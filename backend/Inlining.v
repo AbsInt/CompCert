@@ -48,32 +48,6 @@ Definition add_globdef (fenv: funenv) (idg: ident * globdef fundef unit) : funen
 Definition funenv_program (p: program) : funenv :=
   List.fold_left add_globdef p.(prog_defs) (PTree.empty function).
 
-(** Resources used by a function. *)
-
-(** Maximum PC (node number) in the CFG of a function.  All nodes of
-  the CFG of [f] are between 1 and [max_pc_function f] (inclusive). *)
-
-Definition max_pc_function (f: function) :=
-  PTree.fold (fun m pc i => Pmax m pc) f.(fn_code) 1%positive.
-
-(** Maximum pseudo-register defined in a function.  All results of
-  an instruction of [f], as well as all parameters of [f], are between
-  1 and [max_def_function] (inclusive). *)
-
-Definition max_def_instr (i: instruction) :=
-  match i with
-  | Iop op args res s => res
-  | Iload chunk addr args dst s => dst
-  | Icall sg ros args res s => res
-  | Ibuiltin ef args res s => res
-  | _ => 1%positive
-  end.
-
-Definition max_def_function (f: function) :=
-  Pmax
-    (PTree.fold (fun m pc i => Pmax m (max_def_instr i)) f.(fn_code) 1%positive)
-    (List.fold_left (fun m r => Pmax m r) f.(fn_params) 1%positive).
-
 (** State monad *)
 
 (** To construct incrementally the CFG of a function after inlining,
@@ -319,7 +293,7 @@ Definition inline_function (ctx: context) (id: ident) (f: function)
                            (args: list reg)
                            (retpc: node) (retreg: reg) : mon node :=
   let npc := max_pc_function f in
-  let nreg := max_def_function f in
+  let nreg := max_reg_function f in
   do dpc <- reserve_nodes npc;
   do dreg <- reserve_regs nreg;
   let ctx' := callcontext ctx dpc dreg nreg f.(fn_stacksize) retpc retreg in 
@@ -333,7 +307,7 @@ Definition inline_tail_function (ctx: context) (id: ident) (f: function)
                                (P: PTree.get id fenv = Some f)
                                (args: list reg): mon node :=
   let npc := max_pc_function f in
-  let nreg := max_def_function f in
+  let nreg := max_reg_function f in
   do dpc <- reserve_nodes npc;
   do dreg <- reserve_regs nreg;
   let ctx' := tailcontext ctx dpc dreg nreg f.(fn_stacksize) in 
@@ -442,7 +416,7 @@ Definition expand_cfg := Fixm size_fenv expand_cfg_rec.
 
 Definition expand_function (fenv: funenv) (f: function): mon context :=
   let npc := max_pc_function f in
-  let nreg := max_def_function f in
+  let nreg := max_reg_function f in
   do dpc <- reserve_nodes npc;
   do dreg <- reserve_regs nreg;
   let ctx := initcontext dpc dreg nreg f.(fn_stacksize) in 

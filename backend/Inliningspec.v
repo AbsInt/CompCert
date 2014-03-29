@@ -72,61 +72,6 @@ Proof.
   apply H. red; intros. rewrite PTree.gempty in H0; discriminate.
 Qed.
 
-(** ** Soundness of the computed bounds over function resources *)
-
-Remark Pmax_l: forall x y, Ple x (Pmax x y).
-Proof. intros; xomega. Qed.
-
-Remark Pmax_r: forall x y, Ple y (Pmax x y).
-Proof. intros; xomega. Qed.
-
-Lemma max_pc_function_sound:
-  forall f pc i, f.(fn_code)!pc = Some i -> Ple pc (max_pc_function f).
-Proof.
-  intros until i. unfold max_pc_function. 
-  apply PTree_Properties.fold_rec with (P := fun c m => c!pc = Some i -> Ple pc m).
-  (* extensionality *)
-  intros. apply H0. rewrite H; auto. 
-  (* base case *)
-  rewrite PTree.gempty. congruence.
-  (* inductive case *)
-  intros. rewrite PTree.gsspec in H2. destruct (peq pc k). 
-  inv H2. apply Pmax_r.
-  apply Ple_trans with a. auto. apply Pmax_l.
-Qed.
-
-Lemma max_def_function_instr:
-  forall f pc i, f.(fn_code)!pc = Some i -> Ple (max_def_instr i) (max_def_function f).
-Proof.
-  intros. unfold max_def_function. eapply Ple_trans. 2: eapply Pmax_l. 
-  revert H. 
-  apply PTree_Properties.fold_rec with (P := fun c m => c!pc = Some i -> Ple (max_def_instr i) m).
-  (* extensionality *)
-  intros. apply H0. rewrite H; auto. 
-  (* base case *)
-  rewrite PTree.gempty. congruence.
-  (* inductive case *)
-  intros. rewrite PTree.gsspec in H2. destruct (peq pc k). 
-  inv H2. apply Pmax_r. 
-  apply Ple_trans with a. auto. apply Pmax_l.
-Qed.
-
-Lemma max_def_function_params:
-  forall f r, In r f.(fn_params) -> Ple r (max_def_function f).
-Proof.
-  assert (A: forall l m, Ple m (fold_left (fun m r => Pmax m r) l m)).
-    induction l; simpl; intros. 
-    apply Ple_refl.
-    eapply Ple_trans. 2: eauto. apply Pmax_l.
-  assert (B: forall l m r, In r l -> Ple r (fold_left (fun m r => Pmax m r) l m)).
-    induction l; simpl; intros.
-    contradiction.
-    destruct H. subst a. eapply Ple_trans. 2: eapply A. apply Pmax_r. 
-    eauto. 
-  unfold max_def_function; intros. 
-  eapply Ple_trans. 2: eapply Pmax_r. eauto. 
-Qed.
-
 (** ** Properties of shifting *)
 
 Lemma shiftpos_eq: forall x y, Zpos (shiftpos x y) = (Zpos x + Zpos y) - 1.
@@ -509,7 +454,7 @@ Hypothesis rec_spec:
   rec fe' L ctx f s = R x s' i ->
   fenv_agree fe' ->
   Ple (ctx.(dpc) + max_pc_function f) s.(st_nextnode) ->
-  ctx.(mreg) = max_def_function f ->
+  ctx.(mreg) = max_reg_function f ->
   Ple (Pplus ctx.(dreg) ctx.(mreg)) s.(st_nextreg) ->
   ctx.(mstk) >= 0 -> 
   ctx.(mstk) = Zmax (fn_stacksize f) 0 ->
@@ -535,7 +480,7 @@ Ltac inv_incr :=
 Lemma expand_instr_spec:
   forall ctx pc instr s x s' i c,
   expand_instr fe rec ctx pc instr s = R x s' i ->
-  Ple (max_def_instr instr) ctx.(mreg) ->
+  (forall r, instr_defs instr = Some r -> Ple r ctx.(mreg)) ->
   Plt (spc ctx pc) s.(st_nextnode) ->
   Ple (ctx.(dreg) + ctx.(mreg)) s.(st_nextreg) ->
   ctx.(mstk) >= 0 -> ctx.(dstk) >= 0 ->
@@ -555,7 +500,7 @@ Proof.
   (* inlined *)
   subst s1.
   monadInv EXP. unfold inline_function in EQ; monadInv EQ.
-  set (ctx' := callcontext ctx x1 x2 (max_def_function f) (fn_stacksize f) n r).
+  set (ctx' := callcontext ctx x1 x2 (max_reg_function f) (fn_stacksize f) n r).
   inversion EQ0; inversion EQ1; inversion EQ. inv_incr. 
   apply tr_call_inlined with (pc1 := x0) (ctx' := ctx') (f := f); auto.
   eapply BASE; eauto. 
@@ -586,7 +531,7 @@ Proof.
   (* inlined *)
   subst s1.
   monadInv EXP. unfold inline_function in EQ; monadInv EQ.
-  set (ctx' := tailcontext ctx x1 x2 (max_def_function f) (fn_stacksize f)) in *.
+  set (ctx' := tailcontext ctx x1 x2 (max_reg_function f) (fn_stacksize f)) in *.
   inversion EQ0; inversion EQ1; inversion EQ. inv_incr. 
   apply tr_tailcall_inlined with (pc1 := x0) (ctx' := ctx') (f := f); auto.
   eapply BASE; eauto. 
@@ -618,7 +563,7 @@ Lemma iter_expand_instr_spec:
   forall ctx l s x s' i c,
   mlist_iter2 (expand_instr fe rec ctx) l s = R x s' i ->
   list_norepet (List.map (@fst _ _) l) ->
-  (forall pc instr, In (pc, instr) l -> Ple (max_def_instr instr) ctx.(mreg)) ->
+  (forall pc instr r, In (pc, instr) l -> instr_defs instr = Some r -> Ple r ctx.(mreg)) ->
   (forall pc instr, In (pc, instr) l -> Plt (spc ctx pc) s.(st_nextnode)) ->
   Ple (ctx.(dreg) + ctx.(mreg)) s.(st_nextreg) ->
   ctx.(mstk) >= 0 -> ctx.(dstk) >= 0 ->
@@ -665,7 +610,7 @@ Lemma expand_cfg_rec_spec:
   forall ctx f s x s' i c,
   expand_cfg_rec fe rec ctx f s = R x s' i ->
   Ple (ctx.(dpc) + max_pc_function f) s.(st_nextnode) ->
-  ctx.(mreg) = max_def_function f ->
+  ctx.(mreg) = max_reg_function f ->
   Ple (ctx.(dreg) + ctx.(mreg)) s.(st_nextreg) ->
   ctx.(mstk) >= 0 -> 
   ctx.(mstk) = Zmax (fn_stacksize f) 0 ->
@@ -677,11 +622,11 @@ Lemma expand_cfg_rec_spec:
 Proof.
   intros. unfold expand_cfg_rec in H. monadInv H. inversion EQ. 
   constructor. 
-  intros. rewrite H1. eapply max_def_function_params; eauto. 
+  intros. rewrite H1. eapply max_reg_function_params; eauto. 
   intros. exploit ptree_mfold_spec; eauto. intros [INCR' ITER].
   eapply iter_expand_instr_spec; eauto. 
     apply PTree.elements_keys_norepet. 
-    intros. rewrite H1. eapply max_def_function_instr; eauto. 
+    intros. rewrite H1. eapply max_reg_function_def with (i := instr); eauto. 
     eapply PTree.elements_complete; eauto.
   intros.
     assert (Ple pc0 (max_pc_function f)).
@@ -718,7 +663,7 @@ Lemma expand_cfg_spec:
   expand_cfg fe ctx f s = R x s' i ->
   fenv_agree fe ->  
   Ple (ctx.(dpc) + max_pc_function f) s.(st_nextnode) ->
-  ctx.(mreg) = max_def_function f ->
+  ctx.(mreg) = max_reg_function f ->
   Ple (ctx.(dreg) + ctx.(mreg)) s.(st_nextreg) ->
   ctx.(mstk) >= 0 -> 
   ctx.(mstk) = Zmax (fn_stacksize f) 0 ->
@@ -756,7 +701,7 @@ Proof.
   intros. unfold transf_function in H.
   destruct (expand_function fenv f initstate) as [ctx s i] eqn:?. 
   destruct (zlt (st_stksize s) Int.max_unsigned); inv H.
-  monadInv Heqr. set (ctx := initcontext x x0 (max_def_function f) (fn_stacksize f)) in *.
+  monadInv Heqr. set (ctx := initcontext x x0 (max_reg_function f) (fn_stacksize f)) in *.
 Opaque initstate.
   destruct INCR3. inversion EQ1. inversion EQ.
   apply tr_function_intro with ctx; auto.

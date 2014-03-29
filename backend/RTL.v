@@ -367,6 +367,24 @@ Qed.
 
 (** * Operations on RTL abstract syntax *)
 
+(** Transformation of a RTL function instruction by instruction.
+  This applies a given transformation function to all instructions
+  of a function and constructs a transformed function from that. *)
+
+Section TRANSF.
+
+Variable transf: node -> instruction -> instruction.
+
+Definition transf_function (f: function) : function :=
+  mkfunction
+    f.(fn_sig)
+    f.(fn_params)
+    f.(fn_stacksize)
+    (PTree.map transf f.(fn_code))
+    f.(fn_entrypoint).
+
+End TRANSF.
+
 (** Computation of the possible successors of an instruction.
   This is used in particular for dataflow analyses. *)
 
@@ -422,20 +440,140 @@ Definition instr_defs (i: instruction) : option reg :=
   | Ireturn optarg => None
   end.
 
-(** Transformation of a RTL function instruction by instruction.
-  This applies a given transformation function to all instructions
-  of a function and constructs a transformed function from that. *)
+(** Maximum PC (node number) in the CFG of a function.  All nodes of
+  the CFG of [f] are between 1 and [max_pc_function f] (inclusive). *)
 
-Section TRANSF.
+Definition max_pc_function (f: function) :=
+  PTree.fold (fun m pc i => Pmax m pc) f.(fn_code) 1%positive.
 
-Variable transf: node -> instruction -> instruction.
+Lemma max_pc_function_sound:
+  forall f pc i, f.(fn_code)!pc = Some i -> Ple pc (max_pc_function f).
+Proof.
+  intros until i. unfold max_pc_function. 
+  apply PTree_Properties.fold_rec with (P := fun c m => c!pc = Some i -> Ple pc m).
+  (* extensionality *)
+  intros. apply H0. rewrite H; auto. 
+  (* base case *)
+  rewrite PTree.gempty. congruence.
+  (* inductive case *)
+  intros. rewrite PTree.gsspec in H2. destruct (peq pc k). 
+  inv H2. xomega. 
+  apply Ple_trans with a. auto. xomega.
+Qed.
 
-Definition transf_function (f: function) : function :=
-  mkfunction
-    f.(fn_sig)
-    f.(fn_params)
-    f.(fn_stacksize)
-    (PTree.map transf f.(fn_code))
-    f.(fn_entrypoint).
+(** Maximum pseudo-register mentioned in a function.  All results or arguments
+  of an instruction of [f], as well as all parameters of [f], are between
+  1 and [max_reg_function] (inclusive). *)
 
-End TRANSF.
+Definition max_reg_instr (m: positive) (pc: node) (i: instruction) :=
+  match i with
+  | Inop s => m
+  | Iop op args res s => fold_left Pmax args (Pmax res m)
+  | Iload chunk addr args dst s => fold_left Pmax args (Pmax dst m)
+  | Istore chunk addr args src s => fold_left Pmax args (Pmax src m)
+  | Icall sig (inl r) args res s => fold_left Pmax args (Pmax r (Pmax res m))
+  | Icall sig (inr id) args res s => fold_left Pmax args (Pmax res m)
+  | Itailcall sig (inl r) args => fold_left Pmax args (Pmax r m)
+  | Itailcall sig (inr id) args => fold_left Pmax args m
+  | Ibuiltin ef args res s => fold_left Pmax args (Pmax res m)
+  | Icond cond args ifso ifnot => fold_left Pmax args m
+  | Ijumptable arg tbl => Pmax arg m
+  | Ireturn None => m
+  | Ireturn (Some arg) => Pmax arg m
+  end.
+
+Definition max_reg_function (f: function) :=
+  Pmax
+    (PTree.fold max_reg_instr f.(fn_code) 1%positive)
+    (fold_left Pmax f.(fn_params) 1%positive).
+
+Remark max_reg_instr_ge:
+  forall m pc i, Ple m (max_reg_instr m pc i).
+Proof.
+  intros. 
+  assert (X: forall l n, Ple m n -> Ple m (fold_left Pmax l n)).
+  { induction l; simpl; intros. 
+    auto.
+    apply IHl. xomega. }
+  destruct i; simpl; try (destruct s0); try (apply X); try xomega.
+  destruct o; xomega.
+Qed.
+
+Remark max_reg_instr_def:
+  forall m pc i r, instr_defs i = Some r -> Ple r (max_reg_instr m pc i).
+Proof.
+  intros.
+  assert (X: forall l n, Ple r n -> Ple r (fold_left Pmax l n)).
+  { induction l; simpl; intros. xomega. apply IHl. xomega. }
+  destruct i; simpl in *; inv H.
+- apply X. xomega.
+- apply X. xomega.
+- destruct s0; apply X; xomega.
+- apply X. xomega.
+Qed.
+
+Remark max_reg_instr_uses:
+  forall m pc i r, In r (instr_uses i) -> Ple r (max_reg_instr m pc i).
+Proof.
+  intros. 
+  assert (X: forall l n, In r l \/ Ple r n -> Ple r (fold_left Pmax l n)).
+  { induction l; simpl; intros. 
+    tauto.
+    apply IHl. destruct H0 as [[A|A]|A]. right; subst; xomega. auto. right; xomega. }
+  destruct i; simpl in *; try (destruct s0); try (apply X; auto).
+- contradiction.
+- destruct H. right; subst; xomega. auto.
+- destruct H. right; subst; xomega. auto.
+- destruct H. right; subst; xomega. auto.
+- intuition. subst; xomega.
+- destruct o; simpl in H; intuition. subst; xomega.
+Qed.
+
+Lemma max_reg_function_def:
+  forall f pc i r,
+  f.(fn_code)!pc = Some i -> instr_defs i = Some r -> Ple r (max_reg_function f).
+Proof.
+  intros. 
+  assert (Ple r (PTree.fold max_reg_instr f.(fn_code) 1%positive)).
+  {  revert H. 
+     apply PTree_Properties.fold_rec with
+       (P := fun c m => c!pc = Some i -> Ple r m).
+   - intros. rewrite H in H1; auto.
+   - rewrite PTree.gempty; congruence.
+   - intros. rewrite PTree.gsspec in H3. destruct (peq pc k). 
+     + inv H3. eapply max_reg_instr_def; eauto. 
+     + apply Ple_trans with a. auto. apply max_reg_instr_ge.
+  }
+  unfold max_reg_function. xomega. 
+Qed.
+
+Lemma max_reg_function_use:
+  forall f pc i r,
+  f.(fn_code)!pc = Some i -> In r (instr_uses i) -> Ple r (max_reg_function f).
+Proof.
+  intros. 
+  assert (Ple r (PTree.fold max_reg_instr f.(fn_code) 1%positive)).
+  {  revert H. 
+     apply PTree_Properties.fold_rec with
+       (P := fun c m => c!pc = Some i -> Ple r m).
+   - intros. rewrite H in H1; auto.
+   - rewrite PTree.gempty; congruence.
+   - intros. rewrite PTree.gsspec in H3. destruct (peq pc k). 
+     + inv H3. eapply max_reg_instr_uses; eauto. 
+     + apply Ple_trans with a. auto. apply max_reg_instr_ge.
+  }
+  unfold max_reg_function. xomega. 
+Qed.
+
+Lemma max_reg_function_params:
+  forall f r, In r f.(fn_params) -> Ple r (max_reg_function f).
+Proof.
+  intros.
+  assert (X: forall l n, In r l \/ Ple r n -> Ple r (fold_left Pmax l n)).
+  { induction l; simpl; intros. 
+    tauto.
+    apply IHl. destruct H0 as [[A|A]|A]. right; subst; xomega. auto. right; xomega. }
+  assert (Y: Ple r (fold_left Pmax f.(fn_params) 1%positive)).
+  { apply X; auto. }
+  unfold max_reg_function. xomega.
+Qed.
