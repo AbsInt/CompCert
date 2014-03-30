@@ -237,7 +237,7 @@ let rec is_bitfield_access env e =
       end
   | EUnop(Oarrow fieldname, e1) ->
       begin match unroll env e1.etyp with
-      | TPtr(ty, _) ->
+      | TPtr(ty, _) | TArray(ty, _, _) ->
           is_bitfield_access env
             {edesc = EUnop(Odot fieldname,
                            {edesc = EUnop(Oderef, e1); etyp = ty});
