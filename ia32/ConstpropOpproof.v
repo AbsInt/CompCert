@@ -309,6 +309,8 @@ Proof.
   intros; unfold make_xorimm.
   predSpec Int.eq Int.eq_spec n Int.zero; intros.
   subst n. exists (e#r); split; auto. destruct (e#r); simpl; auto. rewrite Int.xor_zero; auto.
+  predSpec Int.eq Int.eq_spec n Int.mone; intros.
+  subst n. exists (Val.notint e#r); split; auto. 
   econstructor; split; eauto. auto. 
 Qed.
 

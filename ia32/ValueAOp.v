@@ -76,6 +76,7 @@ Definition eval_static_operation (op: operation) (vl: list aval): aval :=
   | Oorimm n, v1::nil => or v1 (I n)
   | Oxor, v1::v2::nil => xor v1 v2
   | Oxorimm n, v1::nil => xor v1 (I n)
+  | Onot, v1::nil => notint v1
   | Oshl, v1::v2::nil => shl v1 v2
   | Oshlimm n, v1::nil => shl v1 (I n)
   | Oshr, v1::v2::nil => shr v1 v2

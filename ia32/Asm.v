@@ -156,6 +156,7 @@ Inductive instruction: Type :=
   | Pxor_r (rd: ireg)                  (**r [xor] with self = set to zero *)
   | Pxor_rr (rd: ireg) (r1: ireg)
   | Pxor_ri (rd: ireg) (n: int)
+  | Pnot (rd: ireg)
   | Psal_rcl (rd: ireg)
   | Psal_ri (rd: ireg) (n: int)
   | Pshr_rcl (rd: ireg)
@@ -573,6 +574,8 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr_nf (rs#rd <- (Val.xor rs#rd rs#r1))) m
   | Pxor_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Val.xor rs#rd (Vint n)))) m
+  | Pnot rd =>
+      Next (nextinstr_nf (rs#rd <- (Val.notint rs#rd))) m
   | Psal_rcl rd =>
       Next (nextinstr_nf (rs#rd <- (Val.shl rs#rd rs#ECX))) m
   | Psal_ri rd n =>

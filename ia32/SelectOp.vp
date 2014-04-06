@@ -68,7 +68,12 @@ Definition addrstack (ofs: int) :=
 
 (** ** Integer logical negation *)
 
-Definition notint (e: expr) := Eop (Oxorimm Int.mone) (e ::: Enil).
+Nondetfunction notint (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Ointconst (Int.not n)) Enil
+  | Eop (Oxorimm n) (e1 ::: Enil) => Eop (Oxorimm (Int.not n)) (e1 ::: Enil)
+  | _ => Eop Onot (e ::: Enil)
+  end.
 
 (** ** Integer addition and pointer addition *)
 
@@ -110,6 +115,14 @@ Nondetfunction add (e1: expr) (e2: expr) :=
       Eop (Olea (Aindexed2 Int.zero)) (e1:::e2:::Enil)
   end.
 
+(** ** Opposite *)
+
+Nondetfunction negint (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Ointconst (Int.neg n)) Enil
+  | _ =>  Eop Oneg (e ::: Enil)
+  end.
+
 (** ** Integer and pointer subtraction *)
 
 Nondetfunction sub (e1: expr) (e2: expr) :=
@@ -124,8 +137,6 @@ Nondetfunction sub (e1: expr) (e2: expr) :=
   | _, _ =>
       Eop Osub (e1:::e2:::Enil)
   end.
-
-Definition negint (e: expr) := Eop Oneg (e ::: Enil).
 
 (** ** Immediate shifts *)
 
@@ -275,6 +286,8 @@ Nondetfunction xorimm (n1: int) (e2: expr) :=
       Eop (Ointconst (Int.xor n1 n2)) Enil
   | Eop (Oxorimm n2) (t2:::Enil) =>
      Eop (Oxorimm (Int.xor n1 n2)) (t2:::Enil)
+  | Eop Onot (t2:::Enil) =>
+     Eop (Oxorimm (Int.not n1)) (t2:::Enil)
   | _ =>
      Eop (Oxorimm n1) (e2:::Enil)
   end.
@@ -399,29 +412,50 @@ Definition compf (c: comparison) (e1: expr) (e2: expr) :=
 
 Nondetfunction cast8unsigned (e: expr) := 
   match e with
+  | Eop (Ointconst n) Enil =>
+      Eop (Ointconst (Int.zero_ext 8 n)) Enil
   | Eop (Oandimm n) (t:::Enil) =>
-      Eop (Oandimm (Int.and (Int.repr 255) n)) (t:::Enil)
+      andimm (Int.and (Int.repr 255) n) t
   | _ =>
       Eop Ocast8unsigned (e:::Enil)
   end.
 
-Definition cast8signed (e: expr) := Eop Ocast8signed (e ::: Enil).
+Nondetfunction cast8signed (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil =>
+      Eop (Ointconst (Int.sign_ext 8 n)) Enil
+  | _ =>
+      Eop Ocast8signed (e ::: Enil)
+  end.
 
 Nondetfunction cast16unsigned (e: expr) := 
   match e with
+  | Eop (Ointconst n) Enil =>
+      Eop (Ointconst (Int.zero_ext 16 n)) Enil
   | Eop (Oandimm n) (t:::Enil) =>
-      Eop (Oandimm (Int.and (Int.repr 65535) n)) (t:::Enil)
+      andimm (Int.and (Int.repr 65535) n) t
   | _ =>
       Eop Ocast16unsigned (e:::Enil)
   end.
 
-Definition cast16signed (e: expr) := Eop Ocast16signed (e ::: Enil).
+Nondetfunction cast16signed (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil =>
+      Eop (Ointconst (Int.sign_ext 16 n)) Enil
+  | _ =>
+      Eop Ocast16signed (e ::: Enil)
+  end.
 
 (** Floating-point conversions *)
 
 Definition singleoffloat (e: expr) := Eop Osingleoffloat (e ::: Enil).
 Definition intoffloat (e: expr) := Eop Ointoffloat (e ::: Enil).
-Definition floatofint (e: expr) := Eop Ofloatofint (e ::: Enil).
+
+Nondetfunction floatofint (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Ofloatconst (Float.floatofint n)) Enil
+  | _ => Eop Ofloatofint (e ::: Enil)
+  end.
 
 Definition intuoffloat (e: expr) :=
   Elet e
@@ -430,12 +464,16 @@ Definition intuoffloat (e: expr) :=
         (intoffloat (Eletvar 1))
         (addimm Float.ox8000_0000 (intoffloat (subf (Eletvar 1) (Eletvar 0))))))%nat.
 
-Definition floatofintu (e: expr) :=
-  let f := Eop (Ofloatconst (Float.floatofintu Float.ox8000_0000)) Enil in
-  Elet e
-    (Econdition (CEcond (Ccompuimm Clt Float.ox8000_0000) (Eletvar O ::: Enil))
-      (floatofint (Eletvar O))
-      (addf (floatofint (addimm (Int.neg Float.ox8000_0000) (Eletvar O))) f)).
+Nondetfunction floatofintu (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Ofloatconst (Float.floatofintu n)) Enil
+  | _ =>
+    let f := Eop (Ofloatconst (Float.floatofintu Float.ox8000_0000)) Enil in
+    Elet e
+      (Econdition (CEcond (Ccompuimm Clt Float.ox8000_0000) (Eletvar O ::: Enil))
+        (floatofint (Eletvar O))
+        (addf (floatofint (addimm (Int.neg Float.ox8000_0000) (Eletvar O))) f))
+  end.
 
 (** ** Addressing modes *)
 

@@ -357,6 +357,9 @@ Definition transl_op
   | Oxorimm n, a1 :: nil =>
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Pxor_ri r n :: k)
+  | Onot, a1 :: nil =>
+      assertion (mreg_eq a1 res);
+      do r <- ireg_of res; OK (Pnot r :: k)
   | Oshl, a1 :: a2 :: nil =>
       assertion (mreg_eq a1 res);
       assertion (mreg_eq a2 CX);

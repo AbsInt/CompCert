@@ -644,6 +644,8 @@ let print_instruction oc = function
       fprintf oc "	xorl	%a, %a\n" ireg r1 ireg rd
   | Pxor_ri(rd, n) ->
       fprintf oc "	xorl	$%a, %a\n" coqint n ireg rd
+  | Pnot(rd) ->
+      fprintf oc "	notl	%a\n" ireg rd
   | Psal_rcl(rd) ->
       fprintf oc "	sall	%%cl, %a\n" ireg rd
   | Psal_ri(rd, n) ->

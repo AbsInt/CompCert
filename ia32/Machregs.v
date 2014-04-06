@@ -211,6 +211,7 @@ Definition two_address_op (op: operation) : bool :=
   | Oorimm _ => true
   | Oxor => true
   | Oxorimm _ => true
+  | Onot => true
   | Oshl => true
   | Oshlimm _ => true
   | Oshr => true

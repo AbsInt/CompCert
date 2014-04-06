@@ -132,8 +132,8 @@ Definition make_orimm (n: int) (r: reg) :=
   else (Oorimm n, r :: nil).
 
 Definition make_xorimm (n: int) (r: reg) :=
-  if Int.eq n Int.zero
-  then (Omove, r :: nil)
+  if Int.eq n Int.zero then (Omove, r :: nil)
+  else if Int.eq n Int.mone then (Onot, r :: nil)
   else (Oxorimm n, r :: nil).
 
 Definition make_divimm n (r1 r2: reg) :=
