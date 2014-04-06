@@ -195,14 +195,10 @@ module IntSet = Set.Make(struct
   let compare (x:int) (y:int) = compare x y
 end)
 
-module IntPairSet = Set.Make(struct
-  type t = int * int
-  let compare ((x1, y1): (int * int)) (x2, y2) =
-    if x1 < x2 then -1 else
-    if x1 > x2 then 1 else
-    if y1 < y2 then -1 else
-    if y1 > y2 then 1 else
-    0
+module IntPairs = Hashtbl.Make(struct
+    type t = int * int
+    let equal ((x1, y1): (int * int)) (x2, y2) = x1 = x2 && y1 = y2
+    let hash = Hashtbl.hash
   end)
 
 (* The global state of the algorithm *)
@@ -220,7 +216,7 @@ type graph = {
   varTable: (var, node) Hashtbl.t;
   mutable nextIdent: int;
   (* The adjacency set  *)
-  mutable adjSet: IntPairSet.t;
+  mutable adjSet: unit IntPairs.t;
   (* Low-degree, non-move-related nodes *)
   simplifyWorklist: DLinkNode.t;
   (* Low-degree, move-related nodes *)
@@ -284,7 +280,7 @@ let init costs =
     stats_of_reg = costs;
     varTable = Hashtbl.create 253;
     nextIdent = 0;
-    adjSet = IntPairSet.empty;
+    adjSet = IntPairs.create 997;
     simplifyWorklist = DLinkNode.make SimplifyWorklist;
     freezeWorklist = DLinkNode.make FreezeWorklist;
     spillWorklist = DLinkNode.make SpillWorklist;
@@ -342,7 +338,7 @@ let nodeOfVar g v =
 let interfere g n1 n2 =
   let i1 = n1.ident and i2 = n2.ident in
   let p = if i1 < i2 then (i1, i2) else (i2, i1) in
-  IntPairSet.mem p g.adjSet
+  IntPairs.mem g.adjSet p
 
 (* Add an edge to the graph. *)
 
@@ -365,7 +361,7 @@ let addEdge g n1 n2 =
   if not (interfere g n1 n2) then begin
     let i1 = n1.ident and i2 = n2.ident in
     let p = if i1 < i2 then (i1, i2) else (i2, i1) in
-    g.adjSet <- IntPairSet.add p g.adjSet;
+    IntPairs.add g.adjSet p ();
     if n1.nstate <> Colored then recordInterf n1 n2;
     if n2.nstate <> Colored then recordInterf n2 n1
   end
@@ -516,7 +512,7 @@ let combineEdge g n1 n2 =
     (* Add new edge *)
     let i1 = n1.ident and i2 = n2.ident in
     let p = if i1 < i2 then (i1, i2) else (i2, i1) in
-    g.adjSet <- IntPairSet.add p g.adjSet;
+    IntPairs.add g.adjSet p ();
     if n1.nstate <> Colored then begin
       n1.adjlist <- n2 :: n1.adjlist;
       n1.degree  <- 1 + n1.degree
@@ -702,19 +698,16 @@ let freeze g =
 
 (*
 let spillCost n =
-(*i
-  printf "spillCost %s: cost = %.2f  degree = %d  rank = %.2f\n"
-                (name_of_node n) n.spillcost n.degree 
-                (n.spillcost /. float n.degree);
-*)
   n.spillcost /. float n.degree
 *)
 
 (* This is spill cost function h_0 from Bernstein et al 1989.  It performs
    slightly better than Chaitin's and than functions h_1 and h_2. *)
 
+(*
 let spillCost n =
   let deg = float n.degree in n.spillcost /. (deg *. deg)
+*)
 
 (* Spill a node *)
 
@@ -724,8 +717,13 @@ let selectSpill g =
   let (n, cost) =
     DLinkNode.fold
       (fun n (best_node, best_cost as best) ->
-        let cost = spillCost n in
-        if cost <= best_cost then (n, cost) else best)
+        (* Manual inlining of [spillCost] above plus algebraic simplif *)
+        let deg = float n.degree in
+        let deg2 = deg *. deg in
+        (* if n.spillcost /. deg2 <= best_cost *)
+        if n.spillcost <= best_cost *. deg2
+        then (n, n.spillcost /. deg2)
+        else best)
       g.spillWorklist (DLinkNode.dummy, infinity) in
   assert (n != DLinkNode.dummy);
   if cost = infinity then begin
