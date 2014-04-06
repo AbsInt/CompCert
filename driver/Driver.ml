@@ -457,6 +457,7 @@ Tracing options:
 General options:
   -stdlib <dir>  Set the path of the Compcert run-time library
   -v             Print external commands before invoking them
+  -timings       Show the time spent in various compiler passes
 Interpreter mode:
   -interp        Execute given .c files using the reference interpreter
   -quiet         Suppress diagnostic messages for the interpreter
@@ -529,6 +530,7 @@ let cmdline_actions =
       push_linker_arg s);
   "-Os$", Set option_Osize;
   "-O$", Unset option_Osize;
+  "-timings$", Set option_timings;
   "-fsmall-data$", Integer(fun n -> option_small_data := n);
   "-fsmall-const$", Integer(fun n -> option_small_const := n);
   "-ffloat-const-prop$", Integer(fun n -> option_ffloatconstprop := n);

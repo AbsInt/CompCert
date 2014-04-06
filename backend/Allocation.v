@@ -368,7 +368,7 @@ End IndexedEqKind.
 
 Module OrderedEqKind := OrderedIndexed(IndexedEqKind).
 
-(** This is an order over equations that is lexicgraphic on [ereg], then
+(** This is an order over equations that is lexicographic on [ereg], then
   [eloc], then [ekind]. *)
 
 Module OrderedEquation <: OrderedType.
@@ -609,20 +609,6 @@ Definition subst_loc (l1 l2: loc) (e: eqs) : option eqs :=
      (EqSet2.elements_between (select_loc_l l1) (select_loc_h l1) (eqs2 e))
      (Some e).
 
-(** [loc_type_compat env l e] checks that for all equations [r = l] in [e],
-  the type [env r] of [r] is compatible with the type of [l]. *)
-
-Definition sel_type (k: equation_kind) (ty: typ) : typ :=
-  match k with
-  | Full => ty
-  | Low | High => Tint
-  end.
-
-Definition loc_type_compat (env: regenv) (l: loc) (e: eqs) : bool :=
-  EqSet2.for_all_between
-    (fun q => subtype (sel_type (ekind q) (env (ereg q))) (Loc.type l))
-    (select_loc_l l) (select_loc_h l) (eqs2 e).
-
 (** [add_equations [r1...rN] [m1...mN] e] adds to [e] the [N] equations
     [ri = R mi [Full]].  Return [None] if the two lists have different lengths.
 *)
@@ -773,25 +759,18 @@ Definition destroyed_by_move (src dst: loc) :=
   | _, _ => destroyed_by_op Omove
   end.
 
-Definition well_typed_move (env: regenv) (dst: loc) (e: eqs) : bool :=
-  match dst with
-  | R r => true
-  | S sl ofs ty => loc_type_compat env dst e
-  end.
-
 (** Simulate the effect of a sequence of moves [mv] on a set of
   equations [e].  The set [e] is the equations that must hold
   after the sequence of moves.  Return the set of equations that
   must hold before the sequence of moves.  Return [None] if the
   set of equations [e] cannot hold after the sequence of moves. *)
 
-Fixpoint track_moves (env: regenv) (mv: moves) (e: eqs) : option eqs :=
+Fixpoint track_moves (mv: moves) (e: eqs) : option eqs :=
   match mv with
   | nil => Some e
   | (src, dst) :: mv =>
-      do e1 <- track_moves env mv e;
+      do e1 <- track_moves mv e;
       assertion (can_undef_except dst (destroyed_by_move src dst)) e1;
-      assertion (well_typed_move env dst e1);
       subst_loc dst src e1
   end.
 
@@ -824,89 +803,89 @@ Definition kind_second_word := if Archi.big_endian then Low else High.
   equations that must hold "before" these instructions, or [None] if
   impossible. *)
 
-Definition transfer_aux (f: RTL.function) (env: regenv) (shape: block_shape) (e: eqs) : option eqs :=
+Definition transfer_aux (f: RTL.function) (shape: block_shape) (e: eqs) : option eqs :=
   match shape with
   | BSnop mv s =>
-      track_moves env mv e
+      track_moves mv e
   | BSmove src dst mv s =>
-      track_moves env mv (subst_reg dst src e)
+      track_moves mv (subst_reg dst src e)
   | BSmakelong src1 src2 dst mv s =>
       let e1 := subst_reg_kind dst High src1 Full e in
       let e2 := subst_reg_kind dst Low src2 Full e1 in
       assertion (reg_unconstrained dst e2);
-      track_moves env mv e2
+      track_moves mv e2
   | BSlowlong src dst mv s =>
       let e1 := subst_reg_kind dst Full src Low e in
       assertion (reg_unconstrained dst e1);
-      track_moves env mv e1
+      track_moves mv e1
   | BShighlong src dst mv s =>
       let e1 := subst_reg_kind dst Full src High e in
       assertion (reg_unconstrained dst e1);
-      track_moves env mv e1
+      track_moves mv e1
   | BSop op args res mv1 args' res' mv2 s =>
-      do e1 <- track_moves env mv2 e;
+      do e1 <- track_moves mv2 e;
       do e2 <- transfer_use_def args res args' res' (destroyed_by_op op) e1;
-      track_moves env mv1 e2
+      track_moves mv1 e2
   | BSopdead op args res mv s =>
       assertion (reg_unconstrained res e);
-      track_moves env mv e
+      track_moves mv e
   | BSload chunk addr args dst mv1 args' dst' mv2 s =>
-      do e1 <- track_moves env mv2 e;
+      do e1 <- track_moves mv2 e;
       do e2 <- transfer_use_def args dst args' dst' (destroyed_by_load chunk addr) e1;
-      track_moves env mv1 e2
+      track_moves mv1 e2
   | BSload2 addr addr' args dst mv1 args1' dst1' mv2 args2' dst2' mv3 s =>
-      do e1 <- track_moves env mv3 e;
+      do e1 <- track_moves mv3 e;
       let e2 := remove_equation (Eq kind_second_word dst (R dst2')) e1 in
       assertion (loc_unconstrained (R dst2') e2);
       assertion (can_undef (destroyed_by_load Mint32 addr') e2);
       do e3 <- add_equations args args2' e2;
-      do e4 <- track_moves env mv2 e3;
+      do e4 <- track_moves mv2 e3;
       let e5 := remove_equation (Eq kind_first_word dst (R dst1')) e4 in
       assertion (loc_unconstrained (R dst1') e5);
       assertion (can_undef (destroyed_by_load Mint32 addr) e5);
       assertion (reg_unconstrained dst e5);
       do e6 <- add_equations args args1' e5;
-      track_moves env mv1 e6
+      track_moves mv1 e6
   | BSload2_1 addr args dst mv1 args' dst' mv2 s =>
-      do e1 <- track_moves env mv2 e;
+      do e1 <- track_moves mv2 e;
       let e2 := remove_equation (Eq kind_first_word dst (R dst')) e1 in
       assertion (reg_loc_unconstrained dst (R dst') e2);
       assertion (can_undef (destroyed_by_load Mint32 addr) e2);
       do e3 <- add_equations args args' e2;
-      track_moves env mv1 e3
+      track_moves mv1 e3
   | BSload2_2 addr addr' args dst mv1 args' dst' mv2 s =>
-      do e1 <- track_moves env mv2 e;
+      do e1 <- track_moves mv2 e;
       let e2 := remove_equation (Eq kind_second_word dst (R dst')) e1 in
       assertion (reg_loc_unconstrained dst (R dst') e2);
       assertion (can_undef (destroyed_by_load Mint32 addr') e2);
       do e3 <- add_equations args args' e2;
-      track_moves env mv1 e3
+      track_moves mv1 e3
   | BSloaddead chunk addr args dst mv s =>
       assertion (reg_unconstrained dst e);
-      track_moves env mv e
+      track_moves mv e
   | BSstore chunk addr args src mv args' src' s =>
       assertion (can_undef (destroyed_by_store chunk addr) e);
       do e1 <- add_equations (src :: args) (src' :: args') e;
-      track_moves env mv e1
+      track_moves mv e1
   | BSstore2 addr addr' args src mv1 args1' src1' mv2 args2' src2' s =>
       assertion (can_undef (destroyed_by_store Mint32 addr') e);
       do e1 <- add_equations args args2' 
                   (add_equation (Eq kind_second_word src (R src2')) e);
-      do e2 <- track_moves env mv2 e1;
+      do e2 <- track_moves mv2 e1;
       assertion (can_undef (destroyed_by_store Mint32 addr) e2);
       do e3 <- add_equations args args1' 
                   (add_equation (Eq kind_first_word src (R src1')) e2);
-      track_moves env mv1 e3
+      track_moves mv1 e3
   | BScall sg ros args res mv1 ros' mv2 s =>
       let args' := loc_arguments sg in
       let res' := map R (loc_result sg) in
-      do e1 <- track_moves env mv2 e;
+      do e1 <- track_moves mv2 e;
       do e2 <- remove_equations_res res (sig_res sg) res' e1;
       assertion (forallb (fun l => reg_loc_unconstrained res l e2) res');
       assertion (no_caller_saves e2);
       do e3 <- add_equation_ros ros ros' e2;
       do e4 <- add_equations_args args (sig_args sg) args' e3;
-      track_moves env mv1 e4
+      track_moves mv1 e4
   | BStailcall sg ros args mv1 ros' =>
       let args' := loc_arguments sg in
       assertion (tailcall_is_possible sg);
@@ -914,9 +893,9 @@ Definition transfer_aux (f: RTL.function) (env: regenv) (shape: block_shape) (e:
       assertion (ros_compatible_tailcall ros');
       do e1 <- add_equation_ros ros ros' empty_eqs;
       do e2 <- add_equations_args args (sig_args sg) args' e1;
-      track_moves env mv1 e2
+      track_moves mv1 e2
   | BSbuiltin ef args res mv1 args' res' mv2 s =>
-      do e1 <- track_moves env mv2 e;
+      do e1 <- track_moves mv2 e;
       let args' := map R args' in
       let res' := map R res' in
       do e2 <- remove_equations_res res (sig_res (ef_sig ef)) res' e1;
@@ -924,23 +903,23 @@ Definition transfer_aux (f: RTL.function) (env: regenv) (shape: block_shape) (e:
       assertion (forallb (fun l => loc_unconstrained l e2) res');
       assertion (can_undef (destroyed_by_builtin ef) e2);
       do e3 <- add_equations_args args (sig_args (ef_sig ef)) args' e2;
-      track_moves env mv1 e3
+      track_moves mv1 e3
   | BSannot txt typ args res mv1 args' s =>
       do e1 <- add_equations_args args (annot_args_typ typ) args' e;
-      track_moves env mv1 e1
+      track_moves mv1 e1
   | BScond cond args mv args' s1 s2 =>
       assertion (can_undef (destroyed_by_cond cond) e);
       do e1 <- add_equations args args' e;
-      track_moves env mv e1
+      track_moves mv e1
   | BSjumptable arg mv arg' tbl =>
       assertion (can_undef destroyed_by_jumptable e);
-      track_moves env mv (add_equation (Eq Full arg (R arg')) e)
+      track_moves mv (add_equation (Eq Full arg (R arg')) e)
   | BSreturn None mv =>
-      track_moves env mv empty_eqs
+      track_moves mv empty_eqs
   | BSreturn (Some arg) mv =>
       let arg' := map R (loc_result (RTL.fn_sig f)) in
       do e1 <- add_equations_res arg (sig_res (RTL.fn_sig f)) arg' empty_eqs;
-      track_moves env mv e1
+      track_moves mv e1
   end.
 
 (** The main transfer function for the dataflow analysis.  Like [transfer_aux],
@@ -948,7 +927,7 @@ Definition transfer_aux (f: RTL.function) (env: regenv) (shape: block_shape) (e:
   equations that must hold "after".  It also handles error propagation
   and reporting. *)
 
-Definition transfer (f: RTL.function) (env: regenv) (shapes: PTree.t block_shape)
+Definition transfer (f: RTL.function) (shapes: PTree.t block_shape)
                     (pc: node) (after: res eqs) : res eqs :=
   match after with
   | Error _ => after
@@ -956,7 +935,7 @@ Definition transfer (f: RTL.function) (env: regenv) (shapes: PTree.t block_shape
       match shapes!pc with
       | None => Error(MSG "At PC " :: POS pc :: MSG ": unmatched block" :: nil)
       | Some shape =>
-          match transfer_aux f env shape e with
+          match transfer_aux f shape e with
           | None => Error(MSG "At PC " :: POS pc :: MSG ": invalid register allocation" :: nil)
           | Some e' => OK e'
           end
@@ -1104,8 +1083,8 @@ Definition successors_block_shape (bsh: block_shape) : list node :=
   | BSreturn optarg mv => nil
   end.
 
-Definition analyze (f: RTL.function) (env: regenv) (bsh: PTree.t block_shape) :=
-  DS.fixpoint_allnodes bsh successors_block_shape (transfer f env bsh).
+Definition analyze (f: RTL.function) (bsh: PTree.t block_shape) :=
+  DS.fixpoint_allnodes bsh successors_block_shape (transfer f bsh).
 
 (** * Validating and translating functions and programs *)
 
@@ -1139,9 +1118,9 @@ Function compat_entry (rparams: list reg) (tys: list typ) (lparams: list loc) (e
   and stack size. *)
 
 Definition check_entrypoints_aux (rtl: RTL.function) (ltl: LTL.function)
-                                 (env: regenv) (e1: eqs) : option unit :=
+                                 (e1: eqs) : option unit :=
   do mv <- pair_entrypoints rtl ltl;
-  do e2 <- track_moves env mv e1;
+  do e2 <- track_moves mv e1;
   assertion (compat_entry (RTL.fn_params rtl)
                           (sig_args (RTL.fn_sig rtl))
                           (loc_parameters (RTL.fn_sig rtl)) e2);
@@ -1154,10 +1133,10 @@ Local Close Scope option_monad_scope.
 Local Open Scope error_monad_scope.
 
 Definition check_entrypoints (rtl: RTL.function) (ltl: LTL.function)
-                             (env: regenv) (bsh: PTree.t block_shape)
+                             (bsh: PTree.t block_shape)
                              (a: PMap.t LEq.t): res unit :=
-  do e1 <- transfer rtl env bsh (RTL.fn_entrypoint rtl) a!!(RTL.fn_entrypoint rtl);
-  match check_entrypoints_aux rtl ltl env e1 with
+  do e1 <- transfer rtl bsh (RTL.fn_entrypoint rtl) a!!(RTL.fn_entrypoint rtl);
+  match check_entrypoints_aux rtl ltl e1 with
   | None => Error (msg "invalid register allocation at entry point")
   | Some _ => OK tt
   end.
@@ -1166,11 +1145,11 @@ Definition check_entrypoints (rtl: RTL.function) (ltl: LTL.function)
   a source RTL function and an LTL function generated by the external
   register allocator. *)
 
-Definition check_function (rtl: RTL.function) (ltl: LTL.function) (env: regenv) : res unit :=
+Definition check_function (rtl: RTL.function) (ltl: LTL.function) : res unit :=
   let bsh := pair_codes rtl ltl in
-  match analyze rtl env bsh with
+  match analyze rtl bsh with
   | None => Error (msg "allocation analysis diverges")
-  | Some a => check_entrypoints rtl ltl env bsh a
+  | Some a => check_entrypoints rtl ltl bsh a
   end.
 
 (** [regalloc] is the external register allocator.  It is written in OCaml
@@ -1186,7 +1165,7 @@ Definition transf_function (f: RTL.function) : res LTL.function :=
   | OK env =>
       match regalloc f with
       | Error m => Error m
-      | OK tf => do x <- check_function f tf env; OK tf
+      | OK tf => do x <- check_function f tf; OK tf
       end
   end.
 

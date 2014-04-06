@@ -13,4 +13,4 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-val elab_preprocessed_file : string -> in_channel -> C.program
+val elab_file : Cabs.definition list -> C.program

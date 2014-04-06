@@ -97,6 +97,8 @@ Extract Constant Compiler.print_RTL => "PrintRTL.print_if".
 Extract Constant Compiler.print_LTL => "PrintLTL.print_if".
 Extract Constant Compiler.print_Mach => "PrintMach.print_if".
 Extract Constant Compiler.print => "fun (f: 'a -> unit) (x: 'a) -> f x; x".
+Extract Constant Compiler.time  => "Clflags.time_coq".
+
 (*Extraction Inline Compiler.apply_total Compiler.apply_partial.*)
 
 (* Processor-specific extraction directives *)

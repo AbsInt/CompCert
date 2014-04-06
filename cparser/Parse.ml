@@ -40,14 +40,18 @@ let parse_transformations s =
 
 let preprocessed_file transfs name sourcefile =
   Cerrors.reset();
-  let t = parse_transformations transfs in
   let ic = open_in sourcefile in
   let p =
     try
-      transform_program t (Elab.elab_preprocessed_file name ic)
-    with Parsing.Parse_error ->
-           Cerrors.error "Error during parsing"; []
-       | Cerrors.Abort ->
-           [] in
+      let t = parse_transformations transfs in
+      let lb = Lexer.init name ic in
+      let parse = Clflags.time2 "Parsing" Parser.file Lexer.initial lb in
+      let p1 = Clflags.time "Elaboration" Elab.elab_file parse in
+      Clflags.time2 "Emulations" transform_program t p1
+    with
+    | Parsing.Parse_error ->
+        Cerrors.error "Error during parsing"; []
+    | Cerrors.Abort ->
+        [] in
   close_in ic;
   if Cerrors.check_errors() then None else Some p

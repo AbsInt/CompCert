@@ -2081,11 +2081,8 @@ let _ = elab_funbody_f := elab_funbody
 
 (** * Entry point *)
 
-let elab_preprocessed_file name ic =
-  let lb = Lexer.init name ic in
+let elab_file prog =
   reset();
-  ignore (elab_definitions false (Builtins.environment())
-                                 (Parser.file Lexer.initial lb));
-  Lexer.finish();
+  ignore (elab_definitions false (Builtins.environment()) prog);
   elaborated_program()
 
