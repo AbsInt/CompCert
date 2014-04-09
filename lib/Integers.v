@@ -1202,6 +1202,11 @@ Qed.
 Remark Ztestbit_0: forall n, Z.testbit 0 n = false.
 Proof Z.testbit_0_l.
 
+Remark Ztestbit_1: forall n, Z.testbit 1 n = zeq n 0.
+Proof.
+  intros. destruct n; simpl; auto.
+Qed.
+
 Remark Ztestbit_m1: forall n, 0 <= n -> Z.testbit (-1) n = true.
 Proof.
   intros. destruct n; simpl; auto. 
@@ -1513,6 +1518,11 @@ Lemma bits_zero:
   forall i, testbit zero i = false.
 Proof.
   intros. unfold testbit. rewrite unsigned_zero. apply Ztestbit_0. 
+Qed.
+
+Remark bits_one: forall n, testbit one n = zeq n 0.
+Proof.
+  unfold testbit; intros. rewrite unsigned_one. apply Ztestbit_1. 
 Qed.
 
 Lemma bits_mone:

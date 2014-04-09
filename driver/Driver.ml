@@ -574,7 +574,7 @@ let _ =
     eprintf "Ambiguous '-o' option (multiple source files)\n";
     exit 2
   end;
-  let linker_args = perform_actions () in
+  let linker_args = time "Total compilation time" perform_actions () in
   if (not nolink) && linker_args <> [] then begin
     linker (output_filename_default "a.out") linker_args
   end

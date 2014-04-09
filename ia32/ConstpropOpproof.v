@@ -160,6 +160,52 @@ Proof.
 - econstructor; eauto.
 Qed.
 
+Lemma make_cmp_base_correct:
+  forall c args vl,
+  vl = map (fun r => AE.get r ae) args ->
+  let (op', args') := make_cmp_base c args vl in
+  exists v, eval_operation ge (Vptr sp Int.zero) op' e##args' m = Some v 
+         /\ Val.lessdef (Val.of_optbool (eval_condition c e##args m)) v.
+Proof.
+  intros. unfold make_cmp_base. 
+  generalize (cond_strength_reduction_correct c args vl H). 
+  destruct (cond_strength_reduction c args vl) as [c' args']. intros EQ.
+  econstructor; split. simpl; eauto. rewrite EQ. auto. 
+Qed.
+
+Lemma make_cmp_correct:
+  forall c args vl,
+  vl = map (fun r => AE.get r ae) args ->
+  let (op', args') := make_cmp c args vl in
+  exists v, eval_operation ge (Vptr sp Int.zero) op' e##args' m = Some v 
+         /\ Val.lessdef (Val.of_optbool (eval_condition c e##args m)) v.
+Proof.
+  intros c args vl.
+  assert (Y: forall r, vincl (AE.get r ae) (Uns 1) = true ->
+             e#r = Vundef \/ e#r = Vint Int.zero \/ e#r = Vint Int.one).
+  { intros. apply vmatch_Uns_1 with bc. eapply vmatch_ge. eapply vincl_ge; eauto. apply MATCH. }
+  unfold make_cmp. case (make_cmp_match c args vl); intros.
+- destruct (Int.eq_dec n Int.one && vincl v1 (Uns 1)) eqn:E1.
+  simpl in H; inv H. InvBooleans. subst n. 
+  exists (e#r1); split; auto. simpl.
+  exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
+  destruct (Int.eq_dec n Int.zero && vincl v1 (Uns 1)) eqn:E0.
+  simpl in H; inv H. InvBooleans. subst n. 
+  exists (Val.xor e#r1 (Vint Int.one)); split; auto. simpl.
+  exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
+  apply make_cmp_base_correct; auto.
+- destruct (Int.eq_dec n Int.zero && vincl v1 (Uns 1)) eqn:E0.
+  simpl in H; inv H. InvBooleans. subst n. 
+  exists (e#r1); split; auto. simpl.
+  exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
+  destruct (Int.eq_dec n Int.one && vincl v1 (Uns 1)) eqn:E1.
+  simpl in H; inv H. InvBooleans. subst n. 
+  exists (Val.xor e#r1 (Vint Int.one)); split; auto. simpl.
+  exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
+  apply make_cmp_base_correct; auto.
+- apply make_cmp_base_correct; auto.
+Qed.
+
 Lemma make_addimm_correct:
   forall n r,
   let (op, args) := make_addimm n r in
@@ -172,36 +218,45 @@ Proof.
 Qed.
   
 Lemma make_shlimm_correct:
-  forall n r1,
-  let (op, args) := make_shlimm n r1 in
+  forall n r1 r2,
+  e#r2 = Vint n ->
+  let (op, args) := make_shlimm n r1 r2 in
   exists v, eval_operation ge (Vptr sp Int.zero) op e##args m = Some v /\ Val.lessdef (Val.shl e#r1 (Vint n)) v.
 Proof.
   intros; unfold make_shlimm.
   predSpec Int.eq Int.eq_spec n Int.zero; intros. subst.
   exists (e#r1); split; auto. destruct (e#r1); simpl; auto. rewrite Int.shl_zero. auto.
+  destruct (Int.ltu n Int.iwordsize). 
   econstructor; split. simpl. eauto. auto.
+  econstructor; split. simpl. eauto. rewrite H; auto.
 Qed.
 
 Lemma make_shrimm_correct:
-  forall n r1,
-  let (op, args) := make_shrimm n r1 in
+  forall n r1 r2,
+  e#r2 = Vint n ->
+  let (op, args) := make_shrimm n r1 r2 in
   exists v, eval_operation ge (Vptr sp Int.zero) op e##args m = Some v /\ Val.lessdef (Val.shr e#r1 (Vint n)) v.
 Proof.
   intros; unfold make_shrimm.
   predSpec Int.eq Int.eq_spec n Int.zero; intros. subst.
   exists (e#r1); split; auto. destruct (e#r1); simpl; auto. rewrite Int.shr_zero. auto.
-  econstructor; split; eauto. simpl. auto.
+  destruct (Int.ltu n Int.iwordsize). 
+  econstructor; split. simpl. eauto. auto.
+  econstructor; split. simpl. eauto. rewrite H; auto.
 Qed.
 
 Lemma make_shruimm_correct:
-  forall n r1,
-  let (op, args) := make_shruimm n r1 in
+  forall n r1 r2,
+  e#r2 = Vint n ->
+  let (op, args) := make_shruimm n r1 r2 in
   exists v, eval_operation ge (Vptr sp Int.zero) op e##args m = Some v /\ Val.lessdef (Val.shru e#r1 (Vint n)) v.
 Proof.
   intros; unfold make_shruimm.
   predSpec Int.eq Int.eq_spec n Int.zero; intros. subst.
   exists (e#r1); split; auto. destruct (e#r1); simpl; auto. rewrite Int.shru_zero. auto.
-  econstructor; split; eauto. simpl. congruence.
+  destruct (Int.ltu n Int.iwordsize). 
+  econstructor; split. simpl. eauto. auto.
+  econstructor; split. simpl. eauto. rewrite H; auto.
 Qed.
 
 Lemma make_mulimm_correct:
@@ -215,7 +270,7 @@ Proof.
   predSpec Int.eq Int.eq_spec n Int.one; intros. subst.
   exists (e#r1); split; auto. destruct (e#r1); simpl; auto. rewrite Int.mul_one; auto.
   destruct (Int.is_power2 n) eqn:?; intros.
-  rewrite (Val.mul_pow2 e#r1 _ _ Heqo). apply make_shlimm_correct; auto. 
+  rewrite (Val.mul_pow2 e#r1 _ _ Heqo). econstructor; split. simpl; eauto. auto.
   econstructor; split; eauto. auto. 
 Qed.
 
@@ -243,9 +298,8 @@ Lemma make_divuimm_correct:
 Proof.
   intros; unfold make_divuimm.
   destruct (Int.is_power2 n) eqn:?.
-  replace v with (Val.shru e#r1 (Vint i)). 
-  eapply make_shruimm_correct; eauto.
-  eapply Val.divu_pow2; eauto. congruence.
+  econstructor; split. simpl; eauto. 
+  rewrite H0 in H. erewrite Val.divu_pow2 by eauto. auto.
   exists v; auto.
 Qed.
 
@@ -466,9 +520,7 @@ Proof.
 (* singleoffloat *)
   InvApproxRegs; SimplVM; inv H0. apply make_singleoffloat_correct; auto.
 (* cond *)
-  generalize (cond_strength_reduction_correct c args0 vl0 H). 
-  destruct (cond_strength_reduction c args0 vl0) as [c' args']; intros.
-  rewrite <- H1 in H0; auto. econstructor; split; eauto.
+  inv H0. apply make_cmp_correct; auto.
 (* mulf *)
   InvApproxRegs; SimplVM; inv H0. rewrite <- H2. apply make_mulfimm_correct; auto.
   InvApproxRegs; SimplVM; inv H0. fold (Val.mulf (Vfloat n1) e#r2).

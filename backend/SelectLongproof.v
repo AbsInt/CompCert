@@ -1024,16 +1024,10 @@ Proof.
   rename i into x. rename i0 into y.
   destruct c; simpl.
 - (* Ceq *)
-  destruct (is_longconst_zero b) eqn:LC.
-+ exploit is_longconst_zero_sound; eauto. intros EQ; inv EQ; clear H0.
-  apply eval_cmpl_eq_zero; auto.
-+ exploit eval_xorl. eexact H. eexact H0. intros [v1 [A B]]. simpl in B. inv B.
+  exploit eval_xorl. eexact H. eexact H0. intros [v1 [A B]]. simpl in B. inv B.
   rewrite int64_eq_xor. apply eval_cmpl_eq_zero; auto.  
 - (* Cne *)
-  destruct (is_longconst_zero b) eqn:LC.
-+ exploit is_longconst_zero_sound; eauto. intros EQ; inv EQ; clear H0.
-  apply eval_cmpl_ne_zero; auto.
-+ exploit eval_xorl. eexact H. eexact H0. intros [v1 [A B]]. simpl in B. inv B.
+  exploit eval_xorl. eexact H. eexact H0. intros [v1 [A B]]. simpl in B. inv B.
   rewrite int64_eq_xor. apply eval_cmpl_ne_zero; auto.  
 - (* Clt *)
   exploit (eval_cmplu_gen Clt Clt). eexact H. eexact H0. simpl.
@@ -1095,16 +1089,10 @@ Proof.
   rename i into x. rename i0 into y.
   destruct c; simpl.
 - (* Ceq *)
-  destruct (is_longconst_zero b) eqn:LC.
-+ exploit is_longconst_zero_sound; eauto. intros EQ; inv EQ; clear H0.
-  apply eval_cmpl_eq_zero; auto.
-+ exploit eval_xorl. eexact H. eexact H0. intros [v1 [A B]]. simpl in B; inv B.
+  exploit eval_xorl. eexact H. eexact H0. intros [v1 [A B]]. simpl in B; inv B.
   rewrite int64_eq_xor. apply eval_cmpl_eq_zero; auto.
 - (* Cne *)
-  destruct (is_longconst_zero b) eqn:LC.
-+ exploit is_longconst_zero_sound; eauto. intros EQ; inv EQ; clear H0.
-  apply eval_cmpl_ne_zero; auto.
-+ exploit eval_xorl. eexact H. eexact H0. intros [v1 [A B]]. simpl in B; inv B.
+  exploit eval_xorl. eexact H. eexact H0. intros [v1 [A B]]. simpl in B; inv B.
   rewrite int64_eq_xor. apply eval_cmpl_ne_zero; auto.
 - (* Clt *)
   destruct (is_longconst_zero b) eqn:LC.

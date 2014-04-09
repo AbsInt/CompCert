@@ -27,10 +27,10 @@ Open Local Scope cminorsel_scope.
   the names of these functions. *)
 
 Record helper_functions : Type := mk_helper_functions {
-  i64_dtos: ident;                      (**r float -> signed long *)
-  i64_dtou: ident;                      (**r float -> unsigned long *)
-  i64_stod: ident;                      (**r signed long -> float *)
-  i64_utod: ident;                      (**r unsigned long -> float *)
+  i64_dtos: ident;                      (**r float64 -> signed long *)
+  i64_dtou: ident;                      (**r float64 -> unsigned long *)
+  i64_stod: ident;                      (**r signed long -> float64 *)
+  i64_utod: ident;                      (**r unsigned long -> float64 *)
   i64_stof: ident;                      (**r signed long -> float32 *)
   i64_utof: ident;                      (**r unsigned long -> float32 *)
   i64_neg: ident;                       (**r opposite *)
@@ -304,13 +304,16 @@ Definition cmplu_gen (ch cl: comparison) (e1 e2: expr) :=
 Definition cmplu (c: comparison) (e1 e2: expr) :=
   match c with
   | Ceq =>
-      if is_longconst_zero e2
-      then cmpl_eq_zero e1
-      else cmpl_eq_zero (xorl e1 e2)
+      cmpl_eq_zero (xorl e1 e2)
+(*
+        (if is_longconst_zero e2 then e1
+         else if is_longconst_zero e1 then e2
+         else xorl e1 e2) *)
   | Cne =>
-      if is_longconst_zero e2
-      then cmpl_ne_zero e1
-      else cmpl_ne_zero (xorl e1 e2)
+      cmpl_ne_zero (xorl e1 e2)
+(*        (if is_longconst_zero e2 then e1
+         else if is_longconst_zero e1 then e2
+         else xorl e1 e2) *)
   | Clt =>
       cmplu_gen Clt Clt e1 e2
   | Cle =>
@@ -330,13 +333,16 @@ Definition cmpl_gen (ch cl: comparison) (e1 e2: expr) :=
 Definition cmpl (c: comparison) (e1 e2: expr) :=
   match c with
   | Ceq =>
-      if is_longconst_zero e2
-      then cmpl_eq_zero e1
-      else cmpl_eq_zero (xorl e1 e2)
+      cmpl_eq_zero (xorl e1 e2)
+(*
+        (if is_longconst_zero e2 then e1
+         else if is_longconst_zero e1 then e2
+         else xorl e1 e2) *)
   | Cne =>
-      if is_longconst_zero e2
-      then cmpl_ne_zero e1
-      else cmpl_ne_zero (xorl e1 e2)
+      cmpl_ne_zero (xorl e1 e2)
+(*        (if is_longconst_zero e2 then e1
+         else if is_longconst_zero e1 then e2
+         else xorl e1 e2) *)
   | Clt =>
       if is_longconst_zero e2
       then comp Clt (highlong e1) (Eop (Ointconst Int.zero) Enil)

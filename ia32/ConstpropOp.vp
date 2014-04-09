@@ -44,6 +44,23 @@ Nondetfunction cond_strength_reduction
       (cond, args)
   end.
 
+Definition make_cmp_base (c: condition) (args: list reg) (vl: list aval) :=
+  let (c', args') := cond_strength_reduction c args vl in (Ocmp c', args').
+
+Nondetfunction make_cmp (c: condition) (args: list reg) (vl: list aval) :=
+  match c, args, vl with
+  | Ccompimm Ceq n, r1 :: nil, v1 :: nil =>
+      if Int.eq_dec n Int.one && vincl v1 (Uns 1) then (Omove, r1 :: nil)
+      else if Int.eq_dec n Int.zero && vincl v1 (Uns 1) then (Oxorimm Int.one, r1 :: nil)
+      else make_cmp_base c args vl
+  | Ccompimm Cne n, r1 :: nil, v1 :: nil =>
+      if Int.eq_dec n Int.zero && vincl v1 (Uns 1) then (Omove, r1 :: nil)
+      else if Int.eq_dec n Int.one && vincl v1 (Uns 1) then (Oxorimm Int.one, r1 :: nil)
+      else make_cmp_base c args vl
+  | _, _, _ =>
+      make_cmp_base c args vl
+  end.
+
 Nondetfunction addr_strength_reduction
                 (addr: addressing) (args: list reg) (vl: list aval) :=
   match addr, args, vl with
@@ -92,20 +109,20 @@ Definition make_addimm (n: int) (r: reg) :=
   then (Omove, r :: nil)
   else (Olea (Aindexed n), r :: nil).
 
-Definition make_shlimm (n: int) (r: reg) :=
-  if Int.eq n Int.zero
-  then (Omove, r :: nil)
-  else (Oshlimm n, r :: nil).
+Definition make_shlimm (n: int) (r1 r2: reg) :=
+  if Int.eq n Int.zero then (Omove, r1 :: nil)
+  else if Int.ltu n Int.iwordsize then (Oshlimm n, r1 :: nil)
+  else (Oshl, r1 :: r2 :: nil).
 
-Definition make_shrimm (n: int) (r: reg) :=
-  if Int.eq n Int.zero
-  then (Omove, r :: nil)
-  else (Oshrimm n, r :: nil).
+Definition make_shrimm (n: int) (r1 r2: reg) :=
+  if Int.eq n Int.zero then (Omove, r1 :: nil)
+  else if Int.ltu n Int.iwordsize then (Oshrimm n, r1 :: nil)
+  else (Oshr, r1 :: r2 :: nil).
 
-Definition make_shruimm (n: int) (r: reg) :=
-  if Int.eq n Int.zero
-  then (Omove, r :: nil)
-  else (Oshruimm n, r :: nil).
+Definition make_shruimm (n: int) (r1 r2: reg) :=
+  if Int.eq n Int.zero then (Omove, r1 :: nil)
+  else if Int.ltu n Int.iwordsize then (Oshruimm n, r1 :: nil)
+  else (Oshru, r1 :: r2 :: nil).
 
 Definition make_mulimm (n: int) (r: reg) :=
   if Int.eq n Int.zero then
@@ -114,7 +131,7 @@ Definition make_mulimm (n: int) (r: reg) :=
     (Omove, r :: nil)
   else
     match Int.is_power2 n with
-    | Some l => make_shlimm l r
+    | Some l => (Oshlimm l, r :: nil)
     | None => (Omulimm n, r :: nil)
     end.
 
@@ -146,7 +163,7 @@ Definition make_divimm n (r1 r2: reg) :=
 
 Definition make_divuimm n (r1 r2: reg) :=
   match Int.is_power2 n with
-  | Some l => make_shruimm l r1
+  | Some l => (Oshruimm l, r1 :: nil)
   | None   => (Odivu, r1 :: r2 :: nil)
   end.
 
@@ -194,16 +211,14 @@ Nondetfunction op_strength_reduction
   | Oor, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_orimm n2 r1
   | Oxor, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_xorimm n1 r2
   | Oxor, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_xorimm n2 r1
-  | Oshl, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shlimm n2 r1
-  | Oshr, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shrimm n2 r1
-  | Oshru, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shruimm n2 r1
+  | Oshl, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shlimm n2 r1 r2
+  | Oshr, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shrimm n2 r1 r2
+  | Oshru, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shruimm n2 r1 r2
   | Olea addr, args, vl =>
       let (addr', args') := addr_strength_reduction addr args vl in
       (Olea addr', args')
   | Osingleoffloat, r1 :: nil, v1 :: nil => make_singleoffloat r1 v1
-  | Ocmp c, args, vl =>
-      let (c', args') := cond_strength_reduction c args vl in 
-      (Ocmp c', args')
+  | Ocmp c, args, vl => make_cmp c args vl
   | Omulf, r1 :: r2 :: nil, v1 :: F n2 :: nil => make_mulfimm n2 r1 r1 r2
   | Omulf, r1 :: r2 :: nil, F n1 :: v2 :: nil => make_mulfimm n1 r2 r1 r2
   | _, _, _ => (op, args)

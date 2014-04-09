@@ -58,9 +58,11 @@ Definition addrstack (ofs: int) :=
 
 Nondetfunction notint (e: expr) :=
   match e with
+  | Eop (Ointconst n) Enil => Eop (Ointconst (Int.not n)) Enil
   | Eop (Oshift s) (t1:::Enil) => Eop (Onotshift s) (t1:::Enil)
   | Eop Onot (t1:::Enil) => t1
   | Eop (Onotshift s) (t1:::Enil) => Eop (Oshift s) (t1:::Enil)
+  | Eop (Oxorimm n) (t1:::Enil) => Eop (Oxorimm (Int.not n)) (t1:::Enil)
   | _ => Eop Onot (e:::Enil)
   end.
 
@@ -93,6 +95,14 @@ Nondetfunction add (e1: expr) (e2: expr) :=
 
 (** ** Integer and pointer subtraction *)
 
+Nondetfunction rsubimm (n: int) (e: expr) :=
+  match e with
+  | Eop (Ointconst m) Enil => Eop (Ointconst (Int.sub n m)) Enil
+  | Eop (Oaddimm m) (t:::Enil) => Eop (Orsubimm (Int.sub n m)) (t:::Enil)
+  | Eop (Orsubimm m) (t:::Enil) => Eop (Oaddimm (Int.sub n m)) (t:::Enil)
+  | _ => Eop (Orsubimm n) (e:::Enil)
+  end.
+
 Nondetfunction sub (e1: expr) (e2: expr) :=
   match e1, e2 with
   | t1, Eop (Ointconst n2) Enil => addimm (Int.neg n2) t1
@@ -102,13 +112,13 @@ Nondetfunction sub (e1: expr) (e2: expr) :=
       addimm n1 (Eop Osub (t1:::t2:::Enil))
   | t1, Eop (Oaddimm n2) (t2:::Enil) =>
       addimm (Int.neg n2) (Eop Osub (t1:::t2:::Enil))
-  | Eop (Ointconst n1) Enil, t2 => Eop (Orsubimm n1) (t2:::Enil)
+  | Eop (Ointconst n1) Enil, t2 => rsubimm n1 t2
   | Eop (Oshift s) (t1:::Enil), t2 => Eop (Orsubshift s) (t2:::t1:::Enil)
   | t1, Eop (Oshift s) (t2:::Enil) => Eop (Osubshift s) (t1:::t2:::Enil)
   | _, _ => Eop Osub (e1:::e2:::Enil)
   end.
 
-Definition negint (e: expr) := Eop (Orsubimm Int.zero) (e ::: Enil).
+Definition negint (e: expr) := rsubimm Int.zero e.
 
 (** ** Immediate shifts *)
 
@@ -247,9 +257,11 @@ Nondetfunction or (e1: expr) (e2: expr) :=
 
 Nondetfunction xorimm (n1: int) (e2: expr) :=
   if Int.eq n1 Int.zero then e2 else
+  if Int.eq n1 Int.mone then notint e2 else
   match e2 with
   | Eop (Ointconst n2) Enil => Eop (Ointconst (Int.xor n1 n2)) Enil
   | Eop (Oxorimm n2) (t2:::Enil) => Eop (Oxorimm (Int.xor n1 n2)) (t2:::Enil)
+  | Eop Onot (t2:::Enil) => Eop (Oxorimm (Int.not n1)) (t2:::Enil)
   | _ => Eop (Oxorimm n1) (e2:::Enil)
   end.
 
@@ -315,7 +327,6 @@ Definition absf (e: expr) :=  Eop Oabsf (e ::: Enil).
 Definition addf (e1 e2: expr) :=  Eop Oaddf (e1 ::: e2 ::: Enil).
 Definition subf (e1 e2: expr) :=  Eop Osubf (e1 ::: e2 ::: Enil).
 Definition mulf (e1 e2: expr) :=  Eop Omulf (e1 ::: e2 ::: Enil).
-Definition divf (e1 e2: expr) :=  Eop Odivf (e1 ::: e2 ::: Enil).
 
 (** ** Comparisons *)
 
@@ -370,19 +381,37 @@ Definition compf (c: comparison) (e1: expr) (e2: expr) :=
 
 Definition cast8unsigned (e: expr) := andimm (Int.repr 255) e.
 
-Definition cast8signed (e: expr) := Eop Ocast8signed (e ::: Enil).
+Nondetfunction cast8signed (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Ointconst (Int.sign_ext 8 n)) Enil
+  | _ => Eop Ocast8signed (e ::: Enil)
+  end.
 
 Definition cast16unsigned (e: expr) := andimm (Int.repr 65535) e.
 
-Definition cast16signed (e: expr) := Eop Ocast16signed (e ::: Enil).
+Nondetfunction cast16signed (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Ointconst (Int.sign_ext 16 n)) Enil
+  | _ => Eop Ocast16signed (e ::: Enil)
+  end.
 
 (** ** Floating-point conversions *)
 
 Definition singleoffloat (e: expr) := Eop Osingleoffloat (e ::: Enil).
 Definition intoffloat (e: expr) := Eop Ointoffloat (e ::: Enil).
 Definition intuoffloat (e: expr) := Eop Ointuoffloat (e ::: Enil).
-Definition floatofint (e: expr) := Eop Ofloatofint (e ::: Enil).
-Definition floatofintu (e: expr) := Eop Ofloatofintu (e ::: Enil).
+
+Nondetfunction floatofint (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Ofloatconst (Float.floatofint n)) Enil
+  | _ => Eop Ofloatofint (e ::: Enil)
+  end.
+
+Nondetfunction floatofintu (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Ofloatconst (Float.floatofintu n)) Enil
+  | _ => Eop Ofloatofintu (e ::: Enil)
+  end.
 
 (** ** Recognition of addressing modes for load and store operations *)
 

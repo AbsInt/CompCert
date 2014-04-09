@@ -133,9 +133,11 @@ Qed.
 Theorem eval_notint: unary_constructor_sound notint Val.notint.
 Proof.
   unfold notint; red; intros until x; case (notint_match a); intros; InvEval.
+  TrivialExists.
   subst x. TrivialExists.
   exists v1; split; auto. subst. destruct v1; simpl; auto. rewrite Int.not_involutive; auto.
   exists (eval_shift s v1); split. EvalOp. subst x. destruct (eval_shift s v1); simpl; auto. rewrite Int.not_involutive; auto.
+  subst x. rewrite Val.not_xor. rewrite Val.xor_assoc. TrivialExists.
   TrivialExists.
 Qed.
 
@@ -177,6 +179,20 @@ Proof.
   TrivialExists.
 Qed.
 
+Theorem eval_rsubimm: forall n, unary_constructor_sound (rsubimm n) (fun v => Val.sub (Vint n) v).
+Proof.
+  red; intros until x. unfold rsubimm; case (rsubimm_match a); intros.
+  InvEval. TrivialExists.
+  InvEval. subst x. econstructor; split. EvalOp. unfold eval_operation; eauto.
+  destruct v1; simpl; auto. rewrite Int.sub_add_r. rewrite <- Int.sub_add_opp. 
+  auto.
+  InvEval. subst x. econstructor; split. EvalOp. simpl; eauto.
+  fold (Val.sub (Vint m0) v1). destruct v1; simpl; auto.
+  rewrite ! Int.sub_add_opp.  rewrite Int.neg_add_distr. rewrite Int.neg_involutive.
+  rewrite (Int.add_permut i). rewrite (Int.add_commut i). auto.
+  TrivialExists.
+Qed.
+
 Theorem eval_sub: binary_constructor_sound sub Val.sub.
 Proof.
   red; intros until y.
@@ -187,7 +203,7 @@ Proof.
     apply eval_addimm; EvalOp.
   subst. rewrite Val.sub_add_l. apply eval_addimm; EvalOp.
   subst. rewrite Val.sub_add_r. apply eval_addimm; EvalOp.
-  TrivialExists.
+  apply eval_rsubimm; auto.
   subst. TrivialExists.
   subst. TrivialExists.
   TrivialExists.
@@ -195,7 +211,7 @@ Qed.
 
 Theorem eval_negint: unary_constructor_sound negint (fun v => Val.sub Vzero v).
 Proof.
-  red; intros. unfold negint. TrivialExists.
+  red; intros. unfold negint. apply eval_rsubimm; auto. 
 Qed.
 
 Theorem eval_shlimm:
@@ -426,9 +442,13 @@ Proof.
   predSpec Int.eq Int.eq_spec n Int.zero. 
   intros. exists x; split. auto.  
   destruct x; simpl; auto. subst n. rewrite Int.xor_zero. auto.
-  destruct (xorimm_match a); intros; InvEval.
+  predSpec Int.eq Int.eq_spec n Int.mone.
+  intros. subst n. rewrite <- Val.not_xor. apply eval_notint; auto.
+  intros. destruct (xorimm_match a); intros; InvEval.
   TrivialExists. simpl. rewrite Int.xor_commut; auto.
-  subst. rewrite Val.xor_assoc. simpl. rewrite Int.xor_commut. TrivialExists. 
+  subst. rewrite Val.xor_assoc. simpl. rewrite Int.xor_commut. TrivialExists.
+  subst x. rewrite Val.not_xor. rewrite Val.xor_assoc. 
+  rewrite (Val.xor_commut (Vint Int.mone)). TrivialExists.
   TrivialExists.
 Qed.
 
@@ -614,11 +634,6 @@ Proof.
   red; intros; TrivialExists.
 Qed.
 
-Theorem eval_divf: binary_constructor_sound divf Val.divf.
-Proof.
-  red; intros; TrivialExists.
-Qed.
-
 Section COMP_IMM.
 
 Variable default: comparison -> int -> condition.
@@ -716,7 +731,9 @@ Qed.
 
 Theorem eval_cast8signed: unary_constructor_sound cast8signed (Val.sign_ext 8).
 Proof.
-  red; intros. unfold cast8signed. TrivialExists.
+  red; intros until x. unfold cast8signed; case (cast8signed_match a); intros.
+  InvEval. TrivialExists.
+  TrivialExists.
 Qed.
 
 Theorem eval_cast8unsigned: unary_constructor_sound cast8unsigned (Val.zero_ext 8).
@@ -727,7 +744,9 @@ Qed.
 
 Theorem eval_cast16signed: unary_constructor_sound cast16signed (Val.sign_ext 16).
 Proof.
-  red; intros. unfold cast16signed. TrivialExists.
+  red; intros until x. unfold cast16signed; case (cast16signed_match a); intros.
+  InvEval. TrivialExists.
+  TrivialExists.
 Qed.
 
 Theorem eval_cast16unsigned: unary_constructor_sound cast16unsigned (Val.zero_ext 16).
@@ -756,7 +775,9 @@ Theorem eval_floatofint:
   Val.floatofint x = Some y ->
   exists v, eval_expr ge sp e m le (floatofint a) v /\ Val.lessdef y v.
 Proof.
-  intros; unfold floatofint. TrivialExists. 
+  intros until y; unfold floatofint. case (floatofint_match a); intros.
+  InvEval. simpl in H0. TrivialExists. 
+  TrivialExists. 
 Qed.
 
 Theorem eval_intuoffloat:
@@ -774,7 +795,9 @@ Theorem eval_floatofintu:
   Val.floatofintu x = Some y ->
   exists v, eval_expr ge sp e m le (floatofintu a) v /\ Val.lessdef y v.
 Proof.
-  intros; unfold floatofintu. TrivialExists. 
+  intros until y; unfold floatofintu. case (floatofintu_match a); intros.
+  InvEval. simpl in H0. TrivialExists. 
+  TrivialExists.
 Qed.
 
 Theorem eval_addressing:

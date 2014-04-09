@@ -39,13 +39,9 @@ Local Open Scope error_monad_scope.
   taken in the Csharpminor code can be mapped to Cminor local
   variable, since the latter do not reside in memory.  
 
-  Another task performed during the translation to Cminor is to eliminate
-  redundant casts to small numerical types (8- and 16-bit integers,
-  single-precision floats).  
-
-  Finally, the Clight-like [switch] construct of Csharpminor
-  is transformed into the simpler, lower-level [switch] construct
-  of Cminor.
+  Another task performed during the translation to Cminor is to
+  transform the Clight-like [switch] construct of Csharpminor
+  into the simpler, lower-level [switch] constructs of Cminor.
 *)
 
 (** * Handling of variables *)

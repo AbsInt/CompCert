@@ -144,39 +144,48 @@ Definition shift_is_scale (n: int) : bool :=
   Int.eq n (Int.repr 1) || Int.eq n (Int.repr 2) || Int.eq n (Int.repr 3).
 
 Nondetfunction shlimm (e1: expr) (n: int) :=
-  if Int.eq n Int.zero then e1 else
-  match e1 with
-  | Eop (Ointconst n1) Enil =>
-      Eop (Ointconst(Int.shl n1 n)) Enil
-  | Eop (Oshlimm n1) (t1:::Enil) =>
-      if Int.ltu (Int.add n n1) Int.iwordsize
-      then Eop (Oshlimm (Int.add n n1)) (t1:::Enil)
-      else Eop (Oshlimm n) (e1:::Enil)
-  | Eop (Olea (Aindexed n1)) (t1:::Enil) =>
-      if shift_is_scale n
-      then Eop (Olea (Ascaled (Int.shl Int.one n) (Int.shl n1 n))) (t1:::Enil)
-      else Eop (Oshlimm n) (e1:::Enil)
-  | _ =>
-      if shift_is_scale n
-      then Eop (Olea (Ascaled (Int.shl Int.one n) Int.zero)) (e1:::Enil)
-      else Eop (Oshlimm n) (e1:::Enil)
-  end.
+  if Int.eq n Int.zero then e1
+  if negb (Int.ltu n Int.iwordsize) then
+    Eop Oshl (e1:::Eop (Ointconst n):::Enil)
+  else
+    match e1 with
+    | Eop (Ointconst n1) Enil =>
+        Eop (Ointconst(Int.shl n1 n)) Enil
+    | Eop (Oshlimm n1) (t1:::Enil) =>
+        if Int.ltu (Int.add n n1) Int.iwordsize
+        then Eop (Oshlimm (Int.add n n1)) (t1:::Enil)
+        else Eop (Oshlimm n) (e1:::Enil)
+    | Eop (Olea (Aindexed n1)) (t1:::Enil) =>
+        if shift_is_scale n
+        then Eop (Olea (Ascaled (Int.shl Int.one n) (Int.shl n1 n))) (t1:::Enil)
+        else Eop (Oshlimm n) (e1:::Enil)
+    | _ =>
+        if shift_is_scale n
+        then Eop (Olea (Ascaled (Int.shl Int.one n) Int.zero)) (e1:::Enil)
+        else Eop (Oshlimm n) (e1:::Enil)
+    end.
 
 Nondetfunction shruimm (e1: expr) (n: int) :=
   if Int.eq n Int.zero then e1 else
-  match e1 with
-  | Eop (Ointconst n1) Enil =>
-      Eop (Ointconst(Int.shru n1 n)) Enil
-  | Eop (Oshruimm n1) (t1:::Enil) =>
-      if Int.ltu (Int.add n n1) Int.iwordsize
-      then Eop (Oshruimm (Int.add n n1)) (t1:::Enil)
-      else Eop (Oshruimm n) (e1:::Enil)
-  | _ =>
-      Eop (Oshruimm n) (e1:::Enil)
-  end.
+  if negb (Int.ltu n Int.iwordsize) then
+    Eop Oshru (e1:::Eop (Ointconst n):::Enil)
+  else
+    match e1 with
+    | Eop (Ointconst n1) Enil =>
+        Eop (Ointconst(Int.shru n1 n)) Enil
+    | Eop (Oshruimm n1) (t1:::Enil) =>
+        if Int.ltu (Int.add n n1) Int.iwordsize
+        then Eop (Oshruimm (Int.add n n1)) (t1:::Enil)
+        else Eop (Oshruimm n) (e1:::Enil)
+    | _ =>
+        Eop (Oshruimm n) (e1:::Enil)
+    end.
 
 Nondetfunction shrimm (e1: expr) (n: int) :=
   if Int.eq n Int.zero then e1 else
+  if negb (Int.ltu n Int.iwordsize) then
+    Eop Oshr (e1:::Eop (Ointconst n):::Enil)
+  else
   match e1 with
   | Eop (Ointconst n1) Enil =>
       Eop (Ointconst(Int.shr n1 n)) Enil
@@ -336,18 +345,6 @@ Definition absf (e: expr) :=  Eop Oabsf (e ::: Enil).
 Definition addf (e1 e2: expr) :=  Eop Oaddf (e1 ::: e2 ::: Enil).
 Definition subf (e1 e2: expr) :=  Eop Osubf (e1 ::: e2 ::: Enil).
 Definition mulf (e1 e2: expr) :=  Eop Omulf (e1 ::: e2 ::: Enil).
-
-Definition divfimm (e: expr) (n: float) :=
-  match Float.exact_inverse n with
-  | Some n' => Eop Omulf (e ::: Eop (Ofloatconst n') Enil ::: Enil)
-  | None    => Eop Odivf (e ::: Eop (Ofloatconst n) Enil ::: Enil)
-  end.
-
-Nondetfunction divf (e1: expr) (e2: expr) :=
-  match e2 with
-  | Eop (Ofloatconst n2) Enil => divfimm e1 n2
-  | _ => Eop Odivf (e1 ::: e2 ::: Enil)
-  end.
 
 (** ** Comparisons *)
 

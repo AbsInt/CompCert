@@ -681,6 +681,14 @@ Qed.
 
 Hint Resolve is_uns_mon is_sgn_mon is_uns_sgn is_uns_usize is_sgn_ssize : va.
 
+Lemma is_uns_1:
+  forall n, is_uns 1 n -> n = Int.zero \/ n = Int.one.
+Proof.
+  intros. destruct (Int.testbit n 0) eqn:B0; [right|left]; apply Int.same_bits_eq; intros.
+  rewrite Int.bits_one. destruct (zeq i 0). subst i; auto. apply H; omega. 
+  rewrite Int.bits_zero. destruct (zeq i 0). subst i; auto. apply H; omega.
+Qed.
+
 (** Smart constructors for [Uns] and [Sgn]. *)
 
 Definition uns (n: Z) : aval :=
@@ -748,6 +756,12 @@ Proof.
 Qed.
 
 Hint Resolve vmatch_uns vmatch_uns_undef vmatch_sgn vmatch_sgn_undef : va.
+
+Lemma vmatch_Uns_1:
+  forall v, vmatch v (Uns 1) -> v = Vundef \/ v = Vint Int.zero \/ v = Vint Int.one.
+Proof.
+  intros. inv H; auto. right. exploit is_uns_1; eauto. intuition congruence.
+Qed.
 
 (** Ordering *)
 
