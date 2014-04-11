@@ -13,7 +13,7 @@ make -q ${1}o || {
    done)
 }
 
-COQPROGNAME="coqtop"
+COQPROGNAME="${COQBIN}coqtop"
 
 COQPROGARGS=""
 for arg in $INCLUDES; do

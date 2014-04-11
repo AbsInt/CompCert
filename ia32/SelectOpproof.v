@@ -213,9 +213,10 @@ Proof.
   red; intros until x.  unfold shlimm.
   predSpec Int.eq Int.eq_spec n Int.zero.
   intros; subst. exists x; split; auto. destruct x; simpl; auto. rewrite Int.shl_zero; auto.
+  destruct (Int.ltu n Int.iwordsize) eqn:LT; simpl.
   destruct (shlimm_match a); intros; InvEval.
   exists (Vint (Int.shl n1 n)); split. EvalOp. 
-  simpl. destruct (Int.ltu n Int.iwordsize); auto.
+  simpl. rewrite LT. auto.
   destruct (Int.ltu (Int.add n n1) Int.iwordsize) eqn:?.
   exists (Val.shl v1 (Vint (Int.add n n1))); split. EvalOp.
   subst. destruct v1; simpl; auto. 
@@ -227,14 +228,16 @@ Proof.
   simpl. auto.
   subst. destruct (shift_is_scale n).
   econstructor; split. EvalOp. simpl. eauto.
-  destruct v1; simpl; auto. destruct (Int.ltu n Int.iwordsize); auto. 
+  destruct v1; simpl; auto. rewrite LT. 
   rewrite Int.shl_mul. rewrite Int.mul_add_distr_l. rewrite (Int.shl_mul n1). auto.
   TrivialExists. econstructor. EvalOp. simpl; eauto. constructor. auto. 
   destruct (shift_is_scale n).
   econstructor; split. EvalOp. simpl. eauto. 
-  destruct x; simpl; auto. destruct (Int.ltu n Int.iwordsize); auto. 
+  destruct x; simpl; auto. rewrite LT.
   rewrite Int.add_zero. rewrite Int.shl_mul. auto. 
   TrivialExists.
+  intros; TrivialExists. constructor. eauto. constructor. EvalOp. simpl; eauto. constructor. 
+  auto.
 Qed.
 
 Theorem eval_shruimm:
@@ -244,19 +247,21 @@ Proof.
   red; intros until x.  unfold shruimm.
   predSpec Int.eq Int.eq_spec n Int.zero.
   intros; subst. exists x; split; auto. destruct x; simpl; auto. rewrite Int.shru_zero; auto.
+  destruct (Int.ltu n Int.iwordsize) eqn:LT; simpl.
   destruct (shruimm_match a); intros; InvEval.
   exists (Vint (Int.shru n1 n)); split. EvalOp. 
-  simpl. destruct (Int.ltu n Int.iwordsize); auto.
+  simpl. rewrite LT; auto. 
   destruct (Int.ltu (Int.add n n1) Int.iwordsize) eqn:?.
   exists (Val.shru v1 (Vint (Int.add n n1))); split. EvalOp.
   subst. destruct v1; simpl; auto. 
   rewrite Heqb.
   destruct (Int.ltu n1 Int.iwordsize) eqn:?; simpl; auto.
-  destruct (Int.ltu n Int.iwordsize) eqn:?; simpl; auto.
-  rewrite Int.add_commut. rewrite Int.shru_shru; auto. rewrite Int.add_commut; auto.
+  rewrite LT. rewrite Int.add_commut. rewrite Int.shru_shru; auto. rewrite Int.add_commut; auto.
   subst. TrivialExists. econstructor. EvalOp. simpl; eauto. constructor. 
   simpl. auto.
   TrivialExists.
+  intros; TrivialExists. constructor. eauto. constructor. EvalOp. simpl; eauto. constructor. 
+  auto.
 Qed.
 
 Theorem eval_shrimm:
@@ -266,19 +271,22 @@ Proof.
   red; intros until x.  unfold shrimm.
   predSpec Int.eq Int.eq_spec n Int.zero.
   intros; subst. exists x; split; auto. destruct x; simpl; auto. rewrite Int.shr_zero; auto.
+  destruct (Int.ltu n Int.iwordsize) eqn:LT; simpl.
   destruct (shrimm_match a); intros; InvEval.
   exists (Vint (Int.shr n1 n)); split. EvalOp. 
-  simpl. destruct (Int.ltu n Int.iwordsize); auto.
+  simpl. rewrite LT; auto. 
   destruct (Int.ltu (Int.add n n1) Int.iwordsize) eqn:?.
   exists (Val.shr v1 (Vint (Int.add n n1))); split. EvalOp.
   subst. destruct v1; simpl; auto. 
   rewrite Heqb.
   destruct (Int.ltu n1 Int.iwordsize) eqn:?; simpl; auto.
-  destruct (Int.ltu n Int.iwordsize) eqn:?; simpl; auto.
+  rewrite LT. 
   rewrite Int.add_commut. rewrite Int.shr_shr; auto. rewrite Int.add_commut; auto.
   subst. TrivialExists. econstructor. EvalOp. simpl; eauto. constructor. 
   simpl. auto.
   TrivialExists.
+  intros; TrivialExists. constructor. eauto. constructor. EvalOp. simpl; eauto. constructor. 
+  auto.
 Qed.
 
 Lemma eval_mulimm_base:

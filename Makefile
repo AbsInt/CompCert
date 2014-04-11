@@ -26,11 +26,11 @@ COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) -as compcert.$(d)) \
 
 CAMLINCLUDES=$(patsubst %,-I %, $(DIRS)) -I extraction -I cparser
 
-COQC=coqc -q $(COQINCLUDES)
-COQDEP=coqdep $(COQINCLUDES)
-COQDOC=coqdoc
-COQEXEC=coqtop $(COQINCLUDES) -batch -load-vernac-source
-COQCHK=coqchk $(COQINCLUDES)
+COQC="$(COQBIN)coqc" -q $(COQINCLUDES)
+COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
+COQDOC="$(COQBIN)coqdoc"
+COQEXEC="$(COQBIN)coqtop" $(COQINCLUDES) -batch -load-vernac-source
+COQCHK="$(COQBIN)coqchk" $(COQINCLUDES)
 
 OCAMLBUILD=ocamlbuild
 OCB_OPTIONS=\
@@ -243,10 +243,11 @@ clean:
 	rm -f ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte
 	rm -rf _build
 	rm -rf doc/html doc/*.glob
-	rm -f doc/coq2html.ml doc/coq2html
+	rm -f doc/coq2html.ml doc/coq2html doc/*.cm? doc/*.o
 	rm -f driver/Configuration.ml
 	rm -f extraction/STAMP extraction/*.ml extraction/*.mli
-	rm -f tools/ndfun
+	rm -f tools/ndfun tools/*.cm? tools/*.o
+	rm -f $(ARCH)/ConstpropOp.v $(ARCH)/SelectOp.v backend/SelectDiv.v backend/SelectLong.v
 	$(MAKE) -C runtime clean
 	$(MAKE) -C test clean
 
