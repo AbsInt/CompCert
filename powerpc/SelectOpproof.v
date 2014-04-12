@@ -490,7 +490,9 @@ Proof.
   intros; red; intros until x. unfold xorimm.
   predSpec Int.eq Int.eq_spec n Int.zero.
   intros. subst. exists x; split; auto. destruct x; simpl; auto. rewrite Int.xor_zero; auto.
-  clear H. destruct (xorimm_match a); intros; InvEval.
+  predSpec Int.eq Int.eq_spec n Int.mone.
+  intros. subst. rewrite <- Val.not_xor. apply eval_notint; auto. 
+  clear H H0. destruct (xorimm_match a); intros; InvEval.
   TrivialExists. simpl. rewrite Int.xor_commut; auto.
   subst. rewrite Val.xor_assoc. simpl. rewrite Int.xor_commut. TrivialExists.
   subst x. TrivialExists. simpl. rewrite Val.not_xor. rewrite Val.xor_assoc. 
