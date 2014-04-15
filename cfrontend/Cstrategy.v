@@ -321,7 +321,7 @@ Inductive estep: state -> trace -> state -> Prop :=
       eval_simple_lvalue e m l b ofs ->
       deref_loc ge ty m b ofs t1 v1 ->
       sem_incrdecr id v1 ty = Some v2 ->
-      sem_cast v2 (typeconv ty) ty = Some v3 ->
+      sem_cast v2 (incrdecr_type ty) ty = Some v3 ->
       assign_loc ge ty m b ofs v3 t2 m' ->
       ty = typeof l ->
       t = t1 ** t2 ->
@@ -335,7 +335,7 @@ Inductive estep: state -> trace -> state -> Prop :=
       match sem_incrdecr id v1 ty with
       | None => True
       | Some v2 =>
-          match sem_cast v2 (typeconv ty) ty with
+          match sem_cast v2 (incrdecr_type ty) ty with
           | None => True
           | Some v3 => forall t2 m', ~(assign_loc ge (typeof l) m b ofs v3 t2 m')
           end
@@ -1341,7 +1341,7 @@ Proof.
   intros [b1 [ofs [E1 S1]]].
   exploit safe_inv. eexact S1. eauto. simpl. intros [t [v1 [A B]]].
   destruct (sem_incrdecr id v1 ty) as [v2|] eqn:?.
-  destruct (sem_cast v2 (typeconv ty) ty) as [v3|] eqn:?.
+  destruct (sem_cast v2 (incrdecr_type ty) ty) as [v3|] eqn:?.
   destruct (classic (exists t2, exists m', assign_loc ge ty m b1 ofs v3 t2 m')).
   destruct H0 as [t2 [m' D]].
   econstructor; econstructor; eapply step_postincr; eauto.
@@ -1522,7 +1522,7 @@ Proof.
   econstructor; econstructor; eauto.
   inv H9. exploit deref_loc_receptive; eauto. intros [EQ [v1' A]]. subst t0.
   destruct (sem_incrdecr id v1' (typeof l)) as [v2'|] eqn:?.
-  destruct (sem_cast v2' (typeconv (typeof l)) (typeof l)) as [v3'|] eqn:?.
+  destruct (sem_cast v2' (incrdecr_type (typeof l)) (typeof l)) as [v3'|] eqn:?.
   destruct (classic (exists t2', exists m'', assign_loc (Genv.globalenv p) (typeof l) m b ofs v3' t2' m'')).
   destruct H1 as [t2' [m'' P]]. 
   econstructor; econstructor. left; eapply step_postincr with (v1 := v1'); eauto. simpl; reflexivity. 
@@ -1535,7 +1535,7 @@ Proof.
   (* postincr stuck *)
   exploit deref_loc_receptive; eauto. intros [EQ [v1' A]]. subst t1.
   destruct (sem_incrdecr id v1' (typeof l)) as [v2'|] eqn:?.
-  destruct (sem_cast v2' (typeconv (typeof l)) (typeof l)) as [v3'|] eqn:?.
+  destruct (sem_cast v2' (incrdecr_type (typeof l)) (typeof l)) as [v3'|] eqn:?.
   destruct (classic (exists t2', exists m'', assign_loc (Genv.globalenv p) (typeof l) m b ofs v3' t2' m'')).
   destruct H1 as [t2' [m'' P]]. 
   econstructor; econstructor. left; eapply step_postincr with (v1 := v1'); eauto. simpl; reflexivity. 
@@ -1744,7 +1744,7 @@ with eval_expr: env -> mem -> kind -> expr -> trace -> mem -> expr -> Prop :=
       eval_simple_lvalue ge e m1 l' b ofs ->
       deref_loc ge ty m1 b ofs t2 v1 ->
       sem_incrdecr id v1 ty = Some v2 ->
-      sem_cast v2 (typeconv ty) ty = Some v3 ->
+      sem_cast v2 (incrdecr_type ty) ty = Some v3 ->
       assign_loc ge ty m1 b ofs v3 t3 m2 ->
       ty = typeof l ->
       eval_expr e m RV (Epostincr id l ty) (t1**t2**t3) m2 (Eval v1 ty)

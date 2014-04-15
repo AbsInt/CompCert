@@ -902,6 +902,15 @@ Definition sem_incrdecr (id: incr_or_decr) (v: val) (ty: type) :=
   | Decr => sem_sub v ty (Vint Int.one) type_int32s
   end.
 
+Definition incrdecr_type (ty: type) :=
+  match typeconv ty with
+  | Tpointer ty a => Tpointer ty a
+  | Tint sz sg a => Tint sz sg noattr
+  | Tlong sg a => Tlong sg noattr
+  | Tfloat sz a => Tfloat sz noattr
+  | _ => Tvoid
+  end.
+
 (** * Compatibility with extensions and injections *)
 
 Section GENERIC_INJECTION.

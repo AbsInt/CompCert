@@ -286,7 +286,9 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
       op = match id with Incr => Oadd | Decr => Osub end ->
       rred (Epostincr id (Eloc b ofs ty) ty) m
          t (Ecomma (Eassign (Eloc b ofs ty) 
-                           (Ebinop op (Eval v1 ty) (Eval (Vint Int.one) type_int32s) (typeconv ty))
+                            (Ebinop op (Eval v1 ty)
+                                       (Eval (Vint Int.one) type_int32s)
+                                       (incrdecr_type ty))
                            ty)
                    (Eval v1 ty) ty) m
   | red_comma: forall v ty1 r2 ty m,
