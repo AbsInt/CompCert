@@ -863,7 +863,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
           let op := match id with Incr => Oadd | Decr => Osub end in
           let r' :=
             Ecomma (Eassign (Eloc b ofs ty) 
-                           (Ebinop op (Eval v1 ty) (Eval (Vint Int.one) type_int32s) (typeconv ty))
+                           (Ebinop op (Eval v1 ty) (Eval (Vint Int.one) type_int32s) (incrdecr_type ty))
                            ty)
                    (Eval v1 ty) ty in
           topred (Rred r' m t)

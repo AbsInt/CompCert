@@ -139,8 +139,8 @@ Function makeif (a: expr) (s1 s2: statement) : statement :=
 
 Definition transl_incrdecr (id: incr_or_decr) (a: expr) (ty: type) : expr :=
   match id with
-  | Incr => Ebinop Oadd a (Econst_int Int.one type_int32s) (typeconv ty)
-  | Decr => Ebinop Osub a (Econst_int Int.one type_int32s) (typeconv ty)
+  | Incr => Ebinop Oadd a (Econst_int Int.one type_int32s) (incrdecr_type ty)
+  | Decr => Ebinop Osub a (Econst_int Int.one type_int32s) (incrdecr_type ty)
   end.
 
 (** Generate a [Sset] or [Sbuiltin] operation as appropriate
