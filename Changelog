@@ -1,3 +1,39 @@
+Language features:
+- Support for C99 designated initializers. (ISO C99 section 6.7.8.)
+
+Improvements in confidence:
+- More theorems proved about float<->integer conversions.
+
+Optimizations:
+- Optimize "x != 0", "x == 0", "x != 1", and "x == 1" when x is known
+  to be a boolean already, ranging over {0, 1, undef}.
+- More systematic constant propagation in pass Selection, lightens
+  the work of later RTL optimisations.
+- IA32: recognize and use the "not" instruction.
+
+Usability:
+- Option "-timings" to print compilation times for various passes.
+- Various tweaks in IRC graph coloring to reduce compilation time.
+
+Improvements in ABI conformance:
+- IA32: revised handling of "common" variables to conform with ABI.
+
+Bug fixing:
+- In -fbitfields emulation: "a->f" was not properly rewritten if "a"
+  had "array of structs" type instead of "pointer to struct".
+- Moved analysis of single-precision floats from RTLtyping to Machtyping.
+  (RTLtyping was incorrectly rejecting some functions involving
+  single-precision floats.)  Simplified LTL semantics and Allocation
+  pass accordingly.
+- Assignment to a l-value of "volatile float" type could cause
+  an internal error in RTLtyping/Machtyping.
+- The case __builtin_fabs applied to integers was missing in the
+  C semantics and in C#minor generation.
+- Fixed some type annotations on CompCert C expressions.  These
+  annotations were incorrect but not in a way that impacted code
+  generation.
+
+
 Release 2.2, 2014-02-24
 =======================
 
