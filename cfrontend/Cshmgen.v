@@ -203,16 +203,16 @@ Definition make_binarith (iop iopu fop lop lopu: binary_operation)
 
 Definition make_add (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_add ty1 ty2 with
-  | add_case_pi ty _ =>
+  | add_case_pi ty =>
       let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
       OK (Ebinop Oadd e1 (Ebinop Omul n e2))
-  | add_case_ip ty _ =>
+  | add_case_ip ty =>
       let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
       OK (Ebinop Oadd e2 (Ebinop Omul n e1))
-  | add_case_pl ty _ =>
+  | add_case_pl ty =>
       let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
       OK (Ebinop Oadd e1 (Ebinop Omul n (Eunop Ointoflong e2)))
-  | add_case_lp ty _ =>
+  | add_case_lp ty =>
       let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
       OK (Ebinop Oadd e2 (Ebinop Omul n (Eunop Ointoflong e1)))
   | add_default =>
@@ -221,13 +221,13 @@ Definition make_add (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
 
 Definition make_sub (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_sub ty1 ty2 with
-  | sub_case_pi ty _ =>
+  | sub_case_pi ty =>
       let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
       OK (Ebinop Osub e1 (Ebinop Omul n e2))
   | sub_case_pp ty =>
       let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
       OK (Ebinop Odivu (Ebinop Osub e1 e2) n)
-  | sub_case_pl ty _ =>
+  | sub_case_pl ty =>
       let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
       OK (Ebinop Osub e1 (Ebinop Omul n (Eunop Ointoflong e2)))
   | sub_default =>

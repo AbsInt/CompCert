@@ -161,6 +161,14 @@ let insertion_mask bf =
   (* Give the mask an hexadecimal string representation, nicer to read *)
   {edesc = EConst(CInt(m, IUInt, sprintf "0x%LXU" m)); etyp = TInt(IUInt, [])}
 
+let eshift env op a b =
+  let ty = unary_conversion env a.etyp in
+  { edesc = EBinop(op, a, b, ty); etyp = ty }
+
+let ebinint env op a b =
+  let ty = binary_conversion env a.etyp b.etyp in
+  { edesc = EBinop(op, a, b, ty); etyp = ty }
+
 (* Extract the value of a bitfield *)
 
 (* Reference C code:
@@ -178,15 +186,11 @@ signed int bitfield_signed_extract(unsigned int x, int ofs, int sz)
 
 *)
 
-let bitfield_extract bf carrier =
-  let e1 =
-    {edesc = EBinop(Oshl, carrier, left_shift_count bf, TInt(IUInt, []));
-     etyp = carrier.etyp} in
+let bitfield_extract env bf carrier =
+  let e1 = eshift env Oshl carrier (left_shift_count bf) in
   let ty = TInt((if bf.bf_signed then IInt else IUInt), []) in
   let e2 = ecast ty e1 in
-  let e3 =
-    {edesc = EBinop(Oshr, e2, right_shift_count bf, e2.etyp);
-     etyp = ty} in
+  let e3 = eshift env Oshr e2 (right_shift_count bf) in
   if bf.bf_signed_res = bf.bf_signed
   then e3
   else ecast (TInt((if bf.bf_signed_res then IInt else IUInt), [])) e3
@@ -203,23 +207,16 @@ unsigned int bitfield_insert(unsigned int x, int ofs, int sz, unsigned int y)
 
 *)
 
-let bitfield_assign bf carrier newval =
+let bitfield_assign env bf carrier newval =
   let msk = insertion_mask bf in
   let notmsk = {edesc = EUnop(Onot, msk); etyp = msk.etyp} in
   let newval_casted =
     ecast (TInt(IUInt,[])) newval in
   let newval_shifted =
-    {edesc = EBinop(Oshl, newval_casted, intconst (Int64.of_int bf.bf_pos) IUInt,
-                    TInt(IUInt,[]));
-     etyp = TInt(IUInt,[])} in
-  let newval_masked =
-    {edesc = EBinop(Oand, newval_shifted, msk, TInt(IUInt,[]));
-     etyp = TInt(IUInt,[])}
-  and oldval_masked =
-    {edesc = EBinop(Oand, carrier, notmsk, TInt(IUInt,[]));
-     etyp = TInt(IUInt,[])} in
-  {edesc = EBinop(Oor,  oldval_masked, newval_masked,  TInt(IUInt,[]));
-   etyp =  TInt(IUInt,[])}
+    eshift env Oshl newval_casted (intconst (Int64.of_int bf.bf_pos) IUInt) in
+  let newval_masked = ebinint env Oand newval_shifted msk
+  and oldval_masked = ebinint env Oand carrier notmsk in
+  ebinint env Oor oldval_masked newval_masked
 
 (* Check whether a field access (e.f or e->f) is a bitfield access.
    If so, return carrier expression (e and *e, respectively)
@@ -322,7 +319,7 @@ let transf_expr env ctx e =
         {edesc = ECall(texp Val e1, List.map (texp Val) el); etyp = e.etyp}
 
   and transf_read e bf =
-    bitfield_extract bf
+    bitfield_extract env bf
       {edesc = EUnop(Odot bf.bf_carrier, texp Val e); etyp = bf.bf_carrier_typ}
 
   and transf_assign ctx e1 bf e2 =
@@ -330,19 +327,19 @@ let transf_expr env ctx e =
       let carrier =
         {edesc = EUnop(Odot bf.bf_carrier, base); etyp = bf.bf_carrier_typ} in
       let asg =
-        eassign carrier (bitfield_assign bf carrier (texp Val e2)) in
-      if ctx = Val then ecomma asg (bitfield_extract bf carrier) else asg)
+        eassign carrier (bitfield_assign env bf carrier (texp Val e2)) in
+      if ctx = Val then ecomma asg (bitfield_extract env bf carrier) else asg)
 
   and transf_assignop ctx op e1 bf e2 tyres =
     bind_lvalue env (texp Val e1) (fun base ->
       let carrier =
         {edesc = EUnop(Odot bf.bf_carrier, base); etyp = bf.bf_carrier_typ} in
       let rhs =
-        {edesc = EBinop(op, bitfield_extract bf carrier, texp Val e2, tyres);
+        {edesc = EBinop(op, bitfield_extract env bf carrier, texp Val e2, tyres);
          etyp = tyres} in
       let asg =
-        eassign carrier (bitfield_assign bf carrier rhs) in
-      if ctx = Val then ecomma asg (bitfield_extract bf carrier) else asg)
+        eassign carrier (bitfield_assign env bf carrier rhs) in
+      if ctx = Val then ecomma asg (bitfield_extract env bf carrier) else asg)
 
   and transf_pre ctx op e1 bf tyfield =
     transf_assignop ctx op e1 bf (intconst 1L IInt)
@@ -357,11 +354,11 @@ let transf_expr env ctx e =
           {edesc = EUnop(Odot bf.bf_carrier, base); etyp = bf.bf_carrier_typ} in
         let temp = mk_temp env tyfield in
         let tyres = unary_conversion env tyfield in
-        let settemp = eassign temp (bitfield_extract bf carrier) in
+        let settemp = eassign temp (bitfield_extract env bf carrier) in
         let rhs =
           {edesc = EBinop(op, temp, intconst 1L IInt, tyres); etyp = tyres} in
         let asg =
-          eassign carrier (bitfield_assign bf carrier rhs) in
+          eassign carrier (bitfield_assign env bf carrier rhs) in
         ecomma (ecomma settemp asg) temp)
     end
 

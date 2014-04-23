@@ -92,6 +92,13 @@ let attr_array_applicable = function
   | AConst | AVolatile | ARestrict | AAlignas _ -> false
   | Attr _ -> true
 
+(* Is an attribute of a composite type applicable to members of this type
+  when they are accessed? *)
+
+let attr_inherited_by_members = function
+  | AConst | AVolatile | ARestrict -> true
+  | AAlignas _ | Attr _ -> false
+
 (* Adding top-level attributes to a type.  Doesn't need to unroll defns. *)
 (* For array types, standard attrs are pushed to the element type. *)
 
@@ -574,17 +581,20 @@ let unary_conversion env t =
   | TInt(kind, attr) ->
       begin match kind with
       | IBool | IChar | ISChar | IUChar | IShort | IUShort ->
-          TInt(IInt, attr)
+          TInt(IInt, [])
       | IInt | IUInt | ILong | IULong | ILongLong | IULongLong ->
-          TInt(kind, attr)
+          TInt(kind, [])
       end
   (* Enums are like signed ints *)
-  | TEnum(id, attr) -> TInt(enum_ikind, attr)
+  | TEnum(id, attr) -> TInt(enum_ikind, [])
   (* Arrays and functions decay automatically to pointers *)
   | TArray(ty, _, _) -> TPtr(ty, [])
   | TFun _ as ty -> TPtr(ty, [])
-  (* Other types are not changed *)
-  | t -> t
+  (* Float types and pointer types lose their attributes *)
+  | TFloat(kind, attr) -> TFloat(kind, [])
+  | TPtr(ty, attr) -> TPtr(ty, [])
+  (* Other types should not occur, but in doubt... *)
+  | _ -> t
 
 (* The usual binary conversions  (H&S 6.3.4).
    Applies only to arithmetic types.

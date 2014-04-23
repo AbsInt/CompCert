@@ -145,18 +145,55 @@ Definition attr_of_type (ty: type) :=
   | Tcomp_ptr id a => a
   end.
 
+(** Change the top-level attributes of a type *)
+
+Definition change_attributes (f: attr -> attr) (ty: type) : type :=
+  match ty with
+  | Tvoid => ty
+  | Tint sz si a => Tint sz si (f a)
+  | Tlong si a => Tlong si (f a)
+  | Tfloat sz a => Tfloat sz (f a)
+  | Tpointer elt a => Tpointer elt (f a)
+  | Tarray elt sz a => Tarray elt sz (f a)
+  | Tfunction args res cc => ty
+  | Tstruct id fld a => Tstruct id fld (f a)
+  | Tunion id fld a => Tunion id fld (f a)
+  | Tcomp_ptr id a => Tcomp_ptr id (f a)
+  end.
+
+(** Erase the top-level attributes of a type *)
+
+Definition remove_attributes (ty: type) : type :=
+  change_attributes (fun _ => noattr) ty.
+
+(** Add extra attributes to the top-level attributes of a type *)
+
+Definition attr_union (a1 a2: attr) : attr :=
+  {| attr_volatile := a1.(attr_volatile) || a2.(attr_volatile);
+     attr_alignas :=
+       match a1.(attr_alignas), a2.(attr_alignas) with
+       | None, al => al
+       | al, None => al
+       | Some n1, Some n2 => Some (N.max n1 n2)
+       end 
+  |}.
+
+Definition merge_attributes (ty: type) (a: attr) : type :=
+  change_attributes (attr_union a) ty.
+
 Definition type_int32s := Tint I32 Signed noattr.
 Definition type_bool := Tint IBool Signed noattr.
 
 (** The usual unary conversion.  Promotes small integer types to [signed int32]
-  and degrades array types and function types to pointer types. *)
+  and degrades array types and function types to pointer types. 
+  Attributes are erased. *)
 
 Definition typeconv (ty: type) : type :=
   match ty with
-  | Tint (I8 | I16 | IBool) _ a => Tint I32 Signed a
-  | Tarray t sz a       => Tpointer t a
+  | Tint (I8 | I16 | IBool) _ _ => Tint I32 Signed noattr
+  | Tarray t sz a       => Tpointer t noattr
   | Tfunction _ _ _     => Tpointer ty noattr
-  | _                   => ty
+  | _                   => remove_attributes ty
   end.
 
 (** * Operations over types *)

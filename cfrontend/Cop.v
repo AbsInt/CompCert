@@ -115,7 +115,7 @@ Definition classify_cast (tfrom tto: type) : classify_cast_cases :=
   end.
 
 (** Semantics of casts.  [sem_cast v1 t1 t2 = Some v2] if value [v1],
-  viewed with static type [t1], can be cast to type [t2],
+  viewed with static type [t1], can be converted  to type [t2],
   resulting in value [v2].  *)
 
 Definition cast_int_int (sz: intsize) (sg: signedness) (i: int) : int :=
@@ -266,7 +266,8 @@ Definition sem_cast (v: val) (t1 t2: type) : option val :=
 
 (** The following describes types that can be interpreted as a boolean:
   integers, floats, pointers.  It is used for the semantics of 
-  the [!] and [?] operators, as well as the [if], [while], [for] statements. *)
+  the [!] and [?] operators, as well as the [if], [while], 
+  and [for] statements. *)
 
 Inductive classify_bool_cases : Type :=
   | bool_case_i                           (**r integer *)
@@ -315,34 +316,6 @@ Definition bool_val (v: val) (t: type) : option bool :=
   | bool_default => None
   end.
 
-(** Common-sense relation between Boolean value and casting to [_Bool] type. *)
-
-Lemma cast_bool_bool_val:
-  forall v t,
-  sem_cast v t (Tint IBool Signed noattr) =
-  match bool_val v t with None => None | Some b => Some(Val.of_bool b) end.
-Proof.
-  intros.
-  assert (A: classify_bool t =
-    match t with
-    | Tint _ _ _ => bool_case_i
-    | Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ _ => bool_case_p
-    | Tfloat _ _ => bool_case_f
-    | Tlong _ _ => bool_case_l
-    | _ => bool_default
-    end).
-  {
-    unfold classify_bool; destruct t; simpl; auto. destruct i; auto.
-  }
-  unfold bool_val. rewrite A. unfold sem_cast. destruct t; simpl; auto; destruct v; auto.
-  destruct (Int.eq i0 Int.zero); auto.
-  destruct (Int64.eq i Int64.zero); auto.
-  destruct (Float.cmp Ceq f0 Float.zero); auto.
-  destruct (Int.eq i Int.zero); auto. 
-  destruct (Int.eq i Int.zero); auto. 
-  destruct (Int.eq i Int.zero); auto. 
-  destruct (Int.eq i0 Int.zero); auto. 
-Qed.
 
 (** ** Unary operators *)
 
@@ -373,17 +346,6 @@ Definition sem_notbool (v: val) (ty: type) : option val :=
       end
   | bool_default => None
   end.
-
-(** Common-sense relation between Boolean value and Boolean negation. *)
-
-Lemma notbool_bool_val:
-  forall v t,
-  sem_notbool v t =
-  match bool_val v t with None => None | Some b => Some(Val.of_bool (negb b)) end.
-Proof.
-  intros. unfold sem_notbool, bool_val. 
-  destruct (classify_bool t); auto; destruct v; auto; rewrite negb_involutive; auto.
-Qed.
 
 (** *** Opposite and absolute value *)
 
@@ -503,6 +465,16 @@ Definition classify_binarith (ty1: type) (ty2: type) : binarith_cases :=
   | _, _ => bin_default
   end.
 
+(** The static type of the result. *)
+
+Definition binarith_result_type (c: binarith_cases) : option type :=
+  match c with
+  | bin_case_i sg => Some(Tint I32 sg noattr)
+  | bin_case_l sg => Some(Tlong sg noattr)
+  | bin_case_f sz => Some(Tfloat sz noattr)
+  | bin_default   => None
+  end.
+
 (** The type at which the computation is done.  Both arguments are
   converted to this type before the actual computation.  *)
 
@@ -549,43 +521,43 @@ Definition sem_binarith
 (** *** Addition *)
 
 Inductive classify_add_cases : Type :=
-  | add_case_pi(ty: type)(a: attr)     (**r pointer, int *)
-  | add_case_ip(ty: type)(a: attr)     (**r int, pointer *)
-  | add_case_pl(ty: type)(a: attr)     (**r pointer, long *)
-  | add_case_lp(ty: type)(a: attr)     (**r long, pointer *)
+  | add_case_pi(ty: type)     (**r pointer, int *)
+  | add_case_ip(ty: type)     (**r int, pointer *)
+  | add_case_pl(ty: type)     (**r pointer, long *)
+  | add_case_lp(ty: type)     (**r long, pointer *)
   | add_default.                       (**r numerical type, numerical type *)
 
 Definition classify_add (ty1: type) (ty2: type) :=
   match typeconv ty1, typeconv ty2 with
-  | Tpointer ty a, Tint _ _ _ => add_case_pi ty a
-  | Tint _ _ _, Tpointer ty a => add_case_ip ty a
-  | Tpointer ty a, Tlong _ _ => add_case_pl ty a
-  | Tlong _ _, Tpointer ty a => add_case_lp ty a
+  | Tpointer ty _, Tint _ _ _ => add_case_pi ty
+  | Tint _ _ _, Tpointer ty _ => add_case_ip ty
+  | Tpointer ty _, Tlong _ _ => add_case_pl ty
+  | Tlong _ _, Tpointer ty _ => add_case_lp ty
   | _, _ => add_default
   end.
 
 Definition sem_add (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
   match classify_add t1 t2 with 
-  | add_case_pi ty _ =>                 (**r pointer plus integer *)
+  | add_case_pi ty =>                 (**r pointer plus integer *)
       match v1,v2 with
       | Vptr b1 ofs1, Vint n2 => 
         Some (Vptr b1 (Int.add ofs1 (Int.mul (Int.repr (sizeof ty)) n2)))
       | _,  _ => None
       end   
-  | add_case_ip ty _ =>                 (**r integer plus pointer *)
+  | add_case_ip ty =>                 (**r integer plus pointer *)
       match v1,v2 with
       | Vint n1, Vptr b2 ofs2 => 
         Some (Vptr b2 (Int.add ofs2 (Int.mul (Int.repr (sizeof ty)) n1)))
       | _,  _ => None
       end   
-  | add_case_pl ty _ =>                 (**r pointer plus long *)
+  | add_case_pl ty =>                 (**r pointer plus long *)
       match v1,v2 with
       | Vptr b1 ofs1, Vlong n2 => 
         let n2 := Int.repr (Int64.unsigned n2) in
         Some (Vptr b1 (Int.add ofs1 (Int.mul (Int.repr (sizeof ty)) n2)))
       | _,  _ => None
       end   
-  | add_case_lp ty _ =>                 (**r long plus pointer *)
+  | add_case_lp ty =>                 (**r long plus pointer *)
       match v1,v2 with
       | Vlong n1, Vptr b2 ofs2 => 
         let n1 := Int.repr (Int64.unsigned n1) in
@@ -603,28 +575,28 @@ Definition sem_add (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
 (** *** Subtraction *)
 
 Inductive classify_sub_cases : Type :=
-  | sub_case_pi(ty: type)(a: attr)      (**r pointer, int *)
+  | sub_case_pi(ty: type)               (**r pointer, int *)
   | sub_case_pp(ty: type)               (**r pointer, pointer *)
-  | sub_case_pl(ty: type)(a: attr)      (**r pointer, long *)
+  | sub_case_pl(ty: type)               (**r pointer, long *)
   | sub_default.                        (**r numerical type, numerical type *)
 
 Definition classify_sub (ty1: type) (ty2: type) :=
   match typeconv ty1, typeconv ty2 with
-  | Tpointer ty a, Tint _ _ _ => sub_case_pi ty a
+  | Tpointer ty _, Tint _ _ _ => sub_case_pi ty
   | Tpointer ty _ , Tpointer _ _ => sub_case_pp ty
-  | Tpointer ty a, Tlong _ _ => sub_case_pl ty a
+  | Tpointer ty _, Tlong _ _ => sub_case_pl ty
   | _, _ => sub_default
   end.
 
 Definition sem_sub (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
   match classify_sub t1 t2 with
-  | sub_case_pi ty attr =>            (**r pointer minus integer *)
+  | sub_case_pi ty =>            (**r pointer minus integer *)
       match v1,v2 with
       | Vptr b1 ofs1, Vint n2 => 
           Some (Vptr b1 (Int.sub ofs1 (Int.mul (Int.repr (sizeof ty)) n2)))
       | _,  _ => None
       end
-  | sub_case_pl ty attr =>            (**r pointer minus long *)
+  | sub_case_pl ty =>            (**r pointer minus long *)
       match v1,v2 with
       | Vptr b1 ofs1, Vlong n2 => 
           let n2 := Int.repr (Int64.unsigned n2) in
@@ -1177,5 +1149,234 @@ Proof.
   intros; eapply Mem.different_pointers_inject; eauto.
 Qed.
 
+(** * Some properties of operator semantics *)
+
+(** This section collects some common-sense properties about the type
+  classification and semantic functions above.  These properties are
+  not used in the CompCert semantics preservation proofs, but increase
+  confidence in the specification and its relation with the ISO C99 standard. *)
+
+(** Relation between Boolean value and casting to [_Bool] type. *)
+
+Lemma cast_bool_bool_val:
+  forall v t,
+  sem_cast v t (Tint IBool Signed noattr) =
+  match bool_val v t with None => None | Some b => Some(Val.of_bool b) end.
+Proof.
+  intros.
+  assert (A: classify_bool t =
+    match t with
+    | Tint _ _ _ => bool_case_i
+    | Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ _ => bool_case_p
+    | Tfloat _ _ => bool_case_f
+    | Tlong _ _ => bool_case_l
+    | _ => bool_default
+    end).
+  {
+    unfold classify_bool; destruct t; simpl; auto. destruct i; auto.
+  }
+  unfold bool_val. rewrite A. unfold sem_cast. destruct t; simpl; auto; destruct v; auto.
+  destruct (Int.eq i0 Int.zero); auto.
+  destruct (Int64.eq i Int64.zero); auto.
+  destruct (Float.cmp Ceq f0 Float.zero); auto.
+  destruct (Int.eq i Int.zero); auto. 
+  destruct (Int.eq i Int.zero); auto. 
+  destruct (Int.eq i Int.zero); auto. 
+  destruct (Int.eq i0 Int.zero); auto. 
+Qed.
+
+(** Relation between Boolean value and Boolean negation. *)
+
+Lemma notbool_bool_val:
+  forall v t,
+  sem_notbool v t =
+  match bool_val v t with None => None | Some b => Some(Val.of_bool (negb b)) end.
+Proof.
+  intros. unfold sem_notbool, bool_val. 
+  destruct (classify_bool t); auto; destruct v; auto; rewrite negb_involutive; auto.
+Qed.
+
+(** Relation with the arithmetic conversions of ISO C99, section 6.3.1 *)
+
+Module ArithConv.
+
+(** This is the ISO C algebra of arithmetic types, without qualifiers.
+    [S] stands for "signed" and [U] for "unsigned".  *)
+
+Inductive int_type : Type :=
+  | _Bool
+  | Char | SChar | UChar
+  | Short | UShort
+  | Int | UInt
+  | Long | ULong
+  | Longlong | ULonglong.
+
+Inductive arith_type : Type :=
+  | I (it: int_type)
+  | Float
+  | Double
+  | Longdouble.
+
+Definition eq_int_type: forall (x y: int_type), {x=y} + {x<>y}.
+Proof. decide equality. Defined.
+
+Definition is_unsigned (t: int_type) : bool :=
+  match t with
+  | _Bool => true
+  | Char => false    (**r as in most of CompCert's target ABIs *)
+  | SChar => false
+  | UChar => true
+  | Short => false
+  | UShort => true
+  | Int => false
+  | UInt => true
+  | Long => false
+  | ULong => true
+  | Longlong => false
+  | ULonglong => true
+  end.
+
+Definition unsigned_type (t: int_type) : int_type :=
+  match t with
+  | Char => UChar
+  | SChar => UChar
+  | Short => UShort
+  | Int => UInt
+  | Long => ULong
+  | Longlong => ULonglong
+  | _ => t
+  end.
+
+Definition int_sizeof (t: int_type) : Z :=
+  match t with
+  | _Bool | Char | SChar | UChar => 1
+  | Short | UShort => 2
+  | Int | UInt | Long | ULong => 4
+  | Longlong | ULonglong => 8
+  end.
+
+(** 6.3.1.1 para 1: integer conversion rank *)
+
+Definition rank (t: int_type) : Z :=
+  match t with
+  | _Bool => 1
+  | Char | SChar | UChar => 2
+  | Short | UShort => 3
+  | Int | UInt => 4
+  | Long | ULong => 5
+  | Longlong | ULonglong => 6
+  end.
+
+(** 6.3.1.1 para 2: integer promotions, a.k.a. usual unary conversions *)
+
+Definition integer_promotion (t: int_type) : int_type :=
+  if zlt (rank t) (rank Int) then Int else t.
+
+(** 6.3.1.8: Usual arithmetic conversions, a.k.a. binary conversions.
+  This function returns the type to which the two operands must be
+  converted. *)
+
+Definition usual_arithmetic_conversion (t1 t2: arith_type) : arith_type :=
+  match t1, t2 with
+  (* First, if the corresponding real type of either operand is long
+     double, the other operand is converted, without change of type domain,
+     to a type whose corresponding real type is long double. *)
+  | Longdouble, _ | _, Longdouble => Longdouble
+  (* Otherwise, if the corresponding real type of either operand is
+     double, the other operand is converted, without change of type domain,
+     to a type whose corresponding real type is double. *)
+  | Double, _ | _, Double => Double
+  (* Otherwise, if the corresponding real type of either operand is
+     float, the other operand is converted, without change of type domain,
+     to a type whose corresponding real type is float. *)
+  | Float, _ | _, Float => Float
+  (* Otherwise, the integer promotions are performed on both operands. *)
+  | I i1, I i2 =>
+    let j1 := integer_promotion i1 in
+    let j2 := integer_promotion i2 in
+    (* Then the following rules are applied to the promoted operands:
+       If both operands have the same type, then no further conversion
+       is needed. *)
+    if eq_int_type j1 j2 then I j1 else
+    match is_unsigned j1, is_unsigned j2 with
+    (* Otherwise, if both operands have signed integer types or both
+       have unsigned integer types, the operand with the type of lesser
+       integer conversion rank is converted to the type of the operand with
+       greater rank. *)
+    | true, true | false, false =>
+        if zlt (rank j1) (rank j2) then I j2 else I j1
+    | true, false =>
+    (* Otherwise, if the operand that has unsigned integer type has
+       rank greater or equal to the rank of the type of the other operand,
+       then the operand with signed integer type is converted to the type of
+       the operand with unsigned integer type. *)
+        if zle (rank j2) (rank j1) then I j1 else
+    (* Otherwise, if the type of the operand with signed integer type
+       can represent all of the values of the type of the operand with
+       unsigned integer type, then the operand with unsigned integer type is
+       converted to the type of the operand with signed integer type. *)
+        if zlt (int_sizeof j1) (int_sizeof j2) then I j2 else
+    (* Otherwise, both operands are converted to the unsigned integer type
+       corresponding to the type of the operand with signed integer type. *)
+        I (unsigned_type j2)
+    | false, true =>
+    (* Same logic as above, swapping the roles of j1 and j2 *)
+        if zle (rank j1) (rank j2) then I j2 else
+        if zlt (int_sizeof j2) (int_sizeof j1) then I j1 else
+        I (unsigned_type j1)
+    end
+  end.
+
+(** Mapping ISO arithmetic types to CompCert types *)
+
+Definition proj_type (t: arith_type) : type :=
+  match t with
+  | I _Bool => Tint IBool Unsigned noattr
+  | I Char => Tint I8 Unsigned noattr
+  | I SChar => Tint I8 Signed noattr
+  | I UChar => Tint I8 Unsigned noattr
+  | I Short => Tint I16 Signed noattr
+  | I UShort => Tint I16 Unsigned noattr
+  | I Int => Tint I32 Signed noattr
+  | I UInt => Tint I32 Unsigned noattr
+  | I Long => Tint I32 Signed noattr
+  | I ULong => Tint I32 Unsigned noattr
+  | I Longlong => Tlong Signed noattr
+  | I ULonglong => Tlong Unsigned noattr
+  | Float => Tfloat F32 noattr
+  | Double => Tfloat F64 noattr
+  | Longdouble => Tfloat F64 noattr
+  end.
+
+(** Relation between [typeconv] and integer promotion. *)
+
+Lemma typeconv_integer_promotion:
+  forall i, typeconv (proj_type (I i)) = proj_type (I (integer_promotion i)).
+Proof.
+  destruct i; reflexivity.
+Qed.
+
+(** Relation between [classify_binarith] and arithmetic conversion. *)
+
+Lemma classify_binarith_arithmetic_conversion:
+  forall t1 t2,
+  binarith_result_type (classify_binarith (proj_type t1) (proj_type t2)) =
+  Some (proj_type (usual_arithmetic_conversion t1 t2)).
+Proof.
+  destruct t1; destruct t2; try reflexivity.
+- destruct it; destruct it0; reflexivity.
+- destruct it; reflexivity.
+- destruct it; reflexivity.
+- destruct it; reflexivity.
+- destruct it; reflexivity.
+- destruct it; reflexivity.
+- destruct it; reflexivity.
+Qed.
+
+End ArithConv.
 
 
+
+
+
+ 

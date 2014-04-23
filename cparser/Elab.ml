@@ -805,7 +805,8 @@ let elab_expr loc env a =
             error "left-hand side of '.' is not a struct or union" in
       (* A field of a const/volatile struct or union is itself const/volatile *)
       { edesc = EUnop(Odot fieldname, b1);
-        etyp = add_attributes_type attrs (type_of_member env fld) }
+        etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
+                                   (type_of_member env fld) }
 
   | MEMBEROFPTR(a1, fieldname) ->
       let b1 = elab a1 in
@@ -823,7 +824,8 @@ let elab_expr loc env a =
         | _ ->
             error "left-hand side of '->' is not a pointer " in
       { edesc = EUnop(Oarrow fieldname, b1);
-        etyp = add_attributes_type attrs (type_of_member env fld) }
+        etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
+                                   (type_of_member env fld) }
 
 (* Hack to treat vararg.h functions the GCC way.  Helps with testing.
     va_start(ap,n)
@@ -996,14 +998,14 @@ let elab_expr loc env a =
         if is_arith_type env b1.etyp && is_arith_type env b2.etyp then
           binary_conversion env b1.etyp b2.etyp
         else begin
-          let (ty, attr) =
+          let ty =
             match unroll env b1.etyp, unroll env b2.etyp with
-            | (TPtr(ty, a) | TArray(ty, _, a)), (TInt _ | TEnum _) -> (ty, a)
-            | (TInt _ | TEnum _), (TPtr(ty, a) | TArray(ty, _, a)) -> (ty, a)
+            | (TPtr(ty, a) | TArray(ty, _, a)), (TInt _ | TEnum _) -> ty
+            | (TInt _ | TEnum _), (TPtr(ty, a) | TArray(ty, _, a)) -> ty
             | _, _ -> error "type error in binary '+'" in
           if not (pointer_arithmetic_ok env ty) then
             err "illegal pointer arithmetic in binary '+'";
-          TPtr(ty, attr)
+          TPtr(ty, [])
         end in
       { edesc = EBinop(Oadd, b1, b2, tyres); etyp = tyres }
 
@@ -1019,11 +1021,11 @@ let elab_expr loc env a =
           | (TPtr(ty, a) | TArray(ty, _, a)), (TInt _ | TEnum _) ->
               if not (pointer_arithmetic_ok env ty) then
                 err "illegal pointer arithmetic in binary '-'";
-              (TPtr(ty, a), TPtr(ty, a))
+              (TPtr(ty, []), TPtr(ty, []))
           | (TInt _ | TEnum _), (TPtr(ty, a) | TArray(ty, _, a)) ->
               if not (pointer_arithmetic_ok env ty) then
                 err "illegal pointer arithmetic in binary '-'";
-              (TPtr(ty, a), TPtr(ty, a))
+              (TPtr(ty, []), TPtr(ty, []))
           | (TPtr(ty1, a1) | TArray(ty1, _, a1)),
             (TPtr(ty2, a2) | TArray(ty2, _, a2)) ->
               if not (compatible_types ~noattrs:true env ty1 ty2) then
@@ -1084,7 +1086,7 @@ let elab_expr loc env a =
       | TPtr(ty1, a1), TPtr(ty2, a2) ->
           let tyres =
             if is_void_type env ty1 || is_void_type env ty2 then
-              TPtr(TVoid [], add_attributes a1 a2)
+              TPtr(TVoid (add_attributes a1 a2), [])
             else
               match combine_types ~noattrs:true env
                                   (TPtr(ty1, a1)) (TPtr(ty2, a2)) with
@@ -1095,9 +1097,9 @@ let elab_expr loc env a =
             in
           { edesc = EConditional(b1, b2, b3); etyp = tyres }
       | TPtr(ty1, a1), TInt _ when is_literal_0 b3 ->
-          { edesc = EConditional(b1, b2, nullconst); etyp = TPtr(ty1, a1) }
+          { edesc = EConditional(b1, b2, nullconst); etyp = TPtr(ty1, []) }
       | TInt _, TPtr(ty2, a2) when is_literal_0 b2 ->
-          { edesc = EConditional(b1, nullconst, b3); etyp = TPtr(ty2, a2) }
+          { edesc = EConditional(b1, nullconst, b3); etyp = TPtr(ty2, []) }
       | ty1, ty2 ->
           match combine_types ~noattrs:true env ty1 ty2 with
           | None ->
@@ -1312,7 +1314,7 @@ let init_char_array_string opt_size s =
     if i < 0L then init else begin
       let c =
         if i < len then Int64.of_int (Char.code s.[Int64.to_int i]) else 0L in
-      add_chars (Int64.pred i) (Init_single (intconst c IChar) :: init)
+      add_chars (Int64.pred i) (Init_single (intconst c IInt) :: init)
     end in
   Init_array (add_chars (Int64.pred size) [])
 

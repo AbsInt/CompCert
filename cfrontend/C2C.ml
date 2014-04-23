@@ -200,9 +200,10 @@ a constant)"; Integers.Int.one in
 (** ** Translation of [va_arg] for variadic functions. *)
 
 let va_list_ptr e =
-  if CBuiltins.va_list_scalar
-  then Eaddrof(e, Tpointer(typeof e, noattr))
-  else e
+  if not CBuiltins.va_list_scalar then e else
+    match e with
+    | Evalof(e', _) -> Eaddrof(e', Tpointer(typeof e, noattr))
+    | _             -> error "bad use of a va_list object"; e
 
 let make_builtin_va_arg env ty e =
   let (helper, ty_ret) =
@@ -215,15 +216,14 @@ let make_builtin_va_arg env ty e =
         ("__compcert_va_float64", Tfloat(F64, noattr))
     | _ ->
         unsupported "va_arg at this type";
-        ("", Tvoid)
-  in
-    Ecast 
-      (Ecall(Evar (intern_string helper, 
-                   Tfunction(Tcons(Tpointer(Tvoid, noattr), Tnil), ty_ret, 
-                             cc_default)),
-             Econs(va_list_ptr e, Enil),
-             ty_ret),
-       ty)
+        ("", Tvoid) in
+  let ty_fun =
+    Tfunction(Tcons(Tpointer(Tvoid, noattr), Tnil), ty_ret, cc_default) in
+  Ecast 
+    (Ecall(Evalof(Evar(intern_string helper, ty_fun), ty_fun),
+           Econs(va_list_ptr e, Enil),
+           ty_ret),
+     ty)
 
 (** ** Translation functions *)
 
@@ -338,7 +338,7 @@ let convertTyp env t =
     | C.TStruct(id, a) ->
         let a' = convertAttr a in
         begin try
-          mergeTypAttr (Hashtbl.find compositeCache id) a'
+          merge_attributes (Hashtbl.find compositeCache id) a'
         with Not_found ->
           let flds =
             try
@@ -350,7 +350,7 @@ let convertTyp env t =
     | C.TUnion(id, a) ->
         let a' = convertAttr a in
         begin try
-          mergeTypAttr (Hashtbl.find compositeCache id) a'
+          merge_attributes (Hashtbl.find compositeCache id) a'
         with Not_found ->
           let flds =
             try
@@ -378,12 +378,6 @@ let convertTyp env t =
               convertFieldList seen fl)
 
   in convertTyp [] t
-
-(*
-let rec convertTypList env = function
-  | [] -> Tnil
-  | t1 :: tl -> Tcons(convertTyp env t1, convertTypList env tl)
-*)
 
 let rec convertTypArgs env tl el =
   match tl, el with
@@ -1062,10 +1056,11 @@ let convertProgram p =
   try
     let gl1 = convertGlobdecls (translEnv Env.empty p) [] (cleanupGlobals p) in
     let gl2 = globals_for_strings gl1 in
+    let p' = { AST.prog_defs = gl2;
+                AST.prog_main = intern_string "main" } in
     if !numErrors > 0
     then None
-    else Some { AST.prog_defs = gl2;
-                AST.prog_main = intern_string "main" }
+    else Some p'
   with Env.Error msg ->
     error (Env.error_message msg); None
 

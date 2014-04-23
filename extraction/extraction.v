@@ -21,6 +21,7 @@ Require Inlining.
 Require ValueDomain.
 Require Tailcall.
 Require Allocation.
+Require Ctypes.
 Require Compiler.
 
 (* Standard lib *)
@@ -125,6 +126,7 @@ Cd "extraction".
 Separate Extraction
    Compiler.transf_c_program Compiler.transf_cminor_program
    Cexec.do_initial_state Cexec.do_step Cexec.at_final_state
+   Ctypes.merge_attributes Ctypes.remove_attributes
    Initializers.transl_init Initializers.constval
    Csyntax.Eindex Csyntax.Epreincr
    Conventions1.dummy_int_reg Conventions1.dummy_float_reg
