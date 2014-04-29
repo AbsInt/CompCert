@@ -19,4 +19,5 @@ exception Abort
 val fatal_error : ('a, Format.formatter, unit, unit, unit, 'b) format6 -> 'a
 val error : ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
 val warning : ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
+val info : ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
 val check_errors : unit -> bool

@@ -273,6 +273,9 @@ EOF
 
 fi
 
+# Avoid re-building cparser/Parser.v on the first run
+touch cparser/Parser.v
+
 # Summarize configuration
 
 if test "$target" = "manual"; then

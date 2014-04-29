@@ -45,12 +45,20 @@ let preprocessed_file transfs name sourcefile =
     try
       let t = parse_transformations transfs in
       let lb = Lexer.init name ic in
-      let parse = Clflags.time2 "Parsing" Parser.file Lexer.initial lb in
-      let p1 = Clflags.time "Elaboration" Elab.elab_file parse in
+      let rec inf = Datatypes.S inf in
+      let ast : Cabs.definition list =
+        Obj.magic
+          (match Clflags.time2 "Parsing"
+                 Parser.translation_unit_file inf (Lexer.tokens_stream lb) with
+             | Parser.Parser.Inter.Fail_pr ->
+                 (* Theoretically impossible : implies inconsistencies
+                    between grammars. *)
+                 Cerrors.fatal_error "Internal error while parsing"
+             | Parser.Parser.Inter.Timeout_pr -> assert false
+             | Parser.Parser.Inter.Parsed_pr (ast, _ ) -> ast) in
+      let p1 = Clflags.time "Elaboration" Elab.elab_file ast in
       Clflags.time2 "Emulations" transform_program t p1
     with
-    | Parsing.Parse_error ->
-        Cerrors.error "Error during parsing"; []
     | Cerrors.Abort ->
         [] in
   close_in ic;

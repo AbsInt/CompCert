@@ -1,7 +1,17 @@
 Language features:
 - Support for C99 designated initializers. (ISO C99 section 6.7.8.)
+- Traditional, pre-Standard function definitions are no longer supported, e.g.
+      int f(i) int i; { return i + 1; }  // no longer supported
+  Use Standard form instead:
+      int f(int i) { return i + 1; }
 
 Improvements in confidence:
+- The parser is now formally verified against the ISO C99 grammar plus
+  CompCert's extensions.  The verification proves that the parser
+  recognizes exactly the language specified by the grammar, and that
+  the grammar has no ambiguities.  For more details, see the paper
+  "Validating LR(1) parsers" by Jacques-Henri Jourdan, François Pottier,
+  and Xavier Leroy, ESOP 2012, http://dx.doi.org/10.1007/978-3-642-28869-2_20
 - More theorems proved about float<->integer conversions.
 
 Optimizations:

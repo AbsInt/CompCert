@@ -11,6 +11,8 @@ char filler1 = 1;
 __attribute((__aligned__(1<<4))) int a = 1234;
 char filler2 = 1;
 __attribute((__aligned__(8))) char b = 'b';
+char filler7 = 1;
+char g __attribute((__aligned__(8))) = 'g';
 
 /* Sections */
 
@@ -40,6 +42,7 @@ int main()
 {
   printf("Address of a = %u mod 16\n", ((unsigned int) &a) & 0xF);
   printf("Address of b = %u mod 8\n", ((unsigned int) &b) & 0x7);
+  printf("Address of g = %u mod 8\n", ((unsigned int) &g) & 0x7);
   printf("Delta d - c = %u\n", ((unsigned int) &d) - ((unsigned int) &c));
   printf("Delta f - e = %u\n", ((unsigned int) &f) - ((unsigned int) &e));
   printf("Address of u = %u mod 8\n", ((unsigned int) &u) & 0x7);

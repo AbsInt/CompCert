@@ -18,7 +18,6 @@
 (* Numbered references are to sections of the ISO C99 standard *)
 
 open Format
-open Cerrors
 open Machine
 open Cabs
 open Cabshelper
@@ -54,6 +53,7 @@ let elab_loc l = (l.filename, l.lineno)
 let top_declarations = ref ([] : globdecl list)
 
 let emit_elab loc td =
+  let loc = elab_loc loc in
   top_declarations := { gdesc = td; gloc = loc } :: !top_declarations
 
 let reset() = top_declarations := []
@@ -63,10 +63,6 @@ let elaborated_program () =
   top_declarations := [];
   (* Reverse it and eliminate unreferenced declarations *)
   Cleanup.program p
-
-(* Location stuff *)
-
-let loc_of_name (_, _, _, loc) = loc
 
 (* Monadic map for functions env -> 'a -> 'b * env *)
 
@@ -91,8 +87,8 @@ let redef fn env arg =
 let elab_expr_f : (cabsloc -> Env.t -> Cabs.expression -> C.exp) ref
   = ref (fun _ _ _ -> assert false)
 
-let elab_funbody_f : (cabsloc -> C.typ -> Env.t -> Cabs.block -> C.stmt) ref
-  = ref (fun _ _ _ _ -> assert false)
+let elab_funbody_f : (C.typ -> Env.t -> statement -> C.stmt) ref
+  = ref (fun _ _ _ -> assert false)
 
 
 (** * Elaboration of constants - C99 section 6.4.4 *)
@@ -199,8 +195,8 @@ let elab_int_constant loc s0 =
 
 let elab_float_constant loc f =
   let ty = match f.suffix_FI with
-    | Some 'l' | Some 'L' -> FLongDouble
-    | Some 'f' | Some 'F' -> FFloat
+    | Some ("l"|"L") -> FLongDouble
+    | Some ("f"|"F") -> FFloat
     | None -> FDouble
     | _ -> assert false (* The lexer should not accept anything else. *)
   in
@@ -212,26 +208,105 @@ let elab_float_constant loc f =
   in
   (v, ty)
 
-let elab_char_constant loc sz cl =
+let parse_next_char s pos loc =
+  if s.[pos] = '\\' then
+    match s.[pos+1] with
+      | '\'' -> (Int64.of_int (Char.code '\''), pos+2)
+      | '\"' -> (Int64.of_int (Char.code '\"'), pos+2)
+      | '?' -> (Int64.of_int (Char.code '?'), pos+2)
+      | '\\' -> (Int64.of_int (Char.code '\\'), pos+2)
+      | 'a' -> (7L, pos+2)
+      | 'b' -> (Int64.of_int (Char.code '\b'), pos+2)
+      | 'f' -> (12L, pos+2)
+      | 'n' -> (Int64.of_int (Char.code '\n'), pos+2)
+      | 'r' -> (Int64.of_int (Char.code '\r'), pos+2)
+      | 't' -> (Int64.of_int (Char.code '\t'), pos+2)
+      | 'v' -> (11L, pos+2)
+      | '0'..'9' -> 
+          let next = ref (pos+1) in
+          while !next < String.length s && s.[!next] >= '0' && s.[!next] <= '9' do 
+            incr next
+          done;
+          (parse_int 8 (String.sub s (pos+1) (!next-pos-1)), !next)
+      | 'x' ->
+          let next = ref (pos+2) in
+          while !next < String.length s && (
+            (s.[!next] >= '0' && s.[!next] <= '9') ||
+            (s.[!next] >= 'a' && s.[!next] <= 'f') ||
+            (s.[!next] >= 'A' && s.[!next] <= 'F'))
+          do 
+            incr next
+          done;
+          (begin 
+             try parse_int 16 (String.uppercase (String.sub s (pos+2) (!next-pos-2)))
+             with Overflow -> 
+               error loc "overflow in hexadecimal escape sequence"; 0L end,
+           !next)
+      | 'u' ->
+          (parse_int 16 (String.uppercase (String.sub s (pos+2) 4)), pos+6)
+      | 'U' ->
+          (parse_int 16 (String.uppercase (String.sub s (pos+2) 8)), pos+10)
+      | _ -> assert false
+  else (Int64.of_int (Char.code s.[pos]), pos+1)
+
+let elab_char_constant loc s =
+  let (s, sz) =
+    match s.[0], s.[1] with
+    | 'L', '\'' -> chop_first s 2, !config.sizeof_wchar
+    | '\'', _ -> chop_first s 1, 1
+    | _ -> assert false
+  in
+  assert (s.[String.length s-1] = '\'');
+  let s = chop_last s 1 in
   let nbits = 8 * sz in
   (* Treat multi-char constants as a number in base 2^nbits *)
   let max_digit = Int64.shift_left 1L nbits in
   let max_val = Int64.shift_left 1L (64 - nbits) in
-  let v =
-    List.fold_left 
-      (fun acc d ->
-        if acc >= max_val then
-          error loc "character constant overflows";
-        if d >= max_digit then
-          warning loc "escape sequence out of range";
-        Int64.add (Int64.shift_left acc nbits) d)
-      0L cl in
+  let rec parse pos accu nchar =
+    if accu >= max_val then
+      error loc "character constant overflows";
+    if pos = String.length s then accu, nchar
+    else
+      let (c, pos) = parse_next_char s pos loc in
+      if c >= max_digit then
+        warning loc "escape sequence out of range";
+      let accu = Int64.add (Int64.shift_left accu nbits) c in
+      parse pos accu (nchar+1)
+  in
+  let v, nchar = parse 0 0L 0 in
   if not (integer_representable v IInt) then
     error loc "character constant cannot be represented at type 'int'";
   (* C99 6.4.4.4 item 10: single character -> represent at type char *)
-  if List.length cl = 1
+  if nchar = 1
   then Ceval.normalize_int v IChar
   else v
+
+let elab_string_literal loc s =
+  let (wide, pos) = if s.[0] = 'L' then ref true, 2 else ref false, 1 in
+  assert (s.[pos-1] = '\"');
+  let rec parse pos accu =
+    if s.[pos] = '\"' then
+      if pos = String.length s - 1 then accu
+      else
+        let pos = if s.[pos+1] = 'L' then (wide := true; pos+3) else pos+2 in
+        assert(s.[pos-1] = '\"');
+        parse pos accu
+    else
+      let (char, pos) = parse_next_char s pos loc in
+      parse pos (char::accu)
+  in
+  let l = List.rev (parse pos []) in
+  let nbbits = if !wide then 8 * !config.sizeof_wchar else 8 in
+  List.iter (fun c ->
+    if c < 0L || c >= Int64.shift_left 1L nbbits then
+      error loc "character overflows") l;
+  if !wide then
+    CWStr l
+  else
+    let res = String.create (List.length l) in
+    List.iteri (fun i c ->
+      res.[i] <- Char.chr (Int64.to_int c)) l;
+    CStr res
 
 let elab_constant loc = function
   | CONST_INT s ->
@@ -240,12 +315,10 @@ let elab_constant loc = function
   | CONST_FLOAT f ->
       let (v, fk) = elab_float_constant loc f in
       CFloat(v, fk)
-  | CONST_CHAR cl ->
-      CInt(elab_char_constant loc 1 cl, IInt, "")
-  | CONST_WCHAR cl -> 
-      CInt(elab_char_constant loc !config.sizeof_wchar cl, IInt, "")
-  | CONST_STRING s -> CStr s
-  | CONST_WSTRING s -> CWStr s
+  | CONST_CHAR s ->
+      CInt(elab_char_constant loc s, IInt, "")
+  | CONST_STRING s ->
+      elab_string_literal loc s
 
 
 (** * Elaboration of type expressions, type specifiers, name declarations *)
@@ -271,17 +344,23 @@ let elab_attr_arg loc env a =
       | Some(CStr s) -> AString s
       | _ -> raise Wrong_attr_arg
 
+let elab_gcc_attr_word = function
+  | GCC_ATTR_IDENT s -> s
+  | GCC_ATTR_CONST -> "const"
+  | GCC_ATTR_PACKED -> "__packed__"
+
 let elab_gcc_attr loc env = function
-  | VARIABLE v ->
+  | GCC_ATTR_EMPTY -> []
+  | GCC_ATTR_NOARGS w ->
+      let v = elab_gcc_attr_word w in
       [Attr(v, [])]
-  | CALL(VARIABLE v, args) ->
+  | GCC_ATTR_ARGS (w, args) ->
+      let v = elab_gcc_attr_word w in
       begin try
         [Attr(v, List.map (elab_attr_arg loc env) args)]
       with Wrong_attr_arg ->
         warning loc "cannot parse '%s' attribute, ignored" v; []
       end
-  | _ ->
-      warning loc "ill-formed attribute, ignored"; []
 
 let is_power_of_two n = n > 0L && Int64.(logand n (pred n)) = 0L
 
@@ -294,25 +373,25 @@ let extract_alignas loc a =
       end
   | _ -> a
 
-let elab_attribute loc env = function
-  | ("const", []) -> [AConst]
-  | ("restrict", []) -> [ARestrict]
-  | ("volatile", []) -> [AVolatile]
-  | ("_Alignas", [a]) ->
+let elab_attribute env = function
+  | GCC_ATTR (l, loc) ->
+      List.fold_left add_attributes []
+        (List.map (fun attr -> [attr])
+           (List.map (extract_alignas loc)
+              (List.flatten
+                 (List.map (elab_gcc_attr loc env) l))))
+  | PACKED_ATTR (args, loc) ->
+      [Attr("__packed__", List.map (elab_attr_arg loc env) args)]
+  | ALIGNAS_ATTR ([a], loc) ->
       begin match elab_attr_arg loc env a with
       | AInt n when is_power_of_two n -> [AAlignas (Int64.to_int n)]
       | _ -> warning loc "bad _Alignas value, ignored"; []
       end
-  | (("__attribute" | "__attribute__"), l) ->
-        List.map (extract_alignas loc)
-          (List.flatten (List.map (elab_gcc_attr loc env) l))
-  | ("__packed__", args) ->
-        [Attr("__packed__", List.map (elab_attr_arg loc env) args)]
-  | ("__asm__", _) -> []    (* MacOS X noise *)
-  | (name, _) -> warning loc "`%s' annotation ignored" name; []
+  | ALIGNAS_ATTR (_, loc) ->
+      warning loc "_Alignas takes exactly one parameter, ignored"; []
 
-let elab_attributes loc env al =
-  List.fold_left add_attributes [] (List.map (elab_attribute loc env) al)
+let elab_attributes env al =
+  List.fold_left add_attributes [] (List.map (elab_attribute env) al)
 
 (* Auxiliary for typespec elaboration *)
 
@@ -324,7 +403,6 @@ let typespec_rank = function (* Don't change this *)
   | Cabs.Tshort -> 4
   | Cabs.Tlong -> 5
   | Cabs.Tint -> 6
-  | Cabs.Tint64 -> 7
   | Cabs.Tfloat -> 8
   | Cabs.Tdouble -> 9
   | Cabs.T_Bool -> 10
@@ -332,8 +410,8 @@ let typespec_rank = function (* Don't change this *)
 
 let typespec_order t1 t2 = compare (typespec_rank t1) (typespec_rank t2)
 
-(* Elaboration of a type specifier.  Returns 4-tuple:
-     (storage class, "inline" flag, elaborated type, new env)
+(* Elaboration of a type specifier.  Returns 5-tuple:
+     (storage class, "inline" flag, "typedef" flag, elaborated type, new env)
    Optional argument "only" is true if this is a standalone
    struct or union declaration, without variable names.
    C99 section 6.7.2.
@@ -347,35 +425,31 @@ let rec elab_specifier ?(only = false) loc env specifier =
   let sto = ref Storage_default
   and inline = ref false
   and attr = ref []
-  and tyspecs = ref [] in
+  and tyspecs = ref [] 
+  and typedef = ref false in
 
   let do_specifier = function
-  | SpecTypedef -> ()
   | SpecCV cv ->
-      let a =
-        match cv with
-        | CV_CONST -> AConst
-        | CV_VOLATILE -> AVolatile
-        | CV_RESTRICT -> ARestrict in
-      attr := add_attributes [a] !attr
-  | SpecAttr a ->
-      attr := add_attributes (elab_attributes loc env [a]) !attr
+      attr := add_attributes (elab_cvspec env cv) !attr
   | SpecStorage st ->
-      if !sto <> Storage_default then
+      if !sto <> Storage_default && st <> TYPEDEF then
         error loc "multiple storage specifiers";
       begin match st with
-      | NO_STORAGE -> ()
       | AUTO -> ()
       | STATIC -> sto := Storage_static
       | EXTERN -> sto := Storage_extern
       | REGISTER -> sto := Storage_register
+      | TYPEDEF -> 
+          if !typedef then
+            error loc "multiple uses of 'typedef'";
+          typedef := true
       end
   | SpecInline -> inline := true
   | SpecType tys -> tyspecs := tys :: !tyspecs in
 
   List.iter do_specifier specifier;
 
-  let simple ty = (!sto, !inline, add_attributes_type !attr ty, env) in
+  let simple ty = (!sto, !inline, !typedef, add_attributes_type !attr ty, env) in
 
   (* As done in CIL, partition !attr into type-related attributes,
      which are returned, and other attributes, which are left in !attr.
@@ -430,11 +504,6 @@ let rec elab_specifier ?(only = false) loc env specifier =
     | [Cabs.Tunsigned; Cabs.Tlong; Cabs.Tlong] -> simple (TInt(IULongLong, []))
     | [Cabs.Tunsigned; Cabs.Tlong; Cabs.Tlong; Cabs.Tint] -> simple (TInt(IULongLong, []))
 
-    (* int64 is a MSVC extension *)
-    | [Cabs.Tint64] -> simple (TInt(ILongLong, []))
-    | [Cabs.Tsigned; Cabs.Tint64] -> simple (TInt(ILongLong, []))
-    | [Cabs.Tunsigned; Cabs.Tint64] -> simple (TInt(IULongLong, []))
-
     | [Cabs.Tfloat] -> simple (TFloat(FFloat, []))
     | [Cabs.Tdouble] -> simple (TFloat(FDouble, []))
 
@@ -446,52 +515,51 @@ let rec elab_specifier ?(only = false) loc env specifier =
         let (id', info) = wrap Env.lookup_typedef loc env id in
         simple (TNamed(id', []))
 
-    | [Cabs.Tstruct(id, optmembers, a)] ->
+    | [Cabs.Tstruct_union(STRUCT, id, optmembers, a)] ->
         let a' =
-          add_attributes (get_type_attrs()) (elab_attributes loc env a) in
+          add_attributes (get_type_attrs()) (elab_attributes env a) in
         let (id', env') =
           elab_struct_or_union only Struct loc id optmembers a' env in
-        (!sto, !inline, TStruct(id', !attr), env')
+        (!sto, !inline, !typedef, TStruct(id', !attr), env')
 
-    | [Cabs.Tunion(id, optmembers, a)] ->
+    | [Cabs.Tstruct_union(UNION, id, optmembers, a)] ->
         let a' =
-          add_attributes (get_type_attrs()) (elab_attributes loc env a) in
+          add_attributes (get_type_attrs()) (elab_attributes env a) in
         let (id', env') =
           elab_struct_or_union only Union loc id optmembers a' env in
-        (!sto, !inline, TUnion(id', !attr), env')
+        (!sto, !inline, !typedef, TUnion(id', !attr), env')
 
     | [Cabs.Tenum(id, optmembers, a)] ->
         let a' =
-          add_attributes (get_type_attrs()) (elab_attributes loc env a) in
-        let (id', env') = 
+          add_attributes (get_type_attrs()) (elab_attributes env a) in
+        let (id', env') =
           elab_enum loc id optmembers a' env in
-        (!sto, !inline, TEnum(id', !attr), env')
-
-    | [Cabs.TtypeofE _] ->
-        fatal_error loc "GCC __typeof__ not supported"
-    | [Cabs.TtypeofT _] ->
-        fatal_error loc "GCC __typeof__ not supported"
+        (!sto, !inline, !typedef, TEnum(id', !attr), env')
 
     (* Specifier doesn't make sense *)
     | _ ->
         fatal_error loc "illegal combination of type specifiers"
+
+(* Elaboration of a type qualifier. *)
+
+and elab_cvspec env = function
+  | CV_CONST -> [AConst]
+  | CV_VOLATILE -> [AVolatile]
+  | CV_RESTRICT -> [ARestrict]
+  | CV_ATTR attr -> elab_attribute env attr
 
 (* Elaboration of a type declarator.  C99 section 6.7.5. *)
 
 and elab_type_declarator loc env ty = function
   | Cabs.JUSTBASE ->
       (ty, env)
-  | Cabs.PARENTYPE(attr1, d, attr2) ->
-      (* XXX ignoring the distinction between attrs after and before *)
-      let a = elab_attributes loc env (attr1 @ attr2) in
-      elab_type_declarator loc env (add_attributes_type a ty) d
-  | Cabs.ARRAY(d, attr, sz) ->
-      let a = elab_attributes loc env attr in
+  | Cabs.ARRAY(d, cv_specs, sz) ->
+      let a = List.fold_left add_attributes [] (List.map (elab_cvspec env) cv_specs) in
       let sz' =
         match sz with
-        | Cabs.NOTHING ->
+        | None ->
             None
-        | _ ->
+        | Some sz ->
             match Ceval.integer_expr env (!elab_expr_f loc env sz) with
             | Some n ->
                 if n < 0L then error loc "array size is negative";
@@ -501,10 +569,10 @@ and elab_type_declarator loc env ty = function
                 error loc "array size is not a compile-time constant";
                 Some 1L in (* produces better error messages later *)
        elab_type_declarator loc env (TArray(ty, sz', a)) d
-  | Cabs.PTR(attr, d) ->
-      let a = elab_attributes loc env attr in
-       elab_type_declarator loc env (TPtr(ty, a)) d
-  | Cabs.PROTO(d, params, vararg) ->
+  | Cabs.PTR(cv_specs, d) ->
+      let a = List.fold_left add_attributes [] (List.map (elab_cvspec env) cv_specs) in
+      elab_type_declarator loc env (TPtr(ty, a)) d
+  | Cabs.PROTO(d, (params, vararg)) ->
        begin match unroll env ty with
        | TArray _ | TFun _ ->
            error loc "illegal function return type@ %a" Cprint.typ ty
@@ -529,13 +597,20 @@ and elab_parameters env params =
 
 (* Elaboration of a function parameter *)
 
-and elab_parameter env (spec, name) =
-  let (id, sto, inl, ty, env1) = elab_name env spec name in
+and elab_parameter env (PARAM (spec, id, decl, attr, loc)) =
+  let (sto, inl, tydef, bty, env1) = elab_specifier loc env spec in
+  if tydef then
+    error loc "'typedef' used in function parameter";
+  let (ty, env2) = elab_type_declarator loc env1 bty decl in
+  let ty = add_attributes_type (elab_attributes env attr) ty in
   if sto <> Storage_default && sto <> Storage_register then
-    error (loc_of_name name)
+    error loc
       "'extern' or 'static' storage not supported for function parameter";
+  if inl then
+    error loc "'inline' is forbidden here";
+  let id = match id with None -> "" | Some id -> id in
   if id <> "" && redef Env.lookup_ident env id <> None then
-    error (loc_of_name name) "redefinition of parameter '%s'" id;
+    error loc "redefinition of parameter '%s'" id;
   (* replace array and function types by pointer types *)
   let ty1 = argument_conversion env1 ty in
   let (id', env2) = Env.enter_ident env1 id sto ty1 in
@@ -543,45 +618,61 @@ and elab_parameter env (spec, name) =
 
 (* Elaboration of a (specifier, Cabs "name") pair *)
 
-and elab_name env spec (id, decl, attr, loc) =
-  let (sto, inl, bty, env') = elab_specifier loc env spec in
+and elab_name env spec (Name (id, decl, attr, loc)) =
+  let (sto, inl, tydef, bty, env') = elab_specifier loc env spec in
+  if tydef then
+    error loc "'typedef' is forbidden here";
   let (ty, env'') = elab_type_declarator loc env' bty decl in 
-  let a = elab_attributes loc env attr in
+  let a = elab_attributes env attr in
   (id, sto, inl, add_attributes_type a ty, env'')
 
 (* Elaboration of a name group.  C99 section 6.7.6 *)
 
 and elab_name_group loc env (spec, namelist) =
-  let (sto, inl, bty, env') =
+  let (sto, inl, tydef, bty, env') =
     elab_specifier loc env spec in
-  let elab_one_name env (id, decl, attr, loc) =
+  if tydef then
+    error loc "'typedef' is forbidden here";
+  if inl then
+    error loc "'inline' is forbidden here";
+  let elab_one_name env (Name (id, decl, attr, loc)) =
     let (ty, env1) =
       elab_type_declarator loc env bty decl in 
-    let a = elab_attributes loc env attr in
-    ((id, sto, add_attributes_type a ty), env1) in
-  mmap elab_one_name env' namelist
+    let a = elab_attributes env attr in
+    ((id, add_attributes_type a ty), env1) in
+  (mmap elab_one_name env' namelist, sto)
 
 (* Elaboration of an init-name group *)
 
 and elab_init_name_group loc env (spec, namelist) =
-  let (sto, inl, bty, env') =
-    elab_specifier loc env spec in
-  let elab_one_name env ((id, decl, attr, loc), init) =
+  let (sto, inl, tydef, bty, env') =
+    elab_specifier ~only:(namelist=[]) loc env spec in
+  if inl then
+    error loc "'inline' is forbidden here";
+  let elab_one_name env (Init_name (Name (id, decl, attr, loc), init)) =
     let (ty, env1) =
       elab_type_declarator loc env bty decl in 
-    let a = elab_attributes loc env attr in
-    ((id, sto, add_attributes_type a ty, init), env1) in
-  mmap elab_one_name env' namelist
+    let a = elab_attributes env attr in
+    ((id, add_attributes_type a ty, init), env1) in
+  (mmap elab_one_name env' namelist, sto, tydef)
 
 (* Elaboration of a field group *)
 
-and elab_field_group loc env (spec, fieldlist) =
-  let (names, env') =
+and elab_field_group env (Field_group (spec, fieldlist, loc)) =
+  let fieldlist = List.map (
+    function
+      | (None, x) -> (Name ("", JUSTBASE, [], cabslu), x)
+      | (Some n, x) -> (n, x))
+    fieldlist
+  in
+
+  let ((names, env'), sto) =
     elab_name_group loc env (spec, List.map fst fieldlist) in
 
-  let elab_bitfield ((_, _, _, loc), optbitsize) (id, sto, ty) =
-    if sto <> Storage_default then
-      error loc "member '%s' has non-default storage" id;
+  if sto <> Storage_default then
+    error loc "non-default storage in struct or union";
+
+  let elab_bitfield (Name (_, _, _, loc), optbitsize) (id, ty) =
     let optbitsize' =
       match optbitsize with
       | None -> None
@@ -623,7 +714,7 @@ and elab_field_group loc env (spec, fieldlist) =
 (* Elaboration of a struct or union. C99 section 6.7.2.1 *)
 
 and elab_struct_or_union_info kind loc env members attrs =
-  let (m, env') = mmap (elab_field_group loc) env members in
+  let (m, env') = mmap elab_field_group env members in
   let m = List.flatten m in
   (* Check for incomplete types *)
   let rec check_incomplete = function
@@ -644,8 +735,12 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
   let warn_attrs () =
     if attrs <> [] then
       warning loc "attributes over struct/union ignored in this context" in
-  let optbinding =
-    if tag = "" then None else Env.lookup_composite env tag in
+  let optbinding, tag =
+    match tag with
+      | None -> None, ""
+      | Some s ->
+          Env.lookup_composite env s, s
+  in
   match optbinding, optmembers with
   | Some(tag', ci), None
     when (not only) || Env.in_current_scope env tag' ->
@@ -663,8 +758,7 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
       (* finishing the definition of an incomplete struct or union *)
       let (ci', env') = elab_struct_or_union_info kind loc env members attrs in
       (* Emit a global definition for it *)
-      emit_elab (elab_loc loc)
-                (Gcompositedef(kind, tag', attrs, ci'.ci_members));
+      emit_elab loc (Gcompositedef(kind, tag', attrs, ci'.ci_members));
       (* Replace infos but keep same ident *)
       (tag', Env.add_composite env' tag' ci')
   | Some(tag', {ci_sizeof = Some _}), Some _
@@ -679,8 +773,7 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
       (* enter it with a new name *)
       let (tag', env') = Env.enter_composite env tag ci in
       (* emit it *)
-      emit_elab (elab_loc loc)
-                (Gcompositedecl(kind, tag', attrs));
+      emit_elab loc (Gcompositedecl(kind, tag', attrs));
       (tag', env')
   | _, Some members ->
       (* definition of a complete struct or union *)
@@ -688,25 +781,23 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
       (* enter it, incomplete, with a new name *)
       let (tag', env') = Env.enter_composite env tag ci1 in
       (* emit a declaration so that inner structs and unions can refer to it *)
-      emit_elab (elab_loc loc)
-                (Gcompositedecl(kind, tag', attrs));
+      emit_elab loc (Gcompositedecl(kind, tag', attrs));
       (* elaborate the members *)
       let (ci2, env'') =
         elab_struct_or_union_info kind loc env' members attrs in
       (* emit a definition *)
-      emit_elab (elab_loc loc)
-                (Gcompositedef(kind, tag', attrs, ci2.ci_members));
+      emit_elab loc (Gcompositedef(kind, tag', attrs, ci2.ci_members));
       (* Replace infos but keep same ident *)
       (tag', Env.add_composite env'' tag' ci2)
 
 (* Elaboration of an enum item.  C99 section 6.7.2.2 *)
 
-and elab_enum_item env (s, exp, loc) nextval =
+and elab_enum_item env ((s, exp), loc) nextval =
   let (v, exp') =
     match exp with
-    | NOTHING ->
+    | None ->
         (nextval, None)
-    | _ ->
+    | Some exp ->
         let exp' = !elab_expr_f loc env exp in
         match Ceval.integer_expr env exp' with
         | Some n -> (n, Some exp')
@@ -725,6 +816,7 @@ and elab_enum_item env (s, exp, loc) nextval =
 (* Elaboration of an enumeration declaration.   C99 section 6.7.2.2  *)
 
 and elab_enum loc tag optmembers attrs env =
+  let tag = match tag with None -> "" | Some s -> s in
   match optmembers with
   | None ->
       let (tag', info) = wrap Env.lookup_enum loc env tag in (tag', env)
@@ -739,16 +831,16 @@ and elab_enum loc tag optmembers attrs env =
       let (dcls, env') = elab_members env 0L members in
       let info = { ei_members = dcls; ei_attr = attrs } in
       let (tag', env'') = Env.enter_enum env' tag info in
-      emit_elab (elab_loc loc) (Genumdef(tag', attrs, dcls));
+      emit_elab loc (Genumdef(tag', attrs, dcls));
       (tag', env'')
 
 (* Elaboration of a naked type, e.g. in a cast *)
 
 let elab_type loc env spec decl =
-  let (sto, inl, bty, env') = elab_specifier loc env spec in
+  let (sto, inl, tydef, bty, env') = elab_specifier loc env spec in
   let (ty, env'') = elab_type_declarator loc env' bty decl in 
-  if sto <> Storage_default || inl then
-    error loc "'extern', 'static', 'register' and 'inline' are meaningless in cast";
+  if sto <> Storage_default || inl || tydef then
+    error loc "'typedef', 'extern', 'static', 'register' and 'inline' are meaningless in cast";
   ty
 
 
@@ -761,9 +853,6 @@ let elab_expr loc env a =
   let warning fmt = warning loc fmt in
 
   let rec elab = function
-
-  | NOTHING ->
-      error "empty expression"
 
 (* 6.5.1 Primary expressions *)
 
@@ -778,9 +867,6 @@ let elab_expr loc env a =
   | CONSTANT cst ->
       let cst' = elab_constant loc cst in
       { edesc = EConst cst'; etyp = type_of_constant cst' }
-
-  | PAREN e ->
-      elab e
 
 (* 6.5.2 Postfix expressions *)
 
@@ -833,22 +919,27 @@ let elab_expr loc env a =
       (elaboration)   --> __builtin_va_start(ap)
     va_arg(ap, ty)
       (preprocessing) --> __builtin_va_arg(ap, ty)
-      (parsing)       --> __builtin_va_arg(ap, sizeof(ty))
+      (elaboration)   --> __builtin_va_arg(ap, sizeof(ty))
 *)
   | CALL((VARIABLE "__builtin_va_start" as a1), [a2; a3]) ->
       let b1 = elab a1 and b2 = elab a2 and _b3 = elab a3 in
       { edesc = ECall(b1, [b2]);
         etyp = TVoid [] }
-  | CALL((VARIABLE "__builtin_va_arg" as a1),
-         [a2; (TYPE_SIZEOF _) as a3]) ->
-      let b1 = elab a1 and b2 = elab a2 and b3 = elab a3 in
+
+  | BUILTIN_VA_ARG (a2, a3) ->
+      let ident =
+        match wrap Env.lookup_ident loc env "__builtin_va_arg" with
+          | (id, II_ident(sto, ty)) -> { edesc = EVar id; etyp = ty }
+          | _ -> assert false
+      in
+      let b2 = elab a2 and b3 = elab (TYPE_SIZEOF a3) in
       let ty = match b3.edesc with ESizeof ty -> ty | _ -> assert false in
       let ty' = default_argument_conversion env ty in
       if not (compatible_types env ty ty') then
         warning "'%a' is promoted to '%a' when passed through '...'.@ You should pass '%a', not '%a', to 'va_arg'"
                 Cprint.typ ty Cprint.typ ty'
                 Cprint.typ ty' Cprint.typ ty;
-      { edesc = ECall(b1, [b2; b3]); etyp = ty }
+      { edesc = ECall(ident, [b2; b3]); etyp = ty }
 
   | CALL(a1, al) ->
       let b1 =
@@ -860,7 +951,7 @@ let elab_expr loc env a =
             let ty = TFun(TInt(IInt, []), None, false, []) in
             (* Emit an extern declaration for it *)
             let id = Env.fresh_ident n in
-            emit_elab (elab_loc loc) (Gdecl(Storage_extern, id, ty, None));
+            emit_elab loc (Gdecl(Storage_extern, id, ty, None));
             { edesc = EVar id; etyp = ty }
         | _ -> elab a1 in
       let bl = List.map elab al in
@@ -1163,22 +1254,10 @@ let elab_expr loc env a =
 
 (* 6.5.17 Sequential expressions *)
 
-  | COMMA [] ->
-      error "empty sequential expression"
-  | COMMA (a1 :: al) ->                 (* watch for left associativity *)
-      let rec elab_comma accu = function
-      | [] -> accu
-      | a :: l ->
-          let b = elab a in
-          elab_comma { edesc = EBinop(Ocomma, accu, b, b.etyp); etyp = b.etyp } l
-      in elab_comma (elab a1) al
-
-(* Extensions that we do not handle *)
-
-  | LABELADDR _ ->
-      error "GCC's &&label construct is not supported"
-  | GNU_BODY _ ->
-      error "GCC's statements within expressions are not supported"
+  | BINARY(COMMA, a1, a2) ->
+      let b1 = elab a1 in
+      let b2 = elab a2 in
+      { edesc = EBinop (Ocomma, b1, b2, b2.etyp); etyp = b2.etyp }
 
 (* Elaboration of pre- or post- increment/decrement *)
   and elab_pre_post_incr_decr op msg a1 =
@@ -1294,12 +1373,12 @@ let elab_expr loc env a =
 let _ = elab_expr_f := elab_expr
 
 let elab_opt_expr loc env = function
-  | NOTHING -> None
-  | a -> Some (elab_expr loc env a)
+  | None -> None
+  | Some a -> Some (elab_expr loc env a)
 
 let elab_for_expr loc env = function
-  | NOTHING -> { sdesc = Sskip; sloc = elab_loc loc }
-  | a -> { sdesc = Sdo (elab_expr loc env a); sloc = elab_loc loc }
+  | None -> { sdesc = Sskip; sloc = elab_loc loc }
+  | Some a -> { sdesc = Sdo (elab_expr loc env a); sloc = elab_loc loc }
 
 
 (* Elaboration of initializers. C99 section 6.7.8 *)
@@ -1522,9 +1601,9 @@ end
 
 let rec elab_designator loc env zi desig =
   match desig with
-  | NEXT_INIT -> 
+  | [] -> 
       zi
-  | INFIELD_INIT(name, desig') ->
+  | INFIELD_INIT name :: desig' ->
       begin match I.member env zi name with
       | Some zi' ->
           elab_designator loc env zi' desig'
@@ -1532,7 +1611,7 @@ let rec elab_designator loc env zi desig =
           error loc "%s has no member named %s" (I.name zi) name;
           raise Exit
       end
-  | ATINDEX_INIT(a, desig') ->
+  | ATINDEX_INIT a :: desig' ->
       begin match Ceval.integer_expr env (elab_expr loc env a) with
       | None ->
           error loc "array element designator for %s is not a compile-time constant"
@@ -1547,9 +1626,6 @@ let rec elab_designator loc env zi desig =
                       n (I.name zi);
             raise Exit
       end
-  | ATINDEXRANGE_INIT(e1, e2) ->
-      error loc "GCC array range designators are not supported";
-      raise Exit
 
 (* Elaboration of an initialization expression.  Return the corresponding
    initializer. *)
@@ -1566,7 +1642,7 @@ let rec elab_list zi il first =
       (* All initialization items consumed. *)
       I.to_init zi
   | (desig, item) :: il' ->
-      if desig = NEXT_INIT then begin
+      if desig = [] then begin
         match (if first then I.first env zi else I.next zi)
         with
         | None ->
@@ -1584,22 +1660,28 @@ let rec elab_list zi il first =
 and elab_item zi item il =
   let ty = I.typeof zi in
   match item, unroll env ty with
-  (* Special case char array = "string literal" *)
+  (* Special case char array = "string literal" 
+               or wchar array = L"wide string literal" *)
   | (SINGLE_INIT (CONSTANT (CONST_STRING s))
      | COMPOUND_INIT [_, SINGLE_INIT(CONSTANT (CONST_STRING s))]),
-    TArray(TInt((IChar|IUChar|ISChar), _), sz, _) ->
-      if not (I.index_below (Int64.of_int(String.length s - 1)) sz) then
-        warning loc "initializer string for array of chars %s is too long"
-                    (I.name zi);
-      elab_list (I.set zi (init_char_array_string sz s)) il false
-  (* Special case int array = L"wide string literal" *)
-  | (SINGLE_INIT (CONSTANT (CONST_WSTRING s))
-     | COMPOUND_INIT [_, SINGLE_INIT(CONSTANT (CONST_WSTRING s))]),
-    TArray(TInt(_, _), sz, _) ->
-      if not (I.index_below (Int64.of_int(List.length s - 1)) sz) then
-        warning loc "initializer string for array of wide chars %s is too long"
-                    (I.name zi);
-      elab_list (I.set zi (init_int_array_wstring sz s)) il false
+    TArray(TInt(ik, _), sz, _) ->
+      begin match elab_string_literal loc s with
+      | CStr s ->
+          if ik <> IChar && ik <> IUChar && ik <> ISChar then
+            error loc "initialization of an array of non-char elements with a string literal";
+          if not (I.index_below (Int64.of_int(String.length s - 1)) sz) then
+            warning loc "initializer string for array of chars %s is too long"
+                        (I.name zi);
+          elab_list (I.set zi (init_char_array_string sz s)) il false
+      | CWStr s ->
+          if ik <> wchar_ikind then
+            error loc "initialization of an array of non-wchar_t elements with a wide string literal";
+          if not (I.index_below (Int64.of_int(List.length s - 1)) sz) then
+            warning loc "initializer string for array of wide chars %s is too long"
+                        (I.name zi);
+          elab_list (I.set zi (init_int_array_wstring sz s)) il false
+      | _ -> assert false
+      end
   (* Brace-enclosed compound initializer *)
   | COMPOUND_INIT il', _ ->
       (* Process the brace-enclosed stuff, obtaining its initializer *)
@@ -1681,15 +1763,17 @@ let elab_initializer loc env root ty ie =
 
 (* Elaboration of top-level and local definitions *)
 
-let enter_typedef loc env (s, sto, ty) =
+let enter_typedefs loc env sto dl =
   if sto <> Storage_default then
     error loc "Non-default storage on 'typedef' definition";
-  if redef Env.lookup_typedef env s <> None then
-    error loc "redefinition of typedef '%s'" s;
-  let (id, env') =
-    Env.enter_typedef env s ty in
-  emit_elab (elab_loc loc) (Gtypedef(id, ty));
-  env'
+  List.fold_left (fun env (s, ty, init) ->
+    if init <> NO_INIT then
+      error loc "initializer in typedef";
+    if redef Env.lookup_typedef env s <> None then
+      error loc "redefinition of typedef '%s'" s;
+    let (id, env') = Env.enter_typedef env s ty in
+    emit_elab loc (Gtypedef(id, ty));
+    env') env dl
 
 let enter_or_refine_ident local loc env s sto ty =
   match redef Env.lookup_ident env s with
@@ -1719,47 +1803,44 @@ let enter_or_refine_ident local loc env s sto ty =
   | _ ->
       Env.enter_ident env s sto ty
 
-let rec enter_decdefs local loc env = function
-  | [] ->
-      ([], env)
-  | (s, sto, ty, init) :: rem ->
-      (* Sanity checks on storage class *)
-      begin match sto with
-      | Storage_extern ->
-          if init <> NO_INIT then error loc
-                           "'extern' declaration cannot have an initializer"
-      | Storage_register ->
-          if not local then error loc "'register' on global declaration"
-      | _ -> ()
-      end;
-      (* function declarations are always extern *)
-      let sto' =
-        match unroll env ty with TFun _ -> Storage_extern | _ -> sto in
-      (* enter ident in environment with declared type, because
-         initializer can refer to the ident *)
-      let (id, env1) = enter_or_refine_ident local loc env s sto' ty in
-      (* process the initializer *)
-      let (ty', init') = elab_initializer loc env1 s ty init in
-      (* update environment with refined type *)
-      let env2 = Env.add_ident env1 id sto' ty' in
-      (* check for incomplete type *)
-      if local && sto' <> Storage_extern
-               && wrap incomplete_type loc env ty' then
-        error loc "'%s' has incomplete type" s;
-      if local && sto' <> Storage_extern && sto' <> Storage_static then begin
-        (* Local definition *)
-        let (decls, env3) = enter_decdefs local loc env2 rem in
-        ((sto', id, ty', init') :: decls, env3)
-      end else begin
-        (* Global definition *)
-        emit_elab (elab_loc loc) (Gdecl(sto', id, ty', init'));
-        enter_decdefs local loc env2 rem
-      end
+let enter_decdefs local loc env sto dl =
+  (* Sanity checks on storage class *)
+  if sto = Storage_register && not local then
+    error loc "'register' on global declaration";
+  if sto <> Storage_default && dl = [] then
+    warning loc "Storage class specifier on empty declaration";
+  let rec enter_decdef (decls, env) (s, ty, init) =
+    if sto = Storage_extern && init <> NO_INIT then
+      error loc "'extern' declaration cannot have an initializer";
+    (* function declarations are always extern *)
+    let sto' =
+      match unroll env ty with TFun _ -> Storage_extern | _ -> sto in
+    (* enter ident in environment with declared type, because
+       initializer can refer to the ident *)
+    let (id, env1) = enter_or_refine_ident local loc env s sto' ty in
+    (* process the initializer *)
+    let (ty', init') = elab_initializer loc env1 s ty init in
+    (* update environment with refined type *)
+    let env2 = Env.add_ident env1 id sto' ty' in
+    (* check for incomplete type *)
+    if local && sto' <> Storage_extern
+             && wrap incomplete_type loc env ty' then
+      error loc "'%s' has incomplete type" s;
+    if local && sto' <> Storage_extern && sto' <> Storage_static then
+      (* Local definition *)
+      ((sto', id, ty', init') :: decls, env2)
+    else begin
+      (* Global definition *)
+      emit_elab loc (Gdecl(sto', id, ty', init'));
+      (decls, env2)
+    end in
+  let (decls, env') = List.fold_left enter_decdef ([], env) dl in
+  (List.rev decls, env')
 
-let elab_fundef env (spec, name) body loc1 loc2 =
+let elab_fundef env spec name body loc =
   let (s, sto, inline, ty, env1) = elab_name env spec name in
   if sto = Storage_register then
-    error loc1 "a function definition cannot have 'register' storage class";
+    error loc "a function definition cannot have 'register' storage class";
   (* Fix up the type.  We can have params = None but only for an
      old-style parameterless function "int f() {...}" *)
   let ty =
@@ -1770,15 +1851,15 @@ let elab_fundef env (spec, name) body loc1 loc2 =
   let (ty_ret, params, vararg, attr) =
     match ty with
     | TFun(ty_ret, Some params, vararg, attr) -> (ty_ret, params, vararg, attr)
-    | _ -> fatal_error loc1 "wrong type for function definition" in
+    | _ -> fatal_error loc "wrong type for function definition" in
   (* Enter function in the environment, for recursive references *)
-  let (fun_id, env1) = enter_or_refine_ident false loc1 env s sto ty in
+  let (fun_id, env1) = enter_or_refine_ident false loc env s sto ty in
   (* Enter parameters in the environment *)
   let env2 =
     List.fold_left (fun e (id, ty) -> Env.add_ident e id Storage_default ty)
                    (Env.new_scope env1) params in
   (* Elaborate function body *)
-  let body' = !elab_funbody_f loc2 ty_ret env2 body in
+  let body' = !elab_funbody_f ty_ret env2 body in
   (* Build and emit function definition *)
   let fn =
     { fd_storage = sto;
@@ -1790,49 +1871,32 @@ let elab_fundef env (spec, name) body loc1 loc2 =
       fd_vararg = vararg;
       fd_locals = [];
       fd_body = body' } in
-  emit_elab (elab_loc loc1) (Gfundef fn);
+  emit_elab loc (Gfundef fn);
   env1
 
 let rec elab_definition (local: bool) (env: Env.t) (def: Cabs.definition)
                     : decl list * Env.t =
   match def with
   (* "int f(int x) { ... }" *)
-  | FUNDEF(spec_name, body, loc1, loc2) ->
-      if local then error loc1 "local definition of a function";
-      let env1 = elab_fundef env spec_name body loc1 loc2 in
+  | FUNDEF(spec, name, body, loc) ->
+      if local then error loc "local definition of a function";
+      let env1 = elab_fundef env spec name body loc in
       ([], env1)
 
   (* "int x = 12, y[10], *z" *)
   | DECDEF(init_name_group, loc) ->
-      let (dl, env1) = elab_init_name_group loc env init_name_group in
-      enter_decdefs local loc env1 dl
-
-  (* "typedef int * x, y[10]; " *)
-  | TYPEDEF(namegroup, loc) ->
-      let (dl, env1) = elab_name_group loc env namegroup in
-      let env2 = List.fold_left (enter_typedef loc) env1 dl in
-      ([], env2)
-
-  (* "struct s { ...};" or "union u;" *)
-  | ONLYTYPEDEF(spec, loc) ->
-      let (sto, inl, ty, env') = elab_specifier ~only:true loc env spec in
-      if sto <> Storage_default || inl then
-        error loc "Non-default storage or 'inline' on 'struct' or 'union' declaration";
-      ([], env')
-
-  (* global asm statement *)
-  | GLOBASM(_, loc) ->
-      error loc "Top-level 'asm' statement is not supported";
-      ([], env)
+      let ((dl, env1), sto, tydef) = 
+        elab_init_name_group loc env init_name_group in
+      if tydef then
+        let env2 = enter_typedefs loc env1 sto dl
+        in ([], env2)
+      else
+        enter_decdefs local loc env1 sto dl
 
   (* pragma *)
   | PRAGMA(s, loc) ->
-      emit_elab (elab_loc loc) (Gpragma s);
+      emit_elab loc (Gpragma s);
       ([], env)
-
-  (* extern "C" { ... } *)
-  | LINKAGE(_, loc, defs) ->
-      elab_definitions local env defs
 
 and elab_definitions local env = function
   | [] -> ([], env)
@@ -1853,11 +1917,12 @@ type stmt_context = {
   ctx_continue: bool            (**r is 'continue' allowed? *)
 }
 
-let block_labels b =
+let stmt_labels stmt =
   let lbls = ref StringSet.empty in
   let rec do_stmt = function
   | BLOCK(b, _) -> do_block b
-  | IF(_, s1, s2, _) -> do_stmt s1; do_stmt s2
+  | If(_, s1, Some s2, _) -> do_stmt s1; do_stmt s2
+  | If(_, s1, None, _) -> do_stmt s1
   | WHILE(_, s1, _) -> do_stmt s1
   | DOWHILE(_, s1, _) -> do_stmt s1
   | FOR(_, _, _, s1, _) -> do_stmt s1
@@ -1870,23 +1935,13 @@ let block_labels b =
       lbls := StringSet.add lbl !lbls;
       do_stmt s1
   | _ -> ()
-  and do_block b = List.iter do_stmt b.bstmts
-  in do_block b; !lbls
+  and do_block b = List.iter do_stmt b
+  in do_stmt stmt; !lbls
 
 let ctx_loop ctx = { ctx with ctx_break = true; ctx_continue = true }
 
 let ctx_switch ctx = { ctx with ctx_break = true }
 
-(* Extract list of Cabs statements from a Cabs block *)
-
-let block_body loc b =
-  if b.blabels <> [] then
-    error loc "GCC's '__label__' declaration is not supported";
-  if b.battrs <> [] then
-    warning loc "ignoring attributes on this block";
-  b.bstmts
-
-
 (* Elaboration of statements *)
 
 let rec elab_stmt env ctx s =
@@ -1912,10 +1967,6 @@ let rec elab_stmt env ctx s =
       end;
       { sdesc = Slabeled(Scase a', elab_stmt env ctx s1); sloc = elab_loc loc }
 
-  | CASERANGE(_, _, _, loc) ->
-      error loc "GCC's 'case' with range of values is not supported";
-      sskip
-
   | DEFAULT(s1, loc) ->
       { sdesc = Slabeled(Sdefault, elab_stmt env ctx s1); sloc = elab_loc loc }
 
@@ -1926,12 +1977,16 @@ let rec elab_stmt env ctx s =
 
 (* 6.8.4 Conditional statements *)
 
-  | IF(a, s1, s2, loc) ->
+  | If(a, s1, s2, loc) ->
       let a' = elab_expr loc env a in
       if not (is_scalar_type env a'.etyp) then
         error loc "the condition of 'if' does not have scalar type";
       let s1' = elab_stmt env ctx s1 in
-      let s2' = elab_stmt env ctx s2 in
+      let s2' = 
+        match s2 with
+          | None -> sskip
+          | Some s2 -> elab_stmt env ctx s2
+      in
       { sdesc = Sif(a', s1', s2'); sloc = elab_loc loc }
 
 (* 6.8.5 Iterative statements *)
@@ -1953,17 +2008,20 @@ let rec elab_stmt env ctx s =
   | FOR(fc, a2, a3, s1, loc) ->
       let (a1', env', decls') =
         match fc with
-        | FC_EXP a1 ->
-            (elab_for_expr loc env a1, env, None)
-        | FC_DECL def ->
+        | Some (FC_EXP a1) ->
+            (elab_for_expr loc env (Some a1), env, None)
+        | None ->
+            (elab_for_expr loc env None, env, None)
+        | Some (FC_DECL def) ->
             let (dcl, env') = elab_definition true (Env.new_scope env) def in
             let loc = elab_loc (get_definitionloc def) in
             (sskip, env', 
              Some(List.map (fun d -> {sdesc = Sdecl d; sloc = loc}) dcl)) in
       let a2' =
-        if a2 = NOTHING
-        then intconst 1L IInt
-        else elab_expr loc env' a2 in
+        match a2 with
+          | None -> intconst 1L IInt
+          | Some a2 -> elab_expr loc env' a2 
+      in
       if not (is_scalar_type env' a2'.etyp) then
         error loc "the condition of 'for' does not have scalar type";
       let a3' = elab_for_expr loc env' a3 in
@@ -2031,27 +2089,22 @@ let rec elab_stmt env ctx s =
       { sdesc = Sskip; sloc = elab_loc loc }
 
 (* Traditional extensions *)
-  | ASM(attr, txt, details, loc) ->
-      if details <> None then
-        error loc "GCC's extended 'asm' statements are not supported";
-      { sdesc = Sasm(String.concat "" txt); sloc = elab_loc loc }
+  | ASM(txt, loc) ->
+      begin match txt with
+      | CONST_STRING s ->
+          { sdesc = Sasm s; sloc = elab_loc loc }
+      | _ ->
+          error loc "ill-defined asm statement";
+          sskip
+      end
 
 (* Unsupported *)
   | DEFINITION def ->
       error (get_definitionloc def) "ill-placed definition";
       sskip
-  | COMPGOTO(a, loc) ->
-      error loc "GCC's computed 'goto' is not supported";
-      sskip
-  | TRY_EXCEPT(_, _, _, loc) ->
-      error loc "'try ... except' statement is not supported";
-      sskip
-  | TRY_FINALLY(_, _, loc) ->
-      error loc "'try ... finally' statement is not supported";
-      sskip
-      
+
 and elab_block loc env ctx b =
-  let b' = elab_block_body (Env.new_scope env) ctx (block_body loc b) in
+  let b' = elab_block_body (Env.new_scope env) ctx b in
   { sdesc = Sblock b'; sloc = elab_loc loc }
 
 and elab_block_body env ctx sl =
@@ -2069,13 +2122,13 @@ and elab_block_body env ctx sl =
 
 (* Elaboration of a function body.  Return the corresponding C statement. *)
 
-let elab_funbody loc return_typ env b =
+let elab_funbody return_typ env b =
   let ctx =
     { ctx_return_typ = return_typ;
-      ctx_labels = block_labels b;
+      ctx_labels = stmt_labels b;
       ctx_break = false;
       ctx_continue = false } in
-  elab_block loc env ctx b
+  elab_stmt env ctx b
 
 (* Filling in forward declaration *)
 let _ = elab_funbody_f := elab_funbody
@@ -2087,4 +2140,20 @@ let elab_file prog =
   reset();
   ignore (elab_definitions false (Builtins.environment()) prog);
   elaborated_program()
+(*
+  let rec inf = Datatypes.S inf in
+  let ast:Cabs.definition list =
+    Obj.magic
+      (match Parser.translation_unit_file inf (Lexer.tokens_stream lb) with
+         | Parser.Parser.Inter.Fail_pr ->
+             (* Theoretically impossible : implies inconsistencies
+                between grammars. *)
+             Cerrors.fatal_error "Internal error while parsing"
+         | Parser.Parser.Inter.Timeout_pr -> assert false
+         | Parser.Parser.Inter.Parsed_pr (ast, _ ) -> ast)
+  in
+  reset();
+  ignore (elab_definitions false (Builtins.environment()) ast);
+  elaborated_program()
+*)
 

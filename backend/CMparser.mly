@@ -299,8 +299,6 @@ let mkmatch expr cases =
 %token GREATERGREATERLU
 %token <string> IDENT
 %token IF
-%token IN
-%token INLINE
 %token INT
 %token INT16
 %token INT16S
@@ -329,7 +327,6 @@ let mkmatch expr cases =
 %token LESSEQUALLU
 %token LESSLESS
 %token LESSLESSL
-%token LET
 %token LONG
 %token <int64> LONGLIT
 %token LONGOFINT 
@@ -378,10 +375,8 @@ let mkmatch expr cases =
 %token WHILE
 
 /* Precedences from low to high */
-
-%left COMMA
-%left p_let
-%right EQUAL
+%nonassoc p_THEN
+%nonassoc ELSE
 %left BAR BARL
 %left CARET CARETL
 %left AMPERSAND AMPERSANDL
@@ -389,7 +384,7 @@ let mkmatch expr cases =
 %left LESSLESS GREATERGREATER GREATERGREATERU LESSLESSL GREATERGREATERL GREATERGREATERLU 
 %left PLUS PLUSF PLUSL MINUS MINUSF MINUSL
 %left STAR SLASH PERCENT STARF SLASHF SLASHU PERCENTU STARL SLASHL SLASHLU PERCENTL PERCENTLU
-%nonassoc BANG TILDE TILDEL p_uminus ABSF INTOFFLOAT INTUOFFLOAT FLOATOFINT FLOATOFINTU INT8S INT8U INT16S INT16U FLOAT32 ALLOC INTOFLONG LONGOFINT LONGOFINTU LONGOFFLOAT LONGUOFFLOAT FLOATOFLONG FLOATOFLONGU
+%nonassoc BANG TILDE TILDEL p_uminus ABSF INTOFFLOAT INTUOFFLOAT FLOATOFINT FLOATOFINTU INT8S INT8U INT16S INT16U FLOAT32 INTOFLONG LONGOFINT LONGOFINTU LONGOFFLOAT LONGUOFFLOAT FLOATOFLONG FLOATOFLONGU
 %left LPAREN
 
 /* Entry point */
@@ -528,7 +523,7 @@ stmt:
   | memory_chunk LBRACKET expr RBRACKET EQUAL expr SEMICOLON
                                                 { mkstore $1 $3 $6 }
   | IF LPAREN expr RPAREN stmts ELSE stmts      { mkifthenelse $3 $5 $7 }
-  | IF LPAREN expr RPAREN stmts                 { mkifthenelse $3 $5 Sskip }
+  | IF LPAREN expr RPAREN stmts %prec p_THEN    { mkifthenelse $3 $5 Sskip }
   | LOOP stmts                                  { Sloop($2) }
   | LBRACELBRACE stmt_list RBRACERBRACE         { Sblock($2) }
   | EXIT SEMICOLON                              { Sexit O }
@@ -672,7 +667,7 @@ expr_list:
 ;
 
 expr_list_1:
-    expr                     %prec COMMA        { $1 :: [] }
+    expr                                        { $1 :: [] }
   | expr COMMA expr_list_1                      { $1 :: $3 }
 ;
 

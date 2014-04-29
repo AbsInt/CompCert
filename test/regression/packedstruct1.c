@@ -6,7 +6,7 @@
 
 /* Simple packing */
 
-struct __packed__ s1 { unsigned short x; int y; double z; };
+struct __packed__(1) s1 { unsigned short x; int y; double z; };
 
 void test1(void)
 {

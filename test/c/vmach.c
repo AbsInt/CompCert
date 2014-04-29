@@ -52,8 +52,7 @@ enum wordcode_instruct {
 
 long stack[STACKSIZE];
 
-long wordcode_interp(code)
-     unsigned int * code;
+long wordcode_interp(unsigned int* code)
 {
   long * sp;
   unsigned int * pc;

@@ -23,6 +23,9 @@ Require Tailcall.
 Require Allocation.
 Require Ctypes.
 Require Compiler.
+Require Parser.
+Require Initializers.
+Require Int31.
 
 (* Standard lib *)
 Require Import ExtrOcamlBasic.
@@ -102,6 +105,26 @@ Extract Constant Compiler.time  => "Clflags.time_coq".
 
 (*Extraction Inline Compiler.apply_total Compiler.apply_partial.*)
 
+(* Cabs *)
+Extract Constant Cabs.cabsloc => 
+"{ lineno : int;
+   filename: string;
+   byteno: int;
+   ident : int;
+ }".
+
+(* Int31 *)
+Extract Inductive Int31.digits => "bool" [ "false" "true" ].
+Extract Inductive Int31.int31 => "int" [ "Camlcoq.Int31.constr" ] "Camlcoq.Int31.destr".
+Extract Constant Int31.twice => "Camlcoq.Int31.twice".
+Extract Constant Int31.twice_plus_one => "Camlcoq.Int31.twice_plus_one".
+Extract Constant Int31.compare31 => "Camlcoq.Int31.compare".
+Extract Constant Int31.On => "0".
+Extract Constant Int31.In => "1".
+
+(* String in Cabs *)
+Extract Constant Cabs.string => "String.t".
+
 (* Processor-specific extraction directives *)
 
 Load extractionMachdep.
@@ -132,4 +155,5 @@ Separate Extraction
    Conventions1.dummy_int_reg Conventions1.dummy_float_reg
    RTL.instr_defs RTL.instr_uses
    Machregs.mregs_for_operation Machregs.mregs_for_builtin
-   Machregs.two_address_op Machregs.is_stack_reg.
+   Machregs.two_address_op Machregs.is_stack_reg
+   Parser.translation_unit_file.

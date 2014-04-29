@@ -16,9 +16,9 @@
 include Makefile.config
 
 DIRS=lib common $(ARCH)/$(VARIANT) $(ARCH) backend cfrontend driver \
-  flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight
+  flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight cparser cparser/validator
 
-RECDIRS=lib common backend cfrontend driver flocq exportclight
+RECDIRS=lib common backend cfrontend driver flocq exportclight cparser
 
 COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) -as compcert.$(d)) \
   -I $(ARCH)/$(VARIANT) -as compcert.$(ARCH).$(VARIANT) \
@@ -26,6 +26,7 @@ COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) -as compcert.$(d)) \
 
 CAMLINCLUDES=$(patsubst %,-I %, $(DIRS)) -I extraction -I cparser
 
+MENHIR=menhir
 COQC="$(COQBIN)coqc" -q $(COQINCLUDES)
 COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
 COQDOC="$(COQBIN)coqdoc"
@@ -109,13 +110,24 @@ CFRONTEND=Ctypes.v Cop.v Csyntax.v Csem.v Cstrategy.v Cexec.v \
   Cshmgen.v Cshmgenproof.v \
   Csharpminor.v Cminorgen.v Cminorgenproof.v
 
+# LR(1) parser validator
+
+PARSERVALIDATOR=Alphabet.v Interpreter_complete.v Interpreter.v \
+  Validator_complete.v Automaton.v Interpreter_correct.v Main.v \
+  Validator_safe.v Grammar.v Interpreter_safe.v Tuples.v
+
+# Parser
+
+PARSER=Cabs.v Parser.v
+
 # Putting everything together (in driver/)
 
 DRIVER=Compopts.v Compiler.v Complements.v
 
 # All source files
 
-FILES=$(LIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(DRIVER) $(FLOCQ)
+FILES=$(LIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(DRIVER) $(FLOCQ) \
+  $(PARSERVALIDATOR) $(PARSER)
 
 # Symbolic links vs. copy
 
@@ -221,6 +233,9 @@ driver/Configuration.ml: Makefile.config VERSION
          version=`cat VERSION`; \
          echo let version = "\"$$version\"") \
         > driver/Configuration.ml
+
+cparser/Parser.v: cparser/Parser.vy
+	$(MENHIR) --coq cparser/Parser.vy
 
 depend: $(FILES) exportclight/Clightdefs.v
 	$(COQDEP) $^ \

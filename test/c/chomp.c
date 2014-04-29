@@ -21,8 +21,7 @@ struct _play
 
 int nrow,ncol;      /* global so as to avoid passing them all over the place */
 
-int *copy_data(data) /* creates a duplicate of a given -data list */
-int *data;
+int *copy_data(int* data) /* creates a duplicate of a given -data list */
 {
   int *new = NDATA;
   int counter = ncol;
@@ -93,8 +92,7 @@ void dump_list(struct _list *list) /* same for a _list structure */
     }
 }
 
-void dump_play(play) /* and for the entire game tree */
-struct _play *play;
+void dump_play(struct _play *play) /* and for the entire game tree */
 {
   if (play != NULL)
     {

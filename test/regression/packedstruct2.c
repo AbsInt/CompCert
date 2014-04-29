@@ -4,7 +4,7 @@
 
 /* Simple packing */
 
-struct __packed__ s1 { unsigned short x; int y; char z; };
+struct __packed__(1) s1 { unsigned short x; int y; char z; };
 
 struct s1 s1 = { 2345, -12345678, 'x' };
 

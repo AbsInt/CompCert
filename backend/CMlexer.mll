@@ -85,8 +85,6 @@ rule token = parse
   | ">>l"    { GREATERGREATERL }
   | ">>lu"    { GREATERGREATERLU }
   | "if"    { IF }
-  | "in"    { IN }
-  | "inline" { INLINE }
   | "int"    { INT }
   | "int16"    { INT16 }
   | "int16s"    { INT16S }
@@ -114,7 +112,6 @@ rule token = parse
   | "<=lu"    { LESSEQUALLU }
   | "<<"    { LESSLESS }
   | "<<l"    { LESSLESSL }
-  | "let"     { LET }
   | "long"    { LONG }
   | "longofint" { LONGOFINT }
   | "longofintu" { LONGOFINTU }

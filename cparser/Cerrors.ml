@@ -41,6 +41,9 @@ let warning fmt =
   incr num_warnings;
   eprintf  ("@[<hov 2>" ^^ fmt ^^ ".@]@.")
 
+let info fmt =
+  eprintf  ("@[<hov 2>" ^^ fmt ^^ ".@]@.")
+
 let check_errors () =
   if !num_errors > 0 then
     eprintf "@[<hov 0>%d error%s detected.@]@."

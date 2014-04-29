@@ -201,11 +201,6 @@ let builtins = {
   "__builtin_strncpy",  (charPtrType, [ charPtrType; charConstPtrType; sizeType ], false);
   "__builtin_strspn",  (intType, [ charConstPtrType; charConstPtrType ], false);
   "__builtin_strpbrk",  (charPtrType, [ charConstPtrType; charConstPtrType ], false);
-  (* When we parse builtin_types_compatible_p, we change its interface *)
-  "__builtin_types_compatible_p", 
-                              (intType, [ uintType; (* Sizeof the type *)
-                                          uintType  (* Sizeof the type *) ],
-                               false);
   "__builtin_tan",  (doubleType, [ doubleType ], false);
   "__builtin_tanf",  (floatType, [ floatType ], false);
   "__builtin_tanl",  (longDoubleType, [ longDoubleType ], false);

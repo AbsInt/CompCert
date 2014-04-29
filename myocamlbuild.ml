@@ -1,8 +1,7 @@
 open Ocamlbuild_plugin;;
 dispatch begin function
 | After_rules ->
-    (* declare the tags "use_Cparser" and "include_Cparser" *)
-    ocaml_lib "cparser/Cparser";
+    flag ["ocaml"; "parser"; "menhir"] (A("--explain"));
 
     (* libraries and syntax extensions accessed via ocamlfind *)
     flag ["ocaml"; "link"; "pkg_unix"] & S[A"-package"; A "unix"];
