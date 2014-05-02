@@ -40,6 +40,9 @@
 
 	.global __i64_dtou
 __i64_dtou:
+#ifdef VARIANT_hardfloat	
+	fmrrd r0, r1, d0
+#endif	
         cmp r1, #0              @ is double < 0 ?
         blt 1f                  @ then it converts to 0
   @ extract unbiased exponent ((HI & 0x7FF00000) >> 20) - (1023 + 52) in r2

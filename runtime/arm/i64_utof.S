@@ -63,8 +63,10 @@ __i64_utof:
         fmacd d0, d1, d2        @ d0 = d0 + d1 * d2 = double value of int64
    @ Round to single
         fcvtsd s0, d0
+#ifdef VARIANT_eabi	
    @ Return result in r0
 	fmrs r0, s0
+#endif	
         bx lr
 	.type __i64_utof, %function
 	.size __i64_utof, . - __i64_utof

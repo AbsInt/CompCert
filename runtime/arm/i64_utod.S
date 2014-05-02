@@ -46,7 +46,9 @@ __i64_utod:
         fuitod d1, s2           @ convert high half to double (unsigned)
         fldd d2, .LC1           @ d2 = 2^32
         fmacd d0, d1, d2        @ d0 = d0 + d1 * d2 = double value of int64
+#ifdef VARIANT_eabi	
 	fmrrd r0, r1, d0        @ return result in r0, r1
+#endif	
         bx lr
 	.type __i64_utod, %function
 	.size __i64_utod, . - __i64_utod

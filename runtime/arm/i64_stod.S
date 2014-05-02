@@ -46,7 +46,9 @@ __i64_stod:
         fsitod d1, s2           @ convert high half to double (signed)
         fldd d2, .LC1           @ d2 = 2^32
         fmacd d0, d1, d2        @ d0 = d0 + d1 * d2 = double value of int64
+#ifdef VARIANT_eabi	
 	fmrrd r0, r1, d0        @ return result in r0, r1
+#endif
         bx lr
 	.type __i64_stod, %function
 	.size __i64_stod, . - __i64_stod

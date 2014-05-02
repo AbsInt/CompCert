@@ -40,6 +40,9 @@
 	
 	.global __i64_dtos
 __i64_dtos:
+#ifdef VARIANT_hardfloat	
+	fmrrd r0, r1, d0
+#endif	
         mov r12, r1, asr #31    @ save sign of result in r12
   @ extract unbiased exponent ((HI & 0x7FF00000) >> 20) - (1023 + 52) in r2
   @ note: 1023 + 52 = 1075 = 1024 + 51
