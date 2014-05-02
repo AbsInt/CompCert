@@ -177,6 +177,56 @@ EOF
   rm -f $f
 fi
 
+# Testing availability of required tools
+
+missingtools=false
+
+echo "Testing Coq... " | tr -d '\n'
+coq_ver=`coqc -v | sed -n -e 's/The Coq Proof Assistant, version \([^ ]*\).*$/\1/p'`
+case "$coq_ver" in
+  8.4pl*)
+        echo "version $coq_ver -- good!";;
+  ?.*)
+        echo "version $coq_ver -- UNSUPPORTED"
+        echo "Error: CompCert requires Coq version 8.4pl1 or 8.4pl2 or 8.4pl3."
+        missingtools=true;;
+  *)
+        echo "NOT FOUND"
+        echo "Error: make sure Coq version 8.4pl3 is installed."
+        missingtools=true;;
+esac
+
+echo "Testing OCaml... " | tr -d '\n'
+ocaml_ver=`ocamlc -version`
+case "$ocaml_ver" in
+  4.*)
+        echo "version $ocaml_ver -- good!";;
+  ?.*)
+        echo "version $ocaml_ver -- UNSUPPORTED"
+        echo "Error: CompCert requires OCaml version 4.00 or later."
+        missingtools=true;;
+  *)
+        echo "NOT FOUND"
+        echo "Error: make sure OCaml version 4.00 or later is installed."
+        missingtools=true;;
+esac
+
+echo "Testing Menhir... " | tr -d '\n'
+menhir_ver=`menhir --version | sed -n -e 's/^.*version \([0-9]*\).*$/\1/p'`
+case "$menhir_ver" in
+  20*)
+        echo "version $menhir_ver -- good!";;
+  *)
+        echo "NOT FOUND"
+        echo "Error: make sure Menhir is installed."
+        missingtools=true;;
+esac
+
+if $missingtools; then
+  echo "One or several required tools are missing or too old.  Aborting."
+  exit 2
+fi
+
 # Additional packages needed for cchecklink
 
 if $cchecklink; then
