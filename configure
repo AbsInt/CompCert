@@ -27,6 +27,8 @@ Supported targets:
   ppc-eabi-diab    (PowerPC, EABI with Diab tools)
   arm-linux        (ARM, EABI)
   arm-eabi         (ARM, EABI)
+  arm-eabihf       (ARM, EABI with hardware floating point)
+  arm-hardfloat    (ARM, EABI with hardware floating point)
   ia32-linux       (x86 32 bits, Linux)
   ia32-bsd         (x86 32 bits, BSD)
   ia32-macosx      (x86 32 bits, MacOS X)
@@ -95,6 +97,15 @@ case "$target" in
   arm-linux|arm-eabi)
     arch="arm"
     variant="eabi"
+    system="linux"
+    cc="${toolprefix}gcc"
+    cprepro="${toolprefix}gcc -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
+    casm="${toolprefix}gcc -c"
+    clinker="${toolprefix}gcc"
+    libmath="-lm";;
+  arm-eabihf|arm-hardfloat)
+    arch="arm"
+    variant="hardfloat"
     system="linux"
     cc="${toolprefix}gcc"
     cprepro="${toolprefix}gcc -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
