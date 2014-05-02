@@ -134,9 +134,9 @@ let subimm oc dst src n =
 
 (* Names of sections *)
 
-let name_of_section_ELF = function
+let name_of_section = function
   | Section_text -> ".text"
-  | Section_data i | Section_small_data i -> if i then ".data" else ".bss"
+  | Section_data i | Section_small_data i -> if i then ".data" else "COMM"
   | Section_const | Section_small_const -> ".section	.rodata"
   | Section_string -> ".section	.rodata"
   | Section_literal -> ".text"
@@ -146,7 +146,7 @@ let name_of_section_ELF = function
                s (if wr then "w" else "") (if ex then "x" else "")
 
 let section oc sec =
-  fprintf oc "	%s\n" (name_of_section_ELF sec)
+  fprintf oc "	%s\n" (name_of_section sec)
 
 (* Record current code position and latest position at which to
    emit float and symbol constants. *)
@@ -959,14 +959,27 @@ let print_var oc name v =
         | Some a -> a
         | None -> 8 (* 8-alignment is a safe default *)
       in
-      section oc sec;
-      fprintf oc "	.balign	%d\n" align;
-      if not (C2C.atom_is_static name) then
-        fprintf oc "	.global	%a\n" print_symb name;
-      fprintf oc "%a:\n" print_symb name;
-      print_init_data oc name v.gvar_init;
-      fprintf oc "	.type	%a, %%object\n" print_symb name;
-      fprintf oc "	.size	%a, . - %a\n" print_symb name print_symb name
+      let name_sec =
+        name_of_section sec in
+      if name_sec <> "COMM" then begin
+        fprintf oc "	%s\n" name_sec;
+        fprintf oc "	.balign	%d\n" align;
+        if not (C2C.atom_is_static name) then
+          fprintf oc "	.global	%a\n" print_symb name;
+        fprintf oc "%a:\n" print_symb name;
+        print_init_data oc name v.gvar_init;
+        fprintf oc "	.type	%a, %%object\n" print_symb name;
+        fprintf oc "	.size	%a, . - %a\n" print_symb name print_symb name
+      end else begin
+        let sz =
+          match v.gvar_init with [Init_space sz] -> sz | _ -> assert false in
+        if C2C.atom_is_static name then
+          fprintf oc "	.local	%a\n" print_symb name;
+        fprintf oc "	.comm	%a, %s, %d\n"
+          print_symb name
+          (Z.to_string sz)
+          align
+      end
 
 let print_globdef oc (name, gdef) =
   match gdef with

@@ -26,7 +26,9 @@ Usability:
 - Various tweaks in IRC graph coloring to reduce compilation time.
 
 Improvements in ABI conformance:
-- IA32: revised handling of "common" variables to conform with ABI.
+- New target platform: ARM with EABI "hard float" calling conventions
+  (armhf in Debian's classification).
+- IA32 and ARM: revised handling of "common" variables to conform with ABI.
 
 Bug fixing:
 - In -fbitfields emulation: "a->f" was not properly rewritten if "a"
