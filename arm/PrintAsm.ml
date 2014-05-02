@@ -272,7 +272,7 @@ let print_annot_val oc txt args res =
   | [IR src], [IR dst] ->
       if dst = src then 0 else (fprintf oc "	mov	%a, %a\n" ireg dst ireg src; 1)
   | [FR src], [FR dst] ->
-      if dst = src then 0 else (fprintf oc "	fcpy	%a, %a\n" freg dst freg src; 1)
+      if dst = src then 0 else (fprintf oc "	fcpyd	%a, %a\n" freg dst freg src; 1)
   | _, _ -> assert false
 
 (* Handling of memcpy *)
@@ -508,53 +508,141 @@ let print_builtin_inline oc name args res =
 
 type direction = Incoming | Outgoing
 
-let ireg_param = function
-  | 0 -> IR0 | 1 -> IR1 | 2 -> IR2 | 3 -> IR3 | _ -> assert false
+module FixupEABI = struct
 
-let freg_param = function
-  | 0 -> FR0 | 1 -> FR1 | 2 -> FR2 | 3 -> FR3 | _ -> assert false
+  let ireg_param = function
+    | 0 -> IR0 | 1 -> IR1 | 2 -> IR2 | 3 -> IR3 | _ -> assert false
 
-let fixup_double oc dir f i1 i2 =
-  match dir with
-  | Incoming ->     (* f <- (i1, i2)  *)
-      fprintf oc "	fmdrr	%a, %a, %a\n" freg f ireg i1 ireg i2
-  | Outgoing ->     (* (i1, i2) <- f *)
-      fprintf oc "	fmrrd	%a, %a, %a\n" ireg i1 ireg i2 freg f
+  let freg_param = function
+    | 0 -> FR0 | 1 -> FR1 | 2 -> FR2 | 3 -> FR3 | _ -> assert false
 
-let fixup_single oc dir f i =
-  match dir with
-  | Incoming ->     (* f <- i; f <- double_of_single f *)
-      fprintf oc "	fmsr	%a, %a\n" freg_single f ireg i;
-      fprintf oc "	fcvtds	%a, %a\n" freg f freg_single f
-  | Outgoing ->     (* f <- single_of_double f; i <- f *)
-      fprintf oc "	fcvtsd	%a, %a\n" freg_single f freg f;
-      fprintf oc "	fmrs	%a, %a\n" ireg i freg_single f
+  let fixup_double oc dir f i1 i2 =
+    match dir with
+    | Incoming ->     (* f <- (i1, i2)  *)
+        fprintf oc "	fmdrr	%a, %a, %a\n" freg f ireg i1 ireg i2
+    | Outgoing ->     (* (i1, i2) <- f *)
+        fprintf oc "	fmrrd	%a, %a, %a\n" ireg i1 ireg i2 freg f
 
-let fixup_conventions oc dir tyl =
-  let rec fixup i tyl =
-    if i >= 4 then 0 else
-      match tyl with
-      | [] -> 0
-      | Tint :: tyl' ->
-          fixup (i+1) tyl'
-      | Tlong :: tyl' ->
-          fixup (((i + 1) land (-2)) + 2) tyl'
-      | Tfloat :: tyl' ->
-          let i = (i + 1) land (-2) in
-          if i >= 4 then 0 else begin
-            fixup_double oc dir (freg_param i) (ireg_param i) (ireg_param (i+1));
-            1 + fixup (i+2) tyl'
-          end
-      | Tsingle :: tyl' ->
-          fixup_single oc dir (freg_param i) (ireg_param i);
-          2 + fixup (i+1) tyl'
-  in fixup 0 tyl
+  let fixup_single oc dir f i =
+    match dir with
+    | Incoming ->     (* f <- i; f <- double_of_single f *)
+        fprintf oc "	fmsr	%a, %a\n" freg_single f ireg i;
+        fprintf oc "	fcvtds	%a, %a\n" freg f freg_single f
+    | Outgoing ->     (* f <- single_of_double f; i <- f *)
+        fprintf oc "	fcvtsd	%a, %a\n" freg_single f freg f;
+        fprintf oc "	fmrs	%a, %a\n" ireg i freg_single f
 
-let fixup_arguments oc dir sg =
-  fixup_conventions oc dir sg.sig_args
+  let fixup_conventions oc dir tyl =
+    let rec fixup i tyl =
+      if i >= 4 then 0 else
+        match tyl with
+        | [] -> 0
+        | Tint :: tyl' ->
+            fixup (i+1) tyl'
+        | Tlong :: tyl' ->
+            fixup (((i + 1) land (-2)) + 2) tyl'
+        | Tfloat :: tyl' ->
+            let i = (i + 1) land (-2) in
+            if i >= 4 then 0 else begin
+              fixup_double oc dir (freg_param i) (ireg_param i) (ireg_param (i+1));
+              1 + fixup (i+2) tyl'
+            end
+        | Tsingle :: tyl' ->
+            fixup_single oc dir (freg_param i) (ireg_param i);
+            2 + fixup (i+1) tyl'
+    in fixup 0 tyl
 
-let fixup_result oc dir sg =
-  fixup_conventions oc dir (proj_sig_res sg :: [])
+  let fixup_arguments oc dir sg =
+    fixup_conventions oc dir sg.sig_args
+
+  let fixup_result oc dir sg =
+    fixup_conventions oc dir (proj_sig_res sg :: [])
+
+end
+
+module FixupHF = struct
+
+  type fsize = Single | Double
+
+  let rec find_single used pos =
+    if pos >= Array.length used then pos
+    else if used.(pos) then find_single used (pos + 1)
+    else begin used.(pos) <- true; pos end
+
+  let rec find_double used pos =
+    if pos + 1 >= Array.length used then pos
+    else if used.(pos) || used.(pos + 1) then find_double used (pos + 2)
+    else begin used.(pos) <- true; used.(pos + 1) <- true; pos / 2 end
+
+  let rec fixup_actions used fr tyl =
+    match tyl with
+    | [] -> []
+    | (Tint | Tlong) :: tyl' -> fixup_actions used fr tyl'
+    | Tfloat :: tyl' ->
+        if fr >= 8 then [] else begin
+          let dr = find_double used 0 in
+          assert (dr < 8);
+          (fr, Double, dr) :: fixup_actions used (fr + 1) tyl'
+        end
+    | Tsingle :: tyl' ->
+        if fr >= 8 then [] else begin
+          let sr = find_single used 0 in
+          assert (sr < 16);
+          (fr, Single, sr) :: fixup_actions used (fr + 1) tyl'
+        end
+
+  let rec fixup_outgoing oc = function
+  | [] -> 0
+  | (fr, Double, dr) :: act ->
+      if fr = dr then fixup_outgoing oc act else begin
+        fprintf oc "	fcpyd	d%d, d%d\n" dr fr;
+        1 + fixup_outgoing oc act
+      end
+  | (fr, Single, sr) :: act ->
+        fprintf oc "	fcvtsd	s%d, d%d\n" sr fr;
+        1 + fixup_outgoing oc act
+
+  let rec fixup_incoming oc = function
+  | [] -> 0
+  | (fr, Double, dr) :: act ->
+      let n = fixup_incoming oc act in
+      if fr = dr then n else begin
+        fprintf oc "	fcpyd	d%d, d%d\n" fr dr;
+        1 + n
+      end
+  | (fr, Single, sr) :: act ->
+      let n = fixup_incoming oc act in
+      fprintf oc "	fcvtds	d%d, s%d\n" fr sr;
+        1 + n
+
+  let fixup_arguments oc dir sg =
+    if sg.sig_cc.cc_vararg then
+      FixupEABI.fixup_arguments oc dir sg
+    else begin
+      let act = fixup_actions (Array.make 16 false) 0 sg.sig_args in
+      match dir with
+      | Outgoing -> fixup_outgoing oc act
+      | Incoming -> fixup_incoming oc act
+    end
+
+  let fixup_result oc dir sg =
+    if sg.sig_cc.cc_vararg then
+      FixupEABI.fixup_result oc dir sg
+    else begin
+      match proj_sig_res sg, dir with
+      | Tsingle, Outgoing ->
+          fprintf oc "	fcvtsd	s0, d0\n"; 1
+      | Tsingle, Incoming ->
+          fprintf oc "	fcvtds	d0, s0\n"; 1
+      | _ -> 0
+    end
+end
+
+let (fixup_arguments, fixup_result) =
+  match Configuration.variant with
+  | "eabi"      -> (FixupEABI.fixup_arguments, FixupEABI.fixup_result)
+  | "hardfloat" -> (FixupHF.fixup_arguments, FixupHF.fixup_result)
+  | _ -> assert false
 
 (* Printing of instructions *)
 
