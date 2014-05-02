@@ -310,9 +310,9 @@ rule initial = parse
           else
             UNKNOWN_NAME(id, ref OtherId, currentLoc lexbuf) }
   | eof                           { EOF }
-  | _                             {
-      Cerrors.fatal_error "%s:%d Error:@ invalid symbol"
-        lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum }
+  | _ as c                        {
+      Cerrors.fatal_error "%s:%d Error:@ invalid symbol %C"
+        lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum c }
 
 and initial_linebegin = parse
   | '\n'                          { new_line lexbuf; initial_linebegin lexbuf }
@@ -320,14 +320,19 @@ and initial_linebegin = parse
   | '#'                           { hash lexbuf }
   | ""                            { initial lexbuf }
 
-(* We assume gcc -E syntax. **)
+(* We assume gcc -E syntax but try to tolerate variations. *)
 and hash = parse
-  | ' ' (decimal_constant as n) " \"" (([^ '\n']#whitespace_char_no_newline)* as file) "\"" [^ '\n']* '\n'
+  | whitespace_char_no_newline +
+    (decimal_constant as n)
+    whitespace_char_no_newline *
+    "\"" ([^ '\n' '\"']* as file) "\""
+    [^ '\n']* '\n'
       { let n =
           try int_of_string n
           with Failure "int_of_string" ->
-            Cerrors.fatal_error "%s:%d Error:@ invalid line number"
-              lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum
+            Cerrors.warning "%s:%d Warning:@ invalid line number"
+              lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum;
+            lexbuf.lex_curr_p.pos_lnum
         in
         lexbuf.lex_curr_p <- {
           lexbuf.lex_curr_p with
@@ -336,14 +341,21 @@ and hash = parse
             pos_bol = lexbuf.lex_curr_p.pos_cnum
         };
         initial_linebegin lexbuf }
-  | "pragma" whitespace_char_no_newline ([^ '\n']* as s) '\n'
+  | whitespace_char_no_newline *
+    "pragma"
+    whitespace_char_no_newline +
+    ([^ '\n']* as s) '\n'
       { new_line lexbuf; PRAGMA (s, currentLoc lexbuf) }
+  | [^ '\n']* '\n'
+      { Cerrors.warning "%s:%d Warning:@ unrecognized '#' line"
+          lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum;
+        new_line lexbuf; initial_linebegin lexbuf }
   | [^ '\n']* eof
       { Cerrors.fatal_error "%s:%d Error:@ unexpected end of file"
           lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum }
-  | _
-      { Cerrors.fatal_error "%s:%d Error:@ invalid symbol"
-          lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum }
+  | _ as c
+      { Cerrors.fatal_error "%s:%d Error:@ invalid symbol %C"
+          lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum c }
 
 {
   open Streams
