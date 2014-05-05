@@ -659,10 +659,10 @@ function_definition_begin:
     }
 
 identifier_list:
-| id = general_identifier
-    { set_id_type id VarId; [id] }
-| idl = identifier_list COMMA id = general_identifier
-    { set_id_type id VarId; id :: idl }
+| id = VAR_NAME
+    { [id] }
+| idl = identifier_list COMMA id = VAR_NAME
+    { id :: idl }
 
 declaration_list:
 | /*empty*/
