@@ -1,3 +1,6 @@
+Release 2.3, 2014-05-05
+=======================
+	
 Language features:
 - Support for C99 designated initializers. (ISO C99 section 6.7.8.)
 
