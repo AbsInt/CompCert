@@ -184,6 +184,7 @@ Definition name_group := (list spec_elem * list name)%type.
 *)
 Inductive definition :=
  | FUNDEF : list spec_elem -> name -> statement -> cabsloc -> definition
+ | KRFUNDEF : list spec_elem -> name -> list string ->  list definition -> statement -> cabsloc -> definition
  | DECDEF : init_name_group -> cabsloc -> definition  (* global variable(s), or function prototype *)
  | PRAGMA : string -> cabsloc -> definition
 

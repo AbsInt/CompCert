@@ -88,11 +88,14 @@ Require Import List.
   selection_statement_safe jump_statement asm_statement
 %type<list definition (* Reverse order *)> translation_unit
 %type<definition> external_declaration function_definition
+%type<list definition> declaration_list
 %type<attribute * cabsloc> attribute_specifier
 %type<list attribute> attribute_specifier_list
 %type<gcc_attribute> gcc_attribute
 %type<list gcc_attribute> gcc_attribute_list
 %type<gcc_attribute_word> gcc_attribute_word
+%type<name * list string> old_function_declarator direct_old_function_declarator
+%type<list string (* Reverse order *)> identifier_list
 
 %start<list definition> translation_unit_file
 %%
@@ -572,7 +575,7 @@ direct_declarator:
         Name name (PROTO typ params) attr loc end }
 | decl = direct_declarator LPAREN RPAREN
     { match decl with Name name typ attr loc =>
-        Name name (PROTO typ ([],false)) attr loc end }
+        Name name (PROTO typ ([], false)) attr loc end }
 
 pointer:
 | loc = STAR
@@ -841,5 +844,41 @@ external_declaration:
 
 (* 6.9.1 *)
 function_definition:
-| specs = declaration_specifiers decl = declarator stmt = compound_statement
+| specs = declaration_specifiers
+  decl = declarator
+  stmt = compound_statement
     { FUNDEF (fst specs) decl stmt (snd specs) }
+| specs = declaration_specifiers
+  decl = old_function_declarator
+  dlist = declaration_list
+  stmt = compound_statement
+    { KRFUNDEF (fst specs) (fst decl) (snd decl) (List.rev' dlist) stmt (snd specs) }
+
+(* Hack to parse old-style, unprototyped function definitions
+   without causing ambiguities between a regular declarator
+   (which can end with attributes) and a declaration list
+   (which can start with attributes). *)
+
+old_function_declarator:
+| decl = direct_old_function_declarator
+    { decl }
+| pt = pointer decl = direct_old_function_declarator
+    { match decl with (Name name typ attr _, params) =>
+        (Name name ((fst pt) typ) attr (snd pt), params) end }
+
+direct_old_function_declarator:
+| decl = direct_declarator LPAREN params = identifier_list RPAREN
+    { (decl, List.rev' params) }
+
+identifier_list:
+| id = VAR_NAME
+    { [fst id] }
+| idl = identifier_list COMMA id = VAR_NAME
+    { fst id :: idl }
+
+declaration_list:
+| /*empty*/
+    { [] }
+| dl = declaration_list d = declaration
+    { d :: dl }
+

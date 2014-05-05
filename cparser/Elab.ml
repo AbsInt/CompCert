@@ -1874,6 +1874,46 @@ let elab_fundef env spec name body loc =
   emit_elab loc (Gfundef fn);
   env1
 
+let elab_kr_fundef env spec name params defs body loc =
+  (* Check that the declarations only declare parameters *)
+  let check_one_decl (Init_name(Name(s, dty, attrs, loc'), ie)) =
+    if not (List.mem s params) then
+      error loc' "Declaration of '%s' which is not a function parameter" s;
+    if ie <> NO_INIT then
+      error loc' "Illegal initialization of function parameter '%s'" s in
+  let check_decl = function
+  | DECDEF((spec', name_init_list), loc') ->
+      List.iter check_one_decl name_init_list
+  | d ->
+      (* Should never be produced by the parser *)
+      fatal_error (get_definitionloc d)
+                  "Illegal declaration of function parameter" in
+  List.iter check_decl defs;
+  (* Convert old-style K&R function definition to modern prototyped form *)
+  let rec convert_param param = function
+  | [] ->
+      (* Parameter is not declared, defaults to "int" in ISO C90,
+         is an error in ISO C99.  Just emit a warning. *)
+      warning loc "Type of '%s' defaults to 'int'" param;
+      PARAM([SpecType Tint], Some param, JUSTBASE, [], loc)
+  | DECDEF((spec', name_init_list), loc') :: defs ->
+      let rec convert = function
+        | [] -> convert_param param defs
+        | Init_name(Name(s, dty, attrs, loc''), ie) :: l ->
+            if s = param
+            then PARAM(spec', Some param, dty, attrs, loc'')
+            else convert l
+      in convert name_init_list
+  | _ ->
+      assert false (* checked earlier *) in
+  let params' =
+    List.map (fun p -> convert_param p defs) params in
+  let name' =
+    let (Name(s, dty, attr, loc')) = name in
+    Name(s, PROTO(dty, (params', false)), attr, loc') in
+  (* Elaborate the prototyped form *)
+  elab_fundef env spec name' body loc
+
 let rec elab_definition (local: bool) (env: Env.t) (def: Cabs.definition)
                     : decl list * Env.t =
   match def with
@@ -1881,6 +1921,12 @@ let rec elab_definition (local: bool) (env: Env.t) (def: Cabs.definition)
   | FUNDEF(spec, name, body, loc) ->
       if local then error loc "local definition of a function";
       let env1 = elab_fundef env spec name body loc in
+      ([], env1)
+
+  (* "int f(x, y) double y; { ... }" *)
+  | KRFUNDEF(spec, name, params, defs, body, loc) ->
+      if local then error loc "local definition of a function";
+      let env1 = elab_kr_fundef env spec name params defs body loc in
       ([], env1)
 
   (* "int x = 12, y[10], *z" *)

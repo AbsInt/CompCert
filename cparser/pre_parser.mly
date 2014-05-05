@@ -648,9 +648,31 @@ function_definition_begin:
 	    | Some i -> declare_varname i
 	  ) l
     }
+| declaration_specifiers pointer? x=direct_declarator 
+  LPAREN params=identifier_list RPAREN in_context(declaration_list)
+    { match x with
+      | (_, Some _) -> $syntaxerror
+      | (i, None) ->
+	declare_varname i;
+	!push_context ();
+	List.iter declare_varname params
+    }
+
+identifier_list:
+| id = general_identifier
+    { set_id_type id VarId; [id] }
+| idl = identifier_list COMMA id = general_identifier
+    { set_id_type id VarId; id :: idl }
+
+declaration_list:
+| /*empty*/
+    { }
+| declaration_list declaration
+    { }
 
 function_definition:
 | function_definition_begin LBRACE block_item_list? pop_context RBRACE
     { }
 | function_definition_begin LBRACE block_item_list? pop_context error
     { unclosed "{" "}" $startpos($2) $endpos }
+
