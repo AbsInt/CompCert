@@ -1,9 +1,5 @@
 Language features:
 - Support for C99 designated initializers. (ISO C99 section 6.7.8.)
-- Traditional, pre-Standard function definitions are no longer supported, e.g.
-      int f(i) int i; { return i + 1; }  // no longer supported
-  Use Standard form instead:
-      int f(int i) { return i + 1; }
 
 Improvements in confidence:
 - The parser is now formally verified against the ISO C99 grammar plus
@@ -24,6 +20,8 @@ Optimizations:
 Usability:
 - Option "-timings" to print compilation times for various passes.
 - Various tweaks in IRC graph coloring to reduce compilation time.
+- IA32: add built-in functions for fused multiply-add
+  (require a recent processor with FMA3 extensions).
 
 Improvements in ABI conformance:
 - New target platform: ARM with EABI "hard float" calling conventions

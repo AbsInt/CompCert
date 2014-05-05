@@ -36,6 +36,22 @@ let builtins = {
       (TFloat(FDouble, []), [TFloat(FDouble, []); TFloat(FDouble, [])], false);
     "__builtin_fmin",
       (TFloat(FDouble, []), [TFloat(FDouble, []); TFloat(FDouble, [])], false);
+    "__builtin_fmadd",
+      (TFloat(FDouble, []), 
+       [TFloat(FDouble, []); TFloat(FDouble, []); TFloat(FDouble, [])],
+       false);
+    "__builtin_fmsub",
+      (TFloat(FDouble, []), 
+       [TFloat(FDouble, []); TFloat(FDouble, []); TFloat(FDouble, [])],
+       false);
+    "__builtin_fnmadd",
+      (TFloat(FDouble, []), 
+       [TFloat(FDouble, []); TFloat(FDouble, []); TFloat(FDouble, [])],
+       false);
+    "__builtin_fnmsub",
+      (TFloat(FDouble, []), 
+       [TFloat(FDouble, []); TFloat(FDouble, []); TFloat(FDouble, [])],
+       false);
     (* Memory accesses *)
     "__builtin_read16_reversed",
       (TInt(IUShort, []), [TPtr(TInt(IUShort, [AConst]), [])], false);

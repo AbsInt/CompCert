@@ -475,6 +475,25 @@ let print_builtin_inline oc name args res =
         fprintf oc "	movapd	%a, %a\n" freg a1 freg res;
         fprintf oc "	minsd	%a, %a\n" freg a2 freg res
       end
+  | ("__builtin_fmadd"|"__builtin_fmsub"|"__builtin_fnmadd"|"__builtin_fnmsub"),
+    [FR a1; FR a2; FR a3], [FR res] ->
+      let opcode =
+        match name with
+        | "__builtin_fmadd" -> "vfmadd"
+        | "__builtin_fmsub" -> "vfmsub"
+        | "__builtin_fnmadd" -> "vfnmadd"
+        | "__builtin_fnmsub" -> "vfnmsub"
+        | _ -> assert false in
+      if res = a1 then
+        fprintf oc "	%s132sd	%a, %a, %a\n" opcode freg a2 freg a3 freg res
+      else if res = a2 then
+        fprintf oc "	%s213sd	%a, %a, %a\n" opcode freg a3 freg a1 freg res
+      else if res = a3 then
+        fprintf oc "	%s231sd	%a, %a, %a\n" opcode freg a1 freg a2 freg res
+      else begin
+        fprintf oc "	movapd	%a, %a\n" freg a3 freg res;
+        fprintf oc "	%s231sd	%a, %a, %a\n" opcode freg a1 freg a2 freg res
+      end
   (* 64-bit integer arithmetic *)
   | "__builtin_negl", [IR ah; IR al], [IR rh; IR rl] ->
       assert (ah = EDX && al = EAX && rh = EDX && rl = EAX);

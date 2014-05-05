@@ -8,6 +8,7 @@ int main(int argc, char ** argv)
   unsigned int y = 0xDEADBEEF;
   double a = 3.14159;
   double b = 2.718;
+  double c = 1.414;
   unsigned short s = 0x1234;
 
   printf("bswap(%x) = %x\n", x, __builtin_bswap(x));
@@ -16,6 +17,13 @@ int main(int argc, char ** argv)
   printf("fsqrt(%f) = %f\n", a, __builtin_fsqrt(a));
   printf("fmin(%f, %f) = %f\n", a, b, __builtin_fmin(a, b));
   printf("fmax(%f, %f) = %f\n", a, b, __builtin_fmax(a, b));
+
+#ifdef FMA3
+  printf("fmadd(%f, %f, %f) = %f\n", a, b, c, __builtin_fmadd(a, b, c));
+  printf("fmsub(%f, %f, %f) = %f\n", a, b, c, __builtin_fmsub(a, b, c));
+  printf("fnmadd(%f, %f, %f) = %f\n", a, b, c, __builtin_fnmadd(a, b, c));
+  printf("fnmsub(%f, %f, %f) = %f\n", a, b, c, __builtin_fnmsub(a, b, c));
+#endif
 
   printf ("read_16_rev = %x\n", __builtin_read16_reversed(&s));
   printf ("read_32_rev = %x\n", __builtin_read32_reversed(&y));
