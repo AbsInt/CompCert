@@ -38,7 +38,7 @@
 %}
 
 %token<string * Pre_parser_aux.identifier_type ref * Cabs.cabsloc>
-  VAR_NAME TYPEDEF_NAME UNKNOWN_NAME
+  VAR_NAME TYPEDEF_NAME
 %token<Cabs.constant * Cabs.cabsloc> CONSTANT
 %token<string * Cabs.cabsloc> STRING_LITERAL PRAGMA
 
@@ -81,7 +81,6 @@ when a is a TYPEDEF_NAME. It is specified by 6.7.5.3 11.
 general_identifier:
 | i = VAR_NAME
 | i = TYPEDEF_NAME
-| i = UNKNOWN_NAME
     { i }
 
 string_literals_list:
@@ -443,7 +442,6 @@ gcc_attribute:
 | gcc_attribute_word LPAREN argument_expression_list? RPAREN
     {}
 | gcc_attribute_word LPAREN i = TYPEDEF_NAME COMMA argument_expression_list RPAREN
-| gcc_attribute_word LPAREN i = UNKNOWN_NAME COMMA argument_expression_list RPAREN
     (* This is to emulate GCC's attribute syntax : we make this identifier
        a var name identifier, so that the parser will see it as a variable
        reference *)

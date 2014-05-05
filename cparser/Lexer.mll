@@ -87,10 +87,12 @@ let init filename channel : Lexing.lexbuf =
   end;
 
  declare_varname := begin fun id ->
-   Hashtbl.add lexicon id (fun loc -> VAR_NAME (id, ref VarId, loc));
-   match !contexts with
-     | [] -> ()
-     | t::q -> contexts := (id::t)::q
+   if Hashtbl.mem lexicon id then begin
+     Hashtbl.add lexicon id (fun loc -> VAR_NAME (id, ref VarId, loc));
+     match !contexts with
+       | [] -> ()
+       | t::q -> contexts := (id::t)::q
+     end
   end;
 
   declare_typename := begin fun id ->
@@ -302,13 +304,7 @@ rule initial = parse
   | "."                           { DOT(currentLoc lexbuf) }
   | identifier as id              {
         try Hashtbl.find lexicon id (currentLoc lexbuf)
-        with Not_found ->
-          let pref = "__builtin_" in
-          if String.length id > String.length pref &&
-            String.sub id 0 (String.length pref) = pref then
-              VAR_NAME (id, ref VarId, currentLoc lexbuf)
-          else
-            UNKNOWN_NAME(id, ref OtherId, currentLoc lexbuf) }
+        with Not_found -> VAR_NAME (id, ref VarId, currentLoc lexbuf) }
   | eof                           { EOF }
   | _ as c                        {
       Cerrors.fatal_error "%s:%d Error:@ invalid symbol %C"
@@ -478,7 +474,6 @@ and hash = parse
       | TILDE loc -> loop TILDE't loc
       | TYPEDEF loc -> loop TYPEDEF't loc
       | TYPEDEF_NAME (id, typ, loc)
-      | UNKNOWN_NAME (id, typ, loc)
       | VAR_NAME (id, typ, loc) ->
           let terminal = match !typ with
             | VarId -> VAR_NAME't
