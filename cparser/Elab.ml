@@ -1875,6 +1875,7 @@ let elab_fundef env spec name body loc =
   env1
 
 let elab_kr_fundef env spec name params defs body loc =
+  warning loc "Non-prototype, pre-standard function definition.@  Converting to prototype form.";
   (* Check that the declarations only declare parameters *)
   let check_one_decl (Init_name(Name(s, dty, attrs, loc'), ie)) =
     if not (List.mem s params) then
