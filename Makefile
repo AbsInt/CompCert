@@ -194,7 +194,7 @@ documentation: doc/coq2html $(FILES)
 	mkdir -p doc/html
 	rm -f doc/html/*.html
 	doc/coq2html -o 'doc/html/%.html' doc/*.glob \
-          $(filter-out doc/coq2html, $^)
+          $(filter-out doc/coq2html cparser/Parser.v, $^)
 	cp doc/coq2html.css doc/coq2html.js doc/html/
 
 doc/coq2html: doc/coq2html.ml
