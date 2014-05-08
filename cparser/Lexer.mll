@@ -35,6 +35,8 @@ let init filename channel : Lexing.lexbuf =
       ("case", fun loc -> CASE loc);
       ("char", fun loc -> CHAR loc);
       ("const", fun loc -> CONST loc);
+      ("__const", fun loc -> CONST loc);
+      ("__const__", fun loc -> CONST loc);
       ("continue", fun loc -> CONTINUE loc);
       ("default", fun loc -> DEFAULT loc);
       ("do", fun loc -> DO loc);
@@ -47,10 +49,14 @@ let init filename channel : Lexing.lexbuf =
       ("goto", fun loc -> GOTO loc);
       ("if", fun loc -> IF loc);
       ("inline", fun loc -> INLINE loc);
+      ("__inline", fun loc -> INLINE loc);
+      ("__inline__", fun loc -> INLINE loc);
       ("int", fun loc -> INT loc);
       ("long", fun loc -> LONG loc);
       ("register", fun loc -> REGISTER loc);
       ("restrict", fun loc -> RESTRICT loc);
+      ("__restrict", fun loc -> RESTRICT loc);
+      ("__restrict__", fun loc -> RESTRICT loc);
       ("return", fun loc -> RETURN loc);
       ("short", fun loc -> SHORT loc);
       ("signed", fun loc -> SIGNED loc);
@@ -229,10 +235,11 @@ let string_literal =
     '"' s_char_sequence? '"'
   | 'L' '"' s_char_sequence? '"'
 
-(* We assume comments are removed by the preprocessor. *)
 rule initial = parse
   | '\n'                          { new_line lexbuf; initial_linebegin lexbuf }
-  | whitespace_char_no_newline    { initial lexbuf }
+  | whitespace_char_no_newline +  { initial lexbuf }
+  | "/*"                          { multiline_comment lexbuf; initial lexbuf }
+  | "//"                          { singleline_comment lexbuf; initial lexbuf }
   | integer_constant as s         { CONSTANT (Cabs.CONST_INT s, currentLoc lexbuf) }
   | decimal_floating_constant     { CONSTANT (Cabs.CONST_FLOAT
                                       {Cabs.isHex_FI = false;
@@ -352,6 +359,21 @@ and hash = parse
   | _ as c
       { Cerrors.fatal_error "%s:%d Error:@ invalid symbol %C"
           lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum c }
+
+(* Multi-line comment terminated by "*/" *)
+and multiline_comment = parse
+  | "*/"   { () }
+  | eof    { Cerrors.error "%s:%d Error: unterminated comment"
+                lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum }
+  | '\n'   { new_line lexbuf; multiline_comment lexbuf }
+  | _      { multiline_comment lexbuf }
+
+(* Single-line comment terminated by a newline *)
+and singleline_comment = parse
+  | '\n'   { new_line lexbuf }
+  | eof    { Cerrors.error "%s:%d Error: unterminated comment"
+                lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum }
+  | _      { singleline_comment lexbuf }
 
 {
   open Streams
