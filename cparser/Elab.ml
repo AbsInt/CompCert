@@ -1664,22 +1664,24 @@ and elab_item zi item il =
                or wchar array = L"wide string literal" *)
   | (SINGLE_INIT (CONSTANT (CONST_STRING s))
      | COMPOUND_INIT [_, SINGLE_INIT(CONSTANT (CONST_STRING s))]),
-    TArray(TInt(ik, _), sz, _) ->
-      begin match elab_string_literal loc s with
-      | CStr s ->
-          if ik <> IChar && ik <> IUChar && ik <> ISChar then
-            error loc "initialization of an array of non-char elements with a string literal";
+    TArray(ty_elt, sz, _) ->
+      begin match elab_string_literal loc s, unroll env ty_elt with
+      | CStr s, TInt((IChar | ISChar | IUChar), _) ->
           if not (I.index_below (Int64.of_int(String.length s - 1)) sz) then
             warning loc "initializer string for array of chars %s is too long"
                         (I.name zi);
           elab_list (I.set zi (init_char_array_string sz s)) il false
-      | CWStr s ->
-          if ik <> wchar_ikind then
-            error loc "initialization of an array of non-wchar_t elements with a wide string literal";
+      | CStr _, _ ->
+          error loc "initialization of an array of non-char elements with a string literal";
+          elab_list zi il false
+      | CWStr s, TInt(ik, _) when ik = wchar_ikind ->
           if not (I.index_below (Int64.of_int(List.length s - 1)) sz) then
             warning loc "initializer string for array of wide chars %s is too long"
                         (I.name zi);
           elab_list (I.set zi (init_int_array_wstring sz s)) il false
+      | CWStr _, _ ->
+          error loc "initialization of an array of non-wchar_t elements with a wide string literal";
+          elab_list zi il false
       | _ -> assert false
       end
   (* Brace-enclosed compound initializer *)

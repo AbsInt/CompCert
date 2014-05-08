@@ -1,3 +1,12 @@
+Usability:
+- Re-added alternate keywords __restrict, __inline__, etc, 
+  for GCC compatibility.
+- Do not assume that the preprocessor removed all comments.
+
+Bug fixing:
+- Fixed regression on initializers of the form  T x[N] = "literal";
+  where T is a typedef for a character type.
+
 Release 2.3, 2014-05-05
 =======================
 	
