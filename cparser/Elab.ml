@@ -222,9 +222,10 @@ let parse_next_char s pos loc =
       | 'r' -> (Int64.of_int (Char.code '\r'), pos+2)
       | 't' -> (Int64.of_int (Char.code '\t'), pos+2)
       | 'v' -> (11L, pos+2)
-      | '0'..'9' -> 
+      | '0'..'7' -> 
           let next = ref (pos+1) in
-          while !next < String.length s && s.[!next] >= '0' && s.[!next] <= '9' do 
+          while !next < pos + 4 && !next < String.length s &&
+                s.[!next] >= '0' && s.[!next] <= '7' do 
             incr next
           done;
           (parse_int 8 (String.sub s (pos+1) (!next-pos-1)), !next)

@@ -250,7 +250,7 @@ rule initial = parse
                                          match suffix with
                                          | None -> None
                                          | Some c -> Some (String.make 1 c) },
-                                      currentLoc lexbuf)}
+                                      currentLoc lexbuf) }
   | hexadecimal_floating_constant { CONSTANT (Cabs.CONST_FLOAT
                                       {Cabs.isHex_FI = true;
                                        Cabs.integer_FI = intpart;
@@ -313,6 +313,9 @@ rule initial = parse
         try Hashtbl.find lexicon id (currentLoc lexbuf)
         with Not_found -> VAR_NAME (id, ref VarId, currentLoc lexbuf) }
   | eof                           { EOF }
+  | '"' ("" | 'L') s_char* '\\' (_ as c) {
+      Cerrors.fatal_error "%s:%d Error:@ invalid escape sequence in string litteral %S"
+        lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum (Printf.sprintf "\\%c" c) }
   | _ as c                        {
       Cerrors.fatal_error "%s:%d Error:@ invalid symbol %C"
         lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum c }
