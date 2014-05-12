@@ -78,3 +78,10 @@ let string_of_cabsloc l =
 
 let format_cabsloc pp l =
   Format.fprintf pp "%s:%d" l.filename l.lineno
+
+let rec append_decltype dt1 dt2 =
+  match dt1 with
+  | JUSTBASE -> dt2
+  | ARRAY(dt, attr, sz) -> ARRAY(append_decltype dt dt2, attr, sz)
+  | PTR(attr, dt) -> PTR(attr, append_decltype dt dt2)
+  | PROTO(dt, params) -> PROTO(append_decltype dt dt2, params)

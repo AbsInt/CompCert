@@ -1878,7 +1878,7 @@ let elab_fundef env spec name body loc =
   env1
 
 let elab_kr_fundef env spec name params defs body loc =
-  warning loc "Non-prototype, pre-standard function definition.@  Converting to prototype form.";
+  warning loc "Non-prototype, pre-standard function definition.@  Converting to prototype form";
   (* Check that the declarations only declare parameters *)
   let check_one_decl (Init_name(Name(s, dty, attrs, loc'), ie)) =
     if not (List.mem s params) then
@@ -1914,7 +1914,8 @@ let elab_kr_fundef env spec name params defs body loc =
     List.map (fun p -> convert_param p defs) params in
   let name' =
     let (Name(s, dty, attr, loc')) = name in
-    Name(s, PROTO(dty, (params', false)), attr, loc') in
+    Name(s, append_decltype dty (PROTO(JUSTBASE, (params', false))),
+         attr, loc') in
   (* Elaborate the prototyped form *)
   elab_fundef env spec name' body loc
 
