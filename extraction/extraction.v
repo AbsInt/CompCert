@@ -112,6 +112,8 @@ Extract Constant Cabs.cabsloc =>
    byteno: int;
    ident : int;
  }".
+Extract Constant Cabs.string => "String.t".
+Extract Constant Cabs.char_code => "int64".
 
 (* Int31 *)
 Extract Inductive Int31.digits => "bool" [ "false" "true" ].
@@ -121,9 +123,6 @@ Extract Constant Int31.twice_plus_one => "Camlcoq.Int31.twice_plus_one".
 Extract Constant Int31.compare31 => "Camlcoq.Int31.compare".
 Extract Constant Int31.On => "0".
 Extract Constant Int31.In => "1".
-
-(* String in Cabs *)
-Extract Constant Cabs.string => "String.t".
 
 (* Processor-specific extraction directives *)
 

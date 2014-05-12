@@ -17,7 +17,8 @@ Require Import BinPos.
 
 (* OCaml's string type. *)
 Parameter string : Type.
-
+(* OCaml's int64 type, used to represent individual characters in literals. *)
+Parameter char_code : Type.
 (* Context information. *)
 Parameter cabsloc : Type.
 
@@ -140,11 +141,11 @@ with expression :=
 
 with constant :=
   (* The string is the textual representation of the constant in
-     the source code. It does include quotes. *)
+     the source code. *)
   | CONST_INT : string -> constant
   | CONST_FLOAT : floatInfo -> constant
-  | CONST_CHAR : string -> constant
-  | CONST_STRING : string -> constant
+  | CONST_CHAR : bool -> list char_code -> constant
+  | CONST_STRING : bool -> list char_code -> constant
 
 with init_expression :=
   | NO_INIT
@@ -208,7 +209,7 @@ with statement :=
  | DEFAULT : statement -> cabsloc -> statement
  | LABEL : string -> statement -> cabsloc -> statement
  | GOTO : string -> cabsloc -> statement
- | ASM : constant -> cabsloc -> statement
+ | ASM : bool -> list char_code -> cabsloc -> statement
  | DEFINITION : definition -> statement (*definition or declaration of a variable or type*)
 
 with for_clause :=

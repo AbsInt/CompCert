@@ -70,7 +70,7 @@ begin
   | LABEL(_,_,loc) -> loc
   | GOTO(_,loc) -> loc
   | DEFINITION d -> get_definitionloc d
-  | ASM(_,loc) -> loc
+  | ASM(_,_,loc) -> loc
 end
 
 let string_of_cabsloc l =

@@ -208,106 +208,42 @@ let elab_float_constant loc f =
   in
   (v, ty)
 
-let parse_next_char s pos loc =
-  if s.[pos] = '\\' then
-    match s.[pos+1] with
-      | '\'' -> (Int64.of_int (Char.code '\''), pos+2)
-      | '\"' -> (Int64.of_int (Char.code '\"'), pos+2)
-      | '?' -> (Int64.of_int (Char.code '?'), pos+2)
-      | '\\' -> (Int64.of_int (Char.code '\\'), pos+2)
-      | 'a' -> (7L, pos+2)
-      | 'b' -> (Int64.of_int (Char.code '\b'), pos+2)
-      | 'f' -> (12L, pos+2)
-      | 'n' -> (Int64.of_int (Char.code '\n'), pos+2)
-      | 'r' -> (Int64.of_int (Char.code '\r'), pos+2)
-      | 't' -> (Int64.of_int (Char.code '\t'), pos+2)
-      | 'v' -> (11L, pos+2)
-      | '0'..'7' -> 
-          let next = ref (pos+1) in
-          while !next < pos + 4 && !next < String.length s &&
-                s.[!next] >= '0' && s.[!next] <= '7' do 
-            incr next
-          done;
-          (parse_int 8 (String.sub s (pos+1) (!next-pos-1)), !next)
-      | 'x' ->
-          let next = ref (pos+2) in
-          while !next < String.length s && (
-            (s.[!next] >= '0' && s.[!next] <= '9') ||
-            (s.[!next] >= 'a' && s.[!next] <= 'f') ||
-            (s.[!next] >= 'A' && s.[!next] <= 'F'))
-          do 
-            incr next
-          done;
-          (begin 
-             try parse_int 16 (String.uppercase (String.sub s (pos+2) (!next-pos-2)))
-             with Overflow -> 
-               error loc "overflow in hexadecimal escape sequence"; 0L end,
-           !next)
-      | 'u' ->
-          (parse_int 16 (String.uppercase (String.sub s (pos+2) 4)), pos+6)
-      | 'U' ->
-          (parse_int 16 (String.uppercase (String.sub s (pos+2) 8)), pos+10)
-      | _ -> assert false
-  else (Int64.of_int (Char.code s.[pos]), pos+1)
-
-let elab_char_constant loc s =
-  let (s, sz) =
-    match s.[0], s.[1] with
-    | 'L', '\'' -> chop_first s 2, !config.sizeof_wchar
-    | '\'', _ -> chop_first s 1, 1
-    | _ -> assert false
-  in
-  assert (s.[String.length s-1] = '\'');
-  let s = chop_last s 1 in
-  let nbits = 8 * sz in
+let elab_char_constant loc wide chars =
+  let nbits = if wide then 8 * !config.sizeof_wchar else 8 in
   (* Treat multi-char constants as a number in base 2^nbits *)
   let max_digit = Int64.shift_left 1L nbits in
   let max_val = Int64.shift_left 1L (64 - nbits) in
-  let rec parse pos accu nchar =
-    if accu >= max_val then
-      error loc "character constant overflows";
-    if pos = String.length s then accu, nchar
-    else
-      let (c, pos) = parse_next_char s pos loc in
-      if c >= max_digit then
-        warning loc "escape sequence out of range";
-      let accu = Int64.add (Int64.shift_left accu nbits) c in
-      parse pos accu (nchar+1)
-  in
-  let v, nchar = parse 0 0L 0 in
+  let v =
+    List.fold_left 
+      (fun acc d ->
+        if acc >= max_val then
+          error loc "character constant overflows";
+        if d >= max_digit then
+          warning loc "escape sequence is out of range (code 0x%LX)" d;
+        Int64.add (Int64.shift_left acc nbits) d)
+      0L chars in
   if not (integer_representable v IInt) then
-    error loc "character constant cannot be represented at type 'int'";
+    warning loc "character constant cannot be represented at type 'int'";
   (* C99 6.4.4.4 item 10: single character -> represent at type char *)
-  if nchar = 1
-  then Ceval.normalize_int v IChar
-  else v
+  Ceval.normalize_int v (if List.length chars = 1 then IChar else IInt)
 
-let elab_string_literal loc s =
-  let (wide, pos) = if s.[0] = 'L' then ref true, 2 else ref false, 1 in
-  assert (s.[pos-1] = '\"');
-  let rec parse pos accu =
-    if s.[pos] = '\"' then
-      if pos = String.length s - 1 then accu
-      else
-        let pos = if s.[pos+1] = 'L' then (wide := true; pos+3) else pos+2 in
-        assert(s.[pos-1] = '\"');
-        parse pos accu
-    else
-      let (char, pos) = parse_next_char s pos loc in
-      parse pos (char::accu)
-  in
-  let l = List.rev (parse pos []) in
-  let nbbits = if !wide then 8 * !config.sizeof_wchar else 8 in
-  List.iter (fun c ->
-    if c < 0L || c >= Int64.shift_left 1L nbbits then
-      error loc "character overflows") l;
-  if !wide then
-    CWStr l
-  else
-    let res = String.create (List.length l) in
-    List.iteri (fun i c ->
-      res.[i] <- Char.chr (Int64.to_int c)) l;
+let elab_string_literal loc wide chars =
+  let nbits = if wide then 8 * !config.sizeof_wchar else 8 in 
+  let char_max = Int64.shift_left 1L nbits in
+  List.iter
+    (fun c ->
+      if c < 0L || c >= char_max
+      then warning loc "escape sequence is out of range (code 0x%LX)" c)
+    chars;
+  if wide then
+    CWStr chars
+  else begin
+    let res = String.create (List.length chars) in
+    List.iteri
+      (fun i c -> res.[i] <- Char.chr (Int64.to_int c))
+      chars;
     CStr res
+  end
 
 let elab_constant loc = function
   | CONST_INT s ->
@@ -316,10 +252,10 @@ let elab_constant loc = function
   | CONST_FLOAT f ->
       let (v, fk) = elab_float_constant loc f in
       CFloat(v, fk)
-  | CONST_CHAR s ->
-      CInt(elab_char_constant loc s, IInt, "")
-  | CONST_STRING s ->
-      elab_string_literal loc s
+  | CONST_CHAR(wide, s) ->
+      CInt(elab_char_constant loc wide s, IInt, "")
+  | CONST_STRING(wide, s) ->
+      elab_string_literal loc wide s
 
 
 (** * Elaboration of type expressions, type specifiers, name declarations *)
@@ -608,7 +544,7 @@ and elab_parameter env (PARAM (spec, id, decl, attr, loc)) =
     error loc
       "'extern' or 'static' storage not supported for function parameter";
   if inl then
-    error loc "'inline' is forbidden here";
+    error loc "'inline' can only appear on functions";
   let id = match id with None -> "" | Some id -> id in
   if id <> "" && redef Env.lookup_ident env id <> None then
     error loc "redefinition of parameter '%s'" id;
@@ -648,12 +584,12 @@ and elab_name_group loc env (spec, namelist) =
 and elab_init_name_group loc env (spec, namelist) =
   let (sto, inl, tydef, bty, env') =
     elab_specifier ~only:(namelist=[]) loc env spec in
-  if inl then
-    error loc "'inline' is forbidden here";
   let elab_one_name env (Init_name (Name (id, decl, attr, loc), init)) =
     let (ty, env1) =
       elab_type_declarator loc env bty decl in 
     let a = elab_attributes env attr in
+    if inl && not (is_function_type env ty) then
+      error loc "'inline' can only appear on functions";
     ((id, add_attributes_type a ty, init), env1) in
   (mmap elab_one_name env' namelist, sto, tydef)
 
@@ -1663,10 +1599,10 @@ and elab_item zi item il =
   match item, unroll env ty with
   (* Special case char array = "string literal" 
                or wchar array = L"wide string literal" *)
-  | (SINGLE_INIT (CONSTANT (CONST_STRING s))
-     | COMPOUND_INIT [_, SINGLE_INIT(CONSTANT (CONST_STRING s))]),
+  | (SINGLE_INIT (CONSTANT (CONST_STRING(w, s)))
+     | COMPOUND_INIT [_, SINGLE_INIT(CONSTANT (CONST_STRING(w, s)))]),
     TArray(ty_elt, sz, _) ->
-      begin match elab_string_literal loc s, unroll env ty_elt with
+      begin match elab_string_literal loc w s, unroll env ty_elt with
       | CStr s, TInt((IChar | ISChar | IUChar), _) ->
           if not (I.index_below (Int64.of_int(String.length s - 1)) sz) then
             warning loc "initializer string for array of chars %s is too long"
@@ -2140,12 +2076,12 @@ let rec elab_stmt env ctx s =
       { sdesc = Sskip; sloc = elab_loc loc }
 
 (* Traditional extensions *)
-  | ASM(txt, loc) ->
-      begin match txt with
-      | CONST_STRING s ->
+  | ASM(wide, chars, loc) ->
+      begin match elab_string_literal loc wide chars with
+      | CStr s ->
           { sdesc = Sasm s; sloc = elab_loc loc }
       | _ ->
-          error loc "ill-defined asm statement";
+          error loc "wide strings not supported in asm statement";
           sskip
       end
 

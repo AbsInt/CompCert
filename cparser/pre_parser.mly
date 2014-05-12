@@ -40,7 +40,8 @@
 %token<string * Pre_parser_aux.identifier_type ref * Cabs.cabsloc>
   VAR_NAME TYPEDEF_NAME
 %token<Cabs.constant * Cabs.cabsloc> CONSTANT
-%token<string * Cabs.cabsloc> STRING_LITERAL PRAGMA
+%token<bool * int64 list * Cabs.cabsloc> STRING_LITERAL
+%token<string * Cabs.cabsloc> PRAGMA
 
 %token<Cabs.cabsloc> SIZEOF PTR INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ NEQ LT GT
   ANDAND BARBAR PLUS MINUS STAR TILDE BANG SLASH PERCENT HAT BAR QUESTION
@@ -614,7 +615,7 @@ jump_statement:
     {}
 
 asm_statement:
-| ASM LPAREN CONSTANT RPAREN SEMICOLON
+| ASM LPAREN string_literals_list RPAREN SEMICOLON
     {}
 
 translation_unit_file:

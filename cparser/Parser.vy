@@ -22,6 +22,7 @@ Require Import List.
 
 %token<string * cabsloc> VAR_NAME TYPEDEF_NAME OTHER_NAME
 %token<string * cabsloc> PRAGMA
+%token<bool * list char_code * cabsloc> STRING_LITERAL
 %token<constant * cabsloc> CONSTANT
 %token<cabsloc> SIZEOF PTR INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ NEQ LT GT
   ANDAND BARBAR PLUS MINUS STAR TILDE BANG SLASH PERCENT HAT BAR QUESTION
@@ -108,6 +109,9 @@ primary_expression:
     { (VARIABLE (fst var), snd var) }
 | cst = CONSTANT
     { (CONSTANT (fst cst), snd cst) }
+| str = STRING_LITERAL
+    { let '((wide, chars), loc) := str in
+      (CONSTANT (CONST_STRING wide chars), loc) }
 | loc = LPAREN expr = expression RPAREN
     { (fst expr, loc)}
 
@@ -816,8 +820,8 @@ jump_statement:
 
 (* Non-standard *)
 asm_statement:
-| loc = ASM LPAREN template = CONSTANT RPAREN SEMICOLON
-    { ASM (fst template) loc }
+| loc = ASM LPAREN template = STRING_LITERAL RPAREN SEMICOLON
+    { let '(wide, chars, _) := template in ASM wide chars loc }
 
 (* 6.9 *)
 translation_unit_file:
