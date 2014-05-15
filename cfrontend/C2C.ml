@@ -1069,9 +1069,13 @@ let convertProgram p =
 let atom_is_static a =
   try
     let i = Hashtbl.find decl_atom a in
-    i.a_storage = C.Storage_static || i.a_inline
-    (* inline functions can remain in generated code, but at least
-       let's not make them global *)
+    (* inline functions can remain in generated code, but should not
+       be global, unless explicitly marked "extern" *)
+    match i.a_storage with
+    | C.Storage_default -> i.a_inline
+    | C.Storage_extern -> false
+    | C.Storage_static -> true
+    | C.Storage_register -> false (* should not happen *)
   with Not_found ->
     false
 

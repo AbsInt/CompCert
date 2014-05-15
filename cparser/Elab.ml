@@ -1699,6 +1699,12 @@ let elab_initializer loc env root ty ie =
   | Some init ->
       (fixup_typ loc env ty init, Some init)
 
+(* Handling of __func__ (section 6.4.2.2) *)
+
+let __func__type_and_init s = 
+  (TArray(TInt(IChar, [AConst]), Some(Int64.of_int (String.length s + 1)), []),
+   init_char_array_string None s)
+
 
 (* Elaboration of top-level and local definitions *)
 
@@ -1797,8 +1803,13 @@ let elab_fundef env spec name body loc =
   let env2 =
     List.fold_left (fun e (id, ty) -> Env.add_ident e id Storage_default ty)
                    (Env.new_scope env1) params in
+  (* Define "__func__" and enter it in the environment *)
+  let (func_ty, func_init) = __func__type_and_init s in
+  let (func_id, env3) =
+    enter_or_refine_ident true loc env2 "__func__" Storage_static func_ty in
+  emit_elab loc (Gdecl(Storage_static, func_id, func_ty, Some func_init));
   (* Elaborate function body *)
-  let body' = !elab_funbody_f ty_ret env2 body in
+  let body' = !elab_funbody_f ty_ret env3 body in
   (* Build and emit function definition *)
   let fn =
     { fd_storage = sto;

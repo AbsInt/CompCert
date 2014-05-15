@@ -419,8 +419,8 @@ struct_or_union:
     { (UNION, loc) }
 
 struct_declaration_list:
-| decl = struct_declaration
-    { [decl] }
+| (* empty *)
+    { nil }
 | qdecls = struct_declaration_list tdecls = struct_declaration
     { tdecls::qdecls }
 

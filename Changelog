@@ -1,11 +1,17 @@
 Usability:
-- Re-added alternate keywords __restrict, __inline__, etc, 
-  for GCC compatibility.
+- Re-added support for "__func__" identifier as per ISO C99.
+- Re-added some popular GCC extensions to ISO C99:
+     . alternate keywords __restrict, __inline__, etc, 
+     . support for empty structs and unions
+     . support '\e' escape in char and string literals, meaning ESC
 - Do not assume that the preprocessor removed all comments.
 
 Bug fixing:
 - Fixed regression on initializers of the form  T x[N] = "literal";
   where T is a typedef for a character type.
+- "asm" statements were causing syntax errors.
+- Better handling of "extern" and "extern inline" function definitions.
+- Internal error on some octal escape sequences in string literals.
 
 Release 2.3, 2014-05-05
 =======================

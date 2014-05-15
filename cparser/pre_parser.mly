@@ -358,6 +358,7 @@ struct_or_union:
     {}
 
 struct_declaration_list:
+| (* empty *)
 | struct_declaration_list? struct_declaration
     {}
 
