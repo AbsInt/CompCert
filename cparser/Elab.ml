@@ -75,12 +75,16 @@ let rec mmap f env = function
 
 (* To detect redefinitions within the same scope *)
 
-let redef fn env arg =
+let previous_def fn env arg =
   try
-    let (id, info) = fn env arg in
-    if Env.in_current_scope env id then Some(id, info) else None
+    Some (fn env arg)
   with Env.Error _ ->
     None
+
+let redef fn env arg =
+  match previous_def fn env arg with
+  | None -> false
+  | Some(id, info) -> Env.in_current_scope env id
 
 (* Forward declarations *)
 
@@ -546,7 +550,7 @@ and elab_parameter env (PARAM (spec, id, decl, attr, loc)) =
   if inl then
     error loc "'inline' can only appear on functions";
   let id = match id with None -> "" | Some id -> id in
-  if id <> "" && redef Env.lookup_ident env id <> None then
+  if id <> "" && redef Env.lookup_ident env id then
     error loc "redefinition of parameter '%s'" id;
   (* replace array and function types by pointer types *)
   let ty1 = argument_conversion env1 ty in
@@ -742,7 +746,7 @@ and elab_enum_item env ((s, exp), loc) nextval =
             error loc
               "value of enumerator '%s' is not a compile-time constant" s;
             (nextval, Some exp') in
-  if redef Env.lookup_ident env s <> None then
+  if redef Env.lookup_ident env s then
     error loc "redefinition of enumerator '%s'" s;
   if not (int_representable v (8 * sizeof_ikind enum_ikind) (is_signed_ikind enum_ikind)) then
      warning loc "the value of '%s' is not representable with type %a"
@@ -1715,26 +1719,24 @@ let enter_typedefs loc env sto dl =
   List.fold_left (fun env (s, ty, init) ->
     if init <> NO_INIT then
       error loc "initializer in typedef";
-    if redef Env.lookup_typedef env s <> None then
+    if redef Env.lookup_typedef env s then
       error loc "redefinition of typedef '%s'" s;
     let (id, env') = Env.enter_typedef env s ty in
     emit_elab loc (Gtypedef(id, ty));
     env') env dl
 
 let enter_or_refine_ident local loc env s sto ty =
-  match redef Env.lookup_ident env s with
-  | Some(id, II_ident(old_sto, old_ty)) ->
+  match previous_def Env.lookup_ident env s with
+  | Some(id, II_ident(old_sto, old_ty))
+    when sto = Storage_extern || Env.in_current_scope env id ->
+      if local && Env.in_current_scope env id then
+        error loc "redefinition of local variable '%s'" s;
       let new_ty =
-        if local then begin
-          error loc "redefinition of local variable '%s'" s;
-          ty
-        end else begin
-          match combine_types env old_ty ty with
-          | Some new_ty ->
-              new_ty
-          | None ->
-              warning loc "redefinition of '%s' with incompatible type" s; ty
-        end in
+        match combine_types env old_ty ty with
+        | Some new_ty ->
+            new_ty
+        | None ->
+            warning loc "redefinition of '%s' with incompatible type" s; ty in
       let new_sto =
         if old_sto = Storage_extern then sto else
         if sto = Storage_extern then old_sto else
@@ -1742,12 +1744,12 @@ let enter_or_refine_ident local loc env s sto ty =
           warning loc "redefinition of '%s' with incompatible storage class" s;
           sto
         end in
-      (id, Env.add_ident env id new_sto new_ty)
-  | Some(id, II_enum v) ->
+      (id, new_sto, Env.add_ident env id new_sto new_ty)
+  | Some(id, II_enum v) when Env.in_current_scope env id ->
       error loc "illegal redefinition of enumerator '%s'" s;
-      (id, Env.add_ident env id sto ty)
+      (id, sto, Env.add_ident env id sto ty)
   | _ ->
-      Env.enter_ident env s sto ty
+      let (id, env') = Env.enter_ident env s sto ty in (id, sto, env')
 
 let enter_decdefs local loc env sto dl =
   (* Sanity checks on storage class *)
@@ -1758,12 +1760,19 @@ let enter_decdefs local loc env sto dl =
   let rec enter_decdef (decls, env) (s, ty, init) =
     if sto = Storage_extern && init <> NO_INIT then
       error loc "'extern' declaration cannot have an initializer";
-    (* function declarations are always extern *)
-    let sto' =
-      match unroll env ty with TFun _ -> Storage_extern | _ -> sto in
+    (* Adjust storage for function declarations *)
+    let sto1 =
+      match unroll env ty, sto with
+      | TFun _, Storage_default -> 
+          Storage_extern
+      | TFun _, (Storage_static | Storage_register) ->
+          if local then error loc "invalid storage class for '%s'" s;
+          sto
+      | _, _ ->
+          sto in
     (* enter ident in environment with declared type, because
        initializer can refer to the ident *)
-    let (id, env1) = enter_or_refine_ident local loc env s sto' ty in
+    let (id, sto', env1) = enter_or_refine_ident local loc env s sto1 ty in
     (* process the initializer *)
     let (ty', init') = elab_initializer loc env1 s ty init in
     (* update environment with refined type *)
@@ -1799,21 +1808,21 @@ let elab_fundef env spec name body loc =
     | TFun(ty_ret, Some params, vararg, attr) -> (ty_ret, params, vararg, attr)
     | _ -> fatal_error loc "wrong type for function definition" in
   (* Enter function in the environment, for recursive references *)
-  let (fun_id, env1) = enter_or_refine_ident false loc env s sto ty in
+  let (fun_id, sto1, env1) = enter_or_refine_ident false loc env s sto ty in
   (* Enter parameters in the environment *)
   let env2 =
     List.fold_left (fun e (id, ty) -> Env.add_ident e id Storage_default ty)
                    (Env.new_scope env1) params in
   (* Define "__func__" and enter it in the environment *)
   let (func_ty, func_init) = __func__type_and_init s in
-  let (func_id, env3) =
+  let (func_id, _, env3) =
     enter_or_refine_ident true loc env2 "__func__" Storage_static func_ty in
   emit_elab loc (Gdecl(Storage_static, func_id, func_ty, Some func_init));
   (* Elaborate function body *)
   let body' = !elab_funbody_f ty_ret env3 body in
   (* Build and emit function definition *)
   let fn =
-    { fd_storage = sto;
+    { fd_storage = sto1;
       fd_inline = inline;
       fd_name = fun_id;
       fd_attrib = attr;
