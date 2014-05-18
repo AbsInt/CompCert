@@ -1601,7 +1601,8 @@ and elab_item zi item il =
                or wchar array = L"wide string literal" *)
   | (SINGLE_INIT (CONSTANT (CONST_STRING(w, s)))
      | COMPOUND_INIT [_, SINGLE_INIT(CONSTANT (CONST_STRING(w, s)))]),
-    TArray(ty_elt, sz, _) ->
+    TArray(ty_elt, sz, _)
+    when is_integer_type env ty_elt ->
       begin match elab_string_literal loc w s, unroll env ty_elt with
       | CStr s, TInt((IChar | ISChar | IUChar), _) ->
           if not (I.index_below (Int64.of_int(String.length s - 1)) sz) then

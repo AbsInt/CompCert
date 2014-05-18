@@ -61,6 +61,12 @@ struct list { int hd; struct list * tl; } x23 = { sizeof(x23), &x23 };
 typedef unsigned char byte;
 byte x24[] = "/*B*/";
 
+/* Another tricky case with string literals */
+char * x25[] = { "/tmp" };
+
+/* One more */
+char x26[] = { "world" };
+
 static void print_chars(char * s, int sz)
 {
   int i;
@@ -126,6 +132,10 @@ int main()
          x23.hd, x23.tl == &x23 ? "ok" : "ERROR");
   printf("x24[%d] = { ", (int) sizeof(x24));
   print_chars((char *) x24, sizeof(x24));
+  printf("}\n");
+  printf("x25[%d] = { \"%s\" }\n", (int) sizeof(x25), x25[0]);
+  printf("x26[%d] = { ", (int) sizeof(x26));
+  print_chars(x26, sizeof(x26));
   printf("}\n");
   return 0;
 }
