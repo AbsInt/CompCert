@@ -31,7 +31,7 @@ TESTS_DIFF=NaNs
 EXTRAS=annot1 commaprec expr2 expr3 expr4 extern1 funct2 funptr1 \
   pragmas ptrs1 ptrs2 struct1 struct2 struct3 \
   struct4 struct5 struct6 struct9 struct10 types1 seqops \
-  singlefloats
+  singlefloats emptydecl
 
 # Test known to fail
 FAILURES=funct1

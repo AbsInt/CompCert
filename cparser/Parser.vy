@@ -836,6 +836,11 @@ translation_unit:
     { [def] }
 | defq = translation_unit deft = external_declaration
     { deft::defq }
+(* Non-standard : empty declaration *)
+| tu = translation_unit SEMICOLON
+    { tu }
+| SEMICOLON
+    { [] }
 
 external_declaration:
 | def = function_definition
