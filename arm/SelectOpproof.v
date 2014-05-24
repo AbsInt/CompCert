@@ -114,7 +114,7 @@ Definition binary_constructor_sound (cstr: expr -> expr -> expr) (sem: val -> va
 
 Theorem eval_addrsymbol:
   forall le id ofs,
-  exists v, eval_expr ge sp e m le (addrsymbol id ofs) v /\ Val.lessdef (symbol_address ge id ofs) v.
+  exists v, eval_expr ge sp e m le (addrsymbol id ofs) v /\ Val.lessdef (Genv.symbol_address ge id ofs) v.
 Proof.
   intros. unfold addrsymbol. econstructor; split. 
   EvalOp. simpl; eauto. 
@@ -150,7 +150,7 @@ Proof.
   destruct x; simpl; auto. rewrite Int.add_zero. auto. rewrite Int.add_zero. auto.
   case (addimm_match a); intros; InvEval; simpl; TrivialExists; simpl.
   rewrite Int.add_commut. auto.
-  unfold symbol_address. destruct (Genv.find_symbol ge s); simpl; auto. rewrite Int.add_commut; auto.
+  unfold Genv.symbol_address. destruct (Genv.find_symbol ge s); simpl; auto. rewrite Int.add_commut; auto.
   rewrite Val.add_assoc. rewrite Int.add_commut. auto.
   subst x. rewrite Val.add_assoc. rewrite Int.add_commut. auto.
 Qed. 

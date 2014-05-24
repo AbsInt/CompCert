@@ -49,7 +49,7 @@ Hypothesis MATCH: ematch bc rs ae.
 
 Lemma match_G:
   forall r id ofs,
-  AE.get r ae = Ptr(Gl id ofs) -> Val.lessdef rs#r (symbol_address ge id ofs).
+  AE.get r ae = Ptr(Gl id ofs) -> Val.lessdef rs#r (Genv.symbol_address ge id ofs).
 Proof.
   intros. apply vmatch_ptr_gl with bc; auto. rewrite <- H. apply MATCH. 
 Qed.
@@ -82,7 +82,7 @@ Ltac SimplVM :=
       rewrite E in *; clear H; SimplVM
   | [ H: vmatch _ ?v (Ptr(Gl ?id ?ofs)) |- _ ] =>
       let E := fresh in
-      assert (E: Val.lessdef v (Op.symbol_address ge id ofs)) by (eapply vmatch_ptr_gl; eauto); 
+      assert (E: Val.lessdef v (Genv.symbol_address ge id ofs)) by (eapply vmatch_ptr_gl; eauto); 
       clear H; SimplVM
   | [ H: vmatch _ ?v (Ptr(Stk ?ofs)) |- _ ] =>
       let E := fresh in

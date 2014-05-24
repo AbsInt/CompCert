@@ -127,7 +127,7 @@ Qed.
 
 Lemma symbol_address_sound:
   forall id ofs,
-  vmatch bc (symbol_address ge id ofs) (Ptr (Gl id ofs)).
+  vmatch bc (Genv.symbol_address ge id ofs) (Ptr (Gl id ofs)).
 Proof.
   intros; apply symbol_address_sound; apply GENV.
 Qed.

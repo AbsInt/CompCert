@@ -380,7 +380,7 @@ Proof.
   exists (Val.longofwords (Vint (Int64.hiword i)) (Vint (Int64.loword i))); split.
   eapply eval_Eop. constructor. EvalOp. simpl; eauto. constructor. EvalOp. simpl; eauto. constructor. auto.
   simpl. rewrite Int64.ofwords_recompose. auto.
-  rewrite <- symbols_preserved. fold (symbol_address tge i i0). apply eval_addrsymbol.
+  rewrite <- symbols_preserved. fold (Genv.symbol_address tge i i0). apply eval_addrsymbol.
   apply eval_addrstack.
   (* Eunop *)
   exploit IHeval_expr; eauto. intros [v1' [A B]].

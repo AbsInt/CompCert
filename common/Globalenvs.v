@@ -102,6 +102,16 @@ Record t: Type := mkgenv {
 Definition find_symbol (ge: t) (id: ident) : option block :=
   PTree.get id ge.(genv_symb).
 
+(** [symbol_address ge id ofs] returns a pointer into the block associated
+  with [id], at byte offset [ofs].  [Vundef] is returned if no block is associated
+  to [id]. *)
+
+Definition symbol_address (ge: t) (id: ident) (ofs: int) : val :=
+  match find_symbol ge id with
+  | Some b => Vptr b ofs
+  | None => Vundef
+  end.
+
 (** [find_funct_ptr ge b] returns the function description associated with
     the given address. *)
 
@@ -266,6 +276,13 @@ Qed.
 End GLOBALENV_PRINCIPLES.
 
 (** ** Properties of the operations over global environments *)
+
+Theorem shift_symbol_address:
+  forall ge id ofs n,
+  symbol_address ge id (Int.add ofs n) = Val.add (symbol_address ge id ofs) (Vint n).
+Proof.
+  intros. unfold symbol_address. destruct (find_symbol ge id); auto. 
+Qed.
 
 Theorem find_funct_inv:
   forall ge v f,

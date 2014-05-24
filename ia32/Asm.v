@@ -275,12 +275,6 @@ Fixpoint label_pos (lbl: label) (pos: Z) (c: code) {struct c} : option Z :=
 
 Variable ge: genv.
 
-Definition symbol_offset (id: ident) (ofs: int) : val :=
-  match Genv.find_symbol ge id with
-  | Some b => Vptr b ofs
-  | None => Vundef
-  end.
-
 (** Evaluating an addressing mode *)
 
 Definition eval_addrmode (a: addrmode) (rs: regset) : val :=
@@ -296,7 +290,7 @@ Definition eval_addrmode (a: addrmode) (rs: regset) : val :=
               end)
              (match const with
               | inl ofs => Vint ofs
-              | inr(id, ofs) => symbol_offset id ofs
+              | inr(id, ofs) => Genv.symbol_address ge id ofs
               end))
   end.
 
@@ -477,7 +471,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pmov_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Vint n))) m
   | Pmov_ra rd id =>
-      Next (nextinstr_nf (rs#rd <- (symbol_offset id Int.zero))) m
+      Next (nextinstr_nf (rs#rd <- (Genv.symbol_address ge id Int.zero))) m
   | Pmov_rm rd a =>
       exec_load Mint32 m a rs rd
   | Pmov_mr a r1 =>
@@ -631,7 +625,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pjmp_l lbl =>
       goto_label f lbl rs m
   | Pjmp_s id sg =>
-      Next (rs#PC <- (symbol_offset id Int.zero)) m
+      Next (rs#PC <- (Genv.symbol_address ge id Int.zero)) m
   | Pjmp_r r sg =>
       Next (rs#PC <- (rs r)) m
   | Pjcc cond lbl =>
@@ -656,7 +650,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       | _ => Stuck
       end
   | Pcall_s id sg =>
-      Next (rs#RA <- (Val.add rs#PC Vone) #PC <- (symbol_offset id Int.zero)) m
+      Next (rs#RA <- (Val.add rs#PC Vone) #PC <- (Genv.symbol_address ge id Int.zero)) m
   | Pcall_r r sg =>
       Next (rs#RA <- (Val.add rs#PC Vone) #PC <- (rs r)) m
   | Pret =>
@@ -806,7 +800,7 @@ Inductive initial_state (p: program): state -> Prop :=
       let ge := Genv.globalenv p in
       let rs0 :=
         (Pregmap.init Vundef)
-        # PC <- (symbol_offset ge p.(prog_main) Int.zero)
+        # PC <- (Genv.symbol_address ge p.(prog_main) Int.zero)
         # RA <- Vzero
         # ESP <- Vzero in
       initial_state p (State rs0 m0).

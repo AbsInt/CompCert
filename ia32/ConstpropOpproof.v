@@ -46,7 +46,7 @@ Hypothesis MATCH: ematch bc e ae.
 
 Lemma match_G:
   forall r id ofs,
-  AE.get r ae = Ptr(Gl id ofs) -> Val.lessdef e#r (symbol_address ge id ofs).
+  AE.get r ae = Ptr(Gl id ofs) -> Val.lessdef e#r (Genv.symbol_address ge id ofs).
 Proof.
   intros. apply vmatch_ptr_gl with bc; auto. rewrite <- H. apply MATCH. 
 Qed.
@@ -79,7 +79,7 @@ Ltac SimplVM :=
       rewrite E in *; clear H; SimplVM
   | [ H: vmatch _ ?v (Ptr(Gl ?id ?ofs)) |- _ ] =>
       let E := fresh in
-      assert (E: Val.lessdef v (Op.symbol_address ge id ofs)) by (eapply vmatch_ptr_gl; eauto); 
+      assert (E: Val.lessdef v (Genv.symbol_address ge id ofs)) by (eapply vmatch_ptr_gl; eauto); 
       clear H; SimplVM
   | [ H: vmatch _ ?v (Ptr(Stk ?ofs)) |- _ ] =>
       let E := fresh in
@@ -103,13 +103,6 @@ Proof.
 - auto.
 Qed.
 
-Remark shift_symbol_address:
-  forall symb ofs n,
-  Op.symbol_address ge symb (Int.add ofs n) = Val.add (Op.symbol_address ge symb ofs) (Vint n).
-Proof.
-  unfold Op.symbol_address; intros. destruct (Genv.find_symbol ge symb); auto. 
-Qed.
-
 Lemma addr_strength_reduction_correct:
   forall addr args vl res,
   vl = map (fun r => AE.get r ae) args ->
@@ -120,15 +113,15 @@ Proof.
   intros until res. unfold addr_strength_reduction.
   destruct (addr_strength_reduction_match addr args vl); simpl;
   intros VL EA; InvApproxRegs; SimplVM; try (inv EA).
-- rewrite shift_symbol_address. econstructor; split. eauto. apply Val.add_lessdef; auto.
+- rewrite Genv.shift_symbol_address. econstructor; split. eauto. apply Val.add_lessdef; auto.
 - econstructor; split; eauto. rewrite Int.add_zero_l.
   change (Vptr sp (Int.add n ofs)) with (Val.add (Vptr sp n) (Vint ofs)). apply Val.add_lessdef; auto.
-- econstructor; split; eauto. rewrite Int.add_assoc. rewrite shift_symbol_address. 
+- econstructor; split; eauto. rewrite Int.add_assoc. rewrite Genv.shift_symbol_address. 
   rewrite Val.add_assoc. apply Val.add_lessdef; auto.
 - econstructor; split; eauto.
   fold (Val.add (Vint n1) e#r2). rewrite (Val.add_commut (Vint n1)).
-  rewrite shift_symbol_address. apply Val.add_lessdef; auto.
-  rewrite Int.add_commut. rewrite shift_symbol_address. apply Val.add_lessdef; auto. 
+  rewrite Genv.shift_symbol_address. apply Val.add_lessdef; auto.
+  rewrite Int.add_commut. rewrite Genv.shift_symbol_address. apply Val.add_lessdef; auto. 
 - econstructor; split; eauto. rewrite Int.add_zero_l. rewrite Int.add_assoc. 
   change (Vptr sp (Int.add n1 (Int.add n2 ofs)))
     with (Val.add (Vptr sp n1) (Vint (Int.add n2 ofs))).
@@ -138,10 +131,10 @@ Proof.
   change (Vptr sp (Int.add (Int.add n2 n1) ofs))
     with (Val.add (Val.add (Vint n1) (Vptr sp n2)) (Vint ofs)).
   apply Val.add_lessdef; auto. apply Val.add_lessdef; auto. 
-- econstructor; split; eauto. rewrite shift_symbol_address. 
+- econstructor; split; eauto. rewrite Genv.shift_symbol_address. 
   rewrite ! Val.add_assoc. apply Val.add_lessdef; auto. 
   rewrite Val.add_commut. apply Val.add_lessdef; auto. 
-- econstructor; split; eauto. rewrite shift_symbol_address.
+- econstructor; split; eauto. rewrite Genv.shift_symbol_address.
   rewrite (Val.add_commut e#r1). rewrite ! Val.add_assoc.
   apply Val.add_lessdef; auto. rewrite Val.add_commut. apply Val.add_lessdef; auto.
 - fold (Val.add (Vint n1) e#r2). econstructor; split; eauto. 
@@ -150,13 +143,13 @@ Proof.
 - econstructor; split; eauto.  rewrite ! Val.add_assoc.
   apply Val.add_lessdef; eauto. 
 - econstructor; split; eauto. rewrite Int.add_assoc. 
-  rewrite shift_symbol_address. apply Val.add_lessdef; auto. 
+  rewrite Genv.shift_symbol_address. apply Val.add_lessdef; auto. 
 - econstructor; split; eauto. 
-  rewrite shift_symbol_address. rewrite ! Val.add_assoc. apply Val.add_lessdef; auto.
+  rewrite Genv.shift_symbol_address. rewrite ! Val.add_assoc. apply Val.add_lessdef; auto.
   rewrite Val.add_commut; auto.
 - econstructor; split; eauto.
-- econstructor; split; eauto. rewrite shift_symbol_address. auto.
-- econstructor; split; eauto. rewrite shift_symbol_address. rewrite Int.mul_commut; auto.
+- econstructor; split; eauto. rewrite Genv.shift_symbol_address. auto.
+- econstructor; split; eauto. rewrite Genv.shift_symbol_address. rewrite Int.mul_commut; auto.
 - econstructor; eauto.
 Qed.
 

@@ -1075,15 +1075,12 @@ Definition genv_match (ge: genv) : Prop :=
   (forall id b, Genv.find_symbol ge id = Some b <-> bc b = BCglob id)
 /\(forall b, Plt b (Genv.genv_next ge) -> bc b <> BCinvalid /\ bc b <> BCstack).
 
-Definition symbol_address (ge: genv) (id: ident) (ofs: int) : val :=
-  match Genv.find_symbol ge id with Some b => Vptr b ofs | None => Vundef end.
-
 Lemma symbol_address_sound:
   forall ge id ofs,
   genv_match ge ->
-  vmatch (symbol_address ge id ofs) (Ptr (Gl id ofs)).
+  vmatch (Genv.symbol_address ge id ofs) (Ptr (Gl id ofs)).
 Proof.
-  intros. unfold symbol_address. destruct (Genv.find_symbol ge id) as [b|] eqn:F. 
+  intros. unfold Genv.symbol_address. destruct (Genv.find_symbol ge id) as [b|] eqn:F. 
   constructor. constructor. apply H; auto. 
   constructor.
 Qed.
@@ -1092,9 +1089,9 @@ Lemma vmatch_ptr_gl:
   forall ge v id ofs,
   genv_match ge ->
   vmatch v (Ptr (Gl id ofs)) ->
-  Val.lessdef v (symbol_address ge id ofs).
+  Val.lessdef v (Genv.symbol_address ge id ofs).
 Proof.
-  intros. unfold symbol_address. inv H0. 
+  intros. unfold Genv.symbol_address. inv H0. 
 - inv H3. replace (Genv.find_symbol ge id) with (Some b). constructor. 
   symmetry. apply H; auto.
 - constructor.

@@ -381,11 +381,11 @@ Proof.
   monadInv H. rewrite (ireg_of_eq _ _ EQ); rewrite (ireg_of_eq _ _ EQ1); simpl.
   apply Val.add_lessdef; auto. apply Val.add_lessdef; auto. 
 (* global *)
-  inv H. simpl. unfold symbol_address, symbol_offset.
+  inv H. simpl. unfold Genv.symbol_address.
   destruct (Genv.find_symbol ge i); simpl; auto. repeat rewrite Int.add_zero. auto.
 (* based *)
   monadInv H. rewrite (ireg_of_eq _ _ EQ). simpl.
-  unfold symbol_address, symbol_offset. destruct (Genv.find_symbol ge i); simpl; auto.
+  unfold Genv.symbol_address. destruct (Genv.find_symbol ge i); simpl; auto.
   rewrite Int.add_zero. rewrite Val.add_commut. auto. 
 (* basedscaled *)
   monadInv H. rewrite (ireg_of_eq _ _ EQ). unfold eval_addrmode. 

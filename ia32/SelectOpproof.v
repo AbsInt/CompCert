@@ -113,14 +113,14 @@ Definition binary_constructor_sound (cstr: expr -> expr -> expr) (sem: val -> va
 
 Theorem eval_addrsymbol:
   forall le id ofs,
-  exists v, eval_expr ge sp e m le (addrsymbol id ofs) v /\ Val.lessdef (symbol_address ge id ofs) v.
+  exists v, eval_expr ge sp e m le (addrsymbol id ofs) v /\ Val.lessdef (Genv.symbol_address ge id ofs) v.
 Proof.
-  intros. unfold addrsymbol. exists (symbol_address ge id ofs); split; auto.
+  intros. unfold addrsymbol. exists (Genv.symbol_address ge id ofs); split; auto.
   destruct (symbol_is_external id).
   predSpec Int.eq Int.eq_spec ofs Int.zero.
   subst. EvalOp.
   EvalOp. econstructor. EvalOp. simpl; eauto. econstructor. simpl. 
-  unfold symbol_address. destruct (Genv.find_symbol ge id); auto. 
+  unfold Genv.symbol_address. destruct (Genv.find_symbol ge id); auto. 
   simpl. rewrite Int.add_commut. rewrite Int.add_zero. auto. 
   EvalOp.
 Qed.
@@ -140,12 +140,6 @@ Proof.
   InvEval. TrivialExists.
   InvEval. subst x. rewrite Val.not_xor. rewrite Val.xor_assoc. TrivialExists.
   TrivialExists.
-Qed.
-
-Lemma shift_symbol_address:
-  forall id ofs n, symbol_address ge id (Int.add ofs n) = Val.add (symbol_address ge id ofs) (Vint n).
-Proof.
-  intros. unfold symbol_address. destruct (Genv.find_symbol); auto. 
 Qed.
 
 Theorem eval_addimm:
@@ -170,13 +164,13 @@ Proof.
   subst. TrivialExists. simpl. rewrite Val.add_permut_4. auto.
   subst. TrivialExists. simpl. rewrite Val.add_assoc. decEq; decEq. rewrite Val.add_permut. auto.
   subst. TrivialExists. simpl. rewrite Val.add_permut_4. rewrite <- Val.add_permut. rewrite <- Val.add_assoc. auto.
-  subst. TrivialExists. simpl. rewrite shift_symbol_address. 
+  subst. TrivialExists. simpl. rewrite Genv.shift_symbol_address. 
     rewrite Val.add_commut. rewrite Val.add_assoc. decEq. decEq. apply Val.add_commut.
-  subst. TrivialExists. simpl. rewrite shift_symbol_address. rewrite Val.add_assoc.
+  subst. TrivialExists. simpl. rewrite Genv.shift_symbol_address. rewrite Val.add_assoc.
     decEq; decEq. apply Val.add_commut.
-  subst. TrivialExists. simpl. rewrite shift_symbol_address. rewrite Val.add_commut. 
+  subst. TrivialExists. simpl. rewrite Genv.shift_symbol_address. rewrite Val.add_commut. 
     rewrite Val.add_assoc. decEq; decEq. apply Val.add_commut.
-  subst. TrivialExists. simpl. rewrite shift_symbol_address.
+  subst. TrivialExists. simpl. rewrite Genv.shift_symbol_address.
     rewrite Val.add_assoc. decEq; decEq. apply Val.add_commut.
   subst. TrivialExists. simpl. rewrite Val.add_permut. rewrite Val.add_assoc.
     decEq; decEq. apply Val.add_commut.

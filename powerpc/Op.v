@@ -147,12 +147,6 @@ Global Opaque eq_condition eq_addressing eq_operation.
 
 (** * Evaluation functions *)
 
-Definition symbol_address (F V: Type) (genv: Genv.t F V) (id: ident) (ofs: int) : val :=
-  match Genv.find_symbol genv id with
-  | Some b => Vptr b ofs
-  | None => Vundef
-  end.
-
 (** Evaluation of conditions, operators and addressing modes applied
   to lists of values.  Return [None] when the computation can trigger an
   error, e.g. integer division by zero.  [eval_condition] returns a boolean,
@@ -178,13 +172,13 @@ Definition eval_operation
   | Omove, v1::nil => Some v1
   | Ointconst n, nil => Some (Vint n)
   | Ofloatconst n, nil => Some (Vfloat n)
-  | Oaddrsymbol s ofs, nil => Some (symbol_address genv s ofs) 
+  | Oaddrsymbol s ofs, nil => Some (Genv.symbol_address genv s ofs) 
   | Oaddrstack ofs, nil => Some (Val.add sp (Vint ofs))
   | Ocast8signed, v1::nil => Some (Val.sign_ext 8 v1)
   | Ocast16signed, v1::nil => Some (Val.sign_ext 16 v1)
   | Oadd, v1::v2::nil => Some (Val.add v1 v2)
   | Oaddimm n, v1::nil => Some (Val.add v1 (Vint n))
-  | Oaddsymbol s ofs, v1::nil => Some (Val.add (symbol_address genv s ofs) v1)
+  | Oaddsymbol s ofs, v1::nil => Some (Val.add (Genv.symbol_address genv s ofs) v1)
   | Osub, v1::v2::nil => Some (Val.sub v1 v2)
   | Osubimm n, v1::nil => Some (Val.sub (Vint n) v1)
   | Omul, v1::v2::nil => Some (Val.mul v1 v2)
@@ -235,8 +229,8 @@ Definition eval_addressing
   match addr, vl with
   | Aindexed n, v1::nil => Some (Val.add v1 (Vint n))
   | Aindexed2, v1::v2::nil => Some (Val.add v1 v2)
-  | Aglobal s ofs, nil => Some (symbol_address genv s ofs)
-  | Abased s ofs, v1::nil => Some (Val.add (symbol_address genv s ofs) v1)
+  | Aglobal s ofs, nil => Some (Genv.symbol_address genv s ofs)
+  | Abased s ofs, v1::nil => Some (Val.add (Genv.symbol_address genv s ofs) v1)
   | Ainstack ofs, nil => Some(Val.add sp (Vint ofs))
   | _, _ => None
   end.
@@ -350,13 +344,13 @@ Proof with (try exact I).
   congruence.
   exact I.
   destruct (Float.is_single_dec f); auto. 
-  unfold symbol_address. destruct (Genv.find_symbol genv i)...
+  unfold Genv.symbol_address. destruct (Genv.find_symbol genv i)...
   destruct sp...
   destruct v0...
   destruct v0...
   destruct v0; destruct v1...
   destruct v0...
-  unfold symbol_address. destruct (Genv.find_symbol genv i)... destruct v0...
+  unfold Genv.symbol_address. destruct (Genv.find_symbol genv i)... destruct v0...
   destruct v0; destruct v1... simpl. destruct (eq_block b b0)...
   destruct v0...
   destruct v0; destruct v1...
@@ -521,8 +515,8 @@ Lemma eval_offset_addressing:
 Proof.
   intros. destruct addr; simpl in H; inv H; simpl in *; FuncInv; subst.
   rewrite Val.add_assoc; auto.
-  unfold symbol_address. destruct (Genv.find_symbol ge i); auto. 
-  unfold symbol_address. destruct (Genv.find_symbol ge i); auto.
+  unfold Genv.symbol_address. destruct (Genv.find_symbol ge i); auto. 
+  unfold Genv.symbol_address. destruct (Genv.find_symbol ge i); auto.
   rewrite Val.add_assoc. rewrite Val.add_permut. rewrite Val.add_commut. auto. 
   rewrite Val.add_assoc. auto. 
 Qed.
@@ -615,7 +609,7 @@ Proof.
   destruct v; simpl in *; inv H1; inv H2.
   right. apply Int.no_overlap_sound; auto. 
 (* Aglobal *)
-  unfold symbol_address in *. 
+  unfold Genv.symbol_address in *. 
   destruct (Genv.find_symbol ge i1) eqn:?; inv H2.
   destruct (Genv.find_symbol ge i) eqn:?; inv H1.
   destruct (ident_eq i i1). subst.
@@ -626,7 +620,7 @@ Proof.
   rewrite Int.add_commut; rewrite Int.add_zero; auto.
   left. red; intros; elim n. subst. eapply Genv.genv_vars_inj; eauto.
 (* Abased *)
-  unfold symbol_address in *. 
+  unfold Genv.symbol_address in *. 
   destruct (Genv.find_symbol ge i1) eqn:?; simpl in *; try discriminate.
   destruct v; inv H2.
   destruct (Genv.find_symbol ge i) eqn:?; inv H1.
@@ -655,9 +649,9 @@ Hypothesis agree_on_symbols:
   forall (s: ident), Genv.find_symbol ge2 s = Genv.find_symbol ge1 s.
 
 Remark symbol_address_preserved:
-  forall s ofs, symbol_address ge2 s ofs = symbol_address ge1 s ofs.
+  forall s ofs, Genv.symbol_address ge2 s ofs = Genv.symbol_address ge1 s ofs.
 Proof.
-  unfold symbol_address; intros. rewrite agree_on_symbols; auto.
+  unfold Genv.symbol_address; intros. rewrite agree_on_symbols; auto.
 Qed.
  
 Lemma eval_operation_preserved:
@@ -686,7 +680,7 @@ Variable f: meminj.
 
 Hypothesis symbol_address_inj: 
   forall id ofs,
-  val_inject f (symbol_address genv id ofs) (symbol_address genv id ofs).
+  val_inject f (Genv.symbol_address genv id ofs) (Genv.symbol_address genv id ofs).
 
 Variable m1: mem.
 Variable m2: mem.
@@ -956,9 +950,9 @@ Variable delta: Z.
 Hypothesis sp_inj: f sp1 = Some(sp2, delta).
 
 Remark symbol_address_inject:
-  forall id ofs, val_inject f (symbol_address genv id ofs) (symbol_address genv id ofs).
+  forall id ofs, val_inject f (Genv.symbol_address genv id ofs) (Genv.symbol_address genv id ofs).
 Proof.
-  intros. unfold symbol_address. destruct (Genv.find_symbol genv id) eqn:?; auto.
+  intros. unfold Genv.symbol_address. destruct (Genv.find_symbol genv id) eqn:?; auto.
   exploit (proj1 globals); eauto. intros. 
   econstructor; eauto. rewrite Int.add_zero; auto.
 Qed.

@@ -493,12 +493,6 @@ Definition eval_testcond (c: testcond) (rs: regset) : option bool :=
     must survive the execution of the pseudo-instruction.
 *)
 
-Definition symbol_offset (id: ident) (ofs: int) : val :=
-  match Genv.find_symbol ge id with
-  | Some b => Vptr b ofs
-  | None => Vundef
-  end.
-
 Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : outcome :=
   match i with
   | Padd r1 r2 so => 
@@ -514,11 +508,11 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       | None => Stuck
       end
   | Pbsymb id sg =>                  
-      Next (rs#PC <- (symbol_offset id Int.zero)) m
+      Next (rs#PC <- (Genv.symbol_address ge id Int.zero)) m
   | Pbreg r sg =>                    
       Next (rs#PC <- (rs#r)) m
   | Pblsymb id sg =>                 
-      Next (rs#IR14 <- (Val.add rs#PC Vone) #PC <- (symbol_offset id Int.zero)) m
+      Next (rs#IR14 <- (Val.add rs#PC Vone) #PC <- (Genv.symbol_address ge id Int.zero)) m
   | Pblreg r sg =>                   
       Next (rs#IR14 <- (Val.add rs#PC Vone) #PC <- (rs#r)) m
   | Pbic r1 r2 so => 
@@ -649,7 +643,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Plabel lbl =>
       Next (nextinstr rs) m
   | Ploadsymbol r1 lbl ofs =>
-      Next (nextinstr (rs#r1 <- (symbol_offset lbl ofs))) m
+      Next (nextinstr (rs#r1 <- (Genv.symbol_address ge lbl ofs))) m
   | Pbtbl r tbl =>
       match rs#r with
       | Vint n => 
@@ -763,7 +757,7 @@ Inductive initial_state (p: program): state -> Prop :=
       let ge := Genv.globalenv p in
       let rs0 :=
         (Pregmap.init Vundef)
-        # PC <- (symbol_offset ge p.(prog_main) Int.zero)
+        # PC <- (Genv.symbol_address ge p.(prog_main) Int.zero)
         # IR14 <- Vzero
         # IR13 <- Vzero in
       Genv.init_mem p = Some m0 ->

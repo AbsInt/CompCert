@@ -133,7 +133,7 @@ Proof.
   destruct (areg ae r); auto. destruct p; auto. 
   predSpec Int.eq Int.eq_spec ofs Int.zero; intros; auto. 
   subst ofs. exploit vmatch_ptr_gl; eauto. intros LD'. inv LD'; try discriminate.
-  rewrite H1 in FF. unfold symbol_address in FF. 
+  rewrite H1 in FF. unfold Genv.symbol_address in FF. 
   simpl. rewrite symbols_preserved.
   destruct (Genv.find_symbol ge id) as [b|]; try discriminate.
   simpl in FF. rewrite dec_eq_true in FF.
@@ -162,8 +162,8 @@ Proof.
 - (* pointer *)
   destruct p; try discriminate.
   + (* global *)
-    inv H. exists (symbol_address ge id ofs); split.
-    unfold symbol_address. rewrite <- symbols_preserved. reflexivity.
+    inv H. exists (Genv.symbol_address ge id ofs); split.
+    unfold Genv.symbol_address. rewrite <- symbols_preserved. reflexivity.
     eapply vmatch_ptr_gl; eauto. 
   + (* stack *)
     inv H. exists (Vptr sp ofs); split. 

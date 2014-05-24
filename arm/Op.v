@@ -177,12 +177,6 @@ Global Opaque eq_shift eq_condition eq_operation eq_addressing.
 
 (** * Evaluation functions *)
 
-Definition symbol_address (F V: Type) (genv: Genv.t F V) (id: ident) (ofs: int) : val :=
-  match Genv.find_symbol genv id with
-  | Some b => Vptr b ofs
-  | None => Vundef
-  end.
-
 (** Evaluation of conditions, operators and addressing modes applied
   to lists of values.  Return [None] when the computation can trigger an
   error, e.g. integer division by zero.  [eval_condition] returns a boolean,
@@ -219,7 +213,7 @@ Definition eval_operation
   | Omove, v1::nil => Some v1
   | Ointconst n, nil => Some (Vint n)
   | Ofloatconst n, nil => Some (Vfloat n)
-  | Oaddrsymbol s ofs, nil => Some (symbol_address genv s ofs)
+  | Oaddrsymbol s ofs, nil => Some (Genv.symbol_address genv s ofs)
   | Oaddrstack ofs, nil => Some (Val.add sp (Vint ofs))
   | Ocast8signed, v1::nil => Some (Val.sign_ext 8 v1)
   | Ocast16signed, v1::nil => Some (Val.sign_ext 16 v1)
@@ -397,7 +391,7 @@ Proof with (try exact I).
   destruct op; simpl; simpl in H0; FuncInv; try subst v...
   congruence.
   destruct (Float.is_single_dec f); red; auto. 
-  unfold symbol_address. destruct (Genv.find_symbol genv i)...
+  unfold Genv.symbol_address. destruct (Genv.find_symbol genv i)...
   destruct sp...
   destruct v0...
   destruct v0...
@@ -714,7 +708,7 @@ Lemma eval_operation_preserved:
 Proof.
   intros.
   unfold eval_operation; destruct op; auto. 
-  unfold symbol_address. rewrite agree_on_symbols; auto.
+  unfold Genv.symbol_address. rewrite agree_on_symbols; auto.
 Qed.
 
 Lemma eval_addressing_preserved:
@@ -739,7 +733,7 @@ Variable f: meminj.
 
 Hypothesis symbol_address_inj: 
   forall id ofs,
-  val_inject f (symbol_address genv id ofs) (symbol_address genv id ofs).
+  val_inject f (Genv.symbol_address genv id ofs) (Genv.symbol_address genv id ofs).
 
 Variable m1: mem.
 Variable m2: mem.
@@ -902,7 +896,7 @@ Lemma eval_addressing_inj:
   exists v2, eval_addressing genv sp2 addr vl2 = Some v2 /\ val_inject f v1 v2.
 Proof.
   assert (UNUSED: forall id ofs,
-            val_inject f (symbol_address genv id ofs) (symbol_address genv id ofs)).
+            val_inject f (Genv.symbol_address genv id ofs) (Genv.symbol_address genv id ofs)).
   exact symbol_address_inj.
   intros. destruct addr; simpl in H1; simpl; FuncInv; InvInject; TrivialExists.
   apply Values.val_add_inject; auto.
@@ -1032,9 +1026,9 @@ Variable delta: Z.
 Hypothesis sp_inj: f sp1 = Some(sp2, delta).
 
 Remark symbol_address_inject:
-  forall id ofs, val_inject f (symbol_address genv id ofs) (symbol_address genv id ofs).
+  forall id ofs, val_inject f (Genv.symbol_address genv id ofs) (Genv.symbol_address genv id ofs).
 Proof.
-  intros. unfold symbol_address. destruct (Genv.find_symbol genv id) eqn:?; auto.
+  intros. unfold Genv.symbol_address. destruct (Genv.find_symbol genv id) eqn:?; auto.
   exploit (proj1 globals); eauto. intros. 
   econstructor; eauto. rewrite Int.add_zero; auto.
 Qed.

@@ -376,12 +376,6 @@ Definition gpr_or_zero (rs: regset) (r: ireg) :=
 
 Variable ge: genv.
 
-Definition symbol_offset (id: ident) (ofs: int) : val :=
-  match Genv.find_symbol ge id with
-  | Some b => Vptr b ofs
-  | None => Vundef
-  end.
-
 (** The two functions below axiomatize how the linker processes
   symbolic references [symbol + offset] and splits their
   actual values into two 16-bit halves. *)
@@ -395,8 +389,8 @@ Parameter high_half: val -> val.
 
 Axiom low_high_half:
   forall id ofs,
-  Val.add (low_half (symbol_offset id ofs)) (high_half (symbol_offset id ofs))
-  = symbol_offset id ofs.
+  Val.add (low_half (Genv.symbol_address ge id ofs)) (high_half (Genv.symbol_address ge id ofs))
+  = Genv.symbol_address ge id ofs.
 
 (** The other axioms we take is that the results of
   the [low_half] and [high_half] functions are of type [Tint],
@@ -421,7 +415,7 @@ Parameter small_data_area_offset: genv -> ident -> int -> val.
 Axiom small_data_area_addressing:
   forall id ofs,
   symbol_is_small_data id ofs = true ->
-  small_data_area_offset ge id ofs = symbol_offset id ofs.
+  small_data_area_offset ge id ofs = Genv.symbol_address ge id ofs.
 
 Parameter symbol_is_rel_data: ident -> int -> bool.
 
@@ -436,10 +430,10 @@ Parameter symbol_is_rel_data: ident -> int -> bool.
 Definition const_low (c: constant) :=
   match c with
   | Cint n => Vint n
-  | Csymbol_low id ofs => low_half (symbol_offset id ofs)
+  | Csymbol_low id ofs => low_half (Genv.symbol_address ge id ofs)
   | Csymbol_high id ofs => Vundef
   | Csymbol_sda id ofs => small_data_area_offset ge id ofs
-  | Csymbol_rel_low id ofs => low_half (symbol_offset id ofs)
+  | Csymbol_rel_low id ofs => low_half (Genv.symbol_address ge id ofs)
   | Csymbol_rel_high id ofs => Vundef
   end.
 
@@ -447,10 +441,10 @@ Definition const_high (c: constant) :=
   match c with
   | Cint n => Vint (Int.shl n (Int.repr 16))
   | Csymbol_low id ofs => Vundef
-  | Csymbol_high id ofs => high_half (symbol_offset id ofs)
+  | Csymbol_high id ofs => high_half (Genv.symbol_address ge id ofs)
   | Csymbol_sda id ofs => Vundef
   | Csymbol_rel_low id ofs => Vundef
-  | Csymbol_rel_high id ofs => high_half (symbol_offset id ofs)
+  | Csymbol_rel_high id ofs => high_half (Genv.symbol_address ge id ofs)
   end.
 
 (** The semantics is purely small-step and defined as a function
@@ -597,9 +591,9 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       | _ => Stuck
       end
   | Pbl ident sg =>
-      Next (rs#LR <- (Val.add rs#PC Vone) #PC <- (symbol_offset ident Int.zero)) m
+      Next (rs#LR <- (Val.add rs#PC Vone) #PC <- (Genv.symbol_address ge ident Int.zero)) m
   | Pbs ident sg =>
-      Next (rs#PC <- (symbol_offset ident Int.zero)) m
+      Next (rs#PC <- (Genv.symbol_address ge ident Int.zero)) m
   | Pblr =>
       Next (rs#PC <- (rs#LR)) m
   | Pbt bit lbl =>
@@ -900,7 +894,7 @@ Inductive initial_state (p: program): state -> Prop :=
       let ge := Genv.globalenv p in
       let rs0 :=
         (Pregmap.init Vundef)
-        # PC <- (symbol_offset ge p.(prog_main) Int.zero)
+        # PC <- (Genv.symbol_address ge p.(prog_main) Int.zero)
         # LR <- Vzero
         # GPR1 <- Vzero in
       initial_state p (State rs0 m0).

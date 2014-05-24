@@ -662,7 +662,7 @@ Opaque loadind.
   left; econstructor; split.
   apply plus_one. eapply exec_step_internal. eauto.
   eapply functions_transl; eauto. eapply find_instr_tail; eauto. 
-  simpl. unfold symbol_offset. rewrite symbols_preserved. rewrite H. eauto.
+  simpl. unfold Genv.symbol_address. rewrite symbols_preserved. rewrite H. eauto.
   econstructor; eauto. 
   econstructor; eauto.
   eapply agree_sp_def; eauto.
@@ -730,7 +730,7 @@ Opaque loadind.
   eapply plus_right'. eapply exec_straight_exec; eauto. 
   econstructor. eauto. eapply functions_transl; eauto. 
   eapply find_instr_tail; eauto. 
-  simpl. unfold symbol_offset. rewrite symbols_preserved. rewrite H. reflexivity. 
+  simpl. unfold Genv.symbol_address. rewrite symbols_preserved. rewrite H. reflexivity. 
   traceEq.
   econstructor; eauto.
   split. Simpl. eapply parent_sp_def; eauto. 
@@ -944,13 +944,13 @@ Proof.
   econstructor; split.
   econstructor.
   eapply Genv.init_mem_transf_partial; eauto.
-  replace (symbol_offset (Genv.globalenv tprog) (prog_main tprog) Int.zero)
+  replace (Genv.symbol_address (Genv.globalenv tprog) (prog_main tprog) Int.zero)
      with (Vptr fb Int.zero).
   econstructor; eauto.
   constructor.
   apply Mem.extends_refl.
   split. auto. simpl. unfold Vzero; congruence. intros. rewrite Regmap.gi. auto. 
-  unfold symbol_offset. 
+  unfold Genv.symbol_address. 
   rewrite (transform_partial_program_main _ _ TRANSF).
   rewrite symbols_preserved. 
   unfold ge; rewrite H1. auto.

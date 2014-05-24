@@ -115,7 +115,7 @@ Definition binary_constructor_sound (cstr: expr -> expr -> expr) (sem: val -> va
 
 Theorem eval_addrsymbol:
   forall le id ofs,
-  exists v, eval_expr ge sp e m le (addrsymbol id ofs) v /\ Val.lessdef (symbol_address ge id ofs) v.
+  exists v, eval_expr ge sp e m le (addrsymbol id ofs) v /\ Val.lessdef (Genv.symbol_address ge id ofs) v.
 Proof.
   intros. unfold addrsymbol. econstructor; split. 
   EvalOp. simpl; eauto. 
@@ -154,13 +154,6 @@ Proof.
   TrivialExists. 
 Qed.
 
-Remark symbol_address_shift:
-  forall s ofs n,
-  symbol_address ge s (Int.add ofs n) = Val.add (symbol_address ge s ofs) (Vint n).
-Proof.
-  unfold symbol_address; intros. destruct (Genv.find_symbol ge s); auto. 
-Qed.
-
 Theorem eval_addimm:
   forall n, unary_constructor_sound (addimm n) (fun x => Val.add x (Vint n)).
 Proof.
@@ -170,19 +163,19 @@ Proof.
   destruct x; simpl; auto. rewrite Int.add_zero. auto. rewrite Int.add_zero. auto.
   case (addimm_match a); intros; InvEval; simpl; TrivialExists; simpl.
   rewrite Int.add_commut. auto.
-  unfold symbol_address. destruct (Genv.find_symbol ge s); simpl; auto. rewrite Int.add_commut; auto.
+  unfold Genv.symbol_address. destruct (Genv.find_symbol ge s); simpl; auto. rewrite Int.add_commut; auto.
   rewrite Val.add_assoc. rewrite Int.add_commut. auto.
   subst. rewrite Val.add_assoc. rewrite Int.add_commut. auto.
-  subst. rewrite Int.add_commut. rewrite symbol_address_shift. rewrite ! Val.add_assoc. f_equal. f_equal. apply Val.add_commut.
+  subst. rewrite Int.add_commut. rewrite Genv.shift_symbol_address. rewrite ! Val.add_assoc. f_equal. f_equal. apply Val.add_commut.
 Qed. 
 
 Theorem eval_addsymbol:
-  forall s ofs, unary_constructor_sound (addsymbol s ofs) (Val.add (symbol_address ge s ofs)).
+  forall s ofs, unary_constructor_sound (addsymbol s ofs) (Val.add (Genv.symbol_address ge s ofs)).
 Proof.
   red; unfold addsymbol; intros until x.
   case (addsymbol_match a); intros; InvEval; simpl; TrivialExists; simpl.
-  rewrite symbol_address_shift. auto. 
-  rewrite symbol_address_shift. subst x. rewrite Val.add_assoc. f_equal. f_equal. 
+  rewrite Genv.shift_symbol_address. auto. 
+  rewrite Genv.shift_symbol_address. subst x. rewrite Val.add_assoc. f_equal. f_equal. 
   apply Val.add_commut.
 Qed.
 
@@ -209,9 +202,9 @@ Proof.
     simpl. repeat rewrite Val.add_assoc. decEq; decEq.
     rewrite Val.add_commut. rewrite Val.add_permut. auto.
 - replace (Val.add x y) with
-    (Val.add (symbol_address ge s (Int.add ofs n)) (Val.add v1 v0)).
+    (Val.add (Genv.symbol_address ge s (Int.add ofs n)) (Val.add v1 v0)).
   apply eval_addsymbol; auto. EvalOp. 
-  subst. rewrite symbol_address_shift. rewrite ! Val.add_assoc. f_equal. 
+  subst. rewrite Genv.shift_symbol_address. rewrite ! Val.add_assoc. f_equal. 
   rewrite Val.add_permut. f_equal. apply Val.add_commut.
 - subst. rewrite Val.add_assoc. apply eval_addsymbol. EvalOp. 
 - subst. rewrite <- Val.add_assoc. apply eval_addimm. EvalOp.

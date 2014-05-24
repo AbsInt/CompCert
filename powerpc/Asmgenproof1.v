@@ -103,41 +103,29 @@ Proof.
   rewrite Int.sub_idem. apply Int.add_zero.
 Qed.
 
-Lemma add_zero_symbol_offset:
-  forall ge id ofs,
-  Val.add Vzero (symbol_offset ge id ofs) = symbol_offset ge id ofs.
+Lemma add_zero_symbol_address:
+  forall (ge: genv) id ofs,
+  Val.add Vzero (Genv.symbol_address ge id ofs) = Genv.symbol_address ge id ofs.
 Proof.
-  unfold symbol_offset; intros. destruct (Genv.find_symbol ge id); auto. 
+  unfold Genv.symbol_address; intros. destruct (Genv.find_symbol ge id); auto. 
   simpl. rewrite Int.add_zero; auto.
 Qed.
 
 Lemma csymbol_high_low:
-  forall ge id ofs,
-  Val.add (high_half (symbol_offset ge id ofs)) (low_half (symbol_offset ge id ofs))
-  = symbol_offset ge id ofs.
+  forall (ge: genv) id ofs,
+  Val.add (high_half (Genv.symbol_address ge id ofs)) (low_half (Genv.symbol_address ge id ofs))
+  = Genv.symbol_address ge id ofs.
 Proof.
   intros. rewrite Val.add_commut. apply low_high_half.
 Qed.
 
 Lemma csymbol_high_low_2:
-  forall ge id ofs rel,
+  forall (ge: genv) id ofs rel,
   Val.add (const_high ge (csymbol_high id ofs rel))
-          (const_low ge (csymbol_low id ofs rel)) = symbol_offset ge id ofs.
+          (const_low ge (csymbol_low id ofs rel)) = Genv.symbol_address ge id ofs.
 Proof.
   intros. destruct rel; apply csymbol_high_low. 
 Qed.
-
-(*
-Lemma csymbol_sda_eq:
-  forall ge id ofs,
-  symbol_is_small_data id ofs = true ->
-  Val.add Vzero (const_low ge (Csymbol_sda id ofs)) = symbol_offset ge id ofs.
-Proof.
-  intros. unfold const_low. rewrite small_data_area_addressing by auto. 
-  unfold symbol_offset. 
-  destruct (Genv.find_symbol ge id); simpl; auto. rewrite Int.add_zero; auto.
-Qed.
-*)
 
 (** Useful properties of the GPR0 registers. *)
 
@@ -859,18 +847,17 @@ Opaque Int.eq.
   destruct (loadimm_correct x i k rs m) as [rs' [A [B C]]]. 
   exists rs'. auto with asmgen. 
   (* Oaddrsymbol *)
-  change (symbol_address ge i i0) with (symbol_offset ge i i0).
-  set (v' := symbol_offset ge i i0).
+  set (v' := Genv.symbol_address ge i i0).
   destruct (symbol_is_small_data i i0) eqn:SD.
   (* small data *)
 Opaque Val.add.
   econstructor; split. apply exec_straight_one; simpl; reflexivity.
-  split. Simpl. rewrite small_data_area_addressing by auto. apply add_zero_symbol_offset.
+  split. Simpl. rewrite small_data_area_addressing by auto. apply add_zero_symbol_address.
   intros; Simpl.
   (* not small data *)
   econstructor; split. eapply exec_straight_two; simpl; reflexivity.
   split. Simpl. rewrite gpr_or_zero_not_zero; eauto with asmgen. Simpl.
-  rewrite Val.add_assoc. rewrite csymbol_high_low_2. apply add_zero_symbol_offset. 
+  rewrite Val.add_assoc. rewrite csymbol_high_low_2. apply add_zero_symbol_address. 
   intros; Simpl. 
   (* Oaddrstack *)
   destruct (addimm_correct x GPR1 i k rs m) as [rs' [EX [RES OTH]]]; eauto with asmgen.
@@ -883,14 +870,14 @@ Opaque Val.add.
   (* small data *)
   econstructor; split. eapply exec_straight_two; simpl; reflexivity. 
   split. Simpl. rewrite (Val.add_commut (rs x)). f_equal.
-  rewrite small_data_area_addressing by auto. apply add_zero_symbol_offset.
+  rewrite small_data_area_addressing by auto. apply add_zero_symbol_address.
   intros; Simpl.
   destruct (symbol_is_rel_data i i0).
   (* relative data *)
   econstructor; split. eapply exec_straight_three; simpl; reflexivity. 
   split. Simpl. rewrite gpr_or_zero_zero. rewrite gpr_or_zero_not_zero by (eauto with asmgen).
   Simpl. rewrite Val.add_assoc. rewrite (Val.add_commut (rs x)). f_equal. 
-  rewrite Val.add_assoc. rewrite csymbol_high_low. apply add_zero_symbol_offset.
+  rewrite Val.add_assoc. rewrite csymbol_high_low. apply add_zero_symbol_address.
   intros; Simpl.
   (* absolute data *)
   econstructor; split. eapply exec_straight_two; simpl; reflexivity.
@@ -1023,7 +1010,7 @@ Transparent Val.add.
   destruct (symbol_is_small_data i i0) eqn:SISD; inv TR.
   (* Aglobal from small data *)
   apply MK1. unfold const_low. rewrite small_data_area_addressing by auto. 
-  apply add_zero_symbol_offset.
+  apply add_zero_symbol_address.
   auto.
   (* Aglobal general case *)
   set (rel := symbol_is_rel_data i i0).
@@ -1042,7 +1029,7 @@ Transparent Val.add.
   (* Abased *)
   destruct (symbol_is_small_data i i0) eqn:SISD.
   (* Abased from small data *)
-  set (rs1 := nextinstr (rs#GPR0 <- (symbol_offset ge i i0))).
+  set (rs1 := nextinstr (rs#GPR0 <- (Genv.symbol_address ge i i0))).
   exploit (MK2 x GPR0 rs1 k).
     unfold rs1; Simpl. apply Val.add_commut.
     intros. unfold rs1; Simpl.
@@ -1050,7 +1037,7 @@ Transparent Val.add.
   exists rs'; split. apply exec_straight_step with rs1 m. 
   unfold exec_instr. rewrite gpr_or_zero_zero. f_equal. unfold rs1. f_equal. f_equal. 
   unfold const_low. rewrite small_data_area_addressing; auto.
-  apply add_zero_symbol_offset.
+  apply add_zero_symbol_address.
   reflexivity.
   assumption. assumption.
   destruct (symbol_is_rel_data i i0).
