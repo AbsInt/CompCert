@@ -376,10 +376,12 @@ Definition transl_op
       OK (Pmov r (transl_shift s r1) :: k)
   | Oshrximm n, a1 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1;
-      OK (Pcmp r1 (SOimm Int.zero) ::
-          addimm IR14 r1 (Int.sub (Int.shl Int.one n) Int.one)
-             (Pmovc TCge IR14 (SOreg r1) ::
-              Pmov r (SOasrimm IR14 n) :: k))
+      if Int.eq n Int.zero then
+        OK (Pmov r (SOreg r1) :: k)
+      else
+        OK (Pmov IR14 (SOasrimm r1 (Int.repr 31)) ::
+            Padd IR14 r1 (SOlsrimm IR14 (Int.sub Int.iwordsize n)) ::
+            Pmov r (SOasrimm IR14 n) :: k)
   | Onegf, a1 :: nil =>
       do r <- freg_of res; do r1 <- freg_of a1;
       OK (Pfnegd r r1 :: k)

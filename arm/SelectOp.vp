@@ -291,14 +291,7 @@ Definition divu_base (e1: expr) (e2: expr) := Eop Odivu (e1:::e2:::Enil).
 Definition modu_base := mod_aux Odivu.
 
 Definition shrximm (e1: expr) (n2: int) :=
-  if Int.eq n2 Int.zero
-  then e1
-  else Elet e1
-         (shrimm
-             (add (Eletvar O)
-                  (shruimm (shrimm (Eletvar O) (Int.repr 31))
-                           (Int.sub Int.iwordsize n2)))
-             n2).
+  if Int.eq n2 Int.zero then e1 else Eop (Oshrximm n2) (e1:::Enil).
 
 (** ** General shifts *)
 

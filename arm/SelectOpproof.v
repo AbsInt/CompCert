@@ -542,49 +542,13 @@ Theorem eval_shrximm:
 Proof.
   intros. unfold shrximm. 
   predSpec Int.eq Int.eq_spec n Int.zero.
-- subst n. exists x; split; auto. 
+  subst n. exists x; split; auto. 
   destruct x; simpl in H0; try discriminate.
   destruct (Int.ltu Int.zero (Int.repr 31)); inv H0.
   replace (Int.shrx i Int.zero) with i. auto. 
   unfold Int.shrx, Int.divs. rewrite Int.shl_zero. 
   change (Int.signed Int.one) with 1. rewrite Z.quot_1_r. rewrite Int.repr_signed; auto.
-- destruct x; simpl in H0; try discriminate.
-  destruct (Int.ltu n (Int.repr 31)) eqn:LT31; inv H0.
-  assert (A: eval_expr ge sp e m (Vint i :: le) (Eletvar 0) (Vint i))
-  by (constructor; auto).
-  exploit (eval_shrimm (Int.repr 31)). eexact A.
-  intros [v [B LD]]. simpl in LD. 
-  change (Int.ltu (Int.repr 31) Int.iwordsize) with true in LD. 
-  simpl in LD; inv LD.
-  exploit (eval_shruimm (Int.sub Int.iwordsize n)). eexact B.
-  intros [v [C LD]]. simpl in LD.
-  assert (RANGE: Int.ltu (Int.sub Int.iwordsize n) Int.iwordsize = true).
-  {
-    generalize (Int.ltu_inv _ _ LT31). intros.
-    unfold Int.sub, Int.ltu. rewrite Int.unsigned_repr_wordsize. 
-    rewrite Int.unsigned_repr. apply zlt_true.
-    assert (Int.unsigned n <> 0). 
-    { red; intros; elim H1. rewrite <- (Int.repr_unsigned n). rewrite H2; reflexivity. }
-    omega. 
-    change (Int.unsigned (Int.repr 31)) with (Int.zwordsize - 1) in H0.
-    generalize Int.wordsize_max_unsigned; omega. 
-  }
-  rewrite RANGE in LD. inv LD. 
-  exploit eval_add. eexact A. eexact C. intros [v [D LD]].
-  simpl in LD. inv LD. 
-  exploit (eval_shrimm n). eexact D. intros [v [E LD]].
-  simpl in LD. 
-  assert (RANGE2: Int.ltu n Int.iwordsize = true).
-  {
-    generalize (Int.ltu_inv _ _ LT31). intros.
-    unfold Int.ltu. rewrite Int.unsigned_repr_wordsize. apply zlt_true.
-    change (Int.unsigned (Int.repr 31)) with (Int.zwordsize - 1) in H0.
-    omega.
-  }
-  rewrite RANGE2 in LD. inv LD. 
-  econstructor; split. econstructor. eassumption. eexact E. 
-  rewrite Int.shrx_shr_2 by auto.
-  auto.
+  econstructor; split. EvalOp. auto.
 Qed.
 
 Theorem eval_shl: binary_constructor_sound shl Val.shl.

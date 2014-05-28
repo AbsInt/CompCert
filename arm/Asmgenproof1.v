@@ -981,34 +981,51 @@ Local Transparent destroyed_by_op.
   intros [rs' [A [B C]]]. 
   exists rs'; auto with asmgen.
   (* Oshrximm *)
-  exploit Val.shrx_shr; eauto. intros [n [i' [ARG1 [ARG2 RES]]]].
-  injection ARG2; intro ARG2'; subst i'; clear ARG2.
-  set (islt := Int.lt n Int.zero) in *.
-  set (rs1 := nextinstr (compare_int rs (Vint n) (Vint Int.zero) m)).
-  assert (OTH1: forall r', data_preg r' = true -> rs1#r' = rs#r').
-  { apply compare_int_inv; auto. }
-  exploit (addimm_correct IR14 x0 (Int.sub (Int.shl Int.one i) Int.one)).
-  intros [rs2 [EXEC2 [RES2 OTH2]]].
-  set (rs3 := nextinstr (if islt then rs2 else rs2#IR14 <- (Vint n))).
-  set (rs4 := nextinstr (rs3#x <- (Val.shr rs3#IR14 (Vint i)))).
-  exists rs4; split.
-  apply exec_straight_step with rs1 m.
-  simpl. rewrite ARG1. auto. auto.
-  eapply exec_straight_trans. eexact EXEC2.
-  apply exec_straight_two with rs3 m.
-  unfold exec_instr. 
-  assert (TC: eval_testcond TCge rs2 = Some (negb islt)).
-  { simpl. rewrite ! OTH2 by auto with asmgen. simpl. 
-    rewrite Int.lt_sub_overflow. fold islt. destruct islt; auto. }
-  rewrite TC. simpl. rewrite OTH2 by eauto with asmgen. rewrite OTH1. rewrite ARG1.
-  unfold rs3; destruct islt; reflexivity.
-  rewrite <- (ireg_of_eq _ _ EQ1). auto with asmgen.
-  reflexivity.
-  unfold rs3; destruct islt; reflexivity.
-  reflexivity.
-  split. unfold rs4; Simpl. unfold rs3. destruct islt. 
-  Simpl. rewrite RES2. unfold rs1. Simpl. Simpl. congruence.
-  intros. unfold rs4, rs3; Simpl. destruct islt; Simpl; rewrite OTH2; auto with asmgen. 
+  destruct (rs x0) eqn: X0; simpl in H0; try discriminate. 
+  destruct (Int.ltu i (Int.repr 31)) eqn: LTU; inv H0. 
+  revert EQ2. predSpec Int.eq Int.eq_spec i Int.zero; intros EQ2. 
+  (* i = 0 *)
+  inv EQ2. econstructor. 
+  split. apply exec_straight_one. simpl. reflexivity. auto. 
+  split. Simpl. unfold Int.shrx. rewrite Int.shl_zero. unfold Int.divs. 
+  change (Int.signed Int.one) with 1. rewrite Z.quot_1_r. rewrite Int.repr_signed. auto.
+  intros. Simpl. 
+  (* i <> 0 *)
+  inv EQ2.
+  assert (LTU': Int.ltu (Int.sub Int.iwordsize i) Int.iwordsize = true).
+  {
+    generalize (Int.ltu_inv _ _ LTU). intros.
+    unfold Int.sub, Int.ltu. rewrite Int.unsigned_repr_wordsize. 
+    rewrite Int.unsigned_repr. apply zlt_true.
+    assert (Int.unsigned i <> 0). 
+    { red; intros; elim H. rewrite <- (Int.repr_unsigned i). rewrite H1; reflexivity. }
+    omega. 
+    change (Int.unsigned (Int.repr 31)) with (Int.zwordsize - 1) in H0.
+    generalize Int.wordsize_max_unsigned; omega. 
+  }
+  assert (LTU'': Int.ltu i Int.iwordsize = true).
+  {
+    generalize (Int.ltu_inv _ _ LTU). intros.
+    unfold Int.ltu. rewrite Int.unsigned_repr_wordsize. apply zlt_true.
+    change (Int.unsigned (Int.repr 31)) with (Int.zwordsize - 1) in H0.
+    omega.
+  }
+  set (j := Int.sub Int.iwordsize i) in *.
+  set (rs1 := nextinstr (rs#IR14 <- (Val.shr (Vint i0) (Vint (Int.repr 31))))).
+  set (rs2 := nextinstr (rs1#IR14 <- (Val.add (Vint i0) (Val.shru rs1#IR14 (Vint j))))).
+  set (rs3 := nextinstr (rs2#x <- (Val.shr rs2#IR14 (Vint i)))).
+  exists rs3; split.
+  apply exec_straight_three with rs1 m rs2 m.
+  simpl. rewrite X0; reflexivity.
+  simpl. f_equal. Simpl. replace (rs1 x0) with (rs x0). rewrite X0; reflexivity.
+  unfold rs1; Simpl.
+  reflexivity. 
+  auto. auto. auto.
+  split. unfold rs3; Simpl. unfold rs2; Simpl. unfold rs1; Simpl. 
+  simpl. change (Int.ltu (Int.repr 31) Int.iwordsize) with true. simpl. 
+  rewrite LTU'; simpl. rewrite LTU''; simpl. 
+  f_equal. symmetry. apply Int.shrx_shr_2. assumption. 
+  intros. unfold rs3; Simpl. unfold rs2; Simpl. unfold rs1; Simpl. 
   (* intoffloat *)
   econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
 Transparent destroyed_by_op. 
