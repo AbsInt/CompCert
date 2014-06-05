@@ -41,10 +41,12 @@ let process_section_pragma classname istring ustring addrmode accmode =
 let re_c_ident = Str.regexp "[A-Za-z_][A-Za-z_0-9]*$"
 
 let process_use_section_pragma classname id =
-  if not (Str.string_match re_c_ident id 0) then
-    C2C.error (sprintf "bad identifier `%s' in #pragma use_section" id);
-  if not (Sections.use_section_for (intern_string id) classname) then
-    C2C.error (sprintf "unknown section name `%s'" classname)
+  if id = "," || id = ";" then () else begin
+    if not (Str.string_match re_c_ident id 0) then
+      C2C.error (sprintf "bad identifier `%s' in #pragma use_section" id);
+    if not (Sections.use_section_for (intern_string id) classname) then
+      C2C.error (sprintf "unknown section name `%s'" classname)
+  end
 
 (* #pragma reserve_register *)
 
@@ -58,59 +60,27 @@ let process_reserve_register_pragma name =
       else
         C2C.error "cannot reserve this register (not a callee-save)"
 
-(* Parsing of pragmas using regexps *)
-
-let re_start_pragma_section = Str.regexp "section\\b"
-
-let re_pragma_section = Str.regexp(
-  "section[ \t]+"
-^ "\\([A-Za-z_][A-Za-z_0-9]*\\)[ \t]+"  (* class_name *)
-^ "\"\\([^\"]*\\)\"?[ \t]*"             (* istring *)
-^ "\"\\([^\"]*\\)\"?[ \t]*"             (* ustring *)
-^ "\\([a-zA-Z-]+\\)?[ \t]*"             (* addressing mode *)
-^ "\\([RWXON]*\\)"                      (* access mode *)
-)
-
-let re_start_pragma_use_section = Str.regexp "use_section\\b"
-
-let re_pragma_use_section = Str.regexp
-  "use_section[ \t]+\
-   \\([A-Za-z_][A-Za-z_0-9]*\\)[ \t]+\
-   \\(.*\\)$"
-
-let re_split_idents = Str.regexp "[ \t,]+"
-
-let re_start_pragma_reserve_register = Str.regexp "reserve_register\\b"
-
-let re_pragma_reserve_register = Str.regexp
-  "reserve_register[ \t]+\\([A-Za-z0-9]+\\)"
+(* Parsing of pragmas *)
 
 let process_pragma name =
-  if Str.string_match re_pragma_section name 0 then begin
-    process_section_pragma
-      (Str.matched_group 1 name) (* classname *)
-      (Str.matched_group 2 name) (* istring *)
-      (Str.matched_group 3 name) (* ustring *)
-      (Str.matched_group 4 name) (* addrmode *)
-      (Str.matched_group 5 name); (* accmode *)
-    true
-  end else if Str.string_match re_start_pragma_section name 0 then
-    (C2C.error "ill-formed `section' pragma"; true)
- else if Str.string_match re_pragma_use_section name 0 then begin
-    let classname = Str.matched_group 1 name
-    and idents = Str.matched_group 2 name in
-    let identlist = Str.split re_split_idents idents in
-    if identlist = [] then C2C.warning "vacuous `use_section' pragma";
-    List.iter (process_use_section_pragma classname) identlist;
-    true
-  end else if Str.string_match re_start_pragma_use_section name 0 then begin
-    C2C.error "ill-formed `use_section' pragma"; true
-  end else if Str.string_match re_pragma_reserve_register name 0 then begin
-    process_reserve_register_pragma (Str.matched_group 1 name); true
-  end else if Str.string_match re_start_pragma_reserve_register name 0 then begin
-    C2C.error "ill-formed `reserve_register' pragma"; true
-  end else
-    false
+  match Tokenize.string name with
+  | ["section"; classname; istring; ustring; addrmode; accmode] ->
+      process_section_pragma classname istring ustring addrmode accmode;
+      true
+  | "section" :: _ ->
+      C2C.error "ill-formed `section' pragma"; true
+  | "use_section" :: classname :: identlist ->
+      if identlist = [] then C2C.warning "vacuous `use_section' pragma";
+      List.iter (process_use_section_pragma classname) identlist;
+      true
+  | "use_section" :: _ ->
+      C2C.error "ill-formed `use_section' pragma"; true
+  | ["reserve_register"; reg] ->
+      process_reserve_register_pragma reg; true
+  | "reserve_register" :: _ ->
+      C2C.error "ill-formed `reserve_register' pragma"; true
+  | _ ->
+      false
 
 let initialize () =
   C2C.process_pragma_hook := process_pragma
