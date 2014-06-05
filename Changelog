@@ -12,6 +12,9 @@ Bug fixing:
 - "asm" statements were causing syntax errors.
 - Better handling of "extern" and "extern inline" function definitions.
 - Internal error on some octal escape sequences in string literals.
+- Parsing of "#pragma section" directives made more robust and
+  with better error reporting.
+
 
 Release 2.3, 2014-05-05
 =======================
