@@ -723,7 +723,7 @@ Qed.
 
 (** Data preservation properties *)
 
-Remark store_zeros_outside:
+Remark store_zeros_load_outside:
   forall m b p n m',
   store_zeros m b p n = Some m' ->
   forall chunk b' p',
@@ -738,6 +738,85 @@ Proof.
   discriminate.
 Qed.
 
+Remark store_zeros_loadbytes_outside:
+  forall m b p n m',
+  store_zeros m b p n = Some m' ->
+  forall b' p' n',
+  b' <> b \/ p' + n' <= p \/ p + n <= p' ->
+  Mem.loadbytes m' b' p' n' = Mem.loadbytes m b' p' n'.
+Proof.
+  intros until n. functional induction (store_zeros m b p n); intros.
+  inv H; auto.
+  transitivity (Mem.loadbytes m' b' p' n'). 
+  apply IHo. auto. intuition omega.
+  eapply Mem.loadbytes_store_other; eauto. simpl. intuition omega. 
+  discriminate.
+Qed.
+
+Definition read_as_zero (m: mem) (b: block) (ofs len: Z) : Prop :=
+  forall chunk p,
+  ofs <= p -> p + size_chunk chunk <= ofs + len -> 
+  (align_chunk chunk | p) ->
+  Mem.load chunk m b p =
+  Some (match chunk with
+        | Mint8unsigned | Mint8signed | Mint16unsigned | Mint16signed | Mint32 => Vint Int.zero
+        | Mint64 => Vlong Int64.zero
+        | Mfloat32 | Mfloat64 => Vfloat Float.zero
+        end).
+
+Remark store_zeros_loadbytes:
+  forall m b p n m',
+  store_zeros m b p n = Some m' ->
+  forall p' n',
+  p <= p' -> p' + Z.of_nat n' <= p + n ->
+  Mem.loadbytes m' b p' (Z.of_nat n') = Some (list_repeat n' (Byte Byte.zero)).
+Proof.
+  intros until n; functional induction (store_zeros m b p n); intros.
+- destruct n'. simpl. apply Mem.loadbytes_empty. omega.
+  rewrite inj_S in H1. omegaContradiction.
+- destruct (zeq p' p).
+  + subst p'. destruct n'. simpl. apply Mem.loadbytes_empty. omega.
+    rewrite inj_S in H1. rewrite inj_S. 
+    replace (Z.succ (Z.of_nat n')) with (1 + Z.of_nat n') by omega.
+    change (list_repeat (S n') (Byte Byte.zero))
+      with ((Byte Byte.zero :: nil) ++ list_repeat n' (Byte Byte.zero)).
+    apply Mem.loadbytes_concat. 
+    erewrite store_zeros_loadbytes_outside; eauto.
+    change (Byte Byte.zero :: nil) with (encode_val Mint8unsigned Vzero).
+    change 1 with (size_chunk Mint8unsigned).
+    eapply Mem.loadbytes_store_same; eauto. 
+    right; omega.
+    eapply IHo; eauto. omega. omega. omega. omega. 
+  + eapply IHo; eauto. omega. omega. 
+- discriminate.
+Qed.
+
+Lemma store_zeros_read_as_zero:
+  forall m b p n m',
+  store_zeros m b p n = Some m' ->
+  read_as_zero m' b p n.
+Proof.
+  intros; red; intros.
+  transitivity (Some(decode_val chunk (list_repeat (size_chunk_nat chunk) (Byte Byte.zero)))).
+  apply Mem.loadbytes_load; auto. rewrite size_chunk_conv. 
+  eapply store_zeros_loadbytes; eauto. rewrite <- size_chunk_conv; auto. 
+  f_equal. destruct chunk; reflexivity. 
+Qed.
+
+Remark store_init_data_outside:
+  forall b i m p m',
+  store_init_data m b p i = Some m' ->
+  forall chunk b' q,
+  b' <> b \/ q + size_chunk chunk <= p \/ p + init_data_size i <= q ->
+  Mem.load chunk m' b' q = Mem.load chunk m b' q.
+Proof.
+  intros. destruct i; simpl in *;
+  try (eapply Mem.load_store_other; eauto; fail).
+  inv H; auto. 
+  destruct (find_symbol ge i); try congruence. 
+  eapply Mem.load_store_other; eauto; intuition.
+Qed.
+
 Remark store_init_data_list_outside:
   forall b il m p m',
   store_init_data_list m b p il = Some m' ->
@@ -750,11 +829,7 @@ Proof.
   intros. destruct (store_init_data m b p a) as [m1|] eqn:?; try congruence.
   transitivity (Mem.load chunk m1 b' q).
   eapply IHil; eauto. generalize (init_data_size_pos a). intuition omega.
-  destruct a; simpl in Heqo;
-  try (eapply Mem.load_store_other; eauto; intuition; fail).
-  inv Heqo. auto.
-  destruct (find_symbol ge i); try congruence. 
-  eapply Mem.load_store_other; eauto; intuition.
+  eapply store_init_data_outside; eauto. tauto. 
 Qed.
 
 Fixpoint load_store_init_data (m: mem) (b: block) (p: Z) (il: list init_data) {struct il} : Prop :=
@@ -782,26 +857,39 @@ Fixpoint load_store_init_data (m: mem) (b: block) (p: Z) (il: list init_data) {s
       (exists b', find_symbol ge symb = Some b' /\ Mem.load Mint32 m b p = Some(Vptr b' ofs))
       /\ load_store_init_data m b (p + 4) il'
   | Init_space n :: il' =>
-      load_store_init_data m b (p + Zmax n 0) il'
+      read_as_zero m b p n
+      /\ load_store_init_data m b (p + Zmax n 0) il'
   end.
+
+Remark init_data_list_size_pos:
+  forall il, init_data_list_size il >= 0.
+Proof.
+  induction il; simpl. omega. generalize (init_data_size_pos a); omega.
+Qed.
 
 Lemma store_init_data_list_charact:
   forall b il m p m',
   store_init_data_list m b p il = Some m' ->
+  read_as_zero m b p (init_data_list_size il) ->
   load_store_init_data m' b p il.
 Proof.
   assert (A: forall chunk v m b p m1 il m',
     Mem.store chunk m b p v = Some m1 ->
     store_init_data_list m1 b (p + size_chunk chunk) il = Some m' ->
     Mem.load chunk m' b p = Some(Val.load_result chunk v)).
-  intros. transitivity (Mem.load chunk m1 b p).
-  eapply store_init_data_list_outside; eauto. right. omega. 
-  eapply Mem.load_store_same; eauto. 
-
+  {
+    intros. transitivity (Mem.load chunk m1 b p).
+    eapply store_init_data_list_outside; eauto. right. omega. 
+    eapply Mem.load_store_same; eauto. 
+  }
   induction il; simpl.
   auto.
   intros. destruct (store_init_data m b p a) as [m1|] eqn:?; try congruence.
-  exploit IHil; eauto. intro D. 
+  exploit IHil; eauto.
+  red; intros. transitivity (Mem.load chunk m b p0). 
+  eapply store_init_data_outside. eauto. auto. 
+  apply H0. generalize (init_data_size_pos a); omega. omega. auto.  
+  intro D. 
   destruct a; simpl in Heqo; intuition.
   eapply (A Mint8unsigned (Vint i)); eauto.
   eapply (A Mint16unsigned (Vint i)); eauto.
@@ -809,6 +897,9 @@ Proof.
   eapply (A Mint64 (Vlong i)); eauto.
   eapply (A Mfloat32 (Vfloat f)); eauto.
   eapply (A Mfloat64 (Vfloat f)); eauto.
+  inv Heqo. red; intros. transitivity (Mem.load chunk m1 b p0). 
+  eapply store_init_data_list_outside; eauto. right. simpl. xomega. 
+  apply H0; auto. simpl. generalize (init_data_list_size_pos il); xomega.
   destruct (find_symbol ge i); try congruence. exists b0; split; auto. 
   eapply (A Mint32 (Vptr b0 i0)); eauto. 
 Qed.
@@ -838,7 +929,7 @@ Proof.
   transitivity (Mem.load chunk m2 b p).
   eapply store_init_data_list_outside; eauto. 
   transitivity (Mem.load chunk m1 b p).
-  eapply store_zeros_outside; eauto.
+  eapply store_zeros_load_outside; eauto.
   eapply Mem.load_alloc_unchanged; eauto.
 Qed.
 
@@ -866,7 +957,7 @@ Remark load_store_init_data_invariant:
 Proof.
   induction il; intro p; simpl.
   auto.
-  repeat rewrite H. destruct a; intuition. 
+  repeat rewrite H. destruct a; intuition. red; intros; rewrite H; auto. 
 Qed.
 
 Definition variables_initialized (g: t) (m: mem) :=
@@ -931,6 +1022,7 @@ Proof.
   right; right; right. unfold perm_globvar. rewrite H3. 
   destruct (gvar_readonly gv); auto with mem.
   eapply store_init_data_list_charact; eauto.
+  eapply store_zeros_read_as_zero; eauto. 
   (* older var *)
   exploit H1; eauto. intros [A [B C]].
   assert (D: Mem.valid_block m b). 
