@@ -124,6 +124,7 @@ Global Opaque binary_normalize32_correct.
 (* The Nan payload operations for single <-> double conversions are not part of
    the IEEE754 standard, but shared between all architectures of Compcert. *)
 Definition floatofbinary32_pl (s:bool) (pl:nan_pl 24) : (bool * nan_pl 53).
+Proof.
   refine (s, transform_quiet_pl (exist _ (Pos.shiftl_nat (proj1_sig pl) 29) _)).
   abstract (
     destruct pl; unfold proj1_sig, Pos.shiftl_nat, nat_iter, Fcore_digits.digits2_Pnat;
@@ -133,6 +134,7 @@ Definition floatofbinary32_pl (s:bool) (pl:nan_pl 24) : (bool * nan_pl 53).
 Defined.
 
 Definition binary32offloat_pl (s:bool) (pl:nan_pl 53) : (bool * nan_pl 24).
+Proof.
   refine (s, exist _ (Pos.shiftr_nat (proj1_sig (transform_quiet_pl pl)) 29) _).
   abstract (
     destruct (transform_quiet_pl pl); unfold proj1_sig, Pos.shiftr_nat, nat_iter;
