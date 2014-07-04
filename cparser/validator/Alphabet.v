@@ -290,10 +290,10 @@ apply all_list_forall.
 Defined.
 
 (** Definitions of [FSet]/[FMap] from [Comparable] **)
-Require Import OrderedType.
 Require Import OrderedTypeAlt.
 Require FSetAVL.
 Require FMapAVL.
+Import OrderedType.
 
 Module Type ComparableM.
   Parameter t : Type.
