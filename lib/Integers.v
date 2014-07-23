@@ -421,7 +421,7 @@ Qed.
 Remark half_modulus_modulus: modulus = 2 * half_modulus.
 Proof.
   rewrite half_modulus_power. rewrite modulus_power. 
-  rewrite <- two_p_S. decEq. omega. 
+  rewrite <- two_p_S. apply f_equal. omega. 
   generalize wordsize_pos; omega.
 Qed.
 
@@ -1015,8 +1015,6 @@ Proof.
   rewrite unsigned_one. apply Zmod_unique with (-1). omega. omega. 
   rewrite unsigned_zero. apply Zmod_unique with 0. omega. omega. 
 Qed. 
-
-
 
 (** ** Properties of multiplication *)
 
@@ -2057,7 +2055,7 @@ Qed.
 Lemma ltu_iwordsize_inv:
   forall x, ltu x iwordsize = true -> 0 <= unsigned x < zwordsize.
 Proof.
-  intros. exploit ltu_inv; eauto. rewrite unsigned_repr_wordsize. auto.
+  intros. generalize (ltu_inv _ _ H). rewrite unsigned_repr_wordsize. auto.
 Qed.
 
 Theorem shl_shl:
@@ -2331,7 +2329,7 @@ Theorem shl_rolm:
   ltu n iwordsize = true ->
   shl x n = rolm x n (shl mone n).
 Proof.
-  intros. exploit ltu_inv; eauto. rewrite unsigned_repr_wordsize; intros.
+  intros. generalize (ltu_inv _ _ H). rewrite unsigned_repr_wordsize; intros.
   unfold rolm. apply same_bits_eq; intros. 
   rewrite bits_and; auto. rewrite !bits_shl; auto. rewrite bits_rol; auto. 
   destruct (zlt i (unsigned n)).
@@ -2347,7 +2345,7 @@ Theorem shru_rolm:
   ltu n iwordsize = true ->
   shru x n = rolm x (sub iwordsize n) (shru mone n).
 Proof.
-  intros. exploit ltu_inv; eauto. rewrite unsigned_repr_wordsize; intros.
+  intros. generalize (ltu_inv _ _ H). rewrite unsigned_repr_wordsize; intros.
   unfold rolm. apply same_bits_eq; intros. 
   rewrite bits_and; auto. rewrite !bits_shru; auto. rewrite bits_rol; auto. 
   destruct (zlt (i + unsigned n) zwordsize).
@@ -2852,7 +2850,7 @@ Proof.
   intros.
   set (uy := unsigned y).
   assert (0 <= uy < zwordsize - 1).
-    exploit ltu_inv; eauto. rewrite unsigned_repr. auto. 
+    generalize (ltu_inv _ _ H). rewrite unsigned_repr. auto. 
     generalize wordsize_pos wordsize_max_unsigned; omega.
   rewrite shr_div_two_p. unfold shrx. unfold divs.  
   assert (shl one y = repr (two_p uy)).
@@ -2896,7 +2894,7 @@ Proof.
 - set (uy := unsigned y).
   generalize (unsigned_range y); fold uy; intros.
   assert (0 <= uy < zwordsize - 1).
-    exploit ltu_inv; eauto. rewrite unsigned_repr. auto. 
+    generalize (ltu_inv _ _ H). rewrite unsigned_repr. auto. 
     generalize wordsize_pos wordsize_max_unsigned; omega.
   assert (two_p uy < modulus).
     rewrite modulus_power. apply two_p_monotone_strict. omega. 
@@ -2937,7 +2935,7 @@ Proof.
   2: rewrite add_zero; auto.
   set (uy := unsigned y).
   assert (0 <= uy < zwordsize - 1).
-    exploit ltu_inv; eauto. rewrite unsigned_repr. auto.
+    generalize (ltu_inv _ _ H). rewrite unsigned_repr. auto.
     generalize wordsize_pos wordsize_max_unsigned; omega.
   assert (shl one y = repr (two_p uy)).
     rewrite shl_mul_two_p. rewrite mul_commut. apply mul_one.
@@ -3828,7 +3826,11 @@ Module Wordsize_32.
   Proof. unfold wordsize; congruence. Qed.
 End Wordsize_32.
 
+Strategy opaque [Wordsize_32.wordsize].
+
 Module Int := Make(Wordsize_32).
+
+Strategy 0 [Wordsize_32.wordsize].
 
 Notation int := Int.int.
 
@@ -3844,7 +3846,11 @@ Module Wordsize_8.
   Proof. unfold wordsize; congruence. Qed.
 End Wordsize_8.
 
+Strategy opaque [Wordsize_8.wordsize].
+
 Module Byte := Make(Wordsize_8).
+
+Strategy 0 [Wordsize_8.wordsize].
 
 Notation byte := Byte.int.
 
@@ -3853,6 +3859,8 @@ Module Wordsize_64.
   Remark wordsize_not_zero: wordsize <> 0%nat.
   Proof. unfold wordsize; congruence. Qed.
 End Wordsize_64.
+
+Strategy opaque [Wordsize_64.wordsize].
 
 Module Int64.
 
@@ -4422,6 +4430,8 @@ Proof.
 Qed.
 
 End Int64.
+
+Strategy 0 [Wordsize_64.wordsize].
 
 Notation int64 := Int64.int.
 
