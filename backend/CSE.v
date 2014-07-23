@@ -293,7 +293,6 @@ Definition store_normalized_range (chunk: memory_chunk) : aval :=
   | Mint8unsigned => Uns 8
   | Mint16signed => Sgn 16
   | Mint16unsigned => Uns 16
-  | Mfloat32 => Fsingle
   | _ => Vtop
   end.
 
@@ -380,7 +379,7 @@ Variable n: numbering.
 Fixpoint reduce_rec (niter: nat) (op: A) (args: list valnum) : option(A * list reg) :=
   match niter with
   | O => None
-  | S niter' =>
+  | Datatypes.S niter' =>
       match f (fun v => find_valnum_num v n.(num_eqs)) op args with
       | None => None
       | Some(op', args') =>

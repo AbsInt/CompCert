@@ -35,7 +35,8 @@ Require Import Switch.
 
 Inductive constant : Type :=
   | Ointconst: int -> constant     (**r integer constant *)
-  | Ofloatconst: float -> constant (**r floating-point constant *)
+  | Ofloatconst: float -> constant (**r double-precision floating-point constant *)
+  | Osingleconst: float32 -> constant (**r single-precision floating-point constant *)
   | Olongconst: int64 -> constant  (**r long integer constant *)
   | Oaddrsymbol: ident -> int -> constant (**r address of the symbol plus the offset *)
   | Oaddrstack: int -> constant.   (**r stack pointer plus the given offset *)
@@ -47,22 +48,31 @@ Inductive unary_operation : Type :=
   | Ocast16signed: unary_operation         (**r 16-bit sign extension *)
   | Onegint: unary_operation               (**r integer opposite *)
   | Onotint: unary_operation               (**r bitwise complement  *)
-  | Onegf: unary_operation                 (**r float opposite *)
-  | Oabsf: unary_operation                 (**r float absolute value *)
+  | Onegf: unary_operation                 (**r float64 opposite *)
+  | Oabsf: unary_operation                 (**r float64 absolute value *)
+  | Onegfs: unary_operation                (**r float32 opposite *)
+  | Oabsfs: unary_operation                (**r float32 absolute value *)
   | Osingleoffloat: unary_operation        (**r float truncation to float32 *)
-  | Ointoffloat: unary_operation           (**r signed integer to float *)
-  | Ointuoffloat: unary_operation          (**r unsigned integer to float *)
-  | Ofloatofint: unary_operation           (**r float to signed integer *)
-  | Ofloatofintu: unary_operation          (**r float to unsigned integer *)
+  | Ofloatofsingle: unary_operation        (**r float extension to float64 *)
+  | Ointoffloat: unary_operation           (**r signed integer to float64 *)
+  | Ointuoffloat: unary_operation          (**r unsigned integer to float64 *)
+  | Ofloatofint: unary_operation           (**r float64 to signed integer *)
+  | Ofloatofintu: unary_operation          (**r float64 to unsigned integer *)
+  | Ointofsingle: unary_operation          (**r signed integer to float32 *)
+  | Ointuofsingle: unary_operation         (**r unsigned integer to float32 *)
+  | Osingleofint: unary_operation          (**r float32 to signed integer *)
+  | Osingleofintu: unary_operation        (**r float32 to unsigned integer *)
   | Onegl: unary_operation                 (**r long integer opposite *)
   | Onotl: unary_operation                 (**r long bitwise complement *)
   | Ointoflong: unary_operation            (**r long to int *)
   | Olongofint: unary_operation            (**r signed int to long *)
   | Olongofintu: unary_operation           (**r unsigned int to long *)
-  | Olongoffloat: unary_operation          (**r float to signed long *)
-  | Olonguoffloat: unary_operation         (**r float to unsigned long *)
-  | Ofloatoflong: unary_operation          (**r signed long to float *)
-  | Ofloatoflongu: unary_operation         (**r unsigned long to float *)
+  | Olongoffloat: unary_operation          (**r float64 to signed long *)
+  | Olonguoffloat: unary_operation         (**r float64 to unsigned long *)
+  | Ofloatoflong: unary_operation          (**r signed long to float64 *)
+  | Ofloatoflongu: unary_operation         (**r unsigned long to float64 *)
+  | Olongofsingle: unary_operation         (**r float32 to signed long *)
+  | Olonguofsingle: unary_operation        (**r float32 to unsigned long *)
   | Osingleoflong: unary_operation         (**r signed long to float32 *)
   | Osingleoflongu: unary_operation.       (**r unsigned long to float32 *)
 
@@ -80,10 +90,14 @@ Inductive binary_operation : Type :=
   | Oshl: binary_operation                 (**r integer left shift *)
   | Oshr: binary_operation                 (**r integer right signed shift *)
   | Oshru: binary_operation                (**r integer right unsigned shift *)
-  | Oaddf: binary_operation                (**r float addition *)
-  | Osubf: binary_operation                (**r float subtraction *)
-  | Omulf: binary_operation                (**r float multiplication *)
-  | Odivf: binary_operation                (**r float division *)
+  | Oaddf: binary_operation                (**r float64 addition *)
+  | Osubf: binary_operation                (**r float64 subtraction *)
+  | Omulf: binary_operation                (**r float64 multiplication *)
+  | Odivf: binary_operation                (**r float64 division *)
+  | Oaddfs: binary_operation               (**r float32 addition *)
+  | Osubfs: binary_operation               (**r float32 subtraction *)
+  | Omulfs: binary_operation               (**r float32 multiplication *)
+  | Odivfs: binary_operation               (**r float32 division *)
   | Oaddl: binary_operation                (**r long addition *)
   | Osubl: binary_operation                (**r long subtraction *)
   | Omull: binary_operation                (**r long multiplication *)
@@ -99,7 +113,8 @@ Inductive binary_operation : Type :=
   | Oshrlu: binary_operation               (**r long right unsigned shift *)
   | Ocmp: comparison -> binary_operation   (**r integer signed comparison *)
   | Ocmpu: comparison -> binary_operation  (**r integer unsigned comparison *)
-  | Ocmpf: comparison -> binary_operation  (**r float comparison *)
+  | Ocmpf: comparison -> binary_operation  (**r float64 comparison *)
+  | Ocmpfs: comparison -> binary_operation (**r float32 comparison *)
   | Ocmpl: comparison -> binary_operation  (**r long signed comparison *)
   | Ocmplu: comparison -> binary_operation. (**r long unsigned comparison *)
 
@@ -240,6 +255,7 @@ Definition eval_constant (sp: val) (cst: constant) : option val :=
   match cst with
   | Ointconst n => Some (Vint n)
   | Ofloatconst n => Some (Vfloat n)
+  | Osingleconst n => Some (Vsingle n)
   | Olongconst n => Some (Vlong n)
   | Oaddrsymbol s ofs =>
       Some(match Genv.find_symbol ge s with
@@ -258,11 +274,18 @@ Definition eval_unop (op: unary_operation) (arg: val) : option val :=
   | Onotint => Some (Val.notint arg)
   | Onegf => Some (Val.negf arg)
   | Oabsf => Some (Val.absf arg)
+  | Onegfs => Some (Val.negfs arg)
+  | Oabsfs => Some (Val.absfs arg)
   | Osingleoffloat => Some (Val.singleoffloat arg)
+  | Ofloatofsingle => Some (Val.floatofsingle arg)
   | Ointoffloat => Val.intoffloat arg
   | Ointuoffloat => Val.intuoffloat arg
   | Ofloatofint => Val.floatofint arg
   | Ofloatofintu => Val.floatofintu arg
+  | Ointofsingle => Val.intofsingle arg
+  | Ointuofsingle => Val.intuofsingle arg
+  | Osingleofint => Val.singleofint arg
+  | Osingleofintu => Val.singleofintu arg
   | Onegl => Some (Val.negl arg)
   | Onotl => Some (Val.notl arg)
   | Ointoflong => Some (Val.loword arg)
@@ -272,6 +295,8 @@ Definition eval_unop (op: unary_operation) (arg: val) : option val :=
   | Olonguoffloat => Val.longuoffloat arg
   | Ofloatoflong => Val.floatoflong arg
   | Ofloatoflongu => Val.floatoflongu arg
+  | Olongofsingle => Val.longofsingle arg
+  | Olonguofsingle => Val.longuofsingle arg
   | Osingleoflong => Val.singleoflong arg
   | Osingleoflongu => Val.singleoflongu arg
   end.
@@ -296,6 +321,10 @@ Definition eval_binop
   | Osubf => Some (Val.subf arg1 arg2)
   | Omulf => Some (Val.mulf arg1 arg2)
   | Odivf => Some (Val.divf arg1 arg2)
+  | Oaddfs => Some (Val.addfs arg1 arg2)
+  | Osubfs => Some (Val.subfs arg1 arg2)
+  | Omulfs => Some (Val.mulfs arg1 arg2)
+  | Odivfs => Some (Val.divfs arg1 arg2)
   | Oaddl => Some (Val.addl arg1 arg2)
   | Osubl => Some (Val.subl arg1 arg2)
   | Omull => Some (Val.mull arg1 arg2)
@@ -312,6 +341,7 @@ Definition eval_binop
   | Ocmp c => Some (Val.cmp c arg1 arg2)
   | Ocmpu c => Some (Val.cmpu (Mem.valid_pointer m) c arg1 arg2)
   | Ocmpf c => Some (Val.cmpf c arg1 arg2)
+  | Ocmpfs c => Some (Val.cmpfs c arg1 arg2)
   | Ocmpl c => Val.cmpl c arg1 arg2
   | Ocmplu c => Val.cmplu c arg1 arg2
   end.

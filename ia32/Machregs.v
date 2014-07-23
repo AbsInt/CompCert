@@ -43,11 +43,8 @@ Global Opaque mreg_eq.
 
 Definition mreg_type (r: mreg): typ :=
   match r with
-  | AX => Tint | BX => Tint | CX => Tint | DX => Tint
-  | SI => Tint | DI => Tint | BP => Tint
-  | X0 => Tfloat | X1 => Tfloat | X2 => Tfloat | X3 => Tfloat
-  | X4 => Tfloat | X5 => Tfloat | X6 => Tfloat | X7 => Tfloat
-  | FP0 => Tfloat
+  | AX | BX | CX | DX | SI | DI | BP => Tany32
+  | X0 | X1 | X2 | X3 | X4 | X5 | X6 | X7 | FP0 => Tany64
   end.
 
 Local Open Scope positive_scope.
@@ -76,7 +73,6 @@ Definition is_stack_reg (r: mreg) : bool :=
 
 Definition destroyed_by_op (op: operation): list mreg :=
   match op with
-  | Omove => FP0 :: nil
   | Ocast8signed | Ocast8unsigned | Ocast16signed | Ocast16unsigned => AX :: nil
   | Omulhs => AX :: DX :: nil
   | Omulhu => AX :: DX :: nil
@@ -95,9 +91,7 @@ Definition destroyed_by_load (chunk: memory_chunk) (addr: addressing): list mreg
 Definition destroyed_by_store (chunk: memory_chunk) (addr: addressing): list mreg :=
   match chunk with
   | Mint8signed | Mint8unsigned => AX :: CX :: nil
-  | Mint16signed | Mint16unsigned | Mint32 | Mint64 => nil
-  | Mfloat32 => X7 :: nil
-  | Mfloat64 => FP0 :: nil
+  | _ => nil
   end.
 
 Definition destroyed_by_cond (cond: condition): list mreg :=
@@ -116,9 +110,7 @@ Definition destroyed_by_builtin (ef: external_function): list mreg :=
   | EF_memcpy sz al =>
       if zle sz 32 then CX :: X7 :: nil else CX :: SI :: DI :: nil
   | EF_vstore (Mint8unsigned|Mint8signed) => AX :: CX :: nil
-  | EF_vstore Mfloat32 => X7 :: nil
   | EF_vstore_global (Mint8unsigned|Mint8signed) _ _ => AX :: nil
-  | EF_vstore_global Mfloat32 _ _ => X7 :: nil
   | EF_builtin id sg =>
       if ident_eq id builtin_write16_reversed
       || ident_eq id builtin_write32_reversed
@@ -127,12 +119,12 @@ Definition destroyed_by_builtin (ef: external_function): list mreg :=
   end.
 
 Definition destroyed_at_function_entry: list mreg :=
-  DX :: FP0 :: nil.   (* must include destroyed_by_op Omove *)
+  (* must include [destroyed_by_setstack ty] *)
+  DX :: FP0 :: nil.
 
 Definition destroyed_by_setstack (ty: typ): list mreg :=
   match ty with
-  | Tfloat => FP0 :: nil
-  | Tsingle => X7 :: FP0 :: nil
+  | Tfloat | Tsingle => FP0 :: nil
   | _ => nil
   end.
 
@@ -190,6 +182,7 @@ Definition two_address_op (op: operation) : bool :=
   | Omove => false
   | Ointconst _ => false
   | Ofloatconst _ => false
+  | Osingleconst _ => false
   | Oindirectsymbol _ => false
   | Ocast8signed => false
   | Ocast8unsigned => false
@@ -228,9 +221,18 @@ Definition two_address_op (op: operation) : bool :=
   | Osubf => true
   | Omulf => true
   | Odivf => true
+  | Onegfs => true
+  | Oabsfs => true
+  | Oaddfs => true
+  | Osubfs => true
+  | Omulfs => true
+  | Odivfs => true
   | Osingleoffloat => false
+  | Ofloatofsingle => false
   | Ointoffloat => false
   | Ofloatofint => false
+  | Ointofsingle => false
+  | Osingleofint => false
   | Omakelong => false
   | Olowlong => false
   | Ohighlong => false

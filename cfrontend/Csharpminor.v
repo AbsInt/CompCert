@@ -33,7 +33,8 @@ Require Import Smallstep.
 
 Inductive constant : Type :=
   | Ointconst: int -> constant          (**r integer constant *)
-  | Ofloatconst: float -> constant      (**r floating-point constant *)
+  | Ofloatconst: float -> constant      (**r double-precision floating-point constant *)
+  | Osingleconst: float32 -> constant   (**r single-precision floating-point constant *)
   | Olongconst: int64 -> constant.      (**r long integer constant *)
 
 Definition unary_operation : Type := Cminor.unary_operation.
@@ -253,6 +254,7 @@ Definition eval_constant (cst: constant) : option val :=
   match cst with
   | Ointconst n => Some (Vint n)
   | Ofloatconst n => Some (Vfloat n)
+  | Osingleconst n => Some (Vsingle n)
   | Olongconst n => Some (Vlong n)
   end.
 

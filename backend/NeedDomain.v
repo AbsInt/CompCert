@@ -33,7 +33,6 @@ Require Import RTL.
 Inductive nval : Type :=
   | Nothing              (**r value is entirely unused *)
   | I (m: int)           (**r only need the bits that are 1 in [m] *)
-  | Fsingle              (**r only need the value after conversion to single float *)
   | All.                 (**r every bit of the value is used *)
 
 Definition eq_nval (x y: nval) : {x=y} + {x<>y}.
@@ -55,12 +54,6 @@ Fixpoint vagree (v w: val) (x: nval) {struct x}: Prop :=
       | Vint p, Vint q => iagree p q m
       | Vint p, _ => False
       | _, _ => True                                 
-      end
-  | Fsingle =>
-      match v, w with
-      | Vfloat f, Vfloat g => Float.singleoffloat f = Float.singleoffloat g
-      | Vfloat _, _ => False
-      | _, _ => True
       end
   | All => Val.lessdef v w
   end.
@@ -115,9 +108,7 @@ Inductive nge: nval -> nval -> Prop :=
   | nge_all: forall x, nge x Nothing
   | nge_int: forall m1 m2,
       (forall i, 0 <= i < Int.zwordsize -> Int.testbit m2 i = true -> Int.testbit m1 i = true) ->
-      nge (I m1) (I m2)
-  | nge_single:
-      nge Fsingle Fsingle.
+      nge (I m1) (I m2).
 
 Lemma nge_refl: forall x, nge x x.
 Proof.
@@ -145,7 +136,6 @@ Definition nlub (x y: nval) : nval :=
   | Nothing, _ => y
   | _, Nothing => x
   | I m1, I m2 => I (Int.or m1 m2)
-  | Fsingle, Fsingle => Fsingle
   | _, _ => All
   end.
 
@@ -388,14 +378,14 @@ Ltac InvAgree :=
   auto || exact Logic.I ||
   match goal with
   | [ H: False |- _ ] => contradiction
-  | [ H: match ?v with Vundef => _ | Vint _ => _ | Vlong _ => _ | Vfloat _ => _ | Vptr _ _ => _ end |- _ ] => destruct v
+  | [ H: match ?v with Vundef => _ | Vint _ => _ | Vlong _ => _ | Vfloat _ => _ | Vsingle _ => _ | Vptr _ _ => _ end |- _ ] => destruct v
   end).
 
 (** And immediate, or immediate *)
 
 Definition andimm (x: nval) (n: int) :=
   match x with
-  | Nothing | Fsingle => Nothing
+  | Nothing => Nothing
   | I m => I (Int.and m n)
   | All => I n
   end.
@@ -408,13 +398,12 @@ Proof.
   unfold andimm; intros; destruct x; simpl in *; unfold Val.and.
 - auto.
 - InvAgree. apply iagree_and; auto.
-- destruct v; destruct w; tauto.
 - InvAgree. rewrite iagree_and_eq in H. rewrite H; auto.
 Qed.
 
 Definition orimm (x: nval) (n: int) :=
   match x with
-  | Nothing | Fsingle => Nothing
+  | Nothing => Nothing
   | I m => I (Int.and m (Int.not n))
   | _ => I (Int.not n)
   end.
@@ -427,21 +416,16 @@ Proof.
   unfold orimm; intros; destruct x; simpl in *.
 - auto.
 - unfold Val.or; InvAgree. apply iagree_or; auto.
-- destruct v; destruct w; tauto.
 - InvAgree. simpl. apply Val.lessdef_same. f_equal. apply iagree_mone. 
   apply iagree_or. rewrite Int.and_commut. rewrite Int.and_mone. auto.
 Qed.
 
 (** Bitwise operations: and, or, xor, not *)
 
-Definition bitwise (x: nval) :=
-  match x with
-  | Fsingle => Nothing
-  | _ => x
-  end.
+Definition bitwise (x: nval) := x.
 
 Remark bitwise_idem: forall nv, bitwise (bitwise nv) = bitwise nv.
-Proof. destruct nv; auto. Qed.
+Proof. auto. Qed.
 
 Lemma vagree_bitwise_binop:
   forall f,
@@ -456,7 +440,6 @@ Proof.
   unfold bitwise; intros. destruct x; simpl in *.
 - auto. 
 - InvAgree. 
-- destruct v1; auto. destruct v2; auto. 
 - inv H0; auto. inv H1; auto. destruct w1; auto.
 Qed.
 
@@ -489,7 +472,7 @@ Qed.
 
 Definition shlimm (x: nval) (n: int) :=
   match x with
-  | Nothing | Fsingle => Nothing
+  | Nothing => Nothing
   | I m => I (Int.shru m n)
   | All => I (Int.shru Int.mone n)
   end.
@@ -504,14 +487,13 @@ Proof.
   destruct x; simpl in *.
 - auto.
 - InvAgree. apply iagree_shl; auto.
-- destruct v; destruct w; auto.
 - InvAgree. apply Val.lessdef_same. f_equal. apply iagree_mone. apply iagree_shl; auto.
 - destruct v; auto with na.
 Qed.
 
 Definition shruimm (x: nval) (n: int) :=
   match x with
-  | Nothing | Fsingle => Nothing
+  | Nothing => Nothing
   | I m => I (Int.shl m n)
   | All => I (Int.shl Int.mone n)
   end.
@@ -526,14 +508,13 @@ Proof.
   destruct x; simpl in *.
 - auto.
 - InvAgree. apply iagree_shru; auto.
-- destruct v; destruct w; auto.
 - InvAgree. apply Val.lessdef_same. f_equal. apply iagree_mone. apply iagree_shru; auto.
 - destruct v; auto with na.
 Qed.
 
 Definition shrimm (x: nval) (n: int) :=
   match x with
-  | Nothing | Fsingle => Nothing
+  | Nothing => Nothing
   | I m => I (let m' := Int.shl m n in
               if Int.eq_dec (Int.shru m' n) m
               then m'
@@ -554,14 +535,13 @@ Proof.
   destruct (Int.eq_dec (Int.shru (Int.shl m n) n) m).
   apply iagree_shr_1; auto.
   apply iagree_shr; auto.
-- destruct v; destruct w; auto.
 - InvAgree. apply Val.lessdef_same. f_equal. apply iagree_mone. apply iagree_shr. auto.
 - destruct v; auto with na.
 Qed.
 
 Definition rolm (x: nval) (amount mask: int) :=
   match x with
-  | Nothing | Fsingle => Nothing
+  | Nothing => Nothing
   | I m => I (Int.ror (Int.and m mask) amount)
   | _ => I (Int.ror mask amount)
   end.
@@ -575,7 +555,6 @@ Proof.
 - auto.
 - unfold Val.rolm; InvAgree. unfold Int.rolm. 
   apply iagree_and. apply iagree_rol. auto. 
-- unfold Val.rolm; destruct v, w; auto.
 - unfold Val.rolm; InvAgree. apply Val.lessdef_same. f_equal. apply iagree_mone. 
   unfold Int.rolm. apply iagree_and. apply iagree_rol. rewrite Int.and_commut. 
   rewrite Int.and_mone. auto.
@@ -583,7 +562,7 @@ Qed.
 
 Definition ror (x: nval) (amount: int) :=
   match x with
-  | Nothing | Fsingle => Nothing
+  | Nothing => Nothing
   | I m => I (Int.rol m amount)
   | All => All
   end.
@@ -598,7 +577,6 @@ Proof.
   destruct x; simpl in *.
 - auto.
 - InvAgree. apply iagree_ror; auto. 
-- destruct v, w; auto.
 - inv H; auto.
 - destruct v; auto with na.
 Qed.
@@ -608,7 +586,7 @@ Qed.
 
 Definition modarith (x: nval) :=
   match x with
-  | Nothing | Fsingle => Nothing
+  | Nothing => Nothing
   | I m => I (complete_mask m)
   | All => All
   end.
@@ -621,7 +599,6 @@ Proof.
   unfold modarith; intros. destruct x; simpl in *. 
 - auto.
 - unfold Val.add; InvAgree. apply eqmod_iagree. apply Int.eqmod_add; apply iagree_eqmod; auto. 
-- unfold Val.add; destruct v1, w1; auto; destruct v2, w2; auto.
 - inv H; auto. inv H0; auto. destruct w1; auto. 
 Qed.
 
@@ -638,7 +615,6 @@ Proof.
   unfold mul, add; intros. destruct x; simpl in *. 
 - auto.
 - unfold Val.mul; InvAgree. apply eqmod_iagree. apply Int.eqmod_mult; apply iagree_eqmod; auto. 
-- unfold Val.mul; destruct v1, w1; auto; destruct v2, w2; auto.
 - inv H; auto. inv H0; auto. destruct w1; auto. 
 Qed.
 
@@ -651,7 +627,6 @@ Proof.
 - auto.
 - unfold Val.neg; InvAgree. 
   apply eqmod_iagree. apply Int.eqmod_neg. apply iagree_eqmod; auto. 
-- destruct v, w; simpl; auto. 
 - inv H; simpl; auto.
 Qed.
 
@@ -659,7 +634,7 @@ Qed.
 
 Definition zero_ext (n: Z) (x: nval) :=
   match x with
-  | Nothing | Fsingle => Nothing
+  | Nothing => Nothing
   | I m => I (Int.zero_ext n m)
   | All => I (Int.zero_ext n Int.mone)
   end.
@@ -677,7 +652,6 @@ Proof.
   red; intros. autorewrite with ints; try omega. 
   destruct (zlt i1 n); auto. apply H; auto.
   autorewrite with ints; try omega. rewrite zlt_true; auto.
-- unfold Val.zero_ext; destruct v; destruct w; auto.
 - unfold Val.zero_ext; InvAgree; auto. apply Val.lessdef_same. f_equal. 
   Int.bit_solve; try omega. destruct (zlt i1 n); auto. apply H; auto. 
   autorewrite with ints; try omega. apply zlt_true; auto.
@@ -685,7 +659,7 @@ Qed.
 
 Definition sign_ext (n: Z) (x: nval) :=
   match x with
-  | Nothing | Fsingle => Nothing
+  | Nothing => Nothing
   | I m => I (Int.or (Int.zero_ext n m) (Int.shl Int.one (Int.repr (n - 1))))
   | All => I (Int.zero_ext n Int.mone)
   end.
@@ -710,7 +684,6 @@ Proof.
   right. rewrite Int.unsigned_repr. rewrite zlt_false by omega. 
   replace (n - 1 - (n - 1)) with 0 by omega. reflexivity. 
   generalize Int.wordsize_max_unsigned; omega.
-- unfold Val.sign_ext; destruct v; destruct w; auto.
 - unfold Val.sign_ext; InvAgree; auto. apply Val.lessdef_same. f_equal. 
   Int.bit_solve; try omega.
   set (j := if zlt i1 n then i1 else n - 1).
@@ -721,31 +694,12 @@ Proof.
   unfold j. destruct (zlt i1 n); omega.
 Qed.
 
-Definition singleoffloat (x: nval) :=
-  match x with
-  | Nothing | I _ => Nothing
-  | Fsingle | All => Fsingle
-  end.
-
-Lemma singleoffloat_sound:
-  forall v w x,
-  vagree v w (singleoffloat x) ->
-  vagree (Val.singleoffloat v) (Val.singleoffloat w) x.
-Proof.
-  unfold singleoffloat; intros. destruct x; simpl in *. 
-- auto.
-- unfold Val.singleoffloat; destruct v, w; auto. 
-- unfold Val.singleoffloat; InvAgree. congruence.
-- unfold Val.singleoffloat; InvAgree; auto. rewrite H; auto. 
-Qed.
-
 (** The needs of a memory store concerning the value being stored. *)
 
 Definition store_argument (chunk: memory_chunk) :=
   match chunk with
   | Mint8signed | Mint8unsigned => I (Int.repr 255)
   | Mint16signed | Mint16unsigned => I (Int.repr 65535)
-  | Mfloat32 => Fsingle
   | _ => All
   end.
 
@@ -781,10 +735,9 @@ Proof.
   change 16 with (Int.size (Int.repr 65535)). apply iagree_eqmod; auto.
 - apply encode_val_inject. rewrite val_inject_id; auto.
 - apply encode_val_inject. rewrite val_inject_id; auto.
-- InvAgree. apply SAME. simpl.
-  rewrite <- (Float.bits_of_singleoffloat f).
-  rewrite <- (Float.bits_of_singleoffloat f0).
-  congruence. 
+- apply encode_val_inject. rewrite val_inject_id; auto.
+- apply encode_val_inject. rewrite val_inject_id; auto.
+- apply encode_val_inject. rewrite val_inject_id; auto.
 - apply encode_val_inject. rewrite val_inject_id; auto.
 Qed.
 
@@ -803,8 +756,6 @@ Proof.
   auto. compute; auto.
 - apply zero_ext_sound with (v := Vint i) (w := Vint i0) (x := All) (n := 16).
   auto. omega.
-- apply singleoffloat_sound with (v := Vfloat f) (w := Vfloat f0) (x := All).
-  auto. 
 Qed.
 
 (** The needs of a comparison *)
@@ -1032,24 +983,6 @@ Proof.
   destruct (zlt i1 n). apply H0; auto.
   rewrite Int.bits_or; auto. rewrite H3; auto. 
   rewrite Int.bits_zero_ext in H3 by omega. rewrite zlt_false in H3 by auto. discriminate.
-Qed.
-
-Definition singleoffloat_redundant (x: nval) :=
-  match x with
-  | Nothing => true
-  | Fsingle => true
-  | _ => false
-  end.
-
-Lemma singleoffloat_redundant_sound:
-  forall v w x,
-  singleoffloat_redundant x = true ->
-  vagree v w (singleoffloat x) ->
-  vagree (Val.singleoffloat v) w x.
-Proof.
-  unfold singleoffloat; intros. destruct x; try discriminate.
-- auto.
-- simpl in *; InvAgree. simpl. rewrite Float.singleoffloat_idem; auto. 
 Qed.
 
 (** * Neededness for register environments *)

@@ -75,6 +75,7 @@ Definition const_for_result (a: aval) : option operation :=
   match a with
   | I n => Some(Ointconst n)
   | F n => if Compopts.generate_float_constants tt then Some(Ofloatconst n) else None
+  | FS n => if Compopts.generate_float_constants tt then Some(Osingleconst n) else None
   | Ptr(Gl symb ofs) => Some(Oaddrsymbol symb ofs)
   | Ptr(Stk ofs) => Some(Oaddrstack ofs)
   | _ => None

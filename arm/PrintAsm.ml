@@ -161,15 +161,27 @@ let distance_to_emit_constants () =
 (* Associate labels to floating-point constants and to symbols *)
 
 let float_labels = (Hashtbl.create 39 : (int64, int) Hashtbl.t)
+let float32_labels = (Hashtbl.create 39 : (int32, int) Hashtbl.t)
 
 let label_float f =
-  let bf = camlint64_of_coqint(Floats.Float.bits_of_double f) in
+  let bf = camlint64_of_coqint(Floats.Float.to_bits f) in
   try
     Hashtbl.find float_labels bf
   with Not_found ->
     let lbl' = new_label() in
     Hashtbl.add float_labels bf lbl';
     size_constants := !size_constants + 8;
+    max_pos_constants := min !max_pos_constants (!currpos + 1024);
+    lbl'
+
+let label_float32 f =
+  let bf = camlint_of_coqint(Floats.Float32.to_bits f) in
+  try
+    Hashtbl.find float32_labels bf
+  with Not_found ->
+    let lbl' = new_label() in
+    Hashtbl.add float32_labels bf lbl';
+    size_constants := !size_constants + 4;
     max_pos_constants := min !max_pos_constants (!currpos + 1024);
     lbl'
 
@@ -188,6 +200,7 @@ let label_symbol id ofs =
 
 let reset_constants () =
   Hashtbl.clear float_labels;
+  Hashtbl.clear float32_labels;
   Hashtbl.clear symbol_labels;
   size_constants := 0;
   max_pos_constants := max_int
@@ -200,6 +213,10 @@ let emit_constants oc =
       and bflo = Int64.logand bf 0xFFFF_FFFFL in
       fprintf oc ".L%d:	.word	0x%Lx, 0x%Lx\n" lbl bflo bfhi)
     float_labels;
+  Hashtbl.iter
+    (fun bf lbl ->
+      fprintf oc ".L%d:	.word	0x%lx\n" lbl bf)
+    float32_labels;
   Hashtbl.iter
     (fun (id, ofs) lbl ->
       fprintf oc ".L%d:	.word	%a\n"
@@ -348,8 +365,7 @@ let print_builtin_vload_common oc chunk args res =
         fprintf oc "	ldr	%a, [%a, #0]\n" ireg res2 ireg addr
       end; 2
   | Mfloat32, [IR addr], [FR res] ->
-      fprintf oc "	flds	%a, [%a, #0]\n" freg_single res ireg addr;
-      fprintf oc "	fcvtds	%a, %a\n" freg res freg_single res; 2
+      fprintf oc "	flds	%a, [%a, #0]\n" freg_single res ireg addr; 1
   | Mfloat64, [IR addr], [FR res] ->
       fprintf oc "	fldd	%a, [%a, #0]\n" freg res ireg addr; 1
   | _ ->
@@ -379,8 +395,7 @@ let print_builtin_vstore_common oc chunk args =
       fprintf oc "	str	%a, [%a, #0]\n" ireg src2 ireg addr;
       fprintf oc "	str	%a, [%a, #4]\n" ireg src1 ireg addr; 2
   | Mfloat32, [IR  addr; FR src] ->
-      fprintf oc "	fcvtsd	%a, %a\n" freg_single FR6 freg src;
-      fprintf oc "	fsts	%a, [%a, #0]\n" freg_single FR6 ireg addr; 2
+      fprintf oc "	fsts	%a, [%a, #0]\n" freg_single src ireg addr; 1
   | Mfloat64, [IR  addr; FR src] ->
       fprintf oc "	fstd	%a, [%a, #0]\n" freg src ireg addr; 1
   | _ ->
@@ -409,11 +424,11 @@ let align n a = (n + a - 1) land (-a)
 let rec next_arg_location ir ofs = function
   | [] ->
       Int32.of_int (ir * 4 + ofs)
-  | (Tint | Tsingle) :: l ->
+  | (Tint | Tsingle | Tany32) :: l ->
       if ir < 4
       then next_arg_location (ir + 1) ofs l
       else next_arg_location ir (ofs + 4) l
-  | (Tfloat | Tlong) :: l ->
+  | (Tfloat | Tlong | Tany64) :: l ->
       if ir < 3
       then next_arg_location (align ir 2 + 2) ofs l
       else next_arg_location ir (align ofs 8 + 8) l
@@ -525,11 +540,9 @@ module FixupEABI = struct
 
   let fixup_single oc dir f i =
     match dir with
-    | Incoming ->     (* f <- i; f <- double_of_single f *)
-        fprintf oc "	fmsr	%a, %a\n" freg_single f ireg i;
-        fprintf oc "	fcvtds	%a, %a\n" freg f freg_single f
-    | Outgoing ->     (* f <- single_of_double f; i <- f *)
-        fprintf oc "	fcvtsd	%a, %a\n" freg_single f freg f;
+    | Incoming ->     (* f <- i *)
+        fprintf oc "	fmsr	%a, %a\n" freg_single f ireg i
+    | Outgoing ->     (* i <- f *)
         fprintf oc "	fmrs	%a, %a\n" ireg i freg_single f
 
   let fixup_conventions oc dir tyl =
@@ -537,11 +550,11 @@ module FixupEABI = struct
       if i >= 4 then 0 else
         match tyl with
         | [] -> 0
-        | Tint :: tyl' ->
+        | (Tint | Tany32) :: tyl' ->
             fixup (i+1) tyl'
         | Tlong :: tyl' ->
             fixup (((i + 1) land (-2)) + 2) tyl'
-        | Tfloat :: tyl' ->
+        | (Tfloat | Tany64) :: tyl' ->
             let i = (i + 1) land (-2) in
             if i >= 4 then 0 else begin
               fixup_double oc dir (freg_param i) (ireg_param i) (ireg_param (i+1));
@@ -549,7 +562,7 @@ module FixupEABI = struct
             end
         | Tsingle :: tyl' ->
             fixup_single oc dir (freg_param i) (ireg_param i);
-            2 + fixup (i+1) tyl'
+            1 + fixup (i+1) tyl'
     in fixup 0 tyl
 
   let fixup_arguments oc dir sg =
@@ -577,8 +590,8 @@ module FixupHF = struct
   let rec fixup_actions used fr tyl =
     match tyl with
     | [] -> []
-    | (Tint | Tlong) :: tyl' -> fixup_actions used fr tyl'
-    | Tfloat :: tyl' ->
+    | (Tint | Tlong | Tany32) :: tyl' -> fixup_actions used fr tyl'
+    | (Tfloat | Tany64) :: tyl' ->
         if fr >= 8 then [] else begin
           let dr = find_double used 0 in
           assert (dr < 8);
@@ -599,7 +612,7 @@ module FixupHF = struct
         1 + fixup_outgoing oc act
       end
   | (fr, Single, sr) :: act ->
-        fprintf oc "	fcvtsd	s%d, d%d\n" sr fr;
+        fprintf oc "	fcpys	s%d, s%d\n" sr (2*fr);
         1 + fixup_outgoing oc act
 
   let rec fixup_incoming oc = function
@@ -612,8 +625,10 @@ module FixupHF = struct
       end
   | (fr, Single, sr) :: act ->
       let n = fixup_incoming oc act in
-      fprintf oc "	fcvtds	d%d, s%d\n" fr sr;
+      if fr = sr then n else begin
+        fprintf oc "	fcpys	s%d, s%d\n" (2*fr) sr;
         1 + n
+      end
 
   let fixup_arguments oc dir sg =
     if sg.sig_cc.cc_vararg then
@@ -628,14 +643,8 @@ module FixupHF = struct
   let fixup_result oc dir sg =
     if sg.sig_cc.cc_vararg then
       FixupEABI.fixup_result oc dir sg
-    else begin
-      match proj_sig_res sg, dir with
-      | Tsingle, Outgoing ->
-          fprintf oc "	fcvtsd	s0, d0\n"; 1
-      | Tsingle, Incoming ->
-          fprintf oc "	fcvtds	d0, s0\n"; 1
-      | _ -> 0
-    end
+    else
+      0
 end
 
 let (fixup_arguments, fixup_result) =
@@ -703,7 +712,7 @@ let print_instruction oc = function
       fprintf oc "	cmp	%a, %a\n" ireg r1 shift_op so; 1
   | Peor(r1, r2, so) ->
       fprintf oc "	eor	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
-  | Pldr(r1, r2, sa) ->
+  | Pldr(r1, r2, sa) | Pldr_a(r1, r2, sa) ->
       fprintf oc "	ldr	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
   | Pldrb(r1, r2, sa) ->
       fprintf oc "	ldrb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
@@ -727,7 +736,7 @@ let print_instruction oc = function
       fprintf oc "	orr	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
   | Prsb(r1, r2, so) ->
       fprintf oc "	rsb	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
-  | Pstr(r1, r2, sa) ->
+  | Pstr(r1, r2, sa) | Pstr_a(r1, r2, sa) ->
       fprintf oc "	str	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa;
       begin match r1, r2, sa with
       | IR14, IR13, SAimm n -> cfi_rel_offset oc "lr" (camlint_of_coqint n)
@@ -786,19 +795,53 @@ let print_instruction oc = function
   | Pftouizd(r1, r2) ->
       fprintf oc "	ftouizd	%a, %a\n" freg_single FR6 freg r2;
       fprintf oc "	fmrs	%a, %a\n" ireg r1 freg_single FR6; 2
+  | Pfabss(r1, r2) ->
+      fprintf oc "	fabss	%a, %a\n" freg_single r1 freg_single r2; 1
+  | Pfnegs(r1, r2) ->
+      fprintf oc "	fnegs	%a, %a\n" freg_single r1 freg_single r2; 1
+  | Pfadds(r1, r2, r3) ->
+      fprintf oc "	fadds	%a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
+  | Pfdivs(r1, r2, r3) ->
+      fprintf oc "	fdivs	%a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
+  | Pfmuls(r1, r2, r3) ->
+      fprintf oc "	fmuls	%a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
+  | Pfsubs(r1, r2, r3) ->
+      fprintf oc "	fsubs	%a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
+  | Pflis(r1, f) ->
+      (* We could make good use of the fconsts instruction, but it's available
+         in VFD v3 and up, not in v1 nor v2 *)
+      let lbl = label_float32 f in
+      fprintf oc "	flds	%a, .L%d @ %.12g\n" freg_single r1 lbl (camlfloat_of_coqfloat32 f); 1
+  | Pfcmps(r1, r2) ->
+      fprintf oc "	fcmps	%a, %a\n" freg_single r1 freg_single r2;
+      fprintf oc "	fmstat\n"; 2
+  | Pfcmpzs(r1) ->
+      fprintf oc "	fcmpzs	%a\n" freg_single r1;
+      fprintf oc "	fmstat\n"; 2
+  | Pfsitos(r1, r2) ->
+      fprintf oc "	fmsr	%a, %a\n" freg_single r1 ireg r2;
+      fprintf oc "	fsitos	%a, %a\n" freg_single r1 freg_single r1; 2
+  | Pfuitos(r1, r2) ->
+      fprintf oc "	fmsr	%a, %a\n" freg_single r1 ireg r2;
+      fprintf oc "	fuitos	%a, %a\n" freg_single r1 freg_single r1; 2
+  | Pftosizs(r1, r2) ->
+      fprintf oc "	ftosizs	%a, %a\n" freg_single FR6 freg_single r2;
+      fprintf oc "	fmrs	%a, %a\n" ireg r1 freg_single FR6; 2
+  | Pftouizs(r1, r2) ->
+      fprintf oc "	ftouizs	%a, %a\n" freg_single FR6 freg_single r2;
+      fprintf oc "	fmrs	%a, %a\n" ireg r1 freg_single FR6; 2
   | Pfcvtsd(r1, r2) ->
-      fprintf oc "	fcvtsd	%a, %a\n" freg_single r1 freg r2;
-      fprintf oc "	fcvtds	%a, %a\n" freg r1 freg_single r1; 2
-  | Pfldd(r1, r2, n) ->
+      fprintf oc "	fcvtsd	%a, %a\n" freg_single r1 freg r2; 1
+  | Pfcvtds(r1, r2) ->
+      fprintf oc "	fcvtds	%a, %a\n" freg r1 freg_single r2; 1
+  | Pfldd(r1, r2, n) | Pfldd_a(r1, r2, n) ->
       fprintf oc "	fldd	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n; 1
   | Pflds(r1, r2, n) ->
-      fprintf oc "	flds	%a, [%a, #%a]\n" freg_single r1 ireg r2 coqint n;
-      fprintf oc "	fcvtds	%a, %a\n" freg r1 freg_single r1; 2
-  | Pfstd(r1, r2, n) ->
+      fprintf oc "	flds	%a, [%a, #%a]\n" freg_single r1 ireg r2 coqint n; 1
+  | Pfstd(r1, r2, n) | Pfstd_a(r1, r2, n) ->
       fprintf oc "	fstd	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n; 1
   | Pfsts(r1, r2, n) ->
-      fprintf oc "	fcvtsd	%a, %a\n" freg_single FR6 freg r1;
-      fprintf oc "	fsts	%a, [%a, #%a]\n" freg_single FR6 ireg r2 coqint n; 2
+      fprintf oc "	fsts	%a, [%a, #%a]\n" freg_single r1 ireg r2 coqint n; 1
   (* Pseudo-instructions *)
   | Pallocframe(sz, ofs) ->
       fprintf oc "	mov	r12, sp\n";
@@ -927,10 +970,10 @@ let print_init oc = function
   | Init_int64 n ->
       fprintf oc "	.quad	%Ld\n" (camlint64_of_coqint n)
   | Init_float32 n ->
-      fprintf oc "	.word	0x%lx %s %.15g \n" (camlint_of_coqint (Floats.Float.bits_of_single n))
+      fprintf oc "	.word	0x%lx %s %.15g \n" (camlint_of_coqint (Floats.Float32.to_bits n))
 	comment (camlfloat_of_coqfloat n)
   | Init_float64 n ->
-      fprintf oc "	.quad	%Ld %s %.18g\n" (camlint64_of_coqint (Floats.Float.bits_of_double n))
+      fprintf oc "	.quad	%Ld %s %.18g\n" (camlint64_of_coqint (Floats.Float.to_bits n))
 	comment (camlfloat_of_coqfloat n)
   | Init_space n ->
       if Z.gt n Z.zero then

@@ -516,7 +516,7 @@ Definition store_init_data (m: mem) (b: block) (p: Z) (id: init_data) : option m
   | Init_int16 n => Mem.store Mint16unsigned m b p (Vint n)
   | Init_int32 n => Mem.store Mint32 m b p (Vint n)
   | Init_int64 n => Mem.store Mint64 m b p (Vlong n)
-  | Init_float32 n => Mem.store Mfloat32 m b p (Vfloat n)
+  | Init_float32 n => Mem.store Mfloat32 m b p (Vsingle n)
   | Init_float64 n => Mem.store Mfloat64 m b p (Vfloat n)
   | Init_addrof symb ofs =>
       match find_symbol ge symb with
@@ -848,7 +848,7 @@ Fixpoint load_store_init_data (m: mem) (b: block) (p: Z) (il: list init_data) {s
       Mem.load Mint64 m b p = Some(Vlong n)
       /\ load_store_init_data m b (p + 8) il'
   | Init_float32 n :: il' =>
-      Mem.load Mfloat32 m b p = Some(Vfloat(Float.singleoffloat n))
+      Mem.load Mfloat32 m b p = Some(Vsingle n)
       /\ load_store_init_data m b (p + 4) il'
   | Init_float64 n :: il' =>
       Mem.load Mfloat64 m b p = Some(Vfloat n)
@@ -895,7 +895,7 @@ Proof.
   eapply (A Mint16unsigned (Vint i)); eauto.
   eapply (A Mint32 (Vint i)); eauto.
   eapply (A Mint64 (Vlong i)); eauto.
-  eapply (A Mfloat32 (Vfloat f)); eauto.
+  eapply (A Mfloat32 (Vsingle f)); eauto.
   eapply (A Mfloat64 (Vfloat f)); eauto.
   inv Heqo. red; intros. transitivity (Mem.load chunk m1 b p0). 
   eapply store_init_data_list_outside; eauto. right. simpl. xomega. 

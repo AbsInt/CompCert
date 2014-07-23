@@ -38,6 +38,7 @@ Inductive val: Type :=
   | Vint: int -> val
   | Vlong: int64 -> val
   | Vfloat: float -> val
+  | Vsingle: float32 -> val
   | Vptr: block -> int -> val.
 
 Definition Vzero: val := Vint Int.zero.
@@ -55,14 +56,28 @@ Definition Vfalse: val := Vint Int.zero.
 
 Module Val.
 
+Definition eq (x y: val): {x=y} + {x<>y}.
+Proof.
+  decide equality. 
+  apply Int.eq_dec.
+  apply Int64.eq_dec.
+  apply Float.eq_dec.
+  apply Float32.eq_dec.
+  apply Int.eq_dec.
+  apply eq_block.
+Defined.
+Global Opaque eq.
+
 Definition has_type (v: val) (t: typ) : Prop :=
   match v, t with
   | Vundef, _ => True
   | Vint _, Tint => True
   | Vlong _, Tlong => True
   | Vfloat _, Tfloat => True
-  | Vfloat f, Tsingle => Float.is_single f
+  | Vsingle _, Tsingle => True
   | Vptr _ _, Tint => True
+  | (Vint _ | Vptr _ _ | Vsingle _), Tany32 => True
+  | _, Tany64 => True
   | _, _ => False
   end.
 
@@ -83,8 +98,8 @@ Lemma has_subtype:
   forall ty1 ty2 v,
   subtype ty1 ty2 = true -> has_type v ty1 -> has_type v ty2.
 Proof.
-  intros. destruct ty1; destruct ty2; simpl in H; discriminate || assumption || idtac.
-  unfold has_type in *. destruct v; auto. 
+  intros. destruct ty1; destruct ty2; simpl in H; discriminate || assumption || idtac;
+  unfold has_type in *; destruct v; auto.
 Qed.
 
 Lemma has_subtype_list:
@@ -126,30 +141,66 @@ Definition absf (v: val) : val :=
   | _ => Vundef
   end.
 
+Definition negfs (v: val) : val :=
+  match v with
+  | Vsingle f => Vsingle (Float32.neg f)
+  | _ => Vundef
+  end.
+
+Definition absfs (v: val) : val :=
+  match v with
+  | Vsingle f => Vsingle (Float32.abs f)
+  | _ => Vundef
+  end.
+
 Definition maketotal (ov: option val) : val :=
   match ov with Some v => v | None => Vundef end.
 
 Definition intoffloat (v: val) : option val :=
   match v with
-  | Vfloat f => option_map Vint (Float.intoffloat f)
+  | Vfloat f => option_map Vint (Float.to_int f)
   | _ => None
   end.
 
 Definition intuoffloat (v: val) : option val :=
   match v with
-  | Vfloat f => option_map Vint (Float.intuoffloat f)
+  | Vfloat f => option_map Vint (Float.to_intu f)
   | _ => None
   end.
 
 Definition floatofint (v: val) : option val :=
   match v with
-  | Vint n => Some (Vfloat (Float.floatofint n))
+  | Vint n => Some (Vfloat (Float.of_int n))
   | _ => None
   end.
 
 Definition floatofintu (v: val) : option val :=
   match v with
-  | Vint n => Some (Vfloat (Float.floatofintu n))
+  | Vint n => Some (Vfloat (Float.of_intu n))
+  | _ => None
+  end.
+
+Definition intofsingle (v: val) : option val :=
+  match v with
+  | Vsingle f => option_map Vint (Float32.to_int f)
+  | _ => None
+  end.
+
+Definition intuofsingle (v: val) : option val :=
+  match v with
+  | Vsingle f => option_map Vint (Float32.to_intu f)
+  | _ => None
+  end.
+
+Definition singleofint (v: val) : option val :=
+  match v with
+  | Vint n => Some (Vsingle (Float32.of_int n))
+  | _ => None
+  end.
+
+Definition singleofintu (v: val) : option val :=
+  match v with
+  | Vint n => Some (Vsingle (Float32.of_intu n))
   | _ => None
   end.
 
@@ -195,7 +246,13 @@ Definition sign_ext (nbits: Z) (v: val) : val :=
 
 Definition singleoffloat (v: val) : val :=
   match v with
-  | Vfloat f => Vfloat(Float.singleoffloat f)
+  | Vfloat f => Vsingle (Float.to_single f)
+  | _ => Vundef
+  end.
+
+Definition floatofsingle (v: val) : val :=
+  match v with
+  | Vsingle f => Vfloat (Float.of_single f)
   | _ => Vundef
   end.
 
@@ -394,6 +451,30 @@ Definition floatofwords (v1 v2: val) : val :=
   | _, _ => Vundef
   end.
 
+Definition addfs (v1 v2: val): val :=
+  match v1, v2 with
+  | Vsingle f1, Vsingle f2 => Vsingle(Float32.add f1 f2)
+  | _, _ => Vundef
+  end.
+
+Definition subfs (v1 v2: val): val :=
+  match v1, v2 with
+  | Vsingle f1, Vsingle f2 => Vsingle(Float32.sub f1 f2)
+  | _, _ => Vundef
+  end.
+
+Definition mulfs (v1 v2: val): val :=
+  match v1, v2 with
+  | Vsingle f1, Vsingle f2 => Vsingle(Float32.mul f1 f2)
+  | _, _ => Vundef
+  end.
+
+Definition divfs (v1 v2: val): val :=
+  match v1, v2 with
+  | Vsingle f1, Vsingle f2 => Vsingle(Float32.div f1 f2)
+  | _, _ => Vundef
+  end.
+
 (** Operations on 64-bit integers *)
 
 Definition longofwords (v1 v2: val) : val :=
@@ -440,37 +521,49 @@ Definition longofintu (v: val) : val :=
 
 Definition longoffloat (v: val) : option val :=
   match v with
-  | Vfloat f => option_map Vlong (Float.longoffloat f)
+  | Vfloat f => option_map Vlong (Float.to_long f)
   | _ => None
   end.
 
 Definition longuoffloat (v: val) : option val :=
   match v with
-  | Vfloat f => option_map Vlong (Float.longuoffloat f)
+  | Vfloat f => option_map Vlong (Float.to_longu f)
+  | _ => None
+  end.
+
+Definition longofsingle (v: val) : option val :=
+  match v with
+  | Vsingle f => option_map Vlong (Float32.to_long f)
+  | _ => None
+  end.
+
+Definition longuofsingle (v: val) : option val :=
+  match v with
+  | Vsingle f => option_map Vlong (Float32.to_longu f)
   | _ => None
   end.
 
 Definition floatoflong (v: val) : option val :=
   match v with
-  | Vlong n => Some (Vfloat (Float.floatoflong n))
+  | Vlong n => Some (Vfloat (Float.of_long n))
   | _ => None
   end.
 
 Definition floatoflongu (v: val) : option val :=
   match v with
-  | Vlong n => Some (Vfloat (Float.floatoflongu n))
+  | Vlong n => Some (Vfloat (Float.of_longu n))
   | _ => None
   end.
 
 Definition singleoflong (v: val) : option val :=
   match v with
-  | Vlong n => Some (Vfloat (Float.singleoflong n))
+  | Vlong n => Some (Vsingle (Float32.of_long n))
   | _ => None
   end.
 
 Definition singleoflongu (v: val) : option val :=
   match v with
-  | Vlong n => Some (Vfloat (Float.singleoflongu n))
+  | Vlong n => Some (Vsingle (Float32.of_longu n))
   | _ => None
   end.
 
@@ -625,6 +718,12 @@ Definition cmpf_bool (c: comparison) (v1 v2: val): option bool :=
   | _, _ => None
   end.
 
+Definition cmpfs_bool (c: comparison) (v1 v2: val): option bool :=
+  match v1, v2 with
+  | Vsingle f1, Vsingle f2 => Some (Float32.cmp c f1 f2)
+  | _, _ => None
+  end.
+
 Definition cmpl_bool (c: comparison) (v1 v2: val): option bool :=
   match v1, v2 with
   | Vlong n1, Vlong n2 => Some (Int64.cmp c n1 n2)
@@ -648,6 +747,9 @@ Definition cmpu (c: comparison) (v1 v2: val): val :=
 
 Definition cmpf (c: comparison) (v1 v2: val): val :=
   of_optbool (cmpf_bool c v1 v2).
+
+Definition cmpfs (c: comparison) (v1 v2: val): val :=
+  of_optbool (cmpfs_bool c v1 v2).
 
 Definition cmpl (c: comparison) (v1 v2: val): option val :=
   option_map of_bool (cmpl_bool c v1 v2).
@@ -681,22 +783,23 @@ Definition load_result (chunk: memory_chunk) (v: val) :=
   | Mint32, Vint n => Vint n
   | Mint32, Vptr b ofs => Vptr b ofs
   | Mint64, Vlong n => Vlong n
-  | Mfloat32, Vfloat f => Vfloat(Float.singleoffloat f)
+  | Mfloat32, Vsingle f => Vsingle f
   | Mfloat64, Vfloat f => Vfloat f
+  | Many32, (Vint _ | Vptr _ _ | Vsingle _) => v
+  | Many64, _ => v
   | _, _ => Vundef
   end.
 
 Lemma load_result_type:
   forall chunk v, has_type (load_result chunk v) (type_of_chunk chunk).
 Proof.
-  intros. destruct chunk; destruct v; simpl; auto. apply Float.singleoffloat_is_single.
+  intros. destruct chunk; destruct v; simpl; auto.
 Qed.
 
 Lemma load_result_same:
   forall v ty, has_type v ty -> load_result (chunk_of_type ty) v = v.
 Proof.
   unfold has_type; intros. destruct v; destruct ty; try contradiction; auto.
-  simpl. rewrite Float.singleoffloat_of_single; auto. 
 Qed.
 
 (** Theorems on arithmetic operations. *)
@@ -1388,6 +1491,8 @@ Inductive val_inject (mi: meminj): val -> val -> Prop :=
       forall i, val_inject mi (Vlong i) (Vlong i)
   | val_inject_float:
       forall f, val_inject mi (Vfloat f) (Vfloat f)
+  | val_inject_single:
+      forall f, val_inject mi (Vsingle f) (Vsingle f)
   | val_inject_ptr:
       forall b1 ofs1 b2 ofs2 delta,
       mi b1 = Some (b2, delta) ->

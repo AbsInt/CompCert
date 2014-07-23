@@ -691,6 +691,7 @@ Proof.
   apply Zone_divide.
   apply Zone_divide.
   apply H2; omega.
+  apply H2; omega.
 Qed.
 
 (** Preservation by external calls *)

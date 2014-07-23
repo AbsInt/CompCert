@@ -395,11 +395,11 @@ let print_builtin_vload_common oc chunk base offset res =
       fprintf oc "	lhz	%a, %a(%a)\n" ireg res constant offset ireg base
   | Mint16signed, IR res ->
       fprintf oc "	lha	%a, %a(%a)\n" ireg res constant offset ireg base
-  | Mint32, IR res ->
+  | (Mint32 | Many32), IR res ->
       fprintf oc "	lwz	%a, %a(%a)\n" ireg res constant offset ireg base
   | Mfloat32, FR res ->
       fprintf oc "	lfs	%a, %a(%a)\n" freg res constant offset ireg base
-  | Mfloat64, FR res ->
+  | (Mfloat64 | Many64), FR res ->
       fprintf oc "	lfd	%a, %a(%a)\n" freg res constant offset ireg base
   (* Mint64 is special-cased below *)
   | _ ->
@@ -451,12 +451,11 @@ let print_builtin_vstore_common oc chunk base offset src =
       fprintf oc "	stb	%a, %a(%a)\n" ireg src constant offset ireg base
   | (Mint16signed | Mint16unsigned), IR src ->
       fprintf oc "	sth	%a, %a(%a)\n" ireg src constant offset ireg base
-  | Mint32, IR src ->
+  | (Mint32 | Many32), IR src ->
       fprintf oc "	stw	%a, %a(%a)\n" ireg src constant offset ireg base
   | Mfloat32, FR src ->
-      fprintf oc "	frsp	%a, %a\n" freg FPR13 freg src;
-      fprintf oc "	stfs	%a, %a(%a)\n" freg FPR13 constant offset ireg base
-  | Mfloat64, FR src ->
+      fprintf oc "	stfs	%a, %a(%a)\n" freg src constant offset ireg base
+  | (Mfloat64 | Many64), FR src ->
       fprintf oc "	stfd	%a, %a(%a)\n" freg src constant offset ireg base
   (* Mint64 is special-cased below *)
   | _ ->
@@ -512,11 +511,11 @@ let align n a = (n + a - 1) land (-a)
 let rec next_arg_locations ir fr ofs = function
   | [] ->
       (ir, fr, ofs)
-  | Tint :: l ->
+  | (Tint | Tany32) :: l ->
       if ir < 8
       then next_arg_locations (ir + 1) fr ofs l
       else next_arg_locations ir fr (ofs + 4) l
-  | (Tfloat | Tsingle) :: l ->
+  | (Tfloat | Tsingle | Tany64) :: l ->
       if fr < 8
       then next_arg_locations ir (fr + 1) ofs l
       else next_arg_locations ir fr (align ofs 8 + 8) l
@@ -676,6 +675,7 @@ let short_cond_branch tbl pc lbl_dest =
 (* Printing of instructions *)
 
 let float_literals : (int * int64) list ref = ref []
+let float32_literals : (int * int32) list ref = ref []
 let jumptables : (int * label list) list ref = ref []
 
 let print_instruction oc tbl pc fallthrough = function
@@ -804,10 +804,12 @@ let print_instruction oc tbl pc fallthrough = function
         fprintf oc "	addi	%a, %a, %ld\n" ireg GPR1 ireg GPR1 sz
       else
         fprintf oc "	lwz	%a, %ld(%a)\n" ireg GPR1 ofs ireg GPR1
-  | Pfabs(r1, r2) ->
+  | Pfabs(r1, r2) | Pfabss(r1, r2) ->
       fprintf oc "	fabs	%a, %a\n" freg r1 freg r2
   | Pfadd(r1, r2, r3) ->
       fprintf oc "	fadd	%a, %a, %a\n" freg r1 freg r2 freg r3
+  | Pfadds(r1, r2, r3) ->
+      fprintf oc "	fadds	%a, %a, %a\n" freg r1 freg r2 freg r3
   | Pfcmpu(r1, r2) ->
       fprintf oc "	fcmpu	%a, %a, %a\n" creg 0 freg r1 freg r2
   | Pfcti(r1, r2) ->
@@ -821,6 +823,8 @@ let print_instruction oc tbl pc fallthrough = function
       fprintf oc "%s end pseudoinstr fcti\n" comment
   | Pfdiv(r1, r2, r3) ->
       fprintf oc "	fdiv	%a, %a, %a\n" freg r1 freg r2 freg r3
+  | Pfdivs(r1, r2, r3) ->
+      fprintf oc "	fdivs	%a, %a, %a\n" freg r1 freg r2 freg r3
   | Pfmake(rd, r1, r2) ->
       fprintf oc "%s begin pseudoinstr %a = fmake(%a, %a)\n"
               comment freg rd ireg r1 ireg r2;
@@ -835,25 +839,37 @@ let print_instruction oc tbl pc fallthrough = function
       fprintf oc "	fmr	%a, %a\n" freg r1 freg r2
   | Pfmul(r1, r2, r3) ->
       fprintf oc "	fmul	%a, %a, %a\n" freg r1 freg r2 freg r3
-  | Pfneg(r1, r2) ->
+  | Pfmuls(r1, r2, r3) ->
+      fprintf oc "	fmuls	%a, %a, %a\n" freg r1 freg r2 freg r3
+  | Pfneg(r1, r2) | Pfnegs(r1, r2) ->
       fprintf oc "	fneg	%a, %a\n" freg r1 freg r2
   | Pfrsp(r1, r2) ->
       fprintf oc "	frsp	%a, %a\n" freg r1 freg r2
+  | Pfxdp(r1, r2) ->
+      if r1 <> r2 then
+        fprintf oc "	fmr	%a, %a\n" freg r1 freg r2
   | Pfsub(r1, r2, r3) ->
       fprintf oc "	fsub	%a, %a, %a\n" freg r1 freg r2 freg r3
+  | Pfsubs(r1, r2, r3) ->
+      fprintf oc "	fsubs	%a, %a, %a\n" freg r1 freg r2 freg r3
   | Plbz(r1, c, r2) ->
       fprintf oc "	lbz	%a, %a(%a)\n" ireg r1 constant c ireg r2
   | Plbzx(r1, r2, r3) ->
       fprintf oc "	lbzx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
-  | Plfd(r1, c, r2) ->
+  | Plfd(r1, c, r2)  | Plfd_a(r1, c, r2) ->
       fprintf oc "	lfd	%a, %a(%a)\n" freg r1 constant c ireg r2
-  | Plfdx(r1, r2, r3) ->
+  | Plfdx(r1, r2, r3) | Plfdx_a(r1, r2, r3) ->
       fprintf oc "	lfdx	%a, %a, %a\n" freg r1 ireg r2 ireg r3
   | Plfi(r1, c) ->
       let lbl = new_label() in
       fprintf oc "	addis	%a, 0, %a\n" ireg GPR12 label_high lbl;
       fprintf oc "	lfd	%a, %a(%a) %s %.18g\n" freg r1 label_low lbl ireg GPR12 comment (camlfloat_of_coqfloat c);
-      float_literals := (lbl, camlint64_of_coqint (Floats.Float.bits_of_double c)) :: !float_literals;
+      float_literals := (lbl, camlint64_of_coqint (Floats.Float.to_bits c)) :: !float_literals;
+  | Plfis(r1, c) ->
+      let lbl = new_label() in
+      fprintf oc "	addis	%a, 0, %a\n" ireg GPR12 label_high lbl;
+      fprintf oc "	lfs	%a, %a(%a) %s %.18g\n" freg r1 label_low lbl ireg GPR12 comment (camlfloat_of_coqfloat32 c);
+      float32_literals := (lbl, camlint_of_coqint (Floats.Float32.to_bits c)) :: !float32_literals;
   | Plfs(r1, c, r2) ->
       fprintf oc "	lfs	%a, %a(%a)\n" freg r1 constant c ireg r2
   | Plfsx(r1, r2, r3) ->
@@ -866,9 +882,9 @@ let print_instruction oc tbl pc fallthrough = function
       fprintf oc "	lhz	%a, %a(%a)\n" ireg r1 constant c ireg r2
   | Plhzx(r1, r2, r3) ->
       fprintf oc "	lhzx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
-  | Plwz(r1, c, r2) ->
+  | Plwz(r1, c, r2) | Plwz_a(r1, c, r2) ->
       fprintf oc "	lwz	%a, %a(%a)\n" ireg r1 constant c ireg r2
-  | Plwzx(r1, r2, r3) ->
+  | Plwzx(r1, r2, r3) | Plwzx_a(r1, r2, r3) ->
       fprintf oc "	lwzx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pmfcrbit(r1, bit) ->
       fprintf oc "	mfcr	%a\n" ireg r1;
@@ -924,23 +940,21 @@ let print_instruction oc tbl pc fallthrough = function
       fprintf oc "	stb	%a, %a(%a)\n" ireg r1 constant c ireg r2
   | Pstbx(r1, r2, r3) ->
       fprintf oc "	stbx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
-  | Pstfd(r1, c, r2) ->
+  | Pstfd(r1, c, r2) | Pstfd_a(r1, c, r2) ->
       fprintf oc "	stfd	%a, %a(%a)\n" freg r1 constant c ireg r2
-  | Pstfdx(r1, r2, r3) ->
+  | Pstfdx(r1, r2, r3) | Pstfdx_a(r1, r2, r3) ->
       fprintf oc "	stfdx	%a, %a, %a\n" freg r1 ireg r2 ireg r3
   | Pstfs(r1, c, r2) ->
-      fprintf oc "	frsp	%a, %a\n" freg FPR13 freg r1;
-      fprintf oc "	stfs	%a, %a(%a)\n" freg FPR13 constant c ireg r2
+      fprintf oc "	stfs	%a, %a(%a)\n" freg r1 constant c ireg r2
   | Pstfsx(r1, r2, r3) ->
-      fprintf oc "	frsp	%a, %a\n" freg FPR13 freg r1;
-      fprintf oc "	stfsx	%a, %a, %a\n" freg FPR13 ireg r2 ireg r3
+      fprintf oc "	stfsx	%a, %a, %a\n" freg r1 ireg r2 ireg r3
   | Psth(r1, c, r2) ->
       fprintf oc "	sth	%a, %a(%a)\n" ireg r1 constant c ireg r2
   | Psthx(r1, r2, r3) ->
       fprintf oc "	sthx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
-  | Pstw(r1, c, r2) ->
+  | Pstw(r1, c, r2) | Pstw_a(r1, c, r2) ->
       fprintf oc "	stw	%a, %a(%a)\n" ireg r1 constant c ireg r2
-  | Pstwx(r1, r2, r3) ->
+  | Pstwx(r1, r2, r3) | Pstwx_a(r1, r2, r3) ->
       fprintf oc "	stwx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Psubfc(r1, r2, r3) ->
       fprintf oc "	subfc	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
@@ -1061,10 +1075,13 @@ let rec print_instructions oc tbl pc fallthrough = function
 
 (* Print the code for a function *)
 
-let print_literal oc (lbl, n) =
+let print_literal64 oc (lbl, n) =
   let nlo = Int64.to_int32 n
   and nhi = Int64.to_int32(Int64.shift_right_logical n 32) in
   fprintf oc "%a:	.long	0x%lx, 0x%lx\n" label lbl nhi nlo
+
+let print_literal32 oc (lbl, n) =
+  fprintf oc "%a:	.long	0x%lx\n" label lbl n
 
 let print_jumptable oc (lbl, tbl) =
   fprintf oc "%a:" label lbl;
@@ -1075,6 +1092,7 @@ let print_jumptable oc (lbl, tbl) =
 let print_function oc name fn =
   Hashtbl.clear current_function_labels;
   float_literals := [];
+  float32_literals := [];
   jumptables := [];
   current_function_sig := fn.fn_sig;
   let (text, lit, jmptbl) =
@@ -1095,11 +1113,12 @@ let print_function oc name fn =
   cfi_endproc oc;
   fprintf oc "	.type	%a, @function\n" symbol name;
   fprintf oc "	.size	%a, . - %a\n" symbol name symbol name;
-  if !float_literals <> [] then begin
+  if !float_literals <> [] || !float32_literals <> [] then begin
     section oc lit;
     fprintf oc "	.balign 8\n";
-    List.iter (print_literal oc) !float_literals;
-    float_literals := []
+    List.iter (print_literal64 oc) !float_literals;
+    List.iter (print_literal32 oc) !float32_literals;
+    float_literals := []; float32_literals := []
   end;
   if !jumptables <> [] then begin
     section oc jmptbl;
@@ -1131,10 +1150,10 @@ let print_init oc = function
                  (Int64.logand b 0xFFFFFFFFL)
   | Init_float32 n ->
       fprintf oc "	.long	0x%lx %s %.18g\n"
-                 (camlint_of_coqint (Floats.Float.bits_of_single n))
+                 (camlint_of_coqint (Floats.Float32.to_bits n))
                  comment (camlfloat_of_coqfloat n)
   | Init_float64 n ->
-      let b = camlint64_of_coqint (Floats.Float.bits_of_double n) in
+      let b = camlint64_of_coqint (Floats.Float.to_bits n) in
       fprintf oc "	.long	0x%Lx, 0x%Lx %s %.18g\n"
                  (Int64.shift_right_logical b 32)
                  (Int64.logand b 0xFFFFFFFFL)

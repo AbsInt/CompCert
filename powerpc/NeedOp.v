@@ -25,6 +25,7 @@ Definition needs_of_operation (op: operation) (nv: nval): list nval :=
   | Omove => op1 nv
   | Ointconst n => nil
   | Ofloatconst n => nil
+  | Osingleconst n => nil
   | Oaddrsymbol id ofs => nil
   | Oaddrstack ofs => nil
   | Ocast8signed => op1 (sign_ext 8 nv)
@@ -52,7 +53,9 @@ Definition needs_of_operation (op: operation) (nv: nval): list nval :=
   | Oroli amount mask => op1 (default nv)
   | Onegf | Oabsf => op1 (default nv)
   | Oaddf | Osubf | Omulf | Odivf => op2 (default nv)
-  | Osingleoffloat => op1 (singleoffloat nv)
+  | Onegfs | Oabsfs => op1 (default nv)
+  | Oaddfs | Osubfs | Omulfs | Odivfs => op2 (default nv)
+  | Osingleoffloat | Ofloatofsingle => op1 (default nv)
   | Ointoffloat => op1 (default nv)
   | Ofloatofwords | Omakelong => op2 (default nv)
   | Olowlong | Ohighlong => op1 (default nv)
@@ -66,7 +69,6 @@ Definition operation_is_redundant (op: operation) (nv: nval): bool :=
   | Oandimm n => andimm_redundant nv n
   | Oorimm n => orimm_redundant nv n
   | Orolm amount mask => rolm_redundant nv amount mask
-  | Osingleoffloat => singleoffloat_redundant nv
   | _ => false
   end.
 
@@ -136,7 +138,6 @@ Proof.
 - apply or_sound; auto. apply notint_sound; rewrite bitwise_idem; auto.
 - apply shrimm_sound; auto.
 - apply rolm_sound; auto. 
-- apply singleoffloat_sound; auto. 
 - destruct (eval_condition c args m) as [b|] eqn:EC; simpl in H2. 
   erewrite needs_of_condition_sound by eauto.
   subst v; simpl. auto with na.
@@ -156,7 +157,6 @@ Proof.
 - apply andimm_redundant_sound; auto. 
 - apply orimm_redundant_sound; auto.
 - apply rolm_redundant_sound; auto.
-- apply singleoffloat_redundant_sound; auto.
 Qed.
 
 End SOUNDNESS.

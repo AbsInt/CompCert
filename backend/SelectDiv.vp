@@ -182,4 +182,16 @@ Nondetfunction divf (e1: expr) (e2: expr) :=
   | _ => Eop Odivf (e1 ::: e2 ::: Enil)
   end.
 
+Definition divfsimm (e: expr) (n: float32) :=
+  match Float32.exact_inverse n with
+  | Some n' => Eop Omulfs (e ::: Eop (Osingleconst n') Enil ::: Enil)
+  | None    => Eop Odivfs (e ::: Eop (Osingleconst n) Enil ::: Enil)
+  end.
+
+Nondetfunction divfs (e1: expr) (e2: expr) :=
+  match e2 with
+  | Eop (Osingleconst n2) Enil => divfsimm e1 n2
+  | _ => Eop Odivfs (e1 ::: e2 ::: Enil)
+  end.
+
 

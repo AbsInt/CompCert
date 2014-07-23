@@ -80,6 +80,10 @@ Ltac SimplVM :=
       let E := fresh in
       assert (E: v = Vfloat n) by (inversion H; auto);
       rewrite E in *; clear H; SimplVM
+  | [ H: vmatch _ ?v (FS ?n) |- _ ] =>
+      let E := fresh in
+      assert (E: v = Vsingle n) by (inversion H; auto);
+      rewrite E in *; clear H; SimplVM
   | [ H: vmatch _ ?v (Ptr(Gl ?id ?ofs)) |- _ ] =>
       let E := fresh in
       assert (E: Val.lessdef v (Genv.symbol_address ge id ofs)) by (eapply vmatch_ptr_gl; eauto); 
@@ -315,7 +319,7 @@ Lemma make_mulfimm_correct:
   exists v, eval_operation ge (Vptr sp Int.zero) op rs##args m = Some v /\ Val.lessdef (Val.mulf rs#r1 rs#r2) v.
 Proof.
   intros; unfold make_mulfimm. 
-  destruct (Float.eq_dec n (Float.floatofint (Int.repr 2))); intros. 
+  destruct (Float.eq_dec n (Float.of_int (Int.repr 2))); intros. 
   simpl. econstructor; split. eauto. rewrite H; subst n.
   destruct (rs#r1); simpl; auto. rewrite Float.mul2_add; auto. 
   simpl. econstructor; split; eauto. 
@@ -328,10 +332,37 @@ Lemma make_mulfimm_correct_2:
   exists v, eval_operation ge (Vptr sp Int.zero) op rs##args m = Some v /\ Val.lessdef (Val.mulf rs#r1 rs#r2) v.
 Proof.
   intros; unfold make_mulfimm. 
-  destruct (Float.eq_dec n (Float.floatofint (Int.repr 2))); intros. 
+  destruct (Float.eq_dec n (Float.of_int (Int.repr 2))); intros. 
   simpl. econstructor; split. eauto. rewrite H; subst n.
   destruct (rs#r2); simpl; auto. rewrite Float.mul2_add; auto. 
   rewrite Float.mul_commut; auto. 
+  simpl. econstructor; split; eauto. 
+Qed.
+
+Lemma make_mulfsimm_correct:
+  forall n r1 r2,
+  rs#r2 = Vsingle n ->
+  let (op, args) := make_mulfsimm n r1 r1 r2 in
+  exists v, eval_operation ge (Vptr sp Int.zero) op rs##args m = Some v /\ Val.lessdef (Val.mulfs rs#r1 rs#r2) v.
+Proof.
+  intros; unfold make_mulfsimm. 
+  destruct (Float32.eq_dec n (Float32.of_int (Int.repr 2))); intros. 
+  simpl. econstructor; split. eauto. rewrite H; subst n.
+  destruct (rs#r1); simpl; auto. rewrite Float32.mul2_add; auto. 
+  simpl. econstructor; split; eauto. 
+Qed.
+
+Lemma make_mulfsimm_correct_2:
+  forall n r1 r2,
+  rs#r1 = Vsingle n ->
+  let (op, args) := make_mulfsimm n r2 r1 r2 in
+  exists v, eval_operation ge (Vptr sp Int.zero) op rs##args m = Some v /\ Val.lessdef (Val.mulfs rs#r1 rs#r2) v.
+Proof.
+  intros; unfold make_mulfsimm. 
+  destruct (Float32.eq_dec n (Float32.of_int (Int.repr 2))); intros. 
+  simpl. econstructor; split. eauto. rewrite H; subst n.
+  destruct (rs#r2); simpl; auto. rewrite Float32.mul2_add; auto. 
+  rewrite Float32.mul_commut; auto. 
   simpl. econstructor; split; eauto. 
 Qed.
 
@@ -360,21 +391,6 @@ Proof.
   assert (V: vmatch bc rs#r (Sgn 16)).
   { eapply vmatch_ge; eauto. apply vincl_ge; auto. }
   inv V; simpl; auto. rewrite is_sgn_sign_ext in H3 by auto. rewrite H3; auto.
-  econstructor; split; simpl; eauto.
-Qed.
-
-Lemma make_singleoffloat_correct:
-  forall r x,
-  vmatch bc rs#r x ->
-  let (op, args) := make_singleoffloat r x in
-  exists v, eval_operation ge (Vptr sp Int.zero) op rs##args m = Some v /\ Val.lessdef (Val.singleoffloat rs#r) v.
-Proof.
-  intros; unfold make_singleoffloat. 
-  destruct (vincl x Fsingle && generate_float_constants tt) eqn:INCL. 
-  InvBooleans. exists rs#r; split; auto. 
-  assert (V: vmatch bc rs#r Fsingle).
-  { eapply vmatch_ge; eauto. apply vincl_ge; auto. }
-  inv V; simpl; auto. rewrite Float.singleoffloat_of_single by auto. auto.
   econstructor; split; simpl; eauto.
 Qed.
 
@@ -424,14 +440,16 @@ Proof.
   InvApproxRegs; SimplVM; inv H0. apply make_shrimm_correct; auto.
 (* shru *)
   InvApproxRegs; SimplVM; inv H0. apply make_shruimm_correct; auto.
-(* singleoffloat *)
-  InvApproxRegs; SimplVM; inv H0. apply make_singleoffloat_correct; auto.
 (* cmp *)
   inv H0. apply make_cmp_correct; auto.
 (* mulf *)
   InvApproxRegs; SimplVM; inv H0. rewrite <- H2. apply make_mulfimm_correct; auto.
   InvApproxRegs; SimplVM; inv H0. fold (Val.mulf (Vfloat n1) rs#r2).
   rewrite <- H2. apply make_mulfimm_correct_2; auto.
+(* mulfs *)
+  InvApproxRegs; SimplVM; inv H0. rewrite <- H2. apply make_mulfsimm_correct; auto.
+  InvApproxRegs; SimplVM; inv H0. fold (Val.mulfs (Vsingle n1) rs#r2).
+  rewrite <- H2. apply make_mulfsimm_correct_2; auto.
 (* default *)
   exists v; auto.
 Qed.

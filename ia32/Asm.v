@@ -118,10 +118,13 @@ Inductive instruction: Type :=
   | Pmovsd_fi (rd: freg) (n: float)     (**r (pseudo-instruction) *)
   | Pmovsd_fm (rd: freg) (a: addrmode)
   | Pmovsd_mf (a: addrmode) (r1: freg)
-  | Pfld_f (r1: freg)                   (**r [fld] from XMM register (pseudo) *)
-  | Pfld_m (a: addrmode)                (**r [fld] from memory *)
-  | Pfstp_f (rd: freg)                  (**r [fstp] to XMM register (pseudo) *)
-  | Pfstp_m (a: addrmode)               (**r [fstp] to memory *)
+  | Pmovss_fi (rd: freg) (n: float32)   (**r [movss] (single 32-bit float) *)
+  | Pmovss_fm (rd: freg) (a: addrmode)
+  | Pmovss_mf (a: addrmode) (r1: freg)
+  | Pfldl_m (a: addrmode)               (**r [fld] double precision *)
+  | Pfstpl_m (a: addrmode)              (**r [fstp] double precision *)
+  | Pflds_m (a: addrmode)               (**r [fld] simple precision *)
+  | Pfstps_m (a: addrmode)              (**r [fstp] simple precision *)
   | Pxchg_rr (r1: ireg) (r2: ireg)      (**r register-register exchange *)
   (** Moves with conversion *)
   | Pmovb_mr (a: addrmode) (rs: ireg)   (**r [mov] (8-bit int) *)
@@ -134,11 +137,12 @@ Inductive instruction: Type :=
   | Pmovzw_rm (rd: ireg) (a: addrmode)
   | Pmovsw_rr (rd: ireg) (rs: ireg)     (**r [movsw] (16-bit sign-extension) *)
   | Pmovsw_rm (rd: ireg) (a: addrmode)
-  | Pcvtss2sd_fm (rd: freg) (a: addrmode) (**r [cvtss2sd] (single float load) *)
-  | Pcvtsd2ss_ff (rd: freg) (r1: freg)  (**r conversion to single (pseudo) *)
-  | Pcvtsd2ss_mf (a: addrmode) (r1: freg) (**r [cvtsd2ss] (single float store *)
+  | Pcvtsd2ss_ff (rd: freg) (r1: freg)  (**r conversion to single float *)
+  | Pcvtss2sd_ff (rd: freg) (r1: freg)  (**r conversion to double float *)
   | Pcvttsd2si_rf (rd: ireg) (r1: freg) (**r double to signed int *)
   | Pcvtsi2sd_fr (rd: freg) (r1: ireg)  (**r signed int to double *)
+  | Pcvttss2si_rf (rd: ireg) (r1: freg) (**r single to signed int *)
+  | Pcvtsi2ss_fr (rd: freg) (r1: ireg)  (**r signed int to single *)
   (** Integer arithmetic *)
   | Plea (rd: ireg) (a: addrmode)
   | Pneg (rd: ireg)
@@ -180,6 +184,14 @@ Inductive instruction: Type :=
   | Pabsd (rd: freg)
   | Pcomisd_ff (r1 r2: freg)
   | Pxorpd_f (rd: freg)	              (**r [xor] with self = set to zero *)
+  | Padds_ff (rd: freg) (r1: freg)
+  | Psubs_ff (rd: freg) (r1: freg)
+  | Pmuls_ff (rd: freg) (r1: freg)
+  | Pdivs_ff (rd: freg) (r1: freg)
+  | Pnegs (rd: freg)
+  | Pabss (rd: freg)
+  | Pcomiss_ff (r1 r2: freg)
+  | Pxorps_f (rd: freg)	              (**r [xor] with self = set to zero *)
   (** Branches and calls *)
   | Pjmp_l (l: label)
   | Pjmp_s (symb: ident) (sg: signature)
@@ -190,6 +202,11 @@ Inductive instruction: Type :=
   | Pcall_s (symb: ident) (sg: signature)
   | Pcall_r (r: ireg) (sg: signature)
   | Pret
+  (** Saving and restoring registers *)
+  | Pmov_rm_a (rd: ireg) (a: addrmode)  (**r like [Pmov_rm], using [Many32] chunk *)
+  | Pmov_mr_a (a: addrmode) (rs: ireg)  (**r like [Pmov_mr], using [Many32] chunk *)
+  | Pmovsd_fm_a (rd: freg) (a: addrmode) (**r like [Pmovsd_fm], using [Many64] chunk *)
+  | Pmovsd_mf_a (a: addrmode) (r1: freg) (**r like [Pmovsd_mf], using [Many64] chunk *)
   (** Pseudo-instructions *)
   | Plabel(l: label)
   | Pallocframe(sz: Z)(ofs_ra ofs_link: int)
@@ -324,6 +341,18 @@ Definition compare_floats (vx vy: val) (rs: regset) : regset :=
       rs #ZF  <- (Val.of_bool (negb (Float.cmp Cne x y)))
          #CF  <- (Val.of_bool (negb (Float.cmp Cge x y)))
          #PF  <- (Val.of_bool (negb (Float.cmp Ceq x y || Float.cmp Clt x y || Float.cmp Cgt x y)))
+         #SF  <- Vundef
+         #OF  <- Vundef
+  | _, _ =>
+      undef_regs (CR ZF :: CR CF :: CR PF :: CR SF :: CR OF :: nil) rs
+  end.
+
+Definition compare_floats32 (vx vy: val) (rs: regset) : regset :=
+  match vx, vy with
+  | Vsingle x, Vsingle y =>
+      rs #ZF  <- (Val.of_bool (negb (Float32.cmp Cne x y)))
+         #CF  <- (Val.of_bool (negb (Float32.cmp Cge x y)))
+         #PF  <- (Val.of_bool (negb (Float32.cmp Ceq x y || Float32.cmp Clt x y || Float32.cmp Cgt x y)))
          #SF  <- Vundef
          #OF  <- Vundef
   | _, _ =>
@@ -484,14 +513,20 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       exec_load Mfloat64 m a rs rd
   | Pmovsd_mf a r1 =>
       exec_store Mfloat64 m a rs r1 nil
-  | Pfld_f r1 =>
-      Next (nextinstr (rs#ST0 <- (rs r1))) m
-  | Pfld_m a =>
+  | Pmovss_fi rd n =>
+      Next (nextinstr (rs#rd <- (Vsingle n))) m
+  | Pmovss_fm rd a =>
+      exec_load Mfloat32 m a rs rd
+  | Pmovss_mf a r1 =>
+      exec_store Mfloat32 m a rs r1 nil
+  | Pfldl_m a =>
       exec_load Mfloat64 m a rs ST0
-  | Pfstp_f rd =>
-      Next (nextinstr (rs#rd <- (rs ST0) #ST0 <- Vundef)) m
-  | Pfstp_m a =>
+  | Pfstpl_m a =>
       exec_store Mfloat64 m a rs ST0 (ST0 :: nil)
+  | Pflds_m a =>
+      exec_load Mfloat32 m a rs ST0
+  | Pfstps_m a =>
+      exec_store Mfloat32 m a rs ST0 (ST0 :: nil)
   | Pxchg_rr r1 r2 =>
       Next (nextinstr (rs#r1 <- (rs r2) #r2 <- (rs r1))) m
   (** Moves with conversion *)
@@ -515,16 +550,18 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (rs#rd <- (Val.sign_ext 16 rs#r1))) m
   | Pmovsw_rm rd a =>
       exec_load Mint16signed m a rs rd
-  | Pcvtss2sd_fm rd a =>
-      exec_load Mfloat32 m a rs rd
   | Pcvtsd2ss_ff rd r1 =>
       Next (nextinstr (rs#rd <- (Val.singleoffloat rs#r1))) m
-  | Pcvtsd2ss_mf a r1 =>
-      exec_store Mfloat32 m a rs r1 (FR XMM7 :: nil)
+  | Pcvtss2sd_ff rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.floatofsingle rs#r1))) m
   | Pcvttsd2si_rf rd r1 =>
       Next (nextinstr (rs#rd <- (Val.maketotal (Val.intoffloat rs#r1)))) m
   | Pcvtsi2sd_fr rd r1 =>
       Next (nextinstr (rs#rd <- (Val.maketotal (Val.floatofint rs#r1)))) m
+  | Pcvttss2si_rf rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.maketotal (Val.intofsingle rs#r1)))) m
+  | Pcvtsi2ss_fr rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.maketotal (Val.singleofint rs#r1)))) m
   (** Integer arithmetic *)
   | Plea rd a =>
       Next (nextinstr (rs#rd <- (eval_addrmode a rs))) m
@@ -604,7 +641,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       end
   | Psetcc c rd =>
       Next (nextinstr (rs#rd <- (Val.of_optbool (eval_testcond c rs)))) m
-  (** Arithmetic operations over floats *)
+  (** Arithmetic operations over double-precision floats *)
   | Paddd_ff rd r1 =>
       Next (nextinstr (rs#rd <- (Val.addf rs#rd rs#r1))) m
   | Psubd_ff rd r1 =>
@@ -621,6 +658,23 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (compare_floats (rs r1) (rs r2) rs)) m
   | Pxorpd_f rd =>
       Next (nextinstr_nf (rs#rd <- (Vfloat Float.zero))) m
+  (** Arithmetic operations over single-precision floats *)
+  | Padds_ff rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.addfs rs#rd rs#r1))) m
+  | Psubs_ff rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.subfs rs#rd rs#r1))) m
+  | Pmuls_ff rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.mulfs rs#rd rs#r1))) m
+  | Pdivs_ff rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.divfs rs#rd rs#r1))) m
+  | Pnegs rd =>
+      Next (nextinstr (rs#rd <- (Val.negfs rs#rd))) m
+  | Pabss rd =>
+      Next (nextinstr (rs#rd <- (Val.absfs rs#rd))) m
+  | Pcomiss_ff r1 r2 =>
+      Next (nextinstr (compare_floats32 (rs r1) (rs r2) rs)) m
+  | Pxorps_f rd =>
+      Next (nextinstr_nf (rs#rd <- (Vsingle Float32.zero))) m
   (** Branches and calls *)
   | Pjmp_l lbl =>
       goto_label f lbl rs m
@@ -655,6 +709,15 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (rs#RA <- (Val.add rs#PC Vone) #PC <- (rs r)) m
   | Pret =>
       Next (rs#PC <- (rs#RA)) m
+  (** Saving and restoring registers *)
+  | Pmov_rm_a rd a =>
+      exec_load Many32 m a rs rd
+  | Pmov_mr_a a r1 =>
+      exec_store Many32 m a rs r1 nil
+  | Pmovsd_fm_a rd a =>
+      exec_load Many64 m a rs rd
+  | Pmovsd_mf_a a r1 =>
+      exec_store Many64 m a rs r1 nil
   (** Pseudo-instructions *)
   | Plabel lbl =>
       Next (nextinstr rs) m

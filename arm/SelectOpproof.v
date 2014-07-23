@@ -598,6 +598,31 @@ Proof.
   red; intros; TrivialExists.
 Qed.
 
+Theorem eval_negfs: unary_constructor_sound negfs Val.negfs.
+Proof.
+  red; intros. TrivialExists. 
+Qed.
+
+Theorem eval_absfs: unary_constructor_sound absfs Val.absfs.
+Proof.
+  red; intros. TrivialExists. 
+Qed.
+
+Theorem eval_addfs: binary_constructor_sound addfs Val.addfs.
+Proof.
+  red; intros; TrivialExists.
+Qed.
+ 
+Theorem eval_subfs: binary_constructor_sound subfs Val.subfs.
+Proof.
+  red; intros; TrivialExists.
+Qed.
+
+Theorem eval_mulfs: binary_constructor_sound mulfs Val.mulfs.
+Proof.
+  red; intros; TrivialExists.
+Qed.
+
 Section COMP_IMM.
 
 Variable default: comparison -> int -> condition.
@@ -693,6 +718,12 @@ Proof.
   intros; red; intros. unfold compf. TrivialExists.
 Qed.
 
+Theorem eval_compfs:
+  forall c, binary_constructor_sound (compfs c) (Val.cmpfs c).
+Proof.
+  intros; red; intros. unfold compfs. TrivialExists.
+Qed.
+
 Theorem eval_cast8signed: unary_constructor_sound cast8signed (Val.sign_ext 8).
 Proof.
   red; intros until x. unfold cast8signed; case (cast8signed_match a); intros.
@@ -722,6 +753,11 @@ Qed.
 Theorem eval_singleoffloat: unary_constructor_sound singleoffloat Val.singleoffloat.
 Proof.
   red; intros. unfold singleoffloat. TrivialExists.
+Qed.
+
+Theorem eval_floatofsingle: unary_constructor_sound floatofsingle Val.floatofsingle.
+Proof.
+  red; intros. unfold floatofsingle. TrivialExists.
 Qed.
 
 Theorem eval_intoffloat:
@@ -760,6 +796,46 @@ Theorem eval_floatofintu:
   exists v, eval_expr ge sp e m le (floatofintu a) v /\ Val.lessdef y v.
 Proof.
   intros until y; unfold floatofintu. case (floatofintu_match a); intros.
+  InvEval. simpl in H0. TrivialExists. 
+  TrivialExists.
+Qed.
+
+Theorem eval_intofsingle:
+  forall le a x y,
+  eval_expr ge sp e m le a x ->
+  Val.intofsingle x = Some y ->
+  exists v, eval_expr ge sp e m le (intofsingle a) v /\ Val.lessdef y v.
+Proof.
+  intros; unfold intofsingle. TrivialExists. 
+Qed.
+
+Theorem eval_singleofint:
+  forall le a x y,
+  eval_expr ge sp e m le a x ->
+  Val.singleofint x = Some y ->
+  exists v, eval_expr ge sp e m le (singleofint a) v /\ Val.lessdef y v.
+Proof.
+  intros until y; unfold singleofint. case (singleofint_match a); intros.
+  InvEval. simpl in H0. TrivialExists. 
+  TrivialExists. 
+Qed.
+
+Theorem eval_intuofsingle:
+  forall le a x y,
+  eval_expr ge sp e m le a x ->
+  Val.intuofsingle x = Some y ->
+  exists v, eval_expr ge sp e m le (intuofsingle a) v /\ Val.lessdef y v.
+Proof.
+  intros; unfold intuofsingle. TrivialExists. 
+Qed.
+
+Theorem eval_singleofintu:
+  forall le a x y,
+  eval_expr ge sp e m le a x ->
+  Val.singleofintu x = Some y ->
+  exists v, eval_expr ge sp e m le (singleofintu a) v /\ Val.lessdef y v.
+Proof.
+  intros until y; unfold singleofintu. case (singleofintu_match a); intros.
   InvEval. simpl in H0. TrivialExists. 
   TrivialExists.
 Qed.

@@ -570,4 +570,20 @@ Proof.
 - TrivialExists.
 Qed.
 
+Theorem eval_divfs:
+  forall le a b x y,
+  eval_expr ge sp e m le a x ->
+  eval_expr ge sp e m le b y ->
+  exists v, eval_expr ge sp e m le (divfs a b) v /\ Val.lessdef (Val.divfs x y) v.
+Proof.
+  intros until y. unfold divfs. destruct (divfs_match b); intros.
+- unfold divfsimm. destruct (Float32.exact_inverse n2) as [n2' | ] eqn:EINV.
+  + inv H0. inv H4. simpl in H6. inv H6. econstructor; split.
+    EvalOp. constructor. eauto. constructor. EvalOp. simpl; eauto. constructor. 
+    simpl; eauto. 
+    destruct x; simpl; auto. erewrite Float32.div_mul_inverse; eauto. 
+  + TrivialExists. 
+- TrivialExists.
+Qed.
+
 End CMCONSTRS.

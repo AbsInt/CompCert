@@ -310,7 +310,6 @@ Axiom load_cast:
   | Mint8unsigned => v = Val.zero_ext 8 v
   | Mint16signed => v = Val.sign_ext 16 v
   | Mint16unsigned => v = Val.zero_ext 16 v
-  | Mfloat32 => v = Val.singleoffloat v
   | _ => True
   end.
 
@@ -443,6 +442,13 @@ Axiom load_store_other:
 
 (** Integrity of pointer values. *)
 
+Definition compat_pointer_chunks (chunk1 chunk2: memory_chunk) : Prop :=
+  match chunk1, chunk2 with
+  | (Mint32 | Many32), (Mint32 | Many32) => True
+  | Many64, Many64 => True
+  | _, _ => False
+  end.
+
 Axiom load_store_pointer_overlap:
   forall chunk m1 b ofs v_b v_o m2 chunk' ofs' v,
   store chunk m1 b ofs (Vptr v_b v_o) = Some m2 ->
@@ -455,13 +461,13 @@ Axiom load_store_pointer_mismatch:
   forall chunk m1 b ofs v_b v_o m2 chunk' v,
   store chunk m1 b ofs (Vptr v_b v_o) = Some m2 ->
   load chunk' m2 b ofs = Some v ->
-  chunk <> Mint32 \/ chunk' <> Mint32 ->
+  ~compat_pointer_chunks chunk chunk' ->
   v = Vundef.
 Axiom load_pointer_store:
-  forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
-  forall chunk' b' ofs' v_b v_o,
+  forall chunk m1 b ofs v m2 chunk' b' ofs' v_b v_o,
+  store chunk m1 b ofs v = Some m2 ->
   load chunk' m2 b' ofs' = Some(Vptr v_b v_o) ->
-  (chunk = Mint32 /\ v = Vptr v_b v_o /\ chunk' = Mint32 /\ b' = b /\ ofs' = ofs)
+  (v = Vptr v_b v_o /\ compat_pointer_chunks chunk chunk' /\ b' = b /\ ofs' = ofs)
   \/ (b' <> b \/ ofs' + size_chunk chunk' <= ofs \/ ofs + size_chunk chunk <= ofs').
 
 (** Load-store properties for [loadbytes]. *)
@@ -500,10 +506,6 @@ Axiom store_int16_sign_ext:
   forall m b ofs n,
   store Mint16signed m b ofs (Vint (Int.sign_ext 16 n)) =
   store Mint16signed m b ofs (Vint n).
-Axiom store_float32_truncate:
-  forall m b ofs n,
-  store Mfloat32 m b ofs (Vfloat (Float.singleoffloat n)) =
-  store Mfloat32 m b ofs (Vfloat n).
 
 (** ** Properties of [storebytes]. *)
 

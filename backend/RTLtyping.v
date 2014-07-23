@@ -36,8 +36,6 @@ Require Import Conventions.
   is very simple, consisting of the four types [Tint] (for integers
   and pointers), [Tfloat] (for double-precision floats), [Tlong]
   (for 64-bit integers) and [Tsingle] (for single-precision floats).
-  At the RTL level, we simplify things further by equating [Tsingle]
-  with [Tfloat].
 
   Additionally, we impose that each pseudo-register has the same type
   throughout the function.  This requirement helps with register allocation,
@@ -56,11 +54,6 @@ Require Import Conventions.
   point to note is that we have one polymorphic operator, [Omove],
   which can work over both integers and floats.
 *)
-
-Definition normalize (ty: typ) : typ :=
-  match ty with Tsingle => Tfloat | _ => ty end.
-
-Definition normalize_list (tyl: list typ) : list typ := map normalize tyl.
 
 Definition regenv := reg -> typ.
 
@@ -86,39 +79,39 @@ Inductive wt_instr : instruction -> Prop :=
       forall op args res s,
       op <> Omove ->
       map env args = fst (type_of_operation op) ->
-      env res = normalize (snd (type_of_operation op)) ->
+      env res = snd (type_of_operation op) ->
       valid_successor s ->
       wt_instr (Iop op args res s)
   | wt_Iload:
       forall chunk addr args dst s,
       map env args = type_of_addressing addr ->
-      env dst = normalize (type_of_chunk chunk) ->
+      env dst = type_of_chunk chunk ->
       valid_successor s ->
       wt_instr (Iload chunk addr args dst s)
   | wt_Istore:
       forall chunk addr args src s,
       map env args = type_of_addressing addr ->
-      env src = type_of_chunk_use chunk ->
+      env src = type_of_chunk chunk ->
       valid_successor s ->
       wt_instr (Istore chunk addr args src s)
   | wt_Icall:
       forall sig ros args res s,
       match ros with inl r => env r = Tint | inr s => True end ->
-      map env args = normalize_list sig.(sig_args) ->
-      env res = normalize (proj_sig_res sig) ->
+      map env args = sig.(sig_args) ->
+      env res = proj_sig_res sig ->
       valid_successor s ->
       wt_instr (Icall sig ros args res s)
   | wt_Itailcall:
       forall sig ros args,
       match ros with inl r => env r = Tint | inr s => True end ->
-      map env args = normalize_list sig.(sig_args) ->
+      map env args = sig.(sig_args) ->
       sig.(sig_res) = funct.(fn_sig).(sig_res) ->
       tailcall_possible sig ->
       wt_instr (Itailcall sig ros args)
   | wt_Ibuiltin:
       forall ef args res s,
-      map env args = normalize_list (ef_sig ef).(sig_args) ->
-      env res = normalize (proj_sig_res (ef_sig ef)) ->
+      map env args = (ef_sig ef).(sig_args) ->
+      env res = proj_sig_res (ef_sig ef) ->
       valid_successor s ->
       wt_instr (Ibuiltin ef args res s)
   | wt_Icond:
@@ -139,7 +132,7 @@ Inductive wt_instr : instruction -> Prop :=
   | wt_Ireturn_some:
       forall arg ty,
       funct.(fn_sig).(sig_res) = Some ty ->
-      env arg = normalize ty ->
+      env arg = ty ->
       wt_instr (Ireturn (Some arg)).
 
 End WT_INSTR.
@@ -152,7 +145,7 @@ End WT_INSTR.
 Record wt_function (f: function) (env: regenv): Prop :=
   mk_wt_function {
     wt_params:
-      map env f.(fn_params) = normalize_list f.(fn_sig).(sig_args);
+      map env f.(fn_params) = f.(fn_sig).(sig_args);
     wt_norepet:
       list_norepet f.(fn_params);
     wt_instrs:
@@ -231,23 +224,23 @@ Definition type_instr (e: S.typenv) (i: instruction) : res S.typenv :=
         end
       else
        (let (targs, tres) := type_of_operation op in
-        do e1 <- S.set_list e args targs; S.set e1 res (normalize tres))
+        do e1 <- S.set_list e args targs; S.set e1 res tres)
   | Iload chunk addr args dst s =>
       do x <- check_successor s;
       do e1 <- S.set_list e args (type_of_addressing addr);
-      S.set e1 dst (normalize (type_of_chunk chunk))
+      S.set e1 dst (type_of_chunk chunk)
   | Istore chunk addr args src s =>
       do x <- check_successor s;
       do e1 <- S.set_list e args (type_of_addressing addr);
-      S.set e1 src (type_of_chunk_use chunk)
+      S.set e1 src (type_of_chunk chunk)
   | Icall sig ros args res s =>
       do x <- check_successor s;
       do e1 <- type_ros e ros;
-      do e2 <- S.set_list e1 args (normalize_list sig.(sig_args));
-      S.set e2 res (normalize (proj_sig_res sig))
+      do e2 <- S.set_list e1 args sig.(sig_args);
+      S.set e2 res (proj_sig_res sig)
   | Itailcall sig ros args =>
       do e1 <- type_ros e ros;
-      do e2 <- S.set_list e1 args (normalize_list sig.(sig_args));
+      do e2 <- S.set_list e1 args sig.(sig_args);
       if opt_typ_eq sig.(sig_res) f.(fn_sig).(sig_res) then
         if tailcall_is_possible sig
         then OK e2
@@ -256,8 +249,8 @@ Definition type_instr (e: S.typenv) (i: instruction) : res S.typenv :=
   | Ibuiltin ef args res s =>
       let sig := ef_sig ef in
       do x <- check_successor s;
-      do e1 <- S.set_list e args (normalize_list sig.(sig_args));
-      S.set e1 res (normalize (proj_sig_res sig))
+      do e1 <- S.set_list e args sig.(sig_args);
+      S.set e1 res (proj_sig_res sig)
  | Icond cond args s1 s2 =>
       do x1 <- check_successor s1;
       do x2 <- check_successor s2;
@@ -271,7 +264,7 @@ Definition type_instr (e: S.typenv) (i: instruction) : res S.typenv :=
   | Ireturn optres =>
       match optres, f.(fn_sig).(sig_res) with
       | None, None => OK e
-      | Some r, Some t => S.set e r (normalize t)
+      | Some r, Some t => S.set e r t
       | _, _ => Error(msg "bad return")
       end
   end.
@@ -297,7 +290,7 @@ Definition check_params_norepet (params: list reg): res unit :=
 
 Definition type_function : res regenv :=
   do e1 <- type_code S.initial;
-  do e2 <- S.set_list e1 f.(fn_params) (normalize_list f.(fn_sig).(sig_args));
+  do e2 <- S.set_list e1 f.(fn_params) f.(fn_sig).(sig_args);
   do te <- S.solve e2;
   do x1 <- check_params_norepet f.(fn_params);
   do x2 <- check_successor f.(fn_entrypoint);
@@ -597,7 +590,7 @@ Proof.
   intros. destruct H. 
   destruct (type_code_complete te S.initial) as (e1 & A & B).
   auto. apply S.satisf_initial. 
-  destruct (S.set_list_complete te f.(fn_params) (normalize_list f.(fn_sig).(sig_args)) e1) as (e2 & C & D); auto.
+  destruct (S.set_list_complete te f.(fn_params) f.(fn_sig).(sig_args) e1) as (e2 & C & D); auto.
   destruct (S.solve_complete te e2) as (te' & E); auto.
   exists te'; unfold type_function.
   rewrite A; simpl. rewrite C; simpl. rewrite E; simpl. 
@@ -637,23 +630,6 @@ Proof.
   apply H.
 Qed.
 
-Lemma normalize_subtype:
-  forall ty, subtype ty (normalize ty) = true.
-Proof.
-  intros. destruct ty; reflexivity.
-Qed.
-
-Lemma wt_regset_assign2:
-  forall env rs v r ty,
-  wt_regset env rs ->
-  Val.has_type v ty ->
-  env r = normalize ty ->
-  wt_regset env (rs#r <- v).
-Proof.
-  intros. eapply wt_regset_assign; eauto.
-  rewrite H1. eapply Val.has_subtype; eauto. apply normalize_subtype.
-Qed.
-
 Lemma wt_regset_list:
   forall env rs,
   wt_regset env rs ->
@@ -684,9 +660,8 @@ Proof.
   intros. inv H. 
   simpl in H0. inv H0. apply wt_regset_assign; auto.
   rewrite H4; auto.
-  eapply wt_regset_assign2; auto.
-  eapply type_of_operation_sound; eauto.
-  auto.
+  eapply wt_regset_assign; auto.
+  rewrite H8. eapply type_of_operation_sound; eauto.
 Qed.
 
 Lemma wt_exec_Iload:
@@ -697,8 +672,7 @@ Lemma wt_exec_Iload:
   wt_regset env (rs#dst <- v).
 Proof.
   intros. destruct a; simpl in H0; try discriminate. inv H.
-  eapply wt_regset_assign2; eauto.
-  eapply Mem.load_type; eauto.
+  eapply wt_regset_assign; eauto. rewrite H8; eapply Mem.load_type; eauto.
 Qed.
 
 Lemma wt_exec_Ibuiltin:
@@ -709,8 +683,8 @@ Lemma wt_exec_Ibuiltin:
   wt_regset env (rs#res <- vres).
 Proof.
   intros. inv H. 
-  eapply wt_regset_assign2; eauto. 
-  eapply external_call_well_typed; eauto.
+  eapply wt_regset_assign; eauto. 
+  rewrite H7; eapply external_call_well_typed; eauto.
 Qed.
 
 Lemma wt_instr_at:
@@ -728,7 +702,7 @@ Inductive wt_stackframes: list stackframe -> signature -> Prop :=
       forall s res f sp pc rs env sg,
       wt_function f env ->
       wt_regset env rs ->
-      env res = normalize (proj_sig_res sg) ->
+      env res = proj_sig_res sg ->
       wt_stackframes s (fn_sig f) ->
       wt_stackframes (Stackframe res f sp pc rs :: s) sg.
 
@@ -743,12 +717,12 @@ Inductive wt_state: state -> Prop :=
       forall s f args m,
       wt_stackframes s (funsig f) ->
       wt_fundef f ->
-      Val.has_type_list args (normalize_list (sig_args (funsig f))) ->
+      Val.has_type_list args (sig_args (funsig f)) ->
       wt_state (Callstate s f args m)
   | wt_state_return:
       forall s v m sg,
       wt_stackframes s sg ->
-      Val.has_type v (normalize (proj_sig_res sg)) ->
+      Val.has_type v (proj_sig_res sg) ->
       wt_state (Returnstate s v m).
 
 Remark wt_stackframes_change_sig:
@@ -814,15 +788,13 @@ Proof.
   econstructor; eauto.
   (* Ireturn *)
   econstructor; eauto. 
-  inv WTI; simpl. auto. unfold proj_sig_res; rewrite H2. rewrite <- H3. auto. 
+  inv WTI; simpl. auto. unfold proj_sig_res; rewrite H2. auto. 
   (* internal function *)
   simpl in *. inv H5.
   econstructor; eauto.
   inv H1. apply wt_init_regs; auto. rewrite wt_params0. auto. 
   (* external function *)
   econstructor; eauto. simpl.  
-  change (Val.has_type res (normalize (proj_sig_res (ef_sig ef)))).
-  eapply Val.has_subtype. apply normalize_subtype. 
   eapply external_call_well_typed; eauto.
   (* return *)
   inv H1. econstructor; eauto.

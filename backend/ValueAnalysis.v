@@ -166,7 +166,7 @@ Definition store_init_data (ab: ablock) (p: Z) (id: init_data) : ablock :=
   | Init_int32 n => ablock_store Mint32 ab p (I n)
   | Init_int64 n => ablock_store Mint64 ab p (L n)
   | Init_float32 n => ablock_store Mfloat32 ab p
-                        (if propagate_float_constants tt then F n else ftop)
+                        (if propagate_float_constants tt then FS n else ftop)
   | Init_float64 n => ablock_store Mfloat64 ab p
                         (if propagate_float_constants tt then F n else ftop)
   | Init_addrof symb ofs => ablock_store Mint32 ab p (Ptr (Gl symb ofs))
@@ -922,7 +922,7 @@ Proof.
     eapply VMTOP; eauto.
   - exploit BC'INV; eauto. intros (b'' & delta & J'). 
     exploit Mem.loadbytes_inject. eexact IMEM. eauto. eauto. intros (bytes & A & B).
-    inv B. inv H3. eapply PMTOP; eauto. 
+    inv B. inv H3. inv H7. eapply PMTOP; eauto. 
   }
   (* Conclusions *)
   exists bc'; splitall.

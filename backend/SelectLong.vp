@@ -138,6 +138,10 @@ Definition floatoflong (arg: expr) :=
   Eexternal hf.(i64_stod) sig_l_f (arg ::: Enil).
 Definition floatoflongu (arg: expr) :=
   Eexternal hf.(i64_utod) sig_l_f (arg ::: Enil).
+Definition longofsingle (arg: expr) := 
+  longoffloat (floatofsingle arg).
+Definition longuofsingle (arg: expr) :=
+  longuoffloat (floatofsingle arg).
 Definition singleoflong (arg: expr) :=
   Eexternal hf.(i64_stof) sig_l_s (arg ::: Enil).
 Definition singleoflongu (arg: expr) :=

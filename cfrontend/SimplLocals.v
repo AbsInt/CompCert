@@ -45,7 +45,8 @@ Definition make_cast (a: expr) (tto: type) : expr :=
   match classify_cast (typeof a) tto with
   | cast_case_neutral => a
   | cast_case_i2i I32 _ => a
-  | cast_case_f2f F64 => a
+  | cast_case_f2f => a
+  | cast_case_s2s => a
   | cast_case_l2l => a
   | cast_case_struct _ _ _ _ => a
   | cast_case_union _ _ _ _ => a
@@ -59,6 +60,7 @@ Fixpoint simpl_expr (cenv: compilenv) (a: expr) : expr :=
   match a with
   | Econst_int _ _ => a
   | Econst_float _ _ => a
+  | Econst_single _ _ => a
   | Econst_long _ _ => a
   | Evar id ty => if VSet.mem id cenv then Etempvar id ty else Evar id ty
   | Etempvar id ty => Etempvar id ty
@@ -157,6 +159,7 @@ Fixpoint addr_taken_expr (a: expr): VSet.t :=
   match a with
   | Econst_int _ _ => VSet.empty
   | Econst_float _ _ => VSet.empty
+  | Econst_single _ _ => VSet.empty
   | Econst_long _ _ => VSet.empty
   | Evar id ty => VSet.empty
   | Etempvar id ty => VSet.empty

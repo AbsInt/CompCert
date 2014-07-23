@@ -143,6 +143,7 @@ Inductive instruction : Type :=
   | Pcmp: ireg -> shift_op -> instruction         (**r integer comparison *)
   | Peor: ireg -> ireg -> shift_op -> instruction (**r bitwise exclusive or *)
   | Pldr: ireg -> ireg -> shift_addr -> instruction (**r int32 load *)
+  | Pldr_a: ireg -> ireg -> shift_addr -> instruction (**r any32 load to int register *)
   | Pldrb: ireg -> ireg -> shift_addr -> instruction (**r unsigned int8 load *)
   | Pldrh: ireg -> ireg -> shift_addr -> instruction (**r unsigned int16 load *)
   | Pldrsb: ireg -> ireg -> shift_addr -> instruction (**r signed int8 load *)
@@ -155,6 +156,7 @@ Inductive instruction : Type :=
   | Porr: ireg -> ireg -> shift_op -> instruction  (**r bitwise or *)
   | Prsb: ireg -> ireg -> shift_op -> instruction  (**r integer reverse subtraction *)
   | Pstr: ireg -> ireg -> shift_addr -> instruction (**r int32 store *)
+  | Pstr_a: ireg -> ireg -> shift_addr -> instruction (**r any32 store from int register *)
   | Pstrb: ireg -> ireg -> shift_addr -> instruction (**r int8 store *)
   | Pstrh: ireg -> ireg -> shift_addr -> instruction (**r int16 store *)
   | Psdiv: instruction                              (**r signed division *)
@@ -172,15 +174,31 @@ Inductive instruction : Type :=
   | Pfsubd: freg -> freg -> freg -> instruction     (**r float subtraction *)
   | Pflid: freg -> float -> instruction             (**r load float constant *)
   | Pfcmpd: freg -> freg -> instruction             (**r float comparison *)
-  | Pfcmpzd: freg -> instruction             (**r float comparison with 0.0 *)
+  | Pfcmpzd: freg -> instruction                    (**r float comparison with 0.0 *)
   | Pfsitod: freg -> ireg -> instruction            (**r signed int to float *)
   | Pfuitod: freg -> ireg -> instruction            (**r unsigned int to float *)
   | Pftosizd: ireg -> freg -> instruction           (**r float to signed int *)
   | Pftouizd: ireg -> freg -> instruction           (**r float to unsigned int *)
-  | Pfcvtsd: freg -> freg -> instruction            (**r round to singled precision *)
+  | Pfabss: freg -> freg -> instruction             (**r float absolute value *)
+  | Pfnegs: freg -> freg -> instruction             (**r float opposite *)
+  | Pfadds: freg -> freg -> freg -> instruction     (**r float addition *)
+  | Pfdivs: freg -> freg -> freg -> instruction     (**r float division *)
+  | Pfmuls: freg -> freg -> freg -> instruction     (**r float multiplication *)
+  | Pfsubs: freg -> freg -> freg -> instruction     (**r float subtraction *)
+  | Pflis: freg -> float32 -> instruction           (**r load float constant *)
+  | Pfcmps: freg -> freg -> instruction             (**r float comparison *)
+  | Pfcmpzs: freg -> instruction                    (**r float comparison with 0.0 *)
+  | Pfsitos: freg -> ireg -> instruction            (**r signed int to float *)
+  | Pfuitos: freg -> ireg -> instruction            (**r unsigned int to float *)
+  | Pftosizs: ireg -> freg -> instruction           (**r float to signed int *)
+  | Pftouizs: ireg -> freg -> instruction           (**r float to unsigned int *)
+  | Pfcvtsd: freg -> freg -> instruction            (**r round to single precision *)
+  | Pfcvtds: freg -> freg -> instruction            (**r expand to double precision *)
   | Pfldd: freg -> ireg -> int -> instruction       (**r float64 load *)
+  | Pfldd_a: freg -> ireg -> int -> instruction     (**r any64 load to FP reg *)
   | Pflds: freg -> ireg -> int -> instruction       (**r float32 load *)
   | Pfstd: freg -> ireg -> int -> instruction       (**r float64 store *)
+  | Pfstd_a: freg -> ireg -> int -> instruction     (**r any64 store from FP reg *)
   | Pfsts: freg -> ireg -> int -> instruction       (**r float32 store *)
 
   (* Pseudo-instructions *)
@@ -392,7 +410,7 @@ Definition compare_int (rs: regset) (v1 v2: val) (m: mem) :=
     #CC <- (Val.cmpu (Mem.valid_pointer m) Cge v1 v2)
     #CV <- (Val.sub_overflow v1 v2).
 
-(** Semantics of [fcmpd] instruction:
+(** Semantics of [fcmp] instructions:
 <<
 ==	N=0 Z=1 C=1 V=0
 <	N=1 Z=0 C=0 V=0
@@ -408,6 +426,20 @@ Definition compare_float (rs: regset) (v1 v2: val) :=
         #CZ <- (Val.of_bool (Float.cmp Ceq f1 f2))
         #CC <- (Val.of_bool (negb (Float.cmp Clt f1 f2)))
         #CV <- (Val.of_bool (negb (Float.cmp Ceq f1 f2 || Float.cmp Clt f1 f2 || Float.cmp Cgt f1 f2)))
+  | _, _ =>
+      rs#CN <- Vundef
+        #CZ <- Vundef
+        #CC <- Vundef
+        #CV <- Vundef
+  end.
+
+Definition compare_float32 (rs: regset) (v1 v2: val) :=
+  match v1, v2 with
+  | Vsingle f1, Vsingle f2 =>
+      rs#CN <- (Val.of_bool (Float32.cmp Clt f1 f2))
+        #CZ <- (Val.of_bool (Float32.cmp Ceq f1 f2))
+        #CC <- (Val.of_bool (negb (Float32.cmp Clt f1 f2)))
+        #CV <- (Val.of_bool (negb (Float32.cmp Ceq f1 f2 || Float32.cmp Clt f1 f2 || Float32.cmp Cgt f1 f2)))
   | _, _ =>
       rs#CN <- Vundef
         #CZ <- Vundef
@@ -523,6 +555,8 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (rs#r1 <- (Val.xor rs#r2 (eval_shift_op so rs)))) m
   | Pldr r1 r2 sa => 
       exec_load Mint32 (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
+  | Pldr_a r1 r2 sa => 
+      exec_load Many32 (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
   | Pldrb r1 r2 sa => 
       exec_load Mint8unsigned (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
   | Pldrh r1 r2 sa => 
@@ -551,6 +585,8 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (rs#r1 <- (Val.sub (eval_shift_op so rs) rs#r2))) m
   | Pstr r1 r2 sa => 
       exec_store Mint32 (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
+  | Pstr_a r1 r2 sa => 
+      exec_store Many32 (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
   | Pstrb r1 r2 sa => 
       exec_store Mint8unsigned (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
   | Pstrh r1 r2 sa => 
@@ -606,19 +642,48 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (rs #FR6 <- Vundef #r1 <- (Val.maketotal (Val.intoffloat rs#r2)))) m
   | Pftouizd r1 r2 =>
       Next (nextinstr (rs #FR6 <- Vundef #r1 <- (Val.maketotal (Val.intuoffloat rs#r2)))) m
+  | Pfabss r1 r2 => 
+      Next (nextinstr (rs#r1 <- (Val.absfs rs#r2))) m
+  | Pfnegs r1 r2 => 
+      Next (nextinstr (rs#r1 <- (Val.negfs rs#r2))) m
+  | Pfadds r1 r2 r3 =>     
+      Next (nextinstr (rs#r1 <- (Val.addfs rs#r2 rs#r3))) m
+  | Pfdivs r1 r2 r3 =>     
+      Next (nextinstr (rs#r1 <- (Val.divfs rs#r2 rs#r3))) m
+  | Pfmuls r1 r2 r3 =>     
+      Next (nextinstr (rs#r1 <- (Val.mulfs rs#r2 rs#r3))) m
+  | Pfsubs r1 r2 r3 =>     
+      Next (nextinstr (rs#r1 <- (Val.subfs rs#r2 rs#r3))) m
+  | Pflis r1 f =>            
+      Next (nextinstr (rs#r1 <- (Vsingle f))) m
+  | Pfcmps r1 r2 =>              
+      Next (nextinstr (compare_float32 rs rs#r1 rs#r2)) m
+  | Pfcmpzs r1 =>              
+      Next (nextinstr (compare_float32 rs rs#r1 (Vsingle Float32.zero))) m
+  | Pfsitos r1 r2 =>
+      Next (nextinstr (rs#r1 <- (Val.maketotal (Val.singleofint rs#r2)))) m
+  | Pfuitos r1 r2 =>
+      Next (nextinstr (rs#r1 <- (Val.maketotal (Val.singleofintu rs#r2)))) m
+  | Pftosizs r1 r2 =>
+      Next (nextinstr (rs #FR6 <- Vundef #r1 <- (Val.maketotal (Val.intofsingle rs#r2)))) m
+  | Pftouizs r1 r2 =>
+      Next (nextinstr (rs #FR6 <- Vundef #r1 <- (Val.maketotal (Val.intuofsingle rs#r2)))) m
   | Pfcvtsd r1 r2 =>
       Next (nextinstr (rs#r1 <- (Val.singleoffloat rs#r2))) m
+  | Pfcvtds r1 r2 =>
+      Next (nextinstr (rs#r1 <- (Val.floatofsingle rs#r2))) m
   | Pfldd r1 r2 n =>
       exec_load Mfloat64 (Val.add rs#r2 (Vint n)) r1 rs m
+  | Pfldd_a r1 r2 n =>
+      exec_load Many64 (Val.add rs#r2 (Vint n)) r1 rs m
   | Pflds r1 r2 n =>
       exec_load Mfloat32 (Val.add rs#r2 (Vint n)) r1 rs m
   | Pfstd r1 r2 n =>      
       exec_store Mfloat64 (Val.add rs#r2 (Vint n)) r1 rs m
+  | Pfstd_a r1 r2 n =>      
+      exec_store Many64 (Val.add rs#r2 (Vint n)) r1 rs m
   | Pfsts r1 r2 n =>
-      match exec_store Mfloat32 (Val.add rs#r2 (Vint n)) r1 rs m with
-      | Next rs' m' => Next (rs'#FR6 <- Vundef) m'
-      | Stuck => Stuck
-      end
+      exec_store Mfloat32 (Val.add rs#r2 (Vint n)) r1 rs m
   (* Pseudo-instructions *)
   | Pallocframe sz pos =>             
       let (m1, stk) := Mem.alloc m 0 sz in

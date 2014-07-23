@@ -185,6 +185,18 @@ Definition transl_cond
   | Cnotcompfzero cmp, a1 :: nil =>
       do r1 <- freg_of a1;
       OK (Pfcmpzd r1 :: k)
+  | Ccompfs cmp, a1 :: a2 :: nil =>
+      do r1 <- freg_of a1; do r2 <- freg_of a2;
+      OK (Pfcmps r1 r2 :: k)
+  | Cnotcompfs cmp, a1 :: a2 :: nil =>
+      do r1 <- freg_of a1; do r2 <- freg_of a2;
+      OK (Pfcmps r1 r2 :: k)
+  | Ccompfszero cmp, a1 :: nil =>
+      do r1 <- freg_of a1;
+      OK (Pfcmpzs r1 :: k)
+  | Cnotcompfszero cmp, a1 :: nil =>
+      do r1 <- freg_of a1;
+      OK (Pfcmpzs r1 :: k)
   | _, _ =>
       Error(msg "Asmgen.transl_cond")
   end.
@@ -241,6 +253,10 @@ Definition cond_for_cond (cond: condition) :=
   | Cnotcompf cmp => cond_for_float_not_cmp cmp
   | Ccompfzero cmp => cond_for_float_cmp cmp
   | Cnotcompfzero cmp => cond_for_float_not_cmp cmp
+  | Ccompfs cmp => cond_for_float_cmp cmp
+  | Cnotcompfs cmp => cond_for_float_not_cmp cmp
+  | Ccompfszero cmp => cond_for_float_cmp cmp
+  | Cnotcompfszero cmp => cond_for_float_not_cmp cmp
   end.
 
 (** Translation of the arithmetic operation [r <- op(args)].
@@ -261,6 +277,9 @@ Definition transl_op
   | Ofloatconst f, nil =>
       do r <- freg_of res;
       OK (Pflid r f :: k)
+  | Osingleconst f, nil =>
+      do r <- freg_of res;
+      OK (Pflis r f :: k)
   | Oaddrsymbol s ofs, nil =>
       do r <- ireg_of res;
       OK (Ploadsymbol r s ofs :: k)
@@ -400,9 +419,30 @@ Definition transl_op
   | Odivf, a1 :: a2 :: nil =>
       do r <- freg_of res; do r1 <- freg_of a1; do r2 <- freg_of a2;
       OK (Pfdivd r r1 r2 :: k)
+  | Onegfs, a1 :: nil =>
+      do r <- freg_of res; do r1 <- freg_of a1;
+      OK (Pfnegs r r1 :: k)
+  | Oabsfs, a1 :: nil =>
+      do r <- freg_of res; do r1 <- freg_of a1;
+      OK (Pfabss r r1 :: k)
+  | Oaddfs, a1 :: a2 :: nil =>
+      do r <- freg_of res; do r1 <- freg_of a1; do r2 <- freg_of a2;
+      OK (Pfadds r r1 r2 :: k)
+  | Osubfs, a1 :: a2 :: nil =>
+      do r <- freg_of res; do r1 <- freg_of a1; do r2 <- freg_of a2;
+      OK (Pfsubs r r1 r2 :: k)
+  | Omulfs, a1 :: a2 :: nil =>
+      do r <- freg_of res; do r1 <- freg_of a1; do r2 <- freg_of a2;
+      OK (Pfmuls r r1 r2 :: k)
+  | Odivfs, a1 :: a2 :: nil =>
+      do r <- freg_of res; do r1 <- freg_of a1; do r2 <- freg_of a2;
+      OK (Pfdivs r r1 r2 :: k)
   | Osingleoffloat, a1 :: nil =>
       do r <- freg_of res; do r1 <- freg_of a1;
       OK (Pfcvtsd r r1 :: k)
+  | Ofloatofsingle, a1 :: nil =>
+      do r <- freg_of res; do r1 <- freg_of a1;
+      OK (Pfcvtds r r1 :: k)
   | Ointoffloat, a1 :: nil =>
       do r <- ireg_of res; do r1 <- freg_of a1;
       OK (Pftosizd r r1 :: k)
@@ -415,6 +455,18 @@ Definition transl_op
   | Ofloatofintu, a1 :: nil =>
       do r <- freg_of res; do r1 <- ireg_of a1;
       OK (Pfuitod r r1 :: k)
+  | Ointofsingle, a1 :: nil =>
+      do r <- ireg_of res; do r1 <- freg_of a1;
+      OK (Pftosizs r r1 :: k)
+  | Ointuofsingle, a1 :: nil =>
+      do r <- ireg_of res; do r1 <- freg_of a1;
+      OK (Pftouizs r r1 :: k)
+  | Osingleofint, a1 :: nil =>
+      do r <- freg_of res; do r1 <- ireg_of a1;
+      OK (Pfsitos r r1 :: k)
+  | Osingleofintu, a1 :: nil =>
+      do r <- freg_of res; do r1 <- ireg_of a1;
+      OK (Pfuitos r r1 :: k)
   | Ocmp cmp, _ =>
       do r <- ireg_of res;
       transl_cond cmp args
@@ -440,31 +492,34 @@ Definition loadind_int (base: ireg) (ofs: int) (dst: ireg) (k: code) :=
   indexed_memory_access (fun base n => Pldr dst base (SAimm n)) mk_immed_mem_word base ofs k.
 
 Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
-  match ty with
-  | Tint =>
-      do r <- ireg_of dst; OK (loadind_int base ofs r k)
-  | Tfloat =>
-      do r <- freg_of dst;
-      OK (indexed_memory_access (Pfldd r) mk_immed_mem_float base ofs k)
-  | Tsingle =>
-      do r <- freg_of dst;
+  match ty, preg_of dst with
+  | Tint, IR r =>
+      OK (indexed_memory_access (fun base n => Pldr r base (SAimm n)) mk_immed_mem_word base ofs k)
+  | Tany32, IR r =>
+      OK (indexed_memory_access (fun base n => Pldr_a r base (SAimm n)) mk_immed_mem_word base ofs k)
+  | Tsingle, FR r =>
       OK (indexed_memory_access (Pflds r) mk_immed_mem_float base ofs k)
-  | Tlong =>
+  | Tfloat, FR r =>
+      OK (indexed_memory_access (Pfldd r) mk_immed_mem_float base ofs k)
+  | Tany64, FR r =>
+      OK (indexed_memory_access (Pfldd_a r) mk_immed_mem_float base ofs k)
+  | _, _ =>
       Error (msg "Asmgen.loadind")
   end.
 
 Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
-  match ty with
-  | Tint =>
-      do r <- ireg_of src;
+  match ty, preg_of src with
+  | Tint, IR r =>
       OK (indexed_memory_access (fun base n => Pstr r base (SAimm n)) mk_immed_mem_word base ofs k)
-  | Tfloat =>
-      do r <- freg_of src;
-      OK (indexed_memory_access (Pfstd r) mk_immed_mem_float base ofs k)
-  | Tsingle =>
-      do r <- freg_of src;
+  | Tany32, IR r =>
+      OK (indexed_memory_access (fun base n => Pstr_a r base (SAimm n)) mk_immed_mem_word base ofs k)
+  | Tsingle, FR r =>
       OK (indexed_memory_access (Pfsts r) mk_immed_mem_float base ofs k)
-  | Tlong =>
+  | Tfloat, FR r =>
+      OK (indexed_memory_access (Pfstd r) mk_immed_mem_float base ofs k)
+  | Tany64, FR r =>
+      OK (indexed_memory_access (Pfstd_a r) mk_immed_mem_float base ofs k)
+  | _, _ =>
       Error (msg "Asmgen.storeind")
   end.
 
@@ -546,7 +601,7 @@ Definition transl_load (chunk: memory_chunk) (addr: addressing)
       transl_memory_access_float Pflds mk_immed_mem_float dst addr args k
   | Mfloat64 =>
       transl_memory_access_float Pfldd mk_immed_mem_float dst addr args k
-  | Mint64 =>
+  | _ =>
       Error (msg "Asmgen.transl_load")
   end.
 
@@ -567,7 +622,7 @@ Definition transl_store (chunk: memory_chunk) (addr: addressing)
       transl_memory_access_float Pfsts mk_immed_mem_float src addr args k
   | Mfloat64 =>
       transl_memory_access_float Pfstd mk_immed_mem_float src addr args k
-  | Mint64 =>
+  | _ =>
       Error (msg "Asmgen.transl_store")
   end.
 

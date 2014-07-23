@@ -159,6 +159,13 @@ Proof.
   intros. unfold make_floatconst. econstructor. reflexivity. 
 Qed.
 
+Lemma make_singleconst_correct:
+  forall n e le m,
+  eval_expr ge e le m (make_singleconst n) (Vsingle n).
+Proof.
+  intros. unfold make_singleconst. econstructor. reflexivity. 
+Qed.
+
 Lemma make_longconst_correct:
   forall n e le m,
   eval_expr ge e le m (make_longconst n) (Vlong n).
@@ -166,62 +173,35 @@ Proof.
   intros. unfold make_floatconst. econstructor. reflexivity. 
 Qed.
 
+Lemma make_singleoffloat_correct:
+  forall a n e le m,
+  eval_expr ge e le m a (Vfloat n) ->
+  eval_expr ge e le m (make_singleoffloat a) (Vsingle (Float.to_single n)).
+Proof.
+  intros. econstructor. eauto. auto.
+Qed.
+
+Lemma make_floatofsingle_correct:
+  forall a n e le m,
+  eval_expr ge e le m a (Vsingle n) ->
+  eval_expr ge e le m (make_floatofsingle a) (Vfloat (Float.of_single n)).
+Proof.
+  intros. econstructor. eauto. auto.
+Qed.
+
 Lemma make_floatofint_correct:
-  forall a n sg sz e le m,
-  eval_expr ge e le m a (Vint n) ->
-  eval_expr ge e le m (make_floatofint a sg sz) (Vfloat(cast_int_float sg sz n)).
-Proof.
-  intros. unfold make_floatofint, cast_int_float.
-  destruct sz.
-  destruct sg. 
-  rewrite Float.singleofint_floatofint. econstructor. econstructor; eauto. simpl; reflexivity. auto.
-  rewrite Float.singleofintu_floatofintu. econstructor. econstructor; eauto. simpl; reflexivity. auto.
-  destruct sg; econstructor; eauto. 
-Qed.
-
-Lemma make_intoffloat_correct:
-  forall e le m a sg f i,
-  eval_expr ge e le m a (Vfloat f) ->
-  cast_float_int sg f = Some i ->
-  eval_expr ge e le m (make_intoffloat a sg) (Vint i).
-Proof.
-  unfold cast_float_int, make_intoffloat; intros.
-  destruct sg; econstructor; eauto; simpl; rewrite H0; auto.
-Qed.
-
-Lemma make_longofint_correct:
   forall a n sg e le m,
   eval_expr ge e le m a (Vint n) ->
-  eval_expr ge e le m (make_longofint a sg) (Vlong(cast_int_long sg n)).
+  eval_expr ge e le m (make_floatofint a sg) (Vfloat(cast_int_float sg n)).
 Proof.
-  intros. unfold make_longofint, cast_int_long. 
+  intros. unfold make_floatofint, cast_int_float.
   destruct sg; econstructor; eauto. 
-Qed.
-
-Lemma make_floatoflong_correct:
-  forall a n sg sz e le m,
-  eval_expr ge e le m a (Vlong n) ->
-  eval_expr ge e le m (make_floatoflong a sg sz) (Vfloat(cast_long_float sg sz n)).
-Proof.
-  intros. unfold make_floatoflong, cast_int_long. 
-  destruct sg; destruct sz; econstructor; eauto. 
-Qed.
-
-Lemma make_longoffloat_correct:
-  forall e le m a sg f i,
-  eval_expr ge e le m a (Vfloat f) ->
-  cast_float_long sg f = Some i ->
-  eval_expr ge e le m (make_longoffloat a sg) (Vlong i).
-Proof.
-  unfold cast_float_long, make_longoffloat; intros.
-  destruct sg; econstructor; eauto; simpl; rewrite H0; auto.
 Qed.
 
 Hint Resolve make_intconst_correct make_floatconst_correct make_longconst_correct
-             make_floatofint_correct make_intoffloat_correct
-             make_longofint_correct
-             make_floatoflong_correct make_longoffloat_correct
-             eval_Eunop eval_Ebinop: cshm.
+             make_singleconst_correct make_singleoffloat_correct make_floatofsingle_correct
+             make_floatofint_correct: cshm.
+Hint Constructors eval_expr eval_exprlist: cshm.
 Hint Extern 2 (@eq trace _ _) => traceEq: cshm.
 
 Lemma make_cmp_ne_zero_correct:
@@ -248,6 +228,9 @@ Proof.
   inv H. econstructor; eauto. rewrite H6. decEq. decEq. 
   simpl in H6. inv H6. unfold Val.cmp in H0. eauto.
   inv H. econstructor; eauto. rewrite H6. decEq. decEq. 
+  simpl in H6. unfold Val.cmpfs in H6.
+  destruct (Val.cmpfs_bool c v1 v2) as [[]|]; inv H6; reflexivity. 
+  inv H. econstructor; eauto. rewrite H6. decEq. decEq. 
   simpl in H6. unfold Val.cmpl in H6.
   destruct (Val.cmpl_bool c v1 v2) as [[]|]; inv H6; reflexivity. 
   inv H. econstructor; eauto. rewrite H6. decEq. decEq. 
@@ -268,16 +251,7 @@ Proof.
   apply make_cmp_ne_zero_correct; auto.
 Qed.
 
-Lemma make_cast_float_correct:
-  forall e le m a n sz,
-  eval_expr ge e le m a (Vfloat n) ->
-  eval_expr ge e le m (make_cast_float a sz) (Vfloat (cast_float_float sz n)).
-Proof.
-  intros. unfold make_cast_float, cast_float_float. 
-  destruct sz. eauto with cshm. auto.
-Qed.
-
-Hint Resolve make_cast_int_correct make_cast_float_correct: cshm.
+Hint Resolve make_cast_int_correct: cshm.
 
 Lemma make_cast_correct:
   forall e le m a b v ty1 ty2 v',
@@ -288,14 +262,40 @@ Lemma make_cast_correct:
 Proof.
   intros. unfold make_cast, sem_cast in *;
   destruct (classify_cast ty1 ty2); inv H; destruct v; inv H1; eauto with cshm.
+  (* single -> int *)
+  unfold make_singleofint, cast_int_float. destruct si1; eauto with cshm. 
   (* float -> int *)
-  destruct (cast_float_int si2 f) as [i|] eqn:E; inv H2. eauto with cshm.
+  destruct (cast_float_int si2 f) as [i|] eqn:E; inv H2.
+  apply make_cast_int_correct. 
+  unfold cast_float_int in E. unfold make_intoffloat.
+  destruct si2; econstructor; eauto; simpl; rewrite E; auto.
+  (* single -> int *)
+  destruct (cast_single_int si2 f) as [i|] eqn:E; inv H2.
+  apply make_cast_int_correct. 
+  unfold cast_single_int in E. unfold make_intofsingle.
+  destruct si2; econstructor; eauto with cshm; simpl; rewrite E; auto.
+  (* long -> int *)
+  unfold make_longofint, cast_int_long. destruct si1; eauto with cshm.
+  (* long -> float *)
+  unfold make_floatoflong, cast_long_float. destruct si1; eauto with cshm.
+  (* long -> single *)
+  unfold make_singleoflong, cast_long_single. destruct si1; eauto with cshm.
   (* float -> long *)
-  destruct (cast_float_long si2 f) as [i|] eqn:E; inv H2. eauto with cshm.
+  destruct (cast_float_long si2 f) as [i|] eqn:E; inv H2.
+  unfold cast_float_long in E. unfold make_longoffloat.
+  destruct si2; econstructor; eauto; simpl; rewrite E; auto.
+  (* single -> long *)
+  destruct (cast_single_long si2 f) as [i|] eqn:E; inv H2.
+  unfold cast_single_long in E. unfold make_longofsingle.
+  destruct si2; econstructor; eauto with cshm; simpl; rewrite E; auto.
   (* float -> bool *)
   econstructor; eauto with cshm.
   simpl. unfold Val.cmpf, Val.cmpf_bool. rewrite Float.cmp_ne_eq.
   destruct (Float.cmp Ceq f Float.zero); auto.
+  (* single -> bool *)
+  econstructor; eauto with cshm.
+  simpl. unfold Val.cmpfs, Val.cmpfs_bool. rewrite Float32.cmp_ne_eq.
+  destruct (Float32.cmp Ceq f Float32.zero); auto.
   (* long -> bool *)
   econstructor; eauto with cshm.
   simpl. unfold Val.cmpl, Val.cmpl_bool, Int64.cmp.
@@ -327,6 +327,10 @@ Proof.
   econstructor; split. econstructor; eauto with cshm. simpl. eauto. 
   unfold Val.cmpf, Val.cmpf_bool. simpl. rewrite <- Float.cmp_ne_eq. 
   destruct (Float.cmp Cne f Float.zero); constructor. 
+(* single *)
+  econstructor; split. econstructor; eauto with cshm. simpl. eauto. 
+  unfold Val.cmpfs, Val.cmpfs_bool. simpl. rewrite <- Float32.cmp_ne_eq. 
+  destruct (Float32.cmp Cne f Float32.zero); constructor. 
 (* pointer *)
   econstructor; split. econstructor; eauto with cshm. simpl. eauto. 
   unfold Val.cmpu, Val.cmpu_bool. simpl.
@@ -357,6 +361,9 @@ Lemma make_absfloat_correct:
 Proof.
   unfold sem_absfloat, make_absfloat; intros until m; intros SEM MAKE EV1;
   destruct (classify_neg tya); inv MAKE; destruct va; inv SEM; eauto with cshm.
+  unfold make_floatoflong, cast_long_float. destruct s.
+  econstructor. econstructor; simpl; eauto. simpl; eauto. simpl; eauto. 
+  econstructor. econstructor; simpl; eauto. simpl; eauto. simpl; eauto. 
 Qed.
 
 Lemma make_notbool_correct:
@@ -396,7 +403,8 @@ Section MAKE_BIN.
 Variable sem_int: signedness -> int -> int -> option val.
 Variable sem_long: signedness -> int64 -> int64 -> option val.
 Variable sem_float: float -> float -> option val.
-Variables iop iopu fop lop lopu: binary_operation.
+Variable sem_single: float32 -> float32 -> option val.
+Variables iop iopu fop sop lop lopu: binary_operation.
 
 Hypothesis iop_ok:
   forall x y m, eval_binop iop (Vint x) (Vint y) m = sem_int Signed x y.
@@ -408,11 +416,13 @@ Hypothesis lopu_ok:
   forall x y m, eval_binop lopu (Vlong x) (Vlong y) m = sem_long Unsigned x y.
 Hypothesis fop_ok:
   forall x y m, eval_binop fop (Vfloat x) (Vfloat y) m = sem_float x y.
+Hypothesis sop_ok:
+  forall x y m, eval_binop sop (Vsingle x) (Vsingle y) m = sem_single x y.
 
 Lemma make_binarith_correct:
   binary_constructor_correct
-    (make_binarith iop iopu fop lop lopu)
-    (sem_binarith sem_int sem_long sem_float).
+    (make_binarith iop iopu fop sop lop lopu)
+    (sem_binarith sem_int sem_long sem_float sem_single).
 Proof.
   red; unfold make_binarith, sem_binarith;
   intros until m; intros SEM MAKE EV1 EV2.
@@ -429,12 +439,13 @@ Proof.
 - destruct s; inv H0; econstructor; eauto with cshm. 
   rewrite lop_ok; auto. rewrite lopu_ok; auto.
 - erewrite <- fop_ok in SEM; eauto with cshm.
+- erewrite <- sop_ok in SEM; eauto with cshm.
 Qed.
 
 Lemma make_binarith_int_correct:
   binary_constructor_correct
     (make_binarith_int iop iopu lop lopu)
-    (sem_binarith sem_int sem_long (fun x y => None)).
+    (sem_binarith sem_int sem_long (fun x y => None) (fun x y => None)).
 Proof.
   red; unfold make_binarith_int, sem_binarith;
   intros until m; intros SEM MAKE EV1 EV2.
@@ -930,6 +941,8 @@ Proof.
   apply make_intconst_correct.
 (* const float *)
   apply make_floatconst_correct.
+(* const single *)
+  apply make_singleconst_correct.
 (* const long *)
   apply make_longconst_correct.
 (* temp var *)

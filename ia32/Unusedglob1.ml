@@ -29,12 +29,14 @@ let referenced_builtin ef =
 
 let referenced_instr = function
   | Pmov_rm (_, a) | Pmov_mr (a, _)
+  | Pmov_rm_a (_, a) | Pmov_mr_a (a, _)
   | Pmovsd_fm (_, a) | Pmovsd_mf(a, _)
-  | Pfld_m a | Pfstp_m a
+  | Pmovss_fm (_, a) | Pmovss_mf(a, _)
+  | Pfldl_m a | Pflds_m a | Pfstpl_m a | Pfstps_m a
   | Pmovb_mr (a, _) | Pmovw_mr (a, _)
   | Pmovzb_rm (_, a) | Pmovsb_rm (_, a)
   | Pmovzw_rm (_, a) | Pmovsw_rm (_, a)
-  | Pcvtss2sd_fm (_, a) | Pcvtsd2ss_mf (a, _) | Plea (_, a) -> referenced_addr a
+  | Plea (_, a) -> referenced_addr a
   | Pjmp_s(s, _) -> [s]
   | Pcall_s(s, _) -> [s]
   | Pbuiltin(ef, args, res) -> referenced_builtin ef

@@ -52,17 +52,17 @@ int dfft(float x[], float y[], int np)
   for (k = 1;  k <= m-1; k++ ) {
     n2 = n2 / 2; 
     n4 = n2 / 4; 
-    e  = tpi / (double)n2; 
+    e  = tpi / (float)n2; 
     a  = 0.0;
     
     for (j = 1; j<= n4 ; j++) {
-      a3 = 3.0 * a; 
+      a3 = 3.0f * a; 
       cc1 = cosf(a); 
       ss1 = sinf(a);
       
       cc3 = cosf(a3); 
       ss3 = sinf(a3); 
-      a = e * (double)j; 
+      a = e * (float)j; 
       is = j; 
       id = 2 * n2;
 	  
@@ -162,7 +162,7 @@ int main(int argc, char ** argv)
   xi = calloc(np, sizeof(float));
   pxr = xr;
   pxi = xi;
-  *pxr = (enp - 1.0) * 0.5;
+  *pxr = (enp - 1.0) * 0.5f;
   *pxi = 0.0;
   n2 = np / 2;  
   *(pxr+n2) = -0.5;
@@ -171,8 +171,8 @@ int main(int argc, char ** argv)
     j = np - i;
     *(pxr+i) = -0.5;
     *(pxr+j) = -0.5;
-    z = t * (double)i;  
-    y = -0.5*(cosf(z)/sinf(z));
+    z = t * (float)i;  
+    y = -0.5f*(cosf(z)/sinf(z));
     *(pxi+i) =  y;
     *(pxi+j) = -y;
   }

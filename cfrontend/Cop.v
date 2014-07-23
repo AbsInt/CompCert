@@ -74,17 +74,25 @@ Inductive incr_or_decr : Type := Incr | Decr.
 Inductive classify_cast_cases : Type :=
   | cast_case_neutral                   (**r int|pointer -> int32|pointer *)
   | cast_case_i2i (sz2:intsize) (si2:signedness)   (**r int -> int *)
-  | cast_case_f2f (sz2:floatsize)                  (**r float -> float *)
-  | cast_case_i2f (si1:signedness) (sz2:floatsize) (**r int -> float *)
-  | cast_case_f2i (sz2:intsize) (si2:signedness)   (**r float -> int *)
+  | cast_case_f2f                                  (**r double -> double *)
+  | cast_case_s2s                                  (**r single -> single *)
+  | cast_case_f2s                                  (**r double -> single *)
+  | cast_case_s2f                                  (**r single -> double *)
+  | cast_case_i2f (si1: signedness)                (**r int -> double *)
+  | cast_case_i2s (si1: signedness)                (**r int -> single *)
+  | cast_case_f2i (sz2:intsize) (si2:signedness)   (**r double -> int *)
+  | cast_case_s2i (sz2:intsize) (si2:signedness)   (**r single -> int *)
   | cast_case_l2l                       (**r long -> long *)
   | cast_case_i2l (si1: signedness)     (**r int -> long *)
   | cast_case_l2i (sz2: intsize) (si2: signedness) (**r long -> int *)
-  | cast_case_l2f (si1: signedness) (sz2: floatsize) (**r long -> float *)
-  | cast_case_f2l (si2: signedness)     (**r float -> long *)
-  | cast_case_f2bool                    (**r float -> bool *)
-  | cast_case_l2bool                    (**r long -> bool *)
-  | cast_case_p2bool                    (**r pointer -> bool *)
+  | cast_case_l2f (si1: signedness)                (**r long -> double *)
+  | cast_case_l2s (si1: signedness)                (**r long -> single *)
+  | cast_case_f2l (si2:signedness)                 (**r double -> long *)
+  | cast_case_s2l (si2:signedness)                 (**r single -> long *)
+  | cast_case_f2bool                               (**r double -> bool *)
+  | cast_case_s2bool                               (**r single -> bool *)
+  | cast_case_l2bool                               (**r long -> bool *)
+  | cast_case_p2bool                               (**r pointer -> bool *)
   | cast_case_struct (id1: ident) (fld1: fieldlist) (id2: ident) (fld2: fieldlist) (**r struct -> struct *)
   | cast_case_union (id1: ident) (fld1: fieldlist) (id2: ident) (fld2: fieldlist) (**r union -> union *)
   | cast_case_void                                 (**r any -> void *)
@@ -93,19 +101,27 @@ Inductive classify_cast_cases : Type :=
 Definition classify_cast (tfrom tto: type) : classify_cast_cases :=
   match tto, tfrom with
   | Tint I32 si2 _, (Tint _ _ _ | Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_neutral
-  | Tint IBool _ _, Tfloat _ _ => cast_case_f2bool
+  | Tint IBool _ _, Tfloat F64 _ => cast_case_f2bool
+  | Tint IBool _ _, Tfloat F32 _ => cast_case_s2bool
   | Tint IBool _ _, (Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_p2bool
   | Tint sz2 si2 _, Tint sz1 si1 _ => cast_case_i2i sz2 si2
-  | Tint sz2 si2 _, Tfloat sz1 _ => cast_case_f2i sz2 si2
-  | Tfloat sz2 _, Tfloat sz1 _ => cast_case_f2f sz2
-  | Tfloat sz2 _, Tint sz1 si1 _ => cast_case_i2f si1 sz2
+  | Tint sz2 si2 _, Tfloat F64 _ => cast_case_f2i sz2 si2
+  | Tint sz2 si2 _, Tfloat F32 _ => cast_case_s2i sz2 si2
+  | Tfloat F64 _, Tfloat F64 _ => cast_case_f2f
+  | Tfloat F32 _, Tfloat F32 _ => cast_case_s2s
+  | Tfloat F64 _, Tfloat F32 _ => cast_case_s2f
+  | Tfloat F32 _, Tfloat F64 _ => cast_case_f2s
+  | Tfloat F64 _, Tint sz1 si1 _ => cast_case_i2f si1
+  | Tfloat F32 _, Tint sz1 si1 _ => cast_case_i2s si1
   | (Tpointer _ _ | Tcomp_ptr _ _), (Tint _ _ _ | Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_neutral
   | Tlong _ _, Tlong _ _ => cast_case_l2l
   | Tlong _ _, Tint sz1 si1 _ => cast_case_i2l si1
   | Tint IBool _ _, Tlong _ _ => cast_case_l2bool
   | Tint sz2 si2 _, Tlong _ _ => cast_case_l2i sz2 si2
-  | Tlong si2 _, Tfloat sz1 _ => cast_case_f2l si2
-  | Tfloat sz2 _, Tlong si1 _ => cast_case_l2f si1 sz2
+  | Tlong si2 _, Tfloat F64 _ => cast_case_f2l si2
+  | Tlong si2 _, Tfloat F32 _ => cast_case_s2l si2
+  | Tfloat F64 _, Tlong si1 _ => cast_case_l2f si1
+  | Tfloat F32 _, Tlong si1 _ => cast_case_l2s si1
   | (Tpointer _ _ | Tcomp_ptr _ _), Tlong _ _ => cast_case_l2i I32 Unsigned
   | Tlong si2 _, (Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_i2l si2
   | Tstruct id2 fld2 _, Tstruct id1 fld1 _ => cast_case_struct id1 fld1 id2 fld2
@@ -128,24 +144,28 @@ Definition cast_int_int (sz: intsize) (sg: signedness) (i: int) : int :=
   | IBool, _ => if Int.eq i Int.zero then Int.zero else Int.one
   end.
 
-Definition cast_int_float (si: signedness) (sz: floatsize) (i: int) : float :=
-  match si, sz with
-  | Signed, F64 => Float.floatofint i
-  | Unsigned, F64 => Float.floatofintu i
-  | Signed, F32 => Float.singleofint i
-  | Unsigned, F32 => Float.singleofintu i
+Definition cast_int_float (si: signedness) (i: int) : float :=
+  match si with
+  | Signed => Float.of_int i
+  | Unsigned => Float.of_intu i
   end.
 
 Definition cast_float_int (si : signedness) (f: float) : option int :=
   match si with
-  | Signed => Float.intoffloat f
-  | Unsigned => Float.intuoffloat f
+  | Signed => Float.to_int f
+  | Unsigned => Float.to_intu f
   end.
 
-Definition cast_float_float (sz: floatsize) (f: float) : float :=
-  match sz with
-  | F32 => Float.singleoffloat f
-  | F64 => f
+Definition cast_int_single (si: signedness) (i: int) : float32 :=
+  match si with
+  | Signed => Float32.of_int i
+  | Unsigned => Float32.of_intu i
+  end.
+
+Definition cast_single_int (si : signedness) (f: float32) : option int :=
+  match si with
+  | Signed => Float32.to_int f
+  | Unsigned => Float32.to_intu f
   end.
 
 Definition cast_int_long (si: signedness) (i: int) : int64 :=
@@ -154,18 +174,28 @@ Definition cast_int_long (si: signedness) (i: int) : int64 :=
   | Unsigned => Int64.repr (Int.unsigned i)
   end.
 
-Definition cast_long_float (si: signedness) (sz: floatsize) (i: int64) : float :=
-  match si, sz with
-  | Signed, F64 => Float.floatoflong i
-  | Unsigned, F64 => Float.floatoflongu i
-  | Signed, F32 => Float.singleoflong i
-  | Unsigned, F32 => Float.singleoflongu i
+Definition cast_long_float (si: signedness) (i: int64) : float :=
+  match si with
+  | Signed => Float.of_long i
+  | Unsigned => Float.of_longu i
+  end.
+
+Definition cast_long_single (si: signedness) (i: int64) : float32 :=
+  match si with
+  | Signed => Float32.of_long i
+  | Unsigned => Float32.of_longu i
   end.
 
 Definition cast_float_long (si : signedness) (f: float) : option int64 :=
   match si with
-  | Signed => Float.longoffloat f
-  | Unsigned => Float.longuoffloat f
+  | Signed => Float.to_long f
+  | Unsigned => Float.to_longu f
+  end.
+
+Definition cast_single_long (si : signedness) (f: float32) : option int64 :=
+  match si with
+  | Signed => Float32.to_long f
+  | Unsigned => Float32.to_longu f
   end.
 
 Definition sem_cast (v: val) (t1 t2: type) : option val :=
@@ -180,14 +210,34 @@ Definition sem_cast (v: val) (t1 t2: type) : option val :=
       | Vint i => Some (Vint (cast_int_int sz2 si2 i))
       | _ => None
       end
-  | cast_case_f2f sz2 =>
+  | cast_case_f2f =>
       match v with
-      | Vfloat f => Some (Vfloat (cast_float_float sz2 f))
+      | Vfloat f => Some (Vfloat f)
       | _ => None
       end
-  | cast_case_i2f si1 sz2 =>
+  | cast_case_s2s =>
       match v with
-      | Vint i => Some (Vfloat (cast_int_float si1 sz2 i))
+      | Vsingle f => Some (Vsingle f)
+      | _ => None
+      end
+  | cast_case_s2f =>
+      match v with
+      | Vsingle f => Some (Vfloat (Float.of_single f))
+      | _ => None
+      end
+  | cast_case_f2s =>
+      match v with
+      | Vfloat f => Some (Vsingle (Float.to_single f))
+      | _ => None
+      end
+  | cast_case_i2f si1 =>
+      match v with
+      | Vint i => Some (Vfloat (cast_int_float si1 i))
+      | _ => None
+      end
+  | cast_case_i2s si1 =>
+      match v with
+      | Vint i => Some (Vsingle (cast_int_single si1 i))
       | _ => None
       end
   | cast_case_f2i sz2 si2 =>
@@ -199,10 +249,25 @@ Definition sem_cast (v: val) (t1 t2: type) : option val :=
           end
       | _ => None
       end
+  | cast_case_s2i sz2 si2 =>
+      match v with
+      | Vsingle f =>
+          match cast_single_int si2 f with
+          | Some i => Some (Vint (cast_int_int sz2 si2 i))
+          | None => None
+          end
+      | _ => None
+      end
   | cast_case_f2bool =>
       match v with
       | Vfloat f =>
           Some(Vint(if Float.cmp Ceq f Float.zero then Int.zero else Int.one))
+      | _ => None
+      end
+  | cast_case_s2bool =>
+      match v with
+      | Vsingle f =>
+          Some(Vint(if Float32.cmp Ceq f Float32.zero then Int.zero else Int.one))
       | _ => None
       end
   | cast_case_p2bool =>
@@ -232,15 +297,29 @@ Definition sem_cast (v: val) (t1 t2: type) : option val :=
           Some(Vint(if Int64.eq n Int64.zero then Int.zero else Int.one))
       | _ => None
       end
-  | cast_case_l2f si1 sz2 =>
+  | cast_case_l2f si1 =>
       match v with
-      | Vlong i => Some (Vfloat (cast_long_float si1 sz2 i))
+      | Vlong i => Some (Vfloat (cast_long_float si1 i))
+      | _ => None
+      end
+  | cast_case_l2s si1 =>
+      match v with
+      | Vlong i => Some (Vsingle (cast_long_single si1 i))
       | _ => None
       end
   | cast_case_f2l si2 =>
       match v with
       | Vfloat f =>
           match cast_float_long si2 f with
+          | Some i => Some (Vlong i)
+          | None => None
+          end
+      | _ => None
+      end
+  | cast_case_s2l si2 =>
+      match v with
+      | Vsingle f =>
+          match cast_single_long si2 f with
           | Some i => Some (Vlong i)
           | None => None
           end
@@ -271,7 +350,8 @@ Definition sem_cast (v: val) (t1 t2: type) : option val :=
 
 Inductive classify_bool_cases : Type :=
   | bool_case_i                           (**r integer *)
-  | bool_case_f                           (**r float *)
+  | bool_case_f                           (**r double float *)
+  | bool_case_s                           (**r single float *)
   | bool_case_p                           (**r pointer *)
   | bool_case_l                           (**r long *)
   | bool_default.
@@ -280,7 +360,8 @@ Definition classify_bool (ty: type) : classify_bool_cases :=
   match typeconv ty with
   | Tint _ _ _ => bool_case_i
   | Tpointer _ _ | Tcomp_ptr _ _ => bool_case_p
-  | Tfloat _ _ => bool_case_f
+  | Tfloat F64 _ => bool_case_f
+  | Tfloat F32 _ => bool_case_s
   | Tlong _ _ => bool_case_l
   | _ => bool_default
   end.
@@ -300,6 +381,11 @@ Definition bool_val (v: val) (t: type) : option bool :=
   | bool_case_f =>
       match v with
       | Vfloat f => Some (negb (Float.cmp Ceq f Float.zero))
+      | _ => None
+      end
+  | bool_case_s =>
+      match v with
+      | Vsingle f => Some (negb (Float32.cmp Ceq f Float32.zero))
       | _ => None
       end
   | bool_case_p =>
@@ -333,6 +419,11 @@ Definition sem_notbool (v: val) (ty: type) : option val :=
       | Vfloat f => Some (Val.of_bool (Float.cmp Ceq f Float.zero))
       | _ => None
       end
+  | bool_case_s =>
+      match v with
+      | Vsingle f => Some (Val.of_bool (Float32.cmp Ceq f Float32.zero))
+      | _ => None
+      end
   | bool_case_p =>
       match v with
       | Vint n => Some (Val.of_bool (Int.eq n Int.zero))
@@ -351,7 +442,8 @@ Definition sem_notbool (v: val) (ty: type) : option val :=
 
 Inductive classify_neg_cases : Type :=
   | neg_case_i(s: signedness)              (**r int *)
-  | neg_case_f(sz: floatsize)              (**r float *)
+  | neg_case_f                             (**r double float *)
+  | neg_case_s                             (**r single float *)
   | neg_case_l(s: signedness)              (**r long *)
   | neg_default.
 
@@ -359,7 +451,8 @@ Definition classify_neg (ty: type) : classify_neg_cases :=
   match ty with
   | Tint I32 Unsigned _ => neg_case_i Unsigned
   | Tint _ _ _ => neg_case_i Signed
-  | Tfloat sz _ => neg_case_f sz
+  | Tfloat F64 _ => neg_case_f
+  | Tfloat F32 _ => neg_case_s
   | Tlong si _ => neg_case_l si
   | _ => neg_default
   end.
@@ -371,9 +464,14 @@ Definition sem_neg (v: val) (ty: type) : option val :=
       | Vint n => Some (Vint (Int.neg n))
       | _ => None
       end
-  | neg_case_f sz =>
+  | neg_case_f =>
       match v with
       | Vfloat f => Some (Vfloat (Float.neg f))
+      | _ => None
+      end
+  | neg_case_s =>
+      match v with
+      | Vsingle f => Some (Vsingle (Float32.neg f))
       | _ => None
       end
   | neg_case_l sg =>
@@ -388,17 +486,22 @@ Definition sem_absfloat (v: val) (ty: type) : option val :=
   match classify_neg ty with
   | neg_case_i sg =>
       match v with
-      | Vint n => Some (Vfloat (Float.abs (cast_int_float sg F64 n)))
+      | Vint n => Some (Vfloat (Float.abs (cast_int_float sg n)))
       | _ => None
       end
-  | neg_case_f sz =>
+  | neg_case_f =>
       match v with
       | Vfloat f => Some (Vfloat (Float.abs f))
       | _ => None
       end
+  | neg_case_s =>
+      match v with
+      | Vsingle f => Some (Vfloat (Float.abs (Float.of_single f)))
+      | _ => None
+      end
   | neg_case_l sg =>
       match v with
-      | Vlong n => Some (Vfloat (Float.abs (cast_long_float sg F64 n)))
+      | Vlong n => Some (Vfloat (Float.abs (cast_long_float sg n)))
       | _ => None
       end
   | neg_default => None
@@ -446,7 +549,8 @@ Definition sem_notint (v: val) (ty: type): option val :=
 Inductive binarith_cases: Type :=
   | bin_case_i (s: signedness)         (**r at int type *)
   | bin_case_l (s: signedness)         (**r at long int type *)
-  | bin_case_f (sz: floatsize)         (**r at float type *)
+  | bin_case_f                         (**r at double float type *)
+  | bin_case_s                         (**r at single float type *)
   | bin_default.                       (**r error *)
 
 Definition classify_binarith (ty1: type) (ty2: type) : binarith_cases :=
@@ -458,31 +562,24 @@ Definition classify_binarith (ty1: type) (ty2: type) : binarith_cases :=
   | Tlong _ _, Tlong _ _ => bin_case_l Unsigned
   | Tlong sg _, Tint _ _ _ => bin_case_l sg
   | Tint _ _ _, Tlong sg _ => bin_case_l sg
-  | Tfloat F32 _, Tfloat F32 _ => bin_case_f F32
-  | Tfloat _ _, Tfloat _ _ => bin_case_f F64
-  | Tfloat sz _, (Tint _ _ _ | Tlong _ _) => bin_case_f sz
-  | (Tint _ _ _ | Tlong _ _), Tfloat sz _ => bin_case_f sz
+  | Tfloat F32 _, Tfloat F32 _ => bin_case_s
+  | Tfloat _ _, Tfloat _ _ => bin_case_f
+  | Tfloat F64 _, (Tint _ _ _ | Tlong _ _) => bin_case_f
+  | (Tint _ _ _ | Tlong _ _), Tfloat F64 _ => bin_case_f
+  | Tfloat F32 _, (Tint _ _ _ | Tlong _ _) => bin_case_s
+  | (Tint _ _ _ | Tlong _ _), Tfloat F32 _ => bin_case_s
   | _, _ => bin_default
   end.
 
-(** The static type of the result. *)
-
-Definition binarith_result_type (c: binarith_cases) : option type :=
-  match c with
-  | bin_case_i sg => Some(Tint I32 sg noattr)
-  | bin_case_l sg => Some(Tlong sg noattr)
-  | bin_case_f sz => Some(Tfloat sz noattr)
-  | bin_default   => None
-  end.
-
-(** The type at which the computation is done.  Both arguments are
-  converted to this type before the actual computation.  *)
+(** The static type of the result. Both arguments are converted to this type
+    before the actual computation. *)
 
 Definition binarith_type (c: binarith_cases) : type :=
   match c with
   | bin_case_i sg => Tint I32 sg noattr
   | bin_case_l sg => Tlong sg noattr
-  | bin_case_f sz => Tfloat F64 noattr
+  | bin_case_f    => Tfloat F64 noattr
+  | bin_case_s    => Tfloat F32 noattr
   | bin_default   => Tvoid
   end.
 
@@ -490,6 +587,7 @@ Definition sem_binarith
     (sem_int: signedness -> int -> int -> option val)
     (sem_long: signedness -> int64 -> int64 -> option val)
     (sem_float: float -> float -> option val)
+    (sem_single: float32 -> float32 -> option val)
     (v1: val) (t1: type) (v2: val) (t2: type) : option val :=
   let c := classify_binarith t1 t2 in
   let t := binarith_type c in
@@ -505,9 +603,14 @@ Definition sem_binarith
       | Vint n1, Vint n2 => sem_int sg n1 n2
       | _,  _ => None
       end
-  | bin_case_f sz =>
+  | bin_case_f =>
       match v1', v2' with
       | Vfloat n1, Vfloat n2 => sem_float n1 n2
+      | _,  _ => None
+      end
+  | bin_case_s =>
+      match v1', v2' with
+      | Vsingle n1, Vsingle n2 => sem_single n1 n2
       | _,  _ => None
       end
   | bin_case_l sg =>
@@ -569,6 +672,7 @@ Definition sem_add (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
         (fun sg n1 n2 => Some(Vint(Int.add n1 n2)))
         (fun sg n1 n2 => Some(Vlong(Int64.add n1 n2)))
         (fun n1 n2 => Some(Vfloat(Float.add n1 n2)))
+        (fun n1 n2 => Some(Vsingle(Float32.add n1 n2)))
         v1 t1 v2 t2
   end.
 
@@ -617,6 +721,7 @@ Definition sem_sub (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
         (fun sg n1 n2 => Some(Vint(Int.sub n1 n2)))
         (fun sg n1 n2 => Some(Vlong(Int64.sub n1 n2)))
         (fun n1 n2 => Some(Vfloat(Float.sub n1 n2)))
+        (fun n1 n2 => Some(Vsingle(Float32.sub n1 n2)))
         v1 t1 v2 t2
   end.
  
@@ -627,6 +732,7 @@ Definition sem_mul (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
     (fun sg n1 n2 => Some(Vint(Int.mul n1 n2)))
     (fun sg n1 n2 => Some(Vlong(Int64.mul n1 n2)))
     (fun n1 n2 => Some(Vfloat(Float.mul n1 n2)))
+    (fun n1 n2 => Some(Vsingle(Float32.mul n1 n2)))
     v1 t1 v2 t2.
 
 Definition sem_div (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
@@ -652,6 +758,7 @@ Definition sem_div (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
           then None else Some(Vlong(Int64.divu n1 n2))
       end)
     (fun n1 n2 => Some(Vfloat(Float.div n1 n2)))
+    (fun n1 n2 => Some(Vsingle(Float32.div n1 n2)))
     v1 t1 v2 t2.
 
 Definition sem_mod (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
@@ -677,12 +784,14 @@ Definition sem_mod (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
           then None else Some(Vlong(Int64.modu n1 n2))
       end)
     (fun n1 n2 => None)
+    (fun n1 n2 => None)
     v1 t1 v2 t2.
 
 Definition sem_and (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
   sem_binarith
     (fun sg n1 n2 => Some(Vint(Int.and n1 n2)))
     (fun sg n1 n2 => Some(Vlong(Int64.and n1 n2)))
+    (fun n1 n2 => None)
     (fun n1 n2 => None)
     v1 t1 v2 t2.
 
@@ -691,12 +800,14 @@ Definition sem_or (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
     (fun sg n1 n2 => Some(Vint(Int.or n1 n2)))
     (fun sg n1 n2 => Some(Vlong(Int64.or n1 n2)))
     (fun n1 n2 => None)
+    (fun n1 n2 => None)
     v1 t1 v2 t2.
 
 Definition sem_xor (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
   sem_binarith
     (fun sg n1 n2 => Some(Vint(Int.xor n1 n2)))
     (fun sg n1 n2 => Some(Vlong(Int64.xor n1 n2)))
+    (fun n1 n2 => None)
     (fun n1 n2 => None)
     v1 t1 v2 t2.
 
@@ -818,6 +929,8 @@ Definition sem_cmp (c:comparison)
             Some(Val.of_bool(match sg with Signed => Int64.cmp c n1 n2 | Unsigned => Int64.cmpu c n1 n2 end)))
         (fun n1 n2 =>
             Some(Val.of_bool(Float.cmp c n1 n2)))
+        (fun n1 n2 =>
+            Some(Val.of_bool(Float32.cmp c n1 n2)))
         v1 t1 v2 t2
   end.
 
@@ -946,7 +1059,9 @@ Proof.
   inv H0; inv H; TrivialInject.
 - econstructor; eauto. 
 - destruct (cast_float_int si2 f0); inv H1; TrivialInject.
+- destruct (cast_single_int si2 f0); inv H1; TrivialInject.
 - destruct (cast_float_long si2 f0); inv H1; TrivialInject.
+- destruct (cast_single_long si2 f0); inv H1; TrivialInject.
 - destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H2; TrivialInject. econstructor; eauto.
 - destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H2; TrivialInject. econstructor; eauto.
 - econstructor; eauto.
@@ -976,18 +1091,19 @@ Definition optval_self_injects (ov: option val) : Prop :=
   end.
 
 Remark sem_binarith_inject:
-  forall sem_int sem_long sem_float v1 t1 v2 t2 v v1' v2',
-  sem_binarith sem_int sem_long sem_float v1 t1 v2 t2 = Some v ->
+  forall sem_int sem_long sem_float sem_single v1 t1 v2 t2 v v1' v2',
+  sem_binarith sem_int sem_long sem_float sem_single v1 t1 v2 t2 = Some v ->
   val_inject f v1 v1' -> val_inject f v2 v2' ->
   (forall sg n1 n2, optval_self_injects (sem_int sg n1 n2)) ->
   (forall sg n1 n2, optval_self_injects (sem_long sg n1 n2)) ->
   (forall n1 n2, optval_self_injects (sem_float n1 n2)) ->
-  exists v', sem_binarith sem_int sem_long sem_float v1' t1 v2' t2 = Some v' /\ val_inject f v v'.
+  (forall n1 n2, optval_self_injects (sem_single n1 n2)) ->
+  exists v', sem_binarith sem_int sem_long sem_float sem_single v1' t1 v2' t2 = Some v' /\ val_inject f v v'.
 Proof.
   intros. 
   assert (SELF: forall ov v, ov = Some v -> optval_self_injects ov -> val_inject f v v).
   {
-    intros. subst ov; simpl in H6. destruct v0; contradiction || constructor.
+    intros. subst ov; simpl in H7. destruct v0; contradiction || constructor.
   }
   unfold sem_binarith in *.
   set (c := classify_binarith t1 t2) in *.
@@ -1093,6 +1209,7 @@ Proof.
             || Int64.eq n1 (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone); exact I.
   destruct (Int64.eq n2 Int64.zero); exact I.
   exact I.
+  exact I.
 - (* mod *)
   eapply sem_binarith_inject; eauto; intros.
   destruct sg.
@@ -1103,6 +1220,7 @@ Proof.
   destruct (Int64.eq n2 Int64.zero
             || Int64.eq n1 (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone); exact I.
   destruct (Int64.eq n2 Int64.zero); exact I.
+  exact I.
   exact I.
 - (* and *)
   eapply sem_binarith_inject; eauto; intros; exact I.
@@ -1168,7 +1286,8 @@ Proof.
     match t with
     | Tint _ _ _ => bool_case_i
     | Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ _ => bool_case_p
-    | Tfloat _ _ => bool_case_f
+    | Tfloat F64 _ => bool_case_f
+    | Tfloat F32 _ => bool_case_s
     | Tlong _ _ => bool_case_l
     | _ => bool_default
     end).
@@ -1178,7 +1297,14 @@ Proof.
   unfold bool_val. rewrite A. unfold sem_cast. destruct t; simpl; auto; destruct v; auto.
   destruct (Int.eq i0 Int.zero); auto.
   destruct (Int64.eq i Int64.zero); auto.
+  destruct f; auto.
+  destruct f; auto.
+  destruct f; auto.
+  destruct f; auto.
   destruct (Float.cmp Ceq f0 Float.zero); auto.
+  destruct f; auto.
+  destruct (Float32.cmp Ceq f0 Float32.zero); auto.
+  destruct f; auto.
   destruct (Int.eq i Int.zero); auto. 
   destruct (Int.eq i Int.zero); auto. 
   destruct (Int.eq i Int.zero); auto. 
@@ -1360,8 +1486,8 @@ Qed.
 
 Lemma classify_binarith_arithmetic_conversion:
   forall t1 t2,
-  binarith_result_type (classify_binarith (proj_type t1) (proj_type t2)) =
-  Some (proj_type (usual_arithmetic_conversion t1 t2)).
+  binarith_type (classify_binarith (proj_type t1) (proj_type t2)) =
+  proj_type (usual_arithmetic_conversion t1 t2).
 Proof.
   destruct t1; destruct t2; try reflexivity.
 - destruct it; destruct it0; reflexivity.

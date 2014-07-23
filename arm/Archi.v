@@ -25,12 +25,24 @@ Definition big_endian := false.
 Notation align_int64 := 8%Z (only parsing).
 Notation align_float64 := 8%Z (only parsing).
 
-Program Definition default_pl : bool * nan_pl 53 := (false, nat_iter 51 xO xH).
+Program Definition default_pl_64 : bool * nan_pl 53 :=
+  (false, nat_iter 51 xO xH).
 
-Definition choose_binop_pl (s1: bool) (pl1: nan_pl 53) (s2: bool) (pl2: nan_pl 53) :=
+Definition choose_binop_pl_64 (s1: bool) (pl1: nan_pl 53) (s2: bool) (pl2: nan_pl 53) :=
   (** Choose second NaN if pl2 is sNaN but pl1 is qNan.
       In all other cases, choose first NaN *)
   (Pos.testbit (proj1_sig pl1) 51 &&
    negb (Pos.testbit (proj1_sig pl2) 51))%bool.
 
-Global Opaque big_endian default_pl choose_binop_pl.
+Program Definition default_pl_32 : bool * nan_pl 24 :=
+  (false, nat_iter 22 xO xH).
+
+Definition choose_binop_pl_32 (s1: bool) (pl1: nan_pl 24) (s2: bool) (pl2: nan_pl 24) :=
+  (** Choose second NaN if pl2 is sNaN but pl1 is qNan.
+      In all other cases, choose first NaN *)
+  (Pos.testbit (proj1_sig pl1) 22 &&
+   negb (Pos.testbit (proj1_sig pl2) 22))%bool.
+
+Global Opaque big_endian
+              default_pl_64 choose_binop_pl_64
+              default_pl_32 choose_binop_pl_32.

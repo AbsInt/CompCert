@@ -374,6 +374,12 @@ Definition addf (e1 e2: expr) :=  Eop Oaddf (e1 ::: e2 ::: Enil).
 Definition subf (e1 e2: expr) :=  Eop Osubf (e1 ::: e2 ::: Enil).
 Definition mulf (e1 e2: expr) :=  Eop Omulf (e1 ::: e2 ::: Enil).
 
+Definition negfs (e: expr) :=  Eop Onegfs (e ::: Enil).
+Definition absfs (e: expr) :=  Eop Oabsfs (e ::: Enil).
+Definition addfs (e1 e2: expr) :=  Eop Oaddfs (e1 ::: e2 ::: Enil).
+Definition subfs (e1 e2: expr) :=  Eop Osubfs (e1 ::: e2 ::: Enil).
+Definition mulfs (e1 e2: expr) :=  Eop Omulfs (e1 ::: e2 ::: Enil).
+
 (** ** Comparisons *)
 
 Nondetfunction compimm (default: comparison -> int -> condition)
@@ -433,6 +439,10 @@ Nondetfunction compu (c: comparison) (e1: expr) (e2: expr) :=
 Definition compf (c: comparison) (e1: expr) (e2: expr) :=
   Eop (Ocmp (Ccompf c)) (e1 ::: e2 ::: Enil).
 
+Definition compfs (c: comparison) (e1: expr) (e2: expr) :=
+  Eop (Ocmp (Ccompf c)) (Eop Ofloatofsingle (e1 ::: Enil) :::
+                         Eop Ofloatofsingle (e2 ::: Enil) ::: Enil).
+
 (** ** Integer conversions *)
 
 Definition cast8unsigned (e: expr) := andimm (Int.repr 255) e.
@@ -457,7 +467,7 @@ Definition intoffloat (e: expr) := Eop Ointoffloat (e ::: Enil).
 
 Definition intuoffloat (e: expr) :=
   Elet e
-  (Elet (Eop (Ofloatconst (Float.floatofintu Float.ox8000_0000)) Enil)
+  (Elet (Eop (Ofloatconst (Float.of_intu Float.ox8000_0000)) Enil)
     (Econdition (CEcond (Ccompf Clt) (Eletvar 1 ::: Eletvar 0 ::: Enil))
       (intoffloat (Eletvar 1))
       (addimm Float.ox8000_0000 (intoffloat (subf (Eletvar 1) (Eletvar 0))))))%nat.
@@ -465,7 +475,7 @@ Definition intuoffloat (e: expr) :=
 Nondetfunction floatofintu (e: expr) :=
   match e with
   | Eop (Ointconst n) Enil =>
-      Eop (Ofloatconst (Float.floatofintu n)) Enil
+      Eop (Ofloatconst (Float.of_intu n)) Enil
   | _ =>
       subf (Eop Ofloatofwords (Eop (Ointconst Float.ox4330_0000) Enil ::: e ::: Enil))
            (Eop (Ofloatconst (Float.from_words Float.ox4330_0000 Int.zero)) Enil)
@@ -474,14 +484,27 @@ Nondetfunction floatofintu (e: expr) :=
 Nondetfunction floatofint (e: expr) :=
   match e with
   | Eop (Ointconst n) Enil =>
-      Eop (Ofloatconst (Float.floatofint n)) Enil
+      Eop (Ofloatconst (Float.of_int n)) Enil
   | _ =>
       subf (Eop Ofloatofwords (Eop (Ointconst Float.ox4330_0000) Enil
                                ::: addimm Float.ox8000_0000 e ::: Enil))
            (Eop (Ofloatconst (Float.from_words Float.ox4330_0000 Float.ox8000_0000)) Enil)
   end.
 
+Definition intofsingle (e: expr) :=
+  intoffloat (Eop Ofloatofsingle (e ::: Enil)).
+
+Definition singleofint (e: expr) :=
+  Eop Osingleoffloat (floatofint e ::: Enil).
+
+Definition intuofsingle (e: expr) :=
+  intuoffloat (Eop Ofloatofsingle (e ::: Enil)).
+
+Definition singleofintu (e: expr) :=
+  Eop Osingleoffloat (floatofintu e ::: Enil).
+
 Definition singleoffloat (e: expr) := Eop Osingleoffloat (e ::: Enil).
+Definition floatofsingle (e: expr) := Eop Ofloatofsingle (e ::: Enil).
 
 (** ** Recognition of addressing modes for load and store operations *)
 

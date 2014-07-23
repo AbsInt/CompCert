@@ -92,7 +92,14 @@ let rec constrain_regs vl cl =
   | v1 :: vl', None :: cl' -> v1 :: constrain_regs vl' cl'
 
 let move v1 v2 k =
-  if v1 = v2 then k else Xmove(v1, v2) :: k
+  if v1 = v2 then
+    k
+  else if is_stack_reg v1 then begin
+    let t = new_temp (typeof v2) in Xmove(v1, t) :: Xmove(t, v2) :: k
+  end else if is_stack_reg v2 then begin
+    let t = new_temp (typeof v1) in Xmove(v1, t) :: Xmove(t, v2) :: k
+  end else
+    Xmove(v1, v2) :: k
 
 let rec movelist vl1 vl2 k =
   match vl1, vl2 with
@@ -104,7 +111,7 @@ let xparmove srcs dsts k =
   assert (List.length srcs = List.length dsts);
   match srcs, dsts with
   | [], [] -> k
-  | [src], [dst] -> Xmove(src, dst) :: k
+  | [src], [dst] -> move src dst k
   | _, _ -> Xparmove(srcs, dsts, new_temp Tint, new_temp Tfloat) :: k
 
 (* Return the XTL basic block corresponding to the given RTL instruction.
@@ -365,9 +372,15 @@ let spill_costs f =
     | L l -> ()
     | V(r, ty) ->
         let st = get_stats r in
-        let c1 = st.cost + amount in
-        let c2 = if c1 >= 0 then c1 else max_int (* overflow *) in
-        st.cost <- c2;
+        if st.cost < 0 then
+          (* the variable must be spilled, don't change its cost *)
+          assert (amount < max_int)
+        else begin
+          (* saturating addition *)
+          let c1 = st.cost + amount in
+          let c2 = if c1 >= 0 then c1 else max_int (* overflow *) in
+          st.cost <- c2
+        end;           
         st.usedefs <- st.usedefs + uses in
 
   let charge_list amount uses vl =
@@ -376,9 +389,23 @@ let spill_costs f =
   let charge_ros amount ros =
     match ros with Coq_inl v -> charge amount 1 v | Coq_inr id -> () in
 
+  let force_stack_allocation v =
+    match v with
+    | L l -> ()
+    | V(r, ty) ->
+        let st = get_stats r in
+        assert (st.cost < max_int);
+        st.cost <- (-1) in
+
   let charge_instr = function
     | Xmove(src, dst) ->
-        charge 1 1 src; charge 1 1 dst
+        if is_stack_reg src then
+          force_stack_allocation dst
+        else if is_stack_reg dst then
+          force_stack_allocation src
+        else begin
+          charge 1 1 src; charge 1 1 dst
+        end
     | Xreload(src, dst) ->
         charge 1 1 src; charge max_int 1 dst
         (* dest must not be spilled! *)
@@ -491,10 +518,13 @@ let add_interfs_instr g instr live =
             add_interfs_list g (vmreg mr) srcs;
             IRC.add_interf g (vmreg mr) ftmp)
           (destroyed_by_setstack Tsingle)
+  | Xop(Ofloatofsingle, arg1::_, res) when Configuration.arch = "powerpc" ->
+      add_interfs_def g res live;
+      IRC.add_pref g arg1 res
   | Xop(op, args, res) ->
       begin match is_two_address op args with
       | None ->
-          add_interfs_def g res live;
+          add_interfs_def g res live
       | Some(arg1, argl) ->
           (* Treat as "res := arg1; res := op(res, argl)" *)
           add_interfs_def g res live;
@@ -502,7 +532,7 @@ let add_interfs_instr g instr live =
           add_interfs_move g arg1 res
             (vset_addlist (res :: argl) (VSet.remove res live))
       end;
-      add_interfs_destroyed g (VSet.remove res live) (destroyed_by_op op);
+      add_interfs_destroyed g (VSet.remove res live) (destroyed_by_op op)
   | Xload(chunk, addr, args, dst) ->
       add_interfs_def g dst live;
       add_interfs_destroyed g (VSet.remove dst live) 
@@ -576,10 +606,16 @@ let tospill_instr alloc instr ts =
       then ts
       else VSet.add src (VSet.add dst ts)
   | Xreload(src, dst) ->
-      assert (is_reg alloc dst);
+      if not (is_reg alloc dst) then begin
+        printf "Error: %a was spilled\n" PrintXTL.var dst;
+        assert false
+      end;
       ts
   | Xspill(src, dst) ->
-      assert (is_reg alloc src);
+      if not (is_reg alloc src) then begin
+        printf "Error: %a was spilled\n" PrintXTL.var src;
+        assert false
+      end;
       ts
   | Xparmove(srcs, dsts, itmp, ftmp) ->
       assert (is_reg alloc itmp && is_reg alloc ftmp);
@@ -834,7 +870,9 @@ let make_parmove srcs dsts itmp ftmp k =
   assert (Array.length dst = n);
   let status = Array.make n To_move in
   let temp_for =
-    function Tint -> itmp | (Tfloat|Tsingle) -> ftmp | Tlong -> assert false in
+    function (Tint|Tany32) -> itmp
+           | (Tfloat|Tsingle|Tany64) -> ftmp
+           | Tlong -> assert false in
   let code = ref [] in
   let add_move s d =
     match s, d with

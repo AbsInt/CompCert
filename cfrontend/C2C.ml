@@ -441,7 +441,13 @@ let z_of_str hex str fst =
 let convertFloat f kind =
   let mant = z_of_str f.C.hex (f.C.intPart ^ f.C.fracPart) 0 in
   match mant with
-    | Z.Z0 -> Float.zero
+    | Z.Z0 ->
+      begin match kind with
+      | FFloat ->
+	  Vsingle (Float.to_single Float.zero)
+      | FDouble | FLongDouble ->
+	  Vfloat Float.zero
+      end
     | Z.Zpos mant ->
 
       let sgExp = match f.C.exp.[0] with '+' | '-' -> true | _ -> false in
@@ -454,10 +460,10 @@ let convertFloat f kind =
       let base = P.of_int (if f.C.hex then 2 else 10) in
 
       begin match kind with
-	| FFloat ->
-	  Float.build_from_parsed32 base mant exp
-	| FDouble | FLongDouble ->
-	  Float.build_from_parsed64 base mant exp
+      | FFloat ->
+	  Vsingle (Float32.from_parsed base mant exp)
+      | FDouble | FLongDouble ->
+	  Vfloat (Float.from_parsed base mant exp)
       end
 
     | Z.Zneg _ -> assert false
@@ -482,7 +488,7 @@ let rec convertExpr env e =
   | C.EConst(C.CFloat(f, k)) ->
       if k = C.FLongDouble && not !Clflags.option_flongdouble then
         unsupported "'long double' floating-point literal";
-      Eval(Vfloat(convertFloat f k), ty)
+      Eval(convertFloat f k, ty)
   | C.EConst(C.CStr s) ->
       let ty = typeStringLiteral s in
       Evalof(Evar(name_for_string_literal env s, ty), ty)

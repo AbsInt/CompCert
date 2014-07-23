@@ -21,6 +21,8 @@ let name_of_type = function
   | Tfloat -> "float"
   | Tlong -> "long"
   | Tsingle -> "single"
+  | Tany32 -> "any32"
+  | Tany64 -> "any64"
 
 let name_of_chunk = function
   | Mint8signed -> "int8s"
@@ -31,6 +33,8 @@ let name_of_chunk = function
   | Mint64 -> "int64"
   | Mfloat32 -> "float32"
   | Mfloat64 -> "float64"
+  | Many32 -> "any32"
+  | Many64 -> "any64"
 
 let name_of_external = function
   | EF_external(name, sg) -> sprintf "extern %S" (extern_atom name)

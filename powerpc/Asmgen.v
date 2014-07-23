@@ -122,40 +122,32 @@ Definition rolm (r1 r2: ireg) (amount mask: int) (k: code) :=
 
 (** Accessing slots in the stack frame.  *)
 
+Definition accessind {A: Type}
+       (instr1: A -> constant -> ireg -> instruction)
+       (instr2: A -> ireg -> ireg -> instruction)
+       (base: ireg) (ofs: int) (r: A) (k: code) :=
+  if Int.eq (high_s ofs) Int.zero 
+  then instr1 r (Cint ofs) base :: k
+  else loadimm GPR0 ofs (instr2 r base GPR0 :: k).
+
 Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
-  match ty with
-  | Tint =>
-      do r <- ireg_of dst;
-      OK (if Int.eq (high_s ofs) Int.zero then
-            Plwz r (Cint ofs) base :: k
-          else
-            loadimm GPR0 ofs (Plwzx r base GPR0 :: k))
-  | Tfloat =>
-      do r <- freg_of dst;
-      OK (if Int.eq (high_s ofs) Int.zero then
-            Plfd r (Cint ofs) base :: k
-          else
-            loadimm GPR0 ofs (Plfdx r base GPR0 :: k))
-  | Tlong | Tsingle =>
-      Error (msg "Asmgen.loadind")
+  match ty, preg_of dst with
+  | Tint, IR r => OK(accessind Plwz Plwzx base ofs r k)
+  | Tany32, IR r => OK(accessind Plwz_a Plwzx_a base ofs r k)
+  | Tsingle, FR r => OK(accessind Plfs Plfsx base ofs r k)
+  | Tfloat, FR r => OK(accessind Plfd Plfdx base ofs r k)
+  | Tany64, FR r => OK(accessind Plfd_a Plfdx_a base ofs r k)
+  | _, _ => Error (msg "Asmgen.loadind")
   end.
 
 Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
-  match ty with
-  | Tint =>
-      do r <- ireg_of src;
-      OK (if Int.eq (high_s ofs) Int.zero then
-            Pstw r (Cint ofs) base :: k
-          else
-            loadimm GPR0 ofs (Pstwx r base GPR0 :: k))
-  | Tfloat =>
-      do r <- freg_of src;
-      OK (if Int.eq (high_s ofs) Int.zero then
-            Pstfd r (Cint ofs) base :: k
-          else
-            loadimm GPR0 ofs (Pstfdx r base GPR0 :: k))
-  | Tlong | Tsingle =>
-      Error (msg "Asmgen.storeind")
+  match ty, preg_of src with
+  | Tint, IR r => OK(accessind Pstw Pstwx base ofs r k)
+  | Tany32, IR r => OK(accessind Pstw_a Pstwx_a base ofs r k)
+  | Tsingle, FR r => OK(accessind Pstfs Pstfsx base ofs r k)
+  | Tfloat, FR r => OK(accessind Pstfd Pstfdx base ofs r k)
+  | Tany64, FR r => OK(accessind Pstfd_a Pstfdx_a base ofs r k)
+  | _, _ => Error (msg "Asmgen.storeind")
   end.
 
 (** Constructor for a floating-point comparison.  The PowerPC has
@@ -340,6 +332,8 @@ Definition transl_op
       do r <- ireg_of res; OK (loadimm r n k)
   | Ofloatconst f, nil =>
       do r <- freg_of res; OK (Plfi r f :: k)
+  | Osingleconst f, nil =>
+      do r <- freg_of res; OK (Plfis r f :: k)
   | Oaddrsymbol s ofs, nil =>
       do r <- ireg_of res;
       OK (if symbol_is_small_data s ofs then
@@ -477,9 +471,30 @@ Definition transl_op
   | Odivf, a1 :: a2 :: nil =>
       do r1 <- freg_of a1; do r2 <- freg_of a2; do r <- freg_of res;
       OK (Pfdiv r r1 r2 :: k)
+  | Onegfs, a1 :: nil =>
+      do r1 <- freg_of a1; do r <- freg_of res;
+      OK (Pfnegs r r1 :: k)
+  | Oabsfs, a1 :: nil =>
+      do r1 <- freg_of a1; do r <- freg_of res;
+      OK (Pfabss r r1 :: k)
+  | Oaddfs, a1 :: a2 :: nil =>
+      do r1 <- freg_of a1; do r2 <- freg_of a2; do r <- freg_of res;
+      OK (Pfadds r r1 r2 :: k)
+  | Osubfs, a1 :: a2 :: nil =>
+      do r1 <- freg_of a1; do r2 <- freg_of a2; do r <- freg_of res;
+      OK (Pfsubs r r1 r2 :: k)
+  | Omulfs, a1 :: a2 :: nil =>
+      do r1 <- freg_of a1; do r2 <- freg_of a2; do r <- freg_of res;
+      OK (Pfmuls r r1 r2 :: k)
+  | Odivfs, a1 :: a2 :: nil =>
+      do r1 <- freg_of a1; do r2 <- freg_of a2; do r <- freg_of res;
+      OK (Pfdivs r r1 r2 :: k)
   | Osingleoffloat, a1 :: nil =>
       do r1 <- freg_of a1; do r <- freg_of res;
       OK (Pfrsp r r1 :: k)
+  | Ofloatofsingle, a1 :: nil =>
+      do r1 <- freg_of a1; do r <- freg_of res;
+      OK (Pfxdp r r1 :: k)
   | Ointoffloat, a1 :: nil =>
       do r1 <- freg_of a1; do r <- ireg_of res;
       OK (Pfcti r r1 :: k)
@@ -566,7 +581,7 @@ Definition transl_load (chunk: memory_chunk) (addr: addressing)
   | Mfloat64 =>
       do r <- freg_of dst;
       transl_memory_access (Plfd r) (Plfdx r) addr args GPR12 k
-  | Mint64 =>
+  | _ =>
       Error (msg "Asmgen.transl_load")
   end.
 
@@ -589,7 +604,7 @@ Definition transl_store (chunk: memory_chunk) (addr: addressing)
   | Mfloat64 =>
       do r <- freg_of src;
       transl_memory_access (Pstfd r) (Pstfdx r) addr args temp k
-  | Mint64 =>
+  | _ =>
       Error (msg "Asmgen.transl_store")
   end.
 

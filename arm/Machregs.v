@@ -44,14 +44,10 @@ Global Opaque mreg_eq.
 
 Definition mreg_type (r: mreg): typ :=
   match r with
-  | R0 => Tint  | R1 => Tint  | R2 => Tint  | R3 => Tint
-  | R4 => Tint  | R5 => Tint  | R6 => Tint  | R7 => Tint
-  | R8 => Tint  | R9 => Tint  | R10 => Tint | R11 => Tint
-  | R12 => Tint
-  | F0 => Tfloat | F1 => Tfloat | F2 => Tfloat | F3 => Tfloat
-  | F4 => Tfloat| F5 => Tfloat  | F6 => Tfloat | F7 => Tfloat
-  | F8 => Tfloat | F9 => Tfloat | F10 => Tfloat | F11 => Tfloat
-  | F12 => Tfloat | F13 => Tfloat | F14 => Tfloat | F15 => Tfloat
+  | R0  | R1  | R2  | R3   | R4  | R5  | R6  | R7 
+  | R8  | R9  | R10 | R11  | R12 => Tany32
+  | F0  | F1  | F2  | F3   | F4 | F5   | F6  | F7 
+  | F8  | F9  | F10  | F11 | F12  | F13  | F14  | F15 => Tany64
   end.
 
 Open Scope positive_scope.
@@ -84,18 +80,14 @@ Definition is_stack_reg (r: mreg) : bool := false.
 Definition destroyed_by_op (op: operation): list mreg :=
   match op with
   | Odiv | Odivu => R0 :: R1 :: R2 :: R3 :: R12 :: nil
-  | Ointoffloat | Ointuoffloat => F6 :: nil
+  | Ointoffloat | Ointuoffloat | Ointofsingle | Ointuofsingle => F6 :: nil
   | _ => nil
   end.
 
 Definition destroyed_by_load (chunk: memory_chunk) (addr: addressing): list mreg :=
   nil.
 
-Definition destroyed_by_store (chunk: memory_chunk) (addr: addressing): list mreg :=
-  match chunk with
-  | Mfloat32 => F6 :: nil
-  | _ => nil
-  end.
+Definition destroyed_by_store (chunk: memory_chunk) (addr: addressing): list mreg := nil.
 
 Definition destroyed_by_cond (cond: condition): list mreg :=
   nil.
@@ -106,16 +98,10 @@ Definition destroyed_by_jumptable: list mreg :=
 Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_memcpy sz al => if zle sz 32 then nil else R2 :: R3 :: R12 :: nil
-  | EF_vstore Mfloat32 => F6 :: nil
-  | EF_vstore_global Mfloat32 _ _ => F6 :: nil
   | _ => nil
   end.
 
-Definition destroyed_by_setstack (ty: typ): list mreg :=
-  match ty with
-  | Tsingle => F6 :: nil
-  | _ => nil
-  end.
+Definition destroyed_by_setstack (ty: typ): list mreg := nil.
 
 Definition destroyed_at_function_entry: list mreg :=
   R12 :: nil.

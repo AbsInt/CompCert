@@ -435,6 +435,34 @@ Proof.
   auto.
 Qed.
 
+Theorem eval_longofsingle:
+  forall le a x y,
+  eval_expr ge sp e m le a x ->
+  Val.longofsingle x = Some y ->
+  exists v, eval_expr ge sp e m le (longofsingle hf a) v /\ Val.lessdef y v.
+Proof.
+  intros; unfold longofsingle.
+  destruct x; simpl in H0; inv H0. destruct (Float32.to_long f) as [n|] eqn:EQ; simpl in H2; inv H2.
+  exploit eval_floatofsingle; eauto. intros (v & A & B). simpl in B. inv B.
+  apply Float32.to_long_double in EQ. 
+  eapply eval_longoffloat; eauto. simpl.
+  change (Float.of_single f) with (Float32.to_double f); rewrite EQ; auto.
+Qed.
+
+Theorem eval_longuofsingle:
+  forall le a x y,
+  eval_expr ge sp e m le a x ->
+  Val.longuofsingle x = Some y ->
+  exists v, eval_expr ge sp e m le (longuofsingle hf a) v /\ Val.lessdef y v.
+Proof.
+  intros; unfold longuofsingle.
+  destruct x; simpl in H0; inv H0. destruct (Float32.to_longu f) as [n|] eqn:EQ; simpl in H2; inv H2.
+  exploit eval_floatofsingle; eauto. intros (v & A & B). simpl in B. inv B.
+  apply Float32.to_longu_double in EQ. 
+  eapply eval_longuoffloat; eauto. simpl.
+  change (Float.of_single f) with (Float32.to_double f); rewrite EQ; auto.
+Qed.
+
 Theorem eval_singleoflong:
   forall le a x y,
   eval_expr ge sp e m le a x ->

@@ -321,6 +321,12 @@ Definition addf (e1 e2: expr) :=  Eop Oaddf (e1 ::: e2 ::: Enil).
 Definition subf (e1 e2: expr) :=  Eop Osubf (e1 ::: e2 ::: Enil).
 Definition mulf (e1 e2: expr) :=  Eop Omulf (e1 ::: e2 ::: Enil).
 
+Definition negfs (e: expr) :=  Eop Onegfs (e ::: Enil).
+Definition absfs (e: expr) :=  Eop Oabsfs (e ::: Enil).
+Definition addfs (e1 e2: expr) :=  Eop Oaddfs (e1 ::: e2 ::: Enil).
+Definition subfs (e1 e2: expr) :=  Eop Osubfs (e1 ::: e2 ::: Enil).
+Definition mulfs (e1 e2: expr) :=  Eop Omulfs (e1 ::: e2 ::: Enil).
+
 (** ** Comparisons *)
 
 Nondetfunction compimm (default: comparison -> int -> condition)
@@ -370,6 +376,9 @@ Nondetfunction compu (c: comparison) (e1: expr) (e2: expr) :=
 Definition compf (c: comparison) (e1: expr) (e2: expr) :=
   Eop (Ocmp (Ccompf c)) (e1 ::: e2 ::: Enil).
 
+Definition compfs (c: comparison) (e1: expr) (e2: expr) :=
+  Eop (Ocmp (Ccompfs c)) (e1 ::: e2 ::: Enil).
+
 (** ** Integer conversions *)
 
 Definition cast8unsigned (e: expr) := andimm (Int.repr 255) e.
@@ -391,19 +400,36 @@ Nondetfunction cast16signed (e: expr) :=
 (** ** Floating-point conversions *)
 
 Definition singleoffloat (e: expr) := Eop Osingleoffloat (e ::: Enil).
+Definition floatofsingle (e: expr) := Eop Ofloatofsingle (e ::: Enil).
+
 Definition intoffloat (e: expr) := Eop Ointoffloat (e ::: Enil).
 Definition intuoffloat (e: expr) := Eop Ointuoffloat (e ::: Enil).
 
 Nondetfunction floatofint (e: expr) :=
   match e with
-  | Eop (Ointconst n) Enil => Eop (Ofloatconst (Float.floatofint n)) Enil
+  | Eop (Ointconst n) Enil => Eop (Ofloatconst (Float.of_int n)) Enil
   | _ => Eop Ofloatofint (e ::: Enil)
   end.
 
 Nondetfunction floatofintu (e: expr) :=
   match e with
-  | Eop (Ointconst n) Enil => Eop (Ofloatconst (Float.floatofintu n)) Enil
+  | Eop (Ointconst n) Enil => Eop (Ofloatconst (Float.of_intu n)) Enil
   | _ => Eop Ofloatofintu (e ::: Enil)
+  end.
+
+Definition intofsingle (e: expr) := Eop Ointofsingle (e ::: Enil).
+Definition intuofsingle (e: expr) := Eop Ointuofsingle (e ::: Enil).
+
+Nondetfunction singleofint (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Osingleconst (Float32.of_int n)) Enil
+  | _ => Eop Osingleofint (e ::: Enil)
+  end.
+
+Nondetfunction singleofintu (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Osingleconst (Float32.of_intu n)) Enil
+  | _ => Eop Osingleofintu (e ::: Enil)
   end.
 
 (** ** Recognition of addressing modes for load and store operations *)
@@ -424,6 +450,8 @@ Definition can_use_Aindexed2 (chunk: memory_chunk): bool :=
   | Mint64 => false
   | Mfloat32 => false
   | Mfloat64 => false
+  | Many32 => true
+  | Many64 => false
   end.
 
 Definition can_use_Aindexed2shift (chunk: memory_chunk): bool :=
@@ -436,6 +464,8 @@ Definition can_use_Aindexed2shift (chunk: memory_chunk): bool :=
   | Mint64 => false
   | Mfloat32 => false
   | Mfloat64 => false
+  | Many32 => true
+  | Many64 => false
   end.
 
 Nondetfunction addressing (chunk: memory_chunk) (e: expr) :=

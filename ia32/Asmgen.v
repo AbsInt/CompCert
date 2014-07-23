@@ -50,8 +50,6 @@ Definition mk_mov (rd rs: preg) (k: code) : res code :=
   match rd, rs with
   | IR rd, IR rs => OK (Pmov_rr rd rs :: k)
   | FR rd, FR rs => OK (Pmovsd_ff rd rs :: k)
-  | ST0, FR rs => OK (Pfld_f rs :: k)
-  | FR rd, ST0 => OK (Pfstp_f rd :: k)
   | _, _ => Error(msg "Asmgen.mk_mov")
   end.
 
@@ -90,42 +88,30 @@ Definition mk_smallstore (sto: addrmode -> ireg ->instruction)
   else
     OK (Pmov_rr EAX rs :: sto addr EAX :: k).
 
-(** Accessing slots in the stack frame.  *)
+(** Accessing slots in the stack frame. *)
 
 Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
-  match ty with
-  | Tint =>
-      do r <- ireg_of dst;
-      OK (Pmov_rm r (Addrmode (Some base) None (inl _ ofs)) :: k)
-  | Tfloat =>
-      match preg_of dst with
-      | FR r => OK (Pmovsd_fm r (Addrmode (Some base) None (inl _ ofs)) :: k)
-      | ST0  => OK (Pfld_m (Addrmode (Some base) None (inl _ ofs)) :: k)
-      | _ => Error (msg "Asmgen.loadind")
-      end
-  | Tsingle =>
-      do r <- freg_of dst;
-      OK (Pcvtss2sd_fm r (Addrmode (Some base) None (inl _ ofs)) :: k)
-  | Tlong =>
-      Error (msg "Asmgen.loadind")
+  match ty, preg_of dst with
+  | Tint, IR r => OK (Pmov_rm r (Addrmode (Some base) None (inl _ ofs)) :: k)
+  | Tsingle, FR r => OK (Pmovss_fm r (Addrmode (Some base) None (inl _ ofs)) :: k)
+  | Tsingle, ST0  => OK (Pflds_m (Addrmode (Some base) None (inl _ ofs)) :: k)
+  | Tfloat, FR r => OK (Pmovsd_fm r (Addrmode (Some base) None (inl _ ofs)) :: k)
+  | Tfloat, ST0  => OK (Pfldl_m (Addrmode (Some base) None (inl _ ofs)) :: k)
+  | Tany32, IR r => OK (Pmov_rm_a r (Addrmode (Some base) None (inl _ ofs)) :: k)
+  | Tany64, FR r => OK (Pmovsd_fm_a r (Addrmode (Some base) None (inl _ ofs)) :: k)
+  | _, _ => Error (msg "Asmgen.loadind")
   end.
 
 Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
-  match ty with
-  | Tint =>
-      do r <- ireg_of src;
-      OK (Pmov_mr (Addrmode (Some base) None (inl _ ofs)) r :: k)
-  | Tfloat =>
-      match preg_of src with
-      | FR r => OK (Pmovsd_mf (Addrmode (Some base) None (inl _ ofs)) r :: k)
-      | ST0  => OK (Pfstp_m (Addrmode (Some base) None (inl _ ofs)) :: k)
-      | _ => Error (msg "Asmgen.loadind")
-      end
-  | Tsingle =>
-      do r <- freg_of src;
-      OK (Pcvtsd2ss_mf (Addrmode (Some base) None (inl _ ofs)) r :: k)
-  | Tlong =>
-      Error (msg "Asmgen.storeind")
+  match ty, preg_of src with
+  | Tint, IR r => OK (Pmov_mr (Addrmode (Some base) None (inl _ ofs)) r :: k)
+  | Tsingle, FR r => OK (Pmovss_mf (Addrmode (Some base) None (inl _ ofs)) r :: k)
+  | Tsingle, ST0 => OK (Pfstps_m (Addrmode (Some base) None (inl _ ofs)) :: k)
+  | Tfloat, FR r => OK (Pmovsd_mf (Addrmode (Some base) None (inl _ ofs)) r :: k)
+  | Tfloat, ST0  => OK (Pfstpl_m (Addrmode (Some base) None (inl _ ofs)) :: k)
+  | Tany32, IR r => OK (Pmov_mr_a (Addrmode (Some base) None (inl _ ofs)) r :: k)
+  | Tany64, FR r => OK (Pmovsd_mf_a (Addrmode (Some base) None (inl _ ofs)) r :: k)
+  | _, _ => Error (msg "Asmgen.storeind")
   end.
 
 (** Translation of addressing modes *)
@@ -163,6 +149,12 @@ Definition floatcomp (cmp: comparison) (r1 r2: freg) : instruction :=
   | Ceq | Cne | Cgt | Cge => Pcomisd_ff r1 r2
   end.
 
+Definition floatcomp32 (cmp: comparison) (r1 r2: freg) : instruction :=
+  match cmp with
+  | Clt | Cle => Pcomiss_ff r2 r1
+  | Ceq | Cne | Cgt | Cge => Pcomiss_ff r1 r2
+  end.
+
 (** Translation of a condition.  Prepends to [k] the instructions
   that evaluate the condition and leave its boolean result in bits
   of the condition register. *)
@@ -183,6 +175,10 @@ Definition transl_cond
       do r1 <- freg_of a1; do r2 <- freg_of a2; OK (floatcomp cmp r1 r2 :: k)
   | Cnotcompf cmp, a1 :: a2 :: nil =>
       do r1 <- freg_of a1; do r2 <- freg_of a2; OK (floatcomp cmp r1 r2 :: k)
+  | Ccompfs cmp, a1 :: a2 :: nil =>
+      do r1 <- freg_of a1; do r2 <- freg_of a2; OK (floatcomp32 cmp r1 r2 :: k)
+  | Cnotcompfs cmp, a1 :: a2 :: nil =>
+      do r1 <- freg_of a1; do r2 <- freg_of a2; OK (floatcomp32 cmp r1 r2 :: k)
   | Cmaskzero n, a1 :: nil =>
       do r1 <- ireg_of a1; OK (Ptest_ri r1 n :: k)
   | Cmasknotzero n, a1 :: nil =>
@@ -224,7 +220,7 @@ Definition testcond_for_condition (cond: condition) : extcond :=
   | Ccompu c => Cond_base(testcond_for_unsigned_comparison c)
   | Ccompimm c n => Cond_base(testcond_for_signed_comparison c)
   | Ccompuimm c n => Cond_base(testcond_for_unsigned_comparison c)
-  | Ccompf c =>
+  | Ccompf c | Ccompfs c =>
       match c with
       | Ceq => Cond_and Cond_np Cond_e
       | Cne => Cond_or Cond_p Cond_ne
@@ -233,7 +229,7 @@ Definition testcond_for_condition (cond: condition) : extcond :=
       | Cgt => Cond_base Cond_a
       | Cge => Cond_base Cond_ae
       end
-  | Cnotcompf c =>
+  | Cnotcompf c | Cnotcompfs c =>
       match c with
       | Ceq => Cond_or Cond_p Cond_ne
       | Cne => Cond_and Cond_np Cond_e
@@ -288,6 +284,9 @@ Definition transl_op
   | Ofloatconst f, nil =>
       do r <- freg_of res; 
       OK ((if Float.eq_dec f Float.zero then Pxorpd_f r else Pmovsd_fi r f) :: k)
+  | Osingleconst f, nil =>
+      do r <- freg_of res; 
+      OK ((if Float32.eq_dec f Float32.zero then Pxorps_f r else Pmovss_fi r f) :: k)
   | Oindirectsymbol id, nil =>
       do r <- ireg_of res;
       OK (Pmov_ra r id :: k)
@@ -412,12 +411,36 @@ Definition transl_op
   | Odivf, a1 :: a2 :: nil =>
       assertion (mreg_eq a1 res);
       do r <- freg_of res; do r2 <- freg_of a2; OK (Pdivd_ff r r2 :: k)
+  | Onegfs, a1 :: nil =>
+      assertion (mreg_eq a1 res);
+      do r <- freg_of res; OK (Pnegs r :: k)
+  | Oabsfs, a1 :: nil =>
+      assertion (mreg_eq a1 res);
+      do r <- freg_of res; OK (Pabss r :: k)
+  | Oaddfs, a1 :: a2 :: nil =>
+      assertion (mreg_eq a1 res);
+      do r <- freg_of res; do r2 <- freg_of a2; OK (Padds_ff r r2 :: k)
+  | Osubfs, a1 :: a2 :: nil =>
+      assertion (mreg_eq a1 res);
+      do r <- freg_of res; do r2 <- freg_of a2; OK (Psubs_ff r r2 :: k)
+  | Omulfs, a1 :: a2 :: nil =>
+      assertion (mreg_eq a1 res);
+      do r <- freg_of res; do r2 <- freg_of a2; OK (Pmuls_ff r r2 :: k)
+  | Odivfs, a1 :: a2 :: nil =>
+      assertion (mreg_eq a1 res);
+      do r <- freg_of res; do r2 <- freg_of a2; OK (Pdivs_ff r r2 :: k)
   | Osingleoffloat, a1 :: nil =>
       do r <- freg_of res; do r1 <- freg_of a1; OK (Pcvtsd2ss_ff r r1 :: k)
+  | Ofloatofsingle, a1 :: nil =>
+      do r <- freg_of res; do r1 <- freg_of a1; OK (Pcvtss2sd_ff r r1 :: k)
   | Ointoffloat, a1 :: nil =>
       do r <- ireg_of res; do r1 <- freg_of a1; OK (Pcvttsd2si_rf r r1 :: k)
   | Ofloatofint, a1 :: nil =>
       do r <- freg_of res; do r1 <- ireg_of a1; OK (Pcvtsi2sd_fr r r1 :: k)
+  | Ointofsingle, a1 :: nil =>
+      do r <- ireg_of res; do r1 <- freg_of a1; OK (Pcvttss2si_rf r r1 :: k)
+  | Osingleofint, a1 :: nil =>
+      do r <- freg_of res; do r1 <- ireg_of a1; OK (Pcvtsi2ss_fr r r1 :: k)
   | Ocmp c, args =>
       do r <- ireg_of res;
       transl_cond c args (mk_setcc (testcond_for_condition c) r k)
@@ -443,10 +466,10 @@ Definition transl_load (chunk: memory_chunk)
   | Mint32 =>
       do r <- ireg_of dest; OK(Pmov_rm r am :: k)
   | Mfloat32 =>
-      do r <- freg_of dest; OK(Pcvtss2sd_fm r am :: k)
+      do r <- freg_of dest; OK(Pmovss_fm r am :: k)
   | Mfloat64 =>
       do r <- freg_of dest; OK(Pmovsd_fm r am :: k)
-  | Mint64 =>
+  | _ =>
       Error (msg "Asmgen.transl_load")
   end.
 
@@ -462,10 +485,10 @@ Definition transl_store (chunk: memory_chunk)
   | Mint32 =>
       do r <- ireg_of src; OK(Pmov_mr am r :: k)
   | Mfloat32 =>
-      do r <- freg_of src; OK(Pcvtsd2ss_mf am r :: k)
+      do r <- freg_of src; OK(Pmovss_mf am r :: k)
   | Mfloat64 =>
       do r <- freg_of src; OK(Pmovsd_mf am r :: k)
-  | Mint64 =>
+  | _ =>
       Error (msg "Asmgen.transl_store")
   end.
 

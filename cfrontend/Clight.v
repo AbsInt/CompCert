@@ -47,7 +47,8 @@ Require Import Cop.
 
 Inductive expr : Type :=
   | Econst_int: int -> type -> expr       (**r integer literal *)
-  | Econst_float: float -> type -> expr   (**r float literal *)
+  | Econst_float: float -> type -> expr   (**r double float literal *)
+  | Econst_single: float32 -> type -> expr (**r single float literal *)
   | Econst_long: int64 -> type -> expr    (**r long integer literal *)
   | Evar: ident -> type -> expr           (**r variable *)
   | Etempvar: ident -> type -> expr       (**r temporary variable *)
@@ -69,6 +70,7 @@ Definition typeof (e: expr) : type :=
   match e with
   | Econst_int _ ty => ty
   | Econst_float _ ty => ty
+  | Econst_single _ ty => ty
   | Econst_long _ ty => ty
   | Evar _ ty => ty
   | Etempvar _ ty => ty
@@ -352,6 +354,8 @@ Inductive eval_expr: expr -> val -> Prop :=
       eval_expr (Econst_int i ty) (Vint i)
   | eval_Econst_float:   forall f ty,
       eval_expr (Econst_float f ty) (Vfloat f)
+  | eval_Econst_single:   forall f ty,
+      eval_expr (Econst_single f ty) (Vsingle f)
   | eval_Econst_long:   forall i ty,
       eval_expr (Econst_long i ty) (Vlong i)
   | eval_Etempvar:  forall id ty v,

@@ -31,10 +31,10 @@ let rec precedence = function
   | Evar _ -> (16, NA)
   | Econst _ -> (16, NA)
   | Eunop _ -> (15, RtoL)
-  | Ebinop((Omul|Odiv|Odivu|Omod|Omodu|Omulf|Odivf|Omull|Odivl|Odivlu|Omodl|Omodlu), _, _) -> (13, LtoR)
-  | Ebinop((Oadd|Osub|Oaddf|Osubf|Oaddl|Osubl), _, _) -> (12, LtoR)
+  | Ebinop((Omul|Odiv|Odivu|Omod|Omodu|Omulf|Odivf|Omulfs|Odivfs|Omull|Odivl|Odivlu|Omodl|Omodlu), _, _) -> (13, LtoR)
+  | Ebinop((Oadd|Osub|Oaddf|Osubf|Oaddfs|Osubfs|Oaddl|Osubl), _, _) -> (12, LtoR)
   | Ebinop((Oshl|Oshr|Oshru|Oshll|Oshrl|Oshrlu), _, _) -> (11, LtoR)
-  | Ebinop((Ocmp _|Ocmpu _|Ocmpf _|Ocmpl _|Ocmplu _), _, _) -> (10, LtoR)
+  | Ebinop((Ocmp _|Ocmpu _|Ocmpf _|Ocmpfs _|Ocmpl _|Ocmplu _), _, _) -> (10, LtoR)
   | Ebinop((Oand|Oandl), _, _) -> (8, LtoR)
   | Ebinop((Oxor|Oxorl), _, _) -> (7, LtoR)
   | Ebinop((Oor|Oorl), _, _) -> (6, LtoR)
@@ -55,11 +55,18 @@ let name_of_unop = function
   | Onotint -> "~"
   | Onegf -> "-f"
   | Oabsf -> "absf"
+  | Onegfs -> "-s"
+  | Oabsfs -> "abss"
   | Osingleoffloat -> "float32"
+  | Ofloatofsingle -> "float64"
   | Ointoffloat -> "intoffloat"
   | Ointuoffloat -> "intuoffloat"
   | Ofloatofint -> "floatofint"
   | Ofloatofintu -> "floatofintu"
+  | Ointofsingle -> "intofsingle"
+  | Ointuofsingle -> "intuofsingle"
+  | Osingleofint -> "singleofint"
+  | Osingleofintu -> "singleofintu"
   | Onegl -> "-l"
   | Onotl -> "~l"
   | Ointoflong -> "intoflong"
@@ -69,6 +76,8 @@ let name_of_unop = function
   | Olonguoffloat -> "longuoffloat"
   | Ofloatoflong -> "floatoflong"
   | Ofloatoflongu -> "floatoflongu"
+  | Olongofsingle -> "longofsingle"
+  | Olonguofsingle -> "longuofsingle"
   | Osingleoflong -> "singleoflong"
   | Osingleoflongu -> "singleoflongu"
 
@@ -98,6 +107,10 @@ let name_of_binop = function
   | Osubf -> "-f"
   | Omulf -> "*f"
   | Odivf -> "/f"
+  | Oaddfs -> "+s"
+  | Osubfs -> "-s"
+  | Omulfs -> "*s"
+  | Odivfs -> "/s"
   | Oaddl -> "+l"
   | Osubl -> "-l"
   | Omull -> "*l"
@@ -114,6 +127,7 @@ let name_of_binop = function
   | Ocmp c -> comparison_name c
   | Ocmpu c -> comparison_name c ^ "u"
   | Ocmpf c -> comparison_name c ^ "f"
+  | Ocmpfs c -> comparison_name c ^ "s"
   | Ocmpl c -> comparison_name c ^ "l"
   | Ocmplu c -> comparison_name c ^ "lu"
 
@@ -135,6 +149,8 @@ let rec expr p (prec, e) =
       fprintf p "%ld" (camlint_of_coqint n)
   | Econst(Ofloatconst f) ->
       fprintf p "%F" (camlfloat_of_coqfloat f)
+  | Econst(Osingleconst f) ->
+      fprintf p "%Ff" (camlfloat_of_coqfloat32 f)
   | Econst(Olongconst n) ->
       fprintf p "%LdLL" (camlint64_of_coqint n)
   | Econst(Oaddrsymbol(id, ofs)) ->
@@ -171,6 +187,8 @@ let name_of_type = function
   | Tfloat -> "float"
   | Tlong -> "long"
   | Tsingle -> "single"
+  | Tany32 -> "any32"
+  | Tany64 -> "any64"
 
 let print_sig p sg =
   List.iter

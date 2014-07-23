@@ -34,12 +34,16 @@ let tint = Base Tint
 let tfloat = Base Tfloat
 let tlong = Base Tlong
 let tsingle = Base Tsingle
+let tany32 = Base Tany32
+let tany64 = Base Tany64
 
 let ty_of_typ = function
   | Tint -> tint
   | Tfloat -> tfloat
   | Tlong -> tlong
-  | Tsingle -> tfloat (* should be tsingle when supported *)
+  | Tsingle -> tsingle
+  | Tany32 -> tany32
+  | Tany64 -> tany64
 
 let ty_of_sig_args tyl = List.map ty_of_typ tyl
 
@@ -88,6 +92,7 @@ let name_of_comparison = function
 let type_constant = function
   | Ointconst _ -> tint
   | Ofloatconst _ -> tfloat
+  | Osingleconst _ -> tsingle
   | Olongconst _ -> tlong
   | Oaddrsymbol _ -> tint
   | Oaddrstack _ -> tint
@@ -101,11 +106,18 @@ let type_unary_operation = function
   | Onotint -> tint, tint
   | Onegf -> tfloat, tfloat
   | Oabsf -> tfloat, tfloat
-  | Osingleoffloat -> tfloat, tfloat
+  | Onegfs -> tsingle, tsingle
+  | Oabsfs -> tsingle, tsingle
+  | Osingleoffloat -> tfloat, tsingle
+  | Ofloatofsingle -> tsingle, tfloat
   | Ointoffloat -> tfloat, tint
   | Ointuoffloat -> tfloat, tint
   | Ofloatofint -> tint, tfloat
   | Ofloatofintu -> tint, tfloat
+  | Ointofsingle -> tsingle, tint
+  | Ointuofsingle -> tsingle, tint
+  | Osingleofint -> tint, tsingle
+  | Osingleofintu -> tint, tsingle
   | Onegl -> tlong, tlong
   | Onotl -> tlong, tlong
   | Ointoflong -> tlong, tint
@@ -115,6 +127,8 @@ let type_unary_operation = function
   | Olonguoffloat -> tfloat, tlong
   | Ofloatoflong -> tlong, tfloat
   | Ofloatoflongu -> tlong, tfloat
+  | Olongofsingle -> tsingle, tlong
+  | Olonguofsingle -> tsingle, tlong
   | Osingleoflong -> tlong, tfloat
   | Osingleoflongu -> tlong, tfloat
 
@@ -136,6 +150,10 @@ let type_binary_operation = function
   | Osubf -> tfloat, tfloat, tfloat
   | Omulf -> tfloat, tfloat, tfloat
   | Odivf -> tfloat, tfloat, tfloat
+  | Oaddfs -> tsingle, tsingle, tsingle
+  | Osubfs -> tsingle, tsingle, tsingle
+  | Omulfs -> tsingle, tsingle, tsingle
+  | Odivfs -> tsingle, tsingle, tsingle
   | Oaddl -> tlong, tlong, tlong
   | Osubl -> tlong, tlong, tlong
   | Omull -> tlong, tlong, tlong
@@ -152,6 +170,7 @@ let type_binary_operation = function
   | Ocmp _ -> tint, tint, tint
   | Ocmpu _ -> tint, tint, tint
   | Ocmpf _ -> tfloat, tfloat, tint
+  | Ocmpfs _ -> tsingle, tsingle, tint
   | Ocmpl _ -> tlong, tlong, tint
   | Ocmplu _ -> tlong, tlong, tint
 
@@ -166,8 +185,10 @@ let type_chunk = function
   | Mint16unsigned -> tint
   | Mint32 -> tint
   | Mint64 -> tlong
-  | Mfloat32 -> tfloat
+  | Mfloat32 -> tsingle
   | Mfloat64 -> tfloat
+  | Many32 -> tany32
+  | Many64 -> tany64
 
 let name_of_chunk = PrintAST.name_of_chunk
 

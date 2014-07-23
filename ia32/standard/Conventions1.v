@@ -15,6 +15,7 @@
 
 Require Import Coqlib.
 Require Import AST.
+Require Import Events.
 Require Import Locations.
 
 (** * Classification of machine registers *)
@@ -161,13 +162,13 @@ Proof.
 Qed.
 
 Lemma int_callee_save_type:
-  forall r, In r int_callee_save_regs -> mreg_type r = Tint.
+  forall r, In r int_callee_save_regs -> mreg_type r = Tany32.
 Proof.
   intro. simpl; ElimOrEq; reflexivity.
 Qed.
 
 Lemma float_callee_save_type:
-  forall r, In r float_callee_save_regs -> mreg_type r = Tfloat.
+  forall r, In r float_callee_save_regs -> mreg_type r = Tany64.
 Proof.
   intro. simpl; ElimOrEq; reflexivity.
 Qed.
@@ -219,25 +220,20 @@ Qed.
 Definition loc_result (s: signature) : list mreg :=
   match s.(sig_res) with
   | None => AX :: nil
-  | Some Tint => AX :: nil
+  | Some (Tint | Tany32) => AX :: nil
   | Some (Tfloat | Tsingle) => FP0 :: nil
+  | Some Tany64 => X0 :: nil
   | Some Tlong => DX :: AX :: nil
   end.
 
-(*
-(** The result location has the type stated in the signature. *)
+(** The result registers have types compatible with that given in the signature. *)
 
 Lemma loc_result_type:
   forall sig,
-  mreg_type (loc_result sig) =
-  match sig.(sig_res) with None => Tint | Some ty => ty end.
+  subtype_list (proj_sig_res' sig) (map mreg_type (loc_result sig)) = true.
 Proof.
-  intros; unfold loc_result.
-  destruct (sig_res sig). 
-  destruct t; reflexivity.
-  reflexivity.
+  intros. unfold proj_sig_res', loc_result. destruct (sig_res sig) as [[]|]; auto.
 Qed.
-*)
 
 (** The result locations are caller-save registers *)
 
@@ -246,9 +242,9 @@ Lemma loc_result_caller_save:
   In r (loc_result s) -> In r destroyed_at_call.
 Proof.
   intros.
-  assert (r = AX \/ r = DX \/ r = FP0).
-    unfold loc_result in H. destruct (sig_res s); [destruct t|idtac]; simpl in H; intuition.
-  destruct H0 as [A | [A | A]]; subst r; simpl; OrEq.
+  assert (r = AX \/ r = DX \/ r = FP0 \/ r = X0).
+    unfold loc_result in H. destruct (sig_res s) as [[]|]; simpl in H; intuition.
+  destruct H0 as [A | [A | [A | A]]]; subst r; simpl; OrEq.
 Qed.
 
 (** ** Location of function arguments *)
@@ -263,6 +259,8 @@ Fixpoint loc_arguments_rec
   | Tfloat :: tys => S Outgoing ofs Tfloat :: loc_arguments_rec tys (ofs + 2)
   | Tsingle :: tys => S Outgoing ofs Tsingle :: loc_arguments_rec tys (ofs + 1)
   | Tlong :: tys => S Outgoing (ofs + 1) Tint :: S Outgoing ofs Tint :: loc_arguments_rec tys (ofs + 2)
+  | Tany32 :: tys => S Outgoing ofs Tany32 :: loc_arguments_rec tys (ofs + 1)
+  | Tany64 :: tys => S Outgoing ofs Tany64 :: loc_arguments_rec tys (ofs + 2)
   end.
 
 (** [loc_arguments s] returns the list of locations where to store arguments
@@ -303,21 +301,18 @@ Remark loc_arguments_rec_charact:
   end.
 Proof.
   induction tyl; simpl loc_arguments_rec; intros.
-  destruct H.
-  destruct a.
-- destruct H. subst l. split. omega. congruence.
-  exploit IHtyl; eauto.
-  destruct l; auto. destruct sl; auto. intuition omega.
-- destruct H. subst l. split. omega. congruence.
-  exploit IHtyl; eauto.
-  destruct l; auto. destruct sl; auto. intuition omega.
-- destruct H. subst l; split; [omega|congruence].
-  destruct H. subst l; split; [omega|congruence].
-  exploit IHtyl; eauto.
-  destruct l; auto. destruct sl; auto. intuition omega.
-- destruct H. subst l. split. omega. congruence.
-  exploit IHtyl; eauto.
-  destruct l; auto. destruct sl; auto. intuition omega.
+- destruct H.
+- assert (REC: forall ofs1, In l (loc_arguments_rec tyl ofs1) -> ofs1 > ofs -> 
+               match l with
+               | R _ => False
+               | S Local _ _ => False
+               | S Incoming _ _ => False
+               | S Outgoing ofs' ty => ofs' >= ofs /\ ty <> Tlong
+               end).
+  { intros. exploit IHtyl; eauto. destruct l; auto. destruct sl; intuition omega
+. }
+  destruct a; simpl in H; repeat (destruct H);
+  ((eapply REC; eauto; omega) || (split; [omega|congruence])).
 Qed.
 
 Lemma loc_arguments_acceptable:
@@ -357,16 +352,15 @@ Lemma loc_arguments_bounded:
 Proof.
   intros until ty. unfold loc_arguments, size_arguments. generalize (sig_args s) 0.
   induction l; simpl; intros.
-  destruct H.
-  destruct a.
-  destruct H. inv H. apply size_arguments_rec_above. auto.
-  destruct H. inv H. apply size_arguments_rec_above. auto.
-  destruct H. inv H.
+- contradiction.
+- Ltac decomp :=
+  match goal with
+  | [ H: _ \/ _ |- _ ] => destruct H; decomp
+  | [ H: S _ _ _ = S _ _ _ |- _ ] => inv H
+  | _ => idtac
+  end.
+  destruct a; simpl in H; decomp; auto; try apply size_arguments_rec_above.
   simpl typesize. replace (z + 1 + 1) with (z + 2) by omega. apply size_arguments_rec_above.
-  destruct H. inv H. 
-  simpl typesize. apply Zle_trans with (ofs + 2). omega. apply size_arguments_rec_above. 
-  auto.
-  destruct H. inv H. apply size_arguments_rec_above. auto.
+  simpl typesize. apply Zle_trans with (ofs + 2). omega. apply size_arguments_rec_above.
 Qed.
-
 

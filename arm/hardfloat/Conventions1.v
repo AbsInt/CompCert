@@ -15,6 +15,7 @@
 
 Require Import Coqlib.
 Require Import AST.
+Require Import Events.
 Require Import Locations.
 
 (** * Classification of machine registers *)
@@ -178,13 +179,13 @@ Proof.
 Qed.
 
 Lemma int_callee_save_type:
-  forall r, In r int_callee_save_regs -> mreg_type r = Tint.
+  forall r, In r int_callee_save_regs -> mreg_type r = Tany32.
 Proof.
   intro. simpl; ElimOrEq; reflexivity.
 Qed.
 
 Lemma float_callee_save_type:
-  forall r, In r float_callee_save_regs -> mreg_type r = Tfloat.
+  forall r, In r float_callee_save_regs -> mreg_type r = Tany64.
 Proof.
   intro. simpl; ElimOrEq; reflexivity.
 Qed.
@@ -235,12 +236,21 @@ Qed.
 Definition loc_result (s: signature) : list mreg :=
   match s.(sig_res) with
   | None => R0 :: nil
-  | Some Tint => R0 :: nil
-  | Some (Tfloat | Tsingle) => F0 :: nil
+  | Some (Tint | Tany32) => R0 :: nil
+  | Some (Tfloat | Tsingle | Tany64) => F0 :: nil
   | Some Tlong => R1 :: R0 :: nil
   end.
 
-(** The result location is a caller-save register or a temporary *)
+(** The result registers have types compatible with that given in the signature. *)
+
+Lemma loc_result_type:
+  forall sig,
+  subtype_list (proj_sig_res' sig) (map mreg_type (loc_result sig)) = true.
+Proof.
+  intros. unfold proj_sig_res', loc_result. destruct (sig_res sig) as [[]|]; auto.
+Qed.
+
+(** The result locations are caller-save registers *)
 
 Lemma loc_result_caller_save:
   forall (s: signature) (r: mreg), 
@@ -286,15 +296,15 @@ Fixpoint loc_arguments_rec
      (tyl: list typ) (ir fr ofs: Z) {struct tyl} : list loc :=
   match tyl with
   | nil => nil
-  | Tint :: tys =>
+  | (Tint | Tany32) as ty :: tys =>
       if zlt ir 4
       then R (ireg_param ir) :: loc_arguments_rec tys (ir + 1) fr ofs
-      else S Outgoing ofs Tint :: loc_arguments_rec tys ir fr (ofs + 1)
-  | Tfloat :: tys =>
+      else S Outgoing ofs ty :: loc_arguments_rec tys ir fr (ofs + 1)
+  | (Tfloat | Tany64) as ty :: tys =>
       if zlt fr 8
       then R (freg_param fr) :: loc_arguments_rec tys ir (fr + 1) ofs
       else let ofs := align ofs 2 in
-           S Outgoing ofs Tfloat :: loc_arguments_rec tys ir fr (ofs + 2)
+           S Outgoing ofs ty :: loc_arguments_rec tys ir fr (ofs + 2)
   | Tsingle :: tys =>
       if zlt fr 8
       then R (freg_param fr) :: loc_arguments_rec tys ir (fr + 1) ofs
@@ -325,12 +335,12 @@ Fixpoint loc_arguments_vararg
      (tyl: list typ) (ofs: Z) {struct tyl} : list loc :=
   match tyl with
   | nil => nil
-  | Tint :: tys =>
-      (if zlt ofs 0 then R (ireg_param (ofs + 4)) else S Outgoing ofs Tint)
+  | (Tint|Tany32) as ty :: tys =>
+      (if zlt ofs 0 then R (ireg_param (ofs + 4)) else S Outgoing ofs ty)
       :: loc_arguments_vararg tys (ofs + 1)
-  | Tfloat :: tys =>
+  | (Tfloat|Tany64) as ty :: tys =>
       let ofs := align ofs 2 in
-      (if zlt ofs 0 then R (freg_param (ofs + 4)) else S Outgoing ofs Tfloat)
+      (if zlt ofs 0 then R (freg_param (ofs + 4)) else S Outgoing ofs ty)
       :: loc_arguments_vararg tys (ofs + 2)
   | Tsingle :: tys =>
       (if zlt ofs 0 then R (freg_param (ofs + 4)) else S Outgoing ofs Tsingle)
@@ -356,11 +366,11 @@ Definition loc_arguments (s: signature) : list loc :=
 Fixpoint size_arguments_rec (tyl: list typ) (ir fr ofs: Z) {struct tyl} : Z :=
   match tyl with
   | nil => ofs
-  | Tint :: tys =>
+  | (Tint|Tany32) :: tys =>
       if zlt ir 4
       then size_arguments_rec tys (ir + 1) fr ofs
       else size_arguments_rec tys ir fr (ofs + 1)
-  | Tfloat :: tys =>
+  | (Tfloat|Tany64) :: tys =>
       if zlt fr 8
       then size_arguments_rec tys ir (fr + 1) ofs
       else size_arguments_rec tys ir fr (align ofs 2 + 2)
@@ -378,8 +388,8 @@ Fixpoint size_arguments_rec (tyl: list typ) (ir fr ofs: Z) {struct tyl} : Z :=
 Fixpoint size_arguments_vararg (tyl: list typ) (ofs: Z) {struct tyl} : Z :=
   match tyl with
   | nil => Zmax 0 ofs
-  | (Tint | Tsingle) :: tys => size_arguments_vararg tys (ofs + 1)
-  | (Tfloat | Tlong) :: tys => size_arguments_vararg tys (align ofs 2 + 2)
+  | (Tint | Tsingle | Tany32) :: tys => size_arguments_vararg tys (ofs + 1)
+  | (Tfloat | Tlong | Tany64) :: tys => size_arguments_vararg tys (align ofs 2 + 2)
   end.
 
 Definition size_arguments (s: signature) : Z :=
@@ -469,6 +479,19 @@ Proof.
   eapply IHtyl; eauto.
   subst. split; [omega | congruence].
   eapply INCR. eapply IHtyl; eauto. omega.
+- (* any32 *)
+  destruct (zlt ir 4); destruct H.
+  subst. left; apply ireg_param_in_params.
+  eapply IHtyl; eauto.
+  subst. split; [omega | congruence].
+  eapply INCR. eapply IHtyl; eauto. omega.
+- (* any64 *)
+  destruct (zlt fr 8); destruct H.
+  subst. right; apply freg_param_in_params.
+  eapply IHtyl; eauto.
+  subst. split. apply Zle_ge. apply align_le. omega. congruence.
+  eapply INCR. eapply IHtyl; eauto.
+  apply Zle_trans with (align ofs 2). apply align_le; omega. omega.
 Qed.
 
 Remark loc_arguments_vararg_charact:
@@ -530,6 +553,20 @@ Proof.
   right; apply freg_param_in_params.
   split. xomega. congruence.
   eapply INCR. eapply IHtyl; eauto. omega.
+- (* any32 *)
+  destruct H. 
+  destruct (zlt ofs 0); subst l. 
+  left; apply ireg_param_in_params.
+  split. xomega. congruence.
+  eapply INCR. eapply IHtyl; eauto. omega.
+- (* any64 *)
+  set (ofs' := align ofs 2) in *.
+  assert (ofs <= ofs') by (apply align_le; omega).
+  destruct H.
+  destruct (zlt ofs' 0); subst l.
+  right; apply freg_param_in_params.
+  split. xomega. congruence.
+  eapply INCR. eapply IHtyl; eauto. omega.
 Qed.
 
 Lemma loc_arguments_acceptable:
@@ -569,6 +606,10 @@ Proof.
   apply Zle_trans with (align ofs0 2 + 2); auto; omega.
   destruct (zlt fr 8); eauto.
   apply Zle_trans with (ofs0 + 1); eauto. omega.
+  destruct (zlt ir 4); eauto. apply Zle_trans with (ofs0 + 1); auto; omega.
+  destruct (zlt fr 8); eauto.
+  apply Zle_trans with (align ofs0 2). apply align_le; omega.
+  apply Zle_trans with (align ofs0 2 + 2); auto; omega.
 Qed.
 
 Remark size_arguments_vararg_above:
@@ -582,6 +623,8 @@ Proof.
   assert (ofs0 <= align ofs0 2) by (apply align_le; omega). xomega.
   assert (ofs0 <= align ofs0 2) by (apply align_le; omega). xomega.
   xomega.
+  xomega.
+  assert (ofs0 <= align ofs0 2) by (apply align_le; omega). xomega.
 Qed.
 
 Lemma size_arguments_above:
@@ -626,6 +669,18 @@ Proof.
   eauto.
   inv H. apply size_arguments_rec_above.
   eauto.
+- (* any32 *)
+  destruct (zlt ir 4); destruct H.
+  discriminate.
+  eauto.
+  inv H. apply size_arguments_rec_above. 
+  eauto.
+- (* any64 *)
+  destruct (zlt fr 8); destruct H.
+  discriminate.
+  eauto. 
+  inv H. apply size_arguments_rec_above. 
+  eauto.
 Qed.
 
 Lemma loc_arguments_vararg_bounded:
@@ -655,6 +710,14 @@ Proof.
 - (* float *)
   destruct H. 
   destruct (zlt ofs0 0); inv H. apply size_arguments_vararg_above. 
+  eauto.
+- (* any32 *)
+  destruct H. 
+  destruct (zlt ofs0 0); inv H. apply size_arguments_vararg_above. 
+  eauto.
+- (* any64 *)
+  destruct H.
+  destruct (zlt (align ofs0 2) 0); inv H. apply size_arguments_vararg_above.
   eauto.
 Qed.
 

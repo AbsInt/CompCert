@@ -121,10 +121,10 @@ let coqint p n =
   else fprintf p "(Int.repr (%ld))" n
 
 let coqfloat p n =
-  let n = camlint64_of_coqint(Floats.Float.bits_of_double n) in
+  let n = camlint64_of_coqint(Floats.Float.to_bits n) in
   if n >= 0L
-  then fprintf p "(Float.double_of_bits (Int64.repr %Ld))" n
-  else fprintf p "(Float.double_of_bits (Int64.repr (%Ld)))" n
+  then fprintf p "(Float.of_bits (Int64.repr %Ld))" n
+  else fprintf p "(Float.of_bits (Int64.repr (%Ld)))" n
 
 let coqint64 p n =
   let n = camlint64_of_coqint n in

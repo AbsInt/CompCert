@@ -196,6 +196,18 @@ Definition typeconv (ty: type) : type :=
   | _                   => remove_attributes ty
   end.
 
+(** Default conversion for arguments to an unprototyped or variadic function.
+  Like [typeconv] but also converts single floats to double floats. *)
+
+Definition default_argument_conversion (ty: type) : type :=
+  match ty with
+  | Tint (I8 | I16 | IBool) _ _ => Tint I32 Signed noattr
+  | Tfloat _ _          => Tfloat F64 noattr
+  | Tarray t sz a       => Tpointer t noattr
+  | Tfunction _ _ _     => Tpointer ty noattr
+  | _                   => remove_attributes ty
+  end.
+
 (** * Operations over types *)
 
 (** Alignment of a type, in bytes. *)
@@ -722,13 +734,4 @@ Fixpoint typlist_of_typelist (tl: typelist) : list AST.typ :=
 
 Definition signature_of_type (args: typelist) (res: type) (cc: calling_convention): signature :=
   mksignature (typlist_of_typelist args) (opttyp_of_type res) cc.
-
-(** Like [typ_of_type], but apply default argument promotion. *)
-
-Definition typ_of_type_default (t: type) : AST.typ :=
-  match t with
-  | Tfloat _ _ => AST.Tfloat
-  | Tlong _ _ => AST.Tlong
-  | _ => AST.Tint
-  end.
 

@@ -237,16 +237,15 @@ Hint Resolve indexed_memory_access_label.
 Remark loadind_label:
   forall base ofs ty dst k c, loadind base ofs ty dst k = OK c -> tail_nolabel k c.
 Proof.
-  intros. destruct ty; monadInv H.
-  unfold loadind_int; TailNoLabel.
-  TailNoLabel.
-  TailNoLabel.
+  unfold loadind, loadind_int; intros;
+  destruct ty, (preg_of dst); inv H; TailNoLabel.
 Qed.
 
 Remark storeind_label:
   forall base ofs ty src k c, storeind src base ofs ty k = OK c -> tail_nolabel k c.
 Proof.
-  intros. destruct ty; monadInv H; TailNoLabel.
+  unfold storeind; intros;
+  destruct ty, (preg_of src); inv H; TailNoLabel.
 Qed.
 
 Remark transl_cond_label:

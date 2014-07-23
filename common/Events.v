@@ -57,7 +57,7 @@ Inductive eventval: Type :=
   | EVint: int -> eventval
   | EVlong: int64 -> eventval
   | EVfloat: float -> eventval
-  | EVfloatsingle: float -> eventval
+  | EVsingle: float32 -> eventval
   | EVptr_global: ident -> int -> eventval.
 
 Inductive event: Type :=
@@ -274,8 +274,7 @@ Inductive eventval_match: eventval -> typ -> val -> Prop :=
   | ev_match_float: forall f,
       eventval_match (EVfloat f) Tfloat (Vfloat f)
   | ev_match_single: forall f,
-      Float.is_single f ->
-      eventval_match (EVfloatsingle f) Tsingle (Vfloat f)
+      eventval_match (EVsingle f) Tsingle (Vsingle f)
   | ev_match_ptr: forall id b ofs,
       Genv.find_symbol ge id = Some b ->
       eventval_match (EVptr_global id ofs) Tint (Vptr b ofs).
@@ -388,7 +387,7 @@ Definition eventval_valid (ev: eventval) : Prop :=
   | EVint _ => True
   | EVlong _ => True
   | EVfloat _ => True
-  | EVfloatsingle f => Float.is_single f
+  | EVsingle _ => True
   | EVptr_global id ofs => exists b, Genv.find_symbol ge id = Some b
   end.
 
@@ -397,7 +396,7 @@ Definition eventval_type (ev: eventval) : typ :=
   | EVint _ => Tint
   | EVlong _ => Tlong
   | EVfloat _ => Tfloat
-  | EVfloatsingle _ => Tsingle
+  | EVsingle _ => Tsingle
   | EVptr_global id ofs => Tint
   end.
 
@@ -412,7 +411,7 @@ Proof.
   destruct H1 as [b EQ]. exists (Vptr b i1); constructor; auto.
   exists (Vlong i0); constructor.
   exists (Vfloat f1); constructor.
-  exists (Vfloat f1); constructor; auto.
+  exists (Vsingle f1); constructor; auto.
   exists (Vint i); constructor.
   destruct H1 as [b' EQ]. exists (Vptr b' i0); constructor; auto.
 Qed.
@@ -967,7 +966,7 @@ Qed.
 Lemma volatile_store_ok:
   forall chunk,
   extcall_properties (volatile_store_sem chunk) 
-                     (mksignature (Tint :: type_of_chunk_use chunk :: nil) None cc_default).
+                     (mksignature (Tint :: type_of_chunk chunk :: nil) None cc_default).
 Proof.
   intros; constructor; intros.
 (* well typed *)
@@ -1022,7 +1021,7 @@ Qed.
 Lemma volatile_store_global_ok:
   forall chunk id ofs,
   extcall_properties (volatile_store_global_sem chunk id ofs) 
-                     (mksignature (type_of_chunk_use chunk :: nil) None cc_default).
+                     (mksignature (type_of_chunk chunk :: nil) None cc_default).
 Proof.
   intros; constructor; intros.
 (* well typed *)

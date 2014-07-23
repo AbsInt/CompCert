@@ -69,7 +69,14 @@ Defined.
 Open Scope Z_scope.
 
 Definition typesize (ty: typ) : Z :=
-  match ty with Tint => 1 | Tlong => 2 | Tfloat => 2 | Tsingle => 1 end.
+  match ty with
+  | Tint => 1
+  | Tlong => 2
+  | Tfloat => 2
+  | Tsingle => 1
+  | Tany32 => 1
+  | Tany64 => 2
+  end.
 
 Lemma typesize_pos:
   forall (ty: typ), typesize ty > 0.
@@ -301,14 +308,27 @@ Module Locmap.
 
   Definition set (l: loc) (v: val) (m: t) : t :=
     fun (p: loc) =>
-      if Loc.eq l p then v
-      else if Loc.diff_dec l p then m p
+      if Loc.eq l p then
+        match l with R r => v | S sl ofs ty => Val.load_result (chunk_of_type ty) v end
+      else if Loc.diff_dec l p then
+        m p
       else Vundef.
 
   Lemma gss: forall l v m,
-    (set l v m) l = v.
+    (set l v m) l = 
+    match l with R r => v | S sl ofs ty => Val.load_result (chunk_of_type ty) v end.
   Proof.
     intros. unfold set. apply dec_eq_true.
+  Qed.
+
+  Lemma gss_reg: forall r v m, (set (R r) v m) (R r) = v.
+  Proof.
+    intros. unfold set. rewrite dec_eq_true. auto.
+  Qed.
+
+  Lemma gss_typed: forall l v m, Val.has_type v (Loc.type l) -> (set l v m) l = v.
+  Proof.
+    intros. rewrite gss. destruct l. auto. apply Val.load_result_same; auto. 
   Qed.
 
   Lemma gso: forall l v m p, Loc.diff l p -> (set l v m) p = m p.
@@ -336,10 +356,11 @@ Module Locmap.
   Proof.
     assert (P: forall ll l m, m l = Vundef -> (undef ll m) l = Vundef).
       induction ll; simpl; intros. auto. apply IHll. 
-      unfold set. destruct (Loc.eq a l). auto.
+      unfold set. destruct (Loc.eq a l).
+      destruct a. auto. destruct ty; reflexivity. 
       destruct (Loc.diff_dec a l); auto.
     induction ll; simpl; intros. contradiction. 
-    destruct H. apply P. subst a. apply gss.  
+    destruct H. apply P. subst a. apply gss_typed. exact I. 
     auto.
   Qed.
 
@@ -364,10 +385,12 @@ Module IndexedTyp <: INDEXED_TYPE.
   Definition t := typ.
   Definition index (x: t) :=
     match x with
-    | Tint => 1%positive
-    | Tsingle => 2%positive
-    | Tfloat => 3%positive
-    | Tlong => 4%positive
+    | Tany32 => 1%positive
+    | Tint => 2%positive
+    | Tsingle => 3%positive
+    | Tany64 => 4%positive
+    | Tfloat => 5%positive
+    | Tlong => 6%positive
     end.
   Lemma index_inj: forall x y, index x = index y -> x = y.
   Proof. destruct x; destruct y; simpl; congruence. Qed.
@@ -456,7 +479,7 @@ Module OrderedLoc <: OrderedType.
   Definition diff_low_bound (l: loc) : loc :=
     match l with
     | R mr => l
-    | S sl ofs ty => S sl (ofs - 1) Tfloat
+    | S sl ofs ty => S sl (ofs - 1) Tany64
     end.
 
   Definition diff_high_bound (l: loc) : loc :=
@@ -480,9 +503,9 @@ Module OrderedLoc <: OrderedType.
         destruct H. right.
         destruct H0. right. generalize (RANGE ty'); omega. 
         destruct H0. 
-        assert (ty' = Tint \/ ty' = Tsingle). 
+        assert (ty' = Tint \/ ty' = Tsingle \/ ty' = Tany32). 
         { unfold OrderedTyp.lt in H1. destruct ty'; auto; compute in H1; congruence. }
-        right. destruct H2; subst ty'; simpl typesize; omega. 
+        right. destruct H2 as [E|[E|E]]; subst ty'; simpl typesize; omega. 
       + destruct H. left. apply OrderedSlot.lt_not_eq; auto.
         destruct H. right.
         destruct H0. left; omega.
@@ -502,13 +525,13 @@ Module OrderedLoc <: OrderedType.
       destruct H. contradiction. 
       destruct H.
       right; right; split; auto. left; omega. 
-      left; right; split; auto. destruct ty'; simpl in *.
-      destruct (zlt ofs' (ofs - 1)). left; auto. 
-      right; split. omega. compute. auto. 
+      left; right; split; auto.
+      assert (EITHER: typesize ty' = 1 /\ OrderedTyp.lt ty' Tany64 \/ typesize ty' = 2).
+      { destruct ty'; compute; auto. }
+      destruct (zlt ofs' (ofs - 1)). left; auto.
+      destruct EITHER as [[P Q] | P].
+      right; split; auto. omega.
       left; omega. 
-      left; omega.
-      destruct (zlt ofs' (ofs - 1)). left; auto. 
-      right; split. omega. compute. auto. 
   Qed.
 
 End OrderedLoc.

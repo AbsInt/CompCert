@@ -168,11 +168,7 @@ Remark loadind_label:
   loadind base ofs ty dst k = OK c ->
   tail_nolabel k c.
 Proof.
-  unfold loadind; intros. destruct ty.
-  TailNoLabel.
-  destruct (preg_of dst); TailNoLabel.
-  discriminate.
-  TailNoLabel.
+  unfold loadind; intros. destruct ty; try discriminate; destruct (preg_of dst); TailNoLabel.
 Qed.
 
 Remark storeind_label:
@@ -180,11 +176,7 @@ Remark storeind_label:
   storeind src base ofs ty k = OK c ->
   tail_nolabel k c.
 Proof.
-  unfold storeind; intros. destruct ty.
-  TailNoLabel.
-  destruct (preg_of src); TailNoLabel.
-  discriminate.
-  TailNoLabel.
+  unfold storeind; intros. destruct ty; try discriminate; destruct (preg_of src); TailNoLabel.
 Qed.
 
 Remark mk_setcc_base_label:
@@ -220,6 +212,8 @@ Proof.
   destruct (Int.eq_dec i Int.zero); TailNoLabel.
   destruct c0; simpl; TailNoLabel.
   destruct c0; simpl; TailNoLabel.
+  destruct c0; simpl; TailNoLabel.
+  destruct c0; simpl; TailNoLabel.
 Qed.
 
 Remark transl_op_label:
@@ -230,6 +224,7 @@ Proof.
   unfold transl_op; intros. destruct op; TailNoLabel.
   destruct (Int.eq_dec i Int.zero); TailNoLabel.
   destruct (Float.eq_dec f Float.zero); TailNoLabel.
+  destruct (Float32.eq_dec f Float32.zero); TailNoLabel.
   eapply tail_nolabel_trans. eapply transl_cond_label; eauto. eapply mk_setcc_label.  
 Qed.
 

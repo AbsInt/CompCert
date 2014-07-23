@@ -435,6 +435,36 @@ Qed.
 
 (** Indexed memory loads. *)
 
+Lemma accessind_load_correct:
+  forall (A: Type) (inj: A -> preg)
+       (instr1: A -> constant -> ireg -> instruction)
+       (instr2: A -> ireg -> ireg -> instruction)
+       (base: ireg) ofs rx chunk v (rs: regset) m k,
+  (forall rs m r1 cst r2,
+   exec_instr ge fn (instr1 r1 cst r2) rs m = load1 ge chunk (inj r1) cst r2 rs m) ->
+  (forall rs m r1 r2 r3,
+   exec_instr ge fn (instr2 r1 r2 r3) rs m = load2 chunk (inj r1) r2 r3 rs m) ->
+  Mem.loadv chunk m (Val.add rs#base (Vint ofs)) = Some v ->
+  base <> GPR0 -> inj rx <> PC ->
+  exists rs',
+     exec_straight ge fn (accessind instr1 instr2 base ofs rx k) rs m k rs' m
+  /\ rs'#(inj rx) = v
+  /\ forall r, r <> PC -> r <> inj rx -> r <> GPR0 -> rs'#r = rs#r.
+Proof.
+  intros. unfold accessind. destruct (Int.eq (high_s ofs) Int.zero).
+- econstructor; split. apply exec_straight_one. 
+  rewrite H. unfold load1. rewrite gpr_or_zero_not_zero by auto. simpl.
+  rewrite H1. eauto. unfold nextinstr. repeat Simplif.
+  split. unfold nextinstr. repeat Simplif. 
+  intros. repeat Simplif. 
+- exploit (loadimm_correct GPR0 ofs); eauto. intros [rs' [P [Q R]]].
+  econstructor; split. eapply exec_straight_trans. eexact P.
+  apply exec_straight_one. rewrite H0. unfold load2. rewrite Q, R by auto with asmgen. 
+  rewrite H1. reflexivity. unfold nextinstr. repeat Simplif.
+  split. repeat Simplif.
+  intros. repeat Simplif.
+Qed.
+
 Lemma loadind_correct:
   forall (base: ireg) ofs ty dst k (rs: regset) m v c,
   loadind base ofs ty dst k = OK c ->
@@ -445,37 +475,43 @@ Lemma loadind_correct:
   /\ rs'#(preg_of dst) = v
   /\ forall r, r <> PC -> r <> preg_of dst -> r <> GPR0 -> rs'#r = rs#r.
 Proof.
-Opaque Int.eq.
-  unfold loadind; intros. destruct ty; monadInv H; simpl in H0.
-(* integer *)
-  rewrite (ireg_of_eq _ _ EQ).
-  destruct (Int.eq (high_s ofs) Int.zero).
-  (* one load *)
-  econstructor; split. apply exec_straight_one. simpl.
-  unfold load1. rewrite gpr_or_zero_not_zero; auto. simpl. rewrite H0. eauto. auto.
-  intuition Simpl.
-  (* loadimm + load *)
-  exploit (loadimm_correct GPR0 ofs); eauto. intros [rs' [A [B C]]]. 
-  exists (nextinstr (rs'#x <- v)); split.
-  eapply exec_straight_trans. eexact A. apply exec_straight_one; auto. 
-  simpl. unfold load2. rewrite C; auto with asmgen. rewrite B. rewrite H0. auto. 
-  intuition Simpl. 
-(* float *)
-  rewrite (freg_of_eq _ _ EQ).
-  destruct (Int.eq (high_s ofs) Int.zero).
-  (* one load *)
-  econstructor; split. apply exec_straight_one. simpl.
-  unfold load1. rewrite gpr_or_zero_not_zero; auto. simpl. rewrite H0. eauto. auto.
-  intuition Simpl.
-  (* loadimm + load *)
-  exploit (loadimm_correct GPR0 ofs); eauto. intros [rs' [A [B C]]]. 
-  exists (nextinstr (rs'#x <- v)); split.
-  eapply exec_straight_trans. eexact A. apply exec_straight_one; auto. 
-  simpl. unfold load2. rewrite C; auto with asmgen. rewrite B. rewrite H0. auto. 
-  intuition Simpl. 
+  unfold loadind; intros. destruct ty; try discriminate; destruct (preg_of dst); inv H; simpl in H0.
+  apply accessind_load_correct with (inj := IR) (chunk := Mint32); auto with asmgen.
+  apply accessind_load_correct with (inj := FR) (chunk := Mfloat64); auto with asmgen.
+  apply accessind_load_correct with (inj := FR) (chunk := Mfloat32); auto with asmgen.
+  apply accessind_load_correct with (inj := IR) (chunk := Many32); auto with asmgen.
+  apply accessind_load_correct with (inj := FR) (chunk := Many64); auto with asmgen.
 Qed.
 
 (** Indexed memory stores. *)
+
+Lemma accessind_store_correct:
+  forall (A: Type) (inj: A -> preg)
+       (instr1: A -> constant -> ireg -> instruction)
+       (instr2: A -> ireg -> ireg -> instruction)
+       (base: ireg) ofs rx chunk (rs: regset) m m' k,
+  (forall rs m r1 cst r2,
+   exec_instr ge fn (instr1 r1 cst r2) rs m = store1 ge chunk (inj r1) cst r2 rs m) ->
+  (forall rs m r1 r2 r3,
+   exec_instr ge fn (instr2 r1 r2 r3) rs m = store2 chunk (inj r1) r2 r3 rs m) ->
+  Mem.storev chunk m (Val.add rs#base (Vint ofs)) (rs (inj rx)) = Some m' ->
+  base <> GPR0 -> inj rx <> PC -> inj rx <> GPR0 ->
+  exists rs',
+     exec_straight ge fn (accessind instr1 instr2 base ofs rx k) rs m k rs' m'
+  /\ forall r, r <> PC -> r <> GPR0 -> rs'#r = rs#r.
+Proof.
+  intros. unfold accessind. destruct (Int.eq (high_s ofs) Int.zero).
+- econstructor; split. apply exec_straight_one. 
+  rewrite H. unfold store1. rewrite gpr_or_zero_not_zero by auto. simpl.
+  rewrite H1. eauto. unfold nextinstr. repeat Simplif.
+  intros. repeat Simplif. 
+- exploit (loadimm_correct GPR0 ofs); eauto. intros [rs' [P [Q R]]].
+  econstructor; split. eapply exec_straight_trans. eexact P.
+  apply exec_straight_one. rewrite H0. unfold store2.
+  rewrite Q. rewrite R by auto with asmgen. rewrite R by auto. 
+  rewrite H1. reflexivity. unfold nextinstr. repeat Simplif.
+  intros. repeat Simplif.
+Qed.
 
 Lemma storeind_correct:
   forall (base: ireg) ofs ty src k (rs: regset) m m' c,
@@ -488,33 +524,12 @@ Lemma storeind_correct:
 Proof.
   unfold storeind; intros.
   assert (preg_of src <> GPR0) by auto with asmgen.
-  destruct ty; monadInv H; simpl in H0.
-(* integer *)
-  rewrite (ireg_of_eq _ _ EQ) in *.
-  destruct (Int.eq (high_s ofs) Int.zero).
-  (* one store *)
-  econstructor; split. apply exec_straight_one. simpl.
-  unfold store1. rewrite gpr_or_zero_not_zero; auto. simpl. rewrite H0. eauto. auto.
-  intros; Simpl.
-  (* loadimm + store *)
-  exploit (loadimm_correct GPR0 ofs); eauto. intros [rs' [A [B C]]]. 
-  exists (nextinstr rs'); split.
-  eapply exec_straight_trans. eexact A. apply exec_straight_one; auto. 
-  simpl. unfold store2. rewrite B. rewrite ! C; auto with asmgen. rewrite H0. auto. 
-  intuition Simpl. 
-(* float *)
-  rewrite (freg_of_eq _ _ EQ) in *.
-  destruct (Int.eq (high_s ofs) Int.zero).
-  (* one store *)
-  econstructor; split. apply exec_straight_one. simpl.
-  unfold store1. rewrite gpr_or_zero_not_zero; auto. simpl. rewrite H0. eauto. auto.
-  intuition Simpl.
-  (* loadimm + store *)
-  exploit (loadimm_correct GPR0 ofs); eauto. intros [rs' [A [B C]]]. 
-  exists (nextinstr rs'); split. 
-  eapply exec_straight_trans. eexact A. apply exec_straight_one; auto. 
-  simpl. unfold store2. rewrite B. rewrite ! C; auto with asmgen. rewrite H0. auto. 
-  intuition Simpl. 
+  destruct ty; try discriminate; destruct (preg_of src) ; inv H; simpl in H0.
+  apply accessind_store_correct with (inj := IR) (chunk := Mint32); auto with asmgen.
+  apply accessind_store_correct with (inj := FR) (chunk := Mfloat64); auto with asmgen.
+  apply accessind_store_correct with (inj := FR) (chunk := Mfloat32); auto with asmgen.
+  apply accessind_store_correct with (inj := IR) (chunk := Many32); auto with asmgen.
+  apply accessind_store_correct with (inj := FR) (chunk := Many64); auto with asmgen.
 Qed.
 
 (** Float comparisons. *)
@@ -1210,15 +1225,7 @@ Local Transparent destroyed_by_store.
 - (* Mint32 *)
   eapply BASE; eauto; erewrite ireg_of_eq by eauto; auto.
 - (* Mfloat32 *)
-  rewrite (freg_of_eq _ _ EQ) in H1.
-  eapply transl_memory_access_correct. eauto. eauto. eauto. 
-  intros. econstructor; split. apply exec_straight_one. 
-  simpl. unfold store1. rewrite H. rewrite H2; auto with asmgen. rewrite H1. eauto. auto. 
-Local Transparent destroyed_by_store.
-  simpl; intros. destruct H5 as [A [B C]]. Simpl. apply H2; auto with asmgen. destruct TEMP0; congruence.
-  intros. econstructor; split. apply exec_straight_one. 
-  simpl. unfold store2. rewrite H. rewrite H2; auto with asmgen. rewrite H1. eauto. auto. 
-  simpl; intros. destruct H5 as [A [B C]]. Simpl. apply H2; auto with asmgen. destruct TEMP0; congruence.
+  eapply BASE; eauto; erewrite freg_of_eq by eauto; auto.
 - (* Mfloat64 *)
   eapply BASE; eauto; erewrite freg_of_eq by eauto; auto.
 Qed.

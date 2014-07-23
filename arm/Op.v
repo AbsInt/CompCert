@@ -57,11 +57,14 @@ Inductive condition : Type :=
   | Ccompushift: comparison -> shift -> condition (**r unsigned integer comparison *)
   | Ccompimm: comparison -> int -> condition (**r signed integer comparison with a constant *)
   | Ccompuimm: comparison -> int -> condition (**r unsigned integer comparison with a constant *)
-  | Ccompf: comparison -> condition     (**r floating-point comparison *)
+  | Ccompf: comparison -> condition     (**r 64-bit floating-point comparison *)
   | Cnotcompf: comparison -> condition (**r negation of a floating-point comparison *)
   | Ccompfzero: comparison -> condition     (**r floating-point comparison with 0.0 *)
-  | Cnotcompfzero: comparison -> condition. (**r negation of a floating-point comparison with 0.0 *)
-
+  | Cnotcompfzero: comparison -> condition  (**r negation of a floating-point comparison with 0.0 *)
+  | Ccompfs: comparison -> condition    (**r 32-bit floating-point comparison *)
+  | Cnotcompfs: comparison -> condition (**r negation of a floating-point comparison *)
+  | Ccompfszero: comparison -> condition     (**r floating-point comparison with 0.0 *)
+  | Cnotcompfszero: comparison -> condition.  (**r negation of a floating-point comparison with 0.0 *)
 
 (** Arithmetic and logical operations.  In the descriptions, [rd] is the
   result of the operation and [r1], [r2], etc, are the arguments. *)
@@ -69,7 +72,8 @@ Inductive condition : Type :=
 Inductive operation : Type :=
   | Omove: operation                    (**r [rd = r1] *)
   | Ointconst: int -> operation         (**r [rd] is set to the given integer constant *)
-  | Ofloatconst: float -> operation     (**r [rd] is set to the given float constant *)
+  | Ofloatconst: float -> operation     (**r [rd] is set to the given 64-bit float constant *)
+  | Osingleconst: float32 -> operation  (**r [rd] is set to the given 32-bit float constant *)
   | Oaddrsymbol: ident -> int -> operation (**r [rd] is set to the the address of the symbol plus the offset *)
   | Oaddrstack: int -> operation        (**r [rd] is set to the stack pointer plus the given offset *)
 (*c Integer arithmetic: *)
@@ -113,12 +117,23 @@ Inductive operation : Type :=
   | Osubf: operation                    (**r [rd = r1 - r2] *)
   | Omulf: operation                    (**r [rd = r1 * r2] *)
   | Odivf: operation                    (**r [rd = r1 / r2] *)
+  | Onegfs: operation                   (**r [rd = - r1] *)
+  | Oabsfs: operation                   (**r [rd = abs(r1)] *)
+  | Oaddfs: operation                   (**r [rd = r1 + r2] *)
+  | Osubfs: operation                   (**r [rd = r1 - r2] *)
+  | Omulfs: operation                   (**r [rd = r1 * r2] *)
+  | Odivfs: operation                   (**r [rd = r1 / r2] *)
   | Osingleoffloat: operation           (**r [rd] is [r1] truncated to single-precision float *)
+  | Ofloatofsingle: operation           (**r [rd] is [r1] expanded to double-precision float *)
 (*c Conversions between int and float: *)
   | Ointoffloat: operation              (**r [rd = signed_int_of_float(r1)] *)
   | Ointuoffloat: operation             (**r [rd = unsigned_int_of_float(r1)] *)
   | Ofloatofint: operation              (**r [rd = float_of_signed_int(r1)] *)
   | Ofloatofintu: operation             (**r [rd = float_of_unsigned_int(r1)] *)
+  | Ointofsingle: operation              (**r [rd = signed_int_of_single(r1)] *)
+  | Ointuofsingle: operation             (**r [rd = unsigned_int_of_single(r1)] *)
+  | Osingleofint: operation              (**r [rd = single_of_signed_int(r1)] *)
+  | Osingleofintu: operation             (**r [rd = single_of_unsigned_int(r1)] *)
 (*c Manipulating 64-bit integers: *)
   | Omakelong: operation                (**r [rd = r1 << 32 | r2] *)
   | Olowlong: operation                 (**r [rd = low-word(r1)] *)
@@ -160,6 +175,7 @@ Definition eq_operation (x y: operation): {x=y} + {x<>y}.
 Proof.
   generalize Int.eq_dec; intro.
   generalize Float.eq_dec; intro.
+  generalize Float32.eq_dec; intro.
   assert (forall (x y: ident), {x=y}+{x<>y}). exact peq.
   generalize eq_shift; intro.
   generalize eq_condition; intro.
@@ -203,6 +219,10 @@ Definition eval_condition (cond: condition) (vl: list val) (m: mem):
   | Cnotcompf c, v1 :: v2 :: nil => option_map negb (Val.cmpf_bool c v1 v2)
   | Ccompfzero c, v1 :: nil => Val.cmpf_bool c v1 (Vfloat Float.zero)
   | Cnotcompfzero c, v1 :: nil => option_map negb (Val.cmpf_bool c v1 (Vfloat Float.zero))
+  | Ccompfs c, v1 :: v2 :: nil => Val.cmpfs_bool c v1 v2
+  | Cnotcompfs c, v1 :: v2 :: nil => option_map negb (Val.cmpfs_bool c v1 v2)
+  | Ccompfszero c, v1 :: nil => Val.cmpfs_bool c v1 (Vsingle Float32.zero)
+  | Cnotcompfszero c, v1 :: nil => option_map negb (Val.cmpfs_bool c v1 (Vsingle Float32.zero))
   | _, _ => None
   end.
 
@@ -213,6 +233,7 @@ Definition eval_operation
   | Omove, v1::nil => Some v1
   | Ointconst n, nil => Some (Vint n)
   | Ofloatconst n, nil => Some (Vfloat n)
+  | Osingleconst n, nil => Some (Vsingle n)
   | Oaddrsymbol s ofs, nil => Some (Genv.symbol_address genv s ofs)
   | Oaddrstack ofs, nil => Some (Val.add sp (Vint ofs))
   | Ocast8signed, v1::nil => Some (Val.sign_ext 8 v1)
@@ -254,11 +275,22 @@ Definition eval_operation
   | Osubf, v1::v2::nil => Some(Val.subf v1 v2)
   | Omulf, v1::v2::nil => Some(Val.mulf v1 v2)
   | Odivf, v1::v2::nil => Some(Val.divf v1 v2)
+  | Onegfs, v1::nil => Some(Val.negfs v1)
+  | Oabsfs, v1::nil => Some(Val.absfs v1)
+  | Oaddfs, v1::v2::nil => Some(Val.addfs v1 v2)
+  | Osubfs, v1::v2::nil => Some(Val.subfs v1 v2)
+  | Omulfs, v1::v2::nil => Some(Val.mulfs v1 v2)
+  | Odivfs, v1::v2::nil => Some(Val.divfs v1 v2)
   | Osingleoffloat, v1::nil => Some(Val.singleoffloat v1)
+  | Ofloatofsingle, v1::nil => Some(Val.floatofsingle v1)
   | Ointoffloat, v1::nil => Val.intoffloat v1
   | Ointuoffloat, v1::nil => Val.intuoffloat v1
   | Ofloatofint, v1::nil => Val.floatofint v1
   | Ofloatofintu, v1::nil => Val.floatofintu v1
+  | Ointofsingle, v1::nil => Val.intofsingle v1
+  | Ointuofsingle, v1::nil => Val.intuofsingle v1
+  | Osingleofint, v1::nil => Val.singleofint v1
+  | Osingleofintu, v1::nil => Val.singleofintu v1
   | Omakelong, v1::v2::nil => Some(Val.longofwords v1 v2)
   | Olowlong, v1::nil => Some(Val.loword v1)
   | Ohighlong, v1::nil => Some(Val.hiword v1)
@@ -281,8 +313,6 @@ Ltac FuncInv :=
   match goal with
   | H: (match ?x with nil => _ | _ :: _ => _ end = Some _) |- _ =>
       destruct x; simpl in H; try discriminate; FuncInv
-  | H: (match ?v with Vundef => _ | Vint _ => _ | Vfloat _ => _ | Vptr _ _ => _ end = Some _) |- _ =>
-      destruct v; simpl in H; try discriminate; FuncInv
   | H: (Some _ = Some _) |- _ =>
       injection H; intros; clear H; FuncInv
   | _ =>
@@ -303,13 +333,18 @@ Definition type_of_condition (c: condition) : list typ :=
   | Cnotcompf _ => Tfloat :: Tfloat :: nil
   | Ccompfzero _ => Tfloat :: nil
   | Cnotcompfzero _ => Tfloat :: nil
+  | Ccompfs _ => Tsingle :: Tsingle :: nil
+  | Cnotcompfs _ => Tsingle :: Tsingle :: nil
+  | Ccompfszero _ => Tsingle :: nil
+  | Cnotcompfszero _ => Tsingle :: nil
   end.
 
 Definition type_of_operation (op: operation) : list typ * typ :=
   match op with
   | Omove => (nil, Tint)   (* treated specially *)
   | Ointconst _ => (nil, Tint)
-  | Ofloatconst f => (nil, if Float.is_single_dec f then Tsingle else Tfloat)
+  | Ofloatconst f => (nil, Tfloat)
+  | Osingleconst f => (nil, Tsingle)
   | Oaddrsymbol _ _ => (nil, Tint)
   | Oaddrstack _ => (nil, Tint)
   | Ocast8signed => (Tint :: nil, Tint)
@@ -351,11 +386,22 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Osubf => (Tfloat :: Tfloat :: nil, Tfloat)
   | Omulf => (Tfloat :: Tfloat :: nil, Tfloat)
   | Odivf => (Tfloat :: Tfloat :: nil, Tfloat)
+  | Onegfs => (Tsingle :: nil, Tsingle)
+  | Oabsfs => (Tsingle :: nil, Tsingle)
+  | Oaddfs => (Tsingle :: Tsingle :: nil, Tsingle)
+  | Osubfs => (Tsingle :: Tsingle :: nil, Tsingle)
+  | Omulfs => (Tsingle :: Tsingle :: nil, Tsingle)
+  | Odivfs => (Tsingle :: Tsingle :: nil, Tsingle)
   | Osingleoffloat => (Tfloat :: nil, Tsingle)
+  | Ofloatofsingle => (Tsingle :: nil, Tfloat)
   | Ointoffloat => (Tfloat :: nil, Tint)
   | Ointuoffloat => (Tfloat :: nil, Tint)
   | Ofloatofint => (Tint :: nil, Tfloat)
   | Ofloatofintu => (Tint :: nil, Tfloat)
+  | Ointofsingle => (Tsingle :: nil, Tint)
+  | Ointuofsingle => (Tsingle :: nil, Tint)
+  | Osingleofint => (Tint :: nil, Tsingle)
+  | Osingleofintu => (Tint :: nil, Tsingle)
   | Omakelong => (Tint :: Tint :: nil, Tlong)
   | Olowlong => (Tlong :: nil, Tint)
   | Ohighlong => (Tlong :: nil, Tint)
@@ -390,7 +436,6 @@ Proof with (try exact I).
   intros.
   destruct op; simpl; simpl in H0; FuncInv; try subst v...
   congruence.
-  destruct (Float.is_single_dec f); red; auto. 
   unfold Genv.symbol_address. destruct (Genv.find_symbol genv i)...
   destruct sp...
   destruct v0...
@@ -433,9 +478,20 @@ Proof with (try exact I).
   destruct v0; destruct v1...
   destruct v0; destruct v1...
   destruct v0; destruct v1...
-  destruct v0... simpl. apply Float.singleoffloat_is_single.  
-  destruct v0; simpl in H0; inv H0. destruct (Float.intoffloat f); simpl in H2; inv H2...
-  destruct v0; simpl in H0; inv H0. destruct (Float.intuoffloat f); simpl in H2; inv H2...
+  destruct v0...
+  destruct v0...
+  destruct v0; destruct v1...
+  destruct v0; destruct v1...
+  destruct v0; destruct v1...
+  destruct v0; destruct v1...
+  destruct v0...
+  destruct v0...
+  destruct v0; simpl in H0; inv H0. destruct (Float.to_int f); simpl in H2; inv H2...
+  destruct v0; simpl in H0; inv H0. destruct (Float.to_intu f); simpl in H2; inv H2...
+  destruct v0; simpl in H0; inv H0...
+  destruct v0; simpl in H0; inv H0...
+  destruct v0; simpl in H0; inv H0. destruct (Float32.to_int f); simpl in H2; inv H2...
+  destruct v0; simpl in H0; inv H0. destruct (Float32.to_intu f); simpl in H2; inv H2...
   destruct v0; simpl in H0; inv H0...
   destruct v0; simpl in H0; inv H0...
   destruct v0; destruct v1...
@@ -503,6 +559,10 @@ Definition negate_condition (cond: condition): condition :=
   | Cnotcompf c => Ccompf c
   | Ccompfzero c => Cnotcompfzero c
   | Cnotcompfzero c => Ccompfzero c
+  | Ccompfs c => Cnotcompfs c
+  | Cnotcompfs c => Ccompfs c
+  | Ccompfszero c => Cnotcompfszero c
+  | Cnotcompfszero c => Ccompfszero c
   end.
 
 Lemma eval_negate_condition:
@@ -520,6 +580,10 @@ Proof.
   repeat (destruct vl; auto). destruct (Val.cmpf_bool c v v0); auto. destruct b; auto.
   repeat (destruct vl; auto). 
   repeat (destruct vl; auto). destruct (Val.cmpf_bool c v (Vfloat Float.zero)); auto. destruct b; auto.
+  repeat (destruct vl; auto). 
+  repeat (destruct vl; auto). destruct (Val.cmpfs_bool c v v0); auto. destruct b; auto.
+  repeat (destruct vl; auto). 
+  repeat (destruct vl; auto). destruct (Val.cmpfs_bool c v (Vsingle Float32.zero)); auto. destruct b; auto.
 Qed.
 
 (** Shifting stack-relative references.  This is used in [Stacking]. *)
@@ -772,6 +836,8 @@ Ltac InvInject :=
       inv H; InvInject
   | [ H: val_inject _ (Vfloat _) _ |- _ ] =>
       inv H; InvInject
+  | [ H: val_inject _ (Vsingle _) _ |- _ ] =>
+      inv H; InvInject
   | [ H: val_inject _ (Vptr _ _) _ |- _ ] =>
       inv H; InvInject
   | [ H: val_list_inject _ nil _ |- _ ] =>
@@ -800,6 +866,10 @@ Proof.
   eauto 4 using val_cmpu_bool_inject, Mem.valid_pointer_implies, eval_shift_inj.
   eauto 4 using val_cmp_bool_inject.
   eauto 4 using val_cmpu_bool_inject, Mem.valid_pointer_implies.
+  inv H3; inv H2; simpl in H0; inv H0; auto.
+  inv H3; inv H2; simpl in H0; inv H0; auto.
+  inv H3; simpl in H0; inv H0; auto.
+  inv H3; simpl in H0; inv H0; auto.
   inv H3; inv H2; simpl in H0; inv H0; auto.
   inv H3; inv H2; simpl in H0; inv H0; auto.
   inv H3; simpl in H0; inv H0; auto.
@@ -869,11 +939,27 @@ Proof.
   inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.
+
+  inv H4; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+
+  inv H4; simpl; auto.
   inv H4; simpl; auto.
 
-  inv H4; simpl in H1; inv H1. simpl. destruct (Float.intoffloat f0); simpl in H2; inv H2.
+  inv H4; simpl in H1; inv H1. simpl. destruct (Float.to_int f0); simpl in H2; inv H2.
   exists (Vint i); auto.
-  inv H4; simpl in H1; inv H1. simpl. destruct (Float.intuoffloat f0); simpl in H2; inv H2.
+  inv H4; simpl in H1; inv H1. simpl. destruct (Float.to_intu f0); simpl in H2; inv H2.
+  exists (Vint i); auto.
+  inv H4; simpl in *; inv H1. TrivialExists.
+  inv H4; simpl in *; inv H1. TrivialExists.
+
+  inv H4; simpl in H1; inv H1. simpl. destruct (Float32.to_int f0); simpl in H2; inv H2.
+  exists (Vint i); auto.
+  inv H4; simpl in H1; inv H1. simpl. destruct (Float32.to_intu f0); simpl in H2; inv H2.
   exists (Vint i); auto.
   inv H4; simpl in *; inv H1. TrivialExists.
   inv H4; simpl in *; inv H1. TrivialExists.

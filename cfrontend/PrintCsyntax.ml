@@ -191,6 +191,8 @@ let print_typed_value p v ty =
       fprintf p "%ld" (camlint_of_coqint n)
   | Vfloat f, _ ->
       fprintf p "%F" (camlfloat_of_coqfloat f)
+  | Vsingle f, _ ->
+      fprintf p "%Ff" (camlfloat_of_coqfloat32 f)
   | Vlong n, Tlong(Unsigned, _) ->
       fprintf p "%LuLLU" (camlint64_of_coqint n)
   | Vlong n, _ ->

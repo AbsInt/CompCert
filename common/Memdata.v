@@ -39,6 +39,8 @@ Definition size_chunk (chunk: memory_chunk) : Z :=
   | Mint64 => 8
   | Mfloat32 => 4
   | Mfloat64 => 8
+  | Many32 => 4
+  | Many64 => 8
   end.
 
 Lemma size_chunk_pos:
@@ -86,6 +88,8 @@ Definition align_chunk (chunk: memory_chunk) : Z :=
   | Mint64 => 8
   | Mfloat32 => 4
   | Mfloat64 => 4
+  | Many32 => 4
+  | Many64 => 4
   end.
 
 Lemma align_chunk_pos:
@@ -112,12 +116,27 @@ Proof.
         | exists 8; reflexivity ].
 Qed.
 
+Inductive quantity : Type := Q32 | Q64.
+
+Definition quantity_eq (q1 q2: quantity) : {q1 = q2} + {q1 <> q2}.
+Proof. decide equality. Defined.
+Global Opaque quantity_eq.
+
+Definition size_quantity_nat (q: quantity) :=
+  match q with Q32 => 4%nat | Q64 => 8%nat end.
+
+Lemma size_quantity_nat_pos:
+  forall q, exists n, size_quantity_nat q = S n.
+Proof.
+  intros. destruct q; [exists 3%nat | exists 7%nat]; auto.
+Qed.
+
 (** * Memory values *)
 
 (** A ``memory value'' is a byte-sized quantity that describes the current
   content of a memory cell.  It can be either:
 - a concrete 8-bit integer;
-- a byte-sized fragment of an opaque pointer;
+- a byte-sized fragment of an opaque value;
 - the special constant [Undef] that represents uninitialized memory.
 *)
 
@@ -126,7 +145,7 @@ Qed.
 Inductive memval: Type :=
   | Undef: memval
   | Byte: byte -> memval
-  | Pointer: block -> int -> nat -> memval.
+  | Fragment: val -> quantity -> nat -> memval.
 
 (** * Encoding and decoding integers *)
 
@@ -311,25 +330,28 @@ Proof.
   simpl. decEq. auto.
 Qed.
 
-Fixpoint inj_pointer (n: nat) (b: block) (ofs: int) {struct n}: list memval :=
+Fixpoint inj_value_rec (n: nat) (v: val) (q: quantity) {struct n}: list memval :=
   match n with
   | O => nil
-  | S m => Pointer b ofs m :: inj_pointer m b ofs
+  | S m => Fragment v q m :: inj_value_rec m v q
   end.
 
-Fixpoint check_pointer (n: nat) (b: block) (ofs: int) (vl: list memval) 
+Definition inj_value (q: quantity) (v: val): list memval :=
+  inj_value_rec (size_quantity_nat q) v q.
+
+Fixpoint check_value (n: nat) (v: val) (q: quantity) (vl: list memval) 
                        {struct n} : bool :=
   match n, vl with
   | O, nil => true
-  | S m, Pointer b' ofs' m' :: vl' =>
-      eq_block b b' && Int.eq_dec ofs ofs' && beq_nat m m' && check_pointer m b ofs vl'
+  | S m, Fragment v' q' m' :: vl' =>
+      Val.eq v v' && quantity_eq q q' && beq_nat m m' && check_value m v q vl'
   | _, _ => false
   end.
 
-Definition proj_pointer (vl: list memval) : val :=
+Definition proj_value (q: quantity) (vl: list memval) : val :=
   match vl with
-  | Pointer b ofs n :: vl' =>
-      if check_pointer 4%nat b ofs vl then Vptr b ofs else Vundef
+  | Fragment v q' n :: vl' =>
+      if check_value (size_quantity_nat q) v q vl then v else Vundef
   | _ => Vundef
   end.
 
@@ -338,10 +360,12 @@ Definition encode_val (chunk: memory_chunk) (v: val) : list memval :=
   | Vint n, (Mint8signed | Mint8unsigned) => inj_bytes (encode_int 1%nat (Int.unsigned n))
   | Vint n, (Mint16signed | Mint16unsigned) => inj_bytes (encode_int 2%nat (Int.unsigned n))
   | Vint n, Mint32 => inj_bytes (encode_int 4%nat (Int.unsigned n))
-  | Vptr b ofs, Mint32 => inj_pointer 4%nat b ofs
+  | Vptr b ofs, Mint32 => inj_value Q32 v
   | Vlong n, Mint64 => inj_bytes (encode_int 8%nat (Int64.unsigned n))
-  | Vfloat n, Mfloat32 => inj_bytes (encode_int 4%nat (Int.unsigned (Float.bits_of_single n)))
-  | Vfloat n, Mfloat64 => inj_bytes (encode_int 8%nat (Int64.unsigned (Float.bits_of_double n)))
+  | Vsingle n, Mfloat32 => inj_bytes (encode_int 4%nat (Int.unsigned (Float32.to_bits n)))
+  | Vfloat n, Mfloat64 => inj_bytes (encode_int 8%nat (Int64.unsigned (Float.to_bits n)))
+  | _, Many32 => inj_value Q32 v
+  | _, Many64 => inj_value Q64 v
   | _, _ => list_repeat (size_chunk_nat chunk) Undef
   end.
 
@@ -355,12 +379,15 @@ Definition decode_val (chunk: memory_chunk) (vl: list memval) : val :=
       | Mint16unsigned => Vint(Int.zero_ext 16 (Int.repr (decode_int bl)))
       | Mint32 => Vint(Int.repr(decode_int bl))
       | Mint64 => Vlong(Int64.repr(decode_int bl))
-      | Mfloat32 => Vfloat(Float.single_of_bits (Int.repr (decode_int bl)))
-      | Mfloat64 => Vfloat(Float.double_of_bits (Int64.repr (decode_int bl)))
+      | Mfloat32 => Vsingle(Float32.of_bits (Int.repr (decode_int bl)))
+      | Mfloat64 => Vfloat(Float.of_bits (Int64.repr (decode_int bl)))
+      | Many32 => Vundef
+      | Many64 => Vundef
       end
   | None =>
       match chunk with
-      | Mint32 => proj_pointer vl
+      | Mint32 | Many32 => Val.load_result chunk (proj_value Q32 vl)
+      | Many64 => Val.load_result chunk (proj_value Q64 vl)
       | _ => Vundef
       end
   end.
@@ -374,12 +401,38 @@ Proof.
         | rewrite length_inj_bytes; apply encode_int_length ].
 Qed.
 
-Lemma check_inj_pointer:
-  forall b ofs n, check_pointer n b ofs (inj_pointer n b ofs) = true.
+Lemma check_inj_value:
+  forall v q n, check_value n v q (inj_value_rec n v q) = true.
 Proof.
   induction n; simpl. auto. 
   unfold proj_sumbool. rewrite dec_eq_true. rewrite dec_eq_true.  
   rewrite <- beq_nat_refl. simpl; auto.
+Qed.
+
+Lemma proj_inj_value:
+  forall q v, proj_value q (inj_value q v) = v.
+Proof.
+  intros. unfold proj_value, inj_value. destruct (size_quantity_nat_pos q) as [n EQ]. 
+  rewrite EQ at 1. simpl. rewrite check_inj_value. auto.
+Qed.
+
+Remark in_inj_value:
+  forall mv v q, In mv (inj_value q v) -> exists n, mv = Fragment v q n.
+Proof.
+Local Transparent inj_value.
+  unfold inj_value; intros until q. generalize (size_quantity_nat q). induction n; simpl; intros.
+  contradiction.
+  destruct H. exists n; auto. eauto. 
+Qed.
+
+Lemma proj_inj_value_mismatch:
+  forall q1 q2 v, q1 <> q2 -> proj_value q1 (inj_value q2 v) = Vundef.
+Proof.
+  intros. unfold proj_value. destruct (inj_value q2 v) eqn:V. auto. destruct m; auto.
+  destruct (in_inj_value (Fragment v0 q n) v q2) as [n' EQ]. 
+  rewrite V; auto with coqlib. inv EQ.
+  destruct (size_quantity_nat_pos q1) as [p EQ1]; rewrite EQ1; simpl.
+  unfold proj_sumbool. rewrite dec_eq_true. rewrite dec_eq_false by congruence. auto.
 Qed.
 
 Definition decode_encode_val (v1: val) (chunk1 chunk2: memory_chunk) (v2: val) : Prop :=
@@ -394,21 +447,30 @@ Definition decode_encode_val (v1: val) (chunk1 chunk2: memory_chunk) (v2: val) :
   | Vint n, Mint16signed, Mint16unsigned => v2 = Vint(Int.zero_ext 16 n)
   | Vint n, Mint16unsigned, Mint16unsigned => v2 = Vint(Int.zero_ext 16 n)
   | Vint n, Mint32, Mint32 => v2 = Vint n
-  | Vint n, Mint32, Mfloat32 => v2 = Vfloat(Float.single_of_bits n)
-  | Vint n, (Mint64 | Mfloat32 | Mfloat64), _ => v2 = Vundef
+  | Vint n, Many32, (Mint32 | Many32) => v2 = Vint n
+  | Vint n, Mint32, Mfloat32 => v2 = Vsingle(Float32.of_bits n)
+  | Vint n, Many64, Many64 => v2 = Vint n
+  | Vint n, (Mint64 | Mfloat32 | Mfloat64 | Many64), _ => v2 = Vundef
   | Vint n, _, _ => True (**r nothing meaningful to say about v2 *)
-  | Vptr b ofs, Mint32, Mint32 => v2 = Vptr b ofs
+  | Vptr b ofs, (Mint32 | Many32), (Mint32 | Many32) => v2 = Vptr b ofs
+  | Vptr b ofs, Many64, Many64 => v2 = Vptr b ofs
   | Vptr b ofs, _, _ => v2 = Vundef
   | Vlong n, Mint64, Mint64 => v2 = Vlong n
-  | Vlong n, Mint64, Mfloat64 => v2 = Vfloat(Float.double_of_bits n)
-  | Vlong n, (Mint8signed|Mint8unsigned|Mint16signed|Mint16unsigned|Mint32|Mfloat32|Mfloat64), _ => v2 = Vundef
+  | Vlong n, Mint64, Mfloat64 => v2 = Vfloat(Float.of_bits n)
+  | Vlong n, Many64, Many64 => v2 = Vlong n
+  | Vlong n, (Mint8signed|Mint8unsigned|Mint16signed|Mint16unsigned|Mint32|Mfloat32|Mfloat64|Many32), _ => v2 = Vundef
   | Vlong n, _, _ => True (**r nothing meaningful to say about v2 *)
-  | Vfloat f, Mfloat32, Mfloat32 => v2 = Vfloat(Float.singleoffloat f)
-  | Vfloat f, Mfloat32, Mint32 => v2 = Vint(Float.bits_of_single f)
   | Vfloat f, Mfloat64, Mfloat64 => v2 = Vfloat f
-  | Vfloat f, (Mint8signed|Mint8unsigned|Mint16signed|Mint16unsigned|Mint32|Mint64), _ => v2 = Vundef
-  | Vfloat f, Mfloat64, Mint64 => v2 = Vlong(Float.bits_of_double f)
+  | Vfloat f, Mfloat64, Mint64 => v2 = Vlong(Float.to_bits f)
+  | Vfloat f, Many64, Many64 => v2 = Vfloat f
+  | Vfloat f, (Mint8signed|Mint8unsigned|Mint16signed|Mint16unsigned|Mint32|Mfloat32|Mint64|Many32), _ => v2 = Vundef
   | Vfloat f, _, _ => True   (* nothing interesting to say about v2 *)
+  | Vsingle f, Mfloat32, Mfloat32 => v2 = Vsingle f
+  | Vsingle f, Mfloat32, Mint32 => v2 = Vint(Float32.to_bits f)
+  | Vsingle f, Many32, Many32 => v2 = Vsingle f
+  | Vsingle f, Many64, Many64 => v2 = Vsingle f
+  | Vsingle f, (Mint8signed|Mint8unsigned|Mint16signed|Mint16unsigned|Mint32|Mint64|Mfloat64|Many64), _ => v2 = Vundef
+  | Vsingle f, _, _ => True (* nothing interesting to say about v2 *)
   end.
 
 Remark decode_val_undef:
@@ -417,14 +479,23 @@ Proof.
   intros. unfold decode_val. simpl. destruct chunk; auto.
 Qed.
 
+Remark proj_bytes_inj_value:
+  forall q v, proj_bytes (inj_value q v) = None.
+Proof.
+  intros. destruct q; reflexivity. 
+Qed.
+
 Lemma decode_encode_val_general:
   forall v chunk1 chunk2,
   decode_encode_val v chunk1 chunk2 (decode_val chunk2 (encode_val chunk1 v)).
 Proof.
-Opaque inj_pointer.
+Opaque inj_value.
   intros.
-  destruct v; destruct chunk1; simpl; try (apply decode_val_undef);
-  destruct chunk2; unfold decode_val; auto; try (rewrite proj_inj_bytes).
+  destruct v; destruct chunk1 eqn:C1; simpl; try (apply decode_val_undef);
+  destruct chunk2 eqn:C2; unfold decode_val; auto; 
+  try (rewrite proj_inj_bytes); try (rewrite proj_bytes_inj_value);
+  try (rewrite proj_inj_value); try (rewrite proj_inj_value_mismatch by congruence);
+  auto.
   rewrite decode_encode_int_1. decEq. apply Int.sign_ext_zero_ext. omega.
   rewrite decode_encode_int_1. decEq. apply Int.zero_ext_idem. omega.
   rewrite decode_encode_int_1. decEq. apply Int.sign_ext_zero_ext. omega.
@@ -437,14 +508,10 @@ Opaque inj_pointer.
   rewrite decode_encode_int_4. auto.
   rewrite decode_encode_int_8. auto.
   rewrite decode_encode_int_8. auto.
-  rewrite decode_encode_int_4. auto.
-  rewrite decode_encode_int_4. decEq. apply Float.single_of_bits_of_single.
   rewrite decode_encode_int_8. auto.
-  rewrite decode_encode_int_8. decEq. apply Float.double_of_bits_of_double.
-  change (proj_bytes (inj_pointer 4 b i)) with (@None (list byte)). simpl. 
-  unfold proj_pointer. generalize (check_inj_pointer b i 4%nat).
-Transparent inj_pointer. 
-  simpl. intros EQ; rewrite EQ; auto.
+  rewrite decode_encode_int_8. decEq. apply Float.of_to_bits.
+  rewrite decode_encode_int_4. auto.
+  rewrite decode_encode_int_4. decEq. apply Float32.of_to_bits.
 Qed.
 
 Lemma decode_encode_val_similar:
@@ -465,12 +532,8 @@ Lemma decode_val_type:
 Proof.
   intros. unfold decode_val. 
   destruct (proj_bytes cl). 
-  destruct chunk; simpl; auto. apply Float.single_of_bits_is_single.
   destruct chunk; simpl; auto.
-  unfold proj_pointer. destruct cl; try (exact I).
-  destruct m; try (exact I).
-  destruct (check_pointer 4%nat b i (Pointer b i n :: cl));
-  exact I.
+  destruct chunk; exact I || apply Val.load_result_type.
 Qed.
 
 Lemma encode_val_int8_signed_unsigned:
@@ -518,7 +581,6 @@ Lemma decode_val_cast:
   | Mint8unsigned => v = Val.zero_ext 8 v
   | Mint16signed => v = Val.sign_ext 16 v
   | Mint16unsigned => v = Val.zero_ext 16 v
-  | Mfloat32 => v = Val.singleoffloat v
   | _ => True
   end.
 Proof.
@@ -527,145 +589,132 @@ Proof.
   unfold Val.zero_ext. rewrite Int.zero_ext_idem; auto. omega. 
   unfold Val.sign_ext. rewrite Int.sign_ext_idem; auto. omega.
   unfold Val.zero_ext. rewrite Int.zero_ext_idem; auto. omega.
-  simpl. rewrite Float.singleoffloat_of_bits. auto.
 Qed.
 
 (** Pointers cannot be forged. *)
 
-Definition memval_valid_first (mv: memval) : Prop :=
-  match mv with
-  | Pointer b ofs n => n = 3%nat
-  | _ => True
+Definition quantity_chunk (chunk: memory_chunk) :=
+  match chunk with
+  | Mint64 | Mfloat64 | Many64 => Q64
+  | _ => Q32
   end.
 
-Definition memval_valid_cont (mv: memval) : Prop :=
-  match mv with
-  | Pointer b ofs n => n <> 3%nat
-  | _ => True
-  end.
+Inductive shape_encoding (chunk: memory_chunk) (v: val): list memval -> Prop :=
+  | shape_encoding_f: forall q i mvl,
+      (chunk = Mint32 \/ chunk = Many32 \/ chunk = Many64) ->
+      q = quantity_chunk chunk ->
+      S i = size_quantity_nat q ->
+      (forall mv, In mv mvl -> exists j, mv = Fragment v q j /\ S j <> size_quantity_nat q) ->
+      shape_encoding chunk v (Fragment v q i :: mvl)
+  | shape_encoding_b: forall b mvl,
+      match v with Vint _ => True | Vlong _ => True | Vfloat _ => True | Vsingle _ => True | _ => False end ->
+      (forall mv, In mv mvl -> exists b', mv = Byte b') ->
+      shape_encoding chunk v (Byte b :: mvl)
+  | shape_encoding_u: forall mvl,
+      (forall mv, In mv mvl -> mv = Undef) ->
+      shape_encoding chunk v (Undef :: mvl).
 
-Inductive encoding_shape: list memval -> Prop :=
-  | encoding_shape_intro: forall mv1 mvl,
-      memval_valid_first mv1 ->
-      (forall mv, In mv mvl -> memval_valid_cont mv) ->
-      encoding_shape (mv1 :: mvl).
-
-Lemma encode_val_shape:
-  forall chunk v, encoding_shape (encode_val chunk v).
+Lemma encode_val_shape: forall chunk v, shape_encoding chunk v (encode_val chunk v).
 Proof.
   intros. 
-  destruct (size_chunk_nat_pos chunk) as [sz1 EQ].
-  assert (A: encoding_shape (list_repeat (size_chunk_nat chunk) Undef)).
-    rewrite EQ; simpl; constructor. exact I. 
-    intros. replace mv with Undef. exact I. symmetry; eapply in_list_repeat; eauto.
-  assert (B: forall bl, length bl = size_chunk_nat chunk ->
-          encoding_shape (inj_bytes bl)).
-    intros. destruct bl; simpl in *. congruence. 
-    constructor. exact I. unfold inj_bytes. intros.
-    exploit list_in_map_inv; eauto. intros [x [C D]]. subst mv. exact I.
-  destruct v; auto; destruct chunk; simpl; auto; try (apply B; apply encode_int_length).
-  constructor. red. auto.
-  simpl; intros. intuition; subst mv; red; simpl; congruence.
+  destruct (size_chunk_nat_pos chunk) as [sz EQ]. 
+  assert (A: forall mv q n,
+             (n < size_quantity_nat q)%nat ->
+             In mv (inj_value_rec n v q) ->
+             exists j, mv = Fragment v q j /\ S j <> size_quantity_nat q).
+  {
+    induction n; simpl; intros. contradiction. destruct H0. 
+    exists n; split; auto. omega. apply IHn; auto. omega. 
+  } 
+  assert (B: forall q,
+             q = quantity_chunk chunk -> 
+             (chunk = Mint32 \/ chunk = Many32 \/ chunk = Many64) ->
+             shape_encoding chunk v (inj_value q v)).
+  {
+Local Transparent inj_value.
+    intros. unfold inj_value. destruct (size_quantity_nat_pos q) as [sz' EQ']. 
+    rewrite EQ'. simpl. constructor; auto.
+    intros; eapply A; eauto. omega. 
+  }
+  assert (C: forall bl,
+             match v with Vint _ => True | Vlong _ => True | Vfloat _ => True | Vsingle _ => True | _ => False end ->
+             length (inj_bytes bl) = size_chunk_nat chunk ->
+             shape_encoding chunk v (inj_bytes bl)).
+  {
+    intros. destruct bl as [|b1 bl]. simpl in H0; congruence. simpl. 
+    constructor; auto. unfold inj_bytes; intros. exploit list_in_map_inv; eauto. 
+    intros (b & P & Q); exists b; auto.
+  }
+  assert (D: shape_encoding chunk v (list_repeat (size_chunk_nat chunk) Undef)).
+  {
+    intros. rewrite EQ; simpl; constructor; auto. 
+    intros. eapply in_list_repeat; eauto. 
+  }
+  generalize (encode_val_length chunk v). intros LEN. 
+  unfold encode_val; unfold encode_val in LEN; destruct v; destruct chunk; (apply B || apply C || apply D); auto; red; auto.
 Qed.
 
-Lemma check_pointer_inv:
-  forall b ofs n mv,
-  check_pointer n b ofs mv = true -> mv = inj_pointer n b ofs.
-Proof.
-  induction n; destruct mv; simpl. 
-  auto.
-  congruence.
-  congruence.
-  destruct m; try congruence. intro. 
-  destruct (andb_prop _ _ H). destruct (andb_prop _ _ H0). 
-  destruct (andb_prop _ _ H2).
-  decEq. decEq. symmetry; eapply proj_sumbool_true; eauto.
-  symmetry; eapply proj_sumbool_true; eauto.
-  symmetry; apply beq_nat_true; auto.
-  auto.
-Qed.
+Inductive shape_decoding (chunk: memory_chunk): list memval -> val -> Prop :=
+  | shape_decoding_f: forall v q i mvl,
+      (chunk = Mint32 \/ chunk = Many32 \/ chunk = Many64) ->
+      q = quantity_chunk chunk ->
+      S i = size_quantity_nat q ->
+      (forall mv, In mv mvl -> exists j, mv = Fragment v q j /\ S j <> size_quantity_nat q) ->
+      shape_decoding chunk (Fragment v q i :: mvl) (Val.load_result chunk v)
+  | shape_decoding_b: forall b mvl v,
+      match v with Vint _ => True | Vlong _ => True | Vfloat _ => True | Vsingle _ => True |  _ => False end ->
+      (forall mv, In mv mvl -> exists b', mv = Byte b') ->
+      shape_decoding chunk (Byte b :: mvl) v
+  | shape_decoding_u: forall mvl,
+      shape_decoding chunk mvl Vundef.
 
-Inductive decoding_shape: list memval -> Prop :=
-  | decoding_shape_intro: forall mv1 mvl,
-      memval_valid_first mv1 -> mv1 <> Undef ->
-      (forall mv, In mv mvl -> memval_valid_cont mv /\ mv <> Undef) ->
-      decoding_shape (mv1 :: mvl).
-
-Lemma decode_val_shape:
-  forall chunk mvl,
-  List.length mvl = size_chunk_nat chunk ->
-  decode_val chunk mvl = Vundef \/ decoding_shape mvl.
+Lemma decode_val_shape: forall chunk mv1 mvl,
+  shape_decoding chunk (mv1 :: mvl) (decode_val chunk (mv1 :: mvl)).
 Proof.
-  intros. destruct (size_chunk_nat_pos chunk) as [sz EQ]. 
+  intros. 
+  assert (A: forall mv mvs bs, proj_bytes mvs = Some bs -> In mv mvs ->
+                               exists b, mv = Byte b).
+  {
+    induction mvs; simpl; intros. 
+    contradiction.
+    destruct a; try discriminate. destruct H0. exists i; auto. 
+    destruct (proj_bytes mvs); try discriminate. eauto. 
+  }
+  assert (B: forall v q mv n mvs,
+             check_value n v q mvs = true -> In mv mvs -> (n < size_quantity_nat q)%nat ->
+             exists j, mv = Fragment v q j /\ S j <> size_quantity_nat q).
+  {
+    induction n; destruct mvs; simpl; intros; try discriminate.
+    contradiction.
+    destruct m; try discriminate. InvBooleans. apply beq_nat_true in H4. subst. 
+    destruct H0. subst mv. exists n0; split; auto. omega. 
+    eapply IHn; eauto. omega.  
+  }
+  assert (U: forall mvs, shape_decoding chunk mvs (Val.load_result chunk Vundef)).
+  {
+    intros. replace (Val.load_result chunk Vundef) with Vundef. constructor. 
+    destruct chunk; auto.
+  }
+  assert (C: forall q, size_quantity_nat q = size_chunk_nat chunk ->
+             (chunk = Mint32 \/ chunk = Many32 \/ chunk = Many64) ->
+             shape_decoding chunk (mv1 :: mvl) (Val.load_result chunk (proj_value q (mv1 :: mvl)))).
+  {
+    intros. unfold proj_value. destruct mv1; auto.
+    destruct (size_quantity_nat_pos q) as [sz EQ]. rewrite EQ. 
+    simpl. unfold proj_sumbool. rewrite dec_eq_true.
+    destruct (quantity_eq q q0); auto. 
+    destruct (beq_nat sz n) eqn:EQN; auto.
+    destruct (check_value sz v q mvl) eqn:CHECK; auto. 
+    simpl. apply beq_nat_true in EQN. subst n q0. constructor. auto. 
+    destruct H0 as [E|[E|E]]; subst chunk; destruct q; auto || discriminate.
+    congruence. 
+    intros. eapply B; eauto. omega. 
+  }
   unfold decode_val. 
-  caseEq (proj_bytes mvl).
-  intros bl PROJ. right. exploit inj_proj_bytes; eauto. intros. subst mvl.
-  destruct bl; simpl in H. congruence. simpl. constructor. 
-  red; auto. congruence.
-  unfold inj_bytes; intros. exploit list_in_map_inv; eauto. intros [b [A B]]. 
-  subst mv. split. red; auto. congruence.
-  intros. destruct chunk; auto. unfold proj_pointer.
-  destruct mvl; auto. destruct m; auto. 
-  caseEq (check_pointer 4%nat b i (Pointer b i n :: mvl)); auto.
-  intros. right. exploit check_pointer_inv; eauto. simpl; intros; inv H2.
-  constructor. red. auto. congruence. 
-  simpl; intros. intuition; subst mv; simpl; congruence.
-Qed.
-
-Lemma encode_val_pointer_inv:
-  forall chunk v b ofs n mvl,
-  encode_val chunk v = Pointer b ofs n :: mvl ->
-  chunk = Mint32 /\ v = Vptr b ofs /\ mvl = inj_pointer 3%nat b ofs.
-Proof.
-  intros until mvl.
-  assert (A: list_repeat (size_chunk_nat chunk) Undef = Pointer b ofs n :: mvl ->
-            chunk = Mint32 /\ v = Vptr b ofs /\ mvl = inj_pointer 3 b ofs).
-    intros. destruct (size_chunk_nat_pos chunk) as [sz SZ]. rewrite SZ in H. simpl in H. discriminate.
-  assert (B: forall bl, length bl <> 0%nat -> inj_bytes bl = Pointer b ofs n :: mvl ->
-            chunk = Mint32 /\ v = Vptr b ofs /\ mvl = inj_pointer 3 b ofs).
-    intros. destruct bl; simpl in *; congruence.
-  unfold encode_val; destruct v; destruct chunk;
-  (apply A; assumption) ||
-  (apply B; rewrite encode_int_length; congruence) || idtac.
-  simpl. intros EQ; inv EQ; auto. 
-Qed.
-
-Lemma decode_val_pointer_inv:
-  forall chunk mvl b ofs,
-  decode_val chunk mvl = Vptr b ofs ->
-  chunk = Mint32 /\ mvl = inj_pointer 4%nat b ofs.
-Proof.
-  intros until ofs; unfold decode_val.
-  destruct (proj_bytes mvl). 
-  destruct chunk; congruence.
-  destruct chunk; try congruence.
-  unfold proj_pointer. destruct mvl. congruence. destruct m; try congruence.
-  case_eq (check_pointer 4%nat b0 i (Pointer b0 i n :: mvl)); intros.
-  inv H0. split; auto. apply check_pointer_inv; auto. 
-  congruence.
-Qed.
-
-Inductive pointer_encoding_shape: list memval -> Prop :=
-  | pointer_encoding_shape_intro: forall mv1 mvl,
-      ~memval_valid_cont mv1 ->
-      (forall mv, In mv mvl -> ~memval_valid_first mv) ->
-      pointer_encoding_shape (mv1 :: mvl).
-
-Lemma encode_pointer_shape:
-  forall b ofs, pointer_encoding_shape (encode_val Mint32 (Vptr b ofs)).
-Proof.
-  intros. simpl. constructor.
-  unfold memval_valid_cont. red; intro. elim H. auto. 
-  unfold memval_valid_first. simpl; intros; intuition; subst mv; congruence.
-Qed.
-
-Lemma decode_pointer_shape:
-  forall chunk mvl b ofs,
-  decode_val chunk mvl = Vptr b ofs ->
-  chunk = Mint32 /\ pointer_encoding_shape mvl.
-Proof.
-  intros. exploit decode_val_pointer_inv; eauto. intros [A B].
-  split; auto. subst mvl. apply encode_pointer_shape. 
+  destruct (proj_bytes (mv1 :: mvl)) as [bl|] eqn:PB. 
+  exploit (A mv1); eauto with coqlib. intros [b1 EQ1]; subst mv1. 
+  destruct chunk; (apply shape_decoding_u || apply shape_decoding_b); eauto with coqlib.
+  destruct chunk; (apply shape_decoding_u || apply C); auto. 
 Qed.
 
 (** * Compatibility with memory injections *)
@@ -675,18 +724,17 @@ Qed.
 Inductive memval_inject (f: meminj): memval -> memval -> Prop :=
   | memval_inject_byte:
       forall n, memval_inject f (Byte n) (Byte n)
-  | memval_inject_ptr:
-      forall b1 ofs1 b2 ofs2 delta n,
-      f b1 = Some (b2, delta) ->
-      ofs2 = Int.add ofs1 (Int.repr delta) ->
-      memval_inject f (Pointer b1 ofs1 n) (Pointer b2 ofs2 n)
+  | memval_inject_frag:
+      forall v1 v2 q n,
+      val_inject f v1 v2 ->
+      memval_inject f (Fragment v1 q n) (Fragment v2 q n)
   | memval_inject_undef:
       forall mv, memval_inject f Undef mv.
 
 Lemma memval_inject_incr:
   forall f f' v1 v2, memval_inject f v1 v2 -> inject_incr f f' -> memval_inject f' v1 v2.
 Proof.
-  intros. inv H; econstructor. rewrite (H0 _ _ _ H1). reflexivity. auto.
+  intros. inv H; econstructor. eapply val_inject_incr; eauto. 
 Qed.
 
 (** [decode_val], applied to lists of memory values that are pairwise
@@ -706,38 +754,33 @@ Proof.
   congruence.
 Qed.
 
-Lemma check_pointer_inject:
+Lemma check_value_inject:
   forall f vl vl',
   list_forall2 (memval_inject f) vl vl' ->
-  forall n b ofs b' delta,
-  check_pointer n b ofs vl = true ->
-  f b = Some(b', delta) ->
-  check_pointer n b' (Int.add ofs (Int.repr delta)) vl' = true.
+  forall v v' q n,
+  check_value n v q vl = true ->
+  val_inject f v v' -> v <> Vundef ->
+  check_value n v' q vl' = true.
 Proof.
   induction 1; intros; destruct n; simpl in *; auto. 
   inv H; auto.
-  destruct (andb_prop _ _ H1). destruct (andb_prop _ _ H). 
-  destruct (andb_prop _ _ H5). 
-  assert (n = n0) by (apply beq_nat_true; auto).
-  assert (b = b0) by (eapply proj_sumbool_true; eauto). 
-  assert (ofs = ofs1) by (eapply proj_sumbool_true; eauto).
-  subst. rewrite H3 in H2; inv H2. 
-  unfold proj_sumbool. rewrite dec_eq_true. rewrite dec_eq_true. 
-  rewrite <- beq_nat_refl. simpl. eauto. 
-  congruence.
+  InvBooleans. assert (n = n0) by (apply beq_nat_true; auto). subst v1 q0 n0.
+  replace v2 with v'. 
+  unfold proj_sumbool; rewrite ! dec_eq_true. rewrite <- beq_nat_refl. simpl; eauto. 
+  inv H2; try discriminate; inv H4; congruence.
+  discriminate.
 Qed.
 
-Lemma proj_pointer_inject:
-  forall f vl1 vl2,
+Lemma proj_value_inject:
+  forall f q vl1 vl2,
   list_forall2 (memval_inject f) vl1 vl2 ->
-  val_inject f (proj_pointer vl1) (proj_pointer vl2).
+  val_inject f (proj_value q vl1) (proj_value q vl2).
 Proof.
-  intros. unfold proj_pointer.
+  intros. unfold proj_value. 
   inversion H; subst. auto. inversion H0; subst; auto.
-  case_eq (check_pointer 4%nat b0 ofs1 (Pointer b0 ofs1 n :: al)); intros.
-  exploit check_pointer_inject. eexact H. eauto. eauto. 
-  intro. rewrite H4. econstructor; eauto. 
-  constructor.
+  destruct (check_value (size_quantity_nat q) v1 q (Fragment v1 q0 n :: al)) eqn:B; auto.
+  destruct (Val.eq v1 Vundef). subst; auto. 
+  erewrite check_value_inject by eauto. auto.
 Qed.
 
 Lemma proj_bytes_not_inject:
@@ -754,9 +797,9 @@ Proof.
   auto.
 Qed.
 
-Lemma check_pointer_undef:
-  forall n b ofs vl,
-  In Undef vl -> check_pointer n b ofs vl = false.
+Lemma check_value_undef:
+  forall n q v vl,
+  In Undef vl -> check_value n v q vl = false.
 Proof.
   induction n; intros; simpl. 
   destruct vl. elim H. auto.
@@ -765,12 +808,12 @@ Proof.
   rewrite IHn; auto. apply andb_false_r. 
 Qed.
 
-Lemma proj_pointer_undef:
-  forall vl, In Undef vl -> proj_pointer vl = Vundef.
+Lemma proj_value_undef:
+  forall q vl, In Undef vl -> proj_value q vl = Vundef.
 Proof.
-  intros; unfold proj_pointer.
+  intros; unfold proj_value.
   destruct vl; auto. destruct m; auto. 
-  rewrite check_pointer_undef. auto. auto.
+  rewrite check_value_undef. auto. auto.
 Qed.
 
 Theorem decode_val_inject:
@@ -779,13 +822,20 @@ Theorem decode_val_inject:
   val_inject f (decode_val chunk vl1) (decode_val chunk vl2).
 Proof.
   intros. unfold decode_val. 
-  case_eq (proj_bytes vl1); intros. 
-  exploit proj_bytes_inject; eauto. intros. rewrite H1. 
+  destruct (proj_bytes vl1) as [bl1|] eqn:PB1.
+  exploit proj_bytes_inject; eauto. intros PB2. rewrite PB2. 
   destruct chunk; constructor.
+  assert (A: forall q fn,
+     val_inject f (Val.load_result chunk (proj_value q vl1))
+                  (match proj_bytes vl2 with
+                   | Some bl => fn bl
+                   | None => Val.load_result chunk (proj_value q vl2)
+                   end)).
+  { intros. destruct (proj_bytes vl2) as [bl2|] eqn:PB2.
+    rewrite proj_value_undef. destruct chunk; auto. eapply proj_bytes_not_inject; eauto. congruence.
+    apply val_load_result_inject. apply proj_value_inject; auto.
+  }
   destruct chunk; auto.
-  case_eq (proj_bytes vl2); intros.
-  rewrite proj_pointer_undef. auto. eapply proj_bytes_not_inject; eauto. congruence.
-  apply proj_pointer_inject; auto.
 Qed.
 
 (** Symmetrically, [encode_val], applied to values related by [val_inject],
@@ -805,6 +855,13 @@ Proof.
   induction vl; simpl; constructor; auto. constructor. 
 Qed.  
 
+Lemma repeat_Undef_inject_encode_val:
+  forall f chunk v,
+  list_forall2 (memval_inject f) (list_repeat (size_chunk_nat chunk) Undef) (encode_val chunk v).
+Proof.
+  intros. rewrite <- (encode_val_length chunk v). apply repeat_Undef_inject_any.
+Qed.
+
 Lemma repeat_Undef_inject_self:
   forall f n,
   list_forall2 (memval_inject f) (list_repeat n Undef) (list_repeat n Undef).
@@ -812,19 +869,24 @@ Proof.
   induction n; simpl; constructor; auto. constructor.
 Qed.  
 
+Lemma inj_value_inject:
+  forall f v1 v2 q, val_inject f v1 v2 -> list_forall2 (memval_inject f) (inj_value q v1) (inj_value q v2).
+Proof.
+  intros.
+Local Transparent inj_value.
+  unfold inj_value. generalize (size_quantity_nat q). induction n; simpl; constructor; auto.
+  constructor; auto. 
+Qed.
+
 Theorem encode_val_inject:
   forall f v1 v2 chunk,
   val_inject f v1 v2 ->
   list_forall2 (memval_inject f) (encode_val chunk v1) (encode_val chunk v2).
 Proof.
-  intros. inv H; simpl.
-  destruct chunk; apply inj_bytes_inject || apply repeat_Undef_inject_self.
-  destruct chunk; apply inj_bytes_inject || apply repeat_Undef_inject_self.
-  destruct chunk; apply inj_bytes_inject || apply repeat_Undef_inject_self.
-  destruct chunk; try (apply repeat_Undef_inject_self). 
-  repeat econstructor; eauto. 
-  replace (size_chunk_nat chunk) with (length (encode_val chunk v2)).
-  apply repeat_Undef_inject_any. apply encode_val_length. 
+  intros. inversion H; subst; simpl; destruct chunk;
+  auto using inj_bytes_inject, inj_value_inject, repeat_Undef_inject_self, repeat_Undef_inject_encode_val.
+  unfold encode_val. destruct v2; apply inj_value_inject; auto.
+  unfold encode_val. destruct v2; apply inj_value_inject; auto.
 Qed.
 
 Definition memval_lessdef: memval -> memval -> Prop := memval_inject inject_id.
@@ -832,8 +894,7 @@ Definition memval_lessdef: memval -> memval -> Prop := memval_inject inject_id.
 Lemma memval_lessdef_refl:
   forall mv, memval_lessdef mv mv.
 Proof.
-  red. destruct mv; econstructor.
-  unfold inject_id; reflexivity. rewrite Int.add_zero; auto. 
+  red. destruct mv; econstructor. apply val_inject_id. auto.
 Qed.
 
 (** [memval_inject] and compositions *)
@@ -845,9 +906,8 @@ Lemma memval_inject_compose:
 Proof.
   intros. inv H.
   inv H0. constructor.
-  inv H0. econstructor. 
-  unfold compose_meminj; rewrite H1; rewrite H5; eauto. 
-  rewrite Int.add_assoc. decEq. unfold Int.add. apply Int.eqm_samerepr. auto with ints.
+  inv H0. econstructor.
+  eapply val_inject_compose; eauto. 
   constructor.
 Qed. 
 
@@ -905,28 +965,22 @@ Qed.
 Lemma decode_val_int64:
   forall l1 l2,
   length l1 = 4%nat -> length l2 = 4%nat ->
-  decode_val Mint64 (l1 ++ l2) =
-  Val.longofwords (decode_val Mint32 (if Archi.big_endian then l1 else l2))
-                  (decode_val Mint32 (if Archi.big_endian then l2 else l1)).
+  Val.lessdef
+    (decode_val Mint64 (l1 ++ l2))
+    (Val.longofwords (decode_val Mint32 (if Archi.big_endian then l1 else l2))
+                     (decode_val Mint32 (if Archi.big_endian then l2 else l1))).
 Proof.
   intros. unfold decode_val.
-  assert (PP: forall vl, match proj_pointer vl with Vundef => True | Vptr _ _ => True | _ => False end).
-    intros. unfold proj_pointer. destruct vl; auto. destruct m; auto. 
-    destruct (check_pointer 4 b i (Pointer b i n :: vl)); auto. 
-  assert (PP1: forall vl v2, Val.longofwords (proj_pointer vl) v2 = Vundef).
-    intros. generalize (PP vl). destruct (proj_pointer vl); reflexivity || contradiction.
-  assert (PP2: forall v1 vl, Val.longofwords v1 (proj_pointer vl) = Vundef).
-    intros. destruct v1; simpl; auto. 
-    generalize (PP vl). destruct (proj_pointer vl); reflexivity || contradiction.
   rewrite proj_bytes_append. 
-  destruct (proj_bytes l1) as [b1|] eqn:B1; destruct (proj_bytes l2) as [b2|] eqn:B2.
-- exploit length_proj_bytes. eexact B1. rewrite H; intro L1.
+  destruct (proj_bytes l1) as [b1|] eqn:B1; destruct (proj_bytes l2) as [b2|] eqn:B2; auto.
+  exploit length_proj_bytes. eexact B1. rewrite H; intro L1.
   exploit length_proj_bytes. eexact B2. rewrite H0; intro L2.
   assert (UR: forall l, length l = 4%nat -> Int.unsigned (Int.repr (int_of_bytes l)) = int_of_bytes l).
     intros. apply Int.unsigned_repr. 
     generalize (int_of_bytes_range l). rewrite H1. 
     change (two_p (Z.of_nat 4 * 8)) with (Int.max_unsigned + 1). 
     omega.
+  apply Val.lessdef_same.
   unfold decode_int, rev_if_be. destruct Archi.big_endian; rewrite B1; rewrite B2.
   + rewrite <- (rev_length b1) in L1. 
     rewrite <- (rev_length b2) in L2.
@@ -938,9 +992,6 @@ Proof.
   + unfold Val.longofwords. f_equal. rewrite Int64.ofwords_add. f_equal.
     rewrite !UR by auto. rewrite int_of_bytes_append. 
     rewrite L1. change (Z.of_nat 4 * 8) with 32. ring.
-- destruct Archi.big_endian; rewrite B1; rewrite B2; auto.
-- destruct Archi.big_endian; rewrite B1; rewrite B2; auto.
-- destruct Archi.big_endian; rewrite B1; rewrite B2; auto.
 Qed.
 
 Lemma bytes_of_int_append:

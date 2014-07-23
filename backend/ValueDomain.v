@@ -509,13 +509,13 @@ Inductive aval : Type :=
   | Sgn (n: Z)
   | L (n: int64)
   | F (f: float)
-  | Fsingle
+  | FS (f: float32)
   | Ptr (p: aptr)
   | Ifptr (p: aptr).
 
 Definition eq_aval: forall (v1 v2: aval), {v1=v2} + {v1<>v2}.
 Proof.
-  intros. generalize zeq Int.eq_dec Int64.eq_dec Float.eq_dec eq_aptr; intros.
+  intros. generalize zeq Int.eq_dec Int64.eq_dec Float.eq_dec Float32.eq_dec eq_aptr; intros.
   decide equality. 
 Defined.
 
@@ -537,14 +537,14 @@ Inductive vmatch : val -> aval -> Prop :=
   | vmatch_Sgn_undef: forall n, vmatch Vundef (Sgn n)
   | vmatch_l: forall i, vmatch (Vlong i) (L i)
   | vmatch_f: forall f, vmatch (Vfloat f) (F f)
-  | vmatch_single: forall f, Float.is_single f -> vmatch (Vfloat f) Fsingle
-  | vmatch_single_undef: vmatch Vundef Fsingle
+  | vmatch_s: forall f, vmatch (Vsingle f) (FS f)
   | vmatch_ptr: forall b ofs p, pmatch b ofs p -> vmatch (Vptr b ofs) (Ptr p)
   | vmatch_ptr_undef: forall p, vmatch Vundef (Ptr p)
   | vmatch_ifptr_undef: forall p, vmatch Vundef (Ifptr p)
   | vmatch_ifptr_i: forall i p, vmatch (Vint i) (Ifptr p)
   | vmatch_ifptr_l: forall i p, vmatch (Vlong i) (Ifptr p)
   | vmatch_ifptr_f: forall f p, vmatch (Vfloat f) (Ifptr p)
+  | vmatch_ifptr_s: forall f p, vmatch (Vsingle f) (Ifptr p)
   | vmatch_ifptr_p: forall b ofs p, pmatch b ofs p -> vmatch (Vptr b ofs) (Ifptr p).
 
 Lemma vmatch_ifptr:
@@ -569,11 +569,14 @@ Proof. constructor. Qed.
 Lemma vmatch_ftop: forall f, vmatch (Vfloat f) ftop.
 Proof. intros; constructor. Qed.
 
+Lemma vmatch_ftop_single: forall f, vmatch (Vsingle f) ftop.
+Proof. intros; constructor. Qed.
+
 Lemma vmatch_undef_ftop: vmatch Vundef ftop.
 Proof. constructor. Qed.    
 
 Hint Constructors vmatch : va.
-Hint Resolve vmatch_itop vmatch_undef_itop vmatch_ftop vmatch_undef_ftop : va.
+Hint Resolve vmatch_itop vmatch_undef_itop vmatch_ftop vmatch_ftop_single vmatch_undef_ftop : va.
 
 (* Some properties about [is_uns] and [is_sgn]. *)
 
@@ -770,22 +773,21 @@ Inductive vge: aval -> aval -> Prop :=
   | vge_i: forall i, vge (I i) (I i)
   | vge_l: forall i, vge (L i) (L i)
   | vge_f: forall f, vge (F f) (F f)
+  | vge_s: forall f, vge (FS f) (FS f)
   | vge_uns_i: forall n i, 0 <= n -> is_uns n i -> vge (Uns n) (I i)
   | vge_uns_uns: forall n1 n2, n1 >= n2 -> vge (Uns n1) (Uns n2)
   | vge_sgn_i: forall n i, 0 < n -> is_sgn n i -> vge (Sgn n) (I i)
   | vge_sgn_sgn: forall n1 n2, n1 >= n2 -> vge (Sgn n1) (Sgn n2)
   | vge_sgn_uns: forall n1 n2, n1 > n2 -> vge (Sgn n1) (Uns n2)
-  | vge_single_f: forall f, Float.is_single f -> vge Fsingle (F f)
-  | vge_single: vge Fsingle Fsingle
   | vge_p_p: forall p q, pge p q -> vge (Ptr p) (Ptr q)
   | vge_ip_p: forall p q, pge p q -> vge (Ifptr p) (Ptr q)
   | vge_ip_ip: forall p q, pge p q -> vge (Ifptr p) (Ifptr q)
   | vge_ip_i: forall p i, vge (Ifptr p) (I i)
   | vge_ip_l: forall p i, vge (Ifptr p) (L i)
   | vge_ip_f: forall p f, vge (Ifptr p) (F f)
+  | vge_ip_s: forall p f, vge (Ifptr p) (FS f)
   | vge_ip_uns: forall p n, vge (Ifptr p) (Uns n)
-  | vge_ip_sgn: forall p n, vge (Ifptr p) (Sgn n)
-  | vge_ip_single: forall p, vge (Ifptr p) Fsingle.
+  | vge_ip_sgn: forall p n, vge (Ifptr p) (Sgn n).
 
 Hint Constructors vge : va.
 
@@ -836,12 +838,9 @@ Definition vlub (v w: aval) : aval :=
   | Sgn n1, Uns n2 => sgn (Z.max n1 (n2 + 1))
   | Sgn n1, Sgn n2 => sgn (Z.max n1 n2)
   | F f1, F f2 =>
-      if Float.eq_dec f1 f2 then v else
-      if Float.is_single_dec f1 && Float.is_single_dec f2 then Fsingle else ftop
-  | F f, Fsingle | Fsingle, F f =>
-      if Float.is_single_dec f then Fsingle else ftop
-  | Fsingle, Fsingle =>
-      Fsingle
+      if Float.eq_dec f1 f2 then v else ftop
+  | FS f1, FS f2 =>
+      if Float32.eq_dec f1 f2 then v else ftop
   | L i1, L i2 =>
       if Int64.eq i1 i2 then v else ltop
   | Ptr p1, Ptr p2 => Ptr(plub p1 p2)
@@ -865,8 +864,8 @@ Proof.
 - f_equal; apply Z.max_comm.
 - f_equal; apply Z.max_comm.
 - rewrite Int64.eq_sym. predSpec Int64.eq Int64.eq_spec n0 n; congruence.
-- rewrite dec_eq_sym. destruct (Float.eq_dec f0 f). congruence. 
-  rewrite andb_comm. auto.
+- rewrite dec_eq_sym. destruct (Float.eq_dec f0 f). congruence. auto.
+- rewrite dec_eq_sym. destruct (Float32.eq_dec f0 f). congruence. auto.
 - f_equal; apply plub_comm.
 - f_equal; apply plub_comm.
 - f_equal; apply plub_comm.
@@ -937,12 +936,8 @@ Proof.
 - eapply vge_trans. apply vge_sgn_sgn'. eauto with va.
 - eapply vge_trans. apply vge_sgn_sgn'. eauto with va.
 - destruct (Int64.eq n n0); constructor.
-- destruct (Float.eq_dec f f0). constructor.
-  destruct (Float.is_single_dec f && Float.is_single_dec f0) eqn:FS.
-  InvBooleans. auto with va.
-  constructor.
-- destruct (Float.is_single_dec f); constructor; auto. 
-- destruct (Float.is_single_dec f); constructor; auto.
+- destruct (Float.eq_dec f f0); constructor.
+- destruct (Float32.eq_dec f f0); constructor.
 - constructor; apply pge_lub_l; auto.
 - constructor; apply pge_lub_l; auto.
 - constructor; apply pge_lub_l; auto.
@@ -1043,8 +1038,7 @@ Definition vincl (v w: aval) : bool :=
   | Sgn n, Sgn m => zle n m
   | L i, L j => Int64.eq_dec i j
   | F i, F j => Float.eq_dec i j
-  | F i, Fsingle => Float.is_single_dec i
-  | Fsingle, Fsingle => true
+  | FS i, FS j => Float32.eq_dec i j
   | Ptr p, Ptr q => pincl p q
   | Ptr p, Ifptr q => pincl p q
   | Ifptr p, Ifptr q => pincl p q
@@ -1063,7 +1057,7 @@ Proof.
   InvBooleans. constructor; auto with va.
   InvBooleans. subst; auto with va.
   InvBooleans. subst; auto with va.
-  InvBooleans. auto with va.
+  InvBooleans. subst; auto with va.
   constructor; apply pincl_ge; auto.
   constructor; apply pincl_ge; auto.
   constructor; apply pincl_ge; auto.
@@ -1152,6 +1146,28 @@ Lemma binop_float_sound:
   vmatch (match v, w with Vfloat i, Vfloat j => Vfloat(sem i j) | _, _ => Vundef end) (binop_float sem x y).
 Proof.
   intros. unfold binop_float; inv H; auto with va; inv H0; auto with va.
+Qed.
+
+Definition unop_single (sem: float32 -> float32) (x: aval) :=
+  match x with FS n => FS (sem n) | _ => ftop end.
+
+Lemma unop_single_sound:
+  forall sem v x,
+  vmatch v x ->
+  vmatch (match v with Vsingle i => Vsingle(sem i) | _ => Vundef end) (unop_single sem x).
+Proof.
+  intros. unfold unop_single; inv H; auto with va.
+Qed.
+
+Definition binop_single (sem: float32 -> float32 -> float32) (x y: aval) :=
+  match x, y with FS n, FS m => FS (sem n m) | _, _ => ftop end.
+
+Lemma binop_single_sound:
+  forall sem v x w y,
+  vmatch v x -> vmatch w y ->
+  vmatch (match v, w with Vsingle i, Vsingle j => Vsingle(sem i j) | _, _ => Vundef end) (binop_single sem x y).
+Proof.
+  intros. unfold binop_single; inv H; auto with va; inv H0; auto with va.
 Qed.
 
 (** Logical operations *)
@@ -1636,6 +1652,42 @@ Lemma divf_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.divf v w) (divf x y).
 Proof (binop_float_sound Float.div).
 
+Definition negfs := unop_single Float32.neg.
+
+Lemma negfs_sound: 
+  forall v x, vmatch v x -> vmatch (Val.negfs v) (negfs x).
+Proof (unop_single_sound Float32.neg).
+
+Definition absfs := unop_single Float32.abs.
+
+Lemma absfs_sound: 
+  forall v x, vmatch v x -> vmatch (Val.absfs v) (absfs x).
+Proof (unop_single_sound Float32.abs).
+
+Definition addfs := binop_single Float32.add.
+
+Lemma addfs_sound: 
+  forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.addfs v w) (addfs x y).
+Proof (binop_single_sound Float32.add).
+
+Definition subfs := binop_single Float32.sub.
+
+Lemma subfs_sound: 
+  forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.subfs v w) (subfs x y).
+Proof (binop_single_sound Float32.sub).
+
+Definition mulfs := binop_single Float32.mul.
+
+Lemma mulfs_sound: 
+  forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mulfs v w) (mulfs x y).
+Proof (binop_single_sound Float32.mul).
+
+Definition divfs := binop_single Float32.div.
+
+Lemma divfs_sound: 
+  forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.divfs v w) (divfs x y).
+Proof (binop_single_sound Float32.div).
+
 (** Conversions *)
 
 Definition zero_ext (nbits: Z) (v: aval) :=
@@ -1683,23 +1735,38 @@ Qed.
 
 Definition singleoffloat (v: aval) :=
   match v with
-  | F f => F (Float.singleoffloat f)
-  | _   => Fsingle
+  | F f => FS (Float.to_single f)
+  | _   => ftop
   end.
 
 Lemma singleoffloat_sound:
   forall v x, vmatch v x -> vmatch (Val.singleoffloat v) (singleoffloat x).
 Proof.
-  intros. 
-  assert (DEFAULT: vmatch (Val.singleoffloat v) Fsingle).
-  { destruct v; constructor. apply Float.singleoffloat_is_single. }
+  intros.  
+  assert (DEFAULT: vmatch (Val.singleoffloat v) ftop).
+  { destruct v; constructor. }
+  destruct x; auto. inv H. constructor. 
+Qed.
+
+Definition floatofsingle (v: aval) :=
+  match v with
+  | FS f => F (Float.of_single f)
+  | _   => ftop
+  end.
+
+Lemma floatofsingle_sound:
+  forall v x, vmatch v x -> vmatch (Val.floatofsingle v) (floatofsingle x).
+Proof.
+  intros.  
+  assert (DEFAULT: vmatch (Val.floatofsingle v) ftop).
+  { destruct v; constructor. }
   destruct x; auto. inv H. constructor. 
 Qed.
 
 Definition intoffloat (x: aval) :=
   match x with
   | F f =>
-      match Float.intoffloat f with
+      match Float.to_int f with
       | Some i => I i
       | None => if va_strict tt then Vbot else itop
       end
@@ -1710,14 +1777,14 @@ Lemma intoffloat_sound:
   forall v x w, vmatch v x -> Val.intoffloat v = Some w -> vmatch w (intoffloat x).
 Proof.
   unfold Val.intoffloat; intros. destruct v; try discriminate. 
-  destruct (Float.intoffloat f) as [i|] eqn:E; simpl in H0; inv H0.
+  destruct (Float.to_int f) as [i|] eqn:E; simpl in H0; inv H0.
   inv H; simpl; auto with va. rewrite E; constructor. 
 Qed.
 
 Definition intuoffloat (x: aval) :=
   match x with
   | F f =>
-      match Float.intuoffloat f with
+      match Float.to_intu f with
       | Some i => I i
       | None => if va_strict tt then Vbot else itop
       end
@@ -1728,13 +1795,13 @@ Lemma intuoffloat_sound:
   forall v x w, vmatch v x -> Val.intuoffloat v = Some w -> vmatch w (intuoffloat x).
 Proof.
   unfold Val.intuoffloat; intros. destruct v; try discriminate. 
-  destruct (Float.intuoffloat f) as [i|] eqn:E; simpl in H0; inv H0.
+  destruct (Float.to_intu f) as [i|] eqn:E; simpl in H0; inv H0.
   inv H; simpl; auto with va. rewrite E; constructor. 
 Qed.
 
 Definition floatofint (x: aval) :=
   match x with
-  | I i => F(Float.floatofint i)
+  | I i => F(Float.of_int i)
   | _   => ftop
   end.
 
@@ -1747,7 +1814,7 @@ Qed.
 
 Definition floatofintu (x: aval) :=
   match x with
-  | I i => F(Float.floatofintu i)
+  | I i => F(Float.of_intu i)
   | _   => ftop
   end.
 
@@ -1755,6 +1822,68 @@ Lemma floatofintu_sound:
   forall v x w, vmatch v x -> Val.floatofintu v = Some w -> vmatch w (floatofintu x).
 Proof.
   unfold Val.floatofintu; intros. destruct v; inv H0.
+  inv H; simpl; auto with va.
+Qed.
+
+Definition intofsingle (x: aval) :=
+  match x with
+  | FS f =>
+      match Float32.to_int f with
+      | Some i => I i
+      | None => if va_strict tt then Vbot else itop
+      end
+  | _ => itop
+  end.
+
+Lemma intofsingle_sound:
+  forall v x w, vmatch v x -> Val.intofsingle v = Some w -> vmatch w (intofsingle x).
+Proof.
+  unfold Val.intofsingle; intros. destruct v; try discriminate. 
+  destruct (Float32.to_int f) as [i|] eqn:E; simpl in H0; inv H0.
+  inv H; simpl; auto with va. rewrite E; constructor. 
+Qed.
+
+Definition intuofsingle (x: aval) :=
+  match x with
+  | FS f =>
+      match Float32.to_intu f with
+      | Some i => I i
+      | None => if va_strict tt then Vbot else itop
+      end
+  | _ => itop
+  end.
+
+Lemma intuofsingle_sound:
+  forall v x w, vmatch v x -> Val.intuofsingle v = Some w -> vmatch w (intuofsingle x).
+Proof.
+  unfold Val.intuofsingle; intros. destruct v; try discriminate. 
+  destruct (Float32.to_intu f) as [i|] eqn:E; simpl in H0; inv H0.
+  inv H; simpl; auto with va. rewrite E; constructor. 
+Qed.
+
+Definition singleofint (x: aval) :=
+  match x with
+  | I i => FS(Float32.of_int i)
+  | _   => ftop
+  end.
+
+Lemma singleofint_sound:
+  forall v x w, vmatch v x -> Val.singleofint v = Some w -> vmatch w (singleofint x).
+Proof.
+  unfold Val.singleofint; intros. destruct v; inv H0.
+  inv H; simpl; auto with va.
+Qed.
+
+Definition singleofintu (x: aval) :=
+  match x with
+  | I i => FS(Float32.of_intu i)
+  | _   => ftop
+  end.
+
+Lemma singleofintu_sound:
+  forall v x w, vmatch v x -> Val.singleofintu v = Some w -> vmatch w (singleofintu x).
+Proof.
+  unfold Val.singleofintu; intros. destruct v; inv H0.
   inv H; simpl; auto with va.
 Qed.
 
@@ -1862,6 +1991,18 @@ Proof.
   intros. inv H; try constructor; inv H0; constructor. 
 Qed.
 
+Definition cmpfs_bool (c: comparison) (v w: aval) : abool :=
+  match v, w with
+  | FS f1, FS f2 => Just (Float32.cmp c f1 f2)
+  | _, _ => Btop
+  end.
+
+Lemma cmpfs_bool_sound:
+  forall c v w x y, vmatch v x -> vmatch w y -> cmatch (Val.cmpfs_bool c v w) (cmpfs_bool c x y).
+Proof.
+  intros. inv H; try constructor; inv H0; constructor. 
+Qed.
+
 Definition maskzero (x: aval) (mask: int) : abool :=
   match x with
   | I i => Just (Int.eq (Int.and i mask) Int.zero)
@@ -1939,9 +2080,10 @@ Definition vnormalize (chunk: memory_chunk) (v: aval) :=
   | Mint16unsigned, _ => Uns 16
   | Mint32, (I _ | Ptr _ | Ifptr _) => v
   | Mint64, L _ => v
-  | Mfloat32, F f => F (Float.singleoffloat f)
-  | Mfloat32, _ => Fsingle
+  | Mfloat32, FS f => v
   | Mfloat64, F f => v
+  | Many32, (I _ | Ptr _ | Ifptr _ | FS _) => v
+  | Many64, _ => v
   | _, _ => Ifptr Pbot
   end.
 
@@ -1963,12 +2105,10 @@ Proof.
 - constructor. omega. apply is_zero_ext_uns; auto with va.
 - constructor. xomega. apply is_sign_ext_sgn; auto with va. apply Z.min_case; auto with va.
 - constructor. omega. apply is_zero_ext_uns; auto with va.
-- constructor. apply Float.singleoffloat_is_single.
 - constructor. omega. apply is_sign_ext_sgn; auto with va.
 - constructor. omega. apply is_zero_ext_uns; auto with va.
 - constructor. omega. apply is_sign_ext_sgn; auto with va.
 - constructor. omega. apply is_zero_ext_uns; auto with va.
-- constructor. apply Float.singleoffloat_is_single.
 Qed.
 
 Lemma vnormalize_cast:
@@ -1992,9 +2132,13 @@ Proof.
 - (* int64 *)
   destruct v; try contradiction; constructor.
 - (* float32 *)
-  rewrite H2. destruct v; simpl; constructor. apply Float.singleoffloat_is_single. 
+  destruct v; try contradiction; constructor.
 - (* float64 *)
   destruct v; try contradiction; constructor.
+- (* any32 *)
+  auto.
+- (* any64 *)
+  auto.
 Qed.
 
 Lemma vnormalize_monotone:
@@ -2024,12 +2168,10 @@ Proof.
 - constructor; auto with va. apply is_zero_ext_uns; auto with va.
 - destruct (zlt n2 8); constructor; auto with va.
 - destruct (zlt n2 16); constructor; auto with va.
-- constructor. apply Float.singleoffloat_is_single.
 - constructor; auto with va. apply is_sign_ext_sgn; auto with va.
 - constructor; auto with va. apply is_zero_ext_uns; auto with va.
 - constructor; auto with va. apply is_sign_ext_sgn; auto with va.
 - constructor; auto with va. apply is_zero_ext_uns; auto with va.
-- constructor. apply Float.singleoffloat_is_single.
 - destruct (zlt n 8); constructor; auto with va.
 - destruct (zlt n 16); constructor; auto with va.
 Qed.
@@ -2064,6 +2206,8 @@ Definition chunk_compat (chunk chunk': memory_chunk) : bool :=
   | Mfloat32, Mfloat32 => true
   | Mint64, Mint64 => true
   | Mfloat64, Mfloat64 => true
+  | Many32, Many32 => true
+  | Many64, Many64 => true
   | _, _ => false
   end.
 
@@ -2148,7 +2292,7 @@ Definition ablock_storebytes_anywhere (ab: ablock) (p: aptr) :=
 
 Definition smatch (m: mem) (b: block) (p: aptr) : Prop :=
   (forall chunk ofs v, Mem.load chunk m b ofs = Some v -> vmatch v (Ifptr p))
-/\(forall ofs b' ofs' i, Mem.loadbytes m b ofs 1 = Some (Pointer b' ofs' i :: nil) -> pmatch b' ofs' p).
+/\(forall ofs b' ofs' q i, Mem.loadbytes m b ofs 1 = Some (Fragment (Vptr b' ofs') q i :: nil) -> pmatch b' ofs' p).
 
 Remark loadbytes_load_ext:
   forall b m m',
@@ -2219,10 +2363,10 @@ Proof.
 Qed.
 
 Lemma smatch_loadbytes:
-  forall m b p b' ofs' i n ofs bytes,
+  forall m b p b' ofs' q i n ofs bytes,
   Mem.loadbytes m b ofs n = Some bytes ->
   smatch m b p ->
-  In (Pointer b' ofs' i) bytes ->
+  In (Fragment (Vptr b' ofs') q i) bytes ->
   pmatch b' ofs' p.
 Proof.
   intros. exploit In_loadbytes; eauto. intros (ofs1 & A & B).
@@ -2251,11 +2395,11 @@ Proof.
 Qed.
 
 Lemma storebytes_provenance:
-  forall m b ofs bytes m' b' ofs' b'' ofs'' i,
+  forall m b ofs bytes m' b' ofs' b'' ofs'' q i,
   Mem.storebytes m b ofs bytes = Some m' ->
-  Mem.loadbytes m' b' ofs' 1 = Some (Pointer b'' ofs'' i :: nil) ->
-  In (Pointer b'' ofs'' i) bytes
-  \/ Mem.loadbytes m b' ofs' 1 = Some (Pointer b'' ofs'' i :: nil).
+  Mem.loadbytes m' b' ofs' 1 = Some (Fragment (Vptr b'' ofs'') q i :: nil) ->
+  In (Fragment (Vptr b'' ofs'') q i) bytes
+  \/ Mem.loadbytes m b' ofs' 1 = Some (Fragment (Vptr b'' ofs'') q i :: nil).
 Proof.
   intros. 
   assert (EITHER:
@@ -2275,26 +2419,24 @@ Proof.
 Qed.
 
 Lemma store_provenance:
-  forall chunk m b ofs v m' b' ofs' b'' ofs'' i,
+  forall chunk m b ofs v m' b' ofs' b'' ofs'' q i,
   Mem.store chunk m b ofs v = Some m' ->
-  Mem.loadbytes m' b' ofs' 1 = Some (Pointer b'' ofs'' i :: nil) ->
-  v = Vptr b'' ofs'' /\ chunk = Mint32
-  \/ Mem.loadbytes m b' ofs' 1 = Some (Pointer b'' ofs'' i :: nil).
+  Mem.loadbytes m' b' ofs' 1 = Some (Fragment (Vptr b'' ofs'') q i :: nil) ->
+  v = Vptr b'' ofs'' /\ (chunk = Mint32 \/ chunk = Many32 \/ chunk = Many64)
+  \/ Mem.loadbytes m b' ofs' 1 = Some (Fragment (Vptr b'' ofs'') q i :: nil).
 Proof.
   intros. exploit storebytes_provenance; eauto. eapply Mem.store_storebytes; eauto. 
   intros [A|A]; auto. left.
-  assert (IN_ENC_BYTES: forall bl, ~In (Pointer b'' ofs'' i) (inj_bytes bl)).
-  {
-    induction bl; simpl. tauto. red; intros; elim IHbl. destruct H1. congruence. auto. 
-  }
-  assert (IN_REP_UNDEF: forall n, ~In (Pointer b'' ofs'' i) (list_repeat n Undef)).
-  {
-    intros; red; intros. exploit in_list_repeat; eauto. congruence.
-  }
-  unfold encode_val in A; destruct chunk, v;
-  try (eelim IN_ENC_BYTES; eassumption);
-  try (eelim IN_REP_UNDEF; eassumption).
-  simpl in A. split; auto. intuition congruence.
+  generalize (encode_val_shape chunk v). intros ENC; inv ENC.
+- split; auto. rewrite <- H1 in A; destruct A.
+  + congruence.
+  + exploit H5; eauto. intros (j & P & Q); congruence.
+- rewrite <- H1 in A; destruct A. 
+  + congruence.
+  + exploit H3; eauto. intros [byte P]; congruence. 
+- rewrite <- H1 in A; destruct A.
+  + congruence.
+  + exploit H2; eauto. congruence.
 Qed.
 
 Lemma smatch_store:
@@ -2307,7 +2449,7 @@ Proof.
   intros. destruct H0 as [A B]. split.
 - intros chunk' ofs' v' LOAD. destruct v'; auto with va.
   exploit Mem.load_pointer_store; eauto. 
-  intros [(P & Q & R & S & T) | DISJ]. 
+  intros [(P & Q & R & S) | DISJ]. 
 + subst. apply vmatch_vplub_l. auto.
 + apply vmatch_vplub_r. apply A with (chunk := chunk') (ofs := ofs').
   rewrite <- LOAD. symmetry. eapply Mem.load_store_other; eauto.
@@ -2325,17 +2467,20 @@ Lemma smatch_storebytes:
   forall m b ofs bytes m' b' p p',
   Mem.storebytes m b ofs bytes = Some m' ->
   smatch m b' p ->
-  (forall b' ofs' i, In (Pointer b' ofs' i) bytes -> pmatch b' ofs' p') ->
+  (forall b' ofs' q i, In (Fragment (Vptr b' ofs') q i) bytes -> pmatch b' ofs' p') ->
   smatch m' b' (plub p' p).
 Proof.
   intros. destruct H0 as [A B]. split.
 - intros. apply vmatch_ifptr. intros bx ofsx EQ; subst v. 
   exploit Mem.load_loadbytes; eauto. intros (bytes' & P & Q).
-  exploit decode_val_pointer_inv; eauto. intros [U V]. 
-  subst chunk bytes'. 
-  exploit In_loadbytes; eauto.
-  instantiate (1 := Pointer bx ofsx 3%nat). simpl; auto.
-  intros (ofs' & X & Y).
+  destruct bytes' as [ | byte1' bytes']. 
+  exploit Mem.loadbytes_length; eauto. intros. destruct chunk; discriminate.
+  generalize (decode_val_shape chunk byte1' bytes'). rewrite <- Q. 
+  intros DEC; inv DEC; try contradiction.
+  assert (v = Vptr bx ofsx).
+  { destruct H5 as [E|[E|E]]; rewrite E in H4; destruct v; simpl in H4; congruence. }
+  exploit In_loadbytes; eauto. eauto with coqlib. 
+  intros (ofs' & X & Y). subst v. 
   exploit storebytes_provenance; eauto. intros [Z | Z].
   apply pmatch_lub_l. eauto. 
   apply pmatch_lub_r. eauto. 
@@ -2530,10 +2675,10 @@ Proof.
 Qed.
 
 Lemma ablock_loadbytes_sound:
-  forall m b ab b' ofs' i n ofs bytes,
+  forall m b ab b' ofs' q i n ofs bytes,
   Mem.loadbytes m b ofs n = Some bytes ->
   bmatch m b ab ->
-  In (Pointer b' ofs' i) bytes ->
+  In (Fragment (Vptr b' ofs') q i) bytes ->
   pmatch b' ofs' (ablock_loadbytes ab).
 Proof.
   intros. destruct H0. eapply smatch_loadbytes; eauto. 
@@ -2542,7 +2687,7 @@ Qed.
 Lemma ablock_storebytes_anywhere_sound:
   forall m b ofs bytes p m' b' ab,
   Mem.storebytes m b ofs bytes = Some m' ->
-  (forall b' ofs' i, In (Pointer b' ofs' i) bytes -> pmatch b' ofs' p) ->
+  (forall b' ofs' q i, In (Fragment (Vptr b' ofs') q i) bytes -> pmatch b' ofs' p) ->
   bmatch m b' ab ->
   bmatch m' b' (ablock_storebytes_anywhere ab p).
 Proof.
@@ -2566,7 +2711,7 @@ Lemma ablock_storebytes_sound:
   forall m b ofs bytes m' p ab sz,
   Mem.storebytes m b ofs bytes = Some m' ->
   length bytes = nat_of_Z sz ->
-  (forall b' ofs' i, In (Pointer b' ofs' i) bytes -> pmatch b' ofs' p) ->
+  (forall b' ofs' q i, In (Fragment (Vptr b' ofs') q i) bytes -> pmatch b' ofs' p) ->
   bmatch m b ab ->
   bmatch m' b (ablock_storebytes ab p ofs sz).
 Proof.
@@ -3060,7 +3205,7 @@ Theorem loadbytes_sound:
   romatch m rm ->
   mmatch m am ->
   pmatch b ofs p ->
-  forall  b' ofs' i, In (Pointer b' ofs' i) bytes -> pmatch b' ofs' (loadbytes am rm p).
+  forall  b' ofs' q i, In (Fragment (Vptr b' ofs') q i) bytes -> pmatch b' ofs' (loadbytes am rm p).
 Proof.
   intros. unfold loadbytes; inv H2.
 - (* Gl id ofs *)
@@ -3093,7 +3238,7 @@ Theorem storebytes_sound:
   mmatch m am ->
   pmatch b ofs p ->
   length bytes = nat_of_Z sz ->
-  (forall b' ofs' i, In (Pointer b' ofs' i) bytes -> pmatch b' ofs' q) ->
+  (forall b' ofs' qt i, In (Fragment (Vptr b' ofs') qt i) bytes -> pmatch b' ofs' q) ->
   mmatch m' (storebytes am p sz q).
 Proof.
   intros until q; intros STORE MM PM LENGTH BYTES.
@@ -3403,7 +3548,7 @@ Proof.
     unfold Mem.loadbytes. rewrite pred_dec_true. reflexivity. 
     red; intros. replace ofs0 with ofs by omega. auto.
   }
-  destruct mv; econstructor.
+  destruct mv; econstructor. destruct v; econstructor. 
   apply inj_of_bc_valid.
   assert (PM: pmatch bc b i Ptop).
   { exploit mmatch_top; eauto. intros [P Q].
@@ -3456,7 +3601,7 @@ Proof.
     - exploit Mem.load_inject. eauto. eauto. apply inj_of_bc_valid; auto. 
       intros (v' & A & B). eapply vmatch_inj_top; eauto. 
     - exploit Mem.loadbytes_inject. eauto. eauto. apply inj_of_bc_valid; auto. 
-      intros (bytes' & A & B). inv B. inv H4. eapply pmatch_inj_top; eauto. 
+      intros (bytes' & A & B). inv B. inv H4. inv H8. eapply pmatch_inj_top; eauto. 
   }
   constructor; simpl; intros. 
   - apply ablock_init_sound. apply SM. congruence.
@@ -3701,7 +3846,11 @@ Hint Resolve cnot_sound symbol_address_sound
        divs_sound divu_sound mods_sound modu_sound shrx_sound
        negf_sound absf_sound
        addf_sound subf_sound mulf_sound divf_sound
-       zero_ext_sound sign_ext_sound singleoffloat_sound
+       negfs_sound absfs_sound
+       addfs_sound subfs_sound mulfs_sound divfs_sound
+       zero_ext_sound sign_ext_sound singleoffloat_sound floatofsingle_sound
        intoffloat_sound intuoffloat_sound floatofint_sound floatofintu_sound
+       intofsingle_sound intuofsingle_sound singleofint_sound singleofintu_sound
        longofwords_sound loword_sound hiword_sound 
-       cmpu_bool_sound cmp_bool_sound cmpf_bool_sound maskzero_sound : va.
+       cmpu_bool_sound cmp_bool_sound cmpf_bool_sound cmpfs_bool_sound
+       maskzero_sound : va.

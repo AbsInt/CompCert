@@ -34,6 +34,8 @@ let short_name_of_type = function
   | Tfloat -> 'f'
   | Tlong -> 'l'
   | Tsingle -> 's'
+  | Tany32 -> 'w'
+  | Tany64 -> 'd'
 
 let loc pp = function
   | R r -> mreg pp r

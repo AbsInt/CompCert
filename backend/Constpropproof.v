@@ -159,6 +159,8 @@ Proof.
   inv H. inv H0. exists (Vint n); auto.
 - (* float *)
   destruct (Compopts.generate_float_constants tt); inv H. inv H0. exists (Vfloat f); auto.
+- (* single *)
+  destruct (Compopts.generate_float_constants tt); inv H. inv H0. exists (Vsingle f); auto.
 - (* pointer *)
   destruct p; try discriminate.
   + (* global *)

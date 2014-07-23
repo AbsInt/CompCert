@@ -506,6 +506,9 @@ Proof.
   (* float *)
   destruct ty; try discriminate. 
   destruct f1; inv EQ2; simpl in H2; inv H2; assumption.
+  (* single *)
+  destruct ty; try discriminate. 
+  destruct f1; inv EQ2; simpl in H2; inv H2; assumption.
   (* pointer *)
   unfold inj in H.
   assert (data = Init_addrof b1 ofs1 /\ chunk = Mint32).
@@ -525,20 +528,18 @@ Lemma transl_init_single_size:
   Genv.init_data_size data = sizeof ty.
 Proof.
   intros. monadInv H. destruct x0. 
-  monadInv EQ2.
-  destruct ty; try discriminate. 
+- monadInv EQ2.
+- destruct ty; try discriminate. 
   destruct i0; inv EQ2; auto.
   inv EQ2; auto.
   inv EQ2; auto.
-  destruct ty; inv EQ2; auto.
-  destruct ty; try discriminate.
+- destruct ty; inv EQ2; auto.
+- destruct ty; try discriminate.
   destruct f0; inv EQ2; auto.
-  destruct ty; try discriminate.
-  destruct i0; auto.
-  inv EQ2.
-  inv EQ2.
-  inv EQ2; auto.
-  inv EQ2.
+- destruct ty; try discriminate.
+  destruct f0; inv EQ2; auto.
+- destruct ty; try discriminate.
+  destruct i0; inv EQ2; auto.
   inv EQ2; auto.
   inv EQ2; auto.
 Qed.

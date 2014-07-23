@@ -799,6 +799,10 @@ Opaque makeif.
     constructor. auto. intros; constructor.
     constructor.
     constructor. auto. intros; constructor.
+  intros. destruct dst; simpl in *; inv H2. 
+    constructor. auto. intros; constructor.
+    constructor.
+    constructor. auto. intros; constructor.
 (* var *)
   monadInv H; econstructor; split; auto with gensym. UseFinish. constructor.
 (* field *)

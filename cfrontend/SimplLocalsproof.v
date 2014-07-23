@@ -189,9 +189,10 @@ Inductive val_casted: val -> type -> Prop :=
   | val_casted_int: forall sz si attr n,
       cast_int_int sz si n = n ->
       val_casted (Vint n) (Tint sz si attr)
-  | val_casted_float: forall sz attr n,
-      cast_float_float sz n = n ->
-      val_casted (Vfloat n) (Tfloat sz attr)
+  | val_casted_float: forall attr n,
+       val_casted (Vfloat n) (Tfloat F64 attr)
+  | val_casted_single: forall attr n,
+       val_casted (Vsingle n) (Tfloat F32 attr)
   | val_casted_long: forall si attr n,
       val_casted (Vlong n) (Tlong si attr)
   | val_casted_ptr_ptr: forall b ofs ty attr,
@@ -220,14 +221,6 @@ Proof.
   destruct (Int.eq i Int.zero); auto.
 Qed.
 
-Remark cast_float_float_idem:
-  forall sz f, cast_float_float sz (cast_float_float sz f) = cast_float_float sz f.
-Proof.
-  intros; destruct sz; simpl.
-  apply Float.singleoffloat_idem; auto.
-  auto.
-Qed.
-
 Lemma cast_val_is_casted:
   forall v ty ty' v', sem_cast v ty ty' = Some v' -> val_casted v' ty'.
 Proof.
@@ -235,28 +228,32 @@ Proof.
 (* void *)
   constructor.
 (* int *)
-  destruct i; destruct ty; simpl in H; try discriminate; destruct v; inv H.
+  destruct i; destruct ty; simpl in H; try (destruct f); try discriminate; destruct v; inv H.
   constructor. apply (cast_int_int_idem I8 s).
   constructor. apply (cast_int_int_idem I8 s).
-  destruct (cast_float_int s f0); inv H1.   constructor. apply (cast_int_int_idem I8 s). 
+  destruct (cast_single_int s f); inv H1. constructor. apply (cast_int_int_idem I8 s).
+  destruct (cast_float_int s f); inv H1. constructor. apply (cast_int_int_idem I8 s).
   constructor. apply (cast_int_int_idem I16 s).
   constructor. apply (cast_int_int_idem I16 s).
-  destruct (cast_float_int s f0); inv H1.   constructor. apply (cast_int_int_idem I16 s). 
+  destruct (cast_single_int s f); inv H1. constructor. apply (cast_int_int_idem I16 s).
+  destruct (cast_float_int s f); inv H1. constructor. apply (cast_int_int_idem I16 s).
   constructor. auto.
   constructor.
   constructor. auto. 
-  destruct (cast_float_int s f0); inv H1. constructor. auto.
-  constructor. auto.
+  destruct (cast_single_int s f); inv H1. constructor. auto.
+  destruct (cast_float_int s f); inv H1. constructor; auto.
+  constructor; auto.
+  constructor.
+  constructor; auto.
   constructor.
   constructor; auto.
   constructor.
   constructor; auto.
-  constructor; auto.
-  constructor; auto.
-  constructor; auto.
+  constructor.
   constructor. simpl. destruct (Int.eq i0 Int.zero); auto.
   constructor. simpl. destruct (Int64.eq i Int64.zero); auto.
-  constructor. simpl. destruct (Float.cmp Ceq f0 Float.zero); auto.
+  constructor. simpl. destruct (Float32.cmp Ceq f Float32.zero); auto.
+  constructor. simpl. destruct (Float.cmp Ceq f Float.zero); auto.
   constructor. simpl. destruct (Int.eq i Int.zero); auto.
   constructor; auto.
   constructor. simpl. destruct (Int.eq i Int.zero); auto.
@@ -266,23 +263,17 @@ Proof.
   constructor. simpl. destruct (Int.eq i0 Int.zero); auto.
   constructor; auto.
 (* long *)
-  destruct ty; try discriminate.
+  destruct ty; try (destruct f); try discriminate.
   destruct v; inv H. constructor.
   destruct v; inv H. constructor.
-  destruct v; try discriminate. destruct (cast_float_long s f0); inv H. constructor.
+  destruct v; try discriminate. destruct (cast_single_long s f); inv H. constructor.
+  destruct v; try discriminate. destruct (cast_float_long s f); inv H. constructor.
   destruct v; inv H. constructor.
   destruct v; inv H. constructor.
   destruct v; inv H. constructor.
   destruct v; inv H. constructor.
 (* float *)
-  destruct ty; simpl in H; try discriminate; destruct v; inv H.
-  constructor. unfold cast_float_float, cast_int_float.
-  destruct f; destruct s; auto.
-  rewrite Float.singleofint_floatofint. apply Float.singleoffloat_idem.
-  rewrite Float.singleofintu_floatofintu. apply Float.singleoffloat_idem.
-  constructor. unfold cast_float_float, cast_long_float.
-  destruct f; destruct s; auto. apply Float.singleoflong_idem. apply Float.singleoflongu_idem.
-  constructor. apply cast_float_float_idem.
+  destruct f; destruct ty; simpl in H; try (destruct f); try discriminate; destruct v; inv H; constructor.
 (* pointer *)
   destruct ty; simpl in H; try discriminate; destruct v; inv H; try constructor.
 (* impossible cases *)
@@ -310,7 +301,8 @@ Proof.
   clear H1. inv H0. auto.
   inversion H0; clear H0; subst chunk. simpl in *. 
   destruct (Int.eq n Int.zero); subst n; reflexivity.
-  destruct sz; inversion H0; clear H0; subst chunk; simpl in *; congruence.
+  inv H0; auto.
+  inv H0; auto.
   inv H0; auto.
   inv H0; auto.
   inv H0; auto.
@@ -327,7 +319,6 @@ Lemma cast_val_casted:
 Proof.
   intros. inversion H; clear H; subst v ty; unfold sem_cast; simpl; auto.
   destruct sz; congruence.
-  congruence.
   unfold proj_sumbool; repeat rewrite dec_eq_true; auto.
   unfold proj_sumbool; repeat rewrite dec_eq_true; auto.
 Qed.
@@ -373,7 +364,8 @@ Proof.
   destruct (classify_cast (typeof a) tto); auto.
   destruct v1; inv H0; auto.
   destruct sz2; auto. destruct v1; inv H0; auto.
-  destruct sz2; auto. destruct v1; inv H0; auto.
+  destruct v1; inv H0; auto.
+  destruct v1; inv H0; auto.
   destruct v1; inv H0; auto.
   destruct v1; try discriminate.
   destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H0; auto.
@@ -1416,6 +1408,7 @@ Proof.
 (* const *)
   exists (Vint i); split; auto. constructor.
   exists (Vfloat f0); split; auto. constructor.
+  exists (Vsingle f0); split; auto. constructor.
   exists (Vlong i); split; auto. constructor.
 (* tempvar *)
   exploit me_temps; eauto. intros [[tv [A B]] C]. 

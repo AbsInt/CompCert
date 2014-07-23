@@ -35,7 +35,7 @@ type node =
   { ident: int;                         (*r unique identifier *)
     typ: typ;                           (*r its type *)
     var: var;                           (*r the XTL variable it comes from *)
-    regclass: int;                      (*r identifier of register class *)
+    mutable regclass: int;              (*r identifier of register class *)
     mutable accesses: int;              (*r number of defs and uses *)
     mutable spillcost: float;           (*r estimated cost of spilling *)
     mutable adjlist: node list;         (*r all nodes it interferes with *)
@@ -239,15 +239,20 @@ type graph = {
 
 (* Register classes and reserved registers *)
 
-let num_register_classes = 2
+(* We have two main register classes:
+     0 for integer registers
+     1 for floating-point registers
+   plus a third pseudo-class 2 that has no registers and forces
+   stack allocation.  XTL variables are mapped to classes 0 and 1
+   according to their types.  A variable can be forced into class 2
+   by giving it a negative spill cost. *)
 
 let class_of_type = function
-  | Tint -> 0
-  | Tfloat | Tsingle -> 1
+  | Tint | Tany32 -> 0
+  | Tfloat | Tsingle | Tany64 -> 1
   | Tlong -> assert false
 
-let type_of_class c =
-  if c = 0 then Tint else Tfloat
+let no_spill_class = 2
 
 let reserved_registers = ref ([]: mreg list)
 
@@ -267,14 +272,19 @@ let init costs =
   and float_callee_save = remove_reserved float_callee_save_regs in
   {
     caller_save_registers =
-      [| Array.of_list int_caller_save; Array.of_list float_caller_save |];
+      [| Array.of_list int_caller_save;
+         Array.of_list float_caller_save;
+         [||] |];
     callee_save_registers =
-      [| Array.of_list int_callee_save; Array.of_list float_callee_save |];
+      [| Array.of_list int_callee_save;
+         Array.of_list float_callee_save;
+         [||] |];
     num_available_registers =
       [| List.length int_caller_save + List.length int_callee_save;
-         List.length float_caller_save + List.length float_callee_save |];
+         List.length float_caller_save + List.length float_callee_save;
+         0 |];
     start_points =
-      [| 0; 0 |];
+      [| 0; 0; 0 |];
     allocatable_registers =
       int_caller_save @ int_callee_save @ float_caller_save @ float_callee_save;
     stats_of_reg = costs;
@@ -303,10 +313,13 @@ let newNodeOfReg g r ty =
   let st = g.stats_of_reg r in
   g.nextIdent <- g.nextIdent + 1;
   { ident = g.nextIdent; typ = ty; 
-    var = V(r, ty); regclass = class_of_type ty;
+    var = V(r, ty);
+    regclass = if st.cost >= 0 then class_of_type ty else no_spill_class;
     accesses = st.usedefs;
     spillcost = weightedSpillCost st;
-    adjlist = []; degree = 0; movelist = []; extra_adj = []; extra_pref = [];
+    adjlist = [];
+    degree = if st.cost >= 0 then 0 else 1;
+    movelist = []; extra_adj = []; extra_pref = [];
     alias = None;
     color = None;
     nstate = Initial;
@@ -382,11 +395,19 @@ let recordExtraPref n1 n2 =
       mnext = DLinkMove.dummy; mprev = DLinkMove.dummy } in
   n1.extra_pref <- m :: n1.extra_pref
 
+let recordExtraPref2 n1 n2 =
+  let m =
+    { src = n1; dst = n2; mstate = FrozenMoves;
+      mnext = DLinkMove.dummy; mprev = DLinkMove.dummy } in
+  n1.extra_pref <- m :: n1.extra_pref;
+  n2.extra_pref <- m :: n2.extra_pref
+
 let addMovePref g n1 n2 =
-  assert (n1.regclass = n2.regclass);
   match n1.color, n2.color with
   | None, None ->
-      recordMove g n1 n2
+      if n1.regclass = n2.regclass
+      then recordMove g n1 n2
+      else recordExtraPref2 n1 n2
   | Some (R mr1), None ->
       if List.mem mr1 g.allocatable_registers then recordMove g n1 n2
   | None, Some (R mr2) ->
@@ -866,7 +887,7 @@ let assign_color g n =
           n.color <- Some loc
       | None ->
           (* Last, pick a Local stack slot *)
-          n.color <- Some (find_slot slot_conflicts (type_of_class n.regclass))
+          n.color <- Some (find_slot slot_conflicts n.typ)
 
 (* Extract the location of a variable *)
 
@@ -884,7 +905,7 @@ let location_of_var g v =
         match ty with
         | Tint -> R dummy_int_reg
         | Tfloat | Tsingle -> R dummy_float_reg
-        | Tlong -> assert false
+        | Tlong | Tany32 | Tany64 -> assert false
 
 (* The exported interface *)
 

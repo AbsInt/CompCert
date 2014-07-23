@@ -196,17 +196,21 @@ Remark loadind_label:
   forall base ofs ty dst k c,
   loadind base ofs ty dst k = OK c -> tail_nolabel k c.
 Proof.
-  unfold loadind; intros.
-  destruct ty; destruct (Int.eq (high_s ofs) Int.zero);
+  unfold loadind, accessind; intros.
+  destruct ty; try discriminate;
+  destruct (preg_of dst); try discriminate;
+  destruct (Int.eq (high_s ofs) Int.zero);
   TailNoLabel; eapply tail_nolabel_trans; TailNoLabel.
 Qed.
 
 Remark storeind_label:
   forall base ofs ty src k c,
-  storeind base src ofs ty k = OK c -> tail_nolabel k c.
+  storeind src base ofs ty k = OK c -> tail_nolabel k c.
 Proof.
-  unfold storeind; intros.
-  destruct ty; destruct (Int.eq (high_s ofs) Int.zero);
+  unfold storeind, accessind; intros.
+  destruct ty; try discriminate;
+  destruct (preg_of src); try discriminate;
+  destruct (Int.eq (high_s ofs) Int.zero);
   TailNoLabel; eapply tail_nolabel_trans; TailNoLabel.
 Qed.
 

@@ -54,23 +54,13 @@ Global Opaque mreg_eq.
 
 Definition mreg_type (r: mreg): typ :=
   match r with
-  | R3 => Tint  | R4 => Tint  | R5 => Tint  | R6 => Tint
-  | R7 => Tint  | R8 => Tint  | R9 => Tint  | R10 => Tint
-  | R11 => Tint | R12 => Tint
-  | R14 => Tint | R15 => Tint | R16 => Tint
-  | R17 => Tint | R18 => Tint | R19 => Tint | R20 => Tint
-  | R21 => Tint | R22 => Tint | R23 => Tint | R24 => Tint
-  | R25 => Tint | R26 => Tint | R27 => Tint | R28 => Tint
-  | R29 => Tint | R30 => Tint | R31 => Tint
-  | F0 => Tfloat
-  | F1 => Tfloat  | F2 => Tfloat  | F3 => Tfloat  | F4 => Tfloat
-  | F5 => Tfloat  | F6 => Tfloat  | F7 => Tfloat  | F8 => Tfloat
-  | F9 => Tfloat  | F10 => Tfloat | F11 => Tfloat | F12 => Tfloat
-  | F13 => Tfloat | F14 => Tfloat | F15 => Tfloat
-  | F16 => Tfloat | F17 => Tfloat | F18 => Tfloat | F19 => Tfloat
-  | F20 => Tfloat | F21 => Tfloat | F22 => Tfloat | F23 => Tfloat
-  | F24 => Tfloat | F25 => Tfloat | F26 => Tfloat | F27 => Tfloat
-  | F28 => Tfloat | F29 => Tfloat | F30 => Tfloat | F31 => Tfloat
+  | R3  | R4  | R5  | R6  | R7  | R8  | R9  | R10  | R11 | R12
+  | R14 | R15 | R16 | R17 | R18 | R19 | R20 | R21 | R22 | R23 | R24
+  | R25 | R26 | R27 | R28 | R29 | R30 | R31 => Tany32
+  | F0  | F1  | F2  | F3  | F4  | F5  | F6  | F7
+  | F8  | F9  | F10 | F11 | F12 | F13 | F14 | F15
+  | F16 | F17 | F18 | F19 | F20 | F21 | F22 | F23
+  | F24 | F25 | F26 | F27 | F28 | F29 | F30 | F31 => Tany64
   end.
 
 Open Scope positive_scope.
@@ -112,6 +102,7 @@ Definition is_stack_reg (r: mreg) : bool := false.
 Definition destroyed_by_op (op: operation): list mreg :=
   match op with
   | Ofloatconst _ => R12 :: nil
+  | Osingleconst _ => R12 :: nil
   | Ointoffloat => F13 :: nil
   | _ => nil
   end.
@@ -120,10 +111,7 @@ Definition destroyed_by_load (chunk: memory_chunk) (addr: addressing): list mreg
   R12 :: nil.
 
 Definition destroyed_by_store (chunk: memory_chunk) (addr: addressing): list mreg :=
-  match chunk with
-  | Mfloat32 => R11 :: R12 :: F13 :: nil
-  | _ => R11 :: R12 :: nil
-  end.
+  R11 :: R12 :: nil.
 
 Definition destroyed_by_cond (cond: condition): list mreg :=
   nil.
@@ -135,21 +123,16 @@ Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_builtin _ _ => F13 :: nil
   | EF_vload _ => nil
-  | EF_vstore Mfloat32 => F13 :: nil
   | EF_vstore _ => nil
   | EF_vload_global _ _ _ => R11 :: nil
   | EF_vstore_global Mint64 _ _ => R10 :: R11 :: R12 :: nil
-  | EF_vstore_global Mfloat32 _ _ => R11 :: R12 :: F13 :: nil
   | EF_vstore_global _ _ _ => R11 :: R12 :: nil
   | EF_memcpy _ _ => R11 :: R12 :: F13 :: nil
   | _ => nil
   end.
 
 Definition destroyed_by_setstack (ty: typ): list mreg :=
-  match ty with
-  | Tsingle => F13 :: nil
-  | _ => nil
-  end.
+  nil.
 
 Definition destroyed_at_function_entry: list mreg :=
   nil.

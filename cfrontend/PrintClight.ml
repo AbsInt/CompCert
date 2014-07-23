@@ -43,6 +43,7 @@ let rec precedence = function
   | Efield _ -> (16, LtoR)
   | Econst_int _ -> (16, NA)
   | Econst_float _ -> (16, NA)
+  | Econst_single _ -> (16, NA)
   | Econst_long _ -> (16, NA)
   | Eunop _ -> (15, RtoL)
   | Eaddrof _ -> (15, RtoL)
@@ -82,6 +83,8 @@ let rec expr p (prec, e) =
       fprintf p "%ld" (camlint_of_coqint n)
   | Econst_float(f, _) ->
       fprintf p "%F" (camlfloat_of_coqfloat f)
+  | Econst_single(f, _) ->
+      fprintf p "%Ff" (camlfloat_of_coqfloat32 f)
   | Econst_long(n, Tlong(Unsigned, _)) ->
       fprintf p "%LuLLU" (camlint64_of_coqint n)
   | Econst_long(n, _) ->
@@ -269,6 +272,7 @@ let rec collect_expr e =
   match e with
   | Econst_int _ -> ()
   | Econst_float _ -> ()
+  | Econst_single _ -> ()
   | Econst_long _ -> ()
   | Evar _ -> ()
   | Etempvar _ -> ()

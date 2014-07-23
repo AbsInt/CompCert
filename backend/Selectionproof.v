@@ -191,11 +191,18 @@ Proof.
   apply eval_notint; auto.
   apply eval_negf; auto.
   apply eval_absf; auto.
+  apply eval_negfs; auto.
+  apply eval_absfs; auto.
   apply eval_singleoffloat; auto.
+  apply eval_floatofsingle; auto.
   eapply eval_intoffloat; eauto.
   eapply eval_intuoffloat; eauto.
   eapply eval_floatofint; eauto.
   eapply eval_floatofintu; eauto.
+  eapply eval_intofsingle; eauto.
+  eapply eval_intuofsingle; eauto.
+  eapply eval_singleofint; eauto.
+  eapply eval_singleofintu; eauto.
   eapply eval_negl; eauto.
   eapply eval_notl; eauto.
   eapply eval_intoflong; eauto.
@@ -205,6 +212,8 @@ Proof.
   eapply eval_longuoffloat; eauto.
   eapply eval_floatoflong; eauto.
   eapply eval_floatoflongu; eauto.
+  eapply eval_longofsingle; eauto.
+  eapply eval_longuofsingle; eauto.
   eapply eval_singleoflong; eauto.
   eapply eval_singleoflongu; eauto.
 Qed.
@@ -234,6 +243,10 @@ Proof.
   apply eval_subf; auto.
   apply eval_mulf; auto.
   apply eval_divf; auto.
+  apply eval_addfs; auto.
+  apply eval_subfs; auto.
+  apply eval_mulfs; auto.
+  apply eval_divfs; auto.
   eapply eval_addl; eauto.
   eapply eval_subl; eauto.
   eapply eval_mull; eauto.
@@ -250,6 +263,7 @@ Proof.
   apply eval_comp; auto.
   apply eval_compu; auto.
   apply eval_compf; auto.
+  apply eval_compfs; auto.
   exists v; split; auto. eapply eval_cmpl; eauto.
   exists v; split; auto. eapply eval_cmplu; eauto.
 Qed.
@@ -377,6 +391,7 @@ Proof.
   destruct cst; simpl in *; inv H. 
   exists (Vint i); split; auto. econstructor. constructor. auto. 
   exists (Vfloat f); split; auto. econstructor. constructor. auto.
+  exists (Vsingle f); split; auto. econstructor. constructor. auto. 
   exists (Val.longofwords (Vint (Int64.hiword i)) (Vint (Int64.loword i))); split.
   eapply eval_Eop. constructor. EvalOp. simpl; eauto. constructor. EvalOp. simpl; eauto. constructor. auto.
   simpl. rewrite Int64.ofwords_recompose. auto.

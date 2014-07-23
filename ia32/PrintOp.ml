@@ -64,6 +64,7 @@ let print_operation reg pp = function
   | Omove, [r1] -> reg pp r1
   | Ointconst n, [] -> fprintf pp "%ld" (camlint_of_coqint n)
   | Ofloatconst n, [] -> fprintf pp "%F" (camlfloat_of_coqfloat n)
+  | Osingleconst n, [] -> fprintf pp "%Ff" (camlfloat_of_coqfloat32 n)
   | Oindirectsymbol id, [] -> fprintf pp "&%s" (extern_atom id)
   | Ocast8signed, [r1] -> fprintf pp "int8signed(%a)" reg r1
   | Ocast8unsigned, [r1] -> fprintf pp "int8unsigned(%a)" reg r1
@@ -100,6 +101,7 @@ let print_operation reg pp = function
   | Omulf, [r1;r2] -> fprintf pp "%a *f %a" reg r1 reg r2
   | Odivf, [r1;r2] -> fprintf pp "%a /f %a" reg r1 reg r2
   | Osingleoffloat, [r1] -> fprintf pp "singleoffloat(%a)" reg r1
+  | Ofloatofsingle, [r1] -> fprintf pp "floatofsingle(%a)" reg r1
   | Ointoffloat, [r1] -> fprintf pp "intoffloat(%a)" reg r1
   | Ofloatofint, [r1] -> fprintf pp "floatofint(%a)" reg r1
   | Omakelong, [r1;r2] -> fprintf pp "makelong(%a,%a)" reg r1 reg r2

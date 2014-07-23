@@ -70,6 +70,8 @@ Definition transl_constant (cst: Csharpminor.constant): constant :=
       Ointconst n
   | Csharpminor.Ofloatconst n =>
       Ofloatconst n
+  | Csharpminor.Osingleconst n =>
+      Osingleconst n
   | Csharpminor.Olongconst n =>
       Olongconst n
   end.

@@ -35,22 +35,15 @@ Definition ident_eq := peq.
 
 Parameter ident_of_string : String.string -> ident.
 
-(** The intermediate languages are weakly typed, using only four
-  types: [Tint] for 32-bit integers and pointers, [Tfloat] for 64-bit
-  floating-point numbers, [Tlong] for 64-bit integers, [Tsingle]
-  for 32-bit floating-point numbers. *)
+(** The intermediate languages are weakly typed, using the following types: *)
 
 Inductive typ : Type :=
-  | Tint
-  | Tfloat
-  | Tlong
-  | Tsingle.
-
-Definition typesize (ty: typ) : Z :=
-  match ty with Tint => 4 | Tfloat => 8 | Tlong => 8 | Tsingle => 4 end.
-
-Lemma typesize_pos: forall ty, typesize ty > 0.
-Proof. destruct ty; simpl; omega. Qed.
+  | Tint                (**r 32-bit integers or pointers *)
+  | Tfloat              (**r 64-bit double-precision floats *)
+  | Tlong               (**r 64-bit integers *)
+  | Tsingle             (**r 32-bit single-precision floats *)
+  | Tany32              (**r any 32-bit value *)
+  | Tany64.             (**r any 64-bit value, i.e. any value *)
 
 Lemma typ_eq: forall (t1 t2: typ), {t1=t2} + {t1<>t2}.
 Proof. decide equality. Defined.
@@ -62,8 +55,22 @@ Definition opt_typ_eq: forall (t1 t2: option typ), {t1=t2} + {t1<>t2}
 Definition list_typ_eq: forall (l1 l2: list typ), {l1=l2} + {l1<>l2}
                      := list_eq_dec typ_eq.
 
-(** All values of type [Tsingle] are also of type [Tfloat].  This
-  corresponds to the following subtyping relation over types. *)
+Definition typesize (ty: typ) : Z :=
+  match ty with
+  | Tint => 4
+  | Tfloat => 8
+  | Tlong => 8
+  | Tsingle => 4
+  | Tany32 => 4
+  | Tany64 => 8
+  end.
+
+Lemma typesize_pos: forall ty, typesize ty > 0.
+Proof. destruct ty; simpl; omega. Qed.
+
+(** All values of size 32 bits are also of type [Tany32].  All values
+  are of type [Tany64].  This corresponds to the following subtyping
+  relation over types. *)
 
 Definition subtype (ty1 ty2: typ) : bool :=
   match ty1, ty2 with
@@ -71,7 +78,8 @@ Definition subtype (ty1 ty2: typ) : bool :=
   | Tlong, Tlong => true
   | Tfloat, Tfloat => true
   | Tsingle, Tsingle => true
-  | Tsingle, Tfloat => true
+  | (Tint | Tsingle | Tany32), Tany32 => true
+  | _, Tany64 => true
   | _, _ => false
   end.
 
@@ -133,7 +141,9 @@ Inductive memory_chunk : Type :=
   | Mint32          (**r 32-bit integer, or pointer *)
   | Mint64          (**r 64-bit integer *)
   | Mfloat32        (**r 32-bit single-precision float *)
-  | Mfloat64.        (**r 64-bit double-precision float *)
+  | Mfloat64        (**r 64-bit double-precision float *)
+  | Many32          (**r any value that fits in 32 bits *)
+  | Many64.         (**r any value *)
 
 Definition chunk_eq: forall (c1 c2: memory_chunk), {c1=c2} + {c1<>c2}.
 Proof. decide equality. Defined.
@@ -151,18 +161,8 @@ Definition type_of_chunk (c: memory_chunk) : typ :=
   | Mint64 => Tlong
   | Mfloat32 => Tsingle
   | Mfloat64 => Tfloat
-  end.
-
-Definition type_of_chunk_use (c: memory_chunk) : typ :=
-  match c with
-  | Mint8signed => Tint
-  | Mint8unsigned => Tint
-  | Mint16signed => Tint
-  | Mint16unsigned => Tint
-  | Mint32 => Tint
-  | Mint64 => Tlong
-  | Mfloat32 => Tfloat
-  | Mfloat64 => Tfloat
+  | Many32 => Tany32
+  | Many64 => Tany64
   end.
 
 (** The chunk that is appropriate to store and reload a value of
@@ -174,6 +174,8 @@ Definition chunk_of_type (ty: typ) :=
   | Tfloat => Mfloat64
   | Tlong => Mint64
   | Tsingle => Mfloat32
+  | Tany32 => Many32
+  | Tany64 => Many64
   end.
 
 (** Initialization data for global variables. *)
@@ -183,7 +185,7 @@ Inductive init_data: Type :=
   | Init_int16: int -> init_data
   | Init_int32: int -> init_data
   | Init_int64: int64 -> init_data
-  | Init_float32: float -> init_data
+  | Init_float32: float32 -> init_data
   | Init_float64: float -> init_data
   | Init_space: Z -> init_data
   | Init_addrof: ident -> int -> init_data.  (**r address of symbol + offset *)
@@ -586,9 +588,9 @@ Definition ef_sig (ef: external_function): signature :=
   | EF_external name sg => sg
   | EF_builtin name sg => sg
   | EF_vload chunk => mksignature (Tint :: nil) (Some (type_of_chunk chunk)) cc_default
-  | EF_vstore chunk => mksignature (Tint :: type_of_chunk_use chunk :: nil) None cc_default
+  | EF_vstore chunk => mksignature (Tint :: type_of_chunk chunk :: nil) None cc_default
   | EF_vload_global chunk _ _ => mksignature nil (Some (type_of_chunk chunk)) cc_default
-  | EF_vstore_global chunk _ _ => mksignature (type_of_chunk_use chunk :: nil) None cc_default
+  | EF_vstore_global chunk _ _ => mksignature (type_of_chunk chunk :: nil) None cc_default
   | EF_malloc => mksignature (Tint :: nil) (Some Tint) cc_default
   | EF_free => mksignature (Tint :: nil) None cc_default
   | EF_memcpy sz al => mksignature (Tint :: Tint :: nil) None cc_default

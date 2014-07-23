@@ -353,7 +353,7 @@ let print_builtin_vload_common oc chunk addr res =
         fprintf oc "	movl	%a, %a\n" addressing addr ireg res2
       end
   | Mfloat32, [FR res] ->
-      fprintf oc "	cvtss2sd %a, %a\n" addressing addr freg res
+      fprintf oc "	movss	%a, %a\n" addressing addr freg res
   | Mfloat64, [FR res] ->
       fprintf oc "	movsd	%a, %a\n" addressing addr freg res
   | _ ->
@@ -394,8 +394,7 @@ let print_builtin_vstore_common oc chunk addr src tmp =
       fprintf oc "	movl	%a, %a\n" ireg src2 addressing addr;
       fprintf oc "	movl	%a, %a\n" ireg src1 addressing addr'
   | Mfloat32, [FR src] ->
-      fprintf oc "	cvtsd2ss %a, %%xmm7\n" freg src;
-      fprintf oc "	movss	%%xmm7, %a\n" addressing addr
+      fprintf oc "	movss	%a, %a\n" freg src addressing addr
   | Mfloat64, [FR src] ->
       fprintf oc "	movsd	%a, %a\n" freg src addressing addr
   | _ ->
@@ -541,7 +540,8 @@ let print_builtin_inline oc name args res =
 
 (* Printing of instructions *)
 
-let float_literals : (int * int64) list ref = ref []
+let float64_literals : (int * int64) list ref = ref []
+let float32_literals : (int * int32) list ref = ref []
 let jumptables : (int * label list) list ref = ref []
 let indirect_symbols : StringSet.t ref = ref StringSet.empty
 
@@ -560,39 +560,38 @@ let print_instruction oc = function
         fprintf oc "	movl	L%a$non_lazy_ptr, %a\n" raw_symbol id ireg rd
       end else
         fprintf oc "	movl	$%a, %a\n" symbol id ireg rd
-  | Pmov_rm(rd, a) ->
+  | Pmov_rm(rd, a) | Pmov_rm_a(rd, a) ->
       fprintf oc "	movl	%a, %a\n" addressing a ireg rd
-  | Pmov_mr(a, r1) ->
+  | Pmov_mr(a, r1) | Pmov_mr_a(a, r1) ->
       fprintf oc "	movl	%a, %a\n" ireg r1 addressing a
   | Pmovsd_ff(rd, r1) ->
       fprintf oc "	movapd	%a, %a\n" freg r1 freg rd
   | Pmovsd_fi(rd, n) ->
-      let b = camlint64_of_coqint (Floats.Float.bits_of_double n) in
+      let b = camlint64_of_coqint (Floats.Float.to_bits n) in
       let lbl = new_label() in
       fprintf oc "	movsd	%a, %a %s %.18g\n" label lbl freg rd comment (camlfloat_of_coqfloat n);
-      float_literals := (lbl, b) :: !float_literals
+      float64_literals := (lbl, b) :: !float64_literals
   | Pmovsd_fm(rd, a) ->
       fprintf oc "	movsd	%a, %a\n" addressing a freg rd
   | Pmovsd_mf(a, r1) ->
       fprintf oc "	movsd	%a, %a\n" freg r1 addressing a
-  | Pfld_f(r1) ->
-      fprintf oc "	subl	$8, %%esp\n";
-      cfi_adjust oc 8l;
-      fprintf oc "	movsd	%a, 0(%%esp)\n" freg r1;
-      fprintf oc "	fldl	0(%%esp)\n";
-      fprintf oc "	addl	$8, %%esp\n";
-      cfi_adjust oc (-8l)
-  | Pfld_m(a) ->
+  | Pmovss_fi(rd, n) ->
+      let b = camlint_of_coqint (Floats.Float32.to_bits n) in
+      let lbl = new_label() in
+      fprintf oc "	movss	%a, %a %s %.18g\n" label lbl freg rd comment (camlfloat_of_coqfloat32 n);
+      float32_literals := (lbl, b) :: !float32_literals
+  | Pmovss_fm(rd, a) ->
+      fprintf oc "	movss	%a, %a\n" addressing a freg rd
+  | Pmovss_mf(a, r1) ->
+      fprintf oc "	movss	%a, %a\n" freg r1 addressing a
+  | Pfldl_m(a) ->
       fprintf oc "	fldl	%a\n" addressing a
-  | Pfstp_f(rd) ->
-      fprintf oc "	subl	$8, %%esp\n";
-      cfi_adjust oc 8l;
-      fprintf oc "	fstpl	0(%%esp)\n";
-      fprintf oc "	movsd	0(%%esp), %a\n" freg rd;
-      fprintf oc "	addl	$8, %%esp\n";
-      cfi_adjust oc (-8l)
-  | Pfstp_m(a) ->
+  | Pfstpl_m(a) ->
       fprintf oc "	fstpl	%a\n" addressing a
+  | Pflds_m(a) ->
+      fprintf oc "	flds	%a\n" addressing a
+  | Pfstps_m(a) ->
+      fprintf oc "	fstps	%a\n" addressing a
   | Pxchg_rr(r1, r2) ->
       fprintf oc "	xchgl	%a, %a\n" ireg r1 ireg r2
   (** Moves with conversion *)
@@ -616,18 +615,18 @@ let print_instruction oc = function
       fprintf oc "	movswl	%a, %a\n" ireg16 r1 ireg rd
   | Pmovsw_rm(rd, a) ->
       fprintf oc "	movswl	%a, %a\n" addressing a ireg rd
-  | Pcvtss2sd_fm(rd, a) ->
-      fprintf oc "	cvtss2sd %a, %a\n" addressing a freg rd
   | Pcvtsd2ss_ff(rd, r1) ->
-      fprintf oc "	cvtsd2ss %a, %a\n" freg r1 freg rd;
-      fprintf oc "	cvtss2sd %a, %a\n" freg rd freg rd
-  | Pcvtsd2ss_mf(a, r1) ->
-      fprintf oc "	cvtsd2ss %a, %%xmm7\n" freg r1;
-      fprintf oc "	movss	%%xmm7, %a\n" addressing a
+      fprintf oc "	cvtsd2ss %a, %a\n" freg r1 freg rd
+  | Pcvtss2sd_ff(rd, r1) ->
+      fprintf oc "	cvtss2sd %a, %a\n" freg r1 freg rd
   | Pcvttsd2si_rf(rd, r1) ->
       fprintf oc "	cvttsd2si %a, %a\n" freg r1 ireg rd
   | Pcvtsi2sd_fr(rd, r1) ->
       fprintf oc "	cvtsi2sd %a, %a\n" ireg r1 freg rd
+  | Pcvttss2si_rf(rd, r1) ->
+      fprintf oc "	cvttss2si %a, %a\n" freg r1 ireg rd
+  | Pcvtsi2ss_fr(rd, r1) ->
+      fprintf oc "	cvtsi2ss %a, %a\n" ireg r1 freg rd
   (** Arithmetic and logical operations over integers *)
   | Plea(rd, a) ->
       fprintf oc "	leal	%a, %a\n" addressing a ireg rd
@@ -713,6 +712,24 @@ let print_instruction oc = function
       fprintf oc "	comisd	%a, %a\n" freg r2 freg r1
   | Pxorpd_f (rd) ->
       fprintf oc "	xorpd	%a, %a\n" freg rd freg rd
+  | Padds_ff(rd, r1) ->
+      fprintf oc "	addss	%a, %a\n" freg r1 freg rd
+  | Psubs_ff(rd, r1) ->
+      fprintf oc "	subss	%a, %a\n" freg r1 freg rd
+  | Pmuls_ff(rd, r1) ->
+      fprintf oc "	mulss	%a, %a\n" freg r1 freg rd
+  | Pdivs_ff(rd, r1) ->
+      fprintf oc "	divss	%a, %a\n" freg r1 freg rd
+  | Pnegs (rd) ->
+      need_masks := true;
+      fprintf oc "	xorpd	%a, %a\n" raw_symbol "__negs_mask" freg rd
+  | Pabss (rd) ->
+      need_masks := true;
+      fprintf oc "	andpd	%a, %a\n" raw_symbol "__abss_mask" freg rd
+  | Pcomiss_ff(r1, r2) ->
+      fprintf oc "	comiss	%a, %a\n" freg r2 freg r1
+  | Pxorps_f (rd) ->
+      fprintf oc "	xorpd	%a, %a\n" freg rd freg rd
   (** Branches and calls *)
   | Pjmp_l(l) ->
       fprintf oc "	jmp	%a\n" label (transl_label l)
@@ -785,8 +802,10 @@ let print_instruction oc = function
           assert false
       end
 
-let print_literal oc (lbl, n) =
+let print_literal64 oc (lbl, n) =
   fprintf oc "%a:	.quad	0x%Lx\n" label lbl n
+let print_literal32 oc (lbl, n) =
+  fprintf oc "%a:	.long	0x%lx\n" label lbl n
 
 let print_jumptable oc (lbl, tbl) =
   fprintf oc "%a:" label lbl;
@@ -796,7 +815,7 @@ let print_jumptable oc (lbl, tbl) =
 
 let print_function oc name fn =
   Hashtbl.clear current_function_labels;
-  float_literals := [];
+  float64_literals := []; float32_literals := [];
   jumptables := [];
   current_function_sig := fn.fn_sig;
   let (text, lit, jmptbl) =
@@ -818,11 +837,13 @@ let print_function oc name fn =
     fprintf oc "	.type	%a, @function\n" symbol name;
     fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
   end;
-  if !float_literals <> [] then begin
+  if !float64_literals <> [] || !float32_literals <> [] then begin
     section oc lit;
     print_align oc 8;
-    List.iter (print_literal oc) !float_literals;
-    float_literals := []
+    List.iter (print_literal64 oc) !float64_literals;
+    float64_literals := [];
+    List.iter (print_literal32 oc) !float32_literals;
+    float32_literals := []
   end;
   if !jumptables <> [] then begin
     section oc jmptbl;
@@ -842,11 +863,11 @@ let print_init oc = function
       fprintf oc "	.quad	%Ld\n" (camlint64_of_coqint n)
   | Init_float32 n ->
       fprintf oc "	.long	%ld %s %.18g\n"
-	(camlint_of_coqint (Floats.Float.bits_of_single n))
+	(camlint_of_coqint (Floats.Float32.to_bits n))
 	comment (camlfloat_of_coqfloat n)
   | Init_float64 n ->
       fprintf oc "	.quad	%Ld %s %.18g\n"
-	(camlint64_of_coqint (Floats.Float.bits_of_double n))
+	(camlint64_of_coqint (Floats.Float.to_bits n))
 	comment (camlfloat_of_coqfloat n)
   | Init_space n ->
       if Z.gt n Z.zero then
@@ -917,7 +938,11 @@ let print_program oc p =
     fprintf oc "%a:	.quad   0x8000000000000000, 0\n"
                raw_symbol "__negd_mask";
     fprintf oc "%a:	.quad   0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF\n"
-               raw_symbol "__absd_mask"
+               raw_symbol "__absd_mask";
+    fprintf oc "%a:	.long   0x80000000, 0, 0, 0\n"
+               raw_symbol "__negs_mask";
+    fprintf oc "%a:	.long   0x7FFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF\n"
+               raw_symbol "__abss_mask"
   end;
   if target = MacOS then begin
     fprintf oc "	.section __IMPORT,__pointers,non_lazy_symbol_pointers\n";

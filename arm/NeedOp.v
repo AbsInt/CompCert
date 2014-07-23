@@ -42,6 +42,7 @@ Definition needs_of_operation (op: operation) (nv: nval): list nval :=
   | Omove => nv::nil
   | Ointconst n => nil
   | Ofloatconst n => nil
+  | Osingleconst n => nil
   | Oaddrsymbol id ofs => nil
   | Oaddrstack ofs => nil
   | Ocast8signed => op1 (sign_ext 8 nv)
@@ -74,8 +75,11 @@ Definition needs_of_operation (op: operation) (nv: nval): list nval :=
   | Oshrximm _ => op1 (default nv)
   | Onegf | Oabsf => op1 (default nv)
   | Oaddf | Osubf | Omulf | Odivf => op2 (default nv)
-  | Osingleoffloat => op1 (singleoffloat nv)
+  | Onegfs | Oabsfs => op1 (default nv)
+  | Oaddfs | Osubfs | Omulfs | Odivfs => op2 (default nv)
+  | Ofloatofsingle | Osingleoffloat => op1 (default nv)
   | Ointoffloat | Ointuoffloat | Ofloatofint | Ofloatofintu => op1 (default nv)
+  | Ointofsingle | Ointuofsingle | Osingleofint | Osingleofintu => op1 (default nv)
   | Omakelong => op2 (default nv)
   | Olowlong | Ohighlong => op1 (default nv)
   | Ocmp c => needs_of_condition c
@@ -87,7 +91,6 @@ Definition operation_is_redundant (op: operation) (nv: nval): bool :=
   | Ocast16signed => sign_ext_redundant 16 nv
   | Oandimm n => andimm_redundant nv n
   | Oorimm n => orimm_redundant nv n
-  | Osingleoffloat => singleoffloat_redundant nv
   | _ => false
   end.
 
@@ -180,7 +183,6 @@ Proof.
 - apply notint_sound; auto. 
 - apply notint_sound. apply needs_of_shift_sound; auto.
 - apply needs_of_shift_sound; auto. 
-- apply singleoffloat_sound; auto. 
 Qed.
 
 Lemma operation_is_redundant_sound:
@@ -195,7 +197,6 @@ Proof.
 - apply sign_ext_redundant_sound; auto. omega.
 - apply andimm_redundant_sound; auto. 
 - apply orimm_redundant_sound; auto.
-- apply singleoffloat_redundant_sound; auto.
 Qed.
 
 End SOUNDNESS.

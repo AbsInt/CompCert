@@ -1299,8 +1299,15 @@ Proof.
   inv H; inv H0; simpl; TrivialExists.
   inv H; inv H0; simpl; TrivialExists.
   inv H; inv H0; simpl; TrivialExists.
-  inv H0; simpl in H; inv H. simpl. destruct (Float.intoffloat f0); simpl in *; inv H1. TrivialExists.
-  inv H0; simpl in H; inv H. simpl. destruct (Float.intuoffloat f0); simpl in *; inv H1. TrivialExists.
+  inv H; inv H0; simpl; TrivialExists.
+  inv H; inv H0; simpl; TrivialExists.
+  inv H; inv H0; simpl; TrivialExists.
+  inv H0; simpl in H; inv H. simpl. destruct (Float.to_int f0); simpl in *; inv H1. TrivialExists.
+  inv H0; simpl in H; inv H. simpl. destruct (Float.to_intu f0); simpl in *; inv H1. TrivialExists.
+  inv H0; simpl in H; inv H. simpl. TrivialExists.
+  inv H0; simpl in H; inv H. simpl. TrivialExists.
+  inv H0; simpl in H; inv H. simpl. destruct (Float32.to_int f0); simpl in *; inv H1. TrivialExists.
+  inv H0; simpl in H; inv H. simpl. destruct (Float32.to_intu f0); simpl in *; inv H1. TrivialExists.
   inv H0; simpl in H; inv H. simpl. TrivialExists.
   inv H0; simpl in H; inv H. simpl. TrivialExists.
   inv H; inv H0; simpl; TrivialExists.
@@ -1308,10 +1315,12 @@ Proof.
   inv H; inv H0; simpl; TrivialExists.
   inv H; inv H0; simpl; TrivialExists.
   inv H; inv H0; simpl; TrivialExists.
-  inv H0; simpl in H; inv H. simpl. destruct (Float.longoffloat f0); simpl in *; inv H1. TrivialExists.
-  inv H0; simpl in H; inv H. simpl. destruct (Float.longuoffloat f0); simpl in *; inv H1. TrivialExists.
+  inv H0; simpl in H; inv H. simpl. destruct (Float.to_long f0); simpl in *; inv H1. TrivialExists.
+  inv H0; simpl in H; inv H. simpl. destruct (Float.to_longu f0); simpl in *; inv H1. TrivialExists.
   inv H0; simpl in H; inv H. simpl. TrivialExists.
   inv H0; simpl in H; inv H. simpl. TrivialExists.
+  inv H0; simpl in H; inv H. simpl. destruct (Float32.to_long f0); simpl in *; inv H1. TrivialExists.
+  inv H0; simpl in H; inv H. simpl. destruct (Float32.to_longu f0); simpl in *; inv H1. TrivialExists.
   inv H0; simpl in H; inv H. simpl. TrivialExists.
   inv H0; simpl in H; inv H. simpl. TrivialExists.
 Qed.
@@ -1361,6 +1370,10 @@ Proof.
   inv H; inv H0; inv H1; TrivialExists.
   inv H; inv H0; inv H1; TrivialExists.
   inv H; inv H0; inv H1; TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists.
   inv H0; try discriminate; inv H1; try discriminate. simpl in *. 
     destruct (Int64.eq i0 Int64.zero
       || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq i0 Int64.mone); inv H; TrivialExists.
@@ -1391,6 +1404,8 @@ Proof.
   intros; eapply Mem.different_pointers_inject; eauto.
   simpl; auto.
 (* cmpf *)
+  inv H; inv H0; inv H1; TrivialExists. apply val_inject_val_of_optbool.
+(* cmpfs *)
   inv H; inv H0; inv H1; TrivialExists. apply val_inject_val_of_optbool.
 (* cmpl *)
   unfold Val.cmpl in *. inv H0; inv H1; simpl in H; inv H.
@@ -1470,6 +1485,7 @@ Proof.
   destruct cst; simpl; intros; inv H. 
   exists (Vint i); auto.
   exists (Vfloat f0); auto.
+  exists (Vsingle f0); auto.
   exists (Vlong i); auto.
 Qed.
 

@@ -15,6 +15,7 @@
 
 Require Import Coqlib.
 Require Import AST.
+Require Import Events.
 Require Import Locations.
 
 (** * Classification of machine registers *)
@@ -178,13 +179,13 @@ Proof.
 Qed.
 
 Lemma int_callee_save_type:
-  forall r, In r int_callee_save_regs -> mreg_type r = Tint.
+  forall r, In r int_callee_save_regs -> mreg_type r = Tany32.
 Proof.
   intro. simpl; ElimOrEq; reflexivity.
 Qed.
 
 Lemma float_callee_save_type:
-  forall r, In r float_callee_save_regs -> mreg_type r = Tfloat.
+  forall r, In r float_callee_save_regs -> mreg_type r = Tany64.
 Proof.
   intro. simpl; ElimOrEq; reflexivity.
 Qed.
@@ -235,12 +236,21 @@ Qed.
 Definition loc_result (s: signature) : list mreg :=
   match s.(sig_res) with
   | None => R0 :: nil
-  | Some Tint => R0 :: nil
-  | Some (Tfloat | Tsingle) => F0 :: nil
+  | Some (Tint | Tany32) => R0 :: nil
+  | Some (Tfloat | Tsingle | Tany64) => F0 :: nil
   | Some Tlong => R1 :: R0 :: nil
   end.
 
-(** The result location is a caller-save register or a temporary *)
+(** The result registers have types compatible with that given in the signature. *)
+
+Lemma loc_result_type:
+  forall sig,
+  subtype_list (proj_sig_res' sig) (map mreg_type (loc_result sig)) = true.
+Proof.
+  intros. unfold proj_sig_res', loc_result. destruct (sig_res sig) as [[]|]; auto.
+Qed.
+
+(** The result locations are caller-save registers *)
 
 Lemma loc_result_caller_save:
   forall (s: signature) (r: mreg), 
@@ -292,12 +302,12 @@ Definition sreg_param (n: Z) : mreg :=
 Fixpoint loc_arguments_rec (tyl: list typ) (ofs: Z) {struct tyl} : list loc :=
   match tyl with
   | nil => nil
-  | Tint :: tys =>
-      (if zle 0 ofs then S Outgoing ofs Tint else R (ireg_param ofs))
+  | (Tint | Tany32) as ty :: tys =>
+      (if zle 0 ofs then S Outgoing ofs ty else R (ireg_param ofs))
       :: loc_arguments_rec tys (ofs + 1)
-  | Tfloat :: tys =>
+  | (Tfloat | Tany64) as ty :: tys =>
       let ofs := align ofs 2 in
-      (if zle 0 ofs then S Outgoing ofs Tfloat else R (freg_param ofs))
+      (if zle 0 ofs then S Outgoing ofs ty else R (freg_param ofs))
       :: loc_arguments_rec tys (ofs + 2)
   | Tsingle :: tys =>
       (if zle 0 ofs then S Outgoing ofs Tsingle else R (sreg_param ofs))
@@ -321,8 +331,8 @@ Definition loc_arguments (s: signature) : list loc :=
 Fixpoint size_arguments_rec (tyl: list typ) (ofs: Z) {struct tyl} : Z :=
   match tyl with
   | nil => ofs
-  | (Tint | Tsingle) :: tys => size_arguments_rec tys (ofs + 1)
-  | (Tfloat | Tlong) :: tys => size_arguments_rec tys (align ofs 2 + 2)
+  | (Tint | Tsingle | Tany32) :: tys => size_arguments_rec tys (ofs + 1)
+  | (Tfloat | Tlong | Tany64) :: tys => size_arguments_rec tys (align ofs 2 + 2)
   end.
 
 Definition size_arguments (s: signature) : Z :=
@@ -404,6 +414,19 @@ Proof.
   split. omega. split. omega. congruence.
   apply sreg_param_caller_save.
   exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
+- (* Tany32 *)
+  destruct H.
+  subst l. destruct (zle 0 ofs).
+  split. omega. split. omega. congruence.
+  apply ireg_param_caller_save.
+  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
+- (* Tany64 *)
+  assert (ofs <= align ofs 2) by (apply align_le; omega).
+  destruct H.
+  subst l. destruct (zle 0 (align ofs 2)).
+  split. omega. split. auto. congruence.
+  apply freg_param_caller_save.
+  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
 Qed.
 
 Lemma loc_arguments_acceptable:
@@ -433,6 +456,9 @@ Proof.
   assert (ofs <= align ofs 2) by (apply align_le; omega).
   apply Zle_trans with (align ofs 2 + 2); auto; omega.
   apply Zle_trans with (ofs + 1); auto; omega.
+  apply Zle_trans with (ofs + 1); auto; omega.
+  assert (ofs <= align ofs 2) by (apply align_le; omega).
+  apply Zle_trans with (align ofs 2 + 2); auto; omega.
 Qed.
 
 Lemma size_arguments_above:
@@ -474,6 +500,10 @@ Proof.
     eapply Zle_trans. 2: apply H0. simpl typesize; omega. omega.
   - (* Tsingle *)
     destruct H1; auto. destruct (zle 0 ofs0); inv H1. apply H0. omega. 
+  - (* Tany32 *)
+    destruct H1; auto. destruct (zle 0 ofs0); inv H1. apply H0. omega. 
+  - (* Tany64 *)
+    destruct H1; auto. destruct (zle 0 (align ofs0 2)); inv H1. apply H0. omega.
   }
   unfold size_arguments. apply H1. auto.  
 Qed.

@@ -52,6 +52,7 @@ Definition eval_static_operation (op: operation) (vl: list aval): aval :=
   | Omove, v1::nil => v1
   | Ointconst n, nil => I n
   | Ofloatconst n, nil => if propagate_float_constants tt then F n else ftop
+  | Osingleconst n, nil => if propagate_float_constants tt then FS n else ftop
   | Oaddrsymbol id ofs, nil => Ptr (Gl id ofs)
   | Oaddrstack ofs, nil => Ptr (Stk ofs)
   | Ocast8signed, v1 :: nil => sign_ext 8 v1
@@ -92,7 +93,14 @@ Definition eval_static_operation (op: operation) (vl: list aval): aval :=
   | Osubf, v1::v2::nil => subf v1 v2
   | Omulf, v1::v2::nil => mulf v1 v2
   | Odivf, v1::v2::nil => divf v1 v2
+  | Onegfs, v1::nil => negfs v1
+  | Oabsfs, v1::nil => absfs v1
+  | Oaddfs, v1::v2::nil => addfs v1 v2
+  | Osubfs, v1::v2::nil => subfs v1 v2
+  | Omulfs, v1::v2::nil => mulfs v1 v2
+  | Odivfs, v1::v2::nil => divfs v1 v2
   | Osingleoffloat, v1::nil => singleoffloat v1
+  | Ofloatofsingle, v1::nil => floatofsingle v1
   | Ointoffloat, v1::nil => intoffloat v1
   | Ofloatofwords, v1::v2::nil => floatofwords v1 v2
   | Omakelong, v1::v2::nil => longofwords v1 v2
@@ -162,6 +170,7 @@ Theorem eval_static_operation_sound:
 Proof.
   unfold eval_operation, eval_static_operation; intros;
   destruct op; InvHyps; eauto with va.
+  destruct (propagate_float_constants tt); constructor.
   destruct (propagate_float_constants tt); constructor.
   rewrite Int.add_zero_l; eauto with va.
   fold (Val.sub (Vint i) a1). auto with va.

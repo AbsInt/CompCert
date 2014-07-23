@@ -116,6 +116,7 @@ Function eval_simpl_expr (a: expr) : option val :=
   match a with
   | Econst_int n _ => Some(Vint n)
   | Econst_float n _ => Some(Vfloat n)
+  | Econst_single n _ => Some(Vsingle n)
   | Econst_long n _ => Some(Vlong n)
   | Ecast b ty => 
       match eval_simpl_expr b with
@@ -242,6 +243,8 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
       ret (finish dst nil (Econst_int n ty))
   | Csyntax.Eval (Vfloat n) ty =>
       ret (finish dst nil (Econst_float n ty))
+  | Csyntax.Eval (Vsingle n) ty =>
+      ret (finish dst nil (Econst_single n ty))
   | Csyntax.Eval (Vlong n) ty =>
       ret (finish dst nil (Econst_long n ty))
   | Csyntax.Eval _ ty =>

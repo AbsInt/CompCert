@@ -54,6 +54,7 @@ Inductive operation : Type :=
   | Omove: operation                    (**r [rd = r1] *)
   | Ointconst: int -> operation         (**r [rd] is set to the given integer constant *)
   | Ofloatconst: float -> operation     (**r [rd] is set to the given float constant *)
+  | Osingleconst: float32 -> operation  (**r [rd] is set to the given float constant *)
   | Oaddrsymbol: ident -> int -> operation (**r [rd] is set to the the address of the symbol plus the offset *)
   | Oaddrstack: int -> operation        (**r [rd] is set to the stack pointer plus the given offset *)
 (*c Integer arithmetic: *)
@@ -96,7 +97,14 @@ Inductive operation : Type :=
   | Osubf: operation                    (**r [rd = r1 - r2] *)
   | Omulf: operation                    (**r [rd = r1 * r2] *)
   | Odivf: operation                    (**r [rd = r1 / r2] *)
+  | Onegfs: operation                   (**r [rd = - r1] *)
+  | Oabsfs: operation                   (**r [rd = abs(r1)] *)
+  | Oaddfs: operation                   (**r [rd = r1 + r2] *)
+  | Osubfs: operation                   (**r [rd = r1 - r2] *)
+  | Omulfs: operation                   (**r [rd = r1 * r2] *)
+  | Odivfs: operation                   (**r [rd = r1 / r2] *)
   | Osingleoffloat: operation           (**r [rd] is [r1] truncated to single-precision float *)
+  | Ofloatofsingle: operation           (**r [rd] is [r1] extended to double-precision float *)
 (*c Conversions between int and float: *)
   | Ointoffloat: operation              (**r [rd = signed_int_of_float(r1)] *)
   | Ofloatofwords: operation            (**r [rd = float_of_words(r1,r2)] *)
@@ -130,7 +138,7 @@ Defined.
 Definition eq_operation (x y: operation): {x=y} + {x<>y}.
 Proof.
   generalize Int.eq_dec; intro.
-  generalize Float.eq_dec; intro.
+  generalize Float.eq_dec Float32.eq_dec; intros.
   assert (forall (x y: ident), {x=y}+{x<>y}). exact peq.
   generalize eq_condition; intro.
   decide equality.
@@ -172,6 +180,7 @@ Definition eval_operation
   | Omove, v1::nil => Some v1
   | Ointconst n, nil => Some (Vint n)
   | Ofloatconst n, nil => Some (Vfloat n)
+  | Osingleconst n, nil => Some (Vsingle n)
   | Oaddrsymbol s ofs, nil => Some (Genv.symbol_address genv s ofs) 
   | Oaddrstack ofs, nil => Some (Val.add sp (Vint ofs))
   | Ocast8signed, v1::nil => Some (Val.sign_ext 8 v1)
@@ -213,7 +222,14 @@ Definition eval_operation
   | Osubf, v1::v2::nil => Some(Val.subf v1 v2)
   | Omulf, v1::v2::nil => Some(Val.mulf v1 v2)
   | Odivf, v1::v2::nil => Some(Val.divf v1 v2)
+  | Onegfs, v1::nil => Some(Val.negfs v1)
+  | Oabsfs, v1::nil => Some(Val.absfs v1)
+  | Oaddfs, v1::v2::nil => Some(Val.addfs v1 v2)
+  | Osubfs, v1::v2::nil => Some(Val.subfs v1 v2)
+  | Omulfs, v1::v2::nil => Some(Val.mulfs v1 v2)
+  | Odivfs, v1::v2::nil => Some(Val.divfs v1 v2)
   | Osingleoffloat, v1::nil => Some(Val.singleoffloat v1)
+  | Ofloatofsingle, v1::nil => Some(Val.floatofsingle v1)
   | Ointoffloat, v1::nil => Val.intoffloat v1
   | Ofloatofwords, v1::v2::nil => Some(Val.floatofwords v1 v2)
   | Omakelong, v1::v2::nil => Some(Val.longofwords v1 v2)
@@ -265,7 +281,8 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   match op with
   | Omove => (nil, Tint)   (* treated specially *)
   | Ointconst _ => (nil, Tint)
-  | Ofloatconst f => (nil, if Float.is_single_dec f then Tsingle else Tfloat)
+  | Ofloatconst f => (nil, Tfloat)
+  | Osingleconst f => (nil, Tsingle)
   | Oaddrsymbol _ _ => (nil, Tint)
   | Oaddrstack _ => (nil, Tint)
   | Ocast8signed => (Tint :: nil, Tint)
@@ -306,7 +323,14 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Osubf => (Tfloat :: Tfloat :: nil, Tfloat)
   | Omulf => (Tfloat :: Tfloat :: nil, Tfloat)
   | Odivf => (Tfloat :: Tfloat :: nil, Tfloat)
+  | Onegfs => (Tsingle :: nil, Tsingle)
+  | Oabsfs => (Tsingle :: nil, Tsingle)
+  | Oaddfs => (Tsingle :: Tsingle :: nil, Tsingle)
+  | Osubfs => (Tsingle :: Tsingle :: nil, Tsingle)
+  | Omulfs => (Tsingle :: Tsingle :: nil, Tsingle)
+  | Odivfs => (Tsingle :: Tsingle :: nil, Tsingle)
   | Osingleoffloat => (Tfloat :: nil, Tsingle)
+  | Ofloatofsingle => (Tsingle :: nil, Tfloat)
   | Ointoffloat => (Tfloat :: nil, Tint)
   | Ofloatofwords => (Tint :: Tint :: nil, Tfloat)
   | Omakelong => (Tint :: Tint :: nil, Tlong)
@@ -343,7 +367,8 @@ Proof with (try exact I).
   destruct op; simpl in H0; FuncInv; subst; simpl.
   congruence.
   exact I.
-  destruct (Float.is_single_dec f); auto. 
+  auto.
+  auto.
   unfold Genv.symbol_address. destruct (Genv.find_symbol genv i)...
   destruct sp...
   destruct v0...
@@ -386,8 +411,15 @@ Proof with (try exact I).
   destruct v0; destruct v1...
   destruct v0; destruct v1...
   destruct v0; destruct v1...
-  destruct v0... simpl. apply Float.singleoffloat_is_single.
-  destruct v0; simpl in H0; inv H0. destruct (Float.intoffloat f); inv H2...
+  destruct v0...
+  destruct v0...
+  destruct v0; destruct v1...
+  destruct v0; destruct v1...
+  destruct v0; destruct v1...
+  destruct v0; destruct v1...
+  destruct v0...
+  destruct v0...
+  destruct v0; simpl in H0; inv H0. destruct (Float.to_int f); inv H2...
   destruct v0; destruct v1...
   destruct v0; destruct v1...
   destruct v0...
@@ -521,35 +553,6 @@ Proof.
   rewrite Val.add_assoc. auto. 
 Qed.
 
-(** Transformation of addressing modes with two operands or more
-  into an equivalent arithmetic operation.  This is used in the [Reload]
-  pass when a store instruction cannot be reloaded directly because
-  it runs out of temporary registers. *)
-
-(** For the PowerPC, there is only one binary addressing mode: [Aindexed2].
-  The corresponding operation is [Oadd]. *)
-
-Definition op_for_binary_addressing (addr: addressing) : operation := Oadd.
-
-Lemma eval_op_for_binary_addressing:
-  forall (F V: Type) (ge: Genv.t F V) sp addr args v m,
-  (length args >= 2)%nat ->
-  eval_addressing ge sp addr args = Some v ->
-  eval_operation ge sp (op_for_binary_addressing addr) args m = Some v.
-Proof.
-  intros.
-  destruct addr; simpl in H0; FuncInv; simpl in H; try omegaContradiction.
-  simpl; congruence.
-Qed.
-
-Lemma type_op_for_binary_addressing:
-  forall addr,
-  (length (type_of_addressing addr) >= 2)%nat ->
-  type_of_operation (op_for_binary_addressing addr) = (type_of_addressing addr, Tint).
-Proof.
-  intros. destruct addr; simpl in H; reflexivity || omegaContradiction.
-Qed.
-
 (** Operations that are so cheap to recompute that CSE should not factor them out. *)
 
 Definition is_trivial_op (op: operation) : bool :=
@@ -576,61 +579,6 @@ Lemma op_depends_on_memory_correct:
 Proof.
   intros until m2. destruct op; simpl; try congruence.
   destruct c; simpl; auto; discriminate. 
-Qed.
-
-(** Checking whether two addressings, applied to the same arguments, produce
-  separated memory addresses.  Used in [CSE]. *)
-
-Definition addressing_separated (chunk1: memory_chunk) (addr1: addressing)
-                               (chunk2: memory_chunk) (addr2: addressing) : bool :=
-  match addr1, addr2 with
-  | Aindexed ofs1, Aindexed ofs2 => 
-      Int.no_overlap ofs1 (size_chunk chunk1) ofs2 (size_chunk chunk2)
-  | Aglobal s1 ofs1, Aglobal s2 ofs2 => 
-      if ident_eq s1 s2 then Int.no_overlap ofs1 (size_chunk chunk1) ofs2 (size_chunk chunk2) else true
-  | Abased s1 ofs1, Abased s2 ofs2 => 
-      if ident_eq s1 s2 then Int.no_overlap ofs1 (size_chunk chunk1) ofs2 (size_chunk chunk2) else true
-  | Ainstack ofs1, Ainstack ofs2 =>
-      Int.no_overlap ofs1 (size_chunk chunk1) ofs2 (size_chunk chunk2)
-  | _, _ => false
-  end.
-
-Lemma addressing_separated_sound:
-  forall (F V: Type) (ge: Genv.t F V) sp chunk1 addr1 chunk2 addr2 vl b1 n1 b2 n2,
-  addressing_separated chunk1 addr1 chunk2 addr2 = true ->
-  eval_addressing ge sp addr1 vl = Some(Vptr b1 n1) ->
-  eval_addressing ge sp addr2 vl = Some(Vptr b2 n2) ->
-  b1 <> b2 \/ Int.unsigned n1 + size_chunk chunk1 <= Int.unsigned n2 \/ Int.unsigned n2 + size_chunk chunk2 <= Int.unsigned n1.
-Proof.
-  unfold addressing_separated; intros.
-  generalize (size_chunk_pos chunk1) (size_chunk_pos chunk2); intros SZ1 SZ2.
-  destruct addr1; destruct addr2; try discriminate; simpl in *; FuncInv.
-(* Aindexed *)
-  destruct v; simpl in *; inv H1; inv H2.
-  right. apply Int.no_overlap_sound; auto. 
-(* Aglobal *)
-  unfold Genv.symbol_address in *. 
-  destruct (Genv.find_symbol ge i1) eqn:?; inv H2.
-  destruct (Genv.find_symbol ge i) eqn:?; inv H1.
-  destruct (ident_eq i i1). subst.
-  replace (Int.unsigned n1) with (Int.unsigned (Int.add Int.zero n1)).
-  replace (Int.unsigned n2) with (Int.unsigned (Int.add Int.zero n2)).
-  right. apply Int.no_overlap_sound; auto. 
-  rewrite Int.add_commut; rewrite Int.add_zero; auto.
-  rewrite Int.add_commut; rewrite Int.add_zero; auto.
-  left. red; intros; elim n. subst. eapply Genv.genv_vars_inj; eauto.
-(* Abased *)
-  unfold Genv.symbol_address in *. 
-  destruct (Genv.find_symbol ge i1) eqn:?; simpl in *; try discriminate.
-  destruct v; inv H2.
-  destruct (Genv.find_symbol ge i) eqn:?; inv H1.
-  destruct (ident_eq i i1). subst.
-  rewrite (Int.add_commut i0 i3). rewrite (Int.add_commut i2 i3).
-  right. apply Int.no_overlap_sound; auto. 
-  left. red; intros; elim n. subst. eapply Genv.genv_vars_inj; eauto.
-(* Ainstack *)
-  destruct sp; simpl in *; inv H1; inv H2.
-  right. apply Int.no_overlap_sound; auto. 
 Qed.
 
 (** * Invariance and compatibility properties. *)
@@ -719,6 +667,8 @@ Ltac InvInject :=
       inv H; InvInject
   | [ H: val_inject _ (Vfloat _) _ |- _ ] =>
       inv H; InvInject
+  | [ H: val_inject _ (Vsingle _) _ |- _ ] =>
+      inv H; InvInject
   | [ H: val_inject _ (Vptr _ _) _ |- _ ] =>
       inv H; InvInject
   | [ H: val_list_inject _ nil _ |- _ ] =>
@@ -806,7 +756,14 @@ Proof.
   inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.
   inv H4; simpl; auto.
-  inv H4; simpl in H1; inv H1. simpl. destruct (Float.intoffloat f0); simpl in H2; inv H2.
+  inv H4; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; simpl in H1; inv H1. simpl. destruct (Float.to_int f0); simpl in H2; inv H2.
   exists (Vint i); auto.
   inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.

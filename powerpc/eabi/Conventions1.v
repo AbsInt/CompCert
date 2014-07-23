@@ -15,6 +15,7 @@
 
 Require Import Coqlib.
 Require Import AST.
+Require Import Events.
 Require Import Locations.
 
 (** * Classification of machine registers *)
@@ -180,13 +181,13 @@ Proof.
 Qed.
 
 Lemma int_callee_save_type:
-  forall r, In r int_callee_save_regs -> mreg_type r = Tint.
+  forall r, In r int_callee_save_regs -> mreg_type r = Tany32.
 Proof.
   intro. simpl; ElimOrEq; reflexivity.
 Qed.
 
 Lemma float_callee_save_type:
-  forall r, In r float_callee_save_regs -> mreg_type r = Tfloat.
+  forall r, In r float_callee_save_regs -> mreg_type r = Tany64.
 Proof.
   intro. simpl; ElimOrEq; reflexivity.
 Qed.
@@ -239,12 +240,21 @@ Qed.
 Definition loc_result (s: signature) : list mreg :=
   match s.(sig_res) with
   | None => R3 :: nil
-  | Some Tint => R3 :: nil
-  | Some (Tfloat | Tsingle) => F1 :: nil
+  | Some (Tint | Tany32) => R3 :: nil
+  | Some (Tfloat | Tsingle | Tany64) => F1 :: nil
   | Some Tlong => R3 :: R4 :: nil
   end.
 
-(** The result location is a caller-save register *)
+(** The result registers have types compatible with that given in the signature. *)
+
+Lemma loc_result_type:
+  forall sig,
+  subtype_list (proj_sig_res' sig) (map mreg_type (loc_result sig)) = true.
+Proof.
+  intros. unfold proj_sig_res', loc_result. destruct (sig_res sig) as [[]|]; auto.
+Qed.
+
+(** The result locations are caller-save registers *)
 
 Lemma loc_result_caller_save:
   forall (s: signature) (r: mreg), 
@@ -278,18 +288,18 @@ Fixpoint loc_arguments_rec
     (tyl: list typ) (ir fr ofs: Z) {struct tyl} : list loc :=
   match tyl with
   | nil => nil
-  | Tint :: tys =>
+  | (Tint | Tany32) as ty :: tys =>
       match list_nth_z int_param_regs ir with
       | None =>
-          S Outgoing ofs Tint :: loc_arguments_rec tys ir fr (ofs + 1)
+          S Outgoing ofs ty :: loc_arguments_rec tys ir fr (ofs + 1)
       | Some ireg =>
           R ireg :: loc_arguments_rec tys (ir + 1) fr ofs
       end
-  | (Tfloat | Tsingle) :: tys =>
+  | (Tfloat | Tsingle | Tany64) as ty :: tys =>
       match list_nth_z float_param_regs fr with
       | None =>
           let ofs := align ofs 2 in
-          S Outgoing ofs Tfloat :: loc_arguments_rec tys ir fr (ofs + 2)
+          S Outgoing ofs ty :: loc_arguments_rec tys ir fr (ofs + 2)
       | Some freg =>
           R freg :: loc_arguments_rec tys ir (fr + 1) ofs
       end
@@ -316,12 +326,12 @@ Definition loc_arguments (s: signature) : list loc :=
 Fixpoint size_arguments_rec (tyl: list typ) (ir fr ofs: Z) {struct tyl} : Z :=
   match tyl with
   | nil => ofs
-  | Tint :: tys =>
+  | (Tint | Tany32) :: tys =>
       match list_nth_z int_param_regs ir with
       | None => size_arguments_rec tys ir fr (ofs + 1)
       | Some ireg => size_arguments_rec tys (ir + 1) fr ofs
       end
-  | (Tfloat | Tsingle) :: tys =>
+  | (Tfloat | Tsingle | Tany64) :: tys =>
       match list_nth_z float_param_regs fr with
       | None => size_arguments_rec tys ir fr (align ofs 2 + 2)
       | Some freg => size_arguments_rec tys ir (fr + 1) ofs
@@ -393,10 +403,24 @@ Opaque list_nth_z.
   destruct H. subst. split. omega. congruence.
   exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
   assert (ofs <= align ofs 2) by (apply align_le; omega). 
-  destruct H. subst. split. omega. congruence. 
+  destruct H. subst. split. omega. congruence.
   destruct H. subst. split. omega. congruence.
   exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega. 
 - (* single *)
+  destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H. 
+  subst. right. eapply list_nth_z_in; eauto.
+  eapply IHtyl; eauto.
+  subst. split. apply Zle_ge. apply align_le. omega. congruence.
+  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto.
+  assert (ofs <= align ofs 2) by (apply align_le; omega). 
+  intuition omega.
+- (* any32 *)
+  destruct (list_nth_z int_param_regs ir) as [r|] eqn:E; destruct H.
+  subst. left. eapply list_nth_z_in; eauto.
+  eapply IHtyl; eauto.
+  subst. split. omega. congruence.
+  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
+- (* any64 *)
   destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H. 
   subst. right. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
@@ -438,6 +462,10 @@ Proof.
   apply Zle_trans with (align ofs0 2 + 2); auto; omega.
   apply Zle_trans with (align ofs0 2). apply align_le; omega.
   apply Zle_trans with (align ofs0 2 + 2); auto; omega.
+  destruct (list_nth_z float_param_regs fr); eauto.
+  apply Zle_trans with (align ofs0 2). apply align_le; omega.
+  apply Zle_trans with (align ofs0 2 + 2); auto; omega.
+  destruct (list_nth_z int_param_regs ir); eauto. apply Zle_trans with (ofs0 + 1); auto; omega.
   destruct (list_nth_z float_param_regs fr); eauto.
   apply Zle_trans with (align ofs0 2). apply align_le; omega.
   apply Zle_trans with (align ofs0 2 + 2); auto; omega.
@@ -490,6 +518,18 @@ Proof.
   transitivity (align ofs0 2 + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
   eauto.
 - (* single *)
+  destruct (list_nth_z float_param_regs fr); destruct H0. 
+  congruence.
+  eauto.
+  inv H0. transitivity (align ofs0 2 + 2). simpl; omega. apply size_arguments_rec_above.
+  eauto.
+- (* any32 *)
+  destruct (list_nth_z int_param_regs ir); destruct H0. 
+  congruence.
+  eauto.
+  inv H0. apply size_arguments_rec_above.
+  eauto.
+- (* any64 *)
   destruct (list_nth_z float_param_regs fr); destruct H0. 
   congruence.
   eauto.

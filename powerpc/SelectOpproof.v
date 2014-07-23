@@ -639,6 +639,31 @@ Proof.
   red; intros; TrivialExists.
 Qed.
 
+Theorem eval_negfs: unary_constructor_sound negfs Val.negfs.
+Proof.
+  red; intros. TrivialExists. 
+Qed.
+
+Theorem eval_absfs: unary_constructor_sound absfs Val.absfs.
+Proof.
+  red; intros. TrivialExists. 
+Qed.
+
+Theorem eval_addfs: binary_constructor_sound addfs Val.addfs.
+Proof.
+  red; intros; TrivialExists.
+Qed.
+ 
+Theorem eval_subfs: binary_constructor_sound subfs Val.subfs.
+Proof.
+  red; intros; TrivialExists.
+Qed.
+
+Theorem eval_mulfs: binary_constructor_sound mulfs Val.mulfs.
+Proof.
+  red; intros; TrivialExists.
+Qed.
+
 Section COMP_IMM.
 
 Variable default: comparison -> int -> condition.
@@ -746,6 +771,18 @@ Proof.
   intros; red; intros. unfold compf. TrivialExists.
 Qed.
 
+Theorem eval_compfs:
+  forall c, binary_constructor_sound (compfs c) (Val.cmpfs c).
+Proof.
+  intros; red; intros. unfold compfs.
+  replace (Val.cmpfs c x y) with
+          (Val.cmpf c (Val.floatofsingle x) (Val.floatofsingle y)).
+  TrivialExists. constructor. EvalOp. simpl; reflexivity. 
+  constructor. EvalOp. simpl; reflexivity. constructor.
+  auto. 
+  destruct x; auto. destruct y; auto. unfold Val.cmpf, Val.cmpfs; simpl. 
+  rewrite Float32.cmp_double. auto. 
+Qed.
 
 Theorem eval_cast8signed: unary_constructor_sound cast8signed (Val.sign_ext 8).
 Proof.
@@ -778,6 +815,11 @@ Proof.
   red; intros. unfold singleoffloat. TrivialExists.
 Qed.
 
+Theorem eval_floatofsingle: unary_constructor_sound floatofsingle Val.floatofsingle.
+Proof.
+  red; intros. unfold floatofsingle. TrivialExists.
+Qed.
+
 Theorem eval_intoffloat:
   forall le a x y,
   eval_expr ge sp e m le a x ->
@@ -794,10 +836,10 @@ Theorem eval_intuoffloat:
   exists v, eval_expr ge sp e m le (intuoffloat a) v /\ Val.lessdef y v.
 Proof.
   intros. destruct x; simpl in H0; try discriminate.
-  destruct (Float.intuoffloat f) as [n|] eqn:?; simpl in H0; inv H0.
+  destruct (Float.to_intu f) as [n|] eqn:?; simpl in H0; inv H0.
   exists (Vint n); split; auto. unfold intuoffloat.
   set (im := Int.repr Int.half_modulus).
-  set (fm := Float.floatofintu im).
+  set (fm := Float.of_intu im).
   assert (eval_expr ge sp e m (Vfloat fm :: Vfloat f :: le) (Eletvar (S O)) (Vfloat f)).
     constructor. auto.
   assert (eval_expr ge sp e m (Vfloat fm :: Vfloat f :: le) (Eletvar O) (Vfloat fm)).
@@ -807,9 +849,9 @@ Proof.
   eapply eval_Econdition with (va := Float.cmp Clt f fm).
   eauto with evalexpr.
   destruct (Float.cmp Clt f fm) eqn:?.
-  exploit Float.intuoffloat_intoffloat_1; eauto. intro EQ.
+  exploit Float.to_intu_to_int_1; eauto. intro EQ.
   EvalOp. simpl. rewrite EQ; auto.
-  exploit Float.intuoffloat_intoffloat_2; eauto. 
+  exploit Float.to_intu_to_int_2; eauto. 
   change Float.ox8000_0000 with im. fold fm. intro EQ.
   set (t2 := subf (Eletvar (S O)) (Eletvar O)).
   set (t3 := intoffloat t2).
@@ -834,7 +876,7 @@ Proof.
   intros until y. unfold floatofint. destruct (floatofint_match a); intros.
   InvEval. TrivialExists. 
   rename e0 into a. destruct x; simpl in H0; inv H0.
-  exists (Vfloat (Float.floatofint i)); split; auto.
+  exists (Vfloat (Float.of_int i)); split; auto.
   set (t1 := addimm Float.ox8000_0000 a).
   set (t2 := Eop Ofloatofwords (Eop (Ointconst Float.ox4330_0000) Enil ::: t1 ::: Enil)).
   set (t3 := Eop (Ofloatconst (Float.from_words Float.ox4330_0000 Float.ox8000_0000)) Enil).
@@ -844,7 +886,7 @@ Proof.
   unfold t2. EvalOp. constructor. EvalOp. simpl; eauto. constructor. eauto. constructor. 
   unfold eval_operation. eauto. 
   instantiate (2 := t3). unfold t3. EvalOp. simpl; eauto.  
-  intros [v2 [A2 B2]]. simpl in B2. inv B2. rewrite Float.floatofint_from_words. auto.
+  intros [v2 [A2 B2]]. simpl in B2. inv B2. rewrite Float.of_int_from_words. auto.
 Qed.
 
 Theorem eval_floatofintu:
@@ -856,7 +898,7 @@ Proof.
   intros until y. unfold floatofintu. destruct (floatofintu_match a); intros.
   InvEval. TrivialExists.
   rename e0 into a. destruct x; simpl in H0; inv H0.
-  exists (Vfloat (Float.floatofintu i)); split; auto.
+  exists (Vfloat (Float.of_intu i)); split; auto.
   unfold floatofintu.
   set (t2 := Eop Ofloatofwords (Eop (Ointconst Float.ox4330_0000) Enil ::: a ::: Enil)).
   set (t3 := Eop (Ofloatconst (Float.from_words Float.ox4330_0000 Int.zero)) Enil).
@@ -864,7 +906,73 @@ Proof.
   unfold t2. EvalOp. constructor. EvalOp. simpl; eauto. constructor. eauto. constructor. 
   unfold eval_operation. eauto. 
   instantiate (2 := t3). unfold t3. EvalOp. simpl; eauto.
-  intros [v2 [A2 B2]]. simpl in B2. inv B2. rewrite Float.floatofintu_from_words. auto.
+  intros [v2 [A2 B2]]. simpl in B2. inv B2. rewrite Float.of_intu_from_words. auto.
+Qed.
+
+Theorem eval_intofsingle:
+  forall le a x y,
+  eval_expr ge sp e m le a x ->
+  Val.intofsingle x = Some y ->
+  exists v, eval_expr ge sp e m le (intofsingle a) v /\ Val.lessdef y v.
+Proof.
+  intros; unfold intofsingle. 
+  assert (Val.intoffloat (Val.floatofsingle x) = Some y).
+  { destruct x; simpl in H0; try discriminate.
+    destruct (Float32.to_int f) eqn:F; inv H0. 
+    apply Float32.to_int_double in F. 
+    simpl. unfold Float32.to_double in F; rewrite F; auto.  
+  }
+  apply eval_intoffloat with (Val.floatofsingle x); auto. EvalOp. 
+Qed.
+
+Theorem eval_singleofint:
+  forall le a x y,
+  eval_expr ge sp e m le a x ->
+  Val.singleofint x = Some y ->
+  exists v, eval_expr ge sp e m le (singleofint a) v /\ Val.lessdef y v.
+Proof.
+  intros. unfold singleofint.
+  assert (exists z, Val.floatofint x = Some z /\ y = Val.singleoffloat z).
+  {
+    destruct x; inv H0. simpl. exists (Vfloat (Float.of_int i)); simpl; split; auto.
+    f_equal. apply Float32.of_int_double. 
+  }
+  destruct H1 as (z & A & B). subst y. 
+  exploit eval_floatofint; eauto. intros (v & C & D). 
+  exists (Val.singleoffloat v); split. EvalOp. inv D; auto. 
+Qed.
+
+Theorem eval_intuofsingle:
+  forall le a x y,
+  eval_expr ge sp e m le a x ->
+  Val.intuofsingle x = Some y ->
+  exists v, eval_expr ge sp e m le (intuofsingle a) v /\ Val.lessdef y v.
+Proof.
+  intros; unfold intuofsingle. 
+  assert (Val.intuoffloat (Val.floatofsingle x) = Some y).
+  { destruct x; simpl in H0; try discriminate.
+    destruct (Float32.to_intu f) eqn:F; inv H0. 
+    apply Float32.to_intu_double in F. 
+    simpl. unfold Float32.to_double in F; rewrite F; auto.  
+  }
+  apply eval_intuoffloat with (Val.floatofsingle x); auto. EvalOp. 
+Qed.
+
+Theorem eval_singleofintu:
+  forall le a x y,
+  eval_expr ge sp e m le a x ->
+  Val.singleofintu x = Some y ->
+  exists v, eval_expr ge sp e m le (singleofintu a) v /\ Val.lessdef y v.
+Proof.
+  intros. unfold singleofintu.
+  assert (exists z, Val.floatofintu x = Some z /\ y = Val.singleoffloat z).
+  {
+    destruct x; inv H0. simpl. exists (Vfloat (Float.of_intu i)); simpl; split; auto.
+    f_equal. apply Float32.of_intu_double. 
+  }
+  destruct H1 as (z & A & B). subst y. 
+  exploit eval_floatofintu; eauto. intros (v & C & D). 
+  exists (Val.singleoffloat v); split. EvalOp. inv D; auto. 
 Qed.
 
 Theorem eval_addressing:

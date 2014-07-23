@@ -73,12 +73,12 @@ Definition save_callee_save_regs
 Definition save_callee_save_int (fe: frame_env) :=
   save_callee_save_regs 
     fe_num_int_callee_save index_int_callee_save FI_saved_int
-    Tint fe int_callee_save_regs.
+    Tany32 fe int_callee_save_regs.
 
 Definition save_callee_save_float (fe: frame_env) :=
   save_callee_save_regs
     fe_num_float_callee_save index_float_callee_save FI_saved_float 
-    Tfloat fe float_callee_save_regs.
+    Tany64 fe float_callee_save_regs.
 
 Definition save_callee_save (fe: frame_env) (k: Mach.code) :=
   save_callee_save_int fe (save_callee_save_float fe k).
@@ -103,12 +103,12 @@ Definition restore_callee_save_regs
 Definition restore_callee_save_int (fe: frame_env) :=
   restore_callee_save_regs 
     fe_num_int_callee_save index_int_callee_save FI_saved_int
-    Tint fe int_callee_save_regs.
+    Tany32 fe int_callee_save_regs.
 
 Definition restore_callee_save_float (fe: frame_env) :=
   restore_callee_save_regs
     fe_num_float_callee_save index_float_callee_save FI_saved_float 
-    Tfloat fe float_callee_save_regs.
+    Tany64 fe float_callee_save_regs.
 
 Definition restore_callee_save (fe: frame_env) (k: Mach.code) :=
   restore_callee_save_int fe (restore_callee_save_float fe k).

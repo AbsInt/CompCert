@@ -32,17 +32,17 @@ inline float single_of_bits(u32 i)
   u.i = i; return u.f;
 }
 
-volatile double val[8];
-
 char * valname[8] = {
   "+0", "-0", "+inf", "-inf",
   "snan(5)", "qnan(6)", "snan(-9)", "qnan(-1)"
 };
 
-int main()
+void test64(void)
 {
+  volatile double val[8];
   int i, j;
 
+  printf("--- Double precision\n");
   val[0] = 0.0;
   val[1] = - val[0];
   val[2] = double_of_bits(0x7FF0000000000000);
@@ -56,10 +56,7 @@ int main()
   for (i = 0; i < 8; i++) {
     printf("opp(%s) = 0x%016llx\n", valname[i], bits_of_double(- val[i]));
     printf("single(%s) = 0x%08x\n", valname[i], bits_of_single((float)(val[i])));
-#if 0
-    /* The reference interpreter doesn't support __builtin_fabs */
     printf("abs(%s) = 0x%016llx\n", valname[i], bits_of_double(__builtin_fabs(val[i])));
-#endif
     for (j = 0; j < 8; j++) {
       printf("%s + %s = 0x%016llx\n",
              valname[i], valname[j], bits_of_double(val[i] + val[j]));
@@ -71,5 +68,44 @@ int main()
              valname[i], valname[j], bits_of_double(val[i] / val[j]));
     }
   }
+}
+
+void test32(void)
+{
+  volatile float val[8];
+  int i, j;
+
+  printf("--- Single precision\n");
+  val[0] = 0.0f;
+  val[1] = - val[0];
+  val[2] = single_of_bits(0x7F800000);
+  val[3] = - val[2];
+
+  val[4] = single_of_bits(0x7F800005);
+  val[5] = single_of_bits(0x7FC00006);
+  val[6] = single_of_bits(0xFF800009);
+  val[7] = single_of_bits(0xFFC00001);
+
+  for (i = 0; i < 8; i++) {
+    printf("opp(%s) = 0x%08x\n", valname[i], bits_of_single(- val[i]));
+    printf("double(%s) = 0x%016llx\n", valname[i], bits_of_double((double)(val[i])));
+    printf("abs(%s) = 0x%08x\n", valname[i], bits_of_single(__builtin_fabs(val[i])));
+    for (j = 0; j < 8; j++) {
+      printf("%s + %s = 0x%08x\n",
+             valname[i], valname[j], bits_of_single(val[i] + val[j]));
+      printf("%s - %s = 0x%08x\n",
+             valname[i], valname[j], bits_of_single(val[i] - val[j]));
+      printf("%s * %s = 0x%08x\n",
+             valname[i], valname[j], bits_of_single(val[i] * val[j]));
+      printf("%s / %s = 0x%08x\n",
+             valname[i], valname[j], bits_of_single(val[i] / val[j]));
+    }
+  }
+}
+
+int main(void)
+{
+  test64();
+  test32();
   return 0;
 }
