@@ -1836,7 +1836,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
-      | Plfd(rd, cst, r1) ->
+      | Plfd(rd, cst, r1) | Plfd_a(rd, cst, r1) ->
           begin match ecode with
           | LFD(frD, rA, d) :: es ->
               OK(fw)
@@ -1846,7 +1846,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
-      | Plfdx(rd, r1, r2) ->
+      | Plfdx(rd, r1, r2) | Plfdx_a(rd, r1, r2) ->
           begin match ecode with
           | LFDX(frD, rA, rB) :: es ->
               OK(fw)
@@ -2004,7 +2004,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
-      | Plwz(rd, cst, r1) ->
+      | Plwz(rd, cst, r1) | Plwz_a(rd, cst, r1) ->
           begin match ecode with
           | LWZ(rD, rA, d) :: es ->
               OK(fw)
@@ -2014,7 +2014,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
-      | Plwzx(rd, r1, r2) ->
+      | Plwzx(rd, r1, r2) | Plwzx_a(rd, r1, r2) ->
           begin match ecode with
           | LWZX(rD, rA, rB) :: es ->
               OK(fw)
@@ -2272,7 +2272,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
-      | Pstfd(rd, cst, r1) ->
+      | Pstfd(rd, cst, r1) | Pstfd_a(rd, cst, r1) ->
           begin match ecode with
           | STFD(frS, rA, d) :: es ->
               OK(fw)
@@ -2282,7 +2282,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
-      | Pstfdx(rd, r1, r2) ->
+      | Pstfdx(rd, r1, r2) | Pstfdx_a(rd, r1, r2) ->
           begin match ecode with
           | STFDX(frS, rA, rB) :: es ->
               OK(fw)
