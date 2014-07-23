@@ -16,7 +16,8 @@
 include Makefile.config
 
 DIRS=lib common $(ARCH)/$(VARIANT) $(ARCH) backend cfrontend driver \
-  flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight cparser cparser/validator
+  flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight \
+  cparser cparser/validator
 
 RECDIRS=lib common backend cfrontend driver flocq exportclight cparser
 
@@ -24,7 +25,7 @@ COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) -as compcert.$(d)) \
   -I $(ARCH)/$(VARIANT) -as compcert.$(ARCH).$(VARIANT) \
   -I $(ARCH) -as compcert.$(ARCH)
 
-CAMLINCLUDES=$(patsubst %,-I %, $(DIRS)) -I extraction -I cparser
+CAMLINCLUDES=$(patsubst %,-I %, $(DIRS)) -I extraction
 
 MENHIR=menhir
 COQC="$(COQBIN)coqc" -q $(COQINCLUDES)
