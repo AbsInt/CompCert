@@ -364,3 +364,8 @@ Proof.
   simpl typesize. apply Zle_trans with (ofs + 2). omega. apply size_arguments_rec_above.
 Qed.
 
+Lemma loc_arguments_main:
+  loc_arguments signature_main = nil.
+Proof.
+  reflexivity.
+Qed.

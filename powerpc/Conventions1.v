@@ -537,3 +537,9 @@ Proof.
   }
   eauto.
 Qed.
+
+Lemma loc_arguments_main:
+  loc_arguments signature_main = nil.
+Proof.
+  reflexivity.
+Qed.

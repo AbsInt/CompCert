@@ -2850,7 +2850,7 @@ Proof.
     intros. change (Mem.valid_block m0 b0). eapply Genv.find_symbol_not_fresh; eauto.
     intros. change (Mem.valid_block m0 b0). eapply Genv.find_funct_ptr_not_fresh; eauto.
     intros. change (Mem.valid_block m0 b0). eapply Genv.find_var_info_not_fresh; eauto.
-  rewrite H3. red; intros. contradiction.
+  rewrite H3. red; intros. rewrite loc_arguments_main in H. contradiction.
   unfold Locmap.init. red; intros; auto.
   unfold parent_locset. red; auto.
 Qed.

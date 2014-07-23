@@ -16,3 +16,11 @@
 Extract Constant Asm.ireg_eq => "fun (x: ireg) (y: ireg) -> x = y".
 Extract Constant Asm.freg_eq => "fun (x: freg) (y: freg) -> x = y".
 Extract Constant Asm.preg_eq => "fun (x: preg) (y: preg) -> x = y".
+
+(* Choice of calling conventions *)
+Extract Constant Archi.abi =>
+  "begin match Configuration.variant with
+   | ""eabi"" -> Softfloat
+   | ""hardfloat"" -> Hardfloat
+   | _ -> assert false
+   end".

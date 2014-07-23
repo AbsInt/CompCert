@@ -15,14 +15,13 @@
 
 include Makefile.config
 
-DIRS=lib common $(ARCH)/$(VARIANT) $(ARCH) backend cfrontend driver \
+DIRS=lib common $(ARCH) backend cfrontend driver \
   flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight \
   cparser cparser/validator
 
 RECDIRS=lib common backend cfrontend driver flocq exportclight cparser
 
 COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) -as compcert.$(d)) \
-  -I $(ARCH)/$(VARIANT) -as compcert.$(ARCH).$(VARIANT) \
   -I $(ARCH) -as compcert.$(ARCH)
 
 CAMLINCLUDES=$(patsubst %,-I %, $(DIRS)) -I extraction
@@ -241,8 +240,7 @@ cparser/Parser.v: cparser/Parser.vy
 
 depend: $(FILES) exportclight/Clightdefs.v
 	$(COQDEP) $^ \
-        | sed -e 's|$(ARCH)/$(VARIANT)/|$$(ARCH)/$$(VARIANT)/|g' \
-              -e 's|$(ARCH)/|$$(ARCH)/|g' \
+        | sed -e 's|$(ARCH)/|$$(ARCH)/|g' \
         > .depend
 
 install:

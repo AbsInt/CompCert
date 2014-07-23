@@ -46,3 +46,6 @@ Definition choose_binop_pl_32 (s1: bool) (pl1: nan_pl 24) (s2: bool) (pl2: nan_p
 Global Opaque big_endian
               default_pl_64 choose_binop_pl_64
               default_pl_32 choose_binop_pl_32.
+
+Inductive abi_kind := Softfloat | Hardfloat.
+Parameter abi: abi_kind.

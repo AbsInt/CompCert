@@ -17,6 +17,7 @@ Require Import Coqlib.
 Require Import AST.
 Require Import Events.
 Require Import Locations.
+Require Archi.
 
 (** * Classification of machine registers *)
 
@@ -231,7 +232,12 @@ Qed.
 (** The result value of a function is passed back to the caller in
   registers [R0] or [F0] or [R0,R1], depending on the type of the
   returned value.  We treat a function without result as a function
-  with one integer result. *)
+  with one integer result.
+
+  For the "softfloat" convention, results of FP types should be passed
+  in [R0] or [R0,R1].  This doesn't fit the CompCert register model,
+  so we have code in [arm/PrintAsm.ml] that inserts additional moves
+  to/from [F0]. *)
 
 Definition loc_result (s: signature) : list mreg :=
   match s.(sig_res) with
@@ -264,7 +270,8 @@ Qed.
 
 (** ** Location of function arguments *)
 
-(** We use the following calling conventions, adapted from the ARM EABI-HF:
+(** For the "hardfloat" configuration, we use the following calling conventions,
+    adapted from the ARM EABI-HF:
 - The first 4 integer arguments are passed in registers [R0] to [R3].
 - The first 2 long integer arguments are passed in an aligned pair of
   two integer registers.
@@ -292,32 +299,33 @@ Definition ireg_param (n: Z) : mreg :=
 Definition freg_param (n: Z) : mreg :=
   match list_nth_z float_param_regs n with Some r => r | None => F0 end.
 
-Fixpoint loc_arguments_rec
+Fixpoint loc_arguments_hf
      (tyl: list typ) (ir fr ofs: Z) {struct tyl} : list loc :=
   match tyl with
   | nil => nil
   | (Tint | Tany32) as ty :: tys =>
       if zlt ir 4
-      then R (ireg_param ir) :: loc_arguments_rec tys (ir + 1) fr ofs
-      else S Outgoing ofs ty :: loc_arguments_rec tys ir fr (ofs + 1)
+      then R (ireg_param ir) :: loc_arguments_hf tys (ir + 1) fr ofs
+      else S Outgoing ofs ty :: loc_arguments_hf tys ir fr (ofs + 1)
   | (Tfloat | Tany64) as ty :: tys =>
       if zlt fr 8
-      then R (freg_param fr) :: loc_arguments_rec tys ir (fr + 1) ofs
+      then R (freg_param fr) :: loc_arguments_hf tys ir (fr + 1) ofs
       else let ofs := align ofs 2 in
-           S Outgoing ofs ty :: loc_arguments_rec tys ir fr (ofs + 2)
+           S Outgoing ofs ty :: loc_arguments_hf tys ir fr (ofs + 2)
   | Tsingle :: tys =>
       if zlt fr 8
-      then R (freg_param fr) :: loc_arguments_rec tys ir (fr + 1) ofs
-      else S Outgoing ofs Tsingle :: loc_arguments_rec tys ir fr (ofs + 1)
+      then R (freg_param fr) :: loc_arguments_hf tys ir (fr + 1) ofs
+      else S Outgoing ofs Tsingle :: loc_arguments_hf tys ir fr (ofs + 1)
   | Tlong :: tys =>
       let ir := align ir 2 in
       if zlt ir 4
-      then R (ireg_param (ir + 1)) :: R (ireg_param ir) :: loc_arguments_rec tys (ir + 2) fr ofs
+      then R (ireg_param (ir + 1)) :: R (ireg_param ir) :: loc_arguments_hf tys (ir + 2) fr ofs
       else let ofs := align ofs 2 in
-          S Outgoing (ofs + 1) Tint :: S Outgoing ofs Tint :: loc_arguments_rec tys ir fr (ofs + 2)
+          S Outgoing (ofs + 1) Tint :: S Outgoing ofs Tint :: loc_arguments_hf tys ir fr (ofs + 2)
   end.
 
-(** For variable-argument functions, we use the default ARM EABI (not HF)
+(** For the "softfloat" configuration, as well as for variable-argument functions
+  in the "hardfloat" configuration, we use the default ARM EABI (not HF)
   calling conventions:
 - The first 4 integer arguments are passed in registers [R0] to [R3].
 - The first 2 long integer arguments are passed in an aligned pair of
@@ -329,73 +337,88 @@ Fixpoint loc_arguments_rec
 - Extra arguments are passed on the stack, in [Outgoing] slots, consecutively
   assigned (1 word for an integer or single argument, 2 words for a float
   or a long), starting at word offset 0.
-*)
 
-Fixpoint loc_arguments_vararg
+This convention is not quite that of the ARM EABI, whereas every float
+argument are passed in one or two integer registers.  Unfortunately,
+this does not fit the data model of CompCert.  In [PrintAsm.ml]
+we insert additional code around function calls and returns that moves
+data appropriately. *)
+
+Fixpoint loc_arguments_sf
      (tyl: list typ) (ofs: Z) {struct tyl} : list loc :=
   match tyl with
   | nil => nil
   | (Tint|Tany32) as ty :: tys =>
       (if zlt ofs 0 then R (ireg_param (ofs + 4)) else S Outgoing ofs ty)
-      :: loc_arguments_vararg tys (ofs + 1)
+      :: loc_arguments_sf tys (ofs + 1)
   | (Tfloat|Tany64) as ty :: tys =>
       let ofs := align ofs 2 in
       (if zlt ofs 0 then R (freg_param (ofs + 4)) else S Outgoing ofs ty)
-      :: loc_arguments_vararg tys (ofs + 2)
+      :: loc_arguments_sf tys (ofs + 2)
   | Tsingle :: tys =>
       (if zlt ofs 0 then R (freg_param (ofs + 4)) else S Outgoing ofs Tsingle)
-      :: loc_arguments_vararg tys (ofs + 1)
+      :: loc_arguments_sf tys (ofs + 1)
   | Tlong :: tys =>
       let ofs := align ofs 2 in
       (if zlt ofs 0 then R (ireg_param (ofs+1+4)) else S Outgoing (ofs+1) Tint)
       :: (if zlt ofs 0 then R (ireg_param (ofs+4)) else S Outgoing ofs Tint)
-      :: loc_arguments_vararg tys (ofs + 2)
+      :: loc_arguments_sf tys (ofs + 2)
   end.
 
 (** [loc_arguments s] returns the list of locations where to store arguments
   when calling a function with signature [s].  *)
 
 Definition loc_arguments (s: signature) : list loc :=
-  if s.(sig_cc).(cc_vararg)
-  then loc_arguments_vararg s.(sig_args) (-4)
-  else loc_arguments_rec s.(sig_args) 0 0 0.
+  match Archi.abi with
+  | Archi.Softfloat =>
+      loc_arguments_sf s.(sig_args) (-4)
+  | Archi.Hardfloat =>
+      if s.(sig_cc).(cc_vararg)
+      then loc_arguments_sf s.(sig_args) (-4)
+      else loc_arguments_hf s.(sig_args) 0 0 0
+  end.
 
 (** [size_arguments s] returns the number of [Outgoing] slots used
   to call a function with signature [s]. *)
 
-Fixpoint size_arguments_rec (tyl: list typ) (ir fr ofs: Z) {struct tyl} : Z :=
+Fixpoint size_arguments_hf (tyl: list typ) (ir fr ofs: Z) {struct tyl} : Z :=
   match tyl with
   | nil => ofs
   | (Tint|Tany32) :: tys =>
       if zlt ir 4
-      then size_arguments_rec tys (ir + 1) fr ofs
-      else size_arguments_rec tys ir fr (ofs + 1)
+      then size_arguments_hf tys (ir + 1) fr ofs
+      else size_arguments_hf tys ir fr (ofs + 1)
   | (Tfloat|Tany64) :: tys =>
       if zlt fr 8
-      then size_arguments_rec tys ir (fr + 1) ofs
-      else size_arguments_rec tys ir fr (align ofs 2 + 2)
+      then size_arguments_hf tys ir (fr + 1) ofs
+      else size_arguments_hf tys ir fr (align ofs 2 + 2)
   | Tsingle :: tys =>
       if zlt fr 8
-      then size_arguments_rec tys ir (fr + 1) ofs
-      else size_arguments_rec tys ir fr (ofs + 1)
+      then size_arguments_hf tys ir (fr + 1) ofs
+      else size_arguments_hf tys ir fr (ofs + 1)
   | Tlong :: tys =>
       let ir := align ir 2 in
       if zlt ir 4
-      then size_arguments_rec tys (ir + 2) fr ofs
-      else size_arguments_rec tys ir fr (align ofs 2 + 2)
+      then size_arguments_hf tys (ir + 2) fr ofs
+      else size_arguments_hf tys ir fr (align ofs 2 + 2)
   end.
 
-Fixpoint size_arguments_vararg (tyl: list typ) (ofs: Z) {struct tyl} : Z :=
+Fixpoint size_arguments_sf (tyl: list typ) (ofs: Z) {struct tyl} : Z :=
   match tyl with
   | nil => Zmax 0 ofs
-  | (Tint | Tsingle | Tany32) :: tys => size_arguments_vararg tys (ofs + 1)
-  | (Tfloat | Tlong | Tany64) :: tys => size_arguments_vararg tys (align ofs 2 + 2)
+  | (Tint | Tsingle | Tany32) :: tys => size_arguments_sf tys (ofs + 1)
+  | (Tfloat | Tlong | Tany64) :: tys => size_arguments_sf tys (align ofs 2 + 2)
   end.
 
 Definition size_arguments (s: signature) : Z :=
-  if s.(sig_cc).(cc_vararg)
-  then size_arguments_vararg s.(sig_args) (-4)
-  else size_arguments_rec s.(sig_args) 0 0 0.
+  match Archi.abi with
+  | Archi.Softfloat =>
+      size_arguments_sf s.(sig_args) (-4)
+  | Archi.Hardfloat =>
+      if s.(sig_cc).(cc_vararg)
+      then size_arguments_sf s.(sig_args) (-4)
+      else size_arguments_hf s.(sig_args) 0 0 0
+  end.
 
 (** Argument locations are either non-temporary registers or [Outgoing] 
   stack slots at nonnegative offsets. *)
@@ -423,9 +446,9 @@ Proof.
   simpl; auto.
 Qed.
 
-Remark loc_arguments_rec_charact:
+Remark loc_arguments_hf_charact:
   forall tyl ir fr ofs l,
-  In l (loc_arguments_rec tyl ir fr ofs) ->
+  In l (loc_arguments_hf tyl ir fr ofs) ->
   match l with
   | R r => In r int_param_regs \/ In r float_param_regs
   | S Outgoing ofs' ty => ofs' >= ofs /\ ty <> Tlong
@@ -447,7 +470,7 @@ Proof.
   {
     intros. destruct l; auto. destruct sl; auto. intuition omega.
   }
-  induction tyl; simpl loc_arguments_rec; intros.
+  induction tyl; simpl loc_arguments_hf; intros.
   elim H.
   destruct a.
 - (* int *)
@@ -494,9 +517,9 @@ Proof.
   apply Zle_trans with (align ofs 2). apply align_le; omega. omega.
 Qed.
 
-Remark loc_arguments_vararg_charact:
+Remark loc_arguments_sf_charact:
   forall tyl ofs l,
-  In l (loc_arguments_vararg tyl ofs) ->
+  In l (loc_arguments_sf tyl ofs) ->
   match l with
   | R r => In r int_param_regs \/ In r float_param_regs
   | S Outgoing ofs' ty => ofs' >= Zmax 0 ofs /\ ty <> Tlong
@@ -518,7 +541,7 @@ Proof.
   {
     intros. destruct l; auto. destruct sl; auto. intuition xomega.
   }
-  induction tyl; simpl loc_arguments_vararg; intros.
+  induction tyl; simpl loc_arguments_sf; intros.
   elim H.
   destruct a.
 - (* int *)
@@ -578,20 +601,20 @@ Proof.
   {
     intros. elim H0; simpl; ElimOrEq; OrEq.
   }
-  red. destruct (cc_vararg (sig_cc s)). 
-  exploit loc_arguments_vararg_charact; eauto.
-  destruct l; auto.
-  exploit loc_arguments_rec_charact; eauto.
-  destruct l; auto.
+  assert (In l (loc_arguments_sf (sig_args s) (-4)) -> loc_argument_acceptable l).
+  { intros. red. exploit loc_arguments_sf_charact; eauto. destruct l; auto. }
+  assert (In l (loc_arguments_hf (sig_args s) 0 0 0) -> loc_argument_acceptable l).
+  { intros. red. exploit loc_arguments_hf_charact; eauto. destruct l; auto. }
+  destruct Archi.abi; [ | destruct (cc_vararg (sig_cc s)) ]; auto.
 Qed.
 
 Hint Resolve loc_arguments_acceptable: locs.
 
 (** The offsets of [Outgoing] arguments are below [size_arguments s]. *)
 
-Remark size_arguments_rec_above:
+Remark size_arguments_hf_above:
   forall tyl ir fr ofs0,
-  ofs0 <= size_arguments_rec tyl ir fr ofs0.
+  ofs0 <= size_arguments_hf tyl ir fr ofs0.
 Proof.
   induction tyl; simpl; intros.
   omega.
@@ -612,9 +635,9 @@ Proof.
   apply Zle_trans with (align ofs0 2 + 2); auto; omega.
 Qed.
 
-Remark size_arguments_vararg_above:
+Remark size_arguments_sf_above:
   forall tyl ofs0,
-  Zmax 0 ofs0 <= size_arguments_vararg tyl ofs0.
+  Zmax 0 ofs0 <= size_arguments_sf tyl ofs0.
 Proof.
   induction tyl; simpl; intros.
   omega.
@@ -630,15 +653,18 @@ Qed.
 Lemma size_arguments_above:
   forall s, size_arguments s >= 0.
 Proof.
-  intros; unfold size_arguments. destruct (cc_vararg (sig_cc s)).
-  apply Zle_ge. change 0 with (Zmax 0 (-4)). apply size_arguments_vararg_above.  
-  apply Zle_ge. apply size_arguments_rec_above.
+  intros; unfold size_arguments. apply Zle_ge.
+  assert (0 <= size_arguments_sf (sig_args s) (-4)).
+  { change 0 with (Zmax 0 (-4)). apply size_arguments_sf_above. }
+  assert (0 <= size_arguments_hf (sig_args s) 0 0 0).
+  { apply size_arguments_hf_above. }
+  destruct Archi.abi; [ | destruct (cc_vararg (sig_cc s)) ]; auto.
 Qed.
 
-Lemma loc_arguments_rec_bounded:
+Lemma loc_arguments_hf_bounded:
   forall ofs ty tyl ir fr ofs0,
-  In (S Outgoing ofs ty) (loc_arguments_rec tyl ir fr ofs0) ->
-  ofs + typesize ty <= size_arguments_rec tyl ir fr ofs0.
+  In (S Outgoing ofs ty) (loc_arguments_hf tyl ir fr ofs0) ->
+  ofs + typesize ty <= size_arguments_hf tyl ir fr ofs0.
 Proof.
   induction tyl; simpl; intros.
   elim H.
@@ -647,77 +673,77 @@ Proof.
   destruct (zlt ir 4); destruct H.
   discriminate.
   eauto.
-  inv H. apply size_arguments_rec_above. 
+  inv H. apply size_arguments_hf_above. 
   eauto.
 - (* float *)
   destruct (zlt fr 8); destruct H.
   discriminate.
   eauto. 
-  inv H. apply size_arguments_rec_above. 
+  inv H. apply size_arguments_hf_above. 
   eauto.
 - (* long *)
   destruct (zlt (align ir 2) 4).
   destruct H. discriminate. destruct H. discriminate. eauto. 
   destruct H. inv H.
-  rewrite <- Zplus_assoc. simpl. apply size_arguments_rec_above.
+  rewrite <- Zplus_assoc. simpl. apply size_arguments_hf_above.
   destruct H. inv H.
-  eapply Zle_trans. 2: apply size_arguments_rec_above. simpl; omega.
+  eapply Zle_trans. 2: apply size_arguments_hf_above. simpl; omega.
   eauto.
 - (* float *)
   destruct (zlt fr 8); destruct H.
   discriminate.
   eauto.
-  inv H. apply size_arguments_rec_above.
+  inv H. apply size_arguments_hf_above.
   eauto.
 - (* any32 *)
   destruct (zlt ir 4); destruct H.
   discriminate.
   eauto.
-  inv H. apply size_arguments_rec_above. 
+  inv H. apply size_arguments_hf_above. 
   eauto.
 - (* any64 *)
   destruct (zlt fr 8); destruct H.
   discriminate.
   eauto. 
-  inv H. apply size_arguments_rec_above. 
+  inv H. apply size_arguments_hf_above. 
   eauto.
 Qed.
 
-Lemma loc_arguments_vararg_bounded:
+Lemma loc_arguments_sf_bounded:
   forall ofs ty tyl ofs0,
-  In (S Outgoing ofs ty) (loc_arguments_vararg tyl ofs0) ->
-  Zmax 0 (ofs + typesize ty) <= size_arguments_vararg tyl ofs0.
+  In (S Outgoing ofs ty) (loc_arguments_sf tyl ofs0) ->
+  Zmax 0 (ofs + typesize ty) <= size_arguments_sf tyl ofs0.
 Proof.
   induction tyl; simpl; intros.
   elim H.
   destruct a.
 - (* int *)
   destruct H. 
-  destruct (zlt ofs0 0); inv H. apply size_arguments_vararg_above. 
+  destruct (zlt ofs0 0); inv H. apply size_arguments_sf_above. 
   eauto.
 - (* float *)
   destruct H.
-  destruct (zlt (align ofs0 2) 0); inv H. apply size_arguments_vararg_above.
+  destruct (zlt (align ofs0 2) 0); inv H. apply size_arguments_sf_above.
   eauto.
 - (* long *)
   destruct H. 
   destruct (zlt (align ofs0 2) 0); inv H.
-  rewrite <- Zplus_assoc. simpl. apply size_arguments_vararg_above.
+  rewrite <- Zplus_assoc. simpl. apply size_arguments_sf_above.
   destruct H. 
   destruct (zlt (align ofs0 2) 0); inv H.
-  eapply Zle_trans. 2: apply size_arguments_vararg_above. simpl; xomega.
+  eapply Zle_trans. 2: apply size_arguments_sf_above. simpl; xomega.
   eauto.
 - (* float *)
   destruct H. 
-  destruct (zlt ofs0 0); inv H. apply size_arguments_vararg_above. 
+  destruct (zlt ofs0 0); inv H. apply size_arguments_sf_above. 
   eauto.
 - (* any32 *)
   destruct H. 
-  destruct (zlt ofs0 0); inv H. apply size_arguments_vararg_above. 
+  destruct (zlt ofs0 0); inv H. apply size_arguments_sf_above. 
   eauto.
 - (* any64 *)
   destruct H.
-  destruct (zlt (align ofs0 2) 0); inv H. apply size_arguments_vararg_above.
+  destruct (zlt (align ofs0 2) 0); inv H. apply size_arguments_sf_above.
   eauto.
 Qed.
 
@@ -727,7 +753,18 @@ Lemma loc_arguments_bounded:
   ofs + typesize ty <= size_arguments s.
 Proof.
   unfold loc_arguments, size_arguments; intros.
-  destruct (cc_vararg (sig_cc s)).
-  eapply Zle_trans. 2: eapply loc_arguments_vararg_bounded; eauto. xomega. 
-  eapply loc_arguments_rec_bounded; eauto.
+  assert (In (S Outgoing ofs ty) (loc_arguments_sf (sig_args s) (-4)) ->
+          ofs + typesize ty <= size_arguments_sf (sig_args s) (-4)).
+  { intros. eapply Zle_trans. 2: eapply loc_arguments_sf_bounded; eauto. xomega. }
+  assert (In (S Outgoing ofs ty) (loc_arguments_hf (sig_args s) 0 0 0) ->
+          ofs + typesize ty <= size_arguments_hf (sig_args s) 0 0 0).
+  { intros. eapply loc_arguments_hf_bounded; eauto. }
+  destruct Archi.abi; [ | destruct (cc_vararg (sig_cc s)) ]; eauto.
+Qed.
+
+Lemma loc_arguments_main:
+  loc_arguments signature_main = nil.
+Proof.
+  unfold loc_arguments. 
+  destruct Archi.abi; reflexivity.
 Qed.
