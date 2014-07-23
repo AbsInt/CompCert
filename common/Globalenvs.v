@@ -761,7 +761,9 @@ Definition read_as_zero (m: mem) (b: block) (ofs len: Z) : Prop :=
   Some (match chunk with
         | Mint8unsigned | Mint8signed | Mint16unsigned | Mint16signed | Mint32 => Vint Int.zero
         | Mint64 => Vlong Int64.zero
-        | Mfloat32 | Mfloat64 => Vfloat Float.zero
+        | Mfloat32 => Vsingle Float32.zero
+        | Mfloat64 => Vfloat Float.zero
+        | Many32 | Many64 => Vundef
         end).
 
 Remark store_zeros_loadbytes:
