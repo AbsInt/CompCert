@@ -19,10 +19,9 @@ DIRS=lib common $(ARCH) backend cfrontend driver \
   flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight \
   cparser cparser/validator
 
-RECDIRS=lib common backend cfrontend driver flocq exportclight cparser
+RECDIRS=lib common $(ARCH) backend cfrontend driver flocq exportclight cparser
 
-COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) -as compcert.$(d)) \
-  -I $(ARCH) -as compcert.$(ARCH)
+COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) -as compcert.$(d))
 
 CAMLINCLUDES=$(patsubst %,-I %, $(DIRS)) -I extraction
 
