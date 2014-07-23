@@ -571,9 +571,9 @@ let print_instruction oc = function
       let lbl = new_label() in
       fprintf oc "	movsd	%a, %a %s %.18g\n" label lbl freg rd comment (camlfloat_of_coqfloat n);
       float64_literals := (lbl, b) :: !float64_literals
-  | Pmovsd_fm(rd, a) ->
+  | Pmovsd_fm(rd, a) | Pmovsd_fm_a(rd, a) ->
       fprintf oc "	movsd	%a, %a\n" addressing a freg rd
-  | Pmovsd_mf(a, r1) ->
+  | Pmovsd_mf(a, r1) | Pmovsd_mf_a(a, r1) ->
       fprintf oc "	movsd	%a, %a\n" freg r1 addressing a
   | Pmovss_fi(rd, n) ->
       let b = camlint_of_coqint (Floats.Float32.to_bits n) in
