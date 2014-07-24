@@ -113,13 +113,14 @@ let ok_fuzz elfmap str byte fuzz =
   | Zero_symbol        -> false
   | Stub(_)            -> true
   | Jumptable          -> true
-  | Float_literal(_)   ->
+  | Float_literal(_)   -> (* FIXME: this shouldn't be a false positive! *)
       (* False positive: 0. becomes -0. *)
       not (
         (byte = a)
         && (fuz = 0x80) (* sign bit *)
         && String.sub str byte 8 = "\000\000\000\000\000\000\000\000"
       )
+  | Float32_literal(_)  -> true
   (* padding is allowed to be non-null, but won't be recognized as padding, but
      as unknown, which is not an ERROR *)
   | Padding            -> false

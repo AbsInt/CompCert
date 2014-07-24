@@ -25,6 +25,7 @@ type byte_chunk_desc =
   | Stub               of string
   | Jumptable
   | Float_literal      of float
+  | Float32_literal    of float
   | Padding
   | Unknown            of string
 
@@ -208,5 +209,6 @@ let string_of_byte_chunk_desc = function
 | Stub(s) -> "Stub for: " ^ s
 | Jumptable -> "Jump table"
 | Float_literal(f) -> "Float literal: " ^ string_of_float f
+| Float32_literal(f) -> "Float32 literal: " ^ string_of_float f
 | Padding -> "Padding"
 | Unknown(s) -> "???" ^ (if !verbose_elfmap then s else "")

@@ -115,6 +115,7 @@ let z_int64 = Camlcoq.Z.to_int64
 (* Some more printers *)
 
 let string_of_ffloat f = string_of_float (camlfloat_of_coqfloat f)
+let string_of_ffloat32 f = string_of_float (camlfloat_of_coqfloat32 f)
 
 let string_of_array string_of_elt sep a =
   let b = Buffer.create 1024 in

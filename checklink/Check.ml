@@ -307,6 +307,12 @@ let match_floats (a: Floats.float) (b: float): checker =
   check_eq (
     Printf.sprintf "match_floats %s %s" (string_of_int64 a) (string_of_int64 b)
   ) a b
+let match_floats32 (a: Floats.float32) (b: float): checker =
+  let a = Int64.bits_of_float (camlfloat_of_coqfloat32 a) in
+  let b = Int64.bits_of_float b in
+  check_eq (
+    Printf.sprintf "match_floats %s %s" (string_of_int64 a) (string_of_int64 b)
+  ) a b
 let match_crbits cb eb =
   let eb = crbit_arr.(eb) in
   check_eq (
@@ -1639,7 +1645,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
-      | Pfabs(rd, r1) ->
+      | Pfabs(rd, r1) | Pfabss(rd, r1) ->
           begin match ecode with
           | FABSx(frD, frB, rc) :: es ->
               OK(fw)
@@ -1652,6 +1658,17 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
       | Pfadd(rd, r1, r2) ->
           begin match ecode with
           | FADDx(frD, frA, frB, rc) :: es ->
+              OK(fw)
+              >>= match_fregs rd    frD
+              >>= match_fregs r1    frA
+              >>= match_fregs r2    frB
+              >>= match_bools false rc
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Pfadds(rd, r1, r2) ->
+          begin match ecode with
+          | FADDSx(frD, frA, frB, rc) :: es ->
               OK(fw)
               >>= match_fregs rd    frD
               >>= match_fregs r1    frA
@@ -1703,6 +1720,17 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
+      | Pfdivs(rd, r1, r2) ->
+          begin match ecode with
+          | FDIVSx(frD, frA, frB, rc) :: es ->
+              OK(fw)
+              >>= match_fregs rd    frD
+              >>= match_fregs r1    frA
+              >>= match_fregs r2    frB
+              >>= match_bools false rc
+              >>= recur_simpl
+          | _ -> error
+          end
       | Pfmake(rd, r1, r2) ->
           begin match ecode with
           |   STWU  (rS0, rA0, d0)    ::
@@ -1746,7 +1774,18 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
-      | Pfneg (rd, r1) ->
+      | Pfmuls(rd, r1, r2) ->
+          begin match ecode with
+          | FMULSx(frD, frA, frC, rc) :: es ->
+              OK(fw)
+              >>= match_fregs rd    frD
+              >>= match_fregs r1    frA
+              >>= match_fregs r2    frC
+              >>= match_bools false rc
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Pfneg(rd, r1) | Pfnegs(rd, r1) ->
           begin match ecode with
           | FNEGx(frD, frB, rc) :: es ->
               OK(fw)
@@ -1782,9 +1821,31 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
+      | Pfxdp(rd, r1) ->
+          if rd = r1 then OK(fw) >>= compare_code cs ecode pc else 
+          begin match ecode with
+          | FMRx(frD, frB, rc) :: es ->
+              OK(fw)
+              >>= match_fregs rd    frD
+              >>= match_fregs r1    frB
+              >>= match_bools false rc
+              >>= recur_simpl
+          | _ -> error
+          end
       | Pfsub(rd, r1, r2) ->
           begin match ecode with
           | FSUBx(frD, frA, frB, rc) :: es ->
+              OK(fw)
+              >>= match_fregs rd    frD
+              >>= match_fregs r1    frA
+              >>= match_fregs r2    frB
+              >>= match_bools false rc
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Pfsubs(rd, r1, r2) ->
+          begin match ecode with
+          | FSUBSx(frD, frA, frB, rc) :: es ->
               OK(fw)
               >>= match_fregs rd    frD
               >>= match_fregs r1    frA
@@ -1903,6 +1964,58 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                     >>= match_fregs  r1    frD1
                     >>= match_floats c     f
                     >>^ (ff_ef ^%= add_range pofs psize 8 (Float_literal(f)))
+                    >>= match_iregs  GPR12 rA1
+                    >>= continue
+                end
+          | _ -> error
+          end
+      | Plfis(r1, c) ->
+          begin match ecode with
+          |   ADDIS(rD0, rA0, simm0) ::
+              LFS  (frD1, rA1, d1)   :: es ->
+              let vaddr = Int32.(
+                add (shift_left (Safe32.of_int simm0) 16) (exts d1)
+              ) in
+              if Int32.rem vaddr 4l <> 0l
+              then ERR("Float32 constants should be 4-byte aligned")
+              else
+                let elf = fw.sf.ef.elf in
+                let atom = Hashtbl.find fw.sf.atoms fw.this_ident in
+                let literal_section =
+                  begin match atom.a_sections with
+                  | [_; l; _] -> l
+                  | _ -> Section_literal
+                  end
+                in
+                let continue = compare_code cs es (Int32.add 8l pc) in
+                begin match bitstring_at_vaddr elf vaddr 4l with
+                | None ->
+                    ERR("Floating point constant address is wrong")
+                | Some(bs, pofs, psize) ->
+                    let f =
+                      bitmatch bs with
+                      | { f : 32 : int } -> Int32.float_of_bits f
+                    in
+                    OK(fw)
+                    >>= (fun ffw ->
+                      begin match section_at_vaddr elf vaddr with
+                      | None -> ERR("No section at that virtual address")
+                      | Some(sndx) ->
+                          let section_name = elf.e_shdra.(sndx).sh_name in
+                          OK(
+                            ffw
+                            >>> (
+                              ff_sf ^%=
+                                match_sections_name literal_section section_name
+                            )
+                          )
+                      end
+                    )
+                    >>= match_iregs  GPR12 rD0
+                    >>= match_iregs  GPR0  rA0
+                    >>= match_fregs  r1    frD1
+                    >>= match_floats32 c     f
+                    >>^ (ff_ef ^%= add_range pofs psize 4 (Float32_literal(f)))
                     >>= match_iregs  GPR12 rA1
                     >>= continue
                 end
@@ -2294,30 +2407,22 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
           end
       | Pstfs(rd, cst, r1) ->
           begin match ecode with
-          |   FRSPx(frD0, frB0, rc0) ::
-              STFS (frS1, rA1,  d1)  :: es ->
+          | STFS(frS, rA, d) :: es ->
               OK(fw)
-              >>= match_fregs FPR13 frD0
-              >>= match_fregs rd    frB0
-              >>= match_bools false rc0
-              >>= match_fregs FPR13 frS1
-              >>= match_iregs r1    rA1
-              >>= match_csts  cst (exts d1)
-              >>= compare_code cs es (Int32.add 8l pc)
+              >>= match_fregs rd  frS
+              >>= match_iregs r1  rA
+              >>= match_csts  cst (exts d)
+              >>= recur_simpl
           | _ -> error
           end
       | Pstfsx(rd, r1, r2) ->
           begin match ecode with
-          |   FRSPx(frD0, frB0, rc0) ::
-              STFSX(frS1, rA1,  rB1) :: es ->
+          | STFSX(frS, rA, rB) :: es ->
               OK(fw)
-              >>= match_fregs FPR13 frD0
-              >>= match_fregs rd    frB0
-              >>= match_bools false rc0
-              >>= match_fregs FPR13 frS1
-              >>= match_iregs r1    rA1
-              >>= match_iregs r2    rB1
-              >>= compare_code cs es (Int32.add 8l pc)
+              >>= match_fregs rd frS
+              >>= match_iregs r1 rA
+              >>= match_iregs r2 rB
+              >>= recur_simpl
           | _ -> error
           end
       | Psth(rd, cst, r1) ->
@@ -2340,7 +2445,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
-      | Pstw(rd, cst, r1) ->
+      | Pstw(rd, cst, r1) | Pstw_a(rd, cst, r1) ->
           begin match ecode with
           | STW(rS, rA, d) :: es ->
               OK(fw)
@@ -2350,7 +2455,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
-      | Pstwx(rd, r1, r2) ->
+      | Pstwx(rd, r1, r2) | Pstwx_a(rd, r1, r2) ->
           begin match ecode with
           | STWX(rS, rA, rB) :: es ->
               OK(fw)
@@ -2541,16 +2646,12 @@ and check_builtin_vstore_common ccode ecode pc chunk addr offset src fw =
       end
   | Mfloat32, FR src ->
       begin match ecode with
-      |   FRSPx(frD0, frB0, rc0) ::
-          STFS (frS1, rA1,  d1)  :: es ->
+      | STFS(frS, rA, d) :: es ->
           OK(fw)
-          >>= match_fregs  FPR13  frD0
-          >>= match_fregs  src    frB0
-          >>= match_bools  false  rc0
-          >>= match_fregs  FPR13  frS1
-          >>= match_iregs  addr   rA1
-          >>= match_csts   offset (exts d1)
-          >>= compare_code ccode es (Int32.add pc 8l)
+          >>= match_fregs  src    frS
+          >>= match_iregs  addr   rA
+          >>= match_csts   offset (exts d)
+          >>= recur_simpl
       | _ -> error
       end
   | Mfloat64, FR src ->
