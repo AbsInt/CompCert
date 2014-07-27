@@ -34,15 +34,14 @@
 
 @ Helper functions for 64-bit integer arithmetic.  ARM version.
 
-        .text
+#include "sysdeps.h"
 
 @@@ Conversion from signed 64-bit integer to single float
 	
-	.global __i64_stof
-__i64_stof:
+FUNCTION(__i64_stof)
     @ Check whether -2^53 <= X < 2^53
-        mov r2, r1, asr #21
-        mov r3, r1, asr #31     @ (r2,r3) = X >> 53
+        ASR r2, r1, #21
+        ASR r3, r1, #31         @ (r2,r3) = X >> 53
         adds r2, r2, #1
         adc r3, r3, #0          @ (r2,r3) = X >> 53 + 1
         cmp r3, #2
@@ -50,30 +49,29 @@ __i64_stof:
    @ X is large enough that double rounding can occur.
    @ Avoid it by nudging X away from the points where double rounding
    @ occurs (the "round to odd" technique)
-	mov r2, #0x700
-        orr r2, r2, #0xFF       @ r2 = 0x7FF
-        and r3, r0, r2          @ extract bits 0 to 11 of X
-        add r3, r3, r2          @ r3 = (X & 0x7FF) + 0x7FF
+	MOV r2, #0x700
+        ORR r2, r2, #0xFF       @ r2 = 0x7FF
+        AND r3, r0, r2          @ extract bits 0 to 11 of X
+        ADD r3, r3, r2          @ r3 = (X & 0x7FF) + 0x7FF
    @ bit 12 of r3 is 0 if all low 12 bits of X are 0, 1 otherwise
    @ bits 13-31 of r3 are 0
-        orr r0, r0, r3          @ correct bit number 12 of X
-	bic r0, r0, r2          @ set to 0 bits 0 to 11 of X
+        ORR r0, r0, r3          @ correct bit number 12 of X
+	BIC r0, r0, r2          @ set to 0 bits 0 to 11 of X
    @ Convert to double
-1:      fmsr s0, r0
-        fuitod d0, s0           @ convert low half to double (unsigned)
-        fmsr s2, r1
-        fsitod d1, s2           @ convert high half to double (signed)
-        fldd d2, .LC1           @ d2 = 2^32
-        fmacd d0, d1, d2        @ d0 = d0 + d1 * d2 = double value of int64
+1:      vmov s0, r0
+        vcvt.f64.u32 d0, s0     @ convert low half to double (unsigned)
+        vmov s2, r1
+        vcvt.f64.s32 d1, s2     @ convert high half to double (signed)
+        vldr d2, .LC1           @ d2 = 2^32
+        vmla.f64 d0, d1, d2     @ d0 = d0 + d1 * d2 = double value of int64
    @ Round to single
-        fcvtsd s0, d0
+        vcvt.f32.f64 s0, d0
 #ifdef VARIANT_eabi	
    @ Return result in r0
-	fmrs r0, s0
+	vmov r0, s0
 #endif	
         bx lr
-	.type __i64_stof, %function
-	.size __i64_stof, . - __i64_stof
-
+ENDFUNCTION(__i64_stof)
+	
         .balign 8
 .LC1:   .quad 0x41f0000000000000 @ 2^32 in double precision

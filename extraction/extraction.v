@@ -93,6 +93,8 @@ Extract Constant Compopts.generate_float_constants =>
   "fun _ -> !Clflags.option_ffloatconstprop >= 2".
 Extract Constant Compopts.eliminate_tailcalls =>
   "fun _ -> !Clflags.option_ftailcalls".
+Extract Constant Compopts.thumb =>
+  "fun _ -> !Clflags.option_fthumb".
 
 (* Compiler *)
 Extract Constant Compiler.print_Clight => "PrintClight.print_if".

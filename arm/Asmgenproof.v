@@ -27,6 +27,7 @@ Require Import Op.
 Require Import Locations.
 Require Import Conventions.
 Require Import Mach.
+Require Import Compopts.
 Require Import Asm.
 Require Import Asmgen.
 Require Import Asmgenproof0.
@@ -179,8 +180,13 @@ Remark loadimm_label:
   forall r n k, tail_nolabel k (loadimm r n k).
 Proof.
   intros. unfold loadimm.
-  destruct (NPeano.leb (length (decompose_int n)) (length (decompose_int (Int.not n))));
-  auto with labels.
+  set (l1 := length (decompose_int n)).
+  set (l2 := length (decompose_int (Int.not n))).
+  destruct (NPeano.leb l1 1%nat). TailNoLabel.
+  destruct (NPeano.leb l2 1%nat). TailNoLabel.
+  destruct (thumb tt). unfold loadimm_thumb.
+  destruct (Int.eq (Int.shru n (Int.repr 16)) Int.zero); TailNoLabel.
+  destruct (NPeano.leb l1 l2); auto with labels.
 Qed.
 Hint Resolve loadimm_label: labels.
 
@@ -188,6 +194,7 @@ Remark addimm_label:
   forall r1 r2 n k, tail_nolabel k (addimm r1 r2 n k).
 Proof.
   intros; unfold addimm.
+  destruct (Int.ltu (Int.repr (-256)) n). TailNoLabel.
   destruct (NPeano.leb (length (decompose_int n)) (length (decompose_int (Int.neg n))));
   auto with labels.
 Qed.
@@ -262,15 +269,15 @@ Proof.
 Opaque Int.eq.
   unfold transl_op; intros; destruct op; TailNoLabel.
   destruct (preg_of r); try discriminate; destruct (preg_of m); inv H; TailNoLabel.
-  destruct (negb (ireg_eq x x0)). TailNoLabel. destruct (negb (ireg_eq x x1)); TailNoLabel.
-  destruct (negb (ireg_eq x x0)). TailNoLabel. destruct (negb (ireg_eq x x1)); TailNoLabel.
+  destruct (thumb tt); TailNoLabel.
+  destruct (thumb tt); TailNoLabel.
   eapply tail_nolabel_trans; TailNoLabel.
   eapply tail_nolabel_trans. eapply transl_cond_label; eauto. TailNoLabel.
 Qed.
 
 Remark transl_memory_access_label:
   forall (mk_instr_imm: ireg -> int -> instruction)
-         (mk_instr_gen: option (ireg -> shift_addr -> instruction))
+         (mk_instr_gen: option (ireg -> shift_op -> instruction))
          (mk_immed: int -> int)
          (addr: addressing) (args: list mreg) c k,
   transl_memory_access mk_instr_imm mk_instr_gen mk_immed addr args k = OK c ->
@@ -556,8 +563,6 @@ Proof.
   exists rs'; split. eauto.
   split. eapply agree_undef_regs; eauto with asmgen.
   simpl; intros. rewrite Q; auto with asmgen.
-Local Transparent destroyed_by_setstack.
-  destruct ty; simpl; auto with asmgen.
 
 - (* Mgetparam *)
   assert (f0 = f) by congruence; subst f0.
@@ -687,7 +692,7 @@ Opaque loadind.
        k rs2 m2'
     /\ rs2#SP = parent_sp s
     /\ rs2#RA = parent_ra s
-    /\ forall r, r <> PC -> r <> SP -> r <> IR14 -> rs2#r = rs0#r).
+    /\ forall r, if_preg r = true -> r <> SP -> r <> IR14 -> rs2#r = rs0#r).
   {
     intros. 
     exploit loadind_int_correct. eexact C. intros [rs1 [P [Q R]]]. 
@@ -695,9 +700,7 @@ Opaque loadind.
     eapply exec_straight_trans. eexact P. apply exec_straight_one. 
     simpl. rewrite R; auto with asmgen. unfold chunk_of_type in A. rewrite A. 
     rewrite <- (sp_val _ _ _ AG). rewrite E. eauto. auto. 
-    split. Simpl.
-    split. Simpl.
-    intros. Simpl. 
+    split. Simpl. split. Simpl. intros. Simpl. 
   }
   destruct ros as [rf|fid]; simpl in H; monadInv H7.
 + (* Indirect call *)
@@ -794,19 +797,19 @@ Opaque loadind.
   left; eapply exec_straight_steps_goto; eauto.
   intros. simpl in TR.
   destruct (transl_cond_correct tge tf cond args _ rs0 m' _ TR) as [rs' [A [B C]]].
-  rewrite EC in B.
+  rewrite EC in B. destruct B as [Bpos Bneg].
   econstructor; econstructor; econstructor; split. eexact A. 
   split. eapply agree_undef_regs; eauto with asmgen.
-  simpl. rewrite B. reflexivity. 
+  simpl. rewrite Bpos. reflexivity. 
 
 - (* Mcond false *)
   exploit eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto. intros EC.
   left; eapply exec_straight_steps; eauto. intros. simpl in TR.
   destruct (transl_cond_correct tge tf cond args _ rs0 m' _ TR) as [rs' [A [B C]]].
-  rewrite EC in B.
+  rewrite EC in B. destruct B as [Bpos Bneg].
   econstructor; split.
   eapply exec_straight_trans. eexact A. 
-  apply exec_straight_one. simpl. rewrite B. reflexivity. auto.
+  apply exec_straight_one. simpl. rewrite Bpos. reflexivity. auto.
   split. eapply agree_undef_regs; eauto with asmgen.
   intros; Simpl.
   simpl. congruence.
@@ -849,7 +852,7 @@ Opaque loadind.
        k rs2 m2'
     /\ rs2#SP = parent_sp s
     /\ rs2#RA = parent_ra s
-    /\ forall r, r <> PC -> r <> SP -> r <> IR14 -> rs2#r = rs0#r).
+    /\ forall r, if_preg r = true -> r <> SP -> r <> IR14 -> rs2#r = rs0#r).
   {
     intros. 
     exploit loadind_int_correct. eexact C. intros [rs1 [P [Q R]]]. 

@@ -34,16 +34,24 @@
 
 @ Helper functions for 64-bit integer arithmetic.  ARM version.
 
-        .text
+#include "sysdeps.h"
 
-@@@ Unsigned modulus	
-	
-	.global __i64_umod
-__i64_umod:
-        push {r4, r5, r6, r7, r8, lr}
-        bl __i64_udivmod         @ remainder is already in r0,r1
-        pop {r4, r5, r6, r7, r8, lr}
+@@@ Shift right signed
+
+FUNCTION(__i64_sar)
+        AND r2, r2, #63         @ normalize amount to 0...63
+        rsbs r3, r2, #32        @ r3 = 32 - amount
+        ble 1f                  @ branch if <= 0, namely if amount >= 32
+        LSR r0, r0, r2
+	LSL r3, r1, r3
+        ORR r0, r1, r3
+        ASR r1, r1, r2
         bx lr
-	.type __i64_umod, %function
-	.size __i64_umod, . - __i64_umod
+1:
+        SUB r2, r2, #32
+        ASR r0, r1, r2
+        ASR r1, r1, #31
+        bx lr
+ENDFUNCTION(__i64_sar)
+
 	

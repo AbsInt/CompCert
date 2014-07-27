@@ -47,5 +47,9 @@ Global Opaque big_endian
               default_pl_64 choose_binop_pl_64
               default_pl_32 choose_binop_pl_32.
 
+(** Which ABI to use: either the standard ARM EABI with floats passed
+  in integer registers, or the "hardfloat" variant of the EABI
+  that uses FP registers instead. *)
+
 Inductive abi_kind := Softfloat | Hardfloat.
 Parameter abi: abi_kind.

@@ -91,29 +91,19 @@ Notation "'RA'" := IR14 (only parsing).
   reference manuals for more details.  Some instructions,
   described below, are pseudo-instructions: they expand to
   canned instruction sequences during the printing of the assembly
-  code. *)
+  code.  Most instructions are common to Thumb2 and ARM classic.  
+  We use a few Thumb2-specific instructions when available, and avoid
+  to use ARM classic features that are not in Thumb2. *)
 
 Definition label := positive.
 
 Inductive shift_op : Type :=
   | SOimm: int -> shift_op
   | SOreg: ireg -> shift_op
-  | SOlslimm: ireg -> int -> shift_op
-  | SOlslreg: ireg -> ireg -> shift_op
-  | SOlsrimm: ireg -> int -> shift_op
-  | SOlsrreg: ireg -> ireg -> shift_op
-  | SOasrimm: ireg -> int -> shift_op
-  | SOasrreg: ireg -> ireg -> shift_op
-  | SOrorimm: ireg -> int -> shift_op
-  | SOrorreg: ireg -> ireg -> shift_op.
-
-Inductive shift_addr : Type :=
-  | SAimm: int -> shift_addr
-  | SAreg: ireg -> shift_addr
-  | SAlsl: ireg -> int -> shift_addr
-  | SAlsr: ireg -> int -> shift_addr
-  | SAasr: ireg -> int -> shift_addr
-  | SAror: ireg -> int -> shift_addr.
+  | SOlsl: ireg -> int -> shift_op
+  | SOlsr: ireg -> int -> shift_op
+  | SOasr: ireg -> int -> shift_op
+  | SOror: ireg -> int -> shift_op.
 
 Inductive testcond : Type :=
   | TCeq: testcond    (**r equal *)
@@ -133,6 +123,7 @@ Inductive instruction : Type :=
   (* Core instructions *)
   | Padd: ireg -> ireg -> shift_op -> instruction (**r integer addition *)
   | Pand: ireg -> ireg -> shift_op -> instruction (**r bitwise and *)
+  | Pasr: ireg -> ireg -> ireg -> instruction     (**r arithmetic shift right *)
   | Pb: label -> instruction                      (**r branch to label *)
   | Pbc: testcond -> label -> instruction            (**r conditional branch to label *)
   | Pbsymb: ident -> signature -> instruction                  (**r branch to symbol *)
@@ -142,23 +133,27 @@ Inductive instruction : Type :=
   | Pbic: ireg -> ireg -> shift_op -> instruction (**r bitwise bit-clear *)
   | Pcmp: ireg -> shift_op -> instruction         (**r integer comparison *)
   | Peor: ireg -> ireg -> shift_op -> instruction (**r bitwise exclusive or *)
-  | Pldr: ireg -> ireg -> shift_addr -> instruction (**r int32 load *)
-  | Pldr_a: ireg -> ireg -> shift_addr -> instruction (**r any32 load to int register *)
-  | Pldrb: ireg -> ireg -> shift_addr -> instruction (**r unsigned int8 load *)
-  | Pldrh: ireg -> ireg -> shift_addr -> instruction (**r unsigned int16 load *)
-  | Pldrsb: ireg -> ireg -> shift_addr -> instruction (**r signed int8 load *)
-  | Pldrsh: ireg -> ireg -> shift_addr -> instruction (**r unsigned int16 load *)
+  | Pldr: ireg -> ireg -> shift_op -> instruction (**r int32 load *)
+  | Pldr_a: ireg -> ireg -> shift_op -> instruction (**r any32 load to int register *)
+  | Pldrb: ireg -> ireg -> shift_op -> instruction (**r unsigned int8 load *)
+  | Pldrh: ireg -> ireg -> shift_op -> instruction (**r unsigned int16 load *)
+  | Pldrsb: ireg -> ireg -> shift_op -> instruction (**r signed int8 load *)
+  | Pldrsh: ireg -> ireg -> shift_op -> instruction (**r unsigned int16 load *)
+  | Plsl: ireg -> ireg -> ireg -> instruction       (**r shift left *)
+  | Plsr: ireg -> ireg -> ireg -> instruction       (**r logical shift right *)
   | Pmla: ireg -> ireg -> ireg -> ireg -> instruction      (**r integer multiply-add *)
   | Pmov: ireg -> shift_op -> instruction          (**r integer move *)
-  | Pmovc: testcond -> ireg -> shift_op -> instruction (**r integer conditional move *)
+  | Pmovw: ireg -> int -> instruction              (**r move 16-bit immediate *)
+  | Pmovt: ireg -> int -> instruction              (**r set high 16 bits *)
   | Pmul: ireg -> ireg -> ireg -> instruction      (**r integer multiplication *)
   | Pmvn: ireg -> shift_op -> instruction          (**r integer complement *)
   | Porr: ireg -> ireg -> shift_op -> instruction  (**r bitwise or *)
   | Prsb: ireg -> ireg -> shift_op -> instruction  (**r integer reverse subtraction *)
-  | Pstr: ireg -> ireg -> shift_addr -> instruction (**r int32 store *)
-  | Pstr_a: ireg -> ireg -> shift_addr -> instruction (**r any32 store from int register *)
-  | Pstrb: ireg -> ireg -> shift_addr -> instruction (**r int8 store *)
-  | Pstrh: ireg -> ireg -> shift_addr -> instruction (**r int16 store *)
+  | Psbfx: ireg -> ireg -> int -> int -> instruction (**r signed bitfield extract *)
+  | Pstr: ireg -> ireg -> shift_op -> instruction (**r int32 store *)
+  | Pstr_a: ireg -> ireg -> shift_op -> instruction (**r any32 store from int register *)
+  | Pstrb: ireg -> ireg -> shift_op -> instruction (**r int8 store *)
+  | Pstrh: ireg -> ireg -> shift_op -> instruction (**r int16 store *)
   | Psdiv: instruction                              (**r signed division *)
   | Psmull: ireg -> ireg -> ireg -> ireg -> instruction (**r signed multiply long *)
   | Psub: ireg -> ireg -> shift_op -> instruction  (**r integer subtraction *)
@@ -206,6 +201,7 @@ Inductive instruction : Type :=
   | Pfreeframe: Z -> int -> instruction       (**r deallocate stack frame and restore previous frame *)
   | Plabel: label -> instruction                   (**r define a code label *)
   | Ploadsymbol: ireg -> ident -> int -> instruction (**r load the address of a symbol *)
+  | Pmovite: testcond -> ireg -> shift_op -> shift_op -> instruction (**r integer conditional move *)
   | Pbtbl: ireg -> list label -> instruction       (**r N-way branch through a jump table *)
   | Pbuiltin: external_function -> list preg -> list preg -> instruction  (**r built-in function *)
   | Pannot: external_function -> list annot_param -> instruction (**r annotation statement *)
@@ -288,6 +284,11 @@ Fixpoint undef_regs (l: list preg) (rs: regset) : regset :=
   | r :: l' => undef_regs l' (rs#r <- Vundef)
   end.
 
+(** Undefining the condition codes *)
+
+Definition undef_flags (rs: regset) : regset :=
+  fun r => match r with CR _ => Vundef | _ => rs r end.
+
 (** Assigning multiple registers *)
 
 Fixpoint set_regs (rl: list preg) (vl: list val) (rs: regset) : regset :=
@@ -347,6 +348,9 @@ Inductive outcome: Type :=
 Definition nextinstr (rs: regset) :=
   rs#PC <- (Val.add rs#PC Vone).
 
+Definition nextinstr_nf (rs: regset) :=
+  nextinstr (undef_flags rs).
+
 Definition goto_label (f: function) (lbl: label) (rs: regset) (m: mem) :=
   match label_pos lbl 0 (fn_code f) with
   | None => Stuck
@@ -363,28 +367,11 @@ Definition eval_shift_op (so: shift_op) (rs: regset) :=
   match so with
   | SOimm n => Vint n
   | SOreg r => rs r
-  | SOlslimm r n => Val.shl (rs r) (Vint n)
-  | SOlslreg r r' => Val.shl (rs r) (rs r')
-  | SOlsrimm r n => Val.shru (rs r) (Vint n)
-  | SOlsrreg r r' => Val.shru (rs r) (rs r')
-  | SOasrimm r n => Val.shr (rs r) (Vint n)
-  | SOasrreg r r' => Val.shr (rs r) (rs r')
-  | SOrorimm r n => Val.ror (rs r) (Vint n)
-  | SOrorreg r r' => Val.ror (rs r) (rs r')
+  | SOlsl r n => Val.shl (rs r) (Vint n)
+  | SOlsr r n => Val.shru (rs r) (Vint n)
+  | SOasr r n => Val.shr (rs r) (Vint n)
+  | SOror r n => Val.ror (rs r) (Vint n)
   end.
-
-(** Evaluation of [shift_addr] operands *)
-
-Definition eval_shift_addr (sa: shift_addr) (rs: regset) :=
-  match sa with
-  | SAimm n => Vint n
-  | SAreg r => rs r
-  | SAlsl r n => Val.shl (rs r) (Vint n)
-  | SAlsr r n => Val.shru (rs r) (Vint n)
-  | SAasr r n => Val.shr (rs r) (Vint n)
-  | SAror r n => Val.ror (rs r) (Vint n)
-  end.
-
 
 (** Auxiliaries for memory accesses *)
 
@@ -515,22 +502,29 @@ Definition eval_testcond (c: testcond) (rs: regset) : option bool :=
 
 (** Execution of a single instruction [i] in initial state
     [rs] and [m].  Return updated state.  For instructions
-    that correspond to actual PowerPC instructions, the cases are
+    that correspond to actual ARM instructions, the cases are
     straightforward transliterations of the informal descriptions
-    given in the PowerPC reference manuals.  For pseudo-instructions,
-    refer to the informal descriptions given above.  Note that
-    we set to [Vundef] the registers used as temporaries by the
-    expansions of the pseudo-instructions, so that the PPC code
-    we generate cannot use those registers to hold values that
-    must survive the execution of the pseudo-instruction.
+    given in the ARM reference manuals.  For pseudo-instructions,
+    refer to the informal descriptions given above.
+
+    Note that we set to [Vundef] the registers used as temporaries by
+    the expansions of the pseudo-instructions, so that the ARM code we
+    generate cannot use those registers to hold values that must
+    survive the execution of the pseudo-instruction.
+
+    Likewise, for several instructions we set the condition flags
+    to [Vundef], so that we can expand them later to the S form
+    or to the non-S form, whichever is more compact in Thumb2.
 *)
 
 Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : outcome :=
   match i with
   | Padd r1 r2 so => 
-      Next (nextinstr (rs#r1 <- (Val.add rs#r2 (eval_shift_op so rs)))) m
+      Next (nextinstr_nf (rs#r1 <- (Val.add rs#r2 (eval_shift_op so rs)))) m
   | Pand r1 r2 so => 
-      Next (nextinstr (rs#r1 <- (Val.and rs#r2 (eval_shift_op so rs)))) m
+      Next (nextinstr_nf (rs#r1 <- (Val.and rs#r2 (eval_shift_op so rs)))) m
+  | Pasr r1 r2 r3 =>
+      Next (nextinstr_nf (rs#r1 <- (Val.shr rs#r2 rs#r3))) m
   | Pb lbl =>                      
       goto_label f lbl rs m
   | Pbc cond lbl =>            
@@ -548,49 +542,52 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pblreg r sg =>                   
       Next (rs#IR14 <- (Val.add rs#PC Vone) #PC <- (rs#r)) m
   | Pbic r1 r2 so => 
-      Next (nextinstr (rs#r1 <- (Val.and rs#r2 (Val.notint (eval_shift_op so rs))))) m
+      Next (nextinstr_nf (rs#r1 <- (Val.and rs#r2 (Val.notint (eval_shift_op so rs))))) m
   | Pcmp r1 so => 
       Next (nextinstr (compare_int rs rs#r1 (eval_shift_op so rs) m)) m
   | Peor r1 r2 so => 
-      Next (nextinstr (rs#r1 <- (Val.xor rs#r2 (eval_shift_op so rs)))) m
+      Next (nextinstr_nf (rs#r1 <- (Val.xor rs#r2 (eval_shift_op so rs)))) m
   | Pldr r1 r2 sa => 
-      exec_load Mint32 (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
+      exec_load Mint32 (Val.add rs#r2 (eval_shift_op sa rs)) r1 rs m
   | Pldr_a r1 r2 sa => 
-      exec_load Many32 (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
+      exec_load Many32 (Val.add rs#r2 (eval_shift_op sa rs)) r1 rs m
   | Pldrb r1 r2 sa => 
-      exec_load Mint8unsigned (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
+      exec_load Mint8unsigned (Val.add rs#r2 (eval_shift_op sa rs)) r1 rs m
   | Pldrh r1 r2 sa => 
-      exec_load Mint16unsigned (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
+      exec_load Mint16unsigned (Val.add rs#r2 (eval_shift_op sa rs)) r1 rs m
   | Pldrsb r1 r2 sa => 
-      exec_load Mint8signed (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
+      exec_load Mint8signed (Val.add rs#r2 (eval_shift_op sa rs)) r1 rs m
   | Pldrsh r1 r2 sa => 
-      exec_load Mint16signed (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
+      exec_load Mint16signed (Val.add rs#r2 (eval_shift_op sa rs)) r1 rs m
+  | Plsl r1 r2 r3 =>
+      Next (nextinstr_nf (rs#r1 <- (Val.shl rs#r2 rs#r3))) m
+  | Plsr r1 r2 r3 =>
+      Next (nextinstr_nf (rs#r1 <- (Val.shru rs#r2 rs#r3))) m
   | Pmla r1 r2 r3 r4 =>      
       Next (nextinstr (rs#r1 <- (Val.add (Val.mul rs#r2 rs#r3) rs#r4))) m
   | Pmov r1 so =>          
-      Next (nextinstr (rs#r1 <- (eval_shift_op so rs))) m
-  | Pmovc cond r1 so =>          
-      match eval_testcond cond rs with
-      | Some true => Next (nextinstr (rs#r1 <- (eval_shift_op so rs))) m
-      | Some false => Next (nextinstr rs) m
-      | None => Next (nextinstr (rs#r1 <- Vundef)) m
-      end
+      Next (nextinstr_nf (rs#r1 <- (eval_shift_op so rs))) m
+  | Pmovw r n =>
+      Next (nextinstr (rs#r <- (Vint n))) m
+  | Pmovt r n =>
+      Next (nextinstr (rs#r <- (Val.or (Val.and rs#r (Vint (Int.repr 65535)))
+                                       (Vint (Int.shl n (Int.repr 16)))))) m
   | Pmul r1 r2 r3 =>      
       Next (nextinstr (rs#r1 <- (Val.mul rs#r2 rs#r3))) m
   | Pmvn r1 so =>          
-      Next (nextinstr (rs#r1 <- (Val.notint (eval_shift_op so rs)))) m
+      Next (nextinstr_nf (rs#r1 <- (Val.notint (eval_shift_op so rs)))) m
   | Porr r1 r2 so =>  
-      Next (nextinstr (rs#r1 <- (Val.or rs#r2 (eval_shift_op so rs)))) m
+      Next (nextinstr_nf (rs#r1 <- (Val.or rs#r2 (eval_shift_op so rs)))) m
   | Prsb r1 r2 so =>  
-      Next (nextinstr (rs#r1 <- (Val.sub (eval_shift_op so rs) rs#r2))) m
+      Next (nextinstr_nf (rs#r1 <- (Val.sub (eval_shift_op so rs) rs#r2))) m
   | Pstr r1 r2 sa => 
-      exec_store Mint32 (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
+      exec_store Mint32 (Val.add rs#r2 (eval_shift_op sa rs)) r1 rs m
   | Pstr_a r1 r2 sa => 
-      exec_store Many32 (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
+      exec_store Many32 (Val.add rs#r2 (eval_shift_op sa rs)) r1 rs m
   | Pstrb r1 r2 sa => 
-      exec_store Mint8unsigned (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
+      exec_store Mint8unsigned (Val.add rs#r2 (eval_shift_op sa rs)) r1 rs m
   | Pstrh r1 r2 sa => 
-      exec_store Mint16unsigned (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
+      exec_store Mint16unsigned (Val.add rs#r2 (eval_shift_op sa rs)) r1 rs m
   | Psdiv =>
       match Val.divs rs#IR0 rs#IR1 with
       | Some v => Next (nextinstr (rs#IR0 <- v
@@ -598,11 +595,13 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
                                      #IR3 <- Vundef #IR12 <- Vundef)) m
       | None => Stuck
       end
+  | Psbfx r1 r2 lsb sz =>
+      Next (nextinstr (rs#r1 <- (Val.sign_ext (Int.unsigned sz) (Val.shru rs#r2 (Vint lsb))))) m
   | Psmull rdl rdh r1 r2 =>
       Next (nextinstr (rs#rdl <- (Val.mul rs#r1 rs#r2)
                          #rdh <- (Val.mulhs rs#r1 rs#r2))) m
   | Psub r1 r2 so =>  
-      Next (nextinstr (rs#r1 <- (Val.sub rs#r2 (eval_shift_op so rs)))) m
+      Next (nextinstr_nf (rs#r1 <- (Val.sub rs#r2 (eval_shift_op so rs)))) m
   | Pudiv =>
       match Val.divu rs#IR0 rs#IR1 with
       | Some v => Next (nextinstr (rs#IR0 <- v
@@ -709,6 +708,14 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr rs) m
   | Ploadsymbol r1 lbl ofs =>
       Next (nextinstr (rs#r1 <- (Genv.symbol_address ge lbl ofs))) m
+  | Pmovite cond r1 ifso ifnot =>
+      let v :=
+        match eval_testcond cond rs with
+        | Some true => eval_shift_op ifso rs
+        | Some false => eval_shift_op ifnot rs
+        | None => Vundef
+        end in
+      Next (nextinstr (rs#r1 <- v)) m
   | Pbtbl r tbl =>
       match rs#r with
       | Vint n => 

@@ -34,50 +34,44 @@
 
 @ Helper functions for variadic functions <stdarg.h>.  ARM version
 
-        .text
+#include "sysdeps.h"
 
 @ typedef void * va_list;
 @ unsigned int __compcert_va_int32(va_list * ap);
 @ unsigned long long __compcert_va_int64(va_list * ap);
 @ double __compcert_va_float64(va_list * ap);
 
-        .global __compcert_va_int32
-__compcert_va_int32:
+FUNCTION(__compcert_va_int32)
 	                        @ r0 = ap parameter
         ldr     r1, [r0, #0]    @ r1 = pointer to next argument
-        add     r1, r1, #4      @ advance ap by 4
+        ADD     r1, r1, #4      @ advance ap by 4
         str     r1, [r0, #0]
         ldr     r0, [r1, #-4]    @ load next argument and return it in r0
         bx      lr
-        .type __compcert_va_int32, %function
-        .size __compcert_va_int32, . - __compcert_va_int32
+ENDFUNCTION(__compcert_va_int32)
 
-        .global __compcert_va_int64
-__compcert_va_int64:
+FUNCTION(__compcert_va_int64)
 	                        @ r0 = ap parameter
         ldr     r1, [r0, #0]    @ r1 = pointer to next argument
-        add     r1, r1, #15     @ 8-align and advance by 8
-        bic     r1, r1, #7
+        ADD     r1, r1, #15     @ 8-align and advance by 8
+        BIC     r1, r1, #7
         str     r1, [r0, #0]    @ update ap
         ldr     r0, [r1, #-8]   @ load next argument and return it in r0,r1
         ldr     r1, [r1, #-4]
         bx      lr
-        .type __compcert_va_int64, %function
-        .size __compcert_va_int64, . - __compcert_va_int64
+ENDFUNCTION(__compcert_va_int64)
 
-        .global __compcert_va_float64
-__compcert_va_float64:
+FUNCTION(__compcert_va_float64)
 	                        @ r0 = ap parameter
         ldr     r1, [r0, #0]    @ r1 = pointer to next argument
-        add     r1, r1, #15     @ 8-align and advance by 8
-        bic     r1, r1, #7
+        ADD     r1, r1, #15     @ 8-align and advance by 8
+        BIC     r1, r1, #7
         str     r1, [r0, #0]    @ update ap
-#ifdef VARIANT_hardfloat
-        fldd    d0, [r1, #-8]   @ load next argument and return it in d0
-#else
+#ifdef VARIANT_eabi
         ldr     r0, [r1, #-8]   @ load next argument and return it in r0,r1
         ldr     r1, [r1, #-4]
+#else	
+        vldr    d0, [r1, #-8]   @ load next argument and return it in d0
 #endif	
         bx      lr
-        .type __compcert_va_float64, %function
-        .size __compcert_va_float64, . - __compcert_va_float64
+ENDFUNCTION(__compcert_va_float64)

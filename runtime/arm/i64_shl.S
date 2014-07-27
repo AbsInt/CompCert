@@ -34,39 +34,38 @@
 
 @ Helper functions for 64-bit integer arithmetic.  ARM version.
 
-        .text
+#include "sysdeps.h"	
 
-@@@ Shift right unsigned	
+@@@ Shift left	
 
 @ Note on ARM shifts: the shift amount is taken modulo 256.
 @ If shift amount mod 256 >= 32, the shift produces 0.
 
 @ Algorithm:
-@    RL = (XL >> N) | (XH << (32-N) | (XH >> (N-32))
-@    RH = XH >> N        
+@    RH = (XH << N) | (XL >> (32-N) | (XL << (N-32))
+@    RL = XL << N        
 @ If N = 0:
-@    RL = XL | 0 | 0
-@    RH = XH
-@ If 1 <= N <= 31:  1 <= 32-N <= 31  and  255 <= N-32 mod 256 <= 255
-@    RL = (XL >> N) | (XH >> (32-N) | 0
-@    RH = XH >> N        
+@    RH = XH | 0 | 0
+@    RL = XL
+@ If 1 <= N <= 31:  1 <= 32-N <= 31  and  2s5 <= N-32 mod 256 <= 255
+@    RH = (XH << N) | (XL >> (32-N) | 0
+@    RL = XL << N        
 @ If N = 32:
-@    RL = 0 | XH | 0
-@    RH = 0
-@ If 33 <= N <= 63: 255 <= 32-N mod 256 <= 255 and 1 <= N-32 <= 31
-@    RL = 0 | 0 | (XH >> (N-32))
-@    RH = 0
-
-	.global __i64_shr
-__i64_shr:
-        and r2, r2, #63         @ normalize amount to 0...63
-        rsb r3, r2, #32         @ r3 = 32 - amount
-        mov r0, r0, lsr r2
-        orr r0, r0, r1, lsl r3
-	sub r3, r2, #32         @ r3 = amount - 32
-	orr r0, r0, r1, lsr r3
-        mov r1, r1, lsr r2
-        bx lr
-	.type __i64_shr, %function
-	.size __i64_shr, . - __i64_shr
+@    RH = 0 | XL | 0
+@    RL = 0
+@ If 33 <= N <= 63: 225 <= 32-N mod 256 <= 255 and 1 <= N-32 <= 31
+@    RH = 0 | 0 | (XL << (N-32))
+@    RL = 0
 	
+FUNCTION(__i64_shl)
+        AND r2, r2, #63         @ normalize amount to 0...63
+        RSB r3, r2, #32         @ r3 = 32 - amount
+        LSL r1, r1, r2
+        LSR r3, r0, r3
+        ORR r1, r1, r3
+	SUB r3, r2, #32         @ r3 = amount - 32
+	LSL r3, r0, r3
+	ORR r1, r1, r3
+        LSL r0, r0, r2
+        bx lr
+ENDFUNCTION(__i64_shl)

@@ -34,24 +34,23 @@
 
 @ Helper functions for 64-bit integer arithmetic.  ARM version.
 
-        .text
+#include "sysdeps.h"
 
 @@@ Conversion from signed 64-bit integer to double float
 	
-	.global __i64_stod
+FUNCTION(__i64_stod)
 __i64_stod:
-        fmsr s0, r0
-        fuitod d0, s0           @ convert low half to double (unsigned)
-        fmsr s2, r1
-        fsitod d1, s2           @ convert high half to double (signed)
-        fldd d2, .LC1           @ d2 = 2^32
-        fmacd d0, d1, d2        @ d0 = d0 + d1 * d2 = double value of int64
+        vmov    s0, r0
+        vcvt.f64.u32 d0, s0     @ convert low half to double (unsigned)
+        vmov    s2, r1
+        vcvt.f64.s32 d1, s2     @ convert high half to double (signed)
+        vldr    d2, .LC1        @ d2 = 2^32
+        vmla.f64 d0, d1, d2     @ d0 = d0 + d1 * d2 = double value of int64
 #ifdef VARIANT_eabi	
-	fmrrd r0, r1, d0        @ return result in r0, r1
+	vmov	r0, r1, d0      @ return result in r0, r1
 #endif
         bx lr
-	.type __i64_stod, %function
-	.size __i64_stod, . - __i64_stod
+ENDFUNCTION(__i64_stod)
 
         .balign 8
 .LC1:   .quad 0x41f0000000000000 @ 2^32 in double precision

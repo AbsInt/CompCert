@@ -429,6 +429,7 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>) :
   -O             Optimize for speed [on by default]
   -Os            Optimize for code size
   -ffpu          Use FP registers for some integer operations [on]
+  -fthumb        (ARM only) Use Thumb2 instruction encoding
   -fsmall-data <n>  Set maximal size <n> for allocation in small data area
   -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
   -ffloat-const-prop <n>  Control constant propagation of floats
@@ -552,6 +553,7 @@ let cmdline_actions =
   @ f_opt "inline-asm" option_finline_asm
   @ f_opt "fpu" option_ffpu
   @ f_opt "sse" option_ffpu (* backward compatibility *)
+  @ f_opt "thumb" option_fthumb
 
 let _ =
   Gc.set { (Gc.get()) with

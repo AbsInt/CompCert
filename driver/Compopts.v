@@ -30,4 +30,5 @@ Parameter va_strict: unit -> bool.
 (** Flag -ftailcalls.  For tail call optimization. *)
 Parameter eliminate_tailcalls: unit -> bool.
 
-
+(** Flag -fthumb.  For the ARM back-end. *)
+Parameter thumb: unit -> bool.

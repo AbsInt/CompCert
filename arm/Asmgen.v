@@ -21,6 +21,7 @@ Require Import Op.
 Require Import Locations.
 Require Import Mach.
 Require Import Asm.
+Require Import Compopts.
 
 Open Local Scope string_scope.
 Open Local Scope error_monad_scope.
@@ -33,62 +34,120 @@ Definition ireg_of (r: mreg) : res ireg :=
 Definition freg_of (r: mreg) : res freg :=
   match preg_of r with FR mr => OK mr | _ => Error(msg "Asmgen.freg_of") end.
 
-(** Recognition of integer immediate arguments.
-- For arithmetic operations, immediates are
-  8-bit quantities zero-extended and rotated right by 0, 2, 4, ... 30 bits.
-- For memory accesses of type [Mint32], immediate offsets are
-  12-bit quantities plus a sign bit.
-- For other memory accesses, immediate offsets are
-  8-bit quantities plus a sign bit. *)
+(** Recognition of integer immediate arguments for arithmetic operations.
+- ARM: immediates are 8-bit quantities zero-extended and rotated right
+  by 0, 2, 4, ... 30 bits.  In other words, [n] is an immediate iff
+  [rotate-left(n, p)] is between 0 and 255 for some [p = 0, 2, 4, ..., 30].
+- Thumb: immediates are 8-bit quantities zero-extended and shifted left
+  by 0, 1, ..., 31 bits.  In other words, [n] is an immediate if
+  all bits are 0 except a run of 8 adjacent bits.  In addition,
+  [00XY00XY] and [XY00XY00] and [XYXYXYXY] are immediates for
+  a given [XY] 8-bit constant.
+*)
 
-Fixpoint is_immed_arith_aux (n: nat) (x msk: int) {struct n}: bool :=
+Fixpoint is_immed_arith_arm (n: nat) (x: int) {struct n}: bool :=
   match n with
   | Datatypes.O => false
-  | Datatypes.S n' =>
-      Int.eq (Int.and x (Int.not msk)) Int.zero ||
-      is_immed_arith_aux n' x (Int.ror msk (Int.repr 2))
+  | Datatypes.S n =>
+      Int.eq x (Int.and x (Int.repr 255)) ||
+      is_immed_arith_arm n (Int.rol x (Int.repr 2))
   end.
 
-Definition is_immed_arith (x: int) : bool :=
-  is_immed_arith_aux 16%nat x (Int.repr 255).
+Fixpoint is_immed_arith_thumb (n: nat) (x: int) {struct n}: bool :=
+  match n with
+  | Datatypes.O => true
+  | Datatypes.S n =>
+      Int.eq x (Int.and x (Int.repr 255)) ||
+      (Int.eq (Int.and x Int.one) Int.zero
+       && is_immed_arith_thumb n (Int.shru x Int.one))
+  end.
 
-Definition is_immed_mem_word (x: int) : bool :=
-  Int.lt x (Int.repr 4096) && Int.lt (Int.repr (-4096)) x.
+Definition is_immed_arith_thumb_special (x: int): bool :=
+  let l1 := Int.and x (Int.repr 255) in
+  let l2 := Int.shl l1 (Int.repr 8) in
+  let l3 := Int.shl l2 (Int.repr 8) in
+  let l4 := Int.shl l3 (Int.repr 8) in
+  let l13 := Int.or l1 l3 in
+  let l24 := Int.or l2 l4 in
+  Int.eq x l13 || Int.eq x l24 || Int.eq x (Int.or l13 l24).
 
-Definition mk_immed_mem_word (x: int) : int :=
-  Int.sign_ext 13 x.
-  
-Definition is_immed_mem_small (x: int) : bool :=
-  Int.lt x (Int.repr 256) && Int.lt (Int.repr (-256)) x.
-  
-Definition mk_immed_mem_small (x: int) : int :=
-  Int.sign_ext 9 x.
-  
-Definition is_immed_mem_float (x: int) : bool :=
-  Int.eq (Int.and x (Int.repr 3)) Int.zero
-  && Int.lt x (Int.repr 1024) && Int.lt (Int.repr (-1024)) x.
-  
-Definition mk_immed_mem_float (x: int) : int :=
-  Int.and (Int.sign_ext 11 x) (Int.repr 4294967288).  (**r 0xfffffff8 *)
-  
+Definition is_immed_arith (x: int): bool :=
+  if thumb tt
+  then is_immed_arith_thumb 24%nat x || is_immed_arith_thumb_special x
+  else is_immed_arith_arm 16%nat x.
+
+(** Recognition of integer immediate arguments for indexed memory accesses.
+- For 32-bit integers, immediate offsets are [(-2^12,2^12)] for ARM classic
+  and [(-2^8,2^12)] for Thumb2.
+- For 8- and 16-bit integers, immediate offsets are [(-2^8,2^8)].
+- For 32- and 64-bit integers, immediate offsets are multiples of 4
+  in [(-2^10,2^10)].
+
+For all 3 kinds of accesses, we provide not a recognizer but a synthesizer:
+a function taking an arbitrary offset [n] and returning a valid offset [n']
+that contains as many useful bits of [n] as possible, so that the
+computation of the remainder [n - n'] is as simple as possible.
+In particular, if [n] is a representable immediate argument, we should have
+[n' = n].
+*)
+
+Definition mk_immed_mem_word (x: int): int :=
+  if Int.ltu x Int.zero then
+    Int.neg (Int.zero_ext (if thumb tt then 8 else 12) (Int.neg x))
+  else
+    Int.zero_ext 12 x.
+
+Definition mk_immed_mem_small (x: int): int :=
+  if Int.ltu x Int.zero then
+    Int.neg (Int.zero_ext 8 (Int.neg x))
+  else
+    Int.zero_ext 8 x.
+
+Definition mk_immed_mem_float (x: int): int :=
+  let x := Int.and x (Int.repr (-4)) in   (**r mask low 2 bits off *)
+  if Int.ltu x Int.zero then
+    Int.neg (Int.zero_ext 10 (Int.neg x))
+  else
+    Int.zero_ext 10 x.
+
 (** Decomposition of a 32-bit integer into a list of immediate arguments,
     whose sum or "or" or "xor" equals the integer. *)
 
-Fixpoint decompose_int_rec (N: nat) (n p: int) : list int :=
+Fixpoint decompose_int_arm (N: nat) (n p: int) : list int :=
   match N with
   | Datatypes.O =>
       if Int.eq n Int.zero then nil else n :: nil
   | Datatypes.S M =>
       if Int.eq (Int.and n (Int.shl (Int.repr 3) p)) Int.zero then
-        decompose_int_rec M n (Int.add p (Int.repr 2))
+        decompose_int_arm M n (Int.add p (Int.repr 2))
       else
         let m := Int.shl (Int.repr 255) p in
         Int.and n m ::
-        decompose_int_rec M (Int.and n (Int.not m)) (Int.add p (Int.repr 2))
+        decompose_int_arm M (Int.and n (Int.not m)) (Int.add p (Int.repr 2))
   end.
 
+Fixpoint decompose_int_thumb (N: nat) (n p: int) : list int :=
+  match N with
+  | Datatypes.O =>
+      if Int.eq n Int.zero then nil else n :: nil
+  | Datatypes.S M =>
+      if Int.eq (Int.and n (Int.shl Int.one p)) Int.zero then
+        decompose_int_thumb M n (Int.add p Int.one)
+      else
+        let m := Int.shl (Int.repr 255) p in
+        Int.and n m ::
+        decompose_int_thumb M (Int.and n (Int.not m)) (Int.add p Int.one)
+  end.
+
+Definition decompose_int_base (n: int): list int :=
+  if thumb tt
+  then if is_immed_arith_thumb_special n
+       then n :: nil
+       else decompose_int_thumb 24%nat n Int.zero
+  else decompose_int_arm 12%nat n Int.zero.
+
 Definition decompose_int (n: int) : list int :=
-  match decompose_int_rec 12%nat n Int.zero with
+  match decompose_int_base n with
   | nil => Int.zero :: nil
   | l   => l
   end.
@@ -103,27 +162,45 @@ Definition iterate_op (op1 op2: shift_op -> instruction) (l: list int) (k: code)
 
 (** Smart constructors for integer immediate arguments. *)
 
+Definition loadimm_thumb (r: ireg) (n: int) (k: code) :=
+  let hi := Int.shru n (Int.repr 16) in
+  if Int.eq hi Int.zero
+  then Pmovw r n :: k
+  else Pmovw r (Int.zero_ext 16 n) :: Pmovt r hi :: k.
+
 Definition loadimm (r: ireg) (n: int) (k: code) :=
   let d1 := decompose_int n in
   let d2 := decompose_int (Int.not n) in
-  if NPeano.leb (List.length d1) (List.length d2)
-  then iterate_op (Pmov r) (Porr r r) d1 k
-  else iterate_op (Pmvn r) (Pbic r r) d2 k.
+  let l1 := List.length d1 in
+  let l2 := List.length d2 in
+  if NPeano.leb l1 1%nat then
+    Pmov r (SOimm n) :: k
+  else if NPeano.leb l2 1%nat then
+    Pmvn r (SOimm (Int.not n)) :: k
+  else if thumb tt then
+    loadimm_thumb r n k
+  else if NPeano.leb l1 l2 then
+    iterate_op (Pmov r) (Porr r r) d1 k
+  else
+    iterate_op (Pmvn r) (Pbic r r) d2 k.
 
 Definition addimm (r1 r2: ireg) (n: int) (k: code) :=
-  let d1 := decompose_int n in
-  let d2 := decompose_int (Int.neg n) in
-  if NPeano.leb (List.length d1) (List.length d2)
-  then iterate_op (Padd r1 r2) (Padd r1 r1) d1 k
-  else iterate_op (Psub r1 r2) (Psub r1 r1) d2 k.
+  if Int.ltu (Int.repr (-256)) n then
+    Psub r1 r2 (SOimm (Int.neg n)) :: k
+  else
+   (let d1 := decompose_int n in
+    let d2 := decompose_int (Int.neg n) in
+    if NPeano.leb (List.length d1) (List.length d2)
+    then iterate_op (Padd r1 r2) (Padd r1 r1) d1 k
+    else iterate_op (Psub r1 r2) (Psub r1 r1) d2 k).
+
+Definition rsubimm (r1 r2: ireg) (n: int) (k: code) :=
+  iterate_op (Prsb r1 r2) (Padd r1 r1) (decompose_int n) k.
 
 Definition andimm (r1 r2: ireg) (n: int) (k: code) :=
   if is_immed_arith n 
   then Pand r1 r2 (SOimm n) :: k
   else iterate_op (Pbic r1 r2) (Pbic r1 r1) (decompose_int (Int.not n)) k.
-
-Definition rsubimm (r1 r2: ireg) (n: int) (k: code) :=
-  iterate_op (Prsb r1 r2) (Padd r1 r1) (decompose_int n) k.
 
 Definition orimm  (r1 r2: ireg) (n: int) (k: code) :=
   iterate_op (Porr r1 r2) (Porr r1 r1) (decompose_int n) k.
@@ -135,10 +212,10 @@ Definition xorimm  (r1 r2: ireg) (n: int) (k: code) :=
 
 Definition transl_shift (s: shift) (r: ireg) : shift_op :=
   match s with
-  | Slsl n => SOlslimm r (s_amount n)
-  | Slsr n => SOlsrimm r (s_amount n)
-  | Sasr n => SOasrimm r (s_amount n)
-  | Sror n => SOrorimm r (s_amount n)
+  | Slsl n => SOlsl r (s_amount n)
+  | Slsr n => SOlsr r (s_amount n)
+  | Sasr n => SOasr r (s_amount n)
+  | Sror n => SOror r (s_amount n)
   end.
 
 (** Translation of a condition.  Prepends to [k] the instructions
@@ -288,12 +365,18 @@ Definition transl_op
       OK (addimm r IR13 n k)
   | Ocast8signed, a1 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1;
-      OK (Pmov r (SOlslimm r1 (Int.repr 24)) ::
-          Pmov r (SOasrimm r (Int.repr 24)) :: k)
+      OK (if thumb tt then
+            Psbfx r r1 Int.zero (Int.repr 8) :: k
+          else
+            Pmov r (SOlsl r1 (Int.repr 24)) ::
+            Pmov r (SOasr r (Int.repr 24)) :: k)
   | Ocast16signed, a1 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1;
-      OK (Pmov r (SOlslimm r1 (Int.repr 16)) ::
-          Pmov r (SOasrimm r (Int.repr 16)) :: k)
+      OK (if thumb tt then
+            Psbfx r r1 Int.zero (Int.repr 16) :: k
+          else
+            Pmov r (SOlsl r1 (Int.repr 16)) ::
+            Pmov r (SOasr r (Int.repr 16)) :: k)
   | Oadd, a1 :: a2 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
       OK (Padd r r1 (SOreg r2) :: k)
@@ -317,15 +400,11 @@ Definition transl_op
       OK (rsubimm r r1 n k)
   | Omul, a1 :: a2 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
-      OK (if negb (ireg_eq r r1) then Pmul r r1 r2 :: k
-          else if negb (ireg_eq r r2) then Pmul r r2 r1 :: k
-          else Pmul IR14 r1 r2 :: Pmov r (SOreg IR14) :: k)
+      OK (Pmul r r1 r2 :: k)
   | Omla, a1 :: a2 :: a3 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1; 
       do r2 <- ireg_of a2; do r3 <- ireg_of a3;
-      OK (if negb (ireg_eq r r1) then Pmla r r1 r2 r3 :: k
-          else if negb (ireg_eq r r2) then Pmla r r2 r1 r3 :: k
-          else Pmla IR14 r1 r2 r3 :: Pmov r (SOreg IR14) :: k)
+      OK (Pmla r r1 r2 r3 :: k)
   | Omulhs, a1 :: a2 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
       OK (Psmull IR14 r r1 r2 :: k)
@@ -383,13 +462,13 @@ Definition transl_op
       OK (Pmvn r (transl_shift s r1) :: k)
   | Oshl, a1 :: a2 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
-      OK (Pmov r (SOlslreg r1 r2) :: k)
+      OK (Plsl r r1 r2 :: k)
   | Oshr, a1 :: a2 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
-      OK (Pmov r (SOasrreg r1 r2) :: k)
+      OK (Pasr r r1 r2 :: k)
   | Oshru, a1 :: a2 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
-      OK (Pmov r (SOlsrreg r1 r2) :: k)
+      OK (Plsr r r1 r2 :: k)
   | Oshift s, a1 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1;
       OK (Pmov r (transl_shift s r1) :: k)
@@ -398,9 +477,9 @@ Definition transl_op
       if Int.eq n Int.zero then
         OK (Pmov r (SOreg r1) :: k)
       else
-        OK (Pmov IR14 (SOasrimm r1 (Int.repr 31)) ::
-            Padd IR14 r1 (SOlsrimm IR14 (Int.sub Int.iwordsize n)) ::
-            Pmov r (SOasrimm IR14 n) :: k)
+        OK (Pmov IR14 (SOasr r1 (Int.repr 31)) ::
+            Padd IR14 r1 (SOlsr IR14 (Int.sub Int.iwordsize n)) ::
+            Pmov r (SOasr IR14 n) :: k)
   | Onegf, a1 :: nil =>
       do r <- freg_of res; do r1 <- freg_of a1;
       OK (Pfnegd r r1 :: k)
@@ -470,9 +549,7 @@ Definition transl_op
   | Ocmp cmp, _ =>
       do r <- ireg_of res;
       transl_cond cmp args
-        (Pmov r (SOimm Int.zero) ::
-         Pmovc (cond_for_cond cmp) r (SOimm Int.one) ::
-         k)
+        (Pmovite (cond_for_cond cmp) r (SOimm Int.one) (SOimm Int.zero) :: k)
   | _, _ =>
       Error(msg "Asmgen.transl_op")
   end.
@@ -489,14 +566,14 @@ Definition indexed_memory_access
   else addimm IR14 base (Int.sub n n1) (mk_instr IR14 n1 :: k).
 
 Definition loadind_int (base: ireg) (ofs: int) (dst: ireg) (k: code) :=
-  indexed_memory_access (fun base n => Pldr dst base (SAimm n)) mk_immed_mem_word base ofs k.
+  indexed_memory_access (fun base n => Pldr dst base (SOimm n)) mk_immed_mem_word base ofs k.
 
 Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
   match ty, preg_of dst with
   | Tint, IR r =>
-      OK (indexed_memory_access (fun base n => Pldr r base (SAimm n)) mk_immed_mem_word base ofs k)
+      OK (indexed_memory_access (fun base n => Pldr r base (SOimm n)) mk_immed_mem_word base ofs k)
   | Tany32, IR r =>
-      OK (indexed_memory_access (fun base n => Pldr_a r base (SAimm n)) mk_immed_mem_word base ofs k)
+      OK (indexed_memory_access (fun base n => Pldr_a r base (SOimm n)) mk_immed_mem_word base ofs k)
   | Tsingle, FR r =>
       OK (indexed_memory_access (Pflds r) mk_immed_mem_float base ofs k)
   | Tfloat, FR r =>
@@ -510,9 +587,9 @@ Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
 Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
   match ty, preg_of src with
   | Tint, IR r =>
-      OK (indexed_memory_access (fun base n => Pstr r base (SAimm n)) mk_immed_mem_word base ofs k)
+      OK (indexed_memory_access (fun base n => Pstr r base (SOimm n)) mk_immed_mem_word base ofs k)
   | Tany32, IR r =>
-      OK (indexed_memory_access (fun base n => Pstr_a r base (SAimm n)) mk_immed_mem_word base ofs k)
+      OK (indexed_memory_access (fun base n => Pstr_a r base (SOimm n)) mk_immed_mem_word base ofs k)
   | Tsingle, FR r =>
       OK (indexed_memory_access (Pfsts r) mk_immed_mem_float base ofs k)
   | Tfloat, FR r =>
@@ -525,17 +602,9 @@ Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
 
 (** Translation of memory accesses *)
 
-Definition transl_shift_addr (s: shift) (r: ireg) : shift_addr :=
-  match s with
-  | Slsl n => SAlsl r (s_amount n)
-  | Slsr n => SAlsr r (s_amount n)
-  | Sasr n => SAasr r (s_amount n)
-  | Sror n => SAror r (s_amount n)
-  end.
-
 Definition transl_memory_access
      (mk_instr_imm: ireg -> int -> instruction)
-     (mk_instr_gen: option (ireg -> shift_addr -> instruction))
+     (mk_instr_gen: option (ireg -> shift_op -> instruction))
      (mk_immed: int -> int)
      (addr: addressing) (args: list mreg) (k: code) :=
   match addr, args with
@@ -546,7 +615,7 @@ Definition transl_memory_access
       match mk_instr_gen with
       | Some f =>
           do r1 <- ireg_of a1; do r2 <- ireg_of a2;
-          OK (f r1 (SAreg r2) :: k)
+          OK (f r1 (SOreg r2) :: k)
       | None =>
           Error (msg "Asmgen.Aindexed2")
       end
@@ -554,7 +623,7 @@ Definition transl_memory_access
       match mk_instr_gen with
       | Some f =>
           do r1 <- ireg_of a1; do r2 <- ireg_of a2;
-          OK (f r1 (transl_shift_addr s r2) :: k)
+          OK (f r1 (transl_shift s r2) :: k)
       | None =>
           Error (msg "Asmgen.Aindexed2shift")
       end
@@ -565,12 +634,12 @@ Definition transl_memory_access
   end.
 
 Definition transl_memory_access_int
-     (mk_instr: ireg -> ireg -> shift_addr -> instruction)
+     (mk_instr: ireg -> ireg -> shift_op -> instruction)
      (mk_immed: int -> int)
      (dst: mreg) (addr: addressing) (args: list mreg) (k: code) :=
   do rd <- ireg_of dst;
   transl_memory_access
-    (fun r n => mk_instr rd r (SAimm n))
+    (fun r n => mk_instr rd r (SOimm n))
     (Some (mk_instr rd))
     mk_immed addr args k.
 
@@ -729,7 +798,7 @@ Definition transl_function (f: Mach.function) :=
   do c <- transl_code f f.(Mach.fn_code) true;
   OK (mkfunction f.(Mach.fn_sig)
         (Pallocframe f.(fn_stacksize) f.(fn_link_ofs) ::
-         Pstr IR14 IR13 (SAimm f.(fn_retaddr_ofs)) :: c)).
+         Pstr IR14 IR13 (SOimm f.(fn_retaddr_ofs)) :: c)).
 
 Definition transf_function (f: Mach.function) : res Asm.function :=
   do tf <- transl_function f;

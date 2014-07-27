@@ -34,18 +34,28 @@
 
 @ Helper functions for 64-bit integer arithmetic.  ARM version.
 
-        .text
+#include "sysdeps.h"
 
-@@@ Unsigned division	
+@@@ Signed division	
 	
-	.global __i64_udiv
-__i64_udiv:
-        push {r4, r5, r6, r7, r8, lr}
-        bl __i64_udivmod
-        mov r0, r4
-        mov r1, r5
-        pop {r4, r5, r6, r7, r8, lr}
+FUNCTION(__i64_sdiv)
+        push {r4, r5, r6, r7, r8, r10, lr}
+        ASR r4, r1, #31          @ r4 = sign of N
+        ASR r5, r3, #31          @ r5 = sign of D
+        EOR r10, r4, r5          @ r10 = sign of result
+        EOR r0, r0, r4           @ take absolute value of N
+        EOR r1, r1, r4           @ N = (N ^ (N >>s 31)) - (N >>s 31)
+        subs r0, r0, r4
+        sbc r1, r1, r4
+        EOR r2, r2, r5           @ take absolute value of D
+        EOR r3, r3, r5
+        subs r2, r2, r5
+        sbc r3, r3, r5
+        bl __i64_udivmod         @ do unsigned division
+        EOR r0, r4, r10          @ apply expected sign
+        EOR r1, r5, r10
+        subs r0, r0, r10
+        sbc r1, r1, r10
+        pop {r4, r5, r6, r7, r8, r10, lr}
         bx lr
-	.type __i64_udiv, %function
-	.size __i64_udiv, . - __i64_udiv
-	
+ENDFUNCTION(__i64_sdiv)

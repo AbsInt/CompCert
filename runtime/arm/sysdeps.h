@@ -34,42 +34,51 @@
 
 // System dependencies
 
-#if defined(SYS_linux) || defined(SYS_bsd)
-
-#define GLOB(x) x
+#ifdef THUMB
 #define FUNCTION(f) \
 	.text; \
-	.globl f; \
-	.align 16; \
+	.thumb; \
+	.thumb_func; \
+	.global f; \
 f:
+#else
+#define FUNCTION(f) \
+	.text; \
+	.arm; \
+	.global f; \
+f:
+#endif
 
 #define ENDFUNCTION(f) \
-	.type f, @function; .size f, . - f
+	.type f, %function; .size f, . - f
 
+// In Thumb2 mode, some instructions have shorter encodings in their "S" form
+// (update condition flags).  For cases where the condition flags do not
+// matter, we use the following macros for these instructions.
+// In classic ARM mode, we prefer not to use the "S" form unless necessary.
+
+#ifdef THUMB
+#define THUMB_S(x) x##s
+#else
+#define THUMB_S(x) x
 #endif
 
-#if defined(SYS_macosx)
+#define ADD THUMB_S(add)
+#define AND THUMB_S(and)
+#define ASR THUMB_S(asr)
+#define BIC THUMB_S(bic)
+#define EOR THUMB_S(eor)
+#define LSL THUMB_S(lsl)
+#define LSR THUMB_S(lsr)
+#define MOV THUMB_S(mov)
+#define ORR THUMB_S(orr)
+#define RSB THUMB_S(rsb)
+#define SUB THUMB_S(sub)
 
-#define GLOB(x) _##x
-#define FUNCTION(f) \
-	.text; \
-	.globl _##f; \
-	.align 4; \
-_##f:
-
-#define ENDFUNCTION(f)
-
+	.syntax unified
+#ifdef THUMB
+	.arch	armv7
+#else
+	.arch	armv6
 #endif
-
-#if defined(SYS_cygwin)
-
-#define GLOB(x) _##x
-#define FUNCTION(f) \
-	.text; \
-	.globl _##f; \
-	.align 16; \
-_##f:
-
-#define ENDFUNCTION(f)
-
-#endif
+	.fpu	vfpv2

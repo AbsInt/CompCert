@@ -34,39 +34,28 @@
 
 @ Helper functions for 64-bit integer arithmetic.  ARM version.
 
-        .text
+#include "sysdeps.h"
 
-@@@ Shift left	
-
-@ Note on ARM shifts: the shift amount is taken modulo 256.
-@ If shift amount mod 256 >= 32, the shift produces 0.
-
-@ Algorithm:
-@    RH = (XH << N) | (XL >> (32-N) | (XL << (N-32))
-@    RL = XL << N        
-@ If N = 0:
-@    RH = XH | 0 | 0
-@    RL = XL
-@ If 1 <= N <= 31:  1 <= 32-N <= 31  and  255 <= N-32 mod 256 <= 255
-@    RH = (XH << N) | (XL >> (32-N) | 0
-@    RL = XL << N        
-@ If N = 32:
-@    RH = 0 | XL | 0
-@    RL = 0
-@ If 33 <= N <= 63: 255 <= 32-N mod 256 <= 255 and 1 <= N-32 <= 31
-@    RH = 0 | 0 | (XL << (N-32))
-@    RL = 0
+@@@ Signed modulus
 	
-	.global __i64_shl
-__i64_shl:
-        and r2, r2, #63         @ normalize amount to 0...63
-        rsb r3, r2, #32         @ r3 = 32 - amount
-        mov r1, r1, lsl r2
-        orr r1, r1, r0, lsr r3
-	sub r3, r2, #32         @ r3 = amount - 32
-	orr r1, r1, r0, lsl r3
-        mov r0, r0, lsl r2
+FUNCTION(__i64_smod)
+        push {r4, r5, r6, r7, r8, r10, lr}
+        ASR r4, r1, #31          @ r4 = sign of N
+        ASR r5, r3, #31          @ r5 = sign of D
+        MOV r10, r4              @ r10 = sign of result
+        EOR r0, r0, r4           @ take absolute value of N
+        EOR r1, r1, r4           @ N = (N ^ (N >>s 31)) - (N >>s 31)
+        subs r0, r0, r4
+        sbc r1, r1, r4
+        EOR r2, r2, r5           @ take absolute value of D
+        EOR r3, r3, r5
+        subs r2, r2, r5
+        sbc r3, r3, r5
+        bl __i64_udivmod         @ do unsigned division
+        EOR r0, r0, r10          @ apply expected sign
+        EOR r1, r1, r10
+        subs r0, r0, r10
+        sbc r1, r1, r10
+        pop {r4, r5, r6, r7, r8, r10, lr}
         bx lr
-	.type __i64_shl, %function
-	.size __i64_shl, . - __i64_shl
-
+ENDFUNCTION(__i64_smod)

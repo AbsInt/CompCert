@@ -34,58 +34,58 @@
 
 @ Helper functions for 64-bit integer arithmetic.  ARM version.
 
-        .text
+#include "sysdeps.h"
 
 @@@ Conversion from double float to unsigned 64-bit integer	
 
-	.global __i64_dtou
-__i64_dtou:
-#ifdef VARIANT_hardfloat	
-	fmrrd r0, r1, d0
+FUNCTION(__i64_dtou)
+#ifndef VARIANT_eabi
+	vmov r0, r1, d0
 #endif	
         cmp r1, #0              @ is double < 0 ?
         blt 1f                  @ then it converts to 0
   @ extract unbiased exponent ((HI & 0x7FF00000) >> 20) - (1023 + 52) in r2
   @ note: 1023 + 52 = 1075 = 1024 + 51
   @ note: (HI & 0x7FF00000) >> 20 = (HI << 1) >> 21
-        mov r2, r1, lsl #1
-        mov r2, r2, lsr #21
-        sub r2, r2, #51
-        sub r2, r2, #1024
+        LSL r2, r1, #1
+        LSR r2, r2, #21
+        SUB r2, r2, #51
+        SUB r2, r2, #1024
   @ check range of exponent
         cmn r2, #52             @ if EXP < -52, double is < 1.0
         blt 1f
         cmp r2, #12             @ if EXP >= 64 - 52, double is >= 2^64
         bge 2f
   @ extract true mantissa
-        bic r1, r1, #0xFF000000
-        bic r1, r1, #0x00F00000 @ HI &= ~0xFFF00000
-        orr r1, r1, #0x00100000 @ HI |= 0x00100000
+        BIC r1, r1, #0xFF000000
+        BIC r1, r1, #0x00F00000 @ HI &= ~0xFFF00000
+        ORR r1, r1, #0x00100000 @ HI |= 0x00100000
   @ shift it appropriately
         cmp r2, #0
         blt 3f
   @ EXP >= 0: shift left by EXP.  Note that EXP < 12        
         rsb r3, r2, #32         @ r3 = 32 - amount
-        mov r1, r1, lsl r2
-        orr r1, r1, r0, lsr r3
-        mov r0, r0, lsl r2
+        LSL r1, r1, r2
+        LSR r3, r0, r3
+        ORR r1, r1, r3
+        LSL r0, r0, r2
 	bx lr
   @ EXP < 0: shift right by -EXP.  Note that -EXP <= 52 but can be >= 32        
-3:      rsb r2, r2, #0          @ r2 = -EXP - shift amount
-        rsb r3, r2, #32         @ r3 = 32 - amount
-        mov r0, r0, lsr r2
-        orr r0, r0, r1, lsl r3
-	sub r3, r2, #32         @ r3 = amount - 32  (see i64_shr.s)
-	orr r0, r0, r1, lsr r3
-        mov r1, r1, lsr r2
+3:      RSB r2, r2, #0          @ r2 = -EXP = shift amount
+        RSB r3, r2, #32         @ r3 = 32 - amount
+        LSR r0, r0, r2
+        LSL r3, r1, r3
+        ORR r0, r0, r3
+	SUB r3, r2, #32         @ r3 = amount - 32  (see i64_shr.s)
+	LSR r3, r1, r3
+	ORR r0, r0, r3
+        LSR r1, r1, r2
         bx lr
   @ special cases
-1:      mov r0, #0              @ result is 0
-        mov r1, #0
+1:      MOV r0, #0              @ result is 0
+        MOV r1, #0
         bx lr
 2:      mvn r0, #0              @ result is 0xFF....FF (MAX_UINT)
-        mvn r1, #0
+        MOV r1, r0
         bx lr
-	.type __i64_dtou, %function
-        .size __i64_dtou, . - __i64_dtou
-	
+ENDFUNCTION(__i64_dtou)

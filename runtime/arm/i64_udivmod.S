@@ -34,7 +34,7 @@
 
 @ Helper functions for 64-bit integer arithmetic.  ARM version.
 
-        .text
+#include "sysdeps.h"
 
 @@@ Auxiliary function for division and modulus. Don't call from C
 
@@ -42,14 +42,14 @@
 @ On exit:   Q = (r4, r5) quotient     R = (r0, r1) remainder	
 @ Locals:    M = (r6, r7) mask         TMP = r8 temporary	
 	
-	.global __i64_udivmod
-__i64_udivmod:
+FUNCTION(__i64_udivmod)
         orrs r8, r2, r3         @ is D == 0?
+	it eq
         bxeq lr                 @ if so, return with unspecified results
-        mov r4, #0              @ Q = 0
-        mov r5, #0
-        mov r6, #1              @ M = 1
-        mov r7, #0
+        MOV r4, #0              @ Q = 0
+        MOV r5, #0
+        MOV r6, #1              @ M = 1
+        MOV r7, #0
 1:      cmp r3, #0              @ while ((signed) D >= 0) ...
         blt 2f
         subs r8, r0, r2         @ ... and N >= D ...
@@ -69,12 +69,11 @@ __i64_udivmod:
         adc r1, r1, r3          @ N = N + D
         bic r4, r4, r6          @ Q = Q & ~M
         bic r5, r5, r7
-3:      movs r7, r7, lsr #1     @ M = M >> 1
-        mov r6, r6, rrx
-        movs r3, r3, lsr #1     @ D = D >> 1
-        mov r2, r2, rrx
+3:      lsrs r7, r7, #1         @ M = M >> 1
+        rrx r6, r6
+        lsrs r3, r3, #1         @ D = D >> 1
+        rrx r2, r2
         orrs r8, r6, r7         @ repeat while (M != 0) ...
         bne 2b
         bx lr
-	.type __i64_udivmod, %function
-	.size __i64_udivmod, . - __i64_udivmod
+ENDFUNCTION(__i64_udivmod)

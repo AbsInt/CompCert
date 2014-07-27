@@ -28,6 +28,7 @@ let option_falignfunctions = ref (None: int option)
 let option_falignbranchtargets = ref 0
 let option_faligncondbranchs = ref 0
 let option_finline_asm = ref false
+let option_fthumb = ref false
 let option_Osize = ref false
 let option_dparse = ref false
 let option_dcmedium = ref false

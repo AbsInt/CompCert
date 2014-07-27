@@ -20,6 +20,11 @@ open AST
 open Memdata
 open Asm
 
+(* Code generation options.  To be turned into proper options. *)
+
+let vfpv3 = ref true
+let literals_in_code = ref true
+
 (* On-the-fly label renaming *)
 
 let next_label = ref 100
@@ -102,35 +107,41 @@ let condition_name = function
   | TCgt -> "gt"
   | TCle -> "le"
 
-let movimm oc dst n =
-  match Asmgen.decompose_int n with
-  | [] -> assert false
-  | hd::tl as l ->
-      fprintf oc "	mov	%s, #%a\n" dst coqint hd;
-      List.iter
-        (fun n -> fprintf oc "	orr	%s, %s, #%a\n" dst dst coqint n)
-        tl;
-      List.length l
+let neg_condition_name = function
+  | TCeq -> "ne"
+  | TCne -> "eq"
+  | TChs -> "lo"
+  | TClo -> "hs"
+  | TCmi -> "pl"
+  | TCpl -> "mi"
+  | TChi -> "ls"
+  | TCls -> "hi"
+  | TCge -> "lt"
+  | TClt -> "ge"
+  | TCgt -> "le"
+  | TCle -> "gt"
 
-let addimm oc dst src n =
-  match Asmgen.decompose_int n with
-  | [] -> assert false
-  | hd::tl as l ->
-      fprintf oc "	add	%s, %s, #%a\n" dst src coqint hd;
-      List.iter
-        (fun n -> fprintf oc "	add	%s, %s, #%a\n" dst dst coqint n)
-        tl;
-      List.length l
+(* In Thumb2 mode, some arithmetic instructions have shorter encodings
+   if they carry the "S" flag (update condition flags):
+       add   (but not sp + imm)
+       and
+       asr
+       bic
+       eor
+       lsl
+       lsr
+       mov
+       mvn
+       orr
+       rsb
+       sub    (but not sp - imm)
+   The proof of Asmgen shows that CompCert-generated code behaves the
+   same whether flags are updated or not by those instructions.  The
+   following printing function adds a "S" suffix if we are in Thumb2
+   mode. *)
 
-let subimm oc dst src n =
-  match Asmgen.decompose_int n with
-  | [] -> assert false
-  | hd::tl as l ->
-      fprintf oc "	sub	%s, %s, #%a\n" dst src coqint hd;
-      List.iter
-        (fun n -> fprintf oc "	sub	%s, %s, #%a\n" dst dst coqint n)
-        tl;
-      List.length l
+let thumbS oc =
+  if !Clflags.option_fthumb then output_char oc 's'
 
 (* Names of sections *)
 
@@ -156,15 +167,16 @@ let size_constants = ref 0
 let max_pos_constants = ref max_int
 
 let distance_to_emit_constants () =
-  !max_pos_constants - (!currpos + !size_constants)
+  if !literals_in_code
+  then !max_pos_constants - (!currpos + !size_constants)
+  else max_int
 
 (* Associate labels to floating-point constants and to symbols *)
 
 let float_labels = (Hashtbl.create 39 : (int64, int) Hashtbl.t)
 let float32_labels = (Hashtbl.create 39 : (int32, int) Hashtbl.t)
 
-let label_float f =
-  let bf = camlint64_of_coqint(Floats.Float.to_bits f) in
+let label_float bf =
   try
     Hashtbl.find float_labels bf
   with Not_found ->
@@ -174,8 +186,7 @@ let label_float f =
     max_pos_constants := min !max_pos_constants (!currpos + 1024);
     lbl'
 
-let label_float32 f =
-  let bf = camlint_of_coqint(Floats.Float32.to_bits f) in
+let label_float32 bf =
   try
     Hashtbl.find float32_labels bf
   with Not_found ->
@@ -206,6 +217,7 @@ let reset_constants () =
   max_pos_constants := max_int
 
 let emit_constants oc =
+  fprintf oc "	.balign	4\n";
   Hashtbl.iter
     (fun bf lbl ->
       (* Little-endian floats *)
@@ -223,6 +235,67 @@ let emit_constants oc =
           lbl print_symb_ofs (id, ofs))
     symbol_labels;
   reset_constants ()
+
+(* Generate code to load the address of id + ofs in register r *)
+
+let loadsymbol oc r id ofs =
+  if !Clflags.option_fthumb then begin
+    fprintf oc "	movw	%a, #:lower16:%a\n"
+            ireg r print_symb_ofs (id, ofs);
+    fprintf oc "	movt	%a, #:upper16:%a\n"
+            ireg r print_symb_ofs (id, ofs); 2
+  end else begin
+    let lbl = label_symbol id ofs in
+    fprintf oc "	ldr	%a, .L%d @ %a\n" 
+            ireg r lbl print_symb_ofs (id, ofs); 1
+  end
+
+(* Emit instruction sequences that set or offset a register by a constant. *)
+(* No S suffix because they are applied to SP most of the time. *)
+
+let movimm oc dst n =
+  match Asmgen.decompose_int n with
+  | [] -> assert false
+  | hd::tl as l ->
+      fprintf oc "	mov	%s, #%a\n" dst coqint hd;
+      List.iter
+        (fun n -> fprintf oc "	orr	%s, %s, #%a\n" dst dst coqint n)
+        tl;
+      List.length l
+
+let addimm oc dst src n =
+  match Asmgen.decompose_int n with
+  | [] -> assert false
+  | hd::tl as l ->
+      fprintf oc "	add	%s, %s, #%a\n" dst src coqint hd;
+      List.iter
+        (fun n -> fprintf oc "	add	%s, %s, #%a\n" dst dst coqint n)
+        tl;
+      List.length l
+
+let subimm oc dst src n =
+  match Asmgen.decompose_int n with
+  | [] -> assert false
+  | hd::tl as l ->
+      fprintf oc "	sub	%s, %s, #%a\n" dst src coqint hd;
+      List.iter
+        (fun n -> fprintf oc "	sub	%s, %s, #%a\n" dst dst coqint n)
+        tl;
+      List.length l
+
+(* Recognition of float constants appropriate for VMOV.
+   "a normalized binary floating point encoding with 1 sign bit, 4
+    bits of fraction and a 3-bit exponent" *)
+
+let is_immediate_float64 bits =
+  let exp = (Int64.(to_int (shift_right_logical bits 52)) land 0x7FF) - 1023 in
+  let mant = Int64.logand bits 0xF_FFFF_FFFF_FFFFL in
+  exp >= -3 && exp <= 4 && Int64.logand mant 0xF_0000_0000_0000L = mant
+
+let is_immediate_float32 bits =
+  let exp = (Int32.(to_int (shift_right_logical bits 23)) land 0xFF) - 127 in
+  let mant = Int32.logand bits 0x7F_FFFFl in
+  exp >= -3 && exp <= 4 && Int32.logand mant 0x78_0000l = mant
 
 (* Emit .file / .loc debugging directives *)
 
@@ -267,7 +340,7 @@ let cfi_rel_offset oc reg ofs =
    - annotation statements: take their arguments in registers or stack
      locations; generate no code;
    - inlined by the compiler: take their arguments in arbitrary
-     registers; preserve all registers except IR2, IR3, IR12 and FP6.
+     registers.
 *)
 
 (* Handling of annotations *)
@@ -365,9 +438,9 @@ let print_builtin_vload_common oc chunk args res =
         fprintf oc "	ldr	%a, [%a, #0]\n" ireg res2 ireg addr
       end; 2
   | Mfloat32, [IR addr], [FR res] ->
-      fprintf oc "	flds	%a, [%a, #0]\n" freg_single res ireg addr; 1
+      fprintf oc "	vldr	%a, [%a, #0]\n" freg_single res ireg addr; 1
   | Mfloat64, [IR addr], [FR res] ->
-      fprintf oc "	fldd	%a, [%a, #0]\n" freg res ireg addr; 1
+      fprintf oc "	vldr	%a, [%a, #0]\n" freg res ireg addr; 1
   | _ ->
       assert false
 
@@ -378,10 +451,9 @@ let print_builtin_vload oc chunk args res =
 
 let print_builtin_vload_global oc chunk id ofs args res =
   fprintf oc "%s begin builtin __builtin_volatile_read\n" comment;
-  let lbl = label_symbol id ofs in
-  fprintf oc "	ldr	%a, .L%d @ %a\n" ireg IR14 lbl print_symb_ofs (id, ofs);
-  let n = print_builtin_vload_common oc chunk [IR IR14] res in
-  fprintf oc "%s end builtin __builtin_volatile_read\n" comment; n + 1
+  let n1 = loadsymbol oc IR14 id ofs in
+  let n2 = print_builtin_vload_common oc chunk [IR IR14] res in
+  fprintf oc "%s end builtin __builtin_volatile_read\n" comment; n1 + n2
 
 let print_builtin_vstore_common oc chunk args =
   match chunk, args with
@@ -395,9 +467,9 @@ let print_builtin_vstore_common oc chunk args =
       fprintf oc "	str	%a, [%a, #0]\n" ireg src2 ireg addr;
       fprintf oc "	str	%a, [%a, #4]\n" ireg src1 ireg addr; 2
   | Mfloat32, [IR  addr; FR src] ->
-      fprintf oc "	fsts	%a, [%a, #0]\n" freg_single src ireg addr; 1
+      fprintf oc "	vstr	%a, [%a, #0]\n" freg_single src ireg addr; 1
   | Mfloat64, [IR  addr; FR src] ->
-      fprintf oc "	fstd	%a, [%a, #0]\n" freg src ireg addr; 1
+      fprintf oc "	vstr	%a, [%a, #0]\n" freg src ireg addr; 1
   | _ ->
       assert false
 
@@ -408,10 +480,9 @@ let print_builtin_vstore oc chunk args =
 
 let print_builtin_vstore_global oc chunk id ofs args =
   fprintf oc "%s begin builtin __builtin_volatile_write\n" comment;
-  let lbl = label_symbol id ofs in
-  fprintf oc "	ldr	%a, .L%d @ %a\n" ireg IR14 lbl print_symb_ofs (id, ofs);
-  let n = print_builtin_vstore_common oc chunk (IR IR14 :: args) in
-  fprintf oc "%s end builtin __builtin_volatile_write\n" comment; n + 1
+  let n1 = loadsymbol oc IR14 id ofs in
+  let n2 = print_builtin_vstore_common oc chunk (IR IR14 :: args) in
+  fprintf oc "%s end builtin __builtin_volatile_write\n" comment; n1 + n2
 
 (* Handling of varargs *)
 
@@ -458,24 +529,30 @@ let print_builtin_inline oc name args res =
       fprintf oc "	clz	%a, %a\n" ireg res ireg a1; 1
   (* Float arithmetic *)
   | "__builtin_fabs", [FR a1], [FR res] ->
-      fprintf oc "	fabsd	%a, %a\n" freg res freg a1; 1
+      fprintf oc "	vabs.f64 %a, %a\n" freg res freg a1; 1
   | "__builtin_fsqrt", [FR a1], [FR res] ->
-      fprintf oc "	fsqrtd	%a, %a\n" freg res freg a1; 1
+      fprintf oc "	vsqrt.f64 %a, %a\n" freg res freg a1; 1
   (* 64-bit integer arithmetic *)
   | "__builtin_negl", [IR ah; IR al], [IR rh; IR rl] ->
-      if rl = ah then begin
-        fprintf oc "	rsbs	%a, %a, #0\n" ireg IR14 ireg al;
-        fprintf oc "	rsc	%a, %a, #0\n" ireg rh ireg ah;
-        fprintf oc "	mov	%a, %a\n" ireg rl ireg IR14; 3
-      end else begin
-        fprintf oc "	rsbs	%a, %a, #0\n" ireg rl ireg al;
-        fprintf oc "	rsc	%a, %a, #0\n" ireg rh ireg ah; 2
-      end
+        fprintf oc "	rsbs	%a, %a, #0\n"
+                ireg (if rl = ah then IR14 else rl) ireg al;
+        (* No "rsc" instruction in Thumb2.  Emulate based on
+             rsc a, b, #0 == a <- AddWithCarry(~b, 0, carry)
+                          == mvn a, b; adc a, a, #0 *)
+        if !Clflags.option_fthumb then begin
+          fprintf oc "	mvn	%a, %a\n" ireg rh ireg ah;
+          fprintf oc "	adc	%a, %a, #0\n" ireg rh ireg rh
+        end else begin
+          fprintf oc "	rsc	%a, %a, #0\n" ireg rh ireg ah
+        end;
+        if rl = ah then
+          fprintf oc "	mov%t	%a, %a\n" thumbS ireg rl ireg IR14;
+        4
   | "__builtin_addl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
       if rl = ah || rl = bh then begin
         fprintf oc "	adds	%a, %a, %a\n" ireg IR14 ireg al ireg bl;
         fprintf oc "	adc	%a, %a, %a\n" ireg rh ireg ah ireg bh;
-        fprintf oc "	mov	%a, %a\n" ireg rl ireg IR14; 3
+        fprintf oc "	mov%t	%a, %a\n" thumbS ireg rl ireg IR14; 3
       end else begin
         fprintf oc "	adds	%a, %a, %a\n" ireg rl ireg al ireg bl;
         fprintf oc "	adc	%a, %a, %a\n" ireg rh ireg ah ireg bh; 2
@@ -484,18 +561,13 @@ let print_builtin_inline oc name args res =
       if rl = ah || rl = bh then begin
         fprintf oc "	subs	%a, %a, %a\n" ireg IR14 ireg al ireg bl;
         fprintf oc "	sbc	%a, %a, %a\n" ireg rh ireg ah ireg bh;
-        fprintf oc "	mov	%a, %a\n" ireg rl ireg IR14; 3
+        fprintf oc "	mov%t	%a, %a\n" thumbS ireg rl ireg IR14; 3
       end else begin
         fprintf oc "	subs	%a, %a, %a\n" ireg rl ireg al ireg bl;
         fprintf oc "	sbc	%a, %a, %a\n" ireg rh ireg ah ireg bh; 2
       end
   | "__builtin_mull", [IR a; IR b], [IR rh; IR rl] ->
-      if rl = a || rh = a then begin
-        fprintf oc "	mov	%a, %a\n" ireg IR14 ireg a;
-        fprintf oc "	umull   %a, %a, %a, %a\n" ireg rl ireg rh ireg IR14 ireg b; 2
-      end else begin
-        fprintf oc "	umull   %a, %a, %a, %a\n" ireg rl ireg rh ireg a ireg b; 1
-      end
+      fprintf oc "	umull   %a, %a, %a, %a\n" ireg rl ireg rh ireg a ireg b; 1
   (* Memory accesses *)
   | "__builtin_read16_reversed", [IR a1], [IR res] ->
       fprintf oc "	ldrh	%a, [%a, #0]\n" ireg res ireg a1;
@@ -534,16 +606,16 @@ module FixupEABI = struct
   let fixup_double oc dir f i1 i2 =
     match dir with
     | Incoming ->     (* f <- (i1, i2)  *)
-        fprintf oc "	fmdrr	%a, %a, %a\n" freg f ireg i1 ireg i2
+        fprintf oc "	vmov	%a, %a, %a\n" freg f ireg i1 ireg i2
     | Outgoing ->     (* (i1, i2) <- f *)
-        fprintf oc "	fmrrd	%a, %a, %a\n" ireg i1 ireg i2 freg f
+        fprintf oc "	vmov	%a, %a, %a\n" ireg i1 ireg i2 freg f
 
   let fixup_single oc dir f i =
     match dir with
     | Incoming ->     (* f <- i *)
-        fprintf oc "	fmsr	%a, %a\n" freg_single f ireg i
+        fprintf oc "	vmov	%a, %a\n" freg_single f ireg i
     | Outgoing ->     (* i <- f *)
-        fprintf oc "	fmrs	%a, %a\n" ireg i freg_single f
+        fprintf oc "	vmov	%a, %a\n" ireg i freg_single f
 
   let fixup_conventions oc dir tyl =
     let rec fixup i tyl =
@@ -608,11 +680,11 @@ module FixupHF = struct
   | [] -> 0
   | (fr, Double, dr) :: act ->
       if fr = dr then fixup_outgoing oc act else begin
-        fprintf oc "	fcpyd	d%d, d%d\n" dr fr;
+        fprintf oc "	vmov.f64 d%d, d%d\n" dr fr;
         1 + fixup_outgoing oc act
       end
   | (fr, Single, sr) :: act ->
-        fprintf oc "	fcpys	s%d, s%d\n" sr (2*fr);
+        fprintf oc "	vmov.f32 s%d, s%d\n" sr (2*fr);
         1 + fixup_outgoing oc act
 
   let rec fixup_incoming oc = function
@@ -620,13 +692,13 @@ module FixupHF = struct
   | (fr, Double, dr) :: act ->
       let n = fixup_incoming oc act in
       if fr = dr then n else begin
-        fprintf oc "	fcpyd	d%d, d%d\n" fr dr;
+        fprintf oc "	vmov.f64 d%d, d%d\n" fr dr;
         1 + n
       end
   | (fr, Single, sr) :: act ->
       let n = fixup_incoming oc act in
       if fr = sr then n else begin
-        fprintf oc "	fcpys	s%d, s%d\n" (2*fr) sr;
+        fprintf oc "	vmov.f32 s%d, s%d\n" (2*fr) sr;
         1 + n
       end
 
@@ -658,29 +730,23 @@ let (fixup_arguments, fixup_result) =
 let shift_op oc = function
   | SOimm n -> fprintf oc "#%a" coqint n
   | SOreg r -> ireg oc r
-  | SOlslimm(r, n) -> fprintf oc "%a, lsl #%a" ireg r coqint n
-  | SOlslreg(r, r') -> fprintf oc "%a, lsl %a" ireg r ireg r'
-  | SOlsrimm(r, n) -> fprintf oc "%a, lsr #%a" ireg r coqint n
-  | SOlsrreg(r, r') -> fprintf oc "%a, lsr %a" ireg r ireg r'
-  | SOasrimm(r, n) -> fprintf oc "%a, asr #%a" ireg r coqint n
-  | SOasrreg(r, r') -> fprintf oc "%a, asr %a" ireg r ireg r'
-  | SOrorimm(r, n) -> fprintf oc "%a, ror #%a" ireg r coqint n
-  | SOrorreg(r, r') -> fprintf oc "%a, ror %a" ireg r ireg r'
-
-let shift_addr oc = function
-  | SAimm n -> fprintf oc "#%a" coqint n
-  | SAreg r -> ireg oc r
-  | SAlsl(r, n) -> fprintf oc "%a, lsl #%a" ireg r coqint n
-  | SAlsr(r, n) -> fprintf oc "%a, lsr #%a" ireg r coqint n
-  | SAasr(r, n) -> fprintf oc "%a, asr #%a" ireg r coqint n
-  | SAror(r, n) -> fprintf oc "%a, ror #%a" ireg r coqint n
+  | SOlsl(r, n) -> fprintf oc "%a, lsl #%a" ireg r coqint n
+  | SOlsr(r, n) -> fprintf oc "%a, lsr #%a" ireg r coqint n
+  | SOasr(r, n) -> fprintf oc "%a, asr #%a" ireg r coqint n
+  | SOror(r, n) -> fprintf oc "%a, ror #%a" ireg r coqint n
 
 let print_instruction oc = function
   (* Core instructions *)
   | Padd(r1, r2, so) ->
-      fprintf oc "	add	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
+      fprintf oc "	add%s	%a, %a, %a\n"
+         (if !Clflags.option_fthumb && r2 <> IR14 then "s" else "")
+         ireg r1 ireg r2 shift_op so; 1
   | Pand(r1, r2, so) ->
-      fprintf oc "	and	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
+      fprintf oc "	and%t	%a, %a, %a\n"
+         thumbS ireg r1 ireg r2 shift_op so; 1
+  | Pasr(r1, r2, r3) ->
+      fprintf oc "	asr%t	%a, %a, %a\n"
+         thumbS ireg r1 ireg r2 ireg r3; 1
   | Pb lbl ->
       fprintf oc "	b	%a\n" print_label lbl; 1
   | Pbc(bit, lbl) ->
@@ -707,141 +773,181 @@ let print_instruction oc = function
       let n2 = fixup_result oc Incoming sg in
       n1 + 1 + n2
   | Pbic(r1, r2, so) ->
-      fprintf oc "	bic	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
+      fprintf oc "	bic%t	%a, %a, %a\n"
+              thumbS ireg r1 ireg r2 shift_op so; 1
   | Pcmp(r1, so) ->
       fprintf oc "	cmp	%a, %a\n" ireg r1 shift_op so; 1
   | Peor(r1, r2, so) ->
-      fprintf oc "	eor	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
+      fprintf oc "	eor%t	%a, %a, %a\n"
+              thumbS ireg r1 ireg r2 shift_op so; 1
   | Pldr(r1, r2, sa) | Pldr_a(r1, r2, sa) ->
-      fprintf oc "	ldr	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
+      fprintf oc "	ldr	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
   | Pldrb(r1, r2, sa) ->
-      fprintf oc "	ldrb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
+      fprintf oc "	ldrb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
   | Pldrh(r1, r2, sa) ->
-      fprintf oc "	ldrh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
+      fprintf oc "	ldrh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
   | Pldrsb(r1, r2, sa) ->
-      fprintf oc "	ldrsb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
+      fprintf oc "	ldrsb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
   | Pldrsh(r1, r2, sa) ->
-      fprintf oc "	ldrsh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
+      fprintf oc "	ldrsh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
+  | Plsl(r1, r2, r3) ->
+      fprintf oc "	lsl%t	%a, %a, %a\n"
+              thumbS ireg r1 ireg r2 ireg r3; 1
+  | Plsr(r1, r2, r3) ->
+      fprintf oc "	lsr%t	%a, %a, %a\n"
+              thumbS ireg r1 ireg r2 ireg r3; 1
   | Pmla(r1, r2, r3, r4) ->
       fprintf oc "	mla	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 ireg r4; 1
   | Pmov(r1, so) ->
-      fprintf oc "	mov	%a, %a\n" ireg r1 shift_op so; 1
-  | Pmovc(bit, r1, so) ->
-      fprintf oc "	mov%s	%a, %a\n" (condition_name bit) ireg r1 shift_op so; 1
+      fprintf oc "	mov%t	%a, %a\n" thumbS ireg r1 shift_op so; 1
+  | Pmovw(r1, n) ->
+      fprintf oc "	movw	%a, #%a\n" ireg r1 coqint n; 1
+  | Pmovt(r1, n) ->
+      fprintf oc "	movt	%a, #%a\n" ireg r1 coqint n; 1
   | Pmul(r1, r2, r3) ->
       fprintf oc "	mul	%a, %a, %a\n" ireg r1 ireg r2 ireg r3; 1
   | Pmvn(r1, so) ->
-      fprintf oc "	mvn	%a, %a\n" ireg r1 shift_op so; 1
+      fprintf oc "	mvn%t	%a, %a\n" thumbS ireg r1 shift_op so; 1
   | Porr(r1, r2, so) ->
-      fprintf oc "	orr	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
+      fprintf oc "	orr%t	%a, %a, %a\n"
+              thumbS ireg r1 ireg r2 shift_op so; 1
   | Prsb(r1, r2, so) ->
-      fprintf oc "	rsb	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
+      fprintf oc "	rsb%t	%a, %a, %a\n"
+              thumbS ireg r1 ireg r2 shift_op so; 1
   | Pstr(r1, r2, sa) | Pstr_a(r1, r2, sa) ->
-      fprintf oc "	str	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa;
+      fprintf oc "	str	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa;
       begin match r1, r2, sa with
-      | IR14, IR13, SAimm n -> cfi_rel_offset oc "lr" (camlint_of_coqint n)
+      | IR14, IR13, SOimm n -> cfi_rel_offset oc "lr" (camlint_of_coqint n)
       | _ -> ()
       end;
       1
   | Pstrb(r1, r2, sa) ->
-      fprintf oc "	strb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
+      fprintf oc "	strb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
   | Pstrh(r1, r2, sa) ->
-      fprintf oc "	strh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
+      fprintf oc "	strh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
   | Psdiv ->
       fprintf oc "	bl	__aeabi_idiv\n"; 1
+  | Psbfx(r1, r2, lsb, sz) ->
+      fprintf oc "	sbfx	%a, %a, #%a, #%a\n" ireg r1 ireg r2 coqint lsb coqint sz; 1
   | Psmull(r1, r2, r3, r4) ->
       fprintf oc "	smull	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 ireg r4; 1
   | Psub(r1, r2, so) ->
-      fprintf oc "	sub	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
+      fprintf oc "	sub%t	%a, %a, %a\n"
+              thumbS ireg r1 ireg r2 shift_op so; 1
   | Pudiv ->
       fprintf oc "	bl	__aeabi_uidiv\n"; 1
   | Pumull(r1, r2, r3, r4) ->
       fprintf oc "	umull	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 ireg r4; 1
-  (* Floating-point coprocessor instructions *)
+  (* Floating-point VFD instructions *)
   | Pfcpyd(r1, r2) ->
-      fprintf oc "	fcpyd	%a, %a\n" freg r1 freg r2; 1
+      fprintf oc "	vmov.f64 %a, %a\n" freg r1 freg r2; 1
   | Pfabsd(r1, r2) ->
-      fprintf oc "	fabsd	%a, %a\n" freg r1 freg r2; 1
+      fprintf oc "	vabs.f64 %a, %a\n" freg r1 freg r2; 1
   | Pfnegd(r1, r2) ->
-      fprintf oc "	fnegd	%a, %a\n" freg r1 freg r2; 1
+      fprintf oc "	vneg.f64 %a, %a\n" freg r1 freg r2; 1
   | Pfaddd(r1, r2, r3) ->
-      fprintf oc "	faddd	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
+      fprintf oc "	vadd.f64 %a, %a, %a\n" freg r1 freg r2 freg r3; 1
   | Pfdivd(r1, r2, r3) ->
-      fprintf oc "	fdivd	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
+      fprintf oc "	vdiv.f64 %a, %a, %a\n" freg r1 freg r2 freg r3; 1
   | Pfmuld(r1, r2, r3) ->
-      fprintf oc "	fmuld	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
+      fprintf oc "	vmul.f64 %a, %a, %a\n" freg r1 freg r2 freg r3; 1
   | Pfsubd(r1, r2, r3) ->
-      fprintf oc "	fsubd	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
+      fprintf oc "	vsub.f64 %a, %a, %a\n" freg r1 freg r2 freg r3; 1
   | Pflid(r1, f) ->
-      (* We could make good use of the fconstd instruction, but it's available
-         in VFD v3 and up, not in v1 nor v2 *)
-      let lbl = label_float f in
-      fprintf oc "	fldd	%a, .L%d @ %.12g\n" freg r1 lbl (camlfloat_of_coqfloat f); 1
+      let f = camlint64_of_coqint(Floats.Float.to_bits f) in
+      if !vfpv3 && is_immediate_float64 f then begin
+        fprintf oc "	vmov.f64 %a, #%F\n"
+                   freg r1 (Int64.float_of_bits f); 1
+        (* immediate floats have at most 4 bits of fraction, so they
+           should print exactly with OCaml's F decimal format. *)
+      end else if !literals_in_code then begin
+        let lbl = label_float f in
+        fprintf oc "	vldr	%a, .L%d @ %.12g\n"
+                freg r1 lbl (Int64.float_of_bits f); 1
+      end else begin
+        let lbl = label_float f in
+        fprintf oc "	movw	r14, #:lower16:.L%d\n" lbl;
+        fprintf oc "	movt	r14, #:upper16:.L%d\n" lbl;
+        fprintf oc "	vldr	%a, [r14, #0] @ %.12g\n"
+                freg r1 (Int64.float_of_bits f); 3
+      end
   | Pfcmpd(r1, r2) ->
-      fprintf oc "	fcmpd	%a, %a\n" freg r1 freg r2;
-      fprintf oc "	fmstat\n"; 2
+      fprintf oc "	vcmp.f64 %a, %a\n" freg r1 freg r2;
+      fprintf oc "	vmrs APSR_nzcv, FPSCR\n"; 2
   | Pfcmpzd(r1) ->
-      fprintf oc "	fcmpzd	%a\n" freg r1;
-      fprintf oc "	fmstat\n"; 2
+      fprintf oc "	vcmp.f64 %a, #0\n" freg r1;
+      fprintf oc "	vmrs APSR_nzcv, FPSCR\n"; 2
   | Pfsitod(r1, r2) ->
-      fprintf oc "	fmsr	%a, %a\n" freg_single r1 ireg r2;
-      fprintf oc "	fsitod	%a, %a\n" freg r1 freg_single r1; 2
+      fprintf oc "	vmov	%a, %a\n" freg_single r1 ireg r2;
+      fprintf oc "	vcvt.f64.s32 %a, %a\n" freg r1 freg_single r1; 2
   | Pfuitod(r1, r2) ->
-      fprintf oc "	fmsr	%a, %a\n" freg_single r1 ireg r2;
-      fprintf oc "	fuitod	%a, %a\n" freg r1 freg_single r1; 2
+      fprintf oc "	vmov	%a, %a\n" freg_single r1 ireg r2;
+      fprintf oc "	vcvt.f64.u32 %a, %a\n" freg r1 freg_single r1; 2
   | Pftosizd(r1, r2) ->
-      fprintf oc "	ftosizd	%a, %a\n" freg_single FR6 freg r2;
-      fprintf oc "	fmrs	%a, %a\n" ireg r1 freg_single FR6; 2
+      fprintf oc "	vcvt.s32.f64 %a, %a\n" freg_single FR6 freg r2;
+      fprintf oc "	vmov	%a, %a\n" ireg r1 freg_single FR6; 2
   | Pftouizd(r1, r2) ->
-      fprintf oc "	ftouizd	%a, %a\n" freg_single FR6 freg r2;
-      fprintf oc "	fmrs	%a, %a\n" ireg r1 freg_single FR6; 2
+      fprintf oc "	vcvt.u32.f64 %a, %a\n" freg_single FR6 freg r2;
+      fprintf oc "	vmov	%a, %a\n" ireg r1 freg_single FR6; 2
   | Pfabss(r1, r2) ->
-      fprintf oc "	fabss	%a, %a\n" freg_single r1 freg_single r2; 1
+      fprintf oc "	vabs.f32 %a, %a\n" freg_single r1 freg_single r2; 1
   | Pfnegs(r1, r2) ->
-      fprintf oc "	fnegs	%a, %a\n" freg_single r1 freg_single r2; 1
+      fprintf oc "	vneg.f32 %a, %a\n" freg_single r1 freg_single r2; 1
   | Pfadds(r1, r2, r3) ->
-      fprintf oc "	fadds	%a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
+      fprintf oc "	vadd.f32 %a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
   | Pfdivs(r1, r2, r3) ->
-      fprintf oc "	fdivs	%a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
+      fprintf oc "	vdiv.f32 %a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
   | Pfmuls(r1, r2, r3) ->
-      fprintf oc "	fmuls	%a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
+      fprintf oc "	vmul.f32 %a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
   | Pfsubs(r1, r2, r3) ->
-      fprintf oc "	fsubs	%a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
+      fprintf oc "	vsub.f32 %a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
   | Pflis(r1, f) ->
-      (* We could make good use of the fconsts instruction, but it's available
-         in VFD v3 and up, not in v1 nor v2 *)
-      let lbl = label_float32 f in
-      fprintf oc "	flds	%a, .L%d @ %.12g\n" freg_single r1 lbl (camlfloat_of_coqfloat32 f); 1
+      let f = camlint_of_coqint(Floats.Float32.to_bits f) in
+      if !vfpv3 && is_immediate_float32 f then begin
+        fprintf oc "	vmov.f32 %a, #%F\n"
+                freg_single r1 (Int32.float_of_bits f); 1
+        (* immediate floats have at most 4 bits of fraction, so they
+           should print exactly with OCaml's F decimal format. *)
+      end else if !literals_in_code then begin
+        let lbl = label_float32 f in
+        fprintf oc "	vldr	%a, .L%d @ %.12g\n"
+                   freg_single r1 lbl (Int32.float_of_bits f); 1
+      end else begin
+        fprintf oc "	movw	r14, #%ld\n" (Int32.logand f 0xFFFFl);
+        fprintf oc "	movt	r14, #%ld\n" (Int32.shift_right_logical f 16);
+        fprintf oc "	vmov	%a, r14 @ %.12g\n"
+                   freg_single r1 (Int32.float_of_bits f); 3
+      end
   | Pfcmps(r1, r2) ->
-      fprintf oc "	fcmps	%a, %a\n" freg_single r1 freg_single r2;
-      fprintf oc "	fmstat\n"; 2
+      fprintf oc "	vcmp.f32 %a, %a\n" freg_single r1 freg_single r2;
+      fprintf oc "	vmrs APSR_nzcv, FPSCR\n"; 2
   | Pfcmpzs(r1) ->
-      fprintf oc "	fcmpzs	%a\n" freg_single r1;
-      fprintf oc "	fmstat\n"; 2
+      fprintf oc "	vcmp.f32 %a, #0\n" freg_single r1;
+      fprintf oc "	vmrs APSR_nzcv, FPSCR\n"; 2
   | Pfsitos(r1, r2) ->
-      fprintf oc "	fmsr	%a, %a\n" freg_single r1 ireg r2;
-      fprintf oc "	fsitos	%a, %a\n" freg_single r1 freg_single r1; 2
+      fprintf oc "	vmov	%a, %a\n" freg_single r1 ireg r2;
+      fprintf oc "	vcvt.f32.s32 %a, %a\n" freg_single r1 freg_single r1; 2
   | Pfuitos(r1, r2) ->
-      fprintf oc "	fmsr	%a, %a\n" freg_single r1 ireg r2;
-      fprintf oc "	fuitos	%a, %a\n" freg_single r1 freg_single r1; 2
+      fprintf oc "	vmov	%a, %a\n" freg_single r1 ireg r2;
+      fprintf oc "	vcvt.f32.u32 %a, %a\n" freg_single r1 freg_single r1; 2
   | Pftosizs(r1, r2) ->
-      fprintf oc "	ftosizs	%a, %a\n" freg_single FR6 freg_single r2;
-      fprintf oc "	fmrs	%a, %a\n" ireg r1 freg_single FR6; 2
+      fprintf oc "	vcvt.s32.f32 %a, %a\n" freg_single FR6 freg_single r2;
+      fprintf oc "	vmov	%a, %a\n" ireg r1 freg_single FR6; 2
   | Pftouizs(r1, r2) ->
-      fprintf oc "	ftouizs	%a, %a\n" freg_single FR6 freg_single r2;
-      fprintf oc "	fmrs	%a, %a\n" ireg r1 freg_single FR6; 2
+      fprintf oc "	vcvt.u32.f32 %a, %a\n" freg_single FR6 freg_single r2;
+      fprintf oc "	vmov	%a, %a\n" ireg r1 freg_single FR6; 2
   | Pfcvtsd(r1, r2) ->
-      fprintf oc "	fcvtsd	%a, %a\n" freg_single r1 freg r2; 1
+      fprintf oc "	vcvt.f32.f64 %a, %a\n" freg_single r1 freg r2; 1
   | Pfcvtds(r1, r2) ->
-      fprintf oc "	fcvtds	%a, %a\n" freg r1 freg_single r2; 1
+      fprintf oc "	vcvt.f64.f32 %a, %a\n" freg r1 freg_single r2; 1
   | Pfldd(r1, r2, n) | Pfldd_a(r1, r2, n) ->
-      fprintf oc "	fldd	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n; 1
+      fprintf oc "	vldr	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n; 1
   | Pflds(r1, r2, n) ->
-      fprintf oc "	flds	%a, [%a, #%a]\n" freg_single r1 ireg r2 coqint n; 1
+      fprintf oc "	vldr	%a, [%a, #%a]\n" freg_single r1 ireg r2 coqint n; 1
   | Pfstd(r1, r2, n) | Pfstd_a(r1, r2, n) ->
-      fprintf oc "	fstd	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n; 1
+      fprintf oc "	vstr	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n; 1
   | Pfsts(r1, r2, n) ->
-      fprintf oc "	fsts	%a, [%a, #%a]\n" freg_single r1 ireg r2 coqint n; 1
+      fprintf oc "	vstr	%a, [%a, #%a]\n" freg_single r1 ireg r2 coqint n; 1
   (* Pseudo-instructions *)
   | Pallocframe(sz, ofs) ->
       fprintf oc "	mov	r12, sp\n";
@@ -866,17 +972,32 @@ let print_instruction oc = function
   | Plabel lbl ->
       fprintf oc "%a:\n" print_label lbl; 0
   | Ploadsymbol(r1, id, ofs) ->
-      let lbl = label_symbol id ofs in
-      fprintf oc "	ldr	%a, .L%d @ %a\n" 
-         ireg r1 lbl print_symb_ofs (id, ofs); 1
+      loadsymbol oc r1 id ofs
+  | Pmovite(cond, r1, ifso, ifnot) ->
+      fprintf oc "	ite	%s\n" (condition_name cond);
+      fprintf oc "	mov%s	%a, %a\n"
+                 (condition_name cond) ireg r1 shift_op ifso;
+      fprintf oc "	mov%s	%a, %a\n"
+                 (neg_condition_name cond) ireg r1 shift_op ifnot; 2
   | Pbtbl(r, tbl) ->
-      fprintf oc "	mov	r14, %a, lsl #2\n" ireg r;
-      fprintf oc "	ldr	pc, [pc, r14]\n";
-      fprintf oc "	mov	r0, r0\n"; (* no-op *)
-      List.iter
-        (fun l -> fprintf oc "	.word	%a\n" print_label l)
-        tbl;
-      3 + List.length tbl
+      if !Clflags.option_fthumb then begin
+        let lbl = new_label() in
+        fprintf oc "	adr	r14, .L%d\n" lbl;
+        fprintf oc "	add	r14, r14, %a, lsl #2\n" ireg r;
+        fprintf oc "	mov	pc, r14\n";
+        fprintf oc ".L%d:\n" lbl;
+        List.iter
+          (fun l -> fprintf oc "	b.w	%a\n" print_label l)
+          tbl;
+        3 + List.length tbl
+      end else begin
+        fprintf oc "	add	pc, pc, %a, lsl #2\n" ireg r;
+        fprintf oc "	nop\n";
+        List.iter
+          (fun l -> fprintf oc "	b	%a\n" print_label l)
+          tbl;
+        2 + List.length tbl
+      end
   | Pbuiltin(ef, args, res) ->
       begin match ef with
       | EF_builtin(name, sg) ->
@@ -938,25 +1059,31 @@ let print_function oc name fn =
   reset_constants();
   current_function_sig := fn.fn_sig;
   currpos := 0;
-  let text =
+  let (text, lit) =
     match C2C.atom_sections name with
-    | t :: _ -> t
-    |   _    -> Section_text in
+    | t :: l :: _ -> (t, l)
+    | _    -> (Section_text, Section_literal) in
   section oc text;
   let alignment =
     match !Clflags.option_falignfunctions with Some n -> n | None -> 4 in
   fprintf oc "	.balign %d\n" alignment;
   if not (C2C.atom_is_static name) then
     fprintf oc "	.global	%a\n" print_symb name;
+  if !Clflags.option_fthumb then
+    fprintf oc "	.thumb_func\n";
   fprintf oc "%a:\n" print_symb name;
   print_location oc (C2C.atom_location name);
   cfi_startproc oc;
   ignore (fixup_arguments oc Incoming fn.fn_sig);
   print_instructions oc fn.fn_code;
-  emit_constants oc;
+  if !literals_in_code then emit_constants oc;
   cfi_endproc oc;
   fprintf oc "	.type	%a, %%function\n" print_symb name;
-  fprintf oc "	.size	%a, . - %a\n" print_symb name print_symb name
+  fprintf oc "	.size	%a, . - %a\n" print_symb name print_symb name;
+  if not !literals_in_code && !size_constants > 0 then begin
+    section oc lit;
+    emit_constants oc
+  end
 
 (* Data *)
 
@@ -1031,9 +1158,14 @@ let print_globdef oc (name, gdef) =
   | Gvar v -> print_var oc name v
 
 let print_program oc p =
-(*  fprintf oc "	.fpu	vfp\n"; *)
   PrintAnnot.print_version_and_options oc comment;
   Hashtbl.clear filename_num;
+  fprintf oc "	.syntax	unified\n";
+  fprintf oc "	.arch	%s\n"
+          (if !Clflags.option_fthumb then "armv7" else "armv6");
+  fprintf oc "	.fpu	%s\n"
+          (if !vfpv3 then "vfpv3-d16" else "vfpv2");
+  fprintf oc "	.%s\n" (if !Clflags.option_fthumb then "thumb" else "arm");
   List.iter (print_globdef oc) p.prog_defs
 
 

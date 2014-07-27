@@ -454,7 +454,7 @@ Definition can_use_Aindexed2 (chunk: memory_chunk): bool :=
   | Many64 => false
   end.
 
-Definition can_use_Aindexed2shift (chunk: memory_chunk): bool :=
+Definition can_use_Aindexed2shift (chunk: memory_chunk) (s: shift): bool :=
   match chunk with
   | Mint8signed => false
   | Mint8unsigned => true
@@ -466,14 +466,20 @@ Definition can_use_Aindexed2shift (chunk: memory_chunk): bool :=
   | Mfloat64 => false
   | Many32 => true
   | Many64 => false
-  end.
+  end &&
+  (if thumb tt then
+     match s with
+     | Slsl s => Int.ltu s (Int.repr 4)
+     | _      => false
+     end
+   else true).
 
 Nondetfunction addressing (chunk: memory_chunk) (e: expr) :=
   match e with
   | Eop (Oaddrstack n) Enil => (Ainstack n, Enil)
   | Eop (Oaddimm n) (e1:::Enil) => (Aindexed n, e1:::Enil)
   | Eop (Oaddshift s) (e1:::e2:::Enil) =>
-      if can_use_Aindexed2shift chunk
+      if can_use_Aindexed2shift chunk s
       then (Aindexed2shift s, e1:::e2:::Enil)
       else (Aindexed Int.zero, Eop (Oaddshift s) (e1:::e2:::Enil) ::: Enil)
   | Eop Oadd (e1:::e2:::Enil) =>
