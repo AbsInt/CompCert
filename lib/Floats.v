@@ -146,9 +146,10 @@ Next Obligation.
 Qed.
 
 Lemma nan_payload_fequal:
-  forall prec p1 e1 p2 e2, p1 = p2 -> (exist _ p1 e1:nan_pl prec) = exist _ p2 e2.
+  forall prec (p1 p2: nan_pl prec),
+  proj1_sig p1 = proj1_sig p2 -> p1 = p2.
 Proof.
-  simpl; intros; subst. f_equal. apply Fcore_Zaux.eqbool_irrelevance.
+  intros. destruct p1, p2; simpl in H; subst. f_equal. apply Fcore_Zaux.eqbool_irrelevance.
 Qed.
 
 Lemma lor_idempotent:
@@ -161,16 +162,14 @@ Qed.
 Lemma transform_quiet_pl_idempotent:
   forall pl, transform_quiet_pl (transform_quiet_pl pl) = transform_quiet_pl pl.
 Proof.
-  intros []; simpl; intros. apply nan_payload_fequal.
-  simpl. apply lor_idempotent.
+  intros. apply nan_payload_fequal; simpl. apply lor_idempotent.
 Qed.
 
 (** Nan payload operations for single <-> double conversions. *)
 
-Definition of_single_pl (s:bool) (pl:nan_pl 24) : (bool * nan_pl 53).
+Definition expand_pl (pl: nan_pl 24) : nan_pl 53.
 Proof.
-Proof.
-  refine (s, transform_quiet_pl (exist _ (Pos.shiftl_nat (proj1_sig pl) 29) _)).
+  refine (exist _ (Pos.shiftl_nat (proj1_sig pl) 29) _).
   abstract (
     destruct pl; unfold proj1_sig, Pos.shiftl_nat, nat_iter, Fcore_digits.digits2_Pnat;
     fold (Fcore_digits.digits2_Pnat x);
@@ -178,17 +177,25 @@ Proof.
     zify; omega).
 Defined.
 
-Definition to_single_pl (s:bool) (pl:nan_pl 53) : (bool * nan_pl 24).
+Definition of_single_pl (s:bool) (pl:nan_pl 24) : (bool * nan_pl 53) :=
+  (s,
+   if Archi.float_of_single_preserves_sNaN
+   then expand_pl pl
+   else transform_quiet_pl (expand_pl pl)).
+
+Definition reduce_pl (pl: nan_pl 53) : nan_pl 24.
 Proof.
-Proof.
-  refine (s, exist _ (Pos.shiftr_nat (proj1_sig (transform_quiet_pl pl)) 29) _).
+  refine (exist _ (Pos.shiftr_nat (proj1_sig pl) 29) _).
   abstract (
-    destruct (transform_quiet_pl pl); unfold proj1_sig, Pos.shiftr_nat, nat_iter;
+    destruct pl; unfold proj1_sig, Pos.shiftr_nat, nat_iter;
     rewrite Z.ltb_lt in *;
     assert (forall x, Fcore_digits.digits2_Pnat (Pos.div2 x) =
                       (Fcore_digits.digits2_Pnat x - 1)%nat) by (destruct x0; simpl; zify; omega);
     rewrite !H, <- !NPeano.Nat.sub_add_distr; zify; omega).
 Defined.
+
+Definition to_single_pl (s:bool) (pl:nan_pl 53) : (bool * nan_pl 24) :=
+  (s, reduce_pl (transform_quiet_pl pl)).
 
 (** NaN payload operations for opposite and absolute value. *)
 
@@ -285,68 +292,6 @@ Ltac smart_omega :=
   compute_this Int64.max_unsigned;
   compute_this (Zpower_pos 2 1024); compute_this (Zpower_pos 2 53); compute_this (Zpower_pos 2 52); compute_this (Zpower_pos 2 32);
   zify; omega.
-
-Lemma of_single_to_single_pl:
-  forall s pl,
-    prod_rect (fun _ => _) of_single_pl (prod_rect (fun _ => _) to_single_pl (of_single_pl s pl)) = of_single_pl s pl.
-Proof.
-  destruct pl. unfold of_single_pl, to_single_pl.
-  unfold transform_quiet_pl, proj1_sig. simpl.
-  f_equal. apply nan_payload_fequal.
-  unfold Pos.shiftr_nat. simpl.
-  rewrite !lor_idempotent. reflexivity.
-Qed.
-
-Lemma of_single_to_single_of_single:
-  forall f, of_single (to_single (of_single f)) = of_single f.
-Proof.
-  intros. unfold of_single, to_single, b64_of_b32, b32_of_b64.
-  destruct (is_nan _ _ f) eqn:ISNAN.
-- destruct f; try discriminate. 
-  unfold Bconv. 
-  rewrite <- of_single_to_single_pl at 2.
-  reflexivity.
-- rewrite (Bconv_narrow_widen 24); auto; omega.
-Qed.
-
-Lemma to_single_of_single_pl:
-  forall s pl,
-    prod_rect (fun _ => _) to_single_pl (prod_rect  (fun _ => _) of_single_pl (to_single_pl s pl)) = to_single_pl s pl.
-Proof.
-  destruct pl. unfold of_single_pl, to_single_pl. unfold prod_rect.
-  f_equal. apply nan_payload_fequal.
-  rewrite transform_quiet_pl_idempotent.
-  unfold transform_quiet_pl, proj1_sig.
-  change 51 with (29+22).
-  clear - x. revert x. unfold Pos.shiftr_nat, Pos.shiftl_nat.
-  induction (29)%nat. intro. simpl. apply lor_idempotent.
-  intro.
-  rewrite !nat_iter_succ_r with (f:=Pos.div2).
-  destruct x; simpl; try apply IHn.
-  clear IHn. induction n. reflexivity.
-  rewrite !nat_iter_succ_r with (f:=Pos.div2). auto.
-Qed.
-
-Lemma to_single_of_single_to_single:
-  forall f, to_single (of_single (to_single f)) = to_single f.
-Proof.
-  intros. unfold to_single, of_single, b32_of_b64, b64_of_b32.
-  destruct (is_nan _ _ f) eqn:ISNAN.
-- destruct f; try discriminate. 
-  unfold Bconv. 
-  rewrite <- to_single_of_single_pl at 2.
-  reflexivity.
-- rewrite (Bconv_narrow_widen 24); auto. omega. omega. 
-  set (f' := Bconv 53 1024 24 128 __ __ to_single_pl mode_NE f).
-  destruct f; try discriminate; try reflexivity. 
-  exploit (Bconv_correct 53 1024 24 128 __ __ to_single_pl mode_NE
-     (B754_finite 53 1024 b m e e0)). auto. 
-  destruct Rlt_bool.
-  intros (A & B & C). apply is_finite_not_is_nan; auto.
-  fold f'. intros A. destruct f'; auto.
-  simpl in A. unfold binary_overflow in A.
-  destruct overflow_to_inf in A; destruct n; discriminate.
-Qed.
 
 (** Commutativity properties of addition and multiplication. *)
 
