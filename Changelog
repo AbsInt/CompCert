@@ -1,3 +1,31 @@
+- Revised and improved support for single-precision floating-point 
+  arithmetic.  Earlier, all FP arithmetic was performed at double
+  precision, with conversions to/from single precision as needed,
+  in particular when loading/storing a single-precision FP number
+  from/to memory.  Now, FP operations whose arguments are of type
+  "float" are performed in single-precision, using the processor's
+  single FP instructions.  Fewer conversions between double and
+  single precision are generated.
+
+- Refactored the library of FP arithmetic (lib/Floats.v) to support
+  both 64- and 32-bit floats.
+- Some more theorems proved about float<->integer conversions.
+
+- ARM port: added support for Thumb2 instruction encoding (option -fthumb).
+  Thumb2 is supported on ARMv7 and up, and produces more compact
+  machine code.
+
+- The memory model was extended with two new "chunks", Many32 and Many64,
+  that enable storing any 32-bit value or 64-bit value using
+  an opaque, not bit-based encoding, and reloading these values exactly.
+  These new chunks are used to implement saving and restoring callee-save
+  registers that can contain data of unknown types (e.g. float32 or float64)
+  but known sizes.
+
+
+Release 2.3pl2, 2014-05-15
+==========================
+
 Usability:
 - Re-added support for "__func__" identifier as per ISO C99.
 - Re-added some popular GCC extensions to ISO C99:
