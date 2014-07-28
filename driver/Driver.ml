@@ -152,7 +152,8 @@ let compile_c_ast sourcename csyntax ofile =
   (* Convert to Asm *)
   let asm =
     match Compiler.transf_c_program csyntax with
-    | Errors.OK x -> x
+    | Errors.OK asm ->
+        Asmexpand.expand_program (Unusedglob.transf_program asm)
     | Errors.Error msg ->
         print_error stderr msg;
         exit 2 in
@@ -161,7 +162,7 @@ let compile_c_ast sourcename csyntax ofile =
     dump_asm asm (output_filename sourcename ".c" ".sdump");
   (* Print Asm in text form *)
   let oc = open_out ofile in
-  PrintAsm.print_program oc (Unusedglob.transf_program asm);
+  PrintAsm.print_program oc asm;
   close_out oc
 
 (* From C source to asm *)

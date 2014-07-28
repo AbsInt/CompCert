@@ -22,6 +22,10 @@
   registers that can contain data of unknown types (e.g. float32 or float64)
   but known sizes.
 
+- PowerPC port: refactored the expansion of built-in functions and
+  pseudo-instructions so that it does not need to be re-done in
+  cchecklink.  Updated the cchecklink validator accordingly.
+
 
 Release 2.3pl2, 2014-05-15
 ==========================

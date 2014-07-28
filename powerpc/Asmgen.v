@@ -721,7 +721,8 @@ Definition transl_function (f: Mach.function) :=
   OK (mkfunction f.(Mach.fn_sig)
        (Pallocframe f.(fn_stacksize) f.(fn_link_ofs) ::
         Pmflr GPR0 ::
-        Pstw GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 :: c)).
+        Pstw GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 ::
+        Pcfi_rel_offset f.(fn_retaddr_ofs) :: c)).
 
 Definition transf_function (f: Mach.function) : res Asm.function :=
   do tf <- transl_function f;

@@ -2,6 +2,10 @@ include ../../Makefile.config
 
 CC=../../ccomp 
 CFLAGS=-stdlib ../../runtime -dparse -dclight -dasm -fstruct-return
+ifeq ($(CCHECKLINK),true)
+CCHECK=../../cchecklink
+CFLAGS+= -sdump
+endif
 
 SRCS=analyze.c clause.c clock.c closure.c cnf.c component.c                 \
   condensing.c context.c defs.c dfgparser.c dfgscanner.c doc-proof.c        \
@@ -19,7 +23,7 @@ spass: $(SRCS:.c=.o)
 
 clean:
 	rm -f spass
-	rm -f *.o *.s *.parsed.c *.light.c
+	rm -f *.o *.s *.parsed.c *.light.c *.sdump
 
 test:
 	./spass small_problem.dfg | grep 'Proof found'
@@ -29,6 +33,10 @@ TIME=xtime -o /dev/null     # Xavier's hack
 
 bench:
 	@echo -n "spass: "; $(TIME) ./spass problem.dfg
+
+ccheck:
+	@echo "---- spass"
+	@$(CCHECK) -exe spass *.sdump
 
 depend:
 	gcc -MM $(SRCS) > .depend

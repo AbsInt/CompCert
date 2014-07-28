@@ -4,6 +4,10 @@ CC=../../ccomp
 CFLAGS=-stdlib ../../runtime -dparse -dclight -dasm -fstruct-return
 LIBS=$(LIBMATH)
 TIME=xtime -mintime 2.0
+ifeq ($(CCHECKLINK),true)
+CCHECK=../../cchecklink
+CFLAGS+= -sdump
+endif
 
 OBJS=memory.o gmllexer.o gmlparser.o eval.o \
   arrays.o vector.o matrix.o object.o intersect.o surface.o light.o \
@@ -15,7 +19,7 @@ render: $(OBJS)
 	$(CC) $(CFLAGS) -o render $(OBJS) $(LIBS)
 
 clean:
-	rm -f *.o *.parsed.c *.light.c *.s *.ppm render
+	rm -f *.o *.parsed.c *.light.c *.s *.sdump *.ppm render
 
 include .depend
 
@@ -55,3 +59,8 @@ test:
 
 bench:
 	@echo -n "raytracer: "; $(TIME) ./render < kal.gml
+
+ccheck:
+	@echo "---- render"
+	@$(CCHECK) -exe render *.sdump
+

@@ -2,6 +2,10 @@ include ../../Makefile.config
 
 CCOMP=../../ccomp
 CCOMPFLAGS=-stdlib ../../runtime -dc -dclight -dasm
+ifeq ($(CCHECKLINK),true)
+CCHECK=../../cchecklink
+CCOMPFLAGS+= -sdump
+endif
 
 CFLAGS=-O1 -Wall
 
@@ -38,6 +42,12 @@ test:
 	   fi; \
          done
 
+ccheck:
+	@for i in $(PROGS); do \
+           echo "---- $$i"; \
+           $(CCHECK) -exe $$i.compcert $$i.sdump; \
+         done
+
 test_gcc:
 	@for i in $(PROGS); do \
 	   if ./$$i.gcc | cmp -s - Results/$$i; \
@@ -69,4 +79,4 @@ cminor_roundtrip:
 
 clean:
 	rm -f *.compcert *.gcc
-	rm -f *.compcert.c *.light.c *.parsed.c *.s *.o *~ 
+	rm -f *.compcert.c *.light.c *.parsed.c *.s *.o *.sdump *~ 

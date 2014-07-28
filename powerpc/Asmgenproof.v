@@ -918,30 +918,36 @@ Local Transparent destroyed_by_jumptable.
   set (rs2 := nextinstr (rs0#GPR1 <- sp #GPR0 <- Vundef)).
   set (rs3 := nextinstr (rs2#GPR0 <- (rs0#LR))).
   set (rs4 := nextinstr rs3).
+  set (rs5 := nextinstr rs4).
   assert (EXEC_PROLOGUE:
             exec_straight tge x
               x.(fn_code) rs0 m'
-              x1 rs4 m3').
+              x1 rs5 m3').
   rewrite <- H5 at 2. simpl. 
-  apply exec_straight_three with rs2 m2' rs3 m2'.
+  apply exec_straight_step with rs2 m2'.
   unfold exec_instr. rewrite C. fold sp.
-  rewrite <- (sp_val _ _ _ AG). rewrite F. auto. 
-  simpl. auto.
+  rewrite <- (sp_val _ _ _ AG). rewrite F. auto. auto.
+  apply exec_straight_step with rs3 m2'.
+  simpl. auto. auto.
+  apply exec_straight_two with rs4 m3'.
   simpl. unfold store1. rewrite gpr_or_zero_not_zero. 
   change (rs3 GPR1) with sp. change (rs3 GPR0) with (rs0 LR). simpl. 
   rewrite Int.add_zero_l. simpl in P. rewrite Int.add_zero_l in P. rewrite ATLR. rewrite P. auto. congruence.
   auto. auto. auto.
-  left; exists (State rs4 m3'); split.
+  left; exists (State rs5 m3'); split.
   eapply exec_straight_steps_1; eauto. omega. constructor. 
   econstructor; eauto. 
-  change (rs4 PC) with (Val.add (Val.add (Val.add (rs0 PC) Vone) Vone) Vone). 
+  change (rs5 PC) with (Val.add (Val.add (Val.add (Val.add (rs0 PC) Vone) Vone) Vone) Vone).
   rewrite ATPC. simpl. constructor; eauto.
-  subst x; simpl in g. unfold fn_code. eapply code_tail_next_int. omega. 
+  subst x; simpl in g. unfold fn_code.
   eapply code_tail_next_int. omega. 
   eapply code_tail_next_int. omega. 
+  eapply code_tail_next_int. omega.
+  eapply code_tail_next_int. omega.
   constructor.
-  unfold rs4, rs3, rs2.
-  apply agree_nextinstr. apply agree_set_other; auto. apply agree_set_other; auto. 
+  unfold rs5, rs4, rs3, rs2.
+  apply agree_nextinstr. apply agree_nextinstr. 
+  apply agree_set_other; auto. apply agree_set_other; auto. 
   apply agree_nextinstr. apply agree_set_other; auto.
   eapply agree_change_sp; eauto. unfold sp; congruence.
   congruence.

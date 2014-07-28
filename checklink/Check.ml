@@ -68,8 +68,8 @@ let check_st_bind atom (sym: elf32_sym): s_framework -> s_framework =
 (** Adapted from CompCert *)
 let name_of_section_Linux: section_name -> string = function
 | Section_text -> ".text"
-| Section_data i -> if i then ".data" else ".bss"
-| Section_small_data i -> if i then ".sdata" else ".sbss"
+| Section_data i -> if i then ".data" else "COMM"
+| Section_small_data i -> if i then ".sdata" else "COMM"
 | Section_const -> ".rodata"
 | Section_small_const -> ".sdata2"
 | Section_string -> ".rodata"
@@ -277,10 +277,12 @@ let freg_arr: freg array =
     FPR23; FPR24; FPR25; FPR26; FPR27; FPR28; FPR29; FPR30; FPR31
   |]
 
-let crbit_arr: crbit array =
-  [|
-    CRbit_0; CRbit_1; CRbit_2; CRbit_3
-  |]
+let num_crbit = function
+  | CRbit_0 -> 0
+  | CRbit_1 -> 1
+  | CRbit_2 -> 2
+  | CRbit_3 -> 3
+  | CRbit_6 -> 6
 
 type checker = f_framework -> f_framework or_err
 let check (cond: bool) (msg: string): checker =
@@ -301,22 +303,20 @@ let match_int32s a b: checker =
   ) a b
 (** We compare floats by their bit representation, so that 0.0 and -0.0 are
     different. *)
-let match_floats (a: Floats.float) (b: float): checker =
-  let a = Int64.bits_of_float (camlfloat_of_coqfloat a) in
-  let b = Int64.bits_of_float b in
+let match_floats (a: Floats.float) (b: int64): checker =
+  let a = camlint64_of_coqint (Floats.Float.to_bits a) in
   check_eq (
     Printf.sprintf "match_floats %s %s" (string_of_int64 a) (string_of_int64 b)
   ) a b
-let match_floats32 (a: Floats.float32) (b: float): checker =
-  let a = Int64.bits_of_float (camlfloat_of_coqfloat32 a) in
-  let b = Int64.bits_of_float b in
+let match_floats32 (a: Floats.float32) (b: int32): checker =
+  let a = camlint_of_coqint (Floats.Float32.to_bits a) in
   check_eq (
-    Printf.sprintf "match_floats %s %s" (string_of_int64 a) (string_of_int64 b)
+    Printf.sprintf "match_floats %s %s" (string_of_int32 a) (string_of_int32 b)
   ) a b
 let match_crbits cb eb =
-  let eb = crbit_arr.(eb) in
+  let cb = num_crbit cb in
   check_eq (
-    Printf.sprintf "match_crbits %s %s" (string_of_crbit cb) (string_of_crbit eb)
+    Printf.sprintf "match_crbits %d %d" cb eb
   ) cb eb
 let match_iregs  cr er =
   let er = ireg_arr.(er) in
@@ -575,195 +575,6 @@ let rec match_jmptbl lbllist vaddr size ffw =
       end
   end
 
-(** Matches [ecode] against the expected CR6 magic before a function call.
-*)
-let match_set_cr6 sg ecode =
-  if sg.sig_cc.cc_vararg then
-    if List.mem Tfloat sg.sig_args then
-      match ecode with
-      | CREQV(6, 6, 6) :: ecode' -> Some ecode'
-      | _ -> None
-    else
-      match ecode with
-      | CRXOR(6, 6, 6) :: ecode' -> Some ecode'
-      | _ -> None
-  else Some ecode
-
-(** Matches [ecode] agains the expected code for a small memory copy
-    pseudo-instruction. Returns a triple containing the updated framework,
-    the remaining ELF code, and the updated program counter.
-*)
-let match_memcpy_small ecode pc sz al src dst (fw: f_framework)
-    : (f_framework * ecode * int32) or_err =
-  let error = ERR("match_memcpy_small") in
-  let rec match_memcpy_small_aux ofs sz ecode pc (fw: f_framework) =
-    let ofs32 = Safe32.of_int ofs in
-    if sz >= 8 && al >= 4
-    then (
-      match ecode with
-      |   LFD (frD0, rA0, d0) ::
-          STFD(frS1, rA1, d1) :: es ->
-          OK(fw)
-          >>= match_fregs  FPR13 frD0
-          >>= match_iregs  src   rA0
-          >>= match_int32s ofs32 (exts d0)
-          >>= match_fregs  FPR13 frS1
-          >>= match_iregs  dst   rA1
-          >>= match_int32s ofs32 (exts d1)
-          >>= match_memcpy_small_aux (ofs + 8) (sz - 8) es (Int32.add 8l pc)
-      | _ -> error
-    )
-    else if sz >= 4
-    then (
-      match ecode with
-      |   LWZ(rD0, rA0, d0) ::
-          STW(rS1, rA1, d1) :: es ->
-          OK(fw)
-          >>= match_iregs  GPR0  rD0
-          >>= match_iregs  src   rA0
-          >>= match_int32s ofs32 (exts d0)
-          >>= match_iregs  GPR0  rS1
-          >>= match_iregs  dst   rA1
-          >>= match_int32s ofs32 (exts d0)
-          >>= match_memcpy_small_aux (ofs + 4) (sz - 4) es (Int32.add 8l pc)
-      | _ -> error
-    )
-    else if sz >= 2
-    then (
-      match ecode with
-      |   LHZ(rD0, rA0, d0) ::
-          STH(rS1, rA1, d1) :: es ->
-          OK(fw)
-          >>= match_iregs  GPR0  rD0
-          >>= match_iregs  src   rA0
-          >>= match_int32s ofs32 (exts d0)
-          >>= match_iregs  GPR0  rS1
-          >>= match_iregs  dst   rA1
-          >>= match_int32s ofs32 (exts d0)
-          >>= match_memcpy_small_aux (ofs + 2) (sz - 2) es (Int32.add 8l pc)
-      | _ -> error
-    )
-    else if sz >= 1
-    then (
-      match ecode with
-      |   LBZ(rD0, rA0, d0) ::
-          STB(rS1, rA1, d1) :: es ->
-          OK(fw)
-          >>= match_iregs  GPR0  rD0
-          >>= match_iregs  src   rA0
-          >>= match_int32s ofs32 (exts d0)
-          >>= match_iregs  GPR0  rS1
-          >>= match_iregs  dst   rA1
-          >>= match_int32s ofs32 (exts d0)
-          >>= match_memcpy_small_aux (ofs + 1) (sz - 1) es (Int32.add 8l pc)
-      | _ -> error
-    )
-    else OK(fw, ecode, pc)
-  in match_memcpy_small_aux 0 sz ecode pc fw
-
-(** Matches [ecode] agains the expected code for a big memory copy
-    pseudo-instruction. Returns a triple containing the updated framework,
-    the remaining ELF code, and the updated program counter.
-*)
-let match_memcpy_big ecode pc sz al src dst fw
-    : (f_framework * ecode * int32) or_err =
-  let error = ERR("match_memcpy_big") in
-  match ecode with
-  |   ADDI (rD0, rA0, simm0)           :: (* pc *)
-      MTSPR(rS1, spr1)                 ::
-      ADDI (rD2, rA2, simm2)           ::
-      ADDI (rD3, rA3, simm3)           ::
-      LWZU (rD4, rA4, d4)              :: (* pc + 16 <-  *)
-      STWU (rS5, rA5, d5)              :: (*           | *)
-      BCx  (bo6,  bi6,  bd6, aa6, lk6) :: (* pc + 24 --  *)
-      es ->
-      let sz' = Safe32.of_int (sz / 4) in
-      let (s, d) = if dst <> GPR11 then (GPR11, GPR12) else (GPR12, GPR11) in
-      let target_vaddr = Int32.(add 16l pc) in
-      let dest_vaddr = Int32.(add (add 24l pc) (mul 4l (exts bd6))) in
-      OK(fw)
-      >>= match_iregs  GPR0  rD0
-      >>= match_iregs  GPR0  rA0
-      >>= match_int32s sz'   (exts simm0)
-      >>= match_iregs  GPR0  rS1
-      >>= match_ctr    spr1
-      >>= match_iregs  s     rD2
-      >>= match_iregs  src   rA2
-      >>= match_int32s (-4l) (exts simm2)
-      >>= match_iregs  d     rD3
-      >>= match_iregs  dst   rA3
-      >>= match_int32s (-4l) (exts simm3)
-      >>= match_iregs  GPR0  rD4
-      >>= match_iregs  s     rA4
-      >>= match_int32s 4l    (exts d4)
-      >>= match_iregs  GPR0  rS5
-      >>= match_iregs  d     rA5
-      >>= match_int32s 4l    (exts d5)
-      >>= (fun ffw ->
-        bitmatch bo6 with
-        | { 16:5:int } -> OK(ffw)
-        | { _ }        -> ERR("bitmatch bo")
-      )
-      >>= match_ints   bi6   0
-      >>= match_int32s dest_vaddr target_vaddr
-      >>= match_bools  false aa6
-      >>= match_bools  false lk6
-      >>= (fun fw ->
-        match sz land 3 with
-        | 1 ->
-            begin match es with
-            |   LBZ(rD0, rA0, d0) ::
-                STB(rS1, rA1, d1) :: es ->
-                OK(fw)
-                >>= match_iregs  GPR0 rD0
-                >>= match_iregs  s    rA0
-                >>= match_int32s 4l   (exts d0)
-                >>= match_iregs  GPR0 rS1
-                >>= match_iregs  d    rA1
-                >>= match_int32s 4l   (exts d1)
-                >>= (fun fw -> OK(fw, es, Int32.add 36l pc))
-            | _ -> error
-            end
-        | 2 ->
-            begin match es with
-            |   LHZ(rD0, rA0, d0) ::
-                STH(rS1, rA1, d1) :: es ->
-                OK(fw)
-                >>= match_iregs  GPR0 rD0
-                >>= match_iregs  s    rA0
-                >>= match_int32s 4l   (exts d0)
-                >>= match_iregs  GPR0 rS1
-                >>= match_iregs  d    rA1
-                >>= match_int32s 4l   (exts d1)
-                >>= (fun fw -> OK(fw, es , Int32.add 36l pc))
-            | _ -> error
-            end
-        | 3 ->
-            begin match es with
-            |   LHZ(rD0, rA0, d0) ::
-                STH(rS1, rA1, d1) ::
-                LBZ(rD2, rA2, d2) ::
-                STB(rS3, rA3, d3) :: es ->
-                OK(fw)
-                >>= match_iregs  GPR0 rD0
-                >>= match_iregs  s    rA0
-                >>= match_int32s 4l   (exts d0)
-                >>= match_iregs  GPR0 rS1
-                >>= match_iregs  d    rA1
-                >>= match_int32s 4l   (exts d1)
-                >>= match_iregs  GPR0 rD2
-                >>= match_iregs  s    rA2
-                >>= match_int32s 6l   (exts d2)
-                >>= match_iregs  GPR0 rS3
-                >>= match_iregs  d    rA3
-                >>= match_int32s 6l   (exts d3)
-                >>= (fun fw -> OK(fw, es, Int32.add 44l pc))
-            | _ -> error
-            end
-        | _ -> OK(fw, es, Int32.add 28l pc)
-      )
-  | _ -> error
-
 let match_bo_bt_bool bo =
   bitmatch bo with
   | { false:1; true:1; true:1; false:1; false:1 } -> true
@@ -772,6 +583,11 @@ let match_bo_bt_bool bo =
 let match_bo_bf_bool bo =
   bitmatch bo with
   | { false:1; false:1; true:1; false:1; false:1 } -> true
+  | { _ } -> false
+
+let match_bo_bdnz_bool bo =
+  bitmatch bo with
+  | { true:1; false:1; false:1; false:1; false:1 } -> true
   | { _ } -> false
 
 let match_bo_bt bo: checker = fun ffw ->
@@ -869,6 +685,18 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
+      | Paddc(rd, r1, r2) ->
+          begin match ecode with
+          | ADDCx(rD, rA, rB, oe, rc) :: es ->
+              OK(fw)
+              >>= match_iregs rd    rD
+              >>= match_iregs r1    rA
+              >>= match_iregs r2    rB
+              >>= match_bools false oe
+              >>= match_bools false rc
+              >>= recur_simpl
+          | _ -> error
+          end
       | Padde(rd, r1, r2) ->
           begin match ecode with
           | ADDEx(rD, rA, rB, oe, rc) :: es ->
@@ -931,34 +759,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
-      | Pallocframe(sz, ofs) ->
-          begin match ecode with
-          | STWU(rS, rA, d) :: es ->
-              OK(fw)
-              >>= match_iregs   GPR1 rS
-              >>= match_iregs   GPR1 rA
-              >>= match_z_int32 sz   (Int32.neg (exts d))
-              >>= match_z_int32 ofs  0l
-              >>= recur_simpl
-          |   ADDIS   (rD0, rA0, simm0)  ::
-              ORI     (rS1, rA1, uimm1)  ::
-              STWUX   (rS2, rA2, rB2)    :: es ->
-              let sz32 = Int32.neg (z_int32 sz) in
-              let sz_hi = Int32.shift_right_logical sz32 16 in
-              let sz_lo = Int32.logand sz32 0xFFFFl in
-              OK(fw)
-              >>= match_iregs  GPR12 rD0
-              >>= match_iregs  GPR0  rA0
-              >>= match_int32s sz_hi (Safe32.of_int simm0)
-              >>= match_iregs  GPR12 rS1
-              >>= match_iregs  GPR12 rA1
-              >>= match_int32s sz_lo (Safe32.of_int uimm1)
-              >>= match_iregs  GPR1  rS2
-              >>= match_iregs  GPR1  rA2
-              >>= match_iregs  GPR12 rB2
-              >>= compare_code cs es (Int32.add 12l pc)
-          | _ -> error
-          end
+      | Pallocframe(sz, ofs) -> error
       | Pandc(rd, r1, r2) ->
           begin match ecode with
           | ANDCx(rS, rA, rB, rc) :: es ->
@@ -1016,8 +817,8 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
           | _ -> error
           end
       | Pbctr sg ->
-          begin match match_set_cr6 sg ecode with
-          | Some(BCCTRx(bo, bi, lk) :: es) ->
+          begin match ecode with
+          | BCCTRx(bo, bi, lk) :: es ->
               OK(fw)
               >>= match_bo_ctr bo
               >>= match_ints  0     bi
@@ -1026,12 +827,24 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
           | _ -> error
           end
       | Pbctrl sg ->
-          begin match match_set_cr6 sg ecode with
-          | Some(BCCTRx(bo, bi, lk) :: es) ->
+          begin match ecode with
+          | BCCTRx(bo, bi, lk) :: es ->
               OK(fw)
               >>= match_bo_ctr bo
               >>= match_ints  0    bi
               >>= match_bools true lk
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Pbdnz(lbl) ->
+          begin match ecode with
+          | BCx (bo,  bi,  bd, aa, lk) :: es when match_bo_bdnz_bool bo ->
+              let lblvaddr = Int32.(add pc (mul 4l (exts bd))) in
+              OK(fw)
+              >>= match_ints 0 bi
+              >>= lblmap_unify lbl lblvaddr     
+              >>= match_bools  false aa
+              >>= match_bools  false lk
               >>= recur_simpl
           | _ -> error
           end
@@ -1064,8 +877,8 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
           | _ -> error
           end
       | Pbl(ident, sg) ->
-          begin match match_set_cr6 sg ecode with
-          | Some(Bx(li, aa, lk) :: es) ->
+          begin match ecode with
+          | Bx(li, aa, lk) :: es ->
               let dest = Int32.(add pc (mul 4l (exts li))) in
               OK(fw)
               >>= (ff_sf ^%=? idmap_unify ident dest)
@@ -1085,8 +898,8 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
           | _ -> error
           end
       | Pbs(ident, sg) ->
-          begin match match_set_cr6 sg ecode with
-          | Some(Bx(li, aa, lk) :: es) ->
+          begin match ecode with
+          | Bx(li, aa, lk) :: es ->
               let dest = Int32.(add pc (mul 4l (exts li))) in
               OK(fw)
               >>= match_bools false aa
@@ -1156,386 +969,12 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
           end
       | Pbuiltin(ef, args, res) ->
           begin match ef with
-          | EF_builtin(name, sg) ->
-              begin match Hashtbl.find
-                  (fw |. ff_sf).ident_to_name name, args, res with
-                  | "__builtin_mulhw", [IR a1; IR a2], [IR res] ->
-                      begin match ecode with
-                      | MULHWx(rD, rA, rB, rc) :: es ->
-                          OK(fw)
-                          >>= match_iregs res   rD
-                          >>= match_iregs a1    rA
-                          >>= match_iregs a2    rB
-                          >>= match_bools false rc
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | "__builtin_mulhwu", [IR a1; IR a2], [IR res] ->
-                      begin match ecode with
-                      | MULHWUx(rD, rA, rB, rc) :: es ->
-                          OK(fw)
-                          >>= match_iregs res   rD
-                          >>= match_iregs a1    rA
-                          >>= match_iregs a2    rB
-                          >>= match_bools false rc
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | "__builtin_cntlz", [IR a1], [IR res] ->
-                      begin match ecode with
-                      | CNTLZWx(rS, rA, rc) :: es ->
-                          OK(fw)
-                          >>= match_iregs a1    rS
-                          >>= match_iregs res   rA
-                          >>= match_bools false rc
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | ("__builtin_bswap"|"__builtin_bswap32"), [IR a1], [IR res] ->
-                      begin match ecode with
-                      |   STWU (rS0, rA0, d0)    ::
-                          LWBRX(rD1, rA1, rB1)   ::
-                          ADDI (rD2, rA2, simm2) :: es ->
-                          OK(fw)
-                          >>= match_iregs  a1    rS0
-                          >>= match_iregs  GPR1  rA0
-                          >>= match_int32s (-8l) (exts d0)
-                          >>= match_iregs  res   rD1
-                          >>= match_iregs  GPR0  rA1
-                          >>= match_iregs  GPR1  rB1
-                          >>= match_iregs  GPR1  rD2
-                          >>= match_iregs  GPR1  rA2
-                          >>= match_int32s 8l    (exts simm2)
-                          >>= compare_code cs es (Int32.add 12l pc)
-                      | _ -> error
-                      end
-                  | "__builtin_bswap16", [IR a1], [IR res] ->
-                      begin match ecode with
-                      |   RLWINMx(rS1, rA1, sh1, mb1, me1, rc1) ::
-                          RLWINMx(rS2, rA2, sh2, mb2, me2, rc2) ::
-                          ORx(rS3, rA3, rB3, rc3) :: es ->
-                          OK(fw)
-                          >>= match_iregs  GPR0  rS1
-                          >>= match_iregs  a1    rA1
-                          >>= check_eq "bswap16-1" sh1 8
-                          >>= check_eq "bswap16-2" mb1 16
-                          >>= check_eq "bswap16-3" me1 23
-                          >>= match_iregs  res   rS2
-                          >>= match_iregs  a1    rA2
-                          >>= check_eq "bswap16-4" sh2 24
-                          >>= check_eq "bswap16-5" mb2 24
-                          >>= check_eq "bswap16-6" me2 31
-                          >>= match_iregs  res   rS3
-                          >>= match_iregs  GPR0  rA3
-                          >>= match_iregs  res   rB3
-                          >>= compare_code cs es (Int32.add 12l pc)
-                      | _ -> error
-                      end
-                  | "__builtin_fmadd", [FR a1; FR a2; FR a3], [FR res] ->
-                      begin match ecode with
-                      | FMADDx(frD, frA, frB, frC, rc) :: es ->
-                          OK(fw)
-                          >>= match_fregs res frD
-                          >>= match_fregs a1 frA
-                          >>= match_fregs a3 frB
-                          >>= match_fregs a2 frC
-                          >>= match_bools false rc
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | "__builtin_fmsub", [FR a1; FR a2; FR a3], [FR res] ->
-                      begin match ecode with
-                      | FMSUBx(frD, frA, frB, frC, rc) :: es ->
-                          OK(fw)
-                          >>= match_fregs res frD
-                          >>= match_fregs a1 frA
-                          >>= match_fregs a3 frB
-                          >>= match_fregs a2 frC
-                          >>= match_bools false rc
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | "__builtin_fnmadd", [FR a1; FR a2; FR a3], [FR res] ->
-                      begin match ecode with
-                      | FNMADDx(frD, frA, frB, frC, rc) :: es ->
-                          OK(fw)
-                          >>= match_fregs res frD
-                          >>= match_fregs a1 frA
-                          >>= match_fregs a3 frB
-                          >>= match_fregs a2 frC
-                          >>= match_bools false rc
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | "__builtin_fnmsub", [FR a1; FR a2; FR a3], [FR res] ->
-                      begin match ecode with
-                      | FNMSUBx(frD, frA, frB, frC, rc) :: es ->
-                          OK(fw)
-                          >>= match_fregs res frD
-                          >>= match_fregs a1 frA
-                          >>= match_fregs a3 frB
-                          >>= match_fregs a2 frC
-                          >>= match_bools false rc
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | "__builtin_fabs", [FR a1], [FR res] ->
-                      begin match ecode with
-                      | FABSx(frD, frB, rc) :: es ->
-                          OK(fw)
-                          >>= match_fregs res   frD
-                          >>= match_fregs a1    frB
-                          >>= match_bools false rc
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | "__builtin_fsqrt", [FR a1], [FR res] ->
-                      begin match ecode with
-                      | FSQRTx(frD, frB, rc) :: es ->
-                          OK(fw)
-                          >>= match_fregs res   frD
-                          >>= match_fregs a1    frB
-                          >>= match_bools false rc
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | "__builtin_frsqrte", [FR a1], [FR res] ->
-                      begin match ecode with
-                      | FRSQRTEx(frD, frB, rc) :: es ->
-                          OK(fw)
-                          >>= match_fregs res   frD
-                          >>= match_fregs a1    frB
-                          >>= match_bools false rc
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | "__builtin_fres", [FR a1], [FR res] ->
-                      begin match ecode with
-                      | FRESx(frD, frB, rc) :: es ->
-                          OK(fw)
-                          >>= match_fregs res   frD
-                          >>= match_fregs a1    frB
-                          >>= match_bools false rc
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | "__builtin_fsel", [FR a1; FR a2; FR a3], [FR res] ->
-                      begin match ecode with
-                      | FSELx(frD, frA, frB, frC, rc) :: es ->
-                          OK(fw)
-                          >>= match_fregs res frD
-                          >>= match_fregs a1 frA
-                          >>= match_fregs a3 frB
-                          >>= match_fregs a2 frC
-                          >>= match_bools false rc
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | "__builtin_fcti", [FR r1], [IR rd] ->
-                      begin match ecode with
-                      | FCTIWx(frD0, frB0, rc0)   ::
-                        STFDU  (frS1, rA1,  d1)    ::
-                        LWZ    (rD2,  rA2,  d2)    ::
-                        ADDI   (rD3,  rA3,  simm3) :: es ->
-                          OK(fw)
-                          >>= match_fregs  FPR13 frD0
-                          >>= match_fregs  r1    frB0
-                          >>= match_bools  false rc0
-                          >>= match_fregs  FPR13 frS1
-                          >>= match_iregs  GPR1  rA1
-                          >>= match_int32s (-8l) (exts d1)
-                          >>= match_iregs  rd    rD2
-                          >>= match_iregs  GPR1  rA2
-                          >>= match_int32s 4l    (exts d2)
-                          >>= match_iregs  GPR1  rD3
-                          >>= match_iregs  GPR1  rA3
-                          >>= match_int32s 8l    (exts simm3)
-                          >>= compare_code cs es (Int32.add 16l pc)
-                      | _ -> error
-                      end
-                  | "__builtin_read16_reversed", [IR a1], [IR res] ->
-                      begin match ecode with
-                      | LHBRX(rD, rA, rB):: es ->
-                          OK(fw)
-                          >>= match_iregs res  rD
-                          >>= match_iregs GPR0 rA
-                          >>= match_iregs a1   rB
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | "__builtin_read32_reversed", [IR a1], [IR res] ->
-                      begin match ecode with
-                      | LWBRX(rD, rA, rB) :: es ->
-                          OK(fw)
-                          >>= match_iregs res  rD
-                          >>= match_iregs GPR0 rA
-                          >>= match_iregs a1   rB
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | "__builtin_write16_reversed", [IR a1; IR a2], _ ->
-                      begin match ecode with
-                      | STHBRX(rS, rA, rB) :: es ->
-                          OK(fw)
-                          >>= match_iregs a2   rS
-                          >>= match_iregs GPR0 rA
-                          >>= match_iregs a1   rB
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | "__builtin_write32_reversed", [IR a1; IR a2], _ ->
-                      begin match ecode with
-                      | STWBRX(rS, rA, rB) :: es ->
-                          OK(fw)
-                          >>= match_iregs a2   rS
-                          >>= match_iregs GPR0 rA
-                          >>= match_iregs a1   rB
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | "__builtin_eieio", [], _ ->
-                      begin match ecode with
-                      | EIEIO :: es ->
-                          OK(fw)
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | "__builtin_sync", [], _ ->
-                      begin match ecode with
-                      | SYNC :: es ->
-                          OK(fw)
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | "__builtin_isync", [], _ ->
-                      begin match ecode with
-                      | ISYNC :: es ->
-                          OK(fw)
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | "__builtin_trap", [], _ ->
-                      begin match ecode with
-                      | TW(tO, rA, rB) :: es ->
-                          OK(fw)
-                          >>= (fun ffw ->
-                            bitmatch tO with
-                            | { 31 : 5 : int } -> OK(ffw)
-                            | { _ } -> ERR("bitmatch")
-                          )
-                          >>= match_iregs GPR0 rA
-                          >>= match_iregs GPR0 rB
-                          >>= recur_simpl
-                      | _ -> error
-                      end
-                  | _ -> error
-              end
-          | EF_vload(chunk) ->
-              begin match args with
-              | [IR addr] ->
-                  OK(fw)
-                  >>= check_builtin_vload_common
-                    cs ecode pc chunk addr (Cint Integers.Int.zero) res
-              | _ -> fatal "Unexpected args in EF_vload, please report."
-              end
-          | EF_vstore(chunk) ->
-              begin match args with
-              | [IR addr; src] ->
-                  OK(fw)
-                  >>= check_builtin_vstore_common
-                    cs ecode pc chunk addr (Cint Integers.Int.zero) src
-              | _ -> fatal "Unexpected args in EF_vstore, please report."
-              end
-          | EF_vload_global(chunk, ident, ofs) ->
-              begin match ecode with
-              | ADDIS(rD, rA, simm) :: es ->
-                  let high = Csymbol_high(ident, ofs) in
-                  OK(fw)
-                  >>= match_iregs  GPR11 rD
-                  >>= match_iregs  GPR0  rA
-                  >>= match_csts   high  (Safe32.of_int simm)
-                  >>= check_builtin_vload_common
-                    cs es (Int32.add pc 4l) chunk GPR11
-                    (Csymbol_low(ident, ofs)) res
-              | _ -> error
-              end
-          | EF_vstore_global(chunk, ident, ofs) ->
-              begin match args with
-              | [src] ->
-                  begin match ecode with
-                  | ADDIS(rD, rA, simm) :: es ->
-                      let tmp =
-                        if src = IR GPR11
-                        then GPR12
-                        else GPR11
-                      in
-                      let high = Csymbol_high(ident, ofs) in
-                      OK(fw)
-                      >>= match_iregs  tmp   rD
-                      >>= match_iregs  GPR0  rA
-                      >>= match_csts   high  (Safe32.of_int simm)
-                      >>= check_builtin_vstore_common
-                        cs es (Int32.add pc 4l) chunk tmp
-                        (Csymbol_low(ident, ofs)) src
-                  | _ -> error
-                  end
-              | _ -> fatal "Unexpected args in EF_vstore_global, please report."
-              end
-          | EF_memcpy(sz, al) ->
-              let sz = z_int sz in
-              let al = z_int al in
-              begin match args with
-              | [IR dst; IR src] ->
-                  if sz <= 48
-                  then (
-                    match match_memcpy_small ecode pc sz al src dst fw with
-                    | ERR(s) -> ERR(s)
-                    | OK(fw, es, pc) -> compare_code cs es pc fw
-                  )
-                  else (
-                    match match_memcpy_big ecode pc sz al src dst fw with
-                    | ERR(s) -> ERR(s)
-                    | OK(fw, es, pc) -> compare_code cs es pc fw
-                  )
-              | _ -> error
-              end
-          | EF_annot_val(text, targ) ->
-              begin match args, res with
-              | IR src :: _, [IR dst] ->
-                  if dst <> src
-                  then (
-                    match ecode with
-                    | ORx(rS, rA, rB, rc) :: es ->
-                        OK(fw)
-                        >>= match_iregs src rS
-                        >>= match_iregs dst rA
-                        >>= match_iregs src rB
-                        >>= match_bools false rc
-                        >>= recur_simpl
-                    | _ -> error
-                  )
-                  else compare_code cs ecode pc fw
-              | FR src :: _, [FR dst] ->
-                  if dst <> src
-                  then (
-                    match ecode with
-                    | FMRx(frD, frB, rc) :: es ->
-                        OK(fw)
-                        >>= match_fregs dst frD
-                        >>= match_fregs src frB
-                        >>= match_bools false rc
-                        >>= recur_simpl
-                    | _ -> error
-                  )
-                  else compare_code cs ecode pc fw
-              | _ -> error
-              end
-          | EF_annot(_, _)    -> fatal "Unexpected EF_annot, please report."
-          | EF_external(_, _) -> fatal "Unexpected EF_external, please report."
-          | EF_free           -> fatal "Unexpected EF_free, please report."
-          | EF_malloc         -> fatal "Unexpected EF_malloc, please report."
           | EF_inline_asm(_)  -> fatal "Unsupported: inline asm statement."
+          | _                 -> fatal "Unexpected Pbuiltin, please report."
           end
+      | Pcfi_adjust _ | Pcfi_rel_offset _ ->
+          OK(fw)
+          >>= compare_code cs ecode pc
       | Pcmplw(r1, r2) ->
           begin match ecode with
           | CMPL(crfD, l, rA, rB) :: es ->
@@ -1580,9 +1019,39 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
+      | Pcntlz(r1, r2) ->
+          begin match ecode with
+          | CNTLZWx(rS, rA, rc) :: es ->
+              OK(fw)
+              >>= match_iregs r2    rS
+              >>= match_iregs r1    rA
+              >>= match_bools false rc
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Pcreqv(bd, b1, b2) ->
+          begin match ecode with
+          | CREQV(crbD, crbA, crbB) :: es ->
+              OK(fw)
+              >>= match_crbits bd crbD
+              >>= match_crbits b1 crbA
+              >>= match_crbits b2 crbB
+              >>= recur_simpl
+          | _ -> error
+          end
       | Pcror(bd, b1, b2) ->
           begin match ecode with
           | CROR(crbD, crbA, crbB) :: es ->
+              OK(fw)
+              >>= match_crbits bd crbD
+              >>= match_crbits b1 crbA
+              >>= match_crbits b2 crbB
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Pcrxor(bd, b1, b2) ->
+          begin match ecode with
+          | CRXOR(crbD, crbA, crbB) :: es ->
               OK(fw)
               >>= match_crbits bd crbD
               >>= match_crbits b1 crbA
@@ -1611,6 +1080,13 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= match_iregs r2    rB
               >>= match_bools false oe
               >>= match_bools false rc
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Peieio ->
+          begin match ecode with
+          | EIEIO :: es ->
+              OK(fw)
               >>= recur_simpl
           | _ -> error
           end
@@ -1688,25 +1164,25 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
           | _ -> error
           end
       | Pfcti(rd, r1) ->
+          error
+      | Pfctiw(rd, r1) ->
           begin match ecode with
-          |   FCTIWZx(frD0, frB0, rc0)   ::
-              STFDU  (frS1, rA1,  d1)    ::
-              LWZ    (rD2,  rA2,  d2)    ::
-              ADDI   (rD3,  rA3,  simm3) :: es ->
+          | FCTIWx(frD0, frB0, rc0) :: es ->
               OK(fw)
-              >>= match_fregs  FPR13 frD0
+              >>= match_fregs  rd    frD0
               >>= match_fregs  r1    frB0
               >>= match_bools  false rc0
-              >>= match_fregs  FPR13 frS1
-              >>= match_iregs  GPR1  rA1
-              >>= match_int32s (-8l) (exts d1)
-              >>= match_iregs  rd    rD2
-              >>= match_iregs  GPR1  rA2
-              >>= match_int32s 4l    (exts d2)
-              >>= match_iregs  GPR1  rD3
-              >>= match_iregs  GPR1  rA3
-              >>= match_int32s 8l    (exts simm3)
-              >>= compare_code cs es (Int32.add 16l pc)
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Pfctiwz(rd, r1) ->
+          begin match ecode with
+          | FCTIWZx(frD0, frB0, rc0) :: es ->
+              OK(fw)
+              >>= match_fregs  rd    frD0
+              >>= match_fregs  r1    frB0
+              >>= match_bools  false rc0
+              >>= recur_simpl
           | _ -> error
           end
       | Pfdiv(rd, r1, r2) ->
@@ -1732,27 +1208,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
           | _ -> error
           end
       | Pfmake(rd, r1, r2) ->
-          begin match ecode with
-          |   STWU  (rS0, rA0, d0)    ::
-              STW   (rS1, rA1, d1)    ::
-              LFD   (frD2, rA2, d2)   ::
-              ADDI  (rD3, rA3, simm3) :: es ->
-              OK(fw)
-              >>= match_iregs  r1    rS0
-              >>= match_iregs  GPR1  rA0
-              >>= match_int32s (-8l) (exts d0)
-              >>= match_iregs  r2    rS1
-              >>= match_iregs  GPR1  rA1
-              >>= match_int32s 4l    (exts d1)
-              >>= match_fregs  rd    frD2
-              >>= match_iregs  GPR1  rA2
-              >>= match_int32s 0l    (exts d2)
-              >>= match_iregs  GPR1  rD3
-              >>= match_iregs  GPR1  rA3
-              >>= match_int32s 8l    (exts simm3)
-              >>= compare_code cs es (Int32.add 16l pc)
-          | _ -> error
-          end
+          error
       | Pfmr(rd, r1) ->
           begin match ecode with
           | FMRx(frD, frB, rc) :: es ->
@@ -1796,21 +1252,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
           | _ -> error
           end
       | Pfreeframe(sz, ofs) ->
-          begin match ecode with
-          | ADDI(rD, rA, simm) :: es ->
-              OK(fw)
-              >>= match_iregs   GPR1 rD
-              >>= match_iregs   GPR1 rA
-              >>= match_z_int32 sz (exts simm)
-              >>= recur_simpl
-          | LWZ(rD, rA, d) :: es ->
-              OK(fw)
-              >>= match_iregs   GPR1 rD
-              >>= match_iregs   GPR1 rA
-              >>= match_z_int32 ofs  (exts d)
-              >>= recur_simpl
-          | _ -> error
-          end
+          error
       | Pfrsp(rd, r1) ->
           begin match ecode with
           | FRSPx(frD, frB, rc) :: es ->
@@ -1822,16 +1264,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
           | _ -> error
           end
       | Pfxdp(rd, r1) ->
-          if rd = r1 then OK(fw) >>= compare_code cs ecode pc else 
-          begin match ecode with
-          | FMRx(frD, frB, rc) :: es ->
-              OK(fw)
-              >>= match_fregs rd    frD
-              >>= match_fregs r1    frB
-              >>= match_bools false rc
-              >>= recur_simpl
-          | _ -> error
-          end
+          error
       | Pfsub(rd, r1, r2) ->
           begin match ecode with
           | FSUBx(frD, frA, frB, rc) :: es ->
@@ -1851,6 +1284,103 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= match_fregs r1    frA
               >>= match_fregs r2    frB
               >>= match_bools false rc
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Pfmadd(rd, r1, r2, r3) ->
+          begin match ecode with
+          | FMADDx(frD, frA, frB, frC, rc) :: es ->
+              OK(fw)
+              >>= match_fregs rd frD
+              >>= match_fregs r1 frA
+              >>= match_fregs r3 frB
+              >>= match_fregs r2 frC
+              >>= match_bools false rc
+              >>= recur_simpl
+           | _ -> error
+           end
+      | Pfmsub(rd, r1, r2, r3) ->
+          begin match ecode with
+          | FMSUBx(frD, frA, frB, frC, rc) :: es ->
+              OK(fw)
+              >>= match_fregs rd frD
+              >>= match_fregs r1 frA
+              >>= match_fregs r3 frB
+              >>= match_fregs r2 frC
+              >>= match_bools false rc
+              >>= recur_simpl
+           | _ -> error
+           end
+      | Pfnmadd(rd, r1, r2, r3) ->
+          begin match ecode with
+          | FNMADDx(frD, frA, frB, frC, rc) :: es ->
+              OK(fw)
+              >>= match_fregs rd frD
+              >>= match_fregs r1 frA
+              >>= match_fregs r3 frB
+              >>= match_fregs r2 frC
+              >>= match_bools false rc
+              >>= recur_simpl
+           | _ -> error
+           end
+      | Pfnmsub(rd, r1, r2, r3) ->
+          begin match ecode with
+          | FNMSUBx(frD, frA, frB, frC, rc) :: es ->
+              OK(fw)
+              >>= match_fregs rd frD
+              >>= match_fregs r1 frA
+              >>= match_fregs r3 frB
+              >>= match_fregs r2 frC
+              >>= match_bools false rc
+              >>= recur_simpl
+           | _ -> error
+           end
+      | Pfsqrt(rd, r1) ->
+          begin match ecode with
+          | FSQRTx(frD, frB, rc) :: es ->
+              OK(fw)
+              >>= match_fregs rd   frD
+              >>= match_fregs r1   frB
+              >>= match_bools false rc
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Pfrsqrte(rd, r1) ->
+          begin match ecode with
+          | FRSQRTEx(frD, frB, rc) :: es ->
+              OK(fw)
+              >>= match_fregs rd   frD
+              >>= match_fregs r1   frB
+              >>= match_bools false rc
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Pfres(rd, r1) ->
+          begin match ecode with
+          | FRESx(frD, frB, rc) :: es ->
+              OK(fw)
+              >>= match_fregs rd   frD
+              >>= match_fregs r1   frB
+              >>= match_bools false rc
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Pfsel(rd, r1, r2, r3) ->
+          begin match ecode with
+          | FSELx(frD, frA, frB, frC, rc) :: es ->
+              OK(fw)
+              >>= match_fregs rd frD
+              >>= match_fregs r1 frA
+              >>= match_fregs r3 frB
+              >>= match_fregs r2 frC
+              >>= match_bools false rc
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Pisync ->
+          begin match ecode with
+          | ISYNC :: es ->
+              OK(fw)
               >>= recur_simpl
           | _ -> error
           end
@@ -1942,7 +1472,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                 | Some(bs, pofs, psize) ->
                     let f =
                       bitmatch bs with
-                      | { f : 64 : int } -> Int64.float_of_bits f
+                      | { f : 64 : int } -> f
                     in
                     OK(fw)
                     >>= (fun ffw ->
@@ -1994,7 +1524,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                 | Some(bs, pofs, psize) ->
                     let f =
                       bitmatch bs with
-                      | { f : 32 : int } -> Int32.float_of_bits f
+                      | { f : 32 : int } -> f
                     in
                     OK(fw)
                     >>= (fun ffw ->
@@ -2014,7 +1544,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                     >>= match_iregs  GPR12 rD0
                     >>= match_iregs  GPR0  rA0
                     >>= match_fregs  r1    frD1
-                    >>= match_floats32 c     f
+                    >>= match_floats32 c   f
                     >>^ (ff_ef ^%= add_range pofs psize 4 (Float32_literal(f)))
                     >>= match_iregs  GPR12 rA1
                     >>= continue
@@ -2079,6 +1609,16 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
+      | Plhbrx(rd, r1, r2) ->
+          begin match ecode with
+          | LHBRX(rD, rA, rB):: es ->
+              OK(fw)
+              >>= match_iregs rd rD
+              >>= match_iregs r1 rA
+              >>= match_iregs r2 rB
+              >>= recur_simpl
+          | _ -> error
+          end
       | Plhz(rd, Csymbol_sda(ident, ofs), r1) ->
           begin match ecode with
           | LHZ(rD, rA, d) :: es ->
@@ -2108,6 +1648,16 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
+      | Plwbrx(rd, r1, r2) ->
+          begin match ecode with
+          | LWBRX(rD, rA, rB):: es ->
+              OK(fw)
+              >>= match_iregs rd rD
+              >>= match_iregs r1 rA
+              >>= match_iregs r2 rB
+              >>= recur_simpl
+          | _ -> error
+          end
       | Plwz(rd, Csymbol_sda(ident, ofs), r1) ->
           begin match ecode with
           | LWZ(rD, rA, d) :: es ->
@@ -2127,6 +1677,16 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
+      | Plwzu(rd, cst, r1) ->
+          begin match ecode with
+          | LWZU(rD, rA, d) :: es ->
+              OK(fw)
+              >>= match_iregs rd  rD
+              >>= match_iregs r1  rA
+              >>= match_csts  cst (exts d)
+              >>= recur_simpl
+          | _ -> error
+          end
       | Plwzx(rd, r1, r2) | Plwzx_a(rd, r1, r2) ->
           begin match ecode with
           | LWZX(rD, rA, rB) :: es ->
@@ -2137,21 +1697,16 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
-      | Pmfcrbit(rd, bit) ->
+      | Pmfcr rd ->
           begin match ecode with
-          |   MFCR   (rD0)                          ::
-              RLWINMx(rS1, rA1, sh1, mb1, me1, rc1) :: es ->
+          | MFCR (rD0) :: es ->
               OK(fw)
               >>= match_iregs  rd    rD0
-              >>= match_iregs  rd    rS1
-              >>= match_iregs  rd    rA1
-              >>= match_crbits bit   (sh1 - 1)
-              >>= match_ints   31    mb1
-              >>= match_ints   31    me1
-              >>= match_bools  false rc1
-              >>= compare_code cs es (Int32.add 8l pc)
+              >>= recur_simpl
           | _ -> error
-          end
+          end 
+          | Pmfcrbit(rd, bit) ->
+          error
       | Pmflr(r) ->
           begin match ecode with
           | MFSPR(rD, spr) :: es ->
@@ -2395,6 +1950,16 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
+      | Pstfdu(rd, cst, r1) ->
+          begin match ecode with
+          | STFDU(frS, rA, d) :: es ->
+              OK(fw)
+              >>= match_fregs rd  frS
+              >>= match_iregs r1  rA
+              >>= match_csts  cst (exts d)
+              >>= recur_simpl
+          | _ -> error
+          end
       | Pstfdx(rd, r1, r2) | Pstfdx_a(rd, r1, r2) ->
           begin match ecode with
           | STFDX(frS, rA, rB) :: es ->
@@ -2445,6 +2010,16 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
+      | Psthbrx(rd, r1, r2) ->
+          begin match ecode with
+          | STHBRX(rS, rA, rB) :: es ->
+              OK(fw)
+              >>= match_iregs rd rS
+              >>= match_iregs r1 rA
+              >>= match_iregs r2 rB
+              >>= recur_simpl
+          | _ -> error
+          end
       | Pstw(rd, cst, r1) | Pstw_a(rd, cst, r1) ->
           begin match ecode with
           | STW(rS, rA, d) :: es ->
@@ -2455,9 +2030,39 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
+      | Pstwu(rd, cst, r1) ->
+          begin match ecode with
+          | STWU(rS, rA, d) :: es ->
+              OK(fw)
+              >>= match_iregs rd  rS
+              >>= match_iregs r1  rA
+              >>= match_csts  cst (exts d)
+              >>= recur_simpl
+          | _ -> error
+          end
       | Pstwx(rd, r1, r2) | Pstwx_a(rd, r1, r2) ->
           begin match ecode with
           | STWX(rS, rA, rB) :: es ->
+              OK(fw)
+              >>= match_iregs rd rS
+              >>= match_iregs r1 rA
+              >>= match_iregs r2 rB
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Pstwbrx(rd, r1, r2) ->
+          begin match ecode with
+          | STWBRX(rS, rA, rB) :: es ->
+              OK(fw)
+              >>= match_iregs rd rS
+              >>= match_iregs r1 rA
+              >>= match_iregs r2 rB
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Pstwxu(rd, r1, r2) ->
+          begin match ecode with
+          | STWUX(rS, rA, rB) :: es ->
               OK(fw)
               >>= match_iregs rd rS
               >>= match_iregs r1 rA
@@ -2489,6 +2094,17 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
+      | Psubfze(rd, r1) ->
+          begin match ecode with
+          | SUBFZEx(rD, rA, oe, rc) :: es ->
+              OK(fw)
+              >>= match_iregs rd    rD
+              >>= match_iregs r1    rA
+              >>= match_bools false oe
+              >>= match_bools false rc
+              >>= recur_simpl
+          | _ -> error
+          end
       | Psubfic(rd, r1, cst) ->
           begin match ecode with
           | SUBFIC(rD, rA, simm) :: es ->
@@ -2496,6 +2112,27 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= match_iregs rd  rD
               >>= match_iregs r1  rA
               >>= match_csts  cst (exts simm)
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Psync ->
+          begin match ecode with
+          | SYNC :: es ->
+              OK(fw)
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Ptrap ->
+          begin match ecode with
+          | TW(tO, rA, rB) :: es ->
+              OK(fw)
+              >>= (fun ffw ->
+                bitmatch tO with
+                | { 31 : 5 : int } -> OK(ffw)
+                | { _ } -> ERR("bitmatch")
+              )
+              >>= match_iregs GPR0 rA
+              >>= match_iregs GPR0 rB
               >>= recur_simpl
           | _ -> error
           end
@@ -2530,142 +2167,6 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
-and check_builtin_vload_common ccode ecode pc chunk addr offset res fw =
-  let error = ERR("Non-matching instructions") in
-  let recur_simpl = compare_code ccode (List.tl ecode) (Int32.add pc 4l) in
-  begin match chunk, res with
-  | Mint8unsigned, [IR res] ->
-      begin match ecode with
-      | LBZ(rD, rA, d) :: es ->
-          OK(fw)
-          >>= match_iregs  res    rD
-          >>= match_iregs  addr   rA
-          >>= match_csts   offset (exts d)
-          >>= recur_simpl
-      | _ -> error
-      end
-  | Mint8signed, [IR res] ->
-      begin match ecode with
-      |   LBZ   (rD0, rA0, d0)  ::
-          EXTSBx(rS1, rA1, rc1) :: es ->
-          OK(fw)
-          >>= match_iregs  res    rD0
-          >>= match_iregs  addr   rA0
-          >>= match_csts   offset (exts d0)
-          >>= match_iregs  res    rS1
-          >>= match_iregs  res    rA1
-          >>= match_bools  false  rc1
-          >>= compare_code ccode es (Int32.add 8l pc)
-      | _ -> error
-      end
-  | Mint16unsigned, [IR res] ->
-      begin match ecode with
-      | LHZ(rD, rA, d) :: es ->
-          OK(fw)
-          >>= match_iregs  res    rD
-          >>= match_iregs  addr   rA
-          >>= match_csts   offset (exts d)
-          >>= recur_simpl
-      | _ -> error
-      end
-  | Mint16signed, [IR res] ->
-      begin match ecode with
-      | LHA(rD, rA, d) :: es ->
-          OK(fw)
-          >>= match_iregs  res    rD
-          >>= match_iregs  addr   rA
-          >>= match_csts   offset (exts d)
-          >>= recur_simpl
-      | _ -> error
-      end
-  | Mint32, [IR res] ->
-      begin match ecode with
-      | LWZ(rD, rA, d) :: es ->
-          OK(fw)
-          >>= match_iregs  res    rD
-          >>= match_iregs  addr   rA
-          >>= match_csts   offset (exts d)
-          >>= recur_simpl
-      | _ -> error
-      end
-  | Mfloat32, [FR res] ->
-      begin match ecode with
-      | LFS(frD, rA, d) :: es ->
-          OK(fw)
-          >>= match_fregs  res    frD
-          >>= match_iregs  addr   rA
-          >>= match_csts   offset (exts d)
-          >>= recur_simpl
-      | _ -> error
-      end
-  | Mfloat64, [FR res] ->
-      begin match ecode with
-      | LFD(frD, rA, d) :: es ->
-          OK(fw)
-          >>= match_fregs  res    frD
-          >>= match_iregs  addr   rA
-          >>= match_csts   offset (exts d)
-          >>= recur_simpl
-      | _ -> error
-      end
-  | _ -> error
-  end
-and check_builtin_vstore_common ccode ecode pc chunk addr offset src fw =
-  let recur_simpl = compare_code ccode (List.tl ecode) (Int32.add pc 4l) in
-  let error = ERR("Non-matching instructions") in
-  begin match chunk, src with
-  | (Mint8signed | Mint8unsigned), IR src ->
-      begin match ecode with
-      | STB(rS, rA, d) :: es ->
-          OK(fw)
-          >>= match_iregs  src    rS
-          >>= match_iregs  addr   rA
-          >>= match_csts   offset (exts d)
-          >>= recur_simpl
-      | _ -> error
-      end
-  | (Mint16signed | Mint16unsigned), IR src ->
-      begin match ecode with
-      | STH(rS, rA, d) :: es ->
-          OK(fw)
-          >>= match_iregs  src    rS
-          >>= match_iregs  addr   rA
-          >>= match_csts   offset (exts d)
-          >>= recur_simpl
-      | _ -> error
-      end
-  | Mint32, IR src ->
-      begin match ecode with
-      | STW(rS, rA, d) :: es ->
-          OK(fw)
-          >>= match_iregs  src    rS
-          >>= match_iregs  addr   rA
-          >>= match_csts   offset (exts d)
-          >>= recur_simpl
-      | _ -> error
-      end
-  | Mfloat32, FR src ->
-      begin match ecode with
-      | STFS(frS, rA, d) :: es ->
-          OK(fw)
-          >>= match_fregs  src    frS
-          >>= match_iregs  addr   rA
-          >>= match_csts   offset (exts d)
-          >>= recur_simpl
-      | _ -> error
-      end
-  | Mfloat64, FR src ->
-      begin match ecode with
-      | STFD(frS, rA, d) :: es ->
-          OK(fw)
-          >>= match_fregs  src    frS
-          >>= match_iregs  addr   rA
-          >>= match_csts   offset (exts d)
-          >>= recur_simpl
-      | _ -> error
-      end
-  | _ -> error
-  end
 
 (** A work element is a triple giving a CompCert ident for the function to
     analyze, its name as a string, and the actual code. It is not obvious how
@@ -2822,7 +2323,7 @@ let compare_data (l: init_data list) (bs: bitstring) (sfw: s_framework)
         | Init_float32(f) -> (
           bitmatch bs with
           | { j : 32 : int; bs : -1 : bitstring } ->
-              if camlfloat_of_coqfloat f = Int32.float_of_bits j
+              if camlint_of_coqint (Floats.Float32.to_bits f) = j
               then compare_data_aux l bs (s + 4) sfw
               else ERR("Wrong float32")
           | { _ } -> error
@@ -2830,7 +2331,7 @@ let compare_data (l: init_data list) (bs: bitstring) (sfw: s_framework)
         | Init_float64(f) -> (
           bitmatch bs with
           | { j : 64 : int; bs : -1 : bitstring } ->
-              if camlfloat_of_coqfloat f = Int64.float_of_bits j
+              if camlint64_of_coqint (Floats.Float.to_bits f) = j
               then compare_data_aux l bs (s + 8) sfw
               else ERR("Wrong float64")
           | { _ } -> error
@@ -3276,6 +2777,7 @@ let warn_sections_remapping efw =
   print_debug "Checking remapped sections";
   StringMap.fold
     (fun c_name (e_name, conflicts) efw ->
+      if c_name = "COMM" then efw else
       if StringSet.is_empty conflicts
       then
         match e_name with

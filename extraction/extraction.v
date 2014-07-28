@@ -157,4 +157,5 @@ Separate Extraction
    RTL.instr_defs RTL.instr_uses
    Machregs.mregs_for_operation Machregs.mregs_for_builtin
    Machregs.two_address_op Machregs.is_stack_reg
+   AST.signature_main
    Parser.translation_unit_file.

@@ -1,7 +1,13 @@
+include ../../Makefile.config
+
 CC=../../ccomp 
 CFLAGS=-U__GNUC__ -stdlib ../../runtime -dclight -dasm
 LIBS=
 TIME=xtime -o /dev/null -mintime 1.0
+ifeq ($(CCHECKLINK),true)
+CCHECK=../../cchecklink
+CFLAGS+= -sdump
+endif
 
 EXE=arcode lzw lzss
 
@@ -51,10 +57,18 @@ bench:
          done
 	rm -f $(TESTCOMPR)
 
+ccheck:
+	@echo "---- arcode"
+	@$(CCHECK) -exe arcode $(ARCODE_OBJS:.o=.sdump)
+	@echo "---- lzw"
+	@$(CCHECK) -exe lzw $(LZW_OBJS:.o=.sdump)
+	@echo "---- lzss"
+	@$(CCHECK) -exe lzss $(LZSS_OBJS:.o=.sdump)
+
 include .depend
 
 clean:
-	rm -f *.o *.light.c *.s $(EXE)
+	rm -f *.o *.light.c *.s *.sdump $(EXE)
 
 depend:
 	gcc -MM *.c > .depend

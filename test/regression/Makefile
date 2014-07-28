@@ -2,6 +2,10 @@ include ../../Makefile.config
 
 CCOMP=../../ccomp
 CCOMPFLAGS=-stdlib ../../runtime -dparse -dc -dclight -dasm -fall
+ifeq ($(CCHECKLINK),true)
+CCHECK=../../cchecklink
+CCOMPFLAGS+= -sdump
+endif
 
 LIBS=$(LIBMATH)
 
@@ -48,7 +52,7 @@ all_s: $(TESTS:%=%.s) $(TESTS_COMP:%=%.s) $(TESTS_DIFF:%=%.s) $(EXTRAS:%=%.s)
 
 clean:
 	rm -f *.compcert
-	rm -f *.parsed.c *.compcert.c *.light.c *.s *.o *~ 
+	rm -f *.parsed.c *.compcert.c *.light.c *.s *.o *.sdump *~ 
 
 test:
 	@for i in $(TESTS) $(TESTS_COMP); do \
@@ -81,3 +85,10 @@ test:
          done
 
 bench:
+
+ccheck:
+	@for i in $(TESTS) $(TESTS_COMP); do \
+           echo "---- $$i"; \
+           $(CCHECK) -exe $$i.compcert $$i.sdump; \
+         done
+
