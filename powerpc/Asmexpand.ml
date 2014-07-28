@@ -369,19 +369,19 @@ let expand_builtin_inline name args res =
       emit (Pcfi_adjust _m8)
   (* 64-bit integer arithmetic *)
   | "__builtin_negl", [IR ah; IR al], [IR rh; IR rl] ->
-      expand_int64_arith (rl = ah) rl (fun rl' ->
-        emit (Psubfic(rl', al, Cint _0));
+      expand_int64_arith (rl = ah) rl (fun rl ->
+        emit (Psubfic(rl, al, Cint _0));
         emit (Psubfze(rh, ah)))
   | "__builtin_addl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
-      expand_int64_arith (rl = ah || rl = bh) rl (fun rl' ->
-        emit (Paddc(rl', al, bl));
+      expand_int64_arith (rl = ah || rl = bh) rl (fun rl ->
+        emit (Paddc(rl, al, bl));
         emit (Padde(rh, ah, bh)))
   | "__builtin_subl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
-      expand_int64_arith (rl = ah || rl = bh) rl (fun rl' ->
-        emit (Psubfc(rl', bl, al));
+      expand_int64_arith (rl = ah || rl = bh) rl (fun rl ->
+        emit (Psubfc(rl, bl, al));
         emit (Psubfe(rh, bh, ah)))
   | "__builtin_mull", [IR a; IR b], [IR rh; IR rl] ->
-      expand_int64_arith (rl = a || rl = b) rl (fun rl' ->
+      expand_int64_arith (rl = a || rl = b) rl (fun rl ->
         emit (Pmullw(rl, a, b));
         emit (Pmulhwu(rh, a, b)))
   (* Memory accesses *)
@@ -394,6 +394,8 @@ let expand_builtin_inline name args res =
   | "__builtin_write32_reversed", [IR a1; IR a2], _ ->
       emit (Pstwbrx(a2, GPR0, a1))
   (* Synchronization *)
+  | "__builtin_membar", [], _ ->
+      ()
   | "__builtin_eieio", [], _ ->
       emit (Peieio)
   | "__builtin_sync", [], _ ->

@@ -515,6 +515,21 @@ let print_builtin_va_start oc r =
   fprintf oc "	str	r14, [%a, #0]\n" ireg r;
   n + 1
 
+(* Auxiliary for 64-bit integer arithmetic built-ins.  They expand to
+   two instructions, one computing the low 32 bits of the result,
+   followed by another computing the high 32 bits.  In cases where
+   the first instruction would overwrite arguments to the second
+   instruction, we must go through IR14 to hold the low 32 bits of the result.
+*)
+
+let print_int64_arith oc conflict rl fn =
+  if conflict then begin
+    let n = fn IR14 in
+    fprintf oc "	mov%t	%a, %a\n" thumbS ireg rl ireg IR14;
+    n + 1
+  end else
+    fn rl
+
 (* Handling of compiler-inlined builtins *)
 
 let print_builtin_inline oc name args res =
@@ -534,38 +549,25 @@ let print_builtin_inline oc name args res =
       fprintf oc "	vsqrt.f64 %a, %a\n" freg res freg a1; 1
   (* 64-bit integer arithmetic *)
   | "__builtin_negl", [IR ah; IR al], [IR rh; IR rl] ->
-        fprintf oc "	rsbs	%a, %a, #0\n"
-                ireg (if rl = ah then IR14 else rl) ireg al;
+      print_int64_arith oc (rl = ah) rl (fun rl ->
+        fprintf oc "	rsbs	%a, %a, #0\n" ireg rl ireg al;
         (* No "rsc" instruction in Thumb2.  Emulate based on
              rsc a, b, #0 == a <- AddWithCarry(~b, 0, carry)
                           == mvn a, b; adc a, a, #0 *)
         if !Clflags.option_fthumb then begin
           fprintf oc "	mvn	%a, %a\n" ireg rh ireg ah;
-          fprintf oc "	adc	%a, %a, #0\n" ireg rh ireg rh
+          fprintf oc "	adc	%a, %a, #0\n" ireg rh ireg rh; 3
         end else begin
-          fprintf oc "	rsc	%a, %a, #0\n" ireg rh ireg ah
-        end;
-        if rl = ah then
-          fprintf oc "	mov%t	%a, %a\n" thumbS ireg rl ireg IR14;
-        4
+          fprintf oc "	rsc	%a, %a, #0\n" ireg rh ireg ah; 2
+        end)
   | "__builtin_addl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
-      if rl = ah || rl = bh then begin
-        fprintf oc "	adds	%a, %a, %a\n" ireg IR14 ireg al ireg bl;
-        fprintf oc "	adc	%a, %a, %a\n" ireg rh ireg ah ireg bh;
-        fprintf oc "	mov%t	%a, %a\n" thumbS ireg rl ireg IR14; 3
-      end else begin
+      print_int64_arith oc (rl = ah || rl = bh) rl (fun rl ->
         fprintf oc "	adds	%a, %a, %a\n" ireg rl ireg al ireg bl;
-        fprintf oc "	adc	%a, %a, %a\n" ireg rh ireg ah ireg bh; 2
-      end
+        fprintf oc "	adc	%a, %a, %a\n" ireg rh ireg ah ireg bh; 2)
   | "__builtin_subl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
-      if rl = ah || rl = bh then begin
-        fprintf oc "	subs	%a, %a, %a\n" ireg IR14 ireg al ireg bl;
-        fprintf oc "	sbc	%a, %a, %a\n" ireg rh ireg ah ireg bh;
-        fprintf oc "	mov%t	%a, %a\n" thumbS ireg rl ireg IR14; 3
-      end else begin
+      print_int64_arith oc (rl = ah || rl = bh) rl (fun rl ->
         fprintf oc "	subs	%a, %a, %a\n" ireg rl ireg al ireg bl;
-        fprintf oc "	sbc	%a, %a, %a\n" ireg rh ireg ah ireg bh; 2
-      end
+        fprintf oc "	sbc	%a, %a, %a\n" ireg rh ireg ah ireg bh; 2)
   | "__builtin_mull", [IR a; IR b], [IR rh; IR rl] ->
       fprintf oc "	umull   %a, %a, %a, %a\n" ireg rl ireg rh ireg a ireg b; 1
   (* Memory accesses *)
@@ -581,6 +583,13 @@ let print_builtin_inline oc name args res =
   | "__builtin_write32_reversed", [IR a1; IR a2], _ ->
       fprintf oc "	rev	%a, %a\n" ireg IR14 ireg a2;
       fprintf oc "	str	%a, [%a, #0]\n" ireg IR14 ireg a1; 2
+  (* Synchronization *)
+  | "__builtin_membar", [], _ ->
+      0
+  | "__builtin_dsb", [], _ ->
+      fprintf oc "	dsb\n"; 1
+  | "__builtin_isb", [], _ ->
+      fprintf oc "	isb\n"; 1
   (* Vararg stuff *)
   | "__builtin_va_start", [IR a], _ ->
       print_builtin_va_start oc a

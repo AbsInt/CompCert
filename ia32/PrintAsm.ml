@@ -529,6 +529,9 @@ let print_builtin_inline oc name args res =
         fprintf oc "	movl	%a, %a\n" ireg a2 ireg tmp;
       fprintf oc "	bswap	%a\n" ireg tmp;
       fprintf oc "	movl	%a, 0(%a)\n" ireg tmp ireg a1
+  (* Synchronization *)
+  | "__builtin_membar", [], _ ->
+      ()
   (* Vararg stuff *)
   | "__builtin_va_start", [IR a], _ ->
       print_builtin_va_start oc a

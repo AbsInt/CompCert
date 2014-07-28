@@ -92,6 +92,11 @@ let builtins_generic = {
         (TInt(IInt, []),
           [TPtr(TInt(IChar, [AConst]), []); TInt(IInt, [])],
           false);
+    (* Software memory barrier *)
+    "__builtin_membar",
+        (TVoid [],
+          [],
+          false);
     (* Variable arguments *)
 (* va_start(ap,n)
       (preprocessing) --> __builtin_va_start(ap, arg)

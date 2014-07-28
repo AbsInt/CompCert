@@ -43,6 +43,11 @@ let builtins = {
       (TVoid [], [TPtr(TInt(IUShort, []), []); TInt(IUShort, [])], false);
     "__builtin_write32_reversed",
       (TVoid [], [TPtr(TInt(IUInt, []), []); TInt(IUInt, [])], false);
+    (* Synchronization *)
+    "__builtin_dsb",
+      (TVoid [], [], false);
+    "__builtin_isb",
+      (TVoid [], [], false)
   ]
 }
 
