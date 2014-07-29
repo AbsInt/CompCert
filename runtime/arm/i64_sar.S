@@ -44,7 +44,7 @@ FUNCTION(__i64_sar)
         ble 1f                  @ branch if <= 0, namely if amount >= 32
         LSR r0, r0, r2
 	LSL r3, r1, r3
-        ORR r0, r1, r3
+        ORR r0, r0, r3
         ASR r1, r1, r2
         bx lr
 1:

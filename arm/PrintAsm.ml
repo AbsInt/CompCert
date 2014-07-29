@@ -20,10 +20,16 @@ open AST
 open Memdata
 open Asm
 
-(* Code generation options.  To be turned into proper options. *)
+(* Code generation options. *)
 
-let vfpv3 = ref true
-let literals_in_code = ref true
+let vfpv3 = Configuration.model >= "armv7"
+
+let hardware_idiv () =
+  match Configuration.model with
+  | "armv7r" | "armv7m" -> !Clflags.option_fthumb
+  | _ -> false
+
+let literals_in_code = ref true     (* to be turned into a proper option *)
 
 (* On-the-fly label renaming *)
 
@@ -729,7 +735,7 @@ module FixupHF = struct
 end
 
 let (fixup_arguments, fixup_result) =
-  match Configuration.variant with
+  match Configuration.abi with
   | "eabi"      -> (FixupEABI.fixup_arguments, FixupEABI.fixup_result)
   | "hardfloat" -> (FixupHF.fixup_arguments, FixupHF.fixup_result)
   | _ -> assert false
@@ -835,7 +841,11 @@ let print_instruction oc = function
   | Pstrh(r1, r2, sa) ->
       fprintf oc "	strh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
   | Psdiv ->
-      fprintf oc "	bl	__aeabi_idiv\n"; 1
+      if hardware_idiv() then begin
+        fprintf oc "	sdiv	r0, r0, r1\n"; 1
+      end else begin
+        fprintf oc "	bl	__aeabi_idiv\n"; 1
+      end
   | Psbfx(r1, r2, lsb, sz) ->
       fprintf oc "	sbfx	%a, %a, #%a, #%a\n" ireg r1 ireg r2 coqint lsb coqint sz; 1
   | Psmull(r1, r2, r3, r4) ->
@@ -844,7 +854,11 @@ let print_instruction oc = function
       fprintf oc "	sub%t	%a, %a, %a\n"
               thumbS ireg r1 ireg r2 shift_op so; 1
   | Pudiv ->
-      fprintf oc "	bl	__aeabi_uidiv\n"; 1
+      if hardware_idiv() then begin
+        fprintf oc "	udiv	r0, r0, r1\n"; 1
+      end else begin
+        fprintf oc "	bl	__aeabi_uidiv\n"; 1
+      end
   | Pumull(r1, r2, r3, r4) ->
       fprintf oc "	umull	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 ireg r4; 1
   (* Floating-point VFD instructions *)
@@ -864,7 +878,7 @@ let print_instruction oc = function
       fprintf oc "	vsub.f64 %a, %a, %a\n" freg r1 freg r2 freg r3; 1
   | Pflid(r1, f) ->
       let f = camlint64_of_coqint(Floats.Float.to_bits f) in
-      if !vfpv3 && is_immediate_float64 f then begin
+      if vfpv3 && is_immediate_float64 f then begin
         fprintf oc "	vmov.f64 %a, #%F\n"
                    freg r1 (Int64.float_of_bits f); 1
         (* immediate floats have at most 4 bits of fraction, so they
@@ -912,7 +926,7 @@ let print_instruction oc = function
       fprintf oc "	vsub.f32 %a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
   | Pflis(r1, f) ->
       let f = camlint_of_coqint(Floats.Float32.to_bits f) in
-      if !vfpv3 && is_immediate_float32 f then begin
+      if vfpv3 && is_immediate_float32 f then begin
         fprintf oc "	vmov.f32 %a, #%F\n"
                 freg_single r1 (Int32.float_of_bits f); 1
         (* immediate floats have at most 4 bits of fraction, so they
@@ -1171,9 +1185,14 @@ let print_program oc p =
   Hashtbl.clear filename_num;
   fprintf oc "	.syntax	unified\n";
   fprintf oc "	.arch	%s\n"
-          (if !Clflags.option_fthumb then "armv7" else "armv6");
+          (match Configuration.model with
+           | "armv6" -> "armv6"
+           | "armv7a" -> "armv7-a"
+           | "armv7r" -> "armv7-r"
+           | "armv7m" -> "armv7-m"
+           | _ -> "armv7");
   fprintf oc "	.fpu	%s\n"
-          (if !vfpv3 then "vfpv3-d16" else "vfpv2");
+          (if vfpv3 then "vfpv3-d16" else "vfpv2");
   fprintf oc "	.%s\n" (if !Clflags.option_fthumb then "thumb" else "arm");
   List.iter (print_globdef oc) p.prog_defs
 

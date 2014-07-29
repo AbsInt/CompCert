@@ -67,7 +67,7 @@ FUNCTION(__compcert_va_float64)
         ADD     r1, r1, #15     @ 8-align and advance by 8
         BIC     r1, r1, #7
         str     r1, [r0, #0]    @ update ap
-#ifdef VARIANT_eabi
+#ifdef ABI_eabi
         ldr     r0, [r1, #-8]   @ load next argument and return it in r0,r1
         ldr     r1, [r1, #-4]
 #else	

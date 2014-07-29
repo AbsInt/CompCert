@@ -62,7 +62,7 @@ FUNCTION(__i64_utof)
         vmla.f64 d0, d1, d2     @ d0 = d0 + d1 * d2 = double value of int64
    @ Round to single
         vcvt.f32.f64 s0, d0
-#ifdef VARIANT_eabi	
+#ifdef ABI_eabi	
    @ Return result in r0
 	vmov r0, s0
 #endif	

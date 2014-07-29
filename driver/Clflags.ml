@@ -28,7 +28,7 @@ let option_falignfunctions = ref (None: int option)
 let option_falignbranchtargets = ref 0
 let option_faligncondbranchs = ref 0
 let option_finline_asm = ref false
-let option_fthumb = ref false
+let option_fthumb = ref (Configuration.model = "armv7m")
 let option_Osize = ref false
 let option_dparse = ref false
 let option_dcmedium = ref false
@@ -49,7 +49,7 @@ let option_v = ref false
 let option_interp = ref false
 let option_small_data = 
   ref (if Configuration.arch = "powerpc"
-       && Configuration.variant = "eabi"
+       && Configuration.abi = "eabi"
        && Configuration.system = "diab"
        then 8 else 0)
 let option_small_const = ref (!option_small_data)

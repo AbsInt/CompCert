@@ -39,7 +39,7 @@
 @@@ Conversion from double float to signed 64-bit integer
 	
 FUNCTION(__i64_dtos)
-#ifndef VARIANT_eabi
+#ifndef ABI_eabi
 	vmov r0, r1, d0
 #endif	
         ASR r12, r1, #31       @ save sign of result in r12

@@ -46,7 +46,7 @@ __i64_stod:
         vcvt.f64.u32 d1, s2     @ convert high half to double (unsigned)
         vldr    d2, .LC1        @ d2 = 2^32
         vmla.f64 d0, d1, d2     @ d0 = d0 + d1 * d2 = double value of int64
-#ifdef VARIANT_eabi	
+#ifdef ABI_eabi	
 	vmov	r0, r1, d0      @ return result in r0, r1
 #endif
         bx lr

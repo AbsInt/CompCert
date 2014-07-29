@@ -226,7 +226,8 @@ driver/Configuration.ml: Makefile.config VERSION
          echo let asm = "\"$(CASM)\""; \
          echo let linker = "\"$(CLINKER)\""; \
          echo let arch = "\"$(ARCH)\""; \
-         echo let variant = "\"$(VARIANT)\""; \
+         echo let model = "\"$(MODEL)\""; \
+         echo let abi = "\"$(ABI)\""; \
          echo let system = "\"$(SYSTEM)\""; \
          echo let has_runtime_lib = $(HAS_RUNTIME_LIB); \
          echo let asm_supports_cfi = $(ASM_SUPPORTS_CFI); \

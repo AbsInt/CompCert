@@ -39,7 +39,7 @@
 @@@ Conversion from double float to unsigned 64-bit integer	
 
 FUNCTION(__i64_dtou)
-#ifndef VARIANT_eabi
+#ifndef ABI_eabi
 	vmov r0, r1, d0
 #endif	
         cmp r1, #0              @ is double < 0 ?

@@ -27,13 +27,19 @@ Supported targets:
   ppc-eabi-diab    (PowerPC, EABI with Diab tools)
   arm-linux        (ARM, EABI)
   arm-eabi         (ARM, EABI)
-  arm-eabihf       (ARM, EABI with hardware floating point)
-  arm-hardfloat    (ARM, EABI with hardware floating point)
+  arm-eabihf       (ARM, EABI using hardware FP registers)
+  arm-hardfloat    (ARM, EABI using hardware FP registers)
   ia32-linux       (x86 32 bits, Linux)
   ia32-bsd         (x86 32 bits, BSD)
   ia32-macosx      (x86 32 bits, MacOS X)
   ia32-cygwin      (x86 32 bits, Cygwin environment under Windows)
   manual           (edit configuration file by hand)
+
+For ARM targets, the "arm-" prefix can be refined into:
+  armv6-           ARMv6 + VFPv2
+  armv7a-          ARMv7a + VFPv3-d16   (default)
+  armv7r-          ARMv7r + VFPv3-d16
+  armv7m-          ARMv7m + VFPv3-d16
 
 Options:
   -prefix <dir>    Install in <dir>/bin and <dir>/lib/compcert
@@ -74,7 +80,8 @@ asm_supports_cfi=""
 case "$target" in
   powerpc-linux|ppc-linux|powerpc-eabi|ppc-eabi)
     arch="powerpc"
-    variant="eabi"
+    model="standard"
+    abi="eabi"
     system="linux"
     cc="${toolprefix}gcc"
     cprepro="${toolprefix}gcc -U__GNUC__ -E"
@@ -85,7 +92,8 @@ case "$target" in
     cchecklink=true;;
   powerpc-eabi-diab|ppc-eabi-diab)
     arch="powerpc"
-    variant="eabi"
+    model="standard"
+    abi="eabi"
     system="diab"
     cc="${toolprefix}dcc"
     cprepro="${toolprefix}dcc -E"
@@ -94,18 +102,22 @@ case "$target" in
     clinker="${toolprefix}dcc"
     libmath="-lm"
     cchecklink=true;;
-  arm-linux|arm-eabi)
+  arm*-*)
     arch="arm"
-    variant="eabi"
-    system="linux"
-    cc="${toolprefix}gcc"
-    cprepro="${toolprefix}gcc -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
-    casm="${toolprefix}gcc -c"
-    clinker="${toolprefix}gcc"
-    libmath="-lm";;
-  arm-eabihf|arm-hardfloat)
-    arch="arm"
-    variant="hardfloat"
+    case "$target" in
+      armv6-*) model="armv6";;
+      arm-*|armv7a-*) model="armv7a";;
+      armv7r-*) model="armv7r";;
+      armv7m-*) model="armv7m";;
+      *)
+        echo "Unknown target '$target'." 1>&2
+        echo "$usage" 1>&2
+        exit 2;;
+    esac
+    case "$target" in
+      *-eabi) abi="eabi";;
+      *-eabihf|*-hf|*-hardfloat) abi="hardfloat";;
+    esac
     system="linux"
     cc="${toolprefix}gcc"
     cprepro="${toolprefix}gcc -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
@@ -114,7 +126,8 @@ case "$target" in
     libmath="-lm";;
   ia32-linux)
     arch="ia32"
-    variant="standard"
+    model="sse2"
+    abi="standard"
     system="linux"
     cc="${toolprefix}gcc -m32"
     cprepro="${toolprefix}gcc -m32 -U__GNUC__ -E"
@@ -123,7 +136,8 @@ case "$target" in
     libmath="-lm";;
   ia32-bsd)
     arch="ia32"
-    variant="standard"
+    model="sse2"
+    abi="standard"
     system="bsd"
     cc="${toolprefix}gcc -m32"
     cprepro="${toolprefix}gcc -m32 -U__GNUC__ -E"
@@ -132,7 +146,8 @@ case "$target" in
     libmath="-lm";;
   ia32-macosx)
     arch="ia32"
-    variant="standard"
+    model="sse2"
+    abi="standard"
     system="macosx"
     cc="${toolprefix}gcc -arch i386"
     cprepro="${toolprefix}gcc -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' -E"
@@ -146,7 +161,8 @@ case "$target" in
     libmath="";;
   ia32-cygwin)
     arch="ia32"
-    variant="standard"
+    model="sse2"
+    abi="standard"
     system="cygwin"
     cc="${toolprefix}gcc -m32"
     cprepro="${toolprefix}gcc -m32 -U__GNUC__ -E"
@@ -199,11 +215,11 @@ case "$coq_ver" in
         echo "version $coq_ver -- good!";;
   ?.*)
         echo "version $coq_ver -- UNSUPPORTED"
-        echo "Error: CompCert requires Coq version 8.4pl1 or 8.4pl2 or 8.4pl3."
+        echo "Error: CompCert requires Coq version 8.4, pl1 and up."
         missingtools=true;;
   *)
         echo "NOT FOUND"
-        echo "Error: make sure Coq version 8.4pl3 is installed."
+        echo "Error: make sure Coq version 8.4pl4 is installed."
         missingtools=true;;
 esac
 
@@ -264,7 +280,8 @@ EOF
 if test "$target" != "manual"; then
 cat >> Makefile.config <<EOF
 ARCH=$arch
-VARIANT=$variant
+MODEL=$model
+ABI=$abi
 SYSTEM=$system
 CC=$cc
 CPREPRO=$cprepro
@@ -285,11 +302,21 @@ cat >> Makefile.config <<'EOF'
 # ARCH=ia32
 ARCH=
 
+# Hardware variant
+# MODEL=standard  # for PowerPC
+# MODEL=armv6     # for ARM
+# MODEL=armv7a    # for ARM
+# MODEL=armv7r    # for ARM
+# MODEL=armv7m    # for ARM
+# MODEL=sse2      # for IA32
+MODEL=
+
 # Target ABI
-# VARIANT=eabi     # for PowerPC / Linux and other SVR4 or EABI platforms
-# VARIANT=linux    # for ARM
-# VARIANT=standard # for IA32
-VARIANT=
+# ABI=eabi     # for PowerPC / Linux and other SVR4 or EABI platforms
+# ABI=eabi     # for ARM
+# ABI=hardfloat # for ARM
+# ABI=standard # for IA32
+ABI=
 
 # Target operating system and development environment
 # Possible choices for PowerPC:
@@ -355,7 +382,8 @@ cat <<EOF
 
 CompCert configuration:
     Target architecture........... $arch
-    Application binary interface.. $variant
+    Hardware model................ $model
+    Application binary interface.. $abi
     OS and development env........ $system
     C compiler.................... $cc
     C preprocessor................ $cprepro

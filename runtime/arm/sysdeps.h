@@ -34,6 +34,13 @@
 
 // System dependencies
 
+#if defined(MODEL_armv7r)
+// Thumb2-only
+#define THUMB
+#else
+#undef THUMB
+#endif
+
 #ifdef THUMB
 #define FUNCTION(f) \
 	.text; \
@@ -76,9 +83,15 @@ f:
 #define SUB THUMB_S(sub)
 
 	.syntax unified
-#ifdef THUMB
-	.arch	armv7
+#if defined(MODEL_armv6)
+        .arch   armv6
+#elif defined(MODEL_armv7a)
+        .arch   armv7-a
+#elif defined(MODEL_armv7r)
+        .arch   armv7-r
+#elif defined(MODEL_armv7m)
+        .arch   armv7-m
 #else
-	.arch	armv6
+        .arch   armv7
 #endif
 	.fpu	vfpv2

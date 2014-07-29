@@ -22,7 +22,7 @@ $(LIB): $(OBJS)
 	$(CASMRUNTIME) -o $@ $^
 
 %.o: $(ARCH)/%.S
-	$(CASMRUNTIME) -DVARIANT_$(VARIANT) -DSYS_$(SYSTEM) -o $@ $^
+	$(CASMRUNTIME) -DMODEL_$(MODEL) -DABI_$(ABI) -DSYS_$(SYSTEM) -o $@ $^
 
 clean::
 	rm -f *.o $(LIB)
