@@ -1177,6 +1177,15 @@ Axiom free_inject:
     exists lo1, exists hi1, In (b1, lo1, hi1) l /\ lo1 <= ofs < hi1) ->
   inject f m1' m2'.
 
+Axiom free_parallel_inject:
+  forall f m1 m2 b lo hi m1' b' delta,
+  inject f m1 m2 ->
+  free m1 b lo hi = Some m1' ->
+  f b = Some(b', delta) ->
+  exists m2',
+     free m2 b' (lo + delta) (hi + delta) = Some m2'
+  /\ inject f m1' m2'.
+
 Axiom drop_outside_inject:
   forall f m1 m2 b lo hi p m2',
   inject f m1 m2 -> 

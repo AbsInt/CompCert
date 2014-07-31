@@ -3863,6 +3863,32 @@ Proof.
   exploit H2; eauto. intros [lo1 [hi1 [C D]]]. eauto.
 Qed.
 
+Theorem free_parallel_inject:
+  forall f m1 m2 b lo hi m1' b' delta,
+  inject f m1 m2 ->
+  free m1 b lo hi = Some m1' ->
+  f b = Some(b', delta) ->
+  exists m2',
+     free m2 b' (lo + delta) (hi + delta) = Some m2'
+  /\ inject f m1' m2'.
+Proof.
+  intros. 
+  destruct (range_perm_free m2 b' (lo + delta) (hi + delta)) as [m2' FREE].
+  eapply range_perm_inject; eauto. eapply free_range_perm; eauto.
+  exists m2'; split; auto.
+  eapply free_inject with (m1 := m1) (l := (b,lo,hi)::nil); eauto. 
+  simpl; rewrite H0; auto.
+  intros. destruct (eq_block b1 b).
+  subst b1. rewrite H1 in H2; inv H2. 
+  exists lo, hi; split; auto with coqlib. omega.
+  exploit mi_no_overlap. eexact H. eexact n. eauto. eauto.
+  eapply perm_max. eapply perm_implies. eauto. auto with mem. 
+  instantiate (1 := ofs + delta0 - delta). 
+  apply perm_cur_max. apply perm_implies with Freeable; auto with mem. 
+  eapply free_range_perm; eauto. omega.
+  intros [A|A]. congruence. omega.
+Qed.
+
 Lemma drop_outside_inject: forall f m1 m2 b lo hi p m2',
   inject f m1 m2 -> 
   drop_perm m2 b lo hi p = Some m2' -> 

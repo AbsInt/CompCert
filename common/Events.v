@@ -1174,47 +1174,27 @@ Proof.
   tauto.
 (* mem inject *)
   inv H0. inv H2. inv H7. inv H9.
-  exploit Mem.load_inject; eauto. intros [vsz [A B]]. inv B. 
+  exploit Mem.load_inject; eauto. intros [vsz [A B]]. inv B.
   assert (Mem.range_perm m1 b (Int.unsigned lo - 4) (Int.unsigned lo + Int.unsigned sz) Cur Freeable).
     eapply Mem.free_range_perm; eauto.
   exploit Mem.address_inject; eauto. 
     apply Mem.perm_implies with Freeable; auto with mem.
     apply H0. instantiate (1 := lo). omega. 
   intro EQ.
-  assert (Mem.range_perm m1' b2 (Int.unsigned lo + delta - 4) (Int.unsigned lo + delta + Int.unsigned sz) Cur Freeable).
-    red; intros. 
-    replace ofs with ((ofs - delta) + delta) by omega.
-    eapply Mem.perm_inject; eauto. apply H0. omega. 
-  destruct (Mem.range_perm_free _ _ _ _ H2) as [m2' FREE].
-  exists f; exists Vundef; exists m2'; intuition.
-
-  econstructor.
-  rewrite EQ. replace (Int.unsigned lo + delta - 4) with (Int.unsigned lo - 4 + delta) by omega.
-  eauto. auto. 
-  rewrite EQ. auto.
-  
-  assert (Mem.free_list m1 ((b, Int.unsigned lo - 4, Int.unsigned lo + Int.unsigned sz) :: nil) = Some m2).
-    simpl. rewrite H5. auto.
-  eapply Mem.free_inject; eauto. 
-  intros. destruct (eq_block b b1).
-  subst b. assert (delta0 = delta) by congruence. subst delta0. 
-  exists (Int.unsigned lo - 4); exists (Int.unsigned lo + Int.unsigned sz); split.
-  simpl; auto. omega.
-  elimtype False. exploit Mem.inject_no_overlap. eauto. eauto. eauto. eauto. 
-  instantiate (1 := ofs + delta0 - delta).
-  apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
-  apply H0. omega.
-  eapply Mem.perm_max. eauto with mem.
-  intuition. 
-
-  eapply Mem.free_unchanged_on; eauto. 
-  unfold loc_unmapped; intros. congruence.
-
-  eapply Mem.free_unchanged_on; eauto. 
-  unfold loc_out_of_reach; intros. red; intros. eelim H8; eauto. 
-  apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
-  apply H0. omega.
-
+  exploit Mem.free_parallel_inject; eauto. intros (m2' & C & D).
+  exists f, Vundef, m2'; split.
+  apply extcall_free_sem_intro with (sz := sz) (m' := m2'). 
+    rewrite EQ. rewrite <- A. f_equal. omega. 
+    auto.
+    rewrite ! EQ. rewrite <- C. f_equal; omega.
+  split. auto. 
+  split. auto.
+  split. eapply Mem.free_unchanged_on; eauto. unfold loc_unmapped. intros; congruence.
+  split. eapply Mem.free_unchanged_on; eauto. unfold loc_out_of_reach. 
+    intros. red; intros. eelim H7; eauto.
+    apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem. 
+    apply H0. omega.
+  split. auto. 
   red; intros. congruence.
 (* trace length *)
   inv H; simpl; omega.
