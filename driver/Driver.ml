@@ -557,27 +557,30 @@ let cmdline_actions =
   @ f_opt "thumb" option_fthumb
 
 let _ =
-  Gc.set { (Gc.get()) with
-              Gc.minor_heap_size = 524288; (* 512k *)
-              Gc.major_heap_increment = 4194304 (* 4M *)
-         };
-  Printexc.record_backtrace true;
-  Machine.config :=
-    begin match Configuration.arch with
-    | "powerpc" -> Machine.ppc_32_bigendian
-    | "arm"     -> Machine.arm_littleendian
-    | "ia32"    -> Machine.x86_32
-    | _         -> assert false
+  try
+    Gc.set { (Gc.get()) with
+                Gc.minor_heap_size = 524288; (* 512k *)
+                Gc.major_heap_increment = 4194304 (* 4M *)
+           };
+    Printexc.record_backtrace true;
+    Machine.config :=
+      begin match Configuration.arch with
+      | "powerpc" -> Machine.ppc_32_bigendian
+      | "arm"     -> Machine.arm_littleendian
+      | "ia32"    -> Machine.x86_32
+      | _         -> assert false
+      end;
+    Builtins.set C2C.builtins;
+    CPragmas.initialize();
+    parse_cmdline cmdline_actions usage_string;
+    let nolink = !option_c || !option_S || !option_E || !option_interp in
+    if nolink && !option_o <> None && !num_source_files >= 2 then begin
+      eprintf "Ambiguous '-o' option (multiple source files)\n";
+      exit 2
     end;
-  Builtins.set C2C.builtins;
-  CPragmas.initialize();
-  parse_cmdline cmdline_actions usage_string;
-  let nolink = !option_c || !option_S || !option_E || !option_interp in
-  if nolink && !option_o <> None && !num_source_files >= 2 then begin
-    eprintf "Ambiguous '-o' option (multiple source files)\n";
-    exit 2
-  end;
-  let linker_args = time "Total compilation time" perform_actions () in
-  if (not nolink) && linker_args <> [] then begin
-    linker (output_filename_default "a.out") linker_args
-  end
+    let linker_args = time "Total compilation time" perform_actions () in
+    if (not nolink) && linker_args <> [] then begin
+      linker (output_filename_default "a.out") linker_args
+    end
+  with Sys_error msg ->
+    eprintf "I/O error: %s.\n" msg; exit 2
