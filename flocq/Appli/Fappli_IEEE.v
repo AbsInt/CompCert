@@ -72,8 +72,7 @@ Definition valid_binary x :=
   end.
 
 (** Basic type used for representing binary FP numbers.
-    Note that there is exactly one such object per FP datum.
-    NaNs do not have any payload. They cannot be distinguished. *)
+    Note that there is exactly one such object per FP datum. *)
 
 Definition nan_pl := {pl | (Z_of_nat' (S (digits2_Pnat pl)) <? prec)%Z  = true}.
 
