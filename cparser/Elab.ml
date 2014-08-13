@@ -1779,6 +1779,7 @@ let enter_decdefs local loc env sto dl =
     let env2 = Env.add_ident env1 id sto' ty' in
     (* check for incomplete type *)
     if local && sto' <> Storage_extern
+             && not (is_function_type env ty')
              && wrap incomplete_type loc env ty' then
       error loc "'%s' has incomplete type" s;
     if local && sto' <> Storage_extern && sto' <> Storage_static then
