@@ -474,7 +474,7 @@ let rec elab_specifier ?(only = false) loc env specifier =
         let a' =
           add_attributes (get_type_attrs()) (elab_attributes env a) in
         let (id', env') =
-          elab_enum loc id optmembers a' env in
+          elab_enum only loc id optmembers a' env in
         (!sto, !inline, !typedef, TEnum(id', !attr), env')
 
     (* Specifier doesn't make sense *)
@@ -756,13 +756,17 @@ and elab_enum_item env ((s, exp), loc) nextval =
 
 (* Elaboration of an enumeration declaration.   C99 section 6.7.2.2  *)
 
-and elab_enum loc tag optmembers attrs env =
+and elab_enum only loc tag optmembers attrs env =
   let tag = match tag with None -> "" | Some s -> s in
   match optmembers with
   | None ->
+    if only then
+      fatal_error loc
+         "forward declaration of 'enum %s' is not allowed in ISO C" tag;
       let (tag', info) = wrap Env.lookup_enum loc env tag in (tag', env)
-      (* XXX this will cause an error for incomplete enum definitions. *)
   | Some members ->
+      if tag <> "" && redef Env.lookup_enum env tag then
+        error loc "redefinition of 'enum %s'" tag;
       let rec elab_members env nextval = function
       | [] -> ([], env)
       | hd :: tl ->
