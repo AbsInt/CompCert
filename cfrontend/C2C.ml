@@ -771,7 +771,8 @@ let rec convertStmt ploc env s =
       if init.sdesc <> C.Sskip then
         warning "ignored code at beginning of 'switch'";
       let te = convertExpr env e in
-      add_lineno ploc s.sloc (Sswitch(te, convertSwitch s.sloc env cases))
+      add_lineno ploc s.sloc
+        (Sswitch(te, convertSwitch s.sloc env (is_longlong env e.etyp) cases))
   | C.Slabeled(C.Slabel lbl, s1) ->
       add_lineno ploc s.sloc
         (Slabel(intern_string lbl, convertStmt s.sloc env s1))
@@ -795,7 +796,7 @@ let rec convertStmt ploc env s =
       add_lineno ploc s.sloc
         (Sdo (Ebuiltin (EF_inline_asm (intern_string txt), Tnil, Enil, Tvoid)))
 
-and convertSwitch ploc env = function
+and convertSwitch ploc env is_64 = function
   | [] ->
       LSnil
   | (lbl, s) :: rem ->
@@ -808,9 +809,11 @@ and convertSwitch ploc env = function
             match Ceval.integer_expr env e with
             | None -> unsupported "'case' label is not a compile-time integer";
                       None
-            | Some v -> Some (Z.of_uint64 v)
+            | Some v -> Some (if is_64
+                              then Z.of_uint64 v
+                              else Z.of_uint32 (Int64.to_int32 v))
       in
-      LScons(lbl', convertStmt ploc env s, convertSwitch s.sloc env rem)
+      LScons(lbl', convertStmt ploc env s, convertSwitch s.sloc env is_64 rem)
 
 (** Function definitions *)
 

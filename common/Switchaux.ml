@@ -96,4 +96,39 @@ let compile_switch modulus default table =
     else compile_switch_as_tree modulus default tbl
   end
 
+(* For debugging *)
+(**
+open Format
 
+let print_table p (tbl, dfl) =
+  fprintf p "@[<v 0>";
+  List.iter
+    (fun (key, act) -> fprintf p "%s -> %d@ " (Z.to_string key) (Nat.to_int act))
+    tbl;
+  fprintf p "_ -> %d@]" (Nat.to_int dfl)
+
+let rec print_jumptable p = function
+  | [] -> fprintf p "<empty>"
+  | [n] -> fprintf p "%d" (Nat.to_int n)
+  | n::ns -> fprintf p "%d %a" (Nat.to_int n) print_jumptable ns
+
+let rec print_tree p = function
+  | CTaction n -> fprintf p "action %d" (Nat.to_int n)
+  | CTifeq(key, act, t) ->
+      fprintf p "@[<v 2>if (x == %s)@ action %d@;<0 -2>else@ %a@]"
+              (Z.to_string key) (Nat.to_int act) print_tree t
+  | CTiflt(key, t1, t2) ->
+      fprintf p "@[<v 2>if (x <u %s)@ %a@;<0 -2>else@ %a@]"
+              (Z.to_string key) print_tree t1 print_tree t2
+  | CTjumptable(ofs, sz, acts,t) ->
+      fprintf p "@[<v 2>if (x - %s <u %s)@ jumptable %a@;<0 -2>else@ %a@]"
+              (Z.to_string ofs) (Z.to_string sz)
+              print_jumptable acts print_tree t
+
+let compile_switch modulus default table =
+  let t = compile_switch modulus default table in
+  printf "@[<v 0>-------------@ ";
+  printf "Initial problem:@ %a@ " print_table (table, default);
+  printf "Decision tree:@ %a@ @]@." print_tree t;
+  t
+**)
