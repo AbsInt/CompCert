@@ -1881,8 +1881,9 @@ with exec_stmt: env -> mem -> statement -> trace -> mem -> outcome -> Prop :=
       exec_stmt e m3 (Sfor Sskip a2 a3 s) t4 m4 out ->
       exec_stmt e m (Sfor Sskip a2 a3 s)
                 (t1 ** t2 ** t3 ** t4) m4 out
-  | exec_Sswitch:   forall e m a sl t1 m1 n t2 m2 out,
-      eval_expression e m a t1 m1 (Vint n) ->
+  | exec_Sswitch:   forall e m a sl t1 m1 v n t2 m2 out,
+      eval_expression e m a t1 m1 v ->
+      sem_switch_arg v (typeof a) = Some n ->
       exec_stmt e m1 (seq_of_labeled_statement (select_switch n sl)) t2 m2 out ->
       exec_stmt e m (Sswitch a sl)
                 (t1 ** t2) m2 (outcome_switch out)
@@ -2104,8 +2105,9 @@ with execinf_stmt: env -> mem -> statement -> traceinf -> Prop :=
   | execinf_Sswitch_expr:   forall e m a sl t1,
       evalinf_expr e m RV a t1 ->
       execinf_stmt e m (Sswitch a sl) t1
-  | execinf_Sswitch_body:   forall e m a sl t1 m1 n t2,
-      eval_expression e m a t1 m1 (Vint n) ->
+  | execinf_Sswitch_body:   forall e m a sl t1 m1 v n t2,
+      eval_expression e m a t1 m1 v ->
+      sem_switch_arg v (typeof a) = Some n ->
       execinf_stmt e m1 (seq_of_labeled_statement (select_switch n sl)) t2 ->
       execinf_stmt e m (Sswitch a sl) (t1***t2)
 
@@ -2573,7 +2575,7 @@ Proof.
   auto.
 
 (* switch *)
-  destruct (H2 f (Kswitch2 k)) as [S1 [A1 B1]].
+  destruct (H3 f (Kswitch2 k)) as [S1 [A1 B1]].
   set (S2 :=
     match out with
     | Out_normal => State f Sskip k e m2
@@ -2584,7 +2586,7 @@ Proof.
   exists S2; split.
   eapply star_left. right; eapply step_switch.
   eapply star_trans. apply H0. 
-  eapply star_left. right; eapply step_expr_switch.
+  eapply star_left. right; eapply step_expr_switch. eauto. 
   eapply star_trans. eexact A1. 
   unfold S2; inv B1.
     apply star_one. right; constructor. auto. 
@@ -3013,7 +3015,7 @@ Proof.
   eapply forever_N_plus.
   eapply plus_left. right; constructor. 
   eapply star_right. eapply eval_expression_to_steps; eauto. 
-  right; constructor. 
+  right; constructor. eauto. 
   reflexivity. reflexivity. 
   eapply COS; eauto. traceEq. 
 

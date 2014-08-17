@@ -188,14 +188,14 @@ let longconst n =
 
 let exitnum n = Nat.of_int32 n
 
-let mkswitch expr (cases, dfl) =
+let mkswitch islong convert expr (cases, dfl) =
   convert_accu := [];
   let c = convert_rexpr expr in
   let rec mktable = function
   | [] -> []
   | (key, exit) :: rem ->
-      (coqint_of_camlint key, exitnum exit) :: mktable rem in
-  prepend_seq !convert_accu (Sswitch(c, mktable cases, exitnum dfl))
+      (convert key, exitnum exit) :: mktable rem in
+  prepend_seq !convert_accu (Sswitch(islong, c, mktable cases, exitnum dfl))
 
 (***
    match (a) { case 0: s0; case 1: s1; case 2: s2; }  --->
@@ -222,7 +222,7 @@ let mkmatch_aux expr cases =
         (coqint_of_camlint key, Nat.of_int n)
         :: mktable (n + 1) rem in
   let sw =
-    Sswitch(expr, mktable 0 cases, Nat.of_int (ncases - 1)) in
+    Sswitch(false, expr, mktable 0 cases, Nat.of_int (ncases - 1)) in
   let rec mkblocks body n = function
     | [] -> assert false
     | [key, action] ->
@@ -366,6 +366,7 @@ let mkmatch expr cases =
 %token STARL
 %token <string> STRINGLIT
 %token SWITCH
+%token SWITCHL
 %token TILDE
 %token TILDEL
 %token TAILCALL
@@ -531,7 +532,9 @@ stmt:
   | RETURN SEMICOLON                            { Sreturn None }
   | RETURN expr SEMICOLON                       { mkreturn_some $2 }
   | SWITCH LPAREN expr RPAREN LBRACE switch_cases RBRACE
-                                                { mkswitch $3 $6 }
+                                         { mkswitch false Z.of_uint32 $3 $6 }
+  | SWITCHL LPAREN expr RPAREN LBRACE switchl_cases RBRACE
+                                         { mkswitch true Z.of_uint64 $3 $6 }
   | MATCH LPAREN expr RPAREN LBRACE match_cases RBRACE
                                                 { mkmatch $3 $6 }
   | TAILCALL expr LPAREN expr_list RPAREN COLON signature SEMICOLON
@@ -555,6 +558,13 @@ switch_cases:
     DEFAULT COLON EXIT INTLIT SEMICOLON
            { ([], $4) }
   | CASE INTLIT COLON EXIT INTLIT SEMICOLON switch_cases
+           { let (cases, dfl) = $7 in (($2, $5) :: cases, dfl) }
+;
+
+switchl_cases:
+    DEFAULT COLON EXIT INTLIT SEMICOLON
+           { ([], $4) }
+  | CASE LONGLIT COLON EXIT INTLIT SEMICOLON switchl_cases
            { let (cases, dfl) = $7 in (($2, $5) :: cases, dfl) }
 ;
 

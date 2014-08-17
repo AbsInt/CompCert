@@ -1003,7 +1003,7 @@ Proof.
       end).
   { induction 1; simpl; intros. 
     auto.
-    destruct c; auto. destruct (Int.eq i n); auto. 
+    destruct c; auto. destruct (zeq z n); auto. 
     econstructor; split; eauto. constructor; auto. }
   intros. unfold Csem.select_switch, select_switch.
   specialize (CASE n ls tls H). 
@@ -2113,7 +2113,7 @@ Proof.
   left; eapply plus_left. constructor. apply push_seq. traceEq.
   econstructor; eauto. constructor; auto. 
 (* expr switch *)
-  inv H7. exploit tr_top_val_for_val_inv; eauto. intros [A [B C]]. subst.
+  inv H8. exploit tr_top_val_for_val_inv; eauto. intros [A [B C]]. subst.
   econstructor; split.
   left; eapply plus_two. constructor. econstructor; eauto. traceEq.
   econstructor; eauto.

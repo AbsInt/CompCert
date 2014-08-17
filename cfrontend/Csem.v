@@ -155,14 +155,14 @@ Fixpoint select_switch_default (sl: labeled_statements): labeled_statements :=
   | LScons (Some i) s sl' => select_switch_default sl'
   end.
 
-Fixpoint select_switch_case (n: int) (sl: labeled_statements): option labeled_statements :=
+Fixpoint select_switch_case (n: Z) (sl: labeled_statements): option labeled_statements :=
   match sl with
   | LSnil => None
   | LScons None s sl' => select_switch_case n sl'
-  | LScons (Some c) s sl' => if Int.eq c n then Some sl else select_switch_case n sl'
+  | LScons (Some c) s sl' => if zeq c n then Some sl else select_switch_case n sl'
   end.
 
-Definition select_switch (n: int) (sl: labeled_statements): labeled_statements :=
+Definition select_switch (n: Z) (sl: labeled_statements): labeled_statements :=
   match select_switch_case n sl with
   | Some sl' => sl'
   | None => select_switch_default sl
@@ -715,8 +715,9 @@ Inductive sstep: state -> trace -> state -> Prop :=
   | step_switch: forall f x sl k e m,
       sstep (State f (Sswitch x sl) k e m)
          E0 (ExprState f x (Kswitch1 sl k) e m)
-  | step_expr_switch: forall f n ty sl k e m,
-      sstep (ExprState f (Eval (Vint n) ty) (Kswitch1 sl k) e m)
+  | step_expr_switch: forall f ty sl k e m v n,
+      sem_switch_arg v ty = Some n ->
+      sstep (ExprState f (Eval v ty) (Kswitch1 sl k) e m)
          E0 (State f (seq_of_labeled_statement (select_switch n sl)) (Kswitch2 k) e m)
   | step_skip_break_switch: forall f x k e m,
       x = Sskip \/ x = Sbreak ->

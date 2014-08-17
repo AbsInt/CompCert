@@ -22,7 +22,6 @@ Require Import Memory.
 Require Import Cminor.
 Require Import Op.
 Require Import Globalenvs.
-Require Import Switch.
 Require Import Smallstep.
 
 (** * Abstract syntax *)
@@ -57,10 +56,21 @@ with condexpr : Type :=
 
 Infix ":::" := Econs (at level 60, right associativity) : cminorsel_scope.
 
+(** Conditional expressions [condexpr] are expressions that are evaluated
+  not for their exact value, but for their [true]/[false] Boolean value.
+  Likewise, exit expressions [exitexpr] are expressions that evaluate
+  to an exit number.  They are used to compile the [Sswitch] statement
+  of Cminor. *)
+
+Inductive exitexpr : Type :=
+  | XEexit: nat -> exitexpr
+  | XEjumptable: expr -> list nat -> exitexpr
+  | XEcondition: condexpr -> exitexpr -> exitexpr -> exitexpr
+  | XElet: expr -> exitexpr -> exitexpr.
+
 (** Statements are as in Cminor, except that the [Sifthenelse]
-  construct uses a machine-dependent condition (with multiple
-  arguments), and the [Sstore] construct uses a machine-dependent
-  addressing mode. *)
+  construct uses a conditional expression, and the [Sstore] construct
+  uses a machine-dependent addressing mode. *)
 
 Inductive stmt : Type :=
   | Sskip: stmt
@@ -74,7 +84,7 @@ Inductive stmt : Type :=
   | Sloop: stmt -> stmt
   | Sblock: stmt -> stmt
   | Sexit: nat -> stmt
-  | Sswitch: expr -> list (int * nat) -> nat -> stmt
+  | Sswitch: exitexpr -> stmt
   | Sreturn: option expr -> stmt
   | Slabel: label -> stmt -> stmt
   | Sgoto: label -> stmt.
@@ -214,6 +224,22 @@ Scheme eval_expr_ind3 := Minimality for eval_expr Sort Prop
   with eval_exprlist_ind3 := Minimality for eval_exprlist Sort Prop
   with eval_condexpr_ind3 := Minimality for eval_condexpr Sort Prop.
 
+Inductive eval_exitexpr: letenv -> exitexpr -> nat -> Prop :=
+  | eval_XEexit: forall le x,
+      eval_exitexpr le (XEexit x) x
+  | eval_XEjumptable: forall le a tbl n x,
+      eval_expr le a (Vint n) ->
+      list_nth_z tbl (Int.unsigned n) = Some x ->
+      eval_exitexpr le (XEjumptable a tbl) x
+  | eval_XEcondition: forall le a b c va x,
+      eval_condexpr le a va ->
+      eval_exitexpr le (if va then b else c) x ->
+      eval_exitexpr le (XEcondition a b c) x
+  | eval_XElet: forall le a b v x,
+      eval_expr le a v ->
+      eval_exitexpr (v :: le) b x ->
+      eval_exitexpr le (XElet a b) x.
+
 Inductive eval_expr_or_symbol: letenv -> expr + ident -> val -> Prop :=
   | eval_eos_e: forall le e v,
       eval_expr le e v ->
@@ -344,10 +370,10 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f (Sexit (S n)) (Kblock k) sp e m)
         E0 (State f (Sexit n) k sp e m)
 
-  | step_switch: forall f a cases default k sp e m n,
-      eval_expr sp e m nil a (Vint n) ->
-      step (State f (Sswitch a cases default) k sp e m)
-        E0 (State f (Sexit (switch_target n default cases)) k sp e m)
+  | step_switch: forall f a k sp e m n,
+      eval_exitexpr sp e m nil a n ->
+      step (State f (Sswitch a) k sp e m)
+        E0 (State f (Sexit n) k sp e m)
 
   | step_return_0: forall f k sp e m m',
       Mem.free m sp 0 f.(fn_stackspace) = Some m' ->
@@ -517,4 +543,3 @@ Proof.
 Qed.
 
 Hint Resolve eval_lift: evalexpr.
-

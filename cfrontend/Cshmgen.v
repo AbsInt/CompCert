@@ -589,7 +589,11 @@ Fixpoint transl_statement (tyret: type) (nbrk ncnt: nat)
   | Clight.Sswitch a sl =>
       do ta <- transl_expr a;
       do tsl <- transl_lbl_stmt tyret 0%nat (S ncnt) sl;
-      OK (Sblock (Sswitch ta tsl))
+      match classify_switch (typeof a) with
+      | switch_case_i => OK (Sblock (Sswitch false ta tsl))
+      | switch_case_l => OK (Sblock (Sswitch true ta tsl))
+      | switch_default => Error(msg "Cshmgen.transl_stmt(switch)")
+      end
   | Clight.Slabel lbl s =>
       do ts <- transl_statement tyret nbrk ncnt s;
       OK (Slabel lbl ts)

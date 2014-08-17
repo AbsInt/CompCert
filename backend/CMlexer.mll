@@ -149,6 +149,7 @@ rule token = parse
   | "*f"    { STARF }
   | "*l"    { STARL }
   | "switch"    { SWITCH }
+  | "switchl"    { SWITCHL }
   | "tailcall"  { TAILCALL }
   | "~"    { TILDE }
   | "~l"    { TILDEL }

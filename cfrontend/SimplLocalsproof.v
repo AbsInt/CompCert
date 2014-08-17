@@ -1798,7 +1798,7 @@ Proof.
     induction ls; simpl; intros; monadInv H; simpl.
     auto.
     destruct o. 
-    destruct (Int.eq i n).
+    destruct (zeq z n).
     econstructor; split; eauto. simpl; rewrite EQ, EQ1; auto.
     apply IHls. auto. 
     apply IHls. auto.
@@ -1840,7 +1840,7 @@ Proof.
   {
     induction ls; simpl; intros.
     discriminate.
-    destruct o. destruct (Int.eq i n). inv H0. auto. eauto with compat. 
+    destruct o. destruct (zeq z n). inv H0. auto. eauto with compat. 
     eauto with compat.
   }
   intros. specialize (CASE ls). unfold select_switch. 
@@ -2104,8 +2104,12 @@ Proof.
   intros. apply match_cont_change_cenv with (cenv_for f); auto. eapply match_cont_free_env; eauto.
 
 (* switch *)
-  exploit eval_simpl_expr; eauto with compat. intros [tv [A B]]. inv B.
+  exploit eval_simpl_expr; eauto with compat. intros [tv [A B]].
   econstructor; split. apply plus_one. econstructor; eauto.
+  rewrite typeof_simpl_expr. instantiate (1 := n). 
+  unfold sem_switch_arg in *;
+  destruct (classify_switch (typeof a)); try discriminate;
+  inv B; inv H0; auto.
   econstructor; eauto. 
   erewrite simpl_seq_of_labeled_statement. reflexivity.
   eapply simpl_select_switch; eauto. 

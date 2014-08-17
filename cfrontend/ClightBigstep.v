@@ -151,8 +151,9 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
       exec_stmt e le2 m2 (Sloop s1 s2) t3 le3 m3 out ->
       exec_stmt e le m (Sloop s1 s2)
                 (t1**t2**t3) le3 m3 out
-  | exec_Sswitch:   forall e le m a t n sl le1 m1 out,
-      eval_expr ge e le m a (Vint n) ->
+  | exec_Sswitch:   forall e le m a t v n sl le1 m1 out,
+      eval_expr ge e le m a v ->
+      sem_switch_arg v (typeof a) = Some n ->
       exec_stmt e le m (seq_of_labeled_statement (select_switch n sl)) t le1 m1 out ->
       exec_stmt e le m (Sswitch a sl)
                 t le1 m1 (outcome_switch out)
@@ -220,8 +221,9 @@ CoInductive execinf_stmt: env -> temp_env -> mem -> statement -> traceinf -> Pro
       exec_stmt e le1 m1 s2 t2 le2 m2 Out_normal ->
       execinf_stmt e le2 m2 (Sloop s1 s2) t3 ->
       execinf_stmt e le m (Sloop s1 s2) (t1***t2***t3)
-  | execinf_Sswitch:   forall e le m a t n sl,
-      eval_expr ge e le m a (Vint n) ->
+  | execinf_Sswitch:   forall e le m a t v n sl,
+      eval_expr ge e le m a v ->
+      sem_switch_arg v (typeof a) = Some n ->
       execinf_stmt e le m (seq_of_labeled_statement (select_switch n sl)) t ->
       execinf_stmt e le m (Sswitch a sl) t
 
@@ -427,7 +429,7 @@ Proof.
   auto.
 
 (* switch *)
-  destruct (H1 f (Kswitch k)) as [S1 [A1 B1]].
+  destruct (H2 f (Kswitch k)) as [S1 [A1 B1]].
   set (S2 :=
     match out with
     | Out_normal => State f Sskip k e le1 m1

@@ -455,19 +455,7 @@ with transl_condexpr (map: mapping) (a: condexpr) (ntrue nfalse: node)
          transl_expr map b r nc
   end.
 
-(** Auxiliary for branch prediction.  When compiling an if/then/else
-  statement, we have a choice between translating the ``then'' branch
-  first or the ``else'' branch first.  Linearization of RTL control-flow
-  graph, performed later, will exploit this choice as a hint about
-  which branch is most frequently executed.  However, this choice has
-  no impact on program correctness.  We delegate the choice to an
-  external heuristic (written in OCaml), declared below.  *)
-
-Parameter more_likely: condexpr -> stmt -> stmt -> bool.
-
-(** Auxiliary for translating [Sswitch] statements. *)
-
-Parameter compile_switch: nat -> table -> comptree.
+(** Auxiliary for translating exit expressions. *)
 
 Definition transl_exit (nexits: list node) (n: nat) : mon node :=
   match nth_error nexits n with
@@ -484,28 +472,38 @@ Fixpoint transl_jumptable (nexits: list node) (tbl: list nat) : mon (list node) 
       ret (n1 :: nl)
   end.
 
-Fixpoint transl_switch (r: reg) (nexits: list node) (t: comptree)
-                       {struct t} : mon node :=
-  match t with
-  | CTaction act =>
-      transl_exit nexits act
-  | CTifeq key act t' =>
-      do ncont <- transl_switch r nexits t';
-      do nfound <- transl_exit nexits act;
-      add_instr (Icond (Ccompimm Ceq key) (r :: nil) nfound ncont)
-  | CTiflt key t1 t2 =>
-      do n2 <- transl_switch r nexits t2;
-      do n1 <- transl_switch r nexits t1;
-      add_instr (Icond (Ccompuimm Clt key) (r :: nil) n1 n2)
-  | CTjumptable ofs sz tbl t' =>
-      do rt <- new_reg;
-      do ttbl <- transl_jumptable nexits tbl;
-      do n1 <- add_instr (Ijumptable rt ttbl);
-      do n2 <- transl_switch r nexits t';
-      do n3 <- add_instr (Icond (Ccompuimm Clt sz) (rt :: nil) n1 n2);
-      let op := if Int.eq ofs Int.zero then Omove else Oaddimm (Int.neg ofs) in
-      add_instr (Iop op (r :: nil) rt n3)
+(** Translation of an exit expression.  Branches to the node corresponding
+  to the exit number denoted by the expression. *)
+
+Fixpoint transl_exitexpr (map: mapping) (a: exitexpr) (nexits: list node)
+                         {struct a} : mon node :=
+  match a with
+  | XEexit n =>
+      transl_exit nexits n
+  | XEjumptable a tbl =>
+      do r <- alloc_reg map a;
+      do tbl' <- transl_jumptable nexits tbl;
+      do n1 <- add_instr (Ijumptable r tbl');
+         transl_expr map a r n1
+  | XEcondition a b c =>
+      do nc <- transl_exitexpr map c nexits;
+      do nb <- transl_exitexpr map b nexits;
+         transl_condexpr map a nb nc
+  | XElet a b =>
+      do r  <- new_reg;
+      do n1 <- transl_exitexpr (add_letvar map r) b nexits;
+         transl_expr map a r n1
   end.
+
+(** Auxiliary for branch prediction.  When compiling an if/then/else
+  statement, we have a choice between translating the ``then'' branch
+  first or the ``else'' branch first.  Linearization of RTL control-flow
+  graph, performed later, will exploit this choice as a hint about
+  which branch is most frequently executed.  However, this choice has
+  no impact on program correctness.  We delegate the choice to an
+  external heuristic (written in OCaml), declared below.  *)
+
+Parameter more_likely: condexpr -> stmt -> stmt -> bool.
 
 (** Translation of statements.  [transl_stmt map s nd nexits nret rret]
   enriches the current CFG with the RTL instructions necessary to
@@ -581,14 +579,8 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
       transl_stmt map sbody nd (nd :: nexits) ngoto nret rret
   | Sexit n =>
       transl_exit nexits n
-  | Sswitch a cases default =>
-      let t := compile_switch default cases in
-      if validate_switch default cases t then
-        (do r <- alloc_reg map a;
-         do ns <- transl_switch r nexits t;
-         transl_expr map a r ns)
-      else
-        error (Errors.msg "RTLgen: wrong switch")
+  | Sswitch a =>
+      transl_exitexpr map a nexits
   | Sreturn opt_a =>
       match opt_a, rret with
       | None, _ => ret nret

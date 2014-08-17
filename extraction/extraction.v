@@ -16,6 +16,7 @@ Require AST.
 Require Iteration.
 Require Floats.
 Require SelectLong.
+Require Selection.
 Require RTLgen.
 Require Inlining.
 Require ValueDomain.
@@ -62,9 +63,9 @@ Extract Constant SelectLong.get_helper =>
 Extract Constant SelectLong.get_builtin =>
   "fun s sg ->
      Errors.OK (Camlcoq.intern_string (Camlcoq.camlstring_of_coqstring s))".
+Extract Constant Selection.compile_switch => "Switchaux.compile_switch".
 
 (* RTLgen *)
-Extract Constant RTLgen.compile_switch => "RTLgenaux.compile_switch".
 Extract Constant RTLgen.more_likely => "RTLgenaux.more_likely".
 Extraction Inline RTLgen.ret RTLgen.error RTLgen.bind RTLgen.bind2.
 
@@ -133,7 +134,7 @@ Load extractionMachdep.
 (* Avoid name clashes *)
 Extraction Blacklist List String Int.
 
-(* Cutting the dependancy to R. *)
+(* Cutting the dependency to R. *)
 Extract Inlined Constant Fcore_defs.F2R => "fun _ -> assert false".
 Extract Inlined Constant Fappli_IEEE.FF2R => "fun _ -> assert false".
 Extract Inlined Constant Fappli_IEEE.B2R => "fun _ -> assert false".

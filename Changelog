@@ -26,6 +26,12 @@
   pseudo-instructions so that it does not need to be re-done in
   cchecklink.  Updated the cchecklink validator accordingly.
 
+- Language features: support "switch" statements over an argument of
+  type "long long".
+
+- Value analysis and constant propagation: more precise treatment of
+  comparisons against an integer constant.
+
 
 Release 2.3pl2, 2014-05-15
 ==========================

@@ -138,7 +138,7 @@ Fixpoint shift_exit (e: exit_env) (n: nat) {struct e} : nat :=
   | true :: e', S m => S (shift_exit e' m)
   end.
 
-Fixpoint switch_table (ls: lbl_stmt) (k: nat) {struct ls} : list (int * nat) * nat :=
+Fixpoint switch_table (ls: lbl_stmt) (k: nat) {struct ls} : list (Z * nat) * nat :=
   match ls with
   | LSnil =>
       (nil, k)
@@ -193,10 +193,10 @@ Fixpoint transl_stmt (cenv: compilenv) (xenv: exit_env) (s: Csharpminor.stmt)
       OK (Sblock ts)
   | Csharpminor.Sexit n =>
       OK (Sexit (shift_exit xenv n))
-  | Csharpminor.Sswitch e ls =>
+  | Csharpminor.Sswitch long e ls =>
       let (tbl, dfl) := switch_table ls O in
       do te <- transl_expr cenv e;
-      transl_lblstmt cenv (switch_env ls xenv) ls (Sswitch te tbl dfl)
+      transl_lblstmt cenv (switch_env ls xenv) ls (Sswitch long te tbl dfl)
   | Csharpminor.Sreturn None =>
       OK (Sreturn None)
   | Csharpminor.Sreturn (Some e) =>

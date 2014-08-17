@@ -1697,15 +1697,15 @@ Proof.
 - auto.
 - destruct (switch_table sl (S base)) as [tbl1 dfl1] eqn:ST. 
   destruct o; simpl.
-  rewrite Int.eq_sym. destruct (Int.eq i i0). 
+  rewrite dec_eq_sym. destruct (zeq i z).
   exists O; split; auto. constructor.
   specialize (IHsl (S base) dfl). rewrite ST in IHsl. simpl in *.
   destruct (select_switch_case i sl).
-  destruct IHsl as (n & P & Q). exists (S n); split. constructor; auto. omega. 
+  destruct IHsl as (x & P & Q). exists (S x); split. constructor; auto. omega. 
   auto.
   specialize (IHsl (S base) dfl). rewrite ST in IHsl. simpl in *.
   destruct (select_switch_case i sl).
-  destruct IHsl as (n & P & Q). exists (S n); split. constructor; auto. omega. 
+  destruct IHsl as (x & P & Q). exists (S x); split. constructor; auto. omega. 
   auto.
 Qed.
 
@@ -2107,7 +2107,8 @@ Opaque PTree.set.
 (* switch *)
   simpl in TR. destruct (switch_table cases O) as [tbl dfl] eqn:STBL. monadInv TR.
   exploit transl_expr_correct; eauto. intros [tv [EVAL VINJ]].
-  inv VINJ.
+  assert (SA: switch_argument islong tv n).
+  { inv H0; inv VINJ; constructor. }
   exploit switch_descent; eauto. intros [k1 [A B]].
   exploit switch_ascent; eauto. eapply (switch_table_select n).
   rewrite STBL; simpl. intros [k2 [C D]].

@@ -936,7 +936,7 @@ Definition sem_cmp (c:comparison)
 
 (** ** Function applications *)
 
-Inductive classify_fun_cases : Type:=
+Inductive classify_fun_cases : Type :=
   | fun_case_f (targs: typelist) (tres: type) (cc: calling_convention) (**r (pointer to) function *)
   | fun_default.
 
@@ -945,6 +945,30 @@ Definition classify_fun (ty: type) :=
   | Tfunction args res cc => fun_case_f args res cc
   | Tpointer (Tfunction args res cc) _ => fun_case_f args res cc
   | _ => fun_default
+  end.
+
+(** ** Argument of a [switch] statement *)
+
+Inductive classify_switch_cases : Type :=
+  | switch_case_i
+  | switch_case_l
+  | switch_default.
+
+Definition classify_switch (ty: type) :=
+  match ty with
+  | Tint _ _ _ => switch_case_i
+  | Tlong _ _ => switch_case_l
+  | _ => switch_default
+  end.
+
+Definition sem_switch_arg (v: val) (ty: type): option Z :=
+  match classify_switch ty with
+  | switch_case_i =>
+      match v with Vint n => Some(Int.unsigned n) | _ => None end
+  | switch_case_l =>
+      match v with Vlong n => Some(Int64.unsigned n) | _ => None end
+  | switch_default =>
+      None
   end.
 
 (** * Combined semantics of unary and binary operators *)

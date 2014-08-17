@@ -1980,10 +1980,8 @@ Definition do_step (w: world) (s: state) : list (trace * state) :=
             do m' <- Mem.free_list m (blocks_of_env e);
             ret (Returnstate v' (call_cont k) m')
         | Kswitch1 sl k =>
-            match v with
-            | Vint n => ret (State f (seq_of_labeled_statement (select_switch n sl)) (Kswitch2 k) e m)
-            | _ => nil
-            end
+            do n <- sem_switch_arg v ty;
+            ret (State f (seq_of_labeled_statement (select_switch n sl)) (Kswitch2 k) e m)
         | _ => nil
         end
 
@@ -2089,7 +2087,6 @@ Proof with try (left; right; econstructor; eauto; fail).
   (* expression is a value *)
   rewrite (is_val_inv _ _ _ Heqo).
   destruct k; myinv...
-  destruct v; myinv...
   (* expression reduces *)
   intros. exploit list_in_map_inv; eauto. intros [[C rd] [A B]].
   generalize (step_expr_sound e w r RV m). unfold reducts_ok. intros [P Q].
@@ -2189,6 +2186,7 @@ Proof with (unfold ret; auto with coqlib).
   rewrite H0...
   rewrite H0; rewrite H1...
   rewrite H1. red in H0. destruct k; try contradiction...
+  rewrite H0...
   destruct H0; subst x...
   rewrite H0...
 

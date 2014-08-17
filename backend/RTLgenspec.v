@@ -673,7 +673,7 @@ Hint Resolve reg_map_ok_novar: rtlg.
 
 (** [tr_expr c map pr expr ns nd rd optid] holds if the graph [c],
   between nodes [ns] and [nd], contains instructions that compute the
-  value of the Cminor expression [expr] and deposit this value in
+  value of the CminorSel expression [expr] and deposit this value in
   register [rd].  [map] is a mapping from Cminor variables to the
   corresponding RTL registers.  [pr] is a list of RTL registers whose
   values must be preserved during this computation.  All registers
@@ -730,9 +730,9 @@ Inductive tr_expr (c: code):
       tr_expr c map pr (Eexternal id sg al) ns nd rd dst
 
 
-(** [tr_condition c map pr a ns ntrue nfalse rd] holds if the graph [c],
+(** [tr_condition c map pr a ns ntrue nfalse] holds if the graph [c],
   starting at node [ns], contains instructions that compute the truth
-  value of the Cminor conditional expression [a] and terminate
+  value of the CminorSel conditional expression [a] and terminate
   on node [ntrue] if the condition holds and on node [nfalse] otherwise. *)
 
 with tr_condition (c: code): 
@@ -754,7 +754,7 @@ with tr_condition (c: code):
 
 (** [tr_exprlist c map pr exprs ns nd rds] holds if the graph [c],
   between nodes [ns] and [nd], contains instructions that compute the values
-  of the list of Cminor expression [exprlist] and deposit these values
+  of the list of CminorSel expression [exprlist] and deposit these values
   in registers [rds]. *)
 
 with tr_exprlist (c: code): 
@@ -773,31 +773,32 @@ Definition tr_jumptable (nexits: list node) (tbl: list nat) (ttbl: list node) : 
   list_nth_z tbl v = Some act ->
   exists n, list_nth_z ttbl v = Some n /\ nth_error nexits act = Some n.
 
-Inductive tr_switch
-     (c: code) (map: mapping) (r: reg) (nexits: list node):
-     comptree -> node -> Prop :=
-  | tr_switch_action: forall act n,
-      nth_error nexits act = Some n ->
-      tr_switch c map r nexits (CTaction act) n
-  | tr_switch_ifeq: forall key act t' n ncont nfound,
-      tr_switch c map r nexits t' ncont ->
-      nth_error nexits act = Some nfound ->
-      c!n = Some(Icond (Ccompimm Ceq key) (r :: nil) nfound ncont) ->
-      tr_switch c map r nexits (CTifeq key act t') n
-  | tr_switch_iflt: forall key t1 t2 n n1 n2,
-      tr_switch c map r nexits t1 n1 ->
-      tr_switch c map r nexits t2 n2 ->
-      c!n = Some(Icond (Ccompuimm Clt key) (r :: nil) n1 n2) ->
-      tr_switch c map r nexits (CTiflt key t1 t2) n
-  | tr_switch_jumptable: forall ofs sz tbl t n n1 n2 n3 rt ttbl,
-      ~reg_in_map map rt -> rt <> r ->
-      c!n = Some(Iop (if Int.eq ofs Int.zero then Omove else Oaddimm (Int.neg ofs))
-                     (r ::nil) rt n1) ->
-      c!n1 = Some(Icond (Ccompuimm Clt sz) (rt :: nil) n2 n3) ->
-      c!n2 = Some(Ijumptable rt ttbl) ->
-      tr_switch c map r nexits t n3 ->
-      tr_jumptable nexits tbl ttbl ->
-      tr_switch c map r nexits (CTjumptable ofs sz tbl t) n.
+(** [tr_exitexpr c map pr a ns nexits] holds if the graph [c],
+  starting at node [ns], contains instructions that compute the exit
+  number of the CminorSel exit expression [a] and terminate
+  on the node corresponding to this exit number according to the
+  mapping [nexits]. *)
+
+Inductive tr_exitexpr (c: code): 
+       mapping -> exitexpr -> node -> list node -> Prop :=
+  | tr_XEcond: forall map x n nexits,
+      nth_error nexits x = Some n ->
+      tr_exitexpr c map (XEexit x) n nexits
+  | tr_XEjumptable: forall map a tbl ns nexits n1 r tbl',
+      tr_jumptable nexits tbl tbl' ->
+      tr_expr c map nil a ns n1 r None ->
+      c!n1 = Some (Ijumptable r tbl') ->
+      tr_exitexpr c map (XEjumptable a tbl) ns nexits
+  | tr_XEcondition: forall map a1 a2 a3 ns nexits n2 n3,
+      tr_condition c map nil a1 ns n2 n3 ->
+      tr_exitexpr c map a2 n2 nexits ->
+      tr_exitexpr c map a3 n3 nexits ->
+      tr_exitexpr c map (XEcondition a1 a2 a3) ns nexits
+  | tr_XElet: forall map a b ns nexits r n1,
+      ~reg_in_map map r ->
+      tr_expr c map nil a ns n1 r None ->
+      tr_exitexpr c (add_letvar map r) b n1 nexits ->
+      tr_exitexpr c map (XElet a b) ns nexits.
 
 (** [tr_stmt c map stmt ns ncont nexits nret rret] holds if the graph [c],
   starting at node [ns], contains instructions that perform the Cminor
@@ -866,11 +867,9 @@ Inductive tr_stmt (c: code) (map: mapping):
   | tr_Sexit: forall n ns nd nexits ngoto nret rret,
      nth_error nexits n = Some ns ->
      tr_stmt c map (Sexit n) ns nd nexits ngoto nret rret
-  | tr_Sswitch: forall a cases default ns nd nexits ngoto nret rret n r t,
-     validate_switch default cases t = true ->
-     tr_expr c map nil a ns n r None ->
-     tr_switch c map r nexits t n ->
-     tr_stmt c map (Sswitch a cases default) ns nd nexits ngoto nret rret
+  | tr_Sswitch: forall a ns nd nexits ngoto nret rret,
+     tr_exitexpr c map a ns nexits ->
+     tr_stmt c map (Sswitch a) ns nd nexits ngoto nret rret
   | tr_Sreturn_none: forall nret nd nexits ngoto rret,
      tr_stmt c map (Sreturn None) nret nd nexits ngoto nret rret
   | tr_Sreturn_some: forall a ns nd nexits ngoto nret rret,
@@ -1126,13 +1125,15 @@ Proof.
   constructor. eapply new_reg_not_in_map; eauto.
 Qed.
 
-Lemma tr_switch_incr:
+Lemma tr_exitexpr_incr:
   forall s1 s2, state_incr s1 s2 ->
-  forall map r nexits t ns,
-  tr_switch s1.(st_code) map r nexits t ns ->
-  tr_switch s2.(st_code) map r nexits t ns.
+  forall map a ns nexits,
+  tr_exitexpr s1.(st_code) map a ns nexits ->
+  tr_exitexpr s2.(st_code) map a ns nexits.
 Proof.
-  induction 2; econstructor; eauto with rtlg.
+  intros s1 s2 EXT.
+  generalize tr_expr_incr tr_condition_incr; intros I1 I2.
+  induction 1; econstructor; eauto with rtlg.
 Qed.
 
 Lemma tr_stmt_incr:
@@ -1142,10 +1143,9 @@ Lemma tr_stmt_incr:
   tr_stmt s2.(st_code) map s ns nd nexits ngoto nret rret.
 Proof.
   intros s1 s2 EXT.
-  generalize tr_expr_incr tr_condition_incr tr_exprlist_incr; intros I1 I2 I3.
+  generalize tr_expr_incr tr_condition_incr tr_exprlist_incr tr_exitexpr_incr; intros I1 I2 I3 I4.
   pose (AT := fun pc i => instr_at_incr s1 s2 pc i EXT).
-  induction 1; try (econstructor; eauto; fail).
-  econstructor; eauto. eapply tr_switch_incr; eauto.
+  induction 1; econstructor; eauto.
 Qed.
 
 Lemma transl_exit_charact:
@@ -1170,35 +1170,31 @@ Proof.
   congruence.
 Qed.
 
-Lemma transl_switch_charact:
-  forall map r nexits t s ns s' incr,
-  map_valid map s -> reg_valid r s ->
-  transl_switch r nexits t s = OK ns s' incr ->
-  tr_switch s'.(st_code) map r nexits t ns.
+Lemma transl_exitexpr_charact:
+  forall nexits a map s ns s' INCR
+     (TR: transl_exitexpr map a nexits s = OK ns s' INCR)
+     (WF: map_valid map s),
+  tr_exitexpr s'.(st_code) map a ns nexits.
 Proof.
-  induction t; simpl; intros; saturateTrans.
-
+  induction a; simpl; intros; try (monadInv TR); saturateTrans.
+- (* XEexit *)
   exploit transl_exit_charact; eauto. intros [A B].
-  econstructor; eauto.
-
-  monadInv H1.
-  exploit transl_exit_charact; eauto. intros [A B]. subst s1.
-  econstructor; eauto 2 with rtlg. 
-  apply tr_switch_incr with s0; eauto with rtlg.
-
-  monadInv H1.
-  econstructor; eauto 2 with rtlg. 
-  apply tr_switch_incr with s1; eauto with rtlg.
-  apply tr_switch_incr with s0; eauto with rtlg.
-
-  monadInv H1.
-  exploit transl_jumptable_charact; eauto. intros [A B]. subst s1.
-  econstructor. eauto with rtlg.
-  apply sym_not_equal. apply valid_fresh_different with s; eauto with rtlg.
-  eauto with rtlg. eauto with rtlg. eauto with rtlg. 
-  apply tr_switch_incr with s3. eauto with rtlg.
-  eapply IHt with (s := s2); eauto with rtlg.
-  auto.
+  econstructor; eauto. 
+- (* XEjumptable *)
+  exploit transl_jumptable_charact; eauto. intros [A B].
+  econstructor; eauto. 
+  eapply transl_expr_charact; eauto with rtlg. 
+  eauto with rtlg.
+- (* XEcondition *)
+  econstructor. 
+  eapply transl_condexpr_charact; eauto with rtlg.
+  apply tr_exitexpr_incr with s1; eauto with rtlg. 
+  apply tr_exitexpr_incr with s0; eauto with rtlg.
+- (* XElet *)
+  econstructor; eauto with rtlg.
+  eapply transl_expr_charact; eauto with rtlg.
+  apply tr_exitexpr_incr with s1; auto. eapply IHa; eauto with rtlg.
+  apply add_letvar_valid; eauto with rtlg.
 Qed.
  
 Lemma transl_stmt_charact:
@@ -1285,15 +1281,7 @@ Proof.
   exploit transl_exit_charact; eauto. intros [A B].
   econstructor. eauto.
   (* Sswitch *)
-  generalize TR; clear TR.
-  set (t := compile_switch n l).
-  caseEq (validate_switch n l t); intro VALID; intros.
-  monadInv TR.
-  econstructor; eauto with rtlg.
-  eapply transl_expr_charact; eauto with rtlg.
-  apply tr_switch_incr with s1; auto with rtlg.
-  eapply transl_switch_charact with (s := s0); eauto with rtlg.
-  monadInv TR. 
+  econstructor. eapply transl_exitexpr_charact; eauto. 
   (* Sreturn *)
   destruct o. 
   destruct rret; inv TR. inv OK. 

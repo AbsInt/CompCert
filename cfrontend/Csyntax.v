@@ -166,7 +166,7 @@ Inductive statement : Type :=
 
 with labeled_statements : Type :=            (**r cases of a [switch] *)
   | LSnil: labeled_statements
-  | LScons: option int -> statement -> labeled_statements -> labeled_statements.
+  | LScons: option Z -> statement -> labeled_statements -> labeled_statements.
                       (**r [None] is [default], [Some x] is [case x] *)
 (** ** Functions *)
 

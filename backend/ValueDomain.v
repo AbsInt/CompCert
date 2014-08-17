@@ -1933,17 +1933,184 @@ Proof.
   destruct 1; simpl; auto with va.
 Qed.
 
+(** Comparisons and variation intervals *)
+
+Definition cmp_intv (c: comparison) (i: Z * Z) (n: Z) : abool :=
+  let (lo, hi) := i in
+  match c with
+  | Ceq => if zlt n lo || zlt hi n then Maybe false else Btop
+  | Cne => Btop
+  | Clt => if zlt hi n then Maybe true else if zle n lo then Maybe false else Btop
+  | Cle => if zle hi n then Maybe true else if zlt n lo then Maybe false else Btop
+  | Cgt => if zlt n lo then Maybe true else if zle hi n then Maybe false else Btop
+  | Cge => if zle n lo then Maybe true else if zlt hi n then Maybe false else Btop
+  end.
+
+Definition zcmp (c: comparison) (n1 n2: Z) : bool :=
+  match c with
+  | Ceq => zeq n1 n2
+  | Cne => negb (zeq n1 n2)
+  | Clt => zlt n1 n2
+  | Cle => zle n1 n2
+  | Cgt => zlt n2 n1
+  | Cge => zle n2 n1
+  end.
+
+Lemma zcmp_intv_sound:
+  forall c i x n,
+  fst i <= x <= snd i ->
+  cmatch (Some (zcmp c x n)) (cmp_intv c i n).
+Proof.
+  intros c [lo hi] x n; simpl; intros R.
+  destruct c; unfold zcmp, proj_sumbool.
+- (* eq *)
+  destruct (zlt n lo). rewrite zeq_false by omega. constructor. 
+  destruct (zlt hi n). rewrite zeq_false by omega. constructor.
+  constructor.
+- (* ne *)
+  constructor.
+- (* lt *)
+  destruct (zlt hi n). rewrite zlt_true by omega. constructor.
+  destruct (zle n lo). rewrite zlt_false by omega. constructor.
+  constructor.
+- (* le *)
+  destruct (zle hi n). rewrite zle_true by omega. constructor.
+  destruct (zlt n lo). rewrite zle_false by omega. constructor.
+  constructor.
+- (* gt *)
+  destruct (zlt n lo). rewrite zlt_true by omega. constructor.
+  destruct (zle hi n). rewrite zlt_false by omega. constructor.
+  constructor.
+- (* ge *)
+  destruct (zle n lo). rewrite zle_true by omega. constructor.
+  destruct (zlt hi n). rewrite zle_false by omega. constructor.
+  constructor.
+Qed.
+
+Lemma cmp_intv_None:
+  forall c i n, cmatch None (cmp_intv c i n).
+Proof.
+  unfold cmp_intv; intros. destruct i as [lo hi].
+  destruct c.
+- (* eq *)
+  destruct (zlt n lo). constructor. destruct (zlt hi n); constructor.
+- (* ne *)
+  constructor.
+- (* lt *)
+  destruct (zlt hi n). constructor. destruct (zle n lo); constructor.
+- (* le *)
+  destruct (zle hi n). constructor. destruct (zlt n lo); constructor.
+- (* gt *)
+  destruct (zlt n lo). constructor. destruct (zle hi n); constructor.
+- (* ge *)
+  destruct (zle n lo). constructor. destruct (zlt hi n); constructor.
+Qed.
+
+Definition uintv (v: aval) : Z * Z :=
+  match v with
+  | I n => (Int.unsigned n, Int.unsigned n)
+  | Uns n => if zlt n Int.zwordsize then (0, two_p n - 1) else (0, Int.max_unsigned)
+  | _ => (0, Int.max_unsigned)
+  end.
+
+Lemma uintv_sound:
+  forall n v, vmatch (Vint n) v -> fst (uintv v) <= Int.unsigned n <= snd (uintv v).
+Proof.
+  intros. inv H; simpl; try (apply Int.unsigned_range_2).
+- omega.
+- destruct (zlt n0 Int.zwordsize); simpl.
++ rewrite is_uns_zero_ext in H2. rewrite <- H2. rewrite Int.zero_ext_mod by omega. 
+  exploit (Z_mod_lt (Int.unsigned n) (two_p n0)). apply two_p_gt_ZERO; auto. omega.
++ apply Int.unsigned_range_2.
+Qed.
+
+Lemma cmpu_intv_sound:
+  forall valid c n1 v1 n2,
+  vmatch (Vint n1) v1 ->
+  cmatch (Val.cmpu_bool valid c (Vint n1) (Vint n2)) (cmp_intv c (uintv v1) (Int.unsigned n2)).
+Proof.
+  intros. simpl. replace (Int.cmpu c n1 n2) with (zcmp c (Int.unsigned n1) (Int.unsigned n2)).
+  apply zcmp_intv_sound; apply uintv_sound; auto.
+  destruct c; simpl; auto.
+  unfold Int.ltu. destruct (zle (Int.unsigned n1) (Int.unsigned n2)); [rewrite zlt_false|rewrite zlt_true]; auto; omega.
+  unfold Int.ltu. destruct (zle (Int.unsigned n2) (Int.unsigned n1)); [rewrite zlt_false|rewrite zlt_true]; auto; omega.
+Qed.
+
+Lemma cmpu_intv_sound_2:
+  forall valid c n1 v1 n2,
+  vmatch (Vint n1) v1 ->
+  cmatch (Val.cmpu_bool valid c (Vint n2) (Vint n1)) (cmp_intv (swap_comparison c) (uintv v1) (Int.unsigned n2)).
+Proof.
+  intros. rewrite <- Val.swap_cmpu_bool. apply cmpu_intv_sound; auto. 
+Qed.
+
+Definition sintv (v: aval) : Z * Z :=
+  match v with
+  | I n => (Int.signed n, Int.signed n)
+  | Uns n =>
+      if zlt n Int.zwordsize then (0, two_p n - 1) else (Int.min_signed, Int.max_signed)
+  | Sgn n =>
+      if zlt n Int.zwordsize
+      then (let x := two_p (n-1) in (-x, x-1))
+      else (Int.min_signed, Int.max_signed)
+  | _ => (Int.min_signed, Int.max_signed)
+  end.
+
+Lemma sintv_sound:
+  forall n v, vmatch (Vint n) v -> fst (sintv v) <= Int.signed n <= snd (sintv v).
+Proof.
+  intros. inv H; simpl; try (apply Int.signed_range).
+- omega.
+- destruct (zlt n0 Int.zwordsize); simpl.
++ rewrite is_uns_zero_ext in H2. rewrite <- H2. 
+  assert (Int.unsigned (Int.zero_ext n0 n) = Int.unsigned n mod two_p n0) by (apply Int.zero_ext_mod; omega).
+  exploit (Z_mod_lt (Int.unsigned n) (two_p n0)). apply two_p_gt_ZERO; auto. intros.
+  replace (Int.signed (Int.zero_ext n0 n)) with (Int.unsigned (Int.zero_ext n0 n)).
+  rewrite H. omega. 
+  unfold Int.signed. rewrite zlt_true. auto. 
+  assert (two_p n0 <= Int.half_modulus). 
+  { change Int.half_modulus with (two_p (Int.zwordsize - 1)). 
+    apply two_p_monotone. omega. }
+  omega.  
++ apply Int.signed_range.
+- destruct (zlt n0 (Int.zwordsize)); simpl.
++ rewrite is_sgn_sign_ext in H2 by auto. rewrite <- H2. 
+  exploit (Int.sign_ext_range n0 n). omega. omega. 
++ apply Int.signed_range.
+Qed.
+
+Lemma cmp_intv_sound:
+  forall c n1 v1 n2,
+  vmatch (Vint n1) v1 ->
+  cmatch (Val.cmp_bool c (Vint n1) (Vint n2)) (cmp_intv c (sintv v1) (Int.signed n2)).
+Proof.
+  intros. simpl. replace (Int.cmp c n1 n2) with (zcmp c (Int.signed n1) (Int.signed n2)).
+  apply zcmp_intv_sound; apply sintv_sound; auto.
+  destruct c; simpl; rewrite ? Int.eq_signed; auto.
+  unfold Int.lt. destruct (zle (Int.signed n1) (Int.signed n2)); [rewrite zlt_false|rewrite zlt_true]; auto; omega.
+  unfold Int.lt. destruct (zle (Int.signed n2) (Int.signed n1)); [rewrite zlt_false|rewrite zlt_true]; auto; omega.
+Qed.
+
+Lemma cmp_intv_sound_2:
+  forall c n1 v1 n2,
+  vmatch (Vint n1) v1 ->
+  cmatch (Val.cmp_bool c (Vint n2) (Vint n1)) (cmp_intv (swap_comparison c) (sintv v1) (Int.signed n2)).
+Proof.
+  intros. rewrite <- Val.swap_cmp_bool. apply cmp_intv_sound; auto. 
+Qed. 
+
 (** Comparisons *)
 
 Definition cmpu_bool (c: comparison) (v w: aval) : abool :=
   match v, w with
   | I i1, I i2 => Just (Int.cmpu c i1 i2)
-(* there are cute things to do with Uns/Sgn compared against an integer *)
   | Ptr _, (I _ | Uns _ | Sgn _) => cmp_different_blocks c
   | (I _ | Uns _ | Sgn _), Ptr _ => cmp_different_blocks c
   | Ptr p1, Ptr p2 => pcmp c p1 p2
   | Ptr p1, Ifptr p2 => club (pcmp c p1 p2) (cmp_different_blocks c)
   | Ifptr p1, Ptr p2 => club (pcmp c p1 p2) (cmp_different_blocks c)
+  | _, I i => club (cmp_intv c (uintv v) (Int.unsigned i)) (cmp_different_blocks c)
+  | I i, _ => club (cmp_intv (swap_comparison c) (uintv w) (Int.unsigned i)) (cmp_different_blocks c)
   | _, _ => Btop
   end.
 
@@ -1961,22 +2128,28 @@ Proof.
   {
     intros. simpl. destruct (Int.eq i Int.zero). apply cmp_different_blocks_sound. apply cmp_different_blocks_none.
   }
-  unfold cmpu_bool; inv H; inv H0;
+  unfold cmpu_bool; inversion H; subst; inversion H0; subst;
   auto using cmatch_top, cmp_different_blocks_none, pcmp_none,
-             cmatch_lub_l, cmatch_lub_r, pcmp_sound.
+             cmatch_lub_l, cmatch_lub_r, pcmp_sound,
+             cmpu_intv_sound, cmpu_intv_sound_2, cmp_intv_None.
 - constructor.
 Qed.
 
 Definition cmp_bool (c: comparison) (v w: aval) : abool :=
   match v, w with
   | I i1, I i2 => Just (Int.cmp c i1 i2)
+  | _, I i => cmp_intv c (sintv v) (Int.signed i)
+  | I i, _ => cmp_intv (swap_comparison c) (sintv w) (Int.signed i)
   | _, _ => Btop
   end.
 
 Lemma cmp_bool_sound:
   forall c v w x y, vmatch v x -> vmatch w y -> cmatch (Val.cmp_bool c v w) (cmp_bool c x y).
 Proof.
-  intros. inv H; try constructor; inv H0; constructor. 
+  intros. 
+  unfold cmp_bool; inversion H; subst; inversion H0; subst;
+  auto using cmatch_top, cmp_intv_sound, cmp_intv_sound_2, cmp_intv_None.
+- constructor.
 Qed.
 
 Definition cmpf_bool (c: comparison) (v w: aval) : abool :=

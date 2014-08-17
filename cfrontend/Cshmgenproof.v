@@ -118,7 +118,7 @@ Proof.
   {
     induction sl; simpl; intros.
     inv H; auto. 
-    monadInv H; simpl. destruct o. destruct (Int.eq i n). 
+    monadInv H; simpl. destruct o. destruct (zeq z n).
     econstructor; split; eauto. simpl; rewrite EQ; simpl; rewrite EQ1; auto.
     apply IHsl; auto.
     apply IHsl; auto.
@@ -1188,6 +1188,9 @@ Proof.
 (* return *)
   simpl in TR. destruct o; monadInv TR. auto. auto. 
 (* switch *)
+  assert (exists b, ts = Sblock (Sswitch b x x0)).
+  { destruct (classify_switch (typeof e)); inv EQ2; econstructor; eauto. }
+  destruct H as [b EQ3]; rewrite EQ3; simpl.
   eapply transl_find_label_ls with (k := Clight.Kswitch k); eauto. econstructor; eauto. 
 (* label *)
   destruct (ident_eq lbl l). 
@@ -1394,10 +1397,15 @@ Proof.
 
 (* switch *)
   monadInv TR.
+  assert (E: exists b, ts = Sblock (Sswitch b x x0) /\ Switch.switch_argument b v n).
+  { unfold sem_switch_arg in H0.
+    destruct (classify_switch (typeof a)); inv EQ2; econstructor; split; eauto;
+    destruct v; inv H0; constructor. }
+  destruct E as (b & A & B). subst ts. 
   exploit transl_expr_correct; eauto. intro EV.
   econstructor; split.
   eapply star_plus_trans. eapply match_transl_step; eauto.
-  apply plus_one. econstructor. eauto. traceEq. 
+  apply plus_one. econstructor; eauto. traceEq. 
   econstructor; eauto.
   apply transl_lbl_stmt_2. apply transl_lbl_stmt_1. eauto. 
   constructor.

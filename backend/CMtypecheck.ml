@@ -313,8 +313,8 @@ let rec type_stmt env blk ret s =
   | Sexit n ->
       if Nat.to_int n >= blk then
         raise (Error (sprintf "Bad exit(%d)\n" (Nat.to_int n)))
-  | Sswitch(e, cases, deflt) ->
-      unify (type_expr env [] e) tint
+  | Sswitch(islong, e, cases, deflt) ->
+      unify (type_expr env [] e) (if islong then tlong else tint)
   | Sreturn None ->
       begin match ret with
       | None -> ()

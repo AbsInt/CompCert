@@ -414,71 +414,6 @@ Proof.
   split. apply Regmap.gss. intros; apply Regmap.gso; auto.
 Qed.
 
-(** Correctness of the translation of [switch] statements *)
-
-Lemma transl_switch_correct:
-  forall cs sp e m f map r nexits t ns,
-  tr_switch f.(fn_code) map r nexits t ns ->
-  forall rs i act,
-  rs#r = Vint i ->
-  map_wf map ->
-  match_env map e nil rs ->
-  comptree_match i t = Some act ->
-  exists nd, exists rs',
-  star step tge (State cs f sp ns rs m) E0 (State cs f sp nd rs' m) /\
-  nth_error nexits act = Some nd /\
-  match_env map e nil rs'.
-Proof.
-  Opaque Int.sub.
-  induction 1; simpl; intros.
-(* action *)
-  inv H3. exists n; exists rs; intuition.
-  apply star_refl.
-(* ifeq *)
-  caseEq (Int.eq i key); intro EQ; rewrite EQ in H5.
-  inv H5. exists nfound; exists rs; intuition.
-  apply star_one. eapply exec_Icond with (b := true); eauto. 
-  simpl. rewrite H2. simpl. congruence.
-  exploit IHtr_switch; eauto. intros [nd1 [rs1 [EX [NTH ME]]]].
-  exists nd1; exists rs1; intuition.
-  eapply star_step. eapply exec_Icond with (b := false); eauto. 
-  simpl. rewrite H2. simpl. congruence. eexact EX. traceEq.
-(* iflt *)
-  caseEq (Int.ltu i key); intro EQ; rewrite EQ in H5.
-  exploit IHtr_switch1; eauto. intros [nd1 [rs1 [EX [NTH ME]]]].
-  exists nd1; exists rs1; intuition.
-  eapply star_step. eapply exec_Icond with (b := true); eauto. 
-  simpl. rewrite H2. simpl. congruence. eexact EX. traceEq.
-  exploit IHtr_switch2; eauto. intros [nd1 [rs1 [EX [NTH ME]]]].
-  exists nd1; exists rs1; intuition.
-  eapply star_step. eapply exec_Icond with (b := false); eauto. 
-  simpl. rewrite H2. simpl. congruence. eexact EX. traceEq.
-(* jumptable *)
-  set (rs1 := rs#rt <- (Vint(Int.sub i ofs))).
-  assert (ME1: match_env map e nil rs1).
-    unfold rs1. eauto with rtlg.
-  assert (EX1: step tge (State cs f sp n rs m) E0 (State cs f sp n1 rs1 m)).
-    eapply exec_Iop; eauto. 
-    predSpec Int.eq Int.eq_spec ofs Int.zero; simpl.
-    rewrite H10. rewrite Int.sub_zero_l. congruence.
-    rewrite H6. simpl. rewrite <- Int.sub_add_opp. auto. 
-  caseEq (Int.ltu (Int.sub i ofs) sz); intro EQ; rewrite EQ in H9.
-  exploit H5; eauto. intros [nd [A B]].
-  exists nd; exists rs1; intuition. 
-  eapply star_step. eexact EX1.
-  eapply star_step. eapply exec_Icond with (b := true); eauto. 
-  simpl. unfold rs1. rewrite Regmap.gss. simpl. congruence. 
-  apply star_one. eapply exec_Ijumptable; eauto. unfold rs1. apply Regmap.gss. 
-  reflexivity. traceEq.
-  exploit (IHtr_switch rs1); eauto. unfold rs1. rewrite Regmap.gso; auto.
-  intros [nd [rs' [EX [NTH ME]]]].
-  exists nd; exists rs'; intuition.
-  eapply star_step. eexact EX1.
-  eapply star_step. eapply exec_Icond with (b := false); eauto. 
-  simpl. unfold rs1. rewrite Regmap.gss. simpl. congruence.
-  eexact EX. reflexivity. traceEq.
-Qed.
-
 (** ** Semantic preservation for the translation of expressions *)
 
 Section CORRECTNESS_EXPR.
@@ -560,10 +495,10 @@ Definition transl_condexpr_prop
   /\ Mem.extends m tm'.
 
 (** The correctness of the translation is a huge induction over
-  the Cminor evaluation derivation for the source program.  To keep
+  the CminorSel evaluation derivation for the source program.  To keep
   the proof manageable, we put each case of the proof in a separate
-  lemma.  There is one lemma for each Cminor evaluation rule.
-  It takes as hypotheses the premises of the Cminor evaluation rule,
+  lemma.  There is one lemma for each CminorSel evaluation rule.
+  It takes as hypotheses the premises of the CminorSel evaluation rule,
   plus the induction hypotheses, that is, the [transl_expr_prop], etc,
   corresponding to the evaluations of sub-expressions or sub-statements. *)
 
@@ -978,6 +913,58 @@ Proof
      transl_condexpr_CEcondition_correct
      transl_condexpr_CElet_correct).
 
+(** Exit expressions. *)
+
+Definition transl_exitexpr_prop 
+     (le: letenv) (a: exitexpr) (x: nat) : Prop :=
+  forall tm cs f map ns nexits rs
+    (MWF: map_wf map)
+    (TE: tr_exitexpr f.(fn_code) map a ns nexits)
+    (ME: match_env map e le rs)
+    (EXT: Mem.extends m tm),
+  exists nd, exists rs', exists tm',
+     star step tge (State cs f sp ns rs tm) E0 (State cs f sp nd rs' tm')
+  /\ nth_error nexits x = Some nd
+  /\ match_env map e le rs'
+  /\ Mem.extends m tm'.
+
+Theorem transl_exitexpr_correct:
+  forall le a x,
+  eval_exitexpr ge sp e m le a x ->
+  transl_exitexpr_prop le a x.
+Proof.
+  induction 1; red; intros; inv TE.
+- (* XEexit *)
+  exists ns, rs, tm.
+  split. apply star_refl.
+  auto.
+- (* XEjumptable *)
+  exploit H3; eauto. intros (nd & A & B).
+  exploit transl_expr_correct; eauto. intros (rs1 & tm1 & EXEC1 & ME1 & RES1 & PRES1 & EXT1).
+  exists nd, rs1, tm1.
+  split. eapply star_right. eexact EXEC1. eapply exec_Ijumptable; eauto. inv RES1; auto. traceEq.
+  auto.
+- (* XEcondition *)
+  exploit transl_condexpr_correct; eauto. intros (rs1 & tm1 & EXEC1 & ME1 & RES1 & EXT1).
+  exploit IHeval_exitexpr; eauto. 
+  instantiate (2 := if va then n2 else n3). destruct va; eauto.
+  intros (nd & rs2 & tm2 & EXEC2 & EXIT2 & ME2 & EXT2).
+  exists nd, rs2, tm2. 
+  split. eapply star_trans. apply plus_star. eexact EXEC1. eexact EXEC2. traceEq.
+  auto.
+- (* XElet *)
+  exploit transl_expr_correct; eauto. intros (rs1 & tm1 & EXEC1 & ME1 & RES1 & PRES1 & EXT1).
+  assert (map_wf (add_letvar map r)).
+    eapply add_letvar_wf; eauto. 
+  exploit IHeval_exitexpr; eauto. eapply match_env_bind_letvar; eauto.
+  intros (nd & rs2 & tm2 & EXEC2 & EXIT2 & ME2 & EXT2).
+  exists nd, rs2, tm2.
+  split. eapply star_trans. eexact EXEC1. eexact EXEC2. traceEq. 
+  split. auto. 
+  split. eapply match_env_unbind_letvar; eauto.
+  auto.
+Qed.
+
 End CORRECTNESS_EXPR.
 
 (** ** Measure over CminorSel states *)
@@ -1357,15 +1344,11 @@ Proof.
 
   (* switch *)
   inv TS.
-  exploit validate_switch_correct; eauto. intro CTM.
-  exploit transl_expr_correct; eauto. 
-  intros [rs' [tm' [A [B [C [D X]]]]]].
-  exploit transl_switch_correct; eauto. inv C. auto.
-  intros [nd [rs'' [E [F G]]]].
+  exploit transl_exitexpr_correct; eauto. 
+  intros (nd & rs' & tm' & A & B & C & D). 
   econstructor; split.
-  right; split. eapply star_trans. eexact A. eexact E.  traceEq. Lt_state. 
-  econstructor; eauto.
-  constructor. auto.
+  right; split. eexact A. Lt_state. 
+  econstructor; eauto. constructor; auto. 
 
   (* return none *)
   inv TS.

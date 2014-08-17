@@ -148,7 +148,7 @@ Inductive stmt : Type :=
   | Sloop: stmt -> stmt
   | Sblock: stmt -> stmt
   | Sexit: nat -> stmt
-  | Sswitch: expr -> list (int * nat) -> nat -> stmt
+  | Sswitch: bool -> expr -> list (Z * nat) -> nat -> stmt
   | Sreturn: option expr -> stmt
   | Slabel: label -> stmt -> stmt
   | Sgoto: label -> stmt.
@@ -510,9 +510,10 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f (Sexit (S n)) (Kblock k) sp e m)
         E0 (State f (Sexit n) k sp e m)
 
-  | step_switch: forall f a cases default k sp e m n,
-      eval_expr sp e m a (Vint n) ->
-      step (State f (Sswitch a cases default) k sp e m)
+  | step_switch: forall f islong a cases default k sp e m v n,
+      eval_expr sp e m a v ->
+      switch_argument islong v n ->
+      step (State f (Sswitch islong a cases default) k sp e m)
         E0 (State f (Sexit (switch_target n default cases)) k sp e m)
 
   | step_return_0: forall f k sp e m m',
@@ -733,9 +734,10 @@ with exec_stmt:
       forall f sp e m n,
       exec_stmt f sp e m (Sexit n) E0 e m (Out_exit n)
   | exec_Sswitch:
-      forall f sp e m a cases default n,
-      eval_expr ge sp e m a (Vint n) ->
-      exec_stmt f sp e m (Sswitch a cases default)
+      forall f sp e m islong a cases default v n,
+      eval_expr ge sp e m a v ->
+      switch_argument islong v n ->
+      exec_stmt f sp e m (Sswitch islong a cases default)
                 E0 e m (Out_exit (switch_target n default cases))
   | exec_Sreturn_none:
       forall f sp e m,
@@ -1051,8 +1053,7 @@ Proof.
 
 (* switch *)
   econstructor; split.
-  apply star_one. econstructor; eauto. 
-  constructor.
+  apply star_one. econstructor; eauto. constructor.
 
 (* return none *)
   econstructor; split. apply star_refl. constructor; auto.

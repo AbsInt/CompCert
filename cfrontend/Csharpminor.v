@@ -21,6 +21,7 @@ Require Import Values.
 Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
+Require Import Switch.
 Require Cminor.
 Require Import Smallstep.
 
@@ -67,14 +68,14 @@ Inductive stmt : Type :=
   | Sloop: stmt -> stmt
   | Sblock: stmt -> stmt
   | Sexit: nat -> stmt
-  | Sswitch: expr -> lbl_stmt -> stmt
+  | Sswitch: bool -> expr -> lbl_stmt -> stmt
   | Sreturn: option expr -> stmt
   | Slabel: label -> stmt -> stmt
   | Sgoto: label -> stmt
 
 with lbl_stmt : Type :=
   | LSnil: lbl_stmt
-  | LScons: option int -> stmt -> lbl_stmt -> lbl_stmt.
+  | LScons: option Z -> stmt -> lbl_stmt -> lbl_stmt.
 
 (** Functions are composed of a return type, a list of parameter names,
   a list of local variables with their sizes, a list of temporary variables,
@@ -191,14 +192,14 @@ Fixpoint select_switch_default (sl: lbl_stmt): lbl_stmt :=
   | LScons (Some i) s sl' => select_switch_default sl'
   end.
 
-Fixpoint select_switch_case (n: int) (sl: lbl_stmt): option lbl_stmt :=
+Fixpoint select_switch_case (n: Z) (sl: lbl_stmt): option lbl_stmt :=
   match sl with
   | LSnil => None
   | LScons None s sl' => select_switch_case n sl'
-  | LScons (Some c) s sl' => if Int.eq c n then Some sl else select_switch_case n sl'
+  | LScons (Some c) s sl' => if zeq c n then Some sl else select_switch_case n sl'
   end.
 
-Definition select_switch (n: int) (sl: lbl_stmt): lbl_stmt :=
+Definition select_switch (n: Z) (sl: lbl_stmt): lbl_stmt :=
   match select_switch_case n sl with
   | Some sl' => sl'
   | None => select_switch_default sl
@@ -230,7 +231,7 @@ Fixpoint find_label (lbl: label) (s: stmt) (k: cont)
       find_label lbl s1 (Kseq (Sloop s1) k)
   | Sblock s1 =>
       find_label lbl s1 (Kblock k)
-  | Sswitch a sl =>
+  | Sswitch long a sl =>
       find_label_ls lbl sl k
   | Slabel lbl' s' =>
       if ident_eq lbl lbl' then Some(s', k) else find_label lbl s' k
@@ -423,9 +424,10 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f (Sexit (S n)) (Kblock k) e le m)
         E0 (State f (Sexit n) k e le m)
 
-  | step_switch: forall f a cases k e le m n,
-      eval_expr e le m a (Vint n) ->
-      step (State f (Sswitch a cases) k e le m)
+  | step_switch: forall f islong a cases k e le m v n,
+      eval_expr e le m a v ->
+      switch_argument islong v n ->
+      step (State f (Sswitch islong a cases) k e le m)
         E0 (State f (seq_of_lbl_stmt (select_switch n cases)) k e le m)
 
   | step_return_0: forall f k e le m m',

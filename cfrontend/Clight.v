@@ -111,7 +111,7 @@ Inductive statement : Type :=
 
 with labeled_statements : Type :=            (**r cases of a [switch] *)
   | LSnil: labeled_statements
-  | LScons: option int -> statement -> labeled_statements -> labeled_statements.
+  | LScons: option Z -> statement -> labeled_statements -> labeled_statements.
                       (**r [None] is [default], [Some x] is [case x] *)
 
 (** The C loops are derived forms. *)
@@ -312,14 +312,14 @@ Fixpoint select_switch_default (sl: labeled_statements): labeled_statements :=
   | LScons (Some i) s sl' => select_switch_default sl'
   end.
 
-Fixpoint select_switch_case (n: int) (sl: labeled_statements): option labeled_statements :=
+Fixpoint select_switch_case (n: Z) (sl: labeled_statements): option labeled_statements :=
   match sl with
   | LSnil => None
   | LScons None s sl' => select_switch_case n sl'
-  | LScons (Some c) s sl' => if Int.eq c n then Some sl else select_switch_case n sl'
+  | LScons (Some c) s sl' => if zeq c n then Some sl else select_switch_case n sl'
   end.
 
-Definition select_switch (n: int) (sl: labeled_statements): labeled_statements :=
+Definition select_switch (n: Z) (sl: labeled_statements): labeled_statements :=
   match select_switch_case n sl with
   | Some sl' => sl'
   | None => select_switch_default sl
@@ -614,8 +614,9 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f Sskip k e le m)
         E0 (Returnstate Vundef k m')
 
-  | step_switch: forall f a sl k e le m n,
-      eval_expr e le m a (Vint n) ->
+  | step_switch: forall f a sl k e le m v n,
+      eval_expr e le m a v ->
+      sem_switch_arg v (typeof a) = Some n ->
       step (State f (Sswitch a sl) k e le m)
         E0 (State f (seq_of_labeled_statement (select_switch n sl)) (Kswitch k) e le m)
   | step_skip_break_switch: forall f x k e le m,

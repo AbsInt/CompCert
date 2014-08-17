@@ -765,8 +765,6 @@ let rec convertStmt ploc env s =
   | C.Scontinue ->
       Scontinue
   | C.Sswitch(e, s1) ->
-      if is_longlong env e.etyp then
-        unsupported "'switch' on an argument of type 'long long'";
       let (init, cases) = groupSwitch (flattenSwitch s1) in
       if cases = [] then
         unsupported "ill-formed 'switch' statement";
@@ -810,7 +808,7 @@ and convertSwitch ploc env = function
             match Ceval.integer_expr env e with
             | None -> unsupported "'case' label is not a compile-time integer";
                       None
-            | Some v -> Some (convertInt v)
+            | Some v -> Some (Z.of_uint64 v)
       in
       LScons(lbl', convertStmt ploc env s, convertSwitch s.sloc env rem)
 

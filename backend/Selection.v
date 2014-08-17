@@ -27,6 +27,7 @@ Require Import AST.
 Require Import Errors.
 Require Import Integers.
 Require Import Globalenvs.
+Require Import Switch.
 Require Cminor.
 Require Import Op.
 Require Import CminorSel.
@@ -34,7 +35,8 @@ Require Import SelectOp.
 Require Import SelectDiv.
 Require Import SelectLong.
 
-Open Local Scope cminorsel_scope.
+Local Open Scope cminorsel_scope.
+Local Open Scope error_monad_scope.
 
 (** Conversion of conditions *)
 
@@ -203,60 +205,119 @@ Definition classify_call (ge: Cminor.genv) (e: Cminor.expr) : call_kind :=
       end
   end.
 
+(** Conversion of Cminor [switch] statements to decision trees. *)
+
+Parameter compile_switch: Z -> nat -> table -> comptree.
+
+Section SEL_SWITCH.
+
+Variable make_cmp_eq: expr -> Z -> expr.
+Variable make_cmp_ltu: expr -> Z -> expr.
+Variable make_sub: expr -> Z -> expr.
+Variable make_to_int: expr -> expr.
+
+Fixpoint sel_switch (arg: nat) (t: comptree): exitexpr :=
+  match t with
+  | CTaction act =>
+      XEexit act
+  | CTifeq key act t' =>
+      XEcondition (condexpr_of_expr (make_cmp_eq (Eletvar arg) key))
+                  (XEexit act)
+                  (sel_switch arg t')
+  | CTiflt key t1 t2 =>
+      XEcondition (condexpr_of_expr (make_cmp_ltu (Eletvar arg) key))
+                  (sel_switch arg t1)
+                  (sel_switch arg t2)
+  | CTjumptable ofs sz tbl t' =>
+      XElet (make_sub (Eletvar arg) ofs)
+        (XEcondition (condexpr_of_expr (make_cmp_ltu (Eletvar O) sz))
+                     (XEjumptable (make_to_int (Eletvar O)) tbl)
+                     (sel_switch (S arg) t'))
+  end.
+
+End SEL_SWITCH.
+
+Definition sel_switch_int :=
+  sel_switch
+    (fun arg n => comp Ceq arg (Eop (Ointconst (Int.repr n)) Enil))
+    (fun arg n => compu Clt arg (Eop (Ointconst (Int.repr n)) Enil))
+    (fun arg ofs => sub arg (Eop (Ointconst (Int.repr ofs)) Enil))
+    (fun arg => arg).
+
+Definition sel_switch_long :=
+  sel_switch
+    (fun arg n => cmpl Ceq arg (longconst (Int64.repr n)))
+    (fun arg n => cmplu Clt arg (longconst (Int64.repr n)))
+    (fun arg ofs => subl hf arg (longconst (Int64.repr ofs)))
+    lowlong.
+
 (** Conversion from Cminor statements to Cminorsel statements. *)
 
-Fixpoint sel_stmt (ge: Cminor.genv) (s: Cminor.stmt) : stmt :=
+Fixpoint sel_stmt (ge: Cminor.genv) (s: Cminor.stmt) : res stmt :=
   match s with
-  | Cminor.Sskip => Sskip
-  | Cminor.Sassign id e => Sassign id (sel_expr e)
-  | Cminor.Sstore chunk addr rhs => store chunk (sel_expr addr) (sel_expr rhs)
+  | Cminor.Sskip => OK Sskip
+  | Cminor.Sassign id e => OK (Sassign id (sel_expr e))
+  | Cminor.Sstore chunk addr rhs => OK (store chunk (sel_expr addr) (sel_expr rhs))
   | Cminor.Scall optid sg fn args =>
-      match classify_call ge fn with
+      OK (match classify_call ge fn with
       | Call_default => Scall optid sg (inl _ (sel_expr fn)) (sel_exprlist args)
       | Call_imm id  => Scall optid sg (inr _ id) (sel_exprlist args)
       | Call_builtin ef => Sbuiltin optid ef (sel_exprlist args)
-      end
+      end)
   | Cminor.Sbuiltin optid ef args =>
-      Sbuiltin optid ef (sel_exprlist args)
+      OK (Sbuiltin optid ef (sel_exprlist args))
   | Cminor.Stailcall sg fn args => 
-      match classify_call ge fn with
+      OK (match classify_call ge fn with
       | Call_imm id  => Stailcall sg (inr _ id) (sel_exprlist args)
       | _            => Stailcall sg (inl _ (sel_expr fn)) (sel_exprlist args)
-      end
-  | Cminor.Sseq s1 s2 => Sseq (sel_stmt ge s1) (sel_stmt ge s2)
+      end)
+  | Cminor.Sseq s1 s2 =>
+      do s1' <- sel_stmt ge s1; do s2' <- sel_stmt ge s2;
+      OK (Sseq s1' s2')
   | Cminor.Sifthenelse e ifso ifnot =>
-      Sifthenelse (condexpr_of_expr (sel_expr e))
-                  (sel_stmt ge ifso) (sel_stmt ge ifnot)
-  | Cminor.Sloop body => Sloop (sel_stmt ge body)
-  | Cminor.Sblock body => Sblock (sel_stmt ge body)
-  | Cminor.Sexit n => Sexit n
-  | Cminor.Sswitch e cases dfl => Sswitch (sel_expr e) cases dfl
-  | Cminor.Sreturn None => Sreturn None
-  | Cminor.Sreturn (Some e) => Sreturn (Some (sel_expr e))
-  | Cminor.Slabel lbl body => Slabel lbl (sel_stmt ge body)
-  | Cminor.Sgoto lbl => Sgoto lbl
+      do ifso' <- sel_stmt ge ifso; do ifnot' <- sel_stmt ge ifnot;
+      OK (Sifthenelse (condexpr_of_expr (sel_expr e)) ifso' ifnot')
+  | Cminor.Sloop body =>
+      do body' <- sel_stmt ge body; OK (Sloop body')
+  | Cminor.Sblock body =>
+      do body' <- sel_stmt ge body; OK (Sblock body')
+  | Cminor.Sexit n => OK (Sexit n)
+  | Cminor.Sswitch false e cases dfl =>
+      let t := compile_switch Int.modulus dfl cases in
+      if validate_switch Int.modulus dfl cases t
+      then OK (Sswitch (XElet (sel_expr e) (sel_switch_int O t)))
+      else Error (msg "Selection: bad switch (int)")
+  | Cminor.Sswitch true e cases dfl =>
+      let t := compile_switch Int64.modulus dfl cases in
+      if validate_switch Int64.modulus dfl cases t
+      then OK (Sswitch (XElet (sel_expr e) (sel_switch_long O t)))
+      else Error (msg "Selection: bad switch (long)")
+  | Cminor.Sreturn None => OK (Sreturn None)
+  | Cminor.Sreturn (Some e) => OK (Sreturn (Some (sel_expr e)))
+  | Cminor.Slabel lbl body =>
+      do body' <- sel_stmt ge body; OK (Slabel lbl body')
+  | Cminor.Sgoto lbl => OK (Sgoto lbl)
   end.
 
 End SELECTION.
 
 (** Conversion of functions. *)
 
-Definition sel_function (hf: helper_functions) (ge: Cminor.genv) (f: Cminor.function) : function :=
-  mkfunction
-    f.(Cminor.fn_sig)
-    f.(Cminor.fn_params)
-    f.(Cminor.fn_vars)
-    f.(Cminor.fn_stackspace)
-    (sel_stmt hf ge f.(Cminor.fn_body)).
+Definition sel_function (hf: helper_functions) (ge: Cminor.genv) (f: Cminor.function) : res function :=
+  do body' <- sel_stmt hf ge f.(Cminor.fn_body);
+  OK (mkfunction
+        f.(Cminor.fn_sig)
+        f.(Cminor.fn_params)
+        f.(Cminor.fn_vars)
+        f.(Cminor.fn_stackspace)
+        body').
 
-Definition sel_fundef (hf: helper_functions) (ge: Cminor.genv) (f: Cminor.fundef) : fundef :=
-  transf_fundef (sel_function hf ge) f.
+Definition sel_fundef (hf: helper_functions) (ge: Cminor.genv) (f: Cminor.fundef) : res fundef :=
+  transf_partial_fundef (sel_function hf ge) f.
 
 (** Conversion of programs. *)
 
-Local Open Scope error_monad_scope.
-
 Definition sel_program (p: Cminor.program) : res program :=
   let ge := Genv.globalenv p in
-  do hf <- get_helpers ge; OK (transform_program (sel_fundef hf ge) p).
+  do hf <- get_helpers ge; transform_partial_program (sel_fundef hf ge) p.
 
