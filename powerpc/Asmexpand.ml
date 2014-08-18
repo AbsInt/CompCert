@@ -212,6 +212,11 @@ let expand_builtin_vload_sda chunk id ofs args res =
       assert false
   end
 
+let expand_builtin_vload_rel chunk id ofs args res =
+  emit (Paddis(GPR11, GPR0, Csymbol_rel_high(id, ofs)));
+  emit (Paddi(GPR11, GPR11, Csymbol_rel_low(id, ofs)));
+  expand_builtin_vload chunk [IR GPR11] res
+
 let expand_builtin_vstore_common chunk base offset src =
   match chunk, src with
   | (Mint8signed | Mint8unsigned), IR src ->
@@ -264,10 +269,19 @@ let expand_builtin_vstore_sda chunk id ofs args =
       expand_builtin_vstore_common chunk GPR0 (Csymbol_sda(id, ofs)) src
   | [IR src1; IR src2] when chunk = Mint64 ->
       emit (Pstw(src1, Csymbol_sda(id, ofs), GPR0));
+      let ofs = Int.add ofs _4 in
       emit (Pstw(src2, Csymbol_sda(id, ofs), GPR0))
   | _ ->
       assert false
   end
+
+let expand_builtin_vstore_rel chunk id ofs args =
+  let tmp =
+    if not (List.mem (IR GPR12) args) then GPR12 else
+    if not (List.mem (IR GPR11) args) then GPR11 else GPR10 in
+  emit (Paddis(tmp, GPR0, Csymbol_rel_high(id, ofs)));
+  emit (Paddi(tmp, tmp, Csymbol_rel_low(id, ofs)));
+  expand_builtin_vstore chunk (IR tmp :: args)
 
 (* Handling of varargs *)
 
@@ -492,13 +506,19 @@ let expand_instruction instr =
       | EF_vstore chunk ->
           expand_builtin_vstore chunk args
       | EF_vload_global(chunk, id, ofs) ->
-          if symbol_is_small_data id ofs
-          then expand_builtin_vload_sda chunk id ofs args res
-          else expand_builtin_vload_global chunk id ofs args res
+          if symbol_is_small_data id ofs then
+             expand_builtin_vload_sda chunk id ofs args res
+          else if symbol_is_rel_data id ofs then
+             expand_builtin_vload_rel chunk id ofs args res
+          else
+             expand_builtin_vload_global chunk id ofs args res
       | EF_vstore_global(chunk, id, ofs) ->
-          if symbol_is_small_data id ofs
-          then expand_builtin_vstore_sda chunk id ofs args
-          else expand_builtin_vstore_global chunk id ofs args
+          if symbol_is_small_data id ofs then
+            expand_builtin_vstore_sda chunk id ofs args
+          else if symbol_is_rel_data id ofs then
+            expand_builtin_vstore_rel chunk id ofs args
+          else
+            expand_builtin_vstore_global chunk id ofs args
       | EF_memcpy(sz, al) ->
           expand_builtin_memcpy (Z.to_int sz) (Z.to_int al) args
       | EF_annot_val(txt, targ) ->

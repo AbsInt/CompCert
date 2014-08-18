@@ -429,8 +429,8 @@ Variable ge: genv.
   symbolic references [symbol + offset] and splits their
   actual values into two 16-bit halves. *)
 
-Parameter low_half: val -> val.
-Parameter high_half: val -> val.
+Parameter low_half: genv -> ident -> int -> val.
+Parameter high_half: genv -> ident -> int -> val.
 
 (** The fundamental property of these operations is that, when applied
   to the address of a symbol, their results can be recombined by
@@ -438,18 +438,8 @@ Parameter high_half: val -> val.
 
 Axiom low_high_half:
   forall id ofs,
-  Val.add (low_half (Genv.symbol_address ge id ofs)) (high_half (Genv.symbol_address ge id ofs))
-  = Genv.symbol_address ge id ofs.
+  Val.add (high_half ge id ofs) (low_half ge id ofs) = Genv.symbol_address ge id ofs.
 
-(** The other axioms we take is that the results of
-  the [low_half] and [high_half] functions are of type [Tint],
-  i.e. either integers, pointers or undefined values. *)
-
-Axiom low_half_type: 
-  forall v, Val.has_type (low_half v) Tint.
-Axiom high_half_type: 
-  forall v, Val.has_type (high_half v) Tint.
- 
 (** We also axiomatize the small data area.  For simplicity, we
   claim that small data symbols can be accessed by absolute 16-bit
   offsets, that is, relative to [GPR0].  In reality, the linker
@@ -479,10 +469,10 @@ Parameter symbol_is_rel_data: ident -> int -> bool.
 Definition const_low (c: constant) :=
   match c with
   | Cint n => Vint n
-  | Csymbol_low id ofs => low_half (Genv.symbol_address ge id ofs)
+  | Csymbol_low id ofs => low_half ge id ofs
   | Csymbol_high id ofs => Vundef
   | Csymbol_sda id ofs => small_data_area_offset ge id ofs
-  | Csymbol_rel_low id ofs => low_half (Genv.symbol_address ge id ofs)
+  | Csymbol_rel_low id ofs => low_half ge id ofs
   | Csymbol_rel_high id ofs => Vundef
   end.
 
@@ -490,10 +480,10 @@ Definition const_high (c: constant) :=
   match c with
   | Cint n => Vint (Int.shl n (Int.repr 16))
   | Csymbol_low id ofs => Vundef
-  | Csymbol_high id ofs => high_half (Genv.symbol_address ge id ofs)
+  | Csymbol_high id ofs => high_half ge id ofs
   | Csymbol_sda id ofs => Vundef
   | Csymbol_rel_low id ofs => Vundef
-  | Csymbol_rel_high id ofs => high_half (Genv.symbol_address ge id ofs)
+  | Csymbol_rel_high id ofs => high_half ge id ofs
   end.
 
 (** The semantics is purely small-step and defined as a function

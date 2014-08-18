@@ -31,17 +31,6 @@ Require Import Asmgenproof0.
 
 (** * Properties of low half/high half decomposition *)
 
-Lemma high_half_zero:
-  forall v, Val.add (high_half v) Vzero = high_half v.
-Proof.
-  intros. generalize (high_half_type v).
-  rewrite Val.add_commut. 
-  case (high_half v); simpl; intros; try contradiction.
-  auto. 
-  rewrite Int.add_commut; rewrite Int.add_zero; auto. 
-  rewrite Int.add_zero; auto. 
-Qed.
-
 Lemma low_high_u:
   forall n, Int.or (Int.shl (high_u n) (Int.repr 16)) (low_u n) = n.
 Proof.
@@ -111,20 +100,12 @@ Proof.
   simpl. rewrite Int.add_zero; auto.
 Qed.
 
-Lemma csymbol_high_low:
+Lemma low_high_half_zero:
   forall (ge: genv) id ofs,
-  Val.add (high_half (Genv.symbol_address ge id ofs)) (low_half (Genv.symbol_address ge id ofs))
-  = Genv.symbol_address ge id ofs.
+  Val.add (Val.add Vzero (high_half ge id ofs)) (low_half ge id ofs) =
+  Genv.symbol_address ge id ofs.
 Proof.
-  intros. rewrite Val.add_commut. apply low_high_half.
-Qed.
-
-Lemma csymbol_high_low_2:
-  forall (ge: genv) id ofs rel,
-  Val.add (const_high ge (csymbol_high id ofs rel))
-          (const_low ge (csymbol_low id ofs rel)) = Genv.symbol_address ge id ofs.
-Proof.
-  intros. destruct rel; apply csymbol_high_low. 
+  intros. rewrite Val.add_assoc. rewrite low_high_half. apply add_zero_symbol_address.
 Qed.
 
 (** Useful properties of the GPR0 registers. *)
@@ -863,16 +844,21 @@ Opaque Int.eq.
   exists rs'. auto with asmgen. 
   (* Oaddrsymbol *)
   set (v' := Genv.symbol_address ge i i0).
-  destruct (symbol_is_small_data i i0) eqn:SD.
+  destruct (symbol_is_small_data i i0) eqn:SD; [ | destruct (symbol_is_rel_data i i0) ].
   (* small data *)
 Opaque Val.add.
   econstructor; split. apply exec_straight_one; simpl; reflexivity.
   split. Simpl. rewrite small_data_area_addressing by auto. apply add_zero_symbol_address.
   intros; Simpl.
-  (* not small data *)
+  (* relative data *)
+  econstructor; split. eapply exec_straight_two; simpl; reflexivity.
+  split. Simpl. rewrite gpr_or_zero_not_zero by eauto with asmgen. Simpl.
+  apply low_high_half_zero. 
+  intros; Simpl.
+  (* absolute data *)
   econstructor; split. eapply exec_straight_two; simpl; reflexivity.
   split. Simpl. rewrite gpr_or_zero_not_zero; eauto with asmgen. Simpl.
-  rewrite Val.add_assoc. rewrite csymbol_high_low_2. apply add_zero_symbol_address. 
+  apply low_high_half_zero.
   intros; Simpl. 
   (* Oaddrstack *)
   destruct (addimm_correct x GPR1 i k rs m) as [rs' [EX [RES OTH]]]; eauto with asmgen.
@@ -881,24 +867,24 @@ Opaque Val.add.
   destruct (addimm_correct x0 x i k rs m) as [rs' [A [B C]]]; eauto with asmgen.
   exists rs'; auto with asmgen.
   (* Oaddsymbol *)
-  destruct (symbol_is_small_data i i0) eqn:SD.
+  destruct (symbol_is_small_data i i0) eqn:SD; [ | destruct (symbol_is_rel_data i i0) ].
   (* small data *)
   econstructor; split. eapply exec_straight_two; simpl; reflexivity. 
   split. Simpl. rewrite (Val.add_commut (rs x)). f_equal.
   rewrite small_data_area_addressing by auto. apply add_zero_symbol_address.
   intros; Simpl.
-  destruct (symbol_is_rel_data i i0).
   (* relative data *)
-  econstructor; split. eapply exec_straight_three; simpl; reflexivity. 
-  split. Simpl. rewrite gpr_or_zero_zero. rewrite gpr_or_zero_not_zero by (eauto with asmgen).
-  Simpl. rewrite Val.add_assoc. rewrite (Val.add_commut (rs x)). f_equal. 
-  rewrite Val.add_assoc. rewrite csymbol_high_low. apply add_zero_symbol_address.
-  intros; Simpl.
+  econstructor; split. eapply exec_straight_trans. 
+  eapply exec_straight_two; simpl; reflexivity.
+  eapply exec_straight_two; simpl; reflexivity.
+  split. assert (GPR0 <> x0) by (apply sym_not_equal; eauto with asmgen).
+  Simpl. rewrite ! gpr_or_zero_zero. rewrite ! gpr_or_zero_not_zero by eauto with asmgen. Simpl.
+  rewrite low_high_half_zero. auto.
+  intros; Simpl. 
   (* absolute data *)
   econstructor; split. eapply exec_straight_two; simpl; reflexivity.
   split. Simpl. rewrite ! gpr_or_zero_not_zero by (eauto with asmgen). Simpl. 
-  rewrite Val.add_assoc. rewrite (Val.add_commut (rs x)). f_equal.
-  apply csymbol_high_low.
+  rewrite Val.add_assoc. rewrite (Val.add_commut (rs x)). rewrite low_high_half. auto.
   intros; Simpl.
   (* Osubimm *)
   case (Int.eq (high_s i) Int.zero).
@@ -1022,27 +1008,35 @@ Transparent Val.add.
   (* Aindexed2 *)
   apply MK2; auto.
   (* Aglobal *)
-  destruct (symbol_is_small_data i i0) eqn:SISD; inv TR.
+  destruct (symbol_is_small_data i i0) eqn:SISD; [ | destruct (symbol_is_rel_data i i0) ]; inv TR.
   (* Aglobal from small data *)
   apply MK1. unfold const_low. rewrite small_data_area_addressing by auto. 
   apply add_zero_symbol_address.
   auto.
-  (* Aglobal general case *)
-  set (rel := symbol_is_rel_data i i0).
-  set (rs1 := nextinstr (rs#temp <- (const_high ge (csymbol_high i i0 rel)))).
-  exploit (MK1 (csymbol_low i i0 rel) temp rs1 k).
-    simpl. rewrite gpr_or_zero_not_zero; eauto with asmgen.
-    unfold rs1. Simpl. apply csymbol_high_low_2.
-    intros; unfold rs1; Simpl.
+  (* Aglobal from relative data *)
+  set (rs1 := nextinstr (rs#temp <- (Val.add Vzero (high_half ge i i0)))).
+  set (rs2 := nextinstr (rs1#temp <- (Genv.symbol_address ge i i0))).
+  exploit (MK1 (Cint Int.zero) temp rs2).
+    simpl. rewrite gpr_or_zero_not_zero by eauto with asmgen. 
+    unfold rs2. Simpl. rewrite Val.add_commut. apply add_zero_symbol_address.
+    intros; unfold rs2, rs1; Simpl. 
   intros [rs' [EX' AG']].
-  exists rs'. split. apply exec_straight_step with rs1 m.
-  unfold exec_instr. rewrite gpr_or_zero_zero. 
-  rewrite Val.add_commut. unfold const_high, csymbol_high. 
-  destruct rel; rewrite high_half_zero; reflexivity.
-  reflexivity.
-  assumption. assumption.
+  exists rs'; split. apply exec_straight_step with rs1 m; auto. 
+  apply exec_straight_step with rs2 m; auto. simpl. unfold rs2. 
+  rewrite gpr_or_zero_not_zero by eauto with asmgen. f_equal. f_equal. f_equal.
+  unfold rs1; Simpl. apply low_high_half_zero.
+  eexact EX'. auto.
+  (* Aglobal from absolute data *)
+  set (rs1 := nextinstr (rs#temp <- (Val.add Vzero (high_half ge i i0)))).
+  exploit (MK1 (Csymbol_low i i0) temp rs1).
+    simpl. rewrite gpr_or_zero_not_zero by eauto with asmgen. 
+    unfold rs1. Simpl. apply low_high_half_zero. 
+    intros; unfold rs1; Simpl. 
+  intros [rs' [EX' AG']].
+  exists rs'; split. apply exec_straight_step with rs1 m; auto. 
+  eexact EX'. auto.
   (* Abased *)
-  destruct (symbol_is_small_data i i0) eqn:SISD.
+  destruct (symbol_is_small_data i i0) eqn:SISD; [ | destruct (symbol_is_rel_data i i0) ].
   (* Abased from small data *)
   set (rs1 := nextinstr (rs#GPR0 <- (Genv.symbol_address ge i i0))).
   exploit (MK2 x GPR0 rs1 k).
@@ -1055,30 +1049,25 @@ Transparent Val.add.
   apply add_zero_symbol_address.
   reflexivity.
   assumption. assumption.
-  destruct (symbol_is_rel_data i i0).
-  (* Abased relative *)
-  set (rs1 := nextinstr (rs#GPR0 <- (const_high ge (Csymbol_rel_high i i0)))).
-  set (rs2 := nextinstr (rs1#temp <- (Val.add (rs x) (const_high ge (Csymbol_rel_high i i0))))).
-  exploit (MK1 (Csymbol_rel_low i i0) temp rs2 k).
-    simpl. rewrite gpr_or_zero_not_zero; eauto with asmgen.
-    unfold rs2. Simpl. rewrite Val.add_assoc. simpl. rewrite csymbol_high_low. 
-    apply Val.add_commut.
-    intros. unfold rs2; Simpl. unfold rs1; Simpl.
+  (* Abased from relative data *)
+  set (rs1 := nextinstr (rs#GPR0 <- (rs#x))).
+  set (rs2 := nextinstr (rs1#temp <- (Val.add Vzero (high_half ge i i0)))).
+  set (rs3 := nextinstr (rs2#temp <- (Genv.symbol_address ge i i0))).
+  exploit (MK2 temp GPR0 rs3).
+    f_equal. unfold rs3; Simpl. unfold rs3, rs2, rs1; Simpl. 
+    intros. unfold rs3, rs2, rs1; Simpl.
   intros [rs' [EX' AG']].
-  exists rs'. split. apply exec_straight_step with rs1 m.
-  unfold exec_instr. rewrite gpr_or_zero_zero. 
-  rewrite (Val.add_commut Vzero). unfold const_high. rewrite high_half_zero. auto.
-  reflexivity.
-  apply exec_straight_step with rs2 m.
-  simpl. unfold rs2, rs1. Simpl.
-  reflexivity.
-  assumption. assumption.
+  exists rs'. split. eapply exec_straight_trans with (rs2 := rs3) (m2 := m). 
+  apply exec_straight_three with rs1 m rs2 m; auto. 
+  simpl. unfold rs3. f_equal. f_equal. f_equal. rewrite gpr_or_zero_not_zero by auto. 
+  unfold rs2; Simpl. apply low_high_half_zero. 
+  eexact EX'. auto. 
   (* Abased absolute *)
-  set (rs1 := nextinstr (rs#temp <- (Val.add (rs x) (const_high ge (Csymbol_high i i0))))).
+  set (rs1 := nextinstr (rs#temp <- (Val.add (rs x) (high_half ge i i0)))).
   exploit (MK1 (Csymbol_low i i0) temp rs1 k).
     simpl. rewrite gpr_or_zero_not_zero; eauto with asmgen.
     unfold rs1. Simpl. 
-    rewrite Val.add_assoc. simpl. rewrite csymbol_high_low. apply Val.add_commut. 
+    rewrite Val.add_assoc. rewrite low_high_half. apply Val.add_commut. 
     intros; unfold rs1; Simpl.
   intros [rs' [EX' AG']].
   exists rs'. split. apply exec_straight_step with rs1 m.

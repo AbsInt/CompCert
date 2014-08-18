@@ -415,13 +415,12 @@ let match_csts (cc: constant) (ec: int32): checker = fun ffw ->
       end
   | Csymbol_sda (ident, i) ->
       (* sda should be handled separately in places it occurs *)
-      fatal "Unhandled Csymbol_sda, please report."
+      ERR("Incorrect reference to near-data symbol "
+                ^ Hashtbl.find ffw.sf.ident_to_name ident)
   | Csymbol_rel_low (ident, i) | Csymbol_rel_high (ident, i) ->
-      (* not checked yet *)
-      OK((ff_ef ^%=
-           (add_log (WARNING("Cannot check access to far-data symbol " ^
-                              Hashtbl.find ffw.sf.ident_to_name ident))))
-         ffw)
+      (* should be handled separately in places it occurs *)
+      ERR("Incorrect reference to far-data symbol " 
+                ^ Hashtbl.find ffw.sf.ident_to_name ident)
 
 let match_z_int32 (cz: Z.t) (ei: int32) =
   let cz = z_int32 cz in
@@ -736,6 +735,23 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= match_iregs r1  rA
               >>= match_csts  cst (exts simm)
               >>= recur_simpl
+          | _ -> error
+          end
+      | Paddis(rd, r1, Csymbol_rel_high(id, ofs)) ->
+          begin match cs with
+          | Paddi(rd', r1', Csymbol_rel_low(id', ofs')) :: cs
+            when id' = id && ofs' = ofs ->
+              begin match ecode with
+              | ADDIS(rD, rA, simm) :: ADDI(rD', rA', simm') :: es ->
+                  OK(fw)
+                  >>= match_iregs rd  rD
+                  >>= match_iregs r1' rA'
+                  >>= match_iregs rd' rD'
+                  >>= check_sda id ofs rA
+                        Int32.(add (shift_left (of_int simm) 16) (exts simm'))
+                  >>= compare_code cs es (Int32.add 8l pc)
+              | _ -> error
+              end
           | _ -> error
           end
       | Paddis(rd, r1, cst) ->

@@ -314,11 +314,6 @@ Definition transl_cond_op
 (** Translation of the arithmetic operation [r <- op(args)].
   The corresponding instructions are prepended to [k]. *)
 
-Definition csymbol_high (s: ident) (ofs: int) (rel: bool) :=
-  if rel then Csymbol_rel_high s ofs else Csymbol_high s ofs.
-Definition csymbol_low (s: ident) (ofs: int) (rel: bool) :=
-  if rel then Csymbol_rel_low s ofs else Csymbol_low s ofs.
-
 Definition transl_op
               (op: operation) (args: list mreg) (res: mreg) (k: code) :=
   match op, args with
@@ -338,10 +333,12 @@ Definition transl_op
       do r <- ireg_of res;
       OK (if symbol_is_small_data s ofs then
            Paddi r GPR0 (Csymbol_sda s ofs) :: k
+         else if symbol_is_rel_data s ofs then
+           Paddis r GPR0 (Csymbol_rel_high s ofs) ::
+           Paddi r r (Csymbol_rel_low s ofs) :: k
          else
-           let rel := symbol_is_rel_data s ofs in
-           Paddis r GPR0 (csymbol_high s ofs rel) ::
-           Paddi r r (csymbol_low s ofs rel) :: k)
+           Paddis r GPR0 (Csymbol_high s ofs) ::
+           Paddi r r (Csymbol_low s ofs) :: k)
   | Oaddrstack n, nil =>
       do r <- ireg_of res; OK (addimm r GPR1 n k)
   | Ocast8signed, a1 :: nil =>
@@ -359,9 +356,10 @@ Definition transl_op
              Paddi GPR0 GPR0 (Csymbol_sda s ofs) ::
              Padd r r1 GPR0 :: k
            else if symbol_is_rel_data s ofs then
-             Paddis GPR0 GPR0 (Csymbol_rel_high s ofs) ::
-             Padd r r1 GPR0 ::
-             Paddi r r (Csymbol_rel_low s ofs) :: k
+             Pmr GPR0 r1 ::
+             Paddis r GPR0 (Csymbol_rel_high s ofs) ::
+             Paddi r r (Csymbol_rel_low s ofs) ::
+             Padd r r GPR0 :: k
            else
              Paddis r r1 (Csymbol_high s ofs) ::
              Paddi r r (Csymbol_low s ofs) :: k)
@@ -531,19 +529,23 @@ Definition transl_memory_access
   | Aglobal symb ofs, nil =>
       OK (if symbol_is_small_data symb ofs then
            mk1 (Csymbol_sda symb ofs) GPR0 :: k
+         else if symbol_is_rel_data symb ofs then
+           Paddis temp GPR0 (Csymbol_rel_high symb ofs) ::
+           Paddi temp temp (Csymbol_rel_low symb ofs) ::
+           mk1 (Cint Int.zero) temp :: k
          else
-           let rel := symbol_is_rel_data symb ofs in
-           Paddis temp GPR0 (csymbol_high symb ofs rel) ::
-           mk1 (csymbol_low symb ofs rel) temp :: k)
+           Paddis temp GPR0 (Csymbol_high symb ofs) ::
+           mk1 (Csymbol_low symb ofs) temp :: k)
   | Abased symb ofs, a1 :: nil =>
       do r1 <- ireg_of a1;
       OK (if symbol_is_small_data symb ofs then
             Paddi GPR0 GPR0 (Csymbol_sda symb ofs) ::
             mk2 r1 GPR0 :: k
           else if symbol_is_rel_data symb ofs then
-            Paddis GPR0 GPR0 (Csymbol_rel_high symb ofs) ::
-            Padd temp r1 GPR0 ::
-            mk1 (Csymbol_rel_low symb ofs) temp :: k
+            Pmr GPR0 r1 ::
+            Paddis temp GPR0 (Csymbol_rel_high symb ofs) ::
+            Paddi temp temp (Csymbol_rel_low symb ofs) ::
+            mk2 temp GPR0 :: k
           else
             Paddis temp r1 (Csymbol_high symb ofs) ::
             mk1 (Csymbol_low symb ofs) temp :: k)
