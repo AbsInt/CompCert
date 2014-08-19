@@ -77,25 +77,30 @@ let comment =
   | Linux -> "#"
   | Diab -> ";"
 
+let symbol_fragment oc s n op =
+      fprintf oc "(%a)%s" symbol_offset (s, camlint_of_coqint n) op
+
 let constant oc cst =
   match cst with
   | Cint n ->
       fprintf oc "%ld" (camlint_of_coqint n)
   | Csymbol_low(s, n) ->
-      fprintf oc "(%a)@l" symbol_offset (s, camlint_of_coqint n)
+      symbol_fragment oc s n "@l"
   | Csymbol_high(s, n) ->
-      fprintf oc "(%a)@ha" symbol_offset (s, camlint_of_coqint n)
+      symbol_fragment oc s n "@ha"
   | Csymbol_sda(s, n) ->
-      begin match target with
-      | Linux ->
-          fprintf oc "(%a)@sda21" symbol_offset (s, camlint_of_coqint n)
-      | Diab ->
-          fprintf oc "(%a)@sdarx" symbol_offset (s, camlint_of_coqint n)
-      end
+      symbol_fragment oc s n
+        (match target with Linux -> "@sda21" | Diab  -> "@sdarx")
+  (* 32-bit relative addressing is supported by the Diab tools but not by
+     GNU binutils.  In the latter case, for testing purposes, we treat
+     them as absolute addressings.  The default base register being GPR0,
+     this produces correct code, albeit with absolute addresses. *)
   | Csymbol_rel_low(s, n) ->
-      fprintf oc "(%a)@sdax@l" symbol_offset (s, camlint_of_coqint n)
+      symbol_fragment oc s n
+        (match target with Linux -> "@l" | Diab  -> "@sdax@l")
   | Csymbol_rel_high(s, n) ->
-      fprintf oc "(%a)@sdarx@ha" symbol_offset (s, camlint_of_coqint n)
+      symbol_fragment oc s n
+        (match target with Linux -> "@ha" | Diab -> "@sdarx@ha")
 
 let num_crbit = function
   | CRbit_0 -> 0
@@ -159,9 +164,12 @@ let preg oc = function
 let name_of_section_Linux = function
   | Section_text -> ".text"
   | Section_data i -> if i then ".data" else "COMM"
-  | Section_small_data i -> if i then ".sdata" else "COMM"
+  | Section_small_data i -> 
+      if i
+      then ".section	.sdata,\"aw\",@progbits"
+      else ".section	.sbss,\"aw\",@progbits"
   | Section_const -> ".rodata"
-  | Section_small_const -> ".sdata2"
+  | Section_small_const -> ".section	.sdata2,\"a\",@progbits"
   | Section_string -> ".rodata"
   | Section_literal -> ".section	.rodata.cst8,\"aM\",@progbits,8"
   | Section_jumptable -> ".text"

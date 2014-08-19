@@ -69,7 +69,7 @@ let check_st_bind atom (sym: elf32_sym): s_framework -> s_framework =
 let name_of_section_Linux: section_name -> string = function
 | Section_text -> ".text"
 | Section_data i -> if i then ".data" else "COMM"
-| Section_small_data i -> if i then ".sdata" else "COMM"
+| Section_small_data i -> if i then ".sdata" else ".sbss"
 | Section_const -> ".rodata"
 | Section_small_const -> ".sdata2"
 | Section_string -> ".rodata"
@@ -1936,6 +1936,15 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
+      | Pstb(rd, Csymbol_sda(ident, ofs), r1) ->
+          begin match ecode with
+          | STB(rS, rA, d) :: es ->
+              OK(fw)
+              >>= match_iregs rd  rS
+              >>= check_sda ident ofs rA (exts d)
+              >>= recur_simpl
+          | _ -> error
+          end
       | Pstb(rd, cst, r1) ->
           begin match ecode with
           | STB(rS, rA, d) :: es ->
@@ -1953,6 +1962,15 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= match_iregs rd rS
               >>= match_iregs r1 rA
               >>= match_iregs r2 rB
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Pstfd(rd, Csymbol_sda(ident, ofs), r1) ->
+          begin match ecode with
+          | STFD(frS, rA, d) :: es ->
+              OK(fw)
+              >>= match_fregs rd  frS
+              >>= check_sda ident ofs rA (exts d)
               >>= recur_simpl
           | _ -> error
           end
@@ -1986,6 +2004,15 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
+      | Pstfs(rd, Csymbol_sda(ident, ofs), r1) ->
+          begin match ecode with
+          | STFS(frS, rA, d) :: es ->
+              OK(fw)
+              >>= match_fregs rd  frS
+              >>= check_sda ident ofs rA (exts d)
+              >>= recur_simpl
+          | _ -> error
+          end
       | Pstfs(rd, cst, r1) ->
           begin match ecode with
           | STFS(frS, rA, d) :: es ->
@@ -2003,6 +2030,15 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= match_fregs rd frS
               >>= match_iregs r1 rA
               >>= match_iregs r2 rB
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Psth(rd, Csymbol_sda(ident, ofs),  r1) ->
+          begin match ecode with
+          | STH(rS, rA, d) :: es ->
+              OK(fw)
+              >>= match_iregs rd  rS
+              >>= check_sda ident ofs rA (exts d)
               >>= recur_simpl
           | _ -> error
           end
@@ -2033,6 +2069,15 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= match_iregs rd rS
               >>= match_iregs r1 rA
               >>= match_iregs r2 rB
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Pstw(rd, Csymbol_sda(ident, ofs), r1) ->
+          begin match ecode with
+          | STW(rS, rA, d) :: es ->
+              OK(fw)
+              >>= match_iregs rd  rS
+              >>= check_sda ident ofs rA (exts d)
               >>= recur_simpl
           | _ -> error
           end
