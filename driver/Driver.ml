@@ -426,11 +426,12 @@ Language support options (use -fno-<opt> to turn off -f<opt>) :
   -finline-asm   Support inline 'asm' statements [off]
   -fall          Activate all language support options above
   -fnone         Turn off all language support options above
+Debugging options:
+  -g             Generate debugging information
 Code generation options: (use -fno-<opt> to turn off -f<opt>) :
   -O             Optimize for speed [on by default]
   -Os            Optimize for code size
   -ffpu          Use FP registers for some integer operations [on]
-  -fthumb        (ARM only) Use Thumb2 instruction encoding
   -fsmall-data <n>  Set maximal size <n> for allocation in small data area
   -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
   -ffloat-const-prop <n>  Control constant propagation of floats
@@ -439,9 +440,11 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>) :
   -falign-functions <n>  Set alignment (in bytes) of function entry points
   -falign-branch-targets <n>  Set alignment (in bytes) of branch targets
   -falign-cond-branches <n>  Set alignment (in bytes) of conditional branches
+Target processor options:
+  -mthumb        (ARM only) Use Thumb2 instruction encoding
+  -marm          (ARM only) Use classic ARM instruction encoding
+Assembling options:
   -Wa,<opt>      Pass option <opt> to the assembler
-Debugging options:
-  -g             Generate debugging information
 Linking options:
   -l<lib>        Link library <lib>
   -L<dir>        Add <dir> to search path for libraries
@@ -533,6 +536,8 @@ let cmdline_actions =
   "-Os$", Set option_Osize;
   "-O$", Unset option_Osize;
   "-timings$", Set option_timings;
+  "-mthumb$", Set option_mthumb;
+  "-marm$", Unset option_mthumb;
   "-fsmall-data$", Integer(fun n -> option_small_data := n);
   "-fsmall-const$", Integer(fun n -> option_small_const := n);
   "-ffloat-const-prop$", Integer(fun n -> option_ffloatconstprop := n);
@@ -554,7 +559,6 @@ let cmdline_actions =
   @ f_opt "inline-asm" option_finline_asm
   @ f_opt "fpu" option_ffpu
   @ f_opt "sse" option_ffpu (* backward compatibility *)
-  @ f_opt "thumb" option_fthumb
 
 let _ =
   try

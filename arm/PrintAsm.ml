@@ -26,7 +26,7 @@ let vfpv3 = Configuration.model >= "armv7"
 
 let hardware_idiv () =
   match Configuration.model with
-  | "armv7r" | "armv7m" -> !Clflags.option_fthumb
+  | "armv7r" | "armv7m" -> !Clflags.option_mthumb
   | _ -> false
 
 let literals_in_code = ref true     (* to be turned into a proper option *)
@@ -147,7 +147,7 @@ let neg_condition_name = function
    mode. *)
 
 let thumbS oc =
-  if !Clflags.option_fthumb then output_char oc 's'
+  if !Clflags.option_mthumb then output_char oc 's'
 
 (* Names of sections *)
 
@@ -245,7 +245,7 @@ let emit_constants oc =
 (* Generate code to load the address of id + ofs in register r *)
 
 let loadsymbol oc r id ofs =
-  if !Clflags.option_fthumb then begin
+  if !Clflags.option_mthumb then begin
     fprintf oc "	movw	%a, #:lower16:%a\n"
             ireg r print_symb_ofs (id, ofs);
     fprintf oc "	movt	%a, #:upper16:%a\n"
@@ -560,7 +560,7 @@ let print_builtin_inline oc name args res =
         (* No "rsc" instruction in Thumb2.  Emulate based on
              rsc a, b, #0 == a <- AddWithCarry(~b, 0, carry)
                           == mvn a, b; adc a, a, #0 *)
-        if !Clflags.option_fthumb then begin
+        if !Clflags.option_mthumb then begin
           fprintf oc "	mvn	%a, %a\n" ireg rh ireg ah;
           fprintf oc "	adc	%a, %a, #0\n" ireg rh ireg rh; 3
         end else begin
@@ -754,7 +754,7 @@ let print_instruction oc = function
   (* Core instructions *)
   | Padd(r1, r2, so) ->
       fprintf oc "	add%s	%a, %a, %a\n"
-         (if !Clflags.option_fthumb && r2 <> IR14 then "s" else "")
+         (if !Clflags.option_mthumb && r2 <> IR14 then "s" else "")
          ireg r1 ireg r2 shift_op so; 1
   | Pand(r1, r2, so) ->
       fprintf oc "	and%t	%a, %a, %a\n"
@@ -1003,7 +1003,7 @@ let print_instruction oc = function
       fprintf oc "	mov%s	%a, %a\n"
                  (neg_condition_name cond) ireg r1 shift_op ifnot; 2
   | Pbtbl(r, tbl) ->
-      if !Clflags.option_fthumb then begin
+      if !Clflags.option_mthumb then begin
         let lbl = new_label() in
         fprintf oc "	adr	r14, .L%d\n" lbl;
         fprintf oc "	add	r14, r14, %a, lsl #2\n" ireg r;
@@ -1092,7 +1092,7 @@ let print_function oc name fn =
   fprintf oc "	.balign %d\n" alignment;
   if not (C2C.atom_is_static name) then
     fprintf oc "	.global	%a\n" print_symb name;
-  if !Clflags.option_fthumb then
+  if !Clflags.option_mthumb then
     fprintf oc "	.thumb_func\n";
   fprintf oc "%a:\n" print_symb name;
   print_location oc (C2C.atom_location name);
@@ -1193,7 +1193,7 @@ let print_program oc p =
            | _ -> "armv7");
   fprintf oc "	.fpu	%s\n"
           (if vfpv3 then "vfpv3-d16" else "vfpv2");
-  fprintf oc "	.%s\n" (if !Clflags.option_fthumb then "thumb" else "arm");
+  fprintf oc "	.%s\n" (if !Clflags.option_mthumb then "thumb" else "arm");
   List.iter (print_globdef oc) p.prog_defs
 
 

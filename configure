@@ -36,10 +36,10 @@ Supported targets:
   manual           (edit configuration file by hand)
 
 For ARM targets, the "arm-" prefix can be refined into:
-  armv6-           ARMv6 + VFPv2
-  armv7a-          ARMv7a + VFPv3-d16   (default)
-  armv7r-          ARMv7r + VFPv3-d16
-  armv7m-          ARMv7m + VFPv3-d16
+  armv6-           ARMv6   + VFPv2
+  armv7a-          ARMv7-A + VFPv3-d16   (default)
+  armv7r-          ARMv7-R + VFPv3-d16
+  armv7m-          ARMv7-M + VFPv3-d16
 
 Options:
   -prefix <dir>    Install in <dir>/bin and <dir>/lib/compcert
