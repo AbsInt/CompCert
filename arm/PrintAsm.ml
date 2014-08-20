@@ -599,21 +599,21 @@ let print_builtin_inline oc name args res =
   | "__builtin_isb", [], _ ->
       fprintf oc "	isb\n"; 1
   | "__builtin_ldrex", [IR addr], [IR dst] ->
-      fprintf oc "	ldrex	%a, [%a]\n" dst addr
+      fprintf oc "	ldrex	%a, [%a]\n" ireg dst ireg addr; 1
   | "__builtin_ldrexb", [IR addr], [IR dst] ->
-      fprintf oc "	ldrexb	%a, [%a]\n" dst addr
+      fprintf oc "	ldrexb	%a, [%a]\n" ireg dst ireg addr; 1
   | "__builtin_ldrexd", [IR addr], [IR dsth; IR dstl] ->
-      fprintf oc "	ldrexd	%a, %a, [%a]\n" dstl dsth addr
+      fprintf oc "	ldrexd	%a, %a, [%a]\n" ireg dstl ireg dsth ireg addr; 1
   | "__builtin_ldrexh", [IR addr], [IR dst] ->
-      fprintf oc "	ldrexh	%a, [%a]\n" dst addr
+      fprintf oc "	ldrexh	%a, [%a]\n" ireg dst ireg addr; 1
   | "__builtin_strex", [IR addr; IR src], [IR res] ->
-      fprintf oc "	strex	%a, %a, [%a]\n" res src addr; 1
+      fprintf oc "	strex	%a, %a, [%a]\n" ireg res ireg src ireg addr; 1
   | "__builtin_strexb", [IR addr; IR src], [IR res] ->
-      fprintf oc "	strexb	%a, %a, [%a]\n" res src addr; 1
+      fprintf oc "	strexb	%a, %a, [%a]\n" ireg res ireg src ireg addr; 1
   | "__builtin_strexd", [IR addr; IR srch; IR srcl], [IR res] ->
-      fprintf oc "	strexd	%a, %a, %a, [%a]\n" res srcl srch addr; 1
+      fprintf oc "	strexd	%a, %a, %a, [%a]\n" ireg res ireg srcl ireg srch ireg addr; 1
   | "__builtin_strexh", [IR addr; IR src], [IR res] ->
-      fprintf oc "	strexh	%a, %a, [%a]\n" res src addr; 1
+      fprintf oc "	strexh	%a, %a, [%a]\n" ireg res ireg src ireg addr; 1
 
 
   (* Vararg stuff *)
