@@ -115,8 +115,12 @@ case "$target" in
         exit 2;;
     esac
     case "$target" in
-      *-eabi) abi="eabi";;
+      *-eabi|*-linux) abi="eabi";;
       *-eabihf|*-hf|*-hardfloat) abi="hardfloat";;
+      *)
+        echo "Unknown target '$target'." 1>&2
+        echo "$usage" 1>&2
+        exit 2;;
     esac
     system="linux"
     cc="${toolprefix}gcc"
