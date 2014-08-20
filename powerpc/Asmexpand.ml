@@ -418,6 +418,12 @@ let expand_builtin_inline name args res =
       emit (Pisync)
   | "__builtin_trap", [], _ ->
       emit (Ptrap)
+  | "__builtin_lwar", [IR addr], [IR res] ->
+      emit (Plwarx(res, GPR0, addr))
+  | "__builtin_stwc", [IR addr; IR src], [IR res] ->
+      emit (Pstwcx_(src, GPR0, addr));
+      emit (Pmfcr res);
+      emit (Prlwinm(res, res, Z.of_uint 3, _1))
   (* Vararg stuff *)
   | "__builtin_va_start", [IR a], _ ->
       expand_builtin_va_start a

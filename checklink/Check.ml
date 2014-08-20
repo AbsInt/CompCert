@@ -1664,6 +1664,16 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
+      | Plwarx(rd, r1, r2) ->
+          begin match ecode with
+          | LWARX(rD, rA, rB):: es ->
+              OK(fw)
+              >>= match_iregs rd rD
+              >>= match_iregs r1 rA
+              >>= match_iregs r2 rB
+              >>= recur_simpl
+          | _ -> error
+          end
       | Plwbrx(rd, r1, r2) ->
           begin match ecode with
           | LWBRX(rD, rA, rB):: es ->
@@ -2114,6 +2124,16 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
       | Pstwbrx(rd, r1, r2) ->
           begin match ecode with
           | STWBRX(rS, rA, rB) :: es ->
+              OK(fw)
+              >>= match_iregs rd rS
+              >>= match_iregs r1 rA
+              >>= match_iregs r2 rB
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Pstwcx_(rd, r1, r2) ->
+          begin match ecode with
+          | STWCX_(rS, rA, rB) :: es ->
               OK(fw)
               >>= match_iregs rd rS
               >>= match_iregs r1 rA

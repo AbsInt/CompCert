@@ -512,6 +512,8 @@ let print_instruction oc tbl pc fallthrough = function
       fprintf oc "	addis	%a, 0, %a\n" ireg GPR12 label_high lbl;
       fprintf oc "	lfs	%a, %a(%a) %s %.18g\n" freg r1 label_low lbl ireg GPR12 comment (camlfloat_of_coqfloat32 c);
       float32_literals := (lbl, camlint_of_coqint (Floats.Float32.to_bits c)) :: !float32_literals;
+  | Plwarx(r1, r2, r3) ->
+      fprintf oc "	lwarx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Plwbrx(r1, r2, r3) ->
       fprintf oc "	lwbrx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Plwz(r1, c, r2) | Plwz_a(r1, c, r2) ->
@@ -600,6 +602,8 @@ let print_instruction oc tbl pc fallthrough = function
       fprintf oc "	stwxu	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pstwbrx(r1, r2, r3) ->
       fprintf oc "	stwbrx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+  | Pstwcx_(r1, r2, r3) ->
+      fprintf oc "	stwcx.	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Psubfc(r1, r2, r3) ->
       fprintf oc "	subfc	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Psubfe(r1, r2, r3) ->

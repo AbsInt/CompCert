@@ -84,7 +84,11 @@ let builtins = {
     "__builtin_isync",
       (TVoid [], [], false);
     "__builtin_trap",
-      (TVoid [], [], false)
+      (TVoid [], [], false);
+    "__builtin_lwar",
+      (TInt(IUInt, []), [TPtr(TInt(IUInt, [AConst]), [])], false);
+    "__builtin_stwc",
+      (TInt(IInt, []), [TPtr(TInt(IUInt, []), []); TInt(IUInt, [])], false)
   ]
 }
 

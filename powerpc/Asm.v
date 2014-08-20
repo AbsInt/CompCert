@@ -221,6 +221,7 @@ Inductive instruction : Type :=
   | Plwzx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
   | Plwz_a: ireg -> constant -> ireg -> instruction           (**r load 32-bit quantity to int reg *)
   | Plwzx_a: ireg -> ireg -> ireg -> instruction              (**r same, with 2 index regs *)
+  | Plwarx: ireg -> ireg -> ireg -> instruction               (**r load with reservation *)
   | Plwbrx: ireg -> ireg -> ireg -> instruction               (**r load 32-bit int and reverse endianness *)
   | Pmfcr: ireg -> instruction                                (**r move condition register to reg *)
   | Pmfcrbit: ireg -> crbit -> instruction                    (**r move condition bit to reg (pseudo) *)
@@ -263,6 +264,7 @@ Inductive instruction : Type :=
   | Pstw_a: ireg -> constant -> ireg -> instruction           (**r store 32-bit quantity from int reg *)
   | Pstwx_a: ireg -> ireg -> ireg -> instruction              (**r same, with 2 index regs *)
   | Pstwbrx: ireg -> ireg -> ireg -> instruction              (**r store 32-bit int with reverse endianness *)
+  | Pstwcx_: ireg -> ireg -> ireg -> instruction              (**r store conditional *)
   | Psubfc: ireg -> ireg -> ireg -> instruction               (**r reversed integer subtraction *)
   | Psubfe: ireg -> ireg -> ireg -> instruction               (**r reversed integer subtraction with carry *)
   | Psubfze: ireg -> ireg -> instruction                      (**r integer opposite with carry *)
@@ -869,12 +871,14 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pfrsqrte _ _
   | Pfres _ _
   | Pfsel _ _ _ _
+  | Plwarx _ _ _
   | Plwbrx _ _ _
   | Pisync
   | Plhbrx _ _ _
   | Plwzu _ _ _
   | Pmfcr _
   | Pstwbrx _ _ _
+  | Pstwcx_ _ _ _
   | Pstfdu _ _ _
   | Psthbrx _ _ _
   | Pstwu _ _ _
