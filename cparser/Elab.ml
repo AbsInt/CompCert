@@ -933,7 +933,10 @@ let elab_expr loc env a =
       { edesc = ECast(ty, b1); etyp = ty }
 
   | CAST ((spec, dcl), _) ->
-      error "cast of initializer expression is not supported"
+      err "compound literals are not supported";
+      (* continue with dummy expression of the correct type *)
+      let ty = elab_type loc env spec dcl in
+      { edesc = ECast(ty, nullconst); etyp = ty }
 
   | EXPR_SIZEOF a1 ->
       let b1 = elab a1 in
