@@ -157,8 +157,9 @@ Fixpoint validate (default: nat) (cases: table) (t: comptree)
       end
   | CTjumptable ofs sz tbl t' =>
       let tbl_len := list_length_z tbl in
-      zle 0 ofs && zle 0 sz && zlt (ofs + sz) modulus &&
-      zle sz tbl_len && zlt sz Int.modulus &&
+      zle 0 ofs && zlt ofs modulus &&
+      zle 0 sz && zlt sz modulus &&
+      zle (ofs + sz) modulus && zle sz tbl_len && zlt sz Int.modulus &&
       match split_between default ofs sz cases with
       | (inside, outside) =>
           validate_jumptable inside tbl ofs
@@ -195,7 +196,7 @@ Proof.
 - destruct (split_lt key cases) as [lc rc]; InvBooleans.
   constructor; eauto.
 - destruct (split_between default ofs sz cases) as [ins out]; InvBooleans. 
-  constructor; eauto; omega.
+  constructor; eauto.
 Qed.
 
 (** Semantic correctness proof for validation. *)
@@ -280,7 +281,7 @@ Lemma validate_jumptable_correct:
   forall cases tbl ofs v sz,
   validate_jumptable cases tbl ofs = true ->
   (v - ofs) mod modulus < sz ->
-  0 <= sz -> 0 <= ofs -> ofs + sz < modulus ->
+  0 <= sz -> 0 <= ofs -> ofs + sz <= modulus ->
   0 <= v < modulus ->
   sz <= list_length_z tbl ->
   list_nth_z tbl ((v - ofs) mod modulus) = Some(ZMap.get v cases).
