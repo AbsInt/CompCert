@@ -59,13 +59,13 @@ let builtins = {
     "__builtin_ldrexd",
       (TInt(IULongLong, []), [TPtr(TInt(IULongLong, [AConst]), [])], false);
     "__builtin_strex",
-      (TInt(IInt, []), [TPtr(TInt(IUInt, [AConst]), []); TInt(IUInt, [])], false);
+      (TInt(IInt, []), [TPtr(TInt(IUInt, []), []); TInt(IUInt, [])], false);
     "__builtin_strexb",
-      (TInt(IInt, []), [TPtr(TInt(IUChar, [AConst]), []); TInt(IUChar, [])], false);
+      (TInt(IInt, []), [TPtr(TInt(IUChar, []), []); TInt(IUChar, [])], false);
     "__builtin_strexh",
-      (TInt(IInt, []), [TPtr(TInt(IUShort, [AConst]), []); TInt(IUShort, [])], false);
+      (TInt(IInt, []), [TPtr(TInt(IUShort, []), []); TInt(IUShort, [])], false);
     "__builtin_strexd",
-      (TInt(IInt, []), [TPtr(TInt(IULongLong, [AConst]), []); TInt(IULongLong, [])], false);
+      (TInt(IInt, []), [TPtr(TInt(IULongLong, []), []); TInt(IULongLong, [])], false);
   ]
 }
 
