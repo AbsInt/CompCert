@@ -44,10 +44,28 @@ let builtins = {
     "__builtin_write32_reversed",
       (TVoid [], [TPtr(TInt(IUInt, []), []); TInt(IUInt, [])], false);
     (* Synchronization *)
+    "__builtin_dmb",
+      (TVoid [], [], false);
     "__builtin_dsb",
       (TVoid [], [], false);
     "__builtin_isb",
-      (TVoid [], [], false)
+      (TVoid [], [], false);
+    "__builtin_ldrex",
+      (TInt(IUInt, []), [TPtr(TInt(IUInt, [AConst]), [])], false);
+    "__builtin_ldrexb",
+      (TInt(IUChar, []), [TPtr(TInt(IUChar, [AConst]), [])], false);
+    "__builtin_ldrexh",
+      (TInt(IUShort, []), [TPtr(TInt(IUShort, [AConst]), [])], false);
+    "__builtin_ldrexd",
+      (TInt(IULongLong, []), [TPtr(TInt(IULongLong, [AConst]), [])], false);
+    "__builtin_strex",
+      (TInt(IInt, []), [TPtr(TInt(IUInt, [AConst]), []); TInt(IUInt, [])], false);
+    "__builtin_strexb",
+      (TInt(IInt, []), [TPtr(TInt(IUChar, [AConst]), []); TInt(IUChar, [])], false);
+    "__builtin_strexh",
+      (TInt(IInt, []), [TPtr(TInt(IUShort, [AConst]), []); TInt(IUShort, [])], false);
+    "__builtin_strexd",
+      (TInt(IInt, []), [TPtr(TInt(IULongLong, [AConst]), []); TInt(IULongLong, [])], false);
   ]
 }
 

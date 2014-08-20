@@ -592,10 +592,30 @@ let print_builtin_inline oc name args res =
   (* Synchronization *)
   | "__builtin_membar", [], _ ->
       0
+  | "__builtin_dmb", [], _ ->
+      fprintf oc "	dmb\n"; 1
   | "__builtin_dsb", [], _ ->
       fprintf oc "	dsb\n"; 1
   | "__builtin_isb", [], _ ->
       fprintf oc "	isb\n"; 1
+  | "__builtin_ldrex", [IR addr], [IR dst] ->
+      fprintf oc "	ldrex	%a, [%a]\n" dst addr
+  | "__builtin_ldrexb", [IR addr], [IR dst] ->
+      fprintf oc "	ldrexb	%a, [%a]\n" dst addr
+  | "__builtin_ldrexd", [IR addr], [IR dsth; IR dstl] ->
+      fprintf oc "	ldrexd	%a, %a, [%a]\n" dstl dsth addr
+  | "__builtin_ldrexh", [IR addr], [IR dst] ->
+      fprintf oc "	ldrexh	%a, [%a]\n" dst addr
+  | "__builtin_strex", [IR addr; IR src], [IR res] ->
+      fprintf oc "	strex	%a, %a, [%a]\n" res src addr; 1
+  | "__builtin_strexb", [IR addr; IR src], [IR res] ->
+      fprintf oc "	strexb	%a, %a, [%a]\n" res src addr; 1
+  | "__builtin_strexd", [IR addr; IR srch; IR srcl], [IR res] ->
+      fprintf oc "	strexd	%a, %a, %a, [%a]\n" res srcl srch addr; 1
+  | "__builtin_strexh", [IR addr; IR src], [IR res] ->
+      fprintf oc "	strexh	%a, %a, [%a]\n" res src addr; 1
+
+
   (* Vararg stuff *)
   | "__builtin_va_start", [IR a], _ ->
       print_builtin_va_start oc a
