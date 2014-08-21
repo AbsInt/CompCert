@@ -29,7 +29,7 @@ Require Archi.
 -- Callee-save registers, whose value is preserved across a function call.
 -- Caller-save registers that can be modified during a function call.
 
-  We follow the PowerPC application binary interface (ABI) in our choice
+  We follow the ARM application binary interface (EABI) in our choice
   of callee- and caller-save registers.
 *)
 

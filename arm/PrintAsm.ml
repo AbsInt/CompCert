@@ -368,16 +368,21 @@ let print_annot_val oc txt args res =
   | [IR src], [IR dst] ->
       if dst = src then 0 else (fprintf oc "	mov	%a, %a\n" ireg dst ireg src; 1)
   | [FR src], [FR dst] ->
-      if dst = src then 0 else (fprintf oc "	fcpyd	%a, %a\n" freg dst freg src; 1)
+      if dst = src then 0 else (fprintf oc "	vmov.f64	%a, %a\n" freg dst freg src; 1)
   | _, _ -> assert false
 
 (* Handling of memcpy *)
 
-(* The ARM has strict alignment constraints. *)
+(* The ARM has strict alignment constraints for 2 and 4 byte accesses.
+   8-byte accesses must be 4-aligned. *)
 
 let print_builtin_memcpy_small oc sz al src dst =
   let rec copy ofs sz ninstr =
-    if sz >= 4 && al >= 4 then begin
+    if sz >= 8 && al >= 4 && !Clflags.option_ffpu then begin
+      fprintf oc "	vldr	%a, [%a, #%d]\n" freg FR7 ireg src ofs;
+      fprintf oc "	vstr	%a, [%a, #%d]\n" freg FR7 ireg dst ofs;
+      copy (ofs + 8) (sz - 8) (ninstr + 2)
+    end else if sz >= 4 && al >= 4 then begin
       fprintf oc "	ldr	%a, [%a, #%d]\n" ireg IR14 ireg src ofs;
       fprintf oc "	str	%a, [%a, #%d]\n" ireg IR14 ireg dst ofs;
       copy (ofs + 4) (sz - 4) (ninstr + 2)
