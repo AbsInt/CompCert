@@ -65,9 +65,10 @@ let rec add_exp e =
   | EBinop(op, e1, e2, ty) -> add_exp e1; add_exp e2
   | EConditional(e1, e2, e3) -> add_exp e1; add_exp e2; add_exp e3
   | ECast(ty, e1) -> add_typ ty; add_exp e1
+  | ECompound(ty, ie) -> add_typ ty; add_init ie
   | ECall(e1, el) -> add_exp e1; List.iter add_exp el
 
-let rec add_init = function
+and add_init = function
   | Init_single e -> add_exp e
   | Init_array il -> List.iter add_init il
   | Init_struct(id, il) -> addref id; List.iter (fun (_, i) -> add_init i) il

@@ -789,6 +789,389 @@ let elab_type loc env spec decl =
   ty
 
 
+(* Elaboration of initializers. C99 section 6.7.8 *)
+
+let init_char_array_string opt_size s =
+  let len = Int64.of_int (String.length s) in
+  let size =
+    match opt_size with
+    | Some sz -> sz
+    | None -> Int64.succ len  (* include final 0 character *) in
+  let rec add_chars i init =
+    if i < 0L then init else begin
+      let c =
+        if i < len then Int64.of_int (Char.code s.[Int64.to_int i]) else 0L in
+      add_chars (Int64.pred i) (Init_single (intconst c IInt) :: init)
+    end in
+  Init_array (add_chars (Int64.pred size) [])
+
+let init_int_array_wstring opt_size s =
+  let len = Int64.of_int (List.length s) in
+  let size =
+    match opt_size with
+    | Some sz -> sz
+    | None -> Int64.succ len  (* include final 0 character *) in
+  let rec add_chars i s init =
+    if i < 0L then init else begin
+      let (c, s') =
+        match s with [] -> (0L, []) | c::s' -> (c, s') in
+      add_chars (Int64.pred i) s' (Init_single (intconst c IInt) :: init)
+    end in
+  Init_array (add_chars (Int64.pred size) (List.rev s) [])
+
+let check_init_type loc env a ty =
+  if valid_assignment env a ty then ()
+  else if valid_cast env a.etyp ty then
+    warning loc
+      "initializer has type@ %a@ instead of the expected type @ %a"
+      Cprint.typ a.etyp Cprint.typ ty
+  else
+    error loc
+      "initializer has type@ %a@ instead of the expected type @ %a"
+      Cprint.typ a.etyp Cprint.typ ty
+
+(* Representing initialization state using zippers *)
+
+module I = struct
+
+  type zipinit =
+    | Ztop of string * typ
+
+    | Zarray of zipinit                 (* ancestor *)
+              * typ                     (* type of elements *)
+              * int64 option            (* size *)
+              * init                    (* default initializer *)
+              * init list               (* elements before point, reversed *)
+              * int64                   (* position of point *)
+              * init list               (* elements after point *)
+
+    | Zstruct of zipinit                (* ancestor *)
+               * ident                  (* struct type *)
+               * (field * init) list    (* elements before current, reversed *)
+               * field                  (* current field *)
+               * (field * init) list    (* elements after current *)
+
+    | Zunion of zipinit                 (* ancestor *)
+              * ident                   (* union type *)
+              * field                   (* current member *)
+
+  type state = zipinit * init        (* current point & init for this point *)
+
+  (* The initial state: default initialization, current point at top *)
+  let top env name ty = (Ztop(name, ty), default_init env ty)
+
+  (* Change the initializer for the current point *)
+  let set (z, i) i' = (z, i')
+
+  (* Put the current point back to the top *)
+  let rec to_top = function
+    | Ztop(name, ty), i as zi -> zi
+    | Zarray(z, ty, sz, dfl, before, idx, after), i ->
+        to_top (z, Init_array (List.rev_append before (i :: after)))
+    | Zstruct(z, id, before, fld, after), i ->
+        to_top (z, Init_struct(id, List.rev_append before ((fld, i) :: after)))
+    | Zunion(z, id, fld), i ->
+        to_top (z, Init_union(id, fld, i))
+
+  (* Extract the initializer corresponding to the current state *)
+  let to_init zi = snd (to_top zi)
+
+  (* The type of the current point *)
+  let typeof = function
+    | Ztop(name, ty), i -> ty
+    | Zarray(z, ty, sz, dfl, before, idx, after), i -> ty
+    | Zstruct(z, id, before, fld, after), i -> fld.fld_typ
+    | Zunion(z, id, fld), i -> fld.fld_typ
+
+  (* The name of the path leading to the current point, for error reporting *)
+  let rec zipname = function
+    | Ztop(name, ty) -> name
+    | Zarray(z, ty, sz, dfl, before, idx, after) ->
+        sprintf "%s[%Ld]" (zipname z) idx
+    | Zstruct(z, id, before, fld, after) ->
+        sprintf "%s.%s" (zipname z) fld.fld_name
+    | Zunion(z, id, fld) ->
+        sprintf "%s.%s" (zipname z) fld.fld_name
+
+  let name (z, i) = zipname z
+
+  (* Auxiliary functions to deal with arrays *)
+  let index_below (idx: int64) (sz: int64 option) =
+    match sz with None -> true | Some sz -> idx < sz
+
+  let il_head dfl = function [] -> dfl | i1 :: il -> i1
+  let il_tail = function [] -> [] | i1 :: il -> il
+
+  (* Advance the current point to the next point in right-up order.
+     Return None if no next point, i.e. we are at top *)
+  let rec next = function
+    | Ztop(name, ty), i -> None
+    | Zarray(z, ty, sz, dfl, before, idx, after), i ->
+        let idx' = Int64.succ idx in
+        if index_below idx' sz
+        then Some(Zarray(z, ty, sz, dfl, i :: before, idx', il_tail after),
+                  il_head dfl after)
+        else next (z, Init_array (List.rev_append before (i :: after)))
+    | Zstruct(z, id, before, fld, []), i ->
+        next (z, Init_struct(id, List.rev_append before [(fld, i)]))
+    | Zstruct(z, id, before, fld, (fld1, i1) :: after), i ->
+        Some(Zstruct(z, id, (fld, i) :: before, fld1, after), i1)
+    | Zunion(z, id, fld), i ->
+        next (z, Init_union(id, fld, i))
+
+  (* Move the current point "down" to the first component of an array,
+     struct, or union.  No effect if the current point is a scalar. *)
+  let rec first env (z, i as zi) =
+    let ty = typeof zi in
+    match unroll env ty, i with
+    | TArray(ty, sz, _), Init_array il ->
+        if index_below 0L sz then begin
+          let dfl = default_init env ty in
+          Some(Zarray(z, ty, sz, dfl, [], 0L, il_tail il), il_head dfl il)
+        end
+        else None
+    | TStruct(id, _), Init_struct(id', []) ->
+        None
+    | TStruct(id, _), Init_struct(id', (fld1, i1) :: flds) ->
+        Some(Zstruct(z, id, [], fld1, flds), i1)
+    | TUnion(id, _), Init_union(id', fld, i) ->
+        begin match (Env.find_union env id).ci_members with
+        | [] -> None
+        | fld1 :: _ ->
+            Some(Zunion(z, id, fld1),
+                 if fld.fld_name = fld1.fld_name
+                 then i
+                 else default_init env fld1.fld_typ)
+        end 
+    | (TStruct _ | TUnion _), Init_single a ->
+        (* This is a previous whole-struct initialization that we
+           are going to overwrite.  Revert to the default initializer. *)
+        first env (z, default_init env ty)
+    | _ ->
+        Some (z, i)
+
+  (* Move to the [n]-th element of the current point, which must be
+     an array. *)
+  let index env (z, i as zi) n =
+    match unroll env (typeof zi), i with
+    | TArray(ty, sz, _), Init_array il ->
+        if n >= 0L && index_below n sz then begin 
+          let dfl = default_init env ty in
+          let rec loop p before after =
+            if p = n then
+              Some(Zarray(z, ty, sz, dfl, before, n, il_tail after),
+                   il_head dfl after)
+            else
+              loop (Int64.succ p)
+                   (il_head dfl after :: before)
+                   (il_tail after)
+          in loop 0L [] il
+        end else
+          None
+    | _, _ ->
+        None
+
+  (* Move to the member named [name] of the current point, which must be
+     a struct or a union. *)
+  let rec member env (z, i as zi) name =
+    let ty = typeof zi in
+    match unroll env ty, i with
+    | TStruct(id, _), Init_struct(id', flds) ->
+        let rec find before = function
+          | [] -> None
+          | (fld, i as f_i) :: after ->
+              if fld.fld_name = name then
+                Some(Zstruct(z, id, before, fld, after), i)
+              else
+                find (f_i :: before) after
+        in find [] flds
+    | TUnion(id, _), Init_union(id', fld, i) ->
+        if fld.fld_name = name then
+          Some(Zunion(z, id, fld), i)
+        else begin
+          let rec find = function
+            | [] -> None
+            | fld1 :: rem ->
+                if fld1.fld_name = name then
+                  Some(Zunion(z, id, fld1), default_init env fld1.fld_typ)
+                else
+                  find rem
+           in find (Env.find_union env id).ci_members
+         end
+    | (TStruct _ | TUnion _), Init_single a ->
+        member env (z, default_init env ty) name
+    | _, _ ->
+        None
+end
+
+(* Interpret the given designator, moving the initialization state [zi]
+   "down" accordingly. *)
+
+let rec elab_designator loc env zi desig =
+  match desig with
+  | [] -> 
+      zi
+  | INFIELD_INIT name :: desig' ->
+      begin match I.member env zi name with
+      | Some zi' ->
+          elab_designator loc env zi' desig'
+      | None ->
+          error loc "%s has no member named %s" (I.name zi) name;
+          raise Exit
+      end
+  | ATINDEX_INIT a :: desig' ->
+      begin match Ceval.integer_expr env (!elab_expr_f loc env a) with
+      | None ->
+          error loc "array element designator for %s is not a compile-time constant"
+                    (I.name zi);
+          raise Exit
+      | Some n ->
+          match I.index env zi n with
+          | Some zi' ->
+              elab_designator loc env zi' desig'
+          | None ->
+              error loc "bad array element designator %Ld within %s"
+                      n (I.name zi);
+            raise Exit
+      end
+
+(* Elaboration of an initialization expression.  Return the corresponding
+   initializer. *)
+
+let elab_init loc env root ty_root ie =
+
+(* Perform the initializations described by the list [il] over
+   the initialization state [zi].  [first] is true if we are at the
+   beginning of a braced initializer.  Returns the final initializer. *)
+
+let rec elab_list zi il first =
+  match il with
+  | [] ->
+      (* All initialization items consumed. *)
+      I.to_init zi
+  | (desig, item) :: il' ->
+      if desig = [] then begin
+        match (if first then I.first env zi else I.next zi)
+        with
+        | None ->
+            warning loc "excess elements at end of initializer for %s, ignored"
+                        (I.name zi);
+            I.to_init zi
+        | Some zi' ->
+            elab_item zi' item il'
+      end else
+        elab_item (elab_designator loc env (I.to_top zi) desig) item il'
+
+(* Perform the initialization described by [item] for the current
+   subobject of state [zi].  Continue initializing with the list [il]. *)
+
+and elab_item zi item il =
+  let ty = I.typeof zi in
+  match item, unroll env ty with
+  (* Special case char array = "string literal" 
+               or wchar array = L"wide string literal" *)
+  | (SINGLE_INIT (CONSTANT (CONST_STRING(w, s)))
+     | COMPOUND_INIT [_, SINGLE_INIT(CONSTANT (CONST_STRING(w, s)))]),
+    TArray(ty_elt, sz, _)
+    when is_integer_type env ty_elt ->
+      begin match elab_string_literal loc w s, unroll env ty_elt with
+      | CStr s, TInt((IChar | ISChar | IUChar), _) ->
+          if not (I.index_below (Int64.of_int(String.length s - 1)) sz) then
+            warning loc "initializer string for array of chars %s is too long"
+                        (I.name zi);
+          elab_list (I.set zi (init_char_array_string sz s)) il false
+      | CStr _, _ ->
+          error loc "initialization of an array of non-char elements with a string literal";
+          elab_list zi il false
+      | CWStr s, TInt(ik, _) when ik = wchar_ikind ->
+          if not (I.index_below (Int64.of_int(List.length s - 1)) sz) then
+            warning loc "initializer string for array of wide chars %s is too long"
+                        (I.name zi);
+          elab_list (I.set zi (init_int_array_wstring sz s)) il false
+      | CWStr _, _ ->
+          error loc "initialization of an array of non-wchar_t elements with a wide string literal";
+          elab_list zi il false
+      | _ -> assert false
+      end
+  (* Brace-enclosed compound initializer *)
+  | COMPOUND_INIT il', _ ->
+      (* Process the brace-enclosed stuff, obtaining its initializer *)
+      let ini' = elab_list (I.top env (I.name zi) ty) il' true in
+      (* Initialize current subobject with this state, and continue *)
+      elab_list (I.set zi ini') il false
+  (* Single expression *)
+  | SINGLE_INIT a, _ ->
+      let a' = !elab_expr_f loc env a in
+      elab_single zi a' il
+  (* No initializer: can this happen? *)
+  | NO_INIT, _ ->
+      elab_list zi il false
+
+(* Perform initialization by a single expression [a] for the current
+   subobject of state [zi],  Continue initializing with the list [il']. *)
+
+and elab_single zi a il =
+  let ty = I.typeof zi in
+  match unroll env ty with
+  | TInt _ | TEnum _ | TFloat _ | TPtr _ ->
+      (* This is a scalar: do direct initialization and continue *)
+      check_init_type loc env a ty;
+      elab_list (I.set zi (Init_single a)) il false
+  | TStruct _ | TUnion _ when compatible_types ~noattrs:true env ty a.etyp ->
+      (* This is a composite that can be initialized directly
+         from the expression: do as above *)
+      elab_list (I.set zi (Init_single a)) il false
+  | TStruct _ | TUnion _ | TArray _ ->
+      (* This is an aggregate: we need to drill into it, recursively *)
+      begin match I.first env zi with
+      | Some zi' ->
+          elab_single zi' a il
+      | None ->
+          error loc "initializer for aggregate %s with no elements requires explicit braces"
+                    (I.name zi);
+          raise Exit
+      end
+  | _ ->
+      error loc "impossible to initialize %s of type@ %a"
+                (I.name zi) Cprint.typ ty;
+      raise Exit
+
+(* Start with top-level object initialized to default *)
+
+in elab_item (I.top env root ty_root) ie []
+
+(* Elaboration of a top-level initializer *)
+
+let elab_initial loc env root ty ie =
+  match ie with
+  | NO_INIT -> None
+  | _ ->
+    try
+      Some (elab_init loc env root ty ie)
+    with
+    | Exit -> None  (* error was already reported *)
+    | Env.Error msg -> error loc "%s" (Env.error_message msg); None
+
+(* Complete an array type with the size obtained from the initializer:
+   "int x[] = { 1, 2, 3 }" becomes "int x[3] = ..." *)
+
+let fixup_typ loc env ty init =
+  match unroll env ty, init with
+  | TArray(ty_elt, None, attr), Init_array il ->
+      if il = [] then warning loc "array of size 0";
+      TArray(ty_elt, Some(Int64.of_int(List.length il)), attr)
+  | _ -> ty
+
+(* Entry point *)
+
+let elab_initializer loc env root ty ie =
+  match elab_initial loc env root ty ie with
+  | None ->
+      (ty, None)
+  | Some init ->
+      (fixup_typ loc env ty init, Some init)
+
+
 (* Elaboration of expressions *)
 
 let elab_expr loc env a =
@@ -923,7 +1306,7 @@ let elab_expr loc env a =
   | UNARY(POSDECR, a1) ->
       elab_pre_post_incr_decr Opostdecr "postfix '--'" a1
 
-(* 6.5.3 Unary expressions *)
+(* 6.5.4 Cast operators *)
 
   | CAST ((spec, dcl), SINGLE_INIT a1) ->
       let ty = elab_type loc env spec dcl in
@@ -932,11 +1315,16 @@ let elab_expr loc env a =
         err "illegal cast from %a@ to %a" Cprint.typ b1.etyp Cprint.typ ty;
       { edesc = ECast(ty, b1); etyp = ty }
 
-  | CAST ((spec, dcl), _) ->
-      err "compound literals are not supported";
-      (* continue with dummy expression of the correct type *)
+(* 6.5.2.5 Compound literals *)
+
+  | CAST ((spec, dcl), ie) ->
       let ty = elab_type loc env spec dcl in
-      { edesc = ECast(ty, nullconst); etyp = ty }
+      begin match elab_initializer loc env "<compound literal>" ty ie with
+      | (ty', Some i) -> { edesc = ECompound(ty', i); etyp = ty' }
+      | (ty', None)   -> error "ill-formed compound literal"
+      end
+
+(* 6.5.3 Unary expressions *)
 
   | EXPR_SIZEOF a1 ->
       let b1 = elab a1 in
@@ -1327,389 +1715,6 @@ let elab_opt_expr loc env = function
 let elab_for_expr loc env = function
   | None -> { sdesc = Sskip; sloc = elab_loc loc }
   | Some a -> { sdesc = Sdo (elab_expr loc env a); sloc = elab_loc loc }
-
-
-(* Elaboration of initializers. C99 section 6.7.8 *)
-
-let init_char_array_string opt_size s =
-  let len = Int64.of_int (String.length s) in
-  let size =
-    match opt_size with
-    | Some sz -> sz
-    | None -> Int64.succ len  (* include final 0 character *) in
-  let rec add_chars i init =
-    if i < 0L then init else begin
-      let c =
-        if i < len then Int64.of_int (Char.code s.[Int64.to_int i]) else 0L in
-      add_chars (Int64.pred i) (Init_single (intconst c IInt) :: init)
-    end in
-  Init_array (add_chars (Int64.pred size) [])
-
-let init_int_array_wstring opt_size s =
-  let len = Int64.of_int (List.length s) in
-  let size =
-    match opt_size with
-    | Some sz -> sz
-    | None -> Int64.succ len  (* include final 0 character *) in
-  let rec add_chars i s init =
-    if i < 0L then init else begin
-      let (c, s') =
-        match s with [] -> (0L, []) | c::s' -> (c, s') in
-      add_chars (Int64.pred i) s' (Init_single (intconst c IInt) :: init)
-    end in
-  Init_array (add_chars (Int64.pred size) (List.rev s) [])
-
-let check_init_type loc env a ty =
-  if valid_assignment env a ty then ()
-  else if valid_cast env a.etyp ty then
-    warning loc
-      "initializer has type@ %a@ instead of the expected type @ %a"
-      Cprint.typ a.etyp Cprint.typ ty
-  else
-    error loc
-      "initializer has type@ %a@ instead of the expected type @ %a"
-      Cprint.typ a.etyp Cprint.typ ty
-
-(* Representing initialization state using zippers *)
-
-module I = struct
-
-  type zipinit =
-    | Ztop of string * typ
-
-    | Zarray of zipinit                 (* ancestor *)
-              * typ                     (* type of elements *)
-              * int64 option            (* size *)
-              * init                    (* default initializer *)
-              * init list               (* elements before point, reversed *)
-              * int64                   (* position of point *)
-              * init list               (* elements after point *)
-
-    | Zstruct of zipinit                (* ancestor *)
-               * ident                  (* struct type *)
-               * (field * init) list    (* elements before current, reversed *)
-               * field                  (* current field *)
-               * (field * init) list    (* elements after current *)
-
-    | Zunion of zipinit                 (* ancestor *)
-              * ident                   (* union type *)
-              * field                   (* current member *)
-
-  type state = zipinit * init        (* current point & init for this point *)
-
-  (* The initial state: default initialization, current point at top *)
-  let top env name ty = (Ztop(name, ty), default_init env ty)
-
-  (* Change the initializer for the current point *)
-  let set (z, i) i' = (z, i')
-
-  (* Put the current point back to the top *)
-  let rec to_top = function
-    | Ztop(name, ty), i as zi -> zi
-    | Zarray(z, ty, sz, dfl, before, idx, after), i ->
-        to_top (z, Init_array (List.rev_append before (i :: after)))
-    | Zstruct(z, id, before, fld, after), i ->
-        to_top (z, Init_struct(id, List.rev_append before ((fld, i) :: after)))
-    | Zunion(z, id, fld), i ->
-        to_top (z, Init_union(id, fld, i))
-
-  (* Extract the initializer corresponding to the current state *)
-  let to_init zi = snd (to_top zi)
-
-  (* The type of the current point *)
-  let typeof = function
-    | Ztop(name, ty), i -> ty
-    | Zarray(z, ty, sz, dfl, before, idx, after), i -> ty
-    | Zstruct(z, id, before, fld, after), i -> fld.fld_typ
-    | Zunion(z, id, fld), i -> fld.fld_typ
-
-  (* The name of the path leading to the current point, for error reporting *)
-  let rec zipname = function
-    | Ztop(name, ty) -> name
-    | Zarray(z, ty, sz, dfl, before, idx, after) ->
-        sprintf "%s[%Ld]" (zipname z) idx
-    | Zstruct(z, id, before, fld, after) ->
-        sprintf "%s.%s" (zipname z) fld.fld_name
-    | Zunion(z, id, fld) ->
-        sprintf "%s.%s" (zipname z) fld.fld_name
-
-  let name (z, i) = zipname z
-
-  (* Auxiliary functions to deal with arrays *)
-  let index_below (idx: int64) (sz: int64 option) =
-    match sz with None -> true | Some sz -> idx < sz
-
-  let il_head dfl = function [] -> dfl | i1 :: il -> i1
-  let il_tail = function [] -> [] | i1 :: il -> il
-
-  (* Advance the current point to the next point in right-up order.
-     Return None if no next point, i.e. we are at top *)
-  let rec next = function
-    | Ztop(name, ty), i -> None
-    | Zarray(z, ty, sz, dfl, before, idx, after), i ->
-        let idx' = Int64.succ idx in
-        if index_below idx' sz
-        then Some(Zarray(z, ty, sz, dfl, i :: before, idx', il_tail after),
-                  il_head dfl after)
-        else next (z, Init_array (List.rev_append before (i :: after)))
-    | Zstruct(z, id, before, fld, []), i ->
-        next (z, Init_struct(id, List.rev_append before [(fld, i)]))
-    | Zstruct(z, id, before, fld, (fld1, i1) :: after), i ->
-        Some(Zstruct(z, id, (fld, i) :: before, fld1, after), i1)
-    | Zunion(z, id, fld), i ->
-        next (z, Init_union(id, fld, i))
-
-  (* Move the current point "down" to the first component of an array,
-     struct, or union.  No effect if the current point is a scalar. *)
-  let rec first env (z, i as zi) =
-    let ty = typeof zi in
-    match unroll env ty, i with
-    | TArray(ty, sz, _), Init_array il ->
-        if index_below 0L sz then begin
-          let dfl = default_init env ty in
-          Some(Zarray(z, ty, sz, dfl, [], 0L, il_tail il), il_head dfl il)
-        end
-        else None
-    | TStruct(id, _), Init_struct(id', []) ->
-        None
-    | TStruct(id, _), Init_struct(id', (fld1, i1) :: flds) ->
-        Some(Zstruct(z, id, [], fld1, flds), i1)
-    | TUnion(id, _), Init_union(id', fld, i) ->
-        begin match (Env.find_union env id).ci_members with
-        | [] -> None
-        | fld1 :: _ ->
-            Some(Zunion(z, id, fld1),
-                 if fld.fld_name = fld1.fld_name
-                 then i
-                 else default_init env fld1.fld_typ)
-        end 
-    | (TStruct _ | TUnion _), Init_single a ->
-        (* This is a previous whole-struct initialization that we
-           are going to overwrite.  Revert to the default initializer. *)
-        first env (z, default_init env ty)
-    | _ ->
-        Some (z, i)
-
-  (* Move to the [n]-th element of the current point, which must be
-     an array. *)
-  let index env (z, i as zi) n =
-    match unroll env (typeof zi), i with
-    | TArray(ty, sz, _), Init_array il ->
-        if n >= 0L && index_below n sz then begin 
-          let dfl = default_init env ty in
-          let rec loop p before after =
-            if p = n then
-              Some(Zarray(z, ty, sz, dfl, before, n, il_tail after),
-                   il_head dfl after)
-            else
-              loop (Int64.succ p)
-                   (il_head dfl after :: before)
-                   (il_tail after)
-          in loop 0L [] il
-        end else
-          None
-    | _, _ ->
-        None
-
-  (* Move to the member named [name] of the current point, which must be
-     a struct or a union. *)
-  let rec member env (z, i as zi) name =
-    let ty = typeof zi in
-    match unroll env ty, i with
-    | TStruct(id, _), Init_struct(id', flds) ->
-        let rec find before = function
-          | [] -> None
-          | (fld, i as f_i) :: after ->
-              if fld.fld_name = name then
-                Some(Zstruct(z, id, before, fld, after), i)
-              else
-                find (f_i :: before) after
-        in find [] flds
-    | TUnion(id, _), Init_union(id', fld, i) ->
-        if fld.fld_name = name then
-          Some(Zunion(z, id, fld), i)
-        else begin
-          let rec find = function
-            | [] -> None
-            | fld1 :: rem ->
-                if fld1.fld_name = name then
-                  Some(Zunion(z, id, fld1), default_init env fld1.fld_typ)
-                else
-                  find rem
-           in find (Env.find_union env id).ci_members
-         end
-    | (TStruct _ | TUnion _), Init_single a ->
-        member env (z, default_init env ty) name
-    | _, _ ->
-        None
-end
-
-(* Interpret the given designator, moving the initialization state [zi]
-   "down" accordingly. *)
-
-let rec elab_designator loc env zi desig =
-  match desig with
-  | [] -> 
-      zi
-  | INFIELD_INIT name :: desig' ->
-      begin match I.member env zi name with
-      | Some zi' ->
-          elab_designator loc env zi' desig'
-      | None ->
-          error loc "%s has no member named %s" (I.name zi) name;
-          raise Exit
-      end
-  | ATINDEX_INIT a :: desig' ->
-      begin match Ceval.integer_expr env (elab_expr loc env a) with
-      | None ->
-          error loc "array element designator for %s is not a compile-time constant"
-                    (I.name zi);
-          raise Exit
-      | Some n ->
-          match I.index env zi n with
-          | Some zi' ->
-              elab_designator loc env zi' desig'
-          | None ->
-              error loc "bad array element designator %Ld within %s"
-                      n (I.name zi);
-            raise Exit
-      end
-
-(* Elaboration of an initialization expression.  Return the corresponding
-   initializer. *)
-
-let elab_init loc env root ty_root ie =
-
-(* Perform the initializations described by the list [il] over
-   the initialization state [zi].  [first] is true if we are at the
-   beginning of a braced initializer.  Returns the final initializer. *)
-
-let rec elab_list zi il first =
-  match il with
-  | [] ->
-      (* All initialization items consumed. *)
-      I.to_init zi
-  | (desig, item) :: il' ->
-      if desig = [] then begin
-        match (if first then I.first env zi else I.next zi)
-        with
-        | None ->
-            warning loc "excess elements at end of initializer for %s, ignored"
-                        (I.name zi);
-            I.to_init zi
-        | Some zi' ->
-            elab_item zi' item il'
-      end else
-        elab_item (elab_designator loc env (I.to_top zi) desig) item il'
-
-(* Perform the initialization described by [item] for the current
-   subobject of state [zi].  Continue initializing with the list [il]. *)
-
-and elab_item zi item il =
-  let ty = I.typeof zi in
-  match item, unroll env ty with
-  (* Special case char array = "string literal" 
-               or wchar array = L"wide string literal" *)
-  | (SINGLE_INIT (CONSTANT (CONST_STRING(w, s)))
-     | COMPOUND_INIT [_, SINGLE_INIT(CONSTANT (CONST_STRING(w, s)))]),
-    TArray(ty_elt, sz, _)
-    when is_integer_type env ty_elt ->
-      begin match elab_string_literal loc w s, unroll env ty_elt with
-      | CStr s, TInt((IChar | ISChar | IUChar), _) ->
-          if not (I.index_below (Int64.of_int(String.length s - 1)) sz) then
-            warning loc "initializer string for array of chars %s is too long"
-                        (I.name zi);
-          elab_list (I.set zi (init_char_array_string sz s)) il false
-      | CStr _, _ ->
-          error loc "initialization of an array of non-char elements with a string literal";
-          elab_list zi il false
-      | CWStr s, TInt(ik, _) when ik = wchar_ikind ->
-          if not (I.index_below (Int64.of_int(List.length s - 1)) sz) then
-            warning loc "initializer string for array of wide chars %s is too long"
-                        (I.name zi);
-          elab_list (I.set zi (init_int_array_wstring sz s)) il false
-      | CWStr _, _ ->
-          error loc "initialization of an array of non-wchar_t elements with a wide string literal";
-          elab_list zi il false
-      | _ -> assert false
-      end
-  (* Brace-enclosed compound initializer *)
-  | COMPOUND_INIT il', _ ->
-      (* Process the brace-enclosed stuff, obtaining its initializer *)
-      let ini' = elab_list (I.top env (I.name zi) ty) il' true in
-      (* Initialize current subobject with this state, and continue *)
-      elab_list (I.set zi ini') il false
-  (* Single expression *)
-  | SINGLE_INIT a, _ ->
-      let a' = elab_expr loc env a in
-      elab_single zi a' il
-  (* No initializer: can this happen? *)
-  | NO_INIT, _ ->
-      elab_list zi il false
-
-(* Perform initialization by a single expression [a] for the current
-   subobject of state [zi],  Continue initializing with the list [il']. *)
-
-and elab_single zi a il =
-  let ty = I.typeof zi in
-  match unroll env ty with
-  | TInt _ | TEnum _ | TFloat _ | TPtr _ ->
-      (* This is a scalar: do direct initialization and continue *)
-      check_init_type loc env a ty;
-      elab_list (I.set zi (Init_single a)) il false
-  | TStruct _ | TUnion _ when compatible_types ~noattrs:true env ty a.etyp ->
-      (* This is a composite that can be initialized directly
-         from the expression: do as above *)
-      elab_list (I.set zi (Init_single a)) il false
-  | TStruct _ | TUnion _ | TArray _ ->
-      (* This is an aggregate: we need to drill into it, recursively *)
-      begin match I.first env zi with
-      | Some zi' ->
-          elab_single zi' a il
-      | None ->
-          error loc "initializer for aggregate %s with no elements requires explicit braces"
-                    (I.name zi);
-          raise Exit
-      end
-  | _ ->
-      error loc "impossible to initialize %s of type@ %a"
-                (I.name zi) Cprint.typ ty;
-      raise Exit
-
-(* Start with top-level object initialized to default *)
-
-in elab_item (I.top env root ty_root) ie []
-
-(* Elaboration of a top-level initializer *)
-
-let elab_initial loc env root ty ie =
-  match ie with
-  | NO_INIT -> None
-  | _ ->
-    try
-      Some (elab_init loc env root ty ie)
-    with
-    | Exit -> None  (* error was already reported *)
-    | Env.Error msg -> error loc "%s" (Env.error_message msg); None
-
-(* Complete an array type with the size obtained from the initializer:
-   "int x[] = { 1, 2, 3 }" becomes "int x[3] = ..." *)
-
-let fixup_typ loc env ty init =
-  match unroll env ty, init with
-  | TArray(ty_elt, None, attr), Init_array il ->
-      if il = [] then warning loc "array of size 0";
-      TArray(ty_elt, Some(Int64.of_int(List.length il)), attr)
-  | _ -> ty
-
-(* Entry point *)
-
-let elab_initializer loc env root ty ie =
-  match elab_initial loc env root ty ie with
-  | None ->
-      (ty, None)
-  | Some init ->
-      (fixup_typ loc env ty init, Some init)
 
 (* Handling of __func__ (section 6.4.2.2) *)
 

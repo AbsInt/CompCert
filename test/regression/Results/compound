@@ -1,0 +1,25 @@
+temp1 = "/temp/XXXXXX"
+temp2 = "/temp/XXXXXX"
+mutated temp1 = "/temp/!XXXXX"
+{x = 12, y = 45}
+{x = 42, y = -42}
+{from = {x = 42, y = 43}, to = {x = 44, y = 45}
+{from = {x = 39, y = 40}, to = {x = 41, y = 42}
+{x = -41, y = -41}
+ptrs contains 4 4 4 4 4
+ptrs contains 0 1 2 3 4
+structure = {a = 12, b = "a"}
+foo = { "x", "y", "z" }
+x = {a = 1, b[0] = 'a', b[1] = 'b'}
+{f = 0.250000}
+{i = 11}
+1 + 3 = 4
+{x = 0, y = 0}
+{x = 1, y = 1}
+{x = 2, y = 2}
+{x = 1, y = 0}
+{x = 0, y = 2}
+"first", "second", NULL
+77
+{ n = 3, p -> {0,1,2,0} }
+{ n = 4, p -> {0,1,2,3} }

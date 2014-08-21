@@ -714,6 +714,7 @@ let rec is_lvalue e =
   | EUnop((Oderef | Oarrow _), _) -> true
   | EUnop(Odot _, e') -> is_lvalue e'
   | EBinop(Oindex, _, _, _) -> true
+  | ECompound _ -> true
   | _ -> false
 
 (* Check that a C expression is a modifiable l-value: an l-value

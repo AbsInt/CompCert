@@ -32,6 +32,8 @@
 - Value analysis and constant propagation: more precise treatment of
   comparisons against an integer constant.
 
+- Language features: support C99 compound literals.
+
 
 Release 2.3pl2, 2014-05-15
 ==========================

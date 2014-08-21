@@ -315,6 +315,8 @@ let transf_expr env ctx e =
          etyp = e.etyp}
     | ECast(ty, e1) ->
         {edesc = ECast(ty, texp Val e1); etyp = e.etyp}
+    | ECompound _ ->
+        assert false (* does not occur in unblocked code *)
     | ECall(e1, el) ->
         {edesc = ECall(texp Val e1, List.map (texp Val) el); etyp = e.etyp}
 

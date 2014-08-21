@@ -191,7 +191,7 @@ let precedence = function               (* H&S section 7.2 *)
   | EUnop((Odot _|Oarrow _), _) -> (16, LtoR)
   | EUnop((Opostincr|Opostdecr), _) -> (16, LtoR)
   | EUnop((Opreincr|Opredecr|Onot|Olognot|Ominus|Oplus|Oaddrof|Oderef), _) -> (15, RtoL)
-  | ECast _ -> (14, RtoL)
+  | ECast _ | ECompound _ -> (14, RtoL)
   | EBinop((Omul|Odiv|Omod), _, _, _) -> (13, LtoR)
   | EBinop((Oadd|Osub), _, _, _) -> (12, LtoR)
   | EBinop((Oshl|Oshr), _, _, _) -> (11, LtoR)
@@ -310,6 +310,8 @@ let rec exp pp (prec, a) =
       fprintf pp "%a@ ? %a@ : %a" exp (4, a1) exp (4, a2) exp (4, a3)
   | ECast(ty, a1) ->
       fprintf pp "(%a) %a" typ ty exp (prec', a1)
+  | ECompound(ty, i) ->
+      fprintf pp "(%a) %a" typ ty init i
   | ECall({edesc = EVar {name = "__builtin_va_start"}},
           [a1; {edesc = EUnop(Oaddrof, a2)}]) ->
       fprintf pp "__builtin_va_start@[<hov 1>(%a,@ %a)@]"
@@ -330,7 +332,7 @@ let rec exp pp (prec, a) =
   end;
   if prec' < prec then fprintf pp ")@]" else fprintf pp "@]"
 
-let rec init pp = function
+and init pp = function
   | Init_single e ->
       exp pp (2, e)
   | Init_array il ->

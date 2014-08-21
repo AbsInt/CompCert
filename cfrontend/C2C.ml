@@ -588,6 +588,8 @@ let rec convertExpr env e =
       Econdition(convertExpr env e1, convertExpr env e2, convertExpr env e3, ty)
   | C.ECast(ty1, e1) ->
       Ecast(convertExpr env e1, convertTyp env ty1)
+  | C.ECompound(ty1, ie) ->
+      unsupported "compound literals"; ezero
 
   | C.ECall({edesc = C.EVar {name = "__builtin_annot"}}, args) ->
       begin match args with

@@ -113,6 +113,8 @@ let rec transf_expr env ctx e =
        etyp = newty}
   | ECast(ty, e1) ->
       {edesc = ECast(transf_type env ty, transf_expr env Val e1); etyp = newty}
+  | ECompound(ty, ie) ->
+      {edesc = ECompound(transf_type env ty, transf_init env ie); etyp = newty}
   | ECall(fn, args) ->
       transf_call env ctx None fn args e.etyp
 
@@ -176,7 +178,7 @@ and transf_call env ctx opt_lhs fn args ty =
 
 (* Initializers *)
 
-let rec transf_init env = function
+and transf_init env = function
   | Init_single e ->
       Init_single (transf_expr env Val e)
   | Init_array il ->

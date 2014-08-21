@@ -258,6 +258,8 @@ let rec expr env e =
   (* | ECast(TInt (_, _), EConst (CFloat (_, _))) -> TODO *)
   | ECast(ty, e1) ->
       cast env ty e1.etyp (expr env e1)
+  | ECompound _ ->
+      raise Notconst
   | ECall _ ->
       raise Notconst
 

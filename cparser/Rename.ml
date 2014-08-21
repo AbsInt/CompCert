@@ -105,6 +105,11 @@ and param env (id, ty) =
   else
     let (id', env') = rename env id in ((id', typ env' ty), env')
 
+let field env f =
+  { fld_name = f.fld_name;
+    fld_typ = typ env f.fld_typ;
+    fld_bitfield = f.fld_bitfield }
+
 let constant env = function
   | CEnum(id, v) -> CEnum(ident env id, v)
   | cst -> cst
@@ -121,18 +126,10 @@ and exp_desc env = function
   | EBinop(op, a, b, ty) -> EBinop(op, exp env a, exp env b, typ env ty)
   | EConditional(a, b, c) -> EConditional(exp env a, exp env b, exp env c)
   | ECast(ty, a) -> ECast(typ env ty, exp env a)
+  | ECompound(ty, ie) -> ECompound(typ env ty, init env ie)
   | ECall(a, al) -> ECall(exp env a, List.map (exp env) al)
 
-let optexp env = function
-  | None -> None
-  | Some a -> Some (exp env a)
-
-let field env f =
-  { fld_name = f.fld_name;
-    fld_typ = typ env f.fld_typ;
-    fld_bitfield = f.fld_bitfield }
-
-let rec init env = function
+and init env = function
   | Init_single e -> Init_single(exp env e)
   | Init_array il -> Init_array (List.map (init env) il)
   | Init_struct(id, il) ->
@@ -140,6 +137,10 @@ let rec init env = function
                   List.map (fun (f, i) -> (field env f, init env i)) il)
   | Init_union(id, f, i) ->
       Init_union(ident env id, field env f, init env i)
+
+let optexp env = function
+  | None -> None
+  | Some a -> Some (exp env a)
 
 let decl env (sto, id, ty, int) =
   let (id', env') = rename env id in

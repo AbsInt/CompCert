@@ -25,7 +25,7 @@ type ident =
   { name: string;                       (* name as in the source *)
     stamp: int }                        (* unique ID *)
 
-(* kinds of integers *)
+(* Kinds of integers *)
 
 type ikind = 
   | IBool       (** [_Bool] *)
@@ -153,6 +153,18 @@ type typ =
   | TUnion of ident * attributes
   | TEnum of ident * attributes
 
+(** Struct or union field *)
+
+type field = {
+    fld_name: string;
+    fld_typ: typ;
+    fld_bitfield: int option
+}
+
+type struct_or_union =
+  | Struct
+  | Union
+
 (** Expressions *)
 
 type exp = { edesc: exp_desc; etyp: typ }
@@ -167,7 +179,16 @@ and exp_desc =
                            (* the type at which the operation is performed *)
   | EConditional of exp * exp * exp
   | ECast of typ * exp
+  | ECompound of typ * init
   | ECall of exp * exp list
+
+(** Initializers *)
+
+and init =
+  | Init_single of exp
+  | Init_array of init list
+  | Init_struct of ident * (field * init) list
+  | Init_union of ident * field * init
 
 (** Statements *)
 
@@ -201,30 +222,6 @@ and slabel =
 and decl =
   storage * ident * typ * init option
 
-(** Initializers *)
-
-and init =
-  | Init_single of exp
-  | Init_array of init list
-  | Init_struct of ident * (field * init) list
-  | Init_union of ident * field * init
-
-(** Struct or union field *)
-
-and field = {
-    fld_name: string;
-    fld_typ: typ;
-    fld_bitfield: int option
-}
-
-type struct_or_union =
-  | Struct
-  | Union
-
-(** Enumerator *)
-
-type enumerator = ident * int64 * exp option
-
 (** Function definitions *)
 
 type fundef = {
@@ -238,6 +235,10 @@ type fundef = {
     fd_locals: decl list;          (* local variables *)
     fd_body: stmt
 }
+
+(** Element of an enumeration *)
+
+type enumerator = ident * int64 * exp option
 
 (** Global declarations *)
 
