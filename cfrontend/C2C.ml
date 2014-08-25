@@ -870,6 +870,7 @@ let convertFundecl env (sto, id, ty, optinit) =
     if id.name = "malloc" then EF_malloc else
     if id.name = "free" then EF_free else
     if Str.string_match re_builtin id.name 0
+    && List.mem_assoc id.name builtins.functions
     then EF_builtin(id', sg)
     else EF_external(id', sg) in
   (id', Gfun(External(ef, args, res, cconv)))
