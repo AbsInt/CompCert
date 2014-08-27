@@ -448,6 +448,11 @@ let print_builtin_inline oc name args res =
       if a1 <> res then
         fprintf oc "	movl	%a, %a\n" ireg a1 ireg res;
       fprintf oc "	rolw	$8, %a\n" ireg16 res
+  | "__builtin_clz", [IR a1], [IR res] ->
+      fprintf oc "	bsrl	%a, %a\n" ireg a1 ireg res;
+      fprintf oc "	xorl	$31, %a\n" ireg res
+  | "__builtin_ctz", [IR a1], [IR res] ->
+      fprintf oc "	bsfl	%a, %a\n" ireg a1 ireg res
   (* Float arithmetic *)
   | "__builtin_fabs", [FR a1], [FR res] ->
       need_masks := true;

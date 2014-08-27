@@ -13,7 +13,7 @@ int main(int argc, char ** argv)
 
   printf("mulhw(%x, %x) = %x\n", x, y, __builtin_mulhw(x, y));
   printf("mulhwu(%x, %x) = %x\n", x, y, __builtin_mulhwu(x, y));
-  printf("cntlz(%x) = %d\n", x, __builtin_cntlz(x));
+  printf("cntlz(%x) = %d\n", x, __builtin_clz(x));
   printf("bswap(%x) = %x\n", x, __builtin_bswap(x));
   printf("bswap16(%x) = %x\n", s, __builtin_bswap16(s));
 

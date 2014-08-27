@@ -11,7 +11,7 @@ int main(int argc, char ** argv)
 
   printf("bswap(%x) = %x\n", x, __builtin_bswap(x));
   printf("bswap16(%x) = %x\n", s, __builtin_bswap16(s));
-  printf("cntlz(%x) = %d\n", x, __builtin_cntlz(x));
+  printf("cntlz(%x) = %d\n", x, __builtin_clz(x));
   printf("fsqrt(%f) = %f\n", a, __builtin_fsqrt(a));
   
   printf ("read_16_rev = %x\n", __builtin_read16_reversed(&s));

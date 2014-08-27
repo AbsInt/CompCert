@@ -29,7 +29,7 @@ let builtins = {
       (TInt(IUInt, []), [TInt(IUInt, [])], false);
     "__builtin_bswap16",
       (TInt(IUShort, []), [TInt(IUShort, [])], false);
-    "__builtin_cntlz",
+    "__builtin_clz",
       (TInt(IUInt, []), [TInt(IUInt, [])], false);
     (* Float arithmetic *)
     "__builtin_fsqrt",

@@ -551,7 +551,7 @@ let print_builtin_inline oc name args res =
       fprintf oc "	rev	%a, %a\n" ireg res ireg a1; 1
   | "__builtin_bswap16", [IR a1], [IR res] ->
       fprintf oc "	rev16	%a, %a\n" ireg res ireg a1; 1
-  | "__builtin_cntlz", [IR a1], [IR res] ->
+  | "__builtin_clz", [IR a1], [IR res] ->
       fprintf oc "	clz	%a, %a\n" ireg res ireg a1; 1
   (* Float arithmetic *)
   | "__builtin_fabs", [FR a1], [FR res] ->

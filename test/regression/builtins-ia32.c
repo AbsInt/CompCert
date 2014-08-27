@@ -13,6 +13,8 @@ int main(int argc, char ** argv)
 
   printf("bswap(%x) = %x\n", x, __builtin_bswap(x));
   printf("bswap16(%x) = %x\n", s, __builtin_bswap16(s));
+  printf("clz(%x) = %d\n", x, __builtin_clz(x));
+  printf("ctz(%x) = %d\n", s, __builtin_ctz(s));
 
   printf("fsqrt(%f) = %f\n", a, __builtin_fsqrt(a));
   printf("fmin(%f, %f) = %f\n", a, b, __builtin_fmin(a, b));
