@@ -1,3 +1,11 @@
+Release 2.4
+========================
+
+Language features:
+- Support C99 compound literals  (ISO C99 section 6.5.2.5).
+- Support "switch" statements over an argument of type "long long".
+
+Code generation and optimization:
 - Revised and improved support for single-precision floating-point 
   arithmetic.  Earlier, all FP arithmetic was performed at double
   precision, with conversions to/from single precision as needed,
@@ -6,39 +14,45 @@
   "float" are performed in single-precision, using the processor's
   single FP instructions.  Fewer conversions between double and
   single precision are generated.
-
-- Refactored the library of FP arithmetic (lib/Floats.v) to support
-  both 64- and 32-bit floats.
-- Some more theorems proved about float<->integer conversions.
-
-- ARM port: added support for Thumb2 instruction encoding (option -fthumb).
-  Thumb2 is supported on ARMv7 and up, and produces more compact
-  machine code.
-
-- The memory model was extended with two new "chunks", Many32 and Many64,
-  that enable storing any 32-bit value or 64-bit value using
-  an opaque, not bit-based encoding, and reloading these values exactly.
-  These new chunks are used to implement saving and restoring callee-save
-  registers that can contain data of unknown types (e.g. float32 or float64)
-  but known sizes.
-
-- PowerPC port: refactored the expansion of built-in functions and
-  pseudo-instructions so that it does not need to be re-done in
-  cchecklink.  Updated the cchecklink validator accordingly.
-
-- Language features: support "switch" statements over an argument of
-  type "long long".
-
 - Value analysis and constant propagation: more precise treatment of
   comparisons against an integer constant.
 
-- Language features: support C99 compound literals.
+Improvements in confidence:
+- Full correctness proofs for the algorithms used in the runtime
+  support library for conversions between 64-bit integers and
+  floating-point numbers.
 
+ARM port:
+- Added support for Thumb2 instruction encoding (option -mthumb).
+  Thumb2 is supported on ARMv7 and up, and produces more compact
+  machine code.
+- Exploit some VFPv3 instructions when available.
 - Built-in function '__builtin_cntlz' (count leading zeros)
   renamed '__builtin_clz' for GCC / Clang compatibility.
+- Added built-in functions for load with reservation / store conditional.
 
-- IA32: added built-in functions __builtin_clz and __builtin_ctz
+PowerPC port:
+- Refactored the expansion of built-in functions and
+  pseudo-instructions so that it does not need to be re-done in
+  cchecklink.
+- Updated the cchecklink validator accordingly.
+- Built-in function '__builtin_cntlz' (count leading zeros)
+  renamed '__builtin_clz' for GCC / Clang compatibility.
+- Added built-in functions for load with reservation / store conditional.
+
+IA32 port:
+- Added built-in functions __builtin_clz and __builtin_ctz
   (count leading / trailing zeros).
+
+Coq development:
+- The memory model was extended with two new "chunks", Many32 and Many64,
+  that enable storing any 32-bit value or 64-bit value using
+  an abstract, not bit-based encoding, and reloading these values exactly.
+  These new chunks are used to implement saving and restoring callee-save
+  registers that can contain data of unknown types (e.g. float32 or float64)
+  but known sizes.
+- Refactored the library of FP arithmetic (lib/Floats.v) to support
+  both 64- and 32-bit floats.
 
 
 Release 2.3pl2, 2014-05-15
