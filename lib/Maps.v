@@ -429,73 +429,62 @@ Module PTree <: TREE.
 
   End BOOLEAN_EQUALITY.
 
-    Fixpoint append (i j : positive) {struct i} : positive :=
-      match i with
+  Fixpoint prev_append (i j: positive) {struct i} : positive :=
+    match i with
       | xH => j
-      | xI ii => xI (append ii j)
-      | xO ii => xO (append ii j)
-      end.
+      | xI i' => prev_append i' (xI j)
+      | xO i' => prev_append i' (xO j)
+    end.
 
-    Lemma append_assoc_0 : forall (i j : positive),
-                           append i (xO j) = append (append i (xO xH)) j.
-    Proof.
-      induction i; intros; destruct j; simpl;
-      try rewrite (IHi (xI j));
-      try rewrite (IHi (xO j));
-      try rewrite <- (IHi xH);
-      auto.
-    Qed.
+  Definition prev (i: positive) : positive :=
+    prev_append i xH.
 
-    Lemma append_assoc_1 : forall (i j : positive),
-                           append i (xI j) = append (append i (xI xH)) j.
-    Proof.
-      induction i; intros; destruct j; simpl;
-      try rewrite (IHi (xI j));
-      try rewrite (IHi (xO j));
-      try rewrite <- (IHi xH);
-      auto.
-    Qed.
+  Lemma prev_append_prev i j:
+    prev (prev_append i j) = prev_append j i.
+  Proof.
+    revert j. unfold prev.
+    induction i as [i IH|i IH|]. 3: reflexivity.
+    intros j. simpl. rewrite IH. reflexivity.
+    intros j. simpl. rewrite IH. reflexivity.
+  Qed.
+  
+  Lemma prev_involutive i :
+    prev (prev i) = i.
+  Proof (prev_append_prev i xH).
 
-    Lemma append_neutral_r : forall (i : positive), append i xH = i.
-    Proof.
-      induction i; simpl; congruence.
-    Qed.
-
-    Lemma append_neutral_l : forall (i : positive), append xH i = i.
-    Proof.
-      simpl; auto.
-    Qed.
+  Lemma prev_append_inj i j j' :
+    prev_append i j = prev_append i j' -> j = j'.
+  Proof.
+    revert j j'.
+    induction i as [i Hi|i Hi|]; intros j j' H; auto;
+    specialize (Hi _ _ H); congruence.
+  Qed.
 
     Fixpoint xmap (A B : Type) (f : positive -> A -> B) (m : t A) (i : positive)
              {struct m} : t B :=
       match m with
       | Leaf => Leaf
-      | Node l o r => Node (xmap f l (append i (xO xH)))
-                           (option_map (f i) o)
-                           (xmap f r (append i (xI xH)))
+      | Node l o r => Node (xmap f l (xO i))
+                           (match o with None => None | Some x => Some (f (prev i) x) end)
+                           (xmap f r (xI i))
       end.
 
   Definition map (A B : Type) (f : positive -> A -> B) m := xmap f m xH.
 
     Lemma xgmap:
       forall (A B: Type) (f: positive -> A -> B) (i j : positive) (m: t A),
-      get i (xmap f m j) = option_map (f (append j i)) (get i m).
+      get i (xmap f m j) = option_map (f (prev (prev_append i j))) (get i m).
     Proof.
       induction i; intros; destruct m; simpl; auto.
-      rewrite (append_assoc_1 j i); apply IHi.
-      rewrite (append_assoc_0 j i); apply IHi.
-      rewrite (append_neutral_r j); auto.
     Qed.
 
   Theorem gmap:
     forall (A B: Type) (f: positive -> A -> B) (i: positive) (m: t A),
     get i (map f m) = option_map (f i) (get i m).
   Proof.
-    intros.
+    intros A B f i m.
     unfold map.
-    replace (f i) with (f (append xH i)).
-    apply xgmap.
-    rewrite append_neutral_l; auto.
+    rewrite xgmap. repeat f_equal. exact (prev_involutive i).
   Qed.
 
   Fixpoint map1 (A B: Type) (f: A -> B) (m: t A) {struct m} : t B :=
@@ -639,10 +628,10 @@ Module PTree <: TREE.
       match m with
       | Leaf => k
       | Node l None r =>
-          xelements l (append i (xO xH)) (xelements r (append i (xI xH)) k)
+          xelements l (xO i) (xelements r (xI i) k)
       | Node l (Some x) r =>
-          xelements l (append i (xO xH))
-            ((i, x) :: xelements r (append i (xI xH)) k)
+          xelements l (xO i)
+            ((prev i, x) :: xelements r (xI i) k)
       end.
 
 
@@ -661,16 +650,16 @@ Module PTree <: TREE.
 
     Lemma xelements_correct:
       forall (A: Type) (m: t A) (i j : positive) (v: A) k,
-      get i m = Some v -> In (append j i, v) (xelements m j k).
+      get i m = Some v -> In (prev (prev_append i j), v) (xelements m j k).
     Proof.
       induction m; intros.
        rewrite (gleaf A i) in H; congruence.
        destruct o; destruct i; simpl; simpl in H.
-        rewrite append_assoc_1. apply xelements_incl. right. auto.
-        rewrite append_assoc_0. auto. 
-        inv H. apply xelements_incl. left. rewrite append_neutral_r; auto.
-        rewrite append_assoc_1. apply xelements_incl. auto. 
-        rewrite append_assoc_0. auto. 
+        apply xelements_incl. right. auto.
+        auto.
+        inv H. apply xelements_incl. left. reflexivity.
+        apply xelements_incl. auto. 
+        auto. 
         inv H.
     Qed.
 
@@ -679,88 +668,47 @@ Module PTree <: TREE.
     get i m = Some v -> In (i, v) (elements m).
   Proof.
     intros A m i v H. 
-    exact (xelements_correct m i xH nil H).
+    generalize (xelements_correct m i xH nil H). rewrite prev_append_prev. exact id.
   Qed.
 
-    Fixpoint xget (A : Type) (i j : positive) (m : t A) {struct j} : option A :=
-      match i, j with
-      | _, xH => get i m
-      | xO ii, xO jj => xget ii jj m
-      | xI ii, xI jj => xget ii jj m
-      | _, _ => None
-      end.
-
-    Lemma xget_diag :
-      forall (A : Type) (i : positive) (m1 m2 : t A) (o : option A),
-      xget i i (Node m1 o m2) = o.
-    Proof.
-      induction i; intros; simpl; auto.
-    Qed.
-
-    Lemma xget_left :
-      forall (A : Type) (j i : positive) (m1 m2 : t A) (o : option A) (v : A),
-      xget i (append j (xO xH)) m1 = Some v -> xget i j (Node m1 o m2) = Some v.
-    Proof.
-      induction j; intros; destruct i; simpl; simpl in H; auto; try congruence.
-      destruct i; congruence.
-    Qed.
-
-    Lemma xget_right :
-      forall (A : Type) (j i : positive) (m1 m2 : t A) (o : option A) (v : A),
-      xget i (append j (xI xH)) m2 = Some v -> xget i j (Node m1 o m2) = Some v.
-    Proof.
-      induction j; intros; destruct i; simpl; simpl in H; auto; try congruence.
-      destruct i; congruence.
-    Qed.
+  Lemma in_xelements:
+    forall (A: Type) (m: t A) (i k: positive) (v: A) l,
+    In (k, v) (xelements m i l) ->
+    (exists j, k = prev (prev_append j i) /\ get j m = Some v) \/ In (k, v) l.
+  Proof.
+    induction m as [|l IHl o r IHr]; intros i j v k H.
+    right; exact H.
+    destruct o as [o|].
+    specialize (IHl _ _ _ _ H). destruct IHl as [(j' & -> & Hj')|[IHl|IHl]].
+    left. exists (xO j'). split. reflexivity. exact Hj'.
+    inv IHl. left. exists xH. split. reflexivity. reflexivity.
+    destruct  (IHr _ _ _ _ IHl) as [(j' & -> & Hj') | IH]; clear IHr.
+    left. exists (xI j'). split. reflexivity. exact Hj'.
+    right; assumption.
+    specialize (IHl _ _ _ _ H). destruct IHl as [(j' & -> & Hj' )|IHl].
+    left. exists (xO j'). split. reflexivity. exact Hj'.
+    destruct  (IHr _ _ _ _ IHl) as [(j' & -> & Hj') | IH]; clear IHr.
+    left. exists (xI j'). split. reflexivity. exact Hj'.
+    right; assumption.
+  Qed.
 
     Lemma xelements_complete:
       forall (A: Type) (m: t A) (i j : positive) (v: A) k,
-      In (i, v) (xelements m j k) -> xget i j m = Some v \/ In (i, v) k.
+      In (prev_append j i, v) (xelements m j k) -> get i m = Some v \/ In (prev_append j i, v) k.
     Proof.
-      induction m; simpl; intros.
-      auto.
-      destruct o. 
-      edestruct IHm1; eauto. left; apply xget_left; auto.
-      destruct H0. inv H0. left; apply xget_diag. 
-      edestruct IHm2; eauto. left; apply xget_right; auto.
-      edestruct IHm1; eauto. left; apply xget_left; auto.
-      edestruct IHm2; eauto. left; apply xget_right; auto.
-    Qed.
-
-    Lemma get_xget_h :
-      forall (A: Type) (m: t A) (i: positive), get i m = xget i xH m.
-    Proof.
-      destruct i; simpl; auto.
+      intros A m i j v k H.
+      apply in_xelements in H. destruct H as [(j' & EQ & Hj')|H].
+      rewrite prev_append_prev in EQ. apply prev_append_inj in EQ. left; congruence.
+      right; assumption.
     Qed.
 
   Theorem elements_complete:
     forall (A: Type) (m: t A) (i: positive) (v: A),
     In (i, v) (elements m) -> get i m = Some v.
   Proof.
-    intros A m i v H. unfold elements in H.
-    edestruct xelements_complete; eauto. 
-    rewrite get_xget_h. auto. 
-    contradiction.
-  Qed.
-
-  Lemma in_xelements:
-    forall (A: Type) (m: t A) (i k: positive) (v: A) l,
-    In (k, v) (xelements m i l) ->
-    (exists j, k = append i j) \/ In (k, v) l.
-  Proof.
-    induction m; simpl; intros.
-    auto.
-    destruct o.
-    edestruct IHm1 as [[j EQ] | IN]; eauto.
-    rewrite <- append_assoc_0 in EQ. left; econstructor; eauto. 
-    destruct IN.
-    inv H0. left; exists xH; symmetry; apply append_neutral_r.
-    edestruct IHm2 as [[j EQ] | IN]; eauto.
-    rewrite <- append_assoc_1 in EQ. left; econstructor; eauto. 
-    edestruct IHm1 as [[j EQ] | IN]; eauto.
-    rewrite <- append_assoc_0 in EQ. left; econstructor; eauto. 
-    edestruct IHm2 as [[j EQ] | IN']; eauto.
-    rewrite <- append_assoc_1 in EQ. left; econstructor; eauto.
+    unfold elements. intros A m i v H.
+    change i with (prev_append 1 i) in H.
+    destruct (xelements_complete _ _ _ _ _ H) as [K|()]. exact K.
   Qed.
 
   Definition xkeys (A: Type) (m: t A) (i: positive) (l: list (positive * A)) :=
@@ -769,53 +717,50 @@ Module PTree <: TREE.
   Lemma in_xkeys:
     forall (A: Type) (m: t A) (i k: positive) l,
     In k (xkeys m i l) ->
-    (exists j, k = append i j) \/ In k (List.map fst l).
+    (exists j, k = prev (prev_append j i)) \/ In k (List.map fst l).
   Proof.
     unfold xkeys; intros.
-    exploit list_in_map_inv; eauto. intros [[k1 v1] [EQ IN]].
-    simpl in EQ; subst k1.
-    exploit in_xelements; eauto. intros [EX | IN'].
-    auto.
-    right. change k with (fst (k, v1)). apply List.in_map; auto.
-  Qed.
-
-  Lemma append_injective:
-    forall i j1 j2, append i j1 = append i j2 -> j1 = j2.
-  Proof.
-    induction i; simpl; intros.
-    apply IHi. congruence.
-    apply IHi. congruence.
-    auto.
+    apply (list_in_map_inv) in H. destruct H as ((j, v) & -> & H).
+    change j with (prev_append 1 j) in H. apply in_xelements in H.
+    destruct H as [(j' & Hj' & _) | H]. simpl in Hj'; subst j.
+    left. simpl. exists j'. reflexivity.
+    right. apply in_map. exact H.
   Qed.
 
   Lemma xelements_keys_norepet:
     forall (A: Type) (m: t A) (i: positive) l,
-    (forall k v, get k m = Some v -> ~In (append i k) (List.map fst l)) ->
+    (forall k v, get k m = Some v -> ~In (prev (prev_append k i)) (List.map fst l)) ->
     list_norepet (List.map fst l) ->
     list_norepet (xkeys m i l).
   Proof.
-    unfold xkeys; induction m; simpl; intros.
+    unfold xkeys.
+    intros A m.
+    induction m as [|l Hl o r Hr]; intros i elem H NR.
     auto.
-    destruct o.
-    apply IHm1. 
-    intros; red; intros IN. rewrite <- append_assoc_0 in IN. simpl in IN; destruct IN.
-    exploit (append_injective i k~0 xH). rewrite append_neutral_r. auto.
-    congruence.
-    exploit in_xkeys; eauto. intros [[j EQ] | IN]. 
-    rewrite <- append_assoc_1 in EQ. exploit append_injective; eauto. congruence.
-    elim (H (xO k) v); auto.
-    simpl. constructor. 
-    red; intros IN. exploit in_xkeys; eauto. intros [[j EQ] | IN'].
-    rewrite <- append_assoc_1 in EQ. 
-    exploit (append_injective i j~1 xH). rewrite append_neutral_r. auto. congruence.
-    elim (H xH a). auto. rewrite append_neutral_r. auto.
-    apply IHm2; auto. intros. rewrite <- append_assoc_1. eapply H; eauto. 
-    apply IHm1. 
-    intros; red; intros IN. rewrite <- append_assoc_0 in IN.
-    exploit in_xkeys; eauto. intros [[j EQ] | IN']. 
-    rewrite <- append_assoc_1 in EQ. exploit append_injective; eauto. congruence.
-    elim (H (xO k) v); auto.
-    apply IHm2; auto. intros. rewrite <- append_assoc_1. eapply H; eauto. 
+    destruct o as [o|].
+  - apply Hl.
+    intros k v Hkv IN.
+    destruct IN as [IN | IN].
+    rewrite prev_append_prev in IN. simpl in IN. apply prev_append_inj in IN. discriminate.
+    apply in_xkeys in IN. destruct IN as [(j & EQ) | IN].
+    rewrite !prev_append_prev in EQ. simpl in EQ. apply prev_append_inj in EQ. discriminate.
+    elim (H (xO k) v); auto; fail.
+    simpl. constructor.
+    intros IN.
+    apply in_xkeys in IN. destruct IN as [(j & EQ) | IN].
+    rewrite !prev_append_prev in EQ. simpl in EQ. apply prev_append_inj in EQ. discriminate.
+    elim (H xH o); auto; fail.
+    apply Hr; auto.
+    intros k.
+    exact (H (xI k)).
+  - apply Hl.
+    intros k v Hkv IN.
+    apply in_xkeys in IN. destruct IN as [(j & EQ) | IN].
+    rewrite !prev_append_prev in EQ. simpl in EQ. apply prev_append_inj in EQ. discriminate.
+    exact (H (xO k) _ Hkv IN).
+    apply Hr; auto.
+    intros k.
+    exact (H (xI k)).
   Qed.
 
   Theorem elements_keys_norepet:
@@ -908,12 +853,12 @@ Module PTree <: TREE.
     match m with
     | Leaf => v
     | Node l None r =>
-        let v1 := xfold f (append i (xO xH)) l v in
-        xfold f (append i (xI xH)) r v1
+        let v1 := xfold f (xO i) l v in
+        xfold f (xI i) r v1
     | Node l (Some x) r =>
-        let v1 := xfold f (append i (xO xH)) l v in
-        let v2 := f v1 i x in
-        xfold f (append i (xI xH)) r v2
+        let v1 := xfold f (xO i) l v in
+        let v2 := f v1 (prev i) x in
+        xfold f (xI i) r v2
     end.
 
   Definition fold (A B : Type) (f: B -> positive -> A -> B) (m: t A) (v: B) :=
