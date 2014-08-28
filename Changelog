@@ -6,7 +6,7 @@ Language features:
 - Support "switch" statements over an argument of type "long long".
 
 Code generation and optimization:
-- Revised and improved support for single-precision floating-point 
+- Revised and improved support for single-precision floating-point
   arithmetic.  Earlier, all FP arithmetic was performed at double
   precision, with conversions to/from single precision as needed,
   in particular when loading/storing a single-precision FP number
@@ -36,6 +36,7 @@ PowerPC port:
   pseudo-instructions so that it does not need to be re-done in
   cchecklink.
 - Updated the cchecklink validator accordingly.
+- More efficient code generated for volatile accesses to small data areas.
 - Built-in function '__builtin_cntlz' (count leading zeros)
   renamed '__builtin_clz' for GCC / Clang compatibility.
 - Added built-in functions for load with reservation / store conditional.
