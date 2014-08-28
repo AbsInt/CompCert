@@ -29,7 +29,6 @@ ARM port:
 - Exploit some VFPv3 instructions when available.
 - Built-in function '__builtin_cntlz' (count leading zeros)
   renamed '__builtin_clz' for GCC / Clang compatibility.
-- Added built-in functions for load with reservation / store conditional.
 
 PowerPC port:
 - Refactored the expansion of built-in functions and
@@ -39,7 +38,6 @@ PowerPC port:
 - More efficient code generated for volatile accesses to small data areas.
 - Built-in function '__builtin_cntlz' (count leading zeros)
   renamed '__builtin_clz' for GCC / Clang compatibility.
-- Added built-in functions for load with reservation / store conditional.
 
 IA32 port:
 - Added built-in functions __builtin_clz and __builtin_ctz
