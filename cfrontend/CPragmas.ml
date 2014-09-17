@@ -67,6 +67,9 @@ let process_pragma name =
   | ["section"; classname; istring; ustring; addrmode; accmode] ->
       process_section_pragma classname istring ustring addrmode accmode;
       true
+  | ["section"; classname; istring; ustring; accmode] ->
+      process_section_pragma classname istring ustring "" accmode;
+      true
   | "section" :: _ ->
       C2C.error "ill-formed `section' pragma"; true
   | "use_section" :: classname :: identlist ->
