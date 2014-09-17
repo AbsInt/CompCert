@@ -1,5 +1,5 @@
-Release 2.4
-========================
+Release 2.4, 2014-09-17
+=======================
 
 Language features:
 - Support C99 compound literals  (ISO C99 section 6.5.2.5).
