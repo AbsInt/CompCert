@@ -356,7 +356,7 @@ and char = parse
   | simple_escape_sequence
       { convert_escape c }
   | '\\' (_ as c)
-      { warning lexbuf "incorrect escape sequence '\\%c', treating as '%c'" c c;
+      { error lexbuf "incorrect escape sequence '\\%c'" c;
         Int64.of_int (Char.code c) }
   | _ as c
       { Int64.of_int (Char.code c) }
