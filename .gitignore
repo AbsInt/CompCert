@@ -1,0 +1,40 @@
+# Object files, in general
+*.vo
+*.glob
+*.o
+*.a
+*.cmi
+*.cmo
+*.cmx
+*.cma
+*.cmxa
+# Emacs saves
+*~
+# Executables and configuration
+ccomp
+ccomp.byte
+ccomp.prof
+cchecklink
+cchecklink.byte
+clightgen
+clightgen.byte
+tools/ndfun
+Makefile.config
+# ocamlbuild's temp dir
+_build/
+# Generated files
+driver/Configuration.ml
+ia32/ConstpropOp.v
+ia32/SelectOp.v
+powerpc/ConstpropOp.v
+powerpc/SelectOp.v
+arm/ConstpropOp.v
+arm/SelectOp.v
+backend/SelectDiv.v
+backend/SelectLong.v
+# Documentation
+doc/coq2html
+doc/coq2html.ml
+doc/html
+doc/html/
+
