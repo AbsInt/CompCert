@@ -67,6 +67,8 @@ let init filename channel : Lexing.lexbuf =
       ("unsigned", fun loc -> UNSIGNED loc);
       ("void", fun loc -> VOID loc);
       ("volatile", fun loc -> VOLATILE loc);
+      ("__volatile", fun loc -> VOLATILE loc);
+      ("__volatile__", fun loc -> VOLATILE loc);
       ("while", fun loc -> WHILE loc);
       ("_Alignas", fun loc -> ALIGNAS loc);
       ("_Alignof", fun loc -> ALIGNOF loc);
