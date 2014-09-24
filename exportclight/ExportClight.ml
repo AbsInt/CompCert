@@ -120,17 +120,23 @@ let coqint p n =
   then fprintf p "(Int.repr %ld)" n
   else fprintf p "(Int.repr (%ld))" n
 
+let coqint64 p n =
+  let n = camlint64_of_coqint n in
+  if n >= 0L
+  then fprintf p "(Int64.repr %Ld)" n
+  else fprintf p "(Int64.repr (%Ld))" n
+
 let coqfloat p n =
   let n = camlint64_of_coqint(Floats.Float.to_bits n) in
   if n >= 0L
   then fprintf p "(Float.of_bits (Int64.repr %Ld))" n
   else fprintf p "(Float.of_bits (Int64.repr (%Ld)))" n
 
-let coqint64 p n =
-  let n = camlint64_of_coqint n in
-  if n >= 0L
-  then fprintf p "(Int64.repr %Ld)" n
-  else fprintf p "(Int64.repr (%Ld))" n
+let coqsingle p n =
+  let n = camlint_of_coqint(Floats.Float32.to_bits n) in
+  if n >= 0l
+  then fprintf p "(Float32.of_bits (Int.repr %ld))" n
+  else fprintf p "(Float32.of_bits (Int.repr (%ld)))" n
 
 (* Types *)
 
@@ -212,7 +218,9 @@ let asttype p t =
       | AST.Tint -> "AST.Tint"
       | AST.Tfloat -> "AST.Tfloat"
       | AST.Tlong -> "AST.Tlong"
-      | AST.Tsingle -> "AST.Tsingle")
+      | AST.Tsingle -> "AST.Tsingle"
+      | AST.Tany32 -> "AST.Tany32"
+      | AST.Tany64 -> "AST.Tany64")
 
 let name_of_chunk = function
   | Mint8signed -> "Mint8signed"
@@ -223,6 +231,8 @@ let name_of_chunk = function
   | Mint64 -> "Mint64"
   | Mfloat32 -> "Mfloat32"
   | Mfloat64 -> "Mfloat64"
+  | Many32 -> "Many32"
+  | Many64 -> "Many64"
 
 let signatur p sg =
   fprintf p "@[<hov 2>(mksignature@ %a@ %a@ %a)@]" 
@@ -307,6 +317,8 @@ let rec expr p = function
       fprintf p "(Econst_float %a %a)" coqfloat n typ t
   | Econst_long(n, t) ->
       fprintf p "(Econst_long %a %a)" coqint64 n typ t
+  | Econst_single(n, t) ->
+      fprintf p "(Econst_single %a %a)" coqsingle n typ t
   | Eunop(op, a1, t) ->
       fprintf p "@[<hov 2>(Eunop %s@ %a@ %a)@]"
          (name_unop op) expr a1 typ t
@@ -386,7 +398,7 @@ let init_data p = function
   | Init_int16 n -> fprintf p "Init_int16 %a" coqint n
   | Init_int32 n -> fprintf p "Init_int32 %a" coqint n
   | Init_int64 n -> fprintf p "Init_int64 %a" coqint64 n
-  | Init_float32 n -> fprintf p "Init_float32 %a" coqfloat n
+  | Init_float32 n -> fprintf p "Init_float32 %a" coqsingle n
   | Init_float64 n -> fprintf p "Init_float64 %a" coqfloat n
   | Init_space n -> fprintf p "Init_space %ld" (Z.to_int32 n)
   | Init_addrof(id,ofs) -> fprintf p "Init_addrof %a %a" ident id coqint ofs
@@ -454,6 +466,7 @@ let rec collect_expr e =
   | Econst_int _ -> ()
   | Econst_float _ -> ()
   | Econst_long _ -> ()
+  | Econst_single _ -> ()
   | Evar _ -> ()
   | Etempvar _ -> ()
   | Ederef(r, _) -> collect_expr r
