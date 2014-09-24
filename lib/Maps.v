@@ -133,6 +133,14 @@ Module Type TREE.
   Hypothesis elements_keys_norepet:
     forall (A: Type) (m: t A), 
     list_norepet (List.map (@fst elt A) (elements m)).
+  Hypothesis elements_extensional:
+    forall (A: Type) (m n: t A),
+    (forall i, get i m = get i n) ->
+    elements m = elements n.
+  Hypothesis elements_remove:
+    forall (A: Type) i v (m: t A),
+    get i m = Some v ->
+    exists l1 l2, elements m = l1 ++ (i,v) :: l2 /\ elements (remove i m) = l1 ++ l2.
 
   (** Folding a function over all bindings of a tree. *)
   Variable fold:
@@ -634,8 +642,32 @@ Module PTree <: TREE.
             ((prev i, x) :: xelements r (xI i) k)
       end.
 
-
   Definition elements (A: Type) (m : t A) := xelements m xH nil.
+
+  Remark xelements_append:
+    forall A (m: t A) i k1 k2,
+    xelements m i (k1 ++ k2) = xelements m i k1 ++ k2.
+  Proof.
+    induction m; intros; simpl.
+  - auto.
+  - destruct o; rewrite IHm2; rewrite <- IHm1; auto.
+  Qed.
+
+  Remark xelements_leaf:
+    forall A i, xelements (@Leaf A) i nil = nil.
+  Proof.
+    intros; reflexivity. 
+  Qed.
+
+  Remark xelements_node:
+    forall A (m1: t A) o (m2: t A) i,
+    xelements (Node m1 o m2) i nil =
+       xelements m1 (xO i) nil
+    ++ match o with None => nil | Some v => (prev i, v) :: nil end
+    ++ xelements m2 (xI i) nil.
+  Proof.
+    intros. simpl. destruct o; simpl; rewrite <- xelements_append; auto.
+  Qed.
 
     Lemma xelements_incl:
       forall (A: Type) (m: t A) (i : positive) k x,
@@ -672,112 +704,92 @@ Module PTree <: TREE.
   Qed.
 
   Lemma in_xelements:
-    forall (A: Type) (m: t A) (i k: positive) (v: A) l,
-    In (k, v) (xelements m i l) ->
-    (exists j, k = prev (prev_append j i) /\ get j m = Some v) \/ In (k, v) l.
+    forall (A: Type) (m: t A) (i k: positive) (v: A) ,
+    In (k, v) (xelements m i nil) ->
+    exists j, k = prev (prev_append j i) /\ get j m = Some v.
   Proof.
-    induction m as [|l IHl o r IHr]; intros i j v k H.
-    right; exact H.
-    destruct o as [o|].
-    specialize (IHl _ _ _ _ H). destruct IHl as [(j' & -> & Hj')|[IHl|IHl]].
-    left. exists (xO j'). split. reflexivity. exact Hj'.
-    inv IHl. left. exists xH. split. reflexivity. reflexivity.
-    destruct  (IHr _ _ _ _ IHl) as [(j' & -> & Hj') | IH]; clear IHr.
-    left. exists (xI j'). split. reflexivity. exact Hj'.
-    right; assumption.
-    specialize (IHl _ _ _ _ H). destruct IHl as [(j' & -> & Hj' )|IHl].
-    left. exists (xO j'). split. reflexivity. exact Hj'.
-    destruct  (IHr _ _ _ _ IHl) as [(j' & -> & Hj') | IH]; clear IHr.
-    left. exists (xI j'). split. reflexivity. exact Hj'.
-    right; assumption.
+    induction m; intros. 
+  - rewrite xelements_leaf in H. contradiction.
+  - rewrite xelements_node in H. rewrite ! in_app_iff in H. destruct H as [P | [P | P]].
+    + exploit IHm1; eauto. intros (j & Q & R). exists (xO j); auto.
+    + destruct o; simpl in P; intuition auto. inv H. exists xH; auto. 
+    + exploit IHm2; eauto. intros (j & Q & R). exists (xI j); auto.
   Qed.
-
-    Lemma xelements_complete:
-      forall (A: Type) (m: t A) (i j : positive) (v: A) k,
-      In (prev_append j i, v) (xelements m j k) -> get i m = Some v \/ In (prev_append j i, v) k.
-    Proof.
-      intros A m i j v k H.
-      apply in_xelements in H. destruct H as [(j' & EQ & Hj')|H].
-      rewrite prev_append_prev in EQ. apply prev_append_inj in EQ. left; congruence.
-      right; assumption.
-    Qed.
 
   Theorem elements_complete:
     forall (A: Type) (m: t A) (i: positive) (v: A),
     In (i, v) (elements m) -> get i m = Some v.
   Proof.
-    unfold elements. intros A m i v H.
-    change i with (prev_append 1 i) in H.
-    destruct (xelements_complete _ _ _ _ _ H) as [K|()]. exact K.
+    unfold elements. intros A m i v H. exploit in_xelements; eauto. intros (j & P & Q). 
+    rewrite prev_append_prev in P. change i with (prev_append 1 i) in P. 
+    exploit prev_append_inj; eauto. intros; congruence.
   Qed.
 
-  Definition xkeys (A: Type) (m: t A) (i: positive) (l: list (positive * A)) :=
-    List.map (@fst positive A) (xelements m i l).
+  Definition xkeys (A: Type) (m: t A) (i: positive) :=
+    List.map (@fst positive A) (xelements m i nil).
+
+  Remark xkeys_leaf:
+    forall A i, xkeys (@Leaf A) i = nil.
+  Proof.
+    intros; reflexivity. 
+  Qed.
+
+  Remark xkeys_node:
+    forall A (m1: t A) o (m2: t A) i,
+    xkeys (Node m1 o m2) i =
+       xkeys m1 (xO i)
+    ++ match o with None => nil | Some v => prev i :: nil end
+    ++ xkeys m2 (xI i).
+  Proof.
+    intros. unfold xkeys. rewrite xelements_node. rewrite ! map_app. destruct o; auto. 
+  Qed.
 
   Lemma in_xkeys:
-    forall (A: Type) (m: t A) (i k: positive) l,
-    In k (xkeys m i l) ->
-    (exists j, k = prev (prev_append j i)) \/ In k (List.map fst l).
+    forall (A: Type) (m: t A) (i k: positive),
+    In k (xkeys m i) ->
+    (exists j, k = prev (prev_append j i)).
   Proof.
     unfold xkeys; intros.
     apply (list_in_map_inv) in H. destruct H as ((j, v) & -> & H).
-    change j with (prev_append 1 j) in H. apply in_xelements in H.
-    destruct H as [(j' & Hj' & _) | H]. simpl in Hj'; subst j.
-    left. simpl. exists j'. reflexivity.
-    right. apply in_map. exact H.
+    exploit in_xelements; eauto. intros (k & P & Q). exists k; auto. 
   Qed.
 
   Lemma xelements_keys_norepet:
-    forall (A: Type) (m: t A) (i: positive) l,
-    (forall k v, get k m = Some v -> ~In (prev (prev_append k i)) (List.map fst l)) ->
-    list_norepet (List.map fst l) ->
-    list_norepet (xkeys m i l).
+    forall (A: Type) (m: t A) (i: positive),
+    list_norepet (xkeys m i).
   Proof.
-    unfold xkeys.
-    intros A m.
-    induction m as [|l Hl o r Hr]; intros i elem H NR.
-    auto.
-    destruct o as [o|].
-  - apply Hl.
-    intros k v Hkv IN.
-    destruct IN as [IN | IN].
-    rewrite prev_append_prev in IN. simpl in IN. apply prev_append_inj in IN. discriminate.
-    apply in_xkeys in IN. destruct IN as [(j & EQ) | IN].
-    rewrite !prev_append_prev in EQ. simpl in EQ. apply prev_append_inj in EQ. discriminate.
-    elim (H (xO k) v); auto; fail.
-    simpl. constructor.
-    intros IN.
-    apply in_xkeys in IN. destruct IN as [(j & EQ) | IN].
-    rewrite !prev_append_prev in EQ. simpl in EQ. apply prev_append_inj in EQ. discriminate.
-    elim (H xH o); auto; fail.
-    apply Hr; auto.
-    intros k.
-    exact (H (xI k)).
-  - apply Hl.
-    intros k v Hkv IN.
-    apply in_xkeys in IN. destruct IN as [(j & EQ) | IN].
-    rewrite !prev_append_prev in EQ. simpl in EQ. apply prev_append_inj in EQ. discriminate.
-    exact (H (xO k) _ Hkv IN).
-    apply Hr; auto.
-    intros k.
-    exact (H (xI k)).
+    induction m; intros.
+  - rewrite xkeys_leaf; constructor.
+  - assert (NOTIN1: ~ In (prev i) (xkeys m1 (xO i))).
+    { red; intros. exploit in_xkeys; eauto. intros (j & EQ). 
+      rewrite prev_append_prev in EQ. simpl in EQ. apply prev_append_inj in EQ. discriminate. }
+    assert (NOTIN2: ~ In (prev i) (xkeys m2 (xI i))).
+    { red; intros. exploit in_xkeys; eauto. intros (j & EQ). 
+      rewrite prev_append_prev in EQ. simpl in EQ. apply prev_append_inj in EQ. discriminate. }
+    assert (DISJ: forall x, In x (xkeys m1 (xO i)) -> In x (xkeys m2 (xI i)) -> False).
+    { intros. exploit in_xkeys. eexact H. intros (j1 & EQ1). 
+      exploit in_xkeys. eexact H0. intros (j2 & EQ2). 
+      rewrite prev_append_prev in *. simpl in *. rewrite EQ2 in EQ1. apply prev_append_inj in EQ1. discriminate. }
+    rewrite xkeys_node. apply list_norepet_append. auto. 
+    destruct o; simpl; auto. constructor; auto.
+    red; intros. red; intros; subst y. destruct o; simpl in H0. 
+    destruct H0. subst x. tauto. eauto. eauto. 
   Qed.
 
   Theorem elements_keys_norepet:
     forall (A: Type) (m: t A), 
     list_norepet (List.map (@fst elt A) (elements m)).
   Proof.
-    intros. change (list_norepet (xkeys m 1 nil)). apply xelements_keys_norepet.
-    intros; red; intros. elim H0. constructor.
+    intros. apply (xelements_keys_norepet m xH). 
   Qed.
 
   Remark xelements_empty:
-    forall (A: Type) (m: t A) i l, (forall i, get i m = None) -> xelements m i l = l.
+    forall (A: Type) (m: t A) i, (forall i, get i m = None) -> xelements m i nil = nil.
   Proof.
-    induction m; simpl; intros. 
+    induction m; intros.
     auto.
-    destruct o. generalize (H xH); simpl; congruence. 
-    rewrite IHm1. apply IHm2. 
+    rewrite xelements_node. rewrite IHm1, IHm2. destruct o; auto. 
+    generalize (H xH); simpl; congruence.
     intros. apply (H (xI i0)).
     intros. apply (H (xO i0)).
   Qed.
@@ -791,48 +803,37 @@ Module PTree <: TREE.
       (elements m) (elements n).
   Proof.
     intros until R.
-    assert (forall m n j l1 l2,
+    assert (forall m n j,
     (forall i x, get i m = Some x -> exists y, get i n = Some y /\ R x y) ->
     (forall i y, get i n = Some y -> exists x, get i m = Some x /\ R x y) ->
     list_forall2
       (fun i_x i_y => fst i_x = fst i_y /\ R (snd i_x) (snd i_y))
-      l1 l2 ->
-    list_forall2
-      (fun i_x i_y => fst i_x = fst i_y /\ R (snd i_x) (snd i_y))
-      (xelements m j l1) (xelements n j l2)).
+      (xelements m j nil) (xelements n j nil)).
   {
-    induction m; simpl; intros.
-    rewrite xelements_empty. auto. 
+    induction m; intros.
+  - rewrite xelements_leaf. rewrite xelements_empty. constructor. 
     intros. destruct (get i n) eqn:E; auto. exploit H0; eauto. 
     intros [x [P Q]]. rewrite gleaf in P; congruence.
-    destruct o. 
-    destruct n. exploit (H xH a); auto. simpl. intros [y [P Q]]; congruence.
-    exploit (H xH a); auto. intros [y [P Q]]. simpl in P. subst o. 
-    simpl. apply IHm1. 
-    intros i x. exact (H (xO i) x). 
-    intros i x. exact (H0 (xO i) x).
-    constructor. simpl; auto. 
-    apply IHm2. 
-    intros i x. exact (H (xI i) x). 
-    intros i x. exact (H0 (xI i) x).
-    auto.
-    destruct n. simpl. 
-    rewrite ! xelements_empty. auto.
-    intros. destruct (get i m2) eqn:E; auto. exploit (H (xI i)); eauto.
-    rewrite gleaf. intros [y [P Q]]; congruence.
-    intros. destruct (get i m1) eqn:E; auto. exploit (H (xO i)); eauto.
-    rewrite gleaf. intros [y [P Q]]; congruence.
-    destruct o. 
-    exploit (H0 xH); simpl; eauto. intros [y [P Q]]; congruence.
-    simpl. apply IHm1. 
-    intros i x. exact (H (xO i) x). 
-    intros i x. exact (H0 (xO i) x).
-    apply IHm2. 
-    intros i x. exact (H (xI i) x). 
-    intros i x. exact (H0 (xI i) x).
-    auto.
-  }
-    intros. apply H. auto. auto. constructor.
+  - destruct n as [ | n1 o' n2 ]. 
+    + rewrite xelements_leaf, xelements_empty. constructor.
+      intros. destruct (get i (Node m1 o m2)) eqn:E; auto. exploit H; eauto. 
+      intros [x [P Q]]. rewrite gleaf in P; congruence.
+    + rewrite ! xelements_node. apply list_forall2_app.
+      apply IHm1. 
+      intros. apply (H (xO i) x); auto. 
+      intros. apply (H0 (xO i) y); auto.
+      apply list_forall2_app. 
+      destruct o, o'.
+      destruct (H xH a) as [x [P Q]]. auto. simpl in P. inv P. 
+      constructor. auto. constructor.
+      destruct (H xH a) as [x [P Q]]. auto. simpl in P. inv P.
+      destruct (H0 xH b) as [x [P Q]]. auto. simpl in P. inv P.
+      constructor.
+      apply IHm2. 
+      intros. apply (H (xI i) x); auto. 
+      intros. apply (H0 (xI i) y); auto.
+    }
+    intros. apply H with (j := xH); auto. 
   Qed.
 
   Theorem elements_extensional:
@@ -846,6 +847,57 @@ Module PTree <: TREE.
     intros. rewrite <- H in H0. exists y; auto.
     induction 1. auto. destruct a1 as [a2 a3]; destruct b1 as [b2 b3]; simpl in *.
     destruct H0. congruence.
+  Qed.
+
+  Lemma xelements_remove:
+    forall (A: Type) v (m: t A) i j,
+    get i m = Some v ->
+    exists l1 l2,
+    xelements m j nil = l1 ++ (prev (prev_append i j), v) :: l2
+    /\ xelements (remove i m) j nil = l1 ++ l2.
+  Proof.
+    induction m; intros.
+  - rewrite gleaf in H; discriminate.
+  - assert (REMOVE: xelements (remove i (Node m1 o m2)) j nil =
+                    xelements (match i with
+                               | xH => Node m1 None m2
+                               | xO ii => Node (remove ii m1) o m2
+                               | xI ii => Node m1 o (remove ii m2) end)
+                              j nil).
+    {
+      destruct i; simpl remove.
+      destruct m1; auto. destruct o; auto. destruct (remove i m2); auto.
+      destruct o; auto. destruct m2; auto. destruct (remove i m1); auto. 
+      destruct m1; auto. destruct m2; auto. 
+    }
+    rewrite REMOVE. destruct i; simpl in H.
+    + destruct (IHm2 i (xI j) H) as (l1 & l2 & EQ & EQ').
+      exists (xelements m1 (xO j) nil ++
+              match o with None => nil | Some x => (prev j, x) :: nil end ++
+              l1);
+      exists l2; split.
+      rewrite xelements_node, EQ, ! app_ass. auto.
+      rewrite xelements_node, EQ', ! app_ass. auto.
+    + destruct (IHm1 i (xO j) H) as (l1 & l2 & EQ & EQ').
+      exists l1;
+      exists (l2 ++
+              match o with None => nil | Some x => (prev j, x) :: nil end ++
+              xelements m2 (xI j) nil);
+      split.
+      rewrite xelements_node, EQ, ! app_ass. auto.
+      rewrite xelements_node, EQ', ! app_ass. auto.
+    + subst o. exists (xelements m1 (xO j) nil); exists (xelements m2 (xI j) nil); split.
+      rewrite xelements_node. rewrite prev_append_prev. auto.
+      rewrite xelements_node; auto. 
+  Qed.
+
+  Theorem elements_remove:
+    forall (A: Type) i v (m: t A),
+    get i m = Some v ->
+    exists l1 l2, elements m = l1 ++ (i,v) :: l2 /\ elements (remove i m) = l1 ++ l2.
+  Proof.
+    intros. exploit xelements_remove. eauto. instantiate (1 := xH). 
+    rewrite prev_append_prev. auto. 
   Qed.
 
   Fixpoint xfold (A B: Type) (f: B -> positive -> A -> B)
@@ -1268,64 +1320,23 @@ Variable V: Type.
 
 Definition cardinal (x: T.t V) : nat := List.length (T.elements x).
 
-Remark list_incl_length:
-  forall (A: Type) (l1: list A), list_norepet l1 ->
-  forall (l2: list A), List.incl l1 l2 -> (List.length l1 <= List.length l2)%nat.
-Proof.
-  induction 1; simpl; intros.
-  omega.
-  exploit (List.in_split hd l2). auto with coqlib. intros [l3 [l4 EQ]]. subst l2.
-  assert (length tl <= length (l3 ++ l4))%nat.
-    apply IHlist_norepet. red; intros. 
-    exploit (H1 a); auto with coqlib. 
-    repeat rewrite in_app_iff. simpl. intuition. subst. contradiction.
-  repeat rewrite app_length in *. simpl. omega. 
-Qed.
-
-Remark list_length_incl:
-  forall (A: Type) (l1: list A), list_norepet l1 ->
-  forall l2, List.incl l1 l2 -> List.length l1 = List.length l2 -> List.incl l2 l1.
-Proof.
-  induction 1; simpl; intros.
-  destruct l2; simpl in *. auto with coqlib. discriminate.
-  exploit (List.in_split hd l2). auto with coqlib. intros [l3 [l4 EQ]]. subst l2.
-  assert (incl (l3 ++ l4) tl).
-    apply IHlist_norepet. red; intros. 
-    exploit (H1 a); auto with coqlib. 
-    repeat rewrite in_app_iff. simpl. intuition. subst. contradiction.
-    repeat rewrite app_length in *. simpl in H2. omega. 
-  red; simpl; intros. rewrite in_app_iff in H4; simpl in H4. intuition. 
-Qed.
-
-Remark list_strict_incl_length:
-  forall (A: Type) (l1 l2: list A) (x: A),
-  list_norepet l1 -> List.incl l1 l2 -> ~In x l1 -> In x l2 ->
-  (List.length l1 < List.length l2)%nat.
-Proof.
-  intros. exploit list_incl_length; eauto. intros. 
-  assert (length l1 = length l2 \/ length l1 < length l2)%nat by omega.
-  destruct H4; auto. elim H1. eapply list_length_incl; eauto. 
-Qed.
-
-Remark list_norepet_map:
-  forall (A B: Type) (f: A -> B) (l: list A),
-  list_norepet (List.map f l) -> list_norepet l.
-Proof.
-  induction l; simpl; intros.
-  constructor.
-  inv H. constructor; auto. red; intros; elim H2. apply List.in_map; auto.
-Qed.
-
 Theorem cardinal_remove:
   forall x m y, T.get x m = Some y -> (cardinal (T.remove x m) < cardinal m)%nat.
 Proof.
-  unfold cardinal; intros. apply list_strict_incl_length with (x := (x, y)).
-  apply list_norepet_map with (f := @fst T.elt V). apply T.elements_keys_norepet.
-  red; intros. destruct a as [x' y']. exploit T.elements_complete; eauto. 
-  rewrite T.grspec. destruct (T.elt_eq x' x); intros; try discriminate.
-  apply T.elements_correct; auto.
-  red; intros. exploit T.elements_complete; eauto. rewrite T.grspec. rewrite dec_eq_true. congruence.
-  apply T.elements_correct; auto.
+  unfold cardinal; intros.
+  exploit T.elements_remove; eauto. intros (l1 & l2 & P & Q). 
+  rewrite P, Q. rewrite ! app_length. simpl. omega.
+Qed.
+
+Theorem cardinal_set:
+  forall x m y, T.get x m = None -> (cardinal m < cardinal (T.set x y m))%nat.
+Proof.
+  intros. set (m' := T.set x y m). 
+  replace (cardinal m) with (cardinal (T.remove x m')). 
+  apply cardinal_remove with y. unfold m'; apply T.gss. 
+  unfold cardinal. f_equal. apply T.elements_extensional. 
+  intros. unfold m'. rewrite T.grspec, T.gsspec. 
+  destruct (T.elt_eq i x); auto. congruence.
 Qed.
 
 End MEASURE.
