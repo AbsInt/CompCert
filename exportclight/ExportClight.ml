@@ -127,16 +127,10 @@ let coqint64 p n =
   else fprintf p "(Int64.repr (%Ld))" n
 
 let coqfloat p n =
-  let n = camlint64_of_coqint(Floats.Float.to_bits n) in
-  if n >= 0L
-  then fprintf p "(Float.of_bits (Int64.repr %Ld))" n
-  else fprintf p "(Float.of_bits (Int64.repr (%Ld)))" n
+  fprintf p "(Float.of_bits %a)" coqint64 (Floats.Float.to_bits n)
 
 let coqsingle p n =
-  let n = camlint_of_coqint(Floats.Float32.to_bits n) in
-  if n >= 0l
-  then fprintf p "(Float32.of_bits (Int.repr %ld))" n
-  else fprintf p "(Float32.of_bits (Int.repr (%ld)))" n
+  fprintf p "(Float32.of_bits %a)" coqint (Floats.Float32.to_bits n)
 
 (* Types *)
 
