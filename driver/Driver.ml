@@ -13,6 +13,7 @@
 open Printf
 open Camlcoq
 open Clflags
+open Timing
 
 (* Location of the compatibility library *)
 
