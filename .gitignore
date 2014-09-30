@@ -23,7 +23,7 @@ Makefile.config
 # ocamlbuild's temp dir
 _build/
 # Generated files
-driver/Configuration.ml
+compcert.ini
 ia32/ConstpropOp.v
 ia32/SelectOp.v
 powerpc/ConstpropOp.v

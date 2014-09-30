@@ -157,34 +157,34 @@ extraction/STAMP: $(FILES:.v=.vo) extraction/extraction.v $(ARCH)/extractionMach
 	$(COQEXEC) extraction/extraction.v
 	touch extraction/STAMP
 
-ccomp: extraction/STAMP driver/Configuration.ml
+ccomp: extraction/STAMP compcert.ini
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.native \
         && rm -f ccomp && $(SLN) _build/driver/Driver.native ccomp
 
-ccomp.prof: extraction/STAMP driver/Configuration.ml
+ccomp.prof: extraction/STAMP compcert.ini
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.p.native \
         && rm -f ccomp.prof && $(SLN) _build/driver/Driver.p.native ccomp.prof
 
-ccomp.byte: extraction/STAMP driver/Configuration.ml
+ccomp.byte: extraction/STAMP compcert.ini
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.d.byte \
         && rm -f ccomp.byte && $(SLN) _build/driver/Driver.d.byte ccomp.byte
 
 runtime:
 	$(MAKE) -C runtime
 
-cchecklink: driver/Configuration.ml
+cchecklink: compcert.ini
 	$(OCAMLBUILD) $(OCB_OPTIONS_CHECKLINK) Validator.native \
         && rm -f cchecklink && $(SLN) _build/checklink/Validator.native cchecklink
 
-cchecklink.byte: driver/Configuration.ml
+cchecklink.byte: compcert.ini
 	$(OCAMLBUILD) $(OCB_OPTIONS_CHECKLINK) Validator.d.byte \
         && rm -f cchecklink.byte && $(SLN) _build/checklink/Validator.d.byte cchecklink.byte
 
-clightgen: extraction/STAMP driver/Configuration.ml exportclight/Clightdefs.vo
+clightgen: extraction/STAMP compcert.ini exportclight/Clightdefs.vo
 	$(OCAMLBUILD) $(OCB_OPTIONS_CLIGHTGEN) Clightgen.native \
         && rm -f clightgen && $(SLN) _build/exportclight/Clightgen.native clightgen
 
-clightgen.byte: extraction/STAMP driver/Configuration.ml exportclight/Clightdefs.vo
+clightgen.byte: extraction/STAMP compcert.ini exportclight/Clightdefs.vo
 	$(OCAMLBUILD) $(OCB_OPTIONS_CLIGHTGEN) Clightgen.d.byte \
         && rm -f clightgen.byte && $(SLN) _build/exportclight/Clightgen.d.byte clightgen.byte
 
@@ -220,20 +220,20 @@ latexdoc:
 	@tools/ndfun $*.vp > $*.v || { rm -f $*.v; exit 2; }
 	@chmod -w $*.v
 
-driver/Configuration.ml: Makefile.config VERSION
-	(echo let stdlib_path = "\"$(LIBDIR)\""; \
-         echo let prepro = "\"$(CPREPRO)\""; \
-         echo let asm = "\"$(CASM)\""; \
-         echo let linker = "\"$(CLINKER)\""; \
-         echo let arch = "\"$(ARCH)\""; \
-         echo let model = "\"$(MODEL)\""; \
-         echo let abi = "\"$(ABI)\""; \
-         echo let system = "\"$(SYSTEM)\""; \
-         echo let has_runtime_lib = $(HAS_RUNTIME_LIB); \
-         echo let asm_supports_cfi = $(ASM_SUPPORTS_CFI); \
+compcert.ini: Makefile.config VERSION
+	(echo stdlib_path=$(LIBDIR); \
+         echo prepro=$(CPREPRO); \
+         echo asm=$(CASM); \
+         echo linker=$(CLINKER); \
+         echo arch=$(ARCH); \
+         echo model=$(MODEL); \
+         echo abi=$(ABI); \
+         echo system=$(SYSTEM); \
+         echo has_runtime_lib=$(HAS_RUNTIME_LIB); \
+         echo asm_supports_cfi=$(ASM_SUPPORTS_CFI); \
          version=`cat VERSION`; \
-         echo let version = "\"$$version\"") \
-        > driver/Configuration.ml
+         echo version=$$version) \
+        > compcert.ini
 
 cparser/Parser.v: cparser/Parser.vy
 	$(MENHIR) --coq cparser/Parser.vy
@@ -246,6 +246,8 @@ depend: $(FILES) exportclight/Clightdefs.v
 install:
 	install -d $(BINDIR)
 	install ./ccomp $(BINDIR)
+	install -d $(SHAREDIR)
+	install ./compcert.ini $(SHAREDIR)
 ifeq ($(CCHECKLINK),true)
 	install ./cchecklink $(BINDIR)
 endif
@@ -259,7 +261,7 @@ clean:
 	rm -rf _build
 	rm -rf doc/html doc/*.glob
 	rm -f doc/coq2html.ml doc/coq2html doc/*.cm? doc/*.o
-	rm -f driver/Configuration.ml
+	rm -f compcert.ini
 	rm -f extraction/STAMP extraction/*.ml extraction/*.mli
 	rm -f tools/ndfun tools/*.cm? tools/*.o
 	rm -f $(ARCH)/ConstpropOp.v $(ARCH)/SelectOp.v backend/SelectDiv.v backend/SelectLong.v

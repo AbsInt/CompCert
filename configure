@@ -274,11 +274,14 @@ fi
 
 # Generate Makefile.config
 
+sharedir="$(dirname "$bindir")"/share
+
 rm -f Makefile.config
 cat > Makefile.config <<EOF
 PREFIX=$prefix
 BINDIR=$bindir
 LIBDIR=$libdir
+SHAREDIR=$sharedir
 EOF
 
 if test "$target" != "manual"; then
