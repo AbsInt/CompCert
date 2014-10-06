@@ -17,11 +17,7 @@ open Timing
 
 (* Location of the compatibility library *)
 
-let stdlib_path = ref(
-  try
-    Sys.getenv "COMPCERT_LIBRARY"
-  with Not_found ->
-    Configuration.stdlib_path)
+let stdlib_path = ref Configuration.stdlib_path
 
 let command cmd =
   if !option_v then begin

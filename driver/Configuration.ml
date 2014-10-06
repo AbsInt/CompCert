@@ -18,18 +18,22 @@ let config_vars: (string, string) Hashtbl.t = Hashtbl.create 10
 let _ =
   try
     let file = 
-      let dir = Sys.getcwd () 
-      and name = Sys.argv.(0) in
-      let dirname = if Filename.is_relative name then
-        Filename.dirname (Filename.concat dir name)
-      else 
-        Filename.dirname name
-      in
-      let share_dir = Filename.concat (Filename.concat dirname Filename.parent_dir_name) "share" in
       try
-        open_in (Filename.concat dirname "compcert.ini")
-      with Sys_error _ ->
-        open_in (Filename.concat share_dir "compcert.ini")
+        let env_file = Sys.getenv "COMPCERT_CONFIG" in
+        open_in env_file
+      with Not_found ->
+        let dir = Sys.getcwd () 
+        and name = Sys.argv.(0) in
+        let dirname = if Filename.is_relative name then
+          Filename.dirname (Filename.concat dir name)
+        else 
+          Filename.dirname name
+        in
+        let share_dir = Filename.concat (Filename.concat dirname Filename.parent_dir_name) "share" in
+        try
+          open_in (Filename.concat dirname "compcert.ini")
+        with Sys_error _ ->
+          open_in (Filename.concat share_dir "compcert.ini")
     in
     (try
       let ini_line = Str.regexp "\\([^=]+\\)=\\(.+\\)" in
