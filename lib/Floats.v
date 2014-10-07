@@ -136,10 +136,9 @@ Program Definition transform_quiet_pl (pl:nan_pl 53) : nan_pl 53 :=
 Next Obligation.
   destruct pl.
   simpl. rewrite Z.ltb_lt in *.
-  assert (forall x, S (Fcore_digits.digits2_Pnat x) = Pos.to_nat (Pos.size x)).
+  assert (forall x, Fcore_digits.digits2_pos x = Pos.size x).
   { induction x0; simpl; auto; rewrite IHx0; zify; omega. }
-  fold (Z.of_nat (S (Fcore_digits.digits2_Pnat (Pos.lor x 2251799813685248)))).
-  rewrite H, positive_nat_Z, Psize_log_inf, <- Zlog2_log_inf in *. clear H.
+  rewrite H, Psize_log_inf, <- Zlog2_log_inf in *. clear H.
   change (Z.pos (Pos.lor x 2251799813685248)) with (Z.lor (Z.pos x) 2251799813685248%Z).
   rewrite Z.log2_lor by (zify; omega).
   apply Z.max_case. auto. simpl. omega.
@@ -171,8 +170,8 @@ Definition expand_pl (pl: nan_pl 24) : nan_pl 53.
 Proof.
   refine (exist _ (Pos.shiftl_nat (proj1_sig pl) 29) _).
   abstract (
-    destruct pl; unfold proj1_sig, Pos.shiftl_nat, nat_iter, Fcore_digits.digits2_Pnat;
-    fold (Fcore_digits.digits2_Pnat x);
+    destruct pl; unfold proj1_sig, Pos.shiftl_nat, nat_iter, Fcore_digits.digits2_pos;
+    fold (Fcore_digits.digits2_pos x);
     rewrite Z.ltb_lt in *;
     zify; omega).
 Defined.
@@ -189,9 +188,11 @@ Proof.
   abstract (
     destruct pl; unfold proj1_sig, Pos.shiftr_nat, nat_iter;
     rewrite Z.ltb_lt in *;
-    assert (forall x, Fcore_digits.digits2_Pnat (Pos.div2 x) =
-                      (Fcore_digits.digits2_Pnat x - 1)%nat) by (destruct x0; simpl; zify; omega);
-    rewrite !H, <- !NPeano.Nat.sub_add_distr; zify; omega).
+    assert (forall x, Fcore_digits.digits2_pos (Pos.div2 x) =
+                      (Fcore_digits.digits2_pos x - 1)%positive)
+      by (destruct x0; simpl; auto; rewrite Pplus_one_succ_r, Pos.add_sub; auto);
+    rewrite !H, !Pos2Z.inj_sub_max;
+    repeat (apply Z.max_lub_lt; [reflexivity |apply Z.lt_sub_lt_add_l]); auto).
 Defined.
 
 Definition to_single_pl (s:bool) (pl:nan_pl 53) : (bool * nan_pl 24) :=
@@ -225,42 +226,46 @@ Definition binop_pl (x y: binary64) : bool*nan_pl 53 :=
 
 Definition zero: float := B754_zero _ _ false. (**r the float [+0.0] *)
 
-Definition eq_dec: forall (f1 f2: float), {f1 = f2} + {f1 <> f2} := b64_eq_dec.
+Definition eq_dec: forall (f1 f2: float), {f1 = f2} + {f1 <> f2} := Beq_dec _ _.
 
 (** Arithmetic operations *)
 
-Definition neg: float -> float := b64_opp neg_pl. (**r opposite (change sign) *)
-Definition abs: float -> float := b64_abs abs_pl. (**r absolute value (set sign to [+]) *)
-Definition add: float -> float -> float := b64_plus binop_pl mode_NE. (**r addition *)
-Definition sub: float -> float -> float := b64_minus binop_pl mode_NE. (**r subtraction *)
-Definition mul: float -> float -> float := b64_mult binop_pl mode_NE. (**r multiplication *)
-Definition div: float -> float -> float := b64_div binop_pl mode_NE. (**r division *)
+Definition neg: float -> float := Bopp _ _ neg_pl. (**r opposite (change sign) *)
+Definition abs: float -> float := Babs _ _ abs_pl. (**r absolute value (set sign to [+]) *)
+Definition add: float -> float -> float :=
+  Bplus 53 1024 __ __ binop_pl mode_NE. (**r addition *)
+Definition sub: float -> float -> float :=
+  Bminus 53 1024 __ __ binop_pl mode_NE. (**r subtraction *)
+Definition mul: float -> float -> float :=
+  Bmult 53 1024 __ __ binop_pl mode_NE. (**r multiplication *)
+Definition div: float -> float -> float :=
+  Bdiv 53 1024 __ __ binop_pl mode_NE. (**r division *)
 Definition cmp (c:comparison) (f1 f2: float) : bool := (**r comparison *)
-  cmp_of_comparison c (b64_compare f1 f2).
+  cmp_of_comparison c (Bcompare _ _ f1 f2).
 
 (** Conversions *)
 
-Definition of_single: float32 -> float := b64_of_b32 of_single_pl mode_NE.
-Definition to_single: float -> float32 := b32_of_b64 to_single_pl mode_NE.
+Definition of_single: float32 -> float := Bconv _ _ 53 1024 __ __ of_single_pl mode_NE.
+Definition to_single: float -> float32 := Bconv _ _ 24 128 __ __ to_single_pl mode_NE.
 
 Definition to_int (f:float): option int := (**r conversion to signed 32-bit int *)
-  option_map Int.repr (b64_to_Z_range f Int.min_signed Int.max_signed).
+  option_map Int.repr (ZofB_range _ _ f Int.min_signed Int.max_signed).
 Definition to_intu (f:float): option int := (**r conversion to unsigned 32-bit int *)
-  option_map Int.repr (b64_to_Z_range f 0 Int.max_unsigned).
+  option_map Int.repr (ZofB_range _ _ f 0 Int.max_unsigned).
 Definition to_long (f:float): option int64 := (**r conversion to signed 64-bit int *)
-  option_map Int64.repr (b64_to_Z_range f Int64.min_signed Int64.max_signed).
+  option_map Int64.repr (ZofB_range _ _ f Int64.min_signed Int64.max_signed).
 Definition to_longu (f:float): option int64 := (**r conversion to unsigned 64-bit int *)
-  option_map Int64.repr (b64_to_Z_range f 0 Int64.max_unsigned).
+  option_map Int64.repr (ZofB_range _ _ f 0 Int64.max_unsigned).
 
 Definition of_int (n:int): float := (**r conversion from signed 32-bit int *)
-  b64_of_Z (Int.signed n).
+  BofZ 53 1024 __ __ (Int.signed n).
 Definition of_intu (n:int): float:= (**r conversion from unsigned 32-bit int *)
-  b64_of_Z (Int.unsigned n).
+  BofZ 53 1024 __ __ (Int.unsigned n).
 
 Definition of_long (n:int64): float := (**r conversion from signed 64-bit int *)
-  b64_of_Z (Int64.signed n).
+  BofZ 53 1024 __ __ (Int64.signed n).
 Definition of_longu (n:int64): float:= (**r conversion from unsigned 64-bit int *)
-  b64_of_Z (Int64.unsigned n).
+  BofZ 53 1024 __ __ (Int64.unsigned n).
 
 Definition from_parsed (base:positive) (intPart:positive) (expPart:Z) : float :=
   build_from_parsed 53 1024 __ __ base intPart expPart.
@@ -323,7 +328,7 @@ Qed.
 
 (** Divisions that can be turned into multiplication by an inverse. *)
 
-Definition exact_inverse : float -> option float := b64_exact_inverse. 
+Definition exact_inverse : float -> option float := Bexact_inverse 53 1024 __ __. 
 
 Theorem div_mul_inverse:
   forall x y z, exact_inverse y = Some z -> div x y = mul x z.
@@ -340,7 +345,7 @@ Qed.
 Theorem cmp_swap:
   forall c x y, cmp (swap_comparison c) x y = cmp c y x.
 Proof.
-  unfold cmp, b64_compare; intros. rewrite (Bcompare_swap _ _ x y).
+  unfold cmp; intros. rewrite (Bcompare_swap _ _ x y).
   apply cmp_of_comparison_swap. 
 Qed.
 
@@ -422,7 +427,7 @@ Theorem of_intu_of_int_2:
   Int.ltu x ox8000_0000 = false ->
   of_intu x = add (of_int (Int.sub x ox8000_0000)) (of_intu ox8000_0000).
 Proof.
-  unfold add, b64_plus, of_intu, of_int, b64_of_Z; intros.
+  unfold add, of_intu, of_int; intros.
   set (y := Int.sub x ox8000_0000).
   pose proof (Int.unsigned_range x); pose proof (Int.signed_range y).
   assert (Ry: integer_representable 53 1024 (Int.signed y)).
@@ -443,9 +448,9 @@ Theorem to_intu_to_int_1:
   to_int x = Some n.
 Proof.
   intros. unfold to_intu in H0. 
-  destruct (b64_to_Z_range x 0 Int.max_unsigned) as [p|] eqn:E; simpl in H0; inv H0.
-  unfold b64_to_Z_range in E. exploit ZofB_range_inversion; eauto. intros (A & B & C).
-  unfold to_int, b64_to_Z_range. unfold ZofB_range. rewrite C. 
+  destruct (ZofB_range 53 1024 x 0 Int.max_unsigned) as [p|] eqn:E; simpl in H0; inv H0.
+  exploit ZofB_range_inversion; eauto. intros (A & B & C).
+  unfold to_int, ZofB_range. rewrite C. 
   rewrite Zle_bool_true by smart_omega. rewrite Zle_bool_true; auto.
   exploit (BofZ_exact 53 1024 __ __ (Int.unsigned ox8000_0000)).
   vm_compute; intuition congruence.
@@ -457,9 +462,9 @@ Proof.
   destruct (zeq p 0). 
   subst p; smart_omega.
   destruct (ZofB_range_pos 53 1024 __ __ x p C) as [P Q]. omega.
-  assert (CMP: b64_compare x y = Some Lt). 
-  { unfold cmp, cmp_of_comparison in H. destruct (b64_compare x y) as [[]|]; auto; discriminate. }
-  unfold b64_compare in CMP. rewrite Bcompare_finite_correct in CMP by auto. 
+  assert (CMP: Bcompare _ _ x y = Some Lt). 
+  { unfold cmp, cmp_of_comparison in H. destruct (Bcompare _ _ x y) as [[]|]; auto; discriminate. }
+  rewrite Bcompare_correct in CMP by auto. 
   inv CMP. apply Rcompare_Lt_inv in H1. rewrite EQy in H1.
   assert (p < Int.unsigned ox8000_0000).
   { apply lt_Z2R. eapply Rle_lt_trans; eauto. }
@@ -473,8 +478,8 @@ Theorem to_intu_to_int_2:
   to_int (sub x (of_intu ox8000_0000)) = Some (Int.sub n ox8000_0000).
 Proof.
   intros. unfold to_intu in H0. 
-  destruct (b64_to_Z_range x 0 Int.max_unsigned) as [p|] eqn:E; simpl in H0; inv H0.
-  unfold b64_to_Z_range in E. exploit ZofB_range_inversion; eauto. intros (A & B & C).
+  destruct (ZofB_range _ _ x 0 Int.max_unsigned) as [p|] eqn:E; simpl in H0; inv H0.
+  exploit ZofB_range_inversion; eauto. intros (A & B & C).
   exploit (BofZ_exact 53 1024 __ __ (Int.unsigned ox8000_0000)).
   vm_compute; intuition congruence.
   set (y := of_intu ox8000_0000) in *.
@@ -483,14 +488,14 @@ Proof.
   assert (FINx: is_finite _ _ x = true).
   { rewrite ZofB_correct in C. destruct (is_finite _ _ x) eqn:FINx; congruence. }
   assert (GE: (B2R _ _ x >= Z2R (Int.unsigned ox8000_0000))%R).
-  { rewrite <- EQy. unfold cmp, cmp_of_comparison, b64_compare in H.
-    rewrite Bcompare_finite_correct in H by auto. 
+  { rewrite <- EQy. unfold cmp, cmp_of_comparison in H.
+    rewrite Bcompare_correct in H by auto. 
     destruct (Rcompare (B2R 53 1024 x) (B2R 53 1024 y)) eqn:CMP.
     apply Req_ge; apply Rcompare_Eq_inv; auto.
     discriminate.
     apply Rgt_ge; apply Rcompare_Gt_inv; auto. 
   } 
-  assert (EQ: b64_to_Z_range (sub x y) Int.min_signed Int.max_signed = Some (p - Int.unsigned ox8000_0000)).
+  assert (EQ: ZofB_range _ _ (sub x y) Int.min_signed Int.max_signed = Some (p - Int.unsigned ox8000_0000)).
   {
     apply ZofB_range_minus. exact E. 
     compute_this (Int.unsigned ox8000_0000). smart_omega.
@@ -555,8 +560,8 @@ Theorem of_intu_from_words:
   of_intu x = sub (from_words ox4330_0000 x) (from_words ox4330_0000 Int.zero).
 Proof.
   intros. pose proof (Int.unsigned_range x).
-  rewrite ! from_words_eq. unfold sub, b64_minus. rewrite BofZ_minus. 
-  unfold of_intu, b64_of_Z. f_equal. rewrite Int.unsigned_zero. omega.
+  rewrite ! from_words_eq. unfold sub. rewrite BofZ_minus. 
+  unfold of_intu. f_equal. rewrite Int.unsigned_zero. omega.
   apply integer_representable_n; auto; smart_omega.
   apply integer_representable_n; auto; rewrite Int.unsigned_zero; smart_omega.
 Qed.
@@ -582,8 +587,8 @@ Proof.
   pose proof (Int.signed_range x).
   rewrite ! from_words_eq. rewrite ox8000_0000_signed_unsigned.
   change (Int.unsigned ox8000_0000) with Int.half_modulus.
-  unfold sub, b64_minus. rewrite BofZ_minus. 
-  unfold of_int, b64_of_Z. f_equal. omega.
+  unfold sub. rewrite BofZ_minus. 
+  unfold of_int. f_equal. omega.
   apply integer_representable_n; auto; smart_omega.
   apply integer_representable_n; auto; smart_omega.
 Qed.
@@ -654,11 +659,11 @@ Proof.
   set (x := Int64.unsigned l) in *;
   set (xl := Int.unsigned (Int64.loword l)) in *;
   set (xh := Int.unsigned (Int64.hiword l)) in *.
-  unfold sub, b64_minus. rewrite BofZ_minus.
+  unfold sub. rewrite BofZ_minus.
   replace (2^84 + xh * 2^32 - (2^84 + p20 * 2^32))
      with ((xh - p20) * 2^32) by ring.
-  unfold add, b64_plus. rewrite BofZ_plus. 
-  unfold of_longu, b64_of_Z. f_equal. 
+  unfold add. rewrite BofZ_plus. 
+  unfold of_longu. f_equal. 
   rewrite <- (Int64.ofwords_recompose l) at 1. rewrite Int64.ofwords_add'.
   fold xh; fold xl. compute_this (two_p 32); compute_this p20; ring.
   apply integer_representable_n2p; auto.
@@ -687,12 +692,12 @@ Proof.
   set (xl := Int.unsigned (Int64.loword l)) in *;
   set (xh := Int.signed (Int64.hiword l)) in *.
   rewrite ox8000_0000_signed_unsigned. fold xh. 
-  unfold sub, b64_minus. rewrite BofZ_minus.
+  unfold sub. rewrite BofZ_minus.
   replace (2^84 + (xh + Int.half_modulus) * 2^32 - (2^84 + p * 2^32))
      with ((xh - 2^20) * 2^32) 
        by (compute_this p; compute_this Int.half_modulus; ring).
-  unfold add, b64_plus. rewrite BofZ_plus. 
-  unfold of_long, b64_of_Z. f_equal. 
+  unfold add. rewrite BofZ_plus. 
+  unfold of_long. f_equal. 
   rewrite <- (Int64.ofwords_recompose l) at 1. rewrite Int64.ofwords_add''.
   fold xh; fold xl. compute_this (two_p 32); ring. 
   apply integer_representable_n2p; auto.
@@ -712,11 +717,11 @@ Qed.
 
 Theorem of_longu_decomp:
   forall l,
-  of_longu l = add (mul (of_intu (Int64.hiword l)) (b64_of_Z (2^32)))
+  of_longu l = add (mul (of_intu (Int64.hiword l)) (BofZ 53 1024 __ __ (2^32)))
                    (of_intu (Int64.loword l)).
 Proof.
   intros.
-  unfold of_longu, of_intu, b64_of_Z, add, mul, b64_plus, b64_mult.
+  unfold of_longu, of_intu, add, mul.
   pose proof (Int.unsigned_range (Int64.loword l)).
   pose proof (Int.unsigned_range (Int64.hiword l)).
   pose proof (Int64.unsigned_range l).
@@ -735,11 +740,11 @@ Qed.
 
 Theorem of_long_decomp:
   forall l,
-  of_long l = add (mul (of_int (Int64.hiword l)) (b64_of_Z (2^32)))
+  of_long l = add (mul (of_int (Int64.hiword l)) (BofZ 53 1024 __ __ (2^32)))
                   (of_intu (Int64.loword l)).
 Proof.
   intros.
-  unfold of_long, of_int, of_intu, b64_of_Z, add, mul, b64_plus, b64_mult.
+  unfold of_long, of_int, of_intu, add, mul.
   pose proof (Int.unsigned_range (Int64.loword l)).
   pose proof (Int.signed_range (Int64.hiword l)).
   pose proof (Int64.signed_range l).
@@ -823,7 +828,7 @@ Proof.
   change (2^0) with 1 in B0; rewrite Zdiv_1_r in B0; rewrite B0; auto.
   intros. rewrite NB2 by omega. rewrite ! dec_eq_false by omega. auto.
   }
-  unfold mul, of_long, of_longu, b64_mult, b64_of_Z. 
+  unfold mul, of_long, of_longu. 
   rewrite BofZ_mult_2p. 
 - change (2^1) with 2. rewrite EQ. apply BofZ_round_odd with (p := 1).
 + omega.
@@ -853,11 +858,10 @@ Program Definition transform_quiet_pl (pl:nan_pl 24) : nan_pl 24 :=
 Next Obligation.
   destruct pl.
   simpl. rewrite Z.ltb_lt in *.
-  assert (forall x, S (Fcore_digits.digits2_Pnat x) = Pos.to_nat (Pos.size x)).
+  assert (forall x, Fcore_digits.digits2_pos x = Pos.size x).
   { induction x0; simpl; auto; rewrite IHx0; zify; omega. }
-  fold (Z.of_nat (S (Fcore_digits.digits2_Pnat (Pos.lor x 4194304)))).
-  rewrite H, positive_nat_Z, Psize_log_inf, <- Zlog2_log_inf in *. clear H.
-  change (Z.pos (Pos.lor x 4194304)) with (Z.lor (Z.pos x) 4194304).
+  rewrite H, Psize_log_inf, <- Zlog2_log_inf in *. clear H.
+  change (Z.pos (Pos.lor x 4194304)) with (Z.lor (Z.pos x) 4194304%Z).
   rewrite Z.log2_lor by (zify; omega).
   apply Z.max_case. auto. simpl. omega.
 Qed.
@@ -887,18 +891,22 @@ Definition binop_pl (x y: binary32) : bool*nan_pl 24 :=
 
 Definition zero: float32 := B754_zero _ _ false. (**r the float [+0.0] *)
 
-Definition eq_dec: forall (f1 f2: float32), {f1 = f2} + {f1 <> f2} := b32_eq_dec.
+Definition eq_dec: forall (f1 f2: float32), {f1 = f2} + {f1 <> f2} := Beq_dec _ _.
 
 (** Arithmetic operations *)
 
-Definition neg: float32 -> float32 := b32_opp neg_pl. (**r opposite (change sign) *)
-Definition abs: float32 -> float32 := b32_abs abs_pl. (**r absolute value (set sign to [+]) *)
-Definition add: float32 -> float32 -> float32 := b32_plus binop_pl mode_NE. (**r addition *)
-Definition sub: float32 -> float32 -> float32 := b32_minus binop_pl mode_NE. (**r subtraction *)
-Definition mul: float32 -> float32 -> float32 := b32_mult binop_pl mode_NE. (**r multiplication *)
-Definition div: float32 -> float32 -> float32 := b32_div binop_pl mode_NE. (**r division *)
+Definition neg: float32 -> float32 := Bopp _ _ neg_pl. (**r opposite (change sign) *)
+Definition abs: float32 -> float32 := Babs _ _ abs_pl. (**r absolute value (set sign to [+]) *)
+Definition add: float32 -> float32 -> float32 :=
+  Bplus 24 128 __ __ binop_pl mode_NE. (**r addition *)
+Definition sub: float32 -> float32 -> float32 :=
+  Bminus 24 128 __ __ binop_pl mode_NE. (**r subtraction *)
+Definition mul: float32 -> float32 -> float32 :=
+  Bmult 24 128 __ __ binop_pl mode_NE. (**r multiplication *)
+Definition div: float32 -> float32 -> float32 :=
+  Bdiv 24 128 __ __ binop_pl mode_NE. (**r division *)
 Definition cmp (c:comparison) (f1 f2: float32) : bool := (**r comparison *)
-  cmp_of_comparison c (b32_compare f1 f2).
+  cmp_of_comparison c (Bcompare _ _ f1 f2).
 
 (** Conversions *)
 
@@ -906,23 +914,23 @@ Definition of_double : float -> float32 := Float.to_single.
 Definition to_double : float32 -> float := Float.of_single.
 
 Definition to_int (f:float32): option int := (**r conversion to signed 32-bit int *)
-  option_map Int.repr (b32_to_Z_range f Int.min_signed Int.max_signed).
+  option_map Int.repr (ZofB_range _ _ f Int.min_signed Int.max_signed).
 Definition to_intu (f:float32): option int := (**r conversion to unsigned 32-bit int *)
-  option_map Int.repr (b32_to_Z_range f 0 Int.max_unsigned).
+  option_map Int.repr (ZofB_range _ _ f 0 Int.max_unsigned).
 Definition to_long (f:float32): option int64 := (**r conversion to signed 64-bit int *)
-  option_map Int64.repr (b32_to_Z_range f Int64.min_signed Int64.max_signed).
+  option_map Int64.repr (ZofB_range _ _ f Int64.min_signed Int64.max_signed).
 Definition to_longu (f:float32): option int64 := (**r conversion to unsigned 64-bit int *)
-  option_map Int64.repr (b32_to_Z_range f 0 Int64.max_unsigned).
+  option_map Int64.repr (ZofB_range _ _ f 0 Int64.max_unsigned).
 
 Definition of_int (n:int): float32 := (**r conversion from signed 32-bit int to single-precision float *)
-  b32_of_Z (Int.signed n).
+  BofZ 24 128 __ __ (Int.signed n).
 Definition of_intu (n:int): float32 := (**r conversion from unsigned 32-bit int to single-precision float *)
-  b32_of_Z (Int.unsigned n).
+  BofZ 24 128 __ __ (Int.unsigned n).
 
 Definition of_long (n:int64): float32 := (**r conversion from signed 64-bit int to single-precision float *)
-  b32_of_Z (Int64.signed n).
+  BofZ 24 128 __ __ (Int64.signed n).
 Definition of_longu (n:int64): float32 := (**r conversion from unsigned 64-bit int to single-precision float *)
-  b32_of_Z (Int64.unsigned n).
+  BofZ 24 128 __ __ (Int64.unsigned n).
 
 Definition from_parsed (base:positive) (intPart:positive) (expPart:Z) : float32 :=
   build_from_parsed 24 128 __ __ base intPart expPart.
@@ -965,7 +973,7 @@ Qed.
 
 (** Divisions that can be turned into multiplication by an inverse. *)
 
-Definition exact_inverse : float32 -> option float32 := b32_exact_inverse. 
+Definition exact_inverse : float32 -> option float32 := Bexact_inverse 24 128 __ __.
 
 Theorem div_mul_inverse:
   forall x y z, exact_inverse y = Some z -> div x y = mul x z.
@@ -982,7 +990,7 @@ Qed.
 Theorem cmp_swap:
   forall c x y, cmp (swap_comparison c) x y = cmp c y x.
 Proof.
-  unfold cmp, b32_compare; intros. rewrite (Bcompare_swap _ _ x y).
+  unfold cmp; intros. rewrite (Bcompare_swap _ _ x y).
   apply cmp_of_comparison_swap. 
 Qed.
 
@@ -1076,8 +1084,8 @@ Theorem to_int_double:
 Proof.
   intros.
   unfold to_int in H.
-  destruct (b32_to_Z_range f Int.min_signed Int.max_signed) as [n'|] eqn:E; inv H.
-  unfold Float.to_int, to_double, Float.of_single, b64_to_Z_range, b64_of_b32. 
+  destruct (ZofB_range _ _ f Int.min_signed Int.max_signed) as [n'|] eqn:E; inv H.
+  unfold Float.to_int, to_double, Float.of_single. 
   erewrite ZofB_range_Bconv; eauto. auto. omega. omega. omega. omega. 
 Qed.
 
@@ -1086,8 +1094,8 @@ Theorem to_intu_double:
 Proof.
   intros.
   unfold to_intu in H.
-  destruct (b32_to_Z_range f 0 Int.max_unsigned) as [n'|] eqn:E; inv H.
-  unfold Float.to_intu, to_double, Float.of_single, b64_to_Z_range, b64_of_b32. 
+  destruct (ZofB_range _ _ f 0 Int.max_unsigned) as [n'|] eqn:E; inv H.
+  unfold Float.to_intu, to_double, Float.of_single. 
   erewrite ZofB_range_Bconv; eauto. auto. omega. omega. omega. omega. 
 Qed.
 
@@ -1096,8 +1104,8 @@ Theorem to_long_double:
 Proof.
   intros.
   unfold to_long in H.
-  destruct (b32_to_Z_range f Int64.min_signed Int64.max_signed) as [n'|] eqn:E; inv H.
-  unfold Float.to_long, to_double, Float.of_single, b64_to_Z_range, b64_of_b32. 
+  destruct (ZofB_range _ _ f Int64.min_signed Int64.max_signed) as [n'|] eqn:E; inv H.
+  unfold Float.to_long, to_double, Float.of_single. 
   erewrite ZofB_range_Bconv; eauto. auto. omega. omega. omega. omega. 
 Qed.
 
@@ -1106,8 +1114,8 @@ Theorem to_longu_double:
 Proof.
   intros.
   unfold to_longu in H.
-  destruct (b32_to_Z_range f 0 Int64.max_unsigned) as [n'|] eqn:E; inv H.
-  unfold Float.to_longu, to_double, Float.of_single, b64_to_Z_range, b64_of_b32. 
+  destruct (ZofB_range _ _ f 0 Int64.max_unsigned) as [n'|] eqn:E; inv H.
+  unfold Float.to_longu, to_double, Float.of_single. 
   erewrite ZofB_range_Bconv; eauto. auto. omega. omega. omega. omega. 
 Qed.
 
@@ -1160,14 +1168,13 @@ Qed.
 Lemma of_long_round_odd:
   forall n conv_nan,
   2^36 <= Z.abs n < 2^64 ->
-  b32_of_Z n = b32_of_b64 conv_nan mode_NE (b64_of_Z (Z.land (Z.lor n ((Z.land n 2047) + 2047)) (-2048))).
+  BofZ 24 128 __ __ n = Bconv _ _ 24 128 __ __ conv_nan mode_NE (BofZ 53 1024 __ __ (Z.land (Z.lor n ((Z.land n 2047) + 2047)) (-2048))).
 Proof.
   intros. rewrite <- (int_round_odd_plus 11) by omega.
   assert (-2^64 <= int_round_odd n 11). 
   { change (-2^64) with (int_round_odd (-2^64) 11). apply (int_round_odd_le 0 0); xomega. }
   assert (int_round_odd n 11 <= 2^64). 
   { change (2^64) with (int_round_odd (2^64) 11). apply (int_round_odd_le 0 0); xomega. }
-  unfold b32_of_Z, b32_of_b64, b64_of_Z. 
   rewrite Bconv_BofZ. 
   apply BofZ_round_odd with (p := 11).
   omega.

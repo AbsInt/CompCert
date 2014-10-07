@@ -325,7 +325,7 @@ destruct (round_DN_or_UP beta fexp rnd x) as [H|H] ; rewrite H ; clear H.
 (* . *)
 rewrite Rabs_left1.
 rewrite Ropp_minus_distr.
-apply Rplus_lt_reg_r with (round beta fexp Zfloor x).
+apply Rplus_lt_reg_l with (round beta fexp Zfloor x).
 rewrite <- ulp_DN_UP with (1 := Hx).
 ring_simplify.
 assert (Hu: (x <= round beta fexp Zceil x)%R).

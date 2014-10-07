@@ -46,6 +46,8 @@ End AnyRadix.
 
 Section Binary.
 
+Implicit Arguments exist [[A] [P]].
+
 (** prec is the number of bits of the mantissa including the implicit one
     emax is the exponent of the infinities
     Typically p=24 and emax = 128 in single precision *)
@@ -59,7 +61,7 @@ Instance fexp_correct : Valid_exp fexp := FLT_exp_valid emin prec.
 Instance fexp_monotone : Monotone_exp fexp := FLT_exp_monotone emin prec.
 
 Definition canonic_mantissa m e :=
-  Zeq_bool (fexp (Z_of_nat (S (digits2_Pnat m)) + e)) e.
+  Zeq_bool (fexp (Zpos (digits2_pos m) + e)) e.
 
 Definition bounded m e :=
   andb (canonic_mantissa m e) (Zle_bool e (emax - prec)).
@@ -67,14 +69,15 @@ Definition bounded m e :=
 Definition valid_binary x :=
   match x with
   | F754_finite _ m e => bounded m e
-  | F754_nan _ pl => (Z_of_nat' (S (digits2_Pnat pl)) <? prec)%Z
+  | F754_nan _ pl => (Zpos (digits2_pos pl) <? prec)%Z
   | _ => true
   end.
 
 (** Basic type used for representing binary FP numbers.
-    Note that there is exactly one such object per FP datum. *)
+    Note that there is exactly one such object per FP datum.
+    NaNs do not have any payload. They cannot be distinguished. *)
 
-Definition nan_pl := {pl | (Z_of_nat' (S (digits2_Pnat pl)) <? prec)%Z  = true}.
+Definition nan_pl := {pl | (Zpos (digits2_pos pl) <? prec)%Z  = true}.
 
 Inductive binary_float :=
   | B754_zero : bool -> binary_float
@@ -88,7 +91,7 @@ Definition FF2B x :=
   | F754_finite s m e => B754_finite s m e
   | F754_infinity s => fun _ => B754_infinity s
   | F754_zero s => fun _ => B754_zero s
-  | F754_nan b pl => fun H => B754_nan b (exist _ pl H)
+  | F754_nan b pl => fun H => B754_nan b (exist pl H)
   end.
 
 Definition B2FF x :=
@@ -98,8 +101,6 @@ Definition B2FF x :=
   | B754_zero s => F754_zero s
   | B754_nan b (exist pl _) => F754_nan b pl
   end.
-
-Definition radix2 := Build_radix 2 (refl_equal true).
 
 Definition B2R f :=
   match f with
@@ -183,7 +184,7 @@ pattern ex at 2 ; rewrite <- Hx.
 apply (f_equal fexp).
 rewrite ln_beta_F2R_Zdigits.
 rewrite <- Zdigits_abs.
-rewrite Z_of_nat_S_digits2_Pnat.
+rewrite Zpos_digits2_pos.
 now case sx.
 now case sx.
 Qed.
@@ -419,6 +420,159 @@ simpl.
 now case opp_nan.
 Qed.
 
+(** Absolute value *)
+
+Definition Babs abs_nan (x : binary_float) : binary_float :=
+  match x with
+  | B754_nan sx plx =>
+      let '(sres, plres) := abs_nan sx plx in B754_nan sres plres
+  | B754_infinity sx => B754_infinity false
+  | B754_finite sx mx ex Hx => B754_finite false mx ex Hx
+  | B754_zero sx => B754_zero false
+  end.
+
+Theorem B2R_Babs :
+  forall abs_nan x,
+  B2R (Babs abs_nan x) = Rabs (B2R x).
+Proof.
+  intros abs_nan [sx|sx|sx plx|sx mx ex Hx]; apply sym_eq ; try apply Rabs_R0.
+  simpl. destruct abs_nan. simpl. apply Rabs_R0.
+  simpl. rewrite <- F2R_abs. now destruct sx.
+Qed.
+
+Theorem is_finite_Babs :
+  forall abs_nan x,
+  is_finite (Babs abs_nan x) = is_finite x.
+Proof.
+  intros abs_nan [| | |] ; try easy.
+  intros s pl.
+  simpl.
+  now case abs_nan.
+Qed.
+
+Theorem Bsign_Babs :
+  forall abs_nan x,
+  is_nan x = false ->
+  Bsign (Babs abs_nan x) = false.
+Proof.
+  now intros abs_nan [| | |].
+Qed.
+
+Theorem Babs_idempotent :
+  forall abs_nan (x: binary_float),
+  is_nan x = false ->
+  Babs abs_nan (Babs abs_nan x) = Babs abs_nan x.
+Proof.
+  now intros abs_nan [sx|sx|sx plx|sx mx ex Hx].
+Qed.
+
+Theorem Babs_Bopp :
+  forall abs_nan opp_nan x,
+  is_nan x = false ->
+  Babs abs_nan (Bopp opp_nan x) = Babs abs_nan x.
+Proof.
+  now intros abs_nan opp_nan [| | |].
+Qed.
+
+(** Comparison
+
+[Some c] means ordered as per [c]; [None] means unordered. *)
+
+Definition Bcompare (f1 f2 : binary_float) : option comparison :=
+  match f1, f2 with
+  | B754_nan _ _,_ | _,B754_nan _ _ => None
+  | B754_infinity true, B754_infinity true
+  | B754_infinity false, B754_infinity false => Some Eq
+  | B754_infinity true, _ => Some Lt
+  | B754_infinity false, _ => Some Gt
+  | _, B754_infinity true => Some Gt
+  | _, B754_infinity false => Some Lt
+  | B754_finite true _ _ _, B754_zero _ => Some Lt
+  | B754_finite false _ _ _, B754_zero _ => Some Gt
+  | B754_zero _, B754_finite true _ _ _ => Some Gt
+  | B754_zero _, B754_finite false _ _ _ => Some Lt
+  | B754_zero _, B754_zero _ => Some Eq
+  | B754_finite s1 m1 e1 _, B754_finite s2 m2 e2 _ =>
+    match s1, s2 with
+    | true, false => Some Lt
+    | false, true => Some Gt
+    | false, false =>
+      match Zcompare e1 e2 with
+      | Lt => Some Lt
+      | Gt => Some Gt
+      | Eq => Some (Pcompare m1 m2 Eq)
+      end
+    | true, true =>
+      match Zcompare e1 e2 with
+      | Lt => Some Gt
+      | Gt => Some Lt
+      | Eq => Some (CompOpp (Pcompare m1 m2 Eq))
+      end
+    end
+  end.
+
+Theorem Bcompare_correct :
+  forall f1 f2,
+  is_finite f1 = true -> is_finite f2 = true ->
+  Bcompare f1 f2 = Some (Rcompare (B2R f1) (B2R f2)).
+Proof.
+  Ltac apply_Rcompare :=
+    match goal with
+      | [ |- Some Lt = Some (Rcompare _ _) ] => f_equal; symmetry; apply Rcompare_Lt
+      | [ |- Some Eq = Some (Rcompare _ _) ] => f_equal; symmetry; apply Rcompare_Eq
+      | [ |- Some Gt = Some (Rcompare _ _) ] => f_equal; symmetry; apply Rcompare_Gt
+    end.
+  unfold Bcompare; intros.
+  destruct f1, f2 ; try easy.
+  now rewrite Rcompare_Eq.
+  destruct b0 ; apply_Rcompare.
+  now apply F2R_lt_0_compat.
+  now apply F2R_gt_0_compat.
+  destruct b ; apply_Rcompare.
+  now apply F2R_lt_0_compat.
+  now apply F2R_gt_0_compat.
+  simpl.
+  clear H H0.
+  apply andb_prop in e0; destruct e0; apply (canonic_canonic_mantissa false) in H.
+  apply andb_prop in e2; destruct e2; apply (canonic_canonic_mantissa false) in H1.
+  pose proof (Zcompare_spec e e1); unfold canonic, Fexp in H1, H.
+  assert (forall m1 m2 e1 e2,
+    let x := (Z2R (Zpos m1) * bpow radix2 e1)%R in
+    let y := (Z2R (Zpos m2) * bpow radix2 e2)%R in
+    (canonic_exp radix2 fexp x < canonic_exp radix2 fexp y)%Z -> (x < y)%R).
+  {
+  intros; apply Rnot_le_lt; intro; apply (ln_beta_le radix2) in H5.
+  apply Zlt_not_le with (1 := H4).
+  now apply fexp_monotone.
+  now apply (F2R_gt_0_compat _ (Float radix2 (Zpos m2) e2)).
+  }
+  assert (forall m1 m2 e1 e2, (Z2R (- Zpos m1) * bpow radix2 e1 < Z2R (Zpos m2) * bpow radix2 e2)%R).
+  {
+  intros; apply (Rlt_trans _ 0%R).
+  now apply (F2R_lt_0_compat _ (Float radix2 (Zneg m1) e0)).
+  now apply (F2R_gt_0_compat _ (Float radix2 (Zpos m2) e2)).
+  }
+  unfold F2R, Fnum, Fexp.
+  destruct b, b0; try (now apply_Rcompare; apply H5); inversion H3;
+    try (apply_Rcompare; apply H4; rewrite H, H1 in H7; assumption);
+    try (apply_Rcompare; do 2 rewrite Z2R_opp, Ropp_mult_distr_l_reverse;
+      apply Ropp_lt_contravar; apply H4; rewrite H, H1 in H7; assumption);
+    rewrite H7, Rcompare_mult_r, Rcompare_Z2R by (apply bpow_gt_0); reflexivity.
+Qed.
+
+Theorem Bcompare_swap :
+  forall x y,
+  Bcompare y x = match Bcompare x y with Some c => Some (CompOpp c) | None => None end.
+Proof.
+  intros.
+  destruct x as [ ? | [] | ? ? | [] mx ex Bx ];
+  destruct y as [ ? | [] | ? ? | [] my ey By ]; simpl; try easy.
+- rewrite <- (Zcompare_antisym ex ey). destruct (ex ?= ey)%Z; try easy.
+  now rewrite (Pcompare_antisym mx my).
+- rewrite <- (Zcompare_antisym ex ey). destruct (ex ?= ey)%Z; try easy.
+  now rewrite Pcompare_antisym.
+Qed.
+
 Theorem bounded_lt_emax :
   forall mx ex,
   bounded mx ex = true ->
@@ -441,8 +595,7 @@ now apply F2R_gt_0_compat.
 apply bpow_le.
 rewrite H. 2: discriminate.
 revert H1. clear -H2.
-rewrite Z_of_nat_S_digits2_Pnat.
-change Fcalc_digits.radix2 with radix2.
+rewrite Zpos_digits2_pos.
 unfold fexp, FLT_exp.
 generalize (Zdigits radix2 (Zpos mx)).
 intros ; zify ; subst.
@@ -471,8 +624,7 @@ split.
 unfold canonic_mantissa.
 unfold canonic, Fexp in Cx.
 rewrite Cx at 2.
-rewrite Z_of_nat_S_digits2_Pnat.
-change Fcalc_digits.radix2 with radix2.
+rewrite Zpos_digits2_pos.
 unfold canonic_exp.
 rewrite ln_beta_F2R_Zdigits. 2: discriminate.
 now apply -> Zeq_is_eq_bool.
@@ -600,7 +752,7 @@ induction (nat_of_P n).
 simpl.
 rewrite Zplus_0_r.
 now destruct l as [|[| |]].
-simpl iter_nat.
+simpl nat_rect.
 rewrite inj_S.
 unfold Zsucc.
 rewrite  Zplus_assoc.
@@ -615,18 +767,6 @@ generalize (iter_nat n0 shr_record shr_1 (shr_record_of_loc m l)).
 clear.
 intros (m, r, s) Hm.
 now destruct m as [|[m|m|]|m] ; try (now elim Hm) ; destruct r as [|] ; destruct s as [|].
-Qed.
-
-Definition Zdigits2 m :=
-  match m with Z0 => m | Zpos p => Z_of_nat (S (digits2_Pnat p)) | Zneg p => Z_of_nat (S (digits2_Pnat p)) end.
-
-Theorem Zdigits2_Zdigits :
-  forall m,
-  Zdigits2 m = Zdigits radix2 m.
-Proof.
-unfold Zdigits2.
-intros [|m|m] ; try apply Z_of_nat_S_digits2_Pnat.
-easy.
 Qed.
 
 Definition shr_fexp m e l :=
@@ -829,7 +969,7 @@ apply andb_true_intro.
 split.
 unfold canonic_mantissa.
 apply Zeq_bool_true.
-rewrite Z_of_nat_S_digits2_Pnat.
+rewrite Zpos_digits2_pos.
 rewrite <- ln_beta_F2R_Zdigits.
 apply sym_eq.
 now rewrite H3 in H4.
@@ -849,8 +989,7 @@ unfold valid_binary, bounded.
 rewrite Zle_bool_refl.
 rewrite Bool.andb_true_r.
 apply Zeq_bool_true.
-rewrite Z_of_nat_S_digits2_Pnat.
-change Fcalc_digits.radix2 with radix2.
+rewrite Zpos_digits2_pos.
 replace (Zdigits radix2 (Zpos (match (Zpower 2 prec - 1)%Z with Zpos p => p | _ => xH end))) with prec.
 unfold fexp, FLT_exp, emin.
 generalize (prec_gt_0 prec).
@@ -942,7 +1081,7 @@ assert (forall m e, bounded m e = true -> fexp (Zdigits radix2 (Zpos m) + e) = e
 clear. intros m e Hb.
 destruct (andb_prop _ _ Hb) as (H,_).
 apply Zeq_bool_eq.
-now rewrite <- Z_of_nat_S_digits2_Pnat.
+now rewrite <- Zpos_digits2_pos.
 generalize (H _ _ Hx) (H _ _ Hy).
 clear x y sx sy Hx Hy H.
 unfold fexp, FLT_exp.
@@ -1098,7 +1237,7 @@ apply refl_equal.
 Qed.
 
 Definition shl_align_fexp mx ex :=
-  shl_align mx ex (fexp (Z_of_nat (S (digits2_Pnat mx)) + ex)).
+  shl_align mx ex (fexp (Zpos (digits2_pos mx) + ex)).
 
 Theorem shl_align_fexp_correct :
   forall mx ex,
@@ -1108,8 +1247,8 @@ Theorem shl_align_fexp_correct :
 Proof.
 intros mx ex.
 unfold shl_align_fexp.
-generalize (shl_align_correct mx ex (fexp (Z_of_nat (S (digits2_Pnat mx)) + ex))).
-rewrite Z_of_nat_S_digits2_Pnat.
+generalize (shl_align_correct mx ex (fexp (Zpos (digits2_pos mx) + ex))).
+rewrite Zpos_digits2_pos.
 case shl_align.
 intros mx' ex' (H1, H2).
 split.
@@ -1438,10 +1577,10 @@ Definition Fdiv_core_binary m1 e1 m2 e2 :=
   let e := (e1 - e2)%Z in
   let (m, e') :=
     match (d2 + prec - d1)%Z with
-    | Zpos p => (m1 * Zpower_pos 2 p, e + Zneg p)%Z
+    | Zpos p => (Z.shiftl m1 (Zpos p), e + Zneg p)%Z
     | _ => (m1, e)
     end in
-  let '(q, r) :=  Zdiv_eucl m m2 in
+  let '(q, r) :=  Zfast_div_eucl m m2 in
   (q, e', new_location m2 r loc_Exact).
 
 Lemma Bdiv_correct_aux :
@@ -1463,7 +1602,6 @@ Lemma Bdiv_correct_aux :
 Proof.
 intros m sx mx ex sy my ey.
 replace (Fdiv_core_binary (Zpos mx) ex (Zpos my) ey) with (Fdiv_core radix2 prec (Zpos mx) ex (Zpos my) ey).
-2: now unfold Fdiv_core_binary ; rewrite 2!Zdigits2_Zdigits.
 refine (_ (Fdiv_core_correct radix2 prec (Zpos mx) ex (Zpos my) ey _ _ _)) ; try easy.
 destruct (Fdiv_core radix2 prec (Zpos mx) ex (Zpos my) ey) as ((mz, ez), lz).
 intros (Pz, Bz).
@@ -1540,6 +1678,15 @@ now apply F2R_ge_0_compat.
 apply Rlt_le.
 apply Rinv_0_lt_compat.
 now apply F2R_gt_0_compat.
+(* *)
+unfold Fdiv_core_binary, Fdiv_core.
+rewrite 2!Zdigits2_Zdigits.
+change 2%Z with (radix_val radix2).
+destruct (Zdigits radix2 (Z.pos my) + prec - Zdigits radix2 (Z.pos mx))%Z as [|p|p].
+now rewrite Zfast_div_eucl_correct.
+rewrite Z.shiftl_mul_pow2 by easy.
+now rewrite Zfast_div_eucl_correct.
+now rewrite Zfast_div_eucl_correct.
 Qed.
 
 Definition Bdiv div_nan m x y :=
@@ -1597,10 +1744,10 @@ Definition Fsqrt_core_binary m e :=
   let (s', e'') := if Zeven e' then (s, e') else (s + 1, e' - 1)%Z in
   let m' :=
     match s' with
-    | Zpos p => (m * Zpower_pos 2 p)%Z
+    | Zpos p => Z.shiftl m (Zpos p)
     | _ => m
     end in
-  let (q, r) := Zsqrt m' in
+  let (q, r) := Z.sqrtrem m' in
   let l :=
     if Zeq_bool r 0 then loc_Exact
     else loc_Inexact (if Zle_bool r q then Lt else Gt) in
@@ -1621,7 +1768,6 @@ Lemma Bsqrt_correct_aux :
 Proof with auto with typeclass_instances.
 intros m mx ex Hx.
 replace (Fsqrt_core_binary (Zpos mx) ex) with (Fsqrt_core radix2 prec (Zpos mx) ex).
-2: now unfold Fsqrt_core_binary ; rewrite Zdigits2_Zdigits.
 simpl.
 refine (_ (Fsqrt_core_correct radix2 prec (Zpos mx) ex _)) ; try easy.
 destruct (Fsqrt_core radix2 prec (Zpos mx) ex) as ((mz, ez), lz).
@@ -1716,6 +1862,11 @@ apply Rle_trans with R0.
 apply F2R_le_0_compat.
 now case mz.
 apply sqrt_ge_0.
+(* *)
+unfold Fsqrt_core, Fsqrt_core_binary.
+rewrite Zdigits2_Zdigits.
+destruct (if Zeven _ then _ else _) as [[|s'|s'] e''] ; try easy.
+now rewrite Z.shiftl_mul_pow2.
 Qed.
 
 Definition Bsqrt sqrt_nan m x :=

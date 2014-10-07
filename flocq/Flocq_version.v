@@ -28,4 +28,4 @@ Definition Flocq_version := Eval vm_compute in
     | String h t => parse t major (minor + N_of_ascii h - N_of_ascii "0"%char)%N
     | Empty_string => (major * 100 + minor)%N
     end in
-  parse "2.2.0"%string N0 N0.
+  parse "2.4.0"%string N0 N0.

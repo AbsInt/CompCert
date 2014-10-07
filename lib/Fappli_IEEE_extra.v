@@ -75,8 +75,8 @@ Proof.
   intros. destruct x as [ [] | | | [] ex mx Bx ]; try discriminate; simpl.
 - rewrite Rlt_bool_false; auto. lra.
 - rewrite Rlt_bool_true; auto. apply F2R_lt_0_compat. compute; auto.
-- rewrite Rlt_bool_false; auto. 
-  assert ((F2R (Float radix2 (Z.pos ex) mx) > 0)%R) by 
+- rewrite Rlt_bool_false; auto.
+  assert ((F2R (Float radix2 (Z.pos ex) mx) > 0)%R) by
     ( apply F2R_gt_0_compat; compute; auto ).
   lra.
 Qed.
@@ -115,156 +115,6 @@ Proof.
   destruct (Z_eq_dec e e1); try solve [right; intro H; inversion H; congruence];
   subst; left; f_equal; apply UIP_bool. 
 Defined.
-
-(** ** Comparison *)
-
-(** [Some c] means ordered as per [c]; [None] means unordered. *)
-
-Definition Bcompare (f1 f2: binary_float): option comparison :=
-  match f1, f2 with
-    | B754_nan _ _,_ | _,B754_nan _ _ => None
-    | B754_infinity true, B754_infinity true
-    | B754_infinity false, B754_infinity false => Some Eq
-    | B754_infinity true, _ => Some Lt
-    | B754_infinity false, _ => Some Gt
-    | _, B754_infinity true => Some Gt
-    | _, B754_infinity false => Some Lt
-    | B754_finite true _ _ _, B754_zero _ => Some Lt
-    | B754_finite false _ _ _, B754_zero _ => Some Gt
-    | B754_zero _, B754_finite true _ _ _ => Some Gt
-    | B754_zero _, B754_finite false _ _ _ => Some Lt
-    | B754_zero _, B754_zero _ => Some Eq
-    | B754_finite s1 m1 e1 _, B754_finite s2 m2 e2 _ =>
-      match s1, s2 with
-        | true, false => Some Lt
-        | false, true => Some Gt
-        | false, false =>
-          match Zcompare e1 e2 with
-            | Lt => Some Lt
-            | Gt => Some Gt
-            | Eq => Some (Pcompare m1 m2 Eq)
-          end
-        | true, true =>
-          match Zcompare e1 e2 with
-            | Lt => Some Gt
-            | Gt => Some Lt
-            | Eq => Some (CompOpp (Pcompare m1 m2 Eq))
-          end
-      end
-  end.
-
-Theorem Bcompare_finite_correct:
-  forall f1 f2,
-  is_finite _ _ f1 = true -> is_finite _ _ f2 = true ->
-  Bcompare f1 f2 = Some (Rcompare (B2R _ _ f1) (B2R _ _ f2)).
-Proof.
-  Ltac apply_Rcompare :=
-    match goal with
-      | [ |- Some Lt = Some (Rcompare _ _) ] => f_equal; symmetry; apply Rcompare_Lt
-      | [ |- Some Eq = Some (Rcompare _ _) ] => f_equal; symmetry; apply Rcompare_Eq
-      | [ |- Some Gt = Some (Rcompare _ _) ] => f_equal; symmetry; apply Rcompare_Gt
-    end.
-  unfold Bcompare; intros.
-  destruct f1, f2; try discriminate; unfold B2R, F2R, Fnum, Fexp, cond_Zopp;
-    try (replace 0%R with (Z2R 0 * bpow radix2 e)%R by (simpl Z2R; ring);
-         rewrite Rcompare_mult_r by (apply bpow_gt_0); rewrite Rcompare_Z2R).
-  apply_Rcompare; reflexivity.
-  destruct b0; reflexivity.
-  destruct b; reflexivity.
-  clear H H0.
-  apply andb_prop in e0; destruct e0; apply (canonic_canonic_mantissa _ _ false) in H.
-  apply andb_prop in e2; destruct e2; apply (canonic_canonic_mantissa _ _ false) in H1.
-  pose proof (Zcompare_spec e e1); unfold canonic, Fexp in H1, H.
-  assert (forall m1 m2 e1 e2,
-    let x := (Z2R (Zpos m1) * bpow radix2 e1)%R in
-    let y := (Z2R (Zpos m2) * bpow radix2 e2)%R in
-    (canonic_exp radix2 fexp x < canonic_exp radix2 fexp y)%Z -> (x < y)%R).
-  {  
-  intros; apply Rnot_le_lt; intro; apply (ln_beta_le radix2) in H5.
-  unfold canonic_exp in H4. apply (fexp_monotone prec emax) in H5.
-  unfold fexp, emin in H4. omega.
-  apply Rmult_gt_0_compat; [apply (Z2R_lt 0); reflexivity|now apply bpow_gt_0].
-  }
-  assert (forall m1 m2 e1 e2, (Z2R (- Zpos m1) * bpow radix2 e1 < Z2R (Zpos m2) * bpow radix2 e2)%R).
-  {
-  intros; apply (Rlt_trans _ 0%R).
-  replace 0%R with (0*bpow radix2 e0)%R by ring; apply Rmult_lt_compat_r;
-    [apply bpow_gt_0; reflexivity|now apply (Z2R_lt _ 0)].
-  apply Rmult_gt_0_compat; [apply (Z2R_lt 0); reflexivity|now apply bpow_gt_0].
-  }
-  destruct b, b0; try (now apply_Rcompare; apply H5); inversion H3;
-    try (apply_Rcompare; apply H4; rewrite H, H1 in H7; assumption);
-    try (apply_Rcompare; do 2 rewrite Z2R_opp, Ropp_mult_distr_l_reverse;
-      apply Ropp_lt_contravar; apply H4; rewrite H, H1 in H7; assumption);
-    rewrite H7, Rcompare_mult_r, Rcompare_Z2R by (apply bpow_gt_0); reflexivity.
-Qed.
-
-Theorem Bcompare_swap:
-  forall x y,
-  Bcompare y x = match Bcompare x y with Some c => Some (CompOpp c) | None => None end.
-Proof.
-  intros. 
-  destruct x as [ ? | [] | ? ? | [] mx ex Bx ];
-  destruct y as [ ? | [] | ? ? | [] my ey By ]; simpl; auto.
-- rewrite <- (Zcompare_antisym ex ey). destruct (ex ?= ey)%Z; auto.
-  simpl. f_equal; f_equal. symmetry. apply Pcompare_antisym. 
-- rewrite <- (Zcompare_antisym ex ey). destruct (ex ?= ey)%Z; auto. 
-  simpl. f_equal. symmetry. apply Pcompare_antisym.
-Qed.
-
-(** ** Absolute value *)
-
-Definition Babs abs_nan (x: binary_float) : binary_float :=
-  match x with
-  | B754_nan sx plx =>
-      let '(sres, plres) := abs_nan sx plx in B754_nan _ _ sres plres
-  | B754_infinity sx => B754_infinity _ _ false
-  | B754_finite sx mx ex Hx => B754_finite _ _ false mx ex Hx
-  | B754_zero sx => B754_zero _ _ false
-  end.
-
-Theorem B2R_Babs :
-  forall abs_nan x,
-  B2R _ _ (Babs abs_nan x) = Rabs (B2R _ _ x).
-Proof.
-  intros abs_nan [sx|sx|sx plx|sx mx ex Hx]; apply sym_eq ; try apply Rabs_R0.
-  simpl. destruct abs_nan. simpl. apply Rabs_R0.
-  simpl. rewrite <- F2R_abs. destruct sx; auto. 
-Qed.
-
-Theorem is_finite_Babs :
-  forall abs_nan x,
-  is_finite _ _ (Babs abs_nan x) = is_finite _ _ x.
-Proof.
-  intros abs_nan [| | |] ; try easy.
-  intros s pl.
-  simpl.
-  now case abs_nan.
-Qed.
-
-Theorem sign_Babs:
-  forall abs_nan x,
-  is_nan _ _ x = false ->
-  Bsign _ _ (Babs abs_nan x) = false.
-Proof.
-  intros abs_nan [| | |]; reflexivity || discriminate.
-Qed.
-
-Theorem Babs_idempotent :
-  forall abs_nan (x: binary_float),
-  is_nan _ _ x = false ->
-  Babs abs_nan (Babs abs_nan x) = Babs abs_nan x.
-Proof.
-  now intros abs_nan [sx|sx|sx plx|sx mx ex Hx] ; auto.
-Qed.
-
-Theorem Babs_opp:
-  forall abs_nan opp_nan x,
-  is_nan _ _ x = false ->
-  Babs abs_nan (Bopp _ _ opp_nan x) = Babs abs_nan x.
-Proof.
-  intros abs_nan opp_nan [| | |]; reflexivity || discriminate.
-Qed.
 
 (** ** Conversion from an integer to a FP number *)
 
@@ -1162,14 +1012,17 @@ Proof.
   rewrite Zabs2Nat.id_abs. rewrite Z.abs_eq by omega. auto.
 Qed.
 
-Remark Bexact_inverse_mantissa_digits2_Pnat:
-  digits2_Pnat Bexact_inverse_mantissa = Z.to_nat (prec - 1).
+Remark Bexact_inverse_mantissa_digits2_pos:
+  Z.pos (digits2_pos Bexact_inverse_mantissa) = prec.
 Proof.
-  assert (DIGITS: forall n, digits2_Pnat (nat_iter n xO xH) = n).
-  { induction n; simpl. auto. congruence. }
+  assert (DIGITS: forall n, digits2_pos (nat_iter n xO xH) = Pos.of_nat (n+1)).
+  { induction n; simpl. auto. rewrite IHn. destruct n; auto. }
   red in prec_gt_0_.
   unfold Bexact_inverse_mantissa. rewrite iter_nat_of_Z by omega. rewrite DIGITS.
-  apply Zabs2Nat.abs_nat_nonneg. omega.
+  rewrite Zabs2Nat.abs_nat_nonneg, Z2Nat.inj_sub by omega.
+  destruct prec; try  discriminate. rewrite NPeano.Nat.sub_add.
+  simpl. rewrite Pos2Nat.id. auto.
+  simpl. zify; omega.
 Qed.
 
 Remark bounded_Bexact_inverse:
@@ -1178,8 +1031,7 @@ Remark bounded_Bexact_inverse:
 Proof.
   intros. unfold bounded, canonic_mantissa. rewrite andb_true_iff. 
   rewrite <- Zeq_is_eq_bool. rewrite <- Zle_is_le_bool. 
-  rewrite Bexact_inverse_mantissa_digits2_Pnat. 
-  rewrite inj_S. red in prec_gt_0_. rewrite Z2Nat.id by omega. 
+  rewrite Bexact_inverse_mantissa_digits2_pos. 
   split. 
 - intros; split. unfold FLT_exp. unfold emin in H. zify; omega. omega.
 - intros [A B]. unfold FLT_exp in A. unfold emin. zify; omega.
@@ -1400,7 +1252,7 @@ Proof.
 - apply andb_true_iff in FIN. destruct FIN. 
   destruct (Bconv_widen_exact H H0 conv_nan m x H1) as (A & B & C).
   destruct (Bconv_widen_exact H H0 conv_nan m y H2) as (D & E & F).
-  rewrite ! Bcompare_finite_correct by auto. rewrite A, D. auto.
+  rewrite ! Bcompare_correct by auto. rewrite A, D. auto.
 - generalize (Bconv_widen_exact H H0 conv_nan m x)
              (Bconv_widen_exact H H0 conv_nan m y); intros P Q.
   destruct x, y; try discriminate; simpl in P, Q; simpl;
@@ -1459,48 +1311,3 @@ Proof.
 Qed.
 
 End Compose_Conversions.
-
-(** Specialization to binary32 and binary64 formats. *)
-
-Require Import Fappli_IEEE_bits.
-
-Section B3264.
-
-Let prec32 : (0 < 24)%Z.
-apply refl_equal.
-Qed.
-
-Let emax32 : (24 < 128)%Z.
-apply refl_equal.
-Qed.
-
-Let prec64 : (0 < 53)%Z.
-apply refl_equal.
-Qed.
-
-Let emax64 : (53 < 1024)%Z.
-apply refl_equal.
-Qed.
-
-Definition b32_abs : (bool -> nan_pl 24 -> bool * nan_pl 24) -> binary32 -> binary32 := Babs 24 128.
-Definition b32_eq_dec : forall (f1 f2: binary32), {f1=f2} + {f1<>f2} := Beq_dec 24 128.
-Definition b32_compare : binary32 -> binary32 -> option comparison := Bcompare 24 128.
-Definition b32_of_Z : Z -> binary32 := BofZ 24 128 prec32 emax32.
-Definition b32_to_Z : binary32 -> option Z := ZofB 24 128.
-Definition b32_to_Z_range : binary32 -> Z -> Z -> option Z := ZofB_range 24 128.
-Definition b32_exact_inverse : binary32 -> option binary32 := Bexact_inverse 24 128 prec32.
-
-Definition b64_abs : (bool -> nan_pl 53 -> bool * nan_pl 53) -> binary64 -> binary64 := Babs 53 1024.
-Definition b64_eq_dec : forall (f1 f2: binary64), {f1=f2} + {f1<>f2} := Beq_dec 53 1024.
-Definition b64_compare : binary64 -> binary64 -> option comparison := Bcompare 53 1024.
-Definition b64_of_Z : Z -> binary64 := BofZ 53 1024 prec64 emax64.
-Definition b64_to_Z : binary64 -> option Z := ZofB 53 1024.
-Definition b64_to_Z_range : binary64 -> Z -> Z -> option Z := ZofB_range 53 1024.
-Definition b64_exact_inverse : binary64 -> option binary64 := Bexact_inverse 53 1024 prec64.
-
-Definition b64_of_b32 : (bool -> nan_pl 24 -> bool * nan_pl 53) -> mode -> binary32 -> binary64 :=
-  Bconv 24 128 53 1024 prec32 prec64.
-Definition b32_of_b64 : (bool -> nan_pl 53 -> bool * nan_pl 24) -> mode -> binary64 -> binary32 :=
-  Bconv 53 1024 24 128 prec64 prec32.
-
-End B3264.

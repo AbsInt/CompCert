@@ -104,6 +104,19 @@ apply Zle_max_l.
 apply Zle_max_r.
 Qed.
 
+
+Theorem FLT_format_bpow :
+  forall e, (emin <= e)%Z -> generic_format beta FLT_exp (bpow e).
+Proof.
+intros e He.
+apply generic_format_bpow; unfold FLT_exp.
+apply Z.max_case; try assumption.
+unfold Prec_gt_0 in prec_gt_0_; omega.
+Qed.
+
+
+
+
 Theorem FLT_format_satisfies_any :
   satisfies_any FLT_format.
 Proof.
@@ -115,11 +128,14 @@ apply generic_format_FLT.
 Qed.
 
 Theorem canonic_exp_FLT_FLX :
-  forall x, x <> R0 ->
+  forall x,
   (bpow (emin + prec - 1) <= Rabs x)%R ->
   canonic_exp beta FLT_exp x = canonic_exp beta (FLX_exp prec) x.
 Proof.
-intros x Hx0 Hx.
+intros x Hx.
+assert (Hx0: x <> 0%R).
+intros H1; rewrite H1, Rabs_R0 in Hx.
+contradict Hx; apply Rlt_not_le, bpow_gt_0.
 unfold canonic_exp.
 apply Zmax_left.
 destruct (ln_beta beta x) as (ex, He).
@@ -166,10 +182,6 @@ Theorem round_FLT_FLX : forall rnd x,
 intros rnd x Hx.
 unfold round, scaled_mantissa.
 rewrite canonic_exp_FLT_FLX ; trivial.
-contradict Hx.
-rewrite Hx, Rabs_R0.
-apply Rlt_not_le.
-apply bpow_gt_0.
 Qed.
 
 (** Links between FLT and FIX (underflow) *)

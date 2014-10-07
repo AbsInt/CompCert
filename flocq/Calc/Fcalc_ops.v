@@ -28,6 +28,8 @@ Variable beta : radix.
 
 Notation bpow e := (bpow beta e).
 
+Implicit Arguments Float [[beta]].
+
 Definition Falign (f1 f2 : float beta) :=
   let '(Float m1 e1) := f1 in
   let '(Float m2 e2) := f2 in
@@ -38,7 +40,7 @@ Definition Falign (f1 f2 : float beta) :=
 Theorem Falign_spec :
   forall f1 f2 : float beta,
   let '(m1, m2, e) := Falign f1 f2 in
-  F2R f1 = F2R (Float beta m1 e) /\ F2R f2 = F2R (Float beta m2 e).
+  F2R f1 = @F2R beta (Float m1 e) /\ F2R f2 = @F2R beta (Float m2 e).
 Proof.
 unfold Falign.
 intros (m1, e1) (m2, e2).
@@ -61,9 +63,9 @@ case (Zmin_spec e1 e2); intros (H1,H2); easy.
 case (Zmin_spec e1 e2); intros (H1,H2); easy.
 Qed.
 
-Definition Fopp (f1: float beta) :=
+Definition Fopp (f1 : float beta) : float beta :=
   let '(Float m1 e1) := f1 in
-  Float beta (-m1)%Z e1.
+  Float (-m1)%Z e1.
 
 Theorem F2R_opp :
   forall f1 : float beta,
@@ -72,9 +74,9 @@ intros (m1,e1).
 apply F2R_Zopp.
 Qed.
 
-Definition Fabs (f1: float beta) :=
+Definition Fabs (f1 : float beta) : float beta :=
   let '(Float m1 e1) := f1 in
-  Float beta (Zabs m1)%Z e1.
+  Float (Zabs m1)%Z e1.
 
 Theorem F2R_abs :
   forall f1 : float beta,
@@ -83,9 +85,9 @@ intros (m1,e1).
 apply F2R_Zabs.
 Qed.
 
-Definition Fplus (f1 f2 : float beta) :=
+Definition Fplus (f1 f2 : float beta) : float beta :=
   let '(m1, m2 ,e) := Falign f1 f2 in
-  Float beta (m1 + m2) e.
+  Float (m1 + m2) e.
 
 Theorem F2R_plus :
   forall f1 f2 : float beta,
@@ -104,7 +106,7 @@ Qed.
 
 Theorem Fplus_same_exp :
   forall m1 m2 e,
-  Fplus (Float beta m1 e) (Float beta m2 e) = Float beta (m1 + m2) e.
+  Fplus (Float m1 e) (Float m2 e) = Float (m1 + m2) e.
 Proof.
 intros m1 m2 e.
 unfold Fplus.
@@ -136,17 +138,17 @@ Qed.
 
 Theorem Fminus_same_exp :
   forall m1 m2 e,
-  Fminus (Float beta m1 e) (Float beta m2 e) = Float beta (m1 - m2) e.
+  Fminus (Float m1 e) (Float m2 e) = Float (m1 - m2) e.
 Proof.
 intros m1 m2 e.
 unfold Fminus.
 apply Fplus_same_exp.
 Qed.
 
-Definition Fmult (f1 f2 : float beta) :=
+Definition Fmult (f1 f2 : float beta) : float beta :=
   let '(Float m1 e1) := f1 in
   let '(Float m2 e2) := f2 in
-  Float beta (m1 * m2) (e1 + e2).
+  Float (m1 * m2) (e1 + e2).
 
 Theorem F2R_mult :
   forall f1 f2 : float beta,

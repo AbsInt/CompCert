@@ -1380,8 +1380,6 @@ contradict Fx.
 apply generic_format_round...
 Qed.
 
-
-
 Theorem round_UP_small_pos :
   forall x ex,
   (bpow (ex - 1) <= x < bpow ex)%R ->
@@ -1793,7 +1791,7 @@ rewrite Z2R_plus. simpl.
 destruct (Rcompare_spec (x - Z2R (Zfloor x)) (/ 2)) as [H1|H1|H1] ; apply sym_eq.
 (* . *)
 apply Rcompare_Lt.
-apply Rplus_lt_reg_r with (x - Z2R (Zfloor x))%R.
+apply Rplus_lt_reg_l with (x - Z2R (Zfloor x))%R.
 replace (x - Z2R (Zfloor x) + (x - Z2R (Zfloor x)))%R with ((x - Z2R (Zfloor x)) * 2)%R by ring.
 replace (x - Z2R (Zfloor x) + (Z2R (Zfloor x) + 1 - x))%R with (/2 * 2)%R by field.
 apply Rmult_lt_compat_r with (2 := H1).
@@ -1805,7 +1803,7 @@ rewrite H1.
 field.
 (* . *)
 apply Rcompare_Gt.
-apply Rplus_lt_reg_r with (x - Z2R (Zfloor x))%R.
+apply Rplus_lt_reg_l with (x - Z2R (Zfloor x))%R.
 replace (x - Z2R (Zfloor x) + (x - Z2R (Zfloor x)))%R with ((x - Z2R (Zfloor x)) * 2)%R by ring.
 replace (x - Z2R (Zfloor x) + (Z2R (Zfloor x) + 1 - x))%R with (/2 * 2)%R by field.
 apply Rmult_lt_compat_r with (2 := H1).
@@ -1823,7 +1821,7 @@ rewrite Z2R_plus. simpl.
 destruct (Rcompare_spec (Z2R (Zfloor x) + 1 - x) (/ 2)) as [H1|H1|H1] ; apply sym_eq.
 (* . *)
 apply Rcompare_Lt.
-apply Rplus_lt_reg_r with (Z2R (Zfloor x) + 1 - x)%R.
+apply Rplus_lt_reg_l with (Z2R (Zfloor x) + 1 - x)%R.
 replace (Z2R (Zfloor x) + 1 - x + (Z2R (Zfloor x) + 1 - x))%R with ((Z2R (Zfloor x) + 1 - x) * 2)%R by ring.
 replace (Z2R (Zfloor x) + 1 - x + (x - Z2R (Zfloor x)))%R with (/2 * 2)%R by field.
 apply Rmult_lt_compat_r with (2 := H1).
@@ -1835,7 +1833,7 @@ rewrite H1.
 field.
 (* . *)
 apply Rcompare_Gt.
-apply Rplus_lt_reg_r with (Z2R (Zfloor x) + 1 - x)%R.
+apply Rplus_lt_reg_l with (Z2R (Zfloor x) + 1 - x)%R.
 replace (Z2R (Zfloor x) + 1 - x + (Z2R (Zfloor x) + 1 - x))%R with ((Z2R (Zfloor x) + 1 - x) * 2)%R by ring.
 replace (Z2R (Zfloor x) + 1 - x + (x - Z2R (Zfloor x)))%R with (/2 * 2)%R by field.
 apply Rmult_lt_compat_r with (2 := H1).
@@ -1861,11 +1859,11 @@ rewrite Zceil_floor_neq.
 rewrite Z2R_plus.
 simpl.
 apply Ropp_lt_cancel.
-apply Rplus_lt_reg_r with R1.
+apply Rplus_lt_reg_l with R1.
 replace (1 + -/2)%R with (/2)%R by field.
 now replace (1 + - (Z2R (Zfloor x) + 1 - x))%R with (x - Z2R (Zfloor x))%R by ring.
 apply Rlt_not_eq.
-apply Rplus_lt_reg_r with (- Z2R (Zfloor x))%R.
+apply Rplus_lt_reg_l with (- Z2R (Zfloor x))%R.
 apply Rlt_trans with (/2)%R.
 rewrite Rplus_opp_l.
 apply Rinv_0_lt_compat.
@@ -1897,7 +1895,7 @@ rewrite Hx.
 rewrite Rabs_minus_sym.
 now replace (1 - /2)%R with (/2)%R by field.
 apply Rlt_not_eq.
-apply Rplus_lt_reg_r with (- Z2R (Zfloor x))%R.
+apply Rplus_lt_reg_l with (- Z2R (Zfloor x))%R.
 rewrite Rplus_opp_l, Rplus_comm.
 fold (x - Z2R (Zfloor x))%R.
 rewrite Hx.
@@ -2017,6 +2015,49 @@ apply Rmult_eq_reg_r with (bpow (canonic_exp x)).
 now rewrite 2!Rmult_minus_distr_r.
 apply Rgt_not_eq.
 apply bpow_gt_0.
+Qed.
+
+Lemma round_N_really_small_pos :
+  forall x,
+  forall ex,
+  (Fcore_Raux.bpow beta (ex - 1) <= x < Fcore_Raux.bpow beta ex)%R ->
+  (ex < fexp ex)%Z ->
+  (round Znearest x = 0)%R.
+Proof.
+intros x ex Hex Hf.
+unfold round, F2R, scaled_mantissa, canonic_exp; simpl.
+apply (Rmult_eq_reg_r (bpow (- fexp (ln_beta beta x))));
+  [|now apply Rgt_not_eq; apply bpow_gt_0].
+rewrite Rmult_0_l, Rmult_assoc, <- bpow_plus.
+replace (_ + - _)%Z with 0%Z by ring; simpl; rewrite Rmult_1_r.
+change 0%R with (Z2R 0); apply f_equal.
+apply Znearest_imp.
+simpl; unfold Rminus; rewrite Ropp_0; rewrite Rplus_0_r.
+assert (H : (x >= 0)%R).
+{ apply Rle_ge; apply Rle_trans with (bpow (ex - 1)); [|exact (proj1 Hex)].
+  now apply bpow_ge_0. }
+assert (H' : (x * bpow (- fexp (ln_beta beta x)) >= 0)%R).
+{ apply Rle_ge; apply Rmult_le_pos.
+  - now apply Rge_le.
+  - now apply bpow_ge_0. }
+rewrite Rabs_right; [|exact H'].
+apply (Rmult_lt_reg_r (bpow (fexp (ln_beta beta x)))); [now apply bpow_gt_0|].
+rewrite Rmult_assoc, <- bpow_plus.
+replace (- _ + _)%Z with 0%Z by ring; simpl; rewrite Rmult_1_r.
+apply (Rlt_le_trans _ _ _ (proj2 Hex)).
+apply Rle_trans with (bpow (fexp (ln_beta beta x) - 1)).
+- apply bpow_le.
+  rewrite (ln_beta_unique beta x ex); [omega|].
+  now rewrite Rabs_right.
+- unfold Zminus; rewrite bpow_plus.
+  rewrite Rmult_comm.
+  apply Rmult_le_compat_r; [now apply bpow_ge_0|].
+  unfold Fcore_Raux.bpow, Z.pow_pos; simpl.
+  rewrite Zmult_1_r.
+  apply Rinv_le; [exact Rlt_0_2|].
+  change 2%R with (Z2R 2); apply Z2R_le.
+  destruct beta as (beta_val,beta_prop).
+  now apply Zle_bool_imp_le.
 Qed.
 
 End Znearest.
@@ -2323,6 +2364,37 @@ End Inclusion.
 End Generic.
 
 Notation ZnearestA := (Znearest (Zle_bool 0)).
+
+Section rndNA_opp.
+
+Lemma round_NA_opp :
+  forall beta : radix,
+  forall (fexp : Z -> Z),
+  forall x,
+  (round beta fexp ZnearestA (- x) = - round beta fexp ZnearestA x)%R.
+Proof.
+intros beta fexp x.
+rewrite round_N_opp.
+apply Ropp_eq_compat.
+apply round_ext.
+clear x; intro x.
+unfold Znearest.
+case_eq (Rcompare (x - Z2R (Zfloor x)) (/ 2)); intro C;
+[|reflexivity|reflexivity].
+apply Rcompare_Eq_inv in C.
+assert (H : negb (0 <=? - (Zfloor x + 1))%Z = (0 <=? Zfloor x)%Z);
+  [|now rewrite H].
+rewrite negb_Zle_bool.
+case_eq (0 <=? Zfloor x)%Z; intro C'.
+- apply Zle_bool_imp_le in C'.
+  apply Zlt_bool_true.
+  omega.
+- rewrite Z.leb_gt in C'.
+  apply Zlt_bool_false.
+  omega.
+Qed.
+
+End rndNA_opp.
 
 (** Notations for backward-compatibility with Flocq 1.4. *)
 Notation rndDN := Zfloor (only parsing).

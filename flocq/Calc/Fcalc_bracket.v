@@ -168,7 +168,7 @@ apply Rplus_lt_reg_r with (d * (v - 1))%R.
 ring_simplify.
 rewrite Rmult_comm.
 now apply Rmult_lt_compat_l.
-apply Rplus_lt_reg_r with (-u * v)%R.
+apply Rplus_lt_reg_l with (-u * v)%R.
 replace (- u * v + (d + v * (u - d)))%R with (d * (1 - v))%R by ring.
 replace (- u * v + u)%R with (u * (1 - v))%R by ring.
 apply Rmult_lt_compat_r.

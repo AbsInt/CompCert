@@ -23,7 +23,11 @@ Require Import Fcore_Raux.
 Require Import Fcore_defs.
 Require Import Fcore_float_prop.
 Require Import Fcore_generic_fmt.
+Require Import Fcore_FIX.
+Require Import Fcore_FLX.
+Require Import Fcore_FLT.
 Require Import Fcalc_ops.
+
 
 Section Fprop_plus_error.
 
@@ -232,3 +236,34 @@ apply Ropp_involutive.
 Qed.
 
 End Fprop_plus_zero.
+
+Section Fprop_plus_FLT.
+Variable beta : radix.
+
+Notation bpow e := (bpow beta e).
+
+Variable emin prec : Z.
+Context { prec_gt_0_ : Prec_gt_0 prec }.
+
+Theorem FLT_format_plus_small: forall x y,
+  generic_format beta (FLT_exp emin prec) x ->
+  generic_format beta (FLT_exp emin prec) y ->
+   (Rabs (x+y) <= bpow (prec+emin))%R ->
+    generic_format beta (FLT_exp emin prec) (x+y).
+Proof with auto with typeclass_instances.
+intros x y Fx Fy H.
+apply generic_format_FLT_FIX...
+rewrite Zplus_comm; assumption.
+apply generic_format_FIX_FLT, FIX_format_generic in Fx.
+apply generic_format_FIX_FLT, FIX_format_generic in Fy.
+destruct Fx as (nx,(H1x,H2x)).
+destruct Fy as (ny,(H1y,H2y)).
+apply generic_format_FIX.
+exists (Float beta (Fnum nx+Fnum ny)%Z emin).
+split;[idtac|reflexivity].
+rewrite H1x,H1y; unfold F2R; simpl.
+rewrite H2x, H2y.
+rewrite Z2R_plus; ring.
+Qed.
+
+End Fprop_plus_FLT.
