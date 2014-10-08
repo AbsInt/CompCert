@@ -22,58 +22,7 @@ open Asm
 
 module StringSet = Set.Make(String)
 
-(* Recognition of target ABI and asm syntax *)
-
-type target = ELF | MacOS | Cygwin
-
-let target = 
-  match Configuration.system with
-  | "macosx" -> MacOS
-  | "linux"  -> ELF
-  | "bsd"    -> ELF
-  | "cygwin" -> Cygwin
-  | _        -> invalid_arg ("System " ^ Configuration.system ^ " not supported")
-
-(* On-the-fly label renaming *)
-
-let next_label = ref 100
-
-let new_label() =
-  let lbl = !next_label in incr next_label; lbl
-
-let current_function_labels = (Hashtbl.create 39 : (label, int) Hashtbl.t)
-
-let transl_label lbl =
-  try
-    Hashtbl.find current_function_labels lbl
-  with Not_found ->
-    let lbl' = new_label() in
-    Hashtbl.add current_function_labels lbl lbl';
-    lbl'
-
-(* Basic printing functions *)
-
-let coqint oc n =
-  fprintf oc "%ld" (camlint_of_coqint n)
-
-let raw_symbol oc s =
-  match target with
-  | ELF -> fprintf oc "%s" s
-  | MacOS | Cygwin -> fprintf oc "_%s" s
-
-let symbol oc symb =
-  raw_symbol oc (extern_atom symb)
-
-let symbol_offset oc (symb, ofs) =
-  symbol oc symb;
-  if ofs <> 0l then fprintf oc " + %ld" ofs
-
-let label oc lbl =
-  match target with
-  | ELF -> fprintf oc ".L%d" lbl
-  | MacOS | Cygwin -> fprintf oc "L%d" lbl
-
-let comment = "#"
+(* Basic printing functions used in definition of the systems *)
 
 let int_reg_name = function
   | EAX -> "%eax"  | EBX -> "%ebx"  | ECX -> "%ecx"  | EDX -> "%edx"
@@ -106,6 +55,194 @@ let preg oc = function
   | FR r -> freg oc r
   | _    -> assert false
 
+
+(* System dependend printer functions *)
+module type SYSTEM=
+    sig
+      val raw_symbol: out_channel -> string -> unit
+      val symbol: out_channel -> P.t -> unit
+      val label: out_channel -> int -> unit
+      val name_of_section: section_name -> string
+      val stack_alignment: int
+      val print_align: out_channel -> int -> unit
+      val print_mov_ra: out_channel -> ireg -> ident -> unit
+      val print_fun_info: out_channel -> P.t -> unit
+      val print_var_info: out_channel -> P.t -> unit
+      val print_epilogue: out_channel -> unit
+    end
+
+(* Printer functions for cygwin *)
+module Cygwin_System =
+  (struct
+
+    let raw_symbol oc s =
+       fprintf oc "_%s" s
+
+    let symbol oc symb =
+      fprintf oc "%s" (extern_atom symb)
+
+    let label oc lbl =
+       fprintf oc "L%d" lbl
+        
+    let name_of_section = function
+      | Section_text -> ".text"
+      | Section_data _ | Section_small_data _ -> ".data"
+      | Section_const  | Section_small_const -> ".section	.rdata,\"dr\""
+      | Section_string -> ".section	.rdata,\"dr\""
+      | Section_literal -> ".section	.rdata,\"dr\""
+      | Section_jumptable -> ".text"
+      | Section_user(s, wr, ex) ->
+          sprintf ".section	\"%s\", \"%s\"\n"
+            s (if ex then "xr" else if wr then "d" else "dr")
+
+    let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
+
+    let print_align oc n =
+      fprintf oc "	.align	%d\n" n
+    
+    let print_mov_ra oc rd id =   
+      fprintf oc "	movl	$%a, %a\n" symbol id ireg rd
+
+    let print_fun_info _ _ = ()
+        
+    let print_var_info _ _ = ()
+
+    let print_epilogue _ = ()
+  end:SYSTEM)
+
+(* Printer functions for ELF *)
+module ELF_System =
+  (struct
+    
+    let raw_symbol oc s =
+      fprintf oc "%s" s
+  
+    let symbol oc symb =
+      fprintf oc "%s" (extern_atom symb)
+
+    let label oc lbl =
+      fprintf oc ".L%d" lbl
+
+    let name_of_section = function
+      | Section_text -> ".text"
+      | Section_data i | Section_small_data i -> if i then ".data" else "COMM"
+      | Section_const | Section_small_const -> ".section	.rodata"
+      | Section_string -> ".section	.rodata"
+      | Section_literal -> ".section	.rodata.cst8,\"aM\",@progbits,8"
+      | Section_jumptable -> ".text"
+      | Section_user(s, wr, ex) ->
+          sprintf ".section	\"%s\",\"a%s%s\",@progbits"
+            s (if wr then "w" else "") (if ex then "x" else "")
+            
+    let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
+                    
+    let print_align oc n =
+      fprintf oc "	.align	%d\n" n
+        
+    let print_mov_ra  oc rd id = 
+         fprintf oc "	movl	$%a, %a\n" symbol id ireg rd
+
+    let print_fun_info oc name =
+      fprintf oc "	.type	%a, @function\n" symbol name;
+      fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
+
+    let print_var_info oc name =
+      fprintf oc "	.type	%a, @object\n" symbol name;
+      fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
+
+    let print_epilogue _ = ()
+  end:SYSTEM)
+
+(* Printer functions for MacOS *)
+module MacOS_System =
+  (struct
+    
+    let raw_symbol oc s =
+     fprintf oc "_%s" s
+
+    let symbol oc symb =
+      fprintf oc "%s" (extern_atom symb)
+
+    let label oc lbl =
+      fprintf oc "L%d" lbl
+
+    let name_of_section = function
+      | Section_text -> ".text"
+      | Section_data _ | Section_small_data _ -> ".data"
+      | Section_const  | Section_small_const -> ".const"
+      | Section_string -> ".const"
+      | Section_literal -> ".literal8"
+      | Section_jumptable -> ".const"
+      | Section_user(s, wr, ex) ->
+          sprintf ".section	\"%s\", %s, %s"
+            (if wr then "__DATA" else "__TEXT") s
+            (if ex then "regular, pure_instructions" else "regular")
+    
+    let stack_alignment =  16 (* mandatory *)
+         
+    (* Base-2 log of a Caml integer *)           
+    let rec log2 n =
+      assert (n > 0);
+      if n = 1 then 0 else 1 + log2 (n lsr 1)
+
+    let print_align oc n =
+      fprintf oc "	.align	%d\n" (log2 n)
+        
+    let indirect_symbols : StringSet.t ref = ref StringSet.empty
+
+    let print_mov_ra oc rd id = 
+      let id = extern_atom id in
+      indirect_symbols := StringSet.add id !indirect_symbols;
+      fprintf oc "	movl	L%a$non_lazy_ptr, %a\n" raw_symbol id ireg rd
+
+    let print_fun_info _ _ = ()
+ 
+    let print_var_info _ _ = ()
+    
+    let print_epilogue oc = 
+      fprintf oc "	.section __IMPORT,__pointers,non_lazy_symbol_pointers\n";
+      StringSet.iter
+        (fun s ->
+          fprintf oc "L%a$non_lazy_ptr:\n" raw_symbol s;
+          fprintf oc "	.indirect_symbol %a\n" raw_symbol s;
+          fprintf oc "	.long	0\n")
+        !indirect_symbols
+
+  end:SYSTEM)
+
+
+module AsmPrinter(Target: SYSTEM) =
+  (struct
+    open Target
+(* On-the-fly label renaming *)
+
+let next_label = ref 100
+
+let new_label() =
+  let lbl = !next_label in incr next_label; lbl
+
+let current_function_labels = (Hashtbl.create 39 : (label, int) Hashtbl.t)
+
+let transl_label lbl =
+  try
+    Hashtbl.find current_function_labels lbl
+  with Not_found ->
+    let lbl' = new_label() in
+    Hashtbl.add current_function_labels lbl lbl';
+    lbl'
+
+
+(*  basic printing functions *)
+
+let comment = "#"
+
+let symbol_offset oc (symb, ofs) =
+  symbol oc symb;
+  if ofs <> 0l then fprintf oc " + %ld" ofs
+
+let coqint oc n =
+  fprintf oc "%ld" (camlint_of_coqint n)
+
 let addressing oc (Addrmode(base, shift, cst)) =
   begin match cst with
   | Coq_inl n ->
@@ -136,57 +273,12 @@ let name_of_neg_condition = function
   | Cond_l -> "ge" | Cond_le -> "g" | Cond_ge -> "l" | Cond_g -> "le"
   | Cond_p -> "np" | Cond_np -> "p" 
 
+
 (* Names of sections *)
-
-let name_of_section_ELF = function
-  | Section_text -> ".text"
-  | Section_data i | Section_small_data i -> if i then ".data" else "COMM"
-  | Section_const | Section_small_const -> ".section	.rodata"
-  | Section_string -> ".section	.rodata"
-  | Section_literal -> ".section	.rodata.cst8,\"aM\",@progbits,8"
-  | Section_jumptable -> ".text"
-  | Section_user(s, wr, ex) ->
-       sprintf ".section	\"%s\",\"a%s%s\",@progbits"
-               s (if wr then "w" else "") (if ex then "x" else "")
-
-let name_of_section_MacOS = function
-  | Section_text -> ".text"
-  | Section_data _ | Section_small_data _ -> ".data"
-  | Section_const  | Section_small_const -> ".const"
-  | Section_string -> ".const"
-  | Section_literal -> ".literal8"
-  | Section_jumptable -> ".const"
-  | Section_user(s, wr, ex) ->
-       sprintf ".section	\"%s\", %s, %s"
-               (if wr then "__DATA" else "__TEXT") s
-               (if ex then "regular, pure_instructions" else "regular")
-
-let name_of_section_Cygwin = function
-  | Section_text -> ".text"
-  | Section_data _ | Section_small_data _ -> ".data"
-  | Section_const  | Section_small_const -> ".section	.rdata,\"dr\""
-  | Section_string -> ".section	.rdata,\"dr\""
-  | Section_literal -> ".section	.rdata,\"dr\""
-  | Section_jumptable -> ".text"
-  | Section_user(s, wr, ex) ->
-       sprintf ".section	\"%s\", \"%s\"\n"
-             s (if ex then "xr" else if wr then "d" else "dr")
-
-let name_of_section =
-  match target with
-  | ELF    -> name_of_section_ELF
-  | MacOS  -> name_of_section_MacOS
-  | Cygwin -> name_of_section_Cygwin
-
 let section oc sec =
   fprintf oc "	%s\n" (name_of_section sec)
 
 (* SP adjustment to allocate or free a stack frame *)
-
-let stack_alignment =
-  match target with
-  | ELF | Cygwin -> 8               (* minimum is 4, 8 is better for perfs *)
-  | MacOS -> 16                     (* mandatory *)
 
 let int32_align n a =
   if n >= 0l
@@ -208,11 +300,6 @@ let rec log2 n =
   if n = 1 then 0 else 1 + log2 (n lsr 1)
 
 (* Emit a align directive *)
-
-let print_align oc n =
-  match target with
-  | ELF | Cygwin -> fprintf oc "	.align	%d\n" n
-  | MacOS        -> fprintf oc "	.align	%d\n" (log2 n)
 
 let need_masks = ref false
 
@@ -562,12 +649,7 @@ let print_instruction oc = function
   | Pmov_ri(rd, n) ->
       fprintf oc "	movl	$%ld, %a\n" (camlint_of_coqint n) ireg rd
   | Pmov_ra(rd, id) ->
-      if target = MacOS then begin
-        let id = extern_atom id in
-        indirect_symbols := StringSet.add id !indirect_symbols;
-        fprintf oc "	movl	L%a$non_lazy_ptr, %a\n" raw_symbol id ireg rd
-      end else
-        fprintf oc "	movl	$%a, %a\n" symbol id ireg rd
+      print_mov_ra oc rd id
   | Pmov_rm(rd, a) | Pmov_rm_a(rd, a) ->
       fprintf oc "	movl	%a, %a\n" addressing a ireg rd
   | Pmov_mr(a, r1) | Pmov_mr_a(a, r1) ->
@@ -841,10 +923,7 @@ let print_function oc name fn =
   cfi_startproc oc;
   List.iter (print_instruction oc) fn.fn_code;
   cfi_endproc oc;
-  if target = ELF then begin
-    fprintf oc "	.type	%a, @function\n" symbol name;
-    fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
-  end;
+  print_fun_info oc name;
   if !float64_literals <> [] || !float32_literals <> [] then begin
     section oc lit;
     print_align oc 8;
@@ -913,10 +992,7 @@ let print_var oc name v =
           fprintf oc "	.globl	%a\n" symbol name;
         fprintf oc "%a:\n" symbol name;
         print_init_data oc name v.gvar_init;
-        if target = ELF then begin
-          fprintf oc "	.type	%a, @object\n" symbol name;
-          fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
-        end
+        print_var_info oc name
       end else begin
         let sz =
           match v.gvar_init with [Init_space sz] -> sz | _ -> assert false in
@@ -933,31 +1009,37 @@ let print_globdef oc (name, gdef) =
   | Gfun(Internal code) -> print_function oc name code
   | Gfun(External ef) -> ()
   | Gvar v -> print_var oc name v
+end)
+
+type target = ELF | MacOS | Cygwin
+
 
 let print_program oc p =
-  PrintAnnot.print_version_and_options oc comment;
-  need_masks := false;
-  indirect_symbols := StringSet.empty;
-  Hashtbl.clear filename_num;
-  List.iter (print_globdef oc) p.prog_defs;
-  if !need_masks then begin
-    section oc Section_const;  (* not Section_literal because not 8-bytes *)
-    print_align oc 16;
+  let target =   
+    match Configuration.system with
+    | "macosx" -> MacOS
+    | "linux"  -> ELF
+    | "bsd"    -> ELF
+    | "cygwin" -> Cygwin
+    | _        -> invalid_arg ("System " ^ Configuration.system ^ " not supported") in
+  let module Target = (val (match target with
+  | MacOS -> (module MacOS_System:SYSTEM)
+  | ELF -> (module ELF_System:SYSTEM)
+  | Cygwin -> (module Cygwin_System:SYSTEM)):SYSTEM) in
+  let module Printer = AsmPrinter(Target) in
+  PrintAnnot.print_version_and_options oc Printer.comment;
+  Printer.need_masks := false;
+  Hashtbl.clear Printer.filename_num;
+  List.iter (Printer.print_globdef oc) p.prog_defs;
+  if !Printer.need_masks then begin
+    Printer.section oc Section_const;  (* not Section_literal because not 8-bytes *)
+    Target.print_align oc 16;
     fprintf oc "%a:	.quad   0x8000000000000000, 0\n"
-               raw_symbol "__negd_mask";
+               Target.raw_symbol "__negd_mask";
     fprintf oc "%a:	.quad   0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF\n"
-               raw_symbol "__absd_mask";
+               Target.raw_symbol "__absd_mask";
     fprintf oc "%a:	.long   0x80000000, 0, 0, 0\n"
-               raw_symbol "__negs_mask";
+               Target.raw_symbol "__negs_mask";
     fprintf oc "%a:	.long   0x7FFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF\n"
-               raw_symbol "__abss_mask"
-  end;
-  if target = MacOS then begin
-    fprintf oc "	.section __IMPORT,__pointers,non_lazy_symbol_pointers\n";
-    StringSet.iter
-      (fun s ->
-        fprintf oc "L%a$non_lazy_ptr:\n" raw_symbol s;
-        fprintf oc "	.indirect_symbol %a\n" raw_symbol s;
-        fprintf oc "	.long	0\n")
-      !indirect_symbols
+               Target.raw_symbol "__abss_mask"
   end
