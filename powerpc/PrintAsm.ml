@@ -23,13 +23,227 @@ open Asm
 
 (* Recognition of target ABI and asm syntax *)
 
-type target = Linux | Diab
+module type SYSTEM =
+    sig
+      val comment: string
+      val constant: out_channel -> constant -> unit
+      val ireg: out_channel -> ireg -> unit
+      val freg: out_channel -> freg -> unit
+      val creg: out_channel -> int -> unit
+      val name_of_section: section_name -> string
+      val print_file_line: out_channel -> string -> string -> unit
+      val reset_file_line: unit -> unit
+      val cfi_startproc: out_channel -> unit
+      val cfi_endproc: out_channel -> unit
+      val cfi_adjust: out_channel -> int32 -> unit
+      val cfi_rel_offset: out_channel -> string -> int32 -> unit
+      val print_prologue: out_channel -> unit
+    end
 
-let target = 
-  match Configuration.system with
-  | "linux"  -> Linux
-  | "diab"   -> Diab
-  | _        -> invalid_arg ("System " ^ Configuration.system ^ " not supported")
+let symbol oc symb =
+  fprintf oc "%s" (extern_atom symb)
+
+let symbol_offset oc (symb, ofs) =
+  symbol oc symb;
+  if ofs <> 0l then fprintf oc " + %ld" ofs
+
+let symbol_fragment oc s n op =
+      fprintf oc "(%a)%s" symbol_offset (s, camlint_of_coqint n) op
+
+
+let int_reg_name = function
+  | GPR0 -> "0"  | GPR1 -> "1"  | GPR2 -> "2"  | GPR3 -> "3"
+  | GPR4 -> "4"  | GPR5 -> "5"  | GPR6 -> "6"  | GPR7 -> "7"
+  | GPR8 -> "8"  | GPR9 -> "9"  | GPR10 -> "10" | GPR11 -> "11"
+  | GPR12 -> "12" | GPR13 -> "13" | GPR14 -> "14" | GPR15 -> "15"
+  | GPR16 -> "16" | GPR17 -> "17" | GPR18 -> "18" | GPR19 -> "19"
+  | GPR20 -> "20" | GPR21 -> "21" | GPR22 -> "22" | GPR23 -> "23"
+  | GPR24 -> "24" | GPR25 -> "25" | GPR26 -> "26" | GPR27 -> "27"
+  | GPR28 -> "28" | GPR29 -> "29" | GPR30 -> "30" | GPR31 -> "31"
+
+let float_reg_name = function
+  | FPR0 -> "0"  | FPR1 -> "1"  | FPR2 -> "2"  | FPR3 -> "3"
+  | FPR4 -> "4"  | FPR5 -> "5"  | FPR6 -> "6"  | FPR7 -> "7"
+  | FPR8 -> "8"  | FPR9 -> "9"  | FPR10 -> "10" | FPR11 -> "11"
+  | FPR12 -> "12" | FPR13 -> "13" | FPR14 -> "14" | FPR15 -> "15"
+  | FPR16 -> "16" | FPR17 -> "17" | FPR18 -> "18" | FPR19 -> "19"
+  | FPR20 -> "20" | FPR21 -> "21" | FPR22 -> "22" | FPR23 -> "23"
+  | FPR24 -> "24" | FPR25 -> "25" | FPR26 -> "26" | FPR27 -> "27"
+  | FPR28 -> "28" | FPR29 -> "29" | FPR30 -> "30" | FPR31 -> "31"
+
+module Linux_System =
+  (struct
+    let comment =  "#"
+
+    let constant oc cst =
+      match cst with
+      | Cint n ->
+          fprintf oc "%ld" (camlint_of_coqint n)
+      | Csymbol_low(s, n) ->
+          symbol_fragment oc s n "@l"
+      | Csymbol_high(s, n) ->
+          symbol_fragment oc s n "@ha"
+      | Csymbol_sda(s, n) ->
+          symbol_fragment oc s n "@sda21"
+            (* 32-bit relative addressing is supported by the Diab tools but not by
+               GNU binutils.  In the latter case, for testing purposes, we treat
+               them as absolute addressings.  The default base register being GPR0,
+               this produces correct code, albeit with absolute addresses. *)
+      | Csymbol_rel_low(s, n) ->
+          symbol_fragment oc s n "@l"
+      | Csymbol_rel_high(s, n) ->
+          symbol_fragment oc s n "@ha"
+
+    let ireg oc r =
+      output_string oc (int_reg_name r)
+
+    let freg oc r =
+      output_string oc (float_reg_name r)
+        
+    let creg oc r = 
+      fprintf oc "%d" r
+ 
+    let name_of_section = function
+      | Section_text -> ".text"
+      | Section_data i -> if i then ".data" else "COMM"
+      | Section_small_data i -> 
+          if i
+          then ".section	.sdata,\"aw\",@progbits"
+          else ".section	.sbss,\"aw\",@progbits"
+      | Section_const -> ".rodata"
+      | Section_small_const -> ".section	.sdata2,\"a\",@progbits"
+      | Section_string -> ".rodata"
+      | Section_literal -> ".section	.rodata.cst8,\"aM\",@progbits,8"
+      | Section_jumptable -> ".text"
+      | Section_user(s, wr, ex) ->
+          sprintf ".section	\"%s\",\"a%s%s\",@progbits"
+            s (if wr then "w" else "") (if ex then "x" else "")
+
+    let filename_num : (string, int) Hashtbl.t = Hashtbl.create 7
+    let reset_file_line () = Hashtbl.clear filename_num
+    let print_file_line oc file line =
+      if !Clflags.option_g && file <> "" then begin
+        let filenum = 
+          try
+            Hashtbl.find filename_num file
+          with Not_found ->
+            let n = Hashtbl.length filename_num + 1 in
+            Hashtbl.add filename_num file n;
+            fprintf oc "	.file	%d %S\n" n file;
+            n
+        in fprintf oc "	.loc	%d %s\n" filenum line
+      end
+    
+    (* Emit .cfi directives *)      
+    let cfi_startproc =
+      if Configuration.asm_supports_cfi then
+        (fun oc -> fprintf oc "	.cfi_startproc\n")
+      else
+        (fun _ -> ())
+
+    let cfi_endproc =
+      if Configuration.asm_supports_cfi then
+        (fun oc -> fprintf oc "	.cfi_endproc\n")
+      else
+        (fun _ -> ())
+
+              
+    let cfi_adjust =
+      if Configuration.asm_supports_cfi then
+       (fun oc delta -> fprintf oc "	.cfi_adjust_cfa_offset	%ld\n" delta)
+      else
+        (fun _ _ -> ())
+              
+    let cfi_rel_offset =
+      if Configuration.asm_supports_cfi then
+        (fun oc reg ofs -> fprintf oc "	.cfi_rel_offset	%s, %ld\n" reg ofs)
+      else
+        (fun _ _ _ -> ())
+
+
+    let print_prologue oc = ()
+  
+  end:SYSTEM)
+    
+module Diab_System =
+  (struct
+    let comment =  ";"
+        
+    let constant oc cst =
+      match cst with
+      | Cint n ->
+          fprintf oc "%ld" (camlint_of_coqint n)
+      | Csymbol_low(s, n) ->
+          symbol_fragment oc s n "@l"
+      | Csymbol_high(s, n) ->
+          symbol_fragment oc s n "@ha"
+      | Csymbol_sda(s, n) ->
+          symbol_fragment oc s n "@sdarx"
+      | Csymbol_rel_low(s, n) ->
+          symbol_fragment oc s n "@sdax@l"
+      | Csymbol_rel_high(s, n) ->
+          symbol_fragment oc s n "@sdarx@ha"
+ 
+    let ireg oc r =
+      output_char oc 'r';
+      output_string oc (int_reg_name r)
+
+    let freg oc r =
+      output_char oc 'f';
+      output_string oc (float_reg_name r)
+        
+    let creg oc r =
+      fprintf oc "cr%d" r
+        
+    let name_of_section = function
+      | Section_text -> ".text"
+      | Section_data i -> if i then ".data" else ".bss"
+      | Section_small_data i -> if i then ".sdata" else ".sbss"
+      | Section_const -> ".text"
+      | Section_small_const -> ".sdata2"
+      | Section_string -> ".text"
+      | Section_literal -> ".text"
+      | Section_jumptable -> ".text"
+      | Section_user(s, wr, ex) ->
+          sprintf ".section	\"%s\",,%c"
+               s
+            (match wr, ex with
+            | true, true -> 'm'                 (* text+data *)
+            | true, false -> 'd'                (* data *)
+            | false, true -> 'c'                (* text *)
+            | false, false -> 'r')              (* const *)
+
+    let last_file = ref ""
+    let reset_file_line () = last_file := ""
+    let print_file_line oc file line =
+      if !Clflags.option_g && file <> "" then begin
+        if file <> !last_file then begin
+          fprintf oc "	.d1file	%S\n" file;
+          last_file := file
+        end;
+        fprintf oc "	.d1line	%s\n" line
+      end
+
+    (* Emit .cfi directives *)
+    let cfi_startproc oc = ()
+
+    let cfi_endproc oc = ()
+
+    let cfi_adjust oc delta = ()
+
+    let cfi_rel_offset oc reg ofs = ()
+
+        
+    let print_prologue oc =
+      fprintf oc "	.xopt	align-fill-text=0x60000000\n";
+      if !Clflags.option_g then
+        fprintf oc "	.xopt	asm-debug-on\n"
+  
+  end:SYSTEM)
+
+module AsmPrinter (Target : SYSTEM) =
+  (struct
+    open Target
 
 (* On-the-fly label renaming *)
 
@@ -56,12 +270,6 @@ let coqint oc n =
 let raw_symbol oc s =
   fprintf oc "%s" s
 
-let symbol oc symb =
-  fprintf oc "%s" (extern_atom symb)
-
-let symbol_offset oc (symb, ofs) =
-  symbol oc symb;
-  if ofs <> 0l then fprintf oc " + %ld" ofs
 
 let label oc lbl =
   fprintf oc ".L%d" lbl
@@ -72,35 +280,6 @@ let label_low oc lbl =
 let label_high oc lbl =
   fprintf oc ".L%d@ha" lbl
 
-let comment =
-  match target with
-  | Linux -> "#"
-  | Diab -> ";"
-
-let symbol_fragment oc s n op =
-      fprintf oc "(%a)%s" symbol_offset (s, camlint_of_coqint n) op
-
-let constant oc cst =
-  match cst with
-  | Cint n ->
-      fprintf oc "%ld" (camlint_of_coqint n)
-  | Csymbol_low(s, n) ->
-      symbol_fragment oc s n "@l"
-  | Csymbol_high(s, n) ->
-      symbol_fragment oc s n "@ha"
-  | Csymbol_sda(s, n) ->
-      symbol_fragment oc s n
-        (match target with Linux -> "@sda21" | Diab  -> "@sdarx")
-  (* 32-bit relative addressing is supported by the Diab tools but not by
-     GNU binutils.  In the latter case, for testing purposes, we treat
-     them as absolute addressings.  The default base register being GPR0,
-     this produces correct code, albeit with absolute addresses. *)
-  | Csymbol_rel_low(s, n) ->
-      symbol_fragment oc s n
-        (match target with Linux -> "@l" | Diab  -> "@sdax@l")
-  | Csymbol_rel_high(s, n) ->
-      symbol_fragment oc s n
-        (match target with Linux -> "@ha" | Diab -> "@sdarx@ha")
 
 let num_crbit = function
   | CRbit_0 -> 0
@@ -112,170 +291,23 @@ let num_crbit = function
 let crbit oc bit =
   fprintf oc "%d" (num_crbit bit)
 
-let int_reg_name = function
-  | GPR0 -> "0"  | GPR1 -> "1"  | GPR2 -> "2"  | GPR3 -> "3"
-  | GPR4 -> "4"  | GPR5 -> "5"  | GPR6 -> "6"  | GPR7 -> "7"
-  | GPR8 -> "8"  | GPR9 -> "9"  | GPR10 -> "10" | GPR11 -> "11"
-  | GPR12 -> "12" | GPR13 -> "13" | GPR14 -> "14" | GPR15 -> "15"
-  | GPR16 -> "16" | GPR17 -> "17" | GPR18 -> "18" | GPR19 -> "19"
-  | GPR20 -> "20" | GPR21 -> "21" | GPR22 -> "22" | GPR23 -> "23"
-  | GPR24 -> "24" | GPR25 -> "25" | GPR26 -> "26" | GPR27 -> "27"
-  | GPR28 -> "28" | GPR29 -> "29" | GPR30 -> "30" | GPR31 -> "31"
-
-let float_reg_name = function
-  | FPR0 -> "0"  | FPR1 -> "1"  | FPR2 -> "2"  | FPR3 -> "3"
-  | FPR4 -> "4"  | FPR5 -> "5"  | FPR6 -> "6"  | FPR7 -> "7"
-  | FPR8 -> "8"  | FPR9 -> "9"  | FPR10 -> "10" | FPR11 -> "11"
-  | FPR12 -> "12" | FPR13 -> "13" | FPR14 -> "14" | FPR15 -> "15"
-  | FPR16 -> "16" | FPR17 -> "17" | FPR18 -> "18" | FPR19 -> "19"
-  | FPR20 -> "20" | FPR21 -> "21" | FPR22 -> "22" | FPR23 -> "23"
-  | FPR24 -> "24" | FPR25 -> "25" | FPR26 -> "26" | FPR27 -> "27"
-  | FPR28 -> "28" | FPR29 -> "29" | FPR30 -> "30" | FPR31 -> "31"
-
-let ireg oc r =
-  begin match target with
-  | Diab  -> output_char oc 'r'
-  | Linux -> ()
-  end;
-  output_string oc (int_reg_name r)
-
 let ireg_or_zero oc r =
   if r = GPR0 then output_string oc "0" else ireg oc r
-
-let freg oc r =
-  begin match target with
-  | Diab  -> output_char oc 'f'
-  | Linux -> ()
-  end;
-  output_string oc (float_reg_name r)
-
-let creg oc r =
-  match target with
-  | Diab  -> fprintf oc "cr%d" r
-  | Linux -> fprintf oc "%d" r
 
 let preg oc = function
   | IR r -> ireg oc r
   | FR r -> freg oc r
   | _    -> assert false
 
-(* Names of sections *)
-
-let name_of_section_Linux = function
-  | Section_text -> ".text"
-  | Section_data i -> if i then ".data" else "COMM"
-  | Section_small_data i -> 
-      if i
-      then ".section	.sdata,\"aw\",@progbits"
-      else ".section	.sbss,\"aw\",@progbits"
-  | Section_const -> ".rodata"
-  | Section_small_const -> ".section	.sdata2,\"a\",@progbits"
-  | Section_string -> ".rodata"
-  | Section_literal -> ".section	.rodata.cst8,\"aM\",@progbits,8"
-  | Section_jumptable -> ".text"
-  | Section_user(s, wr, ex) ->
-       sprintf ".section	\"%s\",\"a%s%s\",@progbits"
-               s (if wr then "w" else "") (if ex then "x" else "")
-
-let name_of_section_Diab = function
-  | Section_text -> ".text"
-  | Section_data i -> if i then ".data" else ".bss"
-  | Section_small_data i -> if i then ".sdata" else ".sbss"
-  | Section_const -> ".text"
-  | Section_small_const -> ".sdata2"
-  | Section_string -> ".text"
-  | Section_literal -> ".text"
-  | Section_jumptable -> ".text"
-  | Section_user(s, wr, ex) ->
-       sprintf ".section	\"%s\",,%c"
-               s
-               (match wr, ex with
-                | true, true -> 'm'                 (* text+data *)
-                | true, false -> 'd'                (* data *)
-                | false, true -> 'c'                (* text *)
-                | false, false -> 'r')              (* const *)
-
-let name_of_section =
-  match target with
-  | Linux -> name_of_section_Linux
-  | Diab  -> name_of_section_Diab
-
 let section oc sec =
   let name = name_of_section sec in
   assert (name <> "COMM");
   fprintf oc "	%s\n" name
 
-(* Emit .file / .loc debugging directives *)
-
-module DebugLinux = struct
-  let filename_num : (string, int) Hashtbl.t = Hashtbl.create 7
-  let reset () = Hashtbl.clear filename_num
-  let print_file_line oc file line =
-    if !Clflags.option_g && file <> "" then begin
-      let filenum = 
-        try
-          Hashtbl.find filename_num file
-        with Not_found ->
-          let n = Hashtbl.length filename_num + 1 in
-          Hashtbl.add filename_num file n;
-          fprintf oc "	.file	%d %S\n" n file;
-          n
-      in fprintf oc "	.loc	%d %s\n" filenum line
-    end
-end
-
-module DebugDiab = struct
-  let last_file = ref ""
-  let reset () = last_file := ""
-  let print_file_line oc file line =
-    if !Clflags.option_g && file <> "" then begin
-      if file <> !last_file then begin
-        fprintf oc "	.d1file	%S\n" file;
-        last_file := file
-      end;
-      fprintf oc "	.d1line	%s\n" line
-    end
-end
-
-let print_file_line =
-  match target with
-  | Linux -> DebugLinux.print_file_line
-  | Diab  -> DebugDiab.print_file_line
-
 let print_location oc loc =
   if loc <> Cutil.no_loc then
     print_file_line oc (fst loc) (string_of_int (snd loc))
 
-let reset_file_line =
-  match target with
-  | Linux -> DebugLinux.reset
-  | Diab  -> DebugDiab.reset
-
-(* Emit .cfi directives *)
-
-let cfi_startproc oc =
-  if Configuration.asm_supports_cfi then
-    match target with
-    | Linux -> fprintf oc "	.cfi_startproc\n"
-    | Diab  -> ()
-
-let cfi_endproc oc =
-  if Configuration.asm_supports_cfi then
-    match target with
-    | Linux -> fprintf oc "	.cfi_endproc\n"
-    | Diab  -> ()
-
-let cfi_adjust oc delta =
-  if Configuration.asm_supports_cfi then
-    match target with
-    | Linux -> fprintf oc "	.cfi_adjust_cfa_offset	%ld\n" delta
-    | Diab  -> ()
-
-let cfi_rel_offset oc reg ofs =
-  if Configuration.asm_supports_cfi then
-    match target with
-    | Linux -> fprintf oc "	.cfi_rel_offset	%s, %ld\n" reg ofs
-    | Diab  -> ()
 
 (* Encoding masks for rlwinm instructions *)
 
@@ -824,18 +856,22 @@ let print_globdef oc (name, gdef) =
   | Gfun f -> print_fundef oc name f
   | Gvar v -> print_var oc name v
 
-let print_prologue oc =
-  match target with
-  | Linux ->
-      ()
-  | Diab ->
-      fprintf oc "	.xopt	align-fill-text=0x60000000\n";
-      if !Clflags.option_g then
-        fprintf oc "	.xopt	asm-debug-on\n"
+  end)
+
+type target = Linux | Diab
 
 let print_program oc p =
-  reset_file_line();
-  PrintAnnot.print_version_and_options oc comment;
-  print_prologue oc;
-  List.iter (print_globdef oc) p.prog_defs
+  let target = 
+    (match Configuration.system with
+    | "linux"  -> Linux
+    | "diab"   -> Diab
+    | _        -> invalid_arg ("System " ^ Configuration.system ^ " not supported")) in
+  let module Target = (val (match target with
+  | Linux -> (module Linux_System:SYSTEM)
+  | Diab -> (module Diab_System:SYSTEM)):SYSTEM) in
+  Target.reset_file_line();
+  PrintAnnot.print_version_and_options oc Target.comment;
+  let module Printer = AsmPrinter(Target) in
+  Target.print_prologue oc;
+  List.iter (Printer.print_globdef oc) p.prog_defs
 
