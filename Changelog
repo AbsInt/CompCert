@@ -1,5 +1,6 @@
 - In string and character literals, treat illegal escape sequences 
   (e.g. "\%" or "\0") as an error instead of a warning.
+- Upgraded Flocq to version 2.4.0.
 
 
 Release 2.4, 2014-09-17

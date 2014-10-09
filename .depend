@@ -8,6 +8,7 @@ lib/Ordered.vo lib/Ordered.glob lib/Ordered.v.beautified: lib/Ordered.v lib/Coql
 lib/Iteration.vo lib/Iteration.glob lib/Iteration.v.beautified: lib/Iteration.v lib/Axioms.vo lib/Coqlib.vo lib/Wfsimpl.vo
 lib/Integers.vo lib/Integers.glob lib/Integers.v.beautified: lib/Integers.v lib/Coqlib.vo
 $(ARCH)/Archi.vo $(ARCH)/Archi.glob $(ARCH)/Archi.v.beautified: $(ARCH)/Archi.v flocq/Appli/Fappli_IEEE.vo flocq/Appli/Fappli_IEEE_bits.vo
+lib/Fappli_IEEE_extra.vo lib/Fappli_IEEE_extra.glob lib/Fappli_IEEE_extra.v.beautified: lib/Fappli_IEEE_extra.v flocq/Core/Fcore.vo flocq/Core/Fcore_digits.vo flocq/Calc/Fcalc_digits.vo flocq/Calc/Fcalc_ops.vo flocq/Calc/Fcalc_round.vo flocq/Calc/Fcalc_bracket.vo flocq/Prop/Fprop_Sterbenz.vo flocq/Appli/Fappli_IEEE.vo flocq/Appli/Fappli_rnd_odd.vo
 lib/Floats.vo lib/Floats.glob lib/Floats.v.beautified: lib/Floats.v lib/Coqlib.vo lib/Integers.vo flocq/Appli/Fappli_IEEE.vo flocq/Appli/Fappli_IEEE_bits.vo lib/Fappli_IEEE_extra.vo flocq/Core/Fcore.vo $(ARCH)/Archi.vo
 lib/Parmov.vo lib/Parmov.glob lib/Parmov.v.beautified: lib/Parmov.v lib/Axioms.vo lib/Coqlib.vo
 lib/UnionFind.vo lib/UnionFind.glob lib/UnionFind.v.beautified: lib/UnionFind.v lib/Coqlib.vo
