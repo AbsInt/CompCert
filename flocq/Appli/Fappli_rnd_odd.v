@@ -802,7 +802,7 @@ apply Hz1.
 Qed.
 
 
-Theorem round_odd_prop_pos: 
+Theorem round_odd_prop_pos:
   round beta fexp (Znearest choice) (round beta fexpe Zrnd_odd x) =
                round beta fexp (Znearest choice) x.
 Proof with auto with typeclass_instances.
@@ -945,7 +945,7 @@ Qed.
 
 
 
-Theorem round_odd_prop: forall x, 
+Theorem round_odd_prop: forall x,
   round beta fexp (Znearest choice) (round beta fexpe Zrnd_odd x) =
                round beta fexp (Znearest choice) x.
 Proof with auto with typeclass_instances.

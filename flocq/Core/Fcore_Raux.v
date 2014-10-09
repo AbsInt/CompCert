@@ -73,6 +73,24 @@ apply Rplus_eq_reg_l with r.
 now rewrite 2!(Rplus_comm r).
 Qed.
 
+Theorem Rplus_lt_reg_l :
+  forall r r1 r2 : R,
+  (r + r1 < r + r2)%R -> (r1 < r2)%R.
+Proof.
+intros.
+solve [ apply Rplus_lt_reg_l with (1 := H) |
+        apply Rplus_lt_reg_r with (1 := H) ].
+Qed.
+
+Theorem Rplus_lt_reg_r :
+  forall r r1 r2 : R,
+  (r1 + r < r2 + r)%R -> (r1 < r2)%R.
+Proof.
+intros.
+apply Rplus_lt_reg_l with r.
+now rewrite 2!(Rplus_comm r).
+Qed.
+
 Theorem Rplus_le_reg_r :
   forall r r1 r2 : R,
   (r1 + r <= r2 + r)%R -> (r1 <= r2)%R.
@@ -100,6 +118,21 @@ intros.
 apply Rmult_le_reg_l with r.
 exact H.
 now rewrite 2!(Rmult_comm r).
+Qed.
+
+Theorem Rmult_lt_compat :
+  forall r1 r2 r3 r4,
+  (0 <= r1)%R -> (0 <= r3)%R -> (r1 < r2)%R -> (r3 < r4)%R ->
+  (r1 * r3 < r2 * r4)%R.
+Proof.
+intros r1 r2 r3 r4 Pr1 Pr3 H12 H34.
+apply Rle_lt_trans with (r1 * r4)%R.
+- apply Rmult_le_compat_l.
+  + exact Pr1.
+  + now apply Rlt_le.
+- apply Rmult_lt_compat_r.
+  + now apply Rle_lt_trans with r3.
+  + exact H12.
 Qed.
 
 Theorem Rmult_eq_reg_r :
@@ -217,6 +250,21 @@ unfold sqrt.
 destruct (Rcase_abs x) as [_|H].
 apply Rle_refl.
 apply Rsqrt_positivity.
+Qed.
+
+Lemma sqrt_neg : forall x, (x <= 0)%R -> (sqrt x = 0)%R.
+Proof.
+intros x Npx.
+destruct (Req_dec x 0) as [Zx|Nzx].
+- (* x = 0 *)
+  rewrite Zx.
+  exact sqrt_0.
+- (* x < 0 *)
+  unfold sqrt.
+  destruct Rcase_abs.
+  + reflexivity.
+  + casetype False.
+    now apply Nzx, Rle_antisym; [|apply Rge_le].
 Qed.
 
 Theorem Rabs_le :
@@ -1768,6 +1816,25 @@ now apply Rlt_le.
 now apply Rlt_le.
 Qed.
 
+Lemma ln_beta_lt_pos :
+  forall x y,
+  (0 < x)%R -> (0 < y)%R ->
+  (ln_beta x < ln_beta y)%Z -> (x < y)%R.
+Proof.
+intros x y Px Py.
+destruct (ln_beta x) as (ex, Hex).
+destruct (ln_beta y) as (ey, Hey).
+simpl.
+intro H.
+destruct Hex as (_,Hex); [now apply Rgt_not_eq|].
+destruct Hey as (Hey,_); [now apply Rgt_not_eq|].
+rewrite Rabs_right in Hex; [|now apply Rle_ge; apply Rlt_le].
+rewrite Rabs_right in Hey; [|now apply Rle_ge; apply Rlt_le].
+apply (Rlt_le_trans _ _ _ Hex).
+apply Rle_trans with (bpow (ey - 1)); [|exact Hey].
+now apply bpow_le; omega.
+Qed.
+
 Theorem ln_beta_bpow :
   forall e, (ln_beta (bpow e) = e + 1 :> Z)%Z.
 Proof.
@@ -1834,6 +1901,23 @@ rewrite Zx, Rabs_R0.
 apply bpow_gt_0.
 Qed.
 
+Theorem ln_beta_ge_bpow :
+  forall x e,
+  (bpow (e - 1) <= Rabs x)%R ->
+  (e <= ln_beta x)%Z.
+Proof.
+intros x e H.
+destruct (Rlt_or_le (Rabs x) (bpow e)) as [Hxe|Hxe].
+- (* Rabs x w bpow e *)
+  assert (ln_beta x = e :> Z) as Hln.
+  now apply ln_beta_unique; split.
+  rewrite Hln.
+  now apply Z.le_refl.
+- (* bpow e <= Rabs x *)
+  apply Zlt_le_weak.
+  now apply ln_beta_gt_bpow.
+Qed.
+
 Theorem bpow_ln_beta_gt :
   forall x,
   (Rabs x < bpow (ln_beta x))%R.
@@ -1883,6 +1967,221 @@ now apply Zlt_le_weak.
 apply (Z2R_le 1).
 clear -Zm.
 zify ; omega.
+Qed.
+
+Lemma ln_beta_mult :
+  forall x y,
+  (x <> 0)%R -> (y <> 0)%R ->
+  (ln_beta x + ln_beta y - 1 <= ln_beta (x * y) <= ln_beta x + ln_beta y)%Z.
+Proof.
+intros x y Hx Hy.
+destruct (ln_beta x) as (ex, Hx2).
+destruct (ln_beta y) as (ey, Hy2).
+simpl.
+destruct (Hx2 Hx) as (Hx21,Hx22); clear Hx2.
+destruct (Hy2 Hy) as (Hy21,Hy22); clear Hy2.
+assert (Hxy : (bpow (ex + ey - 1 - 1) <= Rabs (x * y))%R).
+{ replace (ex + ey -1 -1)%Z with (ex - 1 + (ey - 1))%Z; [|ring].
+  rewrite bpow_plus.
+  rewrite Rabs_mult.
+  now apply Rmult_le_compat; try apply bpow_ge_0. }
+assert (Hxy2 : (Rabs (x * y) < bpow (ex + ey))%R).
+{ rewrite Rabs_mult.
+  rewrite bpow_plus.
+  apply Rmult_le_0_lt_compat; try assumption.
+  now apply Rle_trans with (bpow (ex - 1)); try apply bpow_ge_0.
+  now apply Rle_trans with (bpow (ey - 1)); try apply bpow_ge_0. }
+split.
+- now apply ln_beta_ge_bpow.
+- apply ln_beta_le_bpow.
+  + now apply Rmult_integral_contrapositive_currified.
+  + assumption.
+Qed.
+
+Lemma ln_beta_plus :
+  forall x y,
+  (0 < y)%R -> (y <= x)%R ->
+  (ln_beta x <= ln_beta (x + y) <= ln_beta x + 1)%Z.
+Proof.
+assert (Hr : (2 <= r)%Z).
+{ destruct r as (beta_val,beta_prop).
+  now apply Zle_bool_imp_le. }
+intros x y Hy Hxy.
+assert (Hx : (0 < x)%R) by apply (Rlt_le_trans _ _ _ Hy Hxy).
+destruct (ln_beta x) as (ex,Hex); simpl.
+destruct Hex as (Hex0,Hex1); [now apply Rgt_not_eq|].
+assert (Haxy : (Rabs (x + y) < bpow (ex + 1))%R).
+{ rewrite bpow_plus1.
+  apply Rlt_le_trans with (2 * bpow ex)%R.
+  - apply Rle_lt_trans with (2 * Rabs x)%R.
+    + rewrite Rabs_right.
+      { apply Rle_trans with (x + x)%R; [now apply Rplus_le_compat_l|].
+        rewrite Rabs_right.
+        { rewrite Rmult_plus_distr_r.
+          rewrite Rmult_1_l.
+          now apply Rle_refl. }
+        now apply Rgt_ge. }
+      apply Rgt_ge.
+      rewrite <- (Rplus_0_l 0).
+      now apply Rplus_gt_compat.
+    + now apply Rmult_lt_compat_l; intuition.
+  - apply Rmult_le_compat_r; [now apply bpow_ge_0|].
+    now change 2%R with (Z2R 2); apply Z2R_le. }
+assert (Haxy2 : (bpow (ex - 1) <= Rabs (x + y))%R).
+{ apply (Rle_trans _ _ _ Hex0).
+  rewrite Rabs_right; [|now apply Rgt_ge].
+  apply Rabs_ge; right.
+  rewrite <- (Rplus_0_r x) at 1.
+  apply Rplus_le_compat_l.
+  now apply Rlt_le. }
+split.
+- now apply ln_beta_ge_bpow.
+- apply ln_beta_le_bpow.
+  + now apply tech_Rplus; [apply Rlt_le|].
+  + exact Haxy.
+Qed.
+
+Lemma ln_beta_minus :
+  forall x y,
+  (0 < y)%R -> (y < x)%R ->
+  (ln_beta (x - y) <= ln_beta x)%Z.
+Proof.
+intros x y Py Hxy.
+assert (Px : (0 < x)%R) by apply (Rlt_trans _ _ _ Py Hxy).
+apply ln_beta_le.
+- now apply Rlt_Rminus.
+- rewrite <- (Rplus_0_r x) at 2.
+  apply Rplus_le_compat_l.
+  rewrite <- Ropp_0.
+  now apply Ropp_le_contravar; apply Rlt_le.
+Qed.
+
+Lemma ln_beta_minus_lb :
+  forall x y,
+  (0 < x)%R -> (0 < y)%R ->
+  (ln_beta y <= ln_beta x - 2)%Z ->
+  (ln_beta x - 1 <= ln_beta (x - y))%Z.
+Proof.
+assert (Hbeta : (2 <= r)%Z).
+{ destruct r as (beta_val,beta_prop).
+  now apply Zle_bool_imp_le. }
+intros x y Px Py Hln.
+assert (Oxy : (y < x)%R); [now apply ln_beta_lt_pos; [| |omega]|].
+destruct (ln_beta x) as (ex,Hex).
+destruct (ln_beta y) as (ey,Hey).
+simpl in Hln |- *.
+destruct Hex as (Hex,_); [now apply Rgt_not_eq|].
+destruct Hey as (_,Hey); [now apply Rgt_not_eq|].
+assert (Hbx : (bpow (ex - 2) + bpow (ex - 2) <= x)%R).
+{ ring_simplify.
+  apply Rle_trans with (bpow (ex - 1)).
+  - replace (ex - 1)%Z with (ex - 2 + 1)%Z by ring.
+    rewrite bpow_plus1.
+    apply Rmult_le_compat_r; [now apply bpow_ge_0|].
+    now change 2%R with (Z2R 2); apply Z2R_le.
+  - now rewrite Rabs_right in Hex; [|apply Rle_ge; apply Rlt_le]. }
+assert (Hby : (y < bpow (ex - 2))%R).
+{ apply Rlt_le_trans with (bpow ey).
+  now rewrite Rabs_right in Hey; [|apply Rle_ge; apply Rlt_le].
+  now apply bpow_le. }
+assert (Hbxy : (bpow (ex - 2) <= x - y)%R).
+{ apply Ropp_lt_contravar in Hby.
+  apply Rlt_le in Hby.
+  replace (bpow (ex - 2))%R with (bpow (ex - 2) + bpow (ex - 2)
+                                                  - bpow (ex - 2))%R by ring.
+  now apply Rplus_le_compat. }
+apply ln_beta_ge_bpow.
+replace (ex - 1 - 1)%Z with (ex - 2)%Z by ring.
+now apply Rabs_ge; right.
+Qed.
+
+Lemma ln_beta_div :
+  forall x y : R,
+  (0 < x)%R -> (0 < y)%R ->
+  (ln_beta x - ln_beta y <= ln_beta (x / y) <= ln_beta x - ln_beta y + 1)%Z.
+Proof.
+intros x y Px Py.
+destruct (ln_beta x) as (ex,Hex).
+destruct (ln_beta y) as (ey,Hey).
+simpl.
+unfold Rdiv.
+rewrite Rabs_right in Hex; [|now apply Rle_ge; apply Rlt_le].
+rewrite Rabs_right in Hey; [|now apply Rle_ge; apply Rlt_le].
+assert (Heiy : (bpow (- ey) < / y <= bpow (- ey + 1))%R).
+{ split.
+  - rewrite bpow_opp.
+    apply Rinv_lt_contravar.
+    + apply Rmult_lt_0_compat; [exact Py|].
+      now apply bpow_gt_0.
+    + apply Hey.
+      now apply Rgt_not_eq.
+  - replace (_ + _)%Z with (- (ey - 1))%Z by ring.
+    rewrite bpow_opp.
+    apply Rinv_le; [now apply bpow_gt_0|].
+    apply Hey.
+    now apply Rgt_not_eq. }
+split.
+- apply ln_beta_ge_bpow.
+  apply Rabs_ge; right.
+  replace (_ - _)%Z with (ex - 1 - ey)%Z by ring.
+  unfold Zminus at 1; rewrite bpow_plus.
+  apply Rmult_le_compat.
+  + now apply bpow_ge_0.
+  + now apply bpow_ge_0.
+  + apply Hex.
+    now apply Rgt_not_eq.
+  + apply Rlt_le; apply Heiy.
+- assert (Pxy : (0 < x * / y)%R).
+  { apply Rmult_lt_0_compat; [exact Px|].
+    now apply Rinv_0_lt_compat. }
+  apply ln_beta_le_bpow.
+  + now apply Rgt_not_eq.
+  + rewrite Rabs_right; [|now apply Rle_ge; apply Rlt_le].
+    replace (_ + 1)%Z with (ex + (- ey + 1))%Z by ring.
+    rewrite bpow_plus.
+    apply Rlt_le_trans with (bpow ex * / y)%R.
+    * apply Rmult_lt_compat_r; [now apply Rinv_0_lt_compat|].
+      apply Hex.
+      now apply Rgt_not_eq.
+    * apply Rmult_le_compat_l; [now apply bpow_ge_0|].
+      apply Heiy.
+Qed.
+
+Lemma ln_beta_sqrt :
+  forall x,
+  (0 < x)%R ->
+  (2 * ln_beta (sqrt x) - 1 <= ln_beta x <= 2 * ln_beta (sqrt x))%Z.
+Proof.
+intros x Px.
+assert (H : (bpow (2 * ln_beta (sqrt x) - 1 - 1) <= Rabs x
+            < bpow (2 * ln_beta (sqrt x)))%R).
+{ split.
+  - apply Rge_le; rewrite <- (sqrt_def x) at 1;
+    [|now apply Rlt_le]; apply Rle_ge.
+    rewrite Rabs_mult.
+    replace (_ - _)%Z with (ln_beta (sqrt x) - 1
+                            + (ln_beta (sqrt x) - 1))%Z by ring.
+    rewrite bpow_plus.
+    assert (H : (bpow (ln_beta (sqrt x) - 1) <= Rabs (sqrt x))%R).
+    { destruct (ln_beta (sqrt x)) as (esx,Hesx); simpl.
+      apply Hesx.
+      apply Rgt_not_eq; apply Rlt_gt.
+      now apply sqrt_lt_R0. }
+    now apply Rmult_le_compat; [now apply bpow_ge_0|now apply bpow_ge_0| |].
+  - rewrite <- (sqrt_def x) at 1; [|now apply Rlt_le].
+    rewrite Rabs_mult.
+    change 2%Z with (1 + 1)%Z; rewrite Zmult_plus_distr_l;
+    rewrite Zmult_1_l.
+    rewrite bpow_plus.
+    assert (H : (Rabs (sqrt x) < bpow (ln_beta (sqrt x)))%R).
+    { destruct (ln_beta (sqrt x)) as (esx,Hesx); simpl.
+      apply Hesx.
+      apply Rgt_not_eq; apply Rlt_gt.
+      now apply sqrt_lt_R0. }
+    now apply Rmult_lt_compat; [now apply Rabs_pos|now apply Rabs_pos| |]. }
+split.
+- now apply ln_beta_ge_bpow.
+- now apply ln_beta_le_bpow; [now apply Rgt_not_eq|].
 Qed.
 
 End pow.
@@ -2006,3 +2305,30 @@ apply refl_equal.
 Qed.
 
 End cond_Ropp.
+
+(** A little tactic to simplify terms of the form [bpow a * bpow b]. *)
+Ltac bpow_simplify :=
+  (* bpow ex * bpow ey ~~> bpow (ex + ey) *)
+  repeat
+    match goal with
+      | |- context [(bpow _ _ * bpow _ _)] =>
+        rewrite <- bpow_plus
+      | |- context [(?X1 * bpow _ _ * bpow _ _)] =>
+        rewrite (Rmult_assoc X1); rewrite <- bpow_plus
+      | |- context [(?X1 * (?X2 * bpow _ _) * bpow _ _)] =>
+        rewrite <- (Rmult_assoc X1 X2); rewrite (Rmult_assoc (X1 * X2));
+        rewrite <- bpow_plus
+    end;
+  (* ring_simplify arguments of bpow *)
+  repeat
+    match goal with
+      | |- context [(bpow _ ?X)] =>
+        progress ring_simplify X
+    end;
+  (* bpow 0 ~~> 1 *)
+  change (bpow _ 0) with 1;
+  repeat
+    match goal with
+      | |- context [(_ * 1)] =>
+        rewrite Rmult_1_r
+    end.

@@ -25,6 +25,12 @@ Require Import Fappli_IEEE.
 
 Section Binary_Bits.
 
+Implicit Arguments exist [[A] [P]].
+Implicit Arguments B754_zero [[prec] [emax]].
+Implicit Arguments B754_infinity [[prec] [emax]].
+Implicit Arguments B754_nan [[prec] [emax]].
+Implicit Arguments B754_finite [[prec] [emax]].
+
 (** Number of bits for the fraction and exponent *)
 Variable mw ew : Z.
 Hypothesis Hmw : (0 < mw)%Z.
@@ -54,7 +60,40 @@ Qed.
 Hypothesis Hmax : (prec < emax)%Z.
 
 Definition join_bits (s : bool) m e :=
-  (((if s then Zpower 2 ew else 0) + e) * Zpower 2 mw + m)%Z.
+  (Z.shiftl ((if s then Zpower 2 ew else 0) + e) mw + m)%Z.
+
+Lemma join_bits_range :
+  forall s m e,
+  (0 <= m < 2^mw)%Z ->
+  (0 <= e < 2^ew)%Z ->
+  (0 <= join_bits s m e < 2 ^ (mw + ew + 1))%Z.
+Proof.
+intros s m e Hm He.
+unfold join_bits.
+rewrite Z.shiftl_mul_pow2 by now apply Zlt_le_weak.
+split.
+- apply (Zplus_le_compat 0 _ 0) with (2 := proj1 Hm).
+  rewrite <- (Zmult_0_l (2^mw)).
+  apply Zmult_le_compat_r.
+  case s.
+  clear -He ; omega.
+  now rewrite Zmult_0_l.
+  clear -Hm ; omega.
+- apply Zlt_le_trans with (((if s then 2 ^ ew else 0) + e + 1) * 2 ^ mw)%Z.
+  rewrite (Zmult_plus_distr_l _ 1).
+  apply Zplus_lt_compat_l.
+  now rewrite Zmult_1_l.
+  rewrite <- (Zplus_assoc mw), (Zplus_comm mw), Zpower_plus.
+  apply Zmult_le_compat_r.
+  rewrite Zpower_plus.
+  change (2^1)%Z with 2%Z.
+  case s ; clear -He ; omega.
+  now apply Zlt_le_weak.
+  easy.
+  clear -Hm ; omega.
+  clear -Hew ; omega.
+  now apply Zlt_le_weak.
+Qed.
 
 Definition split_bits x :=
   let mm := Zpower 2 mw in
@@ -69,6 +108,7 @@ Theorem split_join_bits :
 Proof.
 intros s m e Hm He.
 unfold split_bits, join_bits.
+rewrite Z.shiftl_mul_pow2 by now apply Zlt_le_weak.
 apply f_equal2.
 apply f_equal2.
 (* *)
@@ -114,6 +154,7 @@ Theorem join_split_bits :
 Proof.
 intros x Hx.
 unfold split_bits, join_bits.
+rewrite Z.shiftl_mul_pow2 by now apply Zlt_le_weak.
 pattern x at 4 ; rewrite Z_div_mod_eq_full with x (2^mw)%Z.
 apply (f_equal (fun v => (v + _)%Z)).
 rewrite Zmult_comm.
@@ -174,8 +215,9 @@ Definition bits_of_binary_float (x : binary_float) :=
   | B754_infinity sx => join_bits sx 0 (Zpower 2 ew - 1)
   | B754_nan sx (exist plx _) => join_bits sx (Zpos plx) (Zpower 2 ew - 1)
   | B754_finite sx mx ex _ =>
-    if Zle_bool (Zpower 2 mw) (Zpos mx) then
-      join_bits sx (Zpos mx - Zpower 2 mw) (ex - emin + 1)
+    let m := (Zpos mx - Zpower 2 mw)%Z in
+    if Zle_bool 0 m then
+      join_bits sx m (ex - emin + 1)
     else
       join_bits sx (Zpos mx) 0
   end.
@@ -186,8 +228,9 @@ Definition split_bits_of_binary_float (x : binary_float) :=
   | B754_infinity sx => (sx, 0, Zpower 2 ew - 1)%Z
   | B754_nan sx (exist plx _) => (sx, Zpos plx, Zpower 2 ew - 1)%Z
   | B754_finite sx mx ex _ =>
-    if Zle_bool (Zpower 2 mw) (Zpos mx) then
-      (sx, Zpos mx - Zpower 2 mw, ex - emin + 1)%Z
+    let m := (Zpos mx - Zpower 2 mw)%Z in
+    if Zle_bool 0 m then
+      (sx, m, ex - emin + 1)%Z
     else
       (sx, Zpos mx, 0)%Z
   end.
@@ -200,6 +243,7 @@ intros [sx|sx|sx [plx Hplx]|sx mx ex Hx] ;
   try ( simpl ; apply split_join_bits ; split ; try apply Zle_refl ; try apply Zlt_pred ; trivial ; omega ).
 simpl. apply split_join_bits; split; try (zify; omega).
 destruct (digits2_Pnat_correct plx).
+rewrite Zpos_digits2_pos, <- Z_of_nat_S_digits2_Pnat in Hplx.
 rewrite Zpower_nat_Z in H0.
 eapply Zlt_le_trans. apply H0.
 change 2%Z with (radix_val radix2). apply Zpower_le.
@@ -210,13 +254,13 @@ unfold bits_of_binary_float, split_bits_of_binary_float.
 assert (Hf: (emin <= ex /\ Zdigits radix2 (Zpos mx) <= prec)%Z).
 destruct (andb_prop _ _ Hx) as (Hx', _).
 unfold canonic_mantissa in Hx'.
-rewrite Z_of_nat_S_digits2_Pnat in Hx'.
+rewrite Zpos_digits2_pos in Hx'.
 generalize (Zeq_bool_eq _ _ Hx').
 unfold FLT_exp.
-change (Fcalc_digits.radix2) with radix2.
 unfold emin.
 clear ; zify ; omega.
-destruct (Zle_bool_spec (2^mw) (Zpos mx)) as [H|H] ;
+case Zle_bool_spec ; intros H ;
+  [ apply -> Z.le_0_sub in H | apply -> Z.lt_sub_0 in H ] ;
   apply split_join_bits ; try now split.
 (* *)
 split.
@@ -251,52 +295,45 @@ Qed.
 Theorem bits_of_binary_float_range:
   forall x, (0 <= bits_of_binary_float x < 2^(mw+ew+1))%Z.
 Proof.
-  intros. 
-Local Open Scope Z_scope.
-  assert (J: forall s m e,
-          0 <= m < 2^mw -> 0 <= e < 2^ew ->
-          0 <= join_bits s m e < 2^(mw+ew+1)).
-  {
-    intros. unfold join_bits. 
-    set (se := (if s then 2 ^ ew else 0) + e).
-    assert (0 <= se < 2^(ew+1)).
-    { rewrite (Zpower_plus radix2) by omega. change (radix2^1) with 2. simpl.
-      unfold se. destruct s; omega. }
-    assert (0 <= se * 2^mw <= (2^(ew+1) - 1) * 2^mw).
-    { split. apply Zmult_gt_0_le_0_compat; omega.
-      apply Zmult_le_compat_r; omega. }
-    rewrite Z.mul_sub_distr_r in H2.
-    replace (mw + ew + 1) with ((ew + 1) + mw) by omega. 
-    rewrite (Zpower_plus radix2) by omega. simpl. omega.
-  }
-  assert (D: forall p n, Z.of_nat (S (digits2_Pnat p)) <= n ->
-             0 <= Z.pos p < 2^n).
-  {
-    intros.  
-    generalize (digits2_Pnat_correct p). simpl. rewrite ! Zpower_nat_Z. intros [A B].
-    split. zify; omega. eapply Zlt_le_trans. eassumption. 
-    apply (Zpower_le radix2); auto.
-  } 
-  destruct x; unfold bits_of_binary_float.
-- apply J; omega.
-- apply J; omega. 
-- destruct n as [pl pl_range]. apply Z.ltb_lt in pl_range.
-  apply J. apply D. unfold prec, Z_of_nat' in pl_range; omega. omega.
-- unfold bounded in e0. apply Bool.andb_true_iff in e0; destruct e0 as [A B].
+unfold bits_of_binary_float.
+intros [sx|sx|sx [pl pl_range]|sx mx ex H].
+- apply join_bits_range ; now split.
+- apply join_bits_range.
+  now split.
+  clear -He_gt_0 ; omega.
+- apply Z.ltb_lt in pl_range.
+  apply join_bits_range.
+  split.
+  easy.
+  apply (Zpower_gt_Zdigits radix2 _ (Zpos pl)).
+  apply Z.lt_succ_r.
+  now rewrite <- Zdigits2_Zdigits.
+  clear -He_gt_0 ; omega.
+- unfold bounded in H.
+  apply Bool.andb_true_iff in H ; destruct H as [A B].
   apply Z.leb_le in B.
-  unfold canonic_mantissa, FLT_exp in A. apply Zeq_bool_eq in A. 
-  assert (G: Z.of_nat (S (digits2_Pnat m)) <= prec) by (zify; omega).
-  assert (M: emin <= e) by (unfold emin; zify; omega). 
-  generalize (Zle_bool_spec (2^mw) (Z.pos m)); intro SPEC; inversion SPEC.
-  + apply J. 
-    * split. omega. generalize (D _ _ G). unfold prec. 
-      rewrite (Zpower_plus radix2) by omega.
-      change (radix2^1) with 2. simpl radix_val. omega.
-    * split. omega. unfold emin. replace (2^ew) with (2 * emax). omega.
-      symmetry. replace ew with (1 + (ew - 1)) by omega. 
-      apply (Zpower_plus radix2); omega.
-  + apply J. zify; omega. omega. 
-Local Close Scope Z_scope.
+  unfold canonic_mantissa, FLT_exp in A. apply Zeq_bool_eq in A.
+  case Zle_bool_spec ; intros H.
+  + apply join_bits_range.
+    * split.
+      clear -H ; omega.
+      rewrite Zpos_digits2_pos in A.
+      cut (Zpos mx < 2 ^ prec)%Z.
+      unfold prec.
+      rewrite Zpower_plus by (clear -Hmw ; omega).
+      change (2^1)%Z with 2%Z.
+      clear ; omega.
+      apply (Zpower_gt_Zdigits radix2 _ (Zpos mx)).
+      clear -A ; zify ; omega.
+    * split.
+      unfold emin ; clear -A ; zify ; omega.
+      replace ew with ((ew - 1) + 1)%Z by ring.
+      rewrite Zpower_plus by (clear - Hew ; omega).
+      unfold emin, emax in *.
+      change (2^1)%Z with 2%Z.
+      clear -B ; omega.
+  + apply -> Z.lt_sub_0 in H.
+    apply join_bits_range ; now split.
 Qed.
 
 Definition binary_float_of_bits_aux x :=
@@ -360,7 +397,7 @@ case Zeq_bool_spec ; intros He2.
 case_eq (x mod 2 ^ mw)%Z; try easy.
 (* nan *)
 intros plx Eqplx. apply Z.ltb_lt.
-rewrite Z_of_nat_S_digits2_Pnat.
+rewrite Zpos_digits2_pos.
 assert (forall a b, a <= b -> a < b+1)%Z by (intros; omega). apply H. clear H.
 apply Zdigits_le_Zpower. simpl.
 rewrite <- Eqplx. edestruct Z_mod_lt; eauto.
@@ -488,9 +525,8 @@ discriminate.
 clear -Hew ; omega.
 destruct (andb_prop _ _ Bx) as (H1, _).
 generalize (Zeq_bool_eq _ _ H1).
-rewrite Z_of_nat_S_digits2_Pnat.
+rewrite Zpos_digits2_pos.
 unfold FLT_exp, emin.
-change Fcalc_digits.radix2 with radix2.
 generalize (Zdigits radix2 (Zpos mx)).
 clear.
 intros ; zify ; omega.
@@ -500,9 +536,9 @@ simpl.
 apply f_equal.
 destruct (andb_prop _ _ Bx) as (H1, _).
 generalize (Zeq_bool_eq _ _ H1).
-rewrite Z_of_nat_S_digits2_Pnat.
+rewrite Zpos_digits2_pos.
 unfold FLT_exp, emin, prec.
-change Fcalc_digits.radix2 with radix2.
+apply -> Z.lt_sub_0 in Hm.
 generalize (Zdigits_le_Zpower radix2 _ (Zpos mx) Hm).
 generalize (Zdigits radix2 (Zpos mx)).
 clear.
@@ -536,6 +572,7 @@ now rewrite He1 in Jx.
 intros px Hm Jx _.
 rewrite Zle_bool_false.
 now rewrite <- He1.
+apply <- Z.lt_sub_0.
 now rewrite <- Hm.
 intros px Hm _ _.
 apply False_ind.
@@ -556,7 +593,7 @@ intros p Hm Jx Cx.
 rewrite <- Hm.
 rewrite Zle_bool_true.
 now ring_simplify (mx + 2^mw - 2^mw)%Z (ex + emin - 1 - emin + 1)%Z.
-now apply (Zplus_le_compat_r 0).
+now ring_simplify.
 intros p Hm.
 apply False_ind.
 clear -Bm Hm ; zify ; omega.
@@ -566,6 +603,8 @@ End Binary_Bits.
 
 (** Specialization for IEEE single precision operations *)
 Section B32_Bits.
+
+Implicit Arguments B754_nan [[prec] [emax]].
 
 Definition binary32 := binary_float 24 128.
 
@@ -577,12 +616,28 @@ Let Hprec_emax : (24 < 128)%Z.
 apply refl_equal.
 Qed.
 
-Definition b32_opp := Bopp 24 128.
-Definition b32_plus := Bplus _ _ Hprec Hprec_emax.
-Definition b32_minus := Bminus _ _ Hprec Hprec_emax.
-Definition b32_mult := Bmult _ _ Hprec Hprec_emax.
-Definition b32_div := Bdiv _ _ Hprec Hprec_emax.
-Definition b32_sqrt := Bsqrt _ _ Hprec Hprec_emax.
+Definition default_nan_pl32 : bool * nan_pl 24 :=
+  (false, exist _ (iter_nat 22 _ xO xH) (refl_equal true)).
+
+Definition unop_nan_pl32 (f : binary32) : bool * nan_pl 24 :=
+  match f with
+  | B754_nan s pl => (s, pl)
+  | _ => default_nan_pl32
+  end.
+
+Definition binop_nan_pl32 (f1 f2 : binary32) : bool * nan_pl 24 :=
+  match f1, f2 with
+  | B754_nan s1 pl1, _ => (s1, pl1)
+  | _, B754_nan s2 pl2 => (s2, pl2)
+  | _, _ => default_nan_pl32
+  end.
+
+Definition b32_opp := Bopp 24 128 pair.
+Definition b32_plus := Bplus _ _ Hprec Hprec_emax binop_nan_pl32.
+Definition b32_minus := Bminus _ _ Hprec Hprec_emax binop_nan_pl32.
+Definition b32_mult := Bmult _ _ Hprec Hprec_emax binop_nan_pl32.
+Definition b32_div := Bdiv _ _ Hprec Hprec_emax binop_nan_pl32.
+Definition b32_sqrt := Bsqrt _ _ Hprec Hprec_emax unop_nan_pl32.
 
 Definition b32_of_bits : Z -> binary32 := binary_float_of_bits 23 8 (refl_equal _) (refl_equal _) (refl_equal _).
 Definition bits_of_b32 : binary32 -> Z := bits_of_binary_float 23 8.
@@ -591,6 +646,8 @@ End B32_Bits.
 
 (** Specialization for IEEE double precision operations *)
 Section B64_Bits.
+
+Implicit Arguments B754_nan [[prec] [emax]].
 
 Definition binary64 := binary_float 53 1024.
 
@@ -602,12 +659,28 @@ Let Hprec_emax : (53 < 1024)%Z.
 apply refl_equal.
 Qed.
 
-Definition b64_opp := Bopp 53 1024.
-Definition b64_plus := Bplus _ _ Hprec Hprec_emax.
-Definition b64_minus := Bminus _ _ Hprec Hprec_emax.
-Definition b64_mult := Bmult _ _ Hprec Hprec_emax.
-Definition b64_div := Bdiv _ _ Hprec Hprec_emax.
-Definition b64_sqrt := Bsqrt _ _ Hprec Hprec_emax.
+Definition default_nan_pl64 : bool * nan_pl 53 :=
+  (false, exist _ (iter_nat 51 _ xO xH) (refl_equal true)).
+
+Definition unop_nan_pl64 (f : binary64) : bool * nan_pl 53 :=
+  match f with
+  | B754_nan s pl => (s, pl)
+  | _ => default_nan_pl64
+  end.
+
+Definition binop_nan_pl64 (pl1 pl2 : binary64) : bool * nan_pl 53 :=
+  match pl1, pl2 with
+  | B754_nan s1 pl1, _ => (s1, pl1)
+  | _, B754_nan s2 pl2 => (s2, pl2)
+  | _, _ => default_nan_pl64
+  end.
+
+Definition b64_opp := Bopp 53 1024 pair.
+Definition b64_plus := Bplus _ _ Hprec Hprec_emax binop_nan_pl64.
+Definition b64_minus := Bminus _ _ Hprec Hprec_emax binop_nan_pl64.
+Definition b64_mult := Bmult _ _ Hprec Hprec_emax binop_nan_pl64.
+Definition b64_div := Bdiv _ _ Hprec Hprec_emax binop_nan_pl64.
+Definition b64_sqrt := Bsqrt _ _ Hprec Hprec_emax unop_nan_pl64.
 
 Definition b64_of_bits : Z -> binary64 := binary_float_of_bits 52 11 (refl_equal _) (refl_equal _) (refl_equal _).
 Definition bits_of_b64 : binary64 -> Z := bits_of_binary_float 52 11.

@@ -703,6 +703,42 @@ Qed.
 
 End Fprop_relative_FLT.
 
+Lemma error_N_FLT :
+  forall (emin prec : Z), (0 < prec)%Z ->
+  forall (choice : Z -> bool),
+  forall (x : R),
+  exists eps eta : R,
+  (Rabs eps <= /2 * bpow (-prec + 1))%R /\
+  (Rabs eta <= /2 * bpow emin)%R /\
+  (eps * eta = 0)%R /\
+  (round beta (FLT_exp emin prec) (Znearest choice) x
+   = x * (1 + eps) + eta)%R.
+Proof.
+intros emin prec Pprec choice x.
+destruct (Rtotal_order x 0) as [Nx|[Zx|Px]].
+{ assert (Pmx : (0 < - x)%R).
+  { now rewrite <- Ropp_0; apply Ropp_lt_contravar. }
+  destruct (error_N_FLT_aux emin prec Pprec
+                            (fun t : Z => negb (choice (- (t + 1))%Z))
+                            (- x)%R Pmx)
+    as (d,(e,(Hd,(He,(Hde,Hr))))).
+  exists d; exists (- e)%R; split; [exact Hd|split; [|split]].
+  { now rewrite Rabs_Ropp. }
+  { now rewrite Ropp_mult_distr_r_reverse, <- Ropp_0; apply f_equal. }
+  rewrite <- (Ropp_involutive x), round_N_opp.
+  now rewrite Ropp_mult_distr_l_reverse, <- Ropp_plus_distr; apply f_equal. }
+{ assert (Ph2 : (0 <= / 2)%R).
+  { apply (Rmult_le_reg_l 2 _ _ Rlt_0_2).
+    rewrite Rmult_0_r, Rinv_r; [exact Rle_0_1|].
+    apply Rgt_not_eq, Rlt_gt, Rlt_0_2. }
+  exists R0; exists R0; rewrite Zx; split; [|split; [|split]].
+  { now rewrite Rabs_R0; apply Rmult_le_pos; [|apply bpow_ge_0]. }
+  { now rewrite Rabs_R0; apply Rmult_le_pos; [|apply bpow_ge_0]. }
+  { now rewrite Rmult_0_l. }
+  now rewrite Rmult_0_l, Rplus_0_l, round_0; [|apply valid_rnd_N]. }
+now apply error_N_FLT_aux.
+Qed.
+
 Section Fprop_relative_FLX.
 
 Variable prec : Z.

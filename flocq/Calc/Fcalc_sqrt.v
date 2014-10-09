@@ -28,108 +28,6 @@ Require Import Fcalc_digits.
 
 Section Fcalc_sqrt.
 
-Fixpoint Zsqrt_aux (p : positive) : Z * Z :=
-  match p with
-  | xH => (1, 0)%Z
-  | xO xH => (1, 1)%Z
-  | xI xH => (1, 2)%Z
-  | xO (xO p) =>
-    let (q, r) := Zsqrt_aux p in
-    let r' := (4 * r)%Z in
-    let d := (r' - (4 * q + 1))%Z in
-    if Zlt_bool d 0 then (2 * q, r')%Z else (2 * q + 1, d)%Z
-  | xO (xI p) =>
-    let (q, r) := Zsqrt_aux p in
-    let r' := (4 * r + 2)%Z in
-    let d := (r' - (4 * q + 1))%Z in
-    if Zlt_bool d 0 then (2 * q, r')%Z else (2 * q + 1, d)%Z
-  | xI (xO p) =>
-    let (q, r) := Zsqrt_aux p in
-    let r' := (4 * r + 1)%Z in
-    let d := (r' - (4 * q + 1))%Z in
-    if Zlt_bool d 0 then (2 * q, r')%Z else (2 * q + 1, d)%Z
-  | xI (xI p) =>
-    let (q, r) := Zsqrt_aux p in
-    let r' := (4 * r + 3)%Z in
-    let d := (r' - (4 * q + 1))%Z in
-    if Zlt_bool d 0 then (2 * q, r')%Z else (2 * q + 1, d)%Z
-  end.
-
-Lemma Zsqrt_ind :
-  forall P : positive -> Prop,
-  P xH -> P (xO xH) -> P (xI xH) ->
-  ( forall p, P p -> P (xO (xO p)) /\ P (xO (xI p)) /\ P (xI (xO p)) /\ P (xI (xI p)) ) ->
-  forall p, P p.
-Proof.
-intros P H1 H2 H3 Hp.
-fix 1.
-intros [[p|p|]|[p|p|]|].
-refine (proj2 (proj2 (proj2 (Hp p _)))).
-apply Zsqrt_ind.
-refine (proj1 (proj2 (proj2 (Hp p _)))).
-apply Zsqrt_ind.
-exact H3.
-refine (proj1 (proj2 (Hp p _))).
-apply Zsqrt_ind.
-refine (proj1 (Hp p _)).
-apply Zsqrt_ind.
-exact H2.
-exact H1.
-Qed.
-
-Lemma Zsqrt_aux_correct :
-  forall p,
-  let (q, r) := Zsqrt_aux p in
-  Zpos p = (q * q + r)%Z /\ (0 <= r <= 2 * q)%Z.
-Proof.
-intros p.
-elim p using Zsqrt_ind ; clear p.
-now repeat split.
-now repeat split.
-now repeat split.
-intros p.
-Opaque Zmult. simpl. Transparent Zmult.
-destruct (Zsqrt_aux p) as (q, r).
-intros (Hq, Hr).
-change (Zpos p~0~0) with (4 * Zpos p)%Z.
-change (Zpos p~0~1) with (4 * Zpos p + 1)%Z.
-change (Zpos p~1~0) with (4 * Zpos p + 2)%Z.
-change (Zpos p~1~1) with (4 * Zpos p + 3)%Z.
-rewrite Hq. clear Hq.
-repeat split.
-generalize (Zlt_cases (4 * r - (4 * q + 1)) 0).
-case Zlt_bool ; ( split ; [ ring | omega ] ).
-generalize (Zlt_cases (4 * r + 2 - (4 * q + 1)) 0).
-case Zlt_bool ; ( split ; [ ring | omega ] ).
-generalize (Zlt_cases (4 * r + 1 - (4 * q + 1)) 0).
-case Zlt_bool ; ( split ; [ ring | omega ] ).
-generalize (Zlt_cases (4 * r + 3 - (4 * q + 1)) 0).
-case Zlt_bool ; ( split ; [ ring | omega ] ).
-Qed.
-
-(** Computes the integer square root and its remainder, but
-    without carrying a proof, contrarily to the operation of
-    the standard libary. *)
-
-Definition Zsqrt p :=
-  match p with
-  | Zpos p => Zsqrt_aux p
-  | _ => (0, 0)%Z
-  end.
-
-Theorem Zsqrt_correct :
-  forall x,
-  (0 <= x)%Z ->
-  let (q, r) := Zsqrt x in
-  x = (q * q + r)%Z /\ (0 <= r <= 2 * q)%Z.
-Proof.
-unfold Zsqrt.
-intros [|p|p] Hx.
-now repeat split.
-apply Zsqrt_aux_correct.
-now elim Hx.
-Qed.
-
 Variable beta : radix.
 Notation bpow e := (bpow beta e).
 
@@ -160,7 +58,7 @@ Definition Fsqrt_core prec m e :=
     | Zpos p => (m * Zpower_pos beta p)%Z
     | _ => m
     end in
-  let (q, r) := Zsqrt m' in
+  let (q, r) := Z.sqrtrem m' in
   let l :=
     if Zeq_bool r 0 then loc_Exact
     else loc_Inexact (if Zle_bool r q then Lt else Gt) in
@@ -236,8 +134,8 @@ now apply Zpower_gt_0.
 now elim He2.
 clearbody m'.
 destruct Hs as (Hs1, (Hs2, Hs3)).
-generalize (Zsqrt_correct m' (Zlt_le_weak _ _ Hs3)).
-destruct (Zsqrt m') as (q, r).
+generalize (Z.sqrtrem_spec m' (Zlt_le_weak _ _ Hs3)).
+destruct (Z.sqrtrem m') as (q, r).
 intros (Hq, Hr).
 rewrite <- Hs1. clear Hs1.
 split.
