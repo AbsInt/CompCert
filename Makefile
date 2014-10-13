@@ -15,7 +15,7 @@
 
 include Makefile.config
 
-DIRS=lib common $(ARCH) backend cfrontend driver \
+DIRS=lib common $(ARCH) backend cfrontend driver debug\
   flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight \
   cparser cparser/validator
 
