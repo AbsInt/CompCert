@@ -63,7 +63,7 @@ Fixpoint simple (a: expr) : Prop :=
   | Ecomma r1 r2 _ => simple r1 /\ simple r2
   | Ecall _ _ _ => False
   | Ebuiltin _ _ _ _ => False
-  | Eparen r1 _ => simple r1
+  | Eparen r1 _ _ => simple r1
   end.
 
 (** A big-step semantics for simple expressions.  Similar to the
@@ -126,21 +126,19 @@ with eval_simple_rvalue: expr -> val -> Prop :=
       eval_simple_rvalue (Esizeof ty1 ty) (Vint (Int.repr (sizeof ty1)))
   | esr_alignof: forall ty1 ty,
       eval_simple_rvalue (Ealignof ty1 ty) (Vint (Int.repr (alignof ty1)))
-  | esr_seqand_true: forall r1 r2 ty v1 v2 v3 v4,
+  | esr_seqand_true: forall r1 r2 ty v1 v2 v3,
       eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) = Some true ->
       eval_simple_rvalue r2 v2 ->
       sem_cast v2 (typeof r2) type_bool = Some v3 ->
-      sem_cast v3 type_bool ty = Some v4 ->
-      eval_simple_rvalue (Eseqand r1 r2 ty) v4
+      eval_simple_rvalue (Eseqand r1 r2 ty) v3
   | esr_seqand_false: forall r1 r2 ty v1,
       eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) = Some false ->
       eval_simple_rvalue (Eseqand r1 r2 ty) (Vint Int.zero)
-  | esr_seqor_false: forall r1 r2 ty v1 v2 v3 v4,
+  | esr_seqor_false: forall r1 r2 ty v1 v2 v3,
       eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) = Some false ->
       eval_simple_rvalue r2 v2 ->
       sem_cast v2 (typeof r2) type_bool = Some v3 ->
-      sem_cast v3 type_bool ty = Some v4 ->
-      eval_simple_rvalue (Eseqor r1 r2 ty) v4
+      eval_simple_rvalue (Eseqor r1 r2 ty) v3
   | esr_seqor_true: forall r1 r2 ty v1,
       eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) = Some true ->
       eval_simple_rvalue (Eseqor r1 r2 ty) (Vint Int.one)
@@ -152,9 +150,9 @@ with eval_simple_rvalue: expr -> val -> Prop :=
   | esr_comma: forall r1 r2 ty v1 v,
       eval_simple_rvalue r1 v1 -> eval_simple_rvalue r2 v ->
       eval_simple_rvalue (Ecomma r1 r2 ty) v
-  | esr_paren: forall r ty v v',
-      eval_simple_rvalue r v -> sem_cast v (typeof r) ty = Some v' ->
-      eval_simple_rvalue (Eparen r ty) v'.
+  | esr_paren: forall r tycast ty v v',
+      eval_simple_rvalue r v -> sem_cast v (typeof r) tycast = Some v' ->
+      eval_simple_rvalue (Eparen r tycast ty) v'.
 
 End SIMPLE_EXPRS.
 
@@ -206,10 +204,10 @@ Proof.
   inv EV. econstructor; eauto. constructor. 
   inv EV. econstructor; eauto. constructor. constructor.
   inv EV. econstructor; eauto. constructor.
-  inv EV. inv H2. eapply esr_seqand_true; eauto. constructor.
+  inv EV. eapply esr_seqand_true; eauto. constructor.
   inv EV. eapply esr_seqand_false; eauto. constructor.
   inv EV. eapply esr_seqor_true; eauto. constructor.
-  inv EV. inv H2. eapply esr_seqor_false; eauto. constructor.
+  inv EV. eapply esr_seqor_false; eauto. constructor.
   inv EV. eapply esr_condition; eauto. constructor. 
   inv EV. constructor.
   inv EV. constructor.
@@ -413,16 +411,16 @@ Proof.
   (* seqand *)
   destruct (bool_val x (typeof r1)) as [b|] eqn:E; inv EQ2. 
   exploit bool_val_inject. eexact E. eauto. intros E'.
-  assert (b = true) by congruence. subst b. monadInv H5. 
-  eapply sem_cast_match; eauto. eapply sem_cast_match; eauto.
+  assert (b = true) by congruence. subst b.
+  eapply sem_cast_match; eauto.
   destruct (bool_val x (typeof r1)) as [b|] eqn:E; inv EQ2. 
   exploit bool_val_inject. eexact E. eauto. intros E'.
   assert (b = false) by congruence. subst b. inv H2. auto.
   (* seqor *)
   destruct (bool_val x (typeof r1)) as [b|] eqn:E; inv EQ2. 
   exploit bool_val_inject. eexact E. eauto. intros E'.
-  assert (b = false) by congruence. subst b. monadInv H5. 
-  eapply sem_cast_match; eauto. eapply sem_cast_match; eauto.
+  assert (b = false) by congruence. subst b. 
+  eapply sem_cast_match; eauto.
   destruct (bool_val x (typeof r1)) as [b|] eqn:E; inv EQ2. 
   exploit bool_val_inject. eexact E. eauto. intros E'.
   assert (b = true) by congruence. subst b. inv H2. auto.

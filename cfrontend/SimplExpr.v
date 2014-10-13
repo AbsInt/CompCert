@@ -197,8 +197,8 @@ Definition make_assign (l r: expr) : statement :=
 *)
 
 Inductive set_destination : Type :=
-  | SDbase (ty: type) (tmp: ident)
-  | SDcons (ty: type) (tmp: ident) (sd: set_destination).
+  | SDbase (tycast ty: type) (tmp: ident)
+  | SDcons (tycast ty: type) (tmp: ident) (sd: set_destination).
 
 Inductive destination : Type := 
   | For_val
@@ -209,8 +209,8 @@ Definition dummy_expr := Econst_int Int.zero type_int32s.
 
 Fixpoint do_set (sd: set_destination) (a: expr) : list statement :=
   match sd with
-  | SDbase ty tmp => Sset tmp (Ecast a ty) :: nil
-  | SDcons ty tmp sd' => Sset tmp (Ecast a ty) :: do_set sd' (Etempvar tmp ty)
+  | SDbase tycast ty tmp => Sset tmp (Ecast a tycast) :: nil
+  | SDcons tycast ty tmp sd' => Sset tmp (Ecast a tycast) :: do_set sd' (Etempvar tmp ty)
   end.
 
 Definition finish (dst: destination) (sl: list statement) (a: expr) :=
@@ -221,11 +221,11 @@ Definition finish (dst: destination) (sl: list statement) (a: expr) :=
   end.
 
 Definition sd_temp (sd: set_destination) :=
-  match sd with SDbase _ tmp => tmp | SDcons _ tmp _ => tmp end.
+  match sd with SDbase _ _ tmp => tmp | SDcons _ _ tmp _ => tmp end.
 Definition sd_seqbool_val (tmp: ident) (ty: type) :=
-  SDcons type_bool tmp (SDbase ty tmp).
+  SDbase type_bool ty tmp.
 Definition sd_seqbool_set (ty: type) (sd: set_destination) :=
-  let tmp :=  sd_temp sd in SDcons type_bool tmp (SDcons ty tmp sd).
+  let tmp :=  sd_temp sd in SDcons type_bool ty tmp sd.
 
 Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement * expr) :=
   match a with
@@ -311,8 +311,8 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
       match dst with
       | For_val =>
           do t <- gensym ty;
-          do (sl2, a2) <- transl_expr (For_set (SDbase ty t)) r2;
-          do (sl3, a3) <- transl_expr (For_set (SDbase ty t)) r3;
+          do (sl2, a2) <- transl_expr (For_set (SDbase ty ty t)) r2;
+          do (sl3, a3) <- transl_expr (For_set (SDbase ty ty t)) r3;
           ret (sl1 ++ makeif a1 (makeseq sl2) (makeseq sl3) :: nil,
                Etempvar t ty)
       | For_effects =>
@@ -322,8 +322,8 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
                dummy_expr)
       | For_set sd =>
           do t <- gensym ty;
-          do (sl2, a2) <- transl_expr (For_set (SDcons ty t sd)) r2;
-          do (sl3, a3) <- transl_expr (For_set (SDcons ty t sd)) r3;
+          do (sl2, a2) <- transl_expr (For_set (SDcons ty ty t sd)) r2;
+          do (sl3, a3) <- transl_expr (For_set (SDcons ty ty t sd)) r3;
           ret (sl1 ++ makeif a1 (makeseq sl2) (makeseq sl3) :: nil,
                dummy_expr)
       end
@@ -399,7 +399,7 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
       | For_effects =>
           ret (sl ++ Sbuiltin None ef tyargs al :: nil, dummy_expr)
       end
-  | Csyntax.Eparen r1 ty =>
+  | Csyntax.Eparen r1 tycast ty =>
       error (msg "SimplExpr.transl_expr: paren")
   end
 

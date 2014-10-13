@@ -797,7 +797,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       match is_val r1 with
       | Some(v1, ty1) =>
           do b <- bool_val v1 ty1;
-          if b then topred (Rred (Eparen (Eparen r2 type_bool) ty) m E0)
+          if b then topred (Rred (Eparen r2 type_bool ty) m E0)
                else topred (Rred (Eval (Vint Int.zero) ty) m E0)
       | None =>
           incontext (fun x => Eseqand x r2 ty) (step_expr RV r1 m)
@@ -807,7 +807,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       | Some(v1, ty1) =>
           do b <- bool_val v1 ty1;
           if b then topred (Rred (Eval (Vint Int.one) ty) m E0)
-               else topred (Rred (Eparen (Eparen r2 type_bool) ty) m E0)
+               else topred (Rred (Eparen r2 type_bool ty) m E0)
       | None =>
           incontext (fun x => Eseqor x r2 ty) (step_expr RV r1 m)
       end
@@ -815,7 +815,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       match is_val r1 with
       | Some(v1, ty1) =>
           do b <- bool_val v1 ty1;
-          topred (Rred (Eparen (if b then r2 else r3) ty) m E0)
+          topred (Rred (Eparen (if b then r2 else r3) ty ty) m E0)
       | None =>
           incontext (fun x => Econdition x r2 r3 ty) (step_expr RV r1 m)
       end
@@ -869,13 +869,13 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       | None =>
           incontext (fun x => Ecomma x r2 ty) (step_expr RV r1 m)
       end
-  | RV, Eparen r1 ty =>
+  | RV, Eparen r1 tycast ty =>
       match is_val r1 with
       | Some (v1, ty1) =>
-          do v <- sem_cast v1 ty1 ty;
+          do v <- sem_cast v1 ty1 tycast;
           topred (Rred (Eval v ty) m E0)
       | None =>
-          incontext (fun x => Eparen x ty) (step_expr RV r1 m)
+          incontext (fun x => Eparen x tycast ty) (step_expr RV r1 m)
       end
   | RV, Ecall r1 rargs ty =>
       match is_val r1, is_val_list rargs with
@@ -1010,8 +1010,8 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
       ty = ty1 /\ deref_loc ge ty m b ofs t v1 /\ possible_trace w t w'
   | Ecomma (Eval v ty1) r2 ty =>
       typeof r2 = ty
-  | Eparen (Eval v1 ty1) ty =>
-      exists v, sem_cast v1 ty1 ty = Some v
+  | Eparen (Eval v1 ty1) tycast ty =>
+      exists v, sem_cast v1 ty1 tycast = Some v
   | Ecall (Eval vf tyf) rargs ty =>
       exprlist_all_values rargs ->
       exists tyargs tyres cconv fd vl,
@@ -1543,7 +1543,7 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
 (* paren *)
   destruct (is_val a) as [[v ty'] | ] eqn:?. rewrite (is_val_inv _ _ _ Heqo). 
   (* top *)
-  destruct (sem_cast v ty' ty) as [v'|] eqn:?...
+  destruct (sem_cast v ty' tycast) as [v'|] eqn:?...
   apply topred_ok; auto. split. apply red_paren; auto. exists w; constructor. 
   (* depth *)
   eapply incontext_ok; eauto.
@@ -1791,7 +1791,7 @@ Proof.
   eapply reducts_incl_trans with (C' := fun x => Ecomma x e2 ty); eauto.
   destruct (is_val (C a)) as [[v ty']|] eqn:?; eauto.
 (* paren *)
-  eapply reducts_incl_trans with (C' := fun x => Eparen x ty); eauto.
+  eapply reducts_incl_trans with (C' := fun x => Eparen x tycast ty); eauto.
   destruct (is_val (C a)) as [[v ty']|] eqn:?; eauto.
 
   induction 1; simpl; intros.

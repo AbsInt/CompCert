@@ -176,8 +176,8 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
                     any tmp
   | tr_condition_val: forall le e1 e2 e3 ty sl1 a1 tmp1 sl2 a2 tmp2 sl3 a3 tmp3 t tmp,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
-      tr_expr le (For_set (SDbase ty t)) e2 sl2 a2 tmp2 ->
-      tr_expr le (For_set (SDbase ty t)) e3 sl3 a3 tmp3 ->
+      tr_expr le (For_set (SDbase ty ty t)) e2 sl2 a2 tmp2 ->
+      tr_expr le (For_set (SDbase ty ty t)) e3 sl3 a3 tmp3 ->
       list_disjoint tmp1 tmp2 ->
       list_disjoint tmp1 tmp3 ->
       incl tmp1 tmp -> incl tmp2 tmp ->  incl tmp3 tmp -> In t tmp ->
@@ -196,8 +196,8 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
                        any tmp
   | tr_condition_set: forall le sd t e1 e2 e3 ty sl1 a1 tmp1 sl2 a2 tmp2 sl3 a3 tmp3 any tmp,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
-      tr_expr le (For_set (SDcons ty t sd)) e2 sl2 a2 tmp2 ->
-      tr_expr le (For_set (SDcons ty t sd)) e3 sl3 a3 tmp3 ->
+      tr_expr le (For_set (SDcons ty ty t sd)) e2 sl2 a2 tmp2 ->
+      tr_expr le (For_set (SDcons ty ty t sd)) e3 sl3 a3 tmp3 ->
       list_disjoint tmp1 tmp2 ->
       list_disjoint tmp1 tmp3 ->
       incl tmp1 tmp -> incl tmp2 tmp -> incl tmp3 tmp -> In t tmp ->
@@ -304,19 +304,19 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
       tr_expr le dst (Csyntax.Ebuiltin ef tyargs el ty)
                    (sl ++ Sbuiltin (Some t) ef tyargs al :: final dst (Etempvar t ty))
                    (Etempvar t ty) tmp
-  | tr_paren_val: forall le e1 ty sl1 a1 t tmp,
-      tr_expr le (For_set (SDbase ty t)) e1 sl1 a1 tmp ->
+  | tr_paren_val: forall le e1 tycast ty sl1 a1 t tmp,
+      tr_expr le (For_set (SDbase tycast ty t)) e1 sl1 a1 tmp ->
       In t tmp -> 
-      tr_expr le For_val (Csyntax.Eparen e1 ty)
+      tr_expr le For_val (Csyntax.Eparen e1 tycast ty)
                        sl1
                        (Etempvar t ty) tmp
-  | tr_paren_effects: forall le e1 ty sl1 a1 tmp any,
+  | tr_paren_effects: forall le e1 tycast ty sl1 a1 tmp any,
       tr_expr le For_effects e1 sl1 a1 tmp ->
-      tr_expr le For_effects (Csyntax.Eparen e1 ty) sl1 any tmp
-  | tr_paren_set: forall le t sd e1 ty sl1 a1 tmp any,
-      tr_expr le (For_set (SDcons ty t sd)) e1 sl1 a1 tmp ->
+      tr_expr le For_effects (Csyntax.Eparen e1 tycast ty) sl1 any tmp
+  | tr_paren_set: forall le t sd e1 tycast ty sl1 a1 tmp any,
+      tr_expr le (For_set (SDcons tycast ty t sd)) e1 sl1 a1 tmp ->
       In t tmp ->
-      tr_expr le (For_set sd) (Csyntax.Eparen e1 ty) sl1 any tmp
+      tr_expr le (For_set sd) (Csyntax.Eparen e1 tycast ty) sl1 any tmp
 
 with tr_exprlist: temp_env -> Csyntax.exprlist -> list statement -> list expr -> list ident -> Prop :=
   | tr_nil: forall le tmp,
@@ -669,13 +669,13 @@ Proof.
 Qed.
 
 Lemma dest_for_set_condition_val:
-  forall tmp ty g1 g2, within tmp g1 g2 -> dest_below (For_set (SDbase ty tmp)) g2.
+  forall tmp tycast ty g1 g2, within tmp g1 g2 -> dest_below (For_set (SDbase tycast ty tmp)) g2.
 Proof.
   intros. destruct H. simpl. auto.
 Qed.
 
 Lemma dest_for_set_condition_set:
-  forall sd tmp ty g1 g2, dest_below (For_set sd) g2 -> within tmp g1 g2 -> dest_below (For_set (SDcons ty tmp sd)) g2.
+  forall sd tmp tycast ty g1 g2, dest_below (For_set sd) g2 -> within tmp g1 g2 -> dest_below (For_set (SDcons tycast ty tmp sd)) g2.
 Proof.
   intros. destruct H0. simpl. auto.
 Qed.

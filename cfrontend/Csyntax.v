@@ -61,7 +61,7 @@ Inductive expr : Type :=
                                                  (**r builtin function call *)
   | Eloc (b: block) (ofs: int) (ty: type)
                        (**r memory location, result of evaluating a l-value *)
-  | Eparen (r: expr) (ty: type)                   (**r marked subexpression *)
+  | Eparen (r: expr) (tycast: type) (ty: type)   (**r marked subexpression *)
 
 with exprlist : Type :=
   | Enil
@@ -87,7 +87,8 @@ but appear during reduction.  These forms are:
 - [Eval v] where [v] is a pointer or [Vundef].  ([Eval] of an integer or 
   float value can occur in a source term and represents a numeric literal.)
 - [Eloc b ofs], which appears during reduction of l-values.
-- [Eparen r], which appears during reduction of conditionals [r1 ? r2 : r3].
+- [Eparen r tycast ty], which appears during reduction of conditionals
+  [r1 ? r2 : r3] as well as sequential `and' / `or'.
 
 Some C expressions are derived forms.  Array access [r1[r2]] is expressed
 as [*(r1 + r2)].
@@ -128,7 +129,7 @@ Definition typeof (a: expr) : type :=
   | Ecomma _ _ ty => ty
   | Ecall _ _ ty => ty
   | Ebuiltin _ _ _ ty => ty
-  | Eparen _ ty => ty
+  | Eparen _ _ ty => ty
   end.
 
 (** ** Statements *)

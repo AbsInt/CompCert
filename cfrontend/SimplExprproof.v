@@ -1301,7 +1301,7 @@ Fixpoint esize (a: Csyntax.expr) : nat :=
   | Csyntax.Ecomma r1 r2 _ => S(esize r1 + esize r2)%nat
   | Csyntax.Ecall r1 rl2 _ => S(esize r1 + esizelist rl2)%nat
   | Csyntax.Ebuiltin ef _ rl _ => S(esizelist rl)%nat
-  | Csyntax.Eparen r1 _ => S(esize r1)
+  | Csyntax.Eparen r1 _ _ => S(esize r1)
   end
 
 with esizelist (el: Csyntax.exprlist) : nat :=
@@ -1404,7 +1404,7 @@ Proof.
   apply push_seq. reflexivity. reflexivity.
   rewrite <- Kseqlist_app.
   eapply match_exprstates; eauto.
-  apply S. apply tr_paren_val with (a1 := dummy_expr); auto. econstructor; eauto. 
+  apply S. apply tr_paren_val with (a1 := a2); auto. 
   apply tr_expr_monotone with tmp2; eauto. auto. auto.
   (* for effects *)
   exploit tr_simple_rvalue; eauto. intros [SL [TY EV]].
@@ -1415,7 +1415,7 @@ Proof.
   apply push_seq. reflexivity. reflexivity.
   rewrite <- Kseqlist_app.
   eapply match_exprstates; eauto.
-  apply S. apply tr_paren_effects with (a1 := dummy_expr); auto. econstructor; eauto. 
+  apply S. apply tr_paren_effects with (a1 := a2); auto.
   apply tr_expr_monotone with tmp2; eauto. auto. auto.
   (* for set *)
   exploit tr_simple_rvalue; eauto. intros [SL [TY EV]].
@@ -1426,9 +1426,8 @@ Proof.
   apply push_seq. reflexivity. reflexivity.
   rewrite <- Kseqlist_app.
   eapply match_exprstates; eauto.
-  apply S. apply tr_paren_set with (a1 := dummy_expr) (t := sd_temp sd); auto.
-  apply tr_paren_set with (a1 := a2) (t := sd_temp sd).
-  apply tr_expr_monotone with tmp2; eauto. auto. auto. auto.
+  apply S. apply tr_paren_set with (a1 := a2) (t := sd_temp sd); auto.
+  apply tr_expr_monotone with tmp2; eauto. auto. auto.
 (* seqand false *)
   exploit tr_top_leftcontext; eauto. clear H9. 
   intros [dst' [sl1 [sl2 [a' [tmp' [P [Q [R S]]]]]]]].
@@ -1514,7 +1513,7 @@ Proof.
   apply push_seq. reflexivity. reflexivity.
   rewrite <- Kseqlist_app.
   eapply match_exprstates; eauto.
-  apply S. apply tr_paren_val with (a1 := dummy_expr); auto. econstructor; eauto. 
+  apply S. apply tr_paren_val with (a1 := a2); auto.  
   apply tr_expr_monotone with tmp2; eauto. auto. auto.
   (* for effects *)
   exploit tr_simple_rvalue; eauto. intros [SL [TY EV]].
@@ -1525,7 +1524,7 @@ Proof.
   apply push_seq. reflexivity. reflexivity.
   rewrite <- Kseqlist_app.
   eapply match_exprstates; eauto.
-  apply S. apply tr_paren_effects with (a1 := dummy_expr); auto. econstructor; eauto. 
+  apply S. apply tr_paren_effects with (a1 := a2); auto.
   apply tr_expr_monotone with tmp2; eauto. auto. auto.
   (* for set *)
   exploit tr_simple_rvalue; eauto. intros [SL [TY EV]].
@@ -1536,8 +1535,7 @@ Proof.
   apply push_seq. reflexivity. reflexivity.
   rewrite <- Kseqlist_app.
   eapply match_exprstates; eauto.
-  apply S. apply tr_paren_set with (a1 := dummy_expr) (t := sd_temp sd); auto.
-  apply tr_paren_set with (a1 := a2) (t := sd_temp sd); auto.
+  apply S. apply tr_paren_set with (a1 := a2) (t := sd_temp sd); auto.
   apply tr_expr_monotone with tmp2; eauto. auto. auto.
 (* condition *)
   exploit tr_top_leftcontext; eauto. clear H9. 

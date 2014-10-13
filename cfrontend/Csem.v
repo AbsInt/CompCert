@@ -248,7 +248,7 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
   | red_seqand_true: forall v1 ty1 r2 ty m,
       bool_val v1 ty1 = Some true ->
       rred (Eseqand (Eval v1 ty1) r2 ty) m
-        E0 (Eparen (Eparen r2 type_bool) ty) m
+        E0 (Eparen r2 type_bool ty) m
   | red_seqand_false: forall v1 ty1 r2 ty m,
       bool_val v1 ty1 = Some false ->
       rred (Eseqand (Eval v1 ty1) r2 ty) m
@@ -260,11 +260,11 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
   | red_seqor_false: forall v1 ty1 r2 ty m,
       bool_val v1 ty1 = Some false ->
       rred (Eseqor (Eval v1 ty1) r2 ty) m
-        E0 (Eparen (Eparen r2 type_bool) ty) m
+        E0 (Eparen r2 type_bool ty) m
   | red_condition: forall v1 ty1 r1 r2 ty b m,
       bool_val v1 ty1 = Some b ->
       rred (Econdition (Eval v1 ty1) r1 r2 ty) m
-        E0 (Eparen (if b then r1 else r2) ty) m
+        E0 (Eparen (if b then r1 else r2) ty ty) m
   | red_sizeof: forall ty1 ty m,
       rred (Esizeof ty1 ty) m
         E0 (Eval (Vint (Int.repr (sizeof ty1))) ty) m
@@ -295,9 +295,9 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
       typeof r2 = ty ->
       rred (Ecomma (Eval v ty1) r2 ty) m
         E0 r2 m
-  | red_paren: forall v1 ty1 ty m v,
-      sem_cast v1 ty1 ty = Some v ->
-      rred (Eparen (Eval v1 ty1) ty) m
+  | red_paren: forall v1 ty1 ty2 ty m v,
+      sem_cast v1 ty1 ty2 = Some v ->
+      rred (Eparen (Eval v1 ty1) ty2 ty) m
         E0 (Eval v ty) m
   | red_builtin: forall ef tyargs el ty m vargs t vres m',
       cast_arguments el tyargs vargs ->
@@ -379,8 +379,8 @@ Inductive context: kind -> kind -> (expr -> expr) -> Prop :=
       contextlist k C -> context k RV (fun x => Ebuiltin ef tyargs (C x) ty)
   | ctx_comma: forall k C e2 ty,
       context k RV C -> context k RV (fun x => Ecomma (C x) e2 ty)
-  | ctx_paren: forall k C ty,
-      context k RV C -> context k RV (fun x => Eparen (C x) ty)
+  | ctx_paren: forall k C tycast ty,
+      context k RV C -> context k RV (fun x => Eparen (C x) tycast ty)
 
 with contextlist: kind -> (expr -> exprlist) -> Prop :=
   | ctx_list_head: forall k C el,

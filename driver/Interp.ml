@@ -452,7 +452,7 @@ let diagnose_stuck_expr p ge w f a kont e m =
     | RV, Eassignop(op, l1, r2, tyres, ty) -> diagnose LV l1 ||| diagnose RV r2
     | RV, Epostincr(id, l, ty) -> diagnose LV l
     | RV, Ecomma(r1, r2, ty) -> diagnose RV r1
-    | RV, Eparen(r1, ty) -> diagnose RV r1
+    | RV, Eparen(r1, tycast, ty) -> diagnose RV r1
     | RV, Ecall(r1, rargs, ty) -> diagnose RV r1 ||| diagnose_list rargs
     | RV, Ebuiltin(ef, tyargs, rargs, ty) -> diagnose_list rargs
     | _, _ -> false in

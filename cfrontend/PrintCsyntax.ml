@@ -272,8 +272,8 @@ let rec expr p (prec, e) =
       fprintf p "%s@[<hov 1>(%a)@]" (extern_atom id) exprlist (true, args)
   | Ebuiltin(_, _, args, _) ->
       fprintf p "<unknown builtin>@[<hov 1>(%a)@]" exprlist (true, args)
-  | Eparen(a1, ty) ->
-      fprintf p "(%s) %a" (name_type ty) expr (prec', a1)
+  | Eparen(a1, tycast, ty) ->
+      fprintf p "(%s) %a" (name_type tycast) expr (prec', a1)
   end;
   if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 

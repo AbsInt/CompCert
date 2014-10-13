@@ -88,7 +88,7 @@ Fixpoint constval (a: expr) : res val :=
       do v1 <- constval r1;
       do v2 <- constval r2;
       match bool_val v1 (typeof r1) with
-      | Some true => do v3 <- do_cast v2 (typeof r2) type_bool; do_cast v3 type_bool ty
+      | Some true => do_cast v2 (typeof r2) type_bool
       | Some false => OK (Vint Int.zero)
       | None => Error(msg "undefined && operation")
       end
@@ -96,7 +96,7 @@ Fixpoint constval (a: expr) : res val :=
       do v1 <- constval r1;
       do v2 <- constval r2;
       match bool_val v1 (typeof r1) with
-      | Some false => do v3 <- do_cast v2 (typeof r2) type_bool; do_cast v3 type_bool ty
+      | Some false => do_cast v2 (typeof r2) type_bool
       | Some true => OK (Vint Int.one)
       | None => Error(msg "undefined || operation")
       end
@@ -126,8 +126,8 @@ Fixpoint constval (a: expr) : res val :=
       | _ =>
           Error(msg "ill-typed field access")
       end
-  | Eparen r ty =>
-      do v <- constval r; do_cast v (typeof r) ty
+  | Eparen r tycast ty =>
+      do v <- constval r; do_cast v (typeof r) tycast
   | _ =>
     Error(msg "not a compile-time constant")
   end.
