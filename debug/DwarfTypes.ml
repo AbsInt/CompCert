@@ -78,36 +78,29 @@ type bound_value =
 
 type dw_tag_array_type =
     {
-     dw_at_byte_size:   constant  option;
-     dw_at_declaration: flag      option;
-     dw_at_name:        string    option;
      dw_at_sibling:     reference option;
-     dw_at_start_scope: constant  option;
-     dw_at_stride_size: constant  option;
-     dw_at_type:        reference option;
+     dw_at_type:        reference;
    }
 
 type dw_tag_base_type =
     {
-     dw_at_bit_offset: constant  option;
-     dw_at_bit_size:   constant  option;
-     dw_at_byte_size:  constant  option;
-     dw_at_encoding:   encoding  option;
-     dw_at_name:       string    option;
+     dw_at_byte_size:  constant;
+     dw_at_encoding:   encoding;
+     dw_at_name:       string;
      dw_at_sibling:    reference option;
    }
 
 type dw_tag_compile_unit =
     {
      dw_at_base_types:      reference       option;
-     dw_at_comp_dir:        string          option;
+     dw_at_comp_dir:        string;
      dw_at_identifier_case: identifier_case option;
-     dw_at_high_pc:         address         option;
-     dw_at_language:        language        option;
-     dw_at_low_pc:          address         option;
+     dw_at_high_pc:         address;
+     dw_at_language:        language;
+     dw_at_low_pc:          address;
      dw_at_macro_info:      constant        option;
-     dw_at_name:            string          option;
-     dw_at_producer:        string          option;
+     dw_at_name:            string;
+     dw_at_producer:        string;
      dw_at_sibling:         reference       option;
      dw_at_stmt_list:       constant        option;
    }
