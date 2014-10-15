@@ -219,7 +219,7 @@ type dw_tag_subprogram =
      dw_at_calling_convention: calling_convention option;
      dw_at_declaration:        flag               option;
      dw_at_external:           flag               option;
-     dw_frame_base:            location_value     option;
+     dw_at_frame_base:         location_value     option;
      dw_at_high_pc:            address            option;
      dw_at_inline:             inline             option;
      dw_at_low_pc:             address            option;
@@ -243,4 +243,59 @@ type dw_subrange_type =
      dw_at_sibling:     reference   option;
      dw_at_type:        reference   option;
      dw_at_upper_bound: bound_value option;
+   }
+
+type dw_tag_subroutine_type =
+    {
+     dw_at_address_class: constant  option;
+     dw_at_declaration:   flag      option;
+     dw_at_name:          string    option;
+     dw_at_prototyped:    flag      option;
+     dw_at_sibling:       reference option;
+     dw_at_type:          reference option;
+   }
+
+type dw_tag_typedef =
+    {
+     dw_at_declaration: flag      option;
+     dw_at_name:        string    option;
+     dw_at_sibling:     reference option;
+     dw_at_start_scope: constant  option;
+     dw_at_type:        reference option;
+   }
+
+type dw_tag_union_type =
+    {
+     dw_at_byte_size:   constant    option;
+     dw_at_declaration: flag      option;
+     dw_at_name:        string    option;
+     dw_at_sibling:     reference option;
+     dw_at_start_scope: constant  option;
+     dw_at_type:        reference option;
+   }
+
+type dw_tag_unspecified_parameter =
+    {
+     dw_at_artificial: flag      option;
+     dw_at_sibling:    reference option;
+   }
+
+type dw_tag_variable =
+    {
+     dw_at_const_value: constant       option;
+     dw_at_declaration: flag           option;
+     dw_at_external:    flag           option;
+     dw_at_location:    location_value option;
+     dw_at_name:        string         option;
+     dw_at_segment:     location_value option;
+     dw_at_sibling:     reference      option;
+     dw_at_start_scope: constant       option;
+     dw_at_type:        reference      option;
+   }
+
+type dw_tag_volatile_type =
+    {
+     dw_at_sibling: reference option;
+     dw_at_type:    reference option;
+
    }
