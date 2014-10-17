@@ -78,6 +78,9 @@ type bound_value =
 
 type dw_tag_array_type =
     {
+     dw_at_decl_column: constant  option;
+     dw_at_decl_file:   constant  option;
+     dw_at_decl_line:   constant  option;
      dw_at_sibling:     reference option;
      dw_at_type:        reference;
    }
@@ -108,49 +111,50 @@ type dw_tag_compile_unit =
 type dw_tag_const_type =
     {
      dw_at_sibling: reference option;
-     dw_at_type:    reference option;     
-   }
-
-type dw_tag_constant =
-    {
-     dw_at_const_value: constant  option;
-     dw_at_declaration: flag      option;
-     dw_at_external:    flag      option;
-     dw_at_name:        string    option;
-     dw_at_sibling:     reference option;
-     dw_at_start_scope: constant  option;
-     dw_at_type:        reference option;
+     dw_at_type:    reference;     
    }
 
 type dw_tag_enumeration_type =
     {
-     dw_at_byte_size:   constant option;
-     dw_at_declaration: flag     option;
-     dw_at_name:        string    option;
+     dw_at_decl_column: constant  option;
+     dw_at_decl_file:   constant  option;
+     dw_at_decl_line:   constant  option;
+     dw_at_byte_size:   constant;
+     dw_at_declaration: flag      option;
+     dw_at_name:        string;
      dw_at_sibling:     reference option;
      dw_at_start_scope: constant  option;
    }
 
 type dw_tag_enumerator =
     {
-     dw_at_const_value: constant  option;
-     dw_at_name:        string    option;
+     dw_at_decl_column: constant  option;
+     dw_at_decl_file:   constant  option;
+     dw_at_decl_line:   constant  option;
+     dw_at_const_value: constant;
+     dw_at_name:        string;
      dw_at_sibling:     reference option;
    }
 
 type dw_tag_formal_parameter =
     {
+     dw_at_decl_column:        constant       option;
+     dw_at_decl_file:          constant       option;
+     dw_at_decl_line:          constant       option;
      dw_at_artificial:         flag           option;
      dw_at_location:           location_value option;
-     dw_at_name:               string         option;
+     dw_at_name:               string;
      dw_at_segment:            location_value option;
      dw_at_sibling:            reference      option;
-     dw_at_type:               reference      option;
+     dw_at_type:               reference;
      dw_at_variable_parameter: flag           option;
    }
 
 type dw_tag_inlined_subroutine =
     {
+     dw_at_decl_column: constant  option;
+     dw_at_decl_file:   constant  option;
+     dw_at_decl_line:   constant  option;
      dw_at_high_pc:     address        option;
      dw_at_low_pc:      address        option;
      dw_at_segment:     location_value option;
@@ -179,6 +183,9 @@ type dw_tag_lexical_block =
 
 type dw_tag_member =
     {
+     dw_at_decl_column: constant  option;
+     dw_at_decl_file:   constant  option;
+     dw_at_decl_line:   constant  option;
      dw_at_byte_size:            constant            option;
      dw_at_bit_offset:           constant            option;
      dw_at_bit_size:             constant            option;
@@ -198,6 +205,9 @@ type dw_tag_pointer_type =
 
 type dw_tag_structure_type =
     {
+     dw_at_decl_column: constant  option;
+     dw_at_decl_file:   constant  option;
+     dw_at_decl_line:   constant  option;
      dw_at_byte_size:   constant  option;
      dw_at_declaration: flag      option;
      dw_at_name:        string    option;
@@ -207,6 +217,9 @@ type dw_tag_structure_type =
 
 type dw_tag_subprogram =
     {
+     dw_at_decl_column: constant  option;
+     dw_at_decl_file:   constant  option;
+     dw_at_decl_line:   constant  option;
      dw_at_address_class:      constant           option;
      dw_at_artificial:         flag               option;
      dw_at_calling_convention: calling_convention option;
@@ -228,6 +241,9 @@ type dw_tag_subprogram =
 
 type dw_subrange_type =
     {
+     dw_at_decl_column: constant  option;
+     dw_at_decl_file:   constant  option;
+     dw_at_decl_line:   constant  option;
      dw_at_byte_size:   constant    option;
      dw_at_declaration: flag        option;
      dw_at_count:       bound_value option;
@@ -240,6 +256,9 @@ type dw_subrange_type =
 
 type dw_tag_subroutine_type =
     {
+     dw_at_decl_column: constant  option;
+     dw_at_decl_file:   constant  option;
+     dw_at_decl_line:   constant  option;
      dw_at_address_class: constant  option;
      dw_at_declaration:   flag      option;
      dw_at_name:          string    option;
@@ -250,6 +269,9 @@ type dw_tag_subroutine_type =
 
 type dw_tag_typedef =
     {
+     dw_at_decl_column: constant  option;
+     dw_at_decl_file:   constant  option;
+     dw_at_decl_line:   constant  option;
      dw_at_declaration: flag      option;
      dw_at_name:        string    option;
      dw_at_sibling:     reference option;
@@ -259,6 +281,9 @@ type dw_tag_typedef =
 
 type dw_tag_union_type =
     {
+     dw_at_decl_column: constant  option;
+     dw_at_decl_file:   constant  option;
+     dw_at_decl_line:   constant  option;
      dw_at_byte_size:   constant    option;
      dw_at_declaration: flag      option;
      dw_at_name:        string    option;
@@ -269,12 +294,18 @@ type dw_tag_union_type =
 
 type dw_tag_unspecified_parameter =
     {
+     dw_at_decl_column: constant  option;
+     dw_at_decl_file:   constant  option;
+     dw_at_decl_line:   constant  option;
      dw_at_artificial: flag      option;
      dw_at_sibling:    reference option;
    }
 
 type dw_tag_variable =
     {
+     dw_at_decl_column: constant  option;
+     dw_at_decl_file:   constant  option;
+     dw_at_decl_line:   constant  option;
      dw_at_const_value: constant       option;
      dw_at_declaration: flag           option;
      dw_at_external:    flag           option;
