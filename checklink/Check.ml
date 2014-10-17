@@ -1,4 +1,3 @@
-open Camlcoq
 open Asm
 open Asm_printers
 open AST
