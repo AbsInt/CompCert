@@ -205,7 +205,7 @@ type dw_tag_subprogram =
      dw_at_type:       reference;
    }
 
-type dw_subrange_type =
+type dw_tag_subrange_type =
     {
      dw_at_type:        reference   option;
      dw_at_upper_bound: bound_value;
@@ -262,3 +262,24 @@ type dw_tag_volatile_type =
      dw_at_type:    reference;
    }
 
+type dw_tag =
+  | DW_TAG_array_type of dw_tag_array_type
+  | DW_TAG_base_type of dw_tag_base_type
+  | DW_TAG_compile_unit of dw_tag_compile_unit
+  | DW_TAG_const_type of dw_tag_const_type
+  | DW_TAG_enumeration_type of dw_tag_enumeration_type
+  | DW_TAG_enumerator of dw_tag_enumerator
+  | DW_TAG_formal_parameter of dw_tag_formal_parameter
+  | DW_TAG_label of dw_tag_label
+  | DW_TAG_lexical_block of dw_tag_lexical_block
+  | DW_TAG_member of dw_tag_member
+  | DW_TAG_pointer_type of dw_tag_pointer_type
+  | DW_TAG_structure_type of dw_tag_structure_type
+  | DW_TAG_tag_subprogram of dw_tag_subprogram
+  | DW_TAG_subrange_type of dw_tag_subrange_type
+  | DW_TAG_subroutine_type of dw_tag_subroutine_type
+  | DW_TAG_typedef of dw_tag_typedef
+  | DW_TAG_union_type of dw_tag_union_type
+  | DW_TAG_unspecified_parameter of dw_tag_unspecified_parameter
+  | DW_TAG_variable of dw_tag_variable
+  | DW_TAG_volatile_type of dw_tag_volatile_type
