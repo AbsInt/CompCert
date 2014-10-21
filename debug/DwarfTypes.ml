@@ -200,7 +200,7 @@ type dw_tag_subprogram =
      dw_at_inline:     inline         option;
      dw_at_low_pc:     address;
      dw_at_name:       string;
-     dw_at_prototyped: flag
+     dw_at_prototyped: flag;
      dw_at_sibling:    reference       option;
      dw_at_type:       reference;
    }
@@ -233,22 +233,20 @@ type dw_tag_union_type =
      dw_at_byte_size:   constant;
      dw_at_name:        string;
      dw_at_sibling:     reference option;
-     dw_at_start_scope: constant  option;
-     dw_at_type:        reference option;
    }
 
 type dw_tag_unspecified_parameter =
     {
-     dw_at_decl_file:   constant  option;
-     dw_at_decl_line:   constant  option;
+     dw_at_decl_file:   constant option;
+     dw_at_decl_line:   constant option;
      dw_at_artificial: flag      option;
      dw_at_sibling:    reference option;
    }
 
 type dw_tag_variable =
     {
-     dw_at_decl_file:   constant  option;
-     dw_at_decl_line:   constant  option;
+     dw_at_decl_file:   constant       option;
+     dw_at_decl_line:   constant       option;
      dw_at_declaration: flag           option;
      dw_at_external:    flag           option;
      dw_at_location:    location_value option;
@@ -261,5 +259,6 @@ type dw_tag_variable =
 type dw_tag_volatile_type =
     {
      dw_at_sibling: reference option;
-     dw_at_type:    reference option;
+     dw_at_type:    reference;
    }
+
