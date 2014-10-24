@@ -41,7 +41,6 @@ OCB_OPTIONS=\
 OCB_OPTIONS_CHECKLINK=\
   $(OCB_OPTIONS) \
   -I checklink \
-   -cflags "-w -3" \
   -use-ocamlfind
 OCB_OPTIONS_CLIGHTGEN=\
   $(OCB_OPTIONS) \
