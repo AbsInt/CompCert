@@ -26,6 +26,10 @@ let reset_id () =
 (* Hashtable to from type name to entry id *)
 let type_table: (string, int) Hashtbl.t = Hashtbl.create 7
 
+(* Clear the type map *)
+let reset_type_table () = 
+  Hashtbl.clear type_table
+
 (* Generate a new entry from a given tag *)
 let new_entry tag =
   let id = next_id () in
@@ -34,7 +38,6 @@ let new_entry tag =
    children = [];
    id = id;
  }
-
 
 (* Add an entry as child to  another entry *)
 let add_children entry child =
