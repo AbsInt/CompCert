@@ -20,276 +20,15 @@ open Sections
 open AST
 open Memdata
 open Asm
-
-(* Recognition of target ABI and asm syntax *)
-
-module type SYSTEM =
-    sig
-      val comment: string
-      val constant: out_channel -> constant -> unit
-      val ireg: out_channel -> ireg -> unit
-      val freg: out_channel -> freg -> unit
-      val creg: out_channel -> int -> unit
-      val name_of_section: section_name -> string
-      val print_file_line: out_channel -> string -> string -> unit
-      val reset_file_line: unit -> unit
-      val cfi_startproc: out_channel -> unit
-      val cfi_endproc: out_channel -> unit
-      val cfi_adjust: out_channel -> int32 -> unit
-      val cfi_rel_offset: out_channel -> string -> int32 -> unit
-      val print_prologue: out_channel -> unit
-    end
-
-let symbol oc symb =
-  fprintf oc "%s" (extern_atom symb)
-
-let symbol_offset oc (symb, ofs) =
-  symbol oc symb;
-  if ofs <> 0l then fprintf oc " + %ld" ofs
-
-let symbol_fragment oc s n op =
-      fprintf oc "(%a)%s" symbol_offset (s, camlint_of_coqint n) op
-
-
-let int_reg_name = function
-  | GPR0 -> "0"  | GPR1 -> "1"  | GPR2 -> "2"  | GPR3 -> "3"
-  | GPR4 -> "4"  | GPR5 -> "5"  | GPR6 -> "6"  | GPR7 -> "7"
-  | GPR8 -> "8"  | GPR9 -> "9"  | GPR10 -> "10" | GPR11 -> "11"
-  | GPR12 -> "12" | GPR13 -> "13" | GPR14 -> "14" | GPR15 -> "15"
-  | GPR16 -> "16" | GPR17 -> "17" | GPR18 -> "18" | GPR19 -> "19"
-  | GPR20 -> "20" | GPR21 -> "21" | GPR22 -> "22" | GPR23 -> "23"
-  | GPR24 -> "24" | GPR25 -> "25" | GPR26 -> "26" | GPR27 -> "27"
-  | GPR28 -> "28" | GPR29 -> "29" | GPR30 -> "30" | GPR31 -> "31"
-
-let float_reg_name = function
-  | FPR0 -> "0"  | FPR1 -> "1"  | FPR2 -> "2"  | FPR3 -> "3"
-  | FPR4 -> "4"  | FPR5 -> "5"  | FPR6 -> "6"  | FPR7 -> "7"
-  | FPR8 -> "8"  | FPR9 -> "9"  | FPR10 -> "10" | FPR11 -> "11"
-  | FPR12 -> "12" | FPR13 -> "13" | FPR14 -> "14" | FPR15 -> "15"
-  | FPR16 -> "16" | FPR17 -> "17" | FPR18 -> "18" | FPR19 -> "19"
-  | FPR20 -> "20" | FPR21 -> "21" | FPR22 -> "22" | FPR23 -> "23"
-  | FPR24 -> "24" | FPR25 -> "25" | FPR26 -> "26" | FPR27 -> "27"
-  | FPR28 -> "28" | FPR29 -> "29" | FPR30 -> "30" | FPR31 -> "31"
-
-module Linux_System =
-  (struct
-    let comment =  "#"
-
-    let constant oc cst =
-      match cst with
-      | Cint n ->
-          fprintf oc "%ld" (camlint_of_coqint n)
-      | Csymbol_low(s, n) ->
-          symbol_fragment oc s n "@l"
-      | Csymbol_high(s, n) ->
-          symbol_fragment oc s n "@ha"
-      | Csymbol_sda(s, n) ->
-          symbol_fragment oc s n "@sda21"
-            (* 32-bit relative addressing is supported by the Diab tools but not by
-               GNU binutils.  In the latter case, for testing purposes, we treat
-               them as absolute addressings.  The default base register being GPR0,
-               this produces correct code, albeit with absolute addresses. *)
-      | Csymbol_rel_low(s, n) ->
-          symbol_fragment oc s n "@l"
-      | Csymbol_rel_high(s, n) ->
-          symbol_fragment oc s n "@ha"
-
-    let ireg oc r =
-      output_string oc (int_reg_name r)
-
-    let freg oc r =
-      output_string oc (float_reg_name r)
-        
-    let creg oc r = 
-      fprintf oc "%d" r
- 
-    let name_of_section = function
-      | Section_text -> ".text"
-      | Section_data i -> if i then ".data" else "COMM"
-      | Section_small_data i -> 
-          if i
-          then ".section	.sdata,\"aw\",@progbits"
-          else ".section	.sbss,\"aw\",@progbits"
-      | Section_const -> ".rodata"
-      | Section_small_const -> ".section	.sdata2,\"a\",@progbits"
-      | Section_string -> ".rodata"
-      | Section_literal -> ".section	.rodata.cst8,\"aM\",@progbits,8"
-      | Section_jumptable -> ".text"
-      | Section_user(s, wr, ex) ->
-          sprintf ".section	\"%s\",\"a%s%s\",@progbits"
-            s (if wr then "w" else "") (if ex then "x" else "")
-
-    let filename_num : (string, int) Hashtbl.t = Hashtbl.create 7
-    let reset_file_line () = Hashtbl.clear filename_num
-    let print_file_line oc file line =
-      if !Clflags.option_g && file <> "" then begin
-        let filenum = 
-          try
-            Hashtbl.find filename_num file
-          with Not_found ->
-            let n = Hashtbl.length filename_num + 1 in
-            Hashtbl.add filename_num file n;
-            fprintf oc "	.file	%d %S\n" n file;
-            n
-        in fprintf oc "	.loc	%d %s\n" filenum line
-      end
-    
-    (* Emit .cfi directives *)      
-    let cfi_startproc =
-      if Configuration.asm_supports_cfi then
-        (fun oc -> fprintf oc "	.cfi_startproc\n")
-      else
-        (fun _ -> ())
-
-    let cfi_endproc =
-      if Configuration.asm_supports_cfi then
-        (fun oc -> fprintf oc "	.cfi_endproc\n")
-      else
-        (fun _ -> ())
-
-              
-    let cfi_adjust =
-      if Configuration.asm_supports_cfi then
-       (fun oc delta -> fprintf oc "	.cfi_adjust_cfa_offset	%ld\n" delta)
-      else
-        (fun _ _ -> ())
-              
-    let cfi_rel_offset =
-      if Configuration.asm_supports_cfi then
-        (fun oc reg ofs -> fprintf oc "	.cfi_rel_offset	%s, %ld\n" reg ofs)
-      else
-        (fun _ _ _ -> ())
-
-
-    let print_prologue oc = ()
-  
-  end:SYSTEM)
-    
-module Diab_System =
-  (struct
-    let comment =  ";"
-        
-    let constant oc cst =
-      match cst with
-      | Cint n ->
-          fprintf oc "%ld" (camlint_of_coqint n)
-      | Csymbol_low(s, n) ->
-          symbol_fragment oc s n "@l"
-      | Csymbol_high(s, n) ->
-          symbol_fragment oc s n "@ha"
-      | Csymbol_sda(s, n) ->
-          symbol_fragment oc s n "@sdarx"
-      | Csymbol_rel_low(s, n) ->
-          symbol_fragment oc s n "@sdax@l"
-      | Csymbol_rel_high(s, n) ->
-          symbol_fragment oc s n "@sdarx@ha"
- 
-    let ireg oc r =
-      output_char oc 'r';
-      output_string oc (int_reg_name r)
-
-    let freg oc r =
-      output_char oc 'f';
-      output_string oc (float_reg_name r)
-        
-    let creg oc r =
-      fprintf oc "cr%d" r
-        
-    let name_of_section = function
-      | Section_text -> ".text"
-      | Section_data i -> if i then ".data" else ".bss"
-      | Section_small_data i -> if i then ".sdata" else ".sbss"
-      | Section_const -> ".text"
-      | Section_small_const -> ".sdata2"
-      | Section_string -> ".text"
-      | Section_literal -> ".text"
-      | Section_jumptable -> ".text"
-      | Section_user(s, wr, ex) ->
-          sprintf ".section	\"%s\",,%c"
-               s
-            (match wr, ex with
-            | true, true -> 'm'                 (* text+data *)
-            | true, false -> 'd'                (* data *)
-            | false, true -> 'c'                (* text *)
-            | false, false -> 'r')              (* const *)
-
-    let last_file = ref ""
-    let reset_file_line () = last_file := ""
-    let print_file_line oc file line =
-      if !Clflags.option_g && file <> "" then begin
-        if file <> !last_file then begin
-          fprintf oc "	.d1file	%S\n" file;
-          last_file := file
-        end;
-        fprintf oc "	.d1line	%s\n" line
-      end
-
-    (* Emit .cfi directives *)
-    let cfi_startproc oc = ()
-
-    let cfi_endproc oc = ()
-
-    let cfi_adjust oc delta = ()
-
-    let cfi_rel_offset oc reg ofs = ()
-
-        
-    let print_prologue oc =
-      fprintf oc "	.xopt	align-fill-text=0x60000000\n";
-      if !Clflags.option_g then
-        fprintf oc "	.xopt	asm-debug-on\n"
-  
-  end:SYSTEM)
+open PrintUtil
+open PrintLinux
+open PrintDiab
 
 module AsmPrinter (Target : SYSTEM) =
   (struct
-    open Target
-
-(* On-the-fly label renaming *)
-
-let next_label = ref 100
-
-let new_label() =
-  let lbl = !next_label in incr next_label; lbl
-
-let current_function_labels = (Hashtbl.create 39 : (label, int) Hashtbl.t)
-
-let transl_label lbl =
-  try
-    Hashtbl.find current_function_labels lbl
-  with Not_found ->
-    let lbl' = new_label() in
-    Hashtbl.add current_function_labels lbl lbl';
-    lbl'
+    include Target
 
 (* Basic printing functions *)
-
-let coqint oc n =
-  fprintf oc "%ld" (camlint_of_coqint n)
-
-let raw_symbol oc s =
-  fprintf oc "%s" s
-
-
-let label oc lbl =
-  fprintf oc ".L%d" lbl
-
-let label_low oc lbl =
-  fprintf oc ".L%d@l" lbl
-
-let label_high oc lbl =
-  fprintf oc ".L%d@ha" lbl
-
-
-let num_crbit = function
-  | CRbit_0 -> 0
-  | CRbit_1 -> 1
-  | CRbit_2 -> 2
-  | CRbit_3 -> 3
-  | CRbit_6 -> 6
-
-let crbit oc bit =
-  fprintf oc "%d" (num_crbit bit)
 
 let ireg_or_zero oc r =
   if r = GPR0 then output_string oc "0" else ireg oc r
@@ -309,28 +48,7 @@ let print_location oc loc =
     print_file_line oc (fst loc) (string_of_int (snd loc))
 
 
-(* Encoding masks for rlwinm instructions *)
-
-let rolm_mask n =
-  let mb = ref 0       (* location of last 0->1 transition *)
-  and me = ref 32      (* location of last 1->0 transition *)
-  and last = ref ((Int32.logand n 1l) <> 0l)  (* last bit seen *)
-  and count = ref 0    (* number of transitions *)
-  and mask = ref 0x8000_0000l in
-  for mx = 0 to 31 do
-    if Int32.logand n !mask <> 0l then
-      if !last then () else (incr count; mb := mx; last := true)
-    else
-      if !last then (incr count; me := mx; last := false) else ();
-    mask := Int32.shift_right_logical !mask 1
-  done;
-  if !me = 0 then me := 32;
-  assert (!count = 2 || (!count = 0 && !last));
-  (!mb, !me-1)
-
 (* Handling of annotations *)
-
-let re_file_line = Str.regexp "#line:\\(.*\\):\\([1-9][0-9]*\\)$"
 
 let print_annot_stmt oc txt targs args =
   if Str.string_match re_file_line txt 0 then begin
@@ -339,14 +57,6 @@ let print_annot_stmt oc txt targs args =
     fprintf oc "%s annotation: " comment;
     PrintAnnot.print_annot_stmt preg "R1" oc txt targs args
   end
-
-(* Determine if the displacement of a conditional branch fits the short form *)
-
-let short_cond_branch tbl pc lbl_dest =
-  match PTree.get lbl_dest tbl with
-  | None -> assert false
-  | Some pc_dest -> 
-      let disp = pc_dest - pc in -0x2000 <= disp && disp < 0x2000
 
 (* Printing of instructions *)
 
@@ -679,37 +389,6 @@ let print_instruction oc tbl pc fallthrough = function
   | Pcfi_rel_offset n ->
       cfi_rel_offset oc "lr" (camlint_of_coqint n)
 
-(* Determine if an instruction falls through *)
-
-let instr_fall_through = function
-  | Pb _ -> false
-  | Pbctr _ -> false
-  | Pbs _ -> false
-  | Pblr -> false
-  | _ -> true
-
-(* Estimate the size of an Asm instruction encoding, in number of actual
-   PowerPC instructions.  We can over-approximate. *)
-
-let instr_size = function
-  | Pbf(bit, lbl) -> 2
-  | Pbt(bit, lbl) -> 2
-  | Pbtbl(r, tbl) -> 5
-  | Plfi(r1, c) -> 2
-  | Plfis(r1, c) -> 2
-  | Plabel lbl -> 0
-  | Pbuiltin(ef, args, res) -> 0
-  | Pannot(ef, args) -> 0
-  | Pcfi_adjust _ | Pcfi_rel_offset _ -> 0
-  | _ -> 1
-
-(* Build a table label -> estimated position in generated code.
-   Used to predict if relative conditional branches can use the short form. *)
-
-let rec label_positions tbl pc = function
-  | [] -> tbl
-  | Plabel lbl :: c -> label_positions (PTree.set lbl pc tbl) pc c
-  | i :: c -> label_positions tbl (pc + instr_size i) c
 
 (* Emit a sequence of instructions *)
 
@@ -869,9 +548,9 @@ let print_program oc p =
   let module Target = (val (match target with
   | Linux -> (module Linux_System:SYSTEM)
   | Diab -> (module Diab_System:SYSTEM)):SYSTEM) in
-  Target.reset_file_line();
-  PrintAnnot.print_version_and_options oc Target.comment;
   let module Printer = AsmPrinter(Target) in
-  Target.print_prologue oc;
+  Printer.reset_file_line();
+  PrintAnnot.print_version_and_options oc Printer.comment;
+  Printer.print_prologue oc;
   List.iter (Printer.print_globdef oc) p.prog_defs
 
