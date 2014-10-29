@@ -78,16 +78,16 @@ type bound_value =
 
 type dw_tag_array_type =
     {
-     dw_at_decl_file: constant  option;
-     dw_at_decl_line: constant  option;
-     dw_at_type:      reference;
+     array_type_file: constant  option;
+     array_type_line: constant  option;
+     array_type:      reference;
    }
 
 type dw_tag_base_type =
     {
-     dw_at_byte_size: constant;
-     dw_at_encoding:  encoding;
-     dw_at_name:      string;
+     base_type_size:      constant;
+     base_type_encoding:  encoding;
+     base_type_name:      string;
    }
 
 type dw_tag_compile_unit =
