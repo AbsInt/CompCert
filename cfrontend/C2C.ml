@@ -38,8 +38,7 @@ type atom_info =
       (* 1 section for data, 3 sections (code/lit/jumptbl) for functions *)
     a_access: Sections.access_mode;    (* access mode, e.g. small data area *)
     a_inline: bool;                    (* function declared inline? *)
-    a_loc: location;                   (* source location *)
-    a_typ: C.typ;                      (* type of the atom *)
+    a_loc: location                    (* source location *)
 }
 
 let decl_atom : (AST.ident, atom_info) Hashtbl.t = Hashtbl.create 103
@@ -160,9 +159,7 @@ let name_for_string_literal env s =
         a_sections = [Sections.for_stringlit()];
         a_access = Sections.Access_default;
         a_inline = false;
-        a_loc = Cutil.no_loc;
-        a_typ= TArray (TInt (IUChar,[]),Some (Int64.of_int (String.length s +1)),[]);
-      };
+        a_loc = Cutil.no_loc };
     Hashtbl.add stringTable s id;
     id
 
@@ -851,9 +848,7 @@ let convertFundef loc env fd =
       a_sections = Sections.for_function env id' fd.fd_ret;
       a_access = Sections.Access_default;
       a_inline = fd.fd_inline;
-      a_loc = loc;
-      a_typ = TFun (fd.fd_ret,Some fd.fd_params,fd.fd_vararg,fd.fd_attrib);
-    };
+      a_loc = loc };
   (id', Gfun(Internal {fn_return = ret;
                        fn_callconv = convertCallconv fd.fd_vararg fd.fd_attrib;
                        fn_params = params;
@@ -940,9 +935,7 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
       a_sections = [section];
       a_access = access;
       a_inline = false;
-      a_loc = loc ;
-      a_typ = ty;
-    };
+      a_loc = loc };
   let volatile = List.mem C.AVolatile attr in
   let readonly = List.mem C.AConst attr && not volatile in
   (id', Gvar {gvar_info = ty'; gvar_init = init';
@@ -1142,8 +1135,3 @@ let atom_location a =
     (Hashtbl.find decl_atom a).a_loc
   with Not_found ->
     Cutil.no_loc
-
-let atom_typ a =
-  try
-    Some (Hashtbl.find decl_atom a).a_typ
-  with Not_found -> None
