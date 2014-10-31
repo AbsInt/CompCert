@@ -78,53 +78,49 @@ type bound_value =
 
 type dw_tag_array_type =
     {
-     array_type_file: constant  option;
-     array_type_line: constant  option;
-     array_type:      reference;
+     array_type_decl_file: constant  option;
+     array_type_decl_line: constant  option;
+     array_type:           reference;
    }
 
 type dw_tag_base_type =
     {
-     base_type_size:      constant;
+     base_type_byte_size: constant;
      base_type_encoding:  encoding;
      base_type_name:      string;
    }
 
 type dw_tag_compile_unit =
     {
-     dw_at_base_types:      reference       option;
-     dw_at_comp_dir:        string;
-     dw_at_identifier_case: identifier_case option;
-     dw_at_high_pc:         address;
-     dw_at_language:        language;
-     dw_at_low_pc:          address;
-     dw_at_macro_info:      constant        option;
-     dw_at_name:            string;
-     dw_at_producer:        string;
-     dw_at_stmt_list:       constant        option;
+     compile_unit_comp_dir:        string;
+     compile_unit_high_pc:         address;
+     compile_unit_low_pc:          address;
+     compile_unit_language:        language;
+     compile_unit_name:            string;
+     compile_unit_producer:        string;
+     compile_unit_stmt_list:       constant option;
    }
 
 type dw_tag_const_type =
     {
-     dw_at_type: reference;     
+     const_type: reference;     
    }
 
 type dw_tag_enumeration_type =
     {
-     dw_at_decl_file:   constant  option;
-     dw_at_decl_line:   constant  option;
-     dw_at_byte_size:   constant;
-     dw_at_declaration: flag      option;
-     dw_at_name:        string;
-     dw_at_start_scope: constant  option;
+     enumeration_decl_file:   constant  option;
+     enumeration_decl_line:   constant  option;
+     enumeration_byte_size:   constant;
+     enumeration_declaration: flag      option;
+     enumeration_name:        string;
    }
 
 type dw_tag_enumerator =
     {
-     dw_at_decl_file:   constant  option;
-     dw_at_decl_line:   constant  option;
-     dw_at_const_value: constant;
-     dw_at_name:        string;
+     enumerator_decl_file: constant  option;
+     enumerator_decl_line: constant  option;
+     enumerator_value:     constant;
+     enumerator_name:      string;
    }
 
 type dw_tag_formal_parameter =
@@ -141,41 +137,41 @@ type dw_tag_formal_parameter =
 
 type dw_tag_label =
     {
-     dw_at_low_pc: address;
-     dw_at_name:   string;
+     label_low_pc: address;
+     label_name:   string;
    }
 
 type dw_tag_lexical_block =
     {
-     dw_at_high_pc: address;
-     dw_at_low_pc:  address;
+     lexical_block__high_pc: address;
+     lexical_block_low_pc:  address;
    }
 
 type dw_tag_member =
     {
-     dw_at_decl_file:            constant            option;
-     dw_at_decl_line:            constant            option;
-     dw_at_byte_size:            constant            option;
-     dw_at_bit_offset:           constant            option;
-     dw_at_bit_size:             constant            option;
-     dw_at_data_member_location: data_location_value option;
-     dw_at_declaration:          flag                option;
-     dw_at_name:                 string;
-     dw_at_type:                 reference;
+     member_decl_file:            constant            option;
+     member_decl_line:            constant            option;
+     member_byte_size:            constant            option;
+     member_bit_offset:           constant            option;
+     member_bit_size:             constant            option;
+     member_data_member_location: data_location_value option;
+     member_declaration:          flag                option;
+     member_name:                 string;
+     member_type:                 reference;
    }
 
 type dw_tag_pointer_type =
     {
-     dw_at_type: reference;
+     pointer_type: reference;
    }
 
 type dw_tag_structure_type =
     {
-     dw_at_decl_file:   constant  option;
-     dw_at_decl_line:   constant  option;
-     dw_at_byte_size:   constant;
-     dw_at_declaration: flag      option;
-     dw_at_name:        string;
+     structure_decl_file:   constant  option;
+     structure_decl_line:   constant  option;
+     structure_byte_size:   constant;
+     structure_declaration: flag      option;
+     structure_name:        string;
    }
 
 type dw_tag_subprogram =
