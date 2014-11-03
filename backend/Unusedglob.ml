@@ -81,6 +81,7 @@ let rec filter used = function
 
 let filter_prog used p =
   { prog_defs = filter used p.prog_defs;
+    prog_public = p.prog_public;
     prog_main = p.prog_main }
 
 (* Entry point *)

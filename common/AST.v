@@ -201,6 +201,8 @@ Record globvar (V: Type) : Type := mkglobvar {
 
 (** Whole programs consist of:
 - a collection of global definitions (name and description);
+- a set of public names (the names that are visible outside
+  this compilation unit);
 - the name of the ``main'' function that serves as entry point in the program.
 
 A global definition is either a global function or a global variable.
@@ -218,6 +220,7 @@ Implicit Arguments Gvar [F V].
 
 Record program (F V: Type) : Type := mkprogram {
   prog_defs: list (ident * globdef F V);
+  prog_public: list ident;
   prog_main: ident
 }.
 
@@ -244,6 +247,7 @@ Definition transform_program_globdef (idg: ident * globdef A V) : ident * globde
 Definition transform_program (p: program A V) : program B V :=
   mkprogram
     (List.map transform_program_globdef p.(prog_defs))
+    p.(prog_public)
     p.(prog_main).
 
 Lemma transform_program_function:
@@ -295,7 +299,8 @@ Fixpoint transf_globdefs (l: list (ident * globdef A V)) : res (list (ident * gl
   end.
 
 Definition transform_partial_program2 (p: program A V) : res (program B W) :=
-  do gl' <- transf_globdefs p.(prog_defs); OK(mkprogram gl' p.(prog_main)).
+  do gl' <- transf_globdefs p.(prog_defs);
+  OK (mkprogram gl' p.(prog_public) p.(prog_main)).
 
 Lemma transform_partial_program2_function:
   forall p tp i tf,
@@ -363,6 +368,14 @@ Proof.
   intros. monadInv H. reflexivity.
 Qed.
 
+Lemma transform_partial_program2_public:
+  forall p tp,
+  transform_partial_program2 p = OK tp ->
+  tp.(prog_public) = p.(prog_public).
+Proof.
+  intros. monadInv H. reflexivity.
+Qed.
+
 (** Additionally, we can also "augment" the program with new global definitions
   and a different "main" function. *)
 
@@ -373,7 +386,7 @@ Variable new_main: ident.
 
 Definition transform_partial_augment_program (p: program A V) : res (program B W) :=
   do gl' <- transf_globdefs p.(prog_defs);
-  OK(mkprogram (gl' ++ new_globs) new_main).
+  OK(mkprogram (gl' ++ new_globs) p.(prog_public) new_main).
 
 Lemma transform_partial_augment_program_main:
   forall p tp,
@@ -414,6 +427,14 @@ Lemma transform_partial_program_main:
   tp.(prog_main) = p.(prog_main).
 Proof.
   apply transform_partial_program2_main.
+Qed.
+
+Lemma transform_partial_program_public:
+  forall p tp,
+  transform_partial_program p = OK tp ->
+  tp.(prog_public) = p.(prog_public).
+Proof.
+  apply transform_partial_program2_public.
 Qed.
 
 Lemma transform_partial_program_function:
@@ -480,7 +501,8 @@ Definition match_program (new_globs : list (ident * globdef B W))
                          (p1: program A V)  (p2: program B W) : Prop :=
   (exists tglob, list_forall2 match_globdef p1.(prog_defs) tglob /\
                  p2.(prog_defs) = tglob ++ new_globs) /\
-  p2.(prog_main) = new_main.
+  p2.(prog_main) = new_main /\
+  p2.(prog_public) = p1.(prog_public).
 
 End MATCH_PROGRAM.
 

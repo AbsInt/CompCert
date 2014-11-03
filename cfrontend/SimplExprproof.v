@@ -2198,7 +2198,7 @@ Proof.
   econstructor.
   exploit Genv.init_mem_match; eauto.  
   simpl. fold tge. rewrite symbols_preserved.
-  destruct MP as [A B]. rewrite B; eexact H1.
+  destruct MP as (A & B & C). rewrite B; eexact H1.
   eexact FIND.
   rewrite <- H3. apply type_of_fundef_preserved. auto.
   constructor. auto. constructor.

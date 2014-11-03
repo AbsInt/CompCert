@@ -612,7 +612,8 @@ let change_main_function p old_main old_main_ty =
       fn_params = []; fn_vars = []; fn_body = body } in
   let new_main_id = intern_string "___main" in
   { prog_main = new_main_id;
-    prog_defs = (new_main_id, Gfun(Internal new_main_fn)) :: p.prog_defs }
+    prog_defs = (new_main_id, Gfun(Internal new_main_fn)) :: p.prog_defs;
+    prog_public = p.prog_public }
 
 let rec find_main_function name = function
   | [] -> None
