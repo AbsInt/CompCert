@@ -743,6 +743,10 @@ Lemma symbols_preserved:
   forall s, Genv.find_symbol tge s = Genv.find_symbol ge s.
 Proof (Genv.find_symbol_transf_partial2 transl_fundef transl_globvar _ TRANSL).
 
+Lemma public_preserved:
+  forall s, Genv.public_symbol tge s = Genv.public_symbol ge s.
+Proof (Genv.public_symbol_transf_partial2 transl_fundef transl_globvar _ TRANSL).
+
 Lemma functions_translated:
   forall v f,
   Genv.find_funct ge v = Some f ->
@@ -1285,7 +1289,7 @@ Proof.
   apply plus_one. econstructor. 
   eapply transl_arglist_correct; eauto. 
   eapply external_call_symbols_preserved_2; eauto.
-  exact symbols_preserved.
+  exact symbols_preserved. exact public_preserved.
   eexact (Genv.find_var_info_transf_partial2 transl_fundef transl_globvar _ TRANSL).
   eexact (Genv.find_var_info_rev_transf_partial2 transl_fundef transl_globvar _ TRANSL).
   eapply match_states_skip; eauto.
@@ -1466,7 +1470,7 @@ Proof.
   econstructor; split.
   apply plus_one. constructor. eauto. 
   eapply external_call_symbols_preserved_2; eauto.
-  exact symbols_preserved.
+  exact symbols_preserved. exact public_preserved.
   eexact (Genv.find_var_info_transf_partial2 transl_fundef transl_globvar _ TRANSL).
   eexact (Genv.find_var_info_rev_transf_partial2 transl_fundef transl_globvar _ TRANSL).
   econstructor; eauto.
@@ -1506,7 +1510,7 @@ Theorem transl_program_correct:
   forward_simulation (Clight.semantics2 prog) (Csharpminor.semantics tprog).
 Proof.
   eapply forward_simulation_plus.
-  eexact symbols_preserved.
+  eexact public_preserved.
   eexact transl_initial_states.
   eexact transl_final_states.
   eexact transl_step.

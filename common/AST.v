@@ -657,6 +657,15 @@ Proof.
 Defined.
 Global Opaque external_function_eq.
 
+(** Global variables referenced by an external function *)
+
+Definition globals_external (ef: external_function) : list ident :=
+  match ef with
+  | EF_vload_global _ id _ => id :: nil
+  | EF_vstore_global _ id _ => id :: nil
+  | _ => nil
+  end.
+
 (** Function definitions are the union of internal and external functions. *)
 
 Inductive fundef (F: Type): Type :=

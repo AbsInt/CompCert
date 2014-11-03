@@ -43,6 +43,13 @@ Proof.
   apply Genv.find_symbol_transf.
 Qed.
 
+Lemma public_preserved:
+  forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
+Proof.
+  intros; unfold ge, tge, tprog, transf_program. 
+  apply Genv.public_symbol_transf.
+Qed.
+
 Lemma varinfo_preserved:
   forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
 Proof.
@@ -285,12 +292,12 @@ Proof.
 (* Lbuiltin *)
   left; econstructor; split.
   econstructor; eauto. eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved.  exact varinfo_preserved.
+  exact symbols_preserved.  exact public_preserved. exact varinfo_preserved.
   econstructor; eauto with coqlib.
 (* Lannot *)
   left; econstructor; split.
   econstructor; eauto. eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved.  exact varinfo_preserved.
+  exact symbols_preserved.  exact public_preserved. exact varinfo_preserved.
   econstructor; eauto with coqlib.
 (* Llabel *)
   case_eq (Labelset.mem lbl (labels_branched_to (fn_code f))); intros.
@@ -329,7 +336,7 @@ Proof.
 (* external function *)
   left; econstructor; split.
   econstructor; eauto. eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved.  exact varinfo_preserved.
+  exact symbols_preserved.  exact public_preserved.  exact varinfo_preserved.
   econstructor; eauto with coqlib.
 (* return *)
   inv H3. inv H1. left; econstructor; split.
@@ -362,7 +369,7 @@ Theorem transf_program_correct:
   forward_simulation (Linear.semantics prog) (Linear.semantics tprog).
 Proof.
   eapply forward_simulation_opt.
-  eexact symbols_preserved.
+  eexact public_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
   eexact transf_step_correct.

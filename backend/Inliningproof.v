@@ -43,6 +43,12 @@ Proof.
   intros. apply Genv.find_symbol_transf_partial with (transf_fundef fenv); auto.
 Qed.
 
+Lemma public_preserved:
+  forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
+Proof.
+  intros. apply Genv.public_symbol_transf_partial with (transf_fundef fenv); auto.
+Qed.
+
 Lemma varinfo_preserved:
   forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
 Proof.
@@ -1008,7 +1014,7 @@ Proof.
   left; econstructor; split.
   eapply plus_one. eapply exec_Ibuiltin; eauto. 
     eapply external_call_symbols_preserved; eauto. 
-    exact symbols_preserved. exact varinfo_preserved.
+    exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor.
     eapply match_stacks_inside_set_reg. 
     eapply match_stacks_inside_extcall with (F1 := F) (F2 := F1) (m1 := m) (m1' := m'0); eauto.
@@ -1161,7 +1167,7 @@ Proof.
   left; econstructor; split.
   eapply plus_one. eapply exec_function_external; eauto. 
     eapply external_call_symbols_preserved; eauto. 
-    exact symbols_preserved. exact varinfo_preserved.
+    exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor.
     eapply match_stacks_bound with (Mem.nextblock m'0).
     eapply match_stacks_extcall with (F1 := F) (F2 := F1) (m1 := m) (m1' := m'0); eauto.
@@ -1250,7 +1256,7 @@ Theorem transf_program_correct:
   forward_simulation (semantics prog) (semantics tprog).
 Proof.
   eapply forward_simulation_star.
-  eexact symbols_preserved.
+  eexact public_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
   eexact step_simulation. 

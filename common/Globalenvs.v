@@ -82,6 +82,7 @@ Variable V: Type.  (**r The type of information attached to variables *)
 (** The type of global environments. *)
 
 Record t: Type := mkgenv {
+  genv_public: list ident;              (**r which symbol names are public *)
   genv_symb: PTree.t block;             (**r mapping symbol -> block *)
   genv_funs: PTree.t F;                 (**r mapping function pointer -> definition *)
   genv_vars: PTree.t (globvar V);       (**r mapping variable pointer -> info *)
@@ -110,6 +111,14 @@ Definition symbol_address (ge: t) (id: ident) (ofs: int) : val :=
   match find_symbol ge id with
   | Some b => Vptr b ofs
   | None => Vundef
+  end.
+
+(** [public_symbol ge id] says whether the name [id] is public and defined. *)
+
+Definition public_symbol (ge: t) (id: ident) : bool :=
+  match find_symbol ge id with
+  | None => false
+  | Some _ => In_dec ident_eq id ge.(genv_public)
   end.
 
 (** [find_funct_ptr ge b] returns the function description associated with
@@ -144,6 +153,7 @@ Definition find_var_info (ge: t) (b: block) : option (globvar V) :=
 
 Program Definition add_global (ge: t) (idg: ident * globdef F V) : t :=
   @mkgenv
+    ge.(genv_public)
     (PTree.set idg#1 ge.(genv_next) ge.(genv_symb))
     (match idg#2 with
      | Gfun f => PTree.set ge.(genv_next) f ge.(genv_funs)
@@ -208,8 +218,8 @@ Proof.
   induction gl1; simpl; intros. auto. rewrite IHgl1; auto.
 Qed.
 
-Program Definition empty_genv : t :=
-  @mkgenv (PTree.empty _) (PTree.empty _) (PTree.empty _) 1%positive _ _ _ _ _.
+Program Definition empty_genv (pub: list ident): t :=
+  @mkgenv pub (PTree.empty _) (PTree.empty _) (PTree.empty _) 1%positive _ _ _ _ _.
 Next Obligation.
   rewrite PTree.gempty in H. discriminate.
 Qed.
@@ -227,7 +237,7 @@ Next Obligation.
 Qed.
 
 Definition globalenv (p: program F V) :=
-  add_globals empty_genv p.(prog_defs).
+  add_globals (empty_genv p.(prog_public)) p.(prog_defs).
 
 (** Proof principles *)
 
@@ -276,6 +286,14 @@ Qed.
 End GLOBALENV_PRINCIPLES.
 
 (** ** Properties of the operations over global environments *)
+
+Theorem public_symbol_exists:
+  forall ge id, public_symbol ge id = true -> exists b, find_symbol ge id = Some b.
+Proof.
+  unfold public_symbol; intros. destruct (find_symbol ge id) as [b|]. 
+  exists b; auto.
+  discriminate.
+Qed.
 
 Theorem shift_symbol_address:
   forall ge id ofs n,
@@ -484,6 +502,21 @@ Proof.
   induction gl; simpl; intros.
   auto.
   rewrite IHgl. auto. 
+Qed.
+
+Remark genv_public_add_globals:
+  forall gl ge,
+  genv_public (add_globals ge gl) = genv_public ge.
+Proof.
+  induction gl; simpl; intros. 
+  auto.
+  rewrite IHgl; auto.
+Qed.
+
+Theorem globalenv_public:
+  forall p, genv_public (globalenv p) = prog_public p.
+Proof.
+  unfold globalenv; intros. rewrite genv_public_add_globals. auto. 
 Qed.
 
 (** * Construction of the initial memory state *)
@@ -1092,7 +1125,7 @@ Lemma init_mem_genv_next: forall p m,
 Proof.
   unfold init_mem; intros.
   exploit alloc_globals_nextblock; eauto. rewrite Mem.nextblock_empty. intro.
-  generalize (genv_next_add_globals (prog_defs p) empty_genv). 
+  generalize (genv_next_add_globals (prog_defs p) (empty_genv (prog_public p))). 
   fold (globalenv p). simpl genv_next. intros. congruence.
 Qed.
 
@@ -1606,6 +1639,17 @@ Proof.
   intros. destruct globalenvs_match. unfold find_symbol.  auto. 
 Qed.
 
+Theorem public_symbol_match:
+  forall (s : ident),
+  ~In s (map fst new_globs) ->
+  public_symbol (globalenv p') s = public_symbol (globalenv p) s.
+Proof.
+  intros. unfold public_symbol. rewrite find_symbol_match by auto. 
+  destruct (find_symbol (globalenv p) s); auto.
+  rewrite ! globalenv_public. 
+  destruct progmatch as (P & Q & R). rewrite R. auto. 
+Qed. 
+
 Hypothesis new_ids_fresh : 
   forall s', find_symbol (globalenv p) s' <> None  -> 
              ~In s' (map fst new_globs).
@@ -1804,6 +1848,14 @@ Proof.
   intros. eapply find_symbol_match. eexact prog_match. auto.
 Qed.
 
+Theorem public_symbol_transf_augment:  
+  forall (s: ident), 
+  ~ In s (map fst new_globs) ->
+  public_symbol (globalenv p') s = public_symbol (globalenv p) s.
+Proof.
+  intros. eapply public_symbol_match. eexact prog_match. auto.
+Qed.
+
 Theorem init_mem_transf_augment: 
    (forall s', find_symbol (globalenv p) s' <> None -> 
      ~ In s' (map fst new_globs)) ->
@@ -1910,6 +1962,14 @@ Proof.
   auto.
 Qed.
 
+Theorem public_symbol_transf_partial2:
+  forall (s: ident),
+  public_symbol (globalenv p') s = public_symbol (globalenv p) s.
+Proof.
+  pose proof (@public_symbol_transf_augment _ _ _ _ _ _ _ _ _ _ transf_augment_OK).
+  auto.
+Qed.
+
 Theorem init_mem_transf_partial2:
   forall m, init_mem p = Some m -> init_mem p' = Some m.
 Proof.
@@ -1966,6 +2026,13 @@ Theorem find_symbol_transf_partial:
   find_symbol (globalenv p') s = find_symbol (globalenv p) s.
 Proof.
   exact (@find_symbol_transf_partial2 _ _ _ _ _ _ _ _ transf_OK).
+Qed.
+
+Theorem public_symbol_transf_partial:
+  forall (s: ident),
+  public_symbol (globalenv p') s = public_symbol (globalenv p) s.
+Proof.
+  exact (@public_symbol_transf_partial2 _ _ _ _ _ _ _ _ transf_OK).
 Qed.
 
 Theorem find_var_info_transf_partial:
@@ -2045,6 +2112,13 @@ Theorem find_symbol_transf:
   find_symbol (globalenv tp) s = find_symbol (globalenv p) s.
 Proof.
   exact (@find_symbol_transf_partial _ _ _ _ _ _ transf_OK).
+Qed.
+
+Theorem public_symbol_transf:
+  forall (s: ident),
+  public_symbol (globalenv tp) s = public_symbol (globalenv p) s.
+Proof.
+  exact (@public_symbol_transf_partial _ _ _ _ _ _ transf_OK).
 Qed.
 
 Theorem find_var_info_transf:
