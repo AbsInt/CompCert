@@ -150,7 +150,7 @@ let compile_c_ast sourcename csyntax ofile =
   let asm =
     match Compiler.transf_c_program csyntax with
     | Errors.OK asm ->
-        Asmexpand.expand_program (Unusedglob.transf_program asm)
+        Asmexpand.expand_program asm
     | Errors.Error msg ->
         print_error stderr msg;
         exit 2 in
