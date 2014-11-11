@@ -106,6 +106,10 @@ module Diab_System =
             
         let string_of_uleb v =
           Printf.sprintf "	.uleb128	%d\n" v
+            
+        let abbrv_start_addr = ref (-1)
+            
+        let get_abbrv_start_addr () = !abbrv_start_addr
 
         let sibling_type_abbr = 0x13
         let decl_file_type_abbr = 0x6
@@ -134,6 +138,26 @@ module Diab_System =
         let data_location_ref_type_abbr = 0x13
         let bound_const_type_abbr = 0xf
         let bound_ref_type_abbr=0x13
+
+
+        let abbrv_section_start oc = 
+          fprintf oc "	.section	.debug_abbrev,,n\n";
+          let lbl = new_label () in
+          abbrv_start_addr := lbl;
+          label oc lbl
+        
+        let abbrv_section_end oc = 
+          fprintf oc "	.section	.debug_abbrev,,n\n";
+          fprintf oc "	.sleb128	0\n"
+
+        let abbrv_prologue oc id = 
+          fprintf oc "	.section	.debug_abbrev,,n\n";
+          fprintf oc "	.uleb128	%d\n" id
+   
+        let abbrv_epilogue oc = 
+          fprintf oc "	.uleb128	0\n";
+          fprintf oc "	.uleb128	0\n"
+
       end:ABBRV_DEFS)
 
   end:SYSTEM)

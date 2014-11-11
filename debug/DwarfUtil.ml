@@ -77,6 +77,11 @@ module type ABBRV_DEFS =
     sig
       val string_of_byte: bool -> string
       val string_of_uleb: int -> string
+      val abbrv_section_start: out_channel -> unit
+      val abbrv_section_end: out_channel -> unit
+      val abbrv_prologue: out_channel -> int -> unit
+      val abbrv_epilogue: out_channel -> unit
+      val get_abbrv_start_addr: unit -> int
       val sibling_type_abbr: int
       val decl_file_type_abbr: int
       val decl_line_type_abbr: int
@@ -115,7 +120,7 @@ module AbbrvPrinter(Defs:ABBRV_DEFS) =
       let abbrv = !curr_abbrv in
       incr curr_abbrv;abbrv
 
-    let abbrvs: string list ref = ref []
+    let abbrvs: (string * int) list ref = ref []
 
     let abbrv_mapping: (string,int) Hashtbl.t = Hashtbl.create 7
 
@@ -331,10 +336,19 @@ module AbbrvPrinter(Defs:ABBRV_DEFS) =
       (try
         Hashtbl.find abbrv_mapping abbrv_string
       with Not_found ->
-        abbrvs:=abbrv_string::!abbrvs;
         let id = next_abbrv in
+        abbrvs:=(abbrv_string,id)::!abbrvs;
         Hashtbl.add abbrv_mapping abbrv_string id;
         id)
+
+    let print_abbrv oc =
+      let abbrvs = List.sort (fun (_,a) (_,b) -> Pervasives.compare a b) !abbrvs in
+      Defs.abbrv_section_start oc;
+      List.iter (fun (s,id) ->
+        Defs.abbrv_prologue oc id;
+        output_string oc s;
+        Defs.abbrv_epilogue oc) abbrvs;
+      Defs.abbrv_section_end oc
 
 
   end)

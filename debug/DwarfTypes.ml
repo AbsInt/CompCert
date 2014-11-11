@@ -36,7 +36,7 @@ type language =
   | DW_LANG_C
   | DW_LANG_C89
 
-type block = string (* Used as bitvector *)
+type block = string
 
 type location_value =
   | LocConst of constant
