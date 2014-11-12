@@ -16,6 +16,7 @@ open Printf
 open Datatypes
 open DwarfTypes
 open DwarfUtil
+open DwarfPrinter
 open Camlcoq
 open Sections
 open Asm
@@ -95,7 +96,7 @@ module Diab_System =
         fprintf oc "	.xopt	asm-debug-on\n"
           
 
-    module DiabAbbrvs =
+    module DwarfDefs =
       (struct
         let string_of_byte value =
           if value then
@@ -104,47 +105,49 @@ module Diab_System =
             
             "	.byte	0x0\n"
             
-        let string_of_uleb v =
+        let string_of_abbrv_entry v =
           Printf.sprintf "	.uleb128	%d\n" v
             
         let abbrv_start_addr = ref (-1)
             
+        let debug_end_addr = ref (-1)
+
         let get_abbrv_start_addr () = !abbrv_start_addr
 
-        let sibling_type_abbr = 0x13
-        let decl_file_type_abbr = 0x6
-        let decl_line_type_abbr = 0xf
-        let type_abbr = 0x10
-        let name_type_abbr = 0x8
-        let encoding_type_abbr = 0xb
-        let byte_size_type_abbr = 0xb
-        let high_pc_type_abbr = 0x1
-        let low_pc_type_abbr = 0x1
-        let stmt_list_type_abbr = 0x6
-        let declaration_type_abbr = 0xc
-        let external_type_abbr = 0xc
-        let prototyped_type_abbr = 0xc
-        let bit_offset_type_abbr = 0xb
-        let comp_dir_type_abbr = 0x8
-        let language_type_abbr = 0xf
-        let producer_type_abbr = 0x8
-        let value_type_abbr = 0xd
-        let artificial_type_abbr = 0xc
-        let variable_parameter_type_abbr = 0xc
-        let bit_size_type_abbr = 0xb
-        let location_const_type_abbr = 0x6
-        let location_block_type_abbr = 0x9
-        let data_location_block_type_abbr = 0x9
-        let data_location_ref_type_abbr = 0x13
-        let bound_const_type_abbr = 0xf
-        let bound_ref_type_abbr=0x13
+        let sibling_type_abbr = dw_form_ref4
+        let decl_file_type_abbr = dw_form_data4
+        let decl_line_type_abbr = dw_form_udata
+        let type_abbr = dw_form_ref_addr
+        let name_type_abbr = dw_form_string
+        let encoding_type_abbr = dw_form_data1
+        let byte_size_type_abbr = dw_form_data1
+        let high_pc_type_abbr = dw_form_addr
+        let low_pc_type_abbr = dw_form_addr
+        let stmt_list_type_abbr = dw_form_data4
+        let declaration_type_abbr = dw_form_flag
+        let external_type_abbr = dw_form_flag
+        let prototyped_type_abbr = dw_form_flag
+        let bit_offset_type_abbr = dw_form_data1
+        let comp_dir_type_abbr = dw_form_string
+        let language_type_abbr = dw_form_udata
+        let producer_type_abbr = dw_form_string
+        let value_type_abbr = dw_form_sdata
+        let artificial_type_abbr = dw_form_flag
+        let variable_parameter_type_abbr = dw_form_flag
+        let bit_size_type_abbr = dw_form_data1
+        let location_const_type_abbr = dw_form_data4
+        let location_block_type_abbr = dw_form_block
+        let data_location_block_type_abbr = dw_form_block
+        let data_location_ref_type_abbr = dw_form_ref4
+        let bound_const_type_abbr = dw_form_udata
+        let bound_ref_type_abbr=dw_form_ref4
 
 
         let abbrv_section_start oc = 
           fprintf oc "	.section	.debug_abbrev,,n\n";
           let lbl = new_label () in
           abbrv_start_addr := lbl;
-          label oc lbl
+          fprintf oc "%a:\n" label lbl
         
         let abbrv_section_end oc = 
           fprintf oc "	.section	.debug_abbrev,,n\n";
@@ -158,6 +161,20 @@ module Diab_System =
           fprintf oc "	.uleb128	0\n";
           fprintf oc "	.uleb128	0\n"
 
-      end:ABBRV_DEFS)
+        let info_section_start oc =
+          fprintf oc "	.section	.debug_info,,n\n";
+          let debug_start = new_label ()
+          and debug_end = new_label () in
+          debug_end_addr:= debug_end;
+          fprintf oc "	.4byte	%a-%a\n" label debug_end label debug_start;
+          fprintf oc "%a:\n" label debug_start;
+          fprintf oc "	.2byte	0x2\n";
+          fprintf oc "	.4byte	%a\n" label !abbrv_start_addr;
+          fprintf oc "	.1byte	%d\n" !Machine.config.Machine.sizeof_ptr
+
+        let info_section_end oc =
+          fprintf oc "%a\n" label !debug_end_addr
+
+      end:DWARF_DEFS)
 
   end:SYSTEM)
