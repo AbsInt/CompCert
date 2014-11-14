@@ -308,6 +308,9 @@ module DwarfPrinter(Defs:DWARF_DEFS) :
 
     let print_debug oc entry =
       compute_abbrv entry;
-      print_abbrv oc
+      print_abbrv oc;
+      info_section_start oc;
+      
+      info_section_end oc
 
   end)
