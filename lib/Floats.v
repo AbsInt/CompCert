@@ -92,28 +92,99 @@ Proof.
   destruct x as [[]|]; simpl; intros; discriminate.
 Qed.
 
-(** Function used to parse floats *)
+Section FP_PARSING.
 
-Program Definition build_from_parsed
-  (prec:Z) (emax:Z) (prec_gt_0 : Prec_gt_0 prec) (Hmax:prec < emax)
-  (base:positive) (intPart:positive) (expPart:Z) :=
-  match expPart return _ with
+Variables prec emax: Z.
+Context (prec_gt_0 : Prec_gt_0 prec).
+Hypothesis Hmax : (prec < emax)%Z.
+
+(** Function used to convert literals into FP numbers during parsing.
+   [intPart] is the mantissa
+   [expPart] is the exponent
+   [base] is the base for the exponent (usually 10 or 16).
+   The result is [intPart * base^expPart] rounded to the nearest FP number,
+   ties to even. *)
+
+Definition build_from_parsed (base:positive) (intPart:positive) (expPart:Z) : binary_float prec emax :=
+  match expPart with
     | Z0 =>
       binary_normalize prec emax prec_gt_0 Hmax mode_NE (Zpos intPart) Z0 false
     | Zpos p =>
       binary_normalize prec emax prec_gt_0 Hmax mode_NE ((Zpos intPart) * Zpower_pos (Zpos base) p) Z0 false
     | Zneg p =>
-      let exp := Zpower_pos (Zpos base) p in
-      match exp return 0 < exp -> _ with
-        | Zneg _ | Z0 => _
-        | Zpos p =>
-          fun _ =>
-          FF2B prec emax _ (proj1 (Bdiv_correct_aux prec emax prec_gt_0 Hmax mode_NE false intPart Z0 false p Z0))
-      end _
+      FF2B prec emax _ (proj1 (Bdiv_correct_aux prec emax prec_gt_0 Hmax mode_NE
+                                  false intPart Z0 false (Pos.pow base p) Z0))
   end.
-Next Obligation.
-  apply Zpower_pos_gt_0. reflexivity.
+
+Let emin := (3 - emax - prec)%Z.
+Let fexp := FLT_exp emin prec.
+
+Theorem build_from_parsed_correct:
+  forall base m e (BASE: 2 <= Zpos base),
+  let base_r := {| radix_val := Zpos base; radix_prop := Zle_imp_le_bool _ _ BASE |} in
+  let r := round radix2 fexp (round_mode mode_NE) (Z2R (Zpos m) * bpow base_r e) in
+  if Rlt_bool (Rabs r) (bpow radix2 emax) then
+     B2R _ _ (build_from_parsed base m e) = r
+  /\ is_finite _ _ (build_from_parsed base m e) = true
+  /\ Bsign _ _ (build_from_parsed base m e) = false
+  else
+    B2FF _ _ (build_from_parsed base m e) = F754_infinity false.
+Proof.
+  intros. 
+  assert (A: forall x, @F2R radix2 {| Fnum := x; Fexp := 0 |} = Z2R x).
+  { intros. unfold F2R, Fnum; simpl. ring. }
+  unfold build_from_parsed, r; destruct e. 
+- change (bpow base_r 0) with (1%R). rewrite Rmult_1_r.  
+  generalize (binary_normalize_correct _ _ _ Hmax mode_NE (Zpos m) 0 false).
+  fold emin; fold fexp. rewrite ! A.
+  destruct (Rlt_bool (Rabs (round radix2 fexp (round_mode mode_NE) (Z2R (Z.pos m))))
+                     (bpow radix2 emax)).
+  + intros (P & Q & R). split. auto. split. auto. rewrite R. rewrite Rcompare_Gt; auto. 
+    apply (Z2R_lt 0). compute; auto.
+  + intros P; rewrite P. unfold binary_overflow.
+    replace (Rlt_bool (Z2R (Z.pos m)) 0%R) with false. auto. 
+    rewrite Rlt_bool_false; auto. apply (Z2R_le 0). xomega.
+- generalize (binary_normalize_correct _ _ _ Hmax mode_NE (Zpos m * Z.pow_pos (Zpos base) p) 0 false).
+  fold emin; fold fexp. rewrite ! A.
+  assert (B: Z2R (Z.pos m * Z.pow_pos (Z.pos base) p) = (Z2R (Z.pos m) * bpow base_r (Z.pos p))%R).
+  { unfold bpow. apply Z2R_mult. }
+  rewrite B. 
+  destruct (Rlt_bool
+     (Rabs
+        (round radix2 fexp (round_mode mode_NE)
+           (Z2R (Z.pos m) * bpow base_r (Z.pos p)))) (bpow radix2 emax)).
+  + intros (P & Q & R). split. auto. split. auto. rewrite R. rewrite Rcompare_Gt; auto. 
+    apply Rmult_lt_0_compat. apply (Z2R_lt 0). xomega. apply bpow_gt_0. 
+  + intros P. rewrite P. unfold binary_overflow. 
+    replace (Rlt_bool (Z2R (Z.pos m) * bpow base_r (Z.pos p)) 0) with false.
+    auto.
+    rewrite Rlt_bool_false; auto. apply Rlt_le. apply Rmult_lt_0_compat. apply (Z2R_lt 0). xomega. apply bpow_gt_0. 
+- generalize (Bdiv_correct_aux prec emax prec_gt_0 Hmax mode_NE false m 0 false (base ^ p) 0).
+  set (f := 
+      match Fdiv_core_binary prec (Z.pos m) 0 (Z.pos (base ^ p)) 0 with
+      | (0, _, _) => F754_nan false 1
+      | (Z.pos mz0, ez, lz) =>
+          binary_round_aux prec emax mode_NE (xorb false false) mz0 ez lz
+      | (Z.neg _, _, _) => F754_nan false 1
+      end).
+  fold emin; fold fexp. rewrite ! A. unfold cond_Zopp. 
+  assert (B: (Z2R (Z.pos m) / Z2R (Z.pos (base ^ p)) =
+              Z2R (Z.pos m) * bpow base_r (Z.neg p))%R).
+  { change (Z.neg p) with (- (Z.pos p)). rewrite bpow_opp. unfold Rdiv. f_equal. f_equal. 
+    unfold bpow. f_equal. simpl. apply Pos2Z.inj_pow_pos. }
+  rewrite ! B. 
+  destruct (Rlt_bool
+     (Rabs
+        (round radix2 fexp (round_mode mode_NE)
+           (Z2R (Z.pos m) * bpow base_r (Z.neg p)))) (bpow radix2 emax)).
+  + intros (P & Q & R & S).
+    split. rewrite B2R_FF2B. exact Q. 
+    split. rewrite is_finite_FF2B. auto.
+    rewrite Bsign_FF2B. auto. 
+  + intros (P & Q). rewrite B2FF_FF2B. auto.
 Qed.
+
+End FP_PARSING.
 
 Local Notation __ := (refl_equal Datatypes.Lt).
 
