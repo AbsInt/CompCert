@@ -11,6 +11,7 @@
 (* *********************************************************************)
 
 open Printf
+open Commandline
 open Camlcoq
 open Clflags
 open Timing
@@ -89,7 +90,6 @@ let parse_c_file sourcename ifile =
   (* Simplification options *)
   let simplifs =
     "b" (* blocks: mandatory *)
-(*  ^ (if !option_flonglong then "l" else "") *)
   ^ (if !option_fstruct_return then "s" else "")
   ^ (if !option_fbitfields then "f" else "")
   ^ (if !option_fpacked_structs then "p" else "")
@@ -170,6 +170,14 @@ let compile_c_file sourcename ifile ofile =
 (* From Cminor to asm *)
 
 let compile_cminor_file ifile ofile =
+  (* Prepare to dump RTL, Mach, etc, if requested *)
+  let set_dest dst opt ext =
+    dst := if !opt then Some (output_filename ifile ".cm" ext)
+                   else None in
+  set_dest PrintRTL.destination option_drtl ".rtl";
+  set_dest Regalloc.destination_alloctrace option_dalloctrace ".alloctrace";
+  set_dest PrintLTL.destination option_dltl ".ltl";
+  set_dest PrintMach.destination option_dmach ".mach";
   Sections.initialize();
   let ic = open_in ifile in
   let lb = Lexing.from_channel ic in
@@ -292,7 +300,7 @@ let process_cminor_file sourcename =
       then output_filename sourcename ".cm" ".s"
       else Filename.temp_file "compcert" ".s" in
     compile_cminor_file sourcename asmname;
-    let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
+    let objname = output_filename ~final: !option_c sourcename ".cm" ".o" in
     assemble asmname objname;
     if not !option_dasm then safe_remove asmname;
     objname
@@ -318,6 +326,17 @@ let process_S_file sourcename =
     objname
   end
 
+(* Processing of .h files *)
+
+let process_h_file sourcename =
+  if !option_E then begin
+    preprocess sourcename (output_filename_default "-");
+    ""
+  end else begin
+    eprintf "Error: input file %s ignored (not in -E mode)\n" sourcename;
+    exit 2
+  end    
+
 (* Record actions to be performed after parsing the command line *)
 
 let actions : ((string -> string) * string) list ref = ref []
@@ -340,57 +359,6 @@ let explode_comma_option s =
   match Str.split (Str.regexp ",") s with
   | [] -> assert false
   | hd :: tl -> tl
-
-type action =
-  | Set of bool ref
-  | Unset of bool ref
-  | Self of (string -> unit)
-  | String of (string -> unit)
-  | Integer of (int -> unit)
-
-let rec find_action s = function
-  | [] -> None
-  | (re, act) :: rem ->
-      if Str.string_match re s 0 then Some act else find_action s rem
-
-let parse_cmdline spec usage =
-  let acts = List.map (fun (pat, act) -> (Str.regexp pat, act)) spec in
-  let rec parse i =
-    if i < Array.length Sys.argv then begin
-      let s = Sys.argv.(i) in
-      match find_action s acts with
-      | None ->
-          if s <> "-help" && s <> "--help" 
-          then eprintf "Unknown argument `%s'\n" s
-          else printf "%s" usage;
-          exit 2
-      | Some(Set r) ->
-          r := true; parse (i+1)
-      | Some(Unset r) ->
-          r := false; parse (i+1)
-      | Some(Self fn) ->
-          fn s; parse (i+1)
-      | Some(String fn) ->
-          if i + 1 < Array.length Sys.argv then begin
-            fn Sys.argv.(i+1); parse (i+2)
-          end else begin
-            eprintf "Option `%s' expects an argument\n" s; exit 2
-          end
-      | Some(Integer fn) ->
-          if i + 1 < Array.length Sys.argv then begin
-            let n =
-              try
-                int_of_string Sys.argv.(i+1)
-              with Failure _ ->
-                eprintf "Argument to option `%s' must be an integer\n" s;
-                exit 2
-            in
-            fn n; parse (i+2)
-          end else begin
-            eprintf "Option `%s' expects an argument\n" s; exit 2
-          end
-    end
-  in parse 1
 
 let usage_string =
 "The CompCert C verified compiler, version " ^ Configuration.version ^ "
@@ -478,75 +446,91 @@ let num_source_files = ref 0
 
 let cmdline_actions =
   let f_opt name ref =
-    ["-f" ^ name ^ "$", Set ref; "-fno-" ^ name ^ "$", Unset ref] in
+    [Exact("-f" ^ name), Set ref; Exact("-fno-" ^ name), Unset ref] in
   [
-  "-I$", String(fun s -> prepro_options := s :: "-I" :: !prepro_options);
-  "-D$", String(fun s -> prepro_options := s :: "-D" :: !prepro_options);
-  "-U$", String(fun s -> prepro_options := s :: "-U" :: !prepro_options);
-  "-[IDU].", Self(fun s -> prepro_options := s :: !prepro_options);
-  "-[lL].", Self(fun s -> push_linker_arg s);
-  "-o$", String(fun s -> option_o := Some s);
-  "-E$", Set option_E;
-  "-S$", Set option_S;
-  "-c$", Set option_c;
-  "-v$", Set option_v;
-  "-g$", Self (fun s -> option_g := true; push_linker_arg s);
-  "-stdlib$", String(fun s -> stdlib_path := s);
-  "-dparse$", Set option_dparse;
-  "-dc$", Set option_dcmedium;
-  "-dclight$", Set option_dclight;
-  "-dcminor", Set option_dcminor;
-  "-drtl$", Set option_drtl;
-  "-dltl$", Set option_dltl;
-  "-dalloctrace$", Set option_dalloctrace;
-  "-dmach$", Set option_dmach;
-  "-dasm$", Set option_dasm;
-  "-sdump$", Set option_sdump;
-  "-interp$", Set option_interp;
-  "-quiet$", Self (fun _ -> Interp.trace := 0);
-  "-trace$", Self (fun _ -> Interp.trace := 2);
-  "-random$", Self (fun _ -> Interp.mode := Interp.Random);
-  "-all$", Self (fun _ -> Interp.mode := Interp.All);
-  ".*\\.c$", Self (fun s ->
-      push_action process_c_file s;
-      incr num_source_files);
-  ".*\\.[ip]$", Self (fun s ->
-      push_action process_i_file s;
-      incr num_source_files);
-  ".*\\.cm$", Self (fun s ->
-      push_action process_cminor_file s;
-      incr num_source_files);
-  ".*\\.s$", Self (fun s ->
-      push_action process_s_file s;
-      incr num_source_files);
-  ".*\\.S$", Self (fun s ->
-      push_action process_S_file s;
-      incr num_source_files);
-  ".*\\.[oa]$", Self (fun s ->
-      push_linker_arg s);
-  "-Wp,", Self (fun s ->
-      prepro_options := List.rev_append (explode_comma_option s) !prepro_options);
-  "-Wa,", Self (fun s ->
-      assembler_options := s :: !assembler_options);
-  "-Wl,", Self (fun s ->
-      push_linker_arg s);
-  "-Os$", Set option_Osize;
-  "-O$", Unset option_Osize;
-  "-timings$", Set option_timings;
-  "-mthumb$", Set option_mthumb;
-  "-marm$", Unset option_mthumb;
-  "-fsmall-data$", Integer(fun n -> option_small_data := n);
-  "-fsmall-const$", Integer(fun n -> option_small_const := n);
-  "-ffloat-const-prop$", Integer(fun n -> option_ffloatconstprop := n);
-  "-falign-functions$", Integer(fun n -> option_falignfunctions := Some n);
-  "-falign-branch-targets", Integer(fun n -> option_falignbranchtargets := n);
-  "-falign-cond-branches", Integer(fun n -> option_faligncondbranchs := n);
-  "-fall$", Self (fun _ ->
+(* File arguments *)
+  Suffix ".c", Self (fun s ->
+      push_action process_c_file s; incr num_source_files);
+  Suffix ".i", Self (fun s ->
+      push_action process_i_file s; incr num_source_files);
+  Suffix ".p", Self (fun s ->
+      push_action process_i_file s; incr num_source_files);
+  Suffix ".cm", Self (fun s ->
+      push_action process_cminor_file s; incr num_source_files);
+  Suffix ".s", Self (fun s ->
+      push_action process_s_file s; incr num_source_files);
+  Suffix ".S", Self (fun s ->
+      push_action process_S_file s; incr num_source_files);
+  Suffix ".o", Self push_linker_arg;
+  Suffix ".a", Self push_linker_arg;
+  (* GCC compatibility: .o.ext files are also object files *)
+  _Regexp ".*\\.o\\.", Self push_linker_arg;
+  (* GCC compatibility: .h files can be preprocessed with -E *)
+  Suffix ".h", Self (fun s ->
+      push_action process_h_file s; incr num_source_files);
+(* Processing options *)
+  Exact "-c", Set option_c;
+  Exact "-E", Set option_E;
+  Exact "-S", Set option_S;
+  Exact "-o", String(fun s -> option_o := Some s);
+(* Preprocessing options *)
+  Exact "-I", String(fun s -> prepro_options := s :: "-I" :: !prepro_options);
+  Prefix "-I", Self(fun s -> prepro_options := s :: !prepro_options);
+  Exact "-D", String(fun s -> prepro_options := s :: "-D" :: !prepro_options);
+  Prefix "-D", Self(fun s -> prepro_options := s :: !prepro_options);
+  Exact "-U", String(fun s -> prepro_options := s :: "-U" :: !prepro_options);
+  Prefix "-U", Self(fun s -> prepro_options := s :: !prepro_options);
+  Prefix "-Wp,", Self (fun s ->
+    prepro_options := List.rev_append (explode_comma_option s) !prepro_options);
+(* Language support options -- more below *)
+  Exact "-fall", Self (fun _ ->
               List.iter (fun r -> r := true) language_support_options);
-  "-fnone$", Self (fun _ ->
+  Exact "-fnone", Self (fun _ ->
               List.iter (fun r -> r := false) language_support_options);
+(* Debugging options *)
+  Exact "-g", Self (fun s -> option_g := true; push_linker_arg s);
+(* Code generation options -- more below *)
+  Exact "-Os", Set option_Osize;
+  Exact "-O", Unset option_Osize;
+  Exact "-fsmall-data", Integer(fun n -> option_small_data := n);
+  Exact "-fsmall-const", Integer(fun n -> option_small_const := n);
+  Exact "-ffloat-const-prop", Integer(fun n -> option_ffloatconstprop := n);
+  Exact "-falign-functions", Integer(fun n -> option_falignfunctions := Some n);
+  Exact "-falign-branch-targets", Integer(fun n -> option_falignbranchtargets := n);
+  Exact "-falign-cond-branches", Integer(fun n -> option_faligncondbranchs := n);
+(* Target processor options *)
+  Exact "-mthumb", Set option_mthumb;
+  Exact "-marm", Unset option_mthumb;
+(* Assembling options *)
+  Prefix "-Wa,", Self (fun s -> assembler_options := s :: !assembler_options);
+(* Linking options *)
+  Prefix "-l", Self push_linker_arg;
+  Prefix "-L", Self push_linker_arg;
+  Prefix "-Wl,", Self push_linker_arg;
+(* Tracing options *)
+  Exact "-dparse", Set option_dparse;
+  Exact "-dc", Set option_dcmedium;
+  Exact "-dclight", Set option_dclight;
+  Exact "-dcminor", Set option_dcminor;
+  Exact "-drtl", Set option_drtl;
+  Exact "-dltl", Set option_dltl;
+  Exact "-dalloctrace", Set option_dalloctrace;
+  Exact "-dmach", Set option_dmach;
+  Exact "-dasm", Set option_dasm;
+  Exact "-sdump", Set option_sdump;
+(* General options *) 
+  Exact "-v", Set option_v;
+  Exact "-stdlib", String(fun s -> stdlib_path := s);
+  Exact "-timings", Set option_timings;
+(* Interpreter mode *)
+  Exact "-interp", Set option_interp;
+  Exact "-quiet", Self (fun _ -> Interp.trace := 0);
+  Exact "-trace", Self (fun _ -> Interp.trace := 2);
+  Exact "-random", Self (fun _ -> Interp.mode := Interp.Random);
+  Exact "-all", Self (fun _ -> Interp.mode := Interp.All)
   ]
-  @ f_opt "tailcalls" option_ftailcalls
+(* -f options: come in -f and -fno- variants *)
+(* Language support options *)
   @ f_opt "longdouble" option_flongdouble
   @ f_opt "struct-return" option_fstruct_return
   @ f_opt "bitfields" option_fbitfields
@@ -554,6 +538,8 @@ let cmdline_actions =
   @ f_opt "unprototyped" option_funprototyped
   @ f_opt "packed-structs" option_fpacked_structs
   @ f_opt "inline-asm" option_finline_asm
+(* Code generation options *)
+  @ f_opt "tailcalls" option_ftailcalls
   @ f_opt "fpu" option_ffpu
   @ f_opt "sse" option_ffpu (* backward compatibility *)
 
