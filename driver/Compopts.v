@@ -28,7 +28,16 @@ Parameter generate_float_constants: unit -> bool.
 Parameter va_strict: unit -> bool.
 
 (** Flag -ftailcalls.  For tail call optimization. *)
-Parameter eliminate_tailcalls: unit -> bool.
+Parameter optim_tailcalls: unit -> bool.
+
+(** Flag -fconstprop.  For constant propagation. *)
+Parameter optim_constprop: unit -> bool.
+
+(** Flag -fcse.  For common subexpression elimination. *)
+Parameter optim_CSE: unit -> bool.
+
+(** Flag -fredundancy.  For dead code elimination. *)
+Parameter optim_redundancy: unit -> bool.
 
 (** Flag -fthumb.  For the ARM back-end. *)
 Parameter thumb: unit -> bool.

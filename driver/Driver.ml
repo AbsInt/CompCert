@@ -393,15 +393,21 @@ Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fnone         Turn off all language support options above
 Debugging options:
   -g             Generate debugging information
-Code generation options: (use -fno-<opt> to turn off -f<opt>) :
-  -O             Optimize for speed [on by default]
-  -Os            Optimize for code size
+Optimization options: (use -fno-<opt> to turn off -f<opt>)
+  -O             Optimize the compiled code [on by default]
+  -O0            Do not optimize the compiled code
+  -O1 -O2 -O3    Synonymous for -O
+  -Os            Optimize for code size in preference to code speed
+  -ftailcalls    Optimize function calls in tail position [on]
+  -fconst-prop   Perform global constant propagation  [on]
+  -ffloat-const-prop <n>  Control constant propagation of floats
+                   (<n>=0: none, <n>=1: limited, <n>=2: full; default is full)
+  -fcse          Perform common subexpression elimination [on]
+  -fredundancy   Perform redundancy elimination [on]
+Code generation options: (use -fno-<opt> to turn off -f<opt>)
   -ffpu          Use FP registers for some integer operations [on]
   -fsmall-data <n>  Set maximal size <n> for allocation in small data area
   -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
-  -ffloat-const-prop <n>  Control constant propagation of floats
-                   (<n>=0: none, <n>=1: limited, <n>=2: full; default is full)
-  -ftailcalls    Optimize function calls in tail position [on]
   -falign-functions <n>  Set alignment (in bytes) of function entry points
   -falign-branch-targets <n>  Set alignment (in bytes) of branch targets
   -falign-cond-branches <n>  Set alignment (in bytes) of conditional branches
@@ -441,6 +447,13 @@ let language_support_options = [
   option_fstruct_return; option_fvararg_calls; option_funprototyped;
   option_fpacked_structs; option_finline_asm
 ]
+
+let optimization_options = [
+  option_ftailcalls; option_fconstprop; option_fcse; option_fredundancy
+]
+
+let set_all opts = List.iter (fun r -> r := true) opts
+let unset_all opts = List.iter (fun r -> r := false) opts
 
 let num_source_files = ref 0
 
@@ -483,15 +496,15 @@ let cmdline_actions =
   Prefix "-Wp,", Self (fun s ->
     prepro_options := List.rev_append (explode_comma_option s) !prepro_options);
 (* Language support options -- more below *)
-  Exact "-fall", Self (fun _ ->
-              List.iter (fun r -> r := true) language_support_options);
-  Exact "-fnone", Self (fun _ ->
-              List.iter (fun r -> r := false) language_support_options);
+  Exact "-fall", Self (fun _ -> set_all language_support_options);
+  Exact "-fnone", Self (fun _ -> unset_all language_support_options);
 (* Debugging options *)
   Exact "-g", Self (fun s -> option_g := true; push_linker_arg s);
 (* Code generation options -- more below *)
+  Exact "-O0", Self (fun _ -> unset_all optimization_options);
+  Exact "-O", Self (fun _ -> set_all optimization_options);
+  _Regexp "-O[123]$", Self (fun _ -> set_all optimization_options);
   Exact "-Os", Set option_Osize;
-  Exact "-O", Unset option_Osize;
   Exact "-fsmall-data", Integer(fun n -> option_small_data := n);
   Exact "-fsmall-const", Integer(fun n -> option_small_const := n);
   Exact "-ffloat-const-prop", Integer(fun n -> option_ffloatconstprop := n);
@@ -538,8 +551,12 @@ let cmdline_actions =
   @ f_opt "unprototyped" option_funprototyped
   @ f_opt "packed-structs" option_fpacked_structs
   @ f_opt "inline-asm" option_finline_asm
-(* Code generation options *)
+(* Optimization options *)
   @ f_opt "tailcalls" option_ftailcalls
+  @ f_opt "const-prop" option_fconstprop
+  @ f_opt "cse" option_fcse
+  @ f_opt "redundancy" option_fredundancy
+(* Code generation options *)
   @ f_opt "fpu" option_ffpu
   @ f_opt "sse" option_ffpu (* backward compatibility *)
 

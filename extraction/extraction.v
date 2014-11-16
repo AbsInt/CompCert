@@ -92,8 +92,14 @@ Extract Constant Compopts.propagate_float_constants =>
   "fun _ -> !Clflags.option_ffloatconstprop >= 1".
 Extract Constant Compopts.generate_float_constants =>
   "fun _ -> !Clflags.option_ffloatconstprop >= 2".
-Extract Constant Compopts.eliminate_tailcalls =>
+Extract Constant Compopts.optim_tailcalls =>
   "fun _ -> !Clflags.option_ftailcalls".
+Extract Constant Compopts.optim_constprop =>
+  "fun _ -> !Clflags.option_fconstprop".
+Extract Constant Compopts.optim_CSE =>
+  "fun _ -> !Clflags.option_fcse".
+Extract Constant Compopts.optim_redundancy =>
+  "fun _ -> !Clflags.option_fredundancy".
 Extract Constant Compopts.thumb =>
   "fun _ -> !Clflags.option_mthumb".
 

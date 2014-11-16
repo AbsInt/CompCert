@@ -71,6 +71,8 @@ Require Linearizeproof.
 Require CleanupLabelsproof.
 Require Stackingproof.
 Require Asmgenproof.
+(** Command-line flags. *)
+Require Import Compopts.
 
 (** Pretty-printers (defined in Caml). *)
 Parameter print_Clight: Clight.program -> unit.
@@ -103,6 +105,14 @@ Definition print {A: Type} (printer: A -> unit) (prog: A) : A :=
 
 Definition time {A B: Type} (name: string) (f: A -> B) : A -> B := f.
 
+Definition total_if {A: Type}
+          (flag: unit -> bool) (f: A -> A) (prog: A) : A :=
+  if flag tt then f prog else prog.
+
+Definition partial_if {A: Type}
+          (flag: unit -> bool) (f: A -> res A) (prog: A) : res A :=
+  if flag tt then f prog else OK prog.
+
 (** We define three translation functions for whole programs: one
   starting with a C program, one with a Cminor program, one with an
   RTL program.  The three translations produce Asm programs ready for
@@ -111,24 +121,24 @@ Definition time {A B: Type} (name: string) (f: A -> B) : A -> B := f.
 Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
    OK f
    @@ print (print_RTL 0)
-   @@ time "Tail calls" Tailcall.transf_program
+   @@ total_if Compopts.optim_tailcalls (time "Tail calls" Tailcall.transf_program)
    @@ print (print_RTL 1)
   @@@ time "Inlining" Inlining.transf_program
    @@ print (print_RTL 2)
    @@ time "Renumbering" Renumber.transf_program
    @@ print (print_RTL 3)
-   @@ time "Constant propagation" Constprop.transf_program
+   @@ total_if Compopts.optim_constprop (time "Constant propagation" Constprop.transf_program)
    @@ print (print_RTL 4)
-   @@ time "Renumbering" Renumber.transf_program
+   @@ total_if Compopts.optim_constprop (time "Renumbering" Renumber.transf_program)
    @@ print (print_RTL 5)
-  @@@ time "CSE" CSE.transf_program
+  @@@ partial_if Compopts.optim_CSE (time "CSE" CSE.transf_program)
    @@ print (print_RTL 6)
-  @@@ time "Dead code" Deadcode.transf_program
+  @@@ partial_if Compopts.optim_redundancy (time "Redundancy elimination" Deadcode.transf_program)
    @@ print (print_RTL 7)
   @@@ time "Register allocation" Allocation.transf_program
    @@ print print_LTL
    @@ time "Branch tunneling" Tunneling.tunnel_program
-  @@@ Linearize.transf_program
+  @@@ time "CFG linearization" Linearize.transf_program
    @@ time "Label cleanup" CleanupLabels.transf_program
   @@@ time "Mach generation" Stacking.transf_program
    @@ print print_Mach
@@ -175,6 +185,33 @@ Proof.
   intros. destruct x; simpl. rewrite print_identity. auto. auto. 
 Qed.
 
+Remark forward_simulation_identity:
+  forall sem, forward_simulation sem sem.
+Proof.
+  intros. apply forward_simulation_step with (fun s1 s2 => s2 = s1); intros.
+- auto.
+- exists s1; auto.
+- subst s2; auto.
+- subst s2. exists s1'; auto. 
+Qed. 
+
+Lemma total_if_simulation:
+  forall (A: Type) (sem: A -> semantics) (flag: unit -> bool) (f: A -> A) (prog: A),
+  (forall p, forward_simulation (sem p) (sem (f p))) ->
+  forward_simulation (sem prog) (sem (total_if flag f prog)).
+Proof.
+  intros. unfold total_if. destruct (flag tt). auto. apply forward_simulation_identity.
+Qed.
+
+Lemma partial_if_simulation:
+  forall (A: Type) (sem: A -> semantics) (flag: unit -> bool) (f: A -> res A) (prog tprog: A),
+  partial_if flag f prog = OK tprog ->
+  (forall p tp, f p = OK tp -> forward_simulation (sem p) (sem tp)) ->
+  forward_simulation (sem prog) (sem tprog).
+Proof.
+  intros. unfold partial_if in *. destruct (flag tt). eauto. inv H. apply forward_simulation_identity.
+Qed.
+
 (** * Semantic preservation *)
 
 (** We prove that the [transf_program] translations preserve semantics
@@ -200,31 +237,44 @@ Proof.
   unfold transf_rtl_program, time in H.
   repeat rewrite compose_print_identity in H.
   simpl in H.
-  set (p1 := Tailcall.transf_program p) in *.
+  set (p1 := total_if optim_tailcalls Tailcall.transf_program p) in *.
   destruct (Inlining.transf_program p1) as [p11|] eqn:?; simpl in H; try discriminate.
   set (p12 := Renumber.transf_program p11) in *.
-  set (p2 := Constprop.transf_program p12) in *.
-  set (p21 := Renumber.transf_program p2) in *.
-  destruct (CSE.transf_program p21) as [p3|] eqn:?; simpl in H; try discriminate.
-  destruct (Deadcode.transf_program p3) as [p31|] eqn:?; simpl in H; try discriminate.
+  set (p2 := total_if optim_constprop Constprop.transf_program p12) in *.
+  set (p21 := total_if optim_constprop Renumber.transf_program p2) in *.
+  destruct (partial_if optim_CSE CSE.transf_program p21) as [p3|] eqn:?; simpl in H; try discriminate.
+  destruct (partial_if optim_redundancy Deadcode.transf_program p3) as [p31|] eqn:?; simpl in H; try discriminate.
   destruct (Allocation.transf_program p31) as [p4|] eqn:?; simpl in H; try discriminate.
   set (p5 := Tunneling.tunnel_program p4) in *.
   destruct (Linearize.transf_program p5) as [p6|] eqn:?; simpl in H; try discriminate.
   set (p7 := CleanupLabels.transf_program p6) in *.
   destruct (Stacking.transf_program p7) as [p8|] eqn:?; simpl in H; try discriminate.
-  eapply compose_forward_simulation. apply Tailcallproof.transf_program_correct. 
-  eapply compose_forward_simulation. apply Inliningproof.transf_program_correct. eassumption.
-  eapply compose_forward_simulation. apply Renumberproof.transf_program_correct. 
-  eapply compose_forward_simulation. apply Constpropproof.transf_program_correct. 
-  eapply compose_forward_simulation. apply Renumberproof.transf_program_correct. 
-  eapply compose_forward_simulation. apply CSEproof.transf_program_correct. eassumption.
-  eapply compose_forward_simulation. apply Deadcodeproof.transf_program_correct. eassumption.
-  eapply compose_forward_simulation. apply Allocproof.transf_program_correct. eassumption.
-  eapply compose_forward_simulation. apply Tunnelingproof.transf_program_correct.
-  eapply compose_forward_simulation. apply Linearizeproof.transf_program_correct. eassumption. 
-  eapply compose_forward_simulation. apply CleanupLabelsproof.transf_program_correct. 
-  eapply compose_forward_simulation. apply Stackingproof.transf_program_correct.
-    eexact Asmgenproof.return_address_exists. eassumption.
+  apply compose_forward_simulation with (RTL.semantics p1).
+    apply total_if_simulation. apply Tailcallproof.transf_program_correct. 
+  apply compose_forward_simulation with (RTL.semantics p11).
+    apply Inliningproof.transf_program_correct; auto.
+  apply compose_forward_simulation with (RTL.semantics p12).
+    apply Renumberproof.transf_program_correct. 
+  apply compose_forward_simulation with (RTL.semantics p2).
+    apply total_if_simulation. apply Constpropproof.transf_program_correct.
+  apply compose_forward_simulation with (RTL.semantics p21).
+    apply total_if_simulation. apply Renumberproof.transf_program_correct. 
+  apply compose_forward_simulation with (RTL.semantics p3).
+    eapply partial_if_simulation; eauto.  apply CSEproof.transf_program_correct.
+  apply compose_forward_simulation with (RTL.semantics p31).
+    eapply partial_if_simulation; eauto. apply Deadcodeproof.transf_program_correct.
+  apply compose_forward_simulation with (LTL.semantics p4).
+    apply Allocproof.transf_program_correct; auto.
+  apply compose_forward_simulation with (LTL.semantics p5).
+    apply Tunnelingproof.transf_program_correct.
+  apply compose_forward_simulation with (Linear.semantics p6).
+    apply Linearizeproof.transf_program_correct; auto.
+  apply compose_forward_simulation with (Linear.semantics p7).
+    apply CleanupLabelsproof.transf_program_correct. 
+  apply compose_forward_simulation with (Mach.semantics Asmgenproof0.return_address_offset p8).
+    apply Stackingproof.transf_program_correct.
+    exact Asmgenproof.return_address_exists.
+    auto.
   apply Asmgenproof.transf_program_correct; eauto.
   split. auto. 
   apply forward_to_backward_simulation. auto. 
