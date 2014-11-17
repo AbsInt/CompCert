@@ -22,6 +22,27 @@ let set_conf_file s =
   | Some _ -> raise (Arg.Bad "multiple configuration files given on command line")
   end
 
+let read_sdumps_from_channel ic =
+  try
+    while true do
+      let l = input_line ic in
+      if l <> "" then sdump_files := l :: !sdump_files
+    done
+  with End_of_file ->
+    ()
+
+let read_sdumps_from_file f =
+  if f = "-" then
+    read_sdumps_from_channel stdin
+  else begin
+    try
+      let ic = open_in f in
+      read_sdumps_from_channel ic;
+      close_in ic
+    with Sys_error msg ->
+      Printf.eprintf "Error reading file: %s\n" msg; exit 2
+  end
+
 let option_disassemble = ref false
 let disassemble_list = ref ([]: string list)
 let add_disassemble s =
@@ -31,12 +52,15 @@ let add_disassemble s =
 let options = [
   (* Main options *)
   "-exe", Arg.String set_elf_file,
-  "<filename> Specify the ELF executable file to analyze";
+    "<filename> Specify the ELF executable file to analyze";
   "-conf", Arg.String set_conf_file,
-  "<filename> Specify a configuration file";
+    "<filename> Specify a configuration file";
+  "-files-from", Arg.String read_sdumps_from_file,
+    "<filename> Read names of .sdump files from the given file\n\
+       \t(or from standard input if <filename> is '-')";
   (* Parsing behavior *)
   "-relaxed", Arg.Set ELF_parsers.relaxed,
-  "Allows the following behaviors in the ELF parser:
+  "Allows the following behaviors in the ELF parser:\n\
 \t* Use of a fallback heuristic to resolve symbols bootstrapped at load time";
   (* Printing behavior *)
   "-no-exhaustive", Arg.Clear Check.exhaustivity,

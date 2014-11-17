@@ -14,7 +14,6 @@
 
 Require Import Coqlib.
 Require Import Maps.
-Require Import Compopts.
 Require Import AST.
 Require Import Registers.
 Require Import Op.
@@ -100,7 +99,7 @@ Definition transf_instr (f: function) (pc: node) (instr: instruction) :=
   using a compilation option. *)
 
 Definition transf_function (f: function) : function :=
-  if zeq f.(fn_stacksize) 0 && eliminate_tailcalls tt
+  if zeq f.(fn_stacksize) 0
   then RTL.transf_function (transf_instr f) f
   else f.
 
