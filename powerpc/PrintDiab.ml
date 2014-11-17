@@ -175,6 +175,9 @@ module Diab_System =
         let info_section_end oc =
           fprintf oc "%a\n" label !debug_end_addr
 
+        let print_entry oc entry abbrv =
+          ()
+
       end:DWARF_DEFS)
 
   end:SYSTEM)

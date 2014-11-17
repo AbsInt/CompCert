@@ -54,6 +54,7 @@ module type DWARF_DEFS =
       val bound_ref_type_abbr: int
       (* Functions for the printing of the debug information *)
       val info_section_start: out_channel -> unit
+      val print_entry: out_channel -> dw_entry -> int -> unit
       val info_section_end: out_channel -> unit
     end
 
@@ -309,8 +310,13 @@ module DwarfPrinter(Defs:DWARF_DEFS) :
     let print_debug oc entry =
       compute_abbrv entry;
       print_abbrv oc;
-      info_section_start oc;
-      
-      info_section_end oc
+      Defs.info_section_start oc;
+      entry_iter_sib (fun sib entry -> 
+         let has_sib = match sib with 
+        | None -> false
+        | Some _ -> true in
+        let abbrv =  get_abbrv entry has_sib in
+        Defs.print_entry oc entry abbrv) entry;
+      Defs.info_section_end oc
 
   end)

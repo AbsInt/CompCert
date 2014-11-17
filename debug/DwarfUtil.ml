@@ -44,11 +44,6 @@ let add_children entry child =
   {entry with children = child::entry.children;}
 
 
-(* Iter over the tree in prefix order *)
-let rec entry_iter f entry =
-  f entry.tag;
-  List.iter (entry_iter f) entry.children
-
 let list_iter_with_next f list =
   let rec aux = (function
     | [] -> ()
