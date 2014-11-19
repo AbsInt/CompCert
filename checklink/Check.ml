@@ -961,7 +961,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               let tblvaddr = Int32.(
                 add (shift_left (Safe32.of_int simm1) 16) (exts d2)
               ) in
-              let tblsize = Safe32.of_int (32 * List.length table) in
+              let tblsize = Safe32.of_int (4 * List.length table) in
               OK(fw)
               >>= match_iregs  GPR12 rA0
               >>= match_iregs  reg   rS0
