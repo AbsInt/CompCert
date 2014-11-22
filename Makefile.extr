@@ -1,0 +1,134 @@
+#######################################################################
+#                                                                     #
+#              The Compcert verified compiler                         #
+#                                                                     #
+#          Xavier Leroy, INRIA Paris-Rocquencourt                     #
+#                                                                     #
+#  Copyright Institut National de Recherche en Informatique et en     #
+#  Automatique.  All rights reserved.  This file is distributed       #
+#  under the terms of the GNU General Public License as published by  #
+#  the Free Software Foundation, either version 2 of the License, or  #
+#  (at your option) any later version.  This file is also distributed #
+#  under the terms of the INRIA Non-Commercial License Agreement.     #
+#                                                                     #
+#######################################################################
+
+# Second-stage Makefile, after Coq extraction
+
+include Makefile.config
+
+DIRS=extraction \
+  lib common $(ARCH) backend cfrontend cparser driver \
+  exportclight
+
+ALLDIRS=$(DIRS)
+ifeq ($(CCHECKLINK),true)
+ALLDIRS+=checklink
+endif
+
+INCLUDES=$(patsubst %,-I %, $(ALLDIRS))
+
+WARNINGS=-w -3
+extraction/%.cmx: WARNINGS +=-w -20
+extraction/%.cmo: WARNINGS +=-w -20
+
+BITSTRING=-package bitstring,bitstring.syntax -syntax bitstring.syntax,camlp4o
+
+OCAMLC=ocamlc -g $(INCLUDES) $(WARNINGS)
+OCAMLOPT=ocamlopt -g $(INCLUDES) $(WARNINGS)
+OCAMLDEP=ocamldep $(INCLUDES)
+
+OCAMLC_P4=ocamlfind $(OCAMLC) $(BITSTRING)
+OCAMLOPT_P4=ocamlfind $(OCAMLOPT) $(BITSTRING)
+OCAMLDEP_P4=ocamlfind $(OCAMLDEP) $(BITSTRING)
+
+MENHIR=menhir --explain
+OCAMLLEX=ocamllex -q
+MODORDER=tools/modorder .depend.extr
+
+PARSERS=backend/CMparser.mly cparser/pre_parser.mly
+LEXERS=backend/CMlexer.mll cparser/Lexer.mll lib/Tokenize.mll
+
+LIBS=str.cmxa
+
+EXECUTABLES=ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte
+GENERATED=$(PARSERS:.mly=.mli) $(PARSERS:.mly=.ml) $(LEXERS:.mll=.ml)
+
+ifeq ($(wildcard .depend.extr),.depend.extr)
+
+CCOMP_OBJS:=$(shell $(MODORDER) driver/Driver.cmx)
+
+ccomp: $(CCOMP_OBJS)
+	@echo "Linking $@"
+	@$(OCAMLOPT) -o $@ $(LIBS) $+
+
+ccomp.byte: $(CCOMP_OBJS:.cmx=.cmo)
+	@echo "Linking $@"
+	@$(OCAMLC) -o $@ $(LIBS:.cmxa=.cma) $+
+
+ifeq ($(CCHECKLINK),true)
+
+CCHECKLINK_OBJS:=$(shell $(MODORDER) checklink/Validator.cmx)
+
+cchecklink: $(CCHECKLINK_OBJS)
+	@echo "Linking $@"
+	@$(OCAMLOPT_P4) -linkpkg -o $@ $(LIBS) $+
+
+cchecklink.byte: $(CCHECKLINK_OBJS:.cmx=.cmo)
+	@echo "Linking $@"
+	@$(OCAMLC_P4) -linkpkg -o $@ $(LIBS:.cmxa=.cma) $+
+
+endif
+
+CLIGHTGEN_OBJS:=$(shell $(MODORDER) exportclight/Clightgen.cmx)
+
+clightgen: $(CLIGHTGEN_OBJS)
+	@echo "Linking $@"
+	@$(OCAMLOPT) -o $@ $(LIBS) $+
+
+clightgen.byte: $(CLIGHTGEN_OBJS:.cmx=.cmo)
+	@echo "Linking $@"
+	@$(OCAMLC) -o $@ $(LIBS:.cmxa=.cma) $+
+
+include .depend.extr
+
+endif
+
+checklink/%.cmx: checklink/%.ml
+	@echo "OCAMLOPT $<"
+	@$(OCAMLOPT_P4) -c $<
+checklink/%.cmo: checklink/%.ml
+	@echo "OCAMLC   $<"
+	@$(OCAMLC_P4) -c $<
+checklink/%.cmi: checklink/%.mli
+	@echo "OCAMLC   $<"
+	@$(OCAMLC_P4) -c $<
+
+%.cmi: %.mli
+	@echo "OCAMLC   $<"
+	@$(OCAMLC) -c $<
+%.cmo: %.ml
+	@echo "OCAMLC   $<"
+	@$(OCAMLC) -c $<
+%.cmx: %.ml
+	@echo "OCAMLOPT $<"
+	@$(OCAMLOPT) -c $<
+
+%.ml %.mli: %.mly
+	$(MENHIR) $<
+%.ml: %.mll
+	$(OCAMLLEX) $<
+
+clean:
+	rm -f $(EXECUTABLES)
+	rm -f $(GENERATED)
+	for d in $(ALLDIRS); do rm -f $$d/*.cm[iox] $$d/*.o; done
+
+depend: $(GENERATED)
+	@echo "Analyzing OCaml dependencies"
+	@for d in $(DIRS); do $(OCAMLDEP) $$d/*.mli $$d/*.ml; done > .depend.extr
+ifeq ($(CCHECKLINK),true)
+	@$(OCAMLDEP_P4) checklink/*.mli checklink/*.ml >> .depend.extr
+endif
+
+

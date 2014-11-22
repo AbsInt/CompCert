@@ -23,28 +23,11 @@ RECDIRS=lib common $(ARCH) backend cfrontend driver flocq exportclight cparser
 
 COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) -as compcert.$(d))
 
-CAMLINCLUDES=$(patsubst %,-I %, $(DIRS)) -I extraction
-
-MENHIR=menhir
 COQC="$(COQBIN)coqc" -q $(COQINCLUDES)
 COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
 COQDOC="$(COQBIN)coqdoc"
 COQEXEC="$(COQBIN)coqtop" $(COQINCLUDES) -batch -load-vernac-source
 COQCHK="$(COQBIN)coqchk" $(COQINCLUDES)
-
-OCAMLBUILD=ocamlbuild
-OCB_OPTIONS=\
-  -j 2 \
-  -no-hygiene \
-  -no-links \
-  $(CAMLINCLUDES)
-OCB_OPTIONS_CHECKLINK=\
-  $(OCB_OPTIONS) \
-  -I checklink \
-  -use-ocamlfind
-OCB_OPTIONS_CLIGHTGEN=\
-  $(OCB_OPTIONS) \
-  -I exportclight
 
 VPATH=$(DIRS)
 GPATH=$(DIRS)
@@ -74,7 +57,7 @@ LIB=Axioms.v Coqlib.v Intv.v Maps.v Heaps.v Lattice.v Ordered.v \
 COMMON=Errors.v AST.v Events.v Globalenvs.v Memdata.v Memtype.v Memory.v \
   Values.v Smallstep.v Behaviors.v Switch.v Determinism.v Unityping.v
 
-# Back-end modules (in backend/, $(ARCH)/, $(ARCH)/$(VARIANT))
+# Back-end modules (in backend/, $(ARCH)/)
 
 BACKEND=\
   Cminor.v Op.v CminorSel.v \
@@ -129,14 +112,6 @@ DRIVER=Compopts.v Compiler.v Complements.v
 FILES=$(LIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(DRIVER) $(FLOCQ) \
   $(PARSERVALIDATOR) $(PARSER)
 
-# Symbolic links vs. copy
-
-ifneq (,$(findstring CYGWIN,$(shell uname -s)))
-SLN=cp
-else
-SLN=ln -s
-endif
-
 all:
 	$(MAKE) proof
 	$(MAKE) extraction
@@ -157,38 +132,28 @@ extraction/STAMP: $(FILES:.v=.vo) extraction/extraction.v $(ARCH)/extractionMach
 	$(COQEXEC) extraction/extraction.v
 	touch extraction/STAMP
 
-ccomp: extraction/STAMP compcert.ini
-	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.native \
-        && rm -f ccomp && $(SLN) _build/driver/Driver.native ccomp
+.depend.extr: extraction/STAMP tools/modorder
+	$(MAKE) -f Makefile.extr depend
 
-ccomp.prof: extraction/STAMP compcert.ini
-	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.p.native \
-        && rm -f ccomp.prof && $(SLN) _build/driver/Driver.p.native ccomp.prof
+ccomp: .depend.extr compcert.ini
+	$(MAKE) -f Makefile.extr ccomp
+ccomp.byte: .depend.extr compcert.ini
+	$(MAKE) -f Makefile.extr ccomp.byte
 
-ccomp.byte: extraction/STAMP compcert.ini
-	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.d.byte \
-        && rm -f ccomp.byte && $(SLN) _build/driver/Driver.d.byte ccomp.byte
+cchecklink: .depend.extr compcert.ini
+	$(MAKE) -f Makefile.extr cchecklink
+cchecklink.byte: .depend.extr compcert.ini
+	$(MAKE) -f Makefile.extr cchecklink.byte
+
+clightgen: .depend.extr compcert.ini exportclight/Clightdefs.vo
+	$(MAKE) -f Makefile.extr clightgen
+clightgen.byte: .depend.extr compcert.ini exportclight/Clightdefs.vo
+	$(MAKE) -f Makefile.extr clightgen.byte
 
 runtime:
 	$(MAKE) -C runtime
 
-cchecklink: compcert.ini
-	$(OCAMLBUILD) $(OCB_OPTIONS_CHECKLINK) Validator.native \
-        && rm -f cchecklink && $(SLN) _build/checklink/Validator.native cchecklink
-
-cchecklink.byte: compcert.ini
-	$(OCAMLBUILD) $(OCB_OPTIONS_CHECKLINK) Validator.d.byte \
-        && rm -f cchecklink.byte && $(SLN) _build/checklink/Validator.d.byte cchecklink.byte
-
-clightgen: extraction/STAMP compcert.ini exportclight/Clightdefs.vo
-	$(OCAMLBUILD) $(OCB_OPTIONS_CLIGHTGEN) Clightgen.native \
-        && rm -f clightgen && $(SLN) _build/exportclight/Clightgen.native clightgen
-
-clightgen.byte: extraction/STAMP compcert.ini exportclight/Clightdefs.vo
-	$(OCAMLBUILD) $(OCB_OPTIONS_CLIGHTGEN) Clightgen.d.byte \
-        && rm -f clightgen.byte && $(SLN) _build/exportclight/Clightgen.d.byte clightgen.byte
-
-.PHONY: proof extraction ccomp ccomp.prof ccomp.byte runtime cchecklink cchecklink.byte clightgen clightgen.byte
+.PHONY: proof extraction runtime
 
 documentation: doc/coq2html $(FILES)
 	mkdir -p doc/html
@@ -201,10 +166,12 @@ doc/coq2html: doc/coq2html.ml
 	ocamlopt -o doc/coq2html str.cmxa doc/coq2html.ml
 
 doc/coq2html.ml: doc/coq2html.mll
-	ocamllex doc/coq2html.mll
+	ocamllex -q doc/coq2html.mll
 
 tools/ndfun: tools/ndfun.ml
 	ocamlopt -o tools/ndfun str.cmxa tools/ndfun.ml
+tools/modorder: tools/modorder.ml
+	ocamlopt -o tools/modorder str.cmxa tools/modorder.ml
 
 latexdoc:
 	cd doc; $(COQDOC) --latex -o doc/doc.tex -g $(FILES)
@@ -257,14 +224,13 @@ endif
 
 clean:
 	rm -f $(patsubst %, %/*.vo, $(DIRS))
-	rm -f ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte
-	rm -rf _build
 	rm -rf doc/html doc/*.glob
 	rm -f doc/coq2html.ml doc/coq2html doc/*.cm? doc/*.o
 	rm -f compcert.ini
-	rm -f extraction/STAMP extraction/*.ml extraction/*.mli
-	rm -f tools/ndfun tools/*.cm? tools/*.o
+	rm -f extraction/STAMP extraction/*.ml extraction/*.mli .depend.extr
+	rm -f tools/ndfun tools/modorder tools/*.cm? tools/*.o
 	rm -f $(ARCH)/ConstpropOp.v $(ARCH)/SelectOp.v backend/SelectDiv.v backend/SelectLong.v
+	$(MAKE) -f Makefile.extr clean
 	$(MAKE) -C runtime clean
 	$(MAKE) -C test clean
 

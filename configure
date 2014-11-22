@@ -253,6 +253,23 @@ case "$menhir_ver" in
         missingtools=true;;
 esac
 
+echo "Testing GNU make..." | tr -d '\n'
+make=''
+for mk in make gmake gnumake; do
+  make_ver=`$mk -v | head -1 | sed -n -e 's/^GNU Make //p'`
+  case "$make_ver" in
+    3.8*|3.9*|[4-9].*)
+        echo "version $make_ver (command '$mk') -- good!"
+        make="$mk"
+        break;;
+  esac
+done
+if test -z "$make"; then 
+  echo "NOT FOUND"
+  echo "Error: make sure GNU Make version 3.80 or later is installed."
+  missingtools=true
+fi
+
 if $missingtools; then
   echo "One or several required tools are missing or too old.  Aborting."
   exit 2
@@ -403,6 +420,7 @@ CompCert configuration:
     Runtime library provided...... $has_runtime_lib
     Library files installed in.... $libdirexp
     cchecklink tool supported..... $cchecklink
+    Build command to use.......... $make
 
 If anything above looks wrong, please edit file ./Makefile.config to correct.
 
