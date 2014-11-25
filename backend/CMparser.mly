@@ -400,10 +400,12 @@ let mkmatch expr cases =
 prog:
    EQUAL STRINGLIT global_declarations EOF
       { { prog_defs = List.rev $3;
+          prog_public = List.map fst $3;  (* FIXME *)
           prog_main = intern_string $2; } }
 
 |  global_declarations EOF
       { { prog_defs = List.rev $1;
+          prog_public = List.map fst $1;  (* FIXME *)
           prog_main = intern_string "main" } }
 ;
 

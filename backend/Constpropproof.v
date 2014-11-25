@@ -54,6 +54,13 @@ Proof.
   apply Genv.find_symbol_transf.
 Qed.
 
+Lemma public_preserved:
+  forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
+Proof.
+  intros; unfold ge, tge, tprog, transf_program. 
+  apply Genv.public_symbol_transf.
+Qed.
+
 Lemma varinfo_preserved:
   forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
 Proof.
@@ -510,7 +517,7 @@ Opaque builtin_strength_reduction.
   left; econstructor; econstructor; split.
   eapply exec_Ibuiltin. eauto. 
   eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_states_succ; eauto. simpl; auto.
   apply set_reg_lessdef; auto.
 
@@ -582,7 +589,7 @@ Opaque builtin_strength_reduction.
   simpl. left; econstructor; econstructor; split.
   eapply exec_function_external; eauto.
   eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   constructor; auto.
 
   (* return *)
@@ -638,7 +645,7 @@ Proof.
   intros [ [n2 [s2' [A B]]] | [n2 [A [B C]]]].
   exists n2; exists s2'; split; auto. left; apply plus_one; auto.
   exists n2; exists s2; split; auto. right; split; auto. subst t; apply star_refl. 
-- eexact symbols_preserved.
+- eexact public_preserved.
 Qed.
 
 End PRESERVATION.

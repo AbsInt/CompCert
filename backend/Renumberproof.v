@@ -47,6 +47,11 @@ Lemma symbols_preserved:
   Genv.find_symbol tge id = Genv.find_symbol ge id.
 Proof (@Genv.find_symbol_transf _ _ _ transf_fundef prog).
 
+Lemma public_preserved:
+  forall id,
+  Genv.public_symbol tge id = Genv.public_symbol ge id.
+Proof (@Genv.public_symbol_transf _ _ _ transf_fundef prog).
+
 Lemma varinfo_preserved:
   forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
 Proof (@Genv.find_var_info_transf _ _ _ transf_fundef prog).
@@ -194,7 +199,7 @@ Proof.
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
     eapply external_call_symbols_preserved; eauto.
-    exact symbols_preserved. exact varinfo_preserved.
+    exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   constructor; auto. eapply reach_succ; eauto. simpl; auto.
 (* cond *)
   econstructor; split.
@@ -219,7 +224,7 @@ Proof.
   econstructor; split.
   eapply exec_function_external; eauto.
     eapply external_call_symbols_preserved; eauto.
-    exact symbols_preserved. exact varinfo_preserved.
+    exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   constructor; auto.
 (* return *)
   inv STACKS. inv H1.
@@ -251,7 +256,7 @@ Theorem transf_program_correct:
   forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
   eapply forward_simulation_step.
-  eexact symbols_preserved.
+  eexact public_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
   exact step_simulation. 

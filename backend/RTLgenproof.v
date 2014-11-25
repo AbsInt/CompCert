@@ -361,6 +361,11 @@ Lemma symbols_preserved:
 Proof
   (Genv.find_symbol_transf_partial transl_fundef _ TRANSL).
 
+Lemma public_preserved:
+  forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
+Proof
+  (Genv.public_symbol_transf_partial transl_fundef _ TRANSL).
+
 Lemma function_ptr_translated:
   forall (b: block) (f: CminorSel.fundef),
   Genv.find_funct_ptr ge b = Some f ->
@@ -687,7 +692,8 @@ Proof.
 (* Exec *)
   split. eapply star_right. eexact EX1.
   eapply exec_Ibuiltin; eauto.
-  eapply external_call_symbols_preserved; eauto. exact symbols_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved; eauto. 
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   reflexivity.
 (* Match-env *)
   split. eauto with rtlg.
@@ -720,7 +726,8 @@ Proof.
   eapply star_left. eapply exec_Icall; eauto.
   simpl. rewrite symbols_preserved. rewrite H. eauto. auto.
   eapply star_left. eapply exec_function_external.
-  eapply external_call_symbols_preserved; eauto. exact symbols_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   apply star_one. apply exec_return. 
   reflexivity. reflexivity. reflexivity.
 (* Match-env *)
@@ -1292,7 +1299,7 @@ Proof.
   left. eapply plus_right. eexact E.
   eapply exec_Ibuiltin. eauto. 
   eapply external_call_symbols_preserved. eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   traceEq. 
   econstructor; eauto. constructor.
   eapply match_env_update_dest; eauto.
@@ -1410,7 +1417,7 @@ Proof.
   econstructor; split.
   left; apply plus_one. eapply exec_function_external; eauto. 
   eapply external_call_symbols_preserved. eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   constructor; auto.
 
   (* return *)
@@ -1448,7 +1455,7 @@ Theorem transf_program_correct:
   forward_simulation (CminorSel.semantics prog) (RTL.semantics tprog).
 Proof.
   eapply forward_simulation_star_wf with (order := lt_state).
-  eexact symbols_preserved.
+  eexact public_preserved.
   eexact transl_initial_states.
   eexact transl_final_states.
   apply lt_state_wf. 

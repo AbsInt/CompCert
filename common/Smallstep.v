@@ -516,8 +516,8 @@ Record forward_simulation (L1 L2: semantics) : Type :=
       exists i', exists s2',
          (Plus L2 s2 t s2' \/ (Star L2 s2 t s2' /\ fsim_order i' i))
       /\ fsim_match_states i' s1' s2';
-    fsim_symbols_preserved:
-      forall id, Genv.find_symbol (globalenv L2) id = Genv.find_symbol (globalenv L1) id
+    fsim_public_preserved:
+      forall id, Genv.public_symbol (globalenv L2) id = Genv.public_symbol (globalenv L1) id
   }.
 
 Implicit Arguments forward_simulation [].
@@ -548,8 +548,8 @@ Section FORWARD_SIMU_DIAGRAMS.
 Variable L1: semantics.
 Variable L2: semantics.
 
-Hypothesis symbols_preserved:
-  forall id, Genv.find_symbol (globalenv L2) id = Genv.find_symbol (globalenv L1) id.
+Hypothesis public_preserved:
+  forall id, Genv.public_symbol (globalenv L2) id = Genv.public_symbol (globalenv L1) id.
 
 Variable match_states: state L1 -> state L2 -> Prop.
 
@@ -809,7 +809,7 @@ Proof.
   right; split. subst t; apply star_refl. red. right. auto. 
   exists s3; auto.
 (* symbols *)
-  intros. transitivity (Genv.find_symbol (globalenv L2) id); apply fsim_symbols_preserved; auto.
+  intros. transitivity (Genv.public_symbol (globalenv L2) id); apply fsim_public_preserved; auto.
 Qed.
 
 End COMPOSE_SIMULATIONS.
@@ -927,8 +927,8 @@ Record backward_simulation (L1 L2: semantics) : Type :=
       exists i', exists s1',
          (Plus L1 s1 t s1' \/ (Star L1 s1 t s1' /\ bsim_order i' i))
       /\ bsim_match_states i' s1' s2';
-    bsim_symbols_preserved:
-      forall id, Genv.find_symbol (globalenv L2) id = Genv.find_symbol (globalenv L1) id
+    bsim_public_preserved:
+      forall id, Genv.public_symbol (globalenv L2) id = Genv.public_symbol (globalenv L1) id
   }.
 
 (** An alternate form of the simulation diagram *)
@@ -957,8 +957,8 @@ Section BACKWARD_SIMU_DIAGRAMS.
 Variable L1: semantics.
 Variable L2: semantics.
 
-Hypothesis symbols_preserved:
-  forall id, Genv.find_symbol (globalenv L2) id = Genv.find_symbol (globalenv L1) id.
+Hypothesis public_preserved:
+  forall id, Genv.public_symbol (globalenv L2) id = Genv.public_symbol (globalenv L1) id.
 
 Variable match_states: state L1 -> state L2 -> Prop.
 
@@ -1201,7 +1201,7 @@ Proof.
 (* simulation *)
   exact bb_simulation.
 (* symbols *)
-  intros. transitivity (Genv.find_symbol (globalenv L2) id); apply bsim_symbols_preserved; auto.
+  intros. transitivity (Genv.public_symbol (globalenv L2) id); apply bsim_public_preserved; auto.
 Qed.
 
 End COMPOSE_BACKWARD_SIMULATIONS.
@@ -1298,7 +1298,7 @@ Proof.
   subst. inv H1. elim H2; auto. 
   right; intuition. 
   eapply match_traces_preserved with (ge1 := (globalenv L2)); auto. 
-  intros; symmetry; apply (fsim_symbols_preserved FS). 
+  intros; symmetry; apply (fsim_public_preserved FS). 
 Qed.
 
 Lemma f2b_determinacy_star:
@@ -1492,7 +1492,7 @@ Proof.
 (* simulation *)
   exact f2b_simulation_step.
 (* symbols preserved *)
-  exact (fsim_symbols_preserved FS).
+  exact (fsim_public_preserved FS).
 Qed.
 
 End FORWARD_TO_BACKWARD.
@@ -1614,7 +1614,7 @@ Proof.
 (* simulation *)
   exact ffs_simulation.
 (* symbols preserved *)
-  simpl. exact (fsim_symbols_preserved sim).
+  simpl. exact (fsim_public_preserved sim).
 Qed.
 
 End FACTOR_FORWARD_SIMULATION.
@@ -1711,7 +1711,7 @@ Proof.
 (* simulation *)
   exact fbs_simulation.
 (* symbols *)
-  simpl. exact (bsim_symbols_preserved sim).
+  simpl. exact (bsim_public_preserved sim).
 Qed.
 
 End FACTOR_BACKWARD_SIMULATION.

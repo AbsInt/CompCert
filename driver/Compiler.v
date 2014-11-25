@@ -46,6 +46,7 @@ Require Renumber.
 Require Constprop.
 Require CSE.
 Require Deadcode.
+Require Unusedglob.
 Require Allocation.
 Require Tunneling.
 Require Linearize.
@@ -65,6 +66,7 @@ Require Renumberproof.
 Require Constpropproof.
 Require CSEproof.
 Require Deadcodeproof.
+Require Unusedglobproof.
 Require Allocproof.
 Require Tunnelingproof.
 Require Linearizeproof.
@@ -135,6 +137,8 @@ Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
    @@ print (print_RTL 6)
   @@@ partial_if Compopts.optim_redundancy (time "Redundancy elimination" Deadcode.transf_program)
    @@ print (print_RTL 7)
+  @@@ time "Unused globals" Unusedglob.transform_program
+   @@ print (print_RTL 8)
   @@@ time "Register allocation" Allocation.transf_program
    @@ print print_LTL
    @@ time "Branch tunneling" Tunneling.tunnel_program
@@ -244,7 +248,8 @@ Proof.
   set (p21 := total_if optim_constprop Renumber.transf_program p2) in *.
   destruct (partial_if optim_CSE CSE.transf_program p21) as [p3|] eqn:?; simpl in H; try discriminate.
   destruct (partial_if optim_redundancy Deadcode.transf_program p3) as [p31|] eqn:?; simpl in H; try discriminate.
-  destruct (Allocation.transf_program p31) as [p4|] eqn:?; simpl in H; try discriminate.
+  destruct (Unusedglob.transform_program p31) as [p32|] eqn:?; simpl in H; try discriminate.
+  destruct (Allocation.transf_program p32) as [p4|] eqn:?; simpl in H; try discriminate.
   set (p5 := Tunneling.tunnel_program p4) in *.
   destruct (Linearize.transf_program p5) as [p6|] eqn:?; simpl in H; try discriminate.
   set (p7 := CleanupLabels.transf_program p6) in *.
@@ -263,6 +268,8 @@ Proof.
     eapply partial_if_simulation; eauto.  apply CSEproof.transf_program_correct.
   apply compose_forward_simulation with (RTL.semantics p31).
     eapply partial_if_simulation; eauto. apply Deadcodeproof.transf_program_correct.
+  apply compose_forward_simulation with (RTL.semantics p32).
+    apply Unusedglobproof.transf_program_correct; auto.
   apply compose_forward_simulation with (LTL.semantics p4).
     apply Allocproof.transf_program_correct; auto.
   apply compose_forward_simulation with (LTL.semantics p5).
