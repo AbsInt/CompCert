@@ -473,15 +473,30 @@ End CLOSURES.
 
 (** The general form of a transition semantics. *)
 
-Record semantics : Type := Semantics {
+Record semantics : Type := Semantics_gen {
   state: Type;
-  funtype: Type;
-  vartype: Type;
-  step : Genv.t funtype vartype -> state -> trace -> state -> Prop;
+  genvtype: Type;
+  step : genvtype -> state -> trace -> state -> Prop;
   initial_state: state -> Prop;
   final_state: state -> int -> Prop;
-  globalenv: Genv.t funtype vartype
+  globalenv: genvtype;
+  symbolenv: Senv.t
 }.
+
+(** The form used in earlier CompCert versions, for backward compatibility. *)
+
+Definition Semantics {state funtype vartype: Type}
+                     (step: Genv.t funtype vartype -> state -> trace -> state -> Prop)
+                     (initial_state: state -> Prop)
+                     (final_state: state -> int -> Prop)
+                     (globalenv: Genv.t funtype vartype) :=
+  {| state := state;
+     genvtype := Genv.t funtype vartype;
+     step := step;
+     initial_state := initial_state;
+     final_state := final_state;
+     globalenv := globalenv;
+     symbolenv := Genv.to_senv globalenv |}.
 
 (** Handy notations. *)
 
@@ -517,7 +532,7 @@ Record forward_simulation (L1 L2: semantics) : Type :=
          (Plus L2 s2 t s2' \/ (Star L2 s2 t s2' /\ fsim_order i' i))
       /\ fsim_match_states i' s1' s2';
     fsim_public_preserved:
-      forall id, Genv.public_symbol (globalenv L2) id = Genv.public_symbol (globalenv L1) id
+      forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
   }.
 
 Implicit Arguments forward_simulation [].
@@ -549,7 +564,7 @@ Variable L1: semantics.
 Variable L2: semantics.
 
 Hypothesis public_preserved:
-  forall id, Genv.public_symbol (globalenv L2) id = Genv.public_symbol (globalenv L1) id.
+  forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id.
 
 Variable match_states: state L1 -> state L2 -> Prop.
 
@@ -809,7 +824,7 @@ Proof.
   right; split. subst t; apply star_refl. red. right. auto. 
   exists s3; auto.
 (* symbols *)
-  intros. transitivity (Genv.public_symbol (globalenv L2) id); apply fsim_public_preserved; auto.
+  intros. transitivity (Senv.public_symbol (symbolenv L2) id); apply fsim_public_preserved; auto.
 Qed.
 
 End COMPOSE_SIMULATIONS.
@@ -822,7 +837,7 @@ Definition single_events (L: semantics) : Prop :=
 Record receptive (L: semantics) : Prop :=
   Receptive {
     sr_receptive: forall s t1 s1 t2,
-      Step L s t1 s1 -> match_traces (globalenv L) t1 t2 -> exists s2, Step L s t2 s2;
+      Step L s t1 s1 -> match_traces (symbolenv L) t1 t2 -> exists s2, Step L s t2 s2;
     sr_traces:
       single_events L
   }.
@@ -831,7 +846,7 @@ Record determinate (L: semantics) : Prop :=
   Determinate {
     sd_determ: forall s t1 s1 t2 s2,
       Step L s t1 s1 -> Step L s t2 s2 ->
-      match_traces (globalenv L) t1 t2 /\ (t1 = t2 -> s1 = s2);
+      match_traces (symbolenv L) t1 t2 /\ (t1 = t2 -> s1 = s2);
     sd_traces:
       single_events L;
     sd_initial_determ: forall s1 s2,
@@ -849,7 +864,7 @@ Hypothesis DET: determinate L.
 
 Lemma sd_determ_1:
   forall s t1 s1 t2 s2,
-  Step L s t1 s1 -> Step L s t2 s2 -> match_traces (globalenv L) t1 t2.
+  Step L s t1 s1 -> Step L s t2 s2 -> match_traces (symbolenv L) t1 t2.
 Proof.
   intros. eapply sd_determ; eauto.
 Qed. 
@@ -928,7 +943,7 @@ Record backward_simulation (L1 L2: semantics) : Type :=
          (Plus L1 s1 t s1' \/ (Star L1 s1 t s1' /\ bsim_order i' i))
       /\ bsim_match_states i' s1' s2';
     bsim_public_preserved:
-      forall id, Genv.public_symbol (globalenv L2) id = Genv.public_symbol (globalenv L1) id
+      forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
   }.
 
 (** An alternate form of the simulation diagram *)
@@ -958,7 +973,7 @@ Variable L1: semantics.
 Variable L2: semantics.
 
 Hypothesis public_preserved:
-  forall id, Genv.public_symbol (globalenv L2) id = Genv.public_symbol (globalenv L1) id.
+  forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id.
 
 Variable match_states: state L1 -> state L2 -> Prop.
 
@@ -1201,7 +1216,7 @@ Proof.
 (* simulation *)
   exact bb_simulation.
 (* symbols *)
-  intros. transitivity (Genv.public_symbol (globalenv L2) id); apply bsim_public_preserved; auto.
+  intros. transitivity (Senv.public_symbol (symbolenv L2) id); apply bsim_public_preserved; auto.
 Qed.
 
 End COMPOSE_BACKWARD_SIMULATIONS.
@@ -1286,10 +1301,10 @@ Lemma f2b_determinacy_inv:
   forall s2 t' s2' t'' s2'',
   Step L2 s2 t' s2' -> Step L2 s2 t'' s2'' ->
   (t' = E0 /\ t'' = E0 /\ s2' = s2'')
-  \/ (t' <> E0 /\ t'' <> E0 /\ match_traces (globalenv L1) t' t'').
+  \/ (t' <> E0 /\ t'' <> E0 /\ match_traces (symbolenv L1) t' t'').
 Proof.
   intros. 
-  assert (match_traces (globalenv L2) t' t'').
+  assert (match_traces (symbolenv L2) t' t'').
     eapply sd_determ_1; eauto. 
   destruct (silent_or_not_silent t').
   subst. inv H1.  
@@ -1297,7 +1312,7 @@ Proof.
   destruct (silent_or_not_silent t'').
   subst. inv H1. elim H2; auto. 
   right; intuition. 
-  eapply match_traces_preserved with (ge1 := (globalenv L2)); auto. 
+  eapply match_traces_preserved with (ge1 := (symbolenv L2)); auto. 
   intros; symmetry; apply (fsim_public_preserved FS). 
 Qed.
 
@@ -1509,7 +1524,7 @@ Variable L: semantics.
 
 Hypothesis Lwb: well_behaved_traces L.
 
-Inductive atomic_step (ge: Genv.t (funtype L) (vartype L)): (trace * state L) -> trace -> (trace * state L) -> Prop :=
+Inductive atomic_step (ge: genvtype L): (trace * state L) -> trace -> (trace * state L) -> Prop :=
   | atomic_step_silent: forall s s',
       Step L s E0 s' ->
       atomic_step ge (E0, s) E0 (E0, s')
@@ -1522,12 +1537,12 @@ Inductive atomic_step (ge: Genv.t (funtype L) (vartype L)): (trace * state L) ->
 
 Definition atomic : semantics := {|
   state := (trace * state L)%type;
-  funtype := funtype L;
-  vartype := vartype L;
+  genvtype := genvtype L;
   step := atomic_step;
   initial_state := fun s => initial_state L (snd s) /\ fst s = E0;
   final_state := fun s r => final_state L (snd s) r /\ fst s = E0;
-  globalenv := globalenv L
+  globalenv := globalenv L;
+  symbolenv := symbolenv L
 |}.
 
 End ATOMIC.
@@ -1722,7 +1737,7 @@ Record strongly_receptive (L: semantics) : Prop :=
   Strongly_receptive {
     ssr_receptive: forall s ev1 t1 s1 ev2,
       Step L s (ev1 :: t1) s1 ->
-      match_traces (globalenv L) (ev1 :: nil) (ev2 :: nil) ->
+      match_traces (symbolenv L) (ev1 :: nil) (ev2 :: nil) ->
       exists s2, exists t2, Step L s (ev2 :: t2) s2;
     ssr_well_behaved:
       well_behaved_traces L
