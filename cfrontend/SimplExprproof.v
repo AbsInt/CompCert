@@ -91,9 +91,9 @@ Proof.
 Qed.
 
 Lemma block_is_volatile_preserved:
-  forall b, block_is_volatile tge b = block_is_volatile ge b.
+  forall b, Genv.block_is_volatile tge b = Genv.block_is_volatile ge b.
 Proof.
-  intros. unfold block_is_volatile. rewrite varinfo_preserved. auto.
+  intros. unfold Genv.block_is_volatile. rewrite varinfo_preserved. auto.
 Qed.
 
 Lemma type_of_fundef_preserved:

@@ -70,6 +70,51 @@ Qed.
 Local Unset Elimination Schemes.
 Local Unset Case Analysis Schemes.
 
+(** * Symbol environments *)
+
+(** Symbol environments are a restricted view of global environments,
+  focusing on symbol names and their associated blocks.  They do not
+  contain mappings from blocks to function or variable definitions. *)
+
+Module Senv.
+
+Record t: Type := mksenv {
+  (** Operations *)
+  find_symbol: ident -> option block;
+  public_symbol: ident -> bool;
+  invert_symbol: block -> option ident;
+  block_is_volatile: block -> bool;
+  nextblock: block;
+  (** Properties *)
+  find_symbol_injective:
+    forall id1 id2 b, find_symbol id1 = Some b -> find_symbol id2 = Some b -> id1 = id2;
+  invert_find_symbol:
+    forall id b, invert_symbol b = Some id -> find_symbol id = Some b;
+  find_invert_symbol:
+    forall id b, find_symbol id = Some b -> invert_symbol b = Some id;
+  public_symbol_exists:
+    forall id, public_symbol id = true -> exists b, find_symbol id = Some b;
+  find_symbol_below:
+    forall id b, find_symbol id = Some b -> Plt b nextblock;
+  block_is_volatile_below:
+    forall b, block_is_volatile b = true -> Plt b nextblock
+}.
+
+Definition symbol_address (ge: t) (id: ident) (ofs: int) : val :=
+  match find_symbol ge id with
+  | Some b => Vptr b ofs
+  | None => Vundef
+  end.
+
+Theorem shift_symbol_address:
+  forall ge id ofs n,
+  symbol_address ge id (Int.add ofs n) = Val.add (symbol_address ge id ofs) (Vint n).
+Proof.
+  intros. unfold symbol_address. destruct (find_symbol ge id); auto. 
+Qed.
+
+End Senv.
+
 Module Genv.
 
 (** * Global environments *)
@@ -148,6 +193,15 @@ Definition invert_symbol (ge: t) (b: block) : option ident :=
 
 Definition find_var_info (ge: t) (b: block) : option (globvar V) :=
   PTree.get b ge.(genv_vars).
+
+(** [block_is_volatile ge b] returns [true] if [b] points to a global variable
+  of volatile type, [false] otherwise. *)
+
+Definition block_is_volatile (ge: t) (b: block) : bool :=
+  match find_var_info ge b with
+  | None => false
+  | Some gv => gv.(gvar_volatile)
+  end.
 
 (** ** Constructing the global environment *)
 
@@ -518,6 +572,30 @@ Theorem globalenv_public:
 Proof.
   unfold globalenv; intros. rewrite genv_public_add_globals. auto. 
 Qed.
+
+Theorem block_is_volatile_below:
+  forall ge b, block_is_volatile ge b = true ->  Plt b ge.(genv_next).
+Proof.
+  unfold block_is_volatile; intros. destruct (find_var_info ge b) as [gv|] eqn:FV.
+  eapply genv_vars_range; eauto.
+  discriminate.
+Qed.
+
+(** ** Coercing a global environment into a symbol environment *)
+
+Definition to_senv (ge: t) : Senv.t :=
+ @Senv.mksenv
+    (find_symbol ge)
+    (public_symbol ge)
+    (invert_symbol ge)
+    (block_is_volatile ge)
+    ge.(genv_next)
+    ge.(genv_vars_inj)
+    (invert_find_symbol ge)
+    (find_invert_symbol ge)
+    (public_symbol_exists ge)
+    ge.(genv_symb_range)
+    (block_is_volatile_below ge).
 
 (** * Construction of the initial memory state *)
 
@@ -1970,6 +2048,19 @@ Proof.
   auto.
 Qed.
 
+Theorem block_is_volatile_transf_partial2:
+  forall (b: block),
+  block_is_volatile (globalenv p') b = block_is_volatile (globalenv p) b.
+Proof.
+  unfold block_is_volatile; intros. 
+  destruct (find_var_info (globalenv p) b) as [v|] eqn:FV.
+  exploit find_var_info_transf_partial2; eauto. intros (v' & P & Q).
+  rewrite P. monadInv Q. auto. 
+  destruct (find_var_info (globalenv p') b) as [v'|] eqn:FV'.
+  exploit find_var_info_rev_transf_partial2; eauto. intros (v & P & Q). congruence.
+  auto.
+Qed.
+
 Theorem init_mem_transf_partial2:
   forall m, init_mem p = Some m -> init_mem p' = Some m.
 Proof.
@@ -2046,6 +2137,13 @@ Proof.
   exploit find_var_info_rev_transf_partial2. eexact transf_OK. eauto.
   intros [v' [P Q]]. monadInv Q. inv EQ. congruence. 
   auto.
+Qed.
+
+Theorem block_is_volatile_transf_partial:
+  forall (b: block),
+  block_is_volatile (globalenv p') b = block_is_volatile (globalenv p) b.
+Proof.
+  exact (@block_is_volatile_transf_partial2 _ _ _ _ _ _ _ _ transf_OK).
 Qed.
 
 Theorem init_mem_transf_partial:
@@ -2128,6 +2226,13 @@ Proof.
   exact (@find_var_info_transf_partial _ _ _ _ _ _ transf_OK).
 Qed.
 
+Theorem block_is_volatile_transf:
+  forall (b: block),
+  block_is_volatile (globalenv tp) b = block_is_volatile (globalenv p) b.
+Proof.
+  exact (@block_is_volatile_transf_partial _ _ _ _ _ _ transf_OK).
+Qed.
+
 Theorem init_mem_transf:
   forall m, init_mem p = Some m -> init_mem tp = Some m.
 Proof.
@@ -2137,3 +2242,5 @@ Qed.
 End TRANSF_PROGRAM.
 
 End Genv.
+
+Coercion Genv.to_senv: Genv.t >-> Senv.t.

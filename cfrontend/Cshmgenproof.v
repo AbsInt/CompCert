@@ -759,29 +759,9 @@ Lemma function_ptr_translated:
   exists tf, Genv.find_funct_ptr tge b = Some tf /\ transl_fundef f = OK tf.
 Proof (Genv.find_funct_ptr_transf_partial2 transl_fundef transl_globvar _ TRANSL).
 
-Lemma var_info_translated:
-  forall b v,
-  Genv.find_var_info ge b = Some v ->
-  exists tv, Genv.find_var_info tge b = Some tv /\ transf_globvar transl_globvar v = OK tv.
-Proof (Genv.find_var_info_transf_partial2 transl_fundef transl_globvar _ TRANSL).
-
-Lemma var_info_rev_translated:
-  forall b tv,
-  Genv.find_var_info tge b = Some tv ->
-  exists v, Genv.find_var_info ge b = Some v /\ transf_globvar transl_globvar v = OK tv.
-Proof (Genv.find_var_info_rev_transf_partial2 transl_fundef transl_globvar _ TRANSL).
-
 Lemma block_is_volatile_preserved:
-  forall b, block_is_volatile tge b = block_is_volatile ge b.
-Proof.
-  intros. unfold block_is_volatile.
-  destruct (Genv.find_var_info ge b) eqn:?.
-  exploit var_info_translated; eauto. intros [tv [A B]]. rewrite A. 
-  unfold transf_globvar in B. monadInv B. auto.
-  destruct (Genv.find_var_info tge b) eqn:?.
-  exploit var_info_rev_translated; eauto. intros [tv [A B]]. congruence.
-  auto.
-Qed.
+  forall b, Genv.block_is_volatile tge b = Genv.block_is_volatile ge b.
+Proof (Genv.block_is_volatile_transf_partial2 transl_fundef transl_globvar _ TRANSL).
 
 (** * Matching between environments *)
 
@@ -1288,10 +1268,8 @@ Proof.
   econstructor; split.
   apply plus_one. econstructor. 
   eapply transl_arglist_correct; eauto. 
-  eapply external_call_symbols_preserved_2; eauto.
-  exact symbols_preserved. exact public_preserved.
-  eexact (Genv.find_var_info_transf_partial2 transl_fundef transl_globvar _ TRANSL).
-  eexact (Genv.find_var_info_rev_transf_partial2 transl_fundef transl_globvar _ TRANSL).
+  eapply external_call_symbols_preserved_gen with (ge1 := ge).
+  exact symbols_preserved. exact public_preserved. exact block_is_volatile_preserved. eauto.
   eapply match_states_skip; eauto.
 
 (* seq *)
@@ -1469,10 +1447,8 @@ Proof.
   exploit match_cont_is_call_cont; eauto. intros [A B].
   econstructor; split.
   apply plus_one. constructor. eauto. 
-  eapply external_call_symbols_preserved_2; eauto.
-  exact symbols_preserved. exact public_preserved.
-  eexact (Genv.find_var_info_transf_partial2 transl_fundef transl_globvar _ TRANSL).
-  eexact (Genv.find_var_info_rev_transf_partial2 transl_fundef transl_globvar _ TRANSL).
+  eapply external_call_symbols_preserved_gen with (ge1 := ge).
+  exact symbols_preserved. exact public_preserved. exact block_is_volatile_preserved. eauto.
   econstructor; eauto.
 
 (* returnstate *)

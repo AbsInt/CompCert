@@ -149,7 +149,7 @@ Lemma eventval_of_val_complete:
   forall ev t v, eventval_match ge ev t v -> eventval_of_val v t = Some ev.
 Proof.
   induction 1; simpl; auto.
-  rewrite (Genv.find_invert_symbol _ _ H0). rewrite H. auto. 
+  rewrite (Genv.find_invert_symbol _ _ H0). simpl in H; rewrite H. auto. 
 Qed.
 
 Lemma list_eventval_of_val_sound:
@@ -181,14 +181,14 @@ Qed.
 Lemma val_of_eventval_complete:
   forall ev t v, eventval_match ge ev t v -> val_of_eventval ev t = Some v.
 Proof.
-  induction 1; simpl; auto. rewrite H, H0; auto.
+  induction 1; simpl; auto. simpl in *. rewrite H, H0; auto.
 Qed.
 
 (** Volatile memory accesses. *)
 
 Definition do_volatile_load (w: world) (chunk: memory_chunk) (m: mem) (b: block) (ofs: int) 
                              : option (world * trace * val) :=
-  if block_is_volatile ge b then
+  if Genv.block_is_volatile ge b then
     do id <- Genv.invert_symbol ge b;
     match nextworld_vload w chunk id ofs with
     | None => None
@@ -202,7 +202,7 @@ Definition do_volatile_load (w: world) (chunk: memory_chunk) (m: mem) (b: block)
 
 Definition do_volatile_store (w: world) (chunk: memory_chunk) (m: mem) (b: block) (ofs: int) (v: val)
                              : option (world * trace * mem) :=
-  if block_is_volatile ge b then
+  if Genv.block_is_volatile ge b then
     do id <- Genv.invert_symbol ge b;
     do ev <- eventval_of_val (Val.load_result chunk v) (type_of_chunk chunk);
     do w' <- nextworld_vstore w chunk id ofs ev;
@@ -239,7 +239,7 @@ Lemma do_volatile_load_complete:
   volatile_load ge chunk m b ofs t v -> possible_trace w t w' ->
   do_volatile_load w chunk m b ofs = Some(w', t, v).
 Proof.
-  unfold do_volatile_load; intros. inv H. 
+  unfold do_volatile_load; intros. inv H; simpl in *.
   rewrite H1. rewrite (Genv.find_invert_symbol _ _ H2). inv H0. inv H8. inv H6. rewrite H9.
   rewrite (val_of_eventval_complete _ _ _ H3). auto.
   rewrite H1. rewrite H2. inv H0. auto.
@@ -262,7 +262,7 @@ Lemma do_volatile_store_complete:
   volatile_store ge chunk m b ofs v t m' -> possible_trace w t w' ->
   do_volatile_store w chunk m b ofs v = Some(w', t, m').
 Proof.
-  unfold do_volatile_store; intros. inv H. 
+  unfold do_volatile_store; intros. inv H; simpl in *.
   rewrite H1. rewrite (Genv.find_invert_symbol _ _ H2).
   rewrite (eventval_of_val_complete _ _ _ H3).
   inv H0. inv H8. inv H6. rewrite H9. auto.
@@ -387,7 +387,7 @@ Qed.
 (** External calls *)
 
 Variable do_external_function:
-  ident -> signature -> genv -> world -> list val -> mem -> option (world * trace * val * mem).
+  ident -> signature -> Senv.t -> world -> list val -> mem -> option (world * trace * val * mem).
 
 Hypothesis do_external_function_sound:
   forall id sg ge vargs m t vres m' w w',
@@ -401,7 +401,7 @@ Hypothesis do_external_function_complete:
   do_external_function id sg ge w vargs m = Some(w', t, vres, m').
 
 Variable do_inline_assembly:
-  ident -> genv -> world -> list val -> mem -> option (world * trace * val * mem).
+  ident -> Senv.t -> world -> list val -> mem -> option (world * trace * val * mem).
 
 Hypothesis do_inline_assembly_sound:
   forall txt ge vargs m t vres m' w w',
@@ -573,11 +573,11 @@ Proof with try congruence.
 (* EF_vstore *)
   auto.
 (* EF_vload_global *)
-  rewrite volatile_load_global_charact.
+  rewrite volatile_load_global_charact; simpl.
   unfold do_ef_volatile_load_global. destruct (Genv.find_symbol ge)...
   intros. exploit VLOAD; eauto. intros [A B]. split; auto. exists b; auto.
 (* EF_vstore_global *)
-  rewrite volatile_store_global_charact.
+  rewrite volatile_store_global_charact; simpl.
   unfold do_ef_volatile_store_global. destruct (Genv.find_symbol ge)...
   intros. exploit VSTORE; eauto. intros [A B]. split; auto. exists b; auto.
 (* EF_malloc *)
@@ -633,10 +633,10 @@ Proof.
 (* EF_vstore *)
   auto.
 (* EF_vload_global *)
-  rewrite volatile_load_global_charact in H. destruct H as [b [P Q]]. 
+  rewrite volatile_load_global_charact in H; simpl in H. destruct H as [b [P Q]]. 
   unfold do_ef_volatile_load_global. rewrite P. auto. 
 (* EF_vstore *)
-  rewrite volatile_store_global_charact in H. destruct H as [b [P Q]]. 
+  rewrite volatile_store_global_charact in H; simpl in H. destruct H as [b [P Q]]. 
   unfold do_ef_volatile_store_global. rewrite P. auto. 
 (* EF_malloc *)
   inv H; unfold do_ef_malloc. 

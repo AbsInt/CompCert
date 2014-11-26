@@ -530,7 +530,7 @@ Proof.
   { unfold tge; rewrite Genv.globalenv_public. 
     unfold transform_program in TRANSF. rewrite USED_GLOBALS in TRANSF. inversion TRANSF. auto. }
   split; [|split;[|split]]; intros.
-  + unfold Genv.public_symbol; rewrite E1, E2.
+  + simpl; unfold Genv.public_symbol; rewrite E1, E2.
     destruct (Genv.find_symbol tge id) as [b'|] eqn:TFS.
     exploit symbols_inject_3; eauto. intros (b & FS & INJ). rewrite FS. auto. 
     destruct (Genv.find_symbol ge id) as [b|] eqn:FS; auto.
@@ -538,13 +538,13 @@ Proof.
     exploit symbols_inject_2; eauto. apply kept_public; auto. 
     intros (b' & TFS' & INJ). congruence.
   + eapply symbols_inject_1; eauto. 
-  + unfold Genv.public_symbol in H0. 
+  + simpl in *; unfold Genv.public_symbol in H0. 
     destruct (Genv.find_symbol ge id) as [b|] eqn:FS; try discriminate.
     rewrite E1 in H0. 
     destruct (in_dec ident_eq id (prog_public p)); try discriminate. inv H1.
     exploit symbols_inject_2; eauto. apply kept_public; auto. 
     intros (b' & A & B); exists b'; auto.
-  + unfold block_is_volatile. 
+  + simpl. unfold Genv.block_is_volatile. 
     destruct (Genv.find_var_info ge b1) as [gv|] eqn:V1.
     exploit var_info_inject; eauto. intros [A B]. rewrite A. auto.
     destruct (Genv.find_var_info tge b2) as [gv|] eqn:V2; auto.

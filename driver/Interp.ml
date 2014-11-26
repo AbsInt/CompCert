@@ -389,7 +389,7 @@ let convert_external_arg ge v t =
   | Vsingle f, AST.Tsingle -> Some (EVsingle f)
   | Vlong n, AST.Tlong -> Some (EVlong n)
   | Vptr(b, ofs), AST.Tint -> 
-      Genv.invert_symbol ge b >>= fun id -> Some (EVptr_global(id, ofs))
+      Senv.invert_symbol ge b >>= fun id -> Some (EVptr_global(id, ofs))
   | _, _ -> None
 
 let rec convert_external_args ge vl tl =
