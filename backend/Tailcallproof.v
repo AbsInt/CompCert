@@ -241,6 +241,10 @@ Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
 Proof (Genv.find_symbol_transf transf_fundef prog).
 
+Lemma public_preserved:
+  forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
+Proof (Genv.public_symbol_transf transf_fundef prog).
+
 Lemma varinfo_preserved:
   forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
 Proof (Genv.find_var_info_transf transf_fundef prog).
@@ -506,7 +510,7 @@ Proof.
   left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) pc' (rs'#res <- v') m'1); split.
   eapply exec_Ibuiltin; eauto.
   eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor; eauto. apply regset_set; auto.
 
 (* cond *)
@@ -567,7 +571,7 @@ Proof.
   left. exists (Returnstate s' res' m2'); split.
   simpl. econstructor; eauto.
   eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   constructor; auto. 
 
 (* returnstate *)
@@ -616,7 +620,7 @@ Theorem transf_program_correct:
   forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
   eapply forward_simulation_opt with (measure := measure); eauto.
-  eexact symbols_preserved.
+  eexact public_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
   exact transf_step_correct. 

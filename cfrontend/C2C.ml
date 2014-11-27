@@ -28,6 +28,8 @@ open Csyntax
 open Initializers
 open Floats
 
+(** ** Extracting information about global variables from their atom *)
+
 (** Record useful information about global variables and functions,
   and associate it with the corresponding atoms. *)
 
@@ -42,6 +44,61 @@ type atom_info =
 }
 
 let decl_atom : (AST.ident, atom_info) Hashtbl.t = Hashtbl.create 103
+
+let atom_is_static a =
+  try
+    let i = Hashtbl.find decl_atom a in
+    (* inline functions can remain in generated code, but should not
+       be global, unless explicitly marked "extern" *)
+    match i.a_storage with
+    | C.Storage_default -> i.a_inline
+    | C.Storage_extern -> false
+    | C.Storage_static -> true
+    | C.Storage_register -> false (* should not happen *)
+  with Not_found ->
+    false
+
+let atom_is_extern a =
+  try
+    (Hashtbl.find decl_atom a).a_storage = C.Storage_extern
+  with Not_found ->
+    false
+
+let atom_alignof a =
+  try
+    (Hashtbl.find decl_atom a).a_alignment
+  with Not_found ->
+    None
+
+let atom_sections a =
+  try
+    (Hashtbl.find decl_atom a).a_sections
+  with Not_found ->
+    []
+
+let atom_is_small_data a ofs =
+  try
+    (Hashtbl.find decl_atom a).a_access = Sections.Access_near
+  with Not_found ->
+    false
+
+let atom_is_rel_data a ofs =
+  try
+    (Hashtbl.find decl_atom a).a_access = Sections.Access_far
+  with Not_found ->
+    false
+
+let atom_is_inline a =
+  try
+    (Hashtbl.find decl_atom a).a_inline
+  with Not_found ->
+    false
+
+let atom_location a =
+  try
+    (Hashtbl.find decl_atom a).a_loc
+  with Not_found ->
+    Cutil.no_loc
 
 (** Hooks -- overriden in machine-dependent CPragmas module *)
 
@@ -1059,6 +1116,13 @@ let cleanupGlobals p =
             clean defs (g :: accu) gl
   in clean IdentSet.empty [] (List.rev p)
 
+(** Extract the list of public (non-static) names *)
+
+let public_globals gl =
+  List.fold_left
+    (fun accu (id, g) -> if atom_is_static id then accu else id :: accu)
+    [] gl
+
 (** Convert a [C.program] into a [Csyntax.program] *)
 
 let convertProgram p =
@@ -1072,66 +1136,11 @@ let convertProgram p =
     let gl1 = convertGlobdecls (translEnv Env.empty p) [] (cleanupGlobals p) in
     let gl2 = globals_for_strings gl1 in
     let p' = { AST.prog_defs = gl2;
-                AST.prog_main = intern_string "main" } in
+               AST.prog_public = public_globals gl2;
+               AST.prog_main = intern_string "main" } in
     if !numErrors > 0
     then None
     else Some p'
   with Env.Error msg ->
     error (Env.error_message msg); None
 
-(** ** Extracting information about global variables from their atom *)
-
-let atom_is_static a =
-  try
-    let i = Hashtbl.find decl_atom a in
-    (* inline functions can remain in generated code, but should not
-       be global, unless explicitly marked "extern" *)
-    match i.a_storage with
-    | C.Storage_default -> i.a_inline
-    | C.Storage_extern -> false
-    | C.Storage_static -> true
-    | C.Storage_register -> false (* should not happen *)
-  with Not_found ->
-    false
-
-let atom_is_extern a =
-  try
-    (Hashtbl.find decl_atom a).a_storage = C.Storage_extern
-  with Not_found ->
-    false
-
-let atom_alignof a =
-  try
-    (Hashtbl.find decl_atom a).a_alignment
-  with Not_found ->
-    None
-
-let atom_sections a =
-  try
-    (Hashtbl.find decl_atom a).a_sections
-  with Not_found ->
-    []
-
-let atom_is_small_data a ofs =
-  try
-    (Hashtbl.find decl_atom a).a_access = Sections.Access_near
-  with Not_found ->
-    false
-
-let atom_is_rel_data a ofs =
-  try
-    (Hashtbl.find decl_atom a).a_access = Sections.Access_far
-  with Not_found ->
-    false
-
-let atom_is_inline a =
-  try
-    (Hashtbl.find decl_atom a).a_inline
-  with Not_found ->
-    false
-
-let atom_location a =
-  try
-    (Hashtbl.find decl_atom a).a_loc
-  with Not_found ->
-    Cutil.no_loc

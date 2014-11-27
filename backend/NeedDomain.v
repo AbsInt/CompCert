@@ -862,12 +862,12 @@ Proof.
     destruct H0. inv H0; constructor; auto with na. 
     inv H0; constructor; auto with na. inv H8; constructor; auto with na.
   }
-  exploit (@eval_operation_inj _ _ ge inject_id).
-  intros. apply val_inject_lessdef. auto.
+  exploit (@eval_operation_inj _ _ _ _ ge ge inject_id).
   eassumption. auto. auto. auto.
+  instantiate (1 := op). intros. apply val_inject_lessdef; auto.
   apply val_inject_lessdef. instantiate (1 := Vptr sp Int.zero). instantiate (1 := Vptr sp Int.zero). auto.
-  apply val_list_inject_lessdef. eauto.
-  eauto. 
+  apply val_list_inject_lessdef; eauto.
+  eauto.
   intros (v2 & A & B). exists v2; split; auto.
   apply vagree_lessdef. apply val_inject_lessdef. auto. 
 Qed.

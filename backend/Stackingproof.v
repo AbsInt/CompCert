@@ -2242,6 +2242,14 @@ Proof.
   exact TRANSF. 
 Qed.
 
+Lemma public_preserved:
+  forall id, Genv.public_symbol tge id = Genv.public_symbol ge id.
+Proof.
+  intros. unfold ge, tge. 
+  apply Genv.public_symbol_transf_partial with transf_fundef.
+  exact TRANSF. 
+Qed.
+
 Lemma varinfo_preserved:
   forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
 Proof.
@@ -2681,7 +2689,7 @@ Proof.
   econstructor; split.
   apply plus_one. econstructor; eauto. 
   eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor; eauto with coqlib.
   inversion H; inversion A; subst.
   eapply match_stack_change_extcall; eauto.
@@ -2705,7 +2713,7 @@ Proof.
   econstructor; split.
   apply plus_one. econstructor; eauto. 
   eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor; eauto with coqlib.
   inv H; inv A. eapply match_stack_change_extcall; eauto.
   apply Plt_Ple. change (Mem.valid_block m sp0). eapply agree_valid_linear; eauto.
@@ -2813,7 +2821,7 @@ Proof.
   econstructor; split.
   apply plus_one. eapply exec_function_external; eauto.
   eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor; eauto.
   apply match_stacks_change_bounds with (Mem.nextblock m) (Mem.nextblock m'0).
   inv H0; inv A. eapply match_stack_change_extcall; eauto. apply Ple_refl. apply Ple_refl. 
@@ -2879,7 +2887,7 @@ Theorem transf_program_correct:
 Proof.
   set (ms := fun s s' => wt_state s /\ match_states s s').
   eapply forward_simulation_plus with (match_states := ms). 
-- exact symbols_preserved.
+- exact public_preserved.
 - intros. exploit transf_initial_states; eauto. intros [st2 [A B]]. 
   exists st2; split; auto. split; auto.
   apply wt_initial_state with (prog := prog); auto. exact wt_prog. 

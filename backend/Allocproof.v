@@ -1453,6 +1453,14 @@ Proof.
   exact TRANSF.
 Qed.
 
+Lemma public_preserved:
+  forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
+Proof.
+  intro. unfold ge, tge.
+  apply Genv.public_symbol_transf_partial with transf_fundef.
+  exact TRANSF.
+Qed.
+
 Lemma varinfo_preserved:
   forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
 Proof.
@@ -2016,7 +2024,7 @@ Proof.
   eapply star_trans. eexact A1. 
   eapply star_left. econstructor. 
   econstructor. unfold reglist. eapply external_call_symbols_preserved; eauto. 
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   instantiate (1 := vl'); auto. 
   instantiate (1 := ls2); auto. 
   eapply star_right. eexact A3.
@@ -2038,7 +2046,7 @@ Proof.
   eapply star_two. econstructor.
   eapply external_call_symbols_preserved' with (ge1 := ge).
   econstructor; eauto. 
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eauto. constructor. eauto. eauto. traceEq.
   exploit satisf_successors. eauto. eauto. simpl; eauto. eauto. 
   eapply satisf_undef_reg with (r := res).
@@ -2133,7 +2141,7 @@ Proof.
   apply plus_one. econstructor; eauto. 
   eapply external_call_symbols_preserved' with (ge1 := ge). 
   econstructor; eauto. 
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor; eauto. simpl.
   replace (map
            (Locmap.setlist (map R (loc_result (ef_sig ef)))
@@ -2204,7 +2212,7 @@ Theorem transf_program_correct:
 Proof.
   set (ms := fun s s' => wt_state s /\ match_states s s').
   eapply forward_simulation_plus with (match_states := ms). 
-- exact symbols_preserved.
+- exact public_preserved.
 - intros. exploit initial_states_simulation; eauto. intros [st2 [A B]]. 
   exists st2; split; auto. split; auto.
   apply wt_initial_state with (p := prog); auto. exact wt_prog. 

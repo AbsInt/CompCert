@@ -541,4 +541,4 @@ Fixpoint transl_globdefs
 
 Definition transl_program (p: Csyntax.program) : res program :=
   do gl' <- transl_globdefs p.(prog_defs) (initial_generator tt);
-  OK (mkprogram gl' p.(prog_main)).
+  OK (mkprogram gl' p.(prog_public) p.(prog_main)).

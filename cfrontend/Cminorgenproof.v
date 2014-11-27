@@ -46,6 +46,10 @@ Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
 Proof (Genv.find_symbol_transf_partial transl_fundef _ TRANSL).
 
+Lemma public_preserved:
+  forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
+Proof (Genv.public_symbol_transf_partial transl_fundef _ TRANSL).
+
 Lemma function_ptr_translated:
   forall (b: block) (f: Csharpminor.fundef),
   Genv.find_funct_ptr ge b = Some f ->
@@ -2026,7 +2030,7 @@ Proof.
   left; econstructor; split.
   apply plus_one. econstructor. eauto. 
   eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. eexact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. eexact varinfo_preserved.
   assert (MCS': match_callstack f' m' tm'
                  (Frame cenv tfn e le te sp lo hi :: cs)
                  (Mem.nextblock m') (Mem.nextblock tm')).
@@ -2181,7 +2185,7 @@ Opaque PTree.set.
   left; econstructor; split.
   apply plus_one. econstructor.
   eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. eexact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. eexact varinfo_preserved.
   econstructor; eauto.
   apply match_callstack_incr_bound with (Mem.nextblock m) (Mem.nextblock tm).
   eapply match_callstack_external_call; eauto.
@@ -2246,7 +2250,7 @@ Theorem transl_program_correct:
   forward_simulation (Csharpminor.semantics prog) (Cminor.semantics tprog).
 Proof.
   eapply forward_simulation_star; eauto.
-  eexact symbols_preserved.
+  eexact public_preserved.
   eexact transl_initial_states.
   eexact transl_final_states.
   eexact transl_step_correct. 

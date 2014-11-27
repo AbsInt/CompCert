@@ -48,6 +48,14 @@ Proof.
   exact TRANSF. 
 Qed.
 
+Lemma public_preserved:
+  forall id, Genv.public_symbol tge id = Genv.public_symbol ge id.
+Proof.
+  intros. unfold ge, tge. 
+  apply Genv.public_symbol_transf_partial with transf_fundef.
+  exact TRANSF. 
+Qed.
+
 Lemma functions_translated:
   forall b f,
   Genv.find_funct_ptr ge b = Some f ->
@@ -672,7 +680,7 @@ Opaque loadind.
   eapply exec_step_builtin. eauto. eauto.
   eapply find_instr_tail; eauto.
   eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eauto.
   econstructor; eauto.
   instantiate (2 := tf); instantiate (1 := x).
@@ -699,7 +707,7 @@ Opaque loadind.
   eapply exec_step_annot. eauto. eauto.
   eapply find_instr_tail; eauto. eauto.
   eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_states_intro with (ep := false); eauto with coqlib.
   unfold nextinstr. rewrite Pregmap.gss. 
   rewrite <- H1; simpl. econstructor; eauto.
@@ -876,7 +884,7 @@ Transparent destroyed_at_function_entry.
   left; econstructor; split.
   apply plus_one. eapply exec_step_external; eauto. 
   eapply external_call_symbols_preserved'; eauto. 
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor; eauto.
   unfold loc_external_result.
   apply agree_set_other; auto. apply agree_set_mregs; auto.
@@ -920,7 +928,7 @@ Theorem transf_program_correct:
   forward_simulation (Mach.semantics return_address_offset prog) (Asm.semantics tprog).
 Proof.
   eapply forward_simulation_star with (measure := measure).
-  eexact symbols_preserved.
+  eexact public_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
   exact step_simulation.
