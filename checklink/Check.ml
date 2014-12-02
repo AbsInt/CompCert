@@ -556,21 +556,14 @@ let rec match_jmptbl lbllist vaddr size ffw =
     )
   in
   let elf = ffw.sf.ef.elf in
-  begin match section_at_vaddr elf vaddr with
+  begin match bitstring_at_vaddr elf vaddr size with
   | None -> ERR("No section for the jumptable")
-  | Some(sndx) ->
-      begin match bitstring_at_vaddr elf vaddr size with
-      | None -> ERR("")
-      | Some(bs, pofs, psize) ->
-          ffw
-          >>> (ff_sf ^%=
-              match_sections_name jmptbl_section elf.e_shdra.(sndx).sh_name
-          )
-          >>> match_jmptbl_aux lbllist bs
-          >>^ (ff_ef ^%=
-              add_range pofs psize 0 Jumptable
-          )
-      end
+  | Some(bs, pofs, psize) ->
+      ffw
+        >>> match_jmptbl_aux lbllist bs
+        >>^ (ff_ef ^%=
+               add_range pofs psize 0 Jumptable
+            )
   end
 
 let match_bo_bt_bool bo =
