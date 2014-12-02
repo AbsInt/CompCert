@@ -16,7 +16,7 @@ open Printf
 open Datatypes
 open DwarfTypes
 open DwarfUtil
-open DwarfPrinter
+open DwarfAbbrvPrinter
 open Camlcoq
 open Sections
 open Asm
@@ -96,21 +96,14 @@ module Diab_System =
         fprintf oc "	.xopt	asm-debug-on\n"
           
 
-    module DwarfDefs =
-      (struct
+    module AbbrvPrinter = DwarfAbbrvPrinter(struct
         let string_of_byte value =
-          if value then
-            "	.byte	0x1\n"
-          else
-            
-            "	.byte	0x0\n"
+          Printf.sprintf "	.byte	%s\n" (if value then "0x1" else "0x2")
             
         let string_of_abbrv_entry v =
           Printf.sprintf "	.uleb128	%d\n" v
-            
+
         let abbrv_start_addr = ref (-1)
-            
-        let debug_end_addr = ref (-1)
 
         let get_abbrv_start_addr () = !abbrv_start_addr
 
@@ -161,23 +154,6 @@ module Diab_System =
           fprintf oc "	.uleb128	0\n";
           fprintf oc "	.uleb128	0\n"
 
-        let info_section_start oc =
-          fprintf oc "	.section	.debug_info,,n\n";
-          let debug_start = new_label ()
-          and debug_end = new_label () in
-          debug_end_addr:= debug_end;
-          fprintf oc "	.4byte	%a-%a\n" label debug_end label debug_start;
-          fprintf oc "%a:\n" label debug_start;
-          fprintf oc "	.2byte	0x2\n";
-          fprintf oc "	.4byte	%a\n" label !abbrv_start_addr;
-          fprintf oc "	.1byte	%d\n" !Machine.config.Machine.sizeof_ptr
-
-        let info_section_end oc =
-          fprintf oc "%a\n" label !debug_end_addr
-
-        let print_entry oc entry abbrv =
-          ()
-
-      end:DWARF_DEFS)
+      end)
 
   end:SYSTEM)

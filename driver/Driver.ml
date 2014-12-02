@@ -499,7 +499,7 @@ let cmdline_actions =
   Exact "-fall", Self (fun _ -> set_all language_support_options);
   Exact "-fnone", Self (fun _ -> unset_all language_support_options);
 (* Debugging options *)
-  Exact "-g", Self (fun s -> option_g := true; push_linker_arg s);
+  Exact "-g", Self (fun s -> option_g := true);
 (* Code generation options -- more below *)
   Exact "-O0", Self (fun _ -> unset_all optimization_options);
   Exact "-O", Self (fun _ -> set_all optimization_options);

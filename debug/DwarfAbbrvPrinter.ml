@@ -14,7 +14,7 @@
 open DwarfTypes
 open DwarfUtil
 
-module type DWARF_DEFS =
+module type DWARF_ABBRV_DEFS =
     sig
       (* Functions used for the printing of the dwarf abbreviations *)
       val string_of_byte: bool -> string
@@ -52,15 +52,11 @@ module type DWARF_DEFS =
       val data_location_ref_type_abbr: int
       val bound_const_type_abbr: int
       val bound_ref_type_abbr: int
-      (* Functions for the printing of the debug information *)
-      val info_section_start: out_channel -> unit
-      val print_entry: out_channel -> dw_entry -> int -> unit
-      val info_section_end: out_channel -> unit
     end
 
-module DwarfPrinter(Defs:DWARF_DEFS) :
+module DwarfAbbrvPrinter(Defs:DWARF_ABBRV_DEFS) :
     sig
-      val print_debug: out_channel -> dw_entry -> unit
+      val print_debug_abbrv: out_channel -> dw_entry -> unit
     end =
   (struct
     
@@ -307,16 +303,8 @@ module DwarfPrinter(Defs:DWARF_DEFS) :
         Defs.abbrv_epilogue oc) abbrvs;
       Defs.abbrv_section_end oc
 
-    let print_debug oc entry =
+    let print_debug_abbrv oc entry =
       compute_abbrv entry;
-      print_abbrv oc;
-      Defs.info_section_start oc;
-      entry_iter_sib (fun sib entry -> 
-         let has_sib = match sib with 
-        | None -> false
-        | Some _ -> true in
-        let abbrv =  get_abbrv entry has_sib in
-        Defs.print_entry oc entry abbrv) entry;
-      Defs.info_section_end oc
+      print_abbrv oc
 
   end)
