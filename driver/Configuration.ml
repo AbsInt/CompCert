@@ -23,7 +23,7 @@ let _ =
         open_in env_file
       with Not_found ->
         let dir = Sys.getcwd () 
-        and name = Sys.argv.(0) in
+        and name = Sys.executable_name in
         let dirname = if Filename.is_relative name then
           Filename.dirname (Filename.concat dir name)
         else 
