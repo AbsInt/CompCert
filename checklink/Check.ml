@@ -535,7 +535,6 @@ let check_label_existence ffw =
     had the expected [size].
 *)
 let rec match_jmptbl lbllist vaddr size ffw =
-  let atom = Hashtbl.find ffw.sf.atoms ffw.this_ident in
   let rec match_jmptbl_aux lbllist bs ffw =
     match lbllist with
     | [] -> OK ffw
