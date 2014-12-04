@@ -549,8 +549,9 @@ let print_program oc p =
   | Linux -> (module Linux_System:SYSTEM)
   | Diab -> (module Diab_System:SYSTEM)):SYSTEM) in
   let module Printer = AsmPrinter(Target) in
+  Printer.set_compilation_unit_addrs 1 2; (* TODO This is dummy code *)
   Printer.reset_file_line();
   PrintAnnot.print_version_and_options oc Printer.comment;
   Printer.print_prologue oc;
-  List.iter (Printer.print_globdef oc) p.prog_defs
-
+  List.iter (Printer.print_globdef oc) p.prog_defs;
+  Printer.print_epilogue oc

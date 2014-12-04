@@ -35,6 +35,9 @@ module type SYSTEM =
       val cfi_adjust: out_channel -> int32 -> unit
       val cfi_rel_offset: out_channel -> string -> int32 -> unit
       val print_prologue: out_channel -> unit
+      val print_epilogue: out_channel -> unit
+      val print_addr_label: out_channel -> int -> unit
+      val set_compilation_unit_addrs: int -> int -> unit
     end
 
 let symbol oc symb =

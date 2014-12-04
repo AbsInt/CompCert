@@ -70,18 +70,26 @@ module Diab_System =
             | false, true -> 'c'                (* text *)
             | false, false -> 'r')              (* const *)
 
+    let filenum : (string, int) Hashtbl.t = Hashtbl.create 7
+
     let last_file = ref ""
-    let reset_file_line () = last_file := ""
+
+    let reset_file_line () = 
+      last_file := "";
+      Hashtbl.clear filenum
+
     let print_file_line oc file line =
       if !Clflags.option_g && file <> "" then begin
         if file <> !last_file then begin
-          fprintf oc "	.d1file	%S\n" file;
-          last_file := file
+          fprintf oc "	.d2file	%S\n" file;
+          last_file := file;
+          if not (Hashtbl.mem filenum file) then
+            Hashtbl.add filenum file (new_label ());
         end;
-        fprintf oc "	.d1line	%s\n" line
+        fprintf oc "	.d2line	%s\n" line
       end
 
-          (* Emit .cfi directives *)
+    (* Emit .cfi directives *)
     let cfi_startproc oc = ()
 
     let cfi_endproc oc = ()
@@ -89,12 +97,63 @@ module Diab_System =
     let cfi_adjust oc delta = ()
 
     let cfi_rel_offset oc reg ofs = ()
+        
+    let debug_line_start = ref (-1)
+
+    let compilation_unit_start_addr = ref (-1)
+
+    let compilation_unit_end_addr = ref (-1)
+      
+    (* Mapping from debug addresses to labels *)
+    let addr_label_map: (int,int) Hashtbl.t = Hashtbl.create 7
+
+    let set_compilation_unit_addrs cu_start cu_end =
+      compilation_unit_start_addr := cu_start;
+      compilation_unit_end_addr := cu_end
+
+    let debug_info_start = ref (-1)
+
+    let print_addr_label oc addr =
+      let lbl = try
+        Hashtbl.find addr_label_map addr
+      with Not_found ->
+        let lbl = new_label () in
+        Hashtbl.add addr_label_map addr lbl;
+        lbl in
+      fprintf oc "%a:\n" label lbl
 
     let print_prologue oc =
       fprintf oc "	.xopt	align-fill-text=0x60000000\n";
       if !Clflags.option_g then
-        fprintf oc "	.xopt	asm-debug-on\n"
+      begin
+        fprintf oc "	.text\n";
+        fprintf oc "	.section	.debug_line,,n\n";
+        let label_debug_line = new_label () in
+        debug_line_start := label_debug_line;
+        fprintf oc "%a:\n" label label_debug_line;
+        fprintf oc "	.text\n";
+        print_addr_label oc !compilation_unit_start_addr;
+        let label_debug_info = new_label () in
+        debug_info_start := label_debug_info;
+        fprintf oc "	.0byte	%a\n" label label_debug_info;
+        fprintf oc "	.d2_line_start	.debug_line\n";
+        fprintf oc "	.text\n";
+        fprintf oc "	.align	2\n"
+      end
           
+    let print_epilogue oc =
+      if !Clflags.option_g then
+        begin
+          (* Everthink available for printing of the compilation unit *)
+          fprintf oc "	.text\n";
+          (* End Address of the compilation unit *)
+          print_addr_label oc !compilation_unit_end_addr;
+          (* Print the filenum which is used for the location expressions *)
+          Hashtbl.iter (fun name lbl ->
+            fprintf oc "%a:	.d2filenum \"%s\"\n" label lbl name) filenum;
+          (* The end of the debug line info *)
+          fprintf oc "	.d2_line_end\n";
+        end
 
     module AbbrvPrinter = DwarfAbbrvPrinter(struct
         let string_of_byte value =
@@ -155,5 +214,6 @@ module Diab_System =
           fprintf oc "	.uleb128	0\n"
 
       end)
+
 
   end:SYSTEM)

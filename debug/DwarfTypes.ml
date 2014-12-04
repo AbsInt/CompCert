@@ -120,7 +120,7 @@ type dw_tag_label =
 type dw_tag_lexical_block =
     {
      lexical_block__high_pc: address;
-     lexical_block_low_pc:  address;
+     lexical_block_low_pc:   address;
    }
 
 type dw_tag_member =

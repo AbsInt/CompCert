@@ -110,5 +110,11 @@ module Linux_System =
 
 
     let print_prologue oc = ()
+
+    let print_epilogue oc = ()
+    
+    let set_compilation_unit_addrs _ _ = ()
+
+    let print_addr_label _ _ = ()
   
   end:SYSTEM)
