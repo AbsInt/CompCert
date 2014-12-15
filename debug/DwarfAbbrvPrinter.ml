@@ -57,6 +57,8 @@ module type DWARF_ABBRV_DEFS =
 module DwarfAbbrvPrinter(Defs:DWARF_ABBRV_DEFS) :
     sig
       val print_debug_abbrv: out_channel -> dw_entry -> unit
+      val get_abbrv: dw_entry -> bool -> int
+      val get_abbrv_start_addr: unit -> int
     end =
   (struct
     
@@ -306,5 +308,7 @@ module DwarfAbbrvPrinter(Defs:DWARF_ABBRV_DEFS) :
     let print_debug_abbrv oc entry =
       compute_abbrv entry;
       print_abbrv oc
+
+    let get_abbrv_start_addr = Defs.get_abbrv_start_addr
 
   end)

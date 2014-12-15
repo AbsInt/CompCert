@@ -54,7 +54,7 @@ type bound_value =
 
 type dw_tag_array_type =
     {
-     array_type_decl_file: constant  option;
+     array_type_decl_file: string    option;
      array_type_decl_line: constant  option;
      array_type:           reference;
    }
@@ -84,7 +84,7 @@ type dw_tag_const_type =
 
 type dw_tag_enumeration_type =
     {
-     enumeration_decl_file:   constant  option;
+     enumeration_decl_file:   string    option;
      enumeration_decl_line:   constant  option;
      enumeration_byte_size:   constant;
      enumeration_declaration: flag      option;
@@ -93,7 +93,7 @@ type dw_tag_enumeration_type =
 
 type dw_tag_enumerator =
     {
-     enumerator_decl_file: constant  option;
+     enumerator_decl_file: string    option;
      enumerator_decl_line: constant  option;
      enumerator_value:     constant;
      enumerator_name:      string;
@@ -101,7 +101,7 @@ type dw_tag_enumerator =
 
 type dw_tag_formal_parameter =
     {
-     formal_parameter_decl_file:          constant       option;
+     formal_parameter_decl_file:          string         option;
      formal_parameter_decl_line:          constant       option;
      formal_parameter_artificial:         flag           option;
      formal_parameter_location:           location_value option;
@@ -125,7 +125,7 @@ type dw_tag_lexical_block =
 
 type dw_tag_member =
     {
-     member_decl_file:            constant            option;
+     member_decl_file:            string              option;
      member_decl_line:            constant            option;
      member_byte_size:            constant            option;
      member_bit_offset:           constant            option;
@@ -143,7 +143,7 @@ type dw_tag_pointer_type =
 
 type dw_tag_structure_type =
     {
-     structure_decl_file:   constant  option;
+     structure_decl_file:   string    option;
      structure_decl_line:   constant  option;
      structure_byte_size:   constant;
      structure_declaration: flag      option;
@@ -152,7 +152,7 @@ type dw_tag_structure_type =
 
 type dw_tag_subprogram =
     {
-     subprogram_decl_file:  constant       option;
+     subprogram_decl_file:  string         option;
      subprogram_decl_line:  constant       option;
      subprogram_external:   flag           option;
      subprogram_frame_base: location_value option;
@@ -176,7 +176,7 @@ type dw_tag_subroutine_type =
 
 type dw_tag_typedef =
     {
-     typedef_decl_file: constant  option;
+     typedef_decl_file: string    option;
      typedef_decl_line: constant  option;
      typedef_name:      string;
      typedef_type:      reference;
@@ -184,7 +184,7 @@ type dw_tag_typedef =
 
 type dw_tag_union_type =
     {
-     union_decl_file: constant  option;
+     union_decl_file: string    option;
      union_decl_line: constant  option;
      union_byte_size: constant;
      union_name:      string;
@@ -192,14 +192,14 @@ type dw_tag_union_type =
 
 type dw_tag_unspecified_parameter =
     {
-     unspecified_parameter_decl_file:  constant option;
+     unspecified_parameter_decl_file:  string   option;
      unspecified_parameter_decl_line:  constant option;
      unspecified_parameter_artificial: flag     option;
    }
 
 type dw_tag_variable =
     {
-     variable_decl_file:   constant       option;
+     variable_decl_file:   string         option;
      variable_decl_line:   constant       option;
      variable_declaration: flag           option;
      variable_external:    flag           option;

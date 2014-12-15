@@ -122,6 +122,8 @@ module Diab_System =
         lbl in
       fprintf oc "%a:\n" label lbl
 
+    let register_addr_label = Hashtbl.add addr_label_map
+
     let print_prologue oc =
       fprintf oc "	.xopt	align-fill-text=0x60000000\n";
       if !Clflags.option_g then
@@ -215,5 +217,19 @@ module Diab_System =
 
       end)
 
+    let print_debug_info oc entry =
+      AbbrvPrinter.print_debug_abbrv oc entry;
+      let abbrv_start = AbbrvPrinter.get_abbrv_start_addr in
+      let debug_start = new_label () in
+      let print_info () =
+        fprintf oc"	.section	.debug_info,,n\n" in
+      print_info ();
+      fprintf oc "%a\n" label debug_start;
+      let debug_length_start = new_label () in (* Address used for length calculation *)
+      let debug_end = new_label () in
+      fprintf oc "	.4byte	%a-%a\n" label debug_end label debug_length_start;
+      fprintf oc "%a\n" label debug_length_start
+      
+    
 
   end:SYSTEM)
