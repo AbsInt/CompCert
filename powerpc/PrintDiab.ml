@@ -219,7 +219,7 @@ module Diab_System =
 
     let print_debug_info oc entry =
       AbbrvPrinter.print_debug_abbrv oc entry;
-      let abbrv_start = AbbrvPrinter.get_abbrv_start_addr in
+      let abbrv_start = AbbrvPrinter.get_abbrv_start_addr () in
       let debug_start = new_label () in
       let print_info () =
         fprintf oc"	.section	.debug_info,,n\n" in
@@ -228,8 +228,13 @@ module Diab_System =
       let debug_length_start = new_label () in (* Address used for length calculation *)
       let debug_end = new_label () in
       fprintf oc "	.4byte	%a-%a\n" label debug_end label debug_length_start;
-      fprintf oc "%a\n" label debug_length_start
-      
+      fprintf oc "%a\n" label debug_length_start;
+      fprintf oc "	.2byte	0x2\n"; (* Dwarf version *)
+      fprintf oc "	.4byte	%a\n" label abbrv_start; (* Offset into the abbreviation *)
+      fprintf oc "	.byte	%X\n" !Machine.config.Machine.sizeof_ptr; (* Sizeof pointer type *)
+      ();
+      fprintf oc "%a\n" label debug_end; (* End of the debug section *)
+      fprintf oc "	.sleb128	0\n"
     
 
   end:SYSTEM)
