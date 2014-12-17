@@ -10,7 +10,7 @@ int f (int p)
 
 int main (int argc, char **argv)
 {
-    int (*p)();
+    int (*p)(int);
     int f();
     int i;
 
