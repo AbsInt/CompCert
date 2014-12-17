@@ -17,30 +17,58 @@
 
 include Makefile.config
 
+# Directories containing plain Caml code (no preprocessing)
+
 DIRS=extraction \
   lib common $(ARCH) backend cfrontend cparser driver \
   exportclight
 
-ALLDIRS=$(DIRS)
+# Directories containing Caml code that must be preprocessed by Camlp4
+
 ifeq ($(CCHECKLINK),true)
-ALLDIRS+=checklink
+DIRS_P4=checklink
+else
+DIRS_P4=
 endif
 
+ALLDIRS=$(DIRS) $(DIRS_P4)
+
 INCLUDES=$(patsubst %,-I %, $(ALLDIRS))
+
+# Control of warnings:
+# warning 3 = deprecated feature.  Turned off for OCaml 4.02 (bytes vs strings)
+# warning 20 = unused function argument.  There are some in extracted code
 
 WARNINGS=-w -3
 extraction/%.cmx: WARNINGS +=-w -20
 extraction/%.cmo: WARNINGS +=-w -20
 
+COMPFLAGS=-g $(INCLUDE) $(WARNINGS)
+
+# Using the bitstring library and syntax extension (for checklink)
+
 BITSTRING=-package bitstring,bitstring.syntax -syntax bitstring.syntax,camlp4o
 
-OCAMLC=ocamlc -g $(INCLUDES) $(WARNINGS)
-OCAMLOPT=ocamlopt -g $(INCLUDES) $(WARNINGS)
-OCAMLDEP=ocamldep $(INCLUDES)
+# Using .opt compilers if available
 
-OCAMLC_P4=ocamlfind $(OCAMLC) $(BITSTRING)
-OCAMLOPT_P4=ocamlfind $(OCAMLOPT) $(BITSTRING)
-OCAMLDEP_P4=ocamlfind $(OCAMLDEP) $(BITSTRING)
+ifeq ($(OCAML_OPT_COMP),true)
+DOTOPT=.opt
+else
+DOTOPT=
+endif
+
+# Compilers used for non-preprocessed code
+
+OCAMLC=ocamlc$(DOTOPT) $(COMPFLAGS)
+OCAMLOPT=ocamlopt$(DOTOPT) $(COMPFLAGS)
+OCAMLDEP=ocamldep$(DOTOPT) $(INCLUDES)
+
+# Compilers used for Camlp4-preprocessed code.  Note that we cannot
+# use the .opt compilers (because ocamlfind doesn't support them).
+
+OCAMLC_P4=ocamlfind ocamlc $(COMPFLAGS) $(BITSTRING)
+OCAMLOPT_P4=ocamlfind ocamlopt $(COMPFLAGS) $(BITSTRING)
+OCAMLDEP_P4=ocamlfind ocamldep $(INCLUDES) $(BITSTRING)
 
 MENHIR=menhir --explain
 OCAMLLEX=ocamllex -q
@@ -53,6 +81,8 @@ LIBS=str.cmxa
 
 EXECUTABLES=ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte
 GENERATED=$(PARSERS:.mly=.mli) $(PARSERS:.mly=.ml) $(LEXERS:.mll=.ml)
+
+# Beginning of part that assumes .depend.extr already exists
 
 ifeq ($(wildcard .depend.extr),.depend.extr)
 
@@ -94,15 +124,17 @@ include .depend.extr
 
 endif
 
-checklink/%.cmx: checklink/%.ml
-	@echo "OCAMLOPT $<"
-	@$(OCAMLOPT_P4) -c $<
-checklink/%.cmo: checklink/%.ml
-	@echo "OCAMLC   $<"
-	@$(OCAMLC_P4) -c $<
+# End of part that assumes .depend.extr already exists
+
 checklink/%.cmi: checklink/%.mli
 	@echo "OCAMLC   $<"
 	@$(OCAMLC_P4) -c $<
+checklink/%.cmo: checklink/%.ml
+	@echo "OCAMLC   $<"
+	@$(OCAMLC_P4) -c $<
+checklink/%.cmx: checklink/%.ml
+	@echo "OCAMLOPT $<"
+	@$(OCAMLOPT_P4) -c $<
 
 %.cmi: %.mli
 	@echo "OCAMLC   $<"
@@ -124,11 +156,12 @@ clean:
 	rm -f $(GENERATED)
 	for d in $(ALLDIRS); do rm -f $$d/*.cm[iox] $$d/*.o; done
 
+# Generation of .depend.extr
+
 depend: $(GENERATED)
 	@echo "Analyzing OCaml dependencies"
 	@for d in $(DIRS); do $(OCAMLDEP) $$d/*.mli $$d/*.ml; done > .depend.extr
-ifeq ($(CCHECKLINK),true)
-	@$(OCAMLDEP_P4) checklink/*.mli checklink/*.ml >> .depend.extr
-endif
+ifneq ($(strip $(DIRS_P4)),)
+	@for d in $(DIRS_P4); do $(OCAMLDEP_P4) $$d/*.mli $$d/*.ml; done >> .dependif
 
 

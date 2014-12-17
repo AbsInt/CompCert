@@ -135,25 +135,27 @@ extraction/STAMP: $(FILES:.v=.vo) extraction/extraction.v $(ARCH)/extractionMach
 .depend.extr: extraction/STAMP tools/modorder
 	$(MAKE) -f Makefile.extr depend
 
-ccomp: .depend.extr compcert.ini
+ccomp: .depend.extr compcert.ini FORCE
 	$(MAKE) -f Makefile.extr ccomp
-ccomp.byte: .depend.extr compcert.ini
+ccomp.byte: .depend.extr compcert.ini FORCE
 	$(MAKE) -f Makefile.extr ccomp.byte
 
-cchecklink: .depend.extr compcert.ini
+cchecklink: .depend.extr compcert.ini FORCE
 	$(MAKE) -f Makefile.extr cchecklink
-cchecklink.byte: .depend.extr compcert.ini
+cchecklink.byte: .depend.extr compcert.ini FORCE
 	$(MAKE) -f Makefile.extr cchecklink.byte
 
-clightgen: .depend.extr compcert.ini exportclight/Clightdefs.vo
+clightgen: .depend.extr compcert.ini exportclight/Clightdefs.vo FORCE
 	$(MAKE) -f Makefile.extr clightgen
-clightgen.byte: .depend.extr compcert.ini exportclight/Clightdefs.vo
+clightgen.byte: .depend.extr compcert.ini exportclight/Clightdefs.vo FORCE
 	$(MAKE) -f Makefile.extr clightgen.byte
 
 runtime:
 	$(MAKE) -C runtime
 
-.PHONY: proof extraction runtime
+FORCE:
+
+.PHONY: proof extraction runtime FORCE
 
 documentation: doc/coq2html $(FILES)
 	mkdir -p doc/html
