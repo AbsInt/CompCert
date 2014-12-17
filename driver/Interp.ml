@@ -380,13 +380,33 @@ let do_printf m fmt args =
 
 let (>>=) opt f = match opt with None -> None | Some arg -> f arg
 
+(* Like eventval_of_val, but accepts static globals as well *)
+
+let convert_external_arg ge v t =
+  match v, t with
+  | Vint i, AST.Tint -> Some (EVint i)
+  | Vfloat f, AST.Tfloat -> Some (EVfloat f)
+  | Vsingle f, AST.Tsingle -> Some (EVsingle f)
+  | Vlong n, AST.Tlong -> Some (EVlong n)
+  | Vptr(b, ofs), AST.Tint -> 
+      Genv.invert_symbol ge b >>= fun id -> Some (EVptr_global(id, ofs))
+  | _, _ -> None
+
+let rec convert_external_args ge vl tl =
+  match vl, tl with
+  | [], [] -> Some []
+  | v1::vl, t1::tl ->
+      convert_external_arg ge v1 t1 >>= fun e1 ->
+      convert_external_args ge vl tl >>= fun el -> Some (e1 :: el)
+  | _, _ -> None
+
 let do_external_function id sg ge w args m =
   match extern_atom id, args with
   | "printf", Vptr(b, ofs) :: args' ->
       extract_string m b ofs >>= fun fmt ->
       print_string (do_printf m fmt args');
       flush stdout;
-      Cexec.list_eventval_of_val ge args sg.sig_args >>= fun eargs ->
+      convert_external_args ge args sg.sig_args >>= fun eargs ->
       Some(((w, [Event_syscall(id, eargs, EVint Int.zero)]), Vint Int.zero), m)
   | _ ->
       None
@@ -612,7 +632,8 @@ let change_main_function p old_main old_main_ty =
       fn_params = []; fn_vars = []; fn_body = body } in
   let new_main_id = intern_string "___main" in
   { prog_main = new_main_id;
-    prog_defs = (new_main_id, Gfun(Internal new_main_fn)) :: p.prog_defs }
+    prog_defs = (new_main_id, Gfun(Internal new_main_fn)) :: p.prog_defs;
+    prog_public = p.prog_public }
 
 let rec find_main_function name = function
   | [] -> None

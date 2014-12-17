@@ -818,6 +818,10 @@ Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
 Proof (Genv.find_symbol_transf_partial (transf_fundef rm) prog TRANSF).
 
+Lemma public_preserved:
+  forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
+Proof (Genv.public_symbol_transf_partial (transf_fundef rm) prog TRANSF).
+
 Lemma varinfo_preserved:
   forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
 Proof (Genv.find_var_info_transf_partial (transf_fundef rm) prog TRANSF).
@@ -1104,7 +1108,7 @@ Proof.
   econstructor; split.
   eapply exec_Ibuiltin; eauto. 
   eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor; eauto.
   eapply analysis_correct_1; eauto. simpl; auto.
 * unfold transfer; rewrite H.
@@ -1188,7 +1192,7 @@ Proof.
   econstructor; split.
   eapply exec_function_external; eauto.
   eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor; eauto.
 
 - (* return *)
@@ -1227,7 +1231,7 @@ Theorem transf_program_correct:
 Proof.
   eapply forward_simulation_step with
     (match_states := fun s1 s2 => sound_state prog s1 /\ match_states s1 s2).
-- eexact symbols_preserved.
+- eexact public_preserved.
 - intros. exploit transf_initial_states; eauto. intros [s2 [A B]]. 
   exists s2. split. auto. split. apply sound_initial; auto. auto.
 - intros. destruct H. eapply transf_final_states; eauto.

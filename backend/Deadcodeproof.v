@@ -381,6 +381,14 @@ Proof.
   exact TRANSF.
 Qed.
 
+Lemma public_preserved:
+  forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
+Proof.
+  intro. unfold ge, tge.
+  apply Genv.public_symbol_transf_partial with (transf_fundef rm).
+  exact TRANSF.
+Qed.
+
 Lemma varinfo_preserved:
   forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
 Proof.
@@ -792,7 +800,7 @@ Ltac UseTransfer :=
   eapply exec_Ibuiltin; eauto.
   eapply external_call_symbols_preserved.
   simpl. rewrite <- H4. constructor. eauto.   
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_update; eauto 2 with na.
   eapply magree_monotone; eauto. intros. apply incl_nmem_add; auto. 
@@ -812,7 +820,7 @@ Ltac UseTransfer :=
   eapply exec_Ibuiltin; eauto.
   eapply external_call_symbols_preserved.
   simpl. econstructor; eauto.   
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_update; eauto 2 with na.
   eapply magree_monotone; eauto. intros. apply incl_nmem_add; auto. 
@@ -825,7 +833,7 @@ Ltac UseTransfer :=
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
   eapply external_call_symbols_preserved. simpl; eauto. 
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_update; eauto 3 with na.
 + (* volatile global store *)
@@ -838,7 +846,7 @@ Ltac UseTransfer :=
   eapply exec_Ibuiltin; eauto.
   eapply external_call_symbols_preserved. simpl. 
   rewrite volatile_store_global_charact. exists b; split; eauto. 
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_update; eauto 2 with na.
 + (* memcpy *)
@@ -870,7 +878,7 @@ Ltac UseTransfer :=
   eapply exec_Ibuiltin; eauto.
   eapply external_call_symbols_preserved. simpl.
   inv LD1. inv LD2. econstructor; eauto.  
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_update; eauto 3 with na.
 + (* memcpy eliminated *)
@@ -893,7 +901,7 @@ Ltac UseTransfer :=
   eapply exec_Ibuiltin; eauto. 
   eapply external_call_symbols_preserved. simpl; constructor. 
   eapply eventval_list_match_lessdef; eauto 2 with na.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_update; eauto 2 with na.
 + (* annot val *)  
@@ -902,7 +910,7 @@ Ltac UseTransfer :=
   eapply exec_Ibuiltin; eauto. 
   eapply external_call_symbols_preserved. simpl; constructor. 
   eapply eventval_match_lessdef; eauto 2 with na.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_update; eauto 3 with na.
 + (* all other builtins *)
@@ -917,7 +925,7 @@ Ltac UseTransfer :=
   econstructor; split.
   eapply exec_Ibuiltin; eauto. 
   eapply external_call_symbols_preserved. eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_update; eauto 3 with na.
   eapply mextends_agree; eauto. 
@@ -969,7 +977,7 @@ Ltac UseTransfer :=
   econstructor; split.
   econstructor; eauto.
   eapply external_call_symbols_preserved; eauto. 
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor; eauto. 
 
 - (* return *)
@@ -1009,7 +1017,7 @@ Proof.
   intros.
   apply forward_simulation_step with
      (match_states := fun s1 s2 => sound_state prog s1 /\ match_states s1 s2).
-- exact symbols_preserved.
+- exact public_preserved.
 - simpl; intros. exploit transf_initial_states; eauto. intros [st2 [A B]].
   exists st2; intuition. eapply sound_initial; eauto. 
 - simpl; intros. destruct H. eapply transf_final_states; eauto. 

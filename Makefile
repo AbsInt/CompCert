@@ -28,6 +28,7 @@ COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
 COQDOC="$(COQBIN)coqdoc"
 COQEXEC="$(COQBIN)coqtop" $(COQINCLUDES) -batch -load-vernac-source
 COQCHK="$(COQBIN)coqchk" $(COQINCLUDES)
+CP=cp
 
 VPATH=$(DIRS)
 GPATH=$(DIRS)
@@ -74,6 +75,7 @@ BACKEND=\
   ConstpropOp.v Constprop.v ConstpropOpproof.v Constpropproof.v \
   CSEdomain.v CombineOp.v CSE.v CombineOpproof.v CSEproof.v \
   NeedDomain.v NeedOp.v Deadcode.v Deadcodeproof.v \
+  Unusedglob.v Unusedglobproof.v \
   Machregs.v Locations.v Conventions1.v Conventions.v LTL.v \
   Allocation.v Allocproof.v \
   Tunneling.v Tunnelingproof.v \
@@ -190,16 +192,16 @@ latexdoc:
 	@chmod -w $*.v
 
 compcert.ini: Makefile.config VERSION
-	(echo stdlib_path=$(LIBDIR); \
-         echo prepro=$(CPREPRO); \
-         echo asm=$(CASM); \
-         echo linker=$(CLINKER); \
-         echo arch=$(ARCH); \
-         echo model=$(MODEL); \
-         echo abi=$(ABI); \
-         echo system=$(SYSTEM); \
-         echo has_runtime_lib=$(HAS_RUNTIME_LIB); \
-         echo asm_supports_cfi=$(ASM_SUPPORTS_CFI); \
+	(echo "stdlib_path=$(LIBDIR)"; \
+         echo "prepro=$(CPREPRO)"; \
+         echo "asm=$(CASM)"; \
+         echo "linker=$(CLINKER)"; \
+         echo "arch=$(ARCH)"; \
+         echo "model=$(MODEL)"; \
+         echo "abi=$(ABI)"; \
+         echo "system=$(SYSTEM)"; \
+         echo "has_runtime_lib=$(HAS_RUNTIME_LIB)"; \
+         echo "asm_supports_cfi=$(ASM_SUPPORTS_CFI)"; \
          version=`cat VERSION`; \
          echo version=$$version) \
         > compcert.ini

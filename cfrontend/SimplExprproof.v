@@ -49,6 +49,13 @@ Proof.
   simpl. tauto.
 Qed.
 
+Lemma public_preserved:
+  forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
+Proof.
+  intros. eapply Genv.public_symbol_match. eapply transl_program_spec; eauto. 
+  simpl. tauto.
+Qed.
+
 Lemma function_ptr_translated:
   forall b f,
   Genv.find_funct_ptr ge b = Some f ->
@@ -155,7 +162,7 @@ Proof.
   rewrite H1. split; auto. eapply deref_loc_value; eauto.
   (* By_value, volatile *)
   rewrite H0; rewrite H1. eapply volatile_load_preserved with (ge1 := ge); auto.
-  exact symbols_preserved. exact block_is_volatile_preserved.
+  exact symbols_preserved. exact public_preserved. exact block_is_volatile_preserved.
   (* By reference *)
   rewrite H0. destruct (type_is_volatile ty); split; auto; eapply deref_loc_reference; eauto.
   (* By copy *)
@@ -175,7 +182,7 @@ Proof.
   rewrite H1. split; auto. eapply assign_loc_value; eauto.
   (* By_value, volatile *)
   rewrite H0; rewrite H1. eapply volatile_store_preserved with (ge1 := ge); auto.
-  exact symbols_preserved. exact block_is_volatile_preserved.
+  exact symbols_preserved. exact public_preserved. exact block_is_volatile_preserved.
   (* By copy *)
   rewrite H0. destruct (type_is_volatile ty); split; auto; eapply assign_loc_copy; eauto.
 Qed.
@@ -1861,7 +1868,7 @@ Proof.
   left. eapply plus_left. constructor.  apply star_one.
   econstructor; eauto.
   eapply external_call_symbols_preserved; eauto. 
-  exact symbols_preserved. exact varinfo_preserved. 
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved. 
   traceEq.
   econstructor; eauto.
   change sl2 with (nil ++ sl2). apply S. constructor. simpl; auto. auto. 
@@ -1872,7 +1879,7 @@ Proof.
   left. eapply plus_left. constructor. apply star_one.
   econstructor; eauto.
   eapply external_call_symbols_preserved; eauto. 
-  exact symbols_preserved. exact varinfo_preserved. 
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved. 
   traceEq.
   econstructor; eauto.
   change sl2 with (nil ++ sl2). apply S.
@@ -2161,7 +2168,7 @@ Proof.
   econstructor; split.
   left; apply plus_one. econstructor; eauto.
   eapply external_call_symbols_preserved; eauto. 
-  exact symbols_preserved. exact varinfo_preserved. 
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved. 
   constructor; auto.
 
 (* return *)
@@ -2198,7 +2205,7 @@ Proof.
   econstructor.
   exploit Genv.init_mem_match; eauto.  
   simpl. fold tge. rewrite symbols_preserved.
-  destruct MP as [A B]. rewrite B; eexact H1.
+  destruct MP as (A & B & C). rewrite B; eexact H1.
   eexact FIND.
   rewrite <- H3. apply type_of_fundef_preserved. auto.
   constructor. auto. constructor.
@@ -2215,7 +2222,7 @@ Theorem transl_program_correct:
   forward_simulation (Cstrategy.semantics prog) (Clight.semantics1 tprog).
 Proof.
   eapply forward_simulation_star_wf with (order := ltof _ measure).
-  eexact symbols_preserved.
+  eexact public_preserved.
   eexact transl_initial_states.
   eexact transl_final_states.
   apply well_founded_ltof.

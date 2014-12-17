@@ -106,7 +106,10 @@ Definition eventval_of_val (v: val) (t: typ) : option eventval :=
   | Vfloat f, AST.Tfloat => Some (EVfloat f)
   | Vsingle f, AST.Tsingle => Some (EVsingle f)
   | Vlong n, AST.Tlong => Some (EVlong n)
-  | Vptr b ofs, AST.Tint => do id <- Genv.invert_symbol ge b; Some (EVptr_global id ofs)
+  | Vptr b ofs, AST.Tint => 
+      do id <- Genv.invert_symbol ge b;
+      check (Genv.public_symbol ge id);
+      Some (EVptr_global id ofs)
   | _, _ => None
   end.
 
@@ -126,7 +129,10 @@ Definition val_of_eventval (ev: eventval) (t: typ) : option val :=
   | EVfloat f, AST.Tfloat => Some (Vfloat f)
   | EVsingle f, AST.Tsingle => Some (Vsingle f)
   | EVlong n, AST.Tlong => Some (Vlong n)
-  | EVptr_global id ofs, AST.Tint => do b <- Genv.find_symbol ge id; Some (Vptr b ofs)
+  | EVptr_global id ofs, AST.Tint =>
+      check (Genv.public_symbol ge id);
+      do b <- Genv.find_symbol ge id;
+      Some (Vptr b ofs)
   | _, _ => None
   end.
 
@@ -134,15 +140,16 @@ Lemma eventval_of_val_sound:
   forall v t ev, eventval_of_val v t = Some ev -> eventval_match ge ev t v.
 Proof.
   intros. destruct v; destruct t; simpl in H; inv H; try constructor.
-  destruct (Genv.invert_symbol ge b) as [id|] eqn:?; inv H1. 
-  constructor. apply Genv.invert_find_symbol; auto.
+  destruct (Genv.invert_symbol ge b) as [id|] eqn:?; try discriminate.
+  destruct (Genv.public_symbol ge id) eqn:?; inv H1.
+  constructor. auto. apply Genv.invert_find_symbol; auto.
 Qed.
 
 Lemma eventval_of_val_complete:
   forall ev t v, eventval_match ge ev t v -> eventval_of_val v t = Some ev.
 Proof.
   induction 1; simpl; auto.
-  rewrite (Genv.find_invert_symbol _ _ H). auto. 
+  rewrite (Genv.find_invert_symbol _ _ H0). rewrite H. auto. 
 Qed.
 
 Lemma list_eventval_of_val_sound:
@@ -166,14 +173,15 @@ Lemma val_of_eventval_sound:
   forall ev t v, val_of_eventval ev t = Some v -> eventval_match ge ev t v.
 Proof.
   intros. destruct ev; destruct t; simpl in H; inv H; try constructor.
+  destruct (Genv.public_symbol ge i) eqn:?; try discriminate.
   destruct (Genv.find_symbol ge i) as [b|] eqn:?; inv H1.
-  constructor. auto.
+  constructor; auto.
 Qed.
 
 Lemma val_of_eventval_complete:
   forall ev t v, eventval_match ge ev t v -> val_of_eventval ev t = Some v.
 Proof.
-  induction 1; simpl; auto. rewrite H; auto.
+  induction 1; simpl; auto. rewrite H, H0; auto.
 Qed.
 
 (** Volatile memory accesses. *)

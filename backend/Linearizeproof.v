@@ -62,6 +62,11 @@ Lemma symbols_preserved:
   Genv.find_symbol tge id = Genv.find_symbol ge id.
 Proof (Genv.find_symbol_transf_partial transf_fundef _ TRANSF).
 
+Lemma public_preserved:
+  forall id,
+  Genv.public_symbol tge id = Genv.public_symbol ge id.
+Proof (Genv.public_symbol_transf_partial transf_fundef _ TRANSF).
+
 Lemma varinfo_preserved:
   forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
 Proof (Genv.find_var_info_transf_partial transf_fundef _ TRANSF).
@@ -640,14 +645,14 @@ Proof.
   left; econstructor; split. simpl.
   apply plus_one. eapply exec_Lbuiltin; eauto.
   eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor; eauto.
 
   (* Lannot *)
   left; econstructor; split. simpl.
   apply plus_one. eapply exec_Lannot; eauto.
   eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor; eauto.
 
   (* Lbranch *)
@@ -705,7 +710,7 @@ Proof.
   monadInv H8. left; econstructor; split.
   apply plus_one. eapply exec_function_external; eauto.
   eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor; eauto.
 
   (* return *)
@@ -741,7 +746,7 @@ Theorem transf_program_correct:
   forward_simulation (LTL.semantics prog) (Linear.semantics tprog).
 Proof.
   eapply forward_simulation_star.
-  eexact symbols_preserved.
+  eexact public_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
   eexact transf_step_correct.

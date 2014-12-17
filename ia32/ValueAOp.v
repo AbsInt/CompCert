@@ -58,7 +58,7 @@ Definition eval_static_operation (op: operation) (vl: list aval): aval :=
   | Ointconst n, nil => I n
   | Ofloatconst n, nil => if propagate_float_constants tt then F n else ftop
   | Osingleconst n, nil => if propagate_float_constants tt then FS n else ftop
-  | Oindirectsymbol id, nil => Ptr (Gl id Int.zero)
+  | Oindirectsymbol id, nil => Ifptr (Gl id Int.zero)
   | Ocast8signed, v1 :: nil => sign_ext 8 v1
   | Ocast8unsigned, v1 :: nil => zero_ext 8 v1
   | Ocast16signed, v1 :: nil => sign_ext 16 v1
@@ -145,7 +145,16 @@ Proof.
   intros; apply symbol_address_sound; apply GENV.
 Qed.
 
-Hint Resolve symbol_address_sound: va.
+Lemma symbol_address_sound_2:
+  forall id ofs,
+  vmatch bc (Genv.symbol_address ge id ofs) (Ifptr (Gl id ofs)).
+Proof.
+  intros. unfold Genv.symbol_address. destruct (Genv.find_symbol ge id) as [b|] eqn:F. 
+  constructor. constructor. apply GENV; auto.
+  constructor.
+Qed.
+
+Hint Resolve symbol_address_sound symbol_address_sound_2: va.
 
 Ltac InvHyps :=
   match goal with

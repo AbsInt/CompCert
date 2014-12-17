@@ -104,7 +104,7 @@ void clock_StartCounter(CLOCK_CLOCKS ClockCounter)
 **********************************************************/
 {
 #ifndef CLOCK_NO_TIMING
-  ftime(&(clock_Counters[ClockCounter]));
+  gettimeofday(&(clock_Counters[ClockCounter]), NULL);
 #endif
 }
 
@@ -121,7 +121,7 @@ void clock_StopPassedTime(CLOCK_CLOCKS ClockCounter)
 {
 #ifndef CLOCK_NO_TIMING
   CLOCK_TMS    newtime;
-  ftime(&newtime);
+  gettimeofday(&newtime, NULL);
   clock_Akku[ClockCounter] = clock_GetSeconds(ClockCounter);
 #endif
 }
@@ -139,7 +139,7 @@ void clock_StopAddPassedTime(CLOCK_CLOCKS ClockCounter)
 {
 #ifndef CLOCK_NO_TIMING
   CLOCK_TMS    newtime;
-  ftime(&newtime);
+  gettimeofday(&newtime, NULL);
   clock_Akku[ClockCounter] += clock_GetSeconds(ClockCounter);
 #endif
 }
@@ -157,13 +157,21 @@ float clock_GetSeconds(CLOCK_CLOCKS ClockCounter)
 {
 #ifndef CLOCK_NO_TIMING
   CLOCK_TMS    newtime;
-  ftime(&newtime);
-  return ((float) (newtime.time - clock_Counters[ClockCounter].time)
-	  + (((newtime.millitm - clock_Counters[ClockCounter].millitm))
-	     /(float)1000));
-#else
+  time_t       seconds_passed;
+  long         microseconds_passed;
+
+  gettimeofday(&newtime, NULL);
+
+  seconds_passed = newtime.tv_sec - clock_Counters[ClockCounter].tv_sec;
+  microseconds_passed = newtime.tv_usec - clock_Counters[ClockCounter].tv_usec;
+
+  return ((float) seconds_passed
+          + (microseconds_passed /(float)1000000));
+
+#else /* CLOCK_NO_TIMING */
   return 0;
-#endif
+#endif /* ! CLOCK_NO_TIMING */
+
 }
 
 #ifdef WIN

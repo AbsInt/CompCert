@@ -659,6 +659,23 @@ Proof.
   destruct c; simpl; try congruence. reflexivity. 
 Qed.
 
+(** Global variables mentioned in an operation or addressing mode *)
+
+Definition globals_addressing (addr: addressing) : list ident :=
+  match addr with
+  | Aglobal s n => s :: nil
+  | Abased s n => s :: nil
+  | Abasedscaled sc s n => s :: nil
+  | _ => nil
+  end.
+
+Definition globals_operation (op: operation) : list ident :=
+  match op with
+  | Oindirectsymbol s => s :: nil
+  | Olea addr => globals_addressing addr
+  | _ => nil
+  end.
+
 (** * Invariance and compatibility properties. *)
 
 (** [eval_operation] and [eval_addressing] depend on a global environment
@@ -699,13 +716,10 @@ End GENV_TRANSF.
 
 Section EVAL_COMPAT.
 
-Variable F V: Type.
-Variable genv: Genv.t F V.
+Variable F1 F2 V1 V2: Type.
+Variable ge1: Genv.t F1 V1.
+Variable ge2: Genv.t F2 V2.
 Variable f: meminj.
-
-Hypothesis symbol_address_inj: 
-  forall id ofs,
-  val_inject f (Genv.symbol_address genv id ofs) (Genv.symbol_address genv id ofs).
 
 Variable m1: mem.
 Variable m2: mem.
@@ -781,29 +795,37 @@ Ltac TrivialExists :=
 
 Lemma eval_addressing_inj:
   forall addr sp1 vl1 sp2 vl2 v1,
+  (forall id ofs,
+      In id (globals_addressing addr) ->
+      val_inject f (Genv.symbol_address ge1 id ofs) (Genv.symbol_address ge2 id ofs)) ->
   val_inject f sp1 sp2 ->
   val_list_inject f vl1 vl2 ->
-  eval_addressing genv sp1 addr vl1 = Some v1 ->
-  exists v2, eval_addressing genv sp2 addr vl2 = Some v2 /\ val_inject f v1 v2.
+  eval_addressing ge1 sp1 addr vl1 = Some v1 ->
+  exists v2, eval_addressing ge2 sp2 addr vl2 = Some v2 /\ val_inject f v1 v2.
 Proof.
-  intros. destruct addr; simpl in H1; simpl; FuncInv; InvInject; TrivialExists.
+  intros. destruct addr; simpl in H2; simpl; FuncInv; InvInject; TrivialExists.
   apply Values.val_add_inject; auto.
   apply Values.val_add_inject; auto. apply Values.val_add_inject; auto.
-  apply Values.val_add_inject; auto. inv H4; simpl; auto.
-  apply Values.val_add_inject; auto. apply Values.val_add_inject; auto. inv H2; simpl; auto.
-  apply Values.val_add_inject; auto.
-  apply Values.val_add_inject; auto. inv H4; simpl; auto.
+  apply Values.val_add_inject; auto. inv H5; simpl; auto.
+  apply Values.val_add_inject; auto. apply Values.val_add_inject; auto. inv H3; simpl; auto.
+  apply H; simpl; auto.
+  apply Values.val_add_inject; auto. apply H; simpl; auto.
+  apply Values.val_add_inject; auto. apply H; simpl; auto. inv H5; simpl; auto.
   apply Values.val_add_inject; auto.
 Qed.
 
 Lemma eval_operation_inj:
   forall op sp1 vl1 sp2 vl2 v1,
+  (forall id ofs,
+      In id (globals_operation op) ->
+      val_inject f (Genv.symbol_address ge1 id ofs) (Genv.symbol_address ge2 id ofs)) ->
   val_inject f sp1 sp2 ->
   val_list_inject f vl1 vl2 ->
-  eval_operation genv sp1 op vl1 m1 = Some v1 ->
-  exists v2, eval_operation genv sp2 op vl2 m2 = Some v2 /\ val_inject f v1 v2.
+  eval_operation ge1 sp1 op vl1 m1 = Some v1 ->
+  exists v2, eval_operation ge2 sp2 op vl2 m2 = Some v2 /\ val_inject f v1 v2.
 Proof.
-  intros. destruct op; simpl in H1; simpl; FuncInv; InvInject; TrivialExists.
+  intros until v1; intros GL; intros. destruct op; simpl in H1; simpl; FuncInv; InvInject; TrivialExists.
+  apply GL; simpl; auto.
   inv H4; simpl; auto.
   inv H4; simpl; auto.
   inv H4; simpl; auto.
@@ -951,13 +973,14 @@ Proof.
           eval_operation genv sp op vl2 m2 = Some v2
           /\ val_inject (fun b => Some(b, 0)) v1 v2).
   eapply eval_operation_inj with (m1 := m1) (sp1 := sp).
-  intros. rewrite <- val_inject_lessdef; auto.
   apply valid_pointer_extends; auto.
   apply weak_valid_pointer_extends; auto.
   apply weak_valid_pointer_no_overflow_extends.
   apply valid_different_pointers_extends; auto.
-  rewrite <- val_inject_lessdef; auto.
-  eauto. auto. 
+  intros. apply val_inject_lessdef. auto. 
+  apply val_inject_lessdef; auto.
+  eauto. 
+  auto.
   destruct H2 as [v2 [A B]]. exists v2; split; auto. rewrite val_inject_lessdef; auto. 
 Qed.
 
@@ -1026,7 +1049,7 @@ Proof.
   intros. 
   rewrite eval_shift_stack_addressing. simpl.
   eapply eval_addressing_inj with (sp1 := Vptr sp1 Int.zero); eauto.
-  exact symbol_address_inject.
+  intros. apply symbol_address_inject.
 Qed.
 
 Lemma eval_operation_inject:
@@ -1041,11 +1064,11 @@ Proof.
   intros. 
   rewrite eval_shift_stack_operation. simpl.
   eapply eval_operation_inj with (sp1 := Vptr sp1 Int.zero) (m1 := m1); eauto.
-  exact symbol_address_inject.
   intros; eapply Mem.valid_pointer_inject_val; eauto.
   intros; eapply Mem.weak_valid_pointer_inject_val; eauto.
   intros; eapply Mem.weak_valid_pointer_inject_no_overflow; eauto.
   intros; eapply Mem.different_pointers_inject; eauto.
+  intros. apply symbol_address_inject. 
 Qed.
 
 End EVAL_INJECT.

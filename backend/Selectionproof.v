@@ -56,6 +56,12 @@ Proof.
   intros. eapply Genv.find_symbol_transf_partial; eauto. 
 Qed.
 
+Lemma public_preserved:
+  forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
+Proof.
+  intros. eapply Genv.public_symbol_transf_partial; eauto. 
+Qed.
+
 Lemma function_ptr_translated:
   forall (b: block) (f: Cminor.fundef),
   Genv.find_funct_ptr ge b = Some f ->
@@ -105,7 +111,7 @@ Proof.
   split. auto.
   split. auto.
   intros. eapply external_call_symbols_preserved; eauto. 
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
 Qed.
 
 Lemma builtin_implements_preserved:
@@ -115,7 +121,7 @@ Lemma builtin_implements_preserved:
 Proof.
   unfold builtin_implements; intros.
   eapply external_call_symbols_preserved; eauto. 
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
 Qed.
 
 Lemma helpers_correct_preserved:
@@ -795,7 +801,7 @@ Proof.
   intros [vres' [m2 [A [B [C D]]]]].
   left; econstructor; split.
   econstructor. eauto. eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   constructor; auto.
   destruct optid; simpl; auto. apply set_var_lessdef; auto.
 - (* Seq *)
@@ -872,14 +878,14 @@ Proof.
   intros [vres' [m2 [A [B [C D]]]]].
   left; econstructor; split.
   econstructor. eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   constructor; auto.
 - (* external call turned into a Sbuiltin *)
   exploit external_call_mem_extends; eauto. 
   intros [vres' [m2 [A [B [C D]]]]].
   left; econstructor; split.
   econstructor. eauto. eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact varinfo_preserved.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   constructor; auto.
 - (* return *)
   inv MC. 
@@ -927,7 +933,7 @@ Proof.
   intros. unfold sel_program in H. 
   destruct (get_helpers (Genv.globalenv prog)) as [hf|] eqn:E; simpl in H; try discriminate.
   apply forward_simulation_opt with (match_states := match_states prog tprog hf) (measure := measure). 
-  eapply symbols_preserved; eauto.
+  eapply public_preserved; eauto.
   apply sel_initial_states; auto.
   apply sel_final_states; auto.
   apply sel_step_correct; auto. eapply helpers_correct_preserved; eauto. apply get_helpers_correct. auto.

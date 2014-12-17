@@ -276,6 +276,7 @@ Inductive eventval_match: eventval -> typ -> val -> Prop :=
   | ev_match_single: forall f,
       eventval_match (EVsingle f) Tsingle (Vsingle f)
   | ev_match_ptr: forall id b ofs,
+      Genv.public_symbol ge id = true ->
       Genv.find_symbol ge id = Some b ->
       eventval_match (EVptr_global id ofs) Tint (Vptr b ofs).
 
@@ -318,45 +319,6 @@ Proof.
   inv H1. constructor. eapply eventval_match_lessdef; eauto. eauto.
 Qed.
 
-(** Compatibility with memory injections *)
-
-Variable f: block -> option (block * Z).
-
-Definition meminj_preserves_globals : Prop :=
-     (forall id b, Genv.find_symbol ge id = Some b -> f b = Some(b, 0))
-  /\ (forall b gv, Genv.find_var_info ge b = Some gv -> f b = Some(b, 0))
-  /\ (forall b1 b2 delta gv, Genv.find_var_info ge b2 = Some gv -> f b1 = Some(b2, delta) -> b2 = b1).
-
-Hypothesis glob_pres: meminj_preserves_globals.
-
-Lemma eventval_match_inject:
-  forall ev ty v1 v2,
-  eventval_match ev ty v1 -> val_inject f v1 v2 -> eventval_match ev ty v2.
-Proof.
-  intros. inv H; inv H0; try constructor; auto.
-  destruct glob_pres as [A [B C]].
-  exploit A; eauto. intro EQ; rewrite H3 in EQ; inv EQ.
-  rewrite Int.add_zero. econstructor; eauto. 
-Qed.
-
-Lemma eventval_match_inject_2:
-  forall ev ty v,
-  eventval_match ev ty v -> val_inject f v v.
-Proof.
-  induction 1; auto.
-  destruct glob_pres as [A [B C]].
-  exploit A; eauto. intro EQ.
-  econstructor; eauto. rewrite Int.add_zero; auto.
-Qed.
-
-Lemma eventval_list_match_inject:
-  forall evl tyl vl1, eventval_list_match evl tyl vl1 ->
-  forall vl2, val_list_inject f vl1 vl2 -> eventval_list_match evl tyl vl2.
-Proof.
-  induction 1; intros. inv H; constructor.
-  inv H1. constructor. eapply eventval_match_inject; eauto. eauto.
-Qed.
-
 (** Determinism *)
 
 Lemma eventval_match_determ_1:
@@ -388,7 +350,7 @@ Definition eventval_valid (ev: eventval) : Prop :=
   | EVlong _ => True
   | EVfloat _ => True
   | EVsingle _ => True
-  | EVptr_global id ofs => exists b, Genv.find_symbol ge id = Some b
+  | EVptr_global id ofs => Genv.public_symbol ge id = true
   end.
 
 Definition eventval_type (ev: eventval) : typ :=
@@ -407,19 +369,21 @@ Lemma eventval_match_receptive:
   exists v2, eventval_match ev2 ty v2.
 Proof.
   intros. inv H; destruct ev2; simpl in H2; try discriminate.
-  exists (Vint i0); constructor.
-  destruct H1 as [b EQ]. exists (Vptr b i1); constructor; auto.
-  exists (Vlong i0); constructor.
-  exists (Vfloat f1); constructor.
-  exists (Vsingle f1); constructor; auto.
-  exists (Vint i); constructor.
-  destruct H1 as [b' EQ]. exists (Vptr b' i0); constructor; auto.
+- exists (Vint i0); constructor.
+- simpl in H1; exploit Genv.public_symbol_exists; eauto. intros [b FS]. 
+  exists (Vptr b i1); constructor; auto.
+- exists (Vlong i0); constructor.
+- exists (Vfloat f0); constructor.
+- exists (Vsingle f0); constructor; auto.
+- exists (Vint i); constructor.
+- simpl in H1. exploit Genv.public_symbol_exists. eexact H1. intros [b' FS]. 
+  exists (Vptr b' i0); constructor; auto.
 Qed.
 
 Lemma eventval_match_valid:
   forall ev ty v, eventval_match ev ty v -> eventval_valid ev.
 Proof.
-  destruct 1; simpl; auto. exists b; auto.
+  destruct 1; simpl; auto.
 Qed.
 
 Lemma eventval_match_same_type:
@@ -439,6 +403,15 @@ Variables F1 V1 F2 V2: Type.
 Variable ge1: Genv.t F1 V1.
 Variable ge2: Genv.t F2 V2.
 
+Hypothesis public_preserved:
+  forall id, Genv.public_symbol ge2 id = Genv.public_symbol ge1 id.
+
+Lemma eventval_valid_preserved:
+  forall ev, eventval_valid ge1 ev -> eventval_valid ge2 ev.
+Proof.
+  intros. destruct ev; simpl in *; auto. rewrite <- H; auto. 
+Qed.
+
 Hypothesis symbols_preserved:
   forall id, Genv.find_symbol ge2 id = Genv.find_symbol ge1 id.
 
@@ -446,7 +419,9 @@ Lemma eventval_match_preserved:
   forall ev ty v,
   eventval_match ge1 ev ty v -> eventval_match ge2 ev ty v.
 Proof.
-  induction 1; constructor; auto. rewrite symbols_preserved; auto. 
+  induction 1; constructor; auto.
+  rewrite public_preserved; auto. 
+  rewrite symbols_preserved; auto. 
 Qed.
 
 Lemma eventval_list_match_preserved:
@@ -456,14 +431,68 @@ Proof.
   induction 1; constructor; auto. eapply eventval_match_preserved; eauto.
 Qed.
 
-Lemma eventval_valid_preserved:
-  forall ev, eventval_valid ge1 ev -> eventval_valid ge2 ev.
+End EVENTVAL_INV.
+
+(** Used for the semantics of volatile memory accesses.  Move to [Globalenv] ? *)
+
+Definition block_is_volatile (F V: Type) (ge: Genv.t F V) (b: block) : bool :=
+  match Genv.find_var_info ge b with
+  | None => false
+  | Some gv => gv.(gvar_volatile)
+  end.
+
+(** Compatibility with memory injections *)
+
+Section EVENTVAL_INJECT.
+
+Variables F1 V1 F2 V2: Type.
+Variable f: block -> option (block * Z).
+Variable ge1: Genv.t F1 V1.
+Variable ge2: Genv.t F2 V2.
+
+Definition symbols_inject : Prop :=
+   (forall id, Genv.public_symbol ge2 id = Genv.public_symbol ge1 id)
+/\ (forall id b1 b2 delta,
+     f b1 = Some(b2, delta) -> Genv.find_symbol ge1 id = Some b1 ->
+     delta = 0 /\ Genv.find_symbol ge2 id = Some b2)
+/\ (forall id b1,
+     Genv.public_symbol ge1 id = true -> Genv.find_symbol ge1 id = Some b1 ->
+     exists b2, f b1 = Some(b2, 0) /\ Genv.find_symbol ge2 id = Some b2)
+/\ (forall b1 b2 delta,
+     f b1 = Some(b2, delta) ->
+     block_is_volatile ge2 b2 = block_is_volatile ge1 b1).
+
+Hypothesis symb_inj: symbols_inject.
+
+Lemma eventval_match_inject:
+  forall ev ty v1 v2,
+  eventval_match ge1 ev ty v1 -> val_inject f v1 v2 -> eventval_match ge2 ev ty v2.
 Proof.
-  unfold eventval_valid; destruct ev; auto. 
-  intros [b A]. exists b; rewrite symbols_preserved; auto.
+  intros. inv H; inv H0; try constructor; auto.
+  destruct symb_inj as (A & B & C & D). exploit C; eauto. intros [b3 [EQ FS]]. rewrite H4 in EQ; inv EQ.
+  rewrite Int.add_zero. constructor; auto. rewrite A; auto.
 Qed.
 
-End EVENTVAL_INV.
+Lemma eventval_match_inject_2:
+  forall ev ty v1,
+  eventval_match ge1 ev ty v1 -> 
+  exists v2, eventval_match ge2 ev ty v2 /\ val_inject f v1 v2.
+Proof.
+  intros. inv H; try (econstructor; split; eauto; constructor; fail).
+  destruct symb_inj as (A & B & C & D). exploit C; eauto. intros [b2 [EQ FS]].
+  exists (Vptr b2 ofs); split. econstructor; eauto. 
+  econstructor; eauto. rewrite Int.add_zero; auto.
+Qed.
+
+Lemma eventval_list_match_inject:
+  forall evl tyl vl1, eventval_list_match ge1 evl tyl vl1 ->
+  forall vl2, val_list_inject f vl1 vl2 -> eventval_list_match ge2 evl tyl vl2.
+Proof.
+  induction 1; intros. inv H; constructor.
+  inv H1. constructor. eapply eventval_match_inject; eauto. eauto.
+Qed.
+
+End EVENTVAL_INJECT.
 
 (** * Matching traces. *)
 
@@ -501,8 +530,8 @@ Variables F1 V1 F2 V2: Type.
 Variable ge1: Genv.t F1 V1.
 Variable ge2: Genv.t F2 V2.
 
-Hypothesis symbols_preserved:
-  forall id, Genv.find_symbol ge2 id = Genv.find_symbol ge1 id.
+Hypothesis public_preserved:
+  forall id, Genv.public_symbol ge2 id = Genv.public_symbol ge1 id.
 
 Lemma match_traces_preserved:
   forall t1 t2, match_traces ge1 t1 t2 -> match_traces ge2 t1 t2.
@@ -530,12 +559,6 @@ Fixpoint output_trace (t: trace) : Prop :=
   end.
 
 (** * Semantics of volatile memory accesses *)
-
-Definition block_is_volatile (F V: Type) (ge: Genv.t F V) (b: block) : bool :=
-  match Genv.find_var_info ge b with
-  | None => false
-  | Some gv => gv.(gvar_volatile)
-  end.
 
 Inductive volatile_load (F V: Type) (ge: Genv.t F V):
                    memory_chunk -> mem -> block -> int -> trace -> val -> Prop :=
@@ -600,7 +623,8 @@ Definition inject_separated (f f': meminj) (m1 m2: mem): Prop :=
   ~Mem.valid_block m1 b1 /\ ~Mem.valid_block m2 b2.
 
 Record extcall_properties (sem: extcall_sem)
-                          (sg: signature) : Prop := mk_extcall_properties {
+                          (sg: signature) (free_globals: list ident) : Prop :=
+  mk_extcall_properties {
 
 (** The return value of an external call must agree with its signature. *)
   ec_well_typed:
@@ -612,6 +636,7 @@ Record extcall_properties (sem: extcall_sem)
   ec_symbols_preserved:
     forall F1 V1 (ge1: Genv.t F1 V1) F2 V2 (ge2: Genv.t F2 V2) vargs m1 t vres m2,
     (forall id, Genv.find_symbol ge2 id = Genv.find_symbol ge1 id) ->
+    (forall id, Genv.public_symbol ge2 id = Genv.public_symbol ge1 id) ->
     (forall b, block_is_volatile ge2 b = block_is_volatile ge1 b) ->
     sem F1 V1 ge1 vargs m1 t vres m2 ->
     sem F2 V2 ge2 vargs m1 t vres m2;
@@ -653,13 +678,16 @@ Record extcall_properties (sem: extcall_sem)
 (** External calls must commute with memory injections,
   in the following sense. *)
   ec_mem_inject:
-    forall F V (ge: Genv.t F V) vargs m1 t vres m2 f m1' vargs',
-    meminj_preserves_globals ge f ->
-    sem F V ge vargs m1 t vres m2 ->
+    forall F1 V1 F2 V2 (ge1: Genv.t F1 V1) (ge2: Genv.t F2 V2) vargs m1 t vres m2 f m1' vargs',
+    symbols_inject f ge1 ge2 ->
+    (forall id b1,
+       In id free_globals -> Genv.find_symbol ge1 id = Some b1 ->
+       exists b2, f b1 = Some(b2, 0) /\ Genv.find_symbol ge2 id = Some b2) ->
+    sem F1 V1 ge1 vargs m1 t vres m2 ->
     Mem.inject f m1 m1' ->
     val_list_inject f vargs vargs' ->
     exists f', exists vres', exists m2',
-       sem F V ge vargs' m1' t vres' m2'
+       sem F2 V2 ge2 vargs' m1' t vres' m2'
     /\ val_inject f' vres vres'
     /\ Mem.inject f' m2 m2'
     /\ Mem.unchanged_on (loc_unmapped f) m1 m2
@@ -696,15 +724,16 @@ Inductive volatile_load_sem (chunk: memory_chunk) (F V: Type) (ge: Genv.t F V):
 Lemma volatile_load_preserved:
   forall F1 V1 (ge1: Genv.t F1 V1) F2 V2 (ge2: Genv.t F2 V2) chunk m b ofs t v,
   (forall id, Genv.find_symbol ge2 id = Genv.find_symbol ge1 id) ->
+  (forall id, Genv.public_symbol ge2 id = Genv.public_symbol ge1 id) ->
   (forall b, block_is_volatile ge2 b = block_is_volatile ge1 b) ->
   volatile_load ge1 chunk m b ofs t v ->
   volatile_load ge2 chunk m b ofs t v.
 Proof.
-  intros. inv H1; constructor; auto.
-  rewrite H0; auto.
+  intros. inv H2; constructor; auto.
+  rewrite H1; auto.
   rewrite H; auto.
   eapply eventval_match_preserved; eauto.
-  rewrite H0; auto.
+  rewrite H1; auto.
 Qed.
 
 Lemma volatile_load_extends:
@@ -718,35 +747,28 @@ Proof.
   exploit Mem.load_extends; eauto. intros [v' [A B]]. exists v'; split; auto. constructor; auto.
 Qed.
 
-Remark meminj_preserves_block_is_volatile:
-  forall F V (ge: Genv.t F V) f b1 b2 delta,
-  meminj_preserves_globals ge f ->
-  f b1 = Some (b2, delta) ->
-  block_is_volatile ge b2 = block_is_volatile ge b1.
-Proof.
-  intros. destruct H as [A [B C]]. unfold block_is_volatile. 
-  case_eq (Genv.find_var_info ge b1); intros.
-  exploit B; eauto. intro EQ; rewrite H0 in EQ; inv EQ. rewrite H; auto.
-  case_eq (Genv.find_var_info ge b2); intros.
-  exploit C; eauto. intro EQ. congruence.
-  auto.
-Qed.
-
 Lemma volatile_load_inject:
-  forall F V (ge: Genv.t F V) f chunk m b ofs t v b' ofs' m',
-  meminj_preserves_globals ge f ->
-  volatile_load ge chunk m b ofs t v ->
+  forall F1 V1 F2 V2 (ge1: Genv.t F1 V1) (ge2: Genv.t F2 V2) f chunk m b ofs t v b' ofs' m',
+  symbols_inject f ge1 ge2 ->
+  volatile_load ge1 chunk m b ofs t v ->
   val_inject f (Vptr b ofs) (Vptr b' ofs') ->
   Mem.inject f m m' ->
-  exists v', volatile_load ge chunk m' b' ofs' t v' /\ val_inject f v v'.
+  exists v', volatile_load ge2 chunk m' b' ofs' t v' /\ val_inject f v v'.
 Proof.
-  intros. inv H0.
-  inv H1. exploit (proj1 H); eauto. intros EQ; rewrite H8 in EQ; inv EQ.
-  rewrite Int.add_zero. exists (Val.load_result chunk v0); split.
-  constructor; auto. 
-  apply val_load_result_inject. eapply eventval_match_inject_2; eauto.
-  exploit Mem.loadv_inject; eauto. simpl; eauto. simpl; intros [v' [A B]]. exists v'; split; auto. 
-  constructor; auto. rewrite <- H3. inv H1. eapply meminj_preserves_block_is_volatile; eauto. 
+  intros until m'; intros SI VL VI MI. generalize SI; intros (A & B & C & D). 
+  inv VL.
+- (* volatile load *)
+  inv VI. exploit B; eauto. intros [U V]. subst delta. 
+  exploit eventval_match_inject_2; eauto. intros (v2 & X & Y).
+  rewrite Int.add_zero. exists (Val.load_result chunk v2); split.
+  constructor; auto.
+  erewrite D; eauto.
+  apply val_load_result_inject. auto.
+- (* normal load *)
+  exploit Mem.loadv_inject; eauto. simpl; eauto. simpl; intros (v2 & X & Y). 
+  exists v2; split; auto. 
+  constructor; auto.
+  inv VI. erewrite D; eauto. 
 Qed.
 
 Lemma volatile_load_receptive:
@@ -763,14 +785,15 @@ Qed.
 Lemma volatile_load_ok:
   forall chunk,
   extcall_properties (volatile_load_sem chunk) 
-                     (mksignature (Tint :: nil) (Some (type_of_chunk chunk)) cc_default).
+                     (mksignature (Tint :: nil) (Some (type_of_chunk chunk)) cc_default)
+                     nil.
 Proof.
   intros; constructor; intros.
 (* well typed *)
   unfold proj_sig_res; simpl. inv H. inv H0. apply Val.load_result_type. 
   eapply Mem.load_type; eauto. 
 (* symbols *)
-  inv H1. constructor. eapply volatile_load_preserved; eauto. 
+  inv H2. constructor. eapply volatile_load_preserved; eauto. 
 (* valid blocks *)
   inv H; auto.
 (* max perms *)
@@ -782,7 +805,7 @@ Proof.
   exploit volatile_load_extends; eauto. intros [v' [A B]].
   exists v'; exists m1'; intuition. constructor; auto.
 (* mem injects *)
-  inv H0. inv H2. inv H7. inversion H5; subst. 
+  inv H1. inv H3. inv H8. inversion H6; subst. 
   exploit volatile_load_inject; eauto. intros [v' [A B]]. 
   exists f; exists v'; exists m1'; intuition. constructor; auto.
   red; intros. congruence.
@@ -825,14 +848,15 @@ Qed.
 Lemma volatile_load_global_ok:
   forall chunk id ofs,
   extcall_properties (volatile_load_global_sem chunk id ofs) 
-                     (mksignature nil (Some (type_of_chunk chunk)) cc_default).
+                     (mksignature nil (Some (type_of_chunk chunk)) cc_default)
+                     (id :: nil).
 Proof.
   intros; constructor; intros.
 (* well typed *)
   unfold proj_sig_res; simpl. inv H. inv H1. apply Val.load_result_type.
   eapply Mem.load_type; eauto. 
 (* symbols *)
-  inv H1. econstructor. rewrite H; eauto. eapply volatile_load_preserved; eauto. 
+  inv H2. econstructor. rewrite H; eauto. eapply volatile_load_preserved; eauto. 
 (* valid blocks *)
   inv H; auto.
 (* max perm *)
@@ -843,9 +867,10 @@ Proof.
   inv H. inv H1. exploit volatile_load_extends; eauto. intros [v' [A B]].
   exists v'; exists m1'; intuition. econstructor; eauto.
 (* inject *)
-  inv H0. inv H2.
-  assert (val_inject f (Vptr b ofs) (Vptr b ofs)). 
-    exploit (proj1 H); eauto. intros EQ. econstructor. eauto. rewrite Int.add_zero; auto.
+  inv H1. inv H3.
+  exploit H0; eauto with coqlib. intros (b2 & INJ & FS2). 
+  assert (val_inject f (Vptr b ofs) (Vptr b2 ofs)).
+    econstructor; eauto. rewrite Int.add_zero; auto. 
   exploit volatile_load_inject; eauto. intros [v' [A B]].
   exists f; exists v'; exists m1'; intuition. econstructor; eauto. 
   red; intros; congruence. 
@@ -872,15 +897,16 @@ Inductive volatile_store_sem (chunk: memory_chunk) (F V: Type) (ge: Genv.t F V):
 Lemma volatile_store_preserved:
   forall F1 V1 (ge1: Genv.t F1 V1) F2 V2 (ge2: Genv.t F2 V2) chunk m1 b ofs v t m2,
   (forall id, Genv.find_symbol ge2 id = Genv.find_symbol ge1 id) ->
+  (forall id, Genv.public_symbol ge2 id = Genv.public_symbol ge1 id) ->
   (forall b, block_is_volatile ge2 b = block_is_volatile ge1 b) ->
   volatile_store ge1 chunk m1 b ofs v t m2 ->
   volatile_store ge2 chunk m1 b ofs v t m2.
 Proof.
-  intros. inv H1; constructor; auto.
-  rewrite H0; auto.
+  intros. inv H2; constructor; auto.
+  rewrite H1; auto.
   rewrite H; auto.
   eapply eventval_match_preserved; eauto.
-  rewrite H0; auto.
+  rewrite H1; auto.
 Qed.
 
 Lemma volatile_store_readonly:
@@ -922,38 +948,44 @@ Proof.
 Qed.
 
 Lemma volatile_store_inject:
-  forall F V (ge: Genv.t F V) f chunk m1 b ofs v t m2 m1' b' ofs' v',
-  meminj_preserves_globals ge f ->
-  volatile_store ge chunk m1 b ofs v t m2 ->
+  forall F1 V1 F2 V2 (ge1: Genv.t F1 V1) (ge2: Genv.t F2 V2) f chunk m1 b ofs v t m2 m1' b' ofs' v',
+  symbols_inject f ge1 ge2 ->
+  volatile_store ge1 chunk m1 b ofs v t m2 ->
   val_inject f (Vptr b ofs) (Vptr b' ofs') ->
   val_inject f v v' ->
   Mem.inject f m1 m1' ->
   exists m2',
-       volatile_store ge chunk m1' b' ofs' v' t m2'
+       volatile_store ge2 chunk m1' b' ofs' v' t m2'
     /\ Mem.inject f m2 m2'
     /\ Mem.unchanged_on (loc_unmapped f) m1 m2
     /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'.
 Proof.
-  intros. inv H0.
-- inv H1. exploit (proj1 H); eauto. intros EQ; rewrite H9 in EQ; inv EQ.
-  rewrite Int.add_zero. exists m1'. intuition. 
-  constructor; auto.
-  eapply eventval_match_inject; eauto. apply val_load_result_inject; auto.
-- assert (Mem.storev chunk m1 (Vptr b ofs) v = Some m2). simpl; auto.
+  intros until v'; intros SI VS AI VI MI. 
+  generalize SI; intros (P & Q & R & S). 
+  inv VS.
+- (* volatile store *)
+  inv AI. exploit Q; eauto. intros [A B]. subst delta. 
+  rewrite Int.add_zero. exists m1'; split.
+  constructor; auto. erewrite S; eauto. 
+  eapply eventval_match_inject; eauto. apply val_load_result_inject. auto.
+  intuition auto with mem.
+- (* normal store *)
+  inversion AI; subst.
+  assert (Mem.storev chunk m1 (Vptr b ofs) v = Some m2). simpl; auto.
   exploit Mem.storev_mapped_inject; eauto. intros [m2' [A B]].
-  inv H1. exists m2'; intuition. 
-+ constructor; auto. rewrite <- H4. eapply meminj_preserves_block_is_volatile; eauto.  
+  exists m2'; intuition auto.
++ constructor; auto. erewrite S; eauto. 
 + eapply Mem.store_unchanged_on; eauto.
-  unfold loc_unmapped; intros. congruence.
+  unfold loc_unmapped; intros. inv AI; congruence.
 + eapply Mem.store_unchanged_on; eauto. 
   unfold loc_out_of_reach; intros. red; intros. simpl in A. 
   assert (EQ: Int.unsigned (Int.add ofs (Int.repr delta)) = Int.unsigned ofs + delta)
   by (eapply Mem.address_inject; eauto with mem).
   rewrite EQ in *.
-  eelim H6; eauto. 
-  exploit Mem.store_valid_access_3. eexact H5. intros [P Q]. 
+  eelim H3; eauto. 
+  exploit Mem.store_valid_access_3. eexact H0. intros [X Y]. 
   apply Mem.perm_cur_max. apply Mem.perm_implies with Writable; auto with mem. 
-  apply P. omega.
+  apply X. omega.
 Qed.
 
 Lemma volatile_store_receptive:
@@ -966,13 +998,14 @@ Qed.
 Lemma volatile_store_ok:
   forall chunk,
   extcall_properties (volatile_store_sem chunk) 
-                     (mksignature (Tint :: type_of_chunk chunk :: nil) None cc_default).
+                     (mksignature (Tint :: type_of_chunk chunk :: nil) None cc_default)
+                     nil.
 Proof.
   intros; constructor; intros.
 (* well typed *)
   unfold proj_sig_res; simpl. inv H; constructor.
 (* symbols preserved *)
-  inv H1. constructor. eapply volatile_store_preserved; eauto. 
+  inv H2. constructor. eapply volatile_store_preserved; eauto. 
 (* valid block *)
   inv H. inv H1. auto. eauto with mem.
 (* perms *)
@@ -984,7 +1017,7 @@ Proof.
   exploit volatile_store_extends; eauto. intros [m2' [A [B C]]]. 
   exists Vundef; exists m2'; intuition. constructor; auto. 
 (* mem inject *)
-  inv H0. inv H2. inv H7. inv H8. inversion H5; subst.
+  inv H1. inv H3. inv H8. inv H9. inversion H6; subst.
   exploit volatile_store_inject; eauto. intros [m2' [A [B [C D]]]].
   exists f; exists Vundef; exists m2'; intuition. constructor; auto. red; intros; congruence.
 (* trace length *)
@@ -1021,13 +1054,14 @@ Qed.
 Lemma volatile_store_global_ok:
   forall chunk id ofs,
   extcall_properties (volatile_store_global_sem chunk id ofs) 
-                     (mksignature (type_of_chunk chunk :: nil) None cc_default).
+                     (mksignature (type_of_chunk chunk :: nil) None cc_default)
+                     (id :: nil).
 Proof.
   intros; constructor; intros.
 (* well typed *)
   unfold proj_sig_res; simpl. inv H; constructor.
 (* symbols preserved *)
-  inv H1. econstructor. rewrite H; eauto. eapply volatile_store_preserved; eauto. 
+  inv H2. econstructor. rewrite H; eauto. eapply volatile_store_preserved; eauto. 
 (* valid block *)
   inv H. inv H2. auto. eauto with mem.
 (* perms *)
@@ -1040,13 +1074,13 @@ Proof.
   intros [vres' [m2' [A [B [C D]]]]]. 
   exists vres'; exists m2'; intuition. rewrite volatile_store_global_charact. exists b; auto. 
 (* mem inject *)
-  rewrite volatile_store_global_charact in H0. destruct H0 as [b [P Q]]. 
-  exploit (proj1 H). eauto. intros EQ. 
-  assert (val_inject f (Vptr b ofs) (Vptr b ofs)). econstructor; eauto. rewrite Int.add_zero; auto.
-  exploit ec_mem_inject. eapply volatile_store_ok. eauto. eexact Q. eauto. eauto. 
+  rewrite volatile_store_global_charact in H1. destruct H1 as [b [P Q]].
+  exploit H0; eauto with coqlib. intros (b2 & INJ & FS2). 
+  assert (val_inject f (Vptr b ofs) (Vptr b2 ofs)). econstructor; eauto. rewrite Int.add_zero; auto.
+  exploit ec_mem_inject. eapply volatile_store_ok. eauto. intuition. eexact Q. eauto. constructor. eauto. eauto. 
   intros [f' [vres' [m2' [A [B [C [D [E G]]]]]]]].
   exists f'; exists vres'; exists m2'; intuition.
-  rewrite volatile_store_global_charact. exists b; auto. 
+  rewrite volatile_store_global_charact. exists b2; auto. 
 (* trace length *)
   inv H. inv H1; simpl; omega.
 (* receptive *)
@@ -1069,7 +1103,8 @@ Inductive extcall_malloc_sem (F V: Type) (ge: Genv.t F V):
 
 Lemma extcall_malloc_ok:
   extcall_properties extcall_malloc_sem 
-                     (mksignature (Tint :: nil) (Some Tint) cc_default).
+                     (mksignature (Tint :: nil) (Some Tint) cc_default)
+                     nil.
 Proof.
   assert (UNCHANGED:
     forall (P: block -> Z -> Prop) m n m' b m'',
@@ -1089,7 +1124,7 @@ Proof.
 (* well typed *)
   inv H. unfold proj_sig_res; simpl. auto.
 (* symbols preserved *)
-  inv H1; econstructor; eauto.
+  inv H2; econstructor; eauto.
 (* valid block *)
   inv H. eauto with mem.
 (* perms *)
@@ -1109,7 +1144,7 @@ Proof.
   econstructor; eauto.
   eapply UNCHANGED; eauto.
 (* mem injects *)
-  inv H0. inv H2. inv H6. inv H8.
+  inv H1. inv H3. inv H7. inv H9.
   exploit Mem.alloc_parallel_inject; eauto. apply Zle_refl. apply Zle_refl. 
   intros [f' [m3' [b' [ALLOC [A [B [C D]]]]]]].
   exploit Mem.store_mapped_inject. eexact A. eauto. eauto. 
@@ -1121,8 +1156,8 @@ Proof.
   eapply UNCHANGED; eauto.
   eapply UNCHANGED; eauto.
   red; intros. destruct (eq_block b1 b). 
-  subst b1. rewrite C in H2. inv H2. eauto with mem. 
-  rewrite D in H2. congruence. auto. 
+  subst b1. rewrite C in H3. inv H3. eauto with mem. 
+  rewrite D in H3 by auto. congruence.
 (* trace length *)
   inv H; simpl; omega.
 (* receptive *)
@@ -1144,13 +1179,14 @@ Inductive extcall_free_sem  (F V: Type) (ge: Genv.t F V):
 
 Lemma extcall_free_ok:
   extcall_properties extcall_free_sem 
-                     (mksignature (Tint :: nil) None cc_default).
+                     (mksignature (Tint :: nil) None cc_default)
+                     nil.
 Proof.
   constructor; intros.
 (* well typed *)
   inv H. unfold proj_sig_res. simpl. auto.
 (* symbols preserved *)
-  inv H1; econstructor; eauto.
+  inv H2; econstructor; eauto.
 (* valid block *)
   inv H. eauto with mem.
 (* perms *)
@@ -1173,13 +1209,13 @@ Proof.
     eapply Mem.free_range_perm. eexact H4. eauto. }
   tauto.
 (* mem inject *)
-  inv H0. inv H2. inv H7. inv H9.
+  inv H1. inv H3. inv H8. inv H10.
   exploit Mem.load_inject; eauto. intros [vsz [A B]]. inv B.
   assert (Mem.range_perm m1 b (Int.unsigned lo - 4) (Int.unsigned lo + Int.unsigned sz) Cur Freeable).
     eapply Mem.free_range_perm; eauto.
   exploit Mem.address_inject; eauto. 
     apply Mem.perm_implies with Freeable; auto with mem.
-    apply H0. instantiate (1 := lo). omega. 
+    apply H1. instantiate (1 := lo). omega. 
   intro EQ.
   exploit Mem.free_parallel_inject; eauto. intros (m2' & C & D).
   exists f, Vundef, m2'; split.
@@ -1191,9 +1227,9 @@ Proof.
   split. auto.
   split. eapply Mem.free_unchanged_on; eauto. unfold loc_unmapped. intros; congruence.
   split. eapply Mem.free_unchanged_on; eauto. unfold loc_out_of_reach. 
-    intros. red; intros. eelim H7; eauto.
+    intros. red; intros. eelim H8; eauto.
     apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem. 
-    apply H0. omega.
+    apply H1. omega.
   split. auto. 
   red; intros. congruence.
 (* trace length *)
@@ -1221,13 +1257,15 @@ Inductive extcall_memcpy_sem (sz al: Z) (F V: Type) (ge: Genv.t F V): list val -
 
 Lemma extcall_memcpy_ok:
   forall sz al,
-  extcall_properties (extcall_memcpy_sem sz al) (mksignature (Tint :: Tint :: nil) None cc_default).
+  extcall_properties (extcall_memcpy_sem sz al)
+                     (mksignature (Tint :: Tint :: nil) None cc_default)
+                     nil.
 Proof.
   intros. constructor.
 - (* return type *)
   intros. inv H. constructor. 
 - (* change of globalenv *)
-  intros. inv H1. econstructor; eauto.
+  intros. inv H2. econstructor; eauto.
 - (* valid blocks *)
   intros. inv H. eauto with mem. 
 - (* perms *)
@@ -1253,7 +1291,7 @@ Proof.
   erewrite list_forall2_length; eauto. 
   tauto.
 - (* injections *)
-  intros. inv H0. inv H2. inv H14. inv H15. inv H11. inv H12.
+  intros. inv H1. inv H3. inv H15. inv H16. inv H12. inv H13.
   destruct (zeq sz 0).
 + (* special case sz = 0 *)
   assert (bytes = nil). 
@@ -1304,7 +1342,7 @@ Proof.
   split. eapply Mem.storebytes_unchanged_on; eauto. unfold loc_unmapped; intros.
   congruence.
   split. eapply Mem.storebytes_unchanged_on; eauto. unfold loc_out_of_reach; intros. red; intros.
-  eelim H2; eauto. 
+  eelim H3; eauto. 
   apply Mem.perm_cur_max. apply Mem.perm_implies with Writable; auto with mem.
   eapply Mem.storebytes_range_perm; eauto. 
   erewrite list_forall2_length; eauto. 
@@ -1340,13 +1378,15 @@ Inductive extcall_annot_sem (text: ident) (targs: list annot_arg) (F V: Type) (g
 
 Lemma extcall_annot_ok:
   forall text targs,
-  extcall_properties (extcall_annot_sem text targs) (mksignature (annot_args_typ targs) None cc_default).
+  extcall_properties (extcall_annot_sem text targs)
+                     (mksignature (annot_args_typ targs) None cc_default)
+                     nil.
 Proof.
   intros; constructor; intros.
 (* well typed *)
   inv H. simpl. auto.
 (* symbols *)
-  inv H1. econstructor; eauto. 
+  inv H2. econstructor; eauto. 
   eapply eventval_list_match_preserved; eauto.
 (* valid blocks *)
   inv H; auto.
@@ -1360,7 +1400,7 @@ Proof.
   econstructor; eauto.
   eapply eventval_list_match_lessdef; eauto.
 (* mem injects *)
-  inv H0.
+  inv H1.
   exists f; exists Vundef; exists m1'; intuition.
   econstructor; eauto.
   eapply eventval_list_match_inject; eauto.
@@ -1384,13 +1424,15 @@ Inductive extcall_annot_val_sem (text: ident) (targ: typ) (F V: Type) (ge: Genv.
 
 Lemma extcall_annot_val_ok:
   forall text targ,
-  extcall_properties (extcall_annot_val_sem text targ) (mksignature (targ :: nil) (Some targ) cc_default).
+  extcall_properties (extcall_annot_val_sem text targ)
+                     (mksignature (targ :: nil) (Some targ) cc_default)
+                     nil.
 Proof.
   intros; constructor; intros.
 (* well typed *)
   inv H. unfold proj_sig_res; simpl. eapply eventval_match_type; eauto.
 (* symbols *)
-  inv H1. econstructor; eauto. 
+  inv H2. econstructor; eauto. 
   eapply eventval_match_preserved; eauto.
 (* valid blocks *)
   inv H; auto.
@@ -1404,7 +1446,7 @@ Proof.
   econstructor; eauto.
   eapply eventval_match_lessdef; eauto.
 (* mem inject *)
-  inv H0. inv H2. inv H7.
+  inv H1. inv H3. inv H8.
   exists f; exists v'; exists m1'; intuition.
   econstructor; eauto.
   eapply eventval_match_inject; eauto.
@@ -1429,14 +1471,14 @@ Qed.
 Parameter external_functions_sem: ident -> signature -> extcall_sem.
 
 Axiom external_functions_properties:
-  forall id sg, extcall_properties (external_functions_sem id sg) sg.
+  forall id sg, extcall_properties (external_functions_sem id sg) sg nil.
 
 (** We treat inline assembly similarly. *)
 
 Parameter inline_assembly_sem: ident -> extcall_sem.
 
 Axiom inline_assembly_properties:
-  forall id, extcall_properties (inline_assembly_sem id) (mksignature nil None cc_default).
+  forall id, extcall_properties (inline_assembly_sem id) (mksignature nil None cc_default) nil.
 
 (** ** Combined semantics of external calls *)
 
@@ -1469,9 +1511,9 @@ Definition external_call (ef: external_function): extcall_sem :=
 
 Theorem external_call_spec:
   forall ef, 
-  extcall_properties (external_call ef) (ef_sig ef).
+  extcall_properties (external_call ef) (ef_sig ef) (globals_external ef).
 Proof.
-  intros. unfold external_call, ef_sig. destruct ef.
+  intros. unfold external_call, ef_sig, globals_external; destruct ef.
   apply external_functions_properties.
   apply external_functions_properties.
   apply volatile_load_ok.
@@ -1492,7 +1534,7 @@ Definition external_call_valid_block ef := ec_valid_block (external_call_spec ef
 Definition external_call_max_perm ef := ec_max_perm (external_call_spec ef).
 Definition external_call_readonly ef := ec_readonly (external_call_spec ef).
 Definition external_call_mem_extends ef := ec_mem_extends (external_call_spec ef).
-Definition external_call_mem_inject ef := ec_mem_inject (external_call_spec ef).
+Definition external_call_mem_inject_gen ef := ec_mem_inject (external_call_spec ef).
 Definition external_call_trace_length ef := ec_trace_length (external_call_spec ef).
 Definition external_call_receptive ef := ec_receptive (external_call_spec ef).
 Definition external_call_determ ef := ec_determ (external_call_spec ef).
@@ -1503,11 +1545,12 @@ Lemma external_call_symbols_preserved:
   forall ef F1 F2 V (ge1: Genv.t F1 V) (ge2: Genv.t F2 V) vargs m1 t vres m2,
   external_call ef ge1 vargs m1 t vres m2 ->
   (forall id, Genv.find_symbol ge2 id = Genv.find_symbol ge1 id) ->
+  (forall id, Genv.public_symbol ge2 id = Genv.public_symbol ge1 id) ->
   (forall b, Genv.find_var_info ge2 b = Genv.find_var_info ge1 b) ->
   external_call ef ge2 vargs m1 t vres m2.
 Proof.
   intros. eapply external_call_symbols_preserved_gen; eauto.
-  intros. unfold block_is_volatile. rewrite H1. auto.
+  intros. unfold block_is_volatile. rewrite H2. auto.
 Qed.
 
 Require Import Errors.
@@ -1517,6 +1560,7 @@ Lemma external_call_symbols_preserved_2:
          (ge1: Genv.t F1 V1) (ge2: Genv.t F2 V2) vargs m1 t vres m2,
   external_call ef ge1 vargs m1 t vres m2 ->
   (forall id, Genv.find_symbol ge2 id = Genv.find_symbol ge1 id) ->
+  (forall id, Genv.public_symbol ge2 id = Genv.public_symbol ge1 id) ->
   (forall b gv1, Genv.find_var_info ge1 b = Some gv1 ->
      exists gv2, Genv.find_var_info ge2 b = Some gv2 /\ transf_globvar tvar gv1 = OK gv2) ->
   (forall b gv2, Genv.find_var_info ge2 b = Some gv2 ->
@@ -1526,9 +1570,9 @@ Proof.
   intros. eapply external_call_symbols_preserved_gen; eauto.
   intros. unfold block_is_volatile.
   case_eq (Genv.find_var_info ge1 b); intros.
-  exploit H1; eauto. intros [g2 [A B]]. rewrite A. monadInv B. destruct g; auto.
+  exploit H2; eauto. intros [g2 [A B]]. rewrite A. monadInv B. destruct g; auto.
   case_eq (Genv.find_var_info ge2 b); intros.
-  exploit H2; eauto. intros [g1 [A B]]. congruence.
+  exploit H3; eauto. intros [g1 [A B]]. congruence.
   auto.
 Qed.
 
@@ -1543,6 +1587,40 @@ Proof.
   exploit external_call_valid_block; eauto. intros.
   eelim Plt_strict; eauto.
   unfold Plt, Ple in *; zify; omega.
+Qed.
+
+(** Special case of [external_call_mem_inject_gen] (for backward compatibility) *)
+
+Definition meminj_preserves_globals (F V: Type) (ge: Genv.t F V) (f: block -> option (block * Z)) : Prop :=
+     (forall id b, Genv.find_symbol ge id = Some b -> f b = Some(b, 0))
+  /\ (forall b gv, Genv.find_var_info ge b = Some gv -> f b = Some(b, 0))
+  /\ (forall b1 b2 delta gv, Genv.find_var_info ge b2 = Some gv -> f b1 = Some(b2, delta) -> b2 = b1).
+
+Lemma external_call_mem_inject:
+  forall ef F V (ge: Genv.t F V) vargs m1 t vres m2 f m1' vargs',
+  meminj_preserves_globals ge f ->
+  external_call ef ge vargs m1 t vres m2 ->
+  Mem.inject f m1 m1' ->
+  val_list_inject f vargs vargs' ->
+  exists f', exists vres', exists m2',
+     external_call ef ge vargs' m1' t vres' m2'
+    /\ val_inject f' vres vres'
+    /\ Mem.inject f' m2 m2'
+    /\ Mem.unchanged_on (loc_unmapped f) m1 m2
+    /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'
+    /\ inject_incr f f'
+    /\ inject_separated f f' m1 m1'.
+Proof.
+  intros. destruct H as (A & B & C). eapply external_call_mem_inject_gen; eauto. 
+  repeat split; intros.
+  + simpl in H3. exploit A; eauto. intros EQ; rewrite EQ in H; inv H. auto.
+  + simpl in H3. exploit A; eauto. intros EQ; rewrite EQ in H; inv H. auto.
+  + simpl in H3. exists b1; split; eauto.
+  + unfold block_is_volatile; simpl.
+    destruct (Genv.find_var_info ge b1) as [gv1|] eqn:V1.
+    * exploit B; eauto. intros EQ; rewrite EQ in H; inv H. rewrite V1; auto.
+    * destruct (Genv.find_var_info ge b2) as [gv2|] eqn:V2; auto.
+      exploit C; eauto. intros EQ; subst b2. congruence.
 Qed.
 
 (** Corollaries of [external_call_determ]. *)
@@ -1658,6 +1736,7 @@ Lemma external_call_symbols_preserved':
   forall ef F1 F2 V (ge1: Genv.t F1 V) (ge2: Genv.t F2 V) vargs m1 t vres m2,
   external_call' ef ge1 vargs m1 t vres m2 ->
   (forall id, Genv.find_symbol ge2 id = Genv.find_symbol ge1 id) ->
+  (forall id, Genv.public_symbol ge2 id = Genv.public_symbol ge1 id) ->
   (forall b, Genv.find_var_info ge2 b = Genv.find_var_info ge1 b) ->
   external_call' ef ge2 vargs m1 t vres m2.
 Proof.

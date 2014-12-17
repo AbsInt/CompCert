@@ -9,6 +9,13 @@ type bitstring = Bitstring.bitstring
     bitstring may be longer.
     @param size number of bits to check
 *)
+
+let is_zeros (bs: bitstring) (size: int): bool =
+  Bitstring.bitstring_length bs >= size
+  && Bitstring.is_zeroes_bitstring (Bitstring.subbitstring bs 0 size)
+
+(*
+
 let rec is_zeros (bs: bitstring) (size: int): bool =
   size = 0 ||
   if size >= 64
@@ -23,3 +30,4 @@ let rec is_zeros (bs: bitstring) (size: int): bool =
     | { 0L : size : int } -> true
     | { _ } -> false
   )
+*)
