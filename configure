@@ -213,7 +213,7 @@ fi
 missingtools=false
 
 echo "Testing Coq... " | tr -d '\n'
-coq_ver=`(coqc -v | sed -n -e 's/The Coq Proof Assistant, version \([^ ]*\).*$/\1/p') 2>/dev/null`
+coq_ver=`coqc -v 2>/dev/null | sed -n -e 's/The Coq Proof Assistant, version \([^ ]*\).*$/\1/p'`
 case "$coq_ver" in
   8.4pl*)
         echo "version $coq_ver -- good!";;
@@ -253,7 +253,7 @@ else
 fi
 
 echo "Testing Menhir... " | tr -d '\n'
-menhir_ver=`(menhir --version | sed -n -e 's/^.*version \([0-9]*\).*$/\1/p') 2>\dev\null`
+menhir_ver=`menhir --version 2>/dev/null | sed -n -e 's/^.*version \([0-9]*\).*$/\1/p'`
 case "$menhir_ver" in
   201[4-9]*|20[2-9]*)
         echo "version $menhir_ver -- good!";;
@@ -270,7 +270,7 @@ esac
 echo "Testing GNU make... " | tr -d '\n'
 make=''
 for mk in make gmake gnumake; do
-  make_ver=`($mk -v | head -1 | sed -n -e 's/^GNU Make //p') 2>/dev/null`
+  make_ver=`($mk -v 2>/dev/null | head -1 | sed -n -e 's/^GNU Make //p') 2>/dev/null`
   case "$make_ver" in
     3.8*|3.9*|[4-9].*)
         echo "version $make_ver (command '$mk') -- good!"

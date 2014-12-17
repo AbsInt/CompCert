@@ -43,7 +43,7 @@ WARNINGS=-w -3
 extraction/%.cmx: WARNINGS +=-w -20
 extraction/%.cmo: WARNINGS +=-w -20
 
-COMPFLAGS=-g $(INCLUDE) $(WARNINGS)
+COMPFLAGS=-g $(INCLUDES) $(WARNINGS)
 
 # Using the bitstring library and syntax extension (for checklink)
 
@@ -162,6 +162,7 @@ depend: $(GENERATED)
 	@echo "Analyzing OCaml dependencies"
 	@for d in $(DIRS); do $(OCAMLDEP) $$d/*.mli $$d/*.ml; done > .depend.extr
 ifneq ($(strip $(DIRS_P4)),)
-	@for d in $(DIRS_P4); do $(OCAMLDEP_P4) $$d/*.mli $$d/*.ml; done >> .dependif
+	@for d in $(DIRS_P4); do $(OCAMLDEP_P4) $$d/*.mli $$d/*.ml; done >> .depend.extr
+endif
 
 
