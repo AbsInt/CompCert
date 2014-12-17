@@ -31,6 +31,7 @@ COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
 COQDOC="$(COQBIN)coqdoc"
 COQEXEC="$(COQBIN)coqtop" $(COQINCLUDES) -batch -load-vernac-source
 COQCHK="$(COQBIN)coqchk" $(COQINCLUDES)
+CP=cp
 
 OCAMLBUILD=ocamlbuild
 OCB_OPTIONS=\
@@ -130,14 +131,6 @@ DRIVER=Compopts.v Compiler.v Complements.v
 FILES=$(LIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(DRIVER) $(FLOCQ) \
   $(PARSERVALIDATOR) $(PARSER)
 
-# Symbolic links vs. copy
-
-ifneq (,$(findstring CYGWIN,$(shell uname -s)))
-SLN=cp
-else
-SLN=ln -s
-endif
-
 all:
 	$(MAKE) proof
 	$(MAKE) extraction
@@ -160,34 +153,34 @@ extraction/STAMP: $(FILES:.v=.vo) extraction/extraction.v $(ARCH)/extractionMach
 
 ccomp: extraction/STAMP compcert.ini
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.native \
-        && rm -f ccomp && $(SLN) _build/driver/Driver.native ccomp
+        && $(CP) _build/driver/Driver.native ccomp
 
 ccomp.prof: extraction/STAMP compcert.ini
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.p.native \
-        && rm -f ccomp.prof && $(SLN) _build/driver/Driver.p.native ccomp.prof
+        && $(CP) _build/driver/Driver.p.native ccomp.prof
 
 ccomp.byte: extraction/STAMP compcert.ini
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.d.byte \
-        && rm -f ccomp.byte && $(SLN) _build/driver/Driver.d.byte ccomp.byte
+        && $(CP) _build/driver/Driver.d.byte ccomp.byte
 
 runtime:
 	$(MAKE) -C runtime
 
 cchecklink: compcert.ini
 	$(OCAMLBUILD) $(OCB_OPTIONS_CHECKLINK) Validator.native \
-        && rm -f cchecklink && $(SLN) _build/checklink/Validator.native cchecklink
+        && $(CP) _build/checklink/Validator.native cchecklink
 
 cchecklink.byte: compcert.ini
 	$(OCAMLBUILD) $(OCB_OPTIONS_CHECKLINK) Validator.d.byte \
-        && rm -f cchecklink.byte && $(SLN) _build/checklink/Validator.d.byte cchecklink.byte
+        && $(CP) _build/checklink/Validator.d.byte cchecklink.byte
 
 clightgen: extraction/STAMP compcert.ini exportclight/Clightdefs.vo
 	$(OCAMLBUILD) $(OCB_OPTIONS_CLIGHTGEN) Clightgen.native \
-        && rm -f clightgen && $(SLN) _build/exportclight/Clightgen.native clightgen
+        && $(CP) _build/exportclight/Clightgen.native clightgen
 
 clightgen.byte: extraction/STAMP compcert.ini exportclight/Clightdefs.vo
 	$(OCAMLBUILD) $(OCB_OPTIONS_CLIGHTGEN) Clightgen.d.byte \
-        && rm -f clightgen.byte && $(SLN) _build/exportclight/Clightgen.d.byte clightgen.byte
+        && $(CP) _build/exportclight/Clightgen.d.byte clightgen.byte
 
 .PHONY: proof extraction ccomp ccomp.prof ccomp.byte runtime cchecklink cchecklink.byte clightgen clightgen.byte
 

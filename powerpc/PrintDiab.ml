@@ -54,16 +54,16 @@ module Diab_System =
         
     let name_of_section = function
       | Section_text -> ".text"
-      | Section_data i -> if i then ".data" else ".bss"
+      | Section_data i -> if i then ".data" else "COMM"
       | Section_small_data i -> if i then ".sdata" else ".sbss"
-      | Section_const -> ".text"
-      | Section_small_const -> ".sdata2"
+      | Section_const _ -> ".text"
+      | Section_small_const _ -> ".sdata2"
       | Section_string -> ".text"
       | Section_literal -> ".text"
       | Section_jumptable -> ".text"
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\",,%c"
-            s
+               s
             (match wr, ex with
             | true, true -> 'm'                 (* text+data *)
             | true, false -> 'd'                (* data *)

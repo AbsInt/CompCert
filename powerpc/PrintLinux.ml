@@ -53,13 +53,14 @@ module Linux_System =
  
     let name_of_section = function
       | Section_text -> ".text"
-      | Section_data i -> if i then ".data" else "COMM"
+      | Section_data i ->
+          if i then ".data" else "COMM"
       | Section_small_data i -> 
-          if i
-          then ".section	.sdata,\"aw\",@progbits"
-          else ".section	.sbss,\"aw\",@progbits"
-      | Section_const -> ".rodata"
-      | Section_small_const -> ".section	.sdata2,\"a\",@progbits"
+          if i then ".section	.sdata,\"aw\",@progbits" else "COMM"
+      | Section_const i ->
+          if i then ".rodata" else "COMM"
+      | Section_small_const i ->
+          if i then ".section	.sdata2,\"a\",@progbits" else "COMM"
       | Section_string -> ".rodata"
       | Section_literal -> ".section	.rodata.cst8,\"aM\",@progbits,8"
       | Section_jumptable -> ".text"

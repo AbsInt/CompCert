@@ -21,8 +21,8 @@ type section_name =
   | Section_text
   | Section_data of bool          (* true = init data, false = uninit data *)
   | Section_small_data of bool
-  | Section_const
-  | Section_small_const
+  | Section_const of bool
+  | Section_small_const of bool
   | Section_string
   | Section_literal
   | Section_jumptable
@@ -68,13 +68,13 @@ let builtin_sections = [
       sec_writable = true; sec_executable = false;
       sec_access = Access_near};
   "CONST",
-     {sec_name_init = Section_const;
-      sec_name_uninit = Section_const;
+     {sec_name_init = Section_const true;
+      sec_name_uninit = Section_const false;
       sec_writable = false; sec_executable = false;
       sec_access = Access_default};
   "SCONST",
-     {sec_name_init = Section_small_const;
-      sec_name_uninit = Section_small_const;
+     {sec_name_init = Section_small_const true;
+      sec_name_uninit = Section_small_const false;
       sec_writable = false; sec_executable = false;
       sec_access = Access_near};
   "STRING",

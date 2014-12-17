@@ -69,8 +69,8 @@ let name_of_section_Linux: section_name -> string = function
 | Section_text -> ".text"
 | Section_data i -> if i then ".data" else "COMM"
 | Section_small_data i -> if i then ".sdata" else ".sbss"
-| Section_const -> ".rodata"
-| Section_small_const -> ".sdata2"
+| Section_const i -> if i then ".rodata" else "COMM"
+| Section_small_const i -> if i then ".sdata2" else "COMM"
 | Section_string -> ".rodata"
 | Section_literal -> ".rodata.cst8"
 | Section_jumptable -> ".text"
@@ -79,10 +79,10 @@ let name_of_section_Linux: section_name -> string = function
 (** Adapted from CompCert *)
 let name_of_section_Diab: section_name -> string = function
 | Section_text -> ".text"
-| Section_data i -> if i then ".data" else ".bss"
+| Section_data i -> if i then ".data" else "COMM"
 | Section_small_data i -> if i then ".sdata" else ".sbss"
-| Section_const -> ".text"
-| Section_small_const -> ".sdata2"
+| Section_const _ -> ".text"
+| Section_small_const _ -> ".sdata2"
 | Section_string -> ".text"
 | Section_literal -> ".text"
 | Section_jumptable -> ".text"
@@ -91,7 +91,6 @@ let name_of_section_Diab: section_name -> string = function
 (** Taken from CompCert *)
 let name_of_section: section_name -> string =
   begin match Configuration.system with
-  | "macosx" -> fatal "Unsupported CompCert configuration: macosx"
   | "linux"  -> name_of_section_Linux
   | "diab"   -> name_of_section_Diab
   | _        -> fatal "Unsupported CompCert configuration"
