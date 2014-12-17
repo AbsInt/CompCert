@@ -57,7 +57,7 @@ let preg oc = function
 
 
 (* System dependend printer functions *)
-module type SYSTEM=
+module type SYSTEM =
     sig
       val raw_symbol: out_channel -> string -> unit
       val symbol: out_channel -> P.t -> unit
@@ -69,6 +69,8 @@ module type SYSTEM=
       val print_fun_info: out_channel -> P.t -> unit
       val print_var_info: out_channel -> P.t -> unit
       val print_epilogue: out_channel -> unit
+      val print_comm_decl: out_channel -> P.t -> Z.t -> int -> unit
+      val print_lcomm_decl: out_channel -> P.t -> Z.t -> int -> unit
     end
 
 (* Printer functions for cygwin *)
@@ -86,8 +88,10 @@ module Cygwin_System =
         
     let name_of_section = function
       | Section_text -> ".text"
-      | Section_data _ | Section_small_data _ -> ".data"
-      | Section_const  | Section_small_const -> ".section	.rdata,\"dr\""
+      | Section_data i | Section_small_data i ->
+          if i then ".data" else "COMM"
+      | Section_const i | Section_small_const i ->
+          if i then ".section	.rdata,\"dr\"" else "COMM"
       | Section_string -> ".section	.rdata,\"dr\""
       | Section_literal -> ".section	.rdata,\"dr\""
       | Section_jumptable -> ".text"
@@ -108,6 +112,14 @@ module Cygwin_System =
     let print_var_info _ _ = ()
 
     let print_epilogue _ = ()
+
+    let print_comm_decl oc name sz al =
+      fprintf oc "	.comm	%a, %s, %d\n" symbol name (Z.to_string sz) al
+
+    let print_lcomm_decl oc name sz al =
+      fprintf oc "	.local	%a\n" symbol name;
+      print_comm_decl oc name sz al
+
   end:SYSTEM)
 
 (* Printer functions for ELF *)
@@ -125,8 +137,10 @@ module ELF_System =
 
     let name_of_section = function
       | Section_text -> ".text"
-      | Section_data i | Section_small_data i -> if i then ".data" else "COMM"
-      | Section_const | Section_small_const -> ".section	.rodata"
+      | Section_data i | Section_small_data i ->
+          if i then ".data" else "COMM"
+      | Section_const i | Section_small_const i ->
+          if i then ".section	.rodata" else "COMM"
       | Section_string -> ".section	.rodata"
       | Section_literal -> ".section	.rodata.cst8,\"aM\",@progbits,8"
       | Section_jumptable -> ".text"
@@ -151,6 +165,14 @@ module ELF_System =
       fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
 
     let print_epilogue _ = ()
+
+    let print_comm_decl oc name sz al =
+      fprintf oc "	.comm	%a, %s, %d\n" symbol name (Z.to_string sz) al
+
+    let print_lcomm_decl oc name sz al =
+      fprintf oc "	.local	%a\n" symbol name;
+      print_comm_decl oc name sz al
+
   end:SYSTEM)
 
 (* Printer functions for MacOS *)
@@ -168,8 +190,10 @@ module MacOS_System =
 
     let name_of_section = function
       | Section_text -> ".text"
-      | Section_data _ | Section_small_data _ -> ".data"
-      | Section_const  | Section_small_const -> ".const"
+      | Section_data i | Section_small_data i ->
+          if i then ".data" else "COMM"
+      | Section_const i  | Section_small_const i ->
+          if i then ".const" else "COMM"
       | Section_string -> ".const"
       | Section_literal -> ".literal8"
       | Section_jumptable -> ".const"
@@ -208,6 +232,14 @@ module MacOS_System =
           fprintf oc "	.long	0\n")
         !indirect_symbols;
       indirect_symbols := StringSet.empty
+
+    let print_comm_decl oc name sz al =
+      fprintf oc "	.comm	%a, %s, %d\n"
+                 symbol name (Z.to_string sz) (log2 al)
+
+    let print_lcomm_decl oc name sz al =
+      fprintf oc "	.lcomm	%a, %s, %d\n"
+                 symbol name (Z.to_string sz) (log2 al)
 
   end:SYSTEM)
 
@@ -996,12 +1028,9 @@ let print_var oc name v =
       end else begin
         let sz =
           match v.gvar_init with [Init_space sz] -> sz | _ -> assert false in
-        if C2C.atom_is_static name then
-          fprintf oc "	.local	%a\n" symbol name;
-        fprintf oc "	.comm	%a, %s, %d\n"
-          symbol name
-          (Z.to_string sz)
-          align
+        if C2C.atom_is_static name
+        then Target.print_lcomm_decl oc name sz align
+        else Target.print_comm_decl oc name sz align
       end
 
 let print_globdef oc (name, gdef) =
@@ -1032,7 +1061,8 @@ let print_program oc p =
   Hashtbl.clear Printer.filename_num;
   List.iter (Printer.print_globdef oc) p.prog_defs;
   if !Printer.need_masks then begin
-    Printer.section oc Section_const;  (* not Section_literal because not 8-bytes *)
+    Printer.section oc (Section_const true);
+                        (* not Section_literal because not 8-bytes *)
     Target.print_align oc 16;
     fprintf oc "%a:	.quad   0x8000000000000000, 0\n"
                Target.raw_symbol "__negd_mask";
