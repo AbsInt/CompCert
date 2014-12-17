@@ -58,8 +58,6 @@ let get_config key =
 let bad_config key v =
   Printf.eprintf "Invalid value `%s' for configuation option `%s'\n" v key; exit 2
 
-let stdlib_path = get_config "stdlib_path"
-
 let prepro = get_config "prepro"
 let asm = get_config "asm"
 let linker = get_config "linker"
@@ -80,6 +78,13 @@ let has_runtime_lib =
   | "true" -> true
   | "false" -> false
   | v -> bad_config "has_runtime_lib" v
+
+
+let stdlib_path =
+  if has_runtime_lib then
+    get_config "stdlib_path"
+  else
+    ""
 
 let asm_supports_cfi = 
   match get_config "asm_supports_cfi" with

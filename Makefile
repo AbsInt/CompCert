@@ -222,16 +222,16 @@ latexdoc:
 	@chmod -w $*.v
 
 compcert.ini: Makefile.config VERSION
-	(echo stdlib_path=$(LIBDIR); \
-         echo prepro=$(CPREPRO); \
-         echo asm=$(CASM); \
-         echo linker=$(CLINKER); \
-         echo arch=$(ARCH); \
-         echo model=$(MODEL); \
-         echo abi=$(ABI); \
-         echo system=$(SYSTEM); \
-         echo has_runtime_lib=$(HAS_RUNTIME_LIB); \
-         echo asm_supports_cfi=$(ASM_SUPPORTS_CFI); \
+	(echo "stdlib_path=$(LIBDIR)"; \
+         echo "prepro=$(CPREPRO)"; \
+         echo "asm=$(CASM)"; \
+         echo "linker=$(CLINKER)"; \
+         echo "arch=$(ARCH)"; \
+         echo "model=$(MODEL)"; \
+         echo "abi=$(ABI)"; \
+         echo "system=$(SYSTEM)"; \
+         echo "has_runtime_lib=$(HAS_RUNTIME_LIB)"; \
+         echo "asm_supports_cfi=$(ASM_SUPPORTS_CFI)"; \
          version=`cat VERSION`; \
          echo version=$$version) \
         > compcert.ini

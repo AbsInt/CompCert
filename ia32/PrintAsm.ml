@@ -161,7 +161,7 @@ module MacOS_System =
      fprintf oc "_%s" s
 
     let symbol oc symb =
-      fprintf oc "%s" (extern_atom symb)
+      fprintf oc "_%s" (extern_atom symb)
 
     let label oc lbl =
       fprintf oc "L%d" lbl
@@ -206,7 +206,8 @@ module MacOS_System =
           fprintf oc "L%a$non_lazy_ptr:\n" raw_symbol s;
           fprintf oc "	.indirect_symbol %a\n" raw_symbol s;
           fprintf oc "	.long	0\n")
-        !indirect_symbols
+        !indirect_symbols;
+      indirect_symbols := StringSet.empty
 
   end:SYSTEM)
 
@@ -638,7 +639,6 @@ let print_builtin_inline oc name args res =
 let float64_literals : (int * int64) list ref = ref []
 let float32_literals : (int * int32) list ref = ref []
 let jumptables : (int * label list) list ref = ref []
-let indirect_symbols : StringSet.t ref = ref StringSet.empty
 
 (* Reminder on AT&T syntax: op source, dest *)
 
@@ -1042,4 +1042,6 @@ let print_program oc p =
                Target.raw_symbol "__negs_mask";
     fprintf oc "%a:	.long   0x7FFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF\n"
                Target.raw_symbol "__abss_mask"
-  end
+  end;
+  Target.print_epilogue oc
+
