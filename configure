@@ -230,7 +230,7 @@ esac
 echo "Testing OCaml... " | tr -d '\n'
 ocaml_ver=`ocamlopt -version 2>/dev/null`
 case "$ocaml_ver" in
-  [4-9].*)
+  4.*)
         echo "version $ocaml_ver -- good!";;
   ?.*)
         echo "version $ocaml_ver -- UNSUPPORTED"
@@ -255,12 +255,14 @@ fi
 echo "Testing Menhir... " | tr -d '\n'
 menhir_ver=`menhir --version 2>/dev/null | sed -n -e 's/^.*version \([0-9]*\).*$/\1/p'`
 case "$menhir_ver" in
-  201[4-9]*|20[2-9]*)
-        echo "version $menhir_ver -- good!";;
-  ?*)
-        echo "version $menhir_ver -- UNSUPPORTED"
-        echo "Error: CompCert requires Menhir version 20140422 or later."
-        missingtools=true;;
+  20[0-9][0-9][0-9][0-9][0-9][0-9])
+        if test "$menhir_ver" -ge 20140422; then
+          echo "version $menhir_ver -- good!"
+        else
+          echo "version $menhir_ver -- UNSUPPORTED"
+          echo "Error: CompCert requires Menhir version 20140422 or later."
+          missingtools=true
+        fi;;
   *)
         echo "NOT FOUND"
         echo "Error: make sure Menhir version 20140422 or later is installed."
@@ -399,9 +401,6 @@ ASM_SUPPORTS_CFI=false
 EOF
 
 fi
-
-# Avoid re-building cparser/Parser.v on the first run
-touch cparser/Parser.v
 
 # Summarize configuration
 

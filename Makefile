@@ -28,6 +28,7 @@ COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
 COQDOC="$(COQBIN)coqdoc"
 COQEXEC="$(COQBIN)coqtop" $(COQINCLUDES) -batch -load-vernac-source
 COQCHK="$(COQBIN)coqchk" $(COQINCLUDES)
+MENHIR=menhir
 CP=cp
 
 VPATH=$(DIRS)
