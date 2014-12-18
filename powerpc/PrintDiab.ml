@@ -217,6 +217,9 @@ module Diab_System =
 
       end)
 
+    let rec print_entry oc entry has_sibling =
+      ()
+
     let print_debug_info oc entry =
       AbbrvPrinter.print_debug_abbrv oc entry;
       let abbrv_start = AbbrvPrinter.get_abbrv_start_addr () in
@@ -232,7 +235,7 @@ module Diab_System =
       fprintf oc "	.2byte	0x2\n"; (* Dwarf version *)
       fprintf oc "	.4byte	%a\n" label abbrv_start; (* Offset into the abbreviation *)
       fprintf oc "	.byte	%X\n" !Machine.config.Machine.sizeof_ptr; (* Sizeof pointer type *)
-      ();
+      print_entry oc entry false;
       fprintf oc "%a\n" label debug_end; (* End of the debug section *)
       fprintf oc "	.sleb128	0\n"
     
