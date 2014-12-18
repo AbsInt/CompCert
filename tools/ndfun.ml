@@ -1,3 +1,20 @@
+(* *********************************************************************)
+(*                                                                     *)
+(*              The Compcert verified compiler                         *)
+(*                                                                     *)
+(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique.  All rights reserved.  This file is distributed       *)
+(*  under the terms of the GNU General Public License as published by  *)
+(*  the Free Software Foundation, either version 2 of the License, or  *)
+(*  (at your option) any later version.  This file is also distributed *)
+(*  under the terms of the INRIA Non-Commercial License Agreement.     *)
+(*                                                                     *)
+(* *********************************************************************)
+
+(* Preprocessor for .vp files *)
+
 open Printf
 
 (* Error reporting *)
@@ -9,11 +26,7 @@ let error file line msg =
 (* Replace newlines with spaces *)
 
 let oneline s =
-  let t = String.create (String.length s) in
-  for i = 0 to String.length s - 1 do
-    t.[i] <- (match s.[i] with '\n' -> ' ' | c -> c)
-  done;
-  t
+  String.map (function '\n' -> ' ' | c -> c) s
 
 (* Trim leading and terminating spaces, and compress multiple spaces *)
 

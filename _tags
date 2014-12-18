@@ -1,9 +1,0 @@
-true: use_menhir
-<**/*.cmx>: debug
-<**/*.native>: debug
-<driver/Driver.*{byte,native}>: use_unix,use_str
-<exportclight/Clightgen.*{byte,native}>: use_unix,use_str
-<checklink/*.ml>: pkg_bitstring
-<checklink/Validator.*{byte,native}>: pkg_unix,pkg_str,pkg_bitstring
-<extraction/*.ml>: warn(-20)
-<**/*.ml>: warn(-3)
