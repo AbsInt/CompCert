@@ -272,7 +272,7 @@ esac
 echo "Testing GNU make... " | tr -d '\n'
 make=''
 for mk in make gmake gnumake; do
-  make_ver=`($mk -v 2>/dev/null | head -1 | sed -n -e 's/^GNU Make //p') 2>/dev/null`
+  make_ver=`$mk -v 2>/dev/null | head -1 | sed -n -e 's/^GNU Make //p'`
   case "$make_ver" in
     3.8*|3.9*|[4-9].*)
         echo "version $make_ver (command '$mk') -- good!"
