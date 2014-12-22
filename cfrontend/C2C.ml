@@ -100,6 +100,10 @@ let atom_location a =
   with Not_found ->
     Cutil.no_loc
 
+(** The current environment of composite definitions *)
+
+let comp_env : composite_env ref = ref Maps.PTree.empty
+
 (** Hooks -- overriden in machine-dependent CPragmas module *)
 
 let process_pragma_hook = ref (fun (s: string) -> false)
@@ -243,12 +247,12 @@ let make_builtin_memcpy args =
   match args with
   | Econs(dst, Econs(src, Econs(sz, Econs(al, Enil)))) ->
       let sz1 =
-        match Initializers.constval sz with
+        match Initializers.constval !comp_env sz with
         | Errors.OK(Vint n) -> n
         | _ -> error "ill-formed __builtin_memcpy_aligned (3rd argument must be 
 a constant)"; Integers.Int.zero in
       let al1 =
-        match Initializers.constval al with
+        match Initializers.constval !comp_env al with
         | Errors.OK(Vint n) -> n
         | _ -> error "ill-formed __builtin_memcpy_aligned (4th argument must be 
 a constant)"; Integers.Int.one in
@@ -270,7 +274,7 @@ let va_list_ptr e =
 let make_builtin_va_arg env ty e =
   let (helper, ty_ret) =
     match ty with
-    | Tint _ | Tpointer _ | Tcomp_ptr _ ->
+    | Tint _ | Tpointer _ ->
         ("__compcert_va_int32", Tint(I32, Unsigned, noattr))
     | Tlong _ ->
         ("__compcert_va_int64", Tlong(Unsigned, noattr))
@@ -303,27 +307,6 @@ let convertAttr a =
       let n = Cutil.alignas_attribute a in
       if n > 0 then Some (N.of_int (log2 n)) else None }
 
-let mergeAttr a1 a2 =
-  { attr_volatile = a1.attr_volatile || a2.attr_volatile;
-    attr_alignas =
-      match a1.attr_alignas, a2.attr_alignas with
-      | None, aa -> aa
-      | aa, None -> aa
-      | Some n1, Some n2 -> Some (if N.le n1 n2 then n1 else n2) }
-
-let mergeTypAttr ty a2 =
-  match ty with
-  | Tvoid -> ty
-  | Tint(sz, sg, a1) -> Tint(sz, sg, mergeAttr a1 a2)
-  | Tfloat(sz, a1) -> Tfloat(sz, mergeAttr a1 a2)
-  | Tlong(sg, a1) -> Tlong(sg, mergeAttr a1 a2)
-  | Tpointer(ty', a1) -> Tpointer(ty', mergeAttr a1 a2)
-  | Tarray(ty', sz, a1) -> Tarray(ty', sz, mergeAttr a1 a2)
-  | Tfunction(targs, tres, cc) -> ty
-  | Tstruct(id, fld, a1) -> Tstruct(id, fld, mergeAttr a1 a2)
-  | Tunion(id, fld, a1) -> Tunion(id, fld, mergeAttr a1 a2)
-  | Tcomp_ptr(id, a1) -> Tcomp_ptr(id, mergeAttr a1 a2)
-
 let convertCallconv va attr =
   let sr =
     Cutil.find_custom_attributes ["structreturn"; "__structreturn"] attr in
@@ -353,93 +336,48 @@ let convertFkind = function
       if not !Clflags.option_flongdouble then unsupported "'long double' type"; 
       F64
 
-(** A cache for structs and unions already converted *)
+let rec convertTyp env t =
+  match t with
+  | C.TVoid a -> Tvoid
+  | C.TInt(C.ILongLong, a) ->
+      Tlong(Signed, convertAttr a)
+  | C.TInt(C.IULongLong, a) ->
+      Tlong(Unsigned, convertAttr a)
+  | C.TInt(ik, a) ->
+      let (sg, sz) = convertIkind ik in Tint(sz, sg, convertAttr a)
+  | C.TFloat(fk, a) ->
+      Tfloat(convertFkind fk, convertAttr a)
+  | C.TPtr(ty, a) ->
+      Tpointer(convertTyp env ty, convertAttr a)
+  | C.TArray(ty, None, a) ->
+      (* Cparser verified that the type ty[] occurs only in
+         contexts that are safe for Clight, so just treat as ty[0]. *)
+      (* warning "array type of unspecified size"; *)
+      Tarray(convertTyp env ty, coqint_of_camlint 0l, convertAttr a)
+  | C.TArray(ty, Some sz, a) ->
+      Tarray(convertTyp env ty, convertInt sz, convertAttr a)
+  | C.TFun(tres, targs, va, a) ->
+      if Cutil.is_composite_type env tres then
+        unsupported "return type is a struct or union (consider adding option -fstruct-return)";
+      Tfunction(begin match targs with
+                | None -> Tnil
+                | Some tl -> convertParams env tl
+                end,
+                convertTyp env tres,
+                convertCallconv va a)
+  | C.TNamed _ ->
+      convertTyp env (Cutil.unroll env t)
+  | C.TStruct(id, a) ->
+      Tstruct(intern_string id.name, convertAttr a)
+  | C.TUnion(id, a) ->
+      Tunion(intern_string id.name, convertAttr a)
+  | C.TEnum(id, a) ->
+      let (sg, sz) = convertIkind Cutil.enum_ikind in
+      Tint(sz, sg, convertAttr a)
 
-let compositeCache : (C.ident, coq_type) Hashtbl.t = Hashtbl.create 77
-
-let convertTyp env t =
-
-  let rec convertTyp seen t =
-    match Cutil.unroll env t with
-    | C.TVoid a -> Tvoid
-    | C.TInt(C.ILongLong, a) ->
-        Tlong(Signed, convertAttr a)
-    | C.TInt(C.IULongLong, a) ->
-        Tlong(Unsigned, convertAttr a)
-    | C.TInt(ik, a) ->
-        let (sg, sz) = convertIkind ik in Tint(sz, sg, convertAttr a)
-    | C.TFloat(fk, a) ->
-        Tfloat(convertFkind fk, convertAttr a)
-    | C.TPtr(ty, a) ->
-        begin match Cutil.unroll env ty with
-        | C.TStruct(id, _) when List.mem id seen ->
-            Tcomp_ptr(intern_string ("struct " ^ id.name), convertAttr a)
-        | C.TUnion(id, _) when List.mem id seen ->
-            Tcomp_ptr(intern_string ("union " ^ id.name), convertAttr a)
-        | _ ->
-            Tpointer(convertTyp seen ty, convertAttr a)
-        end
-    | C.TArray(ty, None, a) ->
-        (* Cparser verified that the type ty[] occurs only in
-           contexts that are safe for Clight, so just treat as ty[0]. *)
-        (* warning "array type of unspecified size"; *)
-        Tarray(convertTyp seen ty, coqint_of_camlint 0l, convertAttr a)
-    | C.TArray(ty, Some sz, a) ->
-        Tarray(convertTyp seen ty, convertInt sz, convertAttr a)
-    | C.TFun(tres, targs, va, a) ->
-        if Cutil.is_composite_type env tres then
-          unsupported "return type is a struct or union (consider adding option -fstruct-return)";
-        Tfunction(begin match targs with
-                  | None -> Tnil
-                  | Some tl -> convertParams seen tl
-                  end,
-                  convertTyp seen tres,
-                  convertCallconv va a)
-    | C.TNamed _ ->
-        assert false
-    | C.TStruct(id, a) ->
-        let a' = convertAttr a in
-        begin try
-          merge_attributes (Hashtbl.find compositeCache id) a'
-        with Not_found ->
-          let flds =
-            try
-              convertFields (id :: seen) (Env.find_struct env id)
-            with Env.Error e ->
-              error (Env.error_message e); Fnil in
-          Tstruct(intern_string("struct " ^ id.name), flds, a')
-        end
-    | C.TUnion(id, a) ->
-        let a' = convertAttr a in
-        begin try
-          merge_attributes (Hashtbl.find compositeCache id) a'
-        with Not_found ->
-          let flds =
-            try
-              convertFields (id :: seen) (Env.find_union env id)
-            with Env.Error e ->
-              error (Env.error_message e); Fnil in
-          Tunion(intern_string("union " ^ id.name), flds, a')
-        end
-    | C.TEnum(id, a) ->
-        let (sg, sz) = convertIkind Cutil.enum_ikind in
-        Tint(sz, sg, convertAttr a)
-
-  and convertParams seen = function
+and convertParams env = function
     | [] -> Tnil
-    | (id, ty) :: rem ->
-        Tcons(convertTyp seen ty, convertParams seen rem)
-
-  and convertFields seen ci =
-    convertFieldList seen ci.Env.ci_members
-
-  and convertFieldList seen = function
-    | [] -> Fnil
-    | f :: fl ->
-        Fcons(intern_string f.fld_name, convertTyp seen f.fld_typ,
-              convertFieldList seen fl)
-
-  in convertTyp [] t
+    | (id, ty) :: rem -> Tcons(convertTyp env ty, convertParams env rem)
 
 let rec convertTypArgs env tl el =
   match tl, el with
@@ -450,12 +388,16 @@ let rec convertTypArgs env tl el =
   | (id, t1) :: tl, e1 :: el ->
       Tcons(convertTyp env t1, convertTypArgs env tl el)
 
-let cacheCompositeDef env su id attr flds =
-  let ty =
-    match su with
-    | C.Struct -> C.TStruct(id, attr)
-    | C.Union  -> C.TUnion(id, attr) in
-  Hashtbl.add compositeCache id (convertTyp env ty)
+let convertField env f =
+  if f.fld_bitfield <> None then
+    unsupported "bit field in struct or union (consider adding option -fbitfields)";
+  (intern_string f.fld_name, convertTyp env f.fld_typ)
+
+let convertCompositedef env su id attr members =
+  Composite(intern_string id.name,
+            begin match su with C.Struct -> Struct | C.Union -> Union end,
+            List.map (convertField env) members,
+            convertAttr attr)
 
 let rec projFunType env ty =
   match Cutil.unroll env ty with
@@ -958,7 +900,8 @@ and convertInitList env il =
   | i :: il' -> Init_cons(convertInit env i, convertInitList env il')
 
 let convertInitializer env ty i =
-  match Initializers.transl_init (convertTyp env ty) (convertInit env i)
+  match Initializers.transl_init
+               !comp_env (convertTyp env ty) (convertInit env i)
   with
   | Errors.OK init -> init
   | Errors.Error msg ->
@@ -970,8 +913,8 @@ let convertInitializer env ty i =
 let convertGlobvar loc env (sto, id, ty, optinit) =
   let id' = intern_string id.name in
   let ty' = convertTyp env ty in 
-  let sz = Ctypes.sizeof ty' in
-  let al = Ctypes.alignof ty' in
+  let sz = Ctypes.sizeof !comp_env ty' in
+  let al = Ctypes.alignof !comp_env ty' in
   let attr = Cutil.attributes_of_type env ty in
   let init' =
     match optinit with
@@ -998,16 +941,6 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
   (id', Gvar {gvar_info = ty'; gvar_init = init';
               gvar_readonly = readonly; gvar_volatile = volatile})
 
-(** Sanity checks on composite declarations. *)
-
-let checkComposite env si id attr flds =
-  let checkField f =
-    if f.fld_bitfield <> None then
-      unsupported "bit field in struct or union (consider adding option -fbitfields)" in
-  List.iter checkField flds;
-  if Cutil.find_custom_attributes ["packed";"__packed__"] attr <> [] then
-    unsupported "packed struct (consider adding option -fpacked-struct)"
-
 (** Convert a list of global declarations.
   Result is a list of CompCert C global declarations (functions +
   variables). *)
@@ -1031,20 +964,30 @@ let rec convertGlobdecls env res gl =
           end
       | C.Gfundef fd ->
           convertGlobdecls env (convertFundef g.gloc env fd :: res) gl'
-      | C.Gcompositedecl _ | C.Gtypedef _ | C.Genumdef _ ->
-          (* typedefs are unrolled, structs are expanded inline, and
-             enum tags are folded.  So we just skip their declarations. *)
-          convertGlobdecls env res gl'
-      | C.Gcompositedef(su, id, attr, flds) ->
-          (* sanity checks on fields *)
-          checkComposite env su id attr flds;
-          (* convert it to a CompCert C type and cache this type *)
-          cacheCompositeDef env su id attr flds;
+      | C.Gcompositedecl _ | C.Gcompositedef _ | C.Gtypedef _ | C.Genumdef _ ->
+          (* Composites are treated in a separate pass,
+             typedefs are unrolled, and enum tags are folded.
+             So we just skip their declarations. *)
           convertGlobdecls env res gl'
       | C.Gpragma s ->
           if not (!process_pragma_hook s) then
             warning ("'#pragma " ^ s ^ "' directive ignored");
           convertGlobdecls env res gl'
+
+(** Convert struct and union declarations.  
+    Result is a list of CompCert C composite declarations. *)
+
+let rec convertCompositedefs env res gl =
+  match gl with
+  | [] -> List.rev res
+  | g :: gl' ->
+      updateLoc g.gloc;
+      match g.gdesc with
+      | C.Gcompositedef(su, id, a, m) ->
+          convertCompositedefs env
+             (convertCompositedef env su id a m :: res) gl'
+      | _ ->
+          convertCompositedefs env res gl'
 
 (** Build environment of typedefs, structs, unions and enums *)
 
@@ -1130,17 +1073,29 @@ let convertProgram p =
   stringNum := 0;
   Hashtbl.clear decl_atom;
   Hashtbl.clear stringTable;
-  Hashtbl.clear compositeCache;
-  let p = Builtins.declarations() @ p in
+  let p = cleanupGlobals (Builtins.declarations() @ p) in
   try
-    let gl1 = convertGlobdecls (translEnv Env.empty p) [] (cleanupGlobals p) in
-    let gl2 = globals_for_strings gl1 in
-    let p' = { AST.prog_defs = gl2;
-               AST.prog_public = public_globals gl2;
-               AST.prog_main = intern_string "main" } in
-    if !numErrors > 0
-    then None
-    else Some p'
+    let env = translEnv Env.empty p in
+    let typs = convertCompositedefs env [] p in
+    match build_composite_env typs with
+    | Errors.Error msg ->
+        error (sprintf "Incorrect struct or union definition: %s"
+                       (string_of_errmsg msg));
+        None
+    | Errors.OK ce ->
+        comp_env := ce;
+        let gl1 = convertGlobdecls env [] p in
+        let gl2 = globals_for_strings gl1 in
+        comp_env := Maps.PTree.empty;
+        let p' =
+          { prog_defs = gl2;
+            prog_public = public_globals gl2;
+            prog_main = intern_string "main";
+            prog_types = typs;
+            prog_comp_env = ce } in
+        if !numErrors > 0
+        then None
+        else Some p'
   with Env.Error msg ->
     error (Env.error_message msg); None
 

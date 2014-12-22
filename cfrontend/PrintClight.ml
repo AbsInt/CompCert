@@ -45,6 +45,8 @@ let rec precedence = function
   | Econst_float _ -> (16, NA)
   | Econst_single _ -> (16, NA)
   | Econst_long _ -> (16, NA)
+  | Esizeof _ -> (15, RtoL)
+  | Ealignof _ -> (15, RtoL)
   | Eunop _ -> (15, RtoL)
   | Eaddrof _ -> (15, RtoL)
   | Ecast _ -> (14, RtoL)
@@ -100,6 +102,10 @@ let rec expr p (prec, e) =
                  expr (prec1, a1) (name_binop op) expr (prec2, a2)
   | Ecast(a1, ty) ->
       fprintf p "(%s) %a" (name_type ty) expr (prec', a1)
+  | Esizeof(ty, _) ->
+      fprintf p "sizeof(%s)" (name_type ty)
+  | Ealignof(ty, _) ->
+      fprintf p "__alignof__(%s)" (name_type ty)
   end;
   if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 
@@ -265,71 +271,10 @@ let print_globdef p (id, gd) =
   | Gfun f -> print_fundef p id f
   | Gvar v -> print_globvar p id v  (* from PrintCsyntax *)
 
-(* Collect struct and union types *)
-
-let rec collect_expr e =
-  collect_type (typeof e);
-  match e with
-  | Econst_int _ -> ()
-  | Econst_float _ -> ()
-  | Econst_single _ -> ()
-  | Econst_long _ -> ()
-  | Evar _ -> ()
-  | Etempvar _ -> ()
-  | Ederef(r, _) -> collect_expr r
-  | Efield(l, _, _) -> collect_expr l
-  | Eaddrof(l, _) -> collect_expr l
-  | Eunop(_, r, _) -> collect_expr r
-  | Ebinop(_, r1, r2, _) -> collect_expr r1; collect_expr r2
-  | Ecast(r, _) -> collect_expr r
-
-let rec collect_exprlist = function
-  | [] -> ()
-  | r1 :: rl -> collect_expr r1; collect_exprlist rl
-
-let rec collect_stmt = function
-  | Sskip -> ()
-  | Sassign(e1, e2) -> collect_expr e1; collect_expr e2
-  | Sset(id, e2) -> collect_expr e2
-  | Scall(optid, e1, el) -> collect_expr e1; collect_exprlist el
-  | Sbuiltin(optid, ef, tyargs, el) -> collect_exprlist el
-  | Ssequence(s1, s2) -> collect_stmt s1; collect_stmt s2
-  | Sifthenelse(e, s1, s2) -> collect_expr e; collect_stmt s1; collect_stmt s2
-  | Sloop(s1, s2) -> collect_stmt s1; collect_stmt s2
-  | Sbreak -> ()
-  | Scontinue -> ()
-  | Sswitch(e, cases) -> collect_expr e; collect_cases cases
-  | Sreturn None -> ()
-  | Sreturn (Some e) -> collect_expr e
-  | Slabel(lbl, s) -> collect_stmt s
-  | Sgoto lbl -> ()
-
-and collect_cases = function
-  | LSnil -> ()
-  | LScons(lbl, s, rem) -> collect_stmt s; collect_cases rem
-
-let collect_function f =
-  collect_type f.fn_return;
-  List.iter (fun (id, ty) -> collect_type ty) f.fn_params;
-  List.iter (fun (id, ty) -> collect_type ty) f.fn_vars;
-  List.iter (fun (id, ty) -> collect_type ty) f.fn_temps;
-  collect_stmt f.fn_body
-
-let collect_globdef (id, gd) =
-  match gd with
-  | Gfun(External(_, args, res, _)) -> collect_type_list args; collect_type res
-  | Gfun(Internal f) -> collect_function f
-  | Gvar v -> collect_type v.gvar_info
-
-let collect_program p =
-  List.iter collect_globdef p.prog_defs
-
 let print_program p prog =
-  struct_unions := StructUnion.empty;
-  collect_program prog;
   fprintf p "@[<v 0>";
-  StructUnion.iter (declare_struct_or_union p) !struct_unions;
-  StructUnion.iter (print_struct_or_union p) !struct_unions;
+  List.iter (declare_composite p) prog.prog_types;
+  List.iter (define_composite p) prog.prog_types;
   List.iter (print_globdef p) prog.prog_defs;
   fprintf p "@]@."
 

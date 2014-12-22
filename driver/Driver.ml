@@ -108,7 +108,7 @@ let parse_c_file sourcename ifile =
   end;
   (* Conversion to Csyntax *)
   let csyntax =
-    match C2C.convertProgram ast with
+    match Timing.time "CompCert C generation" C2C.convertProgram ast with
     | None -> exit 2
     | Some p -> p in
   flush stderr;

@@ -21,6 +21,7 @@
 *)
 
 Require Import Coqlib.
+Require Import Maps.
 Require Import Errors.
 Require Import Integers.
 Require Import Floats.
@@ -160,8 +161,8 @@ Definition make_cast (from to: type) (e: expr) :=
   | cast_case_s2bool => OK (Ebinop (Ocmpfs Cne) e (make_singleconst Float32.zero))
   | cast_case_l2bool => OK (Ebinop (Ocmpl Cne) e (make_longconst Int64.zero))
   | cast_case_p2bool => OK (Ebinop (Ocmpu Cne) e (make_intconst Int.zero))
-  | cast_case_struct id1 fld1 id2 fld2 => OK e
-  | cast_case_union id1 fld1 id2 fld2 => OK e
+  | cast_case_struct id1 id2 => OK e
+  | cast_case_union id1 id2 => OK e
   | cast_case_void => OK e
   | cast_case_default => Error (msg "Cshmgen.make_cast")
   end.
@@ -234,34 +235,34 @@ Definition make_binarith (iop iopu fop sop lop lopu: binary_operation)
   | bin_default => Error (msg "Cshmgen.make_binarith")
   end.
 
-Definition make_add (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
+Definition make_add (ce: composite_env) (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_add ty1 ty2 with
   | add_case_pi ty =>
-      let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
+      let n := make_intconst (Int.repr (Ctypes.sizeof ce ty)) in
       OK (Ebinop Oadd e1 (Ebinop Omul n e2))
   | add_case_ip ty =>
-      let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
+      let n := make_intconst (Int.repr (Ctypes.sizeof ce ty)) in
       OK (Ebinop Oadd e2 (Ebinop Omul n e1))
   | add_case_pl ty =>
-      let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
+      let n := make_intconst (Int.repr (Ctypes.sizeof ce ty)) in
       OK (Ebinop Oadd e1 (Ebinop Omul n (Eunop Ointoflong e2)))
   | add_case_lp ty =>
-      let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
+      let n := make_intconst (Int.repr (Ctypes.sizeof ce ty)) in
       OK (Ebinop Oadd e2 (Ebinop Omul n (Eunop Ointoflong e1)))
   | add_default =>
       make_binarith Oadd Oadd Oaddf Oaddfs Oaddl Oaddl e1 ty1 e2 ty2
   end.
 
-Definition make_sub (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
+Definition make_sub (ce: composite_env) (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_sub ty1 ty2 with
   | sub_case_pi ty =>
-      let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
+      let n := make_intconst (Int.repr (Ctypes.sizeof ce ty)) in
       OK (Ebinop Osub e1 (Ebinop Omul n e2))
   | sub_case_pp ty =>
-      let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
+      let n := make_intconst (Int.repr (Ctypes.sizeof ce ty)) in
       OK (Ebinop Odivu (Ebinop Osub e1 e2) n)
   | sub_case_pl ty =>
-      let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
+      let n := make_intconst (Int.repr (Ctypes.sizeof ce ty)) in
       OK (Ebinop Osub e1 (Ebinop Omul n (Eunop Ointoflong e2)))
   | sub_default =>
       make_binarith Osub Osub Osubf Osubfs Osubl Osubl e1 ty1 e2 ty2
@@ -349,8 +350,8 @@ Definition make_load (addr: expr) (ty_res: type) :=
 (** [make_memcpy dst src ty] returns a [memcpy] builtin appropriate for
   by-copy assignment of a value of Clight type [ty]. *)
 
-Definition make_memcpy (dst src: expr) (ty: type) :=
-  Sbuiltin None (EF_memcpy (Ctypes.sizeof ty) (Ctypes.alignof_blockcopy ty))
+Definition make_memcpy (ce: composite_env) (dst src: expr) (ty: type) :=
+  Sbuiltin None (EF_memcpy (Ctypes.sizeof ce ty) (Ctypes.alignof_blockcopy ce ty))
                 (dst :: src :: nil).
 
 (** [make_store addr ty rhs] stores the value of the
@@ -358,10 +359,10 @@ Definition make_memcpy (dst src: expr) (ty: type) :=
    Csharpminor expression [addr].  
    [ty] is the type of the memory location. *)
 
-Definition make_store (addr: expr) (ty: type) (rhs: expr) :=
+Definition make_store (ce: composite_env) (addr: expr) (ty: type) (rhs: expr) :=
   match access_mode ty with
   | By_value chunk => OK (Sstore chunk addr rhs)
-  | By_copy => OK (make_memcpy addr rhs ty)
+  | By_copy => OK (make_memcpy ce addr rhs ty)
   | _ => Error (msg "Cshmgen.make_store")
   end.
 
@@ -375,12 +376,13 @@ Definition transl_unop (op: Cop.unary_operation) (a: expr) (ta: type) : res expr
   | Cop.Oabsfloat => make_absfloat a ta
   end.
 
-Definition transl_binop (op: Cop.binary_operation)
+Definition transl_binop (ce: composite_env) 
+                        (op: Cop.binary_operation)
                         (a: expr) (ta: type)
                         (b: expr) (tb: type) : res expr :=
   match op with
-  | Cop.Oadd => make_add a ta b tb
-  | Cop.Osub => make_sub a ta b tb
+  | Cop.Oadd => make_add ce a ta b tb
+  | Cop.Osub => make_sub ce a ta b tb
   | Cop.Omul => make_mul a ta b tb
   | Cop.Odiv => make_div a ta b tb
   | Cop.Omod => make_mod a ta b tb
@@ -397,13 +399,31 @@ Definition transl_binop (op: Cop.binary_operation)
   | Cop.Oge => make_cmp Cge a ta b tb
   end.
 
+(** ** Translation of field accesses *)
+
+Definition make_field_access (ce: composite_env) (ty: type) (f: ident) (a: expr) : res expr :=
+  match ty with
+  | Tstruct id _ =>
+      match ce!id with
+      | None =>
+          Error (MSG "Undefined struct " :: CTX id :: nil)
+      | Some co =>
+          do ofs <- field_offset ce f (co_members co);
+          OK (Ebinop Oadd a (make_intconst (Int.repr ofs)))
+      end
+  | Tunion id _ =>
+      OK a
+  | _ =>
+      Error(msg "Cshmgen.make_field_access")
+  end.
+
 (** * Translation of expressions *)
 
 (** [transl_expr a] returns the Csharpminor code that computes the value
    of expression [a]. The computation is performed in the error monad
    (see module [Errors]) to enable error reporting. *)
 
-Fixpoint transl_expr (a: Clight.expr) {struct a} : res expr :=
+Fixpoint transl_expr (ce: composite_env) (a: Clight.expr) {struct a} : res expr :=
   match a with
   | Clight.Econst_int n _ =>
       OK(make_intconst n)
@@ -418,34 +438,28 @@ Fixpoint transl_expr (a: Clight.expr) {struct a} : res expr :=
   | Clight.Etempvar id ty =>
       OK(Evar id)
   | Clight.Ederef b ty =>
-      do tb <- transl_expr b;
+      do tb <- transl_expr ce b;
       make_load tb ty
   | Clight.Eaddrof b _ =>
-      transl_lvalue b
+      transl_lvalue ce b
   | Clight.Eunop op b _ =>
-      do tb <- transl_expr b;
+      do tb <- transl_expr ce b;
       transl_unop op tb (typeof b)
   | Clight.Ebinop op b c _ =>
-      do tb <- transl_expr b;
-      do tc <- transl_expr c;
-      transl_binop op tb (typeof b) tc (typeof c)
+      do tb <- transl_expr ce b;
+      do tc <- transl_expr ce c;
+      transl_binop ce op tb (typeof b) tc (typeof c)
   | Clight.Ecast b ty =>
-      do tb <- transl_expr b;
+      do tb <- transl_expr ce b;
       make_cast (typeof b) ty tb
-  | Clight.Efield b i ty => 
-      match typeof b with
-      | Tstruct _ fld _ =>
-          do tb <- transl_expr b;
-          do ofs <- field_offset i fld;
-          make_load
-            (Ebinop Oadd tb (make_intconst (Int.repr ofs)))
-            ty
-      | Tunion _ fld _ =>
-          do tb <- transl_expr b;
-          make_load tb ty
-      | _ =>
-          Error(msg "Cshmgen.transl_expr(field)")
-      end
+  | Clight.Efield b i ty =>
+      do tb <- transl_expr ce b;
+      do addr <- make_field_access ce (typeof b) i tb;
+      make_load addr ty
+  | Clight.Esizeof ty' ty =>
+      OK(make_intconst (Int.repr (sizeof ce ty')))
+  | Clight.Ealignof ty' ty =>
+      OK(make_intconst (Int.repr (alignof ce ty')))
   end
 
 (** [transl_lvalue a] returns the Csharpminor code that evaluates
@@ -453,23 +467,15 @@ Fixpoint transl_expr (a: Clight.expr) {struct a} : res expr :=
    where the value of [a] is stored.
 *)
 
-with transl_lvalue (a: Clight.expr) {struct a} : res expr :=
+with transl_lvalue (ce: composite_env) (a: Clight.expr) {struct a} : res expr :=
   match a with
   | Clight.Evar id _ =>
       OK (Eaddrof id)
   | Clight.Ederef b _ =>
-      transl_expr b
+      transl_expr ce b
   | Clight.Efield b i ty => 
-      match typeof b with
-      | Tstruct _ fld _ =>
-          do tb <- transl_expr b;
-          do ofs <- field_offset i fld;
-          OK (Ebinop Oadd tb (make_intconst (Int.repr ofs)))
-      | Tunion _ fld _ =>
-          transl_expr b
-      | _ =>
-          Error(msg "Cshmgen.transl_lvalue(field)")
-      end
+      do tb <- transl_expr ce b;
+      make_field_access ce (typeof b) i tb
   | _ => 
       Error(msg "Cshmgen.transl_lvalue")
   end.
@@ -479,20 +485,20 @@ with transl_lvalue (a: Clight.expr) {struct a} : res expr :=
    casted to the corresponding types in [tyl].
    Used for function applications. *)
 
-Fixpoint transl_arglist (al: list Clight.expr) (tyl: typelist)
+Fixpoint transl_arglist (ce: composite_env) (al: list Clight.expr) (tyl: typelist)
                          {struct al}: res (list expr) :=
   match al, tyl with
   | nil, Tnil => OK nil
   | a1 :: a2, Tcons ty1 ty2 =>
-      do ta1 <- transl_expr a1;
+      do ta1 <- transl_expr ce a1;
       do ta1' <- make_cast (typeof a1) ty1 ta1;
-      do ta2 <- transl_arglist a2 ty2;      
+      do ta2 <- transl_arglist ce a2 ty2;      
       OK (ta1' :: ta2)
   | a1 :: a2, Tnil =>
       (* Tolerance for calls to K&R or variadic functions *)
-      do ta1 <- transl_expr a1;
+      do ta1 <- transl_expr ce a1;
       do ta1' <- make_cast (typeof a1) (default_argument_conversion (typeof a1)) ta1;
-      do ta2 <- transl_arglist a2 Tnil;
+      do ta2 <- transl_arglist ce a2 Tnil;
       OK (ta1' :: ta2)
   | _, _ =>
       Error(msg "Cshmgen.transl_arglist: arity mismatch")
@@ -536,24 +542,24 @@ loop s1 s2          --->     block {
                              // break in s1 and s2 branches here
 *)
 
-Fixpoint transl_statement (tyret: type) (nbrk ncnt: nat)
+Fixpoint transl_statement (ce: composite_env) (tyret: type) (nbrk ncnt: nat)
                           (s: Clight.statement) {struct s} : res stmt :=
   match s with
   | Clight.Sskip =>
       OK Sskip
   | Clight.Sassign b c =>
-      do tb <- transl_lvalue b;
-      do tc <- transl_expr c;
+      do tb <- transl_lvalue ce b;
+      do tc <- transl_expr ce c;
       do tc' <- make_cast (typeof c) (typeof b) tc;
-      make_store tb (typeof b) tc'
+      make_store ce tb (typeof b) tc'
   | Clight.Sset x b =>
-      do tb <- transl_expr b;
+      do tb <- transl_expr ce b;
       OK(Sset x tb)
   | Clight.Scall x b cl =>
       match classify_fun (typeof b) with
       | fun_case_f args res cconv =>
-          do tb <- transl_expr b;
-          do tcl <- transl_arglist cl args;
+          do tb <- transl_expr ce b;
+          do tcl <- transl_arglist ce cl args;
           OK(Scall x {| sig_args := typlist_of_arglist cl args;
                         sig_res  := opttyp_of_type res;
                         sig_cc   := cconv |}
@@ -561,80 +567,80 @@ Fixpoint transl_statement (tyret: type) (nbrk ncnt: nat)
       | _ => Error(msg "Cshmgen.transl_stmt(call)")
       end
   | Clight.Sbuiltin x ef tyargs bl =>
-      do tbl <- transl_arglist bl tyargs;
+      do tbl <- transl_arglist ce bl tyargs;
       OK(Sbuiltin x ef tbl)
   | Clight.Ssequence s1 s2 =>
-      do ts1 <- transl_statement tyret nbrk ncnt s1;
-      do ts2 <- transl_statement tyret nbrk ncnt s2;
+      do ts1 <- transl_statement ce tyret nbrk ncnt s1;
+      do ts2 <- transl_statement ce tyret nbrk ncnt s2;
       OK (Sseq ts1 ts2)
   | Clight.Sifthenelse e s1 s2 =>
-      do te <- transl_expr e;
-      do ts1 <- transl_statement tyret nbrk ncnt s1;
-      do ts2 <- transl_statement tyret nbrk ncnt s2;
+      do te <- transl_expr ce e;
+      do ts1 <- transl_statement ce tyret nbrk ncnt s1;
+      do ts2 <- transl_statement ce tyret nbrk ncnt s2;
       OK (Sifthenelse (make_boolean te (typeof e)) ts1 ts2)
   | Clight.Sloop s1 s2 =>
-      do ts1 <- transl_statement tyret 1%nat 0%nat s1;
-      do ts2 <- transl_statement tyret 0%nat (S ncnt) s2;
+      do ts1 <- transl_statement ce tyret 1%nat 0%nat s1;
+      do ts2 <- transl_statement ce tyret 0%nat (S ncnt) s2;
       OK (Sblock (Sloop (Sseq (Sblock ts1) ts2)))
   | Clight.Sbreak =>
       OK (Sexit nbrk)
   | Clight.Scontinue =>
       OK (Sexit ncnt)
   | Clight.Sreturn (Some e) =>
-      do te <- transl_expr e;
+      do te <- transl_expr ce e;
       do te' <- make_cast (typeof e) tyret te;
       OK (Sreturn (Some te'))
   | Clight.Sreturn None =>
       OK (Sreturn None)
   | Clight.Sswitch a sl =>
-      do ta <- transl_expr a;
-      do tsl <- transl_lbl_stmt tyret 0%nat (S ncnt) sl;
+      do ta <- transl_expr ce a;
+      do tsl <- transl_lbl_stmt ce tyret 0%nat (S ncnt) sl;
       match classify_switch (typeof a) with
       | switch_case_i => OK (Sblock (Sswitch false ta tsl))
       | switch_case_l => OK (Sblock (Sswitch true ta tsl))
       | switch_default => Error(msg "Cshmgen.transl_stmt(switch)")
       end
   | Clight.Slabel lbl s =>
-      do ts <- transl_statement tyret nbrk ncnt s;
+      do ts <- transl_statement ce tyret nbrk ncnt s;
       OK (Slabel lbl ts)
   | Clight.Sgoto lbl =>
       OK (Sgoto lbl)
   end
 
-with transl_lbl_stmt (tyret: type) (nbrk ncnt: nat)
+with transl_lbl_stmt (ce: composite_env) (tyret: type) (nbrk ncnt: nat)
                      (sl: Clight.labeled_statements)
                      {struct sl}: res lbl_stmt :=
   match sl with
   | Clight.LSnil =>
       OK LSnil
   | Clight.LScons n s sl' =>
-      do ts <- transl_statement tyret nbrk ncnt s;
-      do tsl' <- transl_lbl_stmt tyret nbrk ncnt sl';
+      do ts <- transl_statement ce tyret nbrk ncnt s;
+      do tsl' <- transl_lbl_stmt ce tyret nbrk ncnt sl';
       OK (LScons n ts tsl')
   end.
 
 (*** Translation of functions *)
 
-Definition transl_var (v: ident * type) := (fst v, sizeof (snd v)).
+Definition transl_var (ce: composite_env) (v: ident * type) := (fst v, sizeof ce (snd v)).
 
 Definition signature_of_function (f: Clight.function) :=
   {| sig_args := map typ_of_type (map snd (Clight.fn_params f));
      sig_res  := opttyp_of_type (Clight.fn_return f);
      sig_cc   := Clight.fn_callconv f |}.
 
-Definition transl_function (f: Clight.function) : res function :=
-  do tbody <- transl_statement f.(Clight.fn_return) 1%nat 0%nat (Clight.fn_body f);
+Definition transl_function (ce: composite_env) (f: Clight.function) : res function :=
+  do tbody <- transl_statement ce f.(Clight.fn_return) 1%nat 0%nat (Clight.fn_body f);
   OK (mkfunction 
        (signature_of_function f)
        (map fst (Clight.fn_params f))
-       (map transl_var (Clight.fn_vars f))
+       (map (transl_var ce) (Clight.fn_vars f))
        (map fst (Clight.fn_temps f))
        tbody).
 
-Definition transl_fundef (f: Clight.fundef) : res fundef :=
+Definition transl_fundef (ce: composite_env) (f: Clight.fundef) : res fundef :=
   match f with
   | Clight.Internal g => 
-      do tg <- transl_function g; OK(AST.Internal tg)
+      do tg <- transl_function ce g; OK(AST.Internal tg)
   | Clight.External ef args res cconv =>
       if signature_eq (ef_sig ef) (signature_of_type args res cconv)
       then OK(AST.External ef)
@@ -646,4 +652,5 @@ Definition transl_fundef (f: Clight.fundef) : res fundef :=
 Definition transl_globvar (ty: type) := OK tt.
 
 Definition transl_program (p: Clight.program) : res program :=
-  transform_partial_program2 transl_fundef transl_globvar p.
+  transform_partial_program2 (transl_fundef p.(prog_comp_env)) transl_globvar p.
+
