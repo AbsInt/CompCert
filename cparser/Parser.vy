@@ -822,6 +822,8 @@ jump_statement:
 asm_statement:
 | loc = ASM LPAREN template = STRING_LITERAL RPAREN SEMICOLON
     { let '(wide, chars, _) := template in ASM wide chars loc }
+| loc = ASM VOLATILE LPAREN template = STRING_LITERAL RPAREN SEMICOLON
+    { let '(wide, chars, _) := template in ASM wide chars loc }
 
 (* 6.9 *)
 translation_unit_file:
