@@ -28,13 +28,34 @@ let init filename channel : Lexing.lexbuf =
   Hashtbl.clear lexicon;
   List.iter
     (fun (key, builder) -> Hashtbl.add lexicon key builder)
-    [ ("auto", fun loc -> AUTO loc);
+    [ 
+      ("_Alignas", fun loc -> ALIGNAS loc);
+      ("_Alignof", fun loc -> ALIGNOF loc);
+      ("_Bool", fun loc -> UNDERSCORE_BOOL loc);
+      ("__alignof", fun loc -> ALIGNOF loc);
+      ("__alignof__", fun loc -> ALIGNOF loc);
+      ("__asm", fun loc -> ASM loc);
+      ("__asm__", fun loc -> ASM loc);
+      ("__attribute", fun loc -> ATTRIBUTE loc);
+      ("__attribute__", fun loc -> ATTRIBUTE loc);
+      ("__builtin_va_arg", fun loc -> BUILTIN_VA_ARG loc);
+      ("__const", fun loc -> CONST loc);
+      ("__const__", fun loc -> CONST loc);
+      ("__inline", fun loc -> INLINE loc);
+      ("__inline__", fun loc -> INLINE loc);
+      ("__packed__", fun loc -> PACKED loc);
+      ("__restrict", fun loc -> RESTRICT loc);
+      ("__restrict__", fun loc -> RESTRICT loc);
+      ("__signed", fun loc -> SIGNED loc);
+      ("__signed__", fun loc -> SIGNED loc);
+      ("__volatile", fun loc -> VOLATILE loc);
+      ("__volatile__", fun loc -> VOLATILE loc);
+      ("asm", fun loc -> ASM loc);
+      ("auto", fun loc -> AUTO loc);
       ("break", fun loc -> BREAK loc);
       ("case", fun loc -> CASE loc);
       ("char", fun loc -> CHAR loc);
       ("const", fun loc -> CONST loc);
-      ("__const", fun loc -> CONST loc);
-      ("__const__", fun loc -> CONST loc);
       ("continue", fun loc -> CONTINUE loc);
       ("default", fun loc -> DEFAULT loc);
       ("do", fun loc -> DO loc);
@@ -47,14 +68,10 @@ let init filename channel : Lexing.lexbuf =
       ("goto", fun loc -> GOTO loc);
       ("if", fun loc -> IF loc);
       ("inline", fun loc -> INLINE loc);
-      ("__inline", fun loc -> INLINE loc);
-      ("__inline__", fun loc -> INLINE loc);
       ("int", fun loc -> INT loc);
       ("long", fun loc -> LONG loc);
       ("register", fun loc -> REGISTER loc);
       ("restrict", fun loc -> RESTRICT loc);
-      ("__restrict", fun loc -> RESTRICT loc);
-      ("__restrict__", fun loc -> RESTRICT loc);
       ("return", fun loc -> RETURN loc);
       ("short", fun loc -> SHORT loc);
       ("signed", fun loc -> SIGNED loc);
@@ -67,21 +84,7 @@ let init filename channel : Lexing.lexbuf =
       ("unsigned", fun loc -> UNSIGNED loc);
       ("void", fun loc -> VOID loc);
       ("volatile", fun loc -> VOLATILE loc);
-      ("__volatile", fun loc -> VOLATILE loc);
-      ("__volatile__", fun loc -> VOLATILE loc);
       ("while", fun loc -> WHILE loc);
-      ("_Alignas", fun loc -> ALIGNAS loc);
-      ("_Alignof", fun loc -> ALIGNOF loc);
-      ("__alignof", fun loc -> ALIGNOF loc);
-      ("__alignof__", fun loc -> ALIGNOF loc);
-      ("__attribute", fun loc -> ATTRIBUTE loc);
-      ("__attribute__", fun loc -> ATTRIBUTE loc);
-      ("_Bool", fun loc -> UNDERSCORE_BOOL loc);
-      ("__builtin_va_arg", fun loc -> BUILTIN_VA_ARG loc);
-      ("__packed__", fun loc -> PACKED loc);
-      ("__asm__", fun loc -> ASM loc);
-      ("__asm", fun loc -> ASM loc);
-      ("asm", fun loc -> ASM loc);
     ];
 
   push_context := begin fun () -> contexts := []::!contexts end;
