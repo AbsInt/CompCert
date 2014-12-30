@@ -44,6 +44,10 @@ let wrap fn loc env arg =
   try fn env arg
   with Env.Error msg -> fatal_error loc "%s" (Env.error_message msg)
 
+let wrap2 fn loc env arg1 arg2 =
+  try fn env arg1 arg2
+  with Env.Error msg -> fatal_error loc "%s" (Env.error_message msg)
+
 (* Translation of locations *)
 
 let elab_loc l = (l.filename, l.lineno)
@@ -786,7 +790,7 @@ let elab_type loc env spec decl =
   let (ty, env'') = elab_type_declarator loc env' bty decl in 
   if sto <> Storage_default || inl || tydef then
     error loc "'typedef', 'extern', 'static', 'register' and 'inline' are meaningless in cast";
-  ty
+  (ty, env'')
 
 
 (* Elaboration of initializers. C99 section 6.7.8 *)
@@ -820,8 +824,8 @@ let init_int_array_wstring opt_size s =
   Init_array (add_chars (Int64.pred size) (List.rev s) [])
 
 let check_init_type loc env a ty =
-  if valid_assignment env a ty then ()
-  else if valid_cast env a.etyp ty then
+  if wrap2 valid_assignment loc env a ty then ()
+  else if wrap2 valid_cast loc env a.etyp ty then
     warning loc
       "initializer has type@ %a@ instead of the expected type @ %a"
       Cprint.typ a.etyp Cprint.typ ty
@@ -1309,16 +1313,18 @@ let elab_expr loc env a =
 (* 6.5.4 Cast operators *)
 
   | CAST ((spec, dcl), SINGLE_INIT a1) ->
-      let ty = elab_type loc env spec dcl in
+      let (ty, _) = elab_type loc env spec dcl in
       let b1 = elab a1 in
-      if not (valid_cast env b1.etyp ty) then
+      if not (wrap2 valid_cast loc env b1.etyp ty) then
         err "illegal cast from %a@ to %a" Cprint.typ b1.etyp Cprint.typ ty;
       { edesc = ECast(ty, b1); etyp = ty }
 
 (* 6.5.2.5 Compound literals *)
 
   | CAST ((spec, dcl), ie) ->
-      let ty = elab_type loc env spec dcl in
+      let (ty, _) = elab_type loc env spec dcl in
+      if wrap incomplete_type loc env ty then
+        err "incomplete type %a" Cprint.typ ty;
       begin match elab_initializer loc env "<compound literal>" ty ie with
       | (ty', Some i) -> { edesc = ECompound(ty', i); etyp = ty' }
       | (ty', None)   -> error "ill-formed compound literal"
@@ -1344,8 +1350,8 @@ let elab_expr loc env a =
       { edesc = bdesc; etyp = TInt(size_t_ikind, []) }
 
   | TYPE_SIZEOF (spec, dcl) ->
-      let ty = elab_type loc env spec dcl in
-      if wrap incomplete_type loc env ty then
+      let (ty, env') = elab_type loc env spec dcl in
+      if wrap incomplete_type loc env' ty then
         err "incomplete type %a" Cprint.typ ty;
       { edesc = ESizeof ty; etyp = TInt(size_t_ikind, []) }
 
@@ -1356,8 +1362,8 @@ let elab_expr loc env a =
       { edesc = EAlignof b1.etyp; etyp =  TInt(size_t_ikind, []) }
 
   | TYPE_ALIGNOF (spec, dcl) ->
-      let ty = elab_type loc env spec dcl in
-      if wrap incomplete_type loc env ty then
+      let (ty, env') = elab_type loc env spec dcl in
+      if wrap incomplete_type loc env' ty then
         err "incomplete type %a" Cprint.typ ty;
       { edesc = EAlignof ty; etyp =  TInt(size_t_ikind, []) }
 
@@ -1544,8 +1550,8 @@ let elab_expr loc env a =
         err "left-hand side of assignment has 'const' type";
       if not (is_modifiable_lvalue env b1) then
         err "left-hand side of assignment is not a modifiable l-value";
-      if not (valid_assignment env b2 b1.etyp) then begin
-        if valid_cast env b2.etyp b1.etyp then
+      if not (wrap2 valid_assignment loc env b2 b1.etyp) then begin
+        if wrap2 valid_cast loc env b2.etyp b1.etyp then
           warning "assigning a value of type@ %a@ to a lvalue of type@ %a"
                   Cprint.typ b2.etyp Cprint.typ b1.etyp
         else
@@ -1576,8 +1582,8 @@ let elab_expr loc env a =
             err "left-hand side of assignment has 'const' type";
           if not (is_modifiable_lvalue env b1) then
             err ("left-hand side of assignment is not a modifiable l-value");
-          if not (valid_assignment env b b1.etyp) then begin
-            if valid_cast env ty b1.etyp then
+          if not (wrap2 valid_assignment loc env b b1.etyp) then begin
+            if wrap2 valid_cast loc env ty b1.etyp then
               warning "assigning a value of type@ %a@ to a lvalue of type@ %a"
                       Cprint.typ ty Cprint.typ b1.etyp
             else
@@ -1689,8 +1695,9 @@ let elab_expr loc env a =
         else (err "too many arguments in function call"; args)
     | arg1 :: argl, (_, ty_p) :: paraml ->
         let ty_a = argument_conversion env arg1.etyp in
-        if not (valid_assignment env {arg1 with etyp = ty_a} ty_p) then begin
-          if valid_cast env ty_a ty_p then
+        if not (wrap2 valid_assignment loc env {arg1 with etyp = ty_a} ty_p)
+        then begin
+          if wrap2 valid_cast loc env ty_a ty_p then
             warning
               "argument #%d of function call has type@ %a@ \
                instead of the expected type@ %a"
@@ -1770,13 +1777,18 @@ let enter_decdefs local loc env sto dl =
   if sto <> Storage_default && dl = [] then
     warning loc "Storage class specifier on empty declaration";
   let rec enter_decdef (decls, env) (s, ty, init) =
-    let isfun = is_function_type env ty in
     if sto = Storage_extern && init <> NO_INIT then
       error loc "'extern' declaration cannot have an initializer";
-    if local && isfun && (sto = Storage_static || sto = Storage_register) then
-      error loc "invalid storage class for '%s'" s;
-    (* Local function declarations are always treated as extern *)
-    let sto1 = if local && isfun then Storage_extern else sto in
+    (* Adjust storage for function declarations *)
+    let sto1 =
+      match unroll env ty, sto with
+      | TFun _, Storage_default -> 
+          Storage_extern
+      | TFun _, (Storage_static | Storage_register) ->
+          if local then error loc "invalid storage class for '%s'" s;
+          sto
+      | _, _ ->
+          sto in
     (* enter ident in environment with declared type, because
        initializer can refer to the ident *)
     let (id, sto', env1) = enter_or_refine_ident local loc env s sto1 ty in
@@ -1786,10 +1798,10 @@ let enter_decdefs local loc env sto dl =
     let env2 = Env.add_ident env1 id sto' ty' in
     (* check for incomplete type *)
     if local && sto' <> Storage_extern
-             && not isfun
+             && not (is_function_type env ty')
              && wrap incomplete_type loc env ty' then
       error loc "'%s' has incomplete type" s;
-    if local && not isfun && sto' <> Storage_extern && sto' <> Storage_static then
+    if local && sto' <> Storage_extern && sto' <> Storage_static then
       (* Local definition *)
       ((sto', id, ty', init') :: decls, env2)
     else begin
@@ -2079,8 +2091,9 @@ let rec elab_stmt env ctx s =
             "'return' without a value in a function of return type@ %a"
             Cprint.typ ctx.ctx_return_typ
       | _, Some b ->
-          if not (valid_assignment env b ctx.ctx_return_typ) then begin
-            if valid_cast env b.etyp ctx.ctx_return_typ then
+          if not (wrap2 valid_assignment loc env b ctx.ctx_return_typ)
+          then begin
+            if wrap2 valid_cast loc env b.etyp ctx.ctx_return_typ then
               warning loc
                 "return value has type@ %a@ \
                  instead of the expected type@ %a"
