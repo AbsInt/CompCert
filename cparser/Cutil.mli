@@ -153,7 +153,7 @@ val ptrdiff_t_ikind : ikind
 
 (* Helpers for type-checking *)
 
-val type_of_constant : constant -> typ
+val type_of_constant : Env.t -> constant -> typ
   (* Return the type of the given constant. *)
 val type_of_member : Env.t -> field -> typ
   (* Return the type of accessing the given field [fld].

@@ -1087,7 +1087,7 @@ and elab_item zi item il =
       | CStr _, _ ->
           error loc "initialization of an array of non-char elements with a string literal";
           elab_list zi il false
-      | CWStr s, TInt(ik, _) when ik = wchar_ikind ->
+      | CWStr s, TInt(ik, _) ->
           if not (I.index_below (Int64.of_int(List.length s - 1)) sz) then
             warning loc "initializer string for array of wide chars %s is too long"
                         (I.name zi);
@@ -1198,7 +1198,7 @@ let elab_expr loc env a =
 
   | CONSTANT cst ->
       let cst' = elab_constant loc cst in
-      { edesc = EConst cst'; etyp = type_of_constant cst' }
+      { edesc = EConst cst'; etyp = type_of_constant env cst' }
 
 (* 6.5.2 Postfix expressions *)
 

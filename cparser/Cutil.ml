@@ -692,18 +692,30 @@ let find_matching_signed_ikind sz =
   else if sz = !config.sizeof_longlong then ILongLong
   else assert false
 
-let wchar_ikind = find_matching_unsigned_ikind !config.sizeof_wchar
+let wchar_ikind =
+  if !config.wchar_signed
+  then find_matching_signed_ikind !config.sizeof_wchar
+  else find_matching_unsigned_ikind !config.sizeof_wchar
 let size_t_ikind = find_matching_unsigned_ikind !config.sizeof_size_t
 let ptr_t_ikind = find_matching_unsigned_ikind !config.sizeof_ptr
 let ptrdiff_t_ikind = find_matching_signed_ikind !config.sizeof_ptrdiff_t
 
+(** The wchar_t type.  Try to get it from a typedef in the environment,
+  otherwise use the integer type described in !config. *)
+
+let wchar_type env =
+  try
+    let (id, def) = Env.lookup_typedef env "wchar_t" in TNamed(id, [])
+  with Env.Error _ ->
+    TInt(wchar_ikind, [])
+
 (** The type of a constant *)
 
-let type_of_constant = function
+let type_of_constant env = function
   | CInt(_, ik, _) -> TInt(ik, [])
   | CFloat(_, fk) -> TFloat(fk, [])
   | CStr _ -> TPtr(TInt(IChar, []), [])
-  | CWStr _ -> TPtr(TInt(wchar_ikind, []), [])
+  | CWStr _ -> TPtr(wchar_type env, [])
   | CEnum(_, _) -> TInt(IInt, [])
 
 (* Check that a C expression is a lvalue *)
