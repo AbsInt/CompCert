@@ -157,7 +157,7 @@ and expand_init islocal env i =
   let rec expand i =
     match i with
     (* The following "flattening" is not C99.  GCC documents it; whether
-       it implements it is unclear, Clang implements it.  At any rate,
+       it implements it is unclear.  Clang implements it.  At any rate,
        it makes it possible to use compound literals in static initializers,
        something that is not possible in C99 because compound literals
        are not constant expressions.
@@ -256,8 +256,8 @@ let unblock_decl loc env ((sto, id, ty, optinit) as d) =
       decls @ [(sto, id, ty, Some init')]
 
 (* Unblocking and simplification for whole files.
-   The environment is used for typedefs only, so we do not maintain
-   other declarations. *)
+   The environment is used for typedefs and composites only,
+   so we do not maintain variable and function definitions. *)
 
 let rec unblock_glob env accu = function
   | [] -> List.rev accu
@@ -273,11 +273,20 @@ let rec unblock_glob env accu = function
       | Gfundef f ->
           let f' = unblock_fundef env f in
           unblock_glob env ({g with gdesc = Gfundef f'} :: accu) gl
+      | Gcompositedecl(su, id, attr) ->
+          unblock_glob
+            (Env.add_composite env id (composite_info_decl env su attr))
+            (g :: accu) gl
+      | Gcompositedef(su, id, attr, fl) ->
+          unblock_glob
+            (Env.add_composite env id (composite_info_def env su attr fl))
+            (g :: accu) gl
       | Gtypedef(id, ty) ->
           unblock_glob (Env.add_typedef env id ty) (g :: accu) gl
-      | Gcompositedecl _
-      | Gcompositedef _
-      | Genumdef _ 
+      | Genumdef (id, attr, members) ->
+          unblock_glob
+            (Env.add_enum env id {ei_members =  members; ei_attr = attr})
+            (g :: accu) gl
       | Gpragma _ ->
           unblock_glob env (g :: accu) gl
 
