@@ -1323,8 +1323,6 @@ let elab_expr loc env a =
 
   | CAST ((spec, dcl), ie) ->
       let (ty, _) = elab_type loc env spec dcl in
-      if wrap incomplete_type loc env ty then
-        err "incomplete type %a" Cprint.typ ty;
       begin match elab_initializer loc env "<compound literal>" ty ie with
       | (ty', Some i) -> { edesc = ECompound(ty', i); etyp = ty' }
       | (ty', None)   -> error "ill-formed compound literal"
