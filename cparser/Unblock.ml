@@ -285,7 +285,7 @@ let rec unblock_glob env accu = function
           unblock_glob (Env.add_typedef env id ty) (g :: accu) gl
       | Genumdef (id, attr, members) ->
           unblock_glob
-            (Env.add_enum env id {ei_members =  members; ei_attr = attr})
+            (Env.add_enum env id {Env.ei_members =  members; Env.ei_attr = attr})
             (g :: accu) gl
       | Gpragma _ ->
           unblock_glob env (g :: accu) gl
