@@ -24,6 +24,7 @@ Require Tailcall.
 Require Allocation.
 Require Ctypes.
 Require Csyntax.
+Require Ctyping.
 Require Clight.
 Require Compiler.
 Require Parser.
@@ -163,6 +164,8 @@ Separate Extraction
    Csyntax.make_program Clight.make_program
    Initializers.transl_init Initializers.constval
    Csyntax.Eindex Csyntax.Epreincr
+   Ctyping.retype_function Ctyping.econdition'
+   Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
    Conventions1.dummy_int_reg Conventions1.dummy_float_reg
    RTL.instr_defs RTL.instr_uses
    Machregs.mregs_for_operation Machregs.mregs_for_builtin

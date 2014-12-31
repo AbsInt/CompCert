@@ -73,11 +73,13 @@ val sizeof : Env.t -> typ -> int option
 val alignof : Env.t -> typ -> int option
   (* Return the natural alignment of the given type, in bytes.
      Machine-dependent. [None] is returned if the type is incomplete. *)
-val sizeof_ikind: ikind -> int
-  (* Return the size of the given integer kind. *)
 val incomplete_type : Env.t -> typ -> bool
   (* Return true if the given type is incomplete, e.g.
      declared but not defined struct or union, or array type  without a size. *)
+val sizeof_ikind: ikind -> int
+  (* Return the size of the given integer kind. *)
+val is_signed_ikind: ikind -> bool
+  (* Return true if the given integer kind is signed, false if unsigned. *)
 
 (* Computing composite_info records *)
 
