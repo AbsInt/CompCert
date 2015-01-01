@@ -201,7 +201,8 @@ let builtins =
 (** ** Functions used to handle string literals *)
 
 let stringNum = ref 0   (* number of next global for string literals *)
-let stringTable = Hashtbl.create 47
+let stringTable : (string, AST.ident) Hashtbl.t = Hashtbl.create 47
+let wstringTable : (int64 list, AST.ident) Hashtbl.t = Hashtbl.create 47
 
 let name_for_string_literal env s =
   try
@@ -221,7 +222,8 @@ let name_for_string_literal env s =
     id
 
 let typeStringLiteral s =
-  Tarray(Tint(I8, Unsigned, noattr), Z.of_uint (String.length s + 1), noattr)
+  let sg = if Machine.((!config).char_signed) then Signed else Unsigned in
+  Tarray(Tint(I8, sg, noattr), Z.of_uint (String.length s + 1), noattr)
 
 let global_for_string s id =
   let init = ref [] in
@@ -232,10 +234,57 @@ let global_for_string s id =
   (id, Gvar {gvar_info = typeStringLiteral s; gvar_init = !init;
              gvar_readonly = true; gvar_volatile = false})
 
+let name_for_wide_string_literal env s =
+  try
+    Hashtbl.find wstringTable s
+  with Not_found ->
+    incr stringNum;
+    let name = Printf.sprintf "__stringlit_%d" !stringNum in
+    let id = intern_string name in
+    Hashtbl.add decl_atom id
+      { a_storage = C.Storage_static;
+        a_alignment = Some Machine.((!config).sizeof_wchar);
+        a_sections = [Sections.for_stringlit()];
+        a_access = Sections.Access_default;
+        a_inline = false;
+        a_loc = Cutil.no_loc };
+    Hashtbl.add wstringTable s id;
+    id
+
+let typeWideStringLiteral s =
+  let sz =
+    match Machine.((!config).sizeof_wchar) with
+    | 2 -> I16
+    | 4 -> I32
+    | _ -> assert false in
+  let sg =
+    if Machine.((!config).wchar_signed) then Signed else Unsigned in
+  Tarray(Tint(sz, sg, noattr), Z.of_uint (List.length s + 1), noattr)
+
+let global_for_wide_string s id =
+  let init = ref [] in
+  let init_of_char =
+    match Machine.((!config).sizeof_wchar) with
+    | 2 -> (fun z -> AST.Init_int16 z)
+    | 4 -> (fun z -> AST.Init_int32 z)
+    | _ -> assert false in
+  let add_char c =
+    init := init_of_char(Z.of_uint64 c) :: !init in
+  List.iter add_char s;
+  add_char 0L;
+  (id, Gvar {gvar_info = typeWideStringLiteral s; gvar_init = List.rev !init;
+             gvar_readonly = true; gvar_volatile = false})
+
 let globals_for_strings globs =
-  Hashtbl.fold
-    (fun s id l -> global_for_string s id :: l)
-    stringTable globs
+  let globs1 =
+    Hashtbl.fold
+      (fun s id l -> global_for_wide_string s id :: l)
+      wstringTable globs in
+  let globs2 =
+    Hashtbl.fold
+      (fun s id l -> global_for_string s id :: l)
+      stringTable globs1 in
+  globs2
 
 (** ** Handling of inlined memcpy functions *)
 
@@ -555,7 +604,8 @@ let rec convertExpr env e =
       let ty = typeStringLiteral s in
       Evalof(Evar(name_for_string_literal env s, ty), ty)
   | C.EConst(C.CWStr s) ->
-      unsupported "wide string literal"; ezero
+      let ty = typeWideStringLiteral s in
+      Evalof(Evar(name_for_wide_string_literal env s, ty), ty)
   | C.EConst(C.CEnum(id, i)) ->
       Eval(Vint(convertInt i), ty)
   | C.ESizeof ty1 ->
@@ -1130,6 +1180,7 @@ let convertProgram p =
   stringNum := 0;
   Hashtbl.clear decl_atom;
   Hashtbl.clear stringTable;
+  Hashtbl.clear wstringTable;
   Hashtbl.clear compositeCache;
   let p = Builtins.declarations() @ p in
   try
