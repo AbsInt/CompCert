@@ -1121,7 +1121,7 @@ and elab_single zi a il =
       (* This is a scalar: do direct initialization and continue *)
       check_init_type loc env a ty;
       elab_list (I.set zi (Init_single a)) il false
-  | TStruct _ | TUnion _ when compatible_types ~noattrs:true env ty a.etyp ->
+  | TStruct _ | TUnion _ when compatible_types AttrIgnoreTop env ty a.etyp ->
       (* This is a composite that can be initialized directly
          from the expression: do as above *)
       elab_list (I.set zi (Init_single a)) il false
@@ -1267,7 +1267,7 @@ let elab_expr loc env a =
       let b2 = elab a2 and b3 = elab (TYPE_SIZEOF a3) in
       let ty = match b3.edesc with ESizeof ty -> ty | _ -> assert false in
       let ty' = default_argument_conversion env ty in
-      if not (compatible_types env ty ty') then
+      if not (compatible_types AttrIgnoreTop env ty ty') then
         warning "'%a' is promoted to '%a' when passed through '...'.@ You should pass '%a', not '%a', to 'va_arg'"
                 Cprint.typ ty Cprint.typ ty'
                 Cprint.typ ty' Cprint.typ ty;
@@ -1459,7 +1459,7 @@ let elab_expr loc env a =
               (TPtr(ty, []), TPtr(ty, []))
           | (TPtr(ty1, a1) | TArray(ty1, _, a1)),
             (TPtr(ty2, a2) | TArray(ty2, _, a2)) ->
-              if not (compatible_types ~noattrs:true env ty1 ty2) then
+              if not (compatible_types AttrIgnoreAll env ty1 ty2) then
                 err "mismatch between pointer types in binary '-'";
               if not (pointer_arithmetic_ok env ty1) then
                 err "illegal pointer arithmetic in binary '-'";
@@ -1519,11 +1519,13 @@ let elab_expr loc env a =
             if is_void_type env ty1 || is_void_type env ty2 then
               TPtr(TVoid (add_attributes a1 a2), [])
             else
-              match combine_types ~noattrs:true env
+              match combine_types AttrIgnoreAll env
                                   (TPtr(ty1, a1)) (TPtr(ty2, a2)) with
               | None ->
-                  error "the second and third arguments of '? :' \
-                         have incompatible pointer types"
+                  warning "the second and third arguments of '? :' \
+                           have incompatible pointer types";
+                  (* tolerance *)
+                  TPtr(TVoid (add_attributes a1 a2), [])
               | Some ty -> ty
             in
           { edesc = EConditional(b1, b2, b3); etyp = tyres }
@@ -1532,7 +1534,7 @@ let elab_expr loc env a =
       | TInt _, TPtr(ty2, a2) when is_literal_0 b2 ->
           { edesc = EConditional(b1, nullconst, b3); etyp = TPtr(ty2, []) }
       | ty1, ty2 ->
-          match combine_types ~noattrs:true env ty1 ty2 with
+          match combine_types AttrIgnoreAll env ty1 ty2 with
           | None ->
               error ("the second and third arguments of '? :' have incompatible types")
           | Some tyres ->
@@ -1660,7 +1662,7 @@ let elab_expr loc env a =
           when is_void_type env ty2 ->
             EBinop(op, b1, b2, TPtr(ty1, []))
         | TPtr(ty1, _), TPtr(ty2, _) ->
-            if not (compatible_types ~noattrs:true env ty1 ty2) then
+            if not (compatible_types AttrIgnoreAll env ty1 ty2) then
               warning "comparison between incompatible pointer types";
             EBinop(op, b1, b2, TPtr(ty1, []))
         | TPtr _, (TInt _ | TEnum _)
@@ -1749,7 +1751,7 @@ let enter_or_refine_ident local loc env s sto ty =
       if local && Env.in_current_scope env id then
         error loc "redefinition of local variable '%s'" s;
       let new_ty =
-        match combine_types env old_ty ty with
+        match combine_types AttrCompat env old_ty ty with
         | Some new_ty ->
             new_ty
         | None ->

@@ -147,7 +147,7 @@ let accessor_type loc env ty =
 let ecast ty e = {edesc = ECast(ty, e); etyp = ty}
 
 let ecast_opt env ty e =
-  if compatible_types ~noattrs:true env ty e.etyp then e else ecast ty e
+  if compatible_types AttrCompat env ty e.etyp then e else ecast ty e
 
 (*  (ty) __builtin_readNN_reversed(&lval)
  or (ty) __builtin_bswapNN(lval) *)

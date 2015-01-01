@@ -58,12 +58,28 @@ val attr_inherited_by_members: attribute -> bool
   (* Is an attribute of a composite inherited by members of the composite? *)
 
 (* Type compatibility *)
-val compatible_types : ?noattrs: bool -> Env.t -> typ -> typ -> bool
+
+type attr_handling =
+  | AttrCompat
+  | AttrIgnoreTop
+  | AttrIgnoreAll
+
+val compatible_types : attr_handling -> Env.t -> typ -> typ -> bool
   (* Check that the two given types are compatible.  
-     If [noattrs], ignore attributes (recursively). *)
-val combine_types : ?noattrs: bool -> Env.t -> typ -> typ -> typ option
+     The attributes in the types are compared according to the first argument:
+- [AttrCompat]: the types must have the same standard attributes
+    ([const], [volatile], [restrict]) but may differ on custom attributes.
+- [AttrIgnoreTop]: the top-level attributes of the two types are ignored,
+    but attributes of e.g. types of pointed objects (for pointer types)
+    are compared as per [AttrCompat].
+- [AttrIgnoreAll]: recursively ignore the attributes in the two types. *)
+val combine_types : attr_handling -> Env.t -> typ -> typ -> typ option
   (* Like [compatible_types], but if the two types are compatible,
-     return the most precise type compatible with both. *)
+     return the most precise type compatible with both.
+     The attributes are compared according to the first argument,
+     with the same meaning as for [compatible_types].
+     When two sets of attributes are compatible, the result of
+     [combine_types] carries the union of these two sets of attributes. *)
 
 (* Size and alignment *)
 
