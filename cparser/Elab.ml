@@ -1777,18 +1777,13 @@ let enter_decdefs local loc env sto dl =
   if sto <> Storage_default && dl = [] then
     warning loc "Storage class specifier on empty declaration";
   let rec enter_decdef (decls, env) (s, ty, init) =
+    let isfun = is_function_type env ty in
     if sto = Storage_extern && init <> NO_INIT then
       error loc "'extern' declaration cannot have an initializer";
-    (* Adjust storage for function declarations *)
-    let sto1 =
-      match unroll env ty, sto with
-      | TFun _, Storage_default -> 
-          Storage_extern
-      | TFun _, (Storage_static | Storage_register) ->
-          if local then error loc "invalid storage class for '%s'" s;
-          sto
-      | _, _ ->
-          sto in
+    if local && isfun && (sto = Storage_static || sto = Storage_register) then
+      error loc "invalid storage class for '%s'" s;
+    (* Local function declarations are always treated as extern *)
+    let sto1 = if local && isfun then Storage_extern else sto in
     (* enter ident in environment with declared type, because
        initializer can refer to the ident *)
     let (id, sto', env1) = enter_or_refine_ident local loc env s sto1 ty in
@@ -1798,10 +1793,10 @@ let enter_decdefs local loc env sto dl =
     let env2 = Env.add_ident env1 id sto' ty' in
     (* check for incomplete type *)
     if local && sto' <> Storage_extern
-             && not (is_function_type env ty')
+             && not isfun
              && wrap incomplete_type loc env ty' then
       error loc "'%s' has incomplete type" s;
-    if local && sto' <> Storage_extern && sto' <> Storage_static then
+    if local && not isfun && sto' <> Storage_extern && sto' <> Storage_static then
       (* Local definition *)
       ((sto', id, ty', init') :: decls, env2)
     else begin
