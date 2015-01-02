@@ -476,8 +476,9 @@ let cmdline_actions =
       push_action process_S_file s; incr num_source_files);
   Suffix ".o", Self push_linker_arg;
   Suffix ".a", Self push_linker_arg;
-  (* GCC compatibility: .o.ext files are also object files *)
+  (* GCC compatibility: .o.ext files and .so files are also object files *)
   _Regexp ".*\\.o\\.", Self push_linker_arg;
+  Suffix ".so", Self push_linker_arg;
   (* GCC compatibility: .h files can be preprocessed with -E *)
   Suffix ".h", Self (fun s ->
       push_action process_h_file s; incr num_source_files);
