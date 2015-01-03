@@ -34,8 +34,7 @@ type action =
   | String of (string -> unit)  (** read next arg as a string, call function *)
   | Integer of (int -> unit)    (** read next arg as an int, call function *)
 
-val parse_cmdline:
-  (pattern * action) list -> string (* usage string *) -> unit
+val parse_cmdline: (pattern * action) list -> unit
 
 (* Note on precedence: [Exact] patterns are tried first, then the other
    patterns are tried in the order in which they appear in the list. *)
