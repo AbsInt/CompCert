@@ -875,8 +875,6 @@ let rec convertStmt ploc env s =
       Scontinue
   | C.Sswitch(e, s1) ->
       let (init, cases) = groupSwitch (flattenSwitch s1) in
-      if cases = [] then
-        unsupported "ill-formed 'switch' statement";
       if init.sdesc <> C.Sskip then
         warning "ignored code at beginning of 'switch'";
       let te = convertExpr env e in
