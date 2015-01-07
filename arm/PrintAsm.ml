@@ -35,7 +35,6 @@ module type PRINTER_OPTIONS =
       val cfi_endproc: out_channel -> unit
       val cfi_adjust: out_channel -> int32 -> unit
       val cfi_rel_offset: out_channel -> string -> int32 -> unit
-      val thumb: bool
      end
 
 (* Module containing the printing functions *)
@@ -162,7 +161,7 @@ let neg_condition_name = function
    mode. *)
 
 let thumbS oc =
-  if Opt.thumb then output_char oc 's'
+  if !Clflags.option_mthumb then output_char oc 's'
 
 (* Names of sections *)
 
@@ -322,24 +321,11 @@ let is_immediate_float32 bits =
 
 (* Emit .file / .loc debugging directives *)
 
-let filename_num : (string, int) Hashtbl.t = Hashtbl.create 7
-
 let print_file_line oc file line =
-  if !Clflags.option_g && file <> "" then begin
-    let filenum = 
-      try
-        Hashtbl.find filename_num file
-      with Not_found ->
-        let n = Hashtbl.length filename_num + 1 in
-        Hashtbl.add filename_num file n;
-        fprintf oc "	.file	%d %S\n" n file;
-        n
-    in fprintf oc "	.loc	%d %s\n" filenum line
-  end
+  PrintAnnot.print_file_line oc comment file line
 
 let print_location oc loc =
-  if loc <> Cutil.no_loc then
-    print_file_line oc (fst loc) (string_of_int (snd loc))
+  if loc <> Cutil.no_loc then print_file_line oc (fst loc) (snd loc)
 
 (* Built-ins.  They come in two flavors: 
    - annotation statements: take their arguments in registers or stack
@@ -354,7 +340,8 @@ let re_file_line = Str.regexp "#line:\\(.*\\):\\([1-9][0-9]*\\)$"
 
 let print_annot_stmt oc txt targs args =
   if Str.string_match re_file_line txt 0 then begin
-    print_file_line oc (Str.matched_group 1 txt) (Str.matched_group 2 txt)
+    print_file_line oc (Str.matched_group 1 txt)
+                       (int_of_string (Str.matched_group 2 txt))
   end else begin
     fprintf oc "%s annotation: " comment;
     PrintAnnot.print_annot_stmt preg "sp" oc txt targs args
@@ -1189,7 +1176,7 @@ let print_globdef oc (name, gdef) =
   end)
 
 let print_program oc p =
-   let module Opt = (struct
+   let module Opt : PRINTER_OPTIONS = struct
    
    let vfpv3 = Configuration.model >= "armv7"
    
@@ -1229,12 +1216,10 @@ let print_program oc p =
    else
    (fun _ _ _ -> ())
 
-   let thumb = !Clflags.option_mthumb
-
-   end: PRINTER_OPTIONS) in
+   end in
   let module Printer = AsmPrinter(Opt) in
+  PrintAnnot.reset_filenames();
   PrintAnnot.print_version_and_options oc Printer.comment;
-  Hashtbl.clear Printer.filename_num;
   fprintf oc "	.syntax	unified\n";
   fprintf oc "	.arch	%s\n"
           (match Configuration.model with
@@ -1246,6 +1231,6 @@ let print_program oc p =
   fprintf oc "	.fpu	%s\n"
           (if Opt.vfpv3 then "vfpv3-d16" else "vfpv2");
   fprintf oc "	.%s\n" (if !Clflags.option_mthumb then "thumb" else "arm");
-  List.iter (Printer.print_globdef oc) p.prog_defs
-
+  List.iter (Printer.print_globdef oc) p.prog_defs;
+  PrintAnnot.close_filenames()
 
