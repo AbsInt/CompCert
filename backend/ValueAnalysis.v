@@ -186,6 +186,7 @@ Definition alloc_global (rm: romem) (idg: ident * globdef fundef unit): romem :=
       PTree.remove id rm
   | (id, Gvar v) =>
       if v.(gvar_readonly) && negb v.(gvar_volatile)
+      && match v.(gvar_init) with nil => false | _ => true end
       then PTree.set id (store_init_data_list (ablock_init Pbot) 0 v.(gvar_init)) rm
       else PTree.remove id rm
   end.
@@ -1677,13 +1678,15 @@ Proof.
   destruct (peq id id1). congruence. eapply H; eauto. 
 - rewrite PTree.gsspec in H0. destruct (peq id id1).
 + inv H0. rewrite PTree.gss. 
-  destruct (gvar_readonly v1 && negb (gvar_volatile v1)) eqn:RO.
-  InvBooleans. rewrite negb_true_iff in H2.
+  destruct (gvar_readonly v1 && negb (gvar_volatile v1) &&
+            match gvar_init v1 with nil => false | _ => true end) eqn:RO.
+  InvBooleans. rewrite negb_true_iff in H4.
   rewrite PTree.gss in H1.
   exists v1. intuition congruence. 
   rewrite PTree.grs in H1. discriminate.
 + rewrite PTree.gso. eapply H; eauto. 
-  destruct (gvar_readonly v1 && negb (gvar_volatile v1)).
+  destruct (gvar_readonly v1 && negb (gvar_volatile v1) &&
+            match gvar_init v1 with nil => false | _ => true end).
   rewrite PTree.gso in H1; auto. 
   rewrite PTree.gro in H1; auto. 
   apply Plt_ne. eapply Genv.genv_symb_range; eauto. 
