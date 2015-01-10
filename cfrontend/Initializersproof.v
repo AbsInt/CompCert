@@ -600,8 +600,8 @@ Proof.
   replace (idlsize data) with (idlsize data + 0) by omega.
   eapply (proj2 (transl_init_list_size il)). eauto.
   unfold lookup_composite in EQ. simpl. destruct (ge.(genv_cenv)!i) as [co|] eqn:?; inv EQ.
-  exploit ce_consistent; eauto. intros (A & B & C).
-  rewrite C. unfold sizeof_composite. rewrite Heqs. apply align_le.
+  erewrite co_consistent_sizeof by (eapply ce_consistent; eauto). 
+  unfold sizeof_composite. rewrite Heqs. apply align_le.
   destruct (co_alignof_two_p x) as [n EQ]. rewrite EQ. apply two_power_nat_pos.
 + (* union *)
   simpl in H. destruct ty; try discriminate.
@@ -612,8 +612,8 @@ Proof.
   rewrite padding_size. omega.
   apply Zle_trans with (sizeof_union ge (co_members x)). 
   eapply union_field_size; eauto.
-  exploit ce_consistent; eauto. intros (A & B & C).
-  rewrite C. unfold sizeof_composite. rewrite Heqs. apply align_le.
+  erewrite co_consistent_sizeof by (eapply ce_consistent; eauto). 
+  unfold sizeof_composite. rewrite Heqs. apply align_le.
   destruct (co_alignof_two_p x) as [n EQ]. rewrite EQ. apply two_power_nat_pos.
 
 - induction il.

@@ -168,6 +168,7 @@ Record composite : Type := {
   co_attr: attr;
   co_sizeof: Z;
   co_alignof: Z;
+  co_rank: nat;
   co_sizeof_pos: co_sizeof >= 0;
   co_alignof_two_p: exists n, co_alignof = two_power_nat n;
   co_sizeof_alignof: (co_alignof | co_sizeof)
@@ -662,6 +663,31 @@ Proof.
   destruct (env!i). apply X. apply Zdivide_0. 
 Qed.
 
+(** Type ranks *)
+
+(** The rank of a type is a nonnegative integer that measures the direct nesting
+  of arrays, struct and union types.  It does not take into account indirect
+  nesting such as a struct type that appears under a pointer or function type.
+  Type ranks ensure that type expressions (ignoring pointer and function types)
+  have an inductive structure. *)
+
+Fixpoint rank_type (ce: composite_env) (t: type) : nat :=
+  match t with
+  | Tarray t' _ _ => S (rank_type ce t')
+  | Tstruct id _ | Tunion id _ =>
+      match ce!id with
+      | None => O
+      | Some co => S (co_rank co)
+      end
+  | _ => O
+  end.
+
+Fixpoint rank_members (ce: composite_env) (m: members) : nat :=
+  match m with
+  | nil => 0%nat
+  | (id, t) :: m => Peano.max (rank_type ce t) (rank_members ce m)
+  end.
+
 (** ** C types and back-end types *)
 
 (** Extracting a type list from a function parameter declaration. *)
@@ -722,6 +748,15 @@ Fixpoint complete_members (env: composite_env) (m: members) : bool :=
   | (id, t) :: m' => complete_type env t && complete_members env m'
   end.
 
+Lemma complete_member:
+  forall env id t m,
+  In (id, t) m -> complete_members env m = true -> complete_type env t = true.
+Proof.
+  induction m as [|[id1 t1] m]; simpl; intuition auto.
+  InvBooleans; inv H1; auto.
+  InvBooleans; eauto.
+Qed.
+
 (** Convert a composite definition to its internal representation.
   The size and alignment of the composite are determined at this time.
   The alignment takes into account the [__Alignas] attributes
@@ -759,6 +794,7 @@ Program Definition composite_of_def
             co_attr := a;
             co_sizeof := align (sizeof_composite env su m) al;
             co_alignof := al;
+            co_rank := rank_members env m;
             co_sizeof_pos := _;
             co_alignof_two_p := _;
             co_sizeof_alignof := _ |}
@@ -793,8 +829,8 @@ Fixpoint add_composite_definitions (env: composite_env) (defs: list composite_de
 Definition build_composite_env (defs: list composite_definition) :=
   add_composite_definitions (PTree.empty _) defs.
 
-(** Stability properties for alignments and sizes.  If the type is
-  complete in a composite environment [env], its size and alignment
+(** Stability properties for alignments, sizes, and ranks.  If the type is
+  complete in a composite environment [env], its size, alignment, and rank
   are unchanged if we add more definitions to [env]. *)
 
 Section STABILITY.
@@ -825,6 +861,16 @@ Qed.
 
 Lemma complete_type_stable:
   forall t, complete_type env t = true -> complete_type env' t = true.
+Proof.
+  induction t; simpl; intros; auto.
+  destruct (env!i) as [co|] eqn:E; try discriminate. 
+  erewrite extends by eauto. auto.
+  destruct (env!i) as [co|] eqn:E; try discriminate. 
+  erewrite extends by eauto. auto.
+Qed.
+
+Lemma rank_type_stable:
+  forall t, complete_type env t = true -> rank_type env' t = rank_type env t.
 Proof.
   induction t; simpl; intros; auto.
   destruct (env!i) as [co|] eqn:E; try discriminate. 
@@ -874,6 +920,14 @@ Proof.
   InvBooleans. rewrite complete_type_stable by auto. rewrite IHm by auto. auto.
 Qed.
 
+Lemma rank_members_stable:
+  forall m, complete_members env m = true -> rank_members env' m = rank_members env m.
+Proof.
+  induction m as [|[id t]]; simpl; intros.
+  auto.
+  InvBooleans. f_equal; auto. apply rank_type_stable; auto.
+Qed.
+
 End STABILITY.
 
 Lemma add_composite_definitions_incr:
@@ -892,10 +946,16 @@ Qed.
   environment produced by [build_composite_env] are consistent with
   the sizes and alignments of the members of the composite types. *)
 
-Definition composite_consistent (env: composite_env) (co: composite) : Prop :=
-     complete_members env (co_members co) = true
-  /\ co_alignof co = align_attr (co_attr co) (alignof_composite env (co_members co))
-  /\ co_sizeof co = align (sizeof_composite env (co_su co) (co_members co)) (co_alignof co).
+Record composite_consistent (env: composite_env) (co: composite) : Prop := {
+  co_consistent_complete:
+     complete_members env (co_members co) = true;
+  co_consistent_alignof:
+     co_alignof co = align_attr (co_attr co) (alignof_composite env (co_members co));
+  co_consistent_sizeof:
+     co_sizeof co = align (sizeof_composite env (co_su co) (co_members co)) (co_alignof co);
+  co_consistent_rank:
+     co_rank co = rank_members env (co_members co)
+}.
 
 Definition composite_env_consistent (env: composite_env) : Prop :=
   forall id co, env!id = Some co -> composite_consistent env co.
@@ -920,20 +980,21 @@ Proof.
   { intros. unfold env1. rewrite PTree.gso; auto. congruence. }
   red; intros. unfold env1 in H2; rewrite PTree.gsspec in H2; destruct (peq id0 id).
 + subst id0. inversion H2; clear H2. subst co. 
-  red; rewrite <- H1; simpl. 
+(*
   assert (A: alignof_composite env1 m = alignof_composite env0 m)
   by (apply alignof_composite_stable; assumption).
-  rewrite A.
-  split. eapply complete_members_stable; eauto. 
-  split. auto.
-  f_equal. symmetry. apply sizeof_composite_stable; assumption.
-+ exploit H0; eauto. intros (P & Q & R).
-  assert (A: alignof_composite env1 (co_members co) = alignof_composite env0 (co_members co))
-  by (apply alignof_composite_stable; assumption).
-  red. rewrite A.
-  split. eapply complete_members_stable; eauto. 
-  split. auto.
-  rewrite R. f_equal. symmetry. apply sizeof_composite_stable; assumption.
+*)
+  rewrite <- H1; constructor; simpl.
+* eapply complete_members_stable; eauto. 
+* f_equal. symmetry. apply alignof_composite_stable; auto. 
+* f_equal. symmetry. apply sizeof_composite_stable; auto. 
+* symmetry. apply rank_members_stable; auto.
++ exploit H0; eauto. intros [P Q R S]. 
+  constructor; intros.
+* eapply complete_members_stable; eauto.
+* rewrite Q. f_equal. symmetry. apply alignof_composite_stable; auto.
+* rewrite R. f_equal. symmetry. apply sizeof_composite_stable; auto.
+* rewrite S. symmetry; apply rank_members_stable; auto.
 Qed.
 
 (** Moreover, every composite definition is reflected in the composite environment. *)
@@ -955,4 +1016,41 @@ Proof.
   exists x.
   split. eapply add_composite_definitions_incr; eauto. apply PTree.gss.
   subst x; auto.
+Qed.
+
+(** As a corollay, in a consistent environment, the rank of a composite type
+  is strictly greater than the ranks of its member types. *)
+
+Remark rank_type_members:
+  forall ce id t m, In (id, t) m -> (rank_type ce t <= rank_members ce m)%nat.
+Proof.
+  induction m; simpl; intros; intuition auto.
+  subst a. xomega.
+  xomega.
+Qed.
+
+Lemma rank_struct_member:
+  forall ce id a co id1 t1,
+  composite_env_consistent ce ->
+  ce!id = Some co ->
+  In (id1, t1) (co_members co) ->
+  (rank_type ce t1 < rank_type ce (Tstruct id a))%nat.
+Proof.
+  intros; simpl. rewrite H0.
+  erewrite co_consistent_rank by eauto.
+  exploit (rank_type_members ce); eauto.
+  omega.
+Qed.
+
+Lemma rank_union_member:
+  forall ce id a co id1 t1,
+  composite_env_consistent ce ->
+  ce!id = Some co ->
+  In (id1, t1) (co_members co) ->
+  (rank_type ce t1 < rank_type ce (Tunion id a))%nat.
+Proof.
+  intros; simpl. rewrite H0.
+  erewrite co_consistent_rank by eauto.
+  exploit (rank_type_members ce); eauto.
+  omega.
 Qed.
