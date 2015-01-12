@@ -68,21 +68,9 @@ module Linux_System =
           sprintf ".section	\"%s\",\"a%s%s\",@progbits"
             s (if wr then "w" else "") (if ex then "x" else "")
 
-    let filename_num : (string, int) Hashtbl.t = Hashtbl.create 7
-    let reset_file_line () = Hashtbl.clear filename_num
     let print_file_line oc file line =
-      if !Clflags.option_g && file <> "" then begin
-        let filenum = 
-          try
-            Hashtbl.find filename_num file
-          with Not_found ->
-            let n = Hashtbl.length filename_num + 1 in
-            Hashtbl.add filename_num file n;
-            fprintf oc "	.file	%d %S\n" n file;
-            n
-        in fprintf oc "	.loc	%d %s\n" filenum line
-      end
-    
+      PrintAnnot.print_file_line oc comment file line
+
     (* Emit .cfi directives *)      
     let cfi_startproc =
       if Configuration.asm_supports_cfi then

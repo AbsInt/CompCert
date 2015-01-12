@@ -29,6 +29,7 @@ type t = {
   sizeof_void: int option;
   sizeof_fun: int option;
   sizeof_wchar: int;
+  wchar_signed: bool;
   sizeof_size_t: int;
   sizeof_ptrdiff_t: int;
   alignof_ptr: int;
@@ -51,6 +52,7 @@ val i32lpll64 : t
 val il32pll64 : t
 val x86_32 : t
 val x86_64 : t
+val win32 : t
 val win64 : t
 val ppc_32_bigendian : t
 val arm_littleendian : t

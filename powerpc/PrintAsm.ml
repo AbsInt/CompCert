@@ -25,7 +25,7 @@ open PrintLinux
 open PrintDiab
 
 module AsmPrinter (Target : SYSTEM) =
-  (struct
+  struct
     include Target
 
 (* Basic printing functions *)
@@ -44,15 +44,14 @@ let section oc sec =
   fprintf oc "	%s\n" name
 
 let print_location oc loc =
-  if loc <> Cutil.no_loc then
-    print_file_line oc (fst loc) (string_of_int (snd loc))
-
+  if loc <> Cutil.no_loc then print_file_line oc (fst loc) (snd loc)
 
 (* Handling of annotations *)
 
 let print_annot_stmt oc txt targs args =
   if Str.string_match re_file_line txt 0 then begin
-    print_file_line oc (Str.matched_group 1 txt) (Str.matched_group 2 txt)
+    print_file_line oc (Str.matched_group 1 txt)
+                       (int_of_string (Str.matched_group 2 txt))
   end else begin
     fprintf oc "%s annotation: " comment;
     PrintAnnot.print_annot_stmt preg "R1" oc txt targs args
@@ -535,7 +534,7 @@ let print_globdef oc (name, gdef) =
   | Gfun f -> print_fundef oc name f
   | Gvar v -> print_var oc name v
 
-  end)
+  end
 
 type target = Linux | Diab
 
@@ -550,7 +549,7 @@ let print_program oc p =
   | Diab -> (module Diab_System:SYSTEM)):SYSTEM) in
   let module Printer = AsmPrinter(Target) in
   Printer.set_compilation_unit_addrs 1 2; (* TODO This is dummy code *)
-  Printer.reset_file_line();
+  PrintAnnot.reset_filenames();
   PrintAnnot.print_version_and_options oc Printer.comment;
   Printer.print_prologue oc;
   List.iter (Printer.print_globdef oc) p.prog_defs;

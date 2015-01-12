@@ -3,6 +3,11 @@
 - Upgraded Flocq to version 2.4.0.
 - cchecklink: added option "-files-from" to read .sdump file names
     from a file or from standard input.	  
+- Revised handling of "common" global declarations, fixes an issue
+    with uninitialized declarations of "const" global variables.
+- Use a Makefile instead of ocamlbuild to compile the OCaml code.
+
+
 
 Release 2.4, 2014-09-17
 =======================

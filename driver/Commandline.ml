@@ -52,7 +52,7 @@ let rec find_action text = function
   | (pat, act) :: rem ->
       if match_pattern text pat then Some act else find_action text rem
 
-let parse_array spec usage argv first last =
+let parse_array spec argv first last =
   (* Split the spec into Exact patterns (in a hashtable) and other patterns *)
   let exact_cases = (Hashtbl.create 29 : (string, action) Hashtbl.t) in
   let rec split_spec = function
@@ -69,10 +69,7 @@ let parse_array spec usage argv first last =
         with Not_found -> find_action s inexact_cases in
       match optact with
       | None ->
-          if s <> "-help" && s <> "--help" 
-          then eprintf "Unknown argument `%s'\n" s
-          else printf "%s" usage;
-          exit 2
+          eprintf "Unknown argument `%s'\n" s; exit 2
       | Some(Set r) ->
           r := true; parse (i+1)
       | Some(Unset r) ->
@@ -101,5 +98,5 @@ let parse_array spec usage argv first last =
     end
   in parse first
 
-let parse_cmdline spec usage =
-  parse_array spec usage Sys.argv 1 (Array.length Sys.argv - 1)
+let parse_cmdline spec =
+  parse_array spec Sys.argv 1 (Array.length Sys.argv - 1)

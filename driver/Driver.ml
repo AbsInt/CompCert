@@ -442,6 +442,9 @@ Interpreter mode:
   -all           Simulate all possible execution orders
 "
 
+let print_usage_and_exit _ =
+  printf "%s" usage_string; exit 0
+
 let language_support_options = [
   option_fbitfields; option_flongdouble;
   option_fstruct_return; option_fvararg_calls; option_funprototyped;
@@ -461,26 +464,9 @@ let cmdline_actions =
   let f_opt name ref =
     [Exact("-f" ^ name), Set ref; Exact("-fno-" ^ name), Unset ref] in
   [
-(* File arguments *)
-  Suffix ".c", Self (fun s ->
-      push_action process_c_file s; incr num_source_files);
-  Suffix ".i", Self (fun s ->
-      push_action process_i_file s; incr num_source_files);
-  Suffix ".p", Self (fun s ->
-      push_action process_i_file s; incr num_source_files);
-  Suffix ".cm", Self (fun s ->
-      push_action process_cminor_file s; incr num_source_files);
-  Suffix ".s", Self (fun s ->
-      push_action process_s_file s; incr num_source_files);
-  Suffix ".S", Self (fun s ->
-      push_action process_S_file s; incr num_source_files);
-  Suffix ".o", Self push_linker_arg;
-  Suffix ".a", Self push_linker_arg;
-  (* GCC compatibility: .o.ext files are also object files *)
-  _Regexp ".*\\.o\\.", Self push_linker_arg;
-  (* GCC compatibility: .h files can be preprocessed with -E *)
-  Suffix ".h", Self (fun s ->
-      push_action process_h_file s; incr num_source_files);
+(* Getting help *)
+  Exact "-help", Self print_usage_and_exit;
+  Exact "--help", Self print_usage_and_exit;
 (* Processing options *)
   Exact "-c", Set option_c;
   Exact "-E", Set option_E;
@@ -559,6 +545,32 @@ let cmdline_actions =
 (* Code generation options *)
   @ f_opt "fpu" option_ffpu
   @ f_opt "sse" option_ffpu (* backward compatibility *)
+  @ [
+(* Catch options that are not handled *)
+  Prefix "-", Self (fun s ->
+      eprintf "Unknown option `%s'\n" s; exit 2);
+(* File arguments *)
+  Suffix ".c", Self (fun s ->
+      push_action process_c_file s; incr num_source_files);
+  Suffix ".i", Self (fun s ->
+      push_action process_i_file s; incr num_source_files);
+  Suffix ".p", Self (fun s ->
+      push_action process_i_file s; incr num_source_files);
+  Suffix ".cm", Self (fun s ->
+      push_action process_cminor_file s; incr num_source_files);
+  Suffix ".s", Self (fun s ->
+      push_action process_s_file s; incr num_source_files);
+  Suffix ".S", Self (fun s ->
+      push_action process_S_file s; incr num_source_files);
+  Suffix ".o", Self push_linker_arg;
+  Suffix ".a", Self push_linker_arg;
+  (* GCC compatibility: .o.ext files and .so files are also object files *)
+  _Regexp ".*\\.o\\.", Self push_linker_arg;
+  Suffix ".so", Self push_linker_arg;
+  (* GCC compatibility: .h files can be preprocessed with -E *)
+  Suffix ".h", Self (fun s ->
+      push_action process_h_file s; incr num_source_files);
+  ]
 
 let _ =
   try
@@ -576,7 +588,7 @@ let _ =
       end;
     Builtins.set C2C.builtins;
     CPragmas.initialize();
-    parse_cmdline cmdline_actions usage_string;
+    parse_cmdline cmdline_actions;
     let nolink = !option_c || !option_S || !option_E || !option_interp in
     if nolink && !option_o <> None && !num_source_files >= 2 then begin
       eprintf "Ambiguous '-o' option (multiple source files)\n";

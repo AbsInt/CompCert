@@ -79,6 +79,12 @@ let rec remove_custom_attributes (names: string list)  (al: attributes) =
   | a :: tl ->
       a :: remove_custom_attributes names tl
 
+(* Is an attribute a ISO C standard attribute? *)
+
+let attr_is_standard = function
+  | AConst | AVolatile | ARestrict -> true
+  | AAlignas _ | Attr _ -> false
+
 (* Is an attribute type-related (true) or variable-related (false)? *)
 
 let attr_is_type_related = function
@@ -184,12 +190,28 @@ let alignas_attribute al =
 
 exception Incompat
 
-let combine_types ?(noattrs = false) env t1 t2 =
+type attr_handling =
+  | AttrCompat
+  | AttrIgnoreTop
+  | AttrIgnoreAll
 
-  let comp_attr a1 a2 =
-    if a1 = a2 then a2
-    else if noattrs then add_attributes a1 a2
-    else raise Incompat
+(* Check that [t1] and [t2] are compatible and produce a type that
+   combines the information in [t1] and [t2].  For example,
+   if [t1] is a prototyped function type and [t2] an unprototyped
+   function type, the combined type takes the prototype from [t1]. *)
+
+let combine_types mode env t1 t2 =
+
+  let comp_attr m a1 a2 =
+    if a1 = a2 then a2 else match m with
+    | AttrCompat ->
+        let (a1std, a1other) = List.partition attr_is_standard a1
+        and (a2std, a2other) = List.partition attr_is_standard a2 in
+        if a1std = a2std
+        then add_attributes a1std (add_attributes a1other a2other)
+        else raise Incompat
+    | AttrIgnoreTop | AttrIgnoreAll ->
+        add_attributes a1 a2
   and comp_base x1 x2 =
     if x1 = x2 then x2 else raise Incompat
   and comp_array_size sz1 sz2 =
@@ -211,18 +233,19 @@ let combine_types ?(noattrs = false) env t1 t2 =
         end
     | _ -> () in
 
-  let rec comp t1 t2 =
+  let rec comp m t1 t2 =
     match t1, t2 with
     | TVoid a1, TVoid a2 ->
-        TVoid(comp_attr a1 a2)
+        TVoid(comp_attr m a1 a2)
     | TInt(ik1, a1), TInt(ik2, a2) ->
-        TInt(comp_base ik1 ik2, comp_attr a1 a2)
+        TInt(comp_base ik1 ik2, comp_attr m a1 a2)
     | TFloat(fk1, a1), TFloat(fk2, a2) ->
-        TFloat(comp_base fk1 fk2, comp_attr a1 a2)
+        TFloat(comp_base fk1 fk2, comp_attr m a1 a2)
     | TPtr(ty1, a1), TPtr(ty2, a2) ->
-        TPtr(comp ty1 ty2, comp_attr a1 a2)
+        let m' = if m = AttrIgnoreTop then AttrCompat else m in
+        TPtr(comp m' ty1 ty2, comp_attr m a1 a2)
     | TArray(ty1, sz1, a1), TArray(ty2, sz2, a2) ->
-        TArray(comp ty1 ty2, comp_array_size sz1 sz2, comp_attr a1 a2)
+        TArray(comp m ty1 ty2, comp_array_size sz1 sz2, comp_attr m a1 a2)
     | TFun(ty1, params1, vararg1, a1), TFun(ty2, params2, vararg2, a2) ->
         let (params, vararg) =
           match params1, params2 with
@@ -231,26 +254,29 @@ let combine_types ?(noattrs = false) env t1 t2 =
           | Some l1, None -> List.iter comp_conv l1; (params1, vararg1)
           | Some l1, Some l2 ->
               if List.length l1 <> List.length l2 then raise Incompat;
-              (Some(List.map2 (fun (id1, ty1) (id2, ty2) -> (id2, comp ty1 ty2))
-                              l1 l2),
-               comp_base vararg1 vararg2)
+              let comp_param (id1, ty1) (id2, ty2) =
+                (id2, comp AttrIgnoreTop ty1 ty2) in
+              (Some(List.map2 comp_param l1 l2), comp_base vararg1 vararg2)
         in
-          TFun(comp ty1 ty2, params, vararg, comp_attr a1 a2)
-    | TNamed _, _ -> comp (unroll env t1) t2
-    | _, TNamed _ -> comp t1 (unroll env t2)
+        let m' = if m = AttrIgnoreTop then AttrCompat else m in
+        TFun(comp m' ty1 ty2, params, vararg, comp_attr m a1 a2)
+    | TNamed _, _ -> comp m (unroll env t1) t2
+    | _, TNamed _ -> comp m t1 (unroll env t2)
     | TStruct(s1, a1), TStruct(s2, a2) ->
-        TStruct(comp_base s1 s2, comp_attr a1 a2)
+        TStruct(comp_base s1 s2, comp_attr m a1 a2)
     | TUnion(s1, a1), TUnion(s2, a2) -> 
-        TUnion(comp_base s1 s2, comp_attr a1 a2)
+        TUnion(comp_base s1 s2, comp_attr m a1 a2)
     | TEnum(s1, a1), TEnum(s2, a2) -> 
-        TEnum(comp_base s1 s2, comp_attr a1 a2)
+        TEnum(comp_base s1 s2, comp_attr m a1 a2)
     | _, _ ->
         raise Incompat
 
-  in try Some(comp t1 t2) with Incompat -> None
+  in try Some(comp mode t1 t2) with Incompat -> None
 
-let compatible_types  ?noattrs env t1 t2 =
-  match combine_types ?noattrs env t1 t2 with Some _ -> true | None -> false
+(** Check whether two types are compatible. *)
+
+let compatible_types mode env t1 t2 =
+  match combine_types mode env t1 t2 with Some _ -> true | None -> false
 
 (* Naive placement algorithm for bit fields, might not match that
    of the compiler. *)
@@ -692,18 +718,30 @@ let find_matching_signed_ikind sz =
   else if sz = !config.sizeof_longlong then ILongLong
   else assert false
 
-let wchar_ikind = find_matching_unsigned_ikind !config.sizeof_wchar
+let wchar_ikind =
+  if !config.wchar_signed
+  then find_matching_signed_ikind !config.sizeof_wchar
+  else find_matching_unsigned_ikind !config.sizeof_wchar
 let size_t_ikind = find_matching_unsigned_ikind !config.sizeof_size_t
 let ptr_t_ikind = find_matching_unsigned_ikind !config.sizeof_ptr
 let ptrdiff_t_ikind = find_matching_signed_ikind !config.sizeof_ptrdiff_t
 
+(** The wchar_t type.  Try to get it from a typedef in the environment,
+  otherwise use the integer type described in !config. *)
+
+let wchar_type env =
+  try
+    let (id, def) = Env.lookup_typedef env "wchar_t" in TNamed(id, [])
+  with Env.Error _ ->
+    TInt(wchar_ikind, [])
+
 (** The type of a constant *)
 
-let type_of_constant = function
+let type_of_constant env = function
   | CInt(_, ik, _) -> TInt(ik, [])
   | CFloat(_, fk) -> TFloat(fk, [])
   | CStr _ -> TPtr(TInt(IChar, []), [])
-  | CWStr _ -> TPtr(TInt(wchar_ikind, []), [])
+  | CWStr _ -> TPtr(wchar_type env, [])
   | CEnum(_, _) -> TInt(IInt, [])
 
 (* Check that a C expression is a lvalue *)
@@ -744,10 +782,9 @@ let is_literal_0 e =
    Custom attributes can safely be dropped but must not be added. *)
 
 let valid_assignment_attr afrom ato =
-  let is_covariant = function Attr _ -> false | _ -> true in
-  let (afrom1, afrom2) = List.partition is_covariant afrom
-  and (ato1, ato2) = List.partition is_covariant ato in
-  incl_attributes afrom1 ato1 && incl_attributes ato2 afrom2
+  let (afromstd, afromcustom) = List.partition attr_is_standard afrom
+  and (atostd, atocustom) = List.partition attr_is_standard ato in
+  incl_attributes afromstd atostd && incl_attributes atocustom afromcustom
 
 (* Check that an assignment is allowed *)
 
@@ -759,9 +796,7 @@ let valid_assignment env from tto =
       valid_assignment_attr (attributes_of_type env ty)
                             (attributes_of_type env ty')
       && (is_void_type env ty || is_void_type env ty'
-          || compatible_types env
-               (erase_attributes_type env ty)
-               (erase_attributes_type env ty'))
+          || compatible_types AttrIgnoreTop env ty ty')
   | TStruct(s, _), TStruct(s', _) -> s = s'
   | TUnion(s, _), TUnion(s', _) -> s = s'
   | _, _ -> false
@@ -769,16 +804,19 @@ let valid_assignment env from tto =
 (* Check that a cast is allowed *)
 
 let valid_cast env tfrom tto =
-  compatible_types ~noattrs:true env tfrom tto ||
-  begin match unroll env tfrom, unroll env tto with
+  match unroll env tfrom, unroll env tto with
+  (* from any type to void *)
   | _, TVoid _ -> true
   (* from any int-or-pointer (with array and functions decaying to pointers)
      to any int-or-pointer *)
-  | (TInt _ | TPtr _ | TArray _ | TFun _ | TEnum _), (TInt _ | TPtr _ | TEnum _) -> true
+  | (TInt _ | TPtr _ | TArray _ | TFun _ | TEnum _),
+    (TInt _ | TPtr _ | TEnum _) -> true
   (* between int and float types *)
   | (TInt _ | TFloat _ | TEnum _), (TInt _ | TFloat _ | TEnum _) -> true
+  (* between identical composites *)
+  | TStruct(s1, _), TStruct(s2, _) -> s1 = s2
+  | TUnion(s1, _), TUnion(s2, _) -> s1 = s2
   | _, _ -> false
-  end
 
 (* Construct an integer constant *)
 

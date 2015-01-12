@@ -28,8 +28,7 @@ module type SYSTEM =
       val freg: out_channel -> freg -> unit
       val creg: out_channel -> int -> unit
       val name_of_section: section_name -> string
-      val print_file_line: out_channel -> string -> string -> unit
-      val reset_file_line: unit -> unit
+      val print_file_line: out_channel -> string -> int -> unit
       val cfi_startproc: out_channel -> unit
       val cfi_endproc: out_channel -> unit
       val cfi_adjust: out_channel -> int32 -> unit

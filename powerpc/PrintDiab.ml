@@ -72,22 +72,10 @@ module Diab_System =
 
     let filenum : (string, int) Hashtbl.t = Hashtbl.create 7
 
-    let last_file = ref ""
-
-    let reset_file_line () = 
-      last_file := "";
-      Hashtbl.clear filenum
-
     let print_file_line oc file line =
-      if !Clflags.option_g && file <> "" then begin
-        if file <> !last_file then begin
-          fprintf oc "	.d2file	%S\n" file;
-          last_file := file;
-          if not (Hashtbl.mem filenum file) then
-            Hashtbl.add filenum file (new_label ());
-        end;
-        fprintf oc "	.d2line	%s\n" line
-      end
+      PrintAnnot.print_file_line_d2 oc comment file line;
+      if !Clflags.option_g && file <> "" && not (Hashtbl.mem filenum file) then
+          Hashtbl.add filenum file (new_label ())
 
     (* Emit .cfi directives *)
     let cfi_startproc oc = ()
