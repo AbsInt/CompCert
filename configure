@@ -18,6 +18,7 @@ libdir='$(PREFIX)/lib/compcert'
 toolprefix=''
 target=''
 has_runtime_lib=true
+build_checklink=true
 
 usage='Usage: ./configure [options] target
 
@@ -64,6 +65,8 @@ while : ; do
         toolprefix="$2"; shift;;
     -no-runtime-lib)
         has_runtime_lib=false; shift;;
+    -no-checklink)
+        build_checklink=false; shift;;
     *)
         if test -n "$target"; then echo "$usage" 1>&2; exit 2; fi
         target="$1";;
@@ -89,7 +92,7 @@ case "$target" in
     casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
     clinker="${toolprefix}gcc"
     libmath="-lm"
-    cchecklink=true;;
+    cchecklink=build_checklink;;
   powerpc-eabi-diab|ppc-eabi-diab)
     arch="powerpc"
     model="standard"
@@ -101,7 +104,7 @@ case "$target" in
     asm_supports_cfi=false
     clinker="${toolprefix}dcc"
     libmath="-lm"
-    cchecklink=true;;
+    cchecklink=build_checklink;;
   arm*-*)
     arch="arm"
     case "$target" in

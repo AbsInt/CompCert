@@ -174,9 +174,9 @@ doc/coq2html.ml: doc/coq2html.mll
 	ocamllex -q doc/coq2html.mll
 
 tools/ndfun: tools/ndfun.ml
-	ocamlopt -o tools/ndfun str.cmxa tools/ndfun.ml
+	ocamlopt -o tools/ndfun str.cmxa tools/ndfun.ml $(LINKERSPEC)
 tools/modorder: tools/modorder.ml
-	ocamlopt -o tools/modorder str.cmxa tools/modorder.ml
+	ocamlopt -o tools/modorder str.cmxa tools/modorder.ml $(LINKERSPEC)
 
 latexdoc:
 	cd doc; $(COQDOC) --latex -o doc/doc.tex -g $(FILES)
