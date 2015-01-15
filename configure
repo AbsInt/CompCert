@@ -92,7 +92,7 @@ case "$target" in
     casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
     clinker="${toolprefix}gcc"
     libmath="-lm"
-    cchecklink=build_checklink;;
+    cchecklink=${build_checklink};;
   powerpc-eabi-diab|ppc-eabi-diab)
     arch="powerpc"
     model="standard"
@@ -104,7 +104,7 @@ case "$target" in
     asm_supports_cfi=false
     clinker="${toolprefix}dcc"
     libmath="-lm"
-    cchecklink=build_checklink;;
+    cchecklink=${build_checklink};;
   arm*-*)
     arch="arm"
     case "$target" in
