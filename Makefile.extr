@@ -157,7 +157,7 @@ clean:
 	for d in $(ALLDIRS); do rm -f $$d/*.cm[iox] $$d/*.o; done
 
 cleansource:
-        rm -f $(EXECUTABLES)
+	rm -f $(EXECUTABLES)
 	for d in $(ALLDIRS); do rm -f $$d/*.cm[iox] $$d/*.o; done
 
 # Generation of .depend.extr
