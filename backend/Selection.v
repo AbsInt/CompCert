@@ -66,8 +66,6 @@ Definition store (chunk: memory_chunk) (e1 e2: expr) :=
 
 Section SELECTION.
 
-Variable hf: helper_functions.
-
 Definition sel_constant (cst: Cminor.constant) : expr :=
   match cst with
   | Cminor.Ointconst n => Eop (Ointconst n) Enil
@@ -100,19 +98,19 @@ Definition sel_unop (op: Cminor.unary_operation) (arg: expr) : expr :=
   | Cminor.Ointuofsingle => intuofsingle arg
   | Cminor.Osingleofint => singleofint arg
   | Cminor.Osingleofintu => singleofintu arg
-  | Cminor.Onegl => negl hf arg
+  | Cminor.Onegl => negl arg
   | Cminor.Onotl => notl arg
   | Cminor.Ointoflong => intoflong arg
   | Cminor.Olongofint => longofint arg
   | Cminor.Olongofintu => longofintu arg
-  | Cminor.Olongoffloat => longoffloat hf arg
-  | Cminor.Olonguoffloat => longuoffloat hf arg
-  | Cminor.Ofloatoflong => floatoflong hf arg
-  | Cminor.Ofloatoflongu => floatoflongu hf arg
-  | Cminor.Olongofsingle => longofsingle hf arg
-  | Cminor.Olonguofsingle => longuofsingle hf arg
-  | Cminor.Osingleoflong => singleoflong hf arg
-  | Cminor.Osingleoflongu => singleoflongu hf arg
+  | Cminor.Olongoffloat => longoffloat arg
+  | Cminor.Olonguoffloat => longuoffloat arg
+  | Cminor.Ofloatoflong => floatoflong arg
+  | Cminor.Ofloatoflongu => floatoflongu arg
+  | Cminor.Olongofsingle => longofsingle arg
+  | Cminor.Olonguofsingle => longuofsingle arg
+  | Cminor.Osingleoflong => singleoflong arg
+  | Cminor.Osingleoflongu => singleoflongu arg
   end.
 
 Definition sel_binop (op: Cminor.binary_operation) (arg1 arg2: expr) : expr :=
@@ -138,19 +136,19 @@ Definition sel_binop (op: Cminor.binary_operation) (arg1 arg2: expr) : expr :=
   | Cminor.Osubfs => subfs arg1 arg2
   | Cminor.Omulfs => mulfs arg1 arg2
   | Cminor.Odivfs => divfs arg1 arg2
-  | Cminor.Oaddl => addl hf arg1 arg2
-  | Cminor.Osubl => subl hf arg1 arg2
-  | Cminor.Omull => mull hf arg1 arg2
-  | Cminor.Odivl => divl hf arg1 arg2
-  | Cminor.Odivlu => divlu hf arg1 arg2
-  | Cminor.Omodl => modl hf arg1 arg2
-  | Cminor.Omodlu => modlu hf arg1 arg2
+  | Cminor.Oaddl => addl arg1 arg2
+  | Cminor.Osubl => subl arg1 arg2
+  | Cminor.Omull => mull arg1 arg2
+  | Cminor.Odivl => divl arg1 arg2
+  | Cminor.Odivlu => divlu arg1 arg2
+  | Cminor.Omodl => modl arg1 arg2
+  | Cminor.Omodlu => modlu arg1 arg2
   | Cminor.Oandl => andl arg1 arg2
   | Cminor.Oorl => orl arg1 arg2
   | Cminor.Oxorl => xorl arg1 arg2
-  | Cminor.Oshll => shll hf arg1 arg2
-  | Cminor.Oshrl => shrl hf arg1 arg2
-  | Cminor.Oshrlu => shrlu hf arg1 arg2
+  | Cminor.Oshll => shll arg1 arg2
+  | Cminor.Oshrl => shrl arg1 arg2
+  | Cminor.Oshrlu => shrlu arg1 arg2
   | Cminor.Ocmp c => comp c arg1 arg2
   | Cminor.Ocmpu c => compu c arg1 arg2
   | Cminor.Ocmpf c => compf c arg1 arg2
@@ -248,7 +246,7 @@ Definition sel_switch_long :=
   sel_switch
     (fun arg n => cmpl Ceq arg (longconst (Int64.repr n)))
     (fun arg n => cmplu Clt arg (longconst (Int64.repr n)))
-    (fun arg ofs => subl hf arg (longconst (Int64.repr ofs)))
+    (fun arg ofs => subl arg (longconst (Int64.repr ofs)))
     lowlong.
 
 (** Conversion from Cminor statements to Cminorsel statements. *)
@@ -303,8 +301,8 @@ End SELECTION.
 
 (** Conversion of functions. *)
 
-Definition sel_function (hf: helper_functions) (ge: Cminor.genv) (f: Cminor.function) : res function :=
-  do body' <- sel_stmt hf ge f.(Cminor.fn_body);
+Definition sel_function (ge: Cminor.genv) (f: Cminor.function) : res function :=
+  do body' <- sel_stmt ge f.(Cminor.fn_body);
   OK (mkfunction
         f.(Cminor.fn_sig)
         f.(Cminor.fn_params)
@@ -312,12 +310,13 @@ Definition sel_function (hf: helper_functions) (ge: Cminor.genv) (f: Cminor.func
         f.(Cminor.fn_stackspace)
         body').
 
-Definition sel_fundef (hf: helper_functions) (ge: Cminor.genv) (f: Cminor.fundef) : res fundef :=
-  transf_partial_fundef (sel_function hf ge) f.
+Definition sel_fundef (ge: Cminor.genv) (f: Cminor.fundef) : res fundef :=
+  transf_partial_fundef (sel_function ge) f.
 
 (** Conversion of programs. *)
 
 Definition sel_program (p: Cminor.program) : res program :=
   let ge := Genv.globalenv p in
-  do hf <- get_helpers ge; transform_partial_program (sel_fundef hf ge) p.
+  do x <- check_helpers ge;
+  transform_partial_program (sel_fundef ge) p.
 

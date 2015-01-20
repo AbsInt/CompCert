@@ -90,11 +90,11 @@ CCOMP_OBJS:=$(shell $(MODORDER) driver/Driver.cmx)
 
 ccomp: $(CCOMP_OBJS)
 	@echo "Linking $@"
-	@$(OCAMLOPT) -o $@ $(LIBS) $+
+	@$(OCAMLOPT) -o $@ $(LIBS) $+ $(LINKERSPEC)
 
 ccomp.byte: $(CCOMP_OBJS:.cmx=.cmo)
 	@echo "Linking $@"
-	@$(OCAMLC) -o $@ $(LIBS:.cmxa=.cma) $+
+	@$(OCAMLC) -o $@ $(LIBS:.cmxa=.cma) $+ $(LINKERSPEC)
 
 ifeq ($(CCHECKLINK),true)
 
@@ -154,6 +154,10 @@ checklink/%.cmx: checklink/%.ml
 clean:
 	rm -f $(EXECUTABLES)
 	rm -f $(GENERATED)
+	for d in $(ALLDIRS); do rm -f $$d/*.cm[iox] $$d/*.o; done
+
+cleansource:
+	rm -f $(EXECUTABLES)
 	for d in $(ALLDIRS); do rm -f $$d/*.cm[iox] $$d/*.o; done
 
 # Generation of .depend.extr
