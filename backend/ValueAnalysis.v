@@ -180,13 +180,30 @@ Fixpoint store_init_data_list (ab: ablock) (p: Z) (idl: list init_data)
   | id :: idl' => store_init_data_list (store_init_data ab p id) (p + Genv.init_data_size id) idl'
   end.
 
+(** When CompCert is used in separate compilation mode, the [gvar_init]
+  initializer attached to a readonly global variable may not correspond
+  to the actual initial value of this global.  This occurs in two cases:
+- an [extern const] variable, which is represented by [gvar_init = nil];
+- a [const] variable without an explicit initializer, which is treated
+  by the linker as a "common" symbol, and is represented by
+  [gvar_init = Init_space sz :: nil].
+
+In both cases, the variable can be defined and initialized in another
+compilation unit which is later linked with the current compilation unit. *)
+
+Definition definitive_initializer (init: list init_data) : bool :=
+  match init with
+  | nil => false
+  | Init_space _ :: nil => false
+  | _ => true
+  end.
+
 Definition alloc_global (rm: romem) (idg: ident * globdef fundef unit): romem :=
   match idg with
   | (id, Gfun f) => 
       PTree.remove id rm
   | (id, Gvar v) =>
-      if v.(gvar_readonly) && negb v.(gvar_volatile)
-      && match v.(gvar_init) with nil => false | _ => true end
+      if v.(gvar_readonly) && negb v.(gvar_volatile) && definitive_initializer v.(gvar_init)
       then PTree.set id (store_init_data_list (ablock_init Pbot) 0 v.(gvar_init)) rm
       else PTree.remove id rm
   end.
@@ -1678,15 +1695,13 @@ Proof.
   destruct (peq id id1). congruence. eapply H; eauto. 
 - rewrite PTree.gsspec in H0. destruct (peq id id1).
 + inv H0. rewrite PTree.gss. 
-  destruct (gvar_readonly v1 && negb (gvar_volatile v1) &&
-            match gvar_init v1 with nil => false | _ => true end) eqn:RO.
+  destruct (gvar_readonly v1 && negb (gvar_volatile v1) && definitive_initializer (gvar_init v1)) eqn:RO.
   InvBooleans. rewrite negb_true_iff in H4.
   rewrite PTree.gss in H1.
   exists v1. intuition congruence. 
   rewrite PTree.grs in H1. discriminate.
 + rewrite PTree.gso. eapply H; eauto. 
-  destruct (gvar_readonly v1 && negb (gvar_volatile v1) &&
-            match gvar_init v1 with nil => false | _ => true end).
+  destruct (gvar_readonly v1 && negb (gvar_volatile v1) && definitive_initializer (gvar_init v1)).
   rewrite PTree.gso in H1; auto. 
   rewrite PTree.gro in H1; auto. 
   apply Plt_ne. eapply Genv.genv_symb_range; eauto. 
