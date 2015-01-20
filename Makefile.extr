@@ -90,11 +90,11 @@ CCOMP_OBJS:=$(shell $(MODORDER) driver/Driver.cmx)
 
 ccomp: $(CCOMP_OBJS)
 	@echo "Linking $@"
-	@$(OCAMLOPT) -o $@ $(LIBS) $+ $(LINKERSPEC)
+	@$(OCAMLOPT) -o $@ $(LIBS) $+
 
 ccomp.byte: $(CCOMP_OBJS:.cmx=.cmo)
 	@echo "Linking $@"
-	@$(OCAMLC) -o $@ $(LIBS:.cmxa=.cma) $+ $(LINKERSPEC)
+	@$(OCAMLC) -o $@ $(LIBS:.cmxa=.cma) $+
 
 ifeq ($(CCHECKLINK),true)
 
