@@ -57,12 +57,6 @@ Extract Constant Iteration.GenIter.iterate =>
 
 (* Selection *)
 
-Extract Constant SelectLong.get_helper =>
-  "fun ge s sg ->
-     Errors.OK (Camlcoq.intern_string (Camlcoq.camlstring_of_coqstring s))".
-Extract Constant SelectLong.get_builtin =>
-  "fun s sg ->
-     Errors.OK (Camlcoq.intern_string (Camlcoq.camlstring_of_coqstring s))".
 Extract Constant Selection.compile_switch => "Switchaux.compile_switch".
 
 (* RTLgen *)

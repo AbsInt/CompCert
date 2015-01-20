@@ -188,7 +188,60 @@ let builtins_generic = {
     "__compcert_va_float64",
         (TFloat(FDouble, []),
           [TPtr(TVoid [], [])],
-          false)
+          false);
+  (* Helper functions for int64 arithmetic *)
+    "__i64_dtos",
+        (TInt(ILongLong, []),
+         [TFloat(FDouble, [])],
+         false);
+    "__i64_dtou",
+        (TInt(IULongLong, []),
+         [TFloat(FDouble, [])],
+         false);
+    "__i64_stod",
+        (TFloat(FDouble, []),
+         [TInt(ILongLong, [])],
+         false);
+    "__i64_utod",
+        (TFloat(FDouble, []),
+         [TInt(IULongLong, [])],
+         false);
+    "__i64_stof",
+        (TFloat(FFloat, []),
+         [TInt(ILongLong, [])],
+         false);
+    "__i64_utof",
+        (TFloat(FFloat, []),
+         [TInt(IULongLong, [])],
+         false);
+    "__i64_sdiv",
+        (TInt(ILongLong, []),
+         [TInt(ILongLong, []); TInt(ILongLong, [])],
+         false);
+    "__i64_udiv",
+        (TInt(IULongLong, []),
+         [TInt(IULongLong, []); TInt(IULongLong, [])],
+         false);
+    "__i64_smod",
+        (TInt(ILongLong, []),
+         [TInt(ILongLong, []); TInt(ILongLong, [])],
+         false);
+    "__i64_umod",
+        (TInt(IULongLong, []),
+         [TInt(IULongLong, []); TInt(IULongLong, [])],
+         false);
+    "__i64_shl",
+        (TInt(ILongLong, []),
+         [TInt(ILongLong, []); TInt(IInt, [])],
+         false);
+    "__i64_shr",
+        (TInt(IULongLong, []),
+         [TInt(IULongLong, []); TInt(IInt, [])],
+         false);
+    "__i64_sar",
+        (TInt(ILongLong, []),
+         [TInt(ILongLong, []); TInt(IInt, [])],
+         false)
   ]
 }
 
