@@ -156,20 +156,20 @@ val default_argument_conversion : Env.t -> typ -> typ
 (* Special types *)
 val enum_ikind : ikind
   (* Integer kind for enum values.  Always [IInt]. *)
-val wchar_ikind : ikind
-  (* Integer kind for wchar_t type.  Unsigned. *)
-val size_t_ikind : ikind
+val wchar_ikind : unit -> ikind
+  (* Integer kind for wchar_t type. *)
+val size_t_ikind : unit -> ikind
   (* Integer kind for size_t type.  Unsigned. *)
-val ptr_t_ikind : ikind
+val ptr_t_ikind : unit -> ikind
   (* Integer kind for ptr_t type.  Smallest unsigned kind large enough
      to contain a pointer without information loss. *)
-val ptrdiff_t_ikind : ikind
+val ptrdiff_t_ikind : unit -> ikind
   (* Integer kind for ptrdiff_t type.  Smallest signed kind large enough
      to contain the difference between two pointers. *)
 
 (* Helpers for type-checking *)
 
-val type_of_constant : Env.t -> constant -> typ
+val type_of_constant : constant -> typ
   (* Return the type of the given constant. *)
 val type_of_member : Env.t -> field -> typ
   (* Return the type of accessing the given field [fld].

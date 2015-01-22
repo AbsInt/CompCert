@@ -138,7 +138,7 @@ let accessor_type loc env ty =
   match unroll env ty with
   | TInt(ik,_) -> (8 * sizeof_ikind ik, TInt(unsigned_ikind_of ik,[]))
   | TEnum(_,_) -> (8 * sizeof_ikind enum_ikind, TInt(unsigned_ikind_of enum_ikind,[]))
-  | TPtr _     -> (8 * !config.sizeof_ptr, TInt(ptr_t_ikind,[]))
+  | TPtr _     -> (8 * !config.sizeof_ptr, TInt(ptr_t_ikind(),[]))
   | _ ->
      error "%a: unsupported type for byte-swapped field access" formatloc loc;
      (32, TVoid [])

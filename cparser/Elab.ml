@@ -1198,7 +1198,7 @@ let elab_expr loc env a =
 
   | CONSTANT cst ->
       let cst' = elab_constant loc cst in
-      { edesc = EConst cst'; etyp = type_of_constant env cst' }
+      { edesc = EConst cst'; etyp = type_of_constant cst' }
 
 (* 6.5.2 Postfix expressions *)
 
@@ -1339,31 +1339,31 @@ let elab_expr loc env a =
         match b1.edesc with
         | EConst(CStr s) ->
             let sz = String.length s + 1 in
-            EConst(CInt(Int64.of_int sz, size_t_ikind, ""))
+            EConst(CInt(Int64.of_int sz, size_t_ikind(), ""))
         | EConst(CWStr s) ->
             let sz = (!config).sizeof_wchar * (List.length s + 1) in
-            EConst(CInt(Int64.of_int sz, size_t_ikind, ""))
+            EConst(CInt(Int64.of_int sz, size_t_ikind(), ""))
         | _ ->
             ESizeof b1.etyp in
-      { edesc = bdesc; etyp = TInt(size_t_ikind, []) }
+      { edesc = bdesc; etyp = TInt(size_t_ikind(), []) }
 
   | TYPE_SIZEOF (spec, dcl) ->
       let (ty, env') = elab_type loc env spec dcl in
       if wrap incomplete_type loc env' ty then
         err "incomplete type %a" Cprint.typ ty;
-      { edesc = ESizeof ty; etyp = TInt(size_t_ikind, []) }
+      { edesc = ESizeof ty; etyp = TInt(size_t_ikind(), []) }
 
   | EXPR_ALIGNOF a1 ->
       let b1 = elab a1 in
       if wrap incomplete_type loc env b1.etyp then
         err "incomplete type %a" Cprint.typ b1.etyp;
-      { edesc = EAlignof b1.etyp; etyp =  TInt(size_t_ikind, []) }
+      { edesc = EAlignof b1.etyp; etyp =  TInt(size_t_ikind(), []) }
 
   | TYPE_ALIGNOF (spec, dcl) ->
       let (ty, env') = elab_type loc env spec dcl in
       if wrap incomplete_type loc env' ty then
         err "incomplete type %a" Cprint.typ ty;
-      { edesc = EAlignof ty; etyp =  TInt(size_t_ikind, []) }
+      { edesc = EAlignof ty; etyp =  TInt(size_t_ikind(), []) }
 
   | UNARY(PLUS, a1) ->
       let b1 = elab a1 in
@@ -1465,7 +1465,7 @@ let elab_expr loc env a =
                 err "illegal pointer arithmetic in binary '-'";
               if wrap sizeof loc env ty1 = Some 0 then
                 err "subtraction between two pointers to zero-sized objects";
-              (TPtr(ty1, []), TInt(ptrdiff_t_ikind, []))
+              (TPtr(ty1, []), TInt(ptrdiff_t_ikind(), []))
           | _, _ -> error "type error in binary '-'"
         end in
       { edesc = EBinop(Osub, b1, b2, tyop); etyp = tyres }

@@ -137,8 +137,8 @@ let builtins_generic = {
          (TVoid [],
            [TPtr(TVoid [], []); 
             TPtr(TVoid [AConst], []); 
-            TInt(Cutil.size_t_ikind, []);
-            TInt(Cutil.size_t_ikind, [])],
+            TInt(IUInt, []);
+            TInt(IUInt, [])],
           false);
     (* Annotations *)
     "__builtin_annot",

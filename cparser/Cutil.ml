@@ -707,41 +707,34 @@ let type_of_member env fld =
 (** Special types *)
 
 let find_matching_unsigned_ikind sz =
+  assert (sz > 0);
   if sz = !config.sizeof_int then IUInt
   else if sz = !config.sizeof_long then IULong
   else if sz = !config.sizeof_longlong then IULongLong
   else assert false
 
 let find_matching_signed_ikind sz =
+  assert (sz > 0);
   if sz = !config.sizeof_int then IInt
   else if sz = !config.sizeof_long then ILong
   else if sz = !config.sizeof_longlong then ILongLong
   else assert false
 
-let wchar_ikind =
+let wchar_ikind () =
   if !config.wchar_signed
   then find_matching_signed_ikind !config.sizeof_wchar
   else find_matching_unsigned_ikind !config.sizeof_wchar
-let size_t_ikind = find_matching_unsigned_ikind !config.sizeof_size_t
-let ptr_t_ikind = find_matching_unsigned_ikind !config.sizeof_ptr
-let ptrdiff_t_ikind = find_matching_signed_ikind !config.sizeof_ptrdiff_t
-
-(** The wchar_t type.  Try to get it from a typedef in the environment,
-  otherwise use the integer type described in !config. *)
-
-let wchar_type env =
-  try
-    let (id, def) = Env.lookup_typedef env "wchar_t" in TNamed(id, [])
-  with Env.Error _ ->
-    TInt(wchar_ikind, [])
+let size_t_ikind () = find_matching_unsigned_ikind !config.sizeof_size_t
+let ptr_t_ikind () = find_matching_unsigned_ikind !config.sizeof_ptr
+let ptrdiff_t_ikind () = find_matching_signed_ikind !config.sizeof_ptrdiff_t
 
 (** The type of a constant *)
 
-let type_of_constant env = function
+let type_of_constant = function
   | CInt(_, ik, _) -> TInt(ik, [])
   | CFloat(_, fk) -> TFloat(fk, [])
   | CStr _ -> TPtr(TInt(IChar, []), [])
-  | CWStr _ -> TPtr(wchar_type env, [])
+  | CWStr _ -> TPtr(TInt(wchar_ikind(), []), [])
   | CEnum(_, _) -> TInt(IInt, [])
 
 (* Check that a C expression is a lvalue *)
@@ -829,14 +822,13 @@ let floatconst0 =
   { edesc = EConst(CFloat({hex=false; intPart="0"; fracPart="0"; exp="0"}, FDouble));
     etyp = TFloat(FDouble, []) }
 
-(* Construct the literal "0" with void * type *)
-
-let nullconst =
-  { edesc = EConst(CInt(0L, ptr_t_ikind, "0")); etyp = TPtr(TVoid [], []) }
-
 (* Construct a cast expression *)
 
 let ecast ty e = { edesc = ECast(ty, e); etyp = ty }
+
+(* Construct the literal "0" with void * type *)
+
+let nullconst = ecast (TPtr(TVoid [], [])) (intconst 0L IInt)
 
 (* Construct an assignment expression *)
 
