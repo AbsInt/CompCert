@@ -105,7 +105,7 @@ Proof.
 Qed.
 
 Lemma match_possible_traces:
-  forall (F V: Type) (ge: Genv.t F V) t1 t2 w0 w1 w2,
+  forall ge t1 t2 w0 w1 w2,
   match_traces ge t1 t2 -> possible_trace w0 t1 w1 -> possible_trace w0 t2 w2 ->
   t1 = t2 /\ w1 = w2.
 Proof.
@@ -508,14 +508,14 @@ Notation "s #1" := (fst s) (at level 9, format "s '#1'") : pair_scope.
 Notation "s #2" := (snd s) (at level 9, format "s '#2'") : pair_scope.
 Local Open Scope pair_scope.
 
-Definition world_sem : semantics := @Semantics
+Definition world_sem : semantics := @Semantics_gen
   (state L * world)%type
-  (funtype L)
-  (vartype L)
+  (genvtype L)
   (fun ge s t s' => step L ge s#1 t s'#1 /\ possible_trace s#2 t s'#2)
   (fun s => initial_state L s#1 /\ s#2 = initial_world)
   (fun s r => final_state L s#1 r)
-  (globalenv L).
+  (globalenv L)
+  (symbolenv L).
 
 (** If the original semantics is determinate, the world-aware semantics is deterministic. *)
 

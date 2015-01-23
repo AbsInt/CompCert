@@ -93,17 +93,17 @@ Inductive classify_cast_cases : Type :=
   | cast_case_s2bool                               (**r single -> bool *)
   | cast_case_l2bool                               (**r long -> bool *)
   | cast_case_p2bool                               (**r pointer -> bool *)
-  | cast_case_struct (id1: ident) (fld1: fieldlist) (id2: ident) (fld2: fieldlist) (**r struct -> struct *)
-  | cast_case_union (id1: ident) (fld1: fieldlist) (id2: ident) (fld2: fieldlist) (**r union -> union *)
+  | cast_case_struct (id1 id2: ident)              (**r struct -> struct *)
+  | cast_case_union  (id1 id2: ident)              (**r union -> union *)
   | cast_case_void                                 (**r any -> void *)
   | cast_case_default.
 
 Definition classify_cast (tfrom tto: type) : classify_cast_cases :=
   match tto, tfrom with
-  | Tint I32 si2 _, (Tint _ _ _ | Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_neutral
+  | Tint I32 si2 _, (Tint _ _ _ | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_neutral
   | Tint IBool _ _, Tfloat F64 _ => cast_case_f2bool
   | Tint IBool _ _, Tfloat F32 _ => cast_case_s2bool
-  | Tint IBool _ _, (Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_p2bool
+  | Tint IBool _ _, (Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_p2bool
   | Tint sz2 si2 _, Tint sz1 si1 _ => cast_case_i2i sz2 si2
   | Tint sz2 si2 _, Tfloat F64 _ => cast_case_f2i sz2 si2
   | Tint sz2 si2 _, Tfloat F32 _ => cast_case_s2i sz2 si2
@@ -113,7 +113,7 @@ Definition classify_cast (tfrom tto: type) : classify_cast_cases :=
   | Tfloat F32 _, Tfloat F64 _ => cast_case_f2s
   | Tfloat F64 _, Tint sz1 si1 _ => cast_case_i2f si1
   | Tfloat F32 _, Tint sz1 si1 _ => cast_case_i2s si1
-  | (Tpointer _ _ | Tcomp_ptr _ _), (Tint _ _ _ | Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_neutral
+  | Tpointer _ _, (Tint _ _ _ | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_neutral
   | Tlong _ _, Tlong _ _ => cast_case_l2l
   | Tlong _ _, Tint sz1 si1 _ => cast_case_i2l si1
   | Tint IBool _ _, Tlong _ _ => cast_case_l2bool
@@ -122,10 +122,10 @@ Definition classify_cast (tfrom tto: type) : classify_cast_cases :=
   | Tlong si2 _, Tfloat F32 _ => cast_case_s2l si2
   | Tfloat F64 _, Tlong si1 _ => cast_case_l2f si1
   | Tfloat F32 _, Tlong si1 _ => cast_case_l2s si1
-  | (Tpointer _ _ | Tcomp_ptr _ _), Tlong _ _ => cast_case_l2i I32 Unsigned
-  | Tlong si2 _, (Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_i2l si2
-  | Tstruct id2 fld2 _, Tstruct id1 fld1 _ => cast_case_struct id1 fld1 id2 fld2
-  | Tunion id2 fld2 _, Tunion id1 fld1 _ => cast_case_union id1 fld1 id2 fld2
+  | Tpointer _ _, Tlong _ _ => cast_case_l2i I32 Unsigned
+  | Tlong si2 _, (Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_i2l si2
+  | Tstruct id2 _, Tstruct id1 _ => cast_case_struct id1 id2
+  | Tunion id2 _, Tunion id1 _ => cast_case_union id1 id2
   | Tvoid, _ => cast_case_void
   | _, _ => cast_case_default
   end.
@@ -325,16 +325,16 @@ Definition sem_cast (v: val) (t1 t2: type) : option val :=
           end
       | _ => None
       end
-  | cast_case_struct id1 fld1 id2 fld2 =>
+  | cast_case_struct id1 id2 =>
       match v with
       | Vptr b ofs =>
-          if ident_eq id1 id2 && fieldlist_eq fld1 fld2 then Some v else None
+          if ident_eq id1 id2 then Some v else None
       | _ => None
       end
-  | cast_case_union id1 fld1 id2 fld2 =>
+  | cast_case_union id1 id2 =>
       match v with
       | Vptr b ofs =>
-          if ident_eq id1 id2 && fieldlist_eq fld1 fld2 then Some v else None
+          if ident_eq id1 id2 then Some v else None
       | _ => None
       end
   | cast_case_void =>
@@ -359,7 +359,7 @@ Inductive classify_bool_cases : Type :=
 Definition classify_bool (ty: type) : classify_bool_cases :=
   match typeconv ty with
   | Tint _ _ _ => bool_case_i
-  | Tpointer _ _ | Tcomp_ptr _ _ => bool_case_p
+  | Tpointer _ _ => bool_case_p
   | Tfloat F64 _ => bool_case_f
   | Tfloat F32 _ => bool_case_s
   | Tlong _ _ => bool_case_l
@@ -401,7 +401,6 @@ Definition bool_val (v: val) (t: type) : option bool :=
       end
   | bool_default => None
   end.
-
 
 (** ** Unary operators *)
 
@@ -639,32 +638,32 @@ Definition classify_add (ty1: type) (ty2: type) :=
   | _, _ => add_default
   end.
 
-Definition sem_add (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+Definition sem_add (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
   match classify_add t1 t2 with 
   | add_case_pi ty =>                 (**r pointer plus integer *)
       match v1,v2 with
       | Vptr b1 ofs1, Vint n2 => 
-        Some (Vptr b1 (Int.add ofs1 (Int.mul (Int.repr (sizeof ty)) n2)))
+        Some (Vptr b1 (Int.add ofs1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
       | _,  _ => None
       end   
   | add_case_ip ty =>                 (**r integer plus pointer *)
       match v1,v2 with
       | Vint n1, Vptr b2 ofs2 => 
-        Some (Vptr b2 (Int.add ofs2 (Int.mul (Int.repr (sizeof ty)) n1)))
+        Some (Vptr b2 (Int.add ofs2 (Int.mul (Int.repr (sizeof cenv ty)) n1)))
       | _,  _ => None
       end   
   | add_case_pl ty =>                 (**r pointer plus long *)
       match v1,v2 with
       | Vptr b1 ofs1, Vlong n2 => 
         let n2 := Int.repr (Int64.unsigned n2) in
-        Some (Vptr b1 (Int.add ofs1 (Int.mul (Int.repr (sizeof ty)) n2)))
+        Some (Vptr b1 (Int.add ofs1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
       | _,  _ => None
       end   
   | add_case_lp ty =>                 (**r long plus pointer *)
       match v1,v2 with
       | Vlong n1, Vptr b2 ofs2 => 
         let n1 := Int.repr (Int64.unsigned n1) in
-        Some (Vptr b2 (Int.add ofs2 (Int.mul (Int.repr (sizeof ty)) n1)))
+        Some (Vptr b2 (Int.add ofs2 (Int.mul (Int.repr (sizeof cenv ty)) n1)))
       | _,  _ => None
       end   
   | add_default =>
@@ -692,27 +691,27 @@ Definition classify_sub (ty1: type) (ty2: type) :=
   | _, _ => sub_default
   end.
 
-Definition sem_sub (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+Definition sem_sub (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
   match classify_sub t1 t2 with
   | sub_case_pi ty =>            (**r pointer minus integer *)
       match v1,v2 with
       | Vptr b1 ofs1, Vint n2 => 
-          Some (Vptr b1 (Int.sub ofs1 (Int.mul (Int.repr (sizeof ty)) n2)))
+          Some (Vptr b1 (Int.sub ofs1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
       | _,  _ => None
       end
   | sub_case_pl ty =>            (**r pointer minus long *)
       match v1,v2 with
       | Vptr b1 ofs1, Vlong n2 => 
           let n2 := Int.repr (Int64.unsigned n2) in
-          Some (Vptr b1 (Int.sub ofs1 (Int.mul (Int.repr (sizeof ty)) n2)))
+          Some (Vptr b1 (Int.sub ofs1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
       | _,  _ => None
       end
   | sub_case_pp ty =>          (**r pointer minus pointer *)
       match v1,v2 with
       | Vptr b1 ofs1, Vptr b2 ofs2 =>
           if eq_block b1 b2 then
-            if Int.eq (Int.repr (sizeof ty)) Int.zero then None
-            else Some (Vint (Int.divu (Int.sub ofs1 ofs2) (Int.repr (sizeof ty))))
+            if Int.eq (Int.repr (sizeof cenv ty)) Int.zero then None
+            else Some (Vint (Int.divu (Int.sub ofs1 ofs2) (Int.repr (sizeof cenv ty))))
           else None
       | _, _ => None
       end
@@ -983,12 +982,13 @@ Definition sem_unary_operation
   end.
 
 Definition sem_binary_operation
+    (cenv: composite_env)
     (op: binary_operation)
     (v1: val) (t1: type) (v2: val) (t2:type)
     (m: mem): option val :=
   match op with
-  | Oadd => sem_add v1 t1 v2 t2
-  | Osub => sem_sub v1 t1 v2 t2 
+  | Oadd => sem_add cenv v1 t1 v2 t2
+  | Osub => sem_sub cenv v1 t1 v2 t2 
   | Omul => sem_mul v1 t1 v2 t2
   | Omod => sem_mod v1 t1 v2 t2
   | Odiv => sem_div v1 t1 v2 t2 
@@ -1005,10 +1005,10 @@ Definition sem_binary_operation
   | Oge => sem_cmp Cge v1 t1 v2 t2 m
   end.
 
-Definition sem_incrdecr (id: incr_or_decr) (v: val) (ty: type) :=
+Definition sem_incrdecr (cenv: composite_env) (id: incr_or_decr) (v: val) (ty: type) :=
   match id with
-  | Incr => sem_add v ty (Vint Int.one) type_int32s
-  | Decr => sem_sub v ty (Vint Int.one) type_int32s
+  | Incr => sem_add cenv v ty (Vint Int.one) type_int32s
+  | Decr => sem_sub cenv v ty (Vint Int.one) type_int32s
   end.
 
 Definition incrdecr_type (ty: type) :=
@@ -1086,8 +1086,8 @@ Proof.
 - destruct (cast_single_int si2 f0); inv H1; TrivialInject.
 - destruct (cast_float_long si2 f0); inv H1; TrivialInject.
 - destruct (cast_single_long si2 f0); inv H1; TrivialInject.
-- destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H2; TrivialInject. econstructor; eauto.
-- destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H2; TrivialInject. econstructor; eauto.
+- destruct (ident_eq id1 id2); inv H2; TrivialInject. econstructor; eauto.
+- destruct (ident_eq id1 id2); inv H2; TrivialInject. econstructor; eauto.
 - econstructor; eauto.
 Qed.
 
@@ -1191,10 +1191,10 @@ Proof.
 Qed.
 
 Lemma sem_binary_operation_inj:
-  forall op v1 ty1 v2 ty2 v tv1 tv2,
-  sem_binary_operation op v1 ty1 v2 ty2 m = Some v ->
+  forall cenv op v1 ty1 v2 ty2 v tv1 tv2,
+  sem_binary_operation cenv op v1 ty1 v2 ty2 m = Some v ->
   val_inject f v1 tv1 -> val_inject f v2 tv2 ->
-  exists tv, sem_binary_operation op tv1 ty1 tv2 ty2 m' = Some tv /\ val_inject f v tv.
+  exists tv, sem_binary_operation cenv op tv1 ty1 tv2 ty2 m' = Some tv /\ val_inject f v tv.
 Proof.
   unfold sem_binary_operation; intros; destruct op.
 - (* add *)
@@ -1215,7 +1215,7 @@ Proof.
   + inv H0; inv H1; inv H. TrivialInject.
     destruct (eq_block b1 b0); try discriminate. subst b1. 
     rewrite H0 in H2; inv H2. rewrite dec_eq_true. 
-    destruct (Int.eq (Int.repr (sizeof ty)) Int.zero); inv H3.
+    destruct (Int.eq (Int.repr (sizeof cenv ty)) Int.zero); inv H3.
     rewrite Int.sub_shifted. TrivialInject.
   + inv H0; inv H1; inv H. TrivialInject.
     econstructor. eauto. rewrite Int.sub_add_l. auto.
@@ -1278,11 +1278,11 @@ Qed.
 End GENERIC_INJECTION.
 
 Lemma sem_binary_operation_inject:
-  forall f m m' op v1 ty1 v2 ty2 v tv1 tv2,
-  sem_binary_operation op v1 ty1 v2 ty2 m = Some v ->
+  forall f m m' cenv op v1 ty1 v2 ty2 v tv1 tv2,
+  sem_binary_operation cenv op v1 ty1 v2 ty2 m = Some v ->
   val_inject f v1 tv1 -> val_inject f v2 tv2 ->
   Mem.inject f m m' ->
-  exists tv, sem_binary_operation op tv1 ty1 tv2 ty2 m' = Some tv /\ val_inject f v tv.
+  exists tv, sem_binary_operation cenv op tv1 ty1 tv2 ty2 m' = Some tv /\ val_inject f v tv.
 Proof.
   intros. eapply sem_binary_operation_inj; eauto. 
   intros; eapply Mem.valid_pointer_inject_val; eauto.
@@ -1309,7 +1309,7 @@ Proof.
   assert (A: classify_bool t =
     match t with
     | Tint _ _ _ => bool_case_i
-    | Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ _ => bool_case_p
+    | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _ => bool_case_p
     | Tfloat F64 _ => bool_case_f
     | Tfloat F32 _ => bool_case_s
     | Tlong _ _ => bool_case_l
@@ -1332,7 +1332,6 @@ Proof.
   destruct (Int.eq i Int.zero); auto. 
   destruct (Int.eq i Int.zero); auto. 
   destruct (Int.eq i Int.zero); auto. 
-  destruct (Int.eq i0 Int.zero); auto. 
 Qed.
 
 (** Relation between Boolean value and Boolean negation. *)
@@ -1524,7 +1523,6 @@ Proof.
 Qed.
 
 End ArithConv.
-
 
 
 
