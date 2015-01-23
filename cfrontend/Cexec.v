@@ -149,7 +149,7 @@ Lemma eventval_of_val_complete:
   forall ev t v, eventval_match ge ev t v -> eventval_of_val v t = Some ev.
 Proof.
   induction 1; simpl; auto.
-  rewrite (Genv.find_invert_symbol _ _ H0). rewrite H. auto. 
+  rewrite (Genv.find_invert_symbol _ _ H0). simpl in H; rewrite H. auto. 
 Qed.
 
 Lemma list_eventval_of_val_sound:
@@ -181,14 +181,14 @@ Qed.
 Lemma val_of_eventval_complete:
   forall ev t v, eventval_match ge ev t v -> val_of_eventval ev t = Some v.
 Proof.
-  induction 1; simpl; auto. rewrite H, H0; auto.
+  induction 1; simpl; auto. simpl in *. rewrite H, H0; auto.
 Qed.
 
 (** Volatile memory accesses. *)
 
 Definition do_volatile_load (w: world) (chunk: memory_chunk) (m: mem) (b: block) (ofs: int) 
                              : option (world * trace * val) :=
-  if block_is_volatile ge b then
+  if Genv.block_is_volatile ge b then
     do id <- Genv.invert_symbol ge b;
     match nextworld_vload w chunk id ofs with
     | None => None
@@ -202,7 +202,7 @@ Definition do_volatile_load (w: world) (chunk: memory_chunk) (m: mem) (b: block)
 
 Definition do_volatile_store (w: world) (chunk: memory_chunk) (m: mem) (b: block) (ofs: int) (v: val)
                              : option (world * trace * mem) :=
-  if block_is_volatile ge b then
+  if Genv.block_is_volatile ge b then
     do id <- Genv.invert_symbol ge b;
     do ev <- eventval_of_val (Val.load_result chunk v) (type_of_chunk chunk);
     do w' <- nextworld_vstore w chunk id ofs ev;
@@ -239,7 +239,7 @@ Lemma do_volatile_load_complete:
   volatile_load ge chunk m b ofs t v -> possible_trace w t w' ->
   do_volatile_load w chunk m b ofs = Some(w', t, v).
 Proof.
-  unfold do_volatile_load; intros. inv H. 
+  unfold do_volatile_load; intros. inv H; simpl in *.
   rewrite H1. rewrite (Genv.find_invert_symbol _ _ H2). inv H0. inv H8. inv H6. rewrite H9.
   rewrite (val_of_eventval_complete _ _ _ H3). auto.
   rewrite H1. rewrite H2. inv H0. auto.
@@ -262,7 +262,7 @@ Lemma do_volatile_store_complete:
   volatile_store ge chunk m b ofs v t m' -> possible_trace w t w' ->
   do_volatile_store w chunk m b ofs v = Some(w', t, m').
 Proof.
-  unfold do_volatile_store; intros. inv H. 
+  unfold do_volatile_store; intros. inv H; simpl in *.
   rewrite H1. rewrite (Genv.find_invert_symbol _ _ H2).
   rewrite (eventval_of_val_complete _ _ _ H3).
   inv H0. inv H8. inv H6. rewrite H9. auto.
@@ -284,31 +284,31 @@ Definition do_deref_loc (w: world) (ty: type) (m: mem) (b: block) (ofs: int) : o
   end.
 
 Definition assign_copy_ok (ty: type) (b: block) (ofs: int) (b': block) (ofs': int) : Prop :=
-  (alignof_blockcopy ty | Int.unsigned ofs') /\ (alignof_blockcopy ty | Int.unsigned ofs) /\
+  (alignof_blockcopy ge ty | Int.unsigned ofs') /\ (alignof_blockcopy ge ty | Int.unsigned ofs) /\
   (b' <> b \/ Int.unsigned ofs' = Int.unsigned ofs
-           \/ Int.unsigned ofs' + sizeof ty <= Int.unsigned ofs
-           \/ Int.unsigned ofs + sizeof ty <= Int.unsigned ofs').
+           \/ Int.unsigned ofs' + sizeof ge ty <= Int.unsigned ofs
+           \/ Int.unsigned ofs + sizeof ge ty <= Int.unsigned ofs').
 
 Remark check_assign_copy:
   forall (ty: type) (b: block) (ofs: int) (b': block) (ofs': int),
   { assign_copy_ok ty b ofs b' ofs' } + {~ assign_copy_ok ty b ofs b' ofs' }.
 Proof with try (right; intuition omega).
   intros. unfold assign_copy_ok. 
-  assert (alignof_blockcopy ty > 0) by apply alignof_blockcopy_pos.
-  destruct (Zdivide_dec (alignof_blockcopy ty) (Int.unsigned ofs')); auto...
-  destruct (Zdivide_dec (alignof_blockcopy ty) (Int.unsigned ofs)); auto...
+  assert (alignof_blockcopy ge ty > 0) by apply alignof_blockcopy_pos.
+  destruct (Zdivide_dec (alignof_blockcopy ge ty) (Int.unsigned ofs')); auto...
+  destruct (Zdivide_dec (alignof_blockcopy ge ty) (Int.unsigned ofs)); auto...
   assert (Y: {b' <> b \/
               Int.unsigned ofs' = Int.unsigned ofs \/
-              Int.unsigned ofs' + sizeof ty <= Int.unsigned ofs \/
-              Int.unsigned ofs + sizeof ty <= Int.unsigned ofs'} +
+              Int.unsigned ofs' + sizeof ge ty <= Int.unsigned ofs \/
+              Int.unsigned ofs + sizeof ge ty <= Int.unsigned ofs'} +
            {~(b' <> b \/
               Int.unsigned ofs' = Int.unsigned ofs \/
-              Int.unsigned ofs' + sizeof ty <= Int.unsigned ofs \/
-              Int.unsigned ofs + sizeof ty <= Int.unsigned ofs')}).
+              Int.unsigned ofs' + sizeof ge ty <= Int.unsigned ofs \/
+              Int.unsigned ofs + sizeof ge ty <= Int.unsigned ofs')}).
   destruct (eq_block b' b); auto.
   destruct (zeq (Int.unsigned ofs') (Int.unsigned ofs)); auto.
-  destruct (zle (Int.unsigned ofs' + sizeof ty) (Int.unsigned ofs)); auto.
-  destruct (zle (Int.unsigned ofs + sizeof ty) (Int.unsigned ofs')); auto.
+  destruct (zle (Int.unsigned ofs' + sizeof ge ty) (Int.unsigned ofs)); auto.
+  destruct (zle (Int.unsigned ofs + sizeof ge ty) (Int.unsigned ofs')); auto.
   right; intuition omega.
   destruct Y... left; intuition omega. 
 Defined.
@@ -324,7 +324,7 @@ Definition do_assign_loc (w: world) (ty: type) (m: mem) (b: block) (ofs: int) (v
       match v with
       | Vptr b' ofs' =>
           if check_assign_copy ty b ofs b' ofs' then
-            do bytes <- Mem.loadbytes m b' (Int.unsigned ofs') (sizeof ty);
+            do bytes <- Mem.loadbytes m b' (Int.unsigned ofs') (sizeof ge ty);
             do m' <- Mem.storebytes m b (Int.unsigned ofs) bytes;
             Some(w, E0, m')
           else None
@@ -387,7 +387,7 @@ Qed.
 (** External calls *)
 
 Variable do_external_function:
-  ident -> signature -> genv -> world -> list val -> mem -> option (world * trace * val * mem).
+  ident -> signature -> Senv.t -> world -> list val -> mem -> option (world * trace * val * mem).
 
 Hypothesis do_external_function_sound:
   forall id sg ge vargs m t vres m' w w',
@@ -401,7 +401,7 @@ Hypothesis do_external_function_complete:
   do_external_function id sg ge w vargs m = Some(w', t, vres, m').
 
 Variable do_inline_assembly:
-  ident -> genv -> world -> list val -> mem -> option (world * trace * val * mem).
+  ident -> Senv.t -> world -> list val -> mem -> option (world * trace * val * mem).
 
 Hypothesis do_inline_assembly_sound:
   forall txt ge vargs m t vres m' w w',
@@ -573,11 +573,11 @@ Proof with try congruence.
 (* EF_vstore *)
   auto.
 (* EF_vload_global *)
-  rewrite volatile_load_global_charact.
+  rewrite volatile_load_global_charact; simpl.
   unfold do_ef_volatile_load_global. destruct (Genv.find_symbol ge)...
   intros. exploit VLOAD; eauto. intros [A B]. split; auto. exists b; auto.
 (* EF_vstore_global *)
-  rewrite volatile_store_global_charact.
+  rewrite volatile_store_global_charact; simpl.
   unfold do_ef_volatile_store_global. destruct (Genv.find_symbol ge)...
   intros. exploit VSTORE; eauto. intros [A B]. split; auto. exists b; auto.
 (* EF_malloc *)
@@ -633,10 +633,10 @@ Proof.
 (* EF_vstore *)
   auto.
 (* EF_vload_global *)
-  rewrite volatile_load_global_charact in H. destruct H as [b [P Q]]. 
+  rewrite volatile_load_global_charact in H; simpl in H. destruct H as [b [P Q]]. 
   unfold do_ef_volatile_load_global. rewrite P. auto. 
 (* EF_vstore *)
-  rewrite volatile_store_global_charact in H. destruct H as [b [P Q]]. 
+  rewrite volatile_store_global_charact in H; simpl in H. destruct H as [b [P Q]]. 
   unfold do_ef_volatile_store_global. rewrite P. auto. 
 (* EF_malloc *)
   inv H; unfold do_ef_malloc. 
@@ -746,12 +746,14 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       match is_val r with
       | Some(Vptr b ofs, ty') =>
           match ty' with
-          | Tstruct id fList _ =>
-              match field_offset f fList with
+          | Tstruct id _ =>
+              do co <- ge.(genv_cenv)!id;
+              match field_offset ge f (co_members co) with
               | Error _ => stuck
               | OK delta => topred (Lred (Eloc b (Int.add ofs (Int.repr delta)) ty) m)
               end
-          | Tunion id fList _ =>
+          | Tunion id _ =>
+              do co <- ge.(genv_cenv)!id;
               topred (Lred (Eloc b ofs ty) m)
           | _ => stuck
           end
@@ -787,7 +789,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
   | RV, Ebinop op r1 r2 ty =>
       match is_val r1, is_val r2 with
       | Some(v1, ty1), Some(v2, ty2) =>
-          do v <- sem_binary_operation op v1 ty1 v2 ty2 m;
+          do v <- sem_binary_operation ge op v1 ty1 v2 ty2 m;
           topred (Rred (Eval v ty) m E0)
       | _, _ =>
          incontext2 (fun x => Ebinop op x r2 ty) (step_expr RV r1 m)
@@ -828,9 +830,9 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
           incontext (fun x => Econdition x r2 r3 ty) (step_expr RV r1 m)
       end
   | RV, Esizeof ty' ty =>
-      topred (Rred (Eval (Vint (Int.repr (sizeof ty'))) ty) m E0)
+      topred (Rred (Eval (Vint (Int.repr (sizeof ge ty'))) ty) m E0)
   | RV, Ealignof ty' ty =>
-      topred (Rred (Eval (Vint (Int.repr (alignof ty'))) ty) m E0)
+      topred (Rred (Eval (Vint (Int.repr (alignof ge ty'))) ty) m E0)
   | RV, Eassign l1 r2 ty =>
       match is_loc l1, is_val r2 with
       | Some(b, ofs, ty1), Some(v2, ty2) =>
@@ -988,8 +990,8 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
   | Efield (Eval v ty1) f ty =>
       exists b, exists ofs, v = Vptr b ofs /\
       match ty1 with
-      | Tstruct _ fList _ => exists delta, field_offset f fList = Errors.OK delta
-      | Tunion _ _ _ => True
+      | Tstruct id _ => exists co delta, ge.(genv_cenv)!id = Some co /\ field_offset ge f (co_members co) = OK delta
+      | Tunion  id _ => exists co, ge.(genv_cenv)!id = Some co
       | _ => False
       end
   | Eval v ty => False
@@ -998,7 +1000,7 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
   | Eunop op (Eval v1 ty1) ty =>
       exists v, sem_unary_operation op v1 ty1 = Some v
   | Ebinop op (Eval v1 ty1) (Eval v2 ty2) ty =>
-      exists v, sem_binary_operation op v1 ty1 v2 ty2 m = Some v
+      exists v, sem_binary_operation ge op v1 ty1 v2 ty2 m = Some v
   | Ecast (Eval v1 ty1) ty =>
       exists v, sem_cast v1 ty1 ty = Some v
   | Eseqand (Eval v1 ty1) r2 ty =>
@@ -1043,8 +1045,8 @@ Proof.
   exists b; auto.
   exists b; auto.
   exists b; exists ofs; auto.
-  exists b; exists ofs; split; auto. exists delta; auto.
-  exists b; exists ofs; auto.
+  exists b; exists ofs; split; auto. exists co, delta; auto. 
+  exists b; exists ofs; split; auto. exists co; auto.
 Qed.
 
 Lemma rred_invert:
@@ -1385,10 +1387,12 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   destruct v...
   destruct ty'... 
   (* top struct *)
-  destruct (field_offset f f0) as [delta|] eqn:?...
-  apply topred_ok; auto. apply red_field_struct; auto.
+  destruct (ge.(genv_cenv)!i0) as [co|] eqn:?...
+  destruct (field_offset ge f (co_members co)) as [delta|] eqn:?...
+  apply topred_ok; auto. eapply red_field_struct; eauto.
   (* top union *)
-  apply topred_ok; auto. apply red_field_union; auto.
+  destruct (ge.(genv_cenv)!i0) as [co|] eqn:?...
+  apply topred_ok; auto. eapply red_field_union; eauto.
   (* in depth *)
   eapply incontext_ok; eauto. 
 (* Evalof *)
@@ -1425,7 +1429,7 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   destruct (is_val a2) as [[v2 ty2] | ] eqn:?.
   rewrite (is_val_inv _ _ _ Heqo). rewrite (is_val_inv _ _ _ Heqo0). 
   (* top *)
-  destruct (sem_binary_operation op v1 ty1 v2 ty2 m) as [v|] eqn:?...
+  destruct (sem_binary_operation ge op v1 ty1 v2 ty2 m) as [v|] eqn:?...
   apply topred_ok; auto. split. apply red_binop; auto. exists w; constructor.
   (* depth *)
   eapply incontext2_ok; eauto. 
@@ -1589,9 +1593,9 @@ Proof.
 (* deref *) 
   auto.
 (* field struct *)
-  rewrite H; auto.
+  rewrite H, H0; auto.
 (* field union *)
-  auto.
+  rewrite H; auto.
 Qed.
 
 Lemma rred_topred:
@@ -1895,21 +1899,21 @@ Fixpoint do_alloc_variables (e: env) (m: mem) (l: list (ident * type)) {struct l
   match l with
   | nil => (e,m)
   | (id, ty) :: l' =>
-      let (m1,b1) := Mem.alloc m 0 (sizeof ty) in 
+      let (m1,b1) := Mem.alloc m 0 (sizeof ge ty) in 
       do_alloc_variables (PTree.set id (b1, ty) e) m1 l'
 end.
 
 Lemma do_alloc_variables_sound:
-  forall l e m, alloc_variables e m l (fst (do_alloc_variables e m l)) (snd (do_alloc_variables e m l)).
+  forall l e m, alloc_variables ge e m l (fst (do_alloc_variables e m l)) (snd (do_alloc_variables e m l)).
 Proof.
   induction l; intros; simpl. 
   constructor.
-  destruct a as [id ty]. destruct (Mem.alloc m 0 (sizeof ty)) as [m1 b1] eqn:?; simpl.
+  destruct a as [id ty]. destruct (Mem.alloc m 0 (sizeof ge ty)) as [m1 b1] eqn:?; simpl.
   econstructor; eauto.
 Qed.
 
 Lemma do_alloc_variables_complete:
-  forall e1 m1 l e2 m2, alloc_variables e1 m1 l e2 m2 ->
+  forall e1 m1 l e2 m2, alloc_variables ge e1 m1 l e2 m2 ->
   do_alloc_variables e1 m1 l = (e2, m2).
 Proof.
   induction 1; simpl. 
@@ -1985,7 +1989,7 @@ Definition do_step (w: world) (s: state) : list (trace * state) :=
             if b then ret (State f s (Kfor3 a2 a3 s k) e m) else ret (State f Sskip k e m)
         | Kreturn k =>
             do v' <- sem_cast v ty f.(fn_return);
-            do m' <- Mem.free_list m (blocks_of_env e);
+            do m' <- Mem.free_list m (blocks_of_env ge e);
             ret (Returnstate v' (call_cont k) m')
         | Kswitch1 sl k =>
             do n <- sem_switch_arg v ty;
@@ -2024,11 +2028,11 @@ Definition do_step (w: world) (s: state) : list (trace * state) :=
   | State f Sskip (Kfor4 a2 a3 s k) e m => ret (State f (Sfor Sskip a2 a3 s) k e m)
 
   | State f (Sreturn None) k e m =>
-      do m' <- Mem.free_list m (blocks_of_env e);
+      do m' <- Mem.free_list m (blocks_of_env ge e);
       ret (Returnstate Vundef (call_cont k) m')
   | State f (Sreturn (Some x)) k e m => ret (ExprState f x (Kreturn k) e m)
   | State f Sskip ((Kstop | Kcall _ _ _ _ _) as k) e m => 
-      do m' <- Mem.free_list m (blocks_of_env e);
+      do m' <- Mem.free_list m (blocks_of_env ge e);
       ret (Returnstate Vundef k m')
 
   | State f (Sswitch x sl) k e m => ret (ExprState f x (Kswitch1 sl k) e m)
@@ -2209,7 +2213,7 @@ End EXEC.
 Local Open Scope option_monad_scope.
 
 Definition do_initial_state (p: program): option (genv * state) :=
-  let ge := Genv.globalenv p in
+  let ge := globalenv p in
   do m0 <- Genv.init_mem p;
   do b <- Genv.find_symbol ge p.(prog_main);
   do f <- Genv.find_funct_ptr ge b;

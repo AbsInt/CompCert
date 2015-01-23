@@ -90,13 +90,13 @@ Inductive eval_simple_lvalue: expr -> block -> int -> Prop :=
   | esl_deref: forall r ty b ofs,
       eval_simple_rvalue r (Vptr b ofs) ->
       eval_simple_lvalue (Ederef r ty) b ofs
-  | esl_field_struct: forall r f ty b ofs id fList a delta,
+  | esl_field_struct: forall r f ty b ofs id co a delta,
       eval_simple_rvalue r (Vptr b ofs) ->
-      typeof r = Tstruct id fList a -> field_offset f fList = OK delta ->
+      typeof r = Tstruct id a -> ge.(genv_cenv)!id = Some co -> field_offset ge f (co_members co) = OK delta ->
       eval_simple_lvalue (Efield r f ty) b (Int.add ofs (Int.repr delta))
-  | esl_field_union: forall r f ty b ofs id fList a,
+  | esl_field_union: forall r f ty b ofs id a,
       eval_simple_rvalue r (Vptr b ofs) ->
-      typeof r = Tunion id fList a ->
+      typeof r = Tunion id a ->
       eval_simple_lvalue (Efield r f ty) b ofs
 
 with eval_simple_rvalue: expr -> val -> Prop :=
@@ -116,16 +116,16 @@ with eval_simple_rvalue: expr -> val -> Prop :=
       eval_simple_rvalue (Eunop op r1 ty) v
   | esr_binop: forall op r1 r2 ty v1 v2 v,
       eval_simple_rvalue r1 v1 -> eval_simple_rvalue r2 v2 ->
-      sem_binary_operation op v1 (typeof r1) v2 (typeof r2) m = Some v ->
+      sem_binary_operation ge op v1 (typeof r1) v2 (typeof r2) m = Some v ->
       eval_simple_rvalue (Ebinop op r1 r2 ty) v
   | esr_cast: forall ty r1 v1 v,
       eval_simple_rvalue r1 v1 ->
       sem_cast v1 (typeof r1) ty = Some v ->
       eval_simple_rvalue (Ecast r1 ty) v
   | esr_sizeof: forall ty1 ty,
-      eval_simple_rvalue (Esizeof ty1 ty) (Vint (Int.repr (sizeof ty1)))
+      eval_simple_rvalue (Esizeof ty1 ty) (Vint (Int.repr (sizeof ge ty1)))
   | esr_alignof: forall ty1 ty,
-      eval_simple_rvalue (Ealignof ty1 ty) (Vint (Int.repr (alignof ty1)))
+      eval_simple_rvalue (Ealignof ty1 ty) (Vint (Int.repr (alignof ge ty1)))
   | esr_seqand_true: forall r1 r2 ty v1 v2 v3,
       eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) = Some true ->
       eval_simple_rvalue r2 v2 ->
@@ -372,13 +372,13 @@ Lemma constval_rvalue:
   forall m a v,
   eval_simple_rvalue empty_env m a v ->
   forall v',
-  constval a = OK v' ->
+  constval ge a = OK v' ->
   val_inject inj v' v
 with constval_lvalue:
   forall m a b ofs,
   eval_simple_lvalue empty_env m a b ofs ->
   forall v',
-  constval a = OK v' ->
+  constval ge a = OK v' ->
   val_inject inj v' (Vptr b ofs).
 Proof.
   (* rvalue *)
@@ -394,7 +394,7 @@ Proof.
   exploit sem_unary_operation_inject. eexact E. eauto. 
   intros [v' [A B]]. congruence.
   (* binop *)
-  destruct (sem_binary_operation op x (typeof r1) x0 (typeof r2) Mem.empty) as [v1'|] eqn:E; inv EQ2.
+  destruct (sem_binary_operation ge op x (typeof r1) x0 (typeof r2) Mem.empty) as [v1'|] eqn:E; inv EQ2.
   exploit (sem_binary_operation_inj inj Mem.empty m).
   intros. rewrite mem_empty_not_valid_pointer in H3; discriminate.
   intros. rewrite mem_empty_not_weak_valid_pointer in H3; discriminate.
@@ -443,8 +443,9 @@ Proof.
   (* deref *)
   eauto.
   (* field struct *)
-  rewrite H0 in CV. monadInv CV. exploit constval_rvalue; eauto. intro MV. inv MV.
-  simpl. replace x with delta by congruence. econstructor; eauto. 
+  rewrite H0 in CV. monadInv CV. unfold lookup_composite in EQ; rewrite H1 in EQ; monadInv EQ. 
+  exploit constval_rvalue; eauto. intro MV. inv MV.
+  simpl. replace x0 with delta by congruence. econstructor; eauto. 
   rewrite ! Int.add_assoc. f_equal. apply Int.add_commut. 
   simpl. auto.
   (* field union *)
@@ -452,7 +453,7 @@ Proof.
 Qed.
 
 Lemma constval_simple:
-  forall a v, constval a = OK v -> simple a.
+  forall a v, constval ge a = OK v -> simple a.
 Proof.
   induction a; simpl; intros vx CV; try (monadInv CV); eauto.
   destruct (typeof a); discriminate || eauto.
@@ -466,7 +467,7 @@ Qed.
 Theorem constval_steps:
   forall f r m v v' ty m',
   star step ge (ExprState f r Kstop empty_env m) E0 (ExprState f (Eval v' ty) Kstop empty_env m') ->
-  constval r = OK v ->
+  constval ge r = OK v ->
   m' = m /\ ty = typeof r /\ val_inject inj v v'.
 Proof.
   intros. exploit eval_simple_steps; eauto. eapply constval_simple; eauto. 
@@ -479,7 +480,7 @@ Qed.
 
 Theorem transl_init_single_steps:
   forall ty a data f m v1 ty1 m' v chunk b ofs m'',
-  transl_init_single ty a = OK data ->
+  transl_init_single ge ty a = OK data ->
   star step ge (ExprState f a Kstop empty_env m) E0 (ExprState f (Eval v1 ty1) Kstop empty_env m') ->
   sem_cast v1 ty1 ty = Some v ->
   access_mode ty = By_value chunk ->
@@ -522,14 +523,13 @@ Qed.
 
 Lemma transl_init_single_size:
   forall ty a data,
-  transl_init_single ty a = OK data ->
-  Genv.init_data_size data = sizeof ty.
+  transl_init_single ge ty a = OK data ->
+  Genv.init_data_size data = sizeof ge ty.
 Proof.
   intros. monadInv H. destruct x0. 
 - monadInv EQ2.
 - destruct ty; try discriminate. 
   destruct i0; inv EQ2; auto.
-  inv EQ2; auto.
   inv EQ2; auto.
 - destruct ty; inv EQ2; auto.
 - destruct ty; try discriminate.
@@ -538,7 +538,6 @@ Proof.
   destruct f0; inv EQ2; auto.
 - destruct ty; try discriminate.
   destruct i0; inv EQ2; auto.
-  inv EQ2; auto.
   inv EQ2; auto.
 Qed.
 
@@ -561,30 +560,32 @@ Proof.
 Qed.
 
 Remark union_field_size:
-  forall f ty fl, field_type f fl = OK ty -> sizeof ty <= sizeof_union fl.
+  forall f ty fl, field_type f fl = OK ty -> sizeof ge ty <= sizeof_union ge fl.
 Proof.
-  induction fl; simpl; intros. 
+  induction fl as [|[i t]]; simpl; intros. 
 - inv H.
 - destruct (ident_eq f i). 
   + inv H. xomega. 
   + specialize (IHfl H). xomega. 
 Qed.
 
+Hypothesis ce_consistent: composite_env_consistent ge.
+
 Lemma transl_init_size:
   forall i ty data,
-  transl_init ty i = OK data ->
-  idlsize data = sizeof ty
+  transl_init ge ty i = OK data ->
+  idlsize data = sizeof ge ty
 
 with transl_init_list_size:
   forall il,
   (forall ty sz data,
-   transl_init_array ty il sz = OK data ->
-   idlsize data = sizeof ty * sz)
+   transl_init_array ge ty il sz = OK data ->
+   idlsize data = sizeof ge ty * sz)
   /\
-  (forall id ty fl pos data,
-   transl_init_struct id ty fl il pos = OK data ->
-   sizeof_struct fl pos <= sizeof ty ->
-   idlsize data + pos = sizeof ty).
+  (forall ty fl pos data,
+   transl_init_struct ge ty fl il pos = OK data ->
+   sizeof_struct ge pos fl <= sizeof ge ty ->
+   idlsize data + pos = sizeof ge ty).
 
 Proof.
 - induction i; intros. 
@@ -595,27 +596,35 @@ Proof.
   simpl. eapply (proj1 (transl_init_list_size il)); eauto.
 + (* struct *)
   simpl in H. destruct ty; try discriminate.
+  monadInv H. destruct (co_su x) eqn:?; try discriminate.
   replace (idlsize data) with (idlsize data + 0) by omega.
   eapply (proj2 (transl_init_list_size il)). eauto.
-Local Opaque alignof.
-  simpl. apply align_le. apply alignof_pos.
+  unfold lookup_composite in EQ. simpl. destruct (ge.(genv_cenv)!i) as [co|] eqn:?; inv EQ.
+  erewrite co_consistent_sizeof by (eapply ce_consistent; eauto). 
+  unfold sizeof_composite. rewrite Heqs. apply align_le.
+  destruct (co_alignof_two_p x) as [n EQ]. rewrite EQ. apply two_power_nat_pos.
 + (* union *)
   simpl in H. destruct ty; try discriminate.
-  set (sz := sizeof (Tunion i0 f0 a)) in *.
-  monadInv H. rewrite idlsize_app. rewrite (IHi _ _ EQ1). 
-  rewrite padding_size. omega. unfold sz. simpl. 
-  apply Zle_trans with (sizeof_union f0). eapply union_field_size; eauto.
-  apply align_le. apply alignof_pos. 
+  monadInv H. destruct (co_su x) eqn:?; try discriminate.
+  monadInv EQ0. 
+  rewrite idlsize_app. rewrite (IHi _ _ EQ0).
+  unfold lookup_composite in EQ. simpl. destruct (ge.(genv_cenv)!i0) as [co|] eqn:?; inv EQ.
+  rewrite padding_size. omega.
+  apply Zle_trans with (sizeof_union ge (co_members x)). 
+  eapply union_field_size; eauto.
+  erewrite co_consistent_sizeof by (eapply ce_consistent; eauto). 
+  unfold sizeof_composite. rewrite Heqs. apply align_le.
+  destruct (co_alignof_two_p x) as [n EQ]. rewrite EQ. apply two_power_nat_pos.
 
 - induction il.
 + (* base cases *)
-  simpl. intuition. 
+  simpl. intuition auto.
 * (* arrays *)
   destruct (zeq sz 0).  inv H.  simpl; ring. 
   destruct (zle 0 sz);  inv H.  simpl. 
   rewrite Z.mul_comm. 
-  assert (0 <= sizeof ty * sz).
-  { apply Zmult_gt_0_le_0_compat. omega. generalize (sizeof_pos ty); omega. }
+  assert (0 <= sizeof ge ty * sz).
+  { apply Zmult_gt_0_le_0_compat. omega. generalize (sizeof_pos ge ty); omega. }
   zify; omega.
 * (* structs *)
   destruct fl; inv H.
@@ -629,12 +638,12 @@ Local Opaque alignof.
   rewrite (A _ _ _ EQ1).
   ring.
 * (* structs *)
-  intros. simpl in H. destruct fl; monadInv H.
+  intros. simpl in H. destruct fl as [|[i1 t1]]; monadInv H.
   rewrite ! idlsize_app. 
   simpl in H0. 
   rewrite padding_size.
   rewrite (transl_init_size _ _ _ EQ). 
-  rewrite <- (B _ _ _ _ _ EQ1). omega.
+  rewrite <- (B _ _ _ _ EQ1). omega.
   auto. apply align_le. apply alignof_pos. 
 Qed.
 
@@ -642,11 +651,11 @@ Qed.
 
 Definition dummy_function := mkfunction Tvoid cc_default nil nil Sskip.
 
-Fixpoint fields_of_struct (id: ident) (ty: type) (fl: fieldlist) (pos: Z) : list (Z * type) :=
+Fixpoint fields_of_struct (fl: members) (pos: Z) : list (Z * type) :=
   match fl with
-  | Fnil => nil
-  | Fcons id1 ty1 fl' =>
-      (align pos (alignof ty1), ty1) :: fields_of_struct id ty fl' (align pos (alignof ty1) + sizeof ty1)
+  | nil => nil
+  | (id1, ty1) :: fl' =>
+      (align pos (alignof ge ty1), ty1) :: fields_of_struct fl' (align pos (alignof ge ty1) + sizeof ge ty1)
   end.
 
 Inductive exec_init: mem -> block -> Z -> type -> initializer -> mem -> Prop :=
@@ -660,13 +669,15 @@ Inductive exec_init: mem -> block -> Z -> type -> initializer -> mem -> Prop :=
   | exec_init_array_: forall m b ofs ty sz a il m',
       exec_init_array m b ofs ty sz il m' ->
       exec_init m b ofs (Tarray ty sz a) (Init_array il) m'
-  | exec_init_struct: forall m b ofs id fl a il m',
-      exec_init_list m b ofs (fields_of_struct id (Tstruct id fl a) fl 0) il m' ->
-      exec_init m b ofs (Tstruct id fl a) (Init_struct il) m'
-  | exec_init_union: forall m b ofs id fl a f i ty m',
-      field_type f fl = OK ty ->
+  | exec_init_struct: forall m b ofs id a il co m',
+      ge.(genv_cenv)!id = Some co -> co_su co = Struct ->
+      exec_init_list m b ofs (fields_of_struct (co_members co) 0) il m' ->
+      exec_init m b ofs (Tstruct id a) (Init_struct il) m'
+  | exec_init_union: forall m b ofs id a f i ty co m',
+      ge.(genv_cenv)!id = Some co -> co_su co = Union ->
+      field_type f (co_members co) = OK ty ->
       exec_init m b ofs ty i m' ->
-      exec_init m b ofs (Tunion id fl a) (Init_union f i) m'
+      exec_init m b ofs (Tunion id a) (Init_union f i) m'
 
 with exec_init_array: mem -> block -> Z -> type -> Z -> initializer_list -> mem -> Prop :=
   | exec_init_array_nil: forall m b ofs ty sz,
@@ -674,7 +685,7 @@ with exec_init_array: mem -> block -> Z -> type -> Z -> initializer_list -> mem 
       exec_init_array m b ofs ty sz Init_nil m
   | exec_init_array_cons: forall m b ofs ty sz i1 il m' m'',
       exec_init m b ofs ty i1 m' ->
-      exec_init_array m' b (ofs + sizeof ty) ty (sz - 1) il m'' ->
+      exec_init_array m' b (ofs + sizeof ge ty) ty (sz - 1) il m'' ->
       exec_init_array m b ofs ty sz (Init_cons i1 il) m''
 
 with exec_init_list: mem -> block -> Z -> list (Z * type) -> initializer_list -> mem -> Prop :=
@@ -718,15 +729,15 @@ Qed.
 
 Lemma transl_init_sound_gen:
   (forall m b ofs ty i m', exec_init m b ofs ty i m' ->
-   forall data, transl_init ty i = OK data ->
+   forall data, transl_init ge ty i = OK data ->
    Genv.store_init_data_list ge m b ofs data = Some m')
 /\(forall m b ofs ty sz il m', exec_init_array m b ofs ty sz il m' ->
-   forall data, transl_init_array ty il sz = OK data ->
+   forall data, transl_init_array ge ty il sz = OK data ->
    Genv.store_init_data_list ge m b ofs data = Some m')
 /\(forall m b ofs l il m', exec_init_list m b ofs l il m' ->
-   forall id ty fl data pos,
-   l = fields_of_struct id ty fl pos ->
-   transl_init_struct id ty fl il pos = OK data ->
+   forall ty fl data pos,
+   l = fields_of_struct fl pos ->
+   transl_init_struct ge ty fl il pos = OK data ->
    Genv.store_init_data_list ge m b (ofs + pos) data = Some m').
 Proof.
 Local Opaque sizeof.
@@ -737,9 +748,11 @@ Local Opaque sizeof.
   replace (Z.max 0 sz) with sz in H1. eauto.
   assert (sz >= 0) by (eapply exec_init_array_length; eauto). xomega. 
 - (* struct *)
+  unfold lookup_composite in H3. rewrite H in H3. simpl in H3. rewrite H0 in H3. 
   replace ofs with (ofs + 0) by omega. eauto.
 - (* union *)
-  rewrite H in H2. monadInv H2. inv EQ.  
+  unfold lookup_composite in H4. rewrite H in H4. simpl in H4. rewrite H0 in H4. 
+  monadInv H4. assert (x = ty) by congruence. subst x.  
   eapply store_init_data_list_app. eauto.
   apply store_init_data_list_padding. 
 
@@ -753,15 +766,15 @@ Local Opaque sizeof.
   eauto.
   rewrite (transl_init_size _ _ _ EQ). eauto.
 - (* struct, empty *)
-  destruct fl; simpl in H; inv H. 
-  inv H0. apply store_init_data_list_padding.
+  destruct fl as [|[i t]]; simpl in H0; inv H0. 
+  apply store_init_data_list_padding.
 - (* struct, nonempty *)
-  destruct fl; simpl in H3; inv H3.
-  monadInv H4. 
+  destruct fl as [|[i t]]; simpl in H4; monadInv H4.
+  simpl in H3; inv H3.
   eapply store_init_data_list_app. apply store_init_data_list_padding.
   rewrite padding_size. 
-  replace (ofs + pos0 + (align pos0 (alignof t) - pos0))
-     with (ofs + align pos0 (alignof t)) by omega.
+  replace (ofs + pos0 + (align pos0 (alignof ge t) - pos0))
+     with (ofs + align pos0 (alignof ge t)) by omega.
   eapply store_init_data_list_app.
   eauto.
   rewrite (transl_init_size _ _ _ EQ).
@@ -769,15 +782,18 @@ Local Opaque sizeof.
   apply align_le. apply alignof_pos.
 Qed.
 
-Theorem transl_init_sound:
-  forall m b ty i m' data,
-  exec_init m b 0 ty i m' ->
-  transl_init ty i = OK data ->
-  Genv.store_init_data_list ge m b 0 data = Some m'.
-Proof.
-  intros. eapply (proj1 transl_init_sound_gen); eauto.
-Qed.
-
 End SOUNDNESS.
 
-
+Theorem transl_init_sound:
+  forall p m b ty i m' data,
+  exec_init (globalenv p) m b 0 ty i m' ->
+  transl_init (prog_comp_env p) ty i = OK data ->
+  Genv.store_init_data_list (globalenv p) m b 0 data = Some m'.
+Proof.
+  intros. 
+  set (ge := globalenv p) in *.
+  change (prog_comp_env p) with (genv_cenv ge) in H0.
+  destruct (transl_init_sound_gen ge) as (A & B & C).
+  eapply build_composite_env_consistent. apply prog_comp_env_eq.
+  eapply A; eauto.
+Qed.

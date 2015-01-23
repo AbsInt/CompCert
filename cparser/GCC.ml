@@ -35,7 +35,7 @@ let voidConstPtrType = TPtr(TVoid [AConst], [])
 let charPtrType = TPtr(TInt(IChar, []), [])
 let charConstPtrType = TPtr(TInt(IChar, [AConst]), [])
 let intPtrType = TPtr(TInt(IInt, []), [])
-let sizeType = TInt(size_t_ikind, [])
+let sizeType() = TInt(size_t_ikind(), [])
 
 let builtins = {
   Builtins.typedefs = [
@@ -43,22 +43,22 @@ let builtins = {
 ];
   Builtins.functions = [
   "__builtin___fprintf_chk",  (intType, [ voidPtrType; intType; charConstPtrType ], true) (* first argument is really FILE*, not void*, but we don't want to build in the definition for FILE *);
-  "__builtin___memcpy_chk",  (voidPtrType, [ voidPtrType; voidConstPtrType; sizeType; sizeType ], false);
-  "__builtin___memmove_chk",  (voidPtrType, [ voidPtrType; voidConstPtrType; sizeType; sizeType ], false);
-  "__builtin___mempcpy_chk",  (voidPtrType, [ voidPtrType; voidConstPtrType; sizeType; sizeType ], false);
-  "__builtin___memset_chk",  (voidPtrType, [ voidPtrType; intType; sizeType; sizeType ], false);
+  "__builtin___memcpy_chk",  (voidPtrType, [ voidPtrType; voidConstPtrType; sizeType(); sizeType() ], false);
+  "__builtin___memmove_chk",  (voidPtrType, [ voidPtrType; voidConstPtrType; sizeType(); sizeType() ], false);
+  "__builtin___mempcpy_chk",  (voidPtrType, [ voidPtrType; voidConstPtrType; sizeType(); sizeType() ], false);
+  "__builtin___memset_chk",  (voidPtrType, [ voidPtrType; intType; sizeType(); sizeType() ], false);
   "__builtin___printf_chk",  (intType, [ intType; charConstPtrType ], true);
-  "__builtin___snprintf_chk",  (intType, [ charPtrType; sizeType; intType; sizeType; charConstPtrType ], true);
-  "__builtin___sprintf_chk",  (intType, [ charPtrType; intType; sizeType; charConstPtrType ], true);
-  "__builtin___stpcpy_chk",  (charPtrType, [ charPtrType; charConstPtrType; sizeType ], false);
-  "__builtin___strcat_chk",  (charPtrType, [ charPtrType; charConstPtrType; sizeType ], false);
-  "__builtin___strcpy_chk",  (charPtrType, [ charPtrType; charConstPtrType; sizeType ], false);
-  "__builtin___strncat_chk",  (charPtrType, [ charPtrType; charConstPtrType; sizeType; sizeType ], false);
-  "__builtin___strncpy_chk",  (charPtrType, [ charPtrType; charConstPtrType; sizeType; sizeType ], false);
+  "__builtin___snprintf_chk",  (intType, [ charPtrType; sizeType(); intType; sizeType(); charConstPtrType ], true);
+  "__builtin___sprintf_chk",  (intType, [ charPtrType; intType; sizeType(); charConstPtrType ], true);
+  "__builtin___stpcpy_chk",  (charPtrType, [ charPtrType; charConstPtrType; sizeType() ], false);
+  "__builtin___strcat_chk",  (charPtrType, [ charPtrType; charConstPtrType; sizeType() ], false);
+  "__builtin___strcpy_chk",  (charPtrType, [ charPtrType; charConstPtrType; sizeType() ], false);
+  "__builtin___strncat_chk",  (charPtrType, [ charPtrType; charConstPtrType; sizeType(); sizeType() ], false);
+  "__builtin___strncpy_chk",  (charPtrType, [ charPtrType; charConstPtrType; sizeType(); sizeType() ], false);
   "__builtin___vfprintf_chk",  (intType, [ voidPtrType; intType; charConstPtrType; voidPtrType ], false) (* first argument is really FILE*, not void*, but we don't want to build in the definition for FILE *);
   "__builtin___vprintf_chk",  (intType, [ intType; charConstPtrType; voidPtrType ], false);
-  "__builtin___vsnprintf_chk",  (intType, [ charPtrType; sizeType; intType; sizeType; charConstPtrType; voidPtrType ], false);
-  "__builtin___vsprintf_chk",  (intType, [ charPtrType; intType; sizeType; charConstPtrType; voidPtrType ], false);
+  "__builtin___vsnprintf_chk",  (intType, [ charPtrType; sizeType(); intType; sizeType(); charConstPtrType; voidPtrType ], false);
+  "__builtin___vsprintf_chk",  (intType, [ charPtrType; intType; sizeType(); charConstPtrType; voidPtrType ], false);
 
   "__builtin_acos",  (doubleType, [ doubleType ], false);
   "__builtin_acosf",  (floatType, [ floatType ], false);
@@ -124,8 +124,8 @@ let builtins = {
   "__builtin_inf",  (doubleType, [], false);
   "__builtin_inff",  (floatType, [], false);
   "__builtin_infl",  (longDoubleType, [], false);
-  "__builtin_memcpy",  (voidPtrType, [ voidPtrType; voidConstPtrType; sizeType ], false);
-  "__builtin_mempcpy",  (voidPtrType, [ voidPtrType; voidConstPtrType; sizeType ], false);
+  "__builtin_memcpy",  (voidPtrType, [ voidPtrType; voidConstPtrType; sizeType() ], false);
+  "__builtin_mempcpy",  (voidPtrType, [ voidPtrType; voidConstPtrType; sizeType() ], false);
 
   "__builtin_fmod",  (doubleType, [ doubleType ], false);
   "__builtin_fmodf",  (floatType, [ floatType ], false);
@@ -162,7 +162,7 @@ let builtins = {
   "__builtin_nansf",  (floatType, [ charConstPtrType ], false);
   "__builtin_nansl",  (longDoubleType, [ charConstPtrType ], false);
   "__builtin_next_arg",  (voidPtrType, [], false);
-  "__builtin_object_size",  (sizeType, [ voidPtrType; intType ], false);
+  "__builtin_object_size",  (sizeType(), [ voidPtrType; intType ], false);
 
   "__builtin_parity",  (intType, [ uintType ], false);
   "__builtin_parityl",  (intType, [ ulongType ], false);
@@ -196,9 +196,9 @@ let builtins = {
   "__builtin_strcmp",  (intType, [ charConstPtrType; charConstPtrType ], false);
   "__builtin_strcpy",  (charPtrType, [ charPtrType; charConstPtrType ], false);
   "__builtin_strcspn",  (uintType, [ charConstPtrType; charConstPtrType ], false);
-  "__builtin_strncat",  (charPtrType, [ charPtrType; charConstPtrType; sizeType ], false);
-  "__builtin_strncmp",  (intType, [ charConstPtrType; charConstPtrType; sizeType ], false);
-  "__builtin_strncpy",  (charPtrType, [ charPtrType; charConstPtrType; sizeType ], false);
+  "__builtin_strncat",  (charPtrType, [ charPtrType; charConstPtrType; sizeType() ], false);
+  "__builtin_strncmp",  (intType, [ charConstPtrType; charConstPtrType; sizeType() ], false);
+  "__builtin_strncpy",  (charPtrType, [ charPtrType; charConstPtrType; sizeType() ], false);
   "__builtin_strspn",  (intType, [ charConstPtrType; charConstPtrType ], false);
   "__builtin_strpbrk",  (charPtrType, [ charConstPtrType; charConstPtrType ], false);
   "__builtin_tan",  (doubleType, [ doubleType ], false);
@@ -217,9 +217,7 @@ let builtins = {
   "__builtin_va_start",  (voidType, [ voidPtrType; voidPtrType ], false);
   "__builtin_stdarg_start",  (voidType, [ voidPtrType ], false);
   (* When we parse builtin_va_arg, type argument becomes sizeof type *)
-  "__builtin_va_arg",  (voidType, [ voidPtrType; sizeType ], false);
-  "__builtin_va_copy",  (voidType, [ voidPtrType;
-                                           voidPtrType ],
-                              false)
+  "__builtin_va_arg",  (voidType, [ voidPtrType; sizeType() ], false);
+  "__builtin_va_copy",  (voidType, [ voidPtrType; voidPtrType ], false)
 ]
 }

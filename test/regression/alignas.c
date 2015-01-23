@@ -33,7 +33,7 @@ struct s {
 struct s c;
 char filler3;
 
-struct s _Alignas(32) d;
+struct s _Alignas(64) d;
 char filler4;
 
 /* Union */
@@ -77,8 +77,8 @@ int main()
 #endif
   printf("c: size = %u, alignment = %u, address mod 16 = %u\n",
          (unsigned) sizeof(c), (unsigned) _Alignof(c), ((unsigned) &c) & 0xF);
-  printf("d: size = %u, alignment = %u, address mod 32 = %u\n",
-         (unsigned) sizeof(d), (unsigned) _Alignof(d), ((unsigned) &d) & 0x1F);
+  printf("d: size = %u, alignment = %u, address mod 64 = %u\n",
+         (unsigned) sizeof(d), (unsigned) _Alignof(d), ((unsigned) &d) & 0x3F);
   printf("e: size = %u, alignment = %u, address mod 16 = %u\n",
          (unsigned) sizeof(e), (unsigned) _Alignof(e), ((unsigned) &e) & 0xF);
   printf("f: size = %u, alignment = %u, address mod 32 = %u\n",

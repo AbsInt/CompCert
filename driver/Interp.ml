@@ -122,22 +122,22 @@ let print_val_list p vl =
 let print_state p (prog, ge, s) =
   match s with
   | State(f, s, k, e, m) ->
-      PrintCsyntax.print_pointer_hook := print_pointer ge e;
+      PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv e;
       fprintf p "in function %s, statement@ @[<hv 0>%a@]"
               (name_of_function prog f)
               PrintCsyntax.print_stmt s
   | ExprState(f, r, k, e, m) ->
-      PrintCsyntax.print_pointer_hook := print_pointer ge e;
+      PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv e;
       fprintf p "in function %s, expression@ @[<hv 0>%a@]"
               (name_of_function prog f)
               PrintCsyntax.print_expr r
   | Callstate(fd, args, k, m) ->
-      PrintCsyntax.print_pointer_hook := print_pointer ge Maps.PTree.empty;
+      PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv Maps.PTree.empty;
       fprintf p "calling@ @[<hov 2>%s(%a)@]"
               (name_of_fundef prog fd)
               print_val_list args
   | Returnstate(res, k, m) ->
-      PrintCsyntax.print_pointer_hook := print_pointer ge Maps.PTree.empty;
+      PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv Maps.PTree.empty;
       fprintf p "returning@ %a"
               print_val res
   | Stuckstate ->
@@ -389,7 +389,7 @@ let convert_external_arg ge v t =
   | Vsingle f, AST.Tsingle -> Some (EVsingle f)
   | Vlong n, AST.Tlong -> Some (EVlong n)
   | Vptr(b, ofs), AST.Tint -> 
-      Genv.invert_symbol ge b >>= fun id -> Some (EVptr_global(id, ofs))
+      Senv.invert_symbol ge b >>= fun id -> Some (EVptr_global(id, ofs))
   | _, _ -> None
 
 let rec convert_external_args ge vl tl =
@@ -422,13 +422,13 @@ and world_io ge m id args =
   None
 
 and world_vload ge m chunk id ofs =
-  Genv.find_symbol ge id >>= fun b ->
+  Genv.find_symbol ge.genv_genv id >>= fun b ->
   Mem.load chunk m b ofs >>= fun v ->
   Cexec.eventval_of_val ge v (type_of_chunk chunk) >>= fun ev ->
   Some(ev, world ge m)
 
 and world_vstore ge m chunk id ofs ev =
-  Genv.find_symbol ge id >>= fun b ->
+  Genv.find_symbol ge.genv_genv id >>= fun b ->
   Cexec.val_of_eventval ge ev (type_of_chunk chunk) >>= fun v ->
   Mem.store chunk m b ofs v >>= fun m' ->
   Some(world ge m')
@@ -479,7 +479,7 @@ let diagnose_stuck_expr p ge w f a kont e m =
   if found then true else begin
     let l = Cexec.step_expr ge do_external_function do_inline_assembly e w k a m in
     if List.exists (fun (ctx,red) -> red = Cexec.Stuckred) l then begin
-      PrintCsyntax.print_pointer_hook := print_pointer ge e;
+      PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv e;
       fprintf p "@[<hov 2>Stuck subexpression:@ %a@]@."
               PrintCsyntax.print_expr a;
       true
@@ -633,7 +633,9 @@ let change_main_function p old_main old_main_ty =
   let new_main_id = intern_string "___main" in
   { prog_main = new_main_id;
     prog_defs = (new_main_id, Gfun(Internal new_main_fn)) :: p.prog_defs;
-    prog_public = p.prog_public }
+    prog_public = p.prog_public;
+    prog_types = p.prog_types;
+    prog_comp_env = p.prog_comp_env }
 
 let rec find_main_function name = function
   | [] -> None
@@ -667,8 +669,8 @@ let execute prog =
   | None -> exit 126
   | Some prog1 ->
       let wprog = world_program prog1 in
-      let wge = Genv.globalenv wprog in
-      match Genv.init_mem wprog with
+      let wge = globalenv wprog in
+      match Genv.init_mem (program_of_program wprog) with
       | None ->
           fprintf p "ERROR: World memory state undefined@."; exit 126
       | Some wm ->

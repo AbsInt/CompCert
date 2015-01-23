@@ -1273,7 +1273,7 @@ Proof.
   inv H2.
   * (* true volatile access *)
     assert (V: vmatch bc v0 (Ifptr Glob)).
-    { inv H4; constructor. econstructor. eapply GE; eauto. }
+    { inv H4; simpl in *; constructor. econstructor. eapply GE; eauto. }
     destruct (va_strict tt). apply vmatch_lub_r. apply vnormalize_sound. auto. 
     apply vnormalize_sound. eapply vmatch_ge; eauto. constructor. constructor.
   * (* normal memory access *)

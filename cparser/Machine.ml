@@ -173,10 +173,40 @@ let gcc_extensions c =
   { c with sizeof_void = Some 1; sizeof_fun = Some 1;
            alignof_void = Some 1; alignof_fun = Some 1 }
 
-(* Default configuration *)
+(* Undefined configuration *)
 
-let config =
-  ref (match Sys.word_size with
-           | 32 -> if Sys.os_type = "Win32" then win32 else ilp32ll64
-           | 64 -> if Sys.os_type = "Win32" then win64 else i32lpll64
-           | _  -> assert false)
+let undef = {
+  name = "UNDEFINED";
+  char_signed = false;
+  sizeof_ptr = 0;
+  sizeof_short = 0;
+  sizeof_int = 0;
+  sizeof_long = 0;
+  sizeof_longlong = 0;
+  sizeof_float = 0;
+  sizeof_double = 0;
+  sizeof_longdouble = 0;
+  sizeof_void = None;
+  sizeof_fun = None;
+  sizeof_wchar = 0;
+  wchar_signed = true;
+  sizeof_size_t = 0;
+  sizeof_ptrdiff_t = 0;
+  alignof_ptr = 0;
+  alignof_short = 0;
+  alignof_int = 0;
+  alignof_long = 0;
+  alignof_longlong = 0;
+  alignof_float = 0;
+  alignof_double = 0;
+  alignof_longdouble = 0;
+  alignof_void = None;
+  alignof_fun = None;
+  bigendian = false;
+  bitfields_msb_first = false;
+  struct_return_as_int = 0
+}
+
+(* The current configuration.  Must be initialized before use. *)
+
+let config = ref undef
