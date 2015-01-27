@@ -380,6 +380,7 @@ let do_printf m fmt args =
 
 let (>>=) opt f = match opt with None -> None | Some arg -> f arg
 
+(*
 (* Like eventval_of_val, but accepts static globals as well *)
 
 let convert_external_arg ge v t =
@@ -399,6 +400,7 @@ let rec convert_external_args ge vl tl =
       convert_external_arg ge v1 t1 >>= fun e1 ->
       convert_external_args ge vl tl >>= fun el -> Some (e1 :: el)
   | _, _ -> None
+*)
 
 let do_external_function id sg ge w args m =
   match extern_atom id, args with
@@ -406,8 +408,12 @@ let do_external_function id sg ge w args m =
       extract_string m b ofs >>= fun fmt ->
       print_string (do_printf m fmt args');
       flush stdout;
+      Some(((w, [Event_syscall(id, [], EVint Int.zero)]), Vint Int.zero), m)
+(*
       convert_external_args ge args sg.sig_args >>= fun eargs ->
       Some(((w, [Event_syscall(id, eargs, EVint Int.zero)]), Vint Int.zero), m)
+*)
+
   | _ ->
       None
 

@@ -13,7 +13,9 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(* Eliminate structs and unions being returned by value as function results *)
+(* Eliminate structs and unions that are
+   - returned by value as function results
+   - passed by value as function parameters. *)
 
 open Machine
 open C
@@ -40,10 +42,124 @@ let classify_return env ty =
   end else
     Ret_scalar
 
-(* Rewriting of function types.
+(* Classification of function parameter types. *)
+
+type param_kind =
+  | Param_unchanged     (**r passed as is *)
+  | Param_ref_caller    (**r passed by reference to a copy taken by the caller *)
+  | Param_flattened of int * int * int (**r passed as N integer arguments *)
+                        (**r (N, size, alignment) *)
+
+let classify_param env ty =
+  if is_composite_type env ty then begin
+    match (!config).struct_passing_style with
+    | SP_ref_callee -> Param_unchanged
+    | SP_ref_caller -> Param_ref_caller
+    | _ ->
+      match sizeof env ty, alignof env ty with
+      | Some sz, Some al -> 
+          Param_flattened ((sz + 3) / 4, sz, al)
+      | _, _ ->
+          Param_unchanged  (* should not happen *)
+  end else
+    Param_unchanged
+
+(* Return the list [f 0; f 1; ...; f (n-1)] *)
+
+let list_map_n f n =
+  let rec map i = if i >= n then [] else f i :: map (i + 1)
+  in map 0
+
+(* Declaring and accessing buffers (arrays of int) *)
+
+let uchar = TInt(IUChar, [])
+let ushort = TInt(IUShort, [])
+let uint = TInt(IUInt, [])
+let ucharptr = TPtr(uchar, [])
+let ushortptr = TPtr(ushort, [])
+let uintptr = TPtr(uint, [])
+
+let ty_buffer n =
+  TArray(uint, Some (Int64.of_int n), [])
+
+let ebuffer_index base idx =
+  { edesc = EBinop(Oindex, base, intconst (Int64.of_int idx) IInt, uintptr);
+    etyp = uint }
+
+let ereinterpret ty e =
+  { edesc = EUnop(Oderef, ecast (TPtr(ty, [])) (eaddrof e)); etyp = ty }
+
+let attr_structret = [Attr("__structreturn", [])]
+
+(* Expression constructor functions *)
+
+let or2 a b = { edesc = EBinop(Oor, a, b, uint); etyp = uint }
+let or3 a b c = or2 (or2 a b) c
+let or4 a b c d = or2 (or2 (or2 a b) c) d
+
+let lshift a nbytes =
+  if nbytes = 0 then a else
+    { edesc = EBinop(Oshl, a, intconst (Int64.of_int (nbytes * 8)) IInt, uint);
+      etyp = uint }
+
+let offsetptr base ofs =
+  { edesc = EBinop(Oadd, base, intconst (Int64.of_int ofs) IInt, ucharptr);
+    etyp = ucharptr }
+
+let load1 base ofs shift_le shift_be =
+  let shift = if (!config).bigendian then shift_be else shift_le in
+  let a = offsetptr base ofs in
+  lshift { edesc = EUnop(Oderef, a); etyp = uchar } shift
+
+let load2 base ofs shift_le shift_be =
+  let shift = if (!config).bigendian then shift_be else shift_le in
+  let a = ecast ushortptr (offsetptr base ofs) in
+  lshift { edesc = EUnop(Oderef, a); etyp = ushort } shift
+
+let load4 base ofs =
+  let a = ecast uintptr (offsetptr base ofs) in
+  { edesc = EUnop(Oderef, a); etyp = uint }
+
+let rec load_words base ofs sz al =
+  if ofs + 4 <= sz then
+    (if al >= 4 || (!config).supports_unaligned_accesses then
+      load4 base ofs
+    else if al >= 2 then
+      or2 (load2 base ofs 0 2)
+          (load2 base (ofs + 2) 2 0)
+    else
+      or4 (load1 base ofs 0 3)
+          (load1 base (ofs + 1) 1 2)
+          (load1 base (ofs + 2) 2 1)
+          (load1 base (ofs + 3) 3 0))
+    :: load_words base (ofs + 4) sz al
+  else if ofs + 3 = sz then
+    [ if al >= 2 || (!config).supports_unaligned_accesses then
+        or2 (load2 base ofs 0 2)
+            (load1 base (ofs + 2) 2 1)
+      else
+        or3 (load1 base ofs 0 3)
+            (load1 base (ofs + 1) 1 2)
+            (load1 base (ofs + 2) 2 1) ]
+  else if ofs + 2 = sz then
+    [ if al >= 2 || (!config).supports_unaligned_accesses then
+        load2 base ofs 0 2
+      else
+        or2 (load1 base ofs 0 3)
+            (load1 base (ofs + 1) 1 2) ]
+  else if ofs + 1 = sz then
+    [ load1 base ofs 0 3 ]
+  else
+    []
+
+(* Rewriting of function types.  For the return type:
       return kind scalar   -> no change
       return kind ref      -> return type void + add 1st parameter struct s *
       return kind value(t) -> return type t.
+   For the parameters:
+      param unchanged      -> no change
+      param_ref_caller     -> turn into a pointer
+      param_flattened N    -> turn into N parameters of type "int"
    Try to preserve original typedef names when no change.
 *)
 
@@ -51,21 +167,24 @@ let rec transf_type env t =
   match unroll env t with
   | TFun(tres, None, vararg, attr) ->
       let tres' = transf_type env tres in
-      let tres'' =
-        match classify_return env tres with
-        | Ret_scalar -> tres'
-        | Ret_ref -> TVoid []
-        | Ret_value ty -> ty in
-      TFun(tres'', None, vararg, attr)
+      begin match classify_return env tres with
+      | Ret_scalar ->
+          TFun(tres', None, vararg, attr)
+      | Ret_ref ->
+          TFun(TVoid [], None, vararg, add_attributes attr attr_structret)
+      | Ret_value ty ->
+          TFun(ty, None, vararg, attr)
+      end
   | TFun(tres, Some args, vararg, attr) ->
-      let args' = List.map (transf_funarg env) args in
+      let args' = transf_funargs env args in
       let tres' = transf_type env tres in
       begin match classify_return env tres with
       | Ret_scalar ->
           TFun(tres', Some args', vararg, attr)
       | Ret_ref ->
           let res = Env.fresh_ident "_res" in
-          TFun(TVoid [], Some((res, TPtr(tres', [])) :: args'), vararg, attr)
+          TFun(TVoid [], Some((res, TPtr(tres', [])) :: args'), vararg,
+               add_attributes attr attr_structret)
       | Ret_value ty ->
           TFun(ty, Some args', vararg, attr)
       end
@@ -77,12 +196,28 @@ let rec transf_type env t =
       if t1' = t1 then t else TArray(transf_type env t1, sz, attr)
   | _ -> t
 
-and transf_funarg env (id, t) = (id, transf_type env t)
+and transf_funargs env = function
+  | [] -> []
+  | (id, t) :: args ->
+      let t' = transf_type env t in
+      let args' = transf_funargs env args in
+      match classify_param env t with
+      | Param_unchanged ->
+          (id, t') :: args'
+      | Param_ref_caller ->
+          (id, TPtr(t', [])) :: args'
+      | Param_flattened(n, sz, al) ->
+          list_map_n (fun _ -> (Env.fresh_ident id.name, uint)) n
+          @ args'
 
 (* Expressions: transform calls + rewrite the types *)
 
-let ereinterpret ty e =
-  { edesc = EUnop(Oderef, ecast (TPtr(ty, [])) (eaddrof e)); etyp = ty }
+let rec translates_to_extended_lvalue arg =
+  is_lvalue arg ||
+  (match arg.edesc with
+   | ECall _ -> true
+   | EBinop(Ocomma, a, b, _) -> translates_to_extended_lvalue b
+   | _ -> false)
 
 let rec transf_expr env ctx e =
   let newty = transf_type env e.etyp in
@@ -98,7 +233,7 @@ let rec transf_expr env ctx e =
   | EUnop(op, e1) ->
       {edesc = EUnop(op, transf_expr env Val e1); etyp = newty}
   | EBinop(Oassign, lhs, {edesc = ECall(fn, args); etyp = ty}, _) ->
-      transf_call env ctx (Some lhs) fn args ty
+      transf_call env ctx (Some (transf_expr env Val lhs)) fn args ty
   | EBinop(Ocomma, e1, e2, ty) ->
       ecomma (transf_expr env Effects e1) (transf_expr env ctx e2)
   | EBinop(op, e1, e2, ty) ->
@@ -133,48 +268,88 @@ let rec transf_expr env ctx e =
 and transf_call env ctx opt_lhs fn args ty =
   let ty' = transf_type env ty in
   let fn' = transf_expr env Val fn in
-  let args' = List.map (transf_expr env Val) args in
+  let (assignments, args') = transf_arguments env args in
   let opt_eassign e =
     match opt_lhs with
     | None -> e
-    | Some lhs -> eassign (transf_expr env Val lhs) e in
+    | Some lhs -> eassign lhs e in
   match fn with
   | {edesc = EVar {name = "__builtin_va_arg"}} ->
       (* Do not transform the call in this case *)
       opt_eassign {edesc = ECall(fn, args'); etyp = ty}
   | _ ->
-    match classify_return env ty with
-    | Ret_scalar ->
-        opt_eassign {edesc = ECall(fn', args'); etyp = ty'}
-    | Ret_ref ->
-        begin match ctx, opt_lhs with
-        | Effects, None ->
-            let tmp = new_temp ~name:"_res" ty in
-            {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
-        | Effects, Some lhs ->
-            let lhs' = transf_expr env Val lhs in
-            {edesc = ECall(fn', eaddrof lhs' :: args'); etyp = TVoid []}
-        | Val, None ->
-            let tmp = new_temp ~name:"_res" ty in
-            ecomma {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
-                   tmp
-        | Val, Some lhs ->
-            let lhs' = transf_expr env Val lhs in
-            let tmp = new_temp ~name:"_res" ty in
-            ecomma {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
-                   (eassign lhs' tmp)
-        end
-    | Ret_value ty_ret ->
-        let ecall = {edesc = ECall(fn', args'); etyp = ty_ret} in
-        begin match ctx, opt_lhs with
-        | Effects, None ->
-            ecall
-        | _, _ ->
-            let tmp = new_temp ~name:"_res" ty_ret in
-            opt_eassign
-              (ecomma (eassign tmp ecall)
-                      (ereinterpret ty' tmp))
-        end
+    let call =
+      match classify_return env ty with
+      | Ret_scalar ->
+          opt_eassign {edesc = ECall(fn', args'); etyp = ty'}
+      | Ret_ref ->
+          begin match ctx, opt_lhs with
+          | Effects, None ->
+              let tmp = new_temp ~name:"_res" ty in
+              {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
+          | Effects, Some lhs ->
+              {edesc = ECall(fn', eaddrof lhs :: args'); etyp = TVoid []}
+          | Val, None ->
+              let tmp = new_temp ~name:"_res" ty in
+              ecomma {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
+                     tmp
+          | Val, Some lhs ->
+              let tmp = new_temp ~name:"_res" ty in
+              ecomma {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
+                     (eassign lhs tmp)
+          end
+      | Ret_value ty_ret ->
+          let ecall = {edesc = ECall(fn', args'); etyp = ty_ret} in
+          begin match ctx, opt_lhs with
+          | Effects, None ->
+              ecall
+          | _, _ ->
+              let tmp = new_temp ~name:"_res" ty_ret in
+              opt_eassign
+                (ecomma (eassign tmp ecall)
+                        (ereinterpret ty' tmp))
+          end
+    in ecommalist assignments call
+
+(* Function argument of ref_caller kind: take a copy and pass pointer to copy
+        arg      --->   newtemp = arg  ...   &newtemp
+   Function argument of flattened(N) kind: copy to array and pass array elts
+        arg      --->   (*((ty *) temparray) = arg ...
+                        temparray[0], ...,, temparray[N-1]
+*)
+
+and transf_arguments env args =
+  match args with
+  | [] -> ([], [])
+  | arg :: args ->
+      let (assignments, args') = transf_arguments env args in
+      match classify_param env arg.etyp with
+      | Param_unchanged ->
+          let arg' = transf_expr env Val arg in
+          (assignments, arg' :: args')
+      | Param_ref_caller ->
+          let ty' = transf_type env arg.etyp in
+          let tmp = new_temp ~name:"_arg" ty' in
+          (transf_assign env tmp arg :: assignments,
+           eaddrof tmp :: args')
+      | Param_flattened(n, sz, al) ->
+          let ty' = transf_type env arg.etyp in
+          if translates_to_extended_lvalue arg then begin
+            let tmp = new_temp ~name:"_arg" ucharptr in
+            (eassign tmp (eaddrof (transf_expr env Val arg)) :: assignments,
+             load_words tmp 0 sz al @ args')
+          end else begin
+            let tmp = new_temp ~name:"_arg" (ty_buffer n) in
+            (transf_assign env (ereinterpret ty' tmp) arg :: assignments,
+             list_map_n (ebuffer_index tmp) n @ args')
+          end
+
+and transf_assign env lhs e =
+  match e.edesc with
+  | ECall(fn, args) ->
+      transf_call env Effects (Some lhs) fn args e.etyp
+  | _ ->
+      eassign lhs (transf_expr env Val e)
 
 (* Initializers *)
 
@@ -256,29 +431,78 @@ let rec transf_stmt s =
 in
   transf_stmt body
 
+(* Binding arguments to parameters.  Returns a triple:
+    - parameter list
+    - actions to perform at the beginning of the function
+    - substitution to apply to the function body
+*)
+
+let rec transf_funparams loc env params =
+  match params with
+  | [] ->
+      ([], sskip, IdentMap.empty)
+  | (x, tx) :: params ->
+      let tx' = transf_type env tx in
+      let (params', actions, subst) = transf_funparams loc env params in
+      match classify_param env tx with
+      | Param_unchanged ->
+          ((x, tx') :: params',
+           actions,
+           subst)
+      | Param_ref_caller ->
+          let tpx = TPtr(tx', []) in
+          let ex = { edesc = EVar x; etyp = tpx } in
+          let estarx = { edesc = EUnop(Oderef, ex); etyp = tx' } in
+          ((x, tpx) :: params', 
+           actions, 
+           IdentMap.add x estarx subst)
+      | Param_flattened(n, sz, al) ->
+          let y = new_temp ~name:x.name (ty_buffer n) in
+          let yparts = list_map_n (fun _ -> Env.fresh_ident x.name) n in
+          let assign_part e p act =
+            sseq loc (sassign loc e {edesc = EVar p; etyp = uint}) act in
+          (List.map (fun p -> (p, uint)) yparts @ params',
+           List.fold_right2 assign_part
+                            (list_map_n (ebuffer_index y) n)
+                            yparts
+                            actions,
+           IdentMap.add x (ereinterpret tx' y) subst)
+
 let transf_fundef env f =
   reset_temps();
   let ret = transf_type env f.fd_ret in
-  let params =
-    List.map (fun (id, ty) -> (id, transf_type env ty)) f.fd_params in
-  let (ret1, params1, body1) =
+  let (params, actions, subst) =
+    transf_funparams f.fd_body.sloc env f.fd_params in
+  let locals =
+    List.map (fun d -> transf_decl env (subst_decl subst d)) f.fd_locals in
+  let (attr1, ret1, params1, body1) =
     match classify_return env f.fd_ret with
     | Ret_scalar ->
-        (ret, params, transf_funbody env f.fd_body None)
+        (f.fd_attrib,
+         ret,
+         params,
+         transf_funbody env (subst_stmt subst f.fd_body) None)
     | Ret_ref ->
         let vres = Env.fresh_ident "_res" in
         let tres = TPtr(ret, []) in
         let eres = {edesc = EVar vres; etyp = tres} in
         let eeres = {edesc = EUnop(Oderef, eres); etyp = ret} in
-        (TVoid [],
+        (add_attributes f.fd_attrib attr_structret,
+         TVoid [],
          (vres, tres) :: params,
-         transf_funbody env f.fd_body (Some eeres))
+         transf_funbody env (subst_stmt subst f.fd_body) (Some eeres))
     | Ret_value ty ->
         let eres = new_temp ~name:"_res" ty in
-        (ty, params, transf_funbody env f.fd_body (Some eres)) in
+        (f.fd_attrib,
+         ty,
+         params, 
+         transf_funbody env (subst_stmt subst f.fd_body) (Some eres)) in
   let temps = get_temps() in
-  {f with fd_ret = ret1; fd_params = params1;
-          fd_locals = f.fd_locals @ temps; fd_body = body1}
+  {f with fd_attrib = attr1;
+          fd_ret = ret1;
+          fd_params = params1;
+          fd_locals = locals @ temps;
+          fd_body = sseq f.fd_body.sloc actions body1}
 
 (* Composites *)
 

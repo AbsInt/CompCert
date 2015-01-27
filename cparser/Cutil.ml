@@ -838,6 +838,14 @@ let eassign e1 e2 = { edesc = EBinop(Oassign, e1, e2, e1.etyp); etyp = e1.etyp }
 
 let ecomma e1 e2 = { edesc = EBinop(Ocomma, e1, e2, e2.etyp); etyp = e2.etyp }
 
+(* Construct a cascade of "," expressions.
+   Associate to the left so that it prints more nicely. *)
+
+let ecommalist el e =
+  match el with
+  | [] -> e
+  | e1 :: el -> ecomma (List.fold_left ecomma e1 el) e
+
 (* Construct an address-of expression.  Can be applied not just to
    an l-value but also to a sequence or a conditional of l-values. *)
 
@@ -910,3 +918,65 @@ let rec default_init env ty =
       end
   | _ ->
       assert false
+
+(* Substitution of variables by expressions *)
+
+let rec subst_expr phi e =
+  match e.edesc with
+  | EConst _ | ESizeof _ | EAlignof _ -> e
+  | EVar x ->
+      begin try IdentMap.find x phi with Not_found -> e end
+  | EUnop(op, e1) ->
+      { e with edesc = EUnop(op, subst_expr phi e1) }
+  | EBinop(op, e1, e2, ty) ->
+      { e with edesc = EBinop(op, subst_expr phi e1, subst_expr phi e2, ty) }
+  | EConditional(e1, e2, e3) ->
+      { e with edesc =
+          EConditional(subst_expr phi e1, subst_expr phi e2, subst_expr phi e3) }
+  | ECast(ty, e1) ->
+      { e with edesc = ECast(ty, subst_expr phi e1) }
+  | ECompound(ty, i) ->
+      { e with edesc = ECompound(ty, subst_init phi i) }
+  | ECall(e1, el) ->
+      { e with edesc = ECall(subst_expr phi e1, List.map (subst_expr phi) el) }
+
+and subst_init phi = function
+  | Init_single e -> Init_single (subst_expr phi e)
+  | Init_array il -> Init_array (List.map (subst_init phi) il)
+  | Init_struct(name, fl) ->
+      Init_struct(name, List.map (fun (f,i) -> (f, subst_init phi i)) fl)
+  | Init_union(name, f, i) ->
+      Init_union(name, f, subst_init phi i)
+
+let subst_decl phi (sto, name, ty, optinit) =
+  (sto, name, ty,
+   match optinit with None -> None | Some i -> Some (subst_init phi i))
+
+let rec subst_stmt phi s =
+  { s with sdesc =
+      match s.sdesc with
+      | Sskip
+      | Sbreak
+      | Scontinue
+      | Sgoto _
+      | Sasm _ -> s.sdesc
+      | Sdo e -> Sdo (subst_expr phi e)
+      | Sseq(s1, s2) -> Sseq (subst_stmt phi s1, subst_stmt phi s2)
+      | Sif(e, s1, s2) ->
+          Sif (subst_expr phi e, subst_stmt phi s1, subst_stmt phi s2)
+      | Swhile(e, s1) -> Swhile (subst_expr phi e, subst_stmt phi s1)
+      | Sdowhile(s1, e) -> Sdowhile (subst_stmt phi s1, subst_expr phi e)
+      | Sfor(s1, e, s2, s3) ->
+          Sfor (subst_stmt phi s1, subst_expr phi e,
+                subst_stmt phi s2, subst_stmt phi s3)
+      | Sswitch(e, s1) -> Sswitch (subst_expr phi e, subst_stmt phi s1)
+      | Slabeled(l, s1) -> Slabeled (l, subst_stmt phi s1)
+      | Sreturn None -> s.sdesc
+      | Sreturn (Some e) -> Sreturn (Some (subst_expr phi e))
+      | Sblock sl -> Sblock (List.map (subst_stmt phi) sl)
+      | Sdecl d -> Sdecl (subst_decl phi d)
+  }
+
+
+
+

@@ -844,8 +844,10 @@ let print_instruction oc = function
   | Pjmp_l(l) ->
       fprintf oc "	jmp	%a\n" label (transl_label l)
   | Pjmp_s(f, sg) ->
+      assert (not sg.sig_cc.cc_structret);
       fprintf oc "	jmp	%a\n" symbol f
   | Pjmp_r(r, sg) ->
+      assert (not sg.sig_cc.cc_structret);
       fprintf oc "	jmp	*%a\n" ireg r
   | Pjcc(c, l) ->
       let l = transl_label l in
@@ -861,11 +863,20 @@ let print_instruction oc = function
       fprintf oc "	jmp	*%a(, %a, 4)\n" label l ireg r;
       jumptables := (l, tbl) :: !jumptables
   | Pcall_s(f, sg) ->
-      fprintf oc "	call	%a\n" symbol f
+      fprintf oc "	call	%a\n" symbol f;
+      if sg.sig_cc.cc_structret then
+        fprintf oc "	pushl	%%eax\n"
   | Pcall_r(r, sg) ->
-      fprintf oc "	call	*%a\n" ireg r
+      fprintf oc "	call	*%a\n" ireg r;
+      if sg.sig_cc.cc_structret then
+        fprintf oc "	pushl	%%eax\n"
   | Pret ->
-      fprintf oc "	ret\n"
+      if (!current_function_sig).sig_cc.cc_structret then begin
+        fprintf oc "	movl	0(%%esp), %%eax\n";
+        fprintf oc "	ret	$4\n"
+      end else begin
+        fprintf oc "	ret\n"
+      end
   (** Pseudo-instructions *)
   | Plabel(l) ->
       fprintf oc "%a:\n" label (transl_label l)

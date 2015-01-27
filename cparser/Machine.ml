@@ -44,8 +44,15 @@ type t = {
   alignof_fun: int option;
   bigendian: bool;
   bitfields_msb_first: bool;
-  struct_return_as_int: int
+  supports_unaligned_accesses: bool;
+  struct_return_as_int: int;
+  struct_passing_style: struct_passing_style
 }
+
+and struct_passing_style =
+  | SP_ref_callee
+  | SP_ref_caller
+  | SP_split_args
 
 let ilp32ll64 = {
   name = "ilp32ll64";
@@ -76,7 +83,9 @@ let ilp32ll64 = {
   alignof_fun = None;
   bigendian = false;
   bitfields_msb_first = false;
-  struct_return_as_int = 0
+  supports_unaligned_accesses = false;
+  struct_return_as_int = 0;
+  struct_passing_style = SP_ref_callee
 }
 
 let i32lpll64 = {
@@ -108,7 +117,9 @@ let i32lpll64 = {
   alignof_fun = None;
   bigendian = false;
   bitfields_msb_first = false;
-  struct_return_as_int = 0
+  supports_unaligned_accesses = false;
+  struct_return_as_int = 0;
+  struct_passing_style = SP_ref_callee
 }
 
 let il32pll64 = {
@@ -140,7 +151,9 @@ let il32pll64 = {
   alignof_fun = None;
   bigendian = false;
   bitfields_msb_first = false;
-  struct_return_as_int = 0
+  supports_unaligned_accesses = false;
+  struct_return_as_int = 0;
+  struct_passing_style = SP_ref_callee
 }
 
 (* Canned configurations for some ABIs *)
@@ -149,9 +162,17 @@ let x86_32 =
   { ilp32ll64 with name = "x86_32";
                    char_signed = true;
                    alignof_longlong = 4; alignof_double = 4;
-                   sizeof_longdouble = 12; alignof_longdouble = 4 }
+                   sizeof_longdouble = 12; alignof_longdouble = 4;
+                   supports_unaligned_accesses = true;
+                   struct_passing_style = SP_split_args }
+
+let x86_32_macosx =
+  { x86_32 with sizeof_longdouble = 16; alignof_longdouble = 16;
+                struct_return_as_int = 8 }
+
 let x86_64 =
   { i32lpll64 with name = "x86_64"; char_signed = true }
+
 let win32 =
   { ilp32ll64 with name = "win32"; char_signed = true;
                    sizeof_wchar = 2; wchar_signed = false }
@@ -162,16 +183,28 @@ let ppc_32_bigendian =
   { ilp32ll64 with name = "powerpc";
                    bigendian = true;
                    bitfields_msb_first = true;
-                   struct_return_as_int = 8 }
+                   supports_unaligned_accesses = true;
+                   struct_return_as_int = 8;
+                   struct_passing_style = SP_ref_caller }
+
 let arm_littleendian =
   { ilp32ll64 with name = "arm";
-                   struct_return_as_int = 4 }
+                   struct_return_as_int = 4;
+                   struct_passing_style = SP_split_args }
 
 (* Add GCC extensions re: sizeof and alignof *)
 
 let gcc_extensions c =
   { c with sizeof_void = Some 1; sizeof_fun = Some 1;
            alignof_void = Some 1; alignof_fun = Some 1 }
+
+(* Normalize configuration for use with the CompCert reference interpreter *)
+
+let compcert_interpreter c =
+  { c with sizeof_longdouble = 8; alignof_longdouble = 8;
+           supports_unaligned_accesses = false;
+           struct_return_as_int = 0;
+           struct_passing_style = SP_ref_callee }
 
 (* Undefined configuration *)
 
@@ -204,7 +237,9 @@ let undef = {
   alignof_fun = None;
   bigendian = false;
   bitfields_msb_first = false;
-  struct_return_as_int = 0
+  supports_unaligned_accesses = false;
+  struct_return_as_int = 0;
+  struct_passing_style = SP_ref_callee
 }
 
 (* The current configuration.  Must be initialized before use. *)

@@ -241,6 +241,7 @@ let process_c_file sourcename =
     let preproname = Filename.temp_file "compcert" ".i" in
     preprocess sourcename preproname;
     if !option_interp then begin
+      Machine.config := Machine.compcert_interpreter !Machine.config;
       let csyntax = parse_c_file sourcename preproname in
       safe_remove preproname;
       Interp.execute csyntax;
@@ -583,7 +584,9 @@ let _ =
       begin match Configuration.arch with
       | "powerpc" -> Machine.ppc_32_bigendian
       | "arm"     -> Machine.arm_littleendian
-      | "ia32"    -> Machine.x86_32
+      | "ia32"    -> if Configuration.system = "macosx"
+                     then Machine.x86_32_macosx
+                     else Machine.x86_32
       | _         -> assert false
       end;
     Builtins.set C2C.builtins;
