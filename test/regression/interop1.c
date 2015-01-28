@@ -37,7 +37,7 @@ struct U5 { int a; char b; };
 struct U6 { int a; short b; };
 struct U7 { int a; short b; char c; };
 struct U8 { char a; int b; };
-struct U9 { double a, b; };
+struct U9 { int a[4]; };
 
 /* Struct passing */
 
@@ -175,7 +175,22 @@ void US(u8) (struct U8 x)
 extern void THEM(u9) (struct U9 x);
 void US(u9) (struct U9 x)
 {
-  printf("u9 = { a = %g, b = %g }\n", x.a, x.b);
+  printf("u9 = { a = { %d, %d, %d, %d } }\n", x.a[0], x.a[1], x.a[2], x.a[3]);
+}
+
+/* Struct passing with modification in the callee */
+
+extern void THEM (ms4) (struct S4 x);
+void US (ms4) (struct S4 x)
+{
+  x.a += 1; x.d -= 1;
+}
+
+extern void THEM (mu9) (struct U9 x);
+void US (mu9) (struct U9 x)
+{
+  int i;
+  for (i = 0; i < 4; i++) x.a[i] = i;
 }
 
 /* Struct return */
@@ -210,7 +225,7 @@ struct U6 US(ru6) (void)
 
 extern struct U9 THEM(ru9) (void);
 struct U9 US(ru9) (void)
-{ return (struct U9){ 0.1234, -5678.9 }; }
+{ return (struct U9){ 111, 222, 333, 444 }; }
 
 /* Test function, calling the functions compiled by the other compiler */
 
@@ -238,7 +253,13 @@ void US(test) (void)
   THEM(u6)((struct U6) { -12345678, 555 });
   THEM(u7)((struct U7) { 111111111, 2222, 'a' });
   THEM(u8)((struct U8) { 'u', 8 });
-  THEM(u9)((struct U9) { 3.14159, -2.718 });
+  THEM(u9)((struct U9) { 9, 8, 7, 6 });
+  { struct S4 x = { 's', 'a', 'm', 'e' };
+    THEM(ms4)(x);
+    printf("after ms4, x = { '%c', '%c', '%c', '%c' }\n", x.a, x.b, x.c, x.d); }
+  { struct U9 x = { 11, 22, 33, 44 };
+    THEM(mu9)(x);
+    printf("after mu9, x = { a = { %d, %d, %d, %d } }\n", x.a[0], x.a[1], x.a[2], x.a[3]); }
   { struct S1 x = THEM(rs1)();
     printf("rs1 = { a = '%c' }\n", x.a); }
   { struct S2 x = THEM(rs2)();
@@ -255,7 +276,7 @@ void US(test) (void)
   { struct U6 x = THEM(ru6)();
     printf("ru6 = { a = %d, b = %d }\n", x.a, x.b); }
   { struct U9 x = THEM(ru9)();
-    printf("ru9 = { a = %f, b = %f }\n", x.a, x.b); }
+    printf("ru9 = { a = { %d, %d, %d, %d } }\n", x.a[0], x.a[1], x.a[2], x.a[3]); }
 }
 
 #if defined(COMPCERT_SIDE)
