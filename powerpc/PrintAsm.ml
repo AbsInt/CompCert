@@ -450,15 +450,6 @@ let print_function oc name fn =
     jumptables := []
   end
 
-(* Generation of whole programs *)
-
-let print_fundef oc name defn =
-  match defn with
-  | Internal code ->
-      print_function oc name code
-  | External _ ->
-      ()
-
 let print_init oc = function
   | Init_int8 n ->
       fprintf oc "	.byte	%ld\n" (camlint_of_coqint n)
@@ -531,7 +522,8 @@ let print_var oc name v =
 
 let print_globdef oc (name, gdef) =
   match gdef with
-  | Gfun f -> print_fundef oc name f
+  | Gfun (Internal code) -> print_function oc name code
+  | Gfun (External ef) ->   ()
   | Gvar v -> print_var oc name v
 
   end
