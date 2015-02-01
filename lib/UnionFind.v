@@ -652,21 +652,21 @@ Qed.
 Next Obligation.
   (* a <> b*)
   destruct (find_x a')
-  as [[b' uf''] [A B]]. simpl in *. inv Heq_anonymous0.
+  as [[b' uf''] [A B]]. simpl in *. inv Heq_anonymous.
   apply repr_some_diff. auto.
 Qed.
 Next Obligation.
-  destruct (find_x a') as [[b' uf''] [A B]]. simpl in *. inv Heq_anonymous0.
+  destruct (find_x a') as [[b' uf''] [A B]]. simpl in *. inv Heq_anonymous.
   rewrite B. apply repr_some. auto.
 Qed.
 Next Obligation.
   split.
   destruct (find_x a')
-  as [[b' uf''] [A B]]. simpl in *. inv Heq_anonymous0.
+  as [[b' uf''] [A B]]. simpl in *. inv Heq_anonymous.
   symmetry. apply repr_some. auto.
   intros. rewrite repr_compress. 
   destruct (find_x a')
-  as [[b' uf''] [A B]]. simpl in *. inv Heq_anonymous0. auto.
+  as [[b' uf''] [A B]]. simpl in *. inv Heq_anonymous. auto.
 Qed.
 Next Obligation.
   split; auto. symmetry. apply repr_none. auto.

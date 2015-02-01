@@ -276,7 +276,7 @@ Property is_terminal_shift_correct :
 Proof.
 unfold is_terminal_shift, terminal_shift.
 intros.
-apply (forallb_items_spec _ H _ _ _ _ H0 (fun _ _ _ _ => _)).
+apply (forallb_items_spec _ H _ _ _ _ H0 (fun _ _ fut look => _)).
 intros.
 destruct (future_of_prod prod0 pos) as [|[]] eqn:?; intuition.
 destruct (action_table st); intuition.
@@ -327,7 +327,11 @@ Proof.
 unfold is_end_reduce, end_reduce.
 intros.
 revert H1.
-apply (forallb_items_spec _ H _ _ _ _ H0 (fun _ _ _ _ => _)).
+apply (forallb_items_spec _ H _ _ _ _ H0 (fun st prod fut look => _ ->
+                                            match action_table st with
+                                              | Default_reduce_act p => p = prod
+                                              | _ => _
+                                            end)).
 intros.
 rewrite H3 in H2.
 destruct (action_table st); intuition.
@@ -368,7 +372,7 @@ Definition non_terminal_goto :=
     match fut with
       | NT nt::q =>
         match goto_table s1 nt with
-          | Some (exist s2 _) =>
+          | Some (exist _ s2 _) =>
             state_has_future s2 prod q lookahead
           | None =>
             forall prod fut lookahead,
@@ -386,7 +390,7 @@ Definition is_non_terminal_goto items_map :=
     match future_of_prod prod pos with
       | NT nt::_ =>
         match goto_table s1 nt with
-          | Some (exist s2 _) =>
+          | Some (exist _ s2 _) =>
             TerminalSet.subset lset (find_items_map items_map s2 prod (S pos))
           | None => forallb_items items_map (fun s1' prod' pos' _ =>
             (implb (compare_eqb s1 s1')
@@ -403,7 +407,16 @@ Property is_non_terminal_goto_correct :
 Proof.
 unfold is_non_terminal_goto, non_terminal_goto.
 intros.
-apply (forallb_items_spec _ H _ _ _ _ H0 (fun _ _ _ _ => _)).
+apply (forallb_items_spec _ H _ _ _ _ H0 (fun st prod fut look =>
+                                            match fut with
+                                              | NT nt :: q =>
+                                                match goto_table st nt with
+                                                  | Some _ => _
+                                                  | None =>
+                                                    forall p f l, state_has_future st p f l -> (_:Prop)
+                                                end
+                                              | _ => _
+                                            end)).
 intros.
 destruct (future_of_prod prod0 pos) as [|[]] eqn:?; intuition.
 destruct (goto_table st n) as [[]|].
@@ -414,10 +427,10 @@ rewrite Heql; reflexivity.
 apply (TerminalSet.subset_2 H2); intuition.
 intros.
 remember st in H2; revert Heqs.
-apply (forallb_items_spec _ H2 _ _ _ _ H3 (fun _ _ _ _ => _)); intros.
-rewrite <- compare_eqb_iff in Heqs; rewrite Heqs in H5.
-destruct (future_of_prod prod2 pos0) as [|[]]; intuition.
+apply (forallb_items_spec _ H2 _ _ _ _ H3 (fun st' prod fut look => s = st' -> match fut return Prop with [] => _ | _ => _ end)); intros.
 rewrite <- compare_eqb_iff in H6; rewrite H6 in H5.
+destruct (future_of_prod prod1 pos0) as [|[]]; intuition.
+rewrite <- compare_eqb_iff in H7; rewrite H7 in H5.
 discriminate.
 Qed.
 
@@ -476,7 +489,11 @@ Property is_non_terminal_closed_correct:
 Proof.
 unfold is_non_terminal_closed, non_terminal_closed.
 intros.
-apply (forallb_items_spec _ H _ _ _ _ H0 (fun _ _ _ _ => _)).
+apply (forallb_items_spec _ H _ _ _ _ H0 (fun st prod fut look =>
+                                            match fut with
+                                              | NT nt :: q => forall p l, _ -> _ -> state_has_future st _ _ _
+                                              | _ => _
+                                            end)).
 intros.
 destruct (future_of_prod prod0 pos); intuition.
 destruct s; eauto; intros.

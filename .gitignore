@@ -8,6 +8,7 @@
 *.cmx
 *.cma
 *.cmxa
+.*.aux
 # Emacs saves
 *~
 # Executables and configuration

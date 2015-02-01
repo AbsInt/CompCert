@@ -87,7 +87,7 @@ Variable init : initstate.
 Definition state_of_stack (stack:stack): state :=
   match stack with
     | [] => init
-    | existT s _::_ => s
+    | existT _ s _::_ => s
   end.
 
 (** [pop] pops some symbols from the stack. It returns the popped semantic
@@ -96,15 +96,15 @@ Definition state_of_stack (stack:stack): state :=
 Fixpoint pop (symbols_to_pop:list symbol) (stack_cur:stack):
   forall {A:Type} (action:arrows_right A (map symbol_semantic_type symbols_to_pop)),
     result (stack * A) :=
-  match symbols_to_pop return forall {A:Type} (action:arrows_right A (map _ symbols_to_pop)), _ with
+  match symbols_to_pop return forall {A:Type} (action:arrows_right A (map _ symbols_to_pop)), result (stack * A) with
     | [] => fun A action => OK (stack_cur, action)
-    | t::q => fun A action => 
+    | t::q => fun A action =>
       match stack_cur with
-        | existT state_cur sem::stack_rec =>
+        | existT _ state_cur sem::stack_rec =>
           match compare_eqdec (last_symb_of_non_init_state state_cur) t with
             | left e =>
               let sem_conv := eq_rect _ symbol_semantic_type sem _ e in
-                pop q stack_rec (action sem_conv)
+              pop q stack_rec (action sem_conv)
             | right _ => Err
           end
         | [] => Err
@@ -147,16 +147,16 @@ Qed.
 Definition reduce_step stack_cur production buffer: result step_result :=
   do (stack_new, sem) <-
     pop (prod_rhs_rev production) stack_cur (prod_action' production);
-  match goto_table (state_of_stack stack_new) (prod_lhs production) return _ with
-    | Some (exist state_new e) =>
+  match goto_table (state_of_stack stack_new) (prod_lhs production) with
+    | Some (exist _ state_new e) =>
       let sem := eq_rect _ _ sem _ e in
       OK (Progress_sr (existT noninitstate_type state_new sem::stack_new) buffer)
     | None =>
-      match stack_new return _ with
+      match stack_new with
         | [] =>
-          match compare_eqdec (prod_lhs production) (start_nt init) return _ with
+          match compare_eqdec (prod_lhs production) (start_nt init) with
             | left e =>
-              let sem := eq_rect _ (fun nt => _ (_ nt)) sem _ e in
+              let sem := eq_rect _ (fun nt => symbol_semantic_type (NT nt)) sem _ e in
               OK (Accept_sr sem buffer)
             | right _ => Err
           end
@@ -171,7 +171,7 @@ Definition step stack_cur buffer: result step_result :=
       reduce_step stack_cur production buffer
     | Lookahead_act awt =>
       match Streams.hd buffer with
-        | existT term sem =>
+        | existT _ term sem =>
           match awt term with
             | Shift_act state_new e =>
               let sem_conv := eq_rect _ symbol_semantic_type sem _ e in
@@ -212,6 +212,14 @@ Definition parse buffer n_steps: result parse_result :=
   parse_fix [] buffer n_steps.
 
 End Init.
+
+Arguments Fail_sr [init].
+Arguments Accept_sr [init] _ _.
+Arguments Progress_sr [init] _ _.
+
+Arguments Fail_pr [init].
+Arguments Timeout_pr [init].
+Arguments Parsed_pr [init] _ _.
 
 End Make.
 

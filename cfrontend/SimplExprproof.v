@@ -45,7 +45,7 @@ Let tge := Clight.globalenv tprog.
 Lemma comp_env_preserved:
   Clight.genv_cenv tge = Csem.genv_cenv ge.
 Proof.
-  monadInv TRANSL. unfold tge; rewrite <- H0; auto. 
+  monadInv TRANSL. auto.
 Qed.
 
 Lemma symbols_preserved:

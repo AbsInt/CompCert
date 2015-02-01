@@ -56,8 +56,6 @@ module P = struct
   let one = Coq_xH
   let succ = Pos.succ
   let pred = Pos.pred
-  let add = Pos.add
-  let sub = Pos.sub
   let eq x y = (Pos.compare x y = Eq)
   let lt x y = (Pos.compare x y = Lt)
   let gt x y = (Pos.compare x y = Gt)
@@ -106,8 +104,6 @@ module P = struct
       then Coq_xH
       else Coq_xI (of_int64 (Int64.shift_right_logical n 1))
 
-  let (+) = add
-  let (-) = sub
   let (=) = eq
   let (<) = lt
   let (<=) = le
@@ -124,11 +120,6 @@ module N = struct
 
   let zero = N0
   let one = Npos Coq_xH
-  let succ = N.succ
-  let pred = N.pred
-  let add = N.add
-  let sub = N.sub
-  let mul = N.mul
   let eq x y = (N.compare x y = Eq)
   let lt x y = (N.compare x y = Lt)
   let gt x y = (N.compare x y = Gt)
@@ -157,9 +148,6 @@ module N = struct
   let of_int64 n =
     if n = 0L then N0 else Npos (P.of_int64 n)
 
-  let (+) = add
-  let (-) = sub
-  let ( * ) = mul
   let (=) = eq
   let (<) = lt
   let (<=) = le

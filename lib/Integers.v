@@ -3576,8 +3576,8 @@ Proof.
   intros. 
   destruct (andb_prop _ _ H1). clear H1. 
   destruct (andb_prop _ _ H2). clear H2.
-  exploit proj_sumbool_true. eexact H1. intro A; clear H1.
-  exploit proj_sumbool_true. eexact H4. intro B; clear H4.
+  apply proj_sumbool_true in H1.
+  apply proj_sumbool_true in H4.
   assert (unsigned ofs1 + sz1 <= unsigned ofs2 \/ unsigned ofs2 + sz2 <= unsigned ofs1).
   destruct (orb_prop _ _ H3). left. eapply proj_sumbool_true; eauto. right. eapply proj_sumbool_true; eauto.
   clear H3.

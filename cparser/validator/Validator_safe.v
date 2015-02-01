@@ -121,7 +121,7 @@ Qed.
 Definition goto_head_symbs :=
   forall s nt,
     match goto_table s nt with
-      | Some (exist s2 _) => 
+      | Some (exist _ s2 _) => 
         prefix (past_symb_of_non_init_state s2) (head_symbs_of_state s)
       | None => True
     end.
@@ -130,7 +130,7 @@ Definition is_goto_head_symbs (_:unit) :=
   forallb (fun s:state =>
     forallb (fun nt =>
       match goto_table s nt with
-        | Some (exist s2 _) =>
+        | Some (exist _ s2 _) =>
           is_prefix (past_symb_of_non_init_state s2) (head_symbs_of_state s)
         | None => true
       end)
@@ -235,7 +235,7 @@ Qed.
 Definition goto_past_state :=
   forall s nt,
     match goto_table s nt with
-      | Some (exist s2 _) =>
+      | Some (exist _ s2 _) =>
         prefix_pred (past_state_of_non_init_state s2)
                     (head_states_of_state s)
       | None => True
@@ -245,7 +245,7 @@ Definition is_goto_past_state (_:unit) :=
   forallb (fun s:state =>
     forallb (fun nt =>
       match goto_table s nt with
-        | Some (exist s2 _) =>
+        | Some (exist _ s2 _) =>
           is_prefix_pred
             (past_state_of_non_init_state s2) (head_states_of_state s)
         | None => true

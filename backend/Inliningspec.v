@@ -516,7 +516,7 @@ Proof.
     assert (dstk ctx + mstk ctx <= dstk ctx'). simpl. apply align_le. apply min_alignment_pos. omega.
     omega.
     intros. simpl in H. rewrite S1.
-    transitivity s1.(st_code)!pc0. eapply set_instr_other; eauto. unfold node in *; xomega.
+    transitivity (s1.(st_code))!pc0. eapply set_instr_other; eauto. unfold node in *; xomega.
     eapply add_moves_unchanged; eauto. unfold node in *; xomega. xomega. 
   red; simpl. subst s2; simpl in *. xomega. 
   red; simpl. split. auto. apply align_le. apply min_alignment_pos.
@@ -546,7 +546,7 @@ Proof.
     assert (dstk ctx <= dstk ctx'). simpl. apply align_le. apply min_alignment_pos. omega.
     omega.
     intros. simpl in H. rewrite S1.
-    transitivity s1.(st_code)!pc0. eapply set_instr_other; eauto. unfold node in *; xomega.
+    transitivity (s1.(st_code))!pc0. eapply set_instr_other; eauto. unfold node in *; xomega.
     eapply add_moves_unchanged; eauto. unfold node in *; xomega. xomega. 
   red; simpl. 
 subst s2; simpl in *; xomega.

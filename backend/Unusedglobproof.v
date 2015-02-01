@@ -1195,8 +1195,10 @@ Theorem init_mem_inject:
   exists f tm, Genv.init_mem tp = Some tm /\ Mem.inject f m tm /\ meminj_preserves_globals f.
 Proof.
   intros.
+  assert (AGI:=alloc_globals_inj).
+  assert (IMPG:=init_meminj_preserves_globals).
   unfold transform_program in TRANSF; rewrite USED_GLOBALS in TRANSF; injection TRANSF. intros EQ.
-  destruct (alloc_globals_inj (prog_public p) (List.rev (prog_defs p)) m used ge tge) as (tm & A & B & C).
+  destruct (AGI (prog_public p) (List.rev (prog_defs p)) m used ge tge) as (tm & A & B & C).
   rewrite rev_involutive; auto. 
   rewrite rev_involutive; auto.
   unfold tge; rewrite <- EQ; auto.
@@ -1205,13 +1207,12 @@ Proof.
   intros. rewrite rev_involutive. auto.
   assert (D: Genv.init_mem tp = Some tm).
   { unfold Genv.init_mem. fold tge. rewrite <- EQ. exact A. }
-  pose proof (init_meminj_preserves_globals). 
   exists init_meminj, tm; intuition auto.
   constructor; intros.
   + auto.
   + destruct (init_meminj b) as [[b1 delta1]|] eqn:INJ; auto.
     exploit init_meminj_invert; eauto. intros (P & id & Q & R).
-    elim H1. eapply Genv.find_symbol_not_fresh; eauto.
+    elim H0. eapply Genv.find_symbol_not_fresh; eauto.
   + exploit init_meminj_invert; eauto. intros (P & id & Q & R).
     eapply Genv.find_symbol_not_fresh; eauto.
   + apply init_meminj_no_overlap.

@@ -743,7 +743,7 @@ Ltac FinishL := apply star_one; left; apply step_lred; eauto; simpl; try (econst
 (* var local *)
   FinishL. 
 (* var global *)
-  FinishL. apply red_var_global; auto.
+  FinishL.
 (* deref *)
   Steps H0 (fun x => C(Ederef x ty)). FinishL. 
 (* field struct *)

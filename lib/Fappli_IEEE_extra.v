@@ -63,10 +63,10 @@ Qed.
 
 Definition is_finite_pos0 (f: binary_float) : bool :=
   match f with
-  | B754_zero s => negb s
-  | B754_infinity _ => false
-  | B754_nan _ _ => false
-  | B754_finite _ _ _ _ => true
+  | B754_zero _ _ s => negb s
+  | B754_infinity _ _ _ => false
+  | B754_nan _ _ _ _ => false
+  | B754_finite _ _ _ _ _ _ => true
   end.
 
 Lemma Bsign_pos0:
@@ -693,10 +693,10 @@ Qed.
 
 Definition ZofB (f: binary_float): option Z :=
   match f with
-    | B754_finite s m (Zpos e) _ => Some (cond_Zopp s (Zpos m) * Zpower_pos radix2 e)%Z
-    | B754_finite s m 0 _ => Some (cond_Zopp s (Zpos m))
-    | B754_finite s m (Zneg e) _ => Some (cond_Zopp s (Zpos m / Zpower_pos radix2 e))%Z
-    | B754_zero _ => Some 0%Z
+    | B754_finite _ _ s m (Zpos e) _ => Some (cond_Zopp s (Zpos m) * Zpower_pos radix2 e)%Z
+    | B754_finite _ _ s m 0 _ => Some (cond_Zopp s (Zpos m))
+    | B754_finite _ _ s m (Zneg e) _ => Some (cond_Zopp s (Zpos m / Zpower_pos radix2 e))%Z
+    | B754_zero _ _ _ => Some 0%Z
     | _ => None
   end.
 
@@ -949,7 +949,9 @@ Proof.
 - revert H H0. fold emin. fold fexp. 
   set (x := B754_finite prec emax b0 m0 e1 e2). set (rx := B2R _ _ x). 
   set (y := B754_finite prec emax b m e e0). set (ry := B2R _ _ y).
-  rewrite (Rmult_comm ry rx). destruct Rlt_bool.
+  rewrite (Rmult_comm ry rx).
+  destruct (Rlt_bool (Rabs (round radix2 fexp (round_mode mode) (rx * ry)))
+                     (bpow radix2 emax)).
   + intros (A1 & A2 & A3) (B1 & B2 & B3).
     apply B2R_Bsign_inj; auto. rewrite <- B1 in A1. auto. 
     rewrite ! Bsign_FF2B. f_equal. f_equal. apply xorb_comm. apply Pos.mul_comm. apply Z.add_comm.
@@ -1002,9 +1004,9 @@ Definition Bexact_inverse_mantissa := Z.iter (prec - 1) xO xH.
 Remark Bexact_inverse_mantissa_value:
   Zpos Bexact_inverse_mantissa = 2 ^ (prec - 1).
 Proof.
-  assert (REC: forall n, Z.pos (nat_iter n xO xH) = 2 ^ (Z.of_nat n)).
+  assert (REC: forall n, Z.pos (iter_nat n _ xO xH) = 2 ^ (Z.of_nat n)).
   { induction n. reflexivity. 
-    simpl nat_iter. transitivity (2 * Z.pos (nat_iter n xO xH)). reflexivity. 
+    simpl nat_rect. transitivity (2 * Z.pos (iter_nat n _ xO xH)). reflexivity. 
     rewrite inj_S. rewrite IHn. unfold Z.succ. rewrite Zpower_plus by omega. 
     change (2 ^ 1) with 2. ring. }
   red in prec_gt_0_.
@@ -1015,12 +1017,12 @@ Qed.
 Remark Bexact_inverse_mantissa_digits2_pos:
   Z.pos (digits2_pos Bexact_inverse_mantissa) = prec.
 Proof.
-  assert (DIGITS: forall n, digits2_pos (nat_iter n xO xH) = Pos.of_nat (n+1)).
+  assert (DIGITS: forall n, digits2_pos (iter_nat n _ xO xH) = Pos.of_nat (n+1)).
   { induction n; simpl. auto. rewrite IHn. destruct n; auto. }
   red in prec_gt_0_.
   unfold Bexact_inverse_mantissa. rewrite iter_nat_of_Z by omega. rewrite DIGITS.
   rewrite Zabs2Nat.abs_nat_nonneg, Z2Nat.inj_sub by omega.
-  destruct prec; try  discriminate. rewrite NPeano.Nat.sub_add.
+  destruct prec; try  discriminate. rewrite Nat.sub_add.
   simpl. rewrite Pos2Nat.id. auto.
   simpl. zify; omega.
 Qed.
@@ -1039,7 +1041,7 @@ Qed.
 
 Program Definition Bexact_inverse (f: binary_float) : option binary_float :=
   match f with
-  | B754_finite s m e B =>
+  | B754_finite _ _ s m e B =>
       if positive_eq_dec m Bexact_inverse_mantissa then
       let e' := -e - (prec - 1) * 2 in
       if Z_le_dec emin e' then
@@ -1129,10 +1131,10 @@ Let binary_float2 := binary_float prec2 emax2.
 
 Definition Bconv (conv_nan: bool -> nan_pl prec1 -> bool * nan_pl prec2) (md: mode) (f: binary_float1) : binary_float2 :=
   match f with
-    | B754_nan s pl => let '(s, pl) := conv_nan s pl in B754_nan _ _ s pl
-    | B754_infinity s => B754_infinity _ _ s
-    | B754_zero s => B754_zero _ _ s
-    | B754_finite s m e _ => binary_normalize _ _ _ Hmax2 md (cond_Zopp s (Zpos m)) e s
+    | B754_nan _ _ s pl => let '(s, pl) := conv_nan s pl in B754_nan _ _ s pl
+    | B754_infinity _ _ s => B754_infinity _ _ s
+    | B754_zero _ _ s => B754_zero _ _ s
+    | B754_finite _ _ s m e _ => binary_normalize _ _ _ Hmax2 md (cond_Zopp s (Zpos m)) e s
   end.
 
 Theorem Bconv_correct:

@@ -203,7 +203,7 @@ Module Float.
 (** Transform a Nan payload to a quiet Nan payload. *)
 
 Program Definition transform_quiet_pl (pl:nan_pl 53) : nan_pl 53 :=
-  Pos.lor pl (nat_iter 51 xO xH).
+  Pos.lor pl (iter_nat 51 _ xO xH).
 Next Obligation.
   destruct pl.
   simpl. rewrite Z.ltb_lt in *.
@@ -241,7 +241,7 @@ Definition expand_pl (pl: nan_pl 24) : nan_pl 53.
 Proof.
   refine (exist _ (Pos.shiftl_nat (proj1_sig pl) 29) _).
   abstract (
-    destruct pl; unfold proj1_sig, Pos.shiftl_nat, nat_iter, Fcore_digits.digits2_pos;
+    destruct pl; unfold proj1_sig, Pos.shiftl_nat, nat_rect, Fcore_digits.digits2_pos;
     fold (Fcore_digits.digits2_pos x);
     rewrite Z.ltb_lt in *;
     zify; omega).
@@ -257,7 +257,7 @@ Definition reduce_pl (pl: nan_pl 53) : nan_pl 24.
 Proof.
   refine (exist _ (Pos.shiftr_nat (proj1_sig pl) 29) _).
   abstract (
-    destruct pl; unfold proj1_sig, Pos.shiftr_nat, nat_iter;
+    destruct pl; unfold proj1_sig, Pos.shiftr_nat, nat_rect;
     rewrite Z.ltb_lt in *;
     assert (forall x, Fcore_digits.digits2_pos (Pos.div2 x) =
                       (Fcore_digits.digits2_pos x - 1)%positive)
@@ -659,7 +659,7 @@ Proof.
   rewrite ! from_words_eq. rewrite ox8000_0000_signed_unsigned.
   change (Int.unsigned ox8000_0000) with Int.half_modulus.
   unfold sub. rewrite BofZ_minus. 
-  unfold of_int. f_equal. omega.
+  unfold of_int. apply f_equal. omega.
   apply integer_representable_n; auto; smart_omega.
   apply integer_representable_n; auto; smart_omega.
 Qed.
@@ -768,7 +768,7 @@ Proof.
      with ((xh - 2^20) * 2^32) 
        by (compute_this p; compute_this Int.half_modulus; ring).
   unfold add. rewrite BofZ_plus. 
-  unfold of_long. f_equal. 
+  unfold of_long. apply f_equal. 
   rewrite <- (Int64.ofwords_recompose l) at 1. rewrite Int64.ofwords_add''.
   fold xh; fold xl. compute_this (two_p 32); ring. 
   apply integer_representable_n2p; auto.
@@ -925,7 +925,7 @@ Module Float32.
 (** ** NaN payload manipulations *)
 
 Program Definition transform_quiet_pl (pl:nan_pl 24) : nan_pl 24 :=
-  Pos.lor pl (nat_iter 22 xO xH).
+  Pos.lor pl (iter_nat 22 _ xO xH).
 Next Obligation.
   destruct pl.
   simpl. rewrite Z.ltb_lt in *.
@@ -1374,4 +1374,3 @@ Global Opaque
   Float32.to_int Float32.to_intu Float32.to_long Float32.to_longu
   Float32.add Float32.sub Float32.mul Float32.div Float32.cmp
   Float32.to_bits Float32.of_bits.
-

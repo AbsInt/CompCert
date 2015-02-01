@@ -222,7 +222,6 @@ Theorem generic_format_FLT_FIX :
   generic_format beta (FIX_exp emin) x ->
   generic_format beta FLT_exp x.
 Proof with auto with typeclass_instances.
-clear prec_gt_0_.
 apply generic_inclusion_le...
 intros e He.
 unfold FIX_exp.

@@ -806,7 +806,7 @@ Lemma agree_frame_set_regs:
   (forall r, In r rl -> mreg_within_bounds b r) ->
   agree_frame j (Locmap.setlist (map R rl) vl ls) ls0 m sp m' sp' parent ra.
 Proof.
-  induction rl; destruct vl; simpl; intros; intuition.
+  induction rl; destruct vl; simpl; intros; try now intuition.
   apply IHrl; auto. 
   eapply agree_frame_set_reg; eauto. 
 Qed.
@@ -972,7 +972,7 @@ Proof.
   red; intros. exploit agree_bounds; eauto. omega. 
   eapply agree_frame_invariant; eauto.
   intros. eapply Mem.load_unchanged_on; eauto. intros. apply REACH. omega. auto. 
-  intros. eapply Mem.perm_unchanged_on; eauto with mem. auto. 
+  intros. eapply Mem.perm_unchanged_on; eauto with mem.
 Qed.
 
 (** Preservation by parallel stores in the Linear and Mach codes *)

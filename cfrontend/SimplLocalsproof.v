@@ -45,7 +45,7 @@ Let tge := globalenv tprog.
 Lemma comp_env_preserved:
   genv_cenv tge = genv_cenv ge.
 Proof.
-  monadInv TRANSF. unfold tge; rewrite <- H0; auto. 
+  monadInv TRANSF. auto.
 Qed.
 
 Lemma transf_programs:
