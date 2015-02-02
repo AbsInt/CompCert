@@ -26,6 +26,8 @@ type section_name =
   | Section_literal
   | Section_jumptable
   | Section_user of string * bool (*writable*) * bool (*executable*)
+  | Section_debug
+  | Section_debug_abbrev
 
 type access_mode =
   | Access_default

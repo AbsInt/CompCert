@@ -177,6 +177,8 @@ let name_of_section = function
   | Section_user(s, wr, ex) ->
        sprintf ".section	\"%s\",\"a%s%s\",%%progbits"
                s (if wr then "w" else "") (if ex then "x" else "")
+  | Section_debug -> sprintf ".section	.debug_info,\"\",@progbits"
+  | Section_debug_abbrev -> sprintf ".section	.debug_abbrev,\"\",@progbits"
 
 let section oc sec =
   fprintf oc "	%s\n" (name_of_section sec)

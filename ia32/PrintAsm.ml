@@ -98,6 +98,8 @@ module Cygwin_System =
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\", \"%s\"\n"
             s (if ex then "xr" else if wr then "d" else "dr")
+      | Section_debug -> ".section	.debug_info,\"\""
+      | Section_debug_abbrev -> ".section	.debug_abbrev,\"\""
 
     let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
 
@@ -147,7 +149,10 @@ module ELF_System =
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\",\"a%s%s\",@progbits"
             s (if wr then "w" else "") (if ex then "x" else "")
+      | Section_debug -> sprintf ".section	.debug_info,\"\",@progbits"
+      | Section_debug_abbrev -> sprintf ".section	.debug_abbrev,\"\",@progbits"
             
+
     let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
                     
     let print_align oc n =
@@ -201,6 +206,8 @@ module MacOS_System =
           sprintf ".section	\"%s\", %s, %s"
             (if wr then "__DATA" else "__TEXT") s
             (if ex then "regular, pure_instructions" else "regular")
+      | Section_debug -> ".section	__DWARF,__debug_info,regular,debug"
+      | Section_debug_abbrev -> ".section	__DWARF,__debug_abbrev,regular,debug"
     
     let stack_alignment =  16 (* mandatory *)
          

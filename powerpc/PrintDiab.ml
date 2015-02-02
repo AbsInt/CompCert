@@ -16,7 +16,7 @@ open Printf
 open Datatypes
 open DwarfTypes
 open DwarfUtil
-open DwarfAbbrvPrinter
+open DwarfPrinter
 open Camlcoq
 open Sections
 open Asm
@@ -145,87 +145,6 @@ module Diab_System =
           fprintf oc "	.d2_line_end\n";
         end
 
-    module AbbrvPrinter = DwarfAbbrvPrinter(struct
-        let string_of_byte value =
-          Printf.sprintf "	.byte	%s\n" (if value then "0x1" else "0x2")
-            
-        let string_of_abbrv_entry v =
-          Printf.sprintf "	.uleb128	%d\n" v
 
-        let abbrv_start_addr = ref (-1)
-
-        let get_abbrv_start_addr () = !abbrv_start_addr
-
-        let sibling_type_abbr = dw_form_ref4
-        let decl_file_type_abbr = dw_form_data4
-        let decl_line_type_abbr = dw_form_udata
-        let type_abbr = dw_form_ref_addr
-        let name_type_abbr = dw_form_string
-        let encoding_type_abbr = dw_form_data1
-        let byte_size_type_abbr = dw_form_data1
-        let high_pc_type_abbr = dw_form_addr
-        let low_pc_type_abbr = dw_form_addr
-        let stmt_list_type_abbr = dw_form_data4
-        let declaration_type_abbr = dw_form_flag
-        let external_type_abbr = dw_form_flag
-        let prototyped_type_abbr = dw_form_flag
-        let bit_offset_type_abbr = dw_form_data1
-        let comp_dir_type_abbr = dw_form_string
-        let language_type_abbr = dw_form_udata
-        let producer_type_abbr = dw_form_string
-        let value_type_abbr = dw_form_sdata
-        let artificial_type_abbr = dw_form_flag
-        let variable_parameter_type_abbr = dw_form_flag
-        let bit_size_type_abbr = dw_form_data1
-        let location_const_type_abbr = dw_form_data4
-        let location_block_type_abbr = dw_form_block
-        let data_location_block_type_abbr = dw_form_block
-        let data_location_ref_type_abbr = dw_form_ref4
-        let bound_const_type_abbr = dw_form_udata
-        let bound_ref_type_abbr=dw_form_ref4
-
-
-        let abbrv_section_start oc = 
-          fprintf oc "	.section	.debug_abbrev,,n\n";
-          let lbl = new_label () in
-          abbrv_start_addr := lbl;
-          fprintf oc "%a:\n" label lbl
-        
-        let abbrv_section_end oc = 
-          fprintf oc "	.section	.debug_abbrev,,n\n";
-          fprintf oc "	.sleb128	0\n"
-
-        let abbrv_prologue oc id = 
-          fprintf oc "	.section	.debug_abbrev,,n\n";
-          fprintf oc "	.uleb128	%d\n" id
-   
-        let abbrv_epilogue oc = 
-          fprintf oc "	.uleb128	0\n";
-          fprintf oc "	.uleb128	0\n"
-
-      end)
-
-    let rec print_entry oc entry has_sibling =
-      ()
-
-    let print_debug_info oc entry =
-      AbbrvPrinter.print_debug_abbrv oc entry;
-      let abbrv_start = AbbrvPrinter.get_abbrv_start_addr () in
-      let debug_start = new_label () in
-      let print_info () =
-        fprintf oc"	.section	.debug_info,,n\n" in
-      print_info ();
-      fprintf oc "%a\n" label debug_start;
-      let debug_length_start = new_label () in (* Address used for length calculation *)
-      let debug_end = new_label () in
-      fprintf oc "	.4byte	%a-%a\n" label debug_end label debug_length_start;
-      fprintf oc "%a\n" label debug_length_start;
-      fprintf oc "	.2byte	0x2\n"; (* Dwarf version *)
-      fprintf oc "	.4byte	%a\n" label abbrv_start; (* Offset into the abbreviation *)
-      fprintf oc "	.byte	%X\n" !Machine.config.Machine.sizeof_ptr; (* Sizeof pointer type *)
-      print_entry oc entry false;
-      fprintf oc "%a\n" label debug_end; (* End of the debug section *)
-      fprintf oc "	.sleb128	0\n"
-    
 
   end:SYSTEM)

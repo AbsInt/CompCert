@@ -14,15 +14,11 @@
 open DwarfTypes
 open DwarfUtil
 
-module type DWARF_ABBRV_DEFS =
+module type DWARF_DEFS =
     sig
       (* Functions used for the printing of the dwarf abbreviations *)
       val string_of_byte: bool -> string
       val string_of_abbrv_entry: int -> string
-      val abbrv_section_start: out_channel -> unit
-      val abbrv_section_end: out_channel -> unit
-      val abbrv_prologue: out_channel -> int -> unit
-      val abbrv_epilogue: out_channel -> unit
       val get_abbrv_start_addr: unit -> int
       (* The form constants of the types *)
       val sibling_type_abbr: int
@@ -54,9 +50,9 @@ module type DWARF_ABBRV_DEFS =
       val bound_ref_type_abbr: int
     end
 
-module DwarfAbbrvPrinter(Defs:DWARF_ABBRV_DEFS) :
+module DwarfPrinter(Defs:DWARF_DEFS) :
     sig
-      val print_debug_abbrv: out_channel -> dw_entry -> unit
+      val print_debug: out_channel -> dw_entry -> unit
       val get_abbrv: dw_entry -> bool -> int
       val get_abbrv_start_addr: unit -> int
     end =
@@ -295,6 +291,25 @@ module DwarfAbbrvPrinter(Defs:DWARF_ABBRV_DEFS) :
         | None -> false
         | Some _ -> true in
         ignore (get_abbrv entry has_sib)) entry
+      
+    let abbrv_section_start oc = 
+      fprintf oc "	.section	.debug_abbrev,,n\n"(* ; *)
+        (* let lbl = new_label () in *)
+        (* abbrv_start_addr := lbl; *)
+        (* fprintf oc "%a:\n" label lbl *)
+        
+    let abbrv_section_end oc = 
+      fprintf oc "	.section	.debug_abbrev,,n\n";
+      fprintf oc "	.sleb128	0\n"
+        
+    let abbrv_prologue oc id = 
+      fprintf oc "	.section	.debug_abbrev,,n\n";
+      fprintf oc "	.uleb128	%d\n" id
+        
+    let abbrv_epilogue oc = 
+      fprintf oc "	.uleb128	0\n";
+      fprintf oc "	.uleb128	0\n"
+
 
     let print_abbrv oc =
       let abbrvs = List.sort (fun (_,a) (_,b) -> Pervasives.compare a b) !abbrvs in
@@ -305,10 +320,37 @@ module DwarfAbbrvPrinter(Defs:DWARF_ABBRV_DEFS) :
         Defs.abbrv_epilogue oc) abbrvs;
       Defs.abbrv_section_end oc
 
+
+    let rec print_entry oc entry has_sibling =
+      ()
+
     let print_debug_abbrv oc entry =
       compute_abbrv entry;
       print_abbrv oc
 
-    let get_abbrv_start_addr = Defs.get_abbrv_start_addr
+    let print_debug_info oc entry =
+      print_debug_abbrv oc entry;
+      let abbrv_start =  DwarfDiab.AbbrvPrinter.get_abbrv_start_addr () in
+      let debug_start = new_label () in
+      let print_info () =
+        fprintf oc"	.section	.debug_info,,n\n" in
+      print_info ();
+      fprintf oc "%a\n" label debug_start;
+      let debug_length_start = new_label () in (* Address used for length calculation *)
+      let debug_end = new_label () in
+      fprintf oc "	.4byte	%a-%a\n" label debug_end label debug_length_start;
+      fprintf oc "%a\n" label debug_length_start;
+      fprintf oc "	.2byte	0x2\n"; (* Dwarf version *)
+      fprintf oc "	.4byte	%a\n" label abbrv_start; (* Offset into the abbreviation *)
+      fprintf oc "	.byte	%X\n" !Machine.config.Machine.sizeof_ptr; (* Sizeof pointer type *)
+      print_entry oc entry false;
+      fprintf oc "%a\n" label debug_end; (* End of the debug section *)
+      fprintf oc "	.sleb128	0\n"
+    
+      
+    let abbrv_start_addr = ref (-1)
+        
+    let get_abbrv_start_addr () = !abbrv_start_addr
+      
 
   end)
