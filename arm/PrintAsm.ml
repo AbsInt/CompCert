@@ -19,6 +19,7 @@ open Sections
 open AST
 open Memdata
 open Asm
+open PrintAsmaux
 
 (* Type for the ABI versions *)
 type float_abi_type =
@@ -45,38 +46,18 @@ module AsmPrinter (Opt: PRINTER_OPTIONS) =
 
 let literals_in_code = ref true     (* to be turned into a proper option *)
 
-(* On-the-fly label renaming *)
-
-let next_label = ref 100
-
-let new_label() =
-  let lbl = !next_label in incr next_label; lbl
-
-let current_function_labels = (Hashtbl.create 39 : (label, int) Hashtbl.t)
-
-let label_for_label lbl =
-  try
-    Hashtbl.find current_function_labels lbl
-  with Not_found ->
-    let lbl' = new_label() in
-    Hashtbl.add current_function_labels lbl lbl';
-    lbl'
-
 (* Basic printing functions *)
 
-let print_symb oc symb =
-  fprintf oc "%s" (extern_atom symb)
-
 let print_label oc lbl =
-  fprintf oc ".L%d" (label_for_label lbl)
+  fprintf oc ".L%d" (transl_label lbl)
 
 let coqint oc n =
   fprintf oc "%ld" (camlint_of_coqint n)
 
 let comment = "@"
 
-let print_symb_ofs oc (symb, ofs) =
-  print_symb oc symb;
+let symbol_offset oc (symb, ofs) =
+  symbol oc symb;
   let ofs = camlint_of_coqint ofs in
   if ofs <> 0l then fprintf oc " + %ld" ofs
 
@@ -254,7 +235,7 @@ let emit_constants oc =
   Hashtbl.iter
     (fun (id, ofs) lbl ->
       fprintf oc ".L%d:	.word	%a\n"
-          lbl print_symb_ofs (id, ofs))
+          lbl symbol_offset (id, ofs))
     symbol_labels;
   reset_constants ()
 
@@ -263,13 +244,13 @@ let emit_constants oc =
 let loadsymbol oc r id ofs =
   if !Clflags.option_mthumb then begin
     fprintf oc "	movw	%a, #:lower16:%a\n"
-            ireg r print_symb_ofs (id, ofs);
+            ireg r symbol_offset (id, ofs);
     fprintf oc "	movt	%a, #:upper16:%a\n"
-            ireg r print_symb_ofs (id, ofs); 2
+            ireg r symbol_offset (id, ofs); 2
   end else begin
     let lbl = label_symbol id ofs in
     fprintf oc "	ldr	%a, .L%d @ %a\n" 
-            ireg r lbl print_symb_ofs (id, ofs); 1
+            ireg r lbl symbol_offset (id, ofs); 1
   end
 
 (* Emit instruction sequences that set or offset a register by a constant. *)
@@ -482,10 +463,6 @@ let print_builtin_vstore_global oc chunk id ofs args =
   fprintf oc "%s end builtin __builtin_volatile_write\n" comment; n1 + n2
 
 (* Handling of varargs *)
-
-let current_function_stacksize = ref 0l
-let current_function_sig =
-  ref { sig_args = []; sig_res = None; sig_cc = cc_default }
 
 let align n a = (n + a - 1) land (-a)
 
@@ -761,7 +738,7 @@ let print_instruction oc = function
       fprintf oc "	b%s	%a\n" (condition_name bit) print_label lbl; 1
   | Pbsymb(id, sg) ->
       let n = fixup_arguments oc Outgoing sg in
-      fprintf oc "	b	%a\n" print_symb id;
+      fprintf oc "	b	%a\n" symbol id;
       n + 1
   | Pbreg(r, sg) ->
       let n = 
@@ -772,7 +749,7 @@ let print_instruction oc = function
       n + 1
   | Pblsymb(id, sg) ->
       let n1 = fixup_arguments oc Outgoing sg in
-      fprintf oc "	bl	%a\n" print_symb id;
+      fprintf oc "	bl	%a\n" symbol id;
       let n2 = fixup_result oc Incoming sg in
       n1 + 1 + n2
   | Pblreg(r, sg) ->
@@ -1084,18 +1061,18 @@ let print_function oc name fn =
     match !Clflags.option_falignfunctions with Some n -> n | None -> 4 in
   fprintf oc "	.balign %d\n" alignment;
   if not (C2C.atom_is_static name) then
-    fprintf oc "	.global	%a\n" print_symb name;
+    fprintf oc "	.global	%a\n" symbol name;
   if !Clflags.option_mthumb then
     fprintf oc "	.thumb_func\n";
-  fprintf oc "%a:\n" print_symb name;
+  fprintf oc "%a:\n" symbol name;
   print_location oc (C2C.atom_location name);
   Opt.cfi_startproc oc;
   ignore (fixup_arguments oc Incoming fn.fn_sig);
   print_instructions oc fn.fn_code;
   if !literals_in_code then emit_constants oc;
   Opt.cfi_endproc oc;
-  fprintf oc "	.type	%a, %%function\n" print_symb name;
-  fprintf oc "	.size	%a, . - %a\n" print_symb name print_symb name;
+  fprintf oc "	.type	%a, %%function\n" symbol name;
+  fprintf oc "	.size	%a, . - %a\n" symbol name symbol name;
   if not !literals_in_code && !size_constants > 0 then begin
     section oc lit;
     emit_constants oc
@@ -1122,7 +1099,7 @@ let print_init oc = function
       if Z.gt n Z.zero then
         fprintf oc "	.space	%s\n" (Z.to_string n)
   | Init_addrof(symb, ofs) ->
-      fprintf oc "	.word	%a\n" print_symb_ofs (symb, ofs)
+      fprintf oc "	.word	%a\n" symbol_offset (symb, ofs)
 
 let print_init_data oc name id =
   if Str.string_match PrintCsyntax.re_string_literal (extern_atom name) 0
@@ -1151,18 +1128,18 @@ let print_var oc name v =
         fprintf oc "	%s\n" name_sec;
         fprintf oc "	.balign	%d\n" align;
         if not (C2C.atom_is_static name) then
-          fprintf oc "	.global	%a\n" print_symb name;
-        fprintf oc "%a:\n" print_symb name;
+          fprintf oc "	.global	%a\n" symbol name;
+        fprintf oc "%a:\n" symbol name;
         print_init_data oc name v.gvar_init;
-        fprintf oc "	.type	%a, %%object\n" print_symb name;
-        fprintf oc "	.size	%a, . - %a\n" print_symb name print_symb name
+        fprintf oc "	.type	%a, %%object\n" symbol name;
+        fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
       end else begin
         let sz =
           match v.gvar_init with [Init_space sz] -> sz | _ -> assert false in
         if C2C.atom_is_static name then
-          fprintf oc "	.local	%a\n" print_symb name;
+          fprintf oc "	.local	%a\n" symbol name;
         fprintf oc "	.comm	%a, %s, %d\n"
-          print_symb name
+          symbol name
           (Z.to_string sz)
           align
       end

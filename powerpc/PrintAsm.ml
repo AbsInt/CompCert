@@ -20,12 +20,12 @@ open Sections
 open AST
 open Memdata
 open Asm
+open PrintAsmaux
 
 (* Recognition of target ABI and asm syntax *)
 
 module type SYSTEM =
     sig
-      val comment: string
       val constant: out_channel -> constant -> unit
       val ireg: out_channel -> ireg -> unit
       val freg: out_channel -> freg -> unit
@@ -39,15 +39,8 @@ module type SYSTEM =
       val print_prologue: out_channel -> unit
     end
 
-let symbol oc symb =
-  fprintf oc "%s" (extern_atom symb)
-
-let symbol_offset oc (symb, ofs) =
-  symbol oc symb;
-  if ofs <> 0l then fprintf oc " + %ld" ofs
-
 let symbol_fragment oc s n op =
-      fprintf oc "(%a)%s" symbol_offset (s, camlint_of_coqint n) op
+      fprintf oc "(%a)%s" symbol_offset (s, n) op
 
 
 let int_reg_name = function
@@ -72,7 +65,6 @@ let float_reg_name = function
 
 module Linux_System : SYSTEM =
   struct
-    let comment =  "#"
 
     let constant oc cst =
       match cst with
@@ -155,7 +147,6 @@ module Linux_System : SYSTEM =
     
 module Diab_System : SYSTEM =
   struct
-    let comment =  ";"
         
     let constant oc cst =
       match cst with
@@ -224,23 +215,6 @@ module AsmPrinter (Target : SYSTEM) =
   struct
     open Target
 
-(* On-the-fly label renaming *)
-
-let next_label = ref 100
-
-let new_label() =
-  let lbl = !next_label in incr next_label; lbl
-
-let current_function_labels = (Hashtbl.create 39 : (label, int) Hashtbl.t)
-
-let transl_label lbl =
-  try
-    Hashtbl.find current_function_labels lbl
-  with Not_found ->
-    let lbl' = new_label() in
-    Hashtbl.add current_function_labels lbl lbl';
-    lbl'
-
 (* Basic printing functions *)
 
 let coqint oc n =
@@ -248,7 +222,6 @@ let coqint oc n =
 
 let raw_symbol oc s =
   fprintf oc "%s" s
-
 
 let label oc lbl =
   fprintf oc ".L%d" lbl
@@ -327,10 +300,6 @@ let short_cond_branch tbl pc lbl_dest =
       let disp = pc_dest - pc in -0x2000 <= disp && disp < 0x2000
 
 (* Printing of instructions *)
-
-let float_literals : (int * int64) list ref = ref []
-let float32_literals : (int * int32) list ref = ref []
-let jumptables : (int * label list) list ref = ref []
 
 let print_instruction oc tbl pc fallthrough = function
   | Padd(r1, r2, r3) ->
@@ -516,7 +485,7 @@ let print_instruction oc tbl pc fallthrough = function
       let lbl = new_label() in
       fprintf oc "	addis	%a, 0, %a\n" ireg GPR12 label_high lbl;
       fprintf oc "	lfd	%a, %a(%a) %s %.18g\n" freg r1 label_low lbl ireg GPR12 comment (camlfloat_of_coqfloat c);
-      float_literals := (lbl, camlint64_of_coqint (Floats.Float.to_bits c)) :: !float_literals;
+      float64_literals := (lbl, camlint64_of_coqint (Floats.Float.to_bits c)) :: !float64_literals;
   | Plfis(r1, c) ->
       let lbl = new_label() in
       fprintf oc "	addis	%a, 0, %a\n" ireg GPR12 label_high lbl;
@@ -715,7 +684,7 @@ let print_jumptable oc (lbl, tbl) =
 
 let print_function oc name fn =
   Hashtbl.clear current_function_labels;
-  float_literals := [];
+  float64_literals := [];
   float32_literals := [];
   jumptables := [];
   let (text, lit, jmptbl) =
@@ -736,12 +705,12 @@ let print_function oc name fn =
   cfi_endproc oc;
   fprintf oc "	.type	%a, @function\n" symbol name;
   fprintf oc "	.size	%a, . - %a\n" symbol name symbol name;
-  if !float_literals <> [] || !float32_literals <> [] then begin
+  if !float64_literals <> [] || !float32_literals <> [] then begin
     section oc lit;
     fprintf oc "	.balign 8\n";
-    List.iter (print_literal64 oc) !float_literals;
+    List.iter (print_literal64 oc) !float64_literals;
     List.iter (print_literal32 oc) !float32_literals;
-    float_literals := []; float32_literals := []
+    float64_literals := []; float32_literals := []
   end;
   if !jumptables <> [] then begin
     section oc jmptbl;
@@ -777,7 +746,7 @@ let print_init oc = function
         fprintf oc "	.space	%s\n" (Z.to_string n)
   | Init_addrof(symb, ofs) ->
       fprintf oc "	.long	%a\n" 
-                 symbol_offset (symb, camlint_of_coqint ofs)
+                 symbol_offset (symb, ofs)
 
 let print_init_data oc name id =
   if Str.string_match PrintCsyntax.re_string_literal (extern_atom name) 0
@@ -840,7 +809,7 @@ let print_program oc p =
   | Linux -> (module Linux_System:SYSTEM)
   | Diab -> (module Diab_System:SYSTEM)):SYSTEM) in
   PrintAnnot.reset_filenames();
-  PrintAnnot.print_version_and_options oc Target.comment;
+  PrintAnnot.print_version_and_options oc comment;
   let module Printer = AsmPrinter(Target) in
   Target.print_prologue oc;
   List.iter (Printer.print_globdef oc) p.prog_defs;
