@@ -32,10 +32,6 @@ module type PRINTER_OPTIONS =
       val float_abi: float_abi_type
       val vfpv3: bool
       val hardware_idiv: bool
-      val cfi_startproc: out_channel -> unit
-      val cfi_endproc: out_channel -> unit
-      val cfi_adjust: out_channel -> int32 -> unit
-      val cfi_rel_offset: out_channel -> string -> int32 -> unit
      end
 
 (* Module containing the printing functions *)
@@ -48,11 +44,7 @@ let literals_in_code = ref true     (* to be turned into a proper option *)
 
 (* Basic printing functions *)
 
-let print_label oc lbl =
-  fprintf oc ".L%d" (transl_label lbl)
-
-let coqint oc n =
-  fprintf oc "%ld" (camlint_of_coqint n)
+let print_label oc lbl = label oc (transl_label lbl)
 
 let comment = "@"
 
@@ -316,8 +308,6 @@ let print_location oc loc =
 *)
 
 (* Handling of annotations *)
-
-let re_file_line = Str.regexp "#line:\\(.*\\):\\([1-9][0-9]*\\)$"
 
 let print_annot_stmt oc txt targs args =
   if Str.string_match re_file_line txt 0 then begin
@@ -802,7 +792,7 @@ let print_instruction oc = function
   | Pstr(r1, r2, sa) | Pstr_a(r1, r2, sa) ->
       fprintf oc "	str	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa;
       begin match r1, r2, sa with
-      | IR14, IR13, SOimm n -> Opt.cfi_rel_offset oc "lr" (camlint_of_coqint n)
+      | IR14, IR13, SOimm n -> cfi_rel_offset oc "lr" (camlint_of_coqint n)
       | _ -> ()
       end;
       1
@@ -946,11 +936,11 @@ let print_instruction oc = function
       fprintf oc "	mov	r12, sp\n";
       if (!current_function_sig).sig_cc.cc_vararg then begin
         fprintf oc "	push	{r0, r1, r2, r3}\n";
-        Opt.cfi_adjust oc 16l
+        cfi_adjust oc 16l
       end;
       let sz' = camlint_of_coqint sz in
       let ninstr = subimm oc "sp" "sp" sz in
-      Opt.cfi_adjust oc sz';
+      cfi_adjust oc sz';
       fprintf oc "	str	r12, [sp, #%a]\n" coqint ofs;
       current_function_stacksize := sz';
       ninstr + (if (!current_function_sig).sig_cc.cc_vararg then 3 else 2)
@@ -1066,13 +1056,12 @@ let print_function oc name fn =
     fprintf oc "	.thumb_func\n";
   fprintf oc "%a:\n" symbol name;
   print_location oc (C2C.atom_location name);
-  Opt.cfi_startproc oc;
+  cfi_startproc oc;
   ignore (fixup_arguments oc Incoming fn.fn_sig);
   print_instructions oc fn.fn_code;
   if !literals_in_code then emit_constants oc;
-  Opt.cfi_endproc oc;
-  fprintf oc "	.type	%a, %%function\n" symbol name;
-  fprintf oc "	.size	%a, . - %a\n" symbol name symbol name;
+  cfi_endproc oc;
+  print_fun_info oc name;
   if not !literals_in_code && !size_constants > 0 then begin
     section oc lit;
     emit_constants oc
@@ -1131,8 +1120,7 @@ let print_var oc name v =
           fprintf oc "	.global	%a\n" symbol name;
         fprintf oc "%a:\n" symbol name;
         print_init_data oc name v.gvar_init;
-        fprintf oc "	.type	%a, %%object\n" symbol name;
-        fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
+        print_var_info oc name
       end else begin
         let sz =
           match v.gvar_init with [Init_space sz] -> sz | _ -> assert false in
@@ -1167,31 +1155,6 @@ let print_program oc p =
    | "armv7r" | "armv7m" -> !Clflags.option_mthumb
    | _ -> false
    
-   
-   (* Emit .cfi directives *)
-   let cfi_startproc =
-   if Configuration.asm_supports_cfi then
-   (fun oc -> fprintf oc "	.cfi_startproc\n")
-   else
-   (fun _ -> ())
-   
-   let cfi_endproc =
-   if Configuration.asm_supports_cfi then
-   (fun oc ->fprintf oc "	.cfi_endproc\n")
-   else
-   (fun _ -> ())
-   
-   let cfi_adjust =
-   if Configuration.asm_supports_cfi then
-   (fun oc delta ->   fprintf oc "	.cfi_adjust_cfa_offset	%ld\n" delta)
-   else
-   (fun _ _ -> ())
-   
-   let cfi_rel_offset =
-   if Configuration.asm_supports_cfi then
-   (fun oc reg ofs -> fprintf oc "	.cfi_rel_offset	%s, %ld\n" reg ofs)
-   else
-   (fun _ _ _ -> ())
 
    end in
   let module Printer = AsmPrinter(Opt) in

@@ -115,31 +115,13 @@ module Linux_System : SYSTEM =
       PrintAnnot.print_file_line oc comment file line
     
     (* Emit .cfi directives *)      
-    let cfi_startproc =
-      if Configuration.asm_supports_cfi then
-        (fun oc -> fprintf oc "	.cfi_startproc\n")
-      else
-        (fun _ -> ())
+    let cfi_startproc = cfi_startproc
 
-    let cfi_endproc =
-      if Configuration.asm_supports_cfi then
-        (fun oc -> fprintf oc "	.cfi_endproc\n")
-      else
-        (fun _ -> ())
-
+    let cfi_endproc = cfi_endproc
               
-    let cfi_adjust =
-      if Configuration.asm_supports_cfi then
-       (fun oc delta -> fprintf oc "	.cfi_adjust_cfa_offset	%ld\n" delta)
-      else
-        (fun _ _ -> ())
+    let cfi_adjust = cfi_adjust
               
-    let cfi_rel_offset =
-      if Configuration.asm_supports_cfi then
-        (fun oc reg ofs -> fprintf oc "	.cfi_rel_offset	%s, %ld\n" reg ofs)
-      else
-        (fun _ _ _ -> ())
-
+    let cfi_rel_offset = cfi_rel_offset
 
     let print_prologue oc = ()
   
@@ -217,14 +199,8 @@ module AsmPrinter (Target : SYSTEM) =
 
 (* Basic printing functions *)
 
-let coqint oc n =
-  fprintf oc "%ld" (camlint_of_coqint n)
-
 let raw_symbol oc s =
   fprintf oc "%s" s
-
-let label oc lbl =
-  fprintf oc ".L%d" lbl
 
 let label_low oc lbl =
   fprintf oc ".L%d@l" lbl
@@ -279,8 +255,6 @@ let rolm_mask n =
   (!mb, !me-1)
 
 (* Handling of annotations *)
-
-let re_file_line = Str.regexp "#line:\\(.*\\):\\([1-9][0-9]*\\)$"
 
 let print_annot_stmt oc txt targs args =
   if Str.string_match re_file_line txt 0 then begin
@@ -703,8 +677,7 @@ let print_function oc name fn =
   print_instructions oc (label_positions PTree.empty 0 fn.fn_code) 
                         0 true fn.fn_code;
   cfi_endproc oc;
-  fprintf oc "	.type	%a, @function\n" symbol name;
-  fprintf oc "	.size	%a, . - %a\n" symbol name symbol name;
+  print_fun_info oc name;
   if !float64_literals <> [] || !float32_literals <> [] then begin
     section oc lit;
     fprintf oc "	.balign 8\n";
@@ -777,8 +750,7 @@ let print_var oc name v =
           fprintf oc "	.globl	%a\n" symbol name;
         fprintf oc "%a:\n" symbol name;
         print_init_data oc name v.gvar_init;
-        fprintf oc "	.type	%a, @object\n" symbol name;
-        fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
+        print_var_info oc name
       end else begin
         let sz =
           match v.gvar_init with [Init_space sz] -> sz | _ -> assert false in

@@ -19,6 +19,7 @@ open Sections
 open AST
 open Memdata
 open Asm
+open PrintAsmaux
 
 module StringSet = Set.Make(String)
 
@@ -80,8 +81,7 @@ module Cygwin_System =
     let raw_symbol oc s =
        fprintf oc "_%s" s
 
-    let symbol oc symb =
-      fprintf oc "%s" (extern_atom symb)
+    let symbol = symbol
 
     let label oc lbl =
        fprintf oc "L%d" lbl
@@ -129,11 +129,9 @@ module ELF_System =
     let raw_symbol oc s =
       fprintf oc "%s" s
   
-    let symbol oc symb =
-      fprintf oc "%s" (extern_atom symb)
+    let symbol = symbol
 
-    let label oc lbl =
-      fprintf oc ".L%d" lbl
+    let label = label
 
     let name_of_section = function
       | Section_text -> ".text"
@@ -156,14 +154,10 @@ module ELF_System =
     let print_mov_ra  oc rd id = 
          fprintf oc "	movl	$%a, %a\n" symbol id ireg rd
 
-    let print_fun_info oc name =
-      fprintf oc "	.type	%a, @function\n" symbol name;
-      fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
-
-    let print_var_info oc name =
-      fprintf oc "	.type	%a, @object\n" symbol name;
-      fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
-
+    let print_fun_info = print_fun_info
+      
+    let print_var_info = print_var_info
+      
     let print_epilogue _ = ()
 
     let print_comm_decl oc name sz al =
@@ -247,33 +241,13 @@ module MacOS_System =
 module AsmPrinter(Target: SYSTEM) =
   (struct
     open Target
-(* On-the-fly label renaming *)
-
-let next_label = ref 100
-
-let new_label() =
-  let lbl = !next_label in incr next_label; lbl
-
-let current_function_labels = (Hashtbl.create 39 : (label, int) Hashtbl.t)
-
-let transl_label lbl =
-  try
-    Hashtbl.find current_function_labels lbl
-  with Not_found ->
-    let lbl' = new_label() in
-    Hashtbl.add current_function_labels lbl lbl';
-    lbl'
 
 (*  Basic printing functions *)
-
-let comment = "#"
 
 let symbol_offset oc (symb, ofs) =
   symbol oc symb;
   if ofs <> 0l then fprintf oc " + %ld" ofs
 
-let coqint oc n =
-  fprintf oc "%ld" (camlint_of_coqint n)
 
 let addressing oc (Addrmode(base, shift, cst)) =
   begin match cst with
@@ -344,17 +318,6 @@ let print_file_line oc file line =
 let print_location oc loc =
   if loc <> Cutil.no_loc then print_file_line oc (fst loc) (snd loc)
 
-(* Emit .cfi directives *)
-
-let cfi_startproc oc =
-  if Configuration.asm_supports_cfi then fprintf oc "	.cfi_startproc\n"
-
-let cfi_endproc oc =
-  if Configuration.asm_supports_cfi then fprintf oc "	.cfi_endproc\n"
-
-let cfi_adjust oc delta =
-  if Configuration.asm_supports_cfi then
-    fprintf oc "	.cfi_adjust_cfa_offset	%ld\n" delta
 
 (* Built-in functions *)
 
@@ -365,8 +328,6 @@ let cfi_adjust oc delta =
      registers; preserve all registers except ECX, EDX, XMM6 and XMM7. *)
 
 (* Handling of annotations *)
-
-let re_file_line = Str.regexp "#line:\\(.*\\):\\([1-9][0-9]*\\)$"
 
 let print_annot_stmt oc txt targs args =
   if Str.string_match re_file_line txt 0 then begin
@@ -528,10 +489,6 @@ let print_builtin_vstore_global oc chunk id ofs args =
 
 (* Handling of varargs *)
 
-let current_function_stacksize = ref 0l
-let current_function_sig =
-  ref { sig_args = []; sig_res = None; sig_cc = cc_default }
-
 let print_builtin_va_start oc r =
   if not (!current_function_sig).sig_cc.cc_vararg then
     invalid_arg "Fatal error: va_start used in non-vararg function";
@@ -655,10 +612,6 @@ let print_builtin_inline oc name args res =
   fprintf oc "%s end builtin %s\n" comment name
 
 (* Printing of instructions *)
-
-let float64_literals : (int * int64) list ref = ref []
-let float32_literals : (int * int32) list ref = ref []
-let jumptables : (int * label list) list ref = ref []
 
 (* Reminder on AT&T syntax: op source, dest *)
 
@@ -1043,7 +996,7 @@ let print_program oc p =
   | ELF -> (module ELF_System:SYSTEM)
   | Cygwin -> (module Cygwin_System:SYSTEM)):SYSTEM) in
   let module Printer = AsmPrinter(Target) in
-  PrintAnnot.print_version_and_options oc Printer.comment;
+  PrintAnnot.print_version_and_options oc comment;
   PrintAnnot.reset_filenames();
   Printer.need_masks := false;
   List.iter (Printer.print_globdef oc) p.prog_defs;

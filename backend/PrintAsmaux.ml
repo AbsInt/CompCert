@@ -26,8 +26,8 @@ module type TARGET =
       val print_epilogue: out_channel -> unit
       val print_align: out_channel -> int -> unit
       val print_comm_symb:  out_channel -> P.t -> int -> unit
-      val print_var_info: out_channel -> P.t -> unit
-      val print_fun_info: out_channel -> P.t -> unit
+      val print_var_info: bool
+      val print_fun_info: bool
       val print_init: out_channel -> init_data -> unit
       val reset_constants: unit -> unit
       val get_section_names: unit -> section_name * section_name * section_name
@@ -58,6 +58,8 @@ let transl_label lbl =
     Hashtbl.add current_function_labels lbl lbl';
     lbl'
 
+let label oc lbl =
+  fprintf oc ".L%d" lbl
 
 (* List of literals and jumptables used in the code *)
 
@@ -82,3 +84,45 @@ let symbol_offset oc (symb, ofs) =
 
 (* The comment deliminiter *)
 let comment = "#"
+
+(* Functions for fun and var info *)
+let print_fun_info oc name =
+  fprintf oc "	.type	%a, @function\n" symbol name;
+  fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
+   
+let print_var_info oc name =
+  fprintf oc "	.type	%a, @object\n" symbol name;
+  fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
+
+(* Emit .cfi directives *)
+let cfi_startproc =
+  if Configuration.asm_supports_cfi then
+    (fun oc -> fprintf oc "	.cfi_startproc\n")
+  else
+    (fun _ -> ())
+      
+let cfi_endproc =
+  if Configuration.asm_supports_cfi then
+    (fun oc -> fprintf oc "	.cfi_endproc\n")
+  else
+    (fun _ -> ())
+      
+      
+let cfi_adjust =
+  if Configuration.asm_supports_cfi then
+       (fun oc delta -> fprintf oc "	.cfi_adjust_cfa_offset	%ld\n" delta)
+  else
+    (fun _ _ -> ())
+      
+let cfi_rel_offset =
+  if Configuration.asm_supports_cfi then
+    (fun oc reg ofs -> fprintf oc "	.cfi_rel_offset	%s, %ld\n" reg ofs)
+  else
+    (fun _ _ _ -> ())
+
+(* For handling of annotations *)
+let re_file_line = Str.regexp "#line:\\(.*\\):\\([1-9][0-9]*\\)$"
+
+(* Basic printing functions *)
+let coqint oc n =
+  fprintf oc "%ld" (camlint_of_coqint n)
