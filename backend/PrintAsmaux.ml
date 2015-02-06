@@ -69,6 +69,11 @@ let float64_literals : (int * int64) list ref = ref []
 let float32_literals : (int * int32) list ref = ref []
 let jumptables : (int * label list) list ref = ref []
 
+let reset_constants () =
+  float64_literals := [];
+  float32_literals := [];
+  jumptables := []
+
 (* Variables used for the handling of varargs *)
 
 let current_function_stacksize = ref 0l
