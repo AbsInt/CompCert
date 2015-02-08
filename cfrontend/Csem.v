@@ -317,7 +317,7 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
     (More exactly, identification of function calls that can reduce.) *)
 
 Inductive callred: expr -> fundef -> list val -> type -> Prop :=
-  | red_Ecall: forall vf tyf tyargs tyres cconv el ty fd vargs,
+  | red_call: forall vf tyf tyargs tyres cconv el ty fd vargs,
       Genv.find_funct ge vf = Some fd ->
       cast_arguments el tyargs vargs ->
       type_of_fundef fd = Tfunction tyargs tyres cconv ->
