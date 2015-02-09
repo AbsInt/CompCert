@@ -34,7 +34,7 @@ module type TARGET =
       val print_file_line: out_channel -> string -> int -> unit
       val print_optional_fun_info: out_channel -> unit
       val cfi_startproc: out_channel -> unit
-      val print_instructions: out_channel -> code -> unit
+      val print_instructions: out_channel -> coq_function -> unit
       val cfi_endproc: out_channel -> unit
       val emit_constants: out_channel -> section_name -> unit
       val print_jumptable: out_channel -> section_name -> unit

@@ -634,13 +634,13 @@ module Target (System : SYSTEM):TARGET =
 
     (* Emit a sequence of instructions *)
 
-    let print_instructions oc code =
+    let print_instructions oc fn =
       let rec aux  oc tbl pc fallthrough = function
       | [] -> ()
       | i :: c ->
           print_instruction oc tbl pc fallthrough i;
          aux oc tbl (pc + instr_size i) (instr_fall_through i) c in
-      aux oc (label_positions PTree.empty 0 code) 0 true code
+      aux oc (label_positions PTree.empty 0 fn.fn_code) 0 true fn.fn_code
 
     (* Print the code for a function *)
 

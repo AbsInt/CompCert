@@ -39,7 +39,7 @@ let print_function oc name fn =
   fprintf oc "%a:\n" symbol name;
   print_location oc (C2C.atom_location name);
   Target.cfi_startproc oc;
-  Target.print_instructions oc fn.fn_code;
+  Target.print_instructions oc fn;
   Target.cfi_endproc oc;
   if Target.print_fun_info then
     print_fun_info oc name;

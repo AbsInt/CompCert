@@ -931,7 +931,7 @@ module Target(System: SYSTEM):TARGET =
     let cfi_startproc = cfi_startproc
     let cfi_endproc = cfi_endproc
 
-    let print_instructions oc code =   List.iter (print_instruction oc) code
+    let print_instructions oc fn =   List.iter (print_instruction oc) fn.fn_code
 
     let print_optional_fun_info _ = ()
 
