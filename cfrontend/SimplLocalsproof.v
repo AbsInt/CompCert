@@ -2120,7 +2120,7 @@ Proof.
   exploit match_envs_free_blocks; eauto. intros [tm' [P Q]].
   econstructor; split. apply plus_one. econstructor; eauto.
   eapply match_cont_is_call_cont; eauto.
-  monadInv TRF; auto.
+  simpl in TRF. monadInv TRF; auto.
   econstructor; eauto. 
   intros. apply match_cont_change_cenv with (cenv_for f); auto. eapply match_cont_free_env; eauto.
 

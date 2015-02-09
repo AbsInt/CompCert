@@ -26,6 +26,8 @@ Require Import Locations.
 Require Import LTL.
 Require Import Tunneling.
 
+Module U := Tunneling.U.
+
 (** * Properties of the branch map computed using union-find. *)
 
 (** A variant of [record_goto] that also incrementally computes a measure [f: node -> nat]

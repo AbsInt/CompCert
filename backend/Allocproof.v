@@ -1358,8 +1358,8 @@ Lemma analyze_successors:
   an!!pc = OK e ->
   exists e', transfer f env bsh s an!!s = OK e' /\ EqSet.Subset e' e.
 Proof.
-  unfold analyze; intros. exploit DS.fixpoint_allnodes_solution; eauto.
-  rewrite H2. unfold DS.L.ge. destruct (transfer f env bsh s an#s); intros.
+  unfold analyze; intros. exploit Allocation.DS.fixpoint_allnodes_solution; eauto.
+  rewrite H2. unfold Allocation.DS.L.ge. destruct (transfer f env bsh s an#s); intros.
   exists e0; auto. 
   contradiction.
 Qed.

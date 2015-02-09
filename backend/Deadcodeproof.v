@@ -523,8 +523,8 @@ Lemma analyze_successors:
   In pc' (successors_instr instr) ->
   NA.ge an!!pc (transfer f (vanalyze rm f) pc' an!!pc').
 Proof.
-  intros. eapply DS.fixpoint_solution; eauto.
-  intros. unfold transfer; rewrite H2. destruct a. apply DS.L.eq_refl.
+  intros. eapply Deadcode.DS.fixpoint_solution; eauto.
+  intros. unfold transfer; rewrite H2. destruct a. apply Deadcode.DS.L.eq_refl.
 Qed.
 
 Lemma match_succ_states:
