@@ -36,7 +36,6 @@ backend/SelectLong.v
 backend/CMlexer.ml
 backend/CMparser.ml
 backend/CMparser.mli
-cparser/Parser.v
 cparser/Lexer.ml
 cparser/pre_parser.ml
 cparser/pre_parser.mli
