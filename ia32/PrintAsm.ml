@@ -166,8 +166,8 @@ module Mingw_System =
       fprintf oc "	.comm	%a, %s, %d\n" symbol name (Z.to_string sz) al
 
     let print_lcomm_decl oc name sz al =
-      fprintf oc "	.local	%a\n" symbol name;
-      print_comm_decl oc name sz al
+      fprintf oc "	.lcomm	%a, %s, %d\n"
+                 symbol name (Z.to_string sz) al
 
   end:SYSTEM)
 
