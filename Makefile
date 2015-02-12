@@ -246,16 +246,8 @@ distclean:
 check-admitted: $(FILES)
 	@grep -w 'admit\|Admitted\|ADMITTED' $^ || echo "Nothing admitted."
 
-# Problems with coqchk (coq 8.4.pl2):
-# Integers.Int.Z_mod_modulus_range takes forever to check
-# Floats.Float.double_of_bits_of_double takes forever to check
-# AST.external_function gives "Failure: impredicative Type inductive type"
-# Asm.instruction gives "Failure: impredicative Type inductive type"
-# Mach.instruction gives "Failure: impredicative Type inductive type"
-# UnionFind.UF.elt gives "Anomaly: Uncaught exception Reduction.NotConvertible"
-
 check-proof: $(FILES)
-	$(COQCHK) -admit Integers -admit Floats -admit AST -admit Asm -admit Mach -admit UnionFind Complements 
+	$(COQCHK) -admit Integers -admit Floats -admit SelectDivproof Complements
 
 print-includes:
 	@echo $(COQINCLUDES)
