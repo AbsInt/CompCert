@@ -788,7 +788,7 @@ Theorem analysis_correct_1:
 Proof.
   intros.
   assert (Numbering.ge approx!!pc' (transfer f vapprox pc approx!!pc)).
-    eapply CSE.Solver.fixpoint_solution; eauto.
+    eapply Solver.fixpoint_solution; eauto.
   destruct H2 as [valu NH]. exists valu; apply H3. auto.
 Qed.
 
@@ -798,9 +798,9 @@ Theorem analysis_correct_entry:
   exists valu, numbering_holds valu ge sp rs m approx!!(f.(fn_entrypoint)).
 Proof.
   intros. 
-  replace (approx!!(f.(fn_entrypoint))) with CSE.Solver.L.top.
+  replace (approx!!(f.(fn_entrypoint))) with Solver.L.top.
   exists (fun v => Vundef). apply empty_numbering_holds.
-  symmetry. eapply CSE.Solver.fixpoint_entry; eauto.
+  symmetry. eapply Solver.fixpoint_entry; eauto.
 Qed.
 
 (** * Semantic preservation *)

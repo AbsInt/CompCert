@@ -131,7 +131,7 @@ Proof.
   unfold reachable_aux. intro reach; intros.
   assert (LBoolean.ge reach!!pc' reach!!pc).
   change (reach!!pc) with ((fun pc r => r) pc (reach!!pc)).
-  eapply DS.fixpoint_solution; eauto. intros; apply Linearize.DS.L.eq_refl.  
+  eapply DS.fixpoint_solution; eauto. intros; apply DS.L.eq_refl.  
   elim H3; intro. congruence. auto.
   intros. apply PMap.gi.
 Qed.
