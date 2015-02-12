@@ -53,7 +53,7 @@ Definition swap_comparison (c: comparison): comparison :=
 (** * Parameterization by the word size, in bits. *)
 
 Module Type WORDSIZE.
-  Variable wordsize: nat.
+  Parameter wordsize: nat.
   Axiom wordsize_not_zero: wordsize <> 0%nat.
 End WORDSIZE.
 

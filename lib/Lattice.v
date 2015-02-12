@@ -33,21 +33,21 @@ Local Unset Case Analysis Schemes.
 
 Module Type SEMILATTICE.
 
-  Variable t: Type.
-  Variable eq: t -> t -> Prop.
-  Hypothesis eq_refl: forall x, eq x x.
-  Hypothesis eq_sym: forall x y, eq x y -> eq y x.
-  Hypothesis eq_trans: forall x y z, eq x y -> eq y z -> eq x z.
-  Variable beq: t -> t -> bool.
-  Hypothesis beq_correct: forall x y, beq x y = true -> eq x y.
-  Variable ge: t -> t -> Prop.
-  Hypothesis ge_refl: forall x y, eq x y -> ge x y.
-  Hypothesis ge_trans: forall x y z, ge x y -> ge y z -> ge x z.
-  Variable bot: t.
-  Hypothesis ge_bot: forall x, ge x bot.
-  Variable lub: t -> t -> t.
-  Hypothesis ge_lub_left: forall x y, ge (lub x y) x.
-  Hypothesis ge_lub_right: forall x y, ge (lub x y) y.
+  Parameter t: Type.
+  Parameter eq: t -> t -> Prop.
+  Axiom eq_refl: forall x, eq x x.
+  Axiom eq_sym: forall x y, eq x y -> eq y x.
+  Axiom eq_trans: forall x y z, eq x y -> eq y z -> eq x z.
+  Parameter beq: t -> t -> bool.
+  Axiom beq_correct: forall x y, beq x y = true -> eq x y.
+  Parameter ge: t -> t -> Prop.
+  Axiom ge_refl: forall x y, eq x y -> ge x y.
+  Axiom ge_trans: forall x y z, ge x y -> ge y z -> ge x z.
+  Parameter bot: t.
+  Axiom ge_bot: forall x, ge x bot.
+  Parameter lub: t -> t -> t.
+  Axiom ge_lub_left: forall x y, ge (lub x y) x.
+  Axiom ge_lub_right: forall x y, ge (lub x y) y.
 
 End SEMILATTICE.
 
@@ -57,8 +57,8 @@ End SEMILATTICE.
 Module Type SEMILATTICE_WITH_TOP.
 
   Include Type SEMILATTICE.
-  Variable top: t.
-  Hypothesis ge_top: forall x, ge top x.
+  Parameter top: t.
+  Axiom ge_top: forall x, ge top x.
 
 End SEMILATTICE_WITH_TOP.
 

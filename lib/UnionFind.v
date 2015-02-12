@@ -26,96 +26,96 @@ Local Unset Elimination Schemes.
 Local Unset Case Analysis Schemes.
 
 Module Type MAP.
-  Variable elt: Type.
-  Variable elt_eq: forall (x y: elt), {x=y} + {x<>y}.
-  Variable t: Type -> Type.
-  Variable empty: forall (A: Type), t A.
-  Variable get: forall (A: Type), elt -> t A -> option A.
-  Variable set: forall (A: Type), elt -> A -> t A -> t A.
-  Hypothesis gempty: forall (A: Type) (x: elt), get x (empty A) = None.
-  Hypothesis gsspec: forall (A: Type) (x y: elt) (v: A) (m: t A),
+  Parameter elt: Type.
+  Parameter elt_eq: forall (x y: elt), {x=y} + {x<>y}.
+  Parameter t: Type -> Type.
+  Parameter empty: forall (A: Type), t A.
+  Parameter get: forall (A: Type), elt -> t A -> option A.
+  Parameter set: forall (A: Type), elt -> A -> t A -> t A.
+  Axiom gempty: forall (A: Type) (x: elt), get x (empty A) = None.
+  Axiom gsspec: forall (A: Type) (x y: elt) (v: A) (m: t A),
     get x (set y v m) = if elt_eq x y then Some v else get x m.
 End MAP.
 
 Unset Implicit Arguments.
 
 Module Type UNIONFIND.
-  Variable elt: Type.
-  Variable elt_eq: forall (x y: elt), {x=y} + {x<>y}.
-  Variable t: Type.
+  Parameter elt: Type.
+  Parameter elt_eq: forall (x y: elt), {x=y} + {x<>y}.
+  Parameter t: Type.
 
-  Variable repr: t -> elt -> elt.
-  Hypothesis repr_canonical: forall uf a, repr uf (repr uf a) = repr uf a.
+  Parameter repr: t -> elt -> elt.
+  Axiom repr_canonical: forall uf a, repr uf (repr uf a) = repr uf a.
 
   Definition sameclass (uf: t) (a b: elt) : Prop := repr uf a = repr uf b.
-  Hypothesis sameclass_refl:
+  Axiom sameclass_refl:
     forall uf a, sameclass uf a a.
-  Hypothesis sameclass_sym:
+  Axiom sameclass_sym:
     forall uf a b, sameclass uf a b -> sameclass uf b a.
-  Hypothesis sameclass_trans:
+  Axiom sameclass_trans:
     forall uf a b c,
     sameclass uf a b -> sameclass uf b c -> sameclass uf a c.
-  Hypothesis sameclass_repr:
+  Axiom sameclass_repr:
     forall uf a, sameclass uf a (repr uf a).
 
-  Variable empty: t.
-  Hypothesis repr_empty:
+  Parameter empty: t.
+  Axiom repr_empty:
     forall a, repr empty a = a.
-  Hypothesis sameclass_empty:
+  Axiom sameclass_empty:
     forall a b, sameclass empty a b -> a = b.
 
-  Variable find: t -> elt -> elt * t.
-  Hypothesis find_repr:
+  Parameter find: t -> elt -> elt * t.
+  Axiom find_repr:
     forall uf a, fst (find uf a) = repr uf a.
-  Hypothesis find_unchanged:
+  Axiom find_unchanged:
     forall uf a x, repr (snd (find uf a)) x = repr uf x.
-  Hypothesis sameclass_find_1:
+  Axiom sameclass_find_1:
     forall uf a x y, sameclass (snd (find uf a)) x y <-> sameclass uf x y.
-  Hypothesis sameclass_find_2:
+  Axiom sameclass_find_2:
     forall uf a, sameclass uf a (fst (find uf a)).
-  Hypothesis sameclass_find_3:
+  Axiom sameclass_find_3:
     forall uf a, sameclass (snd (find uf a)) a (fst (find uf a)).
 
-  Variable union: t -> elt -> elt -> t.
-  Hypothesis repr_union_1:
+  Parameter union: t -> elt -> elt -> t.
+  Axiom repr_union_1:
     forall uf a b x, repr uf x <> repr uf a -> repr (union uf a b) x = repr uf x.
-  Hypothesis repr_union_2:
+  Axiom repr_union_2:
     forall uf a b x, repr uf x = repr uf a -> repr (union uf a b) x = repr uf b.
-  Hypothesis repr_union_3:
+  Axiom repr_union_3:
     forall uf a b, repr (union uf a b) b = repr uf b.
-  Hypothesis sameclass_union_1:
+  Axiom sameclass_union_1:
     forall uf a b, sameclass (union uf a b) a b.
-  Hypothesis sameclass_union_2:
+  Axiom sameclass_union_2:
     forall uf a b x y, sameclass uf x y -> sameclass (union uf a b) x y.
-  Hypothesis sameclass_union_3:
+  Axiom sameclass_union_3:
     forall uf a b x y,
     sameclass (union uf a b) x y ->
        sameclass uf x y 
     \/ sameclass uf x a /\ sameclass uf y b
     \/ sameclass uf x b /\ sameclass uf y a.
 
-  Variable merge: t -> elt -> elt -> t.
-  Hypothesis repr_merge:
+  Parameter merge: t -> elt -> elt -> t.
+  Axiom repr_merge:
     forall uf a b x, repr (merge uf a b) x = repr (union uf a b) x.
-  Hypothesis sameclass_merge:
+  Axiom sameclass_merge:
     forall uf a b x y, sameclass (merge uf a b) x y <-> sameclass (union uf a b) x y.
 
-  Variable path_ord: t -> elt -> elt -> Prop.
-  Hypothesis path_ord_wellfounded:
+  Parameter path_ord: t -> elt -> elt -> Prop.
+  Axiom path_ord_wellfounded:
     forall uf, well_founded (path_ord uf).
-  Hypothesis path_ord_canonical:
+  Axiom path_ord_canonical:
     forall uf x y, repr uf x = x -> ~path_ord uf y x.
-  Hypothesis path_ord_merge_1:
+  Axiom path_ord_merge_1:
     forall uf a b x y,
     path_ord uf x y -> path_ord (merge uf a b) x y.
-  Hypothesis path_ord_merge_2:
+  Axiom path_ord_merge_2:
     forall uf a b,
     repr uf a <> repr uf b -> path_ord (merge uf a b) b (repr uf a).
 
-  Variable pathlen: t -> elt -> nat.
-  Hypothesis pathlen_zero:
+  Parameter pathlen: t -> elt -> nat.
+  Axiom pathlen_zero:
     forall uf a, repr uf a = a <-> pathlen uf a = O.
-  Hypothesis pathlen_merge:
+  Axiom pathlen_merge:
     forall uf a b x,
     pathlen (merge uf a b) x =
       if elt_eq (repr uf a) (repr uf b) then
@@ -124,7 +124,7 @@ Module Type UNIONFIND.
         pathlen uf x + pathlen uf b + 1
       else
         pathlen uf x.
-  Hypothesis pathlen_gt_merge:
+  Axiom pathlen_gt_merge:
     forall uf a b x y,
     repr uf x = repr uf y ->
     pathlen uf x > pathlen uf y ->

@@ -74,7 +74,7 @@ Module Type DATAFLOW_SOLVER.
     point. [transf] is the transfer function, [ep] the entry point,
     and [ev] the minimal abstract value for [ep]. *)
 
-  Variable fixpoint:
+  Parameter fixpoint:
     forall {A: Type} (code: PTree.t A) (successors: A -> list positive)
            (transf: positive -> L.t -> L.t)
            (ep: positive) (ev: L.t),
@@ -83,7 +83,7 @@ Module Type DATAFLOW_SOLVER.
   (** The [fixpoint_solution] theorem shows that the returned solution,
     if any, satisfies the dataflow inequations. *)
 
-  Hypothesis fixpoint_solution:
+  Axiom fixpoint_solution:
     forall A (code: PTree.t A) successors transf ep ev res n instr s,
     fixpoint code successors transf ep ev = Some res ->
     code!n = Some instr -> In s (successors instr) ->
@@ -93,7 +93,7 @@ Module Type DATAFLOW_SOLVER.
   (** The [fixpoint_entry] theorem shows that the returned solution,
     if any, satisfies the additional constraint over the entry point. *)
 
-  Hypothesis fixpoint_entry:
+  Axiom fixpoint_entry:
     forall A (code: PTree.t A) successors transf ep ev res,
     fixpoint code successors transf ep ev = Some res ->
     L.ge res!!ep ev.
@@ -102,7 +102,7 @@ Module Type DATAFLOW_SOLVER.
       and that holds for [L.bot] also holds for the results of
       the analysis. *)
 
-  Hypothesis fixpoint_invariant:
+  Axiom fixpoint_invariant:
     forall A (code: PTree.t A) successors transf ep ev
            (P: L.t -> Prop),
     P L.bot ->
@@ -124,23 +124,23 @@ End DATAFLOW_SOLVER.
 
 Module Type NODE_SET.
 
-  Variable t: Type.
-  Variable empty: t.
-  Variable add: positive -> t -> t.
-  Variable pick: t -> option (positive * t).
-  Variable all_nodes: forall {A: Type}, PTree.t A -> t.
+  Parameter t: Type.
+  Parameter empty: t.
+  Parameter add: positive -> t -> t.
+  Parameter pick: t -> option (positive * t).
+  Parameter all_nodes: forall {A: Type}, PTree.t A -> t.
 
-  Variable In: positive -> t -> Prop.
-  Hypothesis empty_spec:
+  Parameter In: positive -> t -> Prop.
+  Axiom empty_spec:
     forall n, ~In n empty.
-  Hypothesis add_spec:
+  Axiom add_spec:
     forall n n' s, In n' (add n s) <-> n = n' \/ In n' s.
-  Hypothesis pick_none:
+  Axiom pick_none:
     forall s n, pick s = None -> ~In n s.
-  Hypothesis pick_some:
+  Axiom pick_some:
     forall s n s', pick s = Some(n, s') ->
     forall n', In n' s <-> n = n' \/ In n' s'.
-  Hypothesis all_nodes_spec:
+  Axiom all_nodes_spec:
     forall A (code: PTree.t A) n instr,
     code!n = Some instr -> In n (all_nodes code).
 
@@ -900,7 +900,7 @@ Module Type BACKWARD_DATAFLOW_SOLVER.
     is a finite map returning the list of successors of the given program
     point. [transf] is the transfer function. *)
 
-  Variable fixpoint:
+  Parameter fixpoint:
     forall {A: Type} (code: PTree.t A) (successors: A -> list positive)
            (transf: positive -> L.t -> L.t),
     option (PMap.t L.t).
@@ -908,7 +908,7 @@ Module Type BACKWARD_DATAFLOW_SOLVER.
   (** The [fixpoint_solution] theorem shows that the returned solution,
     if any, satisfies the backward dataflow inequations. *)
 
-  Hypothesis fixpoint_solution:
+  Axiom fixpoint_solution:
     forall A (code: PTree.t A) successors transf res n instr s,
     fixpoint code successors transf = Some res ->
     code!n = Some instr -> In s (successors instr) ->
@@ -918,12 +918,12 @@ Module Type BACKWARD_DATAFLOW_SOLVER.
   (** [fixpoint_allnodes] is a variant of [fixpoint], less algorithmically
     efficient, but correct without any hypothesis on the transfer function. *)
 
-  Variable fixpoint_allnodes:
+  Parameter fixpoint_allnodes:
     forall {A: Type} (code: PTree.t A) (successors: A -> list positive)
            (transf: positive -> L.t -> L.t),
     option (PMap.t L.t).
 
-  Hypothesis fixpoint_allnodes_solution:
+  Axiom fixpoint_allnodes_solution:
     forall A (code: PTree.t A) successors transf res n instr s,
     fixpoint_allnodes code successors transf = Some res ->
     code!n = Some instr -> In s (successors instr) ->
@@ -1089,11 +1089,11 @@ End Backward_Dataflow_Solver.
 
 Module Type ORDERED_TYPE_WITH_TOP.
 
-  Variable t: Type.
-  Variable ge: t -> t -> Prop.
-  Variable top: t.
-  Hypothesis top_ge: forall x, ge top x.
-  Hypothesis refl_ge: forall x, ge x x.
+  Parameter t: Type.
+  Parameter ge: t -> t -> Prop.
+  Parameter top: t.
+  Axiom top_ge: forall x, ge top x.
+  Axiom refl_ge: forall x, ge x x.
 
 End ORDERED_TYPE_WITH_TOP.
 
@@ -1105,24 +1105,24 @@ Module Type BBLOCK_SOLVER.
 
   Declare Module L: ORDERED_TYPE_WITH_TOP.
 
-  Variable fixpoint:
+  Parameter fixpoint:
     forall {A: Type} (code: PTree.t A) (successors: A -> list positive)
            (transf: positive -> L.t -> L.t)
            (entrypoint: positive),
     option (PMap.t L.t).
 
-  Hypothesis fixpoint_solution:
+  Axiom fixpoint_solution:
     forall A (code: PTree.t A) successors transf entrypoint res n instr s,
     fixpoint code successors transf entrypoint = Some res ->
     code!n = Some instr -> In s (successors instr) ->
     L.ge res!!s (transf n res!!n).
 
-  Hypothesis fixpoint_entry:
+  Axiom fixpoint_entry:
     forall A (code: PTree.t A) successors transf entrypoint res,
     fixpoint code successors transf entrypoint = Some res ->
     res!!entrypoint = L.top.
 
-  Hypothesis fixpoint_invariant:
+  Axiom fixpoint_invariant:
     forall A (code: PTree.t A) successors transf entrypoint
            (P: L.t -> Prop),
     P L.top ->

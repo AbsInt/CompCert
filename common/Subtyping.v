@@ -30,48 +30,48 @@ Module Type TYPE_ALGEBRA.
 
 (** Type expressions *)
 
-Variable t: Type.
-Variable eq: forall (x y: t), {x=y} + {x<>y}.
-Variable default: t.
+Parameter t: Type.
+Parameter eq: forall (x y: t), {x=y} + {x<>y}.
+Parameter default: t.
 
 (** Subtyping *)
 
-Variable sub: t -> t -> Prop.
-Hypothesis sub_refl: forall x, sub x x.
-Hypothesis sub_trans: forall x y z, sub x y -> sub y z -> sub x z.
-Variable sub_dec: forall x y, {sub x y} + {~sub x y}.
+Parameter sub: t -> t -> Prop.
+Axiom sub_refl: forall x, sub x x.
+Axiom sub_trans: forall x y z, sub x y -> sub y z -> sub x z.
+Parameter sub_dec: forall x y, {sub x y} + {~sub x y}.
 
 (** Least upper bounds. [lub x y] is specified only when [x] and [y] have
   a common supertype; it can be arbitrary otherwise. *)
 
-Variable lub: t -> t -> t.
-Hypothesis lub_left: forall x y z, sub x z -> sub y z -> sub x (lub x y).
-Hypothesis lub_right: forall x y z, sub x z -> sub y z -> sub y (lub x y).
-Hypothesis lub_min: forall x y z, sub x z -> sub y z -> sub (lub x y) z.
+Parameter lub: t -> t -> t.
+Axiom lub_left: forall x y z, sub x z -> sub y z -> sub x (lub x y).
+Axiom lub_right: forall x y z, sub x z -> sub y z -> sub y (lub x y).
+Axiom lub_min: forall x y z, sub x z -> sub y z -> sub (lub x y) z.
 
 (** Greater lower bounds. [glb x y] is specified only when [x] and [y] have
   a common subtype; it can be arbitrary otherwise.*)
 
-Variable glb: t -> t -> t.
-Hypothesis glb_left: forall x y z, sub z x -> sub z y -> sub (glb x y) x.
-Hypothesis glb_right: forall x y z, sub z x -> sub z y -> sub (glb x y) y.
-Hypothesis glb_max: forall x y z, sub z x -> sub z y -> sub z (glb x y).
+Parameter glb: t -> t -> t.
+Axiom glb_left: forall x y z, sub z x -> sub z y -> sub (glb x y) x.
+Axiom glb_right: forall x y z, sub z x -> sub z y -> sub (glb x y) y.
+Axiom glb_max: forall x y z, sub z x -> sub z y -> sub z (glb x y).
 
 (** Low and high bounds for a given type. *)
-Variable low_bound: t -> t.
-Variable high_bound: t -> t.
-Hypothesis low_bound_sub: forall t, sub (low_bound t) t.
-Hypothesis low_bound_minorant: forall x y, sub x y -> sub (low_bound y) x.
-Hypothesis high_bound_sub: forall t, sub t (high_bound t).
-Hypothesis high_bound_majorant: forall x y, sub x y -> sub y (high_bound x).
+Parameter low_bound: t -> t.
+Parameter high_bound: t -> t.
+Axiom low_bound_sub: forall t, sub (low_bound t) t.
+Axiom low_bound_minorant: forall x y, sub x y -> sub (low_bound y) x.
+Axiom high_bound_sub: forall t, sub t (high_bound t).
+Axiom high_bound_majorant: forall x y, sub x y -> sub y (high_bound x).
 
 (** Measure over types *)
 
-Variable weight: t -> nat.
-Variable max_weight: nat.
-Hypothesis weight_range: forall t, weight t <= max_weight.
-Hypothesis weight_sub: forall x y, sub x y -> weight x <= weight y.
-Hypothesis weight_sub_strict: forall x y, sub x y -> x <> y -> weight x < weight y.
+Parameter weight: t -> nat.
+Parameter max_weight: nat.
+Axiom weight_range: forall t, weight t <= max_weight.
+Axiom weight_sub: forall x y, sub x y -> weight x <= weight y.
+Axiom weight_sub_strict: forall x y, sub x y -> x <> y -> weight x < weight y.
 
 End TYPE_ALGEBRA.
 

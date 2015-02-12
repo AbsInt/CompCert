@@ -28,9 +28,9 @@ Local Open Scope error_monad_scope.
 
 Module Type TYPE_ALGEBRA.
 
-Variable t: Type.
-Variable eq: forall (x y: t), {x=y} + {x<>y}.
-Variable default: t.
+Parameter t: Type.
+Parameter eq: forall (x y: t), {x=y} + {x<>y}.
+Parameter default: t.
 
 End TYPE_ALGEBRA.
 
