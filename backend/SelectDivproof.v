@@ -289,15 +289,17 @@ Theorem divs_mul_shift_2:
                          (Int.shru x (Int.repr 31)).
 Proof.
   intros. exploit divs_mul_shift_gen; eauto. instantiate (1 := x). 
-  intros (A & B & C). split. auto. rewrite C. f_equal. f_equal.
+  intros (A & B & C). split. auto. rewrite C.
+  apply (f_equal (fun x => Int.add (Int.shr x _) _)).
   rewrite Int.add_signed. unfold Int.mulhs. set (n := Int.signed x).
   transitivity (Int.repr (n * (m - Int.modulus) / Int.modulus + n)).
-  f_equal. 
+  apply f_equal.
   replace (n * (m - Int.modulus)) with (n * m +  (-n) * Int.modulus) by ring.
   rewrite Z_div_plus. ring. apply Int.modulus_pos. 
   apply Int.eqm_samerepr. apply Int.eqm_add; auto with ints. 
   apply Int.eqm_sym. eapply Int.eqm_trans. apply Int.eqm_signed_unsigned. 
-  apply Int.eqm_unsigned_repr_l. apply Int.eqm_refl2. f_equal. f_equal. 
+  apply Int.eqm_unsigned_repr_l. apply Int.eqm_refl2.
+  apply (f_equal (fun x => n*x/Int.modulus)).
   rewrite Int.signed_repr_eq. rewrite Zmod_small by assumption. 
   apply zlt_false. omega.
 Qed.

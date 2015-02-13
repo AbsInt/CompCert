@@ -247,7 +247,7 @@ check-admitted: $(FILES)
 	@grep -w 'admit\|Admitted\|ADMITTED' $^ || echo "Nothing admitted."
 
 check-proof: $(FILES)
-	$(COQCHK) -admit Integers -admit Floats -admit SelectDivproof Complements
+	$(COQCHK) Complements
 
 print-includes:
 	@echo $(COQINCLUDES)

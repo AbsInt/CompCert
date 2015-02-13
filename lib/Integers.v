@@ -176,7 +176,8 @@ Proof.
     fold modulus. intros A B.
     exploit (Z_div_mod_eq (Zpos p) modulus). apply modulus_pos. intros C.
     set (q := Zpos p / modulus) in *.
-    set (r := P_mod_two_p p wordsize) in *. 
+    set (r := P_mod_two_p p wordsize) in *.
+    generalize r A B; clear r A B; intros.
     rewrite <- B in C. 
     change (Z.neg p) with (- (Z.pos p)). destruct (zeq r 0).
     + symmetry. apply Zmod_unique with (-q). rewrite C; rewrite e. ring.  
@@ -3378,7 +3379,7 @@ Proof.
     repeat rewrite unsigned_repr. tauto. 
     generalize wordsize_max_unsigned; omega.
     generalize wordsize_max_unsigned; omega.
-  intros. unfold one_bits in H.
+  unfold one_bits. intros.
   destruct (list_in_map_inv _ _ _ H) as [i0 [EQ IN]].
   subst i. apply A. apply Z_one_bits_range with (unsigned x); auto.
 Qed.

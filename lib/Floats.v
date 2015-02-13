@@ -560,20 +560,18 @@ Proof.
   { rewrite ZofB_correct in C. destruct (is_finite _ _ x) eqn:FINx; congruence. }
   assert (GE: (B2R _ _ x >= Z2R (Int.unsigned ox8000_0000))%R).
   { rewrite <- EQy. unfold cmp, cmp_of_comparison in H.
-    rewrite Bcompare_correct in H by auto. 
+    rewrite Bcompare_correct in H by auto.
     destruct (Rcompare (B2R 53 1024 x) (B2R 53 1024 y)) eqn:CMP.
     apply Req_ge; apply Rcompare_Eq_inv; auto.
     discriminate.
-    apply Rgt_ge; apply Rcompare_Gt_inv; auto. 
-  } 
+    apply Rgt_ge; apply Rcompare_Gt_inv; auto.
+  }
   assert (EQ: ZofB_range _ _ (sub x y) Int.min_signed Int.max_signed = Some (p - Int.unsigned ox8000_0000)).
-  {
-    apply ZofB_range_minus. exact E. 
+  { apply ZofB_range_minus. exact E.
     compute_this (Int.unsigned ox8000_0000). smart_omega.
     apply Rge_le; auto.
-  } 
-  unfold to_int; rewrite EQ. simpl. f_equal. unfold Int.sub. f_equal. f_equal. 
-  symmetry; apply Int.unsigned_repr. omega.
+  }
+  unfold to_int; rewrite EQ. simpl. unfold Int.sub. rewrite Int.unsigned_repr by omega. auto.
 Qed.
 
 (** Conversions from ints to floats can be defined as bitwise manipulations
@@ -632,7 +630,7 @@ Theorem of_intu_from_words:
 Proof.
   intros. pose proof (Int.unsigned_range x).
   rewrite ! from_words_eq. unfold sub. rewrite BofZ_minus. 
-  unfold of_intu. f_equal. rewrite Int.unsigned_zero. omega.
+  unfold of_intu. apply (f_equal (BofZ 53 1024 __ __)). rewrite Int.unsigned_zero. omega.
   apply integer_representable_n; auto; smart_omega.
   apply integer_representable_n; auto; rewrite Int.unsigned_zero; smart_omega.
 Qed.
@@ -733,8 +731,8 @@ Proof.
   unfold sub. rewrite BofZ_minus.
   replace (2^84 + xh * 2^32 - (2^84 + p20 * 2^32))
      with ((xh - p20) * 2^32) by ring.
-  unfold add. rewrite BofZ_plus. 
-  unfold of_longu. f_equal. 
+  unfold add. rewrite BofZ_plus.
+  unfold of_longu. apply f_equal.
   rewrite <- (Int64.ofwords_recompose l) at 1. rewrite Int64.ofwords_add'.
   fold xh; fold xl. compute_this (two_p 32); compute_this p20; ring.
   apply integer_representable_n2p; auto.
