@@ -26,8 +26,8 @@ module type TARGET =
       val print_epilogue: out_channel -> unit
       val print_align: out_channel -> int -> unit
       val print_comm_symb:  out_channel -> Z.t -> P.t -> int -> unit
-      val print_var_info: bool
-      val print_fun_info: bool
+      val print_var_info: out_channel -> P.t -> unit
+      val print_fun_info: out_channel -> P.t -> unit
       val print_init: out_channel -> init_data -> unit
       val reset_constants: unit -> unit
       val get_section_names: P.t -> section_name * section_name * section_name

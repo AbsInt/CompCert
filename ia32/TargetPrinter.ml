@@ -67,8 +67,8 @@ module type SYSTEM =
       val stack_alignment: int
       val print_align: out_channel -> int -> unit
       val print_mov_ra: out_channel -> ireg -> ident -> unit
-      val print_fun_info: bool
-      val print_var_info: bool
+      val print_fun_info:  out_channel -> P.t -> unit
+      val print_var_info: out_channel -> P.t -> unit
       val print_epilogue: out_channel -> unit
       val print_comm_decl: out_channel -> P.t -> Z.t -> int -> unit
       val print_lcomm_decl: out_channel -> P.t -> Z.t -> int -> unit
@@ -107,9 +107,9 @@ module Cygwin_System : SYSTEM =
     let print_mov_ra oc rd id =   
       fprintf oc "	movl	$%a, %a\n" symbol id ireg rd
 
-    let print_fun_info = false
+    let print_fun_info _ _  = ()
         
-    let print_var_info = false
+    let print_var_info _ _ = ()
 
     let print_epilogue _ = ()
 
@@ -154,9 +154,9 @@ module ELF_System : SYSTEM =
     let print_mov_ra  oc rd id = 
          fprintf oc "	movl	$%a, %a\n" symbol id ireg rd
 
-    let print_fun_info = true
+    let print_fun_info = print_fun_info
       
-    let print_var_info = true
+    let print_var_info = print_var_info
       
     let print_epilogue _ = ()
 
@@ -213,9 +213,9 @@ module MacOS_System : SYSTEM =
       indirect_symbols := StringSet.add id !indirect_symbols;
       fprintf oc "	movl	L%a$non_lazy_ptr, %a\n" raw_symbol id ireg rd
 
-    let print_fun_info = false
+    let print_fun_info _ _ = ()
  
-    let print_var_info = false
+    let print_var_info _ _ = ()
     
     let print_epilogue oc = 
       fprintf oc "	.section __IMPORT,__pointers,non_lazy_symbol_pointers\n";

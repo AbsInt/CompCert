@@ -1058,9 +1058,9 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       if !Clflags.option_mthumb then
         fprintf oc "	.thumb_func\n"
 
-    let print_fun_info = true
+    let print_fun_info = print_fun_info
 
-    let print_var_info = true
+    let print_var_info = print_var_info
 
     let print_comm_symb oc sz name align =
       if C2C.atom_is_static name then

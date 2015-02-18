@@ -44,8 +44,7 @@ module Printer(Target:TARGET) =
       Target.cfi_startproc oc;
       Target.print_instructions oc fn;
       Target.cfi_endproc oc;
-      if Target.print_fun_info then
-        print_fun_info oc name;
+      Target.print_fun_info oc name;
       Target.emit_constants oc lit;
       Target.print_jumptable oc jmptbl
         
@@ -78,8 +77,7 @@ module Printer(Target:TARGET) =
               fprintf oc "	.global	%a\n" symbol name;
             fprintf oc "%a:\n" symbol name;
             print_init_data oc name v.gvar_init;
-            if Target.print_var_info then
-              print_var_info oc name;
+            Target.print_var_info oc name;
           end else
             let sz =
               match v.gvar_init with [Init_space sz] -> sz | _ -> assert false in

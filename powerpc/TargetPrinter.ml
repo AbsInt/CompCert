@@ -683,7 +683,7 @@ module Target (System : SYSTEM):TARGET =
 
     let comment = comment
 
-    let print_fun_info = true
+    let print_fun_info = print_fun_info
 
     let emit_constants oc lit =
       if !float64_literals <> [] || !float32_literals <> [] then begin
@@ -703,7 +703,7 @@ module Target (System : SYSTEM):TARGET =
             
     let reset_constants = reset_constants
  
-    let print_var_info = true
+    let print_var_info = print_var_info
 
     let print_comm_symb oc sz name align = 
       fprintf oc "	%s	%a, %s, %d\n"
