@@ -75,8 +75,8 @@ module type SYSTEM =
     end
 
 (* Printer functions for cygwin *)
-module Cygwin_System =
-  (struct
+module Cygwin_System : SYSTEM =
+  struct
 
     let raw_symbol oc s =
        fprintf oc "_%s" s
@@ -120,11 +120,11 @@ module Cygwin_System =
       fprintf oc "	.local	%a\n" symbol name;
       print_comm_decl oc name sz al
 
-  end:SYSTEM)
+  end
 
 (* Printer functions for ELF *)
-module ELF_System =
-  (struct
+module ELF_System : SYSTEM =
+  struct
     
     let raw_symbol oc s =
       fprintf oc "%s" s
@@ -167,11 +167,11 @@ module ELF_System =
       fprintf oc "	.local	%a\n" symbol name;
       print_comm_decl oc name sz al
 
-  end:SYSTEM)
+  end
 
 (* Printer functions for MacOS *)
-module MacOS_System =
-  (struct
+module MacOS_System : SYSTEM =
+  struct
     
     let raw_symbol oc s =
      fprintf oc "_%s" s
@@ -235,7 +235,7 @@ module MacOS_System =
       fprintf oc "	.lcomm	%a, %s, %d\n"
                  symbol name (Z.to_string sz) (log2 al)
 
-  end:SYSTEM)
+  end
 
 
 module Target(System: SYSTEM):TARGET =

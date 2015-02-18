@@ -37,7 +37,7 @@ module type PRINTER_OPTIONS =
 (* Module containing the printing functions *)
 
 module Target (Opt: PRINTER_OPTIONS) : TARGET =
-  (struct
+  struct
 (* Code generation options. *)
     
     let literals_in_code = ref true     (* to be turned into a proper option *)
@@ -1119,7 +1119,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
 
     let print_epilogue oc = ()
         
-  end)
+  end
 
 let sel_target () = 
   let module S : PRINTER_OPTIONS = struct
