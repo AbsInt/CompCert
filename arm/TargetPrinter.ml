@@ -44,9 +44,11 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
     
 (* Basic printing functions *)
         
-    let print_label oc lbl = label oc (transl_label lbl)
+    let print_label oc lbl = elf_label oc (transl_label lbl)
         
     let comment = "@"
+
+    let symbol = elf_symbol
 
     let symbol_offset oc (symb, ofs) =
       symbol oc symb;
@@ -1058,9 +1060,9 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       if !Clflags.option_mthumb then
         fprintf oc "	.thumb_func\n"
 
-    let print_fun_info = print_fun_info
+    let print_fun_info = elf_print_fun_info
 
-    let print_var_info = print_var_info
+    let print_var_info = elf_print_var_info
 
     let print_comm_symb oc sz name align =
       if C2C.atom_is_static name then

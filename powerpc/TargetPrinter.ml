@@ -26,6 +26,7 @@ open PrintAsmaux
 
 module type SYSTEM =
     sig
+      val comment: string
       val constant: out_channel -> constant -> unit
       val ireg: out_channel -> ireg -> unit
       val freg: out_channel -> freg -> unit
@@ -38,6 +39,10 @@ module type SYSTEM =
       val cfi_rel_offset: out_channel -> string -> int32 -> unit
       val print_prologue: out_channel -> unit
     end
+
+let symbol = elf_symbol
+
+let symbol_offset = elf_symbol_offset
 
 let symbol_fragment oc s n op =
       fprintf oc "(%a)%s" symbol_offset (s, n) op
@@ -65,6 +70,8 @@ let float_reg_name = function
 
 module Linux_System : SYSTEM =
   struct
+
+    let comment = "#"
 
     let constant oc cst =
       match cst with
@@ -129,7 +136,9 @@ module Linux_System : SYSTEM =
     
 module Diab_System : SYSTEM =
   struct
-        
+
+    let comment = ";"
+
     let constant oc cst =
       match cst with
       | Cint n ->
@@ -198,9 +207,12 @@ module Target (System : SYSTEM):TARGET =
     include System
 
     (* Basic printing functions *)
-
+    let symbol = symbol
+        
     let raw_symbol oc s =
       fprintf oc "%s" s
+
+    let label = elf_label
 
     let label_low oc lbl =
       fprintf oc ".L%d@l" lbl
@@ -681,9 +693,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	.long	%a\n" 
             symbol_offset (symb, ofs)
 
-    let comment = comment
-
-    let print_fun_info = print_fun_info
+  
+    let print_fun_info = elf_print_fun_info
 
     let emit_constants oc lit =
       if !float64_literals <> [] || !float32_literals <> [] then begin
@@ -703,7 +714,7 @@ module Target (System : SYSTEM):TARGET =
             
     let reset_constants = reset_constants
  
-    let print_var_info = print_var_info
+    let print_var_info = elf_print_var_info
 
     let print_comm_symb oc sz name align = 
       fprintf oc "	%s	%a, %s, %d\n"

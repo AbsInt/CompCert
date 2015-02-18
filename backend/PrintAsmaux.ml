@@ -41,6 +41,7 @@ module type TARGET =
       val section: out_channel -> section_name -> unit
       val name_of_section: section_name -> string
       val comment: string
+      val symbol: out_channel -> P.t -> unit
     end
 
 (* On-the-fly label renaming *)
@@ -60,7 +61,7 @@ let transl_label lbl =
     Hashtbl.add current_function_labels lbl lbl';
     lbl'
 
-let label oc lbl =
+let elf_label oc lbl =
   fprintf oc ".L%d" lbl
 
 (* List of literals and jumptables used in the code *)
@@ -81,25 +82,22 @@ let current_function_sig =
   ref { sig_args = []; sig_res = None; sig_cc = cc_default }
 
 (* Functions for printing of symbol names *)
-let symbol oc symb =
+let elf_symbol oc symb =
   fprintf oc "%s" (extern_atom symb)
 
-let symbol_offset oc (symb, ofs) =
-  symbol oc symb;
+let elf_symbol_offset oc (symb, ofs) =
+  elf_symbol oc symb;
   let ofs = camlint_of_coqint ofs in
   if ofs <> 0l then fprintf oc " + %ld" ofs
 
-(* The comment deliminiter *)
-let comment = "#"
-
 (* Functions for fun and var info *)
-let print_fun_info oc name =
-  fprintf oc "	.type	%a, @function\n" symbol name;
-  fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
+let elf_print_fun_info oc name =
+  fprintf oc "	.type	%a, @function\n" elf_symbol name;
+  fprintf oc "	.size	%a, . - %a\n" elf_symbol name elf_symbol name
    
-let print_var_info oc name =
-  fprintf oc "	.type	%a, @object\n" symbol name;
-  fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
+let elf_print_var_info oc name =
+  fprintf oc "	.type	%a, @object\n" elf_symbol name;
+  fprintf oc "	.size	%a, . - %a\n" elf_symbol name elf_symbol name
 
 (* Emit .cfi directives *)
 let cfi_startproc =

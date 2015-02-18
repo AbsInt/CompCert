@@ -37,9 +37,9 @@ module Printer(Target:TARGET) =
         match !Clflags.option_falignfunctions with Some n -> n | None -> 4 in
       Target.print_align oc alignment;
       if not (C2C.atom_is_static name) then
-        fprintf oc "	.globl %a\n" symbol name;
+        fprintf oc "	.globl %a\n" Target.symbol name;
       Target.print_optional_fun_info oc;
-      fprintf oc "%a:\n" symbol name;
+      fprintf oc "%a:\n" Target.symbol name;
       print_location oc (C2C.atom_location name);
       Target.cfi_startproc oc;
       Target.print_instructions oc fn;
@@ -74,8 +74,8 @@ module Printer(Target:TARGET) =
             fprintf oc "	%s\n" name_sec;
             Target.print_align oc align;
             if not (C2C.atom_is_static name) then
-              fprintf oc "	.global	%a\n" symbol name;
-            fprintf oc "%a:\n" symbol name;
+              fprintf oc "	.global	%a\n" Target.symbol name;
+            fprintf oc "%a:\n" Target.symbol name;
             print_init_data oc name v.gvar_init;
             Target.print_var_info oc name;
           end else

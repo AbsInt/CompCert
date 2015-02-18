@@ -56,6 +56,8 @@ let preg oc = function
   | FR r -> freg oc r
   | _    -> assert false
 
+(* The comment deliminiter *)
+let comment = "#"
 
 (* System dependend printer functions *)
 module type SYSTEM =
@@ -81,7 +83,7 @@ module Cygwin_System : SYSTEM =
     let raw_symbol oc s =
        fprintf oc "_%s" s
 
-    let symbol = symbol
+    let symbol = elf_symbol
 
     let label oc lbl =
        fprintf oc "L%d" lbl
@@ -129,9 +131,9 @@ module ELF_System : SYSTEM =
     let raw_symbol oc s =
       fprintf oc "%s" s
   
-    let symbol = symbol
+    let symbol = elf_symbol
 
-    let label = label
+    let label = elf_label
 
     let name_of_section = function
       | Section_text -> ".text"
@@ -154,9 +156,9 @@ module ELF_System : SYSTEM =
     let print_mov_ra  oc rd id = 
          fprintf oc "	movl	$%a, %a\n" symbol id ireg rd
 
-    let print_fun_info = print_fun_info
+    let print_fun_info = elf_print_fun_info
       
-    let print_var_info = print_var_info
+    let print_var_info = elf_print_var_info
       
     let print_epilogue _ = ()
 
@@ -239,8 +241,9 @@ module MacOS_System : SYSTEM =
 
 
 module Target(System: SYSTEM):TARGET =
-  (struct
+  struct
     open System
+    let symbol = symbol
 
 (*  Basic printing functions *)
 
@@ -914,8 +917,6 @@ module Target(System: SYSTEM):TARGET =
       then System.print_lcomm_decl oc name sz align
       else System.print_comm_decl oc name sz align
 
-    let comment = comment
-
     let name_of_section = name_of_section
 
     let emit_constants oc lit =
@@ -963,8 +964,10 @@ module Target(System: SYSTEM):TARGET =
         fprintf oc "%a:	.long   0x7FFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF\n"
           raw_symbol "__abss_mask"
       end;
-      System.print_epilogue oc;
-end)
+      System.print_epilogue oc
+      
+    let comment = comment
+end
 
 let sel_target () =
  let module S = (val (match Configuration.system with
