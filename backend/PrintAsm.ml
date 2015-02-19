@@ -20,8 +20,6 @@ open Printf
 open Sections
 open TargetPrinter
 
-module Target = (val (sel_target ()):TARGET) 
-
 module Printer(Target:TARGET) =
   struct
 
@@ -34,7 +32,7 @@ module Printer(Target:TARGET) =
       let (text, lit, jmptbl) = Target.get_section_names name in
       Target.section oc text;
       let alignment =
-        match !Clflags.option_falignfunctions with Some n -> n | None -> 4 in
+        match !Clflags.option_falignfunctions with Some n -> n | None -> Target.default_falignment in
       Target.print_align oc alignment;
       if not (C2C.atom_is_static name) then
         fprintf oc "	.globl %a\n" Target.symbol name;

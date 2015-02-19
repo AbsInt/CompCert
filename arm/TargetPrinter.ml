@@ -1120,7 +1120,8 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       fprintf oc "	.%s\n" (if !Clflags.option_mthumb then "thumb" else "arm")
 
     let print_epilogue oc = ()
-        
+
+    let default_falignment = 4
   end
 
 let sel_target () = 

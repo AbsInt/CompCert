@@ -42,6 +42,7 @@ module type TARGET =
       val name_of_section: section_name -> string
       val comment: string
       val symbol: out_channel -> P.t -> unit
+      val default_falignment: int
     end
 
 (* On-the-fly label renaming *)

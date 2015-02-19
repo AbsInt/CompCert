@@ -741,6 +741,7 @@ module Target (System : SYSTEM):TARGET =
         jumptables := []
       end
 
+    let default_falignment = 4
   end
 
 let sel_target () =

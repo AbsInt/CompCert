@@ -82,8 +82,9 @@ module Cygwin_System : SYSTEM =
 
     let raw_symbol oc s =
        fprintf oc "_%s" s
-
-    let symbol = elf_symbol
+        
+    let symbol oc symb =
+      raw_symbol oc (extern_atom symb)
 
     let label oc lbl =
        fprintf oc "L%d" lbl
@@ -179,7 +180,7 @@ module MacOS_System : SYSTEM =
      fprintf oc "_%s" s
 
     let symbol oc symb =
-      fprintf oc "_%s" (extern_atom symb)
+      raw_symbol oc (extern_atom symb)
 
     let label oc lbl =
       fprintf oc "L%d" lbl
@@ -967,6 +968,8 @@ module Target(System: SYSTEM):TARGET =
       System.print_epilogue oc
       
     let comment = comment
+
+    let default_falignment = 16
 end
 
 let sel_target () =
