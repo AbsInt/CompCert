@@ -82,7 +82,7 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
       eval_lvalue ge e le m a1 loc ofs ->
       eval_expr ge e le m a2 v2 ->
       sem_cast v2 (typeof a2) (typeof a1) = Some v ->
-      assign_loc (typeof a1) m loc ofs v m' ->
+      assign_loc ge (typeof a1) m loc ofs v m' ->
       exec_stmt e le m (Sassign a1 a2)
                E0 le m' Out_normal
   | exec_Sset:     forall e le m id a v,
@@ -164,12 +164,12 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
 
 with eval_funcall: mem -> fundef -> list val -> trace -> mem -> val -> Prop :=
   | eval_funcall_internal: forall le m f vargs t e m1 m2 m3 out vres m4,
-      alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
+      alloc_variables ge empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
       list_norepet (var_names f.(fn_params) ++ var_names f.(fn_vars)) ->
-      bind_parameters e m1 f.(fn_params) vargs m2 ->
+      bind_parameters ge e m1 f.(fn_params) vargs m2 ->
       exec_stmt e (create_undef_temps f.(fn_temps)) m2 f.(fn_body) t le m3 out ->
       outcome_result_value out f.(fn_return) vres ->
-      Mem.free_list m3 (blocks_of_env e) = Some m4 ->
+      Mem.free_list m3 (blocks_of_env ge e) = Some m4 ->
       eval_funcall m (Internal f) vargs t m4 vres
   | eval_funcall_external: forall m ef targs tres cconv vargs t vres m',
       external_call ef ge vargs m t vres m' ->
@@ -232,9 +232,9 @@ CoInductive execinf_stmt: env -> temp_env -> mem -> statement -> traceinf -> Pro
 
 with evalinf_funcall: mem -> fundef -> list val -> traceinf -> Prop :=
   | evalinf_funcall_internal: forall m f vargs t e m1 m2,
-      alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
+      alloc_variables ge empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
       list_norepet (var_names f.(fn_params) ++ var_names f.(fn_vars)) ->
-      bind_parameters e m1 f.(fn_params) vargs m2 ->
+      bind_parameters ge e m1 f.(fn_params) vargs m2 ->
       execinf_stmt e (create_undef_temps f.(fn_temps)) m2 f.(fn_body) t ->
       evalinf_funcall m (Internal f) vargs t.
 
@@ -244,7 +244,7 @@ End BIGSTEP.
 
 Inductive bigstep_program_terminates (p: program): trace -> int -> Prop :=
   | bigstep_program_terminates_intro: forall b f m0 m1 t r,
-      let ge := Genv.globalenv p in 
+      let ge := globalenv p in 
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
@@ -254,7 +254,7 @@ Inductive bigstep_program_terminates (p: program): trace -> int -> Prop :=
 
 Inductive bigstep_program_diverges (p: program): traceinf -> Prop :=
   | bigstep_program_diverges_intro: forall b f m0 t,
-      let ge := Genv.globalenv p in 
+      let ge := globalenv p in 
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
@@ -270,7 +270,7 @@ Definition bigstep_semantics (p: program) :=
 Section BIGSTEP_TO_TRANSITIONS.
 
 Variable prog: program.
-Let ge : genv := Genv.globalenv prog.
+Let ge : genv := globalenv prog.
 
 Inductive outcome_state_match
        (e: env) (le: temp_env) (m: mem) (f: function) (k: cont): outcome -> state -> Prop :=

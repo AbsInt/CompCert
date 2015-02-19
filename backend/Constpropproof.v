@@ -277,11 +277,11 @@ Proof.
 + simpl in H. assert (V: vmatch bc (rs#r1) (Ptr (Gl symb n1))) by (rewrite <- e1; apply MATCH). 
   exploit vmatch_ptr_gl'; eauto. intros [A | [b [A B]]].
   * simpl in H; rewrite A in H; inv H.
-  * simpl; rewrite volatile_load_global_charact. exists b; split; congruence.
+  * simpl; rewrite volatile_load_global_charact; simpl. exists b; split; congruence.
 + simpl in H. assert (V: vmatch bc (rs#r1) (Ptr (Gl symb n1))) by (rewrite <- e1; apply MATCH). 
   exploit vmatch_ptr_gl'; eauto. intros [A | [b [A B]]].
   * simpl in H; rewrite A in H; inv H.
-  * simpl; rewrite volatile_store_global_charact. exists b; split; congruence.
+  * simpl; rewrite volatile_store_global_charact; simpl. exists b; split; congruence.
 + inv H. exploit annot_strength_reduction_correct; eauto. intros [eargs' [A B]]. 
   rewrite <- B. econstructor; eauto. 
 Qed.

@@ -89,11 +89,13 @@ val sizeof : Env.t -> typ -> int option
 val alignof : Env.t -> typ -> int option
   (* Return the natural alignment of the given type, in bytes.
      Machine-dependent. [None] is returned if the type is incomplete. *)
-val sizeof_ikind: ikind -> int
-  (* Return the size of the given integer kind. *)
 val incomplete_type : Env.t -> typ -> bool
   (* Return true if the given type is incomplete, e.g.
      declared but not defined struct or union, or array type  without a size. *)
+val sizeof_ikind: ikind -> int
+  (* Return the size of the given integer kind. *)
+val is_signed_ikind: ikind -> bool
+  (* Return true if the given integer kind is signed, false if unsigned. *)
 
 (* Computing composite_info records *)
 
@@ -156,20 +158,20 @@ val default_argument_conversion : Env.t -> typ -> typ
 (* Special types *)
 val enum_ikind : ikind
   (* Integer kind for enum values.  Always [IInt]. *)
-val wchar_ikind : ikind
-  (* Integer kind for wchar_t type.  Unsigned. *)
-val size_t_ikind : ikind
+val wchar_ikind : unit -> ikind
+  (* Integer kind for wchar_t type. *)
+val size_t_ikind : unit -> ikind
   (* Integer kind for size_t type.  Unsigned. *)
-val ptr_t_ikind : ikind
+val ptr_t_ikind : unit -> ikind
   (* Integer kind for ptr_t type.  Smallest unsigned kind large enough
      to contain a pointer without information loss. *)
-val ptrdiff_t_ikind : ikind
+val ptrdiff_t_ikind : unit -> ikind
   (* Integer kind for ptrdiff_t type.  Smallest signed kind large enough
      to contain the difference between two pointers. *)
 
 (* Helpers for type-checking *)
 
-val type_of_constant : Env.t -> constant -> typ
+val type_of_constant : constant -> typ
   (* Return the type of the given constant. *)
 val type_of_member : Env.t -> field -> typ
   (* Return the type of accessing the given field [fld].

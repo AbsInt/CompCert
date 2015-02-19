@@ -23,6 +23,9 @@ Require ValueDomain.
 Require Tailcall.
 Require Allocation.
 Require Ctypes.
+Require Csyntax.
+Require Ctyping.
+Require Clight.
 Require Compiler.
 Require Parser.
 Require Initializers.
@@ -57,12 +60,6 @@ Extract Constant Iteration.GenIter.iterate =>
 
 (* Selection *)
 
-Extract Constant SelectLong.get_helper =>
-  "fun ge s sg ->
-     Errors.OK (Camlcoq.intern_string (Camlcoq.camlstring_of_coqstring s))".
-Extract Constant SelectLong.get_builtin =>
-  "fun s sg ->
-     Errors.OK (Camlcoq.intern_string (Camlcoq.camlstring_of_coqstring s))".
 Extract Constant Selection.compile_switch => "Switchaux.compile_switch".
 
 (* RTLgen *)
@@ -157,9 +154,12 @@ Cd "extraction".
 Separate Extraction
    Compiler.transf_c_program Compiler.transf_cminor_program
    Cexec.do_initial_state Cexec.do_step Cexec.at_final_state
-   Ctypes.merge_attributes Ctypes.remove_attributes
+   Ctypes.merge_attributes Ctypes.remove_attributes Ctypes.build_composite_env
+   Csyntax.make_program Clight.make_program
    Initializers.transl_init Initializers.constval
    Csyntax.Eindex Csyntax.Epreincr
+   Ctyping.retype_function Ctyping.econdition'
+   Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
    Conventions1.dummy_int_reg Conventions1.dummy_float_reg
    RTL.instr_defs RTL.instr_uses
    Machregs.mregs_for_operation Machregs.mregs_for_builtin

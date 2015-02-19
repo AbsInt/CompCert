@@ -20,6 +20,7 @@ Require Import Integers.
 Require Import Floats.
 Require Import Values.
 Require Import AST.
+Require Import Errors.
 Require Import Ctypes.
 Require Import Cop.
 
@@ -207,8 +208,44 @@ Definition type_of_fundef (f: fundef) : type :=
 
 (** ** Programs *)
 
-(** A program is a collection of named functions, plus a collection
-  of named global variables, carrying their types and optional initialization 
-  data.  See module [AST] for more details. *)
+(** A program is composed of:
+- a list of definitions of functions and global variables;
+- the names of functions and global variables that are public (not static);
+- the name of the function that acts as entry point ("main" function).
+- a list of definitions for structure and union names;
+- the corresponding composite environment;
+*)
 
-Definition program : Type := AST.program fundef type.
+Record program : Type := {
+  prog_defs: list (ident * globdef fundef type);
+  prog_public: list ident;
+  prog_main: ident;
+  prog_types: list composite_definition;
+  prog_comp_env: composite_env;
+  prog_comp_env_eq: build_composite_env prog_types = OK prog_comp_env
+}.
+
+Definition program_of_program (p: program) : AST.program fundef type :=
+  {| AST.prog_defs := p.(prog_defs);
+     AST.prog_public := p.(prog_public);
+     AST.prog_main := p.(prog_main) |}.
+
+Coercion program_of_program: program >-> AST.program.
+
+Program Definition make_program (types: list composite_definition)
+                                (defs: list (ident * globdef fundef type))
+                                (public: list ident)
+                                (main: ident): res program :=
+  match build_composite_env types with
+  | OK env =>
+      OK {| prog_defs := defs;
+            prog_public := public;
+            prog_main := main;
+            prog_types := types;
+            prog_comp_env := env;
+            prog_comp_env_eq := _ |}
+  | Error msg =>
+      Error msg
+  end.
+
+

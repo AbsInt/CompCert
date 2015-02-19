@@ -70,6 +70,51 @@ Qed.
 Local Unset Elimination Schemes.
 Local Unset Case Analysis Schemes.
 
+(** * Symbol environments *)
+
+(** Symbol environments are a restricted view of global environments,
+  focusing on symbol names and their associated blocks.  They do not
+  contain mappings from blocks to function or variable definitions. *)
+
+Module Senv.
+
+Record t: Type := mksenv {
+  (** Operations *)
+  find_symbol: ident -> option block;
+  public_symbol: ident -> bool;
+  invert_symbol: block -> option ident;
+  block_is_volatile: block -> bool;
+  nextblock: block;
+  (** Properties *)
+  find_symbol_injective:
+    forall id1 id2 b, find_symbol id1 = Some b -> find_symbol id2 = Some b -> id1 = id2;
+  invert_find_symbol:
+    forall id b, invert_symbol b = Some id -> find_symbol id = Some b;
+  find_invert_symbol:
+    forall id b, find_symbol id = Some b -> invert_symbol b = Some id;
+  public_symbol_exists:
+    forall id, public_symbol id = true -> exists b, find_symbol id = Some b;
+  find_symbol_below:
+    forall id b, find_symbol id = Some b -> Plt b nextblock;
+  block_is_volatile_below:
+    forall b, block_is_volatile b = true -> Plt b nextblock
+}.
+
+Definition symbol_address (ge: t) (id: ident) (ofs: int) : val :=
+  match find_symbol ge id with
+  | Some b => Vptr b ofs
+  | None => Vundef
+  end.
+
+Theorem shift_symbol_address:
+  forall ge id ofs n,
+  symbol_address ge id (Int.add ofs n) = Val.add (symbol_address ge id ofs) (Vint n).
+Proof.
+  intros. unfold symbol_address. destruct (find_symbol ge id); auto. 
+Qed.
+
+End Senv.
+
 Module Genv.
 
 (** * Global environments *)
@@ -148,6 +193,15 @@ Definition invert_symbol (ge: t) (b: block) : option ident :=
 
 Definition find_var_info (ge: t) (b: block) : option (globvar V) :=
   PTree.get b ge.(genv_vars).
+
+(** [block_is_volatile ge b] returns [true] if [b] points to a global variable
+  of volatile type, [false] otherwise. *)
+
+Definition block_is_volatile (ge: t) (b: block) : bool :=
+  match find_var_info ge b with
+  | None => false
+  | Some gv => gv.(gvar_volatile)
+  end.
 
 (** ** Constructing the global environment *)
 
@@ -267,20 +321,47 @@ Proof.
   apply IHgl; auto. 
 Qed.
 
+Lemma add_globals_unique_preserves:
+  forall id gl ge,
+  (forall ge id1 g, P ge -> In (id1, g) gl -> id1 <> id -> P (add_global ge (id1, g))) ->
+  ~In id (map fst gl) -> P ge -> P (add_globals ge gl).
+Proof.
+  induction gl; simpl; intros. 
+  auto.
+  destruct a. apply IHgl; auto. 
+Qed.
+
+Lemma add_globals_unique_ensures:
+  forall gl1 id g gl2 ge,
+  (forall ge id1 g1, P ge -> In (id1, g1) gl2 -> id1 <> id -> P (add_global ge (id1, g1))) ->
+  (forall ge, P (add_global ge (id, g))) ->
+  ~In id (map fst gl2) -> P (add_globals ge (gl1 ++ (id, g) :: gl2)).
+Proof.
+  intros. rewrite add_globals_app. simpl. apply add_globals_unique_preserves with id; auto.
+Qed.
+
+Remark in_norepet_unique:
+  forall id g (gl: list (ident * globdef F V)),
+  In (id, g) gl -> list_norepet (map fst gl) ->
+  exists gl1 gl2, gl = gl1 ++ (id, g) :: gl2 /\ ~In id (map fst gl2).
+Proof.
+  induction gl as [|[id1 g1] gl]; simpl; intros.
+  contradiction.
+  inv H0. destruct H. 
+  inv H. exists nil, gl. auto. 
+  exploit IHgl; eauto. intros (gl1 & gl2 & X & Y). 
+  exists ((id1, g1) :: gl1), gl2; split; auto. rewrite X; auto. 
+Qed.
+
 Lemma add_globals_norepet_ensures:
   forall id g gl ge,
   (forall ge id1 g1, P ge -> In (id1, g1) gl -> id1 <> id -> P (add_global ge (id1, g1))) ->
   (forall ge, P (add_global ge (id, g))) ->
   In (id, g) gl -> list_norepet (map fst gl) -> P (add_globals ge gl).
 Proof.
-  induction gl; simpl; intros.
-  contradiction.
-  inv H2. 
-  destruct H1. subst a. simpl in H5. 
-  apply add_globals_preserves; auto.
-  intros. apply H. auto. auto. red; intros; subst id0. elim H5. 
-  change id with (fst (id, g0)). apply List.in_map; auto. 
-  apply IHgl; auto. 
+  intros. exploit in_norepet_unique; eauto. intros (gl1 & gl2 & X & Y). 
+  subst gl. apply add_globals_unique_ensures; auto. intros. eapply H; eauto. 
+  apply in_or_app; simpl; auto.
 Qed.
 
 End GLOBALENV_PRINCIPLES.
@@ -333,15 +414,14 @@ Proof.
   intros. unfold find_symbol; simpl. rewrite PTree.gss. econstructor; eauto.
 Qed.
 
-Theorem find_funct_ptr_exists:
-  forall p id f,
-  list_norepet (prog_defs_names p) ->
-  In (id, Gfun f) (prog_defs p) ->
+Theorem find_funct_ptr_exists_2:
+  forall p gl1 id f gl2,
+  prog_defs p = gl1 ++ (id, Gfun f) :: gl2 -> ~In id (map fst gl2) ->
   exists b,
      find_symbol (globalenv p) id = Some b
   /\ find_funct_ptr (globalenv p) b = Some f.
 Proof.
-  intros; unfold globalenv. eapply add_globals_norepet_ensures; eauto.
+  intros; unfold globalenv. rewrite H. eapply add_globals_unique_ensures; eauto.
 (* preserves *)
   intros. unfold find_symbol, find_funct_ptr in *; simpl.
   destruct H1 as [b [A B]]. exists b; split.
@@ -354,15 +434,26 @@ Proof.
   exists (genv_next ge); split. apply PTree.gss. apply PTree.gss.
 Qed.
 
-Theorem find_var_exists:
-  forall p id v,
+Corollary find_funct_ptr_exists:
+  forall p id f,
   list_norepet (prog_defs_names p) ->
-  In (id, Gvar v) (prog_defs p) ->
+  In (id, Gfun f) (prog_defs p) ->
+  exists b,
+     find_symbol (globalenv p) id = Some b
+  /\ find_funct_ptr (globalenv p) b = Some f.
+Proof.
+  intros. exploit in_norepet_unique; eauto. intros (gl1 & gl2 & X & Y). 
+  eapply find_funct_ptr_exists_2; eauto. 
+Qed.
+
+Theorem find_var_exists_2:
+  forall p gl1 id v gl2,
+  prog_defs p = gl1 ++ (id, Gvar v) :: gl2 -> ~In id (map fst gl2) ->
   exists b,
      find_symbol (globalenv p) id = Some b
   /\ find_var_info (globalenv p) b = Some v.
 Proof.
-  intros; unfold globalenv. eapply add_globals_norepet_ensures; eauto.
+  intros; unfold globalenv. rewrite H. eapply add_globals_unique_ensures; eauto.
 (* preserves *)
   intros. unfold find_symbol, find_var_info in *; simpl.
   destruct H1 as [b [A B]]. exists b; split.
@@ -372,6 +463,18 @@ Proof.
 (* ensures *)
   intros. unfold find_symbol, find_var_info in *; simpl.
   exists (genv_next ge); split. apply PTree.gss. apply PTree.gss. 
+Qed.
+
+Corollary find_var_exists:
+  forall p id v,
+  list_norepet (prog_defs_names p) ->
+  In (id, Gvar v) (prog_defs p) ->
+  exists b,
+     find_symbol (globalenv p) id = Some b
+  /\ find_var_info (globalenv p) b = Some v.
+Proof.
+  intros. exploit in_norepet_unique; eauto. intros (gl1 & gl2 & X & Y). 
+  eapply find_var_exists_2; eauto. 
 Qed.
 
 Lemma find_symbol_inversion : forall p x b,
@@ -518,6 +621,30 @@ Theorem globalenv_public:
 Proof.
   unfold globalenv; intros. rewrite genv_public_add_globals. auto. 
 Qed.
+
+Theorem block_is_volatile_below:
+  forall ge b, block_is_volatile ge b = true ->  Plt b ge.(genv_next).
+Proof.
+  unfold block_is_volatile; intros. destruct (find_var_info ge b) as [gv|] eqn:FV.
+  eapply genv_vars_range; eauto.
+  discriminate.
+Qed.
+
+(** ** Coercing a global environment into a symbol environment *)
+
+Definition to_senv (ge: t) : Senv.t :=
+ @Senv.mksenv
+    (find_symbol ge)
+    (public_symbol ge)
+    (invert_symbol ge)
+    (block_is_volatile ge)
+    ge.(genv_next)
+    ge.(genv_vars_inj)
+    (invert_find_symbol ge)
+    (find_invert_symbol ge)
+    (public_symbol_exists ge)
+    ge.(genv_symb_range)
+    (block_is_volatile_below ge).
 
 (** * Construction of the initial memory state *)
 
@@ -1650,9 +1777,10 @@ Proof.
   destruct progmatch as (P & Q & R). rewrite R. auto. 
 Qed. 
 
-Hypothesis new_ids_fresh : 
-  forall s', find_symbol (globalenv p) s' <> None  -> 
-             ~In s' (map fst new_globs).
+Hypothesis new_ids_fresh:
+  forall s, In s (prog_defs_names p) -> In s (map fst new_globs) -> False.
+Hypothesis new_ids_unique:
+  list_norepet (map fst new_globs).
 
 Lemma store_init_data_list_match:
   forall idl m b ofs m',
@@ -1665,7 +1793,7 @@ Proof.
           store_init_data (globalenv p') m b ofs a = Some m').
    destruct a; simpl; auto. rewrite find_symbol_match. auto.
    simpl in H. destruct (find_symbol (globalenv p) i) as [b'|] eqn:?; try discriminate.
-   apply new_ids_fresh. congruence.
+   red; intros. exploit find_symbol_inversion; eauto. 
   case_eq (store_init_data (globalenv p) m b ofs a); intros. 
     rewrite H1 in H. 
     pose proof (H0 _ H1). rewrite H2. auto. 
@@ -1702,6 +1830,32 @@ Proof.
   eapply alloc_globals_match; eauto. 
 Qed.
 
+Theorem find_new_funct_ptr_match:
+  forall id f, In (id, Gfun f) new_globs ->
+  exists b,
+     find_symbol (globalenv p') id = Some b
+  /\ find_funct_ptr (globalenv p') b = Some f.
+Proof.
+  intros.
+  destruct progmatch as [[tglob [P Q]] R].
+  exploit in_norepet_unique; eauto. intros (gl1 & gl2 & S & T). 
+  rewrite S in Q. rewrite <- app_ass in Q. 
+  eapply find_funct_ptr_exists_2; eauto. 
+Qed.
+
+Theorem find_new_var_match:
+  forall id v, In (id, Gvar v) new_globs ->
+  exists b,
+     find_symbol (globalenv p') id = Some b
+  /\ find_var_info (globalenv p') b = Some v.
+Proof.
+  intros.
+  destruct progmatch as [[tglob [P Q]] R].
+  exploit in_norepet_unique; eauto. intros (gl1 & gl2 & S & T). 
+  rewrite S in Q. rewrite <- app_ass in Q. 
+  eapply find_var_exists_2; eauto. 
+Qed.
+
 End MATCH_PROGRAMS.
 
 Section TRANSF_PROGRAM_AUGMENT.
@@ -1719,7 +1873,7 @@ Variable p': program B W.
 Hypothesis transf_OK:
   transform_partial_augment_program transf_fun transf_var new_globs new_main p = OK p'.
 
-Remark prog_match:
+Let prog_match:
   match_program
     (fun fd tfd => transf_fun fd = OK tfd)
     (fun info tinfo => transf_var info = OK tinfo)
@@ -1740,27 +1894,6 @@ Proof.
   intros [tf [X Y]]. exists tf; auto.
 Qed.
 
-Theorem find_new_funct_ptr_exists: 
-  list_norepet (List.map fst new_globs) ->
-  forall id f, In (id, Gfun f) new_globs -> 
-  exists b, find_symbol (globalenv p') id = Some b
-         /\ find_funct_ptr (globalenv p') b = Some f.
-Proof.
-  intros. destruct prog_match as [[tglob [P Q]] R]. 
-  unfold globalenv. rewrite Q. rewrite add_globals_app. 
-  eapply add_globals_norepet_ensures; eauto.
-(* preserves *)
-  intros. unfold find_symbol, find_funct_ptr in *; simpl.
-  destruct H1 as [b [X Y]]. exists b; split.
-  rewrite PTree.gso; auto.
-  destruct g1 as [f1 | v1]. rewrite PTree.gso. auto.
-  apply Plt_ne. eapply genv_funs_range; eauto.
-  auto. 
-(* ensures *)
-  intros. unfold find_symbol, find_funct_ptr in *; simpl.
-  exists (genv_next ge); split. apply PTree.gss. apply PTree.gss. 
-Qed.
-
 Theorem find_funct_ptr_rev_transf_augment:
   forall (b: block) (tf: B),
   find_funct_ptr (globalenv p') b = Some tf ->
@@ -1770,7 +1903,7 @@ Theorem find_funct_ptr_rev_transf_augment:
    In (Gfun tf) (map snd new_globs).
 Proof.
   intros. 
-  exploit find_funct_ptr_rev_match; eauto. eexact prog_match; eauto. auto. 
+  exploit find_funct_ptr_rev_match; eauto.
 Qed.
 
 Theorem find_funct_transf_augment:
@@ -1805,26 +1938,6 @@ Proof.
   rewrite H0; simpl. auto.
 Qed.
 
-Theorem find_new_var_exists:
-  list_norepet (List.map fst new_globs) ->
-  forall id gv, In (id, Gvar gv) new_globs -> 
-  exists b, find_symbol (globalenv p') id = Some b
-         /\ find_var_info (globalenv p') b = Some gv.
-Proof.
-  intros. destruct prog_match as [[tglob [P Q]] R]. 
-  unfold globalenv. rewrite Q. rewrite add_globals_app. 
-  eapply add_globals_norepet_ensures; eauto.
-(* preserves *)
-  intros. unfold find_symbol, find_var_info in *; simpl.
-  destruct H1 as [b [X Y]]. exists b; split.
-  rewrite PTree.gso; auto.
-  destruct g1 as [f1 | v1]. auto. rewrite PTree.gso. auto.
-  red; intros; subst b. eelim Plt_strict. eapply genv_vars_range; eauto.
-(* ensures *)
-  intros. unfold find_symbol, find_var_info in *; simpl.
-  exists (genv_next ge); split. apply PTree.gss. apply PTree.gss. 
-Qed.
-
 Theorem find_var_info_rev_transf_augment:
   forall (b: block) (v': globvar W),
   find_var_info (globalenv p') b = Some v' ->
@@ -1856,9 +1969,12 @@ Proof.
   intros. eapply public_symbol_match. eexact prog_match. auto.
 Qed.
 
+Hypothesis new_ids_fresh:
+  forall s, In s (prog_defs_names p) -> In s (map fst new_globs) -> False.
+Hypothesis new_ids_unique:
+  list_norepet (map fst new_globs).
+
 Theorem init_mem_transf_augment: 
-   (forall s', find_symbol (globalenv p) s' <> None -> 
-     ~ In s' (map fst new_globs)) ->
    forall m, init_mem p = Some m -> 
    init_mem p' = alloc_globals (globalenv p') m new_globs.
 Proof.
@@ -1866,16 +1982,30 @@ Proof.
 Qed.
  
 Theorem init_mem_inject_transf_augment:
-   (forall s', find_symbol (globalenv p) s' <> None -> 
-     ~ In s' (map fst new_globs)) ->
   forall m, init_mem p = Some m ->
   forall m', init_mem p' = Some m' -> 
   Mem.inject (Mem.flat_inj (Mem.nextblock m)) m m'.
 Proof.
   intros. 
-  pose proof (initmem_inject p H0). 
-  erewrite init_mem_transf_augment in H1; eauto. 
+  pose proof (initmem_inject p H). 
+  erewrite init_mem_transf_augment in H0; eauto. 
   eapply alloc_globals_augment; eauto. apply Ple_refl. 
+Qed.
+
+Theorem find_new_funct_ptr_exists: 
+  forall id f, In (id, Gfun f) new_globs -> 
+  exists b, find_symbol (globalenv p') id = Some b
+         /\ find_funct_ptr (globalenv p') b = Some f.
+Proof.
+  intros. eapply find_new_funct_ptr_match; eauto. 
+Qed.
+
+Theorem find_new_var_exists:
+  forall id gv, In (id, Gvar gv) new_globs -> 
+  exists b, find_symbol (globalenv p') id = Some b
+         /\ find_var_info (globalenv p') b = Some gv.
+Proof.
+  intros. eapply find_new_var_match; eauto. 
 Qed.
 
 End TRANSF_PROGRAM_AUGMENT.
@@ -1970,6 +2100,19 @@ Proof.
   auto.
 Qed.
 
+Theorem block_is_volatile_transf_partial2:
+  forall (b: block),
+  block_is_volatile (globalenv p') b = block_is_volatile (globalenv p) b.
+Proof.
+  unfold block_is_volatile; intros. 
+  destruct (find_var_info (globalenv p) b) as [v|] eqn:FV.
+  exploit find_var_info_transf_partial2; eauto. intros (v' & P & Q).
+  rewrite P. monadInv Q. auto. 
+  destruct (find_var_info (globalenv p') b) as [v'|] eqn:FV'.
+  exploit find_var_info_rev_transf_partial2; eauto. intros (v & P & Q). congruence.
+  auto.
+Qed.
+
 Theorem init_mem_transf_partial2:
   forall m, init_mem p = Some m -> init_mem p' = Some m.
 Proof.
@@ -2046,6 +2189,13 @@ Proof.
   exploit find_var_info_rev_transf_partial2. eexact transf_OK. eauto.
   intros [v' [P Q]]. monadInv Q. inv EQ. congruence. 
   auto.
+Qed.
+
+Theorem block_is_volatile_transf_partial:
+  forall (b: block),
+  block_is_volatile (globalenv p') b = block_is_volatile (globalenv p) b.
+Proof.
+  exact (@block_is_volatile_transf_partial2 _ _ _ _ _ _ _ _ transf_OK).
 Qed.
 
 Theorem init_mem_transf_partial:
@@ -2128,6 +2278,13 @@ Proof.
   exact (@find_var_info_transf_partial _ _ _ _ _ _ transf_OK).
 Qed.
 
+Theorem block_is_volatile_transf:
+  forall (b: block),
+  block_is_volatile (globalenv tp) b = block_is_volatile (globalenv p) b.
+Proof.
+  exact (@block_is_volatile_transf_partial _ _ _ _ _ _ transf_OK).
+Qed.
+
 Theorem init_mem_transf:
   forall m, init_mem p = Some m -> init_mem tp = Some m.
 Proof.
@@ -2137,3 +2294,5 @@ Qed.
 End TRANSF_PROGRAM.
 
 End Genv.
+
+Coercion Genv.to_senv: Genv.t >-> Senv.t.
