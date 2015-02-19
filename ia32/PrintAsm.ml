@@ -80,7 +80,7 @@ module Cygwin_System =
     let raw_symbol oc s =
        fprintf oc "_%s" s
 
-    let symbol oc s =
+    let symbol oc symb =
       raw_symbol oc (extern_atom symb)
 
     let label oc lbl =
@@ -129,7 +129,7 @@ module ELF_System =
     let raw_symbol oc s =
       fprintf oc "%s" s
 
-   let symbol oc s =
+   let symbol oc symb =
       raw_symbol oc (extern_atom symb)
 
     let label oc lbl =
@@ -182,7 +182,7 @@ module MacOS_System =
     let raw_symbol oc s =
      fprintf oc "_%s" s
 
-    let symbol oc s =
+    let symbol oc symb =
       raw_symbol oc (extern_atom symb)
 
     let label oc lbl =
