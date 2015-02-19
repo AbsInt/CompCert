@@ -31,8 +31,7 @@ module type SYSTEM =
       val freg: out_channel -> freg -> unit
       val creg: out_channel -> int -> unit
       val name_of_section: section_name -> string
-      val print_file_line: out_channel -> string -> string -> unit
-      val reset_file_line: unit -> unit
+      val print_file_line: out_channel -> string -> int -> unit
       val cfi_startproc: out_channel -> unit
       val cfi_endproc: out_channel -> unit
       val cfi_adjust: out_channel -> int32 -> unit
@@ -71,8 +70,8 @@ let float_reg_name = function
   | FPR24 -> "24" | FPR25 -> "25" | FPR26 -> "26" | FPR27 -> "27"
   | FPR28 -> "28" | FPR29 -> "29" | FPR30 -> "30" | FPR31 -> "31"
 
-module Linux_System =
-  (struct
+module Linux_System : SYSTEM =
+  struct
     let comment =  "#"
 
     let constant oc cst =
@@ -120,20 +119,8 @@ module Linux_System =
           sprintf ".section	\"%s\",\"a%s%s\",@progbits"
             s (if wr then "w" else "") (if ex then "x" else "")
 
-    let filename_num : (string, int) Hashtbl.t = Hashtbl.create 7
-    let reset_file_line () = Hashtbl.clear filename_num
     let print_file_line oc file line =
-      if !Clflags.option_g && file <> "" then begin
-        let filenum = 
-          try
-            Hashtbl.find filename_num file
-          with Not_found ->
-            let n = Hashtbl.length filename_num + 1 in
-            Hashtbl.add filename_num file n;
-            fprintf oc "	.file	%d %S\n" n file;
-            n
-        in fprintf oc "	.loc	%d %s\n" filenum line
-      end
+      PrintAnnot.print_file_line oc comment file line
     
     (* Emit .cfi directives *)      
     let cfi_startproc =
@@ -164,10 +151,10 @@ module Linux_System =
 
     let print_prologue oc = ()
   
-  end:SYSTEM)
+  end
     
-module Diab_System =
-  (struct
+module Diab_System : SYSTEM =
+  struct
     let comment =  ";"
         
     let constant oc cst =
@@ -214,16 +201,8 @@ module Diab_System =
             | false, true -> 'c'                (* text *)
             | false, false -> 'r')              (* const *)
 
-    let last_file = ref ""
-    let reset_file_line () = last_file := ""
     let print_file_line oc file line =
-      if !Clflags.option_g && file <> "" then begin
-        if file <> !last_file then begin
-          fprintf oc "	.d1file	%S\n" file;
-          last_file := file
-        end;
-        fprintf oc "	.d1line	%s\n" line
-      end
+      PrintAnnot.print_file_line_d1 oc comment file line
 
     (* Emit .cfi directives *)
     let cfi_startproc oc = ()
@@ -233,17 +212,16 @@ module Diab_System =
     let cfi_adjust oc delta = ()
 
     let cfi_rel_offset oc reg ofs = ()
-
         
     let print_prologue oc =
       fprintf oc "	.xopt	align-fill-text=0x60000000\n";
       if !Clflags.option_g then
         fprintf oc "	.xopt	asm-debug-on\n"
   
-  end:SYSTEM)
+  end
 
 module AsmPrinter (Target : SYSTEM) =
-  (struct
+  struct
     open Target
 
 (* On-the-fly label renaming *)
@@ -306,9 +284,7 @@ let section oc sec =
   fprintf oc "	%s\n" name
 
 let print_location oc loc =
-  if loc <> Cutil.no_loc then
-    print_file_line oc (fst loc) (string_of_int (snd loc))
-
+  if loc <> Cutil.no_loc then print_file_line oc (fst loc) (snd loc)
 
 (* Encoding masks for rlwinm instructions *)
 
@@ -335,7 +311,8 @@ let re_file_line = Str.regexp "#line:\\(.*\\):\\([1-9][0-9]*\\)$"
 
 let print_annot_stmt oc txt targs args =
   if Str.string_match re_file_line txt 0 then begin
-    print_file_line oc (Str.matched_group 1 txt) (Str.matched_group 2 txt)
+    print_file_line oc (Str.matched_group 1 txt)
+                       (int_of_string (Str.matched_group 2 txt))
   end else begin
     fprintf oc "%s annotation: " comment;
     PrintAnnot.print_annot_stmt preg "R1" oc txt targs args
@@ -773,15 +750,6 @@ let print_function oc name fn =
     jumptables := []
   end
 
-(* Generation of whole programs *)
-
-let print_fundef oc name defn =
-  match defn with
-  | Internal code ->
-      print_function oc name code
-  | External _ ->
-      ()
-
 let print_init oc = function
   | Init_int8 n ->
       fprintf oc "	.byte	%ld\n" (camlint_of_coqint n)
@@ -854,10 +822,11 @@ let print_var oc name v =
 
 let print_globdef oc (name, gdef) =
   match gdef with
-  | Gfun f -> print_fundef oc name f
+  | Gfun (Internal code) -> print_function oc name code
+  | Gfun (External ef) ->   ()
   | Gvar v -> print_var oc name v
 
-  end)
+  end
 
 type target = Linux | Diab
 
@@ -870,9 +839,11 @@ let print_program oc p =
   let module Target = (val (match target with
   | Linux -> (module Linux_System:SYSTEM)
   | Diab -> (module Diab_System:SYSTEM)):SYSTEM) in
-  Target.reset_file_line();
+  PrintAnnot.reset_filenames();
   PrintAnnot.print_version_and_options oc Target.comment;
   let module Printer = AsmPrinter(Target) in
   Target.print_prologue oc;
-  List.iter (Printer.print_globdef oc) p.prog_defs
+  List.iter (Printer.print_globdef oc) p.prog_defs;
+  PrintAnnot.close_filenames()
+
 

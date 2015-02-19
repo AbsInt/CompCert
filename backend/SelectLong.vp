@@ -20,31 +20,30 @@ Require Import Op.
 Require Import CminorSel.
 Require Import SelectOp.
 
-Open Local Scope cminorsel_scope.
+Local Open Scope cminorsel_scope.
+Local Open Scope string_scope.
 
 (** Some operations on 64-bit integers are transformed into calls to
-  runtime library functions.  The following record type collects
-  the names of these functions. *)
+  runtime library functions or built-in functions.
+  Here are the names and signatures of these functions. *)
 
-Record helper_functions : Type := mk_helper_functions {
-  i64_dtos: ident;                      (**r float64 -> signed long *)
-  i64_dtou: ident;                      (**r float64 -> unsigned long *)
-  i64_stod: ident;                      (**r signed long -> float64 *)
-  i64_utod: ident;                      (**r unsigned long -> float64 *)
-  i64_stof: ident;                      (**r signed long -> float32 *)
-  i64_utof: ident;                      (**r unsigned long -> float32 *)
-  i64_neg: ident;                       (**r opposite *)
-  i64_add: ident;                       (**r addition *)
-  i64_sub: ident;                       (**r subtraction *)
-  i64_mul: ident;                       (**r multiplication 32x32->64 *)
-  i64_sdiv: ident;                      (**r signed division *)
-  i64_udiv: ident;                      (**r unsigned division *)
-  i64_smod: ident;                      (**r signed remainder *)
-  i64_umod: ident;                      (**r unsigned remainder *)
-  i64_shl: ident;                       (**r shift left *)
-  i64_shr: ident;                       (**r shift right unsigned *)
-  i64_sar: ident                        (**r shift right signed *)
-}.
+Definition i64_dtos := ident_of_string "__i64_dtos".
+Definition i64_dtou := ident_of_string "__i64_dtou".
+Definition i64_stod := ident_of_string "__i64_stod".
+Definition i64_utod := ident_of_string "__i64_utod".
+Definition i64_stof := ident_of_string "__i64_stof".
+Definition i64_utof := ident_of_string "__i64_utof".
+Definition i64_neg := ident_of_string "__builtin_negl".
+Definition i64_add := ident_of_string "__builtin_addl".
+Definition i64_sub := ident_of_string "__builtin_subl".
+Definition i64_mul := ident_of_string "__builtin_mull".
+Definition i64_sdiv := ident_of_string "__i64_sdiv".
+Definition i64_udiv := ident_of_string "__i64_udiv".
+Definition i64_smod := ident_of_string "__i64_smod".
+Definition i64_umod := ident_of_string "__i64_umod".
+Definition i64_shl := ident_of_string "__i64_shl".
+Definition i64_shr := ident_of_string "__i64_shr".
+Definition i64_sar := ident_of_string "__i64_sar".
 
 Definition sig_l_l := mksignature (Tlong :: nil) (Some Tlong) cc_default.
 Definition sig_l_f := mksignature (Tlong :: nil) (Some Tfloat) cc_default.
@@ -55,8 +54,6 @@ Definition sig_li_l := mksignature (Tlong :: Tint :: nil) (Some Tlong) cc_defaul
 Definition sig_ii_l := mksignature (Tint :: Tint :: nil) (Some Tlong) cc_default.
 
 Section SELECT.
-
-Variable hf: helper_functions.
 
 Definition makelong (h l: expr): expr :=
   Eop Omakelong (h ::: l ::: Enil).
@@ -124,28 +121,28 @@ Definition longofintu (e: expr) :=
 Definition negl (e: expr) :=
   match is_longconst e with
   | Some n => longconst (Int64.neg n)
-  | None => Ebuiltin (EF_builtin hf.(i64_neg) sig_l_l) (e ::: Enil)
+  | None => Ebuiltin (EF_builtin i64_neg sig_l_l) (e ::: Enil)
   end.
 
 Definition notl (e: expr) :=
   splitlong e (fun h l => makelong (notint h) (notint l)).
 
 Definition longoffloat (arg: expr) := 
-  Eexternal hf.(i64_dtos) sig_f_l (arg ::: Enil).
+  Eexternal i64_dtos sig_f_l (arg ::: Enil).
 Definition longuoffloat (arg: expr) :=
-  Eexternal hf.(i64_dtou) sig_f_l (arg ::: Enil).
+  Eexternal i64_dtou sig_f_l (arg ::: Enil).
 Definition floatoflong (arg: expr) :=
-  Eexternal hf.(i64_stod) sig_l_f (arg ::: Enil).
+  Eexternal i64_stod sig_l_f (arg ::: Enil).
 Definition floatoflongu (arg: expr) :=
-  Eexternal hf.(i64_utod) sig_l_f (arg ::: Enil).
+  Eexternal i64_utod sig_l_f (arg ::: Enil).
 Definition longofsingle (arg: expr) := 
   longoffloat (floatofsingle arg).
 Definition longuofsingle (arg: expr) :=
   longuoffloat (floatofsingle arg).
 Definition singleoflong (arg: expr) :=
-  Eexternal hf.(i64_stof) sig_l_s (arg ::: Enil).
+  Eexternal i64_stof sig_l_s (arg ::: Enil).
 Definition singleoflongu (arg: expr) :=
-  Eexternal hf.(i64_utof) sig_l_s (arg ::: Enil).
+  Eexternal i64_utof sig_l_s (arg ::: Enil).
 
 Definition andl (e1 e2: expr) :=
   splitlong2 e1 e2 (fun h1 l1 h2 l2 => makelong (and h1 h2) (and l1 l2)).
@@ -166,7 +163,7 @@ Definition shllimm (e1: expr) (n: int) :=
     makelong (shlimm (lowlong e1) (Int.sub n Int.iwordsize))
              (Eop (Ointconst Int.zero) Enil)
   else
-    Eexternal hf.(i64_shl) sig_li_l (e1 ::: Eop (Ointconst n) Enil ::: Enil).
+    Eexternal i64_shl sig_li_l (e1 ::: Eop (Ointconst n) Enil ::: Enil).
 
 Definition shrluimm (e1: expr) (n: int) :=
   if Int.eq n Int.zero then e1 else
@@ -178,7 +175,7 @@ Definition shrluimm (e1: expr) (n: int) :=
     makelong (Eop (Ointconst Int.zero) Enil)
              (shruimm (highlong e1) (Int.sub n Int.iwordsize))
   else
-    Eexternal hf.(i64_shr) sig_li_l (e1 ::: Eop (Ointconst n) Enil ::: Enil).
+    Eexternal i64_shr sig_li_l (e1 ::: Eop (Ointconst n) Enil ::: Enil).
 
 Definition shrlimm (e1: expr) (n: int) :=
   if Int.eq n Int.zero then e1 else
@@ -191,7 +188,7 @@ Definition shrlimm (e1: expr) (n: int) :=
       (makelong (shrimm (Eletvar 0) (Int.repr 31))
                 (shrimm (Eletvar 0) (Int.sub n Int.iwordsize)))
   else
-    Eexternal hf.(i64_sar) sig_li_l (e1 ::: Eop (Ointconst n) Enil ::: Enil).
+    Eexternal i64_sar sig_li_l (e1 ::: Eop (Ointconst n) Enil ::: Enil).
 
 Definition is_intconst (e: expr) :=
   match e with
@@ -202,23 +199,23 @@ Definition is_intconst (e: expr) :=
 Definition shll (e1 e2: expr) :=
   match is_intconst e2 with
   | Some n => shllimm e1 n
-  | None => Eexternal hf.(i64_shl) sig_li_l (e1 ::: e2 ::: Enil)
+  | None => Eexternal i64_shl sig_li_l (e1 ::: e2 ::: Enil)
   end.
 
 Definition shrlu (e1 e2: expr) :=
   match is_intconst e2 with
   | Some n => shrluimm e1 n
-  | None => Eexternal hf.(i64_shr) sig_li_l (e1 ::: e2 ::: Enil)
+  | None => Eexternal i64_shr sig_li_l (e1 ::: e2 ::: Enil)
   end.
 
 Definition shrl (e1 e2: expr) :=
   match is_intconst e2 with
   | Some n => shrlimm e1 n
-  | None => Eexternal hf.(i64_sar) sig_li_l (e1 ::: e2 ::: Enil)
+  | None => Eexternal i64_sar sig_li_l (e1 ::: e2 ::: Enil)
   end.
 
 Definition addl (e1 e2: expr) :=
-  let default := Ebuiltin (EF_builtin hf.(i64_add) sig_ll_l) (e1 ::: e2 ::: Enil) in
+  let default := Ebuiltin (EF_builtin i64_add sig_ll_l) (e1 ::: e2 ::: Enil) in
   match is_longconst e1, is_longconst e2 with
   | Some n1, Some n2 => longconst (Int64.add n1 n2)
   | Some n1, _ => if Int64.eq n1 Int64.zero then e2 else default
@@ -227,7 +224,7 @@ Definition addl (e1 e2: expr) :=
   end.
 
 Definition subl (e1 e2: expr) :=
-  let default := Ebuiltin (EF_builtin hf.(i64_sub) sig_ll_l) (e1 ::: e2 ::: Enil) in
+  let default := Ebuiltin (EF_builtin i64_sub sig_ll_l) (e1 ::: e2 ::: Enil) in
   match is_longconst e1, is_longconst e2 with
   | Some n1, Some n2 => longconst (Int64.sub n1 n2)
   | Some n1, _ => if Int64.eq n1 Int64.zero then negl e2 else default
@@ -237,7 +234,7 @@ Definition subl (e1 e2: expr) :=
 
 Definition mull_base (e1 e2: expr) :=
   splitlong2 e1 e2 (fun h1 l1 h2 l2 =>
-    Elet (Ebuiltin (EF_builtin hf.(i64_mul) sig_ii_l) (l1 ::: l2 ::: Enil))
+    Elet (Ebuiltin (EF_builtin i64_mul sig_ii_l) (l1 ::: l2 ::: Enil))
       (makelong
         (add (add (Eop Ohighlong (Eletvar O ::: Enil))
                   (mul (lift l1) (lift h2)))
@@ -266,11 +263,11 @@ Definition binop_long (id: ident) (sem: int64 -> int64 -> int64) (e1 e2: expr) :
   | _, _ => Eexternal id sig_ll_l (e1 ::: e2 ::: Enil)
   end.
 
-Definition divl := binop_long hf.(i64_sdiv) Int64.divs.
-Definition modl := binop_long hf.(i64_smod) Int64.mods.
+Definition divl := binop_long i64_sdiv Int64.divs.
+Definition modl := binop_long i64_smod Int64.mods.
 
 Definition divlu (e1 e2: expr) :=
-  let default := Eexternal hf.(i64_udiv) sig_ll_l (e1 ::: e2 ::: Enil) in
+  let default := Eexternal i64_udiv sig_ll_l (e1 ::: e2 ::: Enil) in
   match is_longconst e1, is_longconst e2 with
   | Some n1, Some n2 => longconst (Int64.divu n1 n2)
   | _, Some n2 =>
@@ -282,7 +279,7 @@ Definition divlu (e1 e2: expr) :=
   end.
 
 Definition modlu (e1 e2: expr) :=
-  let default := Eexternal hf.(i64_umod) sig_ll_l (e1 ::: e2 ::: Enil) in
+  let default := Eexternal i64_umod sig_ll_l (e1 ::: e2 ::: Enil) in
   match is_longconst e1, is_longconst e2 with
   | Some n1, Some n2 => longconst (Int64.modu n1 n2)
   | _, Some n2 =>
@@ -363,35 +360,44 @@ Definition cmpl (c: comparison) (e1 e2: expr) :=
 
 End SELECT.
 
-(** Setting up the helper functions *)
+(** Checking that the helper functions are available. *)
 
 Require Import Errors.
-
-Local Open Scope string_scope.
+Require Import Globalenvs.
 Local Open Scope error_monad_scope.
 
-Parameter get_helper: Cminor.genv -> String.string -> signature -> res ident.
-Parameter get_builtin: String.string -> signature -> res ident.
+Definition check_helper (ge: Cminor.genv) (name_sg: ident * signature) : res unit :=
+  let (name, sg) := name_sg in
+  match Genv.find_symbol ge name with
+  | None => 
+      Error (CTX name :: MSG ": not declared" :: nil)
+  | Some b =>
+      match Genv.find_funct_ptr ge b with
+      | Some (External (EF_external name' sg')) =>
+          if ident_eq name' name && signature_eq sg' sg
+          then OK tt
+          else Error (CTX name :: MSG ": wrong declaration" :: nil)
+      | _ =>
+          Error (CTX name :: MSG ": wrong declaration" :: nil)
+      end
+  end.
 
-Definition get_helpers (ge: Cminor.genv): res helper_functions :=
-  do i64_dtos <- get_helper ge "__i64_dtos" sig_f_l ;
-  do i64_dtou <- get_helper ge "__i64_dtou" sig_f_l ;
-  do i64_stod <- get_helper ge "__i64_stod" sig_l_f ;
-  do i64_utod <- get_helper ge "__i64_utod" sig_l_f ;
-  do i64_stof <- get_helper ge "__i64_stof" sig_l_s ;
-  do i64_utof <- get_helper ge "__i64_utof" sig_l_s ;
-  do i64_neg <- get_builtin "__builtin_negl" sig_l_l ;
-  do i64_add <- get_builtin "__builtin_addl" sig_ll_l ;
-  do i64_sub <- get_builtin "__builtin_subl" sig_ll_l ;
-  do i64_mul <- get_builtin "__builtin_mull" sig_ll_l ;
-  do i64_sdiv <- get_helper ge "__i64_sdiv" sig_ll_l ;
-  do i64_udiv <- get_helper ge "__i64_udiv" sig_ll_l ;
-  do i64_smod <- get_helper ge "__i64_smod" sig_ll_l ;
-  do i64_umod <- get_helper ge "__i64_umod" sig_ll_l ;
-  do i64_shl <- get_helper ge "__i64_shl" sig_li_l ;
-  do i64_shr <- get_helper ge "__i64_shr" sig_li_l ;
-  do i64_sar <- get_helper ge "__i64_sar" sig_li_l ;
-  OK (mk_helper_functions
-     i64_dtos i64_dtou i64_stod i64_utod i64_stof i64_utof
-     i64_neg i64_add i64_sub i64_mul i64_sdiv i64_udiv i64_smod i64_umod
-     i64_shl i64_shr i64_sar).
+Definition i64_helpers :=
+    (i64_dtos, sig_f_l) ::
+    (i64_dtou, sig_f_l) ::
+    (i64_stod, sig_l_f) ::
+    (i64_utod, sig_l_f) ::
+    (i64_stof, sig_l_s) ::
+    (i64_utof, sig_l_s) ::
+    (i64_sdiv, sig_ll_l) ::
+    (i64_udiv, sig_ll_l) ::
+    (i64_smod, sig_ll_l) ::
+    (i64_umod, sig_ll_l) ::
+    (i64_shl, sig_li_l) ::
+    (i64_shr, sig_li_l) ::
+    (i64_sar, sig_li_l) ::
+    nil.
+
+Definition check_helpers (ge: Cminor.genv): res unit :=
+  do x <- mmap (check_helper ge) i64_helpers;
+  OK tt.

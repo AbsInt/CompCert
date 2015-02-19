@@ -29,6 +29,7 @@ type t = {
   sizeof_void: int option;
   sizeof_fun: int option;
   sizeof_wchar: int;
+  wchar_signed: bool;
   sizeof_size_t: int;
   sizeof_ptrdiff_t: int;
   alignof_ptr: int;
@@ -60,6 +61,7 @@ let ilp32ll64 = {
   sizeof_void = None;
   sizeof_fun = None;
   sizeof_wchar = 4;
+  wchar_signed = true;
   sizeof_size_t = 4;
   sizeof_ptrdiff_t = 4;
   alignof_ptr = 4;
@@ -91,6 +93,7 @@ let i32lpll64 = {
   sizeof_void = None;
   sizeof_fun = None;
   sizeof_wchar = 4;
+  wchar_signed = true;
   sizeof_size_t = 8;
   sizeof_ptrdiff_t = 8;
   alignof_ptr = 8;
@@ -122,6 +125,7 @@ let il32pll64 = {
   sizeof_void = None;
   sizeof_fun = None;
   sizeof_wchar = 4;
+  wchar_signed = true;
   sizeof_size_t = 8;
   sizeof_ptrdiff_t = 8;
   alignof_ptr = 8;
@@ -148,8 +152,12 @@ let x86_32 =
                    sizeof_longdouble = 12; alignof_longdouble = 4 }
 let x86_64 =
   { i32lpll64 with name = "x86_64"; char_signed = true }
+let win32 =
+  { ilp32ll64 with name = "win32"; char_signed = true;
+                   sizeof_wchar = 2; wchar_signed = false }
 let win64 =
-  { il32pll64 with name = "x86_64"; char_signed = true }
+  { il32pll64 with name = "win64"; char_signed = true;
+                   sizeof_wchar = 2; wchar_signed = false }
 let ppc_32_bigendian =
   { ilp32ll64 with name = "powerpc";
                    bigendian = true;
@@ -165,10 +173,40 @@ let gcc_extensions c =
   { c with sizeof_void = Some 1; sizeof_fun = Some 1;
            alignof_void = Some 1; alignof_fun = Some 1 }
 
-(* Default configuration *)
+(* Undefined configuration *)
 
-let config =
-  ref (match Sys.word_size with
-           | 32 -> ilp32ll64
-           | 64 -> if Sys.os_type = "Win32" then il32pll64 else i32lpll64
-           | _  -> assert false)
+let undef = {
+  name = "UNDEFINED";
+  char_signed = false;
+  sizeof_ptr = 0;
+  sizeof_short = 0;
+  sizeof_int = 0;
+  sizeof_long = 0;
+  sizeof_longlong = 0;
+  sizeof_float = 0;
+  sizeof_double = 0;
+  sizeof_longdouble = 0;
+  sizeof_void = None;
+  sizeof_fun = None;
+  sizeof_wchar = 0;
+  wchar_signed = true;
+  sizeof_size_t = 0;
+  sizeof_ptrdiff_t = 0;
+  alignof_ptr = 0;
+  alignof_short = 0;
+  alignof_int = 0;
+  alignof_long = 0;
+  alignof_longlong = 0;
+  alignof_float = 0;
+  alignof_double = 0;
+  alignof_longdouble = 0;
+  alignof_void = None;
+  alignof_fun = None;
+  bigendian = false;
+  bitfields_msb_first = false;
+  struct_return_as_int = 0
+}
+
+(* The current configuration.  Must be initialized before use. *)
+
+let config = ref undef

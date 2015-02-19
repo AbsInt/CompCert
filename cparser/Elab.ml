@@ -44,6 +44,10 @@ let wrap fn loc env arg =
   try fn env arg
   with Env.Error msg -> fatal_error loc "%s" (Env.error_message msg)
 
+let wrap2 fn loc env arg1 arg2 =
+  try fn env arg1 arg2
+  with Env.Error msg -> fatal_error loc "%s" (Env.error_message msg)
+
 (* Translation of locations *)
 
 let elab_loc l = (l.filename, l.lineno)
@@ -786,7 +790,7 @@ let elab_type loc env spec decl =
   let (ty, env'') = elab_type_declarator loc env' bty decl in 
   if sto <> Storage_default || inl || tydef then
     error loc "'typedef', 'extern', 'static', 'register' and 'inline' are meaningless in cast";
-  ty
+  (ty, env'')
 
 
 (* Elaboration of initializers. C99 section 6.7.8 *)
@@ -820,8 +824,8 @@ let init_int_array_wstring opt_size s =
   Init_array (add_chars (Int64.pred size) (List.rev s) [])
 
 let check_init_type loc env a ty =
-  if valid_assignment env a ty then ()
-  else if valid_cast env a.etyp ty then
+  if wrap2 valid_assignment loc env a ty then ()
+  else if wrap2 valid_cast loc env a.etyp ty then
     warning loc
       "initializer has type@ %a@ instead of the expected type @ %a"
       Cprint.typ a.etyp Cprint.typ ty
@@ -1083,7 +1087,7 @@ and elab_item zi item il =
       | CStr _, _ ->
           error loc "initialization of an array of non-char elements with a string literal";
           elab_list zi il false
-      | CWStr s, TInt(ik, _) when ik = wchar_ikind ->
+      | CWStr s, TInt(ik, _) ->
           if not (I.index_below (Int64.of_int(List.length s - 1)) sz) then
             warning loc "initializer string for array of wide chars %s is too long"
                         (I.name zi);
@@ -1117,7 +1121,7 @@ and elab_single zi a il =
       (* This is a scalar: do direct initialization and continue *)
       check_init_type loc env a ty;
       elab_list (I.set zi (Init_single a)) il false
-  | TStruct _ | TUnion _ when compatible_types ~noattrs:true env ty a.etyp ->
+  | TStruct _ | TUnion _ when compatible_types AttrIgnoreTop env ty a.etyp ->
       (* This is a composite that can be initialized directly
          from the expression: do as above *)
       elab_list (I.set zi (Init_single a)) il false
@@ -1263,7 +1267,7 @@ let elab_expr loc env a =
       let b2 = elab a2 and b3 = elab (TYPE_SIZEOF a3) in
       let ty = match b3.edesc with ESizeof ty -> ty | _ -> assert false in
       let ty' = default_argument_conversion env ty in
-      if not (compatible_types env ty ty') then
+      if not (compatible_types AttrIgnoreTop env ty ty') then
         warning "'%a' is promoted to '%a' when passed through '...'.@ You should pass '%a', not '%a', to 'va_arg'"
                 Cprint.typ ty Cprint.typ ty'
                 Cprint.typ ty' Cprint.typ ty;
@@ -1309,16 +1313,16 @@ let elab_expr loc env a =
 (* 6.5.4 Cast operators *)
 
   | CAST ((spec, dcl), SINGLE_INIT a1) ->
-      let ty = elab_type loc env spec dcl in
+      let (ty, _) = elab_type loc env spec dcl in
       let b1 = elab a1 in
-      if not (valid_cast env b1.etyp ty) then
+      if not (wrap2 valid_cast loc env b1.etyp ty) then
         err "illegal cast from %a@ to %a" Cprint.typ b1.etyp Cprint.typ ty;
       { edesc = ECast(ty, b1); etyp = ty }
 
 (* 6.5.2.5 Compound literals *)
 
   | CAST ((spec, dcl), ie) ->
-      let ty = elab_type loc env spec dcl in
+      let (ty, _) = elab_type loc env spec dcl in
       begin match elab_initializer loc env "<compound literal>" ty ie with
       | (ty', Some i) -> { edesc = ECompound(ty', i); etyp = ty' }
       | (ty', None)   -> error "ill-formed compound literal"
@@ -1335,31 +1339,31 @@ let elab_expr loc env a =
         match b1.edesc with
         | EConst(CStr s) ->
             let sz = String.length s + 1 in
-            EConst(CInt(Int64.of_int sz, size_t_ikind, ""))
+            EConst(CInt(Int64.of_int sz, size_t_ikind(), ""))
         | EConst(CWStr s) ->
             let sz = (!config).sizeof_wchar * (List.length s + 1) in
-            EConst(CInt(Int64.of_int sz, size_t_ikind, ""))
+            EConst(CInt(Int64.of_int sz, size_t_ikind(), ""))
         | _ ->
             ESizeof b1.etyp in
-      { edesc = bdesc; etyp = TInt(size_t_ikind, []) }
+      { edesc = bdesc; etyp = TInt(size_t_ikind(), []) }
 
   | TYPE_SIZEOF (spec, dcl) ->
-      let ty = elab_type loc env spec dcl in
-      if wrap incomplete_type loc env ty then
+      let (ty, env') = elab_type loc env spec dcl in
+      if wrap incomplete_type loc env' ty then
         err "incomplete type %a" Cprint.typ ty;
-      { edesc = ESizeof ty; etyp = TInt(size_t_ikind, []) }
+      { edesc = ESizeof ty; etyp = TInt(size_t_ikind(), []) }
 
   | EXPR_ALIGNOF a1 ->
       let b1 = elab a1 in
       if wrap incomplete_type loc env b1.etyp then
         err "incomplete type %a" Cprint.typ b1.etyp;
-      { edesc = EAlignof b1.etyp; etyp =  TInt(size_t_ikind, []) }
+      { edesc = EAlignof b1.etyp; etyp =  TInt(size_t_ikind(), []) }
 
   | TYPE_ALIGNOF (spec, dcl) ->
-      let ty = elab_type loc env spec dcl in
-      if wrap incomplete_type loc env ty then
+      let (ty, env') = elab_type loc env spec dcl in
+      if wrap incomplete_type loc env' ty then
         err "incomplete type %a" Cprint.typ ty;
-      { edesc = EAlignof ty; etyp =  TInt(size_t_ikind, []) }
+      { edesc = EAlignof ty; etyp =  TInt(size_t_ikind(), []) }
 
   | UNARY(PLUS, a1) ->
       let b1 = elab a1 in
@@ -1455,13 +1459,13 @@ let elab_expr loc env a =
               (TPtr(ty, []), TPtr(ty, []))
           | (TPtr(ty1, a1) | TArray(ty1, _, a1)),
             (TPtr(ty2, a2) | TArray(ty2, _, a2)) ->
-              if not (compatible_types ~noattrs:true env ty1 ty2) then
+              if not (compatible_types AttrIgnoreAll env ty1 ty2) then
                 err "mismatch between pointer types in binary '-'";
               if not (pointer_arithmetic_ok env ty1) then
                 err "illegal pointer arithmetic in binary '-'";
               if wrap sizeof loc env ty1 = Some 0 then
                 err "subtraction between two pointers to zero-sized objects";
-              (TPtr(ty1, []), TInt(ptrdiff_t_ikind, []))
+              (TPtr(ty1, []), TInt(ptrdiff_t_ikind(), []))
           | _, _ -> error "type error in binary '-'"
         end in
       { edesc = EBinop(Osub, b1, b2, tyop); etyp = tyres }
@@ -1515,11 +1519,13 @@ let elab_expr loc env a =
             if is_void_type env ty1 || is_void_type env ty2 then
               TPtr(TVoid (add_attributes a1 a2), [])
             else
-              match combine_types ~noattrs:true env
+              match combine_types AttrIgnoreAll env
                                   (TPtr(ty1, a1)) (TPtr(ty2, a2)) with
               | None ->
-                  error "the second and third arguments of '? :' \
-                         have incompatible pointer types"
+                  warning "the second and third arguments of '? :' \
+                           have incompatible pointer types";
+                  (* tolerance *)
+                  TPtr(TVoid (add_attributes a1 a2), [])
               | Some ty -> ty
             in
           { edesc = EConditional(b1, b2, b3); etyp = tyres }
@@ -1528,7 +1534,7 @@ let elab_expr loc env a =
       | TInt _, TPtr(ty2, a2) when is_literal_0 b2 ->
           { edesc = EConditional(b1, nullconst, b3); etyp = TPtr(ty2, []) }
       | ty1, ty2 ->
-          match combine_types ~noattrs:true env ty1 ty2 with
+          match combine_types AttrIgnoreAll env ty1 ty2 with
           | None ->
               error ("the second and third arguments of '? :' have incompatible types")
           | Some tyres ->
@@ -1544,8 +1550,8 @@ let elab_expr loc env a =
         err "left-hand side of assignment has 'const' type";
       if not (is_modifiable_lvalue env b1) then
         err "left-hand side of assignment is not a modifiable l-value";
-      if not (valid_assignment env b2 b1.etyp) then begin
-        if valid_cast env b2.etyp b1.etyp then
+      if not (wrap2 valid_assignment loc env b2 b1.etyp) then begin
+        if wrap2 valid_cast loc env b2.etyp b1.etyp then
           warning "assigning a value of type@ %a@ to a lvalue of type@ %a"
                   Cprint.typ b2.etyp Cprint.typ b1.etyp
         else
@@ -1576,8 +1582,8 @@ let elab_expr loc env a =
             err "left-hand side of assignment has 'const' type";
           if not (is_modifiable_lvalue env b1) then
             err ("left-hand side of assignment is not a modifiable l-value");
-          if not (valid_assignment env b b1.etyp) then begin
-            if valid_cast env ty b1.etyp then
+          if not (wrap2 valid_assignment loc env b b1.etyp) then begin
+            if wrap2 valid_cast loc env ty b1.etyp then
               warning "assigning a value of type@ %a@ to a lvalue of type@ %a"
                       Cprint.typ ty Cprint.typ b1.etyp
             else
@@ -1656,7 +1662,7 @@ let elab_expr loc env a =
           when is_void_type env ty2 ->
             EBinop(op, b1, b2, TPtr(ty1, []))
         | TPtr(ty1, _), TPtr(ty2, _) ->
-            if not (compatible_types ~noattrs:true env ty1 ty2) then
+            if not (compatible_types AttrIgnoreAll env ty1 ty2) then
               warning "comparison between incompatible pointer types";
             EBinop(op, b1, b2, TPtr(ty1, []))
         | TPtr _, (TInt _ | TEnum _)
@@ -1689,8 +1695,9 @@ let elab_expr loc env a =
         else (err "too many arguments in function call"; args)
     | arg1 :: argl, (_, ty_p) :: paraml ->
         let ty_a = argument_conversion env arg1.etyp in
-        if not (valid_assignment env {arg1 with etyp = ty_a} ty_p) then begin
-          if valid_cast env ty_a ty_p then
+        if not (wrap2 valid_assignment loc env {arg1 with etyp = ty_a} ty_p)
+        then begin
+          if wrap2 valid_cast loc env ty_a ty_p then
             warning
               "argument #%d of function call has type@ %a@ \
                instead of the expected type@ %a"
@@ -1744,7 +1751,7 @@ let enter_or_refine_ident local loc env s sto ty =
       if local && Env.in_current_scope env id then
         error loc "redefinition of local variable '%s'" s;
       let new_ty =
-        match combine_types env old_ty ty with
+        match combine_types AttrCompat env old_ty ty with
         | Some new_ty ->
             new_ty
         | None ->
@@ -2079,8 +2086,9 @@ let rec elab_stmt env ctx s =
             "'return' without a value in a function of return type@ %a"
             Cprint.typ ctx.ctx_return_typ
       | _, Some b ->
-          if not (valid_assignment env b ctx.ctx_return_typ) then begin
-            if valid_cast env b.etyp ctx.ctx_return_typ then
+          if not (wrap2 valid_assignment loc env b ctx.ctx_return_typ)
+          then begin
+            if wrap2 valid_cast loc env b.etyp ctx.ctx_return_typ then
               warning loc
                 "return value has type@ %a@ \
                  instead of the expected type@ %a"

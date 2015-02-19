@@ -70,12 +70,6 @@ let name_longtype sg =
   | Signed -> "long long"
   | Unsigned -> "unsigned long long"
 
-(* Collecting the names and fields of structs and unions *)
-
-module StructUnion = Map.Make(String)
-
-let struct_unions = ref StructUnion.empty
-
 (* Declarator (identifier + type) *)
 
 let attributes a =
@@ -132,12 +126,10 @@ let rec name_cdecl id ty =
       add_args true args;
       Buffer.add_char b ')';
       name_cdecl (Buffer.contents b) res
-  | Tstruct(name, fld, a) ->
-      extern_atom name ^ attributes a ^ name_optid id
-  | Tunion(name, fld, a) ->
-      extern_atom name ^ attributes a ^ name_optid id
-  | Tcomp_ptr(name, a) ->
-      extern_atom name ^ " *" ^ attributes a ^ id
+  | Tstruct(name, a) ->
+      "struct " ^ extern_atom name ^ attributes a ^ name_optid id
+  | Tunion(name, a) ->
+      "union " ^ extern_atom name ^ attributes a ^ name_optid id
 
 (* Type *)
 
@@ -466,7 +458,7 @@ let print_globvar p id v =
       fprintf p "@[<hov 2>%s = "
               (name_cdecl name2 v.gvar_info);
       begin match v.gvar_info, v.gvar_init with
-      | (Tint _ | Tlong _ | Tfloat _ | Tpointer _ | Tfunction _ | Tcomp_ptr _),
+      | (Tint _ | Tlong _ | Tfloat _ | Tpointer _ | Tfunction _),
         [i1] ->
           print_init p i1
       | _, il ->
@@ -482,119 +474,24 @@ let print_globdef p (id, gd) =
   | Gfun f -> print_fundef p id f
   | Gvar v -> print_globvar p id v
 
-(* Collect struct and union types *)
+let struct_or_union = function Struct -> "struct" | Union -> "union"
 
-let rec collect_type = function
-  | Tvoid -> ()
-  | Tint _ -> ()
-  | Tfloat _ -> ()
-  | Tlong _ -> ()
-  | Tpointer(t, _) -> collect_type t
-  | Tarray(t, _, _) -> collect_type t
-  | Tfunction(args, res, _) -> collect_type_list args; collect_type res
-  | Tstruct(id, fld, _) | Tunion(id, fld, _) ->
-      let s = extern_atom id in
-      if not (StructUnion.mem s !struct_unions) then begin
-        struct_unions := StructUnion.add s fld !struct_unions;
-        collect_fields fld
-      end
-  | Tcomp_ptr _ -> ()
+let declare_composite p (Composite(id, su, m, a)) =
+  fprintf p "%s %s;@ " (struct_or_union su) (extern_atom id)
 
-and collect_type_list = function
-  | Tnil -> ()
-  | Tcons(hd, tl) -> collect_type hd; collect_type_list tl
-
-and collect_fields = function
-  | Fnil -> ()
-  | Fcons(id, hd, tl) -> collect_type hd; collect_fields tl
-
-let rec collect_expr e =
-  collect_type (typeof e);
-  match e with
-  | Eloc _ -> assert false
-  | Evar _ -> ()
-  | Ederef(r, _) -> collect_expr r
-  | Efield(l, _, _) -> collect_expr l
-  | Eval _ -> ()
-  | Evalof(l, _) -> collect_expr l
-  | Eaddrof(l, _) -> collect_expr l
-  | Eunop(_, r, _) -> collect_expr r
-  | Ebinop(_, r1, r2, _) -> collect_expr r1; collect_expr r2
-  | Ecast(r, _) -> collect_expr r
-  | Eseqand(r1, r2, _) -> collect_expr r1; collect_expr r2
-  | Eseqor(r1, r2, _) -> collect_expr r1; collect_expr r2
-  | Econdition(r1, r2, r3, _) -> 
-      collect_expr r1; collect_expr r2; collect_expr r3
-  | Esizeof(ty, _) -> collect_type ty
-  | Ealignof(ty, _) -> collect_type ty
-  | Eassign(l, r, _) -> collect_expr l; collect_expr r
-  | Eassignop(_, l, r, _, _) -> collect_expr l; collect_expr r
-  | Epostincr(_, l, _) -> collect_expr l
-  | Ecomma(r1, r2, _) -> collect_expr r1; collect_expr r2
-  | Ecall(r1, rl, _) ->  collect_expr r1; collect_exprlist rl
-  | Ebuiltin(_, _, rl, _) -> collect_exprlist rl
-  | Eparen _ -> assert false
-
-and collect_exprlist = function
-  | Enil -> ()
-  | Econs(r1, rl) ->  collect_expr r1; collect_exprlist rl
-
-let rec collect_stmt = function
-  | Sskip -> ()
-  | Sdo e -> collect_expr e
-  | Ssequence(s1, s2) -> collect_stmt s1; collect_stmt s2
-  | Sifthenelse(e, s1, s2) -> collect_expr e; collect_stmt s1; collect_stmt s2
-  | Swhile(e, s) -> collect_expr e; collect_stmt s
-  | Sdowhile(e, s) -> collect_stmt s; collect_expr e
-  | Sfor(s_init, e, s_iter, s_body) ->
-      collect_stmt s_init; collect_expr e;
-      collect_stmt s_iter; collect_stmt s_body
-  | Sbreak -> ()
-  | Scontinue -> ()
-  | Sswitch(e, cases) -> collect_expr e; collect_cases cases
-  | Sreturn None -> ()
-  | Sreturn (Some e) -> collect_expr e
-  | Slabel(lbl, s) -> collect_stmt s
-  | Sgoto lbl -> ()
-
-and collect_cases = function
-  | LSnil -> ()
-  | LScons(lbl, s, rem) -> collect_stmt s; collect_cases rem
-
-let collect_function f =
-  collect_type f.fn_return;
-  List.iter (fun (id, ty) -> collect_type ty) f.fn_params;
-  List.iter (fun (id, ty) -> collect_type ty) f.fn_vars;
-  collect_stmt f.fn_body
-
-let collect_globdef (id, gd) =
-  match gd with
-  | Gfun(External(_, args, res, _)) -> collect_type_list args; collect_type res
-  | Gfun(Internal f) -> collect_function f
-  | Gvar v -> collect_type v.gvar_info
-
-let collect_program p =
-  List.iter collect_globdef p.prog_defs
-
-let declare_struct_or_union p name fld =
-  fprintf p "%s;@ @ " name
-
-let print_struct_or_union p name fld =
-  fprintf p "@[<v 2>%s {" name;
-  let rec print_fields = function
-  | Fnil -> ()
-  | Fcons(id, ty, rem) ->
-      fprintf p "@ %s;" (name_cdecl (extern_atom id) ty);
-      print_fields rem in
-  print_fields fld;
+let define_composite p (Composite(id, su, m, a)) =
+  fprintf p "@[<v 2>%s %s%s {"
+          (struct_or_union su) (extern_atom id) (attributes a);
+  List.iter
+    (fun (fid, fty) ->
+      fprintf p "@ %s;" (name_cdecl (extern_atom fid) fty))
+    m;
   fprintf p "@;<0 -2>};@]@ @ "
 
 let print_program p prog =
-  struct_unions := StructUnion.empty;
-  collect_program prog;
   fprintf p "@[<v 0>";
-  StructUnion.iter (declare_struct_or_union p) !struct_unions;
-  StructUnion.iter (print_struct_or_union p) !struct_unions;
+  List.iter (declare_composite p) prog.prog_types;
+  List.iter (define_composite p) prog.prog_types;
   List.iter (print_globdef p) prog.prog_defs;
   fprintf p "@]@."
 

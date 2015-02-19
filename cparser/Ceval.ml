@@ -102,7 +102,7 @@ let cast env ty_to ty_from v =
       then v
       else raise Notconst
   | TPtr(ty, _), I n ->
-      I (normalize_int n ptr_t_ikind)
+      I (normalize_int n (ptr_t_ikind ()))
   | TPtr(ty, _), (S _ | WS _) ->
       v
   | TEnum(_, _), I n ->

@@ -1,0 +1,11 @@
+This is the support library for CompCert-generated code.
+It provides helper functions for:
+- 64-bit integer arithmetic
+- implementing the va_arg macro from <stdarg.h>
+
+The implementation is written in assembly language in the
+arm/ ia32/ powerpc/ directories.
+
+The c/ directory contains a C implementation of the 64-bit integer functions.
+It is provided for reference and as a guide for the asm implementations.
+

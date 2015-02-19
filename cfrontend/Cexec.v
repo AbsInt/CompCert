@@ -12,6 +12,7 @@
 
 (** Animating the CompCert C semantics *)
 
+Require Import String.
 Require Import Axioms.
 Require Import Classical.
 Require Import Coqlib.
@@ -30,6 +31,9 @@ Require Import Cop.
 Require Import Csyntax.
 Require Import Csem.
 Require Cstrategy.
+
+Local Open Scope string_scope.
+Local Open Scope list_scope.
 
 (** Error monad with options or lists *)
 
@@ -149,7 +153,7 @@ Lemma eventval_of_val_complete:
   forall ev t v, eventval_match ge ev t v -> eventval_of_val v t = Some ev.
 Proof.
   induction 1; simpl; auto.
-  rewrite (Genv.find_invert_symbol _ _ H0). rewrite H. auto. 
+  rewrite (Genv.find_invert_symbol _ _ H0). simpl in H; rewrite H. auto. 
 Qed.
 
 Lemma list_eventval_of_val_sound:
@@ -181,14 +185,14 @@ Qed.
 Lemma val_of_eventval_complete:
   forall ev t v, eventval_match ge ev t v -> val_of_eventval ev t = Some v.
 Proof.
-  induction 1; simpl; auto. rewrite H, H0; auto.
+  induction 1; simpl; auto. simpl in *. rewrite H, H0; auto.
 Qed.
 
 (** Volatile memory accesses. *)
 
 Definition do_volatile_load (w: world) (chunk: memory_chunk) (m: mem) (b: block) (ofs: int) 
                              : option (world * trace * val) :=
-  if block_is_volatile ge b then
+  if Genv.block_is_volatile ge b then
     do id <- Genv.invert_symbol ge b;
     match nextworld_vload w chunk id ofs with
     | None => None
@@ -202,7 +206,7 @@ Definition do_volatile_load (w: world) (chunk: memory_chunk) (m: mem) (b: block)
 
 Definition do_volatile_store (w: world) (chunk: memory_chunk) (m: mem) (b: block) (ofs: int) (v: val)
                              : option (world * trace * mem) :=
-  if block_is_volatile ge b then
+  if Genv.block_is_volatile ge b then
     do id <- Genv.invert_symbol ge b;
     do ev <- eventval_of_val (Val.load_result chunk v) (type_of_chunk chunk);
     do w' <- nextworld_vstore w chunk id ofs ev;
@@ -239,7 +243,7 @@ Lemma do_volatile_load_complete:
   volatile_load ge chunk m b ofs t v -> possible_trace w t w' ->
   do_volatile_load w chunk m b ofs = Some(w', t, v).
 Proof.
-  unfold do_volatile_load; intros. inv H. 
+  unfold do_volatile_load; intros. inv H; simpl in *.
   rewrite H1. rewrite (Genv.find_invert_symbol _ _ H2). inv H0. inv H8. inv H6. rewrite H9.
   rewrite (val_of_eventval_complete _ _ _ H3). auto.
   rewrite H1. rewrite H2. inv H0. auto.
@@ -262,7 +266,7 @@ Lemma do_volatile_store_complete:
   volatile_store ge chunk m b ofs v t m' -> possible_trace w t w' ->
   do_volatile_store w chunk m b ofs v = Some(w', t, m').
 Proof.
-  unfold do_volatile_store; intros. inv H. 
+  unfold do_volatile_store; intros. inv H; simpl in *.
   rewrite H1. rewrite (Genv.find_invert_symbol _ _ H2).
   rewrite (eventval_of_val_complete _ _ _ H3).
   inv H0. inv H8. inv H6. rewrite H9. auto.
@@ -284,31 +288,31 @@ Definition do_deref_loc (w: world) (ty: type) (m: mem) (b: block) (ofs: int) : o
   end.
 
 Definition assign_copy_ok (ty: type) (b: block) (ofs: int) (b': block) (ofs': int) : Prop :=
-  (alignof_blockcopy ty | Int.unsigned ofs') /\ (alignof_blockcopy ty | Int.unsigned ofs) /\
+  (alignof_blockcopy ge ty | Int.unsigned ofs') /\ (alignof_blockcopy ge ty | Int.unsigned ofs) /\
   (b' <> b \/ Int.unsigned ofs' = Int.unsigned ofs
-           \/ Int.unsigned ofs' + sizeof ty <= Int.unsigned ofs
-           \/ Int.unsigned ofs + sizeof ty <= Int.unsigned ofs').
+           \/ Int.unsigned ofs' + sizeof ge ty <= Int.unsigned ofs
+           \/ Int.unsigned ofs + sizeof ge ty <= Int.unsigned ofs').
 
 Remark check_assign_copy:
   forall (ty: type) (b: block) (ofs: int) (b': block) (ofs': int),
   { assign_copy_ok ty b ofs b' ofs' } + {~ assign_copy_ok ty b ofs b' ofs' }.
 Proof with try (right; intuition omega).
   intros. unfold assign_copy_ok. 
-  assert (alignof_blockcopy ty > 0) by apply alignof_blockcopy_pos.
-  destruct (Zdivide_dec (alignof_blockcopy ty) (Int.unsigned ofs')); auto...
-  destruct (Zdivide_dec (alignof_blockcopy ty) (Int.unsigned ofs)); auto...
+  assert (alignof_blockcopy ge ty > 0) by apply alignof_blockcopy_pos.
+  destruct (Zdivide_dec (alignof_blockcopy ge ty) (Int.unsigned ofs')); auto...
+  destruct (Zdivide_dec (alignof_blockcopy ge ty) (Int.unsigned ofs)); auto...
   assert (Y: {b' <> b \/
               Int.unsigned ofs' = Int.unsigned ofs \/
-              Int.unsigned ofs' + sizeof ty <= Int.unsigned ofs \/
-              Int.unsigned ofs + sizeof ty <= Int.unsigned ofs'} +
+              Int.unsigned ofs' + sizeof ge ty <= Int.unsigned ofs \/
+              Int.unsigned ofs + sizeof ge ty <= Int.unsigned ofs'} +
            {~(b' <> b \/
               Int.unsigned ofs' = Int.unsigned ofs \/
-              Int.unsigned ofs' + sizeof ty <= Int.unsigned ofs \/
-              Int.unsigned ofs + sizeof ty <= Int.unsigned ofs')}).
+              Int.unsigned ofs' + sizeof ge ty <= Int.unsigned ofs \/
+              Int.unsigned ofs + sizeof ge ty <= Int.unsigned ofs')}).
   destruct (eq_block b' b); auto.
   destruct (zeq (Int.unsigned ofs') (Int.unsigned ofs)); auto.
-  destruct (zle (Int.unsigned ofs' + sizeof ty) (Int.unsigned ofs)); auto.
-  destruct (zle (Int.unsigned ofs + sizeof ty) (Int.unsigned ofs')); auto.
+  destruct (zle (Int.unsigned ofs' + sizeof ge ty) (Int.unsigned ofs)); auto.
+  destruct (zle (Int.unsigned ofs + sizeof ge ty) (Int.unsigned ofs')); auto.
   right; intuition omega.
   destruct Y... left; intuition omega. 
 Defined.
@@ -324,7 +328,7 @@ Definition do_assign_loc (w: world) (ty: type) (m: mem) (b: block) (ofs: int) (v
       match v with
       | Vptr b' ofs' =>
           if check_assign_copy ty b ofs b' ofs' then
-            do bytes <- Mem.loadbytes m b' (Int.unsigned ofs') (sizeof ty);
+            do bytes <- Mem.loadbytes m b' (Int.unsigned ofs') (sizeof ge ty);
             do m' <- Mem.storebytes m b (Int.unsigned ofs) bytes;
             Some(w, E0, m')
           else None
@@ -387,7 +391,7 @@ Qed.
 (** External calls *)
 
 Variable do_external_function:
-  ident -> signature -> genv -> world -> list val -> mem -> option (world * trace * val * mem).
+  ident -> signature -> Senv.t -> world -> list val -> mem -> option (world * trace * val * mem).
 
 Hypothesis do_external_function_sound:
   forall id sg ge vargs m t vres m' w w',
@@ -401,7 +405,7 @@ Hypothesis do_external_function_complete:
   do_external_function id sg ge w vargs m = Some(w', t, vres, m').
 
 Variable do_inline_assembly:
-  ident -> genv -> world -> list val -> mem -> option (world * trace * val * mem).
+  ident -> Senv.t -> world -> list val -> mem -> option (world * trace * val * mem).
 
 Hypothesis do_inline_assembly_sound:
   forall txt ge vargs m t vres m' w w',
@@ -573,11 +577,11 @@ Proof with try congruence.
 (* EF_vstore *)
   auto.
 (* EF_vload_global *)
-  rewrite volatile_load_global_charact.
+  rewrite volatile_load_global_charact; simpl.
   unfold do_ef_volatile_load_global. destruct (Genv.find_symbol ge)...
   intros. exploit VLOAD; eauto. intros [A B]. split; auto. exists b; auto.
 (* EF_vstore_global *)
-  rewrite volatile_store_global_charact.
+  rewrite volatile_store_global_charact; simpl.
   unfold do_ef_volatile_store_global. destruct (Genv.find_symbol ge)...
   intros. exploit VSTORE; eauto. intros [A B]. split; auto. exists b; auto.
 (* EF_malloc *)
@@ -633,10 +637,10 @@ Proof.
 (* EF_vstore *)
   auto.
 (* EF_vload_global *)
-  rewrite volatile_load_global_charact in H. destruct H as [b [P Q]]. 
+  rewrite volatile_load_global_charact in H; simpl in H. destruct H as [b [P Q]]. 
   unfold do_ef_volatile_load_global. rewrite P. auto. 
 (* EF_vstore *)
-  rewrite volatile_store_global_charact in H. destruct H as [b [P Q]]. 
+  rewrite volatile_store_global_charact in H; simpl in H. destruct H as [b [P Q]]. 
   unfold do_ef_volatile_store_global. rewrite P. auto. 
 (* EF_malloc *)
   inv H; unfold do_ef_malloc. 
@@ -661,9 +665,9 @@ Qed.
 (** * Reduction of expressions *)
 
 Inductive reduction: Type :=
-  | Lred (l': expr) (m': mem)
-  | Rred (r': expr) (m': mem) (t: trace)
-  | Callred (fd: fundef) (args: list val) (tyres: type) (m': mem)
+  | Lred (rule: string) (l': expr) (m': mem)
+  | Rred (rule: string) (r': expr) (m': mem) (t: trace)
+  | Callred (rule: string) (fd: fundef) (args: list val) (tyres: type) (m': mem)
   | Stuckred.
 
 Section EXPRS.
@@ -728,15 +732,15 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       match e!x with
       | Some(b, ty') =>
           check type_eq ty ty';
-          topred (Lred (Eloc b Int.zero ty) m)
+          topred (Lred "red_var_local" (Eloc b Int.zero ty) m)
       | None =>
           do b <- Genv.find_symbol ge x;
-          topred (Lred (Eloc b Int.zero ty) m)
+          topred (Lred "red_var_global" (Eloc b Int.zero ty) m)
       end
   | LV, Ederef r ty =>
       match is_val r with
       | Some(Vptr b ofs, ty') =>
-          topred (Lred (Eloc b ofs ty) m)
+          topred (Lred "red_deref" (Eloc b ofs ty) m)
       | Some _ =>
           stuck
       | None =>
@@ -746,13 +750,15 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       match is_val r with
       | Some(Vptr b ofs, ty') =>
           match ty' with
-          | Tstruct id fList _ =>
-              match field_offset f fList with
+          | Tstruct id _ =>
+              do co <- ge.(genv_cenv)!id;
+              match field_offset ge f (co_members co) with
               | Error _ => stuck
-              | OK delta => topred (Lred (Eloc b (Int.add ofs (Int.repr delta)) ty) m)
+              | OK delta => topred (Lred "red_field_struct" (Eloc b (Int.add ofs (Int.repr delta)) ty) m)
               end
-          | Tunion id fList _ =>
-              topred (Lred (Eloc b ofs ty) m)
+          | Tunion id _ =>
+              do co <- ge.(genv_cenv)!id;
+              topred (Lred "red_field_union" (Eloc b ofs ty) m)
           | _ => stuck
           end
       | Some _ =>
@@ -767,28 +773,28 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       | Some(b, ofs, ty') =>
           check type_eq ty ty';
           do w',t,v <- do_deref_loc w ty m b ofs;
-          topred (Rred (Eval v ty) m t)
+          topred (Rred "red_rvalof" (Eval v ty) m t)
       | None =>
           incontext (fun x => Evalof x ty) (step_expr LV l m)
       end
   | RV, Eaddrof l ty =>
       match is_loc l with
-      | Some(b, ofs, ty') => topred (Rred (Eval (Vptr b ofs) ty) m E0)
+      | Some(b, ofs, ty') => topred (Rred "red_addrof" (Eval (Vptr b ofs) ty) m E0)
       | None => incontext (fun x => Eaddrof x ty) (step_expr LV l m)
       end
   | RV, Eunop op r1 ty =>
       match is_val r1 with
       | Some(v1, ty1) =>
           do v <- sem_unary_operation op v1 ty1;
-          topred (Rred (Eval v ty) m E0)
+          topred (Rred "red_unop" (Eval v ty) m E0)
       | None =>
           incontext (fun x => Eunop op x ty) (step_expr RV r1 m)
       end
   | RV, Ebinop op r1 r2 ty =>
       match is_val r1, is_val r2 with
       | Some(v1, ty1), Some(v2, ty2) =>
-          do v <- sem_binary_operation op v1 ty1 v2 ty2 m;
-          topred (Rred (Eval v ty) m E0)
+          do v <- sem_binary_operation ge op v1 ty1 v2 ty2 m;
+          topred (Rred "red_binop" (Eval v ty) m E0)
       | _, _ =>
          incontext2 (fun x => Ebinop op x r2 ty) (step_expr RV r1 m)
                     (fun x => Ebinop op r1 x ty) (step_expr RV r2 m)
@@ -797,7 +803,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       match is_val r1 with
       | Some(v1, ty1) =>
           do v <- sem_cast v1 ty1 ty;
-          topred (Rred (Eval v ty) m E0)
+          topred (Rred "red_cast" (Eval v ty) m E0)
       | None =>
           incontext (fun x => Ecast x ty) (step_expr RV r1 m)
       end
@@ -805,8 +811,8 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       match is_val r1 with
       | Some(v1, ty1) =>
           do b <- bool_val v1 ty1;
-          if b then topred (Rred (Eparen r2 type_bool ty) m E0)
-               else topred (Rred (Eval (Vint Int.zero) ty) m E0)
+          if b then topred (Rred "red_seqand_true" (Eparen r2 type_bool ty) m E0)
+               else topred (Rred "red_seqand_false" (Eval (Vint Int.zero) ty) m E0)
       | None =>
           incontext (fun x => Eseqand x r2 ty) (step_expr RV r1 m)
       end
@@ -814,8 +820,8 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       match is_val r1 with
       | Some(v1, ty1) =>
           do b <- bool_val v1 ty1;
-          if b then topred (Rred (Eval (Vint Int.one) ty) m E0)
-               else topred (Rred (Eparen r2 type_bool ty) m E0)
+          if b then topred (Rred "red_seqor_true" (Eval (Vint Int.one) ty) m E0)
+               else topred (Rred "red_seqor_false" (Eparen r2 type_bool ty) m E0)
       | None =>
           incontext (fun x => Eseqor x r2 ty) (step_expr RV r1 m)
       end
@@ -823,21 +829,21 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       match is_val r1 with
       | Some(v1, ty1) =>
           do b <- bool_val v1 ty1;
-          topred (Rred (Eparen (if b then r2 else r3) ty ty) m E0)
+          topred (Rred "red_condition" (Eparen (if b then r2 else r3) ty ty) m E0)
       | None =>
           incontext (fun x => Econdition x r2 r3 ty) (step_expr RV r1 m)
       end
   | RV, Esizeof ty' ty =>
-      topred (Rred (Eval (Vint (Int.repr (sizeof ty'))) ty) m E0)
+      topred (Rred "red_sizeof" (Eval (Vint (Int.repr (sizeof ge ty'))) ty) m E0)
   | RV, Ealignof ty' ty =>
-      topred (Rred (Eval (Vint (Int.repr (alignof ty'))) ty) m E0)
+      topred (Rred "red_alignof" (Eval (Vint (Int.repr (alignof ge ty'))) ty) m E0)
   | RV, Eassign l1 r2 ty =>
       match is_loc l1, is_val r2 with
       | Some(b, ofs, ty1), Some(v2, ty2) =>
           check type_eq ty1 ty;
           do v <- sem_cast v2 ty2 ty1;
           do w',t,m' <- do_assign_loc w ty1 m b ofs v;
-          topred (Rred (Eval v ty) m' t)
+          topred (Rred "red_assign" (Eval v ty) m' t)
       | _, _ =>
          incontext2 (fun x => Eassign x r2 ty) (step_expr LV l1 m)
                     (fun x => Eassign l1 x ty) (step_expr RV r2 m)
@@ -849,7 +855,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
           do w',t,v1 <- do_deref_loc w ty1 m b ofs;
           let r' := Eassign (Eloc b ofs ty1)
                            (Ebinop op (Eval v1 ty1) (Eval v2 ty2) tyres) ty1 in
-          topred (Rred r' m t)
+          topred (Rred "red_assignop" r' m t)
       | _, _ =>
          incontext2 (fun x => Eassignop op x r2 tyres ty) (step_expr LV l1 m)
                     (fun x => Eassignop op l1 x tyres ty) (step_expr RV r2 m)
@@ -865,7 +871,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
                            (Ebinop op (Eval v1 ty) (Eval (Vint Int.one) type_int32s) (incrdecr_type ty))
                            ty)
                    (Eval v1 ty) ty in
-          topred (Rred r' m t)
+          topred (Rred "red_postincr" r' m t)
       | None =>
           incontext (fun x => Epostincr id x ty) (step_expr LV l m)
       end
@@ -873,7 +879,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       match is_val r1 with
       | Some _ =>
           check type_eq (typeof r2) ty;
-          topred (Rred r2 m E0)
+          topred (Rred "red_comma" r2 m E0)
       | None =>
           incontext (fun x => Ecomma x r2 ty) (step_expr RV r1 m)
       end
@@ -881,7 +887,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       match is_val r1 with
       | Some (v1, ty1) =>
           do v <- sem_cast v1 ty1 tycast;
-          topred (Rred (Eval v ty) m E0)
+          topred (Rred "red_paren" (Eval v ty) m E0)
       | None =>
           incontext (fun x => Eparen x tycast ty) (step_expr RV r1 m)
       end
@@ -893,7 +899,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
               do fd <- Genv.find_funct ge vf;
               do vargs <- sem_cast_arguments vtl tyargs;
               check type_eq (type_of_fundef fd) (Tfunction tyargs tyres cconv);
-              topred (Callred fd vargs ty m)
+              topred (Callred "red_call" fd vargs ty m)
           | _ => stuck
           end
       | _, _ =>
@@ -906,7 +912,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
           do vargs <- sem_cast_arguments vtl tyargs;
           match do_external ef w vargs m with
           | None => stuck
-          | Some(w',t,v,m') => topred (Rred (Eval v ty) m' t)
+          | Some(w',t,v,m') => topred (Rred "red_builtin" (Eval v ty) m' t)
           end
       | _ =>
           incontext (fun x => Ebuiltin ef tyargs x ty) (step_exprlist rargs m)
@@ -954,21 +960,6 @@ Proof.
   eapply imm_safe_callred; eauto.
 Qed.
 
-(*
-Definition not_stuck (a: expr) (m: mem) :=
-  forall a' k C, context k RV C -> a = C a' -> imm_safe_t k a' m.
-
-Lemma safe_expr_kind:
-  forall k C a m,
-  context k RV C ->
-  not_stuck (C a) m ->
-  k = Cstrategy.expr_kind a.
-Proof.
-  intros.
-  symmetry. eapply Cstrategy.imm_safe_kind. eapply imm_safe_t_imm_safe. eauto.
-Qed.
-*)
-
 Fixpoint exprlist_all_values (rl: exprlist) : Prop :=
   match rl with
   | Enil => True
@@ -988,8 +979,8 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
   | Efield (Eval v ty1) f ty =>
       exists b, exists ofs, v = Vptr b ofs /\
       match ty1 with
-      | Tstruct _ fList _ => exists delta, field_offset f fList = Errors.OK delta
-      | Tunion _ _ _ => True
+      | Tstruct id _ => exists co delta, ge.(genv_cenv)!id = Some co /\ field_offset ge f (co_members co) = OK delta
+      | Tunion  id _ => exists co, ge.(genv_cenv)!id = Some co
       | _ => False
       end
   | Eval v ty => False
@@ -998,7 +989,7 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
   | Eunop op (Eval v1 ty1) ty =>
       exists v, sem_unary_operation op v1 ty1 = Some v
   | Ebinop op (Eval v1 ty1) (Eval v2 ty2) ty =>
-      exists v, sem_binary_operation op v1 ty1 v2 ty2 m = Some v
+      exists v, sem_binary_operation ge op v1 ty1 v2 ty2 m = Some v
   | Ecast (Eval v1 ty1) ty =>
       exists v, sem_cast v1 ty1 ty = Some v
   | Eseqand (Eval v1 ty1) r2 ty =>
@@ -1043,8 +1034,8 @@ Proof.
   exists b; auto.
   exists b; auto.
   exists b; exists ofs; auto.
-  exists b; exists ofs; split; auto. exists delta; auto.
-  exists b; exists ofs; auto.
+  exists b; exists ofs; split; auto. exists co, delta; auto. 
+  exists b; exists ofs; split; auto. exists co; auto.
 Qed.
 
 Lemma rred_invert:
@@ -1161,9 +1152,9 @@ Hint Resolve context_compose contextlist_compose.
 
 Definition reduction_ok (k: kind) (a: expr) (m: mem) (rd: reduction) : Prop :=
   match k, rd with
-  | LV, Lred l' m' => lred ge e a m l' m'
-  | RV, Rred r' m' t => rred ge a m t r' m' /\ exists w', possible_trace w t w'
-  | RV, Callred fd args tyres m' => callred ge a fd args tyres /\ m' = m
+  | LV, Lred _ l' m' => lred ge e a m l' m'
+  | RV, Rred _ r' m' t => rred ge a m t r' m' /\ exists w', possible_trace w t w'
+  | RV, Callred _ fd args tyres m' => callred ge a fd args tyres /\ m' = m
   | LV, Stuckred => ~imm_safe_t k a m
   | RV, Stuckred => ~imm_safe_t k a m
   | _, _ => False
@@ -1385,10 +1376,12 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   destruct v...
   destruct ty'... 
   (* top struct *)
-  destruct (field_offset f f0) as [delta|] eqn:?...
-  apply topred_ok; auto. apply red_field_struct; auto.
+  destruct (ge.(genv_cenv)!i0) as [co|] eqn:?...
+  destruct (field_offset ge f (co_members co)) as [delta|] eqn:?...
+  apply topred_ok; auto. eapply red_field_struct; eauto.
   (* top union *)
-  apply topred_ok; auto. apply red_field_union; auto.
+  destruct (ge.(genv_cenv)!i0) as [co|] eqn:?...
+  apply topred_ok; auto. eapply red_field_union; eauto.
   (* in depth *)
   eapply incontext_ok; eauto. 
 (* Evalof *)
@@ -1425,7 +1418,7 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   destruct (is_val a2) as [[v2 ty2] | ] eqn:?.
   rewrite (is_val_inv _ _ _ Heqo). rewrite (is_val_inv _ _ _ Heqo0). 
   (* top *)
-  destruct (sem_binary_operation op v1 ty1 v2 ty2 m) as [v|] eqn:?...
+  destruct (sem_binary_operation ge op v1 ty1 v2 ty2 m) as [v|] eqn:?...
   apply topred_ok; auto. split. apply red_binop; auto. exists w; constructor.
   (* depth *)
   eapply incontext2_ok; eauto. 
@@ -1517,7 +1510,7 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   destruct (Genv.find_funct ge vf) as [fd|] eqn:?...
   destruct (sem_cast_arguments vtl tyargs) as [vargs|] eqn:?... 
   destruct (type_eq (type_of_fundef fd) (Tfunction tyargs tyres cconv))...
-  apply topred_ok; auto. red. split; auto. eapply red_Ecall; eauto. 
+  apply topred_ok; auto. red. split; auto. eapply red_call; eauto. 
   eapply sem_cast_arguments_sound; eauto.
   apply not_invert_ok; simpl; intros; myinv. specialize (H ALLVAL). myinv. congruence.
   apply not_invert_ok; simpl; intros; myinv. specialize (H ALLVAL). myinv.
@@ -1579,73 +1572,77 @@ Qed.
 Lemma lred_topred:
   forall l1 m1 l2 m2,
   lred ge e l1 m1 l2 m2 ->
-  step_expr LV l1 m1 = topred (Lred l2 m2).
+  exists rule, step_expr LV l1 m1 = topred (Lred rule l2 m2).
 Proof.
   induction 1; simpl.
 (* var local *)
-  rewrite H. rewrite dec_eq_true; auto.
+  rewrite H. rewrite dec_eq_true. econstructor; eauto.
 (* var global *)
-  rewrite H; rewrite H0. auto.
+  rewrite H; rewrite H0. econstructor; eauto.
 (* deref *) 
-  auto.
+  econstructor; eauto.
 (* field struct *)
-  rewrite H; auto.
+  rewrite H, H0; econstructor; eauto.
 (* field union *)
-  auto.
+  rewrite H; econstructor; eauto.
 Qed.
 
 Lemma rred_topred:
   forall w' r1 m1 t r2 m2,
   rred ge r1 m1 t r2 m2 -> possible_trace w t w' ->
-  step_expr RV r1 m1 = topred (Rred r2 m2 t).
+  exists rule, step_expr RV r1 m1 = topred (Rred rule r2 m2 t).
 Proof.
   induction 1; simpl; intros.
 (* valof *)
-  rewrite dec_eq_true; auto. rewrite (do_deref_loc_complete _ _ _ _ _ _ _ _ H H0). auto. 
+  rewrite dec_eq_true. 
+  rewrite (do_deref_loc_complete _ _ _ _ _ _ _ _ H H0). econstructor; eauto.
 (* addrof *)
-  inv H. auto.
+  inv H. econstructor; eauto.
 (* unop *)
-  inv H0. rewrite H; auto.
+  inv H0. rewrite H; econstructor; eauto.
 (* binop *)
-  inv H0. rewrite H; auto.
+  inv H0. rewrite H; econstructor; eauto.
 (* cast *)
-  inv H0. rewrite H; auto.
+  inv H0. rewrite H; econstructor; eauto.
 (* seqand *)
-  inv H0. rewrite H; auto.
-  inv H0. rewrite H; auto.
+  inv H0. rewrite H; econstructor; eauto.
+  inv H0. rewrite H; econstructor; eauto.
 (* seqor *)
-  inv H0. rewrite H; auto.
-  inv H0. rewrite H; auto.
+  inv H0. rewrite H; econstructor; eauto.
+  inv H0. rewrite H; econstructor; eauto.
 (* condition *)
-  inv H0. rewrite H; auto.
+  inv H0. rewrite H; econstructor; eauto.
 (* sizeof *)
-  inv H. auto.
+  inv H. econstructor; eauto.
 (* alignof *)
-  inv H. auto.
+  inv H. econstructor; eauto.
 (* assign *)
-  rewrite dec_eq_true; auto. rewrite H. rewrite (do_assign_loc_complete _ _ _ _ _ _ _ _ _ H0 H1). auto.
+  rewrite dec_eq_true. rewrite H. rewrite (do_assign_loc_complete _ _ _ _ _ _ _ _ _ H0 H1).
+  econstructor; eauto.
 (* assignop *)
-  rewrite dec_eq_true; auto. rewrite (do_deref_loc_complete _ _ _ _ _ _ _ _ H H0). auto. 
+  rewrite dec_eq_true. rewrite (do_deref_loc_complete _ _ _ _ _ _ _ _ H H0).
+  econstructor; eauto. 
 (* postincr *)
-  rewrite dec_eq_true; auto. subst. rewrite (do_deref_loc_complete _ _ _ _ _ _ _ _ H H1). auto.
+  rewrite dec_eq_true. subst. rewrite (do_deref_loc_complete _ _ _ _ _ _ _ _ H H1).
+  econstructor; eauto.
 (* comma *)
-  inv H0. rewrite dec_eq_true; auto.
+  inv H0. rewrite dec_eq_true. econstructor; eauto.
 (* paren *)
-  inv H0. rewrite H; auto.
+  inv H0. rewrite H; econstructor; eauto.
 (* builtin *)
   exploit sem_cast_arguments_complete; eauto. intros [vtl [A B]].
   exploit do_ef_external_complete; eauto. intros C. 
-  rewrite A. rewrite B. rewrite C. auto.
+  rewrite A. rewrite B. rewrite C. econstructor; eauto.
 Qed.
 
 Lemma callred_topred:
   forall a fd args ty m,
   callred ge a fd args ty ->
-  step_expr RV a m = topred (Callred fd args ty m).
+  exists rule, step_expr RV a m = topred (Callred rule fd args ty m).
 Proof.
   induction 1; simpl.
   rewrite H2. exploit sem_cast_arguments_complete; eauto. intros [vtl [A B]].
-  rewrite A; rewrite H; rewrite B; rewrite H1; rewrite dec_eq_true. auto.
+  rewrite A; rewrite H; rewrite B; rewrite H1; rewrite dec_eq_true. econstructor; eauto.
 Qed.
 
 Definition reducts_incl {A B: Type} (C: A -> B) (res1: reducts A) (res2: reducts B) : Prop :=
@@ -1895,21 +1892,21 @@ Fixpoint do_alloc_variables (e: env) (m: mem) (l: list (ident * type)) {struct l
   match l with
   | nil => (e,m)
   | (id, ty) :: l' =>
-      let (m1,b1) := Mem.alloc m 0 (sizeof ty) in 
+      let (m1,b1) := Mem.alloc m 0 (sizeof ge ty) in 
       do_alloc_variables (PTree.set id (b1, ty) e) m1 l'
 end.
 
 Lemma do_alloc_variables_sound:
-  forall l e m, alloc_variables e m l (fst (do_alloc_variables e m l)) (snd (do_alloc_variables e m l)).
+  forall l e m, alloc_variables ge e m l (fst (do_alloc_variables e m l)) (snd (do_alloc_variables e m l)).
 Proof.
   induction l; intros; simpl. 
   constructor.
-  destruct a as [id ty]. destruct (Mem.alloc m 0 (sizeof ty)) as [m1 b1] eqn:?; simpl.
+  destruct a as [id ty]. destruct (Mem.alloc m 0 (sizeof ge ty)) as [m1 b1] eqn:?; simpl.
   econstructor; eauto.
 Qed.
 
 Lemma do_alloc_variables_complete:
-  forall e1 m1 l e2 m2, alloc_variables e1 m1 l e2 m2 ->
+  forall e1 m1 l e2 m2, alloc_variables ge e1 m1 l e2 m2 ->
   do_alloc_variables e1 m1 l = (e2, m2).
 Proof.
   induction 1; simpl. 
@@ -1952,44 +1949,54 @@ Proof.
    simpl. auto. 
 Qed.
 
+Inductive transition : Type := TR (rule: string) (t: trace) (S': state).
+
 Definition expr_final_state (f: function) (k: cont) (e: env) (C_rd: (expr -> expr) * reduction) :=
   match snd C_rd with
-  | Lred a m => (E0, ExprState f (fst C_rd a) k e m)
-  | Rred a m t => (t, ExprState f (fst C_rd a) k e m)
-  | Callred fd vargs ty m => (E0, Callstate fd vargs (Kcall f e (fst C_rd) ty k) m)
-  | Stuck => (E0, Stuckstate)
+  | Lred rule a m => TR rule E0 (ExprState f (fst C_rd a) k e m)
+  | Rred rule a m t => TR rule t (ExprState f (fst C_rd a) k e m)
+  | Callred rule fd vargs ty m => TR rule E0 (Callstate fd vargs (Kcall f e (fst C_rd) ty k) m)
+  | Stuckred => TR "step_stuck" E0 Stuckstate
   end.
 
 Local Open Scope list_monad_scope.
 
-Definition ret (S: state) : list (trace * state) := (E0, S) :: nil.
+Definition ret (rule: string) (S: state) : list transition :=
+  TR rule E0 S :: nil.
 
-Definition do_step (w: world) (s: state) : list (trace * state) :=
+Definition do_step (w: world) (s: state) : list transition :=
   match s with
 
   | ExprState f a k e m =>
       match is_val a with
       | Some(v, ty) =>
         match k with
-        | Kdo k => ret (State f Sskip k e m )
+        | Kdo k => ret "step_do_2" (State f Sskip k e m )
         | Kifthenelse s1 s2 k =>
-            do b <- bool_val v ty; ret (State f (if b then s1 else s2) k e m)
+            do b <- bool_val v ty;
+            ret "step_ifthenelse_2" (State f (if b then s1 else s2) k e m)
         | Kwhile1 x s k =>
             do b <- bool_val v ty; 
-            if b then ret (State f s (Kwhile2 x s k) e m) else ret (State f Sskip k e m)
+            if b
+            then ret "step_while_true" (State f s (Kwhile2 x s k) e m)
+            else ret "step_while_false" (State f Sskip k e m)
         | Kdowhile2 x s k =>
             do b <- bool_val v ty;
-            if b then ret (State f (Sdowhile x s) k e m) else ret (State f Sskip k e m)
+            if b
+            then ret "step_dowhile_true" (State f (Sdowhile x s) k e m)
+            else ret "step_dowhile_false" (State f Sskip k e m)
         | Kfor2 a2 a3 s k =>
             do b <- bool_val v ty;
-            if b then ret (State f s (Kfor3 a2 a3 s k) e m) else ret (State f Sskip k e m)
+            if b
+            then ret "step_for_true" (State f s (Kfor3 a2 a3 s k) e m)
+            else ret "step_for_false" (State f Sskip k e m)
         | Kreturn k =>
             do v' <- sem_cast v ty f.(fn_return);
-            do m' <- Mem.free_list m (blocks_of_env e);
-            ret (Returnstate v' (call_cont k) m')
+            do m' <- Mem.free_list m (blocks_of_env ge e);
+            ret "step_return_2" (Returnstate v' (call_cont k) m')
         | Kswitch1 sl k =>
             do n <- sem_switch_arg v ty;
-            ret (State f (seq_of_labeled_statement (select_switch n sl)) (Kswitch2 k) e m)
+            ret "step_expr_switch" (State f (seq_of_labeled_statement (select_switch n sl)) (Kswitch2 k) e m)
         | _ => nil
         end
 
@@ -1997,48 +2004,66 @@ Definition do_step (w: world) (s: state) : list (trace * state) :=
           map (expr_final_state f k e) (step_expr e w RV a m)
       end
 
-  | State f (Sdo x) k e m => ret(ExprState f x (Kdo k) e m)
+  | State f (Sdo x) k e m =>
+      ret "step_do_1" (ExprState f x (Kdo k) e m)
+  | State f (Ssequence s1 s2) k e m =>
+      ret "step_seq" (State f s1 (Kseq s2 k) e m)
+  | State f Sskip (Kseq s k) e m =>
+      ret "step_skip_seq" (State f s k e m)
+  | State f Scontinue (Kseq s k) e m =>
+      ret "step_continue_seq" (State f Scontinue k e m)
+  | State f Sbreak (Kseq s k) e m =>
+      ret "step_break_seq" (State f Sbreak k e m)
 
-  | State f (Ssequence s1 s2) k e m => ret(State f s1 (Kseq s2 k) e m)
-  | State f Sskip (Kseq s k) e m => ret (State f s k e m)
-  | State f Scontinue (Kseq s k) e m => ret (State f Scontinue k e m)
-  | State f Sbreak (Kseq s k) e m => ret (State f Sbreak k e m)
+  | State f (Sifthenelse a s1 s2) k e m =>
+      ret "step_ifthenelse_1" (ExprState f a (Kifthenelse s1 s2 k) e m)
 
-  | State f (Sifthenelse a s1 s2) k e m => ret (ExprState f a (Kifthenelse s1 s2 k) e m)
+  | State f (Swhile x s) k e m =>
+      ret "step_while" (ExprState f x (Kwhile1 x s k) e m)
+  | State f (Sskip|Scontinue) (Kwhile2 x s k) e m =>
+      ret "step_skip_or_continue_while" (State f (Swhile x s) k e m)
+  | State f Sbreak (Kwhile2 x s k) e m =>
+      ret "step_break_while" (State f Sskip k e m)
 
-  | State f (Swhile x s) k e m => ret (ExprState f x (Kwhile1 x s k) e m)
-  | State f (Sskip|Scontinue) (Kwhile2 x s k) e m => ret (State f (Swhile x s) k e m)
-  | State f Sbreak (Kwhile2 x s k) e m => ret (State f Sskip k e m)
-
-  | State f (Sdowhile a s) k e m => ret (State f s (Kdowhile1 a s k) e m)
-  | State f (Sskip|Scontinue) (Kdowhile1 x s k) e m => ret (ExprState f x (Kdowhile2 x s k) e m)
-  | State f Sbreak (Kdowhile1 x s k) e m => ret (State f Sskip k e m)
+  | State f (Sdowhile a s) k e m =>
+      ret "step_dowhile" (State f s (Kdowhile1 a s k) e m)
+  | State f (Sskip|Scontinue) (Kdowhile1 x s k) e m =>
+      ret "step_skip_or_continue_dowhile" (ExprState f x (Kdowhile2 x s k) e m)
+  | State f Sbreak (Kdowhile1 x s k) e m =>
+      ret "step_break_dowhile" (State f Sskip k e m)
 
   | State f (Sfor a1 a2 a3 s) k e m =>
       if is_skip a1
-      then ret (ExprState f a2 (Kfor2 a2 a3 s k) e m)
-      else ret (State f a1 (Kseq (Sfor Sskip a2 a3 s) k) e m)
-  | State f Sskip (Kfor3 a2 a3 s k) e m => ret (State f a3 (Kfor4 a2 a3 s k) e m)
-  | State f Scontinue (Kfor3 a2 a3 s k) e m => ret (State f a3 (Kfor4 a2 a3 s k) e m)
-  | State f Sbreak (Kfor3 a2 a3 s k) e m => ret (State f Sskip k e m)
-  | State f Sskip (Kfor4 a2 a3 s k) e m => ret (State f (Sfor Sskip a2 a3 s) k e m)
+      then ret "step_for" (ExprState f a2 (Kfor2 a2 a3 s k) e m)
+      else ret "step_for_start" (State f a1 (Kseq (Sfor Sskip a2 a3 s) k) e m)
+  | State f (Sskip|Scontinue) (Kfor3 a2 a3 s k) e m =>
+      ret "step_skip_or_continue_for3" (State f a3 (Kfor4 a2 a3 s k) e m)
+  | State f Sbreak (Kfor3 a2 a3 s k) e m =>
+      ret "step_break_for3" (State f Sskip k e m)
+  | State f Sskip (Kfor4 a2 a3 s k) e m =>
+      ret "step_skip_for4" (State f (Sfor Sskip a2 a3 s) k e m)
 
   | State f (Sreturn None) k e m =>
-      do m' <- Mem.free_list m (blocks_of_env e);
-      ret (Returnstate Vundef (call_cont k) m')
-  | State f (Sreturn (Some x)) k e m => ret (ExprState f x (Kreturn k) e m)
+      do m' <- Mem.free_list m (blocks_of_env ge e);
+      ret "step_return_0" (Returnstate Vundef (call_cont k) m')
+  | State f (Sreturn (Some x)) k e m =>
+      ret "step_return_1" (ExprState f x (Kreturn k) e m)
   | State f Sskip ((Kstop | Kcall _ _ _ _ _) as k) e m => 
-      do m' <- Mem.free_list m (blocks_of_env e);
-      ret (Returnstate Vundef k m')
+      do m' <- Mem.free_list m (blocks_of_env ge e);
+      ret "step_skip_call" (Returnstate Vundef k m')
 
-  | State f (Sswitch x sl) k e m => ret (ExprState f x (Kswitch1 sl k) e m)
-  | State f (Sskip|Sbreak) (Kswitch2 k) e m => ret (State f Sskip k e m)
-  | State f Scontinue (Kswitch2 k) e m => ret (State f Scontinue k e m)
+  | State f (Sswitch x sl) k e m =>
+      ret "step_switch" (ExprState f x (Kswitch1 sl k) e m)
+  | State f (Sskip|Sbreak) (Kswitch2 k) e m =>
+      ret "step_skip_break_switch" (State f Sskip k e m)
+  | State f Scontinue (Kswitch2 k) e m =>
+      ret "step_continue_switch" (State f Scontinue k e m)
 
-  | State f (Slabel lbl s) k e m => ret (State f s k e m)
+  | State f (Slabel lbl s) k e m =>
+      ret "step_label" (State f s k e m)
   | State f (Sgoto lbl) k e m =>
       match find_label lbl f.(fn_body) (call_cont k) with
-      | Some(s', k') => ret (State f s' k' e m)
+      | Some(s', k') => ret "step_goto" (State f s' k' e m)
       | None => nil
       end
 
@@ -2046,14 +2071,15 @@ Definition do_step (w: world) (s: state) : list (trace * state) :=
       check (list_norepet_dec ident_eq (var_names (fn_params f) ++ var_names (fn_vars f)));
       let (e,m1) := do_alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) in
       do m2 <- sem_bind_parameters w e m1 f.(fn_params) vargs;
-      ret (State f f.(fn_body) k e m2)
+      ret "step_internal_function" (State f f.(fn_body) k e m2)
   | Callstate (External ef _ _ _) vargs k m =>
       match do_external ef w vargs m with
       | None => nil
-      | Some(w',t,v,m') => (t, Returnstate v k m') :: nil
+      | Some(w',t,v,m') => TR "step_external_function" t (Returnstate v k m') :: nil
       end
 
-  | Returnstate v (Kcall f e C ty k) m => ret (ExprState f (C (Eval v ty)) k e m)
+  | Returnstate v (Kcall f e C ty k) m =>
+      ret "step_returnstate" (ExprState f (C (Eval v ty)) k e m)
 
   | _ => nil
   end.
@@ -2061,7 +2087,7 @@ Definition do_step (w: world) (s: state) : list (trace * state) :=
 Ltac myinv :=
   match goal with
   | [ |- In _ nil -> _ ] => intro X; elim X
-  | [ |- In _ (ret _) -> _ ] => 
+  | [ |- In _ (ret _ _) -> _ ] => 
         intro X; elim X; clear X;
         [intro EQ; unfold ret in EQ; inv EQ; myinv | myinv]
   | [ |- In _ (_ :: nil) -> _ ] => 
@@ -2075,8 +2101,8 @@ Ltac myinv :=
 Hint Extern 3 => exact I.
 
 Theorem do_step_sound:
-  forall w S t S',
-  In (t, S') (do_step w S) ->
+  forall w S rule t S',
+  In (TR rule t S') (do_step w S) ->
   Csem.step ge S t S' \/ (t = E0 /\ S' = Stuckstate /\ can_crash_world w S).
 Proof with try (left; right; econstructor; eauto; fail).
   intros until S'. destruct S; simpl.
@@ -2141,45 +2167,52 @@ Proof.
 Qed.
 
 Theorem do_step_complete:
-  forall w S t S' w', possible_trace w t w' -> Csem.step ge S t S' -> In (t, S') (do_step w S).
-Proof with (unfold ret; auto with coqlib).
+  forall w S t S' w',
+  possible_trace w t w' -> Csem.step ge S t S' -> exists rule, In (TR rule t S') (do_step w S).
+Proof with (unfold ret; eauto with coqlib).
   intros until w'; intros PT H.
   destruct H. 
   (* Expression step *)
   inversion H; subst; exploit estep_not_val; eauto; intro NOTVAL.
 (* lred *)
   unfold do_step; rewrite NOTVAL.
-  change (E0, ExprState f (C a') k e m') with (expr_final_state f k e (C, Lred a' m')).
+  exploit lred_topred; eauto. instantiate (1 := w). intros (rule & STEP).
+  exists rule. change (TR rule E0 (ExprState f (C a') k e m')) with (expr_final_state f k e (C, Lred rule a' m')).
   apply in_map.
   generalize (step_expr_context e w _ _ _ H1 a m). unfold reducts_incl.
-  intro. replace C with (fun x => C x). apply H2. 
-  rewrite (lred_topred _ _ _ _ _ _ H0). unfold topred; auto with coqlib.
+  intro. replace C with (fun x => C x). apply H2.
+  rewrite STEP. unfold topred; auto with coqlib.
   apply extensionality; auto.
 (* rred *)
   unfold do_step; rewrite NOTVAL.
-  change (t, ExprState f (C a') k e m') with (expr_final_state f k e (C, Rred a' m' t)).
+  exploit rred_topred; eauto. instantiate (1 := e). intros (rule & STEP).
+  exists rule.
+  change (TR rule t (ExprState f (C a') k e m')) with (expr_final_state f k e (C, Rred rule a' m' t)).
   apply in_map.
   generalize (step_expr_context e w _ _ _ H1 a m). unfold reducts_incl.
-  intro. replace C with (fun x => C x). apply H2. 
-  rewrite (rred_topred _ _ _ _ _ _ _ _ H0 PT). unfold topred; auto with coqlib.
+  intro. replace C with (fun x => C x). apply H2.
+  rewrite STEP; unfold topred; auto with coqlib.
   apply extensionality; auto.
 (* callred *)
   unfold do_step; rewrite NOTVAL.
-  change (E0, Callstate fd vargs (Kcall f e C ty k) m) with (expr_final_state f k e (C, Callred fd vargs ty m)).
+  exploit callred_topred; eauto. instantiate (1 := m). instantiate (1 := w). instantiate (1 := e).
+  intros (rule & STEP). exists rule.
+  change (TR rule E0 (Callstate fd vargs (Kcall f e C ty k) m)) with (expr_final_state f k e (C, Callred rule fd vargs ty m)).
   apply in_map.
   generalize (step_expr_context e w _ _ _ H1 a m). unfold reducts_incl.
   intro. replace C with (fun x => C x). apply H2. 
-  rewrite (callred_topred _ _ _ _ _ _ _ H0). unfold topred; auto with coqlib.
+  rewrite STEP; unfold topred; auto with coqlib.
   apply extensionality; auto.
 (* stuck *)
   exploit not_imm_safe_stuck_red. eauto. red; intros; elim H1. eapply imm_safe_t_imm_safe. eauto.
   instantiate (1 := w). intros [C' IN].
-  simpl do_step. rewrite NOTVAL. 
-  change (E0, Stuckstate) with (expr_final_state f k e (C', Stuckred)).
+  simpl do_step. rewrite NOTVAL.
+  exists "step_stuck".
+  change (TR "step_stuck" E0 Stuckstate) with (expr_final_state f k e (C', Stuckred)).
   apply in_map. auto. 
 
   (* Statement step *)
-  inv H; simpl...
+  inv H; simpl; econstructor...
   rewrite H0...
   rewrite H0...
   rewrite H0...
@@ -2209,7 +2242,7 @@ End EXEC.
 Local Open Scope option_monad_scope.
 
 Definition do_initial_state (p: program): option (genv * state) :=
-  let ge := Genv.globalenv p in
+  let ge := globalenv p in
   do m0 <- Genv.init_mem p;
   do b <- Genv.find_symbol ge p.(prog_main);
   do f <- Genv.find_funct_ptr ge b;

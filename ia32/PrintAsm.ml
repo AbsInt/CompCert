@@ -81,7 +81,7 @@ module Cygwin_System =
        fprintf oc "_%s" s
 
     let symbol oc symb =
-      fprintf oc "%s" (extern_atom symb)
+      raw_symbol oc (extern_atom symb)
 
     let label oc lbl =
        fprintf oc "L%d" lbl
@@ -128,9 +128,9 @@ module ELF_System =
     
     let raw_symbol oc s =
       fprintf oc "%s" s
-  
-    let symbol oc symb =
-      fprintf oc "%s" (extern_atom symb)
+
+   let symbol oc symb =
+      raw_symbol oc (extern_atom symb)
 
     let label oc lbl =
       fprintf oc ".L%d" lbl
@@ -183,7 +183,7 @@ module MacOS_System =
      fprintf oc "_%s" s
 
     let symbol oc symb =
-      fprintf oc "_%s" (extern_atom symb)
+      raw_symbol oc (extern_atom symb)
 
     let label oc lbl =
       fprintf oc "L%d" lbl
@@ -264,8 +264,7 @@ let transl_label lbl =
     Hashtbl.add current_function_labels lbl lbl';
     lbl'
 
-
-(*  basic printing functions *)
+(*  Basic printing functions *)
 
 let comment = "#"
 
@@ -308,6 +307,7 @@ let name_of_neg_condition = function
 
 
 (* Names of sections *)
+
 let section oc sec =
   fprintf oc "	%s\n" (name_of_section sec)
 
@@ -338,24 +338,11 @@ let need_masks = ref false
 
 (* Emit .file / .loc debugging directives *)
 
-let filename_num : (string, int) Hashtbl.t = Hashtbl.create 7
-
 let print_file_line oc file line =
-  if !Clflags.option_g && file <> "" then begin
-    let filenum = 
-      try
-        Hashtbl.find filename_num file
-      with Not_found ->
-        let n = Hashtbl.length filename_num + 1 in
-        Hashtbl.add filename_num file n;
-        fprintf oc "	.file	%d %S\n" n file;
-        n
-    in fprintf oc "	.loc	%d %s\n" filenum line
-  end
+  PrintAnnot.print_file_line oc comment file line
 
 let print_location oc loc =
-  if loc <> Cutil.no_loc then
-    print_file_line oc (fst loc) (string_of_int (snd loc))
+  if loc <> Cutil.no_loc then print_file_line oc (fst loc) (snd loc)
 
 (* Emit .cfi directives *)
 
@@ -383,7 +370,8 @@ let re_file_line = Str.regexp "#line:\\(.*\\):\\([1-9][0-9]*\\)$"
 
 let print_annot_stmt oc txt targs args =
   if Str.string_match re_file_line txt 0 then begin
-    print_file_line oc (Str.matched_group 1 txt) (Str.matched_group 2 txt)
+    print_file_line oc (Str.matched_group 1 txt)
+                       (int_of_string (Str.matched_group 2 txt))
   end else begin
     fprintf oc "%s annotation: " comment;
     PrintAnnot.print_annot_stmt preg "ESP" oc txt targs args
@@ -1042,7 +1030,6 @@ end)
 
 type target = ELF | MacOS | Cygwin
 
-
 let print_program oc p =
   let target =   
     match Configuration.system with
@@ -1057,8 +1044,8 @@ let print_program oc p =
   | Cygwin -> (module Cygwin_System:SYSTEM)):SYSTEM) in
   let module Printer = AsmPrinter(Target) in
   PrintAnnot.print_version_and_options oc Printer.comment;
+  PrintAnnot.reset_filenames();
   Printer.need_masks := false;
-  Hashtbl.clear Printer.filename_num;
   List.iter (Printer.print_globdef oc) p.prog_defs;
   if !Printer.need_masks then begin
     Printer.section oc (Section_const true);
@@ -1073,5 +1060,5 @@ let print_program oc p =
     fprintf oc "%a:	.long   0x7FFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF\n"
                Target.raw_symbol "__abss_mask"
   end;
-  Target.print_epilogue oc
-
+  Target.print_epilogue oc;
+  PrintAnnot.close_filenames()

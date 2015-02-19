@@ -266,16 +266,24 @@ let add_enum env id info =
 
 open Printf
 
+let composite_tag_name name =
+  if name = "" then "<anonymous>" else name
+
 let error_message = function
   | Unbound_identifier name -> 
       sprintf "Unbound identifier '%s'" name
   | Unbound_tag(name, kind) ->
-      sprintf "Unbound %s '%s'" kind name
+      sprintf "Unbound %s '%s'" kind (composite_tag_name name)
   | Tag_mismatch(name, expected, actual) ->
       sprintf "'%s' was declared as a %s but is used as a %s" 
-              name actual expected
+              (composite_tag_name name) actual expected
   | Unbound_typedef name ->
       sprintf "Unbound typedef '%s'" name
   | No_member(compname, compkind, memname) ->
       sprintf "%s '%s' has no member named '%s'"
-              compkind compname memname
+              compkind (composite_tag_name compname) memname
+
+let _ =
+  Printexc.register_printer
+    (function Error e -> Some (sprintf "Env.Error \"%s\"" (error_message e))
+            | _ -> None)

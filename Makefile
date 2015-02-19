@@ -49,7 +49,7 @@ FLOCQ=\
 
 # General-purpose libraries (in lib/)
 
-LIB=Axioms.v Coqlib.v Intv.v Maps.v Heaps.v Lattice.v Ordered.v \
+VLIB=Axioms.v Coqlib.v Intv.v Maps.v Heaps.v Lattice.v Ordered.v \
   Iteration.v Integers.v Archi.v Fappli_IEEE_extra.v Floats.v \
   Parmov.v UnionFind.v Wfsimpl.v \
   Postorder.v FSetAVLplus.v IntvSets.v
@@ -89,7 +89,7 @@ BACKEND=\
 
 # C front-end modules (in cfrontend/)
 
-CFRONTEND=Ctypes.v Cop.v Csyntax.v Csem.v Cstrategy.v Cexec.v \
+CFRONTEND=Ctypes.v Cop.v Csyntax.v Csem.v Ctyping.v Cstrategy.v Cexec.v \
   Initializers.v Initializersproof.v \
   SimplExpr.v SimplExprspec.v SimplExprproof.v \
   Clight.v ClightBigstep.v SimplLocals.v SimplLocalsproof.v \
@@ -112,7 +112,7 @@ DRIVER=Compopts.v Compiler.v Complements.v
 
 # All source files
 
-FILES=$(LIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(DRIVER) $(FLOCQ) \
+FILES=$(VLIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(DRIVER) $(FLOCQ) \
   $(PARSERVALIDATOR) $(PARSER)
 
 all:
@@ -174,9 +174,9 @@ doc/coq2html.ml: doc/coq2html.mll
 	ocamllex -q doc/coq2html.mll
 
 tools/ndfun: tools/ndfun.ml
-	ocamlopt -o tools/ndfun str.cmxa tools/ndfun.ml
+	ocamlopt -o tools/ndfun str.cmxa tools/ndfun.ml $(LINKERSPEC)
 tools/modorder: tools/modorder.ml
-	ocamlopt -o tools/modorder str.cmxa tools/modorder.ml
+	ocamlopt -o tools/modorder str.cmxa tools/modorder.ml $(LINKERSPEC)
 
 latexdoc:
 	cd doc; $(COQDOC) --latex -o doc/doc.tex -g $(FILES)

@@ -122,22 +122,22 @@ let print_val_list p vl =
 let print_state p (prog, ge, s) =
   match s with
   | State(f, s, k, e, m) ->
-      PrintCsyntax.print_pointer_hook := print_pointer ge e;
+      PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv e;
       fprintf p "in function %s, statement@ @[<hv 0>%a@]"
               (name_of_function prog f)
               PrintCsyntax.print_stmt s
   | ExprState(f, r, k, e, m) ->
-      PrintCsyntax.print_pointer_hook := print_pointer ge e;
+      PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv e;
       fprintf p "in function %s, expression@ @[<hv 0>%a@]"
               (name_of_function prog f)
               PrintCsyntax.print_expr r
   | Callstate(fd, args, k, m) ->
-      PrintCsyntax.print_pointer_hook := print_pointer ge Maps.PTree.empty;
+      PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv Maps.PTree.empty;
       fprintf p "calling@ @[<hov 2>%s(%a)@]"
               (name_of_fundef prog fd)
               print_val_list args
   | Returnstate(res, k, m) ->
-      PrintCsyntax.print_pointer_hook := print_pointer ge Maps.PTree.empty;
+      PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv Maps.PTree.empty;
       fprintf p "returning@ %a"
               print_val res
   | Stuckstate ->
@@ -254,27 +254,13 @@ let compare_state s1 s2 =
       compare (rank_state s1) (rank_state s2)
   end
 
-(* Sets of states already explored *)
+(* Maps of states already explored. *)
 
-module StateSet =
-  Set.Make(struct
-             type t = state * Determinism.world
-             let compare (s1,w1) (s2,w2) = compare_state s1 s2
+module StateMap =
+  Map.Make(struct
+             type t = state
+             let compare = compare_state
            end)
-
-(* Purging states that will never be reached again based on their memory
-   next block.  All states with nextblock <= the given nextblock are
-   removed.  We take advantage of the fact that StateSets are sorted
-   by increasing nextblock, cf. the definition of compare_state above. *)
-
-let rec purge_seen nextblock seen =
-  let min = try Some(StateSet.min_elt seen) with Not_found -> None in
-  match min with
-  | None -> seen
-  | Some((s, w) as sw) ->
-      if P.le (mem_state s).Mem.nextblock nextblock
-      then purge_seen nextblock (StateSet.remove sw seen)
-      else seen
 
 (* Extract a string from a global pointer *)
 
@@ -389,7 +375,7 @@ let convert_external_arg ge v t =
   | Vsingle f, AST.Tsingle -> Some (EVsingle f)
   | Vlong n, AST.Tlong -> Some (EVlong n)
   | Vptr(b, ofs), AST.Tint -> 
-      Genv.invert_symbol ge b >>= fun id -> Some (EVptr_global(id, ofs))
+      Senv.invert_symbol ge b >>= fun id -> Some (EVptr_global(id, ofs))
   | _, _ -> None
 
 let rec convert_external_args ge vl tl =
@@ -422,20 +408,20 @@ and world_io ge m id args =
   None
 
 and world_vload ge m chunk id ofs =
-  Genv.find_symbol ge id >>= fun b ->
+  Genv.find_symbol ge.genv_genv id >>= fun b ->
   Mem.load chunk m b ofs >>= fun v ->
   Cexec.eventval_of_val ge v (type_of_chunk chunk) >>= fun ev ->
   Some(ev, world ge m)
 
 and world_vstore ge m chunk id ofs ev =
-  Genv.find_symbol ge id >>= fun b ->
+  Genv.find_symbol ge.genv_genv id >>= fun b ->
   Cexec.val_of_eventval ge ev (type_of_chunk chunk) >>= fun v ->
   Mem.store chunk m b ofs v >>= fun m' ->
   Some(world ge m')
 
 let do_event p ge time w ev =
   if !trace >= 1 then
-    fprintf p "@[<hov 2>Time %d: observable event:@ @[<hov 2>%a@]@]@."
+    fprintf p "@[<hov 2>Time %d: observable event:@ %a@]@."
               time print_event ev;
   (* Return new world after external action *)
   match ev with
@@ -479,7 +465,7 @@ let diagnose_stuck_expr p ge w f a kont e m =
   if found then true else begin
     let l = Cexec.step_expr ge do_external_function do_inline_assembly e w k a m in
     if List.exists (fun (ctx,red) -> red = Cexec.Stuckred) l then begin
-      PrintCsyntax.print_pointer_hook := print_pointer ge e;
+      PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv e;
       fprintf p "@[<hov 2>Stuck subexpression:@ %a@]@."
               PrintCsyntax.print_expr a;
       true
@@ -497,11 +483,10 @@ let diagnose_stuck_state p ge w = function
   | ExprState(f,a,k,e,m) -> ignore(diagnose_stuck_expr p ge w f a k e m)
   | _ -> ()
 
-(* Exploration *)
+(* Execution of a single step.  Return list of triples
+   (reduction rule, next state, next world). *)
 
-let do_step p prog ge time (s, w) =
-  if !trace >= 2 then
-    fprintf p "@[<hov 2>Time %d: %a@]@." time print_state (prog, ge, s);
+let do_step p prog ge time s w =
   match Cexec.at_final_state s with
   | Some r ->
       if !trace >= 1 then
@@ -513,89 +498,71 @@ let do_step p prog ge time (s, w) =
       end
   | None ->
       let l = Cexec.do_step ge do_external_function do_inline_assembly w s in
-      if l = [] || List.exists (fun (t,s) -> s = Stuckstate) l then begin
+      if l = []
+      || List.exists (fun (Cexec.TR(r,t,s)) -> s = Stuckstate) l
+      then begin
         pp_set_max_boxes p 1000;
         fprintf p "@[<hov 2>Stuck state: %a@]@." print_state (prog, ge, s);
         diagnose_stuck_state p ge w s;
         fprintf p "ERROR: Undefined behavior@.";
         exit 126
       end else begin
-        List.map (fun (t, s') -> (s', do_events p ge time w t)) l
+        List.map (fun (Cexec.TR(r, t, s')) -> (r, s', do_events p ge time w t)) l
       end
 
-let rec explore_one p prog ge time sw =
-  let succs = do_step p prog ge time sw in
+(* Exploration of a single execution. *)
+
+let rec explore_one p prog ge time s w =
+  if !trace >= 2 then
+    fprintf p "@[<hov 2>Time %d:@ %a@]@." time print_state (prog, ge, s);
+  let succs = do_step p prog ge time s w in
   if succs <> [] then begin
-    let sw' =
+    let (r, s', w') =
       match !mode with
       | First -> List.hd succs
       | Random -> List.nth succs (Random.int (List.length succs))
       | All -> assert false in
-    explore_one p prog ge (time + 1) sw'
+    if !trace >= 2 then
+      fprintf p "--[%s]-->@." (camlstring_of_coqstring r);
+    explore_one p prog ge (time + 1) s' w'
   end
 
-(* A priority queue structure where the priority is inversely proportional
-   to the memory nextblock. *)
+(* Exploration of all possible executions. *)
 
-module PrioQueue = struct
+let rec explore_all p prog ge time states =
+  if !trace >= 2 then begin
+    List.iter
+      (fun (n, s, w) ->
+         fprintf p "@[<hov 2>State %d.%d: @ %a@]@."
+                   time n print_state (prog, ge, s))
+      states
+  end;
+  let rec explore_next nextstates seen numseen = function
+  | [] ->
+      List.rev nextstates
+  | (n, s, w) :: states ->
+      add_reducts nextstates seen numseen states n (do_step p prog ge time s w)
 
-  type elt = int * StateSet.elt
-
-  type queue = Empty | Node of elt * queue * queue
-
-  let empty = Empty
-
-  let singleton elt = Node(elt, Empty, Empty)
-
-  let higher_prio (time1, (s1, w1)) (time2, (s2, w2)) =
-    P.lt (mem_state s1).Mem.nextblock (mem_state s2).Mem.nextblock
-
-  let rec insert queue elt =
-    match queue with
-    | Empty -> Node(elt, Empty, Empty)
-    | Node(e, left, right) ->
-        if higher_prio elt e
-        then Node(elt, insert right e, left)
-        else Node(e, insert right elt, left)
-
-  let rec remove_top = function
-  | Empty -> assert false
-  | Node(elt, left, Empty) -> left
-  | Node(elt, Empty, right) -> right
-  | Node(elt, (Node(lelt, _, _) as left),
-              (Node(relt, _, _) as right)) ->
-      if higher_prio lelt relt
-      then Node(lelt, remove_top left, right)
-      else Node(relt, left, remove_top right)
-
-  let extract = function
-  | Empty -> None
-  | Node(elt, _, _) as queue -> Some(elt, remove_top queue)
-
-  (* Return true if all elements of queue have strictly lower priority
-     than elt. *)
-  let dominate elt queue =
-    match queue with
-    | Empty -> true
-    | Node(e, _, _) -> higher_prio elt e
-end
-
-let rec explore_all p prog ge seen queue =
-  match PrioQueue.extract queue with
-  | None -> ()
-  | Some((time, sw) as tsw, queue') ->
-      if StateSet.mem sw seen then
-        explore_all p prog ge seen queue'
-      else
-        let succs = 
-          List.rev_map (fun sw -> (time + 1, sw)) (do_step p prog ge time sw) in
-        let queue'' = List.fold_left PrioQueue.insert queue' succs in
-        let seen' = StateSet.add sw seen in
-        let seen'' = 
-          if PrioQueue.dominate tsw queue''
-          then purge_seen (mem_state (fst sw)).Mem.nextblock seen'
-          else seen' in
-        explore_all p prog ge seen'' queue''
+  and add_reducts nextstates seen numseen states n = function
+  | [] ->
+      explore_next nextstates seen numseen states
+  | (r, s', w') :: reducts ->
+      let (n', nextstates', seen', numseen') =
+        try
+          (StateMap.find s' seen, nextstates, seen, numseen)
+        with Not_found ->
+          (numseen,
+           (numseen, s', w') :: nextstates,
+           StateMap.add s' numseen seen,
+           numseen + 1) in
+      if !trace >= 2 then begin
+        fprintf p "Transition state %d.%d --[%s]--> state %d.%d@."
+                  time n (camlstring_of_coqstring r) (time + 1) n'
+      end;
+      add_reducts nextstates' seen' numseen' states n reducts
+  in
+    let nextstates = explore_next [] StateMap.empty 1 states in
+    if nextstates <> [] then explore_all p prog ge (time + 1) nextstates
 
 (* The variant of the source program used to build the world for
    executing events.  
@@ -633,7 +600,9 @@ let change_main_function p old_main old_main_ty =
   let new_main_id = intern_string "___main" in
   { prog_main = new_main_id;
     prog_defs = (new_main_id, Gfun(Internal new_main_fn)) :: p.prog_defs;
-    prog_public = p.prog_public }
+    prog_public = p.prog_public;
+    prog_types = p.prog_types;
+    prog_comp_env = p.prog_comp_env }
 
 let rec find_main_function name = function
   | [] -> None
@@ -667,8 +636,8 @@ let execute prog =
   | None -> exit 126
   | Some prog1 ->
       let wprog = world_program prog1 in
-      let wge = Genv.globalenv wprog in
-      match Genv.init_mem wprog with
+      let wge = globalenv wprog in
+      match Genv.init_mem (program_of_program wprog) with
       | None ->
           fprintf p "ERROR: World memory state undefined@."; exit 126
       | Some wm ->
@@ -678,7 +647,6 @@ let execute prog =
       | Some(ge, s) ->
           match !mode with
           | First | Random ->
-              explore_one p prog1 ge 0 (s, world wge wm)
+              explore_one p prog1 ge 0 s (world wge wm)
           | All ->
-              explore_all p prog1 ge StateSet.empty 
-                                (PrioQueue.singleton (0, (s, world wge wm)))
+              explore_all p prog1 ge 0 [(1, s, world wge wm)]

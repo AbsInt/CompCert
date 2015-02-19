@@ -48,8 +48,8 @@ Definition make_cast (a: expr) (tto: type) : expr :=
   | cast_case_f2f => a
   | cast_case_s2s => a
   | cast_case_l2l => a
-  | cast_case_struct _ _ _ _ => a
-  | cast_case_union _ _ _ _ => a
+  | cast_case_struct _ _ => a
+  | cast_case_union _ _ => a
   | cast_case_void => a
   | _ => Ecast a tto
   end.
@@ -70,6 +70,8 @@ Fixpoint simpl_expr (cenv: compilenv) (a: expr) : expr :=
   | Ebinop op a1 a2 ty => Ebinop op (simpl_expr cenv a1) (simpl_expr cenv a2) ty
   | Ecast a1 ty => Ecast (simpl_expr cenv a1) ty
   | Efield a1 fld ty => Efield (simpl_expr cenv a1) fld ty
+  | Esizeof _ _ => a
+  | Ealignof _ _ => a
   end.
 
 Definition simpl_exprlist (cenv: compilenv) (al: list expr) : list expr :=
@@ -170,6 +172,8 @@ Fixpoint addr_taken_expr (a: expr): VSet.t :=
   | Ebinop op a1 a2 ty => VSet.union (addr_taken_expr a1) (addr_taken_expr a2)
   | Ecast a1 ty => addr_taken_expr a1
   | Efield a1 fld ty => addr_taken_expr a1
+  | Esizeof _ _ => VSet.empty
+  | Ealignof _ _ => VSet.empty
   end.
 
 Fixpoint addr_taken_exprlist (l: list expr) : VSet.t :=
@@ -247,6 +251,10 @@ Definition transf_fundef (fd: fundef) : res fundef :=
   end.
 
 Definition transf_program (p: program) : res program :=
-  AST.transform_partial_program transf_fundef p.
-
-
+  do p1 <- AST.transform_partial_program transf_fundef p;
+  OK {| prog_defs := AST.prog_defs p1;
+        prog_public := AST.prog_public p1;
+        prog_main := AST.prog_main p1;
+        prog_types := prog_types p;
+        prog_comp_env := prog_comp_env p;
+        prog_comp_env_eq := prog_comp_env_eq p |}.

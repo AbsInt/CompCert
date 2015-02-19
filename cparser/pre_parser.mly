@@ -616,7 +616,7 @@ jump_statement:
     {}
 
 asm_statement:
-| ASM LPAREN string_literals_list RPAREN SEMICOLON
+| ASM VOLATILE? LPAREN string_literals_list RPAREN SEMICOLON
     {}
 
 translation_unit_file:

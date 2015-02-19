@@ -57,12 +57,9 @@ Inductive expr : Type :=
   | Eunop: unary_operation -> expr -> type -> expr  (**r unary operation *)
   | Ebinop: binary_operation -> expr -> expr -> type -> expr (**r binary operation *)
   | Ecast: expr -> type -> expr   (**r type cast ([(ty) e]) *)
-  | Efield: expr -> ident -> type -> expr. (**r access to a member of a struct or union *)
-
-(** [sizeof] and [alignof] are derived forms. *)
-
-Definition Esizeof (ty' ty: type) : expr := Econst_int (Int.repr(sizeof ty')) ty.
-Definition Ealignof (ty' ty: type) : expr := Econst_int (Int.repr(alignof ty')) ty.
+  | Efield: expr -> ident -> type -> expr (**r access to a member of a struct or union *)
+  | Esizeof: type -> type -> expr         (**r size of a type *)
+  | Ealignof: type -> type -> expr.       (**r alignment of a type *)
 
 (** Extract the type part of a type-annotated Clight expression. *)
 
@@ -80,6 +77,8 @@ Definition typeof (e: expr) : type :=
   | Ebinop _ _ _ ty => ty
   | Ecast _ ty => ty
   | Efield _ _ ty => ty
+  | Esizeof _ ty => ty
+  | Ealignof _ ty => ty
   end.
 
 (** ** Statements *)
@@ -164,19 +163,57 @@ Definition type_of_fundef (f: fundef) : type :=
 
 (** ** Programs *)
 
-(** A program is a collection of named functions, plus a collection
-  of named global variables, carrying their types and optional initialization 
-  data.  See module [AST] for more details. *)
+(** A program is composed of:
+- a list of definitions of functions and global variables;
+- the names of functions and global variables that are public (not static);
+- the name of the function that acts as entry point ("main" function).
+- a list of definitions for structure and union names;
+- the corresponding composite environment;
+*)
 
-Definition program : Type := AST.program fundef type.
+Record program : Type := {
+  prog_defs: list (ident * globdef fundef type);
+  prog_public: list ident;
+  prog_main: ident;
+  prog_types: list composite_definition;
+  prog_comp_env: composite_env;
+  prog_comp_env_eq: build_composite_env prog_types = OK prog_comp_env
+}.
+
+Definition program_of_program (p: program) : AST.program fundef type :=
+  {| AST.prog_defs := p.(prog_defs);
+     AST.prog_public := p.(prog_public);
+     AST.prog_main := p.(prog_main) |}.
+
+Coercion program_of_program: program >-> AST.program.
+
+Program Definition make_program (types: list composite_definition)
+                                (defs: list (ident * globdef fundef type))
+                                (public: list ident)
+                                (main: ident): res program :=
+  match build_composite_env types with
+  | OK env =>
+      OK {| prog_defs := defs;
+            prog_public := public;
+            prog_main := main;
+            prog_types := types;
+            prog_comp_env := env;
+            prog_comp_env_eq := _ |}
+  | Error msg =>
+      Error msg
+  end.
 
 (** * Operational semantics *)
 
 (** The semantics uses two environments.  The global environment
   maps names of functions and global variables to memory block references,
-  and function pointers to their definitions.  (See module [Globalenvs].) *)
+  and function pointers to their definitions.  (See module [Globalenvs].)
+  It also contains a composite environment, used by type-dependent operations. *)
 
-Definition genv := Genv.t fundef type.
+Record genv := { genv_genv :> Genv.t fundef type; genv_cenv :> composite_env }.
+
+Definition globalenv (p: program) :=
+  {| genv_genv := Genv.globalenv p; genv_cenv := p.(prog_comp_env) |}.
 
 (** The local environment maps local variables to block references and
   types.  The current value of the variable is stored in the
@@ -214,22 +251,26 @@ Inductive deref_loc (ty: type) (m: mem) (b: block) (ofs: int) : val -> Prop :=
   This is allowed only if [ty] indicates an access by value or by copy.
   [m'] is the updated memory state. *)
 
-Inductive assign_loc (ty: type) (m: mem) (b: block) (ofs: int):
+Inductive assign_loc (ce: composite_env) (ty: type) (m: mem) (b: block) (ofs: int):
                                             val -> mem -> Prop :=
   | assign_loc_value: forall v chunk m',
       access_mode ty = By_value chunk ->
       Mem.storev chunk m (Vptr b ofs) v = Some m' ->
-      assign_loc ty m b ofs v m'
+      assign_loc ce ty m b ofs v m'
   | assign_loc_copy: forall b' ofs' bytes m',
       access_mode ty = By_copy ->
-      (sizeof ty > 0 -> (alignof_blockcopy ty | Int.unsigned ofs')) ->
-      (sizeof ty > 0 -> (alignof_blockcopy ty | Int.unsigned ofs)) ->
+      (sizeof ce ty > 0 -> (alignof_blockcopy ce ty | Int.unsigned ofs')) ->
+      (sizeof ce ty > 0 -> (alignof_blockcopy ce ty | Int.unsigned ofs)) ->
       b' <> b \/ Int.unsigned ofs' = Int.unsigned ofs
-              \/ Int.unsigned ofs' + sizeof ty <= Int.unsigned ofs
-              \/ Int.unsigned ofs + sizeof ty <= Int.unsigned ofs' ->
-      Mem.loadbytes m b' (Int.unsigned ofs') (sizeof ty) = Some bytes ->
+              \/ Int.unsigned ofs' + sizeof ce ty <= Int.unsigned ofs
+              \/ Int.unsigned ofs + sizeof ce ty <= Int.unsigned ofs' ->
+      Mem.loadbytes m b' (Int.unsigned ofs') (sizeof ce ty) = Some bytes ->
       Mem.storebytes m b (Int.unsigned ofs) bytes = Some m' ->
-      assign_loc ty m b ofs (Vptr b' ofs') m'.
+      assign_loc ce ty m b ofs (Vptr b' ofs') m'.
+
+Section SEMANTICS.
+
+Variable ge: genv.
 
 (** Allocation of function-local variables.
   [alloc_variables e1 m1 vars e2 m2] allocates one memory block
@@ -246,7 +287,7 @@ Inductive alloc_variables: env -> mem ->
       alloc_variables e m nil e m
   | alloc_variables_cons:
       forall e m id ty vars m1 b1 m2 e2,
-      Mem.alloc m 0 (sizeof ty) = (m1, b1) ->
+      Mem.alloc m 0 (sizeof ge ty) = (m1, b1) ->
       alloc_variables (PTree.set id (b1, ty) e) m1 vars e2 m2 ->
       alloc_variables e m ((id, ty) :: vars) e2 m2.
 
@@ -264,7 +305,7 @@ Inductive bind_parameters (e: env):
   | bind_parameters_cons:
       forall m id ty params v1 vl b m1 m2,
       PTree.get id e = Some(b, ty) ->
-      assign_loc ty m b Int.zero v1 m1 ->
+      assign_loc ge ty m b Int.zero v1 m1 ->
       bind_parameters e m1 params vl m2 ->
       bind_parameters e m ((id, ty) :: params) (v1 :: vl) m2.
 
@@ -289,7 +330,7 @@ Fixpoint bind_parameter_temps (formals: list (ident * type)) (args: list val)
 (** Return the list of blocks in the codomain of [e], with low and high bounds. *)
 
 Definition block_of_binding (id_b_ty: ident * (block * type)) :=
-  match id_b_ty with (id, (b, ty)) => (b, 0, sizeof ty) end.
+  match id_b_ty with (id, (b, ty)) => (b, 0, sizeof ge ty) end.
 
 Definition blocks_of_env (e: env) : list (block * Z * Z) :=
   List.map block_of_binding (PTree.elements e).
@@ -333,10 +374,6 @@ Fixpoint seq_of_labeled_statement (sl: labeled_statements) : statement :=
   | LScons _ s sl' => Ssequence s (seq_of_labeled_statement sl')
   end.
 
-Section SEMANTICS.
-
-Variable ge: genv.
-
 (** ** Evaluation of expressions *)
 
 Section EXPR.
@@ -371,12 +408,16 @@ Inductive eval_expr: expr -> val -> Prop :=
   | eval_Ebinop: forall op a1 a2 ty v1 v2 v,
       eval_expr a1 v1 ->
       eval_expr a2 v2 ->
-      sem_binary_operation op v1 (typeof a1) v2 (typeof a2) m = Some v ->
+      sem_binary_operation ge op v1 (typeof a1) v2 (typeof a2) m = Some v ->
       eval_expr (Ebinop op a1 a2 ty) v
   | eval_Ecast:   forall a ty v1 v,
       eval_expr a v1 ->
       sem_cast v1 (typeof a) ty = Some v ->
       eval_expr (Ecast a ty) v
+  | eval_Esizeof: forall ty1 ty,
+      eval_expr (Esizeof ty1 ty) (Vint (Int.repr (sizeof ge ty1)))
+  | eval_Ealignof: forall ty1 ty,
+      eval_expr (Ealignof ty1 ty) (Vint (Int.repr (alignof ge ty1)))
   | eval_Elvalue: forall a loc ofs v,
       eval_lvalue a loc ofs -> 
       deref_loc (typeof a) m loc ofs v ->
@@ -397,14 +438,16 @@ with eval_lvalue: expr -> block -> int -> Prop :=
   | eval_Ederef: forall a ty l ofs,
       eval_expr a (Vptr l ofs) ->
       eval_lvalue (Ederef a ty) l ofs
- | eval_Efield_struct:   forall a i ty l ofs id fList att delta,
+ | eval_Efield_struct:   forall a i ty l ofs id co att delta,
       eval_expr a (Vptr l ofs) ->
-      typeof a = Tstruct id fList att ->
-      field_offset i fList = OK delta ->
+      typeof a = Tstruct id att ->
+      ge.(genv_cenv)!id = Some co ->
+      field_offset ge i (co_members co) = OK delta ->
       eval_lvalue (Efield a i ty) l (Int.add ofs (Int.repr delta))
- | eval_Efield_union:   forall a i ty l ofs id fList att,
+ | eval_Efield_union:   forall a i ty l ofs id co att,
       eval_expr a (Vptr l ofs) ->
-      typeof a = Tunion id fList att ->
+      typeof a = Tunion id att ->
+      ge.(genv_cenv)!id = Some co ->
       eval_lvalue (Efield a i ty) l ofs.
 
 Scheme eval_expr_ind2 := Minimality for eval_expr Sort Prop
@@ -538,7 +581,7 @@ Inductive step: state -> trace -> state -> Prop :=
       eval_lvalue e le m a1 loc ofs ->
       eval_expr e le m a2 v2 ->
       sem_cast v2 (typeof a2) (typeof a1) = Some v ->
-      assign_loc (typeof a1) m loc ofs v m' ->
+      assign_loc ge (typeof a1) m loc ofs v m' ->
       step (State f (Sassign a1 a2) k e le m)
         E0 (State f Sskip k e le m')
 
@@ -676,45 +719,48 @@ End SEMANTICS.
 
 (** The two semantics for function parameters.  First, parameters as local variables. *)
 
-Inductive function_entry1 (f: function) (vargs: list val) (m: mem) (e: env) (le: temp_env) (m': mem) : Prop :=
+Inductive function_entry1 (ge: genv) (f: function) (vargs: list val) (m: mem) (e: env) (le: temp_env) (m': mem) : Prop :=
   | function_entry1_intro: forall m1,
       list_norepet (var_names f.(fn_params) ++ var_names f.(fn_vars)) ->
-      alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
-      bind_parameters e m1 f.(fn_params) vargs m' ->
+      alloc_variables ge empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
+      bind_parameters ge e m1 f.(fn_params) vargs m' ->
       le = create_undef_temps f.(fn_temps) ->
-      function_entry1 f vargs m e le m'.
+      function_entry1 ge f vargs m e le m'.
 
-Definition step1 (ge: genv) := step ge function_entry1.
+Definition step1 (ge: genv) := step ge (function_entry1 ge).
 
 (** Second, parameters as temporaries. *)
 
-Inductive function_entry2 (f: function) (vargs: list val) (m: mem) (e: env) (le: temp_env) (m': mem) : Prop :=
+Inductive function_entry2 (ge: genv)  (f: function) (vargs: list val) (m: mem) (e: env) (le: temp_env) (m': mem) : Prop :=
   | function_entry2_intro:
       list_norepet (var_names f.(fn_vars)) ->
       list_norepet (var_names f.(fn_params)) ->
       list_disjoint (var_names f.(fn_params)) (var_names f.(fn_temps)) ->
-      alloc_variables empty_env m f.(fn_vars) e m' ->
+      alloc_variables ge empty_env m f.(fn_vars) e m' ->
       bind_parameter_temps f.(fn_params) vargs (create_undef_temps f.(fn_temps)) = Some le ->
-      function_entry2 f vargs m e le m'.
+      function_entry2 ge f vargs m e le m'.
 
-Definition step2 (ge: genv) := step ge function_entry2.
+Definition step2 (ge: genv) := step ge (function_entry2 ge).
 
 (** Wrapping up these definitions in two small-step semantics. *)
 
 Definition semantics1 (p: program) :=
-  Semantics step1 (initial_state p) final_state (Genv.globalenv p).
+  let ge := globalenv p in
+  Semantics_gen step1 (initial_state p) final_state ge ge.
 
 Definition semantics2 (p: program) :=
-  Semantics step2 (initial_state p) final_state (Genv.globalenv p).
+  let ge := globalenv p in
+  Semantics_gen step2 (initial_state p) final_state ge ge.
 
 (** This semantics is receptive to changes in events. *)
 
 Lemma semantics_receptive:
   forall (p: program), receptive (semantics1 p).
 Proof.
-  intros. constructor; simpl; intros.
+  intros. unfold semantics1.
+  set (ge := globalenv p). constructor; simpl; intros.
 (* receptiveness *)
-  assert (t1 = E0 -> exists s2, step1 (Genv.globalenv p) s t2 s2).
+  assert (t1 = E0 -> exists s2, step1 ge s t2 s2).
     intros. subst. inv H0. exists s1; auto.
   inversion H; subst; auto.
   (* builtin *)
@@ -724,7 +770,7 @@ Proof.
   exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
   exists (Returnstate vres2 k m2). econstructor; eauto.
 (* trace length *)
-  red; intros. inv H; simpl; try omega.
+  red; simpl; intros. inv H; simpl; try omega.
   eapply external_call_trace_length; eauto.
   eapply external_call_trace_length; eauto.
 Qed.

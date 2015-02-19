@@ -37,10 +37,16 @@ Variable prog: Csyntax.program.
 Variable tprog: Clight.program.
 Hypothesis TRANSL: transl_program prog = OK tprog.
 
-Let ge := Genv.globalenv prog.
-Let tge := Genv.globalenv tprog.
+Let ge := Csem.globalenv prog.
+Let tge := Clight.globalenv tprog.
 
 (** Invariance properties. *)
+
+Lemma comp_env_preserved:
+  Clight.genv_cenv tge = Csem.genv_cenv ge.
+Proof.
+  monadInv TRANSL. unfold tge; rewrite <- H0; auto. 
+Qed.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
@@ -87,13 +93,13 @@ Proof.
 - destruct (Genv.find_var_info tge b) as [v'|] eqn:V'; auto.
   exploit Genv.find_var_info_rev_match. eapply transl_program_spec; eauto. eassumption. 
   simpl. destruct (plt b (Genv.genv_next (Genv.globalenv prog))); try tauto.
-  intros [v [A B]]. inv B. fold ge in A. congruence.
+  intros [v [A B]]. inv B. change (Genv.globalenv prog) with (Csem.genv_genv ge) in A. congruence.
 Qed.
 
 Lemma block_is_volatile_preserved:
-  forall b, block_is_volatile tge b = block_is_volatile ge b.
+  forall b, Genv.block_is_volatile tge b = Genv.block_is_volatile ge b.
 Proof.
-  intros. unfold block_is_volatile. rewrite varinfo_preserved. auto.
+  intros. unfold Genv.block_is_volatile. rewrite varinfo_preserved. auto.
 Qed.
 
 Lemma type_of_fundef_preserved:
@@ -173,7 +179,7 @@ Remark assign_loc_translated:
   forall ty m b ofs v t m',
   Csem.assign_loc ge ty m b ofs v t m' ->
   match chunk_for_volatile_type ty with
-  | None => t = E0 /\ Clight.assign_loc ty m b ofs v m'
+  | None => t = E0 /\ Clight.assign_loc tge ty m b ofs v m'
   | Some chunk => volatile_store tge chunk m b ofs v t m'
   end.
 Proof.
@@ -184,7 +190,8 @@ Proof.
   rewrite H0; rewrite H1. eapply volatile_store_preserved with (ge1 := ge); auto.
   exact symbols_preserved. exact public_preserved. exact block_is_volatile_preserved.
   (* By copy *)
-  rewrite H0. destruct (type_is_volatile ty); split; auto; eapply assign_loc_copy; eauto.
+  rewrite H0. rewrite <- comp_env_preserved in *. 
+  destruct (type_is_volatile ty); split; auto; eapply assign_loc_copy; eauto.
 Qed.
 
 (** Evaluation of simple expressions and of their translation *)
@@ -241,7 +248,7 @@ Opaque makeif.
   exploit H0; eauto. intros [A [B C]].
   exploit H2; eauto. intros [D [E F]].
   subst sl1 sl2; simpl.
-  assert (eval_expr tge e le m (Ebinop op a1 a2 ty) v). econstructor; eauto. congruence.
+  assert (eval_expr tge e le m (Ebinop op a1 a2 ty) v). econstructor; eauto. rewrite comp_env_preserved; congruence.
   destruct dst; auto. simpl; econstructor; eauto.
 (* cast *)
   exploit H0; eauto. intros [A [B C]].
@@ -249,11 +256,13 @@ Opaque makeif.
   assert (eval_expr tge e le m (Ecast a1 ty) v). econstructor; eauto. congruence.
   destruct dst; auto. simpl; econstructor; eauto.
 (* sizeof *)
+  rewrite <- comp_env_preserved. 
   destruct dst.
   split; auto. split; auto. constructor.
   auto.
   exists (Esizeof ty1 ty). split. auto. split. auto. constructor.
 (* alignof *)
+  rewrite <- comp_env_preserved. 
   destruct dst.
   split; auto. split; auto. constructor.
   auto.
@@ -267,9 +276,11 @@ Opaque makeif.
   exploit H0; eauto. intros [A [B C]]. subst sl1.
   split; auto. split; auto. constructor; auto.
 (* field struct *)
+  rewrite <- comp_env_preserved in *.
   exploit H0; eauto. intros [A [B C]]. subst sl1.
   split; auto. split; auto. rewrite B in H1. eapply eval_Efield_struct; eauto.
 (* field union *)
+  rewrite <- comp_env_preserved in *.
   exploit H0; eauto. intros [A [B C]]. subst sl1.
   split; auto. split; auto. rewrite B in H1. eapply eval_Efield_union; eauto.
 Qed.
@@ -1659,7 +1670,7 @@ Proof.
   left. eapply star_plus_trans. rewrite app_ass. rewrite Kseqlist_app. eexact EXEC.
   eapply plus_two. simpl. econstructor. eapply step_make_assign; eauto. 
     econstructor. eexact EV3. eexact EV2. 
-    rewrite TY3; rewrite <- TY1; rewrite <- TY2; eauto.
+    rewrite TY3; rewrite <- TY1; rewrite <- TY2; rewrite comp_env_preserved; auto.
   reflexivity. traceEq.
   econstructor. auto. change sl2 with (nil ++ sl2). apply S.
   constructor. auto. auto. auto.
@@ -1680,7 +1691,7 @@ Proof.
   eapply star_plus_trans. eexact EXEC.
   simpl. eapply plus_four. econstructor. econstructor.
     econstructor. eexact EV3. eexact EV2. 
-    rewrite TY3; rewrite <- TY1; rewrite <- TY2. eauto.
+    rewrite TY3; rewrite <- TY1; rewrite <- TY2; rewrite comp_env_preserved; eauto.
   econstructor. eapply step_make_assign; eauto. 
     constructor. apply PTree.gss. 
     reflexivity. traceEq.
@@ -1729,8 +1740,8 @@ Proof.
   eapply plus_two. simpl. constructor.
   eapply step_make_assign; eauto. 
   unfold transl_incrdecr. destruct id; simpl in H2. 
-  econstructor. eauto. constructor. simpl. rewrite TY3; rewrite <- TY1. eauto.
-  econstructor. eauto. constructor. simpl. rewrite TY3; rewrite <- TY1. eauto.
+  econstructor. eauto. constructor. rewrite TY3; rewrite <- TY1; rewrite comp_env_preserved. simpl; eauto.
+  econstructor. eauto. constructor. rewrite TY3; rewrite <- TY1; rewrite comp_env_preserved. simpl; eauto.
   destruct id; auto. 
   reflexivity. traceEq.
   econstructor. auto. change sl2 with (nil ++ sl2). apply S.
@@ -1748,8 +1759,10 @@ Proof.
   constructor.
   eapply step_make_assign; eauto. 
   unfold transl_incrdecr. destruct id; simpl in H2. 
-  econstructor. constructor. apply PTree.gss. constructor. simpl. eauto.
-  econstructor. constructor. apply PTree.gss. constructor. simpl. eauto.
+  econstructor. constructor. apply PTree.gss. constructor.
+  rewrite comp_env_preserved; simpl; eauto.
+  econstructor. constructor. apply PTree.gss. constructor.
+  rewrite comp_env_preserved; simpl; eauto.
   destruct id; auto. 
   traceEq.
   econstructor. auto. apply S.
@@ -1900,23 +1913,30 @@ Qed.
 
 Lemma alloc_variables_preserved:
   forall e m params e' m',
-  Csem.alloc_variables e m params e' m' ->
-  alloc_variables e m params e' m'.
+  Csem.alloc_variables ge e m params e' m' ->
+  alloc_variables tge e m params e' m'.
 Proof.
-  induction 1; econstructor; eauto.
+  induction 1; econstructor; eauto. rewrite comp_env_preserved; auto.
 Qed.
 
 Lemma bind_parameters_preserved:
   forall e m params args m',
   Csem.bind_parameters ge e m params args m' ->
-  bind_parameters e m params args m'.
+  bind_parameters tge e m params args m'.
 Proof.
-  induction 1; econstructor; eauto.
-  inv H0. 
-  eapply assign_loc_value; eauto.
-  inv H4. eapply assign_loc_value; eauto. 
-  eapply assign_loc_copy; eauto.
+  induction 1; econstructor; eauto. inv H0. 
+- eapply assign_loc_value; eauto.
+- inv H4. eapply assign_loc_value; eauto.
+- rewrite <- comp_env_preserved in *. eapply assign_loc_copy; eauto.
 Qed.
+
+Lemma blocks_of_env_preserved:
+  forall e, blocks_of_env tge e = Csem.blocks_of_env ge e.
+Proof.
+  intros; unfold blocks_of_env, Csem.blocks_of_env. 
+  unfold block_of_binding, Csem.block_of_binding. 
+  rewrite comp_env_preserved. auto.
+Qed. 
 
 Lemma sstep_simulation:
   forall S1 t S2, Csem.sstep ge S1 t S2 ->
@@ -2090,9 +2110,10 @@ Proof.
   left. apply plus_one. constructor.
   econstructor; eauto. constructor; auto. 
 
+
 (* return none *)
   inv H7. econstructor; split.
-  left. apply plus_one. econstructor; eauto. 
+  left. apply plus_one. econstructor; eauto. rewrite blocks_of_env_preserved; eauto. 
   constructor. apply match_cont_call; auto. 
 (* return some 1 *)
   inv H6. inv H0. econstructor; split.
@@ -2102,14 +2123,14 @@ Proof.
   inv H9. exploit tr_top_val_for_val_inv; eauto. intros [A [B C]]. subst.
   econstructor; split.
   left. eapply plus_two. constructor. econstructor. eauto.
-  erewrite function_return_preserved; eauto. 
+  erewrite function_return_preserved; eauto. rewrite blocks_of_env_preserved; eauto. 
   eauto. traceEq.
   constructor. apply match_cont_call; auto.
 (* skip return *)
   inv H8. 
   assert (is_call_cont tk). inv H9; simpl in *; auto.
   econstructor; split.
-  left. apply plus_one. apply step_skip_call; eauto.
+  left. apply plus_one. apply step_skip_call; eauto. rewrite blocks_of_env_preserved; eauto. 
   constructor. auto.
 
 (* switch *)
@@ -2198,14 +2219,14 @@ Lemma transl_initial_states:
   Csem.initial_state prog S ->
   exists S', Clight.initial_state tprog S' /\ match_states S S'.
 Proof.
-  intros. inv H. 
+  intros. inv H. generalize TRANSL; intros TR; monadInv TR. rewrite H4. 
   exploit transl_program_spec; eauto. intros MP.
   exploit function_ptr_translated; eauto. intros [tf [FIND TR]].
   econstructor; split.
   econstructor.
-  exploit Genv.init_mem_match; eauto.  
-  simpl. fold tge. rewrite symbols_preserved.
-  destruct MP as (A & B & C). rewrite B; eexact H1.
+  exploit Genv.init_mem_match; eauto.
+  change (Genv.globalenv tprog) with (genv_genv tge). rewrite symbols_preserved.
+  rewrite <- H4; simpl; eauto. 
   eexact FIND.
   rewrite <- H3. apply type_of_fundef_preserved. auto.
   constructor. auto. constructor.

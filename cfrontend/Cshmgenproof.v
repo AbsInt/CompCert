@@ -40,8 +40,8 @@ Proof.
 Qed.
 
 Lemma transl_fundef_sig1:
-  forall f tf args res cc,
-  transl_fundef f = OK tf ->
+  forall ce f tf args res cc,
+  transl_fundef ce f = OK tf ->
   classify_fun (type_of_fundef f) = fun_case_f args res cc ->
   funsig tf = signature_of_type args res cc.
 Proof.
@@ -54,8 +54,8 @@ Proof.
 Qed.
 
 Lemma transl_fundef_sig2:
-  forall f tf args res cc,
-  transl_fundef f = OK tf ->
+  forall ce f tf args res cc,
+  transl_fundef ce f = OK tf ->
   type_of_fundef f = Tfunction args res cc ->
   funsig tf = signature_of_type args res cc.
 Proof.
@@ -70,8 +70,8 @@ Qed.
 Lemma transl_expr_lvalue:
   forall ge e le m a loc ofs ta,
   Clight.eval_lvalue ge e le m a loc ofs ->
-  transl_expr a = OK ta ->
-  (exists tb, transl_lvalue a = OK tb /\ make_load tb (typeof a) = OK ta).
+  transl_expr ge a = OK ta ->
+  (exists tb, transl_lvalue ge a = OK tb /\ make_load tb (typeof a) = OK ta).
 Proof.
   intros until ta; intros EVAL TR. inv EVAL; simpl in TR.
   (* var local *)
@@ -81,39 +81,36 @@ Proof.
   (* deref *)
   monadInv TR. exists x; auto.
   (* field struct *)
-  rewrite H0 in TR. monadInv TR.
-  econstructor; split. simpl. rewrite H0.
-  rewrite EQ; rewrite EQ1; simpl; eauto. auto.
+  monadInv TR. exists x0; split; auto. simpl; rewrite EQ; auto. 
   (* field union *)
-  rewrite H0 in TR. monadInv TR.
-  econstructor; split. simpl. rewrite H0. rewrite EQ; simpl; eauto. auto.
+  monadInv TR. exists x0; split; auto. simpl; rewrite EQ; auto. 
 Qed.
 
 (** Properties of labeled statements *)
 
 Lemma transl_lbl_stmt_1:
-  forall tyret nbrk ncnt n sl tsl,
-  transl_lbl_stmt tyret nbrk ncnt sl = OK tsl ->
-  transl_lbl_stmt tyret nbrk ncnt (Clight.select_switch n sl) = OK (select_switch n tsl).
+  forall ce tyret nbrk ncnt n sl tsl,
+  transl_lbl_stmt ce tyret nbrk ncnt sl = OK tsl ->
+  transl_lbl_stmt ce tyret nbrk ncnt (Clight.select_switch n sl) = OK (select_switch n tsl).
 Proof.
   intros until n.
   assert (DFL: forall sl tsl,
-    transl_lbl_stmt tyret nbrk ncnt sl = OK tsl ->
-    transl_lbl_stmt tyret nbrk ncnt (Clight.select_switch_default sl) = OK (select_switch_default tsl)).
+    transl_lbl_stmt ce tyret nbrk ncnt sl = OK tsl ->
+    transl_lbl_stmt ce tyret nbrk ncnt (Clight.select_switch_default sl) = OK (select_switch_default tsl)).
   {
     induction sl; simpl; intros. 
     inv H; auto.
     monadInv H. simpl. destruct o; eauto. simpl; rewrite EQ; simpl; rewrite EQ1; auto.
   }
   assert (CASE: forall sl tsl,
-    transl_lbl_stmt tyret nbrk ncnt sl = OK tsl ->
+    transl_lbl_stmt ce tyret nbrk ncnt sl = OK tsl ->
     match Clight.select_switch_case n sl with
     | None =>
         select_switch_case n tsl = None
     | Some sl' =>
         exists tsl',
            select_switch_case n tsl = Some tsl'
-        /\ transl_lbl_stmt tyret nbrk ncnt sl' = OK tsl'
+        /\ transl_lbl_stmt ce tyret nbrk ncnt sl' = OK tsl'
     end).
   {
     induction sl; simpl; intros.
@@ -130,9 +127,9 @@ Proof.
 Qed.
 
 Lemma transl_lbl_stmt_2:
-  forall tyret nbrk ncnt sl tsl,
-  transl_lbl_stmt tyret nbrk ncnt sl = OK tsl ->
-  transl_statement tyret nbrk ncnt (seq_of_labeled_statement sl) = OK (seq_of_lbl_stmt tsl).
+  forall ce tyret nbrk ncnt sl tsl,
+  transl_lbl_stmt ce tyret nbrk ncnt sl = OK tsl ->
+  transl_statement ce tyret nbrk ncnt (seq_of_labeled_statement sl) = OK (seq_of_lbl_stmt tsl).
 Proof.
   induction sl; intros.
   monadInv H. auto. 
@@ -143,6 +140,7 @@ Qed.
 
 Section CONSTRUCTORS.
 
+Variable ce: composite_env.
 Variable ge: genv.
 
 Lemma make_intconst_correct:
@@ -305,9 +303,9 @@ Proof.
   simpl. unfold Val.cmpu, Val.cmpu_bool, Int.cmpu.
   destruct (Int.eq i Int.zero); auto.
   (* struct *)
-  destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H2; auto.
+  destruct (ident_eq id1 id2); inv H2; auto.
   (* union *)
-  destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H2; auto.
+  destruct (ident_eq id1 id2); inv H2; auto.
 Qed.
 
 Lemma make_boolean_correct:
@@ -467,7 +465,7 @@ End MAKE_BIN.
 
 Hint Extern 2 (@eq (option val) _ _) => (simpl; reflexivity) : cshm.
 
-Lemma make_add_correct: binary_constructor_correct make_add sem_add.
+Lemma make_add_correct: binary_constructor_correct (make_add ce) (sem_add ce).
 Proof.
   red; unfold make_add, sem_add;
   intros until m; intros SEM MAKE EV1 EV2;
@@ -479,14 +477,14 @@ Proof.
 - eapply make_binarith_correct; eauto; intros; auto.
 Qed.
 
-Lemma make_sub_correct: binary_constructor_correct make_sub sem_sub.
+Lemma make_sub_correct: binary_constructor_correct (make_sub ce) (sem_sub ce).
 Proof.
   red; unfold make_sub, sem_sub;
   intros until m; intros SEM MAKE EV1 EV2;
   destruct (classify_sub tya tyb); inv MAKE.
 - destruct va; try discriminate; destruct vb; inv SEM; eauto with cshm.
 - destruct va; try discriminate; destruct vb; inv SEM.
-  destruct (eq_block b0 b1); try discriminate. destruct (Int.eq (Int.repr (sizeof ty)) Int.zero) eqn:E; inv H0.
+  destruct (eq_block b0 b1); try discriminate. destruct (Int.eq (Int.repr (sizeof ce ty)) Int.zero) eqn:E; inv H0.
   econstructor; eauto with cshm. rewrite dec_eq_true. simpl. rewrite E; auto. 
 - destruct va; try discriminate; destruct vb; inv SEM; eauto with cshm.
 - eapply make_binarith_correct; eauto; intros; auto.
@@ -648,8 +646,8 @@ Qed.
 
 Lemma transl_binop_correct:
   forall op a tya b tyb c va vb v e le m,
-  transl_binop op a tya b tyb = OK c ->  
-  sem_binary_operation op va tya vb tyb m = Some v ->
+  transl_binop ce op a tya b tyb = OK c ->  
+  sem_binary_operation ce op va tya vb tyb m = Some v ->
   eval_expr ge e le m a va ->
   eval_expr ge e le m b vb ->
   eval_expr ge e le m c v.
@@ -691,12 +689,12 @@ Proof.
 Qed.
 
 Lemma make_memcpy_correct:
-  forall f dst src ty k e le m b ofs v m',
+  forall ce f dst src ty k e le m b ofs v m',
   eval_expr ge e le m dst (Vptr b ofs) ->
   eval_expr ge e le m src v ->
-  assign_loc ty m b ofs v m' ->
+  assign_loc ce ty m b ofs v m' ->
   access_mode ty = By_copy ->
-  step ge (State f (make_memcpy dst src ty) k e le m) E0 (State f Sskip k e le m').
+  step ge (State f (make_memcpy ce dst src ty) k e le m) E0 (State f Sskip k e le m').
 Proof.
   intros. inv H1; try congruence. 
   unfold make_memcpy. change le with (set_optvar None Vundef le) at 2. 
@@ -710,10 +708,10 @@ Qed.
  
 Lemma make_store_correct:
   forall addr ty rhs code e le m b ofs v m' f k,
-  make_store addr ty rhs = OK code ->
+  make_store ce addr ty rhs = OK code ->
   eval_expr ge e le m addr (Vptr b ofs) ->
   eval_expr ge e le m rhs v ->
-  assign_loc ty m b ofs v m' ->
+  assign_loc ce ty m b ofs v m' ->
   step ge (State f code k e le m) E0 (State f Sskip k e le m').
 Proof.
   unfold make_store. intros until k; intros MKSTORE EV1 EV2 ASSIGN.
@@ -736,52 +734,32 @@ Variable prog: Clight.program.
 Variable tprog: Csharpminor.program.
 Hypothesis TRANSL: transl_program prog = OK tprog.
 
-Let ge := Genv.globalenv prog.
+Let ge := globalenv prog.
 Let tge := Genv.globalenv tprog.
 
 Lemma symbols_preserved:
   forall s, Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof (Genv.find_symbol_transf_partial2 transl_fundef transl_globvar _ TRANSL).
+Proof (Genv.find_symbol_transf_partial2 (transl_fundef ge) transl_globvar _ TRANSL).
 
 Lemma public_preserved:
   forall s, Genv.public_symbol tge s = Genv.public_symbol ge s.
-Proof (Genv.public_symbol_transf_partial2 transl_fundef transl_globvar _ TRANSL).
+Proof (Genv.public_symbol_transf_partial2 (transl_fundef ge) transl_globvar _ TRANSL).
 
 Lemma functions_translated:
   forall v f,
   Genv.find_funct ge v = Some f ->
-  exists tf, Genv.find_funct tge v = Some tf /\ transl_fundef f = OK tf.
-Proof (Genv.find_funct_transf_partial2 transl_fundef transl_globvar _ TRANSL).
+  exists tf, Genv.find_funct tge v = Some tf /\ transl_fundef ge f = OK tf.
+Proof (Genv.find_funct_transf_partial2 (transl_fundef ge) transl_globvar _ TRANSL).
 
 Lemma function_ptr_translated:
   forall b f,
   Genv.find_funct_ptr ge b = Some f ->
-  exists tf, Genv.find_funct_ptr tge b = Some tf /\ transl_fundef f = OK tf.
-Proof (Genv.find_funct_ptr_transf_partial2 transl_fundef transl_globvar _ TRANSL).
-
-Lemma var_info_translated:
-  forall b v,
-  Genv.find_var_info ge b = Some v ->
-  exists tv, Genv.find_var_info tge b = Some tv /\ transf_globvar transl_globvar v = OK tv.
-Proof (Genv.find_var_info_transf_partial2 transl_fundef transl_globvar _ TRANSL).
-
-Lemma var_info_rev_translated:
-  forall b tv,
-  Genv.find_var_info tge b = Some tv ->
-  exists v, Genv.find_var_info ge b = Some v /\ transf_globvar transl_globvar v = OK tv.
-Proof (Genv.find_var_info_rev_transf_partial2 transl_fundef transl_globvar _ TRANSL).
+  exists tf, Genv.find_funct_ptr tge b = Some tf /\ transl_fundef ge f = OK tf.
+Proof (Genv.find_funct_ptr_transf_partial2 (transl_fundef ge) transl_globvar _ TRANSL).
 
 Lemma block_is_volatile_preserved:
-  forall b, block_is_volatile tge b = block_is_volatile ge b.
-Proof.
-  intros. unfold block_is_volatile.
-  destruct (Genv.find_var_info ge b) eqn:?.
-  exploit var_info_translated; eauto. intros [tv [A B]]. rewrite A. 
-  unfold transf_globvar in B. monadInv B. auto.
-  destruct (Genv.find_var_info tge b) eqn:?.
-  exploit var_info_rev_translated; eauto. intros [tv [A B]]. congruence.
-  auto.
-Qed.
+  forall b, Genv.block_is_volatile tge b = Genv.block_is_volatile ge b.
+Proof (Genv.block_is_volatile_transf_partial2 (transl_fundef ge) transl_globvar _ TRANSL).
 
 (** * Matching between environments *)
 
@@ -792,7 +770,7 @@ Record match_env (e: Clight.env) (te: Csharpminor.env) : Prop :=
   mk_match_env {
     me_local:
       forall id b ty,
-      e!id = Some (b, ty) -> te!id = Some(b, sizeof ty);
+      e!id = Some (b, ty) -> te!id = Some(b, sizeof ge ty);
     me_local_inv:
       forall id b sz,
       te!id = Some (b, sz) -> exists ty, e!id = Some(b, ty)
@@ -811,18 +789,18 @@ Qed.
 Lemma match_env_same_blocks:
   forall e te,
   match_env e te ->
-  blocks_of_env te = Clight.blocks_of_env e.
+  blocks_of_env te = Clight.blocks_of_env ge e.
 Proof.
   intros.
   set (R := fun (x: (block * type)) (y: (block * Z)) =>
          match x, y with
-         | (b1, ty), (b2, sz) => b2 = b1 /\ sz = sizeof ty
+         | (b1, ty), (b2, sz) => b2 = b1 /\ sz = sizeof ge ty
          end).
   assert (list_forall2 
             (fun i_x i_y => fst i_x = fst i_y /\ R (snd i_x) (snd i_y))
             (PTree.elements e) (PTree.elements te)).
   apply PTree.elements_canonical_order.
-  intros id [b ty] GET. exists (b, sizeof ty); split. eapply me_local; eauto. red; auto.
+  intros id [b ty] GET. exists (b, sizeof ge ty); split. eapply me_local; eauto. red; auto.
   intros id [b sz] GET. exploit me_local_inv; eauto. intros [ty EQ].
   exploit me_local; eauto. intros EQ1. 
   exists (b, ty); split. auto. red; split; congruence.
@@ -838,7 +816,7 @@ Qed.
 Lemma match_env_free_blocks:
   forall e te m m',
   match_env e te ->
-  Mem.free_list m (Clight.blocks_of_env e) = Some m' ->
+  Mem.free_list m (Clight.blocks_of_env ge e) = Some m' ->
   Mem.free_list m (blocks_of_env te) = Some m'.
 Proof.
   intros. rewrite (match_env_same_blocks _ _ H). auto.
@@ -859,16 +837,16 @@ Qed.
 
 Lemma match_env_alloc_variables:
   forall e1 m1 vars e2 m2,
-  Clight.alloc_variables e1 m1 vars e2 m2 ->
+  Clight.alloc_variables ge e1 m1 vars e2 m2 ->
   forall te1,
   match_env e1 te1 ->
   exists te2,
-  Csharpminor.alloc_variables te1 m1 (map transl_var vars) te2 m2
+  Csharpminor.alloc_variables te1 m1 (map (transl_var ge) vars) te2 m2
   /\ match_env e2 te2.
 Proof.
   induction 1; intros; simpl.
   exists te1; split. constructor. auto.
-  exploit (IHalloc_variables (PTree.set id (b1, sizeof ty) te1)).
+  exploit (IHalloc_variables (PTree.set id (b1, sizeof ge ty) te1)).
   constructor.
     (* me_local *)
     intros until ty0. repeat rewrite PTree.gsspec.
@@ -933,11 +911,11 @@ Hypothesis MENV: match_env e te.
 Lemma transl_expr_lvalue_correct:
   (forall a v,
    Clight.eval_expr ge e le m a v ->
-   forall ta (TR: transl_expr a = OK ta) ,
+   forall ta (TR: transl_expr ge a = OK ta) ,
    Csharpminor.eval_expr tge te le m ta v)
 /\(forall a b ofs,
    Clight.eval_lvalue ge e le m a b ofs ->
-   forall ta (TR: transl_lvalue a = OK ta),
+   forall ta (TR: transl_lvalue ge a = OK ta),
    Csharpminor.eval_expr tge te le m ta (Vptr b ofs)).
 Proof.
   apply eval_expr_lvalue_ind; intros; try (monadInv TR).
@@ -959,6 +937,10 @@ Proof.
   eapply transl_binop_correct; eauto.
 (* cast *)
   eapply make_cast_correct; eauto.
+(* sizeof *)
+  apply make_intconst_correct.
+(* alignof *)
+  apply make_intconst_correct.
 (* rvalue out of lvalue *)
   exploit transl_expr_lvalue; eauto. intros [tb [TRLVAL MKLOAD]].
   eapply make_load_correct; eauto.  
@@ -972,32 +954,34 @@ Proof.
 (* deref *)
   simpl in TR. eauto. 
 (* field struct *)
-  simpl in TR. rewrite H1 in TR. monadInv TR.
+  change (prog_comp_env prog) with (genv_cenv ge) in EQ0.
+  unfold make_field_access in EQ0; rewrite H1, H2 in EQ0; monadInv EQ0.
   eapply eval_Ebinop; eauto.
   apply make_intconst_correct. 
   simpl. congruence.
 (* field union *)
-  simpl in TR. rewrite H1 in TR. eauto.
+  unfold make_field_access in EQ0; rewrite H1 in EQ0; monadInv EQ0.
+  auto.
 Qed.
 
 Lemma transl_expr_correct:
    forall a v,
    Clight.eval_expr ge e le m a v ->
-   forall ta, transl_expr a = OK ta ->
+   forall ta, transl_expr ge a = OK ta ->
    Csharpminor.eval_expr tge te le m ta v.
 Proof (proj1 transl_expr_lvalue_correct).
 
 Lemma transl_lvalue_correct:
    forall a b ofs,
    Clight.eval_lvalue ge e le m a b ofs ->
-   forall ta, transl_lvalue a = OK ta ->
+   forall ta, transl_lvalue ge a = OK ta ->
    Csharpminor.eval_expr tge te le m ta (Vptr b ofs).
 Proof (proj2 transl_expr_lvalue_correct).
 
 Lemma transl_arglist_correct:
   forall al tyl vl,
   Clight.eval_exprlist ge e le m al tyl vl ->
-  forall tal, transl_arglist al tyl = OK tal ->
+  forall tal, transl_arglist ge al tyl = OK tal ->
   Csharpminor.eval_exprlist tge te le m tal vl.
 Proof.
   induction 1; intros.
@@ -1055,21 +1039,21 @@ Inductive match_cont: type -> nat -> nat -> Clight.cont -> Csharpminor.cont -> P
   | match_Kstop: forall tyret nbrk ncnt,
       match_cont tyret nbrk ncnt Clight.Kstop Kstop
   | match_Kseq: forall tyret nbrk ncnt s k ts tk,
-      transl_statement tyret nbrk ncnt s = OK ts ->
+      transl_statement ge tyret nbrk ncnt s = OK ts ->
       match_cont tyret nbrk ncnt k tk ->
       match_cont tyret nbrk ncnt
                  (Clight.Kseq s k)
                  (Kseq ts tk)
   | match_Kloop1: forall tyret s1 s2 k ts1 ts2 nbrk ncnt tk,
-      transl_statement tyret 1%nat 0%nat s1 = OK ts1 ->
-      transl_statement tyret 0%nat (S ncnt) s2 = OK ts2 ->
+      transl_statement ge tyret 1%nat 0%nat s1 = OK ts1 ->
+      transl_statement ge tyret 0%nat (S ncnt) s2 = OK ts2 ->
       match_cont tyret nbrk ncnt k tk ->
       match_cont tyret 1%nat 0%nat
                  (Clight.Kloop1 s1 s2 k)
                  (Kblock (Kseq ts2 (Kseq (Sloop (Sseq (Sblock ts1) ts2)) (Kblock tk))))
   | match_Kloop2: forall tyret s1 s2 k ts1 ts2 nbrk ncnt tk,
-      transl_statement tyret 1%nat 0%nat s1 = OK ts1 ->
-      transl_statement tyret 0%nat (S ncnt) s2 = OK ts2 ->
+      transl_statement ge tyret 1%nat 0%nat s1 = OK ts1 ->
+      transl_statement ge tyret 0%nat (S ncnt) s2 = OK ts2 ->
       match_cont tyret nbrk ncnt k tk ->
       match_cont tyret 0%nat (S ncnt)
                  (Clight.Kloop2 s1 s2 k)
@@ -1080,7 +1064,7 @@ Inductive match_cont: type -> nat -> nat -> Clight.cont -> Csharpminor.cont -> P
                  (Clight.Kswitch k)
                  (Kblock tk)
   | match_Kcall_some: forall tyret nbrk ncnt nbrk' ncnt' f e k id tf te le tk,
-      transl_function f = OK tf ->
+      transl_function ge f = OK tf ->
       match_env e te ->
       match_cont (Clight.fn_return f) nbrk' ncnt' k tk ->
       match_cont tyret nbrk ncnt 
@@ -1090,8 +1074,8 @@ Inductive match_cont: type -> nat -> nat -> Clight.cont -> Csharpminor.cont -> P
 Inductive match_states: Clight.state -> Csharpminor.state -> Prop :=
   | match_state:
       forall f nbrk ncnt s k e le m tf ts tk te ts' tk'
-          (TRF: transl_function f = OK tf)
-          (TR: transl_statement (Clight.fn_return f) nbrk ncnt s = OK ts)
+          (TRF: transl_function ge f = OK tf)
+          (TR: transl_statement ge (Clight.fn_return f) nbrk ncnt s = OK ts)
           (MTR: match_transl ts tk ts' tk')
           (MENV: match_env e te)
           (MK: match_cont (Clight.fn_return f) nbrk ncnt k tk),
@@ -1099,7 +1083,7 @@ Inductive match_states: Clight.state -> Csharpminor.state -> Prop :=
                    (State tf ts' tk' te le m)
   | match_callstate:
       forall fd args k m tfd tk targs tres cconv
-          (TR: transl_fundef fd = OK tfd)
+          (TR: transl_fundef ge fd = OK tfd)
           (MK: match_cont Tvoid 0%nat 0%nat k tk)
           (ISCC: Clight.is_call_cont k)
           (TY: type_of_fundef fd = Tfunction targs tres cconv),
@@ -1113,7 +1097,7 @@ Inductive match_states: Clight.state -> Csharpminor.state -> Prop :=
 
 Remark match_states_skip:
   forall f e le te nbrk ncnt k tf tk m,
-  transl_function f = OK tf ->
+  transl_function ge f = OK tf ->
   match_env e te ->
   match_cont (Clight.fn_return f) nbrk ncnt k tk ->
   match_states (Clight.State f Clight.Sskip k e le m) (State tf Sskip tk te le m).
@@ -1129,27 +1113,27 @@ Variable tyret: type.
 
 Lemma transl_find_label:
   forall s nbrk ncnt k ts tk
-  (TR: transl_statement tyret nbrk ncnt s = OK ts)
+  (TR: transl_statement ge tyret nbrk ncnt s = OK ts)
   (MC: match_cont tyret nbrk ncnt k tk),
   match Clight.find_label lbl s k with
   | None => find_label lbl ts tk = None
   | Some (s', k') =>
       exists ts', exists tk', exists nbrk', exists ncnt',
       find_label lbl ts tk = Some (ts', tk')
-      /\ transl_statement tyret nbrk' ncnt' s' = OK ts'
+      /\ transl_statement ge tyret nbrk' ncnt' s' = OK ts'
       /\ match_cont tyret nbrk' ncnt' k' tk'
   end
 
 with transl_find_label_ls:
   forall ls nbrk ncnt k tls tk
-  (TR: transl_lbl_stmt tyret nbrk ncnt ls = OK tls)
+  (TR: transl_lbl_stmt ge tyret nbrk ncnt ls = OK tls)
   (MC: match_cont tyret nbrk ncnt k tk),
   match Clight.find_label_ls lbl ls k with
   | None => find_label_ls lbl tls tk = None
   | Some (s', k') =>
       exists ts', exists tk', exists nbrk', exists ncnt',
       find_label_ls lbl tls tk = Some (ts', tk')
-      /\ transl_statement tyret nbrk' ncnt' s' = OK ts'
+      /\ transl_statement ge tyret nbrk' ncnt' s' = OK ts'
       /\ match_cont tyret nbrk' ncnt' k' tk'
   end.
 
@@ -1288,10 +1272,8 @@ Proof.
   econstructor; split.
   apply plus_one. econstructor. 
   eapply transl_arglist_correct; eauto. 
-  eapply external_call_symbols_preserved_2; eauto.
-  exact symbols_preserved. exact public_preserved.
-  eexact (Genv.find_var_info_transf_partial2 transl_fundef transl_globvar _ TRANSL).
-  eexact (Genv.find_var_info_rev_transf_partial2 transl_fundef transl_globvar _ TRANSL).
+  eapply external_call_symbols_preserved_gen with (ge1 := ge).
+  exact symbols_preserved. exact public_preserved. exact block_is_volatile_preserved. eauto.
   eapply match_states_skip; eauto.
 
 (* seq *)
@@ -1362,7 +1344,8 @@ Proof.
   monadInv TR. inv MTR. inv MK.
   econstructor; split.
   apply plus_one. constructor.
-  econstructor; eauto. 
+  econstructor; eauto.
+Local Opaque ge. 
   simpl. rewrite H5; simpl. rewrite H7; simpl. eauto. 
   constructor. 
 
@@ -1469,10 +1452,8 @@ Proof.
   exploit match_cont_is_call_cont; eauto. intros [A B].
   econstructor; split.
   apply plus_one. constructor. eauto. 
-  eapply external_call_symbols_preserved_2; eauto.
-  exact symbols_preserved. exact public_preserved.
-  eexact (Genv.find_var_info_transf_partial2 transl_fundef transl_globvar _ TRANSL).
-  eexact (Genv.find_var_info_rev_transf_partial2 transl_fundef transl_globvar _ TRANSL).
+  eapply external_call_symbols_preserved_gen with (ge1 := ge).
+  exact symbols_preserved. exact public_preserved. exact block_is_volatile_preserved. eauto.
   econstructor; eauto.
 
 (* returnstate *)
@@ -1488,9 +1469,10 @@ Lemma transl_initial_states:
 Proof.
   intros. inv H.
   exploit function_ptr_translated; eauto. intros [tf [A B]].
-  assert (C: Genv.find_symbol tge (prog_main tprog) = Some b).
-    rewrite symbols_preserved. replace (prog_main tprog) with (prog_main prog).
-    auto. symmetry. unfold transl_program in TRANSL. 
+  assert (C: Genv.find_symbol tge (AST.prog_main tprog) = Some b).
+    rewrite symbols_preserved. replace (AST.prog_main tprog) with (prog_main prog).
+    auto. symmetry. unfold transl_program in TRANSL.
+    change (prog_main prog) with (AST.prog_main (program_of_program prog)).
     eapply transform_partial_program2_main; eauto.
   assert (funsig tf = signature_of_type Tnil type_int32s cc_default).
     eapply transl_fundef_sig2; eauto. 

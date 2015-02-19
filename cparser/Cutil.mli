@@ -58,12 +58,28 @@ val attr_inherited_by_members: attribute -> bool
   (* Is an attribute of a composite inherited by members of the composite? *)
 
 (* Type compatibility *)
-val compatible_types : ?noattrs: bool -> Env.t -> typ -> typ -> bool
+
+type attr_handling =
+  | AttrCompat
+  | AttrIgnoreTop
+  | AttrIgnoreAll
+
+val compatible_types : attr_handling -> Env.t -> typ -> typ -> bool
   (* Check that the two given types are compatible.  
-     If [noattrs], ignore attributes (recursively). *)
-val combine_types : ?noattrs: bool -> Env.t -> typ -> typ -> typ option
+     The attributes in the types are compared according to the first argument:
+- [AttrCompat]: the types must have the same standard attributes
+    ([const], [volatile], [restrict]) but may differ on custom attributes.
+- [AttrIgnoreTop]: the top-level attributes of the two types are ignored,
+    but attributes of e.g. types of pointed objects (for pointer types)
+    are compared as per [AttrCompat].
+- [AttrIgnoreAll]: recursively ignore the attributes in the two types. *)
+val combine_types : attr_handling -> Env.t -> typ -> typ -> typ option
   (* Like [compatible_types], but if the two types are compatible,
-     return the most precise type compatible with both. *)
+     return the most precise type compatible with both.
+     The attributes are compared according to the first argument,
+     with the same meaning as for [compatible_types].
+     When two sets of attributes are compatible, the result of
+     [combine_types] carries the union of these two sets of attributes. *)
 
 (* Size and alignment *)
 
@@ -73,11 +89,13 @@ val sizeof : Env.t -> typ -> int option
 val alignof : Env.t -> typ -> int option
   (* Return the natural alignment of the given type, in bytes.
      Machine-dependent. [None] is returned if the type is incomplete. *)
-val sizeof_ikind: ikind -> int
-  (* Return the size of the given integer kind. *)
 val incomplete_type : Env.t -> typ -> bool
   (* Return true if the given type is incomplete, e.g.
      declared but not defined struct or union, or array type  without a size. *)
+val sizeof_ikind: ikind -> int
+  (* Return the size of the given integer kind. *)
+val is_signed_ikind: ikind -> bool
+  (* Return true if the given integer kind is signed, false if unsigned. *)
 
 (* Computing composite_info records *)
 
@@ -140,14 +158,14 @@ val default_argument_conversion : Env.t -> typ -> typ
 (* Special types *)
 val enum_ikind : ikind
   (* Integer kind for enum values.  Always [IInt]. *)
-val wchar_ikind : ikind
-  (* Integer kind for wchar_t type.  Unsigned. *)
-val size_t_ikind : ikind
+val wchar_ikind : unit -> ikind
+  (* Integer kind for wchar_t type. *)
+val size_t_ikind : unit -> ikind
   (* Integer kind for size_t type.  Unsigned. *)
-val ptr_t_ikind : ikind
+val ptr_t_ikind : unit -> ikind
   (* Integer kind for ptr_t type.  Smallest unsigned kind large enough
      to contain a pointer without information loss. *)
-val ptrdiff_t_ikind : ikind
+val ptrdiff_t_ikind : unit -> ikind
   (* Integer kind for ptrdiff_t type.  Smallest signed kind large enough
      to contain the difference between two pointers. *)
 

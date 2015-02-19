@@ -1144,10 +1144,10 @@ Qed.
 Theorem transl_program_spec:
   forall p tp,
   transl_program p = OK tp ->
-  match_program tr_fundef (fun v1 v2 => v1 = v2) nil p.(prog_main) p tp.
+  match_program tr_fundef (fun v1 v2 => v1 = v2) nil (Csyntax.prog_main p) p tp.
 Proof.
   unfold transl_program; intros. 
-  destruct (transl_globdefs (prog_defs p) (initial_generator tt)) eqn:E; simpl in H; inv H.
+  destruct (transl_globdefs (Csyntax.prog_defs p) (initial_generator tt)) eqn:E; simpl in H; inv H.
   split; auto. exists l; split. eapply transl_globdefs_spec; eauto. 
   rewrite <- app_nil_end; auto.
 Qed.
