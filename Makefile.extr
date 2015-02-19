@@ -75,9 +75,10 @@ OCAMLLEX=ocamllex -q
 MODORDER=tools/modorder .depend.extr
 
 PARSERS=backend/CMparser.mly cparser/pre_parser.mly
-LEXERS=backend/CMlexer.mll cparser/Lexer.mll lib/Tokenize.mll
+LEXERS=backend/CMlexer.mll cparser/Lexer.mll \
+       lib/Tokenize.mll lib/Readconfig.mll
 
-LIBS=str.cmxa
+LIBS=str.cmxa unix.cmxa
 
 EXECUTABLES=ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte
 GENERATED=$(PARSERS:.mly=.mli) $(PARSERS:.mly=.ml) $(LEXERS:.mll=.ml)
