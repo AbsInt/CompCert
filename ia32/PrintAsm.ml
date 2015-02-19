@@ -80,7 +80,7 @@ module Cygwin_System =
     let raw_symbol oc s =
        fprintf oc "_%s" s
 
-    let symbol oc s =
+    let symbol oc symb =
       raw_symbol oc (extern_atom symb)
 
     let label oc lbl =
@@ -122,55 +122,6 @@ module Cygwin_System =
 
   end:SYSTEM)
 
-(* Printer functions for cygwin *)
-module Mingw_System =
-  (struct
-
-    let raw_symbol oc s =
-       fprintf oc "_%s" s
-
-    let symbol oc symb =
-      fprintf oc "_%s" (extern_atom symb)
-
-    let label oc lbl =
-       fprintf oc "L%d" lbl
-        
-    let name_of_section = function
-      | Section_text -> ".text"
-      | Section_data i | Section_small_data i ->
-          if i then ".data" else "COMM"
-      | Section_const i | Section_small_const i ->
-          if i then ".section	.rdata,\"dr\"" else "COMM"
-      | Section_string -> ".section	.rdata,\"dr\""
-      | Section_literal -> ".section	.rdata,\"dr\""
-      | Section_jumptable -> ".text"
-      | Section_user(s, wr, ex) ->
-          sprintf ".section	\"%s\", \"%s\"\n"
-            s (if ex then "xr" else if wr then "d" else "dr")
-
-    let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
-
-    let print_align oc n =
-      fprintf oc "	.align	%d\n" n
-    
-    let print_mov_ra oc rd id =   
-      fprintf oc "	movl	$%a, %a\n" symbol id ireg rd
-
-    let print_fun_info _ _ = ()
-        
-    let print_var_info _ _ = ()
-
-    let print_epilogue _ = ()
-
-    let print_comm_decl oc name sz al =
-      fprintf oc "	.comm	%a, %s, %d\n" symbol name (Z.to_string sz) al
-
-    let print_lcomm_decl oc name sz al =
-      fprintf oc "	.lcomm	%a, %s, %d\n"
-                 symbol name (Z.to_string sz) al
-
-  end:SYSTEM)
-
 (* Printer functions for ELF *)
 module ELF_System =
   (struct
@@ -178,7 +129,7 @@ module ELF_System =
     let raw_symbol oc s =
       fprintf oc "%s" s
 
-   let symbol oc s =
+   let symbol oc symb =
       raw_symbol oc (extern_atom symb)
 
     let label oc lbl =
@@ -231,7 +182,7 @@ module MacOS_System =
     let raw_symbol oc s =
      fprintf oc "_%s" s
 
-    let symbol oc s =
+    let symbol oc symb =
       raw_symbol oc (extern_atom symb)
 
     let label oc lbl =
@@ -1082,7 +1033,6 @@ let print_program oc p =
   | "macosx" -> (module MacOS_System:SYSTEM)
   | "linux" | "bsd" -> (module ELF_System:SYSTEM)
   | "cygwin" -> (module Cygwin_System:SYSTEM)
-  | "mingw" ->   (module Mingw_System:SYSTEM)
   | _ ->  invalid_arg ("System " ^ Configuration.system ^ " not supported")):SYSTEM) in
   let module Printer = AsmPrinter(Target) in
   PrintAnnot.print_version_and_options oc Printer.comment;
