@@ -60,6 +60,7 @@ let preg oc = function
 module type SYSTEM =
     sig
       val raw_symbol: out_channel -> string -> unit
+      val symbol: out_channel -> P.t -> unit
       val label: out_channel -> int -> unit
       val name_of_section: section_name -> string
       val stack_alignment: int
@@ -78,6 +79,9 @@ module Cygwin_System =
 
     let raw_symbol oc s =
        fprintf oc "_%s" s
+
+    let symbol oc s =
+      raw_symbol oc (extern_atom symb)
 
     let label oc lbl =
        fprintf oc "L%d" lbl
@@ -124,6 +128,9 @@ module ELF_System =
     
     let raw_symbol oc s =
       fprintf oc "%s" s
+
+   let symbol oc s =
+      raw_symbol oc (extern_atom symb)
 
     let label oc lbl =
       fprintf oc ".L%d" lbl
@@ -174,6 +181,9 @@ module MacOS_System =
     
     let raw_symbol oc s =
      fprintf oc "_%s" s
+
+    let symbol oc s =
+      raw_symbol oc (extern_atom symb)
 
     let label oc lbl =
       fprintf oc "L%d" lbl
@@ -238,9 +248,6 @@ module AsmPrinter(Target: SYSTEM) =
   (struct
     open Target
 (* On-the-fly label renaming *)
-
-let symbol oc symb =
-  raw_symbol oc (extern_atom symb)
 
 let next_label = ref 100
 
