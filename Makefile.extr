@@ -79,6 +79,7 @@ LEXERS=backend/CMlexer.mll cparser/Lexer.mll \
        lib/Tokenize.mll lib/Readconfig.mll
 
 LIBS=str.cmxa unix.cmxa
+CHECKLINK_LIBS=str.cmxa
 
 EXECUTABLES=ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte
 GENERATED=$(PARSERS:.mly=.mli) $(PARSERS:.mly=.ml) $(LEXERS:.mll=.ml)
@@ -103,11 +104,11 @@ CCHECKLINK_OBJS:=$(shell $(MODORDER) checklink/Validator.cmx)
 
 cchecklink: $(CCHECKLINK_OBJS)
 	@echo "Linking $@"
-	@$(OCAMLOPT_P4) -linkpkg -o $@ $(LIBS) $+
+	@$(OCAMLOPT_P4) -linkpkg -o $@ $(CHECKLINK_LIBS) $+
 
 cchecklink.byte: $(CCHECKLINK_OBJS:.cmx=.cmo)
 	@echo "Linking $@"
-	@$(OCAMLC_P4) -linkpkg -o $@ $(LIBS:.cmxa=.cma) $+
+	@$(OCAMLC_P4) -linkpkg -o $@ $(CHECKLINK_LIBS:.cmxa=.cma) $+
 
 endif
 
