@@ -20,17 +20,38 @@ open Timing
 
 let stdlib_path = ref Configuration.stdlib_path
 
-let command cmd =
+(* Invocation of external tools *)
+
+let command ?stdout args =
   if !option_v then begin
-    prerr_string "+ "; prerr_string cmd; prerr_endline ""
+    eprintf "+ %s" (String.concat " " args);
+    begin match stdout with
+    | None -> ()
+    | Some f -> eprintf " > %s" f
+    end;
+    prerr_endline ""
   end;
-  Sys.command cmd
-
-let quote_options opts =
-  String.concat " " (List.rev_map Filename.quote opts)
-
-let quote_arguments args =
-  String.concat " " (List.map Filename.quote args)
+  let argv = Array.of_list args in
+  assert (Array.length argv > 0);
+  try
+    let fd_out =
+      match stdout with
+      | None -> Unix.stdout
+      | Some f ->
+          Unix.openfile f [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC] 0o666 in
+    let pid =
+      Unix.create_process argv.(0) argv Unix.stdin fd_out Unix.stderr in
+    let (_, status) =
+      Unix.waitpid [] pid in
+    if stdout <> None then Unix.close fd_out;
+    match status with
+    | Unix.WEXITED rc -> rc
+    | Unix.WSIGNALED n | Unix.WSTOPPED n ->
+        eprintf "Command '%s' killed on a signal.\n" argv.(0); -1
+  with Unix.Unix_error(err, fn, param) ->
+    eprintf "Error executing '%s': %s: %s %s\n"
+            argv.(0) fn (Unix.error_message err) param;
+    -1
 
 let safe_remove file =
   try Sys.remove file with Sys_error _ -> ()
@@ -68,16 +89,17 @@ let output_filename_default default_file =
 
 let preprocess ifile ofile =
   let output =
-    if ofile = "-" then "" else sprintf "> %s" ofile in
-  let cmd =
-    sprintf "%s -D__COMPCERT__ %s %s %s %s"
-      Configuration.prepro
-      (if Configuration.has_runtime_lib
-       then sprintf "-I%s" !stdlib_path
-       else "")
-      (quote_options !prepro_options)
-      ifile output in
-  if command cmd <> 0 then begin
+    if ofile = "-" then None else Some ofile in
+  let cmd = List.concat [
+    Configuration.prepro;
+    ["-D__COMPCERT__"];
+    (if Configuration.has_runtime_lib
+     then ["-I" ^ !stdlib_path]
+     else []);
+    List.rev !prepro_options;
+    [ifile]
+  ] in
+  if command ?stdout:output cmd <> 0 then begin
     if ofile <> "-" then safe_remove ofile;
     eprintf "Error during preprocessing.\n";
     exit 2
@@ -208,11 +230,13 @@ let compile_cminor_file ifile ofile =
 (* From asm to object file *)
 
 let assemble ifile ofile =
-  let cmd =
-    sprintf "%s -o %s %s %s"
-      Configuration.asm ofile (quote_options !assembler_options) ifile in
-  let retcode = command cmd in
-  if retcode <> 0 then begin
+  let cmd = List.concat [
+    Configuration.asm;
+    ["-o"; ofile];
+    List.rev !assembler_options;
+    [ifile]
+  ] in
+  if command cmd <> 0 then begin
     safe_remove ofile;
     eprintf "Error during assembling.\n";
     exit 2
@@ -221,14 +245,14 @@ let assemble ifile ofile =
 (* Linking *)
 
 let linker exe_name files =
-  let cmd =
-    sprintf "%s -o %s %s %s"
-      Configuration.linker
-      (Filename.quote exe_name)
-      (quote_arguments files)
-      (if Configuration.has_runtime_lib
-       then sprintf "-L%s -lcompcert" !stdlib_path
-       else "") in
+  let cmd = List.concat [
+    Configuration.linker;
+    ["-o"; exe_name];
+    files;
+    (if Configuration.has_runtime_lib
+     then ["-L" ^ !stdlib_path; "-lcompcert"]
+     else [])
+  ] in
   if command cmd <> 0 then exit 2
 
 (* Processing of a .c file *)
