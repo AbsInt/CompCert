@@ -132,9 +132,20 @@ let coqfloat p n =
 let coqsingle p n =
   fprintf p "(Float32.of_bits %a)" coqint (Floats.Float32.to_bits n)
 
-(* Types *)
+let coqN p n =
+  fprintf p "%ld%%N" (N.to_int32 n)
 
-let use_struct_names = ref true
+(* Raw attributes *)
+
+let attribute p a =
+  if a = noattr then
+    fprintf p "noattr"
+  else
+    fprintf p "{| attr_volatile := %B; attr_alignas := %a |}"
+              a.attr_volatile
+              (print_option coqN) a.attr_alignas
+
+(* Types *)
 
 let rec typ p t =
   match attr_of_type t with
@@ -143,9 +154,9 @@ let rec typ p t =
   | { attr_volatile = true; attr_alignas = None} ->
         fprintf p "(tvolatile %a)" rtyp t
   | { attr_volatile = false; attr_alignas = Some n} ->
-        fprintf p "(talignas %ld%%N %a)" (N.to_int32 n) rtyp t
+        fprintf p "(talignas %a %a)" coqN n rtyp t
   | { attr_volatile = true; attr_alignas = Some n} ->
-        fprintf p "(tvolatile_alignas %ld%%N %a)" (N.to_int32 n) rtyp t
+        fprintf p "(tvolatile_alignas %a %a)" coqN n rtyp t
 
 and rtyp p = function
   | Tvoid -> fprintf p "tvoid"
@@ -176,28 +187,16 @@ and rtyp p = function
   | Tfunction(targs, tres, cc) ->
       fprintf p "@[<hov 2>(Tfunction@ %a@ %a@ %a)@]"
                 typlist targs typ tres callconv cc
-  | Tstruct(id, flds, _) ->
-      if !use_struct_names
-      then fprintf p "t%a" ident id
-      else fprintf p "@[<hov 2>(Tstruct %a@ %a@ noattr)@]" ident id fieldlist flds
-  | Tunion(id, flds, _) ->
-      if !use_struct_names
-      then fprintf p "t%a" ident id
-      else fprintf p "@[<hov 2>(Tunion %a@ %a@ noattr)@]" ident id fieldlist flds
-  | Tcomp_ptr(id, _) ->
-      fprintf p "(Tcomp_ptr %a noattr)" ident id
+  | Tstruct(id, _) ->
+      fprintf p "(Tstruct %a noattr)" ident id
+  | Tunion(id, _) ->
+      fprintf p "(Tunion %a noattr)" ident id
 
 and typlist p = function
   | Tnil ->
       fprintf p "Tnil"
   | Tcons(t, tl) ->
       fprintf p "@[<hov 2>(Tcons@ %a@ %a)@]" typ t typlist tl
-
-and fieldlist p = function
-  | Fnil ->
-      fprintf p "Fnil"
-  | Fcons(id, t, fl) ->
-      fprintf p "@[<hov 2>(Fcons %a@ %a@ %a)@]" ident id typ t fieldlist fl
 
 and callconv p cc =
   if cc = cc_default
@@ -323,6 +322,10 @@ let rec expr p = function
          (name_binop op) expr a1 expr a2 typ t
   | Ecast(a1, t) ->
       fprintf p "@[<hov 2>(Ecast@ %a@ %a)@]" expr a1 typ t
+  | Esizeof(t1, t) ->
+      fprintf p "(Esizeof %a %a)" typ t1 typ t
+  | Ealignof(t1, t) ->
+      fprintf p "(Ealignof %a %a)" typ t1 typ t
 
 (* Statements *)
 
@@ -420,115 +423,14 @@ let print_ident_globdef p = function
   | (id, Gvar v) ->
       fprintf p "(%a, Gvar v_%s)" ident id (extern_atom id)
 
-(* Collecting the names and fields of structs and unions *)
+(* Composite definitions *)
 
-module TypeSet = Set.Make(struct
-  type t = coq_type
-  let compare = Pervasives.compare
-end)
-
-let struct_unions = ref TypeSet.empty
-
-let register_struct_union ty =
-  struct_unions := TypeSet.add ty !struct_unions
-
-let rec collect_type = function
-  | Tvoid -> ()
-  | Tint _ -> ()
-  | Tlong _ -> ()
-  | Tfloat _ -> ()
-  | Tpointer(t, _) -> collect_type t
-  | Tarray(t, _, _) -> collect_type t
-  | Tfunction(args, res, _) -> collect_type_list args; collect_type res
-  | Tstruct(id, fld, _) ->
-      register_struct_union (Tstruct(id, fld, noattr)) (*; collect_fields fld*)
-  | Tunion(id, fld, _) ->
-      register_struct_union (Tunion(id, fld, noattr)) (*; collect_fields fld*)
-  | Tcomp_ptr _ -> ()
-
-and collect_type_list = function
-  | Tnil -> ()
-  | Tcons(hd, tl) -> collect_type hd; collect_type_list tl
-
-and collect_fields = function
-  | Fnil -> ()
-  | Fcons(id, hd, tl) -> collect_type hd; collect_fields tl
-
-let rec collect_expr e =
-  collect_type (typeof e);
-  match e with
-  | Econst_int _ -> ()
-  | Econst_float _ -> ()
-  | Econst_long _ -> ()
-  | Econst_single _ -> ()
-  | Evar _ -> ()
-  | Etempvar _ -> ()
-  | Ederef(r, _) -> collect_expr r
-  | Efield(l, _, _) -> collect_expr l
-  | Eaddrof(l, _) -> collect_expr l
-  | Eunop(_, r, _) -> collect_expr r
-  | Ebinop(_, r1, r2, _) -> collect_expr r1; collect_expr r2
-  | Ecast(r, _) -> collect_expr r
-
-let rec collect_exprlist = function
-  | [] -> ()
-  | r1 :: rl -> collect_expr r1; collect_exprlist rl
-
-let rec temp_of_expr = function
-  | Etempvar(tmp, _) -> Some tmp
-  | Ecast(e, _) -> temp_of_expr e
-  | _ -> None
-
-let rec collect_stmt = function
-  | Sskip -> ()
-  | Sassign(e1, e2) -> collect_expr e1; collect_expr e2
-  | Sset(id, e2) ->
-      begin match temp_of_expr e2 with
-      | Some tmp -> name_temporary tmp id
-      | None -> ()
-      end;
-      collect_expr e2
-  | Scall(optid, e1, el) -> collect_expr e1; collect_exprlist el
-  | Sbuiltin(optid, ef, tyl, el) -> collect_exprlist el
-  | Ssequence(s1, s2) -> collect_stmt s1; collect_stmt s2
-  | Sifthenelse(e, s1, s2) -> collect_expr e; collect_stmt s1; collect_stmt s2
-  | Sloop(s1, s2) -> collect_stmt s1; collect_stmt s2
-  | Sbreak -> ()
-  | Scontinue -> ()
-  | Sswitch(e, cases) -> collect_expr e; collect_cases cases
-  | Sreturn None -> ()
-  | Sreturn (Some e) -> collect_expr e
-  | Slabel(lbl, s) -> collect_stmt s
-  | Sgoto lbl -> ()
-
-and collect_cases = function
-  | LSnil -> ()
-  | LScons(lbl, s, rem) -> collect_stmt s; collect_cases rem
-
-let collect_function f =
-  collect_type f.fn_return;
-  List.iter (fun (id, ty) -> collect_type ty) f.fn_params;
-  List.iter (fun (id, ty) -> collect_type ty) f.fn_vars;
-  List.iter (fun (id, ty) -> collect_type ty) f.fn_temps;
-  collect_stmt f.fn_body
-
-let collect_globdef (id, gd) =
-  match gd with
-  | Gfun(External(_, args, res, _)) -> collect_type_list args; collect_type res
-  | Gfun(Internal f) -> collect_function f
-  | Gvar v -> collect_type v.gvar_info
-
-let define_struct p ty =
-  match ty with
-  | Tstruct(id, _, _) | Tunion(id, _, _) ->
-      fprintf p "@[<hv 2>Definition t%a :=@  %a.@]@ " ident id typ ty
-  | _ -> assert false
-
-let define_structs p prog =
-  use_struct_names := false;
-  TypeSet.iter (define_struct p) !struct_unions;
-  use_struct_names := true;
-  fprintf p "@ "
+let print_composite_definition p (Composite(id, su, m, a)) =
+  fprintf p "@[<hv 2>Composite %a %s@ %a@ %a@]"
+    ident id
+    (match su with Struct -> "Struct" | Union -> "Union")
+    (print_list (print_pair ident typ)) m
+    attribute a
 
 (* Assertion processing *)
 
@@ -605,14 +507,18 @@ let print_program p prog =
   fprintf p "%s" prologue;
   Hashtbl.clear temp_names;
   all_temp_names := StringSet.empty;
-  struct_unions := TypeSet.empty;
-  List.iter collect_globdef prog.prog_defs;
   define_idents p;
-  define_structs p prog;
   List.iter (print_globdef p) prog.prog_defs;
+  fprintf p "Definition composites : list composite_definition :=@ ";
+  print_list print_composite_definition p prog.prog_types;
+  fprintf p ".@ @ ";
   fprintf p "Definition prog : Clight.program := {|@ ";
   fprintf p "prog_defs :=@ %a;@ " (print_list print_ident_globdef) prog.prog_defs;
-  fprintf p "prog_main := %a@ " ident prog.prog_main;
+  fprintf p "prog_public :=@ %a;@ " (print_list ident) prog.prog_public;
+  fprintf p "prog_main := %a;@ " ident prog.prog_main;
+  fprintf p "prog_types := composites;@ ";
+  fprintf p "prog_comp_env := make_composite_env composites;@ ";
+  fprintf p "prog_comp_env_eq := refl_equal _@ ";
   fprintf p "|}.@ ";
   print_assertions p;
   fprintf p "@]@."

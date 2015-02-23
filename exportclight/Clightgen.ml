@@ -14,24 +14,45 @@
 (* *********************************************************************)
 
 open Printf
+open Commandline
 open Clflags
 
 (* Location of the compatibility library *)
 
-let stdlib_path = ref(
-  try
-    Sys.getenv "COMPCERT_LIBRARY"
-  with Not_found ->
-    Configuration.stdlib_path)
+let stdlib_path = ref Configuration.stdlib_path
 
-let command cmd =
+(* Invocation of external tools *)
+
+let command ?stdout args =
   if !option_v then begin
-    prerr_string "+ "; prerr_string cmd; prerr_endline ""
+    eprintf "+ %s" (String.concat " " args);
+    begin match stdout with
+    | None -> ()
+    | Some f -> eprintf " > %s" f
+    end;
+    prerr_endline ""
   end;
-  Sys.command cmd
-
-let quote_options opts =
-  String.concat " " (List.rev_map Filename.quote opts)
+  let argv = Array.of_list args in
+  assert (Array.length argv > 0);
+  try
+    let fd_out =
+      match stdout with
+      | None -> Unix.stdout
+      | Some f ->
+          Unix.openfile f [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC] 0o666 in
+    let pid =
+      Unix.create_process argv.(0) argv Unix.stdin fd_out Unix.stderr in
+    let (_, status) =
+      Unix.waitpid [] pid in
+    if stdout <> None then Unix.close fd_out;
+    match status with
+    | Unix.WEXITED rc -> rc
+    | Unix.WSIGNALED n | Unix.WSTOPPED n ->
+        eprintf "Command '%s' killed on a signal.\n" argv.(0); -1
+  with Unix.Unix_error(err, fn, param) ->
+    eprintf "Error executing '%s': %s: %s %s\n"
+            argv.(0) fn (Unix.error_message err) param;
+    -1
 
 let safe_remove file =
   try Sys.remove file with Sys_error _ -> ()
@@ -47,20 +68,32 @@ let print_error oc msg =
     List.iter print_one_error msg;
     output_char oc '\n'
 
+(* Determine names for output files.  We use -o option if specified
+   and if this is the final destination file (not a dump file).
+   Otherwise, we generate a file in the current directory. *)
+
+let output_filename ?(final = false) source_file source_suffix output_suffix =
+  match !option_o with
+  | Some file when final -> file
+  | _ -> 
+    Filename.basename (Filename.chop_suffix source_file source_suffix)
+    ^ output_suffix
+
 (* From C to preprocessed C *)
 
 let preprocess ifile ofile =
   let output =
-    if ofile = "-" then "" else sprintf "> %s" ofile in
-  let cmd =
-    sprintf "%s -D__COMPCERT__ %s %s %s %s"
-      Configuration.prepro
-      (if Configuration.has_runtime_lib
-       then sprintf "-I%s" !stdlib_path
-       else "")
-      (quote_options !prepro_options)
-      ifile output in
-  if command cmd <> 0 then begin
+    if ofile = "-" then None else Some ofile in
+  let cmd = List.concat [
+    Configuration.prepro;
+    ["-D__COMPCERT__"];
+    (if Configuration.has_runtime_lib
+     then ["-I" ^ !stdlib_path]
+     else []);
+    List.rev !prepro_options;
+    [ifile]
+  ] in
+  if command ?stdout:output cmd <> 0 then begin
     if ofile <> "-" then safe_remove ofile;
     eprintf "Error during preprocessing.\n";
     exit 2
@@ -82,24 +115,22 @@ let parse_c_file sourcename ifile =
     match Parse.preprocessed_file simplifs sourcename ifile with
     | None -> exit 2
     | Some p -> p in
-  (* Remove preprocessed file (always a temp file) *)
-  safe_remove ifile;
   (* Save C AST if requested *)
   if !option_dparse then begin
-    let ofile = Filename.chop_suffix sourcename ".c" ^ ".parsed.c" in
+    let ofile = output_filename sourcename ".c" ".parsed.c" in
     let oc = open_out ofile in
     Cprint.program (Format.formatter_of_out_channel oc) ast;
     close_out oc
   end;
   (* Conversion to Csyntax *)
   let csyntax =
-    match C2C.convertProgram ast with
+    match Timing.time "CompCert C generation" C2C.convertProgram ast with
     | None -> exit 2
     | Some p -> p in
   flush stderr;
   (* Save CompCert C AST if requested *)
   if !option_dcmedium then begin
-    let ofile = Filename.chop_suffix sourcename ".c" ^ ".compcert.c" in
+    let ofile = output_filename sourcename ".c" ".compcert.c" in
     let oc = open_out ofile in
     PrintCsyntax.print_program (Format.formatter_of_out_channel oc) csyntax;
     close_out oc
@@ -157,59 +188,6 @@ let explode_comma_option s =
   | [] -> assert false
   | hd :: tl -> tl
 
-type action =
-  | Set of bool ref
-  | Unset of bool ref
-  | Self of (string -> unit)
-  | String of (string -> unit)
-  | Integer of (int -> unit)
-
-let rec find_action s = function
-  | [] -> None
-  | (re, act) :: rem ->
-      if Str.string_match re s 0 then Some act else find_action s rem
-
-let parse_cmdline spec usage =
-  let acts = List.map (fun (pat, act) -> (Str.regexp pat, act)) spec in
-  let error () =
-    eprintf "%s" usage;
-    exit 2 in
-  let rec parse i =
-    if i < Array.length Sys.argv then begin
-      let s = Sys.argv.(i) in
-      match find_action s acts with
-      | None ->
-          if s <> "-help" && s <> "--help" 
-          then eprintf "Unknown argument `%s'\n" s;
-          error ()
-      | Some(Set r) ->
-          r := true; parse (i+1)
-      | Some(Unset r) ->
-          r := false; parse (i+1)
-      | Some(Self fn) ->
-          fn s; parse (i+1)
-      | Some(String fn) ->
-          if i + 1 < Array.length Sys.argv then begin
-            fn Sys.argv.(i+1); parse (i+2)
-          end else begin
-            eprintf "Option `%s' expects an argument\n" s; error()
-          end
-      | Some(Integer fn) ->
-          if i + 1 < Array.length Sys.argv then begin
-            let n =
-              try
-                int_of_string Sys.argv.(i+1)
-              with Failure _ ->
-                eprintf "Argument to option `%s' must be an integer\n" s;
-                error()
-            in
-            fn n; parse (i+2)
-          end else begin
-            eprintf "Option `%s' expects an argument\n" s; error()
-          end
-    end
-  in parse 1
-
 let usage_string =
 "The CompCert Clight generator
 Usage: clightgen [options] <source files>
@@ -238,36 +216,63 @@ General options:
   -v             Print external commands before invoking them
 "
 
+let print_usage_and_exit _ =
+  printf "%s" usage_string; exit 0
+
 let language_support_options = [
   option_fbitfields; option_flongdouble;
-  option_fstruct_return; option_fvararg_calls; option_fpacked_structs
+  option_fstruct_return; option_fvararg_calls; option_funprototyped;
+  option_fpacked_structs; option_finline_asm
 ]
+
+let set_all opts = List.iter (fun r -> r := true) opts
+let unset_all opts = List.iter (fun r -> r := false) opts
 
 let cmdline_actions =
   let f_opt name ref =
-    ["-f" ^ name ^ "$", Set ref; "-fno-" ^ name ^ "$", Unset ref] in
+    [Exact("-f" ^ name), Set ref; Exact("-fno-" ^ name), Unset ref] in
   [
-  "-I$", String(fun s -> prepro_options := s :: "-I" :: !prepro_options);
-  "-D$", String(fun s -> prepro_options := s :: "-D" :: !prepro_options);
-  "-U$", String(fun s -> prepro_options := s :: "-U" :: !prepro_options);
-  "-[IDU].", Self(fun s -> prepro_options := s :: !prepro_options);
-  "-dparse$", Set option_dparse;
-  "-dc$", Set option_dcmedium;
-  "-dclight$", Set option_dclight;
-  "-E$", Set option_E;
-  ".*\\.c$", Self (fun s -> process_c_file s);
-  "-Wp,", Self (fun s ->
-      prepro_options := List.rev_append (explode_comma_option s) !prepro_options);
-  "-fall$", Self (fun _ ->
-              List.iter (fun r -> r := true) language_support_options);
-  "-fnone$", Self (fun _ ->
-              List.iter (fun r -> r := false) language_support_options);
+(* Getting help *)
+  Exact "-help", Self print_usage_and_exit;
+  Exact "--help", Self print_usage_and_exit;
+(* Processing options *)
+  Exact "-E", Set option_E;
+(* Preprocessing options *)
+  Exact "-I", String(fun s -> prepro_options := s :: "-I" :: !prepro_options);
+  Prefix "-I", Self(fun s -> prepro_options := s :: !prepro_options);
+  Exact "-D", String(fun s -> prepro_options := s :: "-D" :: !prepro_options);
+  Prefix "-D", Self(fun s -> prepro_options := s :: !prepro_options);
+  Exact "-U", String(fun s -> prepro_options := s :: "-U" :: !prepro_options);
+  Prefix "-U", Self(fun s -> prepro_options := s :: !prepro_options);
+  Prefix "-Wp,", Self (fun s ->
+    prepro_options := List.rev_append (explode_comma_option s) !prepro_options);
+(* Language support options -- more below *)
+  Exact "-fall", Self (fun _ -> set_all language_support_options);
+  Exact "-fnone", Self (fun _ -> unset_all language_support_options);
+(* Tracing options *)
+  Exact "-dparse", Set option_dparse;
+  Exact "-dc", Set option_dcmedium;
+  Exact "-dclight", Set option_dclight;
+(* General options *) 
+  Exact "-v", Set option_v;
+  Exact "-stdlib", String(fun s -> stdlib_path := s);
   ]
+(* -f options: come in -f and -fno- variants *)
+(* Language support options *)
   @ f_opt "longdouble" option_flongdouble
   @ f_opt "struct-return" option_fstruct_return
   @ f_opt "bitfields" option_fbitfields
   @ f_opt "vararg-calls" option_fvararg_calls
+  @ f_opt "unprototyped" option_funprototyped
   @ f_opt "packed-structs" option_fpacked_structs
+  @ f_opt "inline-asm" option_finline_asm
+  @ [
+(* Catch options that are not handled *)
+  Prefix "-", Self (fun s ->
+      eprintf "Unknown option `%s'\n" s; exit 2);
+(* File arguments *)
+  Suffix ".c", Self (fun s -> process_c_file s);
+  ]
 
 let _ =
   Gc.set { (Gc.get()) with
@@ -284,4 +289,5 @@ let _ =
     end;
   Builtins.set C2C.builtins;
   CPragmas.initialize();
-  parse_cmdline cmdline_actions usage_string
+  parse_cmdline cmdline_actions
+
