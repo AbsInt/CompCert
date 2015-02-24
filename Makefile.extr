@@ -61,14 +61,12 @@ endif
 
 OCAMLC=ocamlc$(DOTOPT) $(COMPFLAGS)
 OCAMLOPT=ocamlopt$(DOTOPT) $(COMPFLAGS)
-OCAMLDEP=ocamldep$(DOTOPT) $(INCLUDES)
 
 # Compilers used for Camlp4-preprocessed code.  Note that we cannot
 # use the .opt compilers (because ocamlfind doesn't support them).
 
 OCAMLC_P4=ocamlfind ocamlc $(COMPFLAGS) $(BITSTRING)
 OCAMLOPT_P4=ocamlfind ocamlopt $(COMPFLAGS) $(BITSTRING)
-OCAMLDEP_P4=ocamlfind ocamldep $(INCLUDES) $(BITSTRING)
 
 MENHIR=menhir --explain
 OCAMLLEX=ocamllex -q
@@ -156,6 +154,7 @@ checklink/%.cmx: checklink/%.ml
 clean:
 	rm -f $(EXECUTABLES)
 	rm -f $(GENERATED)
+	rm -f tools/recdepend
 	for d in $(ALLDIRS); do rm -f $$d/*.cm[iox] $$d/*.o; done
 
 cleansource:
@@ -164,11 +163,14 @@ cleansource:
 
 # Generation of .depend.extr
 
-depend: $(GENERATED)
+tools/recdepend: tools/recdepend.ml
+	ocamlopt -o tools/recdepend unix.cmxa tools/recdepend.ml
+
+depend: $(GENERATED) tools/recdepend
 	@echo "Analyzing OCaml dependencies"
-	@for d in $(DIRS); do $(OCAMLDEP) $$d/*.mli $$d/*.ml; done > .depend.extr
+	@tools/recdepend $(DIRS) -o .depend.extr
 ifneq ($(strip $(DIRS_P4)),)
-	@for d in $(DIRS_P4); do $(OCAMLDEP_P4) $$d/*.mli $$d/*.ml; done >> .depend.extr
+	@tools/recdepend -use-ocamlfind $(BITSTRING) $(INCLUDES) $(DIRS_P4) >> .depend.extr
 endif
 
 
