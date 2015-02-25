@@ -166,11 +166,13 @@ cleansource:
 tools/recdepend: tools/recdepend.ml
 	ocamlopt -o tools/recdepend unix.cmxa tools/recdepend.ml
 
+RECDEPEND=tools/recdepend
+
 depend: $(GENERATED) tools/recdepend
 	@echo "Analyzing OCaml dependencies"
-	@tools/recdepend $(DIRS) -o .depend.extr
+	@$(RECDEPEND) $(DIRS) -o .depend.extr
 ifneq ($(strip $(DIRS_P4)),)
-	@tools/recdepend -use-ocamlfind $(BITSTRING) $(INCLUDES) $(DIRS_P4) >> .depend.extr
+	@$(RECDEPEND) -use-ocamlfind $(BITSTRING) $(INCLUDES) $(DIRS_P4) >> .depend.extr
 endif
 
 

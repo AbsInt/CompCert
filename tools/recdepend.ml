@@ -13,6 +13,10 @@
 
 (* Generate dependencies for directories by calling dependencie tool *)
 
+open Set
+
+module StringSet = Make(String)
+
 (* The tools *)
 let ocamlfind = ref "ocamlfind"
 let ocamldep = ref "ocamldep"
@@ -26,7 +30,7 @@ let target_file = ref (None: string option)
 let error_occured = ref false
 
 (* Options for ocamldep *)
-let include_dirs = ref ([] : string list)
+let include_dirs = ref (StringSet.empty)
 let ml_synonyms = ref [".ml"]
 let mli_synonyms = ref [".mli"]
 let slash = ref false
@@ -45,6 +49,9 @@ let ocamlfind_ppopt = ref ([] : string list)
 let add_to_list li s =
   li := s :: !li
 
+let add_to_set set s =
+  set := StringSet.add s !set
+
 let add_to_synonym_list synonyms suffix =
   if (String.length suffix) > 1 && (String.get suffix 0) = '.' then
     add_to_list synonyms suffix
@@ -55,36 +62,37 @@ let usage = "Usage: recdepend [options] <directories>\nOptions are:"
 
 type file_type =
   | ML
-  | MLI
   | MLL
+
+(* Concats dir and name except for the case when dir is . or equivalent *)
+let (^) dir name =
+  if dir = Filename.current_dir_name then
+    name
+  else
+    Filename.concat dir name
 
 let get_files () =
   let rec files_of_dir acc dir =
     let files = Sys.readdir dir in
     let contains_files = ref false in
     let acc = Array.fold_left (fun acc f_name ->
-      if Sys.is_directory (Filename.concat dir f_name) then
-          files_of_dir acc (Filename.concat dir f_name)
+      if Sys.is_directory (dir ^ f_name) then
+          files_of_dir acc (dir ^ f_name)
       else
-        if List.exists (Filename.check_suffix f_name) !ml_synonyms then
+        if List.exists (Filename.check_suffix f_name) (!ml_synonyms@ !mli_synonyms) then
           begin
             contains_files := true;
-            (ML,(Filename.concat dir f_name))::acc
-          end
-        else if List.exists (Filename.check_suffix f_name) !mli_synonyms then
-          begin
-            contains_files := true;
-            (MLI,(Filename.concat dir f_name))::acc
+            (ML,(dir ^ f_name))::acc
           end
         else if !use_menhir && (Filename.check_suffix f_name ".mll") then
           begin
             contains_files := true;
-            (MLL,(Filename.concat dir f_name))::acc
+            (MLL,(dir ^ f_name))::acc
           end
         else
             acc) acc files in
-    if !contains_files then
-      add_to_list include_dirs dir;
+    if !contains_files && dir <> Filename.current_dir_name then
+      add_to_set include_dirs dir;
     acc in
   try
     List.fold_left files_of_dir [] !dirs_to_search
@@ -92,31 +100,36 @@ let get_files () =
     error_occured := true;
     []
 
+let translate_arg_list acc name args =
+  List.fold_left (fun args s -> name::(s::args)) acc args
+
 let compute_dependencies files =
   try let out_file = match !target_file with
   | None -> Unix.stdout 
   | Some s -> Unix.openfile s [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC] 0o666 in
+  let call_process args =
+    let argv = Array.of_list args in
+    let pid = Unix.create_process argv.(0) argv Unix.stdin out_file Unix.stderr in
+    let (_,status) =
+      Unix.waitpid [] pid in
+    let rc = (match status with
+    | Unix.WEXITED rc -> rc
+    | Unix.WSIGNALED _
+    | Unix.WSTOPPED _ -> -1) in
+    error_occured := !error_occured || rc <> 0 in
   let call_ocamldep file =
-    let args = List.fold_left (fun args s -> "-I"::(s::args)) [file] !include_dirs in
-    let args = List.fold_left (fun args syn -> 
-      if syn = ".ml" then 
-        args 
-      else 
-        "-ml-synonym"::(syn::args)) args !ml_synonyms in
-    let args =   List.fold_left (fun args syn -> 
-      if syn = ".mli" then 
-        args 
-      else 
-        "-mli-synonym"::(syn::args)) args !mli_synonyms in
+    let args = StringSet.fold (fun s args -> "-I"::(s::args)) !include_dirs [file] in
+    let args = translate_arg_list args "-ml-synonym" (List.filter ((<>) ".ml") !ml_synonyms) in
+    let args = translate_arg_list args "-mli-synonym" (List.filter ((<>) ".mli") !mli_synonyms) in
     let args = if !slash then "-slash"::args else args in
     let args = if !native_only then "-native"::args else args in
     let args = if !raw_dependencies then "-modules"::args else args in
     let args = match !pp_command with
     | None -> args
     | Some s -> "-pp"::(s::args) in
-    let args = List.fold_left (fun opts ppx -> "-ppx"::(ppx::args)) args !ppx_command in
+    let args = translate_arg_list args "-ppx" !ppx_command in
     let args = if !all_dependencies then "-all"::args else args in
-    let args = List.fold_left (fun opts o_mod -> "-open"::(o_mod::opts)) args !open_modules in
+    let args = translate_arg_list args "-open" !open_modules in
     let args = if !one_line then "-one-line"::args else args in
     let args = if !use_ocamlfind then
       let args = if !ocamlfind_package <> "" then
@@ -127,38 +140,21 @@ let compute_dependencies files =
         "-syntax"::(!ocamlfind_syntax::args)
       else
         args in
-      let args = List.fold_left (fun args s -> "-ppopt"::(s::args)) args !ocamlfind_ppopt in
+      let args = translate_arg_list args "-ppopt" !ocamlfind_ppopt in
       !ocamlfind::("ocamldep"::args)
     else 
       !ocamldep :: args in
-    let argv = Array.of_list args in
-    let pid = Unix.create_process argv.(0) argv Unix.stdin out_file Unix.stderr in
-    let (_,status) =
-      Unix.waitpid [] pid in
-    let rc = (match status with
-    | Unix.WEXITED rc -> rc
-    | Unix.WSIGNALED _
-    | Unix.WSTOPPED _ -> -1) in
-    error_occured := !error_occured || rc <> 0 in
+    call_process args in
   let call_menhir file =
     let args = [!menhir;"--depend";"--ocamldep";!ocamldep] in
     let args = if !raw_dependencies then args@["--raw-depend"] else args in
-    let argv = Array.of_list args in
-    let pid = Unix.create_process argv.(0) argv Unix.stdin out_file Unix.stderr in
-    let (_,status) =
-      Unix.waitpid [] pid in
-    let rc = (match status with
-    | Unix.WEXITED rc -> rc
-    | Unix.WSIGNALED _
-    | Unix.WSTOPPED _ -> -1) in
-    error_occured := !error_occured || rc <> 0 in
+    call_process args in
   List.iter (fun (f_type,f_name) ->
     match f_type with
-    | ML
-    | MLI -> call_ocamldep f_name
+    | ML -> call_ocamldep f_name
     | MLL -> if !use_menhir then call_menhir f_name) files;
   if !target_file <> None then Unix.close out_file
-  with Unix.Unix_error _ ->
+  with  _ ->
       error_occured := true
 
 
@@ -168,7 +164,7 @@ let _ =
   " Generate dependencies on all files";
   "-dep", Arg.Set_string ocamldep,
   "<cmd> Use <cmd> instead of ocamldep";
-  "-I", Arg.String (add_to_list include_dirs),
+  "-I", Arg.String (add_to_set include_dirs),
   "<dir> Add <dir> to the list of include directories";
   "-menhir", Arg.String (fun s -> use_menhir:= true; menhir := s),
   "<cmd> Use <cmd> instead of menhir";
