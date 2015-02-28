@@ -164,13 +164,12 @@ cleansource:
 
 # Generation of .depend.extr
 
-depend: $(GENERATED) tools/recdepend
+depend: $(GENERATED)
 	@echo "Analyzing OCaml dependencies"
-	$(OCAMLDEP) $(foreach d,$(DIRS),$(wildcard $(d)/*.mli $(d)/*.ml)) >.depend.extr
-	$(OCAMLDEP) $(GENERATED) >> .depend.extr
- ifneq ($(strip $(DIRS_P4)),)
-	@$(RECDEPEND) -use-ocamlfind $(BITSTRING) $(INCLUDES) $(DIRS_P4) >> .depend.extr
-	$(OCAMLDEP_P4) $(foreach d,$(DIRS_P4),$(wildcard $(d)/*.mli $(d)/*.ml)) >>.depend.extr
+	@$(OCAMLDEP) $(foreach d,$(DIRS),$(wildcard $(d)/*.mli $(d)/*.ml)) >.depend.extr
+	@$(OCAMLDEP) $(GENERATED) >> .depend.extr
+ifneq ($(strip $(DIRS_P4)),)
+	@$(OCAMLDEP_P4) $(foreach d,$(DIRS_P4),$(wildcard $(d)/*.mli $(d)/*.ml)) >>.depend.extr
 endif
 
 
