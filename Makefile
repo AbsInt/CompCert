@@ -182,7 +182,7 @@ latexdoc:
 	cd doc; $(COQDOC) --latex -o doc/doc.tex -g $(FILES)
 
 %.vo: %.v
-	@rm -f doc/glob/$(*F).glob
+	@rm -f doc/$(*F).glob
 	@echo "COQC $*.v"
 	@$(COQC) -dump-glob doc/$(*F).glob $*.v
 
