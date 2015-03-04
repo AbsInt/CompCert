@@ -1136,7 +1136,6 @@ destruct (Rle_or_lt x 0) as [Hx|Hx].
 apply Rle_trans with (1 := Hx).
 now apply pred_ge_0.
 apply le_pred_lt_aux ; try easy.
-now split.
 Qed.
 
 
