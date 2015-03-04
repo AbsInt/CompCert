@@ -1028,20 +1028,12 @@ let print_globdef oc (name, gdef) =
   | Gvar v -> print_var oc name v
 end)
 
-type target = ELF | MacOS | Cygwin
-
 let print_program oc p =
-  let target =   
-    match Configuration.system with
-    | "macosx" -> MacOS
-    | "linux"  -> ELF
-    | "bsd"    -> ELF
-    | "cygwin" -> Cygwin
-    | _        -> invalid_arg ("System " ^ Configuration.system ^ " not supported") in
-  let module Target = (val (match target with
-  | MacOS -> (module MacOS_System:SYSTEM)
-  | ELF -> (module ELF_System:SYSTEM)
-  | Cygwin -> (module Cygwin_System:SYSTEM)):SYSTEM) in
+  let module Target = (val (match  Configuration.system  with
+  | "macosx" -> (module MacOS_System:SYSTEM)
+  | "linux" | "bsd" -> (module ELF_System:SYSTEM)
+  | "cygwin" -> (module Cygwin_System:SYSTEM)
+  | _ ->  invalid_arg ("System " ^ Configuration.system ^ " not supported")):SYSTEM) in
   let module Printer = AsmPrinter(Target) in
   PrintAnnot.print_version_and_options oc Printer.comment;
   PrintAnnot.reset_filenames();

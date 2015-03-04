@@ -174,15 +174,15 @@ doc/coq2html.ml: doc/coq2html.mll
 	ocamllex -q doc/coq2html.mll
 
 tools/ndfun: tools/ndfun.ml
-	ocamlopt -o tools/ndfun str.cmxa tools/ndfun.ml $(LINKERSPEC)
+	ocamlopt -o tools/ndfun str.cmxa tools/ndfun.ml
 tools/modorder: tools/modorder.ml
-	ocamlopt -o tools/modorder str.cmxa tools/modorder.ml $(LINKERSPEC)
+	ocamlopt -o tools/modorder str.cmxa tools/modorder.ml
 
 latexdoc:
 	cd doc; $(COQDOC) --latex -o doc/doc.tex -g $(FILES)
 
 %.vo: %.v
-	@rm -f doc/glob/$(*F).glob
+	@rm -f doc/$(*F).glob
 	@echo "COQC $*.v"
 	@$(COQC) -dump-glob doc/$(*F).glob $*.v
 
