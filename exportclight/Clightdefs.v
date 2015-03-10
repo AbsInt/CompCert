@@ -23,6 +23,8 @@ Require Export AST.
 Require Export Ctypes.
 Require Export Cop.
 Require Export Clight.
+Require Import Maps.
+Require Import Errors.
 
 Definition tvoid := Tvoid.
 Definition tschar := Tint I8 Signed noattr.
@@ -50,9 +52,8 @@ Definition tattr (a: attr) (ty: type) :=
   | Tpointer elt _ => Tpointer elt a
   | Tarray elt sz _ => Tarray elt sz a
   | Tfunction args res cc => Tfunction args res cc
-  | Tstruct id fld _ => Tstruct id fld a
-  | Tunion id fld _ => Tunion id fld a
-  | Tcomp_ptr id _ => Tcomp_ptr id a
+  | Tstruct id _ => Tstruct id a
+  | Tunion id  _ => Tunion id a
   end.
 
 Definition tvolatile (ty: type) := tattr volatile_attr ty.
@@ -62,3 +63,9 @@ Definition talignas (n: N) (ty: type) :=
 
 Definition tvolatile_alignas (n: N) (ty: type) :=
   tattr {| attr_volatile := true; attr_alignas := Some n |} ty.
+
+Definition make_composite_env (comps: list composite_definition): composite_env :=
+  match build_composite_env comps with
+  | OK e => e
+  | Error _ => PTree.empty _
+  end.

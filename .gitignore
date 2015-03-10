@@ -39,6 +39,7 @@ cparser/Parser.v
 cparser/Lexer.ml
 cparser/pre_parser.ml
 cparser/pre_parser.mli
+lib/Readconfig.ml
 lib/Tokenize.ml
 # Documentation
 doc/coq2html
