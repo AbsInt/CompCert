@@ -365,8 +365,10 @@ a constant)"; Integers.Int.zero in
         | _ -> error "ill-formed __builtin_memcpy_aligned (4th argument must be 
 a constant)"; Integers.Int.one in
       (* to check: sz1 > 0, al1 divides sz1, al1 = 1|2|4|8 *)
+      (* Issue #28: must decay array types to pointer types *)
       Ebuiltin(EF_memcpy(sz1, al1),
-               Tcons(typeof dst, Tcons(typeof src, Tnil)),
+               Tcons(typeconv(typeof dst),
+                     Tcons(typeconv(typeof src), Tnil)),
                Econs(dst, Econs(src, Enil)), Tvoid)
   | _ ->
     assert false
