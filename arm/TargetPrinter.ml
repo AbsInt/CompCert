@@ -1122,6 +1122,12 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
     let print_epilogue oc = ()
 
     let default_falignment = 4
+
+    let get_start_addr () = -1 (* Dummy constant *)
+
+    let get_end_addr () = -1 (* Dummy constant *)
+
+    let get_stmt_list_addr () = -1 (* Dummy constant *)
   end
 
 let sel_target () = 

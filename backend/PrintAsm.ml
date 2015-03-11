@@ -15,6 +15,7 @@ open AST
 open Asm
 open Camlcoq
 open Datatypes
+open DwarfPrinter
 open PrintAsmaux
 open Printf
 open Sections

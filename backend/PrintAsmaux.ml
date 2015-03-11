@@ -43,6 +43,9 @@ module type TARGET =
       val comment: string
       val symbol: out_channel -> P.t -> unit
       val default_falignment: int
+      val get_start_addr: unit -> int
+      val get_end_addr: unit -> int
+      val get_stmt_list_addr: unit -> int
     end
 
 (* On-the-fly label renaming *)

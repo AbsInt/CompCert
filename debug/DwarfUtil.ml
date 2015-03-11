@@ -16,7 +16,7 @@ open DwarfTypes
 
 let id = ref 0
 
-let next_id () = 
+let next_id () =
   let nid = !id in
   incr id; nid
 
@@ -27,7 +27,7 @@ let reset_id () =
 let type_table: (string, int) Hashtbl.t = Hashtbl.create 7
 
 (* Clear the type map *)
-let reset_type_table () = 
+let reset_type_table () =
   Hashtbl.clear type_table
 
 (* Generate a new entry from a given tag *)
@@ -86,3 +86,34 @@ let dw_form_ref4     = 0x13
 let dw_form_ref8     = 0x14
 let dw_ref_udata     = 0x15
 let dw_ref_indirect  = 0x16
+
+module DefaultAbbrevs =
+  struct
+    let sibling_type_abbr = dw_form_ref4
+    let decl_file_type_abbr = dw_form_data4
+    let decl_line_type_abbr = dw_form_udata
+    let type_abbr = dw_form_ref_addr
+    let name_type_abbr = dw_form_string
+    let encoding_type_abbr = dw_form_data1
+    let byte_size_type_abbr = dw_form_data1
+    let high_pc_type_abbr = dw_form_addr
+    let low_pc_type_abbr = dw_form_addr
+    let stmt_list_type_abbr = dw_form_data4
+    let declaration_type_abbr = dw_form_flag
+    let external_type_abbr = dw_form_flag
+    let prototyped_type_abbr = dw_form_flag
+    let bit_offset_type_abbr = dw_form_data1
+    let comp_dir_type_abbr = dw_form_string
+    let language_type_abbr = dw_form_udata
+    let producer_type_abbr = dw_form_string
+    let value_type_abbr = dw_form_sdata
+    let artificial_type_abbr = dw_form_flag
+    let variable_parameter_type_abbr = dw_form_flag
+    let bit_size_type_abbr = dw_form_data1
+    let location_const_type_abbr = dw_form_data4
+    let location_block_type_abbr = dw_form_block
+    let data_location_block_type_abbr = dw_form_block
+    let data_location_ref_type_abbr = dw_form_ref4
+    let bound_const_type_abbr = dw_form_udata
+    let bound_ref_type_abbr=dw_form_ref4
+  end

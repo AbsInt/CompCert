@@ -38,6 +38,7 @@ module type SYSTEM =
       val cfi_adjust: out_channel -> int32 -> unit
       val cfi_rel_offset: out_channel -> string -> int32 -> unit
       val print_prologue: out_channel -> unit
+      val print_epilogue: out_channel -> unit
     end
 
 let symbol = elf_symbol
@@ -67,6 +68,14 @@ let float_reg_name = function
   | FPR20 -> "20" | FPR21 -> "21" | FPR22 -> "22" | FPR23 -> "23"
   | FPR24 -> "24" | FPR25 -> "25" | FPR26 -> "26" | FPR27 -> "27"
   | FPR28 -> "28" | FPR29 -> "29" | FPR30 -> "30" | FPR31 -> "31"
+
+let start_addr = ref (-1)
+
+let end_addr = ref (-1)
+
+let stmt_list_addr = ref (-1)
+
+let label = elf_label
 
 module Linux_System : SYSTEM =
   struct
@@ -117,6 +126,9 @@ module Linux_System : SYSTEM =
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\",\"a%s%s\",@progbits"
             s (if wr then "w" else "") (if ex then "x" else "")
+      | Section_debug_info -> ".debug_info,\"\",@progbits"
+      | Section_debug_abbrev -> ".debug_abbrev,\"\",@progbits"
+
 
     let print_file_line oc file line =
       PrintAnnot.print_file_line oc comment file line
@@ -131,6 +143,8 @@ module Linux_System : SYSTEM =
     let cfi_rel_offset = cfi_rel_offset
 
     let print_prologue oc = ()
+
+    let print_epilogue oc = ()
   
   end
     
@@ -182,9 +196,11 @@ module Diab_System : SYSTEM =
             | true, false -> 'd'                (* data *)
             | false, true -> 'c'                (* text *)
             | false, false -> 'r')              (* const *)
+      | Section_debug_info -> ".debug_info,,n"
+      | Section_debug_abbrev -> ".debug_abbrev,,n"
 
     let print_file_line oc file line =
-      PrintAnnot.print_file_line_d1 oc comment file line
+      PrintAnnot.print_file_line_d2 oc comment file line
 
     (* Emit .cfi directives *)
     let cfi_startproc oc = ()
@@ -198,8 +214,35 @@ module Diab_System : SYSTEM =
     let print_prologue oc =
       fprintf oc "	.xopt	align-fill-text=0x60000000\n";
       if !Clflags.option_g then
-        fprintf oc "	.xopt	asm-debug-on\n"
-  
+        begin
+          fprintf oc "	.text\n";
+          fprintf oc "	.section	.debug_line,,n\n";
+          let label_line_start = new_label () in
+          stmt_list_addr := label_line_start;
+          fprintf oc "%a:\n" label label_line_start;
+          fprintf oc "	.text\n";
+          let label_start = new_label () in
+          start_addr := label_start;
+          fprintf oc "%a:\n" label label_start;
+          fprintf oc "	.d2_line_start	.debug_line\n";
+        end
+
+    let filenum : (string,int) Hashtbl.t = Hashtbl.create 7
+
+    let print_epilogue oc =
+      if !Clflags.option_g then
+        begin
+          fprintf oc "\n";
+          let label_end = new_label () in
+          end_addr := label_end;
+          fprintf oc "%a:\n" label label_end;
+          fprintf oc "	.text\n";
+          Hashtbl.iter (fun file _ ->
+            let label = new_label () in
+            Hashtbl.add filenum file label;
+            fprintf oc ".L%d:	.d2filenum \"%s\"\n" label file) PrintAnnot.filename_info;
+          fprintf oc "	.d2_line_end\n"
+        end
   end
 
 module Target (System : SYSTEM):TARGET =
@@ -212,7 +255,7 @@ module Target (System : SYSTEM):TARGET =
     let raw_symbol oc s =
       fprintf oc "%s" s
 
-    let label = elf_label
+    let label = label
 
     let label_low oc lbl =
       fprintf oc ".L%d@l" lbl
@@ -726,8 +769,6 @@ module Target (System : SYSTEM):TARGET =
     let print_align oc align  =
       fprintf oc "	.balign	%d\n" align
 
-    let print_epilogue _ = ()
-
     let print_jumptable oc jmptbl = 
       let print_jumptable oc (lbl, tbl) =
         fprintf oc "%a:" label lbl;
@@ -742,6 +783,13 @@ module Target (System : SYSTEM):TARGET =
       end
 
     let default_falignment = 4
+        
+    let get_start_addr () = !start_addr
+
+    let get_end_addr () = !end_addr
+
+    let get_stmt_list_addr () = !stmt_list_addr
+
   end
 
 let sel_target () =

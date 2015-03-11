@@ -970,6 +970,13 @@ module Target(System: SYSTEM):TARGET =
     let comment = comment
 
     let default_falignment = 16
+
+    let get_start_addr () = -1 (* Dummy constant *)
+        
+    let get_end_addr () = -1 (* Dummy constant *)
+
+    let get_stmt_list_addr () = -1 (* Dummy constant *)
+
 end
 
 let sel_target () =

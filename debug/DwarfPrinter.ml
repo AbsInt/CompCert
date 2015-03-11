@@ -13,81 +13,53 @@
 
 open DwarfTypes
 open DwarfUtil
+open Printf
 
-module type DWARF_DEFS =
-    sig
-      (* Functions used for the printing of the dwarf abbreviations *)
-      val string_of_byte: bool -> string
-      val string_of_abbrv_entry: int -> string
-      val get_abbrv_start_addr: unit -> int
-      (* The form constants of the types *)
-      val sibling_type_abbr: int
-      val decl_file_type_abbr: int
-      val decl_line_type_abbr: int
-      val type_abbr: int
-      val name_type_abbr: int
-      val encoding_type_abbr: int
-      val byte_size_type_abbr: int
-      val high_pc_type_abbr: int
-      val low_pc_type_abbr: int
-      val stmt_list_type_abbr: int
-      val declaration_type_abbr: int
-      val external_type_abbr: int
-      val prototyped_type_abbr: int
-      val bit_offset_type_abbr: int
-      val comp_dir_type_abbr: int
-      val language_type_abbr: int
-      val producer_type_abbr: int
-      val value_type_abbr: int
-      val artificial_type_abbr: int
-      val variable_parameter_type_abbr: int
-      val bit_size_type_abbr: int
-      val location_const_type_abbr: int
-      val location_block_type_abbr: int
-      val data_location_block_type_abbr: int
-      val data_location_ref_type_abbr: int
-      val bound_const_type_abbr: int
-      val bound_ref_type_abbr: int
-    end
-
-module DwarfPrinter(Defs:DWARF_DEFS) :
+module DwarfPrinter :
     sig
       val print_debug: out_channel -> dw_entry -> unit
-      val get_abbrv: dw_entry -> bool -> int
-      val get_abbrv_start_addr: unit -> int
     end =
-  (struct
-    
+  struct
+
+
+    module Defs = DefaultAbbrevs
+
+    let string_of_abbrv_entry v =
+      Printf.sprintf "	.uleb128	%d\n" v
+
+    let string_of_byte value =
+      Printf.sprintf "	.byte	%s\n" (if value then "0x1" else "0x2")
+
     let curr_abbrv = ref 0
 
     let next_abbrv =
       let abbrv = !curr_abbrv in
       incr curr_abbrv;abbrv
 
-    let abbrvs: (string * int) list ref = ref []
+    let abbrevs: (string * int) list ref = ref []
 
     let abbrv_mapping: (string,int) Hashtbl.t = Hashtbl.create 7
 
     let add_byte buf value =
-      Buffer.add_string buf (Defs.string_of_byte value)
+      Buffer.add_string buf (string_of_byte value)
 
     let add_abbr_uleb v buf =
-      Buffer.add_string buf (Defs.string_of_abbrv_entry v) 
+      Buffer.add_string buf (string_of_abbrv_entry v)
 
     let add_abbr_entry (v1,v2) buf =
       add_abbr_uleb v1 buf;
       add_abbr_uleb v2 buf
- 
+
     let add_sibling = add_abbr_entry (0x1,Defs.sibling_type_abbr)
-       
+
     let add_decl_file = add_abbr_entry (0x3a,Defs.decl_file_type_abbr)
- 
+
     let add_decl_line = add_abbr_entry (0x3b,Defs.decl_line_type_abbr)
-        
+
     let add_type = add_abbr_entry (0x49,Defs.type_abbr)
-   
+
     let add_name = add_abbr_entry (0x3,Defs.name_type_abbr)
-        
+
     let add_encoding = add_abbr_entry (0x3e,Defs.encoding_type_abbr)
 
     let add_byte_size = add_abbr_entry (0xb,Defs.byte_size_type_abbr)
@@ -97,7 +69,7 @@ module DwarfPrinter(Defs:DWARF_DEFS) :
     let add_low_pc = add_abbr_entry (0x11,Defs.low_pc_type_abbr)
 
     let add_stmt_list = add_abbr_entry (0x10,Defs.stmt_list_type_abbr)
-        
+
     let add_declaration = add_abbr_entry (0x3c,Defs.declaration_type_abbr)
 
     let add_external = add_abbr_entry (0x3f,Defs.external_type_abbr)
@@ -120,13 +92,13 @@ module DwarfPrinter(Defs:DWARF_DEFS) :
 
     let add_bit_size = add_abbr_entry (0xc,Defs.bit_size_type_abbr)
 
-    let add_location loc buf = 
+    let add_location loc buf =
       match loc with
       | None -> ()
       | Some (LocConst _) -> add_abbr_entry (0x2,Defs.location_const_type_abbr) buf
       | Some (LocBlock _) -> add_abbr_entry (0x2,Defs.location_block_type_abbr) buf
 
-    let add_data_location loc buf = 
+    let add_data_location loc buf =
       match loc with
       | None -> ()
       | Some (DataLocBlock __) -> add_abbr_entry (0x38,Defs.data_location_block_type_abbr) buf
@@ -149,10 +121,10 @@ module DwarfPrinter(Defs:DWARF_DEFS) :
         | _ -> true in
         add_abbr_uleb id buf;
         add_byte buf has_child;
-        if has_sibling then add_sibling buf; 
-      in     
+        if has_sibling then add_sibling buf;
+      in
       (match entity.tag with
-      | DW_TAG_array_type e -> 
+      | DW_TAG_array_type e ->
           prologue 0x1;
           add_attr_some e.array_type_decl_file add_decl_file;
           add_attr_some e.array_type_decl_line add_decl_line;
@@ -281,44 +253,45 @@ module DwarfPrinter(Defs:DWARF_DEFS) :
         Hashtbl.find abbrv_mapping abbrv_string
       with Not_found ->
         let id = next_abbrv in
-        abbrvs:=(abbrv_string,id)::!abbrvs;
+        abbrevs:=(abbrv_string,id)::!abbrevs;
         Hashtbl.add abbrv_mapping abbrv_string id;
         id)
 
     let compute_abbrv entry =
       entry_iter_sib (fun sib entry ->
-        let has_sib = match sib with 
+        let has_sib = match sib with
         | None -> false
         | Some _ -> true in
         ignore (get_abbrv entry has_sib)) entry
-      
-    let abbrv_section_start oc = 
+
+    let abbrv_section_start oc =
       fprintf oc "	.section	.debug_abbrev,,n\n"(* ; *)
         (* let lbl = new_label () in *)
         (* abbrv_start_addr := lbl; *)
         (* fprintf oc "%a:\n" label lbl *)
-        
-    let abbrv_section_end oc = 
+
+    let abbrv_section_end oc =
       fprintf oc "	.section	.debug_abbrev,,n\n";
       fprintf oc "	.sleb128	0\n"
-        
-    let abbrv_prologue oc id = 
+
+    let abbrv_prologue oc id =
       fprintf oc "	.section	.debug_abbrev,,n\n";
       fprintf oc "	.uleb128	%d\n" id
-        
-    let abbrv_epilogue oc = 
+
+    let abbrv_epilogue oc =
       fprintf oc "	.uleb128	0\n";
       fprintf oc "	.uleb128	0\n"
 
 
-    let print_abbrv oc =
-      let abbrvs = List.sort (fun (_,a) (_,b) -> Pervasives.compare a b) !abbrvs in
-      Defs.abbrv_section_start oc;
+    let print_abbrv occ =
+      let abbrevs = List.sort (fun (_,a) (_,b) -> Pervasives.compare a b) !abbrevs in
+      ()
+      (*Defs.abbrv_section_start oc;
       List.iter (fun (s,id) ->
         Defs.abbrv_prologue oc id;
         output_string oc s;
         Defs.abbrv_epilogue oc) abbrvs;
-      Defs.abbrv_section_end oc
+      Defs.abbrv_section_end oc*)
 
 
     let rec print_entry oc entry has_sibling =
@@ -329,28 +302,23 @@ module DwarfPrinter(Defs:DWARF_DEFS) :
       print_abbrv oc
 
     let print_debug_info oc entry =
-      print_debug_abbrv oc entry;
-      let abbrv_start =  DwarfDiab.AbbrvPrinter.get_abbrv_start_addr () in
-      let debug_start = new_label () in
-      let print_info () =
-        fprintf oc"	.section	.debug_info,,n\n" in
-      print_info ();
-      fprintf oc "%a\n" label debug_start;
-      let debug_length_start = new_label () in (* Address used for length calculation *)
-      let debug_end = new_label () in
-      fprintf oc "	.4byte	%a-%a\n" label debug_end label debug_length_start;
-      fprintf oc "%a\n" label debug_length_start;
-      fprintf oc "	.2byte	0x2\n"; (* Dwarf version *)
-      fprintf oc "	.4byte	%a\n" label abbrv_start; (* Offset into the abbreviation *)
-      fprintf oc "	.byte	%X\n" !Machine.config.Machine.sizeof_ptr; (* Sizeof pointer type *)
-      print_entry oc entry false;
-      fprintf oc "%a\n" label debug_end; (* End of the debug section *)
-      fprintf oc "	.sleb128	0\n"
-    
-      
-    let abbrv_start_addr = ref (-1)
-        
-    let get_abbrv_start_addr () = !abbrv_start_addr
-      
+      print_debug_abbrv oc entry
+      (* (\* let abbrv_start =  DwarfDiab.AbbrvPrinter.get_abbrv_start_addr () in *\) *)
+      (* (\* let debug_start = new_label () in *\) *)
+      (* let print_info () = *)
+      (*   fprintf oc"	.section	.debug_info,,n\n" in *)
+      (* print_info (); *)
+      (* fprintf oc "%a\n" label debug_start; *)
+      (* let debug_length_start = new_label () in (\* Address used for length calculation *\) *)
+      (* let debug_end = new_label () in *)
+      (* fprintf oc "	.4byte	%a-%a\n" label debug_end label debug_length_start; *)
+      (* fprintf oc "%a\n" label debug_length_start; *)
+      (* fprintf oc "	.2byte	0x2\n"; (\* Dwarf version *\) *)
+      (* fprintf oc "	.4byte	%a\n" label abbrv_start; (\* Offset into the abbreviation *\) *)
+      (* fprintf oc "	.byte	%X\n" !Machine.config.Machine.sizeof_ptr; (\* Sizeof pointer type *\) *)
+      (* print_entry oc entry false; *)
+      (* fprintf oc "%a\n" label debug_end; (\* End of the debug section *\) *)
+      (* fprintf oc "	.sleb128	0\n" *)
 
-  end)
+      let print_debug _ _ = failwith "TODO implement"
+  end
