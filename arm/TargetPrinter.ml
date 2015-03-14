@@ -1073,6 +1073,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
         align
 
     let print_instructions oc fn =
+      current_function_sig := fn.fn_sig;
       ignore (fixup_arguments oc Incoming fn.fn_sig);
       print_instructions oc fn.fn_code;
       if !literals_in_code then emit_constants oc
