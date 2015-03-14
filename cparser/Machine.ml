@@ -187,6 +187,9 @@ let ppc_32_bigendian =
                    struct_return_as_int = 8;
                    struct_passing_style = SP_ref_caller }
 
+let ppc_32_bigendian_linux =
+  { ppc_32_bigendian with struct_return_as_int = 0 }
+
 let arm_littleendian =
   { ilp32ll64 with name = "arm";
                    struct_return_as_int = 4;

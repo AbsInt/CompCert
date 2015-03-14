@@ -386,6 +386,10 @@ Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fbitfields    Emulate bit fields in structs [off]
   -flongdouble   Treat 'long double' as 'double' [off]
   -fstruct-return  Emulate returning structs and unions by value [off]
+  -fstruct-return=<convention>
+                 Set the calling conventions used to return structs by value
+  -fstruct-passing=<convention>
+                 Set the calling conventions used to pass structs by value
   -fvararg-calls Support calls to variable-argument functions [on]
   -funprototyped Support calls to old-style functions without prototypes [on]
   -fpacked-structs  Emulate packed structs [off]
@@ -527,7 +531,25 @@ let cmdline_actions =
   Exact "-quiet", Self (fun _ -> Interp.trace := 0);
   Exact "-trace", Self (fun _ -> Interp.trace := 2);
   Exact "-random", Self (fun _ -> Interp.mode := Interp.Random);
-  Exact "-all", Self (fun _ -> Interp.mode := Interp.All)
+  Exact "-all", Self (fun _ -> Interp.mode := Interp.All);
+(* Special -f options *)
+  Exact "-fstruct-passing=ref-callee",
+    Self (fun _ -> option_fstruct_passing_style := Some Machine.SP_ref_callee);
+  Exact "-fstruct-passing=ref-caller",
+    Self (fun _ -> option_fstruct_return := true;
+                   option_fstruct_passing_style := Some Machine.SP_ref_caller);
+  Exact "-fstruct-passing=ints",
+    Self (fun _ -> option_fstruct_return := true;
+                   option_fstruct_passing_style := Some Machine.SP_split_args);
+  Exact "-fstruct-return=ref",
+    Self (fun _ -> option_fstruct_return := true;
+                   option_fstruct_return_style := Some 0);
+  Exact "-fstruct-return=int4",
+    Self (fun _ -> option_fstruct_return := true;
+                   option_fstruct_return_style := Some 4);
+  Exact "-fstruct-return=int8",
+    Self (fun _ -> option_fstruct_return := true;
+                   option_fstruct_return_style := Some 8)
   ]
 (* -f options: come in -f and -fno- variants *)
 (* Language support options *)
@@ -582,9 +604,11 @@ let _ =
     Printexc.record_backtrace true;
     Machine.config :=
       begin match Configuration.arch with
-      | "powerpc" -> Machine.ppc_32_bigendian
+      | "powerpc" -> if Configuration.abi = "linux"
+                     then Machine.ppc_32_bigendian_linux
+                     else Machine.ppc_32_bigendian
       | "arm"     -> Machine.arm_littleendian
-      | "ia32"    -> if Configuration.system = "macosx"
+      | "ia32"    -> if Configuration.abi = "macosx"
                      then Machine.x86_32_macosx
                      else Machine.x86_32
       | _         -> assert false

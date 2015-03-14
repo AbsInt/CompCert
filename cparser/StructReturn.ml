@@ -22,23 +22,29 @@ open C
 open Cutil
 open Transform
 
+let struct_return_style = ref 0
+let struct_passing_style = ref SP_ref_callee
+
 (* Classification of function return types. *)
 
 type return_kind =
   | Ret_scalar    (**r a scalar type, returned as usual *)
   | Ret_ref       (**r a composite type, returned by reference *)
-  | Ret_value of typ (**r a small composite type, returned as an integer *)
+  | Ret_value of typ * int * int
+                  (**r a small composite type, returned as an integer
+                       (type, size, alignment) *)
 
 let classify_return env ty =
   if is_composite_type env ty then begin
-    match sizeof env ty with
-    | None -> Ret_ref  (* should not happen *)
-    | Some sz ->
-        if (!config).struct_return_as_int >= 4 && sz <= 4 then
-          Ret_value (TInt(IUInt, []))
-        else if (!config).struct_return_as_int >= 8 && sz <= 8 then
-          Ret_value (TInt(IULongLong, []))
+    match sizeof env ty, alignof env ty with
+    | Some sz, Some al ->
+        if !struct_return_style >= 4 && sz <= 4 then
+          Ret_value (TInt(IUInt, []), sz, al)
+        else if !struct_return_style >= 8 && sz <= 8 then
+          Ret_value (TInt(IULongLong, []), sz, al)
         else Ret_ref
+    | _, _ ->
+        Ret_ref  (* should not happen *)
   end else
     Ret_scalar
 
@@ -52,7 +58,7 @@ type param_kind =
 
 let classify_param env ty =
   if is_composite_type env ty then begin
-    match (!config).struct_passing_style with
+    match !struct_passing_style with
     | SP_ref_callee -> Param_unchanged
     | SP_ref_caller -> Param_ref_caller
     | _ ->
@@ -75,6 +81,7 @@ let list_map_n f n =
 let uchar = TInt(IUChar, [])
 let ushort = TInt(IUShort, [])
 let uint = TInt(IUInt, [])
+let ulonglong = TInt(IULongLong, [])
 let ucharptr = TPtr(uchar, [])
 let ushortptr = TPtr(ushort, [])
 let uintptr = TPtr(uint, [])
@@ -86,12 +93,12 @@ let ebuffer_index base idx =
   { edesc = EBinop(Oindex, base, intconst (Int64.of_int idx) IInt, uintptr);
     etyp = uint }
 
-let ereinterpret ty e =
-  { edesc = EUnop(Oderef, ecast (TPtr(ty, [])) (eaddrof e)); etyp = ty }
-
 let attr_structret = [Attr("__structreturn", [])]
 
 (* Expression constructor functions *)
+
+let ereinterpret ty e =
+  { edesc = EUnop(Oderef, ecast (TPtr(ty, [])) (eaddrof e)); etyp = ty }
 
 let or2 a b = { edesc = EBinop(Oor, a, b, uint); etyp = uint }
 let or3 a b c = or2 (or2 a b) c
@@ -120,37 +127,59 @@ let load4 base ofs =
   let a = ecast uintptr (offsetptr base ofs) in
   { edesc = EUnop(Oderef, a); etyp = uint }
 
+let lshift_ll a nbytes =
+  let a = ecast ulonglong a in
+  if nbytes = 0 then a else
+    { edesc = EBinop(Oshl, a, intconst (Int64.of_int (nbytes * 8)) IInt, ulonglong);
+      etyp = ulonglong }
+
+let or2_ll a b = { edesc = EBinop(Oor, a, b, uint); etyp = ulonglong }
+
+(* Loading a memory area as one or several integers. *)
+
+let load_word base ofs sz al =
+  match sz with
+  | 0 -> intconst 0L IInt
+  | 1 -> load1 base ofs 0 3
+  | 2 -> if al >= 2 || (!config).supports_unaligned_accesses then
+           load2 base ofs 0 2
+         else
+           or2 (load1 base ofs 0 3)
+               (load1 base (ofs + 1) 1 2)
+  | 3 -> if al >= 2 || (!config).supports_unaligned_accesses then
+           or2 (load2 base ofs 0 2)
+               (load1 base (ofs + 2) 2 1)
+         else
+           or3 (load1 base ofs 0 3)
+               (load1 base (ofs + 1) 1 2)
+               (load1 base (ofs + 2) 2 1)
+  | 4 -> if al >= 4 || (!config).supports_unaligned_accesses then
+           load4 base ofs
+         else if al >= 2 then
+           or2 (load2 base ofs 0 2)
+               (load2 base (ofs + 2) 2 0)
+         else
+           or4 (load1 base ofs 0 3)
+               (load1 base (ofs + 1) 1 2)
+               (load1 base (ofs + 2) 2 1)
+               (load1 base (ofs + 3) 3 0)
+  | _ -> assert false
+
+
 let rec load_words base ofs sz al =
-  if ofs + 4 <= sz then
-    (if al >= 4 || (!config).supports_unaligned_accesses then
-      load4 base ofs
-    else if al >= 2 then
-      or2 (load2 base ofs 0 2)
-          (load2 base (ofs + 2) 2 0)
-    else
-      or4 (load1 base ofs 0 3)
-          (load1 base (ofs + 1) 1 2)
-          (load1 base (ofs + 2) 2 1)
-          (load1 base (ofs + 3) 3 0))
-    :: load_words base (ofs + 4) sz al
-  else if ofs + 3 = sz then
-    [ if al >= 2 || (!config).supports_unaligned_accesses then
-        or2 (load2 base ofs 0 2)
-            (load1 base (ofs + 2) 2 1)
-      else
-        or3 (load1 base ofs 0 3)
-            (load1 base (ofs + 1) 1 2)
-            (load1 base (ofs + 2) 2 1) ]
-  else if ofs + 2 = sz then
-    [ if al >= 2 || (!config).supports_unaligned_accesses then
-        load2 base ofs 0 2
-      else
-        or2 (load1 base ofs 0 3)
-            (load1 base (ofs + 1) 1 2) ]
-  else if ofs + 1 = sz then
-    [ load1 base ofs 0 3 ]
-  else
-    []
+  if ofs >= sz then []
+  else if ofs + 4 >= sz then [load_word base ofs (sz - ofs) al]
+  else load_word base ofs 4 al :: load_words base (ofs + 4) sz al
+
+let load_result base sz al =
+  if sz <= 4 then
+    load_word base 0 sz al
+  else if sz <= 8 then begin
+    let (shift1, shift2) = if (!config).bigendian then (4, 0) else (0, 4) in
+    or2_ll (lshift_ll (load_word base 0 4 al) shift1)
+           (lshift_ll (load_word base 4 (sz - 4) al) shift2)
+  end else
+    assert false
 
 (* Rewriting of function types.  For the return type:
       return kind scalar   -> no change
@@ -172,7 +201,7 @@ let rec transf_type env t =
           TFun(tres', None, vararg, attr)
       | Ret_ref ->
           TFun(TVoid [], None, vararg, add_attributes attr attr_structret)
-      | Ret_value ty ->
+      | Ret_value(ty, sz, al) ->
           TFun(ty, None, vararg, attr)
       end
   | TFun(tres, Some args, vararg, attr) ->
@@ -185,7 +214,7 @@ let rec transf_type env t =
           let res = Env.fresh_ident "_res" in
           TFun(TVoid [], Some((res, TPtr(tres', [])) :: args'), vararg,
                add_attributes attr attr_structret)
-      | Ret_value ty ->
+      | Ret_value(ty, sz, al) ->
           TFun(ty, Some args', vararg, attr)
       end
   | TPtr(t1, attr) ->
@@ -298,7 +327,7 @@ and transf_call env ctx opt_lhs fn args ty =
               ecomma {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
                      (eassign lhs tmp)
           end
-      | Ret_value ty_ret ->
+      | Ret_value(ty_ret, sz, al) ->
           let ecall = {edesc = ECall(fn', args'); etyp = ty_ret} in
           begin match ctx, opt_lhs with
           | Effects, None ->
@@ -313,9 +342,12 @@ and transf_call env ctx opt_lhs fn args ty =
 
 (* Function argument of ref_caller kind: take a copy and pass pointer to copy
         arg      --->   newtemp = arg  ...   &newtemp
-   Function argument of flattened(N) kind: copy to array and pass array elts
-        arg      --->   (*((ty *) temparray) = arg ...
+   Function argument of flattened(N) kind: load and pass as integers
+   either using an intermediate array
+        arg      --->   ( * ((ty * ) temparray) = arg ...
                         temparray[0], ...,, temparray[N-1]
+   or by using loadwords:
+        arg      --->   addr = &(arg) ... loadwords addr ...
 *)
 
 and transf_arguments env args =
@@ -379,6 +411,7 @@ let transf_expr ctx e = transf_expr env ctx e in
      return kind scalar    -> return e
      return kind ref       -> _res = x; return
      return kind value ty  -> *((struct s * )_res) = x; return _res
+                           or addr = &x; return loadresult(addr)
 *)
 
 let rec transf_stmt s =
@@ -415,10 +448,18 @@ let rec transf_stmt s =
           sseq s.sloc
             (sassign s.sloc dst e')
             {sdesc = Sreturn None; sloc = s.sloc}
-      | Ret_value ty, Some dst ->
-          sseq s.sloc
-            (sassign s.sloc (ereinterpret e'.etyp dst) e')
-            {sdesc = Sreturn (Some dst); sloc = s.sloc}
+      | Ret_value(ty, sz, al), None ->
+          if translates_to_extended_lvalue e then begin
+            let tmp = new_temp ~name:"_res" ucharptr in
+            sseq s.sloc
+              (sassign s.sloc tmp (eaddrof e'))
+              {sdesc = Sreturn (Some (load_result tmp sz al)); sloc = s.sloc}
+          end else begin
+            let dst = new_temp ~name:"_res" ty in
+            sseq s.sloc
+              (sassign s.sloc (ereinterpret e'.etyp dst) e')
+              {sdesc = Sreturn (Some dst); sloc = s.sloc}
+          end
       | _, _ ->
           assert false
       end
@@ -491,12 +532,11 @@ let transf_fundef env f =
          TVoid [],
          (vres, tres) :: params,
          transf_funbody env (subst_stmt subst f.fd_body) (Some eeres))
-    | Ret_value ty ->
-        let eres = new_temp ~name:"_res" ty in
+    | Ret_value(ty, sz, al) ->
         (f.fd_attrib,
          ty,
          params, 
-         transf_funbody env (subst_stmt subst f.fd_body) (Some eres)) in
+         transf_funbody env (subst_stmt subst f.fd_body) None) in
   let temps = get_temps() in
   {f with fd_attrib = attr1;
           fd_ret = ret1;
@@ -512,6 +552,18 @@ let transf_composite env su id attr fl =
 (* Entry point *)
 
 let program p =
+  struct_passing_style :=
+    if !Clflags.option_interp then SP_ref_callee else
+    begin match !Clflags.option_fstruct_passing_style with
+    | Some st -> st
+    | None -> (!config).struct_passing_style
+    end;
+  struct_return_style :=
+    if !Clflags.option_interp then 0 else
+    begin match !Clflags.option_fstruct_return_style with
+    | Some st -> st
+    | None -> (!config).struct_return_as_int
+    end;
   Transform.program
     ~decl:transf_decl
     ~fundef:transf_fundef

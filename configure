@@ -84,7 +84,10 @@ case "$target" in
   powerpc-linux|ppc-linux|powerpc-eabi|ppc-eabi)
     arch="powerpc"
     model="standard"
-    abi="eabi"
+    case "$target" in
+      *-linux) abi="linux";;
+      *-eabi) abi="eabi";;
+    esac
     system="linux"
     cc="${toolprefix}gcc"
     cprepro="${toolprefix}gcc -U__GNUC__ -E"
@@ -154,7 +157,7 @@ case "$target" in
   ia32-macosx)
     arch="ia32"
     model="sse2"
-    abi="standard"
+    abi="macosx"
     system="macosx"
     cc="${toolprefix}gcc -arch i386"
     cprepro="${toolprefix}gcc -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' -E"
