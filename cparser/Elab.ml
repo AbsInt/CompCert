@@ -224,16 +224,21 @@ let elab_char_constant loc wide chars =
   let v =
     List.fold_left 
       (fun acc d ->
-        if acc >= max_val then
+        if acc < 0L || acc >= max_val then
           error loc "character constant overflows";
-        if d >= max_digit then
-          warning loc "escape sequence is out of range (code 0x%LX)" d;
+        if d < 0L || d >= max_digit then
+          error loc "escape sequence is out of range (code 0x%LX)" d;
         Int64.add (Int64.shift_left acc nbits) d)
       0L chars in
   if not (integer_representable v IInt) then
     warning loc "character constant cannot be represented at type 'int'";
-  (* C99 6.4.4.4 item 10: single character -> represent at type char *)
-  Ceval.normalize_int v (if List.length chars = 1 then IChar else IInt)
+  (* C99 6.4.4.4 item 10: single character -> represent at type char
+     or wchar_t *)
+  Ceval.normalize_int v
+    (if List.length chars = 1 then
+       if wide then wchar_ikind() else IChar
+     else
+       IInt)
 
 let elab_string_literal loc wide chars =
   let nbits = if wide then 8 * !config.sizeof_wchar else 8 in 
@@ -241,14 +246,14 @@ let elab_string_literal loc wide chars =
   List.iter
     (fun c ->
       if c < 0L || c >= char_max
-      then warning loc "escape sequence is out of range (code 0x%LX)" c)
+      then error loc "escape sequence is out of range (code 0x%LX)" c)
     chars;
   if wide then
     CWStr chars
   else begin
     let res = String.create (List.length chars) in
     List.iteri
-      (fun i c -> res.[i] <- Char.chr (Int64.to_int c))
+      (fun i c -> res.[i] <- Char.unsafe_chr (Int64.to_int c))
       chars;
     CStr res
   end

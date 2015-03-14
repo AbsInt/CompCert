@@ -61,7 +61,7 @@ endif
 
 OCAMLC=ocamlc$(DOTOPT) $(COMPFLAGS)
 OCAMLOPT=ocamlopt$(DOTOPT) $(COMPFLAGS)
-OCAMLDEP=ocamldep$(DOTOPT) $(INCLUDES)
+OCAMLDEP=ocamldep$(DOTOPT) -slash $(INCLUDES)
 
 # Compilers used for Camlp4-preprocessed code.  Note that we cannot
 # use the .opt compilers (because ocamlfind doesn't support them).
@@ -75,9 +75,11 @@ OCAMLLEX=ocamllex -q
 MODORDER=tools/modorder .depend.extr
 
 PARSERS=backend/CMparser.mly cparser/pre_parser.mly
-LEXERS=backend/CMlexer.mll cparser/Lexer.mll lib/Tokenize.mll
+LEXERS=backend/CMlexer.mll cparser/Lexer.mll \
+       lib/Tokenize.mll lib/Readconfig.mll
 
-LIBS=str.cmxa
+LIBS=str.cmxa unix.cmxa
+CHECKLINK_LIBS=str.cmxa
 
 EXECUTABLES=ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte
 GENERATED=$(PARSERS:.mly=.mli) $(PARSERS:.mly=.ml) $(LEXERS:.mll=.ml)
@@ -90,11 +92,11 @@ CCOMP_OBJS:=$(shell $(MODORDER) driver/Driver.cmx)
 
 ccomp: $(CCOMP_OBJS)
 	@echo "Linking $@"
-	@$(OCAMLOPT) -o $@ $(LIBS) $+ $(LINKERSPEC)
+	@$(OCAMLOPT) -o $@ $(LIBS) $+
 
 ccomp.byte: $(CCOMP_OBJS:.cmx=.cmo)
 	@echo "Linking $@"
-	@$(OCAMLC) -o $@ $(LIBS:.cmxa=.cma) $+ $(LINKERSPEC)
+	@$(OCAMLC) -o $@ $(LIBS:.cmxa=.cma) $+
 
 ifeq ($(CCHECKLINK),true)
 
@@ -102,11 +104,11 @@ CCHECKLINK_OBJS:=$(shell $(MODORDER) checklink/Validator.cmx)
 
 cchecklink: $(CCHECKLINK_OBJS)
 	@echo "Linking $@"
-	@$(OCAMLOPT_P4) -linkpkg -o $@ $(LIBS) $+
+	@$(OCAMLOPT_P4) -linkpkg -o $@ $(CHECKLINK_LIBS) $+
 
 cchecklink.byte: $(CCHECKLINK_OBJS:.cmx=.cmo)
 	@echo "Linking $@"
-	@$(OCAMLC_P4) -linkpkg -o $@ $(LIBS:.cmxa=.cma) $+
+	@$(OCAMLC_P4) -linkpkg -o $@ $(CHECKLINK_LIBS:.cmxa=.cma) $+
 
 endif
 
@@ -156,17 +158,14 @@ clean:
 	rm -f $(GENERATED)
 	for d in $(ALLDIRS); do rm -f $$d/*.cm[iox] $$d/*.o; done
 
-cleansource:
-	rm -f $(EXECUTABLES)
-	for d in $(ALLDIRS); do rm -f $$d/*.cm[iox] $$d/*.o; done
-
 # Generation of .depend.extr
 
 depend: $(GENERATED)
 	@echo "Analyzing OCaml dependencies"
-	@for d in $(DIRS); do $(OCAMLDEP) $$d/*.mli $$d/*.ml; done > .depend.extr
+	@$(OCAMLDEP) $(foreach d,$(DIRS),$(wildcard $(d)/*.mli $(d)/*.ml)) >.depend.extr
+	@$(OCAMLDEP) $(GENERATED) >> .depend.extr
 ifneq ($(strip $(DIRS_P4)),)
-	@for d in $(DIRS_P4); do $(OCAMLDEP_P4) $$d/*.mli $$d/*.ml; done >> .depend.extr
+	@$(OCAMLDEP_P4) $(foreach d,$(DIRS_P4),$(wildcard $(d)/*.mli $(d)/*.ml)) >>.depend.extr
 endif
 
 

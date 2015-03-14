@@ -158,17 +158,21 @@ static void test1(u64 x, u64 y)
   u = __i64_stof(x);
   v = (float) (s64) x;
   if (u != v)
-    error++, printf("(double) %lld (s) = %a, expected %a\n", x, u, v);
+    error++, printf("(float) %lld (s) = %a, expected %a\n", x, u, v);
 
   f = (double) x;
-  z = __i64_dtou(f);
-  if (z != (u64) f)
-    error++, printf("(u64) %a = %llu, expected %llu\n", f, z, (u64) f);
+  if (f >= 0 && f < 0x1p+64) {
+    z = __i64_dtou(f);
+    if (z != (u64) f)
+      error++, printf("(u64) %a = %llu, expected %llu\n", f, z, (u64) f);
+  }
 
   f = (double) (s64) x;
-  t = __i64_dtos(f);
-  if (t != (s64) f)
-    error++, printf("(s64) %a = %lld, expected %lld\n", f, z, (s64) f);
+  if (f >= -0x1p+63 && f < 0x1p+63) {
+    t = __i64_dtos(f);
+    if (t != (s64) f)
+      error++, printf("(s64) %a = %lld, expected %lld\n", f, z, (s64) f);
+  }
 
   f = ((double) x) * 0.0001;
   z = __i64_dtou(f);

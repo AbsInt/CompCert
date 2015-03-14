@@ -36,7 +36,7 @@ install:
 endif
 
 test/test_int64: test/test_int64.c $(LIB)
-	$(CC) -o $@ test/test_int64.c $(LIB)
+	$(CC) -g -o $@ test/test_int64.c $(LIB)
 
 clean::
 	rm -f test/test_int64
