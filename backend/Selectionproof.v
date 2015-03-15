@@ -135,7 +135,7 @@ Proof.
   inv H. econstructor; eauto.
 (* default *)
   econstructor. constructor. eauto. constructor. 
-  simpl. inv H0. auto. auto. 
+  simpl. inv H0. auto. 
 Qed.
 
 Lemma eval_load:

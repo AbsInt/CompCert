@@ -273,7 +273,6 @@ Definition sem_cast (v: val) (t1 t2: type) : option val :=
   | cast_case_p2bool =>
       match v with
       | Vint i => Some (Vint (cast_int_int IBool Signed i))
-      | Vptr _ _ => Some (Vint Int.one)
       | _ => None
       end
   | cast_case_l2l =>
@@ -391,7 +390,6 @@ Definition bool_val (v: val) (t: type) : option bool :=
   | bool_case_p =>
       match v with
       | Vint n => Some (negb (Int.eq n Int.zero))
-      | Vptr b ofs => Some true
       | _ => None
       end
   | bool_case_l =>
@@ -426,7 +424,6 @@ Definition sem_notbool (v: val) (ty: type) : option val :=
   | bool_case_p =>
       match v with
       | Vint n => Some (Val.of_bool (Int.eq n Int.zero))
-      | Vptr _ _ => Some Vfalse
       | _ => None
       end
   | bool_case_l =>

@@ -333,7 +333,6 @@ Proof.
   econstructor; split. econstructor; eauto with cshm. simpl. eauto. 
   unfold Val.cmpu, Val.cmpu_bool. simpl.
   destruct (Int.eq i Int.zero); simpl; constructor.
-  exists Vtrue; split. econstructor; eauto with cshm. constructor.
 (* long *)
   econstructor; split. econstructor; eauto with cshm. simpl. unfold Val.cmpl. simpl. eauto. 
   destruct (Int64.eq i Int64.zero); simpl; constructor. 

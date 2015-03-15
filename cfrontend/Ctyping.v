@@ -1390,7 +1390,6 @@ Proof.
   destruct (Float.cmp Ceq f Float.zero); constructor; auto with ty.
   destruct (Float32.cmp Ceq f Float32.zero); constructor; auto with ty.
   destruct (Int.eq i Int.zero); constructor; auto with ty.
-  constructor; auto with ty.
   destruct (Int64.eq i Int64.zero); constructor; auto with ty.
 - (* notint *)
   unfold sem_notint in SEM; DestructCases; auto with ty.
