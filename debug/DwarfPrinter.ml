@@ -22,7 +22,7 @@ module DwarfPrinter(Target: TARGET) :
       val print_debug: out_channel -> dw_entry -> unit
     end =
   struct
-    
+
     open Target
 
     let string_of_byte value =
@@ -30,7 +30,7 @@ module DwarfPrinter(Target: TARGET) :
 
     let print_label oc lbl =
       fprintf oc "%a:\n" label lbl
-      
+
     let curr_abbrev = ref 1
 
     let next_abbrev =
@@ -55,7 +55,7 @@ module DwarfPrinter(Target: TARGET) :
 
     let add_file_loc buf =
       let file,line = DwarfAbbrevs.file_loc_type_abbr in
-      add_abbr_entry (0x3a,file) buf; 
+      add_abbr_entry (0x3a,file) buf;
       add_abbr_entry (0x3b,line) buf
 
     let add_type = add_abbr_entry (0x49,DwarfAbbrevs.type_abbr)
@@ -256,7 +256,7 @@ module DwarfPrinter(Target: TARGET) :
         ignore (get_abbrev entry has_sib)) entry
 
     let abbrev_start_addr = ref (-1)
-        
+
     let abbrev_section_start oc =
       fprintf oc "	.section	%s\n" (name_of_section Section_debug_abbrev);
       let lbl = new_label () in
@@ -331,6 +331,10 @@ module DwarfPrinter(Target: TARGET) :
       print_file_loc oc at.array_type_file_loc;
       print_label oc (entry_to_label at.array_type)
 
+    let print_bound_value oc = function
+      | BoundConst bc -> print_uleb128 oc bc
+      | BoundRef br -> print_ref oc br
+
     let print_base_type oc bt =
       print_byte oc bt.base_type_byte_size;
       let encoding = match bt.base_type_encoding with
@@ -352,7 +356,7 @@ module DwarfPrinter(Target: TARGET) :
       print_label oc (get_end_addr ());
       print_uleb128 oc 1;
       print_string oc tag.compile_unit_name;
-      print_string oc ("CompCert "^Configuration.version); 
+      print_string oc ("CompCert "^Configuration.version);
       print_label oc (get_stmt_list_addr ())
 
     let print_const_type oc ct =
@@ -368,7 +372,7 @@ module DwarfPrinter(Target: TARGET) :
       print_file_loc oc en.enumerator_file_loc;
       print_sleb128 oc en.enumerator_value;
       print_string oc en.enumerator_name
-      
+
     let print_formal_parameter oc fp =
       print_file_loc oc fp.formal_parameter_file_loc;
       print_opt_value oc fp.formal_parameter_artificial print_flag;
@@ -377,7 +381,7 @@ module DwarfPrinter(Target: TARGET) :
       print_opt_value oc fp.formal_parameter_segment print_loc;
       print_ref oc fp.formal_parameter_type;
       print_opt_value oc fp.formal_parameter_variable_parameter print_flag
-      
+
     let print_tag_label oc tl =
       print_ref oc tl.label_low_pc;
       print_string oc tl.label_name
@@ -405,6 +409,49 @@ module DwarfPrinter(Target: TARGET) :
       print_opt_value oc st.structure_declaration print_flag;
       print_string oc st.structure_name
 
+    let print_subprogram oc sp =
+      print_file_loc oc sp.subprogram_file_loc;
+      print_opt_value oc sp.subprogram_external print_flag;
+      print_opt_value oc sp.subprogram_frame_base print_loc;
+      print_ref oc sp.subprogram_high_pc;
+      print_ref oc sp.subprogram_low_pc;
+      print_string oc sp.subprogram_name;
+      print_flag oc sp.subprogram_prototyped;
+      print_ref oc sp.subprogram_type
+
+    let print_subrange oc sr =
+      print_opt_value oc sr.subrange_type print_ref;
+      print_bound_value oc sr.subrange_upper_bound
+
+    let print_subroutine oc st =
+      print_flag oc st.subroutine_prototyped
+
+    let print_typedef oc td =
+      print_file_loc oc td.typedef_file_loc;
+      print_string oc td.typedef_name;
+      print_ref oc td.typedef_type
+
+    let print_union_type oc ut =
+      print_file_loc oc ut.union_file_loc;
+      print_uleb128 oc ut.union_byte_size;
+      print_string oc ut.union_name
+
+    let print_unspecified_parameter oc up =
+      print_file_loc oc up.unspecified_parameter_file_loc;
+      print_opt_value oc up.unspecified_parameter_artificial print_flag
+
+    let print_variable oc var =
+      print_file_loc oc var.variable_file_loc;
+      print_opt_value oc var.variable_declaration print_flag;
+      print_opt_value oc var.variable_external print_flag;
+      print_opt_value oc var.variable_location print_loc;
+      print_string oc var.variable_name;
+      print_opt_value oc var.variable_segment print_loc;
+      print_ref oc var.variable_type
+
+    let print_volatile_type oc vt =
+      print_ref oc vt.volatile_type
+
     let  print_entry oc entry =
       entry_iter_sib (fun sib entry ->
         print_ref oc entry.id;
@@ -423,11 +470,26 @@ module DwarfPrinter(Target: TARGET) :
           | DW_TAG_compile_unit comp -> print_compilation_unit oc comp
           | DW_TAG_base_type bt -> print_base_type oc bt
           | DW_TAG_const_type ct -> print_const_type oc ct
-          | _ -> ()
+          | DW_TAG_enumeration_type et -> print_enumeration_type oc et
+          | DW_TAG_enumerator et -> print_enumerator oc et
+          | DW_TAG_formal_parameter fp -> print_formal_parameter oc fp
+          | DW_TAG_label lb -> print_tag_label oc lb
+          | DW_TAG_lexical_block lb -> print_lexical_block oc lb
+          | DW_TAG_member mb -> print_member oc mb
+          | DW_TAG_pointer_type pt -> print_pointer oc pt
+          | DW_TAG_structure_type st -> print_structure oc st
+          | DW_TAG_subprogram sb -> print_subprogram oc sb
+          | DW_TAG_subrange_type sb -> print_subrange oc sb
+          | DW_TAG_subroutine_type st -> print_subroutine oc st
+          | DW_TAG_typedef tp -> print_typedef oc tp
+          | DW_TAG_union_type ut -> print_union_type oc ut
+          | DW_TAG_unspecified_parameter up -> print_unspecified_parameter oc up
+          | DW_TAG_variable var -> print_variable oc var
+          | DW_TAG_volatile_type vt -> print_volatile_type oc vt
         end;
         if entry.children = [] then
           print_sleb128 oc 0) entry
-            
+
     let print_debug_abbrev oc entry =
       compute_abbrev entry;
       print_abbrev oc
@@ -437,14 +499,14 @@ module DwarfPrinter(Target: TARGET) :
       let debug_start = new_label () in
       debug_start_addr:= debug_start;
       fprintf oc"	.section	%s\n" (name_of_section Section_debug_info);
-      print_label oc debug_start; 
+      print_label oc debug_start;
       let debug_length_start = new_label ()  (* Address used for length calculation *)
       and debug_end = new_label () in
       fprintf oc "	.4byte		%a-%a\n" label debug_end label debug_length_start;
-      print_label oc debug_length_start; 
+      print_label oc debug_length_start;
       fprintf oc "	.2byte		0x2\n"; (* Dwarf version *)
       fprintf oc "	.4byte		%a\n" label !abbrev_start_addr; (* Offset into the abbreviation *)
-      print_byte oc !Machine.config.Machine.sizeof_ptr; (* Sizeof pointer type *) 
+      print_byte oc !Machine.config.Machine.sizeof_ptr; (* Sizeof pointer type *)
       print_entry oc entry;
       print_sleb128 oc 0;
       print_label oc debug_end (* End of the debug section *)

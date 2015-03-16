@@ -70,7 +70,7 @@ type dw_tag_compile_unit =
 
 type dw_tag_const_type =
     {
-     const_type: reference;     
+     const_type: reference;
    }
 
 type dw_tag_enumeration_type =
@@ -219,7 +219,7 @@ type dw_tag =
 
 (* The type of the entries. *)
 
-type dw_entry = 
+type dw_entry =
     {
      tag:      dw_tag;
      children: dw_entry list;
