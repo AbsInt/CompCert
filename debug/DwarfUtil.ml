@@ -90,8 +90,7 @@ let dw_ref_indirect  = 0x16
 module DefaultAbbrevs =
   struct
     let sibling_type_abbr = dw_form_ref4
-    let decl_file_type_abbr = dw_form_data4
-    let decl_line_type_abbr = dw_form_udata
+    let file_loc_type_abbr = dw_form_data4,dw_form_udata
     let type_abbr = dw_form_ref_addr
     let name_type_abbr = dw_form_string
     let encoding_type_abbr = dw_form_data1

@@ -39,6 +39,7 @@ module type SYSTEM =
       val cfi_rel_offset: out_channel -> string -> int32 -> unit
       val print_prologue: out_channel -> unit
       val print_epilogue: out_channel -> unit
+      val print_file_loc: out_channel -> DwarfTypes.file_loc -> unit
     end
 
 let symbol = elf_symbol
@@ -145,6 +146,8 @@ module Linux_System : SYSTEM =
     let print_prologue oc = ()
 
     let print_epilogue oc = ()
+
+    let print_file_loc _ _ = ()
   
   end
     
@@ -243,6 +246,11 @@ module Diab_System : SYSTEM =
             fprintf oc ".L%d:	.d2filenum \"%s\"\n" label file) PrintAnnot.filename_info;
           fprintf oc "	.d2_line_end\n"
         end
+
+    let print_file_loc oc (file,col) = 
+      fprintf oc "	.4byte		%a\n" label (Hashtbl.find filenum file);
+      fprintf oc "	.uleb128	%d\n" col
+
   end
 
 module Target (System : SYSTEM):TARGET =
@@ -789,6 +797,10 @@ module Target (System : SYSTEM):TARGET =
     let get_end_addr () = !end_addr
 
     let get_stmt_list_addr () = !stmt_list_addr
+
+    module DwarfAbbrevs = DwarfUtil.DefaultAbbrevs
+
+    let new_label = new_label
 
   end
 

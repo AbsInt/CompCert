@@ -19,6 +19,7 @@ toolprefix=''
 target=''
 has_runtime_lib=true
 build_checklink=true
+advanced_debug=false
 
 usage='Usage: ./configure [options] target
 
@@ -104,7 +105,8 @@ case "$target" in
     asm_supports_cfi=false
     clinker="${toolprefix}dcc"
     libmath="-lm"
-    cchecklink=${build_checklink};;
+    cchecklink=${build_checklink}
+    advanced_debug=true;;
   arm*-*)
     arch="arm"
     case "$target" in
@@ -336,6 +338,7 @@ LIBMATH=$libmath
 HAS_RUNTIME_LIB=$has_runtime_lib
 CCHECKLINK=$cchecklink
 ASM_SUPPORTS_CFI=$asm_supports_cfi
+ADVANCED_DEBUG=$advanced_debug
 EOF
 else
 cat >> Makefile.config <<'EOF'

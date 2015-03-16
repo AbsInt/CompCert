@@ -99,4 +99,9 @@ let print_program oc p =
   Target.print_prologue oc;
   List.iter (Printer.print_globdef oc) p.prog_defs;
   Target.print_epilogue oc;
-  PrintAnnot.close_filenames ()
+  PrintAnnot.close_filenames ();
+  if !Clflags.option_g && Configuration.advanced_debug then
+    begin
+      let module DebugPrinter = DwarfPrinter(Target) in
+      ()
+    end

@@ -93,4 +93,10 @@ let asm_supports_cfi =
   | "false" -> false
   | v -> bad_config "asm_supports_cfi" [v]
 
+let advanced_debug =
+  match get_config_string "advanced_debug" with
+  | "true" -> true
+  | "false" -> false
+  | v -> bad_config "advanced_debug" [v]
+
 let version = get_config_string "version"

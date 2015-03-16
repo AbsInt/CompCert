@@ -32,10 +32,6 @@ type encoding =
 
 type address = int
 
-type language =
-  | DW_LANG_C
-  | DW_LANG_C89
-
 type block = string
 
 type location_value =
@@ -52,11 +48,12 @@ type bound_value =
 
 (* Types representing the attribute information per tag value *)
 
+type file_loc = string * constant
+
 type dw_tag_array_type =
     {
-     array_type_decl_file: string    option;
-     array_type_decl_line: constant  option;
-     array_type:           reference;
+     array_type_file_loc: file_loc option;
+     array_type:          reference;
    }
 
 type dw_tag_base_type =
@@ -68,13 +65,7 @@ type dw_tag_base_type =
 
 type dw_tag_compile_unit =
     {
-     compile_unit_comp_dir:        string;
-     compile_unit_high_pc:         address;
-     compile_unit_low_pc:          address;
-     compile_unit_language:        language;
      compile_unit_name:            string;
-     compile_unit_producer:        string;
-     compile_unit_stmt_list:       constant option;
    }
 
 type dw_tag_const_type =
@@ -84,8 +75,7 @@ type dw_tag_const_type =
 
 type dw_tag_enumeration_type =
     {
-     enumeration_decl_file:   string    option;
-     enumeration_decl_line:   constant  option;
+     enumeration_file_loc:    file_loc  option;
      enumeration_byte_size:   constant;
      enumeration_declaration: flag      option;
      enumeration_name:        string;
@@ -93,16 +83,14 @@ type dw_tag_enumeration_type =
 
 type dw_tag_enumerator =
     {
-     enumerator_decl_file: string    option;
-     enumerator_decl_line: constant  option;
-     enumerator_value:     constant;
-     enumerator_name:      string;
+     enumerator_file_loc: file_loc option;
+     enumerator_value:    constant;
+     enumerator_name:     string;
    }
 
 type dw_tag_formal_parameter =
     {
-     formal_parameter_decl_file:          string         option;
-     formal_parameter_decl_line:          constant       option;
+     formal_parameter_file_loc:           file_loc       option;
      formal_parameter_artificial:         flag           option;
      formal_parameter_location:           location_value option;
      formal_parameter_name:               string;
@@ -119,14 +107,13 @@ type dw_tag_label =
 
 type dw_tag_lexical_block =
     {
-     lexical_block__high_pc: address;
-     lexical_block_low_pc:   address;
+     lexical_block_high_pc: address;
+     lexical_block_low_pc:  address;
    }
 
 type dw_tag_member =
     {
-     member_decl_file:            string              option;
-     member_decl_line:            constant            option;
+     member_file_loc:             file_loc            option;
      member_byte_size:            constant            option;
      member_bit_offset:           constant            option;
      member_bit_size:             constant            option;
@@ -143,8 +130,7 @@ type dw_tag_pointer_type =
 
 type dw_tag_structure_type =
     {
-     structure_decl_file:   string    option;
-     structure_decl_line:   constant  option;
+     structure_file_loc:    file_loc  option;
      structure_byte_size:   constant;
      structure_declaration: flag      option;
      structure_name:        string;
@@ -152,8 +138,7 @@ type dw_tag_structure_type =
 
 type dw_tag_subprogram =
     {
-     subprogram_decl_file:  string         option;
-     subprogram_decl_line:  constant       option;
+     subprogram_file_loc:   file_loc       option;
      subprogram_external:   flag           option;
      subprogram_frame_base: location_value option;
      subprogram_high_pc:    address;
@@ -176,31 +161,27 @@ type dw_tag_subroutine_type =
 
 type dw_tag_typedef =
     {
-     typedef_decl_file: string    option;
-     typedef_decl_line: constant  option;
-     typedef_name:      string;
-     typedef_type:      reference;
+     typedef_file_loc: file_loc option;
+     typedef_name:     string;
+     typedef_type:     reference;
    }
 
 type dw_tag_union_type =
     {
-     union_decl_file: string    option;
-     union_decl_line: constant  option;
+     union_file_loc:  file_loc  option;
      union_byte_size: constant;
      union_name:      string;
    }
 
 type dw_tag_unspecified_parameter =
     {
-     unspecified_parameter_decl_file:  string   option;
-     unspecified_parameter_decl_line:  constant option;
+     unspecified_parameter_file_loc:   file_loc option;
      unspecified_parameter_artificial: flag     option;
    }
 
 type dw_tag_variable =
     {
-     variable_decl_file:   string         option;
-     variable_decl_line:   constant       option;
+     variable_file_loc:    file_loc       option;
      variable_declaration: flag           option;
      variable_external:    flag           option;
      variable_location:    location_value option;
@@ -246,3 +227,32 @@ type dw_entry =
    }
 
 
+module type DWARF_ABBREVS =
+  sig
+    val sibling_type_abbr: int
+    val file_loc_type_abbr: int * int
+    val type_abbr: int
+    val name_type_abbr: int
+    val encoding_type_abbr: int
+    val byte_size_type_abbr: int
+    val high_pc_type_abbr: int
+    val low_pc_type_abbr: int
+    val stmt_list_type_abbr: int
+    val declaration_type_abbr: int
+    val external_type_abbr: int
+    val prototyped_type_abbr: int
+    val bit_offset_type_abbr: int
+    val comp_dir_type_abbr: int
+    val language_type_abbr: int
+    val producer_type_abbr: int
+    val value_type_abbr: int
+    val artificial_type_abbr: int
+    val variable_parameter_type_abbr: int
+    val bit_size_type_abbr: int
+    val location_const_type_abbr: int
+    val location_block_type_abbr: int
+    val data_location_block_type_abbr: int
+    val data_location_ref_type_abbr: int
+    val bound_const_type_abbr: int
+    val bound_ref_type_abbr: int
+  end

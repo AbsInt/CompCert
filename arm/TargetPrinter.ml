@@ -1128,6 +1128,12 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
     let get_end_addr () = -1 (* Dummy constant *)
 
     let get_stmt_list_addr () = -1 (* Dummy constant *)
+
+    module DwarfAbbrevs = DwarfUtil.DefaultAbbrevs (* Dummy Abbrev types *)
+        
+    let label = print_label
+       
+    let new_label = new_label
   end
 
 let sel_target () = 
