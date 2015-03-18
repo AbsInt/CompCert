@@ -59,7 +59,7 @@ type dw_tag_array_type =
 type dw_tag_base_type =
     {
      base_type_byte_size: constant;
-     base_type_encoding:  encoding;
+     base_type_encoding:  encoding option;
      base_type_name:      string;
    }
 
@@ -93,7 +93,7 @@ type dw_tag_formal_parameter =
      formal_parameter_file_loc:           file_loc       option;
      formal_parameter_artificial:         flag           option;
      formal_parameter_location:           location_value option;
-     formal_parameter_name:               string;
+     formal_parameter_name:               string         option;
      formal_parameter_segment:            location_value option;
      formal_parameter_type:               reference;
      formal_parameter_variable_parameter: flag           option;
@@ -150,12 +150,13 @@ type dw_tag_subprogram =
 
 type dw_tag_subrange_type =
     {
-     subrange_type:        reference option;
-     subrange_upper_bound: bound_value;
+     subrange_type:        reference   option;
+     subrange_upper_bound: bound_value option;
    }
 
 type dw_tag_subroutine_type =
     {
+     subroutine_type:       reference option;
      subroutine_prototyped: flag;
    }
 

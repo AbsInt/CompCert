@@ -91,7 +91,7 @@ module Printer(Target:TARGET) =
             
   end
 
-let print_program oc p =
+let print_program oc p db =
   let module Target = (val (sel_target ()):TARGET) in
   let module Printer = Printer(Target) in
   PrintAnnot.reset_filenames ();

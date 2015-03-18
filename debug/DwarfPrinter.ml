@@ -130,9 +130,9 @@ module DwarfPrinter(Target: TARGET) :
           prologue 0x1;
           add_attr_some e.array_type_file_loc add_file_loc;
           add_type buf
-      | DW_TAG_base_type _ ->
+      | DW_TAG_base_type b ->
           prologue 0x24;
-          add_encoding buf;
+          add_attr_some b.base_type_encoding add_encoding;
           add_byte_size buf;
           add_name buf
       | DW_TAG_compile_unit e ->
@@ -163,7 +163,7 @@ module DwarfPrinter(Target: TARGET) :
           add_attr_some e.formal_parameter_file_loc add_file_loc;
           add_attr_some e.formal_parameter_artificial add_artificial;
           add_location  e.formal_parameter_location buf;
-          add_name buf;
+          add_attr_some e.formal_parameter_name add_name;
           add_location e.formal_parameter_segment buf;
           add_type buf;
           add_attr_some e.formal_parameter_variable_parameter add_variable_parameter
@@ -206,9 +206,12 @@ module DwarfPrinter(Target: TARGET) :
       | DW_TAG_subrange_type e ->
           prologue 0x21;
           add_attr_some e.subrange_type add_type;
-          add_bound_value e.subrange_upper_bound buf
-      | DW_TAG_subroutine_type _ ->
+          (match e.subrange_upper_bound  with 
+          | None -> ()
+          | Some b -> add_bound_value b buf)
+      | DW_TAG_subroutine_type e ->
           prologue 0x15;
+          add_attr_some e.subroutine_type add_type;
           add_prototyped buf
       | DW_TAG_typedef e ->
           prologue 0x16;
@@ -337,17 +340,20 @@ module DwarfPrinter(Target: TARGET) :
 
     let print_base_type oc bt =
       print_byte oc bt.base_type_byte_size;
-      let encoding = match bt.base_type_encoding with
-      | DW_ATE_address -> 0x1
-      | DW_ATE_boolean -> 0x2
-      | DW_ATE_complex_float -> 0x3
-      | DW_ATE_float -> 0x4
-      | DW_ATE_signed -> 0x5
-      | DW_ATE_signed_char -> 0x6
-      | DW_ATE_unsigned -> 0x7
-      | DW_ATE_unsigned_char -> 0x8
-      in
-      print_byte oc encoding;
+      match bt.base_type_encoding with 
+      | Some e ->
+          let encoding = match e with
+          | DW_ATE_address -> 0x1
+          | DW_ATE_boolean -> 0x2
+          | DW_ATE_complex_float -> 0x3
+          | DW_ATE_float -> 0x4
+          | DW_ATE_signed -> 0x5
+          | DW_ATE_signed_char -> 0x6
+          | DW_ATE_unsigned -> 0x7
+          | DW_ATE_unsigned_char -> 0x8
+          in
+          print_byte oc encoding;
+      | None -> ();
       print_string oc bt.base_type_name
 
     let print_compilation_unit oc tag =
@@ -377,7 +383,7 @@ module DwarfPrinter(Target: TARGET) :
       print_file_loc oc fp.formal_parameter_file_loc;
       print_opt_value oc fp.formal_parameter_artificial print_flag;
       print_opt_value oc fp.formal_parameter_location print_loc;
-      print_string oc fp.formal_parameter_name;
+      print_opt_value oc fp.formal_parameter_name print_string;
       print_opt_value oc fp.formal_parameter_segment print_loc;
       print_ref oc fp.formal_parameter_type;
       print_opt_value oc fp.formal_parameter_variable_parameter print_flag
@@ -421,9 +427,10 @@ module DwarfPrinter(Target: TARGET) :
 
     let print_subrange oc sr =
       print_opt_value oc sr.subrange_type print_ref;
-      print_bound_value oc sr.subrange_upper_bound
+      print_opt_value oc sr.subrange_upper_bound print_bound_value
 
     let print_subroutine oc st =
+      print_opt_value oc st.subroutine_type print_ref;
       print_flag oc st.subroutine_prototyped
 
     let print_typedef oc td =

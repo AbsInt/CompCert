@@ -33,8 +33,13 @@ let new_entry tag =
  }
 
 (* Add an entry as child to  another entry *)
-let add_children entry child =
+let add_child entry child =
   {entry with children = child::entry.children;}
+
+
+(* Add entries as children to  another entry *)
+let add_children entry children =
+  {entry with children = entry.children@children;}
 
 
 let list_iter_with_next f list =

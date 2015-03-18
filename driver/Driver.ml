@@ -15,6 +15,7 @@ open Commandline
 open Camlcoq
 open Clflags
 open Timing
+open CtoDwarf
 
 (* Location of the compatibility library *)
 
@@ -181,7 +182,7 @@ let compile_c_ast sourcename csyntax ofile =
     dump_asm asm (output_filename sourcename ".c" ".sdump");
   (* Print Asm in text form *)
   let oc = open_out ofile in
-  PrintAsm.print_program oc asm;
+  PrintAsm.print_program oc asm None;
   close_out oc
 
 (* From C source to asm *)
@@ -212,7 +213,7 @@ let compile_cminor_file ifile ofile =
         exit 2
     | Errors.OK p ->
         let oc = open_out ofile in
-        PrintAsm.print_program oc p;
+        PrintAsm.print_program oc p None;
         close_out oc
   with Parsing.Parse_error ->
          eprintf "File %s, character %d: Syntax error\n"
