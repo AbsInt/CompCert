@@ -129,6 +129,9 @@ let parse_c_file sourcename ifile =
     Cprint.program (Format.formatter_of_out_channel oc) ast;
     close_out oc
   end;
+  let debug = if !option_g && Configuration.advanced_debug then
+    Some (program_to_dwarf ast sourcename) 
+  else None in
   (* Conversion to Csyntax *)
   let csyntax =
     match Timing.time "CompCert C generation" C2C.convertProgram ast with
@@ -142,7 +145,7 @@ let parse_c_file sourcename ifile =
     PrintCsyntax.print_program (Format.formatter_of_out_channel oc) csyntax;
     close_out oc
   end;
-  csyntax
+  csyntax,debug
 
 (* Dump Asm code in binary format for the validator *)
 
@@ -158,7 +161,7 @@ let dump_asm asm destfile =
 
 (* From CompCert C AST to asm *)
 
-let compile_c_ast sourcename csyntax ofile =
+let compile_c_ast sourcename csyntax ofile debug =
   (* Prepare to dump Clight, RTL, etc, if requested *)
   let set_dest dst opt ext =
     dst := if !opt then Some (output_filename sourcename ".c" ext)
@@ -182,13 +185,14 @@ let compile_c_ast sourcename csyntax ofile =
     dump_asm asm (output_filename sourcename ".c" ".sdump");
   (* Print Asm in text form *)
   let oc = open_out ofile in
-  PrintAsm.print_program oc asm None;
+  PrintAsm.print_program oc asm debug;
   close_out oc
 
 (* From C source to asm *)
 
 let compile_c_file sourcename ifile ofile =
-  compile_c_ast sourcename (parse_c_file sourcename ifile) ofile
+  let ast,debug = parse_c_file sourcename ifile in
+  compile_c_ast sourcename ast ofile debug
 
 (* From Cminor to asm *)
 
@@ -266,7 +270,7 @@ let process_c_file sourcename =
     let preproname = Filename.temp_file "compcert" ".i" in
     preprocess sourcename preproname;
     if !option_interp then begin
-      let csyntax = parse_c_file sourcename preproname in
+      let csyntax,_ = parse_c_file sourcename preproname in
       safe_remove preproname;
       Interp.execute csyntax;
       ""
@@ -293,7 +297,7 @@ let process_c_file sourcename =
 
 let process_i_file sourcename =
   if !option_interp then begin
-    let csyntax = parse_c_file sourcename sourcename in
+    let csyntax,_ = parse_c_file sourcename sourcename in
     Interp.execute csyntax;
     ""
   end else if !option_S then begin

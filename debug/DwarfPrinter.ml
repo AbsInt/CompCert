@@ -25,6 +25,7 @@ module DwarfPrinter(Target: TARGET) :
 
     open Target
 
+      
     let string_of_byte value =
       sprintf "	.byte		%s\n" (if value then "0x1" else "0x0")
 
@@ -328,11 +329,15 @@ module DwarfPrinter(Target: TARGET) :
       ()
 
     let print_ref oc r =
-      print_label oc (entry_to_label r)
-
+      let ref = entry_to_label r in
+      fprintf oc "	.4byte		%a\n" label ref     
+        
+    let print_addr oc a =
+      fprintf oc "	.4byte		%a\n" label a     
+        
     let print_array_type oc at =
       print_file_loc oc at.array_type_file_loc;
-      print_label oc (entry_to_label at.array_type)
+      print_ref oc at.array_type
 
     let print_bound_value oc = function
       | BoundConst bc -> print_uleb128 oc bc
@@ -358,12 +363,12 @@ module DwarfPrinter(Target: TARGET) :
 
     let print_compilation_unit oc tag =
       print_string oc (Sys.getcwd ());
-      print_label oc (get_start_addr ());
-      print_label oc (get_end_addr ());
+      print_addr oc (get_start_addr ());
+      print_addr oc (get_end_addr ());
       print_uleb128 oc 1;
       print_string oc tag.compile_unit_name;
       print_string oc ("CompCert "^Configuration.version);
-      print_label oc (get_stmt_list_addr ())
+      print_addr oc (get_stmt_list_addr ())
 
     let print_const_type oc ct =
       print_ref oc ct.const_type
@@ -461,7 +466,7 @@ module DwarfPrinter(Target: TARGET) :
 
     let  print_entry oc entry =
       entry_iter_sib (fun sib entry ->
-        print_ref oc entry.id;
+        print_label oc (entry_to_label entry.id);
         let has_sib = match sib with
         | None -> false
         | Some _ -> true in
@@ -512,7 +517,7 @@ module DwarfPrinter(Target: TARGET) :
       fprintf oc "	.4byte		%a-%a\n" label debug_end label debug_length_start;
       print_label oc debug_length_start;
       fprintf oc "	.2byte		0x2\n"; (* Dwarf version *)
-      fprintf oc "	.4byte		%a\n" label !abbrev_start_addr; (* Offset into the abbreviation *)
+      print_addr oc !abbrev_start_addr; (* Offset into the abbreviation *)
       print_byte oc !Machine.config.Machine.sizeof_ptr; (* Sizeof pointer type *)
       print_entry oc entry;
       print_sleb128 oc 0;

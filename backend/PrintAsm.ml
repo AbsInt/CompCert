@@ -88,6 +88,8 @@ module Printer(Target:TARGET) =
       | Gfun (Internal code) -> print_function oc name code
       | Gfun (External ef) ->   ()
       | Gvar v -> print_var oc name v
+
+    module DebugPrinter = DwarfPrinter (Target)
             
   end
 
@@ -102,6 +104,8 @@ let print_program oc p db =
   PrintAnnot.close_filenames ();
   if !Clflags.option_g && Configuration.advanced_debug then
     begin
-      let module DebugPrinter = DwarfPrinter(Target) in
-      ()
+      match db with
+      | None -> ()
+      | Some db ->
+          Printer.DebugPrinter.print_debug oc db
     end

@@ -111,7 +111,7 @@ let rec type_to_dwarf (typ: typ): int * dw_entry list =
             Some ret,et) in
           let prototyped,children,others =
             (match args with 
-            | None ->
+            | None -> 
                 let u = {
                   unspecified_parameter_file_loc = None;
                   unspecified_parameter_artificial = None;
@@ -182,3 +182,21 @@ let rec type_to_dwarf (typ: typ): int * dw_entry list =
     Hashtbl.add type_table typ_string id;
     id,entries
         
+let rec globdecl_to_dwarf decl =
+  match decl.gdesc with
+  | Gtypedef (n,t) -> let i,t = type_to_dwarf t in
+    Hashtbl.add defined_types_table n.name i;
+    t
+  | Gpragma _ 
+  | _ ->  []
+
+let program_to_dwarf prog name =
+  Hashtbl.reset type_table;
+  Hashtbl.reset defined_types_table;
+  reset_id ();
+  let defs = List.concat (List.map globdecl_to_dwarf prog) in
+  let cp = {
+    compile_unit_name = name;
+  } in
+  let cp = new_entry (DW_TAG_compile_unit cp) in
+  add_children cp defs
