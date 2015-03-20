@@ -834,9 +834,15 @@ let nullconst = ecast (TPtr(TVoid [], [])) (intconst 0L IInt)
 
 let eassign e1 e2 = { edesc = EBinop(Oassign, e1, e2, e1.etyp); etyp = e1.etyp }
 
-(* Construct a "," expression *)
+(* Construct a "," expression.  Reassociate to the left so that
+   it prints more nicely. *)
 
-let ecomma e1 e2 = { edesc = EBinop(Ocomma, e1, e2, e2.etyp); etyp = e2.etyp }
+let rec ecomma e1 e2 =
+  match e2.edesc with
+  | EBinop(Ocomma, e2', e2'', _) ->
+     ecomma (ecomma e1 e2') e2''
+  | _ ->
+     { edesc = EBinop(Ocomma, e1, e2, e2.etyp); etyp = e2.etyp }
 
 (* Construct a cascade of "," expressions.
    Associate to the left so that it prints more nicely. *)
