@@ -44,15 +44,8 @@ type t = {
   alignof_fun: int option;
   bigendian: bool;
   bitfields_msb_first: bool;
-  supports_unaligned_accesses: bool;
-  struct_return_as_int: int;
-  struct_passing_style: struct_passing_style
+  supports_unaligned_accesses: bool
 }
-
-and struct_passing_style =
-  | SP_ref_callee                       (* by reference, callee takes copy *)
-  | SP_ref_caller                       (* by reference, caller takes copy *)
-  | SP_split_args                       (* by value, as a sequence of ints *)
 
 (* The current configuration *)
 
@@ -69,7 +62,6 @@ val x86_64 : t
 val win32 : t
 val win64 : t
 val ppc_32_bigendian : t
-val ppc_32_bigendian_linux : t
 val arm_littleendian : t
 
 val gcc_extensions : t -> t

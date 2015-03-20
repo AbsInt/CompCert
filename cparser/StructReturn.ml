@@ -18,11 +18,12 @@
    - passed by value as function parameters. *)
 
 open Machine
+open Configuration
 open C
 open Cutil
 open Transform
 
-let struct_return_style = ref 0
+let struct_return_style = ref SR_ref
 let struct_passing_style = ref SP_ref_callee
 
 (* Classification of function return types. *)
@@ -38,11 +39,18 @@ let classify_return env ty =
   if is_composite_type env ty then begin
     match sizeof env ty, alignof env ty with
     | Some sz, Some al ->
-        if !struct_return_style >= 4 && sz <= 4 then
-          Ret_value (TInt(IUInt, []), sz, al)
-        else if !struct_return_style >= 8 && sz <= 8 then
-          Ret_value (TInt(IULongLong, []), sz, al)
-        else Ret_ref
+        begin match !struct_return_style with
+        | SR_int1248 when sz = 1 || sz = 2 || sz = 4 ->
+            Ret_value (TInt(IUInt, []), sz, al)
+        | SR_int1248 when sz = 8 ->
+            Ret_value (TInt(IULongLong, []), sz, al)
+        | (SR_int1to4 | SR_int1to8) when sz <= 4 ->
+            Ret_value (TInt(IUInt, []), sz, al)
+        | SR_int1to8 when sz > 4 && sz <= 8 ->
+            Ret_value (TInt(IULongLong, []), sz, al)
+        | _ ->
+            Ret_ref
+        end
     | _, _ ->
         Ret_ref  (* should not happen *)
   end else
@@ -85,6 +93,7 @@ let ulonglong = TInt(IULongLong, [])
 let ucharptr = TPtr(uchar, [])
 let ushortptr = TPtr(ushort, [])
 let uintptr = TPtr(uint, [])
+let ulonglongptr = TPtr(ulonglong, [])
 
 let ty_buffer n =
   TArray(uint, Some (Int64.of_int n), [])
@@ -110,6 +119,7 @@ let lshift a nbytes =
       etyp = uint }
 
 let offsetptr base ofs =
+  if ofs = 0 then base else
   { edesc = EBinop(Oadd, base, intconst (Int64.of_int ofs) IInt, ucharptr);
     etyp = ucharptr }
 
@@ -126,6 +136,10 @@ let load2 base ofs shift_le shift_be =
 let load4 base ofs =
   let a = ecast uintptr (offsetptr base ofs) in
   { edesc = EUnop(Oderef, a); etyp = uint }
+
+let load8 base ofs =
+  let a = ecast ulonglongptr (offsetptr base ofs) in
+  { edesc = EUnop(Oderef, a); etyp = ulonglong }
 
 let lshift_ll a nbytes =
   let a = ecast ulonglong a in
@@ -172,14 +186,16 @@ let rec load_words base ofs sz al =
   else load_word base ofs 4 al :: load_words base (ofs + 4) sz al
 
 let load_result base sz al =
+  assert (sz <= 8);
   if sz <= 4 then
     load_word base 0 sz al
-  else if sz <= 8 then begin
+  else if sz = 8 && (al >= 8 || (!config).supports_unaligned_accesses) then
+    load8 base 0
+  else begin
     let (shift1, shift2) = if (!config).bigendian then (4, 0) else (0, 4) in
     or2_ll (lshift_ll (load_word base 0 4 al) shift1)
            (lshift_ll (load_word base 4 (sz - 4) al) shift2)
-  end else
-    assert false
+  end
 
 (* Rewriting of function types.  For the return type:
       return kind scalar   -> no change
@@ -368,7 +384,8 @@ and transf_arguments env args =
           let ty' = transf_type env arg.etyp in
           if translates_to_extended_lvalue arg then begin
             let tmp = new_temp ~name:"_arg" ucharptr in
-            (eassign tmp (eaddrof (transf_expr env Val arg)) :: assignments,
+            (eassign tmp (ecast ucharptr (eaddrof (transf_expr env Val arg)))
+             :: assignments,
              load_words tmp 0 sz al @ args')
           end else begin
             let tmp = new_temp ~name:"_arg" (ty_buffer n) in
@@ -452,7 +469,7 @@ let rec transf_stmt s =
           if translates_to_extended_lvalue e then begin
             let tmp = new_temp ~name:"_res" ucharptr in
             sseq s.sloc
-              (sassign s.sloc tmp (eaddrof e'))
+              (sassign s.sloc tmp (ecast ucharptr (eaddrof e')))
               {sdesc = Sreturn (Some (load_result tmp sz al)); sloc = s.sloc}
           end else begin
             let dst = new_temp ~name:"_res" ty in
@@ -553,17 +570,13 @@ let transf_composite env su id attr fl =
 
 let program p =
   struct_passing_style :=
-    if !Clflags.option_interp then SP_ref_callee else
-    begin match !Clflags.option_fstruct_passing_style with
-    | Some st -> st
-    | None -> (!config).struct_passing_style
-    end;
+    if !Clflags.option_interp
+    then SP_ref_callee
+    else !Clflags.option_fstruct_passing_style;
   struct_return_style :=
-    if !Clflags.option_interp then 0 else
-    begin match !Clflags.option_fstruct_return_style with
-    | Some st -> st
-    | None -> (!config).struct_return_as_int
-    end;
+    if !Clflags.option_interp
+    then SR_ref
+    else !Clflags.option_fstruct_return_style;
   Transform.program
     ~decl:transf_decl
     ~fundef:transf_fundef

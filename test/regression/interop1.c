@@ -12,171 +12,146 @@
 #include <stdio.h>
 
 /* Alignment 1 */
+
 struct S1 { char a; };
+static struct S1 init_S1 = { 'a' };
+#define print_S1(x) printf("{ a = '%c' }\n", x.a)
+
 struct S2 { char a, b; };
+static struct S2 init_S2 = { 'a', 'b' };
+#define print_S2(x) printf("{ a = '%c', b = '%c' }\n", x.a, x.b)
+
 struct S3 { char a, b, c; };
+static struct S3 init_S3 = { 'a', 'b', 'c' };
+#define print_S3(x) \
+   printf("{ a = '%c', b = '%c', c = ' %c' }\n", x.a, x.b, x.c)
+
 struct S4 { char a, b, c, d; };
+static struct S4 init_S4 = { 'a', 'b', 'c', 'd' };
+#define print_S4(x) \
+   printf("{ a = '%c', b = '%c', c = ' %c', d = '%c' }\n", \
+          x.a, x.b, x.c, x.d);
+
 struct S5 { char a, b, c, d, e; };
+static struct S5 init_S5 = { 'a', 'b', 'c', 'd', 'e' };
+#define print_S5(x) \
+  printf("{ a = '%c', b = '%c', c = ' %c', d = '%c', e = '%c' }\n", \
+         x.a, x.b, x.c, x.d, x.e)
+
 struct S6 { char a, b, c, d, e, f; };
+static struct S6 init_S6 = { 'a', 'b', 'c', 'd', 'e', 'f' };
+#define print_S6(x) \
+  printf("{ a = '%c', b = '%c', c = ' %c', d = '%c', e = '%c', f = '%c' }\n", \
+         x.a, x.b, x.c, x.d, x.e, x.f)
+
 struct S7 { char a, b, c, d, e, f, g; };
+static struct S7 init_S7 = { 'a', 'b', 'c', 'd', 'e', 'f', 'g' };
+#define print_S7(x) \
+  printf("{ a = '%c', b = '%c', c = ' %c', d = '%c', e = '%c', f = '%c', g = '%c' }\n", \
+         x.a, x.b, x.c, x.d, x.e, x.f, x.g)
+
 struct S8 { char a[32]; };
+static struct S8 init_S8 = { "Hello world!" };
+/* Do not use printf("%s") to avoid undefined behavior in the
+   reference interpreter */
+#define print_S8(x) \
+  { char * p;       \
+    printf("\"");   \
+    for (p = x.a; *p != 0; p++) printf("%c", *p); \
+    printf("\"\n");   \
+  }
 
 /* Alignment 2 */
+
 struct T1 { short a; };
+static struct T1 init_T1 = { 123 };
+#define print_T1(x) printf("{ a = %d }\n", x.a)
+
 struct T2 { short a, b; };
+static struct T2 init_T2 = { 123, 456 };
+#define print_T2(x) printf("{ a = %d, b = %d }\n", x.a, x.b)
+
 struct T3 { short a, b, c; };
+static struct T3 init_T3 = { 123, 456, 789 };
+#define print_T3(x) printf("{ a = %d, b = %d, c = %d }\n", x.a, x.b, x.c)
+
 struct T4 { short a, b, c, d; };
+static struct T4 init_T4 = { 123, 456, 789, -111 };
+#define print_T4(x) \
+  printf("{ a = %d, b = %d, c = %d, d = %d }\n", x.a, x.b, x.c, x.d)
+
 struct T5 { short a, b, c, d; char e; };
+static struct T5 init_T5 = { 123, 456, 789, -999, 'x' };
+#define print_T5(x) \
+  printf("{ a = %d, b = %d, c = %d, d = %d, e = '%c' }\n", \
+         x.a, x.b, x.c, x.d, x.e)
 
 /* Alignment >= 4 */
+
 struct U1 { int a; };
+static struct U1 init_U1 = { 12 };
+#define print_U1(x) printf("{ a = %d }\n", x.a)
+
 struct U2 { int a, b; };
+static struct U2 init_U2 = { 12, -34 };
+#define print_U2(x) printf("{ a = %d, b = %d }\n", x.a, x.b)
+
 struct U3 { int a, b, c; };
+static struct U3 init_U3 = { 12, 34, -56};
+#define print_U3(x) printf("{ a = %d, b = %d, c = %d }\n", x.a, x.b, x.c)
+
 struct U4 { int a, b, c, d; };
+static struct U4 init_U4 = { 12, 34, 56, -78 };
+#define print_U4(x) \
+  printf("{ a = %d, b = %d, c = %d, d = %d }\n", x.a, x.b, x.c, x.d)
+
 struct U5 { int a; char b; };
+static struct U5 init_U5 = { 1234, 'u' };
+#define print_U5(x) \
+  printf("{ a = %d, b = '%c' }\n", x.a, x.b)
+
 struct U6 { int a; short b; };
+static struct U6 init_U6 = { 55555, 666 };
+#define print_U6(x) \
+  printf("{ a = %d, b = %d }\n", x.a, x.b)
+
 struct U7 { int a; short b; char c; };
+static struct U7 init_U7 = { -10001, -789, 'z' };
+#define print_U7(x) \
+  printf("{ a = %d, b = %d, c = '%c' }\n", x.a, x.b, x.c)
+
 struct U8 { char a; int b; };
-struct U9 { int a[4]; };
+static struct U8 init_U8 = { 'x', 12345 };
+#define print_U8(x) \
+  printf("{ a = '%c', b = %d }\n", x.a, x.b)
 
 /* Struct passing */
 
-extern void THEM(s1) (struct S1 x);
-void US(s1) (struct S1 x)
-{
-  printf("s1 = { a = '%c' }\n", x.a);
-}
+#define PRINT(name,ty,print) \
+extern void THEM(name) (struct ty x); \
+void US(name) (struct ty x) { print(x); }
 
-extern void THEM(s2) (struct S2 x);
-void US(s2) (struct S2 x)
-{
-  printf("s2 = { a = '%c', b = '%c' }\n", x.a, x.b);
-}
-
-extern void THEM(s3) (struct S3 x);
-void US(s3) (struct S3 x)
-{
-  printf("s3 = { a = '%c', b = '%c', c = ' %c' }\n", x.a, x.b, x.c);
-}
-
-extern void THEM(s4) (struct S4 x);
-void US(s4) (struct S4 x)
-{
-  printf("s4 = { a = '%c', b = '%c', c = ' %c', d = '%c' }\n",
-         x.a, x.b, x.c, x.d);
-}
-
-extern void THEM(s5) (struct S5 x);
-void US(s5) (struct S5 x)
-{
-  printf("s5 = { a = '%c', b = '%c', c = ' %c', d = '%c', e = '%c' }\n",
-         x.a, x.b, x.c, x.d, x.e);
-}
-
-extern void THEM(s6) (struct S6 x);
-void US(s6) (struct S6 x)
-{
-  printf("s6 = { a = '%c', b = '%c', c = ' %c', d = '%c', e = '%c', f = '%c' }\n",
-         x.a, x.b, x.c, x.d, x.e, x.f);
-}
-
-extern void THEM(s7) (struct S7 x);
-void US(s7) (struct S7 x)
-{
-  printf("s7 = { a = '%c', b = '%c', c = ' %c', d = '%c', e = '%c', f = '%c', g = '%c' }\n",
-         x.a, x.b, x.c, x.d, x.e, x.f, x.g);
-}
-
-extern void THEM(s8) (struct S8 x);
-void US(s8) (struct S8 x)
-{
-  printf("s8 = \"%s\"\n", x.a);
-}
-
-extern void THEM(t1) (struct T1 x);
-void US(t1) (struct T1 x)
-{
-  printf("t1 = { a = %d }\n", x.a);
-}
-
-extern void THEM(t2) (struct T2 x);
-void US(t2) (struct T2 x)
-{
-  printf("t2 = { a = %d, b = %d }\n", x.a, x.b);
-}
-
-extern void THEM(t3) (struct T3 x);
-void US(t3) (struct T3 x)
-{
-  printf("t3 = { a = %d, b = %d, c = %d }\n", x.a, x.b, x.c);
-}
-
-extern void THEM(t4) (struct T4 x);
-void US(t4) (struct T4 x)
-{
-  printf("t4 = { a = %d, b = %d, c = %d, d = %d }\n", x.a, x.b, x.c, x.d);
-}
-
-extern void THEM(t5) (struct T5 x);
-void US(t5) (struct T5 x)
-{
-  printf("t4 = { a = %d, b = %d, c = %d, d = %d, e = '%c' }\n",
-         x.a, x.b, x.c, x.d, x.e);
-}
-
-extern void THEM(u1) (struct U1 x);
-void US(u1) (struct U1 x)
-{
-  printf("u1 = { a = %d }\n", x.a);
-}
-
-extern void THEM(u2) (struct U2 x);
-void US(u2) (struct U2 x)
-{
-  printf("u2 = { a = %d, b = %d }\n", x.a, x.b);
-}
-
-extern void THEM(u3) (struct U3 x);
-void US(u3) (struct U3 x)
-{
-  printf("u3 = { a = %d, b = %d, c = %d }\n", x.a, x.b, x.c);
-}
-
-extern void THEM(u4) (struct U4 x);
-void US(u4) (struct U4 x)
-{
-  printf("u4 = { a = %d, b = %d, c = %d, d = %d }\n", x.a, x.b, x.c, x.d);
-}
-
-extern void THEM(u5) (struct U5 x);
-void US(u5) (struct U5 x)
-{
-  printf("u5 = { a = %d, b = '%c' }\n", x.a, x.b);
-}
-
-extern void THEM(u6) (struct U6 x);
-void US(u6) (struct U6 x)
-{
-  printf("u6 = { a = %d, b = %d }\n", x.a, x.b);
-}
-
-extern void THEM(u7) (struct U7 x);
-void US(u7) (struct U7 x)
-{
-  printf("u7 = { a = %d, b = %d, c = '%c' }\n", x.a, x.b, x.c);
-}
-
-extern void THEM(u8) (struct U8 x);
-void US(u8) (struct U8 x)
-{
-  printf("u8 = { a = '%c', b = %d }\n", x.a, x.b);
-}
-
-extern void THEM(u9) (struct U9 x);
-void US(u9) (struct U9 x)
-{
-  printf("u9 = { a = { %d, %d, %d, %d } }\n", x.a[0], x.a[1], x.a[2], x.a[3]);
-}
+PRINT(s1,S1,print_S1)
+PRINT(s2,S2,print_S2)
+PRINT(s3,S3,print_S3)
+PRINT(s4,S4,print_S4)
+PRINT(s5,S5,print_S5)
+PRINT(s6,S6,print_S6)
+PRINT(s7,S7,print_S7)
+PRINT(s8,S8,print_S8)
+PRINT(t1,T1,print_T1)
+PRINT(t2,T2,print_T2)
+PRINT(t3,T3,print_T3)
+PRINT(t4,T4,print_T4)
+PRINT(t5,T5,print_T5)
+PRINT(u1,U1,print_U1)
+PRINT(u2,U2,print_U2)
+PRINT(u3,U3,print_U3)
+PRINT(u4,U4,print_U4)
+PRINT(u5,U5,print_U5)
+PRINT(u6,U6,print_U6)
+PRINT(u7,U7,print_U7)
+PRINT(u8,U8,print_U8)
 
 /* Struct passing with modification in the callee */
 
@@ -186,97 +161,102 @@ void US (ms4) (struct S4 x)
   x.a += 1; x.d -= 1;
 }
 
-extern void THEM (mu9) (struct U9 x);
-void US (mu9) (struct U9 x)
+extern void THEM (mu4) (struct U4 x);
+void US (mu4) (struct U4 x)
 {
-  int i;
-  for (i = 0; i < 4; i++) x.a[i] = i;
+  x.a = 1; x.b = 2;
 }
 
 /* Struct return */
 
-extern struct S1 THEM(rs1) (void);
-struct S1 US(rs1) (void)
-{ return (struct S1){ 'a' }; }
+#define RETURN(name,ty,init) \
+extern struct ty THEM(name)(void); \
+struct ty US(name)(void) { return init; }
 
-extern struct S2 THEM(rs2) (void);
-struct S2 US(rs2) (void)
-{ return (struct S2){ 'a', 'b' }; }
-
-extern struct S3 THEM(rs3) (void);
-struct S3 US(rs3) (void)
-{ return (struct S3){ 'a', 'b', 'c' }; }
-
-extern struct S4 THEM(rs4) (void);
-struct S4 US(rs4) (void)
-{ return (struct S4){ 'a', 'b', 'c', 'd' }; }
-
-extern struct S8 THEM(rs8) (void);
-struct S8 US(rs8) (void)
-{ return (struct S8){ "Lorem ipsum" }; }
-
-extern struct U2 THEM(ru2) (void);
-struct U2 US(ru2) (void)
-{ return (struct U2){ 12, -34 }; }
-
-extern struct U6 THEM(ru6) (void);
-struct U6 US(ru6) (void)
-{ return (struct U6){ 12345678, -9999 }; }
-
-extern struct U9 THEM(ru9) (void);
-struct U9 US(ru9) (void)
-{ return (struct U9){ 111, 222, 333, 444 }; }
+RETURN(rs1,S1,init_S1)
+RETURN(rs2,S2,init_S2)
+RETURN(rs3,S3,init_S3)
+RETURN(rs4,S4,init_S4)
+RETURN(rs5,S5,init_S5)
+RETURN(rs6,S6,init_S6)
+RETURN(rs7,S7,init_S7)
+RETURN(rs8,S8,init_S8)
+RETURN(rt1,T1,init_T1)
+RETURN(rt2,T2,init_T2)
+RETURN(rt3,T3,init_T3)
+RETURN(rt4,T4,init_T4)
+RETURN(rt5,T5,init_T5)
+RETURN(ru1,U1,init_U1)
+RETURN(ru2,U2,init_U2)
+RETURN(ru3,U3,init_U3)
+RETURN(ru4,U4,init_U4)
+RETURN(ru5,U5,init_U5)
+RETURN(ru6,U6,init_U6)
+RETURN(ru7,U7,init_U7)
+RETURN(ru8,U8,init_U8)
 
 /* Test function, calling the functions compiled by the other compiler */
+
+#define CALLPRINT(name,ty,init) \
+  printf(#name": "); THEM(name)(init);
+
+#define CALLRETURN(name,ty,print) \
+  { struct ty x = THEM(name)(); \
+    printf(#name": "); print(x); }
 
 extern void THEM(test) (void);
 void US(test) (void)
 {
-  THEM(s1)((struct S1) {'a'});
-  THEM(s2)((struct S2) {'x', 'y'});
-  THEM(s3)((struct S3) {'a', 'b', 'c'});
-  THEM(s4)((struct S4) {'p', 'q', 'r', 's'});
-  THEM(s5)((struct S5) {'a', 'b', 'c', 'd', 'e'});
-  THEM(s6)((struct S6) {'a', 'b', 'c', 'd', 'e', 'f'});
-  THEM(s7)((struct S7) {'a', 'b', 'c', 'd', 'e', 'f', 'g'});
-  THEM(s8)((struct S8) { "Hello, world!" });
-  THEM(t1)((struct T1) { 12 });
-  THEM(t2)((struct T2) { 34, 56 });
-  THEM(t3)((struct T3) { -1, -2, -3});
-  THEM(t4)((struct T4) { 11, 22, 33, 44} );
-  THEM(t5)((struct T5) { 1, 2, 3, 4, 'x'});
-  THEM(u1)((struct U1) { 12345678 } );
-  THEM(u2)((struct U2) { 1, -1});
-  THEM(u3)((struct U3) { -1, -2, -3 });
-  THEM(u4)((struct U4) { 4, 3, 2, 1 });
-  THEM(u5)((struct U5) { 123, 'z' });
-  THEM(u6)((struct U6) { -12345678, 555 });
-  THEM(u7)((struct U7) { 111111111, 2222, 'a' });
-  THEM(u8)((struct U8) { 'u', 8 });
-  THEM(u9)((struct U9) { 9, 8, 7, 6 });
+  CALLPRINT(s1,S1,init_S1)
+  CALLPRINT(s2,S2,init_S2)
+  CALLPRINT(s3,S3,init_S3)
+  CALLPRINT(s4,S4,init_S4)
+  CALLPRINT(s5,S5,init_S5)
+  CALLPRINT(s6,S6,init_S6)
+  CALLPRINT(s7,S7,init_S7)
+  CALLPRINT(s8,S8,init_S8)
+  CALLPRINT(t1,T1,init_T1)
+  CALLPRINT(t2,T2,init_T2)
+  CALLPRINT(t3,T3,init_T3)
+  CALLPRINT(t4,T4,init_T4)
+  CALLPRINT(t5,T5,init_T5)
+  CALLPRINT(u1,U1,init_U1)
+  CALLPRINT(u2,U2,init_U2)
+  CALLPRINT(u3,U3,init_U3)
+  CALLPRINT(u4,U4,init_U4)
+  CALLPRINT(u5,U5,init_U5)
+  CALLPRINT(u6,U6,init_U6)
+  CALLPRINT(u7,U7,init_U7)
+  CALLPRINT(u8,U8,init_U8)
+
   { struct S4 x = { 's', 'a', 'm', 'e' };
     THEM(ms4)(x);
     printf("after ms4, x = { '%c', '%c', '%c', '%c' }\n", x.a, x.b, x.c, x.d); }
-  { struct U9 x = { 11, 22, 33, 44 };
-    THEM(mu9)(x);
-    printf("after mu9, x = { a = { %d, %d, %d, %d } }\n", x.a[0], x.a[1], x.a[2], x.a[3]); }
-  { struct S1 x = THEM(rs1)();
-    printf("rs1 = { a = '%c' }\n", x.a); }
-  { struct S2 x = THEM(rs2)();
-    printf("rs2 = { a = '%c', b = '%c' }\n", x.a, x.b); }
-  { struct S3 x = THEM(rs3)();
-    printf("rs3 = { a = '%c', b = '%c', c = '%c' }\n", x.a, x.b, x.c); }
-  { struct S4 x = THEM(rs4)();
-    printf("rs4 = { a = '%c', b = '%c', c = '%c', d = '%c' }\n",
-           x.a, x.b, x.c, x.d); }
-  { struct S8 x = THEM(rs8)();
-    printf("rs8 = { \"%s\" }\n", x.a); }
-  { struct U2 x = THEM(ru2)();
-    printf("ru2 = { a = %d, b = %d }\n", x.a, x.b); }
-  { struct U6 x = THEM(ru6)();
-    printf("ru6 = { a = %d, b = %d }\n", x.a, x.b); }
-  { struct U9 x = THEM(ru9)();
-    printf("ru9 = { a = { %d, %d, %d, %d } }\n", x.a[0], x.a[1], x.a[2], x.a[3]); }
+  { struct U4 x = { 11, 22, 33, 44 };
+    THEM(mu4)(x);
+    printf("after mu4, x = { a = { %d, %d, %d, %d } }\n", x.a, x.b, x.c, x.d); }
+
+  CALLRETURN(rs1,S1,print_S1)
+  CALLRETURN(rs2,S2,print_S2)
+  CALLRETURN(rs3,S3,print_S3)
+  CALLRETURN(rs4,S4,print_S4)
+  CALLRETURN(rs5,S5,print_S5)
+  CALLRETURN(rs6,S6,print_S6)
+  CALLRETURN(rs7,S7,print_S7)
+  CALLRETURN(rs8,S8,print_S8)
+  CALLRETURN(rt1,T1,print_T1)
+  CALLRETURN(rt2,T2,print_T2)
+  CALLRETURN(rt3,T3,print_T3)
+  CALLRETURN(rt4,T4,print_T4)
+  CALLRETURN(rt5,T5,print_T5)
+  CALLRETURN(ru1,U1,print_U1)
+  CALLRETURN(ru2,U2,print_U2)
+  CALLRETURN(ru3,U3,print_U3)
+  CALLRETURN(ru4,U4,print_U4)
+  CALLRETURN(ru5,U5,print_U5)
+  CALLRETURN(ru6,U6,print_U6)
+  CALLRETURN(ru7,U7,print_U7)
+  CALLRETURN(ru8,U8,print_U8)
 }
 
 #if defined(COMPCERT_SIDE)
