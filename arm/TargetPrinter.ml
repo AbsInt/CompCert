@@ -1060,9 +1060,13 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       if !Clflags.option_mthumb then
         fprintf oc "	.thumb_func\n"
 
-    let print_fun_info = elf_print_fun_info
+    let print_fun_info oc name =
+      fprintf oc "	.type	%a, %%function\n" symbol name;
+      fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
 
-    let print_var_info = elf_print_var_info
+    let print_var_info oc name =
+      fprintf oc "	.type	%a, %%object\n" symbol name;
+      fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
 
     let print_comm_symb oc sz name align =
       if C2C.atom_is_static name then
