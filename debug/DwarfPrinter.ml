@@ -17,7 +17,7 @@ open Printf
 open PrintAsmaux
 open Sections
 
-module DwarfPrinter(Target: TARGET) :
+module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
     sig
       val print_debug: out_channel -> dw_entry -> unit
     end =
@@ -25,7 +25,6 @@ module DwarfPrinter(Target: TARGET) :
 
     open Target
 
-      
     let string_of_byte value =
       sprintf "	.byte		%s\n" (if value then "0x1" else "0x0")
 
@@ -34,7 +33,7 @@ module DwarfPrinter(Target: TARGET) :
 
     let curr_abbrev = ref 1
 
-    let next_abbrev =
+    let next_abbrev () =
       let abbrev = !curr_abbrev in
       incr curr_abbrev;abbrev
 
@@ -133,8 +132,8 @@ module DwarfPrinter(Target: TARGET) :
           add_type buf
       | DW_TAG_base_type b ->
           prologue 0x24;
-          add_attr_some b.base_type_encoding add_encoding;
           add_byte_size buf;
+          add_attr_some b.base_type_encoding add_encoding;
           add_name buf
       | DW_TAG_compile_unit e ->
           prologue 0x11;
@@ -203,7 +202,7 @@ module DwarfPrinter(Target: TARGET) :
           add_low_pc buf;
           add_name buf;
           add_prototyped buf;
-          add_type buf
+          add_attr_some e.subprogram_type add_type;
       | DW_TAG_subrange_type e ->
           prologue 0x21;
           add_attr_some e.subrange_type add_type;
@@ -247,7 +246,7 @@ module DwarfPrinter(Target: TARGET) :
       (try
         Hashtbl.find abbrev_mapping abbrev_string
       with Not_found ->
-        let id = next_abbrev in
+        let id = next_abbrev () in
         abbrevs:=(abbrev_string,id)::!abbrevs;
         Hashtbl.add abbrev_mapping abbrev_string id;
         id)
@@ -257,7 +256,7 @@ module DwarfPrinter(Target: TARGET) :
         let has_sib = match sib with
         | None -> false
         | Some _ -> true in
-        ignore (get_abbrev entry has_sib)) entry
+        ignore (get_abbrev entry has_sib)) (fun _ -> ()) entry
 
     let abbrev_start_addr = ref (-1)
 
@@ -284,7 +283,7 @@ module DwarfPrinter(Target: TARGET) :
       List.iter (fun (s,id) ->
         abbrev_prologue oc id;
         output_string oc s;
-        abbrev_epilogue oc) abbrevs;
+        abbrev_epilogue oc)  abbrevs;
       abbrev_section_end oc
 
     let debug_start_addr = ref (-1)
@@ -345,7 +344,7 @@ module DwarfPrinter(Target: TARGET) :
 
     let print_base_type oc bt =
       print_byte oc bt.base_type_byte_size;
-      match bt.base_type_encoding with 
+      (match bt.base_type_encoding with 
       | Some e ->
           let encoding = match e with
           | DW_ATE_address -> 0x1
@@ -358,7 +357,7 @@ module DwarfPrinter(Target: TARGET) :
           | DW_ATE_unsigned_char -> 0x8
           in
           print_byte oc encoding;
-      | None -> ();
+      | None -> ());
       print_string oc bt.base_type_name
 
     let print_compilation_unit oc tag =
@@ -421,14 +420,15 @@ module DwarfPrinter(Target: TARGET) :
       print_string oc st.structure_name
 
     let print_subprogram oc sp =
+      let s,e = get_fun_addr sp.subprogram_name in
       print_file_loc oc sp.subprogram_file_loc;
       print_opt_value oc sp.subprogram_external print_flag;
       print_opt_value oc sp.subprogram_frame_base print_loc;
-      print_ref oc sp.subprogram_high_pc;
-      print_ref oc sp.subprogram_low_pc;
+      fprintf oc "	.4byte		%a\n" label s;
+      fprintf oc "	.4byte		%a\n" label e;
       print_string oc sp.subprogram_name;
       print_flag oc sp.subprogram_prototyped;
-      print_ref oc sp.subprogram_type
+      print_opt_value oc sp.subprogram_type print_ref
 
     let print_subrange oc sr =
       print_opt_value oc sr.subrange_type print_ref;
@@ -442,6 +442,7 @@ module DwarfPrinter(Target: TARGET) :
       print_file_loc oc td.typedef_file_loc;
       print_string oc td.typedef_name;
       print_ref oc td.typedef_type
+
 
     let print_union_type oc ut =
       print_file_loc oc ut.union_file_loc;
@@ -498,8 +499,8 @@ module DwarfPrinter(Target: TARGET) :
           | DW_TAG_unspecified_parameter up -> print_unspecified_parameter oc up
           | DW_TAG_variable var -> print_variable oc var
           | DW_TAG_volatile_type vt -> print_volatile_type oc vt
-        end;
-        if entry.children = [] then
+        end) (fun e -> 
+          if e.children <> [] then
           print_sleb128 oc 0) entry
 
     let print_debug_abbrev oc entry =

@@ -94,6 +94,8 @@ val incomplete_type : Env.t -> typ -> bool
      declared but not defined struct or union, or array type  without a size. *)
 val sizeof_ikind: ikind -> int
   (* Return the size of the given integer kind. *)
+val sizeof_fkind: fkind -> int
+  (* Return the size of the given float kind. *)
 val is_signed_ikind: ikind -> bool
   (* Return true if the given integer kind is signed, false if unsigned. *)
 

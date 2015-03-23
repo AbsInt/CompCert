@@ -50,10 +50,11 @@ let list_iter_with_next f list =
   aux list
 
 (* Iter over the tree and pass the sibling id *)
-let entry_iter_sib f entry =
+let entry_iter_sib f g entry =
   let rec aux sib entry =
-    f  sib entry;
-    list_iter_with_next aux entry.children in
+    f sib entry;
+    list_iter_with_next aux entry.children;
+    g entry in
   aux None entry
 
 

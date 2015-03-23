@@ -12,6 +12,8 @@
 
 (* Types used for writing dwarf debug information *)
 
+open Sections
+
 (* Basic types for the value of attributes *)
 
 type constant = int
@@ -130,9 +132,9 @@ type dw_tag_pointer_type =
 
 type dw_tag_structure_type =
     {
-     structure_file_loc:    file_loc  option;
+     structure_file_loc:    file_loc option;
      structure_byte_size:   constant;
-     structure_declaration: flag      option;
+     structure_declaration: flag     option;
      structure_name:        string;
    }
 
@@ -141,11 +143,9 @@ type dw_tag_subprogram =
      subprogram_file_loc:   file_loc       option;
      subprogram_external:   flag           option;
      subprogram_frame_base: location_value option;
-     subprogram_high_pc:    address;
-     subprogram_low_pc:     address;
      subprogram_name:       string;
      subprogram_prototyped: flag;
-     subprogram_type:       reference;
+     subprogram_type:       reference      option;
    }
 
 type dw_tag_subrange_type =
@@ -256,4 +256,15 @@ module type DWARF_ABBREVS =
     val data_location_ref_type_abbr: int
     val bound_const_type_abbr: int
     val bound_ref_type_abbr: int
+  end
+
+module type DWARF_TARGET=
+  sig
+    val label: out_channel -> int -> unit
+    val print_file_loc: out_channel -> file_loc -> unit
+    val get_start_addr: unit -> int
+    val get_end_addr: unit -> int
+    val get_stmt_list_addr: unit -> int    
+    val name_of_section: section_name -> string
+    val get_fun_addr: string -> int * int
   end
