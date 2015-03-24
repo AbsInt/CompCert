@@ -151,8 +151,8 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           prologue 0x4;
           add_attr_some e.enumeration_file_loc add_file_loc;
           add_byte_size buf;
-          add_name buf;
-          add_attr_some e.enumeration_declaration add_declaration
+          add_attr_some e.enumeration_declaration add_declaration;
+          add_name buf
       | DW_TAG_enumerator e ->
           prologue 0x28;
           add_attr_some e.enumerator_file_loc add_file_loc;
@@ -191,7 +191,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       | DW_TAG_structure_type e ->
           prologue 0x13;
           add_attr_some e.structure_file_loc add_file_loc;
-          add_byte_size buf;
+          add_attr_some e.structure_byte_size add_byte_size;
           add_attr_some e.structure_declaration add_declaration;
           add_name buf
       | DW_TAG_subprogram e ->
@@ -221,7 +221,8 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       | DW_TAG_union_type e ->
           prologue 0x17;
           add_attr_some e.union_file_loc add_file_loc;
-          add_byte_size buf;
+          add_attr_some e.union_byte_size add_byte_size;
+          add_attr_some e.union_declaration add_declaration;
           add_name buf
       | DW_TAG_unspecified_parameter e ->
           prologue 0x18;
@@ -415,7 +416,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
 
     let print_structure oc st =
       print_file_loc oc st.structure_file_loc;
-      print_uleb128 oc st.structure_byte_size;
+      print_opt_value oc st.structure_byte_size print_uleb128;
       print_opt_value oc st.structure_declaration print_flag;
       print_string oc st.structure_name
 
@@ -443,10 +444,10 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       print_string oc td.typedef_name;
       print_ref oc td.typedef_type
 
-
     let print_union_type oc ut =
       print_file_loc oc ut.union_file_loc;
-      print_uleb128 oc ut.union_byte_size;
+      print_opt_value oc ut.union_byte_size print_uleb128;
+      print_opt_value oc ut.union_declaration print_flag;
       print_string oc ut.union_name
 
     let print_unspecified_parameter oc up =

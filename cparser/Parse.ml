@@ -41,7 +41,7 @@ let parse_transformations s =
 let preprocessed_file transfs name sourcefile =
   Cerrors.reset();
   let ic = open_in sourcefile in
-  let p =
+  let p,d =
     try
       let t = parse_transformations transfs in
       let lb = Lexer.init name ic in
@@ -57,9 +57,14 @@ let preprocessed_file transfs name sourcefile =
              | Parser.Parser.Inter.Timeout_pr -> assert false
              | Parser.Parser.Inter.Parsed_pr (ast, _ ) -> ast) in
       let p1 = Timing.time "Elaboration" Elab.elab_file ast in
-      Timing.time2 "Emulations" transform_program t p1
+      let debug = 
+        if !Clflags.option_g && Configuration.advanced_debug then
+          Some (CtoDwarf.program_to_dwarf p1 name)
+        else
+          None in
+      Timing.time2 "Emulations" transform_program t p1,debug
     with
     | Cerrors.Abort ->
-        [] in
+        [],None in
   close_in ic;
-  if Cerrors.check_errors() then None else Some p
+  if Cerrors.check_errors() then None,None else Some p,d

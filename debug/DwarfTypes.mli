@@ -133,7 +133,7 @@ type dw_tag_pointer_type =
 type dw_tag_structure_type =
     {
      structure_file_loc:    file_loc option;
-     structure_byte_size:   constant;
+     structure_byte_size:   constant option;
      structure_declaration: flag     option;
      structure_name:        string;
    }
@@ -169,9 +169,10 @@ type dw_tag_typedef =
 
 type dw_tag_union_type =
     {
-     union_file_loc:  file_loc  option;
-     union_byte_size: constant;
-     union_name:      string;
+     union_file_loc:    file_loc option;
+     union_byte_size:   constant option;
+     union_declaration: flag     option;
+     union_name:        string;
    }
 
 type dw_tag_unspecified_parameter =

@@ -15,7 +15,6 @@ open Commandline
 open Camlcoq
 open Clflags
 open Timing
-open CtoDwarf
 
 (* Location of the compatibility library *)
 
@@ -118,20 +117,17 @@ let parse_c_file sourcename ifile =
   ^ (if !option_fpacked_structs then "p" else "")
   in
   (* Parsing and production of a simplified C AST *)
-  let ast =
+  let ast,debug =
     match Parse.preprocessed_file simplifs sourcename ifile with
-    | None -> exit 2
-    | Some p -> p in
+    | None,_ -> exit 2
+    | Some p,d -> p,d in
   (* Save C AST if requested *)
   if !option_dparse then begin
     let ofile = output_filename sourcename ".c" ".parsed.c" in
     let oc = open_out ofile in
     Cprint.program (Format.formatter_of_out_channel oc) ast;
     close_out oc
-  end;
-  let debug = if !option_g && Configuration.advanced_debug then
-    Some (program_to_dwarf ast sourcename) 
-  else None in
+  end; 
   (* Conversion to Csyntax *)
   let csyntax =
     match Timing.time "CompCert C generation" C2C.convertProgram ast with

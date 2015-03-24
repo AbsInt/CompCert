@@ -13,8 +13,10 @@
 open C
 open Cprint
 open Cutil
+open C2C
 open DwarfTypes
 open DwarfUtil
+open Env
 
 (* Functions to translate a C Ast into Dwarf 2 debugging information *)
 
@@ -147,7 +149,7 @@ let rec type_to_dwarf (typ: typ): int * dw_entry list =
       | TStruct (i,at)
       | TUnion (i,at)
       | TEnum (i,at) ->
-          let t = Hashtbl.find composite_types_table i.name in
+          let t = get_composite_type i.name in
           attr_to_dw at t []
       | TNamed (i,at) ->
           let t = Hashtbl.find typedef_table i.name in
@@ -186,7 +188,7 @@ let rec type_to_dwarf (typ: typ): int * dw_entry list =
     Hashtbl.add type_table typ_string id;
     id,entries
         
-let rec globdecl_to_dwarf decl =
+let rec globdecl_to_dwarf env decl =
   match decl.gdesc with
   | Gtypedef (n,t) ->
       let i,t = type_to_dwarf t in
@@ -250,17 +252,130 @@ let rec globdecl_to_dwarf decl =
       let fdef = new_entry (DW_TAG_subprogram fdef) in
       let fdef = add_children fdef fp in
       fdef::e
-  | Genumdef _
-  | Gcompositedef _
-  | Gpragma _ 
-  | Gcompositedecl _ -> []
+  | Genumdef (n,at,e) -> 
+      let bs = sizeof_ikind enum_ikind in
+      let enum = {
+        enumeration_file_loc = Some decl.gloc;
+        enumeration_byte_size = bs;
+        enumeration_declaration = Some false;
+        enumeration_name = n.name;
+      } in
+      let id = get_composite_type n.name in
+      let child = List.map (fun (i,c,_) ->
+        new_entry (DW_TAG_enumerator (
+                   {
+                    enumerator_file_loc = None;
+                    enumerator_value = Int64.to_int c;
+                    enumerator_name = i.name;
+                  }))) e in
+      let enum = 
+        {
+         tag = DW_TAG_enumeration_type enum;
+         children = child;
+         id = id;} in
+      [enum]
+  | Gcompositedef (sou,n,at,m) ->
+      let info = composite_info_def env sou at m in
+      let dec = (match info.ci_sizeof with 
+      | Some _ -> false 
+      | None ->  true) in
+      let tag = (match sou with
+      | Struct ->
+          DW_TAG_structure_type {
+          structure_file_loc = Some decl.gloc;
+          structure_byte_size = info.ci_sizeof;
+          structure_declaration = Some dec;
+          structure_name = n.name;
+        }
+      | Union ->
+          DW_TAG_union_type {
+          union_file_loc = Some decl.gloc;
+          union_byte_size = info.ci_sizeof;
+          union_declaration = Some dec;
+          union_name = n.name;
+        }) in
+      let id = get_composite_type n.name in
+      let children,e = 
+        (match sou with
+        | Struct -> 
+            (* This is the same layout used in Cutil *)
+            let rec pack acc bcc l m =
+              match m with
+              | [] -> acc,bcc,[]
+              | m::ms as ml ->
+                 (match m.fld_bitfield with
+                 | None -> acc,bcc,ml
+                 | Some n ->
+                     if n = 0 then
+                       acc,bcc,ms (* bit width 0 means end of pack *)
+                     else if l + n > 8 * !Machine.config.Machine.sizeof_int then
+                       acc,bcc,ml (* doesn't fit in current word *)
+                     else
+                       let t,e = type_to_dwarf m.fld_typ in
+                       let um = {
+                        member_file_loc = None;
+                        member_byte_size = Some !Machine.config.Machine.sizeof_int;
+                        member_bit_offset = Some l;
+                        member_bit_size = Some n;
+                        member_data_member_location = None;
+                        member_declaration = None;
+                        member_name = m.fld_name;
+                        member_type = t;
+                      } in
+                       pack ((new_entry (DW_TAG_member um))::acc) (e@bcc) (l + n) ms)
+            and translate acc bcc m =
+              match m with
+                [] -> acc,bcc
+              | m::ms as ml ->
+                  (match m.fld_bitfield with
+                  | None -> 
+                      let t,e = type_to_dwarf m.fld_typ in
+                      let um = {
+                        member_file_loc = None;
+                        member_byte_size = None;
+                        member_bit_offset = None;
+                        member_bit_size = None;
+                        member_data_member_location = None;
+                        member_declaration = None;
+                        member_name = m.fld_name;
+                        member_type = t;
+                      } in
+                      translate ((new_entry (DW_TAG_member um))::acc) (e@bcc) ms
+                  | Some _ -> let acc,bcc,rest = pack acc bcc 0 ml in 
+                    translate acc bcc rest)
+            in
+            let children,e = translate [] []  m in
+            List.rev children,e
+        | Union -> mmap 
+              (fun  acc f ->
+                let t,e = type_to_dwarf f.fld_typ in
+                let um = {
+                  member_file_loc = None;
+                  member_byte_size = None;
+                  member_bit_offset = None;
+                  member_bit_size = None;
+                  member_data_member_location = None;
+                  member_declaration = None;
+                  member_name = f.fld_name;
+                  member_type = t;
+               } in
+                new_entry (DW_TAG_member um),e@acc)[] m) in
+      let sou = {
+        tag = tag;
+        children = children;
+        id = id;} in
+      sou::e
+  | Gcompositedecl _
+  | Gpragma _ -> []       
 
 let program_to_dwarf prog name =
   Hashtbl.reset type_table;
   Hashtbl.reset composite_types_table;
   Hashtbl.reset typedef_table;
+  let prog = cleanupGlobals (prog) in
+  let env = translEnv Env.empty prog in
   reset_id ();
-  let defs = List.concat (List.map globdecl_to_dwarf prog) in
+  let defs = List.concat (List.map (globdecl_to_dwarf env) prog) in
   let cp = {
     compile_unit_name = name;
   } in
