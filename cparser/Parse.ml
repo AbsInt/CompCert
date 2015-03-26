@@ -17,14 +17,19 @@
 
 module CharSet = Set.Make(struct type t = char let compare = compare end)
 
-let transform_program t p =
+let transform_program t p name =
   let run_pass pass flag p = if CharSet.mem flag t then pass p else p in
-  Rename.program
-  (run_pass StructReturn.program 's'
+  let p1 = (run_pass StructReturn.program 's'
   (run_pass PackedStructs.program 'p'
   (run_pass Bitfields.program 'f'
   (run_pass Unblock.program 'b'
-  p))))
+  p)))) in
+  let debug = 
+    if !Clflags.option_g && Configuration.advanced_debug then
+      Some (CtoDwarf.program_to_dwarf p p1 name)
+    else
+      None in
+  (Rename.program p1),debug
 
 let parse_transformations s =
   let t = ref CharSet.empty in
@@ -57,12 +62,7 @@ let preprocessed_file transfs name sourcefile =
              | Parser.Parser.Inter.Timeout_pr -> assert false
              | Parser.Parser.Inter.Parsed_pr (ast, _ ) -> ast) in
       let p1 = Timing.time "Elaboration" Elab.elab_file ast in
-      let debug = 
-        if !Clflags.option_g && Configuration.advanced_debug then
-          Some (CtoDwarf.program_to_dwarf p1 name)
-        else
-          None in
-      Timing.time2 "Emulations" transform_program t p1,debug
+      Timing.time2 "Emulations" transform_program t p1 name
     with
     | Cerrors.Abort ->
         [],None in

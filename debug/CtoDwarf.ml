@@ -275,23 +275,21 @@ let rec globdecl_to_dwarf env decl =
          id = id;} in
       [enum]
   | Gcompositedef (sou,n,at,m) ->
-      let info = composite_info_def env sou at m in
-      let dec = (match info.ci_sizeof with 
-      | Some _ -> false 
-      | None ->  true) in
       let tag = (match sou with
       | Struct ->
+          let info = Env.find_struct env n in
           DW_TAG_structure_type {
           structure_file_loc = Some decl.gloc;
           structure_byte_size = info.ci_sizeof;
-          structure_declaration = Some dec;
+          structure_declaration = Some false;
           structure_name = n.name;
         }
       | Union ->
+          let info = Env.find_union env n in
           DW_TAG_union_type {
           union_file_loc = Some decl.gloc;
           union_byte_size = info.ci_sizeof;
-          union_declaration = Some dec;
+          union_declaration = Some false;
           union_name = n.name;
         }) in
       let id = get_composite_type n.name in
@@ -368,12 +366,23 @@ let rec globdecl_to_dwarf env decl =
   | Gcompositedecl _
   | Gpragma _ -> []       
 
-let program_to_dwarf prog name =
+let add_size prog debug =
+  let env = translEnv Env.empty prog in
+  entry_map (function
+    | DW_TAG_structure_type s ->
+        let _,info = Env.lookup_struct env s.structure_name in
+        DW_TAG_structure_type {s with structure_byte_size = info.ci_sizeof;}
+    | DW_TAG_union_type u ->
+        let _,info = Env.lookup_union env u.union_name in
+        DW_TAG_union_type {u with union_byte_size = info.ci_sizeof;}
+    | e -> e) debug
+
+let program_to_dwarf prog prog1 name =
   Hashtbl.reset type_table;
   Hashtbl.reset composite_types_table;
   Hashtbl.reset typedef_table;
   let prog = cleanupGlobals (prog) in
-  let env = translEnv Env.empty prog in
+  let env = translEnv Env.empty prog1 in
   reset_id ();
   let defs = List.concat (List.map (globdecl_to_dwarf env) prog) in
   let cp = {

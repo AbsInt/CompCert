@@ -63,6 +63,15 @@ let rec entry_fold f acc entry =
   let acc = f acc entry.tag in
   List.fold_left (entry_fold f) acc entry.children
 
+let rec entry_map f entry =
+  let t = f entry.tag in
+  let children = List.map (entry_map f) entry.children in
+  {
+   entry with
+   tag = t;
+   children = children;
+ }
+
 (* Attribute form encoding *)
 let dw_form_addr     = 0x01
 let dw_form_block2   = 0x03
