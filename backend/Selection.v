@@ -203,10 +203,21 @@ Definition classify_call (ge: Cminor.genv) (e: Cminor.expr) : call_kind :=
       end
   end.
 
+(** Annotations *)
+
 Definition builtin_is_annot (ef: external_function) (optid: option ident) : bool :=
   match ef, optid with
   | EF_annot _ _, None => true
   | _, _ => false
+  end.
+
+Function sel_annot_arg (e: Cminor.expr) : AST.annot_arg expr :=
+  match e with
+  | Cminor.Econst (Cminor.Oaddrsymbol id ofs) => AA_addrglobal id ofs
+  | Cminor.Econst (Cminor.Oaddrstack ofs) => AA_addrstack ofs
+  | Cminor.Eload chunk (Cminor.Econst (Cminor.Oaddrsymbol id ofs)) => AA_loadglobal chunk id ofs
+  | Cminor.Eload chunk (Cminor.Econst (Cminor.Oaddrstack ofs)) => AA_loadstack chunk ofs
+  | _ => annot_arg (sel_expr e)
   end.
 
 (** Conversion of Cminor [switch] statements to decision trees. *)
@@ -270,7 +281,7 @@ Fixpoint sel_stmt (ge: Cminor.genv) (s: Cminor.stmt) : res stmt :=
       end)
   | Cminor.Sbuiltin optid ef args =>
       OK (if builtin_is_annot ef optid
-          then Sannot ef (List.map (fun e => annot_arg (sel_expr e)) args)
+          then Sannot ef (List.map sel_annot_arg args)
           else Sbuiltin optid ef (sel_exprlist args))
   | Cminor.Stailcall sg fn args => 
       OK (match classify_call ge fn with

@@ -55,7 +55,7 @@ let name_of_external = function
   | EF_annot_val(text, targ) ->  sprintf "annot_val %S" (extern_atom text)
   | EF_inline_asm text -> sprintf "inline_asm %S" (extern_atom text)
 
-let print_annot_arg px oc = function
+let rec print_annot_arg px oc = function
   | AA_base x -> px oc x
   | AA_int n -> fprintf oc "int %ld" (camlint_of_coqint n)
   | AA_long n -> fprintf oc "long %Ld" (camlint64_of_coqint n)
@@ -70,7 +70,9 @@ let print_annot_arg px oc = function
               (name_of_chunk chunk) (extern_atom id) (camlint_of_coqint ofs)
   | AA_addrglobal(id, ofs) ->
       fprintf oc "&%s + %ld" (extern_atom id) (camlint_of_coqint ofs)
-  | AA_longofwords(hi, lo) -> fprintf oc "longofwords %a %a" px hi px lo
+  | AA_longofwords(hi, lo) ->
+      fprintf oc "longofwords(%a, %a)" 
+                 (print_annot_arg px) hi (print_annot_arg px) lo
 
 let rec print_annot_args px oc = function
   | [] -> ()

@@ -598,6 +598,29 @@ Proof.
   exists (v1' :: vl'); split; auto. constructor; eauto.
 Qed.
 
+Lemma sel_annot_arg_correct:
+  forall sp e e' m m',
+  env_lessdef e e' -> Mem.extends m m' ->
+  forall a v,
+  Cminor.eval_expr ge sp e m a v ->
+  exists v',
+     CminorSel.eval_annot_arg tge sp e' m' (sel_annot_arg a) v'
+  /\ Val.lessdef v v'.
+Proof.
+  intros until v. functional induction (sel_annot_arg a); intros EV.
+- inv EV. simpl in H2; inv H2. econstructor; split. constructor. 
+  unfold Genv.symbol_address. rewrite symbols_preserved. auto.
+- inv EV. simpl in H2; inv H2. econstructor; split. constructor. auto.
+- inv EV. inv H3. exploit Mem.loadv_extends; eauto. intros (v' & A & B). 
+  exists v'; split; auto. constructor. 
+  replace (Genv.symbol_address tge id ofs) with vaddr; auto.
+  simpl in H2; inv H2. unfold Genv.symbol_address. rewrite symbols_preserved. auto.
+- inv EV. inv H3. simpl in H2; inv H2. exploit Mem.loadv_extends; eauto. intros (v' & A & B). 
+  exists v'; split; auto. constructor; auto.
+- exploit sel_expr_correct; eauto. intros (v1 & A & B).
+  exists v1; split; auto. eapply eval_annot_arg; eauto.
+Qed.
+
 Lemma sel_annot_args_correct:
   forall sp e e' m m',
   env_lessdef e e' -> Mem.extends m m' ->
@@ -605,16 +628,15 @@ Lemma sel_annot_args_correct:
   Cminor.eval_exprlist ge sp e m al vl ->
   exists vl',
      list_forall2 (CminorSel.eval_annot_arg tge sp e' m')
-                  (List.map (fun a => annot_arg (sel_expr a)) al)
+                  (List.map sel_annot_arg al)
                   vl'
   /\ Val.lessdef_list vl vl'.
 Proof.
   induction 3; simpl.
 - exists (@nil val); split; constructor. 
-- exploit sel_expr_correct; eauto. intros (v1' & A & B).
+- exploit sel_annot_arg_correct; eauto. intros (v1' & A & B).
   destruct IHeval_exprlist as (vl' & C & D).
-  exists (v1' :: vl'); split; auto.
-  constructor; auto. eapply eval_annot_arg; eauto. 
+  exists (v1' :: vl'); split; auto. constructor; auto.
 Qed.
 
 (** Semantic preservation for functions and statements. *)
@@ -813,7 +835,6 @@ Proof.
   assert (Y: optid = None).
   { destruct ef; try discriminate. destruct optid; try discriminate. auto. }
   exploit sel_annot_args_correct; eauto. 
-  set (bl' := map (fun e => annot_arg (sel_expr e)) bl).
   intros (vargs' & P & Q).
   exploit external_call_mem_extends; eauto. 
   intros [vres' [m2 [A [B [C D]]]]].

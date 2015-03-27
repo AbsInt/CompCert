@@ -114,10 +114,11 @@ let xparmove srcs dsts k =
   | [src], [dst] -> move src dst k
   | _, _ -> Xparmove(srcs, dsts, new_temp Tint, new_temp Tfloat) :: k
 
-let convert_annot_arg tyenv = function
+let rec convert_annot_arg tyenv = function
   | AA_base r ->
       begin match tyenv r with
-      | Tlong -> AA_longofwords(V(r, Tint), V(twin_reg r, Tint))
+      | Tlong -> AA_longofwords(AA_base(V(r, Tint)),
+                                AA_base(V(twin_reg r, Tint)))
       | ty    -> AA_base(V(r, ty))
       end
   | AA_int n -> AA_int n
@@ -128,7 +129,8 @@ let convert_annot_arg tyenv = function
   | AA_addrstack(ofs) -> AA_addrstack(ofs)
   | AA_loadglobal(chunk, id, ofs) -> AA_loadglobal(chunk, id, ofs)
   | AA_addrglobal(id, ofs) -> AA_addrglobal(id, ofs)
-  | AA_longofwords(hi, lo) -> AA_longofwords(vreg tyenv hi, vreg tyenv lo)
+  | AA_longofwords(hi, lo) ->
+      AA_longofwords(convert_annot_arg tyenv hi, convert_annot_arg tyenv lo)
  
 (* Return the XTL basic block corresponding to the given RTL instruction.
    Move and parallel move instructions are introduced to honor calling
@@ -249,10 +251,10 @@ let vset_removelist vl after = List.fold_right VSet.remove vl after
 let vset_addlist vl after = List.fold_right VSet.add vl after
 let vset_addros vos after =
   match vos with Coq_inl v -> VSet.add v after | Coq_inr id -> after
-let vset_addannot a after =
+let rec vset_addannot a after =
   match a with
   | AA_base v -> VSet.add v after
-  | AA_longofwords(hi, lo) -> VSet.add hi (VSet.add lo after)
+  | AA_longofwords(hi, lo) -> vset_addannot hi (vset_addannot lo after)
   | _ -> after
 
 let live_before instr after =
@@ -932,18 +934,6 @@ let make_parmove srcs dsts itmp ftmp k =
   done;
   List.rev_append !code k
 
-let transl_annot_arg alloc = function
-  | AA_base v -> AA_base (alloc v)
-  | AA_int n -> AA_int n
-  | AA_long n -> AA_long n
-  | AA_float n -> AA_float n
-  | AA_single n -> AA_single n
-  | AA_loadstack(chunk, ofs) -> AA_loadstack(chunk, ofs)
-  | AA_addrstack(ofs) -> AA_addrstack(ofs)
-  | AA_loadglobal(chunk, id, ofs) -> AA_loadglobal(chunk, id, ofs)
-  | AA_addrglobal(id, ofs) -> AA_addrglobal(id, ofs)
-  | AA_longofwords(hi, lo) -> AA_longofwords(alloc hi, alloc lo)
-
 let transl_instr alloc instr k =
   match instr with
   | Xmove(src, dst) | Xreload(src, dst) | Xspill(src, dst) ->
@@ -975,7 +965,7 @@ let transl_instr alloc instr k =
   | Xbuiltin(ef, args, res) ->
       LTL.Lbuiltin(ef, mregs_of alloc args, mregs_of alloc res) :: k
   | Xannot(ef, args) ->
-      LTL.Lannot(ef, List.map (transl_annot_arg alloc) args) :: k
+      LTL.Lannot(ef, List.map (AST.map_annot_arg alloc) args) :: k
   | Xbranch s ->
       LTL.Lbranch s :: []
   | Xcond(cond, args, s1, s2) ->
