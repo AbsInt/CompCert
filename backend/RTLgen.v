@@ -457,52 +457,35 @@ with transl_condexpr (map: mapping) (a: condexpr) (ntrue nfalse: node)
 
 (** Translation of arguments to annotations. *)
 
-Fixpoint convert_annot_arg (map: mapping) (a: annot_arg expr) : mon (annot_arg reg) :=
+Definition exprlist_of_expr_list (l: list expr) : exprlist :=
+  List.fold_right Econs Enil l.
+
+Fixpoint convert_annot_arg {A: Type} (a: annot_arg expr) (rl: list A) : annot_arg A * list A :=
   match a with
-  | AA_base a => do rd <- alloc_reg map a; ret (AA_base rd)
-  | AA_int n => ret (AA_int n)
-  | AA_long n => ret (AA_long n)
-  | AA_float n => ret (AA_float n)
-  | AA_single n => ret (AA_single n)
-  | AA_loadstack chunk ofs => ret (AA_loadstack chunk ofs)
-  | AA_addrstack ofs => ret (AA_addrstack ofs)
-  | AA_loadglobal chunk id ofs => ret (AA_loadglobal chunk id ofs)
-  | AA_addrglobal id ofs => ret (AA_addrglobal id ofs)
+  | AA_base a =>
+      match rl with
+      | r :: rs => (AA_base r, rs)
+      | nil     => (AA_int Int.zero, nil)   (**r never happens *)
+      end
+  | AA_int n => (AA_int n, rl)
+  | AA_long n => (AA_long n, rl)
+  | AA_float n => (AA_float n, rl)
+  | AA_single n => (AA_single n, rl)
+  | AA_loadstack chunk ofs => (AA_loadstack chunk ofs, rl)
+  | AA_addrstack ofs => (AA_addrstack ofs, rl)
+  | AA_loadglobal chunk id ofs => (AA_loadglobal chunk id ofs, rl)
+  | AA_addrglobal id ofs => (AA_addrglobal id ofs, rl)
   | AA_longofwords hi lo =>
-      do hi' <- convert_annot_arg map hi;
-      do lo' <- convert_annot_arg map lo;
-      ret (AA_longofwords hi' lo')
+      let (hi', rl1) := convert_annot_arg hi rl in
+      let (lo', rl2) := convert_annot_arg lo rl1 in
+      (AA_longofwords hi' lo', rl2)
   end.
 
-Fixpoint convert_annot_args (map: mapping) (al: list (annot_arg expr)) : mon (list (annot_arg reg)) :=
+Fixpoint convert_annot_args {A: Type} (al: list (annot_arg expr)) (rl: list A) : list (annot_arg A) :=
   match al with
-  | nil => ret nil
+  | nil => nil
   | a1 :: al =>
-      do a1' <- convert_annot_arg map a1;
-      do al' <- convert_annot_args map al;
-      ret (a1' :: al')
-  end.
-
-Fixpoint transl_annot_arg
-             (map: mapping) (a: annot_arg expr) (d: annot_arg reg) (nd: node) 
-             : mon node :=
-  match a, d with
-  | AA_base a, AA_base r => transl_expr map a r nd
-  | AA_longofwords hi lo, AA_longofwords hi' lo' =>
-      do no <- transl_annot_arg map lo lo' nd;
-      transl_annot_arg map hi hi' no
-  | _, _ => ret nd
-  end.
-
-Fixpoint transl_annot_args
-          (map: mapping) (al: list (annot_arg expr)) (dl: list (annot_arg reg)) (nd: node)
-          : mon node :=
-  match al, dl with
-  | a1 :: al, d1 :: dl =>
-      do no <- transl_annot_args map al dl nd;
-      transl_annot_arg map a1 d1 no
-  | _, _ =>
-      ret nd
+      let (a1', rl1) := convert_annot_arg a1 rl in a1' :: convert_annot_args al rl1
   end.
 
 (** Auxiliary for translating exit expressions. *)
@@ -608,10 +591,11 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
       do r <- alloc_optreg map optid;
       do n1 <- add_instr (Ibuiltin ef rargs r nd);
          transl_exprlist map al rargs n1
-  | Sannot ef al =>
-      do dl <- convert_annot_args map al;
-      do n1 <- add_instr (Iannot ef dl nd);
-         transl_annot_args map al dl n1
+  | Sannot ef args =>
+      let al := exprlist_of_expr_list (params_of_annot_args args) in
+      do rargs <- alloc_regs map al;
+      do n1 <- add_instr (Iannot ef (convert_annot_args args rargs) nd);
+         transl_exprlist map al rargs n1
   | Sseq s1 s2 =>
       do ns <- transl_stmt map s2 nd nexits ngoto nret rret;
       transl_stmt map s1 ns nexits ngoto nret rret

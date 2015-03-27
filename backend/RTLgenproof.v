@@ -974,6 +974,94 @@ Qed.
 
 (** Annotation arguments. *)
 
+Lemma eval_exprlist_append:
+  forall le al1 vl1 al2 vl2,
+  eval_exprlist ge sp e m le (exprlist_of_expr_list al1) vl1 ->
+  eval_exprlist ge sp e m le (exprlist_of_expr_list al2) vl2 ->
+  eval_exprlist ge sp e m le (exprlist_of_expr_list (al1 ++ al2)) (vl1 ++ vl2).
+Proof.
+  induction al1; simpl; intros vl1 al2 vl2 E1 E2; inv E1.
+- auto.
+- simpl. constructor; eauto. 
+Qed.
+
+Lemma invert_eval_annot_arg:
+  forall a v,
+  eval_annot_arg ge sp e m a v ->
+  exists vl, 
+     eval_exprlist ge sp e m nil (exprlist_of_expr_list (params_of_annot_arg a)) vl
+  /\ Events.eval_annot_arg ge (fun v => v) sp m (fst (convert_annot_arg a vl)) v
+  /\ (forall vl', convert_annot_arg a (vl ++ vl') = (fst (convert_annot_arg a vl), vl')).
+Proof.
+  induction 1; simpl; econstructor; intuition eauto with evalexpr aarg.
+  constructor. 
+  constructor. 
+  repeat constructor.
+Qed.
+
+Lemma invert_eval_annot_args:
+  forall al vl,
+  list_forall2 (eval_annot_arg ge sp e m) al vl ->
+  exists vl',
+     eval_exprlist ge sp e m nil (exprlist_of_expr_list (params_of_annot_args al)) vl'
+  /\ Events.eval_annot_args ge (fun v => v) sp m (convert_annot_args al vl') vl.
+Proof.
+  induction 1; simpl.
+- exists (@nil val); split; constructor.
+- exploit invert_eval_annot_arg; eauto. intros (vl1 & A & B & C).
+  destruct IHlist_forall2 as (vl2 & D & E).
+  exists (vl1 ++ vl2); split.
+  apply eval_exprlist_append; auto.
+  rewrite C; simpl. constructor; auto. 
+Qed.
+
+Lemma transl_eval_annot_arg:
+  forall rs a vl rl v,
+  Val.lessdef_list vl rs##rl ->
+  Events.eval_annot_arg ge (fun v => v) sp m (fst (convert_annot_arg a vl)) v ->
+  exists v',
+     Events.eval_annot_arg ge (fun r => rs#r) sp m (fst (convert_annot_arg a rl)) v'
+  /\ Val.lessdef v v'
+  /\ Val.lessdef_list (snd (convert_annot_arg a vl)) rs##(snd (convert_annot_arg a rl)).
+Proof.
+  induction a; simpl; intros until v; intros LD EV;
+  try (now (inv EV; econstructor; eauto with aarg)).
+- destruct rl; simpl in LD; inv LD; inv EV; simpl.
+  econstructor; eauto with aarg. 
+  exists (rs#p); intuition auto. constructor.
+- destruct (convert_annot_arg a1 vl) as [a1' vl1] eqn:CV1; simpl in *.
+  destruct (convert_annot_arg a2 vl1) as [a2' vl2] eqn:CV2; simpl in *.
+  destruct (convert_annot_arg a1 rl) as [a1'' rl1] eqn:CV3; simpl in *.
+  destruct (convert_annot_arg a2 rl1) as [a2'' rl2] eqn:CV4; simpl in *.
+  inv EV. 
+  exploit IHa1; eauto. rewrite CV1; simpl; eauto. 
+  rewrite CV1, CV3; simpl. intros (v1' & A1 & B1 & C1).
+  exploit IHa2. eexact C1. rewrite CV2; simpl; eauto.
+  rewrite CV2, CV4; simpl. intros (v2' & A2 & B2 & C2).
+  exists (Val.longofwords v1' v2'); split. constructor; auto. 
+  split; auto. apply Val.longofwords_lessdef; auto.
+Qed.
+
+Lemma transl_eval_annot_args:
+  forall rs al vl1 rl vl,
+  Val.lessdef_list vl1 rs##rl ->
+  Events.eval_annot_args ge (fun v => v) sp m (convert_annot_args al vl1) vl ->
+  exists vl',
+     Events.eval_annot_args ge (fun r => rs#r) sp m (convert_annot_args al rl) vl'
+  /\ Val.lessdef_list vl vl'.
+Proof.
+  induction al; simpl; intros until vl; intros LD EV.
+- inv EV. exists (@nil val); split; constructor.
+- destruct (convert_annot_arg a vl1) as [a1' vl2] eqn:CV1; simpl in *.
+  inv EV. 
+  exploit transl_eval_annot_arg. eauto. instantiate (2 := a). rewrite CV1; simpl; eauto. 
+  rewrite CV1; simpl. intros (v1' & A1 & B1 & C1).
+  exploit IHal. eexact C1. eauto. intros (vl' & A2 & B2).
+  destruct (convert_annot_arg a rl) as [a1'' rl2]; simpl in *.
+  exists (v1' :: vl'); split; constructor; auto.
+Qed.
+
+
 (*
 Definition transl_annot_arg_prop (a: annot_arg expr) (v: val): Prop :=
   forall tm cs f map pr ns nd a' rs
@@ -1024,7 +1112,7 @@ Proof.
   rewrite (D2 r) by auto with coqlib. apply Val.longofwords_lessdef; auto.
   transitivity rs1#r1; auto with coqlib.
 Qed.
-*)
+
 
 Definition transl_annot_args_prop (l: list (annot_arg expr)) (vl: list val): Prop :=
   forall tm cs f map pr ns nd l' rs
@@ -1110,6 +1198,7 @@ Proof.
     rewrite E3; auto. 
     transitivity rs1#r1; auto. transitivity rs2#r1; auto.
 Qed.
+*)
 
 End CORRECTNESS_EXPR.
 
@@ -1444,13 +1533,19 @@ Proof.
   eapply match_env_update_dest; eauto.
 
   (* annot *)
-  inv TS. 
-  exploit transl_annot_args_correct; eauto. 
-  intros [rs' [tm' [vl' [E [F [G [J [K L]]]]]]]].
+  inv TS. exploit invert_eval_annot_args; eauto. intros (vparams & P & Q).
+  exploit transl_exprlist_correct; eauto.
+  intros [rs' [tm' [E [F [G [J K]]]]]].
+  exploit transl_eval_annot_args; eauto. 
+  intros (vargs' & U & V).
+  exploit (@eval_annot_args_lessdef _ ge (fun r => rs'#r) (fun r => rs'#r)); eauto.
+  intros (vargs'' & X & Y).
+  assert (Z: Val.lessdef_list vl vargs'') by (eapply Val.lessdef_list_trans; eauto).
   edestruct external_call_mem_extends as [tv [tm'' [A [B [C D]]]]]; eauto.
   econstructor; split.
   left. eapply plus_right. eexact E.
   eapply exec_Iannot; eauto. 
+  eapply eval_annot_args_preserved with (ge1 := ge); eauto. exact symbols_preserved. 
   eapply external_call_symbols_preserved. eauto.
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   traceEq. 

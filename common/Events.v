@@ -1915,37 +1915,3 @@ Qed.
 
 End EVAL_ANNOT_ARG_LESSDEF.
 
-(** Extensionality *)
-
-Section EVAL_ANNOT_ARG_EXTEN.
-
-Variable A: Type.
-Variable ge: Senv.t.
-Variables e1 e2: A -> val.
-Variable sp: val.
-Variable m: mem.
-
-Lemma eval_annot_arg_exten:
-  forall a v, eval_annot_arg ge e1 sp m a v ->
-  (forall x, In x (params_of_annot_arg a) -> e2 x = e1 x) ->
-  eval_annot_arg ge e2 sp m a v.
-Proof.
-  induction 1; simpl; intros EXT; try (now constructor).
-- rewrite <- EXT by auto. constructor.
-- constructor; eauto using in_or_app. 
-Qed.
-
-Lemma eval_annot_args_exten:
-  forall a v, eval_annot_args ge e1 sp m a v ->
-  (forall x, In x (params_of_annot_args a) -> e2 x = e1 x) ->
-  eval_annot_args ge e2 sp m a v.
-Proof.
-  induction 1; simpl; intros EXT; constructor.
-  eapply eval_annot_arg_exten; eauto using in_or_app.
-  eapply IHlist_forall2; eauto using in_or_app.
-Qed.
-
-End EVAL_ANNOT_ARG_EXTEN.
-
-
-
