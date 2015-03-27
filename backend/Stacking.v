@@ -130,13 +130,25 @@ Definition transl_addr (fe: frame_env) (addr: addressing) :=
 
 (** Translation of an annotation argument. *)
 
-Definition transl_annot_param (fe: frame_env) (l: loc) : annot_param :=
-  match l with
-  | R r => APreg r
-  | S Local ofs ty => APstack (chunk_of_type ty) (offset_of_index fe (FI_local ofs ty))
-  | S _ _ _ => APstack Mint32 (-1)     (**r never happens *)
+Fixpoint transl_annot_arg (fe: frame_env) (a: annot_arg loc) : annot_arg mreg :=
+  match a with
+  | AA_base (R r) => AA_base r
+  | AA_base (S Local ofs ty) =>
+      AA_loadstack (chunk_of_type ty) (Int.repr (offset_of_index fe (FI_local ofs ty)))
+  | AA_base (S _ _ __) => AA_int Int.zero  (**r never happens *)
+  | AA_int n => AA_int n
+  | AA_long n => AA_long n
+  | AA_float n => AA_float n
+  | AA_single n => AA_single n
+  | AA_loadstack chunk ofs =>
+      AA_loadstack chunk (Int.add ofs (Int.repr fe.(fe_stack_data)))
+  | AA_addrstack ofs =>
+      AA_addrstack (Int.add ofs (Int.repr fe.(fe_stack_data)))
+  | AA_loadglobal chunk id ofs => AA_loadglobal chunk id ofs
+  | AA_addrglobal id ofs => AA_addrglobal id ofs
+  | AA_longofwords hi lo => 
+      AA_longofwords (transl_annot_arg fe hi) (transl_annot_arg fe lo)
   end.
-
 
 (** Translation of a Linear instruction.  Prepends the corresponding
   Mach instructions to the given list of instructions.
@@ -182,7 +194,7 @@ Definition transl_instr
   | Lbuiltin ef args dst =>
       Mbuiltin ef args dst :: k
   | Lannot ef args =>
-      Mannot ef (map (transl_annot_param fe) args) :: k
+      Mannot ef (map (transl_annot_arg fe) args) :: k
   | Llabel lbl =>
       Mlabel lbl :: k
   | Lgoto lbl =>

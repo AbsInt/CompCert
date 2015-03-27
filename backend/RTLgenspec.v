@@ -220,6 +220,13 @@ Proof.
   intros; red; intros. elim H1; intro. subst r1; auto. auto.
 Qed.
 
+Lemma regs_valid_app:
+  forall rl1 rl2 s,
+  regs_valid rl1 s -> regs_valid rl2 s -> regs_valid (rl1 ++ rl2) s.
+Proof.
+  intros; red; intros. apply in_app_iff in H1. destruct H1; auto. 
+Qed.
+
 Lemma regs_valid_incr:
   forall s1 s2 rl, state_incr s1 s2 -> regs_valid rl s1 -> regs_valid rl s2.
 Proof.
@@ -800,6 +807,49 @@ Inductive tr_exitexpr (c: code):
       tr_exitexpr c (add_letvar map r) b n1 nexits ->
       tr_exitexpr c map (XElet a b) ns nexits.
 
+(** Translation of arguments to annotations.
+    [tr_annot_args c map pr al ns nd al'] holds if the graph [c],
+    starting at node [ns], contains instructions that evaluate the
+    expressions contained in the built-in argument list [al],
+    then terminate on node [nd].  When [nd] is reached, the registers
+    contained in [al'] hold the values of the corresponding expressions
+    in [al].  Registers in [pr] are not modified. *)
+
+Inductive tr_annot_arg (c: code):
+      mapping -> list reg -> annot_arg expr -> node -> node -> annot_arg reg -> Prop :=
+  | tr_AA_base: forall map pr a ns nd r,
+      tr_expr c map pr a ns nd r None ->
+      tr_annot_arg c map pr (AA_base a) ns nd (AA_base r)
+  | tr_AA_int: forall map pr i n,
+      tr_annot_arg c map pr (AA_int i) n n (AA_int i)
+  | tr_AA_long: forall map pr i n,
+      tr_annot_arg c map pr (AA_long i) n n (AA_long i)
+  | tr_AA_float: forall map pr i n,
+      tr_annot_arg c map pr (AA_float i) n n (AA_float i)
+  | tr_AA_single: forall map pr i n,
+      tr_annot_arg c map pr (AA_single i) n n (AA_single i)
+  | tr_AA_loadstack: forall map pr chunk ofs n,
+      tr_annot_arg c map pr (AA_loadstack chunk ofs) n n (AA_loadstack chunk ofs)
+  | tr_AA_addrstack: forall map pr ofs n,
+      tr_annot_arg c map pr (AA_addrstack ofs) n n (AA_addrstack ofs)
+  | tr_AA_loadglobal: forall map pr chunk id ofs n,
+      tr_annot_arg c map pr (AA_loadglobal chunk id ofs) n n (AA_loadglobal chunk id ofs)
+  | tr_AA_addrglobal: forall map pr id ofs n,
+      tr_annot_arg c map pr (AA_addrglobal id ofs) n n (AA_addrglobal id ofs)
+  | tr_AA_longofwords: forall map pr hi lo ns nd n1 hi' lo',
+      tr_annot_arg c map pr hi ns n1 hi' ->
+      tr_annot_arg c map (params_of_annot_arg hi' ++ pr) lo n1 nd lo' ->
+      tr_annot_arg c map pr (AA_longofwords hi lo) ns nd (AA_longofwords hi' lo').
+
+Inductive tr_annot_args (c: code):
+      mapping -> list reg -> list (annot_arg expr) -> node -> node -> list (annot_arg reg) -> Prop :=
+  | tr_AA_nil: forall map pr n,
+      tr_annot_args c map pr nil n n nil
+  | tr_AA_cons: forall map pr a ns n1 a' al nd al',
+      tr_annot_arg c map pr a ns n1 a' ->
+      tr_annot_args c map (params_of_annot_arg a' ++ pr) al n1 nd al' ->
+      tr_annot_args c map pr (a :: al) ns nd (a' :: al').
+
 (** [tr_stmt c map stmt ns ncont nexits nret rret] holds if the graph [c],
   starting at node [ns], contains instructions that perform the Cminor
   statement [stmt].   These instructions branch to node [ncont] if
@@ -847,6 +897,10 @@ Inductive tr_stmt (c: code) (map: mapping):
      c!n1 = Some (Ibuiltin ef rargs rd nd) ->
      reg_map_ok map rd optid ->
      tr_stmt c map (Sbuiltin optid ef al) ns nd nexits ngoto nret rret
+  | tr_Sannot: forall ef al ns nd nexits ngoto nret rret n1 al',
+     tr_annot_args c map nil al ns n1 al' ->
+     c!n1 = Some (Iannot ef al' nd) ->
+     tr_stmt c map (Sannot ef al) ns nd nexits ngoto nret rret
   | tr_Sseq: forall s1 s2 ns nd nexits ngoto nret rret n,
      tr_stmt c map s2 n nd nexits ngoto nret rret ->
      tr_stmt c map s1 ns n nexits ngoto nret rret ->
@@ -1136,6 +1190,28 @@ Proof.
   induction 1; econstructor; eauto with rtlg.
 Qed.
 
+Lemma tr_annot_arg_incr:
+  forall s1 s2, state_incr s1 s2 ->
+  forall map pr a ns nd a',
+  tr_annot_arg s1.(st_code) map pr a ns nd a' ->
+  tr_annot_arg s2.(st_code) map pr a ns nd a'.
+Proof.
+  intros s1 s2 EXT.
+  generalize tr_expr_incr; intros I1.
+  induction 1; econstructor; eauto with rtlg.
+Qed.
+
+Lemma tr_annot_args_incr:
+  forall s1 s2, state_incr s1 s2 ->
+  forall map pr al ns nd al',
+  tr_annot_args s1.(st_code) map pr al ns nd al' ->
+  tr_annot_args s2.(st_code) map pr al ns nd al'.
+Proof.
+  intros s1 s2 EXT.
+  generalize tr_annot_arg_incr; intros I1.
+  induction 1; econstructor; eauto with rtlg.
+Qed.
+
 Lemma tr_stmt_incr:
   forall s1 s2, state_incr s1 s2 ->
   forall map s ns nd nexits ngoto nret rret,
@@ -1143,7 +1219,7 @@ Lemma tr_stmt_incr:
   tr_stmt s2.(st_code) map s ns nd nexits ngoto nret rret.
 Proof.
   intros s1 s2 EXT.
-  generalize tr_expr_incr tr_condition_incr tr_exprlist_incr tr_exitexpr_incr; intros I1 I2 I3 I4.
+  generalize tr_expr_incr tr_condition_incr tr_exprlist_incr tr_exitexpr_incr tr_annot_args_incr; intros I1 I2 I3 I4 I5.
   pose (AT := fun pc i => instr_at_incr s1 s2 pc i EXT).
   induction 1; econstructor; eauto.
 Qed.
@@ -1196,7 +1272,143 @@ Proof.
   apply tr_exitexpr_incr with s1; auto. eapply IHa; eauto with rtlg.
   apply add_letvar_valid; eauto with rtlg.
 Qed.
- 
+
+Lemma convert_annot_arg_valid:
+  forall map a s1 a' s2 i,
+  convert_annot_arg map a s1 = OK a' s2 i ->
+  map_valid map s1 ->
+  regs_valid (params_of_annot_arg a') s2.
+Proof.
+  induction a; simpl; intros; monadInv H; simpl; auto using regs_valid_nil.
+- apply regs_valid_cons. eauto with rtlg. apply regs_valid_nil.
+- apply regs_valid_app. eauto with rtlg. eapply IHa2; eauto with rtlg. 
+Qed.
+
+Lemma convert_annot_args_valid:
+  forall map l s1 l' s2 i,
+  convert_annot_args map l s1 = OK l' s2 i ->
+  map_valid map s1 ->
+  regs_valid (params_of_annot_args l') s2.
+Proof.
+  induction l; simpl; intros.
+- monadInv H. apply regs_valid_nil. 
+- monadInv H. simpl. apply regs_valid_app.
+  + apply regs_valid_incr with s; auto. eapply convert_annot_arg_valid; eauto.
+  + eapply IHl; eauto with rtlg.
+Qed.
+
+Inductive target_annot_arg_ok (map: mapping): list reg -> annot_arg expr -> annot_arg reg -> Prop :=
+  | taa_AA_base: forall pr a r,
+      target_reg_ok map pr a r ->
+      target_annot_arg_ok map pr (AA_base a) (AA_base r)
+  | taa_AA_int: forall pr i,
+      target_annot_arg_ok map pr (AA_int i) (AA_int i)
+  | taa_AA_long: forall pr i,
+      target_annot_arg_ok map pr (AA_long i) (AA_long i)
+  | taa_AA_float: forall pr i,
+      target_annot_arg_ok map pr (AA_float i) (AA_float i)
+  | taa_AA_single: forall pr i,
+      target_annot_arg_ok map pr (AA_single i) (AA_single i)
+  | taa_AA_loadstack: forall pr chunk ofs,
+      target_annot_arg_ok map pr (AA_loadstack chunk ofs) (AA_loadstack chunk ofs)
+  | taa_AA_addrstack: forall pr ofs,
+      target_annot_arg_ok map pr (AA_addrstack ofs) (AA_addrstack ofs)
+  | taa_AA_loadglobal: forall pr chunk id ofs,
+      target_annot_arg_ok map pr (AA_loadglobal chunk id ofs) (AA_loadglobal chunk id ofs)
+  | taa_AA_addrglobal: forall pr id ofs,
+      target_annot_arg_ok map pr (AA_addrglobal id ofs) (AA_addrglobal id ofs)
+  | taa_AA_longofwords: forall pr hi lo hi' lo',
+      target_annot_arg_ok map pr hi hi' ->
+      target_annot_arg_ok map (params_of_annot_arg hi' ++ pr) lo lo' ->
+      target_annot_arg_ok map pr (AA_longofwords hi lo) (AA_longofwords hi' lo').
+
+Lemma convert_annot_arg_ok:
+  forall map a pr s1 a' s2 i,
+  map_valid map s1 ->
+  regs_valid pr s1 ->
+  convert_annot_arg map a s1 = OK a' s2 i ->
+  target_annot_arg_ok map pr a a'.
+Proof.
+  induction a; simpl; intros until i; intros MAP PR CVT; monadInv CVT; try (now constructor).
+- constructor. eauto with rtlg.
+- constructor. 
+  eapply IHa1 with (s1 := s1); eauto. 
+  eapply IHa2 with (s1 := s); eauto with rtlg. 
+  apply regs_valid_app; eauto using convert_annot_arg_valid with rtlg.
+Qed.
+
+Inductive target_annot_args_ok (map: mapping): list reg -> list (annot_arg expr) -> list (annot_arg reg) -> Prop :=
+  | taa_AA_nil: forall pr,
+      target_annot_args_ok map pr nil nil
+  | taa_AA_cons: forall pr a a' l l',
+      target_annot_arg_ok map pr a a' ->
+      target_annot_args_ok map (params_of_annot_arg a' ++ pr) l l' ->
+      target_annot_args_ok map pr (a :: l) (a' :: l').
+
+Lemma convert_annot_args_ok:
+  forall map l pr s1 l' s2 i,
+  map_valid map s1 ->
+  regs_valid pr s1 ->
+  convert_annot_args map l s1 = OK l' s2 i ->
+  target_annot_args_ok map pr l l'.
+Proof.
+  induction l; simpl; intros until i; intros MAP PR CVT; monadInv CVT.
+- constructor.
+- constructor.
+  eapply convert_annot_arg_ok with (s1 := s1); eauto. 
+  eapply IHl with (s1 := s); eauto with rtlg.
+  apply regs_valid_app; eauto using convert_annot_arg_valid with rtlg.
+Qed.
+
+Lemma transl_annot_arg_charact:
+  forall map a a' nd s ns s' i pr
+     (TR: transl_annot_arg map a a' nd s = OK ns s' i) 
+     (WF: map_valid map s)
+     (OK: target_annot_arg_ok map pr a a')
+     (VALID: regs_valid pr s)
+     (VALID2: regs_valid (params_of_annot_arg a') s),
+  tr_annot_arg s'.(st_code) map pr a ns nd a'.
+Proof.
+  induction a; intros; inv OK; simpl in TR; try (monadInv TR); simpl in VALID2.
+- assert (reg_valid r s) by auto with coqlib.
+  constructor. eapply transl_expr_charact; eauto with rtlg. 
+- constructor.
+- constructor.
+- constructor.
+- constructor.
+- constructor.
+- constructor.
+- constructor.
+- constructor.
+- econstructor. 
+  eapply IHa1; eauto with rtlg.
+  red; intros. apply reg_valid_incr with s; auto using in_or_app.
+  apply tr_annot_arg_incr with s0; auto. 
+  eapply IHa2; eauto with rtlg.
+  apply regs_valid_app; auto. red; intros; auto using in_or_app.
+  red; intros; auto using in_or_app.
+Qed.
+
+Lemma transl_annot_args_charact:
+  forall map al al' nd s ns s' i pr
+     (TR: transl_annot_args map al al' nd s = OK ns s' i) 
+     (WF: map_valid map s)
+     (OK: target_annot_args_ok map pr al al')
+     (VALID: regs_valid pr s)
+     (VALID2: regs_valid (params_of_annot_args al') s),
+  tr_annot_args s'.(st_code) map pr al ns nd al'.
+Proof.
+  induction al as [|a al]; intros; inv OK; monadInv TR; simpl in VALID2.
+- constructor.
+- econstructor. 
+  eapply transl_annot_arg_charact; eauto with rtlg.
+  red; intros. apply reg_valid_incr with s; auto using in_or_app.
+  apply tr_annot_args_incr with s0; auto. 
+  eapply IHal; eauto with rtlg.
+  apply regs_valid_app; auto. red; intros; auto using in_or_app.
+  red; intros; auto using in_or_app.
+Qed.
+
 Lemma transl_stmt_charact:
   forall map stmt nd nexits ngoto nret rret s ns s' INCR
     (TR: transl_stmt map stmt nd nexits ngoto nret rret s = OK ns s' INCR)
@@ -1250,6 +1462,11 @@ Proof.
   econstructor; eauto 4 with rtlg.
   eapply transl_exprlist_charact; eauto 3 with rtlg.
   eapply alloc_optreg_map_ok with (s1 := s0); eauto with rtlg.
+  (* Sannot *)
+  econstructor; eauto 4 with rtlg. 
+  eapply transl_annot_args_charact; eauto 3 with rtlg.
+  eapply convert_annot_args_ok; eauto 3 with rtlg.
+  apply regs_valid_incr with s0; auto. eapply convert_annot_args_valid; eauto. 
   (* Sseq *)
   econstructor. 
   apply tr_stmt_incr with s0; auto. 

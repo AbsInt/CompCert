@@ -211,82 +211,55 @@ Proof.
   unfold successor; intros. apply match_successor_rec.
 Qed.
 
-Section BUILTIN_STRENGTH_REDUCTION.
-
-Variable bc: block_classification.
-Hypothesis GE: genv_match bc ge.
-Variable ae: AE.t.
-Variable rs: regset.
-Hypothesis MATCH: ematch bc rs ae.
-
 Lemma annot_strength_reduction_correct:
-  forall targs args targs' args' eargs,
-  annot_strength_reduction ae targs args = (targs', args') ->
-  eventval_list_match ge eargs (annot_args_typ targs) rs##args ->
-  exists eargs',
-  eventval_list_match ge eargs' (annot_args_typ targs') rs##args'
-  /\ annot_eventvals targs' eargs' = annot_eventvals targs eargs.
+  forall bc sp m rs ae, ematch bc rs ae ->
+  forall a v,
+  eval_annot_arg ge (fun r => rs#r) sp m a v ->
+  eval_annot_arg ge (fun r => rs#r) sp m (annot_strength_reduction ae a) v.
 Proof.
-  induction targs; simpl; intros.
-- inv H. simpl. exists eargs; auto. 
-- destruct a.
-  + destruct args as [ | arg args0]; simpl in H0; inv H0.
-    destruct (annot_strength_reduction ae targs args0) as [targs'' args''] eqn:E.
-    exploit IHtargs; eauto. intros [eargs'' [A B]].
-    assert (DFL:
-      exists eargs',
-      eventval_list_match ge eargs' (annot_args_typ (AA_arg ty :: targs'')) rs##(arg :: args'')
-      /\ annot_eventvals (AA_arg ty :: targs'') eargs' = ev1 :: annot_eventvals targs evl).
-    {
-      exists (ev1 :: eargs''); split.
-      simpl; constructor; auto. simpl. congruence.
-    }
-    destruct ty; destruct (areg ae arg) as [] eqn:E2; inv H; auto.
-    * exists eargs''; split; auto; simpl; f_equal; auto. 
-      generalize (MATCH arg); fold (areg ae arg); rewrite E2; intros VM.
-      inv VM. rewrite <- H0 in *. inv H5; auto.
-    * destruct (Compopts.generate_float_constants tt); inv H1; auto. 
-      exists eargs''; split; auto; simpl; f_equal; auto. 
-      generalize (MATCH arg); fold (areg ae arg); rewrite E2; intros VM.
-      inv VM. rewrite <- H0 in *. inv H5; auto.
-  + destruct (annot_strength_reduction ae targs args) as [targs'' args''] eqn:E.
-    inv H.
-    exploit IHtargs; eauto. intros [eargs'' [A B]].
-    exists eargs''; simpl; split; auto. congruence.
-  + destruct (annot_strength_reduction ae targs args) as [targs'' args''] eqn:E.
-    inv H.
-    exploit IHtargs; eauto. intros [eargs'' [A B]].
-    exists eargs''; simpl; split; auto. congruence.
+  induction 2; simpl; eauto with aarg.
+- specialize (H x). unfold areg. destruct (AE.get x ae); try constructor. 
+  + inv H. constructor.
+  + inv H. constructor.
+  + destruct (Compopts.generate_float_constants tt); [inv H|idtac]; constructor.
+  + destruct (Compopts.generate_float_constants tt); [inv H|idtac]; constructor.
+- destruct (annot_strength_reduction ae hi); auto with aarg.
+  destruct (annot_strength_reduction ae lo); auto with aarg.
+  inv IHeval_annot_arg1; inv IHeval_annot_arg2. constructor. 
 Qed.
 
-Lemma vmatch_ptr_gl':
-  forall v id ofs,
-  vmatch bc v (Ptr (Gl id ofs)) ->
-  v = Vundef \/ exists b, Genv.find_symbol ge id = Some b /\ v = Vptr b ofs.
+Lemma annot_strength_reduction_correct_2:
+  forall bc sp m rs ae, ematch bc rs ae ->
+  forall al vl,
+  eval_annot_args ge (fun r => rs#r) sp m al vl ->
+  eval_annot_args ge (fun r => rs#r) sp m (List.map (annot_strength_reduction ae) al) vl.
 Proof.
-  intros. inv H; auto. inv H2. right; exists b; split; auto. eapply GE; eauto.
-Qed. 
+  induction 2; simpl; constructor; auto. eapply annot_strength_reduction_correct; eauto. 
+Qed.
 
 Lemma builtin_strength_reduction_correct:
-  forall ef args m t vres m',
+  forall bc ae rs ef args m t vres m',
+  genv_match bc ge ->
+  ematch bc rs ae ->
   external_call ef ge rs##args m t vres m' ->
   let (ef', args') := builtin_strength_reduction ae ef args in
   external_call ef' ge rs##args' m t vres m'.
 Proof.
-  intros until m'. functional induction (builtin_strength_reduction ae ef args); intros; auto.
+  intros until m'. intros GE MATCH. 
+  assert (M: forall v id ofs,
+             vmatch bc v (Ptr (Gl id ofs)) ->
+             v = Vundef \/ exists b, Genv.find_symbol ge id = Some b /\ v = Vptr b ofs).
+  { intros. inv H; auto. inv H2. right; exists b; split; auto. eapply GE; eauto. }
+  functional induction (builtin_strength_reduction ae ef args); intros; auto.
 + simpl in H. assert (V: vmatch bc (rs#r1) (Ptr (Gl symb n1))) by (rewrite <- e1; apply MATCH). 
-  exploit vmatch_ptr_gl'; eauto. intros [A | [b [A B]]].
+  exploit M; eauto. intros [A | [b [A B]]].
   * simpl in H; rewrite A in H; inv H.
   * simpl; rewrite volatile_load_global_charact; simpl. exists b; split; congruence.
 + simpl in H. assert (V: vmatch bc (rs#r1) (Ptr (Gl symb n1))) by (rewrite <- e1; apply MATCH). 
-  exploit vmatch_ptr_gl'; eauto. intros [A | [b [A B]]].
+  exploit M; eauto. intros [A | [b [A B]]].
   * simpl in H; rewrite A in H; inv H.
   * simpl; rewrite volatile_store_global_charact; simpl. exists b; split; congruence.
-+ inv H. exploit annot_strength_reduction_correct; eauto. intros [eargs' [A B]]. 
-  rewrite <- B. econstructor; eauto. 
 Qed.
-
-End BUILTIN_STRENGTH_REDUCTION.
 
 (** The proof of semantic preservation is a simulation argument
   based on "option" diagrams of the following form:
@@ -520,6 +493,21 @@ Opaque builtin_strength_reduction.
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_states_succ; eauto. simpl; auto.
   apply set_reg_lessdef; auto.
+
+  (* Iannot *)
+  rename pc'0 into pc. TransfInstr; intros. 
+  exploit (@eval_annot_args_lessdef _ ge (fun r => rs#r) (fun r => rs'#r)). 
+    apply REGS. eauto. 
+    eapply annot_strength_reduction_correct_2 with (ae := ae); eauto.
+  intros (vargs' & A & B). 
+  exploit external_call_mem_extends; eauto. 
+  intros (v' & P & Q & R & S & T). 
+  left; econstructor; econstructor; split.
+  eapply exec_Iannot; eauto.
+  eapply eval_annot_args_preserved. eexact symbols_preserved. eauto.
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply match_states_succ; eauto.
 
   (* Icond, preserved *)
   rename pc' into pc. TransfInstr.

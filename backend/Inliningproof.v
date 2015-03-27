@@ -400,6 +400,63 @@ Proof.
   eapply function_ptr_translated; eauto.
 Qed.
 
+(** Translation of annotation arguments. *)
+
+Lemma tr_annot_arg:
+  forall F bound ctx rs rs' sp sp' m m',
+  match_globalenvs F bound ->
+  agree_regs F ctx rs rs' ->
+  F sp = Some(sp', ctx.(dstk)) ->
+  Mem.inject F m m' ->
+  forall a v,
+  eval_annot_arg ge (fun r => rs#r) (Vptr sp Int.zero) m a v ->
+  exists v', eval_annot_arg tge (fun r => rs'#r) (Vptr sp' Int.zero) m' (sannotarg ctx a) v'
+          /\ val_inject F v v'.
+Proof.
+  intros until m'; intros MG AG SP MI. induction 1; simpl.
+- exists rs'#(sreg ctx x); split. constructor. eapply agree_val_reg; eauto.
+- econstructor; eauto with aarg.
+- econstructor; eauto with aarg.
+- econstructor; eauto with aarg.
+- econstructor; eauto with aarg.
+- exploit Mem.loadv_inject; eauto. 
+  instantiate (1 := Vptr sp' (Int.add ofs (Int.repr (dstk ctx)))). 
+  simpl. econstructor; eauto. rewrite Int.add_zero_l; auto.
+  intros (v' & A & B). exists v'; split; auto. constructor. simpl. rewrite Int.add_zero_l; auto. 
+- econstructor; split. constructor. simpl. econstructor; eauto. rewrite ! Int.add_zero_l; auto.
+- assert (val_inject F (Senv.symbol_address ge id ofs) (Senv.symbol_address tge id ofs)).
+  { unfold Senv.symbol_address; simpl; unfold Genv.symbol_address. 
+    rewrite symbols_preserved. destruct (Genv.find_symbol ge id) as [b|] eqn:FS; auto.
+    inv MG. econstructor. eauto. rewrite Int.add_zero; auto. }
+  exploit Mem.loadv_inject; eauto. intros (v' & A & B).
+  exists v'; eauto with aarg. 
+- econstructor; split. constructor. 
+  unfold Senv.symbol_address; simpl; unfold Genv.symbol_address. 
+  rewrite symbols_preserved. destruct (Genv.find_symbol ge id) as [b|] eqn:FS; auto.
+  inv MG. econstructor. eauto. rewrite Int.add_zero; auto.
+- destruct IHeval_annot_arg1 as (v1 & A1 & B1).
+  destruct IHeval_annot_arg2 as (v2 & A2 & B2).
+  econstructor; split. eauto with aarg. apply val_longofwords_inject; auto. 
+Qed.
+
+Lemma tr_annot_args:
+  forall F bound ctx rs rs' sp sp' m m',
+  match_globalenvs F bound ->
+  agree_regs F ctx rs rs' ->
+  F sp = Some(sp', ctx.(dstk)) ->
+  Mem.inject F m m' ->
+  forall al vl,
+  eval_annot_args ge (fun r => rs#r) (Vptr sp Int.zero) m al vl ->
+  exists vl', eval_annot_args tge (fun r => rs'#r) (Vptr sp' Int.zero) m' (map (sannotarg ctx) al) vl'
+          /\ val_list_inject F vl vl'.
+Proof.
+  induction 5; simpl.
+- exists (@nil val); split; constructor.
+- exploit tr_annot_arg; eauto. intros (v1' & A & B).
+  destruct IHlist_forall2 as (vl' & C & D).
+  exists (v1' :: vl'); split; constructor; auto.
+Qed.
+
 (** ** Relating stacks *)
 
 Inductive match_stacks (F: meminj) (m m': mem):
@@ -1024,6 +1081,29 @@ Proof.
   eapply agree_set_reg. eapply agree_regs_incr; eauto. auto. auto. 
   apply J; auto.
   auto. 
+  eapply external_call_valid_block; eauto. 
+  eapply range_private_extcall; eauto. 
+    intros; eapply external_call_max_perm; eauto. 
+  auto. 
+  intros. apply SSZ2. eapply external_call_max_perm; eauto. 
+
+(* annot *)
+  exploit tr_funbody_inv; eauto. intros TR; inv TR.
+  exploit match_stacks_inside_globalenvs; eauto. intros [bound MG]. 
+  exploit tr_annot_args; eauto. intros (vargs' & P & Q).
+  exploit external_call_mem_inject; eauto. 
+    eapply match_stacks_inside_globals; eauto.
+  intros [F1 [v1 [m1' [A [B [C [D [E [J K]]]]]]]]].
+  left; econstructor; split.
+  eapply plus_one. eapply exec_Iannot; eauto.
+    eapply external_call_symbols_preserved; eauto. 
+    exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  econstructor.
+    eapply match_stacks_inside_extcall with (F1 := F) (F2 := F1) (m1 := m) (m1' := m'0); eauto.
+    intros; eapply external_call_max_perm; eauto. 
+    intros; eapply external_call_max_perm; eauto. 
+  auto. 
+  eapply agree_regs_incr; eauto. auto. auto. 
   eapply external_call_valid_block; eauto. 
   eapply range_private_extcall; eauto. 
     intros; eapply external_call_max_perm; eauto. 

@@ -358,34 +358,27 @@ Qed.
 
 (** Translation of arguments to annotations. *)
 
-Lemma annot_arg_match:
-  forall ms sp rs m m' p v,
-  agree ms sp rs ->
-  Mem.extends m m' ->
-  Mach.annot_arg ms m sp p v ->
-  exists v', Asm.annot_arg rs m' (transl_annot_param p) v' /\ Val.lessdef v v'.
+Remark annot_arg_match:
+  forall ge (rs: regset) sp m a v,
+  eval_annot_arg ge (fun r => rs (preg_of r)) sp m a v ->
+  eval_annot_arg ge rs sp m (map_annot_arg preg_of a) v.
 Proof.
-  intros. inv H1; simpl.
-(* reg *)
-  exists (rs (preg_of r)); split. constructor. eapply preg_val; eauto.
-(* stack *)
-  exploit Mem.load_extends; eauto. intros [v' [A B]].
-  exists v'; split; auto. 
-  inv H. econstructor; eauto. 
+  induction 1; simpl; eauto with aarg.
 Qed.
 
-Lemma annot_arguments_match:
-  forall ms sp rs m m', agree ms sp rs -> Mem.extends m m' ->
-  forall pl vl,
-  Mach.annot_arguments ms m sp pl vl ->
-  exists vl', Asm.annot_arguments rs m' (map transl_annot_param pl) vl'
+Lemma annot_args_match:
+  forall ge ms sp rs m m', agree ms sp rs -> Mem.extends m m' ->
+  forall al vl, eval_annot_args ge ms sp m al vl ->
+  exists vl', eval_annot_args ge rs sp m' (map (map_annot_arg preg_of) al) vl'
            /\ Val.lessdef_list vl vl'.
 Proof.
-  induction 3; intros. 
-  exists (@nil val); split. constructor. constructor.
-  exploit annot_arg_match; eauto. intros [v1' [A B]].
+  induction 3; intros; simpl.
+  exists (@nil val); split; constructor.
+  exploit (@eval_annot_arg_lessdef _ ge ms (fun r => rs (preg_of r))); eauto. 
+  intros; eapply preg_val; eauto.
+  intros (v1' & A & B).
   destruct IHlist_forall2 as [vl' [C D]].
-  exists (v1' :: vl'); split; constructor; auto.
+  exists (v1' :: vl'); split; constructor; auto. apply annot_arg_match; auto. 
 Qed.
 
 (** * Correspondence between Mach code and Asm code *)

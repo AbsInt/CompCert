@@ -455,6 +455,56 @@ with transl_condexpr (map: mapping) (a: condexpr) (ntrue nfalse: node)
          transl_expr map b r nc
   end.
 
+(** Translation of arguments to annotations. *)
+
+Fixpoint convert_annot_arg (map: mapping) (a: annot_arg expr) : mon (annot_arg reg) :=
+  match a with
+  | AA_base a => do rd <- alloc_reg map a; ret (AA_base rd)
+  | AA_int n => ret (AA_int n)
+  | AA_long n => ret (AA_long n)
+  | AA_float n => ret (AA_float n)
+  | AA_single n => ret (AA_single n)
+  | AA_loadstack chunk ofs => ret (AA_loadstack chunk ofs)
+  | AA_addrstack ofs => ret (AA_addrstack ofs)
+  | AA_loadglobal chunk id ofs => ret (AA_loadglobal chunk id ofs)
+  | AA_addrglobal id ofs => ret (AA_addrglobal id ofs)
+  | AA_longofwords hi lo =>
+      do hi' <- convert_annot_arg map hi;
+      do lo' <- convert_annot_arg map lo;
+      ret (AA_longofwords hi' lo')
+  end.
+
+Fixpoint convert_annot_args (map: mapping) (al: list (annot_arg expr)) : mon (list (annot_arg reg)) :=
+  match al with
+  | nil => ret nil
+  | a1 :: al =>
+      do a1' <- convert_annot_arg map a1;
+      do al' <- convert_annot_args map al;
+      ret (a1' :: al')
+  end.
+
+Fixpoint transl_annot_arg
+             (map: mapping) (a: annot_arg expr) (d: annot_arg reg) (nd: node) 
+             : mon node :=
+  match a, d with
+  | AA_base a, AA_base r => transl_expr map a r nd
+  | AA_longofwords hi lo, AA_longofwords hi' lo' =>
+      do no <- transl_annot_arg map lo lo' nd;
+      transl_annot_arg map hi hi' no
+  | _, _ => ret nd
+  end.
+
+Fixpoint transl_annot_args
+          (map: mapping) (al: list (annot_arg expr)) (dl: list (annot_arg reg)) (nd: node)
+          : mon node :=
+  match al, dl with
+  | a1 :: al, d1 :: dl =>
+      do no <- transl_annot_args map al dl nd;
+      transl_annot_arg map a1 d1 no
+  | _, _ =>
+      ret nd
+  end.
+
 (** Auxiliary for translating exit expressions. *)
 
 Definition transl_exit (nexits: list node) (n: nat) : mon node :=
@@ -558,6 +608,10 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
       do r <- alloc_optreg map optid;
       do n1 <- add_instr (Ibuiltin ef rargs r nd);
          transl_exprlist map al rargs n1
+  | Sannot ef al =>
+      do dl <- convert_annot_args map al;
+      do n1 <- add_instr (Iannot ef dl nd);
+         transl_annot_args map al dl n1
   | Sseq s1 s2 =>
       do ns <- transl_stmt map s2 nd nexits ngoto nret rret;
       transl_stmt map s1 ns nexits ngoto nret rret

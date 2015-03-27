@@ -203,6 +203,12 @@ Definition classify_call (ge: Cminor.genv) (e: Cminor.expr) : call_kind :=
       end
   end.
 
+Definition builtin_is_annot (ef: external_function) (optid: option ident) : bool :=
+  match ef, optid with
+  | EF_annot _ _, None => true
+  | _, _ => false
+  end.
+
 (** Conversion of Cminor [switch] statements to decision trees. *)
 
 Parameter compile_switch: Z -> nat -> table -> comptree.
@@ -263,7 +269,9 @@ Fixpoint sel_stmt (ge: Cminor.genv) (s: Cminor.stmt) : res stmt :=
       | Call_builtin ef => Sbuiltin optid ef (sel_exprlist args)
       end)
   | Cminor.Sbuiltin optid ef args =>
-      OK (Sbuiltin optid ef (sel_exprlist args))
+      OK (if builtin_is_annot ef optid
+          then Sannot ef (List.map (fun e => annot_arg (sel_expr e)) args)
+          else Sbuiltin optid ef (sel_exprlist args))
   | Cminor.Stailcall sg fn args => 
       OK (match classify_call ge fn with
       | Call_imm id  => Stailcall sg (inr _ id) (sel_exprlist args)

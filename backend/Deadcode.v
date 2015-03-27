@@ -70,6 +70,17 @@ Definition is_dead (v: nval) :=
 Definition is_int_zero (v: nval) :=
   match v with I n => Int.eq n Int.zero | _ => false end.
 
+Fixpoint transfer_annot_arg (na: NA.t) (a: annot_arg reg) : NA.t :=
+  let (ne, nm) := na in
+  match a with
+  | AA_base r => (add_need_all r ne, nm)
+  | AA_int _ | AA_long _ | AA_float _ | AA_single _
+  | AA_addrstack _ | AA_addrglobal _ _ => (ne, nm)
+  | AA_loadstack chunk ofs => (ne, nmem_add nm (Stk ofs) (size_chunk chunk))
+  | AA_loadglobal chunk id ofs => (ne, nmem_add nm (Gl id ofs) (size_chunk chunk))
+  | AA_longofwords hi lo => transfer_annot_arg (transfer_annot_arg na hi) lo
+  end.
+
 Function transfer_builtin (app: VA.t) (ef: external_function) (args: list reg) (res: reg)
                           (ne: NE.t) (nm: nmem) : NA.t :=
   match ef, args with
@@ -128,6 +139,8 @@ Definition transfer (f: function) (approx: PMap.t VA.t)
        nmem_dead_stack f.(fn_stacksize))
   | Some(Ibuiltin ef args res s) =>
       transfer_builtin approx!!pc ef args res ne nm
+  | Some(Iannot ef args s) =>
+      List.fold_left transfer_annot_arg args after
   | Some(Icond cond args s1 s2) =>
       (add_needs args (needs_of_condition cond) ne, nm)
   | Some(Ijumptable arg tbl) =>
