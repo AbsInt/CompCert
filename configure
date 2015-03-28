@@ -64,9 +64,9 @@ while : ; do
     -toolprefix|--toolprefix)
         toolprefix="$2"; shift;;
     -no-runtime-lib)
-        has_runtime_lib=false; shift;;
+        has_runtime_lib=false;;
     -no-checklink)
-        build_checklink=false; shift;;
+        build_checklink=false;;
     *)
         if test -n "$target"; then echo "$usage" 1>&2; exit 2; fi
         target="$1";;
