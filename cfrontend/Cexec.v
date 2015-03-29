@@ -785,7 +785,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
   | RV, Eunop op r1 ty =>
       match is_val r1 with
       | Some(v1, ty1) =>
-          do v <- sem_unary_operation op v1 ty1;
+          do v <- sem_unary_operation op v1 ty1 m;
           topred (Rred "red_unop" (Eval v ty) m E0)
       | None =>
           incontext (fun x => Eunop op x ty) (step_expr RV r1 m)
@@ -810,7 +810,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
   | RV, Eseqand r1 r2 ty =>
       match is_val r1 with
       | Some(v1, ty1) =>
-          do b <- bool_val v1 ty1;
+          do b <- bool_val v1 ty1 m;
           if b then topred (Rred "red_seqand_true" (Eparen r2 type_bool ty) m E0)
                else topred (Rred "red_seqand_false" (Eval (Vint Int.zero) ty) m E0)
       | None =>
@@ -819,7 +819,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
   | RV, Eseqor r1 r2 ty =>
       match is_val r1 with
       | Some(v1, ty1) =>
-          do b <- bool_val v1 ty1;
+          do b <- bool_val v1 ty1 m;
           if b then topred (Rred "red_seqor_true" (Eval (Vint Int.one) ty) m E0)
                else topred (Rred "red_seqor_false" (Eparen r2 type_bool ty) m E0)
       | None =>
@@ -828,7 +828,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
   | RV, Econdition r1 r2 r3 ty =>
       match is_val r1 with
       | Some(v1, ty1) =>
-          do b <- bool_val v1 ty1;
+          do b <- bool_val v1 ty1 m;
           topred (Rred "red_condition" (Eparen (if b then r2 else r3) ty ty) m E0)
       | None =>
           incontext (fun x => Econdition x r2 r3 ty) (step_expr RV r1 m)
@@ -987,17 +987,17 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
   | Evalof (Eloc b ofs ty') ty =>
       ty' = ty /\ exists t, exists v, exists w', deref_loc ge ty m b ofs t v /\ possible_trace w t w'
   | Eunop op (Eval v1 ty1) ty =>
-      exists v, sem_unary_operation op v1 ty1 = Some v
+      exists v, sem_unary_operation op v1 ty1 m = Some v
   | Ebinop op (Eval v1 ty1) (Eval v2 ty2) ty =>
       exists v, sem_binary_operation ge op v1 ty1 v2 ty2 m = Some v
   | Ecast (Eval v1 ty1) ty =>
       exists v, sem_cast v1 ty1 ty = Some v
   | Eseqand (Eval v1 ty1) r2 ty =>
-      exists b, bool_val v1 ty1 = Some b
+      exists b, bool_val v1 ty1 m = Some b
   | Eseqor (Eval v1 ty1) r2 ty =>
-      exists b, bool_val v1 ty1 = Some b
+      exists b, bool_val v1 ty1 m = Some b
   | Econdition (Eval v1 ty1) r1 r2 ty =>
-      exists b, bool_val v1 ty1 = Some b
+      exists b, bool_val v1 ty1 m = Some b
   | Eassign (Eloc b ofs ty1) (Eval v2 ty2) ty =>
       exists v, exists m', exists t, exists w',
       ty = ty1 /\ sem_cast v2 ty2 ty1 = Some v /\ assign_loc ge ty1 m b ofs v t m' /\ possible_trace w t w'
@@ -1409,7 +1409,7 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
 (* unop *)
   destruct (is_val a) as [[v ty'] | ] eqn:?. rewrite (is_val_inv _ _ _ Heqo). 
   (* top *)
-  destruct (sem_unary_operation op v ty') as [v'|] eqn:?...
+  destruct (sem_unary_operation op v ty' m) as [v'|] eqn:?...
   apply topred_ok; auto. split. apply red_unop; auto. exists w; constructor. 
   (* depth *)
   eapply incontext_ok; eauto.
@@ -1433,7 +1433,7 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
 (* seqand *)
   destruct (is_val a1) as [[v ty'] | ] eqn:?. rewrite (is_val_inv _ _ _ Heqo). 
   (* top *)
-  destruct (bool_val v ty') as [v'|] eqn:?... destruct v'.
+  destruct (bool_val v ty' m) as [v'|] eqn:?... destruct v'.
   apply topred_ok; auto. split. eapply red_seqand_true; eauto. exists w; constructor.
   apply topred_ok; auto. split. eapply red_seqand_false; eauto. exists w; constructor.
   (* depth *)
@@ -1441,7 +1441,7 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
 (* seqor *)
   destruct (is_val a1) as [[v ty'] | ] eqn:?. rewrite (is_val_inv _ _ _ Heqo). 
   (* top *)
-  destruct (bool_val v ty') as [v'|] eqn:?... destruct v'.
+  destruct (bool_val v ty' m) as [v'|] eqn:?... destruct v'.
   apply topred_ok; auto. split. eapply red_seqor_true; eauto. exists w; constructor.
   apply topred_ok; auto. split. eapply red_seqor_false; eauto. exists w; constructor.
   (* depth *)
@@ -1449,7 +1449,7 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
 (* condition *)
   destruct (is_val a1) as [[v ty'] | ] eqn:?. rewrite (is_val_inv _ _ _ Heqo). 
   (* top *)
-  destruct (bool_val v ty') as [v'|] eqn:?...
+  destruct (bool_val v ty' m) as [v'|] eqn:?...
   apply topred_ok; auto. split. eapply red_condition; eauto. exists w; constructor.
   (* depth *)
   eapply incontext_ok; eauto.
@@ -1973,20 +1973,20 @@ Definition do_step (w: world) (s: state) : list transition :=
         match k with
         | Kdo k => ret "step_do_2" (State f Sskip k e m )
         | Kifthenelse s1 s2 k =>
-            do b <- bool_val v ty;
+            do b <- bool_val v ty m;
             ret "step_ifthenelse_2" (State f (if b then s1 else s2) k e m)
         | Kwhile1 x s k =>
-            do b <- bool_val v ty; 
+            do b <- bool_val v ty m; 
             if b
             then ret "step_while_true" (State f s (Kwhile2 x s k) e m)
             else ret "step_while_false" (State f Sskip k e m)
         | Kdowhile2 x s k =>
-            do b <- bool_val v ty;
+            do b <- bool_val v ty m;
             if b
             then ret "step_dowhile_true" (State f (Sdowhile x s) k e m)
             else ret "step_dowhile_false" (State f Sskip k e m)
         | Kfor2 a2 a3 s k =>
-            do b <- bool_val v ty;
+            do b <- bool_val v ty m;
             if b
             then ret "step_for_true" (State f s (Kfor3 a2 a3 s k) e m)
             else ret "step_for_false" (State f Sskip k e m)

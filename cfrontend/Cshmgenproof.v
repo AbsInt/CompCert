@@ -311,7 +311,7 @@ Qed.
 Lemma make_boolean_correct:
  forall e le m a v ty b,
   eval_expr ge e le m a v ->
-  bool_val v ty = Some b ->
+  bool_val v ty m = Some b ->
   exists vb,
     eval_expr ge e le m (make_boolean a ty) vb
     /\ Val.bool_of_val vb b.
@@ -333,6 +333,10 @@ Proof.
   econstructor; split. econstructor; eauto with cshm. simpl. eauto. 
   unfold Val.cmpu, Val.cmpu_bool. simpl.
   destruct (Int.eq i Int.zero); simpl; constructor.
+  econstructor; split. econstructor; eauto with cshm. simpl. eauto.
+  destruct (Mem.weak_valid_pointer m b0 (Int.unsigned i)) eqn:V; inv H2.
+  unfold Val.cmpu, Val.cmpu_bool. simpl.
+  unfold Mem.weak_valid_pointer in V; rewrite V. constructor. 
 (* long *)
   econstructor; split. econstructor; eauto with cshm. simpl. unfold Val.cmpl. simpl. eauto. 
   destruct (Int64.eq i Int64.zero); simpl; constructor. 
@@ -365,13 +369,16 @@ Qed.
 
 Lemma make_notbool_correct:
   forall a tya c va v e le m,
-  sem_notbool va tya = Some v ->
+  sem_notbool va tya m = Some v ->
   make_notbool a tya = OK c ->  
   eval_expr ge e le m a va ->
   eval_expr ge e le m c v.
 Proof.
   unfold sem_notbool, make_notbool; intros until m; intros SEM MAKE EV1;
   destruct (classify_bool tya); inv MAKE; destruct va; inv SEM; eauto with cshm.
+  destruct (Mem.weak_valid_pointer m b (Int.unsigned i)) eqn:V; inv H0.
+  econstructor; eauto with cshm. simpl. unfold Val.cmpu, Val.cmpu_bool.
+  unfold Mem.weak_valid_pointer in V; rewrite V. auto. 
 Qed.
 
 Lemma make_notint_correct:
@@ -632,7 +639,7 @@ Qed.
 Lemma transl_unop_correct:
   forall op a tya c va v e le m, 
   transl_unop op a tya = OK c ->
-  sem_unary_operation op va tya = Some v ->
+  sem_unary_operation op va tya m = Some v ->
   eval_expr ge e le m a va ->
   eval_expr ge e le m c v.
 Proof.
