@@ -10,6 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+(* Printer for the Dwarf 2 debug information in ASM *)
 
 open DwarfTypes
 open DwarfUtil
@@ -17,6 +18,7 @@ open Printf
 open PrintAsmaux
 open Sections
 
+(* The printer is parameterized over target specific functions and a set of dwarf type constants *)
 module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
     sig
       val print_debug: out_channel -> dw_entry -> unit
@@ -24,23 +26,17 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
   struct
 
     open Target
+    open DwarfAbbrevs
 
+    (* Byte value to string *)
     let string_of_byte value =
       sprintf "	.byte		%s\n" (if value then "0x1" else "0x0")
 
+    (* Print a label *)
     let print_label oc lbl =
       fprintf oc "%a:\n" label lbl
 
-    let curr_abbrev = ref 1
-
-    let next_abbrev () =
-      let abbrev = !curr_abbrev in
-      incr curr_abbrev;abbrev
-
-    let abbrevs: (string * int) list ref = ref []
-
-    let abbrev_mapping: (string,int) Hashtbl.t = Hashtbl.create 7
-
+    (* Helper functions for abbreviation printing *)
     let add_byte buf value =
       Buffer.add_string buf (string_of_byte value)
 
@@ -51,66 +47,30 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       add_abbr_uleb v1 buf;
       add_abbr_uleb v2 buf
 
-    let add_sibling = add_abbr_entry (0x1,DwarfAbbrevs.sibling_type_abbr)
-
     let add_file_loc buf =
-      let file,line = DwarfAbbrevs.file_loc_type_abbr in
+      let file,line = file_loc_type_abbr in
       add_abbr_entry (0x3a,file) buf;
       add_abbr_entry (0x3b,line) buf
 
-    let add_type = add_abbr_entry (0x49,DwarfAbbrevs.type_abbr)
+    let add_type = add_abbr_entry (0x49,type_abbr)
 
-    let add_name = add_abbr_entry (0x3,DwarfAbbrevs.name_type_abbr)
+    let add_name = add_abbr_entry (0x3,name_type_abbr)
 
-    let add_encoding = add_abbr_entry (0x3e,DwarfAbbrevs.encoding_type_abbr)
+    let add_byte_size = add_abbr_entry (0xb,byte_size_type_abbr)
 
-    let add_byte_size = add_abbr_entry (0xb,DwarfAbbrevs.byte_size_type_abbr)
+    let add_high_pc = add_abbr_entry (0x12,high_pc_type_abbr)
 
-    let add_high_pc = add_abbr_entry (0x12,DwarfAbbrevs.high_pc_type_abbr)
+    let add_low_pc = add_abbr_entry (0x11,low_pc_type_abbr)
 
-    let add_low_pc = add_abbr_entry (0x11,DwarfAbbrevs.low_pc_type_abbr)
-
-    let add_stmt_list = add_abbr_entry (0x10,DwarfAbbrevs.stmt_list_type_abbr)
-
-    let add_declaration = add_abbr_entry (0x3c,DwarfAbbrevs.declaration_type_abbr)
-
-    let add_external = add_abbr_entry (0x3f,DwarfAbbrevs.external_type_abbr)
-
-    let add_prototyped = add_abbr_entry (0x27,DwarfAbbrevs.prototyped_type_abbr)
-
-    let add_bit_offset = add_abbr_entry (0xd,DwarfAbbrevs.bit_offset_type_abbr)
-
-    let add_comp_dir = add_abbr_entry (0x1b,DwarfAbbrevs.comp_dir_type_abbr)
-
-    let add_language = add_abbr_entry (0x13,DwarfAbbrevs.language_type_abbr)
-
-    let add_producer = add_abbr_entry (0x25,DwarfAbbrevs.producer_type_abbr)
-
-    let add_value = add_abbr_entry (0x1c,DwarfAbbrevs.value_type_abbr)
-
-    let add_artificial = add_abbr_entry (0x34,DwarfAbbrevs.artificial_type_abbr)
-
-    let add_variable_parameter = add_abbr_entry (0x4b,DwarfAbbrevs.variable_parameter_type_abbr)
-
-    let add_bit_size = add_abbr_entry (0xc,DwarfAbbrevs.bit_size_type_abbr)
+    let add_declaration = add_abbr_entry (0x3c,declaration_type_abbr)
 
     let add_location loc buf =
       match loc with
       | None -> ()
-      | Some (LocConst _) -> add_abbr_entry (0x2,DwarfAbbrevs.location_const_type_abbr) buf
-      | Some (LocBlock _) -> add_abbr_entry (0x2,DwarfAbbrevs.location_block_type_abbr) buf
+      | Some (LocConst _) -> add_abbr_entry (0x2,location_const_type_abbr) buf
+      | Some (LocBlock _) -> add_abbr_entry (0x2,location_block_type_abbr) buf
 
-    let add_data_location loc buf =
-      match loc with
-      | None -> ()
-      | Some (DataLocBlock __) -> add_abbr_entry (0x38,DwarfAbbrevs.data_location_block_type_abbr) buf
-      | Some (DataLocRef _) -> add_abbr_entry (0x38,DwarfAbbrevs.data_location_ref_type_abbr) buf
-
-    let add_bound_value bound =
-      match bound with
-      | BoundConst _ -> add_abbr_entry (0x2f,DwarfAbbrevs.bound_const_type_abbr)
-      | BoundRef _ -> add_abbr_entry (0x2f,DwarfAbbrevs.bound_ref_type_abbr)
-
+    (* Dwarf entity to string function *)
     let abbrev_string_of_entity entity has_sibling =
       let buf = Buffer.create 12 in
       let add_attr_some v f =
@@ -123,7 +83,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
         | _ -> true in
         add_abbr_uleb id buf;
         add_byte buf has_child;
-        if has_sibling then add_sibling buf;
+        if has_sibling then add_abbr_entry (0x1,sibling_type_abbr) buf;
       in
       (match entity.tag with
       | DW_TAG_array_type e ->
@@ -133,17 +93,17 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       | DW_TAG_base_type b ->
           prologue 0x24;
           add_byte_size buf;
-          add_attr_some b.base_type_encoding add_encoding;
+          add_attr_some b.base_type_encoding (add_abbr_entry (0x3e,encoding_type_abbr));
           add_name buf
       | DW_TAG_compile_unit e ->
           prologue 0x11;
-          add_comp_dir buf;
+          add_abbr_entry (0x1b,comp_dir_type_abbr) buf;
           add_high_pc buf;
           add_low_pc buf;
-          add_language buf;
+          add_abbr_entry (0x13,language_type_abbr) buf;
           add_name buf;
-          add_producer buf;
-          add_stmt_list buf;
+          add_abbr_entry (0x25,producer_type_abbr) buf;
+          add_abbr_entry (0x10,stmt_list_type_abbr) buf;
       | DW_TAG_const_type _ ->
           prologue 0x26;
           add_type buf
@@ -156,17 +116,17 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       | DW_TAG_enumerator e ->
           prologue 0x28;
           add_attr_some e.enumerator_file_loc add_file_loc;
-          add_value buf;
+          add_abbr_entry (0x1c,value_type_abbr) buf;
           add_name buf
       | DW_TAG_formal_parameter e ->
           prologue 0x34;
           add_attr_some e.formal_parameter_file_loc add_file_loc;
-          add_attr_some e.formal_parameter_artificial add_artificial;
+          add_attr_some e.formal_parameter_artificial (add_abbr_entry (0x34,artificial_type_abbr));
           add_location  e.formal_parameter_location buf;
           add_attr_some e.formal_parameter_name add_name;
           add_location e.formal_parameter_segment buf;
           add_type buf;
-          add_attr_some e.formal_parameter_variable_parameter add_variable_parameter
+          add_attr_some e.formal_parameter_variable_parameter (add_abbr_entry (0x4b,variable_parameter_type_abbr))
       | DW_TAG_label _ ->
           prologue 0xa;
           add_low_pc buf;
@@ -179,9 +139,12 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           prologue 0xd;
           add_attr_some e.member_file_loc add_file_loc;
           add_attr_some e.member_byte_size add_byte_size;
-          add_attr_some e.member_bit_offset add_bit_offset;
-          add_attr_some e.member_bit_size add_bit_size;
-          add_data_location e.member_data_member_location buf;
+          add_attr_some e.member_bit_offset (add_abbr_entry (0xd,bit_offset_type_abbr));
+          add_attr_some e.member_bit_size (add_abbr_entry (0xc,bit_size_type_abbr));
+          (match e.member_data_member_location with
+          | None -> ()
+          | Some (DataLocBlock __) -> add_abbr_entry (0x38,data_location_block_type_abbr) buf
+          | Some (DataLocRef _) -> add_abbr_entry (0x38,data_location_ref_type_abbr) buf);
           add_attr_some e.member_declaration add_declaration;
           add_name buf;
           add_type buf
@@ -197,22 +160,23 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       | DW_TAG_subprogram e ->
           prologue 0x2e;
           add_attr_some e.subprogram_file_loc add_file_loc;
-          add_attr_some e.subprogram_external add_external;
+          add_attr_some e.subprogram_external (add_abbr_entry (0x3f,external_type_abbr));
           add_high_pc buf;
           add_low_pc buf;
           add_name buf;
-          add_prototyped buf;
+          add_abbr_entry (0x27,prototyped_type_abbr) buf;
           add_attr_some e.subprogram_type add_type;
       | DW_TAG_subrange_type e ->
           prologue 0x21;
           add_attr_some e.subrange_type add_type;
-          (match e.subrange_upper_bound  with 
+          (match e.subrange_upper_bound with
           | None -> ()
-          | Some b -> add_bound_value b buf)
+          | Some (BoundConst _) -> add_abbr_entry (0x2f,bound_const_type_abbr) buf
+          | Some (BoundRef _) -> add_abbr_entry (0x2f,bound_ref_type_abbr) buf)
       | DW_TAG_subroutine_type e ->
           prologue 0x15;
           add_attr_some e.subroutine_type add_type;
-          add_prototyped buf
+          add_abbr_entry (0x27,prototyped_type_abbr) buf
       | DW_TAG_typedef e ->
           prologue 0x16;
           add_attr_some e.typedef_file_loc add_file_loc;
@@ -227,12 +191,12 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       | DW_TAG_unspecified_parameter e ->
           prologue 0x18;
           add_attr_some e.unspecified_parameter_file_loc add_file_loc;
-          add_attr_some e.unspecified_parameter_artificial add_artificial
+          add_attr_some e.unspecified_parameter_artificial (add_abbr_entry (0x34,artificial_type_abbr))
       | DW_TAG_variable e ->
           prologue 0x34;
           add_attr_some e.variable_file_loc add_file_loc;
           add_attr_some e.variable_declaration add_declaration;
-          add_attr_some e.variable_external add_external;
+          add_attr_some e.variable_external (add_abbr_entry (0x3f,external_type_abbr));
           add_location  e.variable_location buf;
           add_name buf;
           add_location e.variable_segment buf;
@@ -242,16 +206,29 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           add_type buf);
       Buffer.contents buf
 
+    let abbrev_start_addr = ref (-1)
+
+    let curr_abbrev = ref 1
+
+    (* Function to get unique abbreviation ids *)
+    let next_abbrev () =
+      let abbrev = !curr_abbrev in
+      incr curr_abbrev;abbrev
+
+    (* Mapping from abbreviation string to abbrevaiton id *)
+    let abbrev_mapping: (string,int) Hashtbl.t = Hashtbl.create 7
+
+    (* Look up the id of the abbreviation and add it if it is missing *)
     let get_abbrev entity has_sibling =
       let abbrev_string = abbrev_string_of_entity entity has_sibling in
       (try
         Hashtbl.find abbrev_mapping abbrev_string
       with Not_found ->
         let id = next_abbrev () in
-        abbrevs:=(abbrev_string,id)::!abbrevs;
         Hashtbl.add abbrev_mapping abbrev_string id;
         id)
 
+    (* Compute the abbreviations of an entry and its children *)
     let compute_abbrev entry =
       entry_iter_sib (fun sib entry ->
         let has_sib = match sib with
@@ -259,38 +236,26 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
         | Some _ -> true in
         ignore (get_abbrev entry has_sib)) (fun _ -> ()) entry
 
-    let abbrev_start_addr = ref (-1)
-
-    let abbrev_section_start oc =
+    (* Print the debug_abbrev section using the previous computed abbreviations*)
+    let print_abbrev oc =
+      let abbrevs = Hashtbl.fold (fun s i acc -> (s,i)::acc) abbrev_mapping [] in
+      let abbrevs = List.sort (fun (_,a) (_,b) -> Pervasives.compare a b) abbrevs in
       fprintf oc "	.section	%s\n" (name_of_section Section_debug_abbrev);
       let lbl = new_label () in
       abbrev_start_addr := lbl;
-      print_label oc lbl
-
-    let abbrev_section_end oc =
-      fprintf oc "	.sleb128	0\n"
-
-    let abbrev_prologue oc id =
-      fprintf oc "	.uleb128	%d\n" id
-
-    let abbrev_epilogue oc =
-      fprintf oc "	.uleb128	0\n";
-      fprintf oc "	.uleb128	0\n"
-
-
-    let print_abbrev oc =
-      let abbrevs = List.sort (fun (_,a) (_,b) -> Pervasives.compare a b) !abbrevs in
-      abbrev_section_start oc;
+      print_label oc lbl;
       List.iter (fun (s,id) ->
-        abbrev_prologue oc id;
+        fprintf oc "	.uleb128	%d\n" id;
         output_string oc s;
-        abbrev_epilogue oc)  abbrevs;
-      abbrev_section_end oc
+        fprintf oc "	.uleb128	0\n";
+        fprintf oc "	.uleb128	0\n")  abbrevs;
+      fprintf oc "	.sleb128	0\n"
 
     let debug_start_addr = ref (-1)
 
     let entry_labels: (int,int) Hashtbl.t = Hashtbl.create 7
 
+    (* Translate the ids to address labels *)
     let entry_to_label id =
       try
         Hashtbl.find entry_labels id
@@ -299,6 +264,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
         Hashtbl.add entry_labels id label;
         label
 
+    (* Helper functions for debug printing *)
     let print_opt_value oc o f =
       match o with
       | None -> ()
@@ -330,11 +296,11 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
 
     let print_ref oc r =
       let ref = entry_to_label r in
-      fprintf oc "	.4byte		%a\n" label ref     
-        
+      fprintf oc "	.4byte		%a\n" label ref
+
     let print_addr oc a =
-      fprintf oc "	.4byte		%a\n" label a     
-        
+      fprintf oc "	.4byte		%a\n" label a
+
     let print_array_type oc at =
       print_file_loc oc at.array_type_file_loc;
       print_ref oc at.array_type
@@ -345,7 +311,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
 
     let print_base_type oc bt =
       print_byte oc bt.base_type_byte_size;
-      (match bt.base_type_encoding with 
+      (match bt.base_type_encoding with
       | Some e ->
           let encoding = match e with
           | DW_ATE_address -> 0x1
@@ -466,6 +432,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
     let print_volatile_type oc vt =
       print_ref oc vt.volatile_type
 
+    (* Print an debug entry *)
     let  print_entry oc entry =
       entry_iter_sib (fun sib entry ->
         print_label oc (entry_to_label entry.id);
@@ -500,16 +467,17 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           | DW_TAG_unspecified_parameter up -> print_unspecified_parameter oc up
           | DW_TAG_variable var -> print_variable oc var
           | DW_TAG_volatile_type vt -> print_volatile_type oc vt
-        end) (fun e -> 
+        end) (fun e ->
           if e.children <> [] then
           print_sleb128 oc 0) entry
 
+    (* Print the debug abbrev section *)
     let print_debug_abbrev oc entry =
       compute_abbrev entry;
       print_abbrev oc
 
-    let print_debug oc entry =
-      print_debug_abbrev oc entry;
+    (* Print the debug info section *)
+    let print_debug_info oc entry =
       let debug_start = new_label () in
       debug_start_addr:= debug_start;
       fprintf oc"	.section	%s\n" (name_of_section Section_debug_info);
@@ -524,5 +492,11 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       print_entry oc entry;
       print_sleb128 oc 0;
       print_label oc debug_end (* End of the debug section *)
+
+
+    (* Print the debug info and abbrev section *)
+    let print_debug oc entry =
+      print_debug_abbrev oc entry;
+      print_debug_info oc entry
 
   end
