@@ -228,7 +228,7 @@ type dw_entry =
      id:       reference;
    }
 
-
+(* Module type for a matching from type to dwarf encoding *)
 module type DWARF_ABBREVS =
   sig
     val sibling_type_abbr: int
@@ -259,6 +259,7 @@ module type DWARF_ABBREVS =
     val bound_ref_type_abbr: int
   end
 
+(* The target specific functions for printing the debug information *)
 module type DWARF_TARGET=
   sig
     val label: out_channel -> int -> unit
