@@ -75,3 +75,15 @@ FUNCTION(__compcert_va_float64)
 #endif	
         bx      lr
 ENDFUNCTION(__compcert_va_float64)
+
+FUNCTION(__compcert_va_composite)
+	                        @ r0 = ap parameter
+	                        @ r1 = size of the composite, in bytes
+        ldr     r2, [r0, #0]    @ r2 = pointer to next argument
+	ADD     r3, r2, r1      @ advance by size
+        ADD     r3, r3, #3      @ 4-align
+        BIC     r3, r3, #3
+        str     r3, [r0, #0]    @ update ap
+	mov     r0, r2          @ result is pointer to composite in stack
+        bx      lr
+ENDFUNCTION(__compcert_va_composite)

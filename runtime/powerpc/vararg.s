@@ -128,6 +128,13 @@ __compcert_va_float64:
         .type   __compcert_va_float64, @function
         .size   __compcert_va_float64, .-__compcert_va_int64
 
+        .balign 16
+        .globl __compcert_va_composite
+__compcert_va_composite:
+	b       __compcert_va_int32
+        .type   __compcert_va_composite, @function
+        .size   __compcert_va_composite, .-__compcert_va_composite
+
 # Save integer and FP registers at beginning of vararg function        
 
         .balign 16

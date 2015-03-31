@@ -204,6 +204,8 @@ compcert.ini: Makefile.config VERSION
          echo "has_runtime_lib=$(HAS_RUNTIME_LIB)"; \
          echo "asm_supports_cfi=$(ASM_SUPPORTS_CFI)"; \
          echo "advanced_debug=$(ADVANCED_DEBUG)"; \
+         echo "struct_passing_style=$(STRUCT_PASSING)"; \
+         echo "struct_return_style=$(STRUCT_RETURN)"; \
          version=`cat VERSION`; \
          echo version=$$version) \
         > compcert.ini

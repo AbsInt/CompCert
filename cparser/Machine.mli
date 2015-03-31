@@ -44,13 +44,20 @@ type t = {
   alignof_fun: int option;
   bigendian: bool;
   bitfields_msb_first: bool;
-  struct_return_as_int: int
+  supports_unaligned_accesses: bool
 }
+
+(* The current configuration *)
+
+val config : t ref
+
+(* Canned configurations *)
 
 val ilp32ll64 : t
 val i32lpll64 : t
 val il32pll64 : t
 val x86_32 : t
+val x86_32_macosx : t
 val x86_64 : t
 val win32 : t
 val win64 : t
@@ -58,5 +65,4 @@ val ppc_32_bigendian : t
 val arm_littleendian : t
 
 val gcc_extensions : t -> t
-
-val config : t ref
+val compcert_interpreter : t -> t

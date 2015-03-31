@@ -80,12 +80,19 @@ done
 cchecklink=false
 casmruntime=""
 asm_supports_cfi=""
+struct_passing=""
+struct_return=""
 
 case "$target" in
   powerpc-linux|ppc-linux|powerpc-eabi|ppc-eabi)
     arch="powerpc"
     model="standard"
     abi="eabi"
+    struct_passing="ref-caller"
+    case "$target" in
+      *-linux) struct_return="ref";;
+      *-eabi)  struct_return="int1-8";;
+    esac
     system="linux"
     cc="${toolprefix}gcc"
     cprepro="${toolprefix}gcc -U__GNUC__ -E"
@@ -98,6 +105,8 @@ case "$target" in
     arch="powerpc"
     model="standard"
     abi="eabi"
+    struct_passing="ref-caller"
+    struct_return="int1-8"
     system="diab"
     cc="${toolprefix}dcc"
     cprepro="${toolprefix}dcc -E"
@@ -127,6 +136,8 @@ case "$target" in
         echo "$usage" 1>&2
         exit 2;;
     esac
+    struct_passing="ints"
+    struct_return="int1-4"
     system="linux"
     cc="${toolprefix}gcc"
     cprepro="${toolprefix}gcc -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
@@ -137,6 +148,8 @@ case "$target" in
     arch="ia32"
     model="sse2"
     abi="standard"
+    struct_passing="ints"
+    struct_return="ref"
     system="linux"
     cc="${toolprefix}gcc -m32"
     cprepro="${toolprefix}gcc -m32 -U__GNUC__ -E"
@@ -147,6 +160,8 @@ case "$target" in
     arch="ia32"
     model="sse2"
     abi="standard"
+    struct_passing="ints"
+    struct_return="int1248"    # to check!
     system="bsd"
     cc="${toolprefix}gcc -m32"
     cprepro="${toolprefix}gcc -m32 -U__GNUC__ -E"
@@ -156,7 +171,9 @@ case "$target" in
   ia32-macosx)
     arch="ia32"
     model="sse2"
-    abi="standard"
+    abi="macosx"
+    struct_passing="ints"
+    struct_return="int1248"
     system="macosx"
     cc="${toolprefix}gcc -arch i386"
     cprepro="${toolprefix}gcc -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' -E"
@@ -172,6 +189,8 @@ case "$target" in
     arch="ia32"
     model="sse2"
     abi="standard"
+    struct_passing="ints"
+    struct_return="ref"
     system="cygwin"
     cc="${toolprefix}gcc -m32"
     cprepro="${toolprefix}gcc -m32 -U__GNUC__ -E"
@@ -328,6 +347,8 @@ cat >> Makefile.config <<EOF
 ARCH=$arch
 MODEL=$model
 ABI=$abi
+STRUCT_PASSING=$struct_passing
+STRUCT_RETURN=$struct_return
 SYSTEM=$system
 CC=$cc
 CPREPRO=$cprepro
@@ -365,9 +386,19 @@ MODEL=
 # ABI=standard # for IA32
 ABI=
 
+# Default calling conventions for passing structs and unions by value
+# See options -fstruct-passing=<style> and -fstruct-return=<style>
+# in the CompCert user's manual
+STRUCT_PASSING=ref_callee
+# STRUCT_PASSING=ref_caller
+# STRUCT_PASSING=ints
+STRUCT_RETURN=ref
+# STRUCT_RETURN=int1248
+# STRUCT_RETURN=int1-4
+# STRUCT_RETURN=int1-8
+
 # Target operating system and development environment
 # Possible choices for PowerPC:
-# SYSTEM=macosx
 # SYSTEM=linux
 # SYSTEM=diab
 # Possible choices for ARM:
@@ -428,6 +459,7 @@ CompCert configuration:
     Target architecture........... $arch
     Hardware model................ $model
     Application binary interface.. $abi
+    Composite passing conventions. arguments: $struct_passing, return values: $struct_return
     OS and development env........ $system
     C compiler.................... $cc
     C preprocessor................ $cprepro

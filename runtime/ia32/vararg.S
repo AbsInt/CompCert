@@ -67,3 +67,15 @@ FUNCTION(__compcert_va_float64)
         movl %edx, 0(%ecx)
         ret
 ENDFUNCTION(__compcert_va_float64)
+
+FUNCTION(__compcert_va_composite)
+        movl 4(%esp), %ecx         // %ecx = ap parameter
+	movl 8(%esp), %edx         // %edx = size of composite in bytes
+        movl 0(%ecx), %eax         // %eax = current argument pointer
+	leal 3(%eax, %edx), %edx   // advance by size
+        andl $0xfffffffc, %edx     // and round up to multiple of 4
+        movl %edx, 0(%ecx)         // update argument pointer
+        ret
+ENDFUNCTION(__compcert_va_composite)
+        
+        

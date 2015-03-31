@@ -212,6 +212,8 @@ val eassign : exp -> exp -> exp
   (* Expression for [e1 = e2] *)
 val ecomma :  exp -> exp -> exp
   (* Expression for [e1, e2] *)
+val ecommalist :  exp list -> exp -> exp
+  (* Expression for [e1, ..., eN, e] *)
 val sskip: stmt
   (* The [skip] statement.  No location. *)
 val sseq : location -> stmt -> stmt -> stmt
@@ -234,3 +236,10 @@ val formatloc: Format.formatter -> location -> unit
 val default_init: Env.t -> typ -> init
   (* Return a default initializer for the given type
      (with zero numbers, null pointers, etc). *)
+
+(* Substitution of variables by expressions *)
+
+val subst_expr: exp IdentMap.t -> exp -> exp
+val subst_init: exp IdentMap.t -> init -> init
+val subst_decl: exp IdentMap.t -> decl -> decl
+val subst_stmt: exp IdentMap.t -> stmt -> stmt

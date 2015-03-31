@@ -100,3 +100,30 @@ let advanced_debug =
   | v -> bad_config "advanced_debug" [v]
 
 let version = get_config_string "version"
+
+type struct_passing_style =
+  | SP_ref_callee                       (* by reference, callee takes copy *)
+  | SP_ref_caller                       (* by reference, caller takes copy *)
+  | SP_split_args                       (* by value, as a sequence of ints *)
+
+type struct_return_style =
+  | SR_int1248      (* return by content if size is 1, 2, 4 or 8 bytes *)
+  | SR_int1to4      (* return by content if size is <= 4 *)
+  | SR_int1to8      (* return by content if size is <= 8 *)
+  | SR_ref          (* always return by assignment to a reference 
+                       given as extra argument *)
+
+let struct_passing_style =
+  match get_config_string "struct_passing_style" with
+  | "ref-callee" -> SP_ref_callee
+  | "ref-caller" -> SP_ref_caller
+  | "ints"       -> SP_split_args
+  | v -> bad_config "struct_passing_style" [v]
+
+let struct_return_style =
+  match get_config_string "struct_return_style" with
+  | "int1248"  -> SR_int1248
+  | "int1-4"   -> SR_int1to4
+  | "int1-8"   -> SR_int1to8
+  | "ref"      -> SR_ref
+  | v -> bad_config "struct_return_style" [v]
