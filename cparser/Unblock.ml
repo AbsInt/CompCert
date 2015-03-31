@@ -149,7 +149,7 @@ let rec expand_expr islocal env e =
     | ECall(e1, el) ->
         {edesc = ECall(expand e1, List.map expand el); etyp = e.etyp}
   in 
-    let e' = expand e in add_inits_expr !inits e'
+    let e' = expand e in ecommalist !inits e'
 
 (* Elimination of compound literals within an initializer. *)
 
