@@ -344,8 +344,9 @@ Proof.
   econstructor; eauto.
   (* Lannot *)
   left; simpl; econstructor; split.
-  eapply exec_Lannot; eauto. 
-  eapply external_call_symbols_preserved'; eauto.
+  eapply exec_Lannot; eauto.
+  eapply eval_annot_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
+  eapply external_call_symbols_preserved; eauto.
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor; eauto.
 

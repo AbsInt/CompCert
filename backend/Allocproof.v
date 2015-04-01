@@ -165,12 +165,10 @@ Inductive expand_block_shape: block_shape -> RTL.instruction -> LTL.bblock -> Pr
                          (Ibuiltin ef args res s)
                          (expand_moves mv1
                            (Lbuiltin ef args' res' :: expand_moves mv2 (Lbranch s :: k)))
-  | ebs_annot: forall txt typ args res mv args' s k,
-      wf_moves mv ->
-      expand_block_shape (BSannot txt typ args res mv args' s)
-                         (Ibuiltin (EF_annot txt typ) args res s)
-                         (expand_moves mv
-                           (Lannot (EF_annot txt typ) args' :: Lbranch s :: k))
+  | ebs_annot: forall ef args args' s k,
+      expand_block_shape (BSannot ef args args' s)
+                         (Iannot ef args s)
+                         (Lannot ef args' :: Lbranch s :: k)
   | ebs_cond: forall cond args mv args' s1 s2 k,
       wf_moves mv ->
       expand_block_shape (BScond cond args mv args' s1 s2)
@@ -322,7 +320,8 @@ Proof.
 (* builtin *) 
   destruct b0; MonadInv. destruct i; MonadInv; UseParsingLemmas.
   econstructor; eauto.
-  destruct ef; inv H. econstructor; eauto. 
+(* annot *)
+  destruct b; MonadInv. destruct i; MonadInv. UseParsingLemmas. constructor.  
 (* cond *)
   destruct b0; MonadInv. destruct i; MonadInv; UseParsingLemmas. econstructor; eauto.
 (* jumptable *)
@@ -1348,6 +1347,75 @@ Proof.
   rewrite Int64.hi_ofwords, Int64.lo_ofwords; auto. 
 Qed.
 
+Lemma add_equations_annot_arg_satisf:
+  forall env rs ls arg arg' e e',
+  add_equations_annot_arg env arg arg' e = Some e' ->
+  satisf rs ls e' -> satisf rs ls e.
+Proof.
+  induction arg; destruct arg'; simpl; intros; MonadInv; eauto.
+  eapply add_equation_satisf; eauto.
+  destruct arg'1; MonadInv. destruct arg'2; MonadInv. eauto using add_equation_satisf.
+Qed.
+
+Lemma add_equations_annot_arg_lessdef:
+  forall env (ge: RTL.genv) sp rs ls m arg v,
+  eval_annot_arg ge (fun r => rs#r) sp m arg v ->
+  forall e e' arg',
+  add_equations_annot_arg env arg arg' e = Some e' ->
+  satisf rs ls e' ->
+  wt_regset env rs ->
+  exists v', eval_annot_arg ge ls sp m arg' v' /\ Val.lessdef v v'.
+Proof.
+  induction 1; simpl; intros e e' arg' AE SAT WT; destruct arg'; MonadInv.
+- exploit add_equation_lessdef; eauto. simpl; intros.
+  exists (ls x0); auto with aarg.
+- destruct arg'1; MonadInv. destruct arg'2; MonadInv. 
+  exploit add_equation_lessdef. eauto. simpl; intros LD1.
+  exploit add_equation_lessdef. eapply add_equation_satisf. eauto. simpl; intros LD2.
+  exists (Val.longofwords (ls x0) (ls x1)); split; auto with aarg. 
+  rewrite <- (val_longofwords_eq rs#x). apply Val.longofwords_lessdef; auto.
+  rewrite <- e0; apply WT. 
+- econstructor; eauto with aarg.
+- econstructor; eauto with aarg.
+- econstructor; eauto with aarg.
+- econstructor; eauto with aarg.
+- econstructor; eauto with aarg.
+- econstructor; eauto with aarg.
+- econstructor; eauto with aarg.
+- econstructor; eauto with aarg.
+- exploit IHeval_annot_arg1; eauto. eapply add_equations_annot_arg_satisf; eauto. 
+  intros (v1 & A & B).
+  exploit IHeval_annot_arg2; eauto. intros (v2 & C & D).
+  exists (Val.longofwords v1 v2); split; auto with aarg. apply Val.longofwords_lessdef; auto.
+Qed.
+
+Lemma add_equations_annot_args_satisf:
+  forall env rs ls arg arg' e e',
+  add_equations_annot_args env arg arg' e = Some e' ->
+  satisf rs ls e' -> satisf rs ls e.
+Proof.
+  induction arg; destruct arg'; simpl; intros; MonadInv; eauto using add_equations_annot_arg_satisf.
+Qed.
+
+Lemma add_equations_annot_args_lessdef:
+  forall env (ge: RTL.genv) sp rs ls m tm arg vl,
+  eval_annot_args ge (fun r => rs#r) sp m arg vl ->
+  forall arg' e e',
+  add_equations_annot_args env arg arg' e = Some e' ->
+  satisf rs ls e' ->
+  wt_regset env rs ->
+  Mem.extends m tm ->
+  exists vl', eval_annot_args ge ls sp tm arg' vl' /\ Val.lessdef_list vl vl'.
+Proof.
+  induction 1; simpl; intros; destruct arg'; MonadInv.
+- exists (@nil val); split; constructor.
+- exploit IHlist_forall2; eauto. intros (vl' & A & B).
+  exploit add_equations_annot_arg_lessdef; eauto. 
+  eapply add_equations_annot_args_satisf; eauto. intros (v1' & C & D).
+  exploit (@eval_annot_arg_lessdef _ ge ls ls); eauto. intros (v1'' & E & F).
+  exists (v1'' :: vl'); split; constructor; auto. eapply Val.lessdef_trans; eauto. 
+Qed.
+
 (** * Properties of the dataflow analysis *)
 
 Lemma analyze_successors:
@@ -2035,27 +2103,21 @@ Proof.
   econstructor; eauto.
  
 (* annot *)
-- exploit (exec_moves mv); eauto. intros [ls1 [A1 B1]]. 
-  exploit external_call_mem_extends; eauto. eapply add_equations_args_lessdef; eauto.
-  inv WTI. simpl in H4. rewrite <- H4. apply wt_regset_list; auto. 
-  intros [v' [m'' [F [G [J K]]]]].
-  assert (v = Vundef). red in H0; inv H0. auto.
+- exploit add_equations_annot_args_lessdef; eauto.
+  intros (vargs' & A & B). 
+  exploit external_call_mem_extends; eauto.
+  intros [vres' [m'' [F [G [J K]]]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto. 
-  eapply star_trans. eexact A1. 
   eapply star_two. econstructor.
-  eapply external_call_symbols_preserved' with (ge1 := ge).
-  econstructor; eauto. 
+  eapply eval_annot_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
+  eapply external_call_symbols_preserved with (ge1 := ge); eauto. 
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
-  eauto. constructor. eauto. eauto. traceEq.
+  constructor. eauto. traceEq.
   exploit satisf_successors. eauto. eauto. simpl; eauto. eauto. 
-  eapply satisf_undef_reg with (r := res).
-  eapply add_equations_args_satisf; eauto. 
+  eapply add_equations_annot_args_satisf; eauto. 
   intros [enext [U V]]. 
   econstructor; eauto.
-  change (destroyed_by_builtin (EF_annot txt typ)) with (@nil mreg). 
-  simpl. subst v. assumption.
-  apply wt_regset_assign; auto. subst v. constructor. 
 
 (* cond *)
 - exploit (exec_moves mv); eauto. intros [ls1 [A1 B1]].

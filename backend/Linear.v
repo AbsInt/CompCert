@@ -42,7 +42,7 @@ Inductive instruction: Type :=
   | Lcall: signature -> mreg + ident -> instruction
   | Ltailcall: signature -> mreg + ident -> instruction
   | Lbuiltin: external_function -> list mreg -> list mreg -> instruction
-  | Lannot: external_function -> list loc -> instruction
+  | Lannot: external_function -> list (annot_arg loc) -> instruction
   | Llabel: label -> instruction
   | Lgoto: label -> instruction
   | Lcond: condition -> list mreg -> label -> instruction
@@ -204,8 +204,9 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State s f sp (Lbuiltin ef args res :: b) rs m)
          t (State s f sp b rs' m')
   | exec_Lannot:
-      forall s f sp rs m ef args b t v m',
-      external_call' ef ge (map rs args) m t v m' ->
+      forall s f sp rs m ef args vl b t v m',
+      eval_annot_args ge rs sp m args vl ->
+      external_call ef ge vl m t v m' ->
       step (State s f sp (Lannot ef args :: b) rs m)
          t (State s f sp b rs m')
   | exec_Llabel:

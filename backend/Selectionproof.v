@@ -520,6 +520,14 @@ Proof.
   auto.
 Qed.
 
+Lemma set_optvar_lessdef:
+  forall e1 e2 optid v1 v2,
+  env_lessdef e1 e2 -> Val.lessdef v1 v2 ->
+  env_lessdef (set_optvar optid v1 e1) (set_optvar optid v2 e2).
+Proof.
+  unfold set_optvar; intros. destruct optid; auto. apply set_var_lessdef; auto.
+Qed.
+
 Lemma set_params_lessdef:
   forall il vl1 vl2, 
   Val.lessdef_list vl1 vl2 ->
@@ -588,6 +596,47 @@ Proof.
   exploit sel_expr_correct; eauto. intros [v1' [A B]].
   exploit IHeval_exprlist; eauto. intros [vl' [C D]].
   exists (v1' :: vl'); split; auto. constructor; eauto.
+Qed.
+
+Lemma sel_annot_arg_correct:
+  forall sp e e' m m',
+  env_lessdef e e' -> Mem.extends m m' ->
+  forall a v,
+  Cminor.eval_expr ge sp e m a v ->
+  exists v',
+     CminorSel.eval_annot_arg tge sp e' m' (sel_annot_arg a) v'
+  /\ Val.lessdef v v'.
+Proof.
+  intros until v. functional induction (sel_annot_arg a); intros EV.
+- inv EV. simpl in H2; inv H2. econstructor; split. constructor. 
+  unfold Genv.symbol_address. rewrite symbols_preserved. auto.
+- inv EV. simpl in H2; inv H2. econstructor; split. constructor. auto.
+- inv EV. inv H3. exploit Mem.loadv_extends; eauto. intros (v' & A & B). 
+  exists v'; split; auto. constructor. 
+  replace (Genv.symbol_address tge id ofs) with vaddr; auto.
+  simpl in H2; inv H2. unfold Genv.symbol_address. rewrite symbols_preserved. auto.
+- inv EV. inv H3. simpl in H2; inv H2. exploit Mem.loadv_extends; eauto. intros (v' & A & B). 
+  exists v'; split; auto. constructor; auto.
+- exploit sel_expr_correct; eauto. intros (v1 & A & B).
+  exists v1; split; auto. eapply eval_annot_arg; eauto.
+Qed.
+
+Lemma sel_annot_args_correct:
+  forall sp e e' m m',
+  env_lessdef e e' -> Mem.extends m m' ->
+  forall al vl,
+  Cminor.eval_exprlist ge sp e m al vl ->
+  exists vl',
+     list_forall2 (CminorSel.eval_annot_arg tge sp e' m')
+                  (List.map sel_annot_arg al)
+                  vl'
+  /\ Val.lessdef_list vl vl'.
+Proof.
+  induction 3; simpl.
+- exists (@nil val); split; constructor. 
+- exploit sel_annot_arg_correct; eauto. intros (v1' & A & B).
+  destruct IHeval_exprlist as (vl' & C & D).
+  exists (v1' :: vl'); split; auto. constructor; auto.
 Qed.
 
 (** Semantic preservation for functions and statements. *)
@@ -675,6 +724,8 @@ Proof.
   destruct (classify_call ge e); simpl; auto.
 (* tailcall *)
   destruct (classify_call ge e); simpl; auto.
+(* builtin *)
+  destruct (builtin_is_annot e); simpl; auto.
 (* seq *)
   exploit (IHs1 (Cminor.Kseq s2 k)). constructor; eauto. eauto.  
   destruct (Cminor.find_label lbl s1 (Cminor.Kseq s2 k)) as [[sx kx] | ];
@@ -776,14 +827,32 @@ Proof.
   econstructor; eauto. econstructor; eauto. apply sig_function_translated; auto.
   constructor; auto. apply call_cont_commut; auto.
 - (* Sbuiltin *)
+  destruct (builtin_is_annot ef optid) eqn:ISANNOT.
++ (* annotation *)
+  assert (X: exists text targs, ef = EF_annot text targs). 
+  { destruct ef; try discriminate. econstructor; econstructor; eauto. }
+  destruct X as (text & targs & EQ). 
+  assert (Y: optid = None).
+  { destruct ef; try discriminate. destruct optid; try discriminate. auto. }
+  exploit sel_annot_args_correct; eauto. 
+  intros (vargs' & P & Q).
+  exploit external_call_mem_extends; eauto. 
+  intros [vres' [m2 [A [B [C D]]]]].
+  left; econstructor; split.
+  econstructor.
+  rewrite EQ; auto.
+  eauto.
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  rewrite Y. constructor; auto.
++ (* other builtin *)
   exploit sel_exprlist_correct; eauto. intros [vargs' [P Q]].
   exploit external_call_mem_extends; eauto. 
   intros [vres' [m2 [A [B [C D]]]]].
   left; econstructor; split.
   econstructor. eauto. eapply external_call_symbols_preserved; eauto.
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
-  constructor; auto.
-  destruct optid; simpl; auto. apply set_var_lessdef; auto.
+  constructor; auto. apply set_optvar_lessdef; auto. 
 - (* Seq *)
   left; econstructor; split.
   constructor. constructor; auto. constructor; auto.

@@ -114,6 +114,24 @@ let xparmove srcs dsts k =
   | [src], [dst] -> move src dst k
   | _, _ -> Xparmove(srcs, dsts, new_temp Tint, new_temp Tfloat) :: k
 
+let rec convert_annot_arg tyenv = function
+  | AA_base r ->
+      begin match tyenv r with
+      | Tlong -> AA_longofwords(AA_base(V(r, Tint)),
+                                AA_base(V(twin_reg r, Tint)))
+      | ty    -> AA_base(V(r, ty))
+      end
+  | AA_int n -> AA_int n
+  | AA_long n -> AA_long n
+  | AA_float n -> AA_float n
+  | AA_single n -> AA_single n
+  | AA_loadstack(chunk, ofs) -> AA_loadstack(chunk, ofs)
+  | AA_addrstack(ofs) -> AA_addrstack(ofs)
+  | AA_loadglobal(chunk, id, ofs) -> AA_loadglobal(chunk, id, ofs)
+  | AA_addrglobal(id, ofs) -> AA_addrglobal(id, ofs)
+  | AA_longofwords(hi, lo) ->
+      AA_longofwords(convert_annot_arg tyenv hi, convert_annot_arg tyenv lo)
+ 
 (* Return the XTL basic block corresponding to the given RTL instruction.
    Move and parallel move instructions are introduced to honor calling
    conventions and register constraints on some operations.
@@ -192,6 +210,8 @@ let block_of_RTL_instr funsig tyenv = function
       let args2 = constrain_regs args1 cargs and res2 = constrain_regs res1 cres in
       movelist args1 args2
          (Xbuiltin(ef, args2, res2) :: movelist res2 res1 [Xbranch s])
+  | RTL.Iannot(ef, args, s) ->
+      [Xannot(ef, List.map (convert_annot_arg tyenv) args); Xbranch s]
   | RTL.Icond(cond, args, s1, s2) ->
       [Xcond(cond, vregs tyenv args, s1, s2)]
   | RTL.Ijumptable(arg, tbl) ->
@@ -231,6 +251,11 @@ let vset_removelist vl after = List.fold_right VSet.remove vl after
 let vset_addlist vl after = List.fold_right VSet.add vl after
 let vset_addros vos after =
   match vos with Coq_inl v -> VSet.add v after | Coq_inr id -> after
+let rec vset_addannot a after =
+  match a with
+  | AA_base v -> VSet.add v after
+  | AA_longofwords(hi, lo) -> vset_addannot hi (vset_addannot lo after)
+  | _ -> after
 
 let live_before instr after =
   match instr with
@@ -256,6 +281,8 @@ let live_before instr after =
       vset_addlist args (vset_addros ros VSet.empty)
   | Xbuiltin(ef, args, res) ->
       vset_addlist args (vset_removelist res after)
+  | Xannot(ef, args) ->
+      List.fold_right vset_addannot args after
   | Xbranch s ->
       after
   | Xcond(cond, args, s1, s2) ->
@@ -431,16 +458,14 @@ let spill_costs f =
         | EF_vstore _ | EF_vstore_global _ | EF_memcpy _ ->
             (* result is not used but should not be spilled *)
             charge_list 10 1 args; charge_list max_int 0 res
-        | EF_annot _ ->
-            (* arguments are not actually used, so don't charge;
-               result is never used but should not be spilled *)
-            charge_list max_int 0 res
         | EF_annot_val _ ->
             (* like a move *)
             charge_list 1 1 args; charge_list 1 1 res
         | _ ->
             charge_list 10 1 args; charge_list 10 1 res
         end
+    | Xannot(ef, args) ->
+        ()
     | Xbranch _ -> ()
     | Xcond(cond, args, _, _) ->
         charge_list 10 1 args
@@ -556,6 +581,8 @@ let add_interfs_instr g instr live =
       | EF_annot_val _, [arg], [res] -> IRC.add_pref g arg res (* like a move *)
       | _ -> ()
       end
+  | Xannot(ef, args) ->
+      ()
   | Xbranch s ->
       ()
   | Xcond(cond, args, s1, s2) ->
@@ -631,10 +658,9 @@ let tospill_instr alloc instr ts =
   | Xtailcall(sg, vos, args) ->
       addros_tospill alloc vos ts
   | Xbuiltin(ef, args, res) ->
-      begin match ef with
-      | EF_annot _ -> ts
-      |      _     -> addlist_tospill alloc args (addlist_tospill alloc res ts)
-      end
+      addlist_tospill alloc args (addlist_tospill alloc res ts)
+  | Xannot(ef, args) ->
+      ts
   | Xbranch s ->
       ts
   | Xcond(cond, args, s1, s2) ->
@@ -794,14 +820,11 @@ let spill_instr tospill eqs instr =
   | Xtailcall(sg, Coq_inr id, args) ->
       ([instr], [])
   | Xbuiltin(ef, args, res) ->
-      begin match ef with
-      | EF_annot _ ->
-          ([instr], eqs)
-      | _ ->
-          let (args', c1, eqs1) = reload_vars tospill eqs args in
-          let (res', c2, eqs2) = save_vars tospill eqs1 res in
-          (c1 @ Xbuiltin(ef, args', res') :: c2, eqs2)
-      end
+      let (args', c1, eqs1) = reload_vars tospill eqs args in
+      let (res', c2, eqs2) = save_vars tospill eqs1 res in
+      (c1 @ Xbuiltin(ef, args', res') :: c2, eqs2)
+  | Xannot(ef, args) ->
+      ([instr], eqs)
   | Xbranch s ->
       ([instr], eqs)
   | Xcond(cond, args, s1, s2) ->
@@ -940,12 +963,9 @@ let transl_instr alloc instr k =
   | Xtailcall(sg, vos, args) ->
       LTL.Ltailcall(sg, mros_of alloc vos) :: []
   | Xbuiltin(ef, args, res) ->
-      begin match ef with
-      | EF_annot _ ->
-          LTL.Lannot(ef, List.map alloc args) :: k
-      | _ ->
-          LTL.Lbuiltin(ef, mregs_of alloc args, mregs_of alloc res) :: k
-      end
+      LTL.Lbuiltin(ef, mregs_of alloc args, mregs_of alloc res) :: k
+  | Xannot(ef, args) ->
+      LTL.Lannot(ef, List.map (AST.map_annot_arg alloc) args) :: k
   | Xbranch s ->
       LTL.Lbranch s :: []
   | Xcond(cond, args, s1, s2) ->

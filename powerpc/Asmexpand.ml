@@ -74,7 +74,7 @@ let _m8 = coqint_of_camlint (-8l)
 (* Handling of annotations *)
 
 let expand_annot_val txt targ args res =
-  emit (Pannot(EF_annot(txt, [AA_arg targ]), List.map (fun r -> APreg r) args));
+  emit (Pannot(EF_annot(txt, [targ]), List.map (fun r -> AA_base r) args));
   begin match args, res with
   | [IR src], [IR dst] ->
       if dst <> src then emit (Pmr(dst, src))

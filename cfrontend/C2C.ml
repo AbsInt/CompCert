@@ -737,8 +737,7 @@ let rec convertExpr env e =
       | {edesc = C.EConst(CStr txt)} :: args1 ->
           let targs1 = convertTypArgs env [] args1 in
           Ebuiltin(
-            EF_annot(intern_string txt,
-                     List.map (fun t -> AA_arg t) (typlist_of_typelist targs1)),
+            EF_annot(intern_string txt, typlist_of_typelist targs1),
             targs1, convertExprList env args1, convertTyp env e.etyp)
       | _ ->
           error "ill-formed __builtin_annot (first argument must be string literal)";

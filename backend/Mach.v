@@ -61,16 +61,12 @@ Inductive instruction: Type :=
   | Mcall: signature -> mreg + ident -> instruction
   | Mtailcall: signature -> mreg + ident -> instruction
   | Mbuiltin: external_function -> list mreg -> list mreg -> instruction
-  | Mannot: external_function -> list annot_param -> instruction
+  | Mannot: external_function -> list (annot_arg mreg) -> instruction
   | Mlabel: label -> instruction
   | Mgoto: label -> instruction
   | Mcond: condition -> list mreg -> label -> instruction
   | Mjumptable: mreg -> list label -> instruction
-  | Mreturn: instruction
-
-with annot_param: Type :=
-  | APreg: mreg -> annot_param
-  | APstack: memory_chunk -> Z -> annot_param.
+  | Mreturn: instruction.
 
 Definition code := list instruction.
 
@@ -225,19 +221,6 @@ Definition extcall_arguments
     (rs: regset) (m: mem) (sp: val) (sg: signature) (args: list val) : Prop :=
   list_forall2 (extcall_arg rs m sp) (loc_arguments sg) args.
 
-(** Extract the values of the arguments to an annotation. *)
-
-Inductive annot_arg: regset -> mem -> val -> annot_param -> val -> Prop :=
-  | annot_arg_reg: forall rs m sp r,
-      annot_arg rs m sp (APreg r) (rs r)
-  | annot_arg_stack: forall rs m stk base chunk ofs v,
-      Mem.load chunk m stk (Int.unsigned base + ofs) = Some v ->
-      annot_arg rs m (Vptr stk base) (APstack chunk ofs) v.
-
-Definition annot_arguments
-   (rs: regset) (m: mem) (sp: val) (params: list annot_param) (args: list val) : Prop :=
-  list_forall2 (annot_arg rs m sp) params args.
-
 (** Mach execution states. *)
 
 (** Mach execution states. *)
@@ -352,8 +335,8 @@ Inductive step: state -> trace -> state -> Prop :=
          t (State s f sp b rs' m')
   | exec_Mannot:
       forall s f sp rs m ef args b vargs t v m',
-      annot_arguments rs m sp args vargs ->
-      external_call' ef ge vargs m t v m' ->
+      eval_annot_args ge rs sp m args vargs ->
+      external_call ef ge vargs m t v m' ->
       step (State s f sp (Mannot ef args :: b) rs m)
          t (State s f sp b rs m')
   | exec_Mgoto:

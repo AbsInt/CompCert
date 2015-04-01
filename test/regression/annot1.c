@@ -58,6 +58,42 @@ void k(int arg)
                   C1 + 1, arg, C2 * 2);
 }
 
+int j(int a)
+{
+  /* Local variables that are stack-allocated early */
+  short b = 0, c = 0;
+  char d[4];
+  *(a ? &b : &c) = 42;
+  __builtin_annot("j %1 %2 %3 %4", b, c, d[0], d[3]);
+  return b;
+}
+
+long long ll(long long a)
+{
+  /* Force spilling */
+  long long b = a+1;
+  long long c = b+1;
+  long long d = c+1;
+  long long e = d+1;
+  long long f = e+1;
+  long long g = f+1;
+  long long h = g+1;
+  long long i = h+1;
+  long long j = i+1;
+  long long k = j+1;
+  long long l = k+1;
+  long long m = l+1;
+  long long n = m+1;
+  long long o = n+1;
+  long long p = o+1;
+  long long q = p+1;
+  long long r = q+1;
+  long long s = r+1;
+  long long t = s+1;
+  __builtin_annot("ll %1 %2 %3 %4 %5 %6 %7 %8 %9 %10 %11 %12 %13 %14 %15 %16 %17 %18 %19 %20", a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t);
+  return t;
+}
+
 int main()
 {
   __builtin_annot("calling f");

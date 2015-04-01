@@ -492,6 +492,8 @@ Definition transfer (f: function) (approx: PMap.t VA.t) (pc: node) (before: numb
           | EF_vload _ | EF_vload_global _ _ _ | EF_annot _ _ | EF_annot_val _ _ =>
               set_unknown before res
           end
+      | Iannot ef args s =>
+          before
       | Icond cond args ifso ifnot =>
           before
       | Ijumptable arg tbl =>

@@ -2382,6 +2382,8 @@ Section ANNOT_ARGUMENTS.
 Variable f: Linear.function.
 Let b := function_bounds f.
 Let fe := make_env b.
+Variable tf: Mach.function.
+Hypothesis TRANSF_F: transf_function f = OK tf.
 Variable j: meminj.
 Variables m m': mem.
 Variables ls ls0: locset.
@@ -2390,39 +2392,67 @@ Variables sp sp': block.
 Variables parent retaddr: val.
 Hypothesis AGR: agree_regs j ls rs.
 Hypothesis AGF: agree_frame f j ls ls0 m sp m' sp' parent retaddr.
+Hypothesis MINJ: Mem.inject j m m'.
+Hypothesis GINJ: meminj_preserves_globals ge j.
 
-Lemma transl_annot_param_correct:
-  forall l,
-  loc_valid f l = true ->
-  match l with S sl ofs ty => slot_within_bounds b sl ofs ty | _ => True end ->
-  exists v, annot_arg rs m' (Vptr sp' Int.zero) (transl_annot_param fe l) v
-         /\ val_inject j (ls l) v.
+Lemma transl_annot_arg_correct:
+  forall a v,
+  eval_annot_arg ge ls (Vptr sp Int.zero) m a v ->
+  (forall l, In l (params_of_annot_arg a) -> loc_valid f l = true) ->
+  (forall sl ofs ty, In (S sl ofs ty) (params_of_annot_arg a) -> slot_within_bounds b sl ofs ty) ->
+  exists v',
+     eval_annot_arg ge rs (Vptr sp' Int.zero) m' (transl_annot_arg fe a) v'
+  /\ val_inject j v v'.
 Proof.
-  intros. destruct l; simpl in H.
-(* reg *)
-  exists (rs r); split. constructor. auto.
-(* stack *) 
-  destruct sl; try discriminate. 
-  exploit agree_locals; eauto. intros [v [A B]]. inv A. 
-  exists v; split. constructor. rewrite Zplus_0_l. auto. auto.
+Local Opaque fe offset_of_index.
+  induction 1; simpl; intros VALID BOUNDS.
+- assert (loc_valid f x = true) by auto.
+  destruct x as [r | [] ofs ty]; try discriminate.
+  + exists (rs r); auto with aarg.
+  + exploit agree_locals; eauto. intros [v [A B]]. inv A. 
+    exists v; split; auto. constructor. simpl. rewrite Int.add_zero_l.
+Local Transparent fe.
+    unfold fe, b. erewrite offset_of_index_no_overflow by eauto.  exact H1. 
+- econstructor; eauto with aarg.
+- econstructor; eauto with aarg.
+- econstructor; eauto with aarg.
+- econstructor; eauto with aarg.
+- simpl in H. exploit Mem.load_inject; eauto. eapply agree_inj; eauto. 
+  intros (v' & A & B). exists v'; split; auto. constructor.
+  unfold Mem.loadv, Val.add. rewrite <- Int.add_assoc.
+  unfold fe, b; erewrite shifted_stack_offset_no_overflow; eauto.
+  eapply agree_bounds; eauto. eapply Mem.valid_access_perm. eapply Mem.load_valid_access; eauto. 
+- econstructor; split; eauto with aarg.
+  unfold Val.add. rewrite ! Int.add_zero_l. econstructor. eapply agree_inj; eauto. auto.
+- assert (val_inject j (Senv.symbol_address ge id ofs) (Senv.symbol_address ge id ofs)).
+  { unfold Senv.symbol_address; simpl; unfold Genv.symbol_address. 
+    destruct (Genv.find_symbol ge id) eqn:FS; auto.
+    econstructor. eapply (proj1 GINJ); eauto. rewrite Int.add_zero; auto. }
+  exploit Mem.loadv_inject; eauto. intros (v' & A & B). exists v'; auto with aarg.
+- econstructor; split; eauto with aarg. 
+  unfold Senv.symbol_address; simpl; unfold Genv.symbol_address. 
+  destruct (Genv.find_symbol ge id) eqn:FS; auto.
+  econstructor. eapply (proj1 GINJ); eauto. rewrite Int.add_zero; auto.
+- destruct IHeval_annot_arg1 as (v1 & A1 & B1); auto using in_or_app.
+  destruct IHeval_annot_arg2 as (v2 & A2 & B2); auto using in_or_app.
+  exists (Val.longofwords v1 v2); split; auto with aarg. 
+  apply val_longofwords_inject; auto. 
 Qed.
 
-Lemma transl_annot_params_correct:
-  forall ll,
-  forallb (loc_valid f) ll = true ->
-  (forall sl ofs ty, In (S sl ofs ty) ll -> slot_within_bounds b sl ofs ty) ->
-  exists vl,
-     annot_arguments rs m' (Vptr sp' Int.zero) (map (transl_annot_param fe) ll) vl
-  /\ val_list_inject j (map ls ll) vl.
+Lemma transl_annot_args_correct:
+  forall al vl,
+  eval_annot_args ge ls (Vptr sp Int.zero) m al vl ->
+  (forall l, In l (params_of_annot_args al) -> loc_valid f l = true) ->
+  (forall sl ofs ty, In (S sl ofs ty) (params_of_annot_args al) -> slot_within_bounds b sl ofs ty) ->
+  exists vl',
+     eval_annot_args ge rs (Vptr sp' Int.zero) m' (List.map (transl_annot_arg fe) al) vl'
+  /\ val_list_inject j vl vl'.
 Proof.
-  induction ll; simpl; intros. 
-  exists (@nil val); split; constructor.
-  InvBooleans. 
-  exploit (transl_annot_param_correct a). auto. destruct a; auto. 
-  intros [v1 [A B]].
-  exploit IHll. auto. auto. 
-  intros [vl [C D]].
-  exists (v1 :: vl); split; constructor; auto.
+  induction 1; simpl; intros VALID BOUNDS.
+- exists (@nil val); split; constructor.
+- exploit transl_annot_arg_correct; eauto using in_or_app. intros (v1' & A & B).
+  exploit IHlist_forall2; eauto using in_or_app. intros (vl' & C & D).
+  exists (v1'::vl'); split; constructor; auto. 
 Qed.
 
 End ANNOT_ARGUMENTS.
@@ -2705,25 +2735,28 @@ Proof.
   eapply agree_valid_mach; eauto.
 
 - (* Lannot *)
-  exploit transl_annot_params_correct; eauto. eapply wt_state_annot; eauto.
+  exploit transl_annot_args_correct; eauto.
+  eapply match_stacks_preserves_globals; eauto.
+  rewrite <- forallb_forall. eapply wt_state_annot; eauto.
   intros [vargs' [P Q]]. 
-  exploit external_call_mem_inject'; eauto. 
+  exploit external_call_mem_inject; eauto. 
     eapply match_stacks_preserves_globals; eauto.
   intros [j' [res' [m1' [A [B [C [D [E [F G]]]]]]]]].
   econstructor; split.
-  apply plus_one. econstructor; eauto. 
-  eapply external_call_symbols_preserved'; eauto.
+  apply plus_one. econstructor; eauto.
+  eapply eval_annot_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
+  eapply external_call_symbols_preserved; eauto.
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor; eauto with coqlib.
-  inv H; inv A. eapply match_stack_change_extcall; eauto.
+  eapply match_stack_change_extcall; eauto.
   apply Plt_Ple. change (Mem.valid_block m sp0). eapply agree_valid_linear; eauto.
   apply Plt_Ple. change (Mem.valid_block m'0 sp'). eapply agree_valid_mach; eauto.
   eapply agree_regs_inject_incr; eauto.
   eapply agree_frame_inject_incr; eauto. 
   apply agree_frame_extcall_invariant with m m'0; auto.
-  eapply external_call_valid_block'; eauto.
-  intros. inv H; eapply external_call_max_perm; eauto. eapply agree_valid_linear; eauto.
-  eapply external_call_valid_block'; eauto.
+  eapply external_call_valid_block; eauto.
+  intros. eapply external_call_max_perm; eauto. eapply agree_valid_linear; eauto.
+  eapply external_call_valid_block; eauto.
   eapply agree_valid_mach; eauto.
 
 - (* Llabel *)

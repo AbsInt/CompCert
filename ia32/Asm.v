@@ -212,11 +212,7 @@ Inductive instruction: Type :=
   | Pallocframe(sz: Z)(ofs_ra ofs_link: int)
   | Pfreeframe(sz: Z)(ofs_ra ofs_link: int)
   | Pbuiltin(ef: external_function)(args: list preg)(res: list preg)
-  | Pannot(ef: external_function)(args: list annot_param)
-
-with annot_param : Type :=
-  | APreg: preg -> annot_param
-  | APstack: memory_chunk -> Z -> annot_param.
+  | Pannot(ef: external_function)(args: list (annot_arg preg)).
 
 Definition code := list instruction.
 Record function : Type := mkfunction { fn_sig: signature; fn_code: code }.
@@ -798,20 +794,6 @@ Definition extcall_arguments
 Definition loc_external_result (sg: signature) : list preg :=
   map preg_of (loc_result sg).
 
-(** Extract the values of the arguments of an annotation. *)
-
-Inductive annot_arg (rs: regset) (m: mem): annot_param -> val -> Prop :=
-  | annot_arg_reg: forall r,
-      annot_arg rs m (APreg r) (rs r)
-  | annot_arg_stack: forall chunk ofs stk base v,
-      rs (IR ESP) = Vptr stk base ->
-      Mem.load chunk m stk (Int.unsigned base + ofs) = Some v ->
-      annot_arg rs m (APstack chunk ofs) v.
-
-Definition annot_arguments
-    (rs: regset) (m: mem) (params: list annot_param) (args: list val) : Prop :=
-  list_forall2 (annot_arg rs m) params args.
-
 (** Execution of the instruction at [rs#PC]. *)
 
 Inductive state: Type :=
@@ -840,8 +822,8 @@ Inductive step: state -> trace -> state -> Prop :=
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       find_instr (Int.unsigned ofs) f.(fn_code) = Some (Pannot ef args) ->
-      annot_arguments rs m args vargs ->
-      external_call' ef ge vargs m t v m' ->
+      eval_annot_args ge rs (rs ESP) m args vargs ->
+      external_call ef ge vargs m t v m' ->
       step (State rs m) t
            (State (nextinstr rs) m')
   | exec_step_external:
@@ -893,16 +875,6 @@ Proof.
   intros. red in H0; red in H1. eauto. 
 Qed.
 
-Remark annot_arguments_determ:
-  forall rs m params args1 args2,
-  annot_arguments rs m params args1 -> annot_arguments rs m params args2 -> args1 = args2.
-Proof.
-  unfold annot_arguments. intros. revert params args1 H args2 H0. 
-  induction 1; intros. 
-  inv H0; auto.
-  inv H1. decEq; eauto. inv H; inv H4. auto. congruence. 
-Qed.
-
 Lemma semantics_determinate: forall p, determinate (semantics p).
 Proof.
 Ltac Equalities :=
@@ -912,32 +884,32 @@ Ltac Equalities :=
   | _ => idtac
   end.
   intros; constructor; simpl; intros.
-(* determ *)
+- (* determ *)
   inv H; inv H0; Equalities.
-  split. constructor. auto.
-  discriminate.
-  discriminate.
-  inv H11. 
++ split. constructor. auto.
++ discriminate.
++ discriminate.
++ inv H11. 
++ exploit external_call_determ'. eexact H4. eexact H9. intros [A B].
+  split. auto. intros. destruct B; auto. subst. auto.
++ inv H12.
++ assert (vargs0 = vargs) by (eapply eval_annot_args_determ; eauto). subst vargs0.
+  exploit external_call_determ. eexact H5. eexact H13. intros [A B].
+  split. auto. intros. destruct B; auto. subst. auto.
++ assert (args0 = args) by (eapply extcall_arguments_determ; eauto). subst args0.
   exploit external_call_determ'. eexact H4. eexact H9. intros [A B].
   split. auto. intros. destruct B; auto. subst. auto.
-  inv H12.
-  assert (vargs0 = vargs) by (eapply annot_arguments_determ; eauto). subst vargs0.
-  exploit external_call_determ'. eexact H5. eexact H13. intros [A B].
-  split. auto. intros. destruct B; auto. subst. auto.
-  assert (args0 = args) by (eapply extcall_arguments_determ; eauto). subst args0.
-  exploit external_call_determ'. eexact H4. eexact H9. intros [A B].
-  split. auto. intros. destruct B; auto. subst. auto.
-(* trace length *)
+- (* trace length *)
   red; intros; inv H; simpl.
   omega.
   inv H3. eapply external_call_trace_length; eauto.
-  inv H4. eapply external_call_trace_length; eauto.
+  eapply external_call_trace_length; eauto.
   inv H3. eapply external_call_trace_length; eauto.
-(* initial states *)
+- (* initial states *)
   inv H; inv H0. f_equal. congruence.
-(* final no step *)
+- (* final no step *)
   inv H. unfold Vzero in H0. red; intros; red; intros. inv H; congruence.
-(* final states *)
+- (* final states *)
   inv H; inv H0. congruence.
 Qed.
 

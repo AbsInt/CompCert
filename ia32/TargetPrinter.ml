@@ -339,7 +339,7 @@ module Target(System: SYSTEM):TARGET =
           (int_of_string (Str.matched_group 2 txt))
       end else begin
         fprintf oc "%s annotation: " comment;
-        PrintAnnot.print_annot_stmt preg "ESP" oc txt targs args
+        PrintAnnot.print_annot_stmt preg "%esp" oc txt targs args
       end
 
     let print_annot_val oc txt args res =
