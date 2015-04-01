@@ -346,7 +346,7 @@ and print_cases p cases =
 
 and print_case_label p = function
   | None -> fprintf p "default"
-  | Some lbl -> fprintf p "case %ld" (camlint_of_coqint lbl)
+  | Some lbl -> fprintf p "case %s" (Z.to_string lbl)
 
 and print_stmt_for p s =
   match s with
