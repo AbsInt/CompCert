@@ -403,7 +403,7 @@ Inductive eval_expr: expr -> val -> Prop :=
       eval_expr (Eaddrof a ty) (Vptr loc ofs)
   | eval_Eunop:  forall op a ty v1 v,
       eval_expr a v1 ->
-      sem_unary_operation op v1 (typeof a) = Some v ->
+      sem_unary_operation op v1 (typeof a) m = Some v ->
       eval_expr (Eunop op a ty) v
   | eval_Ebinop: forall op a1 a2 ty v1 v2 v,
       eval_expr a1 v1 ->
@@ -620,7 +620,7 @@ Inductive step: state -> trace -> state -> Prop :=
 
   | step_ifthenelse:  forall f a s1 s2 k e le m v1 b,
       eval_expr e le m a v1 ->
-      bool_val v1 (typeof a) = Some b ->
+      bool_val v1 (typeof a) m = Some b ->
       step (State f (Sifthenelse a s1 s2) k e le m)
         E0 (State f (if b then s1 else s2) k e le m)
 

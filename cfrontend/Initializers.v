@@ -74,7 +74,7 @@ Fixpoint constval (ce: composite_env) (a: expr) : res val :=
       constval ce l
   | Eunop op r1 ty =>
       do v1 <- constval ce r1;
-      match sem_unary_operation op v1 (typeof r1) with
+      match sem_unary_operation op v1 (typeof r1) Mem.empty with
       | Some v => OK v
       | None => Error(msg "undefined unary operation")
       end
@@ -94,7 +94,7 @@ Fixpoint constval (ce: composite_env) (a: expr) : res val :=
   | Eseqand r1 r2 ty =>
       do v1 <- constval ce r1;
       do v2 <- constval ce r2;
-      match bool_val v1 (typeof r1) with
+      match bool_val v1 (typeof r1) Mem.empty with
       | Some true => do_cast v2 (typeof r2) type_bool
       | Some false => OK (Vint Int.zero)
       | None => Error(msg "undefined && operation")
@@ -102,7 +102,7 @@ Fixpoint constval (ce: composite_env) (a: expr) : res val :=
   | Eseqor r1 r2 ty =>
       do v1 <- constval ce r1;
       do v2 <- constval ce r2;
-      match bool_val v1 (typeof r1) with
+      match bool_val v1 (typeof r1) Mem.empty with
       | Some false => do_cast v2 (typeof r2) type_bool
       | Some true => OK (Vint Int.one)
       | None => Error(msg "undefined || operation")
@@ -111,7 +111,7 @@ Fixpoint constval (ce: composite_env) (a: expr) : res val :=
       do v1 <- constval ce r1;
       do v2 <- constval ce r2;
       do v3 <- constval ce r3;
-      match bool_val v1 (typeof r1) with
+      match bool_val v1 (typeof r1) Mem.empty with
       | Some true => do_cast v2 (typeof r2) ty
       | Some false => do_cast v3 (typeof r3) ty
       | None => Error(msg "condition is undefined")

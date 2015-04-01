@@ -115,7 +115,7 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
                 t1 le1 m1 out
   | exec_Sifthenelse: forall e le m a s1 s2 v1 b t le' m' out,
       eval_expr ge e le m a v1 ->
-      bool_val v1 (typeof a) = Some b ->
+      bool_val v1 (typeof a) m = Some b ->
       exec_stmt e le m (if b then s1 else s2) t le' m' out ->
       exec_stmt e le m (Sifthenelse a s1 s2)
                 t le' m' out
@@ -204,7 +204,7 @@ CoInductive execinf_stmt: env -> temp_env -> mem -> statement -> traceinf -> Pro
       execinf_stmt e le m (Ssequence s1 s2) (t1 *** t2)
   | execinf_Sifthenelse: forall e le m a s1 s2 v1 b t,
       eval_expr ge e le m a v1 ->
-      bool_val v1 (typeof a) = Some b ->
+      bool_val v1 (typeof a) m = Some b ->
       execinf_stmt e le m (if b then s1 else s2) t ->
       execinf_stmt e le m (Sifthenelse a s1 s2) t
   | execinf_Sloop_body1: forall e le m s1 s2 t,

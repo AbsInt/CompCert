@@ -267,11 +267,8 @@ Proof.
   constructor. simpl. destruct (Float32.cmp Ceq f Float32.zero); auto.
   constructor. simpl. destruct (Float.cmp Ceq f Float.zero); auto.
   constructor. simpl. destruct (Int.eq i Int.zero); auto.
-  constructor; auto.
   constructor. simpl. destruct (Int.eq i Int.zero); auto.
-  constructor; auto.
   constructor. simpl. destruct (Int.eq i Int.zero); auto.
-  constructor; auto.
 (* long *)
   destruct ty; try (destruct f); try discriminate.
   destruct v; inv H. constructor.

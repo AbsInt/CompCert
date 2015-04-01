@@ -1376,9 +1376,9 @@ Proof.
 Qed.
 
 Lemma pres_sem_unop:
-  forall op ty1 ty v1 v,
+  forall op ty1 ty v1 m v,
   type_unop op ty1 = OK ty ->
-  sem_unary_operation op v1 ty1 = Some v ->
+  sem_unary_operation op v1 ty1 m = Some v ->
   wt_val v1 ty1 ->
   wt_val v ty.
 Proof.
@@ -1390,7 +1390,7 @@ Proof.
   destruct (Float.cmp Ceq f Float.zero); constructor; auto with ty.
   destruct (Float32.cmp Ceq f Float32.zero); constructor; auto with ty.
   destruct (Int.eq i Int.zero); constructor; auto with ty.
-  constructor; auto with ty.
+  constructor. constructor.
   destruct (Int64.eq i Int64.zero); constructor; auto with ty.
 - (* notint *)
   unfold sem_notint in SEM; DestructCases; auto with ty.

@@ -2121,12 +2121,14 @@ Proof.
   assert (IP: forall i b ofs,
     cmatch (Val.cmpu_bool valid c (Vint i) (Vptr b ofs)) (cmp_different_blocks c)).
   {
-    intros. simpl. destruct (Int.eq i Int.zero). apply cmp_different_blocks_sound. apply cmp_different_blocks_none.
+    intros. simpl. destruct (Int.eq i Int.zero && (valid b (Int.unsigned ofs) || valid b (Int.unsigned ofs - 1))).
+    apply cmp_different_blocks_sound. apply cmp_different_blocks_none.
   }
   assert (PI: forall i b ofs,
     cmatch (Val.cmpu_bool valid c (Vptr b ofs) (Vint i)) (cmp_different_blocks c)).
   {
-    intros. simpl. destruct (Int.eq i Int.zero). apply cmp_different_blocks_sound. apply cmp_different_blocks_none.
+    intros. simpl. destruct (Int.eq i Int.zero && (valid b (Int.unsigned ofs) || valid b (Int.unsigned ofs - 1))).
+    apply cmp_different_blocks_sound. apply cmp_different_blocks_none.
   }
   unfold cmpu_bool; inversion H; subst; inversion H0; subst;
   auto using cmatch_top, cmp_different_blocks_none, pcmp_none,
