@@ -21,6 +21,13 @@ open AST
 open Memdata
 open Asm
 
+(** All files used in the debug entries *)
+module StringSet = Set.Make(String)
+let all_files : StringSet.t ref = ref StringSet.empty
+let add_file file =
+  all_files := StringSet.add file !all_files
+
+
 (** Line number annotations *)
 
 let filename_info : (string, int * Printlines.filebuf option) Hashtbl.t

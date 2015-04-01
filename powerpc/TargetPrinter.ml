@@ -240,17 +240,16 @@ module Diab_System : SYSTEM =
           end_addr := label_end;
           fprintf oc "%a:\n" label label_end;
           fprintf oc "	.text\n";
-          Hashtbl.iter (fun file _ ->
+          PrintAnnot.StringSet.iter (fun file ->
             let label = new_label () in
             Hashtbl.add filenum file label;
-            fprintf oc ".L%d:	.d2filenum \"%s\"\n" label file) PrintAnnot.filename_info;
+            fprintf oc ".L%d:	.d2filenum \"%s\"\n" label file) !PrintAnnot.all_files;
           fprintf oc "	.d2_line_end\n"
         end
 
-    let print_file_loc oc (file,col) = 
+    let print_file_loc oc (file,col) =
       fprintf oc "	.4byte		%a\n" label (Hashtbl.find filenum file);
       fprintf oc "	.uleb128	%d\n" col
-
   end
 
 module Target (System : SYSTEM):TARGET =
