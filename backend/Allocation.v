@@ -22,6 +22,7 @@ Require Import Maps.
 Require Import Lattice.
 Require Import AST.
 Require Import Integers.
+Require Import Floats.
 Require Import Memdata.
 Require Import Op.
 Require Import Registers.
@@ -95,8 +96,9 @@ Inductive block_shape: Type :=
   | BSbuiltin (ef: external_function) (args: list reg) (res: reg)
          (mv1: moves) (args': list mreg) (res': list mreg)
          (mv2: moves) (s: node)
-  | BSannot (text: ident) (targs: list annot_arg) (args: list reg) (res: reg)
-         (mv: moves) (args': list loc) (s: node)
+  | BSannot (ef: external_function)
+         (args: list (annot_arg reg)) (args': list (annot_arg loc))
+         (s: node)
   | BScond (cond: condition) (args: list reg)
          (mv: moves) (args': list mreg) (s1 s2: node)
   | BSjumptable (arg: reg)
@@ -276,13 +278,14 @@ Definition pair_instr_block
           assertion (external_function_eq ef ef');
           assertion (check_succ s b3);
           Some(BSbuiltin ef args res mv1 args' res' mv2 s)
-      | Lannot ef' args' :: b2 =>
+      | _ => None
+      end
+  | Iannot ef args s =>
+      match b with
+      | Lannot ef' args' :: b1 =>
           assertion (external_function_eq ef ef');
-          assertion (check_succ s b2);
-          match ef with
-          | EF_annot txt typ => Some(BSannot txt typ args res mv1 args' s)
-          | _ => None
-          end
+          assertion (check_succ s b1);
+          Some(BSannot ef args args' s)
       | _ => None
       end
   | Icond cond args s1 s2 =>
@@ -696,6 +699,57 @@ Definition add_equation_ros (ros: reg + ident) (ros': mreg + ident) (e: eqs) : o
   | _, _ => None
   end.
 
+(** [add_equations_annot_arg] adds the needed equations for annotation
+   arguments. *)
+
+Fixpoint add_equations_annot_arg (env: regenv) (arg: annot_arg reg) (arg': annot_arg loc) (e: eqs) : option eqs :=
+  match arg, arg' with
+  | AA_base r, AA_base l =>
+      Some (add_equation (Eq Full r l) e)
+  | AA_base r, AA_longofwords (AA_base lhi) (AA_base llo) =>
+      assertion (typ_eq (env r) Tlong);
+      Some (add_equation (Eq Low r llo) (add_equation (Eq High r lhi) e))
+  | AA_int n, AA_int n' =>
+      assertion (Int.eq_dec n n'); Some e
+  | AA_long n, AA_long n' =>
+      assertion (Int64.eq_dec n n'); Some e
+  | AA_float f, AA_float f' =>
+      assertion (Float.eq_dec f f'); Some e
+  | AA_single f, AA_single f' =>
+      assertion (Float32.eq_dec f f'); Some e
+  | AA_loadstack chunk ofs, AA_loadstack chunk' ofs' =>
+      assertion (chunk_eq chunk chunk');
+      assertion (Int.eq_dec ofs ofs');
+      Some e
+  | AA_addrstack ofs, AA_addrstack ofs' =>
+      assertion (Int.eq_dec ofs ofs');
+      Some e
+  | AA_loadglobal chunk id ofs, AA_loadglobal chunk' id' ofs' =>
+      assertion (chunk_eq chunk chunk');
+      assertion (ident_eq id id');
+      assertion (Int.eq_dec ofs ofs');
+      Some e
+  | AA_addrglobal id ofs, AA_addrglobal id' ofs' =>
+      assertion (ident_eq id id');
+      assertion (Int.eq_dec ofs ofs');
+      Some e
+  | AA_longofwords hi lo, AA_longofwords hi' lo' =>
+      do e1 <- add_equations_annot_arg env hi hi' e;
+      add_equations_annot_arg env lo lo' e1
+  | _, _ =>
+      None
+  end.
+
+Fixpoint add_equations_annot_args (env: regenv)
+   (args: list(annot_arg reg)) (args': list(annot_arg loc)) (e: eqs) : option eqs :=
+  match args, args' with
+  | nil, nil => Some e
+  | a1 :: al, a1' :: al' =>
+      do e1 <- add_equations_annot_arg env a1 a1' e;
+      add_equations_annot_args env al al' e1
+  | _, _ => None
+  end.
+
 (** [can_undef ml] returns true if all machine registers in [ml] are
   unconstrained and can harmlessly be undefined. *)
 
@@ -926,9 +980,8 @@ Definition transfer_aux (f: RTL.function) (env: regenv)
       assertion (can_undef (destroyed_by_builtin ef) e2);
       do e3 <- add_equations_args args (sig_args (ef_sig ef)) args' e2;
       track_moves env mv1 e3
-  | BSannot txt typ args res mv1 args' s =>
-      do e1 <- add_equations_args args (annot_args_typ typ) args' e;
-      track_moves env mv1 e1
+  | BSannot ef args args' s =>
+      add_equations_annot_args env args args' e
   | BScond cond args mv args' s1 s2 =>
       assertion (can_undef (destroyed_by_cond cond) e);
       do e1 <- add_equations args args' e;
@@ -1099,7 +1152,7 @@ Definition successors_block_shape (bsh: block_shape) : list node :=
   | BScall sg ros args res mv1 ros' mv2 s => s :: nil
   | BStailcall sg ros args mv1 ros' => nil
   | BSbuiltin ef args res mv1 args' res' mv2 s => s :: nil
-  | BSannot txt typ args res mv1 args' s => s :: nil
+  | BSannot ef args args' s => s :: nil
   | BScond cond args mv args' s1 s2 => s1 :: s2 :: nil
   | BSjumptable arg mv arg' tbl => tbl
   | BSreturn optarg mv => nil

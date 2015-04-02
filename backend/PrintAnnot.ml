@@ -97,11 +97,34 @@ let print_file_line_d2 oc pref file line =
 
 let re_annot_param = Str.regexp "%%\\|%[1-9][0-9]*"
 
-type arg_value =
-  | Reg of preg
-  | Stack of memory_chunk * Int.int
-  | Intconst of Int.int
-  | Floatconst of float
+let rec print_annot print_preg sp_reg_name oc = function
+  | AA_base x -> print_preg oc x
+  | AA_int n -> fprintf oc "%ld" (camlint_of_coqint n)
+  | AA_long n -> fprintf oc "%Ld" (camlint64_of_coqint n)
+  | AA_float n -> fprintf oc "%.18g" (camlfloat_of_coqfloat n)
+  | AA_single n -> fprintf oc "%.18g" (camlfloat_of_coqfloat32 n)
+  | AA_loadstack(chunk, ofs) ->
+      fprintf oc "mem(%s + %ld, %ld)"
+         sp_reg_name
+         (camlint_of_coqint ofs)
+         (camlint_of_coqint (size_chunk chunk))
+  | AA_addrstack ofs ->
+      fprintf oc "(%s + %ld)"
+         sp_reg_name
+         (camlint_of_coqint ofs)
+  | AA_loadglobal(chunk, id, ofs) ->
+      fprintf oc "mem(\"%s\" + %ld, %ld)"
+         (extern_atom id)
+         (camlint_of_coqint ofs)
+         (camlint_of_coqint (size_chunk chunk))
+  | AA_addrglobal(id, ofs) ->
+      fprintf oc "(\"%s\" + %ld)"
+         (extern_atom id)
+         (camlint_of_coqint ofs)
+  | AA_longofwords(hi, lo) ->
+      fprintf oc "(%a * 0x100000000 + %a)"
+        (print_annot print_preg sp_reg_name) hi
+        (print_annot print_preg sp_reg_name) lo
 
 let print_annot_text print_preg sp_reg_name oc txt args =
   let print_fragment = function
@@ -112,42 +135,18 @@ let print_annot_text print_preg sp_reg_name oc txt args =
   | Str.Delim s ->
       let n = int_of_string (String.sub s 1 (String.length s - 1)) in
       try
-        match List.nth args (n-1) with
-        | Reg r ->
-            print_preg oc r
-        | Stack(chunk, ofs) ->
-            fprintf oc "mem(%s + %ld, %ld)"
-               sp_reg_name
-               (camlint_of_coqint ofs)
-               (camlint_of_coqint (size_chunk chunk))
-        | Intconst n ->
-            fprintf oc "%ld" (camlint_of_coqint n)
-        | Floatconst n ->
-            fprintf oc "%.18g" (camlfloat_of_coqfloat n)
+        print_annot print_preg sp_reg_name oc (List.nth args (n-1))
       with Failure _ ->
         fprintf oc "<bad parameter %s>" s in
   List.iter print_fragment (Str.full_split re_annot_param txt);
   fprintf oc "\n"
 
-let rec annot_args tmpl args =
-  match tmpl, args with
-  | [], _ -> []
-  | AA_arg _ :: tmpl', APreg r :: args' ->
-      Reg r :: annot_args tmpl' args'
-  | AA_arg _ :: tmpl', APstack(chunk, ofs) :: args' ->
-      Stack(chunk, ofs) :: annot_args tmpl' args'
-  | AA_arg _ :: tmpl', [] -> []         (* should never happen *)
-  | AA_int n :: tmpl', _ ->
-      Intconst n :: annot_args tmpl' args
-  | AA_float n :: tmpl', _ ->
-      Floatconst n :: annot_args tmpl' args
-
-let print_annot_stmt print_preg sp_reg_name oc txt tmpl args =
-  print_annot_text print_preg sp_reg_name oc txt (annot_args tmpl args)
+let print_annot_stmt print_preg sp_reg_name oc txt tys args =
+  print_annot_text print_preg sp_reg_name oc txt args
 
 let print_annot_val print_preg oc txt args =
   print_annot_text print_preg "<internal error>" oc txt
-    (List.map (fun r -> Reg r) args)
+    (List.map (fun r -> AA_base r) args)
 
 (* Print CompCert version and command-line as asm comment *)
 

@@ -60,6 +60,7 @@ Definition ref_instruction (i: instruction) : list ident :=
   | Itailcall _ (inl r) _ => nil
   | Itailcall _ (inr id) _ => id :: nil
   | Ibuiltin ef _ _ _ => globals_external ef
+  | Iannot _ args _ => globals_of_annot_args args
   | Icond cond _ _ _ => nil
   | Ijumptable _ _ => nil
   | Ireturn _ => nil

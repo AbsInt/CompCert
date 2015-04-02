@@ -695,14 +695,6 @@ Definition transl_store (chunk: memory_chunk) (addr: addressing)
       Error (msg "Asmgen.transl_store")
   end.
 
-(** Translation of arguments to annotations *)
-
-Definition transl_annot_param (p: Mach.annot_param) : Asm.annot_param :=
-  match p with
-  | Mach.APreg r => APreg (preg_of r)
-  | Mach.APstack chunk ofs => APstack chunk ofs
-  end.
-
 (** Translation of a Mach instruction. *)
 
 Definition transl_instr (f: Mach.function) (i: Mach.instruction)
@@ -737,7 +729,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
   | Mbuiltin ef args res =>
       OK (Pbuiltin ef (map preg_of args) (map preg_of res) :: k)
   | Mannot ef args =>
-      OK (Pannot ef (map transl_annot_param args) :: k)
+      OK (Pannot ef (List.map (map_annot_arg preg_of) args) :: k)
   | Mlabel lbl =>
       OK (Plabel lbl :: k)
   | Mgoto lbl =>

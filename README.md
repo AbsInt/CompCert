@@ -1,7 +1,7 @@
-                The CompCert C verified compiler
+# CompCert
+The verified C compiler.
 
-OVERVIEW:
-
+## Overview
 The CompCert C verified compiler is a compiler for a large subset of the
 C programming language that generates code for the PowerPC, ARM and x86
 processors.
@@ -17,18 +17,13 @@ purposes.
 
 For more information on CompCert (supported platforms, supported C
 features, installation instructions, using the compiler, etc), please
-refer to the user's manual: http://compcert.inria.fr/man/
+refer to the [user's manual](http://compcert.inria.fr/man/).
 
-
-COPYRIGHT:
-
+## Copyright
 The CompCert verified compiler is Copyright 2004, 2005, 2006, 2007,
 2008, 2009, 2010, 2011, 2012, 2013, 2014 Institut National de Recherche en
 Informatique et en Automatique (INRIA).  It is distributed under the
-conditions stated in file LICENSE.
+conditions stated in file `LICENSE`.
 
-
-CONTACT:
-
-The authors can be contacted by e-mail at compcert@yquem.inria.fr
-
+## Contact
+The authors can be contacted by e-mail at compcert@yquem.inria.fr.

@@ -76,7 +76,7 @@ Definition wt_instr (i: instruction) : bool :=
   | Lbuiltin ef args res =>
       subtype_list (proj_sig_res' (ef_sig ef)) (map mreg_type res) 
   | Lannot ef args =>
-      forallb loc_valid args
+      forallb loc_valid (params_of_annot_args args)
   | _ =>
       true
   end.
@@ -365,7 +365,7 @@ Qed.
 Lemma wt_state_annot:
   forall s f sp ef args c rs m,
   wt_state (State s f sp (Lannot ef args :: c) rs m) ->
-  forallb (loc_valid f) args = true.
+  forallb (loc_valid f) (params_of_annot_args args) = true.
 Proof.
   intros. inv H. simpl in WTC; InvBooleans. auto. 
 Qed.

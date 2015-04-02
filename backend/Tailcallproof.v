@@ -513,6 +513,19 @@ Proof.
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor; eauto. apply regset_set; auto.
 
+(* annot *)
+  TransfInstr.
+  exploit (@eval_annot_args_lessdef _ ge (fun r => rs#r) (fun r => rs'#r)); eauto.
+  intros (vargs' & P & Q).
+  exploit external_call_mem_extends; eauto.
+  intros [v' [m'1 [A [B [C D]]]]].
+  left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) pc' rs' m'1); split.
+  eapply exec_Iannot; eauto.
+  eapply eval_annot_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  econstructor; eauto.
+
 (* cond *)
   TransfInstr. 
   left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) (if b then ifso else ifnot) rs' m'); split.

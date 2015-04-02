@@ -1144,6 +1144,21 @@ Proof.
   + apply CASE1.
 * apply set_reg_lessdef; auto.
 
+- (* Iannot *)
+  exploit (@eval_annot_args_lessdef _ ge (fun r => rs#r) (fun r => rs'#r)); eauto. 
+  intros (vargs' & A & B).
+  exploit external_call_mem_extends; eauto.
+  intros (v' & m1' & P & Q & R & S).
+  econstructor; split.
+  eapply exec_Iannot; eauto.
+  eapply eval_annot_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  econstructor; eauto.
+  eapply analysis_correct_1; eauto. simpl; auto.
+  unfold transfer; rewrite H. replace m' with m; auto. 
+  destruct ef; try contradiction. inv H2; auto.
+
 - (* Icond *)
   destruct (valnum_regs approx!!pc args) as [n1 vl] eqn:?.
   elim SAT; intros valu1 NH1.

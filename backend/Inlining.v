@@ -203,6 +203,15 @@ Definition sop (ctx: context) (op: operation) :=
 Definition saddr (ctx: context) (addr: addressing) :=
   shift_stack_addressing (Int.repr ctx.(dstk)) addr.
 
+Fixpoint sannotarg (ctx: context) (a: annot_arg reg) : annot_arg reg :=
+  match a with
+  | AA_base x => AA_base (sreg ctx x)
+  | AA_loadstack chunk ofs => AA_loadstack chunk (Int.add ofs (Int.repr ctx.(dstk)))
+  | AA_addrstack ofs => AA_addrstack (Int.add ofs (Int.repr ctx.(dstk)))
+  | AA_longofwords hi lo => AA_longofwords (sannotarg ctx hi) (sannotarg ctx lo)
+  | _ => a
+  end.
+
 (** The initial context, used to copy the CFG of a toplevel function. *)
 
 Definition initcontext (dpc dreg nreg: positive) (sz: Z) :=
@@ -382,6 +391,9 @@ Definition expand_instr (ctx: context) (pc: node) (i: instruction): mon unit :=
   | Ibuiltin ef args res s =>
       set_instr (spc ctx pc)
                 (Ibuiltin ef (sregs ctx args) (sreg ctx res) (spc ctx s))
+  | Iannot ef args s =>
+      set_instr (spc ctx pc)
+                (Iannot ef (map (sannotarg ctx) args) (spc ctx s))
   | Icond cond args s1 s2 =>
       set_instr (spc ctx pc)
                 (Icond cond (sregs ctx args) (spc ctx s1) (spc ctx s2))

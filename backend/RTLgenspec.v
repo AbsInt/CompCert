@@ -220,6 +220,13 @@ Proof.
   intros; red; intros. elim H1; intro. subst r1; auto. auto.
 Qed.
 
+Lemma regs_valid_app:
+  forall rl1 rl2 s,
+  regs_valid rl1 s -> regs_valid rl2 s -> regs_valid (rl1 ++ rl2) s.
+Proof.
+  intros; red; intros. apply in_app_iff in H1. destruct H1; auto. 
+Qed.
+
 Lemma regs_valid_incr:
   forall s1 s2 rl, state_incr s1 s2 -> regs_valid rl s1 -> regs_valid rl s2.
 Proof.
@@ -847,6 +854,10 @@ Inductive tr_stmt (c: code) (map: mapping):
      c!n1 = Some (Ibuiltin ef rargs rd nd) ->
      reg_map_ok map rd optid ->
      tr_stmt c map (Sbuiltin optid ef al) ns nd nexits ngoto nret rret
+  | tr_Sannot: forall ef al ns nd nexits ngoto nret rret n1 rargs,
+     tr_exprlist c map nil (exprlist_of_expr_list (params_of_annot_args al)) ns n1 rargs ->
+     c!n1 = Some (Iannot ef (convert_annot_args al rargs) nd) ->
+     tr_stmt c map (Sannot ef al) ns nd nexits ngoto nret rret
   | tr_Sseq: forall s1 s2 ns nd nexits ngoto nret rret n,
      tr_stmt c map s2 n nd nexits ngoto nret rret ->
      tr_stmt c map s1 ns n nexits ngoto nret rret ->
@@ -1196,7 +1207,7 @@ Proof.
   apply tr_exitexpr_incr with s1; auto. eapply IHa; eauto with rtlg.
   apply add_letvar_valid; eauto with rtlg.
 Qed.
- 
+
 Lemma transl_stmt_charact:
   forall map stmt nd nexits ngoto nret rret s ns s' INCR
     (TR: transl_stmt map stmt nd nexits ngoto nret rret s = OK ns s' INCR)
@@ -1250,6 +1261,9 @@ Proof.
   econstructor; eauto 4 with rtlg.
   eapply transl_exprlist_charact; eauto 3 with rtlg.
   eapply alloc_optreg_map_ok with (s1 := s0); eauto with rtlg.
+  (* Sannot *)
+  econstructor; eauto 4 with rtlg.
+  eapply transl_exprlist_charact; eauto 3 with rtlg.
   (* Sseq *)
   econstructor. 
   apply tr_stmt_incr with s0; auto. 

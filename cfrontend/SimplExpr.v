@@ -18,6 +18,7 @@ Require Import Errors.
 Require Import Integers.
 Require Import Floats.
 Require Import Values.
+Require Import Memory.
 Require Import AST.
 Require Import Ctypes.
 Require Import Cop.
@@ -129,7 +130,7 @@ Function eval_simpl_expr (a: expr) : option val :=
 Function makeif (a: expr) (s1 s2: statement) : statement :=
   match eval_simpl_expr a with
   | Some v =>
-      match bool_val v (typeof a) with
+      match bool_val v (typeof a) Mem.empty with
       | Some b => if b then s1 else s2
       | None   => Sifthenelse a s1 s2
       end

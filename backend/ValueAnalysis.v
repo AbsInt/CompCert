@@ -55,7 +55,6 @@ Inductive builtin_kind : Type :=
   | Builtin_vload (chunk: memory_chunk) (aaddr: aval)
   | Builtin_vstore (chunk: memory_chunk) (aaddr av: aval)
   | Builtin_memcpy (sz al: Z) (adst asrc: aval)
-  | Builtin_annot
   | Builtin_annot_val (av: aval)
   | Builtin_default.
 
@@ -66,7 +65,6 @@ Definition classify_builtin (ef: external_function) (args: list reg) (ae: aenv) 
   | EF_vstore chunk, a1::a2::nil => Builtin_vstore chunk (areg ae a1) (areg ae a2)
   | EF_vstore_global chunk id ofs, a1::nil => Builtin_vstore chunk (Ptr (Gl id ofs)) (areg ae a1)
   | EF_memcpy sz al, a1::a2::nil => Builtin_memcpy sz al (areg ae a1) (areg ae a2)
-  | EF_annot _ _, _ => Builtin_annot
   | EF_annot_val _ _, a1::nil => Builtin_annot_val (areg ae a1)
   | _, _ => Builtin_default
   end.
@@ -86,8 +84,6 @@ Definition transfer_builtin (ae: aenv) (am: amem) (rm: romem) (ef: external_func
       let p := loadbytes am rm (aptr_of_aval asrc) in
       let am' := storebytes am (aptr_of_aval adst) sz p in
       VA.State (AE.set res itop ae) am'
-  | Builtin_annot =>
-      VA.State (AE.set res itop ae) am
   | Builtin_annot_val av =>
       VA.State (AE.set res av ae) am
   | Builtin_default =>
@@ -115,6 +111,8 @@ Definition transfer (f: function) (rm: romem) (pc: node) (ae: aenv) (am: amem) :
       VA.Bot
   | Some(Ibuiltin ef args res s) =>
       transfer_builtin ae am rm ef args res
+  | Some(Iannot ef args s) =>
+      VA.State ae am
   | Some(Icond cond args s1 s2) =>
       VA.State ae am
   | Some(Ijumptable arg tbl) =>
@@ -306,7 +304,6 @@ Lemma classify_builtin_sound:
       exists dst, exists src,
       extcall_memcpy_sem sz al ge (dst::src::nil) m t res m'
       /\ vmatch bc dst adst /\ vmatch bc src asrc
-  | Builtin_annot => m' = m /\ res = Vundef
   | Builtin_annot_val av => m' = m /\ vmatch bc res av
   | Builtin_default => True
   end.
@@ -329,8 +326,6 @@ Proof.
 - (* memcpy *)
   destruct args; auto. destruct args; auto. destruct args; auto.
   exists (e#p), (e#p0); eauto.
-- (* annot *)
-  simpl in H1. inv H1. auto.
 - (* annot val *)
   destruct args; auto. destruct args; auto.
   simpl in H1. inv H1. eauto.
@@ -1303,10 +1298,6 @@ Proof.
   intros. eapply loadbytes_sound; eauto. apply match_aptr_of_aval; auto. 
   eapply romatch_storebytes; eauto. 
   eapply sound_stack_storebytes; eauto. 
-+ (* annot *)
-  intros (A & B); subst. 
-  eapply sound_succ_state; eauto. simpl; auto. 
-  apply ematch_update; auto. constructor.
 + (* annot val *)
   intros (A & B); subst. 
   eapply sound_succ_state; eauto. simpl; auto. 
@@ -1358,6 +1349,11 @@ Proof.
   intros. apply Q. red. eapply Plt_trans; eauto.
   rewrite C; auto.
   exact AA.
+
+- (* annot *)
+  destruct ef; try contradiction. inv H2. 
+  eapply sound_succ_state; eauto. simpl; auto. 
+  unfold transfer; rewrite H; eauto. 
 
 - (* cond *)
   eapply sound_succ_state; eauto. 

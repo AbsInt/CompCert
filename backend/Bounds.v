@@ -69,7 +69,7 @@ Definition instr_within_bounds (i: instruction) :=
   | Lbuiltin ef args res =>
       forall r, In r res \/ In r (destroyed_by_builtin ef) -> mreg_within_bounds r
   | Lannot ef args =>
-      forall sl ofs ty, In (S sl ofs ty) args -> slot_within_bounds sl ofs ty
+      forall sl ofs ty, In (S sl ofs ty) (params_of_annot_args args) -> slot_within_bounds sl ofs ty
   | _ => True
   end.
 
@@ -121,7 +121,7 @@ Definition slots_of_instr (i: instruction) : list (slot * Z * typ) :=
   match i with
   | Lgetstack sl ofs ty r => (sl, ofs, ty) :: nil
   | Lsetstack r sl ofs ty => (sl, ofs, ty) :: nil
-  | Lannot ef args => slots_of_locs args
+  | Lannot ef args => slots_of_locs (params_of_annot_args args)
   | _ => nil
   end.
 

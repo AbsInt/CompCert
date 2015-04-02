@@ -34,15 +34,6 @@ let rec regs pp = function
   | [r] -> reg pp r
   | r1::rl -> fprintf pp "%a, %a" reg r1 regs rl
 
-let annot_param pp = function
-  | APreg r -> reg pp r
-  | APstack(chunk, ofs) -> fprintf pp "stack(%s,%ld)" (name_of_chunk chunk) (camlint_of_coqint ofs)
-
-let rec annot_params pp = function
-  | [] -> ()
-  | [r] -> annot_param pp r
-  | r1::rl -> fprintf pp "%a, %a" annot_param r1 annot_params rl
-
 let ros pp = function
   | Coq_inl r -> reg pp r
   | Coq_inr s -> fprintf pp "\"%s\"" (extern_atom s)
@@ -78,7 +69,8 @@ let print_instruction pp i =
       fprintf pp "\t%a = %s(%a)\n"
         regs res (name_of_external ef) regs args
   | Mannot(ef, args) ->
-      fprintf pp "\t%s(%a)\n" (name_of_external ef) annot_params args
+      fprintf pp "\t%s(%a)\n"
+        (name_of_external ef) (print_annot_args reg) args
   | Mlabel lbl ->
       fprintf pp "%5d:" (P.to_int lbl)
   | Mgoto lbl ->

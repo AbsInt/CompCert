@@ -284,9 +284,12 @@ module Target (System : SYSTEM):TARGET =
     let ireg_or_zero oc r =
       if r = GPR0 then output_string oc "0" else ireg oc r
 
+    (* [preg] is only used for printing annotations.
+       Use the full register names [rN] and [fN] to avoid
+       ambiguity with constants. *)
     let preg oc = function
-      | IR r -> ireg oc r
-      | FR r -> freg oc r
+      | IR r -> fprintf oc "r%s" (int_reg_name r)
+      | FR r -> fprintf oc "f%s" (float_reg_name r)
       | _    -> assert false
 
     let section oc sec =

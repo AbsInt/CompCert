@@ -102,23 +102,22 @@ Definition num_iter := 10%nat.
 Definition successor (f: function) (ae: AE.t) (pc: node) : node :=
   successor_rec num_iter f ae pc.
 
-Fixpoint annot_strength_reduction
-     (ae: AE.t) (targs: list annot_arg) (args: list reg) :=
-  match targs, args with
-  | AA_arg ty :: targs', arg :: args' =>
-      let (targs'', args'') := annot_strength_reduction ae targs' args' in
-      match ty, areg ae arg with
-      | Tint, I n => (AA_int n :: targs'', args'')
-      | Tfloat, F n => if Compopts.generate_float_constants tt
-                       then (AA_float n :: targs'', args'')
-                       else (AA_arg ty :: targs'', arg :: args'')
-      | _, _ => (AA_arg ty :: targs'', arg :: args'')
+Fixpoint annot_strength_reduction (ae: AE.t) (a: annot_arg reg) :=
+  match a with
+  | AA_base r =>
+      match areg ae r with
+      | I n => AA_int n
+      | L n => AA_long n
+      | F n => if Compopts.generate_float_constants tt then AA_float n else a
+      | FS n => if Compopts.generate_float_constants tt then AA_single n else a
+      | _ => a
       end
-  | targ :: targs', _ =>
-      let (targs'', args'') := annot_strength_reduction ae targs' args in
-      (targ :: targs'', args'')
-  | _, _ =>
-      (targs, args)
+  | AA_longofwords hi lo =>
+      match annot_strength_reduction ae hi, annot_strength_reduction ae lo with
+      | AA_int nhi, AA_int nlo => AA_long (Int64.ofwords nhi nlo)
+      | hi', lo' => AA_longofwords hi' lo'
+      end
+  | _ => a
   end.
 
 Function builtin_strength_reduction
@@ -134,9 +133,6 @@ Function builtin_strength_reduction
       | Ptr(Gl symb n1) => (EF_vstore_global chunk symb n1, r2 :: nil)
       | _ => (ef, args)
       end
-  | EF_annot text targs, args =>
-      let (targs', args') := annot_strength_reduction ae targs args in
-      (EF_annot text targs', args')
   | _, _ =>
       (ef, args)
   end.
@@ -180,6 +176,8 @@ Definition transf_instr (f: function) (an: PMap.t VA.t) (rm: romem)
       | Ibuiltin ef args res s =>
           let (ef', args') := builtin_strength_reduction ae ef args in
           Ibuiltin ef' args' res s
+      | Iannot ef args s =>
+          Iannot ef (List.map (annot_strength_reduction ae) args) s
       | Icond cond args s1 s2 =>
           let aargs := aregs ae args in
           match resolve_branch (eval_static_condition cond aargs) with
