@@ -569,6 +569,7 @@ Definition is_trivial_op (op: operation) : bool :=
 Definition op_depends_on_memory (op: operation) : bool :=
   match op with
   | Ocmp (Ccompu _) => true
+  | Ocmp (Ccompuimm _ _) => true
   | _ => false
   end.
 
@@ -577,8 +578,8 @@ Lemma op_depends_on_memory_correct:
   op_depends_on_memory op = false ->
   eval_operation ge sp op args m1 = eval_operation ge sp op args m2.
 Proof.
-  intros until m2. destruct op; simpl; try congruence.
-  destruct c; simpl; auto; discriminate. 
+  intros until m2. destruct op; simpl; try congruence. unfold eval_condition.
+  destruct c; simpl; auto; try discriminate. 
 Qed.
 
 (** Global variables mentioned in an operation or addressing mode *)
