@@ -730,12 +730,14 @@ Proof.
   rewrite (int_ltu_not i i0). destruct (Int.ltu i i0); destruct (Int.eq i i0); reflexivity.
   destruct (Int.ltu i i0); reflexivity.
 (* int ptr *)
-  destruct (Int.eq i Int.zero) eqn:?; try discriminate.
+  destruct (Int.eq i Int.zero &&
+    (Mem.valid_pointer m b0 (Int.unsigned i0) || Mem.valid_pointer m b0 (Int.unsigned i0 - 1))) eqn:?; try discriminate.
   destruct c; simpl in *; inv H1.
   rewrite Heqb1; reflexivity. 
   rewrite Heqb1; reflexivity.
 (* ptr int *)
-  destruct (Int.eq i0 Int.zero) eqn:?; try discriminate.
+  destruct (Int.eq i0 Int.zero &&
+    (Mem.valid_pointer m b0 (Int.unsigned i) || Mem.valid_pointer m b0 (Int.unsigned i - 1))) eqn:?; try discriminate.
   destruct c; simpl in *; inv H1.
   rewrite Heqb1; reflexivity. 
   rewrite Heqb1; reflexivity.
