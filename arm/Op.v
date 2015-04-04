@@ -707,7 +707,7 @@ Definition is_trivial_op (op: operation) : bool :=
 
 Definition op_depends_on_memory (op: operation) : bool :=
   match op with
-  | Ocmp (Ccompu _ | Ccompushift _ _) => true
+  | Ocmp (Ccompu _ | Ccompushift _ _| Ccompuimm _ _) => true
   | _ => false
   end.
 
