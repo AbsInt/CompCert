@@ -135,7 +135,7 @@ Fixpoint transl_annot_arg (fe: frame_env) (a: annot_arg loc) : annot_arg mreg :=
   | AA_base (R r) => AA_base r
   | AA_base (S Local ofs ty) =>
       AA_loadstack (chunk_of_type ty) (Int.repr (offset_of_index fe (FI_local ofs ty)))
-  | AA_base (S _ _ __) => AA_int Int.zero  (**r never happens *)
+  | AA_base (S _ _ _) => AA_int Int.zero  (**r never happens *)
   | AA_int n => AA_int n
   | AA_long n => AA_long n
   | AA_float n => AA_float n
