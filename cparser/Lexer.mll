@@ -233,6 +233,11 @@ let hexadecimal_floating_constant =
   | hexadecimal_prefix (hexadecimal_digit_sequence as intpart)
         binary_exponent_part floating_suffix?
 
+(* Preprocessing numbers *)
+let preprocessing_number =
+  '.'? ['0'-'9']
+  (['0'-'9' 'A'-'Z' 'a'-'z' '_' '.'] | ['e' 'E' 'p' 'P']['+' '-'])*
+
 (* Character and string constants *)
 let simple_escape_sequence =
   '\\' ( ['\''  '\"'  '?'  '\\'  'a'  'b'  'e'  'f'  'n'  'r'  't'  'v'] as c)
@@ -273,6 +278,8 @@ rule initial = parse
                                            | None -> None
                                            | Some c -> Some (String.make 1 c) },
                                       currentLoc lexbuf)}
+  | preprocessing_number as s     { error lexbuf "invalid numerical constant '%s'@ These characters form a preprocessor number, but not a constant" s;
+                                    CONSTANT (Cabs.CONST_INT "0", currentLoc lexbuf) }
   | "'"                           { let l = char_literal [] lexbuf in
                                     CONSTANT (Cabs.CONST_CHAR(false, l),
                                               currentLoc lexbuf) }
