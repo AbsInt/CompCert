@@ -73,6 +73,7 @@ let rec size_stmt = function
   | Stailcall(sg, eos, args) ->
       3 + size_eos eos + size_exprs args + length_exprs args
   | Sbuiltin(optid, ef, args) -> 1 + size_exprs args
+  | Sannot(txt, args) -> 0
   | Sseq(s1, s2) -> size_stmt s1 + size_stmt s2
   | Sifthenelse(ce, s1, s2) ->
       size_condexpr ce + max (size_stmt s1) (size_stmt s2)
