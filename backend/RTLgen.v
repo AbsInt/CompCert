@@ -455,6 +455,39 @@ with transl_condexpr (map: mapping) (a: condexpr) (ntrue nfalse: node)
          transl_expr map b r nc
   end.
 
+(** Translation of arguments to annotations. *)
+
+Definition exprlist_of_expr_list (l: list expr) : exprlist :=
+  List.fold_right Econs Enil l.
+
+Fixpoint convert_annot_arg {A: Type} (a: annot_arg expr) (rl: list A) : annot_arg A * list A :=
+  match a with
+  | AA_base a =>
+      match rl with
+      | r :: rs => (AA_base r, rs)
+      | nil     => (AA_int Int.zero, nil)   (**r never happens *)
+      end
+  | AA_int n => (AA_int n, rl)
+  | AA_long n => (AA_long n, rl)
+  | AA_float n => (AA_float n, rl)
+  | AA_single n => (AA_single n, rl)
+  | AA_loadstack chunk ofs => (AA_loadstack chunk ofs, rl)
+  | AA_addrstack ofs => (AA_addrstack ofs, rl)
+  | AA_loadglobal chunk id ofs => (AA_loadglobal chunk id ofs, rl)
+  | AA_addrglobal id ofs => (AA_addrglobal id ofs, rl)
+  | AA_longofwords hi lo =>
+      let (hi', rl1) := convert_annot_arg hi rl in
+      let (lo', rl2) := convert_annot_arg lo rl1 in
+      (AA_longofwords hi' lo', rl2)
+  end.
+
+Fixpoint convert_annot_args {A: Type} (al: list (annot_arg expr)) (rl: list A) : list (annot_arg A) :=
+  match al with
+  | nil => nil
+  | a1 :: al =>
+      let (a1', rl1) := convert_annot_arg a1 rl in a1' :: convert_annot_args al rl1
+  end.
+
 (** Auxiliary for translating exit expressions. *)
 
 Definition transl_exit (nexits: list node) (n: nat) : mon node :=
@@ -557,6 +590,11 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
       do rargs <- alloc_regs map al;
       do r <- alloc_optreg map optid;
       do n1 <- add_instr (Ibuiltin ef rargs r nd);
+         transl_exprlist map al rargs n1
+  | Sannot ef args =>
+      let al := exprlist_of_expr_list (params_of_annot_args args) in
+      do rargs <- alloc_regs map al;
+      do n1 <- add_instr (Iannot ef (convert_annot_args args rargs) nd);
          transl_exprlist map al rargs n1
   | Sseq s1 s2 =>
       do ns <- transl_stmt map s2 nd nexits ngoto nret rret;

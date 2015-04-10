@@ -35,6 +35,7 @@ type instruction =
   | Xcall of signature * (var, ident) sum * var list * var list
   | Xtailcall of signature * (var, ident) sum * var list
   | Xbuiltin of external_function * var list * var list
+  | Xannot of external_function * var annot_arg list
   | Xbranch of node
   | Xcond of condition * var list * node * node
   | Xjumptable of var * node list
@@ -124,6 +125,12 @@ let rec set_vars_type vl tyl =
 let unify_var_type v1 v2 =
   if typeof v1 <> typeof v2 then raise Type_error
 
+let rec type_annot_arg a ty =
+  match a with
+  | AA_base v -> set_var_type v ty
+  | AA_longofwords(a1, a2) -> type_annot_arg a1 Tint; type_annot_arg a2 Tint
+  | _ -> ()
+
 let type_instr = function
   | Xmove(src, dst) | Xspill(src, dst) | Xreload(src, dst) ->
       unify_var_type src dst
@@ -153,6 +160,11 @@ let type_instr = function
       let sg = ef_sig ef in
       set_vars_type args sg.sig_args;
       set_vars_type res (Events.proj_sig_res' sg)
+  | Xannot(ef, args) ->
+      let sg = ef_sig ef in
+      if List.length args = List.length sg.sig_args
+      then List.iter2 type_annot_arg args sg.sig_args
+      else raise Type_error
   | Xbranch s ->
       ()
   | Xcond(cond, args, s1, s2) ->

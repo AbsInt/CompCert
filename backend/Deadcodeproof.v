@@ -546,39 +546,77 @@ Proof.
   eapply magree_monotone; eauto.
 Qed.
 
-(** Properties of volatile memory accesses *)
+(** Annotation arguments *)
 
-(*
-Lemma transf_volatile_load:
-
-  forall s f sp pc e m te r tm nm chunk t v m',
-
-  volatile_load_sem chunk ge (addr :: nil) m t v m' ->
-  Val.lessdef addr taddr ->
+Lemma transfer_annot_arg_sound:
+  forall bc e e' sp m m' a v,
+  eval_annot_arg ge (fun r => e#r) (Vptr sp Int.zero) m a v ->
+  forall ne1 nm1 ne2 nm2,
+  transfer_annot_arg (ne1, nm1) a = (ne2, nm2) ->
+  eagree e e' ne2 ->
+  magree m m' (nlive ge sp nm2) ->
   genv_match bc ge ->
   bc sp = BCstack ->
-  pmatch 
-
-  sound_state prog (State s f (Vptr sp Int.zero) pc e m) ->
-  Val.lessdef e#r te#r ->
-  magree m tm
-        (nlive ge sp
-           (nmem_add nm (aaddr (vanalyze rm f) # pc r) (size_chunk chunk))) ->
-  m' = m /\
-  exists tv, volatile_load_sem chunk ge (te#r :: nil) tm t tv tm /\ Val.lessdef v tv.
+  exists v',
+     eval_annot_arg ge (fun r => e'#r) (Vptr sp Int.zero) m' a  v'
+  /\ Val.lessdef v v'
+  /\ eagree e e' ne1
+  /\ magree m m' (nlive ge sp nm1).
 Proof.
-  intros. inv H2. split; auto. rewrite <- H3 in H0; inv H0. inv H4.
-- (* volatile *)
-  exists (Val.load_result chunk v0); split; auto. 
-  constructor. constructor; auto. 
-- (* not volatile *)
+  induction 1; simpl; intros until nm2; intros TR EA MA GM SPM; inv TR.
+- exists e'#x; intuition auto. constructor. eauto 2 with na. eauto 2 with na.
+- exists (Vint n); intuition auto. constructor.
+- exists (Vlong n); intuition auto. constructor.
+- exists (Vfloat n); intuition auto. constructor.
+- exists (Vsingle n); intuition auto. constructor.
+- simpl in H. exploit magree_load; eauto. 
+  intros. eapply nlive_add; eauto with va. rewrite Int.add_zero_l in H0; auto.
+  intros (v' & A & B).
+  exists v'; intuition auto. constructor; auto.
+  eapply magree_monotone; eauto. intros; eapply incl_nmem_add; eauto. 
+- exists (Vptr sp (Int.add Int.zero ofs)); intuition auto with na. constructor. 
+- unfold Senv.symbol_address in H; simpl in H. 
+  destruct (Genv.find_symbol ge id) as [b|] eqn:FS; simpl in H; try discriminate.
   exploit magree_load; eauto.
-  exploit aaddr_sound; eauto. intros (bc & P & Q & R).
-  intros. eapply nlive_add; eauto.
-  intros (v' & P & Q).
-  exists v'; split. constructor. econstructor; eauto. auto.
+  intros. eapply nlive_add; eauto. constructor. apply GM; auto. 
+  intros (v' & A & B).
+  exists v'; intuition auto.
+  constructor. simpl. unfold Senv.symbol_address; simpl; rewrite FS; auto. 
+  eapply magree_monotone; eauto. intros; eapply incl_nmem_add; eauto.
+- exists (Senv.symbol_address ge id ofs); intuition auto with na. constructor.
+- destruct (transfer_annot_arg (ne1, nm1) hi) as [ne' nm'] eqn:TR.
+  exploit IHeval_annot_arg2; eauto. intros (vlo' & A & B & C & D).
+  exploit IHeval_annot_arg1; eauto. intros (vhi' & P & Q & R & S).
+  exists (Val.longofwords vhi' vlo'); intuition auto.
+  constructor; auto.
+  apply Val.longofwords_lessdef; auto.
 Qed.
-*)
+
+Lemma transfer_annot_args_sound:
+  forall e sp m e' m' bc al vl,
+  eval_annot_args ge (fun r => e#r) (Vptr sp Int.zero) m al vl ->
+  forall ne1 nm1 ne2 nm2,
+  List.fold_left transfer_annot_arg al (ne1, nm1) = (ne2, nm2) ->
+  eagree e e' ne2 ->
+  magree m m' (nlive ge sp nm2) ->
+  genv_match bc ge ->
+  bc sp = BCstack ->
+  exists vl',
+     eval_annot_args ge (fun r => e'#r) (Vptr sp Int.zero) m' al vl'
+  /\ Val.lessdef_list vl vl'
+  /\ eagree e e' ne1
+  /\ magree m m' (nlive ge sp nm1).
+Proof.
+Local Opaque transfer_annot_arg.
+  induction 1; simpl; intros.
+- inv H. exists (@nil val); intuition auto. constructor.
+- destruct (transfer_annot_arg (ne1, nm1) a1) as [ne' nm'] eqn:TR.
+  exploit IHlist_forall2; eauto. intros (vs' & A1 & B1 & C1 & D1).
+  exploit transfer_annot_arg_sound; eauto. intros (v1' & A2 & B2 & C2 & D2). 
+  exists (v1' :: vs'); intuition auto. constructor; auto. 
+Qed.
+
+(** Properties of volatile memory accesses *)
 
 Lemma transf_volatile_store:
   forall v1 v2 v1' v2' m tm chunk sp nm t v m',
@@ -928,6 +966,21 @@ Ltac UseTransfer :=
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_update; eauto 3 with na.
   eapply mextends_agree; eauto. 
+
+- (* annot *)
+  TransfInstr; UseTransfer. 
+  destruct (fold_left transfer_annot_arg args (ne, nm)) as [ne1 nm1] eqn:TR; simpl in *.
+  inv SS. exploit transfer_annot_args_sound; eauto. intros (vargs' & A & B & C & D).
+  assert (EC: m' = m /\ external_call ef ge vargs' tm t Vundef tm).
+  { destruct ef; try contradiction. inv H2. split; auto. simpl. constructor. 
+    eapply eventval_list_match_lessdef; eauto. }
+  destruct EC as [EC1 EC2]; subst m'.
+  econstructor; split.
+  eapply exec_Iannot. eauto. auto. 
+  eapply eval_annot_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
+  eapply external_call_symbols_preserved with (ge1 := ge); eauto.
+  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply match_succ_states; eauto. simpl; auto.
 
 - (* conditional *)
   TransfInstr; UseTransfer.

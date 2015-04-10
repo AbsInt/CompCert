@@ -1344,25 +1344,16 @@ Qed.
 
 (** ** Semantics of annotations. *)
 
-Fixpoint annot_eventvals (targs: list annot_arg) (vargs: list eventval) : list eventval :=
-  match targs, vargs with
-  | AA_arg ty :: targs', varg :: vargs' => varg :: annot_eventvals targs' vargs'
-  | AA_int n :: targs', _ => EVint n :: annot_eventvals targs' vargs
-  | AA_float n :: targs', _ => EVfloat n :: annot_eventvals targs' vargs
-  | _, _ => vargs
-  end.
-
-Inductive extcall_annot_sem (text: ident) (targs: list annot_arg) (ge: Senv.t):
+Inductive extcall_annot_sem (text: ident) (targs: list typ) (ge: Senv.t):
               list val -> mem -> trace -> val -> mem -> Prop :=
   | extcall_annot_sem_intro: forall vargs m args,
-      eventval_list_match ge args (annot_args_typ targs) vargs ->
-      extcall_annot_sem text targs ge vargs m
-           (Event_annot text (annot_eventvals targs args) :: E0) Vundef m.
+      eventval_list_match ge args targs vargs ->
+      extcall_annot_sem text targs ge vargs m (Event_annot text args :: E0) Vundef m.
 
 Lemma extcall_annot_ok:
   forall text targs,
   extcall_properties (extcall_annot_sem text targs)
-                     (mksignature (annot_args_typ targs) None cc_default)
+                     (mksignature targs None cc_default)
                      nil.
 Proof.
   intros; constructor; intros.
@@ -1794,9 +1785,133 @@ Proof.
   split; congruence.
 Qed.
 
+(** * Evaluation of annotation arguments *)
 
+Section EVAL_ANNOT_ARG.
 
+Variable A: Type.
+Variable ge: Senv.t.
+Variable e: A -> val.
+Variable sp: val.
+Variable m: mem.
 
+Inductive eval_annot_arg: annot_arg A -> val -> Prop :=
+  | eval_AA_base: forall x,
+      eval_annot_arg (AA_base x) (e x)
+  | eval_AA_int: forall n,
+      eval_annot_arg (AA_int n) (Vint n)
+  | eval_AA_long: forall n,
+      eval_annot_arg (AA_long n) (Vlong n)
+  | eval_AA_float: forall n,
+      eval_annot_arg (AA_float n) (Vfloat n)
+  | eval_AA_single: forall n,
+      eval_annot_arg (AA_single n) (Vsingle n)
+  | eval_AA_loadstack: forall chunk ofs v,
+      Mem.loadv chunk m (Val.add sp (Vint ofs)) = Some v ->
+      eval_annot_arg (AA_loadstack chunk ofs) v
+  | eval_AA_addrstack: forall ofs,
+      eval_annot_arg (AA_addrstack ofs) (Val.add sp (Vint ofs))
+  | eval_AA_loadglobal: forall chunk id ofs v,
+      Mem.loadv chunk m (Senv.symbol_address ge id ofs) = Some v ->
+      eval_annot_arg (AA_loadglobal chunk id ofs) v
+  | eval_AA_addrglobal: forall id ofs,
+      eval_annot_arg (AA_addrglobal id ofs) (Senv.symbol_address ge id ofs)
+  | eval_AA_longofwords: forall hi lo vhi vlo,
+      eval_annot_arg hi vhi -> eval_annot_arg lo vlo ->
+      eval_annot_arg (AA_longofwords hi lo) (Val.longofwords vhi vlo).
 
+Definition eval_annot_args (al: list (annot_arg A)) (vl: list val) : Prop :=
+  list_forall2 eval_annot_arg al vl.
 
+Lemma eval_annot_arg_determ:
+  forall a v, eval_annot_arg a v -> forall v', eval_annot_arg a v' -> v' = v.
+Proof.
+  induction 1; intros v' EV; inv EV; try congruence.
+  f_equal; eauto.
+Qed.
+
+Lemma eval_annot_args_determ:
+  forall al vl, eval_annot_args al vl -> forall vl', eval_annot_args al vl' -> vl' = vl.
+Proof.
+  induction 1; intros v' EV; inv EV; f_equal; eauto using eval_annot_arg_determ.
+Qed.
+
+End EVAL_ANNOT_ARG.
+
+Hint Constructors eval_annot_arg: aarg.
+
+(** Invariance by change of global environment. *)
+
+Section EVAL_ANNOT_ARG_PRESERVED.
+
+Variables A F1 V1 F2 V2: Type.
+Variable ge1: Genv.t F1 V1.
+Variable ge2: Genv.t F2 V2.
+Variable e: A -> val.
+Variable sp: val.
+Variable m: mem.
+
+Hypothesis symbols_preserved:
+  forall id, Genv.find_symbol ge2 id = Genv.find_symbol ge1 id.
+
+Lemma eval_annot_arg_preserved:
+  forall a v, eval_annot_arg ge1 e sp m a v -> eval_annot_arg ge2 e sp m a v.
+Proof.
+  assert (EQ: forall id ofs, Senv.symbol_address ge2 id ofs = Senv.symbol_address ge1 id ofs).
+  { unfold Senv.symbol_address; simpl; intros. rewrite symbols_preserved; auto. }
+  induction 1; eauto with aarg. rewrite <- EQ in H; eauto with aarg. rewrite <- EQ; eauto with aarg. 
+Qed. 
+
+Lemma eval_annot_args_preserved:
+  forall al vl, eval_annot_args ge1 e sp m al vl -> eval_annot_args ge2 e sp m al vl.
+Proof.
+  induction 1; constructor; auto; eapply eval_annot_arg_preserved; eauto. 
+Qed.
+
+End EVAL_ANNOT_ARG_PRESERVED.
+
+(** Compatibility with the "is less defined than" relation. *)
+
+Section EVAL_ANNOT_ARG_LESSDEF.
+
+Variable A: Type.
+Variable ge: Senv.t.
+Variables e1 e2: A -> val.
+Variable sp: val.
+Variables m1 m2: mem.
+
+Hypothesis env_lessdef: forall x, Val.lessdef (e1 x) (e2 x).
+Hypothesis mem_extends: Mem.extends m1 m2.
+
+Lemma eval_annot_arg_lessdef:
+  forall a v1, eval_annot_arg ge e1 sp m1 a v1 ->
+  exists v2, eval_annot_arg ge e2 sp m2 a v2 /\ Val.lessdef v1 v2.
+Proof.
+  induction 1.
+- exists (e2 x); auto with aarg.
+- econstructor; eauto with aarg.
+- econstructor; eauto with aarg.
+- econstructor; eauto with aarg.
+- econstructor; eauto with aarg.
+- exploit Mem.loadv_extends; eauto. intros (v' & P & Q). exists v'; eauto with aarg. 
+- econstructor; eauto with aarg.
+- exploit Mem.loadv_extends; eauto. intros (v' & P & Q). exists v'; eauto with aarg.
+- econstructor; eauto with aarg.
+- destruct IHeval_annot_arg1 as (vhi' & P & Q).
+  destruct IHeval_annot_arg2 as (vlo' & R & S).
+  econstructor; split; eauto with aarg. apply Val.longofwords_lessdef; auto. 
+Qed.
+
+Lemma eval_annot_args_lessdef:
+  forall al vl1, eval_annot_args ge e1 sp m1 al vl1 ->
+  exists vl2, eval_annot_args ge e2 sp m2 al vl2 /\ Val.lessdef_list vl1 vl2.
+Proof.
+  induction 1.
+- econstructor; split. constructor. auto.
+- exploit eval_annot_arg_lessdef; eauto. intros (v1' & P & Q). 
+  destruct IHlist_forall2 as (vl' & U & V).
+  exists (v1'::vl'); split; constructor; auto.
+Qed.
+
+End EVAL_ANNOT_ARG_LESSDEF.
 

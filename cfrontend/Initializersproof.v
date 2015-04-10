@@ -112,7 +112,7 @@ with eval_simple_rvalue: expr -> val -> Prop :=
       eval_simple_rvalue (Eaddrof l ty) (Vptr b ofs)
   | esr_unop: forall op r1 ty v1 v,
       eval_simple_rvalue r1 v1 ->
-      sem_unary_operation op v1 (typeof r1) = Some v ->
+      sem_unary_operation op v1 (typeof r1) m = Some v ->
       eval_simple_rvalue (Eunop op r1 ty) v
   | esr_binop: forall op r1 r2 ty v1 v2 v,
       eval_simple_rvalue r1 v1 -> eval_simple_rvalue r2 v2 ->
@@ -127,23 +127,23 @@ with eval_simple_rvalue: expr -> val -> Prop :=
   | esr_alignof: forall ty1 ty,
       eval_simple_rvalue (Ealignof ty1 ty) (Vint (Int.repr (alignof ge ty1)))
   | esr_seqand_true: forall r1 r2 ty v1 v2 v3,
-      eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) = Some true ->
+      eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) m = Some true ->
       eval_simple_rvalue r2 v2 ->
       sem_cast v2 (typeof r2) type_bool = Some v3 ->
       eval_simple_rvalue (Eseqand r1 r2 ty) v3
   | esr_seqand_false: forall r1 r2 ty v1,
-      eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) = Some false ->
+      eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) m = Some false ->
       eval_simple_rvalue (Eseqand r1 r2 ty) (Vint Int.zero)
   | esr_seqor_false: forall r1 r2 ty v1 v2 v3,
-      eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) = Some false ->
+      eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) m = Some false ->
       eval_simple_rvalue r2 v2 ->
       sem_cast v2 (typeof r2) type_bool = Some v3 ->
       eval_simple_rvalue (Eseqor r1 r2 ty) v3
   | esr_seqor_true: forall r1 r2 ty v1,
-      eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) = Some true ->
+      eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) m = Some true ->
       eval_simple_rvalue (Eseqor r1 r2 ty) (Vint Int.one)
   | esr_condition: forall r1 r2 r3 ty v v1 b v',
-      eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) = Some b -> 
+      eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) m = Some b -> 
       eval_simple_rvalue (if b then r2 else r3) v' ->
       sem_cast v' (typeof (if b then r2 else r3)) ty = Some v ->
       eval_simple_rvalue (Econdition r1 r2 r3 ty) v
@@ -366,6 +366,15 @@ Proof.
   intros [v' [A B]]. congruence.
 Qed.
 
+Lemma bool_val_match:
+  forall v ty b v' m,
+  bool_val v ty Mem.empty = Some b ->
+  val_inject inj v v' ->
+  bool_val v' ty m = Some b.
+Proof.
+  intros. eapply bool_val_inj; eauto. intros. rewrite mem_empty_not_weak_valid_pointer in H2; discriminate.
+Qed.
+
 (** Soundness of [constval] with respect to the big-step semantics *)
 
 Lemma constval_rvalue:
@@ -390,8 +399,10 @@ Proof.
   (* addrof *)
   eauto.
   (* unop *)
-  destruct (sem_unary_operation op x (typeof r1)) as [v1'|] eqn:E; inv EQ0.
-  exploit sem_unary_operation_inject. eexact E. eauto. 
+  destruct (sem_unary_operation op x (typeof r1) Mem.empty) as [v1'|] eqn:E; inv EQ0.
+  exploit (sem_unary_operation_inj inj Mem.empty m).
+  intros. rewrite mem_empty_not_weak_valid_pointer in H2; discriminate.
+  eexact E. eauto. 
   intros [v' [A B]]. congruence.
   (* binop *)
   destruct (sem_binary_operation ge op x (typeof r1) x0 (typeof r2) Mem.empty) as [v1'|] eqn:E; inv EQ2.
@@ -409,24 +420,24 @@ Proof.
   (* alignof *)
   constructor.
   (* seqand *)
-  destruct (bool_val x (typeof r1)) as [b|] eqn:E; inv EQ2. 
-  exploit bool_val_inject. eexact E. eauto. intros E'.
+  destruct (bool_val x (typeof r1) Mem.empty) as [b|] eqn:E; inv EQ2. 
+  exploit bool_val_match. eexact E. eauto. instantiate (1 := m). intros E'.
   assert (b = true) by congruence. subst b.
   eapply sem_cast_match; eauto.
-  destruct (bool_val x (typeof r1)) as [b|] eqn:E; inv EQ2. 
-  exploit bool_val_inject. eexact E. eauto. intros E'.
+  destruct (bool_val x (typeof r1) Mem.empty) as [b|] eqn:E; inv EQ2. 
+  exploit bool_val_match. eexact E. eauto. instantiate (1 := m). intros E'.
   assert (b = false) by congruence. subst b. inv H2. auto.
   (* seqor *)
-  destruct (bool_val x (typeof r1)) as [b|] eqn:E; inv EQ2. 
-  exploit bool_val_inject. eexact E. eauto. intros E'.
+  destruct (bool_val x (typeof r1) Mem.empty) as [b|] eqn:E; inv EQ2. 
+  exploit bool_val_match. eexact E. eauto. instantiate (1 := m). intros E'.
   assert (b = false) by congruence. subst b. 
   eapply sem_cast_match; eauto.
-  destruct (bool_val x (typeof r1)) as [b|] eqn:E; inv EQ2. 
-  exploit bool_val_inject. eexact E. eauto. intros E'.
+  destruct (bool_val x (typeof r1) Mem.empty) as [b|] eqn:E; inv EQ2. 
+  exploit bool_val_match. eexact E. eauto. instantiate (1 := m). intros E'.
   assert (b = true) by congruence. subst b. inv H2. auto.
   (* conditional *)
-  destruct (bool_val x (typeof r1)) as [b'|] eqn:E; inv EQ3.
-  exploit bool_val_inject. eexact E. eauto. intros E'.
+  destruct (bool_val x (typeof r1) Mem.empty) as [b'|] eqn:E; inv EQ3.
+  exploit bool_val_match. eexact E. eauto. instantiate (1 := m). intros E'.
   assert (b' = b) by congruence. subst b'. 
   destruct b; eapply sem_cast_match; eauto.
   (* comma *)

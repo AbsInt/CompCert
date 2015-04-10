@@ -265,6 +265,7 @@ let process_c_file sourcename =
     let preproname = Filename.temp_file "compcert" ".i" in
     preprocess sourcename preproname;
     if !option_interp then begin
+      Machine.config := Machine.compcert_interpreter !Machine.config;
       let csyntax = parse_c_file sourcename preproname in
       safe_remove preproname;
       Interp.execute csyntax;
@@ -409,6 +410,10 @@ Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fbitfields    Emulate bit fields in structs [off]
   -flongdouble   Treat 'long double' as 'double' [off]
   -fstruct-return  Emulate returning structs and unions by value [off]
+  -fstruct-return=<convention>
+                 Set the calling conventions used to return structs by value
+  -fstruct-passing=<convention>
+                 Set the calling conventions used to pass structs by value
   -fvararg-calls Support calls to variable-argument functions [on]
   -funprototyped Support calls to old-style functions without prototypes [on]
   -fpacked-structs  Emulate packed structs [off]
@@ -550,7 +555,28 @@ let cmdline_actions =
   Exact "-quiet", Self (fun _ -> Interp.trace := 0);
   Exact "-trace", Self (fun _ -> Interp.trace := 2);
   Exact "-random", Self (fun _ -> Interp.mode := Interp.Random);
-  Exact "-all", Self (fun _ -> Interp.mode := Interp.All)
+  Exact "-all", Self (fun _ -> Interp.mode := Interp.All);
+(* Special -f options *)
+  Exact "-fstruct-passing=ref-callee",
+    Self (fun _ -> option_fstruct_passing_style := Configuration.SP_ref_callee);
+  Exact "-fstruct-passing=ref-caller",
+    Self (fun _ -> option_fstruct_return := true;
+                   option_fstruct_passing_style := Configuration.SP_ref_caller);
+  Exact "-fstruct-passing=ints",
+    Self (fun _ -> option_fstruct_return := true;
+                   option_fstruct_passing_style := Configuration.SP_split_args);
+  Exact "-fstruct-return=ref",
+    Self (fun _ -> option_fstruct_return := true;
+                   option_fstruct_return_style := Configuration.SR_ref);
+  Exact "-fstruct-return=int1248",
+    Self (fun _ -> option_fstruct_return := true;
+                   option_fstruct_return_style := Configuration.SR_int1248);
+  Exact "-fstruct-return=int1-4",
+    Self (fun _ -> option_fstruct_return := true;
+                   option_fstruct_return_style := Configuration.SR_int1to4);
+  Exact "-fstruct-return=int1-8",
+    Self (fun _ -> option_fstruct_return := true;
+                   option_fstruct_return_style := Configuration.SR_int1to8)
   ]
 (* -f options: come in -f and -fno- variants *)
 (* Language support options *)
@@ -607,7 +633,9 @@ let _ =
       begin match Configuration.arch with
       | "powerpc" -> Machine.ppc_32_bigendian
       | "arm"     -> Machine.arm_littleendian
-      | "ia32"    -> Machine.x86_32
+      | "ia32"    -> if Configuration.abi = "macosx"
+                     then Machine.x86_32_macosx
+                     else Machine.x86_32
       | _         -> assert false
       end;
     Builtins.set C2C.builtins;

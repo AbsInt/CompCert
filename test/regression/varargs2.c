@@ -1,6 +1,9 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+struct Y { char kind; unsigned char num; };
+struct Z { int x, y, z; };
+
 void minivprintf(const char * fmt, va_list ap)
 {
   char c;
@@ -32,6 +35,14 @@ void minivprintf(const char * fmt, va_list ap)
       case 'f':
         printf("%.10g", (float) va_arg(ap, double));
         break;
+      case 'y':
+        { struct Y s = va_arg(ap, struct Y);
+          printf("%c%d", s.kind, s.num);
+          break; }
+      case 'z':
+        { struct Z s = va_arg(ap, struct Z);
+          printf("(%d,%d,%d)", s.x, s.y, s.z);
+          break; }
       default:
         puts("<bad format>");
         return;
@@ -111,9 +122,12 @@ int main()
   miniprintf("A long long: %l\n", 123456789012345LL);
   miniprintf("A string: %s\n", "Hello world");
   miniprintf("A double: %e\n", 3.141592654);
-  miniprintf("A mixture: %c & %s & %d & %l & %e & %f\n",
+  miniprintf("A small struct: %y\n", (struct Y) { 'x', 12 });
+  miniprintf("A bigger struct: %z\n", (struct Z) { 123, 456, 789 });
+  miniprintf("A mixture: %c & %s & %y & %d & %l & %e & %f\n",
              'x',
              "Hello, world!",
+             (struct Y) { 'y', 2 },
              42,
              123456789012345LL,
              3.141592654,

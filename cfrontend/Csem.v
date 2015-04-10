@@ -241,7 +241,7 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
       rred (Eaddrof (Eloc b ofs ty1) ty) m
         E0 (Eval (Vptr b ofs) ty) m
   | red_unop: forall op v1 ty1 ty m v,
-      sem_unary_operation op v1 ty1 = Some v ->
+      sem_unary_operation op v1 ty1 m = Some v ->
       rred (Eunop op (Eval v1 ty1) ty) m
         E0 (Eval v ty) m
   | red_binop: forall op v1 ty1 v2 ty2 ty m v,
@@ -253,23 +253,23 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
       rred (Ecast (Eval v1 ty1) ty) m
         E0 (Eval v ty) m
   | red_seqand_true: forall v1 ty1 r2 ty m,
-      bool_val v1 ty1 = Some true ->
+      bool_val v1 ty1 m = Some true ->
       rred (Eseqand (Eval v1 ty1) r2 ty) m
         E0 (Eparen r2 type_bool ty) m
   | red_seqand_false: forall v1 ty1 r2 ty m,
-      bool_val v1 ty1 = Some false ->
+      bool_val v1 ty1 m = Some false ->
       rred (Eseqand (Eval v1 ty1) r2 ty) m
         E0 (Eval (Vint Int.zero) ty) m
   | red_seqor_true: forall v1 ty1 r2 ty m,
-      bool_val v1 ty1 = Some true ->
+      bool_val v1 ty1 m = Some true ->
       rred (Eseqor (Eval v1 ty1) r2 ty) m
         E0 (Eval (Vint Int.one) ty) m
   | red_seqor_false: forall v1 ty1 r2 ty m,
-      bool_val v1 ty1 = Some false ->
+      bool_val v1 ty1 m = Some false ->
       rred (Eseqor (Eval v1 ty1) r2 ty) m
         E0 (Eparen r2 type_bool ty) m
   | red_condition: forall v1 ty1 r1 r2 ty b m,
-      bool_val v1 ty1 = Some b ->
+      bool_val v1 ty1 m = Some b ->
       rred (Econdition (Eval v1 ty1) r1 r2 ty) m
         E0 (Eparen (if b then r1 else r2) ty ty) m
   | red_sizeof: forall ty1 ty m,
@@ -633,7 +633,7 @@ Inductive sstep: state -> trace -> state -> Prop :=
       sstep (State f (Sifthenelse a s1 s2) k e m)
          E0 (ExprState f a (Kifthenelse s1 s2 k) e m)
   | step_ifthenelse_2:  forall f v ty s1 s2 k e m b,
-      bool_val v ty = Some b ->
+      bool_val v ty m = Some b ->
       sstep (ExprState f (Eval v ty) (Kifthenelse s1 s2 k) e m)
          E0 (State f (if b then s1 else s2) k e m)
 
@@ -641,11 +641,11 @@ Inductive sstep: state -> trace -> state -> Prop :=
       sstep (State f (Swhile x s) k e m)
         E0 (ExprState f x (Kwhile1 x s k) e m)
   | step_while_false: forall f v ty x s k e m,
-      bool_val v ty = Some false ->
+      bool_val v ty m = Some false ->
       sstep (ExprState f (Eval v ty) (Kwhile1 x s k) e m)
         E0 (State f Sskip k e m)
   | step_while_true: forall f v ty x s k e m ,
-      bool_val v ty = Some true ->
+      bool_val v ty m = Some true ->
       sstep (ExprState f (Eval v ty) (Kwhile1 x s k) e m)
         E0 (State f s (Kwhile2 x s k) e m)
   | step_skip_or_continue_while: forall f s0 x s k e m,
@@ -664,11 +664,11 @@ Inductive sstep: state -> trace -> state -> Prop :=
       sstep (State f s0 (Kdowhile1 x s k) e m)
          E0 (ExprState f x (Kdowhile2 x s k) e m)
   | step_dowhile_false: forall f v ty x s k e m,
-      bool_val v ty = Some false ->
+      bool_val v ty m = Some false ->
       sstep (ExprState f (Eval v ty) (Kdowhile2 x s k) e m)
          E0 (State f Sskip k e m)
   | step_dowhile_true: forall f v ty x s k e m,
-      bool_val v ty = Some true ->
+      bool_val v ty m = Some true ->
       sstep (ExprState f (Eval v ty) (Kdowhile2 x s k) e m)
          E0 (State f (Sdowhile x s) k e m)
   | step_break_dowhile: forall f a s k e m,
@@ -683,11 +683,11 @@ Inductive sstep: state -> trace -> state -> Prop :=
       sstep (State f (Sfor Sskip a2 a3 s) k e m)
          E0 (ExprState f a2 (Kfor2 a2 a3 s k) e m)
   | step_for_false: forall f v ty a2 a3 s k e m,
-      bool_val v ty = Some false ->
+      bool_val v ty m = Some false ->
       sstep (ExprState f (Eval v ty) (Kfor2 a2 a3 s k) e m)
          E0 (State f Sskip k e m)
   | step_for_true: forall f v ty a2 a3 s k e m,
-      bool_val v ty = Some true ->
+      bool_val v ty m = Some true ->
       sstep (ExprState f (Eval v ty) (Kfor2 a2 a3 s k) e m)
          E0 (State f s (Kfor3 a2 a3 s k) e m)
   | step_skip_or_continue_for3: forall f x a2 a3 s k e m,

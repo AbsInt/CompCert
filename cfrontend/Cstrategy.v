@@ -122,7 +122,7 @@ with eval_simple_rvalue: expr -> val -> Prop :=
       eval_simple_rvalue (Eaddrof l ty) (Vptr b ofs)
   | esr_unop: forall op r1 ty v1 v,
       eval_simple_rvalue r1 v1 ->
-      sem_unary_operation op v1 (typeof r1) = Some v ->
+      sem_unary_operation op v1 (typeof r1) m = Some v ->
       eval_simple_rvalue (Eunop op r1 ty) v
   | esr_binop: forall op r1 r2 ty v1 v2 v,
       eval_simple_rvalue r1 v1 -> eval_simple_rvalue r2 v2 ->
@@ -249,33 +249,33 @@ Inductive estep: state -> trace -> state -> Prop :=
   | step_seqand_true: forall f C r1 r2 ty k e m v,
       leftcontext RV RV C ->
       eval_simple_rvalue e m r1 v ->
-      bool_val v (typeof r1) = Some true ->
+      bool_val v (typeof r1) m = Some true ->
       estep (ExprState f (C (Eseqand r1 r2 ty)) k e m)
          E0 (ExprState f (C (Eparen r2 type_bool ty)) k e m)
   | step_seqand_false: forall f C r1 r2 ty k e m v,
       leftcontext RV RV C ->
       eval_simple_rvalue e m r1 v ->
-      bool_val v (typeof r1) = Some false ->
+      bool_val v (typeof r1) m = Some false ->
       estep (ExprState f (C (Eseqand r1 r2 ty)) k e m)
          E0 (ExprState f (C (Eval (Vint Int.zero) ty)) k e m)
 
   | step_seqor_true: forall f C r1 r2 ty k e m v,
       leftcontext RV RV C ->
       eval_simple_rvalue e m r1 v ->
-      bool_val v (typeof r1) = Some true ->
+      bool_val v (typeof r1) m = Some true ->
       estep (ExprState f (C (Eseqor r1 r2 ty)) k e m)
          E0 (ExprState f (C (Eval (Vint Int.one) ty)) k e m)
   | step_seqor_false: forall f C r1 r2 ty k e m v,
       leftcontext RV RV C ->
       eval_simple_rvalue e m r1 v ->
-      bool_val v (typeof r1) = Some false ->
+      bool_val v (typeof r1) m = Some false ->
       estep (ExprState f (C (Eseqor r1 r2 ty)) k e m)
          E0 (ExprState f (C (Eparen r2 type_bool ty)) k e m)
 
   | step_condition: forall f C r1 r2 r3 ty k e m v b,
       leftcontext RV RV C ->
       eval_simple_rvalue e m r1 v ->
-      bool_val v (typeof r1) = Some b ->
+      bool_val v (typeof r1) m = Some b ->
       estep (ExprState f (C (Econdition r1 r2 r3 ty)) k e m)
          E0 (ExprState f (C (Eparen (if b then r2 else r3) ty ty)) k e m)
 
@@ -536,17 +536,17 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
   | Evalof (Eloc b ofs ty') ty =>
       ty' = ty /\ exists t, exists v, deref_loc ge ty m b ofs t v
   | Eunop op (Eval v1 ty1) ty =>
-      exists v, sem_unary_operation op v1 ty1 = Some v
+      exists v, sem_unary_operation op v1 ty1 m = Some v
   | Ebinop op (Eval v1 ty1) (Eval v2 ty2) ty =>
       exists v, sem_binary_operation ge op v1 ty1 v2 ty2 m = Some v
   | Ecast (Eval v1 ty1) ty =>
       exists v, sem_cast v1 ty1 ty = Some v
   | Eseqand (Eval v1 ty1) r2 ty =>
-      exists b, bool_val v1 ty1 = Some b
+      exists b, bool_val v1 ty1 m = Some b
   | Eseqor (Eval v1 ty1) r2 ty =>
-      exists b, bool_val v1 ty1 = Some b
+      exists b, bool_val v1 ty1 m = Some b
   | Econdition (Eval v1 ty1) r1 r2 ty =>
-      exists b, bool_val v1 ty1 = Some b
+      exists b, bool_val v1 ty1 m = Some b
   | Eassign (Eloc b ofs ty1) (Eval v2 ty2) ty =>
       exists v, exists m', exists t,
       ty = ty1 /\ sem_cast v2 ty2 ty1 = Some v /\ assign_loc ge ty1 m b ofs v t m'
@@ -1695,27 +1695,27 @@ with eval_expr: env -> mem -> kind -> expr -> trace -> mem -> expr -> Prop :=
       eval_expr e m RV (Ecast a ty) t m' (Ecast a' ty)
   | eval_seqand_true: forall e m a1 a2 ty t1 m' a1' v1 t2 m'' a2' v2 v,
       eval_expr e m RV a1 t1 m' a1' -> eval_simple_rvalue ge e m' a1' v1 ->
-      bool_val v1 (typeof a1) = Some true ->
+      bool_val v1 (typeof a1) m' = Some true ->
       eval_expr e m' RV a2 t2 m'' a2' -> eval_simple_rvalue ge e m'' a2' v2 ->
       sem_cast v2 (typeof a2) type_bool = Some v ->
       eval_expr e m RV (Eseqand a1 a2 ty) (t1**t2) m'' (Eval v ty)
   | eval_seqand_false: forall e m a1 a2 ty t1 m' a1' v1,
       eval_expr e m RV a1 t1 m' a1' -> eval_simple_rvalue ge e m' a1' v1 ->
-      bool_val v1 (typeof a1) = Some false ->
+      bool_val v1 (typeof a1) m' = Some false ->
       eval_expr e m RV (Eseqand a1 a2 ty) t1 m' (Eval (Vint Int.zero) ty)
   | eval_seqor_false: forall e m a1 a2 ty t1 m' a1' v1 t2 m'' a2' v2 v,
       eval_expr e m RV a1 t1 m' a1' -> eval_simple_rvalue ge e m' a1' v1 ->
-      bool_val v1 (typeof a1) = Some false ->
+      bool_val v1 (typeof a1) m' = Some false ->
       eval_expr e m' RV a2 t2 m'' a2' -> eval_simple_rvalue ge e m'' a2' v2 ->
       sem_cast v2 (typeof a2) type_bool = Some v ->
       eval_expr e m RV (Eseqor a1 a2 ty) (t1**t2) m'' (Eval v ty)
   | eval_seqor_true: forall e m a1 a2 ty t1 m' a1' v1,
       eval_expr e m RV a1 t1 m' a1' -> eval_simple_rvalue ge e m' a1' v1 ->
-      bool_val v1 (typeof a1) = Some true ->
+      bool_val v1 (typeof a1) m' = Some true ->
       eval_expr e m RV (Eseqor a1 a2 ty) t1 m' (Eval (Vint Int.one) ty)
   | eval_condition: forall e m a1 a2 a3 ty t1 m' a1' v1 t2 m'' a' v' b v,
       eval_expr e m RV a1 t1 m' a1' -> eval_simple_rvalue ge e m' a1' v1 ->
-      bool_val v1 (typeof a1) = Some b ->
+      bool_val v1 (typeof a1) m' = Some b ->
       eval_expr e m' RV (if b then a2 else a3) t2 m'' a' -> eval_simple_rvalue ge e m'' a' v' ->
       sem_cast v' (typeof (if b then a2 else a3)) ty = Some v ->
       eval_expr e m RV (Econdition a1 a2 a3 ty) (t1**t2) m'' (Eval v ty)
@@ -1801,7 +1801,7 @@ with exec_stmt: env -> mem -> statement -> trace -> mem -> outcome -> Prop :=
                 t1 m1 out
   | exec_Sifthenelse: forall e m a s1 s2 t1 m1 v1 t2 m2 b out,
       eval_expression e m a t1 m1 v1 ->
-      bool_val v1 (typeof a) = Some b ->
+      bool_val v1 (typeof a) m1 = Some b ->
       exec_stmt e m1 (if b then s1 else s2) t2 m2 out ->
       exec_stmt e m (Sifthenelse a s1 s2)
                 (t1**t2) m2 out
@@ -1820,19 +1820,19 @@ with exec_stmt: env -> mem -> statement -> trace -> mem -> outcome -> Prop :=
                E0 m Out_continue
   | exec_Swhile_false: forall e m a s t m' v,
       eval_expression e m a t m' v ->
-      bool_val v (typeof a) = Some false ->
+      bool_val v (typeof a) m' = Some false ->
       exec_stmt e m (Swhile a s)
                 t m' Out_normal
   | exec_Swhile_stop: forall e m a s t1 m1 v t2 m2 out' out,
       eval_expression e m a t1 m1 v ->
-      bool_val v (typeof a) = Some true ->
+      bool_val v (typeof a) m1 = Some true ->
       exec_stmt e m1 s t2 m2 out' ->
       out_break_or_return out' out ->
       exec_stmt e m (Swhile a s)
                 (t1**t2) m2 out
   | exec_Swhile_loop: forall e m a s t1 m1 v t2 m2 out1 t3 m3 out,
       eval_expression e m a t1 m1 v ->
-      bool_val v (typeof a) = Some true ->
+      bool_val v (typeof a) m1 = Some true ->
       exec_stmt e m1 s t2 m2 out1 ->
       out_normal_or_continue out1 ->
       exec_stmt e m2 (Swhile a s) t3 m3 out ->
@@ -1842,7 +1842,7 @@ with exec_stmt: env -> mem -> statement -> trace -> mem -> outcome -> Prop :=
       exec_stmt e m s t1 m1 out1 ->
       out_normal_or_continue out1 ->
       eval_expression e m1 a t2 m2 v ->
-      bool_val v (typeof a) = Some false ->
+      bool_val v (typeof a) m2 = Some false ->
       exec_stmt e m (Sdowhile a s)
                 (t1 ** t2) m2 Out_normal
   | exec_Sdowhile_stop: forall e m s a t m1 out1 out,
@@ -1854,7 +1854,7 @@ with exec_stmt: env -> mem -> statement -> trace -> mem -> outcome -> Prop :=
       exec_stmt e m s t1 m1 out1 ->
       out_normal_or_continue out1 ->
       eval_expression e m1 a t2 m2 v ->
-      bool_val v (typeof a) = Some true ->
+      bool_val v (typeof a) m2 = Some true ->
       exec_stmt e m2 (Sdowhile a s) t3 m3 out ->
       exec_stmt e m (Sdowhile a s) 
                 (t1 ** t2 ** t3) m3 out
@@ -1865,19 +1865,19 @@ with exec_stmt: env -> mem -> statement -> trace -> mem -> outcome -> Prop :=
                 (t1 ** t2) m2 out
   | exec_Sfor_false: forall e m s a2 a3 t m' v,
       eval_expression e m a2 t m' v ->
-      bool_val v (typeof a2) = Some false ->
+      bool_val v (typeof a2) m' = Some false ->
       exec_stmt e m (Sfor Sskip a2 a3 s)
                 t m' Out_normal
   | exec_Sfor_stop: forall e m s a2 a3 t1 m1 v t2 m2 out1 out,
       eval_expression e m a2 t1 m1 v ->
-      bool_val v (typeof a2) = Some true ->
+      bool_val v (typeof a2) m1 = Some true ->
       exec_stmt e m1 s t2 m2 out1 ->
       out_break_or_return out1 out ->
       exec_stmt e m (Sfor Sskip a2 a3 s)
                 (t1 ** t2) m2 out
   | exec_Sfor_loop: forall e m s a2 a3 t1 m1 v t2 m2 out1 t3 m3 t4 m4 out,
       eval_expression e m a2 t1 m1 v ->
-      bool_val v (typeof a2) = Some true ->
+      bool_val v (typeof a2) m1 = Some true ->
       exec_stmt e m1 s t2 m2 out1 ->
       out_normal_or_continue out1 ->
       exec_stmt e m2 a3 t3 m3 Out_normal ->
@@ -1952,7 +1952,7 @@ CoInductive evalinf_expr: env -> mem -> kind -> expr -> traceinf -> Prop :=
       evalinf_expr e m RV (Eseqand a1 a2 ty) t1
   | evalinf_seqand_2: forall e m a1 a2 ty t1 m' a1' v1 t2,
       eval_expr e m RV a1 t1 m' a1' -> eval_simple_rvalue ge e m' a1' v1 ->
-      bool_val v1 (typeof a1) = Some true ->
+      bool_val v1 (typeof a1) m' = Some true ->
       evalinf_expr e m' RV a2 t2 ->
       evalinf_expr e m RV (Eseqand a1 a2 ty) (t1***t2)
   | evalinf_seqor: forall e m a1 a2 ty t1,
@@ -1960,7 +1960,7 @@ CoInductive evalinf_expr: env -> mem -> kind -> expr -> traceinf -> Prop :=
       evalinf_expr e m RV (Eseqor a1 a2 ty) t1
   | evalinf_seqor_2: forall e m a1 a2 ty t1 m' a1' v1 t2,
       eval_expr e m RV a1 t1 m' a1' -> eval_simple_rvalue ge e m' a1' v1 ->
-      bool_val v1 (typeof a1) = Some false ->
+      bool_val v1 (typeof a1) m' = Some false ->
       evalinf_expr e m' RV a2 t2 ->
       evalinf_expr e m RV (Eseqor a1 a2 ty) (t1***t2)
   | evalinf_condition: forall e m a1 a2 a3 ty t1,
@@ -1968,7 +1968,7 @@ CoInductive evalinf_expr: env -> mem -> kind -> expr -> traceinf -> Prop :=
       evalinf_expr e m RV (Econdition a1 a2 a3 ty) t1
   | evalinf_condition_2: forall e m a1 a2 a3 ty t1 m' a1' v1 t2 b,
       eval_expr e m RV a1 t1 m' a1' -> eval_simple_rvalue ge e m' a1' v1 ->
-      bool_val v1 (typeof a1) = Some b ->
+      bool_val v1 (typeof a1) m' = Some b ->
       evalinf_expr e m' RV (if b then a2 else a3) t2 ->
       evalinf_expr e m RV (Econdition a1 a2 a3 ty) (t1***t2)
   | evalinf_assign_left: forall e m a1 t1 a2 ty,
@@ -2039,7 +2039,7 @@ with execinf_stmt: env -> mem -> statement -> traceinf -> Prop :=
       execinf_stmt e m (Sifthenelse a s1 s2) t1
   | execinf_Sifthenelse: forall e m a s1 s2 t1 m1 v1 t2 b,
       eval_expression e m a t1 m1 v1 ->
-      bool_val v1 (typeof a) = Some b ->
+      bool_val v1 (typeof a) m1 = Some b ->
       execinf_stmt e m1 (if b then s1 else s2) t2 ->
       execinf_stmt e m (Sifthenelse a s1 s2) (t1***t2)
   | execinf_Sreturn_some: forall e m a t,
@@ -2050,12 +2050,12 @@ with execinf_stmt: env -> mem -> statement -> traceinf -> Prop :=
       execinf_stmt e m (Swhile a s) t1
   | execinf_Swhile_body: forall e m a s t1 m1 v t2,
       eval_expression e m a t1 m1 v ->
-      bool_val v (typeof a) = Some true ->
+      bool_val v (typeof a) m1 = Some true ->
       execinf_stmt e m1 s t2 ->
       execinf_stmt e m (Swhile a s) (t1***t2)
   | execinf_Swhile_loop: forall e m a s t1 m1 v t2 m2 out1 t3,
       eval_expression e m a t1 m1 v ->
-      bool_val v (typeof a) = Some true ->
+      bool_val v (typeof a) m1 = Some true ->
       exec_stmt e m1 s t2 m2 out1 ->
       out_normal_or_continue out1 ->
       execinf_stmt e m2 (Swhile a s) t3 ->
@@ -2072,7 +2072,7 @@ with execinf_stmt: env -> mem -> statement -> traceinf -> Prop :=
       exec_stmt e m s t1 m1 out1 ->
       out_normal_or_continue out1 ->
       eval_expression e m1 a t2 m2 v ->
-      bool_val v (typeof a) = Some true ->
+      bool_val v (typeof a) m2 = Some true ->
       execinf_stmt e m2 (Sdowhile a s) t3 ->
       execinf_stmt e m (Sdowhile a s) (t1***t2***t3)
   | execinf_Sfor_start_1: forall e m s a1 a2 a3 t1,
@@ -2087,19 +2087,19 @@ with execinf_stmt: env -> mem -> statement -> traceinf -> Prop :=
       execinf_stmt e m (Sfor Sskip a2 a3 s) t
   | execinf_Sfor_body: forall e m s a2 a3 t1 m1 v t2,
       eval_expression e m a2 t1 m1 v ->
-      bool_val v (typeof a2) = Some true ->
+      bool_val v (typeof a2) m1 = Some true ->
       execinf_stmt e m1 s t2 ->
       execinf_stmt e m (Sfor Sskip a2 a3 s) (t1***t2)
   | execinf_Sfor_next: forall e m s a2 a3 t1 m1 v t2 m2 out1 t3,
       eval_expression e m a2 t1 m1 v ->
-      bool_val v (typeof a2) = Some true ->
+      bool_val v (typeof a2) m1 = Some true ->
       exec_stmt e m1 s t2 m2 out1 ->
       out_normal_or_continue out1 ->
       execinf_stmt e m2 a3 t3 ->
       execinf_stmt e m (Sfor Sskip a2 a3 s) (t1***t2***t3)
   | execinf_Sfor_loop: forall e m s a2 a3 t1 m1 v t2 m2 out1 t3 m3 t4,
       eval_expression e m a2 t1 m1 v ->
-      bool_val v (typeof a2) = Some true ->
+      bool_val v (typeof a2) m1 = Some true ->
       exec_stmt e m1 s t2 m2 out1 ->
       out_normal_or_continue out1 ->
       exec_stmt e m2 a3 t3 m3 Out_normal ->

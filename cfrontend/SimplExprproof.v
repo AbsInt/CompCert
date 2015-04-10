@@ -761,20 +761,30 @@ Proof.
   inv H; simpl; auto.
 Qed.
 
+Lemma static_bool_val_sound:
+  forall v t m b, bool_val v t Mem.empty = Some b -> bool_val v t m = Some b.
+Proof.
+  intros until b; unfold bool_val. destruct (classify_bool t); destruct v; auto. 
+  intros E. unfold Mem.weak_valid_pointer, Mem.valid_pointer, proj_sumbool in E. 
+  rewrite ! pred_dec_false in E by (apply Mem.perm_empty). discriminate. 
+Qed.  
+
 Lemma step_makeif:
   forall f a s1 s2 k e le m v1 b,
   eval_expr tge e le m a v1 ->
-  bool_val v1 (typeof a) = Some b ->
+  bool_val v1 (typeof a) m = Some b ->
   star step1 tge (State f (makeif a s1 s2) k e le m)
              E0 (State f (if b then s1 else s2) k e le m).
 Proof.
   intros. functional induction (makeif a s1 s2).
-  exploit eval_simpl_expr_sound; eauto. rewrite e0. intro EQ; subst v. 
-  rewrite e1 in H0. inv H0. constructor.
-  exploit eval_simpl_expr_sound; eauto. rewrite e0. intro EQ; subst v. 
-  rewrite e1 in H0. inv H0. constructor.
-  apply star_one. eapply step_ifthenelse; eauto. 
-  apply star_one. eapply step_ifthenelse; eauto. 
+- exploit eval_simpl_expr_sound; eauto. rewrite e0. intro EQ; subst v.
+  assert (bool_val v1 (typeof a) m = Some true) by (apply static_bool_val_sound; auto). 
+  replace b with true by congruence. constructor.
+- exploit eval_simpl_expr_sound; eauto. rewrite e0. intro EQ; subst v.
+  assert (bool_val v1 (typeof a) m = Some false) by (apply static_bool_val_sound; auto). 
+  replace b with false by congruence. constructor.
+- apply star_one. eapply step_ifthenelse; eauto. 
+- apply star_one. eapply step_ifthenelse; eauto. 
 Qed.
 
 Lemma step_make_set:

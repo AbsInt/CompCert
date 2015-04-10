@@ -489,3 +489,16 @@ Nondetfunction addressing (chunk: memory_chunk) (e: expr) :=
   | _ => (Aindexed Int.zero, e:::Enil)
   end.
 
+(** ** Arguments of annotations *)
+
+Nondetfunction annot_arg (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => AA_int n
+  | Eop (Oaddrsymbol id ofs) Enil => AA_addrglobal id ofs
+  | Eop (Oaddrstack ofs) Enil => AA_addrstack ofs
+  | Eop Omakelong (Eop (Ointconst h) Enil ::: Eop (Ointconst l) Enil ::: Enil) =>
+        AA_long (Int64.ofwords h l)
+  | Eop Omakelong (h ::: l ::: Enil) => AA_longofwords (AA_base h) (AA_base l)
+  | Eload chunk (Ainstack ofs) Enil => AA_loadstack chunk ofs
+  | _ => AA_base e
+  end.

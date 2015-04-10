@@ -111,15 +111,13 @@ Proof.
   simpl in *. InvBooleans. destruct H0. split; auto. eapply has_subtype; eauto.
 Qed.
 
-(** Truth values.  Pointers and non-zero integers are treated as [True].
+(** Truth values.  Non-zero integers are treated as [True].
   The integer 0 (also used to represent the null pointer) is [False].
-  [Vundef] and floats are neither true nor false. *)
+  Other values are neither true nor false. *)
 
 Inductive bool_of_val: val -> bool -> Prop :=
   | bool_of_val_int:
-      forall n, bool_of_val (Vint n) (negb (Int.eq n Int.zero))
-  | bool_of_val_ptr:
-      forall b ofs, bool_of_val (Vptr b ofs) true.
+      forall n, bool_of_val (Vint n) (negb (Int.eq n Int.zero)).
 
 (** Arithmetic operations *)
 
@@ -695,7 +693,9 @@ Definition cmpu_bool (c: comparison) (v1 v2: val): option bool :=
   | Vint n1, Vint n2 =>
       Some (Int.cmpu c n1 n2)
   | Vint n1, Vptr b2 ofs2 =>
-      if Int.eq n1 Int.zero then cmp_different_blocks c else None
+      if Int.eq n1 Int.zero && weak_valid_ptr b2 (Int.unsigned ofs2)
+      then cmp_different_blocks c
+      else None
   | Vptr b1 ofs1, Vptr b2 ofs2 =>
       if eq_block b1 b2 then
         if weak_valid_ptr b1 (Int.unsigned ofs1)
@@ -708,7 +708,9 @@ Definition cmpu_bool (c: comparison) (v1 v2: val): option bool :=
         then cmp_different_blocks c
         else None
   | Vptr b1 ofs1, Vint n2 =>
-      if Int.eq n2 Int.zero then cmp_different_blocks c else None
+      if Int.eq n2 Int.zero && weak_valid_ptr b1 (Int.unsigned ofs1)
+      then cmp_different_blocks c
+      else None
   | _, _ => None
   end.
 
@@ -1175,8 +1177,8 @@ Proof.
   destruct c; auto. 
   destruct x; destruct y; simpl; auto.
   rewrite Int.negate_cmpu. auto.
-  destruct (Int.eq i Int.zero); auto. 
-  destruct (Int.eq i0 Int.zero); auto.
+  destruct (Int.eq i Int.zero && (valid_ptr b (Int.unsigned i0) || valid_ptr b (Int.unsigned i0 - 1))); auto. 
+  destruct (Int.eq i0 Int.zero && (valid_ptr b (Int.unsigned i) || valid_ptr b (Int.unsigned i - 1))); auto.
   destruct (eq_block b b0).
   destruct ((valid_ptr b (Int.unsigned i) || valid_ptr b (Int.unsigned i - 1)) &&
             (valid_ptr b0 (Int.unsigned i0) || valid_ptr b0 (Int.unsigned i0 - 1))).
@@ -1222,8 +1224,8 @@ Proof.
     destruct c; auto.
   destruct x; destruct y; simpl; auto.
   rewrite Int.swap_cmpu. auto.
-  case (Int.eq i Int.zero); auto.
-  case (Int.eq i0 Int.zero); auto.
+  destruct (Int.eq i Int.zero && (valid_ptr b (Int.unsigned i0) || valid_ptr b (Int.unsigned i0 - 1))); auto.
+  destruct (Int.eq i0 Int.zero && (valid_ptr b (Int.unsigned i) || valid_ptr b (Int.unsigned i - 1))); auto.
   destruct (eq_block b b0); subst.
   rewrite dec_eq_true.
   destruct (valid_ptr b0 (Int.unsigned i) || valid_ptr b0 (Int.unsigned i - 1));
@@ -1381,6 +1383,12 @@ Proof.
   left; congruence. tauto. tauto.
 Qed.
 
+Lemma lessdef_list_trans:
+  forall vl1 vl2, lessdef_list vl1 vl2 -> forall vl3, lessdef_list vl2 vl3 -> lessdef_list vl1 vl3.
+Proof.
+  induction 1; intros vl3 LD; inv LD; constructor; eauto using lessdef_trans.
+Qed.
+
 (** Compatibility of operations with the [lessdef] relation. *)
 
 Lemma load_result_lessdef:
@@ -1423,19 +1431,23 @@ Lemma cmpu_bool_lessdef:
   cmpu_bool valid_ptr' c v1' v2' = Some b.
 Proof.
   intros. 
+  assert (A: forall b ofs, valid_ptr b ofs || valid_ptr b (ofs - 1) = true ->
+                           valid_ptr' b ofs || valid_ptr' b (ofs - 1) = true).
+  { intros until ofs. rewrite ! orb_true_iff. intuition. }
   destruct v1; simpl in H2; try discriminate;
   destruct v2; simpl in H2; try discriminate;
   inv H0; inv H1; simpl; auto.
+  destruct (Int.eq i Int.zero && (valid_ptr b0 (Int.unsigned i0) || valid_ptr b0 (Int.unsigned i0 - 1))) eqn:E; try discriminate.
+  InvBooleans. rewrite H0, A by auto. auto. 
+  destruct (Int.eq i0 Int.zero && (valid_ptr b0 (Int.unsigned i) || valid_ptr b0 (Int.unsigned i - 1))) eqn:E; try discriminate.
+  InvBooleans. rewrite H0, A by auto. auto. 
   destruct (eq_block b0 b1).
-  assert (forall b ofs, valid_ptr b ofs || valid_ptr b (ofs - 1) = true ->
-                        valid_ptr' b ofs || valid_ptr' b (ofs - 1) = true).
-    intros until ofs. rewrite ! orb_true_iff. intuition. 
   destruct (valid_ptr b0 (Int.unsigned i) || valid_ptr b0 (Int.unsigned i - 1)) eqn:?; try discriminate.
   destruct (valid_ptr b1 (Int.unsigned i0) || valid_ptr b1 (Int.unsigned i0 - 1)) eqn:?; try discriminate.
-  erewrite !H0 by eauto. auto.
+  erewrite ! A by eauto. auto.
   destruct (valid_ptr b0 (Int.unsigned i)) eqn:?; try discriminate.
   destruct (valid_ptr b1 (Int.unsigned i0)) eqn:?; try discriminate.
-  erewrite !H by eauto. auto.
+  erewrite ! H by eauto. auto.
 Qed.
 
 Lemma of_optbool_lessdef:
@@ -1599,7 +1611,17 @@ Lemma val_cmpu_bool_inject:
 Proof.
   Local Opaque Int.add.
   intros. inv H; simpl in H1; try discriminate; inv H0; simpl in H1; try discriminate; simpl; auto.
-  fold (weak_valid_ptr1 b1 (Int.unsigned ofs1)) in H1.
+- fold (weak_valid_ptr1 b1 (Int.unsigned ofs1)) in H1.
+  fold (weak_valid_ptr2 b2 (Int.unsigned (Int.add ofs1 (Int.repr delta)))).
+  destruct (Int.eq i Int.zero); auto.
+  destruct (weak_valid_ptr1 b1 (Int.unsigned ofs1)) eqn:E; try discriminate.
+  erewrite weak_valid_ptr_inj by eauto. auto. 
+- fold (weak_valid_ptr1 b1 (Int.unsigned ofs1)) in H1.
+  fold (weak_valid_ptr2 b2 (Int.unsigned (Int.add ofs1 (Int.repr delta)))).
+  destruct (Int.eq i Int.zero); auto.
+  destruct (weak_valid_ptr1 b1 (Int.unsigned ofs1)) eqn:E; try discriminate.
+  erewrite weak_valid_ptr_inj by eauto. auto. 
+- fold (weak_valid_ptr1 b1 (Int.unsigned ofs1)) in H1.
   fold (weak_valid_ptr1 b0 (Int.unsigned ofs0)) in H1.
   fold (weak_valid_ptr2 b2 (Int.unsigned (Int.add ofs1 (Int.repr delta)))).
   fold (weak_valid_ptr2 b3 (Int.unsigned (Int.add ofs0 (Int.repr delta0)))). 

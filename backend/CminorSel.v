@@ -79,6 +79,7 @@ Inductive stmt : Type :=
   | Scall : option ident -> signature -> expr + ident -> exprlist -> stmt
   | Stailcall: signature -> expr + ident -> exprlist -> stmt
   | Sbuiltin : option ident -> external_function -> exprlist -> stmt
+  | Sannot : external_function -> list (annot_arg expr) -> stmt
   | Sseq: stmt -> stmt -> stmt
   | Sifthenelse: condexpr -> stmt -> stmt -> stmt
   | Sloop: stmt -> stmt
@@ -248,6 +249,32 @@ Inductive eval_expr_or_symbol: letenv -> expr + ident -> val -> Prop :=
       Genv.find_symbol ge id = Some b ->
       eval_expr_or_symbol le (inr _ id) (Vptr b Int.zero).
 
+Inductive eval_annot_arg: annot_arg expr -> val -> Prop :=
+  | eval_AA_base: forall a v,
+      eval_expr nil a v ->
+      eval_annot_arg (AA_base a) v
+  | eval_AA_int: forall n,
+      eval_annot_arg (AA_int n) (Vint n)
+  | eval_AA_long: forall n,
+      eval_annot_arg (AA_long n) (Vlong n)
+  | eval_AA_float: forall n,
+      eval_annot_arg (AA_float n) (Vfloat n)
+  | eval_AA_single: forall n,
+      eval_annot_arg (AA_single n) (Vsingle n)
+  | eval_AA_loadstack: forall chunk ofs v,
+      Mem.loadv chunk m (Val.add sp (Vint ofs)) = Some v ->
+      eval_annot_arg (AA_loadstack chunk ofs) v
+  | eval_AA_addrstack: forall ofs,
+      eval_annot_arg (AA_addrstack ofs) (Val.add sp (Vint ofs))
+  | eval_AA_loadglobal: forall chunk id ofs v,
+      Mem.loadv chunk m (Genv.symbol_address ge id ofs) = Some v ->
+      eval_annot_arg (AA_loadglobal chunk id ofs) v
+  | eval_AA_addrglobal: forall id ofs,
+      eval_annot_arg (AA_addrglobal id ofs) (Genv.symbol_address ge id ofs)
+  | eval_AA_longofwords: forall a1 a2 v1 v2,
+      eval_expr nil a1 v1 -> eval_expr nil a2 v2 ->
+      eval_annot_arg (AA_longofwords (AA_base a1) (AA_base a2)) (Val.longofwords v1 v2).
+
 End EVAL_EXPR.
 
 (** Pop continuation until a call or stop *)
@@ -342,6 +369,13 @@ Inductive step: state -> trace -> state -> Prop :=
       external_call ef ge vl m t v m' ->
       step (State f (Sbuiltin optid ef al) k sp e m)
          t (State f Sskip k sp (set_optvar optid v e) m')
+
+  | step_annot: forall f ef al k sp e m vl t v m',
+      match ef with EF_annot _ _ => True | _ => False end ->
+      list_forall2 (eval_annot_arg sp e m) al vl ->
+      external_call ef ge vl m t v m' ->
+      step (State f (Sannot ef al) k sp e m)
+         t (State f Sskip k sp e m')
 
   | step_seq: forall f s1 s2 k sp e m,
       step (State f (Sseq s1 s2) k sp e m)

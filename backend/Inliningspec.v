@@ -316,6 +316,9 @@ Inductive tr_instr: context -> node -> instruction -> code -> Prop :=
       Ple res ctx.(mreg) ->
       c!(spc ctx pc) = Some (Ibuiltin ef (sregs ctx args) (sreg ctx res) (spc ctx s)) ->
       tr_instr ctx pc (Ibuiltin ef args res s) c
+  | tr_annot: forall ctx pc c ef args s,
+      c!(spc ctx pc) = Some (Iannot ef (map (sannotarg ctx) args) (spc ctx s)) ->
+      tr_instr ctx pc (Iannot ef args s) c
   | tr_cond: forall ctx pc cond args s1 s2 c,
       c!(spc ctx pc) = Some (Icond cond (sregs ctx args) (spc ctx s1) (spc ctx s2)) ->
       tr_instr ctx pc (Icond cond args s1 s2) c

@@ -199,6 +199,10 @@ let builtins_generic = {
         (TFloat(FDouble, []),
           [TPtr(TVoid [], [])],
           false);
+    "__compcert_va_composite",
+        (TPtr(TVoid [], []),
+          [TPtr(TVoid [], []); TInt(IUInt, [])],
+          false);
   (* Helper functions for int64 arithmetic *)
     "__i64_dtos",
         (TInt(ILongLong, []),
@@ -365,8 +369,10 @@ a constant)"; Integers.Int.zero in
         | _ -> error "ill-formed __builtin_memcpy_aligned (4th argument must be 
 a constant)"; Integers.Int.one in
       (* to check: sz1 > 0, al1 divides sz1, al1 = 1|2|4|8 *)
+      (* Issue #28: must decay array types to pointer types *)
       Ebuiltin(EF_memcpy(sz1, al1),
-               Tcons(typeof dst, Tcons(typeof src, Tnil)),
+               Tcons(typeconv(typeof dst),
+                     Tcons(typeconv(typeof src), Tnil)),
                Econs(dst, Econs(src, Enil)), Tvoid)
   | _ ->
     assert false
@@ -379,25 +385,45 @@ let va_list_ptr e =
     | Evalof(e', _) -> Eaddrof(e', Tpointer(typeof e, noattr))
     | _             -> error "bad use of a va_list object"; e
 
-let make_builtin_va_arg env ty e =
-  let (helper, ty_ret) =
-    match ty with
-    | Tint _ | Tpointer _ ->
-        ("__compcert_va_int32", Tint(I32, Unsigned, noattr))
-    | Tlong _ ->
-        ("__compcert_va_int64", Tlong(Unsigned, noattr))
-    | Tfloat _ ->
-        ("__compcert_va_float64", Tfloat(F64, noattr))
-    | _ ->
-        unsupported "va_arg at this type";
-        ("", Tvoid) in
+let make_builtin_va_arg_by_val helper ty ty_ret arg =
   let ty_fun =
     Tfunction(Tcons(Tpointer(Tvoid, noattr), Tnil), ty_ret, cc_default) in
   Ecast 
     (Ecall(Evalof(Evar(intern_string helper, ty_fun), ty_fun),
-           Econs(va_list_ptr e, Enil),
+           Econs(va_list_ptr arg, Enil),
            ty_ret),
      ty)
+
+let make_builtin_va_arg_by_ref helper ty arg =
+  let ty_fun =
+    Tfunction(Tcons(Tpointer(Tvoid, noattr), Tnil), 
+              Tpointer(Tvoid, noattr), cc_default) in
+  let ty_ptr =
+    Tpointer(ty, noattr) in
+  let call =
+    Ecall(Evalof(Evar(intern_string helper, ty_fun), ty_fun),
+          Econs(va_list_ptr arg, 
+                Econs(Esizeof(ty, Tint(I32, Unsigned, noattr)), Enil)),
+          Tpointer(Tvoid, noattr)) in
+  Evalof(Ederef(Ecast(call, ty_ptr), ty), ty)
+
+let make_builtin_va_arg env ty e =
+  match ty with
+  | Tint _ | Tpointer _ ->
+      make_builtin_va_arg_by_val 
+        "__compcert_va_int32" ty (Tint(I32, Unsigned, noattr)) e
+  | Tlong _ ->
+      make_builtin_va_arg_by_val 
+        "__compcert_va_int64" ty (Tlong(Unsigned, noattr)) e
+  | Tfloat _ ->
+      make_builtin_va_arg_by_val 
+        "__compcert_va_float64" ty (Tfloat(F64, noattr)) e
+  | Tstruct _ | Tunion _ ->
+      make_builtin_va_arg_by_ref
+        "__compcert_va_composite" ty e
+  | _ ->
+      unsupported "va_arg at this type";
+      Eval(Vint(coqint_of_camlint 0l), type_int32s)
 
 (** ** Translation functions *)
 
@@ -711,8 +737,7 @@ let rec convertExpr env e =
       | {edesc = C.EConst(CStr txt)} :: args1 ->
           let targs1 = convertTypArgs env [] args1 in
           Ebuiltin(
-            EF_annot(intern_string txt,
-                     List.map (fun t -> AA_arg t) (typlist_of_typelist targs1)),
+            EF_annot(intern_string txt, typlist_of_typelist targs1),
             targs1, convertExprList env args1, convertTyp env e.etyp)
       | _ ->
           error "ill-formed __builtin_annot (first argument must be string literal)";

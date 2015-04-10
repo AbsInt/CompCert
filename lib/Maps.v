@@ -64,13 +64,13 @@ Module Type TREE.
   Axiom gsspec:
     forall (A: Type) (i j: elt) (x: A) (m: t A),
     get i (set j x m) = if elt_eq i j then Some x else get i m.
-  Axiom gsident:
+  (* We could implement the following, but it's not needed for the moment.
+  Hypothesis gsident:
     forall (A: Type) (i: elt) (m: t A) (v: A),
     get i m = Some v -> set i v m = m.
-  (* We could implement the following, but it's not needed for the moment.
-    Axiom grident:
-      forall (A: Type) (i: elt) (m: t A) (v: A),
-      get i m = None -> remove i m = m.
+  Hypothesis grident:
+    forall (A: Type) (i: elt) (m: t A) (v: A),
+    get i m = None -> remove i m = m.
   *)
   Axiom grs:
     forall (A: Type) (i: elt) (m: t A), get i (remove i m) = None.
@@ -115,11 +115,6 @@ Module Type TREE.
     f None None = None ->
     forall (m1: t A) (m2: t B) (i: elt),
     get i (combine f m1 m2) = f (get i m1) (get i m2).
-  Axiom combine_commut:
-    forall (A B: Type) (f g: option A -> option A -> option B),
-    (forall (i j: option A), f i j = g j i) ->
-    forall (m1 m2: t A),
-    combine f m1 m2 = combine g m2 m1.
 
   (** Enumerating the bindings of a tree. *)
   Parameter elements:
