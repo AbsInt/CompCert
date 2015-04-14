@@ -75,6 +75,8 @@ let name_of_section_Linux: section_name -> string = function
 | Section_literal -> ".rodata.cst8"
 | Section_jumptable -> ".text"
 | Section_user(s, wr, ex) -> s
+| Section_debug_info -> ".debug_info"
+| Section_debug_abbrev -> ".debug_abbrev"
 
 (** Adapted from CompCert *)
 let name_of_section_Diab: section_name -> string = function
@@ -87,6 +89,8 @@ let name_of_section_Diab: section_name -> string = function
 | Section_literal -> ".text"
 | Section_jumptable -> ".text"
 | Section_user(s, wr, ex) -> s
+| Section_debug_info -> ".debug_info"
+| Section_debug_abbrev -> ".debug_abbrev"
 
 (** Taken from CompCert *)
 let name_of_section: section_name -> string =
