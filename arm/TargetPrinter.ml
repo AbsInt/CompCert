@@ -152,6 +152,8 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\",\"a%s%s\",%%progbits"
             s (if wr then "w" else "") (if ex then "x" else "")
+      | Section_debug_info
+      | Section_debug_abbrev -> "" (* Dummy value *)
             
     let section oc sec =
       fprintf oc "	%s\n" (name_of_section sec)
@@ -1139,6 +1141,8 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
     let label = print_label
        
     let new_label = new_label
+        
+    let print_file_loc _ _ = () (* Dummy function *)
   end
 
 let sel_target () = 
