@@ -1138,7 +1138,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
 
     module DwarfAbbrevs = DwarfUtil.DefaultAbbrevs (* Dummy Abbrev types *)
         
-    let label = print_label
+    let label = elf_label
        
     let new_label = new_label
         
