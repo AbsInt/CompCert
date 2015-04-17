@@ -284,10 +284,14 @@ module Target (System : SYSTEM):TARGET =
     let ireg_or_zero oc r =
       if r = GPR0 then output_string oc "0" else ireg oc r
 
-    (* [preg] is only used for printing annotations.
-       Use the full register names [rN] and [fN] to avoid
-       ambiguity with constants. *)
     let preg oc = function
+      | IR r -> ireg oc r
+      | FR r -> freg oc r
+      | _    -> assert false
+
+    (* For printing annotations, use the full register names [rN] and [fN]
+       to avoid ambiguity with constants. *)
+    let preg_annot oc = function
       | IR r -> fprintf oc "r%s" (int_reg_name r)
       | FR r -> fprintf oc "f%s" (float_reg_name r)
       | _    -> assert false
@@ -327,7 +331,7 @@ module Target (System : SYSTEM):TARGET =
           (int_of_string (Str.matched_group 2 txt))
       end else begin
         fprintf oc "%s annotation: " comment;
-        PrintAnnot.print_annot_stmt preg "R1" oc txt targs args
+        PrintAnnot.print_annot_stmt preg_annot "R1" oc txt targs args
       end
 
     (* Determine if the displacement of a conditional branch fits the short form *)
@@ -646,9 +650,10 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "%a:\n" label (transl_label lbl)
       | Pbuiltin(ef, args, res) ->
           begin match ef with
-          | EF_inline_asm txt ->
+          | EF_inline_asm(txt, sg) ->
               fprintf oc "%s begin inline assembly\n" comment;
-              fprintf oc "	%s\n" (extern_atom txt);
+              fprintf oc "\t";
+              PrintAnnot.print_inline_asm preg oc (extern_atom txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment
           | _ ->
               assert false

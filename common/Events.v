@@ -1449,10 +1449,10 @@ Axiom external_functions_properties:
 
 (** We treat inline assembly similarly. *)
 
-Parameter inline_assembly_sem: ident -> extcall_sem.
+Parameter inline_assembly_sem: ident -> signature -> extcall_sem.
 
 Axiom inline_assembly_properties:
-  forall id, extcall_properties (inline_assembly_sem id) (mksignature nil None cc_default) nil.
+  forall id sg, extcall_properties (inline_assembly_sem id sg) sg nil.
 
 (** ** Combined semantics of external calls *)
 
@@ -1479,8 +1479,8 @@ Definition external_call (ef: external_function): extcall_sem :=
   | EF_free              => extcall_free_sem
   | EF_memcpy sz al      => extcall_memcpy_sem sz al
   | EF_annot txt targs   => extcall_annot_sem txt targs
-  | EF_annot_val txt targ=> extcall_annot_val_sem txt targ
-  | EF_inline_asm txt    => inline_assembly_sem txt
+  | EF_annot_val txt targ => extcall_annot_val_sem txt targ
+  | EF_inline_asm txt sg => inline_assembly_sem txt sg
   end.
 
 Theorem external_call_spec:

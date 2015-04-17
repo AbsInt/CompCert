@@ -871,9 +871,10 @@ module Target(System: SYSTEM):TARGET =
                 (Int32.to_int (camlint_of_coqint al)) args
           | EF_annot_val(txt, targ) ->
               print_annot_val oc (extern_atom txt) args res
-          | EF_inline_asm txt ->
+          | EF_inline_asm(txt, sg) ->
               fprintf oc "%s begin inline assembly\n" comment;
-              fprintf oc "	%s\n" (extern_atom txt);
+              fprintf oc "\t";
+              PrintAnnot.print_inline_asm preg oc (extern_atom txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment
           | _ ->
               assert false

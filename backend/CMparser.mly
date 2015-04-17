@@ -60,7 +60,7 @@ let mkef sg toks =
       if sg.sig_args = [] then raise Parsing.Parse_error;
       EF_annot_val(intern_string txt, List.hd sg.sig_args)
   | [EFT_tok "inline_asm"; EFT_string txt] ->
-      EF_inline_asm(intern_string txt)
+      EF_inline_asm(intern_string txt, sg)
   | _ ->
       raise Parsing.Parse_error
 

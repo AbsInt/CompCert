@@ -616,7 +616,43 @@ jump_statement:
     {}
 
 asm_statement:
-| ASM VOLATILE? LPAREN string_literals_list RPAREN SEMICOLON
+| ASM asm_attributes LPAREN string_literals_list asm_arguments RPAREN SEMICOLON
+    {}
+
+asm_attributes:
+| /* empty */
+| CONST asm_attributes    
+| VOLATILE asm_attributes
+    {}
+
+asm_arguments:
+| /* empty */
+| COLON asm_operands
+| COLON asm_operands COLON asm_operands
+| COLON asm_operands COLON asm_operands COLON asm_flags
+    {}
+
+asm_operands:
+| /* empty */
+| asm_operands_ne
+    {}
+
+asm_operands_ne:
+| asm_operands_ne COMMA asm_operand
+| asm_operand
+    {}
+
+asm_operand:
+| asm_op_name string_literals_list LPAREN expression RPAREN
+    {}
+
+asm_op_name:
+| /*empty*/                             {}
+| LBRACK i = general_identifier RBRACK  { set_id_type i OtherId }
+
+asm_flags:
+| string_literals_list
+| string_literals_list COMMA asm_flags
     {}
 
 translation_unit_file:

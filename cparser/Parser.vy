@@ -97,6 +97,12 @@ Require Import List.
 %type<gcc_attribute_word> gcc_attribute_word
 %type<name * list string> old_function_declarator direct_old_function_declarator
 %type<list string (* Reverse order *)> identifier_list
+%type<list asm_flag> asm_flags
+%type<option string> asm_op_name
+%type<asm_operand> asm_operand
+%type<list asm_operand> asm_operands asm_operands_ne
+%type<list asm_operand * list asm_operand * list asm_flag> asm_arguments
+%type<list cvspec> asm_attributes
 
 %start<list definition> translation_unit_file
 %%
@@ -820,10 +826,50 @@ jump_statement:
 
 (* Non-standard *)
 asm_statement:
-| loc = ASM LPAREN template = STRING_LITERAL RPAREN SEMICOLON
-    { let '(wide, chars, _) := template in ASM wide chars loc }
-| loc = ASM VOLATILE LPAREN template = STRING_LITERAL RPAREN SEMICOLON
-    { let '(wide, chars, _) := template in ASM wide chars loc }
+| loc = ASM attr = asm_attributes LPAREN template = STRING_LITERAL args = asm_arguments RPAREN SEMICOLON
+    { let '(wide, chars, _) := template in
+      let '(outputs, inputs, flags) := args in
+      ASM attr wide chars outputs inputs flags loc }
+
+asm_attributes:
+| /* empty */
+     { [] }
+| CONST attr = asm_attributes
+     { CV_CONST :: attr }
+| VOLATILE attr = asm_attributes 
+     { CV_VOLATILE :: attr }
+
+asm_arguments:
+| /* empty */
+     { ([], [], []) }
+| COLON o = asm_operands
+     { (o, [], []) }
+| COLON o = asm_operands COLON i = asm_operands
+     { (o, i, []) }
+| COLON o = asm_operands COLON i = asm_operands COLON f = asm_flags
+     { (o, i, f) }
+
+asm_operands:
+| /* empty */                                   { [] }
+| ol = asm_operands_ne                          { rev' ol }
+
+asm_operands_ne:
+| ol = asm_operands_ne COMMA o = asm_operand    { o :: ol }
+| o = asm_operand                               { [o] }
+
+asm_operand:
+| n = asm_op_name cstr = STRING_LITERAL LPAREN e = expression RPAREN
+    { let '(wide, s, loc) := cstr in ASMOPERAND n wide s (fst e) }
+
+asm_op_name:
+| /* empty */                         { None }
+| LBRACK n = OTHER_NAME RBRACK        { Some (fst n) }
+
+asm_flags:
+| f = STRING_LITERAL
+    { let '(wide, s, loc) := f in (wide, s) :: nil }
+| f = STRING_LITERAL COMMA fl = asm_flags
+    { let '(wide, s, loc) := f in (wide, s) :: fl }
 
 (* 6.9 *)
 translation_unit_file:

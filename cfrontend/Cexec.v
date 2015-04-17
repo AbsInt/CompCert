@@ -405,18 +405,18 @@ Hypothesis do_external_function_complete:
   do_external_function id sg ge w vargs m = Some(w', t, vres, m').
 
 Variable do_inline_assembly:
-  ident -> Senv.t -> world -> list val -> mem -> option (world * trace * val * mem).
+  ident -> signature -> Senv.t -> world -> list val -> mem -> option (world * trace * val * mem).
 
 Hypothesis do_inline_assembly_sound:
-  forall txt ge vargs m t vres m' w w',
-  do_inline_assembly txt ge w vargs m = Some(w', t, vres, m') ->
-  inline_assembly_sem txt ge vargs m t vres m' /\ possible_trace w t w'.
+  forall txt sg ge vargs m t vres m' w w',
+  do_inline_assembly txt sg ge w vargs m = Some(w', t, vres, m') ->
+  inline_assembly_sem txt sg ge vargs m t vres m' /\ possible_trace w t w'.
 
 Hypothesis do_inline_assembly_complete:
-  forall txt ge vargs m t vres m' w w',
-  inline_assembly_sem txt ge vargs m t vres m' ->
+  forall txt sg ge vargs m t vres m' w w',
+  inline_assembly_sem txt sg ge vargs m t vres m' ->
   possible_trace w t w' ->
-  do_inline_assembly txt ge w vargs m = Some(w', t, vres, m').
+  do_inline_assembly txt sg ge w vargs m = Some(w', t, vres, m').
 
 Definition do_ef_volatile_load (chunk: memory_chunk)
        (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
@@ -541,7 +541,7 @@ Definition do_external (ef: external_function):
   | EF_memcpy sz al => do_ef_memcpy sz al
   | EF_annot text targs => do_ef_annot text targs
   | EF_annot_val text targ => do_ef_annot_val text targ
-  | EF_inline_asm text => do_inline_assembly text ge
+  | EF_inline_asm text sg => do_inline_assembly text sg ge
   end.
 
 Lemma do_ef_external_sound:

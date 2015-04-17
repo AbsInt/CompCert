@@ -476,7 +476,7 @@ Definition transfer (f: function) (approx: PMap.t VA.t) (pc: node) (before: numb
           empty_numbering
       | Ibuiltin ef args res s =>
           match ef with
-          | EF_external _ _ | EF_malloc | EF_free | EF_inline_asm _ =>
+          | EF_external _ _ | EF_malloc | EF_free | EF_inline_asm _ _ =>
               empty_numbering
           | EF_builtin _ _ | EF_vstore _ | EF_vstore_global _ _ _ =>
               set_unknown (kill_all_loads before) res
