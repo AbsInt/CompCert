@@ -18,7 +18,7 @@
   to be defined have non-dependent types, and function extensionality is assumed. *)
 
 Require Import Axioms.
-Require Import Wf.
+Require Import Init.Wf.
 Require Import Wf_nat.
 
 Set Implicit Arguments.
@@ -63,6 +63,5 @@ Proof.
 Qed.
 
 End FIXM.
-
 
 
