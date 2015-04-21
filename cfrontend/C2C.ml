@@ -114,18 +114,14 @@ let currentLocation = ref Cutil.no_loc
 
 let updateLoc l = currentLocation := l
 
-let numErrors = ref 0
-
 let error msg =
-  incr numErrors;
-  eprintf "%aError: %s\n" Cutil.printloc !currentLocation msg
+  Cerrors.error "%aError: %s" Cutil.formatloc !currentLocation msg
 
 let unsupported msg =
-  incr numErrors;
-  eprintf "%aUnsupported feature: %s\n" Cutil.printloc !currentLocation msg
+  Cerrors.error "%aUnsupported feature: %s" Cutil.formatloc !currentLocation msg
 
 let warning msg =
-  eprintf "%aWarning: %s\n" Cutil.printloc !currentLocation msg
+  Cerrors.warning "%aWarning: %s\n" Cutil.formatloc !currentLocation msg
 
 let string_of_errmsg msg =
   let string_of_err = function
@@ -1237,7 +1233,7 @@ let public_globals gl =
 (** Convert a [C.program] into a [Csyntax.program] *)
 
 let convertProgram p =
-  numErrors := 0;
+  Cerrors.reset();
   stringNum := 0;
   Hashtbl.clear decl_atom;
   Hashtbl.clear stringTable;
@@ -1262,9 +1258,7 @@ let convertProgram p =
             prog_main = intern_string "main";
             prog_types = typs;
             prog_comp_env = ce } in
-        if !numErrors > 0
-        then None
-        else Some p'
+        if Cerrors.check_errors () then None else Some p'
   with Env.Error msg ->
     error (Env.error_message msg); None
 
