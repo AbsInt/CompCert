@@ -236,6 +236,8 @@ let rec expr p (prec, e) =
                  expr (prec1, a1) (name_binop op) expr (prec2, a2)
   | Ecast(a1, ty) ->
       fprintf p "(%s) %a" (name_type ty) expr (prec', a1)
+  | Eassign(res, Ebuiltin(EF_inline_asm(txt, sg, clob), _, args, _), _) ->
+      extended_asm p txt (Some res) args clob
   | Eassign(a1, a2, _) ->
       fprintf p "%a =@ %a" expr (prec1, a1) expr (prec2, a2)
   | Eassignop(op, a1, a2, _, _) ->
@@ -262,6 +264,8 @@ let rec expr p (prec, e) =
                 (extern_atom txt) exprlist (false, args)
   | Ebuiltin(EF_external(id, sg), _, args, _) ->
       fprintf p "%s@[<hov 1>(%a)@]" (extern_atom id) exprlist (true, args)
+  | Ebuiltin(EF_inline_asm(txt, sg, clob), _, args, _) ->
+      extended_asm p txt None args clob
   | Ebuiltin(_, _, args, _) ->
       fprintf p "<unknown builtin>@[<hov 1>(%a)@]" exprlist (true, args)
   | Eparen(a1, tycast, ty) ->
@@ -276,6 +280,32 @@ and exprlist p (first, rl) =
       if not first then fprintf p ",@ ";
       expr p (2, r);
       exprlist p (false, rl)
+
+and extended_asm p txt res args clob =
+  fprintf p "asm volatile (@[<hv 0>%S" (extern_atom txt);
+  fprintf p "@ :";
+  begin match res with
+  | None -> ()
+  | Some e -> fprintf p " \"=r\"(%a)" expr (0, e)
+  end;
+  let rec inputs p (first, el) =
+    match el with
+    | Enil -> ()
+    | Econs(e1, el) ->
+        if not first then fprintf p ",@ ";
+        fprintf p "\"r\"(%a)" expr (0, e1);
+        inputs p (false, el) in
+  fprintf p "@ : @[<hov 0>%a@]" inputs (true, args);
+  begin match clob with
+  | [] -> ()
+  | c1 :: cl ->
+      fprintf p "@ : @[<hov 0>%S" (extern_atom c1);
+      List.iter
+        (fun c -> fprintf p ",@ %S" (extern_atom c))
+        cl;
+      fprintf p "@]"
+  end;
+  fprintf p ")@]"
 
 let print_expr p e = expr p (0, e)
 let print_exprlist p el = exprlist p (true, el)
