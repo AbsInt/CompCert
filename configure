@@ -19,6 +19,7 @@ toolprefix=''
 target=''
 has_runtime_lib=true
 build_checklink=true
+advanced_debug=false
 
 usage='Usage: ./configure [options] target
 
@@ -94,7 +95,7 @@ case "$target" in
     esac
     system="linux"
     cc="${toolprefix}gcc"
-    cprepro="${toolprefix}gcc -U__GNUC__ -E"
+    cprepro="${toolprefix}gcc -std=c99 -U__GNUC__ -E"
     casm="${toolprefix}gcc -c"
     casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
     clinker="${toolprefix}gcc"
@@ -113,7 +114,8 @@ case "$target" in
     asm_supports_cfi=false
     clinker="${toolprefix}dcc"
     libmath="-lm"
-    cchecklink=${build_checklink};;
+    cchecklink=${build_checklink}
+    advanced_debug=true;;
   arm*-*)
     arch="arm"
     case "$target" in
@@ -138,7 +140,7 @@ case "$target" in
     struct_return="int1-4"
     system="linux"
     cc="${toolprefix}gcc"
-    cprepro="${toolprefix}gcc -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
+    cprepro="${toolprefix}gcc -std=c99 -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
     casm="${toolprefix}gcc -c"
     clinker="${toolprefix}gcc"
     libmath="-lm";;
@@ -150,7 +152,7 @@ case "$target" in
     struct_return="ref"
     system="linux"
     cc="${toolprefix}gcc -m32"
-    cprepro="${toolprefix}gcc -m32 -U__GNUC__ -E"
+    cprepro="${toolprefix}gcc -std=c99 -m32 -U__GNUC__ -E"
     casm="${toolprefix}gcc -m32 -c"
     clinker="${toolprefix}gcc -m32"
     libmath="-lm";;
@@ -162,7 +164,7 @@ case "$target" in
     struct_return="int1248"    # to check!
     system="bsd"
     cc="${toolprefix}gcc -m32"
-    cprepro="${toolprefix}gcc -m32 -U__GNUC__ -E"
+    cprepro="${toolprefix}gcc -std=c99 -m32 -U__GNUC__ -E"
     casm="${toolprefix}gcc -m32 -c"
     clinker="${toolprefix}gcc -m32"
     libmath="-lm";;
@@ -174,7 +176,7 @@ case "$target" in
     struct_return="int1248"
     system="macosx"
     cc="${toolprefix}gcc -arch i386"
-    cprepro="${toolprefix}gcc -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' -E"
+    cprepro="${toolprefix}gcc -std=c99 -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' -E"
     casm="${toolprefix}gcc -arch i386 -c"
     case `uname -r` in
       [1-9].*|10.*|11.*)    # up to MacOS 10.7 included
@@ -191,7 +193,7 @@ case "$target" in
     struct_return="ref"
     system="cygwin"
     cc="${toolprefix}gcc -m32"
-    cprepro="${toolprefix}gcc -m32 -U__GNUC__ -E"
+    cprepro="${toolprefix}gcc -std=c99 -m32 -U__GNUC__ -E"
     casm="${toolprefix}gcc -m32 -c"
     clinker="${toolprefix}gcc -m32"
     libmath="-lm";;
@@ -357,6 +359,7 @@ LIBMATH=$libmath
 HAS_RUNTIME_LIB=$has_runtime_lib
 CCHECKLINK=$cchecklink
 ASM_SUPPORTS_CFI=$asm_supports_cfi
+ADVANCED_DEBUG=$advanced_debug
 EOF
 else
 cat >> Makefile.config <<'EOF'

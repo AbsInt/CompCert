@@ -132,9 +132,34 @@ let string_of_memory_chunk = function
   | Many32 -> "any32"
   | Many64 -> "any64"
 
-let string_of_annot_param = function
-| APreg (p0)-> "APreg(" ^ string_of_preg p0 ^ ")"
-| APstack(m0, c1)-> "APstack(" ^ string_of_memory_chunk m0 ^ ", " ^ string_of_coq_Z c1 ^ ")"
+let rec string_of_annot_param sp_reg_name = function
+  | AA_base x -> string_of_preg x
+  | AA_int n -> Printf.sprintf "%ld" (camlint_of_coqint n)
+  | AA_long n -> Printf.sprintf "%Ld" (camlint64_of_coqint n)
+  | AA_float n -> Printf.sprintf "%.18g" (camlfloat_of_coqfloat n)
+  | AA_single n -> Printf.sprintf "%.18g" (camlfloat_of_coqfloat32 n)
+  | AA_loadstack(chunk, ofs) ->
+      Printf.sprintf "mem(%s + %ld, %s)"
+         sp_reg_name
+         (camlint_of_coqint ofs)
+         ((string_of_memory_chunk chunk))
+  | AA_addrstack ofs ->
+      Printf.sprintf "(%s + %ld)"
+         sp_reg_name
+         (camlint_of_coqint ofs)
+  | AA_loadglobal(chunk, id, ofs) ->
+      Printf.sprintf "mem(\"%s\" + %ld, %s)"
+         (extern_atom id)
+         (camlint_of_coqint ofs)
+         (string_of_memory_chunk chunk)
+  | AA_addrglobal(id, ofs) ->
+      Printf.sprintf "(\"%s\" + %ld)"
+         (extern_atom id)
+         (camlint_of_coqint ofs)
+  | AA_longofwords(hi, lo) ->
+      Printf.sprintf "(%s * 0x100000000 + %s)"
+        (string_of_annot_param sp_reg_name hi)
+        (string_of_annot_param sp_reg_name lo)
 
 let string_of_instruction = function
 | Padd      (i0, i1, i2)        -> "Padd(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ", " ^ string_of_ireg i2 ^ ")"
@@ -278,7 +303,9 @@ let string_of_instruction = function
 | Pxoris    (i0, i1, c2)        -> "Pxoris(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ", " ^ string_of_constant c2 ^ ")"
 | Plabel    (l0)                -> "Plabel(" ^ string_of_label l0 ^ ")"
 | Pbuiltin  (e0, p1, p2)        -> "Pbuiltin(" ^ string_of_external_function e0 ^ ", " ^ string_of_list string_of_preg ", " p1 ^ ", " ^ string_of_list string_of_preg ", " p2 ^ ")"
-| Pannot    (e0, a1)            -> "Pannot(" ^ string_of_external_function e0 ^ ", " ^ string_of_list string_of_annot_param ", " a1 ^ ")"
+| Pannot    (e0, a1)            -> 
+    let sp_reg_name = string_of_external_function e0 in
+    "Pannot(" ^ string_of_external_function e0 ^ ", " ^ string_of_list (string_of_annot_param sp_reg_name) ", " a1 ^ ")"
 | Pcfi_adjust n                 -> "Pcfi_adjust(" ^ string_of_coq_Z n ^ ")"
 | Pcfi_rel_offset n             -> "Pcfi_rel_offset(" ^ string_of_coq_Z n ^ ")"
 

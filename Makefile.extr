@@ -21,7 +21,7 @@ include Makefile.config
 
 DIRS=extraction \
   lib common $(ARCH) backend cfrontend cparser driver \
-  exportclight
+  exportclight debug
 
 # Directories containing Caml code that must be preprocessed by Camlp4
 

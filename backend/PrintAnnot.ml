@@ -21,6 +21,13 @@ open AST
 open Memdata
 open Asm
 
+(** All files used in the debug entries *)
+module StringSet = Set.Make(String)
+let all_files : StringSet.t ref = ref StringSet.empty
+let add_file file =
+  all_files := StringSet.add file !all_files
+
+
 (** Line number annotations *)
 
 let filename_info : (string, int * Printlines.filebuf option) Hashtbl.t
@@ -66,10 +73,10 @@ let print_file_line oc pref file line =
     | Some fb -> Printlines.copy oc pref fb line line
   end
 
-(* Add file and line debug location, using DWARF1 directives in the style
+(* Add file and line debug location, using DWARF2 directives in the style
    of Diab C 5 *)
 
-let print_file_line_d1 oc pref file line =
+let print_file_line_d2 oc pref file line =
   if !Clflags.option_g && file <> "" then begin
     let (_, filebuf) =
       try
@@ -77,10 +84,10 @@ let print_file_line_d1 oc pref file line =
       with Not_found ->
         enter_filename file in
     if file <> !last_file then begin
-      fprintf oc "	.d1file	%S\n" file;
+      fprintf oc "	.d2file	%S\n" file;
       last_file := file
     end;
-    fprintf oc "	.d1line	%d\n" line;
+    fprintf oc "	.d2line	%d\n" line;
     match filebuf with
     | None -> ()
     | Some fb -> Printlines.copy oc pref fb line line
