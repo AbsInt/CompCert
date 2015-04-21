@@ -651,8 +651,7 @@ module Target (System : SYSTEM):TARGET =
       | Pbuiltin(ef, args, res) ->
           begin match ef with
           | EF_inline_asm(txt, sg, clob) ->
-              fprintf oc "%s begin inline assembly\n" comment;
-              fprintf oc "\t";
+              fprintf oc "%s begin inline assembly\n\t" comment;
               PrintAnnot.print_inline_asm preg oc (extern_atom txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment
           | _ ->

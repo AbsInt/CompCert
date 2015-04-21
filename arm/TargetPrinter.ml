@@ -1004,7 +1004,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           | EF_annot_val(txt, targ) ->
               print_annot_val oc (extern_atom txt) args res
           | EF_inline_asm(txt, sg, clob) ->
-              fprintf oc "%s begin inline assembly\n" comment;
+              fprintf oc "%s begin inline assembly\n\t" comment;
               PrintAnnot.print_inline_asm preg oc (extern_atom txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment;
               5 (* hoping this is an upper bound...  *)
