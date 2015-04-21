@@ -831,92 +831,25 @@ and convertExprList env el =
   | [] -> Enil
   | e1 :: el' -> Econs(convertExpr env e1, convertExprList env el')
 
-(** ** Extended assembly *)
+(* Extended assembly *)
 
-module StringMap = Map.Make(String)
-
-let re_asm_placeholder =
-  Str.regexp "\\(%[0-9]+\\|%\\[[a-zA-Z_][a-zA-Z_0-9]*\\]\\|%%\\)"
-
-let convertAsm env txt outputs inputs clobber =
-
-  (* On the fly renaming of labeled and numbered arguments *)
-  let name_of_label lbl pos =
-    match lbl with
-    | None   -> sprintf "%%%d" pos
-    | Some l -> sprintf "%%[%s]" l in
-  let set_label_reg lbl pos pos' subst =
-    StringMap.add (name_of_label lbl pos) (sprintf "%%%d" pos') subst
-  and set_label_mem lbl pos pos' subst =
-    StringMap.add (name_of_label lbl pos)
-                  (CBuiltins.asm_mem_argument (sprintf "%%%d" pos'))
-                  subst
-  and set_label_const lbl pos n subst =
-    StringMap.add (name_of_label lbl pos) (sprintf "%Ld" n) subst in
-
-  (* Fix up the input expressions:
-      - add "&" for inputs of kind "m"
-      - evaluate constants for inputs of kind "i" *)
-  let rec fixupInputs accu pos pos' subst = function
-  | [] ->
-      (List.rev accu, subst)
-  | (lbl, cstr, e) :: inputs ->
-      match cstr with
-      | "r" | "rm" ->
-        fixupInputs (e :: accu) (pos + 1) (pos' + 1)
-                    (set_label_reg lbl pos pos' subst) inputs
-      | "m" | "o" ->
-        fixupInputs (Cutil.eaddrof e :: accu) (pos + 1) (pos' + 1)
-                    (set_label_mem lbl pos pos' subst) inputs
-      | "i" | "n" ->
-        let n =
-          match Ceval.integer_expr env e with
-          | Some n -> n
-          | None -> error "asm argument of kind 'i'/'n' is not a constant"; 0L in
-        fixupInputs accu (pos + 1) pos'
-                    (set_label_const lbl pos n subst) inputs
-      | _ ->
-        unsupported ("asm argument of kind '" ^ cstr ^ "'");
-        ([], subst) in
-  
-  (* Check the output expressions *)
-  let (output', ty_res, (inputs', subst)) =
-    match outputs with
-    | [] ->
-        (None, TVoid [], fixupInputs [] 0 0 StringMap.empty inputs)
-    | [(lbl, cstr, e)] ->
-        if not (cstr = "=r" || cstr = "=rm") then
-          unsupported ("asm result of kind '" ^ cstr ^ "'");
-        (Some e, e.etyp,
-         fixupInputs [] 1 1 (set_label_reg lbl 0 0 StringMap.empty) inputs)
-    | _ ->
-        error "asm statement with 2 or more results";
-        (None, TVoid [], ([], StringMap.empty)) in
-
-  (* Check the clobber list *)
-  List.iter
-    (fun c ->
-      if not (c = "memory" || c = "cc") then
-        unsupported ("asm register clobber '" ^ c ^ "'"))
-    clobber;
-
-  (* Rename the %[ident] and %nnn placeholders in the asm text *)
-  let txt' =
-    Str.global_substitute re_asm_placeholder 
-      (fun txt -> let s = Str.matched_group 1 txt in
-                  try StringMap.find s subst with Not_found -> s)
-      txt in
-
+let convertAsm loc env txt outputs inputs clobber =
+  let (txt', output', inputs') = 
+    ExtendedAsm.transf_asm loc env txt outputs inputs clobber in
+  let clobber' =
+    List.map intern_string clobber in
+  let ty_res =
+    match output' with None -> TVoid [] | Some e -> e.etyp in
   (* Build the Ebuiltin expression *)
   let e = 
     let tinputs = convertTypArgs env [] inputs' in
     let toutput = convertTyp env ty_res in
     Ebuiltin(EF_inline_asm(intern_string txt', 
-                           signature_of_type tinputs toutput cc_default),
+                           signature_of_type tinputs toutput cc_default,
+                           clobber'),
              tinputs,
              convertExprList env inputs',
              convertTyp env ty_res) in
-
   (* Add an assignment to the output, if any *)
   match output' with
   | None -> e
@@ -982,7 +915,9 @@ let rec convertStmt ploc env s =
   | C.Sdo e ->
       add_lineno ploc s.sloc (swrap (Ctyping.sdo (convertExpr env e)))
   | C.Sseq(s1, s2) ->
-      Ssequence(convertStmt ploc env s1, convertStmt s1.sloc env s2)
+      let s1' = convertStmt ploc env s1 in
+      let s2' = convertStmt s1.sloc env s2 in
+      Ssequence(s1', s2')
   | C.Sif(e, s1, s2) ->
       let te = convertExpr env e in
       add_lineno ploc s.sloc 
@@ -1035,7 +970,7 @@ let rec convertStmt ploc env s =
       if not !Clflags.option_finline_asm then
         unsupported "inline 'asm' statement (consider adding option -finline-asm)";
       add_lineno ploc s.sloc
-        (Sdo (convertAsm env txt outputs inputs clobber))
+        (Sdo (convertAsm s.sloc env txt outputs inputs clobber))
 
 and convertSwitch ploc env is_64 = function
   | [] ->

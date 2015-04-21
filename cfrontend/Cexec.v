@@ -541,7 +541,7 @@ Definition do_external (ef: external_function):
   | EF_memcpy sz al => do_ef_memcpy sz al
   | EF_annot text targs => do_ef_annot text targs
   | EF_annot_val text targ => do_ef_annot_val text targ
-  | EF_inline_asm text sg => do_inline_assembly text sg ge
+  | EF_inline_asm text sg clob => do_inline_assembly text sg ge
   end.
 
 Lemma do_ef_external_sound:

@@ -650,7 +650,7 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "%a:\n" label (transl_label lbl)
       | Pbuiltin(ef, args, res) ->
           begin match ef with
-          | EF_inline_asm(txt, sg) ->
+          | EF_inline_asm(txt, sg, clob) ->
               fprintf oc "%s begin inline assembly\n" comment;
               fprintf oc "\t";
               PrintAnnot.print_inline_asm preg oc (extern_atom txt) sg args res;
