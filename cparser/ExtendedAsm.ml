@@ -136,10 +136,14 @@ let transf_outputs loc env = function
               formatloc loc cstr;
         (None, [], set_label_reg lbl 0 0 StringMap.empty, 1, 1)
       end
-  | _ ->
+  | outputs ->
       error "%aUnsupported feature: asm statement with 2 or more outputs"
             formatloc loc;
-      (None, [], StringMap.empty, 0, 0)
+      let rec bind_outputs pos subst = function
+      | [] -> (None, [], subst, pos, pos)
+      | (lbl, cstr, e) :: outputs ->
+          bind_outputs (pos + 1) (set_label_reg lbl pos pos subst) outputs
+      in bind_outputs 0 StringMap.empty outputs
 
 (* Check the clobber list *)
 
