@@ -114,18 +114,14 @@ let currentLocation = ref Cutil.no_loc
 
 let updateLoc l = currentLocation := l
 
-let numErrors = ref 0
-
 let error msg =
-  incr numErrors;
-  eprintf "%aError: %s\n" Cutil.printloc !currentLocation msg
+  Cerrors.error "%aError: %s" Cutil.formatloc !currentLocation msg
 
 let unsupported msg =
-  incr numErrors;
-  eprintf "%aUnsupported feature: %s\n" Cutil.printloc !currentLocation msg
+  Cerrors.error "%aUnsupported feature: %s" Cutil.formatloc !currentLocation msg
 
 let warning msg =
-  eprintf "%aWarning: %s\n" Cutil.printloc !currentLocation msg
+  Cerrors.warning "%aWarning: %s\n" Cutil.formatloc !currentLocation msg
 
 let string_of_errmsg msg =
   let string_of_err = function
@@ -831,6 +827,30 @@ and convertExprList env el =
   | [] -> Enil
   | e1 :: el' -> Econs(convertExpr env e1, convertExprList env el')
 
+(* Extended assembly *)
+
+let convertAsm loc env txt outputs inputs clobber =
+  let (txt', output', inputs') = 
+    ExtendedAsm.transf_asm loc env txt outputs inputs clobber in
+  let clobber' =
+    List.map intern_string clobber in
+  let ty_res =
+    match output' with None -> TVoid [] | Some e -> e.etyp in
+  (* Build the Ebuiltin expression *)
+  let e = 
+    let tinputs = convertTypArgs env [] inputs' in
+    let toutput = convertTyp env ty_res in
+    Ebuiltin(EF_inline_asm(intern_string txt', 
+                           signature_of_type tinputs toutput cc_default,
+                           clobber'),
+             tinputs,
+             convertExprList env inputs',
+             convertTyp env ty_res) in
+  (* Add an assignment to the output, if any *)
+  match output' with
+  | None -> e
+  | Some lhs -> Eassign (convertLvalue env lhs, e, typeof e)
+
 (* Separate the cases of a switch statement body *)
 
 type switchlabel =
@@ -891,7 +911,9 @@ let rec convertStmt ploc env s =
   | C.Sdo e ->
       add_lineno ploc s.sloc (swrap (Ctyping.sdo (convertExpr env e)))
   | C.Sseq(s1, s2) ->
-      Ssequence(convertStmt ploc env s1, convertStmt s1.sloc env s2)
+      let s1' = convertStmt ploc env s1 in
+      let s2' = convertStmt s1.sloc env s2 in
+      Ssequence(s1', s2')
   | C.Sif(e, s1, s2) ->
       let te = convertExpr env e in
       add_lineno ploc s.sloc 
@@ -940,11 +962,11 @@ let rec convertStmt ploc env s =
       unsupported "nested blocks"; Sskip
   | C.Sdecl _ ->
       unsupported "inner declarations"; Sskip
-  | C.Sasm txt ->
+  | C.Sasm(attrs, txt, outputs, inputs, clobber) ->
       if not !Clflags.option_finline_asm then
         unsupported "inline 'asm' statement (consider adding option -finline-asm)";
       add_lineno ploc s.sloc
-        (Sdo (Ebuiltin (EF_inline_asm (intern_string txt), Tnil, Enil, Tvoid)))
+        (Sdo (convertAsm s.sloc env txt outputs inputs clobber))
 
 and convertSwitch ploc env is_64 = function
   | [] ->
@@ -1211,7 +1233,7 @@ let public_globals gl =
 (** Convert a [C.program] into a [Csyntax.program] *)
 
 let convertProgram p =
-  numErrors := 0;
+  Cerrors.reset();
   stringNum := 0;
   Hashtbl.clear decl_atom;
   Hashtbl.clear stringTable;
@@ -1236,9 +1258,7 @@ let convertProgram p =
             prog_main = intern_string "main";
             prog_types = typs;
             prog_comp_env = ce } in
-        if !numErrors > 0
-        then None
-        else Some p'
+        if Cerrors.check_errors () then None else Some p'
   with Env.Error msg ->
     error (Env.error_message msg); None
 

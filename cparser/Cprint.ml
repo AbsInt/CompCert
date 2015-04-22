@@ -364,6 +364,27 @@ let full_decl pp (sto, id, ty, int) =
   end;
   fprintf pp ";@]"
 
+let asm_operand pp (label, constr, e) =
+  begin match label with
+  | None -> ()
+  | Some l -> fprintf pp "[%s] " l
+  end;
+  fprintf pp "%a (%a)" const (CStr constr) exp (0, e)
+
+let asm_operands pp = function
+  | [] -> ()
+  | op1 :: ops ->
+      fprintf pp "@[<hov 0>%a" asm_operand op1;
+      List.iter (fun op -> fprintf pp ",@ %a" asm_operand op) ops;
+      fprintf pp "@]"
+
+let asm_flags pp = function
+  | [] -> ()
+  | fl1 :: fls ->
+      fprintf pp "@[<hov 0>%a" const (CStr fl1);
+      List.iter (fun fl -> fprintf pp ",@ %a" const (CStr fl)) fls;
+      fprintf pp "@]"
+
 exception Not_expr
 
 let rec exp_of_stmt s =
@@ -429,8 +450,21 @@ let rec stmt pp s =
       fprintf pp "@[<v 2>{@ %a@;<0 -2>}@]" stmt_block s
   | Sdecl d ->
       full_decl pp d
-  | Sasm txt ->
-      fprintf pp "asm(%a);" const (CStr txt)
+  | Sasm(attrs, txt, [], [], []) ->
+      fprintf pp "asm%a(%a);" attributes attrs const (CStr txt)
+  | Sasm(attrs, txt, outputs, inputs, []) ->
+      fprintf pp "asm%a(@[<hov 0>%a@ :%a@ :%a@]);"
+                 attributes attrs
+                 const (CStr txt)
+                 asm_operands outputs
+                 asm_operands inputs
+  | Sasm(attrs, txt, outputs, inputs, flags) ->
+      fprintf pp "asm%a(@[<hov 0>%a@ :%a@ :%a@ : %a@]);"
+                 attributes attrs
+                 const (CStr txt)
+                 asm_operands outputs
+                 asm_operands inputs
+                 asm_flags flags
 
 and slabel pp = function
   | Slabel s ->

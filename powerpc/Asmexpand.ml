@@ -523,7 +523,7 @@ let expand_instruction instr =
           expand_builtin_memcpy (Z.to_int sz) (Z.to_int al) args
       | EF_annot_val(txt, targ) ->
           expand_annot_val txt targ args res
-      | EF_inline_asm txt ->
+      | EF_inline_asm(txt, sg, clob) ->
           emit instr
       | _ ->
           assert false

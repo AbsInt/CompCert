@@ -150,6 +150,8 @@ let decl env (sto, id, ty, int) =
     match int with None -> None | Some i -> Some(init env' i)),
    env')
 
+let asm_operand env (lbl, cstr, e) = (lbl, cstr, exp env e)
+
 let rec stmt env s =
   { sdesc = stmt_desc env s.sdesc; sloc = s.sloc }
 
@@ -170,7 +172,11 @@ and stmt_desc env = function
   | Sreturn a -> Sreturn (optexp env a)
   | Sblock sl -> let (sl', _) = mmap stmt_or_decl env sl in Sblock sl'
   | Sdecl d -> assert false
-  | Sasm txt -> Sasm txt
+  | Sasm(attr, txt, outputs, inputs, flags) ->
+       Sasm(attr, txt,
+            List.map (asm_operand env) outputs,
+            List.map (asm_operand env) inputs,
+            flags)
 
 and stmt_or_decl env s =
   match s.sdesc with

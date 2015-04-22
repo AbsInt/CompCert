@@ -270,6 +270,11 @@ let elab_constant loc = function
   | CONST_STRING(wide, s) ->
       elab_string_literal loc wide s
 
+let elab_simple_string loc wide chars =
+  match elab_string_literal loc wide chars with
+  | CStr s -> s
+  | _ -> error loc "wide character string not allowed here"; ""
+
 
 (** * Elaboration of type expressions, type specifiers, name declarations *)
 
@@ -498,13 +503,16 @@ and elab_cvspec env = function
   | CV_RESTRICT -> [ARestrict]
   | CV_ATTR attr -> elab_attribute env attr
 
+and elab_cvspecs env cv_specs =
+  List.fold_left add_attributes [] (List.map (elab_cvspec env) cv_specs)
+
 (* Elaboration of a type declarator.  C99 section 6.7.5. *)
 
 and elab_type_declarator loc env ty = function
   | Cabs.JUSTBASE ->
       (ty, env)
   | Cabs.ARRAY(d, cv_specs, sz) ->
-      let a = List.fold_left add_attributes [] (List.map (elab_cvspec env) cv_specs) in
+      let a = elab_cvspecs env cv_specs in
       let sz' =
         match sz with
         | None ->
@@ -520,7 +528,7 @@ and elab_type_declarator loc env ty = function
                 Some 1L in (* produces better error messages later *)
        elab_type_declarator loc env (TArray(ty, sz', a)) d
   | Cabs.PTR(cv_specs, d) ->
-      let a = List.fold_left add_attributes [] (List.map (elab_cvspec env) cv_specs) in
+      let a = elab_cvspecs env cv_specs in
       elab_type_declarator loc env (TPtr(ty, a)) d
   | Cabs.PROTO(d, (params, vararg)) ->
        begin match unroll env ty with
@@ -1933,6 +1941,13 @@ and elab_definitions local env = function
       let (decl2, env2) = elab_definitions local env1 dl in
       (decl1 @ decl2, env2)
 
+(* Extended asm *)
+
+let elab_asm_operand loc env (ASMOPERAND(label, wide, chars, e)) =
+  let s = elab_simple_string loc wide chars in
+  let e' = elab_expr loc env e in
+  (label, s, e')
+
 
 (* Contexts for elaborating statements *)
 
@@ -2118,14 +2133,14 @@ let rec elab_stmt env ctx s =
       { sdesc = Sskip; sloc = elab_loc loc }
 
 (* Traditional extensions *)
-  | ASM(wide, chars, loc) ->
-      begin match elab_string_literal loc wide chars with
-      | CStr s ->
-          { sdesc = Sasm s; sloc = elab_loc loc }
-      | _ ->
-          error loc "wide strings not supported in asm statement";
-          sskip
-      end
+  | ASM(cv_specs, wide, chars, outputs, inputs, flags, loc) ->
+      let a = elab_cvspecs env cv_specs in
+      let s = elab_simple_string loc wide chars in
+      let outputs = List.map (elab_asm_operand loc env) outputs in
+      let inputs = List.map (elab_asm_operand loc env) inputs in
+      let flags = List.map (fun (w,c) -> elab_simple_string loc w c) flags in
+      { sdesc = Sasm(a, s, outputs, inputs, flags);
+        sloc = elab_loc loc }
 
 (* Unsupported *)
   | DEFINITION def ->

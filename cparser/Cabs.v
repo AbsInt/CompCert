@@ -180,6 +180,12 @@ Definition init_name_group := (list spec_elem * list init_name)%type.
 (* e.g.: int x, y; *)
 Definition name_group := (list spec_elem * list name)%type.
 
+(* GCC extended asm *)
+Inductive asm_operand :=
+| ASMOPERAND: option string -> bool -> list char_code -> expression -> asm_operand.
+
+Definition asm_flag := (bool * list char_code)%type.
+
 (*
 ** Declaration definition (at toplevel)
 *)
@@ -209,7 +215,7 @@ with statement :=
  | DEFAULT : statement -> cabsloc -> statement
  | LABEL : string -> statement -> cabsloc -> statement
  | GOTO : string -> cabsloc -> statement
- | ASM : bool -> list char_code -> cabsloc -> statement
+ | ASM : list cvspec -> bool -> list char_code -> list asm_operand -> list asm_operand -> list asm_flag -> cabsloc -> statement
  | DEFINITION : definition -> statement (*definition or declaration of a variable or type*)
 
 with for_clause :=
