@@ -80,24 +80,29 @@ let is_reg_pair env ty =
 
 (* Transform the input operands:
      - add "&" for inputs of kind "m"
-     - evaluate constants for inputs of kind "i" *)
+     - evaluate constants for inputs of kind "i" and "n" *)
+
+let re_valid_input = Str.regexp "[a-zA-Z]+$"
 
 let rec transf_inputs loc env accu pos pos' subst = function
   | [] ->
       (List.rev accu, subst)
   | (lbl, cstr, e) :: inputs ->
-      match cstr with
-      | "r" ->
+      let valid = Str.string_match re_valid_input cstr 0 in
+      if valid && String.contains cstr 'r' then
         if is_reg_pair env e.etyp then
           transf_inputs loc env (e :: accu) (pos + 1) (pos' + 2)
                       (set_label_regpair lbl pos pos' subst) inputs
         else
           transf_inputs loc env (e :: accu) (pos + 1) (pos' + 1)
                       (set_label_reg lbl pos pos' subst) inputs
-      | "m" ->
+      else
+      if valid && String.contains cstr 'm' then
         transf_inputs loc env (eaddrof e :: accu) (pos + 1) (pos' + 1)
                     (set_label_mem lbl pos pos' subst) inputs
-      | "i" | "n" ->
+      else
+      if valid && (String.contains cstr 'i'
+                   || String.contains cstr 'n') then begin
         let n =
           match Ceval.integer_expr env e with
           | Some n -> n
@@ -106,15 +111,18 @@ let rec transf_inputs loc env accu pos pos' subst = function
                     0L in
         transf_inputs loc env accu (pos + 1) pos'
                       (set_label_const lbl pos n subst) inputs
-      | _ ->
+      end else begin
         error "%aUnsupported feature: asm argument of kind '%s'"
               formatloc loc cstr;
         transf_inputs loc env (e :: accu) (pos + 1) (pos' + 1)
                     (set_label_reg lbl pos pos' subst) inputs
+      end
   
 (* Transform the output operands:
      - outputs of kind "=m" become an input (equal to the address of the output)
 *)
+
+let re_valid_output = Str.regexp "=[a-zA-Z]+$"
 
 let transf_outputs loc env = function
   | [] ->
@@ -122,16 +130,17 @@ let transf_outputs loc env = function
   | [(lbl, cstr, e)] ->
       if not (is_modifiable_lvalue env e) then
         error "%aError: asm output is not a modifiable l-value" formatloc loc;
-      begin match cstr with
-      | "=r" ->
+      let valid = Str.string_match re_valid_output cstr 0 in
+      if valid && String.contains cstr 'r' then
         if is_reg_pair env e.etyp then
           (Some e, [], set_label_regpair lbl 0 0 StringMap.empty, 1, 2)
         else
           (Some e, [], set_label_reg lbl 0 0 StringMap.empty, 1, 1)
-      | "=m" ->
+      else
+      if valid && String.contains cstr 'm' then
         (None, [eaddrof e],
            set_label_mem lbl 0 0 StringMap.empty, 1, 1)
-      | _ ->
+      else begin
         error "%aUnsupported feature: asm result of kind '%s'"
               formatloc loc cstr;
         (None, [], set_label_reg lbl 0 0 StringMap.empty, 1, 1)
@@ -139,6 +148,8 @@ let transf_outputs loc env = function
   | outputs ->
       error "%aUnsupported feature: asm statement with 2 or more outputs"
             formatloc loc;
+      (* Bind the outputs so that we don't get another error 
+         when substituting the text *)
       let rec bind_outputs pos subst = function
       | [] -> (None, [], subst, pos, pos)
       | (lbl, cstr, e) :: outputs ->
