@@ -233,15 +233,7 @@ let signatur p sg =
      (print_option asttype) sg.sig_res 
      callconv sg.sig_cc
 
-let assertions = ref ([]: (ident * annot_arg list) list)
-
-let annot_arg p = function
-  | AA_arg ty ->
-      fprintf p "AA_arg %a" asttype ty
-  | AA_int n ->
-      fprintf p "AA_int %a" coqint n
-  | AA_float n ->
-      fprintf p "AA_float %a" coqfloat n
+let assertions = ref ([]: (ident * typ list) list)
 
 let external_function p = function
   | EF_external(name, sg) ->
@@ -262,12 +254,15 @@ let external_function p = function
       fprintf p "(EF_memcpy %ld %ld)" (Z.to_int32 sz) (Z.to_int32 al)
   | EF_annot(text, targs) -> 
       assertions := (text, targs) :: !assertions;
-      fprintf p "(EF_annot %ld%%positive %a)" (P.to_int32 text) (print_list annot_arg) targs
+      fprintf p "(EF_annot %ld%%positive %a)" (P.to_int32 text) (print_list asttype) targs
   | EF_annot_val(text, targ) ->
-      assertions := (text, [AA_arg targ]) :: !assertions;
+      assertions := (text, [targ]) :: !assertions;
       fprintf p "(EF_annot_val %ld%%positive %a)" (P.to_int32 text) asttype targ
-  | EF_inline_asm(text) ->
-      fprintf p "(EF_inline_asm %ld%%positive)" (P.to_int32 text)
+  | EF_inline_asm(text, sg, clob) ->
+      fprintf p "@[<hov 2>(EF_inline_asm %ld%%positive@ %a@ %a)@]"
+              (P.to_int32 text)
+              signatur sg
+              (print_list ident) clob
 
 (* Expressions *)
 
@@ -461,19 +456,9 @@ let print_assertion p (txt, targs) =
     frags;
   fprintf p "  | %ld%%positive, " (P.to_int32 txt);
   list_iteri
-    (fun i targ ->
-      match targ with
-      | AA_arg _ -> fprintf p "_x%d :: " (i + 1)
-      | _ -> ())
+    (fun i targ -> fprintf p "_x%d :: " (i + 1))
     targs;
   fprintf p "nil =>@ ";
-  list_iteri
-    (fun i targ ->
-      match targ with
-      | AA_arg _ -> ()
-      | AA_int n ->  fprintf p "    let _x%d := %a in@ " (i + 1) coqint n
-      | AA_float n ->  fprintf p "    let _x%d := %a in@ " (i + 1) coqfloat n)
-    targs;
   fprintf p "    ";
   List.iter
     (function
