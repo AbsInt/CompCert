@@ -162,6 +162,7 @@ let check_clobbers loc clob =
   List.iter
     (fun c ->
       if Machregsaux.register_by_name c <> None
+      || List.mem c Machregsaux.scratch_register_names
       || c = "memory" || c = "cc"
       then ()
       else error "%aError: unrecognized asm register clobber '%s'" 

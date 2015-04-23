@@ -12,7 +12,8 @@
 
 (** Auxiliary functions on machine registers *)
 
-val register_by_name: string -> Machregs.mreg option
-val can_reserve_register: Machregs.mreg -> bool
 val name_of_register: Machregs.mreg -> string option
+val register_by_name: string -> Machregs.mreg option
+val scratch_register_names: string list
+val can_reserve_register: Machregs.mreg -> bool
 val mregs_of_clobber: Camlcoq.atom list -> Machregs.mreg list

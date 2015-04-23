@@ -25,6 +25,8 @@ let register_names = [
   ("F12", F12);("F13", F13);("F14", F14); ("F15", F15)
 ]
 
+let scratch_register_names = [ "R14" ]
+
 let name_of_register r =
   let rec rev_assoc = function
   | [] -> None

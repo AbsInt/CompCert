@@ -22,6 +22,8 @@ let register_names = [
   ("ST0", FP0)
 ]
 
+let scratch_register_names = []
+
 let name_of_register r =
   let rec rev_assoc = function
   | [] -> None
