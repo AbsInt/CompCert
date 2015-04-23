@@ -22,6 +22,7 @@ Require Inlining.
 Require ValueDomain.
 Require Tailcall.
 Require Allocation.
+Require Bounds.
 Require Ctypes.
 Require Csyntax.
 Require Ctyping.
@@ -75,6 +76,9 @@ Extract Constant Allocation.regalloc => "Regalloc.regalloc".
 
 (* Linearize *)
 Extract Constant Linearize.enumerate_aux => "Linearizeaux.enumerate_aux".
+
+(* Bounds *)
+Extract Constant Bounds.mregs_of_clobber => "Machregsaux.mregs_of_clobber".
 
 (* SimplExpr *)
 Extract Constant SimplExpr.first_unused_ident => "Camlcoq.first_unused_ident".

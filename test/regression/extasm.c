@@ -6,11 +6,11 @@ int clobbers(int x)
   int y;
   asm("TEST0 out:%0 in:%1" : "=r"(y) : "r"(x) : "cc"
 #if defined(__i386__)
-      , "eax", "edx", "ecx"
+      , "eax", "edx", "ebx"
 #elif defined(__arm__)
-      , "r0", "r1", "r2"
+      , "r0", "r1", "r4"
 #elif defined(__PPC__)
-      , "r3", "r4", "r5"
+      , "r3", "r4", "r31"
 #endif
 );
   return y;

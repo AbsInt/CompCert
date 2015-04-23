@@ -87,6 +87,8 @@ Section BOUNDS.
 
 Variable f: function.
 
+Parameter mregs_of_clobber: list ident -> list mreg.
+
 (** In the proof of the [Stacking] pass, we only need to bound the
   registers written by an instruction.  Therefore, this function
   returns these registers, ignoring registers used only as
@@ -101,6 +103,7 @@ Definition regs_of_instr (i: instruction) : list mreg :=
   | Lstore chunk addr args src => nil
   | Lcall sig ros => nil
   | Ltailcall sig ros => nil
+  | Lbuiltin (EF_inline_asm txt typs clob) args res => res ++ mregs_of_clobber clob
   | Lbuiltin ef args res => res ++ destroyed_by_builtin ef
   | Lannot ef args => nil
   | Llabel lbl => nil
@@ -351,7 +354,9 @@ Proof.
 (* call *)
   eapply size_arguments_bound; eauto.
 (* builtin *)
-  apply H1. apply in_or_app; auto. 
+  apply H1. destruct e; apply in_or_app; auto.
+  change (destroyed_by_builtin (EF_inline_asm text sg clobbers)) with (@nil mreg) in H2.
+  simpl in H2; tauto.
 (* annot *)
   apply H0. rewrite slots_of_locs_charact; auto. 
 Qed.
