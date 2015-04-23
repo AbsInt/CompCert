@@ -281,8 +281,10 @@ let coqint_of_camlint64 : int64 -> Integers.Int64.int = Z.of_uint64
 
 (* Atoms (positive integers representing strings) *)
 
-let atom_of_string = (Hashtbl.create 17 : (string, positive) Hashtbl.t)
-let string_of_atom = (Hashtbl.create 17 : (positive, string) Hashtbl.t)
+type atom = positive
+
+let atom_of_string = (Hashtbl.create 17 : (string, atom) Hashtbl.t)
+let string_of_atom = (Hashtbl.create 17 : (atom, string) Hashtbl.t)
 let next_atom = ref Coq_xH
 
 let intern_string s =
