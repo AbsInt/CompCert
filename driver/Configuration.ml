@@ -82,6 +82,11 @@ let has_runtime_lib =
   | "true" -> true
   | "false" -> false
   | v -> bad_config "has_runtime_lib" [v]
+let has_standard_headers = 
+  match get_config_string "has_standard_headers" with
+  | "true" -> true
+  | "false" -> false
+  | v -> bad_config "has_standard_headers" [v]
 let stdlib_path =
   if has_runtime_lib then
     get_config_string "stdlib_path"

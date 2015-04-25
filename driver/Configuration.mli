@@ -31,6 +31,8 @@ val stdlib_path: string
   (** Path to CompCert's library *)
 val has_runtime_lib: bool
   (** True if CompCert's library is available. *)
+val has_standard_headers: bool
+  (** True if CompCert's standard header files is available. *)
 val advanced_debug: bool
   (** True if advanced debug is implement for the Target *)
 

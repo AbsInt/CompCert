@@ -93,8 +93,8 @@ let preprocess ifile ofile =
   let cmd = List.concat [
     Configuration.prepro;
     ["-D__COMPCERT__"];
-    (if Configuration.has_runtime_lib
-     then ["-I" ^ !stdlib_path]
+    (if Configuration.has_standard_headers
+     then ["-I" ^ Filename.concat !stdlib_path "include" ]
      else []);
     List.rev !prepro_options;
     [ifile]
