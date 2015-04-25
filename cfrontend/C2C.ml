@@ -121,7 +121,7 @@ let unsupported msg =
   Cerrors.error "%aUnsupported feature: %s" Cutil.formatloc !currentLocation msg
 
 let warning msg =
-  Cerrors.warning "%aWarning: %s\n" Cutil.formatloc !currentLocation msg
+  Cerrors.warning "%aWarning: %s" Cutil.formatloc !currentLocation msg
 
 let string_of_errmsg msg =
   let string_of_err = function
@@ -572,6 +572,16 @@ let z_of_str hex str fst =
   done;
   !res
 
+let checkFloatOverflow f =
+  match f with
+  | Fappli_IEEE.B754_finite _ -> ()
+  | Fappli_IEEE.B754_zero _ ->
+      warning "Floating-point literal is so small that it converts to 0"
+  | Fappli_IEEE.B754_infinity _ ->
+      warning "Floating-point literal is so large that it converts to infinity"
+  | Fappli_IEEE.B754_nan _ ->
+      warning "Floating-point literal converts to Not-a-Number"
+
 let convertFloat f kind =
   let mant = z_of_str f.C.hex (f.C.intPart ^ f.C.fracPart) 0 in
   match mant with
@@ -595,9 +605,13 @@ let convertFloat f kind =
 
       begin match kind with
       | FFloat ->
-	  Ctyping.econst_single (Float32.from_parsed base mant exp)
+	  let f = Float32.from_parsed base mant exp in
+          checkFloatOverflow f;
+          Ctyping.econst_single f
       | FDouble | FLongDouble ->
-	  Ctyping.econst_float (Float.from_parsed base mant exp)
+	  let f = Float.from_parsed base mant exp in
+          checkFloatOverflow f;
+          Ctyping.econst_float f
       end
 
     | Z.Zneg _ -> assert false
