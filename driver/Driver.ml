@@ -155,6 +155,15 @@ let dump_asm asm destfile =
   output_value oc C2C.decl_atom;
   close_out oc
 
+let jdump_magic_number = "CompCertJDUMP" ^ Configuration.version
+
+let dump_jasm asm destfile =
+  let oc = open_out_bin destfile in
+  fprintf oc "{\n\"Version\":\"%s\",\n\"Asm Ast\":%a,\n\"C Declaration\":%t}"
+    jdump_magic_number AsmToJSON.p_program asm C2CToJSON.print_decl_atom;
+  close_out oc
+
+
 (* From CompCert C AST to asm *)
 
 let compile_c_ast sourcename csyntax ofile debug =
@@ -176,9 +185,12 @@ let compile_c_ast sourcename csyntax ofile debug =
     | Errors.Error msg ->
         print_error stderr msg;
         exit 2 in
-  (* Dump Asm in binary format *)  
+  (* Dump Asm in binary and JSON format *)  
   if !option_sdump then
-    dump_asm asm (output_filename sourcename ".c" ".sdump");
+    begin
+      dump_asm asm (output_filename sourcename ".c" ".sdump");
+      dump_jasm asm (output_filename sourcename ".c" ".json")
+    end;
   (* Print Asm in text form *)
   let oc = open_out ofile in
   PrintAsm.print_program oc asm debug;
