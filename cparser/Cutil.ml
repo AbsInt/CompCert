@@ -574,6 +574,19 @@ let is_function_type env t =
   | TFun _ -> true
   | _ -> false
 
+(* Find the info for a field access *)
+
+let field_of_dot_access env t m =
+  match unroll env t with
+  | TStruct(id, _) -> Env.find_struct_member env (id, m)
+  | TUnion(id, _) -> Env.find_union_member env (id, m)
+  | _ -> assert false
+
+let field_of_arrow_access env t m =
+  match unroll env t with
+  | TPtr(t, _) | TArray(t, _, _) -> field_of_dot_access env t m
+  | _ -> assert false
+
 (* Ranking of integer kinds *)
 
 let integer_rank = function

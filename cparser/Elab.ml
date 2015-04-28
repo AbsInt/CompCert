@@ -1406,6 +1406,23 @@ let elab_expr loc env a =
       let b1 = elab a1 in
       if not (is_lvalue b1 || is_function_type env b1.etyp) then
         err "argument of '&' is not an l-value";
+      begin match b1.edesc with
+      | EVar id ->
+          begin match wrap Env.find_ident loc env id with
+          | Env.II_ident(Storage_register, _) ->
+              err "address of register variable '%s' requested" id.name
+          | _ -> ()
+          end
+      | EUnop(Odot f, b2) ->
+          let fld = wrap2 field_of_dot_access loc env b2.etyp f in
+          if fld.fld_bitfield <> None then
+            err "address of bit-field '%s' requested" f
+      | EUnop(Oarrow f, b2) ->
+          let fld = wrap2 field_of_arrow_access loc env b2.etyp f in
+          if fld.fld_bitfield <> None then
+            err "address of bit-field '%s' requested" f
+      | _ -> ()
+      end;
       { edesc = EUnop(Oaddrof, b1); etyp = TPtr(b1.etyp, []) }
 
   | UNARY(MEMOF, a1) ->
