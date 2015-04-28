@@ -964,8 +964,7 @@ let rec subst_stmt phi s =
       | Sskip
       | Sbreak
       | Scontinue
-      | Sgoto _
-      | Sasm _ -> s.sdesc
+      | Sgoto _ -> s.sdesc
       | Sdo e -> Sdo (subst_expr phi e)
       | Sseq(s1, s2) -> Sseq (subst_stmt phi s1, subst_stmt phi s2)
       | Sif(e, s1, s2) ->
@@ -981,6 +980,13 @@ let rec subst_stmt phi s =
       | Sreturn (Some e) -> Sreturn (Some (subst_expr phi e))
       | Sblock sl -> Sblock (List.map (subst_stmt phi) sl)
       | Sdecl d -> Sdecl (subst_decl phi d)
+      | Sasm(attr, template, outputs, inputs, clob) ->
+          let subst_asm_operand (lbl, cstr, e) = 
+            (lbl, cstr, subst_expr phi e) in
+          Sasm(attr, template,
+               List.map subst_asm_operand outputs,
+               List.map subst_asm_operand inputs,
+               clob)
   }
 
 
