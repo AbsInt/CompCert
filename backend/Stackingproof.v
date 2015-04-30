@@ -508,14 +508,14 @@ Qed.
 (** A variant of [index_contains], up to a memory injection. *)
 
 Definition index_contains_inj (j: meminj) (m: mem) (sp: block) (idx: frame_index) (v: val) : Prop :=
-  exists v', index_contains m sp idx v' /\ val_inject j v v'.
+  exists v', index_contains m sp idx v' /\ Val.inject j v v'.
 
 Lemma gss_index_contains_inj:
   forall j idx m m' sp v v',
   Mem.store (chunk_of_type (type_of_index idx)) m sp (offset_of_index fe idx) v' = Some m' ->
   index_valid idx ->
   Val.has_type v (type_of_index idx) ->
-  val_inject j v v' ->
+  Val.inject j v v' ->
   index_contains_inj j m' sp idx v.
 Proof.
   intros. exploit gss_index_contains_base; eauto. intros [v'' [A B]].
@@ -530,7 +530,7 @@ Lemma gss_index_contains_inj':
   forall j idx m m' sp v v',
   Mem.store (chunk_of_type (type_of_index idx)) m sp (offset_of_index fe idx) v' = Some m' ->
   index_valid idx ->
-  val_inject j v v' ->
+  Val.inject j v v' ->
   index_contains_inj j m' sp idx (Val.load_result (chunk_of_type (type_of_index idx)) v).
 Proof.
   intros. exploit gss_index_contains_base; eauto. intros [v'' [A B]].
@@ -598,7 +598,7 @@ Hint Resolve store_other_index_contains_inj index_contains_inj_incr: stacking.
 (** Agreement with Mach register states *)
 
 Definition agree_regs (j: meminj) (ls: locset) (rs: regset) : Prop :=
-  forall r, val_inject j (ls (R r)) (rs r).
+  forall r, Val.inject j (ls (R r)) (rs r).
 
 (** Agreement over data stored in memory *)
 
@@ -693,14 +693,14 @@ Definition agree_callee_save (ls ls0: locset) : Prop :=
 
 Lemma agree_reg:
   forall j ls rs r,
-  agree_regs j ls rs -> val_inject j (ls (R r)) (rs r).
+  agree_regs j ls rs -> Val.inject j (ls (R r)) (rs r).
 Proof.
   intros. auto. 
 Qed.
 
 Lemma agree_reglist:
   forall j ls rs rl,
-  agree_regs j ls rs -> val_list_inject j (reglist ls rl) (rs##rl).
+  agree_regs j ls rs -> Val.inject_list j (reglist ls rl) (rs##rl).
 Proof.
   induction rl; simpl; intros.
   auto. constructor. eauto with stacking. auto. 
@@ -713,7 +713,7 @@ Hint Resolve agree_reg agree_reglist: stacking.
 Lemma agree_regs_set_reg:
   forall j ls rs r v v',
   agree_regs j ls rs ->
-  val_inject j v v' ->
+  Val.inject j v v' ->
   agree_regs j (Locmap.set (R r) v ls) (Regmap.set r v' rs).
 Proof.
   intros; red; intros. 
@@ -725,7 +725,7 @@ Qed.
 Lemma agree_regs_set_regs:
   forall j rl vl vl' ls rs,
   agree_regs j ls rs ->
-  val_list_inject j vl vl' ->
+  Val.inject_list j vl vl' ->
   agree_regs j (Locmap.setlist (map R rl) vl ls) (set_regs rl vl' rs).
 Proof.
   induction rl; simpl; intros. 
@@ -850,7 +850,7 @@ Lemma agree_frame_set_local:
   forall j ls ls0 m sp m' sp' parent retaddr ofs ty v v' m'',
   agree_frame j ls ls0 m sp m' sp' parent retaddr ->
   slot_within_bounds b Local ofs ty -> slot_valid f Local ofs ty = true ->
-  val_inject j v v' ->
+  Val.inject j v v' ->
   Mem.store (chunk_of_type ty) m' sp' (offset_of_index fe (FI_local ofs ty)) v' = Some m'' ->
   agree_frame j (Locmap.set (S Local ofs ty) v ls) ls0 m sp m'' sp' parent retaddr.
 Proof.
@@ -889,7 +889,7 @@ Lemma agree_frame_set_outgoing:
   forall j ls ls0 m sp m' sp' parent retaddr ofs ty v v' m'',
   agree_frame j ls ls0 m sp m' sp' parent retaddr ->
   slot_within_bounds b Outgoing ofs ty -> slot_valid f Outgoing ofs ty = true ->
-  val_inject j v v' ->
+  Val.inject j v v' ->
   Mem.store (chunk_of_type ty) m' sp' (offset_of_index fe (FI_arg ofs ty)) v' = Some m'' ->
   agree_frame j (Locmap.set (S Outgoing ofs ty) v ls) ls0 m sp m'' sp' parent retaddr.
 Proof.
@@ -981,7 +981,7 @@ Lemma agree_frame_parallel_stores:
   forall j ls ls0 m sp m' sp' parent retaddr chunk addr addr' v v' m1 m1',
   agree_frame j ls ls0 m sp m' sp' parent retaddr ->
   Mem.inject j m m' ->
-  val_inject j addr addr' ->
+  Val.inject j addr addr' ->
   Mem.storev chunk m addr v = Some m1 ->
   Mem.storev chunk m' addr' v' = Some m1' ->
   agree_frame j ls ls0 m1 sp m1' sp' parent retaddr.
@@ -1669,7 +1669,7 @@ Hypothesis mkindex_val:
   index_contains_inj j m sp (mkindex (number r)) (ls0 (R r)).
 
 Definition agree_unused (ls0: locset) (rs: regset) : Prop :=
-  forall r, ~(mreg_within_bounds b r) -> val_inject j (ls0 (R r)) (rs r).
+  forall r, ~(mreg_within_bounds b r) -> Val.inject j (ls0 (R r)) (rs r).
 
 Lemma restore_callee_save_regs_correct:
   forall l rs k,
@@ -1681,7 +1681,7 @@ Lemma restore_callee_save_regs_correct:
       (State cs fb (Vptr sp Int.zero)
         (restore_callee_save_regs bound number mkindex ty fe l k) rs m)
    E0 (State cs fb (Vptr sp Int.zero) k rs' m)
-  /\ (forall r, In r l -> val_inject j (ls0 (R r)) (rs' r))
+  /\ (forall r, In r l -> Val.inject j (ls0 (R r)) (rs' r))
   /\ (forall r, ~(In r l) -> rs' r = rs r)
   /\ agree_unused ls0 rs'.
 Proof.
@@ -1734,7 +1734,7 @@ Lemma restore_callee_save_correct:
     E0 (State cs fb (Vptr sp' Int.zero) k rs' m')
   /\ (forall r, 
         In r int_callee_save_regs \/ In r float_callee_save_regs -> 
-        val_inject j (ls0 (R r)) (rs' r))
+        Val.inject j (ls0 (R r)) (rs' r))
   /\ (forall r, 
         ~(In r int_callee_save_regs) ->
         ~(In r float_callee_save_regs) ->
@@ -1986,7 +1986,7 @@ Qed.
 Lemma match_stacks_parallel_stores:
   forall j m m' chunk addr addr' v v' m1 m1',
   Mem.inject j m m' ->
-  val_inject j addr addr' ->
+  Val.inject j addr addr' ->
   Mem.storev chunk m addr v = Some m1 ->
   Mem.storev chunk m' addr' v' = Some m1' ->
   forall cs cs' sg bound bound',
@@ -2327,7 +2327,7 @@ Hypothesis AGCS: agree_callee_save ls (parent_locset cs).
 Lemma transl_external_argument:
   forall l,
   In l (loc_arguments sg) ->
-  exists v, extcall_arg rs m' (parent_sp cs') l v /\ val_inject j (ls l) v.
+  exists v, extcall_arg rs m' (parent_sp cs') l v /\ Val.inject j (ls l) v.
 Proof.
   intros.
   assert (loc_argument_acceptable l). apply loc_arguments_acceptable with sg; auto.
@@ -2354,7 +2354,7 @@ Lemma transl_external_arguments_rec:
   forall locs,
   incl locs (loc_arguments sg) ->
   exists vl,
-  list_forall2 (extcall_arg rs m' (parent_sp cs')) locs vl /\ val_list_inject j ls##locs vl.
+  list_forall2 (extcall_arg rs m' (parent_sp cs')) locs vl /\ Val.inject_list j ls##locs vl.
 Proof.
   induction locs; simpl; intros.
   exists (@nil val); split. constructor. constructor.
@@ -2366,7 +2366,7 @@ Qed.
 Lemma transl_external_arguments:
   exists vl,
   extcall_arguments rs m' (parent_sp cs') sg vl /\
-  val_list_inject j (ls ## (loc_arguments sg)) vl.
+  Val.inject_list j (ls ## (loc_arguments sg)) vl.
 Proof.
   unfold extcall_arguments. 
   apply transl_external_arguments_rec.
@@ -2402,7 +2402,7 @@ Lemma transl_annot_arg_correct:
   (forall sl ofs ty, In (S sl ofs ty) (params_of_annot_arg a) -> slot_within_bounds b sl ofs ty) ->
   exists v',
      eval_annot_arg ge rs (Vptr sp' Int.zero) m' (transl_annot_arg fe a) v'
-  /\ val_inject j v v'.
+  /\ Val.inject j v v'.
 Proof.
 Local Opaque fe offset_of_index.
   induction 1; simpl; intros VALID BOUNDS.
@@ -2424,7 +2424,7 @@ Local Transparent fe.
   eapply agree_bounds; eauto. eapply Mem.valid_access_perm. eapply Mem.load_valid_access; eauto. 
 - econstructor; split; eauto with aarg.
   unfold Val.add. rewrite ! Int.add_zero_l. econstructor. eapply agree_inj; eauto. auto.
-- assert (val_inject j (Senv.symbol_address ge id ofs) (Senv.symbol_address ge id ofs)).
+- assert (Val.inject j (Senv.symbol_address ge id ofs) (Senv.symbol_address ge id ofs)).
   { unfold Senv.symbol_address; simpl; unfold Genv.symbol_address. 
     destruct (Genv.find_symbol ge id) eqn:FS; auto.
     econstructor. eapply (proj1 GINJ); eauto. rewrite Int.add_zero; auto. }
@@ -2436,7 +2436,7 @@ Local Transparent fe.
 - destruct IHeval_annot_arg1 as (v1 & A1 & B1); auto using in_or_app.
   destruct IHeval_annot_arg2 as (v2 & A2 & B2); auto using in_or_app.
   exists (Val.longofwords v1 v2); split; auto with aarg. 
-  apply val_longofwords_inject; auto. 
+  apply Val.longofwords_inject; auto. 
 Qed.
 
 Lemma transl_annot_args_correct:
@@ -2446,7 +2446,7 @@ Lemma transl_annot_args_correct:
   (forall sl ofs ty, In (S sl ofs ty) (params_of_annot_args al) -> slot_within_bounds b sl ofs ty) ->
   exists vl',
      eval_annot_args ge rs (Vptr sp' Int.zero) m' (List.map (transl_annot_arg fe) al) vl'
-  /\ val_list_inject j vl vl'.
+  /\ Val.inject_list j vl vl'.
 Proof.
   induction 1; simpl; intros VALID BOUNDS.
 - exists (@nil val); split; constructor.
@@ -2618,7 +2618,7 @@ Proof.
 - (* Lop *)
   assert (exists v',
           eval_operation ge (Vptr sp' Int.zero) (transl_op (make_env (function_bounds f)) op) rs0##args m' = Some v'
-       /\ val_inject j v v').
+       /\ Val.inject j v v').
   eapply eval_operation_inject; eauto.
   eapply match_stacks_preserves_globals; eauto.
   eapply agree_inj; eauto. eapply agree_reglist; eauto.
@@ -2636,7 +2636,7 @@ Proof.
 - (* Lload *)
   assert (exists a',
           eval_addressing ge (Vptr sp' Int.zero) (transl_addr (make_env (function_bounds f)) addr) rs0##args = Some a'
-       /\ val_inject j a a').
+       /\ Val.inject j a a').
   eapply eval_addressing_inject; eauto. 
   eapply match_stacks_preserves_globals; eauto.
   eapply agree_inj; eauto. eapply agree_reglist; eauto.
@@ -2654,7 +2654,7 @@ Proof.
 - (* Lstore *)
   assert (exists a',
           eval_addressing ge (Vptr sp' Int.zero) (transl_addr (make_env (function_bounds f)) addr) rs0##args = Some a'
-       /\ val_inject j a a').
+       /\ Val.inject j a a').
   eapply eval_addressing_inject; eauto. 
   eapply match_stacks_preserves_globals; eauto.
   eapply agree_inj; eauto. eapply agree_reglist; eauto.

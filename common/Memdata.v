@@ -726,7 +726,7 @@ Inductive memval_inject (f: meminj): memval -> memval -> Prop :=
       forall n, memval_inject f (Byte n) (Byte n)
   | memval_inject_frag:
       forall v1 v2 q n,
-      val_inject f v1 v2 ->
+      Val.inject f v1 v2 ->
       memval_inject f (Fragment v1 q n) (Fragment v2 q n)
   | memval_inject_undef:
       forall mv, memval_inject f Undef mv.
@@ -738,7 +738,7 @@ Proof.
 Qed.
 
 (** [decode_val], applied to lists of memory values that are pairwise
-  related by [memval_inject], returns values that are related by [val_inject]. *)
+  related by [memval_inject], returns values that are related by [Val.inject]. *)
 
 Lemma proj_bytes_inject:
   forall f vl vl',
@@ -759,7 +759,7 @@ Lemma check_value_inject:
   list_forall2 (memval_inject f) vl vl' ->
   forall v v' q n,
   check_value n v q vl = true ->
-  val_inject f v v' -> v <> Vundef ->
+  Val.inject f v v' -> v <> Vundef ->
   check_value n v' q vl' = true.
 Proof.
   induction 1; intros; destruct n; simpl in *; auto. 
@@ -774,7 +774,7 @@ Qed.
 Lemma proj_value_inject:
   forall f q vl1 vl2,
   list_forall2 (memval_inject f) vl1 vl2 ->
-  val_inject f (proj_value q vl1) (proj_value q vl2).
+  Val.inject f (proj_value q vl1) (proj_value q vl2).
 Proof.
   intros. unfold proj_value. 
   inversion H; subst. auto. inversion H0; subst; auto.
@@ -819,26 +819,26 @@ Qed.
 Theorem decode_val_inject:
   forall f vl1 vl2 chunk,
   list_forall2 (memval_inject f) vl1 vl2 ->
-  val_inject f (decode_val chunk vl1) (decode_val chunk vl2).
+  Val.inject f (decode_val chunk vl1) (decode_val chunk vl2).
 Proof.
   intros. unfold decode_val. 
   destruct (proj_bytes vl1) as [bl1|] eqn:PB1.
   exploit proj_bytes_inject; eauto. intros PB2. rewrite PB2. 
   destruct chunk; constructor.
   assert (A: forall q fn,
-     val_inject f (Val.load_result chunk (proj_value q vl1))
+     Val.inject f (Val.load_result chunk (proj_value q vl1))
                   (match proj_bytes vl2 with
                    | Some bl => fn bl
                    | None => Val.load_result chunk (proj_value q vl2)
                    end)).
   { intros. destruct (proj_bytes vl2) as [bl2|] eqn:PB2.
     rewrite proj_value_undef. destruct chunk; auto. eapply proj_bytes_not_inject; eauto. congruence.
-    apply val_load_result_inject. apply proj_value_inject; auto.
+    apply Val.load_result_inject. apply proj_value_inject; auto.
   }
   destruct chunk; auto.
 Qed.
 
-(** Symmetrically, [encode_val], applied to values related by [val_inject],
+(** Symmetrically, [encode_val], applied to values related by [Val.inject],
   returns lists of memory values that are pairwise
   related by [memval_inject]. *)
 
@@ -870,7 +870,7 @@ Proof.
 Qed.  
 
 Lemma inj_value_inject:
-  forall f v1 v2 q, val_inject f v1 v2 -> list_forall2 (memval_inject f) (inj_value q v1) (inj_value q v2).
+  forall f v1 v2 q, Val.inject f v1 v2 -> list_forall2 (memval_inject f) (inj_value q v1) (inj_value q v2).
 Proof.
   intros.
 Local Transparent inj_value.
@@ -880,7 +880,7 @@ Qed.
 
 Theorem encode_val_inject:
   forall f v1 v2 chunk,
-  val_inject f v1 v2 ->
+  Val.inject f v1 v2 ->
   list_forall2 (memval_inject f) (encode_val chunk v1) (encode_val chunk v2).
 Proof.
   intros. inversion H; subst; simpl; destruct chunk;

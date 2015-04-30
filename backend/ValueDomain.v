@@ -3690,7 +3690,7 @@ Proof.
 Qed.
 
 Lemma vmatch_inj:
-  forall bc v x, vmatch bc v x -> val_inject (inj_of_bc bc) v v.
+  forall bc v x, vmatch bc v x -> Val.inject (inj_of_bc bc) v v.
 Proof.
   induction 1; econstructor. 
   eapply pmatch_inj; eauto. rewrite Int.add_zero; auto. 
@@ -3698,7 +3698,7 @@ Proof.
 Qed.
 
 Lemma vmatch_list_inj:
-  forall bc vl xl, list_forall2 (vmatch bc) vl xl -> val_list_inject (inj_of_bc bc) vl vl.
+  forall bc vl xl, list_forall2 (vmatch bc) vl xl -> Val.inject_list (inj_of_bc bc) vl vl.
 Proof.
   induction 1; constructor. eapply vmatch_inj; eauto. auto. 
 Qed. 
@@ -3761,7 +3761,7 @@ Proof.
 Qed.
 
 Lemma vmatch_inj_top:
-  forall bc v v', val_inject (inj_of_bc bc) v v' -> vmatch bc v Vtop.
+  forall bc v v', Val.inject (inj_of_bc bc) v v' -> vmatch bc v Vtop.
 Proof.
   intros. inv H; constructor. eapply pmatch_inj_top; eauto. 
 Qed.

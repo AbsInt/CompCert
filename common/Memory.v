@@ -2303,7 +2303,7 @@ Lemma load_inj:
   mem_inj f m1 m2 ->
   load chunk m1 b1 ofs = Some v1 ->
   f b1 = Some (b2, delta) ->
-  exists v2, load chunk m2 b2 (ofs + delta) = Some v2 /\ val_inject f v1 v2.
+  exists v2, load chunk m2 b2 (ofs + delta) = Some v2 /\ Val.inject f v1 v2.
 Proof.
   intros.
   exists (decode_val chunk (getN (size_chunk_nat chunk) (ofs + delta) (m2.(mem_contents)#b2))).
@@ -2367,7 +2367,7 @@ Lemma store_mapped_inj:
   store chunk m1 b1 ofs v1 = Some n1 ->
   meminj_no_overlap f m1 ->
   f b1 = Some (b2, delta) ->
-  val_inject f v1 v2 ->
+  Val.inject f v1 v2 ->
   exists n2,
     store chunk m2 b2 (ofs + delta) v2 = Some n2
     /\ mem_inj f n1 n2.
@@ -3250,7 +3250,7 @@ Theorem valid_pointer_inject_val:
   forall f m1 m2 b ofs b' ofs',
   inject f m1 m2 ->
   valid_pointer m1 b (Int.unsigned ofs) = true ->
-  val_inject f (Vptr b ofs) (Vptr b' ofs') ->
+  Val.inject f (Vptr b ofs) (Vptr b' ofs') ->
   valid_pointer m2 b' (Int.unsigned ofs') = true.
 Proof.
   intros. inv H1.
@@ -3263,7 +3263,7 @@ Theorem weak_valid_pointer_inject_val:
   forall f m1 m2 b ofs b' ofs',
   inject f m1 m2 ->
   weak_valid_pointer m1 b (Int.unsigned ofs) = true ->
-  val_inject f (Vptr b ofs) (Vptr b' ofs') ->
+  Val.inject f (Vptr b ofs) (Vptr b' ofs') ->
   weak_valid_pointer m2 b' (Int.unsigned ofs') = true.
 Proof.
   intros. inv H1.
@@ -3376,7 +3376,7 @@ Theorem load_inject:
   inject f m1 m2 ->
   load chunk m1 b1 ofs = Some v1 ->
   f b1 = Some (b2, delta) ->
-  exists v2, load chunk m2 b2 (ofs + delta) = Some v2 /\ val_inject f v1 v2.
+  exists v2, load chunk m2 b2 (ofs + delta) = Some v2 /\ Val.inject f v1 v2.
 Proof.
   intros. inv H. eapply load_inj; eauto. 
 Qed.
@@ -3385,8 +3385,8 @@ Theorem loadv_inject:
   forall f m1 m2 chunk a1 a2 v1,
   inject f m1 m2 ->
   loadv chunk m1 a1 = Some v1 ->
-  val_inject f a1 a2 ->
-  exists v2, loadv chunk m2 a2 = Some v2 /\ val_inject f v1 v2.
+  Val.inject f a1 a2 ->
+  exists v2, loadv chunk m2 a2 = Some v2 /\ Val.inject f v1 v2.
 Proof.
   intros. inv H1; simpl in H0; try discriminate.
   exploit load_inject; eauto. intros [v2 [LOAD INJ]].
@@ -3414,7 +3414,7 @@ Theorem store_mapped_inject:
   inject f m1 m2 ->
   store chunk m1 b1 ofs v1 = Some n1 ->
   f b1 = Some (b2, delta) ->
-  val_inject f v1 v2 ->
+  Val.inject f v1 v2 ->
   exists n2,
     store chunk m2 b2 (ofs + delta) v2 = Some n2
     /\ inject f n1 n2.
@@ -3484,8 +3484,8 @@ Theorem storev_mapped_inject:
   forall f chunk m1 a1 v1 n1 m2 a2 v2,
   inject f m1 m2 ->
   storev chunk m1 a1 v1 = Some n1 ->
-  val_inject f a1 a2 ->
-  val_inject f v1 v2 ->
+  Val.inject f a1 a2 ->
+  Val.inject f v1 v2 ->
   exists n2,
     storev chunk m2 a2 v2 = Some n2 /\ inject f n1 n2.
 Proof.
@@ -3977,14 +3977,14 @@ Qed.
 
 Lemma val_lessdef_inject_compose:
   forall f v1 v2 v3,
-  Val.lessdef v1 v2 -> val_inject f v2 v3 -> val_inject f v1 v3.
+  Val.lessdef v1 v2 -> Val.inject f v2 v3 -> Val.inject f v1 v3.
 Proof.
   intros. inv H. auto. auto.
 Qed.
 
 Lemma val_inject_lessdef_compose:
   forall f v1 v2 v3,
-  val_inject f v1 v2 -> Val.lessdef v2 v3 -> val_inject f v1 v3.
+  Val.inject f v1 v2 -> Val.lessdef v2 v3 -> Val.inject f v1 v3.
 Proof.
   intros. inv H0. auto. inv H. auto.
 Qed.
@@ -4113,7 +4113,7 @@ Theorem store_inject_neutral:
   store chunk m b ofs v = Some m' ->
   inject_neutral thr m ->
   Plt b thr ->
-  val_inject (flat_inj thr) v v ->
+  Val.inject (flat_inj thr) v v ->
   inject_neutral thr m'.
 Proof.
   intros; red.

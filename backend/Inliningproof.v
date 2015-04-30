@@ -109,11 +109,11 @@ Qed.
 (** ** Agreement between register sets before and after inlining. *)
 
 Definition agree_regs (F: meminj) (ctx: context) (rs rs': regset) :=
-  (forall r, Ple r ctx.(mreg) -> val_inject F rs#r rs'#(sreg ctx r))
+  (forall r, Ple r ctx.(mreg) -> Val.inject F rs#r rs'#(sreg ctx r))
 /\(forall r, Plt ctx.(mreg) r -> rs#r = Vundef).
 
 Definition val_reg_charact (F: meminj) (ctx: context) (rs': regset) (v: val) (r: reg) :=
-  (Plt ctx.(mreg) r /\ v = Vundef) \/ (Ple r ctx.(mreg) /\ val_inject F v rs'#(sreg ctx r)).
+  (Plt ctx.(mreg) r /\ v = Vundef) \/ (Ple r ctx.(mreg) /\ Val.inject F v rs'#(sreg ctx r)).
 
 Remark Plt_Ple_dec:
   forall p q, {Plt p q} + {Ple q p}.
@@ -138,7 +138,7 @@ Proof.
 Qed.
 
 Lemma agree_val_reg:
-  forall F ctx rs rs' r, agree_regs F ctx rs rs' -> val_inject F rs#r rs'#(sreg ctx r).
+  forall F ctx rs rs' r, agree_regs F ctx rs rs' -> Val.inject F rs#r rs'#(sreg ctx r).
 Proof.
   intros. exploit agree_val_reg_gen; eauto. instantiate (1 := r). intros [[A B] | [A B]].
   rewrite B; auto.
@@ -146,7 +146,7 @@ Proof.
 Qed.
 
 Lemma agree_val_regs:
-  forall F ctx rs rs' rl, agree_regs F ctx rs rs' -> val_list_inject F rs##rl rs'##(sregs ctx rl).
+  forall F ctx rs rs' rl, agree_regs F ctx rs rs' -> Val.inject_list F rs##rl rs'##(sregs ctx rl).
 Proof.
   induction rl; intros; simpl. constructor. constructor; auto. apply agree_val_reg; auto.
 Qed.
@@ -154,7 +154,7 @@ Qed.
 Lemma agree_set_reg:
   forall F ctx rs rs' r v v',
   agree_regs F ctx rs rs' ->
-  val_inject F v v' ->
+  Val.inject F v v' ->
   Ple r ctx.(mreg) ->
   agree_regs F ctx (rs#r <- v) (rs'#(sreg ctx r) <- v').
 Proof.
@@ -218,7 +218,7 @@ Qed.
 
 Lemma agree_regs_init_regs:
   forall F ctx rl vl vl',
-  val_list_inject F vl vl' ->
+  Val.inject_list F vl vl' ->
   (forall r, In r rl -> Ple r ctx.(mreg)) ->
   agree_regs F ctx (init_regs vl rl) (init_regs vl' (sregs ctx rl)).
 Proof.
@@ -389,7 +389,7 @@ Proof.
   (* register *)
   assert (rs'#(sreg ctx r) = rs#r).
     exploit Genv.find_funct_inv; eauto. intros [b EQ].
-    assert (A: val_inject F rs#r rs'#(sreg ctx r)). eapply agree_val_reg; eauto.
+    assert (A: Val.inject F rs#r rs'#(sreg ctx r)). eapply agree_val_reg; eauto.
     rewrite EQ in A; inv A.
     inv H1. rewrite DOMAIN in H5. inv H5. auto.
     apply FUNCTIONS with fd. 
@@ -411,7 +411,7 @@ Lemma tr_annot_arg:
   forall a v,
   eval_annot_arg ge (fun r => rs#r) (Vptr sp Int.zero) m a v ->
   exists v', eval_annot_arg tge (fun r => rs'#r) (Vptr sp' Int.zero) m' (sannotarg ctx a) v'
-          /\ val_inject F v v'.
+          /\ Val.inject F v v'.
 Proof.
   intros until m'; intros MG AG SP MI. induction 1; simpl.
 - exists rs'#(sreg ctx x); split. constructor. eapply agree_val_reg; eauto.
@@ -424,7 +424,7 @@ Proof.
   simpl. econstructor; eauto. rewrite Int.add_zero_l; auto.
   intros (v' & A & B). exists v'; split; auto. constructor. simpl. rewrite Int.add_zero_l; auto. 
 - econstructor; split. constructor. simpl. econstructor; eauto. rewrite ! Int.add_zero_l; auto.
-- assert (val_inject F (Senv.symbol_address ge id ofs) (Senv.symbol_address tge id ofs)).
+- assert (Val.inject F (Senv.symbol_address ge id ofs) (Senv.symbol_address tge id ofs)).
   { unfold Senv.symbol_address; simpl; unfold Genv.symbol_address. 
     rewrite symbols_preserved. destruct (Genv.find_symbol ge id) as [b|] eqn:FS; auto.
     inv MG. econstructor. eauto. rewrite Int.add_zero; auto. }
@@ -436,7 +436,7 @@ Proof.
   inv MG. econstructor. eauto. rewrite Int.add_zero; auto.
 - destruct IHeval_annot_arg1 as (v1 & A1 & B1).
   destruct IHeval_annot_arg2 as (v2 & A2 & B2).
-  econstructor; split. eauto with aarg. apply val_longofwords_inject; auto. 
+  econstructor; split. eauto with aarg. apply Val.longofwords_inject; auto. 
 Qed.
 
 Lemma tr_annot_args:
@@ -448,7 +448,7 @@ Lemma tr_annot_args:
   forall al vl,
   eval_annot_args ge (fun r => rs#r) (Vptr sp Int.zero) m al vl ->
   exists vl', eval_annot_args tge (fun r => rs'#r) (Vptr sp' Int.zero) m' (map (sannotarg ctx) al) vl'
-          /\ val_list_inject F vl vl'.
+          /\ Val.inject_list F vl vl'.
 Proof.
   induction 5; simpl.
 - exists (@nil val); split; constructor.
@@ -856,7 +856,7 @@ Inductive match_states: state -> state -> Prop :=
   | match_call_states: forall stk fd args m stk' fd' args' m' F
         (MS: match_stacks F m m' stk stk' (Mem.nextblock m'))
         (FD: transf_fundef fenv fd = OK fd')
-        (VINJ: val_list_inject F args args')
+        (VINJ: Val.inject_list F args args')
         (MINJ: Mem.inject F m m'),
       match_states (Callstate stk fd args m)
                    (Callstate stk' fd' args' m')
@@ -876,7 +876,7 @@ Inductive match_states: state -> state -> Prop :=
                    (State stk' f' (Vptr sp' Int.zero) pc' rs' m')
   | match_return_states: forall stk v m stk' v' m' F
         (MS: match_stacks F m m' stk stk' (Mem.nextblock m'))
-        (VINJ: val_inject F v v')
+        (VINJ: Val.inject F v v')
         (MINJ: Mem.inject F m m'),
       match_states (Returnstate stk v m)
                    (Returnstate stk' v' m')
@@ -884,7 +884,7 @@ Inductive match_states: state -> state -> Prop :=
         (MS: match_stacks_inside F m m' stk stk' f' ctx sp' rs')
         (RET: ctx.(retinfo) = Some rinfo)
         (AT: f'.(fn_code)!pc' = Some(inline_return ctx or rinfo))
-        (VINJ: match or with None => v = Vundef | Some r => val_inject F v rs'#(sreg ctx r) end)
+        (VINJ: match or with None => v = Vundef | Some r => Val.inject F v rs'#(sreg ctx r) end)
         (MINJ: Mem.inject F m m')
         (VB: Mem.valid_block m' sp')
         (PRIV: range_private F m m' sp' ctx.(dstk) f'.(fn_stacksize))
@@ -1120,7 +1120,7 @@ Proof.
 
 (* jumptable *)
   exploit tr_funbody_inv; eauto. intros TR; inv TR.
-  assert (val_inject F rs#arg rs'#(sreg ctx arg)). eapply agree_val_reg; eauto.
+  assert (Val.inject F rs#arg rs'#(sreg ctx arg)). eapply agree_val_reg; eauto.
   rewrite H0 in H2; inv H2. 
   left; econstructor; split.
   eapply plus_one. eapply exec_Ijumptable; eauto.

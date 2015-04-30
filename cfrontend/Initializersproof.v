@@ -358,8 +358,8 @@ Lemma sem_cast_match:
   forall v1 ty1 ty2 v2 v1' v2',
   sem_cast v1 ty1 ty2 = Some v2 ->
   do_cast v1' ty1 ty2 = OK v2' ->
-  val_inject inj v1' v1 ->
-  val_inject inj v2' v2.
+  Val.inject inj v1' v1 ->
+  Val.inject inj v2' v2.
 Proof.
   intros. unfold do_cast in H0. destruct (sem_cast v1' ty1 ty2) as [v2''|] eqn:E; inv H0.
   exploit sem_cast_inject. eexact E. eauto. 
@@ -369,7 +369,7 @@ Qed.
 Lemma bool_val_match:
   forall v ty b v' m,
   bool_val v ty Mem.empty = Some b ->
-  val_inject inj v v' ->
+  Val.inject inj v v' ->
   bool_val v' ty m = Some b.
 Proof.
   intros. eapply bool_val_inj; eauto. intros. rewrite mem_empty_not_weak_valid_pointer in H2; discriminate.
@@ -382,13 +382,13 @@ Lemma constval_rvalue:
   eval_simple_rvalue empty_env m a v ->
   forall v',
   constval ge a = OK v' ->
-  val_inject inj v' v
+  Val.inject inj v' v
 with constval_lvalue:
   forall m a b ofs,
   eval_simple_lvalue empty_env m a b ofs ->
   forall v',
   constval ge a = OK v' ->
-  val_inject inj v' (Vptr b ofs).
+  Val.inject inj v' (Vptr b ofs).
 Proof.
   (* rvalue *)
   induction 1; intros vres CV; simpl in CV; try (monadInv CV).
@@ -479,7 +479,7 @@ Theorem constval_steps:
   forall f r m v v' ty m',
   star step ge (ExprState f r Kstop empty_env m) E0 (ExprState f (Eval v' ty) Kstop empty_env m') ->
   constval ge r = OK v ->
-  m' = m /\ ty = typeof r /\ val_inject inj v v'.
+  m' = m /\ ty = typeof r /\ Val.inject inj v v'.
 Proof.
   intros. exploit eval_simple_steps; eauto. eapply constval_simple; eauto. 
   intros [A [B C]]. intuition. eapply constval_rvalue; eauto.
