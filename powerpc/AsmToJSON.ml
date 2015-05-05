@@ -160,45 +160,6 @@ let p_signature oc signature =
     p_result signature.sig_res
     p_calling_convention signature.sig_cc
 
-let p_memory_chunk oc = function 
-  | Mint8signed -> fprintf oc "\"Mint8signed\""
-  | Mint8unsigned -> fprintf oc "\"Mint8unsigned\""
-  | Mint16signed -> fprintf oc "\"Mint16signed\""
-  | Mint16unsigned -> fprintf oc "\"Mint16unsigned\""
-  | Mint32 -> fprintf oc "\"Mint32\""
-  | Mint64 -> fprintf oc "\"Mint64\""
-  | Mfloat32 -> fprintf oc "\"Mfloat32\""
-  | Mfloat64 -> fprintf oc "\"Mfloat64\""
-  | Many32 -> fprintf oc "\"Many32\""
-  | Many64 -> fprintf oc "\"Many64\""
-
-
-let p_external_fun oc = function
-  | EF_external (i,s) -> fprintf oc "{\"Extern\":%a,\"Sig\":%a}" p_atom i p_signature s
-  | EF_builtin (i,s) -> fprintf oc "{\"Builtin\":%a,\"Sig\":%a}" p_atom i p_signature s
-  | EF_vload chunk -> fprintf oc "{\"Vload\":%a}" p_memory_chunk chunk
-  | EF_vstore chunk -> fprintf oc "{\"Vstore\":%a}" p_memory_chunk chunk
-  | EF_vload_global (chunk,indent,ic) -> fprintf oc "{\"Vload_global\":[%a,%a,%a]}" p_memory_chunk chunk p_atom indent p_int ic
-  | EF_vstore_global (chunk,indent,ic) -> fprintf oc "{\"Vstore_global\":[%a,%a,%a]}" p_memory_chunk chunk p_atom indent p_int ic
-  | EF_malloc -> fprintf oc "{\"Malloc\":null}"
-  | EF_free -> fprintf oc "{\"Free\":null}"
-  | EF_memcpy (sz,al) -> fprintf oc "{\"Memcpy\":[%a,%a]}" p_int sz p_int al
-  | EF_annot (i,t) -> fprintf oc "{\"Annot\":[%a%a]}" p_atom i (p_list_cont p_typ) t
-  | EF_annot_val (i,t) -> fprintf oc "{\"Annot_val\":[%a,%a]}" p_atom i  p_typ t
-  | EF_inline_asm (i,s,il) ->  fprintf oc "{\"Inline_asm\":[%a%a,%a]}" p_atom i p_signature s (p_list_cont p_atom) il
-
-let rec p_annot_arg elem oc = function
-  | AA_base e -> fprintf oc "{\"AA_base\":%a}" elem e
-  | AA_int i -> fprintf oc "{\"AA_int\":%a}" p_int i
-  | AA_long l -> fprintf oc "{\"AA_long\":%a}" p_int64 l
-  | AA_float f -> fprintf oc "{\"AA_float\":%a}" p_float64 f
-  | AA_single f -> fprintf oc "{\"AA_single\":%a}" p_float32 f
-  | AA_loadstack (c,i) -> fprintf oc "{\"AA_loadstack\":[%a,%a]}" p_memory_chunk c p_int i
-  | AA_addrstack i ->  fprintf oc "{\"AA_addrstack\":%a}" p_int i
-  | AA_loadglobal (m,ident,i) -> fprintf oc "{\"AA_loadglobal\":[%a,%a,%a]}" p_memory_chunk m p_atom ident p_int i
-  | AA_addrglobal (ident,i) -> fprintf oc "{\"AA_addrgloabl\":[%a,%a]}" p_atom ident p_int i
-  | AA_longofwords (a,b) -> fprintf oc "{\"AA_longofwords\":[%a,%a]}" (p_annot_arg elem) a (p_annot_arg elem) b
-
 let p_instruction oc ic =
   output_string oc "\n";
   match ic with
@@ -342,16 +303,25 @@ let p_instruction oc ic =
   | Pxori (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Pxori\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Pxoris (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Pxoris\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Plabel l -> fprintf oc "{\"Instruction Name\":\"Plabel\",\"Args\":[%a]}" p_label l
-  | Pbuiltin (ef,args1,args2) -> fprintf oc "{\"Instruction Name\":\"Pbuiltin\",\"Args\":[%a,%a,%a]}" p_external_fun ef (p_list p_preg) args1  (p_list p_preg) args2
-  | Pannot (ef,anargs) -> fprintf oc "{\"Instruction Name\":\"Pannot\",\"Args\":[%a,%a]}" p_external_fun ef (p_list (p_annot_arg p_preg)) anargs
-  | Pcfi_adjust ic -> fprintf oc "{\"Instruction Name\":\"Pcfi_adjust\",\"Args\":[%a]}" p_int ic
-  | Pcfi_rel_offset ic -> fprintf oc "{\"Instruction Name\":\"Pcfi_rel_offset\",\"Args\":[%a]}" p_int ic
+  | Pbuiltin (ef,args1,args2) ->
+      begin match ef with
+      | EF_inline_asm (i,s,il) ->
+          fprintf oc "{\"Instruction Name\":\"Inline_asm\",\"Args\":[%a,%a%a%a%a]}" p_atom i p_signature s (p_list_cont p_atom) il
+            (p_list_cont p_preg) args1  (p_list_cont p_preg) args2
+      | _ -> (* Should all be folded away *)
+          assert false
+      end
+  | Pannot _ -> () (* We do not check the annotations *)
+  | Pcfi_adjust _ -> () (* Only debug relevant *)
+  | Pcfi_rel_offset _ ->  () (* Only debug relevant *)
 
 let p_fundef oc name = function
-  | Internal f -> fprintf oc "{\"Fun_name\":%a,\n\"Fun_sig\":%a,\n\"Fun_code\":%a}"
+  | Internal f ->
+      let instr = List.filter (function Pannot _ | Pcfi_adjust _ | Pcfi_rel_offset _ -> false | _ -> true) f.fn_code in
+      fprintf oc "{\"Fun_name\":%a,\n\"Fun_sig\":%a,\n\"Fun_code\":%a}"
         p_atom name
-        p_signature f.fn_sig (p_list p_instruction) f.fn_code
-  | External f ->fprintf oc "{\"Ext_name\":%a,\"Ext_fun\":%a}" p_atom name p_external_fun f
+        p_signature f.fn_sig (p_list p_instruction) instr
+  | External _ ->() (* Is of no interest *)
 
 let p_init_data oc = function
   | Init_int8 ic -> fprintf oc "{\"Init_int8\":%a}" p_int ic
@@ -370,8 +340,17 @@ let p_prog_def oc (ident,def) =
   | Gvar v -> fprintf oc "{\"Var_name\":%a,\"Var_init\":%a,\"Var_readonly\":%B,\"Var_volatile\":%B}"
         p_atom ident (p_list p_init_data) v.gvar_init v.gvar_readonly v.gvar_volatile
 
+let re_builtin = Str.regexp "__builtin_\\|__i64_\\|__compcert_"
+
+let p_public oc p =
+  let p = List.map extern_atom p in
+  let p = List.filter (fun s -> 
+    not (Str.string_match re_builtin s 0)) p in
+  (p_list (fun oc s -> fprintf oc "\n\"%s\"" s)) oc p
+
 let p_program oc prog =
-  fprintf oc "{\"Prog_efs\":%a,\n\"Prog_public\":%a,\n\"Prog_main\":%a}"
-    (p_list p_prog_def) prog.prog_defs
-    (p_list (fun oc -> fprintf oc "\n%a" p_atom)) prog.prog_public
+  let prog_defs = List.filter (function _,Gfun (External _) -> false | _ -> true) prog.prog_defs in
+  fprintf oc "{\"Prog_defs\":%a,\n\"Prog_public\":%a,\n\"Prog_main\":%a}"
+    (p_list p_prog_def) prog_defs
+    p_public prog.prog_public
     p_atom prog.prog_main
