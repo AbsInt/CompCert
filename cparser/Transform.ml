@@ -138,37 +138,46 @@ let expand_postincrdecr ~read ~write env ctx op l =
         ecomma (eassign tmp (read l)) (ecomma (write l newval) tmp))
 
 (* Generic transformation of a statement, transforming expressions within
-   and preserving the statement structure.  Applies only to unblocked code. *)
+   and preserving the statement structure.
+   If [decl] is not given, it applies only to unblocked code. *)
 
-let stmt trexpr env s =
+let stmt ~expr ?(decl = fun env decl -> assert false) env s =
   let rec stm s =
   match s.sdesc with
   | Sskip -> s
   | Sdo e ->
-      {s with sdesc = Sdo(trexpr s.sloc env Effects e)}
+      {s with sdesc = Sdo(expr s.sloc env Effects e)}
   | Sseq(s1, s2) -> 
       {s with sdesc = Sseq(stm s1, stm s2)}
   | Sif(e, s1, s2) ->
-      {s with sdesc = Sif(trexpr s.sloc env Val e, stm s1, stm s2)}
+      {s with sdesc = Sif(expr s.sloc env Val e, stm s1, stm s2)}
   | Swhile(e, s1) ->
-      {s with sdesc = Swhile(trexpr s.sloc env Val e, stm s1)}
+      {s with sdesc = Swhile(expr s.sloc env Val e, stm s1)}
   | Sdowhile(s1, e) ->
-      {s with sdesc = Sdowhile(stm s1, trexpr s.sloc env Val e)}
+      {s with sdesc = Sdowhile(stm s1, expr s.sloc env Val e)}
   | Sfor(s1, e, s2, s3) ->
-      {s with sdesc = Sfor(stm s1, trexpr s.sloc env Val e, stm s2, stm s3)}
+      {s with sdesc = Sfor(stm s1, expr s.sloc env Val e, stm s2, stm s3)}
   | Sbreak -> s
   | Scontinue -> s
   | Sswitch(e, s1) ->
-      {s with sdesc = Sswitch(trexpr s.sloc env Val e, stm s1)}
+      {s with sdesc = Sswitch(expr s.sloc env Val e, stm s1)}
   | Slabeled(lbl, s) ->
       {s with sdesc = Slabeled(lbl, stm s)}
   | Sgoto lbl -> s
   | Sreturn None -> s
   | Sreturn (Some e) ->
-      {s with sdesc = Sreturn(Some(trexpr s.sloc env Val e))}
-  | Sasm _ -> s
-  | Sblock _ | Sdecl _ ->
-      assert false     (* should not occur in unblocked code *)
+      {s with sdesc = Sreturn(Some(expr s.sloc env Val e))}
+  | Sasm(attr, template, outputs, inputs, clob) ->
+      let asm_operand (lbl, cstr, e) =
+        (lbl, cstr, expr s.sloc env Val e) in
+      {s with sdesc = Sasm(attr, template,
+                           List.map asm_operand outputs,
+                           List.map asm_operand inputs, clob)}
+  | Sblock sl ->
+      {s with sdesc = Sblock (List.map stm sl)}
+  | Sdecl d ->
+      {s with sdesc = Sdecl (decl env d)}
+
   in stm s
 
 (* Generic transformation of a function definition *)

@@ -365,6 +365,14 @@ let typespec_rank = function (* Don't change this *)
 
 let typespec_order t1 t2 = compare (typespec_rank t1) (typespec_rank t2)
 
+(* Is a specifier an anonymous struct/union in the sense of ISO C2011? *)
+
+let is_anonymous_composite spec =
+  List.exists
+    (function SpecType(Tstruct_union(_, None, Some _, _)) -> true
+            | _ -> false)
+    spec
+
 (* Elaboration of a type specifier.  Returns 5-tuple:
      (storage class, "inline" flag, "typedef" flag, elaborated type, new env)
    Optional argument "only" is true if this is a standalone
@@ -617,6 +625,7 @@ and elab_init_name_group loc env (spec, namelist) =
 (* Elaboration of a field group *)
 
 and elab_field_group env (Field_group (spec, fieldlist, loc)) =
+
   let fieldlist = List.map (
     function
       | (None, x) -> (Name ("", JUSTBASE, [], cabslu), x)
@@ -629,6 +638,11 @@ and elab_field_group env (Field_group (spec, fieldlist, loc)) =
 
   if sto <> Storage_default then
     error loc "non-default storage in struct or union";
+  if fieldlist = [] then
+    if is_anonymous_composite spec then
+       error loc "ISO C99 does not support anonymous structs/unions"
+    else
+       warning loc "declaration does not declare any members";
 
   let elab_bitfield (Name (_, _, _, loc), optbitsize) (id, ty) =
     let optbitsize' =
@@ -1406,6 +1420,23 @@ let elab_expr loc env a =
       let b1 = elab a1 in
       if not (is_lvalue b1 || is_function_type env b1.etyp) then
         err "argument of '&' is not an l-value";
+      begin match b1.edesc with
+      | EVar id ->
+          begin match wrap Env.find_ident loc env id with
+          | Env.II_ident(Storage_register, _) ->
+              err "address of register variable '%s' requested" id.name
+          | _ -> ()
+          end
+      | EUnop(Odot f, b2) ->
+          let fld = wrap2 field_of_dot_access loc env b2.etyp f in
+          if fld.fld_bitfield <> None then
+            err "address of bit-field '%s' requested" f
+      | EUnop(Oarrow f, b2) ->
+          let fld = wrap2 field_of_arrow_access loc env b2.etyp f in
+          if fld.fld_bitfield <> None then
+            err "address of bit-field '%s' requested" f
+      | _ -> ()
+      end;
       { edesc = EUnop(Oaddrof, b1); etyp = TPtr(b1.etyp, []) }
 
   | UNARY(MEMOF, a1) ->

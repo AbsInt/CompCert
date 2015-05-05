@@ -840,7 +840,7 @@ Lemma default_needs_of_condition_sound:
   eval_condition cond args2 m2 = Some b.
 Proof.
   intros. apply eval_condition_inj with (f := inject_id) (m1 := m1) (vl1 := args1); auto.
-  apply val_list_inject_lessdef. apply lessdef_vagree_list. auto.
+  apply val_inject_list_lessdef. apply lessdef_vagree_list. auto.
 Qed.
 
 Lemma default_needs_of_operation_sound:
@@ -866,7 +866,7 @@ Proof.
   eassumption. auto. auto. auto.
   instantiate (1 := op). intros. apply val_inject_lessdef; auto.
   apply val_inject_lessdef. instantiate (1 := Vptr sp Int.zero). instantiate (1 := Vptr sp Int.zero). auto.
-  apply val_list_inject_lessdef; eauto.
+  apply val_inject_list_lessdef; eauto.
   eauto.
   intros (v2 & A & B). exists v2; split; auto.
   apply vagree_lessdef. apply val_inject_lessdef. auto. 

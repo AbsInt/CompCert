@@ -107,7 +107,7 @@ Inductive match_var (f: meminj) (cenv: compilenv) (e: env) (m: mem) (te: env) (t
       (MODE: access_mode ty = By_value chunk)
       (LOAD: Mem.load chunk m b 0 = Some v)
       (TLENV: tle!(id) = Some tv)
-      (VINJ: val_inject f v tv),
+      (VINJ: Val.inject f v tv),
       match_var f cenv e m te tle id
   | match_var_not_lifted: forall b ty b'
       (ENV: e!id = Some(b, ty))
@@ -130,7 +130,7 @@ Record match_envs (f: meminj) (cenv: compilenv)
     me_temps:
       forall id v,
       le!id = Some v ->
-      (exists tv, tle!id = Some tv /\ val_inject f v tv)
+      (exists tv, tle!id = Some tv /\ Val.inject f v tv)
       /\ (VSet.mem id cenv = true -> v = Vundef);
     me_inj:
       forall id1 b1 ty1 id2 b2 ty2, e!id1 = Some(b1, ty1) -> e!id2 = Some(b2, ty2) -> id1 <> id2 -> b1 <> b2;
@@ -327,7 +327,7 @@ Qed.
 
 Lemma val_casted_inject:
   forall f v v' ty,
-  val_inject f v v' -> val_casted v ty -> val_casted v' ty.
+  Val.inject f v v' -> val_casted v ty -> val_casted v' ty.
 Proof.
   intros. inv H; auto.
   inv H0; constructor.
@@ -383,7 +383,7 @@ Lemma match_envs_assign_lifted:
   match_envs f cenv e le m lo hi te tle tlo thi ->
   e!id = Some(b, ty) ->
   val_casted v ty ->
-  val_inject f v tv ->
+  Val.inject f v tv ->
   assign_loc ge ty m b Int.zero v m' ->
   VSet.mem id cenv = true ->
   match_envs f cenv e le m' lo hi te (PTree.set id tv tle) tlo thi.
@@ -415,7 +415,7 @@ Qed.
 Lemma match_envs_set_temp:
   forall f cenv e le m lo hi te tle tlo thi id v tv x,
   match_envs f cenv e le m lo hi te tle tlo thi ->
-  val_inject f v tv ->
+  Val.inject f v tv ->
   check_temp cenv id = OK x ->
   match_envs f cenv e (PTree.set id v le) m lo hi te (PTree.set id tv tle) tlo thi.
 Proof.
@@ -436,7 +436,7 @@ Qed.
 Lemma match_envs_set_opttemp:
   forall f cenv e le m lo hi te tle tlo thi optid v tv x,
   match_envs f cenv e le m lo hi te tle tlo thi ->
-  val_inject f v tv ->
+  Val.inject f v tv ->
   check_opttemp cenv optid = OK x ->
   match_envs f cenv e (set_opttemp optid v le) m lo hi te (set_opttemp optid tv tle) tlo thi.
 Proof.
@@ -993,8 +993,8 @@ Qed.
 Lemma assign_loc_inject:
   forall f ty m loc ofs v m' tm loc' ofs' v',
   assign_loc ge ty m loc ofs v m' ->
-  val_inject f (Vptr loc ofs) (Vptr loc' ofs') ->
-  val_inject f v v' ->
+  Val.inject f (Vptr loc ofs) (Vptr loc' ofs') ->
+  Val.inject f v v' ->
   Mem.inject f m tm ->
   exists tm',
      assign_loc tge ty tm loc' ofs' v' tm'
@@ -1095,7 +1095,7 @@ Theorem store_params_correct:
   forall s tm tle1 tle2 targs,
   list_norepet (var_names params) ->
   list_forall2 val_casted args (map snd params) ->
-  val_list_inject j args targs ->
+  Val.inject_list j args targs ->
   match_envs j cenv e le m lo hi te tle1 tlo thi ->
   Mem.inject j m tm ->
   (forall id, ~In id (var_names params) -> tle2!id = tle1!id) ->
@@ -1388,8 +1388,8 @@ Qed.
 Lemma deref_loc_inject:
   forall ty loc ofs v loc' ofs',
   deref_loc ty m loc ofs v ->
-  val_inject f (Vptr loc ofs) (Vptr loc' ofs') ->
-  exists tv, deref_loc ty tm loc' ofs' tv /\ val_inject f v tv.
+  Val.inject f (Vptr loc ofs) (Vptr loc' ofs') ->
+  exists tv, deref_loc ty tm loc' ofs' tv /\ Val.inject f v tv.
 Proof.
   intros. inv H. 
   (* by value *)
@@ -1405,14 +1405,14 @@ Lemma eval_simpl_expr:
   forall a v,
   eval_expr ge e le m a v ->
   compat_cenv (addr_taken_expr a) cenv ->
-  exists tv, eval_expr tge te tle tm (simpl_expr cenv a) tv /\ val_inject f v tv
+  exists tv, eval_expr tge te tle tm (simpl_expr cenv a) tv /\ Val.inject f v tv
 
 with eval_simpl_lvalue:
   forall a b ofs,
   eval_lvalue ge e le m a b ofs ->
   compat_cenv (addr_taken_expr a) cenv ->
   match a with Evar id ty => VSet.mem id cenv = false | _ => True end ->
-  exists b', exists ofs', eval_lvalue tge te tle tm (simpl_expr cenv a) b' ofs' /\ val_inject f (Vptr b ofs) (Vptr b' ofs').
+  exists b', exists ofs', eval_lvalue tge te tle tm (simpl_expr cenv a) b' ofs' /\ Val.inject f (Vptr b ofs) (Vptr b' ofs').
 
 Proof.
   destruct 1; simpl; intros.
@@ -1512,7 +1512,7 @@ Lemma eval_simpl_exprlist:
   val_casted_list vl tyl /\
   exists tvl,
      eval_exprlist tge te tle tm (simpl_exprlist cenv al) tyl tvl
-  /\ val_list_inject f vl tvl.
+  /\ Val.inject_list f vl tvl.
 Proof.
   induction 1; simpl; intros.
   split. constructor. econstructor; split. constructor. auto.
@@ -1729,7 +1729,7 @@ Lemma match_cont_find_funct:
   forall f cenv k tk m bound tbound vf fd tvf,
   match_cont f cenv k tk m bound tbound ->
   Genv.find_funct ge vf = Some fd ->
-  val_inject f vf tvf ->
+  Val.inject f vf tvf ->
   exists tfd, Genv.find_funct tge tvf = Some tfd /\ transf_fundef fd = OK tfd.
 Proof.
   intros. exploit match_cont_globalenv; eauto. intros [bound1 MG]. destruct MG.
@@ -1761,7 +1761,7 @@ Inductive match_states: state -> state -> Prop :=
         (TRFD: transf_fundef fd = OK tfd)
         (MCONT: forall cenv, match_cont j cenv k tk m (Mem.nextblock m) (Mem.nextblock tm))
         (MINJ: Mem.inject j m tm)
-        (AINJ: val_list_inject j vargs tvargs)
+        (AINJ: Val.inject_list j vargs tvargs)
         (FUNTY: type_of_fundef fd = Tfunction targs tres cconv)
         (ANORM: val_casted_list vargs targs),
       match_states (Callstate fd vargs k m)
@@ -1770,7 +1770,7 @@ Inductive match_states: state -> state -> Prop :=
       forall v k m tv tk tm j
         (MCONT: forall cenv, match_cont j cenv k tk m (Mem.nextblock m) (Mem.nextblock tm))
         (MINJ: Mem.inject j m tm)
-        (RINJ: val_inject j v tv),
+        (RINJ: Val.inject j v tv),
       match_states (Returnstate v k m)
                    (Returnstate tv tk tm).
 
@@ -2171,7 +2171,7 @@ Proof.
     eauto. 
     eapply list_norepet_append_left; eauto.
     apply val_casted_list_params. unfold type_of_function in FUNTY. congruence.
-    apply val_list_inject_incr with j'; eauto. 
+    apply val_inject_list_incr with j'; eauto. 
     eexact B. eexact C.
     intros. apply (create_undef_temps_lifted id f). auto.
     intros. destruct (create_undef_temps (fn_temps f))!id as [v|] eqn:?; auto.

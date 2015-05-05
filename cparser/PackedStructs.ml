@@ -317,7 +317,7 @@ let transf_expr loc env ctx e =
 (* Statements *)
 
 let transf_stmt env s =
-  Transform.stmt transf_expr env s
+  Transform.stmt ~expr:transf_expr env s
 
 (* Functions *)
 

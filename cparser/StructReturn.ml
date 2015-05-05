@@ -423,6 +423,7 @@ let transf_decl env (sto, id, ty, init) =
 let transf_funbody env body optres =
 
 let transf_expr ctx e = transf_expr env ctx e in
+let transf_asm_operand (lbl, cstr, e) = (lbl, cstr, transf_expr Val e) in
 
 (* Function returns:
      return kind scalar    -> return e
@@ -484,7 +485,10 @@ let rec transf_stmt s =
       {s with sdesc = Sblock(List.map transf_stmt sl)}
   | Sdecl d ->
       {s with sdesc = Sdecl(transf_decl env d)}
-  | Sasm _ -> s
+  | Sasm(attr, template, outputs, inputs, clob) ->
+      {s with sdesc = Sasm(attr, template,
+                           List.map transf_asm_operand outputs,
+                           List.map transf_asm_operand inputs, clob)}
 
 in
   transf_stmt body
