@@ -15,8 +15,10 @@
 open Asm
 open AST
 open BinNums
+open C2C
 open Camlcoq
 open Printf
+open Sections
 
 let p_ireg oc = function
   | GPR0 -> fprintf oc "{\"Register\":\"GPR0\"}"
@@ -315,14 +317,42 @@ let p_instruction oc ic =
   | Pcfi_adjust _ -> () (* Only debug relevant *)
   | Pcfi_rel_offset _ ->  () (* Only debug relevant *)
 
-let p_fundef oc name = function
-  | Internal f ->
-      let instr = List.filter (function Pannot _ | Pcfi_adjust _ | Pcfi_rel_offset _ -> false | _ -> true) f.fn_code in
-      fprintf oc "{\"Fun_name\":%a,\n\"Fun_sig\":%a,\n\"Fun_code\":%a}"
-        p_atom name
-        p_signature f.fn_sig (p_list p_instruction) instr
-  | External _ ->() (* Is of no interest *)
+let p_storage oc sto =
+  let storage = match sto with
+  | C.Storage_default -> "Default"
+  | C.Storage_extern -> "Extern"
+  | C.Storage_static -> "Static"
+  | C.Storage_register -> "Register" in
+  fprintf oc "\"%s\"" storage
 
+let p_section oc = function
+  | Section_text -> fprintf oc "{\"Section Name\":\"Text\"}"
+  | Section_data init -> fprintf oc "{\"Section Name\":\"Data\",\"Init\":%B}" init
+  | Section_small_data init -> fprintf oc "{\"Section Name\":\"Small Data\",\"Init\":%B}" init
+  | Section_const init -> fprintf oc "{\"Section Name\":\"Const\",\"Init\":%B}" init
+  | Section_small_const init -> fprintf oc "{\"Section Name\":\"Small Const\",\"Init\":%B}" init
+  | Section_string -> fprintf oc "{\"Section Name\":\"String\"}"
+  | Section_literal -> fprintf oc "{\"Section Name\":\"Literal\"}"
+  | Section_jumptable -> fprintf oc "{\"Section Name\":\"Jumptable\"}"
+  | Section_user (s,w,e) -> fprintf oc "{\"Section Name\":%s,\"Writable\":%B,\"Executable\":%B}" s w e
+  | Section_debug_info -> fprintf oc "{\"Section Name\":\"Debug Info\"}"
+  | Section_debug_abbrev -> fprintf oc "{\"Section Name\":\"Debug Abbreviation\"}"
+
+let p_int_opt oc = function
+  | None -> fprintf oc "null"
+  | Some i -> fprintf oc "%d" i
+
+let p_atom_info oc ident =
+  let info = Hashtbl.find C2C.decl_atom ident in
+  fprintf oc "{\"Storage Class\":%a,\n\"Alignment\":%a,\n\"Sections\":%a,\n\"Inline\":%B}"
+    p_storage info.a_storage p_int_opt info.a_alignment (p_list p_section) info.a_sections
+    info.a_inline
+
+let p_fundef oc (name,f) = 
+      let instr = List.filter (function Pannot _ | Pcfi_adjust _ | Pcfi_rel_offset _ -> false | _ -> true) f.fn_code in
+      fprintf oc "{\"Fun Name\":%a,\n\"Fun Sig\":%a,\n\"Atom info\":%a,\n\"Fun Code\":%a}\n"
+        p_atom name p_signature f.fn_sig p_atom_info name (p_list p_instruction) instr
+ 
 let p_init_data oc = function
   | Init_int8 ic -> fprintf oc "{\"Init_int8\":%a}" p_int ic
   | Init_int16 ic -> fprintf oc "{\"Init_int16\":%a}" p_int ic
@@ -333,24 +363,16 @@ let p_init_data oc = function
   | Init_space z -> fprintf oc "{\"Init_space\":%a}" p_z z
   | Init_addrof (p,i) -> fprintf oc "{\"Init_addrof\":[%a,%a]}" p_atom p p_int i
 
-let p_prog_def oc (ident,def) =
-  output_string oc "\n";
-  match def with
-  | Gfun f -> p_fundef oc ident f
-  | Gvar v -> fprintf oc "{\"Var_name\":%a,\"Var_init\":%a,\"Var_readonly\":%B,\"Var_volatile\":%B}"
-        p_atom ident (p_list p_init_data) v.gvar_init v.gvar_readonly v.gvar_volatile
-
-let re_builtin = Str.regexp "__builtin_\\|__i64_\\|__compcert_"
-
-let p_public oc p =
-  let p = List.map extern_atom p in
-  let p = List.filter (fun s -> 
-    not (Str.string_match re_builtin s 0)) p in
-  (p_list (fun oc s -> fprintf oc "\n\"%s\"" s)) oc p
+let p_vardef oc (ident,v) =
+  fprintf oc "{\"Var Name\":%a,\"Var Readonly\":%B,\"Var Volatile\":%B,\"Atom Info\":%a,\"Var Init\":%a}\n"
+    p_atom ident v.gvar_readonly v.gvar_volatile p_atom_info ident (p_list p_init_data) v.gvar_init 
 
 let p_program oc prog =
-  let prog_defs = List.filter (function _,Gfun (External _) -> false | _ -> true) prog.prog_defs in
-  fprintf oc "{\"Prog_defs\":%a,\n\"Prog_public\":%a,\n\"Prog_main\":%a}"
-    (p_list p_prog_def) prog_defs
-    p_public prog.prog_public
-    p_atom prog.prog_main
+  let prog_vars,prog_funs = List.fold_left (fun (vars,funs) (ident,def) ->
+    match def with
+    | Gfun (Internal f) -> vars,(ident,f)::funs
+    | Gvar v -> (ident,v)::vars,funs
+    | _ -> vars,funs) ([],[]) prog.prog_defs in
+  fprintf oc "{\"Global Variables\":%a,\n\"Functions\":%a}"
+    (p_list p_vardef) prog_vars
+    (p_list p_fundef) prog_funs
