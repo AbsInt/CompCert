@@ -1545,7 +1545,7 @@ Proof.
   repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
 Qed.
 
-Remark sun_inject:
+Remark sub_inject:
   forall v1 v1' v2 v2',
   inject f v1 v1' ->
   inject f v2 v2' ->

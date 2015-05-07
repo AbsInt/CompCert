@@ -878,10 +878,10 @@ Proof.
   apply Values.Val.add_inject; auto. apply eval_shift_inj; auto.
   apply Values.Val.add_inject; auto.
 
-  apply Values.Val.sun_inject; auto.
-  apply Values.Val.sun_inject; auto. apply eval_shift_inj; auto.
-  apply Values.Val.sun_inject; auto. apply eval_shift_inj; auto.
-  apply (@Values.Val.sun_inject f (Vint i) (Vint i) v v'); auto.
+  apply Values.Val.sub_inject; auto.
+  apply Values.Val.sub_inject; auto. apply eval_shift_inj; auto.
+  apply Values.Val.sub_inject; auto. apply eval_shift_inj; auto.
+  apply (@Values.Val.sub_inject f (Vint i) (Vint i) v v'); auto.
 
   inv H4; inv H2; simpl; auto.
   apply Values.Val.add_inject; auto. inv H4; inv H2; simpl; auto.
