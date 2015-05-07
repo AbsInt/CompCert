@@ -94,7 +94,7 @@ module Printer(Target:TARGET) =
             fprintf oc "	%s\n" name_sec;
             Target.print_align oc align;
             if not (C2C.atom_is_static name) then
-              fprintf oc "	.global	%a\n" Target.symbol name;
+              fprintf oc "	.globl	%a\n" Target.symbol name;
             fprintf oc "%a:\n" Target.symbol name;
             print_init_data oc name v.gvar_init;
             Target.print_var_info oc name;
