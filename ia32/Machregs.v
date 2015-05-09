@@ -69,6 +69,25 @@ End IndexedMreg.
 Definition is_stack_reg (r: mreg) : bool :=
   match r with FP0 => true | _ => false end.
 
+(** ** Names of registers *)
+
+Local Open Scope string_scope.
+
+Definition register_names :=
+  ("EAX", AX) :: ("EBX", BX) :: ("ECX", CX) :: ("EDX", DX) ::
+  ("ESI", SI) :: ("EDI", DI) :: ("EBP", BP) ::
+  ("XMM0", X0) :: ("XMM1", X1) :: ("XMM2", X2) :: ("XMM3", X3) ::
+  ("XMM4", X4) :: ("XMM5", X5) :: ("XMM6", X6) :: ("XMM7", X7) ::
+  ("ST0", FP0) :: nil.
+
+Definition register_by_name (s: string) : option mreg :=
+  let fix assoc (l: list (string * mreg)) : option mreg :=
+    match l with
+    | nil => None
+    | (s1, r1) :: l' => if string_dec s s1 then Some r1 else assoc l'
+    end
+  in assoc register_names.
+
 (** ** Destroyed registers, preferred registers *)
 
 Definition destroyed_by_op (op: operation): list mreg :=
@@ -100,7 +119,15 @@ Definition destroyed_by_cond (cond: condition): list mreg :=
 Definition destroyed_by_jumptable: list mreg :=
   nil.
 
-Local Open Scope string_scope.
+Fixpoint destroyed_by_clobber (cl: list string): list mreg :=
+  match cl with
+  | nil => nil
+  | c1 :: cl =>
+      match register_by_name c1 with
+      | Some r => r :: destroyed_by_clobber cl
+      | None   => destroyed_by_clobber cl
+      end
+  end.
 
 Definition builtin_write16_reversed := ident_of_string "__builtin_write16_reversed".
 Definition builtin_write32_reversed := ident_of_string "__builtin_write32_reversed".
@@ -115,6 +142,7 @@ Definition destroyed_by_builtin (ef: external_function): list mreg :=
       if ident_eq id builtin_write16_reversed
       || ident_eq id builtin_write32_reversed
       then CX :: DX :: nil else nil
+  | EF_inline_asm txt sg clob => destroyed_by_clobber clob
   | _ => nil
   end.
 

@@ -1,7 +1,7 @@
 /* Testing extended asm.
    To run the test, compile with -S and grep "TEST" in the generated .s */
 
-int clobbers(int x)
+int clobbers(int x, int z)
 {
   int y;
   asm("TEST0 out:%0 in:%1" : "=r"(y) : "r"(x) : "cc"
@@ -10,10 +10,10 @@ int clobbers(int x)
 #elif defined(__arm__)
       , "r0", "r1", "r4"
 #elif defined(__PPC__)
-      , "r3", "r4", "r31"
+      , "r0", "r3", "r4", "r31"
 #endif
 );
-  return y;
+  return y + z;
 }
 
 int main()
