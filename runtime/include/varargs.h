@@ -29,7 +29,7 @@
 
 /* <varargs.h> -- old-style variable argument handling */
 
-#ifdef _VARARGS_H
+#ifndef _VARARGS_H
 #define _VARARGS_H
 
 #error "CompCert does not implement <varargs.h>."
