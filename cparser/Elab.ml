@@ -1801,12 +1801,20 @@ let enter_or_refine_ident local loc env s sto ty =
         | None ->
             warning loc "redefinition of '%s' with incompatible type" s; ty in
       let new_sto =
-        if old_sto = Storage_extern then sto else
-        if sto = Storage_extern then old_sto else
-        if old_sto = sto then sto else begin
-          warning loc "redefinition of '%s' with incompatible storage class" s;
-          sto
-        end in
+	(* The only case not allowed is removing static *)
+	match old_sto,sto with
+	| Storage_static,Storage_static
+	| Storage_extern,Storage_extern
+	| Storage_register,Storage_register
+	| Storage_default,Storage_default -> sto
+	| _,Storage_static ->
+	   error loc "static redefinition of '%s' after non-static definition" s; sto
+	| Storage_static,_ -> Storage_static (* Static stays static *)
+	| Storage_extern,_ -> sto
+	| _,Storage_extern -> old_sto
+	| _,Storage_register
+	| Storage_register,_ -> Storage_register
+      in
       (id, new_sto, Env.add_ident env id new_sto new_ty)
   | Some(id, II_enum v) when Env.in_current_scope env id ->
       error loc "illegal redefinition of enumerator '%s'" s;
