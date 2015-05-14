@@ -459,7 +459,7 @@ let union_to_dwarf (n,at,m) env gloc =
 
 (* Translate global declarations to there dwarf representation *)
 let globdecl_to_dwarf env (typs,decls) decl =
-  PrintAnnot.add_file (fst decl.gloc);
+  PrintAsmaux.add_file (fst decl.gloc);
   match decl.gdesc with
   | Gtypedef (n,t) -> let ret = typedef_to_dwarf (n,t) decl.gloc in
     typs@ret,decls
