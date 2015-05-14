@@ -1862,7 +1862,7 @@ let enter_decdefs local loc env sto dl =
 let elab_fundef env spec name body loc =
   let (s, sto, inline, ty, env1) = elab_name env spec name in
   if sto = Storage_register then
-    error loc "a function definition cannot have 'register' storage class";
+    fatal_error loc "a function definition cannot have 'register' storage class";
   (* Fix up the type.  We can have params = None but only for an
      old-style parameterless function "int f() {...}" *)
   let ty =
