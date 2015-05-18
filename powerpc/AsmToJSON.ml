@@ -21,87 +21,81 @@ open Printf
 open Sections
 
 let p_ireg oc = function
-  | GPR0 -> fprintf oc "{\"Register\":\"GPR0\"}"
-  | GPR1 -> fprintf oc "{\"Register\":\"GPR1\"}"
-  | GPR2 -> fprintf oc "{\"Register\":\"GPR2\"}"
-  | GPR3 -> fprintf oc "{\"Register\":\"GPR3\"}"
-  | GPR4 -> fprintf oc "{\"Register\":\"GPR4\"}"
-  | GPR5 -> fprintf oc "{\"Register\":\"GPR5\"}"
-  | GPR6 -> fprintf oc "{\"Register\":\"GPR6\"}"
-  | GPR7 -> fprintf oc "{\"Register\":\"GPR7\"}"
-  | GPR8 -> fprintf oc "{\"Register\":\"GPR8\"}"
-  | GPR9 -> fprintf oc "{\"Register\":\"GPR9\"}"
-  | GPR10 -> fprintf oc "{\"Register\":\"GPR10\"}"
-  | GPR11 -> fprintf oc "{\"Register\":\"GPR11\"}"
-  | GPR12 -> fprintf oc "{\"Register\":\"GPR12\"}"
-  | GPR13 -> fprintf oc "{\"Register\":\"GPR13\"}"
-  | GPR14 -> fprintf oc "{\"Register\":\"GPR14\"}"
-  | GPR15 -> fprintf oc "{\"Register\":\"GPR15\"}"
-  | GPR16 -> fprintf oc "{\"Register\":\"GPR16\"}"
-  | GPR17 -> fprintf oc "{\"Register\":\"GPR17\"}"
-  | GPR18 -> fprintf oc "{\"Register\":\"GPR18\"}"
-  | GPR19 -> fprintf oc "{\"Register\":\"GPR19\"}"
-  | GPR20 -> fprintf oc "{\"Register\":\"GPR20\"}"
-  | GPR21 -> fprintf oc "{\"Register\":\"GPR21\"}"
-  | GPR22 -> fprintf oc "{\"Register\":\"GPR22\"}"
-  | GPR23 -> fprintf oc "{\"Register\":\"GPR23\"}"
-  | GPR24 -> fprintf oc "{\"Register\":\"GPR24\"}"
-  | GPR25 -> fprintf oc "{\"Register\":\"GPR25\"}"
-  | GPR26 -> fprintf oc "{\"Register\":\"GPR26\"}"
-  | GPR27 -> fprintf oc "{\"Register\":\"GPR27\"}"
-  | GPR28 -> fprintf oc "{\"Register\":\"GPR28\"}"
-  | GPR29 -> fprintf oc "{\"Register\":\"GPR29\"}"
-  | GPR30 -> fprintf oc "{\"Register\":\"GPR30\"}"
-  | GPR31 -> fprintf oc "{\"Register\":\"GPR31\"}"
+  | GPR0 -> fprintf oc "{\"Register\":\"r0\"}"
+  | GPR1 -> fprintf oc "{\"Register\":\"r1\"}"
+  | GPR2 -> fprintf oc "{\"Register\":\"r2\"}"
+  | GPR3 -> fprintf oc "{\"Register\":\"r3\"}"
+  | GPR4 -> fprintf oc "{\"Register\":\"r4\"}"
+  | GPR5 -> fprintf oc "{\"Register\":\"r5\"}"
+  | GPR6 -> fprintf oc "{\"Register\":\"r6\"}"
+  | GPR7 -> fprintf oc "{\"Register\":\"r7\"}"
+  | GPR8 -> fprintf oc "{\"Register\":\"r8\"}"
+  | GPR9 -> fprintf oc "{\"Register\":\"r9\"}"
+  | GPR10 -> fprintf oc "{\"Register\":\"r10\"}"
+  | GPR11 -> fprintf oc "{\"Register\":\"r11\"}"
+  | GPR12 -> fprintf oc "{\"Register\":\"r12\"}"
+  | GPR13 -> fprintf oc "{\"Register\":\"r13\"}"
+  | GPR14 -> fprintf oc "{\"Register\":\"r14\"}"
+  | GPR15 -> fprintf oc "{\"Register\":\"r15\"}"
+  | GPR16 -> fprintf oc "{\"Register\":\"r16\"}"
+  | GPR17 -> fprintf oc "{\"Register\":\"r17\"}"
+  | GPR18 -> fprintf oc "{\"Register\":\"r18\"}"
+  | GPR19 -> fprintf oc "{\"Register\":\"r19\"}"
+  | GPR20 -> fprintf oc "{\"Register\":\"r20\"}"
+  | GPR21 -> fprintf oc "{\"Register\":\"r21\"}"
+  | GPR22 -> fprintf oc "{\"Register\":\"r22\"}"
+  | GPR23 -> fprintf oc "{\"Register\":\"r23\"}"
+  | GPR24 -> fprintf oc "{\"Register\":\"r24\"}"
+  | GPR25 -> fprintf oc "{\"Register\":\"r25\"}"
+  | GPR26 -> fprintf oc "{\"Register\":\"r26\"}"
+  | GPR27 -> fprintf oc "{\"Register\":\"r27\"}"
+  | GPR28 -> fprintf oc "{\"Register\":\"r28\"}"
+  | GPR29 -> fprintf oc "{\"Register\":\"r29\"}"
+  | GPR30 -> fprintf oc "{\"Register\":\"r30\"}"
+  | GPR31 -> fprintf oc "{\"Register\":\"r31\"}"
 
 let p_freg oc = function
-  | FPR0 -> fprintf oc "{\"Register\":\"FPR0\"}"
-  | FPR1 -> fprintf oc "{\"Register\":\"FPR1\"}"
-  | FPR2 -> fprintf oc "{\"Register\":\"FPR2\"}"
-  | FPR3 -> fprintf oc "{\"Register\":\"FPR3\"}"
-  | FPR4 -> fprintf oc "{\"Register\":\"FPR4\"}"
-  | FPR5 -> fprintf oc "{\"Register\":\"FPR5\"}"
-  | FPR6 -> fprintf oc "{\"Register\":\"FPR6\"}"
-  | FPR7 -> fprintf oc "{\"Register\":\"FPR7\"}"
-  | FPR8 -> fprintf oc "{\"Register\":\"FPR8\"}"
-  | FPR9 -> fprintf oc "{\"Register\":\"FPR9\"}"
-  | FPR10 -> fprintf oc "{\"Register\":\"FPR10\"}"
-  | FPR11 -> fprintf oc "{\"Register\":\"FPR11\"}"
-  | FPR12 -> fprintf oc "{\"Register\":\"FPR12\"}"
-  | FPR13 -> fprintf oc "{\"Register\":\"FPR13\"}"
-  | FPR14 -> fprintf oc "{\"Register\":\"FPR14\"}"
-  | FPR15 -> fprintf oc "{\"Register\":\"FPR15\"}"
-  | FPR16 -> fprintf oc "{\"Register\":\"FPR16\"}"
-  | FPR17 -> fprintf oc "{\"Register\":\"FPR17\"}"
-  | FPR18 -> fprintf oc "{\"Register\":\"FPR18\"}"
-  | FPR19 -> fprintf oc "{\"Register\":\"FPR19\"}"
-  | FPR20 -> fprintf oc "{\"Register\":\"FPR20\"}"
-  | FPR21 -> fprintf oc "{\"Register\":\"FPR21\"}"
-  | FPR22 -> fprintf oc "{\"Register\":\"FPR22\"}"
-  | FPR23 -> fprintf oc "{\"Register\":\"FPR23\"}"
-  | FPR24 -> fprintf oc "{\"Register\":\"FPR24\"}"
-  | FPR25 -> fprintf oc "{\"Register\":\"FPR25\"}"
-  | FPR26 -> fprintf oc "{\"Register\":\"FPR26\"}"
-  | FPR27 -> fprintf oc "{\"Register\":\"FPR27\"}"
-  | FPR28 -> fprintf oc "{\"Register\":\"FPR28\"}"
-  | FPR29 -> fprintf oc "{\"Register\":\"FPR29\"}"
-  | FPR30 -> fprintf oc "{\"Register\":\"FPR30\"}"
-  | FPR31 -> fprintf oc "{\"Register\":\"FPR31\"}"
+  | FPR0 -> fprintf oc "{\"Register\":\"f0\"}"
+  | FPR1 -> fprintf oc "{\"Register\":\"f1\"}"
+  | FPR2 -> fprintf oc "{\"Register\":\"f2\"}"
+  | FPR3 -> fprintf oc "{\"Register\":\"f3\"}"
+  | FPR4 -> fprintf oc "{\"Register\":\"f4\"}"
+  | FPR5 -> fprintf oc "{\"Register\":\"f5\"}"
+  | FPR6 -> fprintf oc "{\"Register\":\"f6\"}"
+  | FPR7 -> fprintf oc "{\"Register\":\"f7\"}"
+  | FPR8 -> fprintf oc "{\"Register\":\"f8\"}"
+  | FPR9 -> fprintf oc "{\"Register\":\"f9\"}"
+  | FPR10 -> fprintf oc "{\"Register\":\"f10\"}"
+  | FPR11 -> fprintf oc "{\"Register\":\"f11\"}"
+  | FPR12 -> fprintf oc "{\"Register\":\"f12\"}"
+  | FPR13 -> fprintf oc "{\"Register\":\"f13\"}"
+  | FPR14 -> fprintf oc "{\"Register\":\"f14\"}"
+  | FPR15 -> fprintf oc "{\"Register\":\"f15\"}"
+  | FPR16 -> fprintf oc "{\"Register\":\"f16\"}"
+  | FPR17 -> fprintf oc "{\"Register\":\"f17\"}"
+  | FPR18 -> fprintf oc "{\"Register\":\"f18\"}"
+  | FPR19 -> fprintf oc "{\"Register\":\"f19\"}"
+  | FPR20 -> fprintf oc "{\"Register\":\"f20\"}"
+  | FPR21 -> fprintf oc "{\"Register\":\"f21\"}"
+  | FPR22 -> fprintf oc "{\"Register\":\"f22\"}"
+  | FPR23 -> fprintf oc "{\"Register\":\"f23\"}"
+  | FPR24 -> fprintf oc "{\"Register\":\"f24\"}"
+  | FPR25 -> fprintf oc "{\"Register\":\"f25\"}"
+  | FPR26 -> fprintf oc "{\"Register\":\"f26\"}"
+  | FPR27 -> fprintf oc "{\"Register\":\"f27\"}"
+  | FPR28 -> fprintf oc "{\"Register\":\"f28\"}"
+  | FPR29 -> fprintf oc "{\"Register\":\"f29\"}"
+  | FPR30 -> fprintf oc "{\"Register\":\"f30\"}"
+  | FPR31 -> fprintf oc "{\"Register\":\"f31\"}"
 
 let p_preg oc = function
   | IR ir -> p_ireg oc ir
   | FR fr -> p_freg oc fr
-  | PC -> fprintf oc "{\"Register\":\"PC\"}"
-  | LR -> fprintf oc "{\"Register\":\"LR\"}"
-  | CTR -> fprintf oc "{\"Register\":\"CTR\"}"
-  | CARRY -> fprintf oc "{\"Register\":\"CARRY\"}"
-  | CR0_0 -> fprintf oc "{\"Register\":\"CR0_0\"}"
-  | CR0_1 -> fprintf oc "{\"Register\":\"CR0_1\"}"
-  | CR0_2 -> fprintf oc "{\"Register\":\"CR0_2\"}"
-  | CR0_3 -> fprintf oc "{\"Register\":\"CR0_3\"}"
-  | CR1_2 -> fprintf oc "{\"Register\":\"CR1_2\"}"
+  | _ -> assert false  (* This registers should not be used. *)
 
 let p_atom oc a = fprintf oc "\"%s\"" (extern_atom a)
+
+let p_atom_constant oc a = fprintf oc "{\"Atom\":%a}" p_atom a
 
 let p_int oc i = fprintf oc "%ld" (camlint_of_coqint i)
 let p_int64 oc i = fprintf oc "%Ld" (camlint64_of_coqint i)
@@ -109,14 +103,17 @@ let p_float32 oc f = fprintf oc "%f" (camlfloat_of_coqfloat32 f)
 let p_float64 oc f = fprintf oc "%f" (camlfloat_of_coqfloat f)
 let p_z oc z = fprintf oc "%s" (Z.to_string z)
 
+let p_int_constant oc i = fprintf oc "{\"Integer\":%a}" p_int i
+let p_float_constant oc f = fprintf oc "{\"Float\":%.18g}" (camlfloat_of_coqfloat f)
+let p_z_constant oc z = fprintf oc "{\"Integer\":%s}" (Z.to_string z) 
 
 let p_constant oc  = function
-  | Cint i -> fprintf oc "{\"Integer\":%a}" p_int i
-  | Csymbol_low (i,c) -> fprintf oc "{\"Symbol_low\":[%a,%a]}" p_atom i p_int c
-  | Csymbol_high (i,c) -> fprintf oc "{\"Symbol_high\":[%a,%a]}" p_atom i p_int c 
-  | Csymbol_sda (i,c) -> fprintf oc "{\"Symbol_sda\":[%a,%a]}" p_atom i p_int c 
-  | Csymbol_rel_low (i,c) -> fprintf oc "{\"Symbol_rel_low\":[%a,%a]}" p_atom i p_int c 
-  | Csymbol_rel_high (i,c) -> fprintf oc "{\"Symbol_rel_high\":[%a,%a]}" p_atom i p_int c 
+  | Cint i ->  p_int_constant oc i
+  | Csymbol_low (i,c) -> fprintf oc "{\"Symbol_low\":{\"Name\":%a,\"Offset\":%a}}" p_atom i p_int c
+  | Csymbol_high (i,c) -> fprintf oc "{\"Symbol_high\":{\"Name\":%a,\"Offset\":%a}}" p_atom i p_int c 
+  | Csymbol_sda (i,c) -> fprintf oc "{\"Symbol_sda\":{\"Name\":%a,\"Offset\":%a}}" p_atom i p_int c 
+  | Csymbol_rel_low (i,c) -> fprintf oc "{\"Symbol_rel_low\":{\"Name\":%a,\"Offset\":%a}}" p_atom i p_int c 
+  | Csymbol_rel_high (i,c) -> fprintf oc "{\"Symbol_rel_high\":{\"Name\":%a,\"Offset\":%a}}" p_atom i p_int c 
 
 let p_crbit oc c = 
   let number = match c with
@@ -128,11 +125,13 @@ let p_crbit oc c =
   fprintf oc "{\"CRbit\":%d}" number
 
 
-let p_label oc l = fprintf oc "{\"Label:\"%ld}" (P.to_int32 l)
+let p_label oc l = fprintf oc "{\"Label\":%ld}" (P.to_int32 l)
+
+let p_char_list oc l = fprintf oc "{\"String\":\"%a\"}" (fun oc -> List.iter (output_char oc)) l
 
 let p_list elem oc l =
   match l with
-  | [] -> fprintf oc "null"
+  | [] -> fprintf oc "[]"
   | hd::tail ->
       output_string oc "["; elem oc hd;List.iter (fprintf oc ",%a" elem) tail;output_string oc "]"
 
@@ -141,26 +140,6 @@ let p_list_cont elem oc l =
   | [] -> ()
   | _ ->
       List.iter (fprintf oc ",%a" elem) l
-
-let p_typ oc = function
-    | Tint -> fprintf oc "\"Tint\""
-    | Tfloat -> fprintf oc "\"Tfloat\""
-    | Tlong -> fprintf oc "\"Tlong\""
-    | Tsingle -> fprintf oc "\"Tsingle\""
-    | Tany32 -> fprintf oc "\"Tany32\""
-    | Tany64 -> fprintf oc "\"Tany64\""
-
-let p_signature oc signature =
-  let p_result oc = function
-    | None -> fprintf oc "null"
-    | Some e -> p_typ oc e in
-  let p_calling_convention oc cc =
-    fprintf oc "{\"Vararg\":%B,\"Structreg\":%B}" cc.cc_vararg cc.cc_structret
-  in
-  fprintf oc "{\"Sig_args\":%a,\"Sig_res\":%a,\"Sig_cc\":%a}"
-    (p_list p_typ) signature.sig_args 
-    p_result signature.sig_res
-    p_calling_convention signature.sig_cc
 
 let p_instruction oc ic =
   output_string oc "\n";
@@ -172,21 +151,21 @@ let p_instruction oc ic =
   | Paddic  (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Paddic\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Paddis  (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Paddis\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Paddze (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Paddze\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
-  | Pallocframe (c,i) -> fprintf oc "{\"Instruction Name\":\"Pallocframe\",\"Args\":[%a,%a]}" p_z c p_int i
+  | Pallocframe (c,i) -> fprintf oc "{\"Instruction Name\":\"Pallocframe\",\"Args\":[%a,%a]}" p_z_constant c p_int_constant i
   | Pand_ (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pand_\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pandc (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pandc\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pandi_ (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Pandi_\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Pandis_ (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Pandis_\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Pb l -> fprintf oc "{\"Instruction Name\":\"Pb\",\"Args\":[%a]}" p_label l
-  | Pbctr s ->  fprintf oc "{\"Instruction Name\":\"Pbctr\",\"Args\":[%a]}" p_signature s
-  | Pbctrl s -> fprintf oc "{\"Instruction Name\":\"Pbctrl\",\"Args\":[%a]}" p_signature s
+  | Pbctr s ->  fprintf oc "{\"Instruction Name\":\"Pbctr\",\"Args\":[]}"
+  | Pbctrl s -> fprintf oc "{\"Instruction Name\":\"Pbctrl\",\"Args\":[]}"
   | Pbdnz l -> fprintf oc "{\"Instruction Name\":\"Pbdnz\",\"Args\":[%a]}" p_label l 
   | Pbf (c,l) -> fprintf oc "{\"Instruction Name\":\"Pbf\",\"Args\":[%a,%a]}" p_crbit c p_label l
-  | Pbl (i,s) -> fprintf oc "{\"Instruction Name\":\"Pbl\",\"Args\":[%a,%a]}"  p_atom i p_signature s
-  | Pbs (i,s) -> fprintf oc "{\"Instruction Name\":\"Pbs\",\"Args\":[%a,%a]}"  p_atom i p_signature s
-  | Pblr -> fprintf oc "{\"Instruction Name\":\"Pblr\",\"Args\":null}"
+  | Pbl (i,s) -> fprintf oc "{\"Instruction Name\":\"Pbl\",\"Args\":[%a]}"  p_atom_constant i
+  | Pbs (i,s) -> fprintf oc "{\"Instruction Name\":\"Pbs\",\"Args\":[%a]}"  p_atom_constant i
+  | Pblr -> fprintf oc "{\"Instruction Name\":\"Pblr\",\"Args\":[]}"
   | Pbt (cr,l) -> fprintf oc "{\"Instruction Name\":\"Pbt\",\"Args\":[%a,%a]}" p_crbit cr p_label l
-  | Pbtbl (i,lb) -> fprintf oc "{\"Instruction Name\":\"Pbtl\",\"Args\":[%a,%a]}" p_ireg i (p_list p_label) lb
+  | Pbtbl (i,lb) -> fprintf oc "{\"Instruction Name\":\"Pbtl\",\"Args\":[%a%a]}" p_ireg i (p_list_cont p_label) lb
   | Pcmplw (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pcmplw\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
   | Pcmplwi (ir,c) -> fprintf oc "{\"Instruction Name\":\"Pcmplwi\",\"Args\":[%a,%a]}" p_ireg ir p_constant c
   | Pcmpw (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pcmpw\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
@@ -197,11 +176,11 @@ let p_instruction oc ic =
   | Pcrxor (cr1,cr2,cr3) -> fprintf oc "{\"Instruction Name\":\"Pcrxor\",\"Args\":[%a,%a,%a]}" p_crbit cr1 p_crbit cr2 p_crbit cr3
   | Pdivw (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pdivw\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pdivwu (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pdivwu\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
-  | Peieio -> fprintf oc "{\"Instruction Name\":\"Peieio,\"Args\":null}"
+  | Peieio -> fprintf oc "{\"Instruction Name\":\"Peieio,\"Args\":[]}"
   | Peqv (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Peqv\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pextsb (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pextsb\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
   | Pextsh (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pextsh\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
-  | Pfreeframe (c,i) -> fprintf oc "{\"Instruction Name\":\"Pfreeframe\",\"Args\":[%ld,%a]}" (Z.to_int32 c) p_int i
+  | Pfreeframe (c,i) -> fprintf oc "{\"Instruction Name\":\"Pfreeframe\",\"Args\":[%a,%a]}" p_z_constant c p_int_constant i
   | Pfabs (fr1,fr2) -> fprintf oc "{\"Instruction Name\":\"Pfabs\",\"Args\":[%a,%a]}" p_freg fr1 p_freg fr2
   | Pfabss (fr1,fr2) -> fprintf oc "{\"Instruction Name\":\"Pfabss\",\"Args\":[%a,%a]}" p_freg fr1 p_freg fr2
   | Pfadd (fr1,fr2,fr3) -> fprintf oc "{\"Instruction Name\":\"Pfadd\",\"Args\":[%a,%a,%a]}" p_freg fr1 p_freg fr2 p_freg fr3
@@ -230,7 +209,7 @@ let p_instruction oc ic =
   | Pfrsqrte (fr1,fr2) -> fprintf oc "{\"Instruction Name\":\"Pfsqrte\",\"Args\":[%a,%a]}" p_freg fr1 p_freg fr2
   | Pfres (fr1,fr2) -> fprintf oc "{\"Instruction Name\":\"Pfres\",\"Args\":[%a,%a]}" p_freg fr1 p_freg fr2
   | Pfsel (fr1,fr2,fr3,fr4) -> fprintf oc "{\"Instruction Name\":\"Pfsel\",\"Args\":[%a,%a,%a,%a]}" p_freg fr1 p_freg fr2 p_freg fr3 p_freg fr4
-  | Pisync -> fprintf oc "{\"Instruction Name\":\"Pisync\",\"Args\":null}"
+  | Pisync -> fprintf oc "{\"Instruction Name\":\"Pisync\",\"Args\":[]}"
   | Plbz (ir1,c,ir2) -> fprintf oc "{\"Instruction Name\":\"Plbz\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_constant c p_ireg ir2
   | Plbzx (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pblzx\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Plfd (fr,c,ir) -> fprintf oc "{\"Instruction Name\":\"Plbz\",\"Args\":[%a,%a,%a]}" p_freg fr p_constant c p_ireg ir
@@ -244,8 +223,8 @@ let p_instruction oc ic =
   | Plhbrx (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Plhbrx\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Plhz (ir1,c,ir2) -> fprintf oc "{\"Instruction Name\":\"Plhz\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_constant c p_ireg ir2
   | Plhzx (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Plhzx\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
-  | Plfi (fr,fc) -> fprintf oc "{\"Instruction Name\":\"Plfi\",\"Args\":[%a,%a]}" p_freg fr p_float64 fc
-  | Plfis (fr,fc) -> fprintf oc "{\"Instruction Name\":\"Plfis\",\"Args\":[%a,%a]}" p_freg fr p_float64 fc
+  | Plfi (fr,fc) -> fprintf oc "{\"Instruction Name\":\"Plfi\",\"Args\":[%a,%a]}" p_freg fr p_float_constant fc
+  | Plfis (fr,fc) -> fprintf oc "{\"Instruction Name\":\"Plfis\",\"Args\":[%a,%a]}" p_freg fr p_float_constant fc
   | Plwz (ir1,ic,ir2) -> fprintf oc "{\"Instruction Name\":\"Plwz\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_constant ic p_ireg ir2
   | Plwzu (ir1,c,ir2) -> fprintf oc "{\"Instruction Name\":\"Plwzu\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_constant c p_ireg ir2
   | Plwzx (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Plwz\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
@@ -269,11 +248,11 @@ let p_instruction oc ic =
   | Porc (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Porc\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pori (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Pori\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Poris (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Poris\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
-  | Prlwinm (ir1,ir2,ic1,ic2) -> fprintf oc "{\"Instruction Name\":\"Prlwinm\",\"Args\":[%a,%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_int ic1 p_int ic2
-  | Prlwimi  (ir1,ir2,ic1,ic2) -> fprintf oc "{\"Instruction Name\":\"Prlwimi\",\"Args\":[%a,%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_int ic1 p_int ic2
+  | Prlwinm (ir1,ir2,ic1,ic2) -> fprintf oc "{\"Instruction Name\":\"Prlwinm\",\"Args\":[%a,%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_int_constant ic1 p_int_constant ic2
+  | Prlwimi  (ir1,ir2,ic1,ic2) -> fprintf oc "{\"Instruction Name\":\"Prlwimi\",\"Args\":[%a,%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_int_constant ic1 p_int_constant ic2
   | Pslw (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pslw\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Psraw (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Psraw\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
-  | Psrawi  (ir1,ir2,ic) -> fprintf oc "{\"Instruction Name\":\"Psrawi\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_int ic
+  | Psrawi  (ir1,ir2,ic) -> fprintf oc "{\"Instruction Name\":\"Psrawi\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_int_constant ic
   | Psrw (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Psrw\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pstb (ir1,c,ir2) -> fprintf oc "{\"Instruction Name\":\"Pstb\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_constant c p_ireg ir2
   | Pstbx (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pstbx\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
@@ -299,8 +278,8 @@ let p_instruction oc ic =
   | Psubfe (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Psubfe\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Psubfze (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Psubfe\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
   | Psubfic (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Psubfic\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
-  | Psync -> fprintf oc "{\"Instruction Name\":\"Psync\",\"Args\":null}"
-  | Ptrap -> fprintf oc "{\"Instruction Name\":\"Ptrap\",\"Args\":null}"
+  | Psync -> fprintf oc "{\"Instruction Name\":\"Psync\",\"Args\":[]}"
+  | Ptrap -> fprintf oc "{\"Instruction Name\":\"Ptrap\",\"Args\":[]}"
   | Pxor (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pxor\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pxori (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Pxori\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Pxoris (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Pxoris\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
@@ -308,13 +287,13 @@ let p_instruction oc ic =
   | Pbuiltin (ef,args1,args2) ->
       begin match ef with
       | EF_inline_asm (i,s,il) ->
-          fprintf oc "{\"Instruction Name\":\"Inline_asm\",\"Args\":[%a,%a%a%a%a]}" p_atom i p_signature s (p_list_cont p_atom) il
+          fprintf oc "{\"Instruction Name\":\"Inline_asm\",\"Args\":[%a%a%a%a]}" p_atom_constant i  (p_list_cont p_char_list) il
             (p_list_cont p_preg) args1  (p_list_cont p_preg) args2
       | _ -> (* Should all be folded away *)
           assert false
       end
-  | Pannot _ -> () (* We do not check the annotations *)
-  | Pcfi_adjust _ -> () (* Only debug relevant *)
+  | Pannot _  (* We do not check the annotations *)
+  | Pcfi_adjust _  (* Only debug relevant *)
   | Pcfi_rel_offset _ ->  () (* Only debug relevant *)
 
 let p_storage oc sto =
@@ -322,7 +301,7 @@ let p_storage oc sto =
   | C.Storage_default -> "Default"
   | C.Storage_extern -> "Extern"
   | C.Storage_static -> "Static"
-  | C.Storage_register -> "Register" in
+  | C.Storage_register -> "" (* This should not occur *) in
   fprintf oc "\"%s\"" storage
 
 let p_section oc = function
@@ -335,23 +314,22 @@ let p_section oc = function
   | Section_literal -> fprintf oc "{\"Section Name\":\"Literal\"}"
   | Section_jumptable -> fprintf oc "{\"Section Name\":\"Jumptable\"}"
   | Section_user (s,w,e) -> fprintf oc "{\"Section Name\":%s,\"Writable\":%B,\"Executable\":%B}" s w e
-  | Section_debug_info -> fprintf oc "{\"Section Name\":\"Debug Info\"}"
-  | Section_debug_abbrev -> fprintf oc "{\"Section Name\":\"Debug Abbreviation\"}"
+  | Section_debug_info 
+  | Section_debug_abbrev -> () (* There should be no info in the debug sections *)
 
 let p_int_opt oc = function
-  | None -> fprintf oc "null"
+  | None -> fprintf oc "0"
   | Some i -> fprintf oc "%d" i
 
-let p_atom_info oc ident =
-  let info = Hashtbl.find C2C.decl_atom ident in
-  fprintf oc "{\"Storage Class\":%a,\n\"Alignment\":%a,\n\"Sections\":%a,\n\"Inline\":%B}"
-    p_storage info.a_storage p_int_opt info.a_alignment (p_list p_section) info.a_sections
-    info.a_inline
 
 let p_fundef oc (name,f) = 
-      let instr = List.filter (function Pannot _ | Pcfi_adjust _ | Pcfi_rel_offset _ -> false | _ -> true) f.fn_code in
-      fprintf oc "{\"Fun Name\":%a,\n\"Fun Sig\":%a,\n\"Atom info\":%a,\n\"Fun Code\":%a}\n"
-        p_atom name p_signature f.fn_sig p_atom_info name (p_list p_instruction) instr
+  let info = Hashtbl.find C2C.decl_atom name in
+  let instr = List.filter (function Pannot _ | Pcfi_adjust _ | Pcfi_rel_offset _ -> false | _ -> true) f.fn_code in
+  let c_section,l_section,j_section = match info.a_sections with [a;b;c] -> a,b,c | _ -> assert false in
+  fprintf oc "{\"Fun Name\":%a,\n\"Fun Storage Class\":%a,\n\"Fun Alignment\":%a,\n\"Fun Section Code\":%a,\"Fun Section Literals\":%a,\"Fun Section Jumptable\":%a,\n\"Fun Inline\":%B,\n\"Fun Code\":%a}\n"
+    p_atom name  p_storage info.a_storage  p_int_opt info.a_alignment  
+    p_section c_section p_section l_section p_section j_section info.a_inline
+    (p_list p_instruction) instr
  
 let p_init_data oc = function
   | Init_int8 ic -> fprintf oc "{\"Init_int8\":%a}" p_int ic
@@ -361,11 +339,15 @@ let p_init_data oc = function
   | Init_float32 f -> fprintf oc "{\"Init_float32\":%a}" p_float32 f
   | Init_float64 f -> fprintf oc "{\"Init_float64\":%a}" p_float64 f
   | Init_space z -> fprintf oc "{\"Init_space\":%a}" p_z z
-  | Init_addrof (p,i) -> fprintf oc "{\"Init_addrof\":[%a,%a]}" p_atom p p_int i
+  | Init_addrof (p,i) -> fprintf oc "{\"Init_addrof\":{\"Addr\":%a,\"Offset\":%a}}" p_atom p p_int i
 
 let p_vardef oc (ident,v) =
-  fprintf oc "{\"Var Name\":%a,\"Var Readonly\":%B,\"Var Volatile\":%B,\"Atom Info\":%a,\"Var Init\":%a}\n"
-    p_atom ident v.gvar_readonly v.gvar_volatile p_atom_info ident (p_list p_init_data) v.gvar_init 
+  let info = Hashtbl.find C2C.decl_atom ident in
+  let section = match info.a_sections with [s] -> s | _ -> assert false (* Should only have one section *) in
+  fprintf oc "{\"Var Name\":%a,\"Var Readonly\":%B,\"Var Volatile\":%B,\n\"Var Storage Class\":%a,\n\"Var Alignment\":%a,\n\"Var Section\":%a,\n\"Var Init\":%a}\n"
+    p_atom ident v.gvar_readonly v.gvar_volatile 
+    p_storage info.a_storage p_int_opt info.a_alignment p_section section
+    (p_list p_init_data) v.gvar_init 
 
 let p_program oc prog =
   let prog_vars,prog_funs = List.fold_left (fun (vars,funs) (ident,def) ->
