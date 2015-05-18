@@ -299,9 +299,9 @@ and extended_asm p txt res args clob =
   begin match clob with
   | [] -> ()
   | c1 :: cl ->
-      fprintf p "@ : @[<hov 0>%S" (extern_atom c1);
+      fprintf p "@ : @[<hov 0>%S" (camlstring_of_coqstring c1);
       List.iter
-        (fun c -> fprintf p ",@ %S" (extern_atom c))
+        (fun c -> fprintf p ",@ %S" (camlstring_of_coqstring c))
         cl;
       fprintf p "@]"
   end;

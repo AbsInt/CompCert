@@ -585,13 +585,11 @@ let add_interfs_instr g instr live =
           (* like a move *)
           IRC.add_pref g arg res
       | EF_inline_asm(txt, sg, clob), _, _ ->
-          (* clobbered regs interfere with live set
-             and also with res and args for GCC compatibility *)
+          (* clobbered regs interfere with res and args for GCC compatibility *)
           List.iter (fun c ->
-            match Machregsaux.register_by_name (extern_atom c) with
+            match Machregs.register_by_name c with
             | None -> ()
             | Some mr ->
-                add_interfs_destroyed g across [mr];
                 add_interfs_list_mreg g args mr;
                 if sg.sig_res <> None then add_interfs_list_mreg g res mr)
             clob          

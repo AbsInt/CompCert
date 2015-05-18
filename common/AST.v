@@ -584,7 +584,7 @@ Inductive external_function : Type :=
      (** Another form of annotation that takes one argument, produces
          an event carrying the text and the value of this argument,
          and returns the value of the argument. *)
-  | EF_inline_asm (text: ident) (sg: signature) (clobbers: list ident).
+  | EF_inline_asm (text: ident) (sg: signature) (clobbers: list String.string).
      (** Inline [asm] statements.  Semantically, treated like an
          annotation with no parameters ([EF_annot text nil]).  To be
          used with caution, as it can invalidate the semantic
@@ -642,7 +642,7 @@ Proof.
   generalize ident_eq signature_eq chunk_eq typ_eq zeq Int.eq_dec; intros.
   decide equality.
   apply list_eq_dec. auto.
-  apply list_eq_dec. auto.
+  apply list_eq_dec. apply String.string_dec. 
 Defined.
 Global Opaque external_function_eq.
 

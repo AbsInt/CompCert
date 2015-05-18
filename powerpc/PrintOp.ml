@@ -49,6 +49,7 @@ let print_operation reg pp = function
   | Omove, [r1] -> reg pp r1
   | Ointconst n, [] -> fprintf pp "%ld" (camlint_of_coqint n)
   | Ofloatconst n, [] -> fprintf pp "%F" (camlfloat_of_coqfloat n)
+  | Osingleconst n, [] -> fprintf pp "%Ff" (camlfloat_of_coqfloat32 n)
   | Oaddrsymbol(id, ofs), [] ->
       fprintf pp "\"%s\" + %ld" (extern_atom id) (camlint_of_coqint ofs)
   | Oaddrstack ofs, [] ->
@@ -95,7 +96,14 @@ let print_operation reg pp = function
   | Osubf, [r1;r2] -> fprintf pp "%a -f %a" reg r1 reg r2
   | Omulf, [r1;r2] -> fprintf pp "%a *f %a" reg r1 reg r2
   | Odivf, [r1;r2] -> fprintf pp "%a /f %a" reg r1 reg r2
+  | Onegfs, [r1] -> fprintf pp "negfs(%a)" reg r1
+  | Oabsfs, [r1] -> fprintf pp "absfs(%a)" reg r1
+  | Oaddfs, [r1;r2] -> fprintf pp "%a +fs %a" reg r1 reg r2
+  | Osubfs, [r1;r2] -> fprintf pp "%a -fs %a" reg r1 reg r2
+  | Omulfs, [r1;r2] -> fprintf pp "%a *fs %a" reg r1 reg r2
+  | Odivfs, [r1;r2] -> fprintf pp "%a /fs %a" reg r1 reg r2
   | Osingleoffloat, [r1] -> fprintf pp "singleoffloat(%a)" reg r1
+  | Ofloatofsingle, [r1] -> fprintf pp "floatofsingle(%a)" reg r1
   | Ointoffloat, [r1] -> fprintf pp "intoffloat(%a)" reg r1
   | Ofloatofwords, [r1;r2] -> fprintf pp "floatofwords(%a,%a)" reg r1 reg r2
   | Omakelong, [r1;r2] -> fprintf pp "makelong(%a,%a)" reg r1 reg r2
