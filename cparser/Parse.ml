@@ -29,7 +29,7 @@ let transform_program t p name =
       Some (CtoDwarf.program_to_dwarf p p1 name)
     else
       None in
-  (Rename.program p1),debug
+  (Rename.program p1 (Filename.chop_suffix name ".c")),debug
 
 let parse_transformations s =
   let t = ref CharSet.empty in

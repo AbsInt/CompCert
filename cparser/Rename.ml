@@ -42,6 +42,16 @@ let enter_public env id =
     { re_id = IdentMap.add id id env.re_id;
       re_public = StringMap.add id.name id env.re_public;
       re_used = StringSet.add id.name env.re_used }
+      
+let enter_static env id file =
+  try
+    let id' = StringMap.find id.name env.re_public in
+    { env with re_id = IdentMap.add id id' env.re_id }
+  with Not_found ->
+    let id' = {id with name = Printf.sprintf "_%s_%s" file id.name} in 
+    { re_id = IdentMap.add id id' env.re_id;
+      re_public = env.re_public;
+      re_used = StringSet.add id'.name env.re_used }
 
 (* For static or local identifiers, we make up a new name if needed *)
 (* If the same identifier has already been declared, 
@@ -249,7 +259,7 @@ let reserve_builtins () =
 
 (* Reserve global declarations with public visibility *)
 
-let rec reserve_public env = function
+let rec reserve_public env file = function
   | [] -> env
   | dcl :: rem ->
       let env' =
@@ -257,22 +267,28 @@ let rec reserve_public env = function
         | Gdecl(sto, id, _, _) ->
             begin match sto with
             | Storage_default | Storage_extern -> enter_public env id
-            | Storage_static -> env
+            | Storage_static -> if !Clflags.option_rename_static then
+                enter_static env id file 
+                  else
+                env
             | _ -> assert false
             end
         | Gfundef f ->
             begin match f.fd_storage with
             | Storage_default | Storage_extern -> enter_public env f.fd_name
-            | Storage_static -> env
+            | Storage_static -> if !Clflags.option_rename_static then
+                enter_static env f.fd_name file
+            else
+                env
             | _ -> assert false
             end
         | _ -> env in
-      reserve_public env' rem
+      reserve_public env' file rem
 
 (* Rename the program *)
 
-let program p =
+let program p file =
   globdecls
-    (reserve_public (reserve_builtins()) p)
+    (reserve_public (reserve_builtins()) file p)
     [] p
   
