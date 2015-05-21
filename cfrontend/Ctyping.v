@@ -157,31 +157,108 @@ Definition type_deref (ty: type) : res type :=
   | _ => Error (msg "operator prefix *")
   end.
 
+(** Inferring the type of a conditional expression: the merge of the types
+  of the two arms. *)
+
+Definition attr_combine (a1 a2: attr) : attr :=
+  {| attr_volatile := a1.(attr_volatile) || a2.(attr_volatile);
+     attr_alignas :=
+       match a1.(attr_alignas), a2.(attr_alignas) with
+       | None, al2 => al2
+       | al1, None => al1
+       | Some n1, Some n2 => Some (N.max n1 n2)
+       end
+  |}.
+
+Definition intsize_eq: forall (x y: intsize), {x=y} + {x<>y}.
+Proof. decide equality. Defined.
+
+Definition signedness_eq: forall (x y: signedness), {x=y} + {x<>y}.
+Proof. decide equality. Defined.
+
+Definition floatsize_eq: forall (x y: floatsize), {x=y} + {x<>y}.
+Proof. decide equality. Defined.
+
+Definition callconv_eq: forall (x y: calling_convention), {x=y} + {x<>y}.
+Proof. decide equality; apply bool_dec. Defined.
+
+Fixpoint type_combine (ty1 ty2: type) : res type :=
+  match ty1, ty2 with
+  | Tvoid, Tvoid => OK Tvoid
+  | Tint sz1 sg1 a1, Tint sz2 sg2 a2 =>
+      if intsize_eq sz1 sz2 && signedness_eq sg1 sg2
+      then OK (Tint sz1 sg1 (attr_combine a1 a2))
+      else Error (msg "incompatible int types")
+  | Tlong sg1 a1, Tlong sg2 a2 =>
+      if signedness_eq sg1 sg2
+      then OK (Tlong sg1 (attr_combine a1 a2))
+      else Error (msg "incompatible long types")
+  | Tfloat sz1 a1, Tfloat sz2 a2 =>
+      if floatsize_eq sz1 sz2
+      then OK (Tfloat sz1 (attr_combine a1 a2))
+      else Error (msg "incompatible float types")
+  | Tpointer t1 a1, Tpointer t2 a2 =>
+      do t <- type_combine t1 t2; OK (Tpointer t (attr_combine a1 a2))
+  | Tarray t1 sz1 a1, Tarray t2 sz2 a2 =>
+      do t <- type_combine t1 t2;
+      if zeq sz1 sz2
+      then OK (Tarray t sz1 (attr_combine a1 a2))
+      else Error (msg "incompatible array types")
+  | Tfunction args1 res1 cc1, Tfunction args2 res2 cc2 =>
+      do res <- type_combine res1 res2;
+      do args <-
+        match args1, args2 with
+        | Tnil, _ => OK args2    (* tolerance for unprototyped functions *)
+        | _, Tnil => OK args1
+        | _, _    => typelist_combine args1 args2
+        end;
+      if callconv_eq cc1 cc2
+      then OK (Tfunction args res cc1)
+      else Error (msg "incompatible function types")
+  | Tstruct id1 a1, Tstruct id2 a2 =>
+      if ident_eq id1 id2
+      then OK (Tstruct id1 (attr_combine a1 a2))
+      else Error (msg "incompatible struct types")
+  | Tunion id1 a1, Tunion id2 a2 =>
+      if ident_eq id1 id2
+      then OK (Tunion id1 (attr_combine a1 a2))
+      else Error (msg "incompatible union types")
+  | _, _ =>
+      Error (msg "incompatible types")
+  end
+
+with typelist_combine (tl1 tl2: typelist) : res typelist :=
+  match tl1, tl2 with
+  | Tnil, Tnil => OK Tnil
+  | Tcons t1 tl1, Tcons t2 tl2 =>
+      do t <- type_combine t1 t2;
+      do tl <- typelist_combine tl1 tl2;
+      OK (Tcons t tl)
+  | _, _ =>
+      Error (msg "incompatible function types")
+  end.
+
 Definition is_void (ty: type) : bool :=
   match ty with Tvoid => true | _ => false end.
 
-Definition type_join (ty1 ty2: type) : res type :=
+Definition type_conditional (ty1 ty2: type) : res type :=
   match typeconv ty1, typeconv ty2 with
   | (Tint _ _ _ | Tfloat _ _), (Tint _ _ _ | Tfloat _ _) =>
       binarith_type ty1 ty2 "conditional expression"
   | Tpointer t1 a1, Tpointer t2 a2 =>
-      OK (Tpointer (if is_void t1 || is_void t2 then Tvoid else t1) noattr)
+      let t :=
+        if is_void t1 || is_void t2 then Tvoid else
+          match type_combine t1 t2 with
+          | OK t => t
+          | Error _ => Tvoid   (* tolerance *)
+          end
+       in OK (Tpointer t noattr)
   | Tpointer t1 a1, Tint _ _ _ =>
       OK (Tpointer t1 noattr)
   | Tint _ _ _, Tpointer t2 a2 =>
       OK (Tpointer t2 noattr)
-  | Tvoid, Tvoid =>
-      OK Tvoid
-  | Tstruct id1 a1, Tstruct id2 a2 =>
-      if ident_eq id1 id2
-      then OK (Tstruct id1 noattr)
-      else Error (msg "conditional expression")
-  | Tunion id1 a1, Tunion id2 a2 =>
-      if ident_eq id1 id2
-      then OK (Tunion id1 noattr)
-      else Error (msg "conditional expression")
-  | _, _ =>
-      Error (msg "conditional expression")
+  | t1, t2 =>
+      type_combine t1 t2
   end.
 
 (** * Specification of the type system *)
@@ -603,7 +680,7 @@ Definition eseqor (r1 r2: expr) : res expr :=
 Definition econdition (r1 r2 r3: expr) : res expr :=
   do x1 <- check_rval r1; do x2 <- check_rval r2; do x3 <- check_rval r3;
   do y1 <- check_bool (typeof r1);
-  do ty <- type_join (typeof r2) (typeof r3);
+  do ty <- type_conditional (typeof r2) (typeof r3);
   OK (Econdition r1 r2 r3 ty).
 
 Definition econdition' (r1 r2 r3: expr) (ty: type) : res expr :=
@@ -822,6 +899,23 @@ Definition retype_function (ce: composite_env) (e: typenv) (f: function) : res f
                  f.(fn_vars)
                  s).
 
+Definition retype_fundef (ce: composite_env) (e: typenv) (fd: fundef) : res fundef :=
+  match fd with
+  | Internal f => do f' <- retype_function ce e f; OK (Internal f')
+  | External id args res cc => OK fd
+  end.
+
+Definition typecheck_program (p: program) : res program :=
+  let e := bind_globdef (PTree.empty _) p.(prog_defs) in
+  let ce := p.(prog_comp_env) in
+  do defs <- transf_globdefs (retype_fundef ce e) (fun v => OK v) p.(prog_defs);
+  OK {| prog_defs := defs;
+        prog_public := p.(prog_public);
+        prog_main := p.(prog_main);
+        prog_types := p.(prog_types);
+        prog_comp_env := ce;
+        prog_comp_env_eq := p.(prog_comp_env_eq) |}.
+
 (** Soundness of the smart constructors.  *)
 
 Lemma check_cast_sound:
@@ -882,14 +976,42 @@ Proof.
   destruct i; auto. 
 Qed.
 
-Lemma type_join_cast:
+Lemma type_combine_cast:
   forall t1 t2 t,
-  type_join t1 t2 = OK t -> wt_cast t1 t /\ wt_cast t2 t.
+  type_combine t1 t2 = OK t ->
+  match t1 with Tarray _ _ _ => False | Tfunction _ _ _ => False | _ => True end ->
+  match t2 with Tarray _ _ _ => False | Tfunction _ _ _ => False | _ => True end ->
+  wt_cast t1 t /\ wt_cast t2 t.
 Proof.
-  intros. unfold type_join in H. 
+  intros.
+  unfold wt_cast; destruct t1; try discriminate; destruct t2; simpl in H; inv H.
+- simpl; split; congruence.
+- destruct (intsize_eq i i0 && signedness_eq s s0); inv H3.
+  simpl; destruct i; split; congruence.
+- destruct (signedness_eq s s0); inv H3.
+  simpl; split; congruence.
+- destruct (floatsize_eq f f0); inv H3.
+  simpl; destruct f0; split; congruence.
+- monadInv H3. simpl; split; congruence.
+- contradiction.
+- contradiction.
+- destruct (ident_eq i i0); inv H3. simpl; split; congruence.
+- destruct (ident_eq i i0); inv H3. simpl; split; congruence.
+Qed.
+
+Lemma type_conditional_cast:
+  forall t1 t2 t,
+  type_conditional t1 t2 = OK t -> wt_cast t1 t /\ wt_cast t2 t.
+Proof.
+  intros. 
+  assert (A: forall x, match typeconv x with Tarray _ _ _ => False | Tfunction _ _ _ => False | _ => True end).
+  { destruct x; simpl; auto. destruct i; auto. }
+  assert (D: type_combine (typeconv t1) (typeconv t2) = OK t -> wt_cast t1 t /\ wt_cast t2 t).
+  { intros. apply type_combine_cast in H0. destruct H0; split; apply typeconv_cast; auto. 
+    apply A. apply A. }
+  clear A. unfold type_conditional in H.
   destruct (typeconv t1) eqn:T1; try discriminate;
-  destruct (typeconv t2) eqn:T2; inv H.
-- unfold wt_cast; simpl; split; congruence.
+  destruct (typeconv t2) eqn:T2; inv H; auto using D.
 - eapply binarith_type_cast; eauto.
 - eapply binarith_type_cast; eauto.
 - split; apply typeconv_cast; unfold wt_cast. 
@@ -899,12 +1021,6 @@ Proof.
 - split; apply typeconv_cast; unfold wt_cast. 
   rewrite T1; simpl; congruence. rewrite T2; simpl; congruence.
 - split; apply typeconv_cast; unfold wt_cast. 
-  rewrite T1; simpl; congruence. rewrite T2; simpl; congruence.
-- destruct (ident_eq i i0); inv H1. 
-  split; apply typeconv_cast; unfold wt_cast. 
-  rewrite T1; simpl; congruence. rewrite T2; simpl; congruence.
-- destruct (ident_eq i i0); inv H1. 
-  split; apply typeconv_cast; unfold wt_cast. 
   rewrite T1; simpl; congruence. rewrite T2; simpl; congruence.
 Qed.
 
@@ -1025,7 +1141,7 @@ Lemma econdition_sound:
   forall r1 r2 r3 a, econdition r1 r2 r3 = OK a ->
   wt_expr ce e r1 -> wt_expr ce e r2 -> wt_expr ce e r3 -> wt_expr ce e a.
 Proof.
-  intros. monadInv H. apply type_join_cast in EQ3. destruct EQ3. eauto 10 with ty. 
+  intros. monadInv H. apply type_conditional_cast in EQ3. destruct EQ3. eauto 10 with ty. 
 Qed.
 
 Lemma econdition'_sound:
@@ -1204,6 +1320,38 @@ Lemma retype_function_sound:
   forall ce e f f', retype_function ce e f = OK f' -> wt_function ce e f'.
 Proof.
   intros. monadInv H. constructor; simpl. eapply retype_stmt_sound; eauto. 
+Qed.
+
+Theorem typecheck_program_sound:
+  forall p p', typecheck_program p = OK p' -> wt_program p'.
+Proof.
+  unfold typecheck_program; intros. monadInv H. 
+  rename x into defs.
+  constructor; simpl.
+  set (ce := prog_comp_env p) in *.
+  set (e := bind_globdef (PTree.empty type) (prog_defs p)) in *.
+  set (e' := bind_globdef (PTree.empty type) defs) in *.
+  assert (MATCH:
+    list_forall2 (match_globdef (fun f tf => retype_fundef ce e f = OK tf) (fun v tv => tv = v)) (prog_defs p) defs).
+  {
+    revert EQ; generalize (prog_defs p) defs.
+    induction l as [ | [id gd] l ]; intros l'; simpl; intros.
+    inv EQ. constructor. 
+    destruct gd as [f | v].
+    destruct (retype_fundef ce e f) as [tf|msg] eqn:R; monadInv EQ.
+    constructor; auto. constructor; auto. 
+    monadInv EQ. constructor; auto. destruct v; constructor; auto. }
+  assert (ENVS: e' = e).
+  { unfold e, e'. revert MATCH; generalize (prog_defs p) defs (PTree.empty type). 
+    induction l as [ | [id gd] l ]; intros l' t M; inv M.
+    auto. inv H1; simpl; auto. replace (type_of_fundef f2) with (type_of_fundef f1); auto. 
+    unfold retype_fundef in H4. destruct f1; monadInv H4; auto. monadInv EQ0; auto. 
+  }
+  rewrite ENVS.
+  intros id f. revert MATCH; generalize (prog_defs p) defs. induction 1; simpl; intros.
+  contradiction.
+  destruct H0; auto. subst b1; inv H. destruct f1; simpl in H2. 
+  monadInv H2. eapply retype_function_sound; eauto. congruence. 
 Qed.
 
 (** * Subject reduction *)

@@ -626,7 +626,6 @@ let ewrap = function
       error ("retyping error: " ^  string_of_errmsg msg); ezero
 
 let rec convertExpr env e =
-  (*let ty = convertTyp env e.etyp in*)
   match e.edesc with
   | C.EVar _
   | C.EUnop((C.Oderef|C.Odot _|C.Oarrow _), _)
@@ -734,9 +733,8 @@ let rec convertExpr env e =
       ewrap (Ctyping.eseqor (convertExpr env e1) (convertExpr env e2))
 
   | C.EConditional(e1, e2, e3) ->
-      ewrap (Ctyping.econdition' (convertExpr env e1)
-                                     (convertExpr env e2) (convertExpr env e3)
-                                     (convertTyp env e.etyp))
+      ewrap (Ctyping.econdition (convertExpr env e1)
+                                (convertExpr env e2) (convertExpr env e3))
   | C.ECast(ty1, e1) ->
       ewrap (Ctyping.ecast (convertTyp env ty1) (convertExpr env e1))
   | C.ECompound(ty1, ie) ->
