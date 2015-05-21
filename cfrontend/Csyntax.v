@@ -208,13 +208,22 @@ Definition type_of_fundef (f: fundef) : type :=
 
 (** ** Programs *)
 
-(** A program is composed of:
+(** A "pre-program", as produced by the elaborator is composed of:
 - a list of definitions of functions and global variables;
 - the names of functions and global variables that are public (not static);
 - the name of the function that acts as entry point ("main" function).
-- a list of definitions for structure and union names;
-- the corresponding composite environment;
-*)
+- a list of definitions for structure and union names
+
+A program is composed of the same information, plus the corresponding
+composite environment, and a proof that this environment is consistent
+with the composite definitions. *)
+
+Record pre_program : Type := {
+  pprog_defs: list (ident * globdef fundef type);
+  pprog_public: list ident;
+  pprog_main: ident;
+  pprog_types: list composite_definition
+}.
 
 Record program : Type := {
   prog_defs: list (ident * globdef fundef type);
@@ -232,20 +241,15 @@ Definition program_of_program (p: program) : AST.program fundef type :=
 
 Coercion program_of_program: program >-> AST.program.
 
-Program Definition make_program (types: list composite_definition)
-                                (defs: list (ident * globdef fundef type))
-                                (public: list ident)
-                                (main: ident): res program :=
-  match build_composite_env types with
-  | OK env =>
-      OK {| prog_defs := defs;
-            prog_public := public;
-            prog_main := main;
-            prog_types := types;
-            prog_comp_env := env;
+Program Definition program_of_pre_program (p: pre_program) : res program :=
+  match build_composite_env p.(pprog_types) with
+  | Error e => Error e
+  | OK ce =>
+      OK {| prog_defs := p.(pprog_defs);
+            prog_public := p.(pprog_public);
+            prog_main := p.(pprog_main);
+            prog_types := p.(pprog_types);
+            prog_comp_env := ce;
             prog_comp_env_eq := _ |}
-  | Error msg =>
-      Error msg
   end.
-
 
