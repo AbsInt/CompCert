@@ -243,7 +243,8 @@ Definition is_void (ty: type) : bool :=
 
 Definition type_conditional (ty1 ty2: type) : res type :=
   match typeconv ty1, typeconv ty2 with
-  | (Tint _ _ _ | Tfloat _ _), (Tint _ _ _ | Tfloat _ _) =>
+  | (Tint _ _ _ | Tlong _ _ | Tfloat _ _),
+    (Tint _ _ _ | Tlong _ _ | Tfloat _ _) =>
       binarith_type ty1 ty2 "conditional expression"
   | Tpointer t1 a1, Tpointer t2 a2 =>
       let t :=
@@ -1011,13 +1012,9 @@ Proof.
     apply A. apply A. }
   clear A. unfold type_conditional in H.
   destruct (typeconv t1) eqn:T1; try discriminate;
-  destruct (typeconv t2) eqn:T2; inv H; auto using D.
-- eapply binarith_type_cast; eauto.
-- eapply binarith_type_cast; eauto.
+  destruct (typeconv t2) eqn:T2; inv H; eauto using D, binarith_type_cast.
 - split; apply typeconv_cast; unfold wt_cast. 
   rewrite T1; simpl; congruence. rewrite T2; simpl; congruence.
-- eapply binarith_type_cast; eauto.
-- eapply binarith_type_cast; eauto.
 - split; apply typeconv_cast; unfold wt_cast. 
   rewrite T1; simpl; congruence. rewrite T2; simpl; congruence.
 - split; apply typeconv_cast; unfold wt_cast. 
