@@ -123,7 +123,7 @@ let rec name_cdecl id ty =
           if not first then Buffer.add_string b ", ";
           Buffer.add_string b (name_cdecl "" t1);
           add_args false tl in
-      add_args true args;
+      if not cconv.cc_unproto then add_args true args;
       Buffer.add_char b ')';
       name_cdecl (Buffer.contents b) res
   | Tstruct(name, a) ->

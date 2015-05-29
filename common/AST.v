@@ -100,12 +100,13 @@ These signatures are used in particular to determine appropriate
 calling conventions for the function. *)
 
 Record calling_convention : Type := mkcallconv {
-  cc_vararg: bool;
-  cc_structret: bool
+  cc_vararg: bool;                      (**r variable-arity function *)
+  cc_unproto: bool;                     (**r old-style unprototyped function *)
+  cc_structret: bool                    (**r function returning a struct  *)
 }.
 
 Definition cc_default :=
-  {| cc_vararg := false; cc_structret := false |}.
+  {| cc_vararg := false; cc_unproto := false; cc_structret := false |}.
 
 Record signature : Type := mksignature {
   sig_args: list typ;

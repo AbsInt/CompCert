@@ -179,8 +179,13 @@ Proof. decide equality. Defined.
 Definition floatsize_eq: forall (x y: floatsize), {x=y} + {x<>y}.
 Proof. decide equality. Defined.
 
-Definition callconv_eq: forall (x y: calling_convention), {x=y} + {x<>y}.
-Proof. decide equality; apply bool_dec. Defined.
+Definition callconv_combine (cc1 cc2: calling_convention) : res calling_convention :=
+  if bool_eq cc1.(cc_vararg) cc2.(cc_vararg) then 
+    OK {| cc_vararg := cc1.(cc_vararg);
+          cc_unproto := cc1.(cc_unproto) && cc2.(cc_unproto);
+          cc_structret := cc1.(cc_structret) |}
+  else
+    Error (msg "incompatible calling conventions").
 
 Fixpoint type_combine (ty1 ty2: type) : res type :=
   match ty1, ty2 with
@@ -207,14 +212,11 @@ Fixpoint type_combine (ty1 ty2: type) : res type :=
   | Tfunction args1 res1 cc1, Tfunction args2 res2 cc2 =>
       do res <- type_combine res1 res2;
       do args <-
-        match args1, args2 with
-        | Tnil, _ => OK args2    (* tolerance for unprototyped functions *)
-        | _, Tnil => OK args1
-        | _, _    => typelist_combine args1 args2
-        end;
-      if callconv_eq cc1 cc2
-      then OK (Tfunction args res cc1)
-      else Error (msg "incompatible function types")
+        (if cc1.(cc_unproto) then OK args2 else
+         if cc2.(cc_unproto) then OK args1 else
+         typelist_combine args1 args2);
+      do cc <- callconv_combine cc1 cc2;
+      OK (Tfunction args res cc)
   | Tstruct id1 a1, Tstruct id2 a2 =>
       if ident_eq id1 id2
       then OK (Tstruct id1 (attr_combine a1 a2))
@@ -243,7 +245,8 @@ Definition is_void (ty: type) : bool :=
 
 Definition type_conditional (ty1 ty2: type) : res type :=
   match typeconv ty1, typeconv ty2 with
-  | (Tint _ _ _ | Tfloat _ _), (Tint _ _ _ | Tfloat _ _) =>
+  | (Tint _ _ _ | Tlong _ _ | Tfloat _ _),
+    (Tint _ _ _ | Tlong _ _ | Tfloat _ _) =>
       binarith_type ty1 ty2 "conditional expression"
   | Tpointer t1 a1, Tpointer t2 a2 =>
       let t :=
@@ -1011,13 +1014,9 @@ Proof.
     apply A. apply A. }
   clear A. unfold type_conditional in H.
   destruct (typeconv t1) eqn:T1; try discriminate;
-  destruct (typeconv t2) eqn:T2; inv H; auto using D.
-- eapply binarith_type_cast; eauto.
-- eapply binarith_type_cast; eauto.
+  destruct (typeconv t2) eqn:T2; inv H; eauto using D, binarith_type_cast.
 - split; apply typeconv_cast; unfold wt_cast. 
   rewrite T1; simpl; congruence. rewrite T2; simpl; congruence.
-- eapply binarith_type_cast; eauto.
-- eapply binarith_type_cast; eauto.
 - split; apply typeconv_cast; unfold wt_cast. 
   rewrite T1; simpl; congruence. rewrite T2; simpl; congruence.
 - split; apply typeconv_cast; unfold wt_cast. 

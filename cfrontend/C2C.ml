@@ -437,10 +437,10 @@ let convertAttr a =
       let n = Cutil.alignas_attribute a in
       if n > 0 then Some (N.of_int (log2 n)) else None }
 
-let convertCallconv va attr =
+let convertCallconv va unproto attr =
   let sr =
     Cutil.find_custom_attributes ["structreturn"; "__structreturn"] attr in
-  { cc_vararg = va; cc_structret = sr <> [] }
+  { cc_vararg = va; cc_unproto = unproto; cc_structret = sr <> [] }
 
 (** Types *)
 
@@ -494,7 +494,7 @@ let rec convertTyp env t =
                 | Some tl -> convertParams env tl
                 end,
                 convertTyp env tres,
-                convertCallconv va a)
+                convertCallconv va (targs = None) a)
   | C.TNamed _ ->
       convertTyp env (Cutil.unroll env t)
   | C.TStruct(id, a) ->
@@ -796,7 +796,8 @@ let rec convertExpr env e =
       let targs = convertTypArgs env [] args
       and tres = convertTyp env e.etyp in
       let sg =
-        signature_of_type targs tres {cc_vararg = true; cc_structret = false} in
+        signature_of_type targs tres
+           {cc_vararg = true; cc_unproto = false; cc_structret = false} in
       Ebuiltin(EF_external(intern_string "printf", sg), 
                targs, convertExprList env args, tres)
  
@@ -1031,11 +1032,12 @@ let convertFundef loc env fd =
       a_access = Sections.Access_default;
       a_inline = fd.fd_inline && not fd.fd_vararg;  (* PR#15 *)
       a_loc = loc };
-  (id', Gfun(Internal {fn_return = ret;
-                       fn_callconv = convertCallconv fd.fd_vararg fd.fd_attrib;
-                       fn_params = params;
-                       fn_vars = vars;
-                       fn_body = body'}))
+  (id', Gfun(Internal
+          {fn_return = ret;
+           fn_callconv = convertCallconv fd.fd_vararg false fd.fd_attrib;
+           fn_params = params;
+           fn_vars = vars;
+           fn_body = body'}))
 
 (** External function declaration *)
 
