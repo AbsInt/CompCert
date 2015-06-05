@@ -1,12 +1,87 @@
+Release 2.5, 2015-06-xx
+=======================
+
+Language features:
+- Extended inline assembly in the style of GCC.  (See section 6.5
+  of the user's manual.)  The implementation is not as complete
+  as that of GCC or Clang.  In particular, the only constraints
+  supported over operands are "r" (register), "m" (memory), and
+  "i" (integer immediate).
+
+Code generation and optimization:
+- Revised translation of '||' and '&&' to Clight so as to
+  produce well-typed Clight code.
+- More prudent value analysis of uninitialized declarations of
+ "const" global variables.
+- Revised handling of "common" global declarations, fixes an issue
+  with uninitialized declarations of "const" global variables.
+
+Improvements in confidence:
+- Formalized the typing rules for CompCert C in Coq and verified
+  a type-checker, which is used to produce the type annotations
+  in CompCert C ASTs, rather than trusting the types produced by
+  the Elab pass.
+- Coq proof of correctness for the Unusedglob pass (elimination
+  of unreferenced static global definitions).  The Coq AST for
+  compilation units now records which globals are static.
+- More careful semantics of comparisons between a non-null pointer
+  and the null pointer.  The comparison is undefined if the non-null
+  pointer is out of bounds.
+
+Usability:
+- Generation of DWARF v2 debugging information in "-g" mode.
+  The information describes C types, global variables, functions,
+  but not yet function-local variables.  This is currently available
+  only for the PowerPC/Diab target.
+- Added command-line options to turn individual optimizations on or off,
+  and a "-O0" option to turn them all off.
+- Revised handling of arguments to __builtin_annot so that no code
+  is generated for an argument that is a global variable or a local
+  variable whose address is taken.
 - In string and character literals, treat illegal escape sequences 
   (e.g. "\%" or "\0") as an error instead of a warning.
-- Upgraded Flocq to version 2.4.0.
+- Warn if floating-point literals overflow or underflow when converted
+  to FP numbers.
 - cchecklink: added option "-files-from" to read .sdump file names
     from a file or from standard input.	  
-- Revised handling of "common" global declarations, fixes an issue
-    with uninitialized declarations of "const" global variables.
-- Use a Makefile instead of ocamlbuild to compile the OCaml code.
+- In "-g -S" mode, annotate the generated .s file with comments 
+  containing the C source code.
+- Recognize and accept more of GCC's alternate keywords, e.g. __signed,
+  __volatile__, etc.
 
+ABI conformance:
+- Improved ABI conformance for passing values of struct or union types
+  as function arguments or results.
+- Support the "va_arg" macro from <stdarg.h> in the case of arguments
+  of struct or union types.
+
+Coq development:
+- In the CompCert C and Clight ASTs, struct and union types are now
+  represented by name instead of by structure.  A separate environment
+  maps these names to struct/union definitions.  This avoids
+  bad algorithmic complexity of operations over structural types.
+- Introduce symbol environments (type Senv.t) as a restricted view on
+  global environments (type Genv.t).
+- Upgraded the Flocq library to version 2.4.0.
+
+Bug fixing:
+- Issue #4: exponential behaviors with deeply-nested struct types.
+- Issue #6: mismatch on the definition of wchar_t
+- Issue #10: definition of composite type missing from the environment.
+- Issue #13: improved handling of wide string literals
+- Issue #15: variable-argument functions are not eligible for inlining.
+- Issue #19: support empty "switch" statements
+- Issue #20: ABI incompatibility wrt struct passing on IA32.
+- Issue #28: missing type decay in __builtin_memcpy_aligned applied to arrays.
+- Issue #42: emit error if "static" definition follows non-"static" declaration.
+- Issue #44: OSX assembler does not recognize ".global" directive.
+- Protect against redefinition of the __i64_xxx helper library functions.
+- Revised handling of nonstandard attributes in C type compatibility check.
+
+Miscellaneous:
+- When preprocessing with gcc or clang, use "-std=c99" mode to force
+  C99 conformance.
+- Use a Makefile instead of ocamlbuild to compile the OCaml code.
 
 
 Release 2.4, 2014-09-17
