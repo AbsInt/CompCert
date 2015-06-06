@@ -778,7 +778,9 @@ and elab_enum_item env ((s, exp), loc) nextval =
               "value of enumerator '%s' is not a compile-time constant" s;
             (nextval, Some exp') in
   if redef Env.lookup_ident env s then
-    error loc "redefinition of enumerator '%s'" s;
+    error loc "redefinition of identifier '%s'" s;
+  if redef Env.lookup_typedef env s then
+    error loc "redefinition of typedef '%s' as different kind of symbol" s;
   if not (int_representable v (8 * sizeof_ikind enum_ikind) (is_signed_ikind enum_ikind)) then
      warning loc "the value of '%s' is not representable with type %a"
                  s Cprint.typ (TInt(enum_ikind, []));
@@ -1784,11 +1786,15 @@ let enter_typedefs loc env sto dl =
       error loc "initializer in typedef";
     if redef Env.lookup_typedef env s then
       error loc "redefinition of typedef '%s'" s;
+    if redef Env.lookup_ident env s then
+      error loc "redefinition of identifier '%s' as different kind of symbol" s;
     let (id, env') = Env.enter_typedef env s ty in
     emit_elab loc (Gtypedef(id, ty));
     env') env dl
 
 let enter_or_refine_ident local loc env s sto ty =
+  if redef Env.lookup_typedef env s then
+    error loc "redefinition of typedef '%s' as different kind of symbol" s;
   match previous_def Env.lookup_ident env s with
   | Some(id, II_ident(old_sto, old_ty))
     when sto = Storage_extern || Env.in_current_scope env id ->
@@ -1817,7 +1823,7 @@ let enter_or_refine_ident local loc env s sto ty =
       in
       (id, new_sto, Env.add_ident env id new_sto new_ty)
   | Some(id, II_enum v) when Env.in_current_scope env id ->
-      error loc "illegal redefinition of enumerator '%s'" s;
+      error loc "redefinition of enumerator '%s'" s;
       (id, sto, Env.add_ident env id sto ty)
   | _ ->
       let (id, env') = Env.enter_ident env s sto ty in (id, sto, env')
