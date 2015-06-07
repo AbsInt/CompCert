@@ -402,7 +402,7 @@ let do_inline_assembly txt sg ge w args m = None
 (* Implementing external functions producing observable events *)
 
 let rec world ge m =
-  Determinism.World(world_io ge m, world_vload ge m, world_vstore ge m)
+  lazy (Determinism.World(world_io ge m, world_vload ge m, world_vstore ge m))
 
 and world_io ge m id args =
   None

@@ -36,7 +36,7 @@ Require Import Behaviors.
   that this external call succeeds, has result [r], and changes
   the world to [w]. *)
 
-Inductive world: Type :=
+CoInductive world: Type :=
   World (io: ident -> list eventval -> option (eventval * world))
         (vload: memory_chunk -> ident -> int -> option (eventval * world))
         (vstore: memory_chunk -> ident -> int -> eventval -> option world).
