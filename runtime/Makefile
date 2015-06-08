@@ -1,15 +1,16 @@
 include ../Makefile.config
 
 CFLAGS=-O1 -g -Wall
-INCLUDES=
 OBJS=i64_dtos.o i64_dtou.o i64_sar.o i64_sdiv.o i64_shl.o \
   i64_shr.o i64_smod.o i64_stod.o i64_stof.o \
   i64_udivmod.o i64_udiv.o i64_umod.o i64_utod.o i64_utof.o \
   vararg.o
 LIB=libcompcert.a
+INCLUDES=include/float.h include/stdarg.h include/stdbool.h \
+  include/stddef.h include/varargs.h
 
 ifeq ($(strip $(HAS_RUNTIME_LIB)),true)
-all: $(LIB) $(INCLUDES)
+all: $(LIB)
 else
 all:
 endif
@@ -28,11 +29,19 @@ clean::
 	rm -f *.o $(LIB)
 
 ifeq ($(strip $(HAS_RUNTIME_LIB)),true)
-install:
+install::
 	install -d $(LIBDIR)
-	install -c $(LIB) $(INCLUDES) $(LIBDIR)
+	install -m 0644 $(LIB) $(LIBDIR)
 else
-install:
+install::
+endif
+
+ifeq ($(strip $(HAS_STANDARD_HEADERS)),true)
+install::
+	install -d $(LIBDIR)/include
+	install -m 0644 $(INCLUDES) $(LIBDIR)/include
+else
+install::
 endif
 
 test/test_int64: test/test_int64.c $(LIB)
