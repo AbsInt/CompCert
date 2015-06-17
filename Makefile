@@ -202,6 +202,7 @@ compcert.ini: Makefile.config VERSION
          echo "abi=$(ABI)"; \
          echo "system=$(SYSTEM)"; \
          echo "has_runtime_lib=$(HAS_RUNTIME_LIB)"; \
+         echo "has_standard_headers=$(HAS_STANDARD_HEADERS)"; \
          echo "asm_supports_cfi=$(ASM_SUPPORTS_CFI)"; \
          echo "advanced_debug=$(ADVANCED_DEBUG)"; \
          echo "struct_passing_style=$(STRUCT_PASSING)"; \
@@ -220,15 +221,13 @@ depend: $(FILES) exportclight/Clightdefs.v
 
 install:
 	install -d $(BINDIR)
-	install ./ccomp $(BINDIR)
+	install -m 0755 ./ccomp $(BINDIR)
 	install -d $(SHAREDIR)
-	install ./compcert.ini $(SHAREDIR)
+	install -m 0644 ./compcert.ini $(SHAREDIR)
 ifeq ($(CCHECKLINK),true)
-	install ./cchecklink $(BINDIR)
+	install -m 0755 ./cchecklink $(BINDIR)
 endif
-ifeq ($(HAS_RUNTIME_LIB),true)
 	$(MAKE) -C runtime install
-endif
 
 clean:
 	rm -f $(patsubst %, %/*.vo, $(DIRS))

@@ -93,8 +93,8 @@ let preprocess ifile ofile =
   let cmd = List.concat [
     Configuration.prepro;
     ["-D__COMPCERT__"];
-    (if Configuration.has_runtime_lib
-     then ["-I" ^ !stdlib_path]
+    (if Configuration.has_standard_headers
+     then ["-I" ^ Filename.concat !stdlib_path "include" ]
      else []);
     List.rev !prepro_options;
     [ifile]
@@ -515,6 +515,8 @@ let cmdline_actions =
   Exact "-E", Set option_E;
   Exact "-S", Set option_S;
   Exact "-o", String(fun s -> option_o := Some s);
+  Prefix "-o", Self (fun s -> let s = String.sub s 2 ((String.length s) - 2) in
+			      option_o := Some s);
 (* Preprocessing options *)
   Exact "-I", String(fun s -> prepro_options := s :: "-I" :: !prepro_options);
   Prefix "-I", Self(fun s -> prepro_options := s :: !prepro_options);
