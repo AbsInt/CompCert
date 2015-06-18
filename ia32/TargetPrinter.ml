@@ -841,6 +841,52 @@ module Target(System: SYSTEM):TARGET =
             fprintf oc "	ret\n"
           end
       (** Pseudo-instructions *)
+      | Padcl_ir (n,res) ->
+	 fprintf oc "  	adcl	$%ld, %a\n" (camlint_of_coqint n) ireg res;
+      | Padcl_rr (a1,res) ->
+	 fprintf oc "  	adcl	%a, %a\n" ireg a1 ireg res;
+      | Paddl (a1,res) ->
+	 fprintf oc "	addl	%a, %a\n" ireg a1 ireg res;
+      | Pbsfl (a1,res) ->
+	 fprintf oc "	bsfl	%a, %a\n" ireg a1 ireg res
+      | Pbslr (a1,res) ->
+	 fprintf oc "	bsrl	%a, %a\n" ireg a1 ireg res;
+      | Pbswap res ->
+	 fprintf oc "	bswap	%a\n" ireg res
+      | Pfmadd132 (a1,a2,res) ->
+	 fprintf oc "	vfmadd132sd	%a, %a, %a\n" freg a1 freg a2 freg res
+      | Pfmadd213 (a1,a2,res) ->
+	 fprintf oc "	vfmadd213sd	%a, %a, %a\n" freg a1 freg a2 freg res
+      | Pfmadd231 (a1,a2,res) ->
+	 fprintf oc "	vfmadd231sd	%a, %a, %a\n" freg a1 freg a2 freg res
+      | Pfmsub132 (a1,a2,res) ->
+	 fprintf oc "	vfmsub132sd	%a, %a, %a\n" freg a1 freg a2 freg res
+      | Pfmsub213 (a1,a2,res) ->
+	 fprintf oc "	vfmsub213sd	%a, %a, %a\n" freg a1 freg a2 freg res
+      | Pfmsub231 (a1,a2,res) ->
+	 fprintf oc "	vfmsub231sd	%a, %a, %a\n" freg a1 freg a2 freg res
+      | Pfnmadd132 (a1,a2,res) ->
+	 fprintf oc "	vfnmadd132sd	%a, %a, %a\n" freg a1 freg a2 freg res
+      | Pfnmadd213 (a1,a2,res) ->
+	 fprintf oc "	vfnmadd213sd	%a, %a, %a\n" freg a1 freg a2 freg res
+      | Pfnmadd231 (a1,a2,res) ->
+	 fprintf oc "	vfnmadd231sd	%a, %a, %a\n" freg a1 freg a2 freg res
+      | Pfnmsub132 (a1,a2,res) ->
+	 fprintf oc "	vfnmsub132sd	%a, %a, %a\n" freg a1 freg a2 freg res
+      | Pfnmsub213 (a1,a2,res) ->
+	 fprintf oc "	vfnmsub213sd	%a, %a, %a\n" freg a1 freg a2 freg res
+      | Pfnmsub231 (a1,a2,res) ->
+	 fprintf oc "	vfnmsub231sd	%a, %a, %a\n" freg a1 freg a2 freg res
+      | Pmaxsd (a1,res) ->
+	 fprintf oc "	maxsd	%a, %a\n" freg a1 freg res
+      | Pminsd (a1,res) ->
+	 fprintf oc "	minsd	%a, %a\n" freg a1 freg res
+      | Prolw_8 res ->
+	 fprintf oc "	rolw	$8, %a\n" ireg16 res
+      | Psbbl (a1,res) ->
+	 fprintf oc "	sbbl	%a, %a\n" ireg a1 ireg res
+      | Psqrtsd (a1,res) ->
+	 fprintf oc "	sqrtsd	%a, %a\n" freg a1 freg res
       | Plabel(l) ->
           fprintf oc "%a:\n" label (transl_label l)
       | Pallocframe(sz, ofs_ra, ofs_link) ->

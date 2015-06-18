@@ -212,7 +212,30 @@ Inductive instruction: Type :=
   | Pallocframe(sz: Z)(ofs_ra ofs_link: int)
   | Pfreeframe(sz: Z)(ofs_ra ofs_link: int)
   | Pbuiltin(ef: external_function)(args: list preg)(res: list preg)
-  | Pannot(ef: external_function)(args: list (annot_arg preg)).
+  | Pannot(ef: external_function)(args: list (annot_arg preg))
+  | Padcl_ir (n: int) (r: ireg)
+  | Padcl_rr (r1: ireg) (r2: ireg)
+  | Paddl (r1: ireg) (r2: ireg)
+  | Pbsfl (r1: ireg) (r2: ireg)
+  | Pbslr (r1: ireg) (r2: ireg)
+  | Pbswap (r: ireg)
+  | Pfmadd132 (r1: freg) (r2: freg) (r3: freg)
+  | Pfmadd213 (r1: freg) (r2: freg) (r3: freg)
+  | Pfmadd231 (r1: freg) (r2: freg) (r3: freg)
+  | Pfmsub132 (r1: freg) (r2: freg) (r3: freg)
+  | Pfmsub213 (r1: freg) (r2: freg) (r3: freg)
+  | Pfmsub231 (r1: freg) (r2: freg) (r3: freg)
+  | Pfnmadd132 (r1: freg) (r2: freg) (r3: freg)
+  | Pfnmadd213 (r1: freg) (r2: freg) (r3: freg)
+  | Pfnmadd231 (r1: freg) (r2: freg) (r3: freg)
+  | Pfnmsub132 (r1: freg) (r2: freg) (r3: freg)
+  | Pfnmsub213 (r1: freg) (r2: freg) (r3: freg)
+  | Pfnmsub231 (r1: freg) (r2: freg) (r3: freg)
+  | Pmaxsd (r1: freg) (r2: freg)
+  | Pminsd (r1: freg) (r2: freg)
+  | Prolw_8 (r: ireg)
+  | Psbbl (r1: ireg) (r2: ireg)
+  | Psqrtsd (r1: freg) (r2: freg).
 
 Definition code := list instruction.
 Record function : Type := mkfunction { fn_sig: signature; fn_code: code }.
@@ -748,7 +771,32 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pbuiltin ef args res =>
       Stuck                             (**r treated specially below *)
   | Pannot ef args =>
-      Stuck                             (**r treated specially below *)
+    Stuck                             (**r treated specially below *)
+  (** The following instructions and directives are not generated directly by Asmgen,
+      so we do not model them. *)
+  | Padcl_ir _ _
+  | Padcl_rr _ _
+  | Paddl _ _
+  | Pbswap _
+  | Pbsfl _ _
+  | Pbslr _ _
+  | Pfmadd132 _ _ _
+  | Pfmadd213 _ _ _
+  | Pfmadd231 _ _ _
+  | Pfmsub132 _ _ _
+  | Pfmsub213 _ _ _
+  | Pfmsub231 _ _ _
+  | Pfnmadd132 _ _ _
+  | Pfnmadd213 _ _ _
+  | Pfnmadd231 _ _ _
+  | Pfnmsub132 _ _ _
+  | Pfnmsub213 _ _ _
+  | Pfnmsub231 _ _ _
+  | Pmaxsd _ _
+  | Pminsd _ _
+  | Prolw_8 _
+  | Psbbl _ _
+  | Psqrtsd _ _ => Stuck 
   end.
 
 (** Translation of the LTL/Linear/Mach view of machine registers
