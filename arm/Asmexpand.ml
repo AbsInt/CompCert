@@ -324,7 +324,9 @@ let expand_instruction instr =
 	   | EF_memcpy(sz, al) ->
 	      expand_builtin_memcpy (Int32.to_int (camlint_of_coqint sz))
 		(Int32.to_int (camlint_of_coqint al)) args
-	   | _ -> ()
+	   | EF_inline_asm(txt, sg, clob) ->
+              emit instr
+	   | _ -> assert false
      end
   | _ ->
      emit instr

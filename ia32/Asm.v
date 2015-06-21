@@ -216,9 +216,12 @@ Inductive instruction: Type :=
   | Padcl_ir (n: int) (r: ireg)
   | Padcl_rr (r1: ireg) (r2: ireg)
   | Paddl (r1: ireg) (r2: ireg)
+  | Paddl_mi (a: addrmode) (n: int)
+  | Paddl_ri (r1: ireg) (n: int)
   | Pbsfl (r1: ireg) (r2: ireg)
   | Pbslr (r1: ireg) (r2: ireg)
   | Pbswap (r: ireg)
+  | Pcfi_adjust (n: int)
   | Pfmadd132 (r1: freg) (r2: freg) (r3: freg)
   | Pfmadd213 (r1: freg) (r2: freg) (r3: freg)
   | Pfmadd231 (r1: freg) (r2: freg) (r3: freg)
@@ -233,9 +236,18 @@ Inductive instruction: Type :=
   | Pfnmsub231 (r1: freg) (r2: freg) (r3: freg)
   | Pmaxsd (r1: freg) (r2: freg)
   | Pminsd (r1: freg) (r2: freg)
+  | Pmovb_rm (rs: ireg) (a: addrmode)
+  | Pmovq_rm (rs: freg) (a: addrmode)
+  | Pmovq_mr  (a: addrmode) (rs: freg)
+  | Pmovsb
+  | Pmovsw
+  | Pmovw_rm (rs: ireg) (ad: addrmode)
+  | Prep_movsl
   | Prolw_8 (r: ireg)
   | Psbbl (r1: ireg) (r2: ireg)
-  | Psqrtsd (r1: freg) (r2: freg).
+  | Psqrtsd (r1: freg) (r2: freg)
+  | Psubl_ri (r1: ireg) (n: int)
+  | Pxchg (r1: ireg) (r2: ireg).
 
 Definition code := list instruction.
 Record function : Type := mkfunction { fn_sig: signature; fn_code: code }.
@@ -777,9 +789,12 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Padcl_ir _ _
   | Padcl_rr _ _
   | Paddl _ _
+  | Paddl_mi _ _
+  | Paddl_ri _ _
   | Pbswap _
   | Pbsfl _ _
   | Pbslr _ _
+  | Pcfi_adjust _
   | Pfmadd132 _ _ _
   | Pfmadd213 _ _ _
   | Pfmadd231 _ _ _
@@ -794,9 +809,18 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pfnmsub231 _ _ _
   | Pmaxsd _ _
   | Pminsd _ _
+  | Pmovb_rm _ _
+  | Pmovq_rm _ _
+  | Pmovq_mr _ _   
+  | Pmovsb
+  | Pmovsw
+  | Pmovw_rm _ _ 
+  | Prep_movsl
   | Prolw_8 _
   | Psbbl _ _
-  | Psqrtsd _ _ => Stuck 
+  | Psqrtsd _ _
+  | Psubl_ri _ _
+  | Pxchg _ _ => Stuck 
   end.
 
 (** Translation of the LTL/Linear/Mach view of machine registers
