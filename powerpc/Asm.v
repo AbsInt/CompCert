@@ -260,7 +260,7 @@ Inductive instruction : Type :=
   | Pstw: ireg -> constant -> ireg -> instruction             (**r store 32-bit int *)
   | Pstwu: ireg -> constant -> ireg -> instruction            (**r store 32-bit int with update *)
   | Pstwx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
-  | Pstwxu: ireg -> ireg -> ireg -> instruction               (**r same, with 2 index regs and update *)
+  | Pstwux: ireg -> ireg -> ireg -> instruction               (**r same, with 2 index regs and update *)
   | Pstw_a: ireg -> constant -> ireg -> instruction           (**r store 32-bit quantity from int reg *)
   | Pstwx_a: ireg -> ireg -> ireg -> instruction              (**r same, with 2 index regs *)
   | Pstwbrx: ireg -> ireg -> ireg -> instruction              (**r store 32-bit int with reverse endianness *)
@@ -878,7 +878,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pstfdu _ _ _
   | Psthbrx _ _ _
   | Pstwu _ _ _
-  | Pstwxu _ _ _
+  | Pstwux _ _ _
   | Psubfze _ _
   | Psync
   | Ptrap

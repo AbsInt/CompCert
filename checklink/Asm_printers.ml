@@ -289,7 +289,7 @@ let string_of_instruction = function
 | Pstwu     (i0, c1, i2)        -> "Pstwu(" ^ string_of_ireg i0 ^ ", " ^ string_of_constant c1 ^ ", " ^ string_of_ireg i2 ^ ")"
 | Pstwx     (i0, i1, i2)        -> "Pstwx(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ", " ^ string_of_ireg i2 ^ ")"
 | Pstwx_a   (i0, i1, i2)        -> "Pstwx_a(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ", " ^ string_of_ireg i2 ^ ")"
-| Pstwxu    (i0, i1, i2)        -> "Pstwxu(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ", " ^ string_of_ireg i2 ^ ")"
+| Pstwux    (i0, i1, i2)        -> "Pstwux(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ", " ^ string_of_ireg i2 ^ ")"
 | Pstwbrx   (i0, i1, i2)        -> "Pstwbrx(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ", " ^ string_of_ireg i2 ^ ")"
 | Pstwcx_   (i0, i1, i2)        -> "Pstwcx_(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ", " ^ string_of_ireg i2 ^ ")"
 | Psubfc    (i0, i1, i2)        -> "Psubfc(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ", " ^ string_of_ireg i2 ^ ")"

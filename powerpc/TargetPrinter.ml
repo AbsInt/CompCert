@@ -620,8 +620,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	stwu	%a, %a(%a)\n" ireg r1 constant c ireg r2
       | Pstwx(r1, r2, r3) | Pstwx_a(r1, r2, r3) ->
           fprintf oc "	stwx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
-      | Pstwxu(r1, r2, r3) ->
-          fprintf oc "	stwxu	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+      | Pstwux(r1, r2, r3) ->
+          fprintf oc "	stwux	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pstwbrx(r1, r2, r3) ->
           fprintf oc "	stwbrx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pstwcx_(r1, r2, r3) ->

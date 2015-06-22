@@ -457,7 +457,7 @@ let expand_instruction instr =
         emit (Pstwu(GPR1, Cint(coqint_of_camlint adj), GPR1))
       else begin
         emit_loadimm GPR0 (coqint_of_camlint adj);
-        emit (Pstwxu(GPR1, GPR1, GPR0))
+        emit (Pstwux(GPR1, GPR1, GPR0))
       end;
       emit (Pcfi_adjust (coqint_of_camlint sz));
       if variadic then begin
