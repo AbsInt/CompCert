@@ -7,6 +7,7 @@
      div.proofscript  contents of proof script
      span.docright contents of (**r *) comments
      span.bracket contents of [ ] within comments
+     span.comment contents of (* *) comments
      span.kwd     Coq keyword
      span.tactic  Coq tactic
      span.id      any other identifier
@@ -84,6 +85,10 @@ span.bracket {
 
 span.kwd {
   color:  #cf1d1d;
+}
+
+span.comment {
+  color:  #008000;
 }
 
 a:visited {color : #416DFF; text-decoration : none; }

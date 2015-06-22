@@ -206,15 +206,23 @@ let start_verbatim () =
 let end_verbatim () =
   fprintf !oc "</pre>\n"
 
+let start_comment () =
+  fprintf !oc "<span class=\"comment\">(*"
+
+let end_comment () =
+  fprintf !oc "*)</span>"
+
 let start_bracket () =
   fprintf !oc "<span class=\"bracket\">"
 
 let end_bracket () =
   fprintf !oc "</span>"
 
+let in_proof = ref false
 let proof_counter = ref 0
 
 let start_proof kwd =
+  in_proof := true;
   incr proof_counter;
   fprintf !oc
   "<div class=\"toggleproof\" onclick=\"toggleDisplay('proof%d')\">%s</div>\n"
@@ -222,7 +230,8 @@ let start_proof kwd =
   fprintf !oc "<div class=\"proofscript\" id=\"proof%d\">\n" !proof_counter
 
 let end_proof kwd =
-  fprintf !oc "%s</div>\n" kwd
+  fprintf !oc "%s</div>\n" kwd;
+  in_proof := false
 
 let start_html_page modname =
   fprintf !oc "\
@@ -300,7 +309,8 @@ and coq = parse
         end_doc_right();
         coq lexbuf }
   | "(*"
-      { comment lexbuf;
+      { if !in_proof then start_comment();
+        comment lexbuf;
         coq lexbuf }
   | path as id
       { ident (Lexing.lexeme_start lexbuf) id; coq lexbuf }
@@ -325,13 +335,23 @@ and bracket = parse
 
 and comment = parse
   | "*)"
-      { () }
+      { if !in_proof then end_comment() }
   | "(*"
-      { comment lexbuf; comment lexbuf }
+      { if !in_proof then start_comment(); 
+        comment lexbuf; comment lexbuf }
   | eof
       { () }
-  | _
-      { comment lexbuf }
+  | "\n"
+      { if !in_proof then newline();
+        comment lexbuf }
+  | space* as s
+      { if !in_proof then space s; 
+        comment lexbuf }
+  | eof
+      { () }
+  | _ as c
+      { if !in_proof then character c;
+        comment lexbuf }
 
 and doc_bol = parse
   | "<<" space* "\n"

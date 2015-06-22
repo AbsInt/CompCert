@@ -640,7 +640,7 @@ and elab_field_group env (Field_group (spec, fieldlist, loc)) =
     error loc "non-default storage in struct or union";
   if fieldlist = [] then
     if is_anonymous_composite spec then
-       error loc "ISO C99 does not support anonymous structs/unions"
+       warning loc "ISO C99 does not support anonymous structs/unions"
     else
        warning loc "declaration does not declare any members";
 

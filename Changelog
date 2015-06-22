@@ -1,4 +1,4 @@
-Release 2.5, 2015-06-xx
+Release 2.5, 2015-06-12
 =======================
 
 Language features:
@@ -38,20 +38,21 @@ Usability:
 - Revised handling of arguments to __builtin_annot so that no code
   is generated for an argument that is a global variable or a local
   variable whose address is taken.
-- In string and character literals, treat illegal escape sequences 
+- In string and character literals, treat illegal escape sequences
   (e.g. "\%" or "\0") as an error instead of a warning.
 - Warn if floating-point literals overflow or underflow when converted
   to FP numbers.
-- cchecklink: added option "-files-from" to read .sdump file names
-    from a file or from standard input.	  
-- In "-g -S" mode, annotate the generated .s file with comments 
+- In "-g -S" mode, annotate the generated .s file with comments
   containing the C source code.
 - Recognize and accept more of GCC's alternate keywords, e.g. __signed,
   __volatile__, etc.
+- cchecklink: added option "-files-from" to read .sdump file names
+    from a file or from standard input.
 
 ABI conformance:
 - Improved ABI conformance for passing values of struct or union types
-  as function arguments or results.
+  as function arguments or results.  Full conformance is achieved on
+  IA32/ELF, IA32/MacOSX, PowerPC/EABI, PowerPC/Linux, and ARM/EABI.
 - Support the "va_arg" macro from <stdarg.h> in the case of arguments
   of struct or union types.
 
@@ -77,6 +78,11 @@ Bug fixing:
 - Issue #44: OSX assembler does not recognize ".global" directive.
 - Protect against redefinition of the __i64_xxx helper library functions.
 - Revised handling of nonstandard attributes in C type compatibility check.
+- Emit an error on "preprocessing numbers" that are invalid numerical literals.
+- Added missing check for static redefinition following a non-static
+  declaration.
+- Added missing check for redefinition of a typedef as an ordinary
+  identifier within the same scope.
 
 Miscellaneous:
 - When preprocessing with gcc or clang, use "-std=c99" mode to force
