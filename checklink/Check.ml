@@ -2130,7 +2130,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
-      | Pstwxu(rd, r1, r2) ->
+      | Pstwux(rd, r1, r2) ->
           begin match ecode with
           | STWUX(rS, rA, rB) :: es ->
               OK(fw)
