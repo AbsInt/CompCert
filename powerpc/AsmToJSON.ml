@@ -99,12 +99,13 @@ let p_atom_constant oc a = fprintf oc "{\"Atom\":%a}" p_atom a
 
 let p_int oc i = fprintf oc "%ld" (camlint_of_coqint i)
 let p_int64 oc i = fprintf oc "%Ld" (camlint64_of_coqint i)
-let p_float32 oc f = fprintf oc "%f" (camlfloat_of_coqfloat32 f)
-let p_float64 oc f = fprintf oc "%f" (camlfloat_of_coqfloat f)
+let p_float32 oc f = fprintf oc "%ld" (camlint_of_coqint (Floats.Float32.to_bits f))
+let p_float64 oc f = fprintf oc "%Ld" (camlint64_of_coqint (Floats.Float.to_bits f))
 let p_z oc z = fprintf oc "%s" (Z.to_string z)
 
 let p_int_constant oc i = fprintf oc "{\"Integer\":%a}" p_int i
-let p_float_constant oc f = fprintf oc "{\"Float\":%.18g}" (camlfloat_of_coqfloat f)
+let p_float64_constant oc f = fprintf oc "{\"Float\":%a}" p_float64 f
+let p_float32_constant oc f = fprintf oc "{\"Float\":%a}" p_float32 f
 let p_z_constant oc z = fprintf oc "{\"Integer\":%s}" (Z.to_string z) 
 
 let p_constant oc  = function
@@ -223,8 +224,8 @@ let p_instruction oc ic =
   | Plhbrx (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Plhbrx\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Plhz (ir1,c,ir2) -> fprintf oc "{\"Instruction Name\":\"Plhz\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_constant c p_ireg ir2
   | Plhzx (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Plhzx\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
-  | Plfi (fr,fc) -> fprintf oc "{\"Instruction Name\":\"Plfi\",\"Args\":[%a,%a]}" p_freg fr p_float_constant fc
-  | Plfis (fr,fc) -> fprintf oc "{\"Instruction Name\":\"Plfis\",\"Args\":[%a,%a]}" p_freg fr p_float_constant fc
+  | Plfi (fr,fc) -> fprintf oc "{\"Instruction Name\":\"Plfi\",\"Args\":[%a,%a]}" p_freg fr p_float64_constant fc
+  | Plfis (fr,fc) -> fprintf oc "{\"Instruction Name\":\"Plfis\",\"Args\":[%a,%a]}" p_freg fr p_float32_constant fc
   | Plwz (ir1,ic,ir2) -> fprintf oc "{\"Instruction Name\":\"Plwz\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_constant ic p_ireg ir2
   | Plwz_a (ir1,c,ir2) -> fprintf oc "{\"Instruction Name\":\"Plwz\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_constant c p_ireg ir2
   | Plwzu (ir1,c,ir2) -> fprintf oc "{\"Instruction Name\":\"Plwzu\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_constant c p_ireg ir2
