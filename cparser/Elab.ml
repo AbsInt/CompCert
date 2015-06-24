@@ -1817,6 +1817,7 @@ let enter_or_refine_ident local loc env s sto ty =
 	   error loc "static redefinition of '%s' after non-static definition" s; sto
 	| Storage_static,_ -> Storage_static (* Static stays static *)
 	| Storage_extern,_ -> sto
+        | Storage_default,Storage_extern -> Storage_extern
 	| _,Storage_extern -> old_sto
 	| _,Storage_register
 	| Storage_register,_ -> Storage_register
