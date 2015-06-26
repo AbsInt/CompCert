@@ -38,12 +38,21 @@
 #define _STDDEF_H
 #endif
 
+#ifdef __DCC__
+#if !defined(__size_t) && !defined(_SIZE_T)
+#define	__size_t
+#define _SIZE_T
+typedef unsigned int size_t;
+#endif
+#undef __need_size_t
+#else
 #if defined(_STDDEF_H) || defined(__need_size_t)
 #ifndef _SIZE_T
 #define _SIZE_T
 typedef unsigned long size_t;
 #endif
 #undef __need_size_t
+#endif
 #endif
 
 #if defined(_STDDEF_H) || defined(__need_ptrdiff_t)
