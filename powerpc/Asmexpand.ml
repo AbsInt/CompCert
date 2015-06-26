@@ -19,48 +19,10 @@ open Integers
 open AST
 open Memdata
 open Asm
+open Asmexpandaux
 
-(* Buffering the expanded code *)
 
-let current_code = ref ([]: instruction list)
-
-let emit i = current_code := i :: !current_code
-
-let emit_loadimm r n =
-  List.iter emit (Asmgen.loadimm r n [])
-
-let emit_addimm rd rs n =
-  List.iter emit (Asmgen.addimm rd rs n [])
-
-let get_code () =
-  let c = List.rev !current_code in current_code := []; c
-
-(* Generation of fresh labels *)
-
-let dummy_function = { fn_code = []; fn_sig = signature_main }
-let current_function = ref dummy_function
-let next_label = ref (None : label option)
-
-let new_label () =
-  let lbl =
-    match !next_label with
-    | Some l -> l
-    | None ->
-        (* on-demand computation of the next available label *)
-        List.fold_left
-          (fun next instr ->
-            match instr with
-            | Plabel l -> if P.lt l next then next else P.succ l
-            | _ -> next)
-          P.one (!current_function).fn_code
-  in
-    next_label := Some (P.succ lbl);
-    lbl
-
-let set_current_function f =
-  current_function := f; next_label := None
-
-(* Useful constants *)
+(* Useful constants and helper functions *)
 
 let _0 = Integers.Int.zero
 let _1 = Integers.Int.one
@@ -71,6 +33,14 @@ let _8 = coqint_of_camlint 8l
 let _m4 = coqint_of_camlint (-4l)
 let _m8 = coqint_of_camlint (-8l)
 
+let emit_loadimm r n =
+  List.iter emit (Asmgen.loadimm r n [])
+
+let emit_addimm rd rs n =
+  List.iter emit (Asmgen.addimm rd rs n [])
+
+
+			    
 (* Handling of annotations *)
 
 let expand_annot_val txt targ args res =
@@ -533,11 +503,8 @@ let expand_instruction instr =
 
 let expand_function fn =
   set_current_function fn;
-  current_code := [];
   List.iter expand_instruction fn.fn_code;
-  let c = get_code() in
-  set_current_function dummy_function;
-  { fn with fn_code = c }
+  get_current_function ()
 
 let expand_fundef = function
   | Internal f -> Internal (expand_function f)
