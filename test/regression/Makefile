@@ -17,7 +17,7 @@ TESTS=int32 int64 floats floats-basics \
   volatile1 volatile2 volatile3 \
   funct3 expr5 struct7 struct8 struct11 casts1 casts2 char1 \
   sizeof1 sizeof2 binops bool for1 switch switch2 compound \
-  decl1 interop1 bitfields9
+  decl1 interop1 bitfields9 ptrs3
 
 # Can run, but only in compiled mode, and have reference output in Results
 
