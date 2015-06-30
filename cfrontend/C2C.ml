@@ -897,6 +897,28 @@ let rec groupSwitch = function
       let (fst, cases) = groupSwitch rem in
       (Cutil.sseq s.sloc s fst, cases)
 
+(* Test whether the statement contains case and give an *)
+let rec contains_case s = 
+  match s.sdesc with
+  | C.Sskip 
+  | C.Sdo _ 
+  | C.Sbreak
+  | C.Scontinue 
+  | C.Sswitch _ (* Stop at a switch *)
+  | C.Sgoto _ 
+  | C.Sreturn _ 
+  | C.Sdecl _ 
+  | C.Sasm _ ->  ()
+  | C.Sseq (s1,s2)
+  | C.Sif(_,s1,s2) -> contains_case s1; contains_case s2
+  | C.Swhile (_,s1)
+  | C.Sdowhile (s1,_) -> contains_case s1
+  | C.Sfor (s1,e,s2,s3) ->  contains_case s1; contains_case s2; contains_case s3
+  | C.Slabeled(C.Scase _, _) ->
+      unsupported "'case' outside of 'switch'"
+  | C.Slabeled(_,s) -> contains_case s
+  | C.Sblock b -> List.iter contains_case b
+
 (** Annotations for line numbers *)
 
 let add_lineno prev_loc this_loc s =
@@ -953,7 +975,10 @@ let rec convertStmt ploc env s =
   | C.Sswitch(e, s1) ->
       let (init, cases) = groupSwitch (flattenSwitch s1) in
       if init.sdesc <> C.Sskip then
-        warning "ignored code at beginning of 'switch'";
+        begin
+          warning "ignored code at beginning of 'switch'";
+          contains_case init
+        end;
       let te = convertExpr env e in
       add_lineno ploc s.sloc
         (swrap (Ctyping.sswitch te
