@@ -36,8 +36,6 @@ val has_standard_headers: bool
 val advanced_debug: bool
   (** True if advanced debug is implement for the Target *)
 
-val version: string
-  (** CompCert version string *)
 
 type struct_passing_style =
   | SP_ref_callee                       (* by reference, callee takes copy *)

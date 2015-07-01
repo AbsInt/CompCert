@@ -104,7 +104,6 @@ let advanced_debug =
   | "false" -> false
   | v -> bad_config "advanced_debug" [v]
 
-let version = get_config_string "version"
 
 type struct_passing_style =
   | SP_ref_callee                       (* by reference, callee takes copy *)

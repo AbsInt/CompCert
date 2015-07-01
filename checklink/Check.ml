@@ -2573,7 +2573,7 @@ let check_data (pv: (ident * unit globvar) list) (sfw: s_framework)
 
 (** Read a .sdump file *)
 
-let sdump_magic_number = "CompCertSDUMP" ^ Configuration.version
+let sdump_magic_number = "CompCertSDUMP" ^ Version.version
 
 let read_sdump file =
   let ic = open_in_bin file in

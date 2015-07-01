@@ -145,7 +145,7 @@ let parse_c_file sourcename ifile =
 
 (* Dump Asm code in binary format for the validator *)
 
-let sdump_magic_number = "CompCertSDUMP" ^ Configuration.version
+let sdump_magic_number = "CompCertSDUMP" ^ Version.version
 
 let dump_asm asm destfile =
   let oc = open_out_bin destfile in
@@ -387,7 +387,10 @@ let explode_comma_option s =
   | hd :: tl -> tl
 
 let version_string =
-  "The CompCert C verified compiler, version "^ Configuration.version ^ "\n"
+  if Version.buildnr <> "" && Version.tag <> "" then
+    sprintf "The CompCert verified compiler, %s,%s,%s\n" Version.version Version.buildnr Version.tag
+  else
+    "The CompCert C verified compiler, version "^ Version.version ^ "\n"
 
 let usage_string =
   version_string ^

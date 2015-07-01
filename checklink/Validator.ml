@@ -97,7 +97,7 @@ let anonymous arg =
     set_elf_file arg
 
 let usage =
-  "The CompCert C post-linking validator, version " ^ Configuration.version ^ "
+  "The CompCert C post-linking validator, version " ^ Version.version ^ "
 Usage: cchecklink [options] <.sdump files> <ELF executable>
 In the absence of options, checks are performed and a short result is displayed.
 Options are:"
