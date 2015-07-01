@@ -388,7 +388,7 @@ let explode_comma_option s =
 
 let version_string =
   if Version.buildnr <> "" && Version.tag <> "" then
-    sprintf "The CompCert verified compiler, %s,%s,%s\n" Version.version Version.buildnr Version.tag
+    sprintf "The CompCert verified compiler, %s, Build: %s, Tag: %s\n" Version.version Version.buildnr Version.tag
   else
     "The CompCert C verified compiler, version "^ Version.version ^ "\n"
 
