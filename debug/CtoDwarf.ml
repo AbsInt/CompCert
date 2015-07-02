@@ -29,10 +29,10 @@ let type_table: (string, int) Hashtbl.t = Hashtbl.create 7
 let typedef_table: (string, int) Hashtbl.t = Hashtbl.create 7
 
 (* Hashtable from composite table to entry id *)
-let composite_types_table: (string, int) Hashtbl.t = Hashtbl.create 7
+let composite_types_table: (int, int) Hashtbl.t = Hashtbl.create 7
 
 (* Get the type id of a composite_type *)
-let get_composite_type (name: string): int =
+let get_composite_type (name: int): int =
   try 
     Hashtbl.find composite_types_table name
   with Not_found ->
@@ -232,7 +232,7 @@ and type_to_dwarf_entry typ typ_string=
    | TStruct (i,_)
    | TUnion (i,_)
    | TEnum (i,_) ->
-       let t = get_composite_type i.name in
+       let t = get_composite_type i.stamp in
        t,[]
    | TNamed (i,at) ->
        let t = Hashtbl.find typedef_table i.name in
@@ -353,9 +353,9 @@ let enum_to_dwarf (n,at,e) gloc =
     enumeration_file_loc = Some gloc;
     enumeration_byte_size = bs;
     enumeration_declaration = Some false;
-    enumeration_name = n.name;
+    enumeration_name = if n.name <> "" then Some n.name else None;
   } in
-  let id = get_composite_type n.name in
+  let id = get_composite_type n.stamp in
   let child = List.map enumerator_to_dwarf e in
   let enum = 
     {
@@ -372,9 +372,9 @@ let struct_to_dwarf (n,at,m) env gloc =
     structure_file_loc = Some gloc;
     structure_byte_size = info.ci_sizeof;
     structure_declaration = Some false;
-    structure_name = n.name;
+    structure_name = if n.name <> "" then Some n.name else None;
   } in
-  let id = get_composite_type n.name in
+  let id = get_composite_type n.stamp in
   let rec pack acc bcc l m =
     match m with
     | [] -> acc,bcc,[]
@@ -435,9 +435,9 @@ let union_to_dwarf (n,at,m) env gloc =
     union_file_loc = Some gloc;
     union_byte_size = info.ci_sizeof;
     union_declaration = Some false;
-    union_name = n.name;
+    union_name = if n.name <> "" then Some n.name else None;
   } in
-  let id = get_composite_type n.name in
+  let id = get_composite_type n.stamp in
   let children,e = mmap 
       (fun  acc f ->
         let t,e = type_to_dwarf f.fld_typ in

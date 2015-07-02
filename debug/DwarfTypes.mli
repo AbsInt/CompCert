@@ -80,7 +80,7 @@ type dw_tag_enumeration_type =
      enumeration_file_loc:    file_loc  option;
      enumeration_byte_size:   constant;
      enumeration_declaration: flag      option;
-     enumeration_name:        string;
+     enumeration_name:        string    option;
    }
 
 type dw_tag_enumerator =
@@ -135,7 +135,7 @@ type dw_tag_structure_type =
      structure_file_loc:    file_loc option;
      structure_byte_size:   constant option;
      structure_declaration: flag     option;
-     structure_name:        string;
+     structure_name:        string   option;
    }
 
 type dw_tag_subprogram =
@@ -172,7 +172,7 @@ type dw_tag_union_type =
      union_file_loc:    file_loc option;
      union_byte_size:   constant option;
      union_declaration: flag     option;
-     union_name:        string;
+     union_name:        string   option;
    }
 
 type dw_tag_unspecified_parameter =
