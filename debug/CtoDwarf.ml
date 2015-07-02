@@ -10,6 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+open Builtins
 open C
 open Cprint
 open Cutil
@@ -270,12 +271,12 @@ and type_to_dwarf (typ: typ): int * dw_entry list =
     attr_type_to_dwarf typ typ_string
 
 (* Translate a typedef to its corresponding dwarf representation *)
-let typedef_to_dwarf (n,t) gloc =
+let typedef_to_dwarf gloc (name,t) =
   let i,t = type_to_dwarf t in
-  Hashtbl.add typedef_table n.name i;
+  Hashtbl.add typedef_table name i;
   let td = {
-    typedef_file_loc = Some (gloc);
-    typedef_name = n.name;
+    typedef_file_loc = gloc;
+    typedef_name = name;
     typedef_type = i;
   } in 
   let td = new_entry (DW_TAG_typedef td) in
@@ -461,7 +462,7 @@ let union_to_dwarf (n,at,m) env gloc =
 let globdecl_to_dwarf env (typs,decls) decl =
   PrintAsmaux.add_file (fst decl.gloc);
   match decl.gdesc with
-  | Gtypedef (n,t) -> let ret = typedef_to_dwarf (n,t) decl.gloc in
+  | Gtypedef (n,t) -> let ret = typedef_to_dwarf (Some decl.gloc) (n.name,t)  in
     typs@ret,decls
   | Gdecl d -> let t,d = glob_var_to_dwarf d decl.gloc in
     typs@t,d::decls
@@ -485,7 +486,9 @@ let program_to_dwarf prog prog1 name =
   let prog = cleanupGlobals (prog) in
   let env = translEnv Env.empty prog1 in
   reset_id ();
-  let typs,defs = List.fold_left (globdecl_to_dwarf env) ([],[]) prog in
+  let typs = List.map (typedef_to_dwarf None) C2C.builtins.typedefs in
+  let typs = List.concat typs in
+  let typs,defs = List.fold_left (globdecl_to_dwarf env) (typs,[]) prog in
   let defs = typs @ defs in
   let cp = {
     compile_unit_name = name;
