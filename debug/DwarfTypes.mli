@@ -268,5 +268,5 @@ module type DWARF_TARGET=
     val get_end_addr: unit -> int
     val get_stmt_list_addr: unit -> int    
     val name_of_section: section_name -> string
-    val get_fun_addr: string -> int * int
+    val get_fun_addr: string -> (int * int) option
   end

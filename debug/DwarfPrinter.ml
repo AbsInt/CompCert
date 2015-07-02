@@ -62,6 +62,11 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
 
     let add_low_pc = add_abbr_entry (0x11,low_pc_type_abbr)
 
+    let add_fun_pc sp buf =
+      match get_fun_addr sp.subprogram_name with
+      | None ->()
+      | Some (a,b) -> add_high_pc buf; add_low_pc buf
+
     let add_declaration = add_abbr_entry (0x3c,declaration_type_abbr)
 
     let add_location loc buf =
@@ -387,13 +392,16 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       print_opt_value oc st.structure_declaration print_flag;
       print_opt_value oc st.structure_name print_string
 
+    let print_subprogram_addr oc (s,e) =
+      fprintf oc "	.4byte		%a\n" label s;
+      fprintf oc "	.4byte		%a\n" label e
+     
     let print_subprogram oc sp =
-      let s,e = get_fun_addr sp.subprogram_name in
+      let addr = get_fun_addr sp.subprogram_name  in
       print_file_loc oc sp.subprogram_file_loc;
       print_opt_value oc sp.subprogram_external print_flag;
       print_opt_value oc sp.subprogram_frame_base print_loc;
-      fprintf oc "	.4byte		%a\n" label s;
-      fprintf oc "	.4byte		%a\n" label e;
+      print_opt_value oc addr print_subprogram_addr;
       print_string oc sp.subprogram_name;
       print_flag oc sp.subprogram_prototyped;
       print_opt_value oc sp.subprogram_type print_ref
