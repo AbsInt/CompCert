@@ -18,6 +18,7 @@ open C2C
 open DwarfTypes
 open DwarfUtil
 open Env
+open Set
 
 (* Functions to translate a C Ast into Dwarf 2 debugging information *)
 
@@ -30,6 +31,14 @@ let typedef_table: (string, int) Hashtbl.t = Hashtbl.create 7
 
 (* Hashtable from composite table to entry id *)
 let composite_types_table: (int, int) Hashtbl.t = Hashtbl.create 7
+
+(* Hashtable from id of a defined composite types to minimal type info *)
+let composite_declarations: (int, (struct_or_union * string * location)) Hashtbl.t = Hashtbl.create 7
+
+module IntSet = Set.Make(struct type t = int let compare = compare end)
+
+(* Set of all declared composite_types *)
+let composite_defined: IntSet.t ref = ref IntSet.empty
 
 (* Get the type id of a composite_type *)
 let get_composite_type (name: int): int =
@@ -395,7 +404,7 @@ let struct_to_dwarf (n,at,m) env gloc =
                 member_bit_size = Some n;
                 member_data_member_location = None;
                 member_declaration = None;
-                member_name = m.fld_name;
+                member_name = if m.fld_name <> "" then Some m.fld_name else None;
                 member_type = t;
               } in
               pack ((new_entry (DW_TAG_member um))::acc) (e@bcc) (l + n) ms)
@@ -413,7 +422,7 @@ let struct_to_dwarf (n,at,m) env gloc =
               member_bit_size = None;
               member_data_member_location = None;
               member_declaration = None;
-              member_name = m.fld_name;
+              member_name = if m.fld_name <> "" then Some m.fld_name else None;
               member_type = t;
             } in
             translate ((new_entry (DW_TAG_member um))::acc) (e@bcc) ms
@@ -448,7 +457,7 @@ let union_to_dwarf (n,at,m) env gloc =
           member_bit_size = None;
           member_data_member_location = None;
           member_declaration = None;
-          member_name = f.fld_name;
+          member_name = if f.fld_name <> "" then Some f.fld_name else None;
           member_type = t;
         } in
         new_entry (DW_TAG_member um),e@acc)[] m in
@@ -468,14 +477,41 @@ let globdecl_to_dwarf env (typs,decls) decl =
     typs@t,d::decls
   | Gfundef f ->   let t,d = fundef_to_dwarf f decl.gloc in
     typs@t,d::decls
-  | Genumdef (n,at,e) ->let ret = enum_to_dwarf (n,at,e) decl.gloc in
-    typs@ret,decls
-  | Gcompositedef (Struct,n,at,m) -> let ret = struct_to_dwarf (n,at,m) env decl.gloc in
-    typs@ret,decls
-  | Gcompositedef (Union,n,at,m) -> let ret = union_to_dwarf (n,at,m) env decl.gloc in
-    typs@ret,decls
-  | Gcompositedecl _
+  | Genumdef (n,at,e) ->
+      composite_defined:= IntSet.add n.stamp !composite_defined;
+      let ret = enum_to_dwarf (n,at,e) decl.gloc in
+      typs@ret,decls
+  | Gcompositedef (Struct,n,at,m) ->
+      composite_defined:= IntSet.add n.stamp !composite_defined;
+      let ret = struct_to_dwarf (n,at,m) env decl.gloc in
+      typs@ret,decls
+  | Gcompositedef (Union,n,at,m) ->
+      composite_defined:= IntSet.add n.stamp !composite_defined;
+      let ret = union_to_dwarf (n,at,m) env decl.gloc in
+      typs@ret,decls
+  | Gcompositedecl (sou,i,_) -> Hashtbl.add composite_declarations i.stamp (sou,i.name,decl.gloc);
+      typs,decls
   | Gpragma _ -> typs,decls       
+
+let forward_declaration_to_dwarf sou name loc stamp =
+  let id = get_composite_type stamp in
+  let tag = match sou with
+  | Struct ->
+      DW_TAG_structure_type{
+      structure_file_loc = Some loc;
+      structure_byte_size = None;
+      structure_declaration = Some true;
+      structure_name = if name <> "" then Some name else None;
+    } 
+  | Union ->
+      DW_TAG_union_type {
+      union_file_loc = Some loc;
+      union_byte_size = None;
+      union_declaration = Some true;
+      union_name = if name <> "" then Some name else None;
+    } in
+  {tag = tag; children = []; id = id}
+  
 
 (* Compute the dwarf representations of global declarations. The second program argument is the 
    program after the bitfield and packed struct transformation *)
@@ -489,7 +525,9 @@ let program_to_dwarf prog prog1 name =
   let typs = List.map (typedef_to_dwarf None) C2C.builtins.typedefs in
   let typs = List.concat typs in
   let typs,defs = List.fold_left (globdecl_to_dwarf env) (typs,[]) prog in
-  let defs = typs @ defs in
+  let typs = Hashtbl.fold (fun i (sou,name,loc) typs -> if not (IntSet.mem i !composite_defined) then
+    (forward_declaration_to_dwarf sou name loc i)::typs else typs) composite_declarations typs in
+  let defs =  typs @ defs in
   let cp = {
     compile_unit_name = name;
   } in

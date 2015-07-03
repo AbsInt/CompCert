@@ -121,7 +121,7 @@ type dw_tag_member =
      member_bit_size:             constant            option;
      member_data_member_location: data_location_value option;
      member_declaration:          flag                option;
-     member_name:                 string;
+     member_name:                 string              option;
      member_type:                 reference;
    }
 

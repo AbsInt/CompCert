@@ -151,7 +151,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           | Some (DataLocBlock __) -> add_abbr_entry (0x38,data_location_block_type_abbr) buf
           | Some (DataLocRef _) -> add_abbr_entry (0x38,data_location_ref_type_abbr) buf);
           add_attr_some e.member_declaration add_declaration;
-          add_name buf;
+          add_attr_some e.member_name add_name;
           add_type buf
       | DW_TAG_pointer_type _ ->
           prologue 0xf;
@@ -380,7 +380,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       print_opt_value oc mb.member_bit_size print_byte;
       print_opt_value oc mb.member_data_member_location print_data_location;
       print_opt_value oc mb.member_declaration print_flag;
-      print_string oc mb.member_name;
+      print_opt_value oc mb.member_name print_string;
       print_ref oc mb.member_type
 
     let print_pointer oc pt =
