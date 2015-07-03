@@ -30,8 +30,8 @@ module type SYSTEM =
       val constant: out_channel -> constant -> unit
       val ireg: out_channel -> ireg -> unit
       val freg: out_channel -> freg -> unit
-      val creg: out_channel -> int -> unit
       val name_of_section: section_name -> string
+      val creg: out_channel -> int -> unit
       val print_file_line: out_channel -> string -> int -> unit
       val cfi_startproc: out_channel -> unit
       val cfi_endproc: out_channel -> unit
@@ -40,6 +40,8 @@ module type SYSTEM =
       val print_prologue: out_channel -> unit
       val print_epilogue: out_channel -> unit
       val print_file_loc: out_channel -> DwarfTypes.file_loc -> unit
+      val section: out_channel -> section_name -> unit
+      val debug_section: out_channel -> section_name -> unit
     end
 
 let symbol = elf_symbol
@@ -129,6 +131,11 @@ module Linux_System : SYSTEM =
             s (if wr then "w" else "") (if ex then "x" else "")
       | Section_debug_info -> ".debug_info,\"\",@progbits"
       | Section_debug_abbrev -> ".debug_abbrev,\"\",@progbits"
+    
+    let section oc sec =
+      let name = name_of_section sec in
+      assert (name <> "COMM");
+      fprintf oc "	%s\n" name
 
 
     let print_file_line oc file line =
@@ -148,7 +155,8 @@ module Linux_System : SYSTEM =
     let print_epilogue oc = ()
 
     let print_file_loc _ _ = ()
-  
+        
+    let debug_section _ _ = ()
   end
     
 module Diab_System : SYSTEM =
@@ -202,6 +210,12 @@ module Diab_System : SYSTEM =
       | Section_debug_info -> ".debug_info,,n"
       | Section_debug_abbrev -> ".debug_abbrev,,n"
 
+    let section oc sec =
+      let name = name_of_section sec in
+      assert (name <> "COMM");
+      fprintf oc "	%s\n" name
+
+
     let print_file_line oc file line =
       print_file_line_d2 oc comment file line
 
@@ -232,6 +246,9 @@ module Diab_System : SYSTEM =
 
     let filenum : (string,int) Hashtbl.t = Hashtbl.create 7
 
+    let additional_debug_sections: StringSet.t ref = ref StringSet.empty
+
+
     let print_epilogue oc =
       if !Clflags.option_g then
         begin
@@ -244,12 +261,35 @@ module Diab_System : SYSTEM =
             let label = new_label () in
             Hashtbl.add filenum file label;
             fprintf oc ".L%d:	.d2filenum \"%s\"\n" label file) !all_files;
-          fprintf oc "	.d2_line_end\n"
+          fprintf oc "	.d2_line_end\n";
+          StringSet.iter (fun s ->
+            fprintf oc "	%s\n" s;
+            fprintf oc "	.d2_line_end\n") !additional_debug_sections
         end
 
     let print_file_loc oc (file,col) =
       fprintf oc "	.4byte		%a\n" label (Hashtbl.find filenum file);
       fprintf oc "	.uleb128	%d\n" col
+
+    let debug_section oc sec =
+      if !Clflags.option_g && Configuration.advanced_debug then
+        match sec with
+        | Section_user (name,_,_)  ->
+            let sec_name = name_of_section sec in
+            if not (StringSet.mem sec_name !additional_debug_sections) then
+              begin
+                let name = ".debug_line"^name in
+                additional_debug_sections := StringSet.add sec_name !additional_debug_sections;
+                fprintf oc "	.section	%s,,n\n" name;
+                fprintf oc "	.sectionlink	.debug_line\n";
+                section oc sec;
+                fprintf oc "	.d2_line_start	%s\n" name
+              end
+        | _ -> () (* Only the case of a user section is interresting *)
+      else
+        ()
+            
+
   end
 
 module Target (System : SYSTEM):TARGET =
@@ -295,11 +335,6 @@ module Target (System : SYSTEM):TARGET =
       | IR r -> fprintf oc "r%s" (int_reg_name r)
       | FR r -> fprintf oc "f%s" (float_reg_name r)
       | _    -> assert false
-
-    let section oc sec =
-      let name = name_of_section sec in
-      assert (name <> "COMM");
-      fprintf oc "	%s\n" name
 
     let print_location oc loc =
       if loc <> Cutil.no_loc then print_file_line oc (fst loc) (snd loc)
@@ -806,7 +841,11 @@ module Target (System : SYSTEM):TARGET =
 
     module DwarfAbbrevs = DwarfUtil.DefaultAbbrevs
 
-    let new_label = new_label
+    let new_label = new_label            
+
+    let section oc sec =
+      section oc sec;
+      debug_section oc sec
 
   end
 
