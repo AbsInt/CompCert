@@ -584,49 +584,37 @@ let checkFloatOverflow f =
       warning "Floating-point literal converts to Not-a-Number"
 
 let convertFloat f kind =
-  let iexp =(int_of_string f.C.exp)
-  and sign = match f.C.exp.[0] with '-' -> true | _ -> false in
-  (* Exp cannot be larger than 1023 or smaller than -1022 *)
-  if iexp > 1024  || iexp < -1034 then
-    let f =  if iexp > 1024 then
-      Fappli_IEEE.B754_infinity sign
-    else
-      Fappli_IEEE.B754_zero sign in
-    match kind with
-    | FFloat ->
-        checkFloatOverflow f;
-        Ctyping.econst_single f
-    | FDouble | FLongDouble ->
-        checkFloatOverflow f;
-        Ctyping.econst_float f
-  else
-    let mant = z_of_str f.C.hex (f.C.intPart ^ f.C.fracPart) 0 in
-    match mant with
+  let mant = z_of_str f.C.hex (f.C.intPart ^ f.C.fracPart) 0 in
+  match mant with
     | Z.Z0 ->
-        begin match kind with
-        | FFloat ->
-	    Ctyping.econst_single (Float.to_single Float.zero)
-        | FDouble | FLongDouble ->
-	    Ctyping.econst_float Float.zero
-        end
+      begin match kind with
+      | FFloat ->
+	  Ctyping.econst_single (Float.to_single Float.zero)
+      | FDouble | FLongDouble ->
+	  Ctyping.econst_float Float.zero
+      end
     | Z.Zpos mant ->
-        let sgExp = match f.C.exp.[0] with '+' | '-' -> true | _ -> false in
-        let exp = z_of_str false f.C.exp (if sgExp then 1 else 0) in
-        let exp = if f.C.exp.[0] = '-' then Z.neg exp else exp in
-        let shift_exp =
-	  (if f.C.hex then 4 else 1) * String.length f.C.fracPart in
-        let exp = Z.sub exp (Z.of_uint shift_exp) in
-        let base = P.of_int (if f.C.hex then 2 else 10) in
-        begin match kind with
-        | FFloat ->
-	    let f =  Float32.from_parsed base mant exp in
-            checkFloatOverflow f;
-            Ctyping.econst_single f
-        | FDouble | FLongDouble ->
-	    let f =  Float.from_parsed base mant exp in
-            checkFloatOverflow f;
-            Ctyping.econst_float f
-        end
+
+      let sgExp = match f.C.exp.[0] with '+' | '-' -> true | _ -> false in
+      let exp = z_of_str false f.C.exp (if sgExp then 1 else 0) in
+      let exp = if f.C.exp.[0] = '-' then Z.neg exp else exp in
+      let shift_exp =
+	(if f.C.hex then 4 else 1) * String.length f.C.fracPart in
+      let exp = Z.sub exp (Z.of_uint shift_exp) in
+
+      let base = P.of_int (if f.C.hex then 2 else 10) in
+
+      begin match kind with
+      | FFloat ->
+	  let f = Float32.from_parsed base mant exp in
+          checkFloatOverflow f;
+          Ctyping.econst_single f
+      | FDouble | FLongDouble ->
+	  let f = Float.from_parsed base mant exp in
+          checkFloatOverflow f;
+          Ctyping.econst_float f
+      end
+
     | Z.Zneg _ -> assert false
 
 (** Expressions *)
