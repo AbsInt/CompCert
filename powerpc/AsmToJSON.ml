@@ -297,13 +297,11 @@ let p_instruction oc ic =
   | Pcfi_adjust _  (* Only debug relevant *)
   | Pcfi_rel_offset _ ->  () (* Only debug relevant *)
 
-let p_storage oc sto =
-  let storage = match sto with
-  | C.Storage_default -> "Default"
-  | C.Storage_extern -> "Extern"
-  | C.Storage_static -> "Static"
-  | C.Storage_register -> "" (* This should not occur *) in
-  fprintf oc "\"%s\"" storage
+let p_storage oc static =
+  if static then
+    fprintf oc "\"Static\""
+  else
+    fprintf oc "\"Extern\""
 
 let p_section oc = function
   | Section_text -> fprintf oc "{\"Section Name\":\"Text\"}"
@@ -324,12 +322,14 @@ let p_int_opt oc = function
 
 
 let p_fundef oc (name,f) = 
-  let info = Hashtbl.find C2C.decl_atom name in
-  let instr = List.filter (function Pannot _ | Pcfi_adjust _ | Pcfi_rel_offset _ -> false | _ -> true) f.fn_code in
-  let c_section,l_section,j_section = match info.a_sections with [a;b;c] -> a,b,c | _ -> assert false in
+  let alignment = atom_alignof name
+  and inline = atom_is_inline name
+  and static = atom_is_static name
+  and instr = List.filter (function Pannot _ | Pcfi_adjust _ | Pcfi_rel_offset _ -> false | _ -> true) f.fn_code in
+  let c_section,l_section,j_section = match (atom_sections name) with [a;b;c] -> a,b,c | _ -> assert false in
   fprintf oc "{\"Fun Name\":%a,\n\"Fun Storage Class\":%a,\n\"Fun Alignment\":%a,\n\"Fun Section Code\":%a,\"Fun Section Literals\":%a,\"Fun Section Jumptable\":%a,\n\"Fun Inline\":%B,\n\"Fun Code\":%a}\n"
-    p_atom name  p_storage info.a_storage  p_int_opt info.a_alignment  
-    p_section c_section p_section l_section p_section j_section info.a_inline
+    p_atom name  p_storage static p_int_opt alignment  
+    p_section c_section p_section l_section p_section j_section inline
     (p_list p_instruction) instr
  
 let p_init_data oc = function
@@ -342,12 +342,13 @@ let p_init_data oc = function
   | Init_space z -> fprintf oc "{\"Init_space\":%a}" p_z z
   | Init_addrof (p,i) -> fprintf oc "{\"Init_addrof\":{\"Addr\":%a,\"Offset\":%a}}" p_atom p p_int i
 
-let p_vardef oc (ident,v) =
-  let info = Hashtbl.find C2C.decl_atom ident in
-  let section = match info.a_sections with [s] -> s | _ -> assert false (* Should only have one section *) in
+let p_vardef oc (name,v) =
+  let alignment = atom_alignof name
+  and static = atom_is_static name 
+  and section = match  (atom_sections name) with [s] -> s | _ -> assert false (* Should only have one section *) in
   fprintf oc "{\"Var Name\":%a,\"Var Readonly\":%B,\"Var Volatile\":%B,\n\"Var Storage Class\":%a,\n\"Var Alignment\":%a,\n\"Var Section\":%a,\n\"Var Init\":%a}\n"
-    p_atom ident v.gvar_readonly v.gvar_volatile 
-    p_storage info.a_storage p_int_opt info.a_alignment p_section section
+    p_atom name v.gvar_readonly v.gvar_volatile 
+    p_storage static p_int_opt alignment p_section section
     (p_list p_init_data) v.gvar_init 
 
 let p_program oc prog =
