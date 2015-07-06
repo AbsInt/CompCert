@@ -1024,7 +1024,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
-      | Pcntlz(r1, r2) ->
+      | Pcntlzw(r1, r2) ->
           begin match ecode with
           | CNTLZWx(rS, rA, rc) :: es ->
               OK(fw)

@@ -188,7 +188,7 @@ let string_of_instruction = function
 | Pcmplwi   (i0, c1)            -> "Pcmplwi(" ^ string_of_ireg i0 ^ ", " ^ string_of_constant c1 ^ ")"
 | Pcmpw     (i0, i1)            -> "Pcmpw(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ")"
 | Pcmpwi    (i0, c1)            -> "Pcmpwi(" ^ string_of_ireg i0 ^ ", " ^ string_of_constant c1 ^ ")"
-| Pcntlz    (i0, i1)            -> "Pcntlz(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ")"
+| Pcntlzw   (i0, i1)            -> "Pcntlzw(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ")"
 | Pcreqv    (c0, c1, c2)        -> "Pcreqv(" ^ string_of_crbit c0 ^ ", " ^ string_of_crbit c1 ^ ", " ^ string_of_crbit c2 ^ ")"
 | Pcror     (c0, c1, c2)        -> "Pcror(" ^ string_of_crbit c0 ^ ", " ^ string_of_crbit c1 ^ ", " ^ string_of_crbit c2 ^ ")"
 | Pcrxor    (c0, c1, c2)        -> "Pcrxor(" ^ string_of_crbit c0 ^ ", " ^ string_of_crbit c1 ^ ", " ^ string_of_crbit c2 ^ ")"

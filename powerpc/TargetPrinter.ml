@@ -461,8 +461,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	cmpw	%a, %a, %a\n" creg 0 ireg r1 ireg r2
       | Pcmpwi(r1, c) ->
           fprintf oc "	cmpwi	%a, %a, %a\n" creg 0 ireg r1 constant c
-      | Pcntlz(r1, r2) ->
-          fprintf oc "	cntlz	%a, %a\n" ireg r1 ireg r2
+      | Pcntlzw(r1, r2) ->
+          fprintf oc "	cntlzw	%a, %a\n" ireg r1 ireg r2
       | Pcreqv(c1, c2, c3) ->
           fprintf oc "	creqv	%a, %a, %a\n" crbit c1 crbit c2 crbit c3
       | Pcror(c1, c2, c3) ->
