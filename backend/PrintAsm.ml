@@ -119,7 +119,7 @@ module Printer(Target:TARGET) =
         let get_end_addr = Target.get_end_addr
         let get_stmt_list_addr = Target.get_stmt_list_addr
         let name_of_section = Target.name_of_section
-        let get_fun_addr s = Hashtbl.find addr_mapping s
+        let get_fun_addr s = try Some (Hashtbl.find addr_mapping s) with Not_found -> None
       end
 
     module DebugPrinter = DwarfPrinter (DwarfTarget) (Target.DwarfAbbrevs)

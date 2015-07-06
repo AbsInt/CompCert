@@ -709,8 +709,10 @@ Definition sem_sub (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) 
       match v1,v2 with
       | Vptr b1 ofs1, Vptr b2 ofs2 =>
           if eq_block b1 b2 then
-            if Int.eq (Int.repr (sizeof cenv ty)) Int.zero then None
-            else Some (Vint (Int.divu (Int.sub ofs1 ofs2) (Int.repr (sizeof cenv ty))))
+            let sz := sizeof cenv ty in
+            if zlt 0 sz && zle sz Int.max_signed
+            then Some (Vint (Int.divs (Int.sub ofs1 ofs2) (Int.repr sz)))
+            else None
           else None
       | _, _ => None
       end
@@ -1216,7 +1218,7 @@ Proof.
   + inv H0; inv H1; inv H. TrivialInject.
     destruct (eq_block b1 b0); try discriminate. subst b1. 
     rewrite H0 in H2; inv H2. rewrite dec_eq_true. 
-    destruct (Int.eq (Int.repr (sizeof cenv ty)) Int.zero); inv H3.
+    destruct (zlt 0 (sizeof cenv ty) && zle (sizeof cenv ty) Int.max_signed); inv H3.
     rewrite Int.sub_shifted. TrivialInject.
   + inv H0; inv H1; inv H. TrivialInject.
     econstructor. eauto. rewrite Int.sub_add_l. auto.

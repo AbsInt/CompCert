@@ -343,7 +343,7 @@ let expand_builtin_inline name args res =
   | "__builtin_mulhwu", [IR a1; IR a2], [IR res] ->
       emit (Pmulhwu(res, a1, a2))
   | "__builtin_clz", [IR a1], [IR res] ->
-      emit (Pcntlz(res, a1))
+      emit (Pcntlzw(res, a1))
   | ("__builtin_bswap" | "__builtin_bswap32"), [IR a1], [IR res] ->
       emit (Pstwu(a1, Cint _m8, GPR1));
       emit (Pcfi_adjust _8);

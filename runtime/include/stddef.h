@@ -63,6 +63,20 @@ typedef signed long ptrdiff_t;
 #undef __need_ptrdiff_t
 #endif
 
+#ifdef __DCC__
+#ifndef _WCHART
+#define _WCHART
+#ifndef	__wchar_t
+#define	__wchar_t
+#ifdef _TYPE_wchar_t
+_TYPE_wchar_t;
+#else
+typedef signed int wchar_t;
+#endif
+#endif
+#undef __need_wchar_t
+#endif
+#else
 #if defined(_STDDEF_H) || defined(__need_wchar_t)
 #ifndef _WCHAR_T
 #define _WCHAR_T
@@ -73,6 +87,7 @@ typedef signed int wchar_t;
 #endif
 #endif
 #undef __need_wchar_t
+#endif
 #endif
 
 #if defined(_STDDEF_H) || defined(__need_NULL)

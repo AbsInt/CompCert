@@ -171,7 +171,7 @@ let p_instruction oc ic =
   | Pcmplwi (ir,c) -> fprintf oc "{\"Instruction Name\":\"Pcmplwi\",\"Args\":[%a,%a]}" p_ireg ir p_constant c
   | Pcmpw (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pcmpw\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
   | Pcmpwi (ir,c) -> fprintf oc "{\"Instruction Name\":\"Pcmpwi\",\"Args\":[%a,%a]}" p_ireg ir p_constant c 
-  | Pcntlz (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pcntlz\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
+  | Pcntlzw (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pcntlzw\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
   | Pcreqv (cr1,cr2,cr3) -> fprintf oc "{\"Instruction Name\":\"Pcreqv\",\"Args\":[%a,%a,%a]}" p_crbit cr1 p_crbit cr2 p_crbit cr3
   | Pcror (cr1,cr2,cr3) -> fprintf oc "{\"Instruction Name\":\"Pcror\",\"Args\":[%a,%a,%a]}" p_crbit cr1 p_crbit cr2 p_crbit cr3
   | Pcrxor (cr1,cr2,cr3) -> fprintf oc "{\"Instruction Name\":\"Pcrxor\",\"Args\":[%a,%a,%a]}" p_crbit cr1 p_crbit cr2 p_crbit cr3

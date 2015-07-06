@@ -135,22 +135,22 @@ extraction/STAMP: $(FILES:.v=.vo) extraction/extraction.v $(ARCH)/extractionMach
 	$(COQEXEC) extraction/extraction.v
 	touch extraction/STAMP
 
-.depend.extr: extraction/STAMP tools/modorder
+.depend.extr: extraction/STAMP tools/modorder driver/Version.ml
 	$(MAKE) -f Makefile.extr depend
 
-ccomp: .depend.extr compcert.ini FORCE
+ccomp: .depend.extr compcert.ini driver/Version.ml FORCE
 	$(MAKE) -f Makefile.extr ccomp
-ccomp.byte: .depend.extr compcert.ini FORCE
+ccomp.byte: .depend.extr compcert.ini driver/Version.ml FORCE
 	$(MAKE) -f Makefile.extr ccomp.byte
 
-cchecklink: .depend.extr compcert.ini FORCE
+cchecklink: .depend.extr compcert.ini driver/Version.ml FORCE
 	$(MAKE) -f Makefile.extr cchecklink
-cchecklink.byte: .depend.extr compcert.ini FORCE
+cchecklink.byte: .depend.extr compcert.ini driver/Version.ml FORCE
 	$(MAKE) -f Makefile.extr cchecklink.byte
 
-clightgen: .depend.extr compcert.ini exportclight/Clightdefs.vo FORCE
+clightgen: .depend.extr compcert.ini exportclight/Clightdefs.vo driver/Version.ml FORCE
 	$(MAKE) -f Makefile.extr clightgen
-clightgen.byte: .depend.extr compcert.ini exportclight/Clightdefs.vo FORCE
+clightgen.byte: .depend.extr compcert.ini exportclight/Clightdefs.vo driver/Version.ml FORCE
 	$(MAKE) -f Makefile.extr clightgen.byte
 
 runtime:
@@ -192,7 +192,7 @@ latexdoc:
 	@tools/ndfun $*.vp > $*.v || { rm -f $*.v; exit 2; }
 	@chmod -w $*.v
 
-compcert.ini: Makefile.config VERSION
+compcert.ini: Makefile.config
 	(echo "stdlib_path=$(LIBDIR)"; \
          echo "prepro=$(CPREPRO)"; \
          echo "asm=$(CASM)"; \
@@ -206,10 +206,13 @@ compcert.ini: Makefile.config VERSION
          echo "asm_supports_cfi=$(ASM_SUPPORTS_CFI)"; \
          echo "advanced_debug=$(ADVANCED_DEBUG)"; \
          echo "struct_passing_style=$(STRUCT_PASSING)"; \
-         echo "struct_return_style=$(STRUCT_RETURN)"; \
-         version=`cat VERSION`; \
-         echo version=$$version) \
+         echo "struct_return_style=$(STRUCT_RETURN)";) \
         > compcert.ini
+
+driver/Version.ml: VERSION
+	cat VERSION \
+	| sed -e 's|\(.*\)=\(.*\)|let \1 = \"\2\"|g' \
+	>driver/Version.ml
 
 cparser/Parser.v: cparser/Parser.vy
 	$(MENHIR) --coq cparser/Parser.vy
@@ -233,6 +236,7 @@ clean:
 	rm -f $(patsubst %, %/*.vo, $(DIRS))
 	rm -rf doc/html doc/*.glob
 	rm -f doc/coq2html.ml doc/coq2html doc/*.cm? doc/*.o
+	rm -f driver/Version.ml
 	rm -f compcert.ini
 	rm -f extraction/STAMP extraction/*.ml extraction/*.mli .depend.extr
 	rm -f tools/ndfun tools/modorder tools/*.cm? tools/*.o
