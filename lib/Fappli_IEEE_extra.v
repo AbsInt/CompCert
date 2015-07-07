@@ -1127,8 +1127,8 @@ Lemma pos_pow_spec:
   forall x y, Z.pos (pos_pow x y) = Z.pos x ^ Z.pos y.
 Proof.
   intros x.
-  assert (REC: forall y a, Pos.iter y (Pos.mul x) a = Pos.mul (pos_pow x y) a).
-  { induction y; simpl; intros. 
+  assert (REC: forall y a, Pos.iter (Pos.mul x) a y = Pos.mul (pos_pow x y) a).
+  { induction y; simpl; intros.
   - rewrite ! IHy, Pos.square_spec, ! Pos.mul_assoc. auto.
   - rewrite ! IHy, Pos.square_spec, ! Pos.mul_assoc. auto.
   - auto.

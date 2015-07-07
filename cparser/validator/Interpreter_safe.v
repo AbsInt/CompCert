@@ -69,15 +69,15 @@ Inductive stack_invariant: stack -> Prop :=
                   (symb_stack_of_stack stack) ->
       prefix_pred (head_states_of_state (state_of_stack init stack))
                   (state_stack_of_stack stack) ->
-      stack_invariant_rec stack ->
+      stack_invariant_next stack ->
       stack_invariant stack
-with stack_invariant_rec: stack -> Prop :=
-  | stack_invariant_rec_nil:
-      stack_invariant_rec []
-  | stack_invariant_rec_cons:
+with stack_invariant_next: stack -> Prop :=
+  | stack_invariant_next_nil:
+      stack_invariant_next []
+  | stack_invariant_next_cons:
     forall state_cur st stack_rec,
       stack_invariant stack_rec ->
-      stack_invariant_rec (existT _ state_cur st::stack_rec).
+      stack_invariant_next (existT _ state_cur st::stack_rec).
 
 (** [pop] conserves the stack invariant and does not crash
      under the assumption that we can pop at this place.

@@ -23,7 +23,7 @@ RECDIRS=lib common $(ARCH) backend cfrontend driver flocq exportclight cparser
 
 COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) compcert.$(d))
 
-COQC="$(COQBIN)coqc" -no-native-compiler -q $(COQINCLUDES)
+COQC="$(COQBIN)coqc" -q $(COQINCLUDES)
 COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
 COQDOC="$(COQBIN)coqdoc"
 COQEXEC="$(COQBIN)coqtop" $(COQINCLUDES) -batch -load-vernac-source

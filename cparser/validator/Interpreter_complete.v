@@ -431,7 +431,7 @@ fix 5.
 destruct ptlz. intros; simpl.
 split.
 apply H.
-f_equal.
+eapply (f_equal (fun X => uncurry X semantic_values)).
 apply JMeq_eq, JMeq_sym, JMeq_eqrect with (P:=fun x => x).
 simpl; intros; destruct stack0.
 destruct (proj2 H).
