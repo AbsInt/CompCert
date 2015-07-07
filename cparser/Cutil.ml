@@ -721,7 +721,8 @@ let type_of_member env fld =
 
 let find_matching_unsigned_ikind sz =
   assert (sz > 0);
-  if sz = !config.sizeof_int then IUInt
+  if sz = !config.sizeof_short then IUShort
+  else if sz = !config.sizeof_int then IUInt
   else if sz = !config.sizeof_long then IULong
   else if sz = !config.sizeof_longlong then IULongLong
   else assert false

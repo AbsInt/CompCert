@@ -71,7 +71,7 @@ typedef signed long ptrdiff_t;
 #ifdef _TYPE_wchar_t
 _TYPE_wchar_t;
 #else
-typedef signed int wchar_t;
+typedef unsigned short wchar_t;
 #endif
 #endif
 #undef __need_wchar_t
