@@ -26,8 +26,11 @@ Definition arrows_right: Type -> list Type -> Type :=
   fold_right (fun A B => A -> B).
 
 (** A tuple is a heterogeneous list. For convenience, we use pairs. **)
-Definition tuple (types:list Type) : Type :=
-  fold_right prod unit types.
+Fixpoint tuple (types : list Type) : Type :=
+  match types with
+  | nil => unit
+  | t::q => prod t (tuple q)
+  end.
 
 Fixpoint uncurry {args:list Type} {res:Type}:
   arrows_left args res -> tuple args -> res :=
