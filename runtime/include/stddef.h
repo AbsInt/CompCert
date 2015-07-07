@@ -98,7 +98,7 @@ typedef signed int wchar_t;
 #endif
 
 #if defined(_STDDEF_H) && !defined(offsetof)
-#define offsetof(ty,member) ((size_t) &(((ty)*) NULL)->member)
+#define offsetof(ty,member) ((size_t) &((ty*) NULL)->member)
 #endif
 
 #endif
