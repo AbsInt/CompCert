@@ -17,6 +17,7 @@ Require Import List.
 Require Import Syntax.
 Require Import Alphabet.
 Require Import Orders.
+Require Tuples.
 
 (** The terminal non-terminal alphabets of the grammar. **)
 Module Type Alphs.
@@ -65,7 +66,7 @@ Module Symbol(Import A:Alphs).
 End Symbol.
 
 Module Type T.
-  Require Export Tuples.
+  Export Tuples.
 
   Include Alphs <+ Symbol.
 
