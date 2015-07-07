@@ -59,3 +59,4 @@ let option_small_data =
        then 8 else 0)
 let option_small_const = ref (!option_small_data)
 let option_timings = ref false
+let option_rename_static = ref false

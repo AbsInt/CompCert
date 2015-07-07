@@ -453,7 +453,7 @@ Hypothesis symb_inj: symbols_inject.
 
 Lemma eventval_match_inject:
   forall ev ty v1 v2,
-  eventval_match ge1 ev ty v1 -> val_inject f v1 v2 -> eventval_match ge2 ev ty v2.
+  eventval_match ge1 ev ty v1 -> Val.inject f v1 v2 -> eventval_match ge2 ev ty v2.
 Proof.
   intros. inv H; inv H0; try constructor; auto.
   destruct symb_inj as (A & B & C & D). exploit C; eauto. intros [b3 [EQ FS]]. rewrite H4 in EQ; inv EQ.
@@ -463,7 +463,7 @@ Qed.
 Lemma eventval_match_inject_2:
   forall ev ty v1,
   eventval_match ge1 ev ty v1 -> 
-  exists v2, eventval_match ge2 ev ty v2 /\ val_inject f v1 v2.
+  exists v2, eventval_match ge2 ev ty v2 /\ Val.inject f v1 v2.
 Proof.
   intros. inv H; try (econstructor; split; eauto; constructor; fail).
   destruct symb_inj as (A & B & C & D). exploit C; eauto. intros [b2 [EQ FS]].
@@ -473,7 +473,7 @@ Qed.
 
 Lemma eventval_list_match_inject:
   forall evl tyl vl1, eventval_list_match ge1 evl tyl vl1 ->
-  forall vl2, val_list_inject f vl1 vl2 -> eventval_list_match ge2 evl tyl vl2.
+  forall vl2, Val.inject_list f vl1 vl2 -> eventval_list_match ge2 evl tyl vl2.
 Proof.
   induction 1; intros. inv H; constructor.
   inv H1. constructor. eapply eventval_match_inject; eauto. eauto.
@@ -669,10 +669,10 @@ Record extcall_properties (sem: extcall_sem)
        exists b2, f b1 = Some(b2, 0) /\ Senv.find_symbol ge2 id = Some b2) ->
     sem ge1 vargs m1 t vres m2 ->
     Mem.inject f m1 m1' ->
-    val_list_inject f vargs vargs' ->
+    Val.inject_list f vargs vargs' ->
     exists f', exists vres', exists m2',
        sem ge2 vargs' m1' t vres' m2'
-    /\ val_inject f' vres vres'
+    /\ Val.inject f' vres vres'
     /\ Mem.inject f' m2 m2'
     /\ Mem.unchanged_on (loc_unmapped f) m1 m2
     /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'
@@ -735,9 +735,9 @@ Lemma volatile_load_inject:
   forall ge1 ge2 f chunk m b ofs t v b' ofs' m',
   symbols_inject f ge1 ge2 ->
   volatile_load ge1 chunk m b ofs t v ->
-  val_inject f (Vptr b ofs) (Vptr b' ofs') ->
+  Val.inject f (Vptr b ofs) (Vptr b' ofs') ->
   Mem.inject f m m' ->
-  exists v', volatile_load ge2 chunk m' b' ofs' t v' /\ val_inject f v v'.
+  exists v', volatile_load ge2 chunk m' b' ofs' t v' /\ Val.inject f v v'.
 Proof.
   intros until m'; intros SI VL VI MI. generalize SI; intros (A & B & C & D). 
   inv VL.
@@ -747,7 +747,7 @@ Proof.
   rewrite Int.add_zero. exists (Val.load_result chunk v2); split.
   constructor; auto.
   erewrite D; eauto.
-  apply val_load_result_inject. auto.
+  apply Val.load_result_inject. auto.
 - (* normal load *)
   exploit Mem.loadv_inject; eauto. simpl; eauto. simpl; intros (v2 & X & Y). 
   exists v2; split; auto. 
@@ -852,7 +852,7 @@ Proof.
 (* inject *)
   inv H1. inv H3.
   exploit H0; eauto with coqlib. intros (b2 & INJ & FS2). 
-  assert (val_inject f (Vptr b ofs) (Vptr b2 ofs)).
+  assert (Val.inject f (Vptr b ofs) (Vptr b2 ofs)).
     econstructor; eauto. rewrite Int.add_zero; auto. 
   exploit volatile_load_inject; eauto. intros [v' [A B]].
   exists f; exists v'; exists m1'; intuition. econstructor; eauto. 
@@ -934,8 +934,8 @@ Lemma volatile_store_inject:
   forall ge1 ge2 f chunk m1 b ofs v t m2 m1' b' ofs' v',
   symbols_inject f ge1 ge2 ->
   volatile_store ge1 chunk m1 b ofs v t m2 ->
-  val_inject f (Vptr b ofs) (Vptr b' ofs') ->
-  val_inject f v v' ->
+  Val.inject f (Vptr b ofs) (Vptr b' ofs') ->
+  Val.inject f v v' ->
   Mem.inject f m1 m1' ->
   exists m2',
        volatile_store ge2 chunk m1' b' ofs' v' t m2'
@@ -950,7 +950,7 @@ Proof.
   inv AI. exploit Q; eauto. intros [A B]. subst delta. 
   rewrite Int.add_zero. exists m1'; split.
   constructor; auto. erewrite S; eauto. 
-  eapply eventval_match_inject; eauto. apply val_load_result_inject. auto.
+  eapply eventval_match_inject; eauto. apply Val.load_result_inject. auto.
   intuition auto with mem.
 - (* normal store *)
   inversion AI; subst.
@@ -1058,7 +1058,7 @@ Proof.
 (* mem inject *)
   rewrite volatile_store_global_charact in H1. destruct H1 as [b [P Q]].
   exploit H0; eauto with coqlib. intros (b2 & INJ & FS2). 
-  assert (val_inject f (Vptr b ofs) (Vptr b2 ofs)). econstructor; eauto. rewrite Int.add_zero; auto.
+  assert (Val.inject f (Vptr b ofs) (Vptr b2 ofs)). econstructor; eauto. rewrite Int.add_zero; auto.
   exploit ec_mem_inject. eapply volatile_store_ok. eauto. intuition. eexact Q. eauto. constructor. eauto. eauto. 
   intros [f' [vres' [m2' [A [B [C [D [E G]]]]]]]].
   exists f'; exists vres'; exists m2'; intuition.
@@ -1449,10 +1449,10 @@ Axiom external_functions_properties:
 
 (** We treat inline assembly similarly. *)
 
-Parameter inline_assembly_sem: ident -> extcall_sem.
+Parameter inline_assembly_sem: ident -> signature -> extcall_sem.
 
 Axiom inline_assembly_properties:
-  forall id, extcall_properties (inline_assembly_sem id) (mksignature nil None cc_default) nil.
+  forall id sg, extcall_properties (inline_assembly_sem id sg) sg nil.
 
 (** ** Combined semantics of external calls *)
 
@@ -1479,8 +1479,8 @@ Definition external_call (ef: external_function): extcall_sem :=
   | EF_free              => extcall_free_sem
   | EF_memcpy sz al      => extcall_memcpy_sem sz al
   | EF_annot txt targs   => extcall_annot_sem txt targs
-  | EF_annot_val txt targ=> extcall_annot_val_sem txt targ
-  | EF_inline_asm txt    => inline_assembly_sem txt
+  | EF_annot_val txt targ => extcall_annot_val_sem txt targ
+  | EF_inline_asm txt sg clb => inline_assembly_sem txt sg
   end.
 
 Theorem external_call_spec:
@@ -1552,10 +1552,10 @@ Lemma external_call_mem_inject:
   meminj_preserves_globals ge f ->
   external_call ef ge vargs m1 t vres m2 ->
   Mem.inject f m1 m1' ->
-  val_list_inject f vargs vargs' ->
+  Val.inject_list f vargs vargs' ->
   exists f', exists vres', exists m2',
      external_call ef ge vargs' m1' t vres' m2'
-    /\ val_inject f' vres vres'
+    /\ Val.inject f' vres vres'
     /\ Mem.inject f' m2 m2'
     /\ Mem.unchanged_on (loc_unmapped f) m1 m2
     /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'
@@ -1644,11 +1644,11 @@ Proof.
 Qed.
 
 Lemma decode_longs_inject:
-  forall f tyl vl1 vl2, val_list_inject f vl1 vl2 -> val_list_inject f (decode_longs tyl vl1) (decode_longs tyl vl2).
+  forall f tyl vl1 vl2, Val.inject_list f vl1 vl2 -> Val.inject_list f (decode_longs tyl vl1) (decode_longs tyl vl2).
 Proof.
   induction tyl; simpl; intros. 
   auto.
-  destruct a; inv H; auto. inv H1; auto. constructor; auto. apply val_longofwords_inject; auto. 
+  destruct a; inv H; auto. inv H1; auto. constructor; auto. apply Val.longofwords_inject; auto. 
 Qed.
 
 Lemma encode_long_lessdef:
@@ -1659,10 +1659,10 @@ Proof.
 Qed.
 
 Lemma encode_long_inject:
-  forall f oty v1 v2, val_inject f v1 v2 -> val_list_inject f (encode_long oty v1) (encode_long oty v2).
+  forall f oty v1 v2, Val.inject f v1 v2 -> Val.inject_list f (encode_long oty v1) (encode_long oty v2).
 Proof.
   intros. destruct oty as [[]|]; simpl; auto. 
-  constructor. apply val_hiword_inject; auto. constructor. apply val_loword_inject; auto. auto.
+  constructor. apply Val.hiword_inject; auto. constructor. apply Val.loword_inject; auto. auto.
 Qed.
 
 Lemma encode_long_has_type:
@@ -1736,10 +1736,10 @@ Lemma external_call_mem_inject':
   meminj_preserves_globals ge f ->
   external_call' ef ge vargs m1 t vres m2 ->
   Mem.inject f m1 m1' ->
-  val_list_inject f vargs vargs' ->
+  Val.inject_list f vargs vargs' ->
   exists f' vres' m2',
      external_call' ef ge vargs' m1' t vres' m2'
-  /\ val_list_inject f' vres vres'
+  /\ Val.inject_list f' vres vres'
   /\ Mem.inject f' m2 m2'
   /\ Mem.unchanged_on (loc_unmapped f) m1 m2
   /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'

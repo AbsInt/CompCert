@@ -112,7 +112,7 @@ let parse_c_file sourcename ifile =
   in
   (* Parsing and production of a simplified C AST *)
   let ast =
-    match Parse.preprocessed_file simplifs sourcename ifile with
+    match fst (Parse.preprocessed_file simplifs sourcename ifile) with
     | None -> exit 2
     | Some p -> p in
   (* Save C AST if requested *)

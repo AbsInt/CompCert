@@ -161,7 +161,7 @@ Inductive instruction : Type :=
   | Pcmplwi: ireg -> constant -> instruction                  (**r same, with immediate argument *)
   | Pcmpw: ireg -> ireg -> instruction                        (**r signed integer comparison *)
   | Pcmpwi: ireg -> constant -> instruction                   (**r same, with immediate argument *)
-  | Pcntlz: ireg -> ireg -> instruction                       (**r count leading zeros *)
+  | Pcntlzw: ireg -> ireg -> instruction                       (**r count leading zeros *)
   | Pcreqv: crbit -> crbit -> crbit -> instruction            (**r not-xor between condition bits *)
   | Pcror: crbit -> crbit -> crbit -> instruction             (**r or between condition bits *)
   | Pcrxor: crbit -> crbit -> crbit -> instruction            (**r xor between condition bits *)
@@ -260,7 +260,7 @@ Inductive instruction : Type :=
   | Pstw: ireg -> constant -> ireg -> instruction             (**r store 32-bit int *)
   | Pstwu: ireg -> constant -> ireg -> instruction            (**r store 32-bit int with update *)
   | Pstwx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
-  | Pstwxu: ireg -> ireg -> ireg -> instruction               (**r same, with 2 index regs and update *)
+  | Pstwux: ireg -> ireg -> ireg -> instruction               (**r same, with 2 index regs and update *)
   | Pstw_a: ireg -> constant -> ireg -> instruction           (**r store 32-bit quantity from int reg *)
   | Pstwx_a: ireg -> ireg -> ireg -> instruction              (**r same, with 2 index regs *)
   | Pstwbrx: ireg -> ireg -> ireg -> instruction              (**r store 32-bit int with reverse endianness *)
@@ -853,7 +853,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   (** The following instructions and directives are not generated directly by Asmgen,
       so we do not model them. *)
   | Pbdnz _
-  | Pcntlz _ _
+  | Pcntlzw _ _
   | Pcreqv _ _ _
   | Pcrxor _ _ _
   | Peieio
@@ -878,7 +878,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pstfdu _ _ _
   | Psthbrx _ _ _
   | Pstwu _ _ _
-  | Pstwxu _ _ _
+  | Pstwux _ _ _
   | Psubfze _ _
   | Psync
   | Ptrap

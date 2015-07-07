@@ -78,6 +78,8 @@ let add_decl (sto, id, ty, init) =
   add_typ ty;
   match init with None -> () | Some i -> add_init i
 
+let add_asm_operand (lbl, cstr, e) = add_exp e
+
 let rec add_stmt s =
   match s.sdesc with
   | Sskip -> ()
@@ -98,7 +100,9 @@ let rec add_stmt s =
   | Sreturn(Some e) -> add_exp e
   | Sblock sl -> List.iter add_stmt sl
   | Sdecl d -> add_decl d
-  | Sasm _ -> ()
+  | Sasm(attr, template, outputs, inputs, flags) ->
+      List.iter add_asm_operand outputs;
+      List.iter add_asm_operand inputs
 
 let add_fundef f =
   add_typ f.fd_ret;

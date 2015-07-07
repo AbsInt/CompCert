@@ -923,7 +923,7 @@ Proof.
     rewrite JBELOW in H by auto. eapply inj_of_bc_inv; eauto. 
     rewrite H; congruence.
   }
-  assert (VMTOP: forall v v', val_inject j' v v' -> vmatch bc' v Vtop).
+  assert (VMTOP: forall v v', Val.inject j' v v' -> vmatch bc' v Vtop).
   {
     intros. inv H; constructor. eapply PMTOP; eauto. 
   }

@@ -163,7 +163,7 @@ Qed.
   [f b = Some(b', ofs)] means that C#minor block [b] corresponds
   to a sub-block of Cminor block [b] at offset [ofs].
 
-  A memory injection [f] defines a relation [val_inject f] between
+  A memory injection [f] defines a relation [Val.inject f] between
   values and a relation [Mem.inject f] between memory states.  These
   relations will be used intensively in our proof of simulation
   between C#minor and Cminor executions. *)
@@ -171,7 +171,7 @@ Qed.
 (** ** Matching between Cshaprminor's temporaries and Cminor's variables *)
 
 Definition match_temps (f: meminj) (le: Csharpminor.temp_env) (te: env) : Prop :=
-  forall id v, le!id = Some v -> exists v', te!(id) = Some v' /\ val_inject f v v'.
+  forall id v, le!id = Some v -> exists v', te!(id) = Some v' /\ Val.inject f v v'.
 
 Lemma match_temps_invariant:
   forall f f' le te,
@@ -185,7 +185,7 @@ Qed.
 Lemma match_temps_assign:
   forall f le te id v tv,
   match_temps f le te ->
-  val_inject f v tv ->
+  Val.inject f v tv ->
   match_temps f (PTree.set id v le) (PTree.set id tv te).
 Proof.
   intros; red; intros. rewrite PTree.gsspec in *. destruct (peq id0 id).
@@ -197,7 +197,7 @@ Qed.
 
 Inductive match_var (f: meminj) (sp: block): option (block * Z) -> option Z -> Prop :=
   | match_var_local: forall b sz ofs,
-      val_inject f (Vptr b Int.zero) (Vptr sp (Int.repr ofs)) ->
+      Val.inject f (Vptr b Int.zero) (Vptr sp (Int.repr ofs)) ->
       match_var f sp (Some(b, sz)) (Some ofs)
   | match_var_global:
       match_var f sp None None.
@@ -553,7 +553,7 @@ Qed.
 
 Lemma match_callstack_set_temp:
   forall f cenv e le te sp lo hi cs bound tbound m tm tf id v tv,
-  val_inject f v tv ->
+  Val.inject f v tv ->
   match_callstack f m tm (Frame cenv tf e le te sp lo hi :: cs) bound tbound ->
   match_callstack f m tm (Frame cenv tf e (PTree.set id v le) (PTree.set id tv te) sp lo hi :: cs) bound tbound.
 Proof.
@@ -1119,7 +1119,7 @@ Fixpoint set_params' (vl: list val) (il: list ident) (te: Cminor.env) : Cminor.e
 Lemma bind_parameters_agree_rec:
   forall f vars vals tvals le1 le2 te,
   bind_parameters vars vals le1 = Some le2 ->
-  val_list_inject f vals tvals ->
+  Val.inject_list f vals tvals ->
   match_temps f le1 te ->
   match_temps f le2 (set_params' tvals vars te).
 Proof.
@@ -1213,7 +1213,7 @@ Qed.
 Lemma bind_parameters_agree:
   forall f params temps vals tvals le,
   bind_parameters params vals (create_undef_temps temps) = Some le ->
-  val_list_inject f vals tvals ->
+  Val.inject_list f vals tvals ->
   list_norepet params ->
   list_disjoint params temps ->
   match_temps f le (set_locals temps (set_params tvals params)).
@@ -1238,7 +1238,7 @@ Theorem match_callstack_function_entry:
   list_disjoint (Csharpminor.fn_params fn) (Csharpminor.fn_temps fn) ->
   alloc_variables Csharpminor.empty_env m (Csharpminor.fn_vars fn) e m' ->
   bind_parameters (Csharpminor.fn_params fn) args (create_undef_temps fn.(fn_temps)) = Some le ->
-  val_list_inject f args targs ->
+  Val.inject_list f args targs ->
   Mem.alloc tm 0 tf.(fn_stackspace) = (tm', sp) ->
   match_callstack f m tm cs (Mem.nextblock m) (Mem.nextblock tm) ->
   Mem.inject f m tm ->
@@ -1259,39 +1259,39 @@ Qed.
 (** * Compatibility of evaluation functions with respect to memory injections. *)
 
 Remark val_inject_val_of_bool:
-  forall f b, val_inject f (Val.of_bool b) (Val.of_bool b).
+  forall f b, Val.inject f (Val.of_bool b) (Val.of_bool b).
 Proof.
   intros; destruct b; constructor.
 Qed.
 
 Remark val_inject_val_of_optbool:
-  forall f ob, val_inject f (Val.of_optbool ob) (Val.of_optbool ob).
+  forall f ob, Val.inject f (Val.of_optbool ob) (Val.of_optbool ob).
 Proof.
   intros; destruct ob; simpl. destruct b; constructor. constructor.
 Qed.
 
 Ltac TrivialExists :=
   match goal with
-  | [ |- exists y, Some ?x = Some y /\ val_inject _ _ _ ] =>
+  | [ |- exists y, Some ?x = Some y /\ Val.inject _ _ _ ] =>
       exists x; split; [auto | try(econstructor; eauto)]
-  | [ |- exists y, _ /\ val_inject _ (Vint ?x) _ ] =>
+  | [ |- exists y, _ /\ Val.inject _ (Vint ?x) _ ] =>
       exists (Vint x); split; [eauto with evalexpr | constructor]
-  | [ |- exists y, _ /\ val_inject _ (Vfloat ?x) _ ] =>
+  | [ |- exists y, _ /\ Val.inject _ (Vfloat ?x) _ ] =>
       exists (Vfloat x); split; [eauto with evalexpr | constructor]
-  | [ |- exists y, _ /\ val_inject _ (Vlong ?x) _ ] =>
+  | [ |- exists y, _ /\ Val.inject _ (Vlong ?x) _ ] =>
       exists (Vlong x); split; [eauto with evalexpr | constructor]
   | _ => idtac
   end.
 
-(** Compatibility of [eval_unop] with respect to [val_inject]. *)
+(** Compatibility of [eval_unop] with respect to [Val.inject]. *)
 
 Lemma eval_unop_compat:
   forall f op v1 tv1 v,
   eval_unop op v1 = Some v ->
-  val_inject f v1 tv1 ->
+  Val.inject f v1 tv1 ->
   exists tv,
      eval_unop op tv1 = Some tv
-  /\ val_inject f v tv.
+  /\ Val.inject f v tv.
 Proof.
   destruct op; simpl; intros.
   inv H; inv H0; simpl; TrivialExists.
@@ -1329,17 +1329,17 @@ Proof.
   inv H0; simpl in H; inv H. simpl. TrivialExists.
 Qed.
 
-(** Compatibility of [eval_binop] with respect to [val_inject]. *)
+(** Compatibility of [eval_binop] with respect to [Val.inject]. *)
 
 Lemma eval_binop_compat:
   forall f op v1 tv1 v2 tv2 v m tm,
   eval_binop op v1 v2 m = Some v ->
-  val_inject f v1 tv1 ->
-  val_inject f v2 tv2 ->
+  Val.inject f v1 tv1 ->
+  Val.inject f v2 tv2 ->
   Mem.inject f m tm ->
   exists tv,
      eval_binop op tv1 tv2 tm = Some tv
-  /\ val_inject f v tv.
+  /\ Val.inject f v tv.
 Proof.
   destruct op; simpl; intros.
   inv H; inv H0; inv H1; TrivialExists.
@@ -1401,7 +1401,7 @@ Proof.
   destruct (Val.cmpu_bool (Mem.valid_pointer m) c v1 v2) as [b|] eqn:E.
   replace (Val.cmpu_bool (Mem.valid_pointer tm) c tv1 tv2) with (Some b).
   destruct b; simpl; constructor.
-  symmetry. eapply val_cmpu_bool_inject; eauto.
+  symmetry. eapply Val.cmpu_bool_inject; eauto.
   intros; eapply Mem.valid_pointer_inject_val; eauto.
   intros; eapply Mem.weak_valid_pointer_inject_val; eauto.
   intros; eapply Mem.weak_valid_pointer_inject_no_overflow; eauto.
@@ -1429,7 +1429,7 @@ Lemma var_addr_correct:
   eval_var_addr ge e id b ->
   exists tv,
      eval_expr tge (Vptr sp Int.zero) te tm (var_addr cenv id) tv
-  /\ val_inject f (Vptr b Int.zero) tv.
+  /\ Val.inject f (Vptr b Int.zero) tv.
 Proof.
   unfold var_addr; intros.
   assert (match_var f sp e!id cenv!id).
@@ -1474,7 +1474,7 @@ Qed.
 
 Remark bool_of_val_inject:
   forall f v tv b,
-  Val.bool_of_val v b -> val_inject f v tv -> Val.bool_of_val tv b.
+  Val.bool_of_val v b -> Val.inject f v tv -> Val.bool_of_val tv b.
 Proof.
   intros. inv H0; inv H; constructor; auto.
 Qed.
@@ -1484,7 +1484,7 @@ Lemma transl_constant_correct:
   Csharpminor.eval_constant cst = Some v ->
   exists tv,
      eval_constant tge sp (transl_constant cst) = Some tv
-  /\ val_inject f v tv.
+  /\ Val.inject f v tv.
 Proof.
   destruct cst; simpl; intros; inv H. 
   exists (Vint i); auto.
@@ -1505,7 +1505,7 @@ Lemma transl_expr_correct:
     (TR: transl_expr cenv a = OK ta),
   exists tv,
      eval_expr tge (Vptr sp Int.zero) te tm ta tv
-  /\ val_inject f v tv.
+  /\ Val.inject f v tv.
 Proof.
   induction 3; intros; simpl in TR; try (monadInv TR).
   (* Etempvar *)
@@ -1543,7 +1543,7 @@ Lemma transl_exprlist_correct:
     (TR: transl_exprlist cenv a = OK ta),
   exists tv,
      eval_exprlist tge (Vptr sp Int.zero) te tm ta tv
-  /\ val_list_inject f v tv.
+  /\ Val.inject_list f v tv.
 Proof.
   induction 3; intros; monadInv TR.
   exists (@nil val); split. constructor. constructor.
@@ -1610,7 +1610,7 @@ Inductive match_states: Csharpminor.state -> Cminor.state -> Prop :=
       (MCS: match_callstack f m tm cs (Mem.nextblock m) (Mem.nextblock tm))
       (MK: match_cont k tk cenv nil cs)
       (ISCC: Csharpminor.is_call_cont k)
-      (ARGSINJ: val_list_inject f args targs),
+      (ARGSINJ: Val.inject_list f args targs),
       match_states (Csharpminor.Callstate fd args k m)
                    (Callstate tfd targs tk tm)
   | match_returnstate:
@@ -1618,7 +1618,7 @@ Inductive match_states: Csharpminor.state -> Cminor.state -> Prop :=
       (MINJ: Mem.inject f m tm)
       (MCS: match_callstack f m tm cs (Mem.nextblock m) (Mem.nextblock tm))
       (MK: match_cont k tk cenv nil cs)
-      (RESINJ: val_inject f v tv),
+      (RESINJ: Val.inject f v tv),
       match_states (Csharpminor.Returnstate v k m)
                    (Returnstate tv tk tm).
 
@@ -1626,7 +1626,7 @@ Remark val_inject_function_pointer:
   forall bound v fd f tv,
   Genv.find_funct ge v = Some fd ->
   match_globalenvs f bound ->
-  val_inject f v tv ->
+  Val.inject f v tv ->
   tv = v.
 Proof.
   intros. exploit Genv.find_funct_inv; eauto. intros [b EQ]. subst v.

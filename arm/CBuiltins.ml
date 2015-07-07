@@ -55,3 +55,7 @@ let builtins = {
 
 let size_va_list = 4
 let va_list_scalar = true
+
+(* Expand memory references inside extended asm statements.  Used in C2C. *)
+
+let asm_mem_argument arg = Printf.sprintf "[%s, #0]" arg

@@ -38,6 +38,10 @@ let print_condition reg pp = function
       fprintf pp "%a %sf %a" reg r1 (comparison_name c) reg r2
   | (Cnotcompf c, [r1;r2]) ->
       fprintf pp "%a not(%sf) %a" reg r1 (comparison_name c) reg r2
+  | (Ccompfs c, [r1;r2]) ->
+      fprintf pp "%a %sfs %a" reg r1 (comparison_name c) reg r2
+  | (Cnotcompfs c, [r1;r2]) ->
+      fprintf pp "%a not(%sfs) %a" reg r1 (comparison_name c) reg r2
   | (Cmaskzero n, [r1]) ->
       fprintf pp "%a & 0x%lx == 0" reg r1 (camlint_of_coqint n)
   | (Cmasknotzero n, [r1]) ->
@@ -100,10 +104,18 @@ let print_operation reg pp = function
   | Osubf, [r1;r2] -> fprintf pp "%a -f %a" reg r1 reg r2
   | Omulf, [r1;r2] -> fprintf pp "%a *f %a" reg r1 reg r2
   | Odivf, [r1;r2] -> fprintf pp "%a /f %a" reg r1 reg r2
+  | Onegfs, [r1] -> fprintf pp "negfs(%a)" reg r1
+  | Oabsfs, [r1] -> fprintf pp "absfs(%a)" reg r1
+  | Oaddfs, [r1;r2] -> fprintf pp "%a +fs %a" reg r1 reg r2
+  | Osubfs, [r1;r2] -> fprintf pp "%a -fs %a" reg r1 reg r2
+  | Omulfs, [r1;r2] -> fprintf pp "%a *fs %a" reg r1 reg r2
+  | Odivfs, [r1;r2] -> fprintf pp "%a /fs %a" reg r1 reg r2
   | Osingleoffloat, [r1] -> fprintf pp "singleoffloat(%a)" reg r1
   | Ofloatofsingle, [r1] -> fprintf pp "floatofsingle(%a)" reg r1
   | Ointoffloat, [r1] -> fprintf pp "intoffloat(%a)" reg r1
   | Ofloatofint, [r1] -> fprintf pp "floatofint(%a)" reg r1
+  | Ointofsingle, [r1] -> fprintf pp "intofsingle(%a)" reg r1
+  | Osingleofint, [r1] -> fprintf pp "singleofint(%a)" reg r1
   | Omakelong, [r1;r2] -> fprintf pp "makelong(%a,%a)" reg r1 reg r2
   | Olowlong, [r1] -> fprintf pp "lowlong(%a)" reg r1
   | Ohighlong, [r1] -> fprintf pp "highlong(%a)" reg r1

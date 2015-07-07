@@ -52,6 +52,14 @@ let print_condition reg pp = function
       fprintf pp "%a %sf 0.0" reg r1 (comparison_name c)
   | (Cnotcompfzero c, [r1]) ->
       fprintf pp "%a not(%sf) 0.0" reg r1 (comparison_name c)
+  | (Ccompfs c, [r1;r2]) ->
+      fprintf pp "%a %sfs %a" reg r1 (comparison_name c) reg r2
+  | (Cnotcompfs c, [r1;r2]) ->
+      fprintf pp "%a not(%sfs) %a" reg r1 (comparison_name c) reg r2
+  | (Ccompfszero c, [r1]) ->
+      fprintf pp "%a %sfs 0.0" reg r1 (comparison_name c)
+  | (Cnotcompfszero c, [r1]) ->
+      fprintf pp "%a not(%sfs) 0.0" reg r1 (comparison_name c)
   | _ ->
       fprintf pp "<bad condition>"
 
@@ -59,6 +67,7 @@ let print_operation reg pp = function
   | Omove, [r1] -> reg pp r1
   | Ointconst n, [] -> fprintf pp "%ld" (camlint_of_coqint n)
   | Ofloatconst n, [] -> fprintf pp "%F" (camlfloat_of_coqfloat n)
+  | Osingleconst n, [] -> fprintf pp "%Ff" (camlfloat_of_coqfloat32 n)
   | Oaddrsymbol(id, ofs), [] ->
       fprintf pp "\"%s\" + %ld" (extern_atom id) (camlint_of_coqint ofs)
   | Oaddrstack ofs, [] ->
@@ -100,9 +109,21 @@ let print_operation reg pp = function
   | Osubf, [r1;r2] -> fprintf pp "%a -f %a" reg r1 reg r2
   | Omulf, [r1;r2] -> fprintf pp "%a *f %a" reg r1 reg r2
   | Odivf, [r1;r2] -> fprintf pp "%a /f %a" reg r1 reg r2
+  | Onegfs, [r1] -> fprintf pp "negfs(%a)" reg r1
+  | Oabsfs, [r1] -> fprintf pp "absfs(%a)" reg r1
+  | Oaddfs, [r1;r2] -> fprintf pp "%a +fs %a" reg r1 reg r2
+  | Osubfs, [r1;r2] -> fprintf pp "%a -fs %a" reg r1 reg r2
+  | Omulfs, [r1;r2] -> fprintf pp "%a *fs %a" reg r1 reg r2
+  | Odivfs, [r1;r2] -> fprintf pp "%a /fs %a" reg r1 reg r2
   | Osingleoffloat, [r1] -> fprintf pp "singleoffloat(%a)" reg r1
   | Ointoffloat, [r1] -> fprintf pp "intoffloat(%a)" reg r1
+  | Ointuoffloat, [r1] -> fprintf pp "intuoffloat(%a)" reg r1
   | Ofloatofint, [r1] -> fprintf pp "floatofint(%a)" reg r1
+  | Ofloatofintu, [r1] -> fprintf pp "floatofintu(%a)" reg r1
+  | Ointofsingle, [r1] -> fprintf pp "intofsingle(%a)" reg r1
+  | Ointuofsingle, [r1] -> fprintf pp "intuofsingle(%a)" reg r1
+  | Osingleofint, [r1] -> fprintf pp "singleofint(%a)" reg r1
+  | Osingleofintu, [r1] -> fprintf pp "singleofintu(%a)" reg r1
   | Omakelong, [r1;r2] -> fprintf pp "makelong(%a,%a)" reg r1 reg r2
   | Olowlong, [r1] -> fprintf pp "lowlong(%a)" reg r1
   | Ohighlong, [r1] -> fprintf pp "highlong(%a)" reg r1

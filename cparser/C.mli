@@ -190,6 +190,10 @@ and init =
   | Init_struct of ident * (field * init) list
   | Init_union of ident * field * init
 
+(** GCC extended asm *)
+
+type asm_operand = string option * string * exp
+
 (** Statements *)
 
 type stmt = { sdesc: stmt_desc; sloc: location }
@@ -210,7 +214,7 @@ and stmt_desc =
   | Sreturn of exp option
   | Sblock of stmt list
   | Sdecl of decl
-  | Sasm of string
+  | Sasm of attributes * string * asm_operand list * asm_operand list * string list
 
 and slabel = 
   | Slabel of string

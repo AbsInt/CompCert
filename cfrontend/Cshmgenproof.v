@@ -490,8 +490,19 @@ Proof.
   destruct (classify_sub tya tyb); inv MAKE.
 - destruct va; try discriminate; destruct vb; inv SEM; eauto with cshm.
 - destruct va; try discriminate; destruct vb; inv SEM.
-  destruct (eq_block b0 b1); try discriminate. destruct (Int.eq (Int.repr (sizeof ce ty)) Int.zero) eqn:E; inv H0.
-  econstructor; eauto with cshm. rewrite dec_eq_true. simpl. rewrite E; auto. 
+  destruct (eq_block b0 b1); try discriminate.
+  set (sz := sizeof ce ty) in *.
+  destruct (zlt 0 sz); try discriminate. 
+  destruct (zle sz Int.max_signed); simpl in H0; inv H0.
+  econstructor; eauto with cshm. 
+  rewrite dec_eq_true; simpl. 
+  assert (E: Int.signed (Int.repr sz) = sz). 
+  { apply Int.signed_repr. generalize Int.min_signed_neg; omega. }
+  predSpec Int.eq Int.eq_spec (Int.repr sz) Int.zero.
+  rewrite H in E; rewrite Int.signed_zero in E; omegaContradiction.
+  predSpec Int.eq Int.eq_spec (Int.repr sz) Int.mone.
+  rewrite H0 in E; rewrite Int.signed_mone in E; omegaContradiction.
+  rewrite andb_false_r; auto. 
 - destruct va; try discriminate; destruct vb; inv SEM; eauto with cshm.
 - eapply make_binarith_correct; eauto; intros; auto.
 Qed.

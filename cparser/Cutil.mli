@@ -195,6 +195,10 @@ val fundef_typ: fundef -> typ
 val int_representable: int64 -> int -> bool -> bool
   (* Is the given int64 representable with the given number of bits and
      signedness? *)
+val field_of_dot_access: Env.t -> typ -> string -> field
+  (* Return the field info for a [x.field] access *)
+val field_of_arrow_access: Env.t -> typ -> string -> field
+  (* Return the field info for a [x->field] access *)
 
 (* Constructors *)
 

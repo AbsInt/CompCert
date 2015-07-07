@@ -10,6 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+Require Import String.
 Require Import Coqlib.
 Require Import Maps.
 Require Import AST.
@@ -97,6 +98,36 @@ End IndexedMreg.
 
 Definition is_stack_reg (r: mreg) : bool := false.
 
+(** ** Names of registers *)
+
+Local Open Scope string_scope.
+
+Definition register_names :=
+  ("R3", R3) ::  ("R4", R4) ::  ("R5", R5) ::  ("R6", R6) ::
+  ("R7", R7) ::  ("R8", R8) ::  ("R9", R9) ::  ("R10", R10) ::
+  ("R11", R11) :: ("R12", R12) ::
+  ("R14", R14) :: ("R15", R15) :: ("R16", R16) ::
+  ("R17", R17) :: ("R18", R18) :: ("R19", R19) :: ("R20", R20) ::
+  ("R21", R21) :: ("R22", R22) :: ("R23", R23) :: ("R24", R24) ::
+  ("R25", R25) :: ("R26", R26) :: ("R27", R27) :: ("R28", R28) ::
+  ("R29", R29) :: ("R30", R30) :: ("R31", R31) ::
+  ("F0", F0) :: ("F1", F1) ::  ("F2", F2) ::  ("F3", F3) ::  ("F4", F4) ::
+  ("F5", F5) ::  ("F6", F6) ::  ("F7", F7) ::  ("F8", F8) ::
+  ("F9", F9) ::  ("F10", F10) :: ("F11", F11) :: ("F12", F12) ::
+  ("F13", F13) :: ("F14", F14) :: ("F15", F15) ::
+  ("F16", F16) :: ("F17", F17) :: ("F18", F18) :: ("F19", F19) ::
+  ("F20", F20) :: ("F21", F21) :: ("F22", F22) :: ("F23", F23) ::
+  ("F24", F24) :: ("F25", F25) :: ("F26", F26) :: ("F27", F27) ::
+  ("F28", F28) :: ("F29", F29) :: ("F30", F30) :: ("F31", F31) :: nil.
+
+Definition register_by_name (s: string) : option mreg :=
+  let fix assoc (l: list (string * mreg)) : option mreg :=
+    match l with
+    | nil => None
+    | (s1, r1) :: l' => if string_dec s s1 then Some r1 else assoc l'
+    end
+  in assoc register_names.
+
 (** ** Destroyed registers, preferred registers *)
 
 Definition destroyed_by_op (op: operation): list mreg :=
@@ -119,6 +150,16 @@ Definition destroyed_by_cond (cond: condition): list mreg :=
 Definition destroyed_by_jumptable: list mreg :=
   R12 :: nil.
 
+Fixpoint destroyed_by_clobber (cl: list string): list mreg :=
+  match cl with
+  | nil => nil
+  | c1 :: cl =>
+      match register_by_name c1 with
+      | Some r => r :: destroyed_by_clobber cl
+      | None   => destroyed_by_clobber cl
+      end
+  end.
+
 Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_builtin _ _ => F13 :: nil
@@ -128,6 +169,7 @@ Definition destroyed_by_builtin (ef: external_function): list mreg :=
   | EF_vstore_global Mint64 _ _ => R10 :: R11 :: R12 :: nil
   | EF_vstore_global _ _ _ => R11 :: R12 :: nil
   | EF_memcpy _ _ => R11 :: R12 :: F13 :: nil
+  | EF_inline_asm txt sg clob => destroyed_by_clobber clob
   | _ => nil
   end.
 

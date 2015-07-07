@@ -574,6 +574,19 @@ let is_function_type env t =
   | TFun _ -> true
   | _ -> false
 
+(* Find the info for a field access *)
+
+let field_of_dot_access env t m =
+  match unroll env t with
+  | TStruct(id, _) -> Env.find_struct_member env (id, m)
+  | TUnion(id, _) -> Env.find_union_member env (id, m)
+  | _ -> assert false
+
+let field_of_arrow_access env t m =
+  match unroll env t with
+  | TPtr(t, _) | TArray(t, _, _) -> field_of_dot_access env t m
+  | _ -> assert false
+
 (* Ranking of integer kinds *)
 
 let integer_rank = function
@@ -964,8 +977,7 @@ let rec subst_stmt phi s =
       | Sskip
       | Sbreak
       | Scontinue
-      | Sgoto _
-      | Sasm _ -> s.sdesc
+      | Sgoto _ -> s.sdesc
       | Sdo e -> Sdo (subst_expr phi e)
       | Sseq(s1, s2) -> Sseq (subst_stmt phi s1, subst_stmt phi s2)
       | Sif(e, s1, s2) ->
@@ -981,6 +993,13 @@ let rec subst_stmt phi s =
       | Sreturn (Some e) -> Sreturn (Some (subst_expr phi e))
       | Sblock sl -> Sblock (List.map (subst_stmt phi) sl)
       | Sdecl d -> Sdecl (subst_decl phi d)
+      | Sasm(attr, template, outputs, inputs, clob) ->
+          let subst_asm_operand (lbl, cstr, e) = 
+            (lbl, cstr, subst_expr phi e) in
+          Sasm(attr, template,
+               List.map subst_asm_operand outputs,
+               List.map subst_asm_operand inputs,
+               clob)
   }
 
 

@@ -351,7 +351,7 @@ Proof.
 (* call *)
   eapply size_arguments_bound; eauto.
 (* builtin *)
-  apply H1. apply in_or_app; auto. 
+  apply H1. apply in_or_app; auto.
 (* annot *)
   apply H0. rewrite slots_of_locs_charact; auto. 
 Qed.

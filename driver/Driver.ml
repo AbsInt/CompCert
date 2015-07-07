@@ -74,7 +74,7 @@ let print_error oc msg =
 let output_filename ?(final = false) source_file source_suffix output_suffix =
   match !option_o with
   | Some file when final -> file
-  | _ -> 
+  | _ ->
     Filename.basename (Filename.chop_suffix source_file source_suffix)
     ^ output_suffix
 
@@ -93,8 +93,8 @@ let preprocess ifile ofile =
   let cmd = List.concat [
     Configuration.prepro;
     ["-D__COMPCERT__"];
-    (if Configuration.has_runtime_lib
-     then ["-I" ^ !stdlib_path]
+    (if Configuration.has_standard_headers
+     then ["-I" ^ Filename.concat !stdlib_path "include" ]
      else []);
     List.rev !prepro_options;
     [ifile]
@@ -127,7 +127,7 @@ let parse_c_file sourcename ifile =
     let oc = open_out ofile in
     Cprint.program (Format.formatter_of_out_channel oc) ast;
     close_out oc
-  end; 
+  end;
   (* Conversion to Csyntax *)
   let csyntax =
     match Timing.time "CompCert C generation" C2C.convertProgram ast with
@@ -145,7 +145,7 @@ let parse_c_file sourcename ifile =
 
 (* Dump Asm code in binary format for the validator *)
 
-let sdump_magic_number = "CompCertSDUMP" ^ Configuration.version
+let sdump_magic_number = "CompCertSDUMP" ^ Version.version
 
 let dump_asm asm destfile =
   let oc = open_out_bin destfile in
@@ -154,6 +154,15 @@ let dump_asm asm destfile =
   output_value oc Camlcoq.string_of_atom;
   output_value oc C2C.decl_atom;
   close_out oc
+
+let jdump_magic_number = "CompCertJDUMP" ^ Version.version
+
+let dump_jasm asm destfile =
+  let oc = open_out_bin destfile in
+  fprintf oc "{\n\"Version\":\"%s\",\n\"Asm Ast\":%a}"
+    jdump_magic_number AsmToJSON.p_program asm;
+  close_out oc
+
 
 (* From CompCert C AST to asm *)
 
@@ -176,9 +185,12 @@ let compile_c_ast sourcename csyntax ofile debug =
     | Errors.Error msg ->
         print_error stderr msg;
         exit 2 in
-  (* Dump Asm in binary format *)  
+  (* Dump Asm in binary and JSON format *)  
   if !option_sdump then
-    dump_asm asm (output_filename sourcename ".c" ".sdump");
+    begin
+      dump_asm asm (output_filename sourcename ".c" ".sdump");
+      dump_jasm asm (output_filename sourcename ".c" ".json")
+    end;
   (* Print Asm in text form *)
   let oc = open_out ofile in
   PrintAsm.print_program oc asm debug;
@@ -219,7 +231,7 @@ let compile_cminor_file ifile ofile =
          eprintf "File %s, character %d: Syntax error\n"
                  ifile (Lexing.lexeme_start lb);
          exit 2
-     | CMlexer.Error msg ->  
+     | CMlexer.Error msg ->
          eprintf "File %s, character %d: %s\n"
                  ifile (Lexing.lexeme_start lb) msg;
          exit 2
@@ -361,7 +373,7 @@ let process_h_file sourcename =
   end else begin
     eprintf "Error: input file %s ignored (not in -E mode)\n" sourcename;
     exit 2
-  end    
+  end
 
 (* Record actions to be performed after parsing the command line *)
 
@@ -386,9 +398,15 @@ let explode_comma_option s =
   | [] -> assert false
   | hd :: tl -> tl
 
+let version_string =
+  if Version.buildnr <> "" && Version.tag <> "" then
+    sprintf "The CompCert verified compiler, %s, Build: %s, Tag: %s\n" Version.version Version.buildnr Version.tag
+  else
+    "The CompCert C verified compiler, version "^ Version.version ^ "\n"
+
 let usage_string =
-"The CompCert C verified compiler, version " ^ Configuration.version ^ "
-Usage: ccomp [options] <source files>
+  version_string ^
+  "Usage: ccomp [options] <source files>
 Recognized source files:
   .c             C source file
   .i or .p       C source file that should not be preprocessed
@@ -423,6 +441,7 @@ Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fnone         Turn off all language support options above
 Debugging options:
   -g             Generate debugging information
+  -frename-static Rename static functions and declarations
 Optimization options: (use -fno-<opt> to turn off -f<opt>)
   -O             Optimize the compiled code [on by default]
   -O0            Do not optimize the compiled code
@@ -464,6 +483,7 @@ General options:
   -stdlib <dir>  Set the path of the Compcert run-time library
   -v             Print external commands before invoking them
   -timings       Show the time spent in various compiler passes
+  -version       Print the version string and exit
 Interpreter mode:
   -interp        Execute given .c files using the reference interpreter
   -quiet         Suppress diagnostic messages for the interpreter
@@ -474,6 +494,9 @@ Interpreter mode:
 
 let print_usage_and_exit _ =
   printf "%s" usage_string; exit 0
+
+let print_version_and_exit _ =
+  printf "%s" version_string; exit 0
 
 let language_support_options = [
   option_fbitfields; option_flongdouble;
@@ -497,11 +520,16 @@ let cmdline_actions =
 (* Getting help *)
   Exact "-help", Self print_usage_and_exit;
   Exact "--help", Self print_usage_and_exit;
+(* Getting version info *)
+  Exact "-version", Self print_version_and_exit;
+  Exact "--version", Self print_version_and_exit;
 (* Processing options *)
   Exact "-c", Set option_c;
   Exact "-E", Set option_E;
   Exact "-S", Set option_S;
   Exact "-o", String(fun s -> option_o := Some s);
+  Prefix "-o", Self (fun s -> let s = String.sub s 2 ((String.length s) - 2) in
+                              option_o := Some s);
 (* Preprocessing options *)
   Exact "-I", String(fun s -> prepro_options := s :: "-I" :: !prepro_options);
   Prefix "-I", Self(fun s -> prepro_options := s :: !prepro_options);
@@ -516,6 +544,7 @@ let cmdline_actions =
   Exact "-fnone", Self (fun _ -> unset_all language_support_options);
 (* Debugging options *)
   Exact "-g", Self (fun s -> option_g := true);
+  Exact "-frename-static", Self (fun s -> option_rename_static:= true);
 (* Code generation options -- more below *)
   Exact "-O0", Self (fun _ -> unset_all optimization_options);
   Exact "-O", Self (fun _ -> set_all optimization_options);
@@ -547,7 +576,7 @@ let cmdline_actions =
   Exact "-dmach", Set option_dmach;
   Exact "-dasm", Set option_dasm;
   Exact "-sdump", Set option_sdump;
-(* General options *) 
+(* General options *)
   Exact "-v", Set option_v;
   Exact "-stdlib", String(fun s -> stdlib_path := s);
   Exact "-timings", Set option_timings;

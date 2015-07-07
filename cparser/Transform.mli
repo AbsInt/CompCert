@@ -50,8 +50,10 @@ val expand_postincrdecr :
 
 (** Generic transformation of a statement *)
 
-val stmt : (C.location -> Env.t -> context -> C.exp -> C.exp) ->
-           Env.t -> C.stmt -> C.stmt
+val stmt :
+  expr: (C.location -> Env.t -> context -> C.exp -> C.exp) ->
+  ?decl: (Env.t -> C.decl -> C.decl) ->
+  Env.t -> C.stmt -> C.stmt
 
 (** Generic transformation of a function definition *)
 

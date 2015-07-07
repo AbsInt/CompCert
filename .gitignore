@@ -41,9 +41,9 @@ cparser/pre_parser.ml
 cparser/pre_parser.mli
 lib/Readconfig.ml
 lib/Tokenize.ml
+driver/Version.ml
 # Documentation
 doc/coq2html
 doc/coq2html.ml
 doc/html
 doc/html/
-

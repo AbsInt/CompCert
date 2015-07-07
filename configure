@@ -18,6 +18,7 @@ libdir='$(PREFIX)/lib/compcert'
 toolprefix=''
 target=''
 has_runtime_lib=true
+has_standard_headers=true
 build_checklink=true
 advanced_debug=false
 
@@ -49,6 +50,7 @@ Options:
   -libdir <dir>    Install libraries in <dir>
   -toolprefix <pref>  Prefix names of tools ("gcc", etc) with <pref>
   -no-runtime-lib  Do not compile nor install the runtime support library
+  -no-standard-headers Do not install nor use the standard .h headers
 '
 
 # Parse command-line arguments
@@ -66,6 +68,8 @@ while : ; do
         toolprefix="$2"; shift;;
     -no-runtime-lib)
         has_runtime_lib=false;;
+    -no-standard-headers)
+        has_standard_headers=false;;
     -no-checklink)
         build_checklink=false;;
     *)
@@ -357,6 +361,7 @@ CASMRUNTIME=$casmruntime
 CLINKER=$clinker
 LIBMATH=$libmath
 HAS_RUNTIME_LIB=$has_runtime_lib
+HAS_STANDARD_HEADERS=$has_standard_headers
 CCHECKLINK=$cchecklink
 ASM_SUPPORTS_CFI=$asm_supports_cfi
 ADVANCED_DEBUG=$advanced_debug
@@ -428,8 +433,11 @@ CLINKER=gcc
 # Math library.  Set to empty under MacOS X
 LIBMATH=-lm
 
-# Do not change
+# Turn on/off the installation and use of the runtime support library
 HAS_RUNTIME_LIB=true
+
+# Turn on/off the installation and use of the standard header files
+HAS_STANDARD_HEADERS=true
 
 # Whether the assembler $(CASM) supports .cfi debug directives
 ASM_SUPPORTS_CFI=false
@@ -471,6 +479,8 @@ CompCert configuration:
     Binaries installed in......... $bindirexp
     Runtime library provided...... $has_runtime_lib
     Library files installed in.... $libdirexp
+    Standard headers provided..... $has_standard_headers
+    Standard headers installed in. $libdirexp/include
     cchecklink tool supported..... $cchecklink
     Build command to use.......... $make
 

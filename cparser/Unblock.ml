@@ -225,7 +225,13 @@ let rec unblock_stmt env s =
       {s with sdesc = Sreturn(Some (expand_expr true env e))}
   | Sblock sl -> unblock_block env sl
   | Sdecl d -> assert false
-  | Sasm _ -> s
+  | Sasm(attr, template, outputs, inputs, clob) ->
+      let expand_asm_operand (lbl, cstr, e) =
+        (lbl, cstr, expand_expr true env e) in
+      {s with sdesc = Sasm(attr, template,
+                           List.map expand_asm_operand outputs,
+                           List.map expand_asm_operand inputs, clob)}
+
 
 and unblock_block env = function
   | [] -> sskip

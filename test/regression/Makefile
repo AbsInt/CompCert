@@ -17,7 +17,7 @@ TESTS=int32 int64 floats floats-basics \
   volatile1 volatile2 volatile3 \
   funct3 expr5 struct7 struct8 struct11 casts1 casts2 char1 \
   sizeof1 sizeof2 binops bool for1 switch switch2 compound \
-  decl1 interop1
+  decl1 interop1 bitfields9 ptrs3
 
 # Can run, but only in compiled mode, and have reference output in Results
 
@@ -36,7 +36,7 @@ TESTS_DIFF=NaNs
 EXTRAS=annot1 commaprec expr2 expr3 expr4 extern1 funct2 funptr1 \
   pragmas ptrs1 ptrs2 struct1 struct2 struct3 \
   struct4 struct5 struct6 struct9 struct10 types1 seqops \
-  singlefloats emptydecl
+  singlefloats emptydecl extasm
 
 # Test known to fail
 FAILURES=funct1

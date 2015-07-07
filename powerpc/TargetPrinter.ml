@@ -30,8 +30,8 @@ module type SYSTEM =
       val constant: out_channel -> constant -> unit
       val ireg: out_channel -> ireg -> unit
       val freg: out_channel -> freg -> unit
-      val creg: out_channel -> int -> unit
       val name_of_section: section_name -> string
+      val creg: out_channel -> int -> unit
       val print_file_line: out_channel -> string -> int -> unit
       val cfi_startproc: out_channel -> unit
       val cfi_endproc: out_channel -> unit
@@ -40,6 +40,8 @@ module type SYSTEM =
       val print_prologue: out_channel -> unit
       val print_epilogue: out_channel -> unit
       val print_file_loc: out_channel -> DwarfTypes.file_loc -> unit
+      val section: out_channel -> section_name -> unit
+      val debug_section: out_channel -> section_name -> unit
     end
 
 let symbol = elf_symbol
@@ -129,10 +131,15 @@ module Linux_System : SYSTEM =
             s (if wr then "w" else "") (if ex then "x" else "")
       | Section_debug_info -> ".debug_info,\"\",@progbits"
       | Section_debug_abbrev -> ".debug_abbrev,\"\",@progbits"
+    
+    let section oc sec =
+      let name = name_of_section sec in
+      assert (name <> "COMM");
+      fprintf oc "	%s\n" name
 
 
     let print_file_line oc file line =
-      PrintAnnot.print_file_line oc comment file line
+      print_file_line oc comment file line
     
     (* Emit .cfi directives *)      
     let cfi_startproc = cfi_startproc
@@ -148,7 +155,8 @@ module Linux_System : SYSTEM =
     let print_epilogue oc = ()
 
     let print_file_loc _ _ = ()
-  
+        
+    let debug_section _ _ = ()
   end
     
 module Diab_System : SYSTEM =
@@ -202,8 +210,14 @@ module Diab_System : SYSTEM =
       | Section_debug_info -> ".debug_info,,n"
       | Section_debug_abbrev -> ".debug_abbrev,,n"
 
+    let section oc sec =
+      let name = name_of_section sec in
+      assert (name <> "COMM");
+      fprintf oc "	%s\n" name
+
+
     let print_file_line oc file line =
-      PrintAnnot.print_file_line_d2 oc comment file line
+      print_file_line_d2 oc comment file line
 
     (* Emit .cfi directives *)
     let cfi_startproc oc = ()
@@ -232,6 +246,9 @@ module Diab_System : SYSTEM =
 
     let filenum : (string,int) Hashtbl.t = Hashtbl.create 7
 
+    let additional_debug_sections: StringSet.t ref = ref StringSet.empty
+
+
     let print_epilogue oc =
       if !Clflags.option_g then
         begin
@@ -240,16 +257,39 @@ module Diab_System : SYSTEM =
           end_addr := label_end;
           fprintf oc "%a:\n" label label_end;
           fprintf oc "	.text\n";
-          PrintAnnot.StringSet.iter (fun file ->
+          StringSet.iter (fun file ->
             let label = new_label () in
             Hashtbl.add filenum file label;
-            fprintf oc ".L%d:	.d2filenum \"%s\"\n" label file) !PrintAnnot.all_files;
-          fprintf oc "	.d2_line_end\n"
+            fprintf oc ".L%d:	.d2filenum \"%s\"\n" label file) !all_files;
+          fprintf oc "	.d2_line_end\n";
+          StringSet.iter (fun s ->
+            fprintf oc "	%s\n" s;
+            fprintf oc "	.d2_line_end\n") !additional_debug_sections
         end
 
     let print_file_loc oc (file,col) =
       fprintf oc "	.4byte		%a\n" label (Hashtbl.find filenum file);
       fprintf oc "	.uleb128	%d\n" col
+
+    let debug_section oc sec =
+      if !Clflags.option_g && Configuration.advanced_debug then
+        match sec with
+        | Section_user (name,_,_)  ->
+            let sec_name = name_of_section sec in
+            if not (StringSet.mem sec_name !additional_debug_sections) then
+              begin
+                let name = ".debug_line"^name in
+                additional_debug_sections := StringSet.add sec_name !additional_debug_sections;
+                fprintf oc "	.section	%s,,n\n" name;
+                fprintf oc "	.sectionlink	.debug_line\n";
+                section oc sec;
+                fprintf oc "	.d2_line_start	%s\n" name
+              end
+        | _ -> () (* Only the case of a user section is interresting *)
+      else
+        ()
+            
+
   end
 
 module Target (System : SYSTEM):TARGET =
@@ -284,18 +324,17 @@ module Target (System : SYSTEM):TARGET =
     let ireg_or_zero oc r =
       if r = GPR0 then output_string oc "0" else ireg oc r
 
-    (* [preg] is only used for printing annotations.
-       Use the full register names [rN] and [fN] to avoid
-       ambiguity with constants. *)
     let preg oc = function
+      | IR r -> ireg oc r
+      | FR r -> freg oc r
+      | _    -> assert false
+
+    (* For printing annotations, use the full register names [rN] and [fN]
+       to avoid ambiguity with constants. *)
+    let preg_annot oc = function
       | IR r -> fprintf oc "r%s" (int_reg_name r)
       | FR r -> fprintf oc "f%s" (float_reg_name r)
       | _    -> assert false
-
-    let section oc sec =
-      let name = name_of_section sec in
-      assert (name <> "COMM");
-      fprintf oc "	%s\n" name
 
     let print_location oc loc =
       if loc <> Cutil.no_loc then print_file_line oc (fst loc) (snd loc)
@@ -327,7 +366,7 @@ module Target (System : SYSTEM):TARGET =
           (int_of_string (Str.matched_group 2 txt))
       end else begin
         fprintf oc "%s annotation: " comment;
-        PrintAnnot.print_annot_stmt preg "R1" oc txt targs args
+        print_annot_stmt preg_annot "R1" oc txt targs args
       end
 
     (* Determine if the displacement of a conditional branch fits the short form *)
@@ -422,8 +461,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	cmpw	%a, %a, %a\n" creg 0 ireg r1 ireg r2
       | Pcmpwi(r1, c) ->
           fprintf oc "	cmpwi	%a, %a, %a\n" creg 0 ireg r1 constant c
-      | Pcntlz(r1, r2) ->
-          fprintf oc "	cntlz	%a, %a\n" ireg r1 ireg r2
+      | Pcntlzw(r1, r2) ->
+          fprintf oc "	cntlzw	%a, %a\n" ireg r1 ireg r2
       | Pcreqv(c1, c2, c3) ->
           fprintf oc "	creqv	%a, %a, %a\n" crbit c1 crbit c2 crbit c3
       | Pcror(c1, c2, c3) ->
@@ -616,8 +655,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	stwu	%a, %a(%a)\n" ireg r1 constant c ireg r2
       | Pstwx(r1, r2, r3) | Pstwx_a(r1, r2, r3) ->
           fprintf oc "	stwx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
-      | Pstwxu(r1, r2, r3) ->
-          fprintf oc "	stwxu	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+      | Pstwux(r1, r2, r3) ->
+          fprintf oc "	stwux	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pstwbrx(r1, r2, r3) ->
           fprintf oc "	stwbrx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pstwcx_(r1, r2, r3) ->
@@ -646,9 +685,9 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "%a:\n" label (transl_label lbl)
       | Pbuiltin(ef, args, res) ->
           begin match ef with
-          | EF_inline_asm txt ->
-              fprintf oc "%s begin inline assembly\n" comment;
-              fprintf oc "	%s\n" (extern_atom txt);
+          | EF_inline_asm(txt, sg, clob) ->
+              fprintf oc "%s begin inline assembly\n\t" comment;
+              print_inline_asm preg oc (extern_atom txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment
           | _ ->
               assert false
@@ -802,7 +841,11 @@ module Target (System : SYSTEM):TARGET =
 
     module DwarfAbbrevs = DwarfUtil.DefaultAbbrevs
 
-    let new_label = new_label
+    let new_label = new_label            
+
+    let section oc sec =
+      section oc sec;
+      debug_section oc sec
 
   end
 

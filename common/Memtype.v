@@ -927,7 +927,7 @@ Axiom weak_valid_pointer_extends:
 - if [f b = Some(b', ofs)], the block [b] of [m2] corresponds to
   a sub-block at offset [ofs] of the block [b'] in [m2].
 
-A memory injection [f] defines a relation [val_inject] between values
+A memory injection [f] defines a relation [Val.inject] between values
 that is the identity for integer and float values, and relocates pointer 
 values as prescribed by [f].  (See module [Values].)
 
@@ -1000,14 +1000,14 @@ Axiom valid_pointer_inject_val:
   forall f m1 m2 b ofs b' ofs',
   inject f m1 m2 ->
   valid_pointer m1 b (Int.unsigned ofs) = true ->
-  val_inject f (Vptr b ofs) (Vptr b' ofs') ->
+  Val.inject f (Vptr b ofs) (Vptr b' ofs') ->
   valid_pointer m2 b' (Int.unsigned ofs') = true.
 
 Axiom weak_valid_pointer_inject_val:
   forall f m1 m2 b ofs b' ofs',
   inject f m1 m2 ->
   weak_valid_pointer m1 b (Int.unsigned ofs) = true ->
-  val_inject f (Vptr b ofs) (Vptr b' ofs') ->
+  Val.inject f (Vptr b ofs) (Vptr b' ofs') ->
   weak_valid_pointer m2 b' (Int.unsigned ofs') = true.
 
 Axiom inject_no_overlap:
@@ -1037,14 +1037,14 @@ Axiom load_inject:
   inject f m1 m2 ->
   load chunk m1 b1 ofs = Some v1 ->
   f b1 = Some (b2, delta) ->
-  exists v2, load chunk m2 b2 (ofs + delta) = Some v2 /\ val_inject f v1 v2.
+  exists v2, load chunk m2 b2 (ofs + delta) = Some v2 /\ Val.inject f v1 v2.
 
 Axiom loadv_inject:
   forall f m1 m2 chunk a1 a2 v1,
   inject f m1 m2 ->
   loadv chunk m1 a1 = Some v1 ->
-  val_inject f a1 a2 ->
-  exists v2, loadv chunk m2 a2 = Some v2 /\ val_inject f v1 v2.
+  Val.inject f a1 a2 ->
+  exists v2, loadv chunk m2 a2 = Some v2 /\ Val.inject f v1 v2.
 
 Axiom loadbytes_inject:
   forall f m1 m2 b1 ofs len b2 delta bytes1,
@@ -1059,7 +1059,7 @@ Axiom store_mapped_inject:
   inject f m1 m2 ->
   store chunk m1 b1 ofs v1 = Some n1 ->
   f b1 = Some (b2, delta) ->
-  val_inject f v1 v2 ->
+  Val.inject f v1 v2 ->
   exists n2,
     store chunk m2 b2 (ofs + delta) v2 = Some n2
     /\ inject f n1 n2.
@@ -1085,8 +1085,8 @@ Axiom storev_mapped_inject:
   forall f chunk m1 a1 v1 n1 m2 a2 v2,
   inject f m1 m2 ->
   storev chunk m1 a1 v1 = Some n1 ->
-  val_inject f a1 a2 ->
-  val_inject f v1 v2 ->
+  Val.inject f a1 a2 ->
+  Val.inject f v1 v2 ->
   exists n2,
     storev chunk m2 a2 v2 = Some n2 /\ inject f n1 n2.
 
@@ -1221,7 +1221,7 @@ Axiom store_inject_neutral:
   store chunk m b ofs v = Some m' ->
   inject_neutral thr m ->
   Plt b thr ->
-  val_inject (flat_inj thr) v v ->
+  Val.inject (flat_inj thr) v v ->
   inject_neutral thr m'.
 
 Axiom drop_inject_neutral:

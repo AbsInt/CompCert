@@ -1112,6 +1112,224 @@ Proof.
   + erewrite NAN; eauto. 
 Qed.
 
+(** ** Conversion from scientific notation *)
+
+(** Russian peasant exponentiation *)
+
+Fixpoint pos_pow (x y: positive) : positive :=
+  match y with
+  | xH => x
+  | xO y => Pos.square (pos_pow x y)
+  | xI y => Pos.mul x (Pos.square (pos_pow x y))
+  end.
+
+Lemma pos_pow_spec:
+  forall x y, Z.pos (pos_pow x y) = Z.pos x ^ Z.pos y.
+Proof.
+  intros x.
+  assert (REC: forall y a, Pos.iter y (Pos.mul x) a = Pos.mul (pos_pow x y) a).
+  { induction y; simpl; intros. 
+  - rewrite ! IHy, Pos.square_spec, ! Pos.mul_assoc. auto.
+  - rewrite ! IHy, Pos.square_spec, ! Pos.mul_assoc. auto.
+  - auto.
+  }
+  intros. simpl. rewrite <- Pos2Z.inj_pow_pos. unfold Pos.pow. rewrite REC. rewrite Pos.mul_1_r. auto.
+Qed. 
+
+(** Given a base [base], a mantissa [m] and an exponent [e], the following function
+  computes the FP number closest to [m * base ^ e], using round to odd, ties break to even.
+  The algorithm is naive, computing [base ^ |e|] exactly before doing a multiplication or
+  division with [m].  However, we treat specially very large or very small values of [e],
+  when the result is known to be [+infinity] or [0.0] respectively. *)
+
+Definition Bparse (base: positive) (m: positive) (e: Z): binary_float :=
+  match e with
+  | Z0 => 
+     BofZ (Zpos m)
+  | Zpos p =>
+     if e * Z.log2 (Zpos base) <? emax
+     then BofZ (Zpos m * Zpos (pos_pow base p))
+     else B754_infinity _ _ false
+  | Zneg p =>
+     if e * Z.log2 (Zpos base) + Z.log2_up (Zpos m) <? emin
+     then B754_zero _ _ false
+     else FF2B prec emax _ (proj1 (Bdiv_correct_aux prec emax prec_gt_0_ Hmax mode_NE
+                                     false m Z0 false (pos_pow base p) Z0))
+  end.
+
+(** Properties of [Z.log2] and [Z.log2_up]. *)
+
+Lemma Zpower_log:
+  forall (base: radix) n,
+  0 < n ->
+  2 ^ (n * Z.log2 base) <= base ^ n <= 2 ^ (n * Z.log2_up base).
+Proof.
+  intros.
+  assert (A: 0 < base) by apply radix_gt_0.
+  assert (B: 0 <= Z.log2 base) by apply Z.log2_nonneg.
+  assert (C: 0 <= Z.log2_up base) by apply Z.log2_up_nonneg.
+  destruct (Z.log2_spec base) as [D E]; auto.
+  destruct (Z.log2_up_spec base) as [F G]. apply radix_gt_1. 
+  assert (K: 0 <= 2 ^ Z.log2 base) by (apply Z.pow_nonneg; omega).
+  rewrite ! (Zmult_comm n). rewrite ! Z.pow_mul_r by omega.
+  split; apply Z.pow_le_mono_l; omega.
+Qed.
+
+Lemma bpow_log_pos:
+  forall (base: radix) n,
+  0 < n ->
+  (bpow radix2 (n * Z.log2 base)%Z <= bpow base n)%R.
+Proof.
+  intros. rewrite <- ! Z2R_Zpower. apply Z2R_le; apply Zpower_log; auto.
+  omega.
+  rewrite Zmult_comm; apply Zmult_gt_0_le_0_compat. omega. apply Z.log2_nonneg.
+Qed.
+
+Lemma bpow_log_neg:
+  forall (base: radix) n,
+  n < 0 ->
+  (bpow base n <= bpow radix2 (n * Z.log2 base)%Z)%R.
+Proof.
+  intros. set (m := -n). replace n with (-m) by (unfold m; omega).
+  rewrite ! Z.mul_opp_l, ! bpow_opp. apply Rinv_le. 
+  apply bpow_gt_0.
+  apply bpow_log_pos. unfold m; omega.
+Qed.
+
+(** Overflow and underflow conditions. *)
+
+Lemma round_integer_overflow:
+  forall (base: radix) e m,
+  0 < e ->
+  emax <= e * Z.log2 base ->
+  (bpow radix2 emax <= round radix2 fexp (round_mode mode_NE) (Z2R (Zpos m) * bpow base e))%R.
+Proof.
+  intros. 
+  rewrite <- (round_generic radix2 fexp (round_mode mode_NE) (bpow radix2 emax)); auto.
+  apply round_le; auto. apply fexp_correct; auto. apply valid_rnd_round_mode. 
+  rewrite <- (Rmult_1_l (bpow radix2 emax)). apply Rmult_le_compat.
+  apply Rle_0_1.
+  apply bpow_ge_0.
+  apply (Z2R_le 1). zify; omega.
+  eapply Rle_trans. eapply bpow_le. eassumption. apply bpow_log_pos; auto.
+  apply generic_format_FLT. exists (Float radix2 1 emax).
+  split. unfold F2R; simpl. ring.
+  split. simpl. apply (Zpower_gt_1 radix2); auto.
+  simpl. unfold emin; red in prec_gt_0_; omega.
+Qed.
+
+Lemma round_NE_underflows:
+  forall x,
+  (0 <= x <= bpow radix2 (emin - 1))%R ->
+  round radix2 fexp (round_mode mode_NE) x = 0%R.
+Proof.
+  intros.
+  set (eps := bpow radix2 (emin - 1)) in *.
+  assert (A: round radix2 fexp (round_mode mode_NE) eps = 0%R).
+  { unfold round. simpl. 
+    assert (E: canonic_exp radix2 fexp eps = emin).
+    { unfold canonic_exp, eps. rewrite ln_beta_bpow. unfold fexp, FLT_exp. zify; red in prec_gt_0_; omega. }
+    unfold scaled_mantissa; rewrite E. 
+    assert (P: (eps * bpow radix2 (-emin) = / 2)%R).
+    { unfold eps. rewrite <- bpow_plus. replace (emin - 1 + -emin) with (-1) by omega. auto. }
+    rewrite P. unfold Znearest.  
+    assert (F: Zfloor (/ 2)%R = 0).
+    { apply Zfloor_imp. 
+      split. apply Rlt_le. apply Rinv_0_lt_compat. apply (Z2R_lt 0 2). omega.
+      change (Z2R (0 + 1)) with 1%R. rewrite <- Rinv_1 at 3. apply Rinv_1_lt_contravar. apply Rle_refl. apply (Z2R_lt 1 2). omega.
+    }
+    rewrite F. change (Z2R 0) with 0%R. rewrite Rminus_0_r. rewrite Rcompare_Eq by auto. 
+    simpl. unfold F2R; simpl. apply Rmult_0_l. 
+  }
+  apply Rle_antisym.
+- rewrite <- A. apply round_le. apply fexp_correct; auto. apply valid_rnd_round_mode. tauto.
+- rewrite <- (round_0 radix2 fexp (round_mode mode_NE)). 
+  apply round_le. apply fexp_correct; auto. apply valid_rnd_round_mode. tauto.
+Qed.
+
+Lemma round_integer_underflow:
+  forall (base: radix) e m,
+  e < 0 ->
+  e * Z.log2 base + Z.log2_up (Zpos m) < emin ->
+  round radix2 fexp (round_mode mode_NE) (Z2R (Zpos m) * bpow base e) = 0%R.
+Proof.
+  intros. apply round_NE_underflows. split.
+- apply Rmult_le_pos. apply (Z2R_le 0). zify; omega. apply bpow_ge_0.
+- apply Rle_trans with (bpow radix2 (Z.log2_up (Z.pos m) + e * Z.log2 base)).
++ rewrite bpow_plus. apply Rmult_le_compat. 
+  apply (Z2R_le 0); zify; omega.
+  apply bpow_ge_0.
+  rewrite <- Z2R_Zpower. apply Z2R_le.
+  destruct (Z.eq_dec (Z.pos m) 1). 
+  rewrite e0. simpl. omega.
+  apply Z.log2_up_spec. zify; omega.
+  apply Z.log2_up_nonneg. 
+  apply bpow_log_neg. auto.
++ apply bpow_le. omega. 
+Qed.
+
+(** Correctness of Bparse *)
+
+Theorem Bparse_correct:
+  forall b m e (BASE: 2 <= Zpos b),
+  let base := {| radix_val := Zpos b; radix_prop := Zle_imp_le_bool _ _ BASE |} in
+  let r := round radix2 fexp (round_mode mode_NE) (Z2R (Zpos m) * bpow base e) in
+  if Rlt_bool (Rabs r) (bpow radix2 emax) then
+     B2R _ _ (Bparse b m e) = r
+  /\ is_finite _ _ (Bparse b m e) = true
+  /\ Bsign _ _ (Bparse b m e) = false
+  else
+    B2FF _ _ (Bparse b m e) = F754_infinity false.
+Proof.
+  intros. 
+  assert (A: forall x, @F2R radix2 {| Fnum := x; Fexp := 0 |} = Z2R x).
+  { intros. unfold F2R, Fnum; simpl. ring. }
+  unfold Bparse, r. destruct e as [ | e | e].
+- (* e = Z0 *)
+  change (bpow base 0) with 1%R. rewrite Rmult_1_r. 
+  exact (BofZ_correct (Z.pos m)).
+- (* e = Zpos e *)
+  destruct (Z.ltb_spec (Z.pos e * Z.log2 (Z.pos b)) emax).
++ (* no overflow *)
+  rewrite pos_pow_spec. rewrite <- Z2R_Zpower by (zify; omega). rewrite <- Z2R_mult.
+  replace false with (Z.pos m * Z.pos b ^ Z.pos e <? 0). 
+  exact (BofZ_correct (Z.pos m * Z.pos b ^ Z.pos e)).
+  rewrite Z.ltb_ge. rewrite Zmult_comm. apply Zmult_gt_0_le_0_compat. zify; omega.  apply (Zpower_ge_0 base). 
++ (* overflow *)
+  rewrite Rlt_bool_false. auto. eapply Rle_trans; [idtac|apply Rle_abs]. 
+  apply (round_integer_overflow base). zify; omega. auto. 
+- (* e = Zneg e *)
+  destruct (Z.ltb_spec (Z.neg e * Z.log2 (Z.pos b) + Z.log2_up (Z.pos m)) emin).
++ (* undeflow *)
+  rewrite round_integer_underflow; auto.
+  rewrite Rlt_bool_true. auto.  
+  replace (Rabs 0)%R with 0%R. apply bpow_gt_0. apply (Z2R_abs 0). 
+  zify; omega.
++ (* no underflow *)
+  generalize (Bdiv_correct_aux prec emax prec_gt_0_ Hmax mode_NE false m 0 false (pos_pow b e) 0).
+  set (f := match Fdiv_core_binary prec (Z.pos m) 0 (Z.pos (pos_pow b e)) 0 with
+      | (0, _, _) => F754_nan false 1
+      | (Z.pos mz0, ez, lz) =>
+          binary_round_aux prec emax mode_NE (xorb false false) mz0 ez lz
+      | (Z.neg _, _, _) => F754_nan false 1
+      end).
+  fold emin; fold fexp. rewrite ! A. unfold cond_Zopp. rewrite pos_pow_spec. 
+  assert (B: (Z2R (Z.pos m) / Z2R (Z.pos b ^ Z.pos e) =
+              Z2R (Z.pos m) * bpow base (Z.neg e))%R).
+  { change (Z.neg e) with (- (Z.pos e)). rewrite bpow_opp. auto. }
+  rewrite B. intros [P Q]. 
+  destruct (Rlt_bool
+     (Rabs
+        (round radix2 fexp (round_mode mode_NE)
+           (Z2R (Z.pos m) * bpow base (Z.neg e))))
+    (bpow radix2 emax)).
+* destruct Q as (Q1 & Q2 & Q3). 
+  split. rewrite B2R_FF2B, Q1. auto.
+  split. rewrite is_finite_FF2B. auto. 
+  rewrite Bsign_FF2B. auto.
+* rewrite B2FF_FF2B. auto.
+Qed.
+
 End Extra_ops.
 
 (** ** Conversions between two FP formats *)

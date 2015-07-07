@@ -323,7 +323,7 @@ module Target(System: SYSTEM):TARGET =
 (* Emit .file / .loc debugging directives *)
 
     let print_file_line oc file line =
-      PrintAnnot.print_file_line oc comment file line
+      print_file_line oc comment file line
 
     let print_location oc loc =
       if loc <> Cutil.no_loc then print_file_line oc (fst loc) (snd loc)
@@ -345,12 +345,12 @@ module Target(System: SYSTEM):TARGET =
           (int_of_string (Str.matched_group 2 txt))
       end else begin
         fprintf oc "%s annotation: " comment;
-        PrintAnnot.print_annot_stmt preg "%esp" oc txt targs args
+        print_annot_stmt preg "%esp" oc txt targs args
       end
 
     let print_annot_val oc txt args res =
       fprintf oc "%s annotation: " comment;
-      PrintAnnot.print_annot_val preg oc txt args;
+      print_annot_val preg oc txt args;
       match args, res with
       | [IR src], [IR dst] ->
           if dst <> src then fprintf oc "	movl	%a, %a\n" ireg src ireg dst
@@ -871,9 +871,9 @@ module Target(System: SYSTEM):TARGET =
                 (Int32.to_int (camlint_of_coqint al)) args
           | EF_annot_val(txt, targ) ->
               print_annot_val oc (extern_atom txt) args res
-          | EF_inline_asm txt ->
-              fprintf oc "%s begin inline assembly\n" comment;
-              fprintf oc "	%s\n" (extern_atom txt);
+          | EF_inline_asm(txt, sg, clob) ->
+              fprintf oc "%s begin inline assembly\n\t" comment;
+              print_inline_asm preg oc (extern_atom txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment
           | _ ->
               assert false

@@ -1477,8 +1477,6 @@ Proof.
   intros. inv H; auto. 
 Qed.
 
-End Val.
-
 (** * Values and memory injections *)
 
 (** A memory injection [f] is a function from addresses to either [None]
@@ -1496,62 +1494,62 @@ Definition meminj : Type := block -> option (block * Z).
   as prescribed by the memory injection.  Moreover, [Vundef] values
   inject into any other value. *)
 
-Inductive val_inject (mi: meminj): val -> val -> Prop :=
-  | val_inject_int:
-      forall i, val_inject mi (Vint i) (Vint i)
-  | val_inject_long:
-      forall i, val_inject mi (Vlong i) (Vlong i)
-  | val_inject_float:
-      forall f, val_inject mi (Vfloat f) (Vfloat f)
-  | val_inject_single:
-      forall f, val_inject mi (Vsingle f) (Vsingle f)
-  | val_inject_ptr:
+Inductive inject (mi: meminj): val -> val -> Prop :=
+  | inject_int:
+      forall i, inject mi (Vint i) (Vint i)
+  | inject_long:
+      forall i, inject mi (Vlong i) (Vlong i)
+  | inject_float:
+      forall f, inject mi (Vfloat f) (Vfloat f)
+  | inject_single:
+      forall f, inject mi (Vsingle f) (Vsingle f)
+  | inject_ptr:
       forall b1 ofs1 b2 ofs2 delta,
       mi b1 = Some (b2, delta) ->
       ofs2 = Int.add ofs1 (Int.repr delta) ->
-      val_inject mi (Vptr b1 ofs1) (Vptr b2 ofs2)
+      inject mi (Vptr b1 ofs1) (Vptr b2 ofs2)
   | val_inject_undef: forall v,
-      val_inject mi Vundef v.
+      inject mi Vundef v.
 
-Hint Constructors val_inject.
+Hint Constructors inject.
 
-Inductive val_list_inject (mi: meminj): list val -> list val-> Prop:= 
-  | val_nil_inject :
-      val_list_inject mi nil nil
-  | val_cons_inject : forall v v' vl vl' , 
-      val_inject mi v v' -> val_list_inject mi vl vl'->
-      val_list_inject mi (v :: vl) (v' :: vl').  
+Inductive inject_list (mi: meminj): list val -> list val-> Prop:= 
+  | inject_list_nil :
+      inject_list mi nil nil
+  | inject_list_cons : forall v v' vl vl' , 
+      inject mi v v' -> inject_list mi vl vl'->
+      inject_list mi (v :: vl) (v' :: vl').  
 
-Hint Resolve val_nil_inject val_cons_inject.
+Hint Resolve inject_list_nil inject_list_cons.
 
 Section VAL_INJ_OPS.
 
 Variable f: meminj.
 
-Lemma val_load_result_inject:
+Lemma load_result_inject:
   forall chunk v1 v2,
-  val_inject f v1 v2 ->
-  val_inject f (Val.load_result chunk v1) (Val.load_result chunk v2).
+  inject f v1 v2 ->
+  inject f (Val.load_result chunk v1) (Val.load_result chunk v2).
 Proof.
   intros. inv H; destruct chunk; simpl; econstructor; eauto.
 Qed.
 
-Remark val_add_inject:
+Remark add_inject:
   forall v1 v1' v2 v2',
-  val_inject f v1 v1' ->
-  val_inject f v2 v2' ->
-  val_inject f (Val.add v1 v2) (Val.add v1' v2').
+  inject f v1 v1' ->
+  inject f v2 v2' ->
+  inject f (Val.add v1 v2) (Val.add v1' v2').
 Proof.
   intros. inv H; inv H0; simpl; econstructor; eauto.
   repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
   repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
 Qed.
 
-Remark val_sub_inject:
+Remark sub_inject:
   forall v1 v1' v2 v2',
-  val_inject f v1 v1' ->
-  val_inject f v2 v2' ->
-  val_inject f (Val.sub v1 v2) (Val.sub v1' v2').
+  inject f v1 v1' ->
+  inject f v2 v2' ->
+  inject f (Val.sub v1 v2) (Val.sub v1' v2').
 Proof.
   intros. inv H; inv H0; simpl; auto.
   econstructor; eauto. rewrite Int.sub_add_l. auto.
@@ -1559,10 +1557,10 @@ Proof.
   rewrite Int.sub_shifted. auto.
 Qed.
 
-Lemma val_cmp_bool_inject:
+Lemma cmp_bool_inject:
   forall c v1 v2 v1' v2' b,
-  val_inject f v1 v1' ->
-  val_inject f v2 v2' ->
+  inject f v1 v1' ->
+  inject f v2 v2' ->
   Val.cmp_bool c v1 v2 = Some b ->
   Val.cmp_bool c v1' v2' = Some b.
 Proof.
@@ -1602,10 +1600,10 @@ Hypothesis valid_different_ptrs_inj:
   b1' <> b2' \/
   Int.unsigned (Int.add ofs1 (Int.repr delta1)) <> Int.unsigned (Int.add ofs2 (Int.repr delta2)).
 
-Lemma val_cmpu_bool_inject:
+Lemma cmpu_bool_inject:
   forall c v1 v2 v1' v2' b,
-  val_inject f v1 v1' ->
-  val_inject f v2 v2' ->
+  inject f v1 v1' ->
+  inject f v2 v2' ->
   Val.cmpu_bool valid_ptr1 c v1 v2 = Some b ->
   Val.cmpu_bool valid_ptr2 c v1' v2' = Some b.
 Proof.
@@ -1644,26 +1642,30 @@ Proof.
   now erewrite !valid_ptr_inj by eauto.
 Qed.
 
-Lemma val_longofwords_inject:
+Lemma longofwords_inject:
   forall v1 v2 v1' v2',
-  val_inject f v1 v1' -> val_inject f v2 v2' -> val_inject f (Val.longofwords v1 v2) (Val.longofwords v1' v2').
+  inject f v1 v1' -> inject f v2 v2' -> inject f (Val.longofwords v1 v2) (Val.longofwords v1' v2').
 Proof.
   intros. unfold Val.longofwords. inv H; auto. inv H0; auto.
 Qed.
 
-Lemma val_loword_inject:
-  forall v v', val_inject f v v' -> val_inject f (Val.loword v) (Val.loword v').
+Lemma loword_inject:
+  forall v v', inject f v v' -> inject f (Val.loword v) (Val.loword v').
 Proof.
   intros. unfold Val.loword; inv H; auto. 
 Qed.
 
-Lemma val_hiword_inject:
-  forall v v', val_inject f v v' -> val_inject f (Val.hiword v) (Val.hiword v').
+Lemma hiword_inject:
+  forall v v', inject f v v' -> inject f (Val.hiword v) (Val.hiword v').
 Proof.
   intros. unfold Val.hiword; inv H; auto. 
 Qed.
 
 End VAL_INJ_OPS.
+
+End Val.
+
+Notation meminj := Val.meminj.
 
 (** Monotone evolution of a memory injection. *)
 
@@ -1684,33 +1686,33 @@ Qed.
 Lemma val_inject_incr:
   forall f1 f2 v v',
   inject_incr f1 f2 ->
-  val_inject f1 v v' ->
-  val_inject f2 v v'.
+  Val.inject f1 v v' ->
+  Val.inject f2 v v'.
 Proof.
   intros. inv H0; eauto.
 Qed.
 
-Lemma val_list_inject_incr:
+Lemma val_inject_list_incr:
   forall f1 f2 vl vl' ,
-  inject_incr f1 f2 -> val_list_inject f1 vl vl' ->
-  val_list_inject f2 vl vl'.
+  inject_incr f1 f2 -> Val.inject_list f1 vl vl' ->
+  Val.inject_list f2 vl vl'.
 Proof.
   induction vl; intros; inv H0. auto.
   constructor. eapply val_inject_incr; eauto. auto.
 Qed.
 
-Hint Resolve inject_incr_refl val_inject_incr val_list_inject_incr.
+Hint Resolve inject_incr_refl val_inject_incr val_inject_list_incr.
 
 Lemma val_inject_lessdef:
-  forall v1 v2, Val.lessdef v1 v2 <-> val_inject (fun b => Some(b, 0)) v1 v2.
+  forall v1 v2, Val.lessdef v1 v2 <-> Val.inject (fun b => Some(b, 0)) v1 v2.
 Proof.
   intros; split; intros.
   inv H; auto. destruct v2; econstructor; eauto. rewrite Int.add_zero; auto. 
   inv H; auto. inv H0. rewrite Int.add_zero; auto.
 Qed.
 
-Lemma val_list_inject_lessdef:
-  forall vl1 vl2, Val.lessdef_list vl1 vl2 <-> val_list_inject (fun b => Some(b, 0)) vl1 vl2.
+Lemma val_inject_list_lessdef:
+  forall vl1 vl2, Val.lessdef_list vl1 vl2 <-> Val.inject_list (fun b => Some(b, 0)) vl1 vl2.
 Proof.
   intros; split.
   induction 1; constructor; auto. apply val_inject_lessdef; auto.
@@ -1723,7 +1725,7 @@ Definition inject_id : meminj := fun b => Some(b, 0).
 
 Lemma val_inject_id:
   forall v1 v2,
-  val_inject inject_id v1 v2 <-> Val.lessdef v1 v2.
+  Val.inject inject_id v1 v2 <-> Val.lessdef v1 v2.
 Proof.
   intros; split; intros.
   inv H; auto. 
@@ -1747,8 +1749,8 @@ Definition compose_meminj (f f': meminj) : meminj :=
 
 Lemma val_inject_compose:
   forall f f' v1 v2 v3,
-  val_inject f v1 v2 -> val_inject f' v2 v3 ->
-  val_inject (compose_meminj f f') v1 v3.
+  Val.inject f v1 v2 -> Val.inject f' v2 v3 ->
+  Val.inject (compose_meminj f f') v1 v3.
 Proof.
   intros. inv H; auto; inv H0; auto. econstructor.
   unfold compose_meminj; rewrite H1; rewrite H3; eauto. 

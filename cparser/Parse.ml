@@ -21,15 +21,15 @@ let transform_program t p name =
   let run_pass pass flag p = if CharSet.mem flag t then pass p else p in
   let p1 = (run_pass StructReturn.program 's'
   (run_pass PackedStructs.program 'p'
-  (run_pass Bitfields.program 'f'
   (run_pass Unblock.program 'b'
+  (run_pass Bitfields.program 'f'
   p)))) in
   let debug = 
     if !Clflags.option_g && Configuration.advanced_debug then
       Some (CtoDwarf.program_to_dwarf p p1 name)
     else
       None in
-  (Rename.program p1),debug
+  (Rename.program p1 (Filename.chop_suffix name ".c")),debug
 
 let parse_transformations s =
   let t = ref CharSet.empty in

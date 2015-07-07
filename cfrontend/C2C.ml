@@ -114,18 +114,14 @@ let currentLocation = ref Cutil.no_loc
 
 let updateLoc l = currentLocation := l
 
-let numErrors = ref 0
-
 let error msg =
-  incr numErrors;
-  eprintf "%aError: %s\n" Cutil.printloc !currentLocation msg
+  Cerrors.error "%aError: %s" Cutil.formatloc !currentLocation msg
 
 let unsupported msg =
-  incr numErrors;
-  eprintf "%aUnsupported feature: %s\n" Cutil.printloc !currentLocation msg
+  Cerrors.error "%aUnsupported feature: %s" Cutil.formatloc !currentLocation msg
 
 let warning msg =
-  eprintf "%aWarning: %s\n" Cutil.printloc !currentLocation msg
+  Cerrors.warning "%aWarning: %s" Cutil.formatloc !currentLocation msg
 
 let string_of_errmsg msg =
   let string_of_err = function
@@ -441,10 +437,10 @@ let convertAttr a =
       let n = Cutil.alignas_attribute a in
       if n > 0 then Some (N.of_int (log2 n)) else None }
 
-let convertCallconv va attr =
+let convertCallconv va unproto attr =
   let sr =
     Cutil.find_custom_attributes ["structreturn"; "__structreturn"] attr in
-  { cc_vararg = va; cc_structret = sr <> [] }
+  { cc_vararg = va; cc_unproto = unproto; cc_structret = sr <> [] }
 
 (** Types *)
 
@@ -498,7 +494,7 @@ let rec convertTyp env t =
                 | Some tl -> convertParams env tl
                 end,
                 convertTyp env tres,
-                convertCallconv va a)
+                convertCallconv va (targs = None) a)
   | C.TNamed _ ->
       convertTyp env (Cutil.unroll env t)
   | C.TStruct(id, a) ->
@@ -576,6 +572,17 @@ let z_of_str hex str fst =
   done;
   !res
 
+
+let checkFloatOverflow f =
+  match f with
+  | Fappli_IEEE.B754_finite _ -> ()
+  | Fappli_IEEE.B754_zero _ ->
+      warning "Floating-point literal is so small that it converts to 0"
+  | Fappli_IEEE.B754_infinity _ ->
+      warning "Floating-point literal is so large that it converts to infinity"
+  | Fappli_IEEE.B754_nan _ ->
+      warning "Floating-point literal converts to Not-a-Number"
+
 let convertFloat f kind =
   let mant = z_of_str f.C.hex (f.C.intPart ^ f.C.fracPart) 0 in
   match mant with
@@ -599,9 +606,13 @@ let convertFloat f kind =
 
       begin match kind with
       | FFloat ->
-	  Ctyping.econst_single (Float32.from_parsed base mant exp)
+	  let f = Float32.from_parsed base mant exp in
+          checkFloatOverflow f;
+          Ctyping.econst_single f
       | FDouble | FLongDouble ->
-	  Ctyping.econst_float (Float.from_parsed base mant exp)
+	  let f = Float.from_parsed base mant exp in
+          checkFloatOverflow f;
+          Ctyping.econst_float f
       end
 
     | Z.Zneg _ -> assert false
@@ -616,7 +627,6 @@ let ewrap = function
       error ("retyping error: " ^  string_of_errmsg msg); ezero
 
 let rec convertExpr env e =
-  (*let ty = convertTyp env e.etyp in*)
   match e.edesc with
   | C.EVar _
   | C.EUnop((C.Oderef|C.Odot _|C.Oarrow _), _)
@@ -724,9 +734,8 @@ let rec convertExpr env e =
       ewrap (Ctyping.eseqor (convertExpr env e1) (convertExpr env e2))
 
   | C.EConditional(e1, e2, e3) ->
-      ewrap (Ctyping.econdition' (convertExpr env e1)
-                                     (convertExpr env e2) (convertExpr env e3)
-                                     (convertTyp env e.etyp))
+      ewrap (Ctyping.econdition (convertExpr env e1)
+                                (convertExpr env e2) (convertExpr env e3))
   | C.ECast(ty1, e1) ->
       ewrap (Ctyping.ecast (convertTyp env ty1) (convertExpr env e1))
   | C.ECompound(ty1, ie) ->
@@ -788,7 +797,8 @@ let rec convertExpr env e =
       let targs = convertTypArgs env [] args
       and tres = convertTyp env e.etyp in
       let sg =
-        signature_of_type targs tres {cc_vararg = true; cc_structret = false} in
+        signature_of_type targs tres
+           {cc_vararg = true; cc_unproto = false; cc_structret = false} in
       Ebuiltin(EF_external(intern_string "printf", sg), 
                targs, convertExprList env args, tres)
  
@@ -831,6 +841,30 @@ and convertExprList env el =
   | [] -> Enil
   | e1 :: el' -> Econs(convertExpr env e1, convertExprList env el')
 
+(* Extended assembly *)
+
+let convertAsm loc env txt outputs inputs clobber =
+  let (txt', output', inputs') = 
+    ExtendedAsm.transf_asm loc env txt outputs inputs clobber in
+  let clobber' =
+    List.map (fun s -> coqstring_of_camlstring (String.uppercase s)) clobber in
+  let ty_res =
+    match output' with None -> TVoid [] | Some e -> e.etyp in
+  (* Build the Ebuiltin expression *)
+  let e = 
+    let tinputs = convertTypArgs env [] inputs' in
+    let toutput = convertTyp env ty_res in
+    Ebuiltin(EF_inline_asm(intern_string txt', 
+                           signature_of_type tinputs toutput cc_default,
+                           clobber'),
+             tinputs,
+             convertExprList env inputs',
+             convertTyp env ty_res) in
+  (* Add an assignment to the output, if any *)
+  match output' with
+  | None -> e
+  | Some lhs -> Eassign (convertLvalue env lhs, e, typeof e)
+
 (* Separate the cases of a switch statement body *)
 
 type switchlabel =
@@ -864,6 +898,28 @@ let rec groupSwitch = function
       let (fst, cases) = groupSwitch rem in
       (Cutil.sseq s.sloc s fst, cases)
 
+(* Test whether the statement contains case and give an *)
+let rec contains_case s = 
+  match s.sdesc with
+  | C.Sskip 
+  | C.Sdo _ 
+  | C.Sbreak
+  | C.Scontinue 
+  | C.Sswitch _ (* Stop at a switch *)
+  | C.Sgoto _ 
+  | C.Sreturn _ 
+  | C.Sdecl _ 
+  | C.Sasm _ ->  ()
+  | C.Sseq (s1,s2)
+  | C.Sif(_,s1,s2) -> contains_case s1; contains_case s2
+  | C.Swhile (_,s1)
+  | C.Sdowhile (s1,_) -> contains_case s1
+  | C.Sfor (s1,e,s2,s3) ->  contains_case s1; contains_case s2; contains_case s3
+  | C.Slabeled(C.Scase _, _) ->
+      unsupported "'case' outside of 'switch'"
+  | C.Slabeled(_,s) -> contains_case s
+  | C.Sblock b -> List.iter contains_case b
+
 (** Annotations for line numbers *)
 
 let add_lineno prev_loc this_loc s =
@@ -891,7 +947,9 @@ let rec convertStmt ploc env s =
   | C.Sdo e ->
       add_lineno ploc s.sloc (swrap (Ctyping.sdo (convertExpr env e)))
   | C.Sseq(s1, s2) ->
-      Ssequence(convertStmt ploc env s1, convertStmt s1.sloc env s2)
+      let s1' = convertStmt ploc env s1 in
+      let s2' = convertStmt s1.sloc env s2 in
+      Ssequence(s1', s2')
   | C.Sif(e, s1, s2) ->
       let te = convertExpr env e in
       add_lineno ploc s.sloc 
@@ -918,7 +976,10 @@ let rec convertStmt ploc env s =
   | C.Sswitch(e, s1) ->
       let (init, cases) = groupSwitch (flattenSwitch s1) in
       if init.sdesc <> C.Sskip then
-        warning "ignored code at beginning of 'switch'";
+        begin
+          warning "ignored code at beginning of 'switch'";
+          contains_case init
+        end;
       let te = convertExpr env e in
       add_lineno ploc s.sloc
         (swrap (Ctyping.sswitch te
@@ -940,11 +1001,11 @@ let rec convertStmt ploc env s =
       unsupported "nested blocks"; Sskip
   | C.Sdecl _ ->
       unsupported "inner declarations"; Sskip
-  | C.Sasm txt ->
+  | C.Sasm(attrs, txt, outputs, inputs, clobber) ->
       if not !Clflags.option_finline_asm then
         unsupported "inline 'asm' statement (consider adding option -finline-asm)";
       add_lineno ploc s.sloc
-        (Sdo (Ebuiltin (EF_inline_asm (intern_string txt), Tnil, Enil, Tvoid)))
+        (Sdo (convertAsm s.sloc env txt outputs inputs clobber))
 
 and convertSwitch ploc env is_64 = function
   | [] ->
@@ -997,11 +1058,12 @@ let convertFundef loc env fd =
       a_access = Sections.Access_default;
       a_inline = fd.fd_inline && not fd.fd_vararg;  (* PR#15 *)
       a_loc = loc };
-  (id', Gfun(Internal {fn_return = ret;
-                       fn_callconv = convertCallconv fd.fd_vararg fd.fd_attrib;
-                       fn_params = params;
-                       fn_vars = vars;
-                       fn_body = body'}))
+  (id', Gfun(Internal
+          {fn_return = ret;
+           fn_callconv = convertCallconv fd.fd_vararg false fd.fd_attrib;
+           fn_params = params;
+           fn_vars = vars;
+           fn_body = body'}))
 
 (** External function declaration *)
 
@@ -1211,7 +1273,7 @@ let public_globals gl =
 (** Convert a [C.program] into a [Csyntax.program] *)
 
 let convertProgram p =
-  numErrors := 0;
+  Cerrors.reset();
   stringNum := 0;
   Hashtbl.clear decl_atom;
   Hashtbl.clear stringTable;
@@ -1236,9 +1298,7 @@ let convertProgram p =
             prog_main = intern_string "main";
             prog_types = typs;
             prog_comp_env = ce } in
-        if !numErrors > 0
-        then None
-        else Some p'
+        if Cerrors.check_errors () then None else Some p'
   with Env.Error msg ->
     error (Env.error_message msg); None
 

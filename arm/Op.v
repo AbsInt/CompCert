@@ -808,40 +808,40 @@ Hypothesis valid_different_pointers_inj:
 
 Ltac InvInject :=
   match goal with
-  | [ H: val_inject _ (Vint _) _ |- _ ] =>
+  | [ H: Val.inject _ (Vint _) _ |- _ ] =>
       inv H; InvInject
-  | [ H: val_inject _ (Vfloat _) _ |- _ ] =>
+  | [ H: Val.inject _ (Vfloat _) _ |- _ ] =>
       inv H; InvInject
-  | [ H: val_inject _ (Vsingle _) _ |- _ ] =>
+  | [ H: Val.inject _ (Vsingle _) _ |- _ ] =>
       inv H; InvInject
-  | [ H: val_inject _ (Vptr _ _) _ |- _ ] =>
+  | [ H: Val.inject _ (Vptr _ _) _ |- _ ] =>
       inv H; InvInject
-  | [ H: val_list_inject _ nil _ |- _ ] =>
+  | [ H: Val.inject_list _ nil _ |- _ ] =>
       inv H; InvInject
-  | [ H: val_list_inject _ (_ :: _) _ |- _ ] =>
+  | [ H: Val.inject_list _ (_ :: _) _ |- _ ] =>
       inv H; InvInject
   | _ => idtac
   end.
 
 Remark eval_shift_inj:
-  forall s v v', val_inject f v v' -> val_inject f (eval_shift s v) (eval_shift s v').
+  forall s v v', Val.inject f v v' -> Val.inject f (eval_shift s v) (eval_shift s v').
 Proof.
   intros. inv H; destruct s; simpl; auto; rewrite s_range; auto. 
 Qed.
 
 Lemma eval_condition_inj:
   forall cond vl1 vl2 b,
-  val_list_inject f vl1 vl2 ->
+  Val.inject_list f vl1 vl2 ->
   eval_condition cond vl1 m1 = Some b ->
   eval_condition cond vl2 m2 = Some b.
 Proof.
   intros. destruct cond; simpl in H0; FuncInv; InvInject; simpl.
-  eauto 4 using val_cmp_bool_inject.
-  eauto 4 using val_cmpu_bool_inject, Mem.valid_pointer_implies.
-  eauto using val_cmp_bool_inject, eval_shift_inj.
-  eauto 4 using val_cmpu_bool_inject, Mem.valid_pointer_implies, eval_shift_inj.
-  eauto 4 using val_cmp_bool_inject.
-  eauto 4 using val_cmpu_bool_inject, Mem.valid_pointer_implies.
+  eauto 4 using Val.cmp_bool_inject.
+  eauto 4 using Val.cmpu_bool_inject, Mem.valid_pointer_implies.
+  eauto using Val.cmp_bool_inject, eval_shift_inj.
+  eauto 4 using Val.cmpu_bool_inject, Mem.valid_pointer_implies, eval_shift_inj.
+  eauto 4 using Val.cmp_bool_inject.
+  eauto 4 using Val.cmpu_bool_inject, Mem.valid_pointer_implies.
   inv H3; inv H2; simpl in H0; inv H0; auto.
   inv H3; inv H2; simpl in H0; inv H0; auto.
   inv H3; simpl in H0; inv H0; auto.
@@ -854,7 +854,7 @@ Qed.
 
 Ltac TrivialExists :=
   match goal with
-  | [ |- exists v2, Some ?v1 = Some v2 /\ val_inject _ _ v2 ] =>
+  | [ |- exists v2, Some ?v1 = Some v2 /\ Val.inject _ _ v2 ] =>
       exists v1; split; auto
   | _ => idtac
   end.
@@ -863,28 +863,28 @@ Lemma eval_operation_inj:
   forall op sp1 vl1 sp2 vl2 v1,
   (forall id ofs,
       In id (globals_operation op) ->
-      val_inject f (Genv.symbol_address ge1 id ofs) (Genv.symbol_address ge2 id ofs)) ->
-  val_inject f sp1 sp2 ->
-  val_list_inject f vl1 vl2 ->
+      Val.inject f (Genv.symbol_address ge1 id ofs) (Genv.symbol_address ge2 id ofs)) ->
+  Val.inject f sp1 sp2 ->
+  Val.inject_list f vl1 vl2 ->
   eval_operation ge1 sp1 op vl1 m1 = Some v1 ->
-  exists v2, eval_operation ge2 sp2 op vl2 m2 = Some v2 /\ val_inject f v1 v2.
+  exists v2, eval_operation ge2 sp2 op vl2 m2 = Some v2 /\ Val.inject f v1 v2.
 Proof.
   intros until v1; intros GL; intros. destruct op; simpl in H1; simpl; FuncInv; InvInject; TrivialExists.
   apply GL; simpl; auto.
-  apply Values.val_add_inject; auto.
+  apply Values.Val.add_inject; auto.
   inv H4; simpl; auto.
   inv H4; simpl; auto.
-  apply Values.val_add_inject; auto.
-  apply Values.val_add_inject; auto. apply eval_shift_inj; auto.
-  apply Values.val_add_inject; auto.
+  apply Values.Val.add_inject; auto.
+  apply Values.Val.add_inject; auto. apply eval_shift_inj; auto.
+  apply Values.Val.add_inject; auto.
 
-  apply Values.val_sub_inject; auto.
-  apply Values.val_sub_inject; auto. apply eval_shift_inj; auto.
-  apply Values.val_sub_inject; auto. apply eval_shift_inj; auto.
-  apply (@Values.val_sub_inject f (Vint i) (Vint i) v v'); auto.
+  apply Values.Val.sub_inject; auto.
+  apply Values.Val.sub_inject; auto. apply eval_shift_inj; auto.
+  apply Values.Val.sub_inject; auto. apply eval_shift_inj; auto.
+  apply (@Values.Val.sub_inject f (Vint i) (Vint i) v v'); auto.
 
   inv H4; inv H2; simpl; auto.
-  apply Values.val_add_inject; auto. inv H4; inv H2; simpl; auto.
+  apply Values.Val.add_inject; auto. inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.
   inv H4; inv H3; simpl in H1; inv H1. simpl. 
@@ -958,17 +958,17 @@ Lemma eval_addressing_inj:
   forall addr sp1 vl1 sp2 vl2 v1,
   (forall id ofs,
       In id (globals_addressing addr) ->
-      val_inject f (Genv.symbol_address ge1 id ofs) (Genv.symbol_address ge2 id ofs)) ->
-  val_inject f sp1 sp2 ->
-  val_list_inject f vl1 vl2 ->
+      Val.inject f (Genv.symbol_address ge1 id ofs) (Genv.symbol_address ge2 id ofs)) ->
+  Val.inject f sp1 sp2 ->
+  Val.inject_list f vl1 vl2 ->
   eval_addressing ge1 sp1 addr vl1 = Some v1 ->
-  exists v2, eval_addressing ge2 sp2 addr vl2 = Some v2 /\ val_inject f v1 v2.
+  exists v2, eval_addressing ge2 sp2 addr vl2 = Some v2 /\ Val.inject f v1 v2.
 Proof.
   intros. destruct addr; simpl in H2; simpl; FuncInv; InvInject; TrivialExists.
-  apply Values.val_add_inject; auto.
-  apply Values.val_add_inject; auto.
-  apply Values.val_add_inject; auto. apply eval_shift_inj; auto.
-  apply Values.val_add_inject; auto.
+  apply Values.Val.add_inject; auto.
+  apply Values.Val.add_inject; auto.
+  apply Values.Val.add_inject; auto. apply eval_shift_inj; auto.
+  apply Values.Val.add_inject; auto.
 Qed.
 
 End EVAL_COMPAT.
@@ -1034,7 +1034,7 @@ Proof.
   apply weak_valid_pointer_extends; auto.
   apply weak_valid_pointer_no_overflow_extends.
   apply valid_different_pointers_extends; auto.
-  rewrite <- val_list_inject_lessdef. eauto. auto.
+  rewrite <- val_inject_list_lessdef. eauto. auto.
 Qed.
 
 Lemma eval_operation_lessdef:
@@ -1044,10 +1044,10 @@ Lemma eval_operation_lessdef:
   eval_operation genv sp op vl1 m1 = Some v1 ->
   exists v2, eval_operation genv sp op vl2 m2 = Some v2 /\ Val.lessdef v1 v2.
 Proof.
-  intros. rewrite val_list_inject_lessdef in H.
+  intros. rewrite val_inject_list_lessdef in H.
   assert (exists v2 : val,
           eval_operation genv sp op vl2 m2 = Some v2
-          /\ val_inject (fun b => Some(b, 0)) v1 v2).
+          /\ Val.inject (fun b => Some(b, 0)) v1 v2).
   eapply eval_operation_inj with (m1 := m1) (sp1 := sp).
   apply valid_pointer_extends; auto.
   apply weak_valid_pointer_extends; auto.
@@ -1065,10 +1065,10 @@ Lemma eval_addressing_lessdef:
   eval_addressing genv sp addr vl1 = Some v1 ->
   exists v2, eval_addressing genv sp addr vl2 = Some v2 /\ Val.lessdef v1 v2.
 Proof.
-  intros. rewrite val_list_inject_lessdef in H.
+  intros. rewrite val_inject_list_lessdef in H.
   assert (exists v2 : val,
           eval_addressing genv sp addr vl2 = Some v2
-          /\ val_inject (fun b => Some(b, 0)) v1 v2).
+          /\ Val.inject (fun b => Some(b, 0)) v1 v2).
   eapply eval_addressing_inj with (sp1 := sp).
   intros. rewrite <- val_inject_lessdef; auto. 
   rewrite <- val_inject_lessdef; auto. 
@@ -1092,7 +1092,7 @@ Variable delta: Z.
 Hypothesis sp_inj: f sp1 = Some(sp2, delta).
 
 Remark symbol_address_inject:
-  forall id ofs, val_inject f (Genv.symbol_address genv id ofs) (Genv.symbol_address genv id ofs).
+  forall id ofs, Val.inject f (Genv.symbol_address genv id ofs) (Genv.symbol_address genv id ofs).
 Proof.
   intros. unfold Genv.symbol_address. destruct (Genv.find_symbol genv id) eqn:?; auto.
   exploit (proj1 globals); eauto. intros. 
@@ -1101,7 +1101,7 @@ Qed.
 
 Lemma eval_condition_inject:
   forall cond vl1 vl2 b m1 m2,
-  val_list_inject f vl1 vl2 ->
+  Val.inject_list f vl1 vl2 ->
   Mem.inject f m1 m2 ->
   eval_condition cond vl1 m1 = Some b ->
   eval_condition cond vl2 m2 = Some b.
@@ -1115,11 +1115,11 @@ Qed.
 
 Lemma eval_addressing_inject:
   forall addr vl1 vl2 v1,
-  val_list_inject f vl1 vl2 ->
+  Val.inject_list f vl1 vl2 ->
   eval_addressing genv (Vptr sp1 Int.zero) addr vl1 = Some v1 ->
   exists v2, 
      eval_addressing genv (Vptr sp2 Int.zero) (shift_stack_addressing (Int.repr delta) addr) vl2 = Some v2
-  /\ val_inject f v1 v2.
+  /\ Val.inject f v1 v2.
 Proof.
   intros. 
   rewrite eval_shift_stack_addressing. simpl.
@@ -1129,12 +1129,12 @@ Qed.
 
 Lemma eval_operation_inject:
   forall op vl1 vl2 v1 m1 m2,
-  val_list_inject f vl1 vl2 ->
+  Val.inject_list f vl1 vl2 ->
   Mem.inject f m1 m2 ->
   eval_operation genv (Vptr sp1 Int.zero) op vl1 m1 = Some v1 ->
   exists v2,
      eval_operation genv (Vptr sp2 Int.zero) (shift_stack_operation (Int.repr delta) op) vl2 m2 = Some v2
-  /\ val_inject f v1 v2.
+  /\ Val.inject f v1 v2.
 Proof.
   intros. 
   rewrite eval_shift_stack_operation. simpl.

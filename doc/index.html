@@ -24,7 +24,7 @@ a:active {color : Red; text-decoration : underline; }
 
 <H1 align="center">The CompCert verified compiler</H1>
 <H2 align="center">Commented Coq development</H2>
-<H3 align="center">Version 2.3, 2015-05-05</H3>
+<H3 align="center">Version 2.5, 2015-06-12</H3>
 
 <H2>Introduction</H2>
 
@@ -63,7 +63,8 @@ written.</P>
 <A HREF="http://compcert.inria.fr/">the CompCert Web site</A>.</P>
 
 <P>This document and the CompCert sources are
-copyright 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014 Institut
+copyright 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015
+Institut
 National de Recherche en Informatique et en Automatique (INRIA) and
 distributed under the terms of the
 following <A HREF="LICENSE">license</A>.
@@ -115,7 +116,8 @@ semantics.
 <LI> The CompCert C source language:
 <A HREF="html/Csyntax.html">syntax</A> and
 <A HREF="html/Csem.html">semantics</A> and
-<A HREF="html/Cstrategy.html">determinized semantics</A>.<BR>
+<A HREF="html/Cstrategy.html">determinized semantics</A> and
+<A HREF="html/Ctyping.html">type system</A>.<BR>
 See also: <A HREF="html/Ctypes.html">type expressions</A> and
 <A HREF="html/Cop.html">operators (syntax and semantics)</A> and
 <A HREF="html/Cexec.html">reference interpreter</A>.
@@ -245,10 +247,17 @@ code.
 </TR>
 
 <TR valign="top">
-  <TD>Dead code elimination</TD>
+  <TD>Redundancy elimination</TD>
   <TD>RTL to RTL</TD>
   <TD><A HREF="html/Deadcode.html">Deadcode</A></TD>
   <TD><A HREF="html/Deadcodeproof.html">Deadcodeproof</A></TD>
+</TR>
+
+<TR valign="top">
+  <TD>Removal of unused static globals</TD>
+  <TD>RTL to RTL</TD>
+  <TD><A HREF="html/Unusedglob.html">Unusedglob</A></TD>
+  <TD><A HREF="html/Unusedglobproof.html">Unusedglobproof</A></TD>
 </TR>
 
 <TR valign="top">
@@ -315,9 +324,9 @@ See also: <A HREF="html/NeedOp.html"><I>NeedOp</I></A>: processor-dependent part
 
 <H3>Type systems</H3>
 
-Simple type systems are used to statically capture well-formedness
-conditions on some intermediate languages.
+The type system of CompCert C is fully formalized.  For some intermediate languages of the back-end, simpler type systems are used to statically capture well-formedness conditions.
 <UL>
+<LI> <A HREF="html/Ctyping.html">RTLtyping</A>: typing for CompCert C + type-checking functions.
 <LI> <A HREF="html/RTLtyping.html">RTLtyping</A>: typing for RTL + type
 reconstruction.
 <LI> <A HREF="html/Lineartyping.html">Lineartyping</A>: typing for Linear.

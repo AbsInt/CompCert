@@ -270,6 +270,11 @@ let elab_constant loc = function
   | CONST_STRING(wide, s) ->
       elab_string_literal loc wide s
 
+let elab_simple_string loc wide chars =
+  match elab_string_literal loc wide chars with
+  | CStr s -> s
+  | _ -> error loc "wide character string not allowed here"; ""
+
 
 (** * Elaboration of type expressions, type specifiers, name declarations *)
 
@@ -359,6 +364,14 @@ let typespec_rank = function (* Don't change this *)
   | _ -> 11 (* There should be at most one of the others *)
 
 let typespec_order t1 t2 = compare (typespec_rank t1) (typespec_rank t2)
+
+(* Is a specifier an anonymous struct/union in the sense of ISO C2011? *)
+
+let is_anonymous_composite spec =
+  List.exists
+    (function SpecType(Tstruct_union(_, None, Some _, _)) -> true
+            | _ -> false)
+    spec
 
 (* Elaboration of a type specifier.  Returns 5-tuple:
      (storage class, "inline" flag, "typedef" flag, elaborated type, new env)
@@ -498,13 +511,16 @@ and elab_cvspec env = function
   | CV_RESTRICT -> [ARestrict]
   | CV_ATTR attr -> elab_attribute env attr
 
+and elab_cvspecs env cv_specs =
+  List.fold_left add_attributes [] (List.map (elab_cvspec env) cv_specs)
+
 (* Elaboration of a type declarator.  C99 section 6.7.5. *)
 
 and elab_type_declarator loc env ty = function
   | Cabs.JUSTBASE ->
       (ty, env)
   | Cabs.ARRAY(d, cv_specs, sz) ->
-      let a = List.fold_left add_attributes [] (List.map (elab_cvspec env) cv_specs) in
+      let a = elab_cvspecs env cv_specs in
       let sz' =
         match sz with
         | None ->
@@ -520,7 +536,7 @@ and elab_type_declarator loc env ty = function
                 Some 1L in (* produces better error messages later *)
        elab_type_declarator loc env (TArray(ty, sz', a)) d
   | Cabs.PTR(cv_specs, d) ->
-      let a = List.fold_left add_attributes [] (List.map (elab_cvspec env) cv_specs) in
+      let a = elab_cvspecs env cv_specs in
       elab_type_declarator loc env (TPtr(ty, a)) d
   | Cabs.PROTO(d, (params, vararg)) ->
        begin match unroll env ty with
@@ -609,6 +625,7 @@ and elab_init_name_group loc env (spec, namelist) =
 (* Elaboration of a field group *)
 
 and elab_field_group env (Field_group (spec, fieldlist, loc)) =
+
   let fieldlist = List.map (
     function
       | (None, x) -> (Name ("", JUSTBASE, [], cabslu), x)
@@ -621,6 +638,11 @@ and elab_field_group env (Field_group (spec, fieldlist, loc)) =
 
   if sto <> Storage_default then
     error loc "non-default storage in struct or union";
+  if fieldlist = [] then
+    if is_anonymous_composite spec then
+       warning loc "ISO C99 does not support anonymous structs/unions"
+    else
+       warning loc "declaration does not declare any members";
 
   let elab_bitfield (Name (_, _, _, loc), optbitsize) (id, ty) =
     let optbitsize' =
@@ -756,7 +778,9 @@ and elab_enum_item env ((s, exp), loc) nextval =
               "value of enumerator '%s' is not a compile-time constant" s;
             (nextval, Some exp') in
   if redef Env.lookup_ident env s then
-    error loc "redefinition of enumerator '%s'" s;
+    error loc "redefinition of identifier '%s'" s;
+  if redef Env.lookup_typedef env s then
+    error loc "redefinition of typedef '%s' as different kind of symbol" s;
   if not (int_representable v (8 * sizeof_ikind enum_ikind) (is_signed_ikind enum_ikind)) then
      warning loc "the value of '%s' is not representable with type %a"
                  s Cprint.typ (TInt(enum_ikind, []));
@@ -1398,6 +1422,23 @@ let elab_expr loc env a =
       let b1 = elab a1 in
       if not (is_lvalue b1 || is_function_type env b1.etyp) then
         err "argument of '&' is not an l-value";
+      begin match b1.edesc with
+      | EVar id ->
+          begin match wrap Env.find_ident loc env id with
+          | Env.II_ident(Storage_register, _) ->
+              err "address of register variable '%s' requested" id.name
+          | _ -> ()
+          end
+      | EUnop(Odot f, b2) ->
+          let fld = wrap2 field_of_dot_access loc env b2.etyp f in
+          if fld.fld_bitfield <> None then
+            err "address of bit-field '%s' requested" f
+      | EUnop(Oarrow f, b2) ->
+          let fld = wrap2 field_of_arrow_access loc env b2.etyp f in
+          if fld.fld_bitfield <> None then
+            err "address of bit-field '%s' requested" f
+      | _ -> ()
+      end;
       { edesc = EUnop(Oaddrof, b1); etyp = TPtr(b1.etyp, []) }
 
   | UNARY(MEMOF, a1) ->
@@ -1745,11 +1786,15 @@ let enter_typedefs loc env sto dl =
       error loc "initializer in typedef";
     if redef Env.lookup_typedef env s then
       error loc "redefinition of typedef '%s'" s;
+    if redef Env.lookup_ident env s then
+      error loc "redefinition of identifier '%s' as different kind of symbol" s;
     let (id, env') = Env.enter_typedef env s ty in
     emit_elab loc (Gtypedef(id, ty));
     env') env dl
 
 let enter_or_refine_ident local loc env s sto ty =
+  if redef Env.lookup_typedef env s then
+    error loc "redefinition of typedef '%s' as different kind of symbol" s;
   match previous_def Env.lookup_ident env s with
   | Some(id, II_ident(old_sto, old_ty))
     when sto = Storage_extern || Env.in_current_scope env id ->
@@ -1762,15 +1807,24 @@ let enter_or_refine_ident local loc env s sto ty =
         | None ->
             warning loc "redefinition of '%s' with incompatible type" s; ty in
       let new_sto =
-        if old_sto = Storage_extern then sto else
-        if sto = Storage_extern then old_sto else
-        if old_sto = sto then sto else begin
-          warning loc "redefinition of '%s' with incompatible storage class" s;
-          sto
-        end in
+	(* The only case not allowed is removing static *)
+	match old_sto,sto with
+	| Storage_static,Storage_static
+	| Storage_extern,Storage_extern
+	| Storage_register,Storage_register
+	| Storage_default,Storage_default -> sto
+	| _,Storage_static ->
+	   error loc "static redefinition of '%s' after non-static definition" s; sto
+	| Storage_static,_ -> Storage_static (* Static stays static *)
+	| Storage_extern,_ -> sto
+        | Storage_default,Storage_extern -> Storage_extern
+	| _,Storage_extern -> old_sto
+	| _,Storage_register
+	| Storage_register,_ -> Storage_register
+      in
       (id, new_sto, Env.add_ident env id new_sto new_ty)
   | Some(id, II_enum v) when Env.in_current_scope env id ->
-      error loc "illegal redefinition of enumerator '%s'" s;
+      error loc "redefinition of enumerator '%s'" s;
       (id, sto, Env.add_ident env id sto ty)
   | _ ->
       let (id, env') = Env.enter_ident env s sto ty in (id, sto, env')
@@ -1815,7 +1869,7 @@ let enter_decdefs local loc env sto dl =
 let elab_fundef env spec name body loc =
   let (s, sto, inline, ty, env1) = elab_name env spec name in
   if sto = Storage_register then
-    error loc "a function definition cannot have 'register' storage class";
+    fatal_error loc "a function definition cannot have 'register' storage class";
   (* Fix up the type.  We can have params = None but only for an
      old-style parameterless function "int f() {...}" *)
   let ty =
@@ -1932,6 +1986,13 @@ and elab_definitions local env = function
       let (decl1, env1) = elab_definition local env d1 in
       let (decl2, env2) = elab_definitions local env1 dl in
       (decl1 @ decl2, env2)
+
+(* Extended asm *)
+
+let elab_asm_operand loc env (ASMOPERAND(label, wide, chars, e)) =
+  let s = elab_simple_string loc wide chars in
+  let e' = elab_expr loc env e in
+  (label, s, e')
 
 
 (* Contexts for elaborating statements *)
@@ -2118,14 +2179,14 @@ let rec elab_stmt env ctx s =
       { sdesc = Sskip; sloc = elab_loc loc }
 
 (* Traditional extensions *)
-  | ASM(wide, chars, loc) ->
-      begin match elab_string_literal loc wide chars with
-      | CStr s ->
-          { sdesc = Sasm s; sloc = elab_loc loc }
-      | _ ->
-          error loc "wide strings not supported in asm statement";
-          sskip
-      end
+  | ASM(cv_specs, wide, chars, outputs, inputs, flags, loc) ->
+      let a = elab_cvspecs env cv_specs in
+      let s = elab_simple_string loc wide chars in
+      let outputs = List.map (elab_asm_operand loc env) outputs in
+      let inputs = List.map (elab_asm_operand loc env) inputs in
+      let flags = List.map (fun (w,c) -> elab_simple_string loc w c) flags in
+      { sdesc = Sasm(a, s, outputs, inputs, flags);
+        sloc = elab_loc loc }
 
 (* Unsupported *)
   | DEFINITION def ->

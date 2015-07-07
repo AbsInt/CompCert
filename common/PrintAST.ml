@@ -53,7 +53,7 @@ let name_of_external = function
       sprintf "memcpy size %s align %s " (Z.to_string sz) (Z.to_string al)
   | EF_annot(text, targs) -> sprintf "annot %S" (extern_atom text)
   | EF_annot_val(text, targ) ->  sprintf "annot_val %S" (extern_atom text)
-  | EF_inline_asm text -> sprintf "inline_asm %S" (extern_atom text)
+  | EF_inline_asm(text, sg, clob) -> sprintf "inline_asm %S" (extern_atom text)
 
 let rec print_annot_arg px oc = function
   | AA_base x -> px oc x

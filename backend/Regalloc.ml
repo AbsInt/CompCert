@@ -510,6 +510,9 @@ let add_interfs_live g live v =
 let add_interfs_list g v vl =
   List.iter (IRC.add_interf g v) vl
 
+let add_interfs_list_mreg g vl mr =
+  List.iter (fun v -> IRC.add_interf g v (L (R mr))) vl
+
 let rec add_interfs_pairwise g = function
   | [] -> ()
   | v1 :: vl -> add_interfs_list g v1 vl; add_interfs_pairwise g vl
@@ -578,7 +581,18 @@ let add_interfs_instr g instr live =
       add_interfs_pairwise g res;
       add_interfs_destroyed g across (destroyed_by_builtin ef);
       begin match ef, args, res with
-      | EF_annot_val _, [arg], [res] -> IRC.add_pref g arg res (* like a move *)
+      | EF_annot_val _, [arg], [res] ->
+          (* like a move *)
+          IRC.add_pref g arg res
+      | EF_inline_asm(txt, sg, clob), _, _ ->
+          (* clobbered regs interfere with res and args for GCC compatibility *)
+          List.iter (fun c ->
+            match Machregs.register_by_name c with
+            | None -> ()
+            | Some mr ->
+                add_interfs_list_mreg g args mr;
+                if sg.sig_res <> None then add_interfs_list_mreg g res mr)
+            clob          
       | _ -> ()
       end
   | Xannot(ef, args) ->

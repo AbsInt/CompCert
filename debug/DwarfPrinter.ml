@@ -62,6 +62,11 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
 
     let add_low_pc = add_abbr_entry (0x11,low_pc_type_abbr)
 
+    let add_fun_pc sp buf =
+      match get_fun_addr sp.subprogram_name with
+      | None ->()
+      | Some (a,b) -> add_high_pc buf; add_low_pc buf
+
     let add_declaration = add_abbr_entry (0x3c,declaration_type_abbr)
 
     let add_location loc buf =
@@ -112,7 +117,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           add_attr_some e.enumeration_file_loc add_file_loc;
           add_byte_size buf;
           add_attr_some e.enumeration_declaration add_declaration;
-          add_name buf
+          add_attr_some e.enumeration_name add_name
       | DW_TAG_enumerator e ->
           prologue 0x28;
           add_attr_some e.enumerator_file_loc add_file_loc;
@@ -146,7 +151,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           | Some (DataLocBlock __) -> add_abbr_entry (0x38,data_location_block_type_abbr) buf
           | Some (DataLocRef _) -> add_abbr_entry (0x38,data_location_ref_type_abbr) buf);
           add_attr_some e.member_declaration add_declaration;
-          add_name buf;
+          add_attr_some e.member_name add_name;
           add_type buf
       | DW_TAG_pointer_type _ ->
           prologue 0xf;
@@ -156,7 +161,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           add_attr_some e.structure_file_loc add_file_loc;
           add_attr_some e.structure_byte_size add_byte_size;
           add_attr_some e.structure_declaration add_declaration;
-          add_name buf
+          add_attr_some e.structure_name add_name
       | DW_TAG_subprogram e ->
           prologue 0x2e;
           add_attr_some e.subprogram_file_loc add_file_loc;
@@ -187,7 +192,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           add_attr_some e.union_file_loc add_file_loc;
           add_attr_some e.union_byte_size add_byte_size;
           add_attr_some e.union_declaration add_declaration;
-          add_name buf
+          add_attr_some e.union_name add_name
       | DW_TAG_unspecified_parameter e ->
           prologue 0x18;
           add_attr_some e.unspecified_parameter_file_loc add_file_loc;
@@ -328,12 +333,13 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       print_string oc bt.base_type_name
 
     let print_compilation_unit oc tag =
+      let prod_name = sprintf "AbsInt Angewandte Informatik GmbH:CompCert Version %s:%s" Version.version Configuration.arch in
       print_string oc (Sys.getcwd ());
       print_addr oc (get_start_addr ());
       print_addr oc (get_end_addr ());
       print_uleb128 oc 1;
       print_string oc tag.compile_unit_name;
-      print_string oc ("CompCert "^Configuration.version);
+      print_string oc prod_name;
       print_addr oc (get_stmt_list_addr ())
 
     let print_const_type oc ct =
@@ -343,7 +349,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       print_file_loc oc et.enumeration_file_loc;
       print_uleb128 oc et.enumeration_byte_size;
       print_opt_value oc et.enumeration_declaration print_flag;
-      print_string oc et.enumeration_name
+      print_opt_value oc et.enumeration_name print_string
 
     let print_enumerator oc en =
       print_file_loc oc en.enumerator_file_loc;
@@ -374,7 +380,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       print_opt_value oc mb.member_bit_size print_byte;
       print_opt_value oc mb.member_data_member_location print_data_location;
       print_opt_value oc mb.member_declaration print_flag;
-      print_string oc mb.member_name;
+      print_opt_value oc mb.member_name print_string;
       print_ref oc mb.member_type
 
     let print_pointer oc pt =
@@ -384,15 +390,18 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       print_file_loc oc st.structure_file_loc;
       print_opt_value oc st.structure_byte_size print_uleb128;
       print_opt_value oc st.structure_declaration print_flag;
-      print_string oc st.structure_name
+      print_opt_value oc st.structure_name print_string
 
+    let print_subprogram_addr oc (s,e) =
+      fprintf oc "	.4byte		%a\n" label s;
+      fprintf oc "	.4byte		%a\n" label e
+     
     let print_subprogram oc sp =
-      let s,e = get_fun_addr sp.subprogram_name in
+      let addr = get_fun_addr sp.subprogram_name  in
       print_file_loc oc sp.subprogram_file_loc;
       print_opt_value oc sp.subprogram_external print_flag;
       print_opt_value oc sp.subprogram_frame_base print_loc;
-      fprintf oc "	.4byte		%a\n" label s;
-      fprintf oc "	.4byte		%a\n" label e;
+      print_opt_value oc addr print_subprogram_addr;
       print_string oc sp.subprogram_name;
       print_flag oc sp.subprogram_prototyped;
       print_opt_value oc sp.subprogram_type print_ref
@@ -414,7 +423,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       print_file_loc oc ut.union_file_loc;
       print_opt_value oc ut.union_byte_size print_uleb128;
       print_opt_value oc ut.union_declaration print_flag;
-      print_string oc ut.union_name
+      print_opt_value oc ut.union_name print_string
 
     let print_unspecified_parameter oc up =
       print_file_loc oc up.unspecified_parameter_file_loc;
