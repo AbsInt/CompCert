@@ -170,6 +170,10 @@ let ppc_32_bigendian =
                    bitfields_msb_first = true;
                    supports_unaligned_accesses = true }
 
+let ppc_32_diab_bigendian =
+  { ppc_32_bigendian with sizeof_wchar = 2; wchar_signed = false }
+
+
 let arm_littleendian =
   { ilp32ll64 with name = "arm" }
 

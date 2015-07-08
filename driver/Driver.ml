@@ -661,7 +661,9 @@ let _ =
     Printexc.record_backtrace true;
     Machine.config :=
       begin match Configuration.arch with
-      | "powerpc" -> Machine.ppc_32_bigendian
+      | "powerpc" -> if Configuration.system = "linux"
+                     then Machine.ppc_32_bigendian
+                     else Machine.ppc_32_diab_bigendian
       | "arm"     -> Machine.arm_littleendian
       | "ia32"    -> if Configuration.abi = "macosx"
                      then Machine.x86_32_macosx
