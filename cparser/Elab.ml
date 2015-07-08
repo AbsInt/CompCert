@@ -1805,7 +1805,12 @@ let enter_or_refine_ident local loc env s sto ty =
         | Some new_ty ->
             new_ty
         | None ->
-            warning loc "redefinition of '%s' with incompatible type" s; ty in
+            error loc
+               "redefinition of '%s' with incompatible type.@ \
+                Previous type: %a.@ \
+                New type: %a"
+              s Cprint.typ old_ty Cprint.typ ty;
+            ty in
       let new_sto =
 	(* The only case not allowed is removing static *)
 	match old_sto,sto with
