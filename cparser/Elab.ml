@@ -1899,6 +1899,18 @@ let elab_fundef env spec name body loc =
   emit_elab loc (Gdecl(Storage_static, func_id, func_ty, Some func_init));
   (* Elaborate function body *)
   let body' = !elab_funbody_f ty_ret env3 body in
+  (* Special treatment of the "main" function *)
+  let body'' =
+    if s = "main" then begin
+      match unroll env ty_ret with
+      | TInt(IInt, []) ->
+          (* Add implicit "return 0;" at end of function body *)
+          sseq no_loc body'
+            {sdesc = Sreturn(Some(intconst 0L IInt)); sloc = no_loc}
+      | _ ->
+          warning loc "return type of 'main' should be 'int'";
+          body'
+    end else body' in
   (* Build and emit function definition *)
   let fn =
     { fd_storage = sto1;
@@ -1909,7 +1921,7 @@ let elab_fundef env spec name body loc =
       fd_params = params;
       fd_vararg = vararg;
       fd_locals = [];
-      fd_body = body' } in
+      fd_body = body'' } in
   emit_elab loc (Gfundef fn);
   env1
 
