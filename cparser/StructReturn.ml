@@ -299,10 +299,15 @@ let rec transf_expr env ctx e =
       transf_call env ctx None fn args e.etyp
 
 (* Function calls returning a composite by reference: add first argument.
-    ctx = Effects:   lv = f(...)     -> f(&lv, ...)      [copy optimization]
+    ctx = Effects:   lv = f(...)     -> f(&newtemp, ...), lv = newtemp
                      f(...)          -> f(&newtemp, ...)
     ctx = Val:       lv = f(...)     -> f(&newtemp, ...), lv = newtemp
                      f(...)          -> f(&newtemp, ...), newtemp
+
+   We used to do a copy optimization:
+     ctx = Effects:   lv = f(...)     -> f(&lv, ...)
+   but it is not correct in case of overlap (see test/regression/struct12.c) 
+
    Function calls returning a composite by value:
     ctx = Effects:   lv = f(...)     -> newtemp = f(...), lv = newtemp
                      f(...)          -> f(...)
@@ -332,13 +337,14 @@ and transf_call env ctx opt_lhs fn args ty =
           | Effects, None ->
               let tmp = new_temp ~name:"_res" ty in
               {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
-          | Effects, Some lhs ->
-              {edesc = ECall(fn', eaddrof lhs :: args'); etyp = TVoid []}
+          (* Copy optimization, turned off as explained above *)
+       (* | Effects, Some lhs ->
+              {edesc = ECall(fn', eaddrof lhs :: args'); etyp = TVoid []} *)
           | Val, None ->
               let tmp = new_temp ~name:"_res" ty in
               ecomma {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
                      tmp
-          | Val, Some lhs ->
+          | _, Some lhs ->
               let tmp = new_temp ~name:"_res" ty in
               ecomma {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
                      (eassign lhs tmp)
