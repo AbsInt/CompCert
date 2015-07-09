@@ -1827,12 +1827,12 @@ let enter_or_refine_ident local loc env s sto ty =
 	| _,Storage_register
 	| Storage_register,_ -> Storage_register
       in
-      (id, new_sto, Env.add_ident env id new_sto new_ty)
+      (id, new_sto, Env.add_ident env id new_sto new_ty,new_ty)
   | Some(id, II_enum v) when Env.in_current_scope env id ->
       error loc "redefinition of enumerator '%s'" s;
-      (id, sto, Env.add_ident env id sto ty)
+      (id, sto, Env.add_ident env id sto ty,ty)
   | _ ->
-      let (id, env') = Env.enter_ident env s sto ty in (id, sto, env')
+      let (id, env') = Env.enter_ident env s sto ty in (id, sto, env',ty)
 
 let enter_decdefs local loc env sto dl =
   (* Sanity checks on storage class *)
@@ -1850,7 +1850,7 @@ let enter_decdefs local loc env sto dl =
     let sto1 = if local && isfun then Storage_extern else sto in
     (* enter ident in environment with declared type, because
        initializer can refer to the ident *)
-    let (id, sto', env1) = enter_or_refine_ident local loc env s sto1 ty in
+    let (id, sto', env1,ty) = enter_or_refine_ident local loc env s sto1 ty in
     (* process the initializer *)
     let (ty', init') = elab_initializer loc env1 s ty init in
     (* update environment with refined type *)
@@ -1887,14 +1887,14 @@ let elab_fundef env spec name body loc =
     | TFun(ty_ret, Some params, vararg, attr) -> (ty_ret, params, vararg, attr)
     | _ -> fatal_error loc "wrong type for function definition" in
   (* Enter function in the environment, for recursive references *)
-  let (fun_id, sto1, env1) = enter_or_refine_ident false loc env s sto ty in
+  let (fun_id, sto1, env1,ty) = enter_or_refine_ident false loc env s sto ty in
   (* Enter parameters in the environment *)
   let env2 =
     List.fold_left (fun e (id, ty) -> Env.add_ident e id Storage_default ty)
                    (Env.new_scope env1) params in
   (* Define "__func__" and enter it in the environment *)
   let (func_ty, func_init) = __func__type_and_init s in
-  let (func_id, _, env3) =
+  let (func_id, _, env3,func_ty) =
     enter_or_refine_ident true loc env2 "__func__" Storage_static func_ty in
   emit_elab loc (Gdecl(Storage_static, func_id, func_ty, Some func_init));
   (* Elaborate function body *)
