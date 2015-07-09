@@ -1887,7 +1887,7 @@ let elab_fundef env spec name body loc =
     | TFun(ty_ret, Some params, vararg, attr) -> (ty_ret, params, vararg, attr)
     | _ -> fatal_error loc "wrong type for function definition" in
   (* Enter function in the environment, for recursive references *)
-  let (fun_id, sto1, env1,ty) = enter_or_refine_ident false loc env s sto ty in
+  let (fun_id, sto1, env1,ty) = enter_or_refine_ident false loc env1 s sto ty in
   (* Enter parameters in the environment *)
   let env2 =
     List.fold_left (fun e (id, ty) -> Env.add_ident e id Storage_default ty)
