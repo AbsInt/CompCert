@@ -45,13 +45,19 @@ typedef __builtin_va_list __gnuc_va_list;
 
 #ifdef _STDARG_H
 
+#ifdef __DCC__
 #ifndef _VA_LIST_T
+#define _VA_LIST_T
+#endif
+#ifndef __VA_LIST
+#define __VA_LIST
+typedef __builtin_va_list va_list;
+#endif
+#else
+#ifndef _VA_LIST_T 
 #define _VA_LIST_T
 typedef __builtin_va_list va_list;
 #endif
-
-#ifndef __VA_LIST
-#define __VA_LIST
 #endif
 
 #define va_start(v,l) __builtin_va_start(v,l)
