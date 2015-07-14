@@ -62,6 +62,7 @@ val x86_64 : t
 val win32 : t
 val win64 : t
 val ppc_32_bigendian : t
+val ppc_32_diab_bigendian : t
 val arm_littleendian : t
 
 val gcc_extensions : t -> t

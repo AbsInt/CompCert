@@ -313,7 +313,7 @@ let expand_builtin_inline name args res =
   | "__builtin_mulhwu", [IR a1; IR a2], [IR res] ->
       emit (Pmulhwu(res, a1, a2))
   | "__builtin_clz", [IR a1], [IR res] ->
-      emit (Pcntlz(res, a1))
+      emit (Pcntlzw(res, a1))
   | ("__builtin_bswap" | "__builtin_bswap32"), [IR a1], [IR res] ->
       emit (Pstwu(a1, Cint _m8, GPR1));
       emit (Pcfi_adjust _8);
@@ -397,11 +397,12 @@ let expand_builtin_inline name args res =
 
 (* Calls to variadic functions: condition bit 6 must be set
    if at least one argument is a float; clear otherwise.
-   Note that variadic functions cannot have arguments of type Tsingle. *)
+   For compatibility with other compilers, do the same if the called
+   function is unprototyped. *)
 
 let set_cr6 sg =
-  if sg.sig_cc.cc_vararg then begin
-    if List.mem Tfloat sg.sig_args
+  if sg.sig_cc.cc_vararg || sg.sig_cc.cc_unproto then begin
+    if List.exists (function Tfloat | Tsingle -> true | _ -> false) sg.sig_args
     then emit (Pcreqv(CRbit_6, CRbit_6, CRbit_6))
     else emit (Pcrxor(CRbit_6, CRbit_6, CRbit_6))
   end

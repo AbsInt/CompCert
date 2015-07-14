@@ -145,7 +145,7 @@ let parse_c_file sourcename ifile =
 
 (* Dump Asm code in binary format for the validator *)
 
-let sdump_magic_number = "CompCertSDUMP" ^ Configuration.version
+let sdump_magic_number = "CompCertSDUMP" ^ Version.version
 
 let dump_asm asm destfile =
   let oc = open_out_bin destfile in
@@ -154,6 +154,15 @@ let dump_asm asm destfile =
   output_value oc Camlcoq.string_of_atom;
   output_value oc C2C.decl_atom;
   close_out oc
+
+let jdump_magic_number = "CompCertJDUMP" ^ Version.version
+
+let dump_jasm asm destfile =
+  let oc = open_out_bin destfile in
+  fprintf oc "{\n\"Version\":\"%s\",\n\"Asm Ast\":%a}"
+    jdump_magic_number AsmToJSON.p_program asm;
+  close_out oc
+
 
 (* From CompCert C AST to asm *)
 
@@ -176,9 +185,12 @@ let compile_c_ast sourcename csyntax ofile debug =
     | Errors.Error msg ->
         print_error stderr msg;
         exit 2 in
-  (* Dump Asm in binary format *)
+  (* Dump Asm in binary and JSON format *)  
   if !option_sdump then
-    dump_asm asm (output_filename sourcename ".c" ".sdump");
+    begin
+      dump_asm asm (output_filename sourcename ".c" ".sdump");
+      dump_jasm asm (output_filename sourcename ".c" ".json")
+    end;
   (* Print Asm in text form *)
   let oc = open_out ofile in
   PrintAsm.print_program oc asm debug;
@@ -387,7 +399,10 @@ let explode_comma_option s =
   | hd :: tl -> tl
 
 let version_string =
-  "The CompCert C verified compiler, version "^ Configuration.version ^ "\n"
+  if Version.buildnr <> "" && Version.tag <> "" then
+    sprintf "The CompCert verified compiler, %s, Build: %s, Tag: %s\n" Version.version Version.buildnr Version.tag
+  else
+    "The CompCert C verified compiler, version "^ Version.version ^ "\n"
 
 let usage_string =
   version_string ^
@@ -426,6 +441,7 @@ Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fnone         Turn off all language support options above
 Debugging options:
   -g             Generate debugging information
+  -frename-static Rename static functions and declarations
 Optimization options: (use -fno-<opt> to turn off -f<opt>)
   -O             Optimize the compiled code [on by default]
   -O0            Do not optimize the compiled code
@@ -528,6 +544,7 @@ let cmdline_actions =
   Exact "-fnone", Self (fun _ -> unset_all language_support_options);
 (* Debugging options *)
   Exact "-g", Self (fun s -> option_g := true);
+  Exact "-frename-static", Self (fun s -> option_rename_static:= true);
 (* Code generation options -- more below *)
   Exact "-O0", Self (fun _ -> unset_all optimization_options);
   Exact "-O", Self (fun _ -> set_all optimization_options);
@@ -644,7 +661,9 @@ let _ =
     Printexc.record_backtrace true;
     Machine.config :=
       begin match Configuration.arch with
-      | "powerpc" -> Machine.ppc_32_bigendian
+      | "powerpc" -> if Configuration.system = "linux"
+                     then Machine.ppc_32_bigendian
+                     else Machine.ppc_32_diab_bigendian
       | "arm"     -> Machine.arm_littleendian
       | "ia32"    -> if Configuration.abi = "macosx"
                      then Machine.x86_32_macosx

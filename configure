@@ -113,7 +113,7 @@ case "$target" in
     struct_return="int1-8"
     system="diab"
     cc="${toolprefix}dcc"
-    cprepro="${toolprefix}dcc -E"
+    cprepro="${toolprefix}dcc -E -D__GNUC__"
     casm="${toolprefix}das"
     asm_supports_cfi=false
     clinker="${toolprefix}dcc"

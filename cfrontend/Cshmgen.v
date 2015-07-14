@@ -260,7 +260,7 @@ Definition make_sub (ce: composite_env) (e1: expr) (ty1: type) (e2: expr) (ty2: 
       OK (Ebinop Osub e1 (Ebinop Omul n e2))
   | sub_case_pp ty =>
       let n := make_intconst (Int.repr (Ctypes.sizeof ce ty)) in
-      OK (Ebinop Odivu (Ebinop Osub e1 e2) n)
+      OK (Ebinop Odiv (Ebinop Osub e1 e2) n)
   | sub_case_pl ty =>
       let n := make_intconst (Int.repr (Ctypes.sizeof ce ty)) in
       OK (Ebinop Osub e1 (Ebinop Omul n (Eunop Ointoflong e2)))

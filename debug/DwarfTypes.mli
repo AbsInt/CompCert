@@ -80,7 +80,7 @@ type dw_tag_enumeration_type =
      enumeration_file_loc:    file_loc  option;
      enumeration_byte_size:   constant;
      enumeration_declaration: flag      option;
-     enumeration_name:        string;
+     enumeration_name:        string    option;
    }
 
 type dw_tag_enumerator =
@@ -121,7 +121,7 @@ type dw_tag_member =
      member_bit_size:             constant            option;
      member_data_member_location: data_location_value option;
      member_declaration:          flag                option;
-     member_name:                 string;
+     member_name:                 string              option;
      member_type:                 reference;
    }
 
@@ -135,7 +135,7 @@ type dw_tag_structure_type =
      structure_file_loc:    file_loc option;
      structure_byte_size:   constant option;
      structure_declaration: flag     option;
-     structure_name:        string;
+     structure_name:        string   option;
    }
 
 type dw_tag_subprogram =
@@ -172,7 +172,7 @@ type dw_tag_union_type =
      union_file_loc:    file_loc option;
      union_byte_size:   constant option;
      union_declaration: flag     option;
-     union_name:        string;
+     union_name:        string   option;
    }
 
 type dw_tag_unspecified_parameter =
@@ -268,5 +268,5 @@ module type DWARF_TARGET=
     val get_end_addr: unit -> int
     val get_stmt_list_addr: unit -> int    
     val name_of_section: section_name -> string
-    val get_fun_addr: string -> int * int
+    val get_fun_addr: string -> (int * int) option
   end

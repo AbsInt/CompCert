@@ -31,7 +31,8 @@ type bitfield_info =
     bf_pos: int;        (* start bit *)
     bf_size: int;       (* size in bit *)
     bf_signed: bool;    (* is field signed or unsigned? *)
-    bf_signed_res: bool (* is result of extracting field signed or unsigned? *)
+    bf_signed_res: bool; (* is result of extracting field signed or unsigned? *)
+    bf_bool: bool       (* does field have type _Bool? *)
   }
 
 (* invariants:
@@ -100,7 +101,13 @@ let pack_bitfields env sid ml =
               match unroll env (type_of_member env m) with
               | TInt(ik, _) -> is_signed_ikind ik
               | _ -> assert false (* should never happen, checked in Elab *) in
-            pack ((m.fld_name, pos, n, signed, signed2) :: accu) (pos + n) ms
+            let is_bool =
+              match unroll env m.fld_typ with
+              | TInt(IBool, _) -> true
+              | _ -> false in
+
+            pack ((m.fld_name, pos, n, signed, signed2, is_bool) :: accu)
+                 (pos + n) ms
           end
   in pack [] 0 ml
 
@@ -121,7 +128,7 @@ let rec transf_members env id count = function
           let carrier_typ = TInt(carrier_ikind, []) in
           (* Enter each field with its bit position, size, signedness *)
           List.iter
-            (fun (name, pos, sz, signed, signed2) ->
+            (fun (name, pos, sz, signed, signed2, is_bool) ->
               if name <> "" then begin
                 let pos' =
                   if !config.bitfields_msb_first
@@ -131,7 +138,8 @@ let rec transf_members env id count = function
                   (id, name)
                   {bf_carrier = carrier; bf_carrier_typ = carrier_typ;
                    bf_pos = pos'; bf_size = sz;
-                   bf_signed = signed; bf_signed_res = signed2}
+                   bf_signed = signed; bf_signed_res = signed2;
+                   bf_bool = is_bool}
               end)
             bitfields;
           { fld_name = carrier; fld_typ = carrier_typ; fld_bitfield = None}
@@ -208,13 +216,16 @@ unsigned int bitfield_insert(unsigned int x, int ofs, int sz, unsigned int y)
   return (x & ~mask) | ((y << ofs) & mask);
 }
 
+If the bitfield is of type _Bool, the new value (y above) must be converted
+to _Bool to normalize it to 0 or 1.
 *)
 
 let bitfield_assign env bf carrier newval =
   let msk = insertion_mask bf in
   let notmsk = {edesc = EUnop(Onot, msk); etyp = msk.etyp} in
   let newval_casted =
-    ecast (TInt(IUInt,[])) newval in
+    ecast (TInt(IUInt,[]))
+          (if bf.bf_bool then ecast (TInt(IBool,[])) newval else newval) in
   let newval_shifted =
     eshift env Oshl newval_casted (intconst (Int64.of_int bf.bf_pos) IUInt) in
   let newval_masked = ebinint env Oand newval_shifted msk
@@ -230,17 +241,22 @@ unsigned int bitfield_init(int ofs, int sz, unsigned int y)
   unsigned int mask = (1U << sz) - 1;
   return (y & mask) << ofs;
 }
+
+If the bitfield is of type _Bool, the new value (y above) must be converted
+to _Bool to normalize it to 0 or 1.
 *)
 
 let bitfield_initializer bf i =
   match i with
   | Init_single e ->
       let m = Int64.pred (Int64.shift_left 1L bf.bf_size) in
+      let e_cast =
+        if bf.bf_bool then ecast (TInt(IBool,[])) e else e in
       let e_mask =
         {edesc = EConst(CInt(m, IUInt, sprintf "0x%LXU" m));
          etyp = TInt(IUInt, [])} in
       let e_and =
-        {edesc = EBinop(Oand, e, e_mask, TInt(IUInt,[]));
+        {edesc = EBinop(Oand, e_cast, e_mask, TInt(IUInt,[]));
          etyp = TInt(IUInt,[])} in
       {edesc = EBinop(Oshl, e_and, intconst (Int64.of_int bf.bf_pos) IInt,
                       TInt(IUInt, []));

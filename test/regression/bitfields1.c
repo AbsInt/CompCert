@@ -7,7 +7,7 @@ struct s {
 
 struct t {
   unsigned int c: 16;
-  unsigned int d: 1;
+  _Bool d: 1;
   short e: 8;
 };
 
@@ -29,7 +29,7 @@ int main()
   y.c = 12345;
   y.d = 0;
   y.e = 89;
-  res = f(&x, &y, 1);
+  res = f(&x, &y, 2);
 
   printf("x = {a = %d, b = %d }\n", x.a, x.b);
   printf("y = {c = %d, d = %d, e = %d }\n", y.c, y.d, y.e);

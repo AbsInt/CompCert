@@ -1,6 +1,13 @@
 /* Fun with builtins */
 
 #include <stdio.h>
+#include <math.h>
+
+char * check_relative_error(double exact, double actual, double precision)
+{
+  double relative_error = (actual - exact) / exact;
+  return fabs(relative_error) <= precision ? "OK" : "ERROR";
+}
 
 int main(int argc, char ** argv)
 {
@@ -22,8 +29,10 @@ int main(int argc, char ** argv)
   printf("fabs(%f) = %f\n", a, __builtin_fabs(a));
   printf("fabs(%f) = %f\n", -a, __builtin_fabs(-a));
   printf("fsqrt(%f) = %f\n", a, __builtin_fsqrt(a));
-  printf("frsqrte(%f) = %f\n", a, __builtin_frsqrte(a));
-  printf("fres(%f) = %f\n", a, __builtin_fres(a));
+  printf("frsqrte(%f) = %s\n",
+         a, check_relative_error(1.0 / sqrt(a), __builtin_frsqrte(a), 1./32.));
+  printf("fres(%f) = %s\n",
+         a, check_relative_error(1.0 / a, __builtin_fres(a), 1./256.));
   printf("fsel(%f, %f, %f) = %f\n", a, b, c, __builtin_fsel(a, b, c));
   printf("fsel(%f, %f, %f) = %f\n", -a, b, c, __builtin_fsel(-a, b, c));
   printf("fcti(%f) = %d\n", a, __builtin_fcti(a));
