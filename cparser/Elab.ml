@@ -1884,7 +1884,10 @@ let elab_fundef env spec name body loc =
   (* Extract info from type *)
   let (ty_ret, params, vararg, attr) =
     match ty with
-    | TFun(ty_ret, Some params, vararg, attr) -> (ty_ret, params, vararg, attr)
+    | TFun(ty_ret, Some params, vararg, attr) -> 
+         if wrap incomplete_type loc env1 ty_ret && not (is_void_type env ty_ret) then
+           fatal_error loc "return type is an incomplete type";
+        (ty_ret, params, vararg, attr)
     | _ -> fatal_error loc "wrong type for function definition" in
   (* Enter function in the environment, for recursive references *)
   let (fun_id, sto1, env1,ty) = enter_or_refine_ident false loc env1 s sto ty in
