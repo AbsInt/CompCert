@@ -539,6 +539,12 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           fprintf oc "	ldrb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
       | Pldrh(r1, r2, sa) ->
           fprintf oc "	ldrh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
+      | Pldr_p(r1, r2, sa)  ->
+          fprintf oc "	ldr	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa; 1
+      | Pldrb_p(r1, r2, sa) ->
+          fprintf oc "	ldrb	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa; 1
+      | Pldrh_p(r1, r2, sa) ->
+          fprintf oc "	ldrh	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa; 1
       | Pldrsb(r1, r2, sa) ->
           fprintf oc "	ldrsb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
       | Pldrsh(r1, r2, sa) ->
@@ -591,6 +597,17 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           fprintf oc "	strb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
       | Pstrh(r1, r2, sa) ->
           fprintf oc "	strh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
+      | Pstr_p(r1, r2, sa) ->
+          fprintf oc "	str	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa;
+          begin match r1, r2, sa with
+          | IR14, IR13, SOimm n -> cfi_rel_offset oc "lr" (camlint_of_coqint n)
+          | _ -> ()
+          end;
+          1
+      | Pstrb_p(r1, r2, sa) ->
+          fprintf oc "	strb	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa; 1
+      | Pstrh_p(r1, r2, sa) ->
+          fprintf oc "	strh	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa; 1
       | Psdiv ->
           if Opt.hardware_idiv then begin
             fprintf oc "	sdiv	r0, r0, r1\n"; 1

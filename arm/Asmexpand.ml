@@ -91,22 +91,22 @@ let expand_annot_val txt targ args res =
 let expand_builtin_memcpy_small sz al src dst =
   let rec copy ofs sz  =
     if sz >= 8 && al >= 4 && !Clflags.option_ffpu then begin
-	emit (Pfldd (FR7,src,ofs));
-	emit (Pfstd (FR7,dst,ofs));
-	copy (Int.add ofs _8) (sz - 8)
-      end else if sz >= 4 && al >= 4 then begin
-	emit (Pldr (IR14,src,SOimm ofs));
-	emit (Pstr (IR14,dst,SOimm ofs));
-	copy (Int.add ofs _4) (sz - 4)
-      end else if sz >= 2 && al >= 2 then begin
-	emit (Pldrh (IR14,src,SOimm ofs));
-	emit (Pstrh (IR14,dst,SOimm ofs));
-	copy (Int.add ofs _2) (sz - 2)
-      end else if sz >= 1 then begin
-	emit (Pldrb (IR14,src,SOimm ofs));
-	emit (Pstrb (IR14,dst,SOimm ofs));
-	copy (Int.add ofs _1) (sz - 1)
-      end else
+      emit (Pfldd (FR7,src,ofs));
+      emit (Pfstd (FR7,dst,ofs));
+      copy (Int.add ofs _8) (sz - 8)
+    end else if sz >= 4 && al >= 4 then begin
+      emit (Pldr (IR14,src,SOimm ofs));
+      emit (Pstr (IR14,dst,SOimm ofs));
+      copy (Int.add ofs _4) (sz - 4)
+    end else if sz >= 2 && al >= 2 then begin
+      emit (Pldrh (IR14,src,SOimm ofs));
+      emit (Pstrh (IR14,dst,SOimm ofs));
+      copy (Int.add ofs _2) (sz - 2)
+    end else if sz >= 1 then begin
+      emit (Pldrb (IR14,src,SOimm ofs));
+      emit (Pstrb (IR14,dst,SOimm ofs));
+      copy (Int.add ofs _1) (sz - 1)
+    end else
       () in
   copy _0 sz
 
@@ -116,9 +116,9 @@ let expand_builtin_memcpy_big sz al src dst =
   assert (src = IR2);
   assert (dst = IR3);
   let (load, store, chunksize) =
-    if al >= 4 then (Pldr (IR12,src,SOimm _4), Pstr (IR12,dst,SOimm _4) , 4)
-    else if al = 2 then (Pldrh (IR12,src,SOimm _2), Pstrh (IR12,dst,SOimm _2), 2)
-    else (Pldrb (IR12,src,SOimm _1), Pstrb (IR12,dst,SOimm _1), 1) in
+    if al >= 4 then (Pldr_p (IR12,src,SOimm _4), Pstr_p (IR12,dst,SOimm _4) , 4)
+    else if al = 2 then (Pldrh_p (IR12,src,SOimm _2), Pstrh_p (IR12,dst,SOimm _2), 2)
+    else (Pldrb_p (IR12,src,SOimm _1), Pstrb_p (IR12,dst,SOimm _1), 1) in
   expand_movimm IR14 (coqint_of_camlint (Int32.of_int (sz / chunksize)));
   let lbl = new_label () in
   emit (Plabel lbl);
@@ -239,14 +239,17 @@ let expand_builtin_inline name args res =
      emit (Pfsqrt (res,a1))
   (* 64-bit integer arithmetic *)
   | "__builtin_negl", [IR ah;IR al], [IR rh; IR rl] ->
-     emit (Prsbs (rl,al,SOimm _0));
-     if !Clflags.option_mthumb then begin
-	 emit (Pmvn (rh,SOreg ah));
-	 emit (Padc (rh,rh,SOimm _0))
-       end else
-       begin
-	 emit (Prsc (rh,ah,SOimm _0))
-       end
+      expand_int64_arith (rl = ah ) rl (fun rl ->
+        emit (Prsbs (rl,al,SOimm _0));
+        (* No "rsc" instruction in Thumb2.  Emulate based on
+           rsc a, b, #0 == a <- AddWithCarry(~b, 0, carry)
+           == mvn a, b; adc a, a, #0 *)
+        if !Clflags.option_mthumb then begin
+	  emit (Pmvn (rh,SOreg ah));
+	  emit (Padc (rh,rh,SOimm _0))
+        end else begin
+	  emit (Prsc (rh,ah,SOimm _0))
+        end)
   | "__builtin_addl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
      expand_int64_arith (rl = ah || rl = bh) rl
 			(fun rl ->

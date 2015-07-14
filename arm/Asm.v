@@ -1,3 +1,4 @@
+
 (* *********************************************************************)
 (*                                                                     *)
 (*              The Compcert verified compiler                         *)
@@ -206,23 +207,30 @@ Inductive instruction : Type :=
   | Pbtbl: ireg -> list label -> instruction       (**r N-way branch through a jump table *)
   | Pbuiltin: external_function -> list preg -> list preg -> instruction  (**r built-in function *)
   | Pannot: external_function -> list (annot_arg preg) -> instruction (**r annotation statement *)
-  | Padc: ireg -> ireg -> shift_op -> instruction   (**r add with carry *)
-  | Pcfi_adjust: int -> instruction                 (**r .cfi_adjust debug directive *)
-  | Pclz: preg -> preg -> instruction               (**r count leading zeros. *)
-  | Pfsqrt: freg -> freg -> instruction             (**r floating-point square root. *)
-  | Prev: preg -> preg -> instruction               (**r reverse bytes and reverse bits. *)
-  | Prev16: preg -> preg -> instruction             (**r reverse bytes and reverse bits. *)
-  | Prsc: ireg -> ireg -> shift_op -> instruction (**r reverse subtract without carry. *)
-  | Psbc: ireg -> ireg -> shift_op -> instruction   (**r add with carry *)
+  | Padc: ireg -> ireg -> shift_op -> instruction     (**r add with carry *)
+  | Pcfi_adjust: int -> instruction                   (**r .cfi_adjust debug directive *)
+  | Pclz: preg -> preg -> instruction                 (**r count leading zeros. *)
+  | Pfsqrt: freg -> freg -> instruction               (**r floating-point square root. *)
+  | Prev: preg -> preg -> instruction                 (**r reverse bytes and reverse bits. *)
+  | Prev16: preg -> preg -> instruction               (**r reverse bytes and reverse bits. *)
+  | Prsc: ireg -> ireg -> shift_op -> instruction     (**r reverse subtract without carry. *)
+  | Psbc: ireg -> ireg -> shift_op -> instruction     (**r add with carry *)
   (* Add, sub, rsb versions with s suffix *)
-  | Padds: ireg -> ireg -> shift_op -> instruction  (**r integer addition with update of condition flags *)
-  | Psubs: ireg -> ireg -> shift_op -> instruction  (**r integer subtraction with update of condition flags *)
-  | Prsbs: ireg -> ireg -> shift_op -> instruction  (**r integer reverse subtraction with update of condition flags *)
-  | Pdmb: instruction                               (**r data memory barrier *)
-  | Pdsb: instruction                               (**r data synchronization barrier *)
-  | Pisb: instruction                               (**r instruction synchronization barrier *)
-  | Pbne: label -> instruction.                     (**r branch if negative macro *)
-
+  | Padds: ireg -> ireg -> shift_op -> instruction    (**r integer addition with update of condition flags *)
+  | Psubs: ireg -> ireg -> shift_op -> instruction    (**r integer subtraction with update of condition flags *)
+  | Prsbs: ireg -> ireg -> shift_op -> instruction    (**r integer reverse subtraction with update of condition flags *)
+  | Pdmb: instruction                                 (**r data memory barrier *)
+  | Pdsb: instruction                                 (**r data synchronization barrier *)
+  | Pisb: instruction                                 (**r instruction synchronization barrier *)
+  | Pbne: label -> instruction                        (**r branch if negative macro *)
+  | Pldr_p: ireg -> ireg -> shift_op -> instruction   (**r int32 load with post increment *)
+  | Pldrb_p: ireg -> ireg -> shift_op -> instruction  (**r unsigned int8 load with post increment *)
+  | Pldrh_p: ireg -> ireg -> shift_op -> instruction  (**r unsigned int16 load with post increment *)
+  | Pstr_p: ireg -> ireg -> shift_op -> instruction   (**r int32 store with post increment *)
+  | Pstrb_p: ireg -> ireg -> shift_op -> instruction  (**r unsigned int8 store with post increment *)
+  | Pstrh_p: ireg -> ireg -> shift_op -> instruction. (**r unsigned int16 store with post increment *)
+ 
+ 
 
 (** The pseudo-instructions are the following:
 
@@ -758,7 +766,13 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pdmb
   | Pdsb
   | Pisb
-  | Pbne _ =>
+  | Pbne _
+  | Pldr_p _ _ _
+  | Pldrb_p _ _ _
+  | Pldrh_p _ _ _
+  | Pstr_p _ _ _
+  | Pstrb_p _ _ _
+  | Pstrh_p _ _ _ =>
     Stuck
   end.
 
