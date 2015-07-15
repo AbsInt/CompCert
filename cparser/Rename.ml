@@ -48,6 +48,7 @@ let enter_static env id file =
     let id' = StringMap.find id.name env.re_public in
     { env with re_id = IdentMap.add id id' env.re_id }
   with Not_found ->
+    let file = String.map (fun a -> match a with 'a'..'z' | 'A'..'Z' | '0'..'9' -> a | _ -> '_') file in
     let id' = {id with name = Printf.sprintf "_%s_%s" file id.name} in 
     { re_id = IdentMap.add id id' env.re_id;
       re_public = env.re_public;
