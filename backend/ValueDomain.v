@@ -1899,21 +1899,26 @@ Proof.
   intros. unfold floatofwords, ftop; inv H; simpl; auto with va; inv H0; auto with va.
 Qed.
 
+(** In [longofwords] and [loword], we add a tolerance for casts between
+    pointers and 64-bit integers. *)
+
 Definition longofwords (x y: aval) :=
-  match x, y with
-  | I i, I j => L(Int64.ofwords i j)
+  match y, x with
+  | I j, I i => L(Int64.ofwords i j)
+  | (Ptr p | Ifptr p), _ => Ifptr (if va_strict tt then Pbot else p)
   | _, _     => ltop
   end.
 
 Lemma longofwords_sound:
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.longofwords v w) (longofwords x y).
 Proof.
-  intros. unfold longofwords, ltop; inv H; simpl; auto with va; inv H0; auto with va.
+  intros. unfold longofwords, ltop; inv H0; inv H; simpl; auto with va.
 Qed.
 
 Definition loword (x: aval) :=
   match x with
   | L i => I(Int64.loword i)
+  | Ptr p | Ifptr p => Ifptr (if va_strict tt then Pbot else p)
   | _   => itop
   end.
 
@@ -2255,6 +2260,7 @@ Definition vnormalize (chunk: memory_chunk) (v: aval) :=
   | Mint16unsigned, _ => Uns 16
   | Mint32, (I _ | Ptr _ | Ifptr _) => v
   | Mint64, L _ => v
+  | Mint64, (Ptr p | Ifptr p) => Ifptr (if va_strict tt then Pbot else p)
   | Mfloat32, FS f => v
   | Mfloat64, F f => v
   | Many32, (I _ | Ptr _ | Ifptr _ | FS _) => v
@@ -2343,6 +2349,9 @@ Proof.
 - constructor; auto with va. apply is_zero_ext_uns; auto with va.
 - destruct (zlt n2 8); constructor; auto with va.
 - destruct (zlt n2 16); constructor; auto with va.
+- destruct (va_strict tt); auto with va.
+- destruct (va_strict tt); auto with va.
+- destruct (va_strict tt); auto with va.
 - constructor; auto with va. apply is_sign_ext_sgn; auto with va.
 - constructor; auto with va. apply is_zero_ext_uns; auto with va.
 - constructor; auto with va. apply is_sign_ext_sgn; auto with va.
