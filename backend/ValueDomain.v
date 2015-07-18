@@ -2267,12 +2267,12 @@ Definition vnormalize (chunk: memory_chunk) (v: aval) :=
   | Mint16unsigned, I i => I (Int.zero_ext 16 i)
   | Mint16unsigned, Uns n => Uns (Z.min n 16)
   | Mint16unsigned, _ => Uns 16
-  | Mint32, (I _ | Ptr _ | Ifptr _) => v
+  | Mint32, (I _ | Uns _ | Sgn _ | Ptr _ | Ifptr _) => v
   | Mint64, L _ => v
   | Mint64, (Ptr p | Ifptr p) => Ifptr (if va_strict tt then Pbot else p)
   | Mfloat32, FS f => v
   | Mfloat64, F f => v
-  | Many32, (I _ | Ptr _ | Ifptr _ | FS _) => v
+  | Many32, (I _ | Uns _ | Sgn _ | Ptr _ | Ifptr _ | FS _) => v
   | Many64, _ => v
   | _, _ => Ifptr Pbot
   end.
