@@ -971,20 +971,28 @@ Proof.
   intros. rewrite vlub_comm. apply vmatch_lub_l; auto.
 Qed.
 
+(** In the CompCert semantics, a memory load or store succeeds only
+  if the address is a pointer value.  Hence, in strict mode,
+  [aptr_of_aval x] returns [Pbot] (no pointer value) if [x]
+  denotes a number or [Vundef].  However, in real code, memory
+  addresses are sometimes synthesized from integers, e.g. an absolute
+  address for a hardware device.  It is a reasonable assumption
+  that these absolute addresses do not point within the stack block,
+  however.  Therefore, in relaxed mode, [aptr_of_aval x] returns
+  [Nonstack] (any pointer outside the stack) when [x] denotes a number. *)
+
 Definition aptr_of_aval (v: aval) : aptr :=
   match v with
   | Ptr p => p
   | Ifptr p => p
-  | _ => Pbot
+  | _ => if va_strict tt then Pbot else Nonstack
   end.
 
 Lemma match_aptr_of_aval:
   forall b ofs av,
-  vmatch (Vptr b ofs) av <-> pmatch b ofs (aptr_of_aval av).
+  vmatch (Vptr b ofs) av -> pmatch b ofs (aptr_of_aval av).
 Proof.
-  unfold aptr_of_aval; intros; split; intros.
-- inv H; auto.
-- destruct av; ((constructor; assumption) || inv H). 
+  unfold aptr_of_aval; intros. inv H; auto.
 Qed.
 
 Definition vplub (v: aval) (p: aptr) : aptr :=

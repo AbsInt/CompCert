@@ -696,7 +696,7 @@ Proof.
           rs#r = Vptr b o -> aaddr approx r = Stk i -> b = sp /\ i = o).
   {
     intros until i. unfold aaddr; subst approx. intros. 
-    specialize (H5 r). rewrite H6 in H5. rewrite match_aptr_of_aval in H5. 
+    specialize (H5 r). rewrite H6 in H5. apply match_aptr_of_aval in H5. 
     rewrite H10 in H5. inv H5. split; auto. eapply bc_stack; eauto. 
   }
   exploit (A rsrc); eauto. intros [P Q].
