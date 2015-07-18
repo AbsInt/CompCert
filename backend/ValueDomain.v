@@ -301,6 +301,7 @@ Definition pincl (p q: aptr) : bool :=
   | (Gl _ _ | Glo _ | Glob | Nonstack), Nonstack => true
   | Stk ofs1, Stk ofs2 => Int.eq_dec ofs1 ofs2
   | Stk ofs1, Stack => true
+  | Stack, Stack => true
   | _, Ptop => true
   | _, _ => false
   end.
@@ -309,6 +310,14 @@ Lemma pincl_ge: forall p q, pincl p q = true -> pge q p.
 Proof.
   unfold pincl; destruct p, q; intros; try discriminate; auto with va;
   InvBooleans; subst; auto with va.
+Qed.
+
+Lemma pincl_ge_2: forall p q, pge p q -> pincl q p = true.
+Proof.
+  destruct 1; simpl; auto.
+- destruct p; auto.
+- destruct p; simpl; auto; rewrite ! proj_sumbool_is_true; auto.
+- rewrite ! proj_sumbool_is_true; auto.
 Qed.
 
 Lemma pincl_sound:
