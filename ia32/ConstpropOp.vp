@@ -50,12 +50,12 @@ Definition make_cmp_base (c: condition) (args: list reg) (vl: list aval) :=
 Nondetfunction make_cmp (c: condition) (args: list reg) (vl: list aval) :=
   match c, args, vl with
   | Ccompimm Ceq n, r1 :: nil, v1 :: nil =>
-      if Int.eq_dec n Int.one && vincl v1 (Uns 1) then (Omove, r1 :: nil)
-      else if Int.eq_dec n Int.zero && vincl v1 (Uns 1) then (Oxorimm Int.one, r1 :: nil)
+      if Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1) then (Omove, r1 :: nil)
+      else if Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1) then (Oxorimm Int.one, r1 :: nil)
       else make_cmp_base c args vl
   | Ccompimm Cne n, r1 :: nil, v1 :: nil =>
-      if Int.eq_dec n Int.zero && vincl v1 (Uns 1) then (Omove, r1 :: nil)
-      else if Int.eq_dec n Int.one && vincl v1 (Uns 1) then (Oxorimm Int.one, r1 :: nil)
+      if Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1) then (Omove, r1 :: nil)
+      else if Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1) then (Oxorimm Int.one, r1 :: nil)
       else make_cmp_base c args vl
   | _, _, _ =>
       make_cmp_base c args vl
@@ -138,7 +138,7 @@ Definition make_mulimm (n: int) (r: reg) :=
 Definition make_andimm (n: int) (r: reg) (a: aval) :=
   if Int.eq n Int.zero then (Ointconst Int.zero, nil)
   else if Int.eq n Int.mone then (Omove, r :: nil)
-  else if match a with Uns m => Int.eq (Int.zero_ext m (Int.not n)) Int.zero
+  else if match a with Uns _ m => Int.eq (Int.zero_ext m (Int.not n)) Int.zero
                      | _ => false end
   then (Omove, r :: nil)
   else (Oandimm n, r :: nil).
@@ -184,13 +184,13 @@ Definition make_mulfsimm (n: float32) (r r1 r2: reg) :=
   else (Omulfs, r1 :: r2 :: nil).
 
 Definition make_cast8signed (r: reg) (a: aval) :=
-  if vincl a (Sgn 8) then (Omove, r :: nil) else (Ocast8signed, r :: nil).
+  if vincl a (Sgn Ptop 8) then (Omove, r :: nil) else (Ocast8signed, r :: nil).
 Definition make_cast8unsigned (r: reg) (a: aval) :=
-  if vincl a (Uns 8) then (Omove, r :: nil) else (Ocast8unsigned, r :: nil).
+  if vincl a (Uns Ptop 8) then (Omove, r :: nil) else (Ocast8unsigned, r :: nil).
 Definition make_cast16signed (r: reg) (a: aval) :=
-  if vincl a (Sgn 16) then (Omove, r :: nil) else (Ocast16signed, r :: nil).
+  if vincl a (Sgn Ptop 16) then (Omove, r :: nil) else (Ocast16signed, r :: nil).
 Definition make_cast16unsigned (r: reg) (a: aval) :=
-  if vincl a (Uns 16) then (Omove, r :: nil) else (Ocast16unsigned, r :: nil).
+  if vincl a (Uns Ptop 16) then (Omove, r :: nil) else (Ocast16unsigned, r :: nil).
 
 Nondetfunction op_strength_reduction 
               (op: operation) (args: list reg) (vl: list aval) :=

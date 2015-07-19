@@ -493,10 +493,10 @@ Lemma store_normalized_range_sound:
   Val.lessdef (Val.load_result chunk v) v.
 Proof.
   intros. destruct chunk; simpl in *; destruct v; auto.
-- inv H. rewrite is_sgn_sign_ext in H3 by omega. rewrite H3; auto.
-- inv H. rewrite is_uns_zero_ext in H3 by omega. rewrite H3; auto.
-- inv H. rewrite is_sgn_sign_ext in H3 by omega. rewrite H3; auto.
-- inv H. rewrite is_uns_zero_ext in H3 by omega. rewrite H3; auto.
+- inv H. rewrite is_sgn_sign_ext in H4 by omega. rewrite H4; auto.
+- inv H. rewrite is_uns_zero_ext in H4 by omega. rewrite H4; auto.
+- inv H. rewrite is_sgn_sign_ext in H4 by omega. rewrite H4; auto.
+- inv H. rewrite is_uns_zero_ext in H4 by omega. rewrite H4; auto.
 Qed.
 
 Lemma add_store_result_hold:

@@ -514,8 +514,8 @@ Qed.
 Inductive aval : Type :=
   | Vbot
   | I (n: int)
-  | Uns (n: Z)
-  | Sgn (n: Z)
+  | Uns (p: aptr) (n: Z)
+  | Sgn (p: aptr) (n: Z)
   | L (n: int64)
   | F (f: float)
   | FS (f: float32)
@@ -537,10 +537,10 @@ Definition is_sgn (n: Z) (i: int) : Prop :=
 
 Inductive vmatch : val -> aval -> Prop :=
   | vmatch_i: forall i, vmatch (Vint i) (I i)
-  | vmatch_Uns: forall i n, 0 <= n -> is_uns n i -> vmatch (Vint i) (Uns n)
-  | vmatch_Uns_undef: forall n, vmatch Vundef (Uns n)
-  | vmatch_Sgn: forall i n, 0 < n -> is_sgn n i -> vmatch (Vint i) (Sgn n)
-  | vmatch_Sgn_undef: forall n, vmatch Vundef (Sgn n)
+  | vmatch_Uns: forall p i n, 0 <= n -> is_uns n i -> vmatch (Vint i) (Uns p n)
+  | vmatch_Uns_undef: forall p n, vmatch Vundef (Uns p n)
+  | vmatch_Sgn: forall p i n, 0 < n -> is_sgn n i -> vmatch (Vint i) (Sgn p n)
+  | vmatch_Sgn_undef: forall p n, vmatch Vundef (Sgn p n)
   | vmatch_l: forall i, vmatch (Vlong i) (L i)
   | vmatch_f: forall f, vmatch (Vfloat f) (F f)
   | vmatch_s: forall f, vmatch (Vsingle f) (FS f)
@@ -704,8 +704,7 @@ We encapsulate this reasoning in the following [ntop1] and [ntop2] functions
 Definition provenance (x: aval) : aptr :=
   if va_strict tt then Pbot else
     match x with
-    | Ptr p => poffset p
-    | Ifptr p => poffset p
+    | Ptr p | Ifptr p | Uns p _ | Sgn p _ => poffset p
     | _ => Pbot
     end.
 
@@ -718,15 +717,15 @@ Definition ntop2 (x y: aval) : aval := Ifptr (plub (provenance x) (provenance y)
 (** Smart constructors for [Uns] and [Sgn]. *)
 
 Definition uns (p: aptr) (n: Z) : aval :=
-  if zle n 1 then Uns 1
-  else if zle n 7 then Uns 7
-  else if zle n 8 then Uns 8
-  else if zle n 15 then Uns 15
-  else if zle n 16 then Uns 16
+  if zle n 1 then Uns p 1
+  else if zle n 7 then Uns p 7
+  else if zle n 8 then Uns p 8
+  else if zle n 15 then Uns p 15
+  else if zle n 16 then Uns p 16
   else Ifptr p.
 
 Definition sgn (p: aptr) (n: Z) : aval :=
-  if zle n 8 then Sgn 8 else if zle n 16 then Sgn 16 else Ifptr p.
+  if zle n 8 then Sgn p 8 else if zle n 16 then Sgn p 16 else Ifptr p.
 
 Lemma vmatch_uns':
   forall p i n, is_uns (Zmax 0 n) i -> vmatch (Vint i) (uns p n).
@@ -784,7 +783,7 @@ Qed.
 Hint Resolve vmatch_uns vmatch_uns_undef vmatch_sgn vmatch_sgn_undef : va.
 
 Lemma vmatch_Uns_1:
-  forall v, vmatch v (Uns 1) -> v = Vundef \/ v = Vint Int.zero \/ v = Vint Int.one.
+  forall p v, vmatch v (Uns p 1) -> v = Vundef \/ v = Vint Int.zero \/ v = Vint Int.one.
 Proof.
   intros. inv H; auto. right. exploit is_uns_1; eauto. intuition congruence.
 Qed.
@@ -797,11 +796,11 @@ Inductive vge: aval -> aval -> Prop :=
   | vge_l: forall i, vge (L i) (L i)
   | vge_f: forall f, vge (F f) (F f)
   | vge_s: forall f, vge (FS f) (FS f)
-  | vge_uns_i: forall n i, 0 <= n -> is_uns n i -> vge (Uns n) (I i)
-  | vge_uns_uns: forall n1 n2, n1 >= n2 -> vge (Uns n1) (Uns n2)
-  | vge_sgn_i: forall n i, 0 < n -> is_sgn n i -> vge (Sgn n) (I i)
-  | vge_sgn_sgn: forall n1 n2, n1 >= n2 -> vge (Sgn n1) (Sgn n2)
-  | vge_sgn_uns: forall n1 n2, n1 > n2 -> vge (Sgn n1) (Uns n2)
+  | vge_uns_i: forall p n i, 0 <= n -> is_uns n i -> vge (Uns p n) (I i)
+  | vge_uns_uns: forall p1 n1 p2 n2, n1 >= n2 -> pge p1 p2 -> vge (Uns p1 n1) (Uns p2 n2)
+  | vge_sgn_i: forall p n i, 0 < n -> is_sgn n i -> vge (Sgn p n) (I i)
+  | vge_sgn_sgn: forall p1 n1 p2 n2, n1 >= n2 -> pge p1 p2 -> vge (Sgn p1 n1) (Sgn p2 n2)
+  | vge_sgn_uns: forall p1 n1 p2 n2, n1 > n2 -> pge p1 p2 -> vge (Sgn p1 n1) (Uns p2 n2)
   | vge_p_p: forall p q, pge p q -> vge (Ptr p) (Ptr q)
   | vge_ip_p: forall p q, pge p q -> vge (Ifptr p) (Ptr q)
   | vge_ip_ip: forall p q, pge p q -> vge (Ifptr p) (Ifptr q)
@@ -809,8 +808,8 @@ Inductive vge: aval -> aval -> Prop :=
   | vge_ip_l: forall p i, vge (Ifptr p) (L i)
   | vge_ip_f: forall p f, vge (Ifptr p) (F f)
   | vge_ip_s: forall p f, vge (Ifptr p) (FS f)
-  | vge_ip_uns: forall p n, vge (Ifptr p) (Uns n)
-  | vge_ip_sgn: forall p n, vge (Ifptr p) (Sgn n).
+  | vge_ip_uns: forall p q n, pge p q -> vge (Ifptr p) (Uns q n)
+  | vge_ip_sgn: forall p q n, pge p q -> vge (Ifptr p) (Sgn q n).
 
 Hint Constructors vge : va.
 
@@ -828,13 +827,13 @@ Qed.
 
 Lemma vge_trans: forall u v, vge u v -> forall w, vge v w -> vge u w.
 Proof.
-  induction 1; intros w V; inv V; eauto with va; constructor; eapply pge_trans; eauto.
+  induction 1; intros w V; inv V; eauto using pge_trans with va.
 Qed.
 
 Lemma vmatch_ge:
   forall v x y, vge x y -> vmatch v y -> vmatch v x.
 Proof.
-  induction 1; intros V; inv V; eauto with va; constructor; eapply pmatch_ge; eauto.
+  induction 1; intros V; inv V; eauto using pmatch_ge with va.
 Qed.
 
 (** Least upper bound *)
@@ -848,18 +847,18 @@ Definition vlub (v w: aval) : aval :=
       if Int.lt i1 Int.zero || Int.lt i2 Int.zero
       then sgn Pbot (Z.max (ssize i1) (ssize i2))
       else uns Pbot (Z.max (usize i1) (usize i2))
-  | I i, Uns n | Uns n, I i =>
+  | I i, Uns p n | Uns p n, I i =>
       if Int.lt i Int.zero
-      then sgn Pbot (Z.max (ssize i) (n + 1))
-      else uns Pbot (Z.max (usize i) n)
-  | I i, Sgn n | Sgn n, I i =>
-      sgn Pbot (Z.max (ssize i) n)
+      then sgn p (Z.max (ssize i) (n + 1))
+      else uns p (Z.max (usize i) n)
+  | I i, Sgn p n | Sgn p n, I i =>
+      sgn p (Z.max (ssize i) n)
   | I i, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), I i =>
       if va_strict tt || Int.eq i Int.zero then Ifptr p else Vtop
-  | Uns n1, Uns n2 => Uns (Z.max n1 n2)
-  | Uns n1, Sgn n2 => sgn Pbot (Z.max (n1 + 1) n2)
-  | Sgn n1, Uns n2 => sgn Pbot (Z.max n1 (n2 + 1))
-  | Sgn n1, Sgn n2 => sgn Pbot (Z.max n1 n2)
+  | Uns p1 n1, Uns p2 n2 => Uns (plub p1 p2) (Z.max n1 n2)
+  | Uns p1 n1, Sgn p2 n2 => sgn (plub p1 p2) (Z.max (n1 + 1) n2)
+  | Sgn p1 n1, Uns p2 n2 => sgn (plub p1 p2) (Z.max n1 (n2 + 1))
+  | Sgn p1 n1, Sgn p2 n2 => sgn (plub p1 p2) (Z.max n1 n2)
   | F f1, F f2 =>
       if Float.eq_dec f1 f2 then v else ntop
   | FS f1, FS f2 =>
@@ -870,6 +869,8 @@ Definition vlub (v w: aval) : aval :=
   | Ptr p1, Ifptr p2 => Ifptr(plub p1 p2)
   | Ifptr p1, Ptr p2 => Ifptr(plub p1 p2)
   | Ifptr p1, Ifptr p2 => Ifptr(plub p1 p2)
+  | (Ptr p1 | Ifptr p1), (Uns p2 _ | Sgn p2 _) => Ifptr(plub p1 p2)
+  | (Uns p1 _ | Sgn p1 _), (Ptr p2 | Ifptr p2) => Ifptr(plub p1 p2)
   | _, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), _ => if va_strict tt then Ifptr p else Vtop
   | _, _ => Vtop
   end.
@@ -882,10 +883,14 @@ Proof.
   congruence.
   rewrite orb_comm. 
   destruct (Int.lt n0 Int.zero || Int.lt n Int.zero); f_equal; apply Z.max_comm. 
-- f_equal; apply Z.max_comm.
-- f_equal; apply Z.max_comm.
-- f_equal; apply Z.max_comm.
-- f_equal; apply Z.max_comm.
+- f_equal. apply plub_comm. apply Z.max_comm.
+- f_equal. apply plub_comm. apply Z.max_comm.
+- f_equal; apply plub_comm.
+- f_equal; apply plub_comm.
+- f_equal. apply plub_comm. apply Z.max_comm.
+- f_equal. apply plub_comm. apply Z.max_comm.
+- f_equal; apply plub_comm.
+- f_equal; apply plub_comm.
 - rewrite Int64.eq_sym. predSpec Int64.eq Int64.eq_spec n0 n; congruence.
 - rewrite dec_eq_sym. destruct (Float.eq_dec f0 f). congruence. auto.
 - rewrite dec_eq_sym. destruct (Float32.eq_dec f0 f). congruence. auto.
@@ -893,9 +898,13 @@ Proof.
 - f_equal; apply plub_comm.
 - f_equal; apply plub_comm.
 - f_equal; apply plub_comm.
+- f_equal; apply plub_comm.
+- f_equal; apply plub_comm.
+- f_equal; apply plub_comm.
+- f_equal; apply plub_comm.
 Qed.
 
-Lemma vge_uns_uns': forall p n, vge (uns p n) (Uns n).
+Lemma vge_uns_uns': forall p n, vge (uns p n) (Uns p n).
 Proof.
   unfold uns; intros. 
   destruct (zle n 1). auto with va.
@@ -907,10 +916,10 @@ Qed.
 
 Lemma vge_uns_i': forall p n i, 0 <= n -> is_uns n i -> vge (uns p n) (I i).
 Proof.
-  intros. apply vge_trans with (Uns n). apply vge_uns_uns'. auto with va. 
+  intros. apply vge_trans with (Uns p n). apply vge_uns_uns'. auto with va. 
 Qed.
 
-Lemma vge_sgn_sgn': forall p n, vge (sgn p n) (Sgn n).
+Lemma vge_sgn_sgn': forall p n, vge (sgn p n) (Sgn p n).
 Proof.
   unfold sgn; intros. 
   destruct (zle n 8). auto with va.
@@ -919,7 +928,7 @@ Qed.
 
 Lemma vge_sgn_i': forall p n i, 0 < n -> is_sgn n i -> vge (sgn p n) (I i).
 Proof.
-  intros. apply vge_trans with (Sgn n). apply vge_sgn_sgn'. auto with va. 
+  intros. apply vge_trans with (Sgn p n). apply vge_sgn_sgn'. auto with va. 
 Qed.
 
 Hint Resolve vge_uns_uns' vge_uns_i' vge_sgn_sgn' vge_sgn_i' : va.
@@ -938,9 +947,9 @@ Qed.
 Lemma vge_lub_l:
   forall x y, vge (vlub x y) x.
 Proof.
-  assert (IFSTRICT: forall (cond: bool) x y, vge x y -> vge (if cond then x else Vtop ) y).
+  assert (IFSTRICT: forall (cond: bool) x1 x2 y, vge x1 y -> vge x2 y -> vge (if cond then x1 else x2) y).
   { destruct cond; auto with va. }
-  unfold vlub; destruct x, y; eauto with va.
+  unfold vlub; destruct x, y; eauto using pge_lub_l with va.
 - predSpec Int.eq Int.eq_spec n n0. auto with va.
   destruct (Int.lt n Int.zero || Int.lt n0 Int.zero).
   apply vge_sgn_i'. generalize (ssize_pos n); xomega. eauto with va. 
@@ -951,20 +960,16 @@ Proof.
 - apply vge_sgn_i'. generalize (ssize_pos n); xomega. eauto with va. 
 - destruct (Int.lt n0 Int.zero).
   eapply vge_trans. apply vge_sgn_sgn'.
-  apply vge_trans with (Sgn (n + 1)); eauto with va.
+  apply vge_trans with (Sgn p (n + 1)); eauto with va.
   eapply vge_trans. apply vge_uns_uns'. eauto with va. 
 - eapply vge_trans. apply vge_sgn_sgn'.
-  apply vge_trans with (Sgn (n + 1)); eauto with va.
+  apply vge_trans with (Sgn p (n + 1)); eauto using pge_lub_l with va.
 - eapply vge_trans. apply vge_sgn_sgn'. eauto with va.
-- eapply vge_trans. apply vge_sgn_sgn'. eauto with va.
-- eapply vge_trans. apply vge_sgn_sgn'. eauto with va.
+- eapply vge_trans. apply vge_sgn_sgn'. eauto using pge_lub_l with va.
+- eapply vge_trans. apply vge_sgn_sgn'. eauto using pge_lub_l with va.
 - destruct (Int64.eq n n0); constructor.
 - destruct (Float.eq_dec f f0); constructor.
 - destruct (Float32.eq_dec f f0); constructor.
-- constructor; apply pge_lub_l; auto.
-- constructor; apply pge_lub_l; auto.
-- constructor; apply pge_lub_l; auto.
-- constructor; apply pge_lub_l; auto.
 Qed.
 
 Lemma vge_lub_r:
@@ -1041,8 +1046,7 @@ Qed.
 
 Definition vpincl (v: aval) (p: aptr) : bool :=
   match v with
-  | Ptr q => pincl q p
-  | Ifptr q => pincl q p
+  | Ptr q | Ifptr q | Uns q _ | Sgn q _ => pincl q p
   | _ => true
   end.
 
@@ -1062,36 +1066,26 @@ Definition vincl (v w: aval) : bool :=
   match v, w with
   | Vbot, _ => true
   | I i, I j => Int.eq_dec i j
-  | I i, Uns n => Int.eq_dec (Int.zero_ext n i) i && zle 0 n
-  | I i, Sgn n => Int.eq_dec (Int.sign_ext n i) i && zlt 0 n
-  | Uns n, Uns m => zle n m
-  | Uns n, Sgn m => zlt n m
-  | Sgn n, Sgn m => zle n m
+  | I i, Uns p n => Int.eq_dec (Int.zero_ext n i) i && zle 0 n
+  | I i, Sgn p n => Int.eq_dec (Int.sign_ext n i) i && zlt 0 n
+  | Uns p n, Uns q m => zle n m && pincl p q
+  | Uns p n, Sgn q m => zlt n m && pincl p q
+  | Sgn p n, Sgn q m => zle n m && pincl p q
   | L i, L j => Int64.eq_dec i j
   | F i, F j => Float.eq_dec i j
   | FS i, FS j => Float32.eq_dec i j
   | Ptr p, Ptr q => pincl p q
-  | Ptr p, Ifptr q => pincl p q
-  | Ifptr p, Ifptr q => pincl p q
+  | (Ptr p | Ifptr p | Uns p _ | Sgn p _), Ifptr q => pincl p q
   | _, Ifptr _ => true
   | _, _ => false
   end.
 
 Lemma vincl_ge: forall v w, vincl v w = true -> vge w v.
 Proof.
-  unfold vincl; destruct v; destruct w; intros; try discriminate; auto with va.
-  InvBooleans. subst; auto with va.
-  InvBooleans. constructor; auto. rewrite is_uns_zero_ext; auto.
-  InvBooleans. constructor; auto. rewrite is_sgn_sign_ext; auto.
-  InvBooleans. constructor; auto with va.
-  InvBooleans. constructor; auto with va.
-  InvBooleans. constructor; auto with va.
-  InvBooleans. subst; auto with va.
-  InvBooleans. subst; auto with va.
-  InvBooleans. subst; auto with va.
-  constructor; apply pincl_ge; auto.
-  constructor; apply pincl_ge; auto.
-  constructor; apply pincl_ge; auto.
+  unfold vincl; destruct v; destruct w;
+  intros; try discriminate; try InvBooleans; try subst; auto using pincl_ge with va.
+- constructor; auto. rewrite is_uns_zero_ext; auto.
+- constructor; auto. rewrite is_sgn_sign_ext; auto.
 Qed.
 
 (** Loading constants *)
@@ -1209,8 +1203,8 @@ Definition shl (v w: aval) :=
       if Int.ltu amount Int.iwordsize then
         match v with
         | I i => I (Int.shl i amount)
-        | Uns n => uns (provenance v) (n + Int.unsigned amount)
-        | Sgn n => sgn (provenance v) (n + Int.unsigned amount)
+        | Uns p n => uns p (n + Int.unsigned amount)
+        | Sgn p n => sgn p (n + Int.unsigned amount)
         | _ => ntop1 v
         end
       else ntop1 v
@@ -1245,7 +1239,7 @@ Definition shru (v w: aval) :=
       if Int.ltu amount Int.iwordsize then
         match v with
         | I i => I (Int.shru i amount)
-        | Uns n => uns (provenance v) (n - Int.unsigned amount)
+        | Uns p n => uns p (n - Int.unsigned amount)
         | _ => uns (provenance v) (Int.zwordsize - Int.unsigned amount)
         end
       else ntop1 v
@@ -1283,8 +1277,8 @@ Definition shr (v w: aval) :=
       if Int.ltu amount Int.iwordsize then
         match v with
         | I i => I (Int.shr i amount)
-        | Uns n => sgn (provenance v) (n + 1 - Int.unsigned amount)
-        | Sgn n => sgn (provenance v) (n - Int.unsigned amount)
+        | Uns p n => sgn p (n + 1 - Int.unsigned amount)
+        | Sgn p n => sgn p (n - Int.unsigned amount)
         | _ => sgn (provenance v) (Int.zwordsize - Int.unsigned amount)
         end
       else ntop1 v
@@ -1311,7 +1305,7 @@ Proof.
     destruct (zlt (Int.zwordsize - 1 + Int.unsigned n) Int.zwordsize);
     omega.
   }
-  assert (SGN: forall i p, is_sgn p i -> 0 < p -> vmatch (Vint (Int.shr i n)) (sgn (provenance x) (p - Int.unsigned n))).
+  assert (SGN: forall q i p, is_sgn p i -> 0 < p -> vmatch (Vint (Int.shr i n)) (sgn q (p - Int.unsigned n))).
   {
     intros. apply vmatch_sgn'. red; intros. zify.
     rewrite ! Int.bits_shr by omega.
@@ -1331,12 +1325,12 @@ Qed.
 Definition and (v w: aval) :=
   match v, w with
   | I i1, I i2 => I (Int.and i1 i2)
-  | I i, Uns n | Uns n, I i => uns Pbot (Z.min n (usize i))
-  | I i, _ | _, I i => uns Pbot (usize i)
-  | Uns n1, Uns n2 => uns Pbot (Z.min n1 n2)
-  | Uns n, _ => uns (provenance w) n
-  | _, Uns n => uns (provenance v) n
-  | Sgn n1, Sgn n2 => sgn Pbot (Z.max n1 n2)
+  | I i, Uns p n | Uns p n, I i => uns p (Z.min n (usize i))
+  | I i, x | x, I i => uns (provenance x) (usize i)
+  | Uns p1 n1, Uns p2 n2 => uns (plub p1 p2) (Z.min n1 n2)
+  | Uns p n, _ => uns (plub p (provenance w)) n
+  | _, Uns p n => uns (plub (provenance v) p) n
+  | Sgn p1 n1, Sgn p2 n2 => sgn (plub p1 p2) (Z.max n1 n2)
   | _, _ => ntop2 v w
   end.
 
@@ -1367,9 +1361,9 @@ Qed.
 Definition or (v w: aval) :=
   match v, w with
   | I i1, I i2 => I (Int.or i1 i2)
-  | I i, Uns n | Uns n, I i => uns Pbot (Z.max n (usize i))
-  | Uns n1, Uns n2 => uns Pbot (Z.max n1 n2)
-  | Sgn n1, Sgn n2 => sgn Pbot (Z.max n1 n2)
+  | I i, Uns p n | Uns p n, I i => uns p (Z.max n (usize i))
+  | Uns p1 n1, Uns p2 n2 => uns (plub p1 p2) (Z.max n1 n2)
+  | Sgn p1 n1, Sgn p2 n2 => sgn (plub p1 p2) (Z.max n1 n2)
   | _, _ => ntop2 v w
   end.
 
@@ -1392,9 +1386,9 @@ Qed.
 Definition xor (v w: aval) :=
   match v, w with
   | I i1, I i2 => I (Int.xor i1 i2)
-  | I i, Uns n | Uns n, I i => uns Pbot (Z.max n (usize i))
-  | Uns n1, Uns n2 => uns Pbot (Z.max n1 n2)
-  | Sgn n1, Sgn n2 => sgn Pbot (Z.max n1 n2)
+  | I i, Uns p n | Uns p n, I i => uns p (Z.max n (usize i))
+  | Uns p1 n1, Uns p2 n2 => uns (plub p1 p2) (Z.max n1 n2)
+  | Sgn p1 n1, Sgn p2 n2 => sgn (plub p1 p2) (Z.max n1 n2)
   | _, _ => ntop2 v w
   end.
 
@@ -1417,8 +1411,8 @@ Qed.
 Definition notint (v: aval) :=
   match v with
   | I i => I (Int.not i)
-  | Uns n => sgn Pbot (n + 1)
-  | Sgn n => Sgn n
+  | Uns p n => sgn p (n + 1)
+  | Sgn p n => Sgn p n
   | _ => ntop1 v
   end.
 
@@ -1723,7 +1717,7 @@ Proof (binop_single_sound Float32.div).
 Definition zero_ext (nbits: Z) (v: aval) :=
   match v with
   | I i => I (Int.zero_ext nbits i)
-  | Uns n => uns Pbot (Z.min n nbits)
+  | Uns p n => uns p (Z.min n nbits)
   | _ => uns (provenance v) nbits
   end.
 
@@ -1743,8 +1737,8 @@ Qed.
 Definition sign_ext (nbits: Z) (v: aval) :=
   match v with
   | I i => I (Int.sign_ext nbits i)
-  | Uns n => if zlt n nbits then Uns n else sgn Pbot nbits
-  | Sgn n => sgn Pbot (Z.min n nbits)
+  | Uns p n => if zlt n nbits then Uns p n else sgn p nbits
+  | Sgn p n => sgn p (Z.min n nbits)
   | _ => sgn (provenance v) nbits
   end.
 
@@ -2039,7 +2033,7 @@ Qed.
 Definition uintv (v: aval) : Z * Z :=
   match v with
   | I n => (Int.unsigned n, Int.unsigned n)
-  | Uns n => if zlt n Int.zwordsize then (0, two_p n - 1) else (0, Int.max_unsigned)
+  | Uns _ n => if zlt n Int.zwordsize then (0, two_p n - 1) else (0, Int.max_unsigned)
   | _ => (0, Int.max_unsigned)
   end.
 
@@ -2077,9 +2071,9 @@ Qed.
 Definition sintv (v: aval) : Z * Z :=
   match v with
   | I n => (Int.signed n, Int.signed n)
-  | Uns n =>
+  | Uns _ n =>
       if zlt n Int.zwordsize then (0, two_p n - 1) else (Int.min_signed, Int.max_signed)
-  | Sgn n =>
+  | Sgn _ n =>
       if zlt n Int.zwordsize
       then (let x := two_p (n-1) in (-x, x-1))
       else (Int.min_signed, Int.max_signed)
@@ -2134,11 +2128,11 @@ Qed.
 Definition cmpu_bool (c: comparison) (v w: aval) : abool :=
   match v, w with
   | I i1, I i2 => Just (Int.cmpu c i1 i2)
-  | Ptr _, (I _ | Uns _ | Sgn _) => cmp_different_blocks c
-  | (I _ | Uns _ | Sgn _), Ptr _ => cmp_different_blocks c
+  | Ptr _, I _ => cmp_different_blocks c
+  | I _, Ptr _ => cmp_different_blocks c
   | Ptr p1, Ptr p2 => pcmp c p1 p2
-  | Ptr p1, Ifptr p2 => club (pcmp c p1 p2) (cmp_different_blocks c)
-  | Ifptr p1, Ptr p2 => club (pcmp c p1 p2) (cmp_different_blocks c)
+  | Ptr p1, (Ifptr p2 | Uns p2 _ | Sgn p2 _) => club (pcmp c p1 p2) (cmp_different_blocks c)
+  | (Ifptr p1 | Uns p1 _ | Sgn p1 _), Ptr p2 => club (pcmp c p1 p2) (cmp_different_blocks c)
   | _, I i => club (cmp_intv c (uintv v) (Int.unsigned i)) (cmp_different_blocks c)
   | I i, _ => club (cmp_intv (swap_comparison c) (uintv w) (Int.unsigned i)) (cmp_different_blocks c)
   | _, _ => Btop
@@ -2211,7 +2205,7 @@ Qed.
 Definition maskzero (x: aval) (mask: int) : abool :=
   match x with
   | I i => Just (Int.eq (Int.and i mask) Int.zero)
-  | Uns n => if Int.eq (Int.zero_ext n mask) Int.zero then Maybe true else Btop
+  | Uns p n => if Int.eq (Int.zero_ext n mask) Int.zero then Maybe true else Btop
   | _ => Btop
   end.
 
@@ -2233,14 +2227,14 @@ Qed.
 Definition of_optbool (ab: abool) : aval :=
   match ab with
   | Just b => I (if b then Int.one else Int.zero)
-  | _ => Uns 1
+  | _ => Uns Pbot 1
   end.
 
 Lemma of_optbool_sound:
   forall ob ab, cmatch ob ab -> vmatch (Val.of_optbool ob) (of_optbool ab).
 Proof.
   intros.
-  assert (DEFAULT: vmatch (Val.of_optbool ob) (Uns 1)).
+  assert (DEFAULT: vmatch (Val.of_optbool ob) (Uns Pbot 1)).
   {
     destruct ob; simpl; auto with va.
     destruct b; constructor; try omega. 
@@ -2270,27 +2264,27 @@ Definition vnormalize (chunk: memory_chunk) (v: aval) :=
   match chunk, v with
   | _, Vbot => Vbot
   | Mint8signed, I i => I (Int.sign_ext 8 i)
-  | Mint8signed, Uns n => if zlt n 8 then Uns n else Sgn 8
-  | Mint8signed, Sgn n => Sgn (Z.min n 8)
-  | Mint8signed, _ => Sgn 8
+  | Mint8signed, Uns p n => if zlt n 8 then Uns (provenance v) n else Sgn (provenance v) 8
+  | Mint8signed, Sgn p n => Sgn (provenance v) (Z.min n 8)
+  | Mint8signed, _ => Sgn (provenance v) 8
   | Mint8unsigned, I i => I (Int.zero_ext 8 i)
-  | Mint8unsigned, Uns n => Uns (Z.min n 8)
-  | Mint8unsigned, _ => Uns 8
+  | Mint8unsigned, Uns p n => Uns (provenance v) (Z.min n 8)
+  | Mint8unsigned, _ => Uns (provenance v) 8
   | Mint16signed, I i => I (Int.sign_ext 16 i)
-  | Mint16signed, Uns n => if zlt n 16 then Uns n else Sgn 16
-  | Mint16signed, Sgn n => Sgn (Z.min n 16)
-  | Mint16signed, _ => Sgn 16
+  | Mint16signed, Uns p n => if zlt n 16 then Uns (provenance v) n else Sgn (provenance v) 16
+  | Mint16signed, Sgn p n => Sgn (provenance v) (Z.min n 16)
+  | Mint16signed, _ => Sgn (provenance v) 16
   | Mint16unsigned, I i => I (Int.zero_ext 16 i)
-  | Mint16unsigned, Uns n => Uns (Z.min n 16)
-  | Mint16unsigned, _ => Uns 16
-  | Mint32, (I _ | Uns _ | Sgn _ | Ptr _ | Ifptr _) => v
+  | Mint16unsigned, Uns p n => Uns (provenance v) (Z.min n 16)
+  | Mint16unsigned, _ => Uns (provenance v) 16
+  | Mint32, (I _ | Uns _ _ | Sgn _ _ | Ptr _ | Ifptr _) => v
   | Mint64, L _ => v
-  | Mint64, (Ptr p | Ifptr p) => Ifptr (if va_strict tt then Pbot else p)
+  | Mint64, (Ptr p | Ifptr p | Uns p _ | Sgn p _) => Ifptr (if va_strict tt then Pbot else p)
   | Mfloat32, FS f => v
   | Mfloat64, F f => v
-  | Many32, (I _ | Uns _ | Sgn _ | Ptr _ | Ifptr _ | FS _) => v
+  | Many32, (I _ | Uns _ _ | Sgn _ _ | Ptr _ | Ifptr _ | FS _) => v
   | Many64, _ => v
-  | _, _ => Ifptr Pbot
+  | _, _ => Ifptr (provenance v)
   end.
 
 Lemma vnormalize_sound:
@@ -2347,42 +2341,66 @@ Proof.
   auto.
 Qed.
 
+Remark poffset_monotone:
+  forall p q, pge p q -> pge (poffset p) (poffset q).
+Proof.
+  destruct 1; simpl; auto with va.
+Qed.
+
+Remark provenance_monotone:
+  forall x y, vge x y -> pge (provenance x) (provenance y).
+Proof.
+  unfold provenance; intros. destruct (va_strict tt). constructor.
+  inv H; auto using poffset_monotone with va.
+Qed.
+
 Lemma vnormalize_monotone:
   forall chunk x y,
   vge x y -> vge (vnormalize chunk x) (vnormalize chunk y).
-Proof.
-  induction 1; destruct chunk; simpl; auto with va.
-- destruct (zlt n 8); constructor; auto with va.
-  apply is_sign_ext_uns; auto with va.
-  apply is_sign_ext_sgn; auto with va.
-- constructor; auto with va. apply is_zero_ext_uns; auto with va.
-  apply Z.min_case; auto with va.
-- destruct (zlt n 16); constructor; auto with va.
-  apply is_sign_ext_uns; auto with va.
-  apply is_sign_ext_sgn; auto with va.
-- constructor; auto with va. apply is_zero_ext_uns; auto with va.
-  apply Z.min_case; auto with va.
-- destruct (zlt n1 8). rewrite zlt_true by omega. auto with va. 
-  destruct (zlt n2 8); auto with va.
-- destruct (zlt n1 16). rewrite zlt_true by omega. auto with va. 
-  destruct (zlt n2 16); auto with va.
-- constructor; auto with va. apply is_sign_ext_sgn; auto with va. 
-  apply Z.min_case; auto with va.
-- constructor; auto with va. apply is_zero_ext_uns; auto with va.
-- constructor; auto with va. apply is_sign_ext_sgn; auto with va.
-  apply Z.min_case; auto with va.
-- constructor; auto with va. apply is_zero_ext_uns; auto with va.
-- destruct (zlt n2 8); constructor; auto with va.
-- destruct (zlt n2 16); constructor; auto with va.
-- destruct (va_strict tt); auto with va.
-- destruct (va_strict tt); auto with va.
-- destruct (va_strict tt); auto with va.
-- constructor; auto with va. apply is_sign_ext_sgn; auto with va.
-- constructor; auto with va. apply is_zero_ext_uns; auto with va.
-- constructor; auto with va. apply is_sign_ext_sgn; auto with va.
-- constructor; auto with va. apply is_zero_ext_uns; auto with va.
-- destruct (zlt n 8); constructor; auto with va.
-- destruct (zlt n 16); constructor; auto with va.
+Proof with (auto using provenance_monotone with va).
+  intros chunk x y V; inversion V; subst; destruct chunk; simpl...
+- destruct (zlt n 8); constructor...
+  apply is_sign_ext_uns...
+  apply is_sign_ext_sgn...
+- constructor... apply is_zero_ext_uns... apply Z.min_case...
+- destruct (zlt n 16); constructor...
+  apply is_sign_ext_uns...
+  apply is_sign_ext_sgn...
+- constructor... apply is_zero_ext_uns... apply Z.min_case...
+- unfold provenance; destruct (va_strict tt)...
+- destruct (zlt n1 8). rewrite zlt_true by omega...
+  destruct (zlt n2 8)...
+- destruct (zlt n1 16). rewrite zlt_true by omega...
+  destruct (zlt n2 16)...
+- destruct (va_strict tt)...
+- constructor... apply is_sign_ext_sgn... apply Z.min_case...
+- constructor... apply is_zero_ext_uns...
+- constructor... apply is_sign_ext_sgn... apply Z.min_case...
+- constructor... apply is_zero_ext_uns...
+- unfold provenance; destruct (va_strict tt)...
+- destruct (va_strict tt)...
+- destruct (zlt n2 8); constructor... 
+- destruct (zlt n2 16); constructor...
+- destruct (va_strict tt)...
+- destruct (va_strict tt)...
+- destruct (va_strict tt)...
+- destruct (va_strict tt)...
+- constructor... apply is_sign_ext_sgn...
+- constructor... apply is_zero_ext_uns...
+- constructor... apply is_sign_ext_sgn...
+- constructor... apply is_zero_ext_uns...
+- unfold provenance; destruct (va_strict tt)...
+- unfold provenance; destruct (va_strict tt)...
+- unfold provenance; destruct (va_strict tt)...
+- unfold provenance; destruct (va_strict tt)...
+- unfold provenance; destruct (va_strict tt)...
+- unfold provenance; destruct (va_strict tt)...
+- unfold provenance; destruct (va_strict tt)...
+- unfold provenance; destruct (va_strict tt)...
+- destruct (zlt n 8)...
+- destruct (zlt n 16)...
+- destruct (va_strict tt)...
+- destruct (va_strict tt)...
 Qed.
 
 (** Abstracting memory blocks *)

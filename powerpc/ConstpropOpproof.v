@@ -131,24 +131,24 @@ Lemma make_cmp_correct:
          /\ Val.lessdef (Val.of_optbool (eval_condition c rs##args m)) v.
 Proof.
   intros c args vl.
-  assert (Y: forall r, vincl (AE.get r ae) (Uns 1) = true ->
+  assert (Y: forall r, vincl (AE.get r ae) (Uns Ptop 1) = true ->
              rs#r = Vundef \/ rs#r = Vint Int.zero \/ rs#r = Vint Int.one).
-  { intros. apply vmatch_Uns_1 with bc. eapply vmatch_ge. eapply vincl_ge; eauto. apply MATCH. }
+  { intros. apply vmatch_Uns_1 with bc Ptop. eapply vmatch_ge. eapply vincl_ge; eauto. apply MATCH. }
   unfold make_cmp. case (make_cmp_match c args vl); intros.
-- destruct (Int.eq_dec n Int.one && vincl v1 (Uns 1)) eqn:E1.
+- destruct (Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1)) eqn:E1.
   simpl in H; inv H. InvBooleans. subst n. 
   exists (rs#r1); split; auto. simpl.
   exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
-  destruct (Int.eq_dec n Int.zero && vincl v1 (Uns 1)) eqn:E0.
+  destruct (Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1)) eqn:E0.
   simpl in H; inv H. InvBooleans. subst n. 
   exists (Val.xor rs#r1 (Vint Int.one)); split; auto. simpl.
   exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
   apply make_cmp_base_correct; auto.
-- destruct (Int.eq_dec n Int.zero && vincl v1 (Uns 1)) eqn:E0.
+- destruct (Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1)) eqn:E0.
   simpl in H; inv H. InvBooleans. subst n. 
   exists (rs#r1); split; auto. simpl.
   exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
-  destruct (Int.eq_dec n Int.one && vincl v1 (Uns 1)) eqn:E1.
+  destruct (Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1)) eqn:E1.
   simpl in H; inv H. InvBooleans. subst n. 
   exists (Val.xor rs#r1 (Vint Int.one)); split; auto. simpl.
   exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
@@ -271,7 +271,7 @@ Proof.
   subst n. exists (Vint Int.zero); split; auto. destruct (rs#r); simpl; auto. rewrite Int.and_zero; auto.
   predSpec Int.eq Int.eq_spec n Int.mone; intros.
   subst n. exists (rs#r); split; auto. destruct (rs#r); simpl; auto. rewrite Int.and_mone; auto.
-  destruct (match x with Uns k => Int.eq (Int.zero_ext k (Int.not n)) Int.zero
+  destruct (match x with Uns _ k => Int.eq (Int.zero_ext k (Int.not n)) Int.zero
                        | _ => false end) eqn:UNS.
   destruct x; try congruence. 
   exists (rs#r); split; auto.
@@ -282,7 +282,7 @@ Proof.
   rewrite Int.bits_zero. simpl. rewrite andb_true_r. auto. 
   rewrite <- EQ. rewrite Int.bits_zero_ext by omega. rewrite zlt_true by auto. 
   rewrite Int.bits_not by auto. apply negb_involutive. 
-  rewrite H5 by auto. auto. 
+  rewrite H6 by auto. auto. 
   econstructor; split; eauto. auto. 
 Qed.
 
@@ -372,11 +372,11 @@ Lemma make_cast8signed_correct:
   let (op, args) := make_cast8signed r x in
   exists v, eval_operation ge (Vptr sp Int.zero) op rs##args m = Some v /\ Val.lessdef (Val.sign_ext 8 rs#r) v.
 Proof.
-  intros; unfold make_cast8signed. destruct (vincl x (Sgn 8)) eqn:INCL. 
+  intros; unfold make_cast8signed. destruct (vincl x (Sgn Ptop 8)) eqn:INCL. 
   exists rs#r; split; auto. 
-  assert (V: vmatch bc rs#r (Sgn 8)).
+  assert (V: vmatch bc rs#r (Sgn Ptop 8)).
   { eapply vmatch_ge; eauto. apply vincl_ge; auto. }
-  inv V; simpl; auto. rewrite is_sgn_sign_ext in H3 by auto. rewrite H3; auto.
+  inv V; simpl; auto. rewrite is_sgn_sign_ext in H4 by auto. rewrite H4; auto.
   econstructor; split; simpl; eauto.
 Qed.
 
@@ -386,11 +386,11 @@ Lemma make_cast16signed_correct:
   let (op, args) := make_cast16signed r x in
   exists v, eval_operation ge (Vptr sp Int.zero) op rs##args m = Some v /\ Val.lessdef (Val.sign_ext 16 rs#r) v.
 Proof.
-  intros; unfold make_cast16signed. destruct (vincl x (Sgn 16)) eqn:INCL. 
+  intros; unfold make_cast16signed. destruct (vincl x (Sgn Ptop 16)) eqn:INCL. 
   exists rs#r; split; auto. 
-  assert (V: vmatch bc rs#r (Sgn 16)).
+  assert (V: vmatch bc rs#r (Sgn Ptop 16)).
   { eapply vmatch_ge; eauto. apply vincl_ge; auto. }
-  inv V; simpl; auto. rewrite is_sgn_sign_ext in H3 by auto. rewrite H3; auto.
+  inv V; simpl; auto. rewrite is_sgn_sign_ext in H4 by auto. rewrite H4; auto.
   econstructor; split; simpl; eauto.
 Qed.
 

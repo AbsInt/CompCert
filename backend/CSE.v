@@ -289,10 +289,10 @@ Definition kill_loads_after_store
 
 Definition store_normalized_range (chunk: memory_chunk) : aval :=
   match chunk with
-  | Mint8signed => Sgn 8
-  | Mint8unsigned => Uns 8
-  | Mint16signed => Sgn 16
-  | Mint16unsigned => Uns 16
+  | Mint8signed => Sgn Ptop 8
+  | Mint8unsigned => Uns Ptop 8
+  | Mint16signed => Sgn Ptop 16
+  | Mint16unsigned => Uns Ptop 16
   | _ => Vtop
   end.
 
