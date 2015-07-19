@@ -529,9 +529,6 @@ Proof.
 Defined.
 
 Definition Vtop := Ifptr Ptop.
-Definition itop := Ifptr Pbot.
-Definition ftop := Ifptr Pbot.
-Definition ltop := Ifptr Pbot.
 
 Definition is_uns (n: Z) (i: int) : Prop :=
   forall m, 0 <= m < Int.zwordsize -> m >= n -> Int.testbit i m = false.
@@ -569,23 +566,7 @@ Proof.
   intros. apply vmatch_ifptr. intros. subst v. inv H; eapply pmatch_top'; eauto.
 Qed.
 
-Lemma vmatch_itop: forall i, vmatch (Vint i) itop.
-Proof. intros; constructor. Qed.
-
-Lemma vmatch_undef_itop: vmatch Vundef itop.
-Proof. constructor. Qed.    
-
-Lemma vmatch_ftop: forall f, vmatch (Vfloat f) ftop.
-Proof. intros; constructor. Qed.
-
-Lemma vmatch_ftop_single: forall f, vmatch (Vsingle f) ftop.
-Proof. intros; constructor. Qed.
-
-Lemma vmatch_undef_ftop: vmatch Vundef ftop.
-Proof. constructor. Qed.    
-
-Hint Constructors vmatch : va.
-Hint Resolve vmatch_itop vmatch_undef_itop vmatch_ftop vmatch_ftop_single vmatch_undef_ftop : va.
+Hint Extern 1 (vmatch _ _) => constructor : va.
 
 (* Some properties about [is_uns] and [is_sgn]. *)
 
@@ -701,21 +682,54 @@ Proof.
   rewrite Int.bits_zero. destruct (zeq i 0). subst i; auto. apply H; omega.
 Qed.
 
+(** Tracking leakage of pointers through arithmetic operations.
+
+In the CompCert semantics, arithmetic operations (e.g. "xor") applied
+to pointer values are undefined or produce the [Vundef] result.
+So, in strict mode, we can abstract the result values of such operations
+as [Ifptr Pbot], namely: [Vundef], or any number, but not a pointer.
+
+In real code, such arithmetic over pointers occurs, so we need to be
+more prudent.  The policy we take, inspired by that of GCC, is that
+"undefined" arithmetic operations involving pointer arguments can
+produce a pointer, but not any pointer: rather, a pointer to the same
+block, but possibly with a different offset.  Hence, if the operation
+has a pointer to abstract region [p] as argument, the result value
+can be a pointer to abstract region [poffset p].  In other words,
+the result value is abstracted as [Ifptr (poffset p)].
+
+We encapsulate this reasoning in the following [ntop1] and [ntop2] functions
+("numerical top"). *)
+
+Definition provenance (x: aval) : aptr :=
+  if va_strict tt then Pbot else
+    match x with
+    | Ptr p => poffset p
+    | Ifptr p => poffset p
+    | _ => Pbot
+    end.
+
+Definition ntop : aval := Ifptr Pbot.
+
+Definition ntop1 (x: aval) : aval := Ifptr (provenance x).
+
+Definition ntop2 (x y: aval) : aval := Ifptr (plub (provenance x) (provenance y)).
+
 (** Smart constructors for [Uns] and [Sgn]. *)
 
-Definition uns (n: Z) : aval :=
+Definition uns (p: aptr) (n: Z) : aval :=
   if zle n 1 then Uns 1
   else if zle n 7 then Uns 7
   else if zle n 8 then Uns 8
   else if zle n 15 then Uns 15
   else if zle n 16 then Uns 16
-  else itop.
+  else Ifptr p.
 
-Definition sgn (n: Z) : aval :=
-  if zle n 8 then Sgn 8 else if zle n 16 then Sgn 16 else itop.
+Definition sgn (p: aptr) (n: Z) : aval :=
+  if zle n 8 then Sgn 8 else if zle n 16 then Sgn 16 else Ifptr p.
 
 Lemma vmatch_uns':
-  forall i n, is_uns (Zmax 0 n) i -> vmatch (Vint i) (uns n).
+  forall p i n, is_uns (Zmax 0 n) i -> vmatch (Vint i) (uns p n).
 Proof.
   intros.
   assert (A: forall n', n' >= 0 -> n' >= n -> is_uns n' i) by (eauto with va).
@@ -729,12 +743,12 @@ Proof.
 Qed.
 
 Lemma vmatch_uns:
-  forall i n, is_uns n i -> vmatch (Vint i) (uns n).
+  forall p i n, is_uns n i -> vmatch (Vint i) (uns p n).
 Proof.
   intros. apply vmatch_uns'. eauto with va.
 Qed.
 
-Lemma vmatch_uns_undef: forall n, vmatch Vundef (uns n).
+Lemma vmatch_uns_undef: forall p n, vmatch Vundef (uns p n).
 Proof.
   intros. unfold uns. 
   destruct (zle n 1). auto with va. 
@@ -745,7 +759,7 @@ Proof.
 Qed.
 
 Lemma vmatch_sgn':
-  forall i n, is_sgn (Zmax 1 n) i -> vmatch (Vint i) (sgn n).
+  forall p i n, is_sgn (Zmax 1 n) i -> vmatch (Vint i) (sgn p n).
 Proof.
   intros.
   assert (A: forall n', n' >= 1 -> n' >= n -> is_sgn n' i) by (eauto with va).
@@ -755,12 +769,12 @@ Proof.
 Qed.
 
 Lemma vmatch_sgn:
-  forall i n, is_sgn n i -> vmatch (Vint i) (sgn n).
+  forall p i n, is_sgn n i -> vmatch (Vint i) (sgn p n).
 Proof.
   intros. apply vmatch_sgn'. eauto with va.
 Qed.
 
-Lemma vmatch_sgn_undef: forall n, vmatch Vundef (sgn n).
+Lemma vmatch_sgn_undef: forall p n, vmatch Vundef (sgn p n).
 Proof.
   intros. unfold sgn.
   destruct (zle n 8). auto with va.
@@ -832,26 +846,26 @@ Definition vlub (v w: aval) : aval :=
   | I i1, I i2 =>
       if Int.eq i1 i2 then v else
       if Int.lt i1 Int.zero || Int.lt i2 Int.zero
-      then sgn (Z.max (ssize i1) (ssize i2))
-      else uns (Z.max (usize i1) (usize i2))
+      then sgn Pbot (Z.max (ssize i1) (ssize i2))
+      else uns Pbot (Z.max (usize i1) (usize i2))
   | I i, Uns n | Uns n, I i =>
       if Int.lt i Int.zero
-      then sgn (Z.max (ssize i) (n + 1))
-      else uns (Z.max (usize i) n)
+      then sgn Pbot (Z.max (ssize i) (n + 1))
+      else uns Pbot (Z.max (usize i) n)
   | I i, Sgn n | Sgn n, I i =>
-      sgn (Z.max (ssize i) n)
+      sgn Pbot (Z.max (ssize i) n)
   | I i, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), I i =>
       if va_strict tt || Int.eq i Int.zero then Ifptr p else Vtop
   | Uns n1, Uns n2 => Uns (Z.max n1 n2)
-  | Uns n1, Sgn n2 => sgn (Z.max (n1 + 1) n2)
-  | Sgn n1, Uns n2 => sgn (Z.max n1 (n2 + 1))
-  | Sgn n1, Sgn n2 => sgn (Z.max n1 n2)
+  | Uns n1, Sgn n2 => sgn Pbot (Z.max (n1 + 1) n2)
+  | Sgn n1, Uns n2 => sgn Pbot (Z.max n1 (n2 + 1))
+  | Sgn n1, Sgn n2 => sgn Pbot (Z.max n1 n2)
   | F f1, F f2 =>
-      if Float.eq_dec f1 f2 then v else ftop
+      if Float.eq_dec f1 f2 then v else ntop
   | FS f1, FS f2 =>
-      if Float32.eq_dec f1 f2 then v else ftop
+      if Float32.eq_dec f1 f2 then v else ntop
   | L i1, L i2 =>
-      if Int64.eq i1 i2 then v else ltop
+      if Int64.eq i1 i2 then v else ntop
   | Ptr p1, Ptr p2 => Ptr(plub p1 p2)
   | Ptr p1, Ifptr p2 => Ifptr(plub p1 p2)
   | Ifptr p1, Ptr p2 => Ifptr(plub p1 p2)
@@ -881,9 +895,9 @@ Proof.
 - f_equal; apply plub_comm.
 Qed.
 
-Lemma vge_uns_uns': forall n, vge (uns n) (Uns n).
+Lemma vge_uns_uns': forall p n, vge (uns p n) (Uns n).
 Proof.
-  unfold uns, itop; intros. 
+  unfold uns; intros. 
   destruct (zle n 1). auto with va.
   destruct (zle n 7). auto with va.
   destruct (zle n 8). auto with va.
@@ -891,19 +905,19 @@ Proof.
   destruct (zle n 16); auto with va.
 Qed.
 
-Lemma vge_uns_i': forall n i, 0 <= n -> is_uns n i -> vge (uns n) (I i).
+Lemma vge_uns_i': forall p n i, 0 <= n -> is_uns n i -> vge (uns p n) (I i).
 Proof.
   intros. apply vge_trans with (Uns n). apply vge_uns_uns'. auto with va. 
 Qed.
 
-Lemma vge_sgn_sgn': forall n, vge (sgn n) (Sgn n).
+Lemma vge_sgn_sgn': forall p n, vge (sgn p n) (Sgn n).
 Proof.
-  unfold sgn, itop; intros. 
+  unfold sgn; intros. 
   destruct (zle n 8). auto with va.
   destruct (zle n 16); auto with va.
 Qed.
 
-Lemma vge_sgn_i': forall n i, 0 < n -> is_sgn n i -> vge (sgn n) (I i).
+Lemma vge_sgn_i': forall p n i, 0 < n -> is_sgn n i -> vge (sgn p n) (I i).
 Proof.
   intros. apply vge_trans with (Sgn n). apply vge_sgn_sgn'. auto with va. 
 Qed.
@@ -1122,7 +1136,7 @@ Qed.
 (** Generic operations that just do constant propagation. *)
 
 Definition unop_int (sem: int -> int) (x: aval) :=
-  match x with I n => I (sem n) | _ => itop end.
+  match x with I n => I (sem n) | _ => ntop1 x end.
 
 Lemma unop_int_sound:
   forall sem v x,
@@ -1133,7 +1147,7 @@ Proof.
 Qed.
 
 Definition binop_int (sem: int -> int -> int) (x y: aval) :=
-  match x, y with I n, I m => I (sem n m) | _, _ => itop end.
+  match x, y with I n, I m => I (sem n m) | _, _ => ntop2 x y end.
 
 Lemma binop_int_sound:
   forall sem v x w y,
@@ -1144,7 +1158,7 @@ Proof.
 Qed.
 
 Definition unop_float (sem: float -> float) (x: aval) :=
-  match x with F n => F (sem n) | _ => ftop end.
+  match x with F n => F (sem n) | _ => ntop1 x end.
 
 Lemma unop_float_sound:
   forall sem v x,
@@ -1155,7 +1169,7 @@ Proof.
 Qed.
 
 Definition binop_float (sem: float -> float -> float) (x y: aval) :=
-  match x, y with F n, F m => F (sem n m) | _, _ => ftop end.
+  match x, y with F n, F m => F (sem n m) | _, _ => ntop2 x y end.
 
 Lemma binop_float_sound:
   forall sem v x w y,
@@ -1166,7 +1180,7 @@ Proof.
 Qed.
 
 Definition unop_single (sem: float32 -> float32) (x: aval) :=
-  match x with FS n => FS (sem n) | _ => ftop end.
+  match x with FS n => FS (sem n) | _ => ntop1 x end.
 
 Lemma unop_single_sound:
   forall sem v x,
@@ -1177,7 +1191,7 @@ Proof.
 Qed.
 
 Definition binop_single (sem: float32 -> float32 -> float32) (x y: aval) :=
-  match x, y with FS n, FS m => FS (sem n m) | _, _ => ftop end.
+  match x, y with FS n, FS m => FS (sem n m) | _, _ => ntop2 x y end.
 
 Lemma binop_single_sound:
   forall sem v x w y,
@@ -1195,19 +1209,19 @@ Definition shl (v w: aval) :=
       if Int.ltu amount Int.iwordsize then
         match v with
         | I i => I (Int.shl i amount)
-        | Uns n => uns (n + Int.unsigned amount)
-        | Sgn n => sgn (n + Int.unsigned amount)
-        | _ => itop
+        | Uns n => uns (provenance v) (n + Int.unsigned amount)
+        | Sgn n => sgn (provenance v) (n + Int.unsigned amount)
+        | _ => ntop1 v
         end
-      else itop
-  | _ => itop
+      else ntop1 v
+  | _ => ntop1 v
   end.
 
 Lemma shl_sound: 
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.shl v w) (shl x y).
 Proof.
   intros.
-  assert (DEFAULT: vmatch (Val.shl v w) itop). 
+  assert (DEFAULT: vmatch (Val.shl v w) (ntop1 x)). 
   {
     destruct v; destruct w; simpl; try constructor. 
     destruct (Int.ltu i0 Int.iwordsize); constructor.
@@ -1231,18 +1245,18 @@ Definition shru (v w: aval) :=
       if Int.ltu amount Int.iwordsize then
         match v with
         | I i => I (Int.shru i amount)
-        | Uns n => uns (n - Int.unsigned amount)
-        | _ => uns (Int.zwordsize - Int.unsigned amount)
+        | Uns n => uns (provenance v) (n - Int.unsigned amount)
+        | _ => uns (provenance v) (Int.zwordsize - Int.unsigned amount)
         end
-      else itop
-  | _ => itop
+      else ntop1 v
+  | _ => ntop1 v
   end.
 
 Lemma shru_sound: 
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.shru v w) (shru x y).
 Proof.
   intros.
-  assert (DEFAULT: vmatch (Val.shru v w) itop). 
+  assert (DEFAULT: vmatch (Val.shru v w) (ntop1 x)). 
   {
     destruct v; destruct w; simpl; try constructor. 
     destruct (Int.ltu i0 Int.iwordsize); constructor.
@@ -1250,7 +1264,7 @@ Proof.
   destruct y; auto. inv H0. unfold shru, Val.shru.
   destruct (Int.ltu n Int.iwordsize) eqn:LTU; auto.
   exploit Int.ltu_inv; eauto. intros RANGE. change (Int.unsigned Int.iwordsize) with Int.zwordsize in RANGE.
-  assert (DEFAULT2: forall i, vmatch (Vint (Int.shru i n)) (uns (Int.zwordsize - Int.unsigned n))).
+  assert (DEFAULT2: forall i, vmatch (Vint (Int.shru i n)) (uns (provenance x) (Int.zwordsize - Int.unsigned n))).
   {
     intros. apply vmatch_uns. red; intros. 
     rewrite Int.bits_shru by omega. apply zlt_false. omega. 
@@ -1269,19 +1283,19 @@ Definition shr (v w: aval) :=
       if Int.ltu amount Int.iwordsize then
         match v with
         | I i => I (Int.shr i amount)
-        | Uns n => sgn (n + 1 - Int.unsigned amount)
-        | Sgn n => sgn (n - Int.unsigned amount)
-        | _ => sgn (Int.zwordsize - Int.unsigned amount)
+        | Uns n => sgn (provenance v) (n + 1 - Int.unsigned amount)
+        | Sgn n => sgn (provenance v) (n - Int.unsigned amount)
+        | _ => sgn (provenance v) (Int.zwordsize - Int.unsigned amount)
         end
-      else itop
-  | _ => itop
+      else ntop1 v
+  | _ => ntop1 v
   end.
 
 Lemma shr_sound: 
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.shr v w) (shr x y).
 Proof.
   intros.
-  assert (DEFAULT: vmatch (Val.shr v w) itop). 
+  assert (DEFAULT: vmatch (Val.shr v w) (ntop1 x)). 
   {
     destruct v; destruct w; simpl; try constructor. 
     destruct (Int.ltu i0 Int.iwordsize); constructor.
@@ -1289,7 +1303,7 @@ Proof.
   destruct y; auto. inv H0. unfold shr, Val.shr.
   destruct (Int.ltu n Int.iwordsize) eqn:LTU; auto.
   exploit Int.ltu_inv; eauto. intros RANGE. change (Int.unsigned Int.iwordsize) with Int.zwordsize in RANGE.
-  assert (DEFAULT2: forall i, vmatch (Vint (Int.shr i n)) (sgn (Int.zwordsize - Int.unsigned n))).
+  assert (DEFAULT2: forall i, vmatch (Vint (Int.shr i n)) (sgn (provenance x) (Int.zwordsize - Int.unsigned n))).
   {
     intros. apply vmatch_sgn. red; intros. 
     rewrite ! Int.bits_shr by omega. f_equal.
@@ -1297,7 +1311,7 @@ Proof.
     destruct (zlt (Int.zwordsize - 1 + Int.unsigned n) Int.zwordsize);
     omega.
   }
-  assert (SGN: forall i p, is_sgn p i -> 0 < p -> vmatch (Vint (Int.shr i n)) (sgn (p - Int.unsigned n))).
+  assert (SGN: forall i p, is_sgn p i -> 0 < p -> vmatch (Vint (Int.shr i n)) (sgn (provenance x) (p - Int.unsigned n))).
   {
     intros. apply vmatch_sgn'. red; intros. zify.
     rewrite ! Int.bits_shr by omega.
@@ -1317,12 +1331,13 @@ Qed.
 Definition and (v w: aval) :=
   match v, w with
   | I i1, I i2 => I (Int.and i1 i2)
-  | I i, Uns n | Uns n, I i => uns (Z.min n (usize i))
-  | I i, _ | _, I i => uns (usize i)
-  | Uns n1, Uns n2 => uns (Z.min n1 n2)
-  | Uns n, _ | _, Uns n => uns n
-  | Sgn n1, Sgn n2 => sgn (Z.max n1 n2)
-  | _, _ => itop
+  | I i, Uns n | Uns n, I i => uns Pbot (Z.min n (usize i))
+  | I i, _ | _, I i => uns Pbot (usize i)
+  | Uns n1, Uns n2 => uns Pbot (Z.min n1 n2)
+  | Uns n, _ => uns (provenance w) n
+  | _, Uns n => uns (provenance v) n
+  | Sgn n1, Sgn n2 => sgn Pbot (Z.max n1 n2)
+  | _, _ => ntop2 v w
   end.
 
 Lemma and_sound: 
@@ -1352,10 +1367,10 @@ Qed.
 Definition or (v w: aval) :=
   match v, w with
   | I i1, I i2 => I (Int.or i1 i2)
-  | I i, Uns n | Uns n, I i => uns (Z.max n (usize i))
-  | Uns n1, Uns n2 => uns (Z.max n1 n2)
-  | Sgn n1, Sgn n2 => sgn (Z.max n1 n2)
-  | _, _ => itop
+  | I i, Uns n | Uns n, I i => uns Pbot (Z.max n (usize i))
+  | Uns n1, Uns n2 => uns Pbot (Z.max n1 n2)
+  | Sgn n1, Sgn n2 => sgn Pbot (Z.max n1 n2)
+  | _, _ => ntop2 v w
   end.
 
 Lemma or_sound: 
@@ -1377,10 +1392,10 @@ Qed.
 Definition xor (v w: aval) :=
   match v, w with
   | I i1, I i2 => I (Int.xor i1 i2)
-  | I i, Uns n | Uns n, I i => uns (Z.max n (usize i))
-  | Uns n1, Uns n2 => uns (Z.max n1 n2)
-  | Sgn n1, Sgn n2 => sgn (Z.max n1 n2)
-  | _, _ => itop
+  | I i, Uns n | Uns n, I i => uns Pbot (Z.max n (usize i))
+  | Uns n1, Uns n2 => uns Pbot (Z.max n1 n2)
+  | Sgn n1, Sgn n2 => sgn Pbot (Z.max n1 n2)
+  | _, _ => ntop2 v w
   end.
 
 Lemma xor_sound: 
@@ -1402,9 +1417,9 @@ Qed.
 Definition notint (v: aval) :=
   match v with
   | I i => I (Int.not i)
-  | Uns n => sgn (n + 1)
+  | Uns n => sgn Pbot (n + 1)
   | Sgn n => Sgn n
-  | _ => itop
+  | _ => ntop1 v
   end.
 
 Lemma notint_sound:
@@ -1420,20 +1435,20 @@ Qed.
 
 Definition ror (x y: aval) :=
   match y, x with
-  | I j, I i => if Int.ltu j Int.iwordsize then I(Int.ror i j) else itop
-  | _, _ => itop
+  | I j, I i => if Int.ltu j Int.iwordsize then I(Int.ror i j) else ntop
+  | _, _ => ntop1 x
   end.
 
 Lemma ror_sound: 
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.ror v w) (ror x y).
 Proof.
   intros. 
-  assert (DEFAULT: vmatch (Val.ror v w) itop). 
+  assert (DEFAULT: forall p, vmatch (Val.ror v w) (Ifptr p)). 
   {
     destruct v; destruct w; simpl; try constructor. 
     destruct (Int.ltu i0 Int.iwordsize); constructor.
   }
-  unfold ror; destruct y; auto. inv H0. unfold Val.ror.
+  unfold ror; destruct y; try apply DEFAULT; auto. inv H0. unfold Val.ror.
   destruct (Int.ltu n Int.iwordsize) eqn:LTU.
   inv H; auto with va.
   inv H; auto with va.
@@ -1442,7 +1457,7 @@ Qed.
 Definition rolm (x: aval) (amount mask: int) :=
   match x with
   | I i => I (Int.rolm i amount mask)
-  | _   => uns (usize mask)
+  | _   => uns (provenance x) (usize mask)
   end.
 
 Lemma rolm_sound:
@@ -1450,13 +1465,14 @@ Lemma rolm_sound:
   vmatch v x -> vmatch (Val.rolm v amount mask) (rolm x amount mask).
 Proof.
   intros.
-  assert (UNS: forall i, vmatch (Vint (Int.rolm i amount mask)) (uns (usize mask))).
+  assert (UNS_r: forall i j n, is_uns n j -> is_uns n (Int.and i j)).
   {
-    intros. 
-    change (vmatch (Val.and (Vint (Int.rol i amount)) (Vint mask))
-                   (and itop (I mask))).
-    apply and_sound; auto with va. 
+    intros; red; intros. rewrite Int.bits_and by auto. rewrite (H0 m) by auto. 
+    apply andb_false_r.
   }
+  assert (UNS: forall i, vmatch (Vint (Int.rolm i amount mask))
+                                (uns (provenance x) (usize mask))).
+  { intros. unfold Int.rolm. apply vmatch_uns. apply UNS_r. auto with va. }
   unfold Val.rolm, rolm. inv H; auto with va.
 Qed.
 
@@ -1476,7 +1492,7 @@ Definition add (x y: aval) :=
   | Ifptr p, I i | I i, Ifptr p => Ifptr (padd p i)
   | Ifptr p, Ifptr q => Ifptr (plub (poffset p) (poffset q))
   | Ifptr p, _ | _, Ifptr p => Ifptr (poffset p)
-  | _, _ => Vtop
+  | _, _ => ntop2 x y
   end.
 
 Lemma add_sound:
@@ -1498,19 +1514,16 @@ Definition sub (v w: aval) :=
 *)
   | Ptr p, _   => Ifptr (poffset p)
   | Ifptr p, I i => Ifptr (psub p i)
-  | Ifptr p, (Uns _ | Sgn _) => Ifptr (poffset p)
-  | Ifptr p1, Ptr p2 => itop
-  | _, _ => Vtop
+  | Ifptr p, _ => Ifptr (plub (poffset p) (provenance w))
+  | _, _ => ntop2 v w
   end.
 
 Lemma sub_sound: 
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.sub v w) (sub x y).
 Proof.
-  intros. inv H; inv H0; simpl;
+  intros. inv H; subst; inv H0; subst; simpl;
   try (destruct (eq_block b b0));
-  try (constructor; (apply psub_sound || eapply poffset_sound); eauto).
-  change Vtop with (Ifptr (poffset Ptop)). 
-  constructor; eapply poffset_sound. eapply pmatch_top'; eauto. 
+  eauto using psub_sound, poffset_sound, pmatch_lub_l with va.
 Qed.
 
 Definition mul := binop_int Int.mul.
@@ -1536,9 +1549,9 @@ Definition divs (v w: aval) :=
   | I i2, I i1 =>
       if Int.eq i2 Int.zero
       || Int.eq i1 (Int.repr Int.min_signed) && Int.eq i2 Int.mone
-      then if va_strict tt then Vbot else itop
+      then if va_strict tt then Vbot else ntop
       else I (Int.divs i1 i2)
-  | _, _ => itop
+  | _, _ => ntop2 v w
   end.
 
 Lemma divs_sound:
@@ -1554,9 +1567,9 @@ Definition divu (v w: aval) :=
   match w, v with
   | I i2, I i1 =>
       if Int.eq i2 Int.zero
-       then if va_strict tt then Vbot else itop
+       then if va_strict tt then Vbot else ntop
       else I (Int.divu i1 i2)
-  | _, _ => itop
+  | _, _ => ntop2 v w
   end.
 
 Lemma divu_sound:
@@ -1572,9 +1585,9 @@ Definition mods (v w: aval) :=
   | I i2, I i1 =>
       if Int.eq i2 Int.zero
       || Int.eq i1 (Int.repr Int.min_signed) && Int.eq i2 Int.mone
-      then if va_strict tt then Vbot else itop
+      then if va_strict tt then Vbot else ntop
       else I (Int.mods i1 i2)
-  | _, _ => itop
+  | _, _ => ntop2 v w
   end.
 
 Lemma mods_sound:
@@ -1590,10 +1603,10 @@ Definition modu (v w: aval) :=
   match w, v with
   | I i2, I i1 =>
       if Int.eq i2 Int.zero
-      then if va_strict tt then Vbot else itop
+      then if va_strict tt then Vbot else ntop
       else I (Int.modu i1 i2)
-  | I i2, _ => uns (usize i2)
-  | _, _ => itop
+  | I i2, _ => uns (provenance v) (usize i2)
+  | _, _ => ntop2 v w
   end.
 
 Lemma modu_sound:
@@ -1617,8 +1630,8 @@ Qed.
 
 Definition shrx (v w: aval) :=
   match v, w with
-  | I i, I j => if Int.ltu j (Int.repr 31) then I(Int.shrx i j) else itop
-  | _, _ => itop
+  | I i, I j => if Int.ltu j (Int.repr 31) then I(Int.shrx i j) else ntop
+  | _, _ => ntop1 v
   end.
 
 Lemma shrx_sound: 
@@ -1710,8 +1723,8 @@ Proof (binop_single_sound Float32.div).
 Definition zero_ext (nbits: Z) (v: aval) :=
   match v with
   | I i => I (Int.zero_ext nbits i)
-  | Uns n => uns (Z.min n nbits)
-  | _ => uns nbits
+  | Uns n => uns Pbot (Z.min n nbits)
+  | _ => uns (provenance v) nbits
   end.
 
 Lemma zero_ext_sound:
@@ -1730,15 +1743,15 @@ Qed.
 Definition sign_ext (nbits: Z) (v: aval) :=
   match v with
   | I i => I (Int.sign_ext nbits i)
-  | Uns n => if zlt n nbits then Uns n else sgn nbits
-  | Sgn n => sgn (Z.min n nbits)
-  | _ => sgn nbits
+  | Uns n => if zlt n nbits then Uns n else sgn Pbot nbits
+  | Sgn n => sgn Pbot (Z.min n nbits)
+  | _ => sgn (provenance v) nbits
   end.
 
 Lemma sign_ext_sound:
   forall nbits v x, 0 < nbits -> vmatch v x -> vmatch (Val.sign_ext nbits v) (sign_ext nbits x).
 Proof.
-  assert (DFL: forall nbits i, 0 < nbits -> vmatch (Vint (Int.sign_ext nbits i)) (sgn nbits)).
+  assert (DFL: forall p nbits i, 0 < nbits -> vmatch (Vint (Int.sign_ext nbits i)) (sgn p nbits)).
   {
     intros. apply vmatch_sgn. apply is_sign_ext_sgn; auto with va.
   }
@@ -1753,14 +1766,14 @@ Qed.
 Definition singleoffloat (v: aval) :=
   match v with
   | F f => FS (Float.to_single f)
-  | _   => ftop
+  | _   => ntop1 v
   end.
 
 Lemma singleoffloat_sound:
   forall v x, vmatch v x -> vmatch (Val.singleoffloat v) (singleoffloat x).
 Proof.
   intros.  
-  assert (DEFAULT: vmatch (Val.singleoffloat v) ftop).
+  assert (DEFAULT: vmatch (Val.singleoffloat v) (ntop1 x)).
   { destruct v; constructor. }
   destruct x; auto. inv H. constructor. 
 Qed.
@@ -1768,14 +1781,14 @@ Qed.
 Definition floatofsingle (v: aval) :=
   match v with
   | FS f => F (Float.of_single f)
-  | _   => ftop
+  | _   => ntop1 v
   end.
 
 Lemma floatofsingle_sound:
   forall v x, vmatch v x -> vmatch (Val.floatofsingle v) (floatofsingle x).
 Proof.
   intros.  
-  assert (DEFAULT: vmatch (Val.floatofsingle v) ftop).
+  assert (DEFAULT: vmatch (Val.floatofsingle v) (ntop1 x)).
   { destruct v; constructor. }
   destruct x; auto. inv H. constructor. 
 Qed.
@@ -1785,9 +1798,9 @@ Definition intoffloat (x: aval) :=
   | F f =>
       match Float.to_int f with
       | Some i => I i
-      | None => if va_strict tt then Vbot else itop
+      | None => if va_strict tt then Vbot else ntop
       end
-  | _ => itop
+  | _ => ntop1 x
   end.
 
 Lemma intoffloat_sound:
@@ -1803,9 +1816,9 @@ Definition intuoffloat (x: aval) :=
   | F f =>
       match Float.to_intu f with
       | Some i => I i
-      | None => if va_strict tt then Vbot else itop
+      | None => if va_strict tt then Vbot else ntop
       end
-  | _ => itop
+  | _ => ntop1 x
   end.
 
 Lemma intuoffloat_sound:
@@ -1819,7 +1832,7 @@ Qed.
 Definition floatofint (x: aval) :=
   match x with
   | I i => F(Float.of_int i)
-  | _   => ftop
+  | _   => ntop1 x
   end.
 
 Lemma floatofint_sound:
@@ -1832,7 +1845,7 @@ Qed.
 Definition floatofintu (x: aval) :=
   match x with
   | I i => F(Float.of_intu i)
-  | _   => ftop
+  | _   => ntop1 x
   end.
 
 Lemma floatofintu_sound:
@@ -1847,9 +1860,9 @@ Definition intofsingle (x: aval) :=
   | FS f =>
       match Float32.to_int f with
       | Some i => I i
-      | None => if va_strict tt then Vbot else itop
+      | None => if va_strict tt then Vbot else ntop
       end
-  | _ => itop
+  | _ => ntop1 x
   end.
 
 Lemma intofsingle_sound:
@@ -1865,9 +1878,9 @@ Definition intuofsingle (x: aval) :=
   | FS f =>
       match Float32.to_intu f with
       | Some i => I i
-      | None => if va_strict tt then Vbot else itop
+      | None => if va_strict tt then Vbot else ntop
       end
-  | _ => itop
+  | _ => ntop1 x
   end.
 
 Lemma intuofsingle_sound:
@@ -1881,7 +1894,7 @@ Qed.
 Definition singleofint (x: aval) :=
   match x with
   | I i => FS(Float32.of_int i)
-  | _   => ftop
+  | _   => ntop1 x
   end.
 
 Lemma singleofint_sound:
@@ -1894,7 +1907,7 @@ Qed.
 Definition singleofintu (x: aval) :=
   match x with
   | I i => FS(Float32.of_intu i)
-  | _   => ftop
+  | _   => ntop1 x
   end.
 
 Lemma singleofintu_sound:
@@ -1907,36 +1920,31 @@ Qed.
 Definition floatofwords (x y: aval) :=
   match x, y with
   | I i, I j => F(Float.from_words i j)
-  | _, _     => ftop
+  | _, _     => ntop2 x y
   end.
 
 Lemma floatofwords_sound:
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.floatofwords v w) (floatofwords x y).
 Proof.
-  intros. unfold floatofwords, ftop; inv H; simpl; auto with va; inv H0; auto with va.
+  intros. unfold floatofwords; inv H; simpl; auto with va; inv H0; auto with va.
 Qed.
-
-(** In [longofwords] and [loword], we add a tolerance for casts between
-    pointers and 64-bit integers. *)
 
 Definition longofwords (x y: aval) :=
   match y, x with
   | I j, I i => L(Int64.ofwords i j)
-  | (Ptr p | Ifptr p), _ => Ifptr (if va_strict tt then Pbot else p)
-  | _, _     => ltop
+  | _, _     => ntop2 x y
   end.
 
 Lemma longofwords_sound:
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.longofwords v w) (longofwords x y).
 Proof.
-  intros. unfold longofwords, ltop; inv H0; inv H; simpl; auto with va.
+  intros. unfold longofwords; inv H0; inv H; simpl; auto with va.
 Qed.
 
 Definition loword (x: aval) :=
   match x with
   | L i => I(Int64.loword i)
-  | Ptr p | Ifptr p => Ifptr (if va_strict tt then Pbot else p)
-  | _   => itop
+  | _   => ntop1 x
   end.
 
 Lemma loword_sound: forall v x, vmatch v x -> vmatch (Val.loword v) (loword x).
@@ -1947,7 +1955,7 @@ Qed.
 Definition hiword (x: aval) :=
   match x with
   | L i => I(Int64.hiword i)
-  | _   => itop
+  | _   => ntop1 x
   end.
 
 Lemma hiword_sound: forall v x, vmatch v x -> vmatch (Val.hiword v) (hiword x).
@@ -4037,7 +4045,7 @@ End VA.
 
 Hint Constructors cmatch : va.
 Hint Constructors pmatch: va.
-Hint Constructors vmatch : va.
+Hint Constructors vmatch: va.
 Hint Resolve cnot_sound symbol_address_sound
        shl_sound shru_sound shr_sound
        and_sound or_sound xor_sound notint_sound 

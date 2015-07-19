@@ -56,8 +56,8 @@ Definition eval_static_operation (op: operation) (vl: list aval): aval :=
   match op, vl with
   | Omove, v1::nil => v1
   | Ointconst n, nil => I n
-  | Ofloatconst n, nil => if propagate_float_constants tt then F n else ftop
-  | Osingleconst n, nil => if propagate_float_constants tt then FS n else ftop
+  | Ofloatconst n, nil => if propagate_float_constants tt then F n else ntop
+  | Osingleconst n, nil => if propagate_float_constants tt then FS n else ntop
   | Oindirectsymbol id, nil => Ifptr (Gl id Int.zero)
   | Ocast8signed, v1 :: nil => sign_ext 8 v1
   | Ocast8unsigned, v1 :: nil => zero_ext 8 v1
@@ -132,7 +132,7 @@ Proof.
   inv VM.
   destruct cond; auto with va.
   inv H0.
-  destruct cond; simpl; eauto with va.
+  destruct cond; simpl; eauto with va.  
   inv H2.
   destruct cond; simpl; eauto with va.
   destruct cond; auto with va.

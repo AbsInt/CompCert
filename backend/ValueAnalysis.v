@@ -79,11 +79,11 @@ Definition transfer_builtin (ae: aenv) (am: amem) (rm: romem) (ef: external_func
       VA.State (AE.set res a ae) am
   | Builtin_vstore chunk aaddr av =>
       let am' := storev chunk am aaddr av in
-      VA.State (AE.set res itop ae) (mlub am am')
+      VA.State (AE.set res ntop ae) (mlub am am')
   | Builtin_memcpy sz al adst asrc =>
       let p := loadbytes am rm (aptr_of_aval asrc) in
       let am' := storebytes am (aptr_of_aval adst) sz p in
-      VA.State (AE.set res itop ae) am'
+      VA.State (AE.set res ntop ae) am'
   | Builtin_annot_val av =>
       VA.State (AE.set res av ae) am
   | Builtin_default =>
@@ -164,9 +164,9 @@ Definition store_init_data (ab: ablock) (p: Z) (id: init_data) : ablock :=
   | Init_int32 n => ablock_store Mint32 ab p (I n)
   | Init_int64 n => ablock_store Mint64 ab p (L n)
   | Init_float32 n => ablock_store Mfloat32 ab p
-                        (if propagate_float_constants tt then FS n else ftop)
+                        (if propagate_float_constants tt then FS n else ntop)
   | Init_float64 n => ablock_store Mfloat64 ab p
-                        (if propagate_float_constants tt then F n else ftop)
+                        (if propagate_float_constants tt then F n else ntop)
   | Init_addrof symb ofs => ablock_store Mint32 ab p (Ptr (Gl symb ofs))
   | Init_space n => ab
   end.
