@@ -64,7 +64,11 @@ Variable bc: block_classification.
 
 (** * Abstracting the result of conditions (type [option bool]) *)
 
-Inductive abool := Bnone | Just (b: bool) | Maybe (b: bool) | Btop.
+Inductive abool :=
+  | Bnone               (**r always [None] (undefined) *)
+  | Just (b: bool)      (**r always [Some b] (defined and known to be [b]) *)
+  | Maybe (b: bool)     (**r either [None] or [Some b] (known to be [b] if defined) *)
+  | Btop.               (**r unknown, all results are possible *)
 
 Inductive cmatch: option bool -> abool -> Prop :=
   | cmatch_none: cmatch None Bnone
@@ -121,14 +125,14 @@ Qed.
 (** * Abstracting pointers *)
 
 Inductive aptr : Type :=
-  | Pbot
-  | Gl (id: ident) (ofs: int)
-  | Glo (id: ident)
-  | Glob
-  | Stk (ofs: int)
-  | Stack
-  | Nonstack
-  | Ptop.
+  | Pbot                        (**r bottom (empty set of pointers) *)
+  | Gl (id: ident) (ofs: int)   (**r pointer into the block for global variable [id] at offset [ofs] *)
+  | Glo (id: ident)             (**r pointer anywhere into the block for global [id] *)
+  | Glob                        (**r pointer into any global variable *)
+  | Stk (ofs: int)              (**r pointer into the current stack frame at offset [ofs] *)
+  | Stack                       (**r pointer anywhere into the current stack frame *)
+  | Nonstack                    (**r pointer anywhere but into the current stack frame *)
+  | Ptop.                       (**r any valid pointer *)
 
 Definition eq_aptr: forall (p1 p2: aptr), {p1=p2} + {p1<>p2}.
 Proof.
@@ -512,23 +516,31 @@ Qed.
 (** * Abstracting values *)
 
 Inductive aval : Type :=
-  | Vbot
-  | I (n: int)
-  | Uns (p: aptr) (n: Z)
-  | Sgn (p: aptr) (n: Z)
-  | L (n: int64)
-  | F (f: float)
-  | FS (f: float32)
-  | Ptr (p: aptr)
-  | Ifptr (p: aptr).
+  | Vbot                     (**r bottom (empty set of values) *)
+  | I (n: int)               (**r exactly [Vint n] *)
+  | Uns (p: aptr) (n: Z)     (**r a [n]-bit unsigned integer, or [Vundef] *)
+  | Sgn (p: aptr) (n: Z)     (**r a [n]-bit signed integer, or [Vundef] *)
+  | L (n: int64)             (**r exactly [Vlong n] *)
+  | F (f: float)             (**r exactly [Vfloat f] *)
+  | FS (f: float32)          (**r exactly [Vsingle f] *)
+  | Ptr (p: aptr)            (**r a pointer from the set [p], or [Vundef] *)
+  | Ifptr (p: aptr).         (**r a pointer from the set [p], or a number, or [Vundef] *)
+
+(** The "top" of the value domain is defined as any pointer, or any
+    number, or [Vundef]. *)
+
+Definition Vtop := Ifptr Ptop.
+
+(** The [p] parameter (an abstract pointer) to [Uns] and [Sgn] helps keeping
+  track of pointers that leak through arithmetic operations such as shifts.
+  See the section "Tracking leakage of pointers" below.
+  In strict analysis mode, [p] is always [Pbot]. *)
 
 Definition eq_aval: forall (v1 v2: aval), {v1=v2} + {v1<>v2}.
 Proof.
   intros. generalize zeq Int.eq_dec Int64.eq_dec Float.eq_dec Float32.eq_dec eq_aptr; intros.
   decide equality. 
 Defined.
-
-Definition Vtop := Ifptr Ptop.
 
 Definition is_uns (n: Z) (i: int) : Prop :=
   forall m, 0 <= m < Int.zwordsize -> m >= n -> Int.testbit i m = false.
