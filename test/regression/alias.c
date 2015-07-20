@@ -2,6 +2,7 @@
    where it should remain conservative. */
 
 typedef unsigned int uintptr_t;
+typedef signed int ptrdiff_t;
 
 /* For testing with GCC */
 #define NOINLINE __attribute__((noinline))
@@ -91,9 +92,12 @@ int get5(void)
   return x;
 }
 
-/* Even more fun with xor */
+/* Even more fun with xor.  This one manufactures a pointer to one object
+   from a pointer to another, distinct object.  Neither GCC nor CompCert
+   promise to implement the expected behavior, but both happen to do it.
+*/
 
-int x;
+int g;
 
 void NOINLINE set6(int * p, uintptr_t z)
 {
@@ -104,12 +108,12 @@ void NOINLINE set6(int * p, uintptr_t z)
 int get6(void)
 {
   int y = 0;
-  uintptr_t z = (uintptr_t) &x ^ (uintptr_t) &y;
-  set6(&x, z);
+  uintptr_t z = (uintptr_t) &g ^ (uintptr_t) &y;
+  set6(&g, z);
   int res1 = y;
-  x = 0;
+  g = 0;
   set6(&y, z);
-  int res2 = x;
+  int res2 = g;
   return res1 & res2;
 }
 
@@ -127,6 +131,24 @@ int get7(void)
   return u.c[0];
 }
 
+/* This is an example where wild pointer arithmetic is used to jump
+   from one object to another.  Like GCC and Clang, we don't preserve the
+   expected behavior. */
+
+ptrdiff_t NOINLINE delta8(int * p)
+{
+  return p - &g;
+}
+
+int get8(void)
+{
+  int x;
+  ptrdiff_t d = delta8(&x);
+  x = 0;
+  *(&g + d) = 1;
+  return x;
+}
+
 /* Test harness */
 
 #include <stdio.h>
@@ -140,6 +162,7 @@ int main()
   printf("Test 5: %d\n", get5());
   printf("Test 6: %d\n", get6());
   printf("Test 7: %d\n", get7());
+  printf("Test 8: %d\n", get8());
   return 0;
 }
 
