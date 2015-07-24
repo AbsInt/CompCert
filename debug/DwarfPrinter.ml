@@ -393,8 +393,8 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       print_opt_value oc st.structure_name print_string
 
     let print_subprogram_addr oc (s,e) =
-      fprintf oc "	.4byte		%a\n" label s;
-      fprintf oc "	.4byte		%a\n" label e
+      fprintf oc "	.4byte		%a\n" label e;
+      fprintf oc "	.4byte		%a\n" label s
      
     let print_subprogram oc sp =
       let addr = get_fun_addr sp.subprogram_name  in
