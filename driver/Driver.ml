@@ -159,8 +159,8 @@ let jdump_magic_number = "CompCertJDUMP" ^ Version.version
 
 let dump_jasm asm destfile =
   let oc = open_out_bin destfile in
-  fprintf oc "{\n\"Version\":\"%s\",\n\"Asm Ast\":%a}"
-    jdump_magic_number AsmToJSON.p_program asm;
+  fprintf oc "{\n\"Version\":\"%s\",\n\"System\":\"%s\",\n\"Asm Ast\":%a}"
+    jdump_magic_number Configuration.system AsmToJSON.p_program asm;
   close_out oc
 
 
