@@ -535,6 +535,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	fres	%a, %a\n" freg r1 freg r2    
       | Pfsel(r1, r2, r3, r4) ->
           fprintf oc "	fsel	%a, %a, %a, %a\n" freg r1 freg r2 freg r3 freg r4
+      | Picbi (r1,r2) ->
+          fprintf oc "	icbi	%a,%a\n" ireg r1 ireg r2
       | Pisync ->
           fprintf oc "	isync\n"
       | Plwsync ->

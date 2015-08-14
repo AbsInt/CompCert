@@ -86,7 +86,10 @@ let builtins = {
     "__builtin_lwsync",
       (TVoid [], [], false);
     "__builtin_trap",
-      (TVoid [], [], false)
+      (TVoid [], [], false);
+    (* Cache isntructions *)
+    "__builtin_icbi",
+      (TVoid [],[TPtr(TVoid [], [])],false)
   ]
 }
 
