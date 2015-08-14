@@ -83,6 +83,8 @@ let builtins = {
       (TVoid [], [], false);
     "__builtin_isync",
       (TVoid [], [], false);
+    "__builtin_lwsync",
+      (TVoid [], [], false);
     "__builtin_trap",
       (TVoid [], [], false)
   ]

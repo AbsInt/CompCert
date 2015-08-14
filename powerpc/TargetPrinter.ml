@@ -537,6 +537,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	fsel	%a, %a, %a, %a\n" freg r1 freg r2 freg r3 freg r4
       | Pisync ->
           fprintf oc "	isync\n"
+      | Plwsync ->
+          fprintf oc "	lwsync\n"
       | Plbz(r1, c, r2) ->
           fprintf oc "	lbz	%a, %a(%a)\n" ireg r1 constant c ireg r2
       | Plbzx(r1, r2, r3) ->

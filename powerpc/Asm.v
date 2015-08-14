@@ -270,6 +270,7 @@ Inductive instruction : Type :=
   | Psubfze: ireg -> ireg -> instruction                      (**r integer opposite with carry *)
   | Psubfic: ireg -> ireg -> constant -> instruction          (**r integer subtraction from immediate *)
   | Psync: instruction                                        (**r SYNC barrier *)
+  | Plwsync: instruction                                      (**r LWSYNC barrier *)
   | Ptrap: instruction                                        (**r unconditional trap *)
   | Pxor: ireg -> ireg -> ireg -> instruction                 (**r bitwise xor *)
   | Pxori: ireg -> ireg -> constant -> instruction            (**r bitwise xor with immediate *)
@@ -870,6 +871,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Plwarx _ _ _
   | Plwbrx _ _ _
   | Pisync
+  | Plwsync
   | Plhbrx _ _ _
   | Plwzu _ _ _
   | Pmfcr _

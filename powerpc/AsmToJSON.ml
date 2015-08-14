@@ -211,12 +211,13 @@ let p_instruction oc ic =
   | Pfres (fr1,fr2) -> fprintf oc "{\"Instruction Name\":\"Pfres\",\"Args\":[%a,%a]}" p_freg fr1 p_freg fr2
   | Pfsel (fr1,fr2,fr3,fr4) -> fprintf oc "{\"Instruction Name\":\"Pfsel\",\"Args\":[%a,%a,%a,%a]}" p_freg fr1 p_freg fr2 p_freg fr3 p_freg fr4
   | Pisync -> fprintf oc "{\"Instruction Name\":\"Pisync\",\"Args\":[]}"
+  | Plwsync -> fprintf oc "{\"Instruction Name\":\"Plwsync\",\"Args\":[]}"
   | Plbz (ir1,c,ir2) -> fprintf oc "{\"Instruction Name\":\"Plbz\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_constant c p_ireg ir2
   | Plbzx (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pblzx\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Plfd (fr,c,ir)
   | Plfd_a (fr,c,ir) -> fprintf oc "{\"Instruction Name\":\"Plfd\",\"Args\":[%a,%a,%a]}" p_freg fr p_constant c p_ireg ir
- | Plfdx (fr,ir1,ir2)
- | Plfdx_a (fr,ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Plfdx\",\"Args\":[%a,%a,%a]}" p_freg fr p_ireg ir1 p_ireg ir2
+  | Plfdx (fr,ir1,ir2)
+  | Plfdx_a (fr,ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Plfdx\",\"Args\":[%a,%a,%a]}" p_freg fr p_ireg ir1 p_ireg ir2
   | Plfs (fr,c,ir) -> fprintf oc "{\"Instruction Name\":\"Plfs\",\"Args\":[%a,%a,%a]}" p_freg fr p_constant c p_ireg ir
   | Plfsx  (fr,ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Plfsx\",\"Args\":[%a,%a,%a]}" p_freg fr p_ireg ir1 p_ireg ir2
   | Plha (ir1,c,ir2) -> fprintf oc "{\"Instruction Name\":\"Plha\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_constant c p_ireg ir2
@@ -349,7 +350,7 @@ let p_vardef oc (name,v) =
   fprintf oc "{\"Var Name\":%a,\"Var Readonly\":%B,\"Var Volatile\":%B,\n\"Var Storage Class\":%a,\n\"Var Alignment\":%a,\n\"Var Section\":%a,\n\"Var Init\":%a}\n"
     p_atom name v.gvar_readonly v.gvar_volatile 
     p_storage static p_int_opt alignment p_section section
-    (p_list p_init_data) v.gvar_init 
+    (p_list p_init_data) v.gvar_init
 
 let p_program oc prog =
   let prog_vars,prog_funs = List.fold_left (fun (vars,funs) (ident,def) ->

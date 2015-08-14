@@ -416,6 +416,8 @@ let expand_builtin_inline name args res =
       emit (Psync)
   | "__builtin_isync", [], _ ->
       emit (Pisync)
+  | "__builtin_lwsync", [], _ ->
+      emit (Plwsync)
   | "__builtin_trap", [], _ ->
       emit (Ptrap)
   (* Vararg stuff *)
