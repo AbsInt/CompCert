@@ -175,6 +175,7 @@ let p_instruction oc ic =
   | Pcreqv (cr1,cr2,cr3) -> fprintf oc "{\"Instruction Name\":\"Pcreqv\",\"Args\":[%a,%a,%a]}" p_crbit cr1 p_crbit cr2 p_crbit cr3
   | Pcror (cr1,cr2,cr3) -> fprintf oc "{\"Instruction Name\":\"Pcror\",\"Args\":[%a,%a,%a]}" p_crbit cr1 p_crbit cr2 p_crbit cr3
   | Pcrxor (cr1,cr2,cr3) -> fprintf oc "{\"Instruction Name\":\"Pcrxor\",\"Args\":[%a,%a,%a]}" p_crbit cr1 p_crbit cr2 p_crbit cr3
+  | Pdcbi (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pdcbi\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
   | Pdivw (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pdivw\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pdivwu (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pdivwu\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Peieio -> fprintf oc "{\"Instruction Name\":\"Peieio,\"Args\":[]}"

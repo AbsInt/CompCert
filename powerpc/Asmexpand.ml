@@ -424,6 +424,8 @@ let expand_builtin_inline name args res =
   | "__builtin_va_start", [IR a], _ ->
       expand_builtin_va_start a
   (* Catch-all *)
+  | "__builtin_dcbi", [IR a1],_ ->
+      emit (Pdcbi (GPR0,a1))
   | "__builtin_icbi", [IR a1],_ ->
       emit (Picbi(GPR0,a1))
   | _ ->

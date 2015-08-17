@@ -161,10 +161,11 @@ Inductive instruction : Type :=
   | Pcmplwi: ireg -> constant -> instruction                  (**r same, with immediate argument *)
   | Pcmpw: ireg -> ireg -> instruction                        (**r signed integer comparison *)
   | Pcmpwi: ireg -> constant -> instruction                   (**r same, with immediate argument *)
-  | Pcntlzw: ireg -> ireg -> instruction                       (**r count leading zeros *)
+  | Pcntlzw: ireg -> ireg -> instruction                      (**r count leading zeros *)
   | Pcreqv: crbit -> crbit -> crbit -> instruction            (**r not-xor between condition bits *)
   | Pcror: crbit -> crbit -> crbit -> instruction             (**r or between condition bits *)
   | Pcrxor: crbit -> crbit -> crbit -> instruction            (**r xor between condition bits *)
+  | Pdcbi: ireg -> ireg -> instruction                        (**r data cache invalidate *)
   | Pdivw: ireg -> ireg -> ireg -> instruction                (**r signed division *)
   | Pdivwu: ireg -> ireg -> ireg -> instruction               (**r unsigned division *)
   | Peieio: instruction                                       (**r EIEIO barrier *)
@@ -858,6 +859,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pcntlzw _ _
   | Pcreqv _ _ _
   | Pcrxor _ _ _
+  | Pdcbi _ _
   | Peieio
   | Pfctiw _ _
   | Pfctiwz _ _
@@ -1065,5 +1067,3 @@ Definition data_preg (r: preg) : bool :=
   | CARRY => false
   | _ => true
   end.
-
-

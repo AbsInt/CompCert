@@ -469,6 +469,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	cror	%a, %a, %a\n" crbit c1 crbit c2 crbit c3
       | Pcrxor(c1, c2, c3) ->
           fprintf oc "	crxor	%a, %a, %a\n" crbit c1 crbit c2 crbit c3
+      | Pdcbi (r1,r2) ->
+          fprintf oc "	dcbi	%a, %a\n" ireg r1 ireg r2
       | Pdivw(r1, r2, r3) ->
           fprintf oc "	divw	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pdivwu(r1, r2, r3) ->
