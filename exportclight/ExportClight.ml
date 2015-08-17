@@ -135,6 +135,11 @@ let coqsingle p n =
 let coqN p n =
   fprintf p "%ld%%N" (N.to_int32 n)
 
+(* Coq strings *)
+
+let coqstring p s =
+  fprintf p "\"%s\"" (camlstring_of_coqstring s)
+
 (* Raw attributes *)
 
 let attribute p a =
@@ -262,7 +267,7 @@ let external_function p = function
       fprintf p "@[<hov 2>(EF_inline_asm %ld%%positive@ %a@ %a)@]"
               (P.to_int32 text)
               signatur sg
-              (print_list ident) clob
+              (print_list coqstring) clob
 
 (* Expressions *)
 
