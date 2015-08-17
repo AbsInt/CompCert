@@ -206,7 +206,8 @@ and typlist p = function
 and callconv p cc =
   if cc = cc_default
   then fprintf p "cc_default"
-  else fprintf p "{|cc_vararg:=%b; cc_structret:=%b|}" cc.cc_vararg cc.cc_structret
+  else fprintf p "{|cc_vararg:=%b; cc_unproto:=%b; cc_structret:=%b|}"
+                  cc.cc_vararg cc.cc_unproto cc.cc_structret
 
 (* External functions *)
 
