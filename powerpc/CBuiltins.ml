@@ -88,6 +88,8 @@ let builtins = {
     "__builtin_trap",
       (TVoid [], [], false);
     (* Cache isntructions *)
+    "__builtin_dcbf",
+      (TVoid [],[TPtr(TVoid [], [])],false);
     "__builtin_dcbi",
       (TVoid [],[TPtr(TVoid [], [])],false);
     "__builtin_icbi",
