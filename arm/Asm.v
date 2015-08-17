@@ -1,3 +1,4 @@
+
 (* *********************************************************************)
 (*                                                                     *)
 (*              The Compcert verified compiler                         *)
@@ -148,6 +149,7 @@ Inductive instruction : Type :=
   | Pmul: ireg -> ireg -> ireg -> instruction      (**r integer multiplication *)
   | Pmvn: ireg -> shift_op -> instruction          (**r integer complement *)
   | Porr: ireg -> ireg -> shift_op -> instruction  (**r bitwise or *)
+  | Ppush: list ireg -> instruction (** push registers on the stack instruction *)
   | Prsb: ireg -> ireg -> shift_op -> instruction  (**r integer reverse subtraction *)
   | Psbfx: ireg -> ireg -> int -> int -> instruction (**r signed bitfield extract *)
   | Pstr: ireg -> ireg -> shift_op -> instruction (**r int32 store *)
@@ -204,7 +206,31 @@ Inductive instruction : Type :=
   | Pmovite: testcond -> ireg -> shift_op -> shift_op -> instruction (**r integer conditional move *)
   | Pbtbl: ireg -> list label -> instruction       (**r N-way branch through a jump table *)
   | Pbuiltin: external_function -> list preg -> list preg -> instruction  (**r built-in function *)
-  | Pannot: external_function -> list (annot_arg preg) -> instruction. (**r annotation statement *)
+  | Pannot: external_function -> list (annot_arg preg) -> instruction (**r annotation statement *)
+  | Padc: ireg -> ireg -> shift_op -> instruction     (**r add with carry *)
+  | Pcfi_adjust: int -> instruction                   (**r .cfi_adjust debug directive *)
+  | Pclz: preg -> preg -> instruction                 (**r count leading zeros. *)
+  | Pfsqrt: freg -> freg -> instruction               (**r floating-point square root. *)
+  | Prev: preg -> preg -> instruction                 (**r reverse bytes and reverse bits. *)
+  | Prev16: preg -> preg -> instruction               (**r reverse bytes and reverse bits. *)
+  | Prsc: ireg -> ireg -> shift_op -> instruction     (**r reverse subtract without carry. *)
+  | Psbc: ireg -> ireg -> shift_op -> instruction     (**r add with carry *)
+  (* Add, sub, rsb versions with s suffix *)
+  | Padds: ireg -> ireg -> shift_op -> instruction    (**r integer addition with update of condition flags *)
+  | Psubs: ireg -> ireg -> shift_op -> instruction    (**r integer subtraction with update of condition flags *)
+  | Prsbs: ireg -> ireg -> shift_op -> instruction    (**r integer reverse subtraction with update of condition flags *)
+  | Pdmb: instruction                                 (**r data memory barrier *)
+  | Pdsb: instruction                                 (**r data synchronization barrier *)
+  | Pisb: instruction                                 (**r instruction synchronization barrier *)
+  | Pbne: label -> instruction                        (**r branch if negative macro *)
+  | Pldr_p: ireg -> ireg -> shift_op -> instruction   (**r int32 load with post increment *)
+  | Pldrb_p: ireg -> ireg -> shift_op -> instruction  (**r unsigned int8 load with post increment *)
+  | Pldrh_p: ireg -> ireg -> shift_op -> instruction  (**r unsigned int16 load with post increment *)
+  | Pstr_p: ireg -> ireg -> shift_op -> instruction   (**r int32 store with post increment *)
+  | Pstrb_p: ireg -> ireg -> shift_op -> instruction  (**r unsigned int8 store with post increment *)
+  | Pstrh_p: ireg -> ireg -> shift_op -> instruction. (**r unsigned int16 store with post increment *)
+ 
+ 
 
 (** The pseudo-instructions are the following:
 
@@ -723,6 +749,31 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       end
   | Pbuiltin ef args res => Stuck    (**r treated specially below *)
   | Pannot ef args => Stuck          (**r treated specially below *)
+  (** The following instructions and directives are not generated directly by Asmgen,
+      so we do not model them. *)
+  | Ppush _
+  | Padc _ _ _
+  | Pcfi_adjust _
+  | Pclz _ _
+  | Prev _ _
+  | Prev16 _ _
+  | Pfsqrt _ _
+  | Prsc _ _ _
+  | Psbc _ _ _
+  | Padds _ _ _
+  | Psubs _ _ _
+  | Prsbs _ _ _
+  | Pdmb
+  | Pdsb
+  | Pisb
+  | Pbne _
+  | Pldr_p _ _ _
+  | Pldrb_p _ _ _
+  | Pldrh_p _ _ _
+  | Pstr_p _ _ _
+  | Pstrb_p _ _ _
+  | Pstrh_p _ _ _ =>
+    Stuck
   end.
 
 (** Translation of the LTL/Linear/Mach view of machine registers
