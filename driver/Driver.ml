@@ -468,6 +468,7 @@ Assembling options:
 Linking options:
   -l<lib>        Link library <lib>
   -L<dir>        Add <dir> to search path for libraries
+  -T <file>      Use <file> as linker command file
   -Wl,<opt>      Pass option <opt> to the linker
 Tracing options:
   -dparse        Save C file after parsing and elaboration in <file>.parse.c
@@ -564,6 +565,10 @@ let cmdline_actions =
 (* Linking options *)
   Prefix "-l", Self push_linker_arg;
   Prefix "-L", Self push_linker_arg;
+  Exact "-T", String (fun s -> if Configuration.system = "diab" then 
+    push_linker_arg ("-Wm "^s) 
+  else
+    push_linker_arg ("-T "^s));
   Prefix "-Wl,", Self push_linker_arg;
 (* Tracing options *)
   Exact "-dparse", Set option_dparse;
