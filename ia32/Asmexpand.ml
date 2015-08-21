@@ -3,6 +3,7 @@
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
 (*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*          Bernhard Schommer, AbsInt Angewandte Informatik GmbH       *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
 (*  Automatique.  All rights reserved.  This file is distributed       *)
@@ -11,8 +12,7 @@
 (* *********************************************************************)
 
 (* Expanding built-ins and some pseudo-instructions by rewriting
-   of the IA32 assembly code.  Currently not done, this expansion
-   is performed on the fly in PrintAsm. *)
+   of the IA32 assembly code.  *)
 
 open Asm
 open Asmexpandaux

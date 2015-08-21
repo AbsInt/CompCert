@@ -3,6 +3,7 @@
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
 (*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*          Bernhard Schommer, AbsInt Angewandte Informatik GmbH       *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
 (*  Automatique.  All rights reserved.  This file is distributed       *)
@@ -11,8 +12,7 @@
 (* *********************************************************************)
 
 (* Expanding built-ins and some pseudo-instructions by rewriting
-   of the ARM assembly code.  Currently not everything done, this
-   expansion is performed on the fly in PrintAsm. *)
+   of the ARM assembly code.  *)
 
 open Asm
 open Asmexpandaux
@@ -310,7 +310,7 @@ let expand_instruction instr =
        else sz in
      if Asmgen.is_immed_arith sz
      then emit (Padd (IR13,IR13,SOimm sz))
-     else emit (Pldr (IR13,IR13,SOimm sz))
+     else emit (Pldr (IR13,IR13,SOimm ofs))
   | Pbuiltin (ef,args,res) ->
      begin match ef with
 	   | EF_builtin (name,sg) ->
