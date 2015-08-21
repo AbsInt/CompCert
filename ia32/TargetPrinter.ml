@@ -661,9 +661,7 @@ module Target(System: SYSTEM):TARGET =
               print_annot_stmt oc (extern_atom txt) targs args
           | EF_inline_asm(txt, sg, clob) ->
               fprintf oc "%s begin inline assembly\n\t" comment;
-              print_inline_asm preg oc (extern_atom txt) sg
-                                       (params_of_builtin_args args)
-                                       (params_of_builtin_res res);
+              print_inline_asm preg oc (extern_atom txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment
           | _ ->
               assert false

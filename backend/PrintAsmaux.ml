@@ -271,23 +271,42 @@ let print_annot_val print_preg oc txt args =
 
 (** Inline assembly *)
 
-let re_asm_param = Str.regexp "%%\\|%[0-9]+"
+let print_asm_argument print_preg oc modifier = function
+  | BA r -> print_preg oc r
+  | BA_longofwords(BA hi, BA lo) ->
+      begin match modifier with
+      | "R" -> print_preg oc hi
+      | "Q" -> print_preg oc lo
+      |  _  -> fprintf oc "%a:%a" print_preg hi print_preg lo
+                  (* Probably not what was intended *)
+      end
+  | _ -> failwith "bad asm argument"
+
+let builtin_arg_of_res = function
+  | BR r -> BA r
+  | BR_longofwords(BR hi, BR lo) -> BA_longofwords(BA hi, BA lo)
+  | _ -> assert false
+
+let re_asm_param_1 = Str.regexp "%%\\|%[QR]?[0-9]+"
+let re_asm_param_2 = Str.regexp "%\\([QR]?\\)\\([0-9]+\\)"
 
 let print_inline_asm print_preg oc txt sg args res =
   let operands =
-    if sg.sig_res = None then args else res @ args in
+    if sg.sig_res = None then args else builtin_arg_of_res res :: args in
   let print_fragment = function
   | Str.Text s ->
       output_string oc s
   | Str.Delim "%%" ->
       output_char oc '%'
   | Str.Delim s ->
-      let n = int_of_string (String.sub s 1 (String.length s - 1)) in
+      assert (Str.string_match re_asm_param_2 s 0);
+      let modifier = Str.matched_group 1 s
+      and number = int_of_string (Str.matched_group 2 s) in
       try
-        print_preg oc (List.nth operands n)
+        print_asm_argument print_preg oc modifier (List.nth operands number)
       with Failure _ ->
         fprintf oc "<bad parameter %s>" s in
-  List.iter print_fragment (Str.full_split re_asm_param txt);
+  List.iter print_fragment (Str.full_split re_asm_param_1 txt);
   fprintf oc "\n"
 
 
