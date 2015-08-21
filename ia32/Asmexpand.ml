@@ -78,19 +78,19 @@ let expand_builtin_memcpy_small sz al src dst =
   let rec copy ofs sz =
     if sz >= 8 && !Clflags.option_ffpu then begin
 	emit (Pmovq_rm (XMM7,Addrmode (Some src, None, Coq_inl ofs)));
-	emit (Pmovq_mr (Addrmode (Some src, None, Coq_inl ofs),XMM7));
+	emit (Pmovq_mr (Addrmode (Some dst, None, Coq_inl ofs),XMM7));
         copy (Int.add ofs _8) (sz - 8)
       end else if sz >= 4 then begin
 	emit (Pmov_rm (ECX,Addrmode (Some src, None, Coq_inl ofs)));
-	emit (Pmov_mr (Addrmode (Some src, None, Coq_inl ofs),ECX));
+	emit (Pmov_mr (Addrmode (Some dst, None, Coq_inl ofs),ECX));
         copy (Int.add ofs _4) (sz - 4)
       end else if sz >= 2 then begin
 	emit (Pmovw_rm (ECX,Addrmode (Some src, None, Coq_inl ofs)));
-	emit (Pmovw_mr (Addrmode (Some src, None, Coq_inl ofs),ECX));
+	emit (Pmovw_mr (Addrmode (Some dst, None, Coq_inl ofs),ECX));
         copy (Int.add ofs _2) (sz - 2)
       end else if sz >= 1 then begin
 	emit (Pmovb_rm (ECX,Addrmode (Some src, None, Coq_inl ofs)));
-	emit (Pmovb_mr (Addrmode (Some src, None, Coq_inl ofs),ECX));
+	emit (Pmovb_mr (Addrmode (Some dst, None, Coq_inl ofs),ECX));
         copy (Int.add ofs _1) (sz - 1)
       end in
   copy _0 sz
@@ -226,7 +226,7 @@ let expand_builtin_inline name args res =
   (* Float arithmetic *)
   | "__builtin_fabs", [FR a1], [FR res] ->
      if a1 <> res then
-       emit (Pmovsd_ff (a1,res));
+       emit (Pmovsd_ff (res,a1));
      emit (Pabsd res) (* This ensures that need_masks is set to true *)
   | "__builtin_fsqrt", [FR a1], [FR res] ->
      emit (Psqrtsd (a1,res))
@@ -236,7 +236,7 @@ let expand_builtin_inline name args res =
      else if res = a2 then
        emit (Pmaxsd (a1,res))
      else begin
-	 emit (Pmovsd_ff (a1,res));
+	 emit (Pmovsd_ff (res,a1));
 	 emit (Pmaxsd (a2,res))
        end
   | "__builtin_fmin", [FR a1; FR a2], [FR res] ->
@@ -245,7 +245,7 @@ let expand_builtin_inline name args res =
      else if res = a2 then
        emit (Pminsd (a1,res))
      else begin
-	 emit (Pmovsd_ff (a1,res));
+	 emit (Pmovsd_ff (res,a1));
 	 emit (Pminsd (a2,res))
        end
   | "__builtin_fmadd",  [FR a1; FR a2; FR a3], [FR res] ->
@@ -256,7 +256,7 @@ let expand_builtin_inline name args res =
      else if res = a3 then
        emit (Pfmadd231 (a2,a3,res))
      else begin
-	 emit (Pmovsd_ff (a2,res));
+	 emit (Pmovsd_ff (res,a2));
 	 emit (Pfmadd231 (a1,a2,res))
        end
   |"__builtin_fmsub",  [FR a1; FR a2; FR a3], [FR res] ->
@@ -267,7 +267,7 @@ let expand_builtin_inline name args res =
      else if res = a3 then
        emit (Pfmsub231 (a2,a3,res))
      else begin
-	 emit (Pmovsd_ff (a2,res));
+	 emit (Pmovsd_ff (res,a2));
 	 emit (Pfmsub231 (a1,a2,res))
        end
   | "__builtin_fnmadd",  [FR a1; FR a2; FR a3], [FR res] ->
@@ -278,7 +278,7 @@ let expand_builtin_inline name args res =
      else if res = a3 then
        emit (Pfnmadd231 (a2,a3,res))
      else begin
-	 emit (Pmovsd_ff (a2,res));
+	 emit (Pmovsd_ff (res,a2));
 	 emit (Pfnmadd231 (a1,a2,res))
        end
   |"__builtin_fnmsub",  [FR a1; FR a2; FR a3], [FR res] ->
@@ -289,7 +289,7 @@ let expand_builtin_inline name args res =
      else if res = a3 then
        emit (Pfnmsub231 (a2,a3,res))
      else begin
-	 emit (Pmovsd_ff (a2,res));
+	 emit (Pmovsd_ff (res,a2));
 	 emit (Pfnmsub231 (a1,a2,res))
        end
   (* 64-bit integer arithmetic *)
@@ -304,7 +304,7 @@ let expand_builtin_inline name args res =
      emit (Padcl_rr (ECX,EDX))
   | "__builtin_subl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
      assert (ah = EDX && al = EAX && bh = ECX && bl = EBX && rh = EDX && rl = EAX);
-     emit (Psub_rr (EBX,EAX));
+     emit (Psub_rr (EAX,EBX));
      emit (Psbbl (ECX,EDX))
   | "__builtin_mull", [IR a; IR b], [IR rh; IR rl] ->
      assert (a = EAX && b = EDX && rh = EDX && rl = EAX);
@@ -322,9 +322,16 @@ let expand_builtin_inline name args res =
      let tmp = if a1 = ECX then EDX else ECX in
      let addr = Addrmode(Some a1,None,Coq_inl _0) in
      if a2 <> tmp then
-       emit (Pmov_rr (a2,tmp));
+       emit (Pmov_rr (tmp,a2));
      emit (Pxchg (tmp,tmp));
      emit (Pmovw_mr (addr,tmp))
+  | "__builtin_write32_reversed", [IR a1; IR a2], _ ->
+     let tmp = if a1 = ECX then EDX else ECX in
+     let addr = Addrmode(Some a1,None,Coq_inl _0) in
+     if a2 <> tmp then
+       emit (Pmov_rr (tmp,a2));
+     emit (Pbswap tmp);
+     emit (Pmov_mr (addr,tmp))
   (* Vararg stuff *)
   | "__builtin_va_start", [IR a], _ ->
      expand_builtin_va_start a
