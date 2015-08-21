@@ -162,10 +162,9 @@ clean:
 
 depend: $(GENERATED)
 	@echo "Analyzing OCaml dependencies"
-	@$(OCAMLDEP) $(foreach d,$(DIRS),$(wildcard $(d)/*.mli $(d)/*.ml)) >.depend.extr
-	@$(OCAMLDEP) $(GENERATED) >> .depend.extr
+	@$(OCAMLDEP) $(foreach d,$(DIRS),$(wildcard $(d)/*.mli $(d)/*.ml)) $(GENERATED) >.depend.extr || { rm -f .depend.extr; exit 2; }
 ifneq ($(strip $(DIRS_P4)),)
-	@$(OCAMLDEP_P4) $(foreach d,$(DIRS_P4),$(wildcard $(d)/*.mli $(d)/*.ml)) >>.depend.extr
+	@$(OCAMLDEP_P4) $(foreach d,$(DIRS_P4),$(wildcard $(d)/*.mli $(d)/*.ml)) >>.depend.extr || { rm -f .depend.extr; exit 2; }
 endif
 
 

@@ -3,6 +3,7 @@
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
 (*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*          Bernhard Schommer, AbsInt Angewandte Informatik GmbH       *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
 (*  Automatique.  All rights reserved.  This file is distributed       *)
@@ -11,8 +12,7 @@
 (* *********************************************************************)
 
 (* Expanding built-ins and some pseudo-instructions by rewriting
-   of the ARM assembly code.  Currently not everything done, this
-   expansion is performed on the fly in PrintAsm. *)
+   of the ARM assembly code.  *)
 
 open Asm
 open Asmexpandaux
@@ -168,7 +168,7 @@ let expand_builtin_vload chunk args res =
 
 let expand_builtin_vload_global chunk id ofs args res =
   emit (Ploadsymbol (IR14,id,ofs));
-  expand_builtin_vload_common chunk args res
+  expand_builtin_vload_common chunk (IR IR14 :: args) res
 
 let expand_builtin_vstore_common chunk args =
   match chunk, args with
@@ -180,11 +180,11 @@ let expand_builtin_vstore_common chunk args =
      emit (Pstr (src,addr, SOimm _0))
   | Mint64, [IR  addr; IR src1; IR src2] ->
      emit (Pstr (src2,addr,SOimm _0));
-     emit (Pstr (src1,addr,SOimm _0))
+     emit (Pstr (src1,addr,SOimm _4))
   | Mfloat32, [IR  addr; FR src] ->
-     emit (Pfstd (src,addr,_0))
+     emit (Pfsts (src,addr,_0))
   | Mfloat64, [IR  addr; FR src] ->
-     emit (Pfsts (src,addr,_0));
+     emit (Pfstd (src,addr,_0));
   | _ ->
      assert false
 
@@ -193,7 +193,7 @@ let expand_builtin_vstore chunk args =
 
 let expand_builtin_vstore_global chunk id ofs args =
   emit (Ploadsymbol (IR14,id,ofs));
-  expand_builtin_vstore_common chunk args
+  expand_builtin_vstore_common chunk (IR IR14 :: args)
 
 (* Handling of varargs *)
 
@@ -269,10 +269,10 @@ let expand_builtin_inline name args res =
   | "__builtin_read32_reversed", [IR a1], [IR res] ->
      emit (Pldr (res,a1,SOimm _0));
      emit (Prev (IR res,IR res));
-  | "__builtin_write16_reverse", [IR a1; IR a2], _ ->
+  | "__builtin_write16_reversed", [IR a1; IR a2], _ ->
      emit (Prev16 (IR IR14, IR a2));
      emit (Pstrh (IR14, a1, SOimm _0))
-  | "__builtin_write32_reverse", [IR a1; IR a2], _ ->
+  | "__builtin_write32_reversed", [IR a1; IR a2], _ ->
      emit (Prev (IR IR14, IR a2));
      emit (Pstr (IR14, a1, SOimm _0))
   (* Synchronization *)
@@ -301,7 +301,8 @@ let expand_instruction instr =
        end;
      expand_subimm IR13 IR13 sz;
      emit (Pcfi_adjust sz);
-     emit (Pstr (IR12,IR13,SOimm ofs))
+     emit (Pstr (IR12,IR13,SOimm ofs));
+     PrintAsmaux.current_function_stacksize := camlint_of_coqint sz
   | Pfreeframe (sz, ofs) ->
      let sz =
        if (!current_function).fn_sig.sig_cc.cc_vararg
@@ -309,7 +310,7 @@ let expand_instruction instr =
        else sz in
      if Asmgen.is_immed_arith sz
      then emit (Padd (IR13,IR13,SOimm sz))
-     else emit (Pldr (IR13,IR13,SOimm sz))
+     else emit (Pldr (IR13,IR13,SOimm ofs))
   | Pbuiltin (ef,args,res) ->
      begin match ef with
 	   | EF_builtin (name,sg) ->

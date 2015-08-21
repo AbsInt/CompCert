@@ -54,7 +54,7 @@ test:
 	./render < kal.gml
 	@if cmp kal.ppm Results/kal.ppm; \
         then echo "raytracer: passed"; \
-        else echo "raytracer: FAILED"; \
+        else echo "raytracer: FAILED"; exit 2; \
         fi
 
 bench:
