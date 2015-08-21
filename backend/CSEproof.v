@@ -419,6 +419,14 @@ Proof.
   rewrite Regmap.gso; eauto with cse.
 Qed.
 
+Lemma set_res_unknown_holds:
+  forall valu ge sp rs m n r v,
+  numbering_holds valu ge sp rs m n ->
+  numbering_holds valu ge sp (regmap_setres r v rs) m (set_res_unknown n r).
+Proof.
+  intros. destruct r; simpl; auto. apply set_unknown_holds; auto.
+Qed.
+
 Lemma kill_eqs_charact:
   forall pred l strict r eqs,
   In (Eq l strict r) (kill_eqs pred eqs) -> 
@@ -533,7 +541,7 @@ Qed.
 Lemma kill_loads_after_storebytes_holds:
   forall valu ge sp rs m n dst b ofs bytes m' bc approx ae am sz,
   numbering_holds valu ge (Vptr sp Int.zero) rs m n ->
-  rs#dst = Vptr b ofs ->
+  pmatch bc b ofs dst ->
   Mem.storebytes m b (Int.unsigned ofs) bytes = Some m' ->
   genv_match bc ge ->
   bc sp = BCstack ->
@@ -556,7 +564,7 @@ Proof.
   eapply pdisjoint_sound. eauto. 
   unfold aaddressing. apply match_aptr_of_aval. eapply eval_static_addressing_sound; eauto. 
   erewrite <- regs_valnums_sound by eauto. eauto with va.
-  unfold aaddr. apply match_aptr_of_aval. rewrite <- H0. apply H4. 
+  auto.
 Qed.
 
 Lemma load_memcpy:
@@ -675,33 +683,25 @@ Proof.
 Qed.
 
 Lemma add_memcpy_holds:
-  forall m bsrc osrc sz bytes bdst odst m' valu ge sp rs n1 n2 bc approx ae am rsrc rdst,
+  forall m bsrc osrc sz bytes bdst odst m' valu ge sp rs n1 n2 bc asrc adst,
   Mem.loadbytes m bsrc (Int.unsigned osrc) sz = Some bytes ->
   Mem.storebytes m bdst (Int.unsigned odst) bytes = Some m' ->
   numbering_holds valu ge (Vptr sp Int.zero) rs m n1 ->
   numbering_holds valu ge (Vptr sp Int.zero) rs m' n2 ->
-  genv_match bc ge ->
+  pmatch bc bsrc osrc asrc ->
+  pmatch bc bdst odst adst ->
   bc sp = BCstack ->
-  ematch bc rs ae ->
-  approx = VA.State ae am ->
-  rs#rsrc = Vptr bsrc osrc ->
-  rs#rdst = Vptr bdst odst ->
   Ple (num_next n1) (num_next n2) ->
-  numbering_holds valu ge (Vptr sp Int.zero) rs m' (add_memcpy approx n1 n2 rsrc rdst sz).
+  numbering_holds valu ge (Vptr sp Int.zero) rs m' (add_memcpy n1 n2 asrc adst sz).
 Proof.
   intros. unfold add_memcpy.
-  destruct (aaddr approx rsrc) eqn:ASRC; auto.
-  destruct (aaddr approx rdst) eqn:ADST; auto.
-  assert (A: forall r b o i,
-          rs#r = Vptr b o -> aaddr approx r = Stk i -> b = sp /\ i = o).
+  destruct asrc; auto; destruct adst; auto. 
+  assert (A: forall b o i, pmatch bc b o (Stk i) -> b = sp /\ i = o).
   {
-    intros until i. unfold aaddr; subst approx. intros. 
-    specialize (H5 r). rewrite H6 in H5. apply match_aptr_of_aval in H5. 
-    rewrite H10 in H5. inv H5. split; auto. eapply bc_stack; eauto. 
+    intros. inv H7. split; auto. eapply bc_stack; eauto.
   }
-  exploit (A rsrc); eauto. intros [P Q].
-  exploit (A rdst); eauto. intros [U V].
-  subst bsrc ofs bdst ofs0. 
+  apply A in H3; destruct H3. subst bsrc ofs.
+  apply A in H4; destruct H4. subst bdst ofs0.
   constructor; simpl; intros; eauto with cse.
 - constructor; simpl; eauto with cse. 
   intros. exploit add_memcpy_eqs_charact; eauto. intros [X | (e0 & X & Y)].
@@ -1102,62 +1102,51 @@ Proof.
   apply regs_lessdef_regs; auto.
 
 - (* Ibuiltin *)
+  exploit (@eval_builtin_args_lessdef _ ge (fun r => rs#r) (fun r => rs'#r)); eauto. 
+  intros (vargs' & A & B).
   exploit external_call_mem_extends; eauto.
-  instantiate (1 := rs'##args). apply regs_lessdef_regs; auto.
   intros (v' & m1' & P & Q & R & S).
   econstructor; split.
-  eapply exec_Ibuiltin; eauto. 
+  eapply exec_Ibuiltin; eauto.
+  eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
   eapply external_call_symbols_preserved; eauto.
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor; eauto.
   eapply analysis_correct_1; eauto. simpl; auto.
 * unfold transfer; rewrite H.
   destruct SAT as [valu NH].
-  assert (CASE1: exists valu, numbering_holds valu ge sp (rs#res <- v) m' empty_numbering).
+  assert (CASE1: exists valu, numbering_holds valu ge sp (regmap_setres res vres rs) m' empty_numbering).
   { exists valu; apply empty_numbering_holds. }
-  assert (CASE2: m' = m -> exists valu, numbering_holds valu ge sp (rs#res <- v) m' (set_unknown approx#pc res)).
-  { intros. rewrite H1. exists valu. apply set_unknown_holds; auto. }
-  assert (CASE3: exists valu, numbering_holds valu ge sp (rs#res <- v) m'
-                         (set_unknown (kill_all_loads approx#pc) res)).
-  { exists valu. apply set_unknown_holds. eapply kill_all_loads_hold; eauto. }
+  assert (CASE2: m' = m -> exists valu, numbering_holds valu ge sp (regmap_setres res vres rs) m' (set_res_unknown approx#pc res)).
+  { intros. subst m'. exists valu. apply set_res_unknown_holds; auto. }
+  assert (CASE3: exists valu, numbering_holds valu ge sp (regmap_setres res vres rs) m'
+                         (set_res_unknown (kill_all_loads approx#pc) res)).
+  { exists valu. apply set_res_unknown_holds. eapply kill_all_loads_hold; eauto. }
   destruct ef.
   + apply CASE1.
   + apply CASE3. 
-  + apply CASE2; inv H0; auto.
+  + apply CASE2; inv H1; auto.
   + apply CASE3.
-  + apply CASE2; inv H0; auto. 
-  + apply CASE3; auto.
   + apply CASE1.
   + apply CASE1.
-  + destruct args as [ | rdst args]; auto.
-    destruct args as [ | rsrc args]; auto. 
-    destruct args; auto.
-    simpl in H0. inv H0. 
-    exists valu. 
-    apply set_unknown_holds. 
-    inv SOUND. eapply add_memcpy_holds; eauto. 
+  + inv H0; auto. inv H3; auto. inv H4; auto.
+    simpl in H1. inv H1.
+    exists valu.
+    apply set_res_unknown_holds.
+    inv SOUND. unfold vanalyze, rm; rewrite AN. 
+    assert (pmatch bc bsrc osrc (aaddr_arg (VA.State ae am) a0))
+    by (eapply aaddr_arg_sound_1; eauto). 
+    assert (pmatch bc bdst odst (aaddr_arg (VA.State ae am) a1))
+    by (eapply aaddr_arg_sound_1; eauto). 
+    eapply add_memcpy_holds; eauto. 
     eapply kill_loads_after_storebytes_holds; eauto. 
     eapply Mem.loadbytes_length; eauto. 
     simpl. apply Ple_refl. 
-  + apply CASE2; inv H0; auto.
-  + apply CASE2; inv H0; auto.
+  + apply CASE2; inv H1; auto.
+  + apply CASE2; inv H1; auto.
   + apply CASE1.
-* apply set_reg_lessdef; auto.
-
-- (* Iannot *)
-  exploit (@eval_annot_args_lessdef _ ge (fun r => rs#r) (fun r => rs'#r)); eauto. 
-  intros (vargs' & A & B).
-  exploit external_call_mem_extends; eauto.
-  intros (v' & m1' & P & Q & R & S).
-  econstructor; split.
-  eapply exec_Iannot; eauto.
-  eapply eval_annot_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
-  econstructor; eauto.
-  eapply analysis_correct_1; eauto. simpl; auto.
-  unfold transfer; rewrite H. replace m' with m; auto. 
-  destruct ef; try contradiction. inv H2; auto.
+  + apply CASE2; inv H1; auto.
+* apply set_res_lessdef; auto.
 
 - (* Icond *)
   destruct (valnum_regs approx!!pc args) as [n1 vl] eqn:?.

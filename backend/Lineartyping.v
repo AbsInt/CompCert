@@ -55,6 +55,13 @@ Definition loc_valid (l: loc) : bool :=
   | S _ _ _ => false
   end.
 
+Fixpoint wt_builtin_res (ty: typ) (res: builtin_res mreg) : bool :=
+  match res with
+  | BR r => subtype ty (mreg_type r)
+  | BR_none => true
+  | BR_longofwords hi lo => wt_builtin_res Tint hi && wt_builtin_res Tint lo
+  end.
+
 Definition wt_instr (i: instruction) : bool :=
   match i with
   | Lgetstack sl ofs ty r =>
@@ -74,9 +81,8 @@ Definition wt_instr (i: instruction) : bool :=
   | Ltailcall sg ros =>
       zeq (size_arguments sg) 0
   | Lbuiltin ef args res =>
-      subtype_list (proj_sig_res' (ef_sig ef)) (map mreg_type res) 
-  | Lannot ef args =>
-      forallb loc_valid (params_of_annot_args args)
+      wt_builtin_res (proj_sig_res (ef_sig ef)) res
+      && forallb loc_valid (params_of_builtin_args args)
   | _ =>
       true
   end.
@@ -159,6 +165,20 @@ Proof.
   induction vl; destruct rl; simpl; intros; try contradiction.
   auto.
   destruct H. apply IHvl; auto. apply wt_setreg; auto. 
+Qed.
+
+Lemma wt_setres:
+  forall res ty v rs,
+  wt_builtin_res ty res = true ->
+  Val.has_type v ty ->
+  wt_locset rs ->
+  wt_locset (Locmap.setres res v rs).
+Proof.
+  induction res; simpl; intros.
+- apply wt_setreg; auto. eapply Val.has_subtype; eauto.
+- auto.
+- InvBooleans. eapply IHres2; eauto. destruct v; exact I. 
+  eapply IHres1; eauto. destruct v; exact I.
 Qed.
 
 Lemma wt_find_label:
@@ -291,12 +311,8 @@ Proof.
 - (* builtin *)
   simpl in *; InvBooleans.
   econstructor; eauto.
-  apply wt_setlist. 
-  eapply Val.has_subtype_list; eauto. eapply external_call_well_typed'; eauto. 
+  eapply wt_setres; eauto. eapply external_call_well_typed; eauto. 
   apply wt_undef_regs; auto.
-- (* annot *)
-  simpl in *; InvBooleans.
-  econstructor; eauto. 
 - (* label *)
   simpl in *. econstructor; eauto.
 - (* goto *)
@@ -362,10 +378,10 @@ Proof.
   intros. inv H. simpl in WTC; InvBooleans. auto.
 Qed.
 
-Lemma wt_state_annot:
-  forall s f sp ef args c rs m,
-  wt_state (State s f sp (Lannot ef args :: c) rs m) ->
-  forallb (loc_valid f) (params_of_annot_args args) = true.
+Lemma wt_state_builtin:
+  forall s f sp ef args res c rs m,
+  wt_state (State s f sp (Lbuiltin ef args res :: c) rs m) ->
+  forallb (loc_valid f) (params_of_builtin_args args) = true.
 Proof.
   intros. inv H. simpl in WTC; InvBooleans. auto. 
 Qed.

@@ -220,6 +220,22 @@ Proof.
 Qed.
 Hint Resolve match_env_update_dest: rtlg.
 
+(** A variant of [match_env_update_var] corresponding to the assignment
+  of the result of a builtin. *)
+
+Lemma match_env_update_res:
+  forall map res v e le tres tv rs,
+  Val.lessdef v tv ->
+  map_wf map ->
+  tr_builtin_res map res tres ->
+  match_env map e le rs ->
+  match_env map (set_builtin_res res v e) le (regmap_setres tres tv rs).
+Proof.
+  intros. inv H1; simpl.
+- eapply match_env_update_var; eauto.
+- auto.
+Qed.
+
 (** Matching and [let]-bound variables. *)
 
 Lemma match_env_bind_letvar:
@@ -677,6 +693,15 @@ Proof.
   auto.
 Qed.
 
+Remark eval_builtin_args_trivial:
+  forall (ge: RTL.genv) (rs: regset) sp m rl,
+  eval_builtin_args ge (fun r => rs#r) sp m (List.map (@BA reg) rl) rs##rl.
+Proof.
+  induction rl; simpl.
+- constructor.
+- constructor; auto. constructor.
+Qed.
+
 Lemma transl_expr_Ebuiltin_correct:
   forall le ef al vl v,
   eval_exprlist ge sp e m le al vl ->
@@ -691,7 +716,9 @@ Proof.
   exists (rs1#rd <- v'); exists tm2.
 (* Exec *)
   split. eapply star_right. eexact EX1.
+  change (rs1#rd <- v') with (regmap_setres (BR rd) v' rs1).
   eapply exec_Ibuiltin; eauto.
+  eapply eval_builtin_args_trivial.
   eapply external_call_symbols_preserved; eauto. 
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   reflexivity.
@@ -972,7 +999,7 @@ Proof.
   auto.
 Qed.
 
-(** Annotation arguments. *)
+(** Builtin arguments. *)
 
 Lemma eval_exprlist_append:
   forall le al1 vl1 al2 vl2,
@@ -985,54 +1012,54 @@ Proof.
 - simpl. constructor; eauto. 
 Qed.
 
-Lemma invert_eval_annot_arg:
+Lemma invert_eval_builtin_arg:
   forall a v,
-  eval_annot_arg ge sp e m a v ->
+  eval_builtin_arg ge sp e m a v ->
   exists vl, 
-     eval_exprlist ge sp e m nil (exprlist_of_expr_list (params_of_annot_arg a)) vl
-  /\ Events.eval_annot_arg ge (fun v => v) sp m (fst (convert_annot_arg a vl)) v
-  /\ (forall vl', convert_annot_arg a (vl ++ vl') = (fst (convert_annot_arg a vl), vl')).
+     eval_exprlist ge sp e m nil (exprlist_of_expr_list (params_of_builtin_arg a)) vl
+  /\ Events.eval_builtin_arg ge (fun v => v) sp m (fst (convert_builtin_arg a vl)) v
+  /\ (forall vl', convert_builtin_arg a (vl ++ vl') = (fst (convert_builtin_arg a vl), vl')).
 Proof.
-  induction 1; simpl; econstructor; intuition eauto with evalexpr aarg.
+  induction 1; simpl; econstructor; intuition eauto with evalexpr barg.
   constructor. 
   constructor. 
   repeat constructor.
 Qed.
 
-Lemma invert_eval_annot_args:
+Lemma invert_eval_builtin_args:
   forall al vl,
-  list_forall2 (eval_annot_arg ge sp e m) al vl ->
+  list_forall2 (eval_builtin_arg ge sp e m) al vl ->
   exists vl',
-     eval_exprlist ge sp e m nil (exprlist_of_expr_list (params_of_annot_args al)) vl'
-  /\ Events.eval_annot_args ge (fun v => v) sp m (convert_annot_args al vl') vl.
+     eval_exprlist ge sp e m nil (exprlist_of_expr_list (params_of_builtin_args al)) vl'
+  /\ Events.eval_builtin_args ge (fun v => v) sp m (convert_builtin_args al vl') vl.
 Proof.
   induction 1; simpl.
 - exists (@nil val); split; constructor.
-- exploit invert_eval_annot_arg; eauto. intros (vl1 & A & B & C).
+- exploit invert_eval_builtin_arg; eauto. intros (vl1 & A & B & C).
   destruct IHlist_forall2 as (vl2 & D & E).
   exists (vl1 ++ vl2); split.
   apply eval_exprlist_append; auto.
   rewrite C; simpl. constructor; auto. 
 Qed.
 
-Lemma transl_eval_annot_arg:
+Lemma transl_eval_builtin_arg:
   forall rs a vl rl v,
   Val.lessdef_list vl rs##rl ->
-  Events.eval_annot_arg ge (fun v => v) sp m (fst (convert_annot_arg a vl)) v ->
+  Events.eval_builtin_arg ge (fun v => v) sp m (fst (convert_builtin_arg a vl)) v ->
   exists v',
-     Events.eval_annot_arg ge (fun r => rs#r) sp m (fst (convert_annot_arg a rl)) v'
+     Events.eval_builtin_arg ge (fun r => rs#r) sp m (fst (convert_builtin_arg a rl)) v'
   /\ Val.lessdef v v'
-  /\ Val.lessdef_list (snd (convert_annot_arg a vl)) rs##(snd (convert_annot_arg a rl)).
+  /\ Val.lessdef_list (snd (convert_builtin_arg a vl)) rs##(snd (convert_builtin_arg a rl)).
 Proof.
   induction a; simpl; intros until v; intros LD EV;
-  try (now (inv EV; econstructor; eauto with aarg)).
+  try (now (inv EV; econstructor; eauto with barg)).
 - destruct rl; simpl in LD; inv LD; inv EV; simpl.
-  econstructor; eauto with aarg. 
+  econstructor; eauto with barg. 
   exists (rs#p); intuition auto. constructor.
-- destruct (convert_annot_arg a1 vl) as [a1' vl1] eqn:CV1; simpl in *.
-  destruct (convert_annot_arg a2 vl1) as [a2' vl2] eqn:CV2; simpl in *.
-  destruct (convert_annot_arg a1 rl) as [a1'' rl1] eqn:CV3; simpl in *.
-  destruct (convert_annot_arg a2 rl1) as [a2'' rl2] eqn:CV4; simpl in *.
+- destruct (convert_builtin_arg a1 vl) as [a1' vl1] eqn:CV1; simpl in *.
+  destruct (convert_builtin_arg a2 vl1) as [a2' vl2] eqn:CV2; simpl in *.
+  destruct (convert_builtin_arg a1 rl) as [a1'' rl1] eqn:CV3; simpl in *.
+  destruct (convert_builtin_arg a2 rl1) as [a2'' rl2] eqn:CV4; simpl in *.
   inv EV. 
   exploit IHa1; eauto. rewrite CV1; simpl; eauto. 
   rewrite CV1, CV3; simpl. intros (v1' & A1 & B1 & C1).
@@ -1042,163 +1069,24 @@ Proof.
   split; auto. apply Val.longofwords_lessdef; auto.
 Qed.
 
-Lemma transl_eval_annot_args:
+Lemma transl_eval_builtin_args:
   forall rs al vl1 rl vl,
   Val.lessdef_list vl1 rs##rl ->
-  Events.eval_annot_args ge (fun v => v) sp m (convert_annot_args al vl1) vl ->
+  Events.eval_builtin_args ge (fun v => v) sp m (convert_builtin_args al vl1) vl ->
   exists vl',
-     Events.eval_annot_args ge (fun r => rs#r) sp m (convert_annot_args al rl) vl'
+     Events.eval_builtin_args ge (fun r => rs#r) sp m (convert_builtin_args al rl) vl'
   /\ Val.lessdef_list vl vl'.
 Proof.
   induction al; simpl; intros until vl; intros LD EV.
 - inv EV. exists (@nil val); split; constructor.
-- destruct (convert_annot_arg a vl1) as [a1' vl2] eqn:CV1; simpl in *.
+- destruct (convert_builtin_arg a vl1) as [a1' vl2] eqn:CV1; simpl in *.
   inv EV. 
-  exploit transl_eval_annot_arg. eauto. instantiate (2 := a). rewrite CV1; simpl; eauto. 
+  exploit transl_eval_builtin_arg. eauto. instantiate (2 := a). rewrite CV1; simpl; eauto. 
   rewrite CV1; simpl. intros (v1' & A1 & B1 & C1).
   exploit IHal. eexact C1. eauto. intros (vl' & A2 & B2).
-  destruct (convert_annot_arg a rl) as [a1'' rl2]; simpl in *.
+  destruct (convert_builtin_arg a rl) as [a1'' rl2]; simpl in *.
   exists (v1' :: vl'); split; constructor; auto.
 Qed.
-
-
-(*
-Definition transl_annot_arg_prop (a: annot_arg expr) (v: val): Prop :=
-  forall tm cs f map pr ns nd a' rs
-    (MWF: map_wf map)
-    (TR: tr_annot_arg f.(fn_code) map pr a ns nd a')
-    (ME: match_env map e nil rs)
-    (EXT: Mem.extends m tm),
-  exists rs', exists tm', exists v',
-     star step tge (State cs f sp ns rs tm) E0 (State cs f sp nd rs' tm')
-  /\ match_env map e nil rs'
-  /\ Events.eval_annot_arg tge (fun r => rs'#r) sp tm' a' v'
-  /\ Val.lessdef v v'
-  /\ (forall r, In r pr -> rs'#r = rs#r)
-  /\ Mem.extends m tm'.
-
-Theorem transl_annot_arg_correct:
-  forall a v,
-  eval_annot_arg ge sp e m a v ->
-  transl_annot_arg_prop a v.
-Proof.
-  induction 1; red; intros; inv TR.
-- exploit transl_expr_correct; eauto. intros (rs1 & tm1 & A1 & B1 & C1 & D1 & E1).
-  exists rs1, tm1, rs1#r; intuition eauto. constructor.
-- exists rs, tm, (Vint n); intuition auto using star_refl with aarg.
-- exists rs, tm, (Vlong n); intuition auto using star_refl with aarg.
-- exists rs, tm, (Vfloat n); intuition auto using star_refl with aarg.
-- exists rs, tm, (Vsingle n); intuition auto using star_refl with aarg.
-- exploit Mem.loadv_extends; eauto. intros (v' & P & Q).
-  exists rs, tm, v'; intuition auto using star_refl with aarg.
-- exists rs, tm, (Val.add sp (Vint ofs)); intuition auto using star_refl with aarg.
-- exploit Mem.loadv_extends; eauto. intros (v' & P & Q).
-  replace (Genv.symbol_address ge id ofs) 
-     with (Senv.symbol_address tge id ofs) in P.
-  exists rs, tm, v'; intuition auto using star_refl with aarg.
-  unfold Genv.symbol_address, Senv.symbol_address. simpl.
-  rewrite symbols_preserved; auto.
-- exists rs, tm, (Senv.symbol_address tge id ofs); intuition auto using star_refl with aarg.
-  unfold Genv.symbol_address, Senv.symbol_address. simpl.
-  rewrite symbols_preserved; auto.
-- inv H5. inv H9. simpl in H5. 
-  exploit transl_expr_correct. eexact H. eauto. eauto. eauto. eauto. 
-  intros (rs1 & tm1 & A1 & B1 & C1 & D1 & E1).
-  exploit transl_expr_correct. eexact H0. eauto. eauto. eauto. eauto. 
-  intros (rs2 & tm2 & A2 & B2 & C2 & D2 & E2).
-  exists rs2, tm2, (Val.longofwords rs2#r rs2#r0); intuition auto.
-  eapply star_trans; eauto. 
-  constructor. constructor. constructor. 
-  rewrite (D2 r) by auto with coqlib. apply Val.longofwords_lessdef; auto.
-  transitivity rs1#r1; auto with coqlib.
-Qed.
-
-
-Definition transl_annot_args_prop (l: list (annot_arg expr)) (vl: list val): Prop :=
-  forall tm cs f map pr ns nd l' rs
-    (MWF: map_wf map)
-    (TR: tr_annot_args f.(fn_code) map pr l ns nd l')
-    (ME: match_env map e nil rs)
-    (EXT: Mem.extends m tm),
-  exists rs', exists tm', exists vl',
-     star step tge (State cs f sp ns rs tm) E0 (State cs f sp nd rs' tm')
-  /\ match_env map e nil rs'
-  /\ eval_annot_args tge (fun r => rs'#r) sp tm' l' vl'
-  /\ Val.lessdef_list vl vl'
-  /\ (forall r, In r pr -> rs'#r = rs#r)
-  /\ Mem.extends m tm'.
-
-Theorem transl_annot_args_correct:
-  forall l vl,
-  list_forall2 (eval_annot_arg ge sp e m) l vl ->
-  transl_annot_args_prop l vl.
-Proof.
-  induction 1; red; intros.
-- inv TR. exists rs, tm, (@nil val). 
-  split. constructor.
-  split. auto.
-  split. constructor.
-  split. constructor.
-  split. auto.
-  auto.
-- inv TR. inv H; inv H5. 
-  + exploit transl_expr_correct; eauto.
-    intros (rs1 & tm1 & A1 & B1 & C1 & D1 & E1).
-    exploit (IHlist_forall2 tm1 cs); eauto. 
-    intros (rs2 & tm2 & vl2 & A2 & B2 & C2 & D2 & E2 & F2). simpl in E2.
-    exists rs2, tm2, (rs2#r :: vl2); intuition auto.
-    eapply star_trans; eauto.
-    constructor; auto. constructor.
-    rewrite E2; auto.
-    transitivity rs1#r0; auto.
-  + exploit (IHlist_forall2 tm cs); eauto.
-    intros (rs' & tm' & vl' & A & B & C & D & E & F).
-    exists rs', tm', (Vint n :: vl'); simpl; intuition auto. constructor; auto with aarg.
-  + exploit (IHlist_forall2 tm cs); eauto.
-    intros (rs' & tm' & vl' & A & B & C & D & E & F).
-    exists rs', tm', (Vlong n :: vl'); simpl; intuition auto. constructor; auto with aarg.
-  + exploit (IHlist_forall2 tm cs); eauto.
-    intros (rs' & tm' & vl' & A & B & C & D & E & F).
-    exists rs', tm', (Vfloat n :: vl'); simpl; intuition auto. constructor; auto with aarg.
-  + exploit (IHlist_forall2 tm cs); eauto.
-    intros (rs' & tm' & vl' & A & B & C & D & E & F).
-    exists rs', tm', (Vsingle n :: vl'); simpl; intuition auto. constructor; auto with aarg.
-  + exploit (IHlist_forall2 tm cs); eauto.
-    intros (rs' & tm' & vl' & A & B & C & D & E & F).
-    exploit Mem.loadv_extends; eauto. intros (v1' & P & Q).
-    exists rs', tm', (v1' :: vl'); simpl; intuition auto. constructor; eauto with aarg. 
-  + exploit (IHlist_forall2 tm cs); eauto.
-    intros (rs' & tm' & vl' & A & B & C & D & E & F).
-    exists rs', tm', (Val.add sp (Vint ofs) :: vl'); simpl; intuition auto. constructor; auto with aarg.
-  + exploit (IHlist_forall2 tm cs); eauto.
-    intros (rs' & tm' & vl' & A & B & C & D & E & F).
-    exploit Mem.loadv_extends; eauto. intros (v1' & P & Q).
-    replace (Genv.symbol_address ge id ofs) 
-       with (Senv.symbol_address tge id ofs) in P.
-    exists rs', tm', (v1' :: vl'); simpl; intuition auto. constructor; auto with aarg. 
-    unfold Genv.symbol_address, Senv.symbol_address. simpl.
-    rewrite symbols_preserved; auto. 
-  + exploit (IHlist_forall2 tm cs); eauto.
-    intros (rs' & tm' & vl' & A & B & C & D & E & F).
-    exists rs', tm', (Genv.symbol_address tge id ofs :: vl'); simpl; intuition auto.
-    constructor; auto with aarg. constructor. 
-    unfold Genv.symbol_address. rewrite symbols_preserved; auto.
-  + inv H7. inv H12. 
-    exploit transl_expr_correct. eexact H1. eauto. eauto. eauto. eauto. 
-    intros (rs1 & tm1 & A1 & B1 & C1 & D1 & E1).
-    exploit transl_expr_correct. eexact H2. eauto. eauto. eauto. eexact E1.  
-    intros (rs2 & tm2 & A2 & B2 & C2 & D2 & E2). simpl in D2.
-    exploit (IHlist_forall2 tm2 cs); eauto. 
-    intros (rs3 & tm3 & vl3 & A3 & B3 & C3 & D3 & E3 & F3). simpl in E3.
-    exists rs3, tm3, (Val.longofwords rs3#r rs3#r0 :: vl3); intuition auto.
-    eapply star_trans; eauto. eapply star_trans; eauto.  auto.
-    constructor; auto with aarg. constructor. constructor. constructor.  
-    constructor; auto. apply Val.longofwords_lessdef. 
-    rewrite E3, D2; auto.
-    rewrite E3; auto. 
-    transitivity rs1#r1; auto. transitivity rs2#r1; auto.
-Qed.
-*)
 
 End CORRECTNESS_EXPR.
 
@@ -1520,36 +1408,24 @@ Proof.
 
   (* builtin *)
   inv TS. 
+  exploit invert_eval_builtin_args; eauto. intros (vparams & P & Q).
   exploit transl_exprlist_correct; eauto.
   intros [rs' [tm' [E [F [G [J K]]]]]].
-  edestruct external_call_mem_extends as [tv [tm'' [A [B [C D]]]]]; eauto.
-  econstructor; split.
-  left. eapply plus_right. eexact E.
-  eapply exec_Ibuiltin. eauto. 
-  eapply external_call_symbols_preserved. eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
-  traceEq. 
-  econstructor; eauto. constructor.
-  eapply match_env_update_dest; eauto.
-
-  (* annot *)
-  inv TS. exploit invert_eval_annot_args; eauto. intros (vparams & P & Q).
-  exploit transl_exprlist_correct; eauto.
-  intros [rs' [tm' [E [F [G [J K]]]]]].
-  exploit transl_eval_annot_args; eauto. 
+  exploit transl_eval_builtin_args; eauto. 
   intros (vargs' & U & V).
-  exploit (@eval_annot_args_lessdef _ ge (fun r => rs'#r) (fun r => rs'#r)); eauto.
+  exploit (@eval_builtin_args_lessdef _ ge (fun r => rs'#r) (fun r => rs'#r)); eauto.
   intros (vargs'' & X & Y).
   assert (Z: Val.lessdef_list vl vargs'') by (eapply Val.lessdef_list_trans; eauto).
   edestruct external_call_mem_extends as [tv [tm'' [A [B [C D]]]]]; eauto.
   econstructor; split.
   left. eapply plus_right. eexact E.
-  eapply exec_Iannot; eauto. 
-  eapply eval_annot_args_preserved with (ge1 := ge); eauto. exact symbols_preserved. 
+  eapply exec_Ibuiltin. eauto.
+  eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved. 
   eapply external_call_symbols_preserved. eauto.
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   traceEq. 
   econstructor; eauto. constructor.
+  eapply match_env_update_res; eauto.
  
   (* seq *)
   inv TS. 

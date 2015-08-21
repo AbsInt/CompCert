@@ -93,12 +93,10 @@ Inductive block_shape: Type :=
          (mv1: moves) (ros': mreg + ident) (mv2: moves) (s: node)
   | BStailcall (sg: signature) (ros: reg + ident) (args: list reg)
          (mv1: moves) (ros': mreg + ident)
-  | BSbuiltin (ef: external_function) (args: list reg) (res: reg)
-         (mv1: moves) (args': list mreg) (res': list mreg)
+  | BSbuiltin (ef: external_function)
+         (args: list (builtin_arg reg)) (res: builtin_res reg)
+         (mv1: moves) (args': list (builtin_arg loc)) (res': builtin_res mreg)
          (mv2: moves) (s: node)
-  | BSannot (ef: external_function)
-         (args: list (annot_arg reg)) (args': list (annot_arg loc))
-         (s: node)
   | BScond (cond: condition) (args: list reg)
          (mv: moves) (args': list mreg) (s1 s2: node)
   | BSjumptable (arg: reg)
@@ -278,14 +276,6 @@ Definition pair_instr_block
           assertion (external_function_eq ef ef');
           assertion (check_succ s b3);
           Some(BSbuiltin ef args res mv1 args' res' mv2 s)
-      | _ => None
-      end
-  | Iannot ef args s =>
-      match b with
-      | Lannot ef' args' :: b1 =>
-          assertion (external_function_eq ef ef');
-          assertion (check_succ s b1);
-          Some(BSannot ef args args' s)
       | _ => None
       end
   | Icond cond args s1 s2 =>
@@ -699,54 +689,86 @@ Definition add_equation_ros (ros: reg + ident) (ros': mreg + ident) (e: eqs) : o
   | _, _ => None
   end.
 
-(** [add_equations_annot_arg] adds the needed equations for annotation
-   arguments. *)
+(** [add_equations_builtin_arg] adds the needed equations for arguments
+    to builtin functions. *)
 
-Fixpoint add_equations_annot_arg (env: regenv) (arg: annot_arg reg) (arg': annot_arg loc) (e: eqs) : option eqs :=
+Fixpoint add_equations_builtin_arg
+     (env: regenv) (arg: builtin_arg reg) (arg': builtin_arg loc) (e: eqs) : option eqs :=
   match arg, arg' with
-  | AA_base r, AA_base l =>
+  | BA r, BA l =>
       Some (add_equation (Eq Full r l) e)
-  | AA_base r, AA_longofwords (AA_base lhi) (AA_base llo) =>
+  | BA r, BA_longofwords (BA lhi) (BA llo) =>
       assertion (typ_eq (env r) Tlong);
       Some (add_equation (Eq Low r llo) (add_equation (Eq High r lhi) e))
-  | AA_int n, AA_int n' =>
+  | BA_int n, BA_int n' =>
       assertion (Int.eq_dec n n'); Some e
-  | AA_long n, AA_long n' =>
+  | BA_long n, BA_long n' =>
       assertion (Int64.eq_dec n n'); Some e
-  | AA_float f, AA_float f' =>
+  | BA_float f, BA_float f' =>
       assertion (Float.eq_dec f f'); Some e
-  | AA_single f, AA_single f' =>
+  | BA_single f, BA_single f' =>
       assertion (Float32.eq_dec f f'); Some e
-  | AA_loadstack chunk ofs, AA_loadstack chunk' ofs' =>
+  | BA_loadstack chunk ofs, BA_loadstack chunk' ofs' =>
       assertion (chunk_eq chunk chunk');
       assertion (Int.eq_dec ofs ofs');
       Some e
-  | AA_addrstack ofs, AA_addrstack ofs' =>
+  | BA_addrstack ofs, BA_addrstack ofs' =>
       assertion (Int.eq_dec ofs ofs');
       Some e
-  | AA_loadglobal chunk id ofs, AA_loadglobal chunk' id' ofs' =>
+  | BA_loadglobal chunk id ofs, BA_loadglobal chunk' id' ofs' =>
       assertion (chunk_eq chunk chunk');
       assertion (ident_eq id id');
       assertion (Int.eq_dec ofs ofs');
       Some e
-  | AA_addrglobal id ofs, AA_addrglobal id' ofs' =>
+  | BA_addrglobal id ofs, BA_addrglobal id' ofs' =>
       assertion (ident_eq id id');
       assertion (Int.eq_dec ofs ofs');
       Some e
-  | AA_longofwords hi lo, AA_longofwords hi' lo' =>
-      do e1 <- add_equations_annot_arg env hi hi' e;
-      add_equations_annot_arg env lo lo' e1
+  | BA_longofwords hi lo, BA_longofwords hi' lo' =>
+      do e1 <- add_equations_builtin_arg env hi hi' e;
+      add_equations_builtin_arg env lo lo' e1
   | _, _ =>
       None
   end.
 
-Fixpoint add_equations_annot_args (env: regenv)
-   (args: list(annot_arg reg)) (args': list(annot_arg loc)) (e: eqs) : option eqs :=
+Fixpoint add_equations_builtin_args
+   (env: regenv) (args: list (builtin_arg reg))
+   (args': list (builtin_arg loc)) (e: eqs) : option eqs :=
   match args, args' with
   | nil, nil => Some e
   | a1 :: al, a1' :: al' =>
-      do e1 <- add_equations_annot_arg env a1 a1' e;
-      add_equations_annot_args env al al' e1
+      do e1 <- add_equations_builtin_arg env a1 a1' e;
+      add_equations_builtin_args env al al' e1
+  | _, _ => None
+  end.
+
+(** For [EF_debug] builtins, some arguments can be removed. *)
+
+Fixpoint add_equations_debug_args
+   (env: regenv) (args: list (builtin_arg reg))
+   (args': list (builtin_arg loc)) (e: eqs) : option eqs :=
+  match args, args' with
+  | _, nil => Some e
+  | a1 :: al, a1' :: al' =>
+      match add_equations_builtin_arg env a1 a1' e with
+      | None => add_equations_debug_args env al args' e
+      | Some e1 => add_equations_debug_args env al al' e1
+      end
+  | _, _ => None
+  end.
+
+(** Checking of the result of a builtin *)
+
+Definition remove_equations_builtin_res
+    (env: regenv) (res: builtin_res reg) (res': builtin_res mreg) (e: eqs) : option eqs :=
+  match res, res' with
+  | BR r, BR r' => Some (remove_equation (Eq Full r (R r')) e)
+  | BR r, BR_longofwords (BR rhi) (BR rlo) =>
+      assertion (typ_eq (env r) Tlong);
+      if mreg_eq rhi rlo then None else
+        Some (remove_equation (Eq Low r (R rlo))
+                (remove_equation (Eq High r (R rhi)) e))
+  | BR_none, BR_none => Some e
   | _, _ => None
   end.
 
@@ -972,16 +994,18 @@ Definition transfer_aux (f: RTL.function) (env: regenv)
       track_moves env mv1 e2
   | BSbuiltin ef args res mv1 args' res' mv2 s =>
       do e1 <- track_moves env mv2 e;
-      let args' := map R args' in
-      let res' := map R res' in
-      do e2 <- remove_equations_res res (sig_res (ef_sig ef)) res' e1;
-      assertion (reg_unconstrained res e2);
-      assertion (forallb (fun l => loc_unconstrained l e2) res');
+      do e2 <- remove_equations_builtin_res env res res' e1;
+      assertion (forallb (fun r => reg_unconstrained r e2)
+                         (params_of_builtin_res res));
+      assertion (forallb (fun mr => loc_unconstrained (R mr) e2)
+                         (params_of_builtin_res res'));
       assertion (can_undef (destroyed_by_builtin ef) e2);
-      do e3 <- add_equations_args args (sig_args (ef_sig ef)) args' e2;
+      do e3 <-
+        match ef with
+        | EF_debug _ _ _ => add_equations_debug_args env args args' e2
+        | _              => add_equations_builtin_args env args args' e2
+        end;
       track_moves env mv1 e3
-  | BSannot ef args args' s =>
-      add_equations_annot_args env args args' e
   | BScond cond args mv args' s1 s2 =>
       assertion (can_undef (destroyed_by_cond cond) e);
       do e1 <- add_equations args args' e;
@@ -1152,7 +1176,6 @@ Definition successors_block_shape (bsh: block_shape) : list node :=
   | BScall sg ros args res mv1 ros' mv2 s => s :: nil
   | BStailcall sg ros args mv1 ros' => nil
   | BSbuiltin ef args res mv1 args' res' mv2 s => s :: nil
-  | BSannot ef args args' s => s :: nil
   | BScond cond args mv args' s1 s2 => s1 :: s2 :: nil
   | BSjumptable arg mv arg' tbl => tbl
   | BSreturn optarg mv => nil

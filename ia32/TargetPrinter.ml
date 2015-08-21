@@ -658,17 +658,14 @@ module Target(System: SYSTEM):TARGET =
 	 assert false
       | Pbuiltin(ef, args, res) ->
           begin match ef with
-          | EF_inline_asm(txt, sg, clob) ->
-              fprintf oc "%s begin inline assembly\n\t" comment;
-              print_inline_asm preg oc (extern_atom txt) sg args res;
-              fprintf oc "%s end inline assembly\n" comment
-          | _ ->
-              assert false
-          end
-      | Pannot(ef, args) ->
-          begin match ef with
           | EF_annot(txt, targs) ->
               print_annot_stmt oc (extern_atom txt) targs args
+          | EF_inline_asm(txt, sg, clob) ->
+              fprintf oc "%s begin inline assembly\n\t" comment;
+              print_inline_asm preg oc (extern_atom txt) sg
+                                       (params_of_builtin_args args)
+                                       (params_of_builtin_res res);
+              fprintf oc "%s end inline assembly\n" comment
           | _ ->
               assert false
           end

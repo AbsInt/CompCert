@@ -162,9 +162,8 @@ let ren_instr f maps pc i =
   | Itailcall(sg, ros, args) ->
       Itailcall(sg, ren_ros before ros, ren_regs before args)
   | Ibuiltin(ef, args, res, s) ->
-      Ibuiltin(ef, ren_regs before args, ren_reg after res, s)
-  | Iannot(ef, args, s) ->
-      Iannot(ef, List.map (AST.map_annot_arg (ren_reg before)) args, s)
+      Ibuiltin(ef, List.map (AST.map_builtin_arg (ren_reg before)) args,
+                   AST.map_builtin_res (ren_reg after) res, s)
   | Icond(cond, args, s1, s2) ->
       Icond(cond, ren_regs before args, s1, s2)
   | Ijumptable(arg, tbl) ->

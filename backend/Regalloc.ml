@@ -114,24 +114,60 @@ let xparmove srcs dsts k =
   | [src], [dst] -> move src dst k
   | _, _ -> Xparmove(srcs, dsts, new_temp Tint, new_temp Tfloat) :: k
 
-let rec convert_annot_arg tyenv = function
-  | AA_base r ->
+let rec convert_builtin_arg tyenv = function
+  | BA r ->
       begin match tyenv r with
-      | Tlong -> AA_longofwords(AA_base(V(r, Tint)),
-                                AA_base(V(twin_reg r, Tint)))
-      | ty    -> AA_base(V(r, ty))
+      | Tlong -> BA_longofwords(BA(V(r, Tint)), BA(V(twin_reg r, Tint)))
+      | ty    -> BA(V(r, ty))
       end
-  | AA_int n -> AA_int n
-  | AA_long n -> AA_long n
-  | AA_float n -> AA_float n
-  | AA_single n -> AA_single n
-  | AA_loadstack(chunk, ofs) -> AA_loadstack(chunk, ofs)
-  | AA_addrstack(ofs) -> AA_addrstack(ofs)
-  | AA_loadglobal(chunk, id, ofs) -> AA_loadglobal(chunk, id, ofs)
-  | AA_addrglobal(id, ofs) -> AA_addrglobal(id, ofs)
-  | AA_longofwords(hi, lo) ->
-      AA_longofwords(convert_annot_arg tyenv hi, convert_annot_arg tyenv lo)
- 
+  | BA_int n -> BA_int n
+  | BA_long n -> BA_long n
+  | BA_float n -> BA_float n
+  | BA_single n -> BA_single n
+  | BA_loadstack(chunk, ofs) -> BA_loadstack(chunk, ofs)
+  | BA_addrstack(ofs) -> BA_addrstack(ofs)
+  | BA_loadglobal(chunk, id, ofs) -> BA_loadglobal(chunk, id, ofs)
+  | BA_addrglobal(id, ofs) -> BA_addrglobal(id, ofs)
+  | BA_longofwords(hi, lo) ->
+      BA_longofwords(convert_builtin_arg tyenv hi, convert_builtin_arg tyenv lo)
+
+let convert_builtin_res tyenv = function
+  | BR r ->
+      begin match tyenv r with
+      | Tlong -> BR_longofwords(BR(V(r, Tint)), BR(V(twin_reg r, Tint)))
+      | ty    -> BR(V(r, ty))
+      end
+  | BR_none -> BR_none
+  | BR_longofwords _ -> assert false
+
+let rec constrain_builtin_arg a cl =
+  match a, cl with
+  | BA x, None :: cl' -> (a, cl')
+  | BA x, Some mr :: cl' -> (BA (L(R mr)), cl')
+  | BA_longofwords(hi, lo), _ ->
+      let (hi', cl1) = constrain_builtin_arg hi cl in
+      let (lo', cl2) = constrain_builtin_arg lo cl1 in
+      (BA_longofwords(hi', lo'), cl2)
+  | _, _ -> (a, cl)
+
+let rec constrain_builtin_args al cl =
+  match al with
+  | [] -> ([], cl)
+  | a :: al ->
+      let (a', cl1) = constrain_builtin_arg a cl in
+      let (al', cl2) = constrain_builtin_args al cl1 in
+      (a' :: al', cl2)
+
+let rec constrain_builtin_res a cl =
+  match a, cl with
+  | BR x, None :: cl' -> (a, cl')
+  | BR x, Some mr :: cl' -> (BR (L(R mr)), cl')
+  | BR_longofwords(hi, lo), _ ->
+      let (hi', cl1) = constrain_builtin_res hi cl in
+      let (lo', cl2) = constrain_builtin_res lo cl1 in
+      (BR_longofwords(hi', lo'), cl2)
+  | _, _ -> (a, cl)
+
 (* Return the XTL basic block corresponding to the given RTL instruction.
    Move and parallel move instructions are introduced to honor calling
    conventions and register constraints on some operations.
@@ -206,12 +242,14 @@ let block_of_RTL_instr funsig tyenv = function
         [Xtailcall(sg, sum_left_map (vreg tyenv) ros, args')]
   | RTL.Ibuiltin(ef, args, res, s) ->
       let (cargs, cres) = mregs_for_builtin ef in
-      let args1 = expand_regs tyenv args and res1 = expand_regs tyenv [res] in
-      let args2 = constrain_regs args1 cargs and res2 = constrain_regs res1 cres in
-      movelist args1 args2
-         (Xbuiltin(ef, args2, res2) :: movelist res2 res1 [Xbranch s])
-  | RTL.Iannot(ef, args, s) ->
-      [Xannot(ef, List.map (convert_annot_arg tyenv) args); Xbranch s]
+      let args1 = List.map (convert_builtin_arg tyenv) args
+      and res1 = convert_builtin_res tyenv res in
+      let (args2, _) = constrain_builtin_args args1 cargs
+      and (res2, _)  = constrain_builtin_res res1 cres in
+      movelist (params_of_builtin_args args1) (params_of_builtin_args args2)
+         (Xbuiltin(ef, args2, res2) ::
+            movelist (params_of_builtin_res res2) (params_of_builtin_res res1)
+               [Xbranch s])
   | RTL.Icond(cond, args, s1, s2) ->
       [Xcond(cond, vregs tyenv args, s1, s2)]
   | RTL.Ijumptable(arg, tbl) ->
@@ -249,13 +287,23 @@ let function_of_RTL_function f tyenv =
 
 let vset_removelist vl after = List.fold_right VSet.remove vl after
 let vset_addlist vl after = List.fold_right VSet.add vl after
+
 let vset_addros vos after =
   match vos with Coq_inl v -> VSet.add v after | Coq_inr id -> after
-let rec vset_addannot a after =
+
+let rec vset_addarg a after =
   match a with
-  | AA_base v -> VSet.add v after
-  | AA_longofwords(hi, lo) -> vset_addannot hi (vset_addannot lo after)
+  | BA v -> VSet.add v after
+  | BA_longofwords(hi, lo) -> vset_addarg hi (vset_addarg lo after)
   | _ -> after
+
+let vset_addargs al after = List.fold_right vset_addarg al after
+
+let rec vset_removeres r after =
+  match r with
+  | BR v -> VSet.remove v after
+  | BR_none -> after
+  | BR_longofwords(hi, lo) -> vset_removeres hi (vset_removeres lo after)
 
 let live_before instr after =
   match instr with
@@ -279,10 +327,10 @@ let live_before instr after =
       vset_addlist args (vset_addros ros (vset_removelist res after))
   | Xtailcall(sg, ros, args) ->
       vset_addlist args (vset_addros ros VSet.empty)
+  | Xbuiltin(EF_debug _, args, res) ->
+      vset_removeres res after
   | Xbuiltin(ef, args, res) ->
-      vset_addlist args (vset_removelist res after)
-  | Xannot(ef, args) ->
-      List.fold_right vset_addannot args after
+      vset_addargs args (vset_removeres res after)
   | Xbranch s ->
       after
   | Xcond(cond, args, s1, s2) ->
@@ -330,6 +378,7 @@ let pair_block_live blk after =
 (**************** Dead code elimination **********************)
 
 (* Eliminate pure instructions whose results are not used later. *)
+(* Also: remove dead registers from debug annotations. *)
 
 let rec dce_parmove srcs dsts after =
   match srcs, dsts with
@@ -340,6 +389,12 @@ let rec dce_parmove srcs dsts after =
       then (src1 :: srcs', dst1 :: dsts')
       else (srcs', dsts')
   | _, _ -> assert false
+
+let rec keep_builtin_arg after = function
+  | BA v -> VSet.mem v after
+  | BA_longofwords(hi, lo) ->
+      keep_builtin_arg after hi && keep_builtin_arg after lo
+  | _ -> true
 
 let dce_instr instr after k =
   match instr with
@@ -361,6 +416,9 @@ let dce_instr instr after k =
       if VSet.mem dst after
       then instr :: k
       else k
+  | Xbuiltin(EF_debug _ as ef, args, res) ->
+      let across = vset_removeres res after in
+      Xbuiltin(ef, List.filter (keep_builtin_arg across) args, res) :: k
   | _ ->
       instr :: k
 
@@ -455,17 +513,20 @@ let spill_costs f =
         charge_ros 10 vos
     | Xbuiltin(ef, args, res) ->
         begin match ef with
-        | EF_vstore _ | EF_vstore_global _ | EF_memcpy _ ->
+        | EF_annot _ | EF_debug _ ->
+            ()
+        | EF_vstore _ | EF_memcpy _ ->
             (* result is not used but should not be spilled *)
-            charge_list 10 1 args; charge_list max_int 0 res
+            charge_list 10 1 (params_of_builtin_args args);
+            charge_list max_int 0 (params_of_builtin_res res)
         | EF_annot_val _ ->
             (* like a move *)
-            charge_list 1 1 args; charge_list 1 1 res
+            charge_list 1 1 (params_of_builtin_args args);
+            charge_list 1 1 (params_of_builtin_res res)
         | _ ->
-            charge_list 10 1 args; charge_list 10 1 res
+            charge_list 10 1 (params_of_builtin_args args);
+            charge_list 10 1 (params_of_builtin_res res)
         end
-    | Xannot(ef, args) ->
-        ()
     | Xbranch _ -> ()
     | Xcond(cond, args, _, _) ->
         charge_list 10 1 args
@@ -575,28 +636,28 @@ let add_interfs_instr g instr live =
       ()
   | Xbuiltin(ef, args, res) ->
       (* Interferences with live across *)
-      let across = vset_removelist res live in
-      List.iter (add_interfs_live g across) res;
+      let across = vset_removeres res live in
+      let vres = params_of_builtin_res res in
+      List.iter (add_interfs_live g across) vres;
       (* All results must be pairwise different *)
-      add_interfs_pairwise g res;
+      add_interfs_pairwise g vres;
       add_interfs_destroyed g across (destroyed_by_builtin ef);
       begin match ef, args, res with
-      | EF_annot_val _, [arg], [res] ->
+      | EF_annot_val _, [BA arg], BR res ->
           (* like a move *)
           IRC.add_pref g arg res
       | EF_inline_asm(txt, sg, clob), _, _ ->
+          let vargs = params_of_builtin_args args in
           (* clobbered regs interfere with res and args for GCC compatibility *)
           List.iter (fun c ->
             match Machregs.register_by_name c with
             | None -> ()
             | Some mr ->
-                add_interfs_list_mreg g args mr;
-                if sg.sig_res <> None then add_interfs_list_mreg g res mr)
+                add_interfs_list_mreg g vargs mr;
+                add_interfs_list_mreg g vres mr)
             clob          
       | _ -> ()
       end
-  | Xannot(ef, args) ->
-      ()
   | Xbranch s ->
       ()
   | Xcond(cond, args, s1, s2) ->
@@ -671,10 +732,11 @@ let tospill_instr alloc instr ts =
       addros_tospill alloc vos ts
   | Xtailcall(sg, vos, args) ->
       addros_tospill alloc vos ts
-  | Xbuiltin(ef, args, res) ->
-      addlist_tospill alloc args (addlist_tospill alloc res ts)
-  | Xannot(ef, args) ->
+  | Xbuiltin((EF_annot _ | EF_debug _), _, _) ->
       ts
+  | Xbuiltin(ef, args, res) ->
+      addlist_tospill alloc (params_of_builtin_args args)
+         (addlist_tospill alloc (params_of_builtin_res res) ts)
   | Xbranch s ->
       ts
   | Xcond(cond, args, s1, s2) ->
@@ -734,6 +796,23 @@ let rec reload_vars tospill eqs vl =
       let (ts, cs, eqs2) = reload_vars tospill eqs1 vs in
       (t1 :: ts, c1 @ cs, eqs2)
 
+let rec reload_arg tospill eqs = function
+  | BA v ->
+      let (t, c1, eqs1) = reload_var tospill eqs v in
+      (BA t, c1, eqs1)
+  | BA_longofwords(hi, lo) ->
+      let (hi', c1, eqs1) = reload_arg tospill eqs hi in
+      let (lo', c2, eqs2) = reload_arg tospill eqs1 lo in
+      (BA_longofwords(hi', lo'), c1 @ c2, eqs2)
+  | a -> (a, [], eqs)
+
+let rec reload_args tospill eqs = function
+  | [] -> ([], [], eqs)
+  | a1 :: al ->
+      let (t1, c1, eqs1) = reload_arg tospill eqs a1 in
+      let (tl, cl, eqs2) = reload_args tospill eqs1 al in
+      (t1 :: tl, c1 @ cl, eqs2)
+
 let save_var tospill eqs v =
   if not (VSet.mem v tospill) then
     (v, [], kill v eqs)
@@ -742,13 +821,16 @@ let save_var tospill eqs v =
     (t, [Xspill(t, v)], add v t (kill v eqs))
   end
 
-let rec save_vars tospill eqs vl =
-  match vl with
-  | [] -> ([], [], eqs)
-  | v1 :: vs ->
-      let (t1, c1, eqs1) = save_var tospill eqs v1 in
-      let (ts, cs, eqs2) = save_vars tospill eqs1 vs in
-      (t1 :: ts, c1 @ cs, eqs2)
+let rec save_res tospill eqs = function
+  | BR v ->
+      let (t, c1, eqs1) = save_var tospill eqs v in
+      (BR t, c1, eqs1)
+  | BR_none ->
+      (BR_none, [], eqs)
+  | BR_longofwords(hi, lo) ->
+      let (hi', c1, eqs1) = save_res tospill eqs hi in
+      let (lo', c2, eqs2) = save_res tospill eqs1 lo in
+      (BR_longofwords(hi', lo'), c1 @ c2, eqs2)
 
 (* Trimming equations when we have too many or when they are too old.
    The goal is to limit the live range of unspillable temporaries.
@@ -833,12 +915,12 @@ let spill_instr tospill eqs instr =
       (c1 @ [Xtailcall(sg, Coq_inl v', args)], [])
   | Xtailcall(sg, Coq_inr id, args) ->
       ([instr], [])
-  | Xbuiltin(ef, args, res) ->
-      let (args', c1, eqs1) = reload_vars tospill eqs args in
-      let (res', c2, eqs2) = save_vars tospill eqs1 res in
-      (c1 @ Xbuiltin(ef, args', res') :: c2, eqs2)
-  | Xannot(ef, args) ->
+  | Xbuiltin((EF_annot _ | EF_debug _), args, res) ->
       ([instr], eqs)
+  | Xbuiltin(ef, args, res) ->
+      let (args', c1, eqs1) = reload_args tospill eqs args in
+      let (res', c2, eqs2) = save_res tospill eqs1 res in
+      (c1 @ Xbuiltin(ef, args', res') :: c2, eqs2)
   | Xbranch s ->
       ([instr], eqs)
   | Xcond(cond, args, s1, s2) ->
@@ -977,9 +1059,8 @@ let transl_instr alloc instr k =
   | Xtailcall(sg, vos, args) ->
       LTL.Ltailcall(sg, mros_of alloc vos) :: []
   | Xbuiltin(ef, args, res) ->
-      LTL.Lbuiltin(ef, mregs_of alloc args, mregs_of alloc res) :: k
-  | Xannot(ef, args) ->
-      LTL.Lannot(ef, List.map (AST.map_annot_arg alloc) args) :: k
+      LTL.Lbuiltin(ef, List.map (AST.map_builtin_arg alloc) args,
+                       AST.map_builtin_res (mreg_of alloc) res) :: k
   | Xbranch s ->
       LTL.Lbranch s :: []
   | Xcond(cond, args, s1, s2) ->

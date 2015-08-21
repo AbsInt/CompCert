@@ -93,24 +93,6 @@ Proof.
   intros. destruct f; reflexivity.
 Qed.
 
-Definition regs_lessdef (rs1 rs2: regset) : Prop :=
-  forall r, Val.lessdef (rs1#r) (rs2#r).
-
-Lemma regs_lessdef_regs:
-  forall rs1 rs2, regs_lessdef rs1 rs2 ->
-  forall rl, Val.lessdef_list rs1##rl rs2##rl.
-Proof.
-  induction rl; constructor; auto.
-Qed.
-
-Lemma set_reg_lessdef:
-  forall r v1 v2 rs1 rs2,
-  Val.lessdef v1 v2 -> regs_lessdef rs1 rs2 -> regs_lessdef (rs1#r <- v1) (rs2#r <- v2).
-Proof.
-  intros; red; intros. repeat rewrite Regmap.gsspec. 
-  destruct (peq r0 r); auto.
-Qed.
-
 Lemma init_regs_lessdef:
   forall rl vl1 vl2,
   Val.lessdef_list vl1 vl2 ->
@@ -211,54 +193,79 @@ Proof.
   unfold successor; intros. apply match_successor_rec.
 Qed.
 
-Lemma annot_strength_reduction_correct:
+Lemma builtin_arg_reduction_correct:
   forall bc sp m rs ae, ematch bc rs ae ->
   forall a v,
-  eval_annot_arg ge (fun r => rs#r) sp m a v ->
-  eval_annot_arg ge (fun r => rs#r) sp m (annot_strength_reduction ae a) v.
+  eval_builtin_arg ge (fun r => rs#r) sp m a v ->
+  eval_builtin_arg ge (fun r => rs#r) sp m (builtin_arg_reduction ae a) v.
 Proof.
-  induction 2; simpl; eauto with aarg.
+  induction 2; simpl; eauto with barg.
 - specialize (H x). unfold areg. destruct (AE.get x ae); try constructor. 
   + inv H. constructor.
   + inv H. constructor.
   + destruct (Compopts.generate_float_constants tt); [inv H|idtac]; constructor.
   + destruct (Compopts.generate_float_constants tt); [inv H|idtac]; constructor.
-- destruct (annot_strength_reduction ae hi); auto with aarg.
-  destruct (annot_strength_reduction ae lo); auto with aarg.
-  inv IHeval_annot_arg1; inv IHeval_annot_arg2. constructor. 
+- destruct (builtin_arg_reduction ae hi); auto with barg.
+  destruct (builtin_arg_reduction ae lo); auto with barg.
+  inv IHeval_builtin_arg1; inv IHeval_builtin_arg2. constructor. 
 Qed.
 
-Lemma annot_strength_reduction_correct_2:
+Lemma builtin_arg_strength_reduction_correct:
+  forall bc sp m rs ae a v c,
+  ematch bc rs ae ->
+  eval_builtin_arg ge (fun r => rs#r) sp m a v ->
+  eval_builtin_arg ge (fun r => rs#r) sp m (builtin_arg_strength_reduction ae a c) v.
+Proof.
+  intros. unfold builtin_arg_strength_reduction. 
+  destruct (builtin_arg_ok (builtin_arg_reduction ae a) c).
+  eapply builtin_arg_reduction_correct; eauto.
+  auto.
+Qed.
+
+Lemma builtin_args_strength_reduction_correct:
   forall bc sp m rs ae, ematch bc rs ae ->
   forall al vl,
-  eval_annot_args ge (fun r => rs#r) sp m al vl ->
-  eval_annot_args ge (fun r => rs#r) sp m (List.map (annot_strength_reduction ae) al) vl.
+  eval_builtin_args ge (fun r => rs#r) sp m al vl ->
+  forall cl,
+  eval_builtin_args ge (fun r => rs#r) sp m (builtin_args_strength_reduction ae al cl) vl.
 Proof.
-  induction 2; simpl; constructor; auto. eapply annot_strength_reduction_correct; eauto. 
+  induction 2; simpl; constructor.
+  eapply builtin_arg_strength_reduction_correct; eauto.
+  apply IHlist_forall2. 
+Qed.
+
+Lemma debug_strength_reduction_correct:
+  forall bc sp m rs ae, ematch bc rs ae ->
+  forall al vl,
+  eval_builtin_args ge (fun r => rs#r) sp m al vl ->
+  exists vl', eval_builtin_args ge (fun r => rs#r) sp m (debug_strength_reduction ae al) vl'.
+Proof.
+  induction 2; simpl.
+- exists (@nil val); constructor.
+- destruct IHlist_forall2 as (vl' & A).
+  destruct (builtin_arg_reduction ae a1); repeat (eauto; econstructor). 
 Qed.
 
 Lemma builtin_strength_reduction_correct:
-  forall bc ae rs ef args m t vres m',
-  genv_match bc ge ->
+  forall sp bc ae rs ef args vargs m t vres m',
   ematch bc rs ae ->
-  external_call ef ge rs##args m t vres m' ->
-  let (ef', args') := builtin_strength_reduction ae ef args in
-  external_call ef' ge rs##args' m t vres m'.
+  eval_builtin_args ge (fun r => rs#r) sp m args vargs ->
+  external_call ef ge vargs m t vres m' ->
+  exists vargs',
+     eval_builtin_args ge (fun r => rs#r) sp m (builtin_strength_reduction ae ef args) vargs'
+  /\ external_call ef ge vargs' m t vres m'.
 Proof.
-  intros until m'. intros GE MATCH. 
-  assert (M: forall v id ofs,
-             vmatch bc v (Ptr (Gl id ofs)) ->
-             v = Vundef \/ exists b, Genv.find_symbol ge id = Some b /\ v = Vptr b ofs).
-  { intros. inv H; auto. inv H2. right; exists b; split; auto. eapply GE; eauto. }
-  functional induction (builtin_strength_reduction ae ef args); intros; auto.
-+ simpl in H. assert (V: vmatch bc (rs#r1) (Ptr (Gl symb n1))) by (rewrite <- e1; apply MATCH). 
-  exploit M; eauto. intros [A | [b [A B]]].
-  * simpl in H; rewrite A in H; inv H.
-  * simpl; rewrite volatile_load_global_charact; simpl. exists b; split; congruence.
-+ simpl in H. assert (V: vmatch bc (rs#r1) (Ptr (Gl symb n1))) by (rewrite <- e1; apply MATCH). 
-  exploit M; eauto. intros [A | [b [A B]]].
-  * simpl in H; rewrite A in H; inv H.
-  * simpl; rewrite volatile_store_global_charact; simpl. exists b; split; congruence.
+  intros. 
+  assert (DEFAULT: forall cl,
+    exists vargs',
+       eval_builtin_args ge (fun r => rs#r) sp m (builtin_args_strength_reduction ae args cl) vargs'
+    /\ external_call ef ge vargs' m t vres m').
+  { exists vargs; split; auto. eapply builtin_args_strength_reduction_correct; eauto. }
+  unfold builtin_strength_reduction.
+  destruct ef; auto.
+  exploit debug_strength_reduction_correct; eauto. intros (vargs' & P). 
+  exists vargs'; split; auto. 
+  inv H1; constructor.
 Qed.
 
 (** The proof of semantic preservation is a simulation argument
@@ -478,36 +485,21 @@ Proof.
   apply regs_lessdef_regs; auto. 
 
   (* Ibuiltin *)
-  rename pc'0 into pc.
+  rename pc'0 into pc. clear MATCH. TransfInstr; intros.
 Opaque builtin_strength_reduction.
-  exploit builtin_strength_reduction_correct; eauto. 
-  TransfInstr.
-  destruct (builtin_strength_reduction ae ef args) as [ef' args'].
-  intros P Q.
-  exploit external_call_mem_extends; eauto. 
-  instantiate (1 := rs'##args'). apply regs_lessdef_regs; auto.
+  exploit builtin_strength_reduction_correct; eauto. intros (vargs' & P & Q).
+  exploit (@eval_builtin_args_lessdef _ ge (fun r => rs#r) (fun r => rs'#r)). 
+    apply REGS. eauto. eexact P.
+  intros (vargs'' & U & V).
+  exploit external_call_mem_extends; eauto.
   intros [v' [m2' [A [B [C D]]]]].
   left; econstructor; econstructor; split.
-  eapply exec_Ibuiltin. eauto. 
-  eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
-  eapply match_states_succ; eauto. simpl; auto.
-  apply set_reg_lessdef; auto.
-
-  (* Iannot *)
-  rename pc'0 into pc. TransfInstr; intros. 
-  exploit (@eval_annot_args_lessdef _ ge (fun r => rs#r) (fun r => rs'#r)). 
-    apply REGS. eauto. 
-    eapply annot_strength_reduction_correct_2 with (ae := ae); eauto.
-  intros (vargs' & A & B). 
-  exploit external_call_mem_extends; eauto. 
-  intros (v' & P & Q & R & S & T). 
-  left; econstructor; econstructor; split.
-  eapply exec_Iannot; eauto.
-  eapply eval_annot_args_preserved. eexact symbols_preserved. eauto.
+  eapply exec_Ibuiltin; eauto. 
+  eapply eval_builtin_args_preserved. eexact symbols_preserved. eauto.
   eapply external_call_symbols_preserved; eauto.
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_states_succ; eauto.
+  apply set_res_lessdef; auto.
 
   (* Icond, preserved *)
   rename pc' into pc. TransfInstr.

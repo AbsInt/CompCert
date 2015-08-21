@@ -219,30 +219,30 @@ let print_file_line_d2 oc pref file line =
 let re_annot_param = Str.regexp "%%\\|%[1-9][0-9]*"
 
 let rec print_annot print_preg sp_reg_name oc = function
-  | AA_base x -> print_preg oc x
-  | AA_int n -> fprintf oc "%ld" (camlint_of_coqint n)
-  | AA_long n -> fprintf oc "%Ld" (camlint64_of_coqint n)
-  | AA_float n -> fprintf oc "%.18g" (camlfloat_of_coqfloat n)
-  | AA_single n -> fprintf oc "%.18g" (camlfloat_of_coqfloat32 n)
-  | AA_loadstack(chunk, ofs) ->
+  | BA x -> print_preg oc x
+  | BA_int n -> fprintf oc "%ld" (camlint_of_coqint n)
+  | BA_long n -> fprintf oc "%Ld" (camlint64_of_coqint n)
+  | BA_float n -> fprintf oc "%.18g" (camlfloat_of_coqfloat n)
+  | BA_single n -> fprintf oc "%.18g" (camlfloat_of_coqfloat32 n)
+  | BA_loadstack(chunk, ofs) ->
       fprintf oc "mem(%s + %ld, %ld)"
          sp_reg_name
          (camlint_of_coqint ofs)
          (camlint_of_coqint (size_chunk chunk))
-  | AA_addrstack ofs ->
+  | BA_addrstack ofs ->
       fprintf oc "(%s + %ld)"
          sp_reg_name
          (camlint_of_coqint ofs)
-  | AA_loadglobal(chunk, id, ofs) ->
+  | BA_loadglobal(chunk, id, ofs) ->
       fprintf oc "mem(\"%s\" + %ld, %ld)"
          (extern_atom id)
          (camlint_of_coqint ofs)
          (camlint_of_coqint (size_chunk chunk))
-  | AA_addrglobal(id, ofs) ->
+  | BA_addrglobal(id, ofs) ->
       fprintf oc "(\"%s\" + %ld)"
          (extern_atom id)
          (camlint_of_coqint ofs)
-  | AA_longofwords(hi, lo) ->
+  | BA_longofwords(hi, lo) ->
       fprintf oc "(%a * 0x100000000 + %a)"
         (print_annot print_preg sp_reg_name) hi
         (print_annot print_preg sp_reg_name) lo
@@ -267,7 +267,7 @@ let print_annot_stmt print_preg sp_reg_name oc txt tys args =
 
 let print_annot_val print_preg oc txt args =
   print_annot_text print_preg "<internal error>" oc txt
-    (List.map (fun r -> AA_base r) args)
+    (List.map (fun r -> BA r) args)
 
 (** Inline assembly *)
 

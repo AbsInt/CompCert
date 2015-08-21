@@ -79,10 +79,9 @@ let print_instruction pp succ = function
       fprintf pp "tailcall %a" ros fn
   | Lbuiltin(ef, args, res) ->
       fprintf pp "%a = %s(%a)"
-        mregs res (name_of_external ef) mregs args
-  | Lannot(ef, args) ->
-      fprintf pp "%s(%a)\n"
-        (name_of_external ef) (print_annot_args loc) args
+        (print_builtin_res mreg) res
+        (name_of_external ef)
+        (print_builtin_args loc) args
   | Lbranch s ->
       print_succ pp s succ
   | Lcond(cond, args, s1, s2) ->
