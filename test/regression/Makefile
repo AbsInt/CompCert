@@ -23,8 +23,17 @@ TESTS=int32 int64 floats floats-basics \
 
 TESTS_COMP=attribs1 bitfields1 bitfields2 bitfields3 bitfields4 \
   bitfields5 bitfields6 bitfields7 bitfields8 \
-  builtins-$(ARCH) packedstruct1 packedstruct2 alignas \
+  builtins-$(ARCH) packedstruct2 alignas \
   varargs1 varargs2 sections alias
+
+# packedstruct1 makes unaligned memory accesses
+
+ifeq ($(ARCH),powerpc)
+TESTS_COMP+=packedstruct1
+endif
+ifeq ($(ARCH),ia32)
+TESTS_COMP+=packedstruct1
+endif
 
 # Can run, both in compiled mode and in interpreter mode,
 # but produce processor-dependent results, so no reference output in Results
@@ -66,7 +75,7 @@ test:
 	@for i in $(TESTS) $(TESTS_COMP); do \
 	   if ./$$i.compcert | cmp -s - Results/$$i; \
            then echo "$$i: passed"; \
-           else echo "$$i: FAILED"; \
+           else echo "$$i: FAILED"; exit 2; \
 	   fi; \
          done
 	@for i in $(TESTS); do \
