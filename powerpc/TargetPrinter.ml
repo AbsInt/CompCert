@@ -854,7 +854,16 @@ module Target (System : SYSTEM):TARGET =
     let section oc sec =
       section oc sec;
       debug_section oc sec
+       
+    let locations = (Hashtbl.create 17 : (atom,DwarfTypes.location_value) Hashtbl.t)
 
+    let get_location a = try Some (Hashtbl.find locations a) with Not_found -> None 
+
+    let get_segment_location _ = None
+
+    let add_var_location a =
+      if !Clflags.option_g && Configuration.advanced_debug then
+        Hashtbl.add locations a (DwarfTypes.LocSymbol a);
   end
 
 let sel_target () =

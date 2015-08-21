@@ -13,6 +13,7 @@
 (* Types used for writing dwarf debug information *)
 
 open Sections
+open Camlcoq
 
 (* Basic types for the value of attributes *)
 
@@ -37,7 +38,7 @@ type address = int
 type block = string
 
 type location_value =
-  | LocSymbol of string
+  | LocSymbol of atom
   | LocConst of constant
   | LocBlock of block
 
@@ -93,11 +94,10 @@ type dw_tag_enumerator =
 
 type dw_tag_formal_parameter =
     {
+     formal_parameter_id:                 int;
      formal_parameter_file_loc:           file_loc       option;
      formal_parameter_artificial:         flag           option;
-     formal_parameter_location:           location_value option;
      formal_parameter_name:               string         option;
-     formal_parameter_segment:            location_value option;
      formal_parameter_type:               reference;
      formal_parameter_variable_parameter: flag           option;
    }
@@ -141,9 +141,9 @@ type dw_tag_structure_type =
 
 type dw_tag_subprogram =
     {
+     subprogram_id:         int;
      subprogram_file_loc:   file_loc       option;
      subprogram_external:   flag           option;
-     subprogram_frame_base: location_value option;
      subprogram_name:       string;
      subprogram_prototyped: flag;
      subprogram_type:       reference      option;
@@ -184,12 +184,11 @@ type dw_tag_unspecified_parameter =
 
 type dw_tag_variable =
     {
+     variable_id:          int;
      variable_file_loc:    file_loc       option;
      variable_declaration: flag           option;
      variable_external:    flag           option;
-     variable_location:    location_value option;
      variable_name:        string;
-     variable_segment:     location_value option;
      variable_type:        reference;
    }
 
@@ -270,4 +269,8 @@ module type DWARF_TARGET=
     val get_stmt_list_addr: unit -> int    
     val name_of_section: section_name -> string
     val get_fun_addr: string -> (int * int) option
+    val get_location: int -> location_value option
+    val get_segment_location: int -> location_value option
+    val get_frame_base: int -> location_value option
+    val symbol: out_channel -> atom -> unit
   end

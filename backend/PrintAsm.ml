@@ -78,6 +78,7 @@ module Printer(Target:TARGET) =
         List.iter (Target.print_init oc) id
  
     let print_var oc name v =
+      if !Clflags.option_g && Configuration.advanced_debug then Target.add_var_location name;
       match v.gvar_init with
       | [] -> ()
       | _  ->
@@ -102,8 +103,7 @@ module Printer(Target:TARGET) =
             let sz =
               match v.gvar_init with [Init_space sz] -> sz | _ -> assert false in
             Target.print_comm_symb oc sz name align
-              
-              
+                            
     let print_globdef oc (name,gdef) =
       match gdef with
       | Gfun (Internal code) -> print_function oc name code
@@ -120,6 +120,10 @@ module Printer(Target:TARGET) =
         let get_stmt_list_addr = Target.get_stmt_list_addr
         let name_of_section = Target.name_of_section
         let get_fun_addr s = try Some (Hashtbl.find addr_mapping s) with Not_found -> None
+        let get_location a =  try (Target.get_location (stamp_atom a)) with Not_found -> None
+        let get_segment_location a = try (Target.get_segment_location (stamp_atom a)) with Not_found -> None
+        let get_frame_base a = None
+        let symbol = Target.symbol
       end
 
     module DebugPrinter = DwarfPrinter (DwarfTarget) (Target.DwarfAbbrevs)

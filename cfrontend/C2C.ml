@@ -1038,7 +1038,9 @@ let convertFundef loc env fd =
   let params =
     List.map
       (fun (id, ty) ->
-        (intern_string id.name, convertTyp env ty))
+        let id' = intern_string id.name in
+        add_stamp id.stamp id';
+        (id', convertTyp env ty))
       fd.fd_params in
   let vars =
     List.map
@@ -1047,7 +1049,9 @@ let convertFundef loc env fd =
           unsupported "'static' or 'extern' local variable";
         if init <> None then
           unsupported "initialized local variable";
-        (intern_string id.name, convertTyp env ty))
+        let id' = intern_string id.name in
+        add_stamp id.stamp id';
+        (id', convertTyp env ty))
       fd.fd_locals in
   let body' = convertStmt loc env fd.fd_body in
   let id' = intern_string fd.fd_name.name in
@@ -1075,6 +1079,7 @@ let convertFundecl env (sto, id, ty, optinit) =
     | Tfunction(args, res, cconv) -> (args, res, cconv)
     | _ -> assert false in
   let id' = intern_string id.name in
+  add_stamp id.stamp id';
   let sg = signature_of_type args res cconv in
   let ef =
     if id.name = "malloc" then EF_malloc else
@@ -1116,6 +1121,7 @@ let convertInitializer env ty i =
 
 let convertGlobvar loc env (sto, id, ty, optinit) =
   let id' = intern_string id.name in
+  add_stamp id.stamp id';
   let ty' = convertTyp env ty in 
   let sz = Ctypes.sizeof !comp_env ty' in
   let al = Ctypes.alignof !comp_env ty' in

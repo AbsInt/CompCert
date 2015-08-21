@@ -164,15 +164,14 @@ and fun_to_dwarf_tag rt args =
         false,[u],[]
     | Some [] -> true,[],[]
     | Some l ->
-        let c,e = mmap (fun acc (_,t) ->
+        let c,e = mmap (fun acc (i,t) ->
           let t,e = type_to_dwarf t in
           let fp =
             {
+             formal_parameter_id = i.stamp;
              formal_parameter_file_loc = None;
              formal_parameter_artificial = None;
-             formal_parameter_location = None;
              formal_parameter_name = None;
-             formal_parameter_segment = None;
              formal_parameter_type = t;
              formal_parameter_variable_parameter = None;
            } in
@@ -301,12 +300,11 @@ let glob_var_to_dwarf (s,n,t,_) gloc =
    | Storage_static -> false
    | _ -> true) in
    let decl = {
+     variable_id = n.stamp;
      variable_file_loc = (Some gloc);
      variable_declaration = Some at_decl;
      variable_external = Some ext;
-     variable_location = if ext then Some (LocSymbol n.name) else None;
      variable_name = n.name;
-     variable_segment = None;
      variable_type = i;
    } in
    let decl = new_entry (DW_TAG_variable decl) in
@@ -322,9 +320,9 @@ let fundef_to_dwarf f gloc =
   | Storage_static -> false
   | _ -> true) in
   let fdef = {
+    subprogram_id = f.fd_name.stamp;
     subprogram_file_loc = (Some gloc);
     subprogram_external = Some ext;
-    subprogram_frame_base = None;
     subprogram_name = f.fd_name.name;
     subprogram_prototyped = true;
     subprogram_type = ret;
@@ -333,11 +331,10 @@ let fundef_to_dwarf f gloc =
     let t,e = type_to_dwarf t in
     let fp =
       {
+       formal_parameter_id = p.stamp;
        formal_parameter_file_loc = None;
        formal_parameter_artificial = None;
-       formal_parameter_location = None;
        formal_parameter_name = (Some p.name);
-       formal_parameter_segment = None;
        formal_parameter_type = t;
        formal_parameter_variable_parameter = None;
      } in

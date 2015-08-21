@@ -923,6 +923,12 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
     let new_label = new_label
         
     let print_file_loc _ _ = () (* Dummy function *)
+
+    let get_location _ = None (* Dummy function *)
+
+    let get_segment_location _ = None (* Dummy function *)
+
+    let add_var_location _ = () (* Dummy function *)
   end
 
 let sel_target () = 
