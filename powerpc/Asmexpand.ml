@@ -44,11 +44,11 @@ let emit_addimm rd rs n =
 (* Handling of annotations *)
 
 let expand_annot_val txt targ args res =
-  emit (Pannot(EF_annot(txt, [targ]), List.map (fun r -> AA_base r) args));
+  emit (Pbuiltin(EF_annot(txt, [targ]), args, BR_none));
   begin match args, res with
-  | [IR src], [IR dst] ->
+  | [BA(IR src)], BR(IR dst) ->
       if dst <> src then emit (Pmr(dst, src))
-  | [FR src], [FR dst] ->
+  | [BA(FR src)], BR(FR dst) ->
       if dst <> src then emit (Pfmr(dst, src))
   | _, _ ->
       assert false
@@ -62,34 +62,64 @@ let expand_annot_val txt targ args res =
    So, use 64-bit accesses only if alignment >= 4.
    Note that lfd and stfd cannot trap on ill-formed floats. *)
 
+let memcpy_small_arg sz arg otherarg tmp1 tmp2 =
+  match arg with
+  | BA (IR r) ->
+      (r, _0)
+  | BA_addrstack ofs ->
+      if Int.eq (Asmgen.high_s ofs) Int.zero
+      && Int.eq (Asmgen.high_s (Int.add ofs (Int.repr (Z.of_uint sz))))
+                Int.zero
+      then (GPR1, ofs)
+      else begin
+        let tmp = if otherarg = BA (IR tmp1) then tmp2 else tmp1 in
+        emit_addimm tmp GPR1 ofs;
+        (tmp, _0)
+      end
+  | _ ->
+      assert false
+
 let expand_builtin_memcpy_small sz al src dst =
-  let rec copy ofs sz =
+  let (rsrc, osrc) = memcpy_small_arg sz src dst GPR11 GPR12 in
+  let (rdst, odst) = memcpy_small_arg sz dst src GPR12 GPR11 in
+  let rec copy osrc odst sz =
     if sz >= 8 && al >= 4 && !Clflags.option_ffpu then begin
-      emit (Plfd(FPR13, Cint ofs, src));
-      emit (Pstfd(FPR13, Cint ofs, dst));
-      copy (Int.add ofs _8) (sz - 8)
+      emit (Plfd(FPR13, Cint osrc, rsrc));
+      emit (Pstfd(FPR13, Cint odst, rdst));
+      copy (Int.add osrc _8) (Int.add odst _8) (sz - 8)
     end else if sz >= 4 then begin
-      emit (Plwz(GPR0, Cint ofs, src));
-      emit (Pstw(GPR0, Cint ofs, dst));
-      copy (Int.add ofs _4) (sz - 4)
+      emit (Plwz(GPR0, Cint osrc, rsrc));
+      emit (Pstw(GPR0, Cint odst, rdst));
+      copy (Int.add osrc _4) (Int.add odst _4) (sz - 4)
     end else if sz >= 2 then begin
-      emit (Plhz(GPR0, Cint ofs, src));
-      emit (Psth(GPR0, Cint ofs, dst));
-      copy (Int.add ofs _2) (sz - 2)
+      emit (Plhz(GPR0, Cint osrc, rsrc));
+      emit (Psth(GPR0, Cint odst, rdst));
+      copy (Int.add osrc _2) (Int.add odst _2) (sz - 2)
     end else if sz >= 1 then begin
-      emit (Plbz(GPR0, Cint ofs, src));
-      emit (Pstb(GPR0, Cint ofs, dst));
-      copy (Int.add ofs _1) (sz - 1)
+      emit (Plbz(GPR0, Cint osrc, rsrc));
+      emit (Pstb(GPR0, Cint odst, rdst));
+      copy (Int.add osrc _1) (Int.add odst _1) (sz - 1)
     end in
-  copy _0 sz
+  copy osrc odst sz
+
+let memcpy_big_arg arg tmp =
+  (* Set [tmp] to the value of [arg] minus 4 *)
+  match arg with
+  | BA (IR r) ->
+      emit (Paddi(tmp, r, Cint _m4))
+  | BA_addrstack ofs ->
+      emit_addimm tmp GPR1 (Int.add ofs _m4)
+  | _ ->
+      assert false
 
 let expand_builtin_memcpy_big sz al src dst =
   assert (sz >= 4);
   emit_loadimm GPR0 (Z.of_uint (sz / 4));
   emit (Pmtctr GPR0);
-  let (s,d) = if dst <> GPR11 then (GPR11, GPR12) else (GPR12, GPR11) in
-  emit (Paddi(s, src, Cint _m4));
-  emit (Paddi(d, dst, Cint _m4));
+  let (s, d) = 
+    if dst <> BA (IR GPR11) then (GPR11, GPR12) else (GPR12, GPR11) in
+  memcpy_big_arg src s;
+  memcpy_big_arg dst d;
   let lbl = new_label() in
   emit (Plabel lbl);
   emit (Plwzu(GPR0, Cint _4, s));
@@ -109,7 +139,7 @@ let expand_builtin_memcpy_big sz al src dst =
 
 let expand_builtin_memcpy sz al args =
   let (dst, src) =
-    match args with [IR d; IR s] -> (d, s) | _ -> assert false in
+    match args with [d; s] -> (d, s) | _ -> assert false in
   if sz <= (if !Clflags.option_ffpu && al >= 4
             then if !Clflags.option_Osize then 35 else 51
 	    else if !Clflags.option_Osize then 19 else 27)
@@ -118,140 +148,129 @@ let expand_builtin_memcpy sz al args =
 
 (* Handling of volatile reads and writes *)
 
-let expand_builtin_vload_common chunk base offset res =
+let offset_constant cst delta =
+  match cst with
+  | Cint n ->
+      let n' = Int.add n delta in
+      if Int.eq (Asmgen.high_s n') Int.zero then Some (Cint n') else None
+  | Csymbol_sda(id, ofs) ->
+      Some (Csymbol_sda(id, Int.add ofs delta))
+  | _ -> None
+
+let rec expand_builtin_vload_common chunk base offset res =
   match chunk, res with
-  | Mint8unsigned, IR res ->
+  | Mint8unsigned, BR(IR res) ->
       emit (Plbz(res, offset, base))
-  | Mint8signed, IR res ->
+  | Mint8signed, BR(IR res) ->
       emit (Plbz(res, offset, base));
       emit (Pextsb(res, res))
-  | Mint16unsigned, IR res ->
+  | Mint16unsigned, BR(IR res) ->
       emit (Plhz(res, offset, base))
-  | Mint16signed, IR res ->
+  | Mint16signed, BR(IR res) ->
       emit (Plha(res, offset, base))
-  | (Mint32 | Many32), IR res ->
+  | (Mint32 | Many32), BR(IR res) ->
       emit (Plwz(res, offset, base))
-  | Mfloat32, FR res ->
+  | Mfloat32, BR(FR res) ->
       emit (Plfs(res, offset, base))
-  | (Mfloat64 | Many64), FR res ->
+  | (Mfloat64 | Many64), BR(FR res) ->
       emit (Plfd(res, offset, base))
-  (* Mint64 is special-cased below *)
-  | _ ->
-      assert false
+  | Mint64, BR_longofwords(BR(IR hi), BR(IR lo)) ->
+      begin match offset_constant offset _4 with
+      | Some offset' ->
+          if hi <> base then begin
+            emit (Plwz(hi, offset, base));
+            emit (Plwz(lo, offset', base))
+          end else begin
+            emit (Plwz(lo, offset', base));
+            emit (Plwz(hi, offset, base))
+          end
+      | None ->      
+          emit (Paddi(GPR11, base, offset));
+          expand_builtin_vload_common chunk GPR11 (Cint _0) res
+      end
+  | _, _ -> assert false
 
 let expand_builtin_vload chunk args res =
-  begin match args, res with
-  | [IR addr], [res] when chunk <> Mint64 ->
+  match args with
+  | [BA(IR addr)] ->
       expand_builtin_vload_common chunk addr (Cint _0) res
-  | [IR addr], [IR res1; IR res2] when chunk = Mint64 ->
-      if addr <> res1 then begin
-        emit (Plwz(res1, Cint _0, addr));
-        emit (Plwz(res2, Cint _4, addr))
+  | [BA_addrstack ofs] ->
+      if Int.eq (Asmgen.high_s ofs) Int.zero then
+        expand_builtin_vload_common chunk GPR1 (Cint ofs) res
+      else begin
+        emit_addimm GPR11 GPR1 ofs;
+        expand_builtin_vload_common chunk GPR11 (Cint _0) res
+      end
+  | [BA_addrglobal(id, ofs)] ->
+      if symbol_is_small_data id ofs then
+        expand_builtin_vload_common chunk GPR0 (Csymbol_sda(id, ofs)) res
+      else if symbol_is_rel_data id ofs then begin
+        emit (Paddis(GPR11, GPR0, Csymbol_rel_high(id, ofs)));
+        expand_builtin_vload_common chunk GPR11 (Csymbol_rel_low(id, ofs)) res
       end else begin
-        emit (Plwz(res2, Cint _4, addr));
-        emit (Plwz(res1, Cint _0, addr))
+        emit (Paddis(GPR11, GPR0, Csymbol_high(id, ofs)));
+        expand_builtin_vload_common chunk GPR11 (Csymbol_low(id, ofs)) res
       end
   | _ ->
       assert false
-  end
 
-let expand_builtin_vload_global chunk id ofs args res =
-  begin match res with
-  | [res] when chunk <> Mint64 ->
-      emit (Paddis(GPR11, GPR0, Csymbol_high(id, ofs)));
-      expand_builtin_vload_common chunk GPR11 (Csymbol_low(id, ofs)) res
-  | [IR res1; IR res2] when chunk = Mint64 ->
-      emit (Paddis(res1, GPR0, Csymbol_high(id, ofs)));
-      emit (Plwz(res1, Csymbol_low(id, ofs), res1));
-      let ofs = Int.add ofs _4 in
-      emit (Paddis(res2, GPR0, Csymbol_high(id, ofs)));
-      emit (Plwz(res2, Csymbol_low(id, ofs), res2))
-  | _ ->
-      assert false
-  end
-
-let expand_builtin_vload_sda chunk id ofs args res =
-  begin match res with
-  | [res] when chunk <> Mint64 ->
-      expand_builtin_vload_common chunk GPR0 (Csymbol_sda(id, ofs)) res
-  | [IR res1; IR res2] when chunk = Mint64 ->
-      emit (Plwz(res1, Csymbol_sda(id, ofs), GPR0));
-      let ofs = Int.add ofs _4 in
-      emit (Plwz(res2, Csymbol_sda(id, ofs), GPR0))
-  | _ ->
-      assert false
-  end
-
-let expand_builtin_vload_rel chunk id ofs args res =
-  emit (Paddis(GPR11, GPR0, Csymbol_rel_high(id, ofs)));
-  emit (Paddi(GPR11, GPR11, Csymbol_rel_low(id, ofs)));
-  expand_builtin_vload chunk [IR GPR11] res
+let temp_for_vstore src =
+  let rl = AST.params_of_builtin_arg src in
+  if not (List.mem (IR GPR11) rl) then GPR11
+  else if not (List.mem (IR GPR12) rl) then GPR12
+  else GPR10
 
 let expand_builtin_vstore_common chunk base offset src =
   match chunk, src with
-  | (Mint8signed | Mint8unsigned), IR src ->
+  | (Mint8signed | Mint8unsigned), BA(IR src) ->
       emit (Pstb(src, offset, base))
-  | (Mint16signed | Mint16unsigned), IR src ->
+  | (Mint16signed | Mint16unsigned), BA(IR src) ->
       emit (Psth(src, offset, base))
-  | (Mint32 | Many32), IR src ->
+  | (Mint32 | Many32), BA(IR src) ->
       emit (Pstw(src, offset, base))
-  | Mfloat32, FR src ->
+  | Mfloat32, BA(FR src) ->
       emit (Pstfs(src, offset, base))
-  | (Mfloat64 | Many64), FR src ->
+  | (Mfloat64 | Many64), BA(FR src) ->
       emit (Pstfd(src, offset, base))
-  (* Mint64 is special-cased below *)
-  | _ ->
-      assert false
+  | Mint64, BA_longofwords(BA(IR hi), BA(IR lo)) ->
+      begin match offset_constant offset _4 with
+      | Some offset' ->
+          emit (Pstw(hi, offset, base));
+          emit (Pstw(lo, offset', base))
+      | None ->      
+          let tmp = temp_for_vstore src in
+          emit (Paddi(tmp, base, offset));
+          emit (Pstw(hi, Cint _0, tmp));
+          emit (Pstw(lo, Cint _4, tmp))
+      end
+  | _, _ -> assert false
 
 let expand_builtin_vstore chunk args =
-  begin match args with
-  | [IR addr; src] when chunk <> Mint64 ->
+  match args with
+  | [BA(IR addr); src] ->
       expand_builtin_vstore_common chunk addr (Cint _0) src
-  | [IR addr; IR src1; IR src2] when chunk = Mint64 ->
-      emit (Pstw(src1, Cint _0, addr));
-      emit (Pstw(src2, Cint _4, addr))
+  | [BA_addrstack ofs; src] ->
+      if Int.eq (Asmgen.high_s ofs) Int.zero then
+        expand_builtin_vstore_common chunk GPR1 (Cint ofs) src
+      else begin
+        let tmp = temp_for_vstore src in
+        emit_addimm tmp GPR1 ofs;
+        expand_builtin_vstore_common chunk tmp (Cint _0) src
+      end
+  | [BA_addrglobal(id, ofs); src] ->
+      if symbol_is_small_data id ofs then
+        expand_builtin_vstore_common chunk GPR0 (Csymbol_sda(id, ofs)) src
+      else if symbol_is_rel_data id ofs then begin
+        let tmp = temp_for_vstore src in
+        emit (Paddis(tmp, GPR0, Csymbol_rel_high(id, ofs)));
+        expand_builtin_vstore_common chunk tmp (Csymbol_rel_low(id, ofs)) src
+      end else begin
+        let tmp = temp_for_vstore src in
+        emit (Paddis(tmp, GPR0, Csymbol_high(id, ofs)));
+        expand_builtin_vstore_common chunk tmp (Csymbol_low(id, ofs)) src
+      end
   | _ ->
       assert false
-  end
-
-let expand_builtin_vstore_global chunk id ofs args =
-  begin match args with
-  | [src] when chunk <> Mint64 ->
-      let tmp = if src = IR GPR11 then GPR12 else GPR11 in
-      emit (Paddis(tmp, GPR0, Csymbol_high(id, ofs)));
-      expand_builtin_vstore_common chunk tmp (Csymbol_low(id, ofs)) src
-  | [IR src1; IR src2] when chunk = Mint64 ->
-      let tmp =
-        if not (List.mem GPR12 [src1; src2]) then GPR12 else
-        if not (List.mem GPR11 [src1; src2]) then GPR11 else GPR10 in
-      emit (Paddis(tmp, GPR0, Csymbol_high(id, ofs)));
-      emit (Pstw(src1, Csymbol_low(id, ofs), tmp));
-      let ofs = Int.add ofs _4 in
-      emit (Paddis(tmp, GPR0, Csymbol_high(id, ofs)));
-      emit (Pstw(src2, Csymbol_low(id, ofs), tmp))
-  | _ ->
-      assert false
-  end
-
-let expand_builtin_vstore_sda chunk id ofs args =
-  begin match args with
-  | [src] when chunk <> Mint64 ->
-      expand_builtin_vstore_common chunk GPR0 (Csymbol_sda(id, ofs)) src
-  | [IR src1; IR src2] when chunk = Mint64 ->
-      emit (Pstw(src1, Csymbol_sda(id, ofs), GPR0));
-      let ofs = Int.add ofs _4 in
-      emit (Pstw(src2, Csymbol_sda(id, ofs), GPR0))
-  | _ ->
-      assert false
-  end
-
-let expand_builtin_vstore_rel chunk id ofs args =
-  let tmp =
-    if not (List.mem (IR GPR12) args) then GPR12 else
-    if not (List.mem (IR GPR11) args) then GPR11 else GPR10 in
-  emit (Paddis(tmp, GPR0, Csymbol_rel_high(id, ofs)));
-  emit (Paddi(tmp, tmp, Csymbol_rel_low(id, ofs)));
-  expand_builtin_vstore chunk (IR tmp :: args)
 
 (* Handling of varargs *)
 
@@ -308,43 +327,43 @@ let expand_builtin_inline name args res =
   (* Can use as temporaries: GPR0, FPR13 *)
   match name, args, res with
   (* Integer arithmetic *)
-  | "__builtin_mulhw", [IR a1; IR a2], [IR res] ->
+  | "__builtin_mulhw", [BA(IR a1); BA(IR a2)], BR(IR res) ->
       emit (Pmulhw(res, a1, a2))
-  | "__builtin_mulhwu", [IR a1; IR a2], [IR res] ->
+  | "__builtin_mulhwu", [BA(IR a1); BA(IR a2)], BR(IR res) ->
       emit (Pmulhwu(res, a1, a2))
-  | "__builtin_clz", [IR a1], [IR res] ->
+  | "__builtin_clz", [BA(IR a1)], BR(IR res) ->
       emit (Pcntlzw(res, a1))
-  | ("__builtin_bswap" | "__builtin_bswap32"), [IR a1], [IR res] ->
+  | ("__builtin_bswap" | "__builtin_bswap32"), [BA(IR a1)], BR(IR res) ->
       emit (Pstwu(a1, Cint _m8, GPR1));
       emit (Pcfi_adjust _8);
       emit (Plwbrx(res, GPR0, GPR1));
       emit (Paddi(GPR1, GPR1, Cint _8));
       emit (Pcfi_adjust _m8)
-  | "__builtin_bswap16", [IR a1], [IR res] ->
+  | "__builtin_bswap16", [BA(IR a1)], BR(IR res) ->
       emit (Prlwinm(GPR0, a1, _8, coqint_of_camlint 0x0000FF00l));
       emit (Prlwinm(res, a1, coqint_of_camlint 24l,
                                   coqint_of_camlint 0x000000FFl));
       emit (Por(res, GPR0, res))
   (* Float arithmetic *)
-  | "__builtin_fmadd", [FR a1; FR a2; FR a3], [FR res] ->
+  | "__builtin_fmadd", [BA(FR a1); BA(FR a2); BA(FR a3)], BR(FR res) ->
       emit (Pfmadd(res, a1, a2, a3))
-  | "__builtin_fmsub", [FR a1; FR a2; FR a3], [FR res] ->
+  | "__builtin_fmsub", [BA(FR a1); BA(FR a2); BA(FR a3)], BR(FR res) ->
       emit (Pfmsub(res, a1, a2, a3))
-  | "__builtin_fnmadd", [FR a1; FR a2; FR a3], [FR res] ->
+  | "__builtin_fnmadd", [BA(FR a1); BA(FR a2); BA(FR a3)], BR(FR res) ->
       emit (Pfnmadd(res, a1, a2, a3))
-  | "__builtin_fnmsub", [FR a1; FR a2; FR a3], [FR res] ->
+  | "__builtin_fnmsub", [BA(FR a1); BA(FR a2); BA(FR a3)], BR(FR res) ->
       emit (Pfnmsub(res, a1, a2, a3))
-  | "__builtin_fabs", [FR a1], [FR res] ->
+  | "__builtin_fabs", [BA(FR a1)], BR(FR res) ->
       emit (Pfabs(res, a1))
-  | "__builtin_fsqrt", [FR a1], [FR res] ->
+  | "__builtin_fsqrt", [BA(FR a1)], BR(FR res) ->
       emit (Pfsqrt(res, a1))
-  | "__builtin_frsqrte", [FR a1], [FR res] ->
+  | "__builtin_frsqrte", [BA(FR a1)], BR(FR res) ->
       emit (Pfrsqrte(res, a1))
-  | "__builtin_fres", [FR a1], [FR res] ->
+  | "__builtin_fres", [BA(FR a1)], BR(FR res) ->
       emit (Pfres(res, a1))
-  | "__builtin_fsel", [FR a1; FR a2; FR a3], [FR res] ->
+  | "__builtin_fsel", [BA(FR a1); BA(FR a2); BA(FR a3)], BR(FR res) ->
       emit (Pfsel(res, a1, a2, a3))
-  | "__builtin_fcti", [FR a1], [IR res] ->
+  | "__builtin_fcti", [BA(FR a1)], BR(IR res) ->
       emit (Pfctiw(FPR13, a1));
       emit (Pstfdu(FPR13, Cint _m8, GPR1));
       emit (Pcfi_adjust _8);
@@ -352,30 +371,36 @@ let expand_builtin_inline name args res =
       emit (Paddi(GPR1, GPR1, Cint _8));
       emit (Pcfi_adjust _m8)
   (* 64-bit integer arithmetic *)
-  | "__builtin_negl", [IR ah; IR al], [IR rh; IR rl] ->
+  | "__builtin_negl", [BA_longofwords(BA(IR ah), BA(IR al))],
+                      BR_longofwords(BR(IR rh), BR(IR rl)) ->
       expand_int64_arith (rl = ah) rl (fun rl ->
         emit (Psubfic(rl, al, Cint _0));
         emit (Psubfze(rh, ah)))
-  | "__builtin_addl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
+  | "__builtin_addl", [BA_longofwords(BA(IR ah), BA(IR al));
+                       BA_longofwords(BA(IR bh), BA(IR bl))],
+                      BR_longofwords(BR(IR rh), BR(IR rl)) ->
       expand_int64_arith (rl = ah || rl = bh) rl (fun rl ->
         emit (Paddc(rl, al, bl));
         emit (Padde(rh, ah, bh)))
-  | "__builtin_subl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
+  | "__builtin_subl", [BA_longofwords(BA(IR ah), BA(IR al));
+                       BA_longofwords(BA(IR bh), BA(IR bl))],
+                      BR_longofwords(BR(IR rh), BR(IR rl)) ->
       expand_int64_arith (rl = ah || rl = bh) rl (fun rl ->
         emit (Psubfc(rl, bl, al));
         emit (Psubfe(rh, bh, ah)))
-  | "__builtin_mull", [IR a; IR b], [IR rh; IR rl] ->
+  | "__builtin_mull", [BA(IR a); BA(IR b)],
+                      BR_longofwords(BR(IR rh), BR(IR rl)) ->
       expand_int64_arith (rl = a || rl = b) rl (fun rl ->
         emit (Pmullw(rl, a, b));
         emit (Pmulhwu(rh, a, b)))
   (* Memory accesses *)
-  | "__builtin_read16_reversed", [IR a1], [IR res] ->
+  | "__builtin_read16_reversed", [BA(IR a1)], BR(IR res) ->
       emit (Plhbrx(res, GPR0, a1))
-  | "__builtin_read32_reversed", [IR a1], [IR res] ->
+  | "__builtin_read32_reversed", [BA(IR a1)], BR(IR res) ->
       emit (Plwbrx(res, GPR0, a1))
-  | "__builtin_write16_reversed", [IR a1; IR a2], _ ->
+  | "__builtin_write16_reversed", [BA(IR a1); BA(IR a2)], _ ->
       emit (Psthbrx(a2, GPR0, a1))
-  | "__builtin_write32_reversed", [IR a1; IR a2], _ ->
+  | "__builtin_write32_reversed", [BA(IR a1); BA(IR a2)], _ ->
       emit (Pstwbrx(a2, GPR0, a1))
   (* Synchronization *)
   | "__builtin_membar", [], _ ->
@@ -391,15 +416,25 @@ let expand_builtin_inline name args res =
   | "__builtin_trap", [], _ ->
       emit (Ptrap)
   (* Vararg stuff *)
-  | "__builtin_va_start", [IR a], _ ->
+  | "__builtin_va_start", [BA(IR a)], _ ->
       expand_builtin_va_start a
-  (* Catch-all *)
-  | "__builtin_dcbf", [IR a1],_ ->
+  (* Cache control *)
+  | "__builtin_dcbf", [BA(IR a1)],_ ->
       emit (Pdcbf (GPR0,a1))
-  | "__builtin_dcbi", [IR a1],_ ->
+  | "__builtin_dcbi", [BA(IR a1)],_ ->
       emit (Pdcbi (GPR0,a1))
-  | "__builtin_icbi", [IR a1],_ ->
+  | "__builtin_icbi", [BA(IR a1)],_ ->
       emit (Picbi(GPR0,a1))
+  (* Special registers *)
+  | "__builtin_get_spr", [BA_int n], BR(IR res) ->
+      emit (Pmfspr(res, n))
+  | "__builtin_get_spr", _, _ ->
+      invalid_arg ("the argument of __builtin_get_spr must be a constant")
+  | "__builtin_set_spr", [BA_int n; BA(IR a1)], _ ->
+      emit (Pmtspr(n, a1))
+  | "__builtin_set_spr", _, _ ->
+      invalid_arg ("the first argument of __builtin_set_spr must be a constant")
+  (* Catch-all *)
   | _ ->
       invalid_arg ("unrecognized builtin " ^ name)
 
@@ -484,25 +519,11 @@ let expand_instruction instr =
           expand_builtin_vload chunk args res
       | EF_vstore chunk ->
           expand_builtin_vstore chunk args
-      | EF_vload_global(chunk, id, ofs) ->
-          if symbol_is_small_data id ofs then
-             expand_builtin_vload_sda chunk id ofs args res
-          else if symbol_is_rel_data id ofs then
-             expand_builtin_vload_rel chunk id ofs args res
-          else
-             expand_builtin_vload_global chunk id ofs args res
-      | EF_vstore_global(chunk, id, ofs) ->
-          if symbol_is_small_data id ofs then
-            expand_builtin_vstore_sda chunk id ofs args
-          else if symbol_is_rel_data id ofs then
-            expand_builtin_vstore_rel chunk id ofs args
-          else
-            expand_builtin_vstore_global chunk id ofs args
       | EF_memcpy(sz, al) ->
           expand_builtin_memcpy (Z.to_int sz) (Z.to_int al) args
       | EF_annot_val(txt, targ) ->
           expand_annot_val txt targ args res
-      | EF_inline_asm(txt, sg, clob) ->
+       | EF_annot _ | EF_debug _ | EF_inline_asm _ ->
           emit instr
       | _ ->
           assert false

@@ -521,5 +521,3 @@ Nondetfunction builtin_arg (e: expr) :=
   | Eload chunk (Ainstack ofs) Enil => BA_loadstack chunk ofs
   | _ => BA e
   end.
-
-Definition builtin_function_const (id: ident) := false.

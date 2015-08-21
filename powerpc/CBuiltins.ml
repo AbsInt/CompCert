@@ -93,7 +93,12 @@ let builtins = {
     "__builtin_dcbi",
       (TVoid [],[TPtr(TVoid [], [])],false);
     "__builtin_icbi",
-      (TVoid [],[TPtr(TVoid [], [])],false)
+      (TVoid [],[TPtr(TVoid [], [])],false);
+    (* Access to special registers *)
+    "__builtin_get_spr",
+      (TInt(IUInt, []), [TInt(IInt, [])], false);
+    "__builtin_set_spr",
+      (TVoid [], [TInt(IInt, []); TInt(IUInt, [])], false)
   ]
 }
 

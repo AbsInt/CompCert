@@ -599,6 +599,10 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	mtctr	%a\n" ireg r1
       | Pmtlr(r1) ->
           fprintf oc "	mtlr	%a\n" ireg r1
+      | Pmfspr(rd, spr) ->
+          fprintf oc "	mfspr	%a, %ld\n" ireg rd (camlint_of_coqint spr)
+      | Pmtspr(spr, rs) ->
+          fprintf oc "	mtspr	%ld, %a\n" (camlint_of_coqint spr) ireg rs
       | Pmulli(r1, r2, c) ->
           fprintf oc "	mulli	%a, %a, %a\n" ireg r1 ireg r2 constant c
       | Pmullw(r1, r2, r3) ->
@@ -693,17 +697,12 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "%a:\n" label (transl_label lbl)
       | Pbuiltin(ef, args, res) ->
           begin match ef with
+          | EF_annot(txt, targs) ->
+              print_annot_stmt oc (extern_atom txt) targs args
           | EF_inline_asm(txt, sg, clob) ->
               fprintf oc "%s begin inline assembly\n\t" comment;
               print_inline_asm preg oc (extern_atom txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment
-          | _ ->
-              assert false
-          end
-      | Pannot(ef, args) ->
-          begin match ef with
-          | EF_annot(txt, targs) ->
-              print_annot_stmt oc (extern_atom txt) targs args
           | _ ->
               assert false
           end
@@ -731,8 +730,8 @@ module Target (System : SYSTEM):TARGET =
       | Plfi(r1, c) -> 2
       | Plfis(r1, c) -> 2
       | Plabel lbl -> 0
-      | Pbuiltin(ef, args, res) -> 0
-      | Pannot(ef, args) -> 0
+      | Pbuiltin((EF_annot _ | EF_debug _), args, res) -> 0
+      | Pbuiltin(ef, args, res) -> 3
       | Pcfi_adjust _ | Pcfi_rel_offset _ -> 0
       | _ -> 1
 
