@@ -533,7 +533,7 @@ Nondetfunction builtin_arg (e: expr) :=
   | Eop (Oaddrstack ofs) Enil => BA_addrstack ofs
   | Eop Omakelong (Eop (Ointconst h) Enil ::: Eop (Ointconst l) Enil ::: Enil) =>
         BA_long (Int64.ofwords h l)
-  | Eop Omakelong (h ::: l ::: Enil) => BA_longofwords (BA h) (BA l)
+  | Eop Omakelong (h ::: l ::: Enil) => BA_splitlong (BA h) (BA l)
   | Eload chunk (Aglobal id ofs) Enil => BA_loadglobal chunk id ofs
   | Eload chunk (Ainstack ofs) Enil => BA_loadstack chunk ofs
   | _ => BA e

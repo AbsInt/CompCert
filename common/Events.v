@@ -1724,9 +1724,9 @@ Inductive eval_builtin_arg: builtin_arg A -> val -> Prop :=
       eval_builtin_arg (BA_loadglobal chunk id ofs) v
   | eval_BA_addrglobal: forall id ofs,
       eval_builtin_arg (BA_addrglobal id ofs) (Senv.symbol_address ge id ofs)
-  | eval_BA_longofwords: forall hi lo vhi vlo,
+  | eval_BA_splitlong: forall hi lo vhi vlo,
       eval_builtin_arg hi vhi -> eval_builtin_arg lo vlo ->
-      eval_builtin_arg (BA_longofwords hi lo) (Val.longofwords vhi vlo).
+      eval_builtin_arg (BA_splitlong hi lo) (Val.longofwords vhi vlo).
 
 Definition eval_builtin_args (al: list (builtin_arg A)) (vl: list val) : Prop :=
   list_forall2 eval_builtin_arg al vl.

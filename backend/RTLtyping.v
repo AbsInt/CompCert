@@ -76,7 +76,7 @@ Definition type_of_builtin_arg (a: builtin_arg reg) : typ :=
   | BA_addrstack ofs => Tint
   | BA_loadglobal chunk id ofs => type_of_chunk chunk
   | BA_addrglobal id ofs => Tint
-  | BA_longofwords hi lo => Tlong
+  | BA_splitlong hi lo => Tlong
   end.
 
 Definition type_of_builtin_res (r: builtin_res reg) : typ :=
@@ -245,7 +245,7 @@ Definition type_builtin_arg (e: S.typenv) (a: builtin_arg reg) (ty: typ) : res S
   | BA_addrstack ofs => type_expect e ty Tint
   | BA_loadglobal chunk id ofs => type_expect e ty (type_of_chunk chunk)
   | BA_addrglobal id ofs => type_expect e ty Tint
-  | BA_longofwords hi lo => type_expect e ty Tlong
+  | BA_splitlong hi lo => type_expect e ty Tlong
   end.
 
 Fixpoint type_builtin_args (e: S.typenv) (al: list (builtin_arg reg)) (tyl: list typ) : res S.typenv :=

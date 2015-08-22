@@ -113,10 +113,10 @@ Fixpoint builtin_arg_reduction (ae: AE.t) (a: builtin_arg reg) :=
       | FS n => if Compopts.generate_float_constants tt then BA_single n else a
       | _ => a
       end
-  | BA_longofwords hi lo =>
+  | BA_splitlong hi lo =>
       match builtin_arg_reduction ae hi, builtin_arg_reduction ae lo with
       | BA_int nhi, BA_int nlo => BA_long (Int64.ofwords nhi nlo)
-      | hi', lo' => BA_longofwords hi' lo'
+      | hi', lo' => BA_splitlong hi' lo'
       end
   | _ => a
   end.

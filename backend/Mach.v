@@ -166,7 +166,7 @@ Fixpoint set_res (res: builtin_res mreg) (v: val) (rs: regset) : regset :=
   match res with
   | BR r => Regmap.set r v rs
   | BR_none => rs
-  | BR_longofwords hi lo => set_res lo (Val.loword v) (set_res hi (Val.hiword v) rs)
+  | BR_splitlong hi lo => set_res lo (Val.loword v) (set_res hi (Val.hiword v) rs)
   end.
 
 Definition is_label (lbl: label) (instr: instruction) : bool :=

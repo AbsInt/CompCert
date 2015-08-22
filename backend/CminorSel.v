@@ -270,9 +270,9 @@ Inductive eval_builtin_arg: builtin_arg expr -> val -> Prop :=
       eval_builtin_arg (BA_loadglobal chunk id ofs) v
   | eval_BA_addrglobal: forall id ofs,
       eval_builtin_arg (BA_addrglobal id ofs) (Genv.symbol_address ge id ofs)
-  | eval_BA_longofwords: forall a1 a2 v1 v2,
+  | eval_BA_splitlong: forall a1 a2 v1 v2,
       eval_expr nil a1 v1 -> eval_expr nil a2 v2 ->
-      eval_builtin_arg (BA_longofwords (BA a1) (BA a2)) (Val.longofwords v1 v2).
+      eval_builtin_arg (BA_splitlong (BA a1) (BA a2)) (Val.longofwords v1 v2).
 
 End EVAL_EXPR.
 

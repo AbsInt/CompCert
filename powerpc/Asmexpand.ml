@@ -62,7 +62,7 @@ let expand_annot_val txt targ args res =
    So, use 64-bit accesses only if alignment >= 4.
    Note that lfd and stfd cannot trap on ill-formed floats. *)
 
-let memcpy_small_arg sz arg otherarg tmp1 tmp2 =
+let memcpy_small_arg sz arg tmp =
   match arg with
   | BA (IR r) ->
       (r, _0)
@@ -71,17 +71,15 @@ let memcpy_small_arg sz arg otherarg tmp1 tmp2 =
       && Int.eq (Asmgen.high_s (Int.add ofs (Int.repr (Z.of_uint sz))))
                 Int.zero
       then (GPR1, ofs)
-      else begin
-        let tmp = if otherarg = BA (IR tmp1) then tmp2 else tmp1 in
-        emit_addimm tmp GPR1 ofs;
-        (tmp, _0)
-      end
+      else begin emit_addimm tmp GPR1 ofs; (tmp, _0) end
   | _ ->
       assert false
 
 let expand_builtin_memcpy_small sz al src dst =
-  let (rsrc, osrc) = memcpy_small_arg sz src dst GPR11 GPR12 in
-  let (rdst, odst) = memcpy_small_arg sz dst src GPR12 GPR11 in
+  let (tsrc, tdst) = 
+    if dst <> BA (IR GPR11) then (GPR11, GPR12) else (GPR12, GPR11) in
+  let (rsrc, osrc) = memcpy_small_arg sz src tsrc in
+  let (rdst, odst) = memcpy_small_arg sz dst tdst in
   let rec copy osrc odst sz =
     if sz >= 8 && al >= 4 && !Clflags.option_ffpu then begin
       emit (Plfd(FPR13, Cint osrc, rsrc));
@@ -174,7 +172,7 @@ let rec expand_builtin_vload_common chunk base offset res =
       emit (Plfs(res, offset, base))
   | (Mfloat64 | Many64), BR(FR res) ->
       emit (Plfd(res, offset, base))
-  | Mint64, BR_longofwords(BR(IR hi), BR(IR lo)) ->
+  | Mint64, BR_splitlong(BR(IR hi), BR(IR lo)) ->
       begin match offset_constant offset _4 with
       | Some offset' ->
           if hi <> base then begin
@@ -232,7 +230,7 @@ let expand_builtin_vstore_common chunk base offset src =
       emit (Pstfs(src, offset, base))
   | (Mfloat64 | Many64), BA(FR src) ->
       emit (Pstfd(src, offset, base))
-  | Mint64, BA_longofwords(BA(IR hi), BA(IR lo)) ->
+  | Mint64, BA_splitlong(BA(IR hi), BA(IR lo)) ->
       begin match offset_constant offset _4 with
       | Some offset' ->
           emit (Pstw(hi, offset, base));
@@ -371,25 +369,25 @@ let expand_builtin_inline name args res =
       emit (Paddi(GPR1, GPR1, Cint _8));
       emit (Pcfi_adjust _m8)
   (* 64-bit integer arithmetic *)
-  | "__builtin_negl", [BA_longofwords(BA(IR ah), BA(IR al))],
-                      BR_longofwords(BR(IR rh), BR(IR rl)) ->
+  | "__builtin_negl", [BA_splitlong(BA(IR ah), BA(IR al))],
+                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
       expand_int64_arith (rl = ah) rl (fun rl ->
         emit (Psubfic(rl, al, Cint _0));
         emit (Psubfze(rh, ah)))
-  | "__builtin_addl", [BA_longofwords(BA(IR ah), BA(IR al));
-                       BA_longofwords(BA(IR bh), BA(IR bl))],
-                      BR_longofwords(BR(IR rh), BR(IR rl)) ->
+  | "__builtin_addl", [BA_splitlong(BA(IR ah), BA(IR al));
+                       BA_splitlong(BA(IR bh), BA(IR bl))],
+                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
       expand_int64_arith (rl = ah || rl = bh) rl (fun rl ->
         emit (Paddc(rl, al, bl));
         emit (Padde(rh, ah, bh)))
-  | "__builtin_subl", [BA_longofwords(BA(IR ah), BA(IR al));
-                       BA_longofwords(BA(IR bh), BA(IR bl))],
-                      BR_longofwords(BR(IR rh), BR(IR rl)) ->
+  | "__builtin_subl", [BA_splitlong(BA(IR ah), BA(IR al));
+                       BA_splitlong(BA(IR bh), BA(IR bl))],
+                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
       expand_int64_arith (rl = ah || rl = bh) rl (fun rl ->
         emit (Psubfc(rl, bl, al));
         emit (Psubfe(rh, bh, ah)))
   | "__builtin_mull", [BA(IR a); BA(IR b)],
-                      BR_longofwords(BR(IR rh), BR(IR rl)) ->
+                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
       expand_int64_arith (rl = a || rl = b) rl (fun rl ->
         emit (Pmullw(rl, a, b));
         emit (Pmulhwu(rh, a, b)))

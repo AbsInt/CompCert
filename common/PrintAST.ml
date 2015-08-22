@@ -66,8 +66,8 @@ let rec print_builtin_arg px oc = function
               (name_of_chunk chunk) (extern_atom id) (camlint_of_coqint ofs)
   | BA_addrglobal(id, ofs) ->
       fprintf oc "&%s + %ld" (extern_atom id) (camlint_of_coqint ofs)
-  | BA_longofwords(hi, lo) ->
-      fprintf oc "long(%a, %a)" 
+  | BA_splitlong(hi, lo) ->
+      fprintf oc "splitlong(%a, %a)" 
                  (print_builtin_arg px) hi (print_builtin_arg px) lo
 
 let rec print_builtin_args px oc = function
@@ -79,7 +79,7 @@ let rec print_builtin_args px oc = function
 let rec print_builtin_res px oc = function
   | BR x -> px oc x
   | BR_none -> fprintf oc "_"
-  | BR_longofwords(hi, lo) ->
-      fprintf oc "long(%a, %a)" 
+  | BR_splitlong(hi, lo) ->
+      fprintf oc "splitlong(%a, %a)" 
                  (print_builtin_res px) hi (print_builtin_res px) lo
 

@@ -140,7 +140,7 @@ let expand_builtin_vload_common chunk addr res =
      emit (Pmovsw_rm (res,addr))
   | Mint32, BR(IR res) ->
      emit (Pmov_rm (res,addr))
-  | Mint64, BR_longofwords(BR(IR res1), BR(IR res2)) ->
+  | Mint64, BR_splitlong(BR(IR res1), BR(IR res2)) ->
      let addr' = offset_addressing addr _4 in
      if not (Asmgen.addressing_mentions addr res2) then begin
 	 emit (Pmov_rm (res2,addr));
@@ -176,7 +176,7 @@ let expand_builtin_vstore_common chunk addr src tmp =
      emit (Pmovw_mr (addr,src))
   | Mint32, BA(IR src) ->
      emit (Pmov_mr (addr,src))
-  | Mint64, BA_longofwords(BA(IR src1), BA(IR src2)) ->
+  | Mint64, BA_splitlong(BA(IR src1), BA(IR src2)) ->
      let addr' = offset_addressing addr _4 in
      emit (Pmov_mr (addr,src2));
      emit (Pmov_mr (addr',src1))
@@ -293,26 +293,26 @@ let expand_builtin_inline name args res =
         (fun r1 r2 r3 -> Pfnmsub213(r1, r2, r3))
         (fun r1 r2 r3 -> Pfnmsub231(r1, r2, r3))
   (* 64-bit integer arithmetic *)
-  | "__builtin_negl", [BA_longofwords(BA(IR ah), BA(IR al))],
-                      BR_longofwords(BR(IR rh), BR(IR rl)) ->
+  | "__builtin_negl", [BA_splitlong(BA(IR ah), BA(IR al))],
+                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
      assert (ah = EDX && al = EAX && rh = EDX && rl = EAX);
      emit (Pneg EAX);
      emit (Padc_ri (EDX,_0));
      emit (Pneg EDX)
-  | "__builtin_addl", [BA_longofwords(BA(IR ah), BA(IR al));
-                       BA_longofwords(BA(IR bh), BA(IR bl))],
-                       BR_longofwords(BR(IR rh), BR(IR rl)) ->
+  | "__builtin_addl", [BA_splitlong(BA(IR ah), BA(IR al));
+                       BA_splitlong(BA(IR bh), BA(IR bl))],
+                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
      assert (ah = EDX && al = EAX && bh = ECX && bl = EBX && rh = EDX && rl = EAX);
      emit (Padd_rr (EAX,EBX));
      emit (Padc_rr (EDX,ECX))
-  | "__builtin_subl", [BA_longofwords(BA(IR ah), BA(IR al));
-                       BA_longofwords(BA(IR bh), BA(IR bl))],
-                       BR_longofwords(BR(IR rh), BR(IR rl)) ->
+  | "__builtin_subl", [BA_splitlong(BA(IR ah), BA(IR al));
+                       BA_splitlong(BA(IR bh), BA(IR bl))],
+                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
      assert (ah = EDX && al = EAX && bh = ECX && bl = EBX && rh = EDX && rl = EAX);
      emit (Psub_rr (EAX,EBX));
      emit (Psbb_rr (EDX,ECX))
   | "__builtin_mull", [BA(IR a); BA(IR b)],
-                      BR_longofwords(BR(IR rh), BR(IR rl)) ->
+                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
      assert (a = EAX && b = EDX && rh = EDX && rl = EAX);
      emit (Pmul_r EDX)
   (* Memory accesses *)

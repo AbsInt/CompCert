@@ -117,7 +117,7 @@ let xparmove srcs dsts k =
 let rec convert_builtin_arg tyenv = function
   | BA r ->
       begin match tyenv r with
-      | Tlong -> BA_longofwords(BA(V(r, Tint)), BA(V(twin_reg r, Tint)))
+      | Tlong -> BA_splitlong(BA(V(r, Tint)), BA(V(twin_reg r, Tint)))
       | ty    -> BA(V(r, ty))
       end
   | BA_int n -> BA_int n
@@ -128,26 +128,26 @@ let rec convert_builtin_arg tyenv = function
   | BA_addrstack(ofs) -> BA_addrstack(ofs)
   | BA_loadglobal(chunk, id, ofs) -> BA_loadglobal(chunk, id, ofs)
   | BA_addrglobal(id, ofs) -> BA_addrglobal(id, ofs)
-  | BA_longofwords(hi, lo) ->
-      BA_longofwords(convert_builtin_arg tyenv hi, convert_builtin_arg tyenv lo)
+  | BA_splitlong(hi, lo) ->
+      BA_splitlong(convert_builtin_arg tyenv hi, convert_builtin_arg tyenv lo)
 
 let convert_builtin_res tyenv = function
   | BR r ->
       begin match tyenv r with
-      | Tlong -> BR_longofwords(BR(V(r, Tint)), BR(V(twin_reg r, Tint)))
+      | Tlong -> BR_splitlong(BR(V(r, Tint)), BR(V(twin_reg r, Tint)))
       | ty    -> BR(V(r, ty))
       end
   | BR_none -> BR_none
-  | BR_longofwords _ -> assert false
+  | BR_splitlong _ -> assert false
 
 let rec constrain_builtin_arg a cl =
   match a, cl with
   | BA x, None :: cl' -> (a, cl')
   | BA x, Some mr :: cl' -> (BA (L(R mr)), cl')
-  | BA_longofwords(hi, lo), _ ->
+  | BA_splitlong(hi, lo), _ ->
       let (hi', cl1) = constrain_builtin_arg hi cl in
       let (lo', cl2) = constrain_builtin_arg lo cl1 in
-      (BA_longofwords(hi', lo'), cl2)
+      (BA_splitlong(hi', lo'), cl2)
   | _, _ -> (a, cl)
 
 let rec constrain_builtin_args al cl =
@@ -162,10 +162,10 @@ let rec constrain_builtin_res a cl =
   match a, cl with
   | BR x, None :: cl' -> (a, cl')
   | BR x, Some mr :: cl' -> (BR (L(R mr)), cl')
-  | BR_longofwords(hi, lo), _ ->
+  | BR_splitlong(hi, lo), _ ->
       let (hi', cl1) = constrain_builtin_res hi cl in
       let (lo', cl2) = constrain_builtin_res lo cl1 in
-      (BR_longofwords(hi', lo'), cl2)
+      (BR_splitlong(hi', lo'), cl2)
   | _, _ -> (a, cl)
 
 (* Return the XTL basic block corresponding to the given RTL instruction.
@@ -294,7 +294,7 @@ let vset_addros vos after =
 let rec vset_addarg a after =
   match a with
   | BA v -> VSet.add v after
-  | BA_longofwords(hi, lo) -> vset_addarg hi (vset_addarg lo after)
+  | BA_splitlong(hi, lo) -> vset_addarg hi (vset_addarg lo after)
   | _ -> after
 
 let vset_addargs al after = List.fold_right vset_addarg al after
@@ -303,7 +303,7 @@ let rec vset_removeres r after =
   match r with
   | BR v -> VSet.remove v after
   | BR_none -> after
-  | BR_longofwords(hi, lo) -> vset_removeres hi (vset_removeres lo after)
+  | BR_splitlong(hi, lo) -> vset_removeres hi (vset_removeres lo after)
 
 let live_before instr after =
   match instr with
@@ -392,7 +392,7 @@ let rec dce_parmove srcs dsts after =
 
 let rec keep_builtin_arg after = function
   | BA v -> VSet.mem v after
-  | BA_longofwords(hi, lo) ->
+  | BA_splitlong(hi, lo) ->
       keep_builtin_arg after hi && keep_builtin_arg after lo
   | _ -> true
 
@@ -800,10 +800,10 @@ let rec reload_arg tospill eqs = function
   | BA v ->
       let (t, c1, eqs1) = reload_var tospill eqs v in
       (BA t, c1, eqs1)
-  | BA_longofwords(hi, lo) ->
+  | BA_splitlong(hi, lo) ->
       let (hi', c1, eqs1) = reload_arg tospill eqs hi in
       let (lo', c2, eqs2) = reload_arg tospill eqs1 lo in
-      (BA_longofwords(hi', lo'), c1 @ c2, eqs2)
+      (BA_splitlong(hi', lo'), c1 @ c2, eqs2)
   | a -> (a, [], eqs)
 
 let rec reload_args tospill eqs = function
@@ -827,10 +827,10 @@ let rec save_res tospill eqs = function
       (BR t, c1, eqs1)
   | BR_none ->
       (BR_none, [], eqs)
-  | BR_longofwords(hi, lo) ->
+  | BR_splitlong(hi, lo) ->
       let (hi', c1, eqs1) = save_res tospill eqs hi in
       let (lo', c2, eqs2) = save_res tospill eqs1 lo in
-      (BR_longofwords(hi', lo'), c1 @ c2, eqs2)
+      (BR_splitlong(hi', lo'), c1 @ c2, eqs2)
 
 (* Trimming equations when we have too many or when they are too old.
    The goal is to limit the live range of unspillable temporaries.

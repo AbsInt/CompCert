@@ -401,10 +401,10 @@ Fixpoint convert_builtin_arg {A: Type} (a: builtin_arg expr) (rl: list A) : buil
   | BA_addrstack ofs => (BA_addrstack ofs, rl)
   | BA_loadglobal chunk id ofs => (BA_loadglobal chunk id ofs, rl)
   | BA_addrglobal id ofs => (BA_addrglobal id ofs, rl)
-  | BA_longofwords hi lo =>
+  | BA_splitlong hi lo =>
       let (hi', rl1) := convert_builtin_arg hi rl in
       let (lo', rl2) := convert_builtin_arg lo rl1 in
-      (BA_longofwords hi' lo', rl2)
+      (BA_splitlong hi' lo', rl2)
   end.
 
 Fixpoint convert_builtin_args {A: Type} (al: list (builtin_arg expr)) (rl: list A) : list (builtin_arg A) :=

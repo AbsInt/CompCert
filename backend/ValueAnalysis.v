@@ -71,7 +71,7 @@ Fixpoint abuiltin_arg (ae: aenv) (am: amem) (rm: romem) (ba: builtin_arg reg) : 
   | BA_addrstack ofs => Ptr (Stk ofs)
   | BA_loadglobal chunk id ofs => loadv chunk rm am (Ptr (Gl id ofs))
   | BA_addrglobal id ofs => Ptr (Gl id ofs)
-  | BA_longofwords hi lo => longofwords (abuiltin_arg ae am rm hi) (abuiltin_arg ae am rm lo)
+  | BA_splitlong hi lo => longofwords (abuiltin_arg ae am rm hi) (abuiltin_arg ae am rm lo)
   end.
 
 Definition set_builtin_res (br: builtin_res reg) (av: aval) (ae: aenv) : aenv :=

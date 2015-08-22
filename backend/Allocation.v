@@ -697,7 +697,7 @@ Fixpoint add_equations_builtin_arg
   match arg, arg' with
   | BA r, BA l =>
       Some (add_equation (Eq Full r l) e)
-  | BA r, BA_longofwords (BA lhi) (BA llo) =>
+  | BA r, BA_splitlong (BA lhi) (BA llo) =>
       assertion (typ_eq (env r) Tlong);
       Some (add_equation (Eq Low r llo) (add_equation (Eq High r lhi) e))
   | BA_int n, BA_int n' =>
@@ -724,7 +724,7 @@ Fixpoint add_equations_builtin_arg
       assertion (ident_eq id id');
       assertion (Int.eq_dec ofs ofs');
       Some e
-  | BA_longofwords hi lo, BA_longofwords hi' lo' =>
+  | BA_splitlong hi lo, BA_splitlong hi' lo' =>
       do e1 <- add_equations_builtin_arg env hi hi' e;
       add_equations_builtin_arg env lo lo' e1
   | _, _ =>
@@ -763,7 +763,7 @@ Definition remove_equations_builtin_res
     (env: regenv) (res: builtin_res reg) (res': builtin_res mreg) (e: eqs) : option eqs :=
   match res, res' with
   | BR r, BR r' => Some (remove_equation (Eq Full r (R r')) e)
-  | BR r, BR_longofwords (BR rhi) (BR rlo) =>
+  | BR r, BR_splitlong (BR rhi) (BR rlo) =>
       assertion (typ_eq (env r) Tlong);
       if mreg_eq rhi rlo then None else
         Some (remove_equation (Eq Low r (R rlo))

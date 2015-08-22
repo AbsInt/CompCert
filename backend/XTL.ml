@@ -127,7 +127,7 @@ let unify_var_type v1 v2 =
 let rec type_builtin_arg a ty =
   match a with
   | BA v -> set_var_type v ty
-  | BA_longofwords(a1, a2) -> type_builtin_arg a1 Tint; type_builtin_arg a2 Tint
+  | BA_splitlong(a1, a2) -> type_builtin_arg a1 Tint; type_builtin_arg a2 Tint
   | _ -> ()
 
 let rec type_builtin_args al tyl =
@@ -139,7 +139,7 @@ let rec type_builtin_args al tyl =
 let rec type_builtin_res a ty =
   match a with
   | BR v -> set_var_type v ty
-  | BR_longofwords(a1, a2) -> type_builtin_res a1 Tint; type_builtin_res a2 Tint
+  | BR_splitlong(a1, a2) -> type_builtin_res a1 Tint; type_builtin_res a2 Tint
   | _ -> ()
 
 let type_instr = function

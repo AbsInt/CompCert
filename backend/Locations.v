@@ -381,7 +381,7 @@ Module Locmap.
     match res with
     | BR r => set (R r) v m
     | BR_none => m
-    | BR_longofwords hi lo => 
+    | BR_splitlong hi lo => 
         setres lo (Val.loword v) (setres hi (Val.hiword v) m)
     end.
 

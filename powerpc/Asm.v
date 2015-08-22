@@ -393,7 +393,7 @@ Fixpoint set_res (res: builtin_res preg) (v: val) (rs: regset) : regset :=
   match res with
   | BR r => rs#r <- v
   | BR_none => rs
-  | BR_longofwords hi lo => set_res lo (Val.loword v) (set_res hi (Val.hiword v) rs)
+  | BR_splitlong hi lo => set_res lo (Val.loword v) (set_res hi (Val.hiword v) rs)
   end.
 
 Section RELSEM.

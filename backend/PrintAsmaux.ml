@@ -135,9 +135,6 @@ let cfi_rel_offset =
   else
     (fun _ _ _ -> ())
 
-(* For handling of annotations *)
-let re_file_line = Str.regexp "#line:\\(.*\\):\\([1-9][0-9]*\\)$"
-
 (* Basic printing functions *)
 let coqint oc n =
   fprintf oc "%ld" (camlint_of_coqint n)
@@ -213,8 +210,7 @@ let print_file_line_d2 oc pref file line =
     | Some fb -> Printlines.copy oc pref fb line line
   end
 
-					    
-(** "True" annotations *)
+(** Programmer-supplied annotations (__builtin_annot). *)
 
 let re_annot_param = Str.regexp "%%\\|%[1-9][0-9]*"
 
@@ -242,7 +238,7 @@ let rec print_annot print_preg sp_reg_name oc = function
       fprintf oc "(\"%s\" + %ld)"
          (extern_atom id)
          (camlint_of_coqint ofs)
-  | BA_longofwords(hi, lo) ->
+  | BA_splitlong(hi, lo) ->
       fprintf oc "(%a * 0x100000000 + %a)"
         (print_annot print_preg sp_reg_name) hi
         (print_annot print_preg sp_reg_name) lo
@@ -262,18 +258,27 @@ let print_annot_text print_preg sp_reg_name oc txt args =
   List.iter print_fragment (Str.full_split re_annot_param txt);
   fprintf oc "\n"
 
-let print_annot_stmt print_preg sp_reg_name oc txt tys args =
-  print_annot_text print_preg sp_reg_name oc txt args
+(* Printing of [EF_debug] info.  To be completed. *)
 
-let print_annot_val print_preg oc txt args =
-  print_annot_text print_preg "<internal error>" oc txt
-    (List.map (fun r -> BA r) args)
+let re_file_line = Str.regexp "#line:\\(.*\\):\\([1-9][0-9]*\\)$"
 
+let print_debug_info comment print_line print_preg sp_name oc kind txt args =
+  if kind = 1 && Str.string_match re_file_line txt 0 then begin
+    print_line oc (Str.matched_group 1 txt)
+                  (int_of_string (Str.matched_group 2 txt))
+  end else begin
+    fprintf oc "%s debug%d: %s" comment kind txt;
+    List.iter
+      (fun a -> fprintf oc " %a" (print_annot print_preg sp_name) a)
+      args;
+    fprintf oc "\n"
+  end
+					    
 (** Inline assembly *)
 
 let print_asm_argument print_preg oc modifier = function
   | BA r -> print_preg oc r
-  | BA_longofwords(BA hi, BA lo) ->
+  | BA_splitlong(BA hi, BA lo) ->
       begin match modifier with
       | "R" -> print_preg oc hi
       | "Q" -> print_preg oc lo
@@ -284,7 +289,7 @@ let print_asm_argument print_preg oc modifier = function
 
 let builtin_arg_of_res = function
   | BR r -> BA r
-  | BR_longofwords(BR hi, BR lo) -> BA_longofwords(BA hi, BA lo)
+  | BR_splitlong(BR hi, BR lo) -> BA_splitlong(BA hi, BA lo)
   | _ -> assert false
 
 let re_asm_param_1 = Str.regexp "%%\\|%[QR]?[0-9]+"

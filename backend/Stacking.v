@@ -146,8 +146,8 @@ Fixpoint transl_builtin_arg (fe: frame_env) (a: builtin_arg loc) : builtin_arg m
       BA_addrstack (Int.add ofs (Int.repr fe.(fe_stack_data)))
   | BA_loadglobal chunk id ofs => BA_loadglobal chunk id ofs
   | BA_addrglobal id ofs => BA_addrglobal id ofs
-  | BA_longofwords hi lo => 
-      BA_longofwords (transl_builtin_arg fe hi) (transl_builtin_arg fe lo)
+  | BA_splitlong hi lo => 
+      BA_splitlong (transl_builtin_arg fe hi) (transl_builtin_arg fe lo)
   end.
 
 (** Translation of a Linear instruction.  Prepends the corresponding
