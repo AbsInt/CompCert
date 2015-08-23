@@ -188,29 +188,33 @@ and fun_to_dwarf_tag rt args =
   s.id,((s::others)@et)
 
 (* Generate a dwarf tag for the given array type *)
-and array_to_dwarf_tag child size = 
+and array_to_dwarf_tag child size =
+  let append_opt a b =
+    match a with
+    | None -> b
+    | Some a -> a::b in
   let size_to_subrange s =
-    let b = (match s with 
+    match s with 
     | None -> None
     | Some i ->
         let i = Int64.to_int i in
-        Some (BoundConst i)) in
-    let s = {
-      subrange_type = None;
-      subrange_upper_bound = b;
-    } in
-    new_entry (DW_TAG_subrange_type s) in 
+        let s =
+          {
+           subrange_type = None;
+           subrange_upper_bound = Some (BoundConst i);
+         } in
+        Some (new_entry (DW_TAG_subrange_type s)) in 
   let rec aux t = 
     (match t with
     | TArray (child,size,_) ->
         let sub = size_to_subrange size in
         let t,c,e = aux child in
-        t,sub::c,e
+        t,append_opt sub c,e
     | _ -> let t,e = type_to_dwarf t in
       t,[],e) in
   let t,children,e = aux child in
   let sub = size_to_subrange size in
-  let children = List.rev (sub::children) in
+  let children = List.rev (append_opt sub children) in
   let arr = {
     array_type_file_loc = None;
     array_type = t;
