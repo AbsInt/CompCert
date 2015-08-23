@@ -116,6 +116,177 @@ Proof.
   intros. inv H. eapply find_label_match_rec; eauto. 
 Qed.
 
+(** * Properties of availability sets *)
+
+(** These properties are not used in the semantic preservation proof,
+    but establish some confidence in the availability analysis. *)
+
+Definition avail_above (v: ident) (s: avail) : Prop :=
+  forall v' i', In (v', i') s -> Plt v v'.
+
+Inductive wf_avail: avail -> Prop :=
+  | wf_avail_nil:
+      wf_avail nil
+  | wf_avail_cons: forall v i s,
+     avail_above v s ->
+     wf_avail s ->
+     wf_avail ((v, i) :: s).
+
+Lemma set_state_1:
+  forall v i s, In (v, i) (set_state v i s).
+Proof.
+  induction s as [ | [v' i'] s]; simpl. 
+- auto.
+- destruct (Pos.compare v v'); simpl; auto. 
+Qed.
+
+Lemma set_state_2:
+  forall v i v' i' s,
+  v' <> v -> In (v', i') s -> In (v', i') (set_state v i s).
+Proof.
+  induction s as [ | [v1 i1] s]; simpl; intros.
+- contradiction.
+- destruct (Pos.compare_spec v v1); simpl.
++ subst v1. destruct H0. congruence. auto.
++ auto.
++ destruct H0; auto.
+Qed.
+
+Lemma set_state_3:
+  forall v i v' i' s, 
+  wf_avail s ->
+  In (v', i') (set_state v i s) ->
+  (v' = v /\ i' = i) \/ (v' <> v /\ In (v', i') s).
+Proof.
+  induction 1; simpl; intros.
+- intuition congruence.
+- destruct (Pos.compare_spec v v0); simpl in H1.
++ subst v0. destruct H1. inv H1; auto. right; split.
+  apply sym_not_equal. apply Plt_ne. eapply H; eauto. 
+  auto.
++ destruct H1. inv H1; auto.
+  destruct H1. inv H1. right; split; auto. apply sym_not_equal. apply Plt_ne. auto.
+  right; split; auto. apply sym_not_equal. apply Plt_ne. apply Plt_trans with v0; eauto.
++ destruct H1. inv H1. right; split; auto. apply Plt_ne. auto.
+  destruct IHwf_avail as [A | [A B]]; auto.
+Qed.
+
+Lemma wf_set_state:
+  forall v i s, wf_avail s -> wf_avail (set_state v i s).
+Proof.
+  induction 1; simpl.
+- constructor. red; simpl; tauto. constructor.
+- destruct (Pos.compare_spec v v0).
++ subst v0. constructor; auto. 
++ constructor. 
+  red; simpl; intros. destruct H2. 
+  inv H2. auto. apply Plt_trans with v0; eauto. 
+  constructor; auto.
++ constructor. 
+  red; intros. exploit set_state_3. eexact H0. eauto. intros [[A B] | [A B]]; subst; eauto.
+  auto.
+Qed.
+
+Lemma remove_state_1:
+  forall v i s, wf_avail s -> ~ In (v, i) (remove_state v s).
+Proof.
+  induction 1; simpl; red; intros.
+- auto.
+- destruct (Pos.compare_spec v v0); simpl in *.
++ subst v0. elim (Plt_strict v); eauto.
++ destruct H1. inv H1.  elim (Plt_strict v); eauto. 
+  elim (Plt_strict v). apply Plt_trans with v0; eauto. 
++ destruct H1. inv H1. elim (Plt_strict v); eauto.  tauto.
+Qed.
+
+Lemma remove_state_2:
+  forall v v' i' s, v' <> v -> In (v', i') s -> In (v', i') (remove_state v s).
+Proof.
+  induction s as [ | [v1 i1] s]; simpl; intros.
+- auto.
+- destruct (Pos.compare_spec v v1); simpl.
++ subst v1. destruct H0. congruence. auto.
++ auto.
++ destruct H0; auto.
+Qed.
+
+Lemma remove_state_3:
+  forall v v' i' s, wf_avail s -> In (v', i') (remove_state v s) -> v' <> v /\ In (v', i') s.
+Proof.
+  induction 1; simpl; intros.
+- contradiction.
+- destruct (Pos.compare_spec v v0); simpl in H1.
++ subst v0. split; auto. apply sym_not_equal; apply Plt_ne; eauto.
++ destruct H1. inv H1. split; auto. apply sym_not_equal; apply Plt_ne; eauto.
+  split; auto. apply sym_not_equal; apply Plt_ne. apply Plt_trans with v0; eauto.
++ destruct H1. inv H1. split; auto. apply Plt_ne; auto. 
+  destruct IHwf_avail as [A B] ; auto.
+Qed.
+
+Lemma wf_remove_state:
+  forall v s, wf_avail s -> wf_avail (remove_state v s).
+Proof.
+  induction 1; simpl.
+- constructor.
+- destruct (Pos.compare_spec v v0).
++ auto.
++ constructor; auto.
++ constructor; auto. red; intros.
+  exploit remove_state_3. eexact H0. eauto. intros [A B]. eauto.
+Qed.
+
+Lemma wf_filter:
+  forall pred s, wf_avail s -> wf_avail (List.filter pred s).
+Proof.
+  induction 1; simpl.
+- constructor.
+- destruct (pred (v, i)) eqn:P; auto. 
+  constructor; auto. 
+  red; intros. apply filter_In in H1. destruct H1. eauto. 
+Qed.
+
+Lemma join_1:
+  forall v i s1, wf_avail s1 -> forall s2, wf_avail s2 ->
+  In (v, i) s1 -> In (v, i) s2 -> In (v, i) (join s1 s2).
+Proof.
+  induction 1; simpl; try tauto; induction 1; simpl; intros I1 I2; auto.
+  destruct I1, I2.
+- inv H3; inv H4. rewrite Pos.compare_refl. rewrite dec_eq_true; auto with coqlib.
+- inv H3. 
+  assert (L: Plt v1 v) by eauto. apply Pos.compare_gt_iff in L. rewrite L. auto. 
+- inv H4.
+  assert (L: Plt v0 v) by eauto. apply Pos.compare_lt_iff in L. rewrite L. apply IHwf_avail. constructor; auto. auto. auto with coqlib.
+- destruct (Pos.compare v0 v1).
++ destruct (eq_debuginfo i0 i1); auto with coqlib. 
++ apply IHwf_avail; auto with coqlib. constructor; auto.
++ eauto.
+Qed.
+
+Lemma join_2:
+  forall v i s1, wf_avail s1 -> forall s2, wf_avail s2 ->
+  In (v, i) (join s1 s2) -> In (v, i) s1 /\ In (v, i) s2.
+Proof.
+  induction 1; simpl; try tauto; induction 1; simpl; intros I; try tauto. 
+  destruct (Pos.compare_spec v0 v1).
+- subst v1. destruct (eq_debuginfo i0 i1).
+  + subst i1. destruct I. auto. exploit IHwf_avail; eauto. tauto.
+  + exploit IHwf_avail; eauto. tauto.
+- exploit (IHwf_avail ((v1, i1) :: s0)); eauto. constructor; auto. 
+  simpl. tauto.
+- exploit IHwf_avail0; eauto. tauto.
+Qed.
+
+Lemma wf_join:
+  forall s1, wf_avail s1 -> forall s2, wf_avail s2 -> wf_avail (join s1 s2).
+Proof.
+  induction 1; simpl; induction 1; simpl; try constructor.
+  destruct (Pos.compare_spec v v0).
+- subst v0. destruct (eq_debuginfo i i0); auto. constructor; auto. 
+  red; intros. apply join_2 in H3; auto. destruct H3. eauto.
+- apply IHwf_avail. constructor; auto. 
+- apply IHwf_avail0. 
+Qed.
+
 (** * Semantic preservation *)
 
 Section PRESERVATION.
