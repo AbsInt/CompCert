@@ -648,7 +648,7 @@ module Target(System: SYSTEM):TARGET =
           begin match ef with
           | EF_annot(txt, targs) ->
               fprintf oc "%s annotation: " comment;
-              print_annot_text preg_annot "%esp" oc (extern_atom txt) args
+              print_annot_text preg "%esp" oc (extern_atom txt) args
           | EF_debug(kind, txt, targs) ->
               print_debug_info comment print_file_line preg "%esp" oc
                                (P.to_int kind) (extern_atom txt) args

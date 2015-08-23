@@ -22,6 +22,7 @@ Require Import AST.
 Require Import Ctypes.
 Require Import Cop.
 Require Import Clight.
+Require Compopts.
 
 Open Scope error_monad_scope.
 Open Scope string_scope.
@@ -53,6 +54,23 @@ Definition make_cast (a: expr) (tto: type) : expr :=
   | cast_case_void => a
   | _ => Ecast a tto
   end.
+
+(** Insertion of debug annotations *)
+
+Definition Sdebug_temp (id: ident) (ty: type) :=
+  Sbuiltin None (EF_debug 2%positive id (typ_of_type ty :: nil))
+                (Tcons (typeconv ty) Tnil)
+                (Etempvar id ty :: nil).
+
+Definition Sdebug_var (id: ident) (ty: type) :=
+  Sbuiltin None (EF_debug 5%positive id (AST.Tint :: nil))
+                (Tcons (Tpointer ty noattr) Tnil)
+                (Eaddrof (Evar id ty) (Tpointer ty noattr) :: nil).
+
+Definition Sset_debug (id: ident) (ty: type) (a: expr) :=
+  if Compopts.debug tt
+  then Ssequence (Sset id (make_cast a ty)) (Sdebug_temp id ty)
+  else Sset id (make_cast a ty).
 
 (** Rewriting of expressions and statements. *)
 
@@ -94,7 +112,7 @@ Fixpoint simpl_stmt (cenv: compilenv) (s: statement) : res statement :=
   | Sassign a1 a2 =>
       match is_liftable_var cenv a1 with
       | Some id =>
-          OK (Sset id (make_cast (simpl_expr cenv a2) (typeof a1)))
+          OK (Sset_debug id (typeof a1) (simpl_expr cenv a2))
       | None =>
           OK (Sassign (simpl_expr cenv a1) (simpl_expr cenv a2))
       end
@@ -225,6 +243,22 @@ Definition cenv_for (f: function) : compilenv :=
 
 (** Transform a function *)
 
+Definition add_debug_var (id_ty: ident * type) (s: statement) :=
+  let (id, ty) := id_ty in Ssequence (Sdebug_var id ty) s.
+
+Definition add_debug_vars (vars: list (ident * type)) (s: statement) :=
+  if Compopts.debug tt
+  then List.fold_right add_debug_var s vars
+  else s.
+
+Definition add_debug_param (id_ty: ident * type) (s: statement) :=
+  let (id, ty) := id_ty in Ssequence (Sdebug_temp id ty) s.
+
+Definition add_debug_params (params: list (ident * type)) (s: statement) :=
+  if Compopts.debug tt
+  then List.fold_right add_debug_param s params
+  else s.
+
 Definition remove_lifted (cenv: compilenv) (vars: list (ident * type)) :=
   List.filter (fun id_ty => negb (VSet.mem (fst id_ty) cenv)) vars.
 
@@ -235,12 +269,16 @@ Definition transf_function (f: function) : res function :=
   let cenv := cenv_for f in
   assertion (list_disjoint_dec ident_eq (var_names f.(fn_params)) (var_names f.(fn_temps)));
   do body' <- simpl_stmt cenv f.(fn_body);
+  let vars' := remove_lifted cenv (f.(fn_params) ++ f.(fn_vars)) in
+  let temps' := add_lifted cenv f.(fn_vars) f.(fn_temps) in
   OK {| fn_return := f.(fn_return);
         fn_callconv := f.(fn_callconv);
         fn_params := f.(fn_params);
-        fn_vars := remove_lifted cenv (f.(fn_params) ++ f.(fn_vars));
-        fn_temps := add_lifted cenv f.(fn_vars) f.(fn_temps);
-        fn_body := store_params cenv f.(fn_params) body' |}.
+        fn_vars := vars';
+        fn_temps := temps';
+        fn_body := add_debug_params f.(fn_params) 
+                      (store_params cenv f.(fn_params)
+                        (add_debug_vars vars' body')) |}.
 
 (** Whole-program transformation *)
 

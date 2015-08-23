@@ -130,7 +130,10 @@ Inductive wt_instr : instruction -> Prop :=
       wt_instr (Itailcall sig ros args)
   | wt_Ibuiltin:
       forall ef args res s,
-      map type_of_builtin_arg args = (ef_sig ef).(sig_args) ->
+      match ef with
+      | EF_annot _ _ | EF_debug _ _ _ => True
+      | _ => map type_of_builtin_arg args = (ef_sig ef).(sig_args)
+      end ->
       type_of_builtin_res res = proj_sig_res (ef_sig ef) ->
       valid_successor s ->
       wt_instr (Ibuiltin ef args res s)
@@ -301,7 +304,11 @@ Definition type_instr (e: S.typenv) (i: instruction) : res S.typenv :=
   | Ibuiltin ef args res s =>
       let sig := ef_sig ef in
       do x <- check_successor s;
-      do e1 <- type_builtin_args e args sig.(sig_args);
+      do e1 <- 
+        match ef with
+        | EF_annot _ _ | EF_debug _ _ _ => OK e
+        | _ => type_builtin_args e args sig.(sig_args)
+        end;
       type_builtin_res e1 res (proj_sig_res sig)
  | Icond cond args s1 s2 =>
       do x1 <- check_successor s1;
@@ -462,6 +469,8 @@ Proof.
   destruct (opt_typ_eq (sig_res s) (sig_res (fn_sig f))); try discriminate.
   destruct (tailcall_is_possible s) eqn:TCIP; inv EQ2.
   eauto with ty.
+- (* builtin *)
+  destruct e0; try monadInv EQ1; eauto with ty.
 - (* jumptable *)
   destruct (zle (list_length_z l * 4) Int.max_unsigned); inv EQ2.
   eauto with ty.
@@ -517,7 +526,7 @@ Proof.
   apply tailcall_is_possible_correct; auto.
 - (* builtin *)
   constructor.
-  eapply type_builtin_args_sound; eauto with ty.
+  destruct e0; auto; eapply type_builtin_args_sound; eauto with ty.
   eapply type_builtin_res_sound; eauto.
   eauto with ty.
 - (* cond *)
@@ -691,10 +700,12 @@ Proof.
 - (* builtin *)
   exploit type_builtin_args_complete; eauto. instantiate (1 := args). intros [e1 [A B]].
   exploit type_builtin_res_complete; eauto. instantiate (1 := res). intros [e2 [C D]].
-  exists e2; split; auto. 
+  exploit type_builtin_res_complete. eexact H. instantiate (1 := res). intros [e3 [E F]].
   rewrite check_successor_complete by auto. simpl.
-  rewrite <- H0; rewrite A; simpl.
-  rewrite <- H1; auto.
+  exists (match ef with EF_annot _ _ | EF_debug _ _ _ => e3 | _ => e2 end); split.
+  rewrite H1 in C, E. 
+  destruct ef; try (rewrite <- H0; rewrite A); simpl; auto.
+  destruct ef; auto.
 - (* cond *)
   exploit S.set_list_complete. eauto. eauto. intros [e1 [A B]].
   exists e1; split; auto.

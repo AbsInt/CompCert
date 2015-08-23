@@ -51,6 +51,7 @@ Require Allocation.
 Require Tunneling.
 Require Linearize.
 Require CleanupLabels.
+Require Debugvar.
 Require Stacking.
 Require Asmgen.
 (** Proofs of semantic preservation. *)
@@ -71,6 +72,7 @@ Require Allocproof.
 Require Tunnelingproof.
 Require Linearizeproof.
 Require CleanupLabelsproof.
+Require Debugvarproof.
 Require Stackingproof.
 Require Asmgenproof.
 (** Command-line flags. *)
@@ -144,6 +146,7 @@ Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
    @@ time "Branch tunneling" Tunneling.tunnel_program
   @@@ time "CFG linearization" Linearize.transf_program
    @@ time "Label cleanup" CleanupLabels.transf_program
+  @@@ partial_if Compopts.debug (time "Debugging info for local variables" Debugvar.transf_program)
   @@@ time "Mach generation" Stacking.transf_program
    @@ print print_Mach
   @@@ time "Asm generation" Asmgen.transf_program.
@@ -253,7 +256,8 @@ Proof.
   set (p5 := Tunneling.tunnel_program p4) in *.
   destruct (Linearize.transf_program p5) as [p6|] eqn:?; simpl in H; try discriminate.
   set (p7 := CleanupLabels.transf_program p6) in *.
-  destruct (Stacking.transf_program p7) as [p8|] eqn:?; simpl in H; try discriminate.
+  destruct (partial_if debug Debugvar.transf_program p7) as [p71|] eqn:?; simpl in H; try discriminate.
+  destruct (Stacking.transf_program p71) as [p8|] eqn:?; simpl in H; try discriminate.
   apply compose_forward_simulation with (RTL.semantics p1).
     apply total_if_simulation. apply Tailcallproof.transf_program_correct. 
   apply compose_forward_simulation with (RTL.semantics p11).
@@ -278,6 +282,8 @@ Proof.
     apply Linearizeproof.transf_program_correct; auto.
   apply compose_forward_simulation with (Linear.semantics p7).
     apply CleanupLabelsproof.transf_program_correct. 
+  apply compose_forward_simulation with (Linear.semantics p71).
+    eapply partial_if_simulation; eauto. apply Debugvarproof.transf_program_correct.
   apply compose_forward_simulation with (Mach.semantics Asmgenproof0.return_address_offset p8).
     apply Stackingproof.transf_program_correct.
     exact Asmgenproof.return_address_exists.

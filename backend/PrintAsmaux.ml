@@ -263,16 +263,28 @@ let print_annot_text print_preg sp_reg_name oc txt args =
 let re_file_line = Str.regexp "#line:\\(.*\\):\\([1-9][0-9]*\\)$"
 
 let print_debug_info comment print_line print_preg sp_name oc kind txt args =
-  if kind = 1 && Str.string_match re_file_line txt 0 then begin
-    print_line oc (Str.matched_group 1 txt)
-                  (int_of_string (Str.matched_group 2 txt))
-  end else begin
-    fprintf oc "%s debug%d: %s" comment kind txt;
+  let print_debug_args oc args =
     List.iter
       (fun a -> fprintf oc " %a" (print_annot print_preg sp_name) a)
-      args;
-    fprintf oc "\n"
-  end
+      args in
+  match kind with
+  | 1 ->  (* line number *)
+      if Str.string_match re_file_line txt 0 then
+        print_line oc (Str.matched_group 1 txt)
+                      (int_of_string (Str.matched_group 2 txt))
+  | 2 ->  (* assignment to local variable, not useful *)
+      ()
+  | 3 ->  (* beginning of live range for local variable *)
+      fprintf oc "%s debug: start live range %s =%a\n"
+                 comment txt print_debug_args args
+  | 4 ->  (* end of live range for local variable *)
+      fprintf oc "%s debug: end live range %s\n"
+                 comment txt
+  | 5 ->  (* local variable preallocated in stack *)
+      fprintf oc "%s debug: %s resides at%a\n"
+                 comment txt print_debug_args args
+  | _ ->
+      ()
 					    
 (** Inline assembly *)
 
