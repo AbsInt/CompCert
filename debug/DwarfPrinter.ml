@@ -74,7 +74,6 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       | None -> ()
       | Some (LocConst _) -> add_abbr_entry (0x2,location_const_type_abbr) buf
       | Some (LocBlock _) -> add_abbr_entry (0x2,location_block_type_abbr) buf
-      | Some (LocSymbol _) -> add_abbr_entry (0x2,location_block_type_abbr) buf
 
     (* Dwarf entity to string function *)
     let abbrev_string_of_entity entity has_sibling =
@@ -295,12 +294,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       fprintf oc "	.byte		0x%X\n" b
 
     let print_loc oc loc =
-      match loc with
-      | LocSymbol s ->
-          fprintf oc "	.sleb128	5\n";
-          fprintf oc "	.byte		3\n";
-          fprintf oc "	.4byte		%s\n" s
-      | _ ->   ()
+      ()
 
     let print_data_location oc dl =
       ()

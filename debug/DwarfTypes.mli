@@ -37,7 +37,6 @@ type address = int
 type block = string
 
 type location_value =
-  | LocSymbol of string
   | LocConst of constant
   | LocBlock of block
 
