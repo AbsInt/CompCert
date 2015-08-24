@@ -22,6 +22,8 @@ open Camlcoq
 open Datatypes
 open Integers
        
+exception Error of string
+
 (* Useful constants and helper functions *)
 
 let _0 = Int.zero
@@ -65,7 +67,8 @@ let expand_annot_val txt targ args res =
      if dst <> src then emit (Pmov_rr (dst,src))
   | [BA(FR src)], BR(FR dst) ->
      if dst <> src then emit (Pmovsd_ff (dst,src))
-  | _, _ -> assert false
+  | _, _ ->
+     raise (Error "ill-formed __builtin_annot_val")
 
 (* Translate a builtin argument into an addressing mode *)
 
@@ -342,7 +345,7 @@ let expand_builtin_inline name args res =
      ()
   (* Catch-all *)
   | _ ->
-     invalid_arg ("unrecognized builtin " ^ name)
+     raise (Error ("unrecognized builtin " ^ name))
 
 (* Expansion of instructions *)
        
@@ -384,16 +387,41 @@ let expand_instruction instr =
      end
   | _ -> emit instr
        
-let expand_program p = p
-
 let expand_function fn =
-  set_current_function fn;
-  List.iter expand_instruction fn.fn_code;
-  get_current_function ()
+  try
+    set_current_function fn;
+    List.iter expand_instruction fn.fn_code;
+    Errors.OK (get_current_function ())
+  with Error s ->
+    Errors.Error (Errors.msg (coqstring_of_camlstring s))
 
 let expand_fundef = function
-  | Internal f -> Internal (expand_function f)
-  | External ef -> External ef
+  | Internal f ->
+      begin match expand_function f with
+      | Errors.OK tf -> Errors.OK (Internal tf)
+      | Errors.Error msg -> Errors.Error msg
+      end
+  | External ef ->
+      Errors.OK (External ef)
 
-let expand_program (p: Asm.program) : Asm.program =
-  AST.transform_program expand_fundef p
+let expand_program (p: Asm.program) : Asm.program Errors.res =
+  AST.transform_partial_program expand_fundef p
+let expand_function fn =
+  try
+    set_current_function fn;
+    List.iter expand_instruction fn.fn_code;
+    Errors.OK (get_current_function ())
+  with Error s ->
+    Errors.Error (Errors.msg (coqstring_of_camlstring s))
+
+let expand_fundef = function
+  | Internal f ->
+      begin match expand_function f with
+      | Errors.OK tf -> Errors.OK (Internal tf)
+      | Errors.Error msg -> Errors.Error msg
+      end
+  | External ef ->
+      Errors.OK (External ef)
+
+let expand_program (p: Asm.program) : Asm.program Errors.res =
+  AST.transform_partial_program expand_fundef p

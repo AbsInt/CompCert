@@ -21,6 +21,7 @@ open Memdata
 open Asm
 open Asmexpandaux
 
+exception Error of string
 
 (* Useful constants and helper functions *)
 
@@ -51,7 +52,7 @@ let expand_annot_val txt targ args res =
   | [BA(FR src)], BR(FR dst) ->
       if dst <> src then emit (Pfmr(dst, src))
   | _, _ ->
-      assert false
+      raise (Error "ill-formed __builtin_annot_val")
   end
 
 (* Handling of memcpy *)
@@ -62,14 +63,16 @@ let expand_annot_val txt targ args res =
    So, use 64-bit accesses only if alignment >= 4.
    Note that lfd and stfd cannot trap on ill-formed floats. *)
 
+let offset_in_range ofs =
+  Int.eq (Asmgen.high_s ofs) Int.zero
+
 let memcpy_small_arg sz arg tmp =
   match arg with
   | BA (IR r) ->
       (r, _0)
   | BA_addrstack ofs ->
-      if Int.eq (Asmgen.high_s ofs) Int.zero
-      && Int.eq (Asmgen.high_s (Int.add ofs (Int.repr (Z.of_uint sz))))
-                Int.zero
+      if offset_in_range ofs
+      && offset_in_range (Int.add ofs (Int.repr (Z.of_uint sz)))
       then (GPR1, ofs)
       else begin emit_addimm tmp GPR1 ofs; (tmp, _0) end
   | _ ->
@@ -150,7 +153,7 @@ let offset_constant cst delta =
   match cst with
   | Cint n ->
       let n' = Int.add n delta in
-      if Int.eq (Asmgen.high_s n') Int.zero then Some (Cint n') else None
+      if offset_in_range n' then Some (Cint n') else None
   | Csymbol_sda(id, ofs) ->
       Some (Csymbol_sda(id, Int.add ofs delta))
   | _ -> None
@@ -186,14 +189,15 @@ let rec expand_builtin_vload_common chunk base offset res =
           emit (Paddi(GPR11, base, offset));
           expand_builtin_vload_common chunk GPR11 (Cint _0) res
       end
-  | _, _ -> assert false
+  | _, _ ->
+      assert false
 
 let expand_builtin_vload chunk args res =
   match args with
   | [BA(IR addr)] ->
       expand_builtin_vload_common chunk addr (Cint _0) res
   | [BA_addrstack ofs] ->
-      if Int.eq (Asmgen.high_s ofs) Int.zero then
+      if offset_in_range ofs then
         expand_builtin_vload_common chunk GPR1 (Cint ofs) res
       else begin
         emit_addimm GPR11 GPR1 ofs;
@@ -241,14 +245,15 @@ let expand_builtin_vstore_common chunk base offset src =
           emit (Pstw(hi, Cint _0, tmp));
           emit (Pstw(lo, Cint _4, tmp))
       end
-  | _, _ -> assert false
+  | _, _ ->
+      assert false
 
 let expand_builtin_vstore chunk args =
   match args with
   | [BA(IR addr); src] ->
       expand_builtin_vstore_common chunk addr (Cint _0) src
   | [BA_addrstack ofs; src] ->
-      if Int.eq (Asmgen.high_s ofs) Int.zero then
+      if offset_in_range ofs then
         expand_builtin_vstore_common chunk GPR1 (Cint ofs) src
       else begin
         let tmp = temp_for_vstore src in
@@ -427,14 +432,14 @@ let expand_builtin_inline name args res =
   | "__builtin_get_spr", [BA_int n], BR(IR res) ->
       emit (Pmfspr(res, n))
   | "__builtin_get_spr", _, _ ->
-      invalid_arg ("the argument of __builtin_get_spr must be a constant")
+      raise (Error "the argument of __builtin_get_spr must be a constant")
   | "__builtin_set_spr", [BA_int n; BA(IR a1)], _ ->
       emit (Pmtspr(n, a1))
   | "__builtin_set_spr", _, _ ->
-      invalid_arg ("the first argument of __builtin_set_spr must be a constant")
+      raise (Error "the first argument of __builtin_set_spr must be a constant")
   (* Catch-all *)
   | _ ->
-      invalid_arg ("unrecognized builtin " ^ name)
+      raise (Error ("unrecognized builtin " ^ name))
 
 (* Calls to variadic functions: condition bit 6 must be set
    if at least one argument is a float; clear otherwise.
@@ -530,13 +535,21 @@ let expand_instruction instr =
       emit instr
 
 let expand_function fn =
-  set_current_function fn;
-  List.iter expand_instruction fn.fn_code;
-  get_current_function ()
+  try
+    set_current_function fn;
+    List.iter expand_instruction fn.fn_code;
+    Errors.OK (get_current_function ())
+  with Error s ->
+    Errors.Error (Errors.msg (coqstring_of_camlstring s))
 
 let expand_fundef = function
-  | Internal f -> Internal (expand_function f)
-  | External ef -> External ef
+  | Internal f ->
+      begin match expand_function f with
+      | Errors.OK tf -> Errors.OK (Internal tf)
+      | Errors.Error msg -> Errors.Error msg
+      end
+  | External ef ->
+      Errors.OK (External ef)
 
-let expand_program (p: Asm.program) : Asm.program =
-  AST.transform_program expand_fundef p
+let expand_program (p: Asm.program) : Asm.program Errors.res =
+  AST.transform_partial_program expand_fundef p
