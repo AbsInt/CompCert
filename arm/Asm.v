@@ -205,14 +205,13 @@ Inductive instruction : Type :=
   | Ploadsymbol: ireg -> ident -> int -> instruction (**r load the address of a symbol *)
   | Pmovite: testcond -> ireg -> shift_op -> shift_op -> instruction (**r integer conditional move *)
   | Pbtbl: ireg -> list label -> instruction       (**r N-way branch through a jump table *)
-  | Pbuiltin: external_function -> list preg -> list preg -> instruction  (**r built-in function *)
-  | Pannot: external_function -> list (annot_arg preg) -> instruction (**r annotation statement *)
+  | Pbuiltin: external_function -> list (builtin_arg preg) -> builtin_res preg -> instruction (**r built-in function (pseudo) *)
   | Padc: ireg -> ireg -> shift_op -> instruction     (**r add with carry *)
   | Pcfi_adjust: int -> instruction                   (**r .cfi_adjust debug directive *)
-  | Pclz: preg -> preg -> instruction                 (**r count leading zeros. *)
+  | Pclz: ireg -> ireg -> instruction                 (**r count leading zeros. *)
   | Pfsqrt: freg -> freg -> instruction               (**r floating-point square root. *)
-  | Prev: preg -> preg -> instruction                 (**r reverse bytes and reverse bits. *)
-  | Prev16: preg -> preg -> instruction               (**r reverse bytes and reverse bits. *)
+  | Prev: ireg -> ireg -> instruction                 (**r reverse bytes and reverse bits. *)
+  | Prev16: ireg -> ireg -> instruction               (**r reverse bytes and reverse bits. *)
   | Prsc: ireg -> ireg -> shift_op -> instruction     (**r reverse subtract without carry. *)
   | Psbc: ireg -> ireg -> shift_op -> instruction     (**r add with carry *)
   (* Add, sub, rsb versions with s suffix *)
@@ -317,6 +316,15 @@ Fixpoint set_regs (rl: list preg) (vl: list val) (rs: regset) : regset :=
   match rl, vl with
   | r1 :: rl', v1 :: vl' => set_regs rl' vl' (rs#r1 <- v1)
   | _, _ => rs
+  end.
+
+(** Assigning the result of a builtin *)
+
+Fixpoint set_res (res: builtin_res preg) (v: val) (rs: regset) : regset :=
+  match res with
+  | BR r => rs#r <- v
+  | BR_none => rs
+  | BR_splitlong hi lo => set_res lo (Val.loword v) (set_res hi (Val.hiword v) rs)
   end.
 
 Section RELSEM.
@@ -748,7 +756,6 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       | _ => Stuck
       end
   | Pbuiltin ef args res => Stuck    (**r treated specially below *)
-  | Pannot ef args => Stuck          (**r treated specially below *)
   (** The following instructions and directives are not generated directly by Asmgen,
       so we do not model them. *)
   | Ppush _
@@ -827,23 +834,16 @@ Inductive step: state -> trace -> state -> Prop :=
       exec_instr f i rs m = Next rs' m' ->
       step (State rs m) E0 (State rs' m')
   | exec_step_builtin:
-      forall b ofs f ef args res rs m t vl rs' m',
+      forall b ofs f ef args res rs m vargs t vres rs' m',
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
-      find_instr (Int.unsigned ofs) (fn_code f) = Some (Pbuiltin ef args res) ->
-      external_call' ef ge (map rs args) m t vl m' ->
-      rs' = nextinstr 
-              (set_regs res vl
+      find_instr (Int.unsigned ofs) f.(fn_code) = Some (Pbuiltin ef args res) ->
+      eval_builtin_args ge rs (rs SP) m args vargs ->
+      external_call ef ge vargs m t vres m' ->
+      rs' = nextinstr
+              (set_res res vres
                 (undef_regs (map preg_of (destroyed_by_builtin ef)) rs)) ->
       step (State rs m) t (State rs' m')
-  | exec_step_annot:
-      forall b ofs f ef args rs m vargs t v m',
-      rs PC = Vptr b ofs ->
-      Genv.find_funct_ptr ge b = Some (Internal f) ->
-      find_instr (Int.unsigned ofs) (fn_code f) = Some (Pannot ef args) ->
-      eval_annot_args ge rs (rs SP) m args vargs ->
-      external_call ef ge vargs m t v m' ->
-      step (State rs m) t (State (nextinstr rs) m')
   | exec_step_external:
       forall b ef args res rs m t rs' m',
       rs PC = Vptr b Int.zero ->
@@ -907,12 +907,8 @@ Ltac Equalities :=
   split. constructor. auto.
   discriminate.
   discriminate.
-  inv H11. 
-  exploit external_call_determ'. eexact H4. eexact H9. intros [A B].
-  split. auto. intros. destruct B; auto. subst. auto.
-  inv H12.
-  assert (vargs0 = vargs) by (eapply eval_annot_args_determ; eauto). subst vargs0.
-  exploit external_call_determ. eexact H5. eexact H13. intros [A B].
+  assert (vargs0 = vargs) by (eapply eval_builtin_args_determ; eauto). subst vargs0.
+  exploit external_call_determ. eexact H5. eexact H11. intros [A B].
   split. auto. intros. destruct B; auto. subst. auto.
   assert (args0 = args) by (eapply extcall_arguments_determ; eauto). subst args0.
   exploit external_call_determ'. eexact H3. eexact H8. intros [A B].
@@ -921,7 +917,6 @@ Ltac Equalities :=
   red; intros; inv H; simpl.
   omega.
   inv H3; eapply external_call_trace_length; eauto.
-  eapply external_call_trace_length; eauto.
   inv H2; eapply external_call_trace_length; eauto.
 (* initial states *)
   inv H; inv H0. f_equal. congruence.

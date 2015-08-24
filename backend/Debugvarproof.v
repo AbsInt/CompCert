@@ -455,15 +455,17 @@ Proof.
 - (* load *)
   econstructor; split.
   eapply plus_left.
-  econstructor; eauto.
+  eapply exec_Lload with (a := a). 
   rewrite <- H; apply eval_addressing_preserved; exact symbols_preserved.
+  eauto. eauto. 
   apply eval_add_delta_ranges. traceEq.
   constructor; auto.
 - (* store *)
   econstructor; split.
   eapply plus_left.
-  econstructor; eauto.
+  eapply exec_Lstore with (a := a).
   rewrite <- H; apply eval_addressing_preserved; exact symbols_preserved.
+  eauto. eauto. 
   apply eval_add_delta_ranges. traceEq.
   constructor; auto.
 - (* call *)

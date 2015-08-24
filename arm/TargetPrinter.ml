@@ -305,17 +305,6 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
     let print_location oc loc =
       if loc <> Cutil.no_loc then print_file_line oc (fst loc) (snd loc)
 
-(* Handling of annotations *)
-
-    let print_annot_stmt oc txt targs args =
-      if Str.string_match re_file_line txt 0 then begin
-        print_file_line oc (Str.matched_group 1 txt)
-          (int_of_string (Str.matched_group 2 txt))
-      end else begin
-        fprintf oc "%s annotation: " comment;
-        print_annot_stmt preg "sp" oc txt targs args
-      end
-
 (* Auxiliary for 64-bit integer arithmetic built-ins.  They expand to
    two instructions, one computing the low 32 bits of the result,
    followed by another computing the high 32 bits.  In cases where
@@ -521,7 +510,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           fprintf oc "	bic%t	%a, %a, %a\n"
             thumbS ireg r1 ireg r2 shift_op so; 1
       | Pclz (r1,r2) ->
-	 fprintf oc "	clz	%a, %a\n" preg r1 preg r2; 1
+	 fprintf oc "	clz	%a, %a\n" ireg r1 ireg r2; 1
       | Pcmp(r1, so) ->
           fprintf oc "	cmp	%a, %a\n" ireg r1 shift_op so; 1
       | Pdmb ->
@@ -571,9 +560,9 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           fprintf oc "	orr%t	%a, %a, %a\n"
             thumbS ireg r1 ireg r2 shift_op so; 1
       | Prev (r1,r2) ->
-	 fprintf oc "	rev	%a, %a\n" preg r1 preg r2; 1
+	 fprintf oc "	rev	%a, %a\n" ireg r1 ireg r2; 1
       | Prev16 (r1,r2) ->
-	 fprintf oc "	rev16	%a, %a\n" preg r1 preg r2; 1
+	 fprintf oc "	rev16	%a, %a\n" ireg r1 ireg r2; 1
       | Prsb(r1, r2, so) ->
          fprintf oc "	rsb%t	%a, %a, %a\n"
 		 thumbS ireg r1 ireg r2 shift_op so; 1
@@ -782,18 +771,19 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           end
       | Pbuiltin(ef, args, res) ->
           begin match ef with
+          | EF_annot(txt, targs) ->
+              fprintf oc "%s annotation: " comment;
+              print_annot_text preg "sp" oc (extern_atom txt) args;
+              0
+          | EF_debug(kind, txt, targs) ->
+              print_debug_info comment print_file_line preg "sp" oc
+                               (P.to_int kind) (extern_atom txt) args;
+              0
           | EF_inline_asm(txt, sg, clob) ->
               fprintf oc "%s begin inline assembly\n\t" comment;
               print_inline_asm preg oc (extern_atom txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment;
               5 (* hoping this is an upper bound...  *)
-          | _ ->
-              assert false
-          end
-      | Pannot(ef, args) ->
-          begin match ef with
-          | EF_annot(txt, targs) ->
-              print_annot_stmt oc (extern_atom txt) targs args; 0
           | _ ->
               assert false
           end

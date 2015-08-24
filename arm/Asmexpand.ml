@@ -21,6 +21,8 @@ open AST
 open Camlcoq
 open Integers
 
+exception Error of string
+
 (* Useful constants and helper functions *)
 
 let _0 = Integers.Int.zero
@@ -74,51 +76,83 @@ let expand_int64_arith conflict rl fn =
 (* Handling of annotations *)
 
 let expand_annot_val txt targ args res =
-  emit (Pannot (EF_annot(txt,[targ]), List.map (fun r -> AA_base r) args));
+  emit (Pbuiltin (EF_annot(txt,[targ]), args, BR_none));
   match args, res with
-  | [IR src], [IR dst] ->
+  | [BA(IR src)], BR(IR dst) ->
      if dst <> src then emit (Pmov (dst,SOreg src))
-  | [FR src], [FR dst] ->
+  | [BA(FR src)], BR(FR dst) ->
      if dst <> src then emit (Pfcpyd (dst,src))
-  | _, _ -> assert false
-
+  | _, _ ->
+     raise (Error "ill-formed __builtin_annot_val")
 
 (* Handling of memcpy *)
 
 (* The ARM has strict alignment constraints for 2 and 4 byte accesses.
    8-byte accesses must be 4-aligned. *)
 
+let offset_in_range ofs =
+  let n = camlint_of_coqint ofs in n <= 128l && n >= -128l
+
+let memcpy_small_arg sz arg tmp =
+  match arg with
+  | BA (IR r) ->
+      (r, _0)
+  | BA_addrstack ofs ->
+      if offset_in_range ofs
+      && offset_in_range (Int.add ofs (Int.repr (Z.of_uint sz)))
+      then (IR13, ofs)
+      else begin expand_addimm tmp IR13 ofs; (tmp, _0) end
+  | _ ->
+      assert false
+
 let expand_builtin_memcpy_small sz al src dst =
-  let rec copy ofs sz  =
+  let (tsrc, tdst) = 
+    if dst <> BA (IR IR2) then (IR2, IR3) else (IR3, IR2) in
+  let (rsrc, osrc) = memcpy_small_arg sz src tsrc in
+  let (rdst, odst) = memcpy_small_arg sz dst tdst in
+  let rec copy osrc odst sz  =
     if sz >= 8 && al >= 4 && !Clflags.option_ffpu then begin
-      emit (Pfldd (FR7,src,ofs));
-      emit (Pfstd (FR7,dst,ofs));
-      copy (Int.add ofs _8) (sz - 8)
+      emit (Pfldd (FR7,rsrc,osrc));
+      emit (Pfstd (FR7,rdst,odst));
+      copy (Int.add osrc _8) (Int.add odst _8) (sz - 8)
     end else if sz >= 4 && al >= 4 then begin
-      emit (Pldr (IR14,src,SOimm ofs));
-      emit (Pstr (IR14,dst,SOimm ofs));
-      copy (Int.add ofs _4) (sz - 4)
+      emit (Pldr (IR14,rsrc,SOimm osrc));
+      emit (Pstr (IR14,rdst,SOimm odst));
+      copy (Int.add osrc _4) (Int.add odst _4) (sz - 4)
     end else if sz >= 2 && al >= 2 then begin
-      emit (Pldrh (IR14,src,SOimm ofs));
-      emit (Pstrh (IR14,dst,SOimm ofs));
-      copy (Int.add ofs _2) (sz - 2)
+      emit (Pldrh (IR14,rsrc,SOimm osrc));
+      emit (Pstrh (IR14,rdst,SOimm odst));
+      copy (Int.add osrc _2) (Int.add odst _2) (sz - 2)
     end else if sz >= 1 then begin
-      emit (Pldrb (IR14,src,SOimm ofs));
-      emit (Pstrb (IR14,dst,SOimm ofs));
-      copy (Int.add ofs _1) (sz - 1)
-    end else
-      () in
-  copy _0 sz
+      emit (Pldrb (IR14,rsrc,SOimm osrc));
+      emit (Pstrb (IR14,rdst,SOimm odst));
+      copy (Int.add osrc _1) (Int.add odst _1) (sz - 1)
+    end in
+  copy osrc odst sz
+
+let memcpy_big_arg arg tmp =
+  match arg with
+  | BA (IR r) ->
+      if r <> tmp then emit (Pmov(tmp, SOreg r))
+  | BA_addrstack ofs ->
+      expand_addimm tmp IR13 ofs
+  | _ ->
+      assert false
 
 let expand_builtin_memcpy_big sz al src dst =
   assert (sz >= al);
   assert (sz mod al = 0);
-  assert (src = IR2);
-  assert (dst = IR3);
+  let (s, d) = 
+    if dst <> BA (IR IR2) then (IR2, IR3) else (IR3, IR2) in
+  memcpy_big_arg src s;
+  memcpy_big_arg dst d;
   let (load, store, chunksize) =
-    if al >= 4 then (Pldr_p (IR12,src,SOimm _4), Pstr_p (IR12,dst,SOimm _4) , 4)
-    else if al = 2 then (Pldrh_p (IR12,src,SOimm _2), Pstrh_p (IR12,dst,SOimm _2), 2)
-    else (Pldrb_p (IR12,src,SOimm _1), Pstrb_p (IR12,dst,SOimm _1), 1) in
+    if al >= 4 then
+      (Pldr_p (IR12,s,SOimm _4), Pstr_p (IR12,d,SOimm _4) , 4)
+    else if al = 2 then
+       (Pldrh_p (IR12,s,SOimm _2), Pstrh_p (IR12,d,SOimm _2), 2)
+    else
+       (Pldrb_p (IR12,s,SOimm _1), Pstrb_p (IR12,d,SOimm _1), 1) in
   expand_movimm IR14 (coqint_of_camlint (Int32.of_int (sz / chunksize)));
   let lbl = new_label () in
   emit (Plabel lbl);
@@ -129,71 +163,93 @@ let expand_builtin_memcpy_big sz al src dst =
 
 let expand_builtin_memcpy  sz al args =
   let (dst, src) =
-    match args with [IR d; IR s] -> (d, s) | _ -> assert false in
+    match args with [d; s] -> (d, s) | _ -> assert false in
   if sz <= 32
   then expand_builtin_memcpy_small sz al src dst
   else expand_builtin_memcpy_big sz al src dst
 
 (* Handling of volatile reads and writes *)
 
-let expand_builtin_vload_common chunk args res =
-  match chunk, args, res with
-  | Mint8unsigned, [IR addr], [IR res] ->
-     emit (Pldrb (res, addr,SOimm _0))
-  | Mint8signed, [IR addr], [IR res] ->
-     emit (Pldrsb (res, addr,SOimm _0))
-  | Mint16unsigned, [IR addr], [IR res] ->
-     emit (Pldrh (res, addr, SOimm _0))
-  | Mint16signed, [IR addr], [IR res] ->
-     emit (Pldrsh (res, addr, SOimm _0))
-  | Mint32, [IR addr], [IR res] ->
-     emit (Pldr (res,addr, SOimm _0))
-  | Mint64, [IR addr], [IR res1; IR res2] ->
-     if addr <> res2 then begin
-	 emit (Pldr (res2, addr, SOimm _0));
-	 emit (Pldr (res1, addr, SOimm _4))
+let expand_builtin_vload_common chunk base ofs res =
+  match chunk, res with
+  | Mint8unsigned, BR(IR res) ->
+     emit (Pldrb (res, base, SOimm ofs))
+  | Mint8signed, BR(IR res) ->
+     emit (Pldrsb (res, base, SOimm ofs))
+  | Mint16unsigned, BR(IR res) ->
+     emit (Pldrh (res, base, SOimm ofs))
+  | Mint16signed, BR(IR res) ->
+     emit (Pldrsh (res, base, SOimm ofs))
+  | Mint32, BR(IR res) ->
+     emit (Pldr (res, base, SOimm ofs))
+  | Mint64, BR_splitlong(BR(IR res1), BR(IR res2)) ->
+     let ofs' = Int.add ofs _4 in
+     if base <> res2 then begin
+	 emit (Pldr (res2, base, SOimm ofs));
+	 emit (Pldr (res1, base, SOimm ofs'))
        end else begin
-	 emit (Pldr (res1,addr, SOimm _4));
-	 emit (Pldr (res2,addr, SOimm _0))
+	 emit (Pldr (res1, base, SOimm ofs'));
+	 emit (Pldr (res2, base, SOimm ofs))
        end
-  | Mfloat32, [IR addr], [FR res] ->
-     emit (Pflds (res, addr, _0))
-  | Mfloat64, [IR addr], [FR res] ->
-     emit (Pfldd (res,addr, _0))
+  | Mfloat32, BR(FR res) ->
+     emit (Pflds (res, base, ofs))
+  | Mfloat64, BR(FR res) ->
+     emit (Pfldd (res, base, ofs))
   | _ ->
      assert false
 
 let expand_builtin_vload chunk args res =
-  expand_builtin_vload_common chunk args res
+  match args with
+  | [BA(IR addr)] ->
+      expand_builtin_vload_common chunk addr _0 res
+  | [BA_addrstack ofs] ->
+      if offset_in_range (Int.add ofs (Memdata.size_chunk chunk)) then
+        expand_builtin_vload_common chunk IR13 ofs res
+      else begin
+        expand_addimm IR14 IR13 ofs;
+        expand_builtin_vload_common chunk IR14 _0 res
+      end
+  | [BA_addrglobal(id, ofs)] ->
+      emit (Ploadsymbol (IR14,id,ofs));
+      expand_builtin_vload_common chunk IR14 _0 res
+  | _ ->
+      assert false
 
-let expand_builtin_vload_global chunk id ofs args res =
-  emit (Ploadsymbol (IR14,id,ofs));
-  expand_builtin_vload_common chunk (IR IR14 :: args) res
-
-let expand_builtin_vstore_common chunk args =
-  match chunk, args with
-  | (Mint8signed | Mint8unsigned), [IR  addr; IR src] ->
-     emit (Pstrb (src,addr, SOimm _0))
-  | (Mint16signed | Mint16unsigned), [IR  addr; IR src] ->
-     emit (Pstrh (src,addr, SOimm _0))
-  | Mint32, [IR  addr; IR src] ->
-     emit (Pstr (src,addr, SOimm _0))
-  | Mint64, [IR  addr; IR src1; IR src2] ->
-     emit (Pstr (src2,addr,SOimm _0));
-     emit (Pstr (src1,addr,SOimm _4))
-  | Mfloat32, [IR  addr; FR src] ->
-     emit (Pfsts (src,addr,_0))
-  | Mfloat64, [IR  addr; FR src] ->
-     emit (Pfstd (src,addr,_0));
+let expand_builtin_vstore_common chunk base ofs src =
+  match chunk, src with
+  | (Mint8signed | Mint8unsigned), BA(IR src) ->
+     emit (Pstrb (src, base, SOimm ofs))
+  | (Mint16signed | Mint16unsigned), BA(IR src) ->
+     emit (Pstrh (src, base, SOimm ofs))
+  | Mint32, BA(IR src) ->
+     emit (Pstr (src, base, SOimm ofs))
+  | Mint64, BA_splitlong(BA(IR src1), BA(IR src2)) ->
+     let ofs' = Int.add ofs _4 in
+     emit (Pstr (src2, base, SOimm ofs));
+     emit (Pstr (src1, base, SOimm ofs'))
+  | Mfloat32, BA(FR src) ->
+     emit (Pfsts (src, base, ofs))
+  | Mfloat64, BA(FR src) ->
+     emit (Pfstd (src, base, ofs))
   | _ ->
      assert false
 
 let expand_builtin_vstore chunk args =
-  expand_builtin_vstore_common chunk args
-
-let expand_builtin_vstore_global chunk id ofs args =
-  emit (Ploadsymbol (IR14,id,ofs));
-  expand_builtin_vstore_common chunk (IR IR14 :: args)
+  match args with
+  | [BA(IR addr); src] ->
+      expand_builtin_vstore_common chunk addr _0 src
+  | [BA_addrstack ofs; src] ->
+      if offset_in_range (Int.add ofs (Memdata.size_chunk chunk)) then
+        expand_builtin_vstore_common chunk IR13 ofs src
+      else begin
+        expand_addimm IR14 IR13 ofs;
+        expand_builtin_vstore_common chunk IR14 _0 src
+      end
+  | [BA_addrglobal(id, ofs); src] ->
+      emit (Ploadsymbol (IR14,id,ofs));
+      expand_builtin_vstore_common chunk IR14 _0 src
+  | _ ->
+      assert false
 
 (* Handling of varargs *)
 
@@ -223,22 +279,24 @@ let expand_builtin_va_start r =
 
 
 (* Handling of compiler-inlined builtins *)
+
 let expand_builtin_inline name args res =
   match name, args, res with
   (* Integer arithmetic *)
-  | ("__builtin_bswap" | "__builtin_bswap32"), [IR a1], [IR res] ->
-     emit (Prev (IR res,IR a1))
-  | "__builtin_bswap16", [IR a1], [IR res] ->
-     emit (Prev16 (IR res,IR a1))
-  | "__builtin_clz", [IR a1], [IR res] ->
-     emit (Pclz (IR res, IR a1))
+  | ("__builtin_bswap" | "__builtin_bswap32"), [BA(IR a1)], BR(IR res) ->
+     emit (Prev (res, a1))
+  | "__builtin_bswap16", [BA(IR a1)], BR(IR res) ->
+     emit (Prev16 (res, a1))
+  | "__builtin_clz", [BA(IR a1)], BR(IR res) ->
+     emit (Pclz (res, a1))
   (* Float arithmetic *)
-  | "__builtin_fabs",  [FR a1], [FR res] ->
+  | "__builtin_fabs",  [BA(FR a1)], BR(FR res) ->
      emit (Pfabsd (res,a1))
-  | "__builtin_fsqrt", [FR a1], [FR res] ->
+  | "__builtin_fsqrt", [BA(FR a1)], BR(FR res) ->
      emit (Pfsqrt (res,a1))
   (* 64-bit integer arithmetic *)
-  | "__builtin_negl", [IR ah;IR al], [IR rh; IR rl] ->
+  | "__builtin_negl", [BA_splitlong(BA(IR ah), BA(IR al))],
+                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
       expand_int64_arith (rl = ah ) rl (fun rl ->
         emit (Prsbs (rl,al,SOimm _0));
         (* No "rsc" instruction in Thumb2.  Emulate based on
@@ -250,30 +308,35 @@ let expand_builtin_inline name args res =
         end else begin
 	  emit (Prsc (rh,ah,SOimm _0))
         end)
-  | "__builtin_addl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
+  | "__builtin_addl", [BA_splitlong(BA(IR ah), BA(IR al));
+                       BA_splitlong(BA(IR bh), BA(IR bl))],
+                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
      expand_int64_arith (rl = ah || rl = bh) rl
 			(fun rl ->
 			 emit (Padds (rl,al,SOreg bl));
 			 emit (Padc (rh,ah,SOreg bh)))
-  | "__builtin_subl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
+  | "__builtin_subl", [BA_splitlong(BA(IR ah), BA(IR al));
+                       BA_splitlong(BA(IR bh), BA(IR bl))],
+                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
      expand_int64_arith (rl = ah || rl = bh) rl
 		       (fun rl ->
 			emit (Psubs (rl,al,SOreg bl));
 			emit (Psbc (rh,ah,SOreg bh)))
-  | "__builtin_mull", [IR a; IR b], [IR rh; IR rl] ->
+  | "__builtin_mull", [BA(IR a); BA(IR b)],
+                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
      emit (Pumull (rl,rh,a,b))
   (* Memory accesses *)
-  | "__builtin_read16_reversed", [IR a1], [IR res] ->
+  | "__builtin_read16_reversed", [BA(IR a1)], BR(IR res) ->
      emit (Pldrh (res,a1,SOimm _0));
-     emit (Prev16 (IR res,IR res));
-  | "__builtin_read32_reversed", [IR a1], [IR res] ->
+     emit (Prev16 (res, res));
+  | "__builtin_read32_reversed", [BA(IR a1)], BR(IR res) ->
      emit (Pldr (res,a1,SOimm _0));
-     emit (Prev (IR res,IR res));
-  | "__builtin_write16_reversed", [IR a1; IR a2], _ ->
-     emit (Prev16 (IR IR14, IR a2));
+     emit (Prev (res, res));
+  | "__builtin_write16_reversed", [BA(IR a1); BA(IR a2)], _ ->
+     emit (Prev16 (IR14, a2));
      emit (Pstrh (IR14, a1, SOimm _0))
-  | "__builtin_write32_reversed", [IR a1; IR a2], _ ->
-     emit (Prev (IR IR14, IR a2));
+  | "__builtin_write32_reversed", [BA(IR a1); BA(IR a2)], _ ->
+     emit (Prev (IR14, a2));
      emit (Pstr (IR14, a1, SOimm _0))
   (* Synchronization *)
   | "__builtin_membar",[], _ ->
@@ -285,11 +348,11 @@ let expand_builtin_inline name args res =
   | "__builtin_isb", [], _ ->
      emit Pisb
   (* Vararg stuff *)
-  | "__builtin_va_start", [IR a], _ ->
+  | "__builtin_va_start", [BA(IR a)], _ ->
      expand_builtin_va_start a
   (* Catch-all *)
   | _ ->
-      invalid_arg ("unrecognized builtin " ^ name)
+      raise (Error ("unrecognized builtin " ^ name))
 
 let expand_instruction instr =
   match instr with
@@ -319,30 +382,35 @@ let expand_instruction instr =
 	      expand_builtin_vload chunk args res
 	   | EF_vstore chunk ->
 	      expand_builtin_vstore chunk args
-	   | EF_vload_global(chunk, id, ofs) ->
-	      expand_builtin_vload_global chunk id ofs args res
-	   | EF_vstore_global(chunk, id, ofs) ->
-	      expand_builtin_vstore_global chunk id ofs args
 	   | EF_annot_val (txt,targ) ->
 	      expand_annot_val txt targ args res
 	   | EF_memcpy(sz, al) ->
 	      expand_builtin_memcpy (Int32.to_int (camlint_of_coqint sz))
 		(Int32.to_int (camlint_of_coqint al)) args
-	   | EF_inline_asm(txt, sg, clob) ->
+	   | EF_annot _ | EF_debug _ | EF_inline_asm _ ->
               emit instr
-	   | _ -> assert false
+	   | _ ->
+              assert false
      end
   | _ ->
      emit instr
 
 let expand_function fn =
-  set_current_function fn;
-  List.iter expand_instruction fn.fn_code;
-  get_current_function ()
+  try
+    set_current_function fn;
+    List.iter expand_instruction fn.fn_code;
+    Errors.OK (get_current_function ())
+  with Error s ->
+    Errors.Error (Errors.msg (coqstring_of_camlstring s))
 
 let expand_fundef = function
-  | Internal f -> Internal (expand_function f)
-  | External ef -> External ef
+  | Internal f ->
+      begin match expand_function f with
+      | Errors.OK tf -> Errors.OK (Internal tf)
+      | Errors.Error msg -> Errors.Error msg
+      end
+  | External ef ->
+      Errors.OK (External ef)
 
-let expand_program (p: Asm.program) : Asm.program =
-  AST.transform_program expand_fundef p
+let expand_program (p: Asm.program) : Asm.program Errors.res =
+  AST.transform_partial_program expand_fundef p
