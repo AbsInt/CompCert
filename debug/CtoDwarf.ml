@@ -197,7 +197,7 @@ and array_to_dwarf_tag child size =
     match s with 
     | None -> None
     | Some i ->
-        let i = Int64.to_int i in
+        let i = Int64.to_int (Int64.sub i Int64.one) in
         let s =
           {
            subrange_type = None;
@@ -276,23 +276,30 @@ and attr_type_to_dwarf typ typ_string =
         
 (* Translate a given type to its dwarf representation *)
 and type_to_dwarf (typ: typ): int * dw_entry list =
-  let typ = strip_attributes typ in
-  let typ_string = typ_to_string typ in
-  try
-    Hashtbl.find type_table typ_string,[]
-  with Not_found ->
-    attr_type_to_dwarf typ typ_string
+  match typ with
+   | TStruct (i,_)
+   | TUnion (i,_)
+   | TEnum (i,_) ->
+       let t = get_composite_type i.stamp in
+       t,[]
+   | _ -> 
+       let typ = strip_attributes typ in
+       let typ_string = typ_to_string typ in
+       try
+         Hashtbl.find type_table typ_string,[]
+       with Not_found ->
+         attr_type_to_dwarf typ typ_string
 
 (* Translate a typedef to its corresponding dwarf representation *)
 let typedef_to_dwarf gloc (name,t) =
   let i,t = type_to_dwarf t in
-  Hashtbl.add typedef_table name i;
   let td = {
     typedef_file_loc = gloc;
     typedef_name = name;
     typedef_type = i;
   } in 
   let td = new_entry (DW_TAG_typedef td) in
+  Hashtbl.add typedef_table name td.id;
   td::t     
 
 (* Translate a global var to its corresponding dwarf representation *)
