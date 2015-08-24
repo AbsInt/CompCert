@@ -514,6 +514,8 @@ let unset_all opts = List.iter (fun r -> r := false) opts
 
 let num_source_files = ref 0
 
+let num_input_files = ref 0
+    
 let cmdline_actions =
   let f_opt name ref =
     [Exact("-f" ^ name), Set ref; Exact("-fno-" ^ name), Unset ref] in
@@ -636,25 +638,25 @@ let cmdline_actions =
       eprintf "Unknown option `%s'\n" s; exit 2);
 (* File arguments *)
   Suffix ".c", Self (fun s ->
-      push_action process_c_file s; incr num_source_files);
+      push_action process_c_file s; incr num_source_files; incr num_input_files);
   Suffix ".i", Self (fun s ->
-      push_action process_i_file s; incr num_source_files);
+      push_action process_i_file s; incr num_source_files; incr num_input_files);
   Suffix ".p", Self (fun s ->
-      push_action process_i_file s; incr num_source_files);
+      push_action process_i_file s; incr num_source_files; incr num_input_files);
   Suffix ".cm", Self (fun s ->
-      push_action process_cminor_file s; incr num_source_files);
+      push_action process_cminor_file s; incr num_source_files; incr num_input_files);
   Suffix ".s", Self (fun s ->
-      push_action process_s_file s; incr num_source_files);
+      push_action process_s_file s; incr num_source_files; incr num_input_files);
   Suffix ".S", Self (fun s ->
-      push_action process_S_file s; incr num_source_files);
-  Suffix ".o", Self push_linker_arg;
-  Suffix ".a", Self push_linker_arg;
+      push_action process_S_file s; incr num_source_files; incr num_input_files);
+  Suffix ".o", Self (fun s -> push_linker_arg s; incr num_input_files);
+  Suffix ".a", Self (fun s -> push_linker_arg s; incr num_input_files);
   (* GCC compatibility: .o.ext files and .so files are also object files *)
-  _Regexp ".*\\.o\\.", Self push_linker_arg;
-  Suffix ".so", Self push_linker_arg;
+  _Regexp ".*\\.o\\.", Self (fun s -> push_linker_arg s; incr num_input_files);
+  Suffix ".so", Self (fun s -> push_linker_arg s; incr num_input_files);
   (* GCC compatibility: .h files can be preprocessed with -E *)
   Suffix ".h", Self (fun s ->
-      push_action process_h_file s; incr num_source_files);
+      push_action process_h_file s; incr num_source_files; incr num_input_files);
   ]
 
 let _ =
@@ -683,7 +685,7 @@ let _ =
       eprintf "Ambiguous '-o' option (multiple source files)\n";
       exit 2
     end;
-    if !num_source_files = 0 then
+    if !num_input_files = 0 then
       begin
         eprintf "ccomp: error: no input file\n";
         exit 2
