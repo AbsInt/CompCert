@@ -124,7 +124,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           add_abbr_entry (0x1c,value_type_abbr) buf;
           add_name buf
       | DW_TAG_formal_parameter e ->
-          prologue 0x34;
+          prologue 0x5;
           add_attr_some e.formal_parameter_file_loc add_file_loc;
           add_attr_some e.formal_parameter_artificial (add_abbr_entry (0x34,artificial_type_abbr));
           add_location  e.formal_parameter_location buf;
