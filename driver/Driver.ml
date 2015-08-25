@@ -183,7 +183,7 @@ let compile_c_ast sourcename csyntax ofile debug =
     | Errors.OK asm ->
         Asmexpand.expand_program asm
     | Errors.Error msg ->
-        print_error stderr msg;
+        eprintf "%s: %a" sourcename print_error msg;
         exit 2 in
   (* Dump Asm in binary and JSON format *)  
   if !option_sdump then
@@ -221,7 +221,7 @@ let compile_cminor_file ifile ofile =
             (CMtypecheck.type_program
               (CMparser.prog CMlexer.token lb)) with
     | Errors.Error msg ->
-        print_error stderr msg;
+        eprintf "%s: %a" ifile print_error msg;
         exit 2
     | Errors.OK p ->
         let oc = open_out ofile in
