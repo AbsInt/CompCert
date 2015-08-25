@@ -568,7 +568,7 @@ let cmdline_actions =
   Prefix "-l", Self push_linker_arg;
   Prefix "-L", Self push_linker_arg;
   Exact "-T", String (fun s -> if Configuration.system = "diab" then 
-    push_linker_arg ("-Wm "^s) 
+    push_linker_arg ("-Wm"^s) 
   else
     push_linker_arg ("-T "^s));
   Prefix "-Wl,", Self push_linker_arg;
