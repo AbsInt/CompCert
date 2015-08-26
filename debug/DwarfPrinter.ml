@@ -72,6 +72,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
     let add_location loc buf =
       match loc with
       | None -> ()
+      | Some (LocSymbol _) ->add_abbr_entry (0x2,location_block_type_abbr) buf
       | Some (LocConst _) -> add_abbr_entry (0x2,location_const_type_abbr) buf
       | Some (LocBlock _) -> add_abbr_entry (0x2,location_block_type_abbr) buf
 
