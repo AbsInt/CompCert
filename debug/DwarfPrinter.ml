@@ -74,7 +74,6 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       | None -> ()
       | Some (LocConst _) -> add_abbr_entry (0x2,location_const_type_abbr) buf
       | Some (LocBlock _) -> add_abbr_entry (0x2,location_block_type_abbr) buf
-      | Some (LocSymbol _) -> add_abbr_entry (0x2,location_block_type_abbr) buf
 
     (* Dwarf entity to string function *)
     let abbrev_string_of_entity entity has_sibling =
@@ -125,7 +124,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           add_abbr_entry (0x1c,value_type_abbr) buf;
           add_name buf
       | DW_TAG_formal_parameter e ->
-          prologue 0x34;
+          prologue 0x5;
           add_attr_some e.formal_parameter_file_loc add_file_loc;
           add_attr_some e.formal_parameter_artificial (add_abbr_entry (0x34,artificial_type_abbr));
           add_location  (get_location e.formal_parameter_id) buf;
@@ -341,8 +340,8 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
     let print_compilation_unit oc tag =
       let prod_name = sprintf "AbsInt Angewandte Informatik GmbH:CompCert Version %s:%s" Version.version Configuration.arch in
       print_string oc (Sys.getcwd ());
-      print_addr oc (get_start_addr ());
       print_addr oc (get_end_addr ());
+      print_addr oc (get_start_addr ());
       print_uleb128 oc 1;
       print_string oc tag.compile_unit_name;
       print_string oc prod_name;

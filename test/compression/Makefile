@@ -44,7 +44,7 @@ test:
           ./$$i -d -i $(TESTCOMPR) -o $(TESTEXPND); \
           if cmp $(TESTFILE) $(TESTEXPND); \
           then echo "$$i: passed"; \
-          else echo "$$i: FAILED"; \
+          else echo "$$i: FAILED"; exit 2; \
           fi; \
         done
 	rm -f $(TESTCOMPR) $(TESTEXPND)

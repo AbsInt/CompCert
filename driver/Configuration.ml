@@ -20,17 +20,20 @@ let ini_file_name =
     Sys.getenv "COMPCERT_CONFIG"
   with Not_found ->
     let exe_dir = Filename.dirname Sys.executable_name in
-    let exe_ini = Filename.concat exe_dir "compcert.ini" in
     let share_dir =
       Filename.concat (Filename.concat exe_dir Filename.parent_dir_name)
-                      "share" in
-    let share_ini = Filename.concat share_dir "compcert.ini" in
-    if Sys.file_exists exe_ini then exe_ini
-    else if Sys.file_exists share_ini then share_ini
-    else begin 
-      eprintf "Cannot find compcert.ini configuration file.\n";
-      exit 2
-    end
+        "share" in
+    let share_compcert_dir =
+      Filename.concat share_dir "compcert" in
+    let search_path = [exe_dir;share_dir;share_compcert_dir] in
+    let files = List.map (fun s -> Filename.concat s "compcert.ini") search_path in
+    try
+      List.find  Sys.file_exists files
+    with Not_found ->
+      begin 
+        eprintf "Cannot find compcert.ini configuration file.\n";
+        exit 2
+      end
 
 (* Read in the .ini file *)
 

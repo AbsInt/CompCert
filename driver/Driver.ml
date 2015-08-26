@@ -183,7 +183,7 @@ let compile_c_ast sourcename csyntax ofile debug =
     | Errors.OK asm ->
         Asmexpand.expand_program asm
     | Errors.Error msg ->
-        print_error stderr msg;
+        eprintf "%s: %a" sourcename print_error msg;
         exit 2 in
   (* Dump Asm in binary and JSON format *)  
   if !option_sdump then
@@ -221,7 +221,7 @@ let compile_cminor_file ifile ofile =
             (CMtypecheck.type_program
               (CMparser.prog CMlexer.token lb)) with
     | Errors.Error msg ->
-        print_error stderr msg;
+        eprintf "%s: %a" ifile print_error msg;
         exit 2
     | Errors.OK p ->
         let oc = open_out ofile in
@@ -514,6 +514,8 @@ let unset_all opts = List.iter (fun r -> r := false) opts
 
 let num_source_files = ref 0
 
+let num_input_files = ref 0
+    
 let cmdline_actions =
   let f_opt name ref =
     [Exact("-f" ^ name), Set ref; Exact("-fno-" ^ name), Unset ref] in
@@ -566,7 +568,7 @@ let cmdline_actions =
   Prefix "-l", Self push_linker_arg;
   Prefix "-L", Self push_linker_arg;
   Exact "-T", String (fun s -> if Configuration.system = "diab" then 
-    push_linker_arg ("-Wm "^s) 
+    push_linker_arg ("-Wm"^s) 
   else
     push_linker_arg ("-T "^s));
   Prefix "-Wl,", Self push_linker_arg;
@@ -636,25 +638,25 @@ let cmdline_actions =
       eprintf "Unknown option `%s'\n" s; exit 2);
 (* File arguments *)
   Suffix ".c", Self (fun s ->
-      push_action process_c_file s; incr num_source_files);
+      push_action process_c_file s; incr num_source_files; incr num_input_files);
   Suffix ".i", Self (fun s ->
-      push_action process_i_file s; incr num_source_files);
+      push_action process_i_file s; incr num_source_files; incr num_input_files);
   Suffix ".p", Self (fun s ->
-      push_action process_i_file s; incr num_source_files);
+      push_action process_i_file s; incr num_source_files; incr num_input_files);
   Suffix ".cm", Self (fun s ->
-      push_action process_cminor_file s; incr num_source_files);
+      push_action process_cminor_file s; incr num_source_files; incr num_input_files);
   Suffix ".s", Self (fun s ->
-      push_action process_s_file s; incr num_source_files);
+      push_action process_s_file s; incr num_source_files; incr num_input_files);
   Suffix ".S", Self (fun s ->
-      push_action process_S_file s; incr num_source_files);
-  Suffix ".o", Self push_linker_arg;
-  Suffix ".a", Self push_linker_arg;
+      push_action process_S_file s; incr num_source_files; incr num_input_files);
+  Suffix ".o", Self (fun s -> push_linker_arg s; incr num_input_files);
+  Suffix ".a", Self (fun s -> push_linker_arg s; incr num_input_files);
   (* GCC compatibility: .o.ext files and .so files are also object files *)
-  _Regexp ".*\\.o\\.", Self push_linker_arg;
-  Suffix ".so", Self push_linker_arg;
+  _Regexp ".*\\.o\\.", Self (fun s -> push_linker_arg s; incr num_input_files);
+  Suffix ".so", Self (fun s -> push_linker_arg s; incr num_input_files);
   (* GCC compatibility: .h files can be preprocessed with -E *)
   Suffix ".h", Self (fun s ->
-      push_action process_h_file s; incr num_source_files);
+      push_action process_h_file s; incr num_source_files; incr num_input_files);
   ]
 
 let _ =
@@ -683,6 +685,11 @@ let _ =
       eprintf "Ambiguous '-o' option (multiple source files)\n";
       exit 2
     end;
+    if !num_input_files = 0 then
+      begin
+        eprintf "ccomp: error: no input file\n";
+        exit 2
+      end;
     let linker_args = time "Total compilation time" perform_actions () in
     if (not nolink) && linker_args <> [] then begin
       linker (output_filename_default "a.out") linker_args

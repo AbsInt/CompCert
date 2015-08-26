@@ -187,29 +187,33 @@ and fun_to_dwarf_tag rt args =
   s.id,((s::others)@et)
 
 (* Generate a dwarf tag for the given array type *)
-and array_to_dwarf_tag child size = 
+and array_to_dwarf_tag child size =
+  let append_opt a b =
+    match a with
+    | None -> b
+    | Some a -> a::b in
   let size_to_subrange s =
-    let b = (match s with 
+    match s with 
     | None -> None
     | Some i ->
-        let i = Int64.to_int i in
-        Some (BoundConst i)) in
-    let s = {
-      subrange_type = None;
-      subrange_upper_bound = b;
-    } in
-    new_entry (DW_TAG_subrange_type s) in 
+        let i = Int64.to_int (Int64.sub i Int64.one) in
+        let s =
+          {
+           subrange_type = None;
+           subrange_upper_bound = Some (BoundConst i);
+         } in
+        Some (new_entry (DW_TAG_subrange_type s)) in 
   let rec aux t = 
     (match t with
     | TArray (child,size,_) ->
         let sub = size_to_subrange size in
         let t,c,e = aux child in
-        t,sub::c,e
+        t,append_opt sub c,e
     | _ -> let t,e = type_to_dwarf t in
       t,[],e) in
   let t,children,e = aux child in
   let sub = size_to_subrange size in
-  let children = List.rev (sub::children) in
+  let children = List.rev (append_opt sub children) in
   let arr = {
     array_type_file_loc = None;
     array_type = t;
@@ -271,23 +275,30 @@ and attr_type_to_dwarf typ typ_string =
         
 (* Translate a given type to its dwarf representation *)
 and type_to_dwarf (typ: typ): int * dw_entry list =
-  let typ = strip_attributes typ in
-  let typ_string = typ_to_string typ in
-  try
-    Hashtbl.find type_table typ_string,[]
-  with Not_found ->
-    attr_type_to_dwarf typ typ_string
+  match typ with
+   | TStruct (i,_)
+   | TUnion (i,_)
+   | TEnum (i,_) ->
+       let t = get_composite_type i.stamp in
+       t,[]
+   | _ -> 
+       let typ = strip_attributes typ in
+       let typ_string = typ_to_string typ in
+       try
+         Hashtbl.find type_table typ_string,[]
+       with Not_found ->
+         attr_type_to_dwarf typ typ_string
 
 (* Translate a typedef to its corresponding dwarf representation *)
 let typedef_to_dwarf gloc (name,t) =
   let i,t = type_to_dwarf t in
-  Hashtbl.add typedef_table name i;
   let td = {
     typedef_file_loc = gloc;
     typedef_name = name;
     typedef_type = i;
   } in 
   let td = new_entry (DW_TAG_typedef td) in
+  Hashtbl.add typedef_table name td.id;
   td::t     
 
 (* Translate a global var to its corresponding dwarf representation *)

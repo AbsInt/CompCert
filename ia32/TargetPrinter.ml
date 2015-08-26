@@ -580,77 +580,76 @@ module Target(System: SYSTEM):TARGET =
           end else begin
             fprintf oc "	ret\n"
           end
-      (** Pseudo-instructions *)
-      | Padcl_ir (n,res) ->
+      (* Instructions produced by Asmexpand *)
+      | Padc_ri (res,n) ->
 	 fprintf oc "  	adcl	$%ld, %a\n" (camlint_of_coqint n) ireg res;
-      | Padcl_rr (a1,res) ->
+      | Padc_rr (res,a1) ->
 	 fprintf oc "  	adcl	%a, %a\n" ireg a1 ireg res;
-      | Paddl (a1,res) ->
-	 fprintf oc "	addl	%a, %a\n" ireg a1 ireg res;
-      | Paddl_mi (addr,n) ->
-	 fprintf oc "	addl	$%ld, %a\n" (camlint_of_coqint n) addressing addr
-      | Paddl_ri (res,n) ->
+      | Padd_ri (res,n) ->
 	  fprintf oc "	addl	$%ld, %a\n" (camlint_of_coqint n) ireg res
-      | Pbsfl (a1,res) ->
+      | Padd_rr (res,a1) ->
+	 fprintf oc "	addl	%a, %a\n" ireg a1 ireg res;
+      | Padd_mi (addr,n) ->
+	 fprintf oc "	addl	$%ld, %a\n" (camlint_of_coqint n) addressing addr
+      | Pbsf (res,a1) ->
 	 fprintf oc "	bsfl	%a, %a\n" ireg a1 ireg res
-      | Pbslr (a1,res) ->
+      | Pbsr (res,a1) ->
 	 fprintf oc "	bsrl	%a, %a\n" ireg a1 ireg res
       | Pbswap res ->
 	 fprintf oc "	bswap	%a\n" ireg res
+      | Pbswap16 res ->
+	 fprintf oc "	rolw	$8, %a\n" ireg16 res
       | Pcfi_adjust sz ->
 	 cfi_adjust oc (camlint_of_coqint sz)
-      | Pfmadd132 (a1,a2,res) ->
+      | Pfmadd132 (res,a1,a2) ->
 	 fprintf oc "	vfmadd132sd	%a, %a, %a\n" freg a1 freg a2 freg res
-      | Pfmadd213 (a1,a2,res) ->
+      | Pfmadd213 (res,a1,a2) ->
 	 fprintf oc "	vfmadd213sd	%a, %a, %a\n" freg a1 freg a2 freg res
-      | Pfmadd231 (a1,a2,res) ->
+      | Pfmadd231 (res,a1,a2) ->
 	 fprintf oc "	vfmadd231sd	%a, %a, %a\n" freg a1 freg a2 freg res
-      | Pfmsub132 (a1,a2,res) ->
+      | Pfmsub132 (res,a1,a2) ->
 	 fprintf oc "	vfmsub132sd	%a, %a, %a\n" freg a1 freg a2 freg res
-      | Pfmsub213 (a1,a2,res) ->
+      | Pfmsub213 (res,a1,a2) ->
 	 fprintf oc "	vfmsub213sd	%a, %a, %a\n" freg a1 freg a2 freg res
-      | Pfmsub231 (a1,a2,res) ->
+      | Pfmsub231 (res,a1,a2) ->
 	 fprintf oc "	vfmsub231sd	%a, %a, %a\n" freg a1 freg a2 freg res
-      | Pfnmadd132 (a1,a2,res) ->
+      | Pfnmadd132 (res,a1,a2) ->
 	 fprintf oc "	vfnmadd132sd	%a, %a, %a\n" freg a1 freg a2 freg res
-      | Pfnmadd213 (a1,a2,res) ->
+      | Pfnmadd213 (res,a1,a2) ->
 	 fprintf oc "	vfnmadd213sd	%a, %a, %a\n" freg a1 freg a2 freg res
-      | Pfnmadd231 (a1,a2,res) ->
+      | Pfnmadd231 (res,a1,a2) ->
 	 fprintf oc "	vfnmadd231sd	%a, %a, %a\n" freg a1 freg a2 freg res
-      | Pfnmsub132 (a1,a2,res) ->
+      | Pfnmsub132 (res,a1,a2) ->
 	 fprintf oc "	vfnmsub132sd	%a, %a, %a\n" freg a1 freg a2 freg res
-      | Pfnmsub213 (a1,a2,res) ->
+      | Pfnmsub213 (res,a1,a2) ->
 	 fprintf oc "	vfnmsub213sd	%a, %a, %a\n" freg a1 freg a2 freg res
-      | Pfnmsub231 (a1,a2,res) ->
+      | Pfnmsub231 (res,a1,a2) ->
 	 fprintf oc "	vfnmsub231sd	%a, %a, %a\n" freg a1 freg a2 freg res
-      | Pmaxsd (a1,res) ->
+      | Pmaxsd (res,a1) ->
 	 fprintf oc "	maxsd	%a, %a\n" freg a1 freg res
-      | Pminsd (a1,res) ->
+      | Pminsd (res,a1) ->
 	 fprintf oc "	minsd	%a, %a\n" freg a1 freg res
-      | Pmovb_rm (r1,a) ->
-	 fprintf oc "	movb	%a, %a\n" addressing a ireg8 r1
+      | Pmovb_rm (rd,a) ->
+	 fprintf oc "	movb	%a, %a\n" addressing a ireg8 rd
+      | Pmovq_mr(a, rs) ->
+          fprintf oc "	movq	%a, %a\n" freg rs addressing a
       | Pmovq_rm(rd, a) ->
           fprintf oc "	movq	%a, %a\n" addressing a freg rd
-      | Pmovq_mr(a, r1) ->
-          fprintf oc "	movq	%a, %a\n" freg r1 addressing a
       | Pmovsb ->
 	 fprintf oc "	movsb\n";
       | Pmovsw ->
 	 fprintf oc "	movsw\n";
-      | Pmovw_rm (r1, a) ->
-          fprintf oc "	movw	%a, %a\n" addressing a ireg16 r1
+      | Pmovw_rm (rd, a) ->
+          fprintf oc "	movw	%a, %a\n" addressing a ireg16 rd
       | Prep_movsl ->
 	 fprintf oc "	rep	movsl\n"
-      | Prolw_8 res ->
-	 fprintf oc "	rolw	$8, %a\n" ireg16 res
-      | Psbbl (a1,res) ->
+      | Psbb_rr (res,a1) ->
 	 fprintf oc "	sbbl	%a, %a\n" ireg a1 ireg res
-      | Psqrtsd (a1,res) ->
+      | Psqrtsd (res,a1) ->
 	 fprintf oc "	sqrtsd	%a, %a\n" freg a1 freg res
-      | Psubl_ri (res,n) ->
+      | Psub_ri (res,n) ->
 	  fprintf oc "	subl	$%ld, %a\n" (camlint_of_coqint n) ireg res;
-      | Pxchg (a1,a2) ->
-	 fprintf oc "	xchg	%a, %a\n" ireg8 a1 high_ireg8 a2;
+      (** Pseudo-instructions *)
       | Plabel(l) ->
           fprintf oc "%a:\n" label (transl_label l)
       | Pallocframe(sz, ofs_ra, ofs_link) 
