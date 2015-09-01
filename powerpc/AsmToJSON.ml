@@ -177,6 +177,8 @@ let p_instruction oc ic =
   | Pcrxor (cr1,cr2,cr3) -> fprintf oc "{\"Instruction Name\":\"Pcrxor\",\"Args\":[%a,%a,%a]}" p_crbit cr1 p_crbit cr2 p_crbit cr3
   | Pdcbf (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pdcbf\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
   | Pdcbi (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pdcbi\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
+  | Pdcbt (n,ir1) -> fprintf oc "{\"Instruction Name\":\"Pdcbt\",\"Args\":[%a,%a]}" p_int n p_ireg ir1
+  | Pdcbtst (n,ir1) -> fprintf oc "{\"Instruction Name\":\"Pdcbtst\",\"Args\":[%a,%a]}" p_int n p_ireg ir1
   | Pdivw (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pdivw\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pdivwu (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pdivwu\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Peieio -> fprintf oc "{\"Instruction Name\":\"Peieio,\"Args\":[]}"

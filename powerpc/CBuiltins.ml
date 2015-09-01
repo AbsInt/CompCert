@@ -94,6 +94,8 @@ let builtins = {
       (TVoid [],[TPtr(TVoid [], [])],false);
     "__builtin_icbi",
       (TVoid [],[TPtr(TVoid [], [])],false);
+    "__builtin_prefetch",
+      (TVoid [], [TPtr (TVoid [],[]);TInt (IInt, []);TInt (IInt,[])],false);
     (* Access to special registers *)
     "__builtin_get_spr",
       (TInt(IUInt, []), [TInt(IInt, [])], false);

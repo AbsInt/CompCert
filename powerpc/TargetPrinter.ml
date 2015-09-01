@@ -462,6 +462,10 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	dcbf	%a, %a\n" ireg r1 ireg r2
       | Pdcbi (r1,r2) ->
           fprintf oc "	dcbi	%a, %a\n" ireg r1 ireg r2
+      | Pdcbt (c,r1) ->
+          fprintf oc "	dcbt	%a, %a, %s\n" ireg GPR0  ireg r1 (Z.to_string c)
+      | Pdcbtst (c,r1) ->
+          fprintf oc "	dcbtst	%a, %a, %s\n"  ireg GPR0 ireg r1 (Z.to_string c)
       | Pdivw(r1, r2, r3) ->
           fprintf oc "	divw	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pdivwu(r1, r2, r3) ->

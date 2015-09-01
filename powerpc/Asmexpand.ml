@@ -428,6 +428,17 @@ let expand_builtin_inline name args res =
       emit (Pdcbi (GPR0,a1))
   | "__builtin_icbi", [BA(IR a1)],_ ->
       emit (Picbi(GPR0,a1))
+  | "__builtin_prefetch" , [BA (IR addr);BA_int rw; BA_int loc],_ ->
+      if not ((loc >= _0) && (loc < _4)) then
+          raise (Error "the last argument of __builtin_prefetch must be a constant between 0 and 3");
+      if Int.eq rw _0 then begin
+        emit (Pdcbt (loc,addr));
+      end else if Int.eq rw _1 then begin
+        emit (Pdcbtst (loc,addr));
+      end else
+        raise (Error "the second argument of __builtin_prefetch must be either 0 or 1")
+  | "__builtin_prefetch" ,_,_ ->
+      raise (Error "the second and third argument of __builtin_prefetch must be a constant")
   (* Special registers *)
   | "__builtin_get_spr", [BA_int n], BR(IR res) ->
       emit (Pmfspr(res, n))

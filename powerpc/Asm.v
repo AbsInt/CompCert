@@ -167,6 +167,8 @@ Inductive instruction : Type :=
   | Pcrxor: crbit -> crbit -> crbit -> instruction            (**r xor between condition bits *)
   | Pdcbf: ireg -> ireg -> instruction                        (**r data cache flush *)
   | Pdcbi: ireg -> ireg -> instruction                        (**r data cache invalidate *)
+  | Pdcbt: int -> ireg -> instruction                         (**r data cache block touch *)
+  | Pdcbtst: int -> ireg -> instruction                         (**r data cache block touch *)
   | Pdivw: ireg -> ireg -> ireg -> instruction                (**r signed division *)
   | Pdivwu: ireg -> ireg -> ireg -> instruction               (**r unsigned division *)
   | Peieio: instruction                                       (**r EIEIO barrier *)
@@ -870,6 +872,8 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pcrxor _ _ _
   | Pdcbf _ _
   | Pdcbi _ _
+  | Pdcbt _ _
+  | Pdcbtst _ _
   | Peieio
   | Pfctiw _ _
   | Pfctiwz _ _
