@@ -67,9 +67,8 @@ Definition instr_within_bounds (i: instruction) :=
   | Lload chunk addr args dst => mreg_within_bounds dst
   | Lcall sig ros => size_arguments sig <= bound_outgoing b
   | Lbuiltin ef args res =>
-      forall r, In r res \/ In r (destroyed_by_builtin ef) -> mreg_within_bounds r
-  | Lannot ef args =>
-      forall sl ofs ty, In (S sl ofs ty) (params_of_annot_args args) -> slot_within_bounds sl ofs ty
+       (forall r, In r (params_of_builtin_res res) \/ In r (destroyed_by_builtin ef) -> mreg_within_bounds r)
+    /\ (forall sl ofs ty, In (S sl ofs ty) (params_of_builtin_args args) -> slot_within_bounds sl ofs ty)
   | _ => True
   end.
 
@@ -101,8 +100,7 @@ Definition regs_of_instr (i: instruction) : list mreg :=
   | Lstore chunk addr args src => nil
   | Lcall sig ros => nil
   | Ltailcall sig ros => nil
-  | Lbuiltin ef args res => res ++ destroyed_by_builtin ef
-  | Lannot ef args => nil
+  | Lbuiltin ef args res => params_of_builtin_res res ++ destroyed_by_builtin ef
   | Llabel lbl => nil
   | Lgoto lbl => nil
   | Lcond cond args lbl => nil
@@ -121,7 +119,7 @@ Definition slots_of_instr (i: instruction) : list (slot * Z * typ) :=
   match i with
   | Lgetstack sl ofs ty r => (sl, ofs, ty) :: nil
   | Lsetstack r sl ofs ty => (sl, ofs, ty) :: nil
-  | Lannot ef args => slots_of_locs (params_of_annot_args args)
+  | Lbuiltin ef args res => slots_of_locs (params_of_builtin_args args)
   | _ => nil
   end.
 
@@ -351,8 +349,8 @@ Proof.
 (* call *)
   eapply size_arguments_bound; eauto.
 (* builtin *)
+  split; intros.
   apply H1. apply in_or_app; auto.
-(* annot *)
   apply H0. rewrite slots_of_locs_charact; auto. 
 Qed.
 

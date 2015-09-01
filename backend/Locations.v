@@ -377,6 +377,14 @@ Module Locmap.
     destruct vl; auto. destruct H. rewrite IHll; auto. apply gso; auto. apply Loc.diff_sym; auto.
   Qed.
 
+  Fixpoint setres (res: builtin_res mreg) (v: val) (m: t) : t :=
+    match res with
+    | BR r => set (R r) v m
+    | BR_none => m
+    | BR_splitlong hi lo => 
+        setres lo (Val.loword v) (setres hi (Val.hiword v) m)
+    end.
+
 End Locmap.
 
 (** * Total ordering over locations *)

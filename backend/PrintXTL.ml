@@ -101,10 +101,9 @@ let print_instruction pp succ = function
       fprintf pp "tailcall %a(%a)" ros fn vars args
   | Xbuiltin(ef, args, res) ->
       fprintf pp "%a = %s(%a)"
-        vars res (name_of_external ef) vars args
-  | Xannot(ef, args) ->
-      fprintf pp "%s(%a)"
-        (name_of_external ef) (print_annot_args var) args
+        (print_builtin_res var) res
+        (name_of_external ef)
+        (print_builtin_args var) args
   | Xbranch s ->
       print_succ pp s succ
   | Xcond(cond, args, s1, s2) ->

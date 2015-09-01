@@ -243,6 +243,8 @@ let p_instruction oc ic =
   | Pmr (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pmr\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
   | Pmtctr ir -> fprintf oc "{\"Instruction Name\":\"Pmtctr\",\"Args\":[%a]}" p_ireg ir
   | Pmtlr ir -> fprintf oc "{\"Instruction Name\":\"Pmtlr\",\"Args\":[%a]}" p_ireg ir
+  | Pmfspr(ir, n) -> fprintf oc "{\"Instruction Name\":\"Pmfspr\",\"Args\":[%a,%a]}" p_ireg ir p_int n
+  | Pmtspr(n, ir) -> fprintf oc "{\"Instruction Name\":\"Pmtspr\",\"Args\":[%a,%a]}" p_int n p_ireg ir
   | Pmulli (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Pmulli\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Pmullw (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pmulw\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pmulhw (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pmulhw\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
@@ -289,7 +291,9 @@ let p_instruction oc ic =
   | Pxori (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Pxori\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Pxoris (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Pxoris\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Plabel l -> fprintf oc "{\"Instruction Name\":\"Plabel\",\"Args\":[%a]}" p_label l
-  | Pbuiltin (ef,args1,args2) ->
+  | Pbuiltin (ef,args1,args2) -> ()
+(* FIXME *)
+(*
       begin match ef with
       | EF_inline_asm (i,s,il) ->
           fprintf oc "{\"Instruction Name\":\"Inline_asm\",\"Args\":[%a%a%a%a]}" p_atom_constant i  (p_list_cont p_char_list) il
@@ -297,7 +301,8 @@ let p_instruction oc ic =
       | _ -> (* Should all be folded away *)
           assert false
       end
-  | Pannot _  (* We do not check the annotations *)
+*)
+(* END FIXME *)
   | Pcfi_adjust _  (* Only debug relevant *)
   | Pcfi_rel_offset _ ->  () (* Only debug relevant *)
 
@@ -329,7 +334,7 @@ let p_fundef oc (name,f) =
   let alignment = atom_alignof name
   and inline = atom_is_inline name
   and static = atom_is_static name
-  and instr = List.filter (function Pannot _ | Pcfi_adjust _ | Pcfi_rel_offset _ -> false | _ -> true) f.fn_code in
+  and instr = List.filter (function Pcfi_adjust _ | Pcfi_rel_offset _ -> false | _ -> true) f.fn_code in
   let c_section,l_section,j_section = match (atom_sections name) with [a;b;c] -> a,b,c | _ -> assert false in
   fprintf oc "{\"Fun Name\":%a,\n\"Fun Storage Class\":%a,\n\"Fun Alignment\":%a,\n\"Fun Section Code\":%a,\"Fun Section Literals\":%a,\"Fun Section Jumptable\":%a,\n\"Fun Inline\":%B,\n\"Fun Code\":%a}\n"
     p_atom name  p_storage static p_int_opt alignment  

@@ -70,41 +70,54 @@ Definition is_dead (v: nval) :=
 Definition is_int_zero (v: nval) :=
   match v with I n => Int.eq n Int.zero | _ => false end.
 
-Fixpoint transfer_annot_arg (na: NA.t) (a: annot_arg reg) : NA.t :=
+Fixpoint transfer_builtin_arg (nv: nval) (na: NA.t) (a: builtin_arg reg) : NA.t :=
   let (ne, nm) := na in
   match a with
-  | AA_base r => (add_need_all r ne, nm)
-  | AA_int _ | AA_long _ | AA_float _ | AA_single _
-  | AA_addrstack _ | AA_addrglobal _ _ => (ne, nm)
-  | AA_loadstack chunk ofs => (ne, nmem_add nm (Stk ofs) (size_chunk chunk))
-  | AA_loadglobal chunk id ofs => (ne, nmem_add nm (Gl id ofs) (size_chunk chunk))
-  | AA_longofwords hi lo => transfer_annot_arg (transfer_annot_arg na hi) lo
+  | BA r => (add_need r nv ne, nm)
+  | BA_int _ | BA_long _ | BA_float _ | BA_single _
+  | BA_addrstack _ | BA_addrglobal _ _ => (ne, nm)
+  | BA_loadstack chunk ofs => (ne, nmem_add nm (Stk ofs) (size_chunk chunk))
+  | BA_loadglobal chunk id ofs => (ne, nmem_add nm (Gl id ofs) (size_chunk chunk))
+  | BA_splitlong hi lo =>
+      transfer_builtin_arg All (transfer_builtin_arg All na hi) lo
   end.
 
-Function transfer_builtin (app: VA.t) (ef: external_function) (args: list reg) (res: reg)
+Definition transfer_builtin_args (na: NA.t) (al: list (builtin_arg reg)) : NA.t :=
+  List.fold_left (transfer_builtin_arg All) al na.
+
+Definition kill_builtin_res (res: builtin_res reg) (ne: NE.t) : NE.t :=
+  match res with
+  | BR r => kill r ne
+  | _    => ne
+  end.
+
+Function transfer_builtin (app: VA.t) (ef: external_function)
+                          (args: list (builtin_arg reg)) (res: builtin_res reg)
                           (ne: NE.t) (nm: nmem) : NA.t :=
   match ef, args with
   | EF_vload chunk, a1::nil =>
-      (add_needs_all args (kill res ne),
-       nmem_add nm (aaddr app a1) (size_chunk chunk))
-  | EF_vload_global chunk id ofs, nil =>
-      (add_needs_all args (kill res ne),
-       nmem_add nm (Gl id ofs) (size_chunk chunk))
+      transfer_builtin_arg All
+        (kill_builtin_res res ne,
+         nmem_add nm (aaddr_arg app a1) (size_chunk chunk))
+        a1
   | EF_vstore chunk, a1::a2::nil =>
-      (add_need_all a1 (add_need a2 (store_argument chunk) (kill res ne)), nm)
-  | EF_vstore_global chunk id ofs, a1::nil =>
-      (add_need a1 (store_argument chunk) (kill res ne), nm)
+      transfer_builtin_arg All
+          (transfer_builtin_arg (store_argument chunk)
+                                (kill_builtin_res res ne, nm) a2)
+          a1
   | EF_memcpy sz al, dst::src::nil =>
-      if nmem_contains nm (aaddr app dst) sz then
-       (add_needs_all args (kill res ne),
-        nmem_add (nmem_remove nm (aaddr app dst) sz) (aaddr app src) sz)
+      if nmem_contains nm (aaddr_arg app dst) sz then
+        transfer_builtin_args
+           (kill_builtin_res res ne,
+            nmem_add (nmem_remove nm (aaddr_arg app dst) sz) (aaddr_arg app src) sz)
+           args
       else (ne, nm)
-  | EF_annot txt targs, _ =>
-      (add_needs_all args (kill res ne), nm)
-  | EF_annot_val txt targ, _ =>
-      (add_needs_all args (kill res ne), nm)
+  | (EF_annot _ _ | EF_annot_val _ _), _ =>
+      transfer_builtin_args (kill_builtin_res res ne, nm) args
+  | EF_debug _ _ _, _ =>
+      (kill_builtin_res res ne, nm)
   | _, _ =>
-      (add_needs_all args (kill res ne), nmem_all) 
+      transfer_builtin_args (kill_builtin_res res ne, nmem_all) args
   end.
 
 Definition transfer (f: function) (approx: PMap.t VA.t)
@@ -139,8 +152,6 @@ Definition transfer (f: function) (approx: PMap.t VA.t)
        nmem_dead_stack f.(fn_stacksize))
   | Some(Ibuiltin ef args res s) =>
       transfer_builtin approx!!pc ef args res ne nm
-  | Some(Iannot ef args s) =>
-      List.fold_left transfer_annot_arg args after
   | Some(Icond cond args s1 s2) =>
       (add_needs args (needs_of_condition cond) ne, nm)
   | Some(Ijumptable arg tbl) =>
@@ -187,7 +198,7 @@ Definition transf_instr (approx: PMap.t VA.t) (an: PMap.t NA.t)
       then instr
       else Inop s
   | Ibuiltin (EF_memcpy sz al) (dst :: src :: nil) res s =>
-      if nmem_contains (snd an!!pc) (aaddr approx!!pc dst) sz
+      if nmem_contains (snd an!!pc) (aaddr_arg approx!!pc dst) sz
       then instr
       else Inop s
   | _ =>

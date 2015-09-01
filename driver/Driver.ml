@@ -179,9 +179,11 @@ let compile_c_ast sourcename csyntax ofile debug =
   set_dest PrintMach.destination option_dmach ".mach";
   (* Convert to Asm *)
   let asm =
-    match Compiler.transf_c_program csyntax with
+    match Compiler.apply_partial
+               (Compiler.transf_c_program csyntax)
+               Asmexpand.expand_program with
     | Errors.OK asm ->
-        Asmexpand.expand_program asm
+        asm
     | Errors.Error msg ->
         eprintf "%s: %a" sourcename print_error msg;
         exit 2 in

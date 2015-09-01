@@ -228,6 +228,12 @@ Definition set_unknown (n: numbering) (rd: reg) :=
      num_reg  := PTree.remove rd n.(num_reg);
      num_val  := forget_reg n rd |}.
 
+Definition set_res_unknown (n: numbering) (res: builtin_res reg) :=
+  match res with
+  | BR r => set_unknown n r
+  | _    => n
+  end.
+
 (** [kill_equations pred n] remove all equations satisfying predicate [pred]. *)
 
 Fixpoint kill_eqs (pred: rhs -> bool) (eqs: list equation) : list equation :=
@@ -307,16 +313,15 @@ Definition add_store_result (app: VA.t) (n: numbering) (chunk: memory_chunk) (ad
        num_val  := n2.(num_val) |}
   else n.
 
-(** [kill_loads_after_storebyte app n dst sz] removes all equations
+(** [kill_loads_after_storebyte n dst sz] removes all equations
   involving loads that could be invalidated by a store of [sz] bytes
   starting at address [dst]. Loads that are disjoint from this
   store-bytes are preserved.  Equations involving memory-dependent
   operators are also removed. *)
 
 Definition kill_loads_after_storebytes
-             (app: VA.t) (n: numbering) (dst: reg) (sz: Z) :=
-  let p := aaddr app dst in
-  kill_equations (filter_after_store app n p sz) n.
+             (app: VA.t) (n: numbering) (dst: aptr) (sz: Z) :=
+  kill_equations (filter_after_store app n dst sz) n.
 
 (** [add_memcpy app n1 n2 rsrc rdst sz] adds equations to [n2] that 
   represent the effect of a [memcpy] block copy operation of [sz] bytes
@@ -355,8 +360,8 @@ Fixpoint add_memcpy_eqs (src sz delta: Z) (eqs1 eqs2: list equation) :=
       end
   end.
 
-Definition add_memcpy (app: VA.t) (n1 n2: numbering) (rsrc rdst: reg) (sz: Z) :=
-  match aaddr app rsrc, aaddr app rdst with
+Definition add_memcpy (n1 n2: numbering) (asrc adst: aptr) (sz: Z) :=
+  match asrc, adst with
   | Stk src, Stk dst =>
       {| num_next := n2.(num_next);
          num_eqs  := add_memcpy_eqs (Int.unsigned src) sz
@@ -478,22 +483,22 @@ Definition transfer (f: function) (approx: PMap.t VA.t) (pc: node) (before: numb
           match ef with
           | EF_external _ _ | EF_malloc | EF_free | EF_inline_asm _ _ _ =>
               empty_numbering
-          | EF_builtin _ _ | EF_vstore _ | EF_vstore_global _ _ _ =>
-              set_unknown (kill_all_loads before) res
+          | EF_builtin _ _ | EF_vstore _ =>
+              set_res_unknown (kill_all_loads before) res
           | EF_memcpy sz al =>
               match args with
-              | rdst :: rsrc :: nil =>
+              | dst :: src :: nil =>
                   let app := approx!!pc in
-                  let n := kill_loads_after_storebytes app before rdst sz in
-                  set_unknown (add_memcpy app before n rsrc rdst sz) res
+                  let adst := aaddr_arg app dst in
+                  let asrc := aaddr_arg app src in
+                  let n := kill_loads_after_storebytes app before adst sz in
+                  set_res_unknown (add_memcpy before n asrc adst sz) res
               | _ =>
                   empty_numbering
               end
-          | EF_vload _ | EF_vload_global _ _ _ | EF_annot _ _ | EF_annot_val _ _ =>
-              set_unknown before res
+          | EF_vload _ | EF_annot _ _ | EF_annot_val _ _ | EF_debug _ _ _ =>
+              set_res_unknown before res
           end
-      | Iannot ef args s =>
-          before
       | Icond cond args ifso ifnot =>
           before
       | Ijumptable arg tbl =>

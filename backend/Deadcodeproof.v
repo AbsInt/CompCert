@@ -262,6 +262,16 @@ Proof.
   simpl. eapply ma_nextblock; eauto.
 Qed.
 
+Lemma magree_valid_access:
+  forall m1 m2 (P: locset) chunk b ofs p,
+  magree m1 m2 P ->
+  Mem.valid_access m1 chunk b ofs p ->
+  Mem.valid_access m2 chunk b ofs p.
+Proof.
+  intros. destruct H0; split; auto. 
+  red; intros. eapply ma_perm; eauto.
+Qed. 
+
 (** * Properties of the need environment *)
 
 Lemma add_need_all_eagree:
@@ -547,33 +557,43 @@ Proof.
   eapply magree_monotone; eauto. intros; apply B; auto.  
 Qed.
 
-(** Annotation arguments *)
+(** Builtin arguments and results *)
 
-Lemma transfer_annot_arg_sound:
+Lemma eagree_set_res:
+  forall e1 e2 v1 v2 res ne,
+  Val.lessdef v1 v2 ->
+  eagree e1 e2 (kill_builtin_res res ne) ->
+  eagree (regmap_setres res v1 e1) (regmap_setres res v2 e2) ne.
+Proof.
+  intros. destruct res; simpl in *; auto. 
+  apply eagree_update; eauto. apply vagree_lessdef; auto.
+Qed.
+
+Lemma transfer_builtin_arg_sound:
   forall bc e e' sp m m' a v,
-  eval_annot_arg ge (fun r => e#r) (Vptr sp Int.zero) m a v ->
-  forall ne1 nm1 ne2 nm2,
-  transfer_annot_arg (ne1, nm1) a = (ne2, nm2) ->
+  eval_builtin_arg ge (fun r => e#r) (Vptr sp Int.zero) m a v ->
+  forall nv ne1 nm1 ne2 nm2,
+  transfer_builtin_arg nv (ne1, nm1) a = (ne2, nm2) ->
   eagree e e' ne2 ->
   magree m m' (nlive ge sp nm2) ->
   genv_match bc ge ->
   bc sp = BCstack ->
   exists v',
-     eval_annot_arg ge (fun r => e'#r) (Vptr sp Int.zero) m' a  v'
-  /\ Val.lessdef v v'
+     eval_builtin_arg ge (fun r => e'#r) (Vptr sp Int.zero) m' a  v'
+  /\ vagree v v' nv
   /\ eagree e e' ne1
   /\ magree m m' (nlive ge sp nm1).
 Proof.
   induction 1; simpl; intros until nm2; intros TR EA MA GM SPM; inv TR.
 - exists e'#x; intuition auto. constructor. eauto 2 with na. eauto 2 with na.
-- exists (Vint n); intuition auto. constructor.
-- exists (Vlong n); intuition auto. constructor.
-- exists (Vfloat n); intuition auto. constructor.
-- exists (Vsingle n); intuition auto. constructor.
+- exists (Vint n); intuition auto. constructor. apply vagree_same.
+- exists (Vlong n); intuition auto. constructor. apply vagree_same.
+- exists (Vfloat n); intuition auto. constructor. apply vagree_same.
+- exists (Vsingle n); intuition auto. constructor. apply vagree_same.
 - simpl in H. exploit magree_load; eauto. 
   intros. eapply nlive_add; eauto with va. rewrite Int.add_zero_l in H0; auto.
   intros (v' & A & B).
-  exists v'; intuition auto. constructor; auto.
+  exists v'; intuition auto. constructor; auto. apply vagree_lessdef; auto.
   eapply magree_monotone; eauto. intros; eapply incl_nmem_add; eauto. 
 - exists (Vptr sp (Int.add Int.zero ofs)); intuition auto with na. constructor. 
 - unfold Senv.symbol_address in H; simpl in H. 
@@ -583,38 +603,78 @@ Proof.
   intros (v' & A & B).
   exists v'; intuition auto.
   constructor. simpl. unfold Senv.symbol_address; simpl; rewrite FS; auto. 
+  apply vagree_lessdef; auto.
   eapply magree_monotone; eauto. intros; eapply incl_nmem_add; eauto.
 - exists (Senv.symbol_address ge id ofs); intuition auto with na. constructor.
-- destruct (transfer_annot_arg (ne1, nm1) hi) as [ne' nm'] eqn:TR.
-  exploit IHeval_annot_arg2; eauto. intros (vlo' & A & B & C & D).
-  exploit IHeval_annot_arg1; eauto. intros (vhi' & P & Q & R & S).
+- destruct (transfer_builtin_arg All (ne1, nm1) hi) as [ne' nm'] eqn:TR.
+  exploit IHeval_builtin_arg2; eauto. intros (vlo' & A & B & C & D).
+  exploit IHeval_builtin_arg1; eauto. intros (vhi' & P & Q & R & S).
   exists (Val.longofwords vhi' vlo'); intuition auto.
   constructor; auto.
-  apply Val.longofwords_lessdef; auto.
+  apply vagree_lessdef.
+  apply Val.longofwords_lessdef; apply lessdef_vagree; auto.
 Qed.
 
-Lemma transfer_annot_args_sound:
+Lemma transfer_builtin_args_sound:
   forall e sp m e' m' bc al vl,
-  eval_annot_args ge (fun r => e#r) (Vptr sp Int.zero) m al vl ->
+  eval_builtin_args ge (fun r => e#r) (Vptr sp Int.zero) m al vl ->
   forall ne1 nm1 ne2 nm2,
-  List.fold_left transfer_annot_arg al (ne1, nm1) = (ne2, nm2) ->
+  transfer_builtin_args (ne1, nm1) al = (ne2, nm2) ->
   eagree e e' ne2 ->
   magree m m' (nlive ge sp nm2) ->
   genv_match bc ge ->
   bc sp = BCstack ->
   exists vl',
-     eval_annot_args ge (fun r => e'#r) (Vptr sp Int.zero) m' al vl'
+     eval_builtin_args ge (fun r => e'#r) (Vptr sp Int.zero) m' al vl'
   /\ Val.lessdef_list vl vl'
   /\ eagree e e' ne1
   /\ magree m m' (nlive ge sp nm1).
 Proof.
-Local Opaque transfer_annot_arg.
+Local Opaque transfer_builtin_arg.
   induction 1; simpl; intros.
 - inv H. exists (@nil val); intuition auto. constructor.
-- destruct (transfer_annot_arg (ne1, nm1) a1) as [ne' nm'] eqn:TR.
+- destruct (transfer_builtin_arg All (ne1, nm1) a1) as [ne' nm'] eqn:TR.
   exploit IHlist_forall2; eauto. intros (vs' & A1 & B1 & C1 & D1).
-  exploit transfer_annot_arg_sound; eauto. intros (v1' & A2 & B2 & C2 & D2). 
+  exploit transfer_builtin_arg_sound; eauto. intros (v1' & A2 & B2 & C2 & D2). 
   exists (v1' :: vs'); intuition auto. constructor; auto. 
+Qed.
+
+Lemma can_eval_builtin_arg:
+  forall sp e m e' m' P,
+  magree m m' P ->
+  forall a v,
+  eval_builtin_arg ge (fun r => e#r) (Vptr sp Int.zero) m a v ->
+  exists v', eval_builtin_arg tge (fun r => e'#r) (Vptr sp Int.zero) m' a v'.
+Proof.
+  intros until P; intros MA.
+  assert (LD: forall chunk addr v,
+              Mem.loadv chunk m addr = Some v ->
+              exists v', Mem.loadv chunk m' addr = Some v').
+  {
+    intros. destruct addr; simpl in H; try discriminate. 
+    eapply Mem.valid_access_load. eapply magree_valid_access; eauto. 
+    eapply Mem.load_valid_access; eauto. }
+  induction 1; try (econstructor; now constructor).
+- exploit LD; eauto. intros (v' & A). exists v'; constructor; auto.
+- exploit LD; eauto. intros (v' & A). exists v'; constructor.
+  unfold Senv.symbol_address, Senv.find_symbol. rewrite symbols_preserved. assumption. 
+- destruct IHeval_builtin_arg1 as (v1' & A1).
+  destruct IHeval_builtin_arg2 as (v2' & A2).
+  exists (Val.longofwords v1' v2'); constructor; auto.
+Qed.
+
+Lemma can_eval_builtin_args:
+  forall sp e m e' m' P,
+  magree m m' P ->
+  forall al vl,
+  eval_builtin_args ge (fun r => e#r) (Vptr sp Int.zero) m al vl ->
+  exists vl', eval_builtin_args tge (fun r => e'#r) (Vptr sp Int.zero) m' al vl'.
+Proof.
+  induction 2.
+- exists (@nil val); constructor.
+- exploit can_eval_builtin_arg; eauto. intros (v' & A).
+  destruct IHlist_forall2 as (vl' & B).
+  exists (v' :: vl'); constructor; eauto.
 Qed.
 
 (** Properties of volatile memory accesses *)
@@ -821,167 +881,165 @@ Ltac UseTransfer :=
   functional induction (transfer_builtin (vanalyze rm f)#pc ef args res ne nm);
   simpl in *; intros.
 + (* volatile load *)
-  assert (LD: Val.lessdef rs#a1 te#a1) by eauto 2 with na.
-  inv H0. rewrite <- H1 in LD; inv LD.
-  assert (X: exists tv, volatile_load ge chunk tm b ofs t tv /\ Val.lessdef v tv).
+  inv H0. inv H6. rename b1 into v1.
+  destruct (transfer_builtin_arg All
+              (kill_builtin_res res ne,
+              nmem_add nm (aaddr_arg (vanalyze rm f) # pc a1)
+                (size_chunk chunk)) a1) as (ne1, nm1) eqn: TR.
+  inversion SS; subst. exploit transfer_builtin_arg_sound; eauto. 
+  intros (tv1 & A & B & C & D). 
+  inv H1. simpl in B. inv B. 
+  assert (X: exists tvres, volatile_load ge chunk tm b ofs t tvres /\ Val.lessdef vres tvres).
   {
     inv H2. 
-  * exists (Val.load_result chunk v0); split; auto. constructor; auto. 
+  * exists (Val.load_result chunk v); split; auto. constructor; auto. 
   * exploit magree_load; eauto. 
-    exploit aaddr_sound; eauto. intros (bc & A & B & C).
+    exploit aaddr_arg_sound_1; eauto. rewrite <- AN. intros. 
     intros. eapply nlive_add; eassumption. 
     intros (tv & P & Q). 
     exists tv; split; auto. constructor; auto. 
   }
-  destruct X as (tv & A & B).
+  destruct X as (tvres & P & Q).
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
+  apply eval_builtin_args_preserved with (ge1 := ge). exact symbols_preserved.
+  constructor. eauto. constructor.
   eapply external_call_symbols_preserved.
-  simpl. rewrite <- H4. constructor. eauto.   
+  constructor. simpl. eauto. 
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_update; eauto 2 with na.
-  eapply magree_monotone; eauto. intros. apply incl_nmem_add; auto. 
-+ (* volatile global load *)
-  inv H0. 
-  assert (X: exists tv, volatile_load ge chunk tm b ofs t tv /\ Val.lessdef v tv).
-  {
-    inv H2. 
-  * exists (Val.load_result chunk v0); split; auto. constructor; auto. 
-  * exploit magree_load; eauto.
-    inv SS. intros. eapply nlive_add; eauto. constructor. apply GE. auto. 
-    intros (tv & P & Q). 
-    exists tv; split; auto. constructor; auto. 
-  }
-  destruct X as (tv & A & B).
-  econstructor; split.
-  eapply exec_Ibuiltin; eauto.
-  eapply external_call_symbols_preserved.
-  simpl. econstructor; eauto.   
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
-  eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_update; eauto 2 with na.
+  apply eagree_set_res; auto.
   eapply magree_monotone; eauto. intros. apply incl_nmem_add; auto. 
 + (* volatile store *)
-  exploit transf_volatile_store. eauto. 
-  instantiate (1 := te#a1). eauto 3 with na.
-  instantiate (1 := te#a2). eauto 3 with na. 
-  eauto.
-  intros (EQ & tm' & A & B). subst v. 
+  inv H0. inv H6. inv H7. rename b1 into v1. rename b0 into v2.
+  destruct (transfer_builtin_arg (store_argument chunk)
+              (kill_builtin_res res ne, nm) a2) as (ne2, nm2) eqn: TR2.
+  destruct (transfer_builtin_arg All (ne2, nm2) a1) as (ne1, nm1) eqn: TR1.
+  inversion SS; subst. 
+  exploit transfer_builtin_arg_sound. eexact H4. eauto. eauto. eauto. eauto. eauto.
+  intros (tv1 & A1 & B1 & C1 & D1).
+  exploit transfer_builtin_arg_sound. eexact H3. eauto. eauto. eauto. eauto. eauto.
+  intros (tv2 & A2 & B2 & C2 & D2).
+  exploit transf_volatile_store; eauto.
+  intros (EQ & tm' & P & Q). subst vres. 
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
+  apply eval_builtin_args_preserved with (ge1 := ge). exact symbols_preserved.
+  constructor. eauto. constructor. eauto. constructor.
   eapply external_call_symbols_preserved. simpl; eauto. 
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_update; eauto 3 with na.
-+ (* volatile global store *)
-  rewrite volatile_store_global_charact in H0. destruct H0 as (b & P & Q).
-  exploit transf_volatile_store. eauto. eauto. 
-  instantiate (1 := te#a1). eauto 2 with na. 
-  eauto.
-  intros (EQ & tm' & A & B). subst v. 
-  econstructor; split.
-  eapply exec_Ibuiltin; eauto.
-  eapply external_call_symbols_preserved. simpl. 
-  rewrite volatile_store_global_charact. exists b; split; eauto. 
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
-  eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_update; eauto 2 with na.
+  apply eagree_set_res; auto. 
 + (* memcpy *)
   rewrite e1 in TI.
-  inv H0. 
-  set (adst := aaddr (vanalyze rm f) # pc dst) in *.
-  set (asrc := aaddr (vanalyze rm f) # pc src) in *.
-  exploit magree_loadbytes. eauto. eauto. 
-  exploit aaddr_sound. eauto. symmetry; eexact H2.
-  intros (bc & A & B & C).
-  intros. eapply nlive_add; eassumption. 
+  inv H0. inv H6. inv H7. rename b1 into v1. rename b0 into v2.
+  set (adst := aaddr_arg (vanalyze rm f) # pc dst) in *.
+  set (asrc := aaddr_arg (vanalyze rm f) # pc src) in *.
+  destruct (transfer_builtin_arg All
+              (kill_builtin_res res ne,
+               nmem_add (nmem_remove nm adst sz) asrc sz) dst)
+           as (ne2, nm2) eqn: TR2.
+  destruct (transfer_builtin_arg All (ne2, nm2) src) as (ne1, nm1) eqn: TR1.
+  inversion SS; subst.
+  exploit transfer_builtin_arg_sound. eexact H3. eauto. eauto. eauto. eauto. eauto.
+  intros (tv1 & A1 & B1 & C1 & D1).
+  exploit transfer_builtin_arg_sound. eexact H4. eauto. eauto. eauto. eauto. eauto.
+  intros (tv2 & A2 & B2 & C2 & D2).
+  inv H1.
+  exploit magree_loadbytes. eauto. eauto.
+  intros. eapply nlive_add; eauto. 
+  unfold asrc, vanalyze, rm; rewrite AN; eapply aaddr_arg_sound_1; eauto.
   intros (tbytes & P & Q).
   exploit magree_storebytes_parallel.
-  eapply magree_monotone. eexact MEM. 
+  eapply magree_monotone. eexact D2. 
   instantiate (1 := nlive ge sp0 (nmem_remove nm adst sz)).
   intros. apply incl_nmem_add; auto.
   eauto. 
-  instantiate (1 := nlive ge sp0 nm). 
-  exploit aaddr_sound. eauto. symmetry; eexact H1.
-  intros (bc & A & B & C).
-  intros. eapply nlive_remove; eauto.
-  erewrite Mem.loadbytes_length in H10 by eauto. 
-  rewrite nat_of_Z_eq in H10 by omega. auto.
+  instantiate (1 := nlive ge sp0 nm).
+  intros. eapply nlive_remove; eauto. 
+  unfold adst, vanalyze, rm; rewrite AN; eapply aaddr_arg_sound_1; eauto.
+  erewrite Mem.loadbytes_length in H1 by eauto. 
+  rewrite nat_of_Z_eq in H1 by omega. auto.
   eauto. 
   intros (tm' & A & B).
-  assert (LD1: Val.lessdef rs#src te#src) by eauto 3 with na. rewrite <- H2 in LD1.
-  assert (LD2: Val.lessdef rs#dst te#dst) by eauto 3 with na. rewrite <- H1 in LD2.
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
+  apply eval_builtin_args_preserved with (ge1 := ge). exact symbols_preserved.
+  constructor. eauto. constructor. eauto. constructor.
   eapply external_call_symbols_preserved. simpl.
-  inv LD1. inv LD2. econstructor; eauto.  
+  simpl in B1; inv B1. simpl in B2; inv B2. econstructor; eauto.  
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_update; eauto 3 with na.
+  apply eagree_set_res; auto.
 + (* memcpy eliminated *)
-  rewrite e1 in TI. inv H0.
-  set (adst := aaddr (vanalyze rm f) # pc dst) in *.
-  set (asrc := aaddr (vanalyze rm f) # pc src) in *.
+  rewrite e1 in TI.
+  inv H0. inv H6. inv H7. rename b1 into v1. rename b0 into v2.
+  set (adst := aaddr_arg (vanalyze rm f) # pc dst) in *.
+  set (asrc := aaddr_arg (vanalyze rm f) # pc src) in *.
+  inv H1.
   econstructor; split.
   eapply exec_Inop; eauto. 
   eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_set_undef; auto.
+  destruct res; auto. apply eagree_set_undef; auto.
   eapply magree_storebytes_left; eauto.
-  exploit aaddr_sound. eauto. symmetry; eexact H1.
+  exploit aaddr_arg_sound. eauto. eauto. 
   intros (bc & A & B & C).
   intros. eapply nlive_contains; eauto.
   erewrite Mem.loadbytes_length in H0 by eauto. 
   rewrite nat_of_Z_eq in H0 by omega. auto.
 + (* annot *)
-  inv H0. 
+  destruct (transfer_builtin_args (kill_builtin_res res ne, nm) _x1) as (ne1, nm1) eqn:TR.
+  inversion SS; subst.
+  exploit transfer_builtin_args_sound; eauto. intros (tvl & A & B & C & D).
+  inv H1.
   econstructor; split. 
-  eapply exec_Ibuiltin; eauto. 
+  eapply exec_Ibuiltin; eauto.
+  apply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
   eapply external_call_symbols_preserved. simpl; constructor. 
   eapply eventval_list_match_lessdef; eauto 2 with na.
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_update; eauto 2 with na.
-+ (* annot val *)  
-  inv H0. destruct _x; inv H1. destruct _x; inv H4.
+  apply eagree_set_res; auto.
++ (* annot val *)
+  destruct (transfer_builtin_args (kill_builtin_res res ne, nm) _x1) as (ne1, nm1) eqn:TR.
+  inversion SS; subst.
+  exploit transfer_builtin_args_sound; eauto. intros (tvl & A & B & C & D).
+  inv H1. inv B. inv H6.
   econstructor; split. 
   eapply exec_Ibuiltin; eauto. 
+  apply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
   eapply external_call_symbols_preserved. simpl; constructor. 
   eapply eventval_match_lessdef; eauto 2 with na.
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_update; eauto 3 with na.
+  apply eagree_set_res; auto.
++ (* debug *)
+  inv H1.
+  exploit can_eval_builtin_args; eauto. intros (vargs' & A).
+  econstructor; split.
+  eapply exec_Ibuiltin; eauto. constructor.
+  eapply match_succ_states; eauto. simpl; auto.
+  apply eagree_set_res; auto.
 + (* all other builtins *)
   assert ((fn_code tf)!pc = Some(Ibuiltin _x _x0 res pc')).
   {
     destruct _x; auto. destruct _x0; auto. destruct _x0; auto. destruct _x0; auto. contradiction. 
   }
-  clear y TI. 
+  clear y TI.
+  destruct (transfer_builtin_args (kill_builtin_res res ne, nmem_all) _x0) as (ne1, nm1) eqn:TR.
+  inversion SS; subst.
+  exploit transfer_builtin_args_sound; eauto. intros (tvl & A & B & C & D).
   exploit external_call_mem_extends; eauto 2 with na. 
   eapply magree_extends; eauto. intros. apply nlive_all. 
-  intros (v' & tm' & A & B & C & D & E). 
+  intros (v' & tm' & P & Q & R & S & T). 
   econstructor; split.
-  eapply exec_Ibuiltin; eauto. 
+  eapply exec_Ibuiltin; eauto.
+  apply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
   eapply external_call_symbols_preserved. eauto.
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_update; eauto 3 with na.
+  apply eagree_set_res; auto.
   eapply mextends_agree; eauto. 
-
-- (* annot *)
-  TransfInstr; UseTransfer. 
-  destruct (fold_left transfer_annot_arg args (ne, nm)) as [ne1 nm1] eqn:TR; simpl in *.
-  inv SS. exploit transfer_annot_args_sound; eauto. intros (vargs' & A & B & C & D).
-  assert (EC: m' = m /\ external_call ef ge vargs' tm t Vundef tm).
-  { destruct ef; try contradiction. inv H2. split; auto. simpl. constructor. 
-    eapply eventval_list_match_lessdef; eauto. }
-  destruct EC as [EC1 EC2]; subst m'.
-  econstructor; split.
-  eapply exec_Iannot. eauto. auto. 
-  eapply eval_annot_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved with (ge1 := ge); eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
-  eapply match_succ_states; eauto. simpl; auto.
 
 - (* conditional *)
   TransfInstr; UseTransfer.

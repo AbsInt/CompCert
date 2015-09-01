@@ -70,13 +70,10 @@ Inductive instruction: Type :=
   | Itailcall: signature -> reg + ident -> list reg -> instruction
       (** [Itailcall sig fn args] performs a function invocation
           in tail-call position.  *)
-  | Ibuiltin: external_function -> list reg -> reg -> node -> instruction
+  | Ibuiltin: external_function -> list (builtin_arg reg) -> builtin_res reg -> node -> instruction
       (** [Ibuiltin ef args dest succ] calls the built-in function
           identified by [ef], giving it the values of [args] as arguments.
           It stores the return value in [dest] and branches to [succ]. *)
-  | Iannot: external_function -> list (annot_arg reg) -> node -> instruction
-      (** [Iannot ef args succ] is similar to [Ibuiltin] but specialized
-          to annotations. *)
   | Icond: condition -> list reg -> node -> node -> instruction
       (** [Icond cond args ifso ifnot] evaluates the boolean condition
           [cond] over the values of registers [args].  If the condition
@@ -253,19 +250,12 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State s f (Vptr stk Int.zero) pc rs m)
         E0 (Callstate s fd rs##args m')
   | exec_Ibuiltin:
-      forall s f sp pc rs m ef args res pc' t v m',
+      forall s f sp pc rs m ef args res pc' vargs t vres m',
       (fn_code f)!pc = Some(Ibuiltin ef args res pc') ->
-      external_call ef ge rs##args m t v m' ->
-      step (State s f sp pc rs m)
-         t (State s f sp pc' (rs#res <- v) m')
-  | exec_Iannot:
-      forall s f sp pc rs m ef args pc' vargs vres t m',
-      (fn_code f)!pc = Some(Iannot ef args pc') ->
-      match ef with EF_annot _ _ => True | _ => False end ->
-      eval_annot_args ge (fun r => rs#r) sp m args vargs ->
+      eval_builtin_args ge (fun r => rs#r) sp m args vargs ->
       external_call ef ge vargs m t vres m' ->
       step (State s f sp pc rs m)
-         t (State s f sp pc' rs m')
+         t (State s f sp pc' (regmap_setres res vres rs) m')
   | exec_Icond:
       forall s f sp pc rs m cond args ifso ifnot b pc',
       (fn_code f)!pc = Some(Icond cond args ifso ifnot) ->
@@ -367,14 +357,11 @@ Proof.
     intros. subst. inv H0. exists s1; auto.
   inversion H; subst; auto.
   exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
-  exists (State s0 f sp pc' (rs#res <- vres2) m2). eapply exec_Ibuiltin; eauto.
-  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
-  exists (State s0 f sp pc' rs m2). eapply exec_Iannot; eauto.
+  exists (State s0 f sp pc' (regmap_setres res vres2 rs) m2). eapply exec_Ibuiltin; eauto.
   exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
   exists (Returnstate s0 vres2 m2). econstructor; eauto.
 (* trace length *)
   red; intros; inv H; simpl; try omega.
-  eapply external_call_trace_length; eauto.
   eapply external_call_trace_length; eauto.
   eapply external_call_trace_length; eauto.
 Qed.
@@ -411,7 +398,6 @@ Definition successors_instr (i: instruction) : list node :=
   | Icall sig ros args res s => s :: nil
   | Itailcall sig ros args => nil
   | Ibuiltin ef args res s => s :: nil
-  | Iannot ef args s => s :: nil
   | Icond cond args ifso ifnot => ifso :: ifnot :: nil
   | Ijumptable arg tbl => tbl
   | Ireturn optarg => nil
@@ -432,8 +418,7 @@ Definition instr_uses (i: instruction) : list reg :=
   | Icall sig (inr id) args res s => args
   | Itailcall sig (inl r) args => r :: args
   | Itailcall sig (inr id) args => args
-  | Ibuiltin ef args res s => args
-  | Iannot ef args s => params_of_annot_args args
+  | Ibuiltin ef args res s => params_of_builtin_args args
   | Icond cond args ifso ifnot => args
   | Ijumptable arg tbl => arg :: nil
   | Ireturn None => nil
@@ -450,8 +435,8 @@ Definition instr_defs (i: instruction) : option reg :=
   | Istore chunk addr args src s => None
   | Icall sig ros args res s => Some res
   | Itailcall sig ros args => None
-  | Ibuiltin ef args res s => Some res
-  | Iannot ef args s => None
+  | Ibuiltin ef args res s =>
+      match res with BR r => Some r | _ => None end
   | Icond cond args ifso ifnot => None
   | Ijumptable arg tbl => None
   | Ireturn optarg => None
@@ -492,8 +477,9 @@ Definition max_reg_instr (m: positive) (pc: node) (i: instruction) :=
   | Icall sig (inr id) args res s => fold_left Pmax args (Pmax res m)
   | Itailcall sig (inl r) args => fold_left Pmax args (Pmax r m)
   | Itailcall sig (inr id) args => fold_left Pmax args m
-  | Ibuiltin ef args res s => fold_left Pmax args (Pmax res m)
-  | Iannot ef args s => fold_left Pmax (params_of_annot_args args) m
+  | Ibuiltin ef args res s =>
+      fold_left Pmax (params_of_builtin_args args)
+        (fold_left Pmax (params_of_builtin_res res) m)
   | Icond cond args ifso ifnot => fold_left Pmax args m
   | Ijumptable arg tbl => Pmax arg m
   | Ireturn None => m
@@ -513,7 +499,7 @@ Proof.
   { induction l; simpl; intros. 
     auto.
     apply IHl. xomega. }
-  destruct i; simpl; try (destruct s0); try (apply X); try xomega.
+  destruct i; simpl; try (destruct s0); repeat (apply X); try xomega.
   destruct o; xomega.
 Qed.
 
@@ -527,7 +513,7 @@ Proof.
 - apply X. xomega.
 - apply X. xomega.
 - destruct s0; apply X; xomega.
-- apply X. xomega.
+- destruct b; inv H1. apply X. simpl. xomega.
 Qed.
 
 Remark max_reg_instr_uses:

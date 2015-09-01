@@ -42,12 +42,6 @@ let mkef sg toks =
       EF_vload c
   | [EFT_tok "volatile"; EFT_tok "store"; EFT_chunk c] ->
       EF_vstore c
-  | [EFT_tok "volatile"; EFT_tok "load"; EFT_chunk c; 
-     EFT_tok "global"; EFT_string s; EFT_int n] ->
-      EF_vload_global(c, intern_string s, coqint_of_camlint n)
-  | [EFT_tok "volatile"; EFT_tok "store"; EFT_chunk c; 
-     EFT_tok "global"; EFT_string s; EFT_int n] ->
-      EF_vstore_global(c, intern_string s, coqint_of_camlint n)
   | [EFT_tok "malloc"] ->
       EF_malloc
   | [EFT_tok "free"] ->

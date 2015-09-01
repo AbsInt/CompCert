@@ -72,11 +72,9 @@ let print_instruction pp (pc, i) =
         ros fn regs args
   | Ibuiltin(ef, args, res, s) ->
       fprintf pp "%a = %s(%a)\n"
-        reg res (name_of_external ef) regs args;
-      print_succ pp s (pc - 1)
-  | Iannot(ef, args, s) ->
-      fprintf pp "%s(%a)\n"
-        (name_of_external ef) (print_annot_args reg) args;
+        (print_builtin_res reg) res
+        (name_of_external ef)
+        (print_builtin_args reg) args;
       print_succ pp s (pc - 1)
   | Icond(cond, args, s1, s2) ->
       fprintf pp "if (%a) goto %d else goto %d\n"

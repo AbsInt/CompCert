@@ -727,9 +727,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
       OK (loadind_int IR13 f.(fn_retaddr_ofs) IR14
            (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: Pbsymb symb sig :: k))
   | Mbuiltin ef args res =>
-      OK (Pbuiltin ef (map preg_of args) (map preg_of res) :: k)
-  | Mannot ef args =>
-      OK (Pannot ef (List.map (map_annot_arg preg_of) args) :: k)
+      OK (Pbuiltin ef (List.map (map_builtin_arg preg_of) args) (map_builtin_res preg_of res) :: k)
   | Mlabel lbl =>
       OK (Plabel lbl :: k)
   | Mgoto lbl =>

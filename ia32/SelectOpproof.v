@@ -898,12 +898,12 @@ Proof.
   exists (v :: nil); split. constructor; auto. constructor. subst; simpl. rewrite Int.add_zero; auto. 
 Qed.
 
-Theorem eval_annot_arg:
+Theorem eval_builtin_arg:
   forall a v,
   eval_expr ge sp e m nil a v ->
-  CminorSel.eval_annot_arg ge sp e m (annot_arg a) v.
+  CminorSel.eval_builtin_arg ge sp e m (builtin_arg a) v.
 Proof.
-  intros until v. unfold annot_arg; case (annot_arg_match a); intros; InvEval.
+  intros until v. unfold builtin_arg; case (builtin_arg_match a); intros; InvEval.
 - constructor.
 - constructor.
 - constructor. 

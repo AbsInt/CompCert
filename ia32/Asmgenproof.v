@@ -671,51 +671,31 @@ Opaque loadind.
   rewrite Pregmap.gss. unfold Genv.symbol_address. rewrite symbols_preserved. rewrite H. auto.
 
 - (* Mbuiltin *)
-  inv AT. monadInv H3. 
+  inv AT. monadInv H4. 
   exploit functions_transl; eauto. intro FN.
-  generalize (transf_function_no_overflow _ _ H2); intro NOOV.
-  exploit external_call_mem_extends'; eauto. eapply preg_vals; eauto.
+  generalize (transf_function_no_overflow _ _ H3); intro NOOV.
+  exploit builtin_args_match; eauto. intros [vargs' [P Q]]. 
+  exploit external_call_mem_extends; eauto.
   intros [vres' [m2' [A [B [C D]]]]].
   left. econstructor; split. apply plus_one. 
   eapply exec_step_builtin. eauto. eauto.
   eapply find_instr_tail; eauto.
-  eapply external_call_symbols_preserved'; eauto.
+  erewrite <- sp_val by eauto. 
+  eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
+  eapply external_call_symbols_preserved; eauto.
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eauto.
   econstructor; eauto.
   instantiate (2 := tf); instantiate (1 := x).
   unfold nextinstr_nf, nextinstr. rewrite Pregmap.gss.
-  rewrite undef_regs_other. rewrite set_pregs_other_2. rewrite undef_regs_other_2.
-  rewrite <- H0. simpl. econstructor; eauto.
+  rewrite undef_regs_other. rewrite set_res_other. rewrite undef_regs_other_2.
+  rewrite <- H1. simpl. econstructor; eauto.
   eapply code_tail_next_int; eauto.
-  rewrite preg_notin_charact. intros. auto with asmgen.
   rewrite preg_notin_charact. intros. auto with asmgen.
   auto with asmgen.
   simpl; intros. intuition congruence.
-  apply agree_nextinstr_nf. eapply agree_set_mregs; auto.
+  apply agree_nextinstr_nf. eapply agree_set_res; auto.
   eapply agree_undef_regs; eauto. intros; apply undef_regs_other_2; auto. 
-  congruence.
-
-- (* Mannot *)
-  inv AT. monadInv H4. 
-  exploit functions_transl; eauto. intro FN.
-  generalize (transf_function_no_overflow _ _ H3); intro NOOV.
-  exploit annot_args_match; eauto. intros [vargs' [P Q]]. 
-  exploit external_call_mem_extends; eauto.
-  intros [vres' [m2' [A [B [C D]]]]].
-  left. econstructor; split. apply plus_one. 
-  eapply exec_step_annot. eauto. eauto.
-  eapply find_instr_tail; eauto. eauto.
-  erewrite <- sp_val by eauto. 
-  eapply eval_annot_args_preserved with (ge1 := ge); eauto.
-  exact symbols_preserved.
-  eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
-  eapply match_states_intro with (ep := false); eauto with coqlib.
-  unfold nextinstr. rewrite Pregmap.gss. 
-  rewrite <- H1; simpl. econstructor; eauto.
-  eapply code_tail_next_int; eauto. 
-  apply agree_nextinstr. auto.
   congruence.
 
 - (* Mgoto *)

@@ -130,7 +130,7 @@ Fixpoint destroyed_by_clobber (cl: list string): list mreg :=
 
 Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
-  | EF_memcpy sz al => if zle sz 32 then F7 :: nil else R2 :: R3 :: R12 :: nil
+  | EF_memcpy sz al => R2 :: R3 :: R12 :: F7 :: nil
   | EF_inline_asm txt sg clob => destroyed_by_clobber clob
   | _ => nil
   end.
@@ -150,11 +150,7 @@ Definition mregs_for_operation (op: operation): list (option mreg) * option mreg
   end.
 
 Definition mregs_for_builtin (ef: external_function): list (option mreg) * list(option mreg) :=
-  match ef with
-  | EF_memcpy sz al =>
-      if zle sz 32 then (nil, nil) else (Some R3 :: Some R2 :: nil, nil)
-  | _ => (nil, nil)
-  end.
+  (nil, nil).
 
 Global Opaque
     destroyed_by_op destroyed_by_load destroyed_by_store
@@ -171,3 +167,15 @@ Definition two_address_op (op: operation) : bool :=
 
 Global Opaque two_address_op.
 
+(* Constraints on constant propagation for builtins *)
+
+Definition builtin_constraints (ef: external_function) :
+                                       list builtin_arg_constraint :=
+  match ef with
+  | EF_vload _ => OK_addrany :: nil
+  | EF_vstore _ => OK_addrany :: OK_default :: nil
+  | EF_memcpy _ _ => OK_addrstack :: OK_addrstack :: nil
+  | EF_annot txt targs => map (fun _ => OK_all) targs
+  | EF_debug kind txt targs => map (fun _ => OK_all) targs
+  | _ => nil
+  end.

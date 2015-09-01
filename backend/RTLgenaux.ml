@@ -12,6 +12,7 @@
 
 open Datatypes
 open Camlcoq
+open AST
 open Switch
 open CminorSel
 
@@ -48,6 +49,10 @@ and size_condexpr = function
   | CElet(a, c) ->
       size_expr a + size_condexpr c
 
+let size_exprlist al = List.fold_right (fun a s -> size_expr a + s) al 0
+
+let size_builtin_args al = size_exprlist (params_of_builtin_args al)
+
 let rec size_exitexpr = function
   | XEexit n -> 0
   | XEjumptable(arg, tbl) -> 2 + size_expr arg
@@ -72,8 +77,8 @@ let rec size_stmt = function
       3 + size_eos eos + size_exprs args + length_exprs args
   | Stailcall(sg, eos, args) ->
       3 + size_eos eos + size_exprs args + length_exprs args
-  | Sbuiltin(optid, ef, args) -> 1 + size_exprs args
-  | Sannot(txt, args) -> 0
+  | Sbuiltin(_, (EF_annot _ | EF_debug _), _) -> 0
+  | Sbuiltin(optid, ef, args) -> 1 + size_builtin_args args
   | Sseq(s1, s2) -> size_stmt s1 + size_stmt s2
   | Sifthenelse(ce, s1, s2) ->
       size_condexpr ce + max (size_stmt s1) (size_stmt s2)

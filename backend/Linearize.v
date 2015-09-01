@@ -187,8 +187,6 @@ Fixpoint linearize_block (b: LTL.bblock) (k: code) : code :=
       Ltailcall sig ros :: k
   | LTL.Lbuiltin ef args res :: b' =>
       Lbuiltin ef args res :: linearize_block b' k
-  | LTL.Lannot ef args :: b' =>
-      Lannot ef args :: linearize_block b' k
   | LTL.Lbranch s :: b' =>
       add_branch s k
   | LTL.Lcond cond args s1 s2 :: b' =>

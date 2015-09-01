@@ -48,7 +48,6 @@ Definition renum_instr (i: instruction) : instruction :=
   | Icall sg ros args res s => Icall sg ros args res (renum_pc s)
   | Itailcall sg ros args => i
   | Ibuiltin ef args res s => Ibuiltin ef args res (renum_pc s)
-  | Iannot ef args s => Iannot ef args (renum_pc s)
   | Icond cond args s1 s2 => Icond cond args (renum_pc s1) (renum_pc s2)
   | Ijumptable arg tbl => Ijumptable arg (List.map renum_pc tbl)
   | Ireturn or => i

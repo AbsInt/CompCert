@@ -35,6 +35,11 @@ Definition areg (ae: aenv) (r: reg) : aval := AE.get r ae.
 
 Definition aregs (ae: aenv) (rl: list reg) : list aval := List.map (areg ae) rl.
 
+(** Analysis of function calls.  We treat specially the case where
+  neither the arguments nor the global variables point within the
+  stack frame of the current function.  In this case, no pointer
+  within the stack frame escapes during the call. *)
+
 Definition mafter_public_call : amem := mtop.
 
 Definition mafter_private_call (am_before: amem) : amem :=
@@ -43,52 +48,77 @@ Definition mafter_private_call (am_before: amem) : amem :=
      am_nonstack := Nonstack;
      am_top := plub (ab_summary (am_stack am_before)) Nonstack |}.
 
-Definition transfer_call (ae: aenv) (am: amem) (args: list reg) (res: reg) :=
+Definition analyze_call (am: amem) (aargs: list aval) :=
   if pincl am.(am_nonstack) Nonstack
-  && forallb (fun r => vpincl (areg ae r) Nonstack) args
-  then
-    VA.State (AE.set res (Ifptr Nonstack) ae) (mafter_private_call am)
-  else
-    VA.State (AE.set res Vtop ae) mafter_public_call.
+  && forallb (fun av => vpincl av Nonstack) aargs
+  then (Ifptr Nonstack, mafter_private_call am)
+  else (Vtop, mafter_public_call).
 
-Inductive builtin_kind : Type :=
-  | Builtin_vload (chunk: memory_chunk) (aaddr: aval)
-  | Builtin_vstore (chunk: memory_chunk) (aaddr av: aval)
-  | Builtin_memcpy (sz al: Z) (adst asrc: aval)
-  | Builtin_annot_val (av: aval)
-  | Builtin_default.
+Definition transfer_call (ae: aenv) (am: amem) (args: list reg) (res: reg) :=
+  let (av, am') := analyze_call am (aregs ae args) in
+  VA.State (AE.set res av ae) am'.
 
-Definition classify_builtin (ef: external_function) (args: list reg) (ae: aenv) :=
-  match ef, args with
-  | EF_vload chunk, a1::nil => Builtin_vload chunk (areg ae a1)
-  | EF_vload_global chunk id ofs, nil => Builtin_vload chunk (Ptr (Gl id ofs))
-  | EF_vstore chunk, a1::a2::nil => Builtin_vstore chunk (areg ae a1) (areg ae a2)
-  | EF_vstore_global chunk id ofs, a1::nil => Builtin_vstore chunk (Ptr (Gl id ofs)) (areg ae a1)
-  | EF_memcpy sz al, a1::a2::nil => Builtin_memcpy sz al (areg ae a1) (areg ae a2)
-  | EF_annot_val _ _, a1::nil => Builtin_annot_val (areg ae a1)
-  | _, _ => Builtin_default
+(** Analysis of builtins. *)
+
+Fixpoint abuiltin_arg (ae: aenv) (am: amem) (rm: romem) (ba: builtin_arg reg) : aval :=
+  match ba with
+  | BA r => areg ae r
+  | BA_int n => I n
+  | BA_long n => L n
+  | BA_float n => F n
+  | BA_single n => FS n
+  | BA_loadstack chunk ofs => loadv chunk rm am (Ptr (Stk ofs))
+  | BA_addrstack ofs => Ptr (Stk ofs)
+  | BA_loadglobal chunk id ofs => loadv chunk rm am (Ptr (Gl id ofs))
+  | BA_addrglobal id ofs => Ptr (Gl id ofs)
+  | BA_splitlong hi lo => longofwords (abuiltin_arg ae am rm hi) (abuiltin_arg ae am rm lo)
   end.
 
-Definition transfer_builtin (ae: aenv) (am: amem) (rm: romem) (ef: external_function) (args: list reg) (res: reg) :=
-  match classify_builtin ef args ae with
-  | Builtin_vload chunk aaddr => 
+Definition set_builtin_res (br: builtin_res reg) (av: aval) (ae: aenv) : aenv :=
+  match br with
+  | BR r => AE.set r av ae
+  | _ => ae
+  end.
+
+Definition transfer_builtin_default
+              (ae: aenv) (am: amem) (rm: romem)
+              (args: list (builtin_arg reg)) (res: builtin_res reg) :=
+  let (av, am') := analyze_call am (map (abuiltin_arg ae am rm) args) in
+  VA.State (set_builtin_res res av ae) am'.
+
+Definition transfer_builtin
+              (ae: aenv) (am: amem) (rm: romem) (ef: external_function)
+              (args: list (builtin_arg reg)) (res: builtin_res reg) :=
+  match ef, args with
+  | EF_vload chunk, addr :: nil =>
+      let aaddr := abuiltin_arg ae am rm addr in
       let a :=
         if va_strict tt
         then vlub (loadv chunk rm am aaddr) (vnormalize chunk (Ifptr Glob))
         else vnormalize chunk Vtop in
-      VA.State (AE.set res a ae) am
-  | Builtin_vstore chunk aaddr av =>
+      VA.State (set_builtin_res res a ae) am
+  | EF_vstore chunk, addr :: v :: nil =>
+      let aaddr := abuiltin_arg ae am rm addr in
+      let av := abuiltin_arg ae am rm v in
       let am' := storev chunk am aaddr av in
-      VA.State (AE.set res ntop ae) (mlub am am')
-  | Builtin_memcpy sz al adst asrc =>
+      VA.State (set_builtin_res res ntop ae) (mlub am am')
+  | EF_memcpy sz al, dst :: src :: nil =>
+      let adst := abuiltin_arg ae am rm dst in
+      let asrc := abuiltin_arg ae am rm src in
       let p := loadbytes am rm (aptr_of_aval asrc) in
       let am' := storebytes am (aptr_of_aval adst) sz p in
-      VA.State (AE.set res ntop ae) am'
-  | Builtin_annot_val av =>
-      VA.State (AE.set res av ae) am
-  | Builtin_default =>
-      transfer_call ae am args res
+      VA.State (set_builtin_res res ntop ae) am'
+  | (EF_annot _ _ | EF_debug _ _ _), _ =>
+      VA.State (set_builtin_res res ntop ae) am
+  | EF_annot_val _ _, v :: nil =>
+      let av := abuiltin_arg ae am rm v in
+      VA.State (set_builtin_res res av ae) am
+  | _, _ =>
+      transfer_builtin_default ae am rm args res
   end.
+
+(** The transfer function for one instruction.  Given the abstract state
+  "before" the instruction, computes the abstract state "after". *)
 
 Definition transfer (f: function) (rm: romem) (pc: node) (ae: aenv) (am: amem) : VA.t :=
   match f.(fn_code)!pc with
@@ -111,8 +141,6 @@ Definition transfer (f: function) (rm: romem) (pc: node) (ae: aenv) (am: amem) :
       VA.Bot
   | Some(Ibuiltin ef args res s) =>
       transfer_builtin ae am rm ef args res
-  | Some(Iannot ef args s) =>
-      VA.State ae am
   | Some(Icond cond args s1 s2) =>
       VA.State ae am
   | Some(Ijumptable arg tbl) =>
@@ -120,6 +148,9 @@ Definition transfer (f: function) (rm: romem) (pc: node) (ae: aenv) (am: amem) :
   | Some(Ireturn arg) =>
       VA.Bot
   end.
+
+(** A wrapper on [transfer] that removes information associated with
+  dead registers, so as to reduce the sizes of abstract states. *)
 
 Definition transfer' (f: function) (lastuses: PTree.t (list reg)) (rm: romem)
                      (pc: node) (before: VA.t) : VA.t :=
@@ -137,6 +168,8 @@ Definition transfer' (f: function) (lastuses: PTree.t (list reg)) (rm: romem)
           VA.State ae'' am'
      end
   end.
+
+(** The forward dataflow analysis. *)
 
 Module DS := Dataflow_Solver(VA)(NodeSetForward).
 
@@ -285,50 +318,65 @@ Proof.
   split. eapply ematch_ge; eauto. eauto. 
 Qed.
 
-(** Classification of builtin functions *)
+(** ** Analysis of registers and builtin arguments *)
 
-Lemma classify_builtin_sound:
-  forall bc e ae ef (ge: genv) args m t res m',
-  ematch bc e ae ->
-  genv_match bc ge ->
-  external_call ef ge e##args m t res m' ->
-  match classify_builtin ef args ae with
-  | Builtin_vload chunk aaddr =>
-      exists addr,
-      volatile_load_sem chunk ge (addr::nil) m t res m' /\ vmatch bc addr aaddr
-  | Builtin_vstore chunk aaddr av =>
-      exists addr v,
-      volatile_store_sem chunk ge (addr::v::nil) m t res m'
-      /\ vmatch bc addr aaddr /\ vmatch bc v av
-  | Builtin_memcpy sz al adst asrc =>
-      exists dst, exists src,
-      extcall_memcpy_sem sz al ge (dst::src::nil) m t res m'
-      /\ vmatch bc dst adst /\ vmatch bc src asrc
-  | Builtin_annot_val av => m' = m /\ vmatch bc res av
-  | Builtin_default => True
-  end.
+Lemma areg_sound:
+  forall bc e ae r, ematch bc e ae -> vmatch bc (e#r) (areg ae r).
 Proof.
-  intros. unfold classify_builtin; destruct ef; auto.
-- (* vload *)
-  destruct args; auto. destruct args; auto.
-  exists (e#p); split; eauto.
-- (* vstore *)
-  destruct args; auto. destruct args; auto. destruct args; auto.
-  exists (e#p), (e#p0); eauto.
-- (* vload global *)
-  destruct args; auto. simpl in H1. 
-  rewrite volatile_load_global_charact in H1. destruct H1 as (b & A & B).
-  exists (Vptr b ofs); split; auto. constructor. constructor. eapply H0; eauto.
-- (* vstore global *)
-  destruct args; auto. destruct args; auto. simpl in H1. 
-  rewrite volatile_store_global_charact in H1. destruct H1 as (b & A & B).
-  exists (Vptr b ofs), (e#p); split; auto. split; eauto. constructor. constructor. eapply H0; eauto.
-- (* memcpy *)
-  destruct args; auto. destruct args; auto. destruct args; auto.
-  exists (e#p), (e#p0); eauto.
-- (* annot val *)
-  destruct args; auto. destruct args; auto.
-  simpl in H1. inv H1. eauto.
+  intros. apply H. 
+Qed.
+
+Lemma aregs_sound:
+  forall bc e ae rl, ematch bc e ae -> list_forall2 (vmatch bc) (e##rl) (aregs ae rl).
+Proof.
+  induction rl; simpl; intros. constructor. constructor; auto. apply areg_sound; auto.
+Qed.
+
+Hint Resolve areg_sound aregs_sound: va.
+
+Lemma abuiltin_arg_sound:
+  forall bc ge rs sp m ae rm am,
+  ematch bc rs ae ->
+  romatch bc m rm ->
+  mmatch bc m am ->
+  genv_match bc ge ->
+  bc sp = BCstack ->
+  forall a v,
+  eval_builtin_arg ge (fun r => rs#r) (Vptr sp Int.zero) m a v ->
+  vmatch bc v (abuiltin_arg ae am rm a).
+Proof.
+  intros until am; intros EM RM MM GM SP.
+  induction 1; simpl; eauto with va.
+- eapply loadv_sound; eauto. simpl. rewrite Int.add_zero_l. auto with va. 
+- simpl. rewrite Int.add_zero_l. auto with va. 
+- eapply loadv_sound; eauto. apply symbol_address_sound; auto.
+- apply symbol_address_sound; auto.
+Qed.
+
+Lemma abuiltin_args_sound:
+  forall bc ge rs sp m ae rm am,
+  ematch bc rs ae ->
+  romatch bc m rm ->
+  mmatch bc m am ->
+  genv_match bc ge ->
+  bc sp = BCstack ->
+  forall al vl,
+  eval_builtin_args ge (fun r => rs#r) (Vptr sp Int.zero) m al vl ->
+  list_forall2 (vmatch bc) vl (map (abuiltin_arg ae am rm) al).
+Proof.
+  intros until am; intros EM RM MM GM SP.
+  induction 1; simpl.
+- constructor.
+- constructor; auto. eapply abuiltin_arg_sound; eauto. 
+Qed.
+
+Lemma set_builtin_res_sound:
+  forall bc rs ae v av res,
+  ematch bc rs ae ->
+  vmatch bc v av ->
+  ematch bc (regmap_setres res v rs) (set_builtin_res res av ae).
+Proof.
+  intros. destruct res; simpl; auto. apply ematch_update; auto. 
 Qed.
 
 (** ** Constructing block classifications *)
@@ -981,6 +1029,17 @@ Proof.
   apply UNCH1; auto. intros; red. unfold inj_of_bc; rewrite H0; auto. 
 Qed.
 
+Remark list_forall2_in_l:
+  forall (A B: Type) (P: A -> B -> Prop) x1 l1 l2,
+  list_forall2 P l1 l2 -> In x1 l1 -> exists x2, In x2 l2 /\ P x1 x2.
+Proof.
+  induction 1; simpl; intros.
+- contradiction.
+- destruct H1.
+  + subst. exists b1; auto. 
+  + exploit IHlist_forall2; eauto. intros (x2 & U & V). exists x2; auto. 
+Qed.
+
 (** ** Semantic invariant *)
 
 Section SOUNDNESS.
@@ -1170,20 +1229,6 @@ Proof.
   econstructor; eauto. 
 Qed.
 
-Lemma areg_sound:
-  forall bc e ae r, ematch bc e ae -> vmatch bc (e#r) (areg ae r).
-Proof.
-  intros. apply H. 
-Qed.
-
-Lemma aregs_sound:
-  forall bc e ae rl, ematch bc e ae -> list_forall2 (vmatch bc) (e##rl) (aregs ae rl).
-Proof.
-  induction rl; simpl; intros. constructor. constructor; auto. apply areg_sound; auto.
-Qed.
-
-Hint Resolve areg_sound aregs_sound: va.
-
 Theorem sound_step:
   forall st t st', RTL.step ge st t st' -> sound_state st -> sound_state st'.
 Proof.
@@ -1215,9 +1260,9 @@ Proof.
 - (* call *)
   assert (TR: transfer f rm pc ae am = transfer_call ae am args res).
   { unfold transfer; rewrite H; auto. }
-  unfold transfer_call in TR. 
+  unfold transfer_call, analyze_call in TR. 
   destruct (pincl (am_nonstack am) Nonstack && 
-            forallb (fun r : reg => vpincl (areg ae r) Nonstack) args) eqn:NOLEAK.
+            forallb (fun av => vpincl av Nonstack) (aregs ae args)) eqn:NOLEAK.
 + (* private call *)
   InvBooleans.
   exploit analyze_successor; eauto. simpl; eauto. rewrite TR. intros SUCC. 
@@ -1230,7 +1275,9 @@ Proof.
     eapply mmatch_stack; eauto. 
   * intros. exploit list_in_map_inv; eauto. intros (r & P & Q). subst v. 
     apply D with (areg ae r). 
-    rewrite forallb_forall in H2. apply vpincl_ge. apply H2; auto. auto with va.
+    rewrite forallb_forall in H2. apply vpincl_ge.
+    apply H2. apply in_map; auto.
+    auto with va.
 + (* public call *)
   exploit analyze_successor; eauto. simpl; eauto. rewrite TR. intros SUCC. 
   exploit anonymize_stack; eauto. intros (bc' & A & B & C & D & E & F & G).
@@ -1259,61 +1306,24 @@ Proof.
   assert (SPVALID: Plt sp0 (Mem.nextblock m)) by (eapply mmatch_below; eauto with va).
   assert (TR: transfer f rm pc ae am = transfer_builtin ae am rm ef args res).
   { unfold transfer; rewrite H; auto. }
-  unfold transfer_builtin in TR.
-  exploit classify_builtin_sound; eauto. destruct (classify_builtin ef args ae). 
-+ (* volatile load *)
-  intros (addr & VLOAD & VADDR). inv VLOAD.
-  eapply sound_succ_state; eauto. simpl; auto.
-  apply ematch_update; auto. 
-  inv H2.
-  * (* true volatile access *)
-    assert (V: vmatch bc v0 (Ifptr Glob)).
-    { inv H4; simpl in *; constructor. econstructor. eapply GE; eauto. }
-    destruct (va_strict tt). apply vmatch_lub_r. apply vnormalize_sound. auto. 
-    apply vnormalize_sound. eapply vmatch_ge; eauto. constructor. constructor.
-  * (* normal memory access *)
-    exploit loadv_sound; eauto. simpl; eauto. intros V.
-    destruct (va_strict tt). 
-    apply vmatch_lub_l. auto.
-    eapply vnormalize_cast; eauto. eapply vmatch_top; eauto. 
-+ (* volatile store *)
-  intros (addr & src & VSTORE & VADDR & VSRC). inv VSTORE. inv H7.
-  * (* true volatile access *)
-    eapply sound_succ_state; eauto. simpl; auto.
-    apply ematch_update; auto. constructor.
-    apply mmatch_lub_l; auto.
-  * (* normal memory access *)
-    eapply sound_succ_state; eauto. simpl; auto.
-    apply ematch_update; auto. constructor.
-    apply mmatch_lub_r. eapply storev_sound; eauto. auto.
-    eapply romatch_store; eauto.
-    eapply sound_stack_storev; eauto. simpl; eauto.
-+ (* memcpy *)
-  intros (dst & src & MEMCPY & VDST & VSRC). inv MEMCPY.
-  eapply sound_succ_state; eauto. simpl; auto. 
-  apply ematch_update; auto. constructor.
-  eapply storebytes_sound; eauto. 
-  apply match_aptr_of_aval; auto. 
-  eapply Mem.loadbytes_length; eauto. 
-  intros. eapply loadbytes_sound; eauto. apply match_aptr_of_aval; auto. 
-  eapply romatch_storebytes; eauto. 
-  eapply sound_stack_storebytes; eauto. 
-+ (* annot val *)
-  intros (A & B); subst. 
-  eapply sound_succ_state; eauto. simpl; auto. 
-  apply ematch_update; auto.
-+ (* general case *)
-  intros _.
-  unfold transfer_call in TR. 
+  (* The default case *)
+  assert (DEFAULT:
+            transfer f rm pc ae am = transfer_builtin_default ae am rm args res ->
+            sound_state
+               (State s f (Vptr sp0 Int.zero) pc' (regmap_setres res vres rs) m')).
+  { unfold transfer_builtin_default, analyze_call; intros TR'.
+  set (aargs := map (abuiltin_arg ae am rm) args) in *.
+  assert (ARGS: list_forall2 (vmatch bc) vargs aargs) by (eapply abuiltin_args_sound; eauto).
   destruct (pincl (am_nonstack am) Nonstack && 
-            forallb (fun r : reg => vpincl (areg ae r) Nonstack) args) eqn:NOLEAK.
+            forallb (fun av => vpincl av Nonstack) aargs)
+        eqn: NOLEAK.
 * (* private builtin call *)
-  InvBooleans. rewrite forallb_forall in H2.
+  InvBooleans. rewrite forallb_forall in H3.
   exploit hide_stack; eauto. apply pincl_ge; auto.
   intros (bc1 & A & B & C & D & E & F & G).
   exploit external_call_match; eauto. 
-  intros. exploit list_in_map_inv; eauto. intros (r & P & Q). subst v0. 
-  eapply D; eauto with va. apply vpincl_ge. apply H2; auto. 
+  intros. exploit list_forall2_in_l; eauto. intros (av & U & V).
+  eapply D; eauto with va. apply vpincl_ge. apply H3; auto. 
   intros (bc2 & J & K & L & M & N & O & P & Q).
   exploit (return_from_private_call bc bc2); eauto.
   eapply mmatch_below; eauto.
@@ -1324,7 +1334,7 @@ Proof.
   eapply external_call_nextblock; eauto. 
   intros (bc3 & U & V & W & X & Y & Z & AA).
   eapply sound_succ_state with (bc := bc3); eauto. simpl; auto. 
-  apply ematch_update; auto.
+  apply set_builtin_res_sound; auto. 
   apply sound_stack_exten with bc. 
   apply sound_stack_inv with m. auto.
   intros. apply Q. red. eapply Plt_trans; eauto.
@@ -1334,7 +1344,7 @@ Proof.
   exploit anonymize_stack; eauto. 
   intros (bc1 & A & B & C & D & E & F & G).
   exploit external_call_match; eauto. 
-  intros. exploit list_in_map_inv; eauto. intros (r & P & Q). subst v0. eapply D; eauto with va.
+  intros. exploit list_forall2_in_l; eauto. intros (av & U & V). eapply D; eauto with va.
   intros (bc2 & J & K & L & M & N & O & P & Q).
   exploit (return_from_public_call bc bc2); eauto.
   eapply mmatch_below; eauto.
@@ -1343,17 +1353,66 @@ Proof.
   eapply external_call_nextblock; eauto. 
   intros (bc3 & U & V & W & X & Y & Z & AA).
   eapply sound_succ_state with (bc := bc3); eauto. simpl; auto. 
-  apply ematch_update; auto.
+  apply set_builtin_res_sound; auto. 
   apply sound_stack_exten with bc. 
   apply sound_stack_inv with m. auto.
   intros. apply Q. red. eapply Plt_trans; eauto.
   rewrite C; auto.
   exact AA.
-
-- (* annot *)
-  destruct ef; try contradiction. inv H2. 
+  }
+  unfold transfer_builtin in TR. 
+  destruct ef; auto.
++ (* volatile load *)
+  inv H0; auto. inv H3; auto. inv H1.
+  exploit abuiltin_arg_sound; eauto. intros VM1.
+  eapply sound_succ_state; eauto. simpl; auto.
+  apply set_builtin_res_sound; auto. 
+  inv H3.
+  * (* true volatile access *)
+    assert (V: vmatch bc v (Ifptr Glob)).
+    { inv H4; simpl in *; constructor. econstructor. eapply GE; eauto. }
+    destruct (va_strict tt). apply vmatch_lub_r. apply vnormalize_sound. auto. 
+    apply vnormalize_sound. eapply vmatch_ge; eauto. constructor. constructor.
+  * (* normal memory access *)
+    exploit loadv_sound; eauto. simpl; eauto. intros V.
+    destruct (va_strict tt). 
+    apply vmatch_lub_l. auto.
+    eapply vnormalize_cast; eauto. eapply vmatch_top; eauto. 
++ (* volatile store *)
+  inv H0; auto. inv H3; auto. inv H4; auto. inv H1. 
+  exploit abuiltin_arg_sound. eauto. eauto. eauto. eauto. eauto. eexact H0. intros VM1.
+  exploit abuiltin_arg_sound. eauto. eauto. eauto. eauto. eauto. eexact H2. intros VM2.
+  inv H9.
+  * (* true volatile access *)
+    eapply sound_succ_state; eauto. simpl; auto.
+    apply set_builtin_res_sound; auto. constructor.
+    apply mmatch_lub_l; auto.
+  * (* normal memory access *)
+    eapply sound_succ_state; eauto. simpl; auto.
+    apply set_builtin_res_sound; auto. constructor.
+    apply mmatch_lub_r. eapply storev_sound; eauto. auto.
+    eapply romatch_store; eauto.
+    eapply sound_stack_storev; eauto. simpl; eauto.
++ (* memcpy *)
+  inv H0; auto. inv H3; auto. inv H4; auto. inv H1. 
+  exploit abuiltin_arg_sound. eauto. eauto. eauto. eauto. eauto. eexact H0. intros VM1.
+  exploit abuiltin_arg_sound. eauto. eauto. eauto. eauto. eauto. eexact H2. intros VM2.
   eapply sound_succ_state; eauto. simpl; auto. 
-  unfold transfer; rewrite H; eauto. 
+  apply set_builtin_res_sound; auto. constructor.
+  eapply storebytes_sound; eauto. 
+  apply match_aptr_of_aval; auto. 
+  eapply Mem.loadbytes_length; eauto. 
+  intros. eapply loadbytes_sound; eauto. apply match_aptr_of_aval; auto. 
+  eapply romatch_storebytes; eauto. 
+  eapply sound_stack_storebytes; eauto. 
++ (* annot *)
+  inv H1. eapply sound_succ_state; eauto. simpl; auto. apply set_builtin_res_sound; auto. constructor. 
++ (* annot val *)
+  inv H0; auto. inv H3; auto. inv H1.
+  eapply sound_succ_state; eauto. simpl; auto.
+  apply set_builtin_res_sound; auto. eapply abuiltin_arg_sound; eauto.
++ (* debug *)
+  inv H1. eapply sound_succ_state; eauto. simpl; auto. apply set_builtin_res_sound; auto. constructor. 
 
 - (* cond *)
   eapply sound_succ_state; eauto. 
@@ -1830,7 +1889,46 @@ Proof.
   eapply eval_static_addressing_sound; eauto with va.
 Qed.
 
+(** This is a less precise version of [abuiltin_arg], where memory
+    contents are not taken into account. *)
 
-  
+Definition aaddr_arg (a: VA.t) (ba: builtin_arg reg) : aptr :=
+  match a with
+  | VA.Bot => Pbot
+  | VA.State ae am => 
+      match ba with
+      | BA r => aptr_of_aval (AE.get r ae)
+      | BA_addrstack ofs => Stk ofs
+      | BA_addrglobal id ofs => Gl id ofs
+      | _ => Ptop
+      end
+  end.
 
+Lemma aaddr_arg_sound_1:
+  forall bc rs ae m rm am ge sp a b ofs,
+  ematch bc rs ae ->
+  romatch bc m rm ->
+  mmatch bc m am ->
+  genv_match bc ge ->
+  bc sp = BCstack ->
+  eval_builtin_arg ge (fun r : positive => rs # r) (Vptr sp Int.zero) m a (Vptr b ofs) ->
+  pmatch bc b ofs (aaddr_arg (VA.State ae am) a).
+Proof.
+  intros. 
+  apply pmatch_ge with (aptr_of_aval (abuiltin_arg ae am rm a)).
+  simpl. destruct a; try (apply pge_top); simpl; apply pge_refl.
+  apply match_aptr_of_aval. eapply abuiltin_arg_sound; eauto.
+Qed.
 
+Lemma aaddr_arg_sound:
+  forall prog s f sp pc e m a b ofs,
+  sound_state prog (State s f (Vptr sp Int.zero) pc e m) ->
+  eval_builtin_arg (Genv.globalenv prog) (fun r => e#r) (Vptr sp Int.zero) m a (Vptr b ofs) ->
+  exists bc,
+     pmatch bc b ofs (aaddr_arg (analyze (romem_for_program prog) f)!!pc a)
+  /\ genv_match bc (Genv.globalenv prog)
+  /\ bc sp = BCstack.
+Proof.
+  intros. inv H. rewrite AN. exists bc; split; auto.
+  eapply aaddr_arg_sound_1; eauto.
+Qed.

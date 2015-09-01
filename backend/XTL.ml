@@ -34,8 +34,7 @@ type instruction =
   | Xstore of memory_chunk * addressing * var list * var
   | Xcall of signature * (var, ident) sum * var list * var list
   | Xtailcall of signature * (var, ident) sum * var list
-  | Xbuiltin of external_function * var list * var list
-  | Xannot of external_function * var annot_arg list
+  | Xbuiltin of external_function * var builtin_arg list * var builtin_res
   | Xbranch of node
   | Xcond of condition * var list * node * node
   | Xjumptable of var * node list
@@ -125,10 +124,22 @@ let rec set_vars_type vl tyl =
 let unify_var_type v1 v2 =
   if typeof v1 <> typeof v2 then raise Type_error
 
-let rec type_annot_arg a ty =
+let rec type_builtin_arg a ty =
   match a with
-  | AA_base v -> set_var_type v ty
-  | AA_longofwords(a1, a2) -> type_annot_arg a1 Tint; type_annot_arg a2 Tint
+  | BA v -> set_var_type v ty
+  | BA_splitlong(a1, a2) -> type_builtin_arg a1 Tint; type_builtin_arg a2 Tint
+  | _ -> ()
+
+let rec type_builtin_args al tyl =
+  match al, tyl with
+  | [], [] -> ()
+  | a :: al, ty :: tyl -> type_builtin_arg a ty; type_builtin_args al tyl
+  | _, _ -> raise Type_error
+
+let rec type_builtin_res a ty =
+  match a with
+  | BR v -> set_var_type v ty
+  | BR_splitlong(a1, a2) -> type_builtin_res a1 Tint; type_builtin_res a2 Tint
   | _ -> ()
 
 let type_instr = function
@@ -158,13 +169,8 @@ let type_instr = function
       ()
   | Xbuiltin(ef, args, res) ->
       let sg = ef_sig ef in
-      set_vars_type args sg.sig_args;
-      set_vars_type res (Events.proj_sig_res' sg)
-  | Xannot(ef, args) ->
-      let sg = ef_sig ef in
-      if List.length args = List.length sg.sig_args
-      then List.iter2 type_annot_arg args sg.sig_args
-      else raise Type_error
+      type_builtin_args args sg.sig_args;
+      type_builtin_res res (proj_sig_res sg)
   | Xbranch s ->
       ()
   | Xcond(cond, args, s1, s2) ->

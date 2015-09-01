@@ -22,6 +22,8 @@ open Camlcoq
 open Datatypes
 open Integers
        
+exception Error of string
+
 (* Useful constants and helper functions *)
 
 let _0 = Int.zero
@@ -59,13 +61,22 @@ let sp_adjustment sz =
 (* Handling of annotations *)
 
 let expand_annot_val txt targ args res =
-  emit (Pannot (EF_annot(txt,[targ]), List.map (fun r -> AA_base r) args));
+  emit (Pbuiltin (EF_annot(txt,[targ]), args, BR_none));
   match args, res with
-  | [IR src], [IR dst] ->
+  | [BA(IR src)], BR(IR dst) ->
      if dst <> src then emit (Pmov_rr (dst,src))
-  | [FR src], [FR dst] ->
+  | [BA(FR src)], BR(FR dst) ->
      if dst <> src then emit (Pmovsd_ff (dst,src))
-  | _, _ -> assert false
+  | _, _ ->
+     raise (Error "ill-formed __builtin_annot_val")
+
+(* Translate a builtin argument into an addressing mode *)
+
+let addressing_of_builtin_arg = function
+  | BA (IR r) -> Addrmode(Some r, None, Coq_inl Integers.Int.zero)
+  | BA_addrstack ofs -> Addrmode(Some ESP, None, Coq_inl ofs)
+  | BA_addrglobal(id, ofs) -> Addrmode(None, None, Coq_inr(id, ofs))
+  | _ -> assert false
 
 (* Operations on addressing modes *)
 
@@ -84,37 +95,36 @@ let global_addr id ofs = Addrmode(None, None, Coq_inr(id, ofs))
    memory accesses regardless of alignment. *)
 
 let expand_builtin_memcpy_small sz al src dst =
-  assert (src = EDX && dst = EAX);
-  let rec copy ofs sz =
+  let rec copy src dst sz =
     if sz >= 8 && !Clflags.option_ffpu then begin
-	emit (Pmovq_rm (XMM7, linear_addr src ofs));
-	emit (Pmovq_mr (linear_addr dst ofs, XMM7));
-        copy (Int.add ofs _8) (sz - 8)
+	emit (Pmovq_rm (XMM7, src));
+	emit (Pmovq_mr (dst, XMM7));
+        copy (offset_addressing src _8) (offset_addressing dst _8) (sz - 8)
       end else if sz >= 4 then begin
-	emit (Pmov_rm (ECX, linear_addr src ofs));
-	emit (Pmov_mr (linear_addr dst ofs, ECX));
-        copy (Int.add ofs _4) (sz - 4)
+	emit (Pmov_rm (ECX, src));
+	emit (Pmov_mr (dst, ECX));
+        copy (offset_addressing src _4) (offset_addressing dst _4) (sz - 4)
       end else if sz >= 2 then begin
-	emit (Pmovw_rm (ECX, linear_addr src ofs));
-	emit (Pmovw_mr (linear_addr dst ofs, ECX));
-        copy (Int.add ofs _2) (sz - 2)
+	emit (Pmovw_rm (ECX, src));
+	emit (Pmovw_mr (dst, ECX));
+        copy (offset_addressing src _2) (offset_addressing dst _2) (sz - 2)
       end else if sz >= 1 then begin
-	emit (Pmovb_rm (ECX, linear_addr src ofs));
-	emit (Pmovb_mr (linear_addr dst ofs, ECX));
-        copy (Int.add ofs _1) (sz - 1)
+	emit (Pmovb_rm (ECX, src));
+	emit (Pmovb_mr (dst, ECX));
+        copy (offset_addressing src _1) (offset_addressing dst _1) (sz - 1)
       end in
-  copy _0 sz
+  copy (addressing_of_builtin_arg src) (addressing_of_builtin_arg dst) sz
 
 let expand_builtin_memcpy_big sz al src dst =
-  assert (src = ESI && dst = EDI);
+  if src <> BA (IR ESI) then emit (Plea (ESI, addressing_of_builtin_arg src));
+  if dst <> BA (IR EDI) then emit (Plea (EDI, addressing_of_builtin_arg dst));
   emit (Pmov_ri (ECX,coqint_of_camlint (Int32.of_int (sz / 4))));
   emit Prep_movsl;
   if sz mod 4 >= 2 then emit Pmovsw;
   if sz mod 2 >= 1 then emit Pmovsb
 
 let expand_builtin_memcpy sz al args =
-  let (dst, src) =
-    match args with [IR d; IR s] -> (d, s) | _ -> assert false in
+  let (dst, src) = match args with [d; s] -> (d, s) | _ -> assert false in
   if sz <= 32
   then expand_builtin_memcpy_small sz al src dst
   else expand_builtin_memcpy_big sz al src dst
@@ -123,17 +133,17 @@ let expand_builtin_memcpy sz al args =
 
 let expand_builtin_vload_common chunk addr res =
   match chunk, res with
-  | Mint8unsigned, [IR res] ->
+  | Mint8unsigned, BR(IR res) ->
      emit (Pmovzb_rm (res,addr))
-  | Mint8signed, [IR res] ->
+  | Mint8signed, BR(IR res) ->
      emit (Pmovsb_rm (res,addr))
-  | Mint16unsigned, [IR res] ->
+  | Mint16unsigned, BR(IR res) ->
      emit (Pmovzw_rm (res,addr))
-  | Mint16signed, [IR res] ->
+  | Mint16signed, BR(IR res) ->
      emit (Pmovsw_rm (res,addr))
-  | Mint32, [IR res] ->
+  | Mint32, BR(IR res) ->
      emit (Pmov_rm (res,addr))
-  | Mint64, [IR res1; IR res2] ->
+  | Mint64, BR_splitlong(BR(IR res1), BR(IR res2)) ->
      let addr' = offset_addressing addr _4 in
      if not (Asmgen.addressing_mentions addr res2) then begin
 	 emit (Pmov_rm (res2,addr));
@@ -142,56 +152,51 @@ let expand_builtin_vload_common chunk addr res =
 	 emit (Pmov_rm (res1,addr'));
 	 emit (Pmov_rm (res2,addr))
        end
-  | Mfloat32, [FR res] ->
+  | Mfloat32, BR(FR res) ->
      emit (Pmovss_fm (res,addr))
-  | Mfloat64, [FR res] ->
+  | Mfloat64, BR(FR res) ->
      emit (Pmovsd_fm (res,addr))
   | _ ->
      assert false
 
 let expand_builtin_vload chunk args res =
   match args with
-  | [IR addr] -> expand_builtin_vload_common chunk (linear_addr addr _0) res
-  | _ -> assert false
+  | [addr] ->
+     expand_builtin_vload_common chunk (addressing_of_builtin_arg addr) res
+  | _ ->
+     assert false
 
-let expand_builtin_vload_global chunk id ofs args res =
-  expand_builtin_vload_common chunk (global_addr id ofs) res
-			      
 let expand_builtin_vstore_common chunk addr src tmp =
   match chunk, src with
-  | (Mint8signed | Mint8unsigned), [IR src] ->
+  | (Mint8signed | Mint8unsigned), BA(IR src) ->
      if Asmgen.low_ireg src then
        emit (Pmovb_mr (addr,src))
      else begin
 	 emit (Pmov_rr (tmp,src));
 	 emit (Pmovb_mr (addr,tmp))
        end
-  | (Mint16signed | Mint16unsigned), [IR src] ->
+  | (Mint16signed | Mint16unsigned), BA(IR src) ->
      emit (Pmovw_mr (addr,src))
-  | Mint32, [IR src] ->
+  | Mint32, BA(IR src) ->
      emit (Pmov_mr (addr,src))
-  | Mint64, [IR src1; IR src2] ->
+  | Mint64, BA_splitlong(BA(IR src1), BA(IR src2)) ->
      let addr' = offset_addressing addr _4 in
      emit (Pmov_mr (addr,src2));
      emit (Pmov_mr (addr',src1))
-  | Mfloat32, [FR src] ->
+  | Mfloat32, BA(FR src) ->
      emit (Pmovss_mf (addr,src))
-  | Mfloat64, [FR src] ->
+  | Mfloat64, BA(FR src) ->
      emit (Pmovsd_mf (addr,src))
   | _ ->
      assert false
 
 let expand_builtin_vstore chunk args =
   match args with
-  | IR addr :: src ->
-     expand_builtin_vstore_common chunk (linear_addr addr _0) src
-       (if addr = EAX then ECX else EAX)
+  | [addr; src] ->
+     let addr = addressing_of_builtin_arg addr in
+     expand_builtin_vstore_common chunk addr src
+       (if Asmgen.addressing_mentions addr EAX then ECX else EAX)
   | _ -> assert false
-
-		
-let expand_builtin_vstore_global chunk id ofs args =
-  expand_builtin_vstore_common chunk (global_addr id ofs) args EAX
-
 		 
 (* Handling of varargs *)
 		 
@@ -216,7 +221,7 @@ let expand_builtin_va_start r =
 
 let expand_fma args res i132 i213 i231 =
   match args, res with
-  | [FR a1; FR a2; FR a3], [FR res] ->
+  | [BA(FR a1); BA(FR a2); BA(FR a3)], BR(FR res) ->
       if res = a1 then emit (i132 a1 a3 a2)       (* a1 * a2 + a3 *)
       else if res = a2 then emit (i213 a2 a1 a3)  (* a1 * a2 + a3 *)
       else if res = a3 then emit (i231 a3 a1 a2)  (* a1 * a2 + a3 *)
@@ -232,27 +237,27 @@ let expand_fma args res i132 i213 i231 =
 let expand_builtin_inline name args res =
   match name, args, res with
   (* Integer arithmetic *)
-  | ("__builtin_bswap"| "__builtin_bswap32"), [IR a1], [IR res] ->
+  | ("__builtin_bswap"| "__builtin_bswap32"), [BA(IR a1)], BR(IR res) ->
      if a1 <> res then
        emit (Pmov_rr (res,a1));
      emit (Pbswap res)
-  | "__builtin_bswap16", [IR a1], [IR res] ->
+  | "__builtin_bswap16", [BA(IR a1)], BR(IR res) ->
      if a1 <> res then
        emit (Pmov_rr (res,a1));
      emit (Pbswap16 res)
-  | "__builtin_clz", [IR a1], [IR res] ->
+  | "__builtin_clz", [BA(IR a1)], BR(IR res) ->
      emit (Pbsr (res,a1));
      emit (Pxor_ri(res,coqint_of_camlint 31l))
-  | "__builtin_ctz", [IR a1], [IR res] ->
+  | "__builtin_ctz", [BA(IR a1)], BR(IR res) ->
      emit (Pbsf (res,a1))
   (* Float arithmetic *)
-  | "__builtin_fabs", [FR a1], [FR res] ->
+  | "__builtin_fabs", [BA(FR a1)], BR(FR res) ->
      if a1 <> res then
        emit (Pmovsd_ff (res,a1));
      emit (Pabsd res) (* This ensures that need_masks is set to true *)
-  | "__builtin_fsqrt", [FR a1], [FR res] ->
+  | "__builtin_fsqrt", [BA(FR a1)], BR(FR res) ->
      emit (Psqrtsd (res,a1))
-  | "__builtin_fmax", [FR a1; FR a2], [FR res] ->
+  | "__builtin_fmax", [BA(FR a1); BA(FR a2)], BR(FR res) ->
      if res = a1 then
        emit (Pmaxsd (res,a2))
      else if res = a2 then
@@ -261,7 +266,7 @@ let expand_builtin_inline name args res =
 	 emit (Pmovsd_ff (res,a1));
 	 emit (Pmaxsd (res,a2))
        end
-  | "__builtin_fmin", [FR a1; FR a2], [FR res] ->
+  | "__builtin_fmin", [BA(FR a1); BA(FR a2)], BR(FR res) ->
      if res = a1 then
        emit (Pminsd (res,a2))
      else if res = a2 then
@@ -291,55 +296,58 @@ let expand_builtin_inline name args res =
         (fun r1 r2 r3 -> Pfnmsub213(r1, r2, r3))
         (fun r1 r2 r3 -> Pfnmsub231(r1, r2, r3))
   (* 64-bit integer arithmetic *)
-  | "__builtin_negl", [IR ah; IR al], [IR rh; IR rl] ->
+  | "__builtin_negl", [BA_splitlong(BA(IR ah), BA(IR al))],
+                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
      assert (ah = EDX && al = EAX && rh = EDX && rl = EAX);
      emit (Pneg EAX);
      emit (Padc_ri (EDX,_0));
      emit (Pneg EDX)
-  | "__builtin_addl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
+  | "__builtin_addl", [BA_splitlong(BA(IR ah), BA(IR al));
+                       BA_splitlong(BA(IR bh), BA(IR bl))],
+                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
      assert (ah = EDX && al = EAX && bh = ECX && bl = EBX && rh = EDX && rl = EAX);
      emit (Padd_rr (EAX,EBX));
      emit (Padc_rr (EDX,ECX))
-  | "__builtin_subl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
+  | "__builtin_subl", [BA_splitlong(BA(IR ah), BA(IR al));
+                       BA_splitlong(BA(IR bh), BA(IR bl))],
+                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
      assert (ah = EDX && al = EAX && bh = ECX && bl = EBX && rh = EDX && rl = EAX);
      emit (Psub_rr (EAX,EBX));
      emit (Psbb_rr (EDX,ECX))
-  | "__builtin_mull", [IR a; IR b], [IR rh; IR rl] ->
+  | "__builtin_mull", [BA(IR a); BA(IR b)],
+                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
      assert (a = EAX && b = EDX && rh = EDX && rl = EAX);
      emit (Pmul_r EDX)
   (* Memory accesses *)
-  | "__builtin_read16_reversed", [IR a1], [IR res] ->
-     let addr = Addrmode(Some a1,None,Coq_inl _0) in
-     emit (Pmovzw_rm (res,addr));
+  | "__builtin_read16_reversed", [BA(IR a1)], BR(IR res) ->
+     emit (Pmovzw_rm (res, linear_addr a1 _0));
      emit (Pbswap16 res)
-  | "__builtin_read32_reversed", [IR a1], [IR res] ->
-     let addr = Addrmode(Some a1,None,Coq_inl _0) in
-     emit (Pmov_rm (res,addr));
+  | "__builtin_read32_reversed", [BA(IR a1)], BR(IR res) ->
+     emit (Pmov_rm (res, linear_addr a1 _0));
      emit (Pbswap res)
-  | "__builtin_write16_reversed", [IR a1; IR a2], _ ->
+  | "__builtin_write16_reversed", [BA(IR a1); BA(IR a2)], _ ->
      let tmp = if a1 = ECX then EDX else ECX in
      if a2 <> tmp then
        emit (Pmov_rr (tmp,a2));
      emit (Pbswap16 tmp);
-     emit (Pmovw_mr (linear_addr a1 _0,tmp))
-  | "__builtin_write32_reversed", [IR a1; IR a2], _ ->
+     emit (Pmovw_mr (linear_addr a1 _0, tmp))
+  | "__builtin_write32_reversed", [BA(IR a1); BA(IR a2)], _ ->
      let tmp = if a1 = ECX then EDX else ECX in
-     let addr = Addrmode(Some a1,None,Coq_inl _0) in
      if a2 <> tmp then
        emit (Pmov_rr (tmp,a2));
      emit (Pbswap tmp);
-     emit (Pmov_mr (addr,tmp))
+     emit (Pmov_mr (linear_addr a1 _0, tmp))
   (* Vararg stuff *)
-  | "__builtin_va_start", [IR a], _ ->
+  | "__builtin_va_start", [BA(IR a)], _ ->
      expand_builtin_va_start a
   (* Synchronization *)
   | "__builtin_membar", [], _ ->
      ()
   (* Catch-all *)
   | _ ->
-     invalid_arg ("unrecognized builtin " ^ name)
+     raise (Error ("unrecognized builtin " ^ name))
 
-
+(* Expansion of instructions *)
        
 let expand_instruction instr =
   match instr with
@@ -365,10 +373,6 @@ let expand_instruction instr =
           expand_builtin_vload chunk args res
        | EF_vstore chunk ->
           expand_builtin_vstore chunk args
-       | EF_vload_global(chunk, id, ofs) ->
-          expand_builtin_vload_global chunk id ofs args res
-       | EF_vstore_global(chunk, id, ofs) ->
-          expand_builtin_vstore_global chunk id ofs args
        | EF_memcpy(sz, al) ->
           expand_builtin_memcpy
             (Int32.to_int (camlint_of_coqint sz))
@@ -376,22 +380,48 @@ let expand_instruction instr =
             args
        | EF_annot_val(txt, targ) ->
           expand_annot_val txt targ args res      
-       | EF_inline_asm(txt, sg, clob) ->
+       | EF_annot _ | EF_debug _ | EF_inline_asm _ ->
           emit instr
-       | _ -> assert false
+       | _ ->
+          assert false
      end
   | _ -> emit instr
        
-let expand_program p = p
-
 let expand_function fn =
-  set_current_function fn;
-  List.iter expand_instruction fn.fn_code;
-  get_current_function ()
+  try
+    set_current_function fn;
+    List.iter expand_instruction fn.fn_code;
+    Errors.OK (get_current_function ())
+  with Error s ->
+    Errors.Error (Errors.msg (coqstring_of_camlstring s))
 
 let expand_fundef = function
-  | Internal f -> Internal (expand_function f)
-  | External ef -> External ef
+  | Internal f ->
+      begin match expand_function f with
+      | Errors.OK tf -> Errors.OK (Internal tf)
+      | Errors.Error msg -> Errors.Error msg
+      end
+  | External ef ->
+      Errors.OK (External ef)
 
-let expand_program (p: Asm.program) : Asm.program =
-  AST.transform_program expand_fundef p
+let expand_program (p: Asm.program) : Asm.program Errors.res =
+  AST.transform_partial_program expand_fundef p
+let expand_function fn =
+  try
+    set_current_function fn;
+    List.iter expand_instruction fn.fn_code;
+    Errors.OK (get_current_function ())
+  with Error s ->
+    Errors.Error (Errors.msg (coqstring_of_camlstring s))
+
+let expand_fundef = function
+  | Internal f ->
+      begin match expand_function f with
+      | Errors.OK tf -> Errors.OK (Internal tf)
+      | Errors.Error msg -> Errors.Error msg
+      end
+  | External ef ->
+      Errors.OK (External ef)
+
+let expand_program (p: Asm.program) : Asm.program Errors.res =
+  AST.transform_partial_program expand_fundef p
