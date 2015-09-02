@@ -177,9 +177,9 @@ let p_instruction oc ic =
   | Pcrxor (cr1,cr2,cr3) -> fprintf oc "{\"Instruction Name\":\"Pcrxor\",\"Args\":[%a,%a,%a]}" p_crbit cr1 p_crbit cr2 p_crbit cr3
   | Pdcbf (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pdcbf\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
   | Pdcbi (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pdcbi\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
-  | Pdcbt (n,ir1) -> fprintf oc "{\"Instruction Name\":\"Pdcbt\",\"Args\":[%a,%a]}" p_int n p_ireg ir1
-  | Pdcbtst (n,ir1) -> fprintf oc "{\"Instruction Name\":\"Pdcbtst\",\"Args\":[%a,%a]}" p_int n p_ireg ir1
-  | Pdcbtls (n,ir1) -> fprintf oc "{\"Instruction Name\":\"Pdcbtls\",\"Args\":[%a,%a]}" p_int n p_ireg ir1
+  | Pdcbt (n,ir1) -> fprintf oc "{\"Instruction Name\":\"Pdcbt\",\"Args\":[%a,%a]}" p_int_constant n p_ireg ir1
+  | Pdcbtst (n,ir1) -> fprintf oc "{\"Instruction Name\":\"Pdcbtst\",\"Args\":[%a,%a]}" p_int_constant n p_ireg ir1
+  | Pdcbtls (n,ir1) -> fprintf oc "{\"Instruction Name\":\"Pdcbtls\",\"Args\":[%a,%a]}" p_int_constant n p_ireg ir1
   | Pdivw (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pdivw\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pdivwu (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pdivwu\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Peieio -> fprintf oc "{\"Instruction Name\":\"Peieio,\"Args\":[]}"
@@ -246,8 +246,8 @@ let p_instruction oc ic =
   | Pmr (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pmr\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
   | Pmtctr ir -> fprintf oc "{\"Instruction Name\":\"Pmtctr\",\"Args\":[%a]}" p_ireg ir
   | Pmtlr ir -> fprintf oc "{\"Instruction Name\":\"Pmtlr\",\"Args\":[%a]}" p_ireg ir
-  | Pmfspr(ir, n) -> fprintf oc "{\"Instruction Name\":\"Pmfspr\",\"Args\":[%a,%a]}" p_ireg ir p_int n
-  | Pmtspr(n, ir) -> fprintf oc "{\"Instruction Name\":\"Pmtspr\",\"Args\":[%a,%a]}" p_int n p_ireg ir
+  | Pmfspr(ir, n) -> fprintf oc "{\"Instruction Name\":\"Pmfspr\",\"Args\":[%a,%a]}" p_ireg ir p_int_constant n
+  | Pmtspr(n, ir) -> fprintf oc "{\"Instruction Name\":\"Pmtspr\",\"Args\":[%a,%a]}" p_int_constant n p_ireg ir
   | Pmulli (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Pmulli\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Pmullw (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pmulw\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pmulhw (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pmulhw\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
