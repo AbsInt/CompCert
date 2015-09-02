@@ -463,11 +463,11 @@ module Target (System : SYSTEM):TARGET =
       | Pdcbi (r1,r2) ->
           fprintf oc "	dcbi	%a, %a\n" ireg r1 ireg r2
       | Pdcbt (c,r1) ->
-          fprintf oc "	dcbt	%s, %a, %a\n" (Z.to_string c) ireg GPR0  ireg r1
+          fprintf oc "	dcbt	%ld, %a, %a\n" (camlint_of_coqint c) ireg GPR0  ireg r1
       | Pdcbtst (c,r1) ->
-          fprintf oc "	dcbtst	%s, %a, %a\n"  (Z.to_string c) ireg GPR0 ireg r1
+          fprintf oc "	dcbtst	%ld, %a, %a\n"  (camlint_of_coqint c) ireg GPR0 ireg r1
       | Pdcbtls (c,r1) ->
-          fprintf oc "	dcbtls	%s, %a, %a\n" (Z.to_string c) ireg GPR0 ireg r1
+          fprintf oc "	dcbtls	%ld, %a, %a\n" (camlint_of_coqint c) ireg GPR0 ireg r1
       | Pdivw(r1, r2, r3) ->
           fprintf oc "	divw	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pdivwu(r1, r2, r3) ->

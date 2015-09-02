@@ -363,7 +363,7 @@ let expand_builtin_prefetch addr rw loc =
   expand_builtin_cache_common addr emit_prefetch_instr
 
 let expand_builtin_dcbtls addr loc =
-  if not ((loc >= _0) && (loc <= _2)) then
+  if not ((loc == _0) || (loc = _2)) then
     raise (Error "the second argument of __builtin_dcbtls must be a constant between 0 and 2");
   let emit_inst addr = emit (Pdcbtls (loc,addr)) in
   expand_builtin_cache_common addr emit_inst
