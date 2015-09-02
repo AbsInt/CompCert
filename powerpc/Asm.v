@@ -207,6 +207,7 @@ Inductive instruction : Type :=
   | Pfsel: freg -> freg -> freg -> freg -> instruction        (**r FP conditional move *)
   | Pisync: instruction                                       (**r ISYNC barrier *)
   | Picbi: ireg -> ireg -> instruction                        (**r instruction cache invalidate *)
+  | Picbtls: int -> ireg -> instruction                       (**r instruction cache block touch and lock set *)
   | Plbz: ireg -> constant -> ireg -> instruction             (**r load 8-bit unsigned int *)
   | Plbzx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
   | Plfd: freg -> constant -> ireg -> instruction             (**r load 64-bit float *)
@@ -890,6 +891,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Plwarx _ _ _
   | Plwbrx _ _ _
   | Picbi _ _
+  | Picbtls _ _
   | Pisync
   | Plwsync
   | Plhbrx _ _ _

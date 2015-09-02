@@ -536,6 +536,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	fsel	%a, %a, %a, %a\n" freg r1 freg r2 freg r3 freg r4
       | Picbi (r1,r2) ->
           fprintf oc "	icbi	%a,%a\n" ireg r1 ireg r2
+      | Picbtls (n,r1) ->
+          fprintf oc "	icbtls	%ld, %a, %a\n" (camlint_of_coqint n) ireg GPR0 ireg r1
       | Pisync ->
           fprintf oc "	isync\n"
       | Plwsync ->

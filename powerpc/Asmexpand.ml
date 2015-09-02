@@ -368,6 +368,12 @@ let expand_builtin_dcbtls addr loc =
   let emit_inst addr = emit (Pdcbtls (loc,addr)) in
   expand_builtin_cache_common addr emit_inst
 
+let expand_builtin_icbtls addr loc =
+  if not ((loc == _0) || (loc = _2)) then
+    raise (Error "the second argument of __builtin_icbtls must be a constant between 0 and 2");
+  let emit_inst addr = emit (Picbtls (loc,addr)) in
+  expand_builtin_cache_common addr emit_inst
+
 (* Handling of compiler-inlined builtins *)
 
 let expand_builtin_inline name args res =
@@ -476,6 +482,10 @@ let expand_builtin_inline name args res =
      expand_builtin_dcbtls a loc
   | "__builtin_dcbtls",_,_ ->
       raise (Error "the second argument of __builtin_dcbtls must be a constant")
+  | "__builtin_icbtls", [a; BA_int loc],_ ->
+     expand_builtin_icbtls a loc
+  | "__builtin_icbtls",_,_ ->
+      raise (Error "the second argument of __builtin_icbtls must be a constant")
   | "__builtin_prefetch" , [a1 ;BA_int rw; BA_int loc],_ ->
       expand_builtin_prefetch a1 rw loc
   | "__builtin_prefetch" ,_,_ ->
