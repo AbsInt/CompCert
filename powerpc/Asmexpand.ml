@@ -324,6 +324,50 @@ let expand_builtin_va_start r =
 let expand_int64_arith conflict rl fn =
   if conflict then (fn GPR0; emit (Pmr(rl, GPR0))) else fn rl
 
+(* Handling of cache instructions *)
+
+(* Auxiliary function to generate address for the cache function *)
+let expand_builtin_cache_common addr f =
+  let add = match addr with
+  | BA (IR a1) -> a1
+  | BA_addrstack ofs ->
+      emit_addimm GPR11 GPR1 ofs;
+      GPR11
+  | BA_addrglobal(id, ofs) ->
+      if symbol_is_small_data id ofs then begin
+        emit (Paddi (GPR11, GPR0, Csymbol_sda(id, ofs)));
+        GPR11
+      end else if symbol_is_rel_data id ofs then begin
+        emit (Paddis(GPR11, GPR0, Csymbol_rel_high(id, ofs)));
+        emit (Paddi(GPR11, GPR11, Csymbol_rel_low(id, ofs)));
+        GPR11
+      end else begin
+        emit (Paddis(GPR11, GPR0, Csymbol_high(id, ofs)));
+        emit (Paddi (GPR11, GPR11, Csymbol_low(id, ofs)));
+        GPR11
+      end 
+  | _ -> raise (Error "Argument is not an address") in
+  f add
+ 
+let expand_builtin_prefetch addr rw loc =
+  if not ((loc >= _0) && (loc <= _2)) then
+    raise (Error "the last argument of __builtin_prefetch must be a constant between 0 and 2");
+  let emit_prefetch_instr addr =
+    if Int.eq rw _0 then begin
+      emit (Pdcbt (loc,addr));
+    end else if Int.eq rw _1 then begin
+      emit (Pdcbtst (loc,addr));
+    end else
+      raise (Error "the second argument of __builtin_prefetch must be either 0 or 1")
+  in
+  expand_builtin_cache_common addr emit_prefetch_instr
+
+let expand_builtin_dcbtls addr loc =
+  if not ((loc >= _0) && (loc <= _2)) then
+    raise (Error "the second argument of __builtin_dcbtls must be a constant between 0 and 2");
+  let emit_inst addr = emit (Pdcbtls (loc,addr)) in
+  expand_builtin_cache_common addr emit_inst
+
 (* Handling of compiler-inlined builtins *)
 
 let expand_builtin_inline name args res =
@@ -428,15 +472,12 @@ let expand_builtin_inline name args res =
       emit (Pdcbi (GPR0,a1))
   | "__builtin_icbi", [BA(IR a1)],_ ->
       emit (Picbi(GPR0,a1))
-  | "__builtin_prefetch" , [BA (IR addr);BA_int rw; BA_int loc],_ ->
-      if not ((loc >= _0) && (loc < _4)) then
-          raise (Error "the last argument of __builtin_prefetch must be a constant between 0 and 3");
-      if Int.eq rw _0 then begin
-        emit (Pdcbt (loc,addr));
-      end else if Int.eq rw _1 then begin
-        emit (Pdcbtst (loc,addr));
-      end else
-        raise (Error "the second argument of __builtin_prefetch must be either 0 or 1")
+  | "__builtin_dcbtls", [a; BA_int loc],_ ->
+     expand_builtin_dcbtls a loc
+  | "__builtin_dcbtls",_,_ ->
+      raise (Error "the second argument of __builtin_dcbtls must be a constant")
+  | "__builtin_prefetch" , [a1 ;BA_int rw; BA_int loc],_ ->
+      expand_builtin_prefetch a1 rw loc
   | "__builtin_prefetch" ,_,_ ->
       raise (Error "the second and third argument of __builtin_prefetch must be a constant")
   (* Special registers *)

@@ -179,6 +179,7 @@ let p_instruction oc ic =
   | Pdcbi (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pdcbi\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
   | Pdcbt (n,ir1) -> fprintf oc "{\"Instruction Name\":\"Pdcbt\",\"Args\":[%a,%a]}" p_int n p_ireg ir1
   | Pdcbtst (n,ir1) -> fprintf oc "{\"Instruction Name\":\"Pdcbtst\",\"Args\":[%a,%a]}" p_int n p_ireg ir1
+  | Pdcbtls (n,ir1) -> fprintf oc "{\"Instruction Name\":\"Pdcbtls\",\"Args\":[%a,%a]}" p_int n p_ireg ir1
   | Pdivw (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pdivw\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pdivwu (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pdivwu\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Peieio -> fprintf oc "{\"Instruction Name\":\"Peieio,\"Args\":[]}"
@@ -336,7 +337,7 @@ let p_fundef oc (name,f) =
   let alignment = atom_alignof name
   and inline = atom_is_inline name
   and static = atom_is_static name
-  and instr = List.filter (function Pcfi_adjust _ | Pcfi_rel_offset _ -> false | _ -> true) f.fn_code in
+  and instr = List.filter (function Pbuiltin _| Pcfi_adjust _ | Pcfi_rel_offset _ -> false | _ -> true) f.fn_code in
   let c_section,l_section,j_section = match (atom_sections name) with [a;b;c] -> a,b,c | _ -> assert false in
   fprintf oc "{\"Fun Name\":%a,\n\"Fun Storage Class\":%a,\n\"Fun Alignment\":%a,\n\"Fun Section Code\":%a,\"Fun Section Literals\":%a,\"Fun Section Jumptable\":%a,\n\"Fun Inline\":%B,\n\"Fun Code\":%a}\n"
     p_atom name  p_storage static p_int_opt alignment  
