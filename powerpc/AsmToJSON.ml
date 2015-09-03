@@ -158,7 +158,7 @@ let p_instruction oc ic =
   | Pandi_ (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Pandi_\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Pandis_ (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Pandis_\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Pb l -> fprintf oc "{\"Instruction Name\":\"Pb\",\"Args\":[%a]}" p_label l
-  | Pbctr s -> assert false (* Should not occur *)
+  | Pbctr s -> fprintf oc  "{\"Instruction Name\":\"Pbctr\",\"Args\":[]}"
   | Pbctrl s -> fprintf oc "{\"Instruction Name\":\"Pbctrl\",\"Args\":[]}"
   | Pbdnz l -> fprintf oc "{\"Instruction Name\":\"Pbdnz\",\"Args\":[%a]}" p_label l 
   | Pbf (c,l) -> fprintf oc "{\"Instruction Name\":\"Pbf\",\"Args\":[%a,%a]}" p_crbit c p_label l
