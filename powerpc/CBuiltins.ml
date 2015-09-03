@@ -100,6 +100,8 @@ let builtins = {
       (TVoid[], [TPtr (TVoid [],[]);TInt (IInt,[])],false);
     "__builtin_icbtls",
       (TVoid[], [TPtr (TVoid [],[]);TInt (IInt,[])],false);
+    "__builtin_dcbz",
+      (TVoid[], [TPtr (TVoid [],[])],false);
     (* Access to special registers *)
     "__builtin_get_spr",
       (TInt(IUInt, []), [TInt(IInt, [])], false);

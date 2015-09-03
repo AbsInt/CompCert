@@ -354,9 +354,9 @@ let expand_builtin_prefetch addr rw loc =
     raise (Error "the last argument of __builtin_prefetch must be a constant between 0 and 2");
   let emit_prefetch_instr addr =
     if Int.eq rw _0 then begin
-      emit (Pdcbt (loc,addr));
+      emit (Pdcbt (loc,GPR0,addr));
     end else if Int.eq rw _1 then begin
-      emit (Pdcbtst (loc,addr));
+      emit (Pdcbtst (loc,GPR0,addr));
     end else
       raise (Error "the second argument of __builtin_prefetch must be either 0 or 1")
   in
@@ -365,13 +365,13 @@ let expand_builtin_prefetch addr rw loc =
 let expand_builtin_dcbtls addr loc =
   if not ((loc == _0) || (loc = _2)) then
     raise (Error "the second argument of __builtin_dcbtls must be a constant between 0 and 2");
-  let emit_inst addr = emit (Pdcbtls (loc,addr)) in
+  let emit_inst addr = emit (Pdcbtls (loc,GPR0,addr)) in
   expand_builtin_cache_common addr emit_inst
 
 let expand_builtin_icbtls addr loc =
   if not ((loc == _0) || (loc = _2)) then
     raise (Error "the second argument of __builtin_icbtls must be a constant between 0 and 2");
-  let emit_inst addr = emit (Picbtls (loc,addr)) in
+  let emit_inst addr = emit (Picbtls (loc,GPR0,addr)) in
   expand_builtin_cache_common addr emit_inst
 
 (* Handling of compiler-inlined builtins *)
@@ -490,6 +490,8 @@ let expand_builtin_inline name args res =
       expand_builtin_prefetch a1 rw loc
   | "__builtin_prefetch" ,_,_ ->
       raise (Error "the second and third argument of __builtin_prefetch must be a constant")
+  | "__builtin_dcbz",[BA (IR a1)],_ ->
+      emit (Pdcbz (GPR0,a1))
   (* Special registers *)
   | "__builtin_get_spr", [BA_int n], BR(IR res) ->
       emit (Pmfspr(res, n))

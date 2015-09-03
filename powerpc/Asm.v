@@ -167,9 +167,10 @@ Inductive instruction : Type :=
   | Pcrxor: crbit -> crbit -> crbit -> instruction            (**r xor between condition bits *)
   | Pdcbf: ireg -> ireg -> instruction                        (**r data cache flush *)
   | Pdcbi: ireg -> ireg -> instruction                        (**r data cache invalidate *)
-  | Pdcbt: int -> ireg -> instruction                         (**r data cache block touch *)
-  | Pdcbtst: int -> ireg -> instruction                       (**r data cache block touch *)
-  | Pdcbtls: int -> ireg -> instruction                       (**r data cache block touch and lock set *)
+  | Pdcbt: int -> ireg -> ireg -> instruction                 (**r data cache block touch *)
+  | Pdcbtst: int -> ireg -> ireg -> instruction               (**r data cache block touch *)
+  | Pdcbtls: int -> ireg -> ireg -> instruction               (**r data cache block touch and lock *)
+  | Pdcbz: ireg -> ireg -> instruction                        (**r data cache block zero *)
   | Pdivw: ireg -> ireg -> ireg -> instruction                (**r signed division *)
   | Pdivwu: ireg -> ireg -> ireg -> instruction               (**r unsigned division *)
   | Peieio: instruction                                       (**r EIEIO barrier *)
@@ -207,7 +208,7 @@ Inductive instruction : Type :=
   | Pfsel: freg -> freg -> freg -> freg -> instruction        (**r FP conditional move *)
   | Pisync: instruction                                       (**r ISYNC barrier *)
   | Picbi: ireg -> ireg -> instruction                        (**r instruction cache invalidate *)
-  | Picbtls: int -> ireg -> instruction                       (**r instruction cache block touch and lock set *)
+  | Picbtls: int -> ireg -> ireg -> instruction               (**r instruction cache block touch and lock set *)
   | Plbz: ireg -> constant -> ireg -> instruction             (**r load 8-bit unsigned int *)
   | Plbzx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
   | Plfd: freg -> constant -> ireg -> instruction             (**r load 64-bit float *)
@@ -874,9 +875,10 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pcrxor _ _ _
   | Pdcbf _ _
   | Pdcbi _ _
-  | Pdcbt _ _
-  | Pdcbtst _ _
-  | Pdcbtls _ _
+  | Pdcbt _ _ _
+  | Pdcbtst _ _ _
+  | Pdcbtls _ _ _
+  | Pdcbz _ _
   | Peieio
   | Pfctiw _ _
   | Pfctiwz _ _
@@ -891,7 +893,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Plwarx _ _ _
   | Plwbrx _ _ _
   | Picbi _ _
-  | Picbtls _ _
+  | Picbtls _ _ _
   | Pisync
   | Plwsync
   | Plhbrx _ _ _
