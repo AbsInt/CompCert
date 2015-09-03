@@ -242,6 +242,7 @@ let p_instruction oc ic =
   | Plwzx_a (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Plwzx\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Plwarx (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Plwarx\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Plwbrx (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Plwbrx\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
+  | Pmbar c -> fprintf oc "{\"Instruction Name\":\"Pmbar\",\"Args\":[%a]}" p_int_constant c
   | Pmfcr ir -> fprintf oc "{\"Instruction Name\":\"Pmfcr\",\"Args\":[%a]}" p_ireg ir
   | Pmfcrbit (ir,crb) -> assert false (* Should not occur *)
   | Pmflr ir -> fprintf oc "{\"Instruction Name\":\"Pmflr\",\"Args\":[%a]}" p_ireg ir

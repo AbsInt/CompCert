@@ -209,6 +209,7 @@ Definition builtin_set_spr := ident_of_string "__builtin_set_spr".
 Definition builtin_prefetch := ident_of_string "__builtin_prefetch".
 Definition builtin_dcbtls := ident_of_string "__builtin_dcbtls".
 Definition builtin_icbtls := ident_of_string "__builtin_icbtls".
+Definition builtin_mbar := ident_of_string "__builtin_mbar".
 
 Definition builtin_constraints (ef: external_function) :
                                        list builtin_arg_constraint :=
@@ -219,6 +220,7 @@ Definition builtin_constraints (ef: external_function) :
       else if ident_eq id builtin_prefetch then OK_addrany :: OK_const :: OK_const :: nil
       else if ident_eq id builtin_dcbtls then OK_addrany::OK_const::nil
       else if ident_eq id builtin_icbtls then OK_addrany::OK_const::nil
+      else if ident_eq id builtin_mbar then OK_const::nil
       else nil
   | EF_vload _ => OK_addrany :: nil
   | EF_vstore _ => OK_addrany :: OK_default :: nil

@@ -586,6 +586,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	lwzu	%a, %a(%a)\n" ireg r1 constant c ireg r2
       | Plwzx(r1, r2, r3) | Plwzx_a(r1, r2, r3) ->
           fprintf oc "	lwzx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+      | Pmbar mo ->
+          fprintf oc "	mbar	%ld\n" (camlint_of_coqint mo)
       | Pmfcr(r1) ->
           fprintf oc "	mfcr	%a\n" ireg r1
       | Pmfcrbit(r1, bit) ->

@@ -231,6 +231,7 @@ Inductive instruction : Type :=
   | Plwzx_a: ireg -> ireg -> ireg -> instruction              (**r same, with 2 index regs *)
   | Plwarx: ireg -> ireg -> ireg -> instruction               (**r load with reservation *)
   | Plwbrx: ireg -> ireg -> ireg -> instruction               (**r load 32-bit int and reverse endianness *)
+  | Pmbar: int -> instruction                                 (**r memory barrier *)
   | Pmfcr: ireg -> instruction                                (**r move condition register to reg *)
   | Pmfcrbit: ireg -> crbit -> instruction                    (**r move condition bit to reg (pseudo) *)
   | Pmflr: ireg -> instruction                                (**r move LR to reg *)
@@ -898,6 +899,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Plwsync
   | Plhbrx _ _ _
   | Plwzu _ _ _
+  | Pmbar _
   | Pmfcr _
   | Pmfspr _ _
   | Pmtspr _ _

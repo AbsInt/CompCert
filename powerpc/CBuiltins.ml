@@ -85,6 +85,8 @@ let builtins = {
       (TVoid [], [], false);
     "__builtin_lwsync",
       (TVoid [], [], false);
+    "__builtin_mbar",
+      (TVoid [], [TInt(IInt, [])], false);
     "__builtin_trap",
       (TVoid [], [], false);
     (* Cache isntructions *)

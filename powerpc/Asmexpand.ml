@@ -466,6 +466,12 @@ let expand_builtin_inline name args res =
       emit (Pisync)
   | "__builtin_lwsync", [], _ ->
       emit (Plwsync)
+  | "__builtin_mbar",  [BA_int mo], _ ->
+      if not (mo = _0 || mo = _1) then
+        raise (Error "the argument of __builtin_mbar must be either 0 or 1");
+      emit (Pmbar mo)
+  | "__builin_mbar",_, _ ->
+      raise (Error "the argument of __builtin_mbar must be a constant");
   | "__builtin_trap", [], _ ->
       emit (Ptrap)
   (* Vararg stuff *)
