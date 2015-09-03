@@ -221,7 +221,7 @@ let p_instruction oc ic =
   | Pisync -> fprintf oc "{\"Instruction Name\":\"Pisync\",\"Args\":[]}"
   | Plwsync -> fprintf oc "{\"Instruction Name\":\"Plwsync\",\"Args\":[]}"
   | Plbz (ir1,c,ir2) -> fprintf oc "{\"Instruction Name\":\"Plbz\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_constant c p_ireg ir2
-  | Plbzx (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pblzx\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
+  | Plbzx (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Plbzx\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Plfd (fr,c,ir)
   | Plfd_a (fr,c,ir) -> fprintf oc "{\"Instruction Name\":\"Plfd\",\"Args\":[%a,%a,%a]}" p_freg fr p_constant c p_ireg ir
   | Plfdx (fr,ir1,ir2)
