@@ -271,7 +271,7 @@ let p_instruction oc ic =
   | Pstbx (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pstbx\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pstfd (fr,c,ir)
   | Pstfd_a (fr,c,ir) -> fprintf oc "{\"Instruction Name\":\"Pstfd\",\"Args\":[%a,%a,%a]}" p_freg fr p_constant c p_ireg ir
-  | Pstfdu (fr,c,ir) -> fprintf oc "{\"Instruction Name\":\"Pstdu\",\"Args\":[%a,%a,%a]}" p_freg fr p_constant c p_ireg ir
+  | Pstfdu (fr,c,ir) -> fprintf oc "{\"Instruction Name\":\"Pstfdu\",\"Args\":[%a,%a,%a]}" p_freg fr p_constant c p_ireg ir
   | Pstfdx (fr,ir1,ir2)
   | Pstfdx_a (fr,ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pstfdx\",\"Args\":[%a,%a,%a]}" p_freg fr p_ireg ir1 p_ireg ir2
   | Pstfs (fr,c,ir) -> fprintf oc "{\"Instruction Name\":\"Pstfs\",\"Args\":[%a,%a,%a]}" p_freg fr p_constant c p_ireg ir
