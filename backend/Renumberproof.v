@@ -198,13 +198,7 @@ Proof.
 (* builtin *)
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
-    eapply external_call_symbols_preserved; eauto.
-    exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
-  constructor; auto. eapply reach_succ; eauto. simpl; auto.
-(* annot *)
-  econstructor; split.
-  eapply exec_Iannot; eauto.
-    eapply eval_annot_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
+    eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
     eapply external_call_symbols_preserved; eauto.
     exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   constructor; auto. eapply reach_succ; eauto. simpl; auto.

@@ -41,3 +41,6 @@ Parameter optim_redundancy: unit -> bool.
 
 (** Flag -fthumb.  For the ARM back-end. *)
 Parameter thumb: unit -> bool.
+
+(** Flag -g.  For insertion of debugging information. *)
+Parameter debug: unit -> bool.

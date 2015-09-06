@@ -85,6 +85,8 @@ let builtins = {
       (TVoid [], [], false);
     "__builtin_lwsync",
       (TVoid [], [], false);
+    "__builtin_mbar",
+      (TVoid [], [TInt(IInt, [])], false);
     "__builtin_trap",
       (TVoid [], [], false);
     (* Cache isntructions *)
@@ -93,7 +95,20 @@ let builtins = {
     "__builtin_dcbi",
       (TVoid [],[TPtr(TVoid [], [])],false);
     "__builtin_icbi",
-      (TVoid [],[TPtr(TVoid [], [])],false)
+      (TVoid [],[TPtr(TVoid [], [])],false);
+    "__builtin_prefetch",
+      (TVoid [], [TPtr (TVoid [],[]);TInt (IInt, []);TInt (IInt,[])],false);
+    "__builtin_dcbtls",
+      (TVoid[], [TPtr (TVoid [],[]);TInt (IInt,[])],false);
+    "__builtin_icbtls",
+      (TVoid[], [TPtr (TVoid [],[]);TInt (IInt,[])],false);
+    "__builtin_dcbz",
+      (TVoid[], [TPtr (TVoid [],[])],false);
+    (* Access to special registers *)
+    "__builtin_get_spr",
+      (TInt(IUInt, []), [TInt(IInt, [])], false);
+    "__builtin_set_spr",
+      (TVoid [], [TInt(IInt, []); TInt(IUInt, [])], false)
   ]
 }
 

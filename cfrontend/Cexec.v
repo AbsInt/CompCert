@@ -527,6 +527,10 @@ Definition do_ef_annot_val (text: ident) (targ: typ)
   | _ => None
   end.
 
+Definition do_ef_debug (kind: positive) (text: ident) (targs: list typ)
+       (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
+  Some(w, E0, Vundef, m).
+
 Definition do_external (ef: external_function):
        world -> list val -> mem -> option (world * trace * val * mem) :=
   match ef with
@@ -534,14 +538,13 @@ Definition do_external (ef: external_function):
   | EF_builtin name sg => do_external_function name sg ge
   | EF_vload chunk => do_ef_volatile_load chunk
   | EF_vstore chunk => do_ef_volatile_store chunk
-  | EF_vload_global chunk id ofs => do_ef_volatile_load_global chunk id ofs
-  | EF_vstore_global chunk id ofs => do_ef_volatile_store_global chunk id ofs
   | EF_malloc => do_ef_malloc
   | EF_free => do_ef_free
   | EF_memcpy sz al => do_ef_memcpy sz al
   | EF_annot text targs => do_ef_annot text targs
   | EF_annot_val text targ => do_ef_annot_val text targ
   | EF_inline_asm text sg clob => do_inline_assembly text sg ge
+  | EF_debug kind text targs => do_ef_debug kind text targs
   end.
 
 Lemma do_ef_external_sound:
@@ -550,40 +553,21 @@ Lemma do_ef_external_sound:
   external_call ef ge vargs m t vres m' /\ possible_trace w t w'.
 Proof with try congruence.
   intros until m'.
-
-  assert (VLOAD: forall chunk vargs,
-    do_ef_volatile_load chunk w vargs m = Some (w', t, vres, m') ->
-    volatile_load_sem chunk ge vargs m t vres m' /\ possible_trace w t w').
-  intros chunk vargs'.
-  unfold do_ef_volatile_load. destruct vargs'... destruct v... destruct vargs'... 
-  mydestr. destruct p as [[w'' t''] v]; mydestr.
-  exploit do_volatile_load_sound; eauto. intuition. econstructor; eauto. 
-
-  assert (VSTORE: forall chunk vargs,
-    do_ef_volatile_store chunk w vargs m = Some (w', t, vres, m') ->
-    volatile_store_sem chunk ge vargs m t vres m' /\ possible_trace w t w').
-  intros chunk vargs'.
-  unfold do_ef_volatile_store. destruct vargs'... destruct v... destruct vargs'... destruct vargs'... 
-  mydestr. destruct p as [[w'' t''] m'']. mydestr. 
-  exploit do_volatile_store_sound; eauto. intuition. econstructor; eauto.
-
   destruct ef; simpl.
 (* EF_external *)
   eapply do_external_function_sound; eauto. 
 (* EF_builtin *)
   eapply do_external_function_sound; eauto. 
 (* EF_vload *)
+  unfold do_ef_volatile_load. destruct vargs... destruct v... destruct vargs... 
+  mydestr. destruct p as [[w'' t''] v]; mydestr.
+  exploit do_volatile_load_sound; eauto. intuition. econstructor; eauto. 
   auto.
 (* EF_vstore *)
+  unfold do_ef_volatile_store. destruct vargs... destruct v... destruct vargs... destruct vargs... 
+  mydestr. destruct p as [[w'' t''] m'']. mydestr. 
+  exploit do_volatile_store_sound; eauto. intuition. econstructor; eauto.
   auto.
-(* EF_vload_global *)
-  rewrite volatile_load_global_charact; simpl.
-  unfold do_ef_volatile_load_global. destruct (Genv.find_symbol ge)...
-  intros. exploit VLOAD; eauto. intros [A B]. split; auto. exists b; auto.
-(* EF_vstore_global *)
-  rewrite volatile_store_global_charact; simpl.
-  unfold do_ef_volatile_store_global. destruct (Genv.find_symbol ge)...
-  intros. exploit VSTORE; eauto. intros [A B]. split; auto. exists b; auto.
 (* EF_malloc *)
   unfold do_ef_malloc. destruct vargs... destruct v... destruct vargs...
   destruct (Mem.alloc m (-4) (Int.unsigned i)) as [m1 b] eqn:?. mydestr.
@@ -606,6 +590,8 @@ Proof with try congruence.
   econstructor. constructor; eauto. constructor.
 (* EF_inline_asm *)
   eapply do_inline_assembly_sound; eauto.
+(* EF_debug *)
+  unfold do_ef_debug. mydestr. split; constructor.
 Qed.
 
 Lemma do_ef_external_complete:
@@ -613,35 +599,17 @@ Lemma do_ef_external_complete:
   external_call ef ge vargs m t vres m' -> possible_trace w t w' ->
   do_external ef w vargs m = Some(w', t, vres, m').
 Proof.
-  intros.
- 
-  assert (VLOAD: forall chunk vargs,
-             volatile_load_sem chunk ge vargs m t vres m' ->
-             do_ef_volatile_load chunk w vargs m = Some (w', t, vres, m')).
-  intros. inv H1; unfold do_ef_volatile_load.
-  exploit do_volatile_load_complete; eauto. intros EQ; rewrite EQ; auto.
-
-  assert (VSTORE: forall chunk vargs,
-             volatile_store_sem chunk ge vargs m t vres m' ->
-             do_ef_volatile_store chunk w vargs m = Some (w', t, vres, m')).
-  intros. inv H1; unfold do_ef_volatile_store.
-  exploit do_volatile_store_complete; eauto. intros EQ; rewrite EQ; auto.
-
-  destruct ef; simpl in *.
+  intros. destruct ef; simpl in *.
 (* EF_external *)
   eapply do_external_function_complete; eauto.
 (* EF_builtin *)
   eapply do_external_function_complete; eauto.
 (* EF_vload *)
-  auto.
+  inv H; unfold do_ef_volatile_load.
+  exploit do_volatile_load_complete; eauto. intros EQ; rewrite EQ; auto.
 (* EF_vstore *)
-  auto.
-(* EF_vload_global *)
-  rewrite volatile_load_global_charact in H; simpl in H. destruct H as [b [P Q]]. 
-  unfold do_ef_volatile_load_global. rewrite P. auto. 
-(* EF_vstore *)
-  rewrite volatile_store_global_charact in H; simpl in H. destruct H as [b [P Q]]. 
-  unfold do_ef_volatile_store_global. rewrite P. auto. 
+  inv H; unfold do_ef_volatile_store.
+  exploit do_volatile_store_complete; eauto. intros EQ; rewrite EQ; auto.
 (* EF_malloc *)
   inv H; unfold do_ef_malloc. 
   inv H0. rewrite H1. rewrite H2. auto.
@@ -660,6 +628,8 @@ Proof.
   rewrite (eventval_of_val_complete _ _ _ H1). auto.
 (* EF_inline_asm *)
   eapply do_inline_assembly_complete; eauto.
+(* EF_debug *)
+  inv H. inv H0. reflexivity.
 Qed.
 
 (** * Reduction of expressions *)

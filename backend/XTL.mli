@@ -35,8 +35,7 @@ type instruction =
   | Xstore of memory_chunk * addressing * var list * var
   | Xcall of signature * (var, ident) sum * var list * var list
   | Xtailcall of signature * (var, ident) sum * var list
-  | Xbuiltin of external_function * var list * var list
-  | Xannot of external_function * var annot_arg list
+  | Xbuiltin of external_function * var builtin_arg list * var builtin_res
   | Xbranch of node
   | Xcond of condition * var list * node * node
   | Xjumptable of var * node list

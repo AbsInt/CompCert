@@ -34,6 +34,7 @@ Require Import CminorSel.
 Require Import SelectOp.
 Require Import SelectDiv.
 Require Import SelectLong.
+Require Machregs.
 
 Local Open Scope cminorsel_scope.
 Local Open Scope error_monad_scope.
@@ -203,21 +204,27 @@ Definition classify_call (ge: Cminor.genv) (e: Cminor.expr) : call_kind :=
       end
   end.
 
-(** Annotations *)
+(** Builtin arguments and results *)
 
-Definition builtin_is_annot (ef: external_function) (optid: option ident) : bool :=
-  match ef, optid with
-  | EF_annot _ _, None => true
-  | _, _ => false
+Definition sel_builtin_arg
+       (e: Cminor.expr) (c: builtin_arg_constraint): AST.builtin_arg expr :=
+  let e' := sel_expr e in
+  let ba := builtin_arg e' in
+  if builtin_arg_ok ba c then ba else BA e'.
+
+Fixpoint sel_builtin_args
+       (el: list Cminor.expr)
+       (cl: list builtin_arg_constraint): list (AST.builtin_arg expr) :=
+  match el with
+  | nil => nil
+  | e :: el =>
+      sel_builtin_arg e (List.hd OK_default cl) :: sel_builtin_args el (List.tl cl)
   end.
 
-Function sel_annot_arg (e: Cminor.expr) : AST.annot_arg expr :=
-  match e with
-  | Cminor.Econst (Cminor.Oaddrsymbol id ofs) => AA_addrglobal id ofs
-  | Cminor.Econst (Cminor.Oaddrstack ofs) => AA_addrstack ofs
-  | Cminor.Eload chunk (Cminor.Econst (Cminor.Oaddrsymbol id ofs)) => AA_loadglobal chunk id ofs
-  | Cminor.Eload chunk (Cminor.Econst (Cminor.Oaddrstack ofs)) => AA_loadstack chunk ofs
-  | _ => annot_arg (sel_expr e)
+Definition sel_builtin_res (optid: option ident) : builtin_res ident :=
+  match optid with
+  | None => BR_none
+  | Some id => BR id
   end.
 
 (** Conversion of Cminor [switch] statements to decision trees. *)
@@ -277,12 +284,13 @@ Fixpoint sel_stmt (ge: Cminor.genv) (s: Cminor.stmt) : res stmt :=
       OK (match classify_call ge fn with
       | Call_default => Scall optid sg (inl _ (sel_expr fn)) (sel_exprlist args)
       | Call_imm id  => Scall optid sg (inr _ id) (sel_exprlist args)
-      | Call_builtin ef => Sbuiltin optid ef (sel_exprlist args)
+      | Call_builtin ef => Sbuiltin (sel_builtin_res optid) ef
+                                    (sel_builtin_args args
+                                       (Machregs.builtin_constraints ef))
       end)
   | Cminor.Sbuiltin optid ef args =>
-      OK (if builtin_is_annot ef optid
-          then Sannot ef (List.map sel_annot_arg args)
-          else Sbuiltin optid ef (sel_exprlist args))
+      OK (Sbuiltin (sel_builtin_res optid) ef
+                   (sel_builtin_args args (Machregs.builtin_constraints ef)))
   | Cminor.Stailcall sg fn args => 
       OK (match classify_call ge fn with
       | Call_imm id  => Stailcall sg (inr _ id) (sel_exprlist args)

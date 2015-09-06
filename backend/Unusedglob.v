@@ -59,8 +59,7 @@ Definition ref_instruction (i: instruction) : list ident :=
   | Icall _ (inr id) _ _ _ => id :: nil
   | Itailcall _ (inl r) _ => nil
   | Itailcall _ (inr id) _ => id :: nil
-  | Ibuiltin ef _ _ _ => globals_external ef
-  | Iannot _ args _ => globals_of_annot_args args
+  | Ibuiltin _ args _ _ => globals_of_builtin_args args
   | Icond cond _ _ _ => nil
   | Ijumptable _ _ => nil
   | Ireturn _ => nil
@@ -87,7 +86,7 @@ Definition add_ref_definition (pm: prog_map) (id: ident) (w: workset): workset :
   match pm!id with
   | None => w
   | Some (Gfun (Internal f)) => add_ref_function f w
-  | Some (Gfun (External ef)) => addlist_workset (globals_external ef) w
+  | Some (Gfun (External ef)) => w
   | Some (Gvar gv) => add_ref_globvar gv w
   end.
 

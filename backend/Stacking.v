@@ -128,26 +128,26 @@ Definition transl_op (fe: frame_env) (op: operation) :=
 Definition transl_addr (fe: frame_env) (addr: addressing) :=
   shift_stack_addressing (Int.repr fe.(fe_stack_data)) addr.
 
-(** Translation of an annotation argument. *)
+(** Translation of a builtin argument. *)
 
-Fixpoint transl_annot_arg (fe: frame_env) (a: annot_arg loc) : annot_arg mreg :=
+Fixpoint transl_builtin_arg (fe: frame_env) (a: builtin_arg loc) : builtin_arg mreg :=
   match a with
-  | AA_base (R r) => AA_base r
-  | AA_base (S Local ofs ty) =>
-      AA_loadstack (chunk_of_type ty) (Int.repr (offset_of_index fe (FI_local ofs ty)))
-  | AA_base (S _ _ _) => AA_int Int.zero  (**r never happens *)
-  | AA_int n => AA_int n
-  | AA_long n => AA_long n
-  | AA_float n => AA_float n
-  | AA_single n => AA_single n
-  | AA_loadstack chunk ofs =>
-      AA_loadstack chunk (Int.add ofs (Int.repr fe.(fe_stack_data)))
-  | AA_addrstack ofs =>
-      AA_addrstack (Int.add ofs (Int.repr fe.(fe_stack_data)))
-  | AA_loadglobal chunk id ofs => AA_loadglobal chunk id ofs
-  | AA_addrglobal id ofs => AA_addrglobal id ofs
-  | AA_longofwords hi lo => 
-      AA_longofwords (transl_annot_arg fe hi) (transl_annot_arg fe lo)
+  | BA (R r) => BA r
+  | BA (S Local ofs ty) =>
+      BA_loadstack (chunk_of_type ty) (Int.repr (offset_of_index fe (FI_local ofs ty)))
+  | BA (S _ _ _) => BA_int Int.zero  (**r never happens *)
+  | BA_int n => BA_int n
+  | BA_long n => BA_long n
+  | BA_float n => BA_float n
+  | BA_single n => BA_single n
+  | BA_loadstack chunk ofs =>
+      BA_loadstack chunk (Int.add ofs (Int.repr fe.(fe_stack_data)))
+  | BA_addrstack ofs =>
+      BA_addrstack (Int.add ofs (Int.repr fe.(fe_stack_data)))
+  | BA_loadglobal chunk id ofs => BA_loadglobal chunk id ofs
+  | BA_addrglobal id ofs => BA_addrglobal id ofs
+  | BA_splitlong hi lo => 
+      BA_splitlong (transl_builtin_arg fe hi) (transl_builtin_arg fe lo)
   end.
 
 (** Translation of a Linear instruction.  Prepends the corresponding
@@ -192,9 +192,7 @@ Definition transl_instr
       restore_callee_save fe
         (Mtailcall sig ros :: k)
   | Lbuiltin ef args dst =>
-      Mbuiltin ef args dst :: k
-  | Lannot ef args =>
-      Mannot ef (map (transl_annot_arg fe) args) :: k
+      Mbuiltin ef (map (transl_builtin_arg fe) args) dst :: k
   | Llabel lbl =>
       Mlabel lbl :: k
   | Lgoto lbl =>

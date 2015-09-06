@@ -137,7 +137,6 @@ Definition destroyed_by_builtin (ef: external_function): list mreg :=
   | EF_memcpy sz al =>
       if zle sz 32 then CX :: X7 :: nil else CX :: SI :: DI :: nil
   | EF_vstore (Mint8unsigned|Mint8signed) => AX :: CX :: nil
-  | EF_vstore_global (Mint8unsigned|Mint8signed) _ _ => AX :: nil
   | EF_builtin id sg =>
       if ident_eq id builtin_write16_reversed
       || ident_eq id builtin_write32_reversed
@@ -267,3 +266,15 @@ Definition two_address_op (op: operation) : bool :=
   | Ocmp c => false
   end.
 
+(* Constraints on constant propagation for builtins *)
+
+Definition builtin_constraints (ef: external_function) :
+                                       list builtin_arg_constraint :=
+  match ef with
+  | EF_vload _ => OK_addrany :: nil
+  | EF_vstore _ => OK_addrany :: OK_default :: nil
+  | EF_memcpy _ _ => OK_addrany :: OK_addrany :: nil
+  | EF_annot txt targs => map (fun _ => OK_all) targs
+  | EF_debug kind txt targs => map (fun _ => OK_all) targs
+  | _ => nil
+  end.

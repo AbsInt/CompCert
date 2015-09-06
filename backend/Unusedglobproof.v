@@ -111,7 +111,7 @@ Proof.
   unfold add_ref_definition; intros. 
   destruct (pm!id) as [[[] | ? ] | ].
   apply add_ref_function_incl.
-  apply addlist_workset_incl. 
+  apply workset_incl_refl.
   apply add_ref_globvar_incl.
   apply workset_incl_refl.
 Qed.
@@ -165,7 +165,7 @@ Proof.
 Qed.
 
 Definition ref_fundef (fd: fundef) (id: ident) : Prop :=
-  match fd with Internal f => ref_function f id | External ef => In id (globals_external ef) end.
+  match fd with Internal f => ref_function f id | External ef => False end.
 
 Definition ref_def (gd: globdef fundef unit) (id: ident) : Prop :=
   match gd with
@@ -179,7 +179,7 @@ Lemma seen_add_ref_definition:
 Proof.
   unfold add_ref_definition; intros. rewrite H. red in H0; destruct gd as [[f|ef]|gv].
   apply seen_add_ref_function; auto.
-  apply seen_addlist_workset; auto.
+  contradiction.
   destruct H0 as (ofs & IN).
   unfold add_ref_globvar.
   assert (forall l (w: workset),
@@ -580,6 +580,14 @@ Proof.
   intros; red; intros. rewrite ! Regmap.gsspec. destruct (peq r0 r); auto. 
 Qed.
 
+Lemma set_res_inject:
+  forall f rs rs' res v v',
+  regset_inject f rs rs' -> Val.inject f v v' ->
+  regset_inject f (regmap_setres res v rs) (regmap_setres res v' rs').
+Proof.
+  intros. destruct res; auto. apply set_reg_inject; auto. 
+Qed.
+
 Lemma regset_inject_incr:
   forall f f' rs rs', regset_inject f rs rs' -> inject_incr f f' -> regset_inject f' rs rs'.
 Proof.
@@ -704,7 +712,6 @@ Lemma external_call_inject:
   forall ef vargs m1 t vres m2 f m1' vargs',
   meminj_preserves_globals f ->
   external_call ef ge vargs m1 t vres m2 ->
-  (forall id, In id (globals_external ef) -> kept id) ->
   Mem.inject f m1 m1' ->
   Val.inject_list f vargs vargs' ->
   exists f', exists vres', exists m2',
@@ -717,9 +724,7 @@ Lemma external_call_inject:
     /\ inject_separated f f' m1 m1'.
 Proof.
   intros. eapply external_call_mem_inject_gen; eauto.
-- apply globals_symbols_inject; auto.
-- intros. exploit symbols_inject_2; eauto. 
-  intros (b' & A & B); exists b'; auto.
+  apply globals_symbols_inject; auto.
 Qed.
 
 Lemma find_function_inject:
@@ -741,60 +746,60 @@ Proof.
   auto.
 Qed.
 
-Lemma eval_annot_arg_inject:
+Lemma eval_builtin_arg_inject:
   forall rs sp m j rs' sp' m' a v,
-  eval_annot_arg ge (fun r => rs#r) (Vptr sp Int.zero) m a v ->
+  eval_builtin_arg ge (fun r => rs#r) (Vptr sp Int.zero) m a v ->
   j sp = Some(sp', 0) ->
   meminj_preserves_globals j ->
   regset_inject j rs rs' ->
   Mem.inject j m m' ->
-  (forall id, In id (globals_of_annot_arg a) -> kept id) ->
+  (forall id, In id (globals_of_builtin_arg a) -> kept id) ->
   exists v',
-     eval_annot_arg tge (fun r => rs'#r) (Vptr sp' Int.zero) m' a v'
+     eval_builtin_arg tge (fun r => rs'#r) (Vptr sp' Int.zero) m' a v'
   /\ Val.inject j v v'.
 Proof.
   induction 1; intros SP GL RS MI K; simpl in K.
 - exists rs'#x; split; auto. constructor. 
-- econstructor; eauto with aarg.
-- econstructor; eauto with aarg.
-- econstructor; eauto with aarg.
-- econstructor; eauto with aarg.
+- econstructor; eauto with barg.
+- econstructor; eauto with barg.
+- econstructor; eauto with barg.
+- econstructor; eauto with barg.
 - simpl in H. exploit Mem.load_inject; eauto. rewrite Zplus_0_r. 
-  intros (v' & A & B). exists v'; auto with aarg.
-- econstructor; split; eauto with aarg. simpl. econstructor; eauto. rewrite Int.add_zero; auto.
+  intros (v' & A & B). exists v'; auto with barg.
+- econstructor; split; eauto with barg. simpl. econstructor; eauto. rewrite Int.add_zero; auto.
 - assert (Val.inject j (Senv.symbol_address ge id ofs) (Senv.symbol_address tge id ofs)).
   { unfold Senv.symbol_address; simpl; unfold Genv.symbol_address. 
     destruct (Genv.find_symbol ge id) as [b|] eqn:FS; auto.
     exploit symbols_inject_2; eauto. intros (b' & A & B). rewrite A. 
     econstructor; eauto. rewrite Int.add_zero; auto. }
-  exploit Mem.loadv_inject; eauto. intros (v' & A & B). exists v'; auto with aarg.
-- econstructor; split; eauto with aarg.
+  exploit Mem.loadv_inject; eauto. intros (v' & A & B). exists v'; auto with barg.
+- econstructor; split; eauto with barg.
   unfold Senv.symbol_address; simpl; unfold Genv.symbol_address. 
   destruct (Genv.find_symbol ge id) as [b|] eqn:FS; auto.
   exploit symbols_inject_2; eauto. intros (b' & A & B). rewrite A. 
   econstructor; eauto. rewrite Int.add_zero; auto.
-- destruct IHeval_annot_arg1 as (v1' & A1 & B1); eauto using in_or_app.
-  destruct IHeval_annot_arg2 as (v2' & A2 & B2); eauto using in_or_app.
-  exists (Val.longofwords v1' v2'); split; auto with aarg. 
+- destruct IHeval_builtin_arg1 as (v1' & A1 & B1); eauto using in_or_app.
+  destruct IHeval_builtin_arg2 as (v2' & A2 & B2); eauto using in_or_app.
+  exists (Val.longofwords v1' v2'); split; auto with barg. 
   apply Val.longofwords_inject; auto.
 Qed.
 
-Lemma eval_annot_args_inject:
+Lemma eval_builtin_args_inject:
   forall rs sp m j rs' sp' m' al vl,
-  eval_annot_args ge (fun r => rs#r) (Vptr sp Int.zero) m al vl ->
+  eval_builtin_args ge (fun r => rs#r) (Vptr sp Int.zero) m al vl ->
   j sp = Some(sp', 0) ->
   meminj_preserves_globals j ->
   regset_inject j rs rs' ->
   Mem.inject j m m' ->
-  (forall id, In id (globals_of_annot_args al) -> kept id) ->
+  (forall id, In id (globals_of_builtin_args al) -> kept id) ->
   exists vl',
-     eval_annot_args tge (fun r => rs'#r) (Vptr sp' Int.zero) m' al vl'
+     eval_builtin_args tge (fun r => rs'#r) (Vptr sp' Int.zero) m' al vl'
   /\ Val.inject_list j vl vl'.
 Proof.
   induction 1; intros. 
 - exists (@nil val); split; constructor.
 - simpl in H5. 
-  exploit eval_annot_arg_inject; eauto using in_or_app. intros (v1' & A & B).
+  exploit eval_builtin_arg_inject; eauto using in_or_app. intros (v1' & A & B).
   destruct IHlist_forall2 as (vl' & C & D); eauto using in_or_app. 
   exists (v1' :: vl'); split; constructor; auto.
 Qed.
@@ -888,39 +893,22 @@ Proof.
   apply regs_inject; auto.
 
 - (* builtin *)
-  exploit external_call_inject; eauto. 
-  eapply match_stacks_preserves_globals; eauto.
-  intros. apply KEPT. red. econstructor; econstructor; eauto. 
-  apply regs_inject; eauto.
-  intros (j' & tv & tm' & A & B & C & D & E & F & G).
-  econstructor; split.
-  eapply exec_Ibuiltin; eauto.
-  eapply match_states_regular with (j := j'); eauto. 
-  apply match_stacks_incr with j; auto. 
-  intros. exploit G; eauto. intros [P Q].
-  assert (Mem.valid_block m sp0) by (eapply Mem.valid_block_inject_1; eauto).
-  assert (Mem.valid_block tm tsp) by (eapply Mem.valid_block_inject_2; eauto).
-  unfold Mem.valid_block in *; xomega.
-  apply set_reg_inject; auto. apply regset_inject_incr with j; auto.
-
-- (* annot *)
-  exploit eval_annot_args_inject; eauto. 
+  exploit eval_builtin_args_inject; eauto. 
   eapply match_stacks_preserves_globals; eauto.
   intros. apply KEPT. red. econstructor; econstructor; eauto. 
   intros (vargs' & P & Q).
   exploit external_call_inject; eauto. 
   eapply match_stacks_preserves_globals; eauto.
-  destruct ef; contradiction.
   intros (j' & tv & tm' & A & B & C & D & E & F & G).
   econstructor; split.
-  eapply exec_Iannot; eauto.
+  eapply exec_Ibuiltin; eauto.
   eapply match_states_regular with (j := j'); eauto. 
   apply match_stacks_incr with j; auto. 
   intros. exploit G; eauto. intros [U V].
   assert (Mem.valid_block m sp0) by (eapply Mem.valid_block_inject_1; eauto).
   assert (Mem.valid_block tm tsp) by (eapply Mem.valid_block_inject_2; eauto).
   unfold Mem.valid_block in *; xomega.
-  apply regset_inject_incr with j; auto.
+  apply set_res_inject; auto. apply regset_inject_incr with j; auto.
 
 - (* cond *)
   assert (C: eval_condition cond trs##args tm = Some b).

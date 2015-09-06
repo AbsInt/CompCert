@@ -727,7 +727,7 @@ Inductive tr_expr (c: code):
       tr_expr c map pr (Eletvar n) ns nd rd dst
   | tr_Ebuiltin: forall map pr ef al ns nd rd dst n1 rl,
       tr_exprlist c map pr al ns n1 rl ->
-      c!n1 = Some (Ibuiltin ef rl rd nd) ->
+      c!n1 = Some (Ibuiltin ef (List.map (@BA reg) rl) (BR rd) nd) ->
       reg_map_ok map rd dst -> ~In rd pr ->
       tr_expr c map pr (Ebuiltin ef al) ns nd rd dst
   | tr_Eexternal: forall map pr id sg al ns nd rd dst n1 rl,
@@ -807,6 +807,15 @@ Inductive tr_exitexpr (c: code):
       tr_exitexpr c (add_letvar map r) b n1 nexits ->
       tr_exitexpr c map (XElet a b) ns nexits.
 
+(** Auxiliary for the compilation of [builtin] statements. *)
+
+Inductive tr_builtin_res: mapping -> builtin_res ident -> builtin_res reg -> Prop :=
+  | tr_builtin_res_var: forall map id r,
+      map.(map_vars)!id = Some r ->
+      tr_builtin_res map (BR id) (BR r)
+  | tr_builtin_res_none: forall map,
+      tr_builtin_res map BR_none BR_none.
+
 (** [tr_stmt c map stmt ns ncont nexits nret rret] holds if the graph [c],
   starting at node [ns], contains instructions that perform the Cminor
   statement [stmt].   These instructions branch to node [ncont] if
@@ -849,15 +858,11 @@ Inductive tr_stmt (c: code) (map: mapping):
      tr_exprlist c map nil cl ns n2 rargs ->
      c!n2 = Some (Itailcall sig (inr _ id) rargs) ->
      tr_stmt c map (Stailcall sig (inr _ id) cl) ns nd nexits ngoto nret rret
-  | tr_Sbuiltin: forall optid ef al ns nd nexits ngoto nret rret rd n1 rargs,
-     tr_exprlist c map nil al ns n1 rargs ->
-     c!n1 = Some (Ibuiltin ef rargs rd nd) ->
-     reg_map_ok map rd optid ->
-     tr_stmt c map (Sbuiltin optid ef al) ns nd nexits ngoto nret rret
-  | tr_Sannot: forall ef al ns nd nexits ngoto nret rret n1 rargs,
-     tr_exprlist c map nil (exprlist_of_expr_list (params_of_annot_args al)) ns n1 rargs ->
-     c!n1 = Some (Iannot ef (convert_annot_args al rargs) nd) ->
-     tr_stmt c map (Sannot ef al) ns nd nexits ngoto nret rret
+  | tr_Sbuiltin: forall res ef args ns nd nexits ngoto nret rret res' n1 rargs,
+     tr_exprlist c map nil (exprlist_of_expr_list (params_of_builtin_args args)) ns n1 rargs ->
+     c!n1 = Some (Ibuiltin ef (convert_builtin_args args rargs) res' nd) ->
+     tr_builtin_res map res res' ->
+     tr_stmt c map (Sbuiltin res ef args) ns nd nexits ngoto nret rret
   | tr_Sseq: forall s1 s2 ns nd nexits ngoto nret rret n,
      tr_stmt c map s2 n nd nexits ngoto nret rret ->
      tr_stmt c map s1 ns n nexits ngoto nret rret ->
@@ -1208,6 +1213,17 @@ Proof.
   apply add_letvar_valid; eauto with rtlg.
 Qed.
 
+Lemma convert_builtin_res_charact:
+  forall map res s res' s' INCR
+    (TR: convert_builtin_res map res s = OK res' s' INCR)
+    (WF: map_valid map s),
+  tr_builtin_res map res res'.
+Proof.
+  destruct res; simpl; intros; monadInv TR. 
+- constructor.  unfold find_var in EQ. destruct (map_vars map)!x; inv EQ; auto.
+- constructor.
+Qed.
+
 Lemma transl_stmt_charact:
   forall map stmt nd nexits ngoto nret rret s ns s' INCR
     (TR: transl_stmt map stmt nd nexits ngoto nret rret s = OK ns s' INCR)
@@ -1260,10 +1276,7 @@ Proof.
   (* Sbuiltin *)
   econstructor; eauto 4 with rtlg.
   eapply transl_exprlist_charact; eauto 3 with rtlg.
-  eapply alloc_optreg_map_ok with (s1 := s0); eauto with rtlg.
-  (* Sannot *)
-  econstructor; eauto 4 with rtlg.
-  eapply transl_exprlist_charact; eauto 3 with rtlg.
+  eapply convert_builtin_res_charact; eauto with rtlg.
   (* Sseq *)
   econstructor. 
   apply tr_stmt_incr with s0; auto. 

@@ -358,17 +358,6 @@ module Target (System : SYSTEM):TARGET =
       assert (!count = 2 || (!count = 0 && !last));
       (!mb, !me-1)
 
-    (* Handling of annotations *)
-
-    let print_annot_stmt oc txt targs args =
-      if Str.string_match re_file_line txt 0 then begin
-        print_file_line oc (Str.matched_group 1 txt)
-          (int_of_string (Str.matched_group 2 txt))
-      end else begin
-        fprintf oc "%s annotation: " comment;
-        print_annot_stmt preg_annot "R1" oc txt targs args
-      end
-
     (* Determine if the displacement of a conditional branch fits the short form *)
 
     let short_cond_branch tbl pc lbl_dest =
@@ -473,6 +462,14 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	dcbf	%a, %a\n" ireg r1 ireg r2
       | Pdcbi (r1,r2) ->
           fprintf oc "	dcbi	%a, %a\n" ireg r1 ireg r2
+      | Pdcbt (c,r1,r2) ->
+          fprintf oc "	dcbt	%ld, %a, %a\n" (camlint_of_coqint c) ireg r1  ireg r2
+      | Pdcbtst (c,r1,r2) ->
+          fprintf oc "	dcbtst	%ld, %a, %a\n"  (camlint_of_coqint c) ireg r1 ireg r2
+      | Pdcbtls (c,r1,r2) ->
+          fprintf oc "	dcbtls	%ld, %a, %a\n" (camlint_of_coqint c) ireg r1 ireg r2
+      | Pdcbz (r1,r2) ->
+          fprintf oc "	dcbz	%a, %a\n" ireg r1 ireg r2
       | Pdivw(r1, r2, r3) ->
           fprintf oc "	divw	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pdivwu(r1, r2, r3) ->
@@ -541,6 +538,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	fsel	%a, %a, %a, %a\n" freg r1 freg r2 freg r3 freg r4
       | Picbi (r1,r2) ->
           fprintf oc "	icbi	%a,%a\n" ireg r1 ireg r2
+      | Picbtls (n,r1,r2) ->
+          fprintf oc "	icbtls	%ld, %a, %a\n" (camlint_of_coqint n) ireg r1 ireg r2
       | Pisync ->
           fprintf oc "	isync\n"
       | Plwsync ->
@@ -587,6 +586,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	lwzu	%a, %a(%a)\n" ireg r1 constant c ireg r2
       | Plwzx(r1, r2, r3) | Plwzx_a(r1, r2, r3) ->
           fprintf oc "	lwzx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+      | Pmbar mo ->
+          fprintf oc "	mbar	%ld\n" (camlint_of_coqint mo)
       | Pmfcr(r1) ->
           fprintf oc "	mfcr	%a\n" ireg r1
       | Pmfcrbit(r1, bit) ->
@@ -599,6 +600,10 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	mtctr	%a\n" ireg r1
       | Pmtlr(r1) ->
           fprintf oc "	mtlr	%a\n" ireg r1
+      | Pmfspr(rd, spr) ->
+          fprintf oc "	mfspr	%a, %ld\n" ireg rd (camlint_of_coqint spr)
+      | Pmtspr(spr, rs) ->
+          fprintf oc "	mtspr	%ld, %a\n" (camlint_of_coqint spr) ireg rs
       | Pmulli(r1, r2, c) ->
           fprintf oc "	mulli	%a, %a, %a\n" ireg r1 ireg r2 constant c
       | Pmullw(r1, r2, r3) ->
@@ -693,17 +698,16 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "%a:\n" label (transl_label lbl)
       | Pbuiltin(ef, args, res) ->
           begin match ef with
+          | EF_annot(txt, targs) ->
+              fprintf oc "%s annotation: " comment;
+              print_annot_text preg_annot "r1" oc (extern_atom txt) args
+          | EF_debug(kind, txt, targs) ->
+              print_debug_info comment print_file_line preg_annot "r1" oc
+                               (P.to_int kind) (extern_atom txt) args
           | EF_inline_asm(txt, sg, clob) ->
               fprintf oc "%s begin inline assembly\n\t" comment;
               print_inline_asm preg oc (extern_atom txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment
-          | _ ->
-              assert false
-          end
-      | Pannot(ef, args) ->
-          begin match ef with
-          | EF_annot(txt, targs) ->
-              print_annot_stmt oc (extern_atom txt) targs args
           | _ ->
               assert false
           end
@@ -731,8 +735,8 @@ module Target (System : SYSTEM):TARGET =
       | Plfi(r1, c) -> 2
       | Plfis(r1, c) -> 2
       | Plabel lbl -> 0
-      | Pbuiltin(ef, args, res) -> 0
-      | Pannot(ef, args) -> 0
+      | Pbuiltin((EF_annot _ | EF_debug _), args, res) -> 0
+      | Pbuiltin(ef, args, res) -> 3
       | Pcfi_adjust _ | Pcfi_rel_offset _ -> 0
       | _ -> 1
 

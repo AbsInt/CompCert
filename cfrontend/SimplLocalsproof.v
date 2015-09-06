@@ -334,6 +334,13 @@ Proof.
   inv H0; constructor.
 Qed.
 
+Lemma forall2_val_casted_inject:
+  forall f vl vl', Val.inject_list f vl vl' ->
+  forall tyl, list_forall2 val_casted vl tyl -> list_forall2 val_casted vl' tyl.
+Proof.
+  induction 1; intros tyl F; inv F; constructor; eauto. eapply val_casted_inject; eauto. 
+Qed.
+
 Inductive val_casted_list: list val -> typelist -> Prop :=
   | vcl_nil:
       val_casted_list nil Tnil
@@ -374,6 +381,116 @@ Proof.
   destruct v1; try discriminate.
   destruct (ident_eq id1 id2); inv H0; auto.
   inv H0; auto.
+Qed.
+
+(** Debug annotations. *)
+
+Lemma cast_typeconv:
+  forall v ty,
+  val_casted v ty ->
+  sem_cast v ty (typeconv ty) = Some v.
+Proof.
+  induction 1; simpl; auto. 
+- destruct sz; auto. 
+- unfold sem_cast. simpl. rewrite dec_eq_true; auto.
+- unfold sem_cast. simpl. rewrite dec_eq_true; auto.
+Qed.
+
+Lemma step_Sdebug_temp:
+  forall f id ty k e le m v,
+  le!id = Some v ->
+  val_casted v ty ->
+  step2 tge (State f (Sdebug_temp id ty) k e le m)
+         E0 (State f Sskip k e le m).
+Proof.
+  intros. unfold Sdebug_temp. eapply step_builtin with (optid := None).
+  econstructor. constructor. eauto. simpl. eapply cast_typeconv; eauto. constructor.
+  simpl. constructor. 
+Qed.
+
+Lemma step_Sdebug_var:
+  forall f id ty k e le m b,
+  e!id = Some(b, ty) ->
+  step2 tge (State f (Sdebug_var id ty) k e le m)
+         E0 (State f Sskip k e le m).
+Proof.
+  intros. unfold Sdebug_var. eapply step_builtin with (optid := None).
+  econstructor. constructor. constructor. eauto. 
+  simpl. reflexivity. constructor. 
+  simpl. constructor. 
+Qed.
+
+Lemma step_Sset_debug:
+  forall f id ty a k e le m v v',
+  eval_expr tge e le m a v ->
+  sem_cast v (typeof a) ty = Some v' ->
+  plus step2 tge (State f (Sset_debug id ty a) k e le m)
+              E0 (State f Sskip k e (PTree.set id v' le) m).
+Proof.
+  intros; unfold Sset_debug. 
+  assert (forall k, step2 tge (State f (Sset id (make_cast a ty)) k e le m)
+                           E0 (State f Sskip k e (PTree.set id v' le) m)).
+  { intros. apply step_set. eapply make_cast_correct; eauto. }
+  destruct (Compopts.debug tt).
+- eapply plus_left. constructor. 
+  eapply star_left. apply H1.
+  eapply star_left. constructor.
+  apply star_one. apply step_Sdebug_temp with (v := v').
+  apply PTree.gss. eapply cast_val_is_casted; eauto. 
+  reflexivity. reflexivity. reflexivity.
+- apply plus_one. apply H1.
+Qed.
+
+Lemma step_add_debug_vars:
+  forall f s e le m vars k,
+  (forall id ty, In (id, ty) vars -> exists b, e!id = Some (b, ty)) ->
+  star step2 tge (State f (add_debug_vars vars s) k e le m)
+              E0 (State f s k e le m).
+Proof.
+  unfold add_debug_vars. destruct (Compopts.debug tt).
+- induction vars; simpl; intros. 
+  + apply star_refl.
+  + destruct a as [id ty].
+    exploit H; eauto. intros (b & TE). 
+    simpl. eapply star_left. constructor. 
+    eapply star_left. eapply step_Sdebug_var; eauto. 
+    eapply star_left. constructor.
+    apply IHvars; eauto.
+    reflexivity. reflexivity. reflexivity.
+- intros. apply star_refl.
+Qed.
+
+Remark bind_parameter_temps_inv:
+  forall id params args le le',
+  bind_parameter_temps params args le = Some le' ->
+  ~In id (var_names params) ->
+  le'!id = le!id.
+Proof.
+  induction params; simpl; intros. 
+  destruct args; inv H. auto.
+  destruct a as [id1 ty1]. destruct args; try discriminate. 
+  transitivity ((PTree.set id1 v le)!id). 
+  eapply IHparams; eauto. apply PTree.gso. intuition. 
+Qed.
+
+Lemma step_add_debug_params:
+  forall f s k e le m params vl le1,
+  list_norepet (var_names params) ->
+  list_forall2 val_casted vl (map snd params) ->
+  bind_parameter_temps params vl le1 = Some le ->
+  star step2 tge (State f (add_debug_params params s) k e le m)
+              E0 (State f s k e le m).
+Proof.
+  unfold add_debug_params. destruct (Compopts.debug tt).
+- induction params as [ | [id ty] params ]; simpl; intros until le1; intros NR CAST BIND; inv CAST; inv NR.
+  + apply star_refl.
+  + assert (le!id = Some a1). { erewrite bind_parameter_temps_inv by eauto. apply PTree.gss. }
+    eapply star_left. constructor. 
+    eapply star_left. eapply step_Sdebug_temp; eauto. 
+    eapply star_left. constructor.
+    eapply IHparams; eauto.
+    reflexivity. reflexivity. reflexivity.
+- intros; apply star_refl.
 Qed.
 
 (** Preservation by assignment to lifted variable. *)
@@ -909,7 +1026,8 @@ Theorem match_envs_alloc_variables:
   /\ Mem.inject j' m' tm'
   /\ inject_incr j j'
   /\ (forall b, Mem.valid_block m b -> j' b = j b)
-  /\ (forall b b' delta, j' b = Some(b', delta) -> Mem.valid_block tm b' -> j' b = j b).
+  /\ (forall b b' delta, j' b = Some(b', delta) -> Mem.valid_block tm b' -> j' b = j b)
+  /\ (forall id ty, In (id, ty) vars -> VSet.mem id cenv = false -> exists b, te!id = Some(b, ty)).
 Proof.
   intros. 
   exploit (match_alloc_variables cenv); eauto. instantiate (1 := empty_env). 
@@ -988,6 +1106,10 @@ Proof.
   (* incr *)
   eapply alloc_variables_nextblock; eauto.
   eapply alloc_variables_nextblock; eauto.
+
+  (* other properties *)
+  intuition auto. edestruct F as (b & X & Y); eauto. rewrite H5 in Y.
+  destruct Y as (tb & U & V). exists tb; auto.
 Qed.
 
 Lemma assign_loc_inject:
@@ -1065,19 +1187,6 @@ Proof.
   split. auto.
   intros. rewrite <- H0. eapply Mem.load_storebytes_other; eauto. 
   left. congruence.
-Qed.
-
-Remark bind_parameter_temps_inv:
-  forall id params args le le',
-  bind_parameter_temps params args le = Some le' ->
-  ~In id (var_names params) ->
-  le'!id = le!id.
-Proof.
-  induction params; simpl; intros. 
-  destruct args; inv H. auto.
-  destruct a as [id1 ty1]. destruct args; try discriminate. 
-  transitivity ((PTree.set id1 v le)!id). 
-  eapply IHparams; eauto. apply PTree.gso. intuition. 
 Qed.
 
 Lemma assign_loc_nextblock:
@@ -1917,6 +2026,7 @@ Proof.
   monadInv TS; auto.
   (* var *)
   destruct (is_liftable_var cenv e); monadInv TS; auto. 
+  unfold Sset_debug. destruct (Compopts.debug tt); auto. 
   (* set *)
   monadInv TS; auto.
   (* call *)
@@ -1975,10 +2085,24 @@ Proof.
 Qed.
 
 Lemma find_label_store_params:
-  forall lbl s k params, find_label lbl (store_params cenv params s) k = find_label lbl s k.
+  forall s k params, find_label lbl (store_params cenv params s) k = find_label lbl s k.
 Proof.
   induction params; simpl. auto. 
   destruct a as [id ty]. destruct (VSet.mem id cenv); auto. 
+Qed.
+
+Lemma find_label_add_debug_vars:
+  forall s k vars, find_label lbl (add_debug_vars vars s) k = find_label lbl s k.
+Proof.
+  unfold add_debug_vars. destruct (Compopts.debug tt); auto. 
+  induction vars; simpl; auto. destruct a as [id ty]; simpl. auto. 
+Qed.
+
+Lemma find_label_add_debug_params:
+  forall s k vars, find_label lbl (add_debug_params vars s) k = find_label lbl s k.
+Proof.
+  unfold add_debug_params. destruct (Compopts.debug tt); auto. 
+  induction vars; simpl; auto. destruct a as [id ty]; simpl. auto. 
 Qed.
 
 End FIND_LABEL.  
@@ -1999,8 +2123,8 @@ Proof.
   exploit me_vars; eauto. instantiate (1 := id). intros MV. 
   inv H.
   (* local variable *)
-  econstructor; split. 
-  apply plus_one. econstructor. eapply make_cast_correct. eexact A. rewrite typeof_simpl_expr. eexact C.
+  econstructor; split.
+  eapply step_Sset_debug. eauto. rewrite typeof_simpl_expr. eauto.  
   econstructor; eauto with compat. 
   eapply match_envs_assign_lifted; eauto. eapply cast_val_is_casted; eauto.
   eapply match_cont_assign_loc; eauto. exploit me_range; eauto. xomega.
@@ -2154,7 +2278,8 @@ Proof.
     apply compat_cenv_for.
   rewrite H. intros [ts' [tk' [A [B [C D]]]]]. 
   econstructor; split.
-  apply plus_one. econstructor; eauto. simpl. rewrite find_label_store_params. eexact A.
+  apply plus_one. econstructor; eauto. simpl.
+  rewrite find_label_add_debug_params. rewrite find_label_store_params. rewrite find_label_add_debug_vars. eexact A.
   econstructor; eauto.
 
 (* internal function *)
@@ -2166,11 +2291,13 @@ Proof.
     instantiate (1 := cenv_for_gen (addr_taken_stmt f.(fn_body)) (fn_params f ++ fn_vars f)).
     intros. eapply cenv_for_gen_by_value; eauto. rewrite VSF.mem_iff. eexact H4.
     intros. eapply cenv_for_gen_domain. rewrite VSF.mem_iff. eexact H3.
-  intros [j' [te [tm0 [A [B [C [D [E F]]]]]]]].
+  intros [j' [te [tm0 [A [B [C [D [E [F G]]]]]]]]].
+  assert (K: list_forall2 val_casted vargs (map snd (fn_params f))).
+  { apply val_casted_list_params. unfold type_of_function in FUNTY. congruence. }
   exploit store_params_correct.
     eauto. 
     eapply list_norepet_append_left; eauto.
-    apply val_casted_list_params. unfold type_of_function in FUNTY. congruence.
+    eexact K.
     apply val_inject_list_incr with j'; eauto. 
     eexact B. eexact C.
     intros. apply (create_undef_temps_lifted id f). auto.
@@ -2184,8 +2311,11 @@ Proof.
   econstructor; split. 
   eapply plus_left. econstructor. 
   econstructor. exact Y. exact X. exact Z. simpl. eexact A. simpl. eexact Q.
-  simpl. eexact P.
-  traceEq.
+  simpl. eapply star_trans. eapply step_add_debug_params. auto. eapply forall2_val_casted_inject; eauto. eexact Q.
+  eapply star_trans. eexact P. eapply step_add_debug_vars. 
+  unfold remove_lifted; intros. rewrite List.filter_In in H3. destruct H3. 
+  apply negb_true_iff in H4. eauto. 
+  reflexivity. reflexivity. traceEq.
   econstructor; eauto. 
   eapply match_cont_invariant; eauto. 
   intros. transitivity (Mem.load chunk m0 b 0). 

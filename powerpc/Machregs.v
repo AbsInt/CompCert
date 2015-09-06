@@ -163,11 +163,9 @@ Fixpoint destroyed_by_clobber (cl: list string): list mreg :=
 Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_builtin _ _ => F13 :: nil
-  | EF_vload _ => nil
-  | EF_vstore _ => nil
-  | EF_vload_global _ _ _ => R11 :: nil
-  | EF_vstore_global Mint64 _ _ => R10 :: R11 :: R12 :: nil
-  | EF_vstore_global _ _ _ => R11 :: R12 :: nil
+  | EF_vload _ => R11 :: nil
+  | EF_vstore Mint64 => R10 :: R11 :: R12 :: nil
+  | EF_vstore _ => R11 :: R12 :: nil
   | EF_memcpy _ _ => R11 :: R12 :: F13 :: nil
   | EF_inline_asm txt sg clob => destroyed_by_clobber clob
   | _ => nil
@@ -202,4 +200,32 @@ Definition two_address_op (op: operation) : bool :=
   match op with
   | Oroli _ _ => true
   | _ => false
+  end.
+
+(* Constraints on constant propagation for builtins *)
+
+Definition builtin_get_spr := ident_of_string "__builtin_get_spr".
+Definition builtin_set_spr := ident_of_string "__builtin_set_spr".
+Definition builtin_prefetch := ident_of_string "__builtin_prefetch".
+Definition builtin_dcbtls := ident_of_string "__builtin_dcbtls".
+Definition builtin_icbtls := ident_of_string "__builtin_icbtls".
+Definition builtin_mbar := ident_of_string "__builtin_mbar".
+
+Definition builtin_constraints (ef: external_function) :
+                                       list builtin_arg_constraint :=
+  match ef with
+  | EF_builtin id sg =>
+      if ident_eq id builtin_get_spr then OK_const :: nil
+      else if ident_eq id builtin_set_spr then OK_const :: OK_default :: nil
+      else if ident_eq id builtin_prefetch then OK_addrany :: OK_const :: OK_const :: nil
+      else if ident_eq id builtin_dcbtls then OK_addrany::OK_const::nil
+      else if ident_eq id builtin_icbtls then OK_addrany::OK_const::nil
+      else if ident_eq id builtin_mbar then OK_const::nil
+      else nil
+  | EF_vload _ => OK_addrany :: nil
+  | EF_vstore _ => OK_addrany :: OK_default :: nil
+  | EF_memcpy _ _ => OK_addrstack :: OK_addrstack :: nil
+  | EF_annot txt targs => map (fun _ => OK_all) targs
+  | EF_debug kind txt targs => map (fun _ => OK_all) targs
+  | _ => nil
   end.

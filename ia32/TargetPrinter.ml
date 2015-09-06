@@ -337,17 +337,6 @@ module Target(System: SYSTEM):TARGET =
    - inlined by the compiler: take their arguments in arbitrary
    registers; preserve all registers except ECX, EDX, XMM6 and XMM7. *)
 
-(* Handling of annotations *)
-
-    let print_annot_stmt oc txt targs args =
-      if Str.string_match re_file_line txt 0 then begin
-        print_file_line oc (Str.matched_group 1 txt)
-          (int_of_string (Str.matched_group 2 txt))
-      end else begin
-        fprintf oc "%s annotation: " comment;
-        print_annot_stmt preg "%esp" oc txt targs args
-      end
-
  (* Handling of varargs *)
 
     let print_builtin_va_start oc r =
@@ -657,17 +646,16 @@ module Target(System: SYSTEM):TARGET =
 	 assert false
       | Pbuiltin(ef, args, res) ->
           begin match ef with
+          | EF_annot(txt, targs) ->
+              fprintf oc "%s annotation: " comment;
+              print_annot_text preg "%esp" oc (extern_atom txt) args
+          | EF_debug(kind, txt, targs) ->
+              print_debug_info comment print_file_line preg "%esp" oc
+                               (P.to_int kind) (extern_atom txt) args
           | EF_inline_asm(txt, sg, clob) ->
               fprintf oc "%s begin inline assembly\n\t" comment;
               print_inline_asm preg oc (extern_atom txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment
-          | _ ->
-              assert false
-          end
-      | Pannot(ef, args) ->
-          begin match ef with
-          | EF_annot(txt, targs) ->
-              print_annot_stmt oc (extern_atom txt) targs args
           | _ ->
               assert false
           end

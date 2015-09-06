@@ -926,7 +926,7 @@ let add_lineno prev_loc this_loc s =
   if !Clflags.option_g && prev_loc <> this_loc && this_loc <> Cutil.no_loc
   then begin
     let txt = sprintf "#line:%s:%d" (fst this_loc) (snd this_loc) in
-     Ssequence(Sdo(Ebuiltin(EF_annot(intern_string txt, []),
+     Ssequence(Sdo(Ebuiltin(EF_debug(P.one, intern_string txt, []),
                             Tnil, Enil, Tvoid)),
                s)
   end else

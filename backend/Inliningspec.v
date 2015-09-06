@@ -313,12 +313,9 @@ Inductive tr_instr: context -> node -> instruction -> code -> Prop :=
       context_stack_tailcall ctx f ctx' ->
       tr_instr ctx pc (Itailcall sg (inr _ id) args) c
   | tr_builtin: forall ctx pc c ef args res s,
-      Ple res ctx.(mreg) ->
-      c!(spc ctx pc) = Some (Ibuiltin ef (sregs ctx args) (sreg ctx res) (spc ctx s)) ->
+      match res with BR r => Ple r ctx.(mreg) | _ => True end ->
+      c!(spc ctx pc) = Some (Ibuiltin ef (map (sbuiltinarg ctx) args) (sbuiltinres ctx res) (spc ctx s)) ->
       tr_instr ctx pc (Ibuiltin ef args res s) c
-  | tr_annot: forall ctx pc c ef args s,
-      c!(spc ctx pc) = Some (Iannot ef (map (sannotarg ctx) args) (spc ctx s)) ->
-      tr_instr ctx pc (Iannot ef args s) c
   | tr_cond: forall ctx pc cond args s1 s2 c,
       c!(spc ctx pc) = Some (Icond cond (sregs ctx args) (spc ctx s1) (spc ctx s2)) ->
       tr_instr ctx pc (Icond cond args s1 s2) c
@@ -554,6 +551,8 @@ Proof.
   red; simpl. 
 subst s2; simpl in *; xomega.
   red; auto.
+(* builtin *)
+  eapply tr_builtin; eauto. destruct b; eauto. 
 (* return *)
   destruct (retinfo ctx) as [[rpc rreg] | ] eqn:?. 
   (* inlined *)

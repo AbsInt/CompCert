@@ -560,12 +560,6 @@ Inductive external_function : Type :=
      (** A volatile store operation.   If the adress given as first argument
          points within a volatile global variable, generate an event.
          Otherwise, produce no event and behave like a regular memory store. *)
-  | EF_vload_global (chunk: memory_chunk) (id: ident) (ofs: int)
-     (** A volatile load operation from a global variable. 
-         Specialized version of [EF_vload]. *)
-  | EF_vstore_global (chunk: memory_chunk) (id: ident) (ofs: int)
-     (** A volatile store operation in a global variable. 
-         Specialized version of [EF_vstore]. *)
   | EF_malloc
      (** Dynamic memory allocation.  Takes the requested size in bytes
          as argument; returns a pointer to a fresh block of the given size.
@@ -585,12 +579,16 @@ Inductive external_function : Type :=
      (** Another form of annotation that takes one argument, produces
          an event carrying the text and the value of this argument,
          and returns the value of the argument. *)
-  | EF_inline_asm (text: ident) (sg: signature) (clobbers: list String.string).
+  | EF_inline_asm (text: ident) (sg: signature) (clobbers: list String.string)
      (** Inline [asm] statements.  Semantically, treated like an
          annotation with no parameters ([EF_annot text nil]).  To be
          used with caution, as it can invalidate the semantic
          preservation theorem.  Generated only if [-finline-asm] is
          given. *)
+  | EF_debug (kind: positive) (text: ident) (targs: list typ).
+     (** Transport debugging information from the front-end to the generated
+         assembly.  Takes zero, one or several arguments like [EF_annot].
+         Unlike [EF_annot], produces no observable event. *)
 
 (** The type signature of an external function. *)
 
@@ -600,14 +598,13 @@ Definition ef_sig (ef: external_function): signature :=
   | EF_builtin name sg => sg
   | EF_vload chunk => mksignature (Tint :: nil) (Some (type_of_chunk chunk)) cc_default
   | EF_vstore chunk => mksignature (Tint :: type_of_chunk chunk :: nil) None cc_default
-  | EF_vload_global chunk _ _ => mksignature nil (Some (type_of_chunk chunk)) cc_default
-  | EF_vstore_global chunk _ _ => mksignature (type_of_chunk chunk :: nil) None cc_default
   | EF_malloc => mksignature (Tint :: nil) (Some Tint) cc_default
   | EF_free => mksignature (Tint :: nil) None cc_default
   | EF_memcpy sz al => mksignature (Tint :: Tint :: nil) None cc_default
   | EF_annot text targs => mksignature targs None cc_default
   | EF_annot_val text targ => mksignature (targ :: nil) (Some targ) cc_default
   | EF_inline_asm text sg clob => sg
+  | EF_debug kind text targs => mksignature targs None cc_default
   end.
 
 (** Whether an external function should be inlined by the compiler. *)
@@ -618,14 +615,13 @@ Definition ef_inline (ef: external_function) : bool :=
   | EF_builtin name sg => true
   | EF_vload chunk => true
   | EF_vstore chunk => true
-  | EF_vload_global chunk id ofs => true
-  | EF_vstore_global chunk id ofs => true
   | EF_malloc => false
   | EF_free => false
   | EF_memcpy sz al => true
   | EF_annot text targs => true
   | EF_annot_val text targ => true
   | EF_inline_asm text sg clob => true
+  | EF_debug kind text targs => true
   end.
 
 (** Whether an external function must reload its arguments. *)
@@ -633,6 +629,7 @@ Definition ef_inline (ef: external_function) : bool :=
 Definition ef_reloads (ef: external_function) : bool :=
   match ef with
   | EF_annot text targs => false
+  | EF_debug kind text targs => false
   | _ => true
   end.
 
@@ -640,21 +637,11 @@ Definition ef_reloads (ef: external_function) : bool :=
 
 Definition external_function_eq: forall (ef1 ef2: external_function), {ef1=ef2} + {ef1<>ef2}.
 Proof.
-  generalize ident_eq signature_eq chunk_eq typ_eq zeq Int.eq_dec; intros.
+  generalize ident_eq signature_eq chunk_eq typ_eq list_eq_dec zeq Int.eq_dec; intros.
   decide equality.
-  apply list_eq_dec. auto.
   apply list_eq_dec. apply String.string_dec. 
 Defined.
 Global Opaque external_function_eq.
-
-(** Global variables referenced by an external function *)
-
-Definition globals_external (ef: external_function) : list ident :=
-  match ef with
-  | EF_vload_global _ id _ => id :: nil
-  | EF_vstore_global _ id _ => id :: nil
-  | _ => nil
-  end.
 
 (** Function definitions are the union of internal and external functions. *)
 
@@ -690,55 +677,95 @@ Definition transf_partial_fundef (fd: fundef A): res (fundef B) :=
 
 End TRANSF_PARTIAL_FUNDEF.
 
-(** * Arguments to annotations *)
+(** * Arguments and results to builtin functions *)
 
 Set Contextual Implicit. 
 
-Inductive annot_arg (A: Type) : Type :=
-  | AA_base (x: A)
-  | AA_int (n: int)
-  | AA_long (n: int64)
-  | AA_float (f: float)
-  | AA_single (f: float32)
-  | AA_loadstack (chunk: memory_chunk) (ofs: int)
-  | AA_addrstack (ofs: int)
-  | AA_loadglobal (chunk: memory_chunk) (id: ident) (ofs: int)
-  | AA_addrglobal (id: ident) (ofs: int)
-  | AA_longofwords (hi lo: annot_arg A).
+Inductive builtin_arg (A: Type) : Type :=
+  | BA (x: A)
+  | BA_int (n: int)
+  | BA_long (n: int64)
+  | BA_float (f: float)
+  | BA_single (f: float32)
+  | BA_loadstack (chunk: memory_chunk) (ofs: int)
+  | BA_addrstack (ofs: int)
+  | BA_loadglobal (chunk: memory_chunk) (id: ident) (ofs: int)
+  | BA_addrglobal (id: ident) (ofs: int)
+  | BA_splitlong (hi lo: builtin_arg A).
 
-Fixpoint globals_of_annot_arg (A: Type) (a: annot_arg A) : list ident :=
+Inductive builtin_res (A: Type) : Type :=
+  | BR (x: A)
+  | BR_none
+  | BR_splitlong (hi lo: builtin_res A).
+
+Fixpoint globals_of_builtin_arg (A: Type) (a: builtin_arg A) : list ident :=
   match a with
-  | AA_loadglobal chunk id ofs => id :: nil
-  | AA_addrglobal id ofs => id :: nil
-  | AA_longofwords hi lo => globals_of_annot_arg hi ++ globals_of_annot_arg lo
+  | BA_loadglobal chunk id ofs => id :: nil
+  | BA_addrglobal id ofs => id :: nil
+  | BA_splitlong hi lo => globals_of_builtin_arg hi ++ globals_of_builtin_arg lo
   | _ => nil
   end.
 
-Definition globals_of_annot_args (A: Type) (al: list (annot_arg A)) : list ident :=
-  List.fold_right (fun a l => globals_of_annot_arg a ++ l) nil al.
+Definition globals_of_builtin_args (A: Type) (al: list (builtin_arg A)) : list ident :=
+  List.fold_right (fun a l => globals_of_builtin_arg a ++ l) nil al.
 
-Fixpoint params_of_annot_arg (A: Type) (a: annot_arg A) : list A :=
+Fixpoint params_of_builtin_arg (A: Type) (a: builtin_arg A) : list A :=
   match a with
-  | AA_base x => x :: nil
-  | AA_longofwords hi lo => params_of_annot_arg hi ++ params_of_annot_arg lo
+  | BA x => x :: nil
+  | BA_splitlong hi lo => params_of_builtin_arg hi ++ params_of_builtin_arg lo
   | _ => nil
   end.
 
-Definition params_of_annot_args (A: Type) (al: list (annot_arg A)) : list A :=
-  List.fold_right (fun a l => params_of_annot_arg a ++ l) nil al.
+Definition params_of_builtin_args (A: Type) (al: list (builtin_arg A)) : list A :=
+  List.fold_right (fun a l => params_of_builtin_arg a ++ l) nil al.
 
-Fixpoint map_annot_arg (A B: Type) (f: A -> B) (a: annot_arg A) : annot_arg B :=
+Fixpoint params_of_builtin_res (A: Type) (a: builtin_res A) : list A :=
   match a with
-  | AA_base x => AA_base (f x)
-  | AA_int n => AA_int n
-  | AA_long n => AA_long n
-  | AA_float n => AA_float n
-  | AA_single n => AA_single n
-  | AA_loadstack chunk ofs => AA_loadstack chunk ofs
-  | AA_addrstack ofs => AA_addrstack ofs
-  | AA_loadglobal chunk id ofs => AA_loadglobal chunk id ofs
-  | AA_addrglobal id ofs => AA_addrglobal id ofs
-  | AA_longofwords hi lo => 
-      AA_longofwords (map_annot_arg f hi) (map_annot_arg f lo)
+  | BR x => x :: nil
+  | BR_none => nil
+  | BR_splitlong hi lo => params_of_builtin_res hi ++ params_of_builtin_res lo
   end.
 
+Fixpoint map_builtin_arg (A B: Type) (f: A -> B) (a: builtin_arg A) : builtin_arg B :=
+  match a with
+  | BA x => BA (f x)
+  | BA_int n => BA_int n
+  | BA_long n => BA_long n
+  | BA_float n => BA_float n
+  | BA_single n => BA_single n
+  | BA_loadstack chunk ofs => BA_loadstack chunk ofs
+  | BA_addrstack ofs => BA_addrstack ofs
+  | BA_loadglobal chunk id ofs => BA_loadglobal chunk id ofs
+  | BA_addrglobal id ofs => BA_addrglobal id ofs
+  | BA_splitlong hi lo => 
+      BA_splitlong (map_builtin_arg f hi) (map_builtin_arg f lo)
+  end.
+
+Fixpoint map_builtin_res (A B: Type) (f: A -> B) (a: builtin_res A) : builtin_res B :=
+  match a with
+  | BR x => BR (f x)
+  | BR_none => BR_none
+  | BR_splitlong hi lo => 
+      BR_splitlong (map_builtin_res f hi) (map_builtin_res f lo)
+  end.
+
+(** Which kinds of builtin arguments are supported by which external function. *)
+
+Inductive builtin_arg_constraint : Type :=
+  | OK_default
+  | OK_const
+  | OK_addrstack
+  | OK_addrglobal
+  | OK_addrany
+  | OK_all.
+
+Definition builtin_arg_ok
+       (A: Type) (ba: builtin_arg A) (c: builtin_arg_constraint) :=
+  match ba, c with
+  | (BA _ | BA_splitlong _ _), _ => true
+  | (BA_int _ | BA_long _ | BA_float _ | BA_single _), OK_const => true
+  | BA_addrstack _, (OK_addrstack | OK_addrany) => true
+  | BA_addrglobal _ _, (OK_addrglobal | OK_addrany) => true
+  | _, OK_all => true
+  | _, _ => false
+  end.

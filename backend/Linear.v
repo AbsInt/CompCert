@@ -41,8 +41,7 @@ Inductive instruction: Type :=
   | Lstore: memory_chunk -> addressing -> list mreg -> mreg -> instruction
   | Lcall: signature -> mreg + ident -> instruction
   | Ltailcall: signature -> mreg + ident -> instruction
-  | Lbuiltin: external_function -> list mreg -> list mreg -> instruction
-  | Lannot: external_function -> list (annot_arg loc) -> instruction
+  | Lbuiltin: external_function -> list (builtin_arg loc) -> builtin_res mreg -> instruction
   | Llabel: label -> instruction
   | Lgoto: label -> instruction
   | Lcond: condition -> list mreg -> label -> instruction
@@ -198,17 +197,12 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State s f (Vptr stk Int.zero) (Ltailcall sig ros :: b) rs m)
         E0 (Callstate s f' rs' m')
   | exec_Lbuiltin:
-      forall s f sp rs m ef args res b t vl rs' m',
-      external_call' ef ge (reglist rs args) m t vl m' ->
-      rs' = Locmap.setlist (map R res) vl (undef_regs (destroyed_by_builtin ef) rs) ->
+      forall s f sp rs m ef args res b vargs t vres rs' m',
+      eval_builtin_args ge rs sp m args vargs ->
+      external_call ef ge vargs m t vres m' ->
+      rs' = Locmap.setres res vres (undef_regs (destroyed_by_builtin ef) rs) ->
       step (State s f sp (Lbuiltin ef args res :: b) rs m)
          t (State s f sp b rs' m')
-  | exec_Lannot:
-      forall s f sp rs m ef args vl b t v m',
-      eval_annot_args ge rs sp m args vl ->
-      external_call ef ge vl m t v m' ->
-      step (State s f sp (Lannot ef args :: b) rs m)
-         t (State s f sp b rs m')
   | exec_Llabel:
       forall s f sp lbl b rs m,
       step (State s f sp (Llabel lbl :: b) rs m)

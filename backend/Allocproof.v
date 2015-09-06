@@ -165,10 +165,6 @@ Inductive expand_block_shape: block_shape -> RTL.instruction -> LTL.bblock -> Pr
                          (Ibuiltin ef args res s)
                          (expand_moves mv1
                            (Lbuiltin ef args' res' :: expand_moves mv2 (Lbranch s :: k)))
-  | ebs_annot: forall ef args args' s k,
-      expand_block_shape (BSannot ef args args' s)
-                         (Iannot ef args s)
-                         (Lannot ef args' :: Lbranch s :: k)
   | ebs_cond: forall cond args mv args' s1 s2 k,
       wf_moves mv ->
       expand_block_shape (BScond cond args mv args' s1 s2)
@@ -318,10 +314,8 @@ Proof.
 (* tailcall *)
   destruct b0; MonadInv. destruct i; MonadInv; UseParsingLemmas. econstructor; eauto.
 (* builtin *) 
-  destruct b0; MonadInv. destruct i; MonadInv; UseParsingLemmas.
+  destruct b1; MonadInv. destruct i; MonadInv; UseParsingLemmas.
   econstructor; eauto.
-(* annot *)
-  destruct b; MonadInv. destruct i; MonadInv. UseParsingLemmas. constructor.  
 (* cond *)
   destruct b0; MonadInv. destruct i; MonadInv; UseParsingLemmas. econstructor; eauto.
 (* jumptable *)
@@ -1347,9 +1341,9 @@ Proof.
   rewrite Int64.hi_ofwords, Int64.lo_ofwords; auto. 
 Qed.
 
-Lemma add_equations_annot_arg_satisf:
+Lemma add_equations_builtin_arg_satisf:
   forall env rs ls arg arg' e e',
-  add_equations_annot_arg env arg arg' e = Some e' ->
+  add_equations_builtin_arg env arg arg' e = Some e' ->
   satisf rs ls e' -> satisf rs ls e.
 Proof.
   induction arg; destruct arg'; simpl; intros; MonadInv; eauto.
@@ -1357,63 +1351,169 @@ Proof.
   destruct arg'1; MonadInv. destruct arg'2; MonadInv. eauto using add_equation_satisf.
 Qed.
 
-Lemma add_equations_annot_arg_lessdef:
+Lemma add_equations_builtin_arg_lessdef:
   forall env (ge: RTL.genv) sp rs ls m arg v,
-  eval_annot_arg ge (fun r => rs#r) sp m arg v ->
+  eval_builtin_arg ge (fun r => rs#r) sp m arg v ->
   forall e e' arg',
-  add_equations_annot_arg env arg arg' e = Some e' ->
+  add_equations_builtin_arg env arg arg' e = Some e' ->
   satisf rs ls e' ->
   wt_regset env rs ->
-  exists v', eval_annot_arg ge ls sp m arg' v' /\ Val.lessdef v v'.
+  exists v', eval_builtin_arg ge ls sp m arg' v' /\ Val.lessdef v v'.
 Proof.
   induction 1; simpl; intros e e' arg' AE SAT WT; destruct arg'; MonadInv.
 - exploit add_equation_lessdef; eauto. simpl; intros.
-  exists (ls x0); auto with aarg.
+  exists (ls x0); auto with barg.
 - destruct arg'1; MonadInv. destruct arg'2; MonadInv. 
   exploit add_equation_lessdef. eauto. simpl; intros LD1.
   exploit add_equation_lessdef. eapply add_equation_satisf. eauto. simpl; intros LD2.
-  exists (Val.longofwords (ls x0) (ls x1)); split; auto with aarg. 
+  exists (Val.longofwords (ls x0) (ls x1)); split; auto with barg. 
   rewrite <- (val_longofwords_eq rs#x). apply Val.longofwords_lessdef; auto.
   rewrite <- e0; apply WT. 
-- econstructor; eauto with aarg.
-- econstructor; eauto with aarg.
-- econstructor; eauto with aarg.
-- econstructor; eauto with aarg.
-- econstructor; eauto with aarg.
-- econstructor; eauto with aarg.
-- econstructor; eauto with aarg.
-- econstructor; eauto with aarg.
-- exploit IHeval_annot_arg1; eauto. eapply add_equations_annot_arg_satisf; eauto. 
+- econstructor; eauto with barg.
+- econstructor; eauto with barg.
+- econstructor; eauto with barg.
+- econstructor; eauto with barg.
+- econstructor; eauto with barg.
+- econstructor; eauto with barg.
+- econstructor; eauto with barg.
+- econstructor; eauto with barg.
+- exploit IHeval_builtin_arg1; eauto. eapply add_equations_builtin_arg_satisf; eauto. 
   intros (v1 & A & B).
-  exploit IHeval_annot_arg2; eauto. intros (v2 & C & D).
-  exists (Val.longofwords v1 v2); split; auto with aarg. apply Val.longofwords_lessdef; auto.
+  exploit IHeval_builtin_arg2; eauto. intros (v2 & C & D).
+  exists (Val.longofwords v1 v2); split; auto with barg. apply Val.longofwords_lessdef; auto.
 Qed.
 
-Lemma add_equations_annot_args_satisf:
+Lemma add_equations_builtin_args_satisf:
   forall env rs ls arg arg' e e',
-  add_equations_annot_args env arg arg' e = Some e' ->
+  add_equations_builtin_args env arg arg' e = Some e' ->
   satisf rs ls e' -> satisf rs ls e.
 Proof.
-  induction arg; destruct arg'; simpl; intros; MonadInv; eauto using add_equations_annot_arg_satisf.
+  induction arg; destruct arg'; simpl; intros; MonadInv; eauto using add_equations_builtin_arg_satisf.
 Qed.
 
-Lemma add_equations_annot_args_lessdef:
+Lemma add_equations_builtin_args_lessdef:
   forall env (ge: RTL.genv) sp rs ls m tm arg vl,
-  eval_annot_args ge (fun r => rs#r) sp m arg vl ->
+  eval_builtin_args ge (fun r => rs#r) sp m arg vl ->
   forall arg' e e',
-  add_equations_annot_args env arg arg' e = Some e' ->
+  add_equations_builtin_args env arg arg' e = Some e' ->
   satisf rs ls e' ->
   wt_regset env rs ->
   Mem.extends m tm ->
-  exists vl', eval_annot_args ge ls sp tm arg' vl' /\ Val.lessdef_list vl vl'.
+  exists vl', eval_builtin_args ge ls sp tm arg' vl' /\ Val.lessdef_list vl vl'.
 Proof.
   induction 1; simpl; intros; destruct arg'; MonadInv.
 - exists (@nil val); split; constructor.
 - exploit IHlist_forall2; eauto. intros (vl' & A & B).
-  exploit add_equations_annot_arg_lessdef; eauto. 
-  eapply add_equations_annot_args_satisf; eauto. intros (v1' & C & D).
-  exploit (@eval_annot_arg_lessdef _ ge ls ls); eauto. intros (v1'' & E & F).
+  exploit add_equations_builtin_arg_lessdef; eauto. 
+  eapply add_equations_builtin_args_satisf; eauto. intros (v1' & C & D).
+  exploit (@eval_builtin_arg_lessdef _ ge ls ls); eauto. intros (v1'' & E & F).
   exists (v1'' :: vl'); split; constructor; auto. eapply Val.lessdef_trans; eauto. 
+Qed.
+
+Lemma add_equations_debug_args_satisf:
+  forall env rs ls arg arg' e e',
+  add_equations_debug_args env arg arg' e = Some e' ->
+  satisf rs ls e' -> satisf rs ls e.
+Proof.
+  induction arg; destruct arg'; simpl; intros; MonadInv; auto.
+  destruct (add_equations_builtin_arg env a b e) as [e1|] eqn:A;
+  eauto using add_equations_builtin_arg_satisf.
+Qed.
+
+Lemma add_equations_debug_args_eval:
+  forall env (ge: RTL.genv) sp rs ls m tm arg vl,
+  eval_builtin_args ge (fun r => rs#r) sp m arg vl ->
+  forall arg' e e',
+  add_equations_debug_args env arg arg' e = Some e' ->
+  satisf rs ls e' ->
+  wt_regset env rs ->
+  Mem.extends m tm ->
+  exists vl', eval_builtin_args ge ls sp tm arg' vl'.
+Proof.
+  induction 1; simpl; intros; destruct arg'; MonadInv.
+- exists (@nil val); constructor.
+- exists (@nil val); constructor.
+- destruct (add_equations_builtin_arg env a1 b e) as [e1|] eqn:A.
++ exploit IHlist_forall2; eauto. intros (vl' & B).
+  exploit add_equations_builtin_arg_lessdef; eauto. 
+  eapply add_equations_debug_args_satisf; eauto. intros (v1' & C & D).
+  exploit (@eval_builtin_arg_lessdef _ ge ls ls); eauto. intros (v1'' & E & F).
+  exists (v1'' :: vl'); constructor; auto.
++ eauto.
+Qed.
+
+Lemma add_equations_builtin_eval:
+  forall ef env args args' e1 e2 m1 m1' rs ls (ge: RTL.genv) sp vargs t vres m2,
+  wt_regset env rs ->
+  match ef with
+  | EF_debug _ _ _ => add_equations_debug_args env args args' e1
+  | _              => add_equations_builtin_args env args args' e1
+  end = Some e2 ->
+  Mem.extends m1 m1' ->
+  satisf rs ls e2 ->
+  eval_builtin_args ge (fun r => rs # r) sp m1 args vargs ->
+  external_call ef ge vargs m1 t vres m2 ->
+  satisf rs ls e1 /\
+  exists vargs' vres' m2',
+     eval_builtin_args ge ls sp m1' args' vargs'
+  /\ external_call ef ge vargs' m1' t vres' m2'
+  /\ Val.lessdef vres vres'
+  /\ Mem.extends m2 m2'.
+Proof.
+  intros. 
+  assert (DEFAULT: add_equations_builtin_args env args args' e1 = Some e2 ->
+    satisf rs ls e1 /\
+    exists vargs' vres' m2',
+       eval_builtin_args ge ls sp m1' args' vargs'
+    /\ external_call ef ge vargs' m1' t vres' m2'
+    /\ Val.lessdef vres vres'
+    /\ Mem.extends m2 m2').
+  {
+    intros. split. eapply add_equations_builtin_args_satisf; eauto. 
+    exploit add_equations_builtin_args_lessdef; eauto.
+    intros (vargs' & A & B).
+    exploit external_call_mem_extends; eauto.
+    intros (vres' & m2' & C & D & E & F).
+    exists vargs', vres', m2'; auto.
+  }
+  destruct ef; auto. 
+  split. eapply add_equations_debug_args_satisf; eauto. 
+  exploit add_equations_debug_args_eval; eauto.
+  intros (vargs' & A).
+  simpl in H4; inv H4.
+  exists vargs', Vundef, m1'. intuition auto. simpl. constructor. 
+Qed.
+
+Lemma parallel_set_builtin_res_satisf:
+  forall env res res' e0 e1 rs ls v v',
+  remove_equations_builtin_res env res res' e0 = Some e1 ->
+  forallb (fun r => reg_unconstrained r e1) (params_of_builtin_res res) = true ->
+  forallb (fun mr => loc_unconstrained (R mr) e1) (params_of_builtin_res res') = true ->
+  satisf rs ls e1 ->
+  Val.lessdef v v' ->
+  satisf (regmap_setres res v rs) (Locmap.setres res' v' ls) e0.
+Proof.
+  intros. rewrite forallb_forall in *.
+  destruct res, res'; simpl in *; inv H.
+- apply parallel_assignment_satisf with (k := Full); auto.
+  unfold reg_loc_unconstrained. rewrite H0 by auto. rewrite H1 by auto. auto.
+- destruct res'1; try discriminate. destruct res'2; try discriminate.
+  rename x0 into hi; rename x1 into lo. MonadInv. destruct (mreg_eq hi lo); inv H5.
+  set (e' := remove_equation {| ekind := High; ereg := x; eloc := R hi |} e0) in *.
+  set (e'' := remove_equation {| ekind := Low; ereg := x; eloc := R lo |} e') in *.
+  simpl in *. red; intros. 
+  destruct (OrderedEquation.eq_dec q (Eq Low x (R lo))).
+  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gss. apply Val.loword_lessdef; auto.
+  destruct (OrderedEquation.eq_dec q (Eq High x (R hi))).
+  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gso by (red; auto).
+  rewrite Locmap.gss. apply Val.hiword_lessdef; auto.
+  assert (EqSet.In q e'').
+  { unfold e'', e', remove_equation; simpl; ESD.fsetdec. }
+  rewrite Regmap.gso. rewrite ! Locmap.gso. auto. 
+  eapply loc_unconstrained_sound; eauto.
+  eapply loc_unconstrained_sound; eauto.
+  eapply reg_unconstrained_sound; eauto.
+- auto.
 Qed.
 
 (** * Properties of the dataflow analysis *)
@@ -2071,51 +2171,27 @@ Proof.
   rewrite SIG. inv WTI. rewrite <- H6. apply wt_regset_list; auto. 
 
 (* builtin *)
-- assert (WTRS': wt_regset env (rs#res <- v)) by (eapply wt_exec_Ibuiltin; eauto).
-  exploit (exec_moves mv1); eauto. intros [ls1 [A1 B1]]. 
-  exploit external_call_mem_extends; eauto.
-  eapply add_equations_args_lessdef; eauto.
-  inv WTI. rewrite <- H4. apply wt_regset_list; auto. 
-  intros [v' [m'' [F [G [J K]]]]].
-  assert (E: map ls1 (map R args') = reglist ls1 args').
-  { unfold reglist. rewrite list_map_compose. auto. }
-  rewrite E in F. clear E.
-  set (vl' := encode_long (sig_res (ef_sig ef)) v').
-  set (ls2 := Locmap.setlist (map R res') vl' (undef_regs (destroyed_by_builtin ef) ls1)).
-  assert (satisf (rs#res <- v) ls2 e0).
-  { eapply parallel_assignment_satisf_2; eauto. 
-    eapply can_undef_satisf; eauto.
-    eapply add_equations_args_satisf; eauto. }
+- exploit (exec_moves mv1); eauto. intros [ls1 [A1 B1]].
+  exploit add_equations_builtin_eval; eauto. 
+  intros (C & vargs' & vres' & m'' & D & E & F & G).
+  assert (WTRS': wt_regset env (regmap_setres res vres rs)) by (eapply wt_exec_Ibuiltin; eauto).
+  set (ls2 := Locmap.setres res' vres' (undef_regs (destroyed_by_builtin ef) ls1)).
+  assert (satisf (regmap_setres res vres rs) ls2 e0).
+  { eapply parallel_set_builtin_res_satisf; eauto. 
+    eapply can_undef_satisf; eauto. }
   exploit (exec_moves mv2); eauto. intros [ls3 [A3 B3]].
   econstructor; split.
   eapply plus_left. econstructor; eauto. 
   eapply star_trans. eexact A1. 
-  eapply star_left. econstructor. 
-  econstructor. unfold reglist. eapply external_call_symbols_preserved; eauto. 
+  eapply star_left. econstructor.
+  eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
+  eapply external_call_symbols_preserved. eauto. 
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
-  instantiate (1 := vl'); auto. 
   instantiate (1 := ls2); auto. 
   eapply star_right. eexact A3.
   econstructor. 
   reflexivity. reflexivity. reflexivity. traceEq. 
   exploit satisf_successors; eauto. simpl; eauto.
-  intros [enext [U V]]. 
-  econstructor; eauto.
- 
-(* annot *)
-- exploit add_equations_annot_args_lessdef; eauto.
-  intros (vargs' & A & B). 
-  exploit external_call_mem_extends; eauto.
-  intros [vres' [m'' [F [G [J K]]]]].
-  econstructor; split.
-  eapply plus_left. econstructor; eauto. 
-  eapply star_two. econstructor.
-  eapply eval_annot_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved with (ge1 := ge); eauto. 
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
-  constructor. eauto. traceEq.
-  exploit satisf_successors. eauto. eauto. simpl; eauto. eauto. 
-  eapply add_equations_annot_args_satisf; eauto. 
   intros [enext [U V]]. 
   econstructor; eauto.
 

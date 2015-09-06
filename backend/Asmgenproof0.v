@@ -356,29 +356,55 @@ Proof.
   eapply extcall_args_match; eauto.
 Qed.
 
-(** Translation of arguments to annotations. *)
+(** Translation of arguments and results to builtins. *)
 
-Remark annot_arg_match:
+Remark builtin_arg_match:
   forall ge (rs: regset) sp m a v,
-  eval_annot_arg ge (fun r => rs (preg_of r)) sp m a v ->
-  eval_annot_arg ge rs sp m (map_annot_arg preg_of a) v.
+  eval_builtin_arg ge (fun r => rs (preg_of r)) sp m a v ->
+  eval_builtin_arg ge rs sp m (map_builtin_arg preg_of a) v.
 Proof.
-  induction 1; simpl; eauto with aarg.
+  induction 1; simpl; eauto with barg.
 Qed.
 
-Lemma annot_args_match:
+Lemma builtin_args_match:
   forall ge ms sp rs m m', agree ms sp rs -> Mem.extends m m' ->
-  forall al vl, eval_annot_args ge ms sp m al vl ->
-  exists vl', eval_annot_args ge rs sp m' (map (map_annot_arg preg_of) al) vl'
+  forall al vl, eval_builtin_args ge ms sp m al vl ->
+  exists vl', eval_builtin_args ge rs sp m' (map (map_builtin_arg preg_of) al) vl'
            /\ Val.lessdef_list vl vl'.
 Proof.
   induction 3; intros; simpl.
   exists (@nil val); split; constructor.
-  exploit (@eval_annot_arg_lessdef _ ge ms (fun r => rs (preg_of r))); eauto. 
+  exploit (@eval_builtin_arg_lessdef _ ge ms (fun r => rs (preg_of r))); eauto. 
   intros; eapply preg_val; eauto.
   intros (v1' & A & B).
   destruct IHlist_forall2 as [vl' [C D]].
-  exists (v1' :: vl'); split; constructor; auto. apply annot_arg_match; auto. 
+  exists (v1' :: vl'); split; constructor; auto. apply builtin_arg_match; auto. 
+Qed.
+
+Lemma agree_set_res:
+  forall res ms sp rs v v',
+  agree ms sp rs ->
+  Val.lessdef v v' ->
+  agree (Mach.set_res res v ms) sp (Asm.set_res (map_builtin_res preg_of res) v' rs).
+Proof.
+  induction res; simpl; intros.
+- eapply agree_set_mreg; eauto. rewrite Pregmap.gss. auto.
+  intros. apply Pregmap.gso; auto.
+- auto.
+- apply IHres2. apply IHres1. auto. 
+  apply Val.hiword_lessdef; auto.
+  apply Val.loword_lessdef; auto.
+Qed.
+
+Lemma set_res_other:
+  forall r res v rs,
+  data_preg r = false ->
+  set_res (map_builtin_res preg_of res) v rs r = rs r.
+Proof.
+  induction res; simpl; intros.
+- apply Pregmap.gso. red; intros; subst r. rewrite preg_of_data in H; discriminate.
+- auto.
+- rewrite IHres2, IHres1; auto.
 Qed.
 
 (** * Correspondence between Mach code and Asm code *)
