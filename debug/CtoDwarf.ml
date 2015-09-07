@@ -305,15 +305,12 @@ let typedef_to_dwarf gloc (name,t) =
 (* Translate a global var to its corresponding dwarf representation *)
 let glob_var_to_dwarf (s,n,t,_) gloc =
    let i,t = type_to_dwarf t in
-   let at_decl = (match s with
-   | Storage_extern -> true
-   | _ -> false) in
    let ext = (match s with
    | Storage_static -> false
    | _ -> true) in
    let decl = {
      variable_file_loc = (Some gloc);
-     variable_declaration = Some at_decl;
+     variable_declaration = None;
      variable_external = Some ext;
      variable_location = None;
      variable_name = n.name;
@@ -372,7 +369,7 @@ let enum_to_dwarf (n,at,e) gloc =
   let enum = {
     enumeration_file_loc = Some gloc;
     enumeration_byte_size = bs;
-    enumeration_declaration = Some false;
+    enumeration_declaration = None;
     enumeration_name = if n.name <> "" then Some n.name else None;
   } in
   let id = get_composite_type n.stamp in
