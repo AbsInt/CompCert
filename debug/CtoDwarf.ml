@@ -391,7 +391,7 @@ let struct_to_dwarf (n,at,m) env gloc =
   let tag =DW_TAG_structure_type {
     structure_file_loc = Some gloc;
     structure_byte_size = info.ci_sizeof;
-    structure_declaration = Some false;
+    structure_declaration = None;
     structure_name = if n.name <> "" then Some n.name else None;
   } in
   let id = get_composite_type n.stamp in
@@ -446,7 +446,7 @@ let struct_to_dwarf (n,at,m) env gloc =
     tag = tag;
     children = children;
     id = id;} in
-  sou::e
+  e@[sou]
 
 (* Translate a union definition to its corresponding dwarf representation *)
 let union_to_dwarf (n,at,m) env gloc = 
@@ -454,7 +454,7 @@ let union_to_dwarf (n,at,m) env gloc =
   let tag = DW_TAG_union_type {
     union_file_loc = Some gloc;
     union_byte_size = info.ci_sizeof;
-    union_declaration = Some false;
+    union_declaration = None;
     union_name = if n.name <> "" then Some n.name else None;
   } in
   let id = get_composite_type n.stamp in
@@ -476,7 +476,7 @@ let union_to_dwarf (n,at,m) env gloc =
     tag = tag;
     children = children;
     id = id;} in
-  sou::e
+  e@[sou]
 
 (* Translate global declarations to there dwarf representation *)
 let globdecl_to_dwarf env (typs,decls) decl =
