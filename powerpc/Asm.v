@@ -157,6 +157,7 @@ Inductive instruction : Type :=
   | Pblr: instruction                                         (**r branch to contents of register LR *)
   | Pbt: crbit -> label -> instruction                        (**r branch if true *)
   | Pbtbl: ireg -> list label -> instruction                  (**r N-way branch through a jump table (pseudo) *)
+  | Pcmpb: ireg -> ireg -> ireg -> instruction                (**r compare bytes *)
   | Pcmplw: ireg -> ireg -> instruction                       (**r unsigned integer comparison *)
   | Pcmplwi: ireg -> constant -> instruction                  (**r same, with immediate argument *)
   | Pcmpw: ireg -> ireg -> instruction                        (**r signed integer comparison *)
@@ -871,6 +872,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   (** The following instructions and directives are not generated
       directly by [Asmgen], so we do not model them. *)
   | Pbdnz _
+  | Pcmpb _ _ _
   | Pcntlzw _ _
   | Pcreqv _ _ _
   | Pcrxor _ _ _

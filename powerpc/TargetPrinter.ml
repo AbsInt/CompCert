@@ -442,6 +442,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	bctr\n";
           jumptables := (lbl, tbl) :: !jumptables;
           fprintf oc "%s end pseudoinstr btbl\n" comment
+      | Pcmpb (r1, r2, r3) ->
+          fprintf oc "	cmpb	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pcmplw(r1, r2) ->
           fprintf oc "	cmplw	%a, %a, %a\n" creg 0 ireg r1 ireg r2
       | Pcmplwi(r1, c) ->

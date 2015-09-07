@@ -36,6 +36,8 @@ let builtins = {
       (TInt(IUInt, []), [TInt(IUInt, [])], false);
     "__builtin_bswap16",
       (TInt(IUShort, []), [TInt(IUShort, [])], false);
+    "__builtin_cmpb",
+      (TInt (IUInt, []),  [TInt(IUInt, []);TInt(IUInt, [])], false);
     (* Float arithmetic *)
     "__builtin_fmadd",
       (TFloat(FDouble, []), 
