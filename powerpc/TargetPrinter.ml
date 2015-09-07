@@ -383,7 +383,7 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	addis	%a, %a, %a\n" ireg r1 ireg_or_zero r2 constant c
       | Paddze(r1, r2) ->
           fprintf oc "	addze	%a, %a\n" ireg r1 ireg r2
-      | Pallocframe(sz, ofs) ->
+      | Pallocframe(sz, ofs, _) ->
           assert false
       | Pand_(r1, r2, r3) ->
           fprintf oc "	and.	%a, %a, %a\n" ireg r1 ireg r2 ireg r3

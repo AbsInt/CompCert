@@ -110,7 +110,12 @@ let builtins = {
     "__builtin_get_spr",
       (TInt(IUInt, []), [TInt(IInt, [])], false);
     "__builtin_set_spr",
-      (TVoid [], [TInt(IInt, []); TInt(IUInt, [])], false)
+      (TVoid [], [TInt(IInt, []); TInt(IUInt, [])], false);
+    (* Frame and return address *)
+    "__builtin_call_frame",
+      (TPtr (TVoid [],[]),[],false);
+    "__builtin_return_address",
+      (TPtr (TVoid [],[]),[],false)
   ]
 }
 

@@ -276,6 +276,9 @@ let expand_builtin_vstore chunk args =
       assert false
 
 (* Handling of varargs *)
+let linkregister_offset = ref  Int.zero
+
+let retaddr_offset = ref Int.zero
 
 let current_function_stacksize = ref 0l
 
@@ -470,6 +473,16 @@ let expand_builtin_inline name args res =
       emit (Pmtspr(n, a1))
   | "__builtin_set_spr", _, _ ->
       raise (Error "the first argument of __builtin_set_spr must be a constant")
+  (* Frame and return address *)
+  | "__builtin_call_frame", _,BR (IR res) ->
+      let sz = !current_function_stacksize 
+      and ofs = !linkregister_offset in
+      if sz < 0x8000l then
+        emit (Paddi(res, GPR1, Cint(coqint_of_camlint sz)))
+      else
+        emit (Plwz(res, Cint ofs, GPR1))
+  | "__builtin_return_address",_,BR (IR res) ->
+      emit (Plwz (res, Cint! retaddr_offset,GPR1))
   (* Catch-all *)
   | _ ->
       raise (Error ("unrecognized builtin " ^ name))
@@ -497,7 +510,7 @@ let num_crbit = function
 
 let expand_instruction instr =
   match instr with
-  | Pallocframe(sz, ofs) ->
+  | Pallocframe(sz, ofs,retofs) ->
       let variadic = (!current_function).fn_sig.sig_cc.cc_vararg in
       let sz = camlint_of_coqint sz in
       assert (ofs = Int.zero);
@@ -516,7 +529,9 @@ let expand_instruction instr =
                   {sig_args = []; sig_res = None; sig_cc = cc_default}));
         emit (Pmtlr GPR0)
       end;
-      current_function_stacksize := sz
+      current_function_stacksize := sz;
+      linkregister_offset := ofs;
+      retaddr_offset := retofs
   | Pbctr sg | Pbctrl sg | Pbl(_, sg) | Pbs(_, sg) ->
       set_cr6 sg;
       emit instr

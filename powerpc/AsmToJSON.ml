@@ -152,7 +152,7 @@ let p_instruction oc ic =
   | Paddic  (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Paddic\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Paddis  (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Paddis\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Paddze (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Paddze\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
-  | Pallocframe (c,i) -> assert false(* Should not occur *)
+  | Pallocframe (c,i,r) -> assert false(* Should not occur *)
   | Pand_ (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pand_\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pandc (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pandc\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pandi_ (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Pandi_\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
