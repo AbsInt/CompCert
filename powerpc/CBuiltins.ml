@@ -115,7 +115,10 @@ let builtins = {
     "__builtin_call_frame",
       (TPtr (TVoid [],[]),[],false);
     "__builtin_return_address",
-      (TPtr (TVoid [],[]),[],false)
+      (TPtr (TVoid [],[]),[],false);
+    (* isel *)
+    "__builtin_isel",
+      (TInt (IInt, []),[TInt(IInt, []);TInt(IInt, []);TInt(IInt, [])],false)
   ]
 }
 

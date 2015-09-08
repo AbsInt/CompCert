@@ -207,6 +207,7 @@ Inductive instruction : Type :=
   | Pfrsqrte: freg -> freg -> instruction                     (**r approximate reciprocal of square root *)
   | Pfres: freg -> freg -> instruction                        (**r approximate inverse *)
   | Pfsel: freg -> freg -> freg -> freg -> instruction        (**r FP conditional move *)
+  | Pisel: ireg -> ireg -> ireg -> crbit -> instruction       (**r integer select *)
   | Pisync: instruction                                       (**r ISYNC barrier *)
   | Picbi: ireg -> ireg -> instruction                        (**r instruction cache invalidate *)
   | Picbtls: int -> ireg -> ireg -> instruction               (**r instruction cache block touch and lock set *)
@@ -893,6 +894,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pfrsqrte _ _
   | Pfres _ _
   | Pfsel _ _ _ _
+  | Pisel _ _ _ _
   | Plwarx _ _ _
   | Plwbrx _ _ _
   | Picbi _ _
