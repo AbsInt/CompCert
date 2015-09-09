@@ -118,7 +118,10 @@ let builtins = {
       (TPtr (TVoid [],[]),[],false);
     (* isel *)
     "__builtin_isel",
-      (TInt (IInt, []),[TInt(IInt, []);TInt(IInt, []);TInt(IInt, [])],false)
+      (TInt (IInt, []),[TInt(IInt, []);TInt(IInt, []);TInt(IInt, [])],false);
+    (* atomic operations *)
+    "__builtin_atomic_exchange",
+      (TVoid [], [TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[])],false)
   ]
 }
 

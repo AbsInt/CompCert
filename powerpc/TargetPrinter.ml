@@ -414,6 +414,8 @@ module Target (System : SYSTEM):TARGET =
           end
       | Pbl(s, sg) ->
           fprintf oc "	bl	%a\n" symbol s
+      | Pbne lbl ->
+          fprintf oc "	bne-	%a\n" label (transl_label lbl)
       | Pbs(s, sg) ->
           fprintf oc "	b	%a\n" symbol s
       | Pblr ->
