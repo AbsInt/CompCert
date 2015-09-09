@@ -121,7 +121,10 @@ let builtins = {
       (TInt (IInt, []),[TInt(IInt, []);TInt(IInt, []);TInt(IInt, [])],false);
     (* atomic operations *)
     "__builtin_atomic_exchange",
-      (TVoid [], [TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[])],false)
+      (TVoid [], [TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[])],false);
+    "__builtin_atomic_load",
+      (TVoid [], [TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[])],false)
+
   ]
 }
 
