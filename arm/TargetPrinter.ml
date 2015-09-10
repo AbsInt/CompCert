@@ -20,7 +20,6 @@ open AST
 open Memdata
 open Asm
 open PrintAsmaux
-open Debug
 
 (* Type for the ABI versions *)
 type float_abi_type =

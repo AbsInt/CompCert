@@ -21,7 +21,6 @@ open AST
 open Memdata
 open Asm
 open PrintAsmaux
-open Debug
 
 (* Recognition of target ABI and asm syntax *)
 
@@ -140,7 +139,7 @@ module Linux_System : SYSTEM =
 
 
     let print_file_line oc file line =
-      Debug.print_file_line oc comment file line
+      print_file_line oc comment file line
     
     (* Emit .cfi directives *)      
     let cfi_startproc = cfi_startproc
@@ -218,7 +217,7 @@ module Diab_System : SYSTEM =
 
 
     let print_file_line oc file line =
-      Debug.print_file_line_d2 oc comment file line
+      print_file_line_d2 oc comment file line
 
     (* Emit .cfi directives *)
     let cfi_startproc oc = ()

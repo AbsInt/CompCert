@@ -134,12 +134,12 @@ module Printer(Target:TARGET) =
 let print_program oc p db =
   let module Target = (val (sel_target ()):TARGET) in
   let module Printer = Printer(Target) in
-  Debug.reset_filenames ();
+  reset_filenames ();
   print_version_and_options oc Target.comment;
   Target.print_prologue oc;
   List.iter (Printer.print_globdef oc) p.prog_defs;
   Target.print_epilogue oc;
-  Debug.close_filenames ();
+  close_filenames ();
   if !Clflags.option_g && Configuration.advanced_debug then
     begin
       match db with
