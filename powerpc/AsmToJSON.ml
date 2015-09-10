@@ -163,6 +163,7 @@ let p_instruction oc ic =
   | Pbdnz l -> fprintf oc "{\"Instruction Name\":\"Pbdnz\",\"Args\":[%a]}" p_label l 
   | Pbf (c,l) -> fprintf oc "{\"Instruction Name\":\"Pbf\",\"Args\":[%a,%a]}" p_crbit c p_label l
   | Pbl (i,s) -> fprintf oc "{\"Instruction Name\":\"Pbl\",\"Args\":[%a]}"  p_atom_constant i
+  | Pbne (lbl) -> fprintf oc "{\"Instruction Name\":\"Pbne\",\"Args\":[%a]}"  p_atom_constant lbl
   | Pbs (i,s) -> fprintf oc "{\"Instruction Name\":\"Pbs\",\"Args\":[%a]}"  p_atom_constant i
   | Pblr -> fprintf oc "{\"Instruction Name\":\"Pblr\",\"Args\":[]}"
   | Pbt (cr,l) -> fprintf oc "{\"Instruction Name\":\"Pbt\",\"Args\":[%a,%a]}" p_crbit cr p_label l

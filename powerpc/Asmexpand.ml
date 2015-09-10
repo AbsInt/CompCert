@@ -527,7 +527,7 @@ let expand_builtin_inline name args res =
       and lblneq = new_label ()
       and lblsucc = new_label () in      
       emit (Plwz (GPR10,Cint _0,exp));
-      emit (Plwz (GPR11,Cint _0,exp));
+      emit (Plwz (GPR11,Cint _0,des));
       emit (Psync);
       emit (Plabel lbls);
       emit (Plwarx (GPR12,GPR0,dst));
