@@ -288,7 +288,7 @@ let p_instruction oc ic =
   | Pstwx_a (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pstwx\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pstwux (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pstwux\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pstwbrx (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pstwbrx\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
-  | Pstwcx_ (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pstwc_\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
+  | Pstwcx_ (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pstwcx_\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Psubfc (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Psubfc\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Psubfe (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Psubfe\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Psubfze (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Psubfe\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
