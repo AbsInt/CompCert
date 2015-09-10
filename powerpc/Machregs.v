@@ -161,13 +161,14 @@ Fixpoint destroyed_by_clobber (cl: list string): list mreg :=
   end.
 
 Definition builtin_atomic_exchange := ident_of_string "__builtin_atomic_exchange".
+Definition builtin_sync_and_fetch := ident_of_string "__builtin_sync_and_fetch".
 
 Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_builtin id sg =>
     if ident_eq id builtin_atomic_exchange then R10::R11::F13:: nil
-    else
-      F13 :: nil
+    else if ident_eq id builtin_sync_and_fetch then R11::F13::nil
+    else F13 :: nil
   | EF_vload _ => R11 :: nil
   | EF_vstore Mint64 => R10 :: R11 :: R12 :: nil
   | EF_vstore _ => R11 :: R12 :: nil
