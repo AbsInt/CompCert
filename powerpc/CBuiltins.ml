@@ -118,7 +118,7 @@ let builtins = {
       (TPtr (TVoid [],[]),[],false);
     (* isel *)
     "__builtin_isel",
-      (TInt (IInt, []),[TInt(IInt, []);TInt(IInt, []);TInt(IInt, [])],false)
+      (TInt (IInt, []),[TInt(IBool, []);TInt(IInt, []);TInt(IInt, [])],false)
   ]
 }
 
