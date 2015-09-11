@@ -19,7 +19,7 @@ open DwarfTypes
 open DwarfUtil
 open Env
 open Set
-
+open DebugInformation
 (* Functions to translate a C Ast into Dwarf 2 debugging information *)
 
 
