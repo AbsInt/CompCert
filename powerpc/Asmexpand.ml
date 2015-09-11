@@ -499,12 +499,10 @@ let expand_builtin_inline name args res =
       emit (Pisync);
       emit (Pstw (GPR11,Cint _0,a3))
   | "__builtin_atomic_load", [BA (IR a1); BA (IR a2)],_ ->
-      let lbl = new_label() in
       emit (Psync);
-      emit (Plabel lbl);
       emit (Plwz (a1,Cint _0,a1));
       emit (Pcmpw (a1,a1));
-      emit (Pbne lbl);
+      emit (Pbne_rel _4);
       emit (Pisync);
       emit (Pstw (a1,Cint _0, a2));
   | "__builtin_sync_fetch_and_add", [BA (IR a1); BA(IR a2)], BR (IR res) ->

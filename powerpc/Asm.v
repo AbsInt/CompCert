@@ -154,6 +154,7 @@ Inductive instruction : Type :=
   | Pbf: crbit -> label -> instruction                        (**r branch if false *)
   | Pbl: ident -> signature -> instruction                    (**r branch and link *)
   | Pbne: label -> instruction                                (**r branch not equal *)
+  | Pbne_rel: int -> instruction                              (**r branch not equal with relative offset *)
   | Pbs: ident -> signature -> instruction                    (**r branch to symbol *)
   | Pblr: instruction                                         (**r branch to contents of register LR *)
   | Pbt: crbit -> label -> instruction                        (**r branch if true *)
@@ -875,6 +876,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       directly by [Asmgen], so we do not model them. *)
   | Pbdnz _
   | Pbne _
+  | Pbne_rel _
   | Pcmpb _ _ _
   | Pcntlzw _ _
   | Pcreqv _ _ _

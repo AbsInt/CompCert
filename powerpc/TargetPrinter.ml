@@ -416,6 +416,11 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	bl	%a\n" symbol s
       | Pbne lbl ->
           fprintf oc "	bne-	%a\n" label (transl_label lbl)
+      | Pbne_rel ofs ->
+          let ofs = camlint_of_coqint ofs in
+          let sign = if ofs >= 0l then "+" else "-" in
+          let ofs = Int32.abs ofs in
+          fprintf oc "	bne-	$%s%ld\n" sign ofs 
       | Pbs(s, sg) ->
           fprintf oc "	b	%a\n" symbol s
       | Pblr ->
