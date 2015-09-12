@@ -9,6 +9,8 @@ LIB=libcompcert.a
 INCLUDES=include/float.h include/stdarg.h include/stdbool.h \
   include/stddef.h include/varargs.h
 
+VPATH=$(ARCH)/$(MODEL) $(ARCH)
+
 ifeq ($(strip $(HAS_RUNTIME_LIB)),true)
 all: $(LIB)
 else
@@ -19,10 +21,10 @@ $(LIB): $(OBJS)
 	rm -f $(LIB)
 	ar rcs $(LIB) $(OBJS)
 
-%.o: $(ARCH)/%.s
+%.o: %.s
 	$(CASMRUNTIME) -o $@ $^
 
-%.o: $(ARCH)/%.S
+%.o: %.S
 	$(CASMRUNTIME) -DMODEL_$(MODEL) -DABI_$(ABI) -DSYS_$(SYSTEM) -o $@ $^
 
 clean::
