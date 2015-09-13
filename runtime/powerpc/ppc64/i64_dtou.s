@@ -44,7 +44,7 @@ __i64_dtou:
         lis r0, 0x5f00          # 0x5f00_0000 = 2^63 in binary32 format
         stwu r0, -16(r1)
         lfs f2, 0(r1)           # f2 = 2^63
-        fcmpu f1, f2            # crbit 0 is f1 < f2
+        fcmpu cr0, f1, f2       # crbit 0 is f1 < f2
         bf 0, 1f                # branch if f1 >= 2^63 (or f1 is NaN)
 	fctidz f1, f1           # convert as signed
         stfd f1, 0(r1)
