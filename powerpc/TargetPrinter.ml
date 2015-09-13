@@ -484,6 +484,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	extsb	%a, %a\n" ireg r1 ireg r2
       | Pextsh(r1, r2) ->
           fprintf oc "	extsh	%a, %a\n" ireg r1 ireg r2
+      | Pextsw(r1, r2) ->
+          fprintf oc "	extsw	%a, %a\n" ireg r1 ireg r2
       | Pfreeframe(sz, ofs) ->
           assert false
       | Pfabs(r1, r2) | Pfabss(r1, r2) ->
@@ -494,7 +496,17 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	fadds	%a, %a, %a\n" freg r1 freg r2 freg r3
       | Pfcmpu(r1, r2) ->
           fprintf oc "	fcmpu	%a, %a, %a\n" creg 0 freg r1 freg r2
+      | Pfcfi(r1, r2) ->
+          assert false
+      | Pfcfid(r1, r2) ->
+          fprintf oc "	fcfid	%a, %a\n" freg r1 freg r2
+      | Pfcfiu(r1, r2) ->
+          assert false
       | Pfcti(r1, r2) ->
+          assert false
+      | Pfctidz(r1, r2) ->
+          fprintf oc "	fctidz	%a, %a\n" freg r1 freg r2
+      | Pfctiu(r1, r2) ->
           assert false
       | Pfctiw(r1, r2) ->
           fprintf oc "	fctiw	%a, %a\n" freg r1 freg r2
@@ -628,6 +640,9 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	ori	%a, %a, %a\n" ireg r1 ireg r2 constant c
       | Poris(r1, r2, c) ->
           fprintf oc "	oris	%a, %a, %a\n" ireg r1 ireg r2 constant c
+      | Prldicl(r1, r2, c1, c2) ->
+          fprintf oc "	rldicl	%a, %a, %ld, %ld\n"
+            ireg r1 ireg r2 (camlint_of_coqint c1) (camlint_of_coqint c2)
       | Prlwinm(r1, r2, c1, c2) ->
           let (mb, me) = rolm_mask (camlint_of_coqint c2) in
           fprintf oc "	rlwinm	%a, %a, %ld, %d, %d %s 0x%lx\n"
@@ -650,6 +665,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	stb	%a, %a(%a)\n" ireg r1 constant c ireg r2
       | Pstbx(r1, r2, r3) ->
           fprintf oc "	stbx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+      | Pstdu(r1, c, r2) ->
+          fprintf oc "	stdu	%a, %a(%a)\n" ireg r1 constant c ireg r2
       | Pstfd(r1, c, r2) | Pstfd_a(r1, c, r2) ->
           fprintf oc "	stfd	%a, %a(%a)\n" freg r1 constant c ireg r2
       | Pstfdu(r1, c, r2) ->

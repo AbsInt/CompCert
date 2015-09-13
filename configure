@@ -38,6 +38,10 @@ Supported targets:
   ia32-cygwin      (x86 32 bits, Cygwin environment under Windows)
   manual           (edit configuration file by hand)
 
+For PowerPC targets, the "ppc-" prefix can be refined into:
+  ppc64-           PowerPC 64 bits
+  e5500-           FreeCell e5500 core (PowerPC 64 bits + EREF extensions)
+
 For ARM targets, the "arm-" prefix can be refined into:
   armv6-           ARMv6   + VFPv2
   armv7a-          ARMv7-A + VFPv3-d16   (default)
@@ -88,38 +92,40 @@ struct_passing=""
 struct_return=""
 
 case "$target" in
-  powerpc-linux|ppc-linux|powerpc-eabi|ppc-eabi)
+  powerpc-*|ppc-*|powerpc64-*|ppc64-*|e5500-*)
     arch="powerpc"
-    model="standard"
+    case "$target" in
+      powerpc64-*|ppc64-*) model="ppc64";;
+      e5500-*) model="e5500";;
+      *) model="ppc32";;
+    esac
     abi="eabi"
     struct_passing="ref-caller"
     case "$target" in
       *-linux) struct_return="ref";;
-      *-eabi)  struct_return="int1-8";;
+      *)  struct_return="int1-8";;
     esac
-    system="linux"
-    cc="${toolprefix}gcc"
-    cprepro="${toolprefix}gcc -std=c99 -U__GNUC__ -E"
-    casm="${toolprefix}gcc -c"
-    casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
-    clinker="${toolprefix}gcc"
-    libmath="-lm"
-    cchecklink=${build_checklink};;
-  powerpc-eabi-diab|ppc-eabi-diab)
-    arch="powerpc"
-    model="standard"
-    abi="eabi"
-    struct_passing="ref-caller"
-    struct_return="int1-8"
-    system="diab"
-    cc="${toolprefix}dcc"
-    cprepro="${toolprefix}dcc -E -D__GNUC__"
-    casm="${toolprefix}das"
-    asm_supports_cfi=false
-    clinker="${toolprefix}dcc"
-    libmath="-lm"
-    cchecklink=${build_checklink}
-    advanced_debug=true;;
+    case "$target" in
+      *-eabi-diab)
+        system="diab"
+        cc="${toolprefix}dcc"
+        cprepro="${toolprefix}dcc -E -D__GNUC__"
+        casm="${toolprefix}das"
+        asm_supports_cfi=false
+        clinker="${toolprefix}dcc"
+        libmath="-lm"
+        cchecklink=${build_checklink}
+        advanced_debug=true;;
+      *)
+        system="linux"
+        cc="${toolprefix}gcc"
+        cprepro="${toolprefix}gcc -std=c99 -U__GNUC__ -E"
+        casm="${toolprefix}gcc -c"
+        casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
+        clinker="${toolprefix}gcc"
+        libmath="-lm"
+        cchecklink=${build_checklink};;
+    esac;;
   arm*-*)
     arch="arm"
     case "$target" in

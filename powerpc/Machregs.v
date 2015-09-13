@@ -134,7 +134,7 @@ Definition destroyed_by_op (op: operation): list mreg :=
   match op with
   | Ofloatconst _ => R12 :: nil
   | Osingleconst _ => R12 :: nil
-  | Ointoffloat => F13 :: nil
+  | Ointoffloat | Ointuoffloat => F13 :: nil
   | _ => nil
   end.
 

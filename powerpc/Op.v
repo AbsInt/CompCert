@@ -107,6 +107,9 @@ Inductive operation : Type :=
   | Ofloatofsingle: operation           (**r [rd] is [r1] extended to double-precision float *)
 (*c Conversions between int and float: *)
   | Ointoffloat: operation              (**r [rd = signed_int_of_float(r1)] *)
+  | Ointuoffloat: operation             (**r [rd = unsigned_int_of_float(r1)] (PPC64 only) *)
+  | Ofloatofint: operation              (**r [rd = float_of_signed_int(r1)] (PPC64 only) *)
+  | Ofloatofintu: operation             (**r [rd = float_of_unsigned_int(r1)] (PPC64 only *)
   | Ofloatofwords: operation            (**r [rd = float_of_words(r1,r2)] *)
 (*c Manipulating 64-bit integers: *)
   | Omakelong: operation                (**r [rd = r1 << 32 | r2] *)
@@ -231,6 +234,9 @@ Definition eval_operation
   | Osingleoffloat, v1::nil => Some(Val.singleoffloat v1)
   | Ofloatofsingle, v1::nil => Some(Val.floatofsingle v1)
   | Ointoffloat, v1::nil => Val.intoffloat v1
+  | Ointuoffloat, v1::nil => Val.intuoffloat v1
+  | Ofloatofint, v1::nil => Val.floatofint v1
+  | Ofloatofintu, v1::nil => Val.floatofintu v1
   | Ofloatofwords, v1::v2::nil => Some(Val.floatofwords v1 v2)
   | Omakelong, v1::v2::nil => Some(Val.longofwords v1 v2)
   | Olowlong, v1::nil => Some(Val.loword v1)
@@ -332,6 +338,9 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Osingleoffloat => (Tfloat :: nil, Tsingle)
   | Ofloatofsingle => (Tsingle :: nil, Tfloat)
   | Ointoffloat => (Tfloat :: nil, Tint)
+  | Ointuoffloat => (Tfloat :: nil, Tint)
+  | Ofloatofint => (Tint :: nil, Tfloat)
+  | Ofloatofintu => (Tint :: nil, Tfloat)
   | Ofloatofwords => (Tint :: Tint :: nil, Tfloat)
   | Omakelong => (Tint :: Tint :: nil, Tlong)
   | Olowlong => (Tlong :: nil, Tint)
@@ -420,6 +429,9 @@ Proof with (try exact I).
   destruct v0...
   destruct v0...
   destruct v0; simpl in H0; inv H0. destruct (Float.to_int f); inv H2...
+  destruct v0; simpl in H0; inv H0. destruct (Float.to_intu f); inv H2...
+  destruct v0; simpl in H0; inv H0...
+  destruct v0; simpl in H0; inv H0...
   destruct v0; destruct v1...
   destruct v0; destruct v1...
   destruct v0...
@@ -783,6 +795,10 @@ Proof.
   inv H4; simpl; auto.
   inv H4; simpl in H1; inv H1. simpl. destruct (Float.to_int f0); simpl in H2; inv H2.
   exists (Vint i); auto.
+  inv H4; simpl in H1; inv H1. simpl. destruct (Float.to_intu f0); simpl in H2; inv H2.
+  exists (Vint i); auto.
+  inv H4; simpl in H1; inv H1; simpl. TrivialExists.
+  inv H4; simpl in H1; inv H1; simpl. TrivialExists.
   inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.
   inv H4; simpl; auto.
