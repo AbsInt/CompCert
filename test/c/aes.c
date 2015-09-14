@@ -1423,7 +1423,7 @@ static void do_test(int keybits, u8 * key,
 static void do_bench(int nblocks)
 {
   u32 ckey[4 * (MAXNR + 1)];
-  u8 temp[16];
+  u8 temp[16] = "Plaintext";
   int nr;
 
   nr = rijndaelKeySetupEnc(ckey, (u8 *)"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F", 128);
