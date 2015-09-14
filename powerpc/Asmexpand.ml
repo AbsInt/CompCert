@@ -506,20 +506,23 @@ let expand_builtin_inline name args res =
       emit (Pisync);
       emit (Pstw (a1,Cint _0, a2));
   | "__builtin_sync_fetch_and_add", [BA (IR a1); BA(IR a2)], BR (IR res) ->
-      let tmpres = if a1 = res then
-        GPR11 
-      else
-        res in
       let lbl = new_label() in
       emit (Psync);
       emit (Plabel lbl);
-      emit (Plwarx (tmpres,GPR0,a1));
-      emit (Padd (a2,tmpres,a2));
-      emit (Pstwcx_ (a2,GPR0,a1));
+      emit (Plwarx (res,GPR0,a1));
+      emit (Padd (GPR10,res,a2));
+      emit (Pstwcx_ (GPR10,GPR0,a1));
       emit (Pbne lbl);
       emit (Pisync);
-      if (tmpres <> res) then
-        emit (Pmr (res,tmpres))
+  | "__builtin_sync_fetch_and_add", [BA (IR a1); BA(IR a2)], BR_none ->
+      let lbl = new_label() in
+      emit (Psync);
+      emit (Plabel lbl);
+      emit (Plwarx (GPR3,GPR0,a1));
+      emit (Padd (GPR10,GPR3,a2));
+      emit (Pstwcx_ (GPR10,GPR0,a1));
+      emit (Pbne lbl);
+      emit (Pisync);
   | "__builtin_atomic_compare_exchange", [BA (IR dst); BA(IR exp); BA (IR des)], BR (IR res) ->
       let lbls = new_label ()
       and lblneq = new_label ()
@@ -542,6 +545,27 @@ let expand_builtin_inline name args res =
       emit (Pstw (GPR12,(Cint _0),exp));
       emit (Plabel lblsucc);
       emit (Pmr (res,dst));
+  | "__builtin_atomic_compare_exchange", [BA (IR dst); BA(IR exp); BA (IR des)], BR_none ->
+      let lbls = new_label ()
+      and lblneq = new_label ()
+      and lblsucc = new_label () in      
+      emit (Plwz (GPR10,Cint _0,exp));
+      emit (Plwz (GPR11,Cint _0,des));
+      emit (Psync);
+      emit (Plabel lbls);
+      emit (Plwarx (GPR12,GPR0,dst));
+      emit (Pcmpw (GPR12,GPR10));
+      emit (Pbne lblneq);
+      emit (Pstwcx_ (GPR11,GPR0,dst));
+      emit (Pbne lbls);
+      emit (Plabel lblneq);
+      emit (Pisync);
+      emit (Pmfcr dst);
+      emit (Prlwinm (dst,dst,(Z.of_uint 3),_1));
+      emit (Pcmpwi (dst,(Cint _0)));
+      emit (Pbne lblsucc);
+      emit (Pstw (GPR12,(Cint _0),exp));
+      emit (Plabel lblsucc);
   (* Catch-all *)
   | _ ->
       raise (Error ("unrecognized builtin " ^ name))

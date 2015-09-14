@@ -126,7 +126,8 @@ let builtins = {
       (TVoid [], [TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[])],false);
     "__builtin_atomic_compare_exchange",
       (TInt (IBool, []), [TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[])],false);
-    
+    "__builtin_sync_fetch_and_add",
+      (TInt (IInt, []),  [TPtr (TInt(IInt, []),[]);TInt(IInt, [])],false);
   ]
 }
 

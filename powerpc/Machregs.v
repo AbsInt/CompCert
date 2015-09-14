@@ -161,15 +161,15 @@ Fixpoint destroyed_by_clobber (cl: list string): list mreg :=
   end.
 
 Definition builtin_atomic_exchange := ident_of_string "__builtin_atomic_exchange".
-Definition builtin_sync_and_fetch := ident_of_string "__builtin_sync_and_fetch".
+Definition builtin_sync_and_fetch := ident_of_string "__builtin_sync_fetch_and_add".
 Definition builtin_atomic_compare_exchange := ident_of_string "__builtin_atomic_compare_exchange".
 
 Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_builtin id sg =>
-    if ident_eq id builtin_atomic_exchange then R10::R11::F13:: nil
-    else if ident_eq id builtin_sync_and_fetch then R11::F13::nil
-    else if ident_eq id builtin_atomic_compare_exchange then R10::R11::R12::F13:: nil
+    if ident_eq id builtin_atomic_exchange then R10::R11:: nil
+    else if ident_eq id builtin_atomic_compare_exchange then R10::R11::R12:: nil
+    else if ident_eq id builtin_sync_and_fetch then R3::R10::nil 
     else F13 :: nil
   | EF_vload _ => R11 :: nil
   | EF_vstore Mint64 => R10 :: R11 :: R12 :: nil
@@ -193,7 +193,14 @@ Definition mregs_for_operation (op: operation): list (option mreg) * option mreg
 
 
 Definition mregs_for_builtin (ef: external_function): list (option mreg) * list (option mreg) :=
-  (nil, nil).
+  match ef with
+    | EF_builtin id sg =>
+      if ident_eq id builtin_atomic_exchange then ((Some R3)::(Some R4)::(Some R5)::nil,nil)
+      else if ident_eq id builtin_sync_and_fetch then ((Some R4)::(Some R5)::nil,(Some R3)::nil)
+      else if ident_eq id builtin_atomic_compare_exchange then ((Some R4)::(Some R5)::(Some R6)::nil, (Some R3):: nil)
+      else (nil, nil)
+    | _ => (nil, nil)
+  end.
 
 Global Opaque
     destroyed_by_op destroyed_by_load destroyed_by_store
