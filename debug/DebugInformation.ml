@@ -37,14 +37,15 @@ type composite_field =
      cfd_bit_offset:  int option;
      cfd_byte_offset: int option;
      cfd_byte_size:   int option;
+     cfd_bitfield:    string option;
    }
 
 type composite_type =
     {
      ct_name:     string;
+     ct_sou:      struct_or_union;
      ct_file_loc: location option;
      ct_members:  composite_field list;
-     ct_alignof:  int option;
      ct_sizeof:   int option;
    }
 
@@ -72,9 +73,8 @@ type typedef = {
   }
 
 type enumerator = {
-    enumerator_file_loc: location option;
     enumerator_name:     string;
-    enumerator_const:    int;
+    enumerator_const:    int64;
   }
 
 type enum_type = {
@@ -108,8 +108,7 @@ type debug_types =
   | FloatType of float_type
   | PointerType of ptr_type
   | ArrayType of array_type
-  | StructType of composite_type
-  | UnionType of composite_type
+  | CompositeType of composite_type
   | EnumType of enum_type
   | FunctionType of function_type
   | Typedef of typedef
@@ -244,22 +243,22 @@ let insert_type (ty: typ) =
               let str =
                 {
                  ct_name = id.name;
+                 ct_sou = Struct;
                  ct_file_loc = None;
                  ct_members = [];
-                 ct_alignof = None;
                  ct_sizeof = None;
                } in
-              StructType str
+              CompositeType str
           | TUnion (id,_) ->
               let union =
                 {
                  ct_name = id.name;
+                 ct_sou = Union;
                  ct_file_loc = None;
                  ct_members = [];
-                 ct_alignof = None;
                  ct_sizeof = None;
                } in
-              UnionType union
+              CompositeType union
           | TEnum (id,_) ->
               let enum = 
                 {
@@ -290,20 +289,20 @@ let insert_type (ty: typ) =
   in
   attr_aux ty
 
-(* Replace the struct information *)
-let replace_struct id f =
+(* Replace the composite information *)
+let replace_composite id f =
   let str = Hashtbl.find all_types id in
   match str with
-  | StructType comp -> let comp' = f comp in
-    if comp <> comp' then Hashtbl.replace all_types id (StructType comp')
+  | CompositeType comp -> let comp' = f comp in
+    if comp <> comp' then Hashtbl.replace all_types id (CompositeType comp')
   | _ -> assert false (* This should never happen *)
 
-(* Replace the union information *)
-let replace_union id f =
-  let union = Hashtbl.find all_types id in
-  match union with
-  | UnionType comp -> let comp' = f comp in
-    if comp <> comp' then Hashtbl.replace all_types id (UnionType comp')
+(* Replace the enum information *)
+let replace_enum id f =
+  let str = Hashtbl.find all_types id in
+  match str with
+  | EnumType comp -> let comp' = f comp in
+    if comp <> comp' then Hashtbl.replace all_types id (EnumType comp')
   | _ -> assert false (* This should never happen *)
 
 (* Replace the typdef information *)
@@ -365,6 +364,12 @@ let replace_var id var =
   let var = GlobalVariable var in
   Hashtbl.replace definitions id var
 
+let gen_comp_typ sou id at = 
+  if sou = Struct then
+    TStruct (id,at)
+  else
+    TUnion (id,at)
+
 let insert_declaration dec env =
   let insert d_dec stamp =
     let id = next_id () in
@@ -420,22 +425,53 @@ let insert_declaration dec env =
         fun_locals = [];
       } in
       insert (Function fd) f.fd_name.stamp
-  | Gcompositedecl (Struct,id,at) -> 
-      ignore (insert_type (TStruct (id,at)));
-      let id = find_type (TStruct (id,[])) in
-      replace_struct id (fun comp -> if comp.ct_file_loc = None then
+  | Gcompositedecl (sou,id,at) -> 
+      ignore (insert_type (gen_comp_typ sou id at));
+      let id = find_type (gen_comp_typ sou id []) in
+      replace_composite id (fun comp -> if comp.ct_file_loc = None then
         {comp with ct_file_loc = Some (dec.gloc);}
       else comp)
-  | Gcompositedecl (Union,id,at) -> 
-      ignore (insert_type (TUnion (id,at)));
-      let id = find_type (TUnion (id,[])) in
-      replace_union id (fun comp -> if comp.ct_file_loc = None then
-        {comp with ct_file_loc = Some (dec.gloc);}
-      else comp)
-  | Gcompositedef _ -> ()
+  | Gcompositedef (sou,id,at,fi) -> 
+      ignore (insert_type (gen_comp_typ sou id at));
+      let id = find_type (gen_comp_typ sou id []) in
+      let fields = List.map (fun f ->
+        {
+         cfd_name = f.fld_name;
+         cfd_typ = insert_type f.fld_typ;
+         cfd_bit_size = None;
+         cfd_bit_offset = f.fld_bitfield;
+         cfd_byte_offset = None;
+         cfd_byte_size = None;
+         cfd_bitfield = None;
+       }) fi in
+      replace_composite id (fun comp ->
+        let loc = if comp.ct_file_loc = None then Some dec.gloc else comp.ct_file_loc in
+        {comp with ct_file_loc = loc; ct_members = fields;})
   | Gtypedef (id,t) -> 
       let id = insert_type (TNamed (id,[])) in
       let tid = insert_type t in
       replace_typedef id (fun typ -> {typ with typ = Some tid;});
-  | Genumdef _ -> ()
+  | Genumdef (n,at,e) -> 
+      ignore(insert_type (TEnum (n,at)));
+      let id = find_type (TEnum (n,[])) in
+      let enumerator = List.map (fun (i,c,_) ->
+        {    
+             enumerator_name = i.name;
+             enumerator_const = c;
+       }) e in
+      replace_enum id (fun en ->
+        {en with enum_file_loc = Some dec.gloc; enum_enumerators = enumerator;})
   | Gpragma _ -> ()
+
+let set_offset str field (offset,byte_size) =
+  let id = find_type (TStruct (str,[])) in
+  replace_composite id (fun comp ->
+    let name f = f.cfd_name = field || match f.cfd_bitfield with Some n -> n = field | _ -> false in 
+    let members = List.map (fun a -> if name a then
+          {a with cfd_byte_offset = Some offset; cfd_byte_size = Some byte_size;}
+      else a) comp.ct_members in
+    {comp with ct_members = members;})
+
+let set_size comp sou size =
+  let id = find_type (gen_comp_typ sou comp []) in
+  replace_composite id (fun comp -> {comp with ct_sizeof = Some size;}) 
