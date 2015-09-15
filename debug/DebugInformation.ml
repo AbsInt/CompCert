@@ -317,7 +317,7 @@ let replace_typedef id f =
 (* Types for global definitions *)
 
 (* Information for a global variable *)
-type global_variable = {
+type global_variable_information = {
     gvar_name:        string;
     gvar_atom:        atom option;
     gvar_file_loc:    location;
@@ -326,8 +326,27 @@ type global_variable = {
     gvar_type:        int;
   }
 
+type parameter_information = 
+ {
+  parameter_name:     string;
+  parameter_atom:     atom option;
+  parameter_type:     int;
+}
+
+type function_information = {
+    fun_name:        string;
+    fun_atom:        atom option;
+    fun_file_loc:    location;
+    fun_external:    bool;
+    fun_return_type: int option; (* Again the special case of void functions *)
+    fun_vararg:      bool;
+    fun_parameter:   parameter_information list;
+    fun_locals:       int list;
+  }
+
 type definition_type =
-  | GlobalVariable of global_variable
+  | GlobalVariable of global_variable_information
+  | Function of function_information
 
 (* All definitions encountered *)
 let definitions: (int,definition_type) Hashtbl.t = Hashtbl.create 7
@@ -340,6 +359,7 @@ let find_var_stamp id =
   let var = Hashtbl.find definitions id in
   match var with
   | GlobalVariable var -> id,var
+  |  _ -> assert false
 
 let replace_var id var =
   let var = GlobalVariable var in
@@ -374,7 +394,32 @@ let insert_declaration dec env =
           replace_var id ({var with gvar_declaration = false;})
         end
       end
-  | Gfundef _ -> ()
+  | Gfundef f -> 
+      let ret =  (match f.fd_ret with
+      | TVoid _ -> None
+      | _ -> Some (insert_type f.fd_ret)) in
+      let ext =  (match f.fd_storage with
+      | Storage_static -> false
+      | _ -> true) in
+      let params = List.map (fun (p,ty) ->
+        let ty = insert_type ty in
+        {
+         parameter_name = p.name;
+         parameter_atom = None;
+         parameter_type = ty;
+       }) f.fd_params in
+      let fd =
+      { 
+        fun_name = f.fd_name.name;
+        fun_atom = None;
+        fun_file_loc = dec.gloc;
+        fun_external = ext;
+        fun_return_type = ret;
+        fun_vararg = f.fd_vararg;
+        fun_parameter = params;
+        fun_locals = [];
+      } in
+      insert (Function fd) f.fd_name.stamp
   | Gcompositedecl (Struct,id,at) -> 
       ignore (insert_type (TStruct (id,at)));
       let id = find_type (TStruct (id,[])) in
