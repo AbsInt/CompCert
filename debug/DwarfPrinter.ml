@@ -130,7 +130,6 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           add_attr_some e.formal_parameter_artificial (add_abbr_entry (0x34,artificial_type_abbr));
           add_location  (get_location e.formal_parameter_id) buf;
           add_attr_some e.formal_parameter_name add_name;
-          add_location  (get_segment_location e.formal_parameter_id) buf;
           add_type buf;
           add_attr_some e.formal_parameter_variable_parameter (add_abbr_entry (0x4b,variable_parameter_type_abbr))
       | DW_TAG_label _ ->
@@ -205,7 +204,6 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           add_attr_some e.variable_external (add_abbr_entry (0x3f,external_type_abbr));
           add_location  (get_location e.variable_id) buf;
           add_name buf;
-          add_location  (get_segment_location e.variable_id) buf;
           add_type buf
       | DW_TAG_volatile_type _ ->
           prologue 0x35;
@@ -367,7 +365,6 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       print_opt_value oc fp.formal_parameter_artificial print_flag;
       print_opt_value oc (get_location fp.formal_parameter_id) print_loc;
       print_opt_value oc fp.formal_parameter_name print_string;
-      print_opt_value oc  (get_segment_location fp.formal_parameter_id) print_loc;
       print_ref oc fp.formal_parameter_type;
       print_opt_value oc fp.formal_parameter_variable_parameter print_flag
 
@@ -441,7 +438,6 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       print_opt_value oc var.variable_external print_flag;
       print_opt_value oc (get_location var.variable_id) print_loc;
       print_string oc var.variable_name;
-      print_opt_value oc (get_segment_location var.variable_id) print_loc;
       print_ref oc var.variable_type
 
     let print_volatile_type oc vt =

@@ -343,7 +343,9 @@ type function_information = {
     fun_return_type: int option; (* Again the special case of void functions *)
     fun_vararg:      bool;
     fun_parameter:   parameter_information list;
-    fun_locals:       int list;
+    fun_locals:      int list;
+    fun_low_pc:      int option;
+    fun_high_pc:     int option;
   }
 
 type definition_type =
@@ -373,6 +375,13 @@ let find_fun_stamp id =
   | Function f -> id,f
   |  _ -> assert false
 
+let find_fun_atom id =
+  let id = (Hashtbl.find atom_to_definition id) in
+  let f = Hashtbl.find definitions id in
+  match f with
+  | Function f -> id,f
+  |  _ -> assert false
+
 
 let replace_var id var =
   let var = GlobalVariable var in
@@ -388,7 +397,7 @@ let gen_comp_typ sou id at =
   else
     TUnion (id,at)
 
-let insert_declaration dec env =
+let insert_global_declaration env dec=
   let insert d_dec stamp =
     let id = next_id () in
     Hashtbl.add definitions id d_dec;
@@ -441,6 +450,8 @@ let insert_declaration dec env =
         fun_vararg = f.fd_vararg;
         fun_parameter = params;
         fun_locals = [];
+        fun_low_pc = None;
+        fun_high_pc = None;
       } in
       insert (Function fd) f.fd_name.stamp
   | Gcompositedecl (sou,id,at) -> 
@@ -481,18 +492,28 @@ let insert_declaration dec env =
         {en with enum_file_loc = Some dec.gloc; enum_enumerators = enumerator;})
   | Gpragma _ -> ()
 
-let set_member_offset str field offset byte_size =
+let set_member_offset str field offset =
   let id = find_type (TStruct (str,[])) in
   replace_composite id (fun comp ->
     let name f = f.cfd_name = field || match f.cfd_bitfield with Some n -> n = field | _ -> false in 
     let members = List.map (fun a -> if name a then
-          {a with cfd_byte_offset = Some offset; cfd_byte_size = Some byte_size;}
+          {a with cfd_byte_offset = Some offset;}
       else a) comp.ct_members in
     {comp with ct_members = members;})
 
 let set_composite_size comp sou size =
   let id = find_type (gen_comp_typ sou comp []) in
-  replace_composite id (fun comp -> {comp with ct_sizeof = Some size;}) 
+  replace_composite id (fun comp -> {comp with ct_sizeof = size;}) 
+
+let set_bitfield_offset str field offset underlying size =
+  let id = find_type (TStruct (str,[])) in
+  replace_composite id (fun comp ->
+    let name f = f.cfd_name = field in
+    let members = List.map (fun a -> if name a then
+      {a with cfd_bit_offset = Some offset; cfd_bitfield = Some underlying; cfd_byte_size = Some size}
+    else
+      a) comp.ct_members in
+    {comp with ct_members = members;})
 
 let atom_global_variable id atom = 
   let id,var = find_var_stamp id.stamp in
@@ -503,6 +524,10 @@ let atom_function id atom =
   let id,f = find_fun_stamp id.stamp in
   replace_fun id ({f with fun_atom = Some atom;});
   Hashtbl.add atom_to_definition atom id
+
+let add_fun_addr atom (high,low) =
+  let id,f = find_fun_atom atom in
+  replace_fun id ({f with fun_high_pc = Some high; fun_low_pc = Some low;})
 
 let init name =
   id := 0;

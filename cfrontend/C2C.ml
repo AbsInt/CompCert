@@ -524,6 +524,11 @@ let convertField env f =
   (intern_string f.fld_name, convertTyp env f.fld_typ)
 
 let convertCompositedef env su id attr members =
+  let t = match su with C.Struct -> 
+    let layout = Cutil.struct_layout env members in
+    List.iter (fun (a,b) -> Debug.set_member_offset id a b) layout;
+    TStruct (id,attr) | C.Union -> TUnion (id,attr) in
+  Debug.set_composite_size id su (Cutil.sizeof env t);
   Composite(intern_string id.name,
             begin match su with C.Struct -> Struct | C.Union -> Union end,
             List.map (convertField env) members,
@@ -1039,7 +1044,6 @@ let convertFundef loc env fd =
     List.map
       (fun (id, ty) ->
         let id' = intern_string id.name in
-        add_stamp id.stamp id';
         (id', convertTyp env ty))
       fd.fd_params in
   let vars =
@@ -1050,7 +1054,6 @@ let convertFundef loc env fd =
         if init <> None then
           unsupported "initialized local variable";
         let id' = intern_string id.name in
-        add_stamp id.stamp id';
         (id', convertTyp env ty))
       fd.fd_locals in
   let body' = convertStmt loc env fd.fd_body in
@@ -1079,7 +1082,7 @@ let convertFundecl env (sto, id, ty, optinit) =
     | Tfunction(args, res, cconv) -> (args, res, cconv)
     | _ -> assert false in
   let id' = intern_string id.name in
-  add_stamp id.stamp id';
+  Debug.atom_function id id';
   let sg = signature_of_type args res cconv in
   let ef =
     if id.name = "malloc" then EF_malloc else
@@ -1121,7 +1124,7 @@ let convertInitializer env ty i =
 
 let convertGlobvar loc env (sto, id, ty, optinit) =
   let id' = intern_string id.name in
-  add_stamp id.stamp id';
+  Debug.atom_global_variable id id';
   let ty' = convertTyp env ty in 
   let sz = Ctypes.sizeof !comp_env ty' in
   let al = Ctypes.alignof !comp_env ty' in

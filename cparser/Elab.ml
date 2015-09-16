@@ -56,9 +56,11 @@ let elab_loc l = (l.filename, l.lineno)
 
 let top_declarations = ref ([] : globdecl list)
 
-let emit_elab loc td =
+let emit_elab env loc td =
   let loc = elab_loc loc in
-  top_declarations := { gdesc = td; gloc = loc } :: !top_declarations
+  let dec ={ gdesc = td; gloc = loc } in
+  Debug.insert_global_declaration env dec;
+  top_declarations := dec :: !top_declarations
 
 let reset() = top_declarations := []
 
@@ -730,7 +732,7 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
       (* finishing the definition of an incomplete struct or union *)
       let (ci', env') = elab_struct_or_union_info kind loc env members attrs in
       (* Emit a global definition for it *)
-      emit_elab loc (Gcompositedef(kind, tag', attrs, ci'.ci_members));
+      emit_elab env' loc (Gcompositedef(kind, tag', attrs, ci'.ci_members));
       (* Replace infos but keep same ident *)
       (tag', Env.add_composite env' tag' ci')
   | Some(tag', {ci_sizeof = Some _}), Some _
@@ -745,7 +747,7 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
       (* enter it with a new name *)
       let (tag', env') = Env.enter_composite env tag ci in
       (* emit it *)
-      emit_elab loc (Gcompositedecl(kind, tag', attrs));
+      emit_elab env' loc (Gcompositedecl(kind, tag', attrs));
       (tag', env')
   | _, Some members ->
       (* definition of a complete struct or union *)
@@ -753,12 +755,12 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
       (* enter it, incomplete, with a new name *)
       let (tag', env') = Env.enter_composite env tag ci1 in
       (* emit a declaration so that inner structs and unions can refer to it *)
-      emit_elab loc (Gcompositedecl(kind, tag', attrs));
+      emit_elab env' loc (Gcompositedecl(kind, tag', attrs));
       (* elaborate the members *)
       let (ci2, env'') =
         elab_struct_or_union_info kind loc env' members attrs in
       (* emit a definition *)
-      emit_elab loc (Gcompositedef(kind, tag', attrs, ci2.ci_members));
+      emit_elab env'' loc (Gcompositedef(kind, tag', attrs, ci2.ci_members));
       (* Replace infos but keep same ident *)
       (tag', Env.add_composite env'' tag' ci2)
 
@@ -809,7 +811,7 @@ and elab_enum only loc tag optmembers attrs env =
       let (dcls, env') = elab_members env 0L members in
       let info = { ei_members = dcls; ei_attr = attrs } in
       let (tag', env'') = Env.enter_enum env' tag info in
-      emit_elab loc (Genumdef(tag', attrs, dcls));
+      emit_elab env' loc (Genumdef(tag', attrs, dcls));
       (tag', env'')
 
 (* Elaboration of a naked type, e.g. in a cast *)
@@ -1312,7 +1314,7 @@ let elab_expr loc env a =
             let ty = TFun(TInt(IInt, []), None, false, []) in
             (* Emit an extern declaration for it *)
             let id = Env.fresh_ident n in
-            emit_elab loc (Gdecl(Storage_extern, id, ty, None));
+            emit_elab env loc (Gdecl(Storage_extern, id, ty, None));
             { edesc = EVar id; etyp = ty }
         | _ -> elab a1 in
       let bl = List.map elab al in
@@ -1789,7 +1791,7 @@ let enter_typedefs loc env sto dl =
     if redef Env.lookup_ident env s then
       error loc "redefinition of identifier '%s' as different kind of symbol" s;
     let (id, env') = Env.enter_typedef env s ty in
-    emit_elab loc (Gtypedef(id, ty));
+    emit_elab env loc (Gtypedef(id, ty));
     env') env dl
 
 let enter_or_refine_ident local loc env s sto ty =
@@ -1865,7 +1867,7 @@ let enter_decdefs local loc env sto dl =
       ((sto', id, ty', init') :: decls, env2)
     else begin
       (* Global definition *)
-      emit_elab loc (Gdecl(sto', id, ty', init'));
+      emit_elab env2 loc (Gdecl(sto', id, ty', init'));
       (decls, env2)
     end in
   let (decls, env') = List.fold_left enter_decdef ([], env) dl in
@@ -1899,7 +1901,7 @@ let elab_fundef env spec name body loc =
   let (func_ty, func_init) = __func__type_and_init s in
   let (func_id, _, env3,func_ty) =
     enter_or_refine_ident true loc env2 "__func__" Storage_static func_ty in
-  emit_elab loc (Gdecl(Storage_static, func_id, func_ty, Some func_init));
+  emit_elab env3 loc (Gdecl(Storage_static, func_id, func_ty, Some func_init));
   (* Elaborate function body *)
   let body' = !elab_funbody_f ty_ret env3 body in
   (* Special treatment of the "main" function *)
@@ -1925,7 +1927,7 @@ let elab_fundef env spec name body loc =
       fd_vararg = vararg;
       fd_locals = [];
       fd_body = body'' } in
-  emit_elab loc (Gfundef fn);
+  emit_elab env1 loc (Gfundef fn);
   env1
 
 let elab_kr_fundef env spec name params defs body loc =
@@ -1997,7 +1999,7 @@ let rec elab_definition (local: bool) (env: Env.t) (def: Cabs.definition)
 
   (* pragma *)
   | PRAGMA(s, loc) ->
-      emit_elab loc (Gpragma s);
+      emit_elab env loc (Gpragma s);
       ([], env)
 
 and elab_definitions local env = function

@@ -270,7 +270,6 @@ module type DWARF_TARGET=
     val name_of_section: section_name -> string
     val get_fun_addr: string -> (int * int) option
     val get_location: int -> location_value option
-    val get_segment_location: int -> location_value option
     val get_frame_base: int -> location_value option
     val symbol: out_channel -> atom -> unit
   end

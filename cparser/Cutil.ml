@@ -427,7 +427,6 @@ let sizeof_union env members =
    We lay out fields consecutively, inserting padding to preserve
    their alignment.
    Not done here but in composite_info_decl: rounding size to alignment. *)
-
 let sizeof_struct env members =
   let rec sizeof_rec ofs = function
   | [] ->
@@ -448,6 +447,26 @@ let sizeof_struct env members =
         sizeof_rec (align ofs a + s) ml'
       end
   in sizeof_rec 0 members
+
+(* Simplified version to compute offsets on structs without bitfields *)
+let struct_layout env members =
+  let rec struct_layout_rec mem ofs = function
+    | [] ->
+        mem
+    | [ { fld_typ = TArray(_, None, _) } as m ] ->
+      (* C99: ty[] allowed as last field *)
+      begin match alignof env m.fld_typ with
+      | Some a -> ( m.fld_name,align ofs a)::mem
+      | None -> []
+      end
+    | m :: rem ->
+        match alignof env m.fld_typ, sizeof env m.fld_typ with
+        | Some a, Some s -> 
+            let offset = align ofs a in
+            struct_layout_rec ((m.fld_name,offset)::mem) (offset + s) rem
+        | _, _ -> []
+  in struct_layout_rec [] 0 members
+
 
 (* Determine whether a type is incomplete *)
 

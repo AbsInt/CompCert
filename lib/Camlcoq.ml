@@ -284,7 +284,6 @@ let coqint_of_camlint64 : int64 -> Integers.Int64.int = Z.of_uint64
 type atom = positive
 
 let atom_of_string = (Hashtbl.create 17 : (string, atom) Hashtbl.t)
-let atom_of_stamp = (Hashtbl.create 17: (int, atom) Hashtbl.t)
 let string_of_atom = (Hashtbl.create 17 : (atom, string) Hashtbl.t)
 let next_atom = ref Coq_xH
 
@@ -296,14 +295,7 @@ let intern_string s =
     next_atom := Pos.succ !next_atom;
     Hashtbl.add atom_of_string s a;
     Hashtbl.add string_of_atom a s;
-    a
-
-let add_stamp s a =
-  Hashtbl.add atom_of_stamp s a
-
-let stamp_atom s =
-  Hashtbl.find atom_of_stamp s
-  
+    a 
 let extern_atom a =
   try
     Hashtbl.find string_of_atom a

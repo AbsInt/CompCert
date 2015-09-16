@@ -27,11 +27,10 @@ module Printer(Target:TARGET) =
     let addr_mapping: (string, (int * int)) Hashtbl.t = Hashtbl.create 7
 
     let get_fun_addr name =
-      let name = extern_atom name in
-      let start_addr = new_label ()
-      and end_addr = new_label () in
-      Hashtbl.add addr_mapping name (start_addr,end_addr);
-      start_addr,end_addr
+      let s = new_label ()
+      and e = new_label () in
+      Debug.add_fun_addr name (s,e);
+      s,e
 
     let print_debug_label oc l =
       if !Clflags.option_g && Configuration.advanced_debug then
@@ -120,8 +119,7 @@ module Printer(Target:TARGET) =
         let get_stmt_list_addr = Target.get_stmt_list_addr
         let name_of_section = Target.name_of_section
         let get_fun_addr s = try Some (Hashtbl.find addr_mapping s) with Not_found -> None
-        let get_location a =  try (Target.get_location (stamp_atom a)) with Not_found -> None
-        let get_segment_location a = try (Target.get_segment_location (stamp_atom a)) with Not_found -> None
+        let get_location a =  None
         let get_frame_base a = None
         let symbol = Target.symbol
       end

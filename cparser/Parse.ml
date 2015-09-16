@@ -24,12 +24,7 @@ let transform_program t p name =
   (run_pass Unblock.program 'b'
   (run_pass Bitfields.program 'f'
   p)))) in
-  let debug = 
-    if !Clflags.option_g && Configuration.advanced_debug then
-      Some (CtoDwarf.program_to_dwarf p p1 name)
-    else
-      None in
-  (Rename.program p1 (Filename.chop_suffix name ".c")),debug
+  (Rename.program p1 (Filename.chop_suffix name ".c"))
 
 let parse_transformations s =
   let t = ref CharSet.empty in
@@ -46,7 +41,7 @@ let parse_transformations s =
 let preprocessed_file transfs name sourcefile =
   Cerrors.reset();
   let ic = open_in sourcefile in
-  let p,d =
+  let p =
     try
       let t = parse_transformations transfs in
       let lb = Lexer.init name ic in
@@ -65,6 +60,6 @@ let preprocessed_file transfs name sourcefile =
       Timing.time2 "Emulations" transform_program t p1 name
     with
     | Cerrors.Abort ->
-        [],None in
+        [] in
   close_in ic;
-  if Cerrors.check_errors() then None,None else Some p,d
+  if Cerrors.check_errors() then None else Some p
