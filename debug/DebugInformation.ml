@@ -27,6 +27,9 @@ let next_id () =
 let reset_id () =
   id := 0
 
+(* The name of the current compilation unit *)
+let file_name: string ref = ref ""
+
 
 (* Types for the information of type info *)
 type composite_field =
@@ -117,7 +120,7 @@ type debug_types =
   | Void
 
 (* All types encountered *)
-let all_types: (int,debug_types) Hashtbl.t = Hashtbl.create 7
+let types: (int,debug_types) Hashtbl.t = Hashtbl.create 7
 
 (* Lookup table for types *)
 let lookup_types: (string, int) Hashtbl.t = Hashtbl.create 7
@@ -193,7 +196,7 @@ let insert_type (ty: typ) =
   let insert d_ty ty =
     let id = next_id () 
     and name = typ_to_string ty in
-    Hashtbl.add all_types id d_ty;
+    Hashtbl.add types id d_ty;
     Hashtbl.add lookup_types name id;
     id in
   (* We are only interrested in Const and Volatile *)
@@ -291,26 +294,26 @@ let insert_type (ty: typ) =
 
 (* Replace the composite information *)
 let replace_composite id f =
-  let str = Hashtbl.find all_types id in
+  let str = Hashtbl.find types id in
   match str with
   | CompositeType comp -> let comp' = f comp in
-    if comp <> comp' then Hashtbl.replace all_types id (CompositeType comp')
+    if comp <> comp' then Hashtbl.replace types id (CompositeType comp')
   | _ -> assert false (* This should never happen *)
 
 (* Replace the enum information *)
 let replace_enum id f =
-  let str = Hashtbl.find all_types id in
+  let str = Hashtbl.find types id in
   match str with
   | EnumType comp -> let comp' = f comp in
-    if comp <> comp' then Hashtbl.replace all_types id (EnumType comp')
+    if comp <> comp' then Hashtbl.replace types id (EnumType comp')
   | _ -> assert false (* This should never happen *)
 
 (* Replace the typdef information *)
 let replace_typedef id f =
-  let typdef = Hashtbl.find all_types id in
+  let typdef = Hashtbl.find types id in
   match typdef with
   | Typedef typ -> let typ' = f typ in
-    if typ <> typ' then Hashtbl.replace all_types id (Typedef typ')
+    if typ <> typ' then Hashtbl.replace types id (Typedef typ')
   | _ -> assert false (* This should never happen *)
 
 (* Types for global definitions *)
@@ -353,6 +356,9 @@ let definitions: (int,definition_type) Hashtbl.t = Hashtbl.create 7
 (* Mapping from stamp to debug id *)
 let stamp_to_definition: (int,int) Hashtbl.t = Hashtbl.create 7
 
+(* Mapping from atom to debug id *)
+let atom_to_definition: (atom, int) Hashtbl.t = Hashtbl.create 7
+
 let find_var_stamp id =
   let id = (Hashtbl.find stamp_to_definition id) in
   let var = Hashtbl.find definitions id in
@@ -360,9 +366,21 @@ let find_var_stamp id =
   | GlobalVariable var -> id,var
   |  _ -> assert false
 
+let find_fun_stamp id =
+  let id = (Hashtbl.find stamp_to_definition id) in
+  let f = Hashtbl.find definitions id in
+  match f with
+  | Function f -> id,f
+  |  _ -> assert false
+
+
 let replace_var id var =
   let var = GlobalVariable var in
   Hashtbl.replace definitions id var
+
+let replace_fun id f =
+  let f = Function f in
+  Hashtbl.replace definitions id f
 
 let gen_comp_typ sou id at = 
   if sou = Struct then
@@ -463,7 +481,7 @@ let insert_declaration dec env =
         {en with enum_file_loc = Some dec.gloc; enum_enumerators = enumerator;})
   | Gpragma _ -> ()
 
-let set_offset str field (offset,byte_size) =
+let set_member_offset str field offset byte_size =
   let id = find_type (TStruct (str,[])) in
   replace_composite id (fun comp ->
     let name f = f.cfd_name = field || match f.cfd_bitfield with Some n -> n = field | _ -> false in 
@@ -472,6 +490,26 @@ let set_offset str field (offset,byte_size) =
       else a) comp.ct_members in
     {comp with ct_members = members;})
 
-let set_size comp sou size =
+let set_composite_size comp sou size =
   let id = find_type (gen_comp_typ sou comp []) in
   replace_composite id (fun comp -> {comp with ct_sizeof = Some size;}) 
+
+let atom_global_variable id atom = 
+  let id,var = find_var_stamp id.stamp in
+  replace_var id ({var with gvar_atom = Some atom;});
+  Hashtbl.add atom_to_definition atom id
+    
+let atom_function id atom =
+  let id,f = find_fun_stamp id.stamp in
+  replace_fun id ({f with fun_atom = Some atom;});
+  Hashtbl.add atom_to_definition atom id
+
+let init name =
+  id := 0;
+  file_name := name;
+  Hashtbl.reset types;
+  Hashtbl.reset lookup_types;
+  Hashtbl.reset definitions;
+  Hashtbl.reset stamp_to_definition;
+  Hashtbl.reset atom_to_definition
+  
