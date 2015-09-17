@@ -246,8 +246,9 @@ module Diab_System : SYSTEM =
 
     let filenum : (string,int) Hashtbl.t = Hashtbl.create 7
 
-    let additional_debug_sections: StringSet.t ref = ref StringSet.empty
+    module StringSet = Set.Make(String)
 
+    let additional_debug_sections: StringSet.t ref = ref StringSet.empty
 
     let print_epilogue oc =
       if !Clflags.option_g then
@@ -257,10 +258,10 @@ module Diab_System : SYSTEM =
           end_addr := label_end;
           fprintf oc "%a:\n" label label_end;
           fprintf oc "	.text\n";
-          StringSet.iter (fun file ->
+          Debug.all_files_iter (fun file ->
             let label = new_label () in
             Hashtbl.add filenum file label;
-            fprintf oc ".L%d:	.d2filenum \"%s\"\n" label file) !all_files;
+            fprintf oc ".L%d:	.d2filenum \"%s\"\n" label file);
           fprintf oc "	.d2_line_end\n";
           StringSet.iter (fun s ->
             fprintf oc "	%s\n" s;

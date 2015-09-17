@@ -12,6 +12,7 @@
 
 open C
 open Camlcoq
+open DwarfTypes
 
 
 val init: unit -> unit
@@ -23,3 +24,5 @@ val set_member_offset: ident -> string -> int -> unit
 val set_bitfield_offset: ident -> string -> int -> string -> int -> unit
 val insert_global_declaration:  Env.t -> globdecl -> unit
 val add_fun_addr: atom -> (int * int) -> unit
+val generate_debug_info: unit -> dw_entry option
+val all_files_iter: (string -> unit) -> unit

@@ -14,18 +14,8 @@
 
 open DwarfTypes
 
-let id = ref 0
-
-let next_id () =
-  let nid = !id in
-  incr id; nid
-
-let reset_id () =
-  id := 0
-
 (* Generate a new entry from a given tag *)
-let new_entry tag =
-  let id = next_id () in
+let new_entry id tag =
   {
    tag = tag;
    children = [];

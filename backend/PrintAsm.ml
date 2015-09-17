@@ -27,9 +27,9 @@ module Printer(Target:TARGET) =
     let addr_mapping: (string, (int * int)) Hashtbl.t = Hashtbl.create 7
 
     let get_fun_addr name =
-      let s = new_label ()
-      and e = new_label () in
-      Debug.add_fun_addr name (s,e);
+      let s = Target.new_label ()
+      and e = Target.new_label () in
+      Debug.add_fun_addr name (e,s);
       s,e
 
     let print_debug_label oc l =
@@ -118,7 +118,6 @@ module Printer(Target:TARGET) =
         let get_end_addr = Target.get_end_addr
         let get_stmt_list_addr = Target.get_stmt_list_addr
         let name_of_section = Target.name_of_section
-        let get_fun_addr s = try Some (Hashtbl.find addr_mapping s) with Not_found -> None
         let get_location a =  None
         let get_frame_base a = None
         let symbol = Target.symbol
@@ -140,7 +139,7 @@ let print_program oc p db =
   close_filenames ();
   if !Clflags.option_g && Configuration.advanced_debug then
     begin
-      match db with
+      match Debug.generate_debug_info () with
       | None -> ()
       | Some db ->
           Printer.DebugPrinter.print_debug oc db

@@ -62,11 +62,6 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
 
     let add_low_pc = add_abbr_entry (0x11,low_pc_type_abbr)
 
-    let add_fun_pc sp buf =
-      match get_fun_addr sp.subprogram_name with
-      | None ->()
-      | Some (a,b) -> add_high_pc buf; add_low_pc buf
-
     let add_declaration = add_abbr_entry (0x3c,declaration_type_abbr)
 
     let add_location loc buf =
@@ -128,7 +123,6 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           prologue 0x5;
           add_attr_some e.formal_parameter_file_loc add_file_loc;
           add_attr_some e.formal_parameter_artificial (add_abbr_entry (0x34,artificial_type_abbr));
-          add_location  (get_location e.formal_parameter_id) buf;
           add_attr_some e.formal_parameter_name add_name;
           add_type buf;
           add_attr_some e.formal_parameter_variable_parameter (add_abbr_entry (0x4b,variable_parameter_type_abbr))
@@ -144,15 +138,15 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           prologue 0xd;
           add_attr_some e.member_file_loc add_file_loc;
           add_attr_some e.member_byte_size add_byte_size;
-          add_attr_some e.member_bit_offset (add_abbr_entry (0xd,bit_offset_type_abbr));
-          add_attr_some e.member_bit_size (add_abbr_entry (0xc,bit_size_type_abbr));
+          add_attr_some e.member_bit_offset (add_abbr_entry (0xc,bit_offset_type_abbr));
+          add_attr_some e.member_bit_size (add_abbr_entry (0xd,bit_size_type_abbr));
+          add_attr_some e.member_declaration add_declaration;
+          add_attr_some e.member_name add_name;
+          add_type buf;
           (match e.member_data_member_location with
           | None -> ()
           | Some (DataLocBlock __) -> add_abbr_entry (0x38,data_location_block_type_abbr) buf
-          | Some (DataLocRef _) -> add_abbr_entry (0x38,data_location_ref_type_abbr) buf);
-          add_attr_some e.member_declaration add_declaration;
-          add_attr_some e.member_name add_name;
-          add_type buf
+          | Some (DataLocRef _) -> add_abbr_entry (0x38,data_location_ref_type_abbr) buf)
       | DW_TAG_pointer_type _ ->
           prologue 0xf;
           add_type buf
@@ -164,10 +158,10 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           add_attr_some e.structure_name add_name
       | DW_TAG_subprogram e ->
           prologue 0x2e;
-          add_attr_some e.subprogram_file_loc add_file_loc;
+          add_file_loc buf;
           add_attr_some e.subprogram_external (add_abbr_entry (0x3f,external_type_abbr));
-          add_high_pc buf;
-          add_low_pc buf;
+          add_attr_some e.subprogram_high_pc add_high_pc;
+          add_attr_some e.subprogram_low_pc add_low_pc;
           add_name buf;
           add_abbr_entry (0x27,prototyped_type_abbr) buf;
           add_attr_some e.subprogram_type add_type;
@@ -199,10 +193,10 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           add_attr_some e.unspecified_parameter_artificial (add_abbr_entry (0x34,artificial_type_abbr))
       | DW_TAG_variable e ->
           prologue 0x34;
-          add_attr_some e.variable_file_loc add_file_loc;
+          add_file_loc buf;
           add_attr_some e.variable_declaration add_declaration;
           add_attr_some e.variable_external (add_abbr_entry (0x3f,external_type_abbr));
-          add_location  (get_location e.variable_id) buf;
+          add_location  e.variable_location buf;
           add_name buf;
           add_type buf
       | DW_TAG_volatile_type _ ->
@@ -301,7 +295,12 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       | _ ->   ()
 
     let print_data_location oc dl =
-      ()
+      match dl with
+      | DataLocBlock [DW_OP_plus_uconst i] ->
+          fprintf oc "	.sleb128	2\n";
+          fprintf oc "	.byte		0x23\n";
+          fprintf oc "	.byte		%d\n" i
+      | _ -> ()
 
     let print_ref oc r =
       let ref = entry_to_label r in
@@ -363,7 +362,6 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
     let print_formal_parameter oc fp =
       print_file_loc oc fp.formal_parameter_file_loc;
       print_opt_value oc fp.formal_parameter_artificial print_flag;
-      print_opt_value oc (get_location fp.formal_parameter_id) print_loc;
       print_opt_value oc fp.formal_parameter_name print_string;
       print_ref oc fp.formal_parameter_type;
       print_opt_value oc fp.formal_parameter_variable_parameter print_flag
@@ -381,10 +379,11 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       print_opt_value oc mb.member_byte_size print_byte;
       print_opt_value oc mb.member_bit_offset print_byte;
       print_opt_value oc mb.member_bit_size print_byte;
-      print_opt_value oc mb.member_data_member_location print_data_location;
       print_opt_value oc mb.member_declaration print_flag;
       print_opt_value oc mb.member_name print_string;
-      print_ref oc mb.member_type
+      print_ref oc mb.member_type;
+      print_opt_value oc mb.member_data_member_location print_data_location
+
 
     let print_pointer oc pt =
       print_ref oc pt.pointer_type
@@ -400,11 +399,10 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       fprintf oc "	.4byte		%a\n" label s
      
     let print_subprogram oc sp =
-      let addr = get_fun_addr sp.subprogram_name  in
-      print_file_loc oc sp.subprogram_file_loc;
+      print_file_loc oc (Some sp.subprogram_file_loc);
       print_opt_value oc sp.subprogram_external print_flag;
-      print_opt_value oc (get_frame_base sp.subprogram_id) print_loc;
-      print_opt_value oc addr print_subprogram_addr;
+      print_opt_value oc sp.subprogram_high_pc print_addr;
+      print_opt_value oc sp.subprogram_low_pc print_addr;
       print_string oc sp.subprogram_name;
       print_flag oc sp.subprogram_prototyped;
       print_opt_value oc sp.subprogram_type print_ref
@@ -433,10 +431,10 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       print_opt_value oc up.unspecified_parameter_artificial print_flag
 
     let print_variable oc var =
-      print_file_loc oc var.variable_file_loc;
+      print_file_loc oc (Some var.variable_file_loc);
       print_opt_value oc var.variable_declaration print_flag;
       print_opt_value oc var.variable_external print_flag;
-      print_opt_value oc (get_location var.variable_id) print_loc;
+      print_opt_value oc var.variable_location print_loc;
       print_string oc var.variable_name;
       print_ref oc var.variable_type
 

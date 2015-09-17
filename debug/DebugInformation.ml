@@ -30,6 +30,11 @@ let reset_id () =
 (* The name of the current compilation unit *)
 let file_name: string ref = ref ""
 
+(** All files used in the debug entries *)
+module StringSet = Set.Make(String)
+let all_files : StringSet.t ref = ref StringSet.empty
+let add_file file =
+  all_files := StringSet.add file !all_files
 
 (* Types for the information of type info *)
 type composite_field =
@@ -45,11 +50,12 @@ type composite_field =
 
 type composite_type =
     {
-     ct_name:     string;
-     ct_sou:      struct_or_union;
-     ct_file_loc: location option;
-     ct_members:  composite_field list;
-     ct_sizeof:   int option;
+     ct_name:        string;
+     ct_sou:         struct_or_union;
+     ct_file_loc:    location option;
+     ct_members:     composite_field list;
+     ct_sizeof:      int option;
+     ct_declaration: bool;
    }
 
 type ptr_type = {
@@ -57,22 +63,23 @@ type ptr_type = {
   }
 
 type const_type = {
-    const_type: int
+    cst_type: int
   }
 
 type volatile_type = {
-    volatile_type: int
+    vol_type: int
   }
 
 
 type array_type = {
     arr_type: int;
-    arr_size: int64 option;
+    arr_size: int64 option list;
   }
 
 type typedef = {
-    typedef_name: string;
-    typ:          int option;
+    typedef_file_loc: location option;
+    typedef_name:     string;
+    typ:              int option;
   }
 
 type enumerator = {
@@ -101,7 +108,7 @@ type parameter_type = {
   }
 
 type function_type = {
-    fun_return_type: int;
+    fun_return_type: int option;
     fun_prototyped:  bool;
     fun_params:      parameter_type list;
   }
@@ -215,6 +222,11 @@ let insert_type (ty: typ) =
               let id = attr_aux t in
               PointerType ({pts = id})
           | TArray (t,s,_) ->
+              let rec size acc t = (match t with
+              | TArray (child,s,_) ->
+                  size (s::acc) child
+              | _ -> t,List.rev acc) in
+              let t,s = size [s] t in
               let id = attr_aux t in
               let arr = {
                 arr_type = id;
@@ -229,7 +241,9 @@ let insert_type (ty: typ) =
                  param_type = t;
                  param_name = i.name;               
                }) p,true) in
-              let ret = attr_aux t in
+              let ret = (match t with 
+              | TVoid _ -> None
+              | _ -> Some (attr_aux t)) in
               let ftype = {
                 fun_return_type = ret;
                 fun_prototyped = prot;
@@ -238,6 +252,7 @@ let insert_type (ty: typ) =
               FunctionType ftype
           | TNamed (id,_) ->
               let t = {
+                typedef_file_loc = None;
                 typedef_name = id.name;
                 typ = None;
               } in
@@ -249,6 +264,7 @@ let insert_type (ty: typ) =
                  ct_sou = Struct;
                  ct_file_loc = None;
                  ct_members = [];
+                 ct_declaration = false;
                  ct_sizeof = None;
                } in
               CompositeType str
@@ -259,6 +275,7 @@ let insert_type (ty: typ) =
                  ct_sou = Union;
                  ct_file_loc = None;
                  ct_members = [];
+                 ct_declaration = false;
                  ct_sizeof = None;
                } in
               CompositeType union
@@ -280,11 +297,11 @@ let insert_type (ty: typ) =
         match strip_last_attribute ty with
         | Some AConst,t -> 
             let id = attr_aux t in
-            let const = { const_type = id} in
+            let const = { cst_type = id} in
             insert (ConstType const) ty
         | Some AVolatile,t ->
             let id = attr_aux t in
-            let volatile = {volatile_type = id} in
+            let volatile = {vol_type = id} in
             insert (VolatileType volatile) ty
         | Some (ARestrict|AAlignas _| Attr(_,_)),t ->
             attr_aux t
@@ -398,6 +415,7 @@ let gen_comp_typ sou id at =
     TUnion (id,at)
 
 let insert_global_declaration env dec=
+  add_file (fst dec.gloc);
   let insert d_dec stamp =
     let id = next_id () in
     Hashtbl.add definitions id d_dec;
@@ -463,23 +481,24 @@ let insert_global_declaration env dec=
   | Gcompositedef (sou,id,at,fi) -> 
       ignore (insert_type (gen_comp_typ sou id at));
       let id = find_type (gen_comp_typ sou id []) in
+      let fi = List.filter (fun f -> f.fld_name <> "") fi in (* Fields without names need no info *)
       let fields = List.map (fun f ->
         {
          cfd_name = f.fld_name;
          cfd_typ = insert_type f.fld_typ;
-         cfd_bit_size = None;
-         cfd_bit_offset = f.fld_bitfield;
+         cfd_bit_size = f.fld_bitfield;
+         cfd_bit_offset = None;
          cfd_byte_offset = None;
          cfd_byte_size = None;
          cfd_bitfield = None;
        }) fi in
       replace_composite id (fun comp ->
         let loc = if comp.ct_file_loc = None then Some dec.gloc else comp.ct_file_loc in
-        {comp with ct_file_loc = loc; ct_members = fields;})
+        {comp with ct_file_loc = loc; ct_members = fields; ct_declaration = true;})
   | Gtypedef (id,t) -> 
       let id = insert_type (TNamed (id,[])) in
       let tid = insert_type t in
-      replace_typedef id (fun typ -> {typ with typ = Some tid;});
+      replace_typedef id (fun typ -> {typ with typedef_file_loc = Some dec.gloc; typ = Some tid;});
   | Genumdef (n,at,e) -> 
       ignore(insert_type (TEnum (n,at)));
       let id = find_type (TEnum (n,[])) in
@@ -516,18 +535,25 @@ let set_bitfield_offset str field offset underlying size =
     {comp with ct_members = members;})
 
 let atom_global_variable id atom = 
-  let id,var = find_var_stamp id.stamp in
-  replace_var id ({var with gvar_atom = Some atom;});
-  Hashtbl.add atom_to_definition atom id
+  try
+    let id,var = find_var_stamp id.stamp in
+    replace_var id ({var with gvar_atom = Some atom;});
+    Hashtbl.add atom_to_definition atom id 
+  with Not_found -> ()
     
 let atom_function id atom =
-  let id,f = find_fun_stamp id.stamp in
-  replace_fun id ({f with fun_atom = Some atom;});
-  Hashtbl.add atom_to_definition atom id
-
+  try
+    Printf.printf "Trying to add atom of function %s\n" id.name;
+    let id,f = find_fun_stamp id.stamp in
+    replace_fun id ({f with fun_atom = Some atom;});
+    Hashtbl.add atom_to_definition atom id
+  with Not_found -> ()
+    
 let add_fun_addr atom (high,low) =
-  let id,f = find_fun_atom atom in
-  replace_fun id ({f with fun_high_pc = Some high; fun_low_pc = Some low;})
+  try
+    let id,f = find_fun_atom atom in
+    replace_fun id ({f with fun_high_pc = Some high; fun_low_pc = Some low;})
+  with Not_found -> Printf.printf "Could not find function %s\n" (extern_atom atom); ()
 
 let init name =
   id := 0;

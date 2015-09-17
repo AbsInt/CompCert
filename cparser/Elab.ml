@@ -56,10 +56,10 @@ let elab_loc l = (l.filename, l.lineno)
 
 let top_declarations = ref ([] : globdecl list)
 
-let emit_elab env loc td =
+let emit_elab ?(enter:bool=true) env loc td =
   let loc = elab_loc loc in
   let dec ={ gdesc = td; gloc = loc } in
-  Debug.insert_global_declaration env dec;
+  if enter then  Debug.insert_global_declaration env dec;
   top_declarations := dec :: !top_declarations
 
 let reset() = top_declarations := []
@@ -1901,7 +1901,7 @@ let elab_fundef env spec name body loc =
   let (func_ty, func_init) = __func__type_and_init s in
   let (func_id, _, env3,func_ty) =
     enter_or_refine_ident true loc env2 "__func__" Storage_static func_ty in
-  emit_elab env3 loc (Gdecl(Storage_static, func_id, func_ty, Some func_init));
+  emit_elab ~enter:false env3 loc (Gdecl(Storage_static, func_id, func_ty, Some func_init));
   (* Elaborate function body *)
   let body' = !elab_funbody_f ty_ret env3 body in
   (* Special treatment of the "main" function *)

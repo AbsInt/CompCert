@@ -1058,6 +1058,7 @@ let convertFundef loc env fd =
       fd.fd_locals in
   let body' = convertStmt loc env fd.fd_body in
   let id' = intern_string fd.fd_name.name in
+  Debug.atom_function fd.fd_name id';
   Hashtbl.add decl_atom id'
     { a_storage = fd.fd_storage;
       a_alignment = None;
@@ -1082,7 +1083,6 @@ let convertFundecl env (sto, id, ty, optinit) =
     | Tfunction(args, res, cconv) -> (args, res, cconv)
     | _ -> assert false in
   let id' = intern_string id.name in
-  Debug.atom_function id id';
   let sg = signature_of_type args res cconv in
   let ef =
     if id.name = "malloc" then EF_malloc else

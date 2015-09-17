@@ -134,7 +134,7 @@ let rec transf_members env id count = function
                   if !config.bitfields_msb_first
                   then sizeof_ikind carrier_ikind * 8 - pos - sz
                   else pos in
-                Debug.set_bitfield_offset id name pos' carrier (sizeof_ikind carrier_ikind);
+                Debug.set_bitfield_offset id name pos carrier (sizeof_ikind carrier_ikind);
                 Hashtbl.add bitfield_table
                   (id, name)
                   {bf_carrier = carrier; bf_carrier_typ = carrier_typ;

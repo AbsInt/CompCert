@@ -143,12 +143,6 @@ let coqint oc n =
   fprintf oc "%ld" (camlint_of_coqint n)
 
 (* Printing annotations in asm syntax *)
-(** All files used in the debug entries *)
-module StringSet = Set.Make(String)
-let all_files : StringSet.t ref = ref StringSet.empty
-let add_file file =
-  all_files := StringSet.add file !all_files
-
 
 let filename_info : (string, int * Printlines.filebuf option) Hashtbl.t
                   = Hashtbl.create 7
