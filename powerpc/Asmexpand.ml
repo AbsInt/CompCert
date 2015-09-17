@@ -507,12 +507,8 @@ let expand_builtin_inline name args res =
       emit (Plabel lbl);
       emit (Pisync);
       emit (Pstw (a1,Cint _0, a2));
-  | "__builtin_sync_fetch_and_add", [BA (IR a1); BA(IR a2)], res ->
+  | "__builtin_sync_fetch_and_add", [BA (IR a1); BA(IR a2)], BR (IR res) ->
       let lbl = new_label() in
-      let res = (match res with
-      | BR (IR res) -> res
-      | BR_none -> GPR3
-      | _ ->   raise (Error ("unrecognized builtin " ^ name))) in
       emit (Psync);
       emit (Plabel lbl);
       emit (Plwarx (res,GPR0,a1));
@@ -520,7 +516,7 @@ let expand_builtin_inline name args res =
       emit (Pstwcx_ (GPR10,GPR0,a1));
       emit (Pbf (CRbit_2, lbl));
       emit (Pisync);
-  | "__builtin_atomic_compare_exchange", [BA (IR dst); BA(IR exp); BA (IR des)], res ->
+  | "__builtin_atomic_compare_exchange", [BA (IR dst); BA(IR exp); BA (IR des)],  BR (IR res) ->
       let lbls = new_label ()
       and lblneq = new_label ()
       and lblsucc = new_label () in      
@@ -541,11 +537,7 @@ let expand_builtin_inline name args res =
       emit (Pbf (CRbit_2,lblsucc));
       emit (Pstw (GPR12,(Cint _0),exp));
       emit (Plabel lblsucc);
-      (match res with
-      | BR_none -> ()
-      | BR (IR res) ->
-          emit (Pmr (res,dst))
-      | _ ->raise (Error ("unrecognized builtin " ^ name)))
+      emit (Pmr (res,dst))
   (* Catch-all *)
   | _ ->
       raise (Error ("unrecognized builtin " ^ name))
