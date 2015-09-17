@@ -814,7 +814,10 @@ Inductive tr_builtin_res: mapping -> builtin_res ident -> builtin_res reg -> Pro
       map.(map_vars)!id = Some r ->
       tr_builtin_res map (BR id) (BR r)
   | tr_builtin_res_none: forall map,
-      tr_builtin_res map BR_none BR_none.
+      tr_builtin_res map BR_none BR_none
+  | tr_builtin_res_fresh: forall map r,
+      ~reg_in_map map r ->
+      tr_builtin_res map BR_none (BR r).
 
 (** [tr_stmt c map stmt ns ncont nexits nret rret] holds if the graph [c],
   starting at node [ns], contains instructions that perform the Cminor
@@ -1214,14 +1217,17 @@ Proof.
 Qed.
 
 Lemma convert_builtin_res_charact:
-  forall map res s res' s' INCR
-    (TR: convert_builtin_res map res s = OK res' s' INCR)
+  forall map oty res s res' s' INCR
+    (TR: convert_builtin_res map oty res s = OK res' s' INCR)
     (WF: map_valid map s),
   tr_builtin_res map res res'.
 Proof.
-  destruct res; simpl; intros; monadInv TR. 
-- constructor.  unfold find_var in EQ. destruct (map_vars map)!x; inv EQ; auto.
-- constructor.
+  destruct res; simpl; intros.
+- monadInv TR. constructor.  unfold find_var in EQ. destruct (map_vars map)!x; inv EQ; auto.
+- destruct oty; monadInv TR.
++ constructor. eauto with rtlg. 
++ constructor.
+- monadInv TR.
 Qed.
 
 Lemma transl_stmt_charact:

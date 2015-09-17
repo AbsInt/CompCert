@@ -1,8 +1,8 @@
 /* Testing the alias analysis on ill-defined codes 
    where it should remain conservative. */
 
-typedef unsigned int uintptr_t;
-typedef signed int ptrdiff_t;
+#include <stddef.h>
+#include <stdint.h>
 
 /* For testing with GCC */
 #define NOINLINE __attribute__((noinline))

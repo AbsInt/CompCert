@@ -234,6 +234,7 @@ Proof.
   intros. inv H1; simpl.
 - eapply match_env_update_var; eauto.
 - auto.
+- eapply match_env_update_temp; eauto.
 Qed.
 
 (** Matching and [let]-bound variables. *)

@@ -104,8 +104,7 @@ Record function: Type := mkfunction {
     for its stack-allocated activation record.  [fn_params] is the list
     of registers that are bound to the values of arguments at call time.
     [fn_entrypoint] is the node of the first instruction of the function
-    in the CFG.  [fn_code_wf] asserts that all instructions of the function
-    have nodes no greater than [fn_nextpc]. *)
+    in the CFG. *)
 
 Definition fundef := AST.fundef function.
 
