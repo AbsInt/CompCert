@@ -360,7 +360,6 @@ type function_information = {
     fun_return_type: int option; (* Again the special case of void functions *)
     fun_vararg:      bool;
     fun_parameter:   parameter_information list;
-    fun_locals:      int list;
     fun_low_pc:      int option;
     fun_high_pc:     int option;
   }
@@ -369,7 +368,8 @@ type definition_type =
   | GlobalVariable of global_variable_information
   | Function of function_information
 
-(* All definitions encountered *)
+
+(* All global definitions encountered *)
 let definitions: (int,definition_type) Hashtbl.t = Hashtbl.create 7
 
 (* Mapping from stamp to debug id *)
@@ -378,7 +378,7 @@ let stamp_to_definition: (int,int) Hashtbl.t = Hashtbl.create 7
 (* Mapping from atom to debug id *)
 let atom_to_definition: (atom, int) Hashtbl.t = Hashtbl.create 7
 
-let find_var_stamp id =
+let find_gvar_stamp id =
   let id = (Hashtbl.find stamp_to_definition id) in
   let var = Hashtbl.find definitions id in
   match var with
@@ -399,7 +399,6 @@ let find_fun_atom id =
   | Function f -> id,f
   |  _ -> assert false
 
-
 let replace_var id var =
   let var = GlobalVariable var in
   Hashtbl.replace definitions id var
@@ -407,6 +406,45 @@ let replace_var id var =
 let replace_fun id f =
   let f = Function f in
   Hashtbl.replace definitions id f
+
+
+(* Information for local variables *)
+type local_variable_information = {
+    lvar_name:    string;
+    lvar_atom:    atom option;
+    lvar_file_loc:location;
+    lvar_type:    int;
+    lvar_static:  bool;  (* Static variable are mapped to symbols *)
+  }
+
+type scope_information = 
+  {
+   scope_variables: int list; (* Variable and Scope ids *)
+ }
+
+type local_information =
+  | LocalVariable of local_variable_information
+  | Scope of scope_information
+
+(* All local variables *)
+let local_variables: (int, local_information) Hashtbl.t = Hashtbl.create 7
+
+(* Mapping from stampt to the debug id of the local variable *)
+let stamp_to_local: (int,int) Hashtbl.t = Hashtbl.create 7
+
+(* Mapping form atom to the debug id of the local variable *)
+let atom_to_local: (atom, int) Hashtbl.t = Hashtbl.create 7
+
+let find_lvar_stamp id =
+  let id = (Hashtbl.find stamp_to_local id) in
+  let v = Hashtbl.find local_variables id in
+  match v with
+  | LocalVariable v -> id,v
+  | _ -> assert false
+
+let replace_lvar id var =
+  let var = LocalVariable var in
+  Hashtbl.replace local_variables id var
 
 let gen_comp_typ sou id at = 
   if sou = Struct then
@@ -440,7 +478,7 @@ let insert_global_declaration env dec=
           } in
           insert (GlobalVariable decl) id.stamp
         end else if init <> None || sto <> Storage_extern then begin (* It is a definition *)
-          let id,var = find_var_stamp id.stamp in
+          let id,var = find_gvar_stamp id.stamp in
           replace_var id ({var with gvar_declaration = false;})
         end
       end
@@ -467,7 +505,6 @@ let insert_global_declaration env dec=
         fun_return_type = ret;
         fun_vararg = f.fd_vararg;
         fun_parameter = params;
-        fun_locals = [];
         fun_low_pc = None;
         fun_high_pc = None;
       } in
@@ -536,14 +573,13 @@ let set_bitfield_offset str field offset underlying size =
 
 let atom_global_variable id atom = 
   try
-    let id,var = find_var_stamp id.stamp in
+    let id,var = find_gvar_stamp id.stamp in
     replace_var id ({var with gvar_atom = Some atom;});
     Hashtbl.add atom_to_definition atom id 
   with Not_found -> ()
     
 let atom_function id atom =
   try
-    Printf.printf "Trying to add atom of function %s\n" id.name;
     let id,f = find_fun_stamp id.stamp in
     replace_fun id ({f with fun_atom = Some atom;});
     Hashtbl.add atom_to_definition atom id
@@ -553,7 +589,37 @@ let add_fun_addr atom (high,low) =
   try
     let id,f = find_fun_atom atom in
     replace_fun id ({f with fun_high_pc = Some high; fun_low_pc = Some low;})
-  with Not_found -> Printf.printf "Could not find function %s\n" (extern_atom atom); ()
+  with Not_found -> ()
+
+let atom_local_variable id atom =
+  try
+    let id,var = find_lvar_stamp id.stamp in
+    replace_lvar id ({var with lvar_atom = Some atom;});
+    Hashtbl.add atom_to_local atom id
+  with Not_found -> ()
+
+let insert_local_declaration sto id ty loc =
+  let ty = find_type ty in
+  let var = {
+    lvar_name = id.name;
+    lvar_atom = None;
+    lvar_file_loc = loc;
+    lvar_type = ty;
+    lvar_static = sto = Storage_static;
+  } in
+  let id' = next_id () in
+  Hashtbl.add local_variables id' (LocalVariable var);
+  Hashtbl.add stamp_to_local id.stamp id'
+
+let scopes: (int * scope_information) Stack.t = Stack.create ()
+
+let enter_scope id =
+  let empty_scope = {scope_variables = [];} in
+  Stack.push (id,empty_scope) scopes
+
+let enter_function_scope id =
+  Stack.clear scopes;
+  enter_scope id
 
 let init name =
   id := 0;
@@ -562,5 +628,8 @@ let init name =
   Hashtbl.reset lookup_types;
   Hashtbl.reset definitions;
   Hashtbl.reset stamp_to_definition;
-  Hashtbl.reset atom_to_definition
+  Hashtbl.reset atom_to_definition;
+  Hashtbl.reset local_variables;
+  Hashtbl.reset stamp_to_local;
+  Hashtbl.reset atom_to_local
   

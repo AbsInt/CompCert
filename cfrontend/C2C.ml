@@ -1054,6 +1054,7 @@ let convertFundef loc env fd =
         if init <> None then
           unsupported "initialized local variable";
         let id' = intern_string id.name in
+        Debug.atom_local_variable id id';
         (id', convertTyp env ty))
       fd.fd_locals in
   let body' = convertStmt loc env fd.fd_body in

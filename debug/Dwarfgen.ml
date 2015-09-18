@@ -217,6 +217,17 @@ let function_parameter_to_entry p =
   } in
   new_entry (next_id ()) (DW_TAG_formal_parameter p)
 
+let local_variable_to_entry v id =
+  let var = {
+    variable_file_loc = v.lvar_file_loc;
+    variable_declaration = None;
+    variable_external = None;
+    variable_name = v.lvar_name;
+    variable_type = v.lvar_type;
+    variable_location = None;
+  } in
+  new_entry id (DW_TAG_variable var)
+
 let function_to_entry id f =
   let f_tag = {
     subprogram_file_loc = f.fun_file_loc;
@@ -228,8 +239,9 @@ let function_to_entry id f =
     subprogram_low_pc = f.fun_low_pc;
   } in
  let f_entry =  new_entry id (DW_TAG_subprogram f_tag) in
- let child = List.map function_parameter_to_entry f.fun_parameter in
- add_children f_entry child
+ let params = List.map function_parameter_to_entry f.fun_parameter in
+(* let vars = List.map local_variable_to_entry f.fun_locals in*)
+ add_children f_entry params
      
 let definition_to_entry id t =
   match t with

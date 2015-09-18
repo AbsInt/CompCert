@@ -30,6 +30,8 @@ type implem =
      mutable add_fun_addr: atom -> (int * int) -> unit;
      mutable generate_debug_info: unit -> dw_entry option;
      mutable all_files_iter: (string -> unit) -> unit;
+     mutable insert_local_declaration: storage -> ident -> typ -> location -> unit;
+     mutable atom_local_variable: ident -> atom -> unit;
    }
 
 let implem =
@@ -44,6 +46,8 @@ let implem =
    add_fun_addr = (fun _ _ -> ());
    generate_debug_info = (fun _ -> None);
    all_files_iter = (fun _ -> ());
+   insert_local_declaration = (fun _ _ _ _ -> ());
+   atom_local_variable = (fun _ _ -> ());
 }
 
 let init () =
@@ -58,6 +62,8 @@ let init () =
     implem.add_fun_addr <- DebugInformation.add_fun_addr;
     implem.generate_debug_info <- (fun () -> Some (Dwarfgen.gen_debug_info ()));
     implem.all_files_iter <- (fun f -> DebugInformation.StringSet.iter f !DebugInformation.all_files);
+    implem.insert_local_declaration <- DebugInformation.insert_local_declaration;
+    implem.atom_local_variable <- DebugInformation.atom_local_variable;
   end else begin
     implem.init <- (fun _ -> ());
     implem.atom_function <- (fun _ _ -> ());
@@ -69,6 +75,8 @@ let init () =
     implem.add_fun_addr <- (fun _ _ -> ());
     implem.generate_debug_info <- (fun _ -> None);
     implem.all_files_iter <- (fun _ -> ());
+    implem.insert_local_declaration <- (fun _ _ _ _ -> ());
+    implem.atom_local_variable <- (fun _ _ -> ());
   end
 
 let init_compile_unit name = implem.init name
@@ -81,3 +89,5 @@ let insert_global_declaration env dec = implem.insert_global_declaration env dec
 let add_fun_addr atom addr = implem.add_fun_addr atom addr
 let generate_debug_info () = implem.generate_debug_info ()
 let all_files_iter f = implem.all_files_iter f
+let insert_local_declaration sto id ty loc = implem.insert_local_declaration  sto id ty loc
+let atom_local_variable id atom = implem.atom_local_variable id atom
