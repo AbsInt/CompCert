@@ -441,7 +441,7 @@ let expand_builtin_inline name args res =
       emit (Picbi(GPR0,a1))
   | "__builtin_dcbtls", [BA (IR a1); BA_int loc],_ ->
       if not ((Int.eq loc _0) || (Int.eq loc _2)) then
-        raise (Error "the second argument of __builtin_dcbtls must be a constant between 0 and 2");
+        raise (Error "the second argument of __builtin_dcbtls must be 0 or 2");
       emit (Pdcbtls (loc,GPR0,a1))    
   | "__builtin_dcbtls",_,_ ->
       raise (Error "the second argument of __builtin_dcbtls must be a constant")
