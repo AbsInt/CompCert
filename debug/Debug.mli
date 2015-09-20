@@ -26,5 +26,7 @@ val insert_global_declaration:  Env.t -> globdecl -> unit
 val add_fun_addr: atom -> (int * int) -> unit
 val generate_debug_info: unit -> dw_entry option
 val all_files_iter: (string -> unit) -> unit
-val insert_local_declaration: storage -> ident -> typ -> location -> unit
+val insert_local_declaration: int -> storage -> ident -> typ -> location -> unit
 val atom_local_variable: ident -> atom -> unit
+val enter_scope: int -> int -> unit
+val enter_function_scope: ident -> int -> unit

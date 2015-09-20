@@ -30,8 +30,10 @@ type implem =
      mutable add_fun_addr: atom -> (int * int) -> unit;
      mutable generate_debug_info: unit -> dw_entry option;
      mutable all_files_iter: (string -> unit) -> unit;
-     mutable insert_local_declaration: storage -> ident -> typ -> location -> unit;
+     mutable insert_local_declaration: int -> storage -> ident -> typ -> location -> unit;
      mutable atom_local_variable: ident -> atom -> unit;
+     mutable enter_scope: int -> int -> unit;
+     mutable enter_function_scope: ident -> int -> unit;
    }
 
 let implem =
@@ -46,8 +48,10 @@ let implem =
    add_fun_addr = (fun _ _ -> ());
    generate_debug_info = (fun _ -> None);
    all_files_iter = (fun _ -> ());
-   insert_local_declaration = (fun _ _ _ _ -> ());
+   insert_local_declaration = (fun _ _ _ _ _ -> ());
    atom_local_variable = (fun _ _ -> ());
+   enter_scope = (fun _ _  -> ());
+   enter_function_scope = (fun _ _ -> ());
 }
 
 let init () =
@@ -64,6 +68,8 @@ let init () =
     implem.all_files_iter <- (fun f -> DebugInformation.StringSet.iter f !DebugInformation.all_files);
     implem.insert_local_declaration <- DebugInformation.insert_local_declaration;
     implem.atom_local_variable <- DebugInformation.atom_local_variable;
+    implem.enter_scope <- DebugInformation.enter_scope;
+    implem.enter_function_scope <- DebugInformation.enter_function_scope;
   end else begin
     implem.init <- (fun _ -> ());
     implem.atom_function <- (fun _ _ -> ());
@@ -75,8 +81,10 @@ let init () =
     implem.add_fun_addr <- (fun _ _ -> ());
     implem.generate_debug_info <- (fun _ -> None);
     implem.all_files_iter <- (fun _ -> ());
-    implem.insert_local_declaration <- (fun _ _ _ _ -> ());
+    implem.insert_local_declaration <- (fun _ _ _ _ _ -> ());
     implem.atom_local_variable <- (fun _ _ -> ());
+    implem.enter_scope <- (fun _ _  -> ());
+    implem.enter_function_scope <- (fun _ _ -> ());
   end
 
 let init_compile_unit name = implem.init name
@@ -89,5 +97,7 @@ let insert_global_declaration env dec = implem.insert_global_declaration env dec
 let add_fun_addr atom addr = implem.add_fun_addr atom addr
 let generate_debug_info () = implem.generate_debug_info ()
 let all_files_iter f = implem.all_files_iter f
-let insert_local_declaration sto id ty loc = implem.insert_local_declaration  sto id ty loc
+let insert_local_declaration scope sto id ty loc = implem.insert_local_declaration scope sto id ty loc
 let atom_local_variable id atom = implem.atom_local_variable id atom
+let enter_scope p_id id = implem.enter_scope p_id id
+let enter_function_scope fun_id sc_id = implem.enter_function_scope fun_id sc_id
