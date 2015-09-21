@@ -533,12 +533,11 @@ let expand_builtin_inline name args res =
       (* Here, CR2 is true if the exchange succeeded, false if it failed *)
       emit (Pisync);
       emit (Pmfcr dst);
-      emit (Prlwinm (res,res,(Z.of_uint 3),_1));
+      emit (Prlwinm (res,dest,(Z.of_uint 3),_1));
       (* Update exp with the current value of dst if the exchange failed *)
       emit (Pbt (CRbit_2,lblsucc));
       emit (Pstw (GPR0,Cint _0,exp));
-      emit (Plabel lblsucc);
-      emit (Pmr (res,dst))
+      emit (Plabel lblsucc)
   (* Catch-all *)
   | _ ->
       raise (Error ("unrecognized builtin " ^ name))
