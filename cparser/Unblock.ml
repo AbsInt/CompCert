@@ -199,40 +199,34 @@ let integer_const n =
   intconst (Int64.of_int n) IInt
 
 (* Line number annotation:
-      __builtin_debug(1, "#line:filename:lineno", scope1, ..., scopeN) *)
+      __builtin_debug(1, "#line:filename:lineno") *)
 (* TODO: consider
-      __builtin_debug(1, "filename", lineno, scope1, ..., scopeN)
+      __builtin_debug(1, "filename", lineno)
    instead. *)
 
-let debug_lineno ctx (filename, lineno) =
+let debug_lineno (filename, lineno) =
   debug_annot 1L
-    (string_const (Printf.sprintf "#line:%s:%d" filename lineno) ::
-     List.rev_map integer_const ctx)
+    [string_const (Printf.sprintf "#line:%s:%d" filename lineno)]
+
+(* Scope annotation:
+      __builtin_debug(6, "", scope1, scope2, ..., scopeN)
+*)
+
+let empty_string = string_const ""
+
+let debug_scope ctx =
+  debug_annot 6L (empty_string :: List.rev_map integer_const ctx)
+
+(* Add line number debug annotation if the line number changes.
+   Add scope debug annotation regardless. *)
 
 let add_lineno ctx prev_loc this_loc s =
-  if !Clflags.option_g && this_loc <> prev_loc && this_loc <> no_loc
-  then sseq no_loc (debug_lineno ctx this_loc) s
-  else s
-
-(* Variable declaration annotation:
-      __builtin_debug(6, var, scope)  *)
-
-let debug_var_decl ctx id ty =
-  let scope = match ctx with [] -> 0 | sc :: _ -> sc in
-  debug_annot 6L
-    [ {edesc = EVar id; etyp = ty}; integer_const scope ]
-
-let add_var_decl ctx id ty s =
-  if !Clflags.option_g
-  then sseq no_loc (debug_var_decl ctx id ty) s
-  else s
-
-let add_param_decls params body =
   if !Clflags.option_g then
-    List.fold_right
-      (fun (id, ty) s -> sseq no_loc (debug_var_decl [] id ty) s)
-      params body
-  else body
+    sseq no_loc (debug_scope ctx)
+      (if this_loc <> prev_loc && this_loc <> no_loc
+       then sseq no_loc (debug_lineno this_loc) s
+       else s)
+  else s
 
 (* Generate fresh scope identifiers, for blocks that contain at least
    one declaration *)
@@ -255,14 +249,14 @@ let new_scope_id () =
 let process_decl loc env ctx (sto, id, ty, optinit) k =
   let ty' = remove_const env ty in
   local_variables := (sto, id, ty', None) :: !local_variables;
-  add_var_decl ctx id ty
-   (match optinit with
-    | None ->
-        k
-    | Some init ->
-        let init' = expand_init true env init in
-        let l = local_initializer env { edesc = EVar id; etyp = ty' } init' [] in
-        add_inits_stmt loc l k)
+  (* TODO: register the fact that id is declared in scope ctx *)
+  match optinit with
+  | None ->
+      k
+  | Some init ->
+      let init' = expand_init true env init in
+      let l = local_initializer env { edesc = EVar id; etyp = ty' } init' [] in
+      add_inits_stmt loc l k
 
 (* Simplification of blocks within a statement *)
 
@@ -342,8 +336,8 @@ and unblock_block env ctx ploc = function
 let unblock_fundef env f =
   local_variables := [];
   next_scope_id := 0;
-  let body =
-    add_param_decls f.fd_params (unblock_stmt env [] no_loc f.fd_body) in
+  (* TODO: register the parameters as being declared in function scope *)
+  let body = unblock_stmt env [] no_loc f.fd_body in
   let decls = !local_variables in
   local_variables := [];
   { f with fd_locals = f.fd_locals @ decls; fd_body = body }

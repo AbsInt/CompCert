@@ -269,8 +269,6 @@ let print_debug_info comment print_line print_preg sp_name oc kind txt args =
       args in
   match kind with
   | 1 ->  (* line number *)
-      fprintf oc "%s debug: current scopes%a\n"
-                 comment print_debug_args args;
       if Str.string_match re_file_line txt 0 then
         print_line oc (Str.matched_group 1 txt)
                       (int_of_string (Str.matched_group 2 txt))
@@ -285,9 +283,9 @@ let print_debug_info comment print_line print_preg sp_name oc kind txt args =
   | 5 ->  (* local variable preallocated in stack *)
       fprintf oc "%s debug: %s resides at%a\n"
                  comment txt print_debug_args args
-  | 6 ->  (* declaration of a local variable *)
-      fprintf oc "%s debug: %s declared in scope%a\n"
-                 comment txt print_debug_args args
+  | 6 ->  (* scope annotations *)
+      fprintf oc "%s debug: current scopes%a\n"
+                 comment print_debug_args args;
   | _ ->
       ()
 					    
