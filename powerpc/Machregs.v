@@ -167,9 +167,8 @@ Definition builtin_atomic_compare_exchange := ident_of_string "__builtin_atomic_
 Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_builtin id sg =>
-    if ident_eq id builtin_atomic_exchange then R10::R11:: nil
-    else if ident_eq id builtin_atomic_compare_exchange then R10::R11::R12:: nil
-    else if ident_eq id builtin_sync_and_fetch then R3::R10::nil 
+    if ident_eq id builtin_atomic_exchange then R10::nil
+    else if ident_eq id builtin_atomic_compare_exchange then R10::R11::nil
     else F13 :: nil
   | EF_vload _ => R11 :: nil
   | EF_vstore Mint64 => R10 :: R11 :: R12 :: nil

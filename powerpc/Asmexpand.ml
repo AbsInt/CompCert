@@ -493,27 +493,27 @@ let expand_builtin_inline name args res =
       emit (Psync);
       let lbl = new_label() in
       emit (Plabel lbl);
-      emit (Plwarx (GPR11,GPR0,a1));
+      emit (Plwarx (GPR0,GPR0,a1));
       emit (Pstwcx_ (GPR10,GPR0,a1));
       emit (Pbf (CRbit_2,lbl));
       emit (Pisync);
-      emit (Pstw (GPR11,Cint _0,a3))
+      emit (Pstw (GPR0,Cint _0,a3))
   | "__builtin_atomic_load", [BA (IR a1); BA (IR a2)],_ ->
       let lbl = new_label () in
       emit (Psync);
-      emit (Plwz (a1,Cint _0,a1));
-      emit (Pcmpw (a1,a1));
+      emit (Plwz (GPR0,Cint _0,a1));
+      emit (Pcmpw (GPR0,GPR0));
       emit (Pbf (CRbit_2,lbl));
       emit (Plabel lbl);
       emit (Pisync);
-      emit (Pstw (a1,Cint _0, a2));
+      emit (Pstw (GPR0,Cint _0, a2))
   | "__builtin_sync_fetch_and_add", [BA (IR a1); BA(IR a2)], BR (IR res) ->
       let lbl = new_label() in
       emit (Psync);
       emit (Plabel lbl);
       emit (Plwarx (res,GPR0,a1));
-      emit (Padd (GPR10,res,a2));
-      emit (Pstwcx_ (GPR10,GPR0,a1));
+      emit (Padd (GPR0,res,a2));
+      emit (Pstwcx_ (GPR0,GPR0,a1));
       emit (Pbf (CRbit_2, lbl));
       emit (Pisync);
   | "__builtin_atomic_compare_exchange", [BA (IR dst); BA(IR exp); BA (IR des)],  BR (IR res) ->
@@ -524,18 +524,19 @@ let expand_builtin_inline name args res =
       emit (Plwz (GPR11,Cint _0,des));
       emit (Psync);
       emit (Plabel lbls);
-      emit (Plwarx (GPR12,GPR0,dst));
-      emit (Pcmpw (GPR12,GPR10));
+      emit (Plwarx (GPR0,GPR0,dst));
+      emit (Pcmpw (GPR0,GPR10));
       emit (Pbf (CRbit_2,lblneq));
       emit (Pstwcx_ (GPR11,GPR0,dst));
       emit (Pbf (CRbit_2,lbls));
       emit (Plabel lblneq);
+      (* Here, CR2 is true if the exchange succeeded, false if it failed *)
       emit (Pisync);
       emit (Pmfcr dst);
-      emit (Prlwinm (dst,dst,(Z.of_uint 3),_1));
-      emit (Pcmpwi (dst,(Cint _0)));
-      emit (Pbf (CRbit_2,lblsucc));
-      emit (Pstw (GPR12,(Cint _0),exp));
+      emit (Prlwinm (res,res,(Z.of_uint 3),_1));
+      (* Update exp with the current value of dst if the exchange failed *)
+      emit (Pbt (CRbit_2,lblsucc));
+      emit (Pstw (GPR0,Cint _0,exp));
       emit (Plabel lblsucc);
       emit (Pmr (res,dst))
   (* Catch-all *)
