@@ -64,7 +64,7 @@ let expand_annot_val txt targ args res =
    Note that lfd and stfd cannot trap on ill-formed floats. *)
 
 let offset_in_range ofs =
-  Int.eq (Asmgen.high_s ofs) Int.zero
+  Int.eq (Asmgen.high_s ofs) _0
 
 let memcpy_small_arg sz arg tmp =
   match arg with
@@ -276,9 +276,9 @@ let expand_builtin_vstore chunk args =
       assert false
 
 (* Handling of varargs *)
-let linkregister_offset = ref  Int.zero
+let linkregister_offset = ref  _0
 
-let retaddr_offset = ref Int.zero
+let retaddr_offset = ref _0
 
 let current_function_stacksize = ref 0l
 
@@ -485,8 +485,59 @@ let expand_builtin_inline name args res =
       emit (Plwz (res, Cint! retaddr_offset,GPR1))
   (* isel *)
   | "__builtin_isel", [BA (IR a1); BA (IR a2); BA (IR a3)],BR (IR res) ->
-      emit (Pcmpwi (a1,Cint (Int.zero)));
+      emit (Pcmpwi (a1,Cint (_0)));
       emit (Pisel (res,a3,a2,CRbit_2))
+  (* atomic operations *)
+  | "__builtin_atomic_exchange", [BA (IR a1); BA (IR a2); BA (IR a3)],_ ->
+      emit (Plwz (GPR10,Cint _0,a2));
+      emit (Psync);
+      let lbl = new_label() in
+      emit (Plabel lbl);
+      emit (Plwarx (GPR0,GPR0,a1));
+      emit (Pstwcx_ (GPR10,GPR0,a1));
+      emit (Pbf (CRbit_2,lbl));
+      emit (Pisync);
+      emit (Pstw (GPR0,Cint _0,a3))
+  | "__builtin_atomic_load", [BA (IR a1); BA (IR a2)],_ ->
+      let lbl = new_label () in
+      emit (Psync);
+      emit (Plwz (GPR0,Cint _0,a1));
+      emit (Pcmpw (GPR0,GPR0));
+      emit (Pbf (CRbit_2,lbl));
+      emit (Plabel lbl);
+      emit (Pisync);
+      emit (Pstw (GPR0,Cint _0, a2))
+  | "__builtin_sync_fetch_and_add", [BA (IR a1); BA(IR a2)], BR (IR res) ->
+      let lbl = new_label() in
+      emit (Psync);
+      emit (Plabel lbl);
+      emit (Plwarx (res,GPR0,a1));
+      emit (Padd (GPR0,res,a2));
+      emit (Pstwcx_ (GPR0,GPR0,a1));
+      emit (Pbf (CRbit_2, lbl));
+      emit (Pisync);
+  | "__builtin_atomic_compare_exchange", [BA (IR dst); BA(IR exp); BA (IR des)],  BR (IR res) ->
+      let lbls = new_label ()
+      and lblneq = new_label ()
+      and lblsucc = new_label () in      
+      emit (Plwz (GPR10,Cint _0,exp));
+      emit (Plwz (GPR11,Cint _0,des));
+      emit (Psync);
+      emit (Plabel lbls);
+      emit (Plwarx (GPR0,GPR0,dst));
+      emit (Pcmpw (GPR0,GPR10));
+      emit (Pbf (CRbit_2,lblneq));
+      emit (Pstwcx_ (GPR11,GPR0,dst));
+      emit (Pbf (CRbit_2,lbls));
+      emit (Plabel lblneq);
+      (* Here, CR2 is true if the exchange succeeded, false if it failed *)
+      emit (Pisync);
+      emit (Pmfcr dst);
+      emit (Prlwinm (res,dest,(Z.of_uint 3),_1));
+      (* Update exp with the current value of dst if the exchange failed *)
+      emit (Pbt (CRbit_2,lblsucc));
+      emit (Pstw (GPR0,Cint _0,exp));
+      emit (Plabel lblsucc)
   (* Catch-all *)
   | _ ->
       raise (Error ("unrecognized builtin " ^ name))
@@ -517,7 +568,7 @@ let expand_instruction instr =
   | Pallocframe(sz, ofs,retofs) ->
       let variadic = (!current_function).fn_sig.sig_cc.cc_vararg in
       let sz = camlint_of_coqint sz in
-      assert (ofs = Int.zero);
+      assert (ofs = _0);
       let sz = if variadic then Int32.add sz 96l else sz in
       let adj = Int32.neg sz in
       if adj >= -0x8000l then
