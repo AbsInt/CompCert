@@ -276,6 +276,9 @@ let expand_builtin_vstore chunk args =
       assert false
 
 (* Handling of varargs *)
+let linkregister_offset = ref  Int.zero
+
+let retaddr_offset = ref Int.zero
 
 let current_function_stacksize = ref 0l
 
@@ -324,56 +327,6 @@ let expand_builtin_va_start r =
 let expand_int64_arith conflict rl fn =
   if conflict then (fn GPR0; emit (Pmr(rl, GPR0))) else fn rl
 
-(* Handling of cache instructions *)
-
-(* Auxiliary function to generate address for the cache function *)
-let expand_builtin_cache_common addr f =
-  let add = match addr with
-  | BA (IR a1) -> a1
-  | BA_addrstack ofs ->
-      emit_addimm GPR11 GPR1 ofs;
-      GPR11
-  | BA_addrglobal(id, ofs) ->
-      if symbol_is_small_data id ofs then begin
-        emit (Paddi (GPR11, GPR0, Csymbol_sda(id, ofs)));
-        GPR11
-      end else if symbol_is_rel_data id ofs then begin
-        emit (Paddis(GPR11, GPR0, Csymbol_rel_high(id, ofs)));
-        emit (Paddi(GPR11, GPR11, Csymbol_rel_low(id, ofs)));
-        GPR11
-      end else begin
-        emit (Paddis(GPR11, GPR0, Csymbol_high(id, ofs)));
-        emit (Paddi (GPR11, GPR11, Csymbol_low(id, ofs)));
-        GPR11
-      end 
-  | _ -> raise (Error "Argument is not an address") in
-  f add
- 
-let expand_builtin_prefetch addr rw loc =
-  if not ((loc >= _0) && (loc <= _2)) then
-    raise (Error "the last argument of __builtin_prefetch must be a constant between 0 and 2");
-  let emit_prefetch_instr addr =
-    if Int.eq rw _0 then begin
-      emit (Pdcbt (loc,GPR0,addr));
-    end else if Int.eq rw _1 then begin
-      emit (Pdcbtst (loc,GPR0,addr));
-    end else
-      raise (Error "the second argument of __builtin_prefetch must be either 0 or 1")
-  in
-  expand_builtin_cache_common addr emit_prefetch_instr
-
-let expand_builtin_dcbtls addr loc =
-  if not ((loc == _0) || (loc = _2)) then
-    raise (Error "the second argument of __builtin_dcbtls must be a constant between 0 and 2");
-  let emit_inst addr = emit (Pdcbtls (loc,GPR0,addr)) in
-  expand_builtin_cache_common addr emit_inst
-
-let expand_builtin_icbtls addr loc =
-  if not ((loc == _0) || (loc = _2)) then
-    raise (Error "the second argument of __builtin_icbtls must be a constant between 0 and 2");
-  let emit_inst addr = emit (Picbtls (loc,GPR0,addr)) in
-  expand_builtin_cache_common addr emit_inst
-
 (* Handling of compiler-inlined builtins *)
 
 let expand_builtin_inline name args res =
@@ -386,6 +339,8 @@ let expand_builtin_inline name args res =
       emit (Pmulhwu(res, a1, a2))
   | "__builtin_clz", [BA(IR a1)], BR(IR res) ->
       emit (Pcntlzw(res, a1))
+  | "__builtin_cmpb",  [BA(IR a1); BA(IR a2)], BR(IR res) ->
+      emit (Pcmpb (res,a1,a2))
   | ("__builtin_bswap" | "__builtin_bswap32"), [BA(IR a1)], BR(IR res) ->
       emit (Pstwu(a1, Cint _m8, GPR1));
       emit (Pcfi_adjust _8);
@@ -468,7 +423,7 @@ let expand_builtin_inline name args res =
       emit (Plwsync)
   | "__builtin_mbar",  [BA_int mo], _ ->
       if not (mo = _0 || mo = _1) then
-        raise (Error "the argument of __builtin_mbar must be either 0 or 1");
+        raise (Error "the argument of __builtin_mbar must be 0 or 1");
       emit (Pmbar mo)
   | "__builin_mbar",_, _ ->
       raise (Error "the argument of __builtin_mbar must be a constant");
@@ -484,16 +439,27 @@ let expand_builtin_inline name args res =
       emit (Pdcbi (GPR0,a1))
   | "__builtin_icbi", [BA(IR a1)],_ ->
       emit (Picbi(GPR0,a1))
-  | "__builtin_dcbtls", [a; BA_int loc],_ ->
-     expand_builtin_dcbtls a loc
+  | "__builtin_dcbtls", [BA (IR a1); BA_int loc],_ ->
+      if not ((Int.eq loc _0) || (Int.eq loc _2)) then
+        raise (Error "the second argument of __builtin_dcbtls must be 0 or 2");
+      emit (Pdcbtls (loc,GPR0,a1))    
   | "__builtin_dcbtls",_,_ ->
       raise (Error "the second argument of __builtin_dcbtls must be a constant")
-  | "__builtin_icbtls", [a; BA_int loc],_ ->
-     expand_builtin_icbtls a loc
+  | "__builtin_icbtls", [BA (IR a1); BA_int loc],_ ->
+    if not ((Int.eq loc _0) || (Int.eq loc _2)) then
+        raise (Error "the second argument of __builtin_icbtls must be 0 or 2");
+      emit (Picbtls (loc,GPR0,a1))
   | "__builtin_icbtls",_,_ ->
       raise (Error "the second argument of __builtin_icbtls must be a constant")
-  | "__builtin_prefetch" , [a1 ;BA_int rw; BA_int loc],_ ->
-      expand_builtin_prefetch a1 rw loc
+  | "__builtin_prefetch" , [BA (IR a1) ;BA_int rw; BA_int loc],_ ->
+      if not (Int.ltu loc _4) then
+        raise (Error "the last argument of __builtin_prefetch must be 0, 1 or 2");
+      if Int.eq rw _0 then begin
+        emit (Pdcbt (loc,GPR0,a1));
+      end else if Int.eq rw _1 then begin
+        emit (Pdcbtst (loc,GPR0,a1));
+      end else
+        raise (Error "the second argument of __builtin_prefetch must be 0 or 1")
   | "__builtin_prefetch" ,_,_ ->
       raise (Error "the second and third argument of __builtin_prefetch must be a constant")
   | "__builtin_dcbz",[BA (IR a1)],_ ->
@@ -507,6 +473,20 @@ let expand_builtin_inline name args res =
       emit (Pmtspr(n, a1))
   | "__builtin_set_spr", _, _ ->
       raise (Error "the first argument of __builtin_set_spr must be a constant")
+  (* Frame and return address *)
+  | "__builtin_call_frame", _,BR (IR res) ->
+      let sz = !current_function_stacksize 
+      and ofs = !linkregister_offset in
+      if sz < 0x8000l then
+        emit (Paddi(res, GPR1, Cint(coqint_of_camlint sz)))
+      else
+        emit (Plwz(res, Cint ofs, GPR1))
+  | "__builtin_return_address",_,BR (IR res) ->
+      emit (Plwz (res, Cint! retaddr_offset,GPR1))
+  (* isel *)
+  | "__builtin_isel", [BA (IR a1); BA (IR a2); BA (IR a3)],BR (IR res) ->
+      emit (Pcmpwi (a1,Cint (Int.zero)));
+      emit (Pisel (res,a3,a2,CRbit_2))
   (* Catch-all *)
   | _ ->
       raise (Error ("unrecognized builtin " ^ name))
@@ -534,7 +514,7 @@ let num_crbit = function
 
 let expand_instruction instr =
   match instr with
-  | Pallocframe(sz, ofs) ->
+  | Pallocframe(sz, ofs,retofs) ->
       let variadic = (!current_function).fn_sig.sig_cc.cc_vararg in
       let sz = camlint_of_coqint sz in
       assert (ofs = Int.zero);
@@ -553,7 +533,9 @@ let expand_instruction instr =
                   {sig_args = []; sig_res = None; sig_cc = cc_default}));
         emit (Pmtlr GPR0)
       end;
-      current_function_stacksize := sz
+      current_function_stacksize := sz;
+      linkregister_offset := ofs;
+      retaddr_offset := retofs
   | Pbctr sg | Pbctrl sg | Pbl(_, sg) | Pbs(_, sg) ->
       set_cr6 sg;
       emit instr

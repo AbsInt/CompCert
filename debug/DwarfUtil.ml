@@ -85,6 +85,7 @@ module DefaultAbbrevs =
     let name_type_abbr = dw_form_string
     let encoding_type_abbr = dw_form_data1
     let byte_size_type_abbr = dw_form_data1
+    let member_size_abbr = dw_form_udata
     let high_pc_type_abbr = dw_form_addr
     let low_pc_type_abbr = dw_form_addr
     let stmt_list_type_abbr = dw_form_data4

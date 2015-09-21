@@ -217,9 +217,9 @@ Definition builtin_constraints (ef: external_function) :
   | EF_builtin id sg =>
       if ident_eq id builtin_get_spr then OK_const :: nil
       else if ident_eq id builtin_set_spr then OK_const :: OK_default :: nil
-      else if ident_eq id builtin_prefetch then OK_addrany :: OK_const :: OK_const :: nil
-      else if ident_eq id builtin_dcbtls then OK_addrany::OK_const::nil
-      else if ident_eq id builtin_icbtls then OK_addrany::OK_const::nil
+      else if ident_eq id builtin_prefetch then OK_default :: OK_const :: OK_const :: nil
+      else if ident_eq id builtin_dcbtls then OK_default::OK_const::nil
+      else if ident_eq id builtin_icbtls then OK_default::OK_const::nil
       else if ident_eq id builtin_mbar then OK_const::nil
       else nil
   | EF_vload _ => OK_addrany :: nil

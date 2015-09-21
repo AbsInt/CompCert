@@ -58,6 +58,8 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
 
     let add_byte_size = add_abbr_entry (0xb,byte_size_type_abbr)
 
+    let add_member_size = add_abbr_entry (0xb,member_size_abbr)
+
     let add_high_pc = add_abbr_entry (0x12,high_pc_type_abbr)
 
     let add_low_pc = add_abbr_entry (0x11,low_pc_type_abbr)
@@ -153,7 +155,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       | DW_TAG_structure_type e ->
           prologue 0x13;
           add_attr_some e.structure_file_loc add_file_loc;
-          add_attr_some e.structure_byte_size add_byte_size;
+          add_attr_some e.structure_byte_size add_member_size;
           add_attr_some e.structure_declaration add_declaration;
           add_attr_some e.structure_name add_name
       | DW_TAG_subprogram e ->
@@ -184,7 +186,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       | DW_TAG_union_type e ->
           prologue 0x17;
           add_attr_some e.union_file_loc add_file_loc;
-          add_attr_some e.union_byte_size add_byte_size;
+          add_attr_some e.union_byte_size add_member_size;
           add_attr_some e.union_declaration add_declaration;
           add_attr_some e.union_name add_name
       | DW_TAG_unspecified_parameter e ->
@@ -246,7 +248,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
         fprintf oc "	.uleb128	%d\n" id;
         output_string oc s;
         fprintf oc "	.uleb128	0\n";
-        fprintf oc "	.uleb128	0\n")  abbrevs;
+        fprintf oc "	.uleb128	0\n\n")  abbrevs;
       fprintf oc "	.sleb128	0\n"
 
     let debug_start_addr = ref (-1)

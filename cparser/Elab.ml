@@ -1839,7 +1839,7 @@ let enter_or_refine_ident local loc env s sto ty =
 let enter_decdefs local loc env sto dl =
   (* Sanity checks on storage class *)
   if sto = Storage_register && not local then
-    error loc "'register' on global declaration";
+    fatal_error loc "'register' on global declaration";
   if sto <> Storage_default && dl = [] then
     warning loc "Storage class specifier on empty declaration";
   let rec enter_decdef (decls, env) (s, ty, init) =

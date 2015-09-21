@@ -50,7 +50,10 @@ int main(int argc, char ** argv)
   y = 0;
   __builtin_write32_reversed(&y, 0x12345678);
   printf ("CSE write_32_rev: %s\n", y == 0x78563412 ? "ok" : "ERROR");
-
+  /* Make sure that ignoring the result of a builtin
+     doesn't cause an internal error */
+  (void) __builtin_bswap(x);
+  (void) __builtin_fsqrt(a);
   return 0;
 }
 

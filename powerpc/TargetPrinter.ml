@@ -384,7 +384,7 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	addis	%a, %a, %a\n" ireg r1 ireg_or_zero r2 constant c
       | Paddze(r1, r2) ->
           fprintf oc "	addze	%a, %a\n" ireg r1 ireg r2
-      | Pallocframe(sz, ofs) ->
+      | Pallocframe(sz, ofs, _) ->
           assert false
       | Pand_(r1, r2, r3) ->
           fprintf oc "	and.	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
@@ -443,6 +443,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	bctr\n";
           jumptables := (lbl, tbl) :: !jumptables;
           fprintf oc "%s end pseudoinstr btbl\n" comment
+      | Pcmpb (r1, r2, r3) ->
+          fprintf oc "	cmpb	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pcmplw(r1, r2) ->
           fprintf oc "	cmplw	%a, %a, %a\n" creg 0 ireg r1 ireg r2
       | Pcmplwi(r1, c) ->
@@ -537,6 +539,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	fres	%a, %a\n" freg r1 freg r2    
       | Pfsel(r1, r2, r3, r4) ->
           fprintf oc "	fsel	%a, %a, %a, %a\n" freg r1 freg r2 freg r3 freg r4
+      | Pisel (r1,r2,r3,cr) ->
+          fprintf oc "	isel	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 crbit cr
       | Picbi (r1,r2) ->
           fprintf oc "	icbi	%a,%a\n" ireg r1 ireg r2
       | Picbtls (n,r1,r2) ->

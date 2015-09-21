@@ -243,7 +243,11 @@ Proof.
   induction 2; simpl.
 - exists (@nil val); constructor.
 - destruct IHlist_forall2 as (vl' & A).
-  destruct (builtin_arg_reduction ae a1); repeat (eauto; econstructor). 
+  assert (eval_builtin_args ge (fun r => rs#r) sp m
+             (a1 :: debug_strength_reduction ae al) (b1 :: vl'))
+  by (constructor; eauto).
+  destruct a1; try (econstructor; eassumption).
+  destruct (builtin_arg_reduction ae (BA x)); repeat (eauto; econstructor). 
 Qed.
 
 Lemma builtin_strength_reduction_correct:

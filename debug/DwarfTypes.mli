@@ -242,6 +242,7 @@ module type DWARF_ABBREVS =
     val name_type_abbr: int
     val encoding_type_abbr: int
     val byte_size_type_abbr: int
+    val member_size_abbr: int
     val high_pc_type_abbr: int
     val low_pc_type_abbr: int
     val stmt_list_type_abbr: int

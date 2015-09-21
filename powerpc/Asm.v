@@ -142,7 +142,7 @@ Inductive instruction : Type :=
   | Paddic: ireg -> ireg -> constant -> instruction           (**r add immediate and set carry *)
   | Paddis: ireg -> ireg -> constant -> instruction           (**r add immediate high *)
   | Paddze: ireg -> ireg -> instruction                       (**r add carry *)
-  | Pallocframe: Z -> int -> instruction                      (**r allocate new stack frame (pseudo) *)
+  | Pallocframe: Z -> int -> int -> instruction               (**r allocate new stack frame (pseudo) *)
   | Pand_: ireg -> ireg -> ireg -> instruction                (**r bitwise and *)
   | Pandc: ireg -> ireg -> ireg -> instruction                (**r bitwise and-complement *)
   | Pandi_: ireg -> ireg -> constant -> instruction           (**r and immediate and set conditions *)
@@ -157,6 +157,7 @@ Inductive instruction : Type :=
   | Pblr: instruction                                         (**r branch to contents of register LR *)
   | Pbt: crbit -> label -> instruction                        (**r branch if true *)
   | Pbtbl: ireg -> list label -> instruction                  (**r N-way branch through a jump table (pseudo) *)
+  | Pcmpb: ireg -> ireg -> ireg -> instruction                (**r compare bytes *)
   | Pcmplw: ireg -> ireg -> instruction                       (**r unsigned integer comparison *)
   | Pcmplwi: ireg -> constant -> instruction                  (**r same, with immediate argument *)
   | Pcmpw: ireg -> ireg -> instruction                        (**r signed integer comparison *)
@@ -206,6 +207,7 @@ Inductive instruction : Type :=
   | Pfrsqrte: freg -> freg -> instruction                     (**r approximate reciprocal of square root *)
   | Pfres: freg -> freg -> instruction                        (**r approximate inverse *)
   | Pfsel: freg -> freg -> freg -> freg -> instruction        (**r FP conditional move *)
+  | Pisel: ireg -> ireg -> ireg -> crbit -> instruction       (**r integer select *)
   | Pisync: instruction                                       (**r ISYNC barrier *)
   | Picbi: ireg -> ireg -> instruction                        (**r instruction cache invalidate *)
   | Picbtls: int -> ireg -> ireg -> instruction               (**r instruction cache block touch and lock set *)
@@ -323,7 +325,7 @@ lbl:    .double floatcst
         lfd     rdst, 0(r1)
         addi    r1, r1, 8
 >>
-- [Pallocframe sz ofs]: in the formal semantics, this pseudo-instruction
+- [Pallocframe sz ofs retofs]: in the formal semantics, this pseudo-instruction
   allocates a memory block with bounds [0] and [sz], stores the value
   of register [r1] (the stack pointer, by convention) at offset [ofs]
   in this block, and sets [r1] to a pointer to the bottom of this
@@ -622,7 +624,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Paddze rd r1 =>
       Next (nextinstr (rs#rd <- (Val.add rs#r1 rs#CARRY)
                        #CARRY <- (Val.add_carry rs#r1 Vzero rs#CARRY))) m
-  | Pallocframe sz ofs =>
+  | Pallocframe sz ofs _ =>
       let (m1, stk) := Mem.alloc m 0 sz in
       let sp := Vptr stk Int.zero in
       match Mem.storev Mint32 m1 (Val.add sp (Vint ofs)) rs#GPR1 with
@@ -871,6 +873,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   (** The following instructions and directives are not generated
       directly by [Asmgen], so we do not model them. *)
   | Pbdnz _
+  | Pcmpb _ _ _
   | Pcntlzw _ _
   | Pcreqv _ _ _
   | Pcrxor _ _ _
@@ -891,6 +894,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pfrsqrte _ _
   | Pfres _ _
   | Pfsel _ _ _ _
+  | Pisel _ _ _ _
   | Plwarx _ _ _
   | Plwbrx _ _ _
   | Picbi _ _

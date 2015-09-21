@@ -152,7 +152,7 @@ let p_instruction oc ic =
   | Paddic  (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Paddic\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Paddis  (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Paddis\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Paddze (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Paddze\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
-  | Pallocframe (c,i) -> assert false(* Should not occur *)
+  | Pallocframe (c,i,r) -> assert false(* Should not occur *)
   | Pand_ (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pand_\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pandc (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pandc\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pandi_ (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Pandi_\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
@@ -167,6 +167,7 @@ let p_instruction oc ic =
   | Pblr -> fprintf oc "{\"Instruction Name\":\"Pblr\",\"Args\":[]}"
   | Pbt (cr,l) -> fprintf oc "{\"Instruction Name\":\"Pbt\",\"Args\":[%a,%a]}" p_crbit cr p_label l
   | Pbtbl (i,lb) -> fprintf oc "{\"Instruction Name\":\"Pbtl\",\"Args\":[%a%a]}" p_ireg i (p_list_cont p_label) lb
+  | Pcmpb (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pcmpb\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pcmplw (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pcmplw\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
   | Pcmplwi (ir,c) -> fprintf oc "{\"Instruction Name\":\"Pcmplwi\",\"Args\":[%a,%a]}" p_ireg ir p_constant c
   | Pcmpw (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pcmpw\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
@@ -216,6 +217,7 @@ let p_instruction oc ic =
   | Pfrsqrte (fr1,fr2) -> fprintf oc "{\"Instruction Name\":\"Pfsqrte\",\"Args\":[%a,%a]}" p_freg fr1 p_freg fr2
   | Pfres (fr1,fr2) -> fprintf oc "{\"Instruction Name\":\"Pfres\",\"Args\":[%a,%a]}" p_freg fr1 p_freg fr2
   | Pfsel (fr1,fr2,fr3,fr4) -> fprintf oc "{\"Instruction Name\":\"Pfsel\",\"Args\":[%a,%a,%a,%a]}" p_freg fr1 p_freg fr2 p_freg fr3 p_freg fr4
+  | Pisel (ir1,ir2,ir3,cr) -> fprintf oc "{\"Instruction Name\":\"Pisel\",\"Args\":[%a,%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3 p_crbit cr
   | Picbi (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Picbi\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
   | Picbtls (n,ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Picbtls\",\"Args\":[%a,%a,%a]}" p_int_constant n p_ireg ir1 p_ireg ir2
   | Pisync -> fprintf oc "{\"Instruction Name\":\"Pisync\",\"Args\":[]}"
@@ -286,7 +288,7 @@ let p_instruction oc ic =
   | Pstwx_a (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pstwx\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pstwux (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pstwux\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pstwbrx (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pstwbrx\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
-  | Pstwcx_ (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pstwc_\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
+  | Pstwcx_ (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pstwcx_\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Psubfc (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Psubfc\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Psubfe (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Psubfe\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Psubfze (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Psubfe\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2

@@ -36,6 +36,8 @@ let builtins = {
       (TInt(IUInt, []), [TInt(IUInt, [])], false);
     "__builtin_bswap16",
       (TInt(IUShort, []), [TInt(IUShort, [])], false);
+    "__builtin_cmpb",
+      (TInt (IUInt, []),  [TInt(IUInt, []);TInt(IUInt, [])], false);
     (* Float arithmetic *)
     "__builtin_fmadd",
       (TFloat(FDouble, []), 
@@ -108,7 +110,15 @@ let builtins = {
     "__builtin_get_spr",
       (TInt(IUInt, []), [TInt(IInt, [])], false);
     "__builtin_set_spr",
-      (TVoid [], [TInt(IInt, []); TInt(IUInt, [])], false)
+      (TVoid [], [TInt(IInt, []); TInt(IUInt, [])], false);
+    (* Frame and return address *)
+    "__builtin_call_frame",
+      (TPtr (TVoid [],[]),[],false);
+    "__builtin_return_address",
+      (TPtr (TVoid [],[]),[],false);
+    (* isel *)
+    "__builtin_isel",
+      (TInt (IInt, []),[TInt(IBool, []);TInt(IInt, []);TInt(IInt, [])],false)
   ]
 }
 
