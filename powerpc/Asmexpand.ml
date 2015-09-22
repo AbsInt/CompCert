@@ -532,8 +532,8 @@ let expand_builtin_inline name args res =
       emit (Plabel lblneq);
       (* Here, CR2 is true if the exchange succeeded, false if it failed *)
       emit (Pisync);
-      emit (Pmfcr dst);
-      emit (Prlwinm (res,dst,(Z.of_uint 3),_1));
+      emit (Pmfcr GPR10);
+      emit (Prlwinm (res,GPR10,(Z.of_uint 3),_1));
       (* Update exp with the current value of dst if the exchange failed *)
       emit (Pbt (CRbit_2,lblsucc));
       emit (Pstw (GPR0,Cint _0,exp));
