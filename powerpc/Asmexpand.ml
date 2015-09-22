@@ -41,7 +41,7 @@ let emit_addimm rd rs n =
   List.iter emit (Asmgen.addimm rd rs n [])
 
 
-			    
+
 (* Handling of annotations *)
 
 let expand_annot_val txt targ args res =
@@ -79,7 +79,7 @@ let memcpy_small_arg sz arg tmp =
       assert false
 
 let expand_builtin_memcpy_small sz al src dst =
-  let (tsrc, tdst) = 
+  let (tsrc, tdst) =
     if dst <> BA (IR GPR11) then (GPR11, GPR12) else (GPR12, GPR11) in
   let (rsrc, osrc) = memcpy_small_arg sz src tsrc in
   let (rdst, odst) = memcpy_small_arg sz dst tdst in
@@ -117,7 +117,7 @@ let expand_builtin_memcpy_big sz al src dst =
   assert (sz >= 4);
   emit_loadimm GPR0 (Z.of_uint (sz / 4));
   emit (Pmtctr GPR0);
-  let (s, d) = 
+  let (s, d) =
     if dst <> BA (IR GPR11) then (GPR11, GPR12) else (GPR12, GPR11) in
   memcpy_big_arg src s;
   memcpy_big_arg dst d;
@@ -185,7 +185,7 @@ let rec expand_builtin_vload_common chunk base offset res =
             emit (Plwz(lo, offset', base));
             emit (Plwz(hi, offset, base))
           end
-      | None ->      
+      | None ->
           emit (Paddi(GPR11, base, offset));
           expand_builtin_vload_common chunk GPR11 (Cint _0) res
       end
@@ -239,7 +239,7 @@ let expand_builtin_vstore_common chunk base offset src =
       | Some offset' ->
           emit (Pstw(hi, offset, base));
           emit (Pstw(lo, offset', base))
-      | None ->      
+      | None ->
           let tmp = temp_for_vstore src in
           emit (Paddi(tmp, base, offset));
           emit (Pstw(hi, Cint _0, tmp));
@@ -442,7 +442,7 @@ let expand_builtin_inline name args res =
   | "__builtin_dcbtls", [BA (IR a1); BA_int loc],_ ->
       if not ((Int.eq loc _0) || (Int.eq loc _2)) then
         raise (Error "the second argument of __builtin_dcbtls must be 0 or 2");
-      emit (Pdcbtls (loc,GPR0,a1))    
+      emit (Pdcbtls (loc,GPR0,a1))
   | "__builtin_dcbtls",_,_ ->
       raise (Error "the second argument of __builtin_dcbtls must be a constant")
   | "__builtin_icbtls", [BA (IR a1); BA_int loc],_ ->
@@ -475,7 +475,7 @@ let expand_builtin_inline name args res =
       raise (Error "the first argument of __builtin_set_spr must be a constant")
   (* Frame and return address *)
   | "__builtin_call_frame", _,BR (IR res) ->
-      let sz = !current_function_stacksize 
+      let sz = !current_function_stacksize
       and ofs = !linkregister_offset in
       if sz < 0x8000l then
         emit (Paddi(res, GPR1, Cint(coqint_of_camlint sz)))
@@ -519,7 +519,7 @@ let expand_builtin_inline name args res =
   | "__builtin_atomic_compare_exchange", [BA (IR dst); BA(IR exp); BA (IR des)],  BR (IR res) ->
       let lbls = new_label ()
       and lblneq = new_label ()
-      and lblsucc = new_label () in      
+      and lblsucc = new_label () in
       emit (Plwz (GPR10,Cint _0,exp));
       emit (Plwz (GPR11,Cint _0,des));
       emit (Psync);
@@ -533,7 +533,7 @@ let expand_builtin_inline name args res =
       (* Here, CR2 is true if the exchange succeeded, false if it failed *)
       emit (Pisync);
       emit (Pmfcr dst);
-      emit (Prlwinm (res,dest,(Z.of_uint 3),_1));
+      emit (Prlwinm (res,dst,(Z.of_uint 3),_1));
       (* Update exp with the current value of dst if the exchange failed *)
       emit (Pbt (CRbit_2,lblsucc));
       emit (Pstw (GPR0,Cint _0,exp));
