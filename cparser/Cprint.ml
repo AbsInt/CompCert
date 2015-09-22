@@ -20,6 +20,8 @@ open C
 
 let print_idents_in_full = ref false
 
+let print_debug_idents = ref false
+
 let print_line_numbers = ref false
 
 let location pp (file, lineno) =
@@ -27,7 +29,9 @@ let location pp (file, lineno) =
     fprintf pp "# %d \"%s\"@ " lineno file
 
 let ident pp i =
-  if !print_idents_in_full
+  if !print_debug_idents
+  then fprintf pp "$%d" i.stamp
+  else if !print_idents_in_full
   then fprintf pp "%s$%d" i.name i.stamp
   else fprintf pp "%s" i.name
 

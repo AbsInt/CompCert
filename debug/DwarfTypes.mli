@@ -114,8 +114,8 @@ type dw_tag_label =
 
 type dw_tag_lexical_block =
     {
-     lexical_block_high_pc: address;
-     lexical_block_low_pc:  address;
+     lexical_block_high_pc: address option;
+     lexical_block_low_pc:  address option;
    }
 
 type dw_tag_member =

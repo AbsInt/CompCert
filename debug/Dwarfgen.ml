@@ -22,6 +22,19 @@ let get_opt_val = function
   | Some a -> a
   | None -> assert false
 
+(* Auxiliary data structures and functions *)
+module IntSet = Set.Make(struct
+  type t = int
+  let compare (x:int) (y:int) = compare x y
+end)
+
+let rec mmap f env = function
+  | [] -> ([],env)
+  | hd :: tl ->
+      let (hd',env1) = f env hd in
+      let (tl', env2) = mmap f env1 tl in
+      (hd' :: tl', env2)
+
 (* Functions to translate the basetypes. *)
 let int_type_to_entry id i =
    let encoding =
@@ -146,7 +159,10 @@ let member_to_entry mem =
     member_byte_size = mem.cfd_byte_size;
     member_bit_offset = mem.cfd_bit_offset;
     member_bit_size = mem.cfd_bit_size;
-    member_data_member_location = Some (DataLocBlock [DW_OP_plus_uconst (get_opt_val mem.cfd_byte_offset)]);
+    member_data_member_location =
+    (match mem.cfd_byte_offset with 
+    | None -> None 
+    | Some s -> Some (DataLocBlock [DW_OP_plus_uconst s]));
     member_declaration = None;
     member_name = Some (mem.cfd_name);
     member_type = mem.cfd_typ;
@@ -193,10 +209,57 @@ let infotype_to_entry id = function
   | VolatileType v -> volatile_to_entry id v
   | Void -> void_to_entry id
 
-let gen_types () =
-  List.rev (Hashtbl.fold (fun id t acc -> (infotype_to_entry id t)::acc) types [])
+let needs_types id d =
+  let add_type id d =
+    if not (IntSet.mem id d) then
+        IntSet.add id d,true
+      else 
+        d,false in
+  let t = Hashtbl.find types id in
+  match t with
+  | IntegerType _ 
+  | FloatType _
+  | Void
+  | EnumType _ -> d,false
+  | Typedef t ->
+      add_type (get_opt_val t.typ) d
+  | PointerType p -> 
+      add_type p.pts d
+  | ArrayType arr -> 
+      add_type arr.arr_type d
+  | ConstType c ->
+      add_type c.cst_type d
+  | VolatileType v ->
+      add_type v.vol_type d
+  | FunctionType f ->
+      let d,c = match f.fun_return_type with
+      | Some t -> add_type t d 
+      | None -> d,false in
+      List.fold_left (fun (d,c) p ->
+        let d,c' = add_type p.param_type d in
+        d,c||c') (d,c) f.fun_params
+  | CompositeType c -> 
+      List.fold_left (fun (d,c) f ->
+        let d,c' = add_type f.cfd_typ d in
+        d,c||c') (d,false) c.ct_members
 
-let global_variable_to_entry id v =
+let gen_types needed =
+  let rec aux d =
+    let d,c = IntSet.fold (fun id (d,c) ->
+      let d,c' = needs_types id d in
+      d,c||c') d (d,false) in
+    if c then
+      aux d
+    else
+      d in
+  let typs = aux needed in
+  List.rev (Hashtbl.fold (fun id t acc -> 
+    if IntSet.mem id typs then
+      (infotype_to_entry id t)::acc
+    else 
+      acc) types [])
+
+let global_variable_to_entry acc id v =
   let var = {
     variable_file_loc = v.gvar_file_loc;
     variable_declaration = Some v.gvar_declaration;
@@ -205,9 +268,9 @@ let global_variable_to_entry id v =
     variable_type = v.gvar_type;
     variable_location = match v.gvar_atom with Some a -> Some (LocSymbol a) | None -> None;
   } in
-  new_entry id (DW_TAG_variable var)
+  new_entry id (DW_TAG_variable var),IntSet.add v.gvar_type acc
 
-let function_parameter_to_entry p =
+let function_parameter_to_entry acc p =
   let p = {
     formal_parameter_file_loc = None;
     formal_parameter_artificial = None;
@@ -215,9 +278,9 @@ let function_parameter_to_entry p =
     formal_parameter_type = p.parameter_type;
     formal_parameter_variable_parameter = None;
   } in
-  new_entry (next_id ()) (DW_TAG_formal_parameter p)
+  new_entry (next_id ()) (DW_TAG_formal_parameter p),IntSet.add p.formal_parameter_type acc
 
-let local_variable_to_entry v id =
+let rec local_variable_to_entry acc v id =
   let var = {
     variable_file_loc = v.lvar_file_loc;
     variable_declaration = None;
@@ -226,9 +289,23 @@ let local_variable_to_entry v id =
     variable_type = v.lvar_type;
     variable_location = None;
   } in
-  new_entry id (DW_TAG_variable var)
+  new_entry id (DW_TAG_variable var),IntSet.add v.lvar_type acc
 
-let function_to_entry id f =
+and scope_to_entry acc sc id =
+  let scope = {
+    lexical_block_high_pc = None;
+    lexical_block_low_pc = None;
+  } in
+  let vars,acc = mmap local_to_entry acc sc.scope_variables in
+  let entry = new_entry id (DW_TAG_lexical_block scope) in
+  add_children entry vars,acc
+
+and local_to_entry acc id =
+  match Hashtbl.find local_variables id with
+  | LocalVariable v -> local_variable_to_entry acc v id
+  | Scope v -> scope_to_entry acc v id
+
+let function_to_entry acc id f =
   let f_tag = {
     subprogram_file_loc = f.fun_file_loc;
     subprogram_external = Some f.fun_external;
@@ -238,22 +315,26 @@ let function_to_entry id f =
     subprogram_high_pc = f.fun_high_pc;
     subprogram_low_pc = f.fun_low_pc;
   } in
- let f_entry =  new_entry id (DW_TAG_subprogram f_tag) in
- let params = List.map function_parameter_to_entry f.fun_parameter in
+  let acc = match f.fun_return_type with Some s -> IntSet.add s acc | None -> acc in
+  let f_entry =  new_entry id (DW_TAG_subprogram f_tag) in
+  let params,acc = mmap function_parameter_to_entry acc f.fun_parameter in
 (* let vars = List.map local_variable_to_entry f.fun_locals in*)
- add_children f_entry params
+  add_children f_entry params,acc
      
-let definition_to_entry id t =
+let definition_to_entry acc id t =
   match t with
-  | GlobalVariable g -> global_variable_to_entry id g
-  | Function f -> function_to_entry id f
+  | GlobalVariable g -> global_variable_to_entry acc id g
+  | Function f -> function_to_entry acc id f
 
 let gen_defs () =
-  List.rev (Hashtbl.fold (fun id t acc -> (definition_to_entry id t)::acc) definitions [])
+  let defs,typ = Hashtbl.fold (fun id t (acc,bcc) ->  let t,bcc = definition_to_entry bcc id t in
+  t::acc,bcc) definitions ([],IntSet.empty) in
+  List.rev defs,typ
 
 let gen_debug_info () =
   let cp =  {
     compile_unit_name = !file_name;
   } in
   let cp = new_entry (next_id ()) (DW_TAG_compile_unit cp) in
-  add_children cp ((gen_types ()) @ (gen_defs ()))
+  let defs,ty = gen_defs () in
+  add_children cp ((gen_types ty) @ defs)

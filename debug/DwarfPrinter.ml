@@ -132,10 +132,10 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           prologue 0xa;
           add_low_pc buf;
           add_name buf;
-      | DW_TAG_lexical_block _ ->
+      | DW_TAG_lexical_block a ->
           prologue 0xb;
-          add_high_pc buf;
-          add_low_pc buf
+          add_attr_some a.lexical_block_high_pc add_high_pc;
+          add_attr_some a.lexical_block_low_pc add_low_pc
       | DW_TAG_member e ->
           prologue 0xd;
           add_attr_some e.member_file_loc add_file_loc;
@@ -373,8 +373,8 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       print_string oc tl.label_name
 
     let print_lexical_block oc lb =
-      print_ref oc lb.lexical_block_high_pc;
-      print_ref oc lb.lexical_block_low_pc
+      print_opt_value oc lb.lexical_block_high_pc print_ref;
+      print_opt_value oc lb.lexical_block_low_pc print_ref
 
     let print_member oc mb =
       print_file_loc oc mb.member_file_loc;
@@ -488,7 +488,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       print_abbrev oc
 
     (* Print the debug info section *)
-    let print_debug_info oc entry =
+    let print_debug_info oc entry  =
       let debug_start = new_label () in
       debug_start_addr:= debug_start;
       fprintf oc"	.section	%s\n" (name_of_section Section_debug_info);

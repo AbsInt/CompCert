@@ -78,6 +78,8 @@ let end_addr = ref (-1)
 
 let stmt_list_addr = ref (-1)
 
+let debug_start_addr = ref (-1)
+
 let label = elf_label
 
 module Linux_System : SYSTEM =
@@ -241,6 +243,9 @@ module Diab_System : SYSTEM =
           let label_start = new_label () in
           start_addr := label_start;
           fprintf oc "%a:\n" label label_start;
+          let d_start = new_label() in
+          debug_start_addr := d_start;
+          fprintf oc "	.0byte	%a\n" label d_start;
           fprintf oc "	.d2_line_start	.debug_line\n";
         end
 
@@ -284,6 +289,7 @@ module Diab_System : SYSTEM =
                 fprintf oc "	.section	%s,,n\n" name;
                 fprintf oc "	.sectionlink	.debug_line\n";
                 section oc sec;
+                fprintf oc "	.0byte	%a\n" label !debug_start_addr;
                 fprintf oc "	.d2_line_start	%s\n" name
               end
         | _ -> () (* Only the case of a user section is interresting *)
@@ -855,6 +861,8 @@ module Target (System : SYSTEM):TARGET =
     let get_end_addr () = !end_addr
 
     let get_stmt_list_addr () = !stmt_list_addr
+
+    let get_debug_start_addr () = !debug_start_addr
 
     module DwarfAbbrevs = DwarfUtil.DefaultAbbrevs
 

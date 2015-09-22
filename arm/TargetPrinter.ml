@@ -905,6 +905,8 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
     let get_end_addr () = -1 (* Dummy constant *)
 
     let get_stmt_list_addr () = -1 (* Dummy constant *)
+        
+    let get_debug_start_addr () = -1 (* Dummy constant *)
 
     module DwarfAbbrevs = DwarfUtil.DefaultAbbrevs (* Dummy Abbrev types *)
         

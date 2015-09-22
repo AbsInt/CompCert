@@ -217,8 +217,11 @@ let add_lineno ctx prev_loc this_loc s =
 (* Variable declaration annotation:
       __builtin_debug(6, var, scope)  *)
 
+let curr_fun_id = ref 0
+
 let debug_var_decl ctx id ty =
   let scope = match ctx with [] -> 0 | sc :: _ -> sc in
+  Debug.add_lvar_scope !curr_fun_id id scope;
   debug_annot 6L
     [ {edesc = EVar id; etyp = ty}; integer_const scope ]
 
@@ -226,13 +229,6 @@ let add_var_decl ctx id ty s =
   if !Clflags.option_g
   then sseq no_loc (debug_var_decl ctx id ty) s
   else s
-
-let add_param_decls params body =
-  if !Clflags.option_g then
-    List.fold_right
-      (fun (id, ty) s -> sseq no_loc (debug_var_decl [] id ty) s)
-      params body
-  else body
 
 (* Generate fresh scope identifiers, for blocks that contain at least
    one declaration *)
@@ -313,7 +309,10 @@ let rec unblock_stmt env ctx ploc s =
   | Sblock sl ->
       let ctx' =
         if block_contains_decl sl
-        then new_scope_id () :: ctx
+        then
+          let id = new_scope_id () in
+          Debug.enter_scope !curr_fun_id (List.hd ctx) id;
+          id:: ctx
         else ctx in
       unblock_block env ctx' ploc sl
   | Sdecl d ->
@@ -342,8 +341,11 @@ and unblock_block env ctx ploc = function
 let unblock_fundef env f =
   local_variables := [];
   next_scope_id := 0;
+  curr_fun_id := f.fd_name.stamp;
+  let id = new_scope_id () in
+  Debug.enter_function_scope f.fd_name id;
   let body =
-    add_param_decls f.fd_params (unblock_stmt env [] no_loc f.fd_body) in
+    (unblock_stmt env [id] no_loc f.fd_body) in
   let decls = !local_variables in
   local_variables := [];
   { f with fd_locals = f.fd_locals @ decls; fd_body = body }

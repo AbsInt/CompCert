@@ -15,6 +15,7 @@
 
 val print_idents_in_full : bool ref
 val print_line_numbers : bool ref
+val print_debug_idents : bool ref
 
 val location : Format.formatter -> C.location -> unit
 val attributes : Format.formatter -> C.attributes -> unit

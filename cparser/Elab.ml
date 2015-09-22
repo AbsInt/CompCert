@@ -2227,7 +2227,7 @@ and elab_block_body env ctx sl =
       let (dcl, env') = elab_definition true env def in
       let loc = elab_loc (get_definitionloc def) in
       List.map (fun ((sto,id,ty,_) as d) ->
-        Debug.insert_local_declaration (-1) sto id ty loc;(* Dummy scope *)
+        Debug.insert_local_declaration sto id ty loc;
         {sdesc = Sdecl d; sloc = loc}) dcl
       @ elab_block_body env' ctx sl1
   | s :: sl1 ->

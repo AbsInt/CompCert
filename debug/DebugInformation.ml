@@ -136,10 +136,9 @@ let lookup_types: (string, int) Hashtbl.t = Hashtbl.create 7
 let typ_to_string (ty: typ) =
   let buf = Buffer.create 7 in
   let chan = Format.formatter_of_buffer buf in
-  let old = !Cprint.print_idents_in_full in
-  Cprint.print_idents_in_full := true;
+  Cprint.print_debug_idents := true;
   Cprint.typ chan ty;
-  Cprint.print_idents_in_full := old;
+  Cprint.print_debug_idents := false;
   Format.pp_print_flush chan ();
   Buffer.contents buf
 
@@ -436,8 +435,10 @@ let stamp_to_local: (int,int) Hashtbl.t = Hashtbl.create 7
 (* Mapping form atom to the debug id of the local variable *)
 let atom_to_local: (atom, int) Hashtbl.t = Hashtbl.create 7
 
-(* Map from scope id to debug id *)
-let scope_to_local: (int,int) Hashtbl.t = Hashtbl.create 7
+(* Map from scope id + function id to debug id *)
+let scope_to_local: (int * int,int) Hashtbl.t = Hashtbl.create 7
+
+(* Map from scope id + function atom to debug id *)
 
 let find_lvar_stamp id =
   let id = (Hashtbl.find stamp_to_local id) in
@@ -450,8 +451,8 @@ let replace_lvar id var =
   let var = LocalVariable var in
   Hashtbl.replace local_variables id var
 
-let find_scope_id id =
-  let id = (Hashtbl.find scope_to_local id) in
+let find_scope_id fid id =
+  let id = Hashtbl.find scope_to_local (fid,id) in
   let v = Hashtbl.find local_variables id in
   match v with
   | Scope v -> id,v
@@ -614,14 +615,15 @@ let atom_local_variable id atom =
     Hashtbl.add atom_to_local atom id
   with Not_found -> ()
 
-let add_lvar_scope var_id s_id =
+let add_lvar_scope f_id var_id s_id =
   try
-    let s_id',scope = find_scope_id s_id in
+    let s_id',scope = find_scope_id f_id s_id in
+    let var_id,_ = find_lvar_stamp var_id.stamp in 
     replace_scope s_id' ({scope_variables = var_id::scope.scope_variables;})
   with Not_found -> ()
 
-let insert_local_declaration scope sto id ty loc =
-  let ty = find_type ty in
+let insert_local_declaration sto id ty loc =
+  let ty = insert_type ty in
   let var = {
     lvar_name = id.name;
     lvar_atom = None;
@@ -631,27 +633,26 @@ let insert_local_declaration scope sto id ty loc =
   } in
   let id' = next_id () in
   Hashtbl.add local_variables id' (LocalVariable var);
-  Hashtbl.add stamp_to_local id.stamp id';
-  add_lvar_scope id' scope
+  Hashtbl.add stamp_to_local id.stamp id'
 
-let new_scope sc_id =
+let new_scope f_id sc_id =
   let scope = {scope_variables = [];} in
   let id = next_id () in
   Hashtbl.add local_variables id (Scope scope);
-  Hashtbl.add scope_to_local sc_id id;
+  Hashtbl.add scope_to_local (f_id,sc_id) id;
   id
 
 let enter_function_scope fun_id sc_id =
   try
-    let id = new_scope sc_id in
+    let id = new_scope fun_id.stamp sc_id in
     let fun_id,f = find_fun_stamp fun_id.stamp in
     replace_fun id ({f with fun_scope = Some id})
   with Not_found -> ()
 
-let enter_scope p_id id =
+let enter_scope f_id p_id id =
   try
-    let id' = new_scope id in
-    let p_id',scope = find_scope_id p_id in
+    let id' = new_scope f_id id in
+    let p_id',scope = find_scope_id f_id p_id in
     replace_scope p_id' ({scope_variables = id'::scope.scope_variables;})
   with Not_found  -> ()
 
