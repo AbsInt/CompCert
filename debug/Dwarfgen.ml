@@ -305,7 +305,17 @@ and local_to_entry acc id =
   | LocalVariable v -> local_variable_to_entry acc v id
   | Scope v -> scope_to_entry acc v id
 
+let fun_scope_to_entries acc id =
+  match id with
+  | None -> [],acc
+  | Some id ->
+      let sc = Hashtbl.find local_variables id in
+      (match sc with
+      | Scope sc ->mmap local_to_entry acc sc.scope_variables
+      | _ -> assert false)
+
 let function_to_entry acc id f =
+  Printf.printf "Generating information for %s with id %d\n" f.fun_name id;
   let f_tag = {
     subprogram_file_loc = f.fun_file_loc;
     subprogram_external = Some f.fun_external;
@@ -318,8 +328,8 @@ let function_to_entry acc id f =
   let acc = match f.fun_return_type with Some s -> IntSet.add s acc | None -> acc in
   let f_entry =  new_entry id (DW_TAG_subprogram f_tag) in
   let params,acc = mmap function_parameter_to_entry acc f.fun_parameter in
-(* let vars = List.map local_variable_to_entry f.fun_locals in*)
-  add_children f_entry params,acc
+  let vars,acc = fun_scope_to_entries acc f.fun_scope in
+  add_children f_entry (params@vars),acc
      
 let definition_to_entry acc id t =
   match t with
@@ -327,7 +337,7 @@ let definition_to_entry acc id t =
   | Function f -> function_to_entry acc id f
 
 let gen_defs () =
-  let defs,typ = Hashtbl.fold (fun id t (acc,bcc) ->  let t,bcc = definition_to_entry bcc id t in
+  let defs,typ = Hashtbl.fold (fun id t (acc,bcc) -> let t,bcc = definition_to_entry bcc id t in
   t::acc,bcc) definitions ([],IntSet.empty) in
   List.rev defs,typ
 

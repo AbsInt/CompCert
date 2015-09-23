@@ -439,6 +439,7 @@ let atom_to_local: (atom, int) Hashtbl.t = Hashtbl.create 7
 let scope_to_local: (int * int,int) Hashtbl.t = Hashtbl.create 7
 
 (* Map from scope id + function atom to debug id *)
+let atom_to_scope: (atom, int) Hashtbl.t = Hashtbl.create 7
 
 let find_lvar_stamp id =
   let id = (Hashtbl.find stamp_to_local id) in
@@ -477,6 +478,7 @@ let insert_global_declaration env dec=
   in
   match dec.gdesc with
   | Gdecl (sto,id,ty,init) ->
+      Printf.printf "Entering information for %s\n" id.name;
       if  not (is_function_type env ty) then begin
         if not (Hashtbl.mem stamp_to_definition id.stamp)  then begin
           let at_decl,ext = (match sto with
@@ -644,9 +646,9 @@ let new_scope f_id sc_id =
 
 let enter_function_scope fun_id sc_id =
   try
-    let id = new_scope fun_id.stamp sc_id in
-    let fun_id,f = find_fun_stamp fun_id.stamp in
-    replace_fun id ({f with fun_scope = Some id})
+    let id = new_scope fun_id sc_id in
+    let fun_id,f = find_fun_stamp fun_id in
+    replace_fun fun_id ({f with fun_scope = Some id})
   with Not_found -> ()
 
 let enter_scope f_id p_id id =

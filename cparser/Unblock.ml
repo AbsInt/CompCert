@@ -255,6 +255,7 @@ let new_scope_id () =
 let process_decl loc env ctx (sto, id, ty, optinit) k =
   let ty' = remove_const env ty in
   local_variables := (sto, id, ty', None) :: !local_variables;
+  debug_var_decl ctx id;
   (* TODO: register the fact that id is declared in scope ctx *)
   match optinit with
   | None ->

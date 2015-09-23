@@ -33,7 +33,7 @@ type implem =
      mutable insert_local_declaration:  storage -> ident -> typ -> location -> unit;
      mutable atom_local_variable: ident -> atom -> unit;
      mutable enter_scope: int -> int -> int -> unit;
-     mutable enter_function_scope: ident -> int -> unit;
+     mutable enter_function_scope: int -> int -> unit;
      mutable add_lvar_scope: int -> ident -> int -> unit;
    }
 

@@ -29,5 +29,5 @@ val all_files_iter: (string -> unit) -> unit
 val insert_local_declaration: storage -> ident -> typ -> location -> unit
 val atom_local_variable: ident -> atom -> unit
 val enter_scope: int -> int -> int -> unit
-val enter_function_scope: ident -> int -> unit
+val enter_function_scope: int -> int -> unit
 val add_lvar_scope: int -> ident -> int -> unit

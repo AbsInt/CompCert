@@ -269,8 +269,11 @@ module Diab_System : SYSTEM =
             fprintf oc ".L%d:	.d2filenum \"%s\"\n" label file);
           fprintf oc "	.d2_line_end\n";
           StringSet.iter (fun s ->
-            fprintf oc "	%s\n" s;
-            fprintf oc "	.d2_line_end\n") !additional_debug_sections
+            if s <> (name_of_section Section_text) then
+              begin
+                fprintf oc "	%s\n" s;
+                fprintf oc "	.d2_line_end\n"
+              end) !additional_debug_sections
         end
 
     let print_file_loc oc (file,col) =
@@ -282,7 +285,7 @@ module Diab_System : SYSTEM =
         match sec with
         | Section_user (name,_,_)  ->
             let sec_name = name_of_section sec in
-            if not (StringSet.mem sec_name !additional_debug_sections) then
+            if not (StringSet.mem sec_name !additional_debug_sections) && name <> ".text" then
               begin
                 let name = ".debug_line"^name in
                 additional_debug_sections := StringSet.add sec_name !additional_debug_sections;
