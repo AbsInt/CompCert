@@ -439,7 +439,7 @@ let atom_to_local: (atom, int) Hashtbl.t = Hashtbl.create 7
 let scope_to_local: (int * int,int) Hashtbl.t = Hashtbl.create 7
 
 (* Map from scope id + function atom to debug id *)
-let atom_to_scope: (atom, int) Hashtbl.t = Hashtbl.create 7
+let atom_to_scope: (atom * int, int) Hashtbl.t = Hashtbl.create 7
 
 let find_lvar_stamp id =
   let id = (Hashtbl.find stamp_to_local id) in
@@ -599,9 +599,11 @@ let atom_global_variable id atom =
     
 let atom_function id atom =
   try
-    let id,f = find_fun_stamp id.stamp in
-    replace_fun id ({f with fun_atom = Some atom;});
-    Hashtbl.add atom_to_definition atom id
+    let id',f = find_fun_stamp id.stamp in
+    replace_fun id' ({f with fun_atom = Some atom;});
+    Hashtbl.add atom_to_definition atom id';
+    Hashtbl.iter (fun (fid,sid) tid -> if fid = id.stamp then 
+      Hashtbl.add atom_to_scope (atom,sid) tid) scope_to_local
   with Not_found -> ()
     
 let add_fun_addr atom (high,low) =
