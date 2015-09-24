@@ -10,9 +10,11 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+open AST
 open C
 open Camlcoq
 open DwarfTypes
+open BinNums
 
 
 val init: unit -> unit
@@ -31,3 +33,8 @@ val atom_local_variable: ident -> atom -> unit
 val enter_scope: int -> int -> int -> unit
 val enter_function_scope: int -> int -> unit
 val add_lvar_scope: int -> ident -> int -> unit
+val open_scope: atom -> int -> positive -> unit
+val close_scope: atom -> int -> positive -> unit
+val start_live_range: atom -> positive -> string builtin_arg -> unit
+val end_live_range: atom -> positive -> unit
+val stack_variable: atom -> string builtin_arg -> unit

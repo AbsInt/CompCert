@@ -478,7 +478,6 @@ let insert_global_declaration env dec=
   in
   match dec.gdesc with
   | Gdecl (sto,id,ty,init) ->
-      Printf.printf "Entering information for %s\n" id.name;
       if  not (is_function_type env ty) then begin
         if not (Hashtbl.mem stamp_to_definition id.stamp)  then begin
           let at_decl,ext = (match sto with
@@ -660,6 +659,21 @@ let enter_scope f_id p_id id =
     replace_scope p_id' ({scope_variables = id'::scope.scope_variables;})
   with Not_found  -> ()
 
+let open_scope atom s_id lbl =
+  ()
+
+let close_scope atom s_id lbl =
+  ()
+
+let start_live_range atom lbl loc =
+  ()
+
+let end_live_range atom lbl =
+  ()
+
+let stack_variable atom loc =
+  ()
+
 let init name =
   id := 0;
   file_name := name;
@@ -672,4 +686,3 @@ let init name =
   Hashtbl.reset stamp_to_local;
   Hashtbl.reset atom_to_local;
   Hashtbl.reset scope_to_local;
-  

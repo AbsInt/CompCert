@@ -315,7 +315,6 @@ let fun_scope_to_entries acc id =
       | _ -> assert false)
 
 let function_to_entry acc id f =
-  Printf.printf "Generating information for %s with id %d\n" f.fun_name id;
   let f_tag = {
     subprogram_file_loc = f.fun_file_loc;
     subprogram_external = Some f.fun_external;

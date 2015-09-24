@@ -10,6 +10,8 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+open AST
+open BinNums
 open C
 open Camlcoq
 open Dwarfgen
@@ -35,6 +37,11 @@ type implem =
      mutable enter_scope: int -> int -> int -> unit;
      mutable enter_function_scope: int -> int -> unit;
      mutable add_lvar_scope: int -> ident -> int -> unit;
+     mutable open_scope: atom -> int -> positive -> unit;
+     mutable close_scope: atom -> int -> positive -> unit;
+     mutable start_live_range: atom -> positive -> string builtin_arg -> unit;
+     mutable end_live_range: atom -> positive -> unit;
+     mutable stack_variable: atom -> string builtin_arg -> unit
    }
 
 let implem =
@@ -54,6 +61,11 @@ let implem =
    enter_scope = (fun _ _ _  -> ());
    enter_function_scope = (fun _ _ -> ());
    add_lvar_scope = (fun _ _ _ -> ());
+   open_scope = (fun _ _ _ -> ());
+   close_scope = (fun _ _ _ -> ());
+   start_live_range = (fun _ _ _ -> ());
+   end_live_range = (fun _ _ -> ());
+   stack_variable = (fun _ _ -> ());
 }
 
 let init () =
@@ -73,6 +85,11 @@ let init () =
     implem.enter_scope <- DebugInformation.enter_scope;
     implem.enter_function_scope <- DebugInformation.enter_function_scope;
     implem.add_lvar_scope <- DebugInformation.add_lvar_scope;
+    implem.open_scope <- DebugInformation.open_scope;
+    implem.close_scope <- DebugInformation.close_scope;
+    implem.start_live_range <- DebugInformation.start_live_range;
+    implem.end_live_range <- DebugInformation.end_live_range;
+    implem.stack_variable <- DebugInformation.stack_variable;
   end else begin
     implem.init <- (fun _ -> ());
     implem.atom_function <- (fun _ _ -> ());
@@ -89,6 +106,11 @@ let init () =
     implem.enter_scope <- (fun _ _  _ -> ());
     implem.enter_function_scope <- (fun _ _ -> ());
     implem.add_lvar_scope <- (fun _ _ _ -> ());
+    implem.open_scope <- (fun _ _ _ -> ());
+    implem.close_scope <- (fun _ _ _ -> ());
+    implem.start_live_range <- (fun _ _ _ -> ());
+    implem.end_live_range <- (fun _ _ -> ());
+    implem.stack_variable <- (fun _ _ -> ());
   end
 
 let init_compile_unit name = implem.init name
@@ -106,3 +128,8 @@ let atom_local_variable id atom = implem.atom_local_variable id atom
 let enter_scope p_id id = implem.enter_scope p_id id
 let enter_function_scope fun_id sc_id = implem.enter_function_scope fun_id sc_id
 let add_lvar_scope fun_id var_id s_id = implem.add_lvar_scope fun_id var_id s_id
+let open_scope atom id lbl = implem.open_scope atom id lbl
+let close_scope atom id lbl = implem.close_scope atom id lbl
+let start_live_range atom lbl loc = implem.start_live_range atom lbl loc
+let end_live_range atom lbl = implem.end_live_range atom lbl
+let stack_variable atom loc = implem.stack_variable atom loc

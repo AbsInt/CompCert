@@ -512,7 +512,7 @@ let num_crbit = function
   | CRbit_3 -> 3
   | CRbit_6 -> 6
 
-let expand_instruction instr =
+let expand_instruction_simple instr =
   match instr with
   | Pallocframe(sz, ofs,retofs) ->
       let variadic = (!current_function).fn_sig.sig_cc.cc_vararg in
@@ -586,22 +586,119 @@ let expand_instruction instr =
   | _ ->
       emit instr
 
-let expand_function fn =
+let preg_to_string p =
+  ""
+
+let rec translate_annot a =
+  match a with
+  | BA x -> BA (preg_to_string x)
+  | BA_int n -> BA_int n
+  | BA_long n -> BA_long n
+  | BA_float n -> BA_float n
+  | BA_single n -> BA_single n
+  | BA_loadstack (chunk,ofs) -> BA_loadstack (chunk,ofs)
+  | BA_addrstack ofs -> BA_addrstack ofs
+  | BA_loadglobal (chunk,id,ofs) -> BA_loadglobal (chunk,id,ofs) 
+  | BA_addrglobal (id,ofs) -> BA_addrglobal  (id,ofs)
+  | BA_splitlong (hi,lo) -> BA_splitlong (translate_annot hi,translate_annot lo)
+
+let expand_stack_loc txt = function
+  | [a] -> Debug.stack_variable txt (translate_annot a)
+  | _ -> assert false
+
+let expand_start_live_range txt lbl = function
+  | [a] -> Debug.start_live_range txt lbl (translate_annot a)
+  | _ -> assert false
+
+let expand_end_live_range =
+  Debug.end_live_range
+
+let expand_scope id lbl oldscopes newscopes =
+  let opening = List.filter (fun a -> List.mem a oldscopes) newscopes
+  and closing = List.filter (fun a -> List.mem a newscopes) oldscopes in
+  List.iter (fun i -> Debug.open_scope id i lbl) opening;
+  List.iter (fun i -> Debug.close_scope id i lbl) closing
+
+let expand_instruction id l =
+  let get_lbl = function
+    | None -> 
+        let lbl = new_label () in
+        emit (Plabel lbl);
+        lbl
+    | Some lbl -> lbl in
+  let rec aux lbl scopes = function
+    | [] -> ()
+    | (Pbuiltin(EF_debug (kind,txt,_x),args,_) as i)::rest ->
+        let kind = (P.to_int kind) in
+        begin
+          match kind with
+          | 1 -> 
+              emit i; aux lbl scopes rest
+          | 2 ->
+              aux  lbl scopes rest
+          | 3 ->
+              let lbl = get_lbl lbl in
+              expand_start_live_range txt lbl args;
+              aux (Some lbl) scopes rest
+          | 4 ->
+              let lbl = get_lbl lbl in
+              expand_end_live_range txt lbl;
+              aux (Some lbl) scopes rest
+          | 5 -> 
+              expand_stack_loc txt args;
+              aux lbl scopes rest
+          | 6 ->
+              let lbl = get_lbl lbl in
+              let scopes' = List.map (function BA_int x -> Int32.to_int (camlint_of_coqint x) | _ -> assert false) args in
+              expand_scope id lbl scopes scopes';
+              aux (Some lbl) scopes' rest
+          | _ ->
+              emit i; aux None scopes rest
+        end
+    | i::rest -> expand_instruction_simple i; aux None scopes rest in
+  aux None [] l
+      
+
+let expand_function id fn =
   try
     set_current_function fn;
-    List.iter expand_instruction fn.fn_code;
+    if !Clflags.option_g then
+      expand_instruction id fn.fn_code
+    else
+      List.iter expand_instruction_simple fn.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->
     Errors.Error (Errors.msg (coqstring_of_camlstring s))
 
-let expand_fundef = function
+let expand_fundef id = function
   | Internal f ->
-      begin match expand_function f with
+      begin match expand_function id f with
       | Errors.OK tf -> Errors.OK (Internal tf)
       | Errors.Error msg -> Errors.Error msg
       end
   | External ef ->
       Errors.OK (External ef)
 
+let rec transform_partial_prog transfun p =
+  match p with
+  | [] -> Errors.OK []
+  | (id,Gvar v)::l ->
+      (match transform_partial_prog transfun l with
+      | Errors.OK x -> Errors.OK ((id,Gvar v)::x)
+      | Errors.Error msg -> Errors.Error msg)
+  | (id,Gfun f)::l ->
+      (match transfun id f with
+      | Errors.OK tf ->
+          (match transform_partial_prog transfun l with
+          | Errors.OK x -> Errors.OK ((id,Gfun tf)::x)
+          | Errors.Error msg -> Errors.Error msg)
+      | Errors.Error msg ->
+          Errors.Error ((Errors.MSG (coqstring_of_camlstring "In function"))::((Errors.CTX
+          id) :: (Errors.MSG (coqstring_of_camlstring ": ") :: msg))))
+
 let expand_program (p: Asm.program) : Asm.program Errors.res =
-  AST.transform_partial_program expand_fundef p
+  match transform_partial_prog expand_fundef p.prog_defs with
+  | Errors.OK x-> 
+      Errors.OK { prog_defs = x; prog_public = p.prog_public; prog_main =
+      p.prog_main }
+  | Errors.Error msg -> Errors.Error msg
