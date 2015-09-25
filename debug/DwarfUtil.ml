@@ -76,6 +76,13 @@ let dw_form_ref8     = 0x14
 let dw_ref_udata     = 0x15
 let dw_ref_indirect  = 0x16
 
+(* Operation encoding *)
+let dw_op_addr = 0x3
+let dw_op_plus_uconst = 0x23
+let dw_op_bregx = 0x92
+let dw_op_piece = 0x93
+
+
 (* Default corresponding encoding for the different abbreviations *)
 module DefaultAbbrevs =
   struct
@@ -100,7 +107,7 @@ module DefaultAbbrevs =
     let artificial_type_abbr = dw_form_flag
     let variable_parameter_type_abbr = dw_form_flag
     let bit_size_type_abbr = dw_form_data1
-    let location_const_type_abbr = dw_form_data4
+    let location_ref_type_abbr = dw_form_data4
     let location_block_type_abbr = dw_form_block
     let data_location_block_type_abbr = dw_form_block
     let data_location_ref_type_abbr = dw_form_ref4

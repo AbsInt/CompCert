@@ -12,8 +12,9 @@
 
 (* Types used for writing dwarf debug information *)
 
-open Sections
+open BinNums
 open Camlcoq
+open Sections
 
 (* Basic types for the value of attributes *)
 
@@ -39,16 +40,17 @@ type block = string
 
 type location_expression =
   | DW_OP_plus_uconst of constant
-  | DW_OP
-
+  | DW_OP_bregx of int * int32
+  | DW_OP_piece of int
 
 type location_value =
   | LocSymbol of atom
-  | LocConst of constant
-  | LocBlock of block
-
+  | LocRef of address
+  | LocSimple of location_expression
+  | LocList of location_expression list
+        
 type data_location_value =
-  | DataLocBlock of location_expression list
+  | DataLocBlock of location_expression
   | DataLocRef of reference
 
 type bound_value =
@@ -233,6 +235,14 @@ type dw_entry =
      id:       reference;
    }
 
+(* The type for the location list. *)
+type location_entry =
+    {
+     loc:     (int * int * location_value) list;
+     loc_id:  reference;
+   }
+type dw_locations = location_entry list
+
 (* Module type for a matching from type to dwarf encoding *)
 module type DWARF_ABBREVS =
   sig
@@ -257,7 +267,7 @@ module type DWARF_ABBREVS =
     val artificial_type_abbr: int
     val variable_parameter_type_abbr: int
     val bit_size_type_abbr: int
-    val location_const_type_abbr: int
+    val location_ref_type_abbr: int
     val location_block_type_abbr: int
     val data_location_block_type_abbr: int
     val data_location_ref_type_abbr: int

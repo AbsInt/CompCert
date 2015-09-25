@@ -10,7 +10,9 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+open AST
 open C
+open Camlcoq
 open Cutil
 open DebugInformation
 open DwarfTypes
@@ -162,7 +164,7 @@ let member_to_entry mem =
     member_data_member_location =
     (match mem.cfd_byte_offset with 
     | None -> None 
-    | Some s -> Some (DataLocBlock [DW_OP_plus_uconst s]));
+    | Some s -> Some (DataLocBlock (DW_OP_plus_uconst s)));
     member_declaration = None;
     member_name = Some (mem.cfd_name);
     member_type = mem.cfd_typ;
@@ -280,38 +282,66 @@ let function_parameter_to_entry acc p =
   } in
   new_entry (next_id ()) (DW_TAG_formal_parameter p),IntSet.add p.formal_parameter_type acc
 
-let rec local_variable_to_entry acc v id =
+let rec local_variable_to_entry f_id acc v id =
+  let loc = try
+    begin 
+      match (Hashtbl.find var_locations (get_opt_val v.lvar_atom)) with
+      | FunctionLoc (a,BA_addrstack (ofs)) ->
+          let ofs = camlint_of_coqint ofs in
+          Some (LocSimple (DW_OP_bregx (a,ofs)))
+      | FunctionLoc (a,BA_splitlong ((BA_addrstack hi),(BA_addrstack lo))) ->
+          let hi = camlint_of_coqint hi 
+          and lo = camlint_of_coqint lo in
+          if lo = Int32.add hi 4l then
+            Some (LocSimple (DW_OP_bregx (a,hi)))
+          else
+            Some (LocList [DW_OP_bregx (a,hi);DW_OP_piece 4;DW_OP_bregx (a,lo);DW_OP_piece 4])
+      | _ -> None
+    end
+  with Not_found -> None in
   let var = {
     variable_file_loc = v.lvar_file_loc;
     variable_declaration = None;
     variable_external = None;
     variable_name = v.lvar_name;
     variable_type = v.lvar_type;
-    variable_location = None;
+    variable_location = loc;
   } in
   new_entry id (DW_TAG_variable var),IntSet.add v.lvar_type acc
 
-and scope_to_entry acc sc id =
+and scope_to_entry f_id acc sc id =
+  let l_pc,h_pc = try
+    let r = Hashtbl.find scope_ranges id in
+    let lbl l = match l with 
+    | Some l -> Some (Hashtbl.find label_translation (f_id,l)) 
+    | None -> None in
+    begin
+      match r with
+      | [] -> None,None
+      | [a] -> lbl a.start_addr, lbl a.end_addr
+      | a::rest -> lbl (List.hd (List.rev rest)).start_addr,lbl a.end_addr
+    end
+  with Not_found -> None,None in
   let scope = {
-    lexical_block_high_pc = None;
-    lexical_block_low_pc = None;
+    lexical_block_high_pc = h_pc;
+    lexical_block_low_pc = l_pc;
   } in
-  let vars,acc = mmap local_to_entry acc sc.scope_variables in
+  let vars,acc = mmap (local_to_entry f_id) acc sc.scope_variables in
   let entry = new_entry id (DW_TAG_lexical_block scope) in
   add_children entry vars,acc
 
-and local_to_entry acc id =
+and local_to_entry f_id acc id =
   match Hashtbl.find local_variables id with
-  | LocalVariable v -> local_variable_to_entry acc v id
-  | Scope v -> scope_to_entry acc v id
+  | LocalVariable v -> local_variable_to_entry f_id acc v id
+  | Scope v -> scope_to_entry f_id acc v id
 
-let fun_scope_to_entries acc id =
+let fun_scope_to_entries f_id acc id =
   match id with
   | None -> [],acc
   | Some id ->
       let sc = Hashtbl.find local_variables id in
       (match sc with
-      | Scope sc ->mmap local_to_entry acc sc.scope_variables
+      | Scope sc ->mmap (local_to_entry f_id) acc sc.scope_variables
       | _ -> assert false)
 
 let function_to_entry acc id f =
@@ -324,10 +354,11 @@ let function_to_entry acc id f =
     subprogram_high_pc = f.fun_high_pc;
     subprogram_low_pc = f.fun_low_pc;
   } in
+  let f_id = get_opt_val f.fun_atom in
   let acc = match f.fun_return_type with Some s -> IntSet.add s acc | None -> acc in
   let f_entry =  new_entry id (DW_TAG_subprogram f_tag) in
   let params,acc = mmap function_parameter_to_entry acc f.fun_parameter in
-  let vars,acc = fun_scope_to_entries acc f.fun_scope in
+  let vars,acc = fun_scope_to_entries f_id acc f.fun_scope in
   add_children f_entry (params@vars),acc
      
 let definition_to_entry acc id t =
@@ -340,10 +371,10 @@ let gen_defs () =
   t::acc,bcc) definitions ([],IntSet.empty) in
   List.rev defs,typ
 
-let gen_debug_info () =
+let gen_debug_info () : dw_entry * dw_locations=
   let cp =  {
     compile_unit_name = !file_name;
   } in
   let cp = new_entry (next_id ()) (DW_TAG_compile_unit cp) in
   let defs,ty = gen_defs () in
-  add_children cp ((gen_types ty) @ defs)
+  add_children cp ((gen_types ty) @ defs),[]

@@ -30,7 +30,7 @@ type implem =
      mutable set_bitfield_offset: ident -> string -> int -> string -> int -> unit;
      mutable insert_global_declaration: Env.t -> globdecl -> unit;
      mutable add_fun_addr: atom -> (int * int) -> unit;
-     mutable generate_debug_info: unit -> dw_entry option;
+     mutable generate_debug_info: unit -> (dw_entry * dw_locations) option;
      mutable all_files_iter: (string -> unit) -> unit;
      mutable insert_local_declaration:  storage -> ident -> typ -> location -> unit;
      mutable atom_local_variable: ident -> atom -> unit;
@@ -39,9 +39,11 @@ type implem =
      mutable add_lvar_scope: int -> ident -> int -> unit;
      mutable open_scope: atom -> int -> positive -> unit;
      mutable close_scope: atom -> int -> positive -> unit;
-     mutable start_live_range: atom -> positive -> string builtin_arg -> unit;
+     mutable start_live_range: atom -> positive -> int * int builtin_arg -> unit;
      mutable end_live_range: atom -> positive -> unit;
-     mutable stack_variable: atom -> string builtin_arg -> unit
+     mutable stack_variable: atom -> int * int builtin_arg -> unit;
+     mutable function_end: atom -> positive -> unit;
+     mutable add_label: atom -> positive -> int -> unit;
    }
 
 let implem =
@@ -66,6 +68,8 @@ let implem =
    start_live_range = (fun _ _ _ -> ());
    end_live_range = (fun _ _ -> ());
    stack_variable = (fun _ _ -> ());
+   function_end = (fun _ _ -> ());
+   add_label = (fun _ _ _ -> ());
 }
 
 let init () =
@@ -90,6 +94,8 @@ let init () =
     implem.start_live_range <- DebugInformation.start_live_range;
     implem.end_live_range <- DebugInformation.end_live_range;
     implem.stack_variable <- DebugInformation.stack_variable;
+    implem.function_end <- DebugInformation.function_end;
+    implem.add_label <- DebugInformation.add_label;
   end else begin
     implem.init <- (fun _ -> ());
     implem.atom_function <- (fun _ _ -> ());
@@ -111,6 +117,8 @@ let init () =
     implem.start_live_range <- (fun _ _ _ -> ());
     implem.end_live_range <- (fun _ _ -> ());
     implem.stack_variable <- (fun _ _ -> ());
+    implem.function_end <- (fun _ _ -> ());
+    implem.add_label <- (fun _ _ _ -> ());
   end
 
 let init_compile_unit name = implem.init name
@@ -133,3 +141,5 @@ let close_scope atom id lbl = implem.close_scope atom id lbl
 let start_live_range atom lbl loc = implem.start_live_range atom lbl loc
 let end_live_range atom lbl = implem.end_live_range atom lbl
 let stack_variable atom loc = implem.stack_variable atom loc
+let function_end atom loc = implem.function_end atom loc
+let add_label atom p lbl = implem.add_label atom p lbl

@@ -10,6 +10,8 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+open AST
+open BinNums
 open C
 open Camlcoq
 open Cutil
@@ -659,20 +661,94 @@ let enter_scope f_id p_id id =
     replace_scope p_id' ({scope_variables = id'::scope.scope_variables;})
   with Not_found  -> ()
 
+
+type scope_range =
+    {
+     start_addr: positive option;
+     end_addr: positive option;
+   }
+
+type var_range =
+    {
+     range_start: positive option;
+     range_end:   positive option;
+     var_loc:     int * int builtin_arg;
+   }
+
+type var_location =
+  | RangeLoc of var_range list
+  | FunctionLoc of  int * int builtin_arg (* Stack allocated variables *)
+
+let var_locations: (atom,var_location) Hashtbl.t = Hashtbl.create 7
+
+let scope_ranges: (int,scope_range list) Hashtbl.t = Hashtbl.create 7
+
+let label_translation: (atom * positive, int) Hashtbl.t = Hashtbl.create 7
+
+let add_label atom p i =
+  Hashtbl.add label_translation (atom,p) i
+
+(* Auxiliary data structures and functions *)
+module IntSet = Set.Make(struct
+  type t = int
+  let compare (x:int) (y:int) = compare x y
+end)
+
+let open_scopes: IntSet.t ref = ref IntSet.empty
+
 let open_scope atom s_id lbl =
-  ()
+  try
+    let s_id = Hashtbl.find atom_to_scope (atom,s_id) in
+    let old_r = try Hashtbl.find scope_ranges s_id with Not_found -> [] in
+    let n_scop = { start_addr = Some lbl; end_addr = None;} in
+    open_scopes := IntSet.add s_id !open_scopes;
+    Hashtbl.replace scope_ranges s_id (n_scop::old_r)
+  with Not_found -> ()
 
 let close_scope atom s_id lbl =
-  ()
+  try
+    let s_id = Hashtbl.find atom_to_scope (atom,s_id) in
+    let old_r = try Hashtbl.find scope_ranges s_id with Not_found -> [] in
+    let last_r,rest = 
+      begin
+        match old_r with
+        | a::rest -> a,rest
+        | _ -> assert false (* We must have an opening scope *)
+      end in
+    let new_r = ({last_r with end_addr = Some lbl;})::rest in
+    open_scopes := IntSet.remove s_id !open_scopes;
+    Hashtbl.replace scope_ranges s_id new_r
+  with Not_found -> ()
 
 let start_live_range atom lbl loc =
-  ()
+  try
+    let old_r = Hashtbl.find var_locations atom in
+    match old_r with
+    | RangeLoc old_r ->
+        let n_r = { range_start = Some lbl; range_end = None; var_loc = loc } in
+        Hashtbl.replace var_locations atom (RangeLoc (n_r::old_r))
+    | _ -> assert false
+  with Not_found -> ()
+
 
 let end_live_range atom lbl =
-  ()
+  try
+    let old_r = Hashtbl.find var_locations atom in
+    match old_r with
+    | RangeLoc (n_r::old_r) ->
+        let n_r = {n_r with  range_end = Some lbl} in
+        Hashtbl.replace var_locations atom (RangeLoc (n_r::old_r))
+    | _ -> assert false
+  with Not_found -> ()
+  
 
-let stack_variable atom loc =
-  ()
+let stack_variable atom (sp,loc) =
+  Hashtbl.add var_locations atom (FunctionLoc (sp,loc))
+
+let function_end atom loc =
+  IntSet.iter (fun id -> close_scope atom id loc) !open_scopes;
+  open_scopes := IntSet.empty
+
 
 let init name =
   id := 0;

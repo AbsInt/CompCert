@@ -102,6 +102,7 @@ module Cygwin_System : SYSTEM =
           sprintf ".section	\"%s\", \"%s\"\n"
             s (if ex then "xr" else if wr then "d" else "dr")
       | Section_debug_info
+      | Section_debug_loc
       | Section_debug_abbrev -> "" (* Dummy value *)
 
     let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)

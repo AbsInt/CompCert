@@ -21,7 +21,7 @@ open Sections
 (* The printer is parameterized over target specific functions and a set of dwarf type constants *)
 module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
     sig
-      val print_debug: out_channel -> dw_entry -> unit
+      val print_debug: out_channel -> dw_entry -> dw_locations -> unit
     end =
   struct
 
@@ -35,6 +35,10 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
     (* Print a label *)
     let print_label oc lbl =
       fprintf oc "%a:\n" label lbl
+
+    (* Print a positive label *)
+    let print_plabel oc lbl =
+      print_label oc (transl_label lbl)
 
     (* Helper functions for abbreviation printing *)
     let add_byte buf value =
@@ -69,9 +73,10 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
     let add_location loc buf =
       match loc with
       | None -> ()
-      | Some (LocSymbol _) ->add_abbr_entry (0x2,location_block_type_abbr) buf
-      | Some (LocConst _) -> add_abbr_entry (0x2,location_const_type_abbr) buf
-      | Some (LocBlock _) -> add_abbr_entry (0x2,location_block_type_abbr) buf
+      | Some (LocRef _) -> add_abbr_entry (0x2,location_ref_type_abbr) buf
+      | Some (LocList _ )
+      | Some (LocSymbol _)
+      | Some (LocSimple _) -> add_abbr_entry (0x2,location_block_type_abbr) buf
 
     (* Dwarf entity to string function *)
     let abbrev_string_of_entity entity has_sibling =
@@ -101,8 +106,8 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       | DW_TAG_compile_unit e ->
           prologue 0x11;
           add_abbr_entry (0x1b,comp_dir_type_abbr) buf;
-          add_high_pc buf;
           add_low_pc buf;
+          add_high_pc buf;
           add_abbr_entry (0x13,language_type_abbr) buf;
           add_name buf;
           add_abbr_entry (0x25,producer_type_abbr) buf;
@@ -288,20 +293,43 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
     let print_byte oc b =
       fprintf oc "	.byte		0x%X\n" b
 
+
+    let size_of_loc_expr = function
+      | DW_OP_bregx _ -> 3
+      | DW_OP_plus_uconst _ -> 2
+      | DW_OP_piece _ -> 2
+        
+    let print_loc_expr oc = function
+      | DW_OP_bregx (a,b) ->
+          print_byte oc dw_op_bregx;
+          print_uleb128 oc a;
+          fprintf oc "	.sleb128	%ld\n" b
+      | DW_OP_plus_uconst i ->
+          print_byte oc dw_op_plus_uconst;
+          print_byte oc i
+      | DW_OP_piece i ->
+          print_byte oc dw_op_piece;
+          print_uleb128 oc i
+        
     let print_loc oc loc =
       match loc with
       | LocSymbol s ->
-          fprintf oc "	.sleb128	5\n";
-          fprintf oc "	.byte		3\n";
+          print_sleb128 oc 5;
+          print_byte oc dw_op_addr;
           fprintf oc "	.4byte		%a\n" symbol s
+      | LocSimple e ->
+          print_sleb128 oc (size_of_loc_expr e);
+          print_loc_expr oc e
+      | LocList e ->
+          let size = List.fold_left (fun acc a -> acc + size_of_loc_expr a) 0 e in
+          print_sleb128 oc size;
+          List.iter (print_loc_expr oc) e
       | _ ->   ()
 
     let print_data_location oc dl =
       match dl with
-      | DataLocBlock [DW_OP_plus_uconst i] ->
-          fprintf oc "	.sleb128	2\n";
-          fprintf oc "	.byte		0x23\n";
-          fprintf oc "	.byte		%d\n" i
+      | DataLocBlock e ->
+          print_loc_expr oc e
       | _ -> ()
 
     let print_ref oc r =
@@ -340,8 +368,8 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
     let print_compilation_unit oc tag =
       let prod_name = sprintf "AbsInt Angewandte Informatik GmbH:CompCert Version %s:%s" Version.version Configuration.arch in
       print_string oc (Sys.getcwd ());
-      print_addr oc (get_end_addr ());
       print_addr oc (get_start_addr ());
+      print_addr oc (get_end_addr ());
       print_uleb128 oc 1;
       print_string oc tag.compile_unit_name;
       print_string oc prod_name;
@@ -372,9 +400,10 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       print_ref oc tl.label_low_pc;
       print_string oc tl.label_name
 
+
     let print_lexical_block oc lb =
-      print_opt_value oc lb.lexical_block_high_pc print_ref;
-      print_opt_value oc lb.lexical_block_low_pc print_ref
+      print_opt_value oc lb.lexical_block_high_pc print_addr;
+      print_opt_value oc lb.lexical_block_low_pc print_addr
 
     let print_member oc mb =
       print_file_loc oc mb.member_file_loc;
@@ -504,10 +533,24 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       print_sleb128 oc 0;
       print_label oc debug_end (* End of the debug section *)
 
+    let print_location_entry oc l =
+      let c_low = get_start_addr () in
+      print_label oc (entry_to_label l.loc_id);
+      List.iter (fun (b,e,loc) ->
+        fprintf oc "	.4byte		%a-%a\n" label b label c_low;
+        fprintf oc "	.4byte		%a-%a\n" label e label c_low;
+        print_loc oc loc) l.loc;
+      fprintf oc "	.4byte	0\n";
+      fprintf oc "	.4byte	0\n"
+
+    let print_location_list oc l =
+      List.iter (print_location_entry oc) l
 
     (* Print the debug info and abbrev section *)
-    let print_debug oc entry =
+    let print_debug oc entry loc =
       print_debug_abbrev oc entry;
-      print_debug_info oc entry
+      print_debug_info oc entry;
+      print_location_list oc loc
+
 
   end

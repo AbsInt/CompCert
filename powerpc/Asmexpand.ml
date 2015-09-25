@@ -586,36 +586,57 @@ let expand_instruction_simple instr =
   | _ ->
       emit instr
 
-let preg_to_string p =
-  ""
+(* Translate to the integer identifier of the register as
+   the EABI specifies *)
 
-let rec translate_annot a =
-  match a with
-  | BA x -> BA (preg_to_string x)
-  | BA_int n -> BA_int n
-  | BA_long n -> BA_long n
-  | BA_float n -> BA_float n
-  | BA_single n -> BA_single n
-  | BA_loadstack (chunk,ofs) -> BA_loadstack (chunk,ofs)
-  | BA_addrstack ofs -> BA_addrstack ofs
-  | BA_loadglobal (chunk,id,ofs) -> BA_loadglobal (chunk,id,ofs) 
-  | BA_addrglobal (id,ofs) -> BA_addrglobal  (id,ofs)
-  | BA_splitlong (hi,lo) -> BA_splitlong (translate_annot hi,translate_annot lo)
+let int_reg_to_dwarf = function
+   | GPR0 -> 0  | GPR1 -> 1  | GPR2 -> 2  | GPR3 -> 3
+   | GPR4 -> 4  | GPR5 -> 5  | GPR6 -> 6  | GPR7 -> 7
+   | GPR8 -> 8  | GPR9 -> 9  | GPR10 -> 10 | GPR11 -> 11
+   | GPR12 -> 12 | GPR13 -> 13 | GPR14 -> 14 | GPR15 -> 15
+   | GPR16 -> 16 | GPR17 -> 17 | GPR18 -> 18 | GPR19 -> 19
+   | GPR20 -> 20 | GPR21 -> 21 | GPR22 -> 22 | GPR23 -> 23
+   | GPR24 -> 24 | GPR25 -> 25 | GPR26 -> 26 | GPR27 -> 27
+   | GPR28 -> 28 | GPR29 -> 29 | GPR30 -> 30 | GPR31 -> 31
 
-let expand_stack_loc txt = function
-  | [a] -> Debug.stack_variable txt (translate_annot a)
-  | _ -> assert false
+let float_reg_to_dwarf = function
+   | FPR0 -> 32  | FPR1 -> 33  | FPR2 -> 34  | FPR3 -> 35
+   | FPR4 -> 36  | FPR5 -> 37  | FPR6 -> 38  | FPR7 -> 39
+   | FPR8 -> 40  | FPR9 -> 41  | FPR10 -> 42 | FPR11 -> 43
+   | FPR12 -> 44 | FPR13 -> 45 | FPR14 -> 46 | FPR15 -> 47
+   | FPR16 -> 48 | FPR17 -> 49 | FPR18 -> 50 | FPR19 -> 51
+   | FPR20 -> 52 | FPR21 -> 53 | FPR22 -> 54| FPR23 -> 55
+   | FPR24 -> 56 | FPR25 -> 57 | FPR26 -> 58 | FPR27 -> 59
+   | FPR28 -> 60 | FPR29 -> 61 | FPR30 -> 62 | FPR31 -> 63
 
-let expand_start_live_range txt lbl = function
-  | [a] -> Debug.start_live_range txt lbl (translate_annot a)
-  | _ -> assert false
+let preg_to_dwarf_int = function
+   | IR r -> int_reg_to_dwarf r
+   | FR r -> float_reg_to_dwarf r
+   | _ -> assert false
 
-let expand_end_live_range =
-  Debug.end_live_range
+
+let translate_annot a =
+  let rec aux = function
+    | BA x -> Some (BA (preg_to_dwarf_int x))
+    | BA_int _
+    | BA_long _
+    | BA_float _
+    | BA_single _
+    | BA_loadglobal _
+    | BA_addrglobal _
+    | BA_loadstack _ -> None
+    | BA_addrstack ofs -> Some (BA_addrstack ofs)
+    | BA_splitlong (hi,lo) -> 
+        begin
+          match (aux hi,aux lo) with
+          | Some hi ,Some lo -> Some (BA_splitlong (hi,lo))
+          | _,_ -> None
+        end in
+  aux (List.hd a)
 
 let expand_scope id lbl oldscopes newscopes =
-  let opening = List.filter (fun a -> List.mem a oldscopes) newscopes
-  and closing = List.filter (fun a -> List.mem a newscopes) oldscopes in
+  let opening = List.filter (fun a -> not (List.mem a oldscopes)) newscopes
+  and closing = List.filter (fun a -> not (List.mem a newscopes)) oldscopes in
   List.iter (fun i -> Debug.open_scope id i lbl) opening;
   List.iter (fun i -> Debug.close_scope id i lbl) closing
 
@@ -627,31 +648,42 @@ let expand_instruction id l =
         lbl
     | Some lbl -> lbl in
   let rec aux lbl scopes = function
-    | [] -> ()
+    | [] -> let lbl = get_lbl lbl in
+      Debug.function_end id lbl
     | (Pbuiltin(EF_debug (kind,txt,_x),args,_) as i)::rest ->
         let kind = (P.to_int kind) in
         begin
           match kind with
-          | 1 -> 
-              emit i; aux lbl scopes rest
+          | 1-> 
+              aux lbl scopes rest
           | 2 ->
               aux  lbl scopes rest
           | 3 ->
-              let lbl = get_lbl lbl in
-              expand_start_live_range txt lbl args;
-              aux (Some lbl) scopes rest
+             begin 
+               match translate_annot args with
+               | Some a ->
+                   let lbl = get_lbl lbl in
+                   Debug.start_live_range txt lbl (1,a);
+                   aux (Some lbl) scopes rest
+               | None -> aux lbl scopes rest
+             end
           | 4 ->
               let lbl = get_lbl lbl in
-              expand_end_live_range txt lbl;
+              Debug.end_live_range txt lbl;
               aux (Some lbl) scopes rest
-          | 5 -> 
-              expand_stack_loc txt args;
-              aux lbl scopes rest
-          | 6 ->
+          | 5 ->
+              begin
+                match translate_annot args with
+                | Some a->
+                    Debug.stack_variable txt (1,a);
+                    aux lbl scopes rest
+                | _ -> aux lbl scopes rest
+              end
+          | 6  ->
               let lbl = get_lbl lbl in
               let scopes' = List.map (function BA_int x -> Int32.to_int (camlint_of_coqint x) | _ -> assert false) args in
               expand_scope id lbl scopes scopes';
-              aux (Some lbl) scopes' rest
+              emit i;aux (Some lbl) scopes' rest
           | _ ->
               emit i; aux None scopes rest
         end

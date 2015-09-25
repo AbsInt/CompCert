@@ -133,7 +133,8 @@ module Linux_System : SYSTEM =
             s (if wr then "w" else "") (if ex then "x" else "")
       | Section_debug_info -> ".debug_info,\"\",@progbits"
       | Section_debug_abbrev -> ".debug_abbrev,\"\",@progbits"
-    
+      | Section_debug_loc -> ".debug_loc,\"\",@progbits"
+            
     let section oc sec =
       let name = name_of_section sec in
       assert (name <> "COMM");
@@ -211,6 +212,7 @@ module Diab_System : SYSTEM =
             | false, false -> 'r')              (* const *)
       | Section_debug_info -> ".debug_info,,n"
       | Section_debug_abbrev -> ".debug_abbrev,,n"
+      | Section_debug_loc -> ".debug_loc,,n"
 
     let section oc sec =
       let name = name_of_section sec in

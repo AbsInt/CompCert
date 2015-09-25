@@ -66,7 +66,9 @@ module Printer(Target:TARGET) =
       print_debug_label oc e;
       Target.print_fun_info oc name;
       Target.emit_constants oc lit;
-      Target.print_jumptable oc jmptbl
+      Target.print_jumptable oc jmptbl;
+      if !Clflags.option_g then
+        Hashtbl.iter (fun p i -> Debug.add_label name p i) current_function_labels
     
     let print_init_data oc name id =
       if Str.string_match PrintCsyntax.re_string_literal (extern_atom name) 0
@@ -141,6 +143,6 @@ let print_program oc p db =
     begin
       match Debug.generate_debug_info () with
       | None -> ()
-      | Some db ->
-          Printer.DebugPrinter.print_debug oc db
+      | Some (db,loc) ->
+          Printer.DebugPrinter.print_debug oc db loc
     end

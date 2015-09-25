@@ -153,6 +153,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           sprintf ".section	\"%s\",\"a%s%s\",%%progbits"
             s (if wr then "w" else "") (if ex then "x" else "")
       | Section_debug_info
+      | Section_debug_loc
       | Section_debug_abbrev -> "" (* Dummy value *)
             
     let section oc sec =
