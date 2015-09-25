@@ -298,7 +298,8 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       | DW_OP_bregx _ -> 3
       | DW_OP_plus_uconst _ -> 2
       | DW_OP_piece _ -> 2
-        
+      | DW_OP_reg i -> if i < 32 then 1 else  2
+
     let print_loc_expr oc = function
       | DW_OP_bregx (a,b) ->
           print_byte oc dw_op_bregx;
@@ -310,6 +311,13 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       | DW_OP_piece i ->
           print_byte oc dw_op_piece;
           print_uleb128 oc i
+      | DW_OP_reg i ->
+          if i < 32 then
+            print_byte oc (dw_op_reg0 + i)
+          else begin
+            print_byte oc dw_op_regx;
+            print_uleb128 oc i
+          end
         
     let print_loc oc loc =
       match loc with
@@ -544,6 +552,7 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
       fprintf oc "	.4byte	0\n"
 
     let print_location_list oc l =
+      fprintf oc"	.section	%s\n" (name_of_section Section_debug_loc);
       List.iter (print_location_entry oc) l
 
     (* Print the debug info and abbrev section *)

@@ -79,6 +79,8 @@ let dw_ref_indirect  = 0x16
 (* Operation encoding *)
 let dw_op_addr = 0x3
 let dw_op_plus_uconst = 0x23
+let dw_op_reg0 = 0x50
+let dw_op_regx = 0x90
 let dw_op_bregx = 0x92
 let dw_op_piece = 0x93
 

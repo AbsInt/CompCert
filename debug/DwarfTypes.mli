@@ -42,6 +42,7 @@ type location_expression =
   | DW_OP_plus_uconst of constant
   | DW_OP_bregx of int * int32
   | DW_OP_piece of int
+  | DW_OP_reg of int
 
 type location_value =
   | LocSymbol of atom

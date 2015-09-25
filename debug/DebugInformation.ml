@@ -695,6 +695,7 @@ module IntSet = Set.Make(struct
 end)
 
 let open_scopes: IntSet.t ref = ref IntSet.empty
+let open_vars: atom list ref = ref []
 
 let open_scope atom s_id lbl =
   try
@@ -721,15 +722,16 @@ let close_scope atom s_id lbl =
   with Not_found -> ()
 
 let start_live_range atom lbl loc =
-  try
-    let old_r = Hashtbl.find var_locations atom in
-    match old_r with
-    | RangeLoc old_r ->
-        let n_r = { range_start = Some lbl; range_end = None; var_loc = loc } in
-        Hashtbl.replace var_locations atom (RangeLoc (n_r::old_r))
-    | _ -> assert false
-  with Not_found -> ()
-
+  let old_r = try
+    begin
+      match Hashtbl.find var_locations atom with
+      | RangeLoc old_r -> old_r
+      | _ -> assert false
+    end
+  with Not_found -> [] in
+  let n_r = { range_start = Some lbl; range_end = None; var_loc = loc } in
+  open_vars := atom::!open_vars;
+  Hashtbl.replace var_locations atom (RangeLoc (n_r::old_r))
 
 let end_live_range atom lbl =
   try
@@ -740,14 +742,26 @@ let end_live_range atom lbl =
         Hashtbl.replace var_locations atom (RangeLoc (n_r::old_r))
     | _ -> assert false
   with Not_found -> ()
-  
+      
+let close_range lbl atom  =
+  try
+    let old_r = Hashtbl.find var_locations atom in
+    match old_r with
+    | RangeLoc (n_r::old_r) ->
+        if n_r.range_end = None then
+          let n_r = {n_r with  range_end = Some lbl} in
+          Hashtbl.replace var_locations atom (RangeLoc (n_r::old_r))
+    | _ -> assert false
+  with Not_found -> ()
 
 let stack_variable atom (sp,loc) =
   Hashtbl.add var_locations atom (FunctionLoc (sp,loc))
 
 let function_end atom loc =
   IntSet.iter (fun id -> close_scope atom id loc) !open_scopes;
-  open_scopes := IntSet.empty
+  open_scopes := IntSet.empty;
+  List.iter (close_range loc) !open_vars;
+  open_vars:= []
 
 
 let init name =

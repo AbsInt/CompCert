@@ -683,7 +683,7 @@ let expand_instruction id l =
               let lbl = get_lbl lbl in
               let scopes' = List.map (function BA_int x -> Int32.to_int (camlint_of_coqint x) | _ -> assert false) args in
               expand_scope id lbl scopes scopes';
-              emit i;aux (Some lbl) scopes' rest
+              aux (Some lbl) scopes' rest
           | _ ->
               emit i; aux None scopes rest
         end

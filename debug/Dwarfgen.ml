@@ -282,23 +282,58 @@ let function_parameter_to_entry acc p =
   } in
   new_entry (next_id ()) (DW_TAG_formal_parameter p),IntSet.add p.formal_parameter_type acc
 
-let rec local_variable_to_entry f_id acc v id =
-  let loc = try
+let gen_splitlong op_hi op_lo =
+  let op_piece = DW_OP_piece 4 in
+  op_piece::op_hi@(op_piece::op_lo)
+  
+let translate_function_loc a = function 
+  | BA_addrstack (ofs) ->
+      let ofs = camlint_of_coqint ofs in
+      Some (LocSimple (DW_OP_bregx (a,ofs))),[]
+  | BA_splitlong (BA_addrstack hi,BA_addrstack lo)->
+      let hi = camlint_of_coqint hi 
+      and lo = camlint_of_coqint lo in
+      if lo = Int32.add hi 4l then
+        Some (LocSimple (DW_OP_bregx (a,hi))),[]
+      else
+        let op_hi = [DW_OP_bregx (a,hi)]
+        and op_lo = [DW_OP_bregx (a,lo)] in
+        Some (LocList (gen_splitlong op_hi op_lo)),[]
+  | _ -> None,[]
+      
+let range_entry_loc (sp,l) =
+  let rec aux = function
+    | BA i ->  [DW_OP_reg i]
+    | BA_addrstack ofs -> 
+        let ofs = camlint_of_coqint ofs in
+        [DW_OP_bregx (sp,ofs)]
+    | BA_splitlong (hi,lo) ->
+        let hi = aux hi
+        and lo = aux lo in
+        gen_splitlong hi lo
+    | _ -> assert false in
+  match aux l with
+  | [] -> assert false
+  | [a] -> LocSimple a
+  | a::rest -> LocList (a::rest)
+
+let rec local_variable_to_entry f_id (acc,bcc) v id =
+  let loc,loc_list = try
     begin 
       match (Hashtbl.find var_locations (get_opt_val v.lvar_atom)) with
-      | FunctionLoc (a,BA_addrstack (ofs)) ->
-          let ofs = camlint_of_coqint ofs in
-          Some (LocSimple (DW_OP_bregx (a,ofs)))
-      | FunctionLoc (a,BA_splitlong ((BA_addrstack hi),(BA_addrstack lo))) ->
-          let hi = camlint_of_coqint hi 
-          and lo = camlint_of_coqint lo in
-          if lo = Int32.add hi 4l then
-            Some (LocSimple (DW_OP_bregx (a,hi)))
-          else
-            Some (LocList [DW_OP_bregx (a,hi);DW_OP_piece 4;DW_OP_bregx (a,lo);DW_OP_piece 4])
-      | _ -> None
+      | FunctionLoc (a,r) ->
+          translate_function_loc a r
+      | RangeLoc l ->
+          let l = List.map (fun i -> 
+            let hi = get_opt_val i.range_start
+            and lo = get_opt_val i.range_end in
+            let hi = Hashtbl.find label_translation (f_id,hi)
+            and lo = Hashtbl.find label_translation (f_id,lo) in
+            hi,lo,range_entry_loc i.var_loc) l in
+          let id = next_id () in
+          Some (LocRef id),[{loc = l;loc_id = id;}]
     end
-  with Not_found -> None in
+  with Not_found -> None,[] in
   let var = {
     variable_file_loc = v.lvar_file_loc;
     variable_declaration = None;
@@ -307,7 +342,7 @@ let rec local_variable_to_entry f_id acc v id =
     variable_type = v.lvar_type;
     variable_location = loc;
   } in
-  new_entry id (DW_TAG_variable var),IntSet.add v.lvar_type acc
+  new_entry id (DW_TAG_variable var),(IntSet.add v.lvar_type acc,loc_list@bcc)
 
 and scope_to_entry f_id acc sc id =
   let l_pc,h_pc = try
@@ -344,7 +379,7 @@ let fun_scope_to_entries f_id acc id =
       | Scope sc ->mmap (local_to_entry f_id) acc sc.scope_variables
       | _ -> assert false)
 
-let function_to_entry acc id f =
+let function_to_entry (acc,bcc) id f =
   let f_tag = {
     subprogram_file_loc = f.fun_file_loc;
     subprogram_external = Some f.fun_external;
@@ -358,23 +393,24 @@ let function_to_entry acc id f =
   let acc = match f.fun_return_type with Some s -> IntSet.add s acc | None -> acc in
   let f_entry =  new_entry id (DW_TAG_subprogram f_tag) in
   let params,acc = mmap function_parameter_to_entry acc f.fun_parameter in
-  let vars,acc = fun_scope_to_entries f_id acc f.fun_scope in
-  add_children f_entry (params@vars),acc
+  let vars,(acc,bcc) = fun_scope_to_entries f_id (acc,bcc) f.fun_scope in
+  add_children f_entry (params@vars),(acc,bcc)
      
-let definition_to_entry acc id t =
+let definition_to_entry (acc,bcc) id t =
   match t with
-  | GlobalVariable g -> global_variable_to_entry acc id g
-  | Function f -> function_to_entry acc id f
+  | GlobalVariable g -> let e,acc = global_variable_to_entry acc id g in
+    e,(acc,bcc)
+  | Function f -> function_to_entry (acc,bcc) id f
 
 let gen_defs () =
-  let defs,typ = Hashtbl.fold (fun id t (acc,bcc) -> let t,bcc = definition_to_entry bcc id t in
-  t::acc,bcc) definitions ([],IntSet.empty) in
-  List.rev defs,typ
+  let defs,(typ,locs) = Hashtbl.fold (fun id t (acc,bcc) -> let t,bcc = definition_to_entry bcc id t in
+  t::acc,bcc) definitions ([],(IntSet.empty,[])) in
+  List.rev defs,typ,locs
 
 let gen_debug_info () : dw_entry * dw_locations=
   let cp =  {
     compile_unit_name = !file_name;
   } in
   let cp = new_entry (next_id ()) (DW_TAG_compile_unit cp) in
-  let defs,ty = gen_defs () in
-  add_children cp ((gen_types ty) @ defs),[]
+  let defs,ty,locs = gen_defs () in
+  add_children cp ((gen_types ty) @ defs),locs
