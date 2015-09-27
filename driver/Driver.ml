@@ -683,7 +683,7 @@ let _ =
     Builtins.set C2C.builtins;
     CPragmas.initialize();
     parse_cmdline cmdline_actions;
-    Debug.init (); (* Initialize the debug functions *)
+    DebugInit.init (); (* Initialize the debug functions *)
     let nolink = !option_c || !option_S || !option_E || !option_interp in
     if nolink && !option_o <> None && !num_source_files >= 2 then begin
       eprintf "Ambiguous '-o' option (multiple source files)\n";

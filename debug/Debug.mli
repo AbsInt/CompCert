@@ -17,7 +17,35 @@ open DwarfTypes
 open BinNums
 
 
-val init: unit -> unit
+(* Record used for stroring references to the actual implementation functions *)
+type implem = 
+    {
+     mutable init: string -> unit;
+     mutable atom_function: ident -> atom -> unit;
+     mutable atom_global_variable: ident -> atom -> unit;
+     mutable set_composite_size: ident -> struct_or_union -> int option -> unit;
+     mutable set_member_offset: ident -> string -> int -> unit;
+     mutable set_bitfield_offset: ident -> string -> int -> string -> int -> unit;
+     mutable insert_global_declaration: Env.t -> globdecl -> unit;
+     mutable add_fun_addr: atom -> (int * int) -> unit;
+     mutable generate_debug_info: unit -> (dw_entry * dw_locations) option;
+     mutable all_files_iter: (string -> unit) -> unit;
+     mutable insert_local_declaration:  storage -> ident -> typ -> location -> unit;
+     mutable atom_local_variable: ident -> atom -> unit;
+     mutable enter_scope: int -> int -> int -> unit;
+     mutable enter_function_scope: int -> int -> unit;
+     mutable add_lvar_scope: int -> ident -> int -> unit;
+     mutable open_scope: atom -> int -> positive -> unit;
+     mutable close_scope: atom -> int -> positive -> unit;
+     mutable start_live_range: atom -> positive -> int * int builtin_arg -> unit;
+     mutable end_live_range: atom -> positive -> unit;
+     mutable stack_variable: atom -> int * int builtin_arg -> unit;
+     mutable function_end: atom -> positive -> unit;
+     mutable add_label: atom -> positive -> int -> unit;
+   }
+
+val implem: implem
+
 val init_compile_unit: string -> unit
 val atom_function: ident -> atom -> unit
 val atom_global_variable: ident -> atom -> unit
