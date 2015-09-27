@@ -19,14 +19,13 @@ open PrintAsmaux
 open Sections
 
 (* The printer is parameterized over target specific functions and a set of dwarf type constants *)
-module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
+module DwarfPrinter(Target: DWARF_TARGET):
     sig
       val print_debug: out_channel -> dw_entry -> dw_locations -> unit
     end =
   struct
 
     open Target
-    open DwarfAbbrevs
 
     (* Byte value to string *)
     let string_of_byte value =
@@ -318,6 +317,11 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
             print_byte oc dw_op_regx;
             print_uleb128 oc i
           end
+
+
+    let print_ref oc r =
+      let ref = entry_to_label r in
+      fprintf oc "	.4byte		%a\n" label ref
         
     let print_loc oc loc =
       match loc with
@@ -332,17 +336,13 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           let size = List.fold_left (fun acc a -> acc + size_of_loc_expr a) 0 e in
           print_sleb128 oc size;
           List.iter (print_loc_expr oc) e
-      | _ ->   ()
+      | LocRef f ->  print_ref oc f
 
     let print_data_location oc dl =
       match dl with
       | DataLocBlock e ->
           print_loc_expr oc e
       | _ -> ()
-
-    let print_ref oc r =
-      let ref = entry_to_label r in
-      fprintf oc "	.4byte		%a\n" label ref
 
     let print_addr oc a =
       fprintf oc "	.4byte		%a\n" label a

@@ -52,10 +52,6 @@ module type TARGET =
       val new_label: unit -> int
       val label: out_channel -> int -> unit
       val print_file_loc: out_channel -> file_loc -> unit
-      val get_location: P.t -> location_value option
-      val get_segment_location: P.t -> location_value option
-      val add_var_location: P.t -> unit
-      module DwarfAbbrevs:  DWARF_ABBREVS
     end
 
 (* On-the-fly label renaming *)

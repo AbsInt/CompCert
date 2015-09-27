@@ -773,19 +773,11 @@ module Target(System: SYSTEM):TARGET =
 
     let get_debug_start_addr () = -1 (* Dummy constant *)
 
-    module DwarfAbbrevs = DwarfUtil.DefaultAbbrevs (* Dummy Abbrev types *)
-
     let label = label
        
     let new_label = new_label
         
     let print_file_loc _ _ = () (* Dummy function *)
-    
-    let get_location _ = None (* Dummy function *)
-
-    let get_segment_location _ = None (* Dummy function *)
-
-    let add_var_location _ = () (* Dummy function *)
 
 end
 

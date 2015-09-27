@@ -79,7 +79,6 @@ module Printer(Target:TARGET) =
         List.iter (Target.print_init oc) id
  
     let print_var oc name v =
-      if !Clflags.option_g && Configuration.advanced_debug then Target.add_var_location name;
       match v.gvar_init with
       | [] -> ()
       | _  ->
@@ -120,14 +119,10 @@ module Printer(Target:TARGET) =
         let get_end_addr = Target.get_end_addr
         let get_stmt_list_addr = Target.get_stmt_list_addr
         let name_of_section = Target.name_of_section
-        let get_location a =  None
-        let get_frame_base a = None
         let symbol = Target.symbol
       end
 
-    module DebugPrinter = DwarfPrinter (DwarfTarget) (Target.DwarfAbbrevs)
-      
-     
+    module DebugPrinter = DwarfPrinter (DwarfTarget)     
   end
 
 let print_program oc p db =

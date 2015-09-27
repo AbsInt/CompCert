@@ -244,38 +244,6 @@ type location_entry =
    }
 type dw_locations = location_entry list
 
-(* Module type for a matching from type to dwarf encoding *)
-module type DWARF_ABBREVS =
-  sig
-    val sibling_type_abbr: int
-    val file_loc_type_abbr: int * int
-    val type_abbr: int
-    val name_type_abbr: int
-    val encoding_type_abbr: int
-    val byte_size_type_abbr: int
-    val member_size_abbr: int
-    val high_pc_type_abbr: int
-    val low_pc_type_abbr: int
-    val stmt_list_type_abbr: int
-    val declaration_type_abbr: int
-    val external_type_abbr: int
-    val prototyped_type_abbr: int
-    val bit_offset_type_abbr: int
-    val comp_dir_type_abbr: int
-    val language_type_abbr: int
-    val producer_type_abbr: int
-    val value_type_abbr: int
-    val artificial_type_abbr: int
-    val variable_parameter_type_abbr: int
-    val bit_size_type_abbr: int
-    val location_ref_type_abbr: int
-    val location_block_type_abbr: int
-    val data_location_block_type_abbr: int
-    val data_location_ref_type_abbr: int
-    val bound_const_type_abbr: int
-    val bound_ref_type_abbr: int
-  end
-
 (* The target specific functions for printing the debug information *)
 module type DWARF_TARGET=
   sig
@@ -285,7 +253,5 @@ module type DWARF_TARGET=
     val get_end_addr: unit -> int
     val get_stmt_list_addr: unit -> int    
     val name_of_section: section_name -> string
-    val get_location: int -> location_value option
-    val get_frame_base: int -> location_value option
     val symbol: out_channel -> atom -> unit
   end
