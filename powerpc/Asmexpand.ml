@@ -652,6 +652,7 @@ let expand_instruction id l =
       Debug.function_end id lbl
     | (Pbuiltin(EF_debug (kind,txt,_x),args,_) as i)::rest ->
         let kind = (P.to_int kind) in
+        emit i;
         begin
           match kind with
           | 1-> 
@@ -665,7 +666,7 @@ let expand_instruction id l =
                    let lbl = get_lbl lbl in
                    Debug.start_live_range txt lbl (1,a);
                    aux (Some lbl) scopes rest
-               | None -> aux lbl scopes rest
+               | None ->  aux lbl scopes rest
              end
           | 4 ->
               let lbl = get_lbl lbl in
@@ -677,7 +678,7 @@ let expand_instruction id l =
                 | Some a->
                     Debug.stack_variable txt (1,a);
                     aux lbl scopes rest
-                | _ -> aux lbl scopes rest
+                | _ ->  aux lbl scopes rest
               end
           | 6  ->
               let lbl = get_lbl lbl in
@@ -685,7 +686,7 @@ let expand_instruction id l =
               expand_scope id lbl scopes scopes';
               aux (Some lbl) scopes' rest
           | _ ->
-              emit i; aux None scopes rest
+              aux None scopes rest
         end
     | i::rest -> expand_instruction_simple i; aux None scopes rest in
   aux None [] l
