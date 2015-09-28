@@ -292,6 +292,9 @@ module DwarfPrinter(Target: DWARF_TARGET):
     let print_byte oc b =
       fprintf oc "	.byte		0x%X\n" b
 
+    let print_2byte oc b =
+      fprintf oc "	.2byte		0x%X\n" b
+
 
     let size_of_loc_expr = function
       | DW_OP_bregx _ -> 3
@@ -335,6 +338,20 @@ module DwarfPrinter(Target: DWARF_TARGET):
       | LocList e ->
           let size = List.fold_left (fun acc a -> acc + size_of_loc_expr a) 0 e in
           print_sleb128 oc size;
+          List.iter (print_loc_expr oc) e
+      | LocRef f ->  print_ref oc f
+
+    let print_list_loc oc = function
+      | LocSymbol s ->
+          print_2byte oc 5;
+          print_byte oc dw_op_addr;
+          fprintf oc "	.4byte		%a\n" symbol s
+      | LocSimple e ->
+          print_2byte oc (size_of_loc_expr e);
+          print_loc_expr oc e
+      | LocList e ->
+          let size = List.fold_left (fun acc a -> acc + size_of_loc_expr a) 0 e in
+          print_2byte oc size;
           List.iter (print_loc_expr oc) e
       | LocRef f ->  print_ref oc f
 
@@ -547,7 +564,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       List.iter (fun (b,e,loc) ->
         fprintf oc "	.4byte		%a-%a\n" label b label c_low;
         fprintf oc "	.4byte		%a-%a\n" label e label c_low;
-        print_loc oc loc) l.loc;
+        print_list_loc oc loc) l.loc;
       fprintf oc "	.4byte	0\n";
       fprintf oc "	.4byte	0\n"
 
