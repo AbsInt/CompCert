@@ -60,7 +60,7 @@ type bound_value =
 
 (* Types representing the attribute information per tag value *)
 
-type file_loc = string * constant
+type file_loc = int * constant
 
 type dw_tag_array_type =
     {
@@ -77,7 +77,10 @@ type dw_tag_base_type =
 
 type dw_tag_compile_unit =
     {
-     compile_unit_name:            string;
+     compile_unit_name:      string;
+     compile_unit_low_pc:    int;
+     compile_unit_high_pc:   int;
+     compile_unit_stmt_list: int;
    }
 
 type dw_tag_const_type =
@@ -243,16 +246,15 @@ type location_entry =
      loc:     (int * int * location_value) list;
      loc_id:  reference;
    }
-type dw_locations = location_entry list
+type dw_locations = int * location_entry list
+
+type debug_entries = (string * int * dw_entry * dw_locations) list
 
 (* The target specific functions for printing the debug information *)
 module type DWARF_TARGET=
   sig
     val label: out_channel -> int -> unit
     val print_file_loc: out_channel -> file_loc -> unit
-    val get_start_addr: unit -> int
-    val get_end_addr: unit -> int
-    val get_stmt_list_addr: unit -> int    
-    val name_of_section: section_name -> string
+    val section: out_channel -> section_name -> unit
     val symbol: out_channel -> atom -> unit
   end

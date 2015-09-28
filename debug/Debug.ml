@@ -30,7 +30,7 @@ type implem =
      mutable set_bitfield_offset: ident -> string -> int -> string -> int -> unit;
      mutable insert_global_declaration: Env.t -> globdecl -> unit;
      mutable add_fun_addr: atom -> (int * int) -> unit;
-     mutable generate_debug_info: unit -> (dw_entry * dw_locations) option;
+     mutable generate_debug_info: (atom -> string) -> string -> debug_entries option;
      mutable all_files_iter: (string -> unit) -> unit;
      mutable insert_local_declaration:  storage -> ident -> typ -> location -> unit;
      mutable atom_local_variable: ident -> atom -> unit;
@@ -45,6 +45,9 @@ type implem =
      mutable function_end: atom -> positive -> unit;
      mutable add_label: atom -> positive -> int -> unit;
      mutable atom_parameter: ident -> ident -> atom -> unit;
+     mutable add_compilation_section_start: string ->(int * int * int * string) -> unit;
+     mutable compute_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit;
+     mutable exists_section: string -> bool;
    }
 
 let implem =
@@ -57,7 +60,7 @@ let implem =
    set_bitfield_offset = (fun _ _ _ _ _ -> ());
    insert_global_declaration = (fun _ _ -> ());
    add_fun_addr = (fun _ _ -> ());
-   generate_debug_info = (fun _ -> None);
+   generate_debug_info = (fun _  _ -> None);
    all_files_iter = (fun _ -> ());
    insert_local_declaration = (fun  _ _ _ _ -> ());
    atom_local_variable = (fun _ _ -> ());
@@ -72,6 +75,9 @@ let implem =
    function_end = (fun _ _ -> ());
    add_label = (fun _ _ _ -> ());
    atom_parameter = (fun _ _ _ -> ());
+   add_compilation_section_start = (fun _ _ -> ());
+   compute_file_enum = (fun _ _ _ -> ());
+   exists_section = (fun _ -> true);
 }
 
 let init_compile_unit name = implem.init name
@@ -82,7 +88,7 @@ let set_member_offset id field off = implem.set_member_offset id field off
 let set_bitfield_offset id field off underlying size = implem.set_bitfield_offset id field off underlying size
 let insert_global_declaration env dec = implem.insert_global_declaration env dec
 let add_fun_addr atom addr = implem.add_fun_addr atom addr
-let generate_debug_info () = implem.generate_debug_info ()
+let generate_debug_info fun_s var_s = implem.generate_debug_info fun_s var_s
 let all_files_iter f = implem.all_files_iter f
 let insert_local_declaration sto id ty loc = implem.insert_local_declaration sto id ty loc
 let atom_local_variable id atom = implem.atom_local_variable id atom
@@ -97,3 +103,6 @@ let stack_variable atom loc = implem.stack_variable atom loc
 let function_end atom loc = implem.function_end atom loc
 let add_label atom p lbl = implem.add_label atom p lbl
 let atom_parameter fid pid atom = implem.atom_parameter fid pid atom
+let add_compilation_section_start sec addr = implem.add_compilation_section_start sec addr
+let exists_section sec = implem.exists_section sec
+let compute_file_enum end_l entry_l line_e = implem.compute_file_enum end_l entry_l line_e

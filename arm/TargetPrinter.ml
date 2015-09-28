@@ -152,7 +152,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\",\"a%s%s\",%%progbits"
             s (if wr then "w" else "") (if ex then "x" else "")
-      | Section_debug_info
+      | Section_debug_info _
       | Section_debug_loc
       | Section_debug_abbrev -> "" (* Dummy value *)
             

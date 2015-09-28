@@ -24,8 +24,6 @@ open TargetPrinter
 module Printer(Target:TARGET) =
   struct
 
-    let addr_mapping: (string, (int * int)) Hashtbl.t = Hashtbl.create 7
-
     let get_fun_addr name =
       let s = Target.new_label ()
       and e = Target.new_label () in
@@ -37,7 +35,6 @@ module Printer(Target:TARGET) =
         fprintf oc "%a:\n" Target.label l
       else
         ()
-
 
     let print_location oc loc =
       if loc <> Cutil.no_loc then Target.print_file_line oc (fst loc) (snd loc)
@@ -113,11 +110,8 @@ module Printer(Target:TARGET) =
     module DwarfTarget: DwarfTypes.DWARF_TARGET =
       struct
         let label = Target.label
-        let name_of_section = Target.name_of_section
+        let section = Target.section
         let print_file_loc = Target.print_file_loc
-        let get_start_addr = Target.get_start_addr   
-        let get_end_addr = Target.get_end_addr
-        let get_stmt_list_addr = Target.get_stmt_list_addr
         let name_of_section = Target.name_of_section
         let symbol = Target.symbol
       end
@@ -136,8 +130,15 @@ let print_program oc p db =
   close_filenames ();
   if !Clflags.option_g && Configuration.advanced_debug then
     begin
-      match Debug.generate_debug_info () with
+      let atom_to_s s =
+        let s = C2C.atom_sections s in
+        match s with
+        | [] -> Target.name_of_section Section_text
+        | (Section_user (n,_,_))::_ -> n
+        | a::_ ->
+            Target.name_of_section a in
+      match Debug.generate_debug_info atom_to_s (Target.name_of_section Section_text) with
       | None -> ()
-      | Some (db,loc) ->
-          Printer.DebugPrinter.print_debug oc db loc
+      | Some db ->
+          Printer.DebugPrinter.print_debug oc db
     end

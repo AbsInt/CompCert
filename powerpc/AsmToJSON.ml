@@ -330,7 +330,7 @@ let p_section oc = function
   | Section_literal -> fprintf oc "{\"Section Name\":\"Literal\"}"
   | Section_jumptable -> fprintf oc "{\"Section Name\":\"Jumptable\"}"
   | Section_user (s,w,e) -> fprintf oc "{\"Section Name\":%s,\"Writable\":%B,\"Executable\":%B}" s w e
-  | Section_debug_info 
+  | Section_debug_info _
   | Section_debug_abbrev 
   | Section_debug_loc -> () (* There should be no info in the debug sections *)
 

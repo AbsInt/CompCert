@@ -21,7 +21,7 @@ open Sections
 (* The printer is parameterized over target specific functions and a set of dwarf type constants *)
 module DwarfPrinter(Target: DWARF_TARGET):
     sig
-      val print_debug: out_channel -> dw_entry -> dw_locations -> unit
+      val print_debug: out_channel -> debug_entries -> unit
     end =
   struct
 
@@ -245,7 +245,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
     let print_abbrev oc =
       let abbrevs = Hashtbl.fold (fun s i acc -> (s,i)::acc) abbrev_mapping [] in
       let abbrevs = List.sort (fun (_,a) (_,b) -> Pervasives.compare a b) abbrevs in
-      fprintf oc "	.section	%s\n" (name_of_section Section_debug_abbrev);
+      section oc Section_debug_abbrev;
       let lbl = new_label () in
       abbrev_start_addr := lbl;
       print_label oc lbl;
@@ -275,9 +275,6 @@ module DwarfPrinter(Target: DWARF_TARGET):
       | None -> ()
       | Some o -> f oc o
 
-    let print_file_loc oc f =
-      print_opt_value oc f print_file_loc
-
     let print_flag oc b =
       output_string oc (string_of_byte b)
 
@@ -296,6 +293,15 @@ module DwarfPrinter(Target: DWARF_TARGET):
     let print_2byte oc b =
       fprintf oc "	.2byte		0x%X\n" b
 
+    let print_ref oc r =
+      let ref = entry_to_label r in
+      fprintf oc "	.4byte		%a\n" label ref
+
+    let print_file_loc oc = function
+      | Some (file,col) ->
+          fprintf oc "	.4byte		%a\n" label file;
+          print_uleb128 oc col
+      | None -> ()
 
     let size_of_loc_expr = function
       | DW_OP_bregx _ -> 3
@@ -322,11 +328,6 @@ module DwarfPrinter(Target: DWARF_TARGET):
             print_uleb128 oc i
           end
 
-
-    let print_ref oc r =
-      let ref = entry_to_label r in
-      fprintf oc "	.4byte		%a\n" label ref
-        
     let print_loc oc loc =
       match loc with
       | LocSymbol s ->
@@ -394,12 +395,12 @@ module DwarfPrinter(Target: DWARF_TARGET):
     let print_compilation_unit oc tag =
       let prod_name = sprintf "AbsInt Angewandte Informatik GmbH:CompCert Version %s:%s" Version.version Configuration.arch in
       print_string oc (Sys.getcwd ());
-      print_addr oc (get_start_addr ());
-      print_addr oc (get_end_addr ());
+      print_addr oc tag.compile_unit_low_pc;
+      print_addr oc tag.compile_unit_high_pc;
       print_uleb128 oc 1;
       print_string oc tag.compile_unit_name;
       print_string oc prod_name;
-      print_addr oc (get_stmt_list_addr ())
+      print_addr oc tag.compile_unit_stmt_list
 
     let print_const_type oc ct =
       print_ref oc ct.const_type
@@ -539,16 +540,15 @@ module DwarfPrinter(Target: DWARF_TARGET):
           print_sleb128 oc 0) entry
 
     (* Print the debug abbrev section *)
-    let print_debug_abbrev oc entry =
-      compute_abbrev entry;
+    let print_debug_abbrev oc entries =
+      List.iter (fun (_,_,e,_) -> compute_abbrev e) entries;
       print_abbrev oc
 
     (* Print the debug info section *)
-    let print_debug_info oc entry  =
-      let debug_start = new_label () in
-      debug_start_addr:= debug_start;
-      fprintf oc"	.section	%s\n" (name_of_section Section_debug_info);
-      print_label oc debug_start;
+    let print_debug_info oc sec start entry  =
+      debug_start_addr:= start;
+      section oc (Section_debug_info sec);      
+      print_label oc start;
       let debug_length_start = new_label ()  (* Address used for length calculation *)
       and debug_end = new_label () in
       fprintf oc "	.4byte		%a-%a\n" label debug_end label debug_length_start;
@@ -560,8 +560,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_sleb128 oc 0;
       print_label oc debug_end (* End of the debug section *)
 
-    let print_location_entry oc l =
-      let c_low = get_start_addr () in
+    let print_location_entry oc c_low l =
       print_label oc (entry_to_label l.loc_id);
       List.iter (fun (b,e,loc) ->
         fprintf oc "	.4byte		%a-%a\n" label b label c_low;
@@ -570,15 +569,15 @@ module DwarfPrinter(Target: DWARF_TARGET):
       fprintf oc "	.4byte	0\n";
       fprintf oc "	.4byte	0\n"
 
-    let print_location_list oc l =
-      fprintf oc"	.section	%s\n" (name_of_section Section_debug_loc);
-      List.iter (print_location_entry oc) l
+    let print_location_list oc (c_low,l) =
+      List.iter (print_location_entry oc c_low) l
 
     (* Print the debug info and abbrev section *)
-    let print_debug oc entry loc =
-      print_debug_abbrev oc entry;
-      print_debug_info oc entry;
-      print_location_list oc loc
+    let print_debug oc entries =
+      print_debug_abbrev oc entries;
+      List.iter (fun (s,d,e,_) -> print_debug_info oc s d e) entries;
+      section oc Section_debug_loc;
+      List.iter (fun (_,_,_,l) -> print_location_list oc l) entries
 
 
   end

@@ -14,5 +14,5 @@ open DwarfTypes
 
 module DwarfPrinter: functor (Target: DWARF_TARGET) ->
   sig
-    val print_debug: out_channel -> dw_entry -> dw_locations -> unit
+    val print_debug: out_channel -> debug_entries -> unit
   end

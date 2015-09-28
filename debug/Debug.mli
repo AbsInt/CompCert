@@ -28,7 +28,7 @@ type implem =
      mutable set_bitfield_offset: ident -> string -> int -> string -> int -> unit;
      mutable insert_global_declaration: Env.t -> globdecl -> unit;
      mutable add_fun_addr: atom -> (int * int) -> unit;
-     mutable generate_debug_info: unit -> (dw_entry * dw_locations) option;
+     mutable generate_debug_info: (atom -> string) -> string -> debug_entries option;
      mutable all_files_iter: (string -> unit) -> unit;
      mutable insert_local_declaration:  storage -> ident -> typ -> location -> unit;
      mutable atom_local_variable: ident -> atom -> unit;
@@ -43,6 +43,9 @@ type implem =
      mutable function_end: atom -> positive -> unit;
      mutable add_label: atom -> positive -> int -> unit;
      mutable atom_parameter: ident -> ident -> atom -> unit;
+     mutable add_compilation_section_start: string -> (int * int * int * string) -> unit;
+     mutable compute_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit;
+     mutable exists_section: string -> bool;
    }
 
 val implem: implem
@@ -68,5 +71,8 @@ val end_live_range: atom -> positive -> unit
 val stack_variable: atom -> int * int builtin_arg -> unit
 val function_end: atom -> positive -> unit
 val add_label: atom -> positive -> int -> unit
-val generate_debug_info: unit -> (dw_entry * dw_locations) option
+val generate_debug_info: (atom -> string) -> string -> debug_entries option
 val atom_parameter: ident -> ident -> atom -> unit
+val add_compilation_section_start: string -> (int * int * int * string) -> unit
+val compute_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit
+val exists_section: string -> bool
