@@ -42,6 +42,7 @@ type implem =
      mutable stack_variable: atom -> int * int builtin_arg -> unit;
      mutable function_end: atom -> positive -> unit;
      mutable add_label: atom -> positive -> int -> unit;
+     mutable atom_parameter: ident -> ident -> atom -> unit;
    }
 
 val implem: implem
@@ -68,3 +69,4 @@ val stack_variable: atom -> int * int builtin_arg -> unit
 val function_end: atom -> positive -> unit
 val add_label: atom -> positive -> int -> unit
 val generate_debug_info: unit -> (dw_entry * dw_locations) option
+val atom_parameter: ident -> ident -> atom -> unit

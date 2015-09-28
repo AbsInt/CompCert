@@ -1042,6 +1042,7 @@ let convertFundef loc env fd =
     List.map
       (fun (id, ty) ->
         let id' = intern_string id.name in
+        Debug.atom_parameter fd.fd_name id id';
         (id', convertTyp env ty))
       fd.fd_params in
   let vars =

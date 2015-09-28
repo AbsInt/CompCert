@@ -145,6 +145,7 @@ let fun_type_to_entry id f =
         formal_parameter_name = if p.param_name <> "" then Some p.param_name else None;
         formal_parameter_type = p.param_type;
         formal_parameter_variable_parameter = None;
+        formal_parameter_location = None;
       } in
       new_entry (next_id ()) (DW_TAG_formal_parameter fp)) f.fun_params;
   in
@@ -272,16 +273,6 @@ let global_variable_to_entry acc id v =
   } in
   new_entry id (DW_TAG_variable var),IntSet.add v.gvar_type acc
 
-let function_parameter_to_entry acc p =
-  let p = {
-    formal_parameter_file_loc = None;
-    formal_parameter_artificial = None;
-    formal_parameter_name = Some p.parameter_name;
-    formal_parameter_type = p.parameter_type;
-    formal_parameter_variable_parameter = None;
-  } in
-  new_entry (next_id ()) (DW_TAG_formal_parameter p),IntSet.add p.formal_parameter_type acc
-
 let gen_splitlong op_hi op_lo =
   let op_piece = DW_OP_piece 4 in
   op_piece::op_hi@(op_piece::op_lo)
@@ -317,10 +308,10 @@ let range_entry_loc (sp,l) =
   | [a] -> LocSimple a
   | a::rest -> LocList (a::rest)
 
-let rec local_variable_to_entry f_id (acc,bcc) v id =
-  let loc,loc_list = try
+let location_entry f_id atom =
+  try
     begin 
-      match (Hashtbl.find var_locations (get_opt_val v.lvar_atom)) with
+      match (Hashtbl.find var_locations atom) with
       | FunctionLoc (a,r) ->
           translate_function_loc a r
       | RangeLoc l ->
@@ -331,9 +322,24 @@ let rec local_variable_to_entry f_id (acc,bcc) v id =
             and lo = Hashtbl.find label_translation (f_id,lo) in
             hi,lo,range_entry_loc i.var_loc) l in
           let id = next_id () in
-          Some (LocRef id),[{loc = l;loc_id = id;}]
+        Some (LocRef id),[{loc = l;loc_id = id;}]
     end
-  with Not_found -> None,[] in
+  with Not_found -> None,[]
+
+let function_parameter_to_entry f_id (acc,bcc) p =
+  let loc,loc_list = location_entry f_id (get_opt_val p.parameter_atom) in
+  let p = {
+    formal_parameter_file_loc = None;
+    formal_parameter_artificial = None;
+    formal_parameter_name = Some p.parameter_name;
+    formal_parameter_type = p.parameter_type;
+    formal_parameter_variable_parameter = None;
+    formal_parameter_location = loc;
+  } in
+  new_entry (next_id ()) (DW_TAG_formal_parameter p),(IntSet.add p.formal_parameter_type acc,loc_list@bcc)
+
+let rec local_variable_to_entry f_id (acc,bcc) v id =
+  let loc,loc_list = location_entry f_id (get_opt_val v.lvar_atom) in
   let var = {
     variable_file_loc = v.lvar_file_loc;
     variable_declaration = None;
@@ -392,7 +398,7 @@ let function_to_entry (acc,bcc) id f =
   let f_id = get_opt_val f.fun_atom in
   let acc = match f.fun_return_type with Some s -> IntSet.add s acc | None -> acc in
   let f_entry =  new_entry id (DW_TAG_subprogram f_tag) in
-  let params,acc = mmap function_parameter_to_entry acc f.fun_parameter in
+  let params,(acc,bcc) = mmap (function_parameter_to_entry f_id) (acc,bcc) f.fun_parameter in
   let vars,(acc,bcc) = fun_scope_to_entries f_id (acc,bcc) f.fun_scope in
   add_children f_entry (params@vars),(acc,bcc)
      

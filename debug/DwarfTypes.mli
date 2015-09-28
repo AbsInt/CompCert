@@ -107,6 +107,7 @@ type dw_tag_formal_parameter =
      formal_parameter_name:               string         option;
      formal_parameter_type:               reference;
      formal_parameter_variable_parameter: flag           option;
+     formal_parameter_location:           location_value option;
    }
 
 type dw_tag_label =

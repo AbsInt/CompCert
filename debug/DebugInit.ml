@@ -40,7 +40,8 @@ let init_debug () =
   implem.end_live_range <- DebugInformation.end_live_range;
   implem.stack_variable <- DebugInformation.stack_variable;
   implem.function_end <- DebugInformation.function_end;
-  implem.add_label <- DebugInformation.add_label
+  implem.add_label <- DebugInformation.add_label;
+  implem.atom_parameter <- DebugInformation.atom_parameter
 
 let init_none () =
   implem.init <- (fun _ -> ());
@@ -64,7 +65,9 @@ let init_none () =
   implem.end_live_range <- (fun _ _ -> ());
   implem.stack_variable <- (fun _ _ -> ());
   implem.function_end <- (fun _ _ -> ());
-  implem.add_label <- (fun _ _ _ -> ())
+  implem.add_label <- (fun _ _ _ -> ());
+  implem.atom_parameter <- (fun _ _ _ -> ())
+
 
 let init () =
   if !Clflags.option_g then

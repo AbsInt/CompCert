@@ -131,7 +131,8 @@ module DwarfPrinter(Target: DWARF_TARGET):
           add_attr_some e.formal_parameter_artificial (add_abbr_entry (0x34,artificial_type_abbr));
           add_attr_some e.formal_parameter_name add_name;
           add_type buf;
-          add_attr_some e.formal_parameter_variable_parameter (add_abbr_entry (0x4b,variable_parameter_type_abbr))
+          add_attr_some e.formal_parameter_variable_parameter (add_abbr_entry (0x4b,variable_parameter_type_abbr));
+          add_location  e.formal_parameter_location buf
       | DW_TAG_label _ ->
           prologue 0xa;
           add_low_pc buf;
@@ -419,7 +420,8 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_opt_value oc fp.formal_parameter_artificial print_flag;
       print_opt_value oc fp.formal_parameter_name print_string;
       print_ref oc fp.formal_parameter_type;
-      print_opt_value oc fp.formal_parameter_variable_parameter print_flag
+      print_opt_value oc fp.formal_parameter_variable_parameter print_flag;
+      print_opt_value oc fp.formal_parameter_location print_loc
 
     let print_tag_label oc tl =
       print_ref oc tl.label_low_pc;

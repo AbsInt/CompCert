@@ -29,6 +29,10 @@ let next_id () =
 let reset_id () =
   id := 0
 
+(* Auximilary functions *)
+let list_replace c f l =
+  List.map (fun a -> if c a then f a else a) l
+
 (* The name of the current compilation unit *)
 let file_name: string ref = ref ""
 
@@ -349,6 +353,7 @@ type global_variable_information = {
 type parameter_information = 
  {
   parameter_name:     string;
+  parameter_ident:    int;
   parameter_atom:     atom option;
   parameter_type:     int;
 }
@@ -512,6 +517,7 @@ let insert_global_declaration env dec=
         let ty = insert_type ty in
         {
          parameter_name = p.name;
+         parameter_ident = p.stamp;
          parameter_atom = None;
          parameter_type = ty;
        }) f.fd_params in
@@ -572,9 +578,7 @@ let set_member_offset str field offset =
   let id = find_type (TStruct (str,[])) in
   replace_composite id (fun comp ->
     let name f = f.cfd_name = field || match f.cfd_bitfield with Some n -> n = field | _ -> false in 
-    let members = List.map (fun a -> if name a then
-          {a with cfd_byte_offset = Some offset;}
-      else a) comp.ct_members in
+    let members = list_replace name (fun a -> {a with cfd_byte_offset = Some offset;}) comp.ct_members in
     {comp with ct_members = members;})
 
 let set_composite_size comp sou size =
@@ -585,10 +589,9 @@ let set_bitfield_offset str field offset underlying size =
   let id = find_type (TStruct (str,[])) in
   replace_composite id (fun comp ->
     let name f = f.cfd_name = field in
-    let members = List.map (fun a -> if name a then
-      {a with cfd_bit_offset = Some offset; cfd_bitfield = Some underlying; cfd_byte_size = Some size}
-    else
-      a) comp.ct_members in
+    let members = list_replace name (fun a -> 
+      {a with cfd_bit_offset = Some offset; cfd_bitfield = Some underlying; cfd_byte_size = Some size})
+        comp.ct_members in
     {comp with ct_members = members;})
 
 let atom_global_variable id atom = 
@@ -605,6 +608,14 @@ let atom_function id atom =
     Hashtbl.add atom_to_definition atom id';
     Hashtbl.iter (fun (fid,sid) tid -> if fid = id.stamp then 
       Hashtbl.add atom_to_scope (atom,sid) tid) scope_to_local
+  with Not_found -> ()
+
+let atom_parameter fid id atom =
+  try
+    let fid',f = find_fun_stamp fid.stamp in
+    let name p = p.parameter_ident = id.stamp in
+    let params = list_replace name (fun p -> {p with parameter_atom = Some atom;}) f.fun_parameter in
+    replace_fun fid' ({f with fun_parameter = params;})
   with Not_found -> ()
     
 let add_fun_addr atom (high,low) =
@@ -763,6 +774,8 @@ let function_end atom loc =
   List.iter (close_range loc) !open_vars;
   open_vars:= []
 
+let compilation_section_start: (string,int) Hashtbl.t = Hashtbl.create 7
+let compilation_section_end: (string,int) Hashtbl.t = Hashtbl.create 7
 
 let init name =
   id := 0;
@@ -776,3 +789,5 @@ let init name =
   Hashtbl.reset stamp_to_local;
   Hashtbl.reset atom_to_local;
   Hashtbl.reset scope_to_local;
+  Hashtbl.reset compilation_section_start;
+  Hashtbl.reset compilation_section_end

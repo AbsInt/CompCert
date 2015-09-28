@@ -44,6 +44,7 @@ type implem =
      mutable stack_variable: atom -> int * int builtin_arg -> unit;
      mutable function_end: atom -> positive -> unit;
      mutable add_label: atom -> positive -> int -> unit;
+     mutable atom_parameter: ident -> ident -> atom -> unit;
    }
 
 let implem =
@@ -70,6 +71,7 @@ let implem =
    stack_variable = (fun _ _ -> ());
    function_end = (fun _ _ -> ());
    add_label = (fun _ _ _ -> ());
+   atom_parameter = (fun _ _ _ -> ());
 }
 
 let init_compile_unit name = implem.init name
@@ -94,3 +96,4 @@ let end_live_range atom lbl = implem.end_live_range atom lbl
 let stack_variable atom loc = implem.stack_variable atom loc
 let function_end atom loc = implem.function_end atom loc
 let add_label atom p lbl = implem.add_label atom p lbl
+let atom_parameter fid pid atom = implem.atom_parameter fid pid atom

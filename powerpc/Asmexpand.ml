@@ -647,7 +647,7 @@ let expand_instruction id l =
         emit (Plabel lbl);
         lbl
     | Some lbl -> lbl in
-  let rec aux lbl scopes = function
+  let rec  aux lbl scopes = function
     | [] -> let lbl = get_lbl lbl in
       Debug.function_end id lbl
     | (Pbuiltin(EF_debug (kind,txt,_x),args,_) as i)::rest ->
@@ -689,7 +689,13 @@ let expand_instruction id l =
               aux None scopes rest
         end
     | i::rest -> expand_instruction_simple i; aux None scopes rest in
-  aux None [] l
+  (* We need to move all closing debug annotations before the last real statement *)
+  let rec move_debug acc = function
+    | (Pbuiltin(EF_debug (kind,txt,_x),args,_) as i)::rest ->
+        move_debug (i::acc) rest (* Move the debug annotations forward *)
+    | b::rest -> List.rev (b::(List.rev acc)@rest) (* We found the first non debug location *)
+    | [] -> List.rev acc (* This actually can never happen *) in
+  aux None [] (move_debug [] (List.rev l))
       
 
 let expand_function id fn =
