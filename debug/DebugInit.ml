@@ -74,7 +74,7 @@ let init_none () =
   implem.exists_section <- (fun _ -> true)
 
 let init () =
-  if !Clflags.option_g then
+  if !Clflags.option_g && Configuration.advanced_debug then
     init_debug ()
   else
     init_none ()
