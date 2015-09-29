@@ -113,3 +113,30 @@ let data_location_block_type_abbr = dw_form_block
 let data_location_ref_type_abbr = dw_form_ref4
 let bound_const_type_abbr = dw_form_udata
 let bound_ref_type_abbr=dw_form_ref4
+
+(* Sizeof functions for the encoding of uleb128 and sleb128 *)
+let sizeof_uleb128 value =
+  let size = ref 1 in
+  let value = ref (value lsr 7) in
+  while !value <> 0 do
+    value := !value lsr 7;
+    incr size;
+  done;
+  !size
+
+let sizeof_sleb128 value =
+  let size = ref 1 in
+  let byte = ref (value land 0x7f) in
+  let value = ref (value lsr 7) in
+  while not ((!value = 0 && (!byte land 0x40) = 0) || (!value = -1 && ((!byte land 0x40) <> 0))) do
+    byte := !value land 0x7f;
+    value := !value lsr 7;
+    incr size;
+  done;
+  !size
+
+let size_of_loc_expr = function
+  | DW_OP_bregx (a,b) -> 1 + (sizeof_uleb128 a)  + (sizeof_sleb128 (Int32.to_int b))
+  | DW_OP_plus_uconst a
+  | DW_OP_piece a -> 1 + (sizeof_uleb128 a)
+  | DW_OP_reg i -> if i < 32 then 1 else  2

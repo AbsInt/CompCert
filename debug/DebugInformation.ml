@@ -256,10 +256,15 @@ let insert_type (ty: typ) =
               } in
               FunctionType ftype
           | TNamed (id,_) ->
+              let typ = try
+                let _,t =
+                  List.find (fun a -> fst a = id.name) CBuiltins.builtins.Builtins.typedefs in
+                Some (attr_aux t)
+              with Not_found -> None in
               let t = {
                 typedef_file_loc = None;
                 typedef_name = id.name;
-                typ = None;
+                typ = typ;
               } in
               Typedef t
           | TStruct (id,_) ->
@@ -749,17 +754,7 @@ let end_live_range atom lbl =
     let old_r = Hashtbl.find var_locations atom in
     match old_r with
     | RangeLoc (n_r::old_r) ->
-        let n_r = {n_r with  range_end = Some lbl} in
-        Hashtbl.replace var_locations atom (RangeLoc (n_r::old_r))
-    | _ -> assert false
-  with Not_found -> ()
-      
-let close_range lbl atom  =
-  try
-    let old_r = Hashtbl.find var_locations atom in
-    match old_r with
-    | RangeLoc (n_r::old_r) ->
-        if n_r.range_end = None then
+        if n_r.range_end = None then (* We can skip non open locations *)
           let n_r = {n_r with  range_end = Some lbl} in
           Hashtbl.replace var_locations atom (RangeLoc (n_r::old_r))
     | _ -> assert false
@@ -771,7 +766,7 @@ let stack_variable atom (sp,loc) =
 let function_end atom loc =
   IntSet.iter (fun id -> close_scope atom id loc) !open_scopes;
   open_scopes := IntSet.empty;
-  List.iter (close_range loc) !open_vars;
+  List.iter (fun atom -> end_live_range atom loc) !open_vars;
   open_vars:= []
 
 let compilation_section_start: (string,int * int * int * string) Hashtbl.t = Hashtbl.create 7

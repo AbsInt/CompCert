@@ -303,12 +303,6 @@ module DwarfPrinter(Target: DWARF_TARGET):
           print_uleb128 oc col
       | None -> ()
 
-    let size_of_loc_expr = function
-      | DW_OP_bregx _ -> 3
-      | DW_OP_plus_uconst _ -> 2
-      | DW_OP_piece _ -> 2
-      | DW_OP_reg i -> if i < 32 then 1 else  2
-
     let print_loc_expr oc = function
       | DW_OP_bregx (a,b) ->
           print_byte oc dw_op_bregx;
@@ -316,7 +310,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
           fprintf oc "	.sleb128	%ld\n" b
       | DW_OP_plus_uconst i ->
           print_byte oc dw_op_plus_uconst;
-          print_byte oc i
+          print_uleb128 oc i
       | DW_OP_piece i ->
           print_byte oc dw_op_piece;
           print_uleb128 oc i
@@ -360,6 +354,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
     let print_data_location oc dl =
       match dl with
       | DataLocBlock e ->
+          print_sleb128 oc (size_of_loc_expr e);
           print_loc_expr oc e
       | _ -> ()
 
