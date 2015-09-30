@@ -57,9 +57,14 @@
 
 (* These precedences declarations solve the conflict in the following declaration :
 
-int f(int (a));
+   int f(int (a));
 
-when a is a TYPEDEF_NAME. It is specified by 6.7.5.3 11.
+   when a is a TYPEDEF_NAME. It is specified by 6.7.5.3 11.
+
+   WARNING: These precedence declarations tend to silently solve other
+   conflicts. So, if you change the grammar (especially or
+   statements), you should check that without these declarations, it
+   has ONLY ONE CONFLICT.
 *)
 %nonassoc TYPEDEF_NAME
 %nonassoc highPrec
@@ -89,25 +94,30 @@ string_literals_list:
 | string_literals_list STRING_LITERAL
     {}
 
-(* WARNING : because of the lookahead token, the context might
-   be pushed or popped one token after the position of this
-   non-terminal !
+(* WARNING : because of the lookahead token, the context might be
+   opened or closed one token after the position of this non-terminal !
 
-   Pushing too late is not dangerous for us, because this does not
+   Opening too late is not dangerous for us, because this does not
    change the token stream. However, we have to make sure the
-   lookahead token present just after popping is not an identifier.
- *)
+   lookahead token present just after closing/declaring/restoring is
+   not an identifier. An easy way to check that is to look at the
+   follow set of the non-terminal in question. The follow sets are
+   given by menhir with option -lg 3. *)
 
-push_context:
-  (* empty *)%prec highPrec { !push_context () }
-pop_context:
-  (* empty *) { !pop_context () }
+%inline nop: (* empty *) { }
+
+open_context:
+  (* empty *)%prec highPrec { !open_context () }
+close_context:
+  (* empty *) { !close_context () }
 in_context(nt):
-  push_context x = nt pop_context { x }
+  open_context x = nt close_context { x }
+
+save_contexts_stk:
+  (* empty *) { !save_contexts_stk () }
 
 declare_varname(nt):
   i = nt { declare_varname i; i }
-
 declare_typename(nt):
   i = nt { declare_typename i; i }
 
@@ -267,37 +277,18 @@ constant_expression:
 | conditional_expression
     {}
 
+(* We separate two kinds of declarations: the typedef declaration and
+   the normal declarations. This makes possible to distinguish /in the
+   grammar/ whether a declaration should add a typename or a varname
+   in the context.  There is an other difference between
+   [init_declarator_list] and [typedef_declarator_list]: the later
+   cannot contain an initialization (this is an error to initialize a
+   typedef). *)
+
 declaration:
 | declaration_specifiers init_declarator_list? SEMICOLON
     {}
 | declaration_specifiers_typedef typedef_declarator_list? SEMICOLON
-    {}
-
-declaration_specifiers_no_type:
-| storage_class_specifier_no_typedef declaration_specifiers_no_type?
-| type_qualifier declaration_specifiers_no_type?
-| function_specifier declaration_specifiers_no_type?
-    {}
-
-declaration_specifiers_no_typedef_name:
-| storage_class_specifier_no_typedef declaration_specifiers_no_typedef_name?
-| type_qualifier declaration_specifiers_no_typedef_name?
-| function_specifier declaration_specifiers_no_typedef_name?
-| type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
-    {}
-
-declaration_specifiers:
-| declaration_specifiers_no_type? i = TYPEDEF_NAME declaration_specifiers_no_type?
-    { set_id_type i TypedefId }
-| declaration_specifiers_no_type? type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
-    {}
-
-declaration_specifiers_typedef:
-| declaration_specifiers_no_type? TYPEDEF declaration_specifiers_no_type? i = TYPEDEF_NAME declaration_specifiers_no_type?
-| declaration_specifiers_no_type? i = TYPEDEF_NAME declaration_specifiers_no_type? TYPEDEF declaration_specifiers_no_type?
-    { set_id_type i TypedefId }
-| declaration_specifiers_no_type? TYPEDEF declaration_specifiers_no_type? type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
-| declaration_specifiers_no_type? type_specifier_no_typedef_name declaration_specifiers_no_typedef_name? TYPEDEF declaration_specifiers_no_typedef_name?
     {}
 
 init_declarator_list:
@@ -326,6 +317,67 @@ storage_class_specifier_no_typedef:
 | REGISTER
     {}
 
+(* [declaration_specifiers_no_type] matches declaration specifiers
+   that do not contain either "typedef" nor type specifiers. *)
+declaration_specifiers_no_type:
+| storage_class_specifier_no_typedef declaration_specifiers_no_type?
+| type_qualifier declaration_specifiers_no_type?
+| function_specifier declaration_specifiers_no_type?
+    {}
+
+(* [declaration_specifiers_no_typedef_name] matches declaration
+   specifiers that contain neither "typedef" nor a typedef name
+   (i.e. type specifier declared using a previous "typedef
+   keyword"). *)
+declaration_specifiers_no_typedef_name:
+| storage_class_specifier_no_typedef declaration_specifiers_no_typedef_name?
+| type_qualifier declaration_specifiers_no_typedef_name?
+| function_specifier declaration_specifiers_no_typedef_name?
+| type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+    {}
+
+(* [declaration_specifiers_no_type] matches declaration_specifiers
+   that do not contains "typedef". Moreover, it makes sure that it
+   contains either one typename and not other type specifier or no
+   typename.
+
+   This is a weaker condition than 6.7.2 2. It is necessary to enforce
+   this in the grammar to disambiguate the example in 6.7.7 6:
+
+   typedef signed int t;
+   struct tag {
+     unsigned t:4;
+     const t:5;
+   };
+
+   The first field is a named t, while the second is unnamed of type t.
+*)
+declaration_specifiers:
+| declaration_specifiers_no_type? i = TYPEDEF_NAME declaration_specifiers_no_type?
+    { set_id_type i TypedefId }
+| declaration_specifiers_no_type? type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+    {}
+
+(* This matches declaration_specifiers that do contains once the
+   "typedef" keyword. To avoid conflicts, we also encode the
+   constraint described in the comment for [declaration_specifiers]. *)
+declaration_specifiers_typedef:
+| declaration_specifiers_no_type?
+  TYPEDEF declaration_specifiers_no_type?
+  i = TYPEDEF_NAME declaration_specifiers_no_type?
+| declaration_specifiers_no_type?
+  i = TYPEDEF_NAME declaration_specifiers_no_type?
+  TYPEDEF declaration_specifiers_no_type?
+    { set_id_type i TypedefId }
+| declaration_specifiers_no_type?
+  TYPEDEF declaration_specifiers_no_type?
+  type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+| declaration_specifiers_no_type?
+  type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+  TYPEDEF declaration_specifiers_no_typedef_name?
+    {}
+
+(* A type specifier which is not a typedef name. *)
 type_specifier_no_typedef_name:
 | VOID
 | CHAR
@@ -366,6 +418,8 @@ struct_declaration:
 | specifier_qualifier_list struct_declarator_list? SEMICOLON
     {}
 
+(* As in the standard, except it also encodes the constraint described
+   in the comment above [declaration_specifiers]. *)
 specifier_qualifier_list:
 | type_qualifier_list? i = TYPEDEF_NAME type_qualifier_list?
     { set_id_type i TypedefId }
@@ -460,6 +514,10 @@ function_specifier:
 | INLINE
     {}
 
+(* The semantic action returned by [declarator] is a pair of the
+   identifier being defined and an option of the context stack that
+   has to be restored if entering the body of the function being
+   defined, if so. *)
 declarator:
 | pointer? x = direct_declarator attribute_specifier_list
     { x }
@@ -470,9 +528,11 @@ direct_declarator:
 | LPAREN x = declarator RPAREN
 | x = direct_declarator LBRACK type_qualifier_list? assignment_expression? RBRACK
     { x }
-| x = direct_declarator LPAREN l=in_context(parameter_type_list?) RPAREN
+| x = direct_declarator LPAREN
+    open_context parameter_type_list? restore_fun = save_contexts_stk
+    close_context RPAREN
     { match snd x with
-      | None -> (fst x, Some (match l with None -> [] | Some l -> l))
+      | None -> (fst x, Some restore_fun)
       | Some _ -> x }
 
 pointer:
@@ -542,26 +602,51 @@ designator:
 | DOT i = general_identifier
     { set_id_type i OtherId }
 
-statement_finish:
-| labeled_statement(statement_finish)
-| compound_statement
-| expression_statement
-| selection_statement_finish
-| iteration_statement(statement_finish)
-| jump_statement
-| asm_statement
+(* The grammar of statements is replicated three times.
+
+   [statement_finish_close] should close the current context just
+   before its last token.
+
+   [statement_finish_noclose] should not close the current context. It
+   should modify it only if this modification actually changes the
+   context of the current block.
+
+   [statement_intern_close] is like [statement_finish_close], except
+   it cannot reduce to a single-branch if statement.
+*)
+
+statement_finish_close:
+| labeled_statement(statement_finish_close)
+| compound_statement(nop)
+| expression_statement(close_context)
+| selection_statement_finish(nop)
+| iteration_statement(nop,statement_finish_close)
+| jump_statement(close_context)
+| asm_statement(close_context)
     {}
 
-statement_intern:
-| labeled_statement(statement_intern)
-| compound_statement
-| expression_statement
-| selection_statement_intern
-| iteration_statement(statement_intern)
-| jump_statement
-| asm_statement
+statement_finish_noclose:
+| labeled_statement(statement_finish_noclose)
+| compound_statement(open_context)
+| expression_statement(nop)
+| selection_statement_finish(open_context)
+| iteration_statement(open_context,statement_finish_close)
+| jump_statement(nop)
+| asm_statement(nop)
     {}
 
+statement_intern_close:
+| labeled_statement(statement_intern_close)
+| compound_statement(nop)
+| expression_statement(close_context)
+| selection_statement_intern_close
+| iteration_statement(nop,statement_intern_close)
+| jump_statement(close_context)
+| asm_statement(close_context)
+    {}
+
+(* [labeled_statement(last_statement)] has the same effect on contexts
+   as [last_statement]. *)
 labeled_statement(last_statement):
 | i = general_identifier COLON last_statement
     { set_id_type i OtherId }
@@ -569,10 +654,14 @@ labeled_statement(last_statement):
 | DEFAULT COLON last_statement
     {}
 
-compound_statement:
-| LBRACE in_context(block_item_list?) RBRACE
+(* [compound_statement] uses a local context and closes it before its
+   last token. It uses [openc] to open this local context if needed.
+   That is, if a local context has already been opened, [openc] = [nop],
+   otherwise, [openc] = [open_context]. *)
+compound_statement(openc):
+| LBRACE openc block_item_list? close_context RBRACE
     {}
-| LBRACE in_context(block_item_list?) error
+| LBRACE openc block_item_list? close_context error
     { unclosed "{" "}" $startpos($1) $endpos }
 
 block_item_list:
@@ -581,47 +670,99 @@ block_item_list:
 
 block_item:
 | declaration
-| statement_finish
+| statement_finish_noclose
 | PRAGMA
     {}
 
-expression_statement:
-| expression? SEMICOLON
+(* [expression_statement], [jump_statement] and [asm_statement] close
+   the local context if needed, depending of the close parameter. If
+   there is no local context, [close] = [nop]. Otherwise,
+   [close] = [close_context]. *)
+expression_statement(close):
+| expression? close SEMICOLON
     {}
 
-selection_statement_finish:
-| IF LPAREN expression RPAREN statement_finish
-| IF LPAREN expression RPAREN statement_intern ELSE statement_finish
-| SWITCH LPAREN expression RPAREN statement_finish
-    {}
-
-selection_statement_intern:
-| IF LPAREN expression RPAREN statement_intern ELSE statement_intern
-| SWITCH LPAREN expression RPAREN statement_intern
-    {}
-
-iteration_statement(stmt):
-| WHILE LPAREN expression RPAREN stmt
-| DO statement_finish WHILE LPAREN expression RPAREN SEMICOLON
-| FOR LPAREN expression? SEMICOLON expression? SEMICOLON expression? RPAREN stmt
-| FOR LPAREN push_context declaration expression? SEMICOLON expression? RPAREN stmt pop_context
-    {}
-
-jump_statement:
-| GOTO i = general_identifier SEMICOLON
+jump_statement(close):
+| GOTO i = general_identifier close SEMICOLON
     { set_id_type i OtherId }
-| CONTINUE SEMICOLON
-| BREAK SEMICOLON
-| RETURN expression? SEMICOLON
+| CONTINUE close SEMICOLON
+| BREAK close SEMICOLON
+| RETURN expression? close SEMICOLON
     {}
 
-asm_statement:
-| ASM asm_attributes LPAREN string_literals_list asm_arguments RPAREN SEMICOLON
+asm_statement(close):
+| ASM asm_attributes LPAREN string_literals_list asm_arguments RPAREN close SEMICOLON
+    {}
+
+(* [selection_statement_finish] and [selection_statement_intern] use a
+   local context and close it before their last token.
+
+   [selection_statement_finish(openc)] uses [openc] to open this local
+   context if needed. That is, if a local context has already been
+   opened, [openc] = [nop], otherwise, [openc] = [open_context].
+
+   [selection_statement_intern_close] is always called with a local
+   context openned. It closes it before its last token.  *)
+
+(* It should be noted that the token [ELSE] should be lookaheaded
+   /outside/ of the local context because if the lookaheaded token is
+   not [ELSE], then this is the end of the statement.
+
+   This is especially important to parse correctly the following
+   example:
+
+     typedef int a;
+
+     int f() {
+       for(int a; ;)
+         if(1);
+       a * x;
+     }
+
+   However, if the lookahead token is [ELSE], we should parse the
+   second branch in the same context as the first branch, so we have
+   to reopen the previously closed context. This is the reason for the
+   save/restore system.
+*)
+
+if_else_statement_begin(openc):
+| IF openc LPAREN expression RPAREN restore_fun = save_contexts_stk
+  statement_intern_close
+    { restore_fun () }
+
+selection_statement_finish(openc):
+| IF openc LPAREN expression RPAREN save_contexts_stk statement_finish_close
+| if_else_statement_begin(openc) ELSE statement_finish_close
+| SWITCH openc LPAREN expression RPAREN statement_finish_close
+    {}
+
+selection_statement_intern_close:
+| if_else_statement_begin(nop) ELSE statement_intern_close
+| SWITCH LPAREN expression RPAREN statement_intern_close
+    {}
+
+(* [iteration_statement] uses a local context and closes it before
+   their last token.
+
+   [iteration_statement] uses [openc] to open this local context if
+   needed. That is, if a local context has already been opened,
+   [openc] = [nop], otherwise, [openc] = [open_context].
+
+   [last_statement] is either [statement_intern_close] or
+   [statement_finish_close]. That is, it should /always/ close the
+   local context. *)
+
+iteration_statement(openc,last_statement):
+| WHILE openc LPAREN expression RPAREN last_statement
+| DO open_context statement_finish_close WHILE
+    openc LPAREN expression RPAREN close_context SEMICOLON
+| FOR openc LPAREN expression? SEMICOLON expression? SEMICOLON expression? RPAREN last_statement
+| FOR openc LPAREN declaration expression? SEMICOLON expression? RPAREN last_statement
     {}
 
 asm_attributes:
 | /* empty */
-| CONST asm_attributes    
+| CONST asm_attributes
 | VOLATILE asm_attributes
     {}
 
@@ -679,22 +820,14 @@ function_definition_begin:
 | declaration_specifiers pointer? x=direct_declarator
     { match x with
       | (_, None) -> $syntaxerror
-      | (i, Some l) ->
-	declare_varname i;
-	!push_context ();
-	List.iter (fun x ->
-	  match x with
-	    | None -> ()
-	    | Some i -> declare_varname i
-	  ) l
+      | (i, Some restore_fun) -> restore_fun ()
     }
-| declaration_specifiers pointer? x=direct_declarator 
-  LPAREN params=identifier_list RPAREN in_context(declaration_list)
+| declaration_specifiers pointer? x=direct_declarator
+  LPAREN params=identifier_list RPAREN open_context declaration_list
     { match x with
       | (_, Some _) -> $syntaxerror
       | (i, None) ->
 	declare_varname i;
-	!push_context ();
 	List.iter declare_varname params
     }
 
@@ -711,8 +844,7 @@ declaration_list:
     { }
 
 function_definition:
-| function_definition_begin LBRACE block_item_list? pop_context RBRACE
+| function_definition_begin LBRACE block_item_list? close_context RBRACE
     { }
-| function_definition_begin LBRACE block_item_list? pop_context error
+| function_definition_begin LBRACE block_item_list? close_context error
     { unclosed "{" "}" $startpos($2) $endpos }
-

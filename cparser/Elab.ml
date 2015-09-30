@@ -2250,20 +2250,3 @@ let elab_file prog =
   reset();
   ignore (elab_definitions false (Builtins.environment()) prog);
   elaborated_program()
-(*
-  let rec inf = Datatypes.S inf in
-  let ast:Cabs.definition list =
-    Obj.magic
-      (match Parser.translation_unit_file inf (Lexer.tokens_stream lb) with
-         | Parser.Parser.Inter.Fail_pr ->
-             (* Theoretically impossible : implies inconsistencies
-                between grammars. *)
-             Cerrors.fatal_error "Internal error while parsing"
-         | Parser.Parser.Inter.Timeout_pr -> assert false
-         | Parser.Parser.Inter.Parsed_pr (ast, _ ) -> ast)
-  in
-  reset();
-  ignore (elab_definitions false (Builtins.environment()) ast);
-  elaborated_program()
-*)
-
