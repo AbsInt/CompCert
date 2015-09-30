@@ -37,6 +37,17 @@ let rec mmap f env = function
       let (tl', env2) = mmap f env1 tl in
       (hd' :: tl', env2)
 
+let rec mmap_opt f env = function
+  | [] -> ([],env)
+  | hd :: tl ->
+      let (hd',env1) = f env hd in
+      let (tl', env2) = mmap_opt f env1 tl in
+      begin
+        match hd' with
+        | Some hd -> (hd :: tl', env2)
+        | None -> tl',env2
+      end
+
 (* Functions to translate the basetypes. *)
 let int_type_to_entry id i =
    let encoding =
@@ -349,16 +360,19 @@ let function_parameter_to_entry f_id (acc,bcc) p =
   new_entry (next_id ()) (DW_TAG_formal_parameter p),(IntSet.add p.formal_parameter_type acc,loc_list@bcc)
 
 let rec local_variable_to_entry sec f_id (acc,bcc) v id =
-  let loc,loc_list = location_entry f_id (get_opt_val v.lvar_atom) in
-  let var = {
-    variable_file_loc = translate_file_loc sec v.lvar_file_loc;
-    variable_declaration = None;
-    variable_external = None;
-    variable_name = v.lvar_name;
-    variable_type = v.lvar_type;
-    variable_location = loc;
-  } in
-  new_entry id (DW_TAG_variable var),(IntSet.add v.lvar_type acc,loc_list@bcc)
+  match v.lvar_atom with
+  | None -> None,(acc,bcc)
+  | Some loc ->
+      let loc,loc_list = location_entry f_id loc in
+      let var = {
+        variable_file_loc = translate_file_loc sec v.lvar_file_loc;
+        variable_declaration = None;
+        variable_external = None;
+        variable_name = v.lvar_name;
+        variable_type = v.lvar_type;
+        variable_location = loc;
+      } in
+      Some (new_entry id (DW_TAG_variable var)),(IntSet.add v.lvar_type acc,loc_list@bcc)
 
 and scope_to_entry sec f_id acc sc id =
   let l_pc,h_pc = try
@@ -377,14 +391,16 @@ and scope_to_entry sec f_id acc sc id =
     lexical_block_high_pc = h_pc;
     lexical_block_low_pc = l_pc;
   } in
-  let vars,acc = mmap (local_to_entry sec f_id) acc sc.scope_variables in
+  let vars,acc = mmap_opt (local_to_entry sec f_id) acc sc.scope_variables in
   let entry = new_entry id (DW_TAG_lexical_block scope) in
   add_children entry vars,acc
 
 and local_to_entry sec f_id acc id =
   match Hashtbl.find local_variables id with
   | LocalVariable v -> local_variable_to_entry sec f_id acc v id
-  | Scope v -> scope_to_entry sec f_id acc v id
+  | Scope v -> let s,acc = 
+      (scope_to_entry sec f_id acc v id) in 
+    Some s,acc
 
 let fun_scope_to_entries sec f_id acc id =
   match id with
@@ -392,7 +408,7 @@ let fun_scope_to_entries sec f_id acc id =
   | Some id ->
       let sc = Hashtbl.find local_variables id in
       (match sc with
-      | Scope sc ->mmap (local_to_entry sec f_id) acc sc.scope_variables
+      | Scope sc ->mmap_opt (local_to_entry sec f_id) acc sc.scope_variables
       | _ -> assert false)
 
 let function_to_entry sec (acc,bcc) id f =

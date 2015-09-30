@@ -665,7 +665,7 @@ let insert_local_declaration sto id ty loc =
     lvar_file_loc = loc;
     lvar_type = ty;
     lvar_static = sto = Storage_static;
-  } in
+    } in
   let id' = next_id () in
   Hashtbl.add local_variables id' (LocalVariable var);
   Hashtbl.add stamp_to_local id.stamp id'
