@@ -393,7 +393,8 @@ module DwarfPrinter(Target: DWARF_TARGET):
           sprintf "%s, Build: %s, Tag: %s" Version.version Version.buildnr Version.tag
         else
           Version.version in
-      let prod_name = sprintf "AbsInt Angewandte Informatik GmbH:CompCert Version %s:%s-%s" version_string Configuration.arch Configuration.system in
+      let prod_name = sprintf "AbsInt Angewandte Informatik GmbH:CompCert Version %s:(%s,%s,%s,%s)" 
+          version_string Configuration.arch Configuration.system Configuration.abi Configuration.model in
       print_string oc (Sys.getcwd ());
       print_addr oc tag.compile_unit_low_pc;
       print_addr oc tag.compile_unit_high_pc;
