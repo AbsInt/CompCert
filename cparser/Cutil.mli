@@ -105,6 +105,8 @@ val composite_info_decl:
   Env.t -> struct_or_union -> attributes -> Env.composite_info
 val composite_info_def:
   Env.t -> struct_or_union -> attributes -> field list -> Env.composite_info
+val struct_layout:
+  Env.t -> field list -> (string * int) list
 
 (* Type classification functions *)
 

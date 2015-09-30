@@ -24,21 +24,17 @@ open TargetPrinter
 module Printer(Target:TARGET) =
   struct
 
-    let addr_mapping: (string, (int * int)) Hashtbl.t = Hashtbl.create 7
-
     let get_fun_addr name =
-      let name = extern_atom name in
-      let start_addr = new_label ()
-      and end_addr = new_label () in
-      Hashtbl.add addr_mapping name (start_addr,end_addr);
-      start_addr,end_addr
+      let s = Target.new_label ()
+      and e = Target.new_label () in
+      Debug.add_fun_addr name (e,s);
+      s,e
 
     let print_debug_label oc l =
       if !Clflags.option_g && Configuration.advanced_debug then
         fprintf oc "%a:\n" Target.label l
       else
         ()
-
 
     let print_location oc loc =
       if loc <> Cutil.no_loc then Target.print_file_line oc (fst loc) (snd loc)
@@ -67,7 +63,9 @@ module Printer(Target:TARGET) =
       print_debug_label oc e;
       Target.print_fun_info oc name;
       Target.emit_constants oc lit;
-      Target.print_jumptable oc jmptbl
+      Target.print_jumptable oc jmptbl;
+      if !Clflags.option_g then
+        Hashtbl.iter (fun p i -> Debug.add_label name p i) current_function_labels
     
     let print_init_data oc name id =
       if Str.string_match PrintCsyntax.re_string_literal (extern_atom name) 0
@@ -102,8 +100,7 @@ module Printer(Target:TARGET) =
             let sz =
               match v.gvar_init with [Init_space sz] -> sz | _ -> assert false in
             Target.print_comm_symb oc sz name align
-              
-              
+                            
     let print_globdef oc (name,gdef) =
       match gdef with
       | Gfun (Internal code) -> print_function oc name code
@@ -113,18 +110,13 @@ module Printer(Target:TARGET) =
     module DwarfTarget: DwarfTypes.DWARF_TARGET =
       struct
         let label = Target.label
-        let name_of_section = Target.name_of_section
+        let section = Target.section
         let print_file_loc = Target.print_file_loc
-        let get_start_addr = Target.get_start_addr   
-        let get_end_addr = Target.get_end_addr
-        let get_stmt_list_addr = Target.get_stmt_list_addr
         let name_of_section = Target.name_of_section
-        let get_fun_addr s = try Some (Hashtbl.find addr_mapping s) with Not_found -> None
+        let symbol = Target.symbol
       end
 
-    module DebugPrinter = DwarfPrinter (DwarfTarget) (Target.DwarfAbbrevs)
-      
-     
+    module DebugPrinter = DwarfPrinter (DwarfTarget)     
   end
 
 let print_program oc p db =
@@ -138,7 +130,14 @@ let print_program oc p db =
   close_filenames ();
   if !Clflags.option_g && Configuration.advanced_debug then
     begin
-      match db with
+      let atom_to_s s =
+        let s = C2C.atom_sections s in
+        match s with
+        | [] -> Target.name_of_section Section_text
+        | (Section_user (n,_,_))::_ -> n
+        | a::_ ->
+            Target.name_of_section a in
+      match Debug.generate_debug_info atom_to_s (Target.name_of_section Section_text) with
       | None -> ()
       | Some db ->
           Printer.DebugPrinter.print_debug oc db

@@ -108,6 +108,7 @@ let preprocess ifile ofile =
 (* From preprocessed C to Csyntax *)
 
 let parse_c_file sourcename ifile =
+  Debug.init_compile_unit sourcename;
   Sections.initialize();
   (* Simplification options *)
   let simplifs =
@@ -117,10 +118,10 @@ let parse_c_file sourcename ifile =
   ^ (if !option_fpacked_structs then "p" else "")
   in
   (* Parsing and production of a simplified C AST *)
-  let ast,debug =
+  let ast =
     match Parse.preprocessed_file simplifs sourcename ifile with
-    | None,_ -> exit 2
-    | Some p,d -> p,d in
+    | None -> exit 2
+    | Some p -> p in
   (* Save C AST if requested *)
   if !option_dparse then begin
     let ofile = output_filename sourcename ".c" ".parsed.c" in
@@ -141,7 +142,7 @@ let parse_c_file sourcename ifile =
     PrintCsyntax.print_program (Format.formatter_of_out_channel oc) csyntax;
     close_out oc
   end;
-  csyntax,debug
+  csyntax,None
 
 (* Dump Asm code in binary format for the validator *)
 
@@ -682,6 +683,7 @@ let _ =
     Builtins.set C2C.builtins;
     CPragmas.initialize();
     parse_cmdline cmdline_actions;
+    DebugInit.init (); (* Initialize the debug functions *)
     let nolink = !option_c || !option_S || !option_E || !option_interp in
     if nolink && !option_o <> None && !num_source_files >= 2 then begin
       eprintf "Ambiguous '-o' option (multiple source files)\n";

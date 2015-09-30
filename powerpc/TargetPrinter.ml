@@ -78,6 +78,8 @@ let end_addr = ref (-1)
 
 let stmt_list_addr = ref (-1)
 
+let debug_start_addr = ref (-1)
+
 let label = elf_label
 
 module Linux_System : SYSTEM =
@@ -129,9 +131,10 @@ module Linux_System : SYSTEM =
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\",\"a%s%s\",@progbits"
             s (if wr then "w" else "") (if ex then "x" else "")
-      | Section_debug_info -> ".debug_info,\"\",@progbits"
+      | Section_debug_info _ -> ".debug_info,\"\",@progbits"
       | Section_debug_abbrev -> ".debug_abbrev,\"\",@progbits"
-    
+      | Section_debug_loc -> ".debug_loc,\"\",@progbits"
+            
     let section oc sec =
       let name = name_of_section sec in
       assert (name <> "COMM");
@@ -207,14 +210,20 @@ module Diab_System : SYSTEM =
             | true, false -> 'd'                (* data *)
             | false, true -> 'c'                (* text *)
             | false, false -> 'r')              (* const *)
-      | Section_debug_info -> ".debug_info,,n"
-      | Section_debug_abbrev -> ".debug_abbrev,,n"
+      | Section_debug_info s -> sprintf ".section	.debug_info%s,,n" (if s <> ".text" then s else "")
+      | Section_debug_abbrev -> ".section	.debug_abbrev,,n"
+      | Section_debug_loc -> ".section	.debug_loc,,n"
 
     let section oc sec =
       let name = name_of_section sec in
       assert (name <> "COMM");
-      fprintf oc "	%s\n" name
-
+      match sec with
+      | Section_debug_info s ->
+          fprintf oc "	%s\n" name;
+          if s <> ".text" then
+            fprintf oc "	.sectionlink	.debug_info\n"
+      | _ ->
+          fprintf oc "	%s\n" name
 
     let print_file_line oc file line =
       print_file_line_d2 oc comment file line
@@ -229,65 +238,51 @@ module Diab_System : SYSTEM =
     let cfi_rel_offset oc reg ofs = ()
         
     let print_prologue oc =
-      fprintf oc "	.xopt	align-fill-text=0x60000000\n";
-      if !Clflags.option_g then
-        begin
-          fprintf oc "	.text\n";
-          fprintf oc "	.section	.debug_line,,n\n";
-          let label_line_start = new_label () in
-          stmt_list_addr := label_line_start;
-          fprintf oc "%a:\n" label label_line_start;
-          fprintf oc "	.text\n";
-          let label_start = new_label () in
-          start_addr := label_start;
-          fprintf oc "%a:\n" label label_start;
-          fprintf oc "	.d2_line_start	.debug_line\n";
-        end
-
-    let filenum : (string,int) Hashtbl.t = Hashtbl.create 7
-
-    let additional_debug_sections: StringSet.t ref = ref StringSet.empty
-
+      fprintf oc "	.xopt	align-fill-text=0x60000000\n"
 
     let print_epilogue oc =
-      if !Clflags.option_g then
-        begin
-          fprintf oc "\n";
-          let label_end = new_label () in
-          end_addr := label_end;
-          fprintf oc "%a:\n" label label_end;
-          fprintf oc "	.text\n";
-          StringSet.iter (fun file ->
-            let label = new_label () in
-            Hashtbl.add filenum file label;
-            fprintf oc ".L%d:	.d2filenum \"%s\"\n" label file) !all_files;
-          fprintf oc "	.d2_line_end\n";
-          StringSet.iter (fun s ->
-            fprintf oc "	%s\n" s;
-            fprintf oc "	.d2_line_end\n") !additional_debug_sections
-        end
+      let end_label sec = 
+        fprintf oc "\n";
+        fprintf oc "	%s\n" sec;
+        let label_end = new_label () in
+        fprintf oc "%a:\n" label label_end;
+        label_end 
+      and entry_label f =
+        let label = new_label () in
+        fprintf oc ".L%d:	.d2filenum \"%s\"\n" label f;
+        label
+      and end_line () =   fprintf oc "	.d2_line_end\n" in
+      Debug.compute_file_enum end_label entry_label end_line
 
     let print_file_loc oc (file,col) =
-      fprintf oc "	.4byte		%a\n" label (Hashtbl.find filenum file);
+      fprintf oc "	.4byte		1\n";(* label (Hashtbl.find filenum file);*)
       fprintf oc "	.uleb128	%d\n" col
 
     let debug_section oc sec =
-      if !Clflags.option_g && Configuration.advanced_debug then
-        match sec with
-        | Section_user (name,_,_)  ->
-            let sec_name = name_of_section sec in
-            if not (StringSet.mem sec_name !additional_debug_sections) then
-              begin
-                let name = ".debug_line"^name in
-                additional_debug_sections := StringSet.add sec_name !additional_debug_sections;
-                fprintf oc "	.section	%s,,n\n" name;
-                fprintf oc "	.sectionlink	.debug_line\n";
-                section oc sec;
-                fprintf oc "	.d2_line_start	%s\n" name
-              end
-        | _ -> () (* Only the case of a user section is interresting *)
-      else
-        ()
+      match sec with
+      | Section_debug_abbrev 
+      | Section_debug_info _
+      | Section_debug_loc -> ()
+      | sec ->
+          let name = match sec with
+          | Section_user (name,_,_) -> name
+          | _ -> name_of_section sec in
+          if not (Debug.exists_section name) then 
+            let line_start = new_label ()
+            and low_pc = new_label ()
+            and debug_info = new_label () in
+            Debug.add_compilation_section_start name (line_start,low_pc,debug_info,name_of_section sec);
+            let line_name = ".debug_line" ^(if name <> ".text" then name else "") in 
+            fprintf oc "	.section	%s,,n\n" line_name;
+            if name <> ".text" then
+              fprintf oc "	.sectionlink	.debug_line\n";
+            fprintf oc "%a:\n" label line_start;
+            section oc sec;
+            fprintf oc "%a:\n" label low_pc;
+            fprintf oc "	.0byte	%a\n" label debug_info;
+            fprintf oc "	.d2_line_start	%s\n" line_name
+          else
+            ()
             
 
   end
@@ -855,14 +850,13 @@ module Target (System : SYSTEM):TARGET =
 
     let get_stmt_list_addr () = !stmt_list_addr
 
-    module DwarfAbbrevs = DwarfUtil.DefaultAbbrevs
+    let get_debug_start_addr () = !debug_start_addr
 
     let new_label = new_label            
 
     let section oc sec =
       section oc sec;
       debug_section oc sec
-
   end
 
 let sel_target () =

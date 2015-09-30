@@ -152,7 +152,8 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\",\"a%s%s\",%%progbits"
             s (if wr then "w" else "") (if ex then "x" else "")
-      | Section_debug_info
+      | Section_debug_info _
+      | Section_debug_loc
       | Section_debug_abbrev -> "" (* Dummy value *)
             
     let section oc sec =
@@ -905,9 +906,9 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
     let get_end_addr () = -1 (* Dummy constant *)
 
     let get_stmt_list_addr () = -1 (* Dummy constant *)
-
-    module DwarfAbbrevs = DwarfUtil.DefaultAbbrevs (* Dummy Abbrev types *)
         
+    let get_debug_start_addr () = -1 (* Dummy constant *)
+       
     let label = elf_label
        
     let new_label = new_label

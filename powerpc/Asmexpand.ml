@@ -563,7 +563,7 @@ let num_crbit = function
   | CRbit_3 -> 3
   | CRbit_6 -> 6
 
-let expand_instruction instr =
+let expand_instruction_simple instr =
   match instr with
   | Pallocframe(sz, ofs,retofs) ->
       let variadic = (!current_function).fn_sig.sig_cc.cc_vararg in
@@ -637,22 +637,160 @@ let expand_instruction instr =
   | _ ->
       emit instr
 
-let expand_function fn =
+(* Translate to the integer identifier of the register as
+   the EABI specifies *)
+
+let int_reg_to_dwarf = function
+   | GPR0 -> 0  | GPR1 -> 1  | GPR2 -> 2  | GPR3 -> 3
+   | GPR4 -> 4  | GPR5 -> 5  | GPR6 -> 6  | GPR7 -> 7
+   | GPR8 -> 8  | GPR9 -> 9  | GPR10 -> 10 | GPR11 -> 11
+   | GPR12 -> 12 | GPR13 -> 13 | GPR14 -> 14 | GPR15 -> 15
+   | GPR16 -> 16 | GPR17 -> 17 | GPR18 -> 18 | GPR19 -> 19
+   | GPR20 -> 20 | GPR21 -> 21 | GPR22 -> 22 | GPR23 -> 23
+   | GPR24 -> 24 | GPR25 -> 25 | GPR26 -> 26 | GPR27 -> 27
+   | GPR28 -> 28 | GPR29 -> 29 | GPR30 -> 30 | GPR31 -> 31
+
+let float_reg_to_dwarf = function
+   | FPR0 -> 32  | FPR1 -> 33  | FPR2 -> 34  | FPR3 -> 35
+   | FPR4 -> 36  | FPR5 -> 37  | FPR6 -> 38  | FPR7 -> 39
+   | FPR8 -> 40  | FPR9 -> 41  | FPR10 -> 42 | FPR11 -> 43
+   | FPR12 -> 44 | FPR13 -> 45 | FPR14 -> 46 | FPR15 -> 47
+   | FPR16 -> 48 | FPR17 -> 49 | FPR18 -> 50 | FPR19 -> 51
+   | FPR20 -> 52 | FPR21 -> 53 | FPR22 -> 54| FPR23 -> 55
+   | FPR24 -> 56 | FPR25 -> 57 | FPR26 -> 58 | FPR27 -> 59
+   | FPR28 -> 60 | FPR29 -> 61 | FPR30 -> 62 | FPR31 -> 63
+
+let preg_to_dwarf_int = function
+   | IR r -> int_reg_to_dwarf r
+   | FR r -> float_reg_to_dwarf r
+   | _ -> assert false
+
+
+let translate_annot annot = 
+  let rec aux = function
+    | BA x -> Some (BA (preg_to_dwarf_int x))
+    | BA_int _
+    | BA_long _
+    | BA_float _
+    | BA_single _
+    | BA_loadglobal _
+    | BA_addrglobal _
+    | BA_loadstack _ -> None
+    | BA_addrstack ofs -> Some (BA_addrstack ofs)
+    | BA_splitlong (hi,lo) -> 
+        begin
+          match (aux hi,aux lo) with
+          | Some hi ,Some lo -> Some (BA_splitlong (hi,lo))
+          | _,_ -> None
+        end in
+  (match annot with
+  | [] -> None
+  | a::_ -> aux a)
+
+let expand_scope id lbl oldscopes newscopes =
+  let opening = List.filter (fun a -> not (List.mem a oldscopes)) newscopes
+  and closing = List.filter (fun a -> not (List.mem a newscopes)) oldscopes in
+  List.iter (fun i -> Debug.open_scope id i lbl) opening;
+  List.iter (fun i -> Debug.close_scope id i lbl) closing
+
+let expand_instruction id l =
+  let get_lbl = function
+    | None -> 
+        let lbl = new_label () in
+        emit (Plabel lbl);
+        lbl
+    | Some lbl -> lbl in
+  let rec  aux lbl scopes = function
+    | [] -> let lbl = get_lbl lbl in
+      Debug.function_end id lbl
+    | (Pbuiltin(EF_debug (kind,txt,_x),args,_) as i)::rest ->
+        let kind = (P.to_int kind) in
+        emit i;
+        begin
+          match kind with
+          | 1-> 
+              aux lbl scopes rest
+          | 2 ->
+              aux  lbl scopes rest
+          | 3 ->
+             begin 
+               match translate_annot args with
+               | Some a ->
+                   let lbl = get_lbl lbl in
+                   Debug.start_live_range txt lbl (1,a);
+                   aux (Some lbl) scopes rest
+               | None ->  aux lbl scopes rest
+             end
+          | 4 ->
+              let lbl = get_lbl lbl in
+              Debug.end_live_range txt lbl;
+              aux (Some lbl) scopes rest
+          | 5 ->
+              begin
+                match translate_annot args with
+                | Some a->
+                    Debug.stack_variable txt (1,a);
+                    aux lbl scopes rest
+                | _ ->  aux lbl scopes rest
+              end
+          | 6  ->
+              let lbl = get_lbl lbl in
+              let scopes' = List.map (function BA_int x -> Int32.to_int (camlint_of_coqint x) | _ -> assert false) args in
+              expand_scope id lbl scopes scopes';
+              aux (Some lbl) scopes' rest
+          | _ ->
+              aux None scopes rest
+        end
+    | i::rest -> expand_instruction_simple i; aux None scopes rest in
+  (* We need to move all closing debug annotations before the last real statement *)
+  let rec move_debug acc = function
+    | (Pbuiltin(EF_debug (kind,txt,_x),args,_) as i)::rest ->
+        move_debug (i::acc) rest (* Move the debug annotations forward *)
+    | b::rest -> List.rev (b::(List.rev acc)@rest) (* We found the first non debug location *)
+    | [] -> List.rev acc (* This actually can never happen *) in
+  aux None [] (move_debug [] (List.rev l))
+      
+
+let expand_function id fn =
   try
     set_current_function fn;
-    List.iter expand_instruction fn.fn_code;
+    if !Clflags.option_g then
+      expand_instruction id fn.fn_code
+    else
+      List.iter expand_instruction_simple fn.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->
     Errors.Error (Errors.msg (coqstring_of_camlstring s))
 
-let expand_fundef = function
+let expand_fundef id = function
   | Internal f ->
-      begin match expand_function f with
+      begin match expand_function id f with
       | Errors.OK tf -> Errors.OK (Internal tf)
       | Errors.Error msg -> Errors.Error msg
       end
   | External ef ->
       Errors.OK (External ef)
 
+let rec transform_partial_prog transfun p =
+  match p with
+  | [] -> Errors.OK []
+  | (id,Gvar v)::l ->
+      (match transform_partial_prog transfun l with
+      | Errors.OK x -> Errors.OK ((id,Gvar v)::x)
+      | Errors.Error msg -> Errors.Error msg)
+  | (id,Gfun f)::l ->
+      (match transfun id f with
+      | Errors.OK tf ->
+          (match transform_partial_prog transfun l with
+          | Errors.OK x -> Errors.OK ((id,Gfun tf)::x)
+          | Errors.Error msg -> Errors.Error msg)
+      | Errors.Error msg ->
+          Errors.Error ((Errors.MSG (coqstring_of_camlstring "In function"))::((Errors.CTX
+          id) :: (Errors.MSG (coqstring_of_camlstring ": ") :: msg))))
+
 let expand_program (p: Asm.program) : Asm.program Errors.res =
-  AST.transform_partial_program expand_fundef p
+  match transform_partial_prog expand_fundef p.prog_defs with
+  | Errors.OK x-> 
+      Errors.OK { prog_defs = x; prog_public = p.prog_public; prog_main =
+      p.prog_main }
+  | Errors.Error msg -> Errors.Error msg

@@ -48,10 +48,10 @@ module type TARGET =
       val get_start_addr: unit -> int
       val get_end_addr: unit -> int
       val get_stmt_list_addr: unit -> int
+      val get_debug_start_addr: unit -> int
       val new_label: unit -> int
       val label: out_channel -> int -> unit
       val print_file_loc: out_channel -> file_loc -> unit
-      module DwarfAbbrevs:  DWARF_ABBREVS
     end
 
 (* On-the-fly label renaming *)
@@ -140,12 +140,6 @@ let coqint oc n =
   fprintf oc "%ld" (camlint_of_coqint n)
 
 (* Printing annotations in asm syntax *)
-(** All files used in the debug entries *)
-module StringSet = Set.Make(String)
-let all_files : StringSet.t ref = ref StringSet.empty
-let add_file file =
-  all_files := StringSet.add file !all_files
-
 
 let filename_info : (string, int * Printlines.filebuf option) Hashtbl.t
                   = Hashtbl.create 7
@@ -283,6 +277,9 @@ let print_debug_info comment print_line print_preg sp_name oc kind txt args =
   | 5 ->  (* local variable preallocated in stack *)
       fprintf oc "%s debug: %s resides at%a\n"
                  comment txt print_debug_args args
+  | 6 ->  (* scope annotations *)
+      fprintf oc "%s debug: current scopes%a\n"
+                 comment print_debug_args args;
   | _ ->
       ()
 					    
