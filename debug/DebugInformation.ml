@@ -387,6 +387,9 @@ let definitions: (int,definition_type) Hashtbl.t = Hashtbl.create 7
 (* Mapping from stamp to debug id *)
 let stamp_to_definition: (int,int) Hashtbl.t = Hashtbl.create 7
 
+(* Mapping from name to debug id *)
+let name_to_definition: (string,int) Hashtbl.t = Hashtbl.create 7
+
 (* Mapping from atom to debug id *)
 let atom_to_definition: (atom, int) Hashtbl.t = Hashtbl.create 7
 
@@ -510,8 +513,13 @@ let insert_global_declaration env dec=
           let id,var = find_gvar_stamp id.stamp in
           replace_var id ({var with gvar_declaration = false;})
         end
-      end
-  | Gfundef f -> 
+      end else if not (Hashtbl.mem name_to_definition id.name) then begin
+        (* Implict declarations need special handling *)
+        let id' = next_id () in
+        Hashtbl.add stamp_to_definition id.stamp id';
+        Hashtbl.add name_to_definition id.name id'
+      end       
+  | Gfundef f ->
       let ret =  (match f.fd_ret with
       | TVoid _ -> None
       | _ -> Some (insert_type f.fd_ret)) in
@@ -539,7 +547,13 @@ let insert_global_declaration env dec=
         fun_high_pc = None;
         fun_scope = None;
       } in
-      insert (Function fd) f.fd_name.stamp
+      begin try
+        let id' = Hashtbl.find name_to_definition f.fd_name.name in
+        Hashtbl.add stamp_to_definition f.fd_name.stamp id';
+        Hashtbl.add definitions id' (Function fd)
+      with Not_found ->
+        insert (Function fd) f.fd_name.stamp
+      end
   | Gcompositedecl (sou,id,at) -> 
       ignore (insert_type (gen_comp_typ sou id at));
       let id = find_type (gen_comp_typ sou id []) in
@@ -798,6 +812,7 @@ let init name =
   Hashtbl.reset lookup_types;
   Hashtbl.reset definitions;
   Hashtbl.reset stamp_to_definition;
+  Hashtbl.reset name_to_definition;
   Hashtbl.reset atom_to_definition;
   Hashtbl.reset local_variables;
   Hashtbl.reset stamp_to_local;

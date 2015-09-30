@@ -235,7 +235,6 @@ let needs_types id d =
   | Void
   | EnumType _ -> d,false
   | Typedef t ->
-      Printf.printf "Typedef %s\n" t.typedef_name;
       add_type (get_opt_val t.typ) d
   | PointerType p -> 
       add_type p.pts d
