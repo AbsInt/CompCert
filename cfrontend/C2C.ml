@@ -524,10 +524,12 @@ let convertField env f =
   (intern_string f.fld_name, convertTyp env f.fld_typ)
 
 let convertCompositedef env su id attr members =
-  let t = match su with C.Struct -> 
-    let layout = Cutil.struct_layout env members in
-    List.iter (fun (a,b) -> Debug.set_member_offset id a b) layout;
-    TStruct (id,attr) | C.Union -> TUnion (id,attr) in
+  let t = match su with 
+  | C.Struct -> 
+      let layout = Cutil.struct_layout env members in
+      List.iter (fun (a,b) -> Debug.set_member_offset id a b) layout;
+      TStruct (id,attr) 
+  | C.Union -> TUnion (id,attr) in
   Debug.set_composite_size id su (Cutil.sizeof env t);
   Composite(intern_string id.name,
             begin match su with C.Struct -> Struct | C.Union -> Union end,

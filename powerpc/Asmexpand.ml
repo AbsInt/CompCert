@@ -615,7 +615,7 @@ let preg_to_dwarf_int = function
    | _ -> assert false
 
 
-let translate_annot a =
+let translate_annot annot = 
   let rec aux = function
     | BA x -> Some (BA (preg_to_dwarf_int x))
     | BA_int _
@@ -632,7 +632,9 @@ let translate_annot a =
           | Some hi ,Some lo -> Some (BA_splitlong (hi,lo))
           | _,_ -> None
         end in
-  aux (List.hd a)
+  (match annot with
+  | [] -> None
+  | a::_ -> aux a)
 
 let expand_scope id lbl oldscopes newscopes =
   let opening = List.filter (fun a -> not (List.mem a oldscopes)) newscopes

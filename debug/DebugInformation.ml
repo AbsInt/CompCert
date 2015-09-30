@@ -752,16 +752,13 @@ let close_scope atom s_id lbl =
   with Not_found -> ()
 
 let start_live_range atom lbl loc =
-  let old_r = try
-    begin
-      match Hashtbl.find var_locations atom with
-      | RangeLoc old_r -> old_r
-      | _ -> assert false
-    end
-  with Not_found -> [] in
-  let n_r = { range_start = Some lbl; range_end = None; var_loc = loc } in
-  open_vars := atom::!open_vars;
-  Hashtbl.replace var_locations atom (RangeLoc (n_r::old_r))
+  let old_r = begin try Hashtbl.find var_locations atom with Not_found -> (RangeLoc []) end in
+  match old_r with
+  | RangeLoc old_r ->
+      let n_r = { range_start = Some lbl; range_end = None; var_loc = loc } in
+      open_vars := atom::!open_vars;
+      Hashtbl.replace var_locations atom (RangeLoc (n_r::old_r))
+  | _ -> () (* Parameter that is passed as variable *)
 
 let end_live_range atom lbl =
   try
@@ -771,7 +768,7 @@ let end_live_range atom lbl =
         if n_r.range_end = None then (* We can skip non open locations *)
           let n_r = {n_r with  range_end = Some lbl} in
           Hashtbl.replace var_locations atom (RangeLoc (n_r::old_r))
-    | _ -> assert false
+    | _ -> ()
   with Not_found -> ()
 
 let stack_variable atom (sp,loc) =
