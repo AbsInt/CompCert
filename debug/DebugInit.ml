@@ -27,7 +27,11 @@ let init_debug () =
   implem.set_bitfield_offset <- DebugInformation.set_bitfield_offset;
   implem.insert_global_declaration <- DebugInformation.insert_global_declaration;
   implem.add_fun_addr <- DebugInformation.add_fun_addr;
-  implem.generate_debug_info <- (fun a b -> Some (Dwarfgen.gen_debug_info a b));
+  implem.generate_debug_info <- 
+    if Configuration.system = "diab" then
+      (fun a b -> Some (Dwarfgen.gen_diab_debug_info a b))
+    else
+      (fun a b -> Some (Dwarfgen.gen_gnu_debug_info a b));
   implem.all_files_iter <- (fun f -> DebugInformation.StringSet.iter f !DebugInformation.all_files);
   implem.insert_local_declaration <- DebugInformation.insert_local_declaration;
   implem.atom_local_variable <- DebugInformation.atom_local_variable;

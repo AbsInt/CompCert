@@ -248,7 +248,13 @@ type location_entry =
    }
 type dw_locations = int * location_entry list
 
-type debug_entries = (string * int * dw_entry * dw_locations) list
+type diab_entries =  (string * int * dw_entry * dw_locations) list
+
+type gnu_entries = dw_entry * dw_locations
+
+type debug_entries =
+  | Diab of diab_entries
+  | Gnu of gnu_entries
 
 (* The target specific functions for printing the debug information *)
 module type DWARF_TARGET=

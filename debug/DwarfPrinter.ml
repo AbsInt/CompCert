@@ -590,12 +590,15 @@ module DwarfPrinter(Target: DWARF_TARGET):
     let print_location_list oc (c_low,l) =
       List.iter (print_location_entry oc c_low) l
 
-    (* Print the debug info and abbrev section *)
-    let print_debug oc entries =
+    let print_diab_entries oc entries =
       print_debug_abbrev oc entries;
       List.iter (fun (s,d,e,_) -> print_debug_info oc s d e) entries;
       section oc Section_debug_loc;
       List.iter (fun (_,_,_,l) -> print_location_list oc l) entries
 
+    (* Print the debug info and abbrev section *)
+    let print_debug oc = function
+      | Diab entries -> print_diab_entries oc entries
+      | _ -> ()
 
   end

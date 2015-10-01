@@ -85,20 +85,17 @@ let void_to_entry id =
   } in
   new_entry id (DW_TAG_base_type void)
 
-let translate_file_loc sec (f,l)  =
-  Hashtbl.find filenum (sec,f),l
-
-let translate_file_loc_opt sec = function
+let file_loc_opt file = function
   | None -> None
   | Some (f,l) ->
     try 
-      Some (translate_file_loc sec (f,l))
+      Some (file (f,l))
     with Not_found -> None
 
-let typedef_to_entry sec id t =
+let typedef_to_entry file id t =
   let i = get_opt_val t.typ in
   let td = {
-    typedef_file_loc = translate_file_loc_opt sec t.typedef_file_loc;
+    typedef_file_loc = file_loc_opt file t.typedef_file_loc;
     typedef_name = t.typedef_name;
     typedef_type = i;
   } in
@@ -133,7 +130,7 @@ let const_to_entry id c =
 let volatile_to_entry id v =
   new_entry id (DW_TAG_volatile_type ({volatile_type = v.vol_type}))
 
-let enum_to_entry sec id e =
+let enum_to_entry file id e =
   let enumerator_to_entry e =
     let tag =
       {
@@ -144,7 +141,7 @@ let enum_to_entry sec id e =
     new_entry (next_id ()) (DW_TAG_enumerator tag) in
   let bs = sizeof_ikind enum_ikind in
   let enum = {
-    enumeration_file_loc = translate_file_loc_opt sec e.enum_file_loc;
+    enumeration_file_loc = file_loc_opt file e.enum_file_loc;
     enumeration_byte_size = bs;
     enumeration_declaration = Some false;
     enumeration_name = Some e.enum_name;
@@ -195,9 +192,9 @@ let member_to_entry mem =
   } in
   new_entry (next_id ()) (DW_TAG_member mem)
 
-let struct_to_entry sec id s =
+let struct_to_entry file id s =
   let tag = {
-     structure_file_loc = translate_file_loc_opt sec s.ct_file_loc;
+     structure_file_loc = file_loc_opt file s.ct_file_loc;
      structure_byte_size = s.ct_sizeof;
      structure_declaration = if s.ct_declaration then Some s.ct_declaration else None;
      structure_name = if s.ct_name <> "" then Some s.ct_name else None;
@@ -206,9 +203,9 @@ let struct_to_entry sec id s =
   let child = List.map member_to_entry s.ct_members in
   add_children entry child
 
-let union_to_entry sec id s =
+let union_to_entry file id s =
   let tag = {
-    union_file_loc =  translate_file_loc_opt sec s.ct_file_loc;
+    union_file_loc =  file_loc_opt file s.ct_file_loc;
     union_byte_size = s.ct_sizeof;
     union_declaration = if s.ct_declaration then Some s.ct_declaration else None;
     union_name = if s.ct_name <> "" then Some s.ct_name else None;
@@ -217,20 +214,20 @@ let union_to_entry sec id s =
   let child = List.map member_to_entry s.ct_members in
   add_children entry child
 
-let composite_to_entry sec id s =
+let composite_to_entry file id s =
   match s.ct_sou with
-  | Struct -> struct_to_entry sec id s
-  | Union -> union_to_entry sec id s
+  | Struct -> struct_to_entry file id s
+  | Union -> union_to_entry file id s
 
-let infotype_to_entry sec id = function
+let infotype_to_entry file id = function
   | IntegerType i -> int_type_to_entry id i
   | FloatType f -> float_type_to_entry id f
   | PointerType p -> pointer_to_entry id p
   | ArrayType arr -> array_to_entry id arr
-  | CompositeType c -> composite_to_entry sec id c
-  | EnumType e -> enum_to_entry sec id e
+  | CompositeType c -> composite_to_entry file id c
+  | EnumType e -> enum_to_entry file id e
   | FunctionType f -> fun_type_to_entry id f
-  | Typedef t -> typedef_to_entry sec id t
+  | Typedef t -> typedef_to_entry file id t
   | ConstType c -> const_to_entry id c
   | VolatileType v -> volatile_to_entry id v
   | Void -> void_to_entry id
@@ -269,7 +266,7 @@ let needs_types id d =
         let d,c' = add_type f.cfd_typ d in
         d,c||c') (d,false) c.ct_members
 
-let gen_types sec needed =
+let gen_types file needed =
   let rec aux d =
     let d,c = IntSet.fold (fun id (d,c) ->
       let d,c' = needs_types id d in
@@ -281,17 +278,17 @@ let gen_types sec needed =
   let typs = aux needed in
   List.rev (Hashtbl.fold (fun id t acc -> 
     if IntSet.mem id typs then
-      (infotype_to_entry sec id t)::acc
+      (infotype_to_entry file id t)::acc
     else 
       acc) types [])
 
-let global_variable_to_entry sec acc id v =
+let global_variable_to_entry file acc id v =
   let loc = match v.gvar_atom with
   | Some a when StringSet.mem (extern_atom a) !printed_vars ->
         Some (LocSymbol a)
   | _ -> None in
   let var = {
-    variable_file_loc = translate_file_loc sec v.gvar_file_loc;
+    variable_file_loc = file v.gvar_file_loc;
     variable_declaration = Some v.gvar_declaration;
     variable_external = Some v.gvar_external;
     variable_name = v.gvar_name;
@@ -365,13 +362,13 @@ let function_parameter_to_entry f_id (acc,bcc) p =
   } in
   new_entry (next_id ()) (DW_TAG_formal_parameter p),(IntSet.add p.formal_parameter_type acc,loc_list@bcc)
 
-let rec local_variable_to_entry sec f_id (acc,bcc) v id =
+let rec local_variable_to_entry file f_id (acc,bcc) v id =
   match v.lvar_atom with
   | None -> None,(acc,bcc)
   | Some loc ->
       let loc,loc_list = location_entry f_id loc in
       let var = {
-        variable_file_loc = translate_file_loc sec v.lvar_file_loc;
+        variable_file_loc = file v.lvar_file_loc;
         variable_declaration = None;
         variable_external = None;
         variable_name = v.lvar_name;
@@ -380,7 +377,7 @@ let rec local_variable_to_entry sec f_id (acc,bcc) v id =
       } in
       Some (new_entry id (DW_TAG_variable var)),(IntSet.add v.lvar_type acc,loc_list@bcc)
 
-and scope_to_entry sec f_id acc sc id =
+and scope_to_entry file f_id acc sc id =
   let l_pc,h_pc = try
     let r = Hashtbl.find scope_ranges id in
     let lbl l = match l with 
@@ -397,29 +394,29 @@ and scope_to_entry sec f_id acc sc id =
     lexical_block_high_pc = h_pc;
     lexical_block_low_pc = l_pc;
   } in
-  let vars,acc = mmap_opt (local_to_entry sec f_id) acc sc.scope_variables in
+  let vars,acc = mmap_opt (local_to_entry file f_id) acc sc.scope_variables in
   let entry = new_entry id (DW_TAG_lexical_block scope) in
   add_children entry vars,acc
 
-and local_to_entry sec f_id acc id =
+and local_to_entry file f_id acc id =
   match Hashtbl.find local_variables id with
-  | LocalVariable v -> local_variable_to_entry sec f_id acc v id
+  | LocalVariable v -> local_variable_to_entry file f_id acc v id
   | Scope v -> let s,acc = 
-      (scope_to_entry sec f_id acc v id) in 
+      (scope_to_entry file f_id acc v id) in 
     Some s,acc
 
-let fun_scope_to_entries sec f_id acc id =
+let fun_scope_to_entries file f_id acc id =
   match id with
   | None -> [],acc
   | Some id ->
       let sc = Hashtbl.find local_variables id in
       (match sc with
-      | Scope sc ->mmap_opt (local_to_entry sec f_id) acc sc.scope_variables
+      | Scope sc ->mmap_opt (local_to_entry file f_id) acc sc.scope_variables
       | _ -> assert false)
 
-let function_to_entry sec (acc,bcc) id f =
+let function_to_entry file (acc,bcc) id f =
   let f_tag = {
-    subprogram_file_loc = translate_file_loc sec f.fun_file_loc;
+    subprogram_file_loc = file f.fun_file_loc;
     subprogram_external = Some f.fun_external;
     subprogram_name = f.fun_name;
     subprogram_prototyped = true;
@@ -431,27 +428,30 @@ let function_to_entry sec (acc,bcc) id f =
   let acc = match f.fun_return_type with Some s -> IntSet.add s acc | None -> acc in
   let f_entry =  new_entry id (DW_TAG_subprogram f_tag) in
   let params,(acc,bcc) = mmap (function_parameter_to_entry f_id) (acc,bcc) f.fun_parameter in
-  let vars,(acc,bcc) = fun_scope_to_entries sec f_id (acc,bcc) f.fun_scope in
+  let vars,(acc,bcc) = fun_scope_to_entries file f_id (acc,bcc) f.fun_scope in
   add_children f_entry (params@vars),(acc,bcc)
      
-let definition_to_entry sec (acc,bcc) id t =
+let definition_to_entry file (acc,bcc) id t =
   match t with
-  | GlobalVariable g -> let e,acc = global_variable_to_entry sec acc id g in
+  | GlobalVariable g -> let e,acc = global_variable_to_entry file acc id g in
     e,(acc,bcc)
-  | Function f -> function_to_entry sec (acc,bcc) id f
+  | Function f -> function_to_entry file (acc,bcc) id f
 
 module StringMap = Map.Make(String)
 
-let gen_debug_info sec_name var_section : debug_entries =
+let diab_file_loc sec (f,l)  =
+  Hashtbl.find filenum (sec,f),l
+
+let gen_diab_debug_info sec_name var_section : debug_entries =
   let defs = Hashtbl.fold (fun id t acc ->
     let s = match t with
     | GlobalVariable _ -> var_section
     | Function f -> sec_name (get_opt_val f.fun_atom) in
     let old = try StringMap.find s acc with Not_found -> [] in
     StringMap.add s ((id,t)::old) acc) definitions StringMap.empty in
-  StringMap.fold (fun s defs acc ->
+  let entries = StringMap.fold (fun s defs acc ->
     let defs,(ty,locs) = List.fold_left (fun (acc,bcc) (id,t) -> 
-      let t,bcc = definition_to_entry s bcc id t in
+      let t,bcc = definition_to_entry (diab_file_loc s) bcc id t in
       t::acc,bcc) ([],(IntSet.empty,[])) defs in
     let line_start,low_pc,debug_start,_ = Hashtbl.find compilation_section_start s
     and high_pc = Hashtbl.find compilation_section_end s in
@@ -462,5 +462,9 @@ let gen_debug_info sec_name var_section : debug_entries =
       compile_unit_stmt_list = line_start; 
     } in
     let cp = new_entry (next_id ()) (DW_TAG_compile_unit cp) in
-    let cp = add_children cp ((gen_types s ty) @ defs) in
-    (s,debug_start,cp,(low_pc,locs))::acc) defs []
+    let cp = add_children cp ((gen_types (diab_file_loc s) ty) @ defs) in
+    (s,debug_start,cp,(low_pc,locs))::acc) defs [] in
+  Diab entries
+
+let gen_gnu_debug_info sec_name var_section : debug_entries =
+  Diab []
