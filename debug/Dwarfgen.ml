@@ -197,7 +197,7 @@ let struct_to_entry sec id s =
   let tag = {
      structure_file_loc = translate_file_loc_opt sec s.ct_file_loc;
      structure_byte_size = s.ct_sizeof;
-     structure_declaration = Some s.ct_declaration;
+     structure_declaration = if s.ct_declaration then Some s.ct_declaration else None;
      structure_name = if s.ct_name <> "" then Some s.ct_name else None;
   } in
   let entry = new_entry id (DW_TAG_structure_type tag) in
@@ -208,7 +208,7 @@ let union_to_entry sec id s =
   let tag = {
     union_file_loc =  translate_file_loc_opt sec s.ct_file_loc;
     union_byte_size = s.ct_sizeof;
-    union_declaration = Some s.ct_declaration;
+    union_declaration = if s.ct_declaration then Some s.ct_declaration else None;
     union_name = if s.ct_name <> "" then Some s.ct_name else None;
   } in
   let entry = new_entry id (DW_TAG_union_type tag) in

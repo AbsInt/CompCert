@@ -184,6 +184,11 @@ let saturate p =
 
 (* Remove unreferenced definitions *)
 
+let remove_unused_debug =  function
+  | Gdecl (_,id,_,_) ->  Debug.remove_unused id
+  | Gfundef f -> Debug.remove_unused f.fd_name
+  | _ -> ()    
+
 let rec simpl_globdecls accu = function
   | [] -> accu
   | g :: rem ->
@@ -199,7 +204,7 @@ let rec simpl_globdecls accu = function
         | Gpragma s -> true in
       if need
       then simpl_globdecls (g :: accu) rem
-      else simpl_globdecls accu rem
+      else begin remove_unused_debug g.gdesc; simpl_globdecls accu rem end
 
 let program p =
   referenced := IdentSet.empty;

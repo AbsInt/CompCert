@@ -274,7 +274,7 @@ let insert_type (ty: typ) =
                  ct_sou = Struct;
                  ct_file_loc = None;
                  ct_members = [];
-                 ct_declaration = false;
+                 ct_declaration = true;
                  ct_sizeof = None;
                } in
               CompositeType str
@@ -285,7 +285,7 @@ let insert_type (ty: typ) =
                  ct_sou = Union;
                  ct_file_loc = None;
                  ct_members = [];
-                 ct_declaration = false;
+                 ct_declaration = true;
                  ct_sizeof = None;
                } in
               CompositeType union
@@ -484,6 +484,13 @@ let gen_comp_typ sou id at =
   else
     TUnion (id,at)
 
+let remove_unused id =
+  try
+    let id' = Hashtbl.find stamp_to_definition id.stamp in
+    Hashtbl.remove definitions id';
+    Hashtbl.remove stamp_to_definition id.stamp
+  with Not_found -> ()
+
 let insert_global_declaration env dec=
   add_file (fst dec.gloc);
   let insert d_dec stamp =
@@ -513,11 +520,12 @@ let insert_global_declaration env dec=
           let id,var = find_gvar_stamp id.stamp in
           replace_var id ({var with gvar_declaration = false;})
         end
-      end else if not (Hashtbl.mem name_to_definition id.name) then begin
+      end else begin
         (* Implict declarations need special handling *)
-        let id' = next_id () in
-        Hashtbl.add stamp_to_definition id.stamp id';
-        Hashtbl.add name_to_definition id.name id'
+        let id' = try Hashtbl.find name_to_definition id.name with Not_found -> 
+          let id' = next_id () in
+          Hashtbl.add name_to_definition id.name id';id' in
+        Hashtbl.add stamp_to_definition id.stamp id'
       end       
   | Gfundef f ->
       let ret =  (match f.fd_ret with
@@ -547,12 +555,12 @@ let insert_global_declaration env dec=
         fun_high_pc = None;
         fun_scope = None;
       } in
-      begin try
-        let id' = Hashtbl.find name_to_definition f.fd_name.name in
+      begin
+        let id' = try Hashtbl.find name_to_definition f.fd_name.name with Not_found -> 
+          let id' = next_id () in
+          Hashtbl.add name_to_definition f.fd_name.name id';id' in
         Hashtbl.add stamp_to_definition f.fd_name.stamp id';
         Hashtbl.add definitions id' (Function fd)
-      with Not_found ->
-        insert (Function fd) f.fd_name.stamp
       end
   | Gcompositedecl (sou,id,at) -> 
       ignore (insert_type (gen_comp_typ sou id at));
@@ -576,7 +584,7 @@ let insert_global_declaration env dec=
        }) fi in
       replace_composite id (fun comp ->
         let loc = if comp.ct_file_loc = None then Some dec.gloc else comp.ct_file_loc in
-        {comp with ct_file_loc = loc; ct_members = fields; ct_declaration = true;})
+        {comp with ct_file_loc = loc; ct_members = fields; ct_declaration = false;})
   | Gtypedef (id,t) -> 
       let id = insert_type (TNamed (id,[])) in
       let tid = insert_type t in
