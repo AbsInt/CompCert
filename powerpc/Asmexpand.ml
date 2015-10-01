@@ -705,11 +705,10 @@ let expand_instruction id l =
       Debug.function_end id lbl
     | (Pbuiltin(EF_debug (kind,txt,_x),args,_) as i)::rest ->
         let kind = (P.to_int kind) in
-        emit i;
         begin
           match kind with
           | 1-> 
-              aux lbl scopes rest
+              emit i;aux lbl scopes rest
           | 2 ->
               aux  lbl scopes rest
           | 3 ->
