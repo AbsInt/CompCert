@@ -269,6 +269,22 @@ module DwarfPrinter(Target: DWARF_TARGET):
         Hashtbl.add entry_labels id label;
         label
 
+    let loc_labels: (int,int) Hashtbl.t = Hashtbl.create 7
+
+    (* Translate the ids to address labels *)
+    let loc_to_label id =
+      try
+        Hashtbl.find loc_labels id
+      with Not_found ->
+        let label = new_label () in
+        Hashtbl.add loc_labels id label;
+        label
+
+    let print_loc_ref oc r =
+      let ref = loc_to_label r in
+      fprintf oc "	.4byte		%a\n" label ref
+
+
     (* Helper functions for debug printing *)
     let print_opt_value oc o f =
       match o with
@@ -335,7 +351,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
           let size = List.fold_left (fun acc a -> acc + size_of_loc_expr a) 0 e in
           print_sleb128 oc size;
           List.iter (print_loc_expr oc) e
-      | LocRef f ->  print_ref oc f
+      | LocRef f ->  print_loc_ref oc f
 
     let print_list_loc oc = function
       | LocSymbol s ->
@@ -349,7 +365,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
           let size = List.fold_left (fun acc a -> acc + size_of_loc_expr a) 0 e in
           print_2byte oc size;
           List.iter (print_loc_expr oc) e
-      | LocRef f ->  print_ref oc f
+      | LocRef f ->  print_loc_ref oc f
 
     let print_data_location oc dl =
       match dl with
@@ -547,6 +563,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
 
     (* Print the debug info section *)
     let print_debug_info oc sec start entry  =
+      Hashtbl.reset entry_labels;
       debug_start_addr:= start;
       section oc (Section_debug_info sec);      
       print_label oc start;
@@ -562,7 +579,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_label oc debug_end (* End of the debug section *)
 
     let print_location_entry oc c_low l =
-      print_label oc (entry_to_label l.loc_id);
+      print_label oc (loc_to_label l.loc_id);
       List.iter (fun (b,e,loc) ->
         fprintf oc "	.4byte		%a-%a\n" label b label c_low;
         fprintf oc "	.4byte		%a-%a\n" label e label c_low;
