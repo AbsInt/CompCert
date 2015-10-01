@@ -743,12 +743,16 @@ let expand_instruction id l =
         end
     | i::rest -> expand_instruction_simple i; aux None scopes rest in
   (* We need to move all closing debug annotations before the last real statement *)
-  let rec move_debug acc = function
-    | (Pbuiltin(EF_debug (kind,txt,_x),args,_) as i)::rest ->
-        move_debug (i::acc) rest (* Move the debug annotations forward *)
-    | b::rest -> List.rev (b::(List.rev acc)@rest) (* We found the first non debug location *)
+  let rec move_debug acc bcc = function
+    | (Pbuiltin(EF_debug (kind,_,_),_,_) as i)::rest ->
+        let kind = (P.to_int kind) in
+        if kind = 1 then
+          move_debug acc (i::bcc) rest (* Do not move debug line *)
+        else
+          move_debug (i::acc) bcc rest (* Move the debug annotations forward *)
+    | b::rest -> List.rev ((List.rev (b::bcc)@List.rev acc)@rest) (* We found the first non debug location *)
     | [] -> List.rev acc (* This actually can never happen *) in
-  aux None [] (move_debug [] (List.rev l))
+  aux None [] (move_debug [] [] (List.rev l))
       
 
 let expand_function id fn =
