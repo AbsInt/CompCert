@@ -39,9 +39,9 @@ type implem =
      mutable add_lvar_scope: int -> ident -> int -> unit;
      mutable open_scope: atom -> int -> positive -> unit;
      mutable close_scope: atom -> int -> positive -> unit;
-     mutable start_live_range: atom -> positive -> int * int builtin_arg -> unit;
-     mutable end_live_range: atom -> positive -> unit;
-     mutable stack_variable: atom -> int * int builtin_arg -> unit;
+     mutable start_live_range: (atom * atom) -> positive -> int * int builtin_arg -> unit;
+     mutable end_live_range: (atom * atom) -> positive -> unit;
+     mutable stack_variable: (atom * atom) -> int * int builtin_arg -> unit;
      mutable function_end: atom -> positive -> unit;
      mutable add_label: atom -> positive -> int -> unit;
      mutable atom_parameter: ident -> ident -> atom -> unit;

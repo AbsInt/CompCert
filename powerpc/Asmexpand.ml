@@ -717,19 +717,19 @@ let expand_instruction id l =
                match translate_annot args with
                | Some a ->
                    let lbl = get_lbl lbl in
-                   Debug.start_live_range txt lbl (1,a);
+                   Debug.start_live_range (id,txt) lbl (1,a);
                    aux (Some lbl) scopes rest
                | None ->  aux lbl scopes rest
              end
           | 4 ->
               let lbl = get_lbl lbl in
-              Debug.end_live_range txt lbl;
+              Debug.end_live_range (id,txt) lbl;
               aux (Some lbl) scopes rest
           | 5 ->
               begin
                 match translate_annot args with
                 | Some a->
-                    Debug.stack_variable txt (1,a);
+                    Debug.stack_variable (id,txt) (1,a);
                     aux lbl scopes rest
                 | _ ->  aux lbl scopes rest
               end

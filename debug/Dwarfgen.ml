@@ -336,7 +336,7 @@ let range_entry_loc (sp,l) =
 let location_entry f_id atom =
   try
     begin 
-      match (Hashtbl.find var_locations atom) with
+      match (Hashtbl.find var_locations (f_id,atom)) with
       | FunctionLoc (a,r) ->
           translate_function_loc a r
       | RangeLoc l ->

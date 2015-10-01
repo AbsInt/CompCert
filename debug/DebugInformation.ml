@@ -717,7 +717,7 @@ type var_location =
   | RangeLoc of var_range list
   | FunctionLoc of  int * int builtin_arg (* Stack allocated variables *)
 
-let var_locations: (atom,var_location) Hashtbl.t = Hashtbl.create 7
+let var_locations: (atom * atom,var_location) Hashtbl.t = Hashtbl.create 7
 
 let scope_ranges: (int,scope_range list) Hashtbl.t = Hashtbl.create 7
 
@@ -759,33 +759,33 @@ let close_scope atom s_id lbl =
     Hashtbl.replace scope_ranges s_id new_r
   with Not_found -> ()
 
-let start_live_range atom lbl loc =
-  let old_r = begin try Hashtbl.find var_locations atom with Not_found -> (RangeLoc []) end in
+let start_live_range (f,v) lbl loc =
+  let old_r = begin try Hashtbl.find var_locations (f,v) with Not_found -> (RangeLoc []) end in
   match old_r with
   | RangeLoc old_r ->
       let n_r = { range_start = Some lbl; range_end = None; var_loc = loc } in
-      open_vars := atom::!open_vars;
-      Hashtbl.replace var_locations atom (RangeLoc (n_r::old_r))
+      open_vars := v::!open_vars;
+      Hashtbl.replace var_locations (f,v) (RangeLoc (n_r::old_r))
   | _ -> () (* Parameter that is passed as variable *)
 
-let end_live_range atom lbl =
+let end_live_range (f,v) lbl =
   try
-    let old_r = Hashtbl.find var_locations atom in
+    let old_r = Hashtbl.find var_locations (f,v) in
     match old_r with
     | RangeLoc (n_r::old_r) ->
         if n_r.range_end = None then (* We can skip non open locations *)
           let n_r = {n_r with  range_end = Some lbl} in
-          Hashtbl.replace var_locations atom (RangeLoc (n_r::old_r))
+          Hashtbl.replace var_locations (f,v) (RangeLoc (n_r::old_r))
     | _ -> ()
   with Not_found -> ()
 
-let stack_variable atom (sp,loc) =
-  Hashtbl.add var_locations atom (FunctionLoc (sp,loc))
+let stack_variable (f,v) (sp,loc) =
+  Hashtbl.add var_locations (f,v) (FunctionLoc (sp,loc))
 
 let function_end atom loc =
   IntSet.iter (fun id -> close_scope atom id loc) !open_scopes;
   open_scopes := IntSet.empty;
-  List.iter (fun atom -> end_live_range atom loc) !open_vars;
+  List.iter (fun id-> end_live_range (atom,id) loc) !open_vars;
   open_vars:= []
 
 let compilation_section_start: (string,int * int * int * string) Hashtbl.t = Hashtbl.create 7
