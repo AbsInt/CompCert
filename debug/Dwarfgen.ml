@@ -15,8 +15,10 @@ open C
 open Camlcoq
 open Cutil
 open DebugInformation
+open DebugTypes
 open DwarfTypes
 open DwarfUtil
+
 (* Generate the dwarf DIE's from the information collected in DebugInformation *)
 
 (* Helper function to get values that must be set. *)
