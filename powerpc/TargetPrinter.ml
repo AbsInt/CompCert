@@ -39,7 +39,6 @@ module type SYSTEM =
       val cfi_rel_offset: out_channel -> string -> int32 -> unit
       val print_prologue: out_channel -> unit
       val print_epilogue: out_channel -> unit
-      val print_file_loc: out_channel -> DwarfTypes.file_loc -> unit
       val section: out_channel -> section_name -> unit
       val debug_section: out_channel -> section_name -> unit
     end
@@ -71,14 +70,6 @@ let float_reg_name = function
   | FPR20 -> "20" | FPR21 -> "21" | FPR22 -> "22" | FPR23 -> "23"
   | FPR24 -> "24" | FPR25 -> "25" | FPR26 -> "26" | FPR27 -> "27"
   | FPR28 -> "28" | FPR29 -> "29" | FPR30 -> "30" | FPR31 -> "31"
-
-let start_addr = ref (-1)
-
-let end_addr = ref (-1)
-
-let stmt_list_addr = ref (-1)
-
-let debug_start_addr = ref (-1)
 
 let label = elf_label
 
@@ -156,8 +147,6 @@ module Linux_System : SYSTEM =
     let print_prologue oc = ()
 
     let print_epilogue oc = ()
-
-    let print_file_loc _ _ = ()
         
     let debug_section _ _ = ()
   end
@@ -253,10 +242,6 @@ module Diab_System : SYSTEM =
         label
       and end_line () =   fprintf oc "	.d2_line_end\n" in
       Debug.compute_file_enum end_label entry_label end_line
-
-    let print_file_loc oc (file,col) =
-      fprintf oc "	.4byte		1\n";(* label (Hashtbl.find filenum file);*)
-      fprintf oc "	.uleb128	%d\n" col
 
     let debug_section oc sec =
       match sec with
@@ -843,14 +828,6 @@ module Target (System : SYSTEM):TARGET =
       end
 
     let default_falignment = 4
-        
-    let get_start_addr () = !start_addr
-
-    let get_end_addr () = !end_addr
-
-    let get_stmt_list_addr () = !stmt_list_addr
-
-    let get_debug_start_addr () = !debug_start_addr
 
     let new_label = new_label            
 

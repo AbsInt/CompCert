@@ -254,7 +254,6 @@ type debug_entries = (string * int * dw_entry * dw_locations) list
 module type DWARF_TARGET=
   sig
     val label: out_channel -> int -> unit
-    val print_file_loc: out_channel -> file_loc -> unit
     val section: out_channel -> section_name -> unit
     val symbol: out_channel -> atom -> unit
   end

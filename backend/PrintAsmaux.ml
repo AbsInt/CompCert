@@ -45,13 +45,8 @@ module type TARGET =
       val comment: string
       val symbol: out_channel -> P.t -> unit
       val default_falignment: int
-      val get_start_addr: unit -> int
-      val get_end_addr: unit -> int
-      val get_stmt_list_addr: unit -> int
-      val get_debug_start_addr: unit -> int
       val new_label: unit -> int
       val label: out_channel -> int -> unit
-      val print_file_loc: out_channel -> file_loc -> unit
     end
 
 (* On-the-fly label renaming *)

@@ -767,19 +767,9 @@ module Target(System: SYSTEM):TARGET =
 
     let default_falignment = 16
 
-    let get_start_addr () = -1 (* Dummy constant *)
-        
-    let get_end_addr () = -1 (* Dummy constant *)
-
-    let get_stmt_list_addr () = -1 (* Dummy constant *)
-
-    let get_debug_start_addr () = -1 (* Dummy constant *)
-
     let label = label
        
     let new_label = new_label
-        
-    let print_file_loc _ _ = () (* Dummy function *)
 
 end
 

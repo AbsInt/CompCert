@@ -112,7 +112,6 @@ module Printer(Target:TARGET) =
       struct
         let label = Target.label
         let section = Target.section
-        let print_file_loc = Target.print_file_loc
         let name_of_section = Target.name_of_section
         let symbol = Target.symbol
       end
