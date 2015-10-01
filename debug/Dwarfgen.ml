@@ -284,13 +284,17 @@ let gen_types sec needed =
       acc) types [])
 
 let global_variable_to_entry sec acc id v =
+  let loc = match v.gvar_atom with
+  | Some a when StringSet.mem (extern_atom a) !printed_vars ->
+        Some (LocSymbol a)
+  | _ -> None in
   let var = {
     variable_file_loc = translate_file_loc sec v.gvar_file_loc;
     variable_declaration = Some v.gvar_declaration;
     variable_external = Some v.gvar_external;
     variable_name = v.gvar_name;
     variable_type = v.gvar_type;
-    variable_location = match v.gvar_atom with Some a -> Some (LocSymbol a) | None -> None;
+    variable_location = loc;
   } in
   new_entry id (DW_TAG_variable var),IntSet.add v.gvar_type acc
 

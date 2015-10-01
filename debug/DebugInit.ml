@@ -45,7 +45,8 @@ let init_debug () =
   implem.add_compilation_section_start <- DebugInformation.add_compilation_section_start;
   implem.compute_file_enum <- DebugInformation.compute_file_enum;
   implem.exists_section <- DebugInformation.exists_section;
-  implem.remove_unused <- DebugInformation.remove_unused
+  implem.remove_unused <- DebugInformation.remove_unused;
+  implem.variable_printed <- DebugInformation.variable_printed
 
 let init_none () =
   implem.init <- (fun _ -> ());
@@ -73,7 +74,8 @@ let init_none () =
   implem.atom_parameter <- (fun _ _ _ -> ());
   implem.add_compilation_section_start <- (fun _ _ -> ());
   implem.exists_section <- (fun _ -> true);
-  implem.remove_unused <- (fun _ -> ())
+  implem.remove_unused <- (fun _ -> ());
+  implem.variable_printed <- (fun _ -> ())
 
 let init () =
   if !Clflags.option_g && Configuration.advanced_debug then

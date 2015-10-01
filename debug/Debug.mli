@@ -47,6 +47,7 @@ type implem =
      mutable compute_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit;
      mutable exists_section: string -> bool;
      mutable remove_unused: ident -> unit;
+     mutable variable_printed: string -> unit;
    }
 
 val implem: implem
@@ -78,3 +79,4 @@ val add_compilation_section_start: string -> (int * int * int * string) -> unit
 val compute_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit
 val exists_section: string -> bool
 val remove_unused: ident -> unit
+val variable_printed: string -> unit

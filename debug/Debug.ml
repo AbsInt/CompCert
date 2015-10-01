@@ -49,6 +49,7 @@ type implem =
      mutable compute_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit;
      mutable exists_section: string -> bool;
      mutable remove_unused: ident -> unit;
+     mutable variable_printed: string -> unit;
    }
 
 let implem =
@@ -80,6 +81,7 @@ let implem =
    compute_file_enum = (fun _ _ _ -> ());
    exists_section = (fun _ -> true);
    remove_unused = (fun _ -> ());
+   variable_printed = (fun _ -> ());
 }
 
 let init_compile_unit name = implem.init name
@@ -109,3 +111,4 @@ let add_compilation_section_start sec addr = implem.add_compilation_section_star
 let exists_section sec = implem.exists_section sec
 let compute_file_enum end_l entry_l line_e = implem.compute_file_enum end_l entry_l line_e
 let remove_unused ident = implem.remove_unused ident
+let variable_printed ident = implem.variable_printed ident

@@ -810,6 +810,11 @@ let compute_file_enum end_label entry_label line_end =
       Hashtbl.add filenum (sec,file) lbl) !all_files;
     line_end ()) compilation_section_start
 
+let printed_vars: StringSet.t ref = ref StringSet.empty
+
+let variable_printed id =
+  printed_vars := StringSet.add id !printed_vars
+
 let init name =
   id := 0;
   file_name := name;
@@ -826,4 +831,5 @@ let init name =
   Hashtbl.reset compilation_section_start;
   Hashtbl.reset compilation_section_end;
   Hashtbl.reset filenum;
-  all_files := StringSet.empty
+  all_files := StringSet.empty;
+  printed_vars := StringSet.empty;
