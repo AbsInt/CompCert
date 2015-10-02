@@ -644,8 +644,10 @@ let function_end atom loc =
   List.iter (fun id-> end_live_range (atom,id) loc) !open_vars;
   open_vars:= []
 
-let compilation_section_start: (string,int * int * int * string) Hashtbl.t = Hashtbl.create 7
+let compilation_section_start: (string,int) Hashtbl.t = Hashtbl.create 7
 let compilation_section_end: (string,int) Hashtbl.t = Hashtbl.create 7
+
+let diab_additional: (string,int * int * string) Hashtbl.t = Hashtbl.create 7
 
 let add_compilation_section_start sec addr =
   Hashtbl.add compilation_section_start sec addr
@@ -653,18 +655,21 @@ let add_compilation_section_start sec addr =
 let add_compilation_section_end sec addr =
   Hashtbl.add compilation_section_end sec addr
 
+let add_diab_info sec addr =
+  Hashtbl.add diab_additional sec addr
+
 let exists_section sec =
   Hashtbl.mem compilation_section_start sec
 
 let filenum: (string * string,int) Hashtbl.t = Hashtbl.create 7
 
 let compute_file_enum end_label entry_label line_end =
-  Hashtbl.iter (fun sec (_,_,_,secname) ->
+  Hashtbl.iter (fun sec (_,_,secname) ->
     Hashtbl.add compilation_section_end sec (end_label secname);
     StringSet.iter (fun file ->
       let lbl = entry_label file in
       Hashtbl.add filenum (sec,file) lbl) !all_files;
-    line_end ()) compilation_section_start
+    line_end ()) diab_additional
 
 let printed_vars: StringSet.t ref = ref StringSet.empty
 
@@ -688,4 +693,5 @@ let init name =
   Hashtbl.reset compilation_section_end;
   Hashtbl.reset filenum;
   all_files := StringSet.singleton name;
+  Hashtbl.reset diab_additional;
   printed_vars := StringSet.empty;

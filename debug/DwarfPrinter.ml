@@ -246,9 +246,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       let abbrevs = Hashtbl.fold (fun s i acc -> (s,i)::acc) abbrev_mapping [] in
       let abbrevs = List.sort (fun (_,a) (_,b) -> Pervasives.compare a b) abbrevs in
       section oc Section_debug_abbrev;
-      let lbl = new_label () in
-      abbrev_start_addr := lbl;
-      print_label oc lbl;
+      print_label oc !abbrev_start_addr;
       List.iter (fun (s,id) ->
         fprintf oc "	.uleb128	%d\n" id;
         output_string oc s;
@@ -257,6 +255,8 @@ module DwarfPrinter(Target: DWARF_TARGET):
       fprintf oc "	.sleb128	0\n"
 
     let debug_start_addr = ref (-1)
+
+    let debug_stmt_list = ref (-1)
 
     let entry_labels: (int,int) Hashtbl.t = Hashtbl.create 7
 
@@ -314,10 +314,13 @@ module DwarfPrinter(Target: DWARF_TARGET):
       fprintf oc "	.4byte		%a\n" label ref
 
     let print_file_loc oc = function
-      | Some (file,col) ->
+      | Some (Diab_file_loc (file,col)) ->
           fprintf oc "	.4byte		%a\n" label file;
           print_uleb128 oc col
-      | None -> ()
+      | Some (Gnu_file_loc (file,col)) ->
+          fprintf oc "	.4byte		%l\n" file;
+          print_uleb128 oc col 
+     | None -> ()
 
     let print_loc_expr oc = function
       | DW_OP_bregx (a,b) ->
@@ -417,7 +420,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_uleb128 oc 1;
       print_string oc tag.compile_unit_name;
       print_string oc prod_name;
-      print_addr oc tag.compile_unit_stmt_list
+      print_addr oc !debug_stmt_list
 
     let print_const_type oc ct =
       print_ref oc ct.const_type
@@ -558,14 +561,14 @@ module DwarfPrinter(Target: DWARF_TARGET):
 
     (* Print the debug abbrev section *)
     let print_debug_abbrev oc entries =
-      List.iter (fun (_,_,e,_) -> compute_abbrev e) entries;
+      List.iter (fun (_,_,_,e,_) -> compute_abbrev e) entries;
       print_abbrev oc
 
     (* Print the debug info section *)
-    let print_debug_info oc sec start entry  =
+    let print_debug_info oc start line_start entry  =
       Hashtbl.reset entry_labels;
       debug_start_addr:= start;
-      section oc (Section_debug_info sec);      
+      debug_stmt_list:= line_start;
       print_label oc start;
       let debug_length_start = new_label ()  (* Address used for length calculation *)
       and debug_end = new_label () in
@@ -590,12 +593,33 @@ module DwarfPrinter(Target: DWARF_TARGET):
     let print_location_list oc (c_low,l) =
       List.iter (print_location_entry oc c_low) l
 
-    (* Print the debug info and abbrev section *)
-    let print_debug oc entries =
+    let print_diab_entries oc entries =
+      let abbrev_start = new_label () in
+      abbrev_start_addr := abbrev_start;  
       print_debug_abbrev oc entries;
-      List.iter (fun (s,d,e,_) -> print_debug_info oc s d e) entries;
+      List.iter (fun (s,d,l,e,_) ->
+        section oc (Section_debug_info s);      
+        print_debug_info oc d l e) entries;
       section oc Section_debug_loc;
-      List.iter (fun (_,_,_,l) -> print_location_list oc l) entries
+      List.iter (fun (_,_,_,_,l) -> print_location_list oc l) entries
 
+    let print_gnu_entries oc cp loc =
+      compute_abbrev cp;
+      let line_start = new_label ()
+      and start = new_label ()
+      and  abbrev_start = new_label () in
+      abbrev_start_addr := abbrev_start;
+      section oc (Section_debug_info "");
+      print_debug_info oc start line_start cp;
+      print_abbrev oc;
+      section oc Section_debug_loc;
+      print_location_list oc loc;
+      fprintf oc "	.section	.debug_line,\"\",@progbits\n";
+      print_label oc line_start
+
+    (* Print the debug info and abbrev section *)
+    let print_debug oc = function
+      | Diab entries -> print_diab_entries oc entries
+      | Gnu (cp,loc) -> print_gnu_entries oc cp loc
 
   end

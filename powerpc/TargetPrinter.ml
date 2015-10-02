@@ -13,6 +13,7 @@
 (* Printing PPC assembly code in asm syntax *)
 
 open Printf
+open Fileinfo
 open Datatypes
 open Maps
 open Camlcoq
@@ -122,9 +123,9 @@ module Linux_System : SYSTEM =
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\",\"a%s%s\",@progbits"
             s (if wr then "w" else "") (if ex then "x" else "")
-      | Section_debug_info _ -> ".debug_info,\"\",@progbits"
-      | Section_debug_abbrev -> ".debug_abbrev,\"\",@progbits"
-      | Section_debug_loc -> ".debug_loc,\"\",@progbits"
+      | Section_debug_info _ -> ".section	.debug_info,\"\",@progbits"
+      | Section_debug_abbrev -> ".section	.debug_abbrev,\"\",@progbits"
+      | Section_debug_loc -> ".section	.debug_loc,\"\",@progbits"
             
     let section oc sec =
       let name = name_of_section sec in
@@ -144,10 +145,26 @@ module Linux_System : SYSTEM =
               
     let cfi_rel_offset = cfi_rel_offset
 
-    let print_prologue oc = ()
+    let print_prologue oc = 
+      if !Clflags.option_g then
+        begin
+      (* TODO print file *)
+          section oc Section_text;
+          let low_pc = new_label () in
+          Debug.add_compilation_section_start ".text" low_pc;
+          fprintf oc "%a:\n" label low_pc;
+          fprintf oc "	.cfi_sections	.debug_frame\n"
+        end
 
-    let print_epilogue oc = ()
-        
+    let print_epilogue oc =
+      if !Clflags.option_g then
+        begin
+          let high_pc = new_label () in
+          Debug.add_compilation_section_end ".text" high_pc;
+          section oc Section_text;
+          fprintf oc "%a:\n" label high_pc
+        end
+
     let debug_section _ _ = ()
   end
     
@@ -239,7 +256,8 @@ module Diab_System : SYSTEM =
             let line_start = new_label ()
             and low_pc = new_label ()
             and debug_info = new_label () in
-            Debug.add_compilation_section_start name (line_start,low_pc,debug_info,name_of_section sec);
+            Debug.add_diab_info name (line_start,debug_info,name_of_section sec);
+            Debug.add_compilation_section_start name low_pc;
             let line_name = ".debug_line" ^(if name <> ".text" then name else "") in 
             fprintf oc "	.section	%s,,n\n" line_name;
             if name <> ".text" then

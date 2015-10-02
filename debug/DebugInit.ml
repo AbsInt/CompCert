@@ -27,7 +27,11 @@ let init_debug () =
   implem.set_bitfield_offset <- DebugInformation.set_bitfield_offset;
   implem.insert_global_declaration <- DebugInformation.insert_global_declaration;
   implem.add_fun_addr <- DebugInformation.add_fun_addr;
-  implem.generate_debug_info <- (fun a b -> Some (Dwarfgen.gen_debug_info a b));
+  implem.generate_debug_info <- 
+    if Configuration.system = "diab" then
+      (fun a b -> Some (Dwarfgen.gen_diab_debug_info a b))
+    else
+      (fun a b -> Some (Dwarfgen.gen_gnu_debug_info a b));
   implem.all_files_iter <- (fun f -> DebugInformation.StringSet.iter f !DebugInformation.all_files);
   implem.insert_local_declaration <- DebugInformation.insert_local_declaration;
   implem.atom_local_variable <- DebugInformation.atom_local_variable;
@@ -43,10 +47,12 @@ let init_debug () =
   implem.add_label <- DebugInformation.add_label;
   implem.atom_parameter <- DebugInformation.atom_parameter;
   implem.add_compilation_section_start <- DebugInformation.add_compilation_section_start;
+  implem.add_compilation_section_end <- DebugInformation.add_compilation_section_end;
   implem.compute_file_enum <- DebugInformation.compute_file_enum;
   implem.exists_section <- DebugInformation.exists_section;
   implem.remove_unused <- DebugInformation.remove_unused;
-  implem.variable_printed <- DebugInformation.variable_printed
+  implem.variable_printed <- DebugInformation.variable_printed;
+  implem.add_diab_info <- DebugInformation.add_diab_info
 
 let init_none () =
   implem.init <- (fun _ -> ());
@@ -73,9 +79,11 @@ let init_none () =
   implem.add_label <- (fun _ _ _ -> ());
   implem.atom_parameter <- (fun _ _ _ -> ());
   implem.add_compilation_section_start <- (fun _ _ -> ());
+  implem.add_compilation_section_end <- (fun _ _ -> ());
   implem.exists_section <- (fun _ -> true);
   implem.remove_unused <- (fun _ -> ());
-  implem.variable_printed <- (fun _ -> ())
+  implem.variable_printed <- (fun _ -> ());
+  implem.add_diab_info <- (fun _ _ -> ())
 
 let init () =
   if !Clflags.option_g && Configuration.advanced_debug then
