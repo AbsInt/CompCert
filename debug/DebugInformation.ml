@@ -686,5 +686,5 @@ let init name =
   Hashtbl.reset compilation_section_start;
   Hashtbl.reset compilation_section_end;
   Hashtbl.reset filenum;
-  all_files := StringSet.empty;
+  all_files := StringSet.singleton name;
   printed_vars := StringSet.empty;

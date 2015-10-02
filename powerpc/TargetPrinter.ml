@@ -225,23 +225,6 @@ module Diab_System : SYSTEM =
     let cfi_adjust oc delta = ()
 
     let cfi_rel_offset oc reg ofs = ()
-        
-    let print_prologue oc =
-      fprintf oc "	.xopt	align-fill-text=0x60000000\n"
-
-    let print_epilogue oc =
-      let end_label sec = 
-        fprintf oc "\n";
-        fprintf oc "	%s\n" sec;
-        let label_end = new_label () in
-        fprintf oc "%a:\n" label label_end;
-        label_end 
-      and entry_label f =
-        let label = new_label () in
-        fprintf oc ".L%d:	.d2filenum \"%s\"\n" label f;
-        label
-      and end_line () =   fprintf oc "	.d2_line_end\n" in
-      Debug.compute_file_enum end_label entry_label end_line
 
     let debug_section oc sec =
       match sec with
@@ -268,7 +251,24 @@ module Diab_System : SYSTEM =
             fprintf oc "	.d2_line_start	%s\n" line_name
           else
             ()
-            
+        
+    let print_prologue oc =
+      fprintf oc "	.xopt	align-fill-text=0x60000000\n";
+      debug_section oc Section_text
+
+    let print_epilogue oc =
+      let end_label sec = 
+        fprintf oc "\n";
+        fprintf oc "	%s\n" sec;
+        let label_end = new_label () in
+        fprintf oc "%a:\n" label label_end;
+        label_end 
+      and entry_label f =
+        let label = new_label () in
+        fprintf oc ".L%d:	.d2filenum \"%s\"\n" label f;
+        label
+      and end_line () =   fprintf oc "	.d2_line_end\n" in
+      Debug.compute_file_enum end_label entry_label end_line
 
   end
 
