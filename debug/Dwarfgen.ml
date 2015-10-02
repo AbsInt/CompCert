@@ -339,7 +339,7 @@ let location_entry f_id atom =
       | FunctionLoc (a,r) ->
           translate_function_loc a r
       | RangeLoc l ->
-          let l = List.map (fun i -> 
+          let l = List.rev_map (fun i -> 
             let hi = get_opt_val i.range_start
             and lo = get_opt_val i.range_end in
             let hi = Hashtbl.find label_translation (f_id,hi)
