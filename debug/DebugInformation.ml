@@ -521,6 +521,7 @@ let add_lvar_scope f_id var_id s_id =
   with Not_found -> ()
 
 let insert_local_declaration sto id ty loc =
+  add_file (fst loc);
   let ty = insert_type ty in
   let var = {
     lvar_name = id.name;
