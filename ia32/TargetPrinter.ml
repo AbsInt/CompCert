@@ -20,6 +20,7 @@ open AST
 open Memdata
 open Asm
 open PrintAsmaux
+open Fileinfo
 
 module StringSet = Set.Make(String)
 
