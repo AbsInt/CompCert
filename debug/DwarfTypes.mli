@@ -60,8 +60,10 @@ type bound_value =
 
 (* Types representing the attribute information per tag value *)
 
-type file_loc = int * constant
-
+type file_loc = 
+  | Diab_file_loc of int * constant
+  | Gnu_file_loc of int * constant
+     
 type dw_tag_array_type =
     {
      array_type_file_loc: file_loc option;
@@ -80,7 +82,6 @@ type dw_tag_compile_unit =
      compile_unit_name:      string;
      compile_unit_low_pc:    int;
      compile_unit_high_pc:   int;
-     compile_unit_stmt_list: int;
    }
 
 type dw_tag_const_type =
@@ -248,7 +249,7 @@ type location_entry =
    }
 type dw_locations = int * location_entry list
 
-type diab_entries =  (string * int * dw_entry * dw_locations) list
+type diab_entries =  (string * int * int * dw_entry * dw_locations) list
 
 type gnu_entries = dw_entry * dw_locations
 

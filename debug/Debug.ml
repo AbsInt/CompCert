@@ -45,11 +45,13 @@ type implem =
      mutable function_end: atom -> positive -> unit;
      mutable add_label: atom -> positive -> int -> unit;
      mutable atom_parameter: ident -> ident -> atom -> unit;
-     mutable add_compilation_section_start: string ->(int * int * int * string) -> unit;
+     mutable add_compilation_section_start: string -> int -> unit;
+     mutable add_compilation_section_end: string -> int -> unit;
      mutable compute_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit;
      mutable exists_section: string -> bool;
      mutable remove_unused: ident -> unit;
      mutable variable_printed: string -> unit;
+     mutable add_diab_info: string -> (int * int * string) -> unit;
    }
 
 let implem =
@@ -78,10 +80,12 @@ let implem =
    add_label = (fun _ _ _ -> ());
    atom_parameter = (fun _ _ _ -> ());
    add_compilation_section_start = (fun _ _ -> ());
+   add_compilation_section_end = (fun _ _ -> ());
    compute_file_enum = (fun _ _ _ -> ());
    exists_section = (fun _ -> true);
    remove_unused = (fun _ -> ());
    variable_printed = (fun _ -> ());
+   add_diab_info = (fun _ _ -> ());
 }
 
 let init_compile_unit name = implem.init name
@@ -108,7 +112,9 @@ let function_end atom loc = implem.function_end atom loc
 let add_label atom p lbl = implem.add_label atom p lbl
 let atom_parameter fid pid atom = implem.atom_parameter fid pid atom
 let add_compilation_section_start sec addr = implem.add_compilation_section_start sec addr
+let add_compilation_section_end sec addr = implem.add_compilation_section_end sec addr
 let exists_section sec = implem.exists_section sec
 let compute_file_enum end_l entry_l line_e = implem.compute_file_enum end_l entry_l line_e
 let remove_unused ident = implem.remove_unused ident
 let variable_printed ident = implem.variable_printed ident
+let add_diab_info sec addr = implem.add_diab_info sec addr

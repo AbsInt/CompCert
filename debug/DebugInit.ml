@@ -47,10 +47,12 @@ let init_debug () =
   implem.add_label <- DebugInformation.add_label;
   implem.atom_parameter <- DebugInformation.atom_parameter;
   implem.add_compilation_section_start <- DebugInformation.add_compilation_section_start;
+  implem.add_compilation_section_end <- DebugInformation.add_compilation_section_end;
   implem.compute_file_enum <- DebugInformation.compute_file_enum;
   implem.exists_section <- DebugInformation.exists_section;
   implem.remove_unused <- DebugInformation.remove_unused;
-  implem.variable_printed <- DebugInformation.variable_printed
+  implem.variable_printed <- DebugInformation.variable_printed;
+  implem.add_diab_info <- DebugInformation.add_diab_info
 
 let init_none () =
   implem.init <- (fun _ -> ());
@@ -77,9 +79,11 @@ let init_none () =
   implem.add_label <- (fun _ _ _ -> ());
   implem.atom_parameter <- (fun _ _ _ -> ());
   implem.add_compilation_section_start <- (fun _ _ -> ());
+  implem.add_compilation_section_end <- (fun _ _ -> ());
   implem.exists_section <- (fun _ -> true);
   implem.remove_unused <- (fun _ -> ());
-  implem.variable_printed <- (fun _ -> ())
+  implem.variable_printed <- (fun _ -> ());
+  implem.add_diab_info <- (fun _ _ -> ())
 
 let init () =
   if !Clflags.option_g && Configuration.advanced_debug then

@@ -43,11 +43,13 @@ type implem =
      mutable function_end: atom -> positive -> unit;
      mutable add_label: atom -> positive -> int -> unit;
      mutable atom_parameter: ident -> ident -> atom -> unit;
-     mutable add_compilation_section_start: string -> (int * int * int * string) -> unit;
+     mutable add_compilation_section_start: string -> int -> unit;
+     mutable add_compilation_section_end: string -> int -> unit;
      mutable compute_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit;
      mutable exists_section: string -> bool;
      mutable remove_unused: ident -> unit;
      mutable variable_printed: string -> unit;
+     mutable add_diab_info: string -> (int * int * string) -> unit;
    }
 
 val implem: implem
@@ -75,8 +77,10 @@ val function_end: atom -> positive -> unit
 val add_label: atom -> positive -> int -> unit
 val generate_debug_info: (atom -> string) -> string -> debug_entries option
 val atom_parameter: ident -> ident -> atom -> unit
-val add_compilation_section_start: string -> (int * int * int * string) -> unit
+val add_compilation_section_start: string -> int -> unit
+val add_compilation_section_end: string -> int -> unit
 val compute_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit
 val exists_section: string -> bool
 val remove_unused: ident -> unit
 val variable_printed: string -> unit
+val add_diab_info: string -> (int * int * string) -> unit

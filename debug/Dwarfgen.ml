@@ -440,7 +440,7 @@ let definition_to_entry file (acc,bcc) id t =
 module StringMap = Map.Make(String)
 
 let diab_file_loc sec (f,l)  =
-  Hashtbl.find filenum (sec,f),l
+  Diab_file_loc (Hashtbl.find filenum (sec,f),l)
 
 let gen_diab_debug_info sec_name var_section : debug_entries =
   let defs = Hashtbl.fold (fun id t acc ->
@@ -453,18 +453,34 @@ let gen_diab_debug_info sec_name var_section : debug_entries =
     let defs,(ty,locs) = List.fold_left (fun (acc,bcc) (id,t) -> 
       let t,bcc = definition_to_entry (diab_file_loc s) bcc id t in
       t::acc,bcc) ([],(IntSet.empty,[])) defs in
-    let line_start,low_pc,debug_start,_ = Hashtbl.find compilation_section_start s
+    let low_pc = Hashtbl.find compilation_section_start s
+    and line_start,debug_start,_ = Hashtbl.find diab_additional s
     and high_pc = Hashtbl.find compilation_section_end s in
     let cp = {
       compile_unit_name = !file_name;
       compile_unit_low_pc = low_pc;
-      compile_unit_high_pc = high_pc;
-      compile_unit_stmt_list = line_start; 
+      compile_unit_high_pc = high_pc; 
     } in
     let cp = new_entry (next_id ()) (DW_TAG_compile_unit cp) in
     let cp = add_children cp ((gen_types (diab_file_loc s) ty) @ defs) in
-    (s,debug_start,cp,(low_pc,locs))::acc) defs [] in
+    (s,debug_start,line_start,cp,(low_pc,locs))::acc) defs [] in
   Diab entries
 
+let gnu_file_loc (f,l) =
+    Gnu_file_loc ((fst (Hashtbl.find Fileinfo.filename_info f),l))
+
 let gen_gnu_debug_info sec_name var_section : debug_entries =
-  Diab []
+  let low_pc = Hashtbl.find compilation_section_start ".text"
+  and high_pc = Hashtbl.find compilation_section_end ".text" in
+  let defs,(ty,locs) = Hashtbl.fold (fun  id t (acc,bcc) -> 
+    let t,bcc = definition_to_entry gnu_file_loc bcc id t in
+    t::acc,bcc) definitions ([],(IntSet.empty,[])) in
+  let types = gen_types gnu_file_loc ty in
+  let cp = {
+    compile_unit_name = !file_name;
+    compile_unit_low_pc = low_pc;
+    compile_unit_high_pc = high_pc; 
+  } in
+  let cp = new_entry (next_id ()) (DW_TAG_compile_unit cp) in
+  let cp = add_children cp (types@defs) in
+  Gnu (cp,(low_pc,locs))
