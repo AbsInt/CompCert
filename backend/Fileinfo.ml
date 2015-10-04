@@ -42,16 +42,17 @@ let enter_filename f =
 
 (* Add file and line debug location, using GNU assembler-style DWARF2
    directives *)
+let print_file oc file =
+  try
+    Hashtbl.find filename_info file
+  with Not_found ->
+    let (filenum, filebuf as res) = enter_filename file in
+    fprintf oc "	.file	%d %S\n" filenum file;
+    res
 
 let print_file_line oc pref file line =
   if !Clflags.option_g && file <> "" then begin
-    let (filenum, filebuf) =
-      try
-        Hashtbl.find filename_info file
-      with Not_found ->
-        let (filenum, filebuf as res) = enter_filename file in
-        fprintf oc "	.file	%d %S\n" filenum file;
-        res in
+    let (filenum, filebuf) = print_file oc file in
     fprintf oc "	.loc	%d %d\n" filenum line;
     match filebuf with
     | None -> ()

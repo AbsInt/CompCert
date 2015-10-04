@@ -161,6 +161,7 @@ module Linux_System : SYSTEM =
         begin
           let high_pc = new_label () in
           Debug.add_compilation_section_end ".text" high_pc;
+          Debug.compute_gnu_file_enum (fun f -> ignore (print_file oc f));
           section oc Section_text;
           fprintf oc "%a:\n" label high_pc
         end
@@ -286,7 +287,7 @@ module Diab_System : SYSTEM =
         fprintf oc ".L%d:	.d2filenum \"%s\"\n" label f;
         label
       and end_line () =   fprintf oc "	.d2_line_end\n" in
-      Debug.compute_file_enum end_label entry_label end_line
+      Debug.compute_diab_file_enum end_label entry_label end_line
 
   end
 
