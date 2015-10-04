@@ -1786,13 +1786,21 @@ let enter_typedefs loc env sto dl =
   List.fold_left (fun env (s, ty, init) ->
     if init <> NO_INIT then
       error loc "initializer in typedef";
-    if redef Env.lookup_typedef env s then
-      error loc "redefinition of typedef '%s'" s;
-    if redef Env.lookup_ident env s then
-      error loc "redefinition of identifier '%s' as different kind of symbol" s;
-    let (id, env') = Env.enter_typedef env s ty in
-    emit_elab env loc (Gtypedef(id, ty));
-    env') env dl
+    match previous_def Env.lookup_typedef env s with
+    | Some (s',ty') ->
+        if equal_types env ty ty' then begin
+          warning loc "redefinition of typedef '%s'" s;
+          env
+        end else begin
+          error loc "redefinition of typedef '%s' with different type" s;
+          env
+        end
+    | None ->
+        if redef Env.lookup_ident env s then
+          error loc "redefinition of identifier '%s' as different kind of symbol" s;
+        let (id, env') = Env.enter_typedef env s ty in
+        emit_elab env loc (Gtypedef(id, ty));
+        env') env dl
 
 let enter_or_refine_ident local loc env s sto ty =
   if redef Env.lookup_typedef env s then

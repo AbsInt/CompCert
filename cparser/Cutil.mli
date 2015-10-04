@@ -80,6 +80,8 @@ val combine_types : attr_handling -> Env.t -> typ -> typ -> typ option
      with the same meaning as for [compatible_types].
      When two sets of attributes are compatible, the result of
      [combine_types] carries the union of these two sets of attributes. *)
+val equal_types : Env.t -> typ -> typ -> bool
+   (* Check that the two given types are equal up to typedef use *)
 
 (* Size and alignment *)
 
