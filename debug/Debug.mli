@@ -45,7 +45,8 @@ type implem =
      mutable atom_parameter: ident -> ident -> atom -> unit;
      mutable add_compilation_section_start: string -> int -> unit;
      mutable add_compilation_section_end: string -> int -> unit;
-     mutable compute_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit;
+     mutable compute_diab_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit;
+     mutable compute_gnu_file_enum: (string -> unit) -> unit;
      mutable exists_section: string -> bool;
      mutable remove_unused: ident -> unit;
      mutable variable_printed: string -> unit;
@@ -79,7 +80,8 @@ val generate_debug_info: (atom -> string) -> string -> debug_entries option
 val atom_parameter: ident -> ident -> atom -> unit
 val add_compilation_section_start: string -> int -> unit
 val add_compilation_section_end: string -> int -> unit
-val compute_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit
+val compute_diab_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit
+val compute_gnu_file_enum: (string -> unit) -> unit
 val exists_section: string -> bool
 val remove_unused: ident -> unit
 val variable_printed: string -> unit

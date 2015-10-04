@@ -663,13 +663,16 @@ let exists_section sec =
 
 let filenum: (string * string,int) Hashtbl.t = Hashtbl.create 7
 
-let compute_file_enum end_label entry_label line_end =
+let compute_diab_file_enum end_label entry_label line_end =
   Hashtbl.iter (fun sec (_,_,secname) ->
     Hashtbl.add compilation_section_end sec (end_label secname);
     StringSet.iter (fun file ->
       let lbl = entry_label file in
       Hashtbl.add filenum (sec,file) lbl) !all_files;
     line_end ()) diab_additional
+
+let compute_gnu_file_enum f =
+  StringSet.iter f !all_files
 
 let printed_vars: StringSet.t ref = ref StringSet.empty
 

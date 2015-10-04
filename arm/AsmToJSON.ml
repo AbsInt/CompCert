@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(* Simple functions to serialize powerpc Asm to JSON *)
+(* Simple functions to serialize arm Asm to JSON *)
 
 (* Dummy function *)
 

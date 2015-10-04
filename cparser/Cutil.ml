@@ -273,6 +273,42 @@ let combine_types mode env t1 t2 =
 
   in try Some(comp mode t1 t2) with Incompat -> None
 
+let rec equal_types env t1 t2 =
+  match t1, t2 with
+  | TVoid a1, TVoid a2 ->
+     a1=a2
+  | TInt(ik1, a1), TInt(ik2, a2) ->
+      ik1 = ik2 && a1 = a2
+  | TFloat(fk1, a1), TFloat(fk2, a2) ->
+     fk1 = fk2 && a1 = a2
+  | TPtr(ty1, a1), TPtr(ty2, a2) ->
+      a1 = a2 && equal_types env ty1 ty2
+  | TArray(ty1, sz1, a1), TArray(ty2, sz2, a2) ->
+      let size = begin match sz1,sz2 with
+      | None, None -> true
+      | Some s1, Some s2 -> s1 = s2
+      | _ -> false end in
+      size && a1 = a2 && equal_types env t1 t2
+  | TFun(ty1, params1, vararg1, a1), TFun(ty2, params2, vararg2, a2) ->
+      let params =
+        match params1, params2 with
+        | None, None -> true
+        | None, Some _
+        | Some _, None -> false
+        | Some l1, Some l2 ->
+            try
+              List.for_all2 (fun (_,t1) (_,t2) -> equal_types env t1 t2) l1 l2
+            with _ -> false
+      in params && a1 = a2 && vararg1 = vararg2 && equal_types env ty1 ty2
+  | TNamed _, _ -> equal_types env (unroll env t1) t2
+  | _, TNamed _ -> equal_types env t1 (unroll env t2)
+  | TStruct(s1, a1), TStruct(s2, a2)
+  | TUnion(s1, a1), TUnion(s2, a2)
+  | TEnum(s1, a1), TEnum(s2, a2) ->
+      s1 = s2 && a1 = a2
+  | _, _ ->
+      false
+
 (** Check whether two types are compatible. *)
 
 let compatible_types mode env t1 t2 =

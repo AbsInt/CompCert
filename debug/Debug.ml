@@ -47,7 +47,8 @@ type implem =
      mutable atom_parameter: ident -> ident -> atom -> unit;
      mutable add_compilation_section_start: string -> int -> unit;
      mutable add_compilation_section_end: string -> int -> unit;
-     mutable compute_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit;
+     mutable compute_diab_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit;
+     mutable compute_gnu_file_enum: (string -> unit) -> unit;
      mutable exists_section: string -> bool;
      mutable remove_unused: ident -> unit;
      mutable variable_printed: string -> unit;
@@ -81,7 +82,8 @@ let implem =
    atom_parameter = (fun _ _ _ -> ());
    add_compilation_section_start = (fun _ _ -> ());
    add_compilation_section_end = (fun _ _ -> ());
-   compute_file_enum = (fun _ _ _ -> ());
+   compute_diab_file_enum = (fun _ _ _ -> ());
+   compute_gnu_file_enum = (fun _ -> ());
    exists_section = (fun _ -> true);
    remove_unused = (fun _ -> ());
    variable_printed = (fun _ -> ());
@@ -114,7 +116,8 @@ let atom_parameter fid pid atom = implem.atom_parameter fid pid atom
 let add_compilation_section_start sec addr = implem.add_compilation_section_start sec addr
 let add_compilation_section_end sec addr = implem.add_compilation_section_end sec addr
 let exists_section sec = implem.exists_section sec
-let compute_file_enum end_l entry_l line_e = implem.compute_file_enum end_l entry_l line_e
+let compute_diab_file_enum end_l entry_l line_e = implem.compute_diab_file_enum end_l entry_l line_e
+let compute_gnu_file_enum f = implem.compute_gnu_file_enum f
 let remove_unused ident = implem.remove_unused ident
 let variable_printed ident = implem.variable_printed ident
 let add_diab_info sec addr = implem.add_diab_info sec addr
