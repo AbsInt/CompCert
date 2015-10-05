@@ -558,9 +558,9 @@ and elab_parameters env params =
   | _ ->
       (* Prototype introduces a new scope *)
       let (vars, _) = mmap elab_parameter (Env.new_scope env) params in
-      (* Catch special case f(void) *)
+      (* Catch special case f(t) where t is void or a typedef to void *)
       match vars with
-        | [ ( {name=""}, TVoid _) ] -> Some []
+        | [ ( {name=""}, t) ] when is_void_type env t -> Some []
         | _ -> Some vars
 
 (* Elaboration of a function parameter *)
