@@ -590,8 +590,21 @@ module DwarfPrinter(Target: DWARF_TARGET):
       fprintf oc "	.4byte	0\n";
       fprintf oc "	.4byte	0\n"
 
+    let print_location_entry_abs oc l =
+      print_label oc (loc_to_label l.loc_id);
+      List.iter (fun (b,e,loc) ->
+        fprintf oc "	.4byte		%a\n" label b;
+        fprintf oc "	.4byte		%a\n" label e;
+        print_list_loc oc loc) l.loc;
+      fprintf oc "	.4byte	0\n";
+      fprintf oc "	.4byte	0\n"
+
+
     let print_location_list oc (c_low,l) =
-      List.iter (print_location_entry oc c_low) l
+      let f =  match c_low with
+      | Some s -> print_location_entry oc s
+      | None -> print_location_entry_abs oc in
+     List.iter f l
 
     let print_diab_entries oc entries =
       let abbrev_start = new_label () in

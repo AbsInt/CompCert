@@ -463,7 +463,7 @@ let gen_diab_debug_info sec_name var_section : debug_entries =
     } in
     let cp = new_entry (next_id ()) (DW_TAG_compile_unit cp) in
     let cp = add_children cp ((gen_types (diab_file_loc s) ty) @ defs) in
-    (s,debug_start,line_start,cp,(low_pc,locs))::acc) defs [] in
+    (s,debug_start,line_start,cp,(Some low_pc,locs))::acc) defs [] in
   Diab entries
 
 let gnu_file_loc (f,l) =
@@ -472,9 +472,12 @@ let gnu_file_loc (f,l) =
 let gen_gnu_debug_info sec_name var_section : debug_entries =
   let low_pc = Hashtbl.find compilation_section_start ".text"
   and high_pc = Hashtbl.find compilation_section_end ".text" in
-  let defs,(ty,locs) = Hashtbl.fold (fun  id t (acc,bcc) -> 
+  let defs,(ty,locs),sec = Hashtbl.fold (fun  id t (acc,bcc,sec) -> 
+    let s = match t with
+    | GlobalVariable _ -> var_section
+    | Function f -> sec_name (get_opt_val f.fun_atom) in
     let t,bcc = definition_to_entry gnu_file_loc bcc id t in
-    t::acc,bcc) definitions ([],(IntSet.empty,[])) in
+    t::acc,bcc,StringSet.add s sec) definitions ([],(IntSet.empty,[]),StringSet.empty) in
   let types = gen_types gnu_file_loc ty in
   let cp = {
     compile_unit_name = !file_name;
@@ -483,4 +486,5 @@ let gen_gnu_debug_info sec_name var_section : debug_entries =
   } in
   let cp = new_entry (next_id ()) (DW_TAG_compile_unit cp) in
   let cp = add_children cp (types@defs) in
-  Gnu (cp,(low_pc,locs))
+  let loc_pc = if StringSet.cardinal sec > 1 then None else Some low_pc in
+  Gnu (cp,(loc_pc,locs))

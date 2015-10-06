@@ -247,7 +247,7 @@ type location_entry =
      loc:     (int * int * location_value) list;
      loc_id:  reference;
    }
-type dw_locations = int * location_entry list
+type dw_locations = int option * location_entry list
 
 type diab_entries =  (string * int * int * dw_entry * dw_locations) list
 
