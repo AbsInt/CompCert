@@ -70,7 +70,7 @@ OCAMLC_P4=ocamlfind ocamlc $(COMPFLAGS) $(BITSTRING)
 OCAMLOPT_P4=ocamlfind ocamlopt $(COMPFLAGS) $(BITSTRING)
 OCAMLDEP_P4=ocamlfind ocamldep $(INCLUDES) $(BITSTRING)
 
-MENHIR=menhir -v --no-stdlib
+MENHIR=menhir -v --no-stdlib -la 1
 OCAMLLEX=ocamllex -q
 MODORDER=tools/modorder .depend.extr
 
