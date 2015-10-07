@@ -95,6 +95,21 @@ option(X):
 optional(X, Y):
   ioption(X) Y {}
 
+(* This is a standard left-recursive, possibly empty list, without
+   separators. Note that, by convention, [X*] is syntactic sugar for
+   [list(X)]. *)
+
+list(X):
+| (* empty *) {}
+| list(X) X   {}
+
+(* [ilist(X)] is equivalent to [list(X)], but is marked [%inline],
+   so its definition is expanded. *)
+
+%inline ilist(X):
+| (* empty *) {}
+| list(X) X   {}
+
 %inline fst(X):
 | x = X
     { fst x }
@@ -352,16 +367,12 @@ storage_class_specifier_no_typedef:
 | REGISTER
     {}
 
-(* [declaration_specifiers_no_type] matches declaration specifiers
+(* [declaration_specifier_no_type] matches declaration specifiers
    that do not contain either "typedef" nor type specifiers. *)
 declaration_specifier_no_type:
 | storage_class_specifier_no_typedef
 | type_qualifier
 | function_specifier
-    {}
-
-declaration_specifiers_no_type:
-| declaration_specifier_no_type declaration_specifiers_no_type?
     {}
 
 (* [declaration_specifiers_no_typedef_name] matches declaration
@@ -396,18 +407,18 @@ declaration_specifiers_no_typedef_name:
    [parameter_declaration], which means that this is the beginning of a
    parameter declaration. *)
 declaration_specifiers(phantom):
-| ioption(declaration_specifiers_no_type) TYPEDEF_NAME                   declaration_specifiers_no_type?
-| declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+| ilist(declaration_specifier_no_type) TYPEDEF_NAME                   declaration_specifier_no_type*
+|       declaration_specifier_no_type* type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
     {}
 
 (* This matches declaration_specifiers that do contains once the
    "typedef" keyword. To avoid conflicts, we also encode the
    constraint described in the comment for [declaration_specifiers]. *)
 declaration_specifiers_typedef:
-| declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?         TYPEDEF_NAME                   declaration_specifiers_no_type?
-| ioption(declaration_specifiers_no_type) TYPEDEF_NAME                   declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?
-| declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
-| declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name? TYPEDEF                        declaration_specifiers_no_typedef_name?
+|       declaration_specifier_no_type*   TYPEDEF                        declaration_specifier_no_type*          TYPEDEF_NAME                   declaration_specifier_no_type*
+| ilist(declaration_specifier_no_type)   TYPEDEF_NAME                   declaration_specifier_no_type*          TYPEDEF                        declaration_specifier_no_type*
+|       declaration_specifier_no_type*   TYPEDEF                        declaration_specifier_no_type*          type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+|       declaration_specifier_no_type*   type_specifier_no_typedef_name declaration_specifiers_no_typedef_name? TYPEDEF                        declaration_specifiers_no_typedef_name?
     {}
 
 (* A type specifier which is not a typedef name. *)
