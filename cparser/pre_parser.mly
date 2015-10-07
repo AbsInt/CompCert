@@ -286,7 +286,7 @@ constant_expression:
    typedef). *)
 
 declaration:
-| declaration_specifiers init_declarator_list? SEMICOLON
+| declaration_specifiers         init_declarator_list?    SEMICOLON
     {}
 | declaration_specifiers_typedef typedef_declarator_list? SEMICOLON
     {}
@@ -321,8 +321,8 @@ storage_class_specifier_no_typedef:
    that do not contain either "typedef" nor type specifiers. *)
 declaration_specifiers_no_type:
 | storage_class_specifier_no_typedef declaration_specifiers_no_type?
-| type_qualifier declaration_specifiers_no_type?
-| function_specifier declaration_specifiers_no_type?
+| type_qualifier                     declaration_specifiers_no_type?
+| function_specifier                 declaration_specifiers_no_type?
     {}
 
 (* [declaration_specifiers_no_typedef_name] matches declaration
@@ -331,9 +331,9 @@ declaration_specifiers_no_type:
    keyword"). *)
 declaration_specifiers_no_typedef_name:
 | storage_class_specifier_no_typedef declaration_specifiers_no_typedef_name?
-| type_qualifier declaration_specifiers_no_typedef_name?
-| function_specifier declaration_specifiers_no_typedef_name?
-| type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+| type_qualifier                     declaration_specifiers_no_typedef_name?
+| function_specifier                 declaration_specifiers_no_typedef_name?
+| type_specifier_no_typedef_name     declaration_specifiers_no_typedef_name?
     {}
 
 (* [declaration_specifiers_no_type] matches declaration_specifiers
@@ -353,7 +353,7 @@ declaration_specifiers_no_typedef_name:
    The first field is a named t, while the second is unnamed of type t.
 *)
 declaration_specifiers:
-| declaration_specifiers_no_type? i = TYPEDEF_NAME declaration_specifiers_no_type?
+| declaration_specifiers_no_type? i = TYPEDEF_NAME               declaration_specifiers_no_type?
     { set_id_type i TypedefId }
 | declaration_specifiers_no_type? type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
     {}
@@ -362,19 +362,11 @@ declaration_specifiers:
    "typedef" keyword. To avoid conflicts, we also encode the
    constraint described in the comment for [declaration_specifiers]. *)
 declaration_specifiers_typedef:
-| declaration_specifiers_no_type?
-  TYPEDEF declaration_specifiers_no_type?
-  i = TYPEDEF_NAME declaration_specifiers_no_type?
-| declaration_specifiers_no_type?
-  i = TYPEDEF_NAME declaration_specifiers_no_type?
-  TYPEDEF declaration_specifiers_no_type?
+| declaration_specifiers_no_type? TYPEDEF                        declaration_specifiers_no_type?         i = TYPEDEF_NAME               declaration_specifiers_no_type?
+| declaration_specifiers_no_type? i = TYPEDEF_NAME               declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?
     { set_id_type i TypedefId }
-| declaration_specifiers_no_type?
-  TYPEDEF declaration_specifiers_no_type?
-  type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
-| declaration_specifiers_no_type?
-  type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
-  TYPEDEF declaration_specifiers_no_typedef_name?
+| declaration_specifiers_no_type? TYPEDEF                        declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+| declaration_specifiers_no_type? type_specifier_no_typedef_name declaration_specifiers_no_typedef_name? TYPEDEF                        declaration_specifiers_no_typedef_name?
     {}
 
 (* A type specifier which is not a typedef name. *)
@@ -421,14 +413,14 @@ struct_declaration:
 (* As in the standard, except it also encodes the constraint described
    in the comment above [declaration_specifiers]. *)
 specifier_qualifier_list:
-| type_qualifier_list? i = TYPEDEF_NAME type_qualifier_list?
+| type_qualifier_list? i = TYPEDEF_NAME               type_qualifier_list?
     { set_id_type i TypedefId }
 | type_qualifier_list? type_specifier_no_typedef_name specifier_qualifier_list_no_typedef_name?
     {}
 
 specifier_qualifier_list_no_typedef_name:
 | type_specifier_no_typedef_name specifier_qualifier_list_no_typedef_name?
-| type_qualifier specifier_qualifier_list_no_typedef_name?
+| type_qualifier                 specifier_qualifier_list_no_typedef_name?
     {}
 
 struct_declarator_list:
