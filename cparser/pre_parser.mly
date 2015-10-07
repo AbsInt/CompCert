@@ -97,6 +97,14 @@ option(X):
 | x = X
     { Some x }
 
+(* [optional(X, Y)] is equivalent to [X? Y]. However, by inlining
+   the two possibilies -- either [X Y] or just [Y] -- we are able
+   to give more meaningful syntax error messages. [optional(X, Y)]
+   itself is usually NOT inlined, as that would cause a useless
+   explosion of cases. *)
+optional(X, Y):
+  ioption(X) Y {}
+
 %inline fst(X):
 | x = X
     { fst x }
@@ -537,7 +545,7 @@ direct_declarator:
 | i = general_identifier
     { set_id_type i VarId; (i, None) }
 | LPAREN x = declarator RPAREN
-| x = direct_declarator LBRACK type_qualifier_list? assignment_expression? RBRACK
+| x = direct_declarator LBRACK type_qualifier_list? optional(assignment_expression, RBRACK)
     { x }
 | x = direct_declarator LPAREN
     open_context parameter_type_list? restore_fun = save_contexts_stk
@@ -583,7 +591,7 @@ abstract_declarator:
 
 direct_abstract_declarator:
 | LPAREN abstract_declarator RPAREN
-| option(direct_abstract_declarator) LBRACK type_qualifier_list? assignment_expression? RBRACK
+| option(direct_abstract_declarator) LBRACK type_qualifier_list? optional(assignment_expression, RBRACK)
 | ioption(direct_abstract_declarator) LPAREN in_context(parameter_type_list?) RPAREN
     {}
 
@@ -764,8 +772,8 @@ iteration_statement(openc,last_statement):
 | WHILE openc LPAREN expression RPAREN last_statement
 | DO open_context statement_finish_close WHILE
     openc LPAREN expression RPAREN close_context SEMICOLON
-| FOR openc LPAREN expression? SEMICOLON expression? SEMICOLON expression? RPAREN last_statement
-| FOR openc LPAREN declaration expression? SEMICOLON expression? RPAREN last_statement
+| FOR openc LPAREN optional(expression, SEMICOLON) optional(expression, SEMICOLON) optional(expression, RPAREN) last_statement
+| FOR openc LPAREN declaration                     optional(expression, SEMICOLON) optional(expression, RPAREN) last_statement
     {}
 
 asm_attributes:
