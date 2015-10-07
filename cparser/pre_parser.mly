@@ -431,12 +431,13 @@ struct_declaration_list:
     {}
 
 struct_declaration:
-| specifier_qualifier_list struct_declarator_list? SEMICOLON
+| specifier_qualifier_list(struct_declaration) struct_declarator_list? SEMICOLON
     {}
 
 (* As in the standard, except it also encodes the constraint described
    in the comment above [declaration_specifiers]. *)
-specifier_qualifier_list:
+(* The phantom parameter can be [struct_declaration] or [type_name]. *)
+specifier_qualifier_list(phantom):
 | type_qualifier_list? TYPEDEF_NAME                   type_qualifier_list?
 | type_qualifier_list? type_specifier_no_typedef_name specifier_qualifier_list_no_typedef_name?
     {}
@@ -570,7 +571,7 @@ parameter_declaration:
     { None }
 
 type_name:
-| specifier_qualifier_list abstract_declarator?
+| specifier_qualifier_list(type_name) abstract_declarator?
     {}
 
 abstract_declarator:
