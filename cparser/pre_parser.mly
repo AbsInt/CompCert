@@ -145,6 +145,22 @@ declare_varname(nt):
 declare_typename(nt):
   i = nt { declare_typename i; i }
 
+(* A note about phantom parameters. The definition of a non-terminal symbol
+   [nt] is sometimes parameterized with a parameter that is unused in the
+   right-hand side. This parameter disappears when macro-expansion takes
+   place. Thus, the presence of this parameter does not influence the language
+   that is accepted by the parser. Yet, it carries information about the
+   context, since different call sites can supply different values of this
+   parameter. This forces the creation of two (or more) identical copies of
+   the definition of [nt], which leads to a larger automaton, where some
+   states have been duplicated. In these states, more information about the
+   context is available, which allows better syntax error messages to be
+   given.
+   
+   By convention, a formal phantom parameter is named [phantom], so as to be
+   easily recognizable. For clarity, we usually explicitly document which
+   actual values it can take. *)
+
 (* Actual grammar *)
 
 primary_expression:
