@@ -772,8 +772,12 @@ iteration_statement(openc,last_statement):
 | WHILE openc LPAREN expression RPAREN last_statement
 | DO open_context statement_finish_close WHILE
     openc LPAREN expression RPAREN close_context SEMICOLON
-| FOR openc LPAREN optional(expression, SEMICOLON) optional(expression, SEMICOLON) optional(expression, RPAREN) last_statement
-| FOR openc LPAREN declaration                     optional(expression, SEMICOLON) optional(expression, RPAREN) last_statement
+| FOR openc LPAREN for_statement_header optional(expression, SEMICOLON) optional(expression, RPAREN) last_statement
+    {}
+
+for_statement_header:
+| optional(expression, SEMICOLON)
+| declaration
     {}
 
 asm_attributes:
