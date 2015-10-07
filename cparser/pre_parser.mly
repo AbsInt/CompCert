@@ -392,17 +392,17 @@ declaration_specifiers_no_typedef_name:
 *)
 declaration_specifiers:
 | ioption(declaration_specifiers_no_type) TYPEDEF_NAME                   declaration_specifiers_no_type?
-| ioption(declaration_specifiers_no_type) type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+| declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
     {}
 
 (* This matches declaration_specifiers that do contains once the
    "typedef" keyword. To avoid conflicts, we also encode the
    constraint described in the comment for [declaration_specifiers]. *)
 declaration_specifiers_typedef:
-| ioption(declaration_specifiers_no_type) TYPEDEF                        declaration_specifiers_no_type?         TYPEDEF_NAME                   declaration_specifiers_no_type?
+| declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?         TYPEDEF_NAME                   declaration_specifiers_no_type?
 | ioption(declaration_specifiers_no_type) TYPEDEF_NAME                   declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?
-| ioption(declaration_specifiers_no_type) TYPEDEF                        declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
-| ioption(declaration_specifiers_no_type) type_specifier_no_typedef_name declaration_specifiers_no_typedef_name? TYPEDEF                        declaration_specifiers_no_typedef_name?
+| declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+| declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name? TYPEDEF                        declaration_specifiers_no_typedef_name?
     {}
 
 (* A type specifier which is not a typedef name. *)
