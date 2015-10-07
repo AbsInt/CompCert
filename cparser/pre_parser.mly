@@ -591,7 +591,7 @@ abstract_declarator:
 
 direct_abstract_declarator:
 | LPAREN abstract_declarator RPAREN
-| option(direct_abstract_declarator) LBRACK type_qualifier_list? optional(assignment_expression, RBRACK)
+| direct_abstract_declarator? LBRACK type_qualifier_list? optional(assignment_expression, RBRACK)
 | ioption(direct_abstract_declarator) LPAREN in_context(parameter_type_list?) RPAREN
     {}
 
