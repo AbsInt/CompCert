@@ -318,9 +318,12 @@ constant_expression:
    cannot contain an initialization (this is an error to initialize a
    typedef). *)
 
-declaration:
-| declaration_specifiers(declaration) init_declarator_list?    SEMICOLON
-| declaration_specifiers_typedef      typedef_declarator_list? SEMICOLON
+(* The phantom parameter is either [block_item], which means we are
+   definitely reading a declaration, or [external_declaration], which
+   means we could also be reading the beginning of a function definition. *)
+declaration(phantom):
+| declaration_specifiers(declaration(phantom)) init_declarator_list?    SEMICOLON
+| declaration_specifiers_typedef               typedef_declarator_list? SEMICOLON
     {}
 
 init_declarator_list:
@@ -384,10 +387,10 @@ declaration_specifiers_no_typedef_name:
 
    The first field is a named t, while the second is unnamed of type t.
 *)
-(* The phantom parameter is EITHER [declaration], which we take to mean that
-   this is the beginning of a declaration *or* a function definition (we
-   cannot distinguish the two!), OR [parameter_declaration], which means that
-   this is the beginning of a parameter declaration. *)
+(* The phantom parameter is either [declaration(_)], which means that
+   this is the beginning of a declaration or a function definition, or
+   [parameter_declaration], which means that this is the beginning of a
+   parameter declaration. *)
 declaration_specifiers(phantom):
 | ioption(declaration_specifiers_no_type) TYPEDEF_NAME                   declaration_specifiers_no_type?
 | declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
@@ -680,7 +683,7 @@ block_item_list:
     {}
 
 block_item:
-| declaration
+| declaration(block_item)
 | statement_finish_noclose
 | PRAGMA
     {}
@@ -771,7 +774,7 @@ iteration_statement(openc,last_statement):
 
 for_statement_header:
 | optional(expression, SEMICOLON)
-| declaration
+| declaration(block_item)
     {}
 
 asm_attributes:
@@ -825,17 +828,19 @@ translation_unit:
 
 external_declaration:
 | function_definition
-| declaration
+| declaration(external_declaration)
 | PRAGMA
     {}
 
 function_definition_begin:
-| declaration_specifiers(declaration) ioption(pointer) x=direct_declarator
+| declaration_specifiers(declaration(external_declaration))
+  ioption(pointer) x=direct_declarator
     { match x with
       | (_, None) -> $syntaxerror
       | (i, Some restore_fun) -> restore_fun ()
     }
-| declaration_specifiers(declaration) ioption(pointer) x=direct_declarator
+| declaration_specifiers(declaration(external_declaration))
+  ioption(pointer) x=direct_declarator
   LPAREN params=identifier_list RPAREN open_context declaration_list
     { match x with
       | (_, Some _) -> $syntaxerror
@@ -853,7 +858,7 @@ identifier_list:
 declaration_list:
 | /*empty*/
     {}
-| declaration_list declaration
+| declaration_list declaration(block_item)
     {}
 
 function_definition:
