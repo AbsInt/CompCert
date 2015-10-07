@@ -408,13 +408,10 @@ type_specifier_no_typedef_name:
     {}
 
 struct_or_union_specifier:
-| struct_or_union attribute_specifier_list LBRACE struct_declaration_list RBRACE
-| struct_or_union attribute_specifier_list other_identifier LBRACE struct_declaration_list RBRACE
+| struct_or_union attribute_specifier_list other_identifier? LBRACE struct_declaration_list RBRACE
 | struct_or_union attribute_specifier_list other_identifier
     {}
-| struct_or_union attribute_specifier_list LBRACE struct_declaration_list error
-    { unclosed "{" "}" $startpos($3) $endpos }
-| struct_or_union attribute_specifier_list general_identifier LBRACE struct_declaration_list error
+| struct_or_union attribute_specifier_list other_identifier? LBRACE struct_declaration_list error
     { unclosed "{" "}" $startpos($4) $endpos }
 
 struct_or_union:
