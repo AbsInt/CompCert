@@ -210,37 +210,44 @@ cast_expression:
 | LPAREN type_name RPAREN cast_expression
     {}
 
+multiplicative_operator:
+  STAR | SLASH | PERCENT {}
+
 multiplicative_expression:
 | cast_expression
-| multiplicative_expression STAR cast_expression
-| multiplicative_expression SLASH cast_expression
-| multiplicative_expression PERCENT cast_expression
+| multiplicative_expression multiplicative_operator cast_expression
     {}
+
+additive_operator:
+  PLUS | MINUS {}
 
 additive_expression:
 | multiplicative_expression
-| additive_expression PLUS multiplicative_expression
-| additive_expression MINUS multiplicative_expression
+| additive_expression additive_operator multiplicative_expression
     {}
+
+shift_operator:
+  LEFT | RIGHT {}
 
 shift_expression:
 | additive_expression
-| shift_expression LEFT additive_expression
-| shift_expression RIGHT additive_expression
+| shift_expression shift_operator additive_expression
     {}
+
+relational_operator:
+  LT | GT | LEQ | GEQ {}
 
 relational_expression:
 | shift_expression
-| relational_expression LT shift_expression
-| relational_expression GT shift_expression
-| relational_expression LEQ shift_expression
-| relational_expression GEQ shift_expression
+| relational_expression relational_operator shift_expression
     {}
+
+equality_operator:
+  EQEQ | NEQ {}
 
 equality_expression:
 | relational_expression
-| equality_expression EQEQ relational_expression
-| equality_expression NEQ relational_expression
+| equality_expression equality_operator relational_expression
     {}
 
 and_expression:
