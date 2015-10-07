@@ -319,8 +319,8 @@ constant_expression:
    typedef). *)
 
 declaration:
-| declaration_specifiers         init_declarator_list?    SEMICOLON
-| declaration_specifiers_typedef typedef_declarator_list? SEMICOLON
+| declaration_specifiers(declaration) init_declarator_list?    SEMICOLON
+| declaration_specifiers_typedef      typedef_declarator_list? SEMICOLON
     {}
 
 init_declarator_list:
@@ -384,7 +384,11 @@ declaration_specifiers_no_typedef_name:
 
    The first field is a named t, while the second is unnamed of type t.
 *)
-declaration_specifiers:
+(* The phantom parameter is EITHER [declaration], which we take to mean that
+   this is the beginning of a declaration *or* a function definition (we
+   cannot distinguish the two!), OR [parameter_declaration], which means that
+   this is the beginning of a parameter declaration. *)
+declaration_specifiers(phantom):
 | ioption(declaration_specifiers_no_type) TYPEDEF_NAME                   declaration_specifiers_no_type?
 | declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
     {}
@@ -565,9 +569,9 @@ parameter_list:
     { i::l }
 
 parameter_declaration:
-| declaration_specifiers id=declare_varname(fst(declarator))
+| declaration_specifiers(parameter_declaration) id=declare_varname(fst(declarator))
     { Some id }
-| declaration_specifiers abstract_declarator(parameter_declaration)?
+| declaration_specifiers(parameter_declaration) abstract_declarator(parameter_declaration)?
     { None }
 
 type_name:
@@ -826,12 +830,12 @@ external_declaration:
     {}
 
 function_definition_begin:
-| declaration_specifiers ioption(pointer) x=direct_declarator
+| declaration_specifiers(declaration) ioption(pointer) x=direct_declarator
     { match x with
       | (_, None) -> $syntaxerror
       | (i, Some restore_fun) -> restore_fun ()
     }
-| declaration_specifiers ioption(pointer) x=direct_declarator
+| declaration_specifiers(declaration) ioption(pointer) x=direct_declarator
   LPAREN params=identifier_list RPAREN open_context declaration_list
     { match x with
       | (_, Some _) -> $syntaxerror
