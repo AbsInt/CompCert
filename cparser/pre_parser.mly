@@ -451,13 +451,10 @@ struct_declarator:
     {}
 
 enum_specifier:
-| ENUM attribute_specifier_list LBRACE enumerator_list COMMA? RBRACE
-| ENUM attribute_specifier_list other_identifier LBRACE enumerator_list COMMA? RBRACE
+| ENUM attribute_specifier_list other_identifier? LBRACE enumerator_list COMMA? RBRACE
 | ENUM attribute_specifier_list other_identifier
     {}
-| ENUM attribute_specifier_list LBRACE enumerator_list COMMA? error
-    { unclosed "{" "}" $startpos($3) $endpos }
-| ENUM attribute_specifier_list general_identifier LBRACE enumerator_list COMMA? error
+| ENUM attribute_specifier_list other_identifier? LBRACE enumerator_list COMMA? error
     { unclosed "{" "}" $startpos($4) $endpos }
 
 enumerator_list:
