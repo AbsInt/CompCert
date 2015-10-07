@@ -138,7 +138,7 @@ string_literals_list:
    follow set of the non-terminal in question. The follow sets are
    given by menhir with option -lg 3. *)
 
-%inline nop: (* empty *) { }
+%inline nop: (* empty *) {}
 
 open_context:
   (* empty *)%prec highPrec { !open_context () }
@@ -326,7 +326,6 @@ constant_expression:
 
 declaration:
 | declaration_specifiers         init_declarator_list?    SEMICOLON
-    {}
 | declaration_specifiers_typedef typedef_declarator_list? SEMICOLON
     {}
 
@@ -338,7 +337,7 @@ init_declarator_list:
 init_declarator:
 | declare_varname(fst(declarator))
 | declare_varname(fst(declarator)) EQ c_initializer
-    { }
+    {}
 
 typedef_declarator_list:
 | typedef_declarator
@@ -347,7 +346,7 @@ typedef_declarator_list:
 
 typedef_declarator:
 | declare_typename(fst(declarator))
-    { }
+    {}
 
 storage_class_specifier_no_typedef:
 | EXTERN
@@ -860,12 +859,12 @@ identifier_list:
 
 declaration_list:
 | /*empty*/
-    { }
+    {}
 | declaration_list declaration
-    { }
+    {}
 
 function_definition:
 | function_definition_begin LBRACE block_item_list? close_context RBRACE
-    { }
+    {}
 | function_definition_begin LBRACE block_item_list? close_context error
     { unclosed "{" "}" $startpos($2) $endpos }
