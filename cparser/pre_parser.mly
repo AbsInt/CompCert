@@ -74,7 +74,24 @@
 
 (* Helpers *)
 
-%inline option(X):
+(* Note that, by convention, [X?] is syntactic sugar for [option(X)],
+   so this definition of [option] is actually used, even though the
+   word [option] does not appear in the rest of this file. *)
+
+option(X):
+| /* nothing */
+    { None }
+| x = X
+    { Some x }
+
+(* [ioption(X)] is equivalent to [option(X)], but is marked [%inline],
+   so its definition is expanded. In the absence of conflicts, the two
+   are equivalent. Using [ioption] instead of [option] in well-chosen
+   places can help avoid conflicts. Conversely, using [option] instead
+   of [ioption] in well-chosen places can help reduce the number of
+   states of the automaton. *)
+
+%inline ioption(X):
 | /* nothing */
     { None }
 | x = X
@@ -353,20 +370,20 @@ declaration_specifiers_no_typedef_name:
    The first field is a named t, while the second is unnamed of type t.
 *)
 declaration_specifiers:
-| declaration_specifiers_no_type? i = TYPEDEF_NAME               declaration_specifiers_no_type?
+| ioption(declaration_specifiers_no_type) i = TYPEDEF_NAME               declaration_specifiers_no_type?
     { set_id_type i TypedefId }
-| declaration_specifiers_no_type? type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+| ioption(declaration_specifiers_no_type) type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
     {}
 
 (* This matches declaration_specifiers that do contains once the
    "typedef" keyword. To avoid conflicts, we also encode the
    constraint described in the comment for [declaration_specifiers]. *)
 declaration_specifiers_typedef:
-| declaration_specifiers_no_type? TYPEDEF                        declaration_specifiers_no_type?         i = TYPEDEF_NAME               declaration_specifiers_no_type?
-| declaration_specifiers_no_type? i = TYPEDEF_NAME               declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?
+| ioption(declaration_specifiers_no_type) TYPEDEF                        declaration_specifiers_no_type?         i = TYPEDEF_NAME               declaration_specifiers_no_type?
+| ioption(declaration_specifiers_no_type) i = TYPEDEF_NAME               declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?
     { set_id_type i TypedefId }
-| declaration_specifiers_no_type? TYPEDEF                        declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
-| declaration_specifiers_no_type? type_specifier_no_typedef_name declaration_specifiers_no_typedef_name? TYPEDEF                        declaration_specifiers_no_typedef_name?
+| ioption(declaration_specifiers_no_type) TYPEDEF                        declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+| ioption(declaration_specifiers_no_type) type_specifier_no_typedef_name declaration_specifiers_no_typedef_name? TYPEDEF                        declaration_specifiers_no_typedef_name?
     {}
 
 (* A type specifier which is not a typedef name. *)
@@ -511,7 +528,7 @@ function_specifier:
    has to be restored if entering the body of the function being
    defined, if so. *)
 declarator:
-| pointer? x = direct_declarator attribute_specifier_list
+| ioption(pointer) x = direct_declarator attribute_specifier_list
     { x }
 
 direct_declarator:
@@ -559,13 +576,13 @@ type_name:
 
 abstract_declarator:
 | pointer
-| pointer? direct_abstract_declarator
+| ioption(pointer) direct_abstract_declarator
     {}
 
 direct_abstract_declarator:
 | LPAREN abstract_declarator RPAREN
-| direct_abstract_declarator? LBRACK type_qualifier_list? assignment_expression? RBRACK
-| direct_abstract_declarator? LPAREN in_context(parameter_type_list?) RPAREN
+| ioption(direct_abstract_declarator) LBRACK type_qualifier_list? assignment_expression? RBRACK
+| ioption(direct_abstract_declarator) LPAREN in_context(parameter_type_list?) RPAREN
     {}
 
 c_initializer:
@@ -809,12 +826,12 @@ external_declaration:
     {}
 
 function_definition_begin:
-| declaration_specifiers pointer? x=direct_declarator
+| declaration_specifiers ioption(pointer) x=direct_declarator
     { match x with
       | (_, None) -> $syntaxerror
       | (i, Some restore_fun) -> restore_fun ()
     }
-| declaration_specifiers pointer? x=direct_declarator
+| declaration_specifiers ioption(pointer) x=direct_declarator
   LPAREN params=identifier_list RPAREN open_context declaration_list
     { match x with
       | (_, Some _) -> $syntaxerror
