@@ -354,10 +354,14 @@ storage_class_specifier_no_typedef:
 
 (* [declaration_specifiers_no_type] matches declaration specifiers
    that do not contain either "typedef" nor type specifiers. *)
+declaration_specifier_no_type:
+| storage_class_specifier_no_typedef
+| type_qualifier
+| function_specifier
+    {}
+
 declaration_specifiers_no_type:
-| storage_class_specifier_no_typedef declaration_specifiers_no_type?
-| type_qualifier                     declaration_specifiers_no_type?
-| function_specifier                 declaration_specifiers_no_type?
+| declaration_specifier_no_type declaration_specifiers_no_type?
     {}
 
 (* [declaration_specifiers_no_typedef_name] matches declaration
