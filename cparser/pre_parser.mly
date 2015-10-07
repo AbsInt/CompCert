@@ -150,8 +150,7 @@ declare_typename(nt):
 (* Actual grammar *)
 
 primary_expression:
-| i = VAR_NAME
-    { set_id_type i VarId }
+| VAR_NAME
 | CONSTANT
 | string_literals_list
 | LPAREN expression RPAREN
@@ -378,8 +377,7 @@ declaration_specifiers_no_typedef_name:
    The first field is a named t, while the second is unnamed of type t.
 *)
 declaration_specifiers:
-| ioption(declaration_specifiers_no_type) i = TYPEDEF_NAME               declaration_specifiers_no_type?
-    { set_id_type i TypedefId }
+| ioption(declaration_specifiers_no_type) TYPEDEF_NAME                   declaration_specifiers_no_type?
 | ioption(declaration_specifiers_no_type) type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
     {}
 
@@ -387,9 +385,8 @@ declaration_specifiers:
    "typedef" keyword. To avoid conflicts, we also encode the
    constraint described in the comment for [declaration_specifiers]. *)
 declaration_specifiers_typedef:
-| ioption(declaration_specifiers_no_type) TYPEDEF                        declaration_specifiers_no_type?         i = TYPEDEF_NAME               declaration_specifiers_no_type?
-| ioption(declaration_specifiers_no_type) i = TYPEDEF_NAME               declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?
-    { set_id_type i TypedefId }
+| ioption(declaration_specifiers_no_type) TYPEDEF                        declaration_specifiers_no_type?         TYPEDEF_NAME                   declaration_specifiers_no_type?
+| ioption(declaration_specifiers_no_type) TYPEDEF_NAME                   declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?
 | ioption(declaration_specifiers_no_type) TYPEDEF                        declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
 | ioption(declaration_specifiers_no_type) type_specifier_no_typedef_name declaration_specifiers_no_typedef_name? TYPEDEF                        declaration_specifiers_no_typedef_name?
     {}
@@ -437,8 +434,7 @@ struct_declaration:
 (* As in the standard, except it also encodes the constraint described
    in the comment above [declaration_specifiers]. *)
 specifier_qualifier_list:
-| type_qualifier_list? i = TYPEDEF_NAME               type_qualifier_list?
-    { set_id_type i TypedefId }
+| type_qualifier_list? TYPEDEF_NAME                   type_qualifier_list?
 | type_qualifier_list? type_specifier_no_typedef_name specifier_qualifier_list_no_typedef_name?
     {}
 
