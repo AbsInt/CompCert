@@ -68,12 +68,6 @@
    so this definition of [option] is actually used, even though the
    word [option] does not appear in the rest of this file. *)
 
-option(X):
-| /* nothing */
-    { None }
-| x = X
-    { Some x }
-
 (* [ioption(X)] is equivalent to [option(X)], but is marked [%inline],
    so its definition is expanded. In the absence of conflicts, the two
    are equivalent. Using [ioption] instead of [option] in well-chosen
@@ -81,11 +75,19 @@ option(X):
    of [ioption] in well-chosen places can help reduce the number of
    states of the automaton. *)
 
+(* Defining the non-%inline version in terms of the %inline version is
+   a standard idiom. It obviates the need to duplicate the definition.
+   The same idiom is used elsewhere below. *)
+
 %inline ioption(X):
 | /* nothing */
     { None }
 | x = X
     { Some x }
+
+option(X):
+  o = ioption(X)
+    { o }
 
 (* [optional(X, Y)] is equivalent to [X? Y]. However, by inlining
    the two possibilies -- either [X Y] or just [Y] -- we are able
@@ -99,16 +101,16 @@ optional(X, Y):
    separators. Note that, by convention, [X*] is syntactic sugar for
    [list(X)]. *)
 
-list(X):
-| (* empty *) {}
-| list(X) X   {}
-
 (* [ilist(X)] is equivalent to [list(X)], but is marked [%inline],
-   so its definition is expanded. *)
+   so its definition is expanded (only one level deep, of course). *)
 
 %inline ilist(X):
 | (* empty *) {}
 | list(X) X   {}
+
+list(X):
+  xs = ilist(X)
+    { xs }
 
 %inline fst(X):
 | x = X
