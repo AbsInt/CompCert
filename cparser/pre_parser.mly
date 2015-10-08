@@ -388,10 +388,6 @@ declaration_specifier_no_typedef_name:
 | type_specifier_no_typedef_name
     {}
 
-declaration_specifiers_no_typedef_name:
-  declaration_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
-    {}
-
 (* [declaration_specifiers_no_type] matches declaration_specifiers
    that do not contains "typedef". Moreover, it makes sure that it
    contains either one typename and not other type specifier or no
@@ -414,7 +410,7 @@ declaration_specifiers_no_typedef_name:
    parameter declaration. *)
 declaration_specifiers(phantom):
 | ilist(declaration_specifier_no_type) TYPEDEF_NAME                   declaration_specifier_no_type*
-|       declaration_specifier_no_type* type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+|       declaration_specifier_no_type* type_specifier_no_typedef_name declaration_specifier_no_typedef_name*
     {}
 
 (* This matches declaration_specifiers that do contains once the
@@ -423,8 +419,8 @@ declaration_specifiers(phantom):
 declaration_specifiers_typedef:
 |       declaration_specifier_no_type*   TYPEDEF                        declaration_specifier_no_type*          TYPEDEF_NAME                   declaration_specifier_no_type*
 | ilist(declaration_specifier_no_type)   TYPEDEF_NAME                   declaration_specifier_no_type*          TYPEDEF                        declaration_specifier_no_type*
-|       declaration_specifier_no_type*   TYPEDEF                        declaration_specifier_no_type*          type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
-|       declaration_specifier_no_type*   type_specifier_no_typedef_name declaration_specifiers_no_typedef_name? TYPEDEF                        declaration_specifiers_no_typedef_name?
+|       declaration_specifier_no_type*   TYPEDEF                        declaration_specifier_no_type*          type_specifier_no_typedef_name declaration_specifier_no_typedef_name*
+|       declaration_specifier_no_type*   type_specifier_no_typedef_name declaration_specifier_no_typedef_name*  TYPEDEF                        declaration_specifier_no_typedef_name*
     {}
 
 (* A type specifier which is not a typedef name. *)
