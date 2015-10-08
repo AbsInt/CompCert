@@ -55,3 +55,72 @@ let get_current_function () =
   let fn = !current_function in
   set_current_function dummy_function;
   {fn with fn_code = c}
+
+(* Expand function for debug information *)
+
+let expand_scope id lbl oldscopes newscopes =
+  let opening = List.filter (fun a -> not (List.mem a oldscopes)) newscopes
+  and closing = List.filter (fun a -> not (List.mem a newscopes)) oldscopes in
+  List.iter (fun i -> Debug.open_scope id i lbl) opening;
+  List.iter (fun i -> Debug.close_scope id i lbl) closing
+    
+
+let expand_debug id annot simple l =
+  let get_lbl = function
+    | None -> 
+        let lbl = new_label () in
+        emit (Plabel lbl);
+        lbl
+    | Some lbl -> lbl in
+  let rec  aux lbl scopes = function
+    | [] -> let lbl = get_lbl lbl in
+      Debug.function_end id lbl
+    | (Pbuiltin(EF_debug (kind,txt,_x),args,_) as i)::rest ->
+        let kind = (P.to_int kind) in
+        begin
+          match kind with
+          | 1-> 
+              emit i;aux lbl scopes rest
+          | 2 ->
+              aux  lbl scopes rest
+          | 3 ->
+             begin 
+               match annot args with
+               | Some a ->
+                   let lbl = get_lbl lbl in
+                   Debug.start_live_range (id,txt) lbl a;
+                   aux (Some lbl) scopes rest
+               | None ->  aux lbl scopes rest
+             end
+          | 4 ->
+              let lbl = get_lbl lbl in
+              Debug.end_live_range (id,txt) lbl;
+              aux (Some lbl) scopes rest
+          | 5 ->
+              begin
+                match annot args with
+                | Some a->
+                    Debug.stack_variable (id,txt) a;
+                    aux lbl scopes rest
+                | _ ->  aux lbl scopes rest
+              end
+          | 6  ->
+              let lbl = get_lbl lbl in
+              let scopes' = List.map (function BA_int x -> Int32.to_int (camlint_of_coqint x) | _ -> assert false) args in
+              expand_scope id lbl scopes scopes';
+              aux (Some lbl) scopes' rest
+          | _ ->
+              aux None scopes rest
+        end
+    | i::rest -> simple i; aux None scopes rest in
+  (* We need to move all closing debug annotations before the last real statement *)
+  let rec move_debug acc bcc = function
+    | (Pbuiltin(EF_debug (kind,_,_),_,_) as i)::rest ->
+        let kind = (P.to_int kind) in
+        if kind = 1 then
+          move_debug acc (i::bcc) rest (* Do not move debug line *)
+        else
+          move_debug (i::acc) bcc rest (* Move the debug annotations forward *)
+    | b::rest -> List.rev ((List.rev (b::bcc)@List.rev acc)@rest) (* We found the first non debug location *)
+    | [] -> List.rev acc (* This actually can never happen *) in
+  aux None [] (move_debug [] [] (List.rev l))

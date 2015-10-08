@@ -668,7 +668,7 @@ let preg_to_dwarf_int = function
 
 let translate_annot annot = 
   let rec aux = function
-    | BA x -> Some (BA (preg_to_dwarf_int x))
+    | BA x -> Some (1,BA (preg_to_dwarf_int x))
     | BA_int _
     | BA_long _
     | BA_float _
@@ -676,11 +676,11 @@ let translate_annot annot =
     | BA_loadglobal _
     | BA_addrglobal _
     | BA_loadstack _ -> None
-    | BA_addrstack ofs -> Some (BA_addrstack ofs)
+    | BA_addrstack ofs -> Some (1,BA_addrstack ofs)
     | BA_splitlong (hi,lo) -> 
         begin
           match (aux hi,aux lo) with
-          | Some hi ,Some lo -> Some (BA_splitlong (hi,lo))
+          | Some (_,hi) ,Some (_,lo) -> Some (1,BA_splitlong (hi,lo))
           | _,_ -> None
         end in
   (match annot with
@@ -692,73 +692,12 @@ let expand_scope id lbl oldscopes newscopes =
   and closing = List.filter (fun a -> not (List.mem a newscopes)) oldscopes in
   List.iter (fun i -> Debug.open_scope id i lbl) opening;
   List.iter (fun i -> Debug.close_scope id i lbl) closing
-
-let expand_instruction id l =
-  let get_lbl = function
-    | None -> 
-        let lbl = new_label () in
-        emit (Plabel lbl);
-        lbl
-    | Some lbl -> lbl in
-  let rec  aux lbl scopes = function
-    | [] -> let lbl = get_lbl lbl in
-      Debug.function_end id lbl
-    | (Pbuiltin(EF_debug (kind,txt,_x),args,_) as i)::rest ->
-        let kind = (P.to_int kind) in
-        begin
-          match kind with
-          | 1-> 
-              emit i;aux lbl scopes rest
-          | 2 ->
-              aux  lbl scopes rest
-          | 3 ->
-             begin 
-               match translate_annot args with
-               | Some a ->
-                   let lbl = get_lbl lbl in
-                   Debug.start_live_range (id,txt) lbl (1,a);
-                   aux (Some lbl) scopes rest
-               | None ->  aux lbl scopes rest
-             end
-          | 4 ->
-              let lbl = get_lbl lbl in
-              Debug.end_live_range (id,txt) lbl;
-              aux (Some lbl) scopes rest
-          | 5 ->
-              begin
-                match translate_annot args with
-                | Some a->
-                    Debug.stack_variable (id,txt) (1,a);
-                    aux lbl scopes rest
-                | _ ->  aux lbl scopes rest
-              end
-          | 6  ->
-              let lbl = get_lbl lbl in
-              let scopes' = List.map (function BA_int x -> Int32.to_int (camlint_of_coqint x) | _ -> assert false) args in
-              expand_scope id lbl scopes scopes';
-              aux (Some lbl) scopes' rest
-          | _ ->
-              aux None scopes rest
-        end
-    | i::rest -> expand_instruction_simple i; aux None scopes rest in
-  (* We need to move all closing debug annotations before the last real statement *)
-  let rec move_debug acc bcc = function
-    | (Pbuiltin(EF_debug (kind,_,_),_,_) as i)::rest ->
-        let kind = (P.to_int kind) in
-        if kind = 1 then
-          move_debug acc (i::bcc) rest (* Do not move debug line *)
-        else
-          move_debug (i::acc) bcc rest (* Move the debug annotations forward *)
-    | b::rest -> List.rev ((List.rev (b::bcc)@List.rev acc)@rest) (* We found the first non debug location *)
-    | [] -> List.rev acc (* This actually can never happen *) in
-  aux None [] (move_debug [] [] (List.rev l))
-      
-
+    
 let expand_function id fn =
   try
     set_current_function fn;
     if !Clflags.option_g then
-      expand_instruction id fn.fn_code
+      expand_debug id translate_annot expand_instruction_simple fn.fn_code
     else
       List.iter expand_instruction_simple fn.fn_code;
     Errors.OK (get_current_function ())
