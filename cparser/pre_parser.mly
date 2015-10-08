@@ -37,6 +37,7 @@
 
 %}
 
+%token<string> PRE_NAME
 %token<string * Pre_parser_aux.identifier_type ref * Cabs.cabsloc>
   VAR_NAME TYPEDEF_NAME
 %token<Cabs.constant * Cabs.cabsloc> CONSTANT
@@ -55,19 +56,27 @@
 
 %token EOF
 
-(* These precedences declarations solve the conflict in the following declaration :
+(* These precedence declarations solve the conflict in the following
+   declaration :
 
    int f(int (a));
 
-   when a is a TYPEDEF_NAME. It is specified by 6.7.5.3 11.
+   when a is a TYPEDEF_NAME. It is specified by 6.7.5.3 11: a should
+   be taken as the type of parameter the anonymous function
+*)
+%nonassoc lowPrec1
+%nonassoc TYPEDEF_NAME
 
+(* These precedence declaration solve the dangling else conflict. *)
+%nonassoc lowPrec2
+%nonassoc ELSE
+
+(*
    WARNING: These precedence declarations tend to silently solve other
    conflicts. So, if you change the grammar (especially or
    statements), you should check that without these declarations, it
-   has ONLY ONE CONFLICT.
+   has ONLY 3 CONFLICTS.
 *)
-%nonassoc TYPEDEF_NAME
-%nonassoc highPrec
 
 %start<unit> translation_unit_file
 %%
@@ -84,37 +93,42 @@
 | x = X
     { fst x }
 
+(* The kind of an identifier should not be determined when looking
+   ahead, because the context may not be up to date. For this reason,
+   when reading an identifier, the lexer emits two tokens: the first
+   one (PRE_NAME) is eaten as a lookahead token, the second one is the
+   actual identifier.
+*)
+
+typedef_name:
+| PRE_NAME i = TYPEDEF_NAME
+    { i }
+
+var_name:
+| PRE_NAME i = VAR_NAME
+    { i }
+
 general_identifier:
-| i = VAR_NAME
-| i = TYPEDEF_NAME
+| i = typedef_name
+| i = var_name
+    { i }
+
+(* We add this non-terminal here to force the resolution of the
+   conflict at the point of shifting the TYPEDEF_NAME. If we had
+   already shifted it, reduce/reduce conflict appear, and menhir is
+   not able to solve them. *)
+low_prec : %prec lowPrec1 {}
+general_identifier_red:
+| PRE_NAME low_prec i = TYPEDEF_NAME
+| PRE_NAME i = VAR_NAME
     { i }
 
 string_literals_list:
-| STRING_LITERAL
-| string_literals_list STRING_LITERAL
+| string_literals_list? STRING_LITERAL
     {}
 
-(* WARNING : because of the lookahead token, the context might be
-   opened or closed one token after the position of this non-terminal !
-
-   Opening too late is not dangerous for us, because this does not
-   change the token stream. However, we have to make sure the
-   lookahead token present just after closing/declaring/restoring is
-   not an identifier. An easy way to check that is to look at the
-   follow set of the non-terminal in question. The follow sets are
-   given by menhir with option -lg 3. *)
-
-%inline nop: (* empty *) { }
-
-open_context:
-  (* empty *)%prec highPrec { !open_context () }
-close_context:
-  (* empty *) { !close_context () }
-in_context(nt):
-  open_context x = nt close_context { x }
-
-save_contexts_stk:
-  (* empty *) { !save_contexts_stk () }
+save_context:
+  (* empty *) { !save_context () }
 
 declare_varname(nt):
   i = nt { declare_varname i; i }
@@ -124,7 +138,7 @@ declare_typename(nt):
 (* Actual grammar *)
 
 primary_expression:
-| i = VAR_NAME
+| i = var_name
     { set_id_type i VarId }
 | CONSTANT
 | string_literals_list
@@ -320,9 +334,9 @@ storage_class_specifier_no_typedef:
 (* [declaration_specifiers_no_type] matches declaration specifiers
    that do not contain either "typedef" nor type specifiers. *)
 declaration_specifiers_no_type:
-| storage_class_specifier_no_typedef declaration_specifiers_no_type?
-| type_qualifier declaration_specifiers_no_type?
-| function_specifier declaration_specifiers_no_type?
+| declaration_specifiers_no_type? storage_class_specifier_no_typedef
+| declaration_specifiers_no_type? type_qualifier
+| declaration_specifiers_no_type? function_specifier
     {}
 
 (* [declaration_specifiers_no_typedef_name] matches declaration
@@ -330,10 +344,10 @@ declaration_specifiers_no_type:
    (i.e. type specifier declared using a previous "typedef
    keyword"). *)
 declaration_specifiers_no_typedef_name:
-| storage_class_specifier_no_typedef declaration_specifiers_no_typedef_name?
-| type_qualifier declaration_specifiers_no_typedef_name?
-| function_specifier declaration_specifiers_no_typedef_name?
-| type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+| declaration_specifiers_no_typedef_name? storage_class_specifier_no_typedef
+| declaration_specifiers_no_typedef_name? type_qualifier
+| declaration_specifiers_no_typedef_name? function_specifier
+| declaration_specifiers_no_typedef_name? type_specifier_no_typedef_name
     {}
 
 (* [declaration_specifiers_no_type] matches declaration_specifiers
@@ -353,7 +367,7 @@ declaration_specifiers_no_typedef_name:
    The first field is a named t, while the second is unnamed of type t.
 *)
 declaration_specifiers:
-| declaration_specifiers_no_type? i = TYPEDEF_NAME declaration_specifiers_no_type?
+| declaration_specifiers_no_type? i = typedef_name declaration_specifiers_no_type?
     { set_id_type i TypedefId }
 | declaration_specifiers_no_type? type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
     {}
@@ -364,9 +378,9 @@ declaration_specifiers:
 declaration_specifiers_typedef:
 | declaration_specifiers_no_type?
   TYPEDEF declaration_specifiers_no_type?
-  i = TYPEDEF_NAME declaration_specifiers_no_type?
+  i = typedef_name declaration_specifiers_no_type?
 | declaration_specifiers_no_type?
-  i = TYPEDEF_NAME declaration_specifiers_no_type?
+  i = typedef_name declaration_specifiers_no_type?
   TYPEDEF declaration_specifiers_no_type?
     { set_id_type i TypedefId }
 | declaration_specifiers_no_type?
@@ -421,7 +435,7 @@ struct_declaration:
 (* As in the standard, except it also encodes the constraint described
    in the comment above [declaration_specifiers]. *)
 specifier_qualifier_list:
-| type_qualifier_list? i = TYPEDEF_NAME type_qualifier_list?
+| type_qualifier_list? i = typedef_name type_qualifier_list?
     { set_id_type i TypedefId }
 | type_qualifier_list? type_specifier_no_typedef_name specifier_qualifier_list_no_typedef_name?
     {}
@@ -497,7 +511,7 @@ gcc_attribute:
 | gcc_attribute_word
 | gcc_attribute_word LPAREN argument_expression_list? RPAREN
     {}
-| gcc_attribute_word LPAREN i = TYPEDEF_NAME COMMA argument_expression_list RPAREN
+| gcc_attribute_word LPAREN i = typedef_name COMMA argument_expression_list RPAREN
     (* This is to emulate GCC's attribute syntax : we make this identifier
        a var name identifier, so that the parser will see it as a variable
        reference *)
@@ -523,16 +537,14 @@ declarator:
     { x }
 
 direct_declarator:
-| i = general_identifier
+| i = general_identifier_red
     { set_id_type i VarId; (i, None) }
-| LPAREN x = declarator RPAREN
+| LPAREN save_context x = declarator RPAREN
 | x = direct_declarator LBRACK type_qualifier_list? assignment_expression? RBRACK
     { x }
-| x = direct_declarator LPAREN
-    open_context parameter_type_list? restore_fun = save_contexts_stk
-    close_context RPAREN
+| x = direct_declarator LPAREN ctx = context_parameter_type_list RPAREN
     { match snd x with
-      | None -> (fst x, Some restore_fun)
+      | None -> (fst x, Some ctx)
       | Some _ -> x }
 
 pointer:
@@ -543,6 +555,10 @@ pointer:
 type_qualifier_list:
 | type_qualifier_list? type_qualifier
     {}
+
+context_parameter_type_list:
+| ctx1 = save_context parameter_type_list? ctx2 = save_context
+    { ctx1 (); ctx2 }
 
 parameter_type_list:
 | l=parameter_list
@@ -571,9 +587,9 @@ abstract_declarator:
     {}
 
 direct_abstract_declarator:
-| LPAREN abstract_declarator RPAREN
+| LPAREN save_context abstract_declarator RPAREN
 | direct_abstract_declarator? LBRACK type_qualifier_list? assignment_expression? RBRACK
-| direct_abstract_declarator? LPAREN in_context(parameter_type_list?) RPAREN
+| direct_abstract_declarator? LPAREN context_parameter_type_list RPAREN
     {}
 
 c_initializer:
@@ -602,67 +618,28 @@ designator:
 | DOT i = general_identifier
     { set_id_type i OtherId }
 
-(* The grammar of statements is replicated three times.
-
-   [statement_finish_close] should close the current context just
-   before its last token.
-
-   [statement_finish_noclose] should not close the current context. It
-   should modify it only if this modification actually changes the
-   context of the current block.
-
-   [statement_intern_close] is like [statement_finish_close], except
-   it cannot reduce to a single-branch if statement.
-*)
-
-statement_finish_close:
-| labeled_statement(statement_finish_close)
-| compound_statement(nop)
-| expression_statement(close_context)
-| selection_statement_finish(nop)
-| iteration_statement(nop,statement_finish_close)
-| jump_statement(close_context)
-| asm_statement(close_context)
+statement:
+| labeled_statement
+| compound_statement
+| expression_statement
+| selection_statement
+| iteration_statement
+| jump_statement
+| asm_statement
     {}
 
-statement_finish_noclose:
-| labeled_statement(statement_finish_noclose)
-| compound_statement(open_context)
-| expression_statement(nop)
-| selection_statement_finish(open_context)
-| iteration_statement(open_context,statement_finish_close)
-| jump_statement(nop)
-| asm_statement(nop)
-    {}
-
-statement_intern_close:
-| labeled_statement(statement_intern_close)
-| compound_statement(nop)
-| expression_statement(close_context)
-| selection_statement_intern_close
-| iteration_statement(nop,statement_intern_close)
-| jump_statement(close_context)
-| asm_statement(close_context)
-    {}
-
-(* [labeled_statement(last_statement)] has the same effect on contexts
-   as [last_statement]. *)
-labeled_statement(last_statement):
-| i = general_identifier COLON last_statement
+labeled_statement:
+| i = general_identifier COLON statement
     { set_id_type i OtherId }
-| CASE constant_expression COLON last_statement
-| DEFAULT COLON last_statement
+| CASE constant_expression COLON statement
+| DEFAULT COLON statement
     {}
 
-(* [compound_statement] uses a local context and closes it before its
-   last token. It uses [openc] to open this local context if needed.
-   That is, if a local context has already been opened, [openc] = [nop],
-   otherwise, [openc] = [open_context]. *)
-compound_statement(openc):
-| LBRACE openc block_item_list? close_context RBRACE
-    {}
-| LBRACE openc block_item_list? close_context error
-    { unclosed "{" "}" $startpos($1) $endpos }
+compound_statement:
+| ctx = save_context LBRACE block_item_list? RBRACE
+    { ctx() }
+| ctx = save_context LBRACE block_item_list? error
+    { ctx(); unclosed "{" "}" $startpos($2) $endpos }
 
 block_item_list:
 | block_item_list? block_item
@@ -670,95 +647,46 @@ block_item_list:
 
 block_item:
 | declaration
-| statement_finish_noclose
+| statement
 | PRAGMA
     {}
 
-(* [expression_statement], [jump_statement] and [asm_statement] close
-   the local context if needed, depending of the close parameter. If
-   there is no local context, [close] = [nop]. Otherwise,
-   [close] = [close_context]. *)
-expression_statement(close):
-| expression? close SEMICOLON
+expression_statement:
+| expression? SEMICOLON
     {}
 
-jump_statement(close):
-| GOTO i = general_identifier close SEMICOLON
+jump_statement:
+| GOTO i = general_identifier SEMICOLON
     { set_id_type i OtherId }
-| CONTINUE close SEMICOLON
-| BREAK close SEMICOLON
-| RETURN expression? close SEMICOLON
+| CONTINUE SEMICOLON
+| BREAK SEMICOLON
+| RETURN expression? SEMICOLON
     {}
 
-asm_statement(close):
-| ASM asm_attributes LPAREN string_literals_list asm_arguments RPAREN close SEMICOLON
+asm_statement:
+| ASM asm_attributes LPAREN string_literals_list asm_arguments RPAREN SEMICOLON
     {}
 
-(* [selection_statement_finish] and [selection_statement_intern] use a
-   local context and close it before their last token.
+ifelse_statement1:
+| IF LPAREN expression RPAREN ctx = save_context statement ELSE
+    { ctx() }
 
-   [selection_statement_finish(openc)] uses [openc] to open this local
-   context if needed. That is, if a local context has already been
-   opened, [openc] = [nop], otherwise, [openc] = [open_context].
+selection_statement:
+| ctx = save_context ifelse_statement1 statement
+| ctx = save_context IF LPAREN expression RPAREN save_context statement %prec lowPrec2
+| ctx = save_context SWITCH LPAREN expression RPAREN statement
+    { ctx() }
 
-   [selection_statement_intern_close] is always called with a local
-   context openned. It closes it before its last token.  *)
+do_statement1:
+| ctx = save_context DO statement
+    { ctx () }
 
-(* It should be noted that the token [ELSE] should be lookaheaded
-   /outside/ of the local context because if the lookaheaded token is
-   not [ELSE], then this is the end of the statement.
-
-   This is especially important to parse correctly the following
-   example:
-
-     typedef int a;
-
-     int f() {
-       for(int a; ;)
-         if(1);
-       a * x;
-     }
-
-   However, if the lookahead token is [ELSE], we should parse the
-   second branch in the same context as the first branch, so we have
-   to reopen the previously closed context. This is the reason for the
-   save/restore system.
-*)
-
-if_else_statement_begin(openc):
-| IF openc LPAREN expression RPAREN restore_fun = save_contexts_stk
-  statement_intern_close
-    { restore_fun () }
-
-selection_statement_finish(openc):
-| IF openc LPAREN expression RPAREN save_contexts_stk statement_finish_close
-| if_else_statement_begin(openc) ELSE statement_finish_close
-| SWITCH openc LPAREN expression RPAREN statement_finish_close
-    {}
-
-selection_statement_intern_close:
-| if_else_statement_begin(nop) ELSE statement_intern_close
-| SWITCH LPAREN expression RPAREN statement_intern_close
-    {}
-
-(* [iteration_statement] uses a local context and closes it before
-   their last token.
-
-   [iteration_statement] uses [openc] to open this local context if
-   needed. That is, if a local context has already been opened,
-   [openc] = [nop], otherwise, [openc] = [open_context].
-
-   [last_statement] is either [statement_intern_close] or
-   [statement_finish_close]. That is, it should /always/ close the
-   local context. *)
-
-iteration_statement(openc,last_statement):
-| WHILE openc LPAREN expression RPAREN last_statement
-| DO open_context statement_finish_close WHILE
-    openc LPAREN expression RPAREN close_context SEMICOLON
-| FOR openc LPAREN expression? SEMICOLON expression? SEMICOLON expression? RPAREN last_statement
-| FOR openc LPAREN declaration expression? SEMICOLON expression? RPAREN last_statement
-    {}
+iteration_statement:
+| ctx = save_context WHILE LPAREN expression RPAREN statement
+| ctx = save_context FOR LPAREN expression? SEMICOLON expression? SEMICOLON expression? RPAREN statement
+| ctx = save_context FOR LPAREN declaration expression? SEMICOLON expression? RPAREN statement
+| ctx = save_context do_statement1 WHILE LPAREN expression RPAREN SEMICOLON
+    { ctx() }
 
 asm_attributes:
 | /* empty */
@@ -816,25 +744,10 @@ external_declaration:
 | PRAGMA
     {}
 
-function_definition_begin:
-| declaration_specifiers pointer? x=direct_declarator
-    { match x with
-      | (_, None) -> $syntaxerror
-      | (i, Some restore_fun) -> restore_fun ()
-    }
-| declaration_specifiers pointer? x=direct_declarator
-  LPAREN params=identifier_list RPAREN open_context declaration_list
-    { match x with
-      | (_, Some _) -> $syntaxerror
-      | (i, None) ->
-	declare_varname i;
-	List.iter declare_varname params
-    }
-
 identifier_list:
-| id = VAR_NAME
+| id = var_name
     { [id] }
-| idl = identifier_list COMMA id = VAR_NAME
+| idl = identifier_list COMMA id = var_name
     { id :: idl }
 
 declaration_list:
@@ -843,8 +756,28 @@ declaration_list:
 | declaration_list declaration
     { }
 
-function_definition:
-| function_definition_begin LBRACE block_item_list? close_context RBRACE
-    { }
-| function_definition_begin LBRACE block_item_list? close_context error
+function_definition1:
+| declaration_specifiers pointer? x=direct_declarator ctx = save_context
+    { match x with
+      | (_, None) -> $syntaxerror
+      | (_, Some ctx') -> ctx'(); ctx
+    }
+| declaration_specifiers pointer? x=direct_declarator
+  LPAREN save_context params=identifier_list RPAREN ctx = save_context declaration_list
+    { match x with
+      | (_, Some _) -> $syntaxerror
+      | (i, None) ->
+	declare_varname i;
+	List.iter declare_varname params;
+        ctx
+    }
+
+function_definition2:
+| ctx = function_definition1 LBRACE block_item_list?
+    { ctx() }
+| ctx = function_definition1 LBRACE block_item_list? error
     { unclosed "{" "}" $startpos($2) $endpos }
+
+function_definition:
+| function_definition2 RBRACE
+    { }

@@ -20,13 +20,12 @@ open Pre_parser_aux
 open Cabshelper
 open Camlcoq
 
-module SMap = Map.Make(String)
+module SSet = Set.Make(String)
 
-let contexts_stk : (Cabs.cabsloc -> token) SMap.t list ref = ref []
+let lexicon : (string, Cabs.cabsloc -> token) Hashtbl.t = Hashtbl.create 17
 
-let init_ctx =
-  List.fold_left (fun ctx (key, builder) -> SMap.add key builder ctx)
-    SMap.empty
+let () =
+  List.iter (fun (key, builder) -> Hashtbl.add lexicon key builder)
     [ ("_Alignas", fun loc -> ALIGNAS loc);
       ("_Alignof", fun loc -> ALIGNOF loc);
       ("_Bool", fun loc -> UNDERSCORE_BOOL loc);
@@ -82,38 +81,24 @@ let init_ctx =
       ("unsigned", fun loc -> UNSIGNED loc);
       ("void", fun loc -> VOID loc);
       ("volatile", fun loc -> VOLATILE loc);
-      ("while", fun loc -> WHILE loc);
-      (let id = "__builtin_va_list" in
-       id, fun loc -> TYPEDEF_NAME (id, ref TypedefId, loc))]
+      ("while", fun loc -> WHILE loc)]
+
+let init_ctx = SSet.singleton "__builtin_va_list"
+let types_context : SSet.t ref = ref init_ctx
 
 let _ =
   (* See comments in pre_parser_aux.ml *)
-  open_context := begin fun () ->
-    contexts_stk := List.hd !contexts_stk::!contexts_stk
-  end;
-
-  close_context := begin fun () ->
-    contexts_stk := List.tl !contexts_stk
-  end;
-
-  save_contexts_stk := begin fun () ->
-    let save = !contexts_stk in
-    fun () -> contexts_stk := save
+  save_context := begin fun () ->
+    let save = !types_context in
+    fun () -> types_context := save
   end;
 
   declare_varname := begin fun id ->
-    match !contexts_stk with
-    (* This is the default, so there is no need to have an entry in this case. *)
-    | ctx::stk -> contexts_stk := SMap.remove id ctx::stk
-    | [] -> assert false
+    types_context := SSet.remove id !types_context
   end;
 
   declare_typename := begin fun id ->
-    match !contexts_stk with
-    | ctx::stk ->
-      contexts_stk :=
-        SMap.add id (fun loc -> TYPEDEF_NAME (id, ref TypedefId, loc)) ctx::stk
-    | [] -> assert false
+    types_context := SSet.add id !types_context
   end
 
 let init filename channel : Lexing.lexbuf =
@@ -340,8 +325,8 @@ rule initial = parse
   | ","                           { COMMA(currentLoc lexbuf) }
   | "."                           { DOT(currentLoc lexbuf) }
   | identifier as id              {
-      try SMap.find id (List.hd !contexts_stk) (currentLoc lexbuf)
-      with Not_found -> VAR_NAME (id, ref VarId, currentLoc lexbuf) }
+      try Hashtbl.find lexicon id (currentLoc lexbuf)
+      with Not_found -> PRE_NAME id }
   | eof                           { EOF }
   | _ as c                        { fatal_error lexbuf "invalid symbol %C" c }
 
@@ -440,21 +425,35 @@ and singleline_comment = parse
 
   let tokens_stream filename channel : token coq_Stream =
     let tokens = Queue.create () in
+    let curr_id = ref None in
     let lexer_wraper lexbuf : Pre_parser.token =
-      let res =
-        if lexbuf.lex_curr_p.pos_cnum = lexbuf.lex_curr_p.pos_bol then
-          initial_linebegin lexbuf
-        else
-          initial lexbuf
-      in
-      Queue.push res tokens;
-      res
+      match !curr_id with
+      | Some id ->
+        curr_id := None;
+        let loc = currentLoc lexbuf in
+        let res =
+          if SSet.mem id !types_context then TYPEDEF_NAME (id, ref TypedefId, loc)
+          else VAR_NAME (id, ref VarId, loc)
+        in
+        Queue.push res tokens;
+        res
+      | None ->
+        let res =
+          if lexbuf.lex_curr_p.pos_cnum = lexbuf.lex_curr_p.pos_bol then
+            initial_linebegin lexbuf
+          else
+            initial lexbuf
+        in
+        begin match res with
+        | PRE_NAME id -> curr_id := Some id
+        | _ -> Queue.push res tokens
+        end;
+        res
     in
     let lexbuf = Lexing.from_channel channel in
     lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_fname = filename; pos_lnum = 1};
-    contexts_stk := [init_ctx];
+    types_context := init_ctx;
     Pre_parser.translation_unit_file lexer_wraper lexbuf;
-    assert (List.length !contexts_stk = 1);
     let rec compute_token_stream () =
       let loop t v =
         Cons (Coq_existT (t, Obj.magic v), Lazy.from_fun compute_token_stream)
@@ -574,6 +573,7 @@ and singleline_comment = parse
       | ATTRIBUTE loc -> loop ATTRIBUTE't loc
       | ASM loc -> loop ASM't loc
       | PRAGMA (s, loc) -> loop PRAGMA't (s, loc)
+      | PRE_NAME _ -> assert false
     in
     Lazy.from_fun compute_token_stream
 

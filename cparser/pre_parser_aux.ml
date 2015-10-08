@@ -18,20 +18,11 @@ type identifier_type =
   | TypedefId
   | OtherId
 
-(* These functions push and pop a context on the contexts stack. *)
-let open_context:(unit -> unit) ref = ref (fun () -> assert false)
-let close_context:(unit -> unit) ref = ref (fun () -> assert false)
+(* Applying once this functions saves the current context stack, and
+   applying it the second time restores it. *)
+let save_context:(unit -> (unit -> unit)) ref = ref (fun _ -> assert false)
 
-(* Applying once this functions saves the whole contexts stack, and
-   applying it the second time restores it.
-
-   This is mainly used to rollback the context stack to a previous
-   state. This is usefull for example when we pop too much contexts at
-   the end of the first branch of an if statement. See
-   pre_parser.mly. *)
-let save_contexts_stk:(unit -> (unit -> unit)) ref = ref (fun _ -> assert false)
-
-(* Change the context at the top of the top stack of context, by
-   changing an identifier to be a varname or a typename*)
+(* Change the context by changing an identifier to be a varname or a
+   typename *)
 let declare_varname:(string -> unit) ref = ref (fun _ -> assert false)
 let declare_typename:(string -> unit) ref = ref (fun _ -> assert false)

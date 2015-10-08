@@ -7,6 +7,12 @@ T f(T a(T)) {
   T b;
   return 1;
 }
+
+T f1(T(x));
+T f1(T x) {
+  return x;
+}
+
 int g(int x) {
  T:;
   T y;
@@ -94,6 +100,17 @@ void m() {
           case 1:
             if(1);
             else printf("ERROR m\n");
+}
+
+int j() {
+  T T;
+}
+
+int k() {
+  { T T; }
+  T t;
+  for(T T; ; );
+  T u;
 }
 
 int main () {
