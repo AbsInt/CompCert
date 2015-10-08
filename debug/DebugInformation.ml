@@ -692,9 +692,13 @@ let init name =
   Hashtbl.reset stamp_to_local;
   Hashtbl.reset atom_to_local;
   Hashtbl.reset scope_to_local;
+  Hashtbl.reset atom_to_scope;
   Hashtbl.reset compilation_section_start;
   Hashtbl.reset compilation_section_end;
-  Hashtbl.reset filenum;
-  all_files := StringSet.singleton name;
   Hashtbl.reset diab_additional;
+  Hashtbl.reset filenum;
+  Hashtbl.reset var_locations;
+  Hashtbl.reset scope_ranges;
+  Hashtbl.reset label_translation;
+  all_files := StringSet.singleton name;
   printed_vars := StringSet.empty;
