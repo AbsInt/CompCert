@@ -552,7 +552,7 @@ function_specifier:
    has to be restored if entering the body of the function being
    defined, if so. *)
 declarator:
-| ioption(pointer) x = direct_declarator attribute_specifier_list
+| ilist(pointer1) x = direct_declarator attribute_specifier_list
     { x }
 
 direct_declarator:
@@ -568,9 +568,26 @@ direct_declarator:
       | None -> (fst x, Some restore_fun)
       | Some _ -> x }
 
-pointer:
-| STAR type_qualifier_list?
-| STAR type_qualifier_list? pointer
+(* The C standard defines [pointer] as a right-recursive list. We prefer to
+   define it as a left-recursive list, because this provides better static
+   context (that is, this changes the automaton in such a way that it is
+   easier to give good error messages, in at least 2 states).
+
+   The non-terminal symbol [pointer1] represents one list element.
+
+   [pointer], which represents a non-empty list of [pointer1]'s, is defined
+   as [pointer1* pointer1].
+
+   When the C standard writes [pointer?], which represents a possibly empty
+   list of [pointer1]'s, we write [pointer1*] or [ilist(pointer1)]. The two
+   are equivalent, as long as there is no conflict. *)
+
+%inline pointer1:
+  STAR type_qualifier_list?
+    {}
+
+%inline pointer:
+  pointer1* pointer1
     {}
 
 type_qualifier_list:
@@ -604,7 +621,7 @@ type_name:
    is permitted (and we do not wish to keep track of why it is permitted). *)
 abstract_declarator(phantom):
 | pointer
-| ioption(pointer) direct_abstract_declarator
+| ilist(pointer1) direct_abstract_declarator
     {}
 
 direct_abstract_declarator:
@@ -851,13 +868,13 @@ external_declaration:
 
 function_definition_begin:
 | declaration_specifiers(declaration(external_declaration))
-  ioption(pointer) x=direct_declarator
+  ilist(pointer1) x=direct_declarator
     { match x with
       | (_, None) -> $syntaxerror
       | (i, Some restore_fun) -> restore_fun ()
     }
 | declaration_specifiers(declaration(external_declaration))
-  ioption(pointer) x=direct_declarator
+  ilist(pointer1) x=direct_declarator
   LPAREN params=identifier_list RPAREN open_context declaration_list
     { match x with
       | (_, Some _) -> $syntaxerror
