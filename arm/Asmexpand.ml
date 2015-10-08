@@ -403,7 +403,7 @@ let expand_function fn =
   with Error s ->
     Errors.Error (Errors.msg (coqstring_of_camlstring s))
 
-let expand_fundef = function
+let expand_fundef _ = function
   | Internal f ->
       begin match expand_function f with
       | Errors.OK tf -> Errors.OK (Internal tf)
@@ -413,4 +413,4 @@ let expand_fundef = function
       Errors.OK (External ef)
 
 let expand_program (p: Asm.program) : Asm.program Errors.res =
-  AST.transform_partial_program expand_fundef p
+  AST.transform_partial_ident_program expand_fundef p

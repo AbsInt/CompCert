@@ -713,26 +713,5 @@ let expand_fundef id = function
   | External ef ->
       Errors.OK (External ef)
 
-let rec transform_partial_prog transfun p =
-  match p with
-  | [] -> Errors.OK []
-  | (id,Gvar v)::l ->
-      (match transform_partial_prog transfun l with
-      | Errors.OK x -> Errors.OK ((id,Gvar v)::x)
-      | Errors.Error msg -> Errors.Error msg)
-  | (id,Gfun f)::l ->
-      (match transfun id f with
-      | Errors.OK tf ->
-          (match transform_partial_prog transfun l with
-          | Errors.OK x -> Errors.OK ((id,Gfun tf)::x)
-          | Errors.Error msg -> Errors.Error msg)
-      | Errors.Error msg ->
-          Errors.Error ((Errors.MSG (coqstring_of_camlstring "In function"))::((Errors.CTX
-          id) :: (Errors.MSG (coqstring_of_camlstring ": ") :: msg))))
-
 let expand_program (p: Asm.program) : Asm.program Errors.res =
-  match transform_partial_prog expand_fundef p.prog_defs with
-  | Errors.OK x-> 
-      Errors.OK { prog_defs = x; prog_public = p.prog_public; prog_main =
-      p.prog_main }
-  | Errors.Error msg -> Errors.Error msg
+  AST.transform_partial_ident_program expand_fundef p
