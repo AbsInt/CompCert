@@ -377,15 +377,19 @@ declaration_specifier_no_type:
 | function_specifier
     {}
 
-(* [declaration_specifiers_no_typedef_name] matches declaration
+(* [declaration_specifier_no_typedef_name] matches declaration
    specifiers that contain neither "typedef" nor a typedef name
    (i.e. type specifier declared using a previous "typedef
    keyword"). *)
+declaration_specifier_no_typedef_name:
+| storage_class_specifier_no_typedef
+| type_qualifier
+| function_specifier
+| type_specifier_no_typedef_name
+    {}
+
 declaration_specifiers_no_typedef_name:
-| storage_class_specifier_no_typedef declaration_specifiers_no_typedef_name?
-| type_qualifier                     declaration_specifiers_no_typedef_name?
-| function_specifier                 declaration_specifiers_no_typedef_name?
-| type_specifier_no_typedef_name     declaration_specifiers_no_typedef_name?
+  declaration_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
     {}
 
 (* [declaration_specifiers_no_type] matches declaration_specifiers
