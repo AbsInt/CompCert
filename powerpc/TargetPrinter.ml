@@ -220,7 +220,7 @@ module Diab_System : SYSTEM =
       | Section_debug_info s -> sprintf ".section	.debug_info%s,,n" (if s <> ".text" then s else "")
       | Section_debug_abbrev -> ".section	.debug_abbrev,,n"
       | Section_debug_loc -> ".section	.debug_loc,,n"
-      | Section_debug_line s -> sprintf ".section	.debug_line.%s,,n\n" s;
+      | Section_debug_line s -> sprintf ".section	.debug_line.%s,,n\n" s
 
     let section oc sec =
       let name = name_of_section sec in
