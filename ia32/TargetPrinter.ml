@@ -102,10 +102,10 @@ module Cygwin_System : SYSTEM =
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\", \"%s\"\n"
             s (if ex then "xr" else if wr then "d" else "dr")
-      | Section_debug_info _
-      | Section_debug_loc
-      | Section_debug_line _
-      | Section_debug_abbrev -> "" (* Dummy value *)
+      | Section_debug_info _ -> ".section	.debug_info,\"dr\""
+      | Section_debug_loc ->  ".section	.debug_loc,\"dr\""
+      | Section_debug_line _ -> ".section	.debug_line,\"dr\""
+      | Section_debug_abbrev -> ".section	.debug_abbrev,\"dr\"" (* Dummy value *)
 
     let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
 
@@ -153,10 +153,10 @@ module ELF_System : SYSTEM =
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\",\"a%s%s\",@progbits"
             s (if wr then "w" else "") (if ex then "x" else "")
-      | Section_debug_info _
-      | Section_debug_loc 
-      | Section_debug_line _
-      | Section_debug_abbrev -> "" (* Dummy value *)
+      | Section_debug_info _ -> ".section	.debug_info,\"\",@progbits"
+      | Section_debug_loc -> ".section	.debug_loc,\"\",@progbits"
+      | Section_debug_line _ -> ".section	.debug_line,\"\",@progbits"
+      | Section_debug_abbrev -> ".section	.debug_abbrev,\"\",@progbits"
             
     let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
                     
@@ -207,10 +207,11 @@ module MacOS_System : SYSTEM =
           sprintf ".section	\"%s\", %s, %s"
             (if wr then "__DATA" else "__TEXT") s
             (if ex then "regular, pure_instructions" else "regular")
-      | Section_debug_info _
-      | Section_debug_loc
-      | Section_debug_line _
-      | Section_debug_abbrev -> "" (* Dummy value *)
+      | Section_debug_info _ ->	".section	__DWARF,__debug_info,regular,debug"
+      | Section_debug_loc  -> ".section	__DWARF,__debug_loc,regular,debug"
+      | Section_debug_line _ -> ".section	__DWARF,__debug_line,regular,debug"
+      | Section_debug_abbrev -> ".section	__DWARF,__debug_abbrev,regular,debug" (* Dummy value *)
+    
     
     let stack_alignment =  16 (* mandatory *)
          
@@ -748,9 +749,16 @@ module Target(System: SYSTEM):TARGET =
         
     let print_var_info = print_var_info
 
-    let print_prologue _ = 
-      need_masks := false
-    
+    let print_prologue oc = 
+      need_masks := false;
+      if !Clflags.option_g then begin
+        section oc Section_text;
+        let low_pc = new_label () in
+        Debug.add_compilation_section_start ".text" low_pc;
+        fprintf oc "%a:\n" elf_label low_pc;
+        fprintf oc "	.cfi_sections	.debug_frame\n"
+      end
+
     let print_epilogue oc = 
       if !need_masks then begin
         section oc (Section_const true);
@@ -765,7 +773,14 @@ module Target(System: SYSTEM):TARGET =
         fprintf oc "%a:	.long   0x7FFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF\n"
           raw_symbol "__abss_mask"
       end;
-      System.print_epilogue oc
+      System.print_epilogue oc;
+      if !Clflags.option_g then begin
+        let high_pc = new_label () in
+        Debug.add_compilation_section_end ".text" high_pc;
+        Debug.compute_gnu_file_enum (fun f -> ignore (print_file oc f));
+        section oc Section_text;
+        fprintf oc "%a:\n" elf_label high_pc
+      end
       
     let comment = comment
 

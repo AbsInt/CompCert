@@ -660,38 +660,17 @@ let float_reg_to_dwarf = function
    | FPR24 -> 56 | FPR25 -> 57 | FPR26 -> 58 | FPR27 -> 59
    | FPR28 -> 60 | FPR29 -> 61 | FPR30 -> 62 | FPR31 -> 63
 
-let preg_to_dwarf_int = function
+let preg_to_dwarf = function
    | IR r -> int_reg_to_dwarf r
    | FR r -> float_reg_to_dwarf r
    | _ -> assert false
 
 
-let translate_annot annot = 
-  let rec aux = function
-    | BA x -> Some (1,BA (preg_to_dwarf_int x))
-    | BA_int _
-    | BA_long _
-    | BA_float _
-    | BA_single _
-    | BA_loadglobal _
-    | BA_addrglobal _
-    | BA_loadstack _ -> None
-    | BA_addrstack ofs -> Some (1,BA_addrstack ofs)
-    | BA_splitlong (hi,lo) -> 
-        begin
-          match (aux hi,aux lo) with
-          | Some (_,hi) ,Some (_,lo) -> Some (1,BA_splitlong (hi,lo))
-          | _,_ -> None
-        end in
-  (match annot with
-  | [] -> None
-  | a::_ -> aux a)
-
 let expand_function id fn =
   try
     set_current_function fn;
     if !Clflags.option_g then
-      expand_debug id translate_annot expand_instruction fn.fn_code
+      expand_debug id 2 preg_to_dwarf expand_instruction fn.fn_code
     else
       List.iter expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())

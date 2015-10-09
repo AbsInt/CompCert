@@ -63,9 +63,30 @@ let expand_scope id lbl oldscopes newscopes =
   and closing = List.filter (fun a -> not (List.mem a newscopes)) oldscopes in
   List.iter (fun i -> Debug.open_scope id i lbl) opening;
   List.iter (fun i -> Debug.close_scope id i lbl) closing
+
+let translate_annot sp preg_to_dwarf annot = 
+  let rec aux = function
+    | BA x -> Some (sp,BA (preg_to_dwarf x))
+    | BA_int _
+    | BA_long _
+    | BA_float _
+    | BA_single _
+    | BA_loadglobal _
+    | BA_addrglobal _
+    | BA_loadstack _ -> None
+    | BA_addrstack ofs -> Some (sp,BA_addrstack ofs)
+    | BA_splitlong (hi,lo) -> 
+        begin
+          match (aux hi,aux lo) with
+          | Some (_,hi) ,Some (_,lo) -> Some (sp,BA_splitlong (hi,lo))
+          | _,_ -> None
+        end in
+  (match annot with
+  | [] -> None
+  | a::_ -> aux a)
     
 
-let expand_debug id annot simple l =
+let expand_debug id sp preg simple l =
   let get_lbl = function
     | None -> 
         let lbl = new_label () in
@@ -85,7 +106,7 @@ let expand_debug id annot simple l =
               aux  lbl scopes rest
           | 3 ->
              begin 
-               match annot args with
+               match translate_annot sp preg args with
                | Some a ->
                    let lbl = get_lbl lbl in
                    Debug.start_live_range (id,txt) lbl a;
@@ -98,7 +119,7 @@ let expand_debug id annot simple l =
               aux (Some lbl) scopes rest
           | 5 ->
               begin
-                match annot args with
+                match translate_annot sp preg args with
                 | Some a->
                     Debug.stack_variable (id,txt) a;
                     aux lbl scopes rest
