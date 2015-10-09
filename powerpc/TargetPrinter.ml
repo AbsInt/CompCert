@@ -126,7 +126,9 @@ module Linux_System : SYSTEM =
       | Section_debug_info _ -> ".section	.debug_info,\"\",@progbits"
       | Section_debug_abbrev -> ".section	.debug_abbrev,\"\",@progbits"
       | Section_debug_loc -> ".section	.debug_loc,\"\",@progbits"
-            
+      | Section_debug_line _ ->  ".section	.debug_line,\"\",@progbits\n"
+
+
     let section oc sec =
       let name = name_of_section sec in
       assert (name <> "COMM");
@@ -146,9 +148,7 @@ module Linux_System : SYSTEM =
     let cfi_rel_offset = cfi_rel_offset
 
     let print_prologue oc = 
-      if !Clflags.option_g then
-        begin
-      (* TODO print file *)
+      if !Clflags.option_g then  begin
           section oc Section_text;
           let low_pc = new_label () in
           Debug.add_compilation_section_start ".text" low_pc;
@@ -220,6 +220,7 @@ module Diab_System : SYSTEM =
       | Section_debug_info s -> sprintf ".section	.debug_info%s,,n" (if s <> ".text" then s else "")
       | Section_debug_abbrev -> ".section	.debug_abbrev,,n"
       | Section_debug_loc -> ".section	.debug_loc,,n"
+      | Section_debug_line s -> sprintf ".section	.debug_line.%s,,n\n" s;
 
     let section oc sec =
       let name = name_of_section sec in

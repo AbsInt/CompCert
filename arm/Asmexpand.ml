@@ -395,17 +395,59 @@ let expand_instruction instr =
   | _ ->
      emit instr
 
-let expand_function fn =
+let int_reg_to_dwarf = function
+   | IR0 -> 0  | IR1 -> 1  | IR2 -> 2  | IR3 -> 3
+   | IR4 -> 4  | IR5 -> 5  | IR6 -> 6  | IR7 -> 7
+   | IR8 -> 8  | IR9 -> 9  | IR10 -> 10 | IR11 -> 11
+   | IR12 -> 12 | IR13 -> 13 | IR14 -> 14
+
+let float_reg_to_dwarf = function
+   | FR0 -> 64  | FR1 -> 65  | FR2 -> 66  | FR3 -> 67
+   | FR4 -> 68  | FR5 -> 69  | FR6 -> 70  | FR7 -> 71
+   | FR8 -> 72  | FR9 -> 73  | FR10 -> 74 | FR11 -> 75
+   | FR12 -> 76 | FR13 -> 77 | FR14 -> 78 | FR15 -> 79
+
+let preg_to_dwarf_int = function
+   | IR r -> int_reg_to_dwarf r
+   | FR r -> float_reg_to_dwarf r
+   | _ -> assert false
+
+let translate_annot annot = 
+  let rec aux = function
+    | BA x -> Some (13,BA (preg_to_dwarf_int x))
+    | BA_int _
+    | BA_long _
+    | BA_float _
+    | BA_single _
+    | BA_loadglobal _
+    | BA_addrglobal _
+    | BA_loadstack _ -> None
+    | BA_addrstack ofs -> Some (13,BA_addrstack ofs)
+    | BA_splitlong (hi,lo) -> 
+        begin
+          match (aux hi,aux lo) with
+          | Some (_,hi) ,Some (_,lo) -> Some (13,BA_splitlong (hi,lo))
+          | _,_ -> None
+        end in
+  (match annot with
+  | [] -> None
+  | a::_ -> aux a)
+
+
+let expand_function id fn =
   try
     set_current_function fn;
-    List.iter expand_instruction fn.fn_code;
+    if !Clflags.option_g then
+      expand_debug id translate_annot expand_instruction fn.fn_code
+    else
+      List.iter expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->
     Errors.Error (Errors.msg (coqstring_of_camlstring s))
 
-let expand_fundef _ = function
+let expand_fundef id = function
   | Internal f ->
-      begin match expand_function f with
+      begin match expand_function id f with
       | Errors.OK tf -> Errors.OK (Internal tf)
       | Errors.Error msg -> Errors.Error msg
       end

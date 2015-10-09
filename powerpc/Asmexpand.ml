@@ -563,7 +563,7 @@ let num_crbit = function
   | CRbit_3 -> 3
   | CRbit_6 -> 6
 
-let expand_instruction_simple instr =
+let expand_instruction instr =
   match instr with
   | Pallocframe(sz, ofs,retofs) ->
       let variadic = (!current_function).fn_sig.sig_cc.cc_vararg in
@@ -687,19 +687,13 @@ let translate_annot annot =
   | [] -> None
   | a::_ -> aux a)
 
-let expand_scope id lbl oldscopes newscopes =
-  let opening = List.filter (fun a -> not (List.mem a oldscopes)) newscopes
-  and closing = List.filter (fun a -> not (List.mem a newscopes)) oldscopes in
-  List.iter (fun i -> Debug.open_scope id i lbl) opening;
-  List.iter (fun i -> Debug.close_scope id i lbl) closing
-    
 let expand_function id fn =
   try
     set_current_function fn;
     if !Clflags.option_g then
-      expand_debug id translate_annot expand_instruction_simple fn.fn_code
+      expand_debug id translate_annot expand_instruction fn.fn_code
     else
-      List.iter expand_instruction_simple fn.fn_code;
+      List.iter expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->
     Errors.Error (Errors.msg (coqstring_of_camlstring s))

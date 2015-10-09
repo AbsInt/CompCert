@@ -153,9 +153,11 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\",\"a%s%s\",%%progbits"
             s (if wr then "w" else "") (if ex then "x" else "")
-      | Section_debug_info _
-      | Section_debug_loc
-      | Section_debug_abbrev -> "" (* Dummy value *)
+      | Section_debug_info _ -> ".section	.debug_info,\"\",%progbits"
+      | Section_debug_loc -> ".section	.debug_loc,\"\",%progbits"
+      | Section_debug_abbrev -> ".section	.debug_abbrev,\"\",%progbits"
+      | Section_debug_line _ -> ".section	.debug_line,\"\",%progbits"
+
             
     let section oc sec =
       fprintf oc "	%s\n" (name_of_section sec)
@@ -896,9 +898,25 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
         | _ -> "armv7");
       fprintf oc "	.fpu	%s\n"
         (if Opt.vfpv3 then "vfpv3-d16" else "vfpv2");
-      fprintf oc "	.%s\n" (if !Clflags.option_mthumb then "thumb" else "arm")
+      fprintf oc "	.%s\n" (if !Clflags.option_mthumb then "thumb" else "arm");
+      if !Clflags.option_g then begin
+        section oc Section_text;
+        let low_pc = new_label () in
+        Debug.add_compilation_section_start ".text" low_pc;
+        fprintf oc "%a:\n" elf_label low_pc;
+        fprintf oc "	.cfi_sections	.debug_frame\n"
+      end
 
-    let print_epilogue oc = ()
+
+    let print_epilogue oc = 
+      if !Clflags.option_g then begin
+        let high_pc = new_label () in
+        Debug.add_compilation_section_end ".text" high_pc;
+        Debug.compute_gnu_file_enum (fun f -> ignore (print_file oc f));
+        section oc Section_text;
+        fprintf oc "%a:\n" elf_label high_pc
+        end
+
 
     let default_falignment = 4
     

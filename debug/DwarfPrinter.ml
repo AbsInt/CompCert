@@ -627,7 +627,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_abbrev oc;
       section oc Section_debug_loc;
       print_location_list oc loc;
-      fprintf oc "	.section	.debug_line,\"\",@progbits\n";
+      section oc (Section_debug_line "");
       print_label oc line_start
 
     (* Print the debug info and abbrev section *)

@@ -30,6 +30,7 @@ type section_name =
   | Section_debug_info of string
   | Section_debug_abbrev
   | Section_debug_loc
+  | Section_debug_line of string
 
 type access_mode =
   | Access_default

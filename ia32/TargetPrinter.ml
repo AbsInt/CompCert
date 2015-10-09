@@ -104,6 +104,7 @@ module Cygwin_System : SYSTEM =
             s (if ex then "xr" else if wr then "d" else "dr")
       | Section_debug_info _
       | Section_debug_loc
+      | Section_debug_line _
       | Section_debug_abbrev -> "" (* Dummy value *)
 
     let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
@@ -153,7 +154,8 @@ module ELF_System : SYSTEM =
           sprintf ".section	\"%s\",\"a%s%s\",@progbits"
             s (if wr then "w" else "") (if ex then "x" else "")
       | Section_debug_info _
-      | Section_debug_loc
+      | Section_debug_loc 
+      | Section_debug_line _
       | Section_debug_abbrev -> "" (* Dummy value *)
             
     let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
@@ -207,6 +209,7 @@ module MacOS_System : SYSTEM =
             (if ex then "regular, pure_instructions" else "regular")
       | Section_debug_info _
       | Section_debug_loc
+      | Section_debug_line _
       | Section_debug_abbrev -> "" (* Dummy value *)
     
     let stack_alignment =  16 (* mandatory *)
