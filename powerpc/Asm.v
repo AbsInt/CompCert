@@ -178,13 +178,19 @@ Inductive instruction : Type :=
   | Peqv: ireg -> ireg -> ireg -> instruction                 (**r bitwise not-xor *)
   | Pextsb: ireg -> ireg -> instruction                       (**r 8-bit sign extension *)
   | Pextsh: ireg -> ireg -> instruction                       (**r 16-bit sign extension *)
+  | Pextsw: ireg -> ireg -> instruction                       (**r 64-bit sign extension (PPC64) *)
   | Pfreeframe: Z -> int -> instruction                       (**r deallocate stack frame and restore previous frame (pseudo) *)
   | Pfabs: freg -> freg -> instruction                        (**r float absolute value *)
   | Pfabss: freg -> freg -> instruction                       (**r float absolute value *)
   | Pfadd: freg -> freg -> freg -> instruction                (**r float addition *)
   | Pfadds: freg -> freg -> freg -> instruction               (**r float addition *)
   | Pfcmpu: freg -> freg -> instruction                       (**r float comparison *)
+  | Pfcfi: freg -> ireg -> instruction                        (**r signed-int-to-float conversion (pseudo, PPC64) *)
+  | Pfcfiu: freg -> ireg -> instruction                       (**r unsigned-int-to-float conversion (pseudo, PPC64) *)
+  | Pfcfid: freg -> freg -> instruction                       (**r signed-long-to-float conversion (PPC64) *)
   | Pfcti: ireg -> freg -> instruction                        (**r float-to-signed-int conversion, round towards 0 (pseudo) *)
+  | Pfctiu: ireg -> freg -> instruction                       (**r float-to-unsigned-int conversion, round towards 0 (pseudo, PPC64) *)
+  | Pfctidz: freg -> freg -> instruction                      (**r float-to-signed-long conversion, round towards 0 (PPC64) *) 
   | Pfctiw: freg -> freg -> instruction                       (**r float-to-signed-int conversion, round by default *) 
   | Pfctiwz: freg -> freg -> instruction                      (**r float-to-signed-int conversion, round towards 0 *) 
   | Pfdiv: freg -> freg -> freg -> instruction                (**r float division *)
@@ -252,6 +258,7 @@ Inductive instruction : Type :=
   | Porc: ireg -> ireg -> ireg -> instruction                 (**r bitwise or-complement *)
   | Pori: ireg -> ireg -> constant -> instruction             (**r or with immediate *)
   | Poris: ireg -> ireg -> constant -> instruction            (**r or with immediate high *)
+  | Prldicl: ireg -> ireg -> int -> int -> instruction        (**r rotate and mask left (PPC64) *)
   | Prlwinm: ireg -> ireg -> int -> int -> instruction        (**r rotate and mask *)
   | Prlwimi: ireg -> ireg -> int -> int -> instruction        (**r rotate and insert *)
   | Pslw: ireg -> ireg -> ireg -> instruction                 (**r shift left *)
@@ -260,6 +267,7 @@ Inductive instruction : Type :=
   | Psrw: ireg -> ireg -> ireg -> instruction                 (**r shift right unsigned *)
   | Pstb: ireg -> constant -> ireg -> instruction             (**r store 8-bit int *)
   | Pstbx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
+  | Pstdu: ireg -> constant -> ireg -> instruction           (**r store 64-bit integer with update (PPC64) *)
   | Pstfd: freg -> constant -> ireg -> instruction            (**r store 64-bit float *)
   | Pstfdu: freg -> constant -> ireg -> instruction           (**r store 64-bit float with update *)
   | Pstfdx: freg -> ireg -> ireg -> instruction               (**r same, with 2 index regs *)
@@ -716,8 +724,14 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (rs#rd <- (Val.addfs rs#r1 rs#r2))) m
   | Pfcmpu r1 r2 =>
       Next (nextinstr (compare_float rs rs#r1 rs#r2)) m
+  | Pfcfi rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.maketotal (Val.floatofint rs#r1)))) m
+  | Pfcfiu rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.maketotal (Val.floatofintu rs#r1)))) m
   | Pfcti rd r1 =>
       Next (nextinstr (rs#FPR13 <- Vundef #rd <- (Val.maketotal (Val.intoffloat rs#r1)))) m
+  | Pfctiu rd r1 =>
+      Next (nextinstr (rs#FPR13 <- Vundef #rd <- (Val.maketotal (Val.intuoffloat rs#r1)))) m
   | Pfdiv rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.divf rs#r1 rs#r2))) m
   | Pfdivs rd r1 r2 =>
@@ -883,7 +897,10 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pdcbtst _ _ _
   | Pdcbtls _ _ _
   | Pdcbz _ _
+  | Pextsw _ _
   | Peieio
+  | Pfcfid _ _
+  | Pfctidz _ _
   | Pfctiw _ _
   | Pfctiwz _ _
   | Pfmadd _ _ _ _
@@ -907,6 +924,8 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pmfcr _
   | Pmfspr _ _
   | Pmtspr _ _
+  | Prldicl _ _ _ _
+  | Pstdu _ _ _
   | Pstwbrx _ _ _
   | Pstwcx_ _ _ _
   | Pstfdu _ _ _

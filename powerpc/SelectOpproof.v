@@ -838,6 +838,8 @@ Proof.
   intros. destruct x; simpl in H0; try discriminate.
   destruct (Float.to_intu f) as [n|] eqn:?; simpl in H0; inv H0.
   exists (Vint n); split; auto. unfold intuoffloat.
+  destruct Archi.ppc64.
+  econstructor. constructor; eauto. constructor. simpl; rewrite Heqo; auto.
   set (im := Int.repr Int.half_modulus).
   set (fm := Float.of_intu im).
   assert (eval_expr ge sp e m (Vfloat fm :: Vfloat f :: le) (Eletvar (S O)) (Vfloat f)).
@@ -875,6 +877,8 @@ Theorem eval_floatofint:
 Proof.
   intros until y. unfold floatofint. destruct (floatofint_match a); intros.
   InvEval. TrivialExists. 
+  destruct Archi.ppc64.
+  TrivialExists. 
   rename e0 into a. destruct x; simpl in H0; inv H0.
   exists (Vfloat (Float.of_int i)); split; auto.
   set (t1 := addimm Float.ox8000_0000 a).
@@ -897,6 +901,8 @@ Theorem eval_floatofintu:
 Proof.
   intros until y. unfold floatofintu. destruct (floatofintu_match a); intros.
   InvEval. TrivialExists.
+  destruct Archi.ppc64.
+  TrivialExists. 
   rename e0 into a. destruct x; simpl in H0; inv H0.
   exists (Vfloat (Float.of_intu i)); split; auto.
   unfold floatofintu.

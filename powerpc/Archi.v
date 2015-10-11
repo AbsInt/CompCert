@@ -43,3 +43,7 @@ Global Opaque big_endian
               default_pl_64 choose_binop_pl_64
               default_pl_32 choose_binop_pl_32
               float_of_single_preserves_sNaN.
+
+(** Can we use the 64-bit extensions to the PowerPC architecture? *)
+Parameter ppc64: bool.
+

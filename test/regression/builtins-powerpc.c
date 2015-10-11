@@ -41,6 +41,8 @@ int main(int argc, char ** argv)
   __builtin_eieio();
   __builtin_sync();
   __builtin_isync();
+  printf("isel(%d, %d, %d) = %d\n", 0, x, y, __builtin_isel(0, x, y));
+  printf("isel(%d, %d, %d) = %d\n", 42, x, y, __builtin_isel(42, x, y));
   printf ("read_16_rev = %x\n", __builtin_read16_reversed(&s));
   printf ("read_32_rev = %x\n", __builtin_read32_reversed(&y));
   __builtin_write16_reversed(&s, 0x789A);
