@@ -95,9 +95,6 @@ intros e; apply Zle_refl.
 now rewrite F2R_opp, F2R_mult, <- Hr1, <- Hy1.
 (* *)
 destruct (relative_error_FLX_ex beta prec (prec_gt_0 prec) rnd (x / y)%R) as (eps,(Heps1,Heps2)).
-apply Rmult_integral_contrapositive_currified.
-exact Zx.
-now apply Rinv_neq_0_compat.
 rewrite Heps2.
 rewrite <- Rabs_Ropp.
 replace (-(x + - (x / y * (1 + eps) * y)))%R with (x * eps)%R by now field.
@@ -135,8 +132,11 @@ now apply Rabs_pos_lt.
 rewrite Rabs_Ropp.
 replace (bpow (Fexp fr)) with (ulp beta (FLX_exp prec) (F2R fr)).
 rewrite <- Hr1.
-apply ulp_error_f...
-unfold ulp; apply f_equal.
+apply error_lt_ulp_round...
+apply Rmult_integral_contrapositive_currified; try apply Rinv_neq_0_compat; assumption.
+rewrite ulp_neq_0.
+2: now rewrite <- Hr1.
+apply f_equal.
 now rewrite Hr2, <- Hr1.
 replace (prec+(Fexp fr+Fexp fy))%Z with ((prec+Fexp fy)+Fexp fr)%Z by ring.
 rewrite bpow_plus.
@@ -246,8 +246,10 @@ apply Rmult_le_compat_r.
 apply Rabs_pos.
 apply Rle_trans with (/2*ulp beta  (FLX_exp prec) (F2R fr))%R.
 rewrite <- Hr1.
-apply ulp_half_error_f...
-right; unfold ulp; apply f_equal.
+apply error_le_half_ulp_round...
+right; rewrite ulp_neq_0.
+2: now rewrite <- Hr1.
+apply f_equal.
 rewrite Hr2, <- Hr1; trivial.
 rewrite Rmult_assoc, Rmult_comm.
 replace (prec+(Fexp fr+Fexp fr))%Z with (Fexp fr + (prec+Fexp fr))%Z by ring.
