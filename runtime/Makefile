@@ -9,7 +9,15 @@ LIB=libcompcert.a
 INCLUDES=include/float.h include/stdarg.h include/stdbool.h \
   include/stddef.h include/varargs.h
 
-VPATH=$(ARCH)/$(MODEL) $(ARCH)
+VPATH=$(ARCH)
+
+ifeq ($(ARCH),powerpc)
+ifeq ($(MODEL),ppc64)
+VPATH=powerpc/ppc64 $(ARCH)
+else ifeq ($(MODEL),e5500)
+VPATH=powerpc/ppc64 $(ARCH)
+endif
+endif
 
 ifeq ($(strip $(HAS_RUNTIME_LIB)),true)
 all: $(LIB)
