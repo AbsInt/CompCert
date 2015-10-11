@@ -15,6 +15,7 @@
 
 (** Observable events, execution traces, and semantics of external calls. *)
 
+Require Import String.
 Require Import Coqlib.
 Require Intv.
 Require Import AST.
@@ -61,10 +62,10 @@ Inductive eventval: Type :=
   | EVptr_global: ident -> int -> eventval.
 
 Inductive event: Type :=
-  | Event_syscall: ident -> list eventval -> eventval -> event
+  | Event_syscall: string -> list eventval -> eventval -> event
   | Event_vload: memory_chunk -> ident -> int -> eventval -> event
   | Event_vstore: memory_chunk -> ident -> int -> eventval -> event
-  | Event_annot: ident -> list eventval -> event.
+  | Event_annot: string -> list eventval -> event.
 
 (** The dynamic semantics for programs collect traces of events.
   Traces are of two kinds: finite (type [trace]) or infinite (type [traceinf]). *)
@@ -1219,7 +1220,7 @@ Qed.
 
 (** ** Semantics of annotations. *)
 
-Inductive extcall_annot_sem (text: ident) (targs: list typ) (ge: Senv.t):
+Inductive extcall_annot_sem (text: string) (targs: list typ) (ge: Senv.t):
               list val -> mem -> trace -> val -> mem -> Prop :=
   | extcall_annot_sem_intro: forall vargs m args,
       eventval_list_match ge args targs vargs ->
@@ -1264,7 +1265,7 @@ Proof.
   split. constructor. auto.
 Qed.
 
-Inductive extcall_annot_val_sem (text: ident) (targ: typ) (ge: Senv.t):
+Inductive extcall_annot_val_sem (text: string) (targ: typ) (ge: Senv.t):
               list val -> mem -> trace -> val -> mem -> Prop :=
   | extcall_annot_val_sem_intro: forall varg m arg,
       eventval_match ge arg targ varg ->
@@ -1354,14 +1355,14 @@ Qed.
   we do not define their semantics, but only assume that it satisfies
   [extcall_properties]. *)
 
-Parameter external_functions_sem: ident -> signature -> extcall_sem.
+Parameter external_functions_sem: String.string -> signature -> extcall_sem.
 
 Axiom external_functions_properties:
   forall id sg, extcall_properties (external_functions_sem id sg) sg.
 
 (** We treat inline assembly similarly. *)
 
-Parameter inline_assembly_sem: ident -> signature -> extcall_sem.
+Parameter inline_assembly_sem: String.string -> signature -> extcall_sem.
 
 Axiom inline_assembly_properties:
   forall id sg, extcall_properties (inline_assembly_sem id sg) sg.

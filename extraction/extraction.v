@@ -42,10 +42,6 @@ Extract Inlined Constant Coqlib.proj_sumbool => "(fun x -> x)".
 (* Wfsimpl *)
 Extraction Inline Wfsimpl.Fix Wfsimpl.Fixm.
 
-(* AST *)
-Extract Constant AST.ident_of_string =>
-  "fun s -> Camlcoq.intern_string (Camlcoq.camlstring_of_coqstring s)".
-
 (* Memory - work around an extraction bug. *)
 Extraction NoInline Memory.Mem.valid_pointer.
 

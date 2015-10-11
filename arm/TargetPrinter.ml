@@ -777,7 +777,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           begin match ef with
           | EF_annot(txt, targs) ->
               fprintf oc "%s annotation: " comment;
-              print_annot_text preg "sp" oc (extern_atom txt) args;
+              print_annot_text preg "sp" oc (camlstring_of_coqstring txt) args;
               0
           | EF_debug(kind, txt, targs) ->
               print_debug_info comment print_file_line preg "sp" oc
@@ -785,7 +785,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
               0
           | EF_inline_asm(txt, sg, clob) ->
               fprintf oc "%s begin inline assembly\n\t" comment;
-              print_inline_asm preg oc (extern_atom txt) sg args res;
+              print_inline_asm preg oc (camlstring_of_coqstring txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment;
               5 (* hoping this is an upper bound...  *)
           | _ ->

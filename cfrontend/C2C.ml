@@ -769,7 +769,7 @@ let rec convertExpr env e =
       | {edesc = C.EConst(CStr txt)} :: args1 ->
           let targs1 = convertTypArgs env [] args1 in
           Ebuiltin(
-            EF_annot(intern_string txt, typlist_of_typelist targs1),
+            EF_annot(coqstring_of_camlstring txt, typlist_of_typelist targs1),
             targs1, convertExprList env args1, convertTyp env e.etyp)
       | _ ->
           error "ill-formed __builtin_annot (first argument must be string literal)";
@@ -781,7 +781,7 @@ let rec convertExpr env e =
       | [ {edesc = C.EConst(CStr txt)}; arg ] ->
           let targ = convertTyp env
                          (Cutil.default_argument_conversion env arg.etyp) in
-          Ebuiltin(EF_annot_val(intern_string txt, typ_of_type targ),
+          Ebuiltin(EF_annot_val(coqstring_of_camlstring txt, typ_of_type targ),
                    Tcons(targ, Tnil), convertExprList env [arg], 
                    convertTyp env e.etyp)
       | _ ->
@@ -822,7 +822,7 @@ let rec convertExpr env e =
       let sg =
         signature_of_type targs tres
            {cc_vararg = true; cc_unproto = false; cc_structret = false} in
-      Ebuiltin(EF_external(intern_string "printf", sg), 
+      Ebuiltin(EF_external(coqstring_of_camlstring "printf", sg), 
                targs, convertExprList env args, tres)
  
   | C.ECall(fn, args) ->
@@ -877,7 +877,7 @@ let convertAsm loc env txt outputs inputs clobber =
   let e = 
     let tinputs = convertTypArgs env [] inputs' in
     let toutput = convertTyp env ty_res in
-    Ebuiltin(EF_inline_asm(intern_string txt', 
+    Ebuiltin(EF_inline_asm(coqstring_of_camlstring txt', 
                            signature_of_type tinputs toutput cc_default,
                            clobber'),
              tinputs,
@@ -1085,14 +1085,15 @@ let convertFundecl env (sto, id, ty, optinit) =
     | Tfunction(args, res, cconv) -> (args, res, cconv)
     | _ -> assert false in
   let id' = intern_string id.name in
+  let id'' = coqstring_of_camlstring id.name in
   let sg = signature_of_type args res cconv in
   let ef =
     if id.name = "malloc" then EF_malloc else
     if id.name = "free" then EF_free else
     if Str.string_match re_builtin id.name 0
     && List.mem_assoc id.name builtins.functions
-    then EF_builtin(id', sg)
-    else EF_external(id', sg) in
+    then EF_builtin(id'', sg)
+    else EF_external(id'', sg) in
   (id', Gfun(External(ef, args, res, cconv)))
 
 (** Initializers *)

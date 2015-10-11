@@ -13,6 +13,7 @@
 (** Characterization and properties of deterministic external worlds
   and deterministic semantics *)
 
+Require Import String.
 Require Import Coqlib.
 Require Import AST.
 Require Import Integers.
@@ -37,11 +38,11 @@ Require Import Behaviors.
   the world to [w]. *)
 
 CoInductive world: Type :=
-  World (io: ident -> list eventval -> option (eventval * world))
+  World (io: string -> list eventval -> option (eventval * world))
         (vload: memory_chunk -> ident -> int -> option (eventval * world))
         (vstore: memory_chunk -> ident -> int -> eventval -> option world).
 
-Definition nextworld_io (w: world) (evname: ident) (evargs: list eventval) :
+Definition nextworld_io (w: world) (evname: string) (evargs: list eventval) :
                      option (eventval * world) :=
   match w with World io vl vs => io evname evargs end.
 

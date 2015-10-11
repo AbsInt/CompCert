@@ -59,7 +59,7 @@ let print_eventval_list p = function
 let print_event p = function
   | Event_syscall(id, args, res) ->
       fprintf p "extcall %s(%a) -> %a"
-                (extern_atom id)
+                (camlstring_of_coqstring id)
                 print_eventval_list args
                 print_eventval res
   | Event_vload(chunk, id, ofs, res) ->
@@ -74,7 +74,7 @@ let print_event p = function
                 print_eventval arg
   | Event_annot(text, args) ->
       fprintf p "annotation \"%s\" %a"
-                (extern_atom text)
+                (camlstring_of_coqstring text)
                 print_eventval_list args
 
 (* Printing states *)
@@ -387,7 +387,7 @@ let rec convert_external_args ge vl tl =
   | _, _ -> None
 
 let do_external_function id sg ge w args m =
-  match extern_atom id, args with
+  match camlstring_of_coqstring id, args with
   | "printf", Vptr(b, ofs) :: args' ->
       extract_string m b ofs >>= fun fmt ->
       print_string (do_printf m fmt args');

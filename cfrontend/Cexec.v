@@ -391,7 +391,7 @@ Qed.
 (** External calls *)
 
 Variable do_external_function:
-  ident -> signature -> Senv.t -> world -> list val -> mem -> option (world * trace * val * mem).
+  string -> signature -> Senv.t -> world -> list val -> mem -> option (world * trace * val * mem).
 
 Hypothesis do_external_function_sound:
   forall id sg ge vargs m t vres m' w w',
@@ -405,7 +405,7 @@ Hypothesis do_external_function_complete:
   do_external_function id sg ge w vargs m = Some(w', t, vres, m').
 
 Variable do_inline_assembly:
-  ident -> signature -> Senv.t -> world -> list val -> mem -> option (world * trace * val * mem).
+  string -> signature -> Senv.t -> world -> list val -> mem -> option (world * trace * val * mem).
 
 Hypothesis do_inline_assembly_sound:
   forall txt sg ge vargs m t vres m' w w',
@@ -513,12 +513,12 @@ Definition do_ef_memcpy (sz al: Z)
   | _ => None
   end.
 
-Definition do_ef_annot (text: ident) (targs: list typ)
+Definition do_ef_annot (text: string) (targs: list typ)
        (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
   do args <- list_eventval_of_val vargs targs;
   Some(w, Event_annot text args :: E0, Vundef, m).
 
-Definition do_ef_annot_val (text: ident) (targ: typ)
+Definition do_ef_annot_val (text: string) (targ: typ)
        (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
   match vargs with
   | varg :: nil =>

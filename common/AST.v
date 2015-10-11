@@ -16,8 +16,8 @@
 (** This file defines a number of data types and operations used in
   the abstract syntax trees of many of the intermediate languages. *)
 
+Require Import String.
 Require Import Coqlib.
-Require String.
 Require Import Errors.
 Require Import Integers.
 Require Import Floats.
@@ -32,8 +32,6 @@ Set Implicit Arguments.
 Definition ident := positive.
 
 Definition ident_eq := peq.
-
-Parameter ident_of_string : String.string -> ident.
 
 (** The intermediate languages are weakly typed, using the following types: *)
 
@@ -305,8 +303,7 @@ End TRANSF_PROGRAM_IDENT.
   for the case the identifier of the function is passed as additional 
   argument *)
 
-Open Local Scope error_monad_scope.
-Open Local Scope string_scope.
+Local Open Scope error_monad_scope.
 
 Section TRANSF_PROGRAM_GEN.
 
@@ -760,10 +757,10 @@ Qed.
   and associated operations. *)
 
 Inductive external_function : Type :=
-  | EF_external (name: ident) (sg: signature)
+  | EF_external (name: string) (sg: signature)
      (** A system call or library function.  Produces an event
          in the trace. *)
-  | EF_builtin (name: ident) (sg: signature)
+  | EF_builtin (name: string) (sg: signature)
      (** A compiler built-in function.  Behaves like an external, but
          can be inlined by the compiler. *)
   | EF_vload (chunk: memory_chunk)
@@ -786,15 +783,15 @@ Inductive external_function : Type :=
          Produces no observable event. *)
   | EF_memcpy (sz: Z) (al: Z)
      (** Block copy, of [sz] bytes, between addresses that are [al]-aligned. *)
-  | EF_annot (text: ident) (targs: list typ)
+  | EF_annot (text: string) (targs: list typ)
      (** A programmer-supplied annotation.  Takes zero, one or several arguments,
          produces an event carrying the text and the values of these arguments,
          and returns no value. *)
-  | EF_annot_val (text: ident) (targ: typ)
+  | EF_annot_val (text: string) (targ: typ)
      (** Another form of annotation that takes one argument, produces
          an event carrying the text and the value of this argument,
          and returns the value of the argument. *)
-  | EF_inline_asm (text: ident) (sg: signature) (clobbers: list String.string)
+  | EF_inline_asm (text: string) (sg: signature) (clobbers: list string)
      (** Inline [asm] statements.  Semantically, treated like an
          annotation with no parameters ([EF_annot text nil]).  To be
          used with caution, as it can invalidate the semantic
@@ -852,9 +849,8 @@ Definition ef_reloads (ef: external_function) : bool :=
 
 Definition external_function_eq: forall (ef1 ef2: external_function), {ef1=ef2} + {ef1<>ef2}.
 Proof.
-  generalize ident_eq signature_eq chunk_eq typ_eq list_eq_dec zeq Int.eq_dec; intros.
+  generalize ident_eq string_dec signature_eq chunk_eq typ_eq list_eq_dec zeq Int.eq_dec; intros.
   decide equality.
-  apply list_eq_dec. apply String.string_dec. 
 Defined.
 Global Opaque external_function_eq.
 

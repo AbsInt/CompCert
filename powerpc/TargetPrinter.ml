@@ -704,13 +704,13 @@ module Target (System : SYSTEM):TARGET =
           begin match ef with
           | EF_annot(txt, targs) ->
               fprintf oc "%s annotation: " comment;
-              print_annot_text preg_annot "r1" oc (extern_atom txt) args
+              print_annot_text preg_annot "r1" oc (camlstring_of_coqstring txt) args
           | EF_debug(kind, txt, targs) ->
               print_debug_info comment print_file_line preg_annot "r1" oc
                                (P.to_int kind) (extern_atom txt) args
           | EF_inline_asm(txt, sg, clob) ->
               fprintf oc "%s begin inline assembly\n\t" comment;
-              print_inline_asm preg oc (extern_atom txt) sg args res;
+              print_inline_asm preg oc (camlstring_of_coqstring txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment
           | _ ->
               assert false

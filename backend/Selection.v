@@ -22,7 +22,9 @@
   Instruction selection proceeds by bottom-up rewriting over expressions.
   The source language is Cminor and the target language is CminorSel. *)
 
+Require String.
 Require Import Coqlib.
+Require Import Maps.
 Require Import AST.
 Require Import Errors.
 Require Import Integers.
@@ -67,6 +69,8 @@ Definition store (chunk: memory_chunk) (e1 e2: expr) :=
 
 Section SELECTION.
 
+Variable hf: helper_functions.
+
 Definition sel_constant (cst: Cminor.constant) : expr :=
   match cst with
   | Cminor.Ointconst n => Eop (Ointconst n) Enil
@@ -104,14 +108,14 @@ Definition sel_unop (op: Cminor.unary_operation) (arg: expr) : expr :=
   | Cminor.Ointoflong => intoflong arg
   | Cminor.Olongofint => longofint arg
   | Cminor.Olongofintu => longofintu arg
-  | Cminor.Olongoffloat => longoffloat arg
-  | Cminor.Olonguoffloat => longuoffloat arg
-  | Cminor.Ofloatoflong => floatoflong arg
-  | Cminor.Ofloatoflongu => floatoflongu arg
-  | Cminor.Olongofsingle => longofsingle arg
-  | Cminor.Olonguofsingle => longuofsingle arg
-  | Cminor.Osingleoflong => singleoflong arg
-  | Cminor.Osingleoflongu => singleoflongu arg
+  | Cminor.Olongoffloat => longoffloat hf arg
+  | Cminor.Olonguoffloat => longuoffloat hf arg
+  | Cminor.Ofloatoflong => floatoflong hf arg
+  | Cminor.Ofloatoflongu => floatoflongu hf arg
+  | Cminor.Olongofsingle => longofsingle hf arg
+  | Cminor.Olonguofsingle => longuofsingle hf arg
+  | Cminor.Osingleoflong => singleoflong hf arg
+  | Cminor.Osingleoflongu => singleoflongu hf arg
   end.
 
 Definition sel_binop (op: Cminor.binary_operation) (arg1 arg2: expr) : expr :=
@@ -139,17 +143,17 @@ Definition sel_binop (op: Cminor.binary_operation) (arg1 arg2: expr) : expr :=
   | Cminor.Odivfs => divfs arg1 arg2
   | Cminor.Oaddl => addl arg1 arg2
   | Cminor.Osubl => subl arg1 arg2
-  | Cminor.Omull => mull arg1 arg2
-  | Cminor.Odivl => divl arg1 arg2
-  | Cminor.Odivlu => divlu arg1 arg2
-  | Cminor.Omodl => modl arg1 arg2
-  | Cminor.Omodlu => modlu arg1 arg2
+  | Cminor.Omull => mull hf arg1 arg2
+  | Cminor.Odivl => divl hf arg1 arg2
+  | Cminor.Odivlu => divlu hf arg1 arg2
+  | Cminor.Omodl => modl hf arg1 arg2
+  | Cminor.Omodlu => modlu hf arg1 arg2
   | Cminor.Oandl => andl arg1 arg2
   | Cminor.Oorl => orl arg1 arg2
   | Cminor.Oxorl => xorl arg1 arg2
-  | Cminor.Oshll => shll arg1 arg2
-  | Cminor.Oshrl => shrl arg1 arg2
-  | Cminor.Oshrlu => shrlu arg1 arg2
+  | Cminor.Oshll => shll hf arg1 arg2
+  | Cminor.Oshrl => shrl hf arg1 arg2
+  | Cminor.Oshrlu => shrlu hf arg1 arg2
   | Cminor.Ocmp c => comp c arg1 arg2
   | Cminor.Ocmpu c => compu c arg1 arg2
   | Cminor.Ocmpf c => compf c arg1 arg2
@@ -324,8 +328,6 @@ Fixpoint sel_stmt (ge: Cminor.genv) (s: Cminor.stmt) : res stmt :=
   | Cminor.Sgoto lbl => OK (Sgoto lbl)
   end.
 
-End SELECTION.
-
 (** Conversion of functions. *)
 
 Definition sel_function (ge: Cminor.genv) (f: Cminor.function) : res function :=
@@ -340,10 +342,76 @@ Definition sel_function (ge: Cminor.genv) (f: Cminor.function) : res function :=
 Definition sel_fundef (ge: Cminor.genv) (f: Cminor.fundef) : res fundef :=
   transf_partial_fundef (sel_function ge) f.
 
+End SELECTION.
+
+(** Setting up the helper functions. *)
+
+Definition globdef := AST.globdef Cminor.fundef unit.
+
+(** We build a partial mapping from global identifiers to their definitions,
+  restricting ourselves to the globals we are interested in, namely
+  the external function declarations whose name starts with "__i64_".
+  This ensures that the mapping remains small and that [lookup_helper]
+  below is efficient. *)
+
+Definition globdef_of_interest (gd: globdef) : bool :=
+  match gd with
+  | Gfun (External (EF_external name sg)) => String.prefix "__i64_" name
+  | _ => false
+  end.
+
+Definition record_globdef (globs: PTree.t globdef) (id_gd: ident * globdef) :=
+  let (id, gd) := id_gd in
+  if globdef_of_interest gd 
+  then PTree.set id gd globs
+  else PTree.remove id globs.
+
+Definition record_globdefs (p: Cminor.program) : PTree.t globdef :=
+  List.fold_left record_globdef p.(prog_defs) (PTree.empty _).
+
+Definition lookup_helper_aux
+     (name: String.string) (sg: signature) (res: option ident)
+     (id: ident) (gd: globdef) :=
+  match gd with
+  | Gfun (External (EF_external name' sg')) =>
+      if String.string_dec name name' && signature_eq sg sg'
+      then Some id
+      else res
+  | _ => res
+  end.
+
+Definition lookup_helper (globs: PTree.t globdef)
+                         (name: String.string) (sg: signature) : res ident :=
+  match PTree.fold (lookup_helper_aux name sg) globs None with
+  | Some id => OK id
+  | None    => Error (MSG name :: MSG ": missing or incorrect declaration" :: nil)
+  end.
+
+Local Open Scope string_scope.
+
+Definition get_helpers (p: Cminor.program) : res helper_functions :=
+  let globs := record_globdefs p in
+  do i64_dtos <- lookup_helper globs "__i64_dtos" sig_f_l ;
+  do i64_dtou <- lookup_helper globs "__i64_dtou" sig_f_l ;
+  do i64_stod <- lookup_helper globs "__i64_stod" sig_l_f ;
+  do i64_utod <- lookup_helper globs "__i64_utod" sig_l_f ;
+  do i64_stof <- lookup_helper globs "__i64_stof" sig_l_s ;
+  do i64_utof <- lookup_helper globs "__i64_utof" sig_l_s ;
+  do i64_sdiv <- lookup_helper globs "__i64_sdiv" sig_ll_l ;
+  do i64_udiv <- lookup_helper globs "__i64_udiv" sig_ll_l ;
+  do i64_smod <- lookup_helper globs "__i64_smod" sig_ll_l ;
+  do i64_umod <- lookup_helper globs "__i64_umod" sig_ll_l ;
+  do i64_shl <- lookup_helper globs "__i64_shl" sig_li_l ;
+  do i64_shr <- lookup_helper globs "__i64_shr" sig_li_l ;
+  do i64_sar <- lookup_helper globs "__i64_sar" sig_li_l ;
+  OK (mk_helper_functions
+     i64_dtos i64_dtou i64_stod i64_utod i64_stof i64_utof
+     i64_sdiv i64_udiv i64_smod i64_umod
+     i64_shl i64_shr i64_sar).
+
 (** Conversion of programs. *)
 
 Definition sel_program (p: Cminor.program) : res program :=
-  let ge := Genv.globalenv p in
-  do x <- check_helpers ge;
-  transform_partial_program (sel_fundef ge) p.
+  do hf <- get_helpers p;
+  transform_partial_program (sel_fundef hf (Genv.globalenv p)) p.
 

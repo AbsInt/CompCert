@@ -258,12 +258,12 @@ let rec expr p (prec, e) =
                 exprlist (true, args)
   | Ebuiltin(EF_annot(txt, _), _, args, _) ->
       fprintf p "__builtin_annot@[<hov 1>(%S%a)@]"
-                (extern_atom txt) exprlist (false, args)
+                (camlstring_of_coqstring txt) exprlist (false, args)
   | Ebuiltin(EF_annot_val(txt, _), _, args, _) ->
       fprintf p "__builtin_annot_val@[<hov 1>(%S%a)@]"
-                (extern_atom txt) exprlist (false, args)
+                (camlstring_of_coqstring txt) exprlist (false, args)
   | Ebuiltin(EF_external(id, sg), _, args, _) ->
-      fprintf p "%s@[<hov 1>(%a)@]" (extern_atom id) exprlist (true, args)
+      fprintf p "%s@[<hov 1>(%a)@]" (camlstring_of_coqstring id) exprlist (true, args)
   | Ebuiltin(EF_inline_asm(txt, sg, clob), _, args, _) ->
       extended_asm p txt None args clob
   | Ebuiltin(_, _, args, _) ->
@@ -282,7 +282,7 @@ and exprlist p (first, rl) =
       exprlist p (false, rl)
 
 and extended_asm p txt res args clob =
-  fprintf p "asm volatile (@[<hv 0>%S" (extern_atom txt);
+  fprintf p "asm volatile (@[<hv 0>%S" (camlstring_of_coqstring txt);
   fprintf p "@ :";
   begin match res with
   | None -> ()

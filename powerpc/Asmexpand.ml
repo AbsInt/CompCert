@@ -620,7 +620,7 @@ let expand_instruction instr =
   | Pbuiltin(ef, args, res) ->
       begin match ef with
       | EF_builtin(name, sg) ->
-          expand_builtin_inline (extern_atom name) args res
+          expand_builtin_inline (camlstring_of_coqstring name) args res
       | EF_vload chunk ->
           expand_builtin_vload chunk args res
       | EF_vstore chunk ->
