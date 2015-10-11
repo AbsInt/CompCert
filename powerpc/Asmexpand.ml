@@ -48,7 +48,7 @@ let emit_addimm rd rs n =
   List.iter emit (Asmgen.addimm rd rs n [])
 
 
-			    
+
 (* Handling of annotations *)
 
 let expand_annot_val txt targ args res =
@@ -71,7 +71,7 @@ let expand_annot_val txt targ args res =
    Note that lfd and stfd cannot trap on ill-formed floats. *)
 
 let offset_in_range ofs =
-  Int.eq (Asmgen.high_s ofs) Int.zero
+  Int.eq (Asmgen.high_s ofs) _0
 
 let memcpy_small_arg sz arg tmp =
   match arg with
@@ -86,7 +86,7 @@ let memcpy_small_arg sz arg tmp =
       assert false
 
 let expand_builtin_memcpy_small sz al src dst =
-  let (tsrc, tdst) = 
+  let (tsrc, tdst) =
     if dst <> BA (IR GPR11) then (GPR11, GPR12) else (GPR12, GPR11) in
   let (rsrc, osrc) = memcpy_small_arg sz src tsrc in
   let (rdst, odst) = memcpy_small_arg sz dst tdst in
@@ -124,7 +124,7 @@ let expand_builtin_memcpy_big sz al src dst =
   assert (sz >= 4);
   emit_loadimm GPR0 (Z.of_uint (sz / 4));
   emit (Pmtctr GPR0);
-  let (s, d) = 
+  let (s, d) =
     if dst <> BA (IR GPR11) then (GPR11, GPR12) else (GPR12, GPR11) in
   memcpy_big_arg src s;
   memcpy_big_arg dst d;
@@ -192,7 +192,7 @@ let rec expand_builtin_vload_common chunk base offset res =
             emit (Plwz(lo, offset', base));
             emit (Plwz(hi, offset, base))
           end
-      | None ->      
+      | None ->
           emit (Paddi(GPR11, base, offset));
           expand_builtin_vload_common chunk GPR11 (Cint _0) res
       end
@@ -246,7 +246,7 @@ let expand_builtin_vstore_common chunk base offset src =
       | Some offset' ->
           emit (Pstw(hi, offset, base));
           emit (Pstw(lo, offset', base))
-      | None ->      
+      | None ->
           let tmp = temp_for_vstore src in
           emit (Paddi(tmp, base, offset));
           emit (Pstw(hi, Cint _0, tmp));
@@ -283,9 +283,9 @@ let expand_builtin_vstore chunk args =
       assert false
 
 (* Handling of varargs *)
-let linkregister_offset = ref  Int.zero
+let linkregister_offset = ref  _0
 
-let retaddr_offset = ref Int.zero
+let retaddr_offset = ref _0
 
 let current_function_stacksize = ref 0l
 
@@ -448,8 +448,8 @@ let expand_builtin_inline name args res =
       emit (Picbi(GPR0,a1))
   | "__builtin_dcbtls", [BA (IR a1); BA_int loc],_ ->
       if not ((Int.eq loc _0) || (Int.eq loc _2)) then
-        raise (Error "the second argument of __builtin_dcbtls must be a constant between 0 and 2");
-      emit (Pdcbtls (loc,GPR0,a1))    
+        raise (Error "the second argument of __builtin_dcbtls must be 0 or 2");
+      emit (Pdcbtls (loc,GPR0,a1))
   | "__builtin_dcbtls",_,_ ->
       raise (Error "the second argument of __builtin_dcbtls must be a constant")
   | "__builtin_icbtls", [BA (IR a1); BA_int loc],_ ->
@@ -482,7 +482,7 @@ let expand_builtin_inline name args res =
       raise (Error "the first argument of __builtin_set_spr must be a constant")
   (* Frame and return address *)
   | "__builtin_call_frame", _,BR (IR res) ->
-      let sz = !current_function_stacksize 
+      let sz = !current_function_stacksize
       and ofs = !linkregister_offset in
       if sz < 0x8000l then
         emit (Paddi(res, GPR1, Cint(coqint_of_camlint sz)))
@@ -510,6 +510,57 @@ let expand_builtin_inline name args res =
         end;
         emit (Por (res, res, GPR0))
       end
+  (* atomic operations *)
+  | "__builtin_atomic_exchange", [BA (IR a1); BA (IR a2); BA (IR a3)],_ ->
+      emit (Plwz (GPR10,Cint _0,a2));
+      emit (Psync);
+      let lbl = new_label() in
+      emit (Plabel lbl);
+      emit (Plwarx (GPR0,GPR0,a1));
+      emit (Pstwcx_ (GPR10,GPR0,a1));
+      emit (Pbf (CRbit_2,lbl));
+      emit (Pisync);
+      emit (Pstw (GPR0,Cint _0,a3))
+  | "__builtin_atomic_load", [BA (IR a1); BA (IR a2)],_ ->
+      let lbl = new_label () in
+      emit (Psync);
+      emit (Plwz (GPR0,Cint _0,a1));
+      emit (Pcmpw (GPR0,GPR0));
+      emit (Pbf (CRbit_2,lbl));
+      emit (Plabel lbl);
+      emit (Pisync);
+      emit (Pstw (GPR0,Cint _0, a2))
+  | "__builtin_sync_fetch_and_add", [BA (IR a1); BA(IR a2)], BR (IR res) ->
+      let lbl = new_label() in
+      emit (Psync);
+      emit (Plabel lbl);
+      emit (Plwarx (res,GPR0,a1));
+      emit (Padd (GPR0,res,a2));
+      emit (Pstwcx_ (GPR0,GPR0,a1));
+      emit (Pbf (CRbit_2, lbl));
+      emit (Pisync);
+  | "__builtin_atomic_compare_exchange", [BA (IR dst); BA(IR exp); BA (IR des)],  BR (IR res) ->
+      let lbls = new_label ()
+      and lblneq = new_label ()
+      and lblsucc = new_label () in
+      emit (Plwz (GPR10,Cint _0,exp));
+      emit (Plwz (GPR11,Cint _0,des));
+      emit (Psync);
+      emit (Plabel lbls);
+      emit (Plwarx (GPR0,GPR0,dst));
+      emit (Pcmpw (GPR0,GPR10));
+      emit (Pbf (CRbit_2,lblneq));
+      emit (Pstwcx_ (GPR11,GPR0,dst));
+      emit (Pbf (CRbit_2,lbls));
+      emit (Plabel lblneq);
+      (* Here, CR2 is true if the exchange succeeded, false if it failed *)
+      emit (Pisync);
+      emit (Pmfcr GPR10);
+      emit (Prlwinm (res,GPR10,(Z.of_uint 3),_1));
+      (* Update exp with the current value of dst if the exchange failed *)
+      emit (Pbt (CRbit_2,lblsucc));
+      emit (Pstw (GPR0,Cint _0,exp));
+      emit (Plabel lblsucc)
   (* Catch-all *)
   | _ ->
       raise (Error ("unrecognized builtin " ^ name))
@@ -540,7 +591,7 @@ let expand_instruction instr =
   | Pallocframe(sz, ofs,retofs) ->
       let variadic = (!current_function).fn_sig.sig_cc.cc_vararg in
       let sz = camlint_of_coqint sz in
-      assert (ofs = Int.zero);
+      assert (ofs = _0);
       let sz = if variadic then Int32.add sz 96l else sz in
       let adj = Int32.neg sz in
       if adj >= -0x8000l then
@@ -635,17 +686,49 @@ let expand_instruction instr =
   | _ ->
       emit instr
 
-let expand_function fn =
+(* Translate to the integer identifier of the register as
+   the EABI specifies *)
+
+let int_reg_to_dwarf = function
+   | GPR0 -> 0  | GPR1 -> 1  | GPR2 -> 2  | GPR3 -> 3
+   | GPR4 -> 4  | GPR5 -> 5  | GPR6 -> 6  | GPR7 -> 7
+   | GPR8 -> 8  | GPR9 -> 9  | GPR10 -> 10 | GPR11 -> 11
+   | GPR12 -> 12 | GPR13 -> 13 | GPR14 -> 14 | GPR15 -> 15
+   | GPR16 -> 16 | GPR17 -> 17 | GPR18 -> 18 | GPR19 -> 19
+   | GPR20 -> 20 | GPR21 -> 21 | GPR22 -> 22 | GPR23 -> 23
+   | GPR24 -> 24 | GPR25 -> 25 | GPR26 -> 26 | GPR27 -> 27
+   | GPR28 -> 28 | GPR29 -> 29 | GPR30 -> 30 | GPR31 -> 31
+
+let float_reg_to_dwarf = function
+   | FPR0 -> 32  | FPR1 -> 33  | FPR2 -> 34  | FPR3 -> 35
+   | FPR4 -> 36  | FPR5 -> 37  | FPR6 -> 38  | FPR7 -> 39
+   | FPR8 -> 40  | FPR9 -> 41  | FPR10 -> 42 | FPR11 -> 43
+   | FPR12 -> 44 | FPR13 -> 45 | FPR14 -> 46 | FPR15 -> 47
+   | FPR16 -> 48 | FPR17 -> 49 | FPR18 -> 50 | FPR19 -> 51
+   | FPR20 -> 52 | FPR21 -> 53 | FPR22 -> 54| FPR23 -> 55
+   | FPR24 -> 56 | FPR25 -> 57 | FPR26 -> 58 | FPR27 -> 59
+   | FPR28 -> 60 | FPR29 -> 61 | FPR30 -> 62 | FPR31 -> 63
+
+let preg_to_dwarf = function
+   | IR r -> int_reg_to_dwarf r
+   | FR r -> float_reg_to_dwarf r
+   | _ -> assert false
+
+
+let expand_function id fn =
   try
     set_current_function fn;
-    List.iter expand_instruction fn.fn_code;
+    if !Clflags.option_g then
+      expand_debug id 2 preg_to_dwarf expand_instruction fn.fn_code
+    else
+      List.iter expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->
     Errors.Error (Errors.msg (coqstring_of_camlstring s))
 
-let expand_fundef = function
+let expand_fundef id = function
   | Internal f ->
-      begin match expand_function f with
+      begin match expand_function id f with
       | Errors.OK tf -> Errors.OK (Internal tf)
       | Errors.Error msg -> Errors.Error msg
       end
@@ -653,4 +736,4 @@ let expand_fundef = function
       Errors.OK (External ef)
 
 let expand_program (p: Asm.program) : Asm.program Errors.res =
-  AST.transform_partial_program expand_fundef p
+  AST.transform_partial_ident_program expand_fundef p

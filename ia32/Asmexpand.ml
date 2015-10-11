@@ -387,17 +387,46 @@ let expand_instruction instr =
      end
   | _ -> emit instr
        
-let expand_function fn =
+let int_reg_to_dwarf = function
+  | EAX -> 0
+  | EBX -> 3
+  | ECX -> 1
+  | EDX -> 2
+  | ESI -> 6
+  | EDI -> 7
+  | EBP -> 5
+  | ESP -> 4
+
+let float_reg_to_dwarf = function
+  | XMM0 -> 21
+  | XMM1 -> 22
+  | XMM2 -> 23
+  | XMM3 -> 24
+  | XMM4 -> 25
+  | XMM5 -> 26
+  | XMM6 -> 27
+  | XMM7 -> 28
+
+let preg_to_dwarf = function
+   | IR r -> int_reg_to_dwarf r
+   | FR r -> float_reg_to_dwarf r
+   | _ -> assert false
+
+
+let expand_function id fn =
   try
     set_current_function fn;
-    List.iter expand_instruction fn.fn_code;
+    if !Clflags.option_g then
+      expand_debug id 4 preg_to_dwarf expand_instruction fn.fn_code
+    else
+      List.iter expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->
     Errors.Error (Errors.msg (coqstring_of_camlstring s))
 
-let expand_fundef = function
+let expand_fundef id = function
   | Internal f ->
-      begin match expand_function f with
+      begin match expand_function id f with
       | Errors.OK tf -> Errors.OK (Internal tf)
       | Errors.Error msg -> Errors.Error msg
       end
@@ -405,23 +434,4 @@ let expand_fundef = function
       Errors.OK (External ef)
 
 let expand_program (p: Asm.program) : Asm.program Errors.res =
-  AST.transform_partial_program expand_fundef p
-let expand_function fn =
-  try
-    set_current_function fn;
-    List.iter expand_instruction fn.fn_code;
-    Errors.OK (get_current_function ())
-  with Error s ->
-    Errors.Error (Errors.msg (coqstring_of_camlstring s))
-
-let expand_fundef = function
-  | Internal f ->
-      begin match expand_function f with
-      | Errors.OK tf -> Errors.OK (Internal tf)
-      | Errors.Error msg -> Errors.Error msg
-      end
-  | External ef ->
-      Errors.OK (External ef)
-
-let expand_program (p: Asm.program) : Asm.program Errors.res =
-  AST.transform_partial_program expand_fundef p
+  AST.transform_partial_ident_program expand_fundef p

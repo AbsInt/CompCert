@@ -22,6 +22,7 @@ Require Import Fcore_Raux.
 Require Import Fcore_defs.
 Require Import Fcore_rnd.
 Require Import Fcore_generic_fmt.
+Require Import Fcore_ulp.
 Require Import Fcore_rnd_ne.
 
 Section RND_FIX.
@@ -83,5 +84,17 @@ Proof.
 intros ex ey H.
 apply Zle_refl.
 Qed.
+
+Theorem ulp_FIX: forall x, ulp beta FIX_exp x = bpow emin.
+Proof.
+intros x; unfold ulp.
+case Req_bool_spec; intros Zx.
+case (negligible_exp_spec FIX_exp).
+intros T; specialize (T (emin-1)%Z); contradict T.
+unfold FIX_exp; omega.
+intros n _; reflexivity.
+reflexivity.
+Qed.
+
 
 End RND_FIX.

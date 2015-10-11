@@ -250,10 +250,6 @@ let external_function p = function
       fprintf p "(EF_vload %s)" (name_of_chunk chunk)
   | EF_vstore chunk ->
       fprintf p "(EF_vstore %s)" (name_of_chunk chunk)
-  | EF_vload_global(chunk, id, ofs) ->
-      fprintf p "(EF_vload_global %s %a %a)" (name_of_chunk chunk) ident id coqint ofs
-  | EF_vstore_global(chunk, id, ofs) ->
-      fprintf p "(EF_vstore_global %s %a %a)" (name_of_chunk chunk) ident id coqint ofs
   | EF_malloc -> fprintf p "EF_malloc"
   | EF_free -> fprintf p "EF_free"
   | EF_memcpy(sz, al) ->
@@ -264,6 +260,8 @@ let external_function p = function
   | EF_annot_val(text, targ) ->
       assertions := (text, [targ]) :: !assertions;
       fprintf p "(EF_annot_val %ld%%positive %a)" (P.to_int32 text) asttype targ
+  | EF_debug(kind, text, targs) -> 
+      fprintf p "(EF_debug %ld%%positive %ld%%positive %a)" (P.to_int32 kind) (P.to_int32 text) (print_list asttype) targs
   | EF_inline_asm(text, sg, clob) ->
       fprintf p "@[<hov 2>(EF_inline_asm %ld%%positive@ %a@ %a)@]"
               (P.to_int32 text)

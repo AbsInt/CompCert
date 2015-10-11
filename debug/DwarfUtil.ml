@@ -14,18 +14,8 @@
 
 open DwarfTypes
 
-let id = ref 0
-
-let next_id () =
-  let nid = !id in
-  incr id; nid
-
-let reset_id () =
-  id := 0
-
 (* Generate a new entry from a given tag *)
-let new_entry tag =
-  let id = next_id () in
+let new_entry id tag =
   {
    tag = tag;
    children = [];
@@ -86,34 +76,67 @@ let dw_form_ref8     = 0x14
 let dw_ref_udata     = 0x15
 let dw_ref_indirect  = 0x16
 
+(* Operation encoding *)
+let dw_op_addr = 0x3
+let dw_op_plus_uconst = 0x23
+let dw_op_reg0 = 0x50
+let dw_op_regx = 0x90
+let dw_op_bregx = 0x92
+let dw_op_piece = 0x93
+
+
 (* Default corresponding encoding for the different abbreviations *)
-module DefaultAbbrevs =
-  struct
-    let sibling_type_abbr = dw_form_ref4
-    let file_loc_type_abbr = dw_form_data4,dw_form_udata
-    let type_abbr = dw_form_ref_addr
-    let name_type_abbr = dw_form_string
-    let encoding_type_abbr = dw_form_data1
-    let byte_size_type_abbr = dw_form_data1
-    let member_size_abbr = dw_form_udata
-    let high_pc_type_abbr = dw_form_addr
-    let low_pc_type_abbr = dw_form_addr
-    let stmt_list_type_abbr = dw_form_data4
-    let declaration_type_abbr = dw_form_flag
-    let external_type_abbr = dw_form_flag
-    let prototyped_type_abbr = dw_form_flag
-    let bit_offset_type_abbr = dw_form_data1
-    let comp_dir_type_abbr = dw_form_string
-    let language_type_abbr = dw_form_udata
-    let producer_type_abbr = dw_form_string
-    let value_type_abbr = dw_form_sdata
-    let artificial_type_abbr = dw_form_flag
-    let variable_parameter_type_abbr = dw_form_flag
-    let bit_size_type_abbr = dw_form_data1
-    let location_const_type_abbr = dw_form_data4
-    let location_block_type_abbr = dw_form_block
-    let data_location_block_type_abbr = dw_form_block
-    let data_location_ref_type_abbr = dw_form_ref4
-    let bound_const_type_abbr = dw_form_udata
-    let bound_ref_type_abbr=dw_form_ref4
-  end
+let sibling_type_abbr = dw_form_ref4
+let file_loc_type_abbr = dw_form_data4,dw_form_udata
+let type_abbr = dw_form_ref_addr
+let name_type_abbr = dw_form_string
+let encoding_type_abbr = dw_form_data1
+let byte_size_type_abbr = dw_form_data1
+let member_size_abbr = dw_form_udata
+let high_pc_type_abbr = dw_form_addr
+let low_pc_type_abbr = dw_form_addr
+let stmt_list_type_abbr = dw_form_data4
+let declaration_type_abbr = dw_form_flag
+let external_type_abbr = dw_form_flag
+let prototyped_type_abbr = dw_form_flag
+let bit_offset_type_abbr = dw_form_data1
+let comp_dir_type_abbr = dw_form_string
+let language_type_abbr = dw_form_udata
+let producer_type_abbr = dw_form_string
+let value_type_abbr = dw_form_sdata
+let artificial_type_abbr = dw_form_flag
+let variable_parameter_type_abbr = dw_form_flag
+let bit_size_type_abbr = dw_form_data1
+let location_ref_type_abbr = dw_form_data4
+let location_block_type_abbr = dw_form_block
+let data_location_block_type_abbr = dw_form_block
+let data_location_ref_type_abbr = dw_form_ref4
+let bound_const_type_abbr = dw_form_udata
+let bound_ref_type_abbr=dw_form_ref4
+
+(* Sizeof functions for the encoding of uleb128 and sleb128 *)
+let sizeof_uleb128 value =
+  let size = ref 1 in
+  let value = ref (value lsr 7) in
+  while !value <> 0 do
+    value := !value lsr 7;
+    incr size;
+  done;
+  !size
+
+let sizeof_sleb128 value =
+  let size = ref 1 in
+  let byte = ref (value land 0x7f) in
+  let value = ref (value lsr 7) in
+  while not ((!value = 0 && (!byte land 0x40) = 0) || (!value = -1 && ((!byte land 0x40) <> 0))) do
+    byte := !value land 0x7f;
+    value := !value lsr 7;
+    incr size;
+  done;
+  !size
+
+let size_of_loc_expr = function
+  | DW_OP_bregx (a,b) -> 1 + (sizeof_uleb128 a)  + (sizeof_sleb128 (Int32.to_int b))
+  | DW_OP_plus_uconst a
+  | DW_OP_piece a -> 1 + (sizeof_uleb128 a)
+  | DW_OP_reg i -> if i < 32 then 1 else  2

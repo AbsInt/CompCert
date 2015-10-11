@@ -177,16 +177,89 @@ and expand_init islocal env i =
   in
     expand i
 
+(* Insertion of debug annotation, for -g mode *)
+
+let debug_id = Env.fresh_ident "__builtin_debug"
+let debug_ty =
+  TFun(TVoid [], Some [Env.fresh_ident "kind", TInt(IInt, [])], true, [])
+
+let debug_annot kind args =
+  { sloc = no_loc;
+    sdesc = Sdo { 
+      etyp = TVoid [];
+      edesc = ECall({edesc = EVar debug_id; etyp = debug_ty},
+                    intconst kind IInt :: args)
+    }
+  }
+
+let string_const str =
+  let c = CStr str in { edesc = EConst c; etyp = type_of_constant c }
+
+let integer_const n =
+  intconst (Int64.of_int n) IInt
+
+(* Line number annotation:
+      __builtin_debug(1, "#line:filename:lineno") *)
+(* TODO: consider
+      __builtin_debug(1, "filename", lineno)
+   instead. *)
+
+let debug_lineno (filename, lineno) =
+  debug_annot 1L
+    [string_const (Printf.sprintf "#line:%s:%d" filename lineno)]
+
+(* Scope annotation:
+      __builtin_debug(6, "", scope1, scope2, ..., scopeN)
+*)
+
+let empty_string = string_const ""
+
+let curr_fun_id = ref 0
+
+let debug_var_decl ctx id =
+  Debug.add_lvar_scope !curr_fun_id id (List.hd ctx)
+
+let debug_scope ctx =
+  debug_annot 6L (empty_string :: List.rev_map integer_const ctx)
+
+(* Add line number debug annotation if the line number changes.
+   Add scope debug annotation regardless. *)
+
+
+let add_lineno ctx prev_loc this_loc s =
+  if !Clflags.option_g then
+    sseq no_loc (debug_scope ctx)
+      (if this_loc <> prev_loc && this_loc <> no_loc
+       then sseq no_loc (debug_lineno this_loc) s
+       else s)
+  else s
+
+(* Generate fresh scope identifiers, for blocks that contain at least
+   one declaration *)
+
+let block_contains_decl sl =
+  List.exists
+    (function {sdesc = Sdecl _} -> true | _ -> false)
+    sl
+
+let next_scope_id = ref 0
+
+let new_scope_id () =
+  incr next_scope_id; !next_scope_id
+
 (* Process a block-scoped variable declaration.
    The variable is entered in [local_variables].
    The initializer, if any, is converted into assignments and
    prepended to [k]. *)
 
-let process_decl loc env (sto, id, ty, optinit) k =
+let process_decl loc env ctx (sto, id, ty, optinit) k =
   let ty' = remove_const env ty in
   local_variables := (sto, id, ty', None) :: !local_variables;
+  debug_var_decl ctx id;
+  (* TODO: register the fact that id is declared in scope ctx *)
   match optinit with
-  | None -> k
+  | None ->
+      k
   | Some init ->
       let init' = expand_init true env init in
       let l = local_initializer env { edesc = EVar id; etyp = ty' } init' [] in
@@ -194,57 +267,90 @@ let process_decl loc env (sto, id, ty, optinit) k =
 
 (* Simplification of blocks within a statement *)
 
-let rec unblock_stmt env s =
+let rec unblock_stmt env ctx ploc s =
   match s.sdesc with
   | Sskip -> s
   | Sdo e ->
-      {s with sdesc = Sdo(expand_expr true env e)}
+      add_lineno ctx ploc s.sloc
+        {s with sdesc = Sdo(expand_expr true env e)}
   | Sseq(s1, s2) ->
-      {s with sdesc = Sseq(unblock_stmt env s1, unblock_stmt env s2)}
+      {s with sdesc = Sseq(unblock_stmt env ctx ploc s1,
+                           unblock_stmt env ctx s1.sloc s2)}
   | Sif(e, s1, s2) -> 
-      {s with sdesc = Sif(expand_expr true env e,
-                          unblock_stmt env s1, unblock_stmt env s2)}
+      add_lineno ctx ploc s.sloc
+        {s with sdesc = Sif(expand_expr true env e,
+                            unblock_stmt env ctx s.sloc s1,
+                            unblock_stmt env ctx s.sloc s2)}
   | Swhile(e, s1) -> 
-      {s with sdesc = Swhile(expand_expr true env e, unblock_stmt env s1)}
+      add_lineno ctx ploc s.sloc
+        {s with sdesc = Swhile(expand_expr true env e,
+                               unblock_stmt env ctx s.sloc s1)}
   | Sdowhile(s1, e) ->
-      {s with sdesc = Sdowhile(unblock_stmt env s1, expand_expr true env e)}
+      add_lineno ctx ploc s.sloc
+        {s with sdesc = Sdowhile(unblock_stmt env ctx s.sloc s1,
+                                 expand_expr true env e)}
   | Sfor(s1, e, s2, s3) ->
-      {s with sdesc = Sfor(unblock_stmt env s1,
-                           expand_expr true env e,
-                           unblock_stmt env s2,
-                           unblock_stmt env s3)}
+      add_lineno ctx ploc s.sloc
+        {s with sdesc = Sfor(unblock_stmt env ctx s.sloc s1,
+                             expand_expr true env e,
+                             unblock_stmt env ctx s.sloc s2,
+                             unblock_stmt env ctx s.sloc s3)}
   | Sbreak -> s
   | Scontinue -> s
   | Sswitch(e, s1) ->
-      {s with sdesc = Sswitch(expand_expr true env e, unblock_stmt env s1)}
+      add_lineno ctx ploc s.sloc
+        {s with sdesc = Sswitch(expand_expr true env e,
+                                unblock_stmt env ctx s.sloc s1)}
   | Slabeled(lbl, s1) -> 
-      {s with sdesc = Slabeled(lbl, unblock_stmt env s1)}
-  | Sgoto lbl -> s
-  | Sreturn None -> s
+      add_lineno ctx ploc s.sloc
+        {s with sdesc = Slabeled(lbl, unblock_stmt env ctx s.sloc s1)}
+  | Sgoto lbl ->
+      add_lineno ctx ploc s.sloc s
+  | Sreturn None ->
+      add_lineno ctx ploc s.sloc s
   | Sreturn (Some e) ->
-      {s with sdesc = Sreturn(Some (expand_expr true env e))}
-  | Sblock sl -> unblock_block env sl
-  | Sdecl d -> assert false
+      add_lineno ctx ploc s.sloc 
+        {s with sdesc = Sreturn(Some (expand_expr true env e))}
+  | Sblock sl ->
+      let ctx' =
+        if block_contains_decl sl
+        then
+          let id = new_scope_id () in
+          (match ctx with
+          | [] -> Debug.enter_function_scope !curr_fun_id id
+          | a::_ -> Debug.enter_scope !curr_fun_id a id);
+          id:: ctx
+        else ctx in
+      unblock_block env ctx' ploc sl
+  | Sdecl d ->
+      assert false
   | Sasm(attr, template, outputs, inputs, clob) ->
       let expand_asm_operand (lbl, cstr, e) =
         (lbl, cstr, expand_expr true env e) in
-      {s with sdesc = Sasm(attr, template,
-                           List.map expand_asm_operand outputs,
-                           List.map expand_asm_operand inputs, clob)}
+      add_lineno ctx ploc s.sloc 
+        {s with sdesc = Sasm(attr, template,
+                             List.map expand_asm_operand outputs,
+                             List.map expand_asm_operand inputs, clob)}
 
 
-and unblock_block env = function
+and unblock_block env ctx ploc = function
   | [] -> sskip
   | {sdesc = Sdecl d; sloc = loc} :: sl ->
-      process_decl loc env d (unblock_block env sl)
+      add_lineno ctx ploc loc
+        (process_decl loc env ctx d
+           (unblock_block env ctx loc sl))
   | s :: sl ->
-      sseq s.sloc (unblock_stmt env s) (unblock_block env sl)
+      sseq s.sloc (unblock_stmt env ctx ploc s)
+                  (unblock_block env ctx s.sloc sl)
 
 (* Simplification of blocks and compound literals within a function *)
 
 let unblock_fundef env f =
   local_variables := [];
-  let body = unblock_stmt env f.fd_body in
+  next_scope_id := 0;
+  curr_fun_id:= f.fd_name.stamp;
+  (* TODO: register the parameters as being declared in function scope *)
+  let body = unblock_stmt env [] no_loc f.fd_body in
   let decls = !local_variables in
   local_variables := [];
   { f with fd_locals = f.fd_locals @ decls; fd_body = body }
@@ -299,4 +405,5 @@ let rec unblock_glob env accu = function
 (* Entry point *)
 
 let program p =
+  {gloc = no_loc; gdesc = Gdecl(Storage_extern, debug_id, debug_ty, None)} ::
   unblock_glob (Builtins.environment()) [] p

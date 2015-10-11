@@ -295,8 +295,7 @@ let intern_string s =
     next_atom := Pos.succ !next_atom;
     Hashtbl.add atom_of_string s a;
     Hashtbl.add string_of_atom a s;
-    a
-
+    a 
 let extern_atom a =
   try
     Hashtbl.find string_of_atom a

@@ -802,13 +802,13 @@ Program Definition composite_of_def
 Next Obligation.
   apply Zle_ge. eapply Zle_trans. eapply sizeof_composite_pos. 
   apply align_le; apply alignof_composite_pos.
-Qed.
+Defined.
 Next Obligation.
   apply align_attr_two_p. apply alignof_composite_two_p.
-Qed.
+Defined.
 Next Obligation.
   apply align_divides. apply alignof_composite_pos.
-Qed.
+Defined.
 
 (** The composite environment for a program is obtained by entering
   its composite definitions in sequence.  The definitions are assumed

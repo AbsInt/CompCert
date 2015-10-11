@@ -12,6 +12,8 @@
 
 (* Types used for writing dwarf debug information *)
 
+open BinNums
+open Camlcoq
 open Sections
 
 (* Basic types for the value of attributes *)
@@ -36,12 +38,20 @@ type address = int
 
 type block = string
 
-type location_value =
-  | LocConst of constant
-  | LocBlock of block
+type location_expression =
+  | DW_OP_plus_uconst of constant
+  | DW_OP_bregx of int * int32
+  | DW_OP_piece of int
+  | DW_OP_reg of int
 
+type location_value =
+  | LocSymbol of atom
+  | LocRef of address
+  | LocSimple of location_expression
+  | LocList of location_expression list
+        
 type data_location_value =
-  | DataLocBlock of block
+  | DataLocBlock of location_expression
   | DataLocRef of reference
 
 type bound_value =
@@ -50,8 +60,10 @@ type bound_value =
 
 (* Types representing the attribute information per tag value *)
 
-type file_loc = string * constant
-
+type file_loc = 
+  | Diab_file_loc of int * constant
+  | Gnu_file_loc of int * constant
+     
 type dw_tag_array_type =
     {
      array_type_file_loc: file_loc option;
@@ -67,7 +79,9 @@ type dw_tag_base_type =
 
 type dw_tag_compile_unit =
     {
-     compile_unit_name:            string;
+     compile_unit_name:      string;
+     compile_unit_low_pc:    int;
+     compile_unit_high_pc:   int;
    }
 
 type dw_tag_const_type =
@@ -94,11 +108,10 @@ type dw_tag_formal_parameter =
     {
      formal_parameter_file_loc:           file_loc       option;
      formal_parameter_artificial:         flag           option;
-     formal_parameter_location:           location_value option;
      formal_parameter_name:               string         option;
-     formal_parameter_segment:            location_value option;
      formal_parameter_type:               reference;
      formal_parameter_variable_parameter: flag           option;
+     formal_parameter_location:           location_value option;
    }
 
 type dw_tag_label =
@@ -109,8 +122,8 @@ type dw_tag_label =
 
 type dw_tag_lexical_block =
     {
-     lexical_block_high_pc: address;
-     lexical_block_low_pc:  address;
+     lexical_block_high_pc: address option;
+     lexical_block_low_pc:  address option;
    }
 
 type dw_tag_member =
@@ -140,12 +153,13 @@ type dw_tag_structure_type =
 
 type dw_tag_subprogram =
     {
-     subprogram_file_loc:   file_loc       option;
-     subprogram_external:   flag           option;
-     subprogram_frame_base: location_value option;
+     subprogram_file_loc:   file_loc;
+     subprogram_external:   flag      option;
      subprogram_name:       string;
      subprogram_prototyped: flag;
-     subprogram_type:       reference      option;
+     subprogram_type:       reference option;
+     subprogram_high_pc:    reference option;
+     subprogram_low_pc:     reference option;
    }
 
 type dw_tag_subrange_type =
@@ -183,13 +197,12 @@ type dw_tag_unspecified_parameter =
 
 type dw_tag_variable =
     {
-     variable_file_loc:    file_loc       option;
+     variable_file_loc:    file_loc;
      variable_declaration: flag           option;
      variable_external:    flag           option;
-     variable_location:    location_value option;
      variable_name:        string;
-     variable_segment:     location_value option;
      variable_type:        reference;
+     variable_location:    location_value option;
    }
 
 type dw_tag_volatile_type =
@@ -228,46 +241,26 @@ type dw_entry =
      id:       reference;
    }
 
-(* Module type for a matching from type to dwarf encoding *)
-module type DWARF_ABBREVS =
-  sig
-    val sibling_type_abbr: int
-    val file_loc_type_abbr: int * int
-    val type_abbr: int
-    val name_type_abbr: int
-    val encoding_type_abbr: int
-    val byte_size_type_abbr: int
-    val member_size_abbr: int
-    val high_pc_type_abbr: int
-    val low_pc_type_abbr: int
-    val stmt_list_type_abbr: int
-    val declaration_type_abbr: int
-    val external_type_abbr: int
-    val prototyped_type_abbr: int
-    val bit_offset_type_abbr: int
-    val comp_dir_type_abbr: int
-    val language_type_abbr: int
-    val producer_type_abbr: int
-    val value_type_abbr: int
-    val artificial_type_abbr: int
-    val variable_parameter_type_abbr: int
-    val bit_size_type_abbr: int
-    val location_const_type_abbr: int
-    val location_block_type_abbr: int
-    val data_location_block_type_abbr: int
-    val data_location_ref_type_abbr: int
-    val bound_const_type_abbr: int
-    val bound_ref_type_abbr: int
-  end
+(* The type for the location list. *)
+type location_entry =
+    {
+     loc:     (int * int * location_value) list;
+     loc_id:  reference;
+   }
+type dw_locations = int option * location_entry list
+
+type diab_entries =  (string * int * int * dw_entry * dw_locations) list
+
+type gnu_entries = dw_entry * dw_locations
+
+type debug_entries =
+  | Diab of diab_entries
+  | Gnu of gnu_entries
 
 (* The target specific functions for printing the debug information *)
 module type DWARF_TARGET=
   sig
     val label: out_channel -> int -> unit
-    val print_file_loc: out_channel -> file_loc -> unit
-    val get_start_addr: unit -> int
-    val get_end_addr: unit -> int
-    val get_stmt_list_addr: unit -> int    
-    val name_of_section: section_name -> string
-    val get_fun_addr: string -> (int * int) option
+    val section: out_channel -> section_name -> unit
+    val symbol: out_channel -> atom -> unit
   end

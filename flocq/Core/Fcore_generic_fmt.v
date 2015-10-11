@@ -1015,7 +1015,7 @@ Qed.
 
 End monotone.
 
-Theorem round_abs_abs' :
+Theorem round_abs_abs :
   forall P : R -> R -> Prop,
   ( forall rnd (Hr : Valid_rnd rnd) x, (0 <= x)%R -> P x (round rnd x) ) ->
   forall rnd {Hr : Valid_rnd rnd} x, P (Rabs x) (Rabs (round rnd x)).
@@ -1043,18 +1043,6 @@ apply round_le...
 now apply Rlt_le.
 Qed.
 
-(* TODO: remove *)
-Theorem round_abs_abs :
-  forall P : R -> R -> Prop,
-  ( forall rnd (Hr : Valid_rnd rnd) x, P x (round rnd x) ) ->
-  forall rnd {Hr : Valid_rnd rnd} x, P (Rabs x) (Rabs (round rnd x)).
-Proof.
-intros P HP.
-apply round_abs_abs'.
-intros.
-now apply HP.
-Qed.
-
 Theorem round_bounded_large :
   forall rnd {Hr : Valid_rnd rnd} x ex,
   (fexp ex < ex)%Z ->
@@ -1064,7 +1052,7 @@ Proof with auto with typeclass_instances.
 intros rnd Hr x ex He.
 apply round_abs_abs...
 clear rnd Hr x.
-intros rnd' Hr x.
+intros rnd' Hr x _.
 apply round_bounded_large_pos...
 Qed.
 
@@ -1076,7 +1064,7 @@ Proof.
 intros rnd Hr x ex H1 H2.
 generalize Rabs_R0.
 rewrite <- H2 at 1.
-apply (round_abs_abs' (fun t rt => forall (ex : Z),
+apply (round_abs_abs (fun t rt => forall (ex : Z),
 (bpow (ex - 1) <= t < bpow ex)%R ->
 rt = 0%R -> (ex <= fexp ex)%Z)); trivial.
 clear; intros rnd Hr x Hx.
@@ -1496,7 +1484,7 @@ right.
 now rewrite Zmax_l with (1 := Zlt_le_weak _ _ He).
 Qed.
 
-Theorem ln_beta_round_DN :
+Theorem ln_beta_DN :
   forall x,
   (0 < round Zfloor x)%R ->
   (ln_beta beta (round Zfloor x) = ln_beta beta x :> Z).
@@ -1513,7 +1501,6 @@ now apply Rgt_not_eq.
 now apply Rlt_le.
 Qed.
 
-(* TODO: remove *)
 Theorem canonic_exp_DN :
   forall x,
   (0 < round Zfloor x)%R ->
@@ -1521,7 +1508,7 @@ Theorem canonic_exp_DN :
 Proof.
 intros x Hd.
 apply (f_equal fexp).
-now apply ln_beta_round_DN.
+now apply ln_beta_DN.
 Qed.
 
 Theorem scaled_mantissa_DN :
@@ -2312,7 +2299,7 @@ intros x Gx.
 apply generic_format_abs_inv.
 apply generic_format_abs in Gx.
 revert rnd valid_rnd x Gx.
-refine (round_abs_abs' _ (fun x y => generic_format fexp1 x -> generic_format fexp1 y) _).
+refine (round_abs_abs _ (fun x y => generic_format fexp1 x -> generic_format fexp1 y) _).
 intros rnd valid_rnd x [Hx|Hx] Gx.
 (* x > 0 *)
 generalize (ln_beta_generic_gt _ x (Rgt_not_eq _ _ Hx) Gx).

@@ -168,4 +168,5 @@ Separate Extraction
    Machregs.mregs_for_operation Machregs.mregs_for_builtin
    Machregs.two_address_op Machregs.is_stack_reg
    AST.signature_main
+   AST.transform_partial_ident_program
    Parser.translation_unit_file.

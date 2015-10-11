@@ -415,11 +415,12 @@ Fixpoint convert_builtin_args {A: Type} (al: list (builtin_arg expr)) (rl: list 
       a1' :: convert_builtin_args al rl1
   end.
 
-Definition convert_builtin_res (map: mapping) (r: builtin_res ident) : mon (builtin_res reg) :=
-  match r with
-  | BR id => do r <- find_var map id; ret (BR r)
-  | BR_none => ret BR_none
-  | _ => error (Errors.msg "RTLgen: bad builtin_res")
+Definition convert_builtin_res (map: mapping) (oty: option typ) (r: builtin_res ident) : mon (builtin_res reg) :=
+  match r, oty with
+  | BR id, _ => do r <- find_var map id; ret (BR r)
+  | BR_none, None => ret BR_none
+  | BR_none, Some _ => do r <- new_reg; ret (BR r)
+  | _, _ => error (Errors.msg "RTLgen: bad builtin_res")
   end.
 
 (** Translation of an expression.  [transl_expr map a rd nd]
@@ -598,7 +599,7 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
       let al := exprlist_of_expr_list (params_of_builtin_args args) in
       do rargs <- alloc_regs map al;
       let args' := convert_builtin_args args rargs in
-      do res' <- convert_builtin_res map res;
+      do res' <- convert_builtin_res map (sig_res (ef_sig ef)) res;
       do n1 <- add_instr (Ibuiltin ef args' res' nd);
          transl_exprlist map al rargs n1
   | Sseq s1 s2 =>

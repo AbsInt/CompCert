@@ -124,7 +124,8 @@ case "$target" in
         casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
         clinker="${toolprefix}gcc"
         libmath="-lm"
-        cchecklink=${build_checklink};;
+        cchecklink=${build_checklink}
+        advanced_debug=true;;
     esac;;
   arm*-*)
     arch="arm"

@@ -273,6 +273,42 @@ let combine_types mode env t1 t2 =
 
   in try Some(comp mode t1 t2) with Incompat -> None
 
+let rec equal_types env t1 t2 =
+  match t1, t2 with
+  | TVoid a1, TVoid a2 ->
+     a1=a2
+  | TInt(ik1, a1), TInt(ik2, a2) ->
+      ik1 = ik2 && a1 = a2
+  | TFloat(fk1, a1), TFloat(fk2, a2) ->
+     fk1 = fk2 && a1 = a2
+  | TPtr(ty1, a1), TPtr(ty2, a2) ->
+      a1 = a2 && equal_types env ty1 ty2
+  | TArray(ty1, sz1, a1), TArray(ty2, sz2, a2) ->
+      let size = begin match sz1,sz2 with
+      | None, None -> true
+      | Some s1, Some s2 -> s1 = s2
+      | _ -> false end in
+      size && a1 = a2 && equal_types env t1 t2
+  | TFun(ty1, params1, vararg1, a1), TFun(ty2, params2, vararg2, a2) ->
+      let params =
+        match params1, params2 with
+        | None, None -> true
+        | None, Some _
+        | Some _, None -> false
+        | Some l1, Some l2 ->
+            try
+              List.for_all2 (fun (_,t1) (_,t2) -> equal_types env t1 t2) l1 l2
+            with _ -> false
+      in params && a1 = a2 && vararg1 = vararg2 && equal_types env ty1 ty2
+  | TNamed _, _ -> equal_types env (unroll env t1) t2
+  | _, TNamed _ -> equal_types env t1 (unroll env t2)
+  | TStruct(s1, a1), TStruct(s2, a2)
+  | TUnion(s1, a1), TUnion(s2, a2)
+  | TEnum(s1, a1), TEnum(s2, a2) ->
+      s1 = s2 && a1 = a2
+  | _, _ ->
+      false
+
 (** Check whether two types are compatible. *)
 
 let compatible_types mode env t1 t2 =
@@ -427,7 +463,6 @@ let sizeof_union env members =
    We lay out fields consecutively, inserting padding to preserve
    their alignment.
    Not done here but in composite_info_decl: rounding size to alignment. *)
-
 let sizeof_struct env members =
   let rec sizeof_rec ofs = function
   | [] ->
@@ -448,6 +483,26 @@ let sizeof_struct env members =
         sizeof_rec (align ofs a + s) ml'
       end
   in sizeof_rec 0 members
+
+(* Simplified version to compute offsets on structs without bitfields *)
+let struct_layout env members =
+  let rec struct_layout_rec mem ofs = function
+    | [] ->
+        mem
+    | [ { fld_typ = TArray(_, None, _) } as m ] ->
+      (* C99: ty[] allowed as last field *)
+      begin match alignof env m.fld_typ with
+      | Some a -> ( m.fld_name,align ofs a)::mem
+      | None -> []
+      end
+    | m :: rem ->
+        match alignof env m.fld_typ, sizeof env m.fld_typ with
+        | Some a, Some s -> 
+            let offset = align ofs a in
+            struct_layout_rec ((m.fld_name,offset)::mem) (offset + s) rem
+        | _, _ -> []
+  in struct_layout_rec [] 0 members
+
 
 (* Determine whether a type is incomplete *)
 

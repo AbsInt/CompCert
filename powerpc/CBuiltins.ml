@@ -118,7 +118,16 @@ let builtins = {
       (TPtr (TVoid [],[]),[],false);
     (* isel *)
     "__builtin_isel",
-      (TInt (IInt, []),[TInt(IBool, []);TInt(IInt, []);TInt(IInt, [])],false)
+      (TInt (IInt, []),[TInt(IBool, []);TInt(IInt, []);TInt(IInt, [])],false);
+    (* atomic operations *)
+    "__builtin_atomic_exchange",
+      (TVoid [], [TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[])],false);
+    "__builtin_atomic_load",
+      (TVoid [], [TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[])],false);
+    "__builtin_atomic_compare_exchange",
+      (TInt (IBool, []), [TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[])],false);
+    "__builtin_sync_fetch_and_add",
+      (TInt (IInt, []),  [TPtr (TInt(IInt, []),[]);TInt(IInt, [])],false);
   ]
 }
 

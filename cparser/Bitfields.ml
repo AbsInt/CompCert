@@ -111,16 +111,16 @@ let pack_bitfields env sid ml =
           end
   in pack [] 0 ml
 
-let rec transf_members env id count = function
+let rec transf_struct_members env id count = function
   | [] -> []
   | m :: ms as ml ->
       if m.fld_bitfield = None then
-        m :: transf_members env id count ms
+        m :: transf_struct_members env id count ms
       else begin
         let (nbits, bitfields, ml') = pack_bitfields env id ml in
         if nbits = 0 then
           (* Lone zero-size bitfield: just ignore *)
-          transf_members env id count ml'
+          transf_struct_members env id count ml'
         else begin
           (* Create integer field of sufficient size for this bitfield group *)
           let carrier = sprintf "__bf%d" count in
@@ -134,6 +134,7 @@ let rec transf_members env id count = function
                   if !config.bitfields_msb_first
                   then sizeof_ikind carrier_ikind * 8 - pos - sz
                   else pos in
+                Debug.set_bitfield_offset id name pos carrier (sizeof_ikind carrier_ikind);
                 Hashtbl.add bitfield_table
                   (id, name)
                   {bf_carrier = carrier; bf_carrier_typ = carrier_typ;
@@ -143,14 +144,49 @@ let rec transf_members env id count = function
               end)
             bitfields;
           { fld_name = carrier; fld_typ = carrier_typ; fld_bitfield = None}
-          :: transf_members env id (count + 1) ml'
+          :: transf_struct_members env id (count + 1) ml'
         end
       end
 
+let rec transf_union_members env id count = function
+    [] -> []
+  | m :: ms ->
+      (match m.fld_bitfield with
+      | None ->  m::transf_union_members env id count ms
+      | Some nbits ->
+          let carrier = sprintf "__bf%d" count in
+          let carrier_ikind = unsigned_ikind_for_carrier nbits in
+          let carrier_typ = TInt(carrier_ikind, []) in
+          let signed =
+            match unroll env m.fld_typ with
+            | TInt(ik, _) -> is_signed_ikind ik
+            | TEnum(eid, _) -> is_signed_enum_bitfield env id m.fld_name eid nbits
+            | _ -> assert false (* should never happen, checked in Elab *) in
+          let signed2 =
+            match unroll env (type_of_member env m) with
+            | TInt(ik, _) -> is_signed_ikind ik
+            | _ -> assert false (* should never happen, checked in Elab *) in
+          let pos' =
+            if !config.bitfields_msb_first
+            then sizeof_ikind carrier_ikind * 8 - nbits
+            else 0 in
+          let is_bool =
+            match unroll env m.fld_typ with
+            | TInt(IBool, _) -> true
+            | _ -> false in
+          Hashtbl.add bitfield_table
+            (id, m.fld_name)
+            {bf_carrier = carrier; bf_carrier_typ = carrier_typ;
+             bf_pos = pos'; bf_size = nbits;
+             bf_signed = signed; bf_signed_res = signed2;
+             bf_bool = is_bool};
+          { fld_name = carrier; fld_typ = carrier_typ; fld_bitfield = None}
+          :: transf_struct_members env id (count + 1) ms)
+
 let transf_composite env su id attr ml =
   match su with
-  | Struct -> (attr, transf_members env id 1 ml)
-  | Union  -> (attr, ml)
+  | Struct -> (attr, transf_struct_members env id 1 ml)
+  | Union  -> (attr, transf_union_members env id 1 ml)
 
 (* Bitfield manipulation expressions *)
 
@@ -317,6 +353,7 @@ let rec is_bitfield_access env e =
   match e.edesc with
   | EUnop(Odot fieldname, e1) ->
       begin match unroll env e1.etyp with
+      | TUnion (id,_)
       | TStruct(id, _) ->
           (try Some(e1, Hashtbl.find bitfield_table (id, fieldname))
            with Not_found -> None)
