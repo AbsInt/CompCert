@@ -60,47 +60,7 @@ let typ_to_string (ty: typ) =
   Buffer.contents buf
 
 (* Helper functions for the attributes *)
-let strip_attributes typ =
-  let strip =  List.filter (fun a -> a = AConst || a = AVolatile) in 
-  match typ with
-  | TVoid at -> TVoid (strip at)
-  | TInt (k,at) ->  TInt (k,strip at)
-  | TFloat (k,at) -> TFloat(k,strip at)
-  | TPtr (t,at) -> TPtr(t,strip at)
-  | TArray (t,s,at) -> TArray(t,s,strip at)
-  | TFun (t,arg,v,at) -> TFun(t,arg,v,strip at)
-  | TNamed (n,at) -> TNamed(n,strip at)
-  | TStruct (n,at) -> TStruct(n,strip at)
-  | TUnion (n,at) -> TUnion(n,strip at)
-  | TEnum (n,at) -> TEnum(n,strip at)
-
-let strip_last_attribute typ  = 
-  let rec hd_opt l = match l with
-    [] -> None,[]
-  | AConst::rest -> Some AConst,rest
-  | AVolatile::rest -> Some AVolatile,rest 
-  | _::rest -> hd_opt rest in
-  match typ with
-  | TVoid at -> let l,r = hd_opt at in
-    l,TVoid r
-  | TInt (k,at) -> let l,r = hd_opt at in
-    l,TInt (k,r)
-  | TFloat (k,at) -> let l,r = hd_opt at in
-    l,TFloat (k,r)
-  | TPtr (t,at) -> let l,r = hd_opt at in
-    l,TPtr(t,r)
-  | TArray (t,s,at) -> let l,r = hd_opt at in
-    l,TArray(t,s,r)
-  | TFun (t,arg,v,at) -> let l,r = hd_opt at in
-    l,TFun(t,arg,v,r)
-  | TNamed (n,at) -> let l,r = hd_opt at in
-    l,TNamed(n,r)
-  | TStruct (n,at) -> let l,r = hd_opt at in
-    l,TStruct(n,r)
-  | TUnion (n,at) -> let l,r = hd_opt at in
-    l,TUnion(n,r)
-  | TEnum (n,at) -> let l,r = hd_opt at in
-    l,TEnum(n,r)
+let strip_attributes typ = strip_attributes_type typ [AConst;AVolatile]
 
 (* Does the type already exist? *)
 let exist_type (ty: typ) =
