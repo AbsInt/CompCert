@@ -60,7 +60,7 @@ let typ_to_string (ty: typ) =
   Buffer.contents buf
 
 (* Helper functions for the attributes *)
-let strip_attributes typ = strip_attributes_type typ [AConst;AVolatile]
+let strip_attributes typ = strip_attributes_type typ [AConst; AVolatile]
 
 (* Does the type already exist? *)
 let exist_type (ty: typ) =
@@ -536,20 +536,11 @@ let label_translation: (atom * positive, int) Hashtbl.t = Hashtbl.create 7
 let add_label atom p i =
   Hashtbl.add label_translation (atom,p) i
 
-(* Auxiliary data structures and functions *)
-module IntSet = Set.Make(struct
-  type t = int
-  let compare (x:int) (y:int) = compare x y
-end)
-
-let open_scopes: IntSet.t ref = ref IntSet.empty
-
 let open_scope atom s_id lbl =
   try
     let s_id = Hashtbl.find atom_to_scope (atom,s_id) in
     let old_r = try Hashtbl.find scope_ranges s_id with Not_found -> [] in
     let n_scop = { start_addr = Some lbl; end_addr = None;} in
-    open_scopes := IntSet.add s_id !open_scopes;
     Hashtbl.replace scope_ranges s_id (n_scop::old_r)
   with Not_found -> ()
 
@@ -564,7 +555,6 @@ let close_scope atom s_id lbl =
         | _ -> assert false (* We must have an opening scope *)
       end in
     let new_r = ({last_r with end_addr = Some lbl;})::rest in
-    open_scopes := IntSet.remove s_id !open_scopes;
     Hashtbl.replace scope_ranges s_id new_r
   with Not_found -> ()
 
@@ -589,10 +579,6 @@ let end_live_range (f,v) lbl =
 
 let stack_variable (f,v) (sp,loc) =
   Hashtbl.add var_locations (f,v) (FunctionLoc (sp,loc))
-
-let function_end atom loc =
-  IntSet.iter (fun id -> close_scope atom id loc) !open_scopes;
-  open_scopes := IntSet.empty
 
 let compilation_section_start: (string,int) Hashtbl.t = Hashtbl.create 7
 let compilation_section_end: (string,int) Hashtbl.t = Hashtbl.create 7

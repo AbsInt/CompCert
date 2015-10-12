@@ -20,39 +20,40 @@ open BinNums
 (* Record used for stroring references to the actual implementation functions *)
 type implem = 
     {
-     mutable init: string -> unit;
-     mutable atom_global: ident -> atom -> unit;
-     mutable set_composite_size: ident -> struct_or_union -> int option -> unit;
-     mutable set_member_offset: ident -> string -> int -> unit;
-     mutable set_bitfield_offset: ident -> string -> int -> string -> int -> unit;
-     mutable insert_global_declaration: Env.t -> globdecl -> unit;
-     mutable add_fun_addr: atom -> (int * int) -> unit;
-     mutable generate_debug_info: (atom -> string) -> string -> debug_entries option;
-     mutable all_files_iter: (string -> unit) -> unit;
-     mutable insert_local_declaration:  storage -> ident -> typ -> location -> unit;
-     mutable atom_local_variable: ident -> atom -> unit;
-     mutable enter_scope: int -> int -> int -> unit;
-     mutable enter_function_scope: int -> int -> unit;
-     mutable add_lvar_scope: int -> ident -> int -> unit;
-     mutable open_scope: atom -> int -> positive -> unit;
-     mutable close_scope: atom -> int -> positive -> unit;
-     mutable start_live_range: (atom * atom) -> positive -> int * int builtin_arg -> unit;
-     mutable end_live_range: (atom * atom) -> positive -> unit;
-     mutable stack_variable: (atom * atom) -> int * int builtin_arg -> unit;
-     mutable function_end: atom -> positive -> unit;
-     mutable add_label: atom -> positive -> int -> unit;
-     mutable atom_parameter: ident -> ident -> atom -> unit;
-     mutable add_compilation_section_start: string -> int -> unit;
-     mutable add_compilation_section_end: string -> int -> unit;
-     mutable compute_diab_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit;
-     mutable compute_gnu_file_enum: (string -> unit) -> unit;
-     mutable exists_section: string -> bool;
-     mutable remove_unused: ident -> unit;
-     mutable variable_printed: string -> unit;
-     mutable add_diab_info: string -> (int * int * string) -> unit;
+     init: string -> unit;
+     atom_global: ident -> atom -> unit;
+     set_composite_size: ident -> struct_or_union -> int option -> unit;
+     set_member_offset: ident -> string -> int -> unit;
+     set_bitfield_offset: ident -> string -> int -> string -> int -> unit;
+     insert_global_declaration: Env.t -> globdecl -> unit;
+     add_fun_addr: atom -> (int * int) -> unit;
+     generate_debug_info: (atom -> string) -> string -> debug_entries option;
+     all_files_iter: (string -> unit) -> unit;
+     insert_local_declaration:  storage -> ident -> typ -> location -> unit;
+     atom_local_variable: ident -> atom -> unit;
+     enter_scope: int -> int -> int -> unit;
+     enter_function_scope: int -> int -> unit;
+     add_lvar_scope: int -> ident -> int -> unit;
+     open_scope: atom -> int -> positive -> unit;
+     close_scope: atom -> int -> positive -> unit;
+     start_live_range: (atom * atom) -> positive -> int * int builtin_arg -> unit;
+     end_live_range: (atom * atom) -> positive -> unit;
+     stack_variable: (atom * atom) -> int * int builtin_arg -> unit;
+     add_label: atom -> positive -> int -> unit;
+     atom_parameter: ident -> ident -> atom -> unit;
+     add_compilation_section_start: string -> int -> unit;
+     add_compilation_section_end: string -> int -> unit;
+     compute_diab_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit;
+     compute_gnu_file_enum: (string -> unit) -> unit;
+     exists_section: string -> bool;
+     remove_unused: ident -> unit;
+     variable_printed: string -> unit;
+     add_diab_info: string -> (int * int * string) -> unit;
    }
 
-val implem: implem
+val default_implem: implem
+
+val implem: implem ref
 
 val init_compile_unit: string -> unit
 val atom_global: ident -> atom -> unit
@@ -72,7 +73,6 @@ val close_scope: atom -> int -> positive -> unit
 val start_live_range: (atom * atom) -> positive -> (int * int builtin_arg) -> unit
 val end_live_range: (atom * atom) -> positive -> unit
 val stack_variable: (atom * atom) -> int * int builtin_arg -> unit
-val function_end: atom -> positive -> unit
 val add_label: atom -> positive -> int -> unit
 val generate_debug_info: (atom -> string) -> string -> debug_entries option
 val atom_parameter: ident -> ident -> atom -> unit

@@ -94,8 +94,7 @@ let expand_debug id sp preg simple l =
         lbl
     | Some lbl -> lbl in
   let rec  aux lbl scopes = function
-    | [] -> let lbl = get_lbl lbl in
-      Debug.function_end id lbl
+    | [] -> ()
     | (Pbuiltin(EF_debug (kind,txt,_x),args,_) as i)::rest ->
         let kind = (P.to_int kind) in
         begin
