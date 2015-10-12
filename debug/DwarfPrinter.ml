@@ -559,11 +559,6 @@ module DwarfPrinter(Target: DWARF_TARGET):
           if e.children <> [] then
           print_sleb128 oc 0) entry
 
-    (* Print the debug abbrev section *)
-    let print_debug_abbrev oc entries =
-      List.iter (fun (_,_,_,e,_) -> compute_abbrev e) entries;
-      print_abbrev oc
-
     (* Print the debug info section *)
     let print_debug_info oc start line_start entry  =
       Hashtbl.reset entry_labels;
@@ -608,13 +603,14 @@ module DwarfPrinter(Target: DWARF_TARGET):
 
     let print_diab_entries oc entries =
       let abbrev_start = new_label () in
-      abbrev_start_addr := abbrev_start;  
-      print_debug_abbrev oc entries;
-      List.iter (fun (s,d,l,e,_) ->
-        section oc (Section_debug_info s);      
-        print_debug_info oc d l e) entries;
+      abbrev_start_addr := abbrev_start;
+      List.iter (fun e -> compute_abbrev e.entry) entries;
+      print_abbrev oc;
+      List.iter (fun e ->
+        section oc (Section_debug_info e.section_name);      
+        print_debug_info oc e.start_label e.line_label e.entry) entries;
       section oc Section_debug_loc;
-      List.iter (fun (_,_,_,_,l) -> print_location_list oc l) entries
+      List.iter (fun e -> print_location_list oc e.locs) entries
 
     let print_gnu_entries oc cp loc =
       compute_abbrev cp;

@@ -249,7 +249,16 @@ type location_entry =
    }
 type dw_locations = int option * location_entry list
 
-type diab_entries =  (string * int * int * dw_entry * dw_locations) list
+type diab_entry =
+    {
+     section_name: string;
+     start_label:  int;
+     line_label:   int;
+     entry:        dw_entry;
+     locs:         dw_locations;
+   }
+
+type diab_entries =  diab_entry list
 
 type gnu_entries = dw_entry * dw_locations
 

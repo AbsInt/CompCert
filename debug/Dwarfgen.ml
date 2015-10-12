@@ -463,7 +463,14 @@ let gen_diab_debug_info sec_name var_section : debug_entries =
     } in
     let cp = new_entry (next_id ()) (DW_TAG_compile_unit cp) in
     let cp = add_children cp ((gen_types (diab_file_loc s) ty) @ defs) in
-    (s,debug_start,line_start,cp,(Some low_pc,locs))::acc) defs [] in
+    let entry = {
+      section_name = s;
+      start_label = debug_start;
+      line_label = line_start;
+      entry = cp;
+      locs = Some low_pc,locs;
+    } in
+    entry::acc) defs [] in
   Diab entries
 
 let gnu_file_loc (f,l) =
