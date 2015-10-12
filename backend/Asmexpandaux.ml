@@ -133,6 +133,7 @@ let expand_debug id sp preg simple l =
           | _ ->
               aux None scopes rest
         end
+    | (Plabel lbl)::rest -> simple (Plabel lbl); aux (Some lbl) scopes rest 
     | i::rest -> simple i; aux None scopes rest in
   (* We need to move all closing debug annotations before the last real statement *)
   let rec move_debug acc bcc = function
