@@ -473,22 +473,6 @@ let set_bitfield_offset str field offset underlying size =
         comp.ct_members in
     {comp with ct_members = members;})
 
-let atom_global_variable id atom = 
-  try
-    let id,var = find_gvar_stamp id.stamp in
-    replace_var id ({var with gvar_atom = Some atom;});
-    Hashtbl.add atom_to_definition atom id 
-  with Not_found -> ()
-    
-let atom_function id atom =
-  try
-    let id',f = find_fun_stamp id.stamp in
-    replace_fun id' ({f with fun_atom = Some atom;});
-    Hashtbl.add atom_to_definition atom id';
-    Hashtbl.iter (fun (fid,sid) tid -> if fid = id.stamp then 
-      Hashtbl.add atom_to_scope (atom,sid) tid) scope_to_local
-  with Not_found -> ()
-
 let atom_global id atom =
   try
     let id' = (Hashtbl.find stamp_to_definition id.stamp) in
@@ -500,8 +484,7 @@ let atom_global id atom =
         Hashtbl.iter (fun (fid,sid) tid -> if fid = id.stamp then 
           Hashtbl.add atom_to_scope (atom,sid) tid) scope_to_local
     | GlobalVariable var ->
-        replace_var id' ({var with gvar_atom = Some atom;});
-        Hashtbl.add atom_to_definition atom id'
+        replace_var id' ({var with gvar_atom = Some atom;})
   with Not_found -> ()
 
 let atom_parameter fid id atom =
