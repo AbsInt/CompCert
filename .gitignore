@@ -14,8 +14,6 @@
 ccomp
 ccomp.byte
 ccomp.prof
-cchecklink
-cchecklink.byte
 clightgen
 clightgen.byte
 tools/ndfun
