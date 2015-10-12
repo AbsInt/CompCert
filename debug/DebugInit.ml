@@ -20,8 +20,7 @@ open Debug
 
 let init_debug () =
   implem.init <- DebugInformation.init;
-  implem.atom_function <- DebugInformation.atom_function;
-  implem.atom_global_variable <- DebugInformation.atom_global_variable;
+  implem.atom_global <- DebugInformation.atom_global;
   implem.set_composite_size <- DebugInformation.set_composite_size;
   implem.set_member_offset <- DebugInformation.set_member_offset;
   implem.set_bitfield_offset <- DebugInformation.set_bitfield_offset;
@@ -43,7 +42,6 @@ let init_debug () =
   implem.start_live_range <- DebugInformation.start_live_range;
   implem.end_live_range <- DebugInformation.end_live_range;
   implem.stack_variable <- DebugInformation.stack_variable;
-  implem.function_end <- DebugInformation.function_end;
   implem.add_label <- DebugInformation.add_label;
   implem.atom_parameter <- DebugInformation.atom_parameter;
   implem.add_compilation_section_start <- DebugInformation.add_compilation_section_start;
@@ -57,8 +55,7 @@ let init_debug () =
 
 let init_none () =
   implem.init <- (fun _ -> ());
-  implem.atom_function <- (fun _ _ -> ());
-  implem.atom_global_variable <- (fun _ _ -> ());
+  implem.atom_global <- (fun _ _ -> ());
   implem.set_composite_size <- (fun _ _ _ -> ());
   implem.set_member_offset <- (fun _ _ _ -> ());
   implem.set_bitfield_offset <- (fun _ _ _ _ _ -> ());
@@ -76,7 +73,6 @@ let init_none () =
   implem.start_live_range <- (fun _ _ _ -> ());
   implem.end_live_range <- (fun _ _ -> ());
   implem.stack_variable <- (fun _ _ -> ());
-  implem.function_end <- (fun _ _ -> ());
   implem.add_label <- (fun _ _ _ -> ());
   implem.atom_parameter <- (fun _ _ _ -> ());
   implem.add_compilation_section_start <- (fun _ _ -> ());

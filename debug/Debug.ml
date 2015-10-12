@@ -23,8 +23,7 @@ open DwarfTypes
 type implem = 
     {
      mutable init: string -> unit;
-     mutable atom_function: ident -> atom -> unit;
-     mutable atom_global_variable: ident -> atom -> unit;
+     mutable atom_global: ident -> atom -> unit;
      mutable set_composite_size: ident -> struct_or_union -> int option -> unit;
      mutable set_member_offset: ident -> string -> int -> unit;
      mutable set_bitfield_offset: ident -> string -> int -> string -> int -> unit;
@@ -58,8 +57,7 @@ type implem =
 let implem =
   {
    init = (fun _ -> ());
-   atom_function = (fun _ _ -> ());
-   atom_global_variable = (fun _ _ -> ());
+   atom_global = (fun _ _ -> ());
    set_composite_size = (fun _ _ _ -> ());
    set_member_offset = (fun _ _  _ -> ());
    set_bitfield_offset = (fun _ _ _ _ _ -> ());
@@ -91,8 +89,7 @@ let implem =
 }
 
 let init_compile_unit name = implem.init name
-let atom_function id atom = implem.atom_function id atom
-let atom_global_variable id atom = implem.atom_global_variable id atom
+let atom_global id atom = implem.atom_global id atom
 let set_composite_size id sou size = implem.set_composite_size id sou size
 let set_member_offset id field off = implem.set_member_offset id field off
 let set_bitfield_offset id field off underlying size = implem.set_bitfield_offset id field off underlying size

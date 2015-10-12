@@ -21,8 +21,7 @@ open BinNums
 type implem = 
     {
      mutable init: string -> unit;
-     mutable atom_function: ident -> atom -> unit;
-     mutable atom_global_variable: ident -> atom -> unit;
+     mutable atom_global: ident -> atom -> unit;
      mutable set_composite_size: ident -> struct_or_union -> int option -> unit;
      mutable set_member_offset: ident -> string -> int -> unit;
      mutable set_bitfield_offset: ident -> string -> int -> string -> int -> unit;
@@ -56,8 +55,7 @@ type implem =
 val implem: implem
 
 val init_compile_unit: string -> unit
-val atom_function: ident -> atom -> unit
-val atom_global_variable: ident -> atom -> unit
+val atom_global: ident -> atom -> unit
 val set_composite_size: ident -> struct_or_union -> int option -> unit
 val set_member_offset: ident -> string -> int -> unit
 val set_bitfield_offset: ident -> string -> int -> string -> int -> unit

@@ -302,9 +302,6 @@ let local_variables: (int, local_information) Hashtbl.t = Hashtbl.create 7
 (* Mapping from stampt to the debug id of the local variable *)
 let stamp_to_local: (int,int) Hashtbl.t = Hashtbl.create 7
 
-(* Mapping form atom to the debug id of the local variable *)
-let atom_to_local: (atom, int) Hashtbl.t = Hashtbl.create 7
-
 (* Map from scope id + function id to debug id *)
 let scope_to_local: (int * int,int) Hashtbl.t = Hashtbl.create 7
 
@@ -492,6 +489,21 @@ let atom_function id atom =
       Hashtbl.add atom_to_scope (atom,sid) tid) scope_to_local
   with Not_found -> ()
 
+let atom_global id atom =
+  try
+    let id' = (Hashtbl.find stamp_to_definition id.stamp) in
+    let g = Hashtbl.find definitions id' in
+    match g with
+    | Function f ->    
+        replace_fun id' ({f with fun_atom = Some atom;});
+        Hashtbl.add atom_to_definition atom id';
+        Hashtbl.iter (fun (fid,sid) tid -> if fid = id.stamp then 
+          Hashtbl.add atom_to_scope (atom,sid) tid) scope_to_local
+    | GlobalVariable var ->
+        replace_var id' ({var with gvar_atom = Some atom;});
+        Hashtbl.add atom_to_definition atom id'
+  with Not_found -> ()
+
 let atom_parameter fid id atom =
   try
     let fid',f = find_fun_stamp fid.stamp in
@@ -509,8 +521,7 @@ let add_fun_addr atom (high,low) =
 let atom_local_variable id atom =
   try
     let id,var = find_lvar_stamp id.stamp in
-    replace_lvar id ({var with lvar_atom = Some atom;});
-    Hashtbl.add atom_to_local atom id
+    replace_lvar id ({var with lvar_atom = Some atom;})
   with Not_found -> ()
 
 let add_lvar_scope f_id var_id s_id =
@@ -589,7 +600,6 @@ module IntSet = Set.Make(struct
 end)
 
 let open_scopes: IntSet.t ref = ref IntSet.empty
-let open_vars: atom list ref = ref []
 
 let open_scope atom s_id lbl =
   try
@@ -620,7 +630,6 @@ let start_live_range (f,v) lbl loc =
   match old_r with
   | RangeLoc old_r ->
       let n_r = { range_start = Some lbl; range_end = None; var_loc = loc } in
-      open_vars := v::!open_vars;
       Hashtbl.replace var_locations (f,v) (RangeLoc (n_r::old_r))
   | _ -> () (* Parameter that is passed as variable *)
 
@@ -640,9 +649,7 @@ let stack_variable (f,v) (sp,loc) =
 
 let function_end atom loc =
   IntSet.iter (fun id -> close_scope atom id loc) !open_scopes;
-  open_scopes := IntSet.empty;
-  List.iter (fun id-> end_live_range (atom,id) loc) !open_vars;
-  open_vars:= []
+  open_scopes := IntSet.empty
 
 let compilation_section_start: (string,int) Hashtbl.t = Hashtbl.create 7
 let compilation_section_end: (string,int) Hashtbl.t = Hashtbl.create 7
@@ -690,7 +697,6 @@ let init name =
   Hashtbl.reset atom_to_definition;
   Hashtbl.reset local_variables;
   Hashtbl.reset stamp_to_local;
-  Hashtbl.reset atom_to_local;
   Hashtbl.reset scope_to_local;
   Hashtbl.reset atom_to_scope;
   Hashtbl.reset compilation_section_start;
