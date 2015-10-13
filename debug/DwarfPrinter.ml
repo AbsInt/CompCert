@@ -602,7 +602,8 @@ module DwarfPrinter(Target: DWARF_TARGET):
       List.iter (fun e -> compute_abbrev e.entry) entries;
       print_abbrev oc;
       List.iter (fun e ->
-        section oc (Section_debug_info e.section_name);      
+        let name = if e.section_name <> ".text" then Some e.section_name else None in
+        section oc (Section_debug_info name);      
         print_debug_info oc e.start_label e.line_label e.entry) entries;
       section oc Section_debug_loc;
       List.iter (fun e -> print_location_list oc e.locs) entries
@@ -613,12 +614,12 @@ module DwarfPrinter(Target: DWARF_TARGET):
       and start = new_label ()
       and  abbrev_start = new_label () in
       abbrev_start_addr := abbrev_start;
-      section oc (Section_debug_info "");
+      section oc (Section_debug_info None);
       print_debug_info oc start line_start cp;
       print_abbrev oc;
       section oc Section_debug_loc;
       print_location_list oc loc;
-      section oc (Section_debug_line "");
+      section oc (Section_debug_line None);
       print_label oc line_start;
       section oc Section_debug_str;
       List.iter (fun (id,s) ->

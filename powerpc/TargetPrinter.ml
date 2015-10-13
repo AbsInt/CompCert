@@ -218,20 +218,25 @@ module Diab_System : SYSTEM =
             | true, false -> 'd'                (* data *)
             | false, true -> 'c'                (* text *)
             | false, false -> 'r')              (* const *)
-      | Section_debug_info s -> sprintf ".section	.debug_info%s,,n" (if s <> ".text" then s else "")
+      | Section_debug_info (Some s) ->
+          sprintf ".section	.debug_info%s,,n" s
+      | Section_debug_info None ->
+          sprintf ".section	.debug_info,,n"
       | Section_debug_abbrev -> ".section	.debug_abbrev,,n"
       | Section_debug_loc -> ".section	.debug_loc,,n"
-      | Section_debug_line s -> sprintf ".section	.debug_line.%s,,n\n" s
+      | Section_debug_line (Some s) ->
+          sprintf ".section	.debug_line.%s,,n\n" s
+      | Section_debug_line None ->
+          sprintf ".section	.debug_line,,n\n"
       | Section_debug_str -> assert false (* Should not be used *)
 
     let section oc sec =
       let name = name_of_section sec in
       assert (name <> "COMM");
       match sec with
-      | Section_debug_info s ->
+      | Section_debug_info (Some s) ->
           fprintf oc "	%s\n" name;
-          if s <> ".text" then
-            fprintf oc "	.sectionlink	.debug_info\n"
+          fprintf oc "	.sectionlink	.debug_info\n"
       | _ ->
           fprintf oc "	%s\n" name
 
@@ -263,6 +268,7 @@ module Diab_System : SYSTEM =
             Debug.add_diab_info name (line_start,debug_info,name_of_section sec);
             Debug.add_compilation_section_start name low_pc;
             let line_name = ".debug_line" ^(if name <> ".text" then name else "") in 
+            section oc (Section_debug_line (if name <> ".text" then Some name else None));
             fprintf oc "	.section	%s,,n\n" line_name;
             if name <> ".text" then
               fprintf oc "	.sectionlink	.debug_line\n";
