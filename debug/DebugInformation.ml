@@ -62,12 +62,6 @@ let typ_to_string (ty: typ) =
 (* Helper functions for the attributes *)
 let strip_attributes typ = strip_attributes_type typ [AConst; AVolatile]
 
-(* Does the type already exist? *)
-let exist_type (ty: typ) =
-  (* We are only interrested in Const and Volatile *)
-  let ty = strip_attributes ty in
-  Hashtbl.mem lookup_types (typ_to_string ty)
-
 (* Find the type id to an type *)
 let find_type (ty: typ) =
   (* We are only interrested in Const and Volatile *)
@@ -227,6 +221,7 @@ let name_to_definition: (string,int) Hashtbl.t = Hashtbl.create 7
 (* Mapping from atom to debug id *)
 let atom_to_definition: (atom, int) Hashtbl.t = Hashtbl.create 7
 
+(* Various lookup functions for defintions *)
 let find_gvar_stamp id =
   let id = (Hashtbl.find stamp_to_definition id) in
   let var = Hashtbl.find definitions id in
@@ -636,4 +631,4 @@ let init name =
   Hashtbl.reset scope_ranges;
   Hashtbl.reset label_translation;
   all_files := StringSet.singleton name;
-  printed_vars := StringSet.empty;
+  printed_vars := StringSet.empty
