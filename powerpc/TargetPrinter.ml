@@ -126,7 +126,8 @@ module Linux_System : SYSTEM =
       | Section_debug_info _ -> ".section	.debug_info,\"\",@progbits"
       | Section_debug_abbrev -> ".section	.debug_abbrev,\"\",@progbits"
       | Section_debug_loc -> ".section	.debug_loc,\"\",@progbits"
-      | Section_debug_line _ ->  ".section	.debug_line,\"\",@progbits\n"
+      | Section_debug_line _ ->  ".section	.debug_line,\"\",@progbits"
+      | Section_debug_str -> ".section	.debug_str,\"MS\",@progbits,1"
 
 
     let section oc sec =
@@ -221,6 +222,7 @@ module Diab_System : SYSTEM =
       | Section_debug_abbrev -> ".section	.debug_abbrev,,n"
       | Section_debug_loc -> ".section	.debug_loc,,n"
       | Section_debug_line s -> sprintf ".section	.debug_line.%s,,n\n" s
+      | Section_debug_str -> assert false (* Should not be used *)
 
     let section oc sec =
       let name = name_of_section sec in

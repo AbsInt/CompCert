@@ -105,8 +105,9 @@ module Cygwin_System : SYSTEM =
       | Section_debug_info _ -> ".section	.debug_info,\"dr\""
       | Section_debug_loc ->  ".section	.debug_loc,\"dr\""
       | Section_debug_line _ -> ".section	.debug_line,\"dr\""
-      | Section_debug_abbrev -> ".section	.debug_abbrev,\"dr\"" (* Dummy value *)
-
+      | Section_debug_abbrev -> ".section	.debug_abbrev,\"dr\""
+      | Section_debug_str-> assert false (* Should not be used *) 
+    
     let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
 
     let print_align oc n =
@@ -157,6 +158,7 @@ module ELF_System : SYSTEM =
       | Section_debug_loc -> ".section	.debug_loc,\"\",@progbits"
       | Section_debug_line _ -> ".section	.debug_line,\"\",@progbits"
       | Section_debug_abbrev -> ".section	.debug_abbrev,\"\",@progbits"
+      | Section_debug_str -> ".section	.debug_str,\"MS\",@progbits,1"
             
     let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
                     
@@ -210,6 +212,7 @@ module MacOS_System : SYSTEM =
       | Section_debug_info _ ->	".section	__DWARF,__debug_info,regular,debug"
       | Section_debug_loc  -> ".section	__DWARF,__debug_loc,regular,debug"
       | Section_debug_line _ -> ".section	__DWARF,__debug_line,regular,debug"
+      | Section_debug_str -> ".section	__DWARF,__debug_str,regular,debug"
       | Section_debug_abbrev -> ".section	__DWARF,__debug_abbrev,regular,debug" (* Dummy value *)
     
     

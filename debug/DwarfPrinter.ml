@@ -57,8 +57,6 @@ module DwarfPrinter(Target: DWARF_TARGET):
 
     let add_type = add_abbr_entry (0x49,type_abbr)
 
-    let add_name = add_abbr_entry (0x3,name_type_abbr)
-
     let add_byte_size = add_abbr_entry (0xb,byte_size_type_abbr)
 
     let add_member_size = add_abbr_entry (0xb,member_size_abbr)
@@ -69,6 +67,16 @@ module DwarfPrinter(Target: DWARF_TARGET):
 
     let add_declaration = add_abbr_entry (0x3c,declaration_type_abbr)
 
+    let add_string buf id = function
+      | Simple_string _ -> add_abbr_entry (id,dw_form_string) buf
+      | Offset_string _ -> add_abbr_entry (id,dw_form_strp) buf
+
+    let add_name buf = add_string buf 0x3
+
+    let add_name_opt buf = function
+      | None -> ()
+      | Some s -> add_name buf s
+
     let add_location loc buf =
       match loc with
       | None -> ()
@@ -76,6 +84,8 @@ module DwarfPrinter(Target: DWARF_TARGET):
       | Some (LocList _ )
       | Some (LocSymbol _)
       | Some (LocSimple _) -> add_abbr_entry (0x2,location_block_type_abbr) buf
+
+   
 
     (* Dwarf entity to string function *)
     let abbrev_string_of_entity entity has_sibling =
@@ -100,15 +110,15 @@ module DwarfPrinter(Target: DWARF_TARGET):
           prologue 0x24;
           add_byte_size buf;
           add_attr_some b.base_type_encoding (add_abbr_entry (0x3e,encoding_type_abbr));
-          add_name buf
+          add_name buf b.base_type_name;
       | DW_TAG_compile_unit e ->
           prologue 0x11;
-          add_abbr_entry (0x1b,comp_dir_type_abbr) buf;
+          add_string buf 0x1b e.compile_unit_dir;
           add_low_pc buf;
           add_high_pc buf;
           add_abbr_entry (0x13,language_type_abbr) buf;
-          add_name buf;
-          add_abbr_entry (0x25,producer_type_abbr) buf;
+          add_name buf e.compile_unit_name;
+          add_string buf 0x25 e.compile_unit_prod_name;
           add_abbr_entry (0x10,stmt_list_type_abbr) buf;
       | DW_TAG_const_type _ ->
           prologue 0x26;
@@ -118,22 +128,22 @@ module DwarfPrinter(Target: DWARF_TARGET):
           add_attr_some e.enumeration_file_loc add_file_loc;
           add_byte_size buf;
           add_attr_some e.enumeration_declaration add_declaration;
-          add_attr_some e.enumeration_name add_name
+          add_name buf e.enumeration_name
       | DW_TAG_enumerator e ->
           prologue 0x28;
           add_abbr_entry (0x1c,value_type_abbr) buf;
-          add_name buf
+          add_name buf e.enumerator_name
       | DW_TAG_formal_parameter e ->
           prologue 0x5;
           add_attr_some e.formal_parameter_artificial (add_abbr_entry (0x34,artificial_type_abbr));
-          add_attr_some e.formal_parameter_name add_name;
+          add_name_opt buf e.formal_parameter_name;
           add_type buf;
           add_attr_some e.formal_parameter_variable_parameter (add_abbr_entry (0x4b,variable_parameter_type_abbr));
           add_location  e.formal_parameter_location buf
-      | DW_TAG_label _ ->
+      | DW_TAG_label e ->
           prologue 0xa;
           add_low_pc buf;
-          add_name buf;
+          add_name buf e.label_name;
       | DW_TAG_lexical_block a ->
           prologue 0xb;
           add_attr_some a.lexical_block_high_pc add_high_pc;
@@ -144,7 +154,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
           add_attr_some e.member_bit_offset (add_abbr_entry (0xc,bit_offset_type_abbr));
           add_attr_some e.member_bit_size (add_abbr_entry (0xd,bit_size_type_abbr));
           add_attr_some e.member_declaration add_declaration;
-          add_attr_some e.member_name add_name;
+          add_name buf e.member_name;
           add_type buf;
           (match e.member_data_member_location with
           | None -> ()
@@ -158,14 +168,14 @@ module DwarfPrinter(Target: DWARF_TARGET):
           add_attr_some e.structure_file_loc add_file_loc;
           add_attr_some e.structure_byte_size add_member_size;
           add_attr_some e.structure_declaration add_declaration;
-          add_attr_some e.structure_name add_name
+          add_name_opt buf e.structure_name
       | DW_TAG_subprogram e ->
           prologue 0x2e;
           add_file_loc buf;
           add_attr_some e.subprogram_external (add_abbr_entry (0x3f,external_type_abbr));
           add_attr_some e.subprogram_high_pc add_high_pc;
           add_attr_some e.subprogram_low_pc add_low_pc;
-          add_name buf;
+          add_name buf e.subprogram_name;
           add_abbr_entry (0x27,prototyped_type_abbr) buf;
           add_attr_some e.subprogram_type add_type;
       | DW_TAG_subrange_type e ->
@@ -182,14 +192,14 @@ module DwarfPrinter(Target: DWARF_TARGET):
       | DW_TAG_typedef e ->
           prologue 0x16;
           add_attr_some e.typedef_file_loc add_file_loc;
-          add_name buf;
+          add_name buf e.typedef_name;
           add_type buf
       | DW_TAG_union_type e ->
           prologue 0x17;
           add_attr_some e.union_file_loc add_file_loc;
           add_attr_some e.union_byte_size add_member_size;
           add_attr_some e.union_declaration add_declaration;
-          add_attr_some e.union_name add_name
+          add_name_opt buf e.union_name
       | DW_TAG_unspecified_parameter e ->
           prologue 0x18;
           add_attr_some e.unspecified_parameter_artificial (add_abbr_entry (0x34,artificial_type_abbr))
@@ -199,7 +209,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
           add_attr_some e.variable_declaration add_declaration;
           add_attr_some e.variable_external (add_abbr_entry (0x3f,external_type_abbr));
           add_location  e.variable_location buf;
-          add_name buf;
+          add_name buf e.variable_name;
           add_type buf
       | DW_TAG_volatile_type _ ->
           prologue 0x35;
@@ -289,8 +299,10 @@ module DwarfPrinter(Target: DWARF_TARGET):
     let print_flag oc b =
       output_string oc (string_of_byte b)
 
-    let print_string oc s =
-      fprintf oc "	.asciz		\"%s\"\n" s
+    let print_string oc = function
+      | Simple_string s ->
+          fprintf oc "	.asciz		\"%s\"\n" s
+      | Offset_string o ->  print_loc_ref oc o
 
     let print_uleb128 oc d =
       fprintf oc "	.uleb128	%d\n" d
@@ -401,19 +413,12 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_string oc bt.base_type_name
 
     let print_compilation_unit oc tag =
-      let version_string =  
-        if Version.buildnr <> "" && Version.tag <> "" then
-          sprintf "%s, Build: %s, Tag: %s" Version.version Version.buildnr Version.tag
-        else
-          Version.version in
-      let prod_name = sprintf "AbsInt Angewandte Informatik GmbH:CompCert Version %s:(%s,%s,%s,%s)" 
-          version_string Configuration.arch Configuration.system Configuration.abi Configuration.model in
-      print_string oc (Sys.getcwd ());
+      print_string oc tag.compile_unit_dir;
       print_addr oc tag.compile_unit_low_pc;
       print_addr oc tag.compile_unit_high_pc;
       print_uleb128 oc 1;
       print_string oc tag.compile_unit_name;
-      print_string oc prod_name;
+      print_string oc tag.compile_unit_prod_name;
       print_addr oc !debug_stmt_list
 
     let print_const_type oc ct =
@@ -423,7 +428,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_file_loc oc et.enumeration_file_loc;
       print_uleb128 oc et.enumeration_byte_size;
       print_opt_value oc et.enumeration_declaration print_flag;
-      print_opt_value oc et.enumeration_name print_string
+      print_string oc et.enumeration_name
 
     let print_enumerator oc en =
       print_sleb128 oc en.enumerator_value;
@@ -450,7 +455,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_opt_value oc mb.member_bit_offset print_byte;
       print_opt_value oc mb.member_bit_size print_byte;
       print_opt_value oc mb.member_declaration print_flag;
-      print_opt_value oc mb.member_name print_string;
+      print_string oc mb.member_name;
       print_ref oc mb.member_type;
       print_opt_value oc mb.member_data_member_location print_data_location
 
@@ -602,7 +607,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       section oc Section_debug_loc;
       List.iter (fun e -> print_location_list oc e.locs) entries
 
-    let print_gnu_entries oc cp loc =
+    let print_gnu_entries oc cp loc s =
       compute_abbrev cp;
       let line_start = new_label ()
       and start = new_label ()
@@ -614,11 +619,16 @@ module DwarfPrinter(Target: DWARF_TARGET):
       section oc Section_debug_loc;
       print_location_list oc loc;
       section oc (Section_debug_line "");
-      print_label oc line_start
+      print_label oc line_start;
+      section oc Section_debug_str;
+      List.iter (fun (id,s) ->
+        print_label oc (loc_to_label id);
+        fprintf oc "	.asciz		\"%s\"\n" s) s
+
 
     (* Print the debug info and abbrev section *)
     let print_debug oc = function
       | Diab entries -> print_diab_entries oc entries
-      | Gnu (cp,loc) -> print_gnu_entries oc cp loc
+      | Gnu (cp,loc,s) -> print_gnu_entries oc cp loc s
 
   end
