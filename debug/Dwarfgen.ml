@@ -107,7 +107,6 @@ let pointer_to_entry id p =
 
 let array_to_entry id arr =
   let arr_tag = {
-    array_type_file_loc = None;
     array_type = arr.arr_type;
   } in
   let arr_entry = new_entry id (DW_TAG_array_type arr_tag) in
@@ -134,7 +133,6 @@ let enum_to_entry file id e =
   let enumerator_to_entry e =
     let tag =
       {
-       enumerator_file_loc = None;
        enumerator_value = Int64.to_int (e.enumerator_const);
        enumerator_name = e.enumerator_name;
      } in
@@ -153,14 +151,12 @@ let enum_to_entry file id e =
 let fun_type_to_entry id f =
   let children = if f.fun_prototyped then
     let u = {
-      unspecified_parameter_file_loc = None;
       unspecified_parameter_artificial = None;
     } in
     [new_entry (next_id ()) (DW_TAG_unspecified_parameter u)]
   else
     List.map (fun p ->
       let fp = {
-        formal_parameter_file_loc = None;
         formal_parameter_artificial = None;
         formal_parameter_name = if p.param_name <> "" then Some p.param_name else None;
         formal_parameter_type = p.param_type;
@@ -178,7 +174,6 @@ let fun_type_to_entry id f =
 
 let member_to_entry mem =
   let mem = {
-    member_file_loc = None;
     member_byte_size = mem.cfd_byte_size;
     member_bit_offset = mem.cfd_bit_offset;
     member_bit_size = mem.cfd_bit_size;
@@ -353,7 +348,6 @@ let location_entry f_id atom =
 let function_parameter_to_entry f_id (acc,bcc) p =
   let loc,loc_list = location_entry f_id (get_opt_val p.parameter_atom) in
   let p = {
-    formal_parameter_file_loc = None;
     formal_parameter_artificial = None;
     formal_parameter_name = Some p.parameter_name;
     formal_parameter_type = p.parameter_type;

@@ -95,7 +95,6 @@ module DwarfPrinter(Target: DWARF_TARGET):
       (match entity.tag with
       | DW_TAG_array_type e ->
           prologue 0x1;
-          add_attr_some e.array_type_file_loc add_file_loc;
           add_type buf
       | DW_TAG_base_type b ->
           prologue 0x24;
@@ -122,12 +121,10 @@ module DwarfPrinter(Target: DWARF_TARGET):
           add_attr_some e.enumeration_name add_name
       | DW_TAG_enumerator e ->
           prologue 0x28;
-          add_attr_some e.enumerator_file_loc add_file_loc;
           add_abbr_entry (0x1c,value_type_abbr) buf;
           add_name buf
       | DW_TAG_formal_parameter e ->
           prologue 0x5;
-          add_attr_some e.formal_parameter_file_loc add_file_loc;
           add_attr_some e.formal_parameter_artificial (add_abbr_entry (0x34,artificial_type_abbr));
           add_attr_some e.formal_parameter_name add_name;
           add_type buf;
@@ -143,7 +140,6 @@ module DwarfPrinter(Target: DWARF_TARGET):
           add_attr_some a.lexical_block_low_pc add_low_pc
       | DW_TAG_member e ->
           prologue 0xd;
-          add_attr_some e.member_file_loc add_file_loc;
           add_attr_some e.member_byte_size add_byte_size;
           add_attr_some e.member_bit_offset (add_abbr_entry (0xc,bit_offset_type_abbr));
           add_attr_some e.member_bit_size (add_abbr_entry (0xd,bit_size_type_abbr));
@@ -196,7 +192,6 @@ module DwarfPrinter(Target: DWARF_TARGET):
           add_attr_some e.union_name add_name
       | DW_TAG_unspecified_parameter e ->
           prologue 0x18;
-          add_attr_some e.unspecified_parameter_file_loc add_file_loc;
           add_attr_some e.unspecified_parameter_artificial (add_abbr_entry (0x34,artificial_type_abbr))
       | DW_TAG_variable e ->
           prologue 0x34;
@@ -381,7 +376,6 @@ module DwarfPrinter(Target: DWARF_TARGET):
       fprintf oc "	.4byte		%a\n" label a
 
     let print_array_type oc at =
-      print_file_loc oc at.array_type_file_loc;
       print_ref oc at.array_type
 
     let print_bound_value oc = function
@@ -432,12 +426,10 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_opt_value oc et.enumeration_name print_string
 
     let print_enumerator oc en =
-      print_file_loc oc en.enumerator_file_loc;
       print_sleb128 oc en.enumerator_value;
       print_string oc en.enumerator_name
 
     let print_formal_parameter oc fp =
-      print_file_loc oc fp.formal_parameter_file_loc;
       print_opt_value oc fp.formal_parameter_artificial print_flag;
       print_opt_value oc fp.formal_parameter_name print_string;
       print_ref oc fp.formal_parameter_type;
@@ -454,7 +446,6 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_opt_value oc lb.lexical_block_low_pc print_addr
 
     let print_member oc mb =
-      print_file_loc oc mb.member_file_loc;
       print_opt_value oc mb.member_byte_size print_byte;
       print_opt_value oc mb.member_bit_offset print_byte;
       print_opt_value oc mb.member_bit_size print_byte;
@@ -506,7 +497,6 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_opt_value oc ut.union_name print_string
 
     let print_unspecified_parameter oc up =
-      print_file_loc oc up.unspecified_parameter_file_loc;
       print_opt_value oc up.unspecified_parameter_artificial print_flag
 
     let print_variable oc var =

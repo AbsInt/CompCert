@@ -66,7 +66,6 @@ type file_loc =
      
 type dw_tag_array_type =
     {
-     array_type_file_loc: file_loc option;
      array_type:          reference;
    }
 
@@ -99,14 +98,12 @@ type dw_tag_enumeration_type =
 
 type dw_tag_enumerator =
     {
-     enumerator_file_loc: file_loc option;
      enumerator_value:    constant;
      enumerator_name:     string;
    }
 
 type dw_tag_formal_parameter =
     {
-     formal_parameter_file_loc:           file_loc       option;
      formal_parameter_artificial:         flag           option;
      formal_parameter_name:               string         option;
      formal_parameter_type:               reference;
@@ -128,7 +125,6 @@ type dw_tag_lexical_block =
 
 type dw_tag_member =
     {
-     member_file_loc:             file_loc            option;
      member_byte_size:            constant            option;
      member_bit_offset:           constant            option;
      member_bit_size:             constant            option;
@@ -191,7 +187,6 @@ type dw_tag_union_type =
 
 type dw_tag_unspecified_parameter =
     {
-     unspecified_parameter_file_loc:   file_loc option;
      unspecified_parameter_artificial: flag     option;
    }
 
