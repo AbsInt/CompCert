@@ -15,6 +15,7 @@ open C
 open Camlcoq
 open DwarfTypes
 open BinNums
+open Sections
 
 
 (* Record used for stroring references to the actual implementation functions *)
@@ -41,14 +42,14 @@ type implem =
      stack_variable: (atom * atom) -> int * int builtin_arg -> unit;
      add_label: atom -> positive -> int -> unit;
      atom_parameter: ident -> ident -> atom -> unit;
-     add_compilation_section_start: string -> int -> unit;
-     add_compilation_section_end: string -> int -> unit;
-     compute_diab_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit;
+     add_compilation_section_start: section_name -> int -> unit;
+     add_compilation_section_end: section_name -> int -> unit;
+     compute_diab_file_enum: (section_name -> int) -> (string-> int) -> (unit -> unit) -> unit;
      compute_gnu_file_enum: (string -> unit) -> unit;
-     exists_section: string -> bool;
+     exists_section: section_name -> bool;
      remove_unused: ident -> unit;
      variable_printed: string -> unit;
-     add_diab_info: string -> (int * int * string) -> unit;
+     add_diab_info: section_name ->  int  -> int -> unit;
    }
 
 val default_implem: implem
@@ -76,11 +77,11 @@ val stack_variable: (atom * atom) -> int * int builtin_arg -> unit
 val add_label: atom -> positive -> int -> unit
 val generate_debug_info: (atom -> string) -> string -> debug_entries option
 val atom_parameter: ident -> ident -> atom -> unit
-val add_compilation_section_start: string -> int -> unit
-val add_compilation_section_end: string -> int -> unit
-val compute_diab_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit
+val add_compilation_section_start: section_name -> int -> unit
+val add_compilation_section_end: section_name -> int -> unit
+val compute_diab_file_enum: (section_name -> int) -> (string-> int) -> (unit -> unit) -> unit
 val compute_gnu_file_enum: (string -> unit) -> unit
-val exists_section: string -> bool
+val exists_section: section_name -> bool
 val remove_unused: ident -> unit
 val variable_printed: string -> unit
-val add_diab_info: string -> (int * int * string) -> unit
+val add_diab_info: section_name ->  int  -> int -> unit

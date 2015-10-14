@@ -152,7 +152,7 @@ module Linux_System : SYSTEM =
       if !Clflags.option_g then  begin
           section oc Section_text;
           let low_pc = new_label () in
-          Debug.add_compilation_section_start ".text" low_pc;
+          Debug.add_compilation_section_start Section_text low_pc;
           fprintf oc "%a:\n" label low_pc;
           fprintf oc "	.cfi_sections	.debug_frame\n"
         end
@@ -161,7 +161,7 @@ module Linux_System : SYSTEM =
       if !Clflags.option_g then
         begin
           let high_pc = new_label () in
-          Debug.add_compilation_section_end ".text" high_pc;
+          Debug.add_compilation_section_end  Section_text high_pc;
           Debug.compute_gnu_file_enum (fun f -> ignore (print_file oc f));
           section oc Section_text;
           fprintf oc "%a:\n" label high_pc
@@ -256,17 +256,18 @@ module Diab_System : SYSTEM =
       match sec with
       | Section_debug_abbrev
       | Section_debug_info _
+      | Section_debug_str
       | Section_debug_loc -> ()
       | sec ->
           let name = match sec with
           | Section_user (name,_,_) -> name
           | _ -> name_of_section sec in
-          if not (Debug.exists_section name) then
+          if not (Debug.exists_section sec) then
             let line_start = new_label ()
             and low_pc = new_label ()
             and debug_info = new_label () in
-            Debug.add_diab_info name (line_start,debug_info,name_of_section sec);
-            Debug.add_compilation_section_start name low_pc;
+            Debug.add_diab_info sec line_start debug_info;
+            Debug.add_compilation_section_start sec low_pc;
             let line_name = ".debug_line" ^(if name <> ".text" then name else "") in
             section oc (Section_debug_line (if name <> ".text" then Some name else None));
             fprintf oc "	.section	%s,,n\n" line_name;
@@ -287,7 +288,7 @@ module Diab_System : SYSTEM =
     let print_epilogue oc =
       let end_label sec =
         fprintf oc "\n";
-        fprintf oc "	%s\n" sec;
+        section oc sec;
         let label_end = new_label () in
         fprintf oc "%a:\n" label label_end;
         label_end

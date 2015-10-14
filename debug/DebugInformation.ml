@@ -16,6 +16,7 @@ open C
 open Camlcoq
 open Cutil
 open DebugTypes
+open Sections
 
 (* This implements an interface for the collection of debugging
    information. *)
@@ -578,19 +579,26 @@ let stack_variable (f,v) (sp,loc) =
 let compilation_section_start: (string,int) Hashtbl.t = Hashtbl.create 7
 let compilation_section_end: (string,int) Hashtbl.t = Hashtbl.create 7
 
-let diab_additional: (string,int * int * string) Hashtbl.t = Hashtbl.create 7
+let diab_additional: (string,int * int * section_name) Hashtbl.t = Hashtbl.create 7
+
+let section_to_string = function
+  | Section_user (n,_,_) -> n
+  | _ -> ".text"
 
 let add_compilation_section_start sec addr =
+  let sec = section_to_string sec in
   Hashtbl.add compilation_section_start sec addr
 
 let add_compilation_section_end sec addr =
+  let sec = section_to_string sec in
   Hashtbl.add compilation_section_end sec addr
 
-let add_diab_info sec addr =
-  Hashtbl.add diab_additional sec addr
+let add_diab_info sec addr1 add2 =
+  let sec' = section_to_string sec in
+  Hashtbl.add diab_additional sec' (addr1,add2,sec)
 
 let exists_section sec =
-  Hashtbl.mem compilation_section_start sec
+  Hashtbl.mem compilation_section_start (section_to_string sec)
 
 let filenum: (string * string,int) Hashtbl.t = Hashtbl.create 7
 

@@ -16,6 +16,7 @@ open C
 open Camlcoq
 open Dwarfgen
 open DwarfTypes
+open Sections
 
 (* Interface for generating and printing debug information *)
 
@@ -43,14 +44,14 @@ type implem =
       stack_variable: (atom * atom) -> int * int builtin_arg -> unit;
       add_label: atom -> positive -> int -> unit;
       atom_parameter: ident -> ident -> atom -> unit;
-      add_compilation_section_start: string -> int -> unit;
-      add_compilation_section_end: string -> int -> unit;
-      compute_diab_file_enum: (string -> int) -> (string-> int) -> (unit -> unit) -> unit;
+      add_compilation_section_start: section_name -> int -> unit;
+      add_compilation_section_end: section_name -> int -> unit;
+      compute_diab_file_enum: (section_name -> int) -> (string-> int) -> (unit -> unit) -> unit;
       compute_gnu_file_enum: (string -> unit) -> unit;
-      exists_section: string -> bool;
+      exists_section: section_name -> bool;
       remove_unused: ident -> unit;
       variable_printed: string -> unit;
-      add_diab_info: string -> (int * int * string) -> unit;
+      add_diab_info: section_name -> int -> int -> unit;
    }
 
 let default_implem =
@@ -83,7 +84,7 @@ let default_implem =
    exists_section = (fun _ -> true);
    remove_unused = (fun _ -> ());
    variable_printed = (fun _ -> ());
-   add_diab_info = (fun _ _ -> ());
+   add_diab_info = (fun _ _ _ -> ());
 }
 
 let implem = ref default_implem
