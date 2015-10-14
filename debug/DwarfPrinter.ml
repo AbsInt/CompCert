@@ -85,7 +85,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       | Some (LocSymbol _)
       | Some (LocSimple _) -> add_abbr_entry (0x2,location_block_type_abbr) buf
 
-   
+
 
     (* Dwarf entity to string function *)
     let abbrev_string_of_entity entity has_sibling =
@@ -326,7 +326,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
           print_uleb128 oc col
       | Some (Gnu_file_loc (file,col)) ->
           fprintf oc "	.4byte		%l\n" file;
-          print_uleb128 oc col 
+          print_uleb128 oc col
      | None -> ()
 
     let print_loc_expr oc = function
@@ -472,7 +472,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
     let print_subprogram_addr oc (s,e) =
       fprintf oc "	.4byte		%a\n" label e;
       fprintf oc "	.4byte		%a\n" label s
-     
+
     let print_subprogram oc sp =
       print_file_loc oc (Some sp.subprogram_file_loc);
       print_opt_value oc sp.subprogram_external print_flag;
@@ -603,7 +603,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_abbrev oc;
       List.iter (fun e ->
         let name = if e.section_name <> ".text" then Some e.section_name else None in
-        section oc (Section_debug_info name);      
+        section oc (Section_debug_info name);
         print_debug_info oc e.start_label e.line_label e.entry) entries;
       section oc Section_debug_loc;
       List.iter (fun e -> print_location_list oc e.locs) entries

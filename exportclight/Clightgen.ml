@@ -75,7 +75,7 @@ let print_error oc msg =
 let output_filename ?(final = false) source_file source_suffix output_suffix =
   match !option_o with
   | Some file when final -> file
-  | _ -> 
+  | _ ->
     Filename.basename (Filename.chop_suffix source_file source_suffix)
     ^ output_suffix
 
@@ -253,7 +253,7 @@ let cmdline_actions =
   Exact "-dparse", Set option_dparse;
   Exact "-dc", Set option_dcmedium;
   Exact "-dclight", Set option_dclight;
-(* General options *) 
+(* General options *)
   Exact "-v", Set option_v;
   Exact "-stdlib", String(fun s -> stdlib_path := s);
   ]

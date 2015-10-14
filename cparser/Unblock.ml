@@ -49,7 +49,7 @@ let rec local_initializer env path init k =
   | Init_struct(id, fil) ->
       let field_init (fld, i) k =
         local_initializer env
-          { edesc = EUnop(Odot fld.fld_name, path); etyp = fld.fld_typ } 
+          { edesc = EUnop(Odot fld.fld_name, path); etyp = fld.fld_typ }
           i k in
       List.fold_right field_init fil k
   | Init_union(id, fld, i) ->
@@ -80,7 +80,7 @@ let add_inits_expr inits e =
 let local_variables = ref ([]: decl list)
 let global_variables = ref ([]: decl list)
 
-(* Note: "const int x = y - 1;" is legal, but we turn it into 
+(* Note: "const int x = y - 1;" is legal, but we turn it into
    "const int x; x = y - 1;", which is not.  Therefore, remove
    top-level 'const' attribute.  Also remove it on element type of
    array type. *)
@@ -128,7 +128,7 @@ let rec expand_expr islocal env e =
         let e2' =
           match op with
           | Ocomma | Ologand | Ologor -> expand_expr islocal env e2
-              (* Make sure the initializers of [e2] are performed in 
+              (* Make sure the initializers of [e2] are performed in
                  sequential order, i.e. just before [e2] but after [e1]. *)
           | _ -> expand e2 in
         {edesc = EBinop(op, e1', e2', ty); etyp = e.etyp}
@@ -148,7 +148,7 @@ let rec expand_expr islocal env e =
         e'
     | ECall(e1, el) ->
         {edesc = ECall(expand e1, List.map expand el); etyp = e.etyp}
-  in 
+  in
     let e' = expand e in ecommalist !inits e'
 
 (* Elimination of compound literals within an initializer. *)
@@ -185,7 +185,7 @@ let debug_ty =
 
 let debug_annot kind args =
   { sloc = no_loc;
-    sdesc = Sdo { 
+    sdesc = Sdo {
       etyp = TVoid [];
       edesc = ECall({edesc = EVar debug_id; etyp = debug_ty},
                     intconst kind IInt :: args)
@@ -276,12 +276,12 @@ let rec unblock_stmt env ctx ploc s =
   | Sseq(s1, s2) ->
       {s with sdesc = Sseq(unblock_stmt env ctx ploc s1,
                            unblock_stmt env ctx s1.sloc s2)}
-  | Sif(e, s1, s2) -> 
+  | Sif(e, s1, s2) ->
       add_lineno ctx ploc s.sloc
         {s with sdesc = Sif(expand_expr true env e,
                             unblock_stmt env ctx s.sloc s1,
                             unblock_stmt env ctx s.sloc s2)}
-  | Swhile(e, s1) -> 
+  | Swhile(e, s1) ->
       add_lineno ctx ploc s.sloc
         {s with sdesc = Swhile(expand_expr true env e,
                                unblock_stmt env ctx s.sloc s1)}
@@ -301,7 +301,7 @@ let rec unblock_stmt env ctx ploc s =
       add_lineno ctx ploc s.sloc
         {s with sdesc = Sswitch(expand_expr true env e,
                                 unblock_stmt env ctx s.sloc s1)}
-  | Slabeled(lbl, s1) -> 
+  | Slabeled(lbl, s1) ->
       add_lineno ctx ploc s.sloc
         {s with sdesc = Slabeled(lbl, unblock_stmt env ctx s.sloc s1)}
   | Sgoto lbl ->
@@ -309,7 +309,7 @@ let rec unblock_stmt env ctx ploc s =
   | Sreturn None ->
       add_lineno ctx ploc s.sloc s
   | Sreturn (Some e) ->
-      add_lineno ctx ploc s.sloc 
+      add_lineno ctx ploc s.sloc
         {s with sdesc = Sreturn(Some (expand_expr true env e))}
   | Sblock sl ->
       let ctx' =
@@ -327,7 +327,7 @@ let rec unblock_stmt env ctx ploc s =
   | Sasm(attr, template, outputs, inputs, clob) ->
       let expand_asm_operand (lbl, cstr, e) =
         (lbl, cstr, expand_expr true env e) in
-      add_lineno ctx ploc s.sloc 
+      add_lineno ctx ploc s.sloc
         {s with sdesc = Sasm(attr, template,
                              List.map expand_asm_operand outputs,
                              List.map expand_asm_operand inputs, clob)}

@@ -18,7 +18,7 @@ open BinNums
 
 
 (* Record used for stroring references to the actual implementation functions *)
-type implem = 
+type implem =
     {
      init: string -> unit;
      atom_global: ident -> atom -> unit;

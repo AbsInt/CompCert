@@ -44,7 +44,7 @@ let rec add_attributes (al1: attributes) (al2: attributes) =
       else if a1 > a2 then a2 :: add_attributes al1 al2'
       else a1 :: add_attributes al1' al2'
 
-let rec remove_attributes (al1: attributes) (al2: attributes) = 
+let rec remove_attributes (al1: attributes) (al2: attributes) =
   (* viewed as sets: al1 \ al2 *)
   match al1, al2 with
   | [], _ -> []
@@ -91,7 +91,7 @@ let attr_is_type_related = function
   | Attr(("packed" | "__packed__"), _) -> true
   | _ -> false
 
-(* Is an attribute applicable to a whole array (true) or only to 
+(* Is an attribute applicable to a whole array (true) or only to
    array elements (false)? *)
 
 let attr_array_applicable = function
@@ -114,10 +114,10 @@ let rec add_attributes_type attr t =
   | TInt(ik, a) -> TInt(ik, add_attributes attr a)
   | TFloat(fk, a) -> TFloat(fk, add_attributes attr a)
   | TPtr(ty, a) -> TPtr(ty, add_attributes attr a)
-  | TArray(ty, sz, a) -> 
+  | TArray(ty, sz, a) ->
       let (attr_arr, attr_elt) = List.partition attr_array_applicable attr in
       TArray(add_attributes_type attr_elt ty, sz, add_attributes attr_arr a)
-  | TFun(ty, params, vararg, a) -> TFun(ty, params, vararg, add_attributes attr 
+  | TFun(ty, params, vararg, a) -> TFun(ty, params, vararg, add_attributes attr
 a)
   | TNamed(s, a) -> TNamed(s, add_attributes attr a)
   | TStruct(s, a) -> TStruct(s, add_attributes attr a)
@@ -144,7 +144,7 @@ let rec attributes_of_type env t =
   | TArray(ty, sz, a) -> add_attributes a (attributes_of_type env ty)
   | TFun(ty, params, vararg, a) -> a
   | TNamed(s, a) -> attributes_of_type env (unroll env t)
-  | TStruct(s, a) -> 
+  | TStruct(s, a) ->
       let ci = Env.find_struct env s in add_attributes ci.ci_attr a
   | TUnion(s, a) ->
       let ci = Env.find_union env s in add_attributes ci.ci_attr a
@@ -179,7 +179,7 @@ let erase_attributes_type env t =
 
 (* Remove all attributes from type that are not contained in attr *)
 let strip_attributes_type t attr =
-  let strip =  List.filter (fun a -> List.mem a attr) in 
+  let strip =  List.filter (fun a -> List.mem a attr) in
   match t with
   | TVoid at -> TVoid (strip at)
   | TInt (k,at) ->  TInt (k,strip at)
@@ -193,7 +193,7 @@ let strip_attributes_type t attr =
   | TEnum (n,at) -> TEnum(n,strip at)
 
 (* Remove the last attribute from the toplevel and return the changed type *)
-let strip_last_attribute typ  = 
+let strip_last_attribute typ  =
   let rec hd_opt l = match l with
     [] -> None,[]
   | a::rest -> Some a,rest in
@@ -306,9 +306,9 @@ let combine_types mode env t1 t2 =
     | _, TNamed _ -> comp m t1 (unroll env t2)
     | TStruct(s1, a1), TStruct(s2, a2) ->
         TStruct(comp_base s1 s2, comp_attr m a1 a2)
-    | TUnion(s1, a1), TUnion(s2, a2) -> 
+    | TUnion(s1, a1), TUnion(s2, a2) ->
         TUnion(comp_base s1 s2, comp_attr m a1 a2)
-    | TEnum(s1, a1), TEnum(s2, a2) -> 
+    | TEnum(s1, a1), TEnum(s2, a2) ->
         TEnum(comp_base s1 s2, comp_attr m a1 a2)
     | _, _ ->
         raise Incompat
@@ -376,7 +376,7 @@ let pack_bitfields ml =
   in
   let (nbits, ml') = pack 0 ml in
   let (sz, al) =
-    (* A lone bitfield of width 0 consumes no space and aligns to 1 *) 
+    (* A lone bitfield of width 0 consumes no space and aligns to 1 *)
     if nbits = 0 then (0, 1) else
     if nbits <= 8 then (1, 1) else
     if nbits <= 16 then (2, 2) else
@@ -487,7 +487,7 @@ let rec sizeof env t =
   | TEnum(_, _) -> Some(sizeof_ikind enum_ikind)
 
 (* Compute the size of a union.
-   It is the size is the max of the sizes of fields.    
+   It is the size is the max of the sizes of fields.
    Not done here but in composite_info_decl: rounding size to alignment. *)
 
 let sizeof_union env members =
@@ -539,7 +539,7 @@ let struct_layout env members =
       end
     | m :: rem ->
         match alignof env m.fld_typ, sizeof env m.fld_typ with
-        | Some a, Some s -> 
+        | Some a, Some s ->
             let offset = align ofs a in
             struct_layout_rec ((m.fld_name,offset)::mem) (offset + s) rem
         | _, _ -> []
@@ -580,11 +580,11 @@ let composite_info_def env su attr m =
 
 let int_representable v nbits sgn =
   if nbits >= 64 then true else
-  if sgn then 
+  if sgn then
     let p = Int64.shift_left 1L (nbits - 1) in Int64.neg p <= v && v < p
   else
     0L <= v && v < Int64.shift_left 1L nbits
-  
+
 (* Type of a function definition *)
 
 let fundef_typ fd =
@@ -709,9 +709,9 @@ let pointer_decay env t =
   | TFun _ as ty -> TPtr(ty, [])
   | t -> t
 
-(* The usual unary conversions (H&S 6.3.3) *) 
+(* The usual unary conversions (H&S 6.3.3) *)
 
-let unary_conversion env t = 
+let unary_conversion env t =
   match unroll env t with
   (* Promotion of small integer types *)
   | TInt(kind, attr) ->
@@ -774,7 +774,7 @@ let binary_conversion env t1 t2 =
 
 (* Conversion on function arguments (with protoypes) *)
 
-let argument_conversion env t = 
+let argument_conversion env t =
   (* Arrays and functions degrade automatically to pointers *)
   (* Other types are not changed *)
   match unroll env t with
@@ -970,7 +970,7 @@ let rec eaddrof e =
   match e.edesc with
   | EUnop(Oderef, e1) -> e1
   | EBinop(Ocomma, e1, e2, _) -> ecomma e1 (eaddrof e2)
-  | EConditional(e1, e2, e3) -> 
+  | EConditional(e1, e2, e3) ->
       { edesc = EConditional(e1, eaddrof e2, eaddrof e3); etyp = TPtr(e.etyp, []) }
   | _ -> { edesc = EUnop(Oaddrof, e); etyp = TPtr(e.etyp, []) }
 
@@ -1092,7 +1092,7 @@ let rec subst_stmt phi s =
       | Sblock sl -> Sblock (List.map (subst_stmt phi) sl)
       | Sdecl d -> Sdecl (subst_decl phi d)
       | Sasm(attr, template, outputs, inputs, clob) ->
-          let subst_asm_operand (lbl, cstr, e) = 
+          let subst_asm_operand (lbl, cstr, e) =
             (lbl, cstr, subst_expr phi e) in
           Sasm(attr, template,
                List.map subst_asm_operand outputs,

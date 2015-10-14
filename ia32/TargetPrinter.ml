@@ -83,13 +83,13 @@ module Cygwin_System : SYSTEM =
 
     let raw_symbol oc s =
        fprintf oc "_%s" s
-        
+
     let symbol oc symb =
       raw_symbol oc (extern_atom symb)
 
     let label oc lbl =
        fprintf oc "L%d" lbl
-        
+
     let name_of_section = function
       | Section_text -> ".text"
       | Section_data i | Section_small_data i ->
@@ -106,18 +106,18 @@ module Cygwin_System : SYSTEM =
       | Section_debug_loc ->  ".section	.debug_loc,\"dr\""
       | Section_debug_line _ -> ".section	.debug_line,\"dr\""
       | Section_debug_abbrev -> ".section	.debug_abbrev,\"dr\""
-      | Section_debug_str-> assert false (* Should not be used *) 
-    
+      | Section_debug_str-> assert false (* Should not be used *)
+
     let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
 
     let print_align oc n =
       fprintf oc "	.align	%d\n" n
-    
-    let print_mov_ra oc rd id =   
+
+    let print_mov_ra oc rd id =
       fprintf oc "	movl	$%a, %a\n" symbol id ireg rd
 
     let print_fun_info _ _  = ()
-        
+
     let print_var_info _ _ = ()
 
     let print_epilogue _ = ()
@@ -134,10 +134,10 @@ module Cygwin_System : SYSTEM =
 (* Printer functions for ELF *)
 module ELF_System : SYSTEM =
   struct
-    
+
     let raw_symbol oc s =
       fprintf oc "%s" s
-  
+
     let symbol = elf_symbol
 
     let label = elf_label
@@ -159,19 +159,19 @@ module ELF_System : SYSTEM =
       | Section_debug_line _ -> ".section	.debug_line,\"\",@progbits"
       | Section_debug_abbrev -> ".section	.debug_abbrev,\"\",@progbits"
       | Section_debug_str -> ".section	.debug_str,\"MS\",@progbits,1"
-            
+
     let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
-                    
+
     let print_align oc n =
       fprintf oc "	.align	%d\n" n
-        
-    let print_mov_ra  oc rd id = 
+
+    let print_mov_ra  oc rd id =
          fprintf oc "	movl	$%a, %a\n" symbol id ireg rd
 
     let print_fun_info = elf_print_fun_info
-      
+
     let print_var_info = elf_print_var_info
-      
+
     let print_epilogue _ = ()
 
     let print_comm_decl oc name sz al =
@@ -186,7 +186,7 @@ module ELF_System : SYSTEM =
 (* Printer functions for MacOS *)
 module MacOS_System : SYSTEM =
   struct
-    
+
     let raw_symbol oc s =
      fprintf oc "_%s" s
 
@@ -214,30 +214,30 @@ module MacOS_System : SYSTEM =
       | Section_debug_line _ -> ".section	__DWARF,__debug_line,regular,debug"
       | Section_debug_str -> ".section	__DWARF,__debug_str,regular,debug"
       | Section_debug_abbrev -> ".section	__DWARF,__debug_abbrev,regular,debug" (* Dummy value *)
-    
-    
+
+
     let stack_alignment =  16 (* mandatory *)
-         
-    (* Base-2 log of a Caml integer *)           
+
+    (* Base-2 log of a Caml integer *)
     let rec log2 n =
       assert (n > 0);
       if n = 1 then 0 else 1 + log2 (n lsr 1)
 
     let print_align oc n =
       fprintf oc "	.align	%d\n" (log2 n)
-        
+
     let indirect_symbols : StringSet.t ref = ref StringSet.empty
 
-    let print_mov_ra oc rd id = 
+    let print_mov_ra oc rd id =
       let id = extern_atom id in
       indirect_symbols := StringSet.add id !indirect_symbols;
       fprintf oc "	movl	L%a$non_lazy_ptr, %a\n" raw_symbol id ireg rd
 
     let print_fun_info _ _ = ()
- 
+
     let print_var_info _ _ = ()
-    
-    let print_epilogue oc = 
+
+    let print_epilogue oc =
       fprintf oc "	.section __IMPORT,__pointers,non_lazy_symbol_pointers\n";
       StringSet.iter
         (fun s ->
@@ -275,7 +275,7 @@ module Target(System: SYSTEM):TARGET =
       | Coq_inl n ->
           let n = camlint_of_coqint n in
           fprintf oc "%ld" n
-      | Coq_inr(id, ofs) -> 
+      | Coq_inr(id, ofs) ->
           let ofs = camlint_of_coqint ofs in
           if ofs = 0l
           then symbol oc id
@@ -292,13 +292,13 @@ module Target(System: SYSTEM):TARGET =
       | Cond_e -> "e" | Cond_ne -> "ne"
       | Cond_b -> "b" | Cond_be -> "be" | Cond_ae -> "ae" | Cond_a -> "a"
       | Cond_l -> "l" | Cond_le -> "le" | Cond_ge -> "ge" | Cond_g -> "g"
-      | Cond_p -> "p" | Cond_np -> "np" 
+      | Cond_p -> "p" | Cond_np -> "np"
 
     let name_of_neg_condition = function
       | Cond_e -> "ne" | Cond_ne -> "e"
       | Cond_b -> "ae" | Cond_be -> "a" | Cond_ae -> "b" | Cond_a -> "be"
       | Cond_l -> "ge" | Cond_le -> "g" | Cond_ge -> "l" | Cond_g -> "le"
-      | Cond_p -> "np" | Cond_np -> "p" 
+      | Cond_p -> "np" | Cond_np -> "p"
 
 
 (* Names of sections *)
@@ -342,7 +342,7 @@ module Target(System: SYSTEM):TARGET =
 
 (* Built-in functions *)
 
-(* Built-ins.  They come in two flavors: 
+(* Built-ins.  They come in two flavors:
    - annotation statements: take their arguments in registers or stack
    locations; generate no code;
    - inlined by the compiler: take their arguments in arbitrary
@@ -652,7 +652,7 @@ module Target(System: SYSTEM):TARGET =
       (** Pseudo-instructions *)
       | Plabel(l) ->
           fprintf oc "%a:\n" label (transl_label l)
-      | Pallocframe(sz, ofs_ra, ofs_link) 
+      | Pallocframe(sz, ofs_ra, ofs_link)
       | Pfreeframe(sz, ofs_ra, ofs_link) ->
 	 assert false
       | Pbuiltin(ef, args, res) ->
@@ -670,13 +670,13 @@ module Target(System: SYSTEM):TARGET =
           | _ ->
               assert false
           end
-            
+
     let print_literal64 oc (lbl, n) =
       fprintf oc "%a:	.quad	0x%Lx\n" label lbl n
     let print_literal32 oc (lbl, n) =
       fprintf oc "%a:	.long	0x%lx\n" label lbl n
-        
-    let print_jumptable oc jmptbl = 
+
+    let print_jumptable oc jmptbl =
       let print_jumptable oc (lbl, tbl) =
         fprintf oc "%a:" label lbl;
         List.iter
@@ -688,7 +688,7 @@ module Target(System: SYSTEM):TARGET =
         List.iter (print_jumptable oc) !jumptables;
         jumptables := []
       end
-          
+
     let print_init oc = function
       | Init_int8 n ->
           fprintf oc "	.byte	%ld\n" (camlint_of_coqint n)
@@ -710,7 +710,7 @@ module Target(System: SYSTEM):TARGET =
           if Z.gt n Z.zero then
             fprintf oc "	.space	%s\n" (Z.to_string n)
       | Init_addrof(symb, ofs) ->
-          fprintf oc "	.long	%a\n" 
+          fprintf oc "	.long	%a\n"
             symbol_offset (symb, camlint_of_coqint ofs)
 
     let print_align = print_align
@@ -741,7 +741,7 @@ module Target(System: SYSTEM):TARGET =
 
     let print_optional_fun_info _ = ()
 
-    let get_section_names name = 
+    let get_section_names name =
       match C2C.atom_sections name with
       | [t;l;j] -> (t, l, j)
       |    _    -> (Section_text, Section_literal, Section_jumptable)
@@ -749,10 +749,10 @@ module Target(System: SYSTEM):TARGET =
     let reset_constants = reset_constants
 
     let print_fun_info = print_fun_info
-        
+
     let print_var_info = print_var_info
 
-    let print_prologue oc = 
+    let print_prologue oc =
       need_masks := false;
       if !Clflags.option_g then begin
         section oc Section_text;
@@ -762,7 +762,7 @@ module Target(System: SYSTEM):TARGET =
         fprintf oc "	.cfi_sections	.debug_frame\n"
       end
 
-    let print_epilogue oc = 
+    let print_epilogue oc =
       if !need_masks then begin
         section oc (Section_const true);
         (* not Section_literal because not 8-bytes *)
@@ -784,13 +784,13 @@ module Target(System: SYSTEM):TARGET =
         section oc Section_text;
         fprintf oc "%a:\n" elf_label high_pc
       end
-      
+
     let comment = comment
 
     let default_falignment = 16
 
     let label = label
-       
+
     let new_label = new_label
 
 end
@@ -798,7 +798,7 @@ end
 let sel_target () =
  let module S = (val (match Configuration.system with
   | "macosx" -> (module MacOS_System:SYSTEM)
-  | "linux" 
+  | "linux"
   | "bsd" -> (module ELF_System:SYSTEM)
   | "cygwin" -> (module Cygwin_System:SYSTEM)
   | _ -> invalid_arg ("System " ^ Configuration.system ^ " not supported")  ):SYSTEM) in

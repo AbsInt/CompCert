@@ -33,7 +33,7 @@ let oneline s =
 let re_trim_1 = Str.regexp "^[ \t]+\\|[ \t]+$"
 let re_trim_2 = Str.regexp "  +"
 
-let trim s = 
+let trim s =
   Str.global_replace re_trim_2 " " (Str.global_replace re_trim_1 "" s)
 
 (* A nicer interface to Str.match_string, with automatic trimming *)
@@ -70,7 +70,7 @@ let re_arg = Str.regexp "\\([a-z][a-z0-9_]*\\)"
 
 let match_args args =
   let n = ref 0 in
-  let subst s = 
+  let subst s =
     incr n; sprintf "%s as zz%d" (Str.matched_group 1 s) !n in
   Str.global_substitute re_arg subst args
 
@@ -78,7 +78,7 @@ let match_args args =
 
 let match_temps args =
   let n = ref 0 in
-  let subst s = 
+  let subst s =
     incr n; sprintf "zz%d" !n in
   Str.global_substitute re_arg subst (remove_commas args)
 

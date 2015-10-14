@@ -47,7 +47,7 @@ type location_value =
   | LocRef of address
   | LocSimple of location_expression
   | LocList of location_expression list
-        
+
 type data_location_value =
   | DataLocBlock of location_expression
   | DataLocRef of reference
@@ -62,10 +62,10 @@ type string_const =
 
 (* Types representing the attribute information per tag value *)
 
-type file_loc = 
+type file_loc =
   | Diab_file_loc of constant * constant
   | Gnu_file_loc of constant * constant
-     
+
 type dw_tag_array_type =
     {
      array_type:          reference;

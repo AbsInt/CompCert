@@ -58,20 +58,20 @@ module type TARGET =
 
 module Dwarfgenaux (Target: TARGET) =
   struct
-    
+
     include Target
 
     let name_opt n = if n <> "" then Some (string_entry n) else None
-    
+
     (* Functions to translate the basetypes. *)
     let int_type_to_entry id i =
       let encoding =
         (match i.int_kind with
         | IBool -> DW_ATE_boolean
         | IChar ->
-            if !Machine.config.Machine.char_signed then 
-              DW_ATE_signed_char 
-            else 
+            if !Machine.config.Machine.char_signed then
+              DW_ATE_signed_char
+            else
               DW_ATE_unsigned_char
         | IInt | ILong | ILongLong | IShort | ISChar -> DW_ATE_signed
         | _ -> DW_ATE_unsigned)in
@@ -82,7 +82,7 @@ module Dwarfgenaux (Target: TARGET) =
       } in
       new_entry id (DW_TAG_base_type int)
 
-    let float_type_to_entry id f = 
+    let float_type_to_entry id f =
       let byte_size = sizeof_fkind f.float_kind in
       let float = {
         base_type_byte_size = byte_size;
@@ -102,7 +102,7 @@ module Dwarfgenaux (Target: TARGET) =
     let file_loc_opt = function
       | None -> None
       | Some (f,l) ->
-          try 
+          try
             Some (file_loc (f,l))
           with Not_found -> None
 
@@ -113,7 +113,7 @@ module Dwarfgenaux (Target: TARGET) =
         typedef_name = string_entry t.typedef_name;
         typedef_type = i;
       } in
-      new_entry id (DW_TAG_typedef td) 
+      new_entry id (DW_TAG_typedef td)
 
     let pointer_to_entry id p =
       let p = {pointer_type = p.pts} in
@@ -192,8 +192,8 @@ module Dwarfgenaux (Target: TARGET) =
         member_bit_offset = mem.cfd_bit_offset;
         member_bit_size = mem.cfd_bit_size;
         member_data_member_location =
-        (match mem.cfd_byte_offset with 
-        | None -> None 
+        (match mem.cfd_byte_offset with
+        | None -> None
         | Some s -> Some (DataLocBlock (DW_OP_plus_uconst s)));
         member_declaration = None;
         member_name = string_entry mem.cfd_name;
@@ -245,19 +245,19 @@ module Dwarfgenaux (Target: TARGET) =
       let add_type id d =
         if not (IntSet.mem id d) then
           IntSet.add id d,true
-        else 
+        else
           d,false in
       let t = Hashtbl.find types id in
       match t with
-      | IntegerType _ 
+      | IntegerType _
       | FloatType _
       | Void
       | EnumType _ -> d,false
       | Typedef t ->
           add_type (get_opt_val t.typ) d
-      | PointerType p -> 
+      | PointerType p ->
           add_type p.pts d
-      | ArrayType arr -> 
+      | ArrayType arr ->
           add_type arr.arr_type d
       | ConstType c ->
           add_type c.cst_type d
@@ -265,12 +265,12 @@ module Dwarfgenaux (Target: TARGET) =
           add_type v.vol_type d
       | FunctionType f ->
           let d,c = match f.fun_return_type with
-          | Some t -> add_type t d 
+          | Some t -> add_type t d
           | None -> d,false in
           List.fold_left (fun (d,c) p ->
             let d,c' = add_type p.param_type d in
             d,c||c') (d,c) f.fun_params
-      | CompositeType c -> 
+      | CompositeType c ->
           List.fold_left (fun (d,c) f ->
             let d,c' = add_type f.cfd_typ d in
             d,c||c') (d,false) c.ct_members
@@ -285,10 +285,10 @@ module Dwarfgenaux (Target: TARGET) =
         else
           d in
       let typs = aux needed in
-      List.rev (Hashtbl.fold (fun id t acc -> 
+      List.rev (Hashtbl.fold (fun id t acc ->
         if IntSet.mem id typs then
           (infotype_to_entry id t)::acc
-        else 
+        else
           acc) types [])
 
     let global_variable_to_entry acc id v =
@@ -309,13 +309,13 @@ module Dwarfgenaux (Target: TARGET) =
     let gen_splitlong op_hi op_lo =
       let op_piece = DW_OP_piece 4 in
       op_piece::op_hi@(op_piece::op_lo)
-                         
-    let translate_function_loc a = function 
+
+    let translate_function_loc a = function
       | BA_addrstack (ofs) ->
           let ofs = camlint_of_coqint ofs in
           Some (LocSimple (DW_OP_bregx (a,ofs))),[]
       | BA_splitlong (BA_addrstack hi,BA_addrstack lo)->
-          let hi = camlint_of_coqint hi 
+          let hi = camlint_of_coqint hi
           and lo = camlint_of_coqint lo in
           if lo = Int32.add hi 4l then
             Some (LocSimple (DW_OP_bregx (a,hi))),[]
@@ -324,11 +324,11 @@ module Dwarfgenaux (Target: TARGET) =
             and op_lo = [DW_OP_bregx (a,lo)] in
             Some (LocList (gen_splitlong op_hi op_lo)),[]
       | _ -> None,[]
-            
+
     let range_entry_loc (sp,l) =
       let rec aux = function
         | BA i ->  [DW_OP_reg i]
-        | BA_addrstack ofs -> 
+        | BA_addrstack ofs ->
             let ofs = camlint_of_coqint ofs in
             [DW_OP_bregx (sp,ofs)]
         | BA_splitlong (hi,lo) ->
@@ -343,12 +343,12 @@ module Dwarfgenaux (Target: TARGET) =
 
     let location_entry f_id atom =
       try
-        begin 
+        begin
           match (Hashtbl.find var_locations (f_id,atom)) with
           | FunctionLoc (a,r) ->
               translate_function_loc a r
           | RangeLoc l ->
-              let l = List.rev_map (fun i -> 
+              let l = List.rev_map (fun i ->
                 let hi = get_opt_val i.range_start
                 and lo = get_opt_val i.range_end in
                 let hi = Hashtbl.find label_translation (f_id,hi)
@@ -388,8 +388,8 @@ module Dwarfgenaux (Target: TARGET) =
     and scope_to_entry  f_id acc sc id =
       let l_pc,h_pc = try
         let r = Hashtbl.find scope_ranges id in
-        let lbl l = match l with 
-        | Some l -> Some (Hashtbl.find label_translation (f_id,l)) 
+        let lbl l = match l with
+        | Some l -> Some (Hashtbl.find label_translation (f_id,l))
         | None -> None in
         begin
           match r with
@@ -409,8 +409,8 @@ module Dwarfgenaux (Target: TARGET) =
     and local_to_entry f_id acc id =
       match Hashtbl.find local_variables id with
       | LocalVariable v -> local_variable_to_entry f_id acc v id
-      | Scope v -> let s,acc = 
-          (scope_to_entry f_id acc v id) in 
+      | Scope v -> let s,acc =
+          (scope_to_entry f_id acc v id) in
         Some s,acc
 
     let fun_scope_to_entries f_id acc id =
@@ -438,7 +438,7 @@ module Dwarfgenaux (Target: TARGET) =
       let params,(acc,bcc) = mmap (function_parameter_to_entry f_id) (acc,bcc) f.fun_parameter in
       let vars,(acc,bcc) = fun_scope_to_entries f_id (acc,bcc) f.fun_scope in
       add_children f_entry (params@vars),(acc,bcc)
-        
+
     let definition_to_entry (acc,bcc) id t =
       match t with
       | GlobalVariable g -> let e,acc = global_variable_to_entry acc id g in
@@ -453,19 +453,19 @@ let diab_file_loc sec (f,l)  =
   Diab_file_loc (Hashtbl.find filenum (sec,f),l)
 
 let prod_name =
-  let version_string =  
+  let version_string =
     if Version.buildnr <> "" && Version.tag <> "" then
       Printf.sprintf "%s, Build: %s, Tag: %s" Version.version Version.buildnr Version.tag
     else
       Version.version in
-  Printf.sprintf "AbsInt Angewandte Informatik GmbH:CompCert Version %s:(%s,%s,%s,%s)" 
+  Printf.sprintf "AbsInt Angewandte Informatik GmbH:CompCert Version %s:(%s,%s,%s,%s)"
     version_string Configuration.arch Configuration.system Configuration.abi Configuration.model
 
 let diab_gen_compilation_section s defs acc =
   let module Gen = Dwarfgenaux(struct
     let file_loc = diab_file_loc s
     let string_entry s =  Simple_string s end) in
-  let defs,(ty,locs) = List.fold_left (fun (acc,bcc) (id,t) -> 
+  let defs,(ty,locs) = List.fold_left (fun (acc,bcc) (id,t) ->
     let t,bcc = Gen.definition_to_entry  bcc id t in
     t::acc,bcc) ([],(IntSet.empty,[])) defs in
   let low_pc = Hashtbl.find compilation_section_start s
@@ -487,7 +487,7 @@ let diab_gen_compilation_section s defs acc =
     entry = cp;
     locs = Some low_pc,locs;
   }::acc
- 
+
 let gen_diab_debug_info sec_name var_section : debug_entries =
   let defs = Hashtbl.fold (fun id t acc ->
     let s = match t with
@@ -513,15 +513,15 @@ let gnu_string_entry s =
       let id = next_id () in
       Hashtbl.add string_table s id;
       Offset_string id
-        
+
 let gen_gnu_debug_info sec_name var_section : debug_entries =
   let low_pc = Hashtbl.find compilation_section_start ".text"
   and high_pc = Hashtbl.find compilation_section_end ".text" in
-  let module Gen = Dwarfgenaux (struct 
+  let module Gen = Dwarfgenaux (struct
     let file_loc = gnu_file_loc
     let string_entry = gnu_string_entry
   end) in
-  let defs,(ty,locs),sec = Hashtbl.fold (fun  id t (acc,bcc,sec) -> 
+  let defs,(ty,locs),sec = Hashtbl.fold (fun  id t (acc,bcc,sec) ->
     let s = match t with
     | GlobalVariable _ -> var_section
     | Function f -> sec_name (get_opt_val f.fun_atom) in

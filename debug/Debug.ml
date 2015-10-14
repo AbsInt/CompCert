@@ -20,7 +20,7 @@ open DwarfTypes
 (* Interface for generating and printing debug information *)
 
 (* Record used for stroring references to the actual implementation functions *)
-type implem = 
+type implem =
     {
       init: string -> unit;
       atom_global: ident -> atom -> unit;

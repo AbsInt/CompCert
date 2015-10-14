@@ -98,7 +98,7 @@ let elf_symbol_offset oc (symb, ofs) =
 let elf_print_fun_info oc name =
   fprintf oc "	.type	%a, @function\n" elf_symbol name;
   fprintf oc "	.size	%a, . - %a\n" elf_symbol name elf_symbol name
-   
+
 let elf_print_var_info oc name =
   fprintf oc "	.type	%a, @object\n" elf_symbol name;
   fprintf oc "	.size	%a, . - %a\n" elf_symbol name elf_symbol name
@@ -109,20 +109,20 @@ let cfi_startproc =
     (fun oc -> fprintf oc "	.cfi_startproc\n")
   else
     (fun _ -> ())
-      
+
 let cfi_endproc =
   if Configuration.asm_supports_cfi then
     (fun oc -> fprintf oc "	.cfi_endproc\n")
   else
     (fun _ -> ())
-      
-      
+
+
 let cfi_adjust =
   if Configuration.asm_supports_cfi then
        (fun oc delta -> fprintf oc "	.cfi_adjust_cfa_offset	%ld\n" delta)
   else
     (fun _ _ -> ())
-      
+
 let cfi_rel_offset =
   if Configuration.asm_supports_cfi then
     (fun oc reg ofs -> fprintf oc "	.cfi_rel_offset	%s, %ld\n" reg ofs)
@@ -211,7 +211,7 @@ let print_debug_info comment print_line print_preg sp_name oc kind txt args =
                  comment print_debug_args args;
   | _ ->
       ()
-					    
+
 (** Inline assembly *)
 
 let print_asm_argument print_preg oc modifier = function
@@ -256,7 +256,7 @@ let print_inline_asm print_preg oc txt sg args res =
 (** Print CompCert version and command-line as asm comment *)
 
 let print_version_and_options oc comment =
-  let version_string =  
+  let version_string =
     if Version.buildnr <> "" && Version.tag <> "" then
       sprintf "%s, Build: %s, Tag: %s" Version.version Version.buildnr Version.tag
     else

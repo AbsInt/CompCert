@@ -103,15 +103,15 @@ module Linux_System : SYSTEM =
 
     let freg oc r =
       output_string oc (float_reg_name r)
-        
-    let creg oc r = 
+
+    let creg oc r =
       fprintf oc "%d" r
- 
+
     let name_of_section = function
       | Section_text -> ".text"
       | Section_data i ->
           if i then ".data" else "COMM"
-      | Section_small_data i -> 
+      | Section_small_data i ->
           if i then ".section	.sdata,\"aw\",@progbits" else "COMM"
       | Section_const i ->
           if i then ".rodata" else "COMM"
@@ -138,17 +138,17 @@ module Linux_System : SYSTEM =
 
     let print_file_line oc file line =
       print_file_line oc comment file line
-    
-    (* Emit .cfi directives *)      
+
+    (* Emit .cfi directives *)
     let cfi_startproc = cfi_startproc
 
     let cfi_endproc = cfi_endproc
-              
+
     let cfi_adjust = cfi_adjust
-              
+
     let cfi_rel_offset = cfi_rel_offset
 
-    let print_prologue oc = 
+    let print_prologue oc =
       if !Clflags.option_g then  begin
           section oc Section_text;
           let low_pc = new_label () in
@@ -169,7 +169,7 @@ module Linux_System : SYSTEM =
 
     let debug_section _ _ = ()
   end
-    
+
 module Diab_System : SYSTEM =
   struct
 
@@ -189,7 +189,7 @@ module Diab_System : SYSTEM =
           symbol_fragment oc s n "@sdax@l"
       | Csymbol_rel_high(s, n) ->
           symbol_fragment oc s n "@sdarx@ha"
- 
+
     let ireg oc r =
       output_char oc 'r';
       output_string oc (int_reg_name r)
@@ -197,10 +197,10 @@ module Diab_System : SYSTEM =
     let freg oc r =
       output_char oc 'f';
       output_string oc (float_reg_name r)
-        
+
     let creg oc r =
       fprintf oc "cr%d" r
-        
+
     let name_of_section = function
       | Section_text -> ".text"
       | Section_data i -> if i then ".data" else "COMM"
@@ -254,20 +254,20 @@ module Diab_System : SYSTEM =
 
     let debug_section oc sec =
       match sec with
-      | Section_debug_abbrev 
+      | Section_debug_abbrev
       | Section_debug_info _
       | Section_debug_loc -> ()
       | sec ->
           let name = match sec with
           | Section_user (name,_,_) -> name
           | _ -> name_of_section sec in
-          if not (Debug.exists_section name) then 
+          if not (Debug.exists_section name) then
             let line_start = new_label ()
             and low_pc = new_label ()
             and debug_info = new_label () in
             Debug.add_diab_info name (line_start,debug_info,name_of_section sec);
             Debug.add_compilation_section_start name low_pc;
-            let line_name = ".debug_line" ^(if name <> ".text" then name else "") in 
+            let line_name = ".debug_line" ^(if name <> ".text" then name else "") in
             section oc (Section_debug_line (if name <> ".text" then Some name else None));
             fprintf oc "	.section	%s,,n\n" line_name;
             if name <> ".text" then
@@ -279,18 +279,18 @@ module Diab_System : SYSTEM =
             fprintf oc "	.d2_line_start	%s\n" line_name
           else
             ()
-        
+
     let print_prologue oc =
       fprintf oc "	.xopt	align-fill-text=0x60000000\n";
       debug_section oc Section_text
 
     let print_epilogue oc =
-      let end_label sec = 
+      let end_label sec =
         fprintf oc "\n";
         fprintf oc "	%s\n" sec;
         let label_end = new_label () in
         fprintf oc "%a:\n" label label_end;
-        label_end 
+        label_end
       and entry_label f =
         let label = new_label () in
         fprintf oc ".L%d:	.d2filenum \"%s\"\n" label f;
@@ -306,7 +306,7 @@ module Target (System : SYSTEM):TARGET =
 
     (* Basic printing functions *)
     let symbol = symbol
-        
+
     let raw_symbol oc s =
       fprintf oc "%s" s
 
@@ -371,7 +371,7 @@ module Target (System : SYSTEM):TARGET =
     let short_cond_branch tbl pc lbl_dest =
       match PTree.get lbl_dest tbl with
       | None -> assert false
-      | Some pc_dest -> 
+      | Some pc_dest ->
           let disp = pc_dest - pc in -0x2000 <= disp && disp < 0x2000
 
     (* Printing of instructions *)
@@ -551,11 +551,11 @@ module Target (System : SYSTEM):TARGET =
       | Pfnmsub(r1, r2, r3, r4) ->
           fprintf oc "	fnmsub	%a, %a, %a, %a\n" freg r1 freg r2 freg r3 freg r4
       | Pfsqrt(r1, r2) ->
-          fprintf oc "	fsqrt	%a, %a\n" freg r1 freg r2    
+          fprintf oc "	fsqrt	%a, %a\n" freg r1 freg r2
       | Pfrsqrte(r1, r2) ->
-          fprintf oc "	frsqrte	%a, %a\n" freg r1 freg r2    
+          fprintf oc "	frsqrte	%a, %a\n" freg r1 freg r2
       | Pfres(r1, r2) ->
-          fprintf oc "	fres	%a, %a\n" freg r1 freg r2    
+          fprintf oc "	fres	%a, %a\n" freg r1 freg r2
       | Pfsel(r1, r2, r3, r4) ->
           fprintf oc "	fsel	%a, %a, %a, %a\n" freg r1 freg r2 freg r3 freg r4
       | Pisel (r1,r2,r3,cr) ->
@@ -793,7 +793,7 @@ module Target (System : SYSTEM):TARGET =
       let nlo = Int64.to_int32 n
       and nhi = Int64.to_int32(Int64.shift_right_logical n 32) in
       fprintf oc "%a:	.long	0x%lx, 0x%lx\n" label lbl nhi nlo
-        
+
     let print_literal32 oc (lbl, n) =
       fprintf oc "%a:	.long	0x%lx\n" label lbl n
 
@@ -823,10 +823,10 @@ module Target (System : SYSTEM):TARGET =
           if Z.gt n Z.zero then
             fprintf oc "	.space	%s\n" (Z.to_string n)
       | Init_addrof(symb, ofs) ->
-          fprintf oc "	.long	%a\n" 
+          fprintf oc "	.long	%a\n"
             symbol_offset (symb, ofs)
 
-  
+
     let print_fun_info = elf_print_fun_info
 
     let emit_constants oc lit =
@@ -840,26 +840,26 @@ module Target (System : SYSTEM):TARGET =
 
     let print_optional_fun_info _ = ()
 
-    let get_section_names name = 
+    let get_section_names name =
       match C2C.atom_sections name with
       | [t;l;j] -> (t, l, j)
       |    _    -> (Section_text, Section_literal, Section_jumptable)
-            
+
     let reset_constants = reset_constants
- 
+
     let print_var_info = elf_print_var_info
 
-    let print_comm_symb oc sz name align = 
+    let print_comm_symb oc sz name align =
       fprintf oc "	%s	%a, %s, %d\n"
         (if C2C.atom_is_static name then ".lcomm" else ".comm")
         symbol name
         (Z.to_string sz)
         align
-    
+
     let print_align oc align  =
       fprintf oc "	.balign	%d\n" align
 
-    let print_jumptable oc jmptbl = 
+    let print_jumptable oc jmptbl =
       let print_jumptable oc (lbl, tbl) =
         fprintf oc "%a:" label lbl;
         List.iter
@@ -874,7 +874,7 @@ module Target (System : SYSTEM):TARGET =
 
     let default_falignment = 4
 
-    let new_label = new_label            
+    let new_label = new_label
 
     let section oc sec =
       section oc sec;
@@ -882,7 +882,7 @@ module Target (System : SYSTEM):TARGET =
   end
 
 let sel_target () =
-  let module S  = (val 
+  let module S  = (val
     (match Configuration.system with
     | "linux"  -> (module Linux_System:SYSTEM)
     | "diab"   -> (module Diab_System:SYSTEM)

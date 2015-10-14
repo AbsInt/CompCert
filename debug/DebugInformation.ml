@@ -17,7 +17,7 @@ open Camlcoq
 open Cutil
 open DebugTypes
 
-(* This implements an interface for the collection of debugging 
+(* This implements an interface for the collection of debugging
    information. *)
 
 (* Simple id generator *)
@@ -71,20 +71,20 @@ let find_type (ty: typ) =
 (* Add type and information *)
 let insert_type (ty: typ) =
   let insert d_ty ty =
-    let id = next_id () 
+    let id = next_id ()
     and name = typ_to_string ty in
     Hashtbl.add types id d_ty;
     Hashtbl.add lookup_types name id;
     id in
   (* We are only interrested in Const and Volatile *)
   let ty = strip_attributes ty in
-  let rec typ_aux ty = 
+  let rec typ_aux ty =
     try find_type ty with
     | Not_found ->
         let d_ty =
           match ty with
           | TVoid _ -> Void
-          | TInt (k,_) -> 
+          | TInt (k,_) ->
               IntegerType ({int_kind = k })
           | TFloat (k,_) ->
               FloatType ({float_kind = k})
@@ -104,14 +104,14 @@ let insert_type (ty: typ) =
               } in
               ArrayType arr
           | TFun (t,param,va,_) ->
-              let param,prot = (match param with 
+              let param,prot = (match param with
               | None -> [],false
-              | Some p -> List.map (fun (i,t) -> let t = attr_aux t in 
+              | Some p -> List.map (fun (i,t) -> let t = attr_aux t in
                 {
                  param_type = t;
-                 param_name = i.name;               
+                 param_name = i.name;
                }) p,true) in
-              let ret = (match t with 
+              let ret = (match t with
               | TVoid _ -> None
               | _ -> Some (attr_aux t)) in
               let ftype = {
@@ -155,7 +155,7 @@ let insert_type (ty: typ) =
                } in
               CompositeType union
           | TEnum (id,_) ->
-              let enum = 
+              let enum =
                 {
                  enum_name = id.name;
                  enum_byte_size = None;
@@ -164,13 +164,13 @@ let insert_type (ty: typ) =
                } in
               EnumType enum in
         insert d_ty ty
-  and attr_aux ty = 
+  and attr_aux ty =
     try
       find_type ty
     with
       Not_found ->
         match strip_last_attribute ty with
-        | Some AConst,t -> 
+        | Some AConst,t ->
             let id = attr_aux t in
             let const = { cst_type = id} in
             insert (ConstType const) ty
@@ -285,7 +285,7 @@ let replace_scope id var =
   let var = Scope var in
   Hashtbl.replace local_variables id var
 
-let gen_comp_typ sou id at = 
+let gen_comp_typ sou id at =
   if sou = Struct then
     TStruct (id,at)
   else
@@ -329,11 +329,11 @@ let insert_global_declaration env dec=
         end
       end else begin
         (* Implict declarations need special handling *)
-        let id' = try Hashtbl.find name_to_definition id.name with Not_found -> 
+        let id' = try Hashtbl.find name_to_definition id.name with Not_found ->
           let id' = next_id () in
           Hashtbl.add name_to_definition id.name id';id' in
         Hashtbl.add stamp_to_definition id.stamp id'
-      end       
+      end
   | Gfundef f ->
       let ret =  (match f.fd_ret with
       | TVoid _ -> None
@@ -350,7 +350,7 @@ let insert_global_declaration env dec=
          parameter_type = ty;
        }) f.fd_params in
       let fd =
-      { 
+      {
         fun_name = f.fd_name.name;
         fun_atom = None;
         fun_file_loc = dec.gloc;
@@ -363,19 +363,19 @@ let insert_global_declaration env dec=
         fun_scope = None;
       } in
       begin
-        let id' = try Hashtbl.find name_to_definition f.fd_name.name with Not_found -> 
+        let id' = try Hashtbl.find name_to_definition f.fd_name.name with Not_found ->
           let id' = next_id () in
           Hashtbl.add name_to_definition f.fd_name.name id';id' in
         Hashtbl.add stamp_to_definition f.fd_name.stamp id';
         Hashtbl.add definitions id' (Function fd)
       end
-  | Gcompositedecl (sou,id,at) -> 
+  | Gcompositedecl (sou,id,at) ->
       ignore (insert_type (gen_comp_typ sou id at));
       let id = find_type (gen_comp_typ sou id []) in
       replace_composite id (fun comp -> if comp.ct_file_loc = None then
         {comp with ct_file_loc = Some (dec.gloc);}
       else comp)
-  | Gcompositedef (sou,id,at,fi) -> 
+  | Gcompositedef (sou,id,at,fi) ->
       ignore (insert_type (gen_comp_typ sou id at));
       let id = find_type (gen_comp_typ sou id []) in
       let fi = List.filter (fun f -> f.fld_name <> "") fi in (* Fields without names need no info *)
@@ -392,15 +392,15 @@ let insert_global_declaration env dec=
       replace_composite id (fun comp ->
         let loc = if comp.ct_file_loc = None then Some dec.gloc else comp.ct_file_loc in
         {comp with ct_file_loc = loc; ct_members = fields; ct_declaration = false;})
-  | Gtypedef (id,t) -> 
+  | Gtypedef (id,t) ->
       let id = insert_type (TNamed (id,[])) in
       let tid = insert_type t in
       replace_typedef id (fun typ -> {typ with typedef_file_loc = Some dec.gloc; typ = Some tid;});
-  | Genumdef (n,at,e) -> 
+  | Genumdef (n,at,e) ->
       ignore(insert_type (TEnum (n,at)));
       let id = find_type (TEnum (n,[])) in
       let enumerator = List.map (fun (i,c,_) ->
-        {    
+        {
              enumerator_name = i.name;
              enumerator_const = c;
        }) e in
@@ -411,19 +411,19 @@ let insert_global_declaration env dec=
 let set_member_offset str field offset =
   let id = find_type (TStruct (str,[])) in
   replace_composite id (fun comp ->
-    let name f = f.cfd_name = field || match f.cfd_bitfield with Some n -> n = field | _ -> false in 
+    let name f = f.cfd_name = field || match f.cfd_bitfield with Some n -> n = field | _ -> false in
     let members = list_replace name (fun a -> {a with cfd_byte_offset = Some offset;}) comp.ct_members in
     {comp with ct_members = members;})
 
 let set_composite_size comp sou size =
   let id = find_type (gen_comp_typ sou comp []) in
-  replace_composite id (fun comp -> {comp with ct_sizeof = size;}) 
+  replace_composite id (fun comp -> {comp with ct_sizeof = size;})
 
 let set_bitfield_offset str field offset underlying size =
   let id = find_type (TStruct (str,[])) in
   replace_composite id (fun comp ->
     let name f = f.cfd_name = field in
-    let members = list_replace name (fun a -> 
+    let members = list_replace name (fun a ->
       {a with cfd_bit_offset = Some offset; cfd_bitfield = Some underlying; cfd_byte_size = Some size})
         comp.ct_members in
     {comp with ct_members = members;})
@@ -433,10 +433,10 @@ let atom_global id atom =
     let id' = (Hashtbl.find stamp_to_definition id.stamp) in
     let g = Hashtbl.find definitions id' in
     match g with
-    | Function f ->    
+    | Function f ->
         replace_fun id' ({f with fun_atom = Some atom;});
         Hashtbl.add atom_to_definition atom id';
-        Hashtbl.iter (fun (fid,sid) tid -> if fid = id.stamp then 
+        Hashtbl.iter (fun (fid,sid) tid -> if fid = id.stamp then
           Hashtbl.add atom_to_scope (atom,sid) tid) scope_to_local
     | GlobalVariable var ->
         replace_var id' ({var with gvar_atom = Some atom;})
@@ -449,7 +449,7 @@ let atom_parameter fid id atom =
     let params = list_replace name (fun p -> {p with parameter_atom = Some atom;}) f.fun_parameter in
     replace_fun fid' ({f with fun_parameter = params;})
   with Not_found -> ()
-    
+
 let add_fun_addr atom (high,low) =
   try
     let id,f = find_fun_atom atom in
@@ -465,7 +465,7 @@ let atom_local_variable id atom =
 let add_lvar_scope f_id var_id s_id =
   try
     let s_id',scope = find_scope_id f_id s_id in
-    let var_id,_ = find_lvar_stamp var_id.stamp in 
+    let var_id,_ = find_lvar_stamp var_id.stamp in
     replace_scope s_id' ({scope_variables = var_id::scope.scope_variables;})
   with Not_found -> ()
 
@@ -543,7 +543,7 @@ let close_scope atom s_id lbl =
   try
     let s_id = Hashtbl.find atom_to_scope (atom,s_id) in
     let old_r = try Hashtbl.find scope_ranges s_id with Not_found -> [] in
-    let last_r,rest = 
+    let last_r,rest =
       begin
         match old_r with
         | a::rest -> a,rest
