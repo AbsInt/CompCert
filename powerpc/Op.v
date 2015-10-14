@@ -17,7 +17,7 @@
 - [operation]: arithmetic and logical operations;
 - [addressing]: addressing modes for load and store operations.
 
-  These types are PowerPC-specific and correspond roughly to what the 
+  These types are PowerPC-specific and correspond roughly to what the
   processor can compute in one instruction.  In other terms, these
   types reflect the state of the program after instruction selection.
   For a processor-independent set of operations, see the abstract
@@ -118,7 +118,7 @@ Inductive operation : Type :=
 (*c Boolean tests: *)
   | Ocmp: condition -> operation.       (**r [rd = 1] if condition holds, [rd = 0] otherwise. *)
 
-(** Addressing modes.  [r1], [r2], etc, are the arguments to the 
+(** Addressing modes.  [r1], [r2], etc, are the arguments to the
   addressing. *)
 
 Inductive addressing: Type :=
@@ -184,7 +184,7 @@ Definition eval_operation
   | Ointconst n, nil => Some (Vint n)
   | Ofloatconst n, nil => Some (Vfloat n)
   | Osingleconst n, nil => Some (Vsingle n)
-  | Oaddrsymbol s ofs, nil => Some (Genv.symbol_address genv s ofs) 
+  | Oaddrsymbol s ofs, nil => Some (Genv.symbol_address genv s ofs)
   | Oaddrstack ofs, nil => Some (Val.add sp (Vint ofs))
   | Ocast8signed, v1::nil => Some (Val.sign_ext 8 v1)
   | Ocast16signed, v1::nil => Some (Val.sign_ext 16 v1)
@@ -436,7 +436,7 @@ Proof with (try exact I).
   destruct v0; destruct v1...
   destruct v0...
   destruct v0...
-  destruct (eval_condition c vl m); simpl... destruct b... 
+  destruct (eval_condition c vl m); simpl... destruct b...
 Qed.
 
 End SOUNDNESS.
@@ -460,7 +460,7 @@ Proof.
   intros until a. unfold is_move_operation; destruct op;
   try (intros; discriminate).
   destruct args. intros; discriminate.
-  destruct args. intros. intuition congruence. 
+  destruct args. intros. intuition congruence.
   intros; discriminate.
 Qed.
 
@@ -488,9 +488,9 @@ Proof.
   repeat (destruct vl; auto). apply Val.negate_cmpu_bool.
   repeat (destruct vl; auto). apply Val.negate_cmp_bool.
   repeat (destruct vl; auto). apply Val.negate_cmpu_bool.
-  repeat (destruct vl; auto). 
+  repeat (destruct vl; auto).
   repeat (destruct vl; auto). destruct (Val.cmpf_bool c v v0); auto. destruct b; auto.
-  repeat (destruct vl; auto). 
+  repeat (destruct vl; auto).
   repeat (destruct vl; auto). destruct (Val.maskzero_bool v i) as [[]|]; auto.
 Qed.
 
@@ -511,7 +511,7 @@ Definition shift_stack_operation (delta: int) (op: operation) :=
 Lemma type_shift_stack_addressing:
   forall delta addr, type_of_addressing (shift_stack_addressing delta addr) = type_of_addressing addr.
 Proof.
-  intros. destruct addr; auto. 
+  intros. destruct addr; auto.
 Qed.
 
 Lemma type_shift_stack_operation:
@@ -559,10 +559,10 @@ Lemma eval_offset_addressing:
 Proof.
   intros. destruct addr; simpl in H; inv H; simpl in *; FuncInv; subst.
   rewrite Val.add_assoc; auto.
-  unfold Genv.symbol_address. destruct (Genv.find_symbol ge i); auto. 
   unfold Genv.symbol_address. destruct (Genv.find_symbol ge i); auto.
-  rewrite Val.add_assoc. rewrite Val.add_permut. rewrite Val.add_commut. auto. 
-  rewrite Val.add_assoc. auto. 
+  unfold Genv.symbol_address. destruct (Genv.find_symbol ge i); auto.
+  rewrite Val.add_assoc. rewrite Val.add_permut. rewrite Val.add_commut. auto.
+  rewrite Val.add_assoc. auto.
 Qed.
 
 (** Operations that are so cheap to recompute that CSE should not factor them out. *)
@@ -591,7 +591,7 @@ Lemma op_depends_on_memory_correct:
   eval_operation ge sp op args m1 = eval_operation ge sp op args m2.
 Proof.
   intros until m2. destruct op; simpl; try congruence. unfold eval_condition.
-  destruct c; simpl; auto; try discriminate. 
+  destruct c; simpl; auto; try discriminate.
 Qed.
 
 (** Global variables mentioned in an operation or addressing mode *)
@@ -630,7 +630,7 @@ Remark symbol_address_preserved:
 Proof.
   unfold Genv.symbol_address; intros. rewrite agree_on_symbols; auto.
 Qed.
- 
+
 Lemma eval_operation_preserved:
   forall sp op vl m,
   eval_operation ge2 sp op vl m = eval_operation ge1 sp op vl m.
@@ -740,25 +740,25 @@ Lemma eval_operation_inj:
 Proof.
   intros until v1; intros GL; intros. destruct op; simpl in H1; simpl; FuncInv; InvInject; TrivialExists.
   apply GL; simpl; auto.
-  apply Values.Val.add_inject; auto. 
+  apply Values.Val.add_inject; auto.
   inv H4; simpl; auto.
   inv H4; simpl; auto.
   apply Values.Val.add_inject; auto.
   apply Values.Val.add_inject; auto.
   apply Values.Val.add_inject; auto. apply GL; simpl; auto.
-  inv H4; inv H2; simpl; auto. econstructor; eauto. 
+  inv H4; inv H2; simpl; auto. econstructor; eauto.
     rewrite Int.sub_add_l. auto.
-    destruct (eq_block b1 b0); auto. subst. rewrite H1 in H0. inv H0. rewrite dec_eq_true. 
+    destruct (eq_block b1 b0); auto. subst. rewrite H1 in H0. inv H0. rewrite dec_eq_true.
     rewrite Int.sub_shifted. auto.
-  inv H4; auto. 
+  inv H4; auto.
   inv H4; inv H2; simpl; auto.
   inv H4; simpl; auto.
   inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.
-  inv H4; inv H3; simpl in H1; inv H1. simpl. 
+  inv H4; inv H3; simpl in H1; inv H1. simpl.
     destruct (Int.eq i0 Int.zero
          || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone); inv H2. TrivialExists.
-  inv H4; inv H3; simpl in H1; inv H1. simpl. 
+  inv H4; inv H3; simpl in H1; inv H1. simpl.
     destruct (Int.eq i0 Int.zero); inv H2. TrivialExists.
   inv H4; inv H2; simpl; auto.
   inv H4; simpl; auto.
@@ -841,7 +841,7 @@ Remark valid_pointer_extends:
   Mem.valid_pointer m1 b1 (Int.unsigned ofs) = true ->
   Mem.valid_pointer m2 b2 (Int.unsigned (Int.add ofs (Int.repr delta))) = true.
 Proof.
-  intros. inv H0. rewrite Int.add_zero. eapply Mem.valid_pointer_extends; eauto. 
+  intros. inv H0. rewrite Int.add_zero. eapply Mem.valid_pointer_extends; eauto.
 Qed.
 
 Remark weak_valid_pointer_extends:
@@ -909,8 +909,8 @@ Proof.
   apply valid_different_pointers_extends; auto.
   intros. rewrite <- val_inject_lessdef; auto.
   rewrite <- val_inject_lessdef; auto.
-  eauto. auto. 
-  destruct H2 as [v2 [A B]]. exists v2; split; auto. rewrite val_inject_lessdef; auto. 
+  eauto. auto.
+  destruct H2 as [v2 [A B]]. exists v2; split; auto. rewrite val_inject_lessdef; auto.
 Qed.
 
 Lemma eval_addressing_lessdef:
@@ -926,8 +926,8 @@ Proof.
   eapply eval_addressing_inj with (sp1 := sp).
   intros. rewrite <- val_inject_lessdef; auto.
   rewrite <- val_inject_lessdef; auto.
-  eauto. auto. 
-  destruct H1 as [v2 [A B]]. exists v2; split; auto. rewrite val_inject_lessdef; auto. 
+  eauto. auto.
+  destruct H1 as [v2 [A B]]. exists v2; split; auto. rewrite val_inject_lessdef; auto.
 Qed.
 
 End EVAL_LESSDEF.
@@ -949,7 +949,7 @@ Remark symbol_address_inject:
   forall id ofs, Val.inject f (Genv.symbol_address genv id ofs) (Genv.symbol_address genv id ofs).
 Proof.
   intros. unfold Genv.symbol_address. destruct (Genv.find_symbol genv id) eqn:?; auto.
-  exploit (proj1 globals); eauto. intros. 
+  exploit (proj1 globals); eauto. intros.
   econstructor; eauto. rewrite Int.add_zero; auto.
 Qed.
 
@@ -971,11 +971,11 @@ Lemma eval_addressing_inject:
   forall addr vl1 vl2 v1,
   Val.inject_list f vl1 vl2 ->
   eval_addressing genv (Vptr sp1 Int.zero) addr vl1 = Some v1 ->
-  exists v2, 
+  exists v2,
      eval_addressing genv (Vptr sp2 Int.zero) (shift_stack_addressing (Int.repr delta) addr) vl2 = Some v2
   /\ Val.inject f v1 v2.
 Proof.
-  intros. 
+  intros.
   rewrite eval_shift_stack_addressing. simpl.
   eapply eval_addressing_inj with (sp1 := Vptr sp1 Int.zero); eauto.
   intros. apply symbol_address_inject.
@@ -990,7 +990,7 @@ Lemma eval_operation_inject:
      eval_operation genv (Vptr sp2 Int.zero) (shift_stack_operation (Int.repr delta) op) vl2 m2 = Some v2
   /\ Val.inject f v1 v2.
 Proof.
-  intros. 
+  intros.
   rewrite eval_shift_stack_operation. simpl.
   eapply eval_operation_inj with (sp1 := Vptr sp1 Int.zero) (m1 := m1); eauto.
   intros; eapply Mem.valid_pointer_inject_val; eauto.
@@ -1015,7 +1015,7 @@ End EVAL_INJECT.
               / \        / \        / \
               \ /        \ /        \ /
         -0--> [1] --1--> [2] --0--> [3]
-       /     
+       /
      [0]
        \
         -1--> [4] --0--> [5] --1--> [6]

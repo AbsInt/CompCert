@@ -21,7 +21,7 @@ Require Import Op.
 (** The following type defines the machine registers that can be referenced
   as locations.  These include:
 - Integer registers that can be allocated to RTL pseudo-registers ([Rxx]).
-- Floating-point registers that can be allocated to RTL pseudo-registers 
+- Floating-point registers that can be allocated to RTL pseudo-registers
   ([Fxx]).
 
   The type [mreg] does not include special-purpose or reserved

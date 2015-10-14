@@ -126,7 +126,7 @@ Definition accessind {A: Type}
        (instr1: A -> constant -> ireg -> instruction)
        (instr2: A -> ireg -> ireg -> instruction)
        (base: ireg) (ofs: int) (r: A) (k: code) :=
-  if Int.eq (high_s ofs) Int.zero 
+  if Int.eq (high_s ofs) Int.zero
   then instr1 r (Cint ofs) base :: k
   else loadimm GPR0 ofs (instr2 r base GPR0 :: k).
 
@@ -522,7 +522,7 @@ Definition int_temp_for (r: mreg) :=
 Definition transl_memory_access
      (mk1: constant -> ireg -> instruction)
      (mk2: ireg -> ireg -> instruction)
-     (addr: addressing) (args: list mreg) 
+     (addr: addressing) (args: list mreg)
      (temp: ireg) (k: code) :=
   match addr, args with
   | Aindexed ofs, a1 :: nil =>
@@ -649,12 +649,12 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
       OK (Pmtctr r1 ::
           Plwz GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 ::
           Pmtlr GPR0 ::
-          Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: 
+          Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) ::
           Pbctr sig :: k)
   | Mtailcall sig (inr symb) =>
       OK (Plwz GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 ::
           Pmtlr GPR0 ::
-          Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: 
+          Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) ::
           Pbs symb sig :: k)
   | Mbuiltin ef args res =>
       OK (Pbuiltin ef (List.map (map_builtin_arg preg_of) args) (map_builtin_res preg_of res) :: k)

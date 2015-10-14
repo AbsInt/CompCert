@@ -86,18 +86,18 @@ with parameter :=
   | PARAM : list spec_elem -> option string -> decl_type -> list attribute -> cabsloc -> parameter
 
 (* The optional expression is the bitfield *)
-with field_group := 
+with field_group :=
   | Field_group : list spec_elem -> list (option name * option expression) -> cabsloc -> field_group
 
 (* The decl_type is in the order in which they are printed. Only the name of
  * the declared identifier is pulled out. *)
 (* e.g: in "int *x", "*x" is the declarator; "x" will be pulled out as *)
 (* the string, and decl_type will be PTR([], JUSTBASE) *)
-with name := 
+with name :=
   | Name : string -> decl_type -> list attribute -> cabsloc -> name
 
 (* A variable declarator ("name") with an initializer *)
-with init_name := 
+with init_name :=
   | Init_name : name -> init_expression -> init_name
 
 (*

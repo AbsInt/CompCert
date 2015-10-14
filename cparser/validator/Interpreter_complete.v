@@ -102,7 +102,7 @@ Variable buffer_end: Stream token.
 Variable full_sem: symbol_semantic_type (NT (start_nt init)).
 
 Inductive pt_zipper:
-  forall (hole_symb:symbol) (hole_word:list token) 
+  forall (hole_symb:symbol) (hole_word:list token)
          (hole_sem:symbol_semantic_type hole_symb), Type :=
 | Top_ptz:
   pt_zipper (NT (start_nt init)) (full_word) (full_sem)
@@ -115,7 +115,7 @@ Inductive pt_zipper:
     {wordq:list token}
     {semantic_valuesq:tuple (map symbol_semantic_type head_symbolsq)},
     parse_tree_list head_symbolsq wordq semantic_valuesq ->
-      
+
     ptl_zipper (head_symbolt::head_symbolsq) (wordt++wordq)
       (semantic_valuet,semantic_valuesq) ->
 
@@ -134,11 +134,11 @@ with ptl_zipper:
     {wordt:list token}
     {semantic_valuet:symbol_semantic_type head_symbolt},
     parse_tree head_symbolt wordt semantic_valuet ->
-    
+
   forall {head_symbolsq:list symbol}
     {wordq:list token}
     {semantic_valuesq:tuple (map symbol_semantic_type head_symbolsq)},
-      
+
   ptl_zipper (head_symbolt::head_symbolsq) (wordt++wordq)
     (semantic_valuet,semantic_valuesq) ->
 
@@ -275,7 +275,7 @@ Fixpoint build_pt_dot {hole_symbs hole_word hole_sems}
     (ptlz:ptl_zipper hole_symbs hole_word hole_sems)
     :pt_dot :=
   match ptl in parse_tree_list hole_symbs hole_word hole_sems
-    return ptl_zipper hole_symbs hole_word hole_sems -> _ 
+    return ptl_zipper hole_symbs hole_word hole_sems -> _
   with
     | Nil_ptl => fun ptlz =>
       Reduce_ptd ptlz
@@ -292,7 +292,7 @@ Fixpoint build_pt_dot {hole_symbs hole_word hole_sems}
   end ptlz.
 
 Lemma build_pt_dot_cost:
-  forall hole_symbs hole_word hole_sems 
+  forall hole_symbs hole_word hole_sems
     (ptl:parse_tree_list hole_symbs hole_word hole_sems)
     (ptlz:ptl_zipper hole_symbs hole_word hole_sems),
     ptd_cost (build_pt_dot ptl ptlz) = ptl_size ptl + ptlz_cost ptlz.
@@ -307,7 +307,7 @@ simpl; rewrite <- plus_n_Sm, plus_assoc; reflexivity.
 Qed.
 
 Lemma build_pt_dot_buffer:
-  forall hole_symbs hole_word hole_sems 
+  forall hole_symbs hole_word hole_sems
     (ptl:parse_tree_list hole_symbs hole_word hole_sems)
     (ptlz:ptl_zipper hole_symbs hole_word hole_sems),
     ptd_buffer (build_pt_dot ptl ptlz) = hole_word ++ ptlz_buffer ptlz.
@@ -321,7 +321,7 @@ simpl; rewrite build_pt_dot_buffer.
 apply app_str_app_assoc.
 Qed.
 
-Lemma ptd_stack_compat_build_pt_dot: 
+Lemma ptd_stack_compat_build_pt_dot:
   forall hole_symbs hole_word hole_sems
     (ptl:parse_tree_list hole_symbs hole_word hole_sems)
     (ptlz:ptl_zipper hole_symbs hole_word hole_sems)
@@ -354,8 +354,8 @@ Program Fixpoint pop_ptlz {hole_symbs hole_word hole_sems}
     { word:_ & { sem:_ &
       (pt_zipper (NT (prod_lhs (ptlz_prod ptlz))) word sem *
        parse_tree (NT (prod_lhs (ptlz_prod ptlz))) word sem)%type } } :=
-  match ptlz in ptl_zipper hole_symbs hole_word hole_sems 
-    return parse_tree_list hole_symbs hole_word hole_sems -> 
+  match ptlz in ptl_zipper hole_symbs hole_word hole_sems
+    return parse_tree_list hole_symbs hole_word hole_sems ->
     { word:_ & { sem:_ &
       (pt_zipper (NT (prod_lhs (ptlz_prod ptlz))) word sem *
        parse_tree (NT (prod_lhs (ptlz_prod ptlz))) word sem)%type } }
@@ -368,7 +368,7 @@ Program Fixpoint pop_ptlz {hole_symbs hole_word hole_sems}
   end ptl.
 
 Lemma pop_ptlz_cost:
-  forall hole_symbs hole_word hole_sems 
+  forall hole_symbs hole_word hole_sems
     (ptl:parse_tree_list hole_symbs hole_word hole_sems)
     (ptlz:ptl_zipper hole_symbs hole_word hole_sems),
   let 'existT word (existT sem (ptz, pt)) := pop_ptlz ptl ptlz in
@@ -381,7 +381,7 @@ simpl; apply pop_ptlz_cost.
 Qed.
 
 Lemma pop_ptlz_buffer:
-  forall hole_symbs hole_word hole_sems 
+  forall hole_symbs hole_word hole_sems
     (ptl:parse_tree_list hole_symbs hole_word hole_sems)
     (ptlz:ptl_zipper hole_symbs hole_word hole_sems),
   let 'existT word (existT sem (ptz, pt)) := pop_ptlz ptl ptlz in
@@ -414,14 +414,14 @@ Lemma pop_ptlz_pop_stack_compat:
     (stack:stack),
 
     ptlz_stack_compat ptlz stack ->
-    
-    let action' := 
-      eq_rect _ (fun x=>x) (prod_action (ptlz_prod ptlz)) _ 
+
+    let action' :=
+      eq_rect _ (fun x=>x) (prod_action (ptlz_prod ptlz)) _
       (pop_ptlz_pop_stack_compat_converter _ _ _ _ _)
     in
     let 'existT word (existT sem (ptz, pt)) := pop_ptlz ptl ptlz in
       match pop (ptlz_past ptlz) stack (uncurry action' hole_sems) with
-        | OK (stack', sem') => 
+        | OK (stack', sem') =>
            ptz_stack_compat ptz stack' /\ sem = sem'
         | Err => True
       end.
@@ -503,8 +503,8 @@ pose proof (pop_ptlz_buffer _ _ _ Nil_ptl ptlz).
 destruct (pop_ptlz Nil_ptl ptlz) as [word [sem [ptz pt]]].
 rewrite H0; clear H0.
 revert H.
-match goal with 
-  |- match ?p1 with Err => _ | OK _ => _ end -> match bind2 ?p2 _ with Err => _ | OK _ => _ end => 
+match goal with
+  |- match ?p1 with Err => _ | OK _ => _ end -> match bind2 ?p2 _ with Err => _ | OK _ => _ end =>
   replace p1 with p2; [destruct p2 as [|[]];  intros|]
 end.
 assumption.
@@ -610,8 +610,8 @@ Qed.
 Variable full_pt: parse_tree (NT (start_nt init)) full_word full_sem.
 
 Definition init_ptd :=
-  match full_pt in parse_tree head full_word full_sem return 
-    pt_zipper head full_word full_sem -> 
+  match full_pt in parse_tree head full_word full_sem return
+    pt_zipper head full_word full_sem ->
     match head return Type with | T _ => unit | NT _ => pt_dot end
   with
     | Terminal_pt _ _ => fun _ => ()
@@ -668,7 +668,7 @@ Qed.
 Theorem parse_complete n_steps:
   match parse init (full_word ++ buffer_end) n_steps with
     | OK (Parsed_pr sem_res buffer_end_res) =>
-      sem_res = full_sem /\ buffer_end_res = buffer_end /\ 
+      sem_res = full_sem /\ buffer_end_res = buffer_end /\
        pt_size full_pt <= n_steps
     | OK Fail_pr => False
     | OK Timeout_pr => n_steps < pt_size full_pt

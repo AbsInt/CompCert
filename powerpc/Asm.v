@@ -109,7 +109,7 @@ Inductive constant: Type :=
 (** A note on constants: while immediate operands to PowerPC
   instructions must be representable in 16 bits (with
   sign extension or left shift by 16 positions for some instructions),
-  we do not attempt to capture these restrictions in the 
+  we do not attempt to capture these restrictions in the
   abstract syntax nor in the semantics.  The assembler will
   emit an error if immediate operands exceed the representable
   range.  Of course, our PPC generator (file [Asmgen]) is
@@ -190,9 +190,9 @@ Inductive instruction : Type :=
   | Pfcfid: freg -> freg -> instruction                       (**r signed-long-to-float conversion (PPC64) *)
   | Pfcti: ireg -> freg -> instruction                        (**r float-to-signed-int conversion, round towards 0 (pseudo) *)
   | Pfctiu: ireg -> freg -> instruction                       (**r float-to-unsigned-int conversion, round towards 0 (pseudo, PPC64) *)
-  | Pfctidz: freg -> freg -> instruction                      (**r float-to-signed-long conversion, round towards 0 (PPC64) *) 
-  | Pfctiw: freg -> freg -> instruction                       (**r float-to-signed-int conversion, round by default *) 
-  | Pfctiwz: freg -> freg -> instruction                      (**r float-to-signed-int conversion, round towards 0 *) 
+  | Pfctidz: freg -> freg -> instruction                      (**r float-to-signed-long conversion, round towards 0 (PPC64) *)
+  | Pfctiw: freg -> freg -> instruction                       (**r float-to-signed-int conversion, round by default *)
+  | Pfctiwz: freg -> freg -> instruction                      (**r float-to-signed-int conversion, round towards 0 *)
   | Pfdiv: freg -> freg -> freg -> instruction                (**r float division *)
   | Pfdivs: freg -> freg -> freg -> instruction               (**r float division *)
   | Pfmake: freg -> ireg -> ireg -> instruction               (**r build a float from 2 ints (pseudo) *)
@@ -380,7 +380,7 @@ Definition program := AST.program fundef unit.
   type [Tint], float registers to values of type [Tfloat],
   and boolean registers ([CARRY], [CR0_0], etc) to either
   [Vzero] or [Vone]. *)
-  
+
 Definition regset := Pregmap.t val.
 Definition genv := Genv.t fundef unit.
 
@@ -674,7 +674,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       end
   | Pbtbl r tbl =>
       match rs r with
-      | Vint n => 
+      | Vint n =>
           match list_nth_z tbl (Int.unsigned n) with
           | None => Stuck
           | Some lbl => goto_label f lbl (rs #GPR12 <- Vundef #CTR <- Vundef) m
@@ -1038,7 +1038,7 @@ Inductive final_state: state -> int -> Prop :=
       rs#PC = Vzero ->
       rs#GPR3 = Vint r ->
       final_state (State rs m) r.
-      
+
 Definition semantics (p: program) :=
   Semantics step (initial_state p) final_state (Genv.globalenv p).
 
@@ -1053,9 +1053,9 @@ Proof.
           forall vl2, list_forall2 (extcall_arg rs m) ll vl2 -> vl1 = vl2).
     induction 1; intros vl2 EA; inv EA.
     auto.
-    f_equal; auto. 
+    f_equal; auto.
     inv H; inv H3; congruence.
-  intros. red in H0; red in H1. eauto. 
+  intros. red in H0; red in H1. eauto.
 Qed.
 
 Lemma semantics_determinate: forall p, determinate (semantics p).

@@ -104,7 +104,7 @@ Definition funsig (fd: fundef) :=
 (** Three evaluation environments are involved:
 - [genv]: global environments, map symbols and functions to memory blocks,
     and maps symbols to variable informations (type [var_kind])
-- [env]: local environments, map local variables 
+- [env]: local environments, map local variables
     to pairs (memory block, size)
 - [temp_env]: local environments, map temporary variables to
     their current values.
@@ -133,7 +133,7 @@ Fixpoint bind_parameters (formals: list ident) (args: list val)
  | nil, nil => Some le
  | id :: xl, v :: vl => bind_parameters xl vl (PTree.set id v le)
  | _, _ => None
- end. 
+ end.
 
 (** Continuations *)
 
@@ -211,10 +211,10 @@ Fixpoint seq_of_lbl_stmt (sl: lbl_stmt) : stmt :=
   | LScons c s sl' => Sseq s (seq_of_lbl_stmt sl')
   end.
 
-(** Find the statement and manufacture the continuation 
+(** Find the statement and manufacture the continuation
   corresponding to a label *)
 
-Fixpoint find_label (lbl: label) (s: stmt) (k: cont) 
+Fixpoint find_label (lbl: label) (s: stmt) (k: cont)
                     {struct s}: option (stmt * cont) :=
   match s with
   | Sseq s1 s2 =>
@@ -238,7 +238,7 @@ Fixpoint find_label (lbl: label) (s: stmt) (k: cont)
   | _ => None
   end
 
-with find_label_ls (lbl: label) (sl: lbl_stmt) (k: cont) 
+with find_label_ls (lbl: label) (sl: lbl_stmt) (k: cont)
                    {struct sl}: option (stmt * cont) :=
   match sl with
   | LSnil => None
@@ -290,8 +290,8 @@ Section RELSEM.
 
 Variable ge: genv.
 
-(* Evaluation of the address of a variable: 
-   [eval_var_addr prg ge e id b] states that variable [id] 
+(* Evaluation of the address of a variable:
+   [eval_var_addr prg ge e id b] states that variable [id]
    in environment [e] evaluates to block [b]. *)
 
 Inductive eval_var_addr: env -> ident -> block -> Prop :=
@@ -460,7 +460,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | step_external_function: forall ef vargs k m t vres m',
       external_call ef ge vargs m t vres m' ->
       step (Callstate (External ef) vargs k m)
-         t (Returnstate vres k m')        
+         t (Returnstate vres k m')
 
   | step_return: forall v optid f e le k m,
       step (Returnstate v (Kcall optid f e le k) m)

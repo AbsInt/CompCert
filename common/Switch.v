@@ -118,7 +118,7 @@ Definition refine_low_bound (v lo: Z) :=
 Definition refine_high_bound (v hi: Z) :=
   if zeq v hi then hi - 1 else hi.
 
-Fixpoint validate_jumptable (cases: ZMap.t nat) 
+Fixpoint validate_jumptable (cases: ZMap.t nat)
                             (tbl: list nat) (n: Z) {struct tbl} : bool :=
   match tbl with
   | nil => true
@@ -143,7 +143,7 @@ Fixpoint validate (default: nat) (cases: table) (t: comptree)
       | (None, _) =>
           false
       | (Some act', others) =>
-          beq_nat act act' 
+          beq_nat act act'
           && validate default others t'
                       (refine_low_bound pivot lo)
                       (refine_high_bound pivot hi)
@@ -192,10 +192,10 @@ Proof.
   induction t; simpl; intros; InvBooleans.
 - constructor.
 - destruct (split_eq key cases) as [[act'|] others]; try discriminate; InvBooleans.
-  constructor; eauto.  
+  constructor; eauto.
 - destruct (split_lt key cases) as [lc rc]; InvBooleans.
   constructor; eauto.
-- destruct (split_between default ofs sz cases) as [ins out]; InvBooleans. 
+- destruct (split_between default ofs sz cases) as [ins out]; InvBooleans.
   constructor; eauto.
 Qed.
 
@@ -213,10 +213,10 @@ Proof.
 - intros. inv H. simpl. destruct (zeq v n); auto.
 - destruct a as [key act].
   destruct (split_eq n cases) as [same other] eqn:SEQ.
-  rewrite (IHcases same other) by auto. 
+  rewrite (IHcases same other) by auto.
   destruct (zeq key n); intros EQ; inv EQ.
-+ destruct (zeq v n); auto. 
-+ simpl. destruct (zeq v key). 
++ destruct (zeq v n); auto.
++ simpl. destruct (zeq v key).
   * subst v. rewrite zeq_false by auto. auto.
   * auto.
 Qed.
@@ -231,7 +231,7 @@ Lemma split_lt_prop:
 Proof.
   induction cases; intros until rcases; simpl.
 - intros. inv H. simpl. destruct (zlt v n); auto.
-- destruct a as [key act]. 
+- destruct a as [key act].
   destruct (split_lt n cases) as [lc rc] eqn:SEQ.
   rewrite (IHcases lc rc) by auto.
   destruct (zlt key n); intros EQ; inv EQ; simpl.
@@ -249,7 +249,7 @@ Lemma split_between_prop:
 Proof.
   induction cases; intros until outside; simpl; intros SEQ.
 - inv SEQ. rewrite ZMap.gi. simpl. destruct (zlt ((v - ofs) mod modulus) sz); auto.
-- destruct a as [key act]. 
+- destruct a as [key act].
   destruct (split_between default ofs sz cases) as [ins outs].
   erewrite IHcases; eauto.
   destruct (zlt ((key - ofs) mod modulus) sz); inv SEQ.
@@ -257,7 +257,7 @@ Proof.
   destruct (zeq v key).
   subst v. rewrite zlt_true by auto. auto.
   auto.
-+ simpl. destruct (zeq v key). 
++ simpl. destruct (zeq v key).
   subst v. rewrite zlt_false by auto. auto.
   auto.
 Qed.
@@ -270,11 +270,11 @@ Lemma validate_jumptable_correct_rec:
 Proof.
   induction tbl; simpl; intros.
 - unfold list_length_z in H0. simpl in H0. omegaContradiction.
-- InvBooleans. rewrite list_length_z_cons in H0. apply beq_nat_true in H1. 
+- InvBooleans. rewrite list_length_z_cons in H0. apply beq_nat_true in H1.
   destruct (zeq v 0).
   + replace (base + v) with base by omega. congruence.
-  + replace (base + v) with (Z.succ base + Z.pred v) by omega. 
-    apply IHtbl. auto. omega. 
+  + replace (base + v) with (Z.succ base + Z.pred v) by omega.
+    apply IHtbl. auto. omega.
 Qed.
 
 Lemma validate_jumptable_correct:
@@ -288,12 +288,12 @@ Lemma validate_jumptable_correct:
 Proof.
   intros.
   rewrite (validate_jumptable_correct_rec cases tbl ofs); auto.
-- f_equal. f_equal. rewrite Zmod_small. omega. 
-  destruct (zle ofs v). omega. 
+- f_equal. f_equal. rewrite Zmod_small. omega.
+  destruct (zle ofs v). omega.
   assert (M: ((v - ofs) + 1 * modulus) mod modulus = (v - ofs) + modulus).
   { rewrite Zmod_small. omega. omega. }
   rewrite Z_mod_plus in M by auto. rewrite M in H0. omega.
-- generalize (Z_mod_lt (v - ofs) modulus modulus_pos). omega. 
+- generalize (Z_mod_lt (v - ofs) modulus modulus_pos). omega.
 Qed.
 
 Lemma validate_correct_rec:
@@ -307,23 +307,23 @@ Proof.
   intros default v VRANGE. induction t; simpl; intros until hi.
 - (* base case *)
   destruct cases as [ | [key1 act1] cases1]; intros.
-+ apply beq_nat_true in H. subst act. reflexivity. 
-+ InvBooleans. apply beq_nat_true in H2. subst. simpl. 
++ apply beq_nat_true in H. subst act. reflexivity.
++ InvBooleans. apply beq_nat_true in H2. subst. simpl.
   destruct (zeq v hi). auto. omegaContradiction.
 - (* eq node *)
   destruct (split_eq key cases) as [optact others] eqn:EQ. intros.
   destruct optact as [act1|]; InvBooleans; try discriminate.
   apply beq_nat_true in H.
   rewrite (split_eq_prop v default _ _ _ _ EQ).
-  destruct (zeq v key). 
+  destruct (zeq v key).
   + congruence.
-  + eapply IHt; eauto. 
+  + eapply IHt; eauto.
     unfold refine_low_bound, refine_high_bound. split.
-    destruct (zeq key lo); omega. 
+    destruct (zeq key lo); omega.
     destruct (zeq key hi); omega.
 - (* lt node *)
   destruct (split_lt key cases) as [lcases rcases] eqn:EQ; intros; InvBooleans.
-  rewrite (split_lt_prop v default _ _ _ _ EQ). destruct (zlt v key). 
+  rewrite (split_lt_prop v default _ _ _ _ EQ). destruct (zlt v key).
   eapply IHt1. eauto. omega.
   eapply IHt2. eauto. omega.
 - (* jumptable node *)
@@ -331,8 +331,8 @@ Proof.
   rewrite (split_between_prop v _ _ _ _ _ _ EQ).
   assert (0 <= (v - ofs) mod modulus < modulus) by (apply Z_mod_lt; omega).
   destruct (zlt ((v - ofs) mod modulus) sz).
-  rewrite Zmod_small by omega. eapply validate_jumptable_correct; eauto.  
-  eapply IHt; eauto. 
+  rewrite Zmod_small by omega. eapply validate_jumptable_correct; eauto.
+  eapply IHt; eauto.
 Qed.
 
 Definition table_tree_agree
@@ -345,8 +345,8 @@ Theorem validate_switch_correct:
   wf_comptree t /\ table_tree_agree default cases t.
 Proof.
   unfold validate_switch, table_tree_agree; split.
-  eapply validate_wf; eauto. 
-  intros; eapply validate_correct_rec; eauto. omega. 
+  eapply validate_wf; eauto.
+  intros; eapply validate_correct_rec; eauto. omega.
 Qed.
 
 End COMPTREE.

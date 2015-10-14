@@ -132,7 +132,7 @@ Proof.
   inv VM.
   destruct cond; auto with va.
   inv H0.
-  destruct cond; simpl; eauto with va.  
+  destruct cond; simpl; eauto with va.
   inv H2.
   destruct cond; simpl; eauto with va.
   destruct cond; auto with va.
@@ -149,7 +149,7 @@ Lemma symbol_address_sound_2:
   forall id ofs,
   vmatch bc (Genv.symbol_address ge id ofs) (Ifptr (Gl id ofs)).
 Proof.
-  intros. unfold Genv.symbol_address. destruct (Genv.find_symbol ge id) as [b|] eqn:F. 
+  intros. unfold Genv.symbol_address. destruct (Genv.find_symbol ge id) as [b|] eqn:F.
   constructor. constructor. apply GENV; auto.
   constructor.
 Qed.
@@ -173,7 +173,7 @@ Theorem eval_static_addressing_sound:
 Proof.
   unfold eval_addressing, eval_static_addressing; intros;
   destruct addr; InvHyps; eauto with va.
-  rewrite Int.add_zero_l; auto with va. 
+  rewrite Int.add_zero_l; auto with va.
 Qed.
 
 Theorem eval_static_operation_sound:
@@ -187,7 +187,7 @@ Proof.
   destruct (propagate_float_constants tt); constructor.
   destruct (propagate_float_constants tt); constructor.
   eapply eval_static_addressing_sound; eauto.
-  apply of_optbool_sound. eapply eval_static_condition_sound; eauto. 
+  apply of_optbool_sound. eapply eval_static_condition_sound; eauto.
 Qed.
 
 End SOUNDNESS.

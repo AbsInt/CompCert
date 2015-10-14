@@ -59,7 +59,7 @@ Proof.
   assert (forall n pc, (return_measure_rec n f pc <= n)%nat).
     induction n; intros; simpl.
     omega.
-    destruct (f!pc); try omega. 
+    destruct (f!pc); try omega.
     destruct i; try omega.
     generalize (IHn n0). omega.
     generalize (IHn n0). omega.
@@ -125,28 +125,28 @@ Lemma is_return_charact:
 Proof.
   induction n; intros.
   simpl in H. congruence.
-  generalize H. simpl. 
+  generalize H. simpl.
   caseEq ((fn_code f)!pc); try congruence.
   intro i. caseEq i; try congruence.
   intros s; intros. eapply is_return_nop; eauto. eapply IHn; eauto. omega.
   unfold return_measure.
   rewrite <- (is_return_measure_rec f (S n) niter pc rret); auto.
-  rewrite <- (is_return_measure_rec f n niter s rret); auto. 
+  rewrite <- (is_return_measure_rec f n niter s rret); auto.
   simpl. rewrite H2. omega. omega.
 
-  intros op args dst s EQ1 EQ2. 
+  intros op args dst s EQ1 EQ2.
   caseEq (is_move_operation op args); try congruence.
   intros src IMO. destruct (Reg.eq rret src); try congruence.
-  subst rret. intro. 
-  exploit is_move_operation_correct; eauto. intros [A B]. subst. 
+  subst rret. intro.
+  exploit is_move_operation_correct; eauto. intros [A B]. subst.
   eapply is_return_move; eauto. eapply IHn; eauto. omega.
   unfold return_measure.
   rewrite <- (is_return_measure_rec f (S n) niter pc src); auto.
-  rewrite <- (is_return_measure_rec f n niter s dst); auto. 
+  rewrite <- (is_return_measure_rec f n niter s dst); auto.
   simpl. rewrite EQ2. omega. omega.
- 
-  intros or EQ1 EQ2. destruct or; intros. 
-  assert (r = rret). eapply proj_sumbool_true; eauto. subst r. 
+
+  intros or EQ1 EQ2. destruct or; intros.
+  assert (r = rret). eapply proj_sumbool_true; eauto. subst r.
   apply is_return_some; auto.
   apply is_return_none; auto.
 Qed.
@@ -172,7 +172,7 @@ Proof.
           opt_typ_eq (sig_res s) (sig_res (fn_sig f))); intros.
   destruct (andb_prop _ _ H0). destruct (andb_prop _ _ H1).
   eapply transf_instr_tailcall; eauto.
-  eapply is_return_charact; eauto. 
+  eapply is_return_charact; eauto.
   constructor.
 Qed.
 
@@ -183,8 +183,8 @@ Lemma transf_instr_lookup:
 Proof.
   intros. unfold transf_function.
   destruct (zeq (fn_stacksize f) 0).
-  simpl. rewrite PTree.gmap. rewrite H. simpl. 
-  exists (transf_instr f pc i); split. auto. apply transf_instr_charact; auto. 
+  simpl. rewrite PTree.gmap. rewrite H. simpl.
+  exists (transf_instr f pc i); split. auto. apply transf_instr_charact; auto.
   exists i; split. auto. constructor.
 Qed.
 
@@ -246,14 +246,14 @@ Proof (@Genv.find_funct_ptr_transf _ _ _ transf_fundef prog).
 Lemma sig_preserved:
   forall f, funsig (transf_fundef f) = funsig f.
 Proof.
-  destruct f; auto. simpl. unfold transf_function. 
-  destruct (zeq (fn_stacksize f) 0); auto. 
+  destruct f; auto. simpl. unfold transf_function.
+  destruct (zeq (fn_stacksize f) 0); auto.
 Qed.
 
 Lemma stacksize_preserved:
   forall f, fn_stacksize (transf_function f) = fn_stacksize f.
 Proof.
-  unfold transf_function. intros. 
+  unfold transf_function. intros.
   destruct (zeq (fn_stacksize f) 0); auto.
 Qed.
 
@@ -410,33 +410,33 @@ Proof.
   induction 1; intros; inv MS; EliminatedInstr.
 
 (* nop *)
-  TransfInstr. left. econstructor; split. 
+  TransfInstr. left. econstructor; split.
   eapply exec_Inop; eauto. constructor; auto.
 (* eliminated nop *)
   assert (s0 = pc') by congruence. subst s0.
-  right. split. simpl. omega. split. auto. 
-  econstructor; eauto. 
+  right. split. simpl. omega. split. auto.
+  econstructor; eauto.
 
 (* op *)
   TransfInstr.
-  assert (Val.lessdef_list (rs##args) (rs'##args)). apply regs_lessdef_regs; auto. 
-  exploit eval_operation_lessdef; eauto. 
-  intros [v' [EVAL' VLD]]. 
+  assert (Val.lessdef_list (rs##args) (rs'##args)). apply regs_lessdef_regs; auto.
+  exploit eval_operation_lessdef; eauto.
+  intros [v' [EVAL' VLD]].
   left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) pc' (rs'#res <- v') m'); split.
   eapply exec_Iop; eauto.  rewrite <- EVAL'.
   apply eval_operation_preserved. exact symbols_preserved.
   econstructor; eauto. apply set_reg_lessdef; auto.
 (* eliminated move *)
-  rewrite H1 in H. clear H1. inv H. 
+  rewrite H1 in H. clear H1. inv H.
   right. split. simpl. omega. split. auto.
-  econstructor; eauto. simpl in H0. rewrite PMap.gss. congruence. 
+  econstructor; eauto. simpl in H0. rewrite PMap.gss. congruence.
 
 (* load *)
   TransfInstr.
-  assert (Val.lessdef_list (rs##args) (rs'##args)). apply regs_lessdef_regs; auto. 
-  exploit eval_addressing_lessdef; eauto. 
+  assert (Val.lessdef_list (rs##args) (rs'##args)). apply regs_lessdef_regs; auto.
+  exploit eval_addressing_lessdef; eauto.
   intros [a' [ADDR' ALD]].
-  exploit Mem.loadv_extends; eauto. 
+  exploit Mem.loadv_extends; eauto.
   intros [v' [LOAD' VLD]].
   left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) pc' (rs'#dst <- v') m'); split.
   eapply exec_Iload with (a := a'). eauto.  rewrite <- ADDR'.
@@ -445,10 +445,10 @@ Proof.
 
 (* store *)
   TransfInstr.
-  assert (Val.lessdef_list (rs##args) (rs'##args)). apply regs_lessdef_regs; auto. 
-  exploit eval_addressing_lessdef; eauto. 
+  assert (Val.lessdef_list (rs##args) (rs'##args)). apply regs_lessdef_regs; auto.
+  exploit eval_addressing_lessdef; eauto.
   intros [a' [ADDR' ALD]].
-  exploit Mem.storev_extends. 2: eexact H1. eauto. eauto. apply RLD.  
+  exploit Mem.storev_extends. 2: eexact H1. eauto. eauto. apply RLD.
   intros [m'1 [STORE' MLD']].
   left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) pc' rs' m'1); split.
   eapply exec_Istore with (a := a'). eauto.  rewrite <- ADDR'.
@@ -457,32 +457,32 @@ Proof.
   econstructor; eauto.
 
 (* call *)
-  exploit find_function_translated; eauto. intro FIND'.  
+  exploit find_function_translated; eauto. intro FIND'.
   TransfInstr.
 (* call turned tailcall *)
   assert ({ m'' | Mem.free m' sp0 0 (fn_stacksize (transf_function f)) = Some m''}).
-    apply Mem.range_perm_free. rewrite stacksize_preserved. rewrite H7. 
+    apply Mem.range_perm_free. rewrite stacksize_preserved. rewrite H7.
     red; intros; omegaContradiction.
   destruct X as [m'' FREE].
   left. exists (Callstate s' (transf_fundef fd) (rs'##args) m''); split.
-  eapply exec_Itailcall; eauto. apply sig_preserved. 
+  eapply exec_Itailcall; eauto. apply sig_preserved.
   constructor. eapply match_stackframes_tail; eauto. apply regs_lessdef_regs; auto.
   eapply Mem.free_right_extends; eauto.
   rewrite stacksize_preserved. rewrite H7. intros. omegaContradiction.
 (* call that remains a call *)
   left. exists (Callstate (Stackframe res (transf_function f) (Vptr sp0 Int.zero) pc' rs' :: s')
                           (transf_fundef fd) (rs'##args) m'); split.
-  eapply exec_Icall; eauto. apply sig_preserved. 
-  constructor. constructor; auto. apply regs_lessdef_regs; auto. auto. 
+  eapply exec_Icall; eauto. apply sig_preserved.
+  constructor. constructor; auto. apply regs_lessdef_regs; auto. auto.
 
-(* tailcall *) 
+(* tailcall *)
   exploit find_function_translated; eauto. intro FIND'.
   exploit Mem.free_parallel_extends; eauto. intros [m'1 [FREE EXT]].
   TransfInstr.
   left. exists (Callstate s' (transf_fundef fd) (rs'##args) m'1); split.
   eapply exec_Itailcall; eauto. apply sig_preserved.
   rewrite stacksize_preserved; auto.
-  constructor. auto.  apply regs_lessdef_regs; auto. auto. 
+  constructor. auto.  apply regs_lessdef_regs; auto. auto.
 
 (* builtin *)
   TransfInstr.
@@ -498,18 +498,18 @@ Proof.
   econstructor; eauto. apply set_res_lessdef; auto.
 
 (* cond *)
-  TransfInstr. 
+  TransfInstr.
   left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) (if b then ifso else ifnot) rs' m'); split.
   eapply exec_Icond; eauto.
   apply eval_condition_lessdef with (rs##args) m; auto. apply regs_lessdef_regs; auto.
-  constructor; auto. 
+  constructor; auto.
 
 (* jumptable *)
-  TransfInstr. 
+  TransfInstr.
   left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) pc' rs' m'); split.
   eapply exec_Ijumptable; eauto.
   generalize (RLD arg). rewrite H0. intro. inv H2. auto.
-  constructor; auto. 
+  constructor; auto.
 
 (* return *)
   exploit Mem.free_parallel_extends; eauto. intros [m'1 [FREE EXT]].
@@ -521,11 +521,11 @@ Proof.
   auto.
 
 (* eliminated return None *)
-  assert (or = None) by congruence. subst or. 
-  right. split. simpl. omega. split. auto. 
+  assert (or = None) by congruence. subst or.
+  right. split. simpl. omega. split. auto.
   constructor. auto.
   simpl. constructor.
-  eapply Mem.free_left_extends; eauto. 
+  eapply Mem.free_left_extends; eauto.
 
 (* eliminated return Some *)
   assert (or = Some r) by congruence. subst or.
@@ -542,12 +542,12 @@ Proof.
   assert (fn_stacksize (transf_function f) = fn_stacksize f /\
           fn_entrypoint (transf_function f) = fn_entrypoint f /\
           fn_params (transf_function f) = fn_params f).
-    unfold transf_function. destruct (zeq (fn_stacksize f) 0); auto. 
-  destruct H0 as [EQ1 [EQ2 EQ3]]. 
+    unfold transf_function. destruct (zeq (fn_stacksize f) 0); auto.
+  destruct H0 as [EQ1 [EQ2 EQ3]].
   left. econstructor; split.
   simpl. eapply exec_function_internal; eauto. rewrite EQ1; eauto.
   rewrite EQ2. rewrite EQ3. constructor; auto.
-  apply regs_lessdef_init_regs. auto. 
+  apply regs_lessdef_init_regs. auto.
 
 (* external call *)
   exploit external_call_mem_extends; eauto.
@@ -556,29 +556,29 @@ Proof.
   simpl. econstructor; eauto.
   eapply external_call_symbols_preserved; eauto.
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
-  constructor; auto. 
+  constructor; auto.
 
 (* returnstate *)
-  inv H2. 
+  inv H2.
 (* synchronous return in both programs *)
-  left. econstructor; split. 
-  apply exec_return. 
-  constructor; auto. apply set_reg_lessdef; auto. 
+  left. econstructor; split.
+  apply exec_return.
+  constructor; auto. apply set_reg_lessdef; auto.
 (* return instr in source program, eliminated because of tailcall *)
-  right. split. unfold measure. simpl length. 
+  right. split. unfold measure. simpl length.
   change (S (length s) * (niter + 2))%nat
-   with ((niter + 2) + (length s) * (niter + 2))%nat. 
-  generalize (return_measure_bounds (fn_code f) pc). omega.  
-  split. auto. 
+   with ((niter + 2) + (length s) * (niter + 2))%nat.
+  generalize (return_measure_bounds (fn_code f) pc). omega.
+  split. auto.
   econstructor; eauto.
-  rewrite Regmap.gss. auto. 
+  rewrite Regmap.gss. auto.
 Qed.
 
 Lemma transf_initial_states:
   forall st1, initial_state prog st1 ->
   exists st2, initial_state tprog st2 /\ match_states st1 st2.
 Proof.
-  intros. inv H. 
+  intros. inv H.
   exploit funct_ptr_translated; eauto. intro FIND.
   exists (Callstate nil (transf_fundef f) nil m0); split.
   econstructor; eauto. apply Genv.init_mem_transf. auto.
@@ -586,14 +586,14 @@ Proof.
   rewrite symbols_preserved. eauto.
   reflexivity.
   rewrite <- H3. apply sig_preserved.
-  constructor. constructor. constructor. apply Mem.extends_refl. 
+  constructor. constructor. constructor. apply Mem.extends_refl.
 Qed.
 
 Lemma transf_final_states:
-  forall st1 st2 r, 
+  forall st1 st2 r,
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
 Proof.
-  intros. inv H0. inv H. inv H5. inv H3. constructor. 
+  intros. inv H0. inv H. inv H5. inv H3. constructor.
 Qed.
 
 
@@ -607,7 +607,7 @@ Proof.
   eexact public_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
-  exact transf_step_correct. 
+  exact transf_step_correct.
 Qed.
 
 End PRESERVATION.

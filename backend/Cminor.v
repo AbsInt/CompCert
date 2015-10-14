@@ -241,7 +241,7 @@ Inductive state: Type :=
              (k: cont)                  (**r what to do next *)
              (m: mem),                  (**r memory state *)
       state.
-             
+
 Section RELSEM.
 
 Variable ge: genv.
@@ -378,7 +378,7 @@ Inductive eval_expr: expr -> val -> Prop :=
       eval_expr (Ebinop op a1 a2) v
   | eval_Eload: forall chunk addr vaddr v,
       eval_expr addr vaddr ->
-      Mem.loadv chunk m vaddr = Some v ->     
+      Mem.loadv chunk m vaddr = Some v ->
       eval_expr (Eload chunk addr) v.
 
 Inductive eval_exprlist: list expr -> list val -> Prop :=
@@ -406,10 +406,10 @@ Definition is_call_cont (k: cont) : Prop :=
   | _ => False
   end.
 
-(** Find the statement and manufacture the continuation 
+(** Find the statement and manufacture the continuation
   corresponding to a label *)
 
-Fixpoint find_label (lbl: label) (s: stmt) (k: cont) 
+Fixpoint find_label (lbl: label) (s: stmt) (k: cont)
                     {struct s}: option (stmt * cont) :=
   match s with
   | Sseq s1 s2 =>
@@ -543,7 +543,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | step_external_function: forall ef vargs k m t vres m',
       external_call ef ge vargs m t vres m' ->
       step (Callstate (External ef) vargs k m)
-         t (Returnstate vres k m')        
+         t (Returnstate vres k m')
 
   | step_return: forall v optid f sp e k m,
       step (Returnstate v (Kcall optid f sp e k) m)
@@ -586,9 +586,9 @@ Proof.
   assert (t1 = E0 -> exists s2, step (Genv.globalenv p) s t2 s2).
     intros. subst. inv H0. exists s1; auto.
   inversion H; subst; auto.
-  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
-  exists (State f Sskip k sp (set_optvar optid vres2 e) m2). econstructor; eauto. 
-  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
+  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]].
+  exists (State f Sskip k sp (set_optvar optid vres2 e) m2). econstructor; eauto.
+  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]].
   exists (Returnstate vres2 k m2). econstructor; eauto.
 (* trace length *)
   red; intros; inv H; simpl; try omega; eapply external_call_trace_length; eauto.
@@ -598,7 +598,7 @@ Qed.
 
 (** We now define another semantics for Cminor without [goto] that follows
   the ``big-step'' style of semantics, also known as natural semantics.
-  In this style, just like expressions evaluate to values, 
+  In this style, just like expressions evaluate to values,
   statements evaluate to``outcomes'' indicating how execution should
   proceed afterwards. *)
 
@@ -758,7 +758,7 @@ with exec_stmt:
 
 Scheme eval_funcall_ind2 := Minimality for eval_funcall Sort Prop
   with exec_stmt_ind2 := Minimality for exec_stmt Sort Prop.
-Combined Scheme eval_funcall_exec_stmt_ind2 
+Combined Scheme eval_funcall_exec_stmt_ind2
   from eval_funcall_ind2, exec_stmt_ind2.
 
 (** Coinductive semantics for divergence.
@@ -871,22 +871,22 @@ Inductive outcome_state_match
         (sp: val) (e: env) (m: mem) (f: function) (k: cont):
         outcome -> state -> Prop :=
   | osm_normal:
-      outcome_state_match sp e m f k 
+      outcome_state_match sp e m f k
                           Out_normal
                           (State f Sskip k sp e m)
   | osm_exit: forall n,
-      outcome_state_match sp e m f k 
+      outcome_state_match sp e m f k
                           (Out_exit n)
                           (State f (Sexit n) k sp e m)
   | osm_return_none: forall k',
       call_cont k' = call_cont k ->
-      outcome_state_match sp e m f k 
+      outcome_state_match sp e m f k
                           (Out_return None)
                           (State f (Sreturn None) k' sp e m)
   | osm_return_some: forall k' a v,
       call_cont k' = call_cont k ->
       eval_expr ge sp e m a v ->
-      outcome_state_match sp e m f k 
+      outcome_state_match sp e m f k
                           (Out_return (Some v))
                           (State f (Sreturn (Some a)) k' sp e m)
   | osm_tail: forall v,
@@ -925,11 +925,11 @@ Proof.
 (* funcall internal *)
   destruct (H2 k) as [S [A B]].
   assert (call_cont k = k) by (apply call_cont_is_call_cont; auto).
-  eapply star_left. econstructor; eauto. 
+  eapply star_left. econstructor; eauto.
   eapply star_trans. eexact A.
   inversion B; clear B; subst out; simpl in H3; simpl; try contradiction.
   (* Out normal *)
-  subst vres. apply star_one. apply step_skip_call; auto. 
+  subst vres. apply star_one. apply step_skip_call; auto.
   (* Out_return None *)
   subst vres. replace k with (call_cont k') by congruence.
   apply star_one. apply step_return_0; auto.
@@ -943,11 +943,11 @@ Proof.
   reflexivity. traceEq.
 
 (* funcall external *)
-  apply star_one. constructor; auto. 
+  apply star_one. constructor; auto.
 
 (* skip *)
   econstructor; split.
-  apply star_refl. 
+  apply star_refl.
   constructor.
 
 (* assign *)
@@ -962,14 +962,14 @@ Proof.
 
 (* call *)
   econstructor; split.
-  eapply star_left. econstructor; eauto. 
-  eapply star_right. apply H4. red; auto. 
+  eapply star_left. econstructor; eauto.
+  eapply star_right. apply H4. red; auto.
   constructor. reflexivity. traceEq.
   subst e'. constructor.
 
 (* builtin *)
   econstructor; split.
-  apply star_one. econstructor; eauto. 
+  apply star_one. econstructor; eauto.
   subst e'. constructor.
 
 (* ifthenelse *)
@@ -985,8 +985,8 @@ Proof.
   destruct (H2 k) as [S2 [A2 B2]].
   inv B1.
   exists S2; split.
-  eapply star_left. constructor. 
-  eapply star_trans. eexact A1. 
+  eapply star_left. constructor.
+  eapply star_trans. eexact A1.
   eapply star_left. constructor. eexact A2.
   reflexivity. reflexivity. traceEq.
   auto.
@@ -1010,8 +1010,8 @@ Proof.
   destruct (H2 k) as [S2 [A2 B2]].
   inv B1.
   exists S2; split.
-  eapply star_left. constructor. 
-  eapply star_trans. eexact A1. 
+  eapply star_left. constructor.
+  eapply star_trans. eexact A1.
   eapply star_left. constructor. eexact A2.
   reflexivity. reflexivity. traceEq.
   auto.
@@ -1063,9 +1063,9 @@ Proof.
 
 (* tailcall *)
   econstructor; split.
-  eapply star_left. econstructor; eauto.  
+  eapply star_left. econstructor; eauto.
   apply H5. apply is_call_cont_call_cont. traceEq.
-  econstructor. 
+  econstructor.
 Qed.
 
 Lemma eval_funcall_steps:
@@ -1100,12 +1100,12 @@ Proof.
 
 (* call *)
   eapply forever_plus_intro.
-  apply plus_one. econstructor; eauto. 
+  apply plus_one. econstructor; eauto.
   apply CIH_FUN. eauto. traceEq.
 
 (* ifthenelse *)
   eapply forever_plus_intro with (s2 := State f (if b then s1 else s2) k sp e m).
-  apply plus_one. econstructor; eauto. 
+  apply plus_one. econstructor; eauto.
   apply CIH_STMT. eauto. traceEq.
 
 (* seq 1 *)
@@ -1118,9 +1118,9 @@ Proof.
   as [S [A B]]. inv B.
   eapply forever_plus_intro.
   eapply plus_left. constructor.
-  eapply star_right. eexact A. constructor. 
+  eapply star_right. eexact A. constructor.
   reflexivity. reflexivity.
-  apply CIH_STMT. eauto. traceEq. 
+  apply CIH_STMT. eauto. traceEq.
 
 (* loop body *)
   eapply forever_plus_intro.
@@ -1132,7 +1132,7 @@ Proof.
   as [S [A B]]. inv B.
   eapply forever_plus_intro.
   eapply plus_left. constructor.
-  eapply star_right. eexact A. constructor. 
+  eapply star_right. eexact A. constructor.
   reflexivity. reflexivity.
   apply CIH_STMT. eauto. traceEq.
 
@@ -1143,14 +1143,14 @@ Proof.
 
 (* tailcall *)
   eapply forever_plus_intro.
-  apply plus_one. econstructor; eauto. 
+  apply plus_one. econstructor; eauto.
   apply CIH_FUN. eauto. traceEq.
 
 (* function call *)
   intros. inv H0.
   eapply forever_plus_intro.
   apply plus_one. econstructor; eauto.
-  apply H. eauto. 
+  apply H. eauto.
   traceEq.
 Qed.
 
@@ -1160,12 +1160,12 @@ Proof.
   constructor; intros.
 (* termination *)
   inv H. econstructor; econstructor.
-  split. econstructor; eauto. 
-  split. apply eval_funcall_steps. eauto. red; auto. 
+  split. econstructor; eauto.
+  split. apply eval_funcall_steps. eauto. red; auto.
   econstructor.
 (* divergence *)
   inv H. econstructor.
-  split. econstructor; eauto. 
+  split. econstructor; eauto.
   eapply forever_plus_forever.
   eapply evalinf_funcall_forever; eauto.
 Qed.

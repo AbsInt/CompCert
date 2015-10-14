@@ -172,7 +172,7 @@ Record wt_function (f: function) (env: regenv): Prop :=
     wt_norepet:
       list_norepet f.(fn_params);
     wt_instrs:
-      forall pc instr, 
+      forall pc instr,
       f.(fn_code)!pc = Some instr -> wt_instr f env instr;
     wt_entrypoint:
       valid_successor f f.(fn_entrypoint)
@@ -304,7 +304,7 @@ Definition type_instr (e: S.typenv) (i: instruction) : res S.typenv :=
   | Ibuiltin ef args res s =>
       let sig := ef_sig ef in
       do x <- check_successor s;
-      do e1 <- 
+      do e1 <-
         match ef with
         | EF_annot _ _ | EF_debug _ _ _ => OK e
         | _ => type_builtin_args e args sig.(sig_args)
@@ -342,7 +342,7 @@ Definition type_code (e: S.typenv): res S.typenv :=
 
 (** Solve remaining constraints *)
 
-Definition check_params_norepet (params: list reg): res unit := 
+Definition check_params_norepet (params: list reg): res unit :=
   if list_norepet_dec Reg.eq params
   then OK tt
   else Error(msg "duplicate parameters").
@@ -369,7 +369,7 @@ Lemma type_ros_sound:
   forall e ros e' te, type_ros e ros = OK e' -> S.satisf te e' ->
   match ros with inl r => te r = Tint | inr s => True end.
 Proof.
-  unfold type_ros; intros. destruct ros. 
+  unfold type_ros; intros. destruct ros.
   eapply S.set_sound; eauto.
   auto.
 Qed.
@@ -377,7 +377,7 @@ Qed.
 Lemma check_successor_sound:
   forall s x, check_successor s = OK x -> valid_successor f s.
 Proof.
-  unfold check_successor, valid_successor; intros. 
+  unfold check_successor, valid_successor; intros.
   destruct (fn_code f)!s; inv H. exists i; auto.
 Qed.
 
@@ -386,9 +386,9 @@ Hint Resolve check_successor_sound: ty.
 Lemma check_successors_sound:
   forall sl x, check_successors sl = OK x -> forall s, In s sl -> valid_successor f s.
 Proof.
-  induction sl; simpl; intros. 
+  induction sl; simpl; intros.
   contradiction.
-  monadInv H. destruct H0. subst a; eauto with ty. eauto. 
+  monadInv H. destruct H0. subst a; eauto with ty. eauto.
 Qed.
 
 Remark type_expect_incr:
@@ -416,7 +416,7 @@ Lemma type_builtin_args_incr:
 Proof.
   induction a; destruct ty; simpl; intros; try discriminate.
   inv H; auto.
-  monadInv H. eapply type_builtin_arg_incr; eauto. 
+  monadInv H. eapply type_builtin_arg_incr; eauto.
 Qed.
 
 Lemma type_builtin_res_incr:
@@ -450,7 +450,7 @@ Lemma type_builtin_res_sound:
   forall e a ty e' te,
   type_builtin_res e a ty = OK e' -> S.satisf te e' -> type_of_builtin_res te a = ty.
 Proof.
-  intros. destruct a; simpl in *. 
+  intros. destruct a; simpl in *.
   eapply S.set_sound; eauto.
   symmetry; eapply type_expect_sound; eauto.
   symmetry; eapply type_expect_sound; eauto.
@@ -495,7 +495,7 @@ Proof.
     destruct l; try discriminate. destruct l; monadInv EQ0.
     constructor. eapply S.move_sound; eauto. eauto with ty.
   + destruct (type_of_operation o) as [targs tres] eqn:TYOP. monadInv EQ0.
-    apply wt_Iop. 
+    apply wt_Iop.
     unfold is_move in ISMOVE; destruct o; congruence.
     rewrite TYOP. eapply S.set_list_sound; eauto with ty.
     rewrite TYOP. eapply S.set_sound; eauto with ty.
@@ -511,7 +511,7 @@ Proof.
   eapply S.set_sound; eauto with ty.
   eauto with ty.
 - (* call *)
-  constructor. 
+  constructor.
   eapply type_ros_sound; eauto with ty.
   eapply S.set_list_sound; eauto with ty.
   eapply S.set_sound; eauto with ty.
@@ -520,7 +520,7 @@ Proof.
   destruct (opt_typ_eq (sig_res s) (sig_res (fn_sig f))); try discriminate.
   destruct (tailcall_is_possible s) eqn:TCIP; inv EQ2.
   constructor.
-  eapply type_ros_sound; eauto with ty. 
+  eapply type_ros_sound; eauto with ty.
   eapply S.set_list_sound; eauto with ty.
   auto.
   apply tailcall_is_possible_correct; auto.
@@ -538,12 +538,12 @@ Proof.
   destruct (zle (list_length_z l * 4) Int.max_unsigned); inv EQ2.
   constructor.
   eapply S.set_sound; eauto.
-  eapply check_successors_sound; eauto. 
+  eapply check_successors_sound; eauto.
   auto.
 - (* return *)
   simpl in H. destruct o as [r|] eqn: RET; destruct (sig_res (fn_sig f)) as [t|] eqn: RES; try discriminate.
   econstructor. eauto. eapply S.set_sound; eauto with ty.
-  inv H. constructor. auto. 
+  inv H. constructor. auto.
 Qed.
 
 Lemma type_code_sound:
@@ -558,16 +558,16 @@ Proof.
          | OK e' => c!pc = Some i -> S.satisf te e' -> wt_instr f te i
          end).
   change (P f.(fn_code) (OK e1)).
-  rewrite <- TCODE. unfold type_code. apply PTree_Properties.fold_rec; unfold P; intros. 
+  rewrite <- TCODE. unfold type_code. apply PTree_Properties.fold_rec; unfold P; intros.
   - (* extensionality *)
-    destruct a; auto; intros. rewrite <- H in H1. eapply H0; eauto. 
+    destruct a; auto; intros. rewrite <- H in H1. eapply H0; eauto.
   - (* base case *)
     rewrite PTree.gempty in H; discriminate.
   - (* inductive case *)
-    destruct a as [e|?]; auto. 
+    destruct a as [e|?]; auto.
     destruct (type_instr e v) as [e'|?] eqn:TYINSTR; auto.
-    intros. rewrite PTree.gsspec in H2. destruct (peq pc k). 
-    inv H2. eapply type_instr_sound; eauto. 
+    intros. rewrite PTree.gsspec in H2. destruct (peq pc k).
+    inv H2. eapply type_instr_sound; eauto.
     eapply H1; eauto. eapply type_instr_incr; eauto.
 Qed.
 
@@ -581,12 +581,12 @@ Proof.
 - (* type of parameters *)
   eapply S.set_list_sound; eauto.
 - (* parameters are unique *)
-  unfold check_params_norepet in EQ2. 
-  destruct (list_norepet_dec Reg.eq (fn_params f)); inv EQ2; auto. 
+  unfold check_params_norepet in EQ2.
+  destruct (list_norepet_dec Reg.eq (fn_params f)); inv EQ2; auto.
 - (* instructions are well typed *)
-  intros. eapply type_code_sound; eauto. 
+  intros. eapply type_code_sound; eauto.
 - (* entry point is valid *)
-  eauto with ty. 
+  eauto with ty.
 Qed.
 
 (** ** Completeness proof *)
@@ -597,7 +597,7 @@ Lemma type_ros_complete:
   match ros with inl r => te r = Tint | inr s => True end ->
   exists e', type_ros e ros = OK e' /\ S.satisf te e'.
 Proof.
-  intros; destruct ros; simpl. 
+  intros; destruct ros; simpl.
   eapply S.set_complete; eauto.
   exists e; auto.
 Qed.
@@ -605,14 +605,14 @@ Qed.
 Lemma check_successor_complete:
   forall s, valid_successor f s -> check_successor s = OK tt.
 Proof.
-  unfold valid_successor, check_successor; intros. 
+  unfold valid_successor, check_successor; intros.
   destruct H as [i EQ]; rewrite EQ; auto.
 Qed.
 
 Lemma type_expect_complete:
   forall e ty, type_expect e ty ty = OK e.
 Proof.
-  unfold type_expect; intros. rewrite dec_eq_true; auto. 
+  unfold type_expect; intros. rewrite dec_eq_true; auto.
 Qed.
 
 Lemma type_builtin_arg_complete:
@@ -620,7 +620,7 @@ Lemma type_builtin_arg_complete:
   S.satisf te e ->
   exists e', type_builtin_arg e a (type_of_builtin_arg te a) = OK e' /\ S.satisf te e'.
 Proof.
-  intros. destruct a; simpl; try (exists e; split; [apply type_expect_complete|assumption]). 
+  intros. destruct a; simpl; try (exists e; split; [apply type_expect_complete|assumption]).
   apply S.set_complete; auto.
 Qed.
 
@@ -629,11 +629,11 @@ Lemma type_builtin_args_complete:
   S.satisf te e ->
   exists e', type_builtin_args e al (List.map (type_of_builtin_arg te) al) = OK e' /\ S.satisf te e'.
 Proof.
-  induction al; simpl; intros. 
+  induction al; simpl; intros.
 - exists e; auto.
-- destruct (type_builtin_arg_complete te a e) as (e1 & A & B); auto. 
+- destruct (type_builtin_arg_complete te a e) as (e1 & A & B); auto.
   destruct (IHal e1) as (e2 & C & D); auto.
-  exists e2; split; auto. rewrite A. auto. 
+  exists e2; split; auto. rewrite A. auto.
 Qed.
 
 Lemma type_builtin_res_complete:
@@ -641,7 +641,7 @@ Lemma type_builtin_res_complete:
   S.satisf te e ->
   exists e', type_builtin_res e a (type_of_builtin_res te a) = OK e' /\ S.satisf te e'.
 Proof.
-  intros. destruct a; simpl. 
+  intros. destruct a; simpl.
   apply S.set_complete; auto.
   exists e; auto.
   exists e; auto.
@@ -664,60 +664,60 @@ Proof.
   exploit S.set_list_complete. eauto. eauto. intros [e1 [A B]].
   exploit S.set_complete. eexact B. eauto. intros [e2 [C D]].
   exists e2; split; auto.
-  rewrite check_successor_complete by auto; simpl. 
+  rewrite check_successor_complete by auto; simpl.
   replace (is_move op) with false. rewrite A; simpl; rewrite C; auto.
   destruct op; reflexivity || congruence.
 - (* load *)
   exploit S.set_list_complete. eauto. eauto. intros [e1 [A B]].
   exploit S.set_complete. eexact B. eauto. intros [e2 [C D]].
   exists e2; split; auto.
-  rewrite check_successor_complete by auto; simpl. 
+  rewrite check_successor_complete by auto; simpl.
   rewrite A; simpl; rewrite C; auto.
 - (* store *)
   exploit S.set_list_complete. eauto. eauto. intros [e1 [A B]].
   exploit S.set_complete. eexact B. eauto. intros [e2 [C D]].
   exists e2; split; auto.
-  rewrite check_successor_complete by auto; simpl. 
+  rewrite check_successor_complete by auto; simpl.
   rewrite A; simpl; rewrite C; auto.
 - (* call *)
   exploit type_ros_complete. eauto. eauto. intros [e1 [A B]].
   exploit S.set_list_complete. eauto. eauto. intros [e2 [C D]].
   exploit S.set_complete. eexact D. eauto. intros [e3 [E F]].
-  exists e3; split; auto. 
-  rewrite check_successor_complete by auto; simpl. 
+  exists e3; split; auto.
+  rewrite check_successor_complete by auto; simpl.
   rewrite A; simpl; rewrite C; simpl; rewrite E; auto.
 - (* tailcall *)
   exploit type_ros_complete. eauto. eauto. intros [e1 [A B]].
   exploit S.set_list_complete. eauto. eauto. intros [e2 [C D]].
-  exists e2; split; auto. 
-  rewrite A; simpl; rewrite C; simpl. 
-  rewrite H2; rewrite dec_eq_true. 
-  replace (tailcall_is_possible sig) with true; auto. 
-  revert H3. unfold tailcall_possible, tailcall_is_possible. generalize (loc_arguments sig). 
+  exists e2; split; auto.
+  rewrite A; simpl; rewrite C; simpl.
+  rewrite H2; rewrite dec_eq_true.
+  replace (tailcall_is_possible sig) with true; auto.
+  revert H3. unfold tailcall_possible, tailcall_is_possible. generalize (loc_arguments sig).
   induction l; simpl; intros. auto.
   exploit (H3 a); auto. intros. destruct a; try contradiction. apply IHl.
-  intros; apply H3; auto. 
+  intros; apply H3; auto.
 - (* builtin *)
   exploit type_builtin_args_complete; eauto. instantiate (1 := args). intros [e1 [A B]].
   exploit type_builtin_res_complete; eauto. instantiate (1 := res). intros [e2 [C D]].
   exploit type_builtin_res_complete. eexact H. instantiate (1 := res). intros [e3 [E F]].
   rewrite check_successor_complete by auto. simpl.
   exists (match ef with EF_annot _ _ | EF_debug _ _ _ => e3 | _ => e2 end); split.
-  rewrite H1 in C, E. 
+  rewrite H1 in C, E.
   destruct ef; try (rewrite <- H0; rewrite A); simpl; auto.
   destruct ef; auto.
 - (* cond *)
   exploit S.set_list_complete. eauto. eauto. intros [e1 [A B]].
   exists e1; split; auto.
-  rewrite check_successor_complete by auto; simpl. 
+  rewrite check_successor_complete by auto; simpl.
   rewrite check_successor_complete by auto; simpl.
   auto.
 - (* jumptbl *)
   exploit S.set_complete. eauto. eauto. intros [e1 [A B]].
   exists e1; split; auto.
-  replace (check_successors tbl) with (OK tt). simpl. 
-  rewrite A; simpl. apply zle_true; auto. 
-  revert H1. generalize tbl. induction tbl0; simpl; intros. auto. 
+  replace (check_successors tbl) with (OK tt). simpl.
+  rewrite A; simpl. apply zle_true; auto.
+  revert H1. generalize tbl. induction tbl0; simpl; intros. auto.
   rewrite check_successor_complete by auto; simpl.
   apply IHtbl0; intros; auto.
 - (* return none *)
@@ -739,14 +739,14 @@ Proof.
   assert (P f.(fn_code) (type_code e0)).
   {
     unfold type_code. apply PTree_Properties.fold_rec; unfold P; intros.
-    - apply H0. intros. apply H1 with pc. rewrite <- H; auto. 
-    - exists e0; auto. 
-    - destruct H1 as [e [A B]]. 
+    - apply H0. intros. apply H1 with pc. rewrite <- H; auto.
+    - exists e0; auto.
+    - destruct H1 as [e [A B]].
       intros. apply H2 with pc. rewrite PTree.gso; auto. congruence.
-      subst a. 
+      subst a.
       destruct (type_instr_complete te e v) as [e' [C D]].
-      auto. apply H2 with k. apply PTree.gss. 
-      exists e'; split; auto. rewrite C; auto. 
+      auto. apply H2 with k. apply PTree.gss.
+      exists e'; split; auto. rewrite C; auto.
   }
   apply H; auto.
 Qed.
@@ -754,15 +754,15 @@ Qed.
 Theorem type_function_complete:
   forall te, wt_function f te -> exists te, type_function = OK te.
 Proof.
-  intros. destruct H. 
+  intros. destruct H.
   destruct (type_code_complete te S.initial) as (e1 & A & B).
-  auto. apply S.satisf_initial. 
+  auto. apply S.satisf_initial.
   destruct (S.set_list_complete te f.(fn_params) f.(fn_sig).(sig_args) e1) as (e2 & C & D); auto.
   destruct (S.solve_complete te e2) as (te' & E); auto.
   exists te'; unfold type_function.
-  rewrite A; simpl. rewrite C; simpl. rewrite E; simpl. 
-  unfold check_params_norepet. rewrite pred_dec_true; auto. simpl. 
-  rewrite check_successor_complete by auto. auto. 
+  rewrite A; simpl. rewrite C; simpl. rewrite E; simpl.
+  unfold check_params_norepet. rewrite pred_dec_true; auto. simpl.
+  rewrite check_successor_complete by auto. auto.
 Qed.
 
 End INFERENCE.
@@ -790,7 +790,7 @@ Lemma wt_regset_assign:
   Val.has_type v (env r) ->
   wt_regset env (rs#r <- v).
 Proof.
-  intros; red; intros. 
+  intros; red; intros.
   rewrite Regmap.gsspec.
   case (peq r0 r); intro.
   subst r0. assumption.
@@ -805,7 +805,7 @@ Proof.
   induction rl; simpl.
   auto.
   split. apply H. apply IHrl.
-Qed.  
+Qed.
 
 Lemma wt_regset_setres:
   forall env rs v res,
@@ -813,8 +813,8 @@ Lemma wt_regset_setres:
   Val.has_type v (type_of_builtin_res env res) ->
   wt_regset env (regmap_setres res v rs).
 Proof.
-  intros. destruct res; simpl in *; auto. apply wt_regset_assign; auto. 
-Qed. 
+  intros. destruct res; simpl in *; auto. apply wt_regset_assign; auto.
+Qed.
 
 Lemma wt_init_regs:
   forall env rl args,
@@ -822,7 +822,7 @@ Lemma wt_init_regs:
   wt_regset env (init_regs args rl).
 Proof.
   induction rl; destruct args; simpl; intuition.
-  red; intros. rewrite Regmap.gi. simpl; auto. 
+  red; intros. rewrite Regmap.gi. simpl; auto.
   apply wt_regset_assign; auto.
 Qed.
 
@@ -833,7 +833,7 @@ Lemma wt_exec_Iop:
   wt_regset env rs ->
   wt_regset env (rs#res <- v).
 Proof.
-  intros. inv H. 
+  intros. inv H.
   simpl in H0. inv H0. apply wt_regset_assign; auto.
   rewrite H4; auto.
   eapply wt_regset_assign; auto.
@@ -858,7 +858,7 @@ Lemma wt_exec_Ibuiltin:
   wt_regset env rs ->
   wt_regset env (regmap_setres res vres rs).
 Proof.
-  intros. inv H. 
+  intros. inv H.
   eapply wt_regset_setres; eauto.
   rewrite H7. eapply external_call_well_typed; eauto.
 Qed.
@@ -867,7 +867,7 @@ Lemma wt_instr_at:
   forall f env pc i,
   wt_function f env -> f.(fn_code)!pc = Some i -> wt_instr f env i.
 Proof.
-  intros. inv H. eauto. 
+  intros. inv H. eauto.
 Qed.
 
 Inductive wt_stackframes: list stackframe -> signature -> Prop :=
@@ -905,9 +905,9 @@ Remark wt_stackframes_change_sig:
   forall s sg1 sg2,
   sg1.(sig_res) = sg2.(sig_res) -> wt_stackframes s sg1 -> wt_stackframes s sg2.
 Proof.
-  intros. inv H0. 
+  intros. inv H0.
 - constructor; congruence.
-- econstructor; eauto. rewrite H3. unfold proj_sig_res. rewrite H. auto. 
+- econstructor; eauto. rewrite H3. unfold proj_sig_res. rewrite H. auto.
 Qed.
 
 Section SUBJECT_REDUCTION.
@@ -936,19 +936,19 @@ Proof.
   assert (wt_fundef fd).
     destruct ros; simpl in H0.
     pattern fd. apply Genv.find_funct_prop with fundef unit p (rs#r).
-    exact wt_p. exact H0. 
+    exact wt_p. exact H0.
     caseEq (Genv.find_symbol ge i); intros; rewrite H1 in H0.
     pattern fd. apply Genv.find_funct_ptr_prop with fundef unit p b.
     exact wt_p. exact H0.
     discriminate.
   econstructor; eauto.
-  econstructor; eauto. inv WTI; auto. 
+  econstructor; eauto. inv WTI; auto.
   inv WTI. rewrite <- H8. apply wt_regset_list. auto.
   (* Itailcall *)
   assert (wt_fundef fd).
     destruct ros; simpl in H0.
     pattern fd. apply Genv.find_funct_prop with fundef unit p (rs#r).
-    exact wt_p. exact H0. 
+    exact wt_p. exact H0.
     caseEq (Genv.find_symbol ge i); intros; rewrite H1 in H0.
     pattern fd. apply Genv.find_funct_ptr_prop with fundef unit p b.
     exact wt_p. exact H0.
@@ -963,24 +963,24 @@ Proof.
   (* Ijumptable *)
   econstructor; eauto.
   (* Ireturn *)
-  econstructor; eauto. 
-  inv WTI; simpl. auto. unfold proj_sig_res; rewrite H2. auto. 
+  econstructor; eauto.
+  inv WTI; simpl. auto. unfold proj_sig_res; rewrite H2. auto.
   (* internal function *)
   simpl in *. inv H5.
   econstructor; eauto.
-  inv H1. apply wt_init_regs; auto. rewrite wt_params0. auto. 
+  inv H1. apply wt_init_regs; auto. rewrite wt_params0. auto.
   (* external function *)
-  econstructor; eauto. simpl.  
+  econstructor; eauto. simpl.
   eapply external_call_well_typed; eauto.
   (* return *)
   inv H1. econstructor; eauto.
-  apply wt_regset_assign; auto. rewrite H10; auto. 
+  apply wt_regset_assign; auto. rewrite H10; auto.
 Qed.
 
 Lemma wt_initial_state:
   forall S, initial_state p S -> wt_state S.
 Proof.
-  intros. inv H. constructor. constructor. rewrite H3; auto. 
+  intros. inv H. constructor. constructor. rewrite H3; auto.
   pattern f. apply Genv.find_funct_ptr_prop with fundef unit p b.
   exact wt_p. exact H2.
   rewrite H3. constructor.
@@ -992,10 +992,10 @@ Lemma wt_instr_inv:
   f.(fn_code)!pc = Some i ->
   exists env, wt_instr f env i /\ wt_regset env rs.
 Proof.
-  intros. inv H. exists env; split; auto. 
-  inv WT_FN. eauto. 
+  intros. inv H. exists env; split; auto.
+  inv WT_FN. eauto.
 Qed.
 
 End SUBJECT_REDUCTION.
 
-  
+

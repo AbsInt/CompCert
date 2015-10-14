@@ -121,7 +121,7 @@ Qed.
 Definition goto_head_symbs :=
   forall s nt,
     match goto_table s nt with
-      | Some (exist s2 _) => 
+      | Some (exist s2 _) =>
         prefix (past_symb_of_non_init_state s2) (head_symbs_of_state s)
       | None => True
     end.

@@ -60,7 +60,7 @@ Fixpoint reg_list_dead
   an instruction is that a register is live before if either
   it is one of the arguments of the instruction, or it is not the result
   of the instruction and it is live after.
-  However, if the result of a side-effect-free instruction is not 
+  However, if the result of a side-effect-free instruction is not
   live ``after'', the whole instruction will be removed later
   (since it computes a useless result), thus its arguments need not
   be live ``before''. *)
@@ -122,11 +122,11 @@ Lemma analyze_solution:
   In s (successors_instr i) ->
   Regset.Subset (transfer f s live!!s) live!!n.
 Proof.
-  unfold analyze; intros. eapply DS.fixpoint_solution; eauto. 
-  intros. unfold transfer; rewrite H2. apply DS.L.eq_refl. 
+  unfold analyze; intros. eapply DS.fixpoint_solution; eauto.
+  intros. unfold transfer; rewrite H2. apply DS.L.eq_refl.
 Qed.
 
-(** Given an RTL function, compute (for every PC) the list of 
+(** Given an RTL function, compute (for every PC) the list of
   pseudo-registers that are used for the last time in the instruction
   at PC.  These are the registers that are used or defined by the instruction
   and dead afterwards.  *)
@@ -145,4 +145,4 @@ Definition last_uses (f: function) : PTree.t (list reg) :=
   | Some live => PTree.map (last_uses_at live) f.(fn_code)
   end.
 
-      
+

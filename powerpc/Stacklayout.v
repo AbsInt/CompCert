@@ -117,10 +117,10 @@ Proof.
     fe_ofs_float_callee_save, fe_num_float_callee_save,
     fe_stack_data.
   set (x1 := align (8 + 4 * bound_outgoing b) 8).
-  assert (8 | x1). unfold x1; apply align_divides. omega. 
+  assert (8 | x1). unfold x1; apply align_divides. omega.
   set (x2 := x1 + 4 * bound_local b).
   assert (4 | x2). unfold x2; apply Zdivide_plus_r; auto.
-  apply Zdivides_trans with 8. exists 2; auto. auto. 
+  apply Zdivides_trans with 8. exists 2; auto. auto.
   exists (bound_local b); ring.
   set (x3 := x2 + 4).
   assert (4 | x3). unfold x3; apply Zdivide_plus_r; auto. exists 1; auto.

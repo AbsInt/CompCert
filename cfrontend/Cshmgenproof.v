@@ -45,8 +45,8 @@ Lemma transl_fundef_sig1:
   classify_fun (type_of_fundef f) = fun_case_f args res cc ->
   funsig tf = signature_of_type args res cc.
 Proof.
-  intros. destruct f; simpl in *. 
-  monadInv H. monadInv EQ. simpl. inversion H0.    
+  intros. destruct f; simpl in *.
+  monadInv H. monadInv EQ. simpl. inversion H0.
   unfold signature_of_function, signature_of_type.
   f_equal. apply transl_params_types.
   destruct (signature_eq (ef_sig e) (signature_of_type t t0 c)); inv H.
@@ -81,9 +81,9 @@ Proof.
   (* deref *)
   monadInv TR. exists x; auto.
   (* field struct *)
-  monadInv TR. exists x0; split; auto. simpl; rewrite EQ; auto. 
+  monadInv TR. exists x0; split; auto. simpl; rewrite EQ; auto.
   (* field union *)
-  monadInv TR. exists x0; split; auto. simpl; rewrite EQ; auto. 
+  monadInv TR. exists x0; split; auto. simpl; rewrite EQ; auto.
 Qed.
 
 (** Properties of labeled statements *)
@@ -98,7 +98,7 @@ Proof.
     transl_lbl_stmt ce tyret nbrk ncnt sl = OK tsl ->
     transl_lbl_stmt ce tyret nbrk ncnt (Clight.select_switch_default sl) = OK (select_switch_default tsl)).
   {
-    induction sl; simpl; intros. 
+    induction sl; simpl; intros.
     inv H; auto.
     monadInv H. simpl. destruct o; eauto. simpl; rewrite EQ; simpl; rewrite EQ1; auto.
   }
@@ -114,16 +114,16 @@ Proof.
     end).
   {
     induction sl; simpl; intros.
-    inv H; auto. 
+    inv H; auto.
     monadInv H; simpl. destruct o. destruct (zeq z n).
     econstructor; split; eauto. simpl; rewrite EQ; simpl; rewrite EQ1; auto.
     apply IHsl; auto.
     apply IHsl; auto.
   }
-  intros. specialize (CASE _ _ H). unfold Clight.select_switch, select_switch. 
-  destruct (Clight.select_switch_case n sl) as [sl'|]. 
+  intros. specialize (CASE _ _ H). unfold Clight.select_switch, select_switch.
+  destruct (Clight.select_switch_case n sl) as [sl'|].
   destruct CASE as [tsl' [P Q]]. rewrite P, Q. auto.
-  rewrite CASE. auto. 
+  rewrite CASE. auto.
 Qed.
 
 Lemma transl_lbl_stmt_2:
@@ -132,7 +132,7 @@ Lemma transl_lbl_stmt_2:
   transl_statement ce tyret nbrk ncnt (seq_of_labeled_statement sl) = OK (seq_of_lbl_stmt tsl).
 Proof.
   induction sl; intros.
-  monadInv H. auto. 
+  monadInv H. auto.
   monadInv H. simpl. rewrite EQ; simpl. rewrite (IHsl _ EQ1). simpl. auto.
 Qed.
 
@@ -147,28 +147,28 @@ Lemma make_intconst_correct:
   forall n e le m,
   eval_expr ge e le m (make_intconst n) (Vint n).
 Proof.
-  intros. unfold make_intconst. econstructor. reflexivity. 
+  intros. unfold make_intconst. econstructor. reflexivity.
 Qed.
 
 Lemma make_floatconst_correct:
   forall n e le m,
   eval_expr ge e le m (make_floatconst n) (Vfloat n).
 Proof.
-  intros. unfold make_floatconst. econstructor. reflexivity. 
+  intros. unfold make_floatconst. econstructor. reflexivity.
 Qed.
 
 Lemma make_singleconst_correct:
   forall n e le m,
   eval_expr ge e le m (make_singleconst n) (Vsingle n).
 Proof.
-  intros. unfold make_singleconst. econstructor. reflexivity. 
+  intros. unfold make_singleconst. econstructor. reflexivity.
 Qed.
 
 Lemma make_longconst_correct:
   forall n e le m,
   eval_expr ge e le m (make_longconst n) (Vlong n).
 Proof.
-  intros. unfold make_floatconst. econstructor. reflexivity. 
+  intros. unfold make_floatconst. econstructor. reflexivity.
 Qed.
 
 Lemma make_singleoffloat_correct:
@@ -193,7 +193,7 @@ Lemma make_floatofint_correct:
   eval_expr ge e le m (make_floatofint a sg) (Vfloat(cast_int_float sg n)).
 Proof.
   intros. unfold make_floatofint, cast_int_float.
-  destruct sg; econstructor; eauto. 
+  destruct sg; econstructor; eauto.
 Qed.
 
 Hint Resolve make_intconst_correct make_floatconst_correct make_longconst_correct
@@ -207,33 +207,33 @@ Lemma make_cmp_ne_zero_correct:
   eval_expr ge e le m a (Vint n) ->
   eval_expr ge e le m (make_cmp_ne_zero a) (Vint (if Int.eq n Int.zero then Int.zero else Int.one)).
 Proof.
-  intros. 
+  intros.
   assert (DEFAULT: eval_expr ge e le m (Ebinop (Ocmp Cne) a (make_intconst Int.zero))
                                        (Vint (if Int.eq n Int.zero then Int.zero else Int.one))).
-    econstructor; eauto with cshm. simpl. unfold Val.cmp, Val.cmp_bool. 
-    unfold Int.cmp. destruct (Int.eq n Int.zero); auto. 
+    econstructor; eauto with cshm. simpl. unfold Val.cmp, Val.cmp_bool.
+    unfold Int.cmp. destruct (Int.eq n Int.zero); auto.
   assert (CMP: forall ob,
                Val.of_optbool ob = Vint n ->
                n = (if Int.eq n Int.zero then Int.zero else Int.one)).
-    intros. destruct ob; simpl in H0; inv H0. destruct b; inv H2. 
+    intros. destruct ob; simpl in H0; inv H0. destruct b; inv H2.
     rewrite Int.eq_false. auto. apply Int.one_not_zero.
     rewrite Int.eq_true. auto.
-  destruct a; simpl; auto. destruct b; auto. 
-  inv H. econstructor; eauto. rewrite H6. decEq. decEq. 
+  destruct a; simpl; auto. destruct b; auto.
+  inv H. econstructor; eauto. rewrite H6. decEq. decEq.
   simpl in H6. inv H6. unfold Val.cmp in H0. eauto.
-  inv H. econstructor; eauto. rewrite H6. decEq. decEq. 
+  inv H. econstructor; eauto. rewrite H6. decEq. decEq.
   simpl in H6. inv H6. unfold Val.cmp in H0. eauto.
-  inv H. econstructor; eauto. rewrite H6. decEq. decEq. 
+  inv H. econstructor; eauto. rewrite H6. decEq. decEq.
   simpl in H6. inv H6. unfold Val.cmp in H0. eauto.
-  inv H. econstructor; eauto. rewrite H6. decEq. decEq. 
+  inv H. econstructor; eauto. rewrite H6. decEq. decEq.
   simpl in H6. unfold Val.cmpfs in H6.
-  destruct (Val.cmpfs_bool c v1 v2) as [[]|]; inv H6; reflexivity. 
-  inv H. econstructor; eauto. rewrite H6. decEq. decEq. 
+  destruct (Val.cmpfs_bool c v1 v2) as [[]|]; inv H6; reflexivity.
+  inv H. econstructor; eauto. rewrite H6. decEq. decEq.
   simpl in H6. unfold Val.cmpl in H6.
-  destruct (Val.cmpl_bool c v1 v2) as [[]|]; inv H6; reflexivity. 
-  inv H. econstructor; eauto. rewrite H6. decEq. decEq. 
+  destruct (Val.cmpl_bool c v1 v2) as [[]|]; inv H6; reflexivity.
+  inv H. econstructor; eauto. rewrite H6. decEq. decEq.
   simpl in H6. unfold Val.cmplu in H6.
-  destruct (Val.cmplu_bool c v1 v2) as [[]|]; inv H6; reflexivity. 
+  destruct (Val.cmplu_bool c v1 v2) as [[]|]; inv H6; reflexivity.
 Qed.
 
 Lemma make_cast_int_correct:
@@ -241,7 +241,7 @@ Lemma make_cast_int_correct:
   eval_expr ge e le m a (Vint n) ->
   eval_expr ge e le m (make_cast_int a sz si) (Vint (cast_int_int sz si n)).
 Proof.
-  intros. unfold make_cast_int, cast_int_int. 
+  intros. unfold make_cast_int, cast_int_int.
   destruct sz.
   destruct si; eauto with cshm.
   destruct si; eauto with cshm.
@@ -261,15 +261,15 @@ Proof.
   intros. unfold make_cast, sem_cast in *;
   destruct (classify_cast ty1 ty2); inv H; destruct v; inv H1; eauto with cshm.
   (* single -> int *)
-  unfold make_singleofint, cast_int_float. destruct si1; eauto with cshm. 
+  unfold make_singleofint, cast_int_float. destruct si1; eauto with cshm.
   (* float -> int *)
   destruct (cast_float_int si2 f) as [i|] eqn:E; inv H2.
-  apply make_cast_int_correct. 
+  apply make_cast_int_correct.
   unfold cast_float_int in E. unfold make_intoffloat.
   destruct si2; econstructor; eauto; simpl; rewrite E; auto.
   (* single -> int *)
   destruct (cast_single_int si2 f) as [i|] eqn:E; inv H2.
-  apply make_cast_int_correct. 
+  apply make_cast_int_correct.
   unfold cast_single_int in E. unfold make_intofsingle.
   destruct si2; econstructor; eauto with cshm; simpl; rewrite E; auto.
   (* long -> int *)
@@ -316,36 +316,36 @@ Lemma make_boolean_correct:
     eval_expr ge e le m (make_boolean a ty) vb
     /\ Val.bool_of_val vb b.
 Proof.
-  intros. unfold make_boolean. unfold bool_val in H0. 
+  intros. unfold make_boolean. unfold bool_val in H0.
   destruct (classify_bool ty); destruct v; inv H0.
 (* int *)
-  econstructor; split. apply make_cmp_ne_zero_correct with (n := i); auto. 
-  destruct (Int.eq i Int.zero); simpl; constructor. 
+  econstructor; split. apply make_cmp_ne_zero_correct with (n := i); auto.
+  destruct (Int.eq i Int.zero); simpl; constructor.
 (* float *)
-  econstructor; split. econstructor; eauto with cshm. simpl. eauto. 
-  unfold Val.cmpf, Val.cmpf_bool. simpl. rewrite <- Float.cmp_ne_eq. 
-  destruct (Float.cmp Cne f Float.zero); constructor. 
+  econstructor; split. econstructor; eauto with cshm. simpl. eauto.
+  unfold Val.cmpf, Val.cmpf_bool. simpl. rewrite <- Float.cmp_ne_eq.
+  destruct (Float.cmp Cne f Float.zero); constructor.
 (* single *)
-  econstructor; split. econstructor; eauto with cshm. simpl. eauto. 
-  unfold Val.cmpfs, Val.cmpfs_bool. simpl. rewrite <- Float32.cmp_ne_eq. 
-  destruct (Float32.cmp Cne f Float32.zero); constructor. 
+  econstructor; split. econstructor; eauto with cshm. simpl. eauto.
+  unfold Val.cmpfs, Val.cmpfs_bool. simpl. rewrite <- Float32.cmp_ne_eq.
+  destruct (Float32.cmp Cne f Float32.zero); constructor.
 (* pointer *)
-  econstructor; split. econstructor; eauto with cshm. simpl. eauto. 
+  econstructor; split. econstructor; eauto with cshm. simpl. eauto.
   unfold Val.cmpu, Val.cmpu_bool. simpl.
   destruct (Int.eq i Int.zero); simpl; constructor.
   econstructor; split. econstructor; eauto with cshm. simpl. eauto.
   destruct (Mem.weak_valid_pointer m b0 (Int.unsigned i)) eqn:V; inv H2.
   unfold Val.cmpu, Val.cmpu_bool. simpl.
-  unfold Mem.weak_valid_pointer in V; rewrite V. constructor. 
+  unfold Mem.weak_valid_pointer in V; rewrite V. constructor.
 (* long *)
-  econstructor; split. econstructor; eauto with cshm. simpl. unfold Val.cmpl. simpl. eauto. 
-  destruct (Int64.eq i Int64.zero); simpl; constructor. 
+  econstructor; split. econstructor; eauto with cshm. simpl. unfold Val.cmpl. simpl. eauto.
+  destruct (Int64.eq i Int64.zero); simpl; constructor.
 Qed.
 
 Lemma make_neg_correct:
   forall a tya c va v e le m,
   sem_neg va tya = Some v ->
-  make_neg a tya = OK c ->  
+  make_neg a tya = OK c ->
   eval_expr ge e le m a va ->
   eval_expr ge e le m c v.
 Proof.
@@ -356,21 +356,21 @@ Qed.
 Lemma make_absfloat_correct:
   forall a tya c va v e le m,
   sem_absfloat va tya = Some v ->
-  make_absfloat a tya = OK c ->  
+  make_absfloat a tya = OK c ->
   eval_expr ge e le m a va ->
   eval_expr ge e le m c v.
 Proof.
   unfold sem_absfloat, make_absfloat; intros until m; intros SEM MAKE EV1;
   destruct (classify_neg tya); inv MAKE; destruct va; inv SEM; eauto with cshm.
   unfold make_floatoflong, cast_long_float. destruct s.
-  econstructor. econstructor; simpl; eauto. simpl; eauto. simpl; eauto. 
-  econstructor. econstructor; simpl; eauto. simpl; eauto. simpl; eauto. 
+  econstructor. econstructor; simpl; eauto. simpl; eauto. simpl; eauto.
+  econstructor. econstructor; simpl; eauto. simpl; eauto. simpl; eauto.
 Qed.
 
 Lemma make_notbool_correct:
   forall a tya c va v e le m,
   sem_notbool va tya m = Some v ->
-  make_notbool a tya = OK c ->  
+  make_notbool a tya = OK c ->
   eval_expr ge e le m a va ->
   eval_expr ge e le m c v.
 Proof.
@@ -378,13 +378,13 @@ Proof.
   destruct (classify_bool tya); inv MAKE; destruct va; inv SEM; eauto with cshm.
   destruct (Mem.weak_valid_pointer m b (Int.unsigned i)) eqn:V; inv H0.
   econstructor; eauto with cshm. simpl. unfold Val.cmpu, Val.cmpu_bool.
-  unfold Mem.weak_valid_pointer in V; rewrite V. auto. 
+  unfold Mem.weak_valid_pointer in V; rewrite V. auto.
 Qed.
 
 Lemma make_notint_correct:
   forall a tya c va v e le m,
   sem_notint va tya = Some v ->
-  make_notint a tya = OK c ->  
+  make_notint a tya = OK c ->
   eval_expr ge e le m a va ->
   eval_expr ge e le m c v.
 Proof.
@@ -397,7 +397,7 @@ Definition binary_constructor_correct
     (sem: val -> type -> val -> type -> option val): Prop :=
   forall a tya b tyb c va vb v e le m,
   sem va tya vb tyb = Some v ->
-  make a tya b tyb = OK c ->  
+  make a tya b tyb = OK c ->
   eval_expr ge e le m a va ->
   eval_expr ge e le m b vb ->
   eval_expr ge e le m c v.
@@ -438,9 +438,9 @@ Proof.
   exploit make_cast_correct. eexact EQ. eauto. eauto. intros EV1'.
   exploit make_cast_correct. eexact EQ1. eauto. eauto. intros EV2'.
   destruct cls; inv EQ2; destruct va'; try discriminate; destruct vb'; try discriminate.
-- destruct s; inv H0; econstructor; eauto with cshm. 
+- destruct s; inv H0; econstructor; eauto with cshm.
   rewrite iop_ok; auto. rewrite iopu_ok; auto.
-- destruct s; inv H0; econstructor; eauto with cshm. 
+- destruct s; inv H0; econstructor; eauto with cshm.
   rewrite lop_ok; auto. rewrite lopu_ok; auto.
 - erewrite <- fop_ok in SEM; eauto with cshm.
 - erewrite <- sop_ok in SEM; eauto with cshm.
@@ -461,9 +461,9 @@ Proof.
   exploit make_cast_correct. eexact EQ. eauto. eauto. intros EV1'.
   exploit make_cast_correct. eexact EQ1. eauto. eauto. intros EV2'.
   destruct cls; inv EQ2; destruct va'; try discriminate; destruct vb'; try discriminate.
-- destruct s; inv H0; econstructor; eauto with cshm. 
+- destruct s; inv H0; econstructor; eauto with cshm.
   rewrite iop_ok; auto. rewrite iopu_ok; auto.
-- destruct s; inv H0; econstructor; eauto with cshm. 
+- destruct s; inv H0; econstructor; eauto with cshm.
   rewrite lop_ok; auto. rewrite lopu_ok; auto.
 Qed.
 
@@ -492,17 +492,17 @@ Proof.
 - destruct va; try discriminate; destruct vb; inv SEM.
   destruct (eq_block b0 b1); try discriminate.
   set (sz := sizeof ce ty) in *.
-  destruct (zlt 0 sz); try discriminate. 
+  destruct (zlt 0 sz); try discriminate.
   destruct (zle sz Int.max_signed); simpl in H0; inv H0.
-  econstructor; eauto with cshm. 
-  rewrite dec_eq_true; simpl. 
-  assert (E: Int.signed (Int.repr sz) = sz). 
+  econstructor; eauto with cshm.
+  rewrite dec_eq_true; simpl.
+  assert (E: Int.signed (Int.repr sz) = sz).
   { apply Int.signed_repr. generalize Int.min_signed_neg; omega. }
   predSpec Int.eq Int.eq_spec (Int.repr sz) Int.zero.
   rewrite H in E; rewrite Int.signed_zero in E; omegaContradiction.
   predSpec Int.eq Int.eq_spec (Int.repr sz) Int.mone.
   rewrite H0 in E; rewrite Int.signed_mone in E; omegaContradiction.
-  rewrite andb_false_r; auto. 
+  rewrite andb_false_r; auto.
 - destruct va; try discriminate; destruct vb; inv SEM; eauto with cshm.
 - eapply make_binarith_correct; eauto; intros; auto.
 Qed.
@@ -546,10 +546,10 @@ Remark small_shift_amount_1:
   Int.ltu (Int64.loword i) Int64.iwordsize' = true
   /\ Int64.unsigned i = Int.unsigned (Int64.loword i).
 Proof.
-  intros. apply Int64.ltu_inv in H. comput (Int64.unsigned Int64.iwordsize). 
+  intros. apply Int64.ltu_inv in H. comput (Int64.unsigned Int64.iwordsize).
   assert (Int64.unsigned i = Int.unsigned (Int64.loword i)).
   {
-    unfold Int64.loword. rewrite Int.unsigned_repr; auto. 
+    unfold Int64.loword. rewrite Int.unsigned_repr; auto.
     comput Int.max_unsigned; omega.
   }
   split; auto. unfold Int.ltu. apply zlt_true. rewrite <- H0. tauto.
@@ -563,7 +563,7 @@ Proof.
   intros. apply Int64.ltu_inv in H. comput (Int64.unsigned (Int64.repr 32)).
   assert (Int64.unsigned i = Int.unsigned (Int64.loword i)).
   {
-    unfold Int64.loword. rewrite Int.unsigned_repr; auto. 
+    unfold Int64.loword. rewrite Int.unsigned_repr; auto.
     comput Int.max_unsigned; omega.
   }
   unfold Int.ltu. apply zlt_true. rewrite <- H0. tauto.
@@ -574,7 +574,7 @@ Lemma small_shift_amount_3:
   Int.ltu i Int64.iwordsize' = true ->
   Int64.unsigned (Int64.repr (Int.unsigned i)) = Int.unsigned i.
 Proof.
-  intros. apply Int.ltu_inv in H. comput (Int.unsigned Int64.iwordsize'). 
+  intros. apply Int.ltu_inv in H. comput (Int.unsigned Int64.iwordsize').
   apply Int64.unsigned_repr. comput Int64.max_unsigned; omega.
 Qed.
 
@@ -588,12 +588,12 @@ Proof.
   econstructor; eauto. simpl; rewrite E; auto.
 - destruct (Int64.ltu i0 Int64.iwordsize) eqn:E; inv SEM.
   exploit small_shift_amount_1; eauto. intros [A B].
-  econstructor; eauto with cshm. simpl. rewrite A. 
+  econstructor; eauto with cshm. simpl. rewrite A.
   f_equal; f_equal. unfold Int64.shl', Int64.shl. rewrite B; auto.
 - destruct (Int64.ltu i0 (Int64.repr 32)) eqn:E; inv SEM.
-  econstructor; eauto with cshm. simpl. rewrite small_shift_amount_2; auto. 
-- destruct (Int.ltu i0 Int64.iwordsize') eqn:E; inv SEM. 
-  econstructor; eauto with cshm. simpl. rewrite E. 
+  econstructor; eauto with cshm. simpl. rewrite small_shift_amount_2; auto.
+- destruct (Int.ltu i0 Int64.iwordsize') eqn:E; inv SEM.
+  econstructor; eauto with cshm. simpl. rewrite E.
   unfold Int64.shl', Int64.shl. rewrite small_shift_amount_3; auto.
 Qed.
 
@@ -612,9 +612,9 @@ Proof.
   unfold Int64.shr', Int64.shr; rewrite B; auto.
   unfold Int64.shru', Int64.shru; rewrite B; auto.
 - destruct (Int64.ltu i0 (Int64.repr 32)) eqn:E; inv SEM.
-  destruct s; inv H0; econstructor; eauto with cshm; simpl; rewrite small_shift_amount_2; auto. 
+  destruct s; inv H0; econstructor; eauto with cshm; simpl; rewrite small_shift_amount_2; auto.
 - destruct (Int.ltu i0 Int64.iwordsize') eqn:E; inv SEM.
-  destruct s; inv H0; econstructor; eauto with cshm; simpl; rewrite E. 
+  destruct s; inv H0; econstructor; eauto with cshm; simpl; rewrite E.
   unfold Int64.shr', Int64.shr; rewrite small_shift_amount_3; auto.
   unfold Int64.shru', Int64.shru; rewrite small_shift_amount_3; auto.
 Qed.
@@ -622,7 +622,7 @@ Qed.
 Lemma make_cmp_correct:
   forall cmp a tya b tyb c va vb v e le m,
   sem_cmp cmp va tya vb tyb m = Some v ->
-  make_cmp cmp a tya b tyb = OK c ->  
+  make_cmp cmp a tya b tyb = OK c ->
   eval_expr ge e le m a va ->
   eval_expr ge e le m b vb ->
   eval_expr ge e le m c v.
@@ -632,38 +632,38 @@ Proof.
 - inv MAKE. destruct (Val.cmpu_bool (Mem.valid_pointer m) cmp va vb) as [bv|] eqn:E;
   simpl in SEM; inv SEM.
   econstructor; eauto. simpl. unfold Val.cmpu. rewrite E. auto.
-- inv MAKE. destruct vb; try discriminate. 
+- inv MAKE. destruct vb; try discriminate.
   set (vb := Vint (Int.repr (Int64.unsigned i))) in *.
   destruct (Val.cmpu_bool (Mem.valid_pointer m) cmp va vb) as [bv|] eqn:E;
   simpl in SEM; inv SEM.
-  econstructor; eauto with cshm. simpl. change (Vint (Int64.loword i)) with vb. 
+  econstructor; eauto with cshm. simpl. change (Vint (Int64.loword i)) with vb.
   unfold Val.cmpu. rewrite E. auto.
-- inv MAKE. destruct va; try discriminate. 
+- inv MAKE. destruct va; try discriminate.
   set (va := Vint (Int.repr (Int64.unsigned i))) in *.
   destruct (Val.cmpu_bool (Mem.valid_pointer m) cmp va vb) as [bv|] eqn:E;
   simpl in SEM; inv SEM.
-  econstructor; eauto with cshm. simpl. change (Vint (Int64.loword i)) with va. 
+  econstructor; eauto with cshm. simpl. change (Vint (Int64.loword i)) with va.
   unfold Val.cmpu. rewrite E. auto.
 - eapply make_binarith_correct; eauto; intros; auto.
 Qed.
 
 Lemma transl_unop_correct:
-  forall op a tya c va v e le m, 
+  forall op a tya c va v e le m,
   transl_unop op a tya = OK c ->
   sem_unary_operation op va tya m = Some v ->
   eval_expr ge e le m a va ->
   eval_expr ge e le m c v.
 Proof.
   intros. destruct op; simpl in *.
-  eapply make_notbool_correct; eauto. 
-  eapply make_notint_correct; eauto. 
+  eapply make_notbool_correct; eauto.
+  eapply make_notint_correct; eauto.
   eapply make_neg_correct; eauto.
   eapply make_absfloat_correct; eauto.
 Qed.
 
 Lemma transl_binop_correct:
   forall op a tya b tyb c va vb v e le m,
-  transl_binop ce op a tya b tyb = OK c ->  
+  transl_binop ce op a tya b tyb = OK c ->
   sem_binary_operation ce op va tya vb tyb m = Some v ->
   eval_expr ge e le m a va ->
   eval_expr ge e le m b vb ->
@@ -686,7 +686,7 @@ Proof.
   eapply make_cmp_correct; eauto.
   eapply make_cmp_correct; eauto.
   eapply make_cmp_correct; eauto.
-Qed. 
+Qed.
 
 Lemma make_load_correct:
   forall addr ty code b ofs v e le m,
@@ -696,7 +696,7 @@ Lemma make_load_correct:
   eval_expr ge e le m code v.
 Proof.
   unfold make_load; intros until m; intros MKLOAD EVEXP DEREF.
-  inv DEREF. 
+  inv DEREF.
   (* scalar *)
   rewrite H in MKLOAD. inv MKLOAD. apply eval_Eload with (Vptr b ofs); auto.
   (* by reference *)
@@ -713,16 +713,16 @@ Lemma make_memcpy_correct:
   access_mode ty = By_copy ->
   step ge (State f (make_memcpy ce dst src ty) k e le m) E0 (State f Sskip k e le m').
 Proof.
-  intros. inv H1; try congruence. 
-  unfold make_memcpy. change le with (set_optvar None Vundef le) at 2. 
+  intros. inv H1; try congruence.
+  unfold make_memcpy. change le with (set_optvar None Vundef le) at 2.
   econstructor.
-  econstructor. eauto. econstructor. eauto. constructor. 
-  econstructor; eauto. 
+  econstructor. eauto. econstructor. eauto. constructor.
+  econstructor; eauto.
   apply alignof_blockcopy_1248.
   apply sizeof_pos.
   apply sizeof_alignof_blockcopy_compat.
 Qed.
- 
+
 Lemma make_store_correct:
   forall addr ty rhs code e le m b ofs v m' f k,
   make_store ce addr ty rhs = OK code ->
@@ -735,10 +735,10 @@ Proof.
   inversion ASSIGN; subst.
   (* nonvolatile scalar *)
   rewrite H in MKSTORE; inv MKSTORE.
-  econstructor; eauto. 
+  econstructor; eauto.
   (* by copy *)
-  rewrite H in MKSTORE; inv MKSTORE. 
-  eapply make_memcpy_correct; eauto. 
+  rewrite H in MKSTORE; inv MKSTORE.
+  eapply make_memcpy_correct; eauto.
 Qed.
 
 End CONSTRUCTORS.
@@ -813,19 +813,19 @@ Proof.
          match x, y with
          | (b1, ty), (b2, sz) => b2 = b1 /\ sz = sizeof ge ty
          end).
-  assert (list_forall2 
+  assert (list_forall2
             (fun i_x i_y => fst i_x = fst i_y /\ R (snd i_x) (snd i_y))
             (PTree.elements e) (PTree.elements te)).
   apply PTree.elements_canonical_order.
   intros id [b ty] GET. exists (b, sizeof ge ty); split. eapply me_local; eauto. red; auto.
   intros id [b sz] GET. exploit me_local_inv; eauto. intros [ty EQ].
-  exploit me_local; eauto. intros EQ1. 
+  exploit me_local; eauto. intros EQ1.
   exists (b, ty); split. auto. red; split; congruence.
 
   unfold blocks_of_env, Clight.blocks_of_env.
-  generalize H0. induction 1. auto. 
+  generalize H0. induction 1. auto.
   simpl. f_equal; auto.
-  unfold block_of_binding, Clight.block_of_binding. 
+  unfold block_of_binding, Clight.block_of_binding.
   destruct a1 as [id1 [blk1 ty1]]. destruct b1 as [id2 [blk2 sz2]].
   simpl in *. destruct H1 as [A [B C]]. congruence.
 Qed.
@@ -867,19 +867,19 @@ Proof.
   constructor.
     (* me_local *)
     intros until ty0. repeat rewrite PTree.gsspec.
-    destruct (peq id0 id); intros. congruence. eapply me_local; eauto. 
+    destruct (peq id0 id); intros. congruence. eapply me_local; eauto.
     (* me_local_inv *)
-    intros until sz. repeat rewrite PTree.gsspec. 
-    destruct (peq id0 id); intros. exists ty; congruence. eapply me_local_inv; eauto. 
+    intros until sz. repeat rewrite PTree.gsspec.
+    destruct (peq id0 id); intros. exists ty; congruence. eapply me_local_inv; eauto.
   intros [te2 [ALLOC MENV]].
   exists te2; split. econstructor; eauto. auto.
-Qed. 
+Qed.
 
 Lemma create_undef_temps_match:
   forall temps,
   create_undef_temps (map fst temps) = Clight.create_undef_temps temps.
 Proof.
-  induction temps; simpl. auto. 
+  induction temps; simpl. auto.
   destruct a as [id ty]. simpl. decEq. auto.
 Qed.
 
@@ -889,8 +889,8 @@ Lemma bind_parameter_temps_match:
   bind_parameters (map fst vars) vals le1 = Some le2.
 Proof.
   induction vars; simpl; intros.
-  destruct vals; inv H. auto. 
-  destruct a as [id ty]. destruct vals; try discriminate. auto. 
+  destruct vals; inv H. auto.
+  destruct a as [id ty]. destruct vals; try discriminate. auto.
 Qed.
 
 (** * Proof of semantic preservation *)
@@ -909,9 +909,9 @@ Qed.
 >>
   Left: evaluation of r-value expression [a] in Clight.
   Right: evaluation of its translation [ta] in Csharpminor.
-  Top (precondition): matching between environments [e], [te], 
+  Top (precondition): matching between environments [e], [te],
     plus well-typedness of expression [a].
-  Bottom (postcondition): the result values [v] 
+  Bottom (postcondition): the result values [v]
     are identical in both evaluations.
 
   We state these diagrams as the following properties, parameterized
@@ -947,7 +947,7 @@ Proof.
 (* temp var *)
   constructor; auto.
 (* addrof *)
-  simpl in TR. auto. 
+  simpl in TR. auto.
 (* unop *)
   eapply transl_unop_correct; eauto.
 (* binop *)
@@ -960,21 +960,21 @@ Proof.
   apply make_intconst_correct.
 (* rvalue out of lvalue *)
   exploit transl_expr_lvalue; eauto. intros [tb [TRLVAL MKLOAD]].
-  eapply make_load_correct; eauto.  
+  eapply make_load_correct; eauto.
 (* var local *)
   exploit (me_local _ _ MENV); eauto. intros EQ.
   econstructor. eapply eval_var_addr_local. eauto.
 (* var global *)
-  econstructor. eapply eval_var_addr_global. 
+  econstructor. eapply eval_var_addr_global.
   eapply match_env_globals; eauto.
   rewrite symbols_preserved. auto.
 (* deref *)
-  simpl in TR. eauto. 
+  simpl in TR. eauto.
 (* field struct *)
   change (prog_comp_env prog) with (genv_cenv ge) in EQ0.
   unfold make_field_access in EQ0; rewrite H1, H2 in EQ0; monadInv EQ0.
   eapply eval_Ebinop; eauto.
-  apply make_intconst_correct. 
+  apply make_intconst_correct.
   simpl. congruence.
 (* field union *)
   unfold make_field_access in EQ0; rewrite H1 in EQ0; monadInv EQ0.
@@ -1003,8 +1003,8 @@ Lemma transl_arglist_correct:
 Proof.
   induction 1; intros.
   monadInv H. constructor.
-  monadInv H2. constructor. 
-  eapply make_cast_correct; eauto. eapply transl_expr_correct; eauto. auto. 
+  monadInv H2. constructor.
+  eapply make_cast_correct; eauto. eapply transl_expr_correct; eauto. auto.
 Qed.
 
 Lemma typlist_of_arglist_eq:
@@ -1026,9 +1026,9 @@ End EXPR.
 <<
            I
      S1 ------- R1
-     |          | 
+     |          |
    t |        + | t
-     v          v  
+     v          v
      S2 ------- R2
            I                         I
 >>
@@ -1047,8 +1047,8 @@ Lemma match_transl_step:
   match_transl (Sblock ts) tk ts' tk' ->
   star step tge (State f ts' tk' te le m) E0 (State f ts (Kblock tk) te le m).
 Proof.
-  intros. inv H. 
-  apply star_one. constructor. 
+  intros. inv H.
+  apply star_one. constructor.
   apply star_refl.
 Qed.
 
@@ -1084,7 +1084,7 @@ Inductive match_cont: type -> nat -> nat -> Clight.cont -> Csharpminor.cont -> P
       transl_function ge f = OK tf ->
       match_env e te ->
       match_cont (Clight.fn_return f) nbrk' ncnt' k tk ->
-      match_cont tyret nbrk ncnt 
+      match_cont tyret nbrk ncnt
                  (Clight.Kcall id f e le k)
                  (Kcall id tf te le tk).
 
@@ -1107,7 +1107,7 @@ Inductive match_states: Clight.state -> Csharpminor.state -> Prop :=
       match_states (Clight.Callstate fd args k m)
                    (Callstate tfd args tk m)
   | match_returnstate:
-      forall res k m tk 
+      forall res k m tk
           (MK: match_cont Tvoid 0%nat 0%nat k tk),
       match_states (Clight.Returnstate res k m)
                    (Returnstate res tk m).
@@ -1119,7 +1119,7 @@ Remark match_states_skip:
   match_cont (Clight.fn_return f) nbrk ncnt k tk ->
   match_states (Clight.State f Clight.Sskip k e le m) (State tf Sskip tk te le m).
 Proof.
-  intros. econstructor; eauto. simpl; reflexivity. constructor. 
+  intros. econstructor; eauto. simpl; reflexivity. constructor.
 Qed.
 
 (** Commutation between label resolution and compilation *)
@@ -1168,13 +1168,13 @@ Proof.
 (* builtin *)
   auto.
 (* seq *)
-  exploit (transl_find_label s0 nbrk ncnt (Clight.Kseq s1 k)); eauto. constructor; eauto. 
+  exploit (transl_find_label s0 nbrk ncnt (Clight.Kseq s1 k)); eauto. constructor; eauto.
   destruct (Clight.find_label lbl s0 (Clight.Kseq s1 k)) as [[s' k'] | ].
   intros [ts' [tk' [nbrk' [ncnt' [A [B C]]]]]].
   rewrite A. exists ts'; exists tk'; exists nbrk'; exists ncnt'; auto.
   intro. rewrite H. eapply transl_find_label; eauto.
 (* ifthenelse *)
-  exploit (transl_find_label s0); eauto. 
+  exploit (transl_find_label s0); eauto.
   destruct (Clight.find_label lbl s0 k) as [[s' k'] | ].
   intros [ts' [tk' [nbrk' [ncnt' [A [B C]]]]]].
   rewrite A. exists ts'; exists tk'; exists nbrk'; exists ncnt'; auto.
@@ -1185,20 +1185,20 @@ Proof.
   intros [ts' [tk' [nbrk' [ncnt' [A [B C]]]]]].
   rewrite A. exists ts'; exists tk'; exists nbrk'; exists ncnt'; auto.
   intro. rewrite H.
-  eapply transl_find_label; eauto. econstructor; eauto. 
+  eapply transl_find_label; eauto. econstructor; eauto.
 (* break *)
   auto.
 (* continue *)
   auto.
 (* return *)
-  simpl in TR. destruct o; monadInv TR. auto. auto. 
+  simpl in TR. destruct o; monadInv TR. auto. auto.
 (* switch *)
   assert (exists b, ts = Sblock (Sswitch b x x0)).
   { destruct (classify_switch (typeof e)); inv EQ2; econstructor; eauto. }
   destruct H as [b EQ3]; rewrite EQ3; simpl.
-  eapply transl_find_label_ls with (k := Clight.Kswitch k); eauto. econstructor; eauto. 
+  eapply transl_find_label_ls with (k := Clight.Kswitch k); eauto. econstructor; eauto.
 (* label *)
-  destruct (ident_eq lbl l). 
+  destruct (ident_eq lbl l).
   exists x; exists tk; exists nbrk; exists ncnt; auto.
   eapply transl_find_label; eauto.
 (* goto *)
@@ -1208,7 +1208,7 @@ Proof.
 (* nil *)
   auto.
 (* cons *)
-  exploit (transl_find_label s nbrk ncnt (Clight.Kseq (seq_of_labeled_statement l) k)); eauto. 
+  exploit (transl_find_label s nbrk ncnt (Clight.Kseq (seq_of_labeled_statement l) k)); eauto.
   econstructor; eauto. apply transl_lbl_stmt_2; eauto.
   destruct (Clight.find_label lbl s (Clight.Kseq (seq_of_labeled_statement l) k)) as [[s' k'] | ].
   intros [ts' [tk' [nbrk' [ncnt' [A [B C]]]]]].
@@ -1228,7 +1228,7 @@ Lemma match_cont_call_cont:
 Proof.
   induction 1; simpl; auto.
   constructor.
-  econstructor; eauto. 
+  econstructor; eauto.
 Qed.
 
 Lemma match_cont_is_call_cont:
@@ -1254,41 +1254,41 @@ Proof.
 (* assign *)
   monadInv TR.
   assert (SAME: ts' = ts /\ tk' = tk).
-    inversion MTR. auto. 
+    inversion MTR. auto.
     subst ts. unfold make_store, make_memcpy in EQ3. destruct (access_mode (typeof a1)); congruence.
   destruct SAME; subst ts' tk'.
   econstructor; split.
   apply plus_one. eapply make_store_correct; eauto.
   eapply transl_lvalue_correct; eauto. eapply make_cast_correct; eauto.
-  eapply transl_expr_correct; eauto.  
+  eapply transl_expr_correct; eauto.
   eapply match_states_skip; eauto.
 
 (* set *)
   monadInv TR. inv MTR. econstructor; split.
-  apply plus_one. econstructor. eapply transl_expr_correct; eauto. 
+  apply plus_one. econstructor. eapply transl_expr_correct; eauto.
   eapply match_states_skip; eauto.
 
 (* call *)
   revert TR. simpl. case_eq (classify_fun (typeof a)); try congruence.
-  intros targs tres cc CF TR. monadInv TR. inv MTR. 
+  intros targs tres cc CF TR. monadInv TR. inv MTR.
   exploit functions_translated; eauto. intros [tfd [FIND TFD]].
   rewrite H in CF. simpl in CF. inv CF.
   econstructor; split.
-  apply plus_one. econstructor; eauto. 
+  apply plus_one. econstructor; eauto.
   exploit transl_expr_correct; eauto.
   exploit transl_arglist_correct; eauto.
-  erewrite typlist_of_arglist_eq by eauto. 
+  erewrite typlist_of_arglist_eq by eauto.
   eapply transl_fundef_sig1; eauto.
   rewrite H3. auto.
-  econstructor; eauto.  
+  econstructor; eauto.
   econstructor; eauto.
   simpl. auto.
 
 (* builtin *)
-  monadInv TR. inv MTR. 
+  monadInv TR. inv MTR.
   econstructor; split.
-  apply plus_one. econstructor. 
-  eapply transl_arglist_correct; eauto. 
+  apply plus_one. econstructor.
+  eapply transl_arglist_correct; eauto.
   eapply external_call_symbols_preserved_gen with (ge1 := ge).
   exact symbols_preserved. exact public_preserved. exact block_is_volatile_preserved. eauto.
   eapply match_states_skip; eauto.
@@ -1296,31 +1296,31 @@ Proof.
 (* seq *)
   monadInv TR. inv MTR.
   econstructor; split.
-  apply plus_one. constructor. 
-  econstructor; eauto. constructor. 
+  apply plus_one. constructor.
+  econstructor; eauto. constructor.
   econstructor; eauto.
 
 (* skip seq *)
   monadInv TR. inv MTR. inv MK.
   econstructor; split.
-  apply plus_one. apply step_skip_seq. 
+  apply plus_one. apply step_skip_seq.
   econstructor; eauto. constructor.
 
 (* continue seq *)
   monadInv TR. inv MTR. inv MK.
   econstructor; split.
-  apply plus_one. constructor. 
+  apply plus_one. constructor.
   econstructor; eauto. simpl. reflexivity. constructor.
 
 (* break seq *)
   monadInv TR. inv MTR. inv MK.
   econstructor; split.
-  apply plus_one. constructor. 
+  apply plus_one. constructor.
   econstructor; eauto. simpl. reflexivity. constructor.
 
 (* ifthenelse *)
   monadInv TR. inv MTR.
-  exploit make_boolean_correct; eauto. 
+  exploit make_boolean_correct; eauto.
   exploit transl_expr_correct; eauto.
   intros [v [A B]].
   econstructor; split.
@@ -1330,12 +1330,12 @@ Proof.
 (* loop *)
   monadInv TR.
   econstructor; split.
-  eapply star_plus_trans. eapply match_transl_step; eauto. 
-  eapply plus_left. constructor. 
+  eapply star_plus_trans. eapply match_transl_step; eauto.
+  eapply plus_left. constructor.
   eapply star_left. constructor.
   apply star_one. constructor.
   reflexivity. reflexivity. traceEq.
-  econstructor; eauto. constructor. econstructor; eauto. 
+  econstructor; eauto. constructor. econstructor; eauto.
 
 (* skip-or-continue loop *)
   assert ((ts' = Sskip \/ ts' = Sexit ncnt) /\ tk' = tk).
@@ -1345,7 +1345,7 @@ Proof.
   eapply plus_left.
   destruct H0; subst ts'. 2:constructor. constructor.
   apply star_one. constructor. traceEq.
-  econstructor; eauto. constructor. econstructor; eauto. 
+  econstructor; eauto. constructor. econstructor; eauto.
 
 (* break loop1 *)
   monadInv TR. inv MTR. inv MK.
@@ -1362,9 +1362,9 @@ Proof.
   econstructor; split.
   apply plus_one. constructor.
   econstructor; eauto.
-Local Opaque ge. 
-  simpl. rewrite H5; simpl. rewrite H7; simpl. eauto. 
-  constructor. 
+Local Opaque ge.
+  simpl. rewrite H5; simpl. rewrite H7; simpl. eauto.
+  constructor.
 
 (* break loop2 *)
   monadInv TR. inv MTR. inv MK.
@@ -1375,21 +1375,21 @@ Local Opaque ge.
   eapply match_states_skip; eauto.
 
 (* return none *)
-  monadInv TR. inv MTR. 
+  monadInv TR. inv MTR.
   econstructor; split.
   apply plus_one. constructor.
-  eapply match_env_free_blocks; eauto. 
+  eapply match_env_free_blocks; eauto.
   econstructor; eauto.
-  eapply match_cont_call_cont. eauto. 
+  eapply match_cont_call_cont. eauto.
 
 (* return some *)
-  monadInv TR. inv MTR. 
+  monadInv TR. inv MTR.
   econstructor; split.
   apply plus_one. constructor.
   eapply make_cast_correct; eauto. eapply transl_expr_correct; eauto.
   eapply match_env_free_blocks; eauto.
   econstructor; eauto.
-  eapply match_cont_call_cont. eauto. 
+  eapply match_cont_call_cont. eauto.
 
 (* skip call *)
   monadInv TR. inv MTR.
@@ -1405,13 +1405,13 @@ Local Opaque ge.
   { unfold sem_switch_arg in H0.
     destruct (classify_switch (typeof a)); inv EQ2; econstructor; split; eauto;
     destruct v; inv H0; constructor. }
-  destruct E as (b & A & B). subst ts. 
+  destruct E as (b & A & B). subst ts.
   exploit transl_expr_correct; eauto. intro EV.
   econstructor; split.
   eapply star_plus_trans. eapply match_transl_step; eauto.
-  apply plus_one. econstructor; eauto. traceEq. 
+  apply plus_one. econstructor; eauto. traceEq.
   econstructor; eauto.
-  apply transl_lbl_stmt_2. apply transl_lbl_stmt_1. eauto. 
+  apply transl_lbl_stmt_2. apply transl_lbl_stmt_1. eauto.
   constructor.
   econstructor. eauto.
 
@@ -1427,29 +1427,29 @@ Local Opaque ge.
 (* continue switch *)
   monadInv TR. inv MTR. inv MK.
   econstructor; split.
-  apply plus_one. constructor. 
+  apply plus_one. constructor.
   econstructor; eauto. simpl. reflexivity. constructor.
 
 (* label *)
-  monadInv TR. inv MTR. 
+  monadInv TR. inv MTR.
   econstructor; split.
-  apply plus_one. constructor. 
+  apply plus_one. constructor.
   econstructor; eauto. constructor.
 
 (* goto *)
   monadInv TR. inv MTR.
   generalize TRF. unfold transl_function. intro TRF'. monadInv TRF'.
   exploit (transl_find_label lbl). eexact EQ. eapply match_cont_call_cont. eauto.
-  rewrite H. 
+  rewrite H.
   intros [ts' [tk'' [nbrk' [ncnt' [A [B C]]]]]].
   econstructor; split.
-  apply plus_one. constructor. simpl. eexact A. 
+  apply plus_one. constructor. simpl. eexact A.
   econstructor; eauto. constructor.
 
 (* internal function *)
   inv H. monadInv TR. monadInv EQ.
   exploit match_cont_is_call_cont; eauto. intros [A B].
-  exploit match_env_alloc_variables; eauto. 
+  exploit match_env_alloc_variables; eauto.
   apply match_env_empty.
   intros [te1 [C D]].
   econstructor; split.
@@ -1464,17 +1464,17 @@ Local Opaque ge.
   constructor.
 
 (* external function *)
-  simpl in TR. 
+  simpl in TR.
   destruct (signature_eq (ef_sig ef) (signature_of_type targs tres cconv)); inv TR.
   exploit match_cont_is_call_cont; eauto. intros [A B].
   econstructor; split.
-  apply plus_one. constructor. eauto. 
+  apply plus_one. constructor. eauto.
   eapply external_call_symbols_preserved_gen with (ge1 := ge).
   exact symbols_preserved. exact public_preserved. exact block_is_volatile_preserved. eauto.
   econstructor; eauto.
 
 (* returnstate *)
-  inv MK. 
+  inv MK.
   econstructor; split.
   apply plus_one. constructor.
   econstructor; eauto. simpl; reflexivity. constructor.
@@ -1492,10 +1492,10 @@ Proof.
     change (prog_main prog) with (AST.prog_main (program_of_program prog)).
     eapply transform_partial_program2_main; eauto.
   assert (funsig tf = signature_of_type Tnil type_int32s cc_default).
-    eapply transl_fundef_sig2; eauto. 
+    eapply transl_fundef_sig2; eauto.
   econstructor; split.
-  econstructor; eauto. eapply Genv.init_mem_transf_partial2; eauto. 
-  econstructor; eauto. constructor; auto. exact I. 
+  econstructor; eauto. eapply Genv.init_mem_transf_partial2; eauto.
+  econstructor; eauto. constructor; auto. exact I.
 Qed.
 
 Lemma transl_final_states:
