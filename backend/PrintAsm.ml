@@ -112,8 +112,8 @@ module Printer(Target:TARGET) =
       struct
         let label = Target.label
         let section = Target.section
-        let name_of_section = Target.name_of_section
         let symbol = Target.symbol
+        let comment = Target.comment
       end
 
     module DebugPrinter = DwarfPrinter (DwarfTarget)

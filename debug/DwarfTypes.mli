@@ -60,11 +60,34 @@ type string_const =
   | Simple_string of string
   | Offset_string of reference
 
-(* Types representing the attribute information per tag value *)
-
 type file_loc =
   | Diab_file_loc of constant * constant
   | Gnu_file_loc of constant * constant
+
+type dw_form =
+  | DW_FORM_addr
+  | DW_FORM_block2
+  | DW_FORM_block4
+  | DW_FORM_data2
+  | DW_FORM_data4
+  | DW_FORM_data8
+  | DW_FORM_string
+  | DW_FORM_block
+  | DW_FORM_block1
+  | DW_FORM_data1
+  | DW_FORM_flag
+  | DW_FORM_sdata
+  | DW_FORM_strp
+  | DW_FORM_udata
+  | DW_FORM_ref_addr
+  | DW_FORM_ref1
+  | DW_FORM_ref2
+  | DW_FORM_ref4
+  | DW_FORM_ref8
+  | DW_FORM_ref_udata
+  | DW_FORM_ref_indirect
+
+(* Types representing the attribute information per tag value *)
 
 type dw_tag_array_type =
     {
@@ -273,4 +296,5 @@ module type DWARF_TARGET=
     val label: out_channel -> int -> unit
     val section: out_channel -> section_name -> unit
     val symbol: out_channel -> atom -> unit
+    val comment: string
   end
