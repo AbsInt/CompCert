@@ -26,7 +26,7 @@ let default_debug =
    set_member_offset = DebugInformation.set_member_offset;
    set_bitfield_offset = DebugInformation.set_bitfield_offset;
    insert_global_declaration = DebugInformation.insert_global_declaration;
-   add_fun_addr = DebugInformation.add_fun_addr;
+   add_fun_addr = (fun _ _ _ -> ());
    generate_debug_info = (fun _ _  -> None);
    all_files_iter = (fun f -> DebugInformation.StringSet.iter f !DebugInformation.all_files);
    insert_local_declaration = DebugInformation.insert_local_declaration;
@@ -41,23 +41,24 @@ let default_debug =
    stack_variable = DebugInformation.stack_variable;
    add_label = DebugInformation.add_label;
    atom_parameter = DebugInformation.atom_parameter;
-   add_compilation_section_start = DebugInformation.add_compilation_section_start;
-   add_compilation_section_end = DebugInformation.add_compilation_section_end;
    compute_diab_file_enum = DebugInformation.compute_diab_file_enum;
    compute_gnu_file_enum = DebugInformation.compute_gnu_file_enum;
    exists_section = DebugInformation.exists_section;
    remove_unused = DebugInformation.remove_unused;
    variable_printed = DebugInformation.variable_printed;
-   add_diab_info = DebugInformation.add_diab_info;
+   add_diab_info = (fun _ _ _ _ -> ());
  }
 
 let init_debug () =
-  let gen =
+  implem :=
   if Configuration.system = "diab" then
-    (fun a b -> Some (Dwarfgen.gen_diab_debug_info a b))
+    let gen = (fun a b -> Some (Dwarfgen.gen_diab_debug_info a b)) in
+    {default_debug with generate_debug_info = gen;
+     add_diab_info = DebugInformation.add_diab_info;
+     add_fun_addr = DebugInformation.diab_add_fun_addr;}
   else
-    (fun a b -> Some (Dwarfgen.gen_gnu_debug_info a b)) in
-  implem := {default_debug with generate_debug_info = gen;}
+    {default_debug with generate_debug_info = (fun a b -> Some (Dwarfgen.gen_gnu_debug_info a b));
+     add_fun_addr = DebugInformation.gnu_add_fun_addr}
 
 let init_none () =
   implem := default_implem

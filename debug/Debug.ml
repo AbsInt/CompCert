@@ -29,7 +29,7 @@ type implem =
       set_member_offset: ident -> string -> int -> unit;
       set_bitfield_offset: ident -> string -> int -> string -> int -> unit;
       insert_global_declaration: Env.t -> globdecl -> unit;
-      add_fun_addr: atom -> (int * int) -> unit;
+      add_fun_addr: atom -> section_name -> (int * int) -> unit;
       generate_debug_info: (atom -> string) -> string -> debug_entries option;
       all_files_iter: (string -> unit) -> unit;
       insert_local_declaration:  storage -> ident -> typ -> location -> unit;
@@ -44,14 +44,12 @@ type implem =
       stack_variable: (atom * atom) -> int * int builtin_arg -> unit;
       add_label: atom -> positive -> int -> unit;
       atom_parameter: ident -> ident -> atom -> unit;
-      add_compilation_section_start: section_name -> int -> unit;
-      add_compilation_section_end: section_name -> int -> unit;
       compute_diab_file_enum: (section_name -> int) -> (string-> int) -> (unit -> unit) -> unit;
       compute_gnu_file_enum: (string -> unit) -> unit;
       exists_section: section_name -> bool;
       remove_unused: ident -> unit;
       variable_printed: string -> unit;
-      add_diab_info: section_name -> int -> int -> unit;
+      add_diab_info: section_name -> int -> int -> int -> unit;
    }
 
 let default_implem =
@@ -62,7 +60,7 @@ let default_implem =
    set_member_offset = (fun _ _  _ -> ());
    set_bitfield_offset = (fun _ _ _ _ _ -> ());
    insert_global_declaration = (fun _ _ -> ());
-   add_fun_addr = (fun _ _ -> ());
+   add_fun_addr = (fun _ _ _ -> ());
    generate_debug_info = (fun _  _ -> None);
    all_files_iter = (fun _ -> ());
    insert_local_declaration = (fun  _ _ _ _ -> ());
@@ -77,14 +75,12 @@ let default_implem =
    stack_variable = (fun _ _ -> ());
    add_label = (fun _ _ _ -> ());
    atom_parameter = (fun _ _ _ -> ());
-   add_compilation_section_start = (fun _ _ -> ());
-   add_compilation_section_end = (fun _ _ -> ());
    compute_diab_file_enum = (fun _ _ _ -> ());
    compute_gnu_file_enum = (fun _ -> ());
    exists_section = (fun _ -> true);
    remove_unused = (fun _ -> ());
    variable_printed = (fun _ -> ());
-   add_diab_info = (fun _ _ _ -> ());
+   add_diab_info = (fun _ _ _ _ -> ());
 }
 
 let implem = ref default_implem
@@ -110,11 +106,9 @@ let end_live_range atom lbl = !implem.end_live_range atom lbl
 let stack_variable atom loc = !implem.stack_variable atom loc
 let add_label atom p lbl = !implem.add_label atom p lbl
 let atom_parameter fid pid atom = !implem.atom_parameter fid pid atom
-let add_compilation_section_start sec addr = !implem.add_compilation_section_start sec addr
-let add_compilation_section_end sec addr = !implem.add_compilation_section_end sec addr
 let exists_section sec = !implem.exists_section sec
 let compute_diab_file_enum end_l entry_l line_e = !implem.compute_diab_file_enum end_l entry_l line_e
 let compute_gnu_file_enum f = !implem.compute_gnu_file_enum f
 let remove_unused ident = !implem.remove_unused ident
 let variable_printed ident = !implem.variable_printed ident
-let add_diab_info sec addr = !implem.add_diab_info sec addr
+let add_diab_info sec line_start debug_info low_pc = !implem.add_diab_info sec line_start debug_info low_pc

@@ -386,21 +386,23 @@ module Dwarfgenaux (Target: TARGET) =
           Some (new_entry id (DW_TAG_variable var)),(IntSet.add v.lvar_type acc,loc_list@bcc)
 
     and scope_to_entry  f_id acc sc id =
-      let l_pc,h_pc = try
+      let r = try
         let r = Hashtbl.find scope_ranges id in
-        let lbl l = match l with
-        | Some l -> Some (Hashtbl.find label_translation (f_id,l))
-        | None -> None in
+        let lbl l h = match l,h with
+        | Some l,Some h->
+            let l = (Hashtbl.find label_translation (f_id,l))
+            and h = (Hashtbl.find label_translation (f_id,h)) in
+            Pc_pair(l,h)
+        | _ -> Empty in
         begin
           match r with
-          | [] -> None,None
-          | [a] -> lbl a.start_addr, lbl a.end_addr
-          | a::rest -> lbl (List.hd (List.rev rest)).start_addr,lbl a.end_addr
+          | [] -> Empty
+          | [a] -> lbl a.start_addr a.end_addr
+          | a::rest -> lbl (List.hd (List.rev rest)).start_addr  a.end_addr
         end
-      with Not_found -> None,None in
+      with Not_found -> Empty in
       let scope = {
-        lexical_block_high_pc = h_pc;
-        lexical_block_low_pc = l_pc;
+        lexical_block_range = r;
       } in
       let vars,acc = mmap_opt (local_to_entry  f_id) acc sc.scope_variables in
       let entry = new_entry id (DW_TAG_lexical_block scope) in
@@ -423,14 +425,16 @@ module Dwarfgenaux (Target: TARGET) =
           | _ -> assert false)
 
     let function_to_entry (acc,bcc) id f =
+      let r = match f.fun_low_pc, f.fun_high_pc with
+      | Some l,Some h -> Pc_pair (l,h)
+      | _ -> Empty in
       let f_tag = {
         subprogram_file_loc = file_loc f.fun_file_loc;
         subprogram_external = Some f.fun_external;
         subprogram_name = string_entry f.fun_name;
         subprogram_prototyped = true;
         subprogram_type = f.fun_return_type;
-        subprogram_high_pc = f.fun_high_pc;
-        subprogram_low_pc = f.fun_low_pc;
+        subprogram_range = r;
       } in
       let f_id = get_opt_val f.fun_atom in
       let acc = match f.fun_return_type with Some s -> IntSet.add s acc | None -> acc in
@@ -473,8 +477,7 @@ let diab_gen_compilation_section s defs acc =
   and high_pc = Hashtbl.find compilation_section_end s in
   let cp = {
     compile_unit_name = Simple_string !file_name;
-    compile_unit_low_pc = low_pc;
-    compile_unit_high_pc = high_pc;
+    compile_unit_range = Pc_pair (low_pc,high_pc);
     compile_unit_dir = Simple_string (Sys.getcwd ());
     compile_unit_prod_name = Simple_string prod_name
   } in
@@ -515,8 +518,11 @@ let gnu_string_entry s =
       Offset_string id
 
 let gen_gnu_debug_info sec_name var_section : debug_entries =
-  let low_pc = Hashtbl.find compilation_section_start ".text"
-  and high_pc = Hashtbl.find compilation_section_end ".text" in
+  let r,low_pc = try
+    let low_pc = Hashtbl.find compilation_section_start ".text"
+    and high_pc = Hashtbl.find compilation_section_end ".text" in
+    Pc_pair (low_pc,high_pc),Some low_pc
+  with Not_found -> Empty,None in
   let module Gen = Dwarfgenaux (struct
     let file_loc = gnu_file_loc
     let string_entry = gnu_string_entry
@@ -530,13 +536,12 @@ let gen_gnu_debug_info sec_name var_section : debug_entries =
   let types = Gen.gen_types ty in
   let cp = {
     compile_unit_name = gnu_string_entry !file_name;
-    compile_unit_low_pc = low_pc;
-    compile_unit_high_pc = high_pc;
+    compile_unit_range = r;
     compile_unit_dir = gnu_string_entry (Sys.getcwd ());
     compile_unit_prod_name = gnu_string_entry prod_name;
   } in
   let cp = new_entry (next_id ()) (DW_TAG_compile_unit cp) in
   let cp = add_children cp (types@defs) in
-  let loc_pc = if StringSet.cardinal sec > 1 then None else Some low_pc in
+  let loc_pc = if StringSet.cardinal sec > 1 then None else low_pc in
   let string_table = Hashtbl.fold (fun s i acc -> (i,s)::acc) string_table [] in
   Gnu (cp,(loc_pc,locs),string_table)

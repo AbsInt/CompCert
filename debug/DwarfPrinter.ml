@@ -91,7 +91,13 @@ module DwarfPrinter(Target: DWARF_TARGET):
       | Some (LocSymbol _)
       | Some (LocSimple _) -> add_abbr_entry (0x2,"DW_AT_location",DW_FORM_block) buf
 
-
+    let add_range buf = function
+      | Pc_pair _ ->
+          add_abbr_entry (0x11,"DW_AT_low_pc",DW_FORM_addr) buf;
+          add_abbr_entry (0x12,"DW_AT_high_pc",DW_FORM_addr) buf
+      | Offset _ ->
+          add_abbr_entry (0x55,"DW_AT_ranges",DW_FORM_data4) buf
+      | Empty -> ()
 
     (* Dwarf entity to string function *)
     let abbrev_string_of_entity entity has_sibling =
@@ -120,8 +126,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       | DW_TAG_compile_unit e ->
           prologue 0x11 "DW_TAG_compile_unit";
           add_string buf 0x1b "DW_AT_comp_dir" e.compile_unit_dir;
-          add_low_pc buf;
-          add_high_pc buf;
+          add_range buf e.compile_unit_range;
           add_abbr_entry (0x13,"DW_AT_language",DW_FORM_udata) buf;
           add_name buf e.compile_unit_name;
           add_string buf 0x25 "DW_AT_producer" e.compile_unit_prod_name;
@@ -152,8 +157,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
           add_name buf e.label_name;
       | DW_TAG_lexical_block a ->
           prologue 0xb "DW_TAG_lexical_block";
-          add_attr_some a.lexical_block_high_pc add_high_pc;
-          add_attr_some a.lexical_block_low_pc add_low_pc
+          add_range buf a.lexical_block_range;
       | DW_TAG_member e ->
           prologue 0xd "DW_TAG_member";
           add_attr_some e.member_byte_size add_byte_size;
@@ -179,8 +183,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
           prologue 0x2e "DW_TAG_subprogram";
           add_file_loc buf;
           add_attr_some e.subprogram_external (add_abbr_entry (0x3f,"DW_AT_external",DW_FORM_flag));
-          add_attr_some e.subprogram_low_pc add_low_pc;
-          add_attr_some e.subprogram_high_pc add_high_pc;
+          add_range buf e.subprogram_range;
           add_name buf e.subprogram_name;
           add_abbr_entry (0x27,"DW_AT_prototyped",DW_FORM_flag) buf;
           add_attr_some e.subprogram_type add_type;
@@ -418,10 +421,15 @@ module DwarfPrinter(Target: DWARF_TARGET):
       | None -> ());
       print_string oc "DW_AT_name" bt.base_type_name
 
+    let print_range oc = function
+      | Pc_pair (l,h) ->
+          print_addr oc "DW_AT_low_pc" l;
+          print_addr oc "DW_AT_high_pc" h
+      | _ -> ()
+
     let print_compilation_unit oc tag =
       print_string oc "DW_AT_comp_dir" tag.compile_unit_dir;
-      print_addr oc "DW_AT_low_pc" tag.compile_unit_low_pc;
-      print_addr oc "DW_AT_high_pc" tag.compile_unit_high_pc;
+      print_range oc tag.compile_unit_range;
       print_uleb128 oc "DW_AT_language" 1;
       print_string oc "DW_AT_name" tag.compile_unit_name;
       print_string oc "DW_AT_producer" tag.compile_unit_prod_name;
@@ -453,8 +461,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
 
 
     let print_lexical_block oc lb =
-      print_opt_value oc "DW_AT_high_pc" lb.lexical_block_high_pc print_addr;
-      print_opt_value oc "DW_AT_low_pc" lb.lexical_block_low_pc print_addr
+      print_range oc lb.lexical_block_range
 
     let print_member oc mb =
       print_opt_value oc "DW_AT_byte_size" mb.member_byte_size print_byte;
@@ -475,15 +482,11 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_opt_value oc "DW_AT_declaration" st.structure_declaration print_flag;
       print_opt_value oc "DW_AT_name" st.structure_name print_string
 
-    let print_subprogram_addr oc (s,e) =
-      fprintf oc "	.4byte		%a\n" label e;
-      fprintf oc "	.4byte		%a\n" label s
 
     let print_subprogram oc sp =
       print_file_loc oc (Some sp.subprogram_file_loc);
       print_opt_value oc "DW_AT_external" sp.subprogram_external print_flag;
-      print_opt_value oc "DW_AT_low_pc" sp.subprogram_low_pc print_addr;
-      print_opt_value oc "DW_AT_high_pc" sp.subprogram_high_pc print_addr;
+      print_range oc sp.subprogram_range;
       print_string oc "DW_AT_name" sp.subprogram_name;
       print_flag oc "DW_AT_prototyped" sp.subprogram_prototyped;
       print_opt_value oc "DW_AT_type" sp.subprogram_type print_ref
@@ -602,6 +605,11 @@ module DwarfPrinter(Target: DWARF_TARGET):
       | None -> print_location_entry_abs oc in
      List.iter f l
 
+    let list_opt l f =
+      match l with
+      | [] -> ()
+      | _ -> f ()
+
     let print_diab_entries oc entries =
       let abbrev_start = new_label () in
       abbrev_start_addr := abbrev_start;
@@ -614,7 +622,8 @@ module DwarfPrinter(Target: DWARF_TARGET):
       section oc Section_debug_loc;
       List.iter (fun e -> print_location_list oc e.locs) entries
 
-    let print_gnu_entries oc cp loc s =
+
+    let print_gnu_entries oc cp (lpc,loc) s =
       compute_abbrev cp;
       let line_start = new_label ()
       and start = new_label ()
@@ -623,14 +632,16 @@ module DwarfPrinter(Target: DWARF_TARGET):
       section oc (Section_debug_info None);
       print_debug_info oc start line_start cp;
       print_abbrev oc;
-      section oc Section_debug_loc;
-      print_location_list oc loc;
+      list_opt loc (fun () ->
+        section oc Section_debug_loc;
+        print_location_list oc (lpc,loc));
       section oc (Section_debug_line None);
       print_label oc line_start;
-      section oc Section_debug_str;
-      List.iter (fun (id,s) ->
-        print_label oc (loc_to_label id);
-        fprintf oc "	.asciz		\"%s\"\n" s) s
+      list_opt s (fun () ->
+        section oc Section_debug_str;
+        List.iter (fun (id,s) ->
+          print_label oc (loc_to_label id);
+          fprintf oc "	.asciz		\"%s\"\n" s) s)
 
 
     (* Print the debug info and abbrev section *)

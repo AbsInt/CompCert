@@ -24,10 +24,10 @@ open TargetPrinter
 module Printer(Target:TARGET) =
   struct
 
-    let get_fun_addr name =
+    let get_fun_addr name txt =
       let s = Target.new_label ()
       and e = Target.new_label () in
-      Debug.add_fun_addr name (e,s);
+      Debug.add_fun_addr name txt (e,s);
       s,e
 
     let print_debug_label oc l =
@@ -51,7 +51,7 @@ module Printer(Target:TARGET) =
         fprintf oc "	.globl %a\n" Target.symbol name;
       Target.print_optional_fun_info oc;
       let s,e = if !Clflags.option_g && Configuration.advanced_debug then
-        get_fun_addr name
+        get_fun_addr name text
       else
         -1,-1 in
       print_debug_label oc s;

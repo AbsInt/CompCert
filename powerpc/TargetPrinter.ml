@@ -151,20 +151,14 @@ module Linux_System : SYSTEM =
     let print_prologue oc =
       if !Clflags.option_g then  begin
           section oc Section_text;
-          let low_pc = new_label () in
-          Debug.add_compilation_section_start Section_text low_pc;
-          fprintf oc "%a:\n" label low_pc;
           fprintf oc "	.cfi_sections	.debug_frame\n"
         end
 
     let print_epilogue oc =
       if !Clflags.option_g then
         begin
-          let high_pc = new_label () in
-          Debug.add_compilation_section_end  Section_text high_pc;
           Debug.compute_gnu_file_enum (fun f -> ignore (print_file oc f));
           section oc Section_text;
-          fprintf oc "%a:\n" label high_pc
         end
 
     let debug_section _ _ = ()
@@ -266,8 +260,7 @@ module Diab_System : SYSTEM =
             let line_start = new_label ()
             and low_pc = new_label ()
             and debug_info = new_label () in
-            Debug.add_diab_info sec line_start debug_info;
-            Debug.add_compilation_section_start sec low_pc;
+            Debug.add_diab_info sec line_start debug_info low_pc;
             let line_name = ".debug_line" ^(if name <> ".text" then name else "") in
             section oc (Section_debug_line (if name <> ".text" then Some name else None));
             fprintf oc "	.section	%s,,n\n" line_name;

@@ -593,9 +593,19 @@ let add_compilation_section_end sec addr =
   let sec = section_to_string sec in
   Hashtbl.add compilation_section_end sec addr
 
-let add_diab_info sec addr1 add2 =
+let add_diab_info sec addr1 add2 addr3 =
   let sec' = section_to_string sec in
+  Hashtbl.add compilation_section_start sec' addr3;
   Hashtbl.add diab_additional sec' (addr1,add2,sec)
+
+let diab_add_fun_addr name _ addr = add_fun_addr name addr
+
+let gnu_add_fun_addr name sec (high,low) =
+  let sec = section_to_string sec in
+  if not (Hashtbl.mem compilation_section_start sec) then
+    Hashtbl.add compilation_section_start sec low;
+  Hashtbl.replace compilation_section_end sec high;
+  add_fun_addr name (high,low)
 
 let exists_section sec =
   Hashtbl.mem compilation_section_start (section_to_string sec)

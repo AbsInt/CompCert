@@ -87,6 +87,11 @@ type dw_form =
   | DW_FORM_ref_udata
   | DW_FORM_ref_indirect
 
+type dw_range =
+  | Pc_pair of reference * reference (* Simple low,high pc *)
+  | Offset of reference * constant (* DWARF 3 version for different range *)
+  | Empty (* Needed for compilation units only containing variables *)
+
 (* Types representing the attribute information per tag value *)
 
 type dw_tag_array_type =
@@ -104,8 +109,7 @@ type dw_tag_base_type =
 type dw_tag_compile_unit =
     {
      compile_unit_name:      string_const;
-     compile_unit_low_pc:    constant;
-     compile_unit_high_pc:   constant;
+     compile_unit_range:     dw_range;
      compile_unit_dir:       string_const;
      compile_unit_prod_name: string_const;
    }
@@ -146,8 +150,7 @@ type dw_tag_label =
 
 type dw_tag_lexical_block =
     {
-     lexical_block_high_pc: address option;
-     lexical_block_low_pc:  address option;
+     lexical_block_range: dw_range;
    }
 
 type dw_tag_member =
@@ -181,8 +184,7 @@ type dw_tag_subprogram =
      subprogram_name:       string_const;
      subprogram_prototyped: flag;
      subprogram_type:       reference     option;
-     subprogram_high_pc:    reference     option;
-     subprogram_low_pc:     reference     option;
+     subprogram_range:      dw_range;
    }
 
 type dw_tag_subrange_type =
