@@ -902,7 +902,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       if !Clflags.option_g then begin
         section oc Section_text;
         let low_pc = new_label () in
-        Debug.add_compilation_section_start ".text" low_pc;
+        Debug.add_compilation_section_start Section_text low_pc;
         fprintf oc "%a:\n" elf_label low_pc;
         fprintf oc "	.cfi_sections	.debug_frame\n"
       end
@@ -911,7 +911,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
     let print_epilogue oc =
       if !Clflags.option_g then begin
         let high_pc = new_label () in
-        Debug.add_compilation_section_end ".text" high_pc;
+        Debug.add_compilation_section_end Section_text high_pc;
         Debug.compute_gnu_file_enum (fun f -> ignore (print_file oc f));
         section oc Section_text;
         fprintf oc "%a:\n" elf_label high_pc
