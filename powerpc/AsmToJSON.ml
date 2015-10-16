@@ -342,6 +342,7 @@ let p_section oc = function
   | Section_debug_abbrev
   | Section_debug_line _
   | Section_debug_loc
+  | Section_debug_ranges
   | Section_debug_str -> () (* There should be no info in the debug sections *)
 
 let p_int_opt oc = function

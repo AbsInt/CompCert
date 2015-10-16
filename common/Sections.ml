@@ -31,6 +31,7 @@ type section_name =
   | Section_debug_info of string option
   | Section_debug_loc
   | Section_debug_line of string option
+  | Section_debug_ranges
   | Section_debug_str
 
 type access_mode =

@@ -272,6 +272,8 @@ module DwarfPrinter(Target: DWARF_TARGET):
 
     let debug_stmt_list = ref (-1)
 
+    let debug_ranges_addr = ref (-1)
+
     let entry_labels: (int,int) Hashtbl.t = Hashtbl.create 7
 
     (* Translate the ids to address labels *)
@@ -425,6 +427,8 @@ module DwarfPrinter(Target: DWARF_TARGET):
       | Pc_pair (l,h) ->
           print_addr oc "DW_AT_low_pc" l;
           print_addr oc "DW_AT_high_pc" h
+      | Offset i -> fprintf oc "	.4byte		%a+0x%d%a\n"
+            label !debug_ranges_addr i print_comment "DW_AT_ranges"
       | _ -> ()
 
     let print_compilation_unit oc tag =
@@ -573,7 +577,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       and debug_end = new_label () in
       fprintf oc "	.4byte		%a-%a%a\n" label debug_end label debug_length_start print_comment "Length of Unit";
       print_label oc debug_length_start;
-      fprintf oc "	.2byte		0x2%a\n" print_comment "DWARF version number"; (* Dwarf version *)
+      fprintf oc "	.2byte		0x%d%a\n" !Clflags.option_gdwarf print_comment "DWARF version number"; (* Dwarf version *)
       print_addr oc "Offset Into Abbrev. Section" !abbrev_start_addr; (* Offset into the abbreviation *)
       print_byte oc "Address Size (in bytes)" !Machine.config.Machine.sizeof_ptr; (* Sizeof pointer type *)
       print_entry oc entry;
@@ -622,12 +626,23 @@ module DwarfPrinter(Target: DWARF_TARGET):
       section oc Section_debug_loc;
       List.iter (fun e -> print_location_list oc e.locs) entries
 
+    let print_ranges oc r =
+      section oc Section_debug_ranges;
+      print_label oc !debug_ranges_addr;
+      List.iter (fun l ->
+        List.iter (fun (b,e) ->
+          fprintf oc "	.4byte		%a\n" label b;
+          fprintf oc "	.4byte		%a\n" label e) l;
+        fprintf oc "	.4byte	0\n";
+        fprintf oc "	.4byte	0\n") r
 
-    let print_gnu_entries oc cp (lpc,loc) s =
+    let print_gnu_entries oc cp (lpc,loc) s r =
       compute_abbrev cp;
       let line_start = new_label ()
       and start = new_label ()
-      and  abbrev_start = new_label () in
+      and  abbrev_start = new_label ()
+      and range_label = new_label () in
+      debug_ranges_addr := range_label;
       abbrev_start_addr := abbrev_start;
       section oc (Section_debug_info None);
       print_debug_info oc start line_start cp;
@@ -635,6 +650,8 @@ module DwarfPrinter(Target: DWARF_TARGET):
       list_opt loc (fun () ->
         section oc Section_debug_loc;
         print_location_list oc (lpc,loc));
+      list_opt r (fun () ->
+        print_ranges oc r);
       section oc (Section_debug_line None);
       print_label oc line_start;
       list_opt s (fun () ->
@@ -647,6 +664,6 @@ module DwarfPrinter(Target: DWARF_TARGET):
     (* Print the debug info and abbrev section *)
     let print_debug oc = function
       | Diab entries -> print_diab_entries oc entries
-      | Gnu (cp,loc,s) -> print_gnu_entries oc cp loc s
+      | Gnu (cp,loc,s,r) -> print_gnu_entries oc cp loc s r
 
   end

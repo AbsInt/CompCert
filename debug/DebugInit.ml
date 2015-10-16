@@ -53,6 +53,7 @@ let init_debug () =
   implem :=
   if Configuration.system = "diab" then
     let gen = (fun a b -> Some (Dwarfgen.gen_diab_debug_info a b)) in
+    Clflags.option_gdwarf := 2; (* Dwarf 2 is the only supported target *)
     {default_debug with generate_debug_info = gen;
      add_diab_info = DebugInformation.add_diab_info;
      add_fun_addr = DebugInformation.diab_add_fun_addr;}

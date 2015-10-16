@@ -89,7 +89,7 @@ type dw_form =
 
 type dw_range =
   | Pc_pair of reference * reference (* Simple low,high pc *)
-  | Offset of reference * constant (* DWARF 3 version for different range *)
+  | Offset of constant (* DWARF 3 version for different range *)
   | Empty (* Needed for compilation units only containing variables *)
 
 (* Types representing the attribute information per tag value *)
@@ -273,6 +273,12 @@ type location_entry =
    }
 type dw_locations = constant option * location_entry list
 
+type range_entry = (address * address) list
+
+type dw_ranges = range_entry list
+
+type dw_string = (int * string) list
+
 type diab_entry =
     {
      section_name: string;
@@ -284,9 +290,7 @@ type diab_entry =
 
 type diab_entries =  diab_entry list
 
-type dw_string = (int * string) list
-
-type gnu_entries = dw_entry * dw_locations * dw_string
+type gnu_entries = dw_entry * dw_locations * dw_string * dw_ranges
 
 type debug_entries =
   | Diab of diab_entries

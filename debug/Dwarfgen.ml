@@ -56,6 +56,29 @@ module type TARGET =
       val string_entry: string -> string_const
     end
 
+type dwarf_accu =
+    {
+     typs:  IntSet.t;
+     locs:   location_entry list;
+     ranges: int * dw_ranges
+   }
+
+let (=<<) acc t =
+  {acc with typs = IntSet.add t acc.typs;}
+
+let (<=<) acc loc =
+  {acc with locs = loc@acc.locs;}
+
+let (>>=) acc r =
+  {acc with ranges = r;}
+
+let empty_accu =
+  {
+   typs = IntSet.empty;
+   locs = [];
+   ranges = 0,[]
+ }
+
 module Dwarfgenaux (Target: TARGET) =
   struct
 
@@ -304,7 +327,8 @@ module Dwarfgenaux (Target: TARGET) =
         variable_type = v.gvar_type;
         variable_location = loc;
       } in
-      new_entry id (DW_TAG_variable var),IntSet.add v.gvar_type acc
+      let acc = acc =<< v.gvar_type in
+      new_entry id (DW_TAG_variable var),acc
 
     let gen_splitlong op_hi op_lo =
       let op_piece = DW_OP_piece 4 in
@@ -359,7 +383,7 @@ module Dwarfgenaux (Target: TARGET) =
         end
       with Not_found -> None,[]
 
-    let function_parameter_to_entry f_id (acc,bcc) p =
+    let function_parameter_to_entry f_id acc p =
       let loc,loc_list = location_entry f_id (get_opt_val p.parameter_atom) in
       let p = {
         formal_parameter_artificial = None;
@@ -368,11 +392,37 @@ module Dwarfgenaux (Target: TARGET) =
         formal_parameter_variable_parameter = None;
         formal_parameter_location = loc;
       } in
-      new_entry (next_id ()) (DW_TAG_formal_parameter p),(IntSet.add p.formal_parameter_type acc,loc_list@bcc)
+      let acc = (acc =<< p.formal_parameter_type) <=< loc_list in
+      new_entry (next_id ()) (DW_TAG_formal_parameter p),acc
 
-    let rec local_variable_to_entry f_id (acc,bcc) v id =
+    let scope_range f_id id (o,dwr) =
+      try
+        let r = Hashtbl.find scope_ranges id in
+        let lbl l h = match l,h with
+        | Some l,Some h->
+            let l = (Hashtbl.find label_translation (f_id,l))
+            and h = (Hashtbl.find label_translation (f_id,h)) in
+            l,h
+        | _ -> raise Not_found in
+        begin
+          match r with
+          | [] -> Empty,(o,dwr)
+          | [a] ->
+              let l,h = lbl a.start_addr a.end_addr in
+              Pc_pair (l,h),(o,dwr)
+          | a::rest ->
+              if !Clflags.option_gdwarf > 2 then
+                let r = List.map (fun e -> lbl e.start_addr e.end_addr) r in
+                (Offset o), (o + 2 + 4 * (List.length r),r::dwr)
+              else
+                let l,h = lbl (List.hd (List.rev rest)).start_addr a.end_addr in
+                Pc_pair (l,h),(o,dwr)
+        end
+      with Not_found -> Empty,(o,dwr)
+
+    let rec local_variable_to_entry f_id acc v id =
       match v.lvar_atom with
-      | None -> None,(acc,bcc)
+      | None -> None,acc
       | Some loc ->
           let loc,loc_list = location_entry f_id loc in
           let var = {
@@ -383,36 +433,22 @@ module Dwarfgenaux (Target: TARGET) =
             variable_type = v.lvar_type;
             variable_location = loc;
           } in
-          Some (new_entry id (DW_TAG_variable var)),(IntSet.add v.lvar_type acc,loc_list@bcc)
+          let acc = (acc =<< v.lvar_type) <=< loc_list in
+          Some (new_entry id (DW_TAG_variable var)),acc
 
-    and scope_to_entry  f_id acc sc id =
-      let r = try
-        let r = Hashtbl.find scope_ranges id in
-        let lbl l h = match l,h with
-        | Some l,Some h->
-            let l = (Hashtbl.find label_translation (f_id,l))
-            and h = (Hashtbl.find label_translation (f_id,h)) in
-            Pc_pair(l,h)
-        | _ -> Empty in
-        begin
-          match r with
-          | [] -> Empty
-          | [a] -> lbl a.start_addr a.end_addr
-          | a::rest -> lbl (List.hd (List.rev rest)).start_addr  a.end_addr
-        end
-      with Not_found -> Empty in
+    and scope_to_entry f_id acc sc id =
+      let r,dwr = scope_range f_id id acc.ranges in
       let scope = {
         lexical_block_range = r;
       } in
       let vars,acc = mmap_opt (local_to_entry  f_id) acc sc.scope_variables in
       let entry = new_entry id (DW_TAG_lexical_block scope) in
-      add_children entry vars,acc
+      add_children entry vars,(acc >>= dwr)
 
     and local_to_entry f_id acc id =
       match Hashtbl.find local_variables id with
       | LocalVariable v -> local_variable_to_entry f_id acc v id
-      | Scope v -> let s,acc =
-          (scope_to_entry f_id acc v id) in
+      | Scope v -> let s,acc = (scope_to_entry f_id acc v id) in
         Some s,acc
 
     let fun_scope_to_entries f_id acc id =
@@ -421,10 +457,10 @@ module Dwarfgenaux (Target: TARGET) =
       | Some id ->
           let sc = Hashtbl.find local_variables id in
           (match sc with
-          | Scope sc ->mmap_opt (local_to_entry f_id) acc sc.scope_variables
+          | Scope sc -> mmap_opt (local_to_entry f_id) acc sc.scope_variables
           | _ -> assert false)
 
-    let function_to_entry (acc,bcc) id f =
+    let function_to_entry acc id f =
       let r = match f.fun_low_pc, f.fun_high_pc with
       | Some l,Some h -> Pc_pair (l,h)
       | _ -> Empty in
@@ -437,17 +473,16 @@ module Dwarfgenaux (Target: TARGET) =
         subprogram_range = r;
       } in
       let f_id = get_opt_val f.fun_atom in
-      let acc = match f.fun_return_type with Some s -> IntSet.add s acc | None -> acc in
+      let acc = match f.fun_return_type with Some s -> acc =<< s | None -> acc in
       let f_entry =  new_entry id (DW_TAG_subprogram f_tag) in
-      let params,(acc,bcc) = mmap (function_parameter_to_entry f_id) (acc,bcc) f.fun_parameter in
-      let vars,(acc,bcc) = fun_scope_to_entries f_id (acc,bcc) f.fun_scope in
-      add_children f_entry (params@vars),(acc,bcc)
+      let params,acc = mmap (function_parameter_to_entry f_id) acc f.fun_parameter in
+      let vars,acc = fun_scope_to_entries f_id acc f.fun_scope in
+      add_children f_entry (params@vars),acc
 
-    let definition_to_entry (acc,bcc) id t =
+    let definition_to_entry acc id t =
       match t with
-      | GlobalVariable g -> let e,acc = global_variable_to_entry acc id g in
-        e,(acc,bcc)
-      | Function f -> function_to_entry (acc,bcc) id f
+      | GlobalVariable g -> global_variable_to_entry acc id g
+      | Function f -> function_to_entry acc id f
 
   end
 
@@ -468,10 +503,11 @@ let prod_name =
 let diab_gen_compilation_section s defs acc =
   let module Gen = Dwarfgenaux(struct
     let file_loc = diab_file_loc s
-    let string_entry s =  Simple_string s end) in
-  let defs,(ty,locs) = List.fold_left (fun (acc,bcc) (id,t) ->
-    let t,bcc = Gen.definition_to_entry  bcc id t in
-    t::acc,bcc) ([],(IntSet.empty,[])) defs in
+    let string_entry s =  Simple_string s
+  end) in
+  let defs,accu = List.fold_left (fun (acc,bcc) (id,t) ->
+    let t,bcc = Gen.definition_to_entry bcc id t in
+    t::acc,bcc) ([],empty_accu) defs in
   let low_pc = Hashtbl.find compilation_section_start s
   and line_start,debug_start,_ = Hashtbl.find diab_additional s
   and high_pc = Hashtbl.find compilation_section_end s in
@@ -482,13 +518,13 @@ let diab_gen_compilation_section s defs acc =
     compile_unit_prod_name = Simple_string prod_name
   } in
   let cp = new_entry (next_id ()) (DW_TAG_compile_unit cp) in
-  let cp = add_children cp ((Gen.gen_types ty) @ defs) in
+  let cp = add_children cp ((Gen.gen_types accu.typs) @ defs) in
   {
     section_name = s;
     start_label = debug_start;
     line_label = line_start;
     entry = cp;
-    locs = Some low_pc,locs;
+    locs = Some low_pc,accu.locs;
   }::acc
 
 let gen_diab_debug_info sec_name var_section : debug_entries =
@@ -517,23 +553,33 @@ let gnu_string_entry s =
       Hashtbl.add string_table s id;
       Offset_string id
 
+
 let gen_gnu_debug_info sec_name var_section : debug_entries =
-  let r,low_pc = try
-    let low_pc = Hashtbl.find compilation_section_start ".text"
-    and high_pc = Hashtbl.find compilation_section_end ".text" in
-    Pc_pair (low_pc,high_pc),Some low_pc
-  with Not_found -> Empty,None in
+  let r,dwr,low_pc =
+    try if !Clflags.option_gdwarf > 3 then
+        let pcs  = Hashtbl.fold (fun s low acc ->
+          (low,Hashtbl.find compilation_section_end s)::acc) compilation_section_start [] in
+        match pcs with
+        | [] ->  Empty,(0,[]),None
+        | [(l,h)] ->   Pc_pair (l,h),(0,[]),Some l
+        | _ -> Offset 0,(2 + 4 * (List.length pcs),[pcs]),None
+    else
+        let l = Hashtbl.find compilation_section_start ".text"
+        and h = Hashtbl.find compilation_section_end ".text" in
+        Pc_pair(l,h),(0,[]),Some l
+    with Not_found ->  Empty,(0,[]),None in
+  let accu = empty_accu >>= dwr in
   let module Gen = Dwarfgenaux (struct
     let file_loc = gnu_file_loc
     let string_entry = gnu_string_entry
   end) in
-  let defs,(ty,locs),sec = Hashtbl.fold (fun  id t (acc,bcc,sec) ->
+  let defs,accu,sec = Hashtbl.fold (fun  id t (acc,bcc,sec) ->
     let s = match t with
     | GlobalVariable _ -> var_section
     | Function f -> sec_name (get_opt_val f.fun_atom) in
     let t,bcc = Gen.definition_to_entry bcc id t in
-    t::acc,bcc,StringSet.add s sec) definitions ([],(IntSet.empty,[]),StringSet.empty) in
-  let types = Gen.gen_types ty in
+    t::acc,bcc,StringSet.add s sec) definitions ([],accu,StringSet.empty) in
+  let types = Gen.gen_types accu.typs in
   let cp = {
     compile_unit_name = gnu_string_entry !file_name;
     compile_unit_range = r;
@@ -544,4 +590,4 @@ let gen_gnu_debug_info sec_name var_section : debug_entries =
   let cp = add_children cp (types@defs) in
   let loc_pc = if StringSet.cardinal sec > 1 then None else low_pc in
   let string_table = Hashtbl.fold (fun s i acc -> (i,s)::acc) string_table [] in
-  Gnu (cp,(loc_pc,locs),string_table)
+  Gnu (cp,(loc_pc,accu.locs),string_table,snd accu.ranges)

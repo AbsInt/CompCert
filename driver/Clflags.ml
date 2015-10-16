@@ -46,6 +46,7 @@ let option_dmach = ref false
 let option_dasm = ref false
 let option_sdump = ref false
 let option_g = ref false
+let option_gdwarf = ref 2
 let option_o = ref (None: string option)
 let option_E = ref false
 let option_S = ref false
