@@ -17,6 +17,10 @@
 
 include Makefile.config
 
+# Menhir configuration and rules.
+
+include Makefile.menhir
+
 # Directories containing plain Caml code (no preprocessing)
 
 DIRS=extraction \
@@ -33,7 +37,7 @@ endif
 
 ALLDIRS=$(DIRS) $(DIRS_P4)
 
-INCLUDES=$(patsubst %,-I %, $(ALLDIRS))
+INCLUDES=$(patsubst %,-I %, $(ALLDIRS)) $(MENHIR_INCLUDES)
 
 # Control of warnings:
 # warning 3 = deprecated feature.  Turned off for OCaml 4.02 (bytes vs strings)
@@ -70,7 +74,6 @@ OCAMLC_P4=ocamlfind ocamlc $(COMPFLAGS) $(BITSTRING)
 OCAMLOPT_P4=ocamlfind ocamlopt $(COMPFLAGS) $(BITSTRING)
 OCAMLDEP_P4=ocamlfind ocamldep $(INCLUDES) $(BITSTRING)
 
-MENHIR=menhir -v --no-stdlib -la 1
 OCAMLLEX=ocamllex -q
 MODORDER=tools/modorder .depend.extr
 
@@ -78,7 +81,9 @@ PARSERS=backend/CMparser.mly cparser/pre_parser.mly
 LEXERS=backend/CMlexer.mll cparser/Lexer.mll \
        lib/Tokenize.mll lib/Readconfig.mll
 
-LIBS=str.cmxa unix.cmxa
+LIBS=str.cmxa unix.cmxa $(MENHIR_LIBS)
+LIBS_BYTE=$(patsubst %.cmxa,%.cma,$(patsubst %.cmx,%.cmo,$(LIBS)))
+
 CHECKLINK_LIBS=str.cmxa
 
 EXECUTABLES=ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte
@@ -96,7 +101,7 @@ ccomp: $(CCOMP_OBJS)
 
 ccomp.byte: $(CCOMP_OBJS:.cmx=.cmo)
 	@echo "Linking $@"
-	@$(OCAMLC) -o $@ $(LIBS:.cmxa=.cma) $+
+	@$(OCAMLC) -o $@ $(LIBS_BYTE) $+
 
 ifeq ($(CCHECKLINK),true)
 
@@ -120,7 +125,7 @@ clightgen: $(CLIGHTGEN_OBJS)
 
 clightgen.byte: $(CLIGHTGEN_OBJS:.cmx=.cmo)
 	@echo "Linking $@"
-	@$(OCAMLC) -o $@ $(LIBS:.cmxa=.cma) $+
+	@$(OCAMLC) -o $@ $(LIBS_BYTE) $+
 
 include .depend.extr
 
@@ -148,8 +153,6 @@ checklink/%.cmx: checklink/%.ml
 	@echo "OCAMLOPT $<"
 	@$(OCAMLOPT) -c $<
 
-%.ml %.mli: %.mly
-	$(MENHIR) $<
 %.ml: %.mll
 	$(OCAMLLEX) $<
 
