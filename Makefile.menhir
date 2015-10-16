@@ -52,7 +52,7 @@ ifeq ($(MENHIR_TABLE),true)
 
   MENHIR_SUGGESTION = $(MENHIR) --suggest-comp-flags
 
-  MENHIR_INCLUDES = $(shell \
+  MENHIR_INCLUDES := $(shell \
     if $(MENHIR_SUGGESTION) | grep -e "-package" >/dev/null ; then \
       echo "-I `ocamlfind query menhirLib`" ; \
     else \
