@@ -144,17 +144,7 @@ let parse_c_file sourcename ifile =
   end;
   csyntax,None
 
-(* Dump Asm code in binary format for the validator *)
-
-let sdump_magic_number = "CompCertSDUMP" ^ Version.version
-
-let dump_asm asm destfile =
-  let oc = open_out_bin destfile in
-  output_string oc sdump_magic_number;
-  output_value oc asm;
-  output_value oc Camlcoq.string_of_atom;
-  output_value oc C2C.decl_atom;
-  close_out oc
+(* Dump Asm code in asm format for the validator *)
 
 let jdump_magic_number = "CompCertJDUMP" ^ Version.version
 
@@ -190,10 +180,7 @@ let compile_c_ast sourcename csyntax ofile debug =
         exit 2 in
   (* Dump Asm in binary and JSON format *)
   if !option_sdump then
-    begin
-      dump_asm asm (output_filename sourcename ".c" ".sdump");
-      dump_jasm asm (output_filename sourcename ".c" ".json")
-    end;
+      dump_jasm asm (output_filename sourcename ".c" ".json");
   (* Print Asm in text form *)
   let oc = open_out ofile in
   PrintAsm.print_program oc asm debug;
