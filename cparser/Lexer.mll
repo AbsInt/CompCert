@@ -440,7 +440,7 @@ and singleline_comment = parse
   open Parser
   open Aut.GramDefs
 
-  let tokens_stream filename channel : token coq_Stream =
+  let tokens_stream filename text : token coq_Stream =
     let tokens = Queue.create () in
     let lexer_wraper lexbuf : Pre_parser.token =
       let res =
@@ -452,7 +452,7 @@ and singleline_comment = parse
       Queue.push res tokens;
       res
     in
-    let lexbuf = Lexing.from_channel channel in
+    let lexbuf = Lexing.from_string text in
     lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_fname = filename; pos_lnum = 1};
     contexts_stk := [init_ctx];
     Pre_parser.translation_unit_file lexer_wraper lexbuf;
