@@ -323,7 +323,7 @@ expression:
 | expression COMMA assignment_expression
     {}
 
-constant_expression:
+%inline constant_expression:
 | conditional_expression
     {}
 
