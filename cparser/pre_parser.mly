@@ -463,12 +463,12 @@ struct_declaration:
 (* The phantom parameter can be [struct_declaration] or [type_name]. *)
 specifier_qualifier_list(phantom):
 | type_qualifier_list? TYPEDEF_NAME                   type_qualifier_list?
-| type_qualifier_list? type_specifier_no_typedef_name specifier_qualifier_list_no_typedef_name?
+| type_qualifier_list? type_specifier_no_typedef_name specifier_qualifier_no_typedef_name*
     {}
 
-specifier_qualifier_list_no_typedef_name:
-| type_specifier_no_typedef_name specifier_qualifier_list_no_typedef_name?
-| type_qualifier                 specifier_qualifier_list_no_typedef_name?
+specifier_qualifier_no_typedef_name:
+| type_specifier_no_typedef_name
+| type_qualifier
     {}
 
 struct_declarator_list:
