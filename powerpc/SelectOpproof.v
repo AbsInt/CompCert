@@ -838,6 +838,8 @@ Proof.
   intros. destruct x; simpl in H0; try discriminate.
   destruct (Float.to_intu f) as [n|] eqn:?; simpl in H0; inv H0.
   exists (Vint n); split; auto. unfold intuoffloat.
+  destruct Archi.ppc64.
+  econstructor. constructor; eauto. constructor. simpl; rewrite Heqo; auto.
   set (im := Int.repr Int.half_modulus).
   set (fm := Float.of_intu im).
   assert (eval_expr ge sp e m (Vfloat fm :: Vfloat f :: le) (Eletvar (S O)) (Vfloat f)).
