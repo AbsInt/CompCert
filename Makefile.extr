@@ -17,6 +17,10 @@
 
 include Makefile.config
 
+# Menhir configuration and rules.
+
+include Makefile.menhir
+
 # Directories containing plain Caml code
 
 DIRS=extraction \
@@ -47,7 +51,6 @@ OCAMLC=ocamlc$(DOTOPT) $(COMPFLAGS)
 OCAMLOPT=ocamlopt$(DOTOPT) $(COMPFLAGS)
 OCAMLDEP=ocamldep$(DOTOPT) -slash $(INCLUDES)
 
-MENHIR=menhir --explain
 OCAMLLEX=ocamllex -q
 MODORDER=tools/modorder .depend.extr
 
@@ -55,7 +58,9 @@ PARSERS=backend/CMparser.mly cparser/pre_parser.mly
 LEXERS=backend/CMlexer.mll cparser/Lexer.mll \
        lib/Tokenize.mll lib/Readconfig.mll
 
-LIBS=str.cmxa unix.cmxa
+LIBS=str.cmxa unix.cmxa $(MENHIR_LIBS)
+LIBS_BYTE=$(patsubst %.cmxa,%.cma,$(patsubst %.cmx,%.cmo,$(LIBS)))
+
 CHECKLINK_LIBS=str.cmxa
 
 EXECUTABLES=ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte
@@ -73,7 +78,7 @@ ccomp: $(CCOMP_OBJS)
 
 ccomp.byte: $(CCOMP_OBJS:.cmx=.cmo)
 	@echo "Linking $@"
-	@$(OCAMLC) -o $@ $(LIBS:.cmxa=.cma) $+
+	@$(OCAMLC) -o $@ $(LIBS_BYTE) $+
 
 CLIGHTGEN_OBJS:=$(shell $(MODORDER) exportclight/Clightgen.cmx)
 
@@ -83,7 +88,7 @@ clightgen: $(CLIGHTGEN_OBJS)
 
 clightgen.byte: $(CLIGHTGEN_OBJS:.cmx=.cmo)
 	@echo "Linking $@"
-	@$(OCAMLC) -o $@ $(LIBS:.cmxa=.cma) $+
+	@$(OCAMLC) -o $@ $(LIBS_BYTE) $+
 
 include .depend.extr
 
@@ -101,8 +106,6 @@ endif
 	@echo "OCAMLOPT $<"
 	@$(OCAMLOPT) -c $<
 
-%.ml %.mli: %.mly
-	$(MENHIR) $<
 %.ml: %.mll
 	$(OCAMLLEX) $<
 

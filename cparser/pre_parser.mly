@@ -74,11 +74,36 @@
 
 (* Helpers *)
 
-%inline option(X):
+(* Note that, by convention, [X?] is syntactic sugar for [option(X)],
+   so this definition of [option] is actually used, even though the
+   word [option] does not appear in the rest of this file. *)
+
+option(X):
 | /* nothing */
     { None }
 | x = X
     { Some x }
+
+(* [ioption(X)] is equivalent to [option(X)], but is marked [%inline],
+   so its definition is expanded. In the absence of conflicts, the two
+   are equivalent. Using [ioption] instead of [option] in well-chosen
+   places can help avoid conflicts. Conversely, using [option] instead
+   of [ioption] in well-chosen places can help reduce the number of
+   states of the automaton. *)
+
+%inline ioption(X):
+| /* nothing */
+    { None }
+| x = X
+    { Some x }
+
+(* [optional(X, Y)] is equivalent to [X? Y]. However, by inlining
+   the two possibilies -- either [X Y] or just [Y] -- we are able
+   to give more meaningful syntax error messages. [optional(X, Y)]
+   itself is usually NOT inlined, as that would cause a useless
+   explosion of cases. *)
+optional(X, Y):
+  ioption(X) Y {}
 
 %inline fst(X):
 | x = X
@@ -88,6 +113,15 @@ general_identifier:
 | i = VAR_NAME
 | i = TYPEDEF_NAME
     { i }
+
+(* [other_identifier] is equivalent to [general_identifier], but adds
+   an instruction that re-classifies this identifier as an [OtherId].
+   Because this definition is marked %inline, the function call takes
+   place when the host production is reduced. *)
+
+%inline other_identifier:
+  i = general_identifier
+    { set_id_type i OtherId }
 
 string_literals_list:
 | STRING_LITERAL
@@ -104,7 +138,7 @@ string_literals_list:
    follow set of the non-terminal in question. The follow sets are
    given by menhir with option -lg 3. *)
 
-%inline nop: (* empty *) { }
+%inline nop: (* empty *) {}
 
 open_context:
   (* empty *)%prec highPrec { !open_context () }
@@ -124,8 +158,7 @@ declare_typename(nt):
 (* Actual grammar *)
 
 primary_expression:
-| i = VAR_NAME
-    { set_id_type i VarId }
+| VAR_NAME
 | CONSTANT
 | string_literals_list
 | LPAREN expression RPAREN
@@ -144,9 +177,8 @@ postfix_expression:
     {}
 | BUILTIN_VA_ARG LPAREN assignment_expression COMMA type_name error
     { unclosed "(" ")" $startpos($2) $endpos }
-| postfix_expression DOT i = general_identifier
-| postfix_expression PTR i = general_identifier
-    { set_id_type i OtherId }
+| postfix_expression DOT other_identifier
+| postfix_expression PTR other_identifier
 | postfix_expression INC
 | postfix_expression DEC
 | LPAREN type_name RPAREN LBRACE initializer_list COMMA? RBRACE
@@ -186,37 +218,44 @@ cast_expression:
 | LPAREN type_name RPAREN cast_expression
     {}
 
+multiplicative_operator:
+  STAR | SLASH | PERCENT {}
+
 multiplicative_expression:
 | cast_expression
-| multiplicative_expression STAR cast_expression
-| multiplicative_expression SLASH cast_expression
-| multiplicative_expression PERCENT cast_expression
+| multiplicative_expression multiplicative_operator cast_expression
     {}
+
+additive_operator:
+  PLUS | MINUS {}
 
 additive_expression:
 | multiplicative_expression
-| additive_expression PLUS multiplicative_expression
-| additive_expression MINUS multiplicative_expression
+| additive_expression additive_operator multiplicative_expression
     {}
+
+shift_operator:
+  LEFT | RIGHT {}
 
 shift_expression:
 | additive_expression
-| shift_expression LEFT additive_expression
-| shift_expression RIGHT additive_expression
+| shift_expression shift_operator additive_expression
     {}
+
+relational_operator:
+  LT | GT | LEQ | GEQ {}
 
 relational_expression:
 | shift_expression
-| relational_expression LT shift_expression
-| relational_expression GT shift_expression
-| relational_expression LEQ shift_expression
-| relational_expression GEQ shift_expression
+| relational_expression relational_operator shift_expression
     {}
+
+equality_operator:
+  EQEQ | NEQ {}
 
 equality_expression:
 | relational_expression
-| equality_expression EQEQ relational_expression
-| equality_expression NEQ relational_expression
+| equality_expression equality_operator relational_expression
     {}
 
 and_expression:
@@ -286,8 +325,7 @@ constant_expression:
    typedef). *)
 
 declaration:
-| declaration_specifiers init_declarator_list? SEMICOLON
-    {}
+| declaration_specifiers         init_declarator_list?    SEMICOLON
 | declaration_specifiers_typedef typedef_declarator_list? SEMICOLON
     {}
 
@@ -299,7 +337,7 @@ init_declarator_list:
 init_declarator:
 | declare_varname(fst(declarator))
 | declare_varname(fst(declarator)) EQ c_initializer
-    { }
+    {}
 
 typedef_declarator_list:
 | typedef_declarator
@@ -308,7 +346,7 @@ typedef_declarator_list:
 
 typedef_declarator:
 | declare_typename(fst(declarator))
-    { }
+    {}
 
 storage_class_specifier_no_typedef:
 | EXTERN
@@ -321,8 +359,8 @@ storage_class_specifier_no_typedef:
    that do not contain either "typedef" nor type specifiers. *)
 declaration_specifiers_no_type:
 | storage_class_specifier_no_typedef declaration_specifiers_no_type?
-| type_qualifier declaration_specifiers_no_type?
-| function_specifier declaration_specifiers_no_type?
+| type_qualifier                     declaration_specifiers_no_type?
+| function_specifier                 declaration_specifiers_no_type?
     {}
 
 (* [declaration_specifiers_no_typedef_name] matches declaration
@@ -331,9 +369,9 @@ declaration_specifiers_no_type:
    keyword"). *)
 declaration_specifiers_no_typedef_name:
 | storage_class_specifier_no_typedef declaration_specifiers_no_typedef_name?
-| type_qualifier declaration_specifiers_no_typedef_name?
-| function_specifier declaration_specifiers_no_typedef_name?
-| type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+| type_qualifier                     declaration_specifiers_no_typedef_name?
+| function_specifier                 declaration_specifiers_no_typedef_name?
+| type_specifier_no_typedef_name     declaration_specifiers_no_typedef_name?
     {}
 
 (* [declaration_specifiers_no_type] matches declaration_specifiers
@@ -353,28 +391,18 @@ declaration_specifiers_no_typedef_name:
    The first field is a named t, while the second is unnamed of type t.
 *)
 declaration_specifiers:
-| declaration_specifiers_no_type? i = TYPEDEF_NAME declaration_specifiers_no_type?
-    { set_id_type i TypedefId }
-| declaration_specifiers_no_type? type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+| ioption(declaration_specifiers_no_type) TYPEDEF_NAME                   declaration_specifiers_no_type?
+| declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
     {}
 
 (* This matches declaration_specifiers that do contains once the
    "typedef" keyword. To avoid conflicts, we also encode the
    constraint described in the comment for [declaration_specifiers]. *)
 declaration_specifiers_typedef:
-| declaration_specifiers_no_type?
-  TYPEDEF declaration_specifiers_no_type?
-  i = TYPEDEF_NAME declaration_specifiers_no_type?
-| declaration_specifiers_no_type?
-  i = TYPEDEF_NAME declaration_specifiers_no_type?
-  TYPEDEF declaration_specifiers_no_type?
-    { set_id_type i TypedefId }
-| declaration_specifiers_no_type?
-  TYPEDEF declaration_specifiers_no_type?
-  type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
-| declaration_specifiers_no_type?
-  type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
-  TYPEDEF declaration_specifiers_no_typedef_name?
+| declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?         TYPEDEF_NAME                   declaration_specifiers_no_type?
+| ioption(declaration_specifiers_no_type) TYPEDEF_NAME                   declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?
+| declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+| declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name? TYPEDEF                        declaration_specifiers_no_typedef_name?
     {}
 
 (* A type specifier which is not a typedef name. *)
@@ -394,14 +422,10 @@ type_specifier_no_typedef_name:
     {}
 
 struct_or_union_specifier:
-| struct_or_union attribute_specifier_list LBRACE struct_declaration_list RBRACE
+| struct_or_union attribute_specifier_list other_identifier? LBRACE struct_declaration_list RBRACE
+| struct_or_union attribute_specifier_list other_identifier
     {}
-| struct_or_union attribute_specifier_list i = general_identifier LBRACE struct_declaration_list RBRACE
-| struct_or_union attribute_specifier_list i = general_identifier
-    { set_id_type i OtherId }
-| struct_or_union attribute_specifier_list LBRACE struct_declaration_list error
-    { unclosed "{" "}" $startpos($3) $endpos }
-| struct_or_union attribute_specifier_list general_identifier LBRACE struct_declaration_list error
+| struct_or_union attribute_specifier_list other_identifier? LBRACE struct_declaration_list error
     { unclosed "{" "}" $startpos($4) $endpos }
 
 struct_or_union:
@@ -421,14 +445,13 @@ struct_declaration:
 (* As in the standard, except it also encodes the constraint described
    in the comment above [declaration_specifiers]. *)
 specifier_qualifier_list:
-| type_qualifier_list? i = TYPEDEF_NAME type_qualifier_list?
-    { set_id_type i TypedefId }
+| type_qualifier_list? TYPEDEF_NAME                   type_qualifier_list?
 | type_qualifier_list? type_specifier_no_typedef_name specifier_qualifier_list_no_typedef_name?
     {}
 
 specifier_qualifier_list_no_typedef_name:
 | type_specifier_no_typedef_name specifier_qualifier_list_no_typedef_name?
-| type_qualifier specifier_qualifier_list_no_typedef_name?
+| type_qualifier                 specifier_qualifier_list_no_typedef_name?
     {}
 
 struct_declarator_list:
@@ -442,14 +465,10 @@ struct_declarator:
     {}
 
 enum_specifier:
-| ENUM attribute_specifier_list LBRACE enumerator_list COMMA? RBRACE
+| ENUM attribute_specifier_list other_identifier? LBRACE enumerator_list COMMA? RBRACE
+| ENUM attribute_specifier_list other_identifier
     {}
-| ENUM attribute_specifier_list i = general_identifier LBRACE enumerator_list COMMA? RBRACE
-| ENUM attribute_specifier_list i = general_identifier
-    { set_id_type i OtherId }
-| ENUM attribute_specifier_list LBRACE enumerator_list COMMA? error
-    { unclosed "{" "}" $startpos($3) $endpos }
-| ENUM attribute_specifier_list general_identifier LBRACE enumerator_list COMMA? error
+| ENUM attribute_specifier_list other_identifier? LBRACE enumerator_list COMMA? error
     { unclosed "{" "}" $startpos($4) $endpos }
 
 enumerator_list:
@@ -504,8 +523,7 @@ gcc_attribute:
     { set_id_type i VarId }
 
 gcc_attribute_word:
-| i = general_identifier
-    { set_id_type i OtherId }
+| other_identifier
 | CONST
 | PACKED
     {}
@@ -519,14 +537,14 @@ function_specifier:
    has to be restored if entering the body of the function being
    defined, if so. *)
 declarator:
-| pointer? x = direct_declarator attribute_specifier_list
+| ioption(pointer) x = direct_declarator attribute_specifier_list
     { x }
 
 direct_declarator:
 | i = general_identifier
     { set_id_type i VarId; (i, None) }
 | LPAREN x = declarator RPAREN
-| x = direct_declarator LBRACK type_qualifier_list? assignment_expression? RBRACK
+| x = direct_declarator LBRACK type_qualifier_list? optional(assignment_expression, RBRACK)
     { x }
 | x = direct_declarator LPAREN
     open_context parameter_type_list? restore_fun = save_contexts_stk
@@ -567,13 +585,13 @@ type_name:
 
 abstract_declarator:
 | pointer
-| pointer? direct_abstract_declarator
+| ioption(pointer) direct_abstract_declarator
     {}
 
 direct_abstract_declarator:
 | LPAREN abstract_declarator RPAREN
-| direct_abstract_declarator? LBRACK type_qualifier_list? assignment_expression? RBRACK
-| direct_abstract_declarator? LPAREN in_context(parameter_type_list?) RPAREN
+| direct_abstract_declarator? LBRACK type_qualifier_list? optional(assignment_expression, RBRACK)
+| ioption(direct_abstract_declarator) LPAREN in_context(parameter_type_list?) RPAREN
     {}
 
 c_initializer:
@@ -598,9 +616,8 @@ designator_list:
 
 designator:
 | LBRACK constant_expression RBRACK
+| DOT other_identifier
     {}
-| DOT i = general_identifier
-    { set_id_type i OtherId }
 
 (* The grammar of statements is replicated three times.
 
@@ -648,8 +665,7 @@ statement_intern_close:
 (* [labeled_statement(last_statement)] has the same effect on contexts
    as [last_statement]. *)
 labeled_statement(last_statement):
-| i = general_identifier COLON last_statement
-    { set_id_type i OtherId }
+| other_identifier COLON last_statement
 | CASE constant_expression COLON last_statement
 | DEFAULT COLON last_statement
     {}
@@ -683,8 +699,7 @@ expression_statement(close):
     {}
 
 jump_statement(close):
-| GOTO i = general_identifier close SEMICOLON
-    { set_id_type i OtherId }
+| GOTO other_identifier close SEMICOLON
 | CONTINUE close SEMICOLON
 | BREAK close SEMICOLON
 | RETURN expression? close SEMICOLON
@@ -756,8 +771,12 @@ iteration_statement(openc,last_statement):
 | WHILE openc LPAREN expression RPAREN last_statement
 | DO open_context statement_finish_close WHILE
     openc LPAREN expression RPAREN close_context SEMICOLON
-| FOR openc LPAREN expression? SEMICOLON expression? SEMICOLON expression? RPAREN last_statement
-| FOR openc LPAREN declaration expression? SEMICOLON expression? RPAREN last_statement
+| FOR openc LPAREN for_statement_header optional(expression, SEMICOLON) optional(expression, RPAREN) last_statement
+    {}
+
+for_statement_header:
+| optional(expression, SEMICOLON)
+| declaration
     {}
 
 asm_attributes:
@@ -788,8 +807,9 @@ asm_operand:
     {}
 
 asm_op_name:
-| /*empty*/                             {}
-| LBRACK i = general_identifier RBRACK  { set_id_type i OtherId }
+| /*empty*/
+| LBRACK other_identifier RBRACK
+    {}
 
 asm_flags:
 | string_literals_list
@@ -817,12 +837,12 @@ external_declaration:
     {}
 
 function_definition_begin:
-| declaration_specifiers pointer? x=direct_declarator
+| declaration_specifiers ioption(pointer) x=direct_declarator
     { match x with
       | (_, None) -> $syntaxerror
       | (i, Some restore_fun) -> restore_fun ()
     }
-| declaration_specifiers pointer? x=direct_declarator
+| declaration_specifiers ioption(pointer) x=direct_declarator
   LPAREN params=identifier_list RPAREN open_context declaration_list
     { match x with
       | (_, Some _) -> $syntaxerror
@@ -839,12 +859,12 @@ identifier_list:
 
 declaration_list:
 | /*empty*/
-    { }
+    {}
 | declaration_list declaration
-    { }
+    {}
 
 function_definition:
 | function_definition_begin LBRACE block_item_list? close_context RBRACE
-    { }
+    {}
 | function_definition_begin LBRACE block_item_list? close_context error
     { unclosed "{" "}" $startpos($2) $endpos }
