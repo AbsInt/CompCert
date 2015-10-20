@@ -126,7 +126,9 @@ module Linux_System : SYSTEM =
       | Section_debug_info _ -> ".section	.debug_info,\"\",@progbits"
       | Section_debug_abbrev -> ".section	.debug_abbrev,\"\",@progbits"
       | Section_debug_loc -> ".section	.debug_loc,\"\",@progbits"
-      | Section_debug_line _ ->  ".section	.debug_line,\"\",@progbits\n"
+      | Section_debug_line _ ->  ".section	.debug_line,\"\",@progbits"
+      | Section_debug_ranges -> ".section	.debug_ranges,\"\",@progbits"
+      | Section_debug_str -> ".section	.debug_str,\"MS\",@progbits,1"
 
 
     let section oc sec =
@@ -150,20 +152,14 @@ module Linux_System : SYSTEM =
     let print_prologue oc =
       if !Clflags.option_g then  begin
           section oc Section_text;
-          let low_pc = new_label () in
-          Debug.add_compilation_section_start ".text" low_pc;
-          fprintf oc "%a:\n" label low_pc;
           fprintf oc "	.cfi_sections	.debug_frame\n"
         end
 
     let print_epilogue oc =
       if !Clflags.option_g then
         begin
-          let high_pc = new_label () in
-          Debug.add_compilation_section_end ".text" high_pc;
           Debug.compute_gnu_file_enum (fun f -> ignore (print_file oc f));
           section oc Section_text;
-          fprintf oc "%a:\n" label high_pc
         end
 
     let debug_section _ _ = ()
@@ -217,19 +213,26 @@ module Diab_System : SYSTEM =
             | true, false -> 'd'                (* data *)
             | false, true -> 'c'                (* text *)
             | false, false -> 'r')              (* const *)
-      | Section_debug_info s -> sprintf ".section	.debug_info%s,,n" (if s <> ".text" then s else "")
+      | Section_debug_info (Some s) ->
+          sprintf ".section	.debug_info%s,,n" s
+      | Section_debug_info None ->
+          sprintf ".section	.debug_info,,n"
       | Section_debug_abbrev -> ".section	.debug_abbrev,,n"
       | Section_debug_loc -> ".section	.debug_loc,,n"
-      | Section_debug_line s -> sprintf ".section	.debug_line.%s,,n\n" s
+      | Section_debug_line (Some s) ->
+          sprintf ".section	.debug_line.%s,,n\n" s
+      | Section_debug_line None ->
+          sprintf ".section	.debug_line,,n\n"
+      | Section_debug_ranges
+      | Section_debug_str -> assert false (* Should not be used *)
 
     let section oc sec =
       let name = name_of_section sec in
       assert (name <> "COMM");
       match sec with
-      | Section_debug_info s ->
+      | Section_debug_info (Some s) ->
           fprintf oc "	%s\n" name;
-          if s <> ".text" then
-            fprintf oc "	.sectionlink	.debug_info\n"
+          fprintf oc "	.sectionlink	.debug_info\n"
       | _ ->
           fprintf oc "	%s\n" name
 
@@ -249,18 +252,19 @@ module Diab_System : SYSTEM =
       match sec with
       | Section_debug_abbrev
       | Section_debug_info _
+      | Section_debug_str
       | Section_debug_loc -> ()
       | sec ->
           let name = match sec with
           | Section_user (name,_,_) -> name
           | _ -> name_of_section sec in
-          if not (Debug.exists_section name) then
+          if not (Debug.exists_section sec) then
             let line_start = new_label ()
             and low_pc = new_label ()
             and debug_info = new_label () in
-            Debug.add_diab_info name (line_start,debug_info,name_of_section sec);
-            Debug.add_compilation_section_start name low_pc;
+            Debug.add_diab_info sec line_start debug_info low_pc;
             let line_name = ".debug_line" ^(if name <> ".text" then name else "") in
+            section oc (Section_debug_line (if name <> ".text" then Some name else None));
             fprintf oc "	.section	%s,,n\n" line_name;
             if name <> ".text" then
               fprintf oc "	.sectionlink	.debug_line\n";
@@ -279,7 +283,7 @@ module Diab_System : SYSTEM =
     let print_epilogue oc =
       let end_label sec =
         fprintf oc "\n";
-        fprintf oc "	%s\n" sec;
+        section oc sec;
         let label_end = new_label () in
         fprintf oc "%a:\n" label label_end;
         label_end
@@ -484,6 +488,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	extsb	%a, %a\n" ireg r1 ireg r2
       | Pextsh(r1, r2) ->
           fprintf oc "	extsh	%a, %a\n" ireg r1 ireg r2
+      | Pextsw(r1, r2) ->
+          fprintf oc "	extsw	%a, %a\n" ireg r1 ireg r2
       | Pfreeframe(sz, ofs) ->
           assert false
       | Pfabs(r1, r2) | Pfabss(r1, r2) ->
@@ -494,7 +500,17 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	fadds	%a, %a, %a\n" freg r1 freg r2 freg r3
       | Pfcmpu(r1, r2) ->
           fprintf oc "	fcmpu	%a, %a, %a\n" creg 0 freg r1 freg r2
+      | Pfcfi(r1, r2) ->
+          assert false
+      | Pfcfid(r1, r2) ->
+          fprintf oc "	fcfid	%a, %a\n" freg r1 freg r2
+      | Pfcfiu(r1, r2) ->
+          assert false
       | Pfcti(r1, r2) ->
+          assert false
+      | Pfctidz(r1, r2) ->
+          fprintf oc "	fctidz	%a, %a\n" freg r1 freg r2
+      | Pfctiu(r1, r2) ->
           assert false
       | Pfctiw(r1, r2) ->
           fprintf oc "	fctiw	%a, %a\n" freg r1 freg r2
@@ -628,6 +644,9 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	ori	%a, %a, %a\n" ireg r1 ireg r2 constant c
       | Poris(r1, r2, c) ->
           fprintf oc "	oris	%a, %a, %a\n" ireg r1 ireg r2 constant c
+      | Prldicl(r1, r2, c1, c2) ->
+          fprintf oc "	rldicl	%a, %a, %ld, %ld\n"
+            ireg r1 ireg r2 (camlint_of_coqint c1) (camlint_of_coqint c2)
       | Prlwinm(r1, r2, c1, c2) ->
           let (mb, me) = rolm_mask (camlint_of_coqint c2) in
           fprintf oc "	rlwinm	%a, %a, %ld, %d, %d %s 0x%lx\n"
@@ -650,6 +669,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	stb	%a, %a(%a)\n" ireg r1 constant c ireg r2
       | Pstbx(r1, r2, r3) ->
           fprintf oc "	stbx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+      | Pstdu(r1, c, r2) ->
+          fprintf oc "	stdu	%a, %a(%a)\n" ireg r1 constant c ireg r2
       | Pstfd(r1, c, r2) | Pstfd_a(r1, c, r2) ->
           fprintf oc "	stfd	%a, %a(%a)\n" freg r1 constant c ireg r2
       | Pstfdu(r1, c, r2) ->
@@ -768,7 +789,7 @@ module Target (System : SYSTEM):TARGET =
       let nlo = Int64.to_int32 n
       and nhi = Int64.to_int32(Int64.shift_right_logical n 32) in
       fprintf oc "%a:	.long	0x%lx, 0x%lx\n" label lbl nhi nlo
-
+        
     let print_literal32 oc (lbl, n) =
       fprintf oc "%a:	.long	0x%lx\n" label lbl n
 

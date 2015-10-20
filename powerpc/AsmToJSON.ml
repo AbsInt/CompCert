@@ -188,13 +188,19 @@ let p_instruction oc ic =
   | Peqv (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Peqv\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pextsb (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pextsb\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
   | Pextsh (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pextsh\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
+  | Pextsw (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Pextsw\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
   | Pfreeframe (c,i) -> assert false (* Should not occur *)
   | Pfabs (fr1,fr2)
   | Pfabss (fr1,fr2) -> fprintf oc "{\"Instruction Name\":\"Pfabs\",\"Args\":[%a,%a]}" p_freg fr1 p_freg fr2
   | Pfadd (fr1,fr2,fr3) -> fprintf oc "{\"Instruction Name\":\"Pfadd\",\"Args\":[%a,%a,%a]}" p_freg fr1 p_freg fr2 p_freg fr3
   | Pfadds (fr1,fr2,fr3) -> fprintf oc "{\"Instruction Name\":\"Pfadds\",\"Args\":[%a,%a,%a]}" p_freg fr1 p_freg fr2 p_freg fr3
   | Pfcmpu (fr1,fr2) -> fprintf oc "{\"Instruction Name\":\"Pfcmpu\",\"Args\":[%a,%a]}" p_freg fr1 p_freg fr2
+  | Pfcfi (ir,fr) -> assert false (* Should not occur *)
+  | Pfcfid (fr1,fr2) -> fprintf oc "{\"Instruction Name\":\"Pfcfid\",\"Args\":[%a,%a]}" p_freg fr1 p_freg fr2
+  | Pfcfiu (ir,fr) -> assert false (* Should not occur *)
   | Pfcti (ir,fr) -> assert false (* Should not occur *)
+  | Pfctiu (ir,fr) -> assert false (* Should not occur *)
+  | Pfctidz (fr1,fr2) -> fprintf oc "{\"Instruction Name\":\"Pfctidz\",\"Args\":[%a,%a]}" p_freg fr1 p_freg fr2
   | Pfctiw (fr1,fr2) -> fprintf oc "{\"Instruction Name\":\"Pfctiw\",\"Args\":[%a,%a]}" p_freg fr1 p_freg fr2
   | Pfctiwz (fr1,fr2) -> fprintf oc "{\"Instruction Name\":\"Pfctiwz\",\"Args\":[%a,%a]}" p_freg fr1 p_freg fr2
   | Pfdiv (fr1,fr2,fr3) -> fprintf oc "{\"Instruction Name\":\"Pfdiv\",\"Args\":[%a,%a,%a]}" p_freg fr1 p_freg fr2 p_freg fr3
@@ -263,6 +269,7 @@ let p_instruction oc ic =
   | Porc (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Porc\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pori (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Pori\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Poris (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Poris\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
+  | Prldicl (ir1,ir2,ic1,ic2) -> fprintf oc "{\"Instruction Name\":\"Prldicl\",\"Args\":[%a,%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_int_constant ic1 p_int_constant ic2
   | Prlwinm (ir1,ir2,ic1,ic2) -> fprintf oc "{\"Instruction Name\":\"Prlwinm\",\"Args\":[%a,%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_int_constant ic1 p_int_constant ic2
   | Prlwimi  (ir1,ir2,ic1,ic2) -> fprintf oc "{\"Instruction Name\":\"Prlwimi\",\"Args\":[%a,%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_int_constant ic1 p_int_constant ic2
   | Pslw (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pslw\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
@@ -271,6 +278,7 @@ let p_instruction oc ic =
   | Psrw (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Psrw\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Pstb (ir1,c,ir2) -> fprintf oc "{\"Instruction Name\":\"Pstb\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_constant c p_ireg ir2
   | Pstbx (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pstbx\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
+  | Pstdu (ir1,c,ir2) -> fprintf oc "{\"Instruction Name\":\"Pstdu\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_constant c p_ireg ir2
   | Pstfd (fr,c,ir)
   | Pstfd_a (fr,c,ir) -> fprintf oc "{\"Instruction Name\":\"Pstfd\",\"Args\":[%a,%a,%a]}" p_freg fr p_constant c p_ireg ir
   | Pstfdu (fr,c,ir) -> fprintf oc "{\"Instruction Name\":\"Pstfdu\",\"Args\":[%a,%a,%a]}" p_freg fr p_constant c p_ireg ir
@@ -333,7 +341,9 @@ let p_section oc = function
   | Section_debug_info _
   | Section_debug_abbrev
   | Section_debug_line _
-  | Section_debug_loc -> () (* There should be no info in the debug sections *)
+  | Section_debug_loc
+  | Section_debug_ranges
+  | Section_debug_str -> () (* There should be no info in the debug sections *)
 
 let p_int_opt oc = function
   | None -> fprintf oc "0"

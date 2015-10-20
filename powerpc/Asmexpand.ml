@@ -23,6 +23,13 @@ open Asmexpandaux
 
 exception Error of string
 
+(* FreeScale's EREF extensions *)
+
+let eref =
+  match Configuration.model with
+  | "e5500" -> true
+  | _ -> false
+
 (* Useful constants and helper functions *)
 
 let _0 = Integers.Int.zero
@@ -485,8 +492,24 @@ let expand_builtin_inline name args res =
       emit (Plwz (res, Cint! retaddr_offset,GPR1))
   (* isel *)
   | "__builtin_isel", [BA (IR a1); BA (IR a2); BA (IR a3)],BR (IR res) ->
-      emit (Pcmpwi (a1,Cint (_0)));
-      emit (Pisel (res,a3,a2,CRbit_2))
+      if eref then begin
+        emit (Pcmpwi (a1,Cint (Int.zero)));
+        emit (Pisel (res,a3,a2,CRbit_2))
+      end else if a2 = a3 then
+        emit (Pmr (res, a2))
+      else begin
+        (* a1 has type _Bool, hence it is 0 or 1 *)
+        emit (Psubfic (GPR0, a1, Cint _0));
+        (* r0 = 0xFFFF_FFFF if a1 is true, r0 = 0 if a1 is false *)
+        if res <> a3 then begin
+          emit (Pand_ (res, a2, GPR0));
+          emit (Pandc (GPR0, a3, GPR0))
+        end else begin
+          emit (Pandc (res, a3, GPR0));
+          emit (Pand_ (GPR0, a2, GPR0))
+        end;
+        emit (Por (res, res, GPR0))
+      end
   (* atomic operations *)
   | "__builtin_atomic_exchange", [BA (IR a1); BA (IR a2); BA (IR a3)],_ ->
       emit (Plwz (GPR10,Cint _0,a2));
@@ -598,8 +621,34 @@ let expand_instruction instr =
         emit (Paddi(GPR1, GPR1, Cint(coqint_of_camlint sz)))
       else
         emit (Plwz(GPR1, Cint ofs, GPR1))
+  | Pfcfi(r1, r2) ->
+      assert (Archi.ppc64);
+      emit (Pextsw(GPR0, r2));
+      emit (Pstdu(GPR0, Cint _m8, GPR1));
+      emit (Pcfi_adjust _8);
+      emit (Plfd(r1, Cint _0, GPR1));
+      emit (Pfcfid(r1, r1));
+      emit (Paddi(GPR1, GPR1, Cint _8));
+      emit (Pcfi_adjust _m8)
+  | Pfcfiu(r1, r2) ->
+      assert (Archi.ppc64);
+      emit (Prldicl(GPR0, r2, _0, coqint_of_camlint 32l));
+      emit (Pstdu(GPR0, Cint _m8, GPR1));
+      emit (Pcfi_adjust _8);
+      emit (Plfd(r1, Cint _0, GPR1));
+      emit (Pfcfid(r1, r1));
+      emit (Paddi(GPR1, GPR1, Cint _8));
+      emit (Pcfi_adjust _m8)
   | Pfcti(r1, r2) ->
       emit (Pfctiwz(FPR13, r2));
+      emit (Pstfdu(FPR13, Cint _m8, GPR1));
+      emit (Pcfi_adjust _8);
+      emit (Plwz(r1, Cint _4, GPR1));
+      emit (Paddi(GPR1, GPR1, Cint _8));
+      emit (Pcfi_adjust _m8)
+  | Pfctiu(r1, r2) ->
+      assert (Archi.ppc64);
+      emit (Pfctidz(FPR13, r2));
       emit (Pstfdu(FPR13, Cint _m8, GPR1));
       emit (Pcfi_adjust _8);
       emit (Plwz(r1, Cint _4, GPR1));
@@ -670,7 +719,7 @@ let expand_function id fn =
   try
     set_current_function fn;
     if !Clflags.option_g then
-      expand_debug id 2 preg_to_dwarf expand_instruction fn.fn_code
+      expand_debug id 1 preg_to_dwarf expand_instruction fn.fn_code
     else
       List.iter expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())

@@ -177,6 +177,48 @@ let remove_attributes_type env attr t =
 let erase_attributes_type env t =
   change_attributes_type env (fun a -> []) t
 
+(* Remove all attributes from type that are not contained in attr *)
+let strip_attributes_type t attr =
+  let strip =  List.filter (fun a -> List.mem a attr) in
+  match t with
+  | TVoid at -> TVoid (strip at)
+  | TInt (k,at) ->  TInt (k,strip at)
+  | TFloat (k,at) -> TFloat(k,strip at)
+  | TPtr (t,at) -> TPtr(t,strip at)
+  | TArray (t,s,at) -> TArray(t,s,strip at)
+  | TFun (t,arg,v,at) -> TFun(t,arg,v,strip at)
+  | TNamed (n,at) -> TNamed(n,strip at)
+  | TStruct (n,at) -> TStruct(n,strip at)
+  | TUnion (n,at) -> TUnion(n,strip at)
+  | TEnum (n,at) -> TEnum(n,strip at)
+
+(* Remove the last attribute from the toplevel and return the changed type *)
+let strip_last_attribute typ  =
+  let rec hd_opt l = match l with
+    [] -> None,[]
+  | a::rest -> Some a,rest in
+  match typ with
+  | TVoid at -> let l,r = hd_opt at in
+    l,TVoid r
+  | TInt (k,at) -> let l,r = hd_opt at in
+    l,TInt (k,r)
+  | TFloat (k,at) -> let l,r = hd_opt at in
+    l,TFloat (k,r)
+  | TPtr (t,at) -> let l,r = hd_opt at in
+    l,TPtr(t,r)
+  | TArray (t,s,at) -> let l,r = hd_opt at in
+    l,TArray(t,s,r)
+  | TFun (t,arg,v,at) -> let l,r = hd_opt at in
+    l,TFun(t,arg,v,r)
+  | TNamed (n,at) -> let l,r = hd_opt at in
+    l,TNamed(n,r)
+  | TStruct (n,at) -> let l,r = hd_opt at in
+    l,TStruct(n,r)
+  | TUnion (n,at) -> let l,r = hd_opt at in
+    l,TUnion(n,r)
+  | TEnum (n,at) -> let l,r = hd_opt at in
+    l,TEnum(n,r)
+
 (* Extracting alignment value from a set of attributes.  Return 0 if none. *)
 
 let alignas_attribute al =

@@ -941,6 +941,18 @@ Opaque Val.add.
   replace v with (Val.maketotal (Val.intoffloat (rs x))).
   TranslOpSimpl.
   rewrite H1; auto.
+  (* Ointuoffloat *)
+  replace v with (Val.maketotal (Val.intuoffloat (rs x))).
+  TranslOpSimpl.
+  rewrite H1; auto.
+  (* Ofloatofint *)
+  replace v with (Val.maketotal (Val.floatofint (rs x))).
+  TranslOpSimpl.
+  rewrite H1; auto.
+  (* Ofloatofintu *)
+  replace v with (Val.maketotal (Val.floatofintu (rs x))).
+  TranslOpSimpl.
+  rewrite H1; auto.
   (* Ocmp *)
   destruct (transl_cond_op_correct c0 args res k rs m c) as [rs' [A [B C]]]; auto.
   exists rs'; auto with asmgen.

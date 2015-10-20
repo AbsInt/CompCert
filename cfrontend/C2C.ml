@@ -1060,7 +1060,7 @@ let convertFundef loc env fd =
       fd.fd_locals in
   let body' = convertStmt env fd.fd_body in
   let id' = intern_string fd.fd_name.name in
-  Debug.atom_function fd.fd_name id';
+  Debug.atom_global fd.fd_name id';
   Hashtbl.add decl_atom id'
     { a_storage = fd.fd_storage;
       a_alignment = None;
@@ -1127,7 +1127,7 @@ let convertInitializer env ty i =
 
 let convertGlobvar loc env (sto, id, ty, optinit) =
   let id' = intern_string id.name in
-  Debug.atom_global_variable id id';
+  Debug.atom_global id id';
   let ty' = convertTyp env ty in
   let sz = Ctypes.sizeof !comp_env ty' in
   let al = Ctypes.alignof !comp_env ty' in

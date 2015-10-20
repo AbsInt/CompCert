@@ -56,6 +56,10 @@ val attr_is_type_related: attribute -> bool
   (* Is an attribute type-related (true) or variable-related (false)? *)
 val attr_inherited_by_members: attribute -> bool
   (* Is an attribute of a composite inherited by members of the composite? *)
+val strip_attributes_type: typ -> attribute list -> typ
+  (* Remove all attributes from the given type that are not contained in the list *)
+val strip_last_attribute: typ -> attribute option * typ
+  (* Remove the last top level attribute and return it *)
 
 (* Type compatibility *)
 

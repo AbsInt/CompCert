@@ -105,7 +105,9 @@ module Cygwin_System : SYSTEM =
       | Section_debug_info _ -> ".section	.debug_info,\"dr\""
       | Section_debug_loc ->  ".section	.debug_loc,\"dr\""
       | Section_debug_line _ -> ".section	.debug_line,\"dr\""
-      | Section_debug_abbrev -> ".section	.debug_abbrev,\"dr\"" (* Dummy value *)
+      | Section_debug_abbrev -> ".section	.debug_abbrev,\"dr\""
+      | Section_debug_ranges -> ".section	.debug_ranges,\"dr\""
+      | Section_debug_str-> assert false (* Should not be used *)
 
     let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
 
@@ -157,6 +159,8 @@ module ELF_System : SYSTEM =
       | Section_debug_loc -> ".section	.debug_loc,\"\",@progbits"
       | Section_debug_line _ -> ".section	.debug_line,\"\",@progbits"
       | Section_debug_abbrev -> ".section	.debug_abbrev,\"\",@progbits"
+      | Section_debug_ranges -> ".section	.debug_ranges,\"\",@progbits"
+      | Section_debug_str -> ".section	.debug_str,\"MS\",@progbits,1"
 
     let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
 
@@ -210,7 +214,9 @@ module MacOS_System : SYSTEM =
       | Section_debug_info _ ->	".section	__DWARF,__debug_info,regular,debug"
       | Section_debug_loc  -> ".section	__DWARF,__debug_loc,regular,debug"
       | Section_debug_line _ -> ".section	__DWARF,__debug_line,regular,debug"
-      | Section_debug_abbrev -> ".section	__DWARF,__debug_abbrev,regular,debug" (* Dummy value *)
+      | Section_debug_str -> ".section	__DWARF,__debug_str,regular,debug"
+      | Section_debug_ranges -> ".section	__DWARF,__debug_ranges,regular,debug"
+      | Section_debug_abbrev -> ".section	__DWARF,__debug_abbrev,regular,debug"
 
 
     let stack_alignment =  16 (* mandatory *)
@@ -656,13 +662,13 @@ module Target(System: SYSTEM):TARGET =
           begin match ef with
           | EF_annot(txt, targs) ->
               fprintf oc "%s annotation: " comment;
-              print_annot_text preg "%esp" oc (camlstring_of_coqstring txt) args
+              print_annot_text preg "%esp" oc (extern_atom txt) args
           | EF_debug(kind, txt, targs) ->
               print_debug_info comment print_file_line preg "%esp" oc
                                (P.to_int kind) (extern_atom txt) args
           | EF_inline_asm(txt, sg, clob) ->
               fprintf oc "%s begin inline assembly\n\t" comment;
-              print_inline_asm preg oc (camlstring_of_coqstring txt) sg args res;
+              print_inline_asm preg oc (extern_atom txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment
           | _ ->
               assert false
@@ -753,9 +759,6 @@ module Target(System: SYSTEM):TARGET =
       need_masks := false;
       if !Clflags.option_g then begin
         section oc Section_text;
-        let low_pc = new_label () in
-        Debug.add_compilation_section_start ".text" low_pc;
-        fprintf oc "%a:\n" elf_label low_pc;
         fprintf oc "	.cfi_sections	.debug_frame\n"
       end
 
@@ -775,11 +778,8 @@ module Target(System: SYSTEM):TARGET =
       end;
       System.print_epilogue oc;
       if !Clflags.option_g then begin
-        let high_pc = new_label () in
-        Debug.add_compilation_section_end ".text" high_pc;
         Debug.compute_gnu_file_enum (fun f -> ignore (print_file oc f));
         section oc Section_text;
-        fprintf oc "%a:\n" elf_label high_pc
       end
 
     let comment = comment

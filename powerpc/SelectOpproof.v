@@ -875,6 +875,8 @@ Theorem eval_floatofint:
 Proof.
   intros until y. unfold floatofint. destruct (floatofint_match a); intros.
   InvEval. TrivialExists.
+  destruct Archi.ppc64.
+  TrivialExists.
   rename e0 into a. destruct x; simpl in H0; inv H0.
   exists (Vfloat (Float.of_int i)); split; auto.
   set (t1 := addimm Float.ox8000_0000 a).
@@ -897,6 +899,8 @@ Theorem eval_floatofintu:
 Proof.
   intros until y. unfold floatofintu. destruct (floatofintu_match a); intros.
   InvEval. TrivialExists.
+  destruct Archi.ppc64.
+  TrivialExists.
   rename e0 into a. destruct x; simpl in H0; inv H0.
   exists (Vfloat (Float.of_intu i)); split; auto.
   unfold floatofintu.

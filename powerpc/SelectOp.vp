@@ -466,19 +466,23 @@ Nondetfunction cast16signed (e: expr) :=
 Definition intoffloat (e: expr) := Eop Ointoffloat (e ::: Enil).
 
 Definition intuoffloat (e: expr) :=
-  Elet e
-  (Elet (Eop (Ofloatconst (Float.of_intu Float.ox8000_0000)) Enil)
-    (Econdition (CEcond (Ccompf Clt) (Eletvar 1 ::: Eletvar 0 ::: Enil))
-      (intoffloat (Eletvar 1))
-      (addimm Float.ox8000_0000 (intoffloat (subf (Eletvar 1) (Eletvar 0))))))%nat.
+  if Archi.ppc64 then
+    Eop Ointuoffloat (e ::: Enil)
+  else
+    Elet e
+    (Elet (Eop (Ofloatconst (Float.of_intu Float.ox8000_0000)) Enil)
+      (Econdition (CEcond (Ccompf Clt) (Eletvar 1 ::: Eletvar 0 ::: Enil))
+        (intoffloat (Eletvar 1))
+        (addimm Float.ox8000_0000 (intoffloat (subf (Eletvar 1) (Eletvar 0))))))%nat.
 
 Nondetfunction floatofintu (e: expr) :=
   match e with
   | Eop (Ointconst n) Enil =>
       Eop (Ofloatconst (Float.of_intu n)) Enil
   | _ =>
-      subf (Eop Ofloatofwords (Eop (Ointconst Float.ox4330_0000) Enil ::: e ::: Enil))
-           (Eop (Ofloatconst (Float.from_words Float.ox4330_0000 Int.zero)) Enil)
+      if Archi.ppc64 then Eop Ofloatofintu (e ::: Enil) else
+        subf (Eop Ofloatofwords (Eop (Ointconst Float.ox4330_0000) Enil ::: e ::: Enil))
+             (Eop (Ofloatconst (Float.from_words Float.ox4330_0000 Int.zero)) Enil)
   end.
 
 Nondetfunction floatofint (e: expr) :=
@@ -486,9 +490,10 @@ Nondetfunction floatofint (e: expr) :=
   | Eop (Ointconst n) Enil =>
       Eop (Ofloatconst (Float.of_int n)) Enil
   | _ =>
-      subf (Eop Ofloatofwords (Eop (Ointconst Float.ox4330_0000) Enil
-                               ::: addimm Float.ox8000_0000 e ::: Enil))
-           (Eop (Ofloatconst (Float.from_words Float.ox4330_0000 Float.ox8000_0000)) Enil)
+      if Archi.ppc64 then Eop Ofloatofint (e ::: Enil) else
+        subf (Eop Ofloatofwords (Eop (Ointconst Float.ox4330_0000) Enil
+                                 ::: addimm Float.ox8000_0000 e ::: Enil))
+             (Eop (Ofloatconst (Float.from_words Float.ox4330_0000 Float.ox8000_0000)) Enil)
   end.
 
 Definition intofsingle (e: expr) :=

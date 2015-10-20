@@ -14,8 +14,6 @@
 ccomp
 ccomp.byte
 ccomp.prof
-cchecklink
-cchecklink.byte
 clightgen
 clightgen.byte
 tools/ndfun
@@ -39,6 +37,7 @@ cparser/Parser.v
 cparser/Lexer.ml
 cparser/pre_parser.ml
 cparser/pre_parser.mli
+cparser/pre_parser.automaton
 lib/Readconfig.ml
 lib/Tokenize.ml
 driver/Version.ml
