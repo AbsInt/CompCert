@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Translation from Compcert C to Clight. 
+(** Translation from Compcert C to Clight.
     Side effects are pulled out of Compcert C expressions. *)
 
 Require Import Coqlib.
@@ -82,11 +82,11 @@ Local Open Scope gensym_monad_scope.
 
 Parameter first_unused_ident: unit -> ident.
 
-Definition initial_generator (x: unit) : generator := 
+Definition initial_generator (x: unit) : generator :=
   mkgenerator (first_unused_ident x) nil.
 
 Definition gensym (ty: type): mon ident :=
-  fun (g: generator) => 
+  fun (g: generator) =>
     Res (gen_next g)
         (mkgenerator (Psucc (gen_next g)) ((gen_next g, ty) :: gen_trail g))
         (Ple_succ (gen_next g)).
@@ -119,7 +119,7 @@ Function eval_simpl_expr (a: expr) : option val :=
   | Econst_float n _ => Some(Vfloat n)
   | Econst_single n _ => Some(Vsingle n)
   | Econst_long n _ => Some(Vlong n)
-  | Ecast b ty => 
+  | Ecast b ty =>
       match eval_simpl_expr b with
       | None => None
       | Some v => sem_cast v (typeof b) ty
@@ -149,7 +149,7 @@ Definition transl_incrdecr (id: incr_or_decr) (a: expr) (ty: type) : expr :=
   to dereference a l-value [l] and store its result in temporary variable [id]. *)
 
 Definition chunk_for_volatile_type (ty: type) : option memory_chunk :=
-  if type_is_volatile ty 
+  if type_is_volatile ty
   then match access_mode ty with By_value chunk => Some chunk | _ => None end
   else None.
 
@@ -201,7 +201,7 @@ Inductive set_destination : Type :=
   | SDbase (tycast ty: type) (tmp: ident)
   | SDcons (tycast ty: type) (tmp: ident) (sd: set_destination).
 
-Inductive destination : Type := 
+Inductive destination : Type :=
   | For_val
   | For_effects
   | For_set (sd: set_destination).
@@ -277,7 +277,7 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
       | For_val =>
           do t <- gensym ty;
           do (sl2, a2) <- transl_expr (For_set (sd_seqbool_val t ty)) r2;
-          ret (sl1 ++ 
+          ret (sl1 ++
                makeif a1 (makeseq sl2) (Sset t (Econst_int Int.zero ty)) :: nil,
                Etempvar t ty)
       | For_effects =>
@@ -285,7 +285,7 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
           ret (sl1 ++ makeif a1 (makeseq sl2) Sskip :: nil, dummy_expr)
       | For_set sd =>
           do (sl2, a2) <- transl_expr (For_set (sd_seqbool_set ty sd)) r2;
-          ret (sl1 ++ 
+          ret (sl1 ++
                makeif a1 (makeseq sl2) (makeseq (do_set sd (Econst_int Int.zero ty))) :: nil,
                dummy_expr)
       end
@@ -295,7 +295,7 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
       | For_val =>
           do t <- gensym ty;
           do (sl2, a2) <- transl_expr (For_set (sd_seqbool_val t ty)) r2;
-          ret (sl1 ++ 
+          ret (sl1 ++
                makeif a1 (Sset t (Econst_int Int.one ty)) (makeseq sl2) :: nil,
                Etempvar t ty)
       | For_effects =>
@@ -303,7 +303,7 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
           ret (sl1 ++ makeif a1 Sskip (makeseq sl2) :: nil, dummy_expr)
       | For_set sd =>
           do (sl2, a2) <- transl_expr (For_set (sd_seqbool_set ty sd)) r2;
-          ret (sl1 ++ 
+          ret (sl1 ++
                makeif a1 (makeseq (do_set sd (Econst_int Int.one ty))) (makeseq sl2) :: nil,
                dummy_expr)
       end
@@ -336,7 +336,7 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
       match dst with
       | For_val | For_set _ =>
           do t <- gensym ty2;
-          ret (finish dst 
+          ret (finish dst
                  (sl1 ++ sl2 ++ Sset t a2 :: make_assign a1 (Etempvar t ty2) :: nil)
                  (Ecast (Etempvar t ty2) ty1))
       | For_effects =>

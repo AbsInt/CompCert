@@ -57,7 +57,7 @@ let default_section_info = {
 
 let builtin_sections = [
   "CODE",
-     {sec_name_init = Section_text; 
+     {sec_name_init = Section_text;
       sec_name_uninit = Section_text;
       sec_writable = false; sec_executable = true;
       sec_access = Access_default};
@@ -118,7 +118,7 @@ let initialize () =
 (* Define or update a given section. *)
 
 let define_section name ?iname ?uname ?writable ?executable ?access () =
-  let si = 
+  let si =
     try Hashtbl.find current_section_table name
     with Not_found -> default_section_info in
   let writable =
@@ -217,7 +217,7 @@ let for_function env id ty_res =
     with Not_found ->
       assert false in
   [si_code.sec_name_init; si_literal.sec_name_init; si_jumptbl.sec_name_init]
- 
+
 (* Determine section for a string literal *)
 
 let for_stringlit() =

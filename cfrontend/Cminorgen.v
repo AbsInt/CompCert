@@ -37,7 +37,7 @@ Local Open Scope error_monad_scope.
   or assigning such a variable becomes a load or store operation at
   that address.  Only scalar local variables whose address is never
   taken in the Csharpminor code can be mapped to Cminor local
-  variable, since the latter do not reside in memory.  
+  variable, since the latter do not reside in memory.
 
   Another task performed during the translation to Cminor is to
   transform the Clight-like [switch] construct of Csharpminor
@@ -220,7 +220,7 @@ with transl_lblstmt (cenv: compilenv) (xenv: exit_env) (ls: Csharpminor.lbl_stmt
 
 (** * Stack layout *)
 
-(** Layout of the Cminor stack data block and construction of the 
+(** Layout of the Cminor stack data block and construction of the
   compilation environment.  Every Csharpminor local variable is
   allocated a slot in the Cminor stack data.  Sufficient padding is
   inserted to ensure adequate alignment of addresses. *)
@@ -240,7 +240,7 @@ Definition assign_variable
 Definition assign_variables (cenv_stacksize: compilenv * Z) (vars: list (ident * Z)) : compilenv * Z :=
   List.fold_left assign_variable vars cenv_stacksize.
 
-(** Before allocating stack slots, we sort variables by increasing size 
+(** Before allocating stack slots, we sort variables by increasing size
   so as to minimize padding. *)
 
 Module VarOrder <: TotalLeBool.
@@ -248,7 +248,7 @@ Module VarOrder <: TotalLeBool.
   Definition leb (v1 v2: t) : bool := zle (snd v1) (snd v2).
   Theorem leb_total: forall v1 v2, leb v1 v2 = true \/ leb v2 v1 = true.
   Proof.
-    unfold leb; intros. 
+    unfold leb; intros.
     assert (snd v1 <= snd v2 \/ snd v2 <= snd v1) by omega.
     unfold proj_sumbool. destruct H; [left|right]; apply zle_true; auto.
   Qed.

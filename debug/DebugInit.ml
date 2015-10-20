@@ -27,7 +27,7 @@ let init_debug () =
   implem.set_bitfield_offset <- DebugInformation.set_bitfield_offset;
   implem.insert_global_declaration <- DebugInformation.insert_global_declaration;
   implem.add_fun_addr <- DebugInformation.add_fun_addr;
-  implem.generate_debug_info <- 
+  implem.generate_debug_info <-
     if Configuration.system = "diab" then
       (fun a b -> Some (Dwarfgen.gen_diab_debug_info a b))
     else

@@ -68,7 +68,7 @@ Qed.
 Lemma pop_invariant:
   forall (symbols_to_pop symbols_popped:list symbol)
          (stack_cur:stack)
-         (A:Type) 
+         (A:Type)
          (action:arrows_left (map symbol_semantic_type (rev_append symbols_to_pop symbols_popped)) A),
   forall word_stack word_popped,
   forall sem_popped,
@@ -96,12 +96,12 @@ destruct e; simpl.
 dependent destruction H.
 destruct H0, H1. apply (Cons_ptl X), inhabits in X0.
 specialize (IHsymbols_to_pop _ _ _ action0 _ _ _ H X0).
-match goal with 
+match goal with
   IHsymbols_to_pop:match ?p1 with Err => _ | OK _ => _ end |- match ?p2 with Err => _ | OK _ => _ end =>
     replace p2 with p1; [destruct p1 as [|[]]|]; intuition
 end.
 destruct IHsymbols_to_pop as [word1res [word2res [sem_full []]]]; intuition; subst.
-exists word1res. 
+exists word1res.
 eexists.
 exists sem_full.
 intuition.

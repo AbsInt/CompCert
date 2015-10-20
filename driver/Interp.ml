@@ -98,7 +98,7 @@ let name_of_function prog fn =
   in find_name prog.prog_defs
 
 let invert_local_variable e b =
-  Maps.PTree.fold 
+  Maps.PTree.fold
     (fun res id (b', _) -> if b = b' then Some id else res)
     e None
 
@@ -176,7 +176,7 @@ let rec compare_cont k1 k2 =
   match k1, k2 with
   | Kstop, Kstop -> 0
   | Kdo k1, Kdo k2 -> compare_cont k1 k2
-  | Kseq(s1, k1), Kseq(s2, k2) ->  
+  | Kseq(s1, k1), Kseq(s2, k2) ->
       let c = compare s1 s2 in if c <> 0 then c else compare_cont k1 k2
   | Kifthenelse(s1, s1', k1), Kifthenelse(s2, s2', k2) ->
       let c = compare (s1,s1') (s2,s2') in
@@ -273,7 +273,7 @@ let extract_string m blk ofs =
         if c = '\000' then begin
           Some(Buffer.contents b)
         end else begin
-          Buffer.add_char b c; 
+          Buffer.add_char b c;
           extract blk (Z.succ ofs)
         end
     | _ ->
@@ -325,7 +325,7 @@ let format_value m flags length conv arg =
   | 'p', "", _ ->
       "<int or pointer argument expected>"
   | _, _, _ ->
-      "<unrecognized format>"      
+      "<unrecognized format>"
 
 let do_printf m fmt args =
 
@@ -374,7 +374,7 @@ let convert_external_arg ge v t =
   | Vfloat f, AST.Tfloat -> Some (EVfloat f)
   | Vsingle f, AST.Tsingle -> Some (EVsingle f)
   | Vlong n, AST.Tlong -> Some (EVlong n)
-  | Vptr(b, ofs), AST.Tint -> 
+  | Vptr(b, ofs), AST.Tint ->
       Senv.invert_symbol ge b >>= fun id -> Some (EVptr_global(id, ofs))
   | _, _ -> None
 
@@ -565,7 +565,7 @@ let rec explore_all p prog ge time states =
     if nextstates <> [] then explore_all p prog ge (time + 1) nextstates
 
 (* The variant of the source program used to build the world for
-   executing events.  
+   executing events.
    Volatile variables are turned into non-volatile ones, so that
      reads and writes can be performed.
    Other variables are turned into empty vars, so that

@@ -74,18 +74,18 @@ ranged over by [l] and [r], respectively, in the grammar above.
 L-values are those expressions that can occur to the left of an assignment.
 They denote memory locations.  (Indeed, the reduction semantics for
 expression reduces them to [Eloc b ofs] expressions.)  L-values are
-variables ([Evar]), pointer dereferences ([Ederef]), field accesses ([Efield]).  
+variables ([Evar]), pointer dereferences ([Ederef]), field accesses ([Efield]).
 R-values are all other expressions.  They denote values, and the reduction
-semantics reduces them to [Eval v] expressions.  
+semantics reduces them to [Eval v] expressions.
 
 A l-value can be used in a r-value context, but this use must be marked
-explicitly with the [Evalof] operator, which is not materialized in the 
+explicitly with the [Evalof] operator, which is not materialized in the
 concrete syntax of C but denotes a read from the location corresponding to
 the l-value [l] argument of [Evalof l].
 
 The grammar above contains some forms that cannot appear in source terms
 but appear during reduction.  These forms are:
-- [Eval v] where [v] is a pointer or [Vundef].  ([Eval] of an integer or 
+- [Eval v] where [v] is a pointer or [Vundef].  ([Eval] of an integer or
   float value can occur in a source term and represents a numeric literal.)
 - [Eloc b ofs], which appears during reduction of l-values.
 - [Eparen r tycast ty], which appears during reduction of conditionals
@@ -102,7 +102,7 @@ Definition Eindex (r1 r2: expr) (ty: type) :=
     [l += 1] and [l -= 1], respectively. *)
 
 Definition Epreincr (id: incr_or_decr) (l: expr) (ty: type) :=
-  Eassignop (match id with Incr => Oadd | Decr => Osub end) 
+  Eassignop (match id with Incr => Oadd | Decr => Osub end)
             l (Eval (Vint Int.one) type_int32s) (typeconv ty) ty.
 
 (** Extract the type part of a type-annotated expression. *)

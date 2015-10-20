@@ -83,10 +83,10 @@ Definition sel_constant (cst: Cminor.constant) : expr :=
 
 Definition sel_unop (op: Cminor.unary_operation) (arg: expr) : expr :=
   match op with
-  | Cminor.Ocast8unsigned => cast8unsigned arg 
-  | Cminor.Ocast8signed => cast8signed arg 
-  | Cminor.Ocast16unsigned => cast16unsigned arg 
-  | Cminor.Ocast16signed => cast16signed arg 
+  | Cminor.Ocast8unsigned => cast8unsigned arg
+  | Cminor.Ocast8signed => cast8signed arg
+  | Cminor.Ocast16unsigned => cast16unsigned arg
+  | Cminor.Ocast16signed => cast16signed arg
   | Cminor.Onegint => negint arg
   | Cminor.Onotint => notint arg
   | Cminor.Onegf => negf arg
@@ -295,7 +295,7 @@ Fixpoint sel_stmt (ge: Cminor.genv) (s: Cminor.stmt) : res stmt :=
   | Cminor.Sbuiltin optid ef args =>
       OK (Sbuiltin (sel_builtin_res optid) ef
                    (sel_builtin_args args (Machregs.builtin_constraints ef)))
-  | Cminor.Stailcall sg fn args => 
+  | Cminor.Stailcall sg fn args =>
       OK (match classify_call ge fn with
       | Call_imm id  => Stailcall sg (inr _ id) (sel_exprlist args)
       | _            => Stailcall sg (inl _ (sel_expr fn)) (sel_exprlist args)
@@ -362,7 +362,7 @@ Definition globdef_of_interest (gd: globdef) : bool :=
 
 Definition record_globdef (globs: PTree.t globdef) (id_gd: ident * globdef) :=
   let (id, gd) := id_gd in
-  if globdef_of_interest gd 
+  if globdef_of_interest gd
   then PTree.set id gd globs
   else PTree.remove id globs.
 

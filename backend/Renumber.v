@@ -22,7 +22,7 @@ Require Import RTL.
   enumeration of the nodes of the control-flow graph.  This property
   can be guaranteed when generating the CFG (module [RTLgen]), but
   is, however, invalidated by further RTL optimization passes such as
-  [Inlining].  
+  [Inlining].
 
   In this module, we renumber the nodes of RTL control-flow graphs
   to restore the postorder property given above.  In passing,

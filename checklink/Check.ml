@@ -421,7 +421,7 @@ let match_csts (cc: constant) (ec: int32): checker = fun ffw ->
                 ^ Hashtbl.find ffw.sf.ident_to_name ident)
   | Csymbol_rel_low (ident, i) | Csymbol_rel_high (ident, i) ->
       (* should be handled separately in places it occurs *)
-      ERR("Incorrect reference to far-data symbol " 
+      ERR("Incorrect reference to far-data symbol "
                 ^ Hashtbl.find ffw.sf.ident_to_name ident)
 
 let match_z_int32 (cz: Z.t) (ei: int32) =
@@ -847,7 +847,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               let lblvaddr = Int32.(add pc (mul 4l (exts bd))) in
               OK(fw)
               >>= match_ints 0 bi
-              >>= lblmap_unify lbl lblvaddr     
+              >>= lblmap_unify lbl lblvaddr
               >>= match_bools  false aa
               >>= match_bools  false lk
               >>= recur_simpl
@@ -1719,7 +1719,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= match_iregs  rd    rD0
               >>= recur_simpl
           | _ -> error
-          end 
+          end
           | Pmfcrbit(rd, bit) ->
           error
       | Pmflr(r) ->

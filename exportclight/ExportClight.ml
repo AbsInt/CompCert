@@ -234,9 +234,9 @@ let name_of_chunk = function
   | Many64 -> "Many64"
 
 let signatur p sg =
-  fprintf p "@[<hov 2>(mksignature@ %a@ %a@ %a)@]" 
+  fprintf p "@[<hov 2>(mksignature@ %a@ %a@ %a)@]"
      (print_list asttype) sg.sig_args
-     (print_option asttype) sg.sig_res 
+     (print_option asttype) sg.sig_res
      callconv sg.sig_cc
 
 let assertions = ref ([]: (string * typ list) list)
@@ -254,13 +254,13 @@ let external_function p = function
   | EF_free -> fprintf p "EF_free"
   | EF_memcpy(sz, al) ->
       fprintf p "(EF_memcpy %ld %ld)" (Z.to_int32 sz) (Z.to_int32 al)
-  | EF_annot(text, targs) -> 
+  | EF_annot(text, targs) ->
       assertions := (camlstring_of_coqstring text, targs) :: !assertions;
       fprintf p "(EF_annot %a %a)" coqstring text (print_list asttype) targs
   | EF_annot_val(text, targ) ->
       assertions := (camlstring_of_coqstring text, [targ]) :: !assertions;
       fprintf p "(EF_annot_val %a %a)" coqstring text asttype targ
-  | EF_debug(kind, text, targs) -> 
+  | EF_debug(kind, text, targs) ->
       fprintf p "(EF_debug %ld%%positive %ld%%positive %a)" (P.to_int32 kind) (P.to_int32 text) (print_list asttype) targs
   | EF_inline_asm(text, sg, clob) ->
       fprintf p "@[<hov 2>(EF_inline_asm %a@ %a@ %a)@]"
@@ -340,7 +340,7 @@ let rec stmt p = function
         (print_option ident) optid expr e1 (print_list expr) el
   | Sbuiltin(optid, ef, tyl, el) ->
       fprintf p "@[<hov 2>(Sbuiltin %a@ %a@ %a@ %a)@]"
-        (print_option ident) optid 
+        (print_option ident) optid
         external_function ef
         typlist tyl
         (print_list expr) el
@@ -414,7 +414,7 @@ let print_globdef p (id, gd) =
   | Gvar v -> print_variable p (id, v)
 
 let print_ident_globdef p = function
-  | (id, Gfun(Internal f)) -> 
+  | (id, Gfun(Internal f)) ->
       fprintf p "(%a, Gfun(Internal f_%s))" ident id (extern_atom id)
   | (id, Gfun(External(ef, targs, tres, cc))) ->
       fprintf p "@[<hov 2>(%a,@ @[<hov 2>Gfun(External %a@ %a@ %a@ %a))@]@]"

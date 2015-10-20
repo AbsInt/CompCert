@@ -174,7 +174,7 @@ Inductive eval_expr: letenv -> expr -> val -> Prop :=
   | eval_Eload: forall le chunk addr al vl vaddr v,
       eval_exprlist le al vl ->
       eval_addressing ge sp addr vl = Some vaddr ->
-      Mem.loadv chunk m vaddr = Some v ->     
+      Mem.loadv chunk m vaddr = Some v ->
       eval_expr le (Eload chunk addr al) v
   | eval_Econdition: forall le a b c va v,
       eval_condexpr le a va ->
@@ -300,10 +300,10 @@ Definition is_call_cont (k: cont) : Prop :=
   | _ => False
   end.
 
-(** Find the statement and manufacture the continuation 
+(** Find the statement and manufacture the continuation
   corresponding to a label *)
 
-Fixpoint find_label (lbl: label) (s: stmt) (k: cont) 
+Fixpoint find_label (lbl: label) (s: stmt) (k: cont)
                     {struct s}: option (stmt * cont) :=
   match s with
   | Sseq s1 s2 =>
@@ -436,7 +436,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | step_external_function: forall ef vargs k m t vres m',
       external_call ef ge vargs m t vres m' ->
       step (Callstate (External ef) vargs k m)
-         t (Returnstate vres k m')        
+         t (Returnstate vres k m')
 
   | step_return: forall v optid f sp e k m,
       step (Returnstate v (Kcall optid f sp e k) m)
@@ -519,7 +519,7 @@ Lemma insert_lenv_lookup1:
 Proof.
   induction 1; intros.
   omegaContradiction.
-  destruct n; simpl; simpl in H0. auto. 
+  destruct n; simpl; simpl in H0. auto.
   apply IHinsert_lenv. auto. omega.
 Qed.
 
@@ -532,7 +532,7 @@ Lemma insert_lenv_lookup2:
 Proof.
   induction 1; intros.
   simpl. assumption.
-  simpl. destruct n. omegaContradiction. 
+  simpl. destruct n. omegaContradiction.
   apply IHinsert_lenv. exact H0. omega.
 Qed.
 
@@ -559,7 +559,7 @@ Proof.
 
   eapply eval_Elet. eauto. apply H2. apply insert_lenv_S; auto.
 
-  case (le_gt_dec p n); intro. 
+  case (le_gt_dec p n); intro.
   apply eval_Eletvar. eapply insert_lenv_lookup2; eauto.
   apply eval_Eletvar. eapply insert_lenv_lookup1; eauto.
 
@@ -573,7 +573,7 @@ Lemma eval_lift:
   eval_expr ge sp e m (w::le) (lift a) v.
 Proof.
   intros. unfold lift. eapply eval_lift_expr.
-  eexact H. apply insert_lenv_0. 
+  eexact H. apply insert_lenv_0.
 Qed.
 
 Hint Resolve eval_lift: evalexpr.

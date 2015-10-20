@@ -120,7 +120,7 @@ Lemma needs_of_condition_sound:
   vagree_list args args' (needs_of_condition cond) ->
   eval_condition cond args' m' = Some b.
 Proof.
-  intros. unfold needs_of_condition in H0. 
+  intros. unfold needs_of_condition in H0.
   eapply default_needs_of_condition_sound; eauto.
 Qed.
 
@@ -129,10 +129,10 @@ Lemma needs_of_shift_sound:
   vagree v v' (needs_of_shift s nv) ->
   vagree (eval_shift s v) (eval_shift s v') nv.
 Proof.
-  intros. destruct s; simpl in *. 
+  intros. destruct s; simpl in *.
   apply shlimm_sound; auto.
   apply shruimm_sound; auto.
-  apply shrimm_sound; auto. 
+  apply shrimm_sound; auto.
   apply ror_sound; auto.
 Qed.
 
@@ -157,32 +157,32 @@ Proof.
 - apply sign_ext_sound; auto. compute; auto.
 - apply sign_ext_sound; auto. compute; auto.
 - apply add_sound; auto.
-- apply add_sound; auto. apply needs_of_shift_sound; auto. 
+- apply add_sound; auto. apply needs_of_shift_sound; auto.
 - apply add_sound; auto with na.
-- replace (default nv) with All in *. 
-  apply vagree_lessdef. apply val_sub_lessdef; auto with na. 
+- replace (default nv) with All in *.
+  apply vagree_lessdef. apply val_sub_lessdef; auto with na.
   apply lessdef_vagree. apply needs_of_shift_sound; auto with na.
   destruct nv; simpl; congruence.
-- replace (default nv) with All in *. 
-  apply vagree_lessdef. apply val_sub_lessdef; auto with na. 
+- replace (default nv) with All in *.
+  apply vagree_lessdef. apply val_sub_lessdef; auto with na.
   apply lessdef_vagree. apply needs_of_shift_sound; auto with na.
   destruct nv; simpl; congruence.
-- apply mul_sound; auto. 
-- apply add_sound; auto. apply mul_sound; auto. 
+- apply mul_sound; auto.
+- apply add_sound; auto. apply mul_sound; auto.
 - apply and_sound; auto.
-- apply and_sound; auto. apply needs_of_shift_sound; auto. 
+- apply and_sound; auto. apply needs_of_shift_sound; auto.
 - apply andimm_sound; auto.
 - apply or_sound; auto.
-- apply or_sound; auto. apply needs_of_shift_sound; auto. 
+- apply or_sound; auto. apply needs_of_shift_sound; auto.
 - apply orimm_sound; auto.
 - apply xor_sound; auto.
-- apply xor_sound; auto. apply needs_of_shift_sound; auto. 
+- apply xor_sound; auto. apply needs_of_shift_sound; auto.
 - apply xor_sound; auto with na.
-- apply and_sound; auto. apply notint_sound; auto. 
-- apply and_sound; auto. apply notint_sound. apply needs_of_shift_sound; auto. 
-- apply notint_sound; auto. 
+- apply and_sound; auto. apply notint_sound; auto.
+- apply and_sound; auto. apply notint_sound. apply needs_of_shift_sound; auto.
+- apply notint_sound; auto.
 - apply notint_sound. apply needs_of_shift_sound; auto.
-- apply needs_of_shift_sound; auto. 
+- apply needs_of_shift_sound; auto.
 Qed.
 
 Lemma operation_is_redundant_sound:
@@ -195,7 +195,7 @@ Proof.
   intros. destruct op; simpl in *; try discriminate; inv H1; FuncInv; subst.
 - apply sign_ext_redundant_sound; auto. omega.
 - apply sign_ext_redundant_sound; auto. omega.
-- apply andimm_redundant_sound; auto. 
+- apply andimm_redundant_sound; auto.
 - apply orimm_redundant_sound; auto.
 Qed.
 

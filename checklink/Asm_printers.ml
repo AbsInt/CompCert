@@ -303,7 +303,7 @@ let string_of_instruction = function
 | Pxoris    (i0, i1, c2)        -> "Pxoris(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ", " ^ string_of_constant c2 ^ ")"
 | Plabel    (l0)                -> "Plabel(" ^ string_of_label l0 ^ ")"
 | Pbuiltin  (e0, p1, p2)        -> "Pbuiltin(" ^ string_of_external_function e0 ^ ", " ^ string_of_list string_of_preg ", " p1 ^ ", " ^ string_of_list string_of_preg ", " p2 ^ ")"
-| Pannot    (e0, a1)            -> 
+| Pannot    (e0, a1)            ->
     let sp_reg_name = string_of_external_function e0 in
     "Pannot(" ^ string_of_external_function e0 ^ ", " ^ string_of_list (string_of_annot_param sp_reg_name) ", " a1 ^ ")"
 | Pcfi_adjust n                 -> "Pcfi_adjust(" ^ string_of_coq_Z n ^ ")"

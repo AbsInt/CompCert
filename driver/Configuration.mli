@@ -46,7 +46,7 @@ type struct_return_style =
   | SR_int1248      (* return by content if size is 1, 2, 4 or 8 bytes *)
   | SR_int1to4      (* return by content if size is <= 4 *)
   | SR_int1to8      (* return by content if size is <= 8 *)
-  | SR_ref          (* always return by assignment to a reference 
+  | SR_ref          (* always return by assignment to a reference
                        given as extra argument *)
 
 val struct_passing_style: struct_passing_style

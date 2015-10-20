@@ -64,11 +64,11 @@ val fundef : (Env.t -> C.stmt -> C.stmt) -> Env.t -> C.fundef -> C.fundef
 val program :
   ?decl:(Env.t -> C.decl -> C.decl) ->
   ?fundef:(Env.t -> C.fundef -> C.fundef) ->
-  ?composite:(Env.t -> C.struct_or_union -> 
-                C.ident -> C.attributes -> C.field list -> 
+  ?composite:(Env.t -> C.struct_or_union ->
+                C.ident -> C.attributes -> C.field list ->
                   C.attributes * C.field list) ->
   ?typedef:(Env.t -> C.ident -> C.typ -> C.typ) ->
-  ?enum:(Env.t -> C.ident -> C.attributes -> C.enumerator list -> 
+  ?enum:(Env.t -> C.ident -> C.attributes -> C.enumerator list ->
                   C.attributes * C.enumerator list) ->
   ?pragma:(Env.t -> string -> string) ->
   C.program ->

@@ -80,7 +80,7 @@ let attributes a =
       sprintf " _Alignas(%Ld)%s" (Int64.shift_left 1L (N.to_int l)) s1
 
 let attributes_space a =
-  let s = attributes a in 
+  let s = attributes a in
   if String.length s = 0 then s else s ^ " "
 
 let name_optid id =
@@ -202,7 +202,7 @@ let rec expr p (prec, e) =
     if assoc = LtoR
     then (prec', prec' + 1)
     else (prec' + 1, prec') in
-  if prec' < prec 
+  if prec' < prec
   then fprintf p "@[<hov 2>("
   else fprintf p "@[<hov 2>";
   begin match e with

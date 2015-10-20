@@ -50,7 +50,7 @@ let compile_switch_as_tree modulus default tbl =
        let (key1, act1) = sw.(lo)
        and (key2, act2) = sw.(lo+1)
        and (key3, act3) = sw.(lo+2) in
-       CTifeq(key1, act1, 
+       CTifeq(key1, act1,
         CTifeq(key2, act2,
           if Z.sub maxval minval = Z.of_uint 2
           then CTaction act3

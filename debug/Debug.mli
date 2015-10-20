@@ -18,7 +18,7 @@ open BinNums
 
 
 (* Record used for stroring references to the actual implementation functions *)
-type implem = 
+type implem =
     {
      mutable init: string -> unit;
      mutable atom_function: ident -> atom -> unit;

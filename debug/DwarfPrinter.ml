@@ -319,7 +319,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
           print_uleb128 oc col
       | Some (Gnu_file_loc (file,col)) ->
           fprintf oc "	.4byte		%l\n" file;
-          print_uleb128 oc col 
+          print_uleb128 oc col
      | None -> ()
 
     let print_loc_expr oc = function
@@ -407,12 +407,12 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_string oc bt.base_type_name
 
     let print_compilation_unit oc tag =
-      let version_string =  
+      let version_string =
         if Version.buildnr <> "" && Version.tag <> "" then
           sprintf "%s, Build: %s, Tag: %s" Version.version Version.buildnr Version.tag
         else
           Version.version in
-      let prod_name = sprintf "AbsInt Angewandte Informatik GmbH:CompCert Version %s:(%s,%s,%s,%s)" 
+      let prod_name = sprintf "AbsInt Angewandte Informatik GmbH:CompCert Version %s:(%s,%s,%s,%s)"
           version_string Configuration.arch Configuration.system Configuration.abi Configuration.model in
       print_string oc (Sys.getcwd ());
       print_addr oc tag.compile_unit_low_pc;
@@ -476,7 +476,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
     let print_subprogram_addr oc (s,e) =
       fprintf oc "	.4byte		%a\n" label e;
       fprintf oc "	.4byte		%a\n" label s
-     
+
     let print_subprogram oc sp =
       print_file_loc oc (Some sp.subprogram_file_loc);
       print_opt_value oc sp.subprogram_external print_flag;
@@ -608,10 +608,10 @@ module DwarfPrinter(Target: DWARF_TARGET):
 
     let print_diab_entries oc entries =
       let abbrev_start = new_label () in
-      abbrev_start_addr := abbrev_start;  
+      abbrev_start_addr := abbrev_start;
       print_debug_abbrev oc entries;
       List.iter (fun (s,d,l,e,_) ->
-        section oc (Section_debug_info s);      
+        section oc (Section_debug_info s);
         print_debug_info oc d l e) entries;
       section oc Section_debug_loc;
       List.iter (fun (_,_,_,_,l) -> print_location_list oc l) entries

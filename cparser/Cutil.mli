@@ -65,7 +65,7 @@ type attr_handling =
   | AttrIgnoreAll
 
 val compatible_types : attr_handling -> Env.t -> typ -> typ -> bool
-  (* Check that the two given types are compatible.  
+  (* Check that the two given types are compatible.
      The attributes in the types are compared according to the first argument:
 - [AttrCompat]: the types must have the same standard attributes
     ([const], [volatile], [restrict]) but may differ on custom attributes.
@@ -225,7 +225,7 @@ val ecommalist :  exp list -> exp -> exp
 val sskip: stmt
   (* The [skip] statement.  No location. *)
 val sseq : location -> stmt -> stmt -> stmt
-  (* Return the statement [s1; s2], optimizing the cases 
+  (* Return the statement [s1; s2], optimizing the cases
      where [s1] or [s2] is [skip], or [s2] is a block. *)
 val sassign : location -> exp -> exp -> stmt
   (* Return the statement [exp1 = exp2;] *)

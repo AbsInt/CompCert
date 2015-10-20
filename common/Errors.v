@@ -122,7 +122,7 @@ Proof.
   destruct (bind_inversion _ _ H) as [hd' [P Q]].
   destruct (bind_inversion _ _ Q) as [tl' [R S]].
   inversion_clear S.
-  constructor. auto. auto. 
+  constructor. auto. auto.
 Qed.
 
 (** * Reasoning over monadic computations *)
@@ -174,20 +174,20 @@ Ltac monadInv1 H :=
 Ltac monadInv H :=
   monadInv1 H ||
   match type of H with
-  | (?F _ _ _ _ _ _ _ _ = OK _) => 
+  | (?F _ _ _ _ _ _ _ _ = OK _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
-  | (?F _ _ _ _ _ _ _ = OK _) => 
+  | (?F _ _ _ _ _ _ _ = OK _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
-  | (?F _ _ _ _ _ _ = OK _) => 
+  | (?F _ _ _ _ _ _ = OK _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
-  | (?F _ _ _ _ _ = OK _) => 
+  | (?F _ _ _ _ _ = OK _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
-  | (?F _ _ _ _ = OK _) => 
+  | (?F _ _ _ _ = OK _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
-  | (?F _ _ _ = OK _) => 
+  | (?F _ _ _ = OK _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
-  | (?F _ _ = OK _) => 
+  | (?F _ _ = OK _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
-  | (?F _ = OK _) => 
+  | (?F _ = OK _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
   end.

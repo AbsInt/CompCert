@@ -168,7 +168,7 @@ Definition analyze (approx: PMap.t VA.t) (f: function): option (PMap.t NA.t) :=
 
 (** * Part 2: the code transformation *)
 
-Definition transf_instr (approx: PMap.t VA.t) (an: PMap.t NA.t) 
+Definition transf_instr (approx: PMap.t VA.t) (an: PMap.t NA.t)
                         (pc: node) (instr: instruction) :=
   match instr with
   | Iop op args res s =>
@@ -177,7 +177,7 @@ Definition transf_instr (approx: PMap.t VA.t) (an: PMap.t NA.t)
         Inop s
       else if is_int_zero nres then
         Iop (Ointconst Int.zero) nil res s
-      else if operation_is_redundant op nres then 
+      else if operation_is_redundant op nres then
         match args with
         | arg :: _ => Iop Omove (arg :: nil) res s
         | nil => instr

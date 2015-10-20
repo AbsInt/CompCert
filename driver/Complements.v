@@ -44,7 +44,7 @@ Theorem transf_c_program_preservation:
   program_behaves (Asm.semantics tp) beh ->
   exists beh', program_behaves (Csem.semantics p) beh' /\ behavior_improves beh' beh.
 Proof.
-  intros. eapply backward_simulation_behavior_improves; eauto. 
+  intros. eapply backward_simulation_behavior_improves; eauto.
   apply transf_c_program_correct; auto.
 Qed.
 
@@ -81,7 +81,7 @@ Proof.
   assert (WBT: forall p, well_behaved_traces (Cstrategy.semantics p)).
     intros. eapply ssr_well_behaved. apply Cstrategy.semantics_strongly_receptive.
   intros. intuition.
-  eapply forward_simulation_behavior_improves; eauto. 
+  eapply forward_simulation_behavior_improves; eauto.
     apply (fst (transf_cstrategy_program_correct _ _ H)).
   exploit backward_simulation_behavior_improves.
     apply (snd (transf_cstrategy_program_correct _ _ H)).
@@ -92,7 +92,7 @@ Proof.
   exploit backward_simulation_same_safe_behavior.
     apply (snd (transf_cstrategy_program_correct _ _ H)).
     intros. rewrite <- atomic_behaviors in H2; eauto. eauto.
-    intros. rewrite atomic_behaviors; auto. 
+    intros. rewrite atomic_behaviors; auto.
 Qed.
 
 (** We can also use the alternate big-step semantics for [Cstrategy]
@@ -114,7 +114,7 @@ Proof.
   apply behavior_bigstep_terminates with (Cstrategy.bigstep_semantics p); auto.
   apply Cstrategy.bigstep_semantics_sound.
   exploit (behavior_bigstep_diverges (Cstrategy.bigstep_semantics_sound p)). eassumption.
-  intros [A | [t [A B]]]. 
+  intros [A | [t [A B]]].
   left. apply transf_cstrategy_program_preservation with p; auto. red; auto.
   right; exists t; split; auto. apply transf_cstrategy_program_preservation with p; auto. red; auto.
 Qed.
@@ -125,10 +125,10 @@ Qed.
   of the source C program satisfies a given specification
   (a predicate on the observable behavior of the program),
   then all executions of the produced Asm program satisfy
-  this specification as well.  
+  this specification as well.
 
   We first show this result for specifications that are stable
-  under the [behavior_improves] relation. *) 
+  under the [behavior_improves] relation. *)
 
 Section SPECS_PRESERVED.
 
@@ -145,7 +145,7 @@ Theorem transf_c_program_preserves_spec:
 Proof.
   intros.
   exploit transf_c_program_preservation; eauto. intros [beh' [A B]].
-  apply spec_stable with beh'; auto. 
+  apply spec_stable with beh'; auto.
 Qed.
 
 End SPECS_PRESERVED.
@@ -166,9 +166,9 @@ Theorem transf_c_program_preserves_safety_spec:
   (forall beh, program_behaves (Csem.semantics p) beh -> spec beh) ->
   (forall beh, program_behaves (Asm.semantics tp) beh -> spec beh).
 Proof.
-  intros. eapply transf_c_program_preserves_spec; eauto. 
-  intros. destruct H2. congruence. destruct H2 as [t [EQ1 EQ2]]. 
-  subst beh1. elim (spec_safety _ H3). 
+  intros. eapply transf_c_program_preserves_spec; eauto.
+  intros. destruct H2. congruence. destruct H2 as [t [EQ1 EQ2]].
+  subst beh1. elim (spec_safety _ H3).
 Qed.
 
 End SAFETY_PRESERVED.
@@ -196,8 +196,8 @@ Proof.
   destruct H2 as [t [C D]]. subst.
   destruct A as [b1 E]. destruct D as [b2 F].
   destruct b1; simpl in E; inv E.
-  exists t1; split; auto. 
-  exists (behavior_app t0 b2); apply behavior_app_assoc. 
+  exists t1; split; auto.
+  exists (behavior_app t0 b2); apply behavior_app_assoc.
 Qed.
 
 End LIVENESS_PRESERVED.

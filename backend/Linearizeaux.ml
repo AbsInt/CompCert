@@ -26,7 +26,7 @@ let enumerate_aux f reach =
     (fun pc nodes ->
       if PMap.get pc reach
       then Coq_cons (pc, nodes)
-      else nodes) 
+      else nodes)
     f.fn_nextpc
 ***)
 
@@ -100,7 +100,7 @@ let basic_blocks f joins =
   (* end_block: record block that we just discovered *)
   and end_block blk minpc =
     blocks := (minpc, List.rev blk) :: !blocks
-  in 
+  in
     start_block f.fn_entrypoint; !blocks
 
 (* Flatten basic blocks in decreasing order of minpc *)

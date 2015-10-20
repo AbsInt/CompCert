@@ -188,7 +188,7 @@ let compile_c_ast sourcename csyntax ofile debug =
     | Errors.Error msg ->
         eprintf "%s: %a" sourcename print_error msg;
         exit 2 in
-  (* Dump Asm in binary and JSON format *)  
+  (* Dump Asm in binary and JSON format *)
   if !option_sdump then
     begin
       dump_asm asm (output_filename sourcename ".c" ".sdump");
@@ -518,7 +518,7 @@ let unset_all opts = List.iter (fun r -> r := false) opts
 let num_source_files = ref 0
 
 let num_input_files = ref 0
-    
+
 let cmdline_actions =
   let f_opt name ref =
     [Exact("-f" ^ name), Set ref; Exact("-fno-" ^ name), Unset ref] in
@@ -570,8 +570,8 @@ let cmdline_actions =
 (* Linking options *)
   Prefix "-l", Self push_linker_arg;
   Prefix "-L", Self push_linker_arg;
-  Exact "-T", String (fun s -> if Configuration.system = "diab" then 
-    push_linker_arg ("-Wm"^s) 
+  Exact "-T", String (fun s -> if Configuration.system = "diab" then
+    push_linker_arg ("-Wm"^s)
   else begin
       push_linker_arg ("-T");
       push_linker_arg(s)

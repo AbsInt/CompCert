@@ -40,13 +40,13 @@ module type PRINTER_OPTIONS =
 module Target (Opt: PRINTER_OPTIONS) : TARGET =
   struct
 (* Code generation options. *)
-    
+
     let literals_in_code = ref true     (* to be turned into a proper option *)
-    
+
 (* Basic printing functions *)
-        
+
     let print_label oc lbl = elf_label oc (transl_label lbl)
-        
+
     let comment = "@"
 
     let symbol = elf_symbol
@@ -61,34 +61,34 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | IR4 -> "r4" | IR5 -> "r5" | IR6 -> "r6" | IR7 -> "r7"
       | IR8 -> "r8" | IR9 -> "r9" | IR10 -> "r10" | IR11 -> "r11"
       | IR12 -> "r12" | IR13 -> "sp" | IR14 -> "lr"
-            
+
     let float_reg_name = function
       | FR0 -> "d0"  | FR1 -> "d1"  | FR2 -> "d2"  | FR3 -> "d3"
       | FR4 -> "d4"  | FR5 -> "d5"  | FR6 -> "d6"  | FR7 -> "d7"
       | FR8 -> "d8"  | FR9 -> "d9"  | FR10 -> "d10"  | FR11 -> "d11"
       | FR12 -> "d12"  | FR13 -> "d13"  | FR14 -> "d14"  | FR15 -> "d15"
-            
+
     let single_float_reg_index = function
       | FR0 -> 0  | FR1 -> 2  | FR2 -> 4  | FR3 -> 6
       | FR4 -> 8  | FR5 -> 10  | FR6 -> 12  | FR7 -> 14
       | FR8 -> 16  | FR9 -> 18  | FR10 -> 20  | FR11 -> 22
       | FR12 -> 24  | FR13 -> 26  | FR14 -> 28  | FR15 -> 30
-            
+
     let single_float_reg_name = function
       | FR0 -> "s0"  | FR1 -> "s2"  | FR2 -> "s4"  | FR3 -> "s6"
       | FR4 -> "s8"  | FR5 -> "s10"  | FR6 -> "s12"  | FR7 -> "s14"
       | FR8 -> "s16"  | FR9 -> "s18"  | FR10 -> "s20"  | FR11 -> "s22"
       | FR12 -> "s24"  | FR13 -> "s26"  | FR14 -> "s28"  | FR15 -> "s30"
-            
+
     let ireg oc r = output_string oc (int_reg_name r)
     let freg oc r = output_string oc (float_reg_name r)
     let freg_single oc r = output_string oc (single_float_reg_name r)
-        
+
     let preg oc = function
       | IR r -> ireg oc r
       | FR r -> freg oc r
       | _    -> assert false
-            
+
     let condition_name = function
       | TCeq -> "eq"
       | TCne -> "ne"
@@ -102,7 +102,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | TClt -> "lt"
       | TCgt -> "gt"
       | TCle -> "le"
-            
+
     let neg_condition_name = function
       | TCeq -> "ne"
       | TCne -> "eq"
@@ -116,7 +116,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | TClt -> "ge"
       | TCgt -> "le"
       | TCle -> "gt"
-            
+
 (* In Thumb2 mode, some arithmetic instructions have shorter encodings
    if they carry the "S" flag (update condition flags):
        add   (but not sp + imm)
@@ -158,27 +158,27 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | Section_debug_abbrev -> ".section	.debug_abbrev,\"\",%progbits"
       | Section_debug_line _ -> ".section	.debug_line,\"\",%progbits"
 
-            
+
     let section oc sec =
       fprintf oc "	%s\n" (name_of_section sec)
-        
+
 (* Record current code position and latest position at which to
    emit float and symbol constants. *)
-        
+
     let currpos = ref 0
     let size_constants = ref 0
     let max_pos_constants = ref max_int
-        
+
     let distance_to_emit_constants () =
       if !literals_in_code
       then !max_pos_constants - (!currpos + !size_constants)
       else max_int
-          
+
 (* Associate labels to floating-point constants and to symbols *)
-          
+
     let float_labels = (Hashtbl.create 39 : (int64, int) Hashtbl.t)
     let float32_labels = (Hashtbl.create 39 : (int32, int) Hashtbl.t)
-        
+
     let label_float bf =
       try
         Hashtbl.find float_labels bf
@@ -188,7 +188,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
         size_constants := !size_constants + 8;
         max_pos_constants := min !max_pos_constants (!currpos + 1024);
         lbl'
-          
+
     let label_float32 bf =
       try
         Hashtbl.find float32_labels bf
@@ -198,10 +198,10 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
         size_constants := !size_constants + 4;
         max_pos_constants := min !max_pos_constants (!currpos + 1024);
         lbl'
-          
+
     let symbol_labels =
       (Hashtbl.create 39 : (ident * Integers.Int.int, int) Hashtbl.t)
-        
+
     let label_symbol id ofs =
       try
         Hashtbl.find symbol_labels (id, ofs)
@@ -211,14 +211,14 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
         size_constants := !size_constants + 4;
         max_pos_constants := min !max_pos_constants (!currpos + 4096);
         lbl'
-          
+
     let reset_constants () =
       Hashtbl.clear float_labels;
       Hashtbl.clear float32_labels;
       Hashtbl.clear symbol_labels;
       size_constants := 0;
       max_pos_constants := max_int
-          
+
     let emit_constants oc =
       fprintf oc "	.balign	4\n";
       Hashtbl.iter
@@ -238,9 +238,9 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
             lbl symbol_offset (id, ofs))
         symbol_labels;
       reset_constants ()
-        
+
 (* Generate code to load the address of id + ofs in register r *)
-        
+
     let loadsymbol oc r id ofs =
       if !Clflags.option_mthumb then begin
         fprintf oc "	movw	%a, #:lower16:%a\n"
@@ -249,13 +249,13 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           ireg r symbol_offset (id, ofs); 2
       end else begin
         let lbl = label_symbol id ofs in
-        fprintf oc "	ldr	%a, .L%d @ %a\n" 
+        fprintf oc "	ldr	%a, .L%d @ %a\n"
           ireg r lbl symbol_offset (id, ofs); 1
       end
-          
+
 (* Emit instruction sequences that set or offset a register by a constant. *)
 (* No S suffix because they are applied to SP most of the time. *)
-          
+
     let movimm oc dst n =
       match Asmgen.decompose_int n with
       | [] -> assert false
@@ -265,7 +265,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
             (fun n -> fprintf oc "	orr	%s, %s, #%a\n" dst dst coqint n)
             tl;
           List.length l
-            
+
     let addimm oc dst src n =
       match Asmgen.decompose_int n with
       | [] -> assert false
@@ -275,7 +275,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
             (fun n -> fprintf oc "	add	%s, %s, #%a\n" dst dst coqint n)
             tl;
           List.length l
-            
+
     let subimm oc dst src n =
       match Asmgen.decompose_int n with
       | [] -> assert false
@@ -285,27 +285,27 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
             (fun n -> fprintf oc "	sub	%s, %s, #%a\n" dst dst coqint n)
             tl;
           List.length l
-            
+
 (* Recognition of float constants appropriate for VMOV.
    a normalized binary floating point encoding with 1 sign bit, 4
    bits of fraction and a 3-bit exponent *)
-   
+
     let is_immediate_float64 bits =
       let exp = (Int64.(to_int (shift_right_logical bits 52)) land 0x7FF) - 1023 in
       let mant = Int64.logand bits 0xF_FFFF_FFFF_FFFFL in
       exp >= -3 && exp <= 4 && Int64.logand mant 0xF_0000_0000_0000L = mant
-        
+
    let is_immediate_float32 bits =
      let exp = (Int32.(to_int (shift_right_logical bits 23)) land 0xFF) - 127 in
      let mant = Int32.logand bits 0x7F_FFFFl in
      exp >= -3 && exp <= 4 && Int32.logand mant 0x78_0000l = mant
-       
+
 
 (* Emit .file / .loc debugging directives *)
-       
+
     let print_file_line oc file line =
       print_file_line oc comment file line
-        
+
     let print_location oc loc =
       if loc <> Cutil.no_loc then print_file_line oc (fst loc) (snd loc)
 
@@ -456,7 +456,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       match Opt.float_abi with
       | Soft -> (FixupEABI.fixup_arguments, FixupEABI.fixup_result)
       | Hard -> (FixupHF.fixup_arguments, FixupHF.fixup_result)
-            
+
 (* Printing of instructions *)
 
     let shift_op oc = function
@@ -494,7 +494,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           fprintf oc "	b	%a\n" symbol id;
           n + 1
       | Pbreg(r, sg) ->
-          let n = 
+          let n =
             if r = IR14
             then fixup_result oc Outgoing sg
             else fixup_arguments oc Outgoing sg in
@@ -886,7 +886,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
             fprintf oc "	.space	%s\n" (Z.to_string n)
       | Init_addrof(symb, ofs) ->
           fprintf oc "	.word	%a\n" symbol_offset (symb, ofs)
-            
+
     let print_prologue oc =
       fprintf oc "	.syntax	unified\n";
       fprintf oc "	.arch	%s\n"
@@ -908,7 +908,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       end
 
 
-    let print_epilogue oc = 
+    let print_epilogue oc =
       if !Clflags.option_g then begin
         let high_pc = new_label () in
         Debug.add_compilation_section_end ".text" high_pc;
@@ -919,22 +919,22 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
 
 
     let default_falignment = 4
-    
+
     let label = elf_label
-       
+
     let new_label = new_label
   end
 
-let sel_target () = 
+let sel_target () =
   let module S : PRINTER_OPTIONS = struct
-   
+
    let vfpv3 = Configuration.model >= "armv7"
-   
+
    let float_abi = match Configuration.abi with
    | "eabi"      -> Soft
    | "hardfloat" -> Hard
    | _ -> assert false
-   
+
    let hardware_idiv  =
    match  Configuration.model with
    | "armv7r" | "armv7m" -> !Clflags.option_mthumb

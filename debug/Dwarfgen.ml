@@ -56,9 +56,9 @@ let int_type_to_entry id i =
     (match i.int_kind with
     | IBool -> DW_ATE_boolean
     | IChar ->
-        if !Machine.config.Machine.char_signed then 
-          DW_ATE_signed_char 
-        else 
+        if !Machine.config.Machine.char_signed then
+          DW_ATE_signed_char
+        else
           DW_ATE_unsigned_char
     | IInt | ILong | ILongLong | IShort | ISChar -> DW_ATE_signed
     | _ -> DW_ATE_unsigned)in
@@ -68,7 +68,7 @@ let int_type_to_entry id i =
     base_type_name = typ_to_string (TInt (i.int_kind,[]));} in
   new_entry id (DW_TAG_base_type int)
 
-let float_type_to_entry id f = 
+let float_type_to_entry id f =
   let byte_size = sizeof_fkind f.float_kind in
   let float = {
     base_type_byte_size = byte_size;
@@ -88,7 +88,7 @@ let void_to_entry id =
 let file_loc_opt file = function
   | None -> None
   | Some (f,l) ->
-    try 
+    try
       Some (file (f,l))
     with Not_found -> None
 
@@ -99,7 +99,7 @@ let typedef_to_entry file id t =
     typedef_name = t.typedef_name;
     typedef_type = i;
   } in
-  new_entry id (DW_TAG_typedef td) 
+  new_entry id (DW_TAG_typedef td)
 
 let pointer_to_entry id p =
   let p = {pointer_type = p.pts} in
@@ -183,8 +183,8 @@ let member_to_entry mem =
     member_bit_offset = mem.cfd_bit_offset;
     member_bit_size = mem.cfd_bit_size;
     member_data_member_location =
-    (match mem.cfd_byte_offset with 
-    | None -> None 
+    (match mem.cfd_byte_offset with
+    | None -> None
     | Some s -> Some (DataLocBlock (DW_OP_plus_uconst s)));
     member_declaration = None;
     member_name = Some (mem.cfd_name);
@@ -236,19 +236,19 @@ let needs_types id d =
   let add_type id d =
     if not (IntSet.mem id d) then
         IntSet.add id d,true
-      else 
+      else
         d,false in
   let t = Hashtbl.find types id in
   match t with
-  | IntegerType _ 
+  | IntegerType _
   | FloatType _
   | Void
   | EnumType _ -> d,false
   | Typedef t ->
       add_type (get_opt_val t.typ) d
-  | PointerType p -> 
+  | PointerType p ->
       add_type p.pts d
-  | ArrayType arr -> 
+  | ArrayType arr ->
       add_type arr.arr_type d
   | ConstType c ->
       add_type c.cst_type d
@@ -256,12 +256,12 @@ let needs_types id d =
       add_type v.vol_type d
   | FunctionType f ->
       let d,c = match f.fun_return_type with
-      | Some t -> add_type t d 
+      | Some t -> add_type t d
       | None -> d,false in
       List.fold_left (fun (d,c) p ->
         let d,c' = add_type p.param_type d in
         d,c||c') (d,c) f.fun_params
-  | CompositeType c -> 
+  | CompositeType c ->
       List.fold_left (fun (d,c) f ->
         let d,c' = add_type f.cfd_typ d in
         d,c||c') (d,false) c.ct_members
@@ -276,10 +276,10 @@ let gen_types file needed =
     else
       d in
   let typs = aux needed in
-  List.rev (Hashtbl.fold (fun id t acc -> 
+  List.rev (Hashtbl.fold (fun id t acc ->
     if IntSet.mem id typs then
       (infotype_to_entry file id t)::acc
-    else 
+    else
       acc) types [])
 
 let global_variable_to_entry file acc id v =
@@ -300,13 +300,13 @@ let global_variable_to_entry file acc id v =
 let gen_splitlong op_hi op_lo =
   let op_piece = DW_OP_piece 4 in
   op_piece::op_hi@(op_piece::op_lo)
-  
-let translate_function_loc a = function 
+
+let translate_function_loc a = function
   | BA_addrstack (ofs) ->
       let ofs = camlint_of_coqint ofs in
       Some (LocSimple (DW_OP_bregx (a,ofs))),[]
   | BA_splitlong (BA_addrstack hi,BA_addrstack lo)->
-      let hi = camlint_of_coqint hi 
+      let hi = camlint_of_coqint hi
       and lo = camlint_of_coqint lo in
       if lo = Int32.add hi 4l then
         Some (LocSimple (DW_OP_bregx (a,hi))),[]
@@ -315,11 +315,11 @@ let translate_function_loc a = function
         and op_lo = [DW_OP_bregx (a,lo)] in
         Some (LocList (gen_splitlong op_hi op_lo)),[]
   | _ -> None,[]
-      
+
 let range_entry_loc (sp,l) =
   let rec aux = function
     | BA i ->  [DW_OP_reg i]
-    | BA_addrstack ofs -> 
+    | BA_addrstack ofs ->
         let ofs = camlint_of_coqint ofs in
         [DW_OP_bregx (sp,ofs)]
     | BA_splitlong (hi,lo) ->
@@ -334,12 +334,12 @@ let range_entry_loc (sp,l) =
 
 let location_entry f_id atom =
   try
-    begin 
+    begin
       match (Hashtbl.find var_locations (f_id,atom)) with
       | FunctionLoc (a,r) ->
           translate_function_loc a r
       | RangeLoc l ->
-          let l = List.rev_map (fun i -> 
+          let l = List.rev_map (fun i ->
             let hi = get_opt_val i.range_start
             and lo = get_opt_val i.range_end in
             let hi = Hashtbl.find label_translation (f_id,hi)
@@ -380,8 +380,8 @@ let rec local_variable_to_entry file f_id (acc,bcc) v id =
 and scope_to_entry file f_id acc sc id =
   let l_pc,h_pc = try
     let r = Hashtbl.find scope_ranges id in
-    let lbl l = match l with 
-    | Some l -> Some (Hashtbl.find label_translation (f_id,l)) 
+    let lbl l = match l with
+    | Some l -> Some (Hashtbl.find label_translation (f_id,l))
     | None -> None in
     begin
       match r with
@@ -401,8 +401,8 @@ and scope_to_entry file f_id acc sc id =
 and local_to_entry file f_id acc id =
   match Hashtbl.find local_variables id with
   | LocalVariable v -> local_variable_to_entry file f_id acc v id
-  | Scope v -> let s,acc = 
-      (scope_to_entry file f_id acc v id) in 
+  | Scope v -> let s,acc =
+      (scope_to_entry file f_id acc v id) in
     Some s,acc
 
 let fun_scope_to_entries file f_id acc id =
@@ -430,7 +430,7 @@ let function_to_entry file (acc,bcc) id f =
   let params,(acc,bcc) = mmap (function_parameter_to_entry f_id) (acc,bcc) f.fun_parameter in
   let vars,(acc,bcc) = fun_scope_to_entries file f_id (acc,bcc) f.fun_scope in
   add_children f_entry (params@vars),(acc,bcc)
-     
+
 let definition_to_entry file (acc,bcc) id t =
   match t with
   | GlobalVariable g -> let e,acc = global_variable_to_entry file acc id g in
@@ -450,7 +450,7 @@ let gen_diab_debug_info sec_name var_section : debug_entries =
     let old = try StringMap.find s acc with Not_found -> [] in
     StringMap.add s ((id,t)::old) acc) definitions StringMap.empty in
   let entries = StringMap.fold (fun s defs acc ->
-    let defs,(ty,locs) = List.fold_left (fun (acc,bcc) (id,t) -> 
+    let defs,(ty,locs) = List.fold_left (fun (acc,bcc) (id,t) ->
       let t,bcc = definition_to_entry (diab_file_loc s) bcc id t in
       t::acc,bcc) ([],(IntSet.empty,[])) defs in
     let low_pc = Hashtbl.find compilation_section_start s
@@ -459,7 +459,7 @@ let gen_diab_debug_info sec_name var_section : debug_entries =
     let cp = {
       compile_unit_name = !file_name;
       compile_unit_low_pc = low_pc;
-      compile_unit_high_pc = high_pc; 
+      compile_unit_high_pc = high_pc;
     } in
     let cp = new_entry (next_id ()) (DW_TAG_compile_unit cp) in
     let cp = add_children cp ((gen_types (diab_file_loc s) ty) @ defs) in
@@ -472,7 +472,7 @@ let gnu_file_loc (f,l) =
 let gen_gnu_debug_info sec_name var_section : debug_entries =
   let low_pc = Hashtbl.find compilation_section_start ".text"
   and high_pc = Hashtbl.find compilation_section_end ".text" in
-  let defs,(ty,locs),sec = Hashtbl.fold (fun  id t (acc,bcc,sec) -> 
+  let defs,(ty,locs),sec = Hashtbl.fold (fun  id t (acc,bcc,sec) ->
     let s = match t with
     | GlobalVariable _ -> var_section
     | Function f -> sec_name (get_opt_val f.fun_atom) in
@@ -482,7 +482,7 @@ let gen_gnu_debug_info sec_name var_section : debug_entries =
   let cp = {
     compile_unit_name = !file_name;
     compile_unit_low_pc = low_pc;
-    compile_unit_high_pc = high_pc; 
+    compile_unit_high_pc = high_pc;
   } in
   let cp = new_entry (next_id ()) (DW_TAG_compile_unit cp) in
   let cp = add_children cp (types@defs) in

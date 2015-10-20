@@ -101,7 +101,7 @@ Lemma possible_trace_app_inv:
 Proof.
   induction t1; simpl; intros.
   exists w0; split. constructor. auto.
-  inv H. exploit IHt1; eauto. intros [w1 [A B]]. 
+  inv H. exploit IHt1; eauto. intros [w1 [A B]].
   exists w1; split. econstructor; eauto. auto.
 Qed.
 
@@ -114,7 +114,7 @@ Proof.
   auto.
   inv H7; inv H6. inv H9; inv H10. split; congruence.
   inv H7; inv H6. inv H9; inv H10. split; congruence.
-  inv H4; inv H3. inv H6; inv H7. split; congruence. 
+  inv H4; inv H3. inv H6; inv H7. split; congruence.
   inv H4; inv H3. inv H7; inv H6. auto.
 Qed.
 
@@ -141,7 +141,7 @@ Lemma possible_traceinf_app_inv:
 Proof.
   induction t1; simpl; intros.
   exists w0; split. constructor. auto.
-  inv H. exploit IHt1; eauto. intros [w1 [A B]]. 
+  inv H. exploit IHt1; eauto. intros [w1 [A B]].
   exists w1; split. econstructor; eauto. auto.
 Qed.
 
@@ -164,7 +164,7 @@ Ltac possibleTraceInv :=
       intros w [P1 P2];
       possibleTraceInv
   | [H: exists w, possible_trace _ _ w |- _] =>
-      let P := fresh "P" in let w := fresh "w" in 
+      let P := fresh "P" in let w := fresh "w" in
       destruct H as [w P]; possibleTraceInv
   | _ => idtac
   end.
@@ -218,19 +218,19 @@ Ltac use_step_deterministic :=
 (** Determinism for finite transition sequences. *)
 
 Lemma star_step_diamond:
-  forall s0 t1 s1, Star L s0 t1 s1 -> 
-  forall t2 s2, Star L s0 t2 s2 -> 
+  forall s0 t1 s1, Star L s0 t1 s1 ->
+  forall t2 s2, Star L s0 t2 s2 ->
   exists t,
      (Star L s1 t s2 /\ t2 = t1 ** t)
   \/ (Star L s2 t s1 /\ t1 = t2 ** t).
 Proof.
-  induction 1; intros. 
-  exists t2; auto. 
-  inv H2. exists (t1 ** t2); right. 
+  induction 1; intros.
+  exists t2; auto.
+  inv H2. exists (t1 ** t2); right.
     split. econstructor; eauto. auto.
-  use_step_deterministic.  
+  use_step_deterministic.
   exploit IHstar. eexact H4. intros [t A]. exists t.
-  destruct A. left; intuition. traceEq. right; intuition. traceEq. 
+  destruct A. left; intuition. traceEq. right; intuition. traceEq.
 Qed.
 
 Ltac use_star_step_diamond :=
@@ -248,8 +248,8 @@ Ltac use_nostep :=
 
 Lemma star_step_triangle:
   forall s0 t1 s1 t2 s2,
-  Star L s0 t1 s1 -> 
-  Star L s0 t2 s2 -> 
+  Star L s0 t1 s1 ->
+  Star L s0 t2 s2 ->
   Nostep L s2 ->
   exists t,
   Star L s1 t s2 /\ t2 = t1 ** t.
@@ -270,7 +270,7 @@ Ltac use_star_step_triangle :=
 
 Lemma steps_deterministic:
   forall s0 t1 s1 t2 s2,
-  Star L s0 t1 s1 -> Star L s0 t2 s2 -> 
+  Star L s0 t1 s1 -> Star L s0 t2 s2 ->
   Nostep L s1 -> Nostep L s2 ->
   t1 = t2 /\ s1 = s2.
 Proof.
@@ -285,8 +285,8 @@ Lemma terminates_not_goes_wrong:
   (forall r, ~final_state L s2 r) -> False.
 Proof.
   intros.
-  assert (t1 = t2 /\ s1 = s2). 
-    eapply steps_deterministic; eauto. eapply det_final_nostep; eauto. 
+  assert (t1 = t2 /\ s1 = s2).
+    eapply steps_deterministic; eauto. eapply det_final_nostep; eauto.
   destruct H4; subst. elim (H3 _ H0).
 Qed.
 
@@ -297,8 +297,8 @@ Lemma star_final_not_forever_silent:
   Nostep L s' ->
   Forever_silent L s -> False.
 Proof.
-  induction 1; intros. 
-  inv H0. use_nostep. 
+  induction 1; intros.
+  inv H0. use_nostep.
   inv H3. use_step_deterministic. eauto.
 Qed.
 
@@ -313,32 +313,32 @@ Proof.
 Qed.
 
 Lemma star_final_not_forever_reactive:
-  forall s t s', Star L s t s' -> 
+  forall s t s', Star L s t s' ->
   forall T, Nostep L s' -> Forever_reactive L s T -> False.
 Proof.
   induction 1; intros.
-  inv H0. inv H1. congruence. use_nostep. 
+  inv H0. inv H1. congruence. use_nostep.
   inv H3. inv H4. congruence.
   use_step_deterministic.
-  eapply IHstar with (T := t4 *** T0). eauto. 
-  eapply star_forever_reactive; eauto.  
+  eapply IHstar with (T := t4 *** T0). eauto.
+  eapply star_forever_reactive; eauto.
 Qed.
 
 Lemma star_forever_silent_inv:
   forall s t s', Star L s t s' ->
-  Forever_silent L s -> 
+  Forever_silent L s ->
   t = E0 /\ Forever_silent L s'.
 Proof.
   induction 1; intros.
   auto.
-  subst. inv H2. use_step_deterministic. eauto. 
+  subst. inv H2. use_step_deterministic. eauto.
 Qed.
 
 Lemma forever_silent_reactive_exclusive:
   forall s T,
   Forever_silent L s -> Forever_reactive L s T -> False.
 Proof.
-  intros. inv H0. exploit star_forever_silent_inv; eauto. 
+  intros. inv H0. exploit star_forever_silent_inv; eauto.
   intros [A B]. contradiction.
 Qed.
 
@@ -358,17 +358,17 @@ Lemma forever_reactive_inv2:
 Proof.
   induction 1; intros.
   congruence.
-  inv H2. congruence. use_step_deterministic. 
+  inv H2. congruence. use_step_deterministic.
   destruct t3.
   (* inductive case *)
-  simpl in *. eapply IHstar; eauto. 
+  simpl in *. eapply IHstar; eauto.
   (* base case *)
   exists s5; exists (e :: t3);
   exists (t2 *** T1); exists (t4 *** T2).
   split. unfold E0; congruence.
-  split. eapply star_forever_reactive; eauto. 
-  split. eapply star_forever_reactive; eauto. 
-  split; traceEq. 
+  split. eapply star_forever_reactive; eauto.
+  split. eapply star_forever_reactive; eauto.
+  split; traceEq.
 Qed.
 
 Lemma forever_reactive_determ':
@@ -381,8 +381,8 @@ Proof.
   inv H. inv H0.
   destruct (forever_reactive_inv2 _ _ _ H t s2 T0 T)
   as [s' [t' [T1' [T2' [A [B [C [D E]]]]]]]]; auto.
-  rewrite D; rewrite E. constructor. auto. 
-  eapply COINDHYP; eauto. 
+  rewrite D; rewrite E. constructor. auto.
+  eapply COINDHYP; eauto.
 Qed.
 
 Lemma forever_reactive_determ:
@@ -399,12 +399,12 @@ Lemma star_forever_reactive_inv:
   forall T, Forever_reactive L s T ->
   exists T', Forever_reactive L s' T' /\ T = t *** T'.
 Proof.
-  induction 1; intros. 
+  induction 1; intros.
   exists T; auto.
   inv H2. inv H3. congruence.
-  use_step_deterministic. 
+  use_step_deterministic.
   exploit IHstar. eapply star_forever_reactive. 2: eauto. eauto.
-  intros [T' [A B]]. exists T'; intuition. traceEq. congruence. 
+  intros [T' [A B]]. exists T'; intuition. traceEq. congruence.
 Qed.
 
 Lemma forever_silent_reactive_exclusive2:
@@ -413,7 +413,7 @@ Lemma forever_silent_reactive_exclusive2:
   Forever_reactive L s T ->
   False.
 Proof.
-  intros. exploit star_forever_reactive_inv; eauto. 
+  intros. exploit star_forever_reactive_inv; eauto.
   intros [T' [A B]]. subst T.
   eapply forever_silent_reactive_exclusive; eauto.
 Qed.
@@ -438,7 +438,7 @@ Proof.
   inv BEH1; inv BEH2; red.
 (* terminates, terminates *)
   assert (t = t0 /\ s' = s'0). eapply steps_deterministic; eauto.
-  destruct H3. split; auto. subst. eapply det_final_state; eauto. 
+  destruct H3. split; auto. subst. eapply det_final_state; eauto.
 (* terminates, diverges *)
   eapply star2_final_not_forever_silent with (s1 := s') (s2 := s'0); eauto.
 (* terminates, reacts *)
@@ -449,9 +449,9 @@ Proof.
   eapply star2_final_not_forever_silent with (s2 := s') (s1 := s'0); eauto.
 (* diverges, diverges *)
   use_star_step_diamond.
-  exploit star_forever_silent_inv. eexact P. eauto.  
+  exploit star_forever_silent_inv. eexact P. eauto.
   intros [A B]. subst; traceEq.
-  exploit star_forever_silent_inv. eexact P. eauto. 
+  exploit star_forever_silent_inv. eexact P. eauto.
   intros [A B]. subst; traceEq.
 (* diverges, reacts *)
   eapply forever_silent_reactive_exclusive2; eauto.
@@ -459,10 +459,10 @@ Proof.
   eapply star2_final_not_forever_silent with (s1 := s'0) (s2 := s'); eauto.
 (* reacts, terminates *)
   eapply star_final_not_forever_reactive; eauto.
-(* reacts, diverges *) 
+(* reacts, diverges *)
   eapply forever_silent_reactive_exclusive2; eauto.
 (* reacts, reacts *)
-  eapply forever_reactive_determ; eauto. 
+  eapply forever_reactive_determ; eauto.
 (* reacts, goes wrong *)
   eapply star_final_not_forever_reactive; eauto.
 (* goes wrong, terminate *)
@@ -473,7 +473,7 @@ Proof.
   eapply star_final_not_forever_reactive; eauto.
 (* goes wrong, goes wrong *)
   assert (t = t0 /\ s' = s'0). eapply steps_deterministic; eauto.
-  tauto. 
+  tauto.
 Qed.
 
 Theorem program_behaves_deterministic:
@@ -483,7 +483,7 @@ Theorem program_behaves_deterministic:
 Proof.
   intros until beh2; intros BEH1 BEH2. inv BEH1; inv BEH2.
 (* both initial states defined *)
-  assert (s = s0) by (eapply det_initial_state; eauto). subst s0. 
+  assert (s = s0) by (eapply det_initial_state; eauto). subst s0.
   eapply state_behaves_deterministic; eauto.
 (* one initial state defined, the other undefined *)
   elim (H1 _ H).
@@ -533,13 +533,13 @@ Proof.
   rewrite (surjective_pairing s1). rewrite (surjective_pairing s2). intuition congruence.
 (* initial states *)
   destruct H; destruct H0.
-  rewrite (surjective_pairing s1). rewrite (surjective_pairing s2). decEq. 
-  eapply (sd_initial_determ D); eauto. 
+  rewrite (surjective_pairing s1). rewrite (surjective_pairing s2). decEq.
+  eapply (sd_initial_determ D); eauto.
   congruence.
 (* final states *)
   eapply (sd_final_determ D); eauto.
 (* final no step *)
-  red; simpl; intros. red; intros [A B]. exploit (sd_final_nostep D); eauto. 
+  red; simpl; intros. red; intros [A B]. exploit (sd_final_nostep D); eauto.
 Qed.
 
 End WORLD_SEM.

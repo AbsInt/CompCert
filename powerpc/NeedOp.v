@@ -101,7 +101,7 @@ Proof.
   intros. destruct cond; simpl in H;
   try (eapply default_needs_of_condition_sound; eauto; fail);
   simpl in *; FuncInv; InvAgree.
-- eapply maskzero_sound; eauto. 
+- eapply maskzero_sound; eauto.
 - destruct (Val.maskzero_bool v i) as [b'|] eqn:MZ; try discriminate.
   erewrite maskzero_sound; eauto.
 Qed.
@@ -117,7 +117,7 @@ Lemma needs_of_operation_sound:
 Proof.
   unfold needs_of_operation; intros; destruct op; try (eapply default_needs_of_operation_sound; eauto; fail);
   simpl in *; FuncInv; InvAgree; TrivialExists.
-- apply sign_ext_sound; auto. compute; auto. 
+- apply sign_ext_sound; auto. compute; auto.
 - apply sign_ext_sound; auto. compute; auto.
 - apply add_sound; auto.
 - apply add_sound; auto with na.
@@ -137,8 +137,8 @@ Proof.
 - apply and_sound; auto. apply notint_sound; rewrite bitwise_idem; auto.
 - apply or_sound; auto. apply notint_sound; rewrite bitwise_idem; auto.
 - apply shrimm_sound; auto.
-- apply rolm_sound; auto. 
-- destruct (eval_condition c args m) as [b|] eqn:EC; simpl in H2. 
+- apply rolm_sound; auto.
+- destruct (eval_condition c args m) as [b|] eqn:EC; simpl in H2.
   erewrite needs_of_condition_sound by eauto.
   subst v; simpl. auto with na.
   subst v; auto with na.
@@ -154,7 +154,7 @@ Proof.
   intros. destruct op; simpl in *; try discriminate; inv H1; FuncInv; subst.
 - apply sign_ext_redundant_sound; auto. omega.
 - apply sign_ext_redundant_sound; auto. omega.
-- apply andimm_redundant_sound; auto. 
+- apply andimm_redundant_sound; auto.
 - apply orimm_redundant_sound; auto.
 - apply rolm_redundant_sound; auto.
 Qed.

@@ -10,7 +10,7 @@ let string_of_byte = Printf.sprintf "0x%02x"
 
 let full_range_of_byte elfmap byte =
   let byte = Int32.of_int byte in
-  List.find (fun (a, b, _, _) -> a <= byte && byte <= b) elfmap 
+  List.find (fun (a, b, _, _) -> a <= byte && byte <= b) elfmap
 
 let range_of_byte elfmap byte =
   let (_, _, _, r) = full_range_of_byte elfmap byte in

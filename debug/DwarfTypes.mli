@@ -49,7 +49,7 @@ type location_value =
   | LocRef of address
   | LocSimple of location_expression
   | LocList of location_expression list
-        
+
 type data_location_value =
   | DataLocBlock of location_expression
   | DataLocRef of reference
@@ -60,10 +60,10 @@ type bound_value =
 
 (* Types representing the attribute information per tag value *)
 
-type file_loc = 
+type file_loc =
   | Diab_file_loc of int * constant
   | Gnu_file_loc of int * constant
-     
+
 type dw_tag_array_type =
     {
      array_type_file_loc: file_loc option;

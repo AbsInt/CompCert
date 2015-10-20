@@ -32,7 +32,7 @@ Inductive mreg: Type :=
   (** Allocatable integer regs *)
   | AX: mreg | BX: mreg | CX: mreg | DX: mreg | SI: mreg | DI: mreg | BP: mreg
   (** Allocatable float regs *)
-  | X0: mreg | X1: mreg | X2: mreg | X3: mreg 
+  | X0: mreg | X1: mreg | X2: mreg | X3: mreg
   | X4: mreg | X5: mreg | X6: mreg | X7: mreg
   (** Special float reg *)
   | FP0: mreg (**r top of x87 FP stack *).

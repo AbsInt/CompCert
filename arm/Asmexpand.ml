@@ -106,7 +106,7 @@ let memcpy_small_arg sz arg tmp =
       assert false
 
 let expand_builtin_memcpy_small sz al src dst =
-  let (tsrc, tdst) = 
+  let (tsrc, tdst) =
     if dst <> BA (IR IR2) then (IR2, IR3) else (IR3, IR2) in
   let (rsrc, osrc) = memcpy_small_arg sz src tsrc in
   let (rdst, odst) = memcpy_small_arg sz dst tdst in
@@ -142,7 +142,7 @@ let memcpy_big_arg arg tmp =
 let expand_builtin_memcpy_big sz al src dst =
   assert (sz >= al);
   assert (sz mod al = 0);
-  let (s, d) = 
+  let (s, d) =
     if dst <> BA (IR IR2) then (IR2, IR3) else (IR3, IR2) in
   memcpy_big_arg src s;
   memcpy_big_arg dst d;

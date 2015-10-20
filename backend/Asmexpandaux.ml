@@ -11,13 +11,13 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(* Util functions used for the expansion of built-ins and some 
+(* Util functions used for the expansion of built-ins and some
    pseudo-instructions *)
 
 open Asm
 open AST
 open Camlcoq
-       
+
 (* Buffering the expanded code *)
 
 let current_code = ref ([]: instruction list)
@@ -25,7 +25,7 @@ let current_code = ref ([]: instruction list)
 let emit i = current_code := i :: !current_code
 
 (* Generation of fresh labels *)
-							  
+
 let dummy_function = { fn_code = []; fn_sig = signature_main }
 let current_function = ref dummy_function
 let next_label = ref (None: label option)
@@ -46,7 +46,7 @@ let new_label () =
     next_label := Some (P.succ lbl);
     lbl
 
-		     
+
 let set_current_function f =
   current_function := f; next_label := None; current_code := []
 
@@ -64,7 +64,7 @@ let expand_scope id lbl oldscopes newscopes =
   List.iter (fun i -> Debug.open_scope id i lbl) opening;
   List.iter (fun i -> Debug.close_scope id i lbl) closing
 
-let translate_annot sp preg_to_dwarf annot = 
+let translate_annot sp preg_to_dwarf annot =
   let rec aux = function
     | BA x -> Some (sp,BA (preg_to_dwarf x))
     | BA_int _
@@ -75,7 +75,7 @@ let translate_annot sp preg_to_dwarf annot =
     | BA_addrglobal _
     | BA_loadstack _ -> None
     | BA_addrstack ofs -> Some (sp,BA_addrstack ofs)
-    | BA_splitlong (hi,lo) -> 
+    | BA_splitlong (hi,lo) ->
         begin
           match (aux hi,aux lo) with
           | Some (_,hi) ,Some (_,lo) -> Some (sp,BA_splitlong (hi,lo))
@@ -84,11 +84,11 @@ let translate_annot sp preg_to_dwarf annot =
   (match annot with
   | [] -> None
   | a::_ -> aux a)
-    
+
 
 let expand_debug id sp preg simple l =
   let get_lbl = function
-    | None -> 
+    | None ->
         let lbl = new_label () in
         emit (Plabel lbl);
         lbl
@@ -100,12 +100,12 @@ let expand_debug id sp preg simple l =
         let kind = (P.to_int kind) in
         begin
           match kind with
-          | 1-> 
+          | 1->
               emit i;aux lbl scopes rest
           | 2 ->
               aux  lbl scopes rest
           | 3 ->
-             begin 
+             begin
                match translate_annot sp preg args with
                | Some a ->
                    let lbl = get_lbl lbl in

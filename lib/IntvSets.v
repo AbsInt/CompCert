@@ -55,12 +55,12 @@ Lemma mem_In:
 Proof.
   induction 1; simpl.
 - intuition congruence.
-- destruct (zlt x h). 
+- destruct (zlt x h).
 + destruct (zle l x); simpl.
   * tauto.
   * split; intros. congruence.
-    exfalso. destruct H0. omega. exploit BELOW; eauto. omega. 
-+ rewrite IHok. intuition. 
+    exfalso. destruct H0. omega. exploit BELOW; eauto. omega.
++ rewrite IHok. intuition.
 Qed.
 
 Fixpoint contains (L H: Z) (s: t) : bool :=
@@ -78,9 +78,9 @@ Proof.
 - destruct (zle h0 h); simpl.
   destruct (zle l l0); simpl.
   intuition.
-  rewrite IHok. intuition. destruct (H3 x); auto. exfalso. 
+  rewrite IHok. intuition. destruct (H3 x); auto. exfalso.
   destruct (H3 l0). omega. omega. exploit BELOW; eauto. omega.
-  rewrite IHok. intuition. destruct (H3 x); auto. exfalso. 
+  rewrite IHok. intuition. destruct (H3 x); auto. exfalso.
   destruct (H3 h). omega. omega. exploit BELOW; eauto. omega.
 Qed.
 
@@ -102,7 +102,7 @@ Proof.
   simpl. rewrite IHok. tauto.
   destruct (zlt h0 l).
   simpl. tauto.
-  rewrite IHok. intuition. 
+  rewrite IHok. intuition.
   assert (l0 <= x < h0 \/ l <= x < h) by xomega. tauto.
   left; xomega.
   left; xomega.
@@ -115,10 +115,10 @@ Proof.
   constructor. auto. intros. inv H0. constructor.
   destruct (zlt h l0).
   constructor; auto. intros. rewrite In_add in H1; auto.
-  destruct H1. omega. auto. 
+  destruct H1. omega. auto.
   destruct (zlt h0 l).
-  constructor. auto. simpl; intros. destruct H1. omega. exploit BELOW; eauto. omega. 
-  constructor. omega. auto. auto. 
+  constructor. auto. simpl; intros. destruct H1. omega. exploit BELOW; eauto. omega.
+  constructor. omega. auto. auto.
   apply IHok. xomega.
 Qed.
 
@@ -130,7 +130,7 @@ Fixpoint remove (L H: Z) (s: t) {struct s} : t :=
       else if zlt H l then s
       else if zlt l L then
         if zlt H h then Cons l L (Cons H h s') else Cons l L (remove L H s')
-      else 
+      else
         if zlt H h then Cons H h s' else remove L H s'
   end.
 
@@ -141,22 +141,22 @@ Proof.
   induction 1; simpl.
   tauto.
   destruct (zlt h l0).
-  simpl. rewrite IHok. intuition omega. 
+  simpl. rewrite IHok. intuition omega.
   destruct (zlt h0 l).
-  simpl. intuition. exploit BELOW; eauto. omega. 
+  simpl. intuition. exploit BELOW; eauto. omega.
   destruct (zlt l l0).
   destruct (zlt h0 h); simpl. clear IHok. split.
-  intros [A | [A | A]]. 
-  split. omega. left; omega. 
-  split. omega. left; omega. 
+  intros [A | [A | A]].
+  split. omega. left; omega.
+  split. omega. left; omega.
   split. exploit BELOW; eauto. omega. auto.
   intros [A [B | B]].
-  destruct (zlt x l0). left; omega. right; left; omega. 
+  destruct (zlt x l0). left; omega. right; left; omega.
   auto.
-  intuition omega. 
+  intuition omega.
   destruct (zlt h0 h); simpl.
   intuition. exploit BELOW; eauto. omega.
-  rewrite IHok. intuition. omegaContradiction. 
+  rewrite IHok. intuition. omegaContradiction.
 Qed.
 
 Lemma remove_ok:
@@ -165,14 +165,14 @@ Proof.
   induction 2; simpl.
   constructor.
   destruct (zlt h l0).
-  constructor; auto. intros; apply BELOW. rewrite In_remove in H1; tauto. 
+  constructor; auto. intros; apply BELOW. rewrite In_remove in H1; tauto.
   destruct (zlt h0 l).
-  constructor; auto. 
+  constructor; auto.
   destruct (zlt l l0).
   destruct (zlt h0 h).
-  constructor. omega. intros. inv H1. omega. exploit BELOW; eauto. omega. 
+  constructor. omega. intros. inv H1. omega. exploit BELOW; eauto. omega.
   constructor. omega. auto. auto.
-  constructor; auto. intros. rewrite In_remove in H1 by auto. destruct H1. exploit BELOW; eauto. omega. 
+  constructor; auto. intros. rewrite In_remove in H1 by auto. destruct H1. exploit BELOW; eauto. omega.
   destruct (zlt h0 h).
   constructor; auto.
   auto.
@@ -204,7 +204,7 @@ Proof.
   tauto.
   assert (ok (Cons l0 h0 s0)) by (constructor; auto).
   destruct (zle h l0).
-  rewrite IHok; auto. simpl. intuition. omegaContradiction. 
+  rewrite IHok; auto. simpl. intuition. omegaContradiction.
   exploit BELOW0; eauto. intros. omegaContradiction.
   destruct (zle h0 l).
   simpl in IHok0; rewrite IHok0. intuition. omegaContradiction.
@@ -212,10 +212,10 @@ Proof.
   destruct (zle l l0).
   destruct (zle h0 h).
   simpl. simpl in IHok0; rewrite IHok0. intuition.
-  simpl. rewrite IHok; auto. simpl. intuition.  exploit BELOW0; eauto. intros; omegaContradiction. 
+  simpl. rewrite IHok; auto. simpl. intuition.  exploit BELOW0; eauto. intros; omegaContradiction.
   destruct (zle h h0).
   simpl. rewrite IHok; auto. simpl. intuition.
-  simpl. simpl in IHok0; rewrite IHok0. intuition. 
+  simpl. simpl in IHok0; rewrite IHok0. intuition.
   exploit BELOW; eauto. intros; omegaContradiction.
 Qed.
 
@@ -237,8 +237,8 @@ Proof.
   constructor; auto. intros.
   assert (In x (inter (Cons l h s) s0)) by exact H3.
   rewrite In_inter in H4; auto. apply BELOW0. tauto.
-  constructor. omega. intros. rewrite In_inter in H3; auto. apply BELOW. tauto. 
-  auto. 
+  constructor. omega. intros. rewrite In_inter in H3; auto. apply BELOW. tauto.
+  auto.
   destruct (zle h h0).
   constructor. omega. intros. rewrite In_inter in H3; auto. apply BELOW. tauto.
   auto.
@@ -265,7 +265,7 @@ Proof.
   split. constructor; auto. tauto.
   destruct (IHok s0) as [A B]; auto.
   split. apply add_ok; auto. apply add_ok; auto.
-  intros. rewrite In_add. rewrite In_add. rewrite <- B. tauto. auto. apply add_ok; auto. 
+  intros. rewrite In_add. rewrite In_add. rewrite <- B. tauto. auto. apply add_ok; auto.
 Qed.
 
 Fixpoint beq (s1 s2: t) : bool :=
@@ -281,13 +281,13 @@ Lemma beq_spec:
 Proof.
   induction 1; destruct 1; simpl.
 - tauto.
-- split; intros. discriminate. exfalso. apply (H0 l). left; omega. 
 - split; intros. discriminate. exfalso. apply (H0 l). left; omega.
-- split; intros. 
-+ InvBooleans. subst. rewrite IHok in H3 by auto. rewrite H3. tauto. 
-+ destruct (zeq l l0). destruct (zeq h h0). simpl. subst. 
+- split; intros. discriminate. exfalso. apply (H0 l). left; omega.
+- split; intros.
++ InvBooleans. subst. rewrite IHok in H3 by auto. rewrite H3. tauto.
++ destruct (zeq l l0). destruct (zeq h h0). simpl. subst.
   apply IHok. auto. intros; split; intros.
-  destruct (proj1 (H1 x)); auto. exfalso. exploit BELOW; eauto. omega. 
+  destruct (proj1 (H1 x)); auto. exfalso. exploit BELOW; eauto. omega.
   destruct (proj2 (H1 x)); auto. exfalso. exploit BELOW0; eauto. omega.
   exfalso. subst l0. destruct (zlt h h0).
   destruct (proj2 (H1 h)). left; omega. omega. exploit BELOW; eauto. omega.
@@ -310,7 +310,7 @@ Next Obligation. constructor. Qed.
 
 Theorem In_empty: forall x, ~(In x empty).
 Proof.
-  unfold In; intros; simpl. tauto. 
+  unfold In; intros; simpl. tauto.
 Qed.
 
 Program Definition interval (l h: Z) : t :=
@@ -337,16 +337,16 @@ Qed.
 
 Theorem In_add: forall x l h s, In x (add l h s) <-> l <= x < h \/ In x s.
 Proof.
-  unfold add, In; intros. 
+  unfold add, In; intros.
   destruct (zlt l h).
   simpl. apply R.In_add. apply proj2_sig.
-  intuition. omegaContradiction. 
+  intuition. omegaContradiction.
 Qed.
 
 Program Definition remove (l h: Z) (s: t) : t :=
   if zlt l h then R.remove l h s else s.
 Next Obligation.
-  apply R.remove_ok. auto. apply proj2_sig. 
+  apply R.remove_ok. auto. apply proj2_sig.
 Qed.
 
 Theorem In_remove: forall x l h s, In x (remove l h s) <-> ~(l <= x < h) /\ In x s.
@@ -362,11 +362,11 @@ Next Obligation. apply R.inter_ok; apply proj2_sig. Qed.
 
 Theorem In_inter: forall x s1 s2, In x (inter s1 s2) <-> In x s1 /\ In x s2.
 Proof.
-  unfold inter, In; intros; simpl. apply R.In_inter; apply proj2_sig. 
+  unfold inter, In; intros; simpl. apply R.In_inter; apply proj2_sig.
 Qed.
 
 Program Definition union (s1 s2: t) : t := R.union s1 s2.
-Next Obligation. 
+Next Obligation.
   destruct (R.In_ok_union _ (proj2_sig s1) _ (proj2_sig s2)). auto.
 Qed.
 
@@ -381,7 +381,7 @@ Program Definition mem (x: Z) (s: t) := R.mem x s.
 
 Theorem mem_spec: forall x s, mem x s = true <-> In x s.
 Proof.
-  unfold mem, In; intros. apply R.mem_In. apply proj2_sig. 
+  unfold mem, In; intros. apply R.mem_In. apply proj2_sig.
 Qed.
 
 Program Definition contains (l h: Z) (s: t) :=
@@ -392,7 +392,7 @@ Theorem contains_spec:
 Proof.
   unfold contains, In; intros. destruct (zlt l h).
   apply R.contains_In. auto. apply proj2_sig.
-  split; intros. omegaContradiction. auto. 
+  split; intros. omegaContradiction. auto.
 Qed.
 
 Program Definition beq (s1 s2: t) : bool := R.beq s1 s2.

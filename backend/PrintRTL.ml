@@ -99,7 +99,7 @@ let print_function pp id f =
       (List.rev_map
         (fun (pc, i) -> (P.to_int pc, i))
         (PTree.elements f.fn_code)) in
-  print_succ pp f.fn_entrypoint 
+  print_succ pp f.fn_entrypoint
     (match instrs with (pc1, _) :: _ -> pc1 | [] -> -1);
   List.iter (print_instruction pp) instrs;
   fprintf pp "}\n\n"
