@@ -283,15 +283,15 @@ rule initial = parse
                                       currentLoc lexbuf)}
   | preprocessing_number as s     { error lexbuf "invalid numerical constant '%s'@ These characters form a preprocessor number, but not a constant" s;
                                     CONSTANT (Cabs.CONST_INT "0", currentLoc lexbuf) }
-  | "'"                           { let l = char_literal [] lexbuf in
+  | "'"                           { let l = char_literal lexbuf.lex_start_p [] lexbuf in
                                     CONSTANT (Cabs.CONST_CHAR(false, l),
                                               currentLoc lexbuf) }
-  | "L'"                          { let l = char_literal [] lexbuf in
+  | "L'"                          { let l = char_literal lexbuf.lex_start_p [] lexbuf in
                                     CONSTANT (Cabs.CONST_CHAR(true, l),
                                               currentLoc lexbuf) }
-  | "\""                          { let l = string_literal [] lexbuf in
+  | "\""                          { let l = string_literal lexbuf.lex_start_p [] lexbuf in
                                     STRING_LITERAL(false, l, currentLoc lexbuf) }
-  | "L\""                         { let l = string_literal [] lexbuf in
+  | "L\""                         { let l = string_literal lexbuf.lex_start_p [] lexbuf in
                                     STRING_LITERAL(true, l, currentLoc lexbuf) }
   | "..."                         { ELLIPSIS(currentLoc lexbuf) }
   | "+="                          { ADD_ASSIGN(currentLoc lexbuf) }
@@ -376,15 +376,17 @@ and char = parse
   | _ as c
       { Int64.of_int (Char.code c) }
 
-and char_literal accu = parse
-  | '\''       { List.rev accu }
+and char_literal startp accu = parse
+  | '\''       { lexbuf.lex_start_p <- startp;
+                 List.rev accu }
   | '\n' | eof { fatal_error lexbuf "missing terminating \"'\" character" }
-  | ""         { let c = char lexbuf in char_literal (c :: accu) lexbuf }
+  | ""         { let c = char lexbuf in char_literal startp (c :: accu) lexbuf }
 
-and string_literal accu = parse
-  | '\"'       { List.rev accu }
+and string_literal startp accu = parse
+  | '\"'       { lexbuf.lex_start_p <- startp;
+                 List.rev accu }
   | '\n' | eof { fatal_error lexbuf "missing terminating '\"' character" }
-  | ""         { let c = char lexbuf in string_literal (c :: accu) lexbuf }
+  | ""         { let c = char lexbuf in string_literal startp (c :: accu) lexbuf }
 
 (* We assume gcc -E syntax but try to tolerate variations. *)
 and hash = parse
