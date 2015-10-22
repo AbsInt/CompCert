@@ -19,61 +19,85 @@ open PrintAsmaux
 open Sections
 
 (* The printer is parameterized over target specific functions and a set of dwarf type constants *)
-module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
+module DwarfPrinter(Target: DWARF_TARGET):
     sig
-      val print_debug: out_channel -> dw_entry -> unit
+      val print_debug: out_channel -> debug_entries -> unit
     end =
   struct
 
     open Target
-    open DwarfAbbrevs
+
+    let print_comment oc s =
+      if s <> "" then
+        fprintf oc "	%s %s" comment s
+
+    let string_of_comment s = sprintf "	%s %s" comment s
+
+    let add_comment buf s =
+      Buffer.add_string buf (sprintf "	%s %s" comment s)
 
     (* Byte value to string *)
-    let string_of_byte value =
-      sprintf "	.byte		%s\n" (if value then "0x1" else "0x0")
+    let string_of_byte value ct =
+      sprintf "	.byte		%s%s\n" (if value then "0x1" else "0x0") (string_of_comment ct)
 
     (* Print a label *)
     let print_label oc lbl =
       fprintf oc "%a:\n" label lbl
 
     (* Helper functions for abbreviation printing *)
-    let add_byte buf value =
-      Buffer.add_string buf (string_of_byte value)
+    let add_byte buf value ct =
+      Buffer.add_string buf (string_of_byte value ct)
 
-    let add_abbr_uleb v buf =
-      Buffer.add_string buf (Printf.sprintf "	.uleb128	%d\n" v)
+    let add_abbr_uleb v ct buf =
+      Buffer.add_string buf (sprintf "	.uleb128	%d%s\n" v (string_of_comment ct))
 
-    let add_abbr_entry (v1,v2) buf =
-      add_abbr_uleb v1 buf;
-      add_abbr_uleb v2 buf
+     let add_abbr_entry (v1,c1,v2) buf =
+       add_abbr_uleb v1 c1 buf;
+       let v2,c2 = code_of_dw_form v2 in
+       Buffer.add_string buf (sprintf "	.uleb128	%d%s\n" v2 (string_of_comment c2))
+
 
     let add_file_loc buf =
-      let file,line = file_loc_type_abbr in
-      add_abbr_entry (0x3a,file) buf;
-      add_abbr_entry (0x3b,line) buf
+      add_abbr_entry (0x3a,"DW_AT_decl_file",DW_FORM_data4) buf;
+      add_abbr_entry (0x3b,"DW_AT_decl_line",DW_FORM_udata) buf
 
-    let add_type = add_abbr_entry (0x49,type_abbr)
+    let add_type = add_abbr_entry (0x49,"DW_AT_type",DW_FORM_ref_addr)
 
-    let add_name = add_abbr_entry (0x3,name_type_abbr)
+    let add_byte_size = add_abbr_entry (0x0b,"DW_AT_byte_size",DW_FORM_data1)
 
-    let add_byte_size = add_abbr_entry (0xb,byte_size_type_abbr)
+    let add_member_size = add_abbr_entry (0x0b,"DW_AT_byte_size",DW_FORM_udata)
 
-    let add_high_pc = add_abbr_entry (0x12,high_pc_type_abbr)
+    let add_high_pc = add_abbr_entry (0x12,"DW_AT_high_pc",DW_FORM_addr)
 
-    let add_low_pc = add_abbr_entry (0x11,low_pc_type_abbr)
+    let add_low_pc = add_abbr_entry (0x11,"DW_AT_low_pc",DW_FORM_addr)
 
-    let add_fun_pc sp buf =
-      match get_fun_addr sp.subprogram_name with
-      | None ->()
-      | Some (a,b) -> add_high_pc buf; add_low_pc buf
+    let add_declaration = add_abbr_entry (0x3c,"DW_AT_declaration",DW_FORM_flag)
 
-    let add_declaration = add_abbr_entry (0x3c,declaration_type_abbr)
+    let add_string buf id c = function
+      | Simple_string _ -> add_abbr_entry (id,c,DW_FORM_string) buf
+      | Offset_string _ -> add_abbr_entry (id,c,DW_FORM_strp) buf
+
+    let add_name buf = add_string buf 0x3 "DW_AT_name"
+
+    let add_name_opt buf = function
+      | None -> ()
+      | Some s -> add_name buf s
 
     let add_location loc buf =
       match loc with
       | None -> ()
-      | Some (LocConst _) -> add_abbr_entry (0x2,location_const_type_abbr) buf
-      | Some (LocBlock _) -> add_abbr_entry (0x2,location_block_type_abbr) buf
+      | Some (LocRef _) -> add_abbr_entry (0x2,"DW_AT_location",DW_FORM_data4) buf
+      | Some (LocList _ )
+      | Some (LocSymbol _)
+      | Some (LocSimple _) -> add_abbr_entry (0x2,"DW_AT_location",DW_FORM_block) buf
+
+    let add_range buf = function
+      | Pc_pair _ ->
+          add_abbr_entry (0x11,"DW_AT_low_pc",DW_FORM_addr) buf;
+          add_abbr_entry (0x12,"DW_AT_high_pc",DW_FORM_addr) buf
+      | Offset _ ->
+          add_abbr_entry (0x55,"DW_AT_ranges",DW_FORM_data4) buf
+      | Empty -> ()
 
     (* Dwarf entity to string function *)
     let abbrev_string_of_entity entity has_sibling =
@@ -82,132 +106,122 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
         match v with
         | None -> ()
         | Some _ -> f buf in
-      let prologue id =
+      let prologue id c =
         let has_child = match entity.children with
         | [] -> false
         | _ -> true in
-        add_abbr_uleb id buf;
-        add_byte buf has_child;
-        if has_sibling then add_abbr_entry (0x1,sibling_type_abbr) buf;
+        add_abbr_uleb id c buf;
+        add_byte buf has_child (if has_child then "DW_CHILDREN_yes" else "DW_CHILDREN_no");
+        if has_sibling then add_abbr_entry (0x1,"DW_AT_sibling",DW_FORM_ref4) buf;
       in
       (match entity.tag with
       | DW_TAG_array_type e ->
-          prologue 0x1;
-          add_attr_some e.array_type_file_loc add_file_loc;
+          prologue 0x1 "DW_TAG_array_type";
           add_type buf
       | DW_TAG_base_type b ->
-          prologue 0x24;
+          prologue 0x24 "DW_TAG_base_type";
           add_byte_size buf;
-          add_attr_some b.base_type_encoding (add_abbr_entry (0x3e,encoding_type_abbr));
-          add_name buf
+          add_attr_some b.base_type_encoding (add_abbr_entry (0x3e,"DW_AT_encoding",DW_FORM_data1));
+          add_name buf b.base_type_name;
       | DW_TAG_compile_unit e ->
-          prologue 0x11;
-          add_abbr_entry (0x1b,comp_dir_type_abbr) buf;
-          add_high_pc buf;
-          add_low_pc buf;
-          add_abbr_entry (0x13,language_type_abbr) buf;
-          add_name buf;
-          add_abbr_entry (0x25,producer_type_abbr) buf;
-          add_abbr_entry (0x10,stmt_list_type_abbr) buf;
+          prologue 0x11 "DW_TAG_compile_unit";
+          add_string buf 0x1b "DW_AT_comp_dir" e.compile_unit_dir;
+          add_range buf e.compile_unit_range;
+          add_abbr_entry (0x13,"DW_AT_language",DW_FORM_udata) buf;
+          add_name buf e.compile_unit_name;
+          add_string buf 0x25 "DW_AT_producer" e.compile_unit_prod_name;
+          add_abbr_entry (0x10,"DW_AT_stmt_list",DW_FORM_data4) buf;
       | DW_TAG_const_type _ ->
-          prologue 0x26;
+          prologue 0x26 "DW_TAG_const_type";
           add_type buf
       | DW_TAG_enumeration_type e ->
-          prologue 0x4;
+          prologue 0x4 "DW_TAG_enumeration_type";
           add_attr_some e.enumeration_file_loc add_file_loc;
           add_byte_size buf;
           add_attr_some e.enumeration_declaration add_declaration;
-          add_attr_some e.enumeration_name add_name
+          add_name buf e.enumeration_name
       | DW_TAG_enumerator e ->
-          prologue 0x28;
-          add_attr_some e.enumerator_file_loc add_file_loc;
-          add_abbr_entry (0x1c,value_type_abbr) buf;
-          add_name buf
+          prologue 0x28 "DW_TAG_enumerator";
+          add_abbr_entry (0x1c,"DW_AT_const_value",DW_FORM_sdata) buf;
+          add_name buf e.enumerator_name
       | DW_TAG_formal_parameter e ->
-          prologue 0x34;
-          add_attr_some e.formal_parameter_file_loc add_file_loc;
-          add_attr_some e.formal_parameter_artificial (add_abbr_entry (0x34,artificial_type_abbr));
-          add_location  e.formal_parameter_location buf;
-          add_attr_some e.formal_parameter_name add_name;
-          add_location e.formal_parameter_segment buf;
+          prologue 0x5 "DW_TAG_formal_parameter";
+          add_attr_some e.formal_parameter_artificial (add_abbr_entry (0x34,"DW_AT_artificial",DW_FORM_flag));
+          add_name_opt buf e.formal_parameter_name;
           add_type buf;
-          add_attr_some e.formal_parameter_variable_parameter (add_abbr_entry (0x4b,variable_parameter_type_abbr))
-      | DW_TAG_label _ ->
-          prologue 0xa;
+          add_attr_some e.formal_parameter_variable_parameter (add_abbr_entry (0x4b,"DW_AT_variable_parameter",DW_FORM_flag));
+          add_location  e.formal_parameter_location buf
+      | DW_TAG_label e ->
+          prologue 0xa "DW_TAG_label";
           add_low_pc buf;
-          add_name buf;
-      | DW_TAG_lexical_block _ ->
-          prologue 0xb;
-          add_high_pc buf;
-          add_low_pc buf
+          add_name buf e.label_name;
+      | DW_TAG_lexical_block a ->
+          prologue 0xb "DW_TAG_lexical_block";
+          add_range buf a.lexical_block_range;
       | DW_TAG_member e ->
-          prologue 0xd;
-          add_attr_some e.member_file_loc add_file_loc;
+          prologue 0xd "DW_TAG_member";
           add_attr_some e.member_byte_size add_byte_size;
-          add_attr_some e.member_bit_offset (add_abbr_entry (0xd,bit_offset_type_abbr));
-          add_attr_some e.member_bit_size (add_abbr_entry (0xc,bit_size_type_abbr));
+          add_attr_some e.member_bit_offset (add_abbr_entry (0xc,"DW_AT_bit_offset",DW_FORM_data1));
+          add_attr_some e.member_bit_size (add_abbr_entry (0xd,"DW_AT_bit_size",DW_FORM_data1));
+          add_attr_some e.member_declaration add_declaration;
+          add_name buf e.member_name;
+          add_type buf;
           (match e.member_data_member_location with
           | None -> ()
-          | Some (DataLocBlock __) -> add_abbr_entry (0x38,data_location_block_type_abbr) buf
-          | Some (DataLocRef _) -> add_abbr_entry (0x38,data_location_ref_type_abbr) buf);
-          add_attr_some e.member_declaration add_declaration;
-          add_attr_some e.member_name add_name;
-          add_type buf
+          | Some (DataLocBlock __) -> add_abbr_entry (0x38,"DW_AT_data_member_location",DW_FORM_block) buf
+          | Some (DataLocRef _) -> add_abbr_entry (0x38,"DW_AT_data_member_location",DW_FORM_ref4) buf)
       | DW_TAG_pointer_type _ ->
-          prologue 0xf;
+          prologue 0xf "DW_TAG_pointer_type";
           add_type buf
       | DW_TAG_structure_type e ->
-          prologue 0x13;
+          prologue 0x13 "DW_TAG_structure_type";
           add_attr_some e.structure_file_loc add_file_loc;
-          add_attr_some e.structure_byte_size add_byte_size;
+          add_attr_some e.structure_byte_size add_member_size;
           add_attr_some e.structure_declaration add_declaration;
-          add_attr_some e.structure_name add_name
+          add_name_opt buf e.structure_name
       | DW_TAG_subprogram e ->
-          prologue 0x2e;
-          add_attr_some e.subprogram_file_loc add_file_loc;
-          add_attr_some e.subprogram_external (add_abbr_entry (0x3f,external_type_abbr));
-          add_high_pc buf;
-          add_low_pc buf;
-          add_name buf;
-          add_abbr_entry (0x27,prototyped_type_abbr) buf;
+          prologue 0x2e "DW_TAG_subprogram";
+          add_file_loc buf;
+          add_attr_some e.subprogram_external (add_abbr_entry (0x3f,"DW_AT_external",DW_FORM_flag));
+          add_range buf e.subprogram_range;
+          add_name buf e.subprogram_name;
+          add_abbr_entry (0x27,"DW_AT_prototyped",DW_FORM_flag) buf;
           add_attr_some e.subprogram_type add_type;
       | DW_TAG_subrange_type e ->
-          prologue 0x21;
+          prologue 0x21 "DW_TAG_subrange_type";
           add_attr_some e.subrange_type add_type;
           (match e.subrange_upper_bound with
           | None -> ()
-          | Some (BoundConst _) -> add_abbr_entry (0x2f,bound_const_type_abbr) buf
-          | Some (BoundRef _) -> add_abbr_entry (0x2f,bound_ref_type_abbr) buf)
+          | Some (BoundConst _) -> add_abbr_entry (0x2f,"DW_AT_upper_bound",DW_FORM_udata) buf
+          | Some (BoundRef _) -> add_abbr_entry (0x2f,"DW_AT_upper_bound",DW_FORM_ref4) buf)
       | DW_TAG_subroutine_type e ->
-          prologue 0x15;
+          prologue 0x15 "DW_TAG_subroutine_type";
           add_attr_some e.subroutine_type add_type;
-          add_abbr_entry (0x27,prototyped_type_abbr) buf
+          add_abbr_entry (0x27,"DW_AT_prototyped",DW_FORM_flag) buf
       | DW_TAG_typedef e ->
-          prologue 0x16;
+          prologue 0x16 "DW_TAG_typedef";
           add_attr_some e.typedef_file_loc add_file_loc;
-          add_name buf;
+          add_name buf e.typedef_name;
           add_type buf
       | DW_TAG_union_type e ->
-          prologue 0x17;
+          prologue 0x17 "DW_TAG_union_type";
           add_attr_some e.union_file_loc add_file_loc;
-          add_attr_some e.union_byte_size add_byte_size;
+          add_attr_some e.union_byte_size add_member_size;
           add_attr_some e.union_declaration add_declaration;
-          add_attr_some e.union_name add_name
+          add_name_opt buf e.union_name
       | DW_TAG_unspecified_parameter e ->
-          prologue 0x18;
-          add_attr_some e.unspecified_parameter_file_loc add_file_loc;
-          add_attr_some e.unspecified_parameter_artificial (add_abbr_entry (0x34,artificial_type_abbr))
+          prologue 0x18 "DW_TAG_unspecified_parameter";
+          add_attr_some e.unspecified_parameter_artificial (add_abbr_entry (0x34,"DW_AT_artificial",DW_FORM_flag))
       | DW_TAG_variable e ->
-          prologue 0x34;
-          add_attr_some e.variable_file_loc add_file_loc;
+          prologue 0x34 "DW_TAG_variable";
+          add_file_loc buf;
           add_attr_some e.variable_declaration add_declaration;
-          add_attr_some e.variable_external (add_abbr_entry (0x3f,external_type_abbr));
-          add_location  e.variable_location buf;
-          add_name buf;
-          add_location e.variable_segment buf;
+          add_attr_some e.variable_external (add_abbr_entry (0x3f,"DW_AT_external",DW_FORM_flag));
+          add_location e.variable_location buf;
+          add_name buf e.variable_name;
           add_type buf
       | DW_TAG_volatile_type _ ->
-          prologue 0x35;
+          prologue 0x35 "DW_TAG_volatile_type";
           add_type buf);
       Buffer.contents buf
 
@@ -245,18 +259,20 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
     let print_abbrev oc =
       let abbrevs = Hashtbl.fold (fun s i acc -> (s,i)::acc) abbrev_mapping [] in
       let abbrevs = List.sort (fun (_,a) (_,b) -> Pervasives.compare a b) abbrevs in
-      fprintf oc "	.section	%s\n" (name_of_section Section_debug_abbrev);
-      let lbl = new_label () in
-      abbrev_start_addr := lbl;
-      print_label oc lbl;
+      section oc Section_debug_abbrev;
+      print_label oc !abbrev_start_addr;
       List.iter (fun (s,id) ->
-        fprintf oc "	.uleb128	%d\n" id;
+        fprintf oc "	.uleb128	%d%a\n" id print_comment "Abbreviation Code";
         output_string oc s;
-        fprintf oc "	.uleb128	0\n";
-        fprintf oc "	.uleb128	0\n")  abbrevs;
-      fprintf oc "	.sleb128	0\n"
+        fprintf oc "	.uleb128	0%a\n" print_comment "EOM(1)";
+        fprintf oc "	.uleb128	0%a\n" print_comment "EOM(2)")  abbrevs;
+      fprintf oc "	.sleb128	0%a\n" print_comment "EOM(3)"
 
     let debug_start_addr = ref (-1)
+
+    let debug_stmt_list = ref (-1)
+
+    let debug_ranges_addr = ref (-1)
 
     let entry_labels: (int,int) Hashtbl.t = Hashtbl.create 7
 
@@ -269,53 +285,128 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
         Hashtbl.add entry_labels id label;
         label
 
+    let loc_labels: (int,int) Hashtbl.t = Hashtbl.create 7
+
+    (* Translate the ids to address labels *)
+    let loc_to_label id =
+      try
+        Hashtbl.find loc_labels id
+      with Not_found ->
+        let label = new_label () in
+        Hashtbl.add loc_labels id label;
+        label
+
+    let print_loc_ref oc c r =
+      let ref = loc_to_label r in
+      fprintf oc "	.4byte		%a%a\n" label ref print_comment c
+
+
     (* Helper functions for debug printing *)
-    let print_opt_value oc o f =
+    let print_opt_value oc c o f =
       match o with
       | None -> ()
-      | Some o -> f oc o
+      | Some o -> f oc c o
 
-    let print_file_loc oc f =
-      print_opt_value oc f print_file_loc
+    let print_flag oc c b =
+      output_string oc (string_of_byte b c)
 
-    let print_flag oc b =
-      output_string oc (string_of_byte b)
+    let print_string oc c = function
+      | Simple_string s ->
+          fprintf oc "	.asciz		\"%s\"%a\n" s print_comment c
+      | Offset_string o ->  print_loc_ref oc c o
 
-    let print_string oc s =
-      fprintf oc "	.asciz		\"%s\"\n" s
+    let print_uleb128 oc c d =
+      fprintf oc "	.uleb128	%d%a\n" d print_comment c
 
-    let print_uleb128 oc d =
-      fprintf oc "	.uleb128	%d\n" d
+    let print_sleb128 oc c d =
+      fprintf oc "	.sleb128	%d%a\n" d print_comment c
 
-    let print_sleb128 oc d =
-      fprintf oc "	.sleb128	%d\n" d
+    let print_byte oc c b =
+      fprintf oc "	.byte		0x%X%a\n" b print_comment c
 
-    let print_byte oc b =
-      fprintf oc "	.byte		0x%X\n" b
+    let print_2byte oc c b =
+      fprintf oc "	.2byte		0x%X%a\n" b print_comment c
 
-    let print_loc oc loc =
-      ()
-
-    let print_data_location oc dl =
-      ()
-
-    let print_ref oc r =
+    let print_ref oc c r =
       let ref = entry_to_label r in
-      fprintf oc "	.4byte		%a\n" label ref
+      fprintf oc "	.4byte		%a%a\n" label ref print_comment c
 
-    let print_addr oc a =
-      fprintf oc "	.4byte		%a\n" label a
+    let print_file_loc oc = function
+      | Some (Diab_file_loc (file,col)) ->
+          fprintf oc "	.4byte		%a%a\n" label file print_comment "DW_AT_decl_file";
+          print_uleb128 oc "DW_AT_decl_line" col
+      | Some (Gnu_file_loc (file,col)) ->
+          fprintf oc "	.4byte		%l%a\n" file print_comment "DW_AT_decl_file";
+          print_uleb128 oc "DW_AT_decl_line"  col
+     | None -> ()
+
+    let print_loc_expr oc = function
+      | DW_OP_bregx (a,b) ->
+          print_byte oc "" dw_op_bregx;
+          print_uleb128 oc "" a;
+          fprintf oc "	.sleb128	%ld\n" b;
+      | DW_OP_plus_uconst i ->
+          print_byte oc "" dw_op_plus_uconst;
+          print_uleb128 oc "" i
+      | DW_OP_piece i ->
+          print_byte oc "" dw_op_piece;
+          print_uleb128 oc "" i
+      | DW_OP_reg i ->
+          if i < 32 then
+            print_byte oc "" (dw_op_reg0 + i)
+          else begin
+            print_byte oc "" dw_op_regx;
+            print_uleb128 oc "" i
+          end
+
+    let print_loc oc c loc =
+      match loc with
+      | LocSymbol s ->
+          print_sleb128 oc c 5;
+          print_byte oc "" dw_op_addr;
+          fprintf oc "	.4byte		%a\n" symbol s
+      | LocSimple e ->
+          print_sleb128 oc c (size_of_loc_expr e);
+          print_loc_expr oc e
+      | LocList e ->
+          let size = List.fold_left (fun acc a -> acc + size_of_loc_expr a) 0 e in
+          print_sleb128 oc "" size;
+          List.iter (print_loc_expr oc) e
+      | LocRef f ->  print_loc_ref oc c f
+
+    let print_list_loc oc = function
+      | LocSymbol s ->
+          print_2byte oc "" 5;
+          print_byte oc "" dw_op_addr;
+          fprintf oc "	.4byte		%a\n" symbol s
+      | LocSimple e ->
+          print_2byte oc "" (size_of_loc_expr e);
+          print_loc_expr oc e
+      | LocList e ->
+          let size = List.fold_left (fun acc a -> acc + size_of_loc_expr a) 0 e in
+          print_2byte oc "" size;
+          List.iter (print_loc_expr oc) e
+      | LocRef f ->  print_loc_ref oc ""  f
+
+    let print_data_location oc c dl =
+      match dl with
+      | DataLocBlock e ->
+          print_sleb128 oc c  (size_of_loc_expr e);
+          print_loc_expr oc e
+      | _ -> ()
+
+    let print_addr oc c a =
+      fprintf oc "	.4byte		%a%a\n" label a print_comment c
 
     let print_array_type oc at =
-      print_file_loc oc at.array_type_file_loc;
-      print_ref oc at.array_type
+      print_ref oc "DW_AT_type" at.array_type
 
-    let print_bound_value oc = function
-      | BoundConst bc -> print_uleb128 oc bc
-      | BoundRef br -> print_ref oc br
+    let print_bound_value oc c = function
+      | BoundConst bc -> print_uleb128 oc c bc
+      | BoundRef br -> print_ref oc c br
 
     let print_base_type oc bt =
-      print_byte oc bt.base_type_byte_size;
+      print_byte oc "DW_AT_byte_size" bt.base_type_byte_size;
       (match bt.base_type_encoding with
       | Some e ->
           let encoding = match e with
@@ -328,118 +419,114 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           | DW_ATE_unsigned -> 0x7
           | DW_ATE_unsigned_char -> 0x8
           in
-          print_byte oc encoding;
+          print_byte oc "DW_AT_encoding" encoding;
       | None -> ());
-      print_string oc bt.base_type_name
+      print_string oc "DW_AT_name" bt.base_type_name
+
+    let print_range oc = function
+      | Pc_pair (l,h) ->
+          print_addr oc "DW_AT_low_pc" l;
+          print_addr oc "DW_AT_high_pc" h
+      | Offset i -> fprintf oc "	.4byte		%a+0x%d%a\n"
+            label !debug_ranges_addr i print_comment "DW_AT_ranges"
+      | _ -> ()
 
     let print_compilation_unit oc tag =
-      let prod_name = sprintf "AbsInt Angewandte Informatik GmbH:CompCert Version %s:%s" Version.version Configuration.arch in
-      print_string oc (Sys.getcwd ());
-      print_addr oc (get_start_addr ());
-      print_addr oc (get_end_addr ());
-      print_uleb128 oc 1;
-      print_string oc tag.compile_unit_name;
-      print_string oc prod_name;
-      print_addr oc (get_stmt_list_addr ())
+      print_string oc "DW_AT_comp_dir" tag.compile_unit_dir;
+      print_range oc tag.compile_unit_range;
+      print_uleb128 oc "DW_AT_language" 1;
+      print_string oc "DW_AT_name" tag.compile_unit_name;
+      print_string oc "DW_AT_producer" tag.compile_unit_prod_name;
+      print_addr oc "DW_AT_stmt_list" !debug_stmt_list
 
     let print_const_type oc ct =
-      print_ref oc ct.const_type
+      print_ref oc "DW_AT_type" ct.const_type
 
     let print_enumeration_type oc et =
       print_file_loc oc et.enumeration_file_loc;
-      print_uleb128 oc et.enumeration_byte_size;
-      print_opt_value oc et.enumeration_declaration print_flag;
-      print_opt_value oc et.enumeration_name print_string
+      print_uleb128 oc "DW_AT_byte_size" et.enumeration_byte_size;
+      print_opt_value oc "DW_AT_declaration" et.enumeration_declaration print_flag;
+      print_string oc "DW_AT_name" et.enumeration_name
 
     let print_enumerator oc en =
-      print_file_loc oc en.enumerator_file_loc;
-      print_sleb128 oc en.enumerator_value;
-      print_string oc en.enumerator_name
+      print_sleb128 oc "DW_AT_const_value" en.enumerator_value;
+      print_string oc "DW_AT_name" en.enumerator_name
 
     let print_formal_parameter oc fp =
-      print_file_loc oc fp.formal_parameter_file_loc;
-      print_opt_value oc fp.formal_parameter_artificial print_flag;
-      print_opt_value oc fp.formal_parameter_location print_loc;
-      print_opt_value oc fp.formal_parameter_name print_string;
-      print_opt_value oc fp.formal_parameter_segment print_loc;
-      print_ref oc fp.formal_parameter_type;
-      print_opt_value oc fp.formal_parameter_variable_parameter print_flag
+      print_opt_value oc "DW_AT_artificial" fp.formal_parameter_artificial print_flag;
+      print_opt_value oc "DW_AT_name" fp.formal_parameter_name print_string;
+      print_ref oc "DW_AT_type" fp.formal_parameter_type;
+      print_opt_value oc "DW_AT_variable_parameter" fp.formal_parameter_variable_parameter print_flag;
+      print_opt_value oc "DW_AT_location" fp.formal_parameter_location print_loc
 
     let print_tag_label oc tl =
-      print_ref oc tl.label_low_pc;
-      print_string oc tl.label_name
+      print_ref oc "DW_AT_low_pc" tl.label_low_pc;
+      print_string oc "DW_AT_name" tl.label_name
+
 
     let print_lexical_block oc lb =
-      print_ref oc lb.lexical_block_high_pc;
-      print_ref oc lb.lexical_block_low_pc
+      print_range oc lb.lexical_block_range
 
     let print_member oc mb =
-      print_file_loc oc mb.member_file_loc;
-      print_opt_value oc mb.member_byte_size print_byte;
-      print_opt_value oc mb.member_bit_offset print_byte;
-      print_opt_value oc mb.member_bit_size print_byte;
-      print_opt_value oc mb.member_data_member_location print_data_location;
-      print_opt_value oc mb.member_declaration print_flag;
-      print_opt_value oc mb.member_name print_string;
-      print_ref oc mb.member_type
+      print_opt_value oc "DW_AT_byte_size" mb.member_byte_size print_byte;
+      print_opt_value oc "DW_AT_bit_offset" mb.member_bit_offset print_byte;
+      print_opt_value oc "DW_AT_bit_size" mb.member_bit_size print_byte;
+      print_opt_value oc  "DW_AT_declaration" mb.member_declaration print_flag;
+      print_string oc "DW_AT_name" mb.member_name;
+      print_ref oc "DW_AT_type" mb.member_type;
+      print_opt_value oc "DW_AT_data_member_location" mb.member_data_member_location print_data_location
+
 
     let print_pointer oc pt =
-      print_ref oc pt.pointer_type
+      print_ref oc "DW_AT_type" pt.pointer_type
 
     let print_structure oc st =
       print_file_loc oc st.structure_file_loc;
-      print_opt_value oc st.structure_byte_size print_uleb128;
-      print_opt_value oc st.structure_declaration print_flag;
-      print_opt_value oc st.structure_name print_string
+      print_opt_value oc "DW_AT_byte_size" st.structure_byte_size print_uleb128;
+      print_opt_value oc "DW_AT_declaration" st.structure_declaration print_flag;
+      print_opt_value oc "DW_AT_name" st.structure_name print_string
 
-    let print_subprogram_addr oc (s,e) =
-      fprintf oc "	.4byte		%a\n" label s;
-      fprintf oc "	.4byte		%a\n" label e
-     
+
     let print_subprogram oc sp =
-      let addr = get_fun_addr sp.subprogram_name  in
-      print_file_loc oc sp.subprogram_file_loc;
-      print_opt_value oc sp.subprogram_external print_flag;
-      print_opt_value oc sp.subprogram_frame_base print_loc;
-      print_opt_value oc addr print_subprogram_addr;
-      print_string oc sp.subprogram_name;
-      print_flag oc sp.subprogram_prototyped;
-      print_opt_value oc sp.subprogram_type print_ref
+      print_file_loc oc (Some sp.subprogram_file_loc);
+      print_opt_value oc "DW_AT_external" sp.subprogram_external print_flag;
+      print_range oc sp.subprogram_range;
+      print_string oc "DW_AT_name" sp.subprogram_name;
+      print_flag oc "DW_AT_prototyped" sp.subprogram_prototyped;
+      print_opt_value oc "DW_AT_type" sp.subprogram_type print_ref
 
     let print_subrange oc sr =
-      print_opt_value oc sr.subrange_type print_ref;
-      print_opt_value oc sr.subrange_upper_bound print_bound_value
+      print_opt_value oc "DW_AT_type" sr.subrange_type print_ref;
+      print_opt_value oc  "DW_AT_upper_bound" sr.subrange_upper_bound print_bound_value
 
     let print_subroutine oc st =
-      print_opt_value oc st.subroutine_type print_ref;
-      print_flag oc st.subroutine_prototyped
+      print_opt_value oc "DW_AT_type" st.subroutine_type print_ref;
+      print_flag oc "DW_AT_prototyped" st.subroutine_prototyped
 
     let print_typedef oc td =
       print_file_loc oc td.typedef_file_loc;
-      print_string oc td.typedef_name;
-      print_ref oc td.typedef_type
+      print_string oc "DW_AT_name" td.typedef_name;
+      print_ref oc "DW_AT_type" td.typedef_type
 
     let print_union_type oc ut =
       print_file_loc oc ut.union_file_loc;
-      print_opt_value oc ut.union_byte_size print_uleb128;
-      print_opt_value oc ut.union_declaration print_flag;
-      print_opt_value oc ut.union_name print_string
+      print_opt_value oc "DW_AT_byte_size" ut.union_byte_size print_uleb128;
+      print_opt_value oc "DW_AT_declaration" ut.union_declaration print_flag;
+      print_opt_value oc "DW_AT_name" ut.union_name print_string
 
     let print_unspecified_parameter oc up =
-      print_file_loc oc up.unspecified_parameter_file_loc;
-      print_opt_value oc up.unspecified_parameter_artificial print_flag
+      print_opt_value oc "DW_AT_artificial" up.unspecified_parameter_artificial print_flag
 
     let print_variable oc var =
-      print_file_loc oc var.variable_file_loc;
-      print_opt_value oc var.variable_declaration print_flag;
-      print_opt_value oc var.variable_external print_flag;
-      print_opt_value oc var.variable_location print_loc;
-      print_string oc var.variable_name;
-      print_opt_value oc var.variable_segment print_loc;
-      print_ref oc var.variable_type
+      print_file_loc oc (Some var.variable_file_loc);
+      print_opt_value oc "DW_AT_declaration" var.variable_declaration print_flag;
+      print_opt_value oc "DW_AT_external" var.variable_external print_flag;
+      print_opt_value oc "DW_AT_location" var.variable_location print_loc;
+      print_string oc "DW_AT_name" var.variable_name;
+      print_ref oc "DW_AT_type" var.variable_type
 
     let print_volatile_type oc vt =
-      print_ref oc vt.volatile_type
+      print_ref oc "DW_AT_type" vt.volatile_type
 
     (* Print an debug entry *)
     let  print_entry oc entry =
@@ -449,11 +536,11 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
         | None -> false
         | Some _ -> true in
         let id = get_abbrev entry has_sib in
-        print_sleb128 oc id;
+        print_sleb128 oc (sprintf "Abbrev [%d] %s" id (string_of_dw_tag entry.tag)) id;
         (match sib with
         | None -> ()
         | Some s -> let lbl = entry_to_label s in
-          fprintf oc "	.4byte		%a-%a\n" label lbl label !debug_start_addr);
+          fprintf oc "	.4byte		%a-%a%a\n" label lbl label !debug_start_addr print_comment "DW_AT_sibling");
         begin
           match entry.tag with
           | DW_TAG_array_type arr_type -> print_array_type oc arr_type
@@ -478,34 +565,105 @@ module DwarfPrinter(Target: DWARF_TARGET)(DwarfAbbrevs:DWARF_ABBREVS):
           | DW_TAG_volatile_type vt -> print_volatile_type oc vt
         end) (fun e ->
           if e.children <> [] then
-          print_sleb128 oc 0) entry
-
-    (* Print the debug abbrev section *)
-    let print_debug_abbrev oc entry =
-      compute_abbrev entry;
-      print_abbrev oc
+          print_sleb128 oc "End Of Children Mark" 0) entry
 
     (* Print the debug info section *)
-    let print_debug_info oc entry =
-      let debug_start = new_label () in
-      debug_start_addr:= debug_start;
-      fprintf oc"	.section	%s\n" (name_of_section Section_debug_info);
-      print_label oc debug_start;
+    let print_debug_info oc start line_start entry  =
+      Hashtbl.reset entry_labels;
+      debug_start_addr:= start;
+      debug_stmt_list:= line_start;
+      print_label oc start;
       let debug_length_start = new_label ()  (* Address used for length calculation *)
       and debug_end = new_label () in
-      fprintf oc "	.4byte		%a-%a\n" label debug_end label debug_length_start;
+      fprintf oc "	.4byte		%a-%a%a\n" label debug_end label debug_length_start print_comment "Length of Unit";
       print_label oc debug_length_start;
-      fprintf oc "	.2byte		0x2\n"; (* Dwarf version *)
-      print_addr oc !abbrev_start_addr; (* Offset into the abbreviation *)
-      print_byte oc !Machine.config.Machine.sizeof_ptr; (* Sizeof pointer type *)
+      fprintf oc "	.2byte		0x%d%a\n" !Clflags.option_gdwarf print_comment "DWARF version number"; (* Dwarf version *)
+      print_addr oc "Offset Into Abbrev. Section" !abbrev_start_addr; (* Offset into the abbreviation *)
+      print_byte oc "Address Size (in bytes)" !Machine.config.Machine.sizeof_ptr; (* Sizeof pointer type *)
       print_entry oc entry;
-      print_sleb128 oc 0;
+      print_sleb128 oc "" 0;
       print_label oc debug_end (* End of the debug section *)
+
+    let print_location_entry oc c_low l =
+      print_label oc (loc_to_label l.loc_id);
+      List.iter (fun (b,e,loc) ->
+        fprintf oc "	.4byte		%a-%a\n" label b label c_low;
+        fprintf oc "	.4byte		%a-%a\n" label e label c_low;
+        print_list_loc oc loc) l.loc;
+      fprintf oc "	.4byte	0\n";
+      fprintf oc "	.4byte	0\n"
+
+    let print_location_entry_abs oc l =
+      print_label oc (loc_to_label l.loc_id);
+      List.iter (fun (b,e,loc) ->
+        fprintf oc "	.4byte		%a\n" label b;
+        fprintf oc "	.4byte		%a\n" label e;
+        print_list_loc oc loc) l.loc;
+      fprintf oc "	.4byte	0\n";
+      fprintf oc "	.4byte	0\n"
+
+
+    let print_location_list oc (c_low,l) =
+      let f =  match c_low with
+      | Some s -> print_location_entry oc s
+      | None -> print_location_entry_abs oc in
+     List.iter f l
+
+    let list_opt l f =
+      match l with
+      | [] -> ()
+      | _ -> f ()
+
+    let print_diab_entries oc entries =
+      let abbrev_start = new_label () in
+      abbrev_start_addr := abbrev_start;
+      List.iter (fun e -> compute_abbrev e.entry) entries;
+      print_abbrev oc;
+      List.iter (fun e ->
+        let name = if e.section_name <> ".text" then Some e.section_name else None in
+        section oc (Section_debug_info name);
+        print_debug_info oc e.start_label e.line_label e.entry) entries;
+      section oc Section_debug_loc;
+      List.iter (fun e -> print_location_list oc e.locs) entries
+
+    let print_ranges oc r =
+      section oc Section_debug_ranges;
+      print_label oc !debug_ranges_addr;
+      List.iter (fun l ->
+        List.iter (fun (b,e) ->
+          fprintf oc "	.4byte		%a\n" label b;
+          fprintf oc "	.4byte		%a\n" label e) l;
+        fprintf oc "	.4byte	0\n";
+        fprintf oc "	.4byte	0\n") r
+
+    let print_gnu_entries oc cp (lpc,loc) s r =
+      compute_abbrev cp;
+      let line_start = new_label ()
+      and start = new_label ()
+      and  abbrev_start = new_label ()
+      and range_label = new_label () in
+      debug_ranges_addr := range_label;
+      abbrev_start_addr := abbrev_start;
+      section oc (Section_debug_info None);
+      print_debug_info oc start line_start cp;
+      print_abbrev oc;
+      list_opt loc (fun () ->
+        section oc Section_debug_loc;
+        print_location_list oc (lpc,loc));
+      list_opt r (fun () ->
+        print_ranges oc r);
+      section oc (Section_debug_line None);
+      print_label oc line_start;
+      list_opt s (fun () ->
+        section oc Section_debug_str;
+        List.iter (fun (id,s) ->
+          print_label oc (loc_to_label id);
+          fprintf oc "	.asciz		\"%s\"\n" s) s)
 
 
     (* Print the debug info and abbrev section *)
-    let print_debug oc entry =
-      print_debug_abbrev oc entry;
-      print_debug_info oc entry
+    let print_debug oc = function
+      | Diab entries -> print_diab_entries oc entries
+      | Gnu (cp,loc,s,r) -> print_gnu_entries oc cp loc s r
 
   end

@@ -39,21 +39,21 @@ Let tge := Genv.globalenv tprog.
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
 Proof.
-  intros; unfold ge, tge, tprog, transf_program. 
+  intros; unfold ge, tge, tprog, transf_program.
   apply Genv.find_symbol_transf.
 Qed.
 
 Lemma public_preserved:
   forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
 Proof.
-  intros; unfold ge, tge, tprog, transf_program. 
+  intros; unfold ge, tge, tprog, transf_program.
   apply Genv.public_symbol_transf.
 Qed.
 
 Lemma varinfo_preserved:
   forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
 Proof.
-  intros; unfold ge, tge, tprog, transf_program. 
+  intros; unfold ge, tge, tprog, transf_program.
   apply Genv.find_var_info_transf.
 Qed.
 
@@ -61,7 +61,7 @@ Lemma functions_translated:
   forall (v: val) (f: fundef),
   Genv.find_funct ge v = Some f ->
   Genv.find_funct tge v = Some (transf_fundef f).
-Proof.  
+Proof.
   intros.
   exact (Genv.find_funct_transf transf_fundef _ _ H).
 Qed.
@@ -70,8 +70,8 @@ Lemma function_ptr_translated:
   forall (b: block) (f: fundef),
   Genv.find_funct_ptr ge b = Some f ->
   Genv.find_funct_ptr tge b = Some (transf_fundef f).
-Proof.  
-  intros. 
+Proof.
+  intros.
   exact (Genv.find_funct_ptr_transf transf_fundef _ _ H).
 Qed.
 
@@ -121,7 +121,7 @@ Proof.
   destruct i; simpl; intros; try contradiction.
   apply Labelset.add_1; auto.
   apply Labelset.add_1; auto.
-  revert H. induction l; simpl; intros. 
+  revert H. induction l; simpl; intros.
   contradiction.
   destruct H. apply Labelset.add_1; auto. apply Labelset.add_2; auto.
 Qed.
@@ -141,8 +141,8 @@ Proof.
              In i c' -> Labelset.In lbl (fold_left add_label_branched_to c' bto)).
   induction c'; simpl; intros.
   contradiction.
-  destruct H2.   
-  subst a. apply H1. apply add_label_branched_to_contains; auto. 
+  destruct H2.
+  subst a. apply H1. apply add_label_branched_to_contains; auto.
   apply IHc'; auto.
 
   unfold labels_branched_to. auto.
@@ -152,7 +152,7 @@ Qed.
 
 Lemma remove_unused_labels_cons:
   forall bto i c,
-  remove_unused_labels bto (i :: c) = 
+  remove_unused_labels bto (i :: c) =
   match i with
   | Llabel lbl =>
       if Labelset.mem lbl bto then i :: remove_unused_labels bto c else remove_unused_labels bto c
@@ -160,7 +160,7 @@ Lemma remove_unused_labels_cons:
       i :: remove_unused_labels bto c
   end.
 Proof.
-  unfold remove_unused_labels; intros. rewrite list_fold_right_eq. auto. 
+  unfold remove_unused_labels; intros. rewrite list_fold_right_eq. auto.
 Qed.
 
 
@@ -176,9 +176,9 @@ Proof.
   rewrite remove_unused_labels_cons.
   unfold is_label in H0. destruct a; simpl; auto.
   destruct (peq lbl l). subst l. inv H0.
-  rewrite Labelset.mem_1; auto. 
+  rewrite Labelset.mem_1; auto.
   simpl. rewrite peq_true. auto.
-  destruct (Labelset.mem l bto); auto. simpl. rewrite peq_false; auto. 
+  destruct (Labelset.mem l bto); auto. simpl. rewrite peq_false; auto.
 Qed.
 
 Corollary find_label_translated:
@@ -189,8 +189,8 @@ Corollary find_label_translated:
   find_label lbl (fn_code (transf_function f)) =
      Some (remove_unused_labels (labels_branched_to (fn_code f)) c).
 Proof.
-  intros. unfold transf_function; unfold cleanup_labels; simpl. 
-  apply find_label_commut. eapply labels_branched_to_correct; eauto. 
+  intros. unfold transf_function; unfold cleanup_labels; simpl.
+  apply find_label_commut. eapply labels_branched_to_correct; eauto.
   apply H; auto with coqlib.
   auto.
 Qed.
@@ -211,7 +211,7 @@ Inductive match_stackframes: stackframe -> stackframe -> Prop :=
       incl c f.(fn_code) ->
       match_stackframes
         (Stackframe f sp ls c)
-        (Stackframe (transf_function f) sp ls 
+        (Stackframe (transf_function f) sp ls
           (remove_unused_labels (labels_branched_to f.(fn_code)) c)).
 
 Inductive match_states: state -> state -> Prop :=
@@ -252,14 +252,14 @@ Theorem transf_step_correct:
   (exists s2', step tge s1' t s2' /\ match_states s2 s2')
   \/ (measure s2 < measure s1 /\ t = E0 /\ match_states s2 s1')%nat.
 Proof.
-  induction 1; intros; inv MS; try rewrite remove_unused_labels_cons. 
+  induction 1; intros; inv MS; try rewrite remove_unused_labels_cons.
 (* Lgetstack *)
   left; econstructor; split.
-  econstructor; eauto. 
+  econstructor; eauto.
   econstructor; eauto with coqlib.
 (* Lsetstack *)
   left; econstructor; split.
-  econstructor; eauto. 
+  econstructor; eauto.
   econstructor; eauto with coqlib.
 (* Lop *)
   left; econstructor; split.
@@ -270,7 +270,7 @@ Proof.
   assert (eval_addressing tge sp addr (LTL.reglist rs args) = Some a).
     rewrite <- H. apply eval_addressing_preserved. exact symbols_preserved.
   left; econstructor; split.
-  econstructor; eauto. 
+  econstructor; eauto.
   econstructor; eauto with coqlib.
 (* Lstore *)
   assert (eval_addressing tge sp addr (LTL.reglist rs args) = Some a).
@@ -280,26 +280,22 @@ Proof.
   econstructor; eauto with coqlib.
 (* Lcall *)
   left; econstructor; split.
-  econstructor. eapply find_function_translated; eauto. 
+  econstructor. eapply find_function_translated; eauto.
   symmetry; apply sig_function_translated.
   econstructor; eauto. constructor; auto. constructor; eauto with coqlib.
 (* Ltailcall *)
   left; econstructor; split.
-  econstructor. erewrite match_parent_locset; eauto. eapply find_function_translated; eauto. 
+  econstructor. erewrite match_parent_locset; eauto. eapply find_function_translated; eauto.
   symmetry; apply sig_function_translated.
-  simpl. eauto. 
+  simpl. eauto.
   econstructor; eauto.
 (* Lbuiltin *)
   left; econstructor; split.
-  econstructor; eauto. eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved.  exact public_preserved. exact varinfo_preserved.
-  econstructor; eauto with coqlib.
-(* Lannot *)
-  left; econstructor; split.
-  econstructor; eauto. 
-  eapply eval_annot_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
+  econstructor.
+  eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
   eapply external_call_symbols_preserved; eauto.
   exact symbols_preserved.  exact public_preserved. exact varinfo_preserved.
+  eauto.
   econstructor; eauto with coqlib.
 (* Llabel *)
   case_eq (Labelset.mem lbl (labels_branched_to (fn_code f))); intros.
@@ -311,11 +307,11 @@ Proof.
   right. split. simpl. omega. split. auto. econstructor; eauto with coqlib.
 (* Lgoto *)
   left; econstructor; split.
-  econstructor. eapply find_label_translated; eauto. red; auto. 
+  econstructor. eapply find_label_translated; eauto. red; auto.
   econstructor; eauto. eapply find_label_incl; eauto.
 (* Lcond taken *)
   left; econstructor; split.
-  econstructor. auto. eauto. eapply find_label_translated; eauto. red; auto. 
+  econstructor. auto. eauto. eapply find_label_translated; eauto. red; auto.
   econstructor; eauto. eapply find_label_incl; eauto.
 (* Lcond not taken *)
   left; econstructor; split.
@@ -323,8 +319,8 @@ Proof.
   econstructor; eauto with coqlib.
 (* Ljumptable *)
   left; econstructor; split.
-  econstructor. eauto. eauto. eapply find_label_translated; eauto. 
-  red. eapply list_nth_z_in; eauto. eauto. 
+  econstructor. eauto. eauto. eapply find_label_translated; eauto.
+  red. eapply list_nth_z_in; eauto. eauto.
   econstructor; eauto. eapply find_label_incl; eauto.
 (* Lreturn *)
   left; econstructor; split.
@@ -333,7 +329,7 @@ Proof.
   econstructor; eauto with coqlib.
 (* internal function *)
   left; econstructor; split.
-  econstructor; simpl; eauto. 
+  econstructor; simpl; eauto.
   econstructor; eauto with coqlib.
 (* external function *)
   left; econstructor; split.
@@ -342,7 +338,7 @@ Proof.
   econstructor; eauto with coqlib.
 (* return *)
   inv H3. inv H1. left; econstructor; split.
-  econstructor; eauto. 
+  econstructor; eauto.
   econstructor; eauto.
 Qed.
 
@@ -353,7 +349,7 @@ Proof.
   intros. inv H.
   econstructor; split.
   eapply initial_state_intro with (f := transf_fundef f).
-  eapply Genv.init_mem_transf; eauto. 
+  eapply Genv.init_mem_transf; eauto.
   rewrite symbols_preserved; eauto.
   apply function_ptr_translated; auto.
   rewrite sig_function_translated. auto.
@@ -361,7 +357,7 @@ Proof.
 Qed.
 
 Lemma transf_final_states:
-  forall st1 st2 r, 
+  forall st1 st2 r,
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
 Proof.
   intros. inv H0. inv H. inv H6. econstructor; eauto.

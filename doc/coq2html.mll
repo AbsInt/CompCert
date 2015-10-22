@@ -157,7 +157,7 @@ let rec set_enum_depth d =
     fprintf !oc "<ul>\n";
     fprintf !oc "<li>\n";
     incr enum_depth;
-  end 
+  end
   else if !enum_depth > d then begin
     fprintf !oc "</li>\n";
     fprintf !oc "</ul>\n";
@@ -290,7 +290,7 @@ rule coq_bol = parse
   | eof
       { () }
   | space* as s
-      { space s; 
+      { space s;
         coq lexbuf }
 
 and skip_newline = parse
@@ -337,7 +337,7 @@ and comment = parse
   | "*)"
       { if !in_proof then end_comment() }
   | "(*"
-      { if !in_proof then start_comment(); 
+      { if !in_proof then start_comment();
         comment lexbuf; comment lexbuf }
   | eof
       { () }
@@ -345,7 +345,7 @@ and comment = parse
       { if !in_proof then newline();
         comment lexbuf }
   | space* as s
-      { if !in_proof then space s; 
+      { if !in_proof then space s;
         comment lexbuf }
   | eof
       { () }
@@ -422,7 +422,7 @@ let process_file f =
   if Filename.check_suffix f ".v" then begin
     let pref_f = Filename.chop_suffix f ".v" in
     let base_f = Filename.basename pref_f in
-    current_module := 
+    current_module :=
       "compcert." ^ Str.global_replace (Str.regexp "/") "." pref_f;
     let ic = open_in f in
     if !output_name = "-" then

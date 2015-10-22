@@ -38,7 +38,7 @@ test:
 	@for i in $(PROGS); do \
 	   if ./$$i.compcert | cmp -s - Results/$$i; \
            then echo "$$i: passed"; \
-           else echo "$$i: FAILED"; \
+           else echo "$$i: FAILED"; exit 2; \
 	   fi; \
          done
 

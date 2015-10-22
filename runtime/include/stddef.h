@@ -71,7 +71,7 @@ typedef signed long ptrdiff_t;
 #ifdef _TYPE_wchar_t
 _TYPE_wchar_t;
 #else
-typedef signed int wchar_t;
+typedef unsigned short wchar_t;
 #endif
 #endif
 #undef __need_wchar_t
@@ -98,7 +98,7 @@ typedef signed int wchar_t;
 #endif
 
 #if defined(_STDDEF_H) && !defined(offsetof)
-#define offsetof(ty,member) ((size_t) &(((ty)*) NULL)->member)
+#define offsetof(ty,member) ((size_t) &((ty*) NULL)->member)
 #endif
 
 #endif

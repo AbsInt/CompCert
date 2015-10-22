@@ -56,8 +56,8 @@ Definition eval_static_operation (op: operation) (vl: list aval): aval :=
   match op, vl with
   | Omove, v1::nil => v1
   | Ointconst n, nil => I n
-  | Ofloatconst n, nil => if propagate_float_constants tt then F n else ftop
-  | Osingleconst n, nil => if propagate_float_constants tt then FS n else ftop
+  | Ofloatconst n, nil => if propagate_float_constants tt then F n else ntop
+  | Osingleconst n, nil => if propagate_float_constants tt then FS n else ntop
   | Oindirectsymbol id, nil => Ifptr (Gl id Int.zero)
   | Ocast8signed, v1 :: nil => sign_ext 8 v1
   | Ocast8unsigned, v1 :: nil => zero_ext 8 v1
@@ -149,7 +149,7 @@ Lemma symbol_address_sound_2:
   forall id ofs,
   vmatch bc (Genv.symbol_address ge id ofs) (Ifptr (Gl id ofs)).
 Proof.
-  intros. unfold Genv.symbol_address. destruct (Genv.find_symbol ge id) as [b|] eqn:F. 
+  intros. unfold Genv.symbol_address. destruct (Genv.find_symbol ge id) as [b|] eqn:F.
   constructor. constructor. apply GENV; auto.
   constructor.
 Qed.
@@ -173,7 +173,7 @@ Theorem eval_static_addressing_sound:
 Proof.
   unfold eval_addressing, eval_static_addressing; intros;
   destruct addr; InvHyps; eauto with va.
-  rewrite Int.add_zero_l; auto with va. 
+  rewrite Int.add_zero_l; auto with va.
 Qed.
 
 Theorem eval_static_operation_sound:
@@ -187,7 +187,7 @@ Proof.
   destruct (propagate_float_constants tt); constructor.
   destruct (propagate_float_constants tt); constructor.
   eapply eval_static_addressing_sound; eauto.
-  apply of_optbool_sound. eapply eval_static_condition_sound; eauto. 
+  apply of_optbool_sound. eapply eval_static_condition_sound; eauto.
 Qed.
 
 End SOUNDNESS.

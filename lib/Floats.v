@@ -53,13 +53,13 @@ Lemma cmp_of_comparison_swap:
   cmp_of_comparison (swap_comparison c) x =
   cmp_of_comparison c (match x with None => None | Some x => Some (CompOpp x) end).
 Proof.
-  intros. destruct c; destruct x as [[]|]; reflexivity. 
+  intros. destruct c; destruct x as [[]|]; reflexivity.
 Qed.
 
 Lemma cmp_of_comparison_ne_eq:
   forall x, cmp_of_comparison Cne x = negb (cmp_of_comparison Ceq x).
 Proof.
-  intros. destruct x as [[]|]; reflexivity. 
+  intros. destruct x as [[]|]; reflexivity.
 Qed.
 
 Lemma cmp_of_comparison_lt_eq_false:
@@ -109,7 +109,7 @@ Module Float.
 (** Transform a Nan payload to a quiet Nan payload. *)
 
 Program Definition transform_quiet_pl (pl:nan_pl 53) : nan_pl 53 :=
-  Pos.lor pl (iter_nat 51 _ xO xH).
+  Pos.lor pl (iter_nat xO 51 xH).
 Next Obligation.
   destruct pl.
   simpl. rewrite Z.ltb_lt in *.
@@ -296,23 +296,23 @@ Qed.
 Theorem mul2_add:
   forall f, add f f = mul f (of_int (Int.repr 2%Z)).
 Proof.
-  intros. apply Bmult2_Bplus. 
-  intros. destruct x; try discriminate. simpl. 
-  transitivity (b, transform_quiet_pl n). 
-  destruct Archi.choose_binop_pl_64; auto. 
+  intros. apply Bmult2_Bplus.
+  intros. destruct x; try discriminate. simpl.
+  transitivity (b, transform_quiet_pl n).
+  destruct Archi.choose_binop_pl_64; auto.
   destruct y; auto || discriminate.
 Qed.
 
 (** Divisions that can be turned into multiplication by an inverse. *)
 
-Definition exact_inverse : float -> option float := Bexact_inverse 53 1024 __ __. 
+Definition exact_inverse : float -> option float := Bexact_inverse 53 1024 __ __.
 
 Theorem div_mul_inverse:
   forall x y z, exact_inverse y = Some z -> div x y = mul x z.
 Proof.
-  intros. apply Bdiv_mult_inverse; auto. 
-  intros. destruct x0; try discriminate. simpl. 
-  transitivity (b, transform_quiet_pl n). 
+  intros. apply Bdiv_mult_inverse; auto.
+  intros. destruct x0; try discriminate. simpl.
+  transitivity (b, transform_quiet_pl n).
   destruct y0; reflexivity || discriminate.
   destruct z0; reflexivity || discriminate.
 Qed.
@@ -323,13 +323,13 @@ Theorem cmp_swap:
   forall c x y, cmp (swap_comparison c) x y = cmp c y x.
 Proof.
   unfold cmp; intros. rewrite (Bcompare_swap _ _ x y).
-  apply cmp_of_comparison_swap. 
+  apply cmp_of_comparison_swap.
 Qed.
 
 Theorem cmp_ne_eq:
   forall f1 f2, cmp Cne f1 f2 = negb (cmp Ceq f1 f2).
 Proof.
-  intros; apply cmp_of_comparison_ne_eq. 
+  intros; apply cmp_of_comparison_ne_eq.
 Qed.
 
 Theorem cmp_lt_eq_false:
@@ -371,7 +371,7 @@ Proof.
   intros; unfold of_bits, to_bits, bits_of_b64, b64_of_bits.
   rewrite Int64.unsigned_repr, binary_float_of_bits_of_binary_float; [reflexivity|].
   generalize (bits_of_binary_float_range 52 11 __ __ f).
-  change (2^(52+11+1)) with (Int64.max_unsigned + 1). omega. 
+  change (2^(52+11+1)) with (Int64.max_unsigned + 1). omega.
 Qed.
 
 Theorem to_of_bits:
@@ -379,7 +379,7 @@ Theorem to_of_bits:
 Proof.
   intros; unfold of_bits, to_bits, bits_of_b64, b64_of_bits.
   rewrite bits_of_binary_float_of_bits. apply Int64.repr_unsigned.
-  apply Int64.unsigned_range. 
+  apply Int64.unsigned_range.
 Qed.
 
 (** Conversions between floats and unsigned ints can be defined
@@ -412,7 +412,7 @@ Proof.
   assert (R8: integer_representable 53 1024 (Int.unsigned ox8000_0000)).
   { apply integer_representable_2p with (p := 31);auto; smart_omega. }
   rewrite BofZ_plus by auto.
-  f_equal. 
+  f_equal.
   unfold Int.ltu in H. destruct zlt in H; try discriminate.
   unfold y, Int.sub. rewrite Int.signed_repr. omega.
   compute_this (Int.unsigned ox8000_0000); smart_omega.
@@ -424,10 +424,10 @@ Theorem to_intu_to_int_1:
   to_intu x = Some n ->
   to_int x = Some n.
 Proof.
-  intros. unfold to_intu in H0. 
+  intros. unfold to_intu in H0.
   destruct (ZofB_range 53 1024 x 0 Int.max_unsigned) as [p|] eqn:E; simpl in H0; inv H0.
   exploit ZofB_range_inversion; eauto. intros (A & B & C).
-  unfold to_int, ZofB_range. rewrite C. 
+  unfold to_int, ZofB_range. rewrite C.
   rewrite Zle_bool_true by smart_omega. rewrite Zle_bool_true; auto.
   exploit (BofZ_exact 53 1024 __ __ (Int.unsigned ox8000_0000)).
   vm_compute; intuition congruence.
@@ -436,16 +436,16 @@ Proof.
   intros (EQy & FINy & SIGNy).
   assert (FINx: is_finite _ _ x = true).
   { rewrite ZofB_correct in C. destruct (is_finite _ _ x) eqn:FINx; congruence. }
-  destruct (zeq p 0). 
+  destruct (zeq p 0).
   subst p; smart_omega.
   destruct (ZofB_range_pos 53 1024 __ __ x p C) as [P Q]. omega.
-  assert (CMP: Bcompare _ _ x y = Some Lt). 
+  assert (CMP: Bcompare _ _ x y = Some Lt).
   { unfold cmp, cmp_of_comparison in H. destruct (Bcompare _ _ x y) as [[]|]; auto; discriminate. }
-  rewrite Bcompare_correct in CMP by auto. 
+  rewrite Bcompare_correct in CMP by auto.
   inv CMP. apply Rcompare_Lt_inv in H1. rewrite EQy in H1.
   assert (p < Int.unsigned ox8000_0000).
   { apply lt_Z2R. eapply Rle_lt_trans; eauto. }
-  change Int.max_signed with (Int.unsigned ox8000_0000 - 1). omega. 
+  change Int.max_signed with (Int.unsigned ox8000_0000 - 1). omega.
 Qed.
 
 Theorem to_intu_to_int_2:
@@ -454,7 +454,7 @@ Theorem to_intu_to_int_2:
   to_intu x = Some n ->
   to_int (sub x (of_intu ox8000_0000)) = Some (Int.sub n ox8000_0000).
 Proof.
-  intros. unfold to_intu in H0. 
+  intros. unfold to_intu in H0.
   destruct (ZofB_range _ _ x 0 Int.max_unsigned) as [p|] eqn:E; simpl in H0; inv H0.
   exploit ZofB_range_inversion; eauto. intros (A & B & C).
   exploit (BofZ_exact 53 1024 __ __ (Int.unsigned ox8000_0000)).
@@ -520,14 +520,14 @@ Qed.
 Lemma from_words_eq:
   forall x, from_words ox4330_0000 x = BofZ 53 1024 __ __ (2^52 + Int.unsigned x).
 Proof.
-  intros. 
+  intros.
   pose proof (Int.unsigned_range x).
   destruct (from_words_value x) as (A & B & C).
   destruct (BofZ_exact 53 1024 __ __ (2^52 + Int.unsigned x)) as (D & E & F).
   smart_omega.
   apply B2R_Bsign_inj; auto.
-  rewrite A, D. rewrite Z2R_plus. auto. 
-  rewrite C, F. symmetry. apply Zlt_bool_false. smart_omega. 
+  rewrite A, D. rewrite Z2R_plus. auto.
+  rewrite C, F. symmetry. apply Zlt_bool_false. smart_omega.
 Qed.
 
 Theorem of_intu_from_words:
@@ -535,7 +535,7 @@ Theorem of_intu_from_words:
   of_intu x = sub (from_words ox4330_0000 x) (from_words ox4330_0000 Int.zero).
 Proof.
   intros. pose proof (Int.unsigned_range x).
-  rewrite ! from_words_eq. unfold sub. rewrite BofZ_minus. 
+  rewrite ! from_words_eq. unfold sub. rewrite BofZ_minus.
   unfold of_intu. apply (f_equal (BofZ 53 1024 __ __)). rewrite Int.unsigned_zero. omega.
   apply integer_representable_n; auto; smart_omega.
   apply integer_representable_n; auto; rewrite Int.unsigned_zero; smart_omega.
@@ -558,11 +558,11 @@ Theorem of_int_from_words:
   of_int x = sub (from_words ox4330_0000 (Int.add x ox8000_0000))
                  (from_words ox4330_0000 ox8000_0000).
 Proof.
-  intros. 
+  intros.
   pose proof (Int.signed_range x).
   rewrite ! from_words_eq. rewrite ox8000_0000_signed_unsigned.
   change (Int.unsigned ox8000_0000) with Int.half_modulus.
-  unfold sub. rewrite BofZ_minus. 
+  unfold sub. rewrite BofZ_minus.
   unfold of_int. apply f_equal. omega.
   apply integer_representable_n; auto; smart_omega.
   apply integer_representable_n; auto; smart_omega.
@@ -605,16 +605,16 @@ Qed.
 Lemma from_words_eq':
   forall x, from_words ox4530_0000 x = BofZ 53 1024 __ __ (2^84 + Int.unsigned x * 2^32).
 Proof.
-  intros. 
+  intros.
   pose proof (Int.unsigned_range x).
   destruct (from_words_value' x) as (A & B & C).
   destruct (BofZ_representable 53 1024 __ __ (2^84 + Int.unsigned x * 2^32)) as (D & E & F).
   replace (2^84 + Int.unsigned x * 2^32)
-    with  ((2^52 + Int.unsigned x) * 2^32) by ring. 
+    with  ((2^52 + Int.unsigned x) * 2^32) by ring.
   apply integer_representable_n2p; auto. smart_omega. omega. omega.
   apply B2R_Bsign_inj; auto.
-  rewrite A, D. rewrite <- Z2R_Zpower by omega. rewrite <- Z2R_plus. auto. 
-  rewrite C, F. symmetry. apply Zlt_bool_false. 
+  rewrite A, D. rewrite <- Z2R_Zpower by omega. rewrite <- Z2R_plus. auto.
+  rewrite C, F. symmetry. apply Zlt_bool_false.
   compute_this (2^84); compute_this (2^32); omega.
 Qed.
 
@@ -629,7 +629,7 @@ Proof.
   pose proof (Int64.unsigned_range l).
   pose proof (Int.unsigned_range (Int64.hiword l)).
   pose proof (Int.unsigned_range (Int64.loword l)).
-  rewrite ! from_words_eq, ! from_words_eq'. 
+  rewrite ! from_words_eq, ! from_words_eq'.
   set (p20 := Int.unsigned (Int.repr (two_p 20))).
   set (x := Int64.unsigned l) in *;
   set (xl := Int.unsigned (Int64.loword l)) in *;
@@ -638,16 +638,16 @@ Proof.
   replace (2^84 + xh * 2^32 - (2^84 + p20 * 2^32))
      with ((xh - p20) * 2^32) by ring.
   unfold add. rewrite BofZ_plus.
-  unfold of_longu. apply f_equal.
+  unfold of_longu. f_equal.
   rewrite <- (Int64.ofwords_recompose l) at 1. rewrite Int64.ofwords_add'.
   fold xh; fold xl. compute_this (two_p 32); compute_this p20; ring.
   apply integer_representable_n2p; auto.
   compute_this p20; smart_omega. omega. omega.
-  apply integer_representable_n; auto; smart_omega. 
+  apply integer_representable_n; auto; smart_omega.
   replace (2^84 + xh * 2^32) with ((2^52 + xh) * 2^32) by ring.
   apply integer_representable_n2p; auto. smart_omega. omega. omega.
   change (2^84 + p20 * 2^32) with ((2^52 + 1048576) * 2^32).
-  apply integer_representable_n2p; auto. omega. omega. 
+  apply integer_representable_n2p; auto. omega. omega.
 Qed.
 
 Theorem of_long_from_words:
@@ -661,29 +661,29 @@ Proof.
   pose proof (Int64.signed_range l).
   pose proof (Int.signed_range (Int64.hiword l)).
   pose proof (Int.unsigned_range (Int64.loword l)).
-  rewrite ! from_words_eq, ! from_words_eq'. 
+  rewrite ! from_words_eq, ! from_words_eq'.
   set (p := Int.unsigned (Int.repr (two_p 20 + two_p 31))).
   set (x := Int64.signed l) in *;
   set (xl := Int.unsigned (Int64.loword l)) in *;
   set (xh := Int.signed (Int64.hiword l)) in *.
-  rewrite ox8000_0000_signed_unsigned. fold xh. 
+  rewrite ox8000_0000_signed_unsigned. fold xh.
   unfold sub. rewrite BofZ_minus.
   replace (2^84 + (xh + Int.half_modulus) * 2^32 - (2^84 + p * 2^32))
-     with ((xh - 2^20) * 2^32) 
+     with ((xh - 2^20) * 2^32)
        by (compute_this p; compute_this Int.half_modulus; ring).
-  unfold add. rewrite BofZ_plus. 
-  unfold of_long. apply f_equal. 
+  unfold add. rewrite BofZ_plus.
+  unfold of_long. apply f_equal.
   rewrite <- (Int64.ofwords_recompose l) at 1. rewrite Int64.ofwords_add''.
-  fold xh; fold xl. compute_this (two_p 32); ring. 
+  fold xh; fold xl. compute_this (two_p 32); ring.
   apply integer_representable_n2p; auto.
   compute_this (2^20); smart_omega. omega. omega.
   apply integer_representable_n; auto; smart_omega.
   replace (2^84 + (xh + Int.half_modulus) * 2^32)
-     with ((2^52 + xh + Int.half_modulus) * 2^32) 
+     with ((2^52 + xh + Int.half_modulus) * 2^32)
        by (compute_this Int.half_modulus; ring).
   apply integer_representable_n2p; auto. smart_omega. omega. omega.
   change (2^84 + p * 2^32) with ((2^52 + p) * 2^32).
-  apply integer_representable_n2p; auto. 
+  apply integer_representable_n2p; auto.
   compute_this p; smart_omega. omega.
 Qed.
 
@@ -706,7 +706,7 @@ Proof.
   assert (DECOMP: x = yh * 2^32 + yl).
   { unfold x. rewrite <- (Int64.ofwords_recompose l). apply Int64.ofwords_add'. }
   rewrite BofZ_mult. rewrite BofZ_plus. rewrite DECOMP; auto.
-  apply integer_representable_n2p; auto. smart_omega. omega. omega. 
+  apply integer_representable_n2p; auto. smart_omega. omega. omega.
   apply integer_representable_n; auto; smart_omega.
   apply integer_representable_n; auto; smart_omega.
   apply integer_representable_n; auto; smart_omega.
@@ -759,7 +759,7 @@ Theorem of_longu_of_long_2:
 Proof.
   intros. change (of_int (Int.repr 2)) with (BofZ 53 1024 __ __ (2^1)).
   pose proof (Int64.unsigned_range x).
-  unfold Int64.ltu in H. 
+  unfold Int64.ltu in H.
   change (Int64.unsigned (Int64.repr Int64.half_modulus)) with (2^63) in H.
   destruct (zlt (Int64.unsigned x) (2^63)); inv H.
   assert (Int64.modulus <= 2^1024 - 2^(1024-53)) by (vm_compute; intuition congruence).
@@ -769,10 +769,10 @@ Proof.
                 if zeq i 0 then Int64.testbit x 1 || Int64.testbit x 0
                 else if zeq i 63 then false else Int64.testbit x (i + 1)).
   { intros; unfold n; autorewrite with ints; auto. rewrite Int64.unsigned_one.
-    rewrite Int64.bits_one. compute_this Int64.zwordsize. 
+    rewrite Int64.bits_one. compute_this Int64.zwordsize.
     destruct (zeq i 0); simpl proj_sumbool.
-    rewrite zlt_true by omega. rewrite andb_true_r. subst i; auto. 
-    rewrite andb_false_r, orb_false_r. 
+    rewrite zlt_true by omega. rewrite andb_true_r. subst i; auto.
+    rewrite andb_false_r, orb_false_r.
     destruct (zeq i 63). subst i. apply zlt_false; omega.
     apply zlt_true; omega. }
   assert (NB2: forall i, 0 <= i ->
@@ -782,29 +782,29 @@ Proof.
                Int64.testbit x i).
   { intros. rewrite Z.mul_pow2_bits by omega. destruct (zeq i 0).
     apply Z.testbit_neg_r; omega.
-    rewrite Int64.bits_signed by omega. compute_this Int64.zwordsize. 
-    destruct (zlt (i-1) 64). 
+    rewrite Int64.bits_signed by omega. compute_this Int64.zwordsize.
+    destruct (zlt (i-1) 64).
     rewrite NB by omega. destruct (zeq i 1).
     subst. rewrite dec_eq_true by auto. auto.
-    rewrite dec_eq_false by omega. destruct (zeq (i - 1) 63). 
-    symmetry. apply Int64.bits_above. compute_this Int64.zwordsize; omega. 
+    rewrite dec_eq_false by omega. destruct (zeq (i - 1) 63).
+    symmetry. apply Int64.bits_above. compute_this Int64.zwordsize; omega.
     f_equal; omega.
-    rewrite NB by omega. rewrite dec_eq_false by omega. rewrite dec_eq_true by auto. 
-    rewrite dec_eq_false by omega. symmetry. apply Int64.bits_above. compute_this Int64.zwordsize; omega. 
+    rewrite NB by omega. rewrite dec_eq_false by omega. rewrite dec_eq_true by auto.
+    rewrite dec_eq_false by omega. symmetry. apply Int64.bits_above. compute_this Int64.zwordsize; omega.
   }
   assert (EQ: Int64.signed n * 2 = int_round_odd (Int64.unsigned x) 1).
   {
   symmetry. apply (int_round_odd_bits 53 1024). omega.
-  intros. rewrite NB2 by omega. replace i with 0 by omega. auto. 
-  rewrite NB2 by omega. rewrite dec_eq_false by omega. rewrite dec_eq_true. 
+  intros. rewrite NB2 by omega. replace i with 0 by omega. auto.
+  rewrite NB2 by omega. rewrite dec_eq_false by omega. rewrite dec_eq_true.
   rewrite orb_comm. unfold Int64.testbit. change (2^1) with 2.
   destruct (Z.testbit (Int64.unsigned x) 0) eqn:B0;
   [rewrite Z.testbit_true in B0 by omega|rewrite Z.testbit_false in B0 by omega];
   change (2^0) with 1 in B0; rewrite Zdiv_1_r in B0; rewrite B0; auto.
   intros. rewrite NB2 by omega. rewrite ! dec_eq_false by omega. auto.
   }
-  unfold mul, of_long, of_longu. 
-  rewrite BofZ_mult_2p. 
+  unfold mul, of_long, of_longu.
+  rewrite BofZ_mult_2p.
 - change (2^1) with 2. rewrite EQ. apply BofZ_round_odd with (p := 1).
 + omega.
 + apply Zle_trans with Int64.modulus; trivial. smart_omega.
@@ -816,7 +816,7 @@ Proof.
   compute_this Int64.modulus; xomega.
 - assert (2^63 <= int_round_odd (Int64.unsigned x) 1).
   { change (2^63) with (int_round_odd (2^63) 1). apply (int_round_odd_le 0 0); omega. }
-  rewrite <- EQ in H1. compute_this (2^63). compute_this (2^53). xomega. 
+  rewrite <- EQ in H1. compute_this (2^63). compute_this (2^53). xomega.
 - omega.
 Qed.
 
@@ -829,7 +829,7 @@ Module Float32.
 (** ** NaN payload manipulations *)
 
 Program Definition transform_quiet_pl (pl:nan_pl 24) : nan_pl 24 :=
-  Pos.lor pl (iter_nat 22 _ xO xH).
+  Pos.lor pl (iter_nat xO 22 xH).
 Next Obligation.
   destruct pl.
   simpl. rewrite Z.ltb_lt in *.
@@ -939,10 +939,10 @@ Qed.
 Theorem mul2_add:
   forall f, add f f = mul f (of_int (Int.repr 2%Z)).
 Proof.
-  intros. apply Bmult2_Bplus. 
-  intros. destruct x; try discriminate. simpl. 
-  transitivity (b, transform_quiet_pl n). 
-  destruct Archi.choose_binop_pl_32; auto. 
+  intros. apply Bmult2_Bplus.
+  intros. destruct x; try discriminate. simpl.
+  transitivity (b, transform_quiet_pl n).
+  destruct Archi.choose_binop_pl_32; auto.
   destruct y; auto || discriminate.
 Qed.
 
@@ -953,9 +953,9 @@ Definition exact_inverse : float32 -> option float32 := Bexact_inverse 24 128 __
 Theorem div_mul_inverse:
   forall x y z, exact_inverse y = Some z -> div x y = mul x z.
 Proof.
-  intros. apply Bdiv_mult_inverse; auto. 
-  intros. destruct x0; try discriminate. simpl. 
-  transitivity (b, transform_quiet_pl n). 
+  intros. apply Bdiv_mult_inverse; auto.
+  intros. destruct x0; try discriminate. simpl.
+  transitivity (b, transform_quiet_pl n).
   destruct y0; reflexivity || discriminate.
   destruct z0; reflexivity || discriminate.
 Qed.
@@ -966,13 +966,13 @@ Theorem cmp_swap:
   forall c x y, cmp (swap_comparison c) x y = cmp c y x.
 Proof.
   unfold cmp; intros. rewrite (Bcompare_swap _ _ x y).
-  apply cmp_of_comparison_swap. 
+  apply cmp_of_comparison_swap.
 Qed.
 
 Theorem cmp_ne_eq:
   forall f1 f2, cmp Cne f1 f2 = negb (cmp Ceq f1 f2).
 Proof.
-  intros; apply cmp_of_comparison_ne_eq. 
+  intros; apply cmp_of_comparison_ne_eq.
 Qed.
 
 Theorem cmp_lt_eq_false:
@@ -1029,7 +1029,7 @@ Theorem to_of_bits:
 Proof.
   intros; unfold of_bits, to_bits, bits_of_b32, b32_of_bits.
   rewrite bits_of_binary_float_of_bits. apply Int.repr_unsigned.
-  apply Int.unsigned_range. 
+  apply Int.unsigned_range.
 Qed.
 
 (** Conversions from 32-bit integers to single-precision floats can
@@ -1039,15 +1039,15 @@ Qed.
 Theorem of_int_double:
   forall n, of_int n = of_double (Float.of_int n).
 Proof.
-  intros. symmetry. apply Bconv_BofZ. 
-  apply integer_representable_n; auto. generalize (Int.signed_range n); Float.smart_omega. 
+  intros. symmetry. apply Bconv_BofZ.
+  apply integer_representable_n; auto. generalize (Int.signed_range n); Float.smart_omega.
 Qed.
 
 Theorem of_intu_double:
   forall n, of_intu n = of_double (Float.of_intu n).
 Proof.
   intros. symmetry. apply Bconv_BofZ.
-  apply integer_representable_n; auto. generalize (Int.unsigned_range n); Float.smart_omega. 
+  apply integer_representable_n; auto. generalize (Int.unsigned_range n); Float.smart_omega.
 Qed.
 
 (** Conversion of single-precision floats to integers can be decomposed
@@ -1060,8 +1060,8 @@ Proof.
   intros.
   unfold to_int in H.
   destruct (ZofB_range _ _ f Int.min_signed Int.max_signed) as [n'|] eqn:E; inv H.
-  unfold Float.to_int, to_double, Float.of_single. 
-  erewrite ZofB_range_Bconv; eauto. auto. omega. omega. omega. omega. 
+  unfold Float.to_int, to_double, Float.of_single.
+  erewrite ZofB_range_Bconv; eauto. auto. omega. omega. omega. omega.
 Qed.
 
 Theorem to_intu_double:
@@ -1070,8 +1070,8 @@ Proof.
   intros.
   unfold to_intu in H.
   destruct (ZofB_range _ _ f 0 Int.max_unsigned) as [n'|] eqn:E; inv H.
-  unfold Float.to_intu, to_double, Float.of_single. 
-  erewrite ZofB_range_Bconv; eauto. auto. omega. omega. omega. omega. 
+  unfold Float.to_intu, to_double, Float.of_single.
+  erewrite ZofB_range_Bconv; eauto. auto. omega. omega. omega. omega.
 Qed.
 
 Theorem to_long_double:
@@ -1080,8 +1080,8 @@ Proof.
   intros.
   unfold to_long in H.
   destruct (ZofB_range _ _ f Int64.min_signed Int64.max_signed) as [n'|] eqn:E; inv H.
-  unfold Float.to_long, to_double, Float.of_single. 
-  erewrite ZofB_range_Bconv; eauto. auto. omega. omega. omega. omega. 
+  unfold Float.to_long, to_double, Float.of_single.
+  erewrite ZofB_range_Bconv; eauto. auto. omega. omega. omega. omega.
 Qed.
 
 Theorem to_longu_double:
@@ -1090,8 +1090,8 @@ Proof.
   intros.
   unfold to_longu in H.
   destruct (ZofB_range _ _ f 0 Int64.max_unsigned) as [n'|] eqn:E; inv H.
-  unfold Float.to_longu, to_double, Float.of_single. 
-  erewrite ZofB_range_Bconv; eauto. auto. omega. omega. omega. omega. 
+  unfold Float.to_longu, to_double, Float.of_single.
+  erewrite ZofB_range_Bconv; eauto. auto. omega. omega. omega. omega.
 Qed.
 
 (** Conversions from 64-bit integers to single-precision floats can be expressed
@@ -1104,7 +1104,7 @@ Lemma int_round_odd_plus:
   int_round_odd n p = Z.land (Z.lor n (Z.land n (2^p-1) + (2^p-1))) (-(2^p)).
 Proof.
   intros.
-  assert (POS: 0 < 2^p) by (apply (Zpower_gt_0 radix2); auto). 
+  assert (POS: 0 < 2^p) by (apply (Zpower_gt_0 radix2); auto).
   assert (A: Z.land n (2^p-1) = n mod 2^p).
   { rewrite <- Z.land_ones by auto. f_equal. rewrite Z.ones_equiv. omega. }
   rewrite A.
@@ -1113,29 +1113,29 @@ Proof.
   set (m := n mod 2^p + (2^p-1)) in *.
   assert (C: m / 2^p = if zeq (n mod 2^p) 0 then 0 else 1).
   { unfold m. destruct (zeq (n mod 2^p) 0).
-    rewrite e. apply Zdiv_small. omega. 
+    rewrite e. apply Zdiv_small. omega.
     eapply Zdiv_unique with (n mod 2^p - 1). ring. omega. }
   assert (D: Z.testbit m p = if zeq (n mod 2^p) 0 then false else true).
   { destruct (zeq (n mod 2^p) 0).
     apply Z.testbit_false; auto. rewrite C; auto.
     apply Z.testbit_true; auto. rewrite C; auto. }
   assert (E: forall i, p < i -> Z.testbit m i = false).
-  { intros. apply Z.testbit_false. omega. 
-    replace (m / 2^i) with 0. auto. symmetry. apply Zdiv_small. 
-    unfold m. split. omega. apply Zlt_le_trans with (2 * 2^p). omega. 
-    change 2 with (2^1) at 1. rewrite <- (Zpower_plus radix2) by omega. 
+  { intros. apply Z.testbit_false. omega.
+    replace (m / 2^i) with 0. auto. symmetry. apply Zdiv_small.
+    unfold m. split. omega. apply Zlt_le_trans with (2 * 2^p). omega.
+    change 2 with (2^1) at 1. rewrite <- (Zpower_plus radix2) by omega.
     apply Zpower_le. omega. }
   assert (F: forall i, 0 <= i -> Z.testbit (-2^p) i = if zlt i p then false else true).
   { intros. rewrite Z.bits_opp by auto. rewrite <- Z.ones_equiv.
-    destruct (zlt i p). 
+    destruct (zlt i p).
     rewrite Z.ones_spec_low by omega. auto.
     rewrite Z.ones_spec_high by omega. auto. }
-  apply int_round_odd_bits; auto. 
-  - intros. rewrite Z.land_spec, F, zlt_true by omega. apply andb_false_r. 
+  apply int_round_odd_bits; auto.
+  - intros. rewrite Z.land_spec, F, zlt_true by omega. apply andb_false_r.
   - rewrite Z.land_spec, Z.lor_spec, D, F, zlt_false, andb_true_r by omega.
-    destruct (Z.eqb (n mod 2^p) 0) eqn:Z. 
-    rewrite Z.eqb_eq in Z. rewrite Z, zeq_true. apply orb_false_r. 
-    rewrite Z.eqb_neq in Z. rewrite zeq_false by auto. apply orb_true_r. 
+    destruct (Z.eqb (n mod 2^p) 0) eqn:Z.
+    rewrite Z.eqb_eq in Z. rewrite Z, zeq_true. apply orb_false_r.
+    rewrite Z.eqb_neq in Z. rewrite zeq_false by auto. apply orb_true_r.
   - intros. rewrite Z.land_spec, Z.lor_spec, E, F, zlt_false, andb_true_r by omega.
     apply orb_false_r.
 Qed.
@@ -1146,18 +1146,18 @@ Lemma of_long_round_odd:
   BofZ 24 128 __ __ n = Bconv _ _ 24 128 __ __ conv_nan mode_NE (BofZ 53 1024 __ __ (Z.land (Z.lor n ((Z.land n 2047) + 2047)) (-2048))).
 Proof.
   intros. rewrite <- (int_round_odd_plus 11) by omega.
-  assert (-2^64 <= int_round_odd n 11). 
+  assert (-2^64 <= int_round_odd n 11).
   { change (-2^64) with (int_round_odd (-2^64) 11). apply (int_round_odd_le 0 0); xomega. }
-  assert (int_round_odd n 11 <= 2^64). 
+  assert (int_round_odd n 11 <= 2^64).
   { change (2^64) with (int_round_odd (2^64) 11). apply (int_round_odd_le 0 0); xomega. }
-  rewrite Bconv_BofZ. 
+  rewrite Bconv_BofZ.
   apply BofZ_round_odd with (p := 11).
   omega.
   apply Zle_trans with (2^64). omega. compute; intuition congruence.
   omega.
-  exact (proj1 H). 
-  unfold int_round_odd. apply integer_representable_n2p_wide. auto. omega. 
-  unfold int_round_odd in H0, H1. 
+  exact (proj1 H).
+  unfold int_round_odd. apply integer_representable_n2p_wide. auto. omega.
+  unfold int_round_odd in H0, H1.
   split; (apply Zmult_le_reg_r with (2^11); [compute; auto | assumption]).
   omega.
   omega.
@@ -1168,46 +1168,46 @@ Theorem of_longu_double_1:
   Int64.unsigned n <= 2^53 ->
   of_longu n = of_double (Float.of_longu n).
 Proof.
-  intros. symmetry; apply Bconv_BofZ. apply integer_representable_n; auto. 
+  intros. symmetry; apply Bconv_BofZ. apply integer_representable_n; auto.
   pose proof (Int64.unsigned_range n); omega.
 Qed.
 
 Theorem of_longu_double_2:
   forall n,
   2^36 <= Int64.unsigned n ->
-  of_longu n = of_double (Float.of_longu 
-                           (Int64.and (Int64.or n 
+  of_longu n = of_double (Float.of_longu
+                           (Int64.and (Int64.or n
                                                 (Int64.add (Int64.and n (Int64.repr 2047))
                                                            (Int64.repr 2047)))
                                       (Int64.repr (-2048)))).
 Proof.
   intros.
-  pose proof (Int64.unsigned_range n). 
+  pose proof (Int64.unsigned_range n).
   unfold of_longu. erewrite of_long_round_odd.
-  unfold of_double, Float.to_single. instantiate (1 := Float.to_single_pl). 
+  unfold of_double, Float.to_single. instantiate (1 := Float.to_single_pl).
   f_equal. unfold Float.of_longu. f_equal.
   set (n' := Z.land (Z.lor (Int64.unsigned n) (Z.land (Int64.unsigned n) 2047 + 2047)) (-2048)).
   assert (int_round_odd (Int64.unsigned n) 11 = n') by (apply int_round_odd_plus; omega).
-  assert (0 <= n'). 
+  assert (0 <= n').
   { rewrite <- H1. change 0 with (int_round_odd 0 11). apply (int_round_odd_le 0 0); omega. }
-  assert (n' < Int64.modulus). 
-  { apply Zle_lt_trans with (int_round_odd (Int64.modulus - 1) 11). 
-    rewrite <- H1. apply (int_round_odd_le 0 0); omega. 
+  assert (n' < Int64.modulus).
+  { apply Zle_lt_trans with (int_round_odd (Int64.modulus - 1) 11).
+    rewrite <- H1. apply (int_round_odd_le 0 0); omega.
     compute; auto. }
   rewrite <- (Int64.unsigned_repr n') by (unfold Int64.max_unsigned; omega).
   f_equal. Int64.bit_solve. rewrite Int64.testbit_repr by auto. unfold n'.
-  rewrite Z.land_spec, Z.lor_spec. f_equal. f_equal. 
+  rewrite Z.land_spec, Z.lor_spec. f_equal. f_equal.
   unfold Int64.testbit. rewrite Int64.add_unsigned.
   fold (Int64.testbit (Int64.repr
         (Int64.unsigned (Int64.and n (Int64.repr 2047)) +
          Int64.unsigned (Int64.repr 2047))) i).
   rewrite Int64.testbit_repr by auto. f_equal. f_equal. unfold Int64.and.
   symmetry. apply Int64.unsigned_repr. change 2047 with (Z.ones 11).
-  rewrite Z.land_ones by omega. 
-  exploit (Z_mod_lt (Int64.unsigned n) (2^11)). compute; auto. 
-  assert (2^11 < Int64.max_unsigned) by (compute; auto). omega. 
+  rewrite Z.land_ones by omega.
+  exploit (Z_mod_lt (Int64.unsigned n) (2^11)). compute; auto.
+  assert (2^11 < Int64.max_unsigned) by (compute; auto). omega.
   apply Int64.same_bits_eqm; auto. exists (-1); auto.
-  split. xomega. change (2^64) with Int64.modulus. xomega. 
+  split. xomega. change (2^64) with Int64.modulus. xomega.
 Qed.
 
 Theorem of_long_double_1:
@@ -1215,50 +1215,50 @@ Theorem of_long_double_1:
   Z.abs (Int64.signed n) <= 2^53 ->
   of_long n = of_double (Float.of_long n).
 Proof.
-  intros. symmetry; apply Bconv_BofZ. apply integer_representable_n; auto. xomega. 
+  intros. symmetry; apply Bconv_BofZ. apply integer_representable_n; auto. xomega.
 Qed.
 
 Theorem of_long_double_2:
   forall n,
   2^36 <= Z.abs (Int64.signed n) ->
   of_long n = of_double (Float.of_long
-                           (Int64.and (Int64.or n 
+                           (Int64.and (Int64.or n
                                                 (Int64.add (Int64.and n (Int64.repr 2047))
                                                            (Int64.repr 2047)))
                                       (Int64.repr (-2048)))).
 Proof.
   intros.
-  pose proof (Int64.signed_range n). 
+  pose proof (Int64.signed_range n).
   unfold of_long. erewrite of_long_round_odd.
-  unfold of_double, Float.to_single. instantiate (1 := Float.to_single_pl). 
+  unfold of_double, Float.to_single. instantiate (1 := Float.to_single_pl).
   f_equal. unfold Float.of_long. f_equal.
   set (n' := Z.land (Z.lor (Int64.signed n) (Z.land (Int64.signed n) 2047 + 2047)) (-2048)).
   assert (int_round_odd (Int64.signed n) 11 = n') by (apply int_round_odd_plus; omega).
-  assert (Int64.min_signed <= n'). 
+  assert (Int64.min_signed <= n').
   { rewrite <- H1. change Int64.min_signed with (int_round_odd Int64.min_signed 11). apply (int_round_odd_le 0 0); omega. }
   assert (n' <= Int64.max_signed).
-  { apply Zle_trans with (int_round_odd Int64.max_signed 11). 
-    rewrite <- H1. apply (int_round_odd_le 0 0); omega. 
+  { apply Zle_trans with (int_round_odd Int64.max_signed 11).
+    rewrite <- H1. apply (int_round_odd_le 0 0); omega.
     compute; intuition congruence. }
   rewrite <- (Int64.signed_repr n') by omega.
   f_equal. Int64.bit_solve. rewrite Int64.testbit_repr by auto. unfold n'.
   rewrite Z.land_spec, Z.lor_spec. f_equal. f_equal.
-  rewrite Int64.bits_signed by omega. rewrite zlt_true by omega. auto. 
+  rewrite Int64.bits_signed by omega. rewrite zlt_true by omega. auto.
   unfold Int64.testbit. rewrite Int64.add_unsigned.
   fold (Int64.testbit (Int64.repr
         (Int64.unsigned (Int64.and n (Int64.repr 2047)) +
          Int64.unsigned (Int64.repr 2047))) i).
   rewrite Int64.testbit_repr by auto. f_equal. f_equal. unfold Int64.and.
-  change (Int64.unsigned (Int64.repr 2047)) with 2047. 
+  change (Int64.unsigned (Int64.repr 2047)) with 2047.
   change 2047 with (Z.ones 11). rewrite ! Z.land_ones by omega.
-  rewrite Int64.unsigned_repr. apply Int64.eqmod_mod_eq. 
+  rewrite Int64.unsigned_repr. apply Int64.eqmod_mod_eq.
   apply Zlt_gt. apply (Zpower_gt_0 radix2); omega.
-  apply Int64.eqmod_divides with (2^64). apply Int64.eqm_signed_unsigned. 
+  apply Int64.eqmod_divides with (2^64). apply Int64.eqm_signed_unsigned.
   exists (2^(64-11)); auto.
-  exploit (Z_mod_lt (Int64.unsigned n) (2^11)). compute; auto. 
-  assert (2^11 < Int64.max_unsigned) by (compute; auto). omega. 
+  exploit (Z_mod_lt (Int64.unsigned n) (2^11)). compute; auto.
+  assert (2^11 < Int64.max_unsigned) by (compute; auto). omega.
   apply Int64.same_bits_eqm; auto. exists (-1); auto.
-  split. auto. assert (-2^64 < Int64.min_signed) by (compute; auto). 
+  split. auto. assert (-2^64 < Int64.min_signed) by (compute; auto).
   assert (Int64.max_signed < 2^64) by (compute; auto).
   xomega.
 Qed.

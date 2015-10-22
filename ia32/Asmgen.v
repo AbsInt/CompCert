@@ -78,7 +78,7 @@ Definition addressing_mentions (addr: addrmode) (r: ireg) : bool :=
    || match displ with Some(r', sc) => ireg_eq r r' | None => false end
   end.
 
-Definition mk_smallstore (sto: addrmode -> ireg ->instruction) 
+Definition mk_smallstore (sto: addrmode -> ireg ->instruction)
                          (addr: addrmode) (rs: ireg) (k: code) :=
   if low_ireg rs then
     OK (sto addr rs :: k)
@@ -252,7 +252,7 @@ Definition mk_setcc_base (cond: extcond) (rd: ireg) (k: code) :=
       if ireg_eq rd EAX
       then Psetcc c1 EAX :: Psetcc c2 ECX :: Pand_rr EAX ECX :: k
       else Psetcc c1 EAX :: Psetcc c2 rd  :: Pand_rr rd EAX :: k
-  | Cond_or c1 c2 => 
+  | Cond_or c1 c2 =>
       if ireg_eq rd EAX
       then Psetcc c1 EAX :: Psetcc c2 ECX :: Por_rr EAX ECX :: k
       else Psetcc c1 EAX :: Psetcc c2 rd  :: Por_rr rd EAX :: k
@@ -282,10 +282,10 @@ Definition transl_op
       do r <- ireg_of res;
       OK ((if Int.eq_dec n Int.zero then Pxor_r r else Pmov_ri r n) :: k)
   | Ofloatconst f, nil =>
-      do r <- freg_of res; 
+      do r <- freg_of res;
       OK ((if Float.eq_dec f Float.zero then Pxorpd_f r else Pmovsd_fi r f) :: k)
   | Osingleconst f, nil =>
-      do r <- freg_of res; 
+      do r <- freg_of res;
       OK ((if Float32.eq_dec f Float32.zero then Pxorps_f r else Pmovss_fi r f) :: k)
   | Oindirectsymbol id, nil =>
       do r <- ireg_of res;
@@ -518,11 +518,11 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
   | Mcall sig (inr symb) =>
       OK (Pcall_s symb sig :: k)
   | Mtailcall sig (inl reg) =>
-      do r <- ireg_of reg; 
-      OK (Pfreeframe f.(fn_stacksize) f.(fn_retaddr_ofs) f.(fn_link_ofs) :: 
+      do r <- ireg_of reg;
+      OK (Pfreeframe f.(fn_stacksize) f.(fn_retaddr_ofs) f.(fn_link_ofs) ::
           Pjmp_r r sig :: k)
   | Mtailcall sig (inr symb) =>
-      OK (Pfreeframe f.(fn_stacksize) f.(fn_retaddr_ofs) f.(fn_link_ofs) :: 
+      OK (Pfreeframe f.(fn_stacksize) f.(fn_retaddr_ofs) f.(fn_link_ofs) ::
           Pjmp_s symb sig :: k)
   | Mlabel lbl =>
       OK(Plabel lbl :: k)
@@ -533,12 +533,10 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
   | Mjumptable arg tbl =>
       do r <- ireg_of arg; OK (Pjmptbl r tbl :: k)
   | Mreturn =>
-      OK (Pfreeframe f.(fn_stacksize) f.(fn_retaddr_ofs) f.(fn_link_ofs) :: 
+      OK (Pfreeframe f.(fn_stacksize) f.(fn_retaddr_ofs) f.(fn_link_ofs) ::
           Pret :: k)
   | Mbuiltin ef args res =>
-      OK (Pbuiltin ef (List.map preg_of args) (List.map preg_of res) :: k)
-  | Mannot ef args =>
-      OK (Pannot ef (List.map (map_annot_arg preg_of) args) :: k)
+      OK (Pbuiltin ef (List.map (map_builtin_arg preg_of) args) (map_builtin_res preg_of res) :: k)
   end.
 
 (** Translation of a code sequence *)

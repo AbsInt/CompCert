@@ -48,9 +48,9 @@ Section Binary.
 
 Implicit Arguments exist [[A] [P]].
 
-(** prec is the number of bits of the mantissa including the implicit one
-    emax is the exponent of the infinities
-    Typically p=24 and emax = 128 in single precision *)
+(** [prec] is the number of bits of the mantissa including the implicit one;
+    [emax] is the exponent of the infinities.
+    For instance, binary32 is defined by [prec = 24] and [emax = 128]. *)
 Variable prec emax : Z.
 Context (prec_gt_0_ : Prec_gt_0 prec).
 Hypothesis Hmax : (prec < emax)%Z.
@@ -74,8 +74,7 @@ Definition valid_binary x :=
   end.
 
 (** Basic type used for representing binary FP numbers.
-    Note that there is exactly one such object per FP datum.
-    NaNs do not have any payload. They cannot be distinguished. *)
+    Note that there is exactly one such object per FP datum. *)
 
 Definition nan_pl := {pl | (Zpos (digits2_pos pl) <? prec)%Z  = true}.
 
@@ -382,6 +381,8 @@ Proof.
 now intros [| |? []|].
 Qed.
 
+(** Opposite *)
+
 Definition Bopp opp_nan x :=
   match x with
   | B754_nan sx plx =>
@@ -647,7 +648,8 @@ generalize (prec_gt_0 prec).
 clear -Hmax ; omega.
 Qed.
 
-(** mantissa, round and sticky bits *)
+(** Truncation *)
+
 Record shr_record := { shr_m : Z ; shr_r : bool ; shr_s : bool }.
 
 Definition shr_1 mrs :=
@@ -695,7 +697,7 @@ Qed.
 
 Definition shr mrs e n :=
   match n with
-  | Zpos p => (iter_pos _ shr_1 mrs p, (e + n)%Z)
+  | Zpos p => (iter_pos shr_1 p mrs, (e + n)%Z)
   | _ => (mrs, e)
   end.
 
@@ -746,24 +748,24 @@ destruct n as [|n|n].
 now destruct l as [|[| |]].
 2: now destruct l as [|[| |]].
 unfold shr.
-rewrite iter_nat_of_P.
+rewrite iter_pos_nat.
 rewrite Zpos_eq_Z_of_nat_o_nat_of_P.
 induction (nat_of_P n).
 simpl.
 rewrite Zplus_0_r.
 now destruct l as [|[| |]].
-simpl nat_rect.
+rewrite iter_nat_S.
 rewrite inj_S.
 unfold Zsucc.
-rewrite  Zplus_assoc.
+rewrite Zplus_assoc.
 revert IHn0.
 apply inbetween_shr_1.
 clear -Hm.
 induction n0.
 now destruct l as [|[| |]].
-simpl.
+rewrite iter_nat_S.
 revert IHn0.
-generalize (iter_nat n0 shr_record shr_1 (shr_record_of_loc m l)).
+generalize (iter_nat shr_1 n0 (shr_record_of_loc m l)).
 clear.
 intros (m, r, s) Hm.
 now destruct m as [|[m|m|]|m] ; try (now elim Hm) ; destruct r as [|] ; destruct s as [|].
@@ -826,6 +828,8 @@ simpl.
 intros H.
 now inversion H.
 Qed.
+
+(** Rounding modes *)
 
 Inductive mode := mode_NE | mode_ZR | mode_DN | mode_UP | mode_NA.
 
@@ -1177,6 +1181,8 @@ destruct x as [sx|sx|sx [plx Hplx]|sx mx ex Hx], y as [sy|sy|sy [ply Hply]|sy my
 apply B2FF_FF2B.
 Qed.
 
+(** Normalization and rounding *)
+
 Definition shl_align mx ex ex' :=
   match (ex' - ex)%Z with
   | Zneg d => (shift_pos d mx, ex')
@@ -1360,6 +1366,7 @@ now apply F2R_lt_0_compat.
 Qed.
 
 (** Addition *)
+
 Definition Bplus plus_nan m x y :=
   let f pl := B754_nan (fst pl) (snd pl) in
   match x, y with
@@ -1541,6 +1548,8 @@ now apply f_equal.
 apply Sz.
 Qed.
 
+(** Subtraction *)
+
 Definition Bminus minus_nan m x y := Bplus minus_nan m x (Bopp pair y).
 
 Theorem Bminus_correct :
@@ -1570,6 +1579,7 @@ rewrite is_finite_Bopp. auto. now destruct y as [ | | | ].
 Qed.
 
 (** Division *)
+
 Definition Fdiv_core_binary m1 e1 m2 e2 :=
   let d1 := Zdigits2 m1 in
   let d2 := Zdigits2 m2 in
@@ -1736,6 +1746,7 @@ now rewrite B2FF_FF2B.
 Qed.
 
 (** Square root *)
+
 Definition Fsqrt_core_binary m e :=
   let d := Zdigits2 m in
   let s := Zmax (2 * prec - d) 0 in

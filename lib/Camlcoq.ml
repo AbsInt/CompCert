@@ -84,7 +84,7 @@ module P = struct
       if n = 0l
       then assert false
       else Coq_xO (of_int32 (Int32.shift_right_logical n 1))
-    else 
+    else
       if n = 1l
       then Coq_xH
       else Coq_xI (of_int32 (Int32.shift_right_logical n 1))
@@ -99,7 +99,7 @@ module P = struct
       if n = 0L
       then assert false
       else Coq_xO (of_int64 (Int64.shift_right_logical n 1))
-    else 
+    else
       if n = 1L
       then Coq_xH
       else Coq_xI (of_int64 (Int64.shift_right_logical n 1))
@@ -284,7 +284,6 @@ let intern_string s =
     Hashtbl.add atom_of_string s a;
     Hashtbl.add string_of_atom a s;
     a
-
 let extern_atom a =
   try
     Hashtbl.find string_of_atom a

@@ -71,7 +71,7 @@ let classify_param env ty =
     | SP_ref_caller -> Param_ref_caller
     | _ ->
       match sizeof env ty, alignof env ty with
-      | Some sz, Some al -> 
+      | Some sz, Some al ->
           Param_flattened ((sz + 3) / 4, sz, al)
       | _, _ ->
           Param_unchanged  (* should not happen *)
@@ -299,10 +299,15 @@ let rec transf_expr env ctx e =
       transf_call env ctx None fn args e.etyp
 
 (* Function calls returning a composite by reference: add first argument.
-    ctx = Effects:   lv = f(...)     -> f(&lv, ...)      [copy optimization]
+    ctx = Effects:   lv = f(...)     -> f(&newtemp, ...), lv = newtemp
                      f(...)          -> f(&newtemp, ...)
     ctx = Val:       lv = f(...)     -> f(&newtemp, ...), lv = newtemp
                      f(...)          -> f(&newtemp, ...), newtemp
+
+   We used to do a copy optimization:
+     ctx = Effects:   lv = f(...)     -> f(&lv, ...)
+   but it is not correct in case of overlap (see test/regression/struct12.c)
+
    Function calls returning a composite by value:
     ctx = Effects:   lv = f(...)     -> newtemp = f(...), lv = newtemp
                      f(...)          -> f(...)
@@ -332,13 +337,14 @@ and transf_call env ctx opt_lhs fn args ty =
           | Effects, None ->
               let tmp = new_temp ~name:"_res" ty in
               {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
-          | Effects, Some lhs ->
-              {edesc = ECall(fn', eaddrof lhs :: args'); etyp = TVoid []}
+          (* Copy optimization, turned off as explained above *)
+       (* | Effects, Some lhs ->
+              {edesc = ECall(fn', eaddrof lhs :: args'); etyp = TVoid []} *)
           | Val, None ->
               let tmp = new_temp ~name:"_res" ty in
               ecomma {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
                      tmp
-          | Val, Some lhs ->
+          | _, Some lhs ->
               let tmp = new_temp ~name:"_res" ty in
               ecomma {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
                      (eassign lhs tmp)
@@ -515,8 +521,8 @@ let rec transf_funparams loc env params =
           let tpx = TPtr(tx', []) in
           let ex = { edesc = EVar x; etyp = tpx } in
           let estarx = { edesc = EUnop(Oderef, ex); etyp = tx' } in
-          ((x, tpx) :: params', 
-           actions, 
+          ((x, tpx) :: params',
+           actions,
            IdentMap.add x estarx subst)
       | Param_flattened(n, sz, al) ->
           let y = new_temp ~name:x.name (ty_buffer n) in
@@ -556,7 +562,7 @@ let transf_fundef env f =
     | Ret_value(ty, sz, al) ->
         (f.fd_attrib,
          ty,
-         params, 
+         params,
          transf_funbody env (subst_stmt subst f.fd_body) None) in
   let temps = get_temps() in
   {f with fd_attrib = attr1;

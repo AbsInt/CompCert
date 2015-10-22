@@ -71,7 +71,7 @@ let liveset pp lv =
   fprintf pp "{";
   VSet.iter (function V(r, ty) -> fprintf pp " x%d" (P.to_int r)
                     | L l -> ())
-    lv;                  
+    lv;
   fprintf pp " }"
 
 let print_succ pp s dfl =
@@ -101,10 +101,9 @@ let print_instruction pp succ = function
       fprintf pp "tailcall %a(%a)" ros fn vars args
   | Xbuiltin(ef, args, res) ->
       fprintf pp "%a = %s(%a)"
-        vars res (name_of_external ef) vars args
-  | Xannot(ef, args) ->
-      fprintf pp "%s(%a)"
-        (name_of_external ef) (print_annot_args var) args
+        (print_builtin_res var) res
+        (name_of_external ef)
+        (print_builtin_args var) args
   | Xbranch s ->
       print_succ pp s succ
   | Xcond(cond, args, s1, s2) ->
@@ -146,7 +145,7 @@ let print_function pp ?alloc ?live f =
       (List.map
         (fun (pc, i) -> (P.to_int pc, i))
         (PTree.elements f.fn_code)) in
-  print_succ pp f.fn_entrypoint 
+  print_succ pp f.fn_entrypoint
     (match instrs with (pc1, _) :: _ -> pc1 | [] -> -1);
   List.iter (print_block pp) instrs;
   fprintf pp "}\n\n";

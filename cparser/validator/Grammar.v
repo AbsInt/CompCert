@@ -97,8 +97,8 @@ Module Defs(Import G:T).
   Definition token := {t:terminal & symbol_semantic_type (T t)}.
 
   (** A grammar creates a relation between word of tokens and semantic values.
-     This relation is parametrized by the head symbol. It defines the 
-     "semantics" of the grammar. This relation is defined by a notion of 
+     This relation is parametrized by the head symbol. It defines the
+     "semantics" of the grammar. This relation is defined by a notion of
      parse tree. **)
   Inductive parse_tree:
     forall (head_symbol:symbol) (word:list token)
@@ -111,9 +111,9 @@ Module Defs(Import G:T).
       parse_tree (T t)
       [existT (fun t => symbol_semantic_type (T t)) t sem] sem
 
-  (** Given a production, if a word has a list of semantic values for the 
-     right hand side as head symbols, then this word has the semantic value 
-     given by the semantic action of the production for the left hand side 
+  (** Given a production, if a word has a list of semantic values for the
+     right hand side as head symbols, then this word has the semantic value
+     given by the semantic action of the production for the left hand side
      as head symbol.**)
   | Non_terminal_pt:
     forall {p:production} {word:list token}

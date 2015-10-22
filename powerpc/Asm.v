@@ -109,7 +109,7 @@ Inductive constant: Type :=
 (** A note on constants: while immediate operands to PowerPC
   instructions must be representable in 16 bits (with
   sign extension or left shift by 16 positions for some instructions),
-  we do not attempt to capture these restrictions in the 
+  we do not attempt to capture these restrictions in the
   abstract syntax nor in the semantics.  The assembler will
   emit an error if immediate operands exceed the representable
   range.  Of course, our PPC generator (file [Asmgen]) is
@@ -142,7 +142,7 @@ Inductive instruction : Type :=
   | Paddic: ireg -> ireg -> constant -> instruction           (**r add immediate and set carry *)
   | Paddis: ireg -> ireg -> constant -> instruction           (**r add immediate high *)
   | Paddze: ireg -> ireg -> instruction                       (**r add carry *)
-  | Pallocframe: Z -> int -> instruction                      (**r allocate new stack frame (pseudo) *)
+  | Pallocframe: Z -> int -> int -> instruction               (**r allocate new stack frame (pseudo) *)
   | Pand_: ireg -> ireg -> ireg -> instruction                (**r bitwise and *)
   | Pandc: ireg -> ireg -> ireg -> instruction                (**r bitwise and-complement *)
   | Pandi_: ireg -> ireg -> constant -> instruction           (**r and immediate and set conditions *)
@@ -157,29 +157,42 @@ Inductive instruction : Type :=
   | Pblr: instruction                                         (**r branch to contents of register LR *)
   | Pbt: crbit -> label -> instruction                        (**r branch if true *)
   | Pbtbl: ireg -> list label -> instruction                  (**r N-way branch through a jump table (pseudo) *)
+  | Pcmpb: ireg -> ireg -> ireg -> instruction                (**r compare bytes *)
   | Pcmplw: ireg -> ireg -> instruction                       (**r unsigned integer comparison *)
   | Pcmplwi: ireg -> constant -> instruction                  (**r same, with immediate argument *)
   | Pcmpw: ireg -> ireg -> instruction                        (**r signed integer comparison *)
   | Pcmpwi: ireg -> constant -> instruction                   (**r same, with immediate argument *)
-  | Pcntlzw: ireg -> ireg -> instruction                       (**r count leading zeros *)
+  | Pcntlzw: ireg -> ireg -> instruction                      (**r count leading zeros *)
   | Pcreqv: crbit -> crbit -> crbit -> instruction            (**r not-xor between condition bits *)
   | Pcror: crbit -> crbit -> crbit -> instruction             (**r or between condition bits *)
   | Pcrxor: crbit -> crbit -> crbit -> instruction            (**r xor between condition bits *)
+  | Pdcbf: ireg -> ireg -> instruction                        (**r data cache flush *)
+  | Pdcbi: ireg -> ireg -> instruction                        (**r data cache invalidate *)
+  | Pdcbt: int -> ireg -> ireg -> instruction                 (**r data cache block touch *)
+  | Pdcbtst: int -> ireg -> ireg -> instruction               (**r data cache block touch *)
+  | Pdcbtls: int -> ireg -> ireg -> instruction               (**r data cache block touch and lock *)
+  | Pdcbz: ireg -> ireg -> instruction                        (**r data cache block zero *)
   | Pdivw: ireg -> ireg -> ireg -> instruction                (**r signed division *)
   | Pdivwu: ireg -> ireg -> ireg -> instruction               (**r unsigned division *)
   | Peieio: instruction                                       (**r EIEIO barrier *)
   | Peqv: ireg -> ireg -> ireg -> instruction                 (**r bitwise not-xor *)
   | Pextsb: ireg -> ireg -> instruction                       (**r 8-bit sign extension *)
   | Pextsh: ireg -> ireg -> instruction                       (**r 16-bit sign extension *)
+  | Pextsw: ireg -> ireg -> instruction                       (**r 64-bit sign extension (PPC64) *)
   | Pfreeframe: Z -> int -> instruction                       (**r deallocate stack frame and restore previous frame (pseudo) *)
   | Pfabs: freg -> freg -> instruction                        (**r float absolute value *)
   | Pfabss: freg -> freg -> instruction                       (**r float absolute value *)
   | Pfadd: freg -> freg -> freg -> instruction                (**r float addition *)
   | Pfadds: freg -> freg -> freg -> instruction               (**r float addition *)
   | Pfcmpu: freg -> freg -> instruction                       (**r float comparison *)
+  | Pfcfi: freg -> ireg -> instruction                        (**r signed-int-to-float conversion (pseudo, PPC64) *)
+  | Pfcfiu: freg -> ireg -> instruction                       (**r unsigned-int-to-float conversion (pseudo, PPC64) *)
+  | Pfcfid: freg -> freg -> instruction                       (**r signed-long-to-float conversion (PPC64) *)
   | Pfcti: ireg -> freg -> instruction                        (**r float-to-signed-int conversion, round towards 0 (pseudo) *)
-  | Pfctiw: freg -> freg -> instruction                       (**r float-to-signed-int conversion, round by default *) 
-  | Pfctiwz: freg -> freg -> instruction                      (**r float-to-signed-int conversion, round towards 0 *) 
+  | Pfctiu: ireg -> freg -> instruction                       (**r float-to-unsigned-int conversion, round towards 0 (pseudo, PPC64) *)
+  | Pfctidz: freg -> freg -> instruction                      (**r float-to-signed-long conversion, round towards 0 (PPC64) *)
+  | Pfctiw: freg -> freg -> instruction                       (**r float-to-signed-int conversion, round by default *)
+  | Pfctiwz: freg -> freg -> instruction                      (**r float-to-signed-int conversion, round towards 0 *)
   | Pfdiv: freg -> freg -> freg -> instruction                (**r float division *)
   | Pfdivs: freg -> freg -> freg -> instruction               (**r float division *)
   | Pfmake: freg -> ireg -> ireg -> instruction               (**r build a float from 2 ints (pseudo) *)
@@ -200,7 +213,10 @@ Inductive instruction : Type :=
   | Pfrsqrte: freg -> freg -> instruction                     (**r approximate reciprocal of square root *)
   | Pfres: freg -> freg -> instruction                        (**r approximate inverse *)
   | Pfsel: freg -> freg -> freg -> freg -> instruction        (**r FP conditional move *)
+  | Pisel: ireg -> ireg -> ireg -> crbit -> instruction       (**r integer select *)
   | Pisync: instruction                                       (**r ISYNC barrier *)
+  | Picbi: ireg -> ireg -> instruction                        (**r instruction cache invalidate *)
+  | Picbtls: int -> ireg -> ireg -> instruction               (**r instruction cache block touch and lock set *)
   | Plbz: ireg -> constant -> ireg -> instruction             (**r load 8-bit unsigned int *)
   | Plbzx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
   | Plfd: freg -> constant -> ireg -> instruction             (**r load 64-bit float *)
@@ -223,12 +239,15 @@ Inductive instruction : Type :=
   | Plwzx_a: ireg -> ireg -> ireg -> instruction              (**r same, with 2 index regs *)
   | Plwarx: ireg -> ireg -> ireg -> instruction               (**r load with reservation *)
   | Plwbrx: ireg -> ireg -> ireg -> instruction               (**r load 32-bit int and reverse endianness *)
+  | Pmbar: int -> instruction                                 (**r memory barrier *)
   | Pmfcr: ireg -> instruction                                (**r move condition register to reg *)
   | Pmfcrbit: ireg -> crbit -> instruction                    (**r move condition bit to reg (pseudo) *)
   | Pmflr: ireg -> instruction                                (**r move LR to reg *)
   | Pmr: ireg -> ireg -> instruction                          (**r integer move *)
   | Pmtctr: ireg -> instruction                               (**r move ireg to CTR *)
   | Pmtlr: ireg -> instruction                                (**r move ireg to LR *)
+  | Pmfspr: ireg -> int -> instruction                        (**r move from special register *)
+  | Pmtspr: int -> ireg -> instruction                        (**r move to special register *)
   | Pmulli: ireg -> ireg -> constant -> instruction           (**r integer multiply immediate *)
   | Pmullw: ireg -> ireg -> ireg -> instruction               (**r integer multiply *)
   | Pmulhw: ireg -> ireg -> ireg -> instruction               (**r multiply high signed *)
@@ -239,6 +258,7 @@ Inductive instruction : Type :=
   | Porc: ireg -> ireg -> ireg -> instruction                 (**r bitwise or-complement *)
   | Pori: ireg -> ireg -> constant -> instruction             (**r or with immediate *)
   | Poris: ireg -> ireg -> constant -> instruction            (**r or with immediate high *)
+  | Prldicl: ireg -> ireg -> int -> int -> instruction        (**r rotate and mask left (PPC64) *)
   | Prlwinm: ireg -> ireg -> int -> int -> instruction        (**r rotate and mask *)
   | Prlwimi: ireg -> ireg -> int -> int -> instruction        (**r rotate and insert *)
   | Pslw: ireg -> ireg -> ireg -> instruction                 (**r shift left *)
@@ -247,6 +267,7 @@ Inductive instruction : Type :=
   | Psrw: ireg -> ireg -> ireg -> instruction                 (**r shift right unsigned *)
   | Pstb: ireg -> constant -> ireg -> instruction             (**r store 8-bit int *)
   | Pstbx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
+  | Pstdu: ireg -> constant -> ireg -> instruction           (**r store 64-bit integer with update (PPC64) *)
   | Pstfd: freg -> constant -> ireg -> instruction            (**r store 64-bit float *)
   | Pstfdu: freg -> constant -> ireg -> instruction           (**r store 64-bit float with update *)
   | Pstfdx: freg -> ireg -> ireg -> instruction               (**r same, with 2 index regs *)
@@ -270,13 +291,13 @@ Inductive instruction : Type :=
   | Psubfze: ireg -> ireg -> instruction                      (**r integer opposite with carry *)
   | Psubfic: ireg -> ireg -> constant -> instruction          (**r integer subtraction from immediate *)
   | Psync: instruction                                        (**r SYNC barrier *)
+  | Plwsync: instruction                                      (**r LWSYNC barrier *)
   | Ptrap: instruction                                        (**r unconditional trap *)
   | Pxor: ireg -> ireg -> ireg -> instruction                 (**r bitwise xor *)
   | Pxori: ireg -> ireg -> constant -> instruction            (**r bitwise xor with immediate *)
   | Pxoris: ireg -> ireg -> constant -> instruction           (**r bitwise xor with immediate high *)
   | Plabel: label -> instruction                              (**r define a code label *)
-  | Pbuiltin: external_function -> list preg -> list preg -> instruction (**r built-in function (pseudo) *)
-  | Pannot: external_function -> list (annot_arg preg) -> instruction (**r annotation statement (pseudo) *)
+  | Pbuiltin: external_function -> list (builtin_arg preg) -> builtin_res preg -> instruction (**r built-in function (pseudo) *)
   | Pcfi_adjust: int -> instruction                           (**r .cfi_adjust debug directive *)
   | Pcfi_rel_offset: int -> instruction.                      (**r .cfi_rel_offset lr debug directive *)
 
@@ -312,7 +333,7 @@ lbl:    .double floatcst
         lfd     rdst, 0(r1)
         addi    r1, r1, 8
 >>
-- [Pallocframe sz ofs]: in the formal semantics, this pseudo-instruction
+- [Pallocframe sz ofs retofs]: in the formal semantics, this pseudo-instruction
   allocates a memory block with bounds [0] and [sz], stores the value
   of register [r1] (the stack pointer, by convention) at offset [ofs]
   in this block, and sets [r1] to a pointer to the bottom of this
@@ -359,7 +380,7 @@ Definition program := AST.program fundef unit.
   type [Tint], float registers to values of type [Tfloat],
   and boolean registers ([CARRY], [CR0_0], etc) to either
   [Vzero] or [Vone]. *)
-  
+
 Definition regset := Pregmap.t val.
 Definition genv := Genv.t fundef unit.
 
@@ -380,6 +401,15 @@ Fixpoint set_regs (rl: list preg) (vl: list val) (rs: regset) : regset :=
   match rl, vl with
   | r1 :: rl', v1 :: vl' => set_regs rl' vl' (rs#r1 <- v1)
   | _, _ => rs
+  end.
+
+(** Assigning the result of a builtin *)
+
+Fixpoint set_res (res: builtin_res preg) (v: val) (rs: regset) : regset :=
+  match res with
+  | BR r => rs#r <- v
+  | BR_none => rs
+  | BR_splitlong hi lo => set_res lo (Val.loword v) (set_res hi (Val.hiword v) rs)
   end.
 
 Section RELSEM.
@@ -602,7 +632,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Paddze rd r1 =>
       Next (nextinstr (rs#rd <- (Val.add rs#r1 rs#CARRY)
                        #CARRY <- (Val.add_carry rs#r1 Vzero rs#CARRY))) m
-  | Pallocframe sz ofs =>
+  | Pallocframe sz ofs _ =>
       let (m1, stk) := Mem.alloc m 0 sz in
       let sp := Vptr stk Int.zero in
       match Mem.storev Mint32 m1 (Val.add sp (Vint ofs)) rs#GPR1 with
@@ -644,7 +674,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       end
   | Pbtbl r tbl =>
       match rs r with
-      | Vint n => 
+      | Vint n =>
           match list_nth_z tbl (Int.unsigned n) with
           | None => Stuck
           | Some lbl => goto_label f lbl (rs #GPR12 <- Vundef #CTR <- Vundef) m
@@ -694,8 +724,14 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (rs#rd <- (Val.addfs rs#r1 rs#r2))) m
   | Pfcmpu r1 r2 =>
       Next (nextinstr (compare_float rs rs#r1 rs#r2)) m
+  | Pfcfi rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.maketotal (Val.floatofint rs#r1)))) m
+  | Pfcfiu rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.maketotal (Val.floatofintu rs#r1)))) m
   | Pfcti rd r1 =>
       Next (nextinstr (rs#FPR13 <- Vundef #rd <- (Val.maketotal (Val.intoffloat rs#r1)))) m
+  | Pfctiu rd r1 =>
+      Next (nextinstr (rs#FPR13 <- Vundef #rd <- (Val.maketotal (Val.intuoffloat rs#r1)))) m
   | Pfdiv rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.divf rs#r1 rs#r2))) m
   | Pfdivs rd r1 r2 =>
@@ -848,15 +884,23 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr rs) m
   | Pbuiltin ef args res =>
       Stuck    (**r treated specially below *)
-  | Pannot ef args =>
-      Stuck    (**r treated specially below *)
-  (** The following instructions and directives are not generated directly by Asmgen,
-      so we do not model them. *)
+  (** The following instructions and directives are not generated
+      directly by [Asmgen], so we do not model them. *)
   | Pbdnz _
+  | Pcmpb _ _ _
   | Pcntlzw _ _
   | Pcreqv _ _ _
   | Pcrxor _ _ _
+  | Pdcbf _ _
+  | Pdcbi _ _
+  | Pdcbt _ _ _
+  | Pdcbtst _ _ _
+  | Pdcbtls _ _ _
+  | Pdcbz _ _
+  | Pextsw _ _
   | Peieio
+  | Pfcfid _ _
+  | Pfctidz _ _
   | Pfctiw _ _
   | Pfctiwz _ _
   | Pfmadd _ _ _ _
@@ -867,12 +911,21 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pfrsqrte _ _
   | Pfres _ _
   | Pfsel _ _ _ _
+  | Pisel _ _ _ _
   | Plwarx _ _ _
   | Plwbrx _ _ _
+  | Picbi _ _
+  | Picbtls _ _ _
   | Pisync
+  | Plwsync
   | Plhbrx _ _ _
   | Plwzu _ _ _
+  | Pmbar _
   | Pmfcr _
+  | Pmfspr _ _
+  | Pmtspr _ _
+  | Prldicl _ _ _ _
+  | Pstdu _ _ _
   | Pstwbrx _ _ _
   | Pstwcx_ _ _ _
   | Pstfdu _ _ _
@@ -946,24 +999,16 @@ Inductive step: state -> trace -> state -> Prop :=
       exec_instr f i rs m = Next rs' m' ->
       step (State rs m) E0 (State rs' m')
   | exec_step_builtin:
-      forall b ofs f ef args res rs m t vl rs' m',
+      forall b ofs f ef args res rs m vargs t vres rs' m',
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       find_instr (Int.unsigned ofs) f.(fn_code) = Some (Pbuiltin ef args res) ->
-      external_call' ef ge (map rs args) m t vl m' ->
+      eval_builtin_args ge rs (rs GPR1) m args vargs ->
+      external_call ef ge vargs m t vres m' ->
       rs' = nextinstr
-              (set_regs res vl
+              (set_res res vres
                 (undef_regs (map preg_of (destroyed_by_builtin ef)) rs)) ->
       step (State rs m) t (State rs' m')
-  | exec_step_annot:
-      forall b ofs f ef args rs m vargs t v m',
-      rs PC = Vptr b ofs ->
-      Genv.find_funct_ptr ge b = Some (Internal f) ->
-      find_instr (Int.unsigned ofs) f.(fn_code) = Some (Pannot ef args) ->
-      eval_annot_args ge rs (rs GPR1) m args vargs ->
-      external_call ef ge vargs m t v m' ->
-      step (State rs m) t
-           (State (nextinstr rs) m')
   | exec_step_external:
       forall b ef args res rs m t rs' m',
       rs PC = Vptr b Int.zero ->
@@ -993,7 +1038,7 @@ Inductive final_state: state -> int -> Prop :=
       rs#PC = Vzero ->
       rs#GPR3 = Vint r ->
       final_state (State rs m) r.
-      
+
 Definition semantics (p: program) :=
   Semantics step (initial_state p) final_state (Genv.globalenv p).
 
@@ -1008,9 +1053,9 @@ Proof.
           forall vl2, list_forall2 (extcall_arg rs m) ll vl2 -> vl1 = vl2).
     induction 1; intros vl2 EA; inv EA.
     auto.
-    f_equal; auto. 
+    f_equal; auto.
     inv H; inv H3; congruence.
-  intros. red in H0; red in H1. eauto. 
+  intros. red in H0; red in H1. eauto.
 Qed.
 
 Lemma semantics_determinate: forall p, determinate (semantics p).
@@ -1027,12 +1072,8 @@ Ltac Equalities :=
   split. constructor. auto.
   discriminate.
   discriminate.
-  inv H11. 
-  exploit external_call_determ'. eexact H4. eexact H9. intros [A B].
-  split. auto. intros. destruct B; auto. subst. auto.
-  inv H12.
-  assert (vargs0 = vargs) by (eapply eval_annot_args_determ; eauto). subst vargs0.
-  exploit external_call_determ. eexact H5. eexact H13. intros [A B].
+  assert (vargs0 = vargs) by (eapply eval_builtin_args_determ; eauto). subst vargs0.
+  exploit external_call_determ. eexact H5. eexact H11. intros [A B].
   split. auto. intros. destruct B; auto. subst. auto.
   assert (args0 = args) by (eapply extcall_arguments_determ; eauto). subst args0.
   exploit external_call_determ'. eexact H3. eexact H8. intros [A B].
@@ -1040,7 +1081,6 @@ Ltac Equalities :=
 (* trace length *)
   red; intros. inv H; simpl.
   omega.
-  inv H3; eapply external_call_trace_length; eauto.
   eapply external_call_trace_length; eauto.
   inv H2; eapply external_call_trace_length; eauto.
 (* initial states *)
@@ -1061,5 +1101,3 @@ Definition data_preg (r: preg) : bool :=
   | CARRY => false
   | _ => true
   end.
-
-

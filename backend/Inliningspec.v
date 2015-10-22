@@ -40,24 +40,24 @@ Remark add_globdef_compat:
   fenv_compat (Genv.add_global ge idg) (Inlining.add_globdef fenv idg).
 Proof.
   intros. destruct idg as [id gd]. red; simpl; intros.
-  unfold Genv.find_symbol in H1; simpl in H1. 
+  unfold Genv.find_symbol in H1; simpl in H1.
   unfold Genv.find_funct_ptr; simpl.
   rewrite PTree.gsspec in H1. destruct (peq id0 id).
   (* same *)
-  subst id0. inv H1. destruct gd. destruct f0. 
+  subst id0. inv H1. destruct gd. destruct f0.
   destruct (should_inline id f0).
   rewrite PTree.gss in H0. rewrite PTree.gss. inv H0; auto.
   rewrite PTree.grs in H0; discriminate.
   rewrite PTree.grs in H0; discriminate.
   rewrite PTree.grs in H0; discriminate.
   (* different *)
-  destruct gd. rewrite PTree.gso. eapply H; eauto. 
+  destruct gd. rewrite PTree.gso. eapply H; eauto.
   destruct f0. destruct (should_inline id f0).
   rewrite PTree.gso in H0; auto.
   rewrite PTree.gro in H0; auto.
   rewrite PTree.gro in H0; auto.
   red; intros; subst b. eelim Plt_strict. eapply Genv.genv_symb_range; eauto.
-  rewrite PTree.gro in H0; auto. eapply H; eauto. 
+  rewrite PTree.gro in H0; auto. eapply H; eauto.
 Qed.
 
 Lemma funenv_program_compat:
@@ -68,7 +68,7 @@ Proof.
   assert (forall gl ge fenv,
          fenv_compat ge fenv ->
          fenv_compat (Genv.add_globals ge gl) (fold_left add_globdef gl fenv)).
-    induction gl; simpl; intros. auto. apply IHgl. apply add_globdef_compat; auto. 
+    induction gl; simpl; intros. auto. apply IHgl. apply add_globdef_compat; auto.
   apply H. red; intros. rewrite PTree.gempty in H0; discriminate.
 Qed.
 
@@ -80,12 +80,12 @@ Proof.
   zify. omega.
 Qed.
 
-Lemma shiftpos_inj: 
+Lemma shiftpos_inj:
   forall x y n, shiftpos x n = shiftpos y n -> x = y.
 Proof.
   intros.
   assert (Zpos (shiftpos x n) = Zpos (shiftpos y n)) by congruence.
-  rewrite ! shiftpos_eq in H0. 
+  rewrite ! shiftpos_eq in H0.
   assert (Z.pos x = Z.pos y) by omega.
   congruence.
 Qed.
@@ -99,32 +99,32 @@ Qed.
 Lemma shiftpos_above:
   forall x n, Ple n (shiftpos x n).
 Proof.
-  intros. unfold Ple; zify. rewrite shiftpos_eq. xomega. 
+  intros. unfold Ple; zify. rewrite shiftpos_eq. xomega.
 Qed.
 
 Lemma shiftpos_not_below:
   forall x n, Plt (shiftpos x n) n -> False.
 Proof.
-  intros. generalize (shiftpos_above x n). xomega. 
+  intros. generalize (shiftpos_above x n). xomega.
 Qed.
 
 Lemma shiftpos_below:
   forall x n, Plt (shiftpos x n) (Pplus x n).
 Proof.
-  intros. unfold Plt; zify. rewrite shiftpos_eq. omega. 
+  intros. unfold Plt; zify. rewrite shiftpos_eq. omega.
 Qed.
 
 Lemma shiftpos_le:
   forall x y n, Ple x y -> Ple (shiftpos x n) (shiftpos y n).
 Proof.
-  intros. unfold Ple in *; zify. rewrite ! shiftpos_eq. omega. 
+  intros. unfold Ple in *; zify. rewrite ! shiftpos_eq. omega.
 Qed.
 
 
 (** ** Working with the state monad *)
 
 Remark bind_inversion:
-  forall (A B: Type) (f: mon A) (g: A -> mon B) 
+  forall (A B: Type) (f: mon A) (g: A -> mon B)
          (y: B) (s1 s3: state) (i: sincr s1 s3),
   bind f g s1 = R y s3 i ->
   exists x, exists s2, exists i1, exists i2,
@@ -156,7 +156,7 @@ Ltac monadInv H :=
   match type of H with
   | (ret _ _ = R _ _ _) => monadInv1 H
   | (bind ?F ?G ?S = R ?X ?S' ?I) => monadInv1 H
-  | (?F _ _ _ _ _ _ _ _ = R _ _ _) => 
+  | (?F _ _ _ _ _ _ _ _ = R _ _ _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
   | (?F _ _ _ _ _ _ _ = R _ _ _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
@@ -189,7 +189,7 @@ Proof.
   induction l; simpl; intros.
   exists (sincr_refl s); auto.
   destruct a as [x y]. unfold bind. simpl. destruct (f x y s) as [xx s1 i1].
-  destruct (IHl s1) as [i2 EQ]. rewrite EQ. econstructor; eauto. 
+  destruct (IHl s1) as [i2 EQ]. rewrite EQ. econstructor; eauto.
 Qed.
 
 Lemma ptree_mfold_spec:
@@ -197,7 +197,7 @@ Lemma ptree_mfold_spec:
   ptree_mfold f t s = R x s' i ->
   exists i', mlist_iter2 f (PTree.elements t) s = R tt s' i'.
 Proof.
-  intros. 
+  intros.
   destruct (mlist_iter2_fold _ _ f (PTree.elements t) s) as [i' EQ].
   unfold ptree_mfold in H. inv H. rewrite PTree.fold_spec.
   econstructor. eexact EQ.
@@ -220,12 +220,12 @@ Lemma add_moves_unchanged:
   Plt pc s.(st_nextnode) \/ Ple s'.(st_nextnode) pc ->
   s'.(st_code)!pc = s.(st_code)!pc.
 Proof.
-  induction srcs; simpl; intros. 
+  induction srcs; simpl; intros.
   monadInv H. auto.
   destruct dsts; monadInv H. auto.
-  transitivity (st_code s0)!pc. eapply IHsrcs; eauto. monadInv EQ; simpl. xomega. 
+  transitivity (st_code s0)!pc. eapply IHsrcs; eauto. monadInv EQ; simpl. xomega.
   monadInv EQ; simpl. apply PTree.gso.
-  inversion INCR0; simpl in *. xomega. 
+  inversion INCR0; simpl in *. xomega.
 Qed.
 
 Lemma add_moves_spec:
@@ -234,15 +234,15 @@ Lemma add_moves_spec:
   (forall pc, Ple s.(st_nextnode) pc -> Plt pc s'.(st_nextnode) -> c!pc = s'.(st_code)!pc) ->
   tr_moves c pc1 srcs dsts pc2.
 Proof.
-  induction srcs; simpl; intros. 
+  induction srcs; simpl; intros.
   monadInv H. apply tr_moves_nil; auto.
-  destruct dsts; monadInv H. apply tr_moves_nil; auto. 
-  apply tr_moves_cons with x. eapply IHsrcs; eauto. 
+  destruct dsts; monadInv H. apply tr_moves_nil; auto.
+  apply tr_moves_cons with x. eapply IHsrcs; eauto.
   intros. inversion INCR. apply H0; xomega.
   monadInv EQ.
-  rewrite H0. erewrite add_moves_unchanged; eauto. 
-  simpl. apply PTree.gss. 
-  simpl. xomega. 
+  rewrite H0. erewrite add_moves_unchanged; eauto.
+  simpl. apply PTree.gss.
+  simpl. xomega.
   xomega.
   inversion INCR; inversion INCR0; simpl in *; xomega.
 Qed.
@@ -313,12 +313,9 @@ Inductive tr_instr: context -> node -> instruction -> code -> Prop :=
       context_stack_tailcall ctx f ctx' ->
       tr_instr ctx pc (Itailcall sg (inr _ id) args) c
   | tr_builtin: forall ctx pc c ef args res s,
-      Ple res ctx.(mreg) ->
-      c!(spc ctx pc) = Some (Ibuiltin ef (sregs ctx args) (sreg ctx res) (spc ctx s)) ->
+      match res with BR r => Ple r ctx.(mreg) | _ => True end ->
+      c!(spc ctx pc) = Some (Ibuiltin ef (map (sbuiltinarg ctx) args) (sbuiltinres ctx res) (spc ctx s)) ->
       tr_instr ctx pc (Ibuiltin ef args res s) c
-  | tr_annot: forall ctx pc c ef args s,
-      c!(spc ctx pc) = Some (Iannot ef (map (sannotarg ctx) args) (spc ctx s)) ->
-      tr_instr ctx pc (Iannot ef args s) c
   | tr_cond: forall ctx pc cond args s1 s2 c,
       c!(spc ctx pc) = Some (Icond cond (sregs ctx args) (spc ctx s1) (spc ctx s2)) ->
       tr_instr ctx pc (Icond cond args s1 s2) c
@@ -389,25 +386,25 @@ Proof.
   generalize set_instr_other; intros A.
   intros. unfold expand_instr in H; destruct instr; eauto.
 (* call *)
-  destruct (can_inline fe s1). eauto. 
+  destruct (can_inline fe s1). eauto.
   monadInv H. unfold inline_function in EQ. monadInv EQ.
-  transitivity (s2.(st_code)!pc'). eauto. 
+  transitivity (s2.(st_code)!pc'). eauto.
   transitivity (s5.(st_code)!pc'). eapply add_moves_unchanged; eauto.
-    left. inversion INCR5. inversion INCR3. monadInv EQ1; simpl in *. xomega. 
-  transitivity (s4.(st_code)!pc'). eapply rec_unchanged; eauto. 
+    left. inversion INCR5. inversion INCR3. monadInv EQ1; simpl in *. xomega.
+  transitivity (s4.(st_code)!pc'). eapply rec_unchanged; eauto.
     simpl. monadInv EQ; simpl. monadInv EQ1; simpl. xomega.
-    simpl. monadInv EQ1; simpl. auto. 
+    simpl. monadInv EQ1; simpl. auto.
   monadInv EQ; simpl. monadInv EQ1; simpl. auto.
 (* tailcall *)
   destruct (can_inline fe s1).
   destruct (retinfo ctx) as [[rpc rreg]|]; eauto.
   monadInv H. unfold inline_tail_function in EQ. monadInv EQ.
-  transitivity (s2.(st_code)!pc'). eauto. 
+  transitivity (s2.(st_code)!pc'). eauto.
   transitivity (s5.(st_code)!pc'). eapply add_moves_unchanged; eauto.
-    left. inversion INCR5. inversion INCR3. monadInv EQ1; simpl in *. xomega. 
-  transitivity (s4.(st_code)!pc'). eapply rec_unchanged; eauto. 
+    left. inversion INCR5. inversion INCR3. monadInv EQ1; simpl in *. xomega.
+  transitivity (s4.(st_code)!pc'). eapply rec_unchanged; eauto.
     simpl. monadInv EQ; simpl. monadInv EQ1; simpl. xomega.
-    simpl. monadInv EQ1; simpl. auto. 
+    simpl. monadInv EQ1; simpl. auto.
   monadInv EQ; simpl. monadInv EQ1; simpl. auto.
 (* return *)
   destruct (retinfo ctx) as [[rpc rreg]|]; eauto.
@@ -428,8 +425,8 @@ Proof.
   (* inductive case *)
   destruct a as [pc1 instr1]; simpl in *.
   monadInv H. inv H3.
-  transitivity ((st_code s0)!pc). 
-  eapply IHl; eauto. destruct INCR; xomega. destruct INCR; xomega. 
+  transitivity ((st_code s0)!pc).
+  eapply IHl; eauto. destruct INCR; xomega. destruct INCR; xomega.
   eapply expand_instr_unchanged; eauto.
 Qed.
 
@@ -442,12 +439,12 @@ Lemma expand_cfg_rec_unchanged:
 Proof.
   intros. unfold expand_cfg_rec in H. monadInv H. inversion EQ.
   transitivity ((st_code s0)!pc).
-  exploit ptree_mfold_spec; eauto. intros [INCR' ITER].  
-  eapply iter_expand_instr_unchanged; eauto. 
-    subst s0; auto. 
+  exploit ptree_mfold_spec; eauto. intros [INCR' ITER].
+  eapply iter_expand_instr_unchanged; eauto.
+    subst s0; auto.
     subst s0; simpl. xomega.
-    red; intros. exploit list_in_map_inv; eauto. intros [pc1 [A B]]. 
-    subst pc. unfold spc in H1. eapply shiftpos_not_below; eauto. 
+    red; intros. exploit list_in_map_inv; eauto. intros [pc1 [A B]].
+    subst pc. unfold spc in H1. eapply shiftpos_not_below; eauto.
     apply PTree.elements_keys_norepet.
   subst s0; auto.
 Qed.
@@ -459,7 +456,7 @@ Hypothesis rec_spec:
   Ple (ctx.(dpc) + max_pc_function f) s.(st_nextnode) ->
   ctx.(mreg) = max_reg_function f ->
   Ple (Pplus ctx.(dreg) ctx.(mreg)) s.(st_nextreg) ->
-  ctx.(mstk) >= 0 -> 
+  ctx.(mstk) >= 0 ->
   ctx.(mstk) = Zmax (fn_stacksize f) 0 ->
   (min_alignment (fn_stacksize f) | ctx.(dstk)) ->
   ctx.(dstk) >= 0 ->
@@ -499,14 +496,14 @@ Proof.
 (* call *)
   destruct (can_inline fe s1) as [|id f P Q].
   (* not inlined *)
-  eapply tr_call; eauto. 
+  eapply tr_call; eauto.
   (* inlined *)
   subst s1.
   monadInv EXP. unfold inline_function in EQ; monadInv EQ.
   set (ctx' := callcontext ctx x1 x2 (max_reg_function f) (fn_stacksize f) n r).
-  inversion EQ0; inversion EQ1; inversion EQ. inv_incr. 
+  inversion EQ0; inversion EQ1; inversion EQ. inv_incr.
   apply tr_call_inlined with (pc1 := x0) (ctx' := ctx') (f := f); auto.
-  eapply BASE; eauto. 
+  eapply BASE; eauto.
   eapply add_moves_spec; eauto.
     intros. rewrite S1. eapply set_instr_other; eauto. unfold node; xomega.
     xomega. xomega.
@@ -519,25 +516,25 @@ Proof.
     assert (dstk ctx + mstk ctx <= dstk ctx'). simpl. apply align_le. apply min_alignment_pos. omega.
     omega.
     intros. simpl in H. rewrite S1.
-    transitivity (s1.(st_code))!pc0. eapply set_instr_other; eauto. unfold node in *; xomega.
-    eapply add_moves_unchanged; eauto. unfold node in *; xomega. xomega. 
-  red; simpl. subst s2; simpl in *. xomega. 
+    transitivity (s1.(st_code)!pc0). eapply set_instr_other; eauto. unfold node in *; xomega.
+    eapply add_moves_unchanged; eauto. unfold node in *; xomega. xomega.
+  red; simpl. subst s2; simpl in *. xomega.
   red; simpl. split. auto. apply align_le. apply min_alignment_pos.
 (* tailcall *)
   destruct (can_inline fe s1) as [|id f P Q].
   (* not inlined *)
-  destruct (retinfo ctx) as [[rpc rreg] | ] eqn:?. 
+  destruct (retinfo ctx) as [[rpc rreg] | ] eqn:?.
   (* turned into a call *)
-  eapply tr_tailcall_call; eauto. 
+  eapply tr_tailcall_call; eauto.
   (* preserved *)
-  eapply tr_tailcall; eauto. 
+  eapply tr_tailcall; eauto.
   (* inlined *)
   subst s1.
   monadInv EXP. unfold inline_function in EQ; monadInv EQ.
   set (ctx' := tailcontext ctx x1 x2 (max_reg_function f) (fn_stacksize f)) in *.
-  inversion EQ0; inversion EQ1; inversion EQ. inv_incr. 
+  inversion EQ0; inversion EQ1; inversion EQ. inv_incr.
   apply tr_tailcall_inlined with (pc1 := x0) (ctx' := ctx') (f := f); auto.
-  eapply BASE; eauto. 
+  eapply BASE; eauto.
   eapply add_moves_spec; eauto.
     intros. rewrite S1. eapply set_instr_other; eauto. unfold node; xomega. xomega. xomega.
   eapply rec_spec; eauto.
@@ -550,16 +547,18 @@ Proof.
     omega.
     intros. simpl in H. rewrite S1.
     transitivity (s1.(st_code))!pc0. eapply set_instr_other; eauto. unfold node in *; xomega.
-    eapply add_moves_unchanged; eauto. unfold node in *; xomega. xomega. 
-  red; simpl. 
+    eapply add_moves_unchanged; eauto. unfold node in *; xomega. xomega.
+  red; simpl.
 subst s2; simpl in *; xomega.
   red; auto.
+(* builtin *)
+  eapply tr_builtin; eauto. destruct b; eauto.
 (* return *)
-  destruct (retinfo ctx) as [[rpc rreg] | ] eqn:?. 
+  destruct (retinfo ctx) as [[rpc rreg] | ] eqn:?.
   (* inlined *)
-  eapply tr_return_inlined; eauto. 
+  eapply tr_return_inlined; eauto.
   (* unchanged *)
-  eapply tr_return; eauto. 
+  eapply tr_return; eauto.
 Qed.
 
 Lemma iter_expand_instr_spec:
@@ -581,29 +580,29 @@ Proof.
   (* inductive case *)
   destruct a as [pc1 instr1]; simpl in *. inv H0. monadInv H. inv_incr.
   assert (A: Ple ctx.(dpc) s0.(st_nextnode)).
-    assert (B: Plt (spc ctx pc) (st_nextnode s)) by eauto. 
+    assert (B: Plt (spc ctx pc) (st_nextnode s)) by eauto.
     unfold spc in B. generalize (shiftpos_above pc (dpc ctx)). xomega.
   destruct H9. inv H.
   (* same pc *)
   eapply expand_instr_spec; eauto.
   omega.
   intros.
-    transitivity ((st_code s')!pc'). 
-    apply H7. auto. xomega. 
-    eapply iter_expand_instr_unchanged; eauto. 
-    red; intros. rewrite list_map_compose in H9. exploit list_in_map_inv; eauto. 
-    intros [[pc0 instr0] [P Q]]. simpl in P. 
+    transitivity ((st_code s')!pc').
+    apply H7. auto. xomega.
+    eapply iter_expand_instr_unchanged; eauto.
+    red; intros. rewrite list_map_compose in H9. exploit list_in_map_inv; eauto.
+    intros [[pc0 instr0] [P Q]]. simpl in P.
     assert (Plt (spc ctx pc0) (st_nextnode s)) by eauto. xomega.
-  transitivity ((st_code s')!(spc ctx pc)). 
-    eapply H8; eauto. 
-    eapply iter_expand_instr_unchanged; eauto. 
+  transitivity ((st_code s')!(spc ctx pc)).
+    eapply H8; eauto.
+    eapply iter_expand_instr_unchanged; eauto.
     assert (Plt (spc ctx pc) (st_nextnode s)) by eauto. xomega.
-    red; intros. rewrite list_map_compose in H. exploit list_in_map_inv; eauto. 
+    red; intros. rewrite list_map_compose in H. exploit list_in_map_inv; eauto.
     intros [[pc0 instr0] [P Q]]. simpl in P.
     assert (pc = pc0) by (eapply shiftpos_inj; eauto). subst pc0.
     elim H12. change pc with (fst (pc, instr0)). apply List.in_map; auto.
   (* older pc *)
-  inv_incr. eapply IHl; eauto. 
+  inv_incr. eapply IHl; eauto.
   intros. eapply Plt_le_trans. eapply H2. right; eauto. xomega.
   intros; eapply Ple_trans; eauto.
   intros. apply H7; auto. xomega.
@@ -615,7 +614,7 @@ Lemma expand_cfg_rec_spec:
   Ple (ctx.(dpc) + max_pc_function f) s.(st_nextnode) ->
   ctx.(mreg) = max_reg_function f ->
   Ple (ctx.(dreg) + ctx.(mreg)) s.(st_nextreg) ->
-  ctx.(mstk) >= 0 -> 
+  ctx.(mstk) >= 0 ->
   ctx.(mstk) = Zmax (fn_stacksize f) 0 ->
   (min_alignment (fn_stacksize f) | ctx.(dstk)) ->
   ctx.(dstk) >= 0 ->
@@ -623,13 +622,13 @@ Lemma expand_cfg_rec_spec:
   (forall pc', Ple ctx.(dpc) pc' -> Plt pc' s'.(st_nextnode) -> c!pc' = s'.(st_code)!pc') ->
   tr_funbody ctx f c.
 Proof.
-  intros. unfold expand_cfg_rec in H. monadInv H. inversion EQ. 
-  constructor. 
-  intros. rewrite H1. eapply max_reg_function_params; eauto. 
+  intros. unfold expand_cfg_rec in H. monadInv H. inversion EQ.
+  constructor.
+  intros. rewrite H1. eapply max_reg_function_params; eauto.
   intros. exploit ptree_mfold_spec; eauto. intros [INCR' ITER].
-  eapply iter_expand_instr_spec; eauto. 
-    apply PTree.elements_keys_norepet. 
-    intros. rewrite H1. eapply max_reg_function_def with (i := instr); eauto. 
+  eapply iter_expand_instr_spec; eauto.
+    apply PTree.elements_keys_norepet.
+    intros. rewrite H1. eapply max_reg_function_def with (i := instr); eauto.
     eapply PTree.elements_complete; eauto.
   intros.
     assert (Ple pc0 (max_pc_function f)).
@@ -637,10 +636,10 @@ Proof.
       eapply Plt_le_trans. apply shiftpos_below. subst s0; simpl; xomega.
   subst s0; simpl; auto.
   intros. apply H8; auto. subst s0; simpl in H11; xomega.
-  intros. apply H8. apply shiftpos_above. 
+  intros. apply H8. apply shiftpos_above.
   assert (Ple pc0 (max_pc_function f)).
-    eapply max_pc_function_sound. eapply PTree.elements_complete; eauto.  
-  eapply Plt_le_trans. apply shiftpos_below. inversion i; xomega. 
+    eapply max_pc_function_sound. eapply PTree.elements_complete; eauto.
+  eapply Plt_le_trans. apply shiftpos_below. inversion i; xomega.
   apply PTree.elements_correct; auto.
   auto. auto. auto.
   inversion INCR0. subst s0; simpl in STKSIZE; xomega.
@@ -658,17 +657,17 @@ Proof.
   intros fe0; pattern fe0. apply well_founded_ind with (R := ltof _ size_fenv).
   apply well_founded_ltof.
   intros. unfold expand_cfg in H0. rewrite unroll_Fixm in H0.
-  eapply expand_cfg_rec_unchanged; eauto. assumption. 
+  eapply expand_cfg_rec_unchanged; eauto. assumption.
 Qed.
 
 Lemma expand_cfg_spec:
   forall fe ctx f s x s' i c,
   expand_cfg fe ctx f s = R x s' i ->
-  fenv_agree fe ->  
+  fenv_agree fe ->
   Ple (ctx.(dpc) + max_pc_function f) s.(st_nextnode) ->
   ctx.(mreg) = max_reg_function f ->
   Ple (ctx.(dreg) + ctx.(mreg)) s.(st_nextreg) ->
-  ctx.(mstk) >= 0 -> 
+  ctx.(mstk) >= 0 ->
   ctx.(mstk) = Zmax (fn_stacksize f) 0 ->
   (min_alignment (fn_stacksize f) | ctx.(dstk)) ->
   ctx.(dstk) >= 0 ->
@@ -679,7 +678,7 @@ Proof.
   intros fe0; pattern fe0. apply well_founded_ind with (R := ltof _ size_fenv).
   apply well_founded_ltof.
   intros. unfold expand_cfg in H0. rewrite unroll_Fixm in H0.
-  eapply expand_cfg_rec_spec; eauto. 
+  eapply expand_cfg_rec_spec; eauto.
   simpl. intros. eapply expand_cfg_unchanged; eauto. assumption.
 Qed.
 
@@ -702,7 +701,7 @@ Lemma transf_function_spec:
   forall f f', transf_function fenv f = OK f' -> tr_function f f'.
 Proof.
   intros. unfold transf_function in H.
-  destruct (expand_function fenv f initstate) as [ctx s i] eqn:?. 
+  destruct (expand_function fenv f initstate) as [ctx s i] eqn:?.
   destruct (zlt (st_stksize s) Int.max_unsigned); inv H.
   monadInv Heqr. set (ctx := initcontext x x0 (max_reg_function f) (fn_stacksize f)) in *.
 Opaque initstate.
@@ -713,11 +712,11 @@ Opaque initstate.
     unfold ctx; rewrite <- H1; rewrite <- H2; rewrite <- H3; simpl. xomega.
     unfold ctx; rewrite <- H0; rewrite <- H1; simpl. xomega.
     simpl. xomega.
-    simpl. apply Zdivide_0. 
+    simpl. apply Zdivide_0.
     simpl. omega.
   simpl. omega.
-  simpl. split; auto. destruct INCR2. destruct INCR1. destruct INCR0. destruct INCR. 
-  simpl. change 0 with (st_stksize initstate). omega. 
+  simpl. split; auto. destruct INCR2. destruct INCR1. destruct INCR0. destruct INCR.
+  simpl. change 0 with (st_stksize initstate). omega.
 Qed.
 
 End INLINING_SPEC.

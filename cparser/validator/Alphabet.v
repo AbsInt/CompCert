@@ -193,7 +193,7 @@ Program Instance NumberedAlphabet {A:Type} (N:Numbered A) : Alphabet A :=
   { AlphabetComparable :=
       {| compare := fun x y => compare31 (inj x) (inj y) |};
     AlphabetFinite :=
-      {| all_list := fst (iter_int31 inj_bound _ 
+      {| all_list := fst (iter_int31 inj_bound _
         (fun p => (cons (surj (snd p)) (fst p), incr (snd p))) ([], 0%int31)) |} }.
 Next Obligation. apply Zcompare_antisym. Qed.
 Next Obligation.

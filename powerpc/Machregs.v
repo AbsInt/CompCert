@@ -21,7 +21,7 @@ Require Import Op.
 (** The following type defines the machine registers that can be referenced
   as locations.  These include:
 - Integer registers that can be allocated to RTL pseudo-registers ([Rxx]).
-- Floating-point registers that can be allocated to RTL pseudo-registers 
+- Floating-point registers that can be allocated to RTL pseudo-registers
   ([Fxx]).
 
   The type [mreg] does not include special-purpose or reserved
@@ -134,7 +134,7 @@ Definition destroyed_by_op (op: operation): list mreg :=
   match op with
   | Ofloatconst _ => R12 :: nil
   | Osingleconst _ => R12 :: nil
-  | Ointoffloat => F13 :: nil
+  | Ointoffloat | Ointuoffloat => F13 :: nil
   | _ => nil
   end.
 
@@ -162,12 +162,13 @@ Fixpoint destroyed_by_clobber (cl: list string): list mreg :=
 
 Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
-  | EF_builtin _ _ => F13 :: nil
-  | EF_vload _ => nil
-  | EF_vstore _ => nil
-  | EF_vload_global _ _ _ => R11 :: nil
-  | EF_vstore_global Mint64 _ _ => R10 :: R11 :: R12 :: nil
-  | EF_vstore_global _ _ _ => R11 :: R12 :: nil
+  | EF_builtin id sg =>
+    if string_dec id "__builtin_atomic_exchange" then R10::nil
+    else if string_dec id "__builtin_atomic_compare_exchange" then R10::R11::nil
+    else F13 :: nil
+  | EF_vload _ => R11 :: nil
+  | EF_vstore Mint64 => R10 :: R11 :: R12 :: nil
+  | EF_vstore _ => R11 :: R12 :: nil
   | EF_memcpy _ _ => R11 :: R12 :: F13 :: nil
   | EF_inline_asm txt sg clob => destroyed_by_clobber clob
   | _ => nil
@@ -185,8 +186,16 @@ Definition temp_for_parent_frame: mreg :=
 Definition mregs_for_operation (op: operation): list (option mreg) * option mreg :=
   (nil, None).
 
+
 Definition mregs_for_builtin (ef: external_function): list (option mreg) * list (option mreg) :=
-  (nil, nil).
+  match ef with
+    | EF_builtin id sg =>
+      if string_dec id "__builtin_atomic_exchange" then ((Some R3)::(Some R4)::(Some R5)::nil,nil)
+      else if string_dec id "__builtin_sync_fetch_and_add" then ((Some R4)::(Some R5)::nil,(Some R3)::nil)
+      else if string_dec id "___builtin_atomic_compare_exchange" then ((Some R4)::(Some R5)::(Some R6)::nil, (Some R3):: nil)
+      else (nil, nil)
+    | _ => (nil, nil)
+  end.
 
 Global Opaque
     destroyed_by_op destroyed_by_load destroyed_by_store
@@ -202,4 +211,25 @@ Definition two_address_op (op: operation) : bool :=
   match op with
   | Oroli _ _ => true
   | _ => false
+  end.
+
+(* Constraints on constant propagation for builtins *)
+
+Definition builtin_constraints (ef: external_function) :
+                                       list builtin_arg_constraint :=
+  match ef with
+  | EF_builtin id sg =>
+      if string_dec id "__builtin_get_spr" then OK_const :: nil
+      else if string_dec id "__builtin_set_spr" then OK_const :: OK_default :: nil
+      else if string_dec id "__builtin_prefetch" then OK_default :: OK_const :: OK_const :: nil
+      else if string_dec id "__builtin_dcbtls" then OK_default::OK_const::nil
+      else if string_dec id "__builtin_icbtls" then OK_default::OK_const::nil
+      else if string_dec id "__builtin_mbar" then OK_const::nil
+      else nil
+  | EF_vload _ => OK_addrany :: nil
+  | EF_vstore _ => OK_addrany :: OK_default :: nil
+  | EF_memcpy _ _ => OK_addrstack :: OK_addrstack :: nil
+  | EF_annot txt targs => map (fun _ => OK_all) targs
+  | EF_debug kind txt targs => map (fun _ => OK_all) targs
+  | _ => nil
   end.

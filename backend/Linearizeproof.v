@@ -113,7 +113,7 @@ Proof.
   caseEq (reachable_aux f).
   unfold reachable_aux; intros reach A.
   assert (LBoolean.ge reach!!(f.(fn_entrypoint)) true).
-  eapply DS.fixpoint_entry. eexact A. auto. 
+  eapply DS.fixpoint_entry. eexact A. auto.
   unfold LBoolean.ge in H. tauto.
   intros. apply PMap.gi.
 Qed.
@@ -131,7 +131,7 @@ Proof.
   unfold reachable_aux. intro reach; intros.
   assert (LBoolean.ge reach!!pc' reach!!pc).
   change (reach!!pc) with ((fun pc r => r) pc (reach!!pc)).
-  eapply DS.fixpoint_solution; eauto. intros; apply DS.L.eq_refl.  
+  eapply DS.fixpoint_solution; eauto. intros; apply DS.L.eq_refl.
   elim H3; intro. congruence. auto.
   intros. apply PMap.gi.
 Qed.
@@ -152,13 +152,13 @@ Lemma nodeset_of_list_correct:
   /\ (forall pc, Nodeset.In pc s' <-> Nodeset.In pc s \/ In pc l)
   /\ (forall pc, In pc l -> ~Nodeset.In pc s).
 Proof.
-  induction l; simpl; intros. 
+  induction l; simpl; intros.
   inv H. split. constructor. split. intro; tauto. intros; tauto.
   generalize H; clear H; caseEq (Nodeset.mem a s); intros.
   inv H0.
   exploit IHl; eauto. intros [A [B C]].
   split. constructor; auto. red; intro. elim (C a H1). apply Nodeset.add_1. hnf. auto.
-  split. intros. rewrite B. rewrite NodesetFacts.add_iff. 
+  split. intros. rewrite B. rewrite NodesetFacts.add_iff.
   unfold Nodeset.E.eq. unfold OrderedPositive.eq. tauto.
   intros. destruct H1. subst pc. rewrite NodesetFacts.not_mem_iff. auto.
   generalize (C pc H1). rewrite NodesetFacts.add_iff. tauto.
@@ -172,7 +172,7 @@ Lemma check_reachable_correct:
   Nodeset.In pc s.
 Proof.
   intros f reach s.
-  assert (forall l ok, 
+  assert (forall l ok,
     List.fold_left (fun a p => check_reachable_aux reach s a (fst p) (snd p)) l ok = true ->
     ok = true /\
     (forall pc i,
@@ -181,16 +181,16 @@ Proof.
      Nodeset.In pc s)).
   induction l; simpl; intros.
   split. auto. intros. destruct H0.
-  destruct a as [pc1 i1]. simpl in H. 
+  destruct a as [pc1 i1]. simpl in H.
   exploit IHl; eauto. intros [A B].
-  unfold check_reachable_aux in A. 
+  unfold check_reachable_aux in A.
   split. destruct (reach!!pc1). elim (andb_prop _ _ A). auto. auto.
-  intros. destruct H0. inv H0. rewrite H1 in A. destruct (andb_prop _ _ A). 
+  intros. destruct H0. inv H0. rewrite H1 in A. destruct (andb_prop _ _ A).
   apply Nodeset.mem_2; auto.
   eauto.
 
   intros pc i. unfold check_reachable. rewrite PTree.fold_spec. intros.
-  exploit H; eauto. intros [A B]. eapply B; eauto. 
+  exploit H; eauto. intros [A B]. eapply B; eauto.
   apply PTree.elements_correct. eauto.
 Qed.
 
@@ -201,9 +201,9 @@ Lemma enumerate_complete:
   (reachable f)!!pc = true ->
   In pc enum.
 Proof.
-  intros until i. unfold enumerate. 
+  intros until i. unfold enumerate.
   set (reach := reachable f).
-  intros. monadInv H. 
+  intros. monadInv H.
   generalize EQ0; clear EQ0. caseEq (check_reachable f reach x); intros; inv EQ0.
   exploit check_reachable_correct; eauto. intro.
   exploit nodeset_of_list_correct; eauto. intros [A [B C]].
@@ -215,9 +215,9 @@ Lemma enumerate_norepet:
   enumerate f = OK enum ->
   list_norepet enum.
 Proof.
-  intros until enum. unfold enumerate. 
+  intros until enum. unfold enumerate.
   set (reach := reachable f).
-  intros. monadInv H. 
+  intros. monadInv H.
   generalize EQ0; clear EQ0. caseEq (check_reachable f reach x); intros; inv EQ0.
   exploit nodeset_of_list_correct; eauto. intros [A [B C]]. auto.
 Qed.
@@ -246,9 +246,9 @@ Proof.
   simpl; intros; discriminate.
   intros c3 TAIL UNIQ. simpl.
   generalize (is_label_correct lbl a). case (is_label lbl a); intro ISLBL.
-  subst a. intro. inversion TAIL. congruence. 
+  subst a. intro. inversion TAIL. congruence.
   elim UNIQ; intros. elim H4. apply is_tail_in with c1; auto.
-  inversion TAIL. congruence. apply IHc2. auto. 
+  inversion TAIL. congruence. apply IHc2. auto.
   destruct a; simpl in UNIQ; tauto.
 Qed.
 
@@ -266,13 +266,13 @@ Proof.
   induction c1.
   simpl; intros; discriminate.
   simpl starts_with. destruct a; try (intros; discriminate).
-  intros. 
+  intros.
   apply plus_left with E0 (State s f sp c1 ls m) E0.
-  simpl. constructor. 
+  simpl. constructor.
   destruct (peq lbl l).
   subst l. replace c3 with c1. constructor.
   apply find_label_unique with lbl c2; auto.
-  apply plus_star. 
+  apply plus_star.
   apply IHc1 with c2; auto. eapply is_tail_cons_left; eauto.
   traceEq.
 Qed.
@@ -291,7 +291,7 @@ Lemma find_label_lin_block:
   find_label lbl (linearize_block b k) = find_label lbl k.
 Proof.
   intros lbl k. generalize (find_label_add_branch lbl k); intro.
-  induction b; simpl; auto. destruct a; simpl; auto. 
+  induction b; simpl; auto. destruct a; simpl; auto.
   case (starts_with s1 k); simpl; auto.
 Qed.
 
@@ -303,7 +303,7 @@ Remark linearize_body_cons:
   | Some b => Llabel pc :: linearize_block b (linearize_body f enum)
   end.
 Proof.
-  intros. unfold linearize_body. rewrite list_fold_right_eq. 
+  intros. unfold linearize_body. rewrite list_fold_right_eq.
   unfold linearize_node. destruct (LTL.fn_code f)!pc; auto.
 Qed.
 
@@ -315,13 +315,13 @@ Lemma find_label_lin_rec:
 Proof.
   induction enum; intros.
   elim H.
-  rewrite linearize_body_cons. 
+  rewrite linearize_body_cons.
   destruct (peq a pc).
   subst a. exists (linearize_body f enum).
   rewrite H0. simpl. rewrite peq_true. auto.
   assert (In pc enum). simpl in H. tauto.
   destruct (IHenum pc b H1 H0) as [k FIND].
-  exists k. destruct (LTL.fn_code f)!a. 
+  exists k. destruct (LTL.fn_code f)!a.
   simpl. rewrite peq_false. rewrite find_label_lin_block. auto. auto.
   auto.
 Qed.
@@ -334,7 +334,7 @@ Lemma find_label_lin:
   exists k,
   find_label pc (fn_code tf) = Some (linearize_block b k).
 Proof.
-  intros. monadInv H. simpl. 
+  intros. monadInv H. simpl.
   rewrite find_label_add_branch. apply find_label_lin_rec.
   eapply enumerate_complete; eauto. auto.
 Qed.
@@ -379,8 +379,8 @@ Lemma label_in_lin_rec:
 Proof.
   induction enum.
   simpl; auto.
-  rewrite linearize_body_cons. destruct (LTL.fn_code f)!a. 
-  simpl. intros [A|B]. left; congruence. 
+  rewrite linearize_body_cons. destruct (LTL.fn_code f)!a.
+  simpl. intros [A|B]. left; congruence.
   right. apply IHenum. eapply label_in_lin_block; eauto.
   intro; right; auto.
 Qed.
@@ -389,7 +389,7 @@ Lemma unique_labels_add_branch:
   forall lbl k,
   unique_labels k -> unique_labels (add_branch lbl k).
 Proof.
-  intros; unfold add_branch. 
+  intros; unfold add_branch.
   destruct (starts_with lbl k); simpl; intuition.
 Qed.
 
@@ -410,9 +410,9 @@ Proof.
   induction enum.
   simpl; auto.
   rewrite linearize_body_cons.
-  intro. destruct (LTL.fn_code f)!a. 
+  intro. destruct (LTL.fn_code f)!a.
   simpl. split. red. intro. inversion H. elim H3.
-  apply label_in_lin_rec with f. 
+  apply label_in_lin_rec with f.
   apply label_in_lin_block with b. auto.
   apply unique_labels_lin_block. apply IHenum. inversion H; auto.
   apply IHenum. inversion H; auto.
@@ -424,7 +424,7 @@ Lemma unique_labels_transf_function:
   unique_labels (fn_code tf).
 Proof.
   intros. monadInv H. simpl.
-  apply unique_labels_add_branch. 
+  apply unique_labels_add_branch.
   apply unique_labels_lin_rec. eapply enumerate_norepet; eauto.
 Qed.
 
@@ -438,7 +438,7 @@ Proof.
   intros; discriminate.
   case (is_label lbl a). intro. injection H; intro. subst c2.
   constructor. constructor.
-  intro. constructor. auto. 
+  intro. constructor. auto.
 Qed.
 
 Lemma is_tail_add_branch:
@@ -454,7 +454,7 @@ Lemma is_tail_lin_block:
 Proof.
   induction b; simpl; intros.
   auto.
-  destruct a; eauto with coqlib. 
+  destruct a; eauto with coqlib.
   eapply is_tail_add_branch; eauto.
   destruct (starts_with s1 c1); eapply is_tail_add_branch; eauto with coqlib.
 Qed.
@@ -558,7 +558,7 @@ Definition measure (S: LTL.state) : nat :=
 Remark match_parent_locset:
   forall s ts, list_forall2 match_stackframes s ts -> parent_locset ts = LTL.parent_locset s.
 Proof.
-  induction 1; simpl. auto. inv H; auto. 
+  induction 1; simpl. auto. inv H; auto.
 Qed.
 
 Theorem transf_step_correct:
@@ -570,41 +570,41 @@ Proof.
   induction 1; intros; try (inv MS).
 
   (* start of block, at an [add_branch] *)
-  exploit find_label_lin; eauto. intros [k F]. 
+  exploit find_label_lin; eauto. intros [k F].
   left; econstructor; split.
-  eapply add_branch_correct; eauto. 
-  econstructor; eauto. 
+  eapply add_branch_correct; eauto.
+  econstructor; eauto.
   intros; eapply reachable_successors; eauto.
   eapply is_tail_lin_block; eauto. eapply is_tail_find_label; eauto.
 
   (* start of block, target of an [Lcond] *)
-  exploit find_label_lin; eauto. intros [k F]. 
+  exploit find_label_lin; eauto. intros [k F].
   left; econstructor; split.
-  apply plus_one. eapply exec_Lcond_true; eauto. 
-  econstructor; eauto. 
+  apply plus_one. eapply exec_Lcond_true; eauto.
+  econstructor; eauto.
   intros; eapply reachable_successors; eauto.
   eapply is_tail_lin_block; eauto. eapply is_tail_find_label; eauto.
 
   (* start of block, target of an [Ljumptable] *)
-  exploit find_label_lin; eauto. intros [k F]. 
+  exploit find_label_lin; eauto. intros [k F].
   left; econstructor; split.
-  apply plus_one. eapply exec_Ljumptable; eauto. 
-  econstructor; eauto. 
+  apply plus_one. eapply exec_Ljumptable; eauto.
+  econstructor; eauto.
   intros; eapply reachable_successors; eauto.
   eapply is_tail_lin_block; eauto. eapply is_tail_find_label; eauto.
 
   (* Lop *)
   left; econstructor; split. simpl.
-  apply plus_one. econstructor; eauto. 
-  instantiate (1 := v); rewrite <- H; apply eval_operation_preserved. 
+  apply plus_one. econstructor; eauto.
+  instantiate (1 := v); rewrite <- H; apply eval_operation_preserved.
   exact symbols_preserved.
-  econstructor; eauto. 
+  econstructor; eauto.
 
   (* Lload *)
   left; econstructor; split. simpl.
-  apply plus_one. econstructor. 
-  instantiate (1 := a). rewrite <- H; apply eval_addressing_preserved. 
-  exact symbols_preserved. eauto. eauto. 
+  apply plus_one. econstructor.
+  instantiate (1 := a). rewrite <- H; apply eval_addressing_preserved.
+  exact symbols_preserved. eauto. eauto.
   econstructor; eauto.
 
   (* Lgetstack *)
@@ -614,14 +614,14 @@ Proof.
 
   (* Lsetstack *)
   left; econstructor; split. simpl.
-  apply plus_one. econstructor; eauto. 
+  apply plus_one. econstructor; eauto.
   econstructor; eauto.
 
   (* Lstore *)
   left; econstructor; split. simpl.
-  apply plus_one. econstructor. 
-  instantiate (1 := a). rewrite <- H; apply eval_addressing_preserved. 
-  exact symbols_preserved. eauto. eauto. 
+  apply plus_one. econstructor.
+  instantiate (1 := a). rewrite <- H; apply eval_addressing_preserved.
+  exact symbols_preserved. eauto. eauto.
   econstructor; eauto.
 
   (* Lcall *)
@@ -629,7 +629,7 @@ Proof.
   left; econstructor; split. simpl.
   apply plus_one. econstructor; eauto.
   symmetry; eapply sig_preserved; eauto.
-  econstructor; eauto. constructor; auto. econstructor; eauto. 
+  econstructor; eauto. constructor; auto. econstructor; eauto.
 
   (* Ltailcall *)
   exploit find_function_translated; eauto. intros [tfd [A B]].
@@ -637,21 +637,14 @@ Proof.
   apply plus_one. econstructor; eauto.
   rewrite (match_parent_locset _ _ STACKS). eauto.
   symmetry; eapply sig_preserved; eauto.
-  rewrite (stacksize_preserved _ _ TRF); eauto. 
+  rewrite (stacksize_preserved _ _ TRF); eauto.
   rewrite (match_parent_locset _ _ STACKS).
   econstructor; eauto.
 
   (* Lbuiltin *)
   left; econstructor; split. simpl.
   apply plus_one. eapply exec_Lbuiltin; eauto.
-  eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
-  econstructor; eauto.
-
-  (* Lannot *)
-  left; econstructor; split. simpl.
-  apply plus_one. eapply exec_Lannot; eauto.
-  eapply eval_annot_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
+  eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
   eapply external_call_symbols_preserved; eauto.
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor; eauto.
@@ -671,25 +664,25 @@ Proof.
   destruct b.
   (* cond is true: no branch *)
   left; econstructor; split.
-  apply plus_one. eapply exec_Lcond_false. 
+  apply plus_one. eapply exec_Lcond_false.
   rewrite eval_negate_condition. rewrite H. auto. eauto.
   rewrite DC. econstructor; eauto.
   (* cond is false: branch is taken *)
-  right; split. simpl; omega. split. auto.  rewrite <- DC. econstructor; eauto. 
+  right; split. simpl; omega. split. auto.  rewrite <- DC. econstructor; eauto.
   rewrite eval_negate_condition. rewrite H. auto.
   (* branch if cond is true *)
   destruct b.
   (* cond is true: branch is taken *)
-  right; split. simpl; omega. split. auto. econstructor; eauto. 
+  right; split. simpl; omega. split. auto. econstructor; eauto.
   (* cond is false: no branch *)
   left; econstructor; split.
-  apply plus_one. eapply exec_Lcond_false. eauto. eauto. 
+  apply plus_one. eapply exec_Lcond_false. eauto. eauto.
   econstructor; eauto.
 
   (* Ljumptable *)
   assert (REACH': (reachable f)!!pc = true).
-    apply REACH. simpl. eapply list_nth_z_in; eauto. 
-  right; split. simpl; omega. split. auto. econstructor; eauto. 
+    apply REACH. simpl. eapply list_nth_z_in; eauto.
+  right; split. simpl; omega. split. auto. econstructor; eauto.
 
   (* Lreturn *)
   left; econstructor; split.
@@ -702,9 +695,9 @@ Proof.
     apply reachable_entrypoint.
   monadInv H7.
   left; econstructor; split.
-  apply plus_one. eapply exec_function_internal; eauto. 
+  apply plus_one. eapply exec_function_internal; eauto.
   rewrite (stacksize_preserved _ _ EQ). eauto.
-  generalize EQ; intro EQ'; monadInv EQ'. simpl. 
+  generalize EQ; intro EQ'; monadInv EQ'. simpl.
   econstructor; eauto. simpl. eapply is_tail_add_branch. constructor.
 
   (* external function *)
@@ -717,8 +710,8 @@ Proof.
   (* return *)
   inv H3. inv H1.
   left; econstructor; split.
-  apply plus_one. econstructor. 
-  econstructor; eauto. 
+  apply plus_one. econstructor.
+  econstructor; eauto.
 Qed.
 
 Lemma transf_initial_states:
@@ -726,18 +719,18 @@ Lemma transf_initial_states:
   exists st2, Linear.initial_state tprog st2 /\ match_states st1 st2.
 Proof.
   intros. inversion H.
-  exploit function_ptr_translated; eauto. intros [tf [A B]].  
+  exploit function_ptr_translated; eauto. intros [tf [A B]].
   exists (Callstate nil tf (Locmap.init Vundef) m0); split.
-  econstructor; eauto. eapply Genv.init_mem_transf_partial; eauto. 
+  econstructor; eauto. eapply Genv.init_mem_transf_partial; eauto.
   replace (prog_main tprog) with (prog_main prog).
   rewrite symbols_preserved. eauto.
-  symmetry. apply (transform_partial_program_main transf_fundef _ TRANSF). 
+  symmetry. apply (transform_partial_program_main transf_fundef _ TRANSF).
   rewrite <- H3. apply sig_preserved. auto.
   constructor. constructor. auto.
 Qed.
 
 Lemma transf_final_states:
-  forall st1 st2 r, 
+  forall st1 st2 r,
   match_states st1 st2 -> LTL.final_state st1 r -> Linear.final_state st2 r.
 Proof.
   intros. inv H0. inv H. inv H6. econstructor; eauto.

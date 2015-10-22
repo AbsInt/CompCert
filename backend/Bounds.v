@@ -67,9 +67,8 @@ Definition instr_within_bounds (i: instruction) :=
   | Lload chunk addr args dst => mreg_within_bounds dst
   | Lcall sig ros => size_arguments sig <= bound_outgoing b
   | Lbuiltin ef args res =>
-      forall r, In r res \/ In r (destroyed_by_builtin ef) -> mreg_within_bounds r
-  | Lannot ef args =>
-      forall sl ofs ty, In (S sl ofs ty) (params_of_annot_args args) -> slot_within_bounds sl ofs ty
+       (forall r, In r (params_of_builtin_res res) \/ In r (destroyed_by_builtin ef) -> mreg_within_bounds r)
+    /\ (forall sl ofs ty, In (S sl ofs ty) (params_of_builtin_args args) -> slot_within_bounds sl ofs ty)
   | _ => True
   end.
 
@@ -101,8 +100,7 @@ Definition regs_of_instr (i: instruction) : list mreg :=
   | Lstore chunk addr args src => nil
   | Lcall sig ros => nil
   | Ltailcall sig ros => nil
-  | Lbuiltin ef args res => res ++ destroyed_by_builtin ef
-  | Lannot ef args => nil
+  | Lbuiltin ef args res => params_of_builtin_res res ++ destroyed_by_builtin ef
   | Llabel lbl => nil
   | Lgoto lbl => nil
   | Lcond cond args lbl => nil
@@ -121,7 +119,7 @@ Definition slots_of_instr (i: instruction) : list (slot * Z * typ) :=
   match i with
   | Lgetstack sl ofs ty r => (sl, ofs, ty) :: nil
   | Lsetstack r sl ofs ty => (sl, ofs, ty) :: nil
-  | Lannot ef args => slots_of_locs (params_of_annot_args args)
+  | Lbuiltin ef args res => slots_of_locs (params_of_builtin_args args)
   | _ => nil
   end.
 
@@ -163,7 +161,7 @@ Proof.
   intros until valu. unfold max_over_list.
   assert (forall l z, fold_left (fun x y => Zmax x (valu y)) l z >= z).
   induction l; simpl; intros.
-  omega. apply Zge_trans with (Zmax z (valu a)). 
+  omega. apply Zge_trans with (Zmax z (valu a)).
   auto. apply Zle_ge. apply Zmax1. auto.
 Qed.
 
@@ -195,7 +193,7 @@ Program Definition function_bounds :=
     _ _.
 Next Obligation.
   apply Zle_ge. eapply Zle_trans. 2: apply Zmax2.
-  apply Zge_le. apply max_over_slots_of_funct_pos.  
+  apply Zge_le. apply max_over_slots_of_funct_pos.
 Qed.
 Next Obligation.
   apply Zle_ge. apply Zmax2.
@@ -213,10 +211,10 @@ Proof.
             z <= f /\ (In x c -> valu x <= f)).
     induction c; simpl; intros.
     split. omega. tauto.
-    elim (IHc (Zmax z (valu a))); intros. 
-    split. apply Zle_trans with (Zmax z (valu a)). apply Zmax1. auto. 
-    intro H1; elim H1; intro. 
-    subst a. apply Zle_trans with (Zmax z (valu x)). 
+    elim (IHc (Zmax z (valu a))); intros.
+    split. apply Zle_trans with (Zmax z (valu a)). apply Zmax1. auto.
+    intro H1; elim H1; intro.
+    subst a. apply Zle_trans with (Zmax z (valu x)).
     apply Zmax2. auto. auto.
   intro. elim (H l 0); intros. auto.
 Qed.
@@ -233,7 +231,7 @@ Lemma max_over_regs_of_funct_bound:
   In i f.(fn_code) -> In r (regs_of_instr i) ->
   valu r <= max_over_regs_of_funct valu.
 Proof.
-  intros. unfold max_over_regs_of_funct. 
+  intros. unfold max_over_regs_of_funct.
   apply Zle_trans with (max_over_regs_of_instr valu i).
   unfold max_over_regs_of_instr. apply max_over_list_bound. auto.
   apply max_over_instrs_bound. auto.
@@ -244,7 +242,7 @@ Lemma max_over_slots_of_funct_bound:
   In i f.(fn_code) -> In s (slots_of_instr i) ->
   valu s <= max_over_slots_of_funct valu.
 Proof.
-  intros. unfold max_over_slots_of_funct. 
+  intros. unfold max_over_slots_of_funct.
   apply Zle_trans with (max_over_slots_of_instr valu i).
   unfold max_over_slots_of_instr. apply max_over_list_bound. auto.
   apply max_over_instrs_bound. auto.
@@ -257,7 +255,7 @@ Lemma int_callee_save_bound:
 Proof.
   intros. apply Zlt_le_trans with (int_callee_save r).
   unfold int_callee_save. omega.
-  unfold function_bounds, bound_int_callee_save. 
+  unfold function_bounds, bound_int_callee_save.
   eapply max_over_regs_of_funct_bound; eauto.
 Qed.
 
@@ -268,7 +266,7 @@ Lemma float_callee_save_bound:
 Proof.
   intros. apply Zlt_le_trans with (float_callee_save r).
   unfold float_callee_save. omega.
-  unfold function_bounds, bound_float_callee_save. 
+  unfold function_bounds, bound_float_callee_save.
   eapply max_over_regs_of_funct_bound; eauto.
 Qed.
 
@@ -317,11 +315,11 @@ Proof.
 Qed.
 
 Lemma slot_is_within_bounds:
-  forall i, In i f.(fn_code) -> 
+  forall i, In i f.(fn_code) ->
   forall sl ty ofs, In (sl, ofs, ty) (slots_of_instr i) ->
   slot_within_bounds function_bounds sl ofs ty.
 Proof.
-  intros. unfold slot_within_bounds. 
+  intros. unfold slot_within_bounds.
   destruct sl.
   eapply local_slot_bound; eauto.
   auto.
@@ -331,12 +329,12 @@ Qed.
 Lemma slots_of_locs_charact:
   forall sl ofs ty l, In (sl, ofs, ty) (slots_of_locs l) <-> In (S sl ofs ty) l.
 Proof.
-  induction l; simpl; intros. 
+  induction l; simpl; intros.
   tauto.
   destruct a; simpl; intuition congruence.
 Qed.
 
-(** It follows that every instruction in the function is within bounds, 
+(** It follows that every instruction in the function is within bounds,
     in the sense of the [instr_within_bounds] predicate. *)
 
 Lemma instr_is_within_bounds:
@@ -344,16 +342,16 @@ Lemma instr_is_within_bounds:
   In i f.(fn_code) ->
   instr_within_bounds function_bounds i.
 Proof.
-  intros; 
+  intros;
   destruct i;
-  generalize (mreg_is_within_bounds _ H); generalize (slot_is_within_bounds _ H); 
+  generalize (mreg_is_within_bounds _ H); generalize (slot_is_within_bounds _ H);
   simpl; intros; auto.
 (* call *)
   eapply size_arguments_bound; eauto.
 (* builtin *)
+  split; intros.
   apply H1. apply in_or_app; auto.
-(* annot *)
-  apply H0. rewrite slots_of_locs_charact; auto. 
+  apply H0. rewrite slots_of_locs_charact; auto.
 Qed.
 
 Lemma function_is_within_bounds:

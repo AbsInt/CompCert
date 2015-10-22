@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(* Simple functions to serialize powerpc Asm to JSON *)
+(* Simple functions to serialize ia32 Asm to JSON *)
 
 (* Dummy function *)
 let p_program oc prog =

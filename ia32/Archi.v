@@ -25,13 +25,13 @@ Definition big_endian := false.
 Notation align_int64 := 4%Z (only parsing).
 Notation align_float64 := 4%Z (only parsing).
 
-Program Definition default_pl_64 : bool * nan_pl 53 := 
+Program Definition default_pl_64 : bool * nan_pl 53 :=
   (true, iter_nat 51 _ xO xH).
 
 Definition choose_binop_pl_64 (s1: bool) (pl1: nan_pl 53) (s2: bool) (pl2: nan_pl 53) :=
   false.                        (**r always choose first NaN *)
 
-Program Definition default_pl_32 : bool * nan_pl 24 := 
+Program Definition default_pl_32 : bool * nan_pl 24 :=
   (true, iter_nat 22 _ xO xH).
 
 Definition choose_binop_pl_32 (s1: bool) (pl1: nan_pl 24) (s2: bool) (pl2: nan_pl 24) :=

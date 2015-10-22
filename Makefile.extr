@@ -17,23 +17,17 @@
 
 include Makefile.config
 
-# Directories containing plain Caml code (no preprocessing)
+# Menhir configuration and rules.
+
+include Makefile.menhir
+
+# Directories containing plain Caml code
 
 DIRS=extraction \
   lib common $(ARCH) backend cfrontend cparser driver \
   exportclight debug
 
-# Directories containing Caml code that must be preprocessed by Camlp4
-
-ifeq ($(CCHECKLINK),true)
-DIRS_P4=checklink
-else
-DIRS_P4=
-endif
-
-ALLDIRS=$(DIRS) $(DIRS_P4)
-
-INCLUDES=$(patsubst %,-I %, $(ALLDIRS))
+INCLUDES=$(patsubst %,-I %, $(DIRS))
 
 # Control of warnings:
 # warning 3 = deprecated feature.  Turned off for OCaml 4.02 (bytes vs strings)
@@ -45,10 +39,6 @@ extraction/%.cmo: WARNINGS +=-w -20
 
 COMPFLAGS=-g $(INCLUDES) $(WARNINGS)
 
-# Using the bitstring library and syntax extension (for checklink)
-
-BITSTRING=-package bitstring,bitstring.syntax -syntax bitstring.syntax,camlp4o
-
 # Using .opt compilers if available
 
 ifeq ($(OCAML_OPT_COMP),true)
@@ -57,20 +47,10 @@ else
 DOTOPT=
 endif
 
-# Compilers used for non-preprocessed code
-
 OCAMLC=ocamlc$(DOTOPT) $(COMPFLAGS)
 OCAMLOPT=ocamlopt$(DOTOPT) $(COMPFLAGS)
 OCAMLDEP=ocamldep$(DOTOPT) -slash $(INCLUDES)
 
-# Compilers used for Camlp4-preprocessed code.  Note that we cannot
-# use the .opt compilers (because ocamlfind doesn't support them).
-
-OCAMLC_P4=ocamlfind ocamlc $(COMPFLAGS) $(BITSTRING)
-OCAMLOPT_P4=ocamlfind ocamlopt $(COMPFLAGS) $(BITSTRING)
-OCAMLDEP_P4=ocamlfind ocamldep $(INCLUDES) $(BITSTRING)
-
-MENHIR=menhir --explain
 OCAMLLEX=ocamllex -q
 MODORDER=tools/modorder .depend.extr
 
@@ -78,7 +58,9 @@ PARSERS=backend/CMparser.mly cparser/pre_parser.mly
 LEXERS=backend/CMlexer.mll cparser/Lexer.mll \
        lib/Tokenize.mll lib/Readconfig.mll
 
-LIBS=str.cmxa unix.cmxa
+LIBS=str.cmxa unix.cmxa $(MENHIR_LIBS)
+LIBS_BYTE=$(patsubst %.cmxa,%.cma,$(patsubst %.cmx,%.cmo,$(LIBS)))
+
 CHECKLINK_LIBS=str.cmxa
 
 EXECUTABLES=ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte
@@ -96,21 +78,7 @@ ccomp: $(CCOMP_OBJS)
 
 ccomp.byte: $(CCOMP_OBJS:.cmx=.cmo)
 	@echo "Linking $@"
-	@$(OCAMLC) -o $@ $(LIBS:.cmxa=.cma) $+
-
-ifeq ($(CCHECKLINK),true)
-
-CCHECKLINK_OBJS:=$(shell $(MODORDER) checklink/Validator.cmx)
-
-cchecklink: $(CCHECKLINK_OBJS)
-	@echo "Linking $@"
-	@$(OCAMLOPT_P4) -linkpkg -o $@ $(CHECKLINK_LIBS) $+
-
-cchecklink.byte: $(CCHECKLINK_OBJS:.cmx=.cmo)
-	@echo "Linking $@"
-	@$(OCAMLC_P4) -linkpkg -o $@ $(CHECKLINK_LIBS:.cmxa=.cma) $+
-
-endif
+	@$(OCAMLC) -o $@ $(LIBS_BYTE) $+
 
 CLIGHTGEN_OBJS:=$(shell $(MODORDER) exportclight/Clightgen.cmx)
 
@@ -120,23 +88,13 @@ clightgen: $(CLIGHTGEN_OBJS)
 
 clightgen.byte: $(CLIGHTGEN_OBJS:.cmx=.cmo)
 	@echo "Linking $@"
-	@$(OCAMLC) -o $@ $(LIBS:.cmxa=.cma) $+
+	@$(OCAMLC) -o $@ $(LIBS_BYTE) $+
 
 include .depend.extr
 
 endif
 
 # End of part that assumes .depend.extr already exists
-
-checklink/%.cmi: checklink/%.mli
-	@echo "OCAMLC   $<"
-	@$(OCAMLC_P4) -c $<
-checklink/%.cmo: checklink/%.ml
-	@echo "OCAMLC   $<"
-	@$(OCAMLC_P4) -c $<
-checklink/%.cmx: checklink/%.ml
-	@echo "OCAMLOPT $<"
-	@$(OCAMLOPT_P4) -c $<
 
 %.cmi: %.mli
 	@echo "OCAMLC   $<"
@@ -148,24 +106,18 @@ checklink/%.cmx: checklink/%.ml
 	@echo "OCAMLOPT $<"
 	@$(OCAMLOPT) -c $<
 
-%.ml %.mli: %.mly
-	$(MENHIR) $<
 %.ml: %.mll
 	$(OCAMLLEX) $<
 
 clean:
 	rm -f $(EXECUTABLES)
 	rm -f $(GENERATED)
-	for d in $(ALLDIRS); do rm -f $$d/*.cm[iox] $$d/*.o; done
+	for d in $(DIRS); do rm -f $$d/*.cm[iox] $$d/*.o; done
 
 # Generation of .depend.extr
 
 depend: $(GENERATED)
 	@echo "Analyzing OCaml dependencies"
-	@$(OCAMLDEP) $(foreach d,$(DIRS),$(wildcard $(d)/*.mli $(d)/*.ml)) >.depend.extr
-	@$(OCAMLDEP) $(GENERATED) >> .depend.extr
-ifneq ($(strip $(DIRS_P4)),)
-	@$(OCAMLDEP_P4) $(foreach d,$(DIRS_P4),$(wildcard $(d)/*.mli $(d)/*.ml)) >>.depend.extr
-endif
+	@$(OCAMLDEP) $(foreach d,$(DIRS),$(wildcard $(d)/*.mli $(d)/*.ml)) $(GENERATED) >.depend.extr || { rm -f .depend.extr; exit 2; }
 
 

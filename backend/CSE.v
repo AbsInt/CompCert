@@ -181,7 +181,7 @@ Definition add_rhs (n: numbering) (rd: reg) (rh: rhs) : numbering :=
 (** [add_op n rd op rs] specializes [add_rhs] for the case of an
   arithmetic operation.  The right-hand side corresponding to [op]
   and the value numbers for the argument registers [rs] is built
-  and added to [n] as described in [add_rhs].   
+  and added to [n] as described in [add_rhs].
 
   If [op] is a move instruction, we simply assign the value number of
   the source register to the destination register, since we know that
@@ -190,7 +190,7 @@ Definition add_rhs (n: numbering) (rd: reg) (rh: rhs) : numbering :=
 <<
      z = add(x, y);  u = x; v = add(u, y);
 >>
-  Since [u] and [x] have the same value number, the second [add] 
+  Since [u] and [x] have the same value number, the second [add]
   is recognized as computing the same result as the first [add],
   and therefore [u] and [z] have the same value number. *)
 
@@ -212,13 +212,13 @@ Definition add_op (n: numbering) (rd: reg) (op: operation) (rs: list reg) :=
   and the value numbers for the argument registers [rs] is built
   and added to [n] as described in [add_rhs]. *)
 
-Definition add_load (n: numbering) (rd: reg) 
+Definition add_load (n: numbering) (rd: reg)
                     (chunk: memory_chunk) (addr: addressing)
                     (rs: list reg) :=
   let (n1, vs) := valnum_regs n rs in
   add_rhs n1 rd (Load chunk addr vs).
 
-(** [set_unknown n rd] returns a numbering where [rd] is mapped to 
+(** [set_unknown n rd] returns a numbering where [rd] is mapped to
   no value number, and no equations are added.  This is useful
   to model instructions with unpredictable results such as [Ibuiltin]. *)
 
@@ -227,6 +227,12 @@ Definition set_unknown (n: numbering) (rd: reg) :=
      num_eqs  := n.(num_eqs);
      num_reg  := PTree.remove rd n.(num_reg);
      num_val  := forget_reg n rd |}.
+
+Definition set_res_unknown (n: numbering) (res: builtin_res reg) :=
+  match res with
+  | BR r => set_unknown n r
+  | _    => n
+  end.
 
 (** [kill_equations pred n] remove all equations satisfying predicate [pred]. *)
 
@@ -289,10 +295,10 @@ Definition kill_loads_after_store
 
 Definition store_normalized_range (chunk: memory_chunk) : aval :=
   match chunk with
-  | Mint8signed => Sgn 8
-  | Mint8unsigned => Uns 8
-  | Mint16signed => Sgn 16
-  | Mint16unsigned => Uns 16
+  | Mint8signed => Sgn Ptop 8
+  | Mint8unsigned => Uns Ptop 8
+  | Mint16signed => Sgn Ptop 16
+  | Mint16unsigned => Uns Ptop 16
   | _ => Vtop
   end.
 
@@ -307,18 +313,17 @@ Definition add_store_result (app: VA.t) (n: numbering) (chunk: memory_chunk) (ad
        num_val  := n2.(num_val) |}
   else n.
 
-(** [kill_loads_after_storebyte app n dst sz] removes all equations
+(** [kill_loads_after_storebyte n dst sz] removes all equations
   involving loads that could be invalidated by a store of [sz] bytes
   starting at address [dst]. Loads that are disjoint from this
   store-bytes are preserved.  Equations involving memory-dependent
   operators are also removed. *)
 
 Definition kill_loads_after_storebytes
-             (app: VA.t) (n: numbering) (dst: reg) (sz: Z) :=
-  let p := aaddr app dst in
-  kill_equations (filter_after_store app n p sz) n.
+             (app: VA.t) (n: numbering) (dst: aptr) (sz: Z) :=
+  kill_equations (filter_after_store app n dst sz) n.
 
-(** [add_memcpy app n1 n2 rsrc rdst sz] adds equations to [n2] that 
+(** [add_memcpy app n1 n2 rsrc rdst sz] adds equations to [n2] that
   represent the effect of a [memcpy] block copy operation of [sz] bytes
   from the address denoted by [rsrc] to the address denoted by [rdst].
   [n2] is the numbering returned by [kill_loads_after_storebytes]
@@ -355,8 +360,8 @@ Fixpoint add_memcpy_eqs (src sz delta: Z) (eqs1 eqs2: list equation) :=
       end
   end.
 
-Definition add_memcpy (app: VA.t) (n1 n2: numbering) (rsrc rdst: reg) (sz: Z) :=
-  match aaddr app rsrc, aaddr app rdst with
+Definition add_memcpy (n1 n2: numbering) (asrc adst: aptr) (sz: Z) :=
+  match asrc, adst with
   | Stk src, Stk dst =>
       {| num_next := n2.(num_next);
          num_eqs  := add_memcpy_eqs (Int.unsigned src) sz
@@ -410,7 +415,7 @@ End REDUCE.
 Module Numbering.
   Definition t := numbering.
   Definition ge (n1 n2: numbering) : Prop :=
-    forall valu ge sp rs m, 
+    forall valu ge sp rs m,
     numbering_holds valu ge sp rs m n2 ->
     numbering_holds valu ge sp rs m n1.
   Definition top := empty_numbering.
@@ -438,7 +443,7 @@ Module Solver := BBlock_solver(Numbering).
   then add an equation for loads from the same location stored to.
   For [Icall] instructions, we could simply associate a fresh, unconstrained by equations value number
   to the result register.  However, it is often undesirable to eliminate
-  common subexpressions across a function call (there is a risk of 
+  common subexpressions across a function call (there is a risk of
   increasing too much the register pressure across the call), so we
   just forget all equations and start afresh with an empty numbering.
   Finally, for instructions that modify neither registers nor
@@ -478,22 +483,22 @@ Definition transfer (f: function) (approx: PMap.t VA.t) (pc: node) (before: numb
           match ef with
           | EF_external _ _ | EF_malloc | EF_free | EF_inline_asm _ _ _ =>
               empty_numbering
-          | EF_builtin _ _ | EF_vstore _ | EF_vstore_global _ _ _ =>
-              set_unknown (kill_all_loads before) res
+          | EF_builtin _ _ | EF_vstore _ =>
+              set_res_unknown (kill_all_loads before) res
           | EF_memcpy sz al =>
               match args with
-              | rdst :: rsrc :: nil =>
+              | dst :: src :: nil =>
                   let app := approx!!pc in
-                  let n := kill_loads_after_storebytes app before rdst sz in
-                  set_unknown (add_memcpy app before n rsrc rdst sz) res
+                  let adst := aaddr_arg app dst in
+                  let asrc := aaddr_arg app src in
+                  let n := kill_loads_after_storebytes app before adst sz in
+                  set_res_unknown (add_memcpy before n asrc adst sz) res
               | _ =>
                   empty_numbering
               end
-          | EF_vload _ | EF_vload_global _ _ _ | EF_annot _ _ | EF_annot_val _ _ =>
-              set_unknown before res
+          | EF_vload _ | EF_annot _ _ | EF_annot_val _ _ | EF_debug _ _ _ =>
+              set_res_unknown before res
           end
-      | Iannot ef args s =>
-          before
       | Icond cond args ifso ifnot =>
           before
       | Ijumptable arg tbl =>

@@ -31,7 +31,8 @@ type bitfield_info =
     bf_pos: int;        (* start bit *)
     bf_size: int;       (* size in bit *)
     bf_signed: bool;    (* is field signed or unsigned? *)
-    bf_signed_res: bool (* is result of extracting field signed or unsigned? *)
+    bf_signed_res: bool; (* is result of extracting field signed or unsigned? *)
+    bf_bool: bool       (* does field have type _Bool? *)
   }
 
 (* invariants:
@@ -100,20 +101,26 @@ let pack_bitfields env sid ml =
               match unroll env (type_of_member env m) with
               | TInt(ik, _) -> is_signed_ikind ik
               | _ -> assert false (* should never happen, checked in Elab *) in
-            pack ((m.fld_name, pos, n, signed, signed2) :: accu) (pos + n) ms
+            let is_bool =
+              match unroll env m.fld_typ with
+              | TInt(IBool, _) -> true
+              | _ -> false in
+
+            pack ((m.fld_name, pos, n, signed, signed2, is_bool) :: accu)
+                 (pos + n) ms
           end
   in pack [] 0 ml
 
-let rec transf_members env id count = function
+let rec transf_struct_members env id count = function
   | [] -> []
   | m :: ms as ml ->
       if m.fld_bitfield = None then
-        m :: transf_members env id count ms
+        m :: transf_struct_members env id count ms
       else begin
         let (nbits, bitfields, ml') = pack_bitfields env id ml in
         if nbits = 0 then
           (* Lone zero-size bitfield: just ignore *)
-          transf_members env id count ml'
+          transf_struct_members env id count ml'
         else begin
           (* Create integer field of sufficient size for this bitfield group *)
           let carrier = sprintf "__bf%d" count in
@@ -121,38 +128,75 @@ let rec transf_members env id count = function
           let carrier_typ = TInt(carrier_ikind, []) in
           (* Enter each field with its bit position, size, signedness *)
           List.iter
-            (fun (name, pos, sz, signed, signed2) ->
+            (fun (name, pos, sz, signed, signed2, is_bool) ->
               if name <> "" then begin
                 let pos' =
                   if !config.bitfields_msb_first
                   then sizeof_ikind carrier_ikind * 8 - pos - sz
                   else pos in
+                Debug.set_bitfield_offset id name pos carrier (sizeof_ikind carrier_ikind);
                 Hashtbl.add bitfield_table
                   (id, name)
                   {bf_carrier = carrier; bf_carrier_typ = carrier_typ;
                    bf_pos = pos'; bf_size = sz;
-                   bf_signed = signed; bf_signed_res = signed2}
+                   bf_signed = signed; bf_signed_res = signed2;
+                   bf_bool = is_bool}
               end)
             bitfields;
           { fld_name = carrier; fld_typ = carrier_typ; fld_bitfield = None}
-          :: transf_members env id (count + 1) ml'
+          :: transf_struct_members env id (count + 1) ml'
         end
       end
 
+let rec transf_union_members env id count = function
+    [] -> []
+  | m :: ms ->
+      (match m.fld_bitfield with
+      | None ->  m::transf_union_members env id count ms
+      | Some nbits ->
+          let carrier = sprintf "__bf%d" count in
+          let carrier_ikind = unsigned_ikind_for_carrier nbits in
+          let carrier_typ = TInt(carrier_ikind, []) in
+          let signed =
+            match unroll env m.fld_typ with
+            | TInt(ik, _) -> is_signed_ikind ik
+            | TEnum(eid, _) -> is_signed_enum_bitfield env id m.fld_name eid nbits
+            | _ -> assert false (* should never happen, checked in Elab *) in
+          let signed2 =
+            match unroll env (type_of_member env m) with
+            | TInt(ik, _) -> is_signed_ikind ik
+            | _ -> assert false (* should never happen, checked in Elab *) in
+          let pos' =
+            if !config.bitfields_msb_first
+            then sizeof_ikind carrier_ikind * 8 - nbits
+            else 0 in
+          let is_bool =
+            match unroll env m.fld_typ with
+            | TInt(IBool, _) -> true
+            | _ -> false in
+          Hashtbl.add bitfield_table
+            (id, m.fld_name)
+            {bf_carrier = carrier; bf_carrier_typ = carrier_typ;
+             bf_pos = pos'; bf_size = nbits;
+             bf_signed = signed; bf_signed_res = signed2;
+             bf_bool = is_bool};
+          { fld_name = carrier; fld_typ = carrier_typ; fld_bitfield = None}
+          :: transf_struct_members env id (count + 1) ms)
+
 let transf_composite env su id attr ml =
   match su with
-  | Struct -> (attr, transf_members env id 1 ml)
-  | Union  -> (attr, ml)
+  | Struct -> (attr, transf_struct_members env id 1 ml)
+  | Union  -> (attr, transf_union_members env id 1 ml)
 
 (* Bitfield manipulation expressions *)
 
 let left_shift_count bf =
-  intconst 
+  intconst
     (Int64.of_int (8 * !config.sizeof_int - (bf.bf_pos + bf.bf_size)))
     IInt
 
 let right_shift_count bf =
-  intconst 
+  intconst
     (Int64.of_int (8 * !config.sizeof_int - bf.bf_size))
     IInt
 
@@ -208,13 +252,16 @@ unsigned int bitfield_insert(unsigned int x, int ofs, int sz, unsigned int y)
   return (x & ~mask) | ((y << ofs) & mask);
 }
 
+If the bitfield is of type _Bool, the new value (y above) must be converted
+to _Bool to normalize it to 0 or 1.
 *)
 
 let bitfield_assign env bf carrier newval =
   let msk = insertion_mask bf in
   let notmsk = {edesc = EUnop(Onot, msk); etyp = msk.etyp} in
   let newval_casted =
-    ecast (TInt(IUInt,[])) newval in
+    ecast (TInt(IUInt,[]))
+          (if bf.bf_bool then ecast (TInt(IBool,[])) newval else newval) in
   let newval_shifted =
     eshift env Oshl newval_casted (intconst (Int64.of_int bf.bf_pos) IUInt) in
   let newval_masked = ebinint env Oand newval_shifted msk
@@ -230,17 +277,22 @@ unsigned int bitfield_init(int ofs, int sz, unsigned int y)
   unsigned int mask = (1U << sz) - 1;
   return (y & mask) << ofs;
 }
+
+If the bitfield is of type _Bool, the new value (y above) must be converted
+to _Bool to normalize it to 0 or 1.
 *)
 
 let bitfield_initializer bf i =
   match i with
   | Init_single e ->
       let m = Int64.pred (Int64.shift_left 1L bf.bf_size) in
+      let e_cast =
+        if bf.bf_bool then ecast (TInt(IBool,[])) e else e in
       let e_mask =
         {edesc = EConst(CInt(m, IUInt, sprintf "0x%LXU" m));
          etyp = TInt(IUInt, [])} in
       let e_and =
-        {edesc = EBinop(Oand, e, e_mask, TInt(IUInt,[]));
+        {edesc = EBinop(Oand, e_cast, e_mask, TInt(IUInt,[]));
          etyp = TInt(IUInt,[])} in
       {edesc = EBinop(Oshl, e_and, intconst (Int64.of_int bf.bf_pos) IInt,
                       TInt(IUInt, []));
@@ -251,7 +303,7 @@ let bitfield_initializer bf i =
 (* Associate to the left so that it prints more nicely *)
 
 let or_expr_list = function
-  | [] -> intconst 0L IUInt 
+  | [] -> intconst 0L IUInt
   | [e] -> e
   | e1 :: el ->
       List.fold_left
@@ -301,6 +353,7 @@ let rec is_bitfield_access env e =
   match e.edesc with
   | EUnop(Odot fieldname, e1) ->
       begin match unroll env e1.etyp with
+      | TUnion (id,_)
       | TStruct(id, _) ->
           (try Some(e1, Hashtbl.find bitfield_table (id, fieldname))
            with Not_found -> None)
@@ -356,7 +409,7 @@ let rec transf_exp env ctx e =
       | Some(ex, bf) ->
           transf_post env ctx (op_for_incr_decr op) ex bf e1.etyp
       end
-  | EUnop(op, e1) -> 
+  | EUnop(op, e1) ->
       {edesc = EUnop(op, transf_exp env Val e1); etyp = e.etyp}
 
   | EBinop(Oassign, e1, e2, ty) ->
@@ -380,7 +433,7 @@ let rec transf_exp env ctx e =
           transf_assignop env ctx (op_for_assignop op) ex bf e2 ty
       end
   | EBinop(Ocomma, e1, e2, ty) ->
-      {edesc = EBinop(Ocomma, transf_exp env Effects e1, 
+      {edesc = EBinop(Ocomma, transf_exp env Effects e1,
                               transf_exp env Val e2, ty);
        etyp = e.etyp}
   | EBinop(op, e1, e2, ty) ->
@@ -481,5 +534,5 @@ let program p =
   Transform.program
     ~composite:transf_composite
     ~decl: transf_decl
-    ~fundef:transf_fundef 
+    ~fundef:transf_fundef
     p

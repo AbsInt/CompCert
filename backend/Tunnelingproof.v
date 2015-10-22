@@ -65,8 +65,8 @@ Proof.
   red; intros; simpl. rewrite PTree.gempty. apply U.repr_empty.
 
 (* inductive case *)
-  intros m uf pc bb; intros. destruct uf as [u f]. 
-  assert (PC: U.repr u pc = pc). 
+  intros m uf pc bb; intros. destruct uf as [u f].
+  assert (PC: U.repr u pc = pc).
     generalize (H1 pc). rewrite H. auto.
   assert (record_goto' (u, f) pc bb = (u, f)
           \/ exists s, exists bb', bb = Lbranch s :: bb' /\ record_goto' (u, f) pc bb = (U.union u pc s, measure_edge u pc s f)).
@@ -75,27 +75,27 @@ Proof.
 
 (* u and f are unchanged *)
   rewrite B.
-  red. intro pc'. simpl. rewrite PTree.gsspec. destruct (peq pc' pc). subst pc'. 
+  red. intro pc'. simpl. rewrite PTree.gsspec. destruct (peq pc' pc). subst pc'.
   destruct bb; auto. destruct i; auto.
-  apply H1. 
+  apply H1.
 
 (* b is Lbranch s, u becomes union u pc s, f becomes measure_edge u pc s f *)
   rewrite B.
   red. intro pc'. simpl. rewrite PTree.gsspec. destruct (peq pc' pc). subst pc'. rewrite EQ.
 
 (* The new instruction *)
-  rewrite (U.repr_union_2 u pc s); auto. rewrite U.repr_union_3. 
+  rewrite (U.repr_union_2 u pc s); auto. rewrite U.repr_union_3.
   unfold measure_edge. destruct (peq (U.repr u s) pc). auto. right. split. auto.
   rewrite PC. rewrite peq_true. omega.
 
 (* An old instruction *)
   assert (U.repr u pc' = pc' -> U.repr (U.union u pc s) pc' = pc').
-    intro. rewrite <- H2 at 2. apply U.repr_union_1. congruence. 
+    intro. rewrite <- H2 at 2. apply U.repr_union_1. congruence.
   generalize (H1 pc'). simpl. destruct (m!pc'); auto. destruct b; auto. destruct i; auto.
   intros [P | [P Q]]. left; auto. right.
   split. apply U.sameclass_union_2. auto.
   unfold measure_edge. destruct (peq (U.repr u s) pc). auto.
-  rewrite P. destruct (peq (U.repr u s0) pc). omega. auto. 
+  rewrite P. destruct (peq (U.repr u s0) pc). omega. auto.
 Qed.
 
 Definition record_gotos' (f: function) :=
@@ -104,12 +104,12 @@ Definition record_gotos' (f: function) :=
 Lemma record_gotos_gotos':
   forall f, fst (record_gotos' f) = record_gotos f.
 Proof.
-  intros. unfold record_gotos', record_gotos. 
+  intros. unfold record_gotos', record_gotos.
   repeat rewrite PTree.fold_spec.
   generalize (PTree.elements (fn_code f)) (U.empty) (fun _ : node => O).
   induction l; intros; simpl.
   auto.
-  unfold record_goto' at 2. unfold record_goto at 2. 
+  unfold record_goto' at 2. unfold record_goto at 2.
   destruct (snd a). apply IHl. destruct i; apply IHl.
 Qed.
 
@@ -128,7 +128,7 @@ Theorem record_gotos_correct:
   | _ => branch_target f pc = pc
   end.
 Proof.
-  intros. 
+  intros.
   generalize (record_gotos'_correct f.(fn_code) pc). simpl.
   fold (record_gotos' f). unfold branch_map_correct, branch_target, count_gotos.
   rewrite record_gotos_gotos'. auto.
@@ -284,14 +284,14 @@ Proof.
     (exists st2' : state,
      step tge (State ts (tunnel_function f) sp (branch_target f pc) rs m) E0 st2'
      /\ match_states (Block s f sp bb rs m) st2')).
-  intros. rewrite H0. econstructor; split. 
-  econstructor. simpl. rewrite PTree.gmap1. rewrite H. simpl. eauto. 
+  intros. rewrite H0. econstructor; split.
+  econstructor. simpl. rewrite PTree.gmap1. rewrite H. simpl. eauto.
   econstructor; eauto.
 
-  generalize (record_gotos_correct f pc). rewrite H. 
-  destruct bb; auto. destruct i; auto. 
-  intros [A | [B C]]. auto. 
-  right. split. simpl. omega. 
+  generalize (record_gotos_correct f pc). rewrite H.
+  destruct bb; auto. destruct i; auto.
+  intros [A | [B C]]. auto.
+  right. split. simpl. omega.
   split. auto.
   rewrite B. econstructor; eauto.
 
@@ -302,7 +302,7 @@ Proof.
   econstructor; eauto.
   (* Lload *)
   left; simpl; econstructor; split.
-  eapply exec_Lload with (a := a). 
+  eapply exec_Lload with (a := a).
   rewrite <- H. apply eval_addressing_preserved. exact symbols_preserved.
   eauto. eauto.
   econstructor; eauto.
@@ -321,41 +321,35 @@ Proof.
   eauto. eauto.
   econstructor; eauto.
   (* Lcall *)
-  left; simpl; econstructor; split. 
+  left; simpl; econstructor; split.
   eapply exec_Lcall with (fd := tunnel_fundef fd); eauto.
   apply find_function_translated; auto.
   rewrite sig_preserved. auto.
   econstructor; eauto.
-  constructor; auto. 
+  constructor; auto.
   constructor; auto.
   (* Ltailcall *)
-  left; simpl; econstructor; split. 
+  left; simpl; econstructor; split.
   eapply exec_Ltailcall with (fd := tunnel_fundef fd); eauto.
-  erewrite match_parent_locset; eauto. 
+  erewrite match_parent_locset; eauto.
   apply find_function_translated; auto.
   apply sig_preserved.
   erewrite <- match_parent_locset; eauto.
   econstructor; eauto.
   (* Lbuiltin *)
   left; simpl; econstructor; split.
-  eapply exec_Lbuiltin; eauto. 
-  eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
-  econstructor; eauto.
-  (* Lannot *)
-  left; simpl; econstructor; split.
-  eapply exec_Lannot; eauto.
-  eapply eval_annot_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved; eauto.
+  eapply exec_Lbuiltin; eauto.
+  eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
+  eapply external_call_symbols_preserved. eauto.
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   econstructor; eauto.
 
   (* Lbranch (preserved) *)
   left; simpl; econstructor; split.
-  eapply exec_Lbranch; eauto. 
+  eapply exec_Lbranch; eauto.
   fold (branch_target f pc). econstructor; eauto.
   (* Lbranch (eliminated) *)
-  right; split. simpl. omega. split. auto. constructor; auto. 
+  right; split. simpl. omega. split. auto. constructor; auto.
 
   (* Lcond *)
   left; simpl; econstructor; split.
@@ -363,9 +357,9 @@ Proof.
   destruct b; econstructor; eauto.
   (* Ljumptable *)
   left; simpl; econstructor; split.
-  eapply exec_Ljumptable. 
+  eapply exec_Ljumptable.
   eauto. rewrite list_nth_z_map. change U.elt with node. rewrite H0. reflexivity. eauto.
-  econstructor; eauto. 
+  econstructor; eauto.
   (* Lreturn *)
   left; simpl; econstructor; split.
   eapply exec_Lreturn; eauto.
@@ -374,13 +368,13 @@ Proof.
   (* internal function *)
   left; simpl; econstructor; split.
   eapply exec_function_internal; eauto.
-  simpl. econstructor; eauto. 
+  simpl. econstructor; eauto.
   (* external function *)
   left; simpl; econstructor; split.
   eapply exec_function_external; eauto.
   eapply external_call_symbols_preserved'; eauto.
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
-  simpl. econstructor; eauto. 
+  simpl. econstructor; eauto.
   (* return *)
   inv H3. inv H1.
   left; econstructor; split.
@@ -392,22 +386,22 @@ Lemma transf_initial_states:
   forall st1, initial_state prog st1 ->
   exists st2, initial_state tprog st2 /\ match_states st1 st2.
 Proof.
-  intros. inversion H. 
+  intros. inversion H.
   exists (Callstate nil (tunnel_fundef f) (Locmap.init Vundef) m0); split.
   econstructor; eauto.
   apply Genv.init_mem_transf; auto.
   change (prog_main tprog) with (prog_main prog).
   rewrite symbols_preserved. eauto.
   apply function_ptr_translated; auto.
-  rewrite <- H3. apply sig_preserved. 
+  rewrite <- H3. apply sig_preserved.
   constructor. constructor.
 Qed.
 
 Lemma transf_final_states:
-  forall st1 st2 r, 
+  forall st1 st2 r,
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
 Proof.
-  intros. inv H0. inv H. inv H6. econstructor; eauto.  
+  intros. inv H0. inv H. inv H6. econstructor; eauto.
 Qed.
 
 Theorem transf_program_correct:
@@ -417,7 +411,7 @@ Proof.
   eexact public_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
-  eexact tunnel_step_correct. 
+  eexact tunnel_step_correct.
 Qed.
 
 End PRESERVATION.

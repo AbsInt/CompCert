@@ -78,8 +78,7 @@ Inductive stmt : Type :=
   | Sstore : memory_chunk -> addressing -> exprlist -> expr -> stmt
   | Scall : option ident -> signature -> expr + ident -> exprlist -> stmt
   | Stailcall: signature -> expr + ident -> exprlist -> stmt
-  | Sbuiltin : option ident -> external_function -> exprlist -> stmt
-  | Sannot : external_function -> list (annot_arg expr) -> stmt
+  | Sbuiltin : builtin_res ident -> external_function -> list (builtin_arg expr) -> stmt
   | Sseq: stmt -> stmt -> stmt
   | Sifthenelse: condexpr -> stmt -> stmt -> stmt
   | Sloop: stmt -> stmt
@@ -175,7 +174,7 @@ Inductive eval_expr: letenv -> expr -> val -> Prop :=
   | eval_Eload: forall le chunk addr al vl vaddr v,
       eval_exprlist le al vl ->
       eval_addressing ge sp addr vl = Some vaddr ->
-      Mem.loadv chunk m vaddr = Some v ->     
+      Mem.loadv chunk m vaddr = Some v ->
       eval_expr le (Eload chunk addr al) v
   | eval_Econdition: forall le a b c va v,
       eval_condexpr le a va ->
@@ -249,33 +248,41 @@ Inductive eval_expr_or_symbol: letenv -> expr + ident -> val -> Prop :=
       Genv.find_symbol ge id = Some b ->
       eval_expr_or_symbol le (inr _ id) (Vptr b Int.zero).
 
-Inductive eval_annot_arg: annot_arg expr -> val -> Prop :=
-  | eval_AA_base: forall a v,
+Inductive eval_builtin_arg: builtin_arg expr -> val -> Prop :=
+  | eval_BA: forall a v,
       eval_expr nil a v ->
-      eval_annot_arg (AA_base a) v
-  | eval_AA_int: forall n,
-      eval_annot_arg (AA_int n) (Vint n)
-  | eval_AA_long: forall n,
-      eval_annot_arg (AA_long n) (Vlong n)
-  | eval_AA_float: forall n,
-      eval_annot_arg (AA_float n) (Vfloat n)
-  | eval_AA_single: forall n,
-      eval_annot_arg (AA_single n) (Vsingle n)
-  | eval_AA_loadstack: forall chunk ofs v,
+      eval_builtin_arg (BA a) v
+  | eval_BA_int: forall n,
+      eval_builtin_arg (BA_int n) (Vint n)
+  | eval_BA_long: forall n,
+      eval_builtin_arg (BA_long n) (Vlong n)
+  | eval_BA_float: forall n,
+      eval_builtin_arg (BA_float n) (Vfloat n)
+  | eval_BA_single: forall n,
+      eval_builtin_arg (BA_single n) (Vsingle n)
+  | eval_BA_loadstack: forall chunk ofs v,
       Mem.loadv chunk m (Val.add sp (Vint ofs)) = Some v ->
-      eval_annot_arg (AA_loadstack chunk ofs) v
-  | eval_AA_addrstack: forall ofs,
-      eval_annot_arg (AA_addrstack ofs) (Val.add sp (Vint ofs))
-  | eval_AA_loadglobal: forall chunk id ofs v,
+      eval_builtin_arg (BA_loadstack chunk ofs) v
+  | eval_BA_addrstack: forall ofs,
+      eval_builtin_arg (BA_addrstack ofs) (Val.add sp (Vint ofs))
+  | eval_BA_loadglobal: forall chunk id ofs v,
       Mem.loadv chunk m (Genv.symbol_address ge id ofs) = Some v ->
-      eval_annot_arg (AA_loadglobal chunk id ofs) v
-  | eval_AA_addrglobal: forall id ofs,
-      eval_annot_arg (AA_addrglobal id ofs) (Genv.symbol_address ge id ofs)
-  | eval_AA_longofwords: forall a1 a2 v1 v2,
+      eval_builtin_arg (BA_loadglobal chunk id ofs) v
+  | eval_BA_addrglobal: forall id ofs,
+      eval_builtin_arg (BA_addrglobal id ofs) (Genv.symbol_address ge id ofs)
+  | eval_BA_splitlong: forall a1 a2 v1 v2,
       eval_expr nil a1 v1 -> eval_expr nil a2 v2 ->
-      eval_annot_arg (AA_longofwords (AA_base a1) (AA_base a2)) (Val.longofwords v1 v2).
+      eval_builtin_arg (BA_splitlong (BA a1) (BA a2)) (Val.longofwords v1 v2).
 
 End EVAL_EXPR.
+
+(** Update local environment with the result of a builtin. *)
+
+Definition set_builtin_res (res: builtin_res ident) (v: val) (e: env) : env :=
+  match res with
+  | BR id => PTree.set id v e
+  | _ => e
+  end.
 
 (** Pop continuation until a call or stop *)
 
@@ -293,10 +300,10 @@ Definition is_call_cont (k: cont) : Prop :=
   | _ => False
   end.
 
-(** Find the statement and manufacture the continuation 
+(** Find the statement and manufacture the continuation
   corresponding to a label *)
 
-Fixpoint find_label (lbl: label) (s: stmt) (k: cont) 
+Fixpoint find_label (lbl: label) (s: stmt) (k: cont)
                     {struct s}: option (stmt * cont) :=
   match s with
   | Sseq s1 s2 =>
@@ -364,18 +371,11 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f (Stailcall sig a bl) k (Vptr sp Int.zero) e m)
         E0 (Callstate fd vargs (call_cont k) m')
 
-  | step_builtin: forall f optid ef al k sp e m vl t v m',
-      eval_exprlist sp e m nil al vl ->
+  | step_builtin: forall f res ef al k sp e m vl t v m',
+      list_forall2 (eval_builtin_arg sp e m) al vl ->
       external_call ef ge vl m t v m' ->
-      step (State f (Sbuiltin optid ef al) k sp e m)
-         t (State f Sskip k sp (set_optvar optid v e) m')
-
-  | step_annot: forall f ef al k sp e m vl t v m',
-      match ef with EF_annot _ _ => True | _ => False end ->
-      list_forall2 (eval_annot_arg sp e m) al vl ->
-      external_call ef ge vl m t v m' ->
-      step (State f (Sannot ef al) k sp e m)
-         t (State f Sskip k sp e m')
+      step (State f (Sbuiltin res ef al) k sp e m)
+         t (State f Sskip k sp (set_builtin_res res v e) m')
 
   | step_seq: forall f s1 s2 k sp e m,
       step (State f (Sseq s1 s2) k sp e m)
@@ -436,7 +436,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | step_external_function: forall ef vargs k m t vres m',
       external_call ef ge vargs m t vres m' ->
       step (Callstate (External ef) vargs k m)
-         t (Returnstate vres k m')        
+         t (Returnstate vres k m')
 
   | step_return: forall v optid f sp e k m,
       step (Returnstate v (Kcall optid f sp e k) m)
@@ -519,7 +519,7 @@ Lemma insert_lenv_lookup1:
 Proof.
   induction 1; intros.
   omegaContradiction.
-  destruct n; simpl; simpl in H0. auto. 
+  destruct n; simpl; simpl in H0. auto.
   apply IHinsert_lenv. auto. omega.
 Qed.
 
@@ -532,7 +532,7 @@ Lemma insert_lenv_lookup2:
 Proof.
   induction 1; intros.
   simpl. assumption.
-  simpl. destruct n. omegaContradiction. 
+  simpl. destruct n. omegaContradiction.
   apply IHinsert_lenv. exact H0. omega.
 Qed.
 
@@ -559,7 +559,7 @@ Proof.
 
   eapply eval_Elet. eauto. apply H2. apply insert_lenv_S; auto.
 
-  case (le_gt_dec p n); intro. 
+  case (le_gt_dec p n); intro.
   apply eval_Eletvar. eapply insert_lenv_lookup2; eauto.
   apply eval_Eletvar. eapply insert_lenv_lookup1; eauto.
 
@@ -573,7 +573,7 @@ Lemma eval_lift:
   eval_expr ge sp e m (w::le) (lift a) v.
 Proof.
   intros. unfold lift. eapply eval_lift_expr.
-  eexact H. apply insert_lenv_0. 
+  eexact H. apply insert_lenv_0.
 Qed.
 
 Hint Resolve eval_lift: evalexpr.

@@ -72,11 +72,9 @@ let print_instruction pp (pc, i) =
         ros fn regs args
   | Ibuiltin(ef, args, res, s) ->
       fprintf pp "%a = %s(%a)\n"
-        reg res (name_of_external ef) regs args;
-      print_succ pp s (pc - 1)
-  | Iannot(ef, args, s) ->
-      fprintf pp "%s(%a)\n"
-        (name_of_external ef) (print_annot_args reg) args;
+        (print_builtin_res reg) res
+        (name_of_external ef)
+        (print_builtin_args reg) args;
       print_succ pp s (pc - 1)
   | Icond(cond, args, s1, s2) ->
       fprintf pp "if (%a) goto %d else goto %d\n"
@@ -101,7 +99,7 @@ let print_function pp id f =
       (List.rev_map
         (fun (pc, i) -> (P.to_int pc, i))
         (PTree.elements f.fn_code)) in
-  print_succ pp f.fn_entrypoint 
+  print_succ pp f.fn_entrypoint
     (match instrs with (pc1, _) :: _ -> pc1 | [] -> -1);
   List.iter (print_instruction pp) instrs;
   fprintf pp "}\n\n"

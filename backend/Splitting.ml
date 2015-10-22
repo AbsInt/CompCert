@@ -39,9 +39,9 @@ let rec repr lr =
   | Link lr' -> let lr'' = repr lr' in lr.kind <- Link lr''; lr''
   | _ -> lr
 
-let same_range lr1 lr2 = 
-  lr1 == lr2 || (* quick test for speed *) 
-  repr lr1 == repr lr2 (* the real test *) 
+let same_range lr1 lr2 =
+  lr1 == lr2 || (* quick test for speed *)
+  repr lr1 == repr lr2 (* the real test *)
 
 let unify lr1 lr2 =
   let lr1 = repr lr1 and lr2 = repr lr2 in
@@ -162,9 +162,8 @@ let ren_instr f maps pc i =
   | Itailcall(sg, ros, args) ->
       Itailcall(sg, ren_ros before ros, ren_regs before args)
   | Ibuiltin(ef, args, res, s) ->
-      Ibuiltin(ef, ren_regs before args, ren_reg after res, s)
-  | Iannot(ef, args, s) ->
-      Iannot(ef, List.map (AST.map_annot_arg (ren_reg before)) args, s)
+      Ibuiltin(ef, List.map (AST.map_builtin_arg (ren_reg before)) args,
+                   AST.map_builtin_res (ren_reg after) res, s)
   | Icond(cond, args, s1, s2) ->
       Icond(cond, ren_regs before args, s1, s2)
   | Ijumptable(arg, tbl) ->

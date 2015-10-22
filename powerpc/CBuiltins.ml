@@ -19,7 +19,7 @@ open C
 
 let builtins = {
   Builtins.typedefs = [
-    "__builtin_va_list", 
+    "__builtin_va_list",
     TArray(TInt(IUInt, []), Some 3L, [])
   ];
   Builtins.functions = [
@@ -36,21 +36,23 @@ let builtins = {
       (TInt(IUInt, []), [TInt(IUInt, [])], false);
     "__builtin_bswap16",
       (TInt(IUShort, []), [TInt(IUShort, [])], false);
+    "__builtin_cmpb",
+      (TInt (IUInt, []),  [TInt(IUInt, []);TInt(IUInt, [])], false);
     (* Float arithmetic *)
     "__builtin_fmadd",
-      (TFloat(FDouble, []), 
+      (TFloat(FDouble, []),
        [TFloat(FDouble, []); TFloat(FDouble, []); TFloat(FDouble, [])],
        false);
     "__builtin_fmsub",
-      (TFloat(FDouble, []), 
+      (TFloat(FDouble, []),
        [TFloat(FDouble, []); TFloat(FDouble, []); TFloat(FDouble, [])],
        false);
     "__builtin_fnmadd",
-      (TFloat(FDouble, []), 
+      (TFloat(FDouble, []),
        [TFloat(FDouble, []); TFloat(FDouble, []); TFloat(FDouble, [])],
        false);
     "__builtin_fnmsub",
-      (TFloat(FDouble, []), 
+      (TFloat(FDouble, []),
        [TFloat(FDouble, []); TFloat(FDouble, []); TFloat(FDouble, [])],
        false);
     "__builtin_fsqrt",
@@ -60,7 +62,7 @@ let builtins = {
     "__builtin_fres",
       (TFloat(FFloat, []), [TFloat(FFloat, [])], false);
     "__builtin_fsel",
-      (TFloat(FDouble, []), 
+      (TFloat(FDouble, []),
        [TFloat(FDouble, []); TFloat(FDouble, []); TFloat(FDouble, [])],
        false);
     "__builtin_fcti",
@@ -83,8 +85,49 @@ let builtins = {
       (TVoid [], [], false);
     "__builtin_isync",
       (TVoid [], [], false);
+    "__builtin_lwsync",
+      (TVoid [], [], false);
+    "__builtin_mbar",
+      (TVoid [], [TInt(IInt, [])], false);
     "__builtin_trap",
-      (TVoid [], [], false)
+      (TVoid [], [], false);
+    (* Cache isntructions *)
+    "__builtin_dcbf",
+      (TVoid [],[TPtr(TVoid [], [])],false);
+    "__builtin_dcbi",
+      (TVoid [],[TPtr(TVoid [], [])],false);
+    "__builtin_icbi",
+      (TVoid [],[TPtr(TVoid [], [])],false);
+    "__builtin_prefetch",
+      (TVoid [], [TPtr (TVoid [],[]);TInt (IInt, []);TInt (IInt,[])],false);
+    "__builtin_dcbtls",
+      (TVoid[], [TPtr (TVoid [],[]);TInt (IInt,[])],false);
+    "__builtin_icbtls",
+      (TVoid[], [TPtr (TVoid [],[]);TInt (IInt,[])],false);
+    "__builtin_dcbz",
+      (TVoid[], [TPtr (TVoid [],[])],false);
+    (* Access to special registers *)
+    "__builtin_get_spr",
+      (TInt(IUInt, []), [TInt(IInt, [])], false);
+    "__builtin_set_spr",
+      (TVoid [], [TInt(IInt, []); TInt(IUInt, [])], false);
+    (* Frame and return address *)
+    "__builtin_call_frame",
+      (TPtr (TVoid [],[]),[],false);
+    "__builtin_return_address",
+      (TPtr (TVoid [],[]),[],false);
+    (* isel *)
+    "__builtin_isel",
+      (TInt (IInt, []),[TInt(IBool, []);TInt(IInt, []);TInt(IInt, [])],false);
+    (* atomic operations *)
+    "__builtin_atomic_exchange",
+      (TVoid [], [TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[])],false);
+    "__builtin_atomic_load",
+      (TVoid [], [TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[])],false);
+    "__builtin_atomic_compare_exchange",
+      (TInt (IBool, []), [TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[])],false);
+    "__builtin_sync_fetch_and_add",
+      (TInt (IInt, []),  [TPtr (TInt(IInt, []),[]);TInt(IInt, [])],false);
   ]
 }
 

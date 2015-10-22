@@ -25,6 +25,7 @@ Require Import Fcore_generic_fmt.
 Require Import Fcore_float_prop.
 Require Import Fcore_FLX.
 Require Import Fcore_FIX.
+Require Import Fcore_ulp.
 Require Import Fcore_rnd_ne.
 
 Section RND_FLT.
@@ -229,6 +230,75 @@ apply Zmax_lub.
 omega.
 apply Zle_refl.
 Qed.
+
+Theorem ulp_FLT_small: forall x, (Rabs x < bpow (emin+prec))%R ->
+    ulp beta FLT_exp x = bpow emin.
+Proof with auto with typeclass_instances.
+intros x Hx.
+unfold ulp; case Req_bool_spec; intros Hx2.
+(* x = 0 *)
+case (negligible_exp_spec FLT_exp).
+intros T; specialize (T (emin-1)%Z); contradict T.
+apply Zle_not_lt; unfold FLT_exp.
+apply Zle_trans with (2:=Z.le_max_r _ _); omega.
+assert (V:FLT_exp emin = emin).
+unfold FLT_exp; apply Z.max_r.
+unfold Prec_gt_0 in prec_gt_0_; omega.
+intros n H2; rewrite <-V.
+apply f_equal, fexp_negligible_exp_eq...
+omega.
+(* x <> 0 *)
+apply f_equal; unfold canonic_exp, FLT_exp.
+apply Z.max_r.
+assert (ln_beta beta x-1 < emin+prec)%Z;[idtac|omega].
+destruct (ln_beta beta x) as (e,He); simpl.
+apply lt_bpow with beta.
+apply Rle_lt_trans with (2:=Hx).
+now apply He.
+Qed.
+
+Theorem ulp_FLT_le: forall x, (bpow (emin+prec) <= Rabs x)%R ->
+  (ulp beta FLT_exp x <= Rabs x * bpow (1-prec))%R.
+Proof.
+intros x Hx.
+assert (x <> 0)%R.
+intros Z; contradict Hx; apply Rgt_not_le, Rlt_gt.
+rewrite Z, Rabs_R0; apply bpow_gt_0.
+rewrite ulp_neq_0; try assumption.
+unfold canonic_exp, FLT_exp.
+destruct (ln_beta beta x) as (e,He).
+apply Rle_trans with (bpow (e-1)*bpow (1-prec))%R.
+rewrite <- bpow_plus.
+right; apply f_equal.
+apply trans_eq with (e-prec)%Z;[idtac|ring].
+simpl; apply Z.max_l.
+assert (emin+prec <= e)%Z; try omega.
+apply le_bpow with beta.
+apply Rle_trans with (1:=Hx).
+left; now apply He.
+apply Rmult_le_compat_r.
+apply bpow_ge_0.
+now apply He.
+Qed.
+
+
+Theorem ulp_FLT_ge: forall x, (Rabs x * bpow (-prec) < ulp beta FLT_exp x)%R.
+Proof.
+intros x; case (Req_dec x 0); intros Hx.
+rewrite Hx, ulp_FLT_small, Rabs_R0, Rmult_0_l; try apply bpow_gt_0.
+rewrite Rabs_R0; apply bpow_gt_0.
+rewrite ulp_neq_0; try exact Hx.
+unfold canonic_exp, FLT_exp.
+apply Rlt_le_trans with (bpow (ln_beta beta x)*bpow (-prec))%R.
+apply Rmult_lt_compat_r.
+apply bpow_gt_0.
+now apply bpow_ln_beta_gt.
+rewrite <- bpow_plus.
+apply bpow_le.
+apply Z.le_max_l.
+Qed.
+
+
 
 (** FLT is a nice format: it has a monotone exponent... *)
 Global Instance FLT_exp_monotone : Monotone_exp FLT_exp.

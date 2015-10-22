@@ -13,7 +13,7 @@
 /*                                                                     */
 /* *********************************************************************/
 
-/* Note that this compiles a superset of the language defined by the AST, 
+/* Note that this compiles a superset of the language defined by the AST,
    including function calls in expressions, matches, while statements, etc. */
 
 %{
@@ -35,19 +35,13 @@ type ef_token =
 let mkef sg toks =
   match toks with
   | [EFT_tok "extern"; EFT_string s] ->
-      EF_external(intern_string s, sg)
+      EF_external(coqstring_of_camlstring s, sg)
   | [EFT_tok "builtin"; EFT_string s] ->
-      EF_builtin(intern_string s, sg)
+      EF_builtin(coqstring_of_camlstring s, sg)
   | [EFT_tok "volatile"; EFT_tok "load"; EFT_chunk c] ->
       EF_vload c
   | [EFT_tok "volatile"; EFT_tok "store"; EFT_chunk c] ->
       EF_vstore c
-  | [EFT_tok "volatile"; EFT_tok "load"; EFT_chunk c; 
-     EFT_tok "global"; EFT_string s; EFT_int n] ->
-      EF_vload_global(c, intern_string s, coqint_of_camlint n)
-  | [EFT_tok "volatile"; EFT_tok "store"; EFT_chunk c; 
-     EFT_tok "global"; EFT_string s; EFT_int n] ->
-      EF_vstore_global(c, intern_string s, coqint_of_camlint n)
   | [EFT_tok "malloc"] ->
       EF_malloc
   | [EFT_tok "free"] ->
@@ -55,12 +49,12 @@ let mkef sg toks =
   | [EFT_tok "memcpy"; EFT_tok "size"; EFT_int sz; EFT_tok "align"; EFT_int al] ->
       EF_memcpy(Z.of_sint32 sz, Z.of_sint32 al)
   | [EFT_tok "annot"; EFT_string txt] ->
-      EF_annot(intern_string txt, sg.sig_args)
+      EF_annot(coqstring_of_camlstring txt, sg.sig_args)
   | [EFT_tok "annot_val"; EFT_string txt] ->
       if sg.sig_args = [] then raise Parsing.Parse_error;
-      EF_annot_val(intern_string txt, List.hd sg.sig_args)
+      EF_annot_val(coqstring_of_camlstring txt, List.hd sg.sig_args)
   | [EFT_tok "inline_asm"; EFT_string txt] ->
-      EF_inline_asm(intern_string txt, sg, [])
+      EF_inline_asm(coqstring_of_camlstring txt, sg, [])
   | _ ->
       raise Parsing.Parse_error
 
@@ -129,7 +123,7 @@ let mkeval e =
       let c1 = convert_rexpr e1 in
       let cl = convert_rexpr_list el in
       prepend_seq !convert_accu (Scall(None, sg, c1, cl))
-  | Rbuiltin(sg, pef, el) -> 
+  | Rbuiltin(sg, pef, el) ->
       let ef = mkef sg pef in
       let cl = convert_rexpr_list el in
       prepend_seq !convert_accu (Sbuiltin(None, ef, cl))
@@ -328,9 +322,9 @@ let mkmatch expr cases =
 %token LESSLESSL
 %token LONG
 %token <int64> LONGLIT
-%token LONGOFINT 
+%token LONGOFINT
 %token LONGOFINTU
-%token LONGOFFLOAT 
+%token LONGOFFLOAT
 %token LONGUOFFLOAT
 %token LOOP
 %token LPAREN
@@ -381,7 +375,7 @@ let mkmatch expr cases =
 %left CARET CARETL
 %left AMPERSAND AMPERSANDL
 %left EQUALEQUAL BANGEQUAL LESS LESSEQUAL GREATER GREATEREQUAL EQUALEQUALU BANGEQUALU LESSU LESSEQUALU GREATERU GREATEREQUALU EQUALEQUALF BANGEQUALF LESSF LESSEQUALF GREATERF GREATEREQUALF EQUALEQUALL BANGEQUALL LESSL LESSEQUALL GREATERL GREATEREQUALL EQUALEQUALLU BANGEQUALLU LESSLU LESSEQUALLU GREATERLU GREATEREQUALLU
-%left LESSLESS GREATERGREATER GREATERGREATERU LESSLESSL GREATERGREATERL GREATERGREATERLU 
+%left LESSLESS GREATERGREATER GREATERGREATERU LESSLESSL GREATERGREATERL GREATERGREATERLU
 %left PLUS PLUSF PLUSL MINUS MINUSF MINUSL
 %left STAR SLASH PERCENT STARF SLASHF SLASHU PERCENTU STARL SLASHL SLASHLU PERCENTL PERCENTLU
 %nonassoc BANG TILDE TILDEL p_uminus ABSF INTOFFLOAT INTUOFFLOAT FLOATOFINT FLOATOFINTU INT8S INT8U INT16S INT16U FLOAT32 INTOFLONG LONGOFINT LONGOFINTU LONGOFFLOAT LONGUOFFLOAT FLOATOFLONG FLOATOFLONGU
@@ -438,12 +432,12 @@ init_data_list:
     /* empty */                                 { [] }
    | init_data_list_1                           { $1 }
  ;
- 
+
 init_data_list_1:
      init_data                                   { [$1] }
    | init_data_list_1 COMMA init_data            { $3 :: $1 }
  ;
- 
+
 init_data:
      INT8 INTLIT                                 { Init_int8 (coqint_of_camlint $2) }
    | INT16 INTLIT                                { Init_int16 (coqint_of_camlint $2) }
@@ -459,7 +453,7 @@ init_data:
    | LBRACKET INTLIT RBRACKET                    { Init_space (Z.of_sint32 $2) }
    | INTLIT LPAREN STRINGLIT RPAREN              { Init_addrof (intern_string $3, coqint_of_camlint $1) }
  ;
- 
+
 /* Procedures */
 
 proc:
@@ -478,14 +472,14 @@ proc:
                         fn_vars = List.rev (tmp @ $9);
                         fn_stackspace = $8;
                         fn_body = $10 })) }
-  | EXTERN STRINGLIT COLON signature 
-      { (intern_string $2, Gfun(External(EF_external(intern_string $2,$4)))) }
+  | EXTERN STRINGLIT COLON signature
+      { (intern_string $2, Gfun(External(EF_external(coqstring_of_camlstring $2,$4)))) }
   | EXTERN STRINGLIT EQUAL eftoks COLON signature
       { (intern_string $2, Gfun(External(mkef $6 $4))) }
 ;
 
 signature:
-    type_ 
+    type_
                { {sig_args = []; sig_res = Some $1; sig_cc = cc_default} }
   | VOID
                { {sig_args = []; sig_res = None; sig_cc = cc_default} }

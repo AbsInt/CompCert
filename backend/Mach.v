@@ -13,7 +13,7 @@
 (** The Mach intermediate language: abstract syntax.
 
   Mach is the last intermediate language before generation of assembly
-  code.  
+  code.
 *)
 
 Require Import Coqlib.
@@ -34,14 +34,14 @@ Require Stacklayout.
 
 (** Like Linear, the Mach language is organized as lists of instructions
   operating over machine registers, with default fall-through behaviour
-  and explicit labels and branch instructions.  
+  and explicit labels and branch instructions.
 
   The main difference with Linear lies in the instructions used to
   access the activation record.  Mach has three such instructions:
   [Mgetstack] and [Msetstack] to read and write within the activation
   record for the current function, at a given word offset and with a
   given type; and [Mgetparam], to read within the activation record of
-  the caller. 
+  the caller.
 
   These instructions implement a more concrete view of the activation
   record than the the [Lgetstack] and [Lsetstack] instructions of
@@ -60,8 +60,7 @@ Inductive instruction: Type :=
   | Mstore: memory_chunk -> addressing -> list mreg -> mreg -> instruction
   | Mcall: signature -> mreg + ident -> instruction
   | Mtailcall: signature -> mreg + ident -> instruction
-  | Mbuiltin: external_function -> list mreg -> list mreg -> instruction
-  | Mannot: external_function -> list (annot_arg mreg) -> instruction
+  | Mbuiltin: external_function -> list (builtin_arg mreg) -> builtin_res mreg -> instruction
   | Mlabel: label -> instruction
   | Mgoto: label -> instruction
   | Mcond: condition -> list mreg -> label -> instruction
@@ -154,13 +153,20 @@ Lemma undef_regs_same:
 Proof.
   induction rl; simpl; intros. tauto.
   destruct H. subst a. apply Regmap.gss.
-  unfold Regmap.set. destruct (RegEq.eq r a); auto. 
+  unfold Regmap.set. destruct (RegEq.eq r a); auto.
 Qed.
 
 Fixpoint set_regs (rl: list mreg) (vl: list val) (rs: regset) : regset :=
   match rl, vl with
   | r1 :: rl', v1 :: vl' => set_regs rl' vl' (Regmap.set r1 v1 rs)
   | _, _ => rs
+  end.
+
+Fixpoint set_res (res: builtin_res mreg) (v: val) (rs: regset) : regset :=
+  match res with
+  | BR r => Regmap.set r v rs
+  | BR_none => rs
+  | BR_splitlong hi lo => set_res lo (Val.loword v) (set_res hi (Val.hiword v) rs)
   end.
 
 Definition is_label (lbl: label) (instr: instruction) : bool :=
@@ -187,7 +193,7 @@ Lemma find_label_incl:
   forall lbl c c', find_label lbl c = Some c' -> incl c' c.
 Proof.
   induction c; simpl; intros. discriminate.
-  destruct (is_label lbl a). inv H. auto with coqlib. eauto with coqlib. 
+  destruct (is_label lbl a). inv H. auto with coqlib. eauto with coqlib.
 Qed.
 
 Section RELSEM.
@@ -328,17 +334,12 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State s fb (Vptr stk soff) (Mtailcall sig ros :: c) rs m)
         E0 (Callstate s f' rs m')
   | exec_Mbuiltin:
-      forall s f sp rs m ef args res b t vl rs' m',
-      external_call' ef ge rs##args m t vl m' ->
-      rs' = set_regs res vl (undef_regs (destroyed_by_builtin ef) rs) ->
+      forall s f sp rs m ef args res b vargs t vres rs' m',
+      eval_builtin_args ge rs sp m args vargs ->
+      external_call ef ge vargs m t vres m' ->
+      rs' = set_res res vres (undef_regs (destroyed_by_builtin ef) rs) ->
       step (State s f sp (Mbuiltin ef args res :: b) rs m)
          t (State s f sp b rs' m')
-  | exec_Mannot:
-      forall s f sp rs m ef args b vargs t v m',
-      eval_annot_args ge rs sp m args vargs ->
-      external_call ef ge vargs m t v m' ->
-      step (State s f sp (Mannot ef args :: b) rs m)
-         t (State s f sp b rs m')
   | exec_Mgoto:
       forall s fb f sp lbl c rs m c',
       Genv.find_funct_ptr ge fb = Some (Internal f) ->

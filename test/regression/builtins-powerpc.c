@@ -1,6 +1,13 @@
 /* Fun with builtins */
 
 #include <stdio.h>
+#include <math.h>
+
+char * check_relative_error(double exact, double actual, double precision)
+{
+  double relative_error = (actual - exact) / exact;
+  return fabs(relative_error) <= precision ? "OK" : "ERROR";
+}
 
 int main(int argc, char ** argv)
 {
@@ -22,8 +29,10 @@ int main(int argc, char ** argv)
   printf("fabs(%f) = %f\n", a, __builtin_fabs(a));
   printf("fabs(%f) = %f\n", -a, __builtin_fabs(-a));
   printf("fsqrt(%f) = %f\n", a, __builtin_fsqrt(a));
-  printf("frsqrte(%f) = %f\n", a, __builtin_frsqrte(a));
-  printf("fres(%f) = %f\n", a, __builtin_fres(a));
+  printf("frsqrte(%f) = %s\n",
+         a, check_relative_error(1.0 / sqrt(a), __builtin_frsqrte(a), 1./32.));
+  printf("fres(%f) = %s\n",
+         a, check_relative_error(1.0 / a, __builtin_fres(a), 1./256.));
   printf("fsel(%f, %f, %f) = %f\n", a, b, c, __builtin_fsel(a, b, c));
   printf("fsel(%f, %f, %f) = %f\n", -a, b, c, __builtin_fsel(-a, b, c));
   printf("fcti(%f) = %d\n", a, __builtin_fcti(a));
@@ -32,6 +41,8 @@ int main(int argc, char ** argv)
   __builtin_eieio();
   __builtin_sync();
   __builtin_isync();
+  printf("isel(%d, %d, %d) = %d\n", 0, x, y, __builtin_isel(0, x, y));
+  printf("isel(%d, %d, %d) = %d\n", 42, x, y, __builtin_isel(42, x, y));
   printf ("read_16_rev = %x\n", __builtin_read16_reversed(&s));
   printf ("read_32_rev = %x\n", __builtin_read32_reversed(&y));
   __builtin_write16_reversed(&s, 0x789A);
@@ -41,7 +52,10 @@ int main(int argc, char ** argv)
   y = 0;
   __builtin_write32_reversed(&y, 0x12345678);
   printf ("CSE write_32_rev: %s\n", y == 0x78563412 ? "ok" : "ERROR");
-
+  /* Make sure that ignoring the result of a builtin
+     doesn't cause an internal error */
+  (void) __builtin_bswap(x);
+  (void) __builtin_fsqrt(a);
   return 0;
 }
 

@@ -20,6 +20,7 @@ Require Import AST.
 Require Import Integers.
 Require Import Floats.
 Require Import Op.
+Require Machregs.
 Require Import Registers.
 Require Import RTL.
 Require Import Lattice.
@@ -102,39 +103,58 @@ Definition num_iter := 10%nat.
 Definition successor (f: function) (ae: AE.t) (pc: node) : node :=
   successor_rec num_iter f ae pc.
 
-Fixpoint annot_strength_reduction (ae: AE.t) (a: annot_arg reg) :=
+Fixpoint builtin_arg_reduction (ae: AE.t) (a: builtin_arg reg) :=
   match a with
-  | AA_base r =>
+  | BA r =>
       match areg ae r with
-      | I n => AA_int n
-      | L n => AA_long n
-      | F n => if Compopts.generate_float_constants tt then AA_float n else a
-      | FS n => if Compopts.generate_float_constants tt then AA_single n else a
+      | I n => BA_int n
+      | L n => BA_long n
+      | F n => if Compopts.generate_float_constants tt then BA_float n else a
+      | FS n => if Compopts.generate_float_constants tt then BA_single n else a
       | _ => a
       end
-  | AA_longofwords hi lo =>
-      match annot_strength_reduction ae hi, annot_strength_reduction ae lo with
-      | AA_int nhi, AA_int nlo => AA_long (Int64.ofwords nhi nlo)
-      | hi', lo' => AA_longofwords hi' lo'
+  | BA_splitlong hi lo =>
+      match builtin_arg_reduction ae hi, builtin_arg_reduction ae lo with
+      | BA_int nhi, BA_int nlo => BA_long (Int64.ofwords nhi nlo)
+      | hi', lo' => BA_splitlong hi' lo'
       end
   | _ => a
   end.
 
-Function builtin_strength_reduction
-      (ae: AE.t) (ef: external_function) (args: list reg) :=
-  match ef, args with
-  | EF_vload chunk, r1 :: nil =>
-      match areg ae r1 with
-      | Ptr(Gl symb n1) => (EF_vload_global chunk symb n1, nil)
-      | _ => (ef, args)
+Definition builtin_arg_strength_reduction
+      (ae: AE.t) (a: builtin_arg reg) (c: builtin_arg_constraint) :=
+  let a' := builtin_arg_reduction ae a in
+  if builtin_arg_ok a' c then a' else a.
+
+Fixpoint builtin_args_strength_reduction
+      (ae: AE.t) (al: list (builtin_arg reg)) (cl: list builtin_arg_constraint) :=
+  match al with
+  | nil => nil
+  | a :: al =>
+      builtin_arg_strength_reduction ae a (List.hd OK_default cl)
+      :: builtin_args_strength_reduction ae al (List.tl cl)
+  end.
+
+(** For debug annotations, add constant values to the original info
+    instead of replacing it. *)
+
+Fixpoint debug_strength_reduction (ae: AE.t) (al: list (builtin_arg reg)) :=
+  match al with
+  | nil => nil
+  | a :: al =>
+      let a' := builtin_arg_reduction ae a in
+      let al' := a :: debug_strength_reduction ae al in
+      match a, a' with
+      | BA _, (BA_int _ | BA_long _ | BA_float _ | BA_single _) => a' :: al'
+      | _, _ => al'
       end
-  | EF_vstore chunk, r1 :: r2 :: nil =>
-      match areg ae r1 with
-      | Ptr(Gl symb n1) => (EF_vstore_global chunk symb n1, r2 :: nil)
-      | _ => (ef, args)
-      end
-  | _, _ =>
-      (ef, args)
+  end.
+
+Definition builtin_strength_reduction
+             (ae: AE.t) (ef: external_function) (al: list (builtin_arg reg)) :=
+  match ef with
+  | EF_debug _ _ _ => debug_strength_reduction ae al
+  | _ => builtin_args_strength_reduction ae al (Machregs.builtin_constraints ef)
   end.
 
 Definition transf_instr (f: function) (an: PMap.t VA.t) (rm: romem)
@@ -163,21 +183,18 @@ Definition transf_instr (f: function) (an: PMap.t VA.t) (rm: romem)
               Iop cop nil dst s
           | None =>
               let (addr', args') := addr_strength_reduction addr args aargs in
-              Iload chunk addr' args' dst s      
+              Iload chunk addr' args' dst s
           end
       | Istore chunk addr args src s =>
           let aargs := aregs ae args in
           let (addr', args') := addr_strength_reduction addr args aargs in
-          Istore chunk addr' args' src s      
+          Istore chunk addr' args' src s
       | Icall sig ros args res s =>
           Icall sig (transf_ros ae ros) args res s
       | Itailcall sig ros args =>
           Itailcall sig (transf_ros ae ros) args
       | Ibuiltin ef args res s =>
-          let (ef', args') := builtin_strength_reduction ae ef args in
-          Ibuiltin ef' args' res s
-      | Iannot ef args s =>
-          Iannot ef (List.map (annot_strength_reduction ae) args) s
+          Ibuiltin ef (builtin_strength_reduction ae ef args) res s
       | Icond cond args s1 s2 =>
           let aargs := aregs ae args in
           match resolve_branch (eval_static_condition cond aargs) with

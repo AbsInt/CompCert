@@ -62,10 +62,11 @@ struct ht_node *ht_node_create(char *key) {
 	perror("malloc ht_node");
 	exit(1);
     }
-    if ((newkey = (char *)strdup(key)) == 0) {
+    if ((newkey = malloc(strlen(key) + 1)) == 0) {
 	perror("strdup newkey");
 	exit(1);
     }
+    strcpy(newkey, key);
     node->key = newkey;
     node->val = 0;
     node->next = (struct ht_node *)NULL;

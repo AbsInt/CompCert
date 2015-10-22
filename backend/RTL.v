@@ -64,19 +64,16 @@ Inductive instruction: Type :=
   | Icall: signature -> reg + ident -> list reg -> reg -> node -> instruction
       (** [Icall sig fn args dest succ] invokes the function determined by
           [fn] (either a function pointer found in a register or a
-          function name), giving it the values of registers [args] 
+          function name), giving it the values of registers [args]
           as arguments.  It stores the return value in [dest] and branches
           to [succ]. *)
   | Itailcall: signature -> reg + ident -> list reg -> instruction
       (** [Itailcall sig fn args] performs a function invocation
           in tail-call position.  *)
-  | Ibuiltin: external_function -> list reg -> reg -> node -> instruction
+  | Ibuiltin: external_function -> list (builtin_arg reg) -> builtin_res reg -> node -> instruction
       (** [Ibuiltin ef args dest succ] calls the built-in function
           identified by [ef], giving it the values of [args] as arguments.
           It stores the return value in [dest] and branches to [succ]. *)
-  | Iannot: external_function -> list (annot_arg reg) -> node -> instruction
-      (** [Iannot ef args succ] is similar to [Ibuiltin] but specialized
-          to annotations. *)
   | Icond: condition -> list reg -> node -> node -> instruction
       (** [Icond cond args ifso ifnot] evaluates the boolean condition
           [cond] over the values of registers [args].  If the condition
@@ -107,8 +104,7 @@ Record function: Type := mkfunction {
     for its stack-allocated activation record.  [fn_params] is the list
     of registers that are bound to the values of arguments at call time.
     [fn_entrypoint] is the node of the first instruction of the function
-    in the CFG.  [fn_code_wf] asserts that all instructions of the function
-    have nodes no greater than [fn_nextpc]. *)
+    in the CFG. *)
 
 Definition fundef := AST.fundef function.
 
@@ -131,7 +127,7 @@ Fixpoint init_regs (vl: list val) (rl: list reg) {struct rl} : regset :=
   | _, _ => Regmap.init Vundef
   end.
 
-(** The dynamic semantics of RTL is given in small-step style, as a 
+(** The dynamic semantics of RTL is given in small-step style, as a
   set of transitions between states.  A state captures the current
   point in the execution.  Three kinds of states appear in the transitions:
 
@@ -153,7 +149,7 @@ Fixpoint init_regs (vl: list val) (rl: list reg) {struct rl} : regset :=
 
 In all three kinds of states, the [cs] parameter represents the call stack.
 It is a list of frames [Stackframe res f sp pc rs].  Each frame represents
-a function call in progress.  
+a function call in progress.
 [res] is the pseudo-register that will receive the result of the call.
 [f] is the calling function.
 [sp] is its stack pointer.
@@ -253,19 +249,12 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State s f (Vptr stk Int.zero) pc rs m)
         E0 (Callstate s fd rs##args m')
   | exec_Ibuiltin:
-      forall s f sp pc rs m ef args res pc' t v m',
+      forall s f sp pc rs m ef args res pc' vargs t vres m',
       (fn_code f)!pc = Some(Ibuiltin ef args res pc') ->
-      external_call ef ge rs##args m t v m' ->
-      step (State s f sp pc rs m)
-         t (State s f sp pc' (rs#res <- v) m')
-  | exec_Iannot:
-      forall s f sp pc rs m ef args pc' vargs vres t m',
-      (fn_code f)!pc = Some(Iannot ef args pc') ->
-      match ef with EF_annot _ _ => True | _ => False end ->
-      eval_annot_args ge (fun r => rs#r) sp m args vargs ->
+      eval_builtin_args ge (fun r => rs#r) sp m args vargs ->
       external_call ef ge vargs m t vres m' ->
       step (State s f sp pc rs m)
-         t (State s f sp pc' rs m')
+         t (State s f sp pc' (regmap_setres res vres rs) m')
   | exec_Icond:
       forall s f sp pc rs m cond args ifso ifnot b pc',
       (fn_code f)!pc = Some(Icond cond args ifso ifnot) ->
@@ -366,15 +355,12 @@ Proof.
   assert (t1 = E0 -> exists s2, step (Genv.globalenv p) s t2 s2).
     intros. subst. inv H0. exists s1; auto.
   inversion H; subst; auto.
-  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
-  exists (State s0 f sp pc' (rs#res <- vres2) m2). eapply exec_Ibuiltin; eauto.
-  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
-  exists (State s0 f sp pc' rs m2). eapply exec_Iannot; eauto.
-  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
+  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]].
+  exists (State s0 f sp pc' (regmap_setres res vres2 rs) m2). eapply exec_Ibuiltin; eauto.
+  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]].
   exists (Returnstate s0 vres2 m2). econstructor; eauto.
 (* trace length *)
   red; intros; inv H; simpl; try omega.
-  eapply external_call_trace_length; eauto.
   eapply external_call_trace_length; eauto.
   eapply external_call_trace_length; eauto.
 Qed.
@@ -411,7 +397,6 @@ Definition successors_instr (i: instruction) : list node :=
   | Icall sig ros args res s => s :: nil
   | Itailcall sig ros args => nil
   | Ibuiltin ef args res s => s :: nil
-  | Iannot ef args s => s :: nil
   | Icond cond args ifso ifnot => ifso :: ifnot :: nil
   | Ijumptable arg tbl => tbl
   | Ireturn optarg => nil
@@ -432,8 +417,7 @@ Definition instr_uses (i: instruction) : list reg :=
   | Icall sig (inr id) args res s => args
   | Itailcall sig (inl r) args => r :: args
   | Itailcall sig (inr id) args => args
-  | Ibuiltin ef args res s => args
-  | Iannot ef args s => params_of_annot_args args
+  | Ibuiltin ef args res s => params_of_builtin_args args
   | Icond cond args ifso ifnot => args
   | Ijumptable arg tbl => arg :: nil
   | Ireturn None => nil
@@ -450,8 +434,8 @@ Definition instr_defs (i: instruction) : option reg :=
   | Istore chunk addr args src s => None
   | Icall sig ros args res s => Some res
   | Itailcall sig ros args => None
-  | Ibuiltin ef args res s => Some res
-  | Iannot ef args s => None
+  | Ibuiltin ef args res s =>
+      match res with BR r => Some r | _ => None end
   | Icond cond args ifso ifnot => None
   | Ijumptable arg tbl => None
   | Ireturn optarg => None
@@ -466,15 +450,15 @@ Definition max_pc_function (f: function) :=
 Lemma max_pc_function_sound:
   forall f pc i, f.(fn_code)!pc = Some i -> Ple pc (max_pc_function f).
 Proof.
-  intros until i. unfold max_pc_function. 
+  intros until i. unfold max_pc_function.
   apply PTree_Properties.fold_rec with (P := fun c m => c!pc = Some i -> Ple pc m).
   (* extensionality *)
-  intros. apply H0. rewrite H; auto. 
+  intros. apply H0. rewrite H; auto.
   (* base case *)
   rewrite PTree.gempty. congruence.
   (* inductive case *)
-  intros. rewrite PTree.gsspec in H2. destruct (peq pc k). 
-  inv H2. xomega. 
+  intros. rewrite PTree.gsspec in H2. destruct (peq pc k).
+  inv H2. xomega.
   apply Ple_trans with a. auto. xomega.
 Qed.
 
@@ -492,8 +476,9 @@ Definition max_reg_instr (m: positive) (pc: node) (i: instruction) :=
   | Icall sig (inr id) args res s => fold_left Pmax args (Pmax res m)
   | Itailcall sig (inl r) args => fold_left Pmax args (Pmax r m)
   | Itailcall sig (inr id) args => fold_left Pmax args m
-  | Ibuiltin ef args res s => fold_left Pmax args (Pmax res m)
-  | Iannot ef args s => fold_left Pmax (params_of_annot_args args) m
+  | Ibuiltin ef args res s =>
+      fold_left Pmax (params_of_builtin_args args)
+        (fold_left Pmax (params_of_builtin_res res) m)
   | Icond cond args ifso ifnot => fold_left Pmax args m
   | Ijumptable arg tbl => Pmax arg m
   | Ireturn None => m
@@ -508,12 +493,12 @@ Definition max_reg_function (f: function) :=
 Remark max_reg_instr_ge:
   forall m pc i, Ple m (max_reg_instr m pc i).
 Proof.
-  intros. 
+  intros.
   assert (X: forall l n, Ple m n -> Ple m (fold_left Pmax l n)).
-  { induction l; simpl; intros. 
+  { induction l; simpl; intros.
     auto.
     apply IHl. xomega. }
-  destruct i; simpl; try (destruct s0); try (apply X); try xomega.
+  destruct i; simpl; try (destruct s0); repeat (apply X); try xomega.
   destruct o; xomega.
 Qed.
 
@@ -527,15 +512,15 @@ Proof.
 - apply X. xomega.
 - apply X. xomega.
 - destruct s0; apply X; xomega.
-- apply X. xomega.
+- destruct b; inv H1. apply X. simpl. xomega.
 Qed.
 
 Remark max_reg_instr_uses:
   forall m pc i r, In r (instr_uses i) -> Ple r (max_reg_instr m pc i).
 Proof.
-  intros. 
+  intros.
   assert (X: forall l n, In r l \/ Ple r n -> Ple r (fold_left Pmax l n)).
-  { induction l; simpl; intros. 
+  { induction l; simpl; intros.
     tauto.
     apply IHl. destruct H0 as [[A|A]|A]. right; subst; xomega. auto. right; xomega. }
   destruct i; simpl in *; try (destruct s0); try (apply X; auto).
@@ -551,36 +536,36 @@ Lemma max_reg_function_def:
   forall f pc i r,
   f.(fn_code)!pc = Some i -> instr_defs i = Some r -> Ple r (max_reg_function f).
 Proof.
-  intros. 
+  intros.
   assert (Ple r (PTree.fold max_reg_instr f.(fn_code) 1%positive)).
-  {  revert H. 
+  {  revert H.
      apply PTree_Properties.fold_rec with
        (P := fun c m => c!pc = Some i -> Ple r m).
    - intros. rewrite H in H1; auto.
    - rewrite PTree.gempty; congruence.
-   - intros. rewrite PTree.gsspec in H3. destruct (peq pc k). 
-     + inv H3. eapply max_reg_instr_def; eauto. 
+   - intros. rewrite PTree.gsspec in H3. destruct (peq pc k).
+     + inv H3. eapply max_reg_instr_def; eauto.
      + apply Ple_trans with a. auto. apply max_reg_instr_ge.
   }
-  unfold max_reg_function. xomega. 
+  unfold max_reg_function. xomega.
 Qed.
 
 Lemma max_reg_function_use:
   forall f pc i r,
   f.(fn_code)!pc = Some i -> In r (instr_uses i) -> Ple r (max_reg_function f).
 Proof.
-  intros. 
+  intros.
   assert (Ple r (PTree.fold max_reg_instr f.(fn_code) 1%positive)).
-  {  revert H. 
+  {  revert H.
      apply PTree_Properties.fold_rec with
        (P := fun c m => c!pc = Some i -> Ple r m).
    - intros. rewrite H in H1; auto.
    - rewrite PTree.gempty; congruence.
-   - intros. rewrite PTree.gsspec in H3. destruct (peq pc k). 
-     + inv H3. eapply max_reg_instr_uses; eauto. 
+   - intros. rewrite PTree.gsspec in H3. destruct (peq pc k).
+     + inv H3. eapply max_reg_instr_uses; eauto.
      + apply Ple_trans with a. auto. apply max_reg_instr_ge.
   }
-  unfold max_reg_function. xomega. 
+  unfold max_reg_function. xomega.
 Qed.
 
 Lemma max_reg_function_params:
@@ -588,7 +573,7 @@ Lemma max_reg_function_params:
 Proof.
   intros.
   assert (X: forall l n, In r l \/ Ple r n -> Ple r (fold_left Pmax l n)).
-  { induction l; simpl; intros. 
+  { induction l; simpl; intros.
     tauto.
     apply IHl. destruct H0 as [[A|A]|A]. right; subst; xomega. auto. right; xomega. }
   assert (Y: Ple r (fold_left Pmax f.(fn_params) 1%positive)).

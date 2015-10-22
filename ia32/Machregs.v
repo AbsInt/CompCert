@@ -32,7 +32,7 @@ Inductive mreg: Type :=
   (** Allocatable integer regs *)
   | AX: mreg | BX: mreg | CX: mreg | DX: mreg | SI: mreg | DI: mreg | BP: mreg
   (** Allocatable float regs *)
-  | X0: mreg | X1: mreg | X2: mreg | X3: mreg 
+  | X0: mreg | X1: mreg | X2: mreg | X3: mreg
   | X4: mreg | X5: mreg | X6: mreg | X7: mreg
   (** Special float reg *)
   | FP0: mreg (**r top of x87 FP stack *).
@@ -129,18 +129,14 @@ Fixpoint destroyed_by_clobber (cl: list string): list mreg :=
       end
   end.
 
-Definition builtin_write16_reversed := ident_of_string "__builtin_write16_reversed".
-Definition builtin_write32_reversed := ident_of_string "__builtin_write32_reversed".
-
 Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_memcpy sz al =>
       if zle sz 32 then CX :: X7 :: nil else CX :: SI :: DI :: nil
   | EF_vstore (Mint8unsigned|Mint8signed) => AX :: CX :: nil
-  | EF_vstore_global (Mint8unsigned|Mint8signed) _ _ => AX :: nil
-  | EF_builtin id sg =>
-      if ident_eq id builtin_write16_reversed
-      || ident_eq id builtin_write32_reversed
+  | EF_builtin name sg =>
+      if string_dec name "__builtin_write16_reversed"
+      || string_dec name "__builtin_write32_reversed"
       then CX :: DX :: nil else nil
   | EF_inline_asm txt sg clob => destroyed_by_clobber clob
   | _ => nil
@@ -174,21 +170,17 @@ Definition mregs_for_operation (op: operation): list (option mreg) * option mreg
   | _ => (nil, None)
   end.
 
-Definition builtin_negl := ident_of_string "__builtin_negl".
-Definition builtin_addl := ident_of_string "__builtin_addl".
-Definition builtin_subl := ident_of_string "__builtin_subl".
-Definition builtin_mull := ident_of_string "__builtin_mull".
-
 Definition mregs_for_builtin (ef: external_function): list (option mreg) * list (option mreg) :=
   match ef with
   | EF_memcpy sz al =>
      if zle sz 32 then (Some AX :: Some DX :: nil, nil) else (Some DI :: Some SI :: nil, nil)
-  | EF_builtin id sg =>
-     if ident_eq id builtin_negl then
+  | EF_builtin name sg =>
+     if string_dec name "__builtin_negl" then
        (Some DX :: Some AX :: nil, Some DX :: Some AX :: nil)
-     else if ident_eq id builtin_addl || ident_eq id builtin_subl then
+     else if string_dec name "__builtin_addl"
+          || string_dec name "__builtin_subl" then
        (Some DX :: Some AX :: Some CX :: Some BX :: nil, Some DX :: Some AX :: nil)
-     else if ident_eq id builtin_mull then
+     else if string_dec name "__builtin_mull" then
        (Some AX :: Some DX :: nil, Some DX :: Some AX :: nil)
      else
        (nil, nil)
@@ -267,3 +259,15 @@ Definition two_address_op (op: operation) : bool :=
   | Ocmp c => false
   end.
 
+(* Constraints on constant propagation for builtins *)
+
+Definition builtin_constraints (ef: external_function) :
+                                       list builtin_arg_constraint :=
+  match ef with
+  | EF_vload _ => OK_addrany :: nil
+  | EF_vstore _ => OK_addrany :: OK_default :: nil
+  | EF_memcpy _ _ => OK_addrany :: OK_addrany :: nil
+  | EF_annot txt targs => map (fun _ => OK_all) targs
+  | EF_debug kind txt targs => map (fun _ => OK_all) targs
+  | _ => nil
+  end.

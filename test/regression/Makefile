@@ -15,16 +15,26 @@ LIBS=$(LIBMATH)
 TESTS=int32 int64 floats floats-basics \
   expr1 expr6 funptr2 initializers initializers2 initializers3 \
   volatile1 volatile2 volatile3 \
-  funct3 expr5 struct7 struct8 struct11 casts1 casts2 char1 \
+  funct3 expr5 struct7 struct8 struct11 struct12 casts1 casts2 char1 \
   sizeof1 sizeof2 binops bool for1 switch switch2 compound \
-  decl1 interop1 bitfields9 ptrs3
+  decl1 interop1 bitfields9 ptrs3 \
+  parsing
 
 # Can run, but only in compiled mode, and have reference output in Results
 
 TESTS_COMP=attribs1 bitfields1 bitfields2 bitfields3 bitfields4 \
   bitfields5 bitfields6 bitfields7 bitfields8 \
-  builtins-$(ARCH) packedstruct1 packedstruct2 alignas \
-  varargs1 varargs2 sections
+  builtins-$(ARCH) packedstruct2 alignas \
+  varargs1 varargs2 sections alias
+
+# packedstruct1 makes unaligned memory accesses
+
+ifeq ($(ARCH),powerpc)
+TESTS_COMP+=packedstruct1
+endif
+ifeq ($(ARCH),ia32)
+TESTS_COMP+=packedstruct1
+endif
 
 # Can run, both in compiled mode and in interpreter mode,
 # but produce processor-dependent results, so no reference output in Results
@@ -66,7 +76,7 @@ test:
 	@for i in $(TESTS) $(TESTS_COMP); do \
 	   if ./$$i.compcert | cmp -s - Results/$$i; \
            then echo "$$i: passed"; \
-           else echo "$$i: FAILED"; \
+           else echo "$$i: FAILED"; exit 2; \
 	   fi; \
          done
 	@for i in $(TESTS); do \

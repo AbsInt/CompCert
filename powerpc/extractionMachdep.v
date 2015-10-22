@@ -23,3 +23,11 @@ Extract Constant Asm.symbol_is_rel_data => "C2C.atom_is_rel_data".
 Extract Constant Asm.ireg_eq => "fun (x: ireg) (y: ireg) -> x = y".
 Extract Constant Asm.freg_eq => "fun (x: freg) (y: freg) -> x = y".
 Extract Constant Asm.preg_eq => "fun (x: preg) (y: preg) -> x = y".
+
+(* Choice of PPC variant *)
+Extract Constant Archi.ppc64 =>
+  "begin match Configuration.model with
+   | ""ppc64"" -> true
+   | ""e5500"" -> true
+   | _ -> false
+   end".

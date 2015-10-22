@@ -617,7 +617,7 @@ apply refl_equal.
 Qed.
 
 Definition default_nan_pl32 : bool * nan_pl 24 :=
-  (false, exist _ (iter_nat 22 _ xO xH) (refl_equal true)).
+  (false, exist _ (iter_nat xO 22 xH) (refl_equal true)).
 
 Definition unop_nan_pl32 (f : binary32) : bool * nan_pl 24 :=
   match f with
@@ -660,7 +660,7 @@ apply refl_equal.
 Qed.
 
 Definition default_nan_pl64 : bool * nan_pl 53 :=
-  (false, exist _ (iter_nat 51 _ xO xH) (refl_equal true)).
+  (false, exist _ (iter_nat xO 51 xH) (refl_equal true)).
 
 Definition unop_nan_pl64 (f : binary64) : bool * nan_pl 53 :=
   match f with

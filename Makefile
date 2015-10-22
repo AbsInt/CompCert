@@ -83,6 +83,7 @@ BACKEND=\
   Linear.v Lineartyping.v \
   Linearize.v Linearizeproof.v \
   CleanupLabels.v CleanupLabelsproof.v \
+  Debugvar.v Debugvarproof.v \
   Mach.v \
   Bounds.v Stacklayout.v Stacking.v Stackingproof.v \
   Asm.v Asmgen.v Asmgenproof0.v Asmgenproof1.v Asmgenproof.v

@@ -325,7 +325,7 @@ Fixpoint bind_parameter_temps (formals: list (ident * type)) (args: list val)
  | nil, nil => Some le
  | (id, t) :: xl, v :: vl => bind_parameter_temps xl vl (PTree.set id v le)
  | _, _ => None
- end. 
+ end.
 
 (** Return the list of blocks in the codomain of [e], with low and high bounds. *)
 
@@ -419,7 +419,7 @@ Inductive eval_expr: expr -> val -> Prop :=
   | eval_Ealignof: forall ty1 ty,
       eval_expr (Ealignof ty1 ty) (Vint (Int.repr (alignof ge ty1)))
   | eval_Elvalue: forall a loc ofs v,
-      eval_lvalue a loc ofs -> 
+      eval_lvalue a loc ofs ->
       deref_loc (typeof a) m loc ofs v ->
       eval_expr a v
 
@@ -523,11 +523,11 @@ Inductive state: Type :=
       (res: val)
       (k: cont)
       (m: mem) : state.
-                 
-(** Find the statement and manufacture the continuation 
+
+(** Find the statement and manufacture the continuation
   corresponding to a label *)
 
-Fixpoint find_label (lbl: label) (s: statement) (k: cont) 
+Fixpoint find_label (lbl: label) (s: statement) (k: cont)
                     {struct s}: option (statement * cont) :=
   match s with
   | Ssequence s1 s2 =>
@@ -552,7 +552,7 @@ Fixpoint find_label (lbl: label) (s: statement) (k: cont)
   | _ => None
   end
 
-with find_label_ls (lbl: label) (sl: labeled_statements) (k: cont) 
+with find_label_ls (lbl: label) (sl: labeled_statements) (k: cont)
                     {struct sl}: option (statement * cont) :=
   match sl with
   | LSnil => None
@@ -646,7 +646,7 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f (Sreturn None) k e le m)
         E0 (Returnstate Vundef (call_cont k) m')
   | step_return_1: forall f a k e le m v v' m',
-      eval_expr e le m a v -> 
+      eval_expr e le m a v ->
       sem_cast v (typeof a) f.(fn_return) = Some v' ->
       Mem.free_list m (blocks_of_env e) = Some m' ->
       step (State f (Sreturn (Some a)) k e le m)
@@ -764,10 +764,10 @@ Proof.
     intros. subst. inv H0. exists s1; auto.
   inversion H; subst; auto.
   (* builtin *)
-  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
+  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]].
   econstructor; econstructor; eauto.
   (* external *)
-  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
+  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]].
   exists (Returnstate vres2 k m2). econstructor; eauto.
 (* trace length *)
   red; simpl; intros. inv H; simpl; try omega.

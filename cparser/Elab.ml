@@ -56,9 +56,11 @@ let elab_loc l = (l.filename, l.lineno)
 
 let top_declarations = ref ([] : globdecl list)
 
-let emit_elab loc td =
+let emit_elab ?(enter:bool=true) env loc td =
   let loc = elab_loc loc in
-  top_declarations := { gdesc = td; gloc = loc } :: !top_declarations
+  let dec ={ gdesc = td; gloc = loc } in
+  if enter then  Debug.insert_global_declaration env dec;
+  top_declarations := dec :: !top_declarations
 
 let reset() = top_declarations := []
 
@@ -101,7 +103,7 @@ let elab_funbody_f : (C.typ -> Env.t -> statement -> C.stmt) ref
 
 (** * Elaboration of constants - C99 section 6.4.4 *)
 
-let has_suffix s suff = 
+let has_suffix s suff =
   let ls = String.length s and lsuff = String.length suff in
   ls >= lsuff && String.sub s (ls - lsuff) lsuff = suff
 
@@ -109,7 +111,7 @@ let chop_last s n =
   assert (String.length s >= n);
   String.sub s 0 (String.length s - n)
 
-let has_prefix s pref = 
+let has_prefix s pref =
   let ls = String.length s and lpref = String.length pref in
   ls >= lpref && String.sub s 0 lpref = pref
 
@@ -193,7 +195,7 @@ let elab_int_constant loc s0 =
   in
   (* Find smallest allowable type that fits *)
   let ty =
-    try List.find (fun ty -> integer_representable v ty) 
+    try List.find (fun ty -> integer_representable v ty)
                   (if base = 10 then dec_kinds else hex_kinds)
     with Not_found ->
       error loc "integer literal '%s' cannot be represented" s0;
@@ -222,7 +224,7 @@ let elab_char_constant loc wide chars =
   let max_digit = Int64.shift_left 1L nbits in
   let max_val = Int64.shift_left 1L (64 - nbits) in
   let v =
-    List.fold_left 
+    List.fold_left
       (fun acc d ->
         if acc < 0L || acc >= max_val then
           error loc "character constant overflows";
@@ -241,7 +243,7 @@ let elab_char_constant loc wide chars =
        IInt)
 
 let elab_string_literal loc wide chars =
-  let nbits = if wide then 8 * !config.sizeof_wchar else 8 in 
+  let nbits = if wide then 8 * !config.sizeof_wchar else 8 in
   let char_max = Int64.shift_left 1L nbits in
   List.iter
     (fun c ->
@@ -388,7 +390,7 @@ let rec elab_specifier ?(only = false) loc env specifier =
   let sto = ref Storage_default
   and inline = ref false
   and attr = ref []
-  and tyspecs = ref [] 
+  and tyspecs = ref []
   and typedef = ref false in
 
   let do_specifier = function
@@ -402,7 +404,7 @@ let rec elab_specifier ?(only = false) loc env specifier =
       | STATIC -> sto := Storage_static
       | EXTERN -> sto := Storage_extern
       | REGISTER -> sto := Storage_register
-      | TYPEDEF -> 
+      | TYPEDEF ->
           if !typedef then
             error loc "multiple uses of 'typedef'";
           typedef := true
@@ -556,9 +558,9 @@ and elab_parameters env params =
   | _ ->
       (* Prototype introduces a new scope *)
       let (vars, _) = mmap elab_parameter (Env.new_scope env) params in
-      (* Catch special case f(void) *)
+      (* Catch special case f(t) where t is void or a typedef to void *)
       match vars with
-        | [ ( {name=""}, TVoid _) ] -> Some []
+        | [ ( {name=""}, t) ] when is_void_type env t -> Some []
         | _ -> Some vars
 
 (* Elaboration of a function parameter *)
@@ -588,7 +590,7 @@ and elab_name env spec (Name (id, decl, attr, loc)) =
   let (sto, inl, tydef, bty, env') = elab_specifier loc env spec in
   if tydef then
     error loc "'typedef' is forbidden here";
-  let (ty, env'') = elab_type_declarator loc env' bty decl in 
+  let (ty, env'') = elab_type_declarator loc env' bty decl in
   let a = elab_attributes env attr in
   (id, sto, inl, add_attributes_type a ty, env'')
 
@@ -603,7 +605,7 @@ and elab_name_group loc env (spec, namelist) =
     error loc "'inline' is forbidden here";
   let elab_one_name env (Name (id, decl, attr, loc)) =
     let (ty, env1) =
-      elab_type_declarator loc env bty decl in 
+      elab_type_declarator loc env bty decl in
     let a = elab_attributes env attr in
     ((id, add_attributes_type a ty), env1) in
   (mmap elab_one_name env' namelist, sto)
@@ -615,7 +617,7 @@ and elab_init_name_group loc env (spec, namelist) =
     elab_specifier ~only:(namelist=[]) loc env spec in
   let elab_one_name env (Init_name (Name (id, decl, attr, loc), init)) =
     let (ty, env1) =
-      elab_type_declarator loc env bty decl in 
+      elab_type_declarator loc env bty decl in
     let a = elab_attributes env attr in
     if inl && not (is_function_type env ty) then
       error loc "'inline' can only appear on functions";
@@ -679,7 +681,7 @@ and elab_field_group env (Field_group (spec, fieldlist, loc)) =
                 error loc "bit size of '%s' is not a compile-time constant" id;
                 None
           end in
-    { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize' } 
+    { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize' }
   in
   (List.map2 elab_bitfield fieldlist names, env')
 
@@ -730,7 +732,7 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
       (* finishing the definition of an incomplete struct or union *)
       let (ci', env') = elab_struct_or_union_info kind loc env members attrs in
       (* Emit a global definition for it *)
-      emit_elab loc (Gcompositedef(kind, tag', attrs, ci'.ci_members));
+      emit_elab env' loc (Gcompositedef(kind, tag', attrs, ci'.ci_members));
       (* Replace infos but keep same ident *)
       (tag', Env.add_composite env' tag' ci')
   | Some(tag', {ci_sizeof = Some _}), Some _
@@ -745,7 +747,7 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
       (* enter it with a new name *)
       let (tag', env') = Env.enter_composite env tag ci in
       (* emit it *)
-      emit_elab loc (Gcompositedecl(kind, tag', attrs));
+      emit_elab env' loc (Gcompositedecl(kind, tag', attrs));
       (tag', env')
   | _, Some members ->
       (* definition of a complete struct or union *)
@@ -753,12 +755,12 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
       (* enter it, incomplete, with a new name *)
       let (tag', env') = Env.enter_composite env tag ci1 in
       (* emit a declaration so that inner structs and unions can refer to it *)
-      emit_elab loc (Gcompositedecl(kind, tag', attrs));
+      emit_elab env' loc (Gcompositedecl(kind, tag', attrs));
       (* elaborate the members *)
       let (ci2, env'') =
         elab_struct_or_union_info kind loc env' members attrs in
       (* emit a definition *)
-      emit_elab loc (Gcompositedef(kind, tag', attrs, ci2.ci_members));
+      emit_elab env'' loc (Gcompositedef(kind, tag', attrs, ci2.ci_members));
       (* Replace infos but keep same ident *)
       (tag', Env.add_composite env'' tag' ci2)
 
@@ -809,14 +811,14 @@ and elab_enum only loc tag optmembers attrs env =
       let (dcls, env') = elab_members env 0L members in
       let info = { ei_members = dcls; ei_attr = attrs } in
       let (tag', env'') = Env.enter_enum env' tag info in
-      emit_elab loc (Genumdef(tag', attrs, dcls));
+      emit_elab env' loc (Genumdef(tag', attrs, dcls));
       (tag', env'')
 
 (* Elaboration of a naked type, e.g. in a cast *)
 
 let elab_type loc env spec decl =
   let (sto, inl, tydef, bty, env') = elab_specifier loc env spec in
-  let (ty, env'') = elab_type_declarator loc env' bty decl in 
+  let (ty, env'') = elab_type_declarator loc env' bty decl in
   if sto <> Storage_default || inl || tydef then
     error loc "'typedef', 'extern', 'static', 'register' and 'inline' are meaningless in cast";
   (ty, env'')
@@ -975,7 +977,7 @@ module I = struct
                  if fld.fld_name = fld1.fld_name
                  then i
                  else default_init env fld1.fld_typ)
-        end 
+        end
     | (TStruct _ | TUnion _), Init_single a ->
         (* This is a previous whole-struct initialization that we
            are going to overwrite.  Revert to the default initializer. *)
@@ -988,7 +990,7 @@ module I = struct
   let index env (z, i as zi) n =
     match unroll env (typeof zi), i with
     | TArray(ty, sz, _), Init_array il ->
-        if n >= 0L && index_below n sz then begin 
+        if n >= 0L && index_below n sz then begin
           let dfl = default_init env ty in
           let rec loop p before after =
             if p = n then
@@ -1042,7 +1044,7 @@ end
 
 let rec elab_designator loc env zi desig =
   match desig with
-  | [] -> 
+  | [] ->
       zi
   | INFIELD_INIT name :: desig' ->
       begin match I.member env zi name with
@@ -1101,7 +1103,7 @@ let rec elab_list zi il first =
 and elab_item zi item il =
   let ty = I.typeof zi in
   match item, unroll env ty with
-  (* Special case char array = "string literal" 
+  (* Special case char array = "string literal"
                or wchar array = L"wide string literal" *)
   | (SINGLE_INIT (CONSTANT (CONST_STRING(w, s)))
      | COMPOUND_INIT [_, SINGLE_INIT(CONSTANT (CONST_STRING(w, s)))]),
@@ -1312,7 +1314,7 @@ let elab_expr loc env a =
             let ty = TFun(TInt(IInt, []), None, false, []) in
             (* Emit an extern declaration for it *)
             let id = Env.fresh_ident n in
-            emit_elab loc (Gdecl(Storage_extern, id, ty, None));
+            emit_elab env loc (Gdecl(Storage_extern, id, ty, None));
             { edesc = EVar id; etyp = ty }
         | _ -> elab a1 in
       let bl = List.map elab al in
@@ -1735,8 +1737,8 @@ let elab_expr loc env a =
     match args, params with
     | [], [] -> []
     | [], _::_ -> err "not enough arguments in function call"; []
-    | _::_, [] -> 
-        if vararg 
+    | _::_, [] ->
+        if vararg
         then args
         else (err "too many arguments in function call"; args)
     | arg1 :: argl, (_, ty_p) :: paraml ->
@@ -1771,7 +1773,7 @@ let elab_for_expr loc env = function
 
 (* Handling of __func__ (section 6.4.2.2) *)
 
-let __func__type_and_init s = 
+let __func__type_and_init s =
   (TArray(TInt(IChar, [AConst]), Some(Int64.of_int (String.length s + 1)), []),
    init_char_array_string None s)
 
@@ -1784,13 +1786,21 @@ let enter_typedefs loc env sto dl =
   List.fold_left (fun env (s, ty, init) ->
     if init <> NO_INIT then
       error loc "initializer in typedef";
-    if redef Env.lookup_typedef env s then
-      error loc "redefinition of typedef '%s'" s;
-    if redef Env.lookup_ident env s then
-      error loc "redefinition of identifier '%s' as different kind of symbol" s;
-    let (id, env') = Env.enter_typedef env s ty in
-    emit_elab loc (Gtypedef(id, ty));
-    env') env dl
+    match previous_def Env.lookup_typedef env s with
+    | Some (s',ty') ->
+        if equal_types env ty ty' then begin
+          warning loc "redefinition of typedef '%s'" s;
+          env
+        end else begin
+          error loc "redefinition of typedef '%s' with different type" s;
+          env
+        end
+    | None ->
+        if redef Env.lookup_ident env s then
+          error loc "redefinition of identifier '%s' as different kind of symbol" s;
+        let (id, env') = Env.enter_typedef env s ty in
+        emit_elab env loc (Gtypedef(id, ty));
+        env') env dl
 
 let enter_or_refine_ident local loc env s sto ty =
   if redef Env.lookup_typedef env s then
@@ -1805,7 +1815,12 @@ let enter_or_refine_ident local loc env s sto ty =
         | Some new_ty ->
             new_ty
         | None ->
-            warning loc "redefinition of '%s' with incompatible type" s; ty in
+            error loc
+               "redefinition of '%s' with incompatible type.@ \
+                Previous type: %a.@ \
+                New type: %a"
+              s Cprint.typ old_ty Cprint.typ ty;
+            ty in
       let new_sto =
 	(* The only case not allowed is removing static *)
 	match old_sto,sto with
@@ -1822,17 +1837,17 @@ let enter_or_refine_ident local loc env s sto ty =
 	| _,Storage_register
 	| Storage_register,_ -> Storage_register
       in
-      (id, new_sto, Env.add_ident env id new_sto new_ty)
+      (id, new_sto, Env.add_ident env id new_sto new_ty,new_ty)
   | Some(id, II_enum v) when Env.in_current_scope env id ->
       error loc "redefinition of enumerator '%s'" s;
-      (id, sto, Env.add_ident env id sto ty)
+      (id, sto, Env.add_ident env id sto ty,ty)
   | _ ->
-      let (id, env') = Env.enter_ident env s sto ty in (id, sto, env')
+      let (id, env') = Env.enter_ident env s sto ty in (id, sto, env',ty)
 
 let enter_decdefs local loc env sto dl =
   (* Sanity checks on storage class *)
   if sto = Storage_register && not local then
-    error loc "'register' on global declaration";
+    fatal_error loc "'register' on global declaration";
   if sto <> Storage_default && dl = [] then
     warning loc "Storage class specifier on empty declaration";
   let rec enter_decdef (decls, env) (s, ty, init) =
@@ -1845,7 +1860,7 @@ let enter_decdefs local loc env sto dl =
     let sto1 = if local && isfun then Storage_extern else sto in
     (* enter ident in environment with declared type, because
        initializer can refer to the ident *)
-    let (id, sto', env1) = enter_or_refine_ident local loc env s sto1 ty in
+    let (id, sto', env1,ty) = enter_or_refine_ident local loc env s sto1 ty in
     (* process the initializer *)
     let (ty', init') = elab_initializer loc env1 s ty init in
     (* update environment with refined type *)
@@ -1860,7 +1875,7 @@ let enter_decdefs local loc env sto dl =
       ((sto', id, ty', init') :: decls, env2)
     else begin
       (* Global definition *)
-      emit_elab loc (Gdecl(sto', id, ty', init'));
+      emit_elab env2 loc (Gdecl(sto', id, ty', init'));
       (decls, env2)
     end in
   let (decls, env') = List.fold_left enter_decdef ([], env) dl in
@@ -1879,21 +1894,36 @@ let elab_fundef env spec name body loc =
   (* Extract info from type *)
   let (ty_ret, params, vararg, attr) =
     match ty with
-    | TFun(ty_ret, Some params, vararg, attr) -> (ty_ret, params, vararg, attr)
+    | TFun(ty_ret, Some params, vararg, attr) ->
+         if wrap incomplete_type loc env1 ty_ret && not (is_void_type env ty_ret) then
+           fatal_error loc "return type is an incomplete type";
+        (ty_ret, params, vararg, attr)
     | _ -> fatal_error loc "wrong type for function definition" in
   (* Enter function in the environment, for recursive references *)
-  let (fun_id, sto1, env1) = enter_or_refine_ident false loc env s sto ty in
+  let (fun_id, sto1, env1,ty) = enter_or_refine_ident false loc env1 s sto ty in
   (* Enter parameters in the environment *)
   let env2 =
     List.fold_left (fun e (id, ty) -> Env.add_ident e id Storage_default ty)
                    (Env.new_scope env1) params in
   (* Define "__func__" and enter it in the environment *)
   let (func_ty, func_init) = __func__type_and_init s in
-  let (func_id, _, env3) =
+  let (func_id, _, env3,func_ty) =
     enter_or_refine_ident true loc env2 "__func__" Storage_static func_ty in
-  emit_elab loc (Gdecl(Storage_static, func_id, func_ty, Some func_init));
+  emit_elab ~enter:false env3 loc (Gdecl(Storage_static, func_id, func_ty, Some func_init));
   (* Elaborate function body *)
   let body' = !elab_funbody_f ty_ret env3 body in
+  (* Special treatment of the "main" function *)
+  let body'' =
+    if s = "main" then begin
+      match unroll env ty_ret with
+      | TInt(IInt, []) ->
+          (* Add implicit "return 0;" at end of function body *)
+          sseq no_loc body'
+            {sdesc = Sreturn(Some(intconst 0L IInt)); sloc = no_loc}
+      | _ ->
+          warning loc "return type of 'main' should be 'int'";
+          body'
+    end else body' in
   (* Build and emit function definition *)
   let fn =
     { fd_storage = sto1;
@@ -1904,8 +1934,8 @@ let elab_fundef env spec name body loc =
       fd_params = params;
       fd_vararg = vararg;
       fd_locals = [];
-      fd_body = body' } in
-  emit_elab loc (Gfundef fn);
+      fd_body = body'' } in
+  emit_elab env1 loc (Gfundef fn);
   env1
 
 let elab_kr_fundef env spec name params defs body loc =
@@ -1967,7 +1997,7 @@ let rec elab_definition (local: bool) (env: Env.t) (def: Cabs.definition)
 
   (* "int x = 12, y[10], *z" *)
   | DECDEF(init_name_group, loc) ->
-      let ((dl, env1), sto, tydef) = 
+      let ((dl, env1), sto, tydef) =
         elab_init_name_group loc env init_name_group in
       if tydef then
         let env2 = enter_typedefs loc env1 sto dl
@@ -1977,7 +2007,7 @@ let rec elab_definition (local: bool) (env: Env.t) (def: Cabs.definition)
 
   (* pragma *)
   | PRAGMA(s, loc) ->
-      emit_elab loc (Gpragma s);
+      emit_elab env loc (Gpragma s);
       ([], env)
 
 and elab_definitions local env = function
@@ -2071,7 +2101,7 @@ let rec elab_stmt env ctx s =
       if not (is_scalar_type env a'.etyp) then
         error loc "the condition of 'if' does not have scalar type";
       let s1' = elab_stmt env ctx s1 in
-      let s2' = 
+      let s2' =
         match s2 with
           | None -> sskip
           | Some s2 -> elab_stmt env ctx s2
@@ -2104,12 +2134,12 @@ let rec elab_stmt env ctx s =
         | Some (FC_DECL def) ->
             let (dcl, env') = elab_definition true (Env.new_scope env) def in
             let loc = elab_loc (get_definitionloc def) in
-            (sskip, env', 
+            (sskip, env',
              Some(List.map (fun d -> {sdesc = Sdecl d; sloc = loc}) dcl)) in
       let a2' =
         match a2 with
           | None -> intconst 1L IInt
-          | Some a2 -> elab_expr loc env' a2 
+          | Some a2 -> elab_expr loc env' a2
       in
       if not (is_scalar_type env' a2'.etyp) then
         error loc "the condition of 'for' does not have scalar type";
@@ -2204,7 +2234,9 @@ and elab_block_body env ctx sl =
   | DEFINITION def :: sl1 ->
       let (dcl, env') = elab_definition true env def in
       let loc = elab_loc (get_definitionloc def) in
-      List.map (fun d -> {sdesc = Sdecl d; sloc = loc}) dcl
+      List.map (fun ((sto,id,ty,_) as d) ->
+        Debug.insert_local_declaration sto id ty loc;
+        {sdesc = Sdecl d; sloc = loc}) dcl
       @ elab_block_body env' ctx sl1
   | s :: sl1 ->
       let s' = elab_stmt env ctx s in
@@ -2230,20 +2262,3 @@ let elab_file prog =
   reset();
   ignore (elab_definitions false (Builtins.environment()) prog);
   elaborated_program()
-(*
-  let rec inf = Datatypes.S inf in
-  let ast:Cabs.definition list =
-    Obj.magic
-      (match Parser.translation_unit_file inf (Lexer.tokens_stream lb) with
-         | Parser.Parser.Inter.Fail_pr ->
-             (* Theoretically impossible : implies inconsistencies
-                between grammars. *)
-             Cerrors.fatal_error "Internal error while parsing"
-         | Parser.Parser.Inter.Timeout_pr -> assert false
-         | Parser.Parser.Inter.Parsed_pr (ast, _ ) -> ast)
-  in
-  reset();
-  ignore (elab_definitions false (Builtins.environment()) ast);
-  elaborated_program()
-*)
-

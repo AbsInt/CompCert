@@ -27,7 +27,7 @@ Open Local Scope string_scope.
 
 (** * Translation environments and state *)
 
-(** The translation functions are parameterized by the following 
+(** The translation functions are parameterized by the following
   compile-time environment, which maps CminorSel local variables and
   let-bound variables to RTL registers.   The mapping for local variables
   is computed from the CminorSel variable declarations at the beginning of
@@ -78,7 +78,7 @@ Lemma state_incr_trans:
   forall s1 s2 s3, state_incr s1 s2 -> state_incr s2 s3 -> state_incr s1 s3.
 Proof.
   intros. inv H; inv H0. apply state_incr_intro.
-  apply Ple_trans with (st_nextnode s2); assumption. 
+  apply Ple_trans with (st_nextnode s2); assumption.
   apply Ple_trans with (st_nextreg s2); assumption.
   intros. generalize (H3 pc) (H5 pc). intuition congruence.
 Qed.
@@ -93,7 +93,7 @@ Qed.
   to modify the global state.  These luxuries are not available in Coq,
   however.  Instead, we use a monadic encoding of the translation:
   translation functions take the current global state as argument,
-  and return either [Error msg] to denote an error, 
+  and return either [Error msg] to denote an error,
   or [OK r s incr] to denote success.  [s] is the modified state, [r]
   the result value of the translation function.  and [incr] a proof
   that the final state is in the [state_incr] relation with the
@@ -198,7 +198,7 @@ Definition add_instr (i: instruction) : mon node :=
   fun s =>
     let n := s.(st_nextnode) in
     OK n
-       (mkstate s.(st_nextreg) (Psucc n) (PTree.set n i s.(st_code)) 
+       (mkstate s.(st_nextreg) (Psucc n) (PTree.set n i s.(st_code))
                 (add_instr_wf s i))
        (add_instr_incr s i).
 
@@ -306,7 +306,7 @@ Definition add_var (map: mapping) (name: ident) : mon (reg * mapping) :=
      ret (r, mkmapping (PTree.set name r map.(map_vars))
                        map.(map_letvars)).
 
-Fixpoint add_vars (map: mapping) (names: list ident) 
+Fixpoint add_vars (map: mapping) (names: list ident)
                   {struct names} : mon (list reg * mapping) :=
   match names with
   | nil => ret (nil, map)
@@ -339,7 +339,7 @@ Definition find_letvar (map: mapping) (idx: nat) : mon reg :=
   fresh temporary register.  Exception: if [a] is a let-bound variable
   or a local variable, we return the RTL register associated
   with that variable instead.  Returning a fresh temporary in all cases
-  would be semantically correct, but would generate less efficient 
+  would be semantically correct, but would generate less efficient
   RTL code. *)
 
 Definition alloc_reg (map: mapping) (a: expr) : mon reg :=
@@ -381,6 +381,48 @@ Definition add_move (rs rd: reg) (nd: node) : mon node :=
   then ret nd
   else add_instr (Iop Omove (rs::nil) rd nd).
 
+(** Translation of arguments and results of builtins. *)
+
+Definition exprlist_of_expr_list (l: list expr) : exprlist :=
+  List.fold_right Econs Enil l.
+
+Fixpoint convert_builtin_arg {A: Type} (a: builtin_arg expr) (rl: list A) : builtin_arg A * list A :=
+  match a with
+  | BA a =>
+      match rl with
+      | r :: rs => (BA r, rs)
+      | nil     => (BA_int Int.zero, nil)   (**r never happens *)
+      end
+  | BA_int n => (BA_int n, rl)
+  | BA_long n => (BA_long n, rl)
+  | BA_float n => (BA_float n, rl)
+  | BA_single n => (BA_single n, rl)
+  | BA_loadstack chunk ofs => (BA_loadstack chunk ofs, rl)
+  | BA_addrstack ofs => (BA_addrstack ofs, rl)
+  | BA_loadglobal chunk id ofs => (BA_loadglobal chunk id ofs, rl)
+  | BA_addrglobal id ofs => (BA_addrglobal id ofs, rl)
+  | BA_splitlong hi lo =>
+      let (hi', rl1) := convert_builtin_arg hi rl in
+      let (lo', rl2) := convert_builtin_arg lo rl1 in
+      (BA_splitlong hi' lo', rl2)
+  end.
+
+Fixpoint convert_builtin_args {A: Type} (al: list (builtin_arg expr)) (rl: list A) : list (builtin_arg A) :=
+  match al with
+  | nil => nil
+  | a1 :: al =>
+      let (a1', rl1) := convert_builtin_arg a1 rl in
+      a1' :: convert_builtin_args al rl1
+  end.
+
+Definition convert_builtin_res (map: mapping) (oty: option typ) (r: builtin_res ident) : mon (builtin_res reg) :=
+  match r, oty with
+  | BR id, _ => do r <- find_var map id; ret (BR r)
+  | BR_none, None => ret BR_none
+  | BR_none, Some _ => do r <- new_reg; ret (BR r)
+  | _, _ => error (Errors.msg "RTLgen: bad builtin_res")
+  end.
+
 (** Translation of an expression.  [transl_expr map a rd nd]
   enriches the current CFG with the RTL instructions necessary
   to compute the value of CminorSel expression [a], leave its result
@@ -413,7 +455,7 @@ Fixpoint transl_expr (map: mapping) (a: expr) (rd: reg) (nd: node)
       do r <- find_letvar map n; add_move r rd nd
   | Ebuiltin ef al =>
       do rl <- alloc_regs map al;
-      do no <- add_instr (Ibuiltin ef rl rd nd);
+      do no <- add_instr (Ibuiltin ef (List.map (@BA reg) rl) (BR rd) nd);
       transl_exprlist map al rl no
   | Eexternal id sg al =>
       do rl <- alloc_regs map al;
@@ -453,39 +495,6 @@ with transl_condexpr (map: mapping) (a: condexpr) (ntrue nfalse: node)
       do r  <- new_reg;
       do nc <- transl_condexpr (add_letvar map r) c ntrue nfalse;
          transl_expr map b r nc
-  end.
-
-(** Translation of arguments to annotations. *)
-
-Definition exprlist_of_expr_list (l: list expr) : exprlist :=
-  List.fold_right Econs Enil l.
-
-Fixpoint convert_annot_arg {A: Type} (a: annot_arg expr) (rl: list A) : annot_arg A * list A :=
-  match a with
-  | AA_base a =>
-      match rl with
-      | r :: rs => (AA_base r, rs)
-      | nil     => (AA_int Int.zero, nil)   (**r never happens *)
-      end
-  | AA_int n => (AA_int n, rl)
-  | AA_long n => (AA_long n, rl)
-  | AA_float n => (AA_float n, rl)
-  | AA_single n => (AA_single n, rl)
-  | AA_loadstack chunk ofs => (AA_loadstack chunk ofs, rl)
-  | AA_addrstack ofs => (AA_addrstack ofs, rl)
-  | AA_loadglobal chunk id ofs => (AA_loadglobal chunk id ofs, rl)
-  | AA_addrglobal id ofs => (AA_addrglobal id ofs, rl)
-  | AA_longofwords hi lo =>
-      let (hi', rl1) := convert_annot_arg hi rl in
-      let (lo', rl2) := convert_annot_arg lo rl1 in
-      (AA_longofwords hi' lo', rl2)
-  end.
-
-Fixpoint convert_annot_args {A: Type} (al: list (annot_arg expr)) (rl: list A) : list (annot_arg A) :=
-  match al with
-  | nil => nil
-  | a1 :: al =>
-      let (a1', rl1) := convert_annot_arg a1 rl in a1' :: convert_annot_args al rl1
   end.
 
 (** Auxiliary for translating exit expressions. *)
@@ -586,15 +595,12 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
       do rargs <- alloc_regs map cl;
       do n1 <- add_instr (Itailcall sig (inr _ id) rargs);
       transl_exprlist map cl rargs n1
-  | Sbuiltin optid ef al =>
+  | Sbuiltin res ef args =>
+      let al := exprlist_of_expr_list (params_of_builtin_args args) in
       do rargs <- alloc_regs map al;
-      do r <- alloc_optreg map optid;
-      do n1 <- add_instr (Ibuiltin ef rargs r nd);
-         transl_exprlist map al rargs n1
-  | Sannot ef args =>
-      let al := exprlist_of_expr_list (params_of_annot_args args) in
-      do rargs <- alloc_regs map al;
-      do n1 <- add_instr (Iannot ef (convert_annot_args args rargs) nd);
+      let args' := convert_builtin_args args rargs in
+      do res' <- convert_builtin_res map (sig_res (ef_sig ef)) res;
+      do n1 <- add_instr (Ibuiltin ef args' res' nd);
          transl_exprlist map al rargs n1
   | Sseq s1 s2 =>
       do ns <- transl_stmt map s2 nd nexits ngoto nret rret;

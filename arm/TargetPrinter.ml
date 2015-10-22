@@ -20,6 +20,7 @@ open AST
 open Memdata
 open Asm
 open PrintAsmaux
+open Fileinfo
 
 (* Type for the ABI versions *)
 type float_abi_type =
@@ -39,13 +40,13 @@ module type PRINTER_OPTIONS =
 module Target (Opt: PRINTER_OPTIONS) : TARGET =
   struct
 (* Code generation options. *)
-    
+
     let literals_in_code = ref true     (* to be turned into a proper option *)
-    
+
 (* Basic printing functions *)
-        
+
     let print_label oc lbl = elf_label oc (transl_label lbl)
-        
+
     let comment = "@"
 
     let symbol = elf_symbol
@@ -60,34 +61,34 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | IR4 -> "r4" | IR5 -> "r5" | IR6 -> "r6" | IR7 -> "r7"
       | IR8 -> "r8" | IR9 -> "r9" | IR10 -> "r10" | IR11 -> "r11"
       | IR12 -> "r12" | IR13 -> "sp" | IR14 -> "lr"
-            
+
     let float_reg_name = function
       | FR0 -> "d0"  | FR1 -> "d1"  | FR2 -> "d2"  | FR3 -> "d3"
       | FR4 -> "d4"  | FR5 -> "d5"  | FR6 -> "d6"  | FR7 -> "d7"
       | FR8 -> "d8"  | FR9 -> "d9"  | FR10 -> "d10"  | FR11 -> "d11"
       | FR12 -> "d12"  | FR13 -> "d13"  | FR14 -> "d14"  | FR15 -> "d15"
-            
+
     let single_float_reg_index = function
       | FR0 -> 0  | FR1 -> 2  | FR2 -> 4  | FR3 -> 6
       | FR4 -> 8  | FR5 -> 10  | FR6 -> 12  | FR7 -> 14
       | FR8 -> 16  | FR9 -> 18  | FR10 -> 20  | FR11 -> 22
       | FR12 -> 24  | FR13 -> 26  | FR14 -> 28  | FR15 -> 30
-            
+
     let single_float_reg_name = function
       | FR0 -> "s0"  | FR1 -> "s2"  | FR2 -> "s4"  | FR3 -> "s6"
       | FR4 -> "s8"  | FR5 -> "s10"  | FR6 -> "s12"  | FR7 -> "s14"
       | FR8 -> "s16"  | FR9 -> "s18"  | FR10 -> "s20"  | FR11 -> "s22"
       | FR12 -> "s24"  | FR13 -> "s26"  | FR14 -> "s28"  | FR15 -> "s30"
-            
+
     let ireg oc r = output_string oc (int_reg_name r)
     let freg oc r = output_string oc (float_reg_name r)
     let freg_single oc r = output_string oc (single_float_reg_name r)
-        
+
     let preg oc = function
       | IR r -> ireg oc r
       | FR r -> freg oc r
       | _    -> assert false
-            
+
     let condition_name = function
       | TCeq -> "eq"
       | TCne -> "ne"
@@ -101,7 +102,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | TClt -> "lt"
       | TCgt -> "gt"
       | TCle -> "le"
-            
+
     let neg_condition_name = function
       | TCeq -> "ne"
       | TCne -> "eq"
@@ -115,7 +116,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | TClt -> "ge"
       | TCgt -> "le"
       | TCle -> "gt"
-            
+
 (* In Thumb2 mode, some arithmetic instructions have shorter encodings
    if they carry the "S" flag (update condition flags):
        add   (but not sp + imm)
@@ -152,29 +153,33 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\",\"a%s%s\",%%progbits"
             s (if wr then "w" else "") (if ex then "x" else "")
-      | Section_debug_info
-      | Section_debug_abbrev -> "" (* Dummy value *)
-            
+      | Section_debug_info _ -> ".section	.debug_info,\"\",%progbits"
+      | Section_debug_loc -> ".section	.debug_loc,\"\",%progbits"
+      | Section_debug_abbrev -> ".section	.debug_abbrev,\"\",%progbits"
+      | Section_debug_line _ -> ".section	.debug_line,\"\",%progbits"
+      | Section_debug_ranges -> ".section	.debug_ranges,\"\",%progbits"
+      | Section_debug_str -> ".section	.debug_str,\"MS\",%progbits,1"
+
     let section oc sec =
       fprintf oc "	%s\n" (name_of_section sec)
-        
+
 (* Record current code position and latest position at which to
    emit float and symbol constants. *)
-        
+
     let currpos = ref 0
     let size_constants = ref 0
     let max_pos_constants = ref max_int
-        
+
     let distance_to_emit_constants () =
       if !literals_in_code
       then !max_pos_constants - (!currpos + !size_constants)
       else max_int
-          
+
 (* Associate labels to floating-point constants and to symbols *)
-          
+
     let float_labels = (Hashtbl.create 39 : (int64, int) Hashtbl.t)
     let float32_labels = (Hashtbl.create 39 : (int32, int) Hashtbl.t)
-        
+
     let label_float bf =
       try
         Hashtbl.find float_labels bf
@@ -184,7 +189,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
         size_constants := !size_constants + 8;
         max_pos_constants := min !max_pos_constants (!currpos + 1024);
         lbl'
-          
+
     let label_float32 bf =
       try
         Hashtbl.find float32_labels bf
@@ -194,10 +199,10 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
         size_constants := !size_constants + 4;
         max_pos_constants := min !max_pos_constants (!currpos + 1024);
         lbl'
-          
+
     let symbol_labels =
       (Hashtbl.create 39 : (ident * Integers.Int.int, int) Hashtbl.t)
-        
+
     let label_symbol id ofs =
       try
         Hashtbl.find symbol_labels (id, ofs)
@@ -207,14 +212,14 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
         size_constants := !size_constants + 4;
         max_pos_constants := min !max_pos_constants (!currpos + 4096);
         lbl'
-          
+
     let reset_constants () =
       Hashtbl.clear float_labels;
       Hashtbl.clear float32_labels;
       Hashtbl.clear symbol_labels;
       size_constants := 0;
       max_pos_constants := max_int
-          
+
     let emit_constants oc =
       fprintf oc "	.balign	4\n";
       Hashtbl.iter
@@ -234,9 +239,9 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
             lbl symbol_offset (id, ofs))
         symbol_labels;
       reset_constants ()
-        
+
 (* Generate code to load the address of id + ofs in register r *)
-        
+
     let loadsymbol oc r id ofs =
       if !Clflags.option_mthumb then begin
         fprintf oc "	movw	%a, #:lower16:%a\n"
@@ -245,13 +250,13 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           ireg r symbol_offset (id, ofs); 2
       end else begin
         let lbl = label_symbol id ofs in
-        fprintf oc "	ldr	%a, .L%d @ %a\n" 
+        fprintf oc "	ldr	%a, .L%d @ %a\n"
           ireg r lbl symbol_offset (id, ofs); 1
       end
-          
+
 (* Emit instruction sequences that set or offset a register by a constant. *)
 (* No S suffix because they are applied to SP most of the time. *)
-          
+
     let movimm oc dst n =
       match Asmgen.decompose_int n with
       | [] -> assert false
@@ -261,7 +266,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
             (fun n -> fprintf oc "	orr	%s, %s, #%a\n" dst dst coqint n)
             tl;
           List.length l
-            
+
     let addimm oc dst src n =
       match Asmgen.decompose_int n with
       | [] -> assert false
@@ -271,7 +276,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
             (fun n -> fprintf oc "	add	%s, %s, #%a\n" dst dst coqint n)
             tl;
           List.length l
-            
+
     let subimm oc dst src n =
       match Asmgen.decompose_int n with
       | [] -> assert false
@@ -281,208 +286,29 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
             (fun n -> fprintf oc "	sub	%s, %s, #%a\n" dst dst coqint n)
             tl;
           List.length l
-            
+
 (* Recognition of float constants appropriate for VMOV.
    a normalized binary floating point encoding with 1 sign bit, 4
    bits of fraction and a 3-bit exponent *)
-   
+
     let is_immediate_float64 bits =
       let exp = (Int64.(to_int (shift_right_logical bits 52)) land 0x7FF) - 1023 in
       let mant = Int64.logand bits 0xF_FFFF_FFFF_FFFFL in
       exp >= -3 && exp <= 4 && Int64.logand mant 0xF_0000_0000_0000L = mant
-        
+
    let is_immediate_float32 bits =
      let exp = (Int32.(to_int (shift_right_logical bits 23)) land 0xFF) - 127 in
      let mant = Int32.logand bits 0x7F_FFFFl in
      exp >= -3 && exp <= 4 && Int32.logand mant 0x78_0000l = mant
-       
+
 
 (* Emit .file / .loc debugging directives *)
-       
+
     let print_file_line oc file line =
       print_file_line oc comment file line
-        
+
     let print_location oc loc =
       if loc <> Cutil.no_loc then print_file_line oc (fst loc) (snd loc)
-          
-(* Built-ins.  They come in two flavors: 
-   - annotation statements: take their arguments in registers or stack
-     locations; generate no code;
-   - inlined by the compiler: take their arguments in arbitrary
-     registers.
-*)
-
-(* Handling of annotations *)
-
-    let print_annot_stmt oc txt targs args =
-      if Str.string_match re_file_line txt 0 then begin
-        print_file_line oc (Str.matched_group 1 txt)
-          (int_of_string (Str.matched_group 2 txt))
-      end else begin
-        fprintf oc "%s annotation: " comment;
-        print_annot_stmt preg "sp" oc txt targs args
-      end
-          
-    let print_annot_val oc txt args res =
-      fprintf oc "%s annotation: " comment;
-      print_annot_val preg oc txt args;
-      match args, res with
-      | [IR src], [IR dst] ->
-          if dst = src then 0 else (fprintf oc "	mov	%a, %a\n" ireg dst ireg src; 1)
-      | [FR src], [FR dst] ->
-          if dst = src then 0 else (fprintf oc "	vmov.f64	%a, %a\n" freg dst freg src; 1)
-      | _, _ -> assert false
-            
-(* Handling of memcpy *)
-
-(* The ARM has strict alignment constraints for 2 and 4 byte accesses.
-   8-byte accesses must be 4-aligned. *)
-            
-    let print_builtin_memcpy_small oc sz al src dst =
-      let rec copy ofs sz ninstr =
-        if sz >= 8 && al >= 4 && !Clflags.option_ffpu then begin
-          fprintf oc "	vldr	%a, [%a, #%d]\n" freg FR7 ireg src ofs;
-          fprintf oc "	vstr	%a, [%a, #%d]\n" freg FR7 ireg dst ofs;
-          copy (ofs + 8) (sz - 8) (ninstr + 2)
-        end else if sz >= 4 && al >= 4 then begin
-          fprintf oc "	ldr	%a, [%a, #%d]\n" ireg IR14 ireg src ofs;
-          fprintf oc "	str	%a, [%a, #%d]\n" ireg IR14 ireg dst ofs;
-          copy (ofs + 4) (sz - 4) (ninstr + 2)
-        end else if sz >= 2 && al >= 2 then begin
-          fprintf oc "	ldrh	%a, [%a, #%d]\n" ireg IR14 ireg src ofs;
-          fprintf oc "	strh	%a, [%a, #%d]\n" ireg IR14 ireg dst ofs;
-          copy (ofs + 2) (sz - 2) (ninstr + 2)
-        end else if sz >= 1 then begin
-          fprintf oc "	ldrb	%a, [%a, #%d]\n" ireg IR14 ireg src ofs;
-          fprintf oc "	strb	%a, [%a, #%d]\n" ireg IR14 ireg dst ofs;
-          copy (ofs + 1) (sz - 1) (ninstr + 2)
-        end else
-          ninstr in
-      copy 0 sz 0
-
-    let print_builtin_memcpy_big oc sz al src dst =
-      assert (sz >= al);
-      assert (sz mod al = 0);
-      assert (src = IR2);
-      assert (dst = IR3);
-      let (load, store, chunksize) =
-        if al >= 4 then ("ldr", "str", 4)
-        else if al = 2 then ("ldrh", "strh", 2)
-        else ("ldrb", "strb", 1) in
-      let n = movimm oc "r14" (coqint_of_camlint (Int32.of_int (sz / chunksize))) in
-      let lbl = new_label() in
-      fprintf oc ".L%d:	%s	%a, [%a], #%d\n" lbl load ireg IR12 ireg src chunksize;
-      fprintf oc "	subs	%a, %a, #1\n" ireg IR14 ireg IR14;
-      fprintf oc "	%s	%a, [%a], #%d\n" store ireg IR12 ireg dst chunksize;
-      fprintf oc "	bne	.L%d\n" lbl;
-      n + 4
-
-    let print_builtin_memcpy oc sz al args =
-      let (dst, src) =
-        match args with [IR d; IR s] -> (d, s) | _ -> assert false in
-      fprintf oc "%s begin builtin __builtin_memcpy_aligned, size = %d, alignment = %d\n"
-        comment sz al;
-      let n =
-        if sz <= 32
-        then print_builtin_memcpy_small oc sz al src dst
-        else print_builtin_memcpy_big oc sz al src dst in
-      fprintf oc "%s end builtin __builtin_memcpy_aligned\n" comment; n
-
-(* Handling of volatile reads and writes *)
-
-    let print_builtin_vload_common oc chunk args res =
-      match chunk, args, res with
-      | Mint8unsigned, [IR addr], [IR res] ->
-          fprintf oc "	ldrb	%a, [%a, #0]\n" ireg res ireg addr; 1
-      | Mint8signed, [IR addr], [IR res] ->
-          fprintf oc "	ldrsb	%a, [%a, #0]\n" ireg res ireg addr; 1
-      | Mint16unsigned, [IR addr], [IR res] ->
-          fprintf oc "	ldrh	%a, [%a, #0]\n" ireg res ireg addr; 1
-      | Mint16signed, [IR addr], [IR res] ->
-          fprintf oc "	ldrsh	%a, [%a, #0]\n" ireg res ireg addr; 1
-      | Mint32, [IR addr], [IR res] ->
-          fprintf oc "	ldr	%a, [%a, #0]\n" ireg res ireg addr; 1
-      | Mint64, [IR addr], [IR res1; IR res2] ->
-          if addr <> res2 then begin
-            fprintf oc "	ldr	%a, [%a, #0]\n" ireg res2 ireg addr;
-            fprintf oc "	ldr	%a, [%a, #4]\n" ireg res1 ireg addr
-          end else begin
-            fprintf oc "	ldr	%a, [%a, #4]\n" ireg res1 ireg addr;
-            fprintf oc "	ldr	%a, [%a, #0]\n" ireg res2 ireg addr
-          end; 2
-      | Mfloat32, [IR addr], [FR res] ->
-          fprintf oc "	vldr	%a, [%a, #0]\n" freg_single res ireg addr; 1
-      | Mfloat64, [IR addr], [FR res] ->
-          fprintf oc "	vldr	%a, [%a, #0]\n" freg res ireg addr; 1
-      | _ ->
-          assert false
-
-    let print_builtin_vload oc chunk args res =
-      fprintf oc "%s begin builtin __builtin_volatile_read\n" comment;
-      let n = print_builtin_vload_common oc chunk args res in
-      fprintf oc "%s end builtin __builtin_volatile_read\n" comment; n
-
-    let print_builtin_vload_global oc chunk id ofs args res =
-      fprintf oc "%s begin builtin __builtin_volatile_read\n" comment;
-      let n1 = loadsymbol oc IR14 id ofs in
-      let n2 = print_builtin_vload_common oc chunk [IR IR14] res in
-      fprintf oc "%s end builtin __builtin_volatile_read\n" comment; n1 + n2
-
-    let print_builtin_vstore_common oc chunk args =
-      match chunk, args with
-      | (Mint8signed | Mint8unsigned), [IR  addr; IR src] ->
-          fprintf oc "	strb	%a, [%a, #0]\n" ireg src ireg addr; 1
-      | (Mint16signed | Mint16unsigned), [IR  addr; IR src] ->
-          fprintf oc "	strh	%a, [%a, #0]\n" ireg src ireg addr; 1
-      | Mint32, [IR  addr; IR src] ->
-          fprintf oc "	str	%a, [%a, #0]\n" ireg src ireg addr; 1
-      | Mint64, [IR  addr; IR src1; IR src2] ->
-          fprintf oc "	str	%a, [%a, #0]\n" ireg src2 ireg addr;
-          fprintf oc "	str	%a, [%a, #4]\n" ireg src1 ireg addr; 2
-      | Mfloat32, [IR  addr; FR src] ->
-          fprintf oc "	vstr	%a, [%a, #0]\n" freg_single src ireg addr; 1
-      | Mfloat64, [IR  addr; FR src] ->
-          fprintf oc "	vstr	%a, [%a, #0]\n" freg src ireg addr; 1
-      | _ ->
-          assert false
-
-    let print_builtin_vstore oc chunk args =
-      fprintf oc "%s begin builtin __builtin_volatile_write\n" comment;
-      let n = print_builtin_vstore_common oc chunk args in
-      fprintf oc "%s end builtin __builtin_volatile_write\n" comment; n
-
-    let print_builtin_vstore_global oc chunk id ofs args =
-      fprintf oc "%s begin builtin __builtin_volatile_write\n" comment;
-      let n1 = loadsymbol oc IR14 id ofs in
-      let n2 = print_builtin_vstore_common oc chunk (IR IR14 :: args) in
-      fprintf oc "%s end builtin __builtin_volatile_write\n" comment; n1 + n2
-
-(* Handling of varargs *)
-
-    let align n a = (n + a - 1) land (-a)
-
-    let rec next_arg_location ir ofs = function
-      | [] ->
-          Int32.of_int (ir * 4 + ofs)
-      | (Tint | Tsingle | Tany32) :: l ->
-          if ir < 4
-          then next_arg_location (ir + 1) ofs l
-          else next_arg_location ir (ofs + 4) l
-      | (Tfloat | Tlong | Tany64) :: l ->
-          if ir < 3
-          then next_arg_location (align ir 2 + 2) ofs l
-          else next_arg_location ir (align ofs 8 + 8) l
-
-    let print_builtin_va_start oc r =
-      if not (!current_function_sig).sig_cc.cc_vararg then
-        invalid_arg "Fatal error: va_start used in non-vararg function";
-      let ofs =
-        Int32.add
-          (next_arg_location 0 0 (!current_function_sig).sig_args)
-          !current_function_stacksize in
-      let n = addimm oc "r14" "sp" (coqint_of_camlint ofs) in
-      fprintf oc "	str	r14, [%a, #0]\n" ireg r;
-      n + 1
 
 (* Auxiliary for 64-bit integer arithmetic built-ins.  They expand to
    two instructions, one computing the low 32 bits of the result,
@@ -498,79 +324,6 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
         n + 1
       end else
         fn rl
-
-(* Handling of compiler-inlined builtins *)
-
-    let print_builtin_inline oc name args res =
-      fprintf oc "%s begin %s\n" comment name;
-      let n = match name, args, res with
-        (* Integer arithmetic *)
-      | ("__builtin_bswap" | "__builtin_bswap32"), [IR a1], [IR res] ->
-          fprintf oc "	rev	%a, %a\n" ireg res ireg a1; 1
-      | "__builtin_bswap16", [IR a1], [IR res] ->
-          fprintf oc "	rev16	%a, %a\n" ireg res ireg a1; 1
-      | "__builtin_clz", [IR a1], [IR res] ->
-          fprintf oc "	clz	%a, %a\n" ireg res ireg a1; 1
-            (* Float arithmetic *)
-      | "__builtin_fabs", [FR a1], [FR res] ->
-          fprintf oc "	vabs.f64 %a, %a\n" freg res freg a1; 1
-      | "__builtin_fsqrt", [FR a1], [FR res] ->
-          fprintf oc "	vsqrt.f64 %a, %a\n" freg res freg a1; 1
-            (* 64-bit integer arithmetic *)
-      | "__builtin_negl", [IR ah; IR al], [IR rh; IR rl] ->
-          print_int64_arith oc (rl = ah) rl (fun rl ->
-            fprintf oc "	rsbs	%a, %a, #0\n" ireg rl ireg al;
-            (* No "rsc" instruction in Thumb2.  Emulate based on
-               rsc a, b, #0 == a <- AddWithCarry(~b, 0, carry)
-               == mvn a, b; adc a, a, #0 *)
-            if !Clflags.option_mthumb then begin
-              fprintf oc "	mvn	%a, %a\n" ireg rh ireg ah;
-              fprintf oc "	adc	%a, %a, #0\n" ireg rh ireg rh; 3
-            end else begin
-              fprintf oc "	rsc	%a, %a, #0\n" ireg rh ireg ah; 2
-            end)
-      | "__builtin_addl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
-          print_int64_arith oc (rl = ah || rl = bh) rl (fun rl ->
-            fprintf oc "	adds	%a, %a, %a\n" ireg rl ireg al ireg bl;
-            fprintf oc "	adc	%a, %a, %a\n" ireg rh ireg ah ireg bh; 2)
-      | "__builtin_subl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
-          print_int64_arith oc (rl = ah || rl = bh) rl (fun rl ->
-            fprintf oc "	subs	%a, %a, %a\n" ireg rl ireg al ireg bl;
-            fprintf oc "	sbc	%a, %a, %a\n" ireg rh ireg ah ireg bh; 2)
-      | "__builtin_mull", [IR a; IR b], [IR rh; IR rl] ->
-          fprintf oc "	umull   %a, %a, %a, %a\n" ireg rl ireg rh ireg a ireg b; 1
-            (* Memory accesses *)
-      | "__builtin_read16_reversed", [IR a1], [IR res] ->
-          fprintf oc "	ldrh	%a, [%a, #0]\n" ireg res ireg a1;
-          fprintf oc "	rev16	%a, %a\n" ireg res ireg res; 2
-      | "__builtin_read32_reversed", [IR a1], [IR res] ->
-          fprintf oc "	ldr	%a, [%a, #0]\n" ireg res ireg a1;
-          fprintf oc "	rev	%a, %a\n" ireg res ireg res; 2
-      | "__builtin_write16_reversed", [IR a1; IR a2], _ ->
-          fprintf oc "	rev16	%a, %a\n" ireg IR14 ireg a2;
-          fprintf oc "	strh	%a, [%a, #0]\n" ireg IR14 ireg a1; 2
-      | "__builtin_write32_reversed", [IR a1; IR a2], _ ->
-          fprintf oc "	rev	%a, %a\n" ireg IR14 ireg a2;
-          fprintf oc "	str	%a, [%a, #0]\n" ireg IR14 ireg a1; 2
-            (* Synchronization *)
-      | "__builtin_membar", [], _ ->
-          0
-      | "__builtin_dmb", [], _ ->
-          fprintf oc "	dmb\n"; 1
-      | "__builtin_dsb", [], _ ->
-          fprintf oc "	dsb\n"; 1
-      | "__builtin_isb", [], _ ->
-          fprintf oc "	isb\n"; 1
-
-            (* Vararg stuff *)
-      | "__builtin_va_start", [IR a], _ ->
-          print_builtin_va_start oc a
-            (* Catch-all *)
-      | _ ->
-          invalid_arg ("unrecognized builtin " ^ name)
-      in
-      fprintf oc "%s end %s\n" comment name;
-      n
 
 (* Fixing up calling conventions *)
 
@@ -704,7 +457,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       match Opt.float_abi with
       | Soft -> (FixupEABI.fixup_arguments, FixupEABI.fixup_result)
       | Hard -> (FixupHF.fixup_arguments, FixupHF.fixup_result)
-            
+
 (* Printing of instructions *)
 
     let shift_op oc = function
@@ -716,11 +469,15 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | SOror(r, n) -> fprintf oc "%a, ror #%a" ireg r coqint n
 
     let print_instruction oc = function
-        (* Core instructions *)
+      (* Core instructions *)
+      | Padc (r1,r2,so) ->
+	 fprintf oc "	adc	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
       | Padd(r1, r2, so) ->
           fprintf oc "	add%s	%a, %a, %a\n"
             (if !Clflags.option_mthumb && r2 <> IR14 then "s" else "")
             ireg r1 ireg r2 shift_op so; 1
+      | Padds (r1,r2,so) ->
+	 fprintf oc "	adds	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
       | Pand(r1, r2, so) ->
           fprintf oc "	and%t	%a, %a, %a\n"
             thumbS ireg r1 ireg r2 shift_op so; 1
@@ -731,12 +488,14 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           fprintf oc "	b	%a\n" print_label lbl; 1
       | Pbc(bit, lbl) ->
           fprintf oc "	b%s	%a\n" (condition_name bit) print_label lbl; 1
+      | Pbne lbl ->
+	 fprintf oc "	bne	%a\n" print_label lbl; 1
       | Pbsymb(id, sg) ->
           let n = fixup_arguments oc Outgoing sg in
           fprintf oc "	b	%a\n" symbol id;
           n + 1
       | Pbreg(r, sg) ->
-          let n = 
+          let n =
             if r = IR14
             then fixup_result oc Outgoing sg
             else fixup_arguments oc Outgoing sg in
@@ -755,17 +514,31 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | Pbic(r1, r2, so) ->
           fprintf oc "	bic%t	%a, %a, %a\n"
             thumbS ireg r1 ireg r2 shift_op so; 1
+      | Pclz (r1,r2) ->
+	 fprintf oc "	clz	%a, %a\n" ireg r1 ireg r2; 1
       | Pcmp(r1, so) ->
           fprintf oc "	cmp	%a, %a\n" ireg r1 shift_op so; 1
-      | Peor(r1, r2, so) ->
+      | Pdmb ->
+	 fprintf oc "	dmb\n"; 1
+      | Pdsb ->
+	 fprintf oc "	dsb\n"; 1
+      |  Peor(r1, r2, so) ->
           fprintf oc "	eor%t	%a, %a, %a\n"
             thumbS ireg r1 ireg r2 shift_op so; 1
+      | Pisb ->
+	 fprintf oc "	isb\n"; 1
       | Pldr(r1, r2, sa) | Pldr_a(r1, r2, sa) ->
           fprintf oc "	ldr	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
       | Pldrb(r1, r2, sa) ->
           fprintf oc "	ldrb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
       | Pldrh(r1, r2, sa) ->
           fprintf oc "	ldrh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
+      | Pldr_p(r1, r2, sa)  ->
+          fprintf oc "	ldr	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa; 1
+      | Pldrb_p(r1, r2, sa) ->
+          fprintf oc "	ldrb	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa; 1
+      | Pldrh_p(r1, r2, sa) ->
+          fprintf oc "	ldrh	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa; 1
       | Pldrsb(r1, r2, sa) ->
           fprintf oc "	ldrsb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
       | Pldrsh(r1, r2, sa) ->
@@ -791,9 +564,22 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | Porr(r1, r2, so) ->
           fprintf oc "	orr%t	%a, %a, %a\n"
             thumbS ireg r1 ireg r2 shift_op so; 1
+      | Prev (r1,r2) ->
+	 fprintf oc "	rev	%a, %a\n" ireg r1 ireg r2; 1
+      | Prev16 (r1,r2) ->
+	 fprintf oc "	rev16	%a, %a\n" ireg r1 ireg r2; 1
       | Prsb(r1, r2, so) ->
-          fprintf oc "	rsb%t	%a, %a, %a\n"
-            thumbS ireg r1 ireg r2 shift_op so; 1
+         fprintf oc "	rsb%t	%a, %a, %a\n"
+		 thumbS ireg r1 ireg r2 shift_op so; 1
+      | Prsbs(r1, r2, so) ->
+         fprintf oc "	rsbs	%a, %a, %a\n"
+		 ireg r1 ireg r2 shift_op so; 1
+      | Prsc (r1,r2,so) ->
+	 fprintf oc "	rsc	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
+      | Pfsqrt (f1,f2) ->
+	 fprintf oc "	vsqrt.f64 %a, %a\n" freg f1 freg f2; 1
+      | Psbc (r1,r2,sa) ->
+	 fprintf oc "	sbc	%a, %a, %a\n" ireg r1 ireg r2 shift_op sa; 1
       | Pstr(r1, r2, sa) | Pstr_a(r1, r2, sa) ->
           fprintf oc "	str	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa;
           begin match r1, r2, sa with
@@ -805,6 +591,17 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           fprintf oc "	strb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
       | Pstrh(r1, r2, sa) ->
           fprintf oc "	strh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
+      | Pstr_p(r1, r2, sa) ->
+          fprintf oc "	str	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa;
+          begin match r1, r2, sa with
+          | IR14, IR13, SOimm n -> cfi_rel_offset oc "lr" (camlint_of_coqint n)
+          | _ -> ()
+          end;
+          1
+      | Pstrb_p(r1, r2, sa) ->
+          fprintf oc "	strb	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa; 1
+      | Pstrh_p(r1, r2, sa) ->
+          fprintf oc "	strh	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa; 1
       | Psdiv ->
           if Opt.hardware_idiv then begin
             fprintf oc "	sdiv	r0, r0, r1\n"; 1
@@ -818,6 +615,9 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | Psub(r1, r2, so) ->
           fprintf oc "	sub%t	%a, %a, %a\n"
             thumbS ireg r1 ireg r2 shift_op so; 1
+      | Psubs(r1, r2, so) ->
+         fprintf oc "	subs	%a, %a, %a\n"
+		 ireg r1 ireg r2 shift_op so; 1
       | Pudiv ->
           if Opt.hardware_idiv then begin
             fprintf oc "	udiv	r0, r0, r1\n"; 1
@@ -886,7 +686,11 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | Pfdivs(r1, r2, r3) ->
           fprintf oc "	vdiv.f32 %a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
       | Pfmuls(r1, r2, r3) ->
-          fprintf oc "	vmul.f32 %a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
+         fprintf oc "	vmul.f32 %a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
+      | Ppush rl ->
+	 let first = ref true in
+	 let sep () = if !first then first := false else output_string oc ", " in
+	 fprintf oc "	push	{%a}\n"  (fun oc rl -> List.iter (fun ir -> sep (); ireg oc ir) rl) rl; ;1
       | Pfsubs(r1, r2, r3) ->
           fprintf oc "	vsub.f32 %a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
       | Pflis(r1, f) ->
@@ -938,25 +742,9 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           fprintf oc "	vstr	%a, [%a, #%a]\n" freg_single r1 ireg r2 coqint n; 1
             (* Pseudo-instructions *)
       | Pallocframe(sz, ofs) ->
-          fprintf oc "	mov	r12, sp\n";
-          if (!current_function_sig).sig_cc.cc_vararg then begin
-            fprintf oc "	push	{r0, r1, r2, r3}\n";
-            cfi_adjust oc 16l
-          end;
-          let sz' = camlint_of_coqint sz in
-          let ninstr = subimm oc "sp" "sp" sz in
-          cfi_adjust oc sz';
-          fprintf oc "	str	r12, [sp, #%a]\n" coqint ofs;
-          current_function_stacksize := sz';
-          ninstr + (if (!current_function_sig).sig_cc.cc_vararg then 3 else 2)
+         assert false
       | Pfreeframe(sz, ofs) ->
-          let sz =
-            if (!current_function_sig).sig_cc.cc_vararg
-            then coqint_of_camlint (Int32.add 16l (camlint_of_coqint sz))
-            else sz in
-          if Asmgen.is_immed_arith sz
-          then fprintf oc "	add	sp, sp, #%a\n" coqint sz
-          else fprintf oc "	ldr	sp, [sp, #%a]\n" coqint ofs; 1
+	 assert false
       | Plabel lbl ->
           fprintf oc "%a:\n" print_label lbl; 0
       | Ploadsymbol(r1, id, ofs) ->
@@ -988,36 +776,23 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           end
       | Pbuiltin(ef, args, res) ->
           begin match ef with
-          | EF_builtin(name, sg) ->
-              print_builtin_inline oc (extern_atom name) args res
-          | EF_vload chunk ->
-              print_builtin_vload oc chunk args res
-          | EF_vstore chunk ->
-              print_builtin_vstore oc chunk args
-          | EF_vload_global(chunk, id, ofs) ->
-              print_builtin_vload_global oc chunk id ofs args res
-          | EF_vstore_global(chunk, id, ofs) ->
-              print_builtin_vstore_global oc chunk id ofs args
-          | EF_memcpy(sz, al) ->
-              print_builtin_memcpy oc (Int32.to_int (camlint_of_coqint sz))
-                (Int32.to_int (camlint_of_coqint al)) args
-          | EF_annot_val(txt, targ) ->
-              print_annot_val oc (extern_atom txt) args res
+          | EF_annot(txt, targs) ->
+              fprintf oc "%s annotation: " comment;
+              print_annot_text preg "sp" oc (camlstring_of_coqstring txt) args;
+              0
+          | EF_debug(kind, txt, targs) ->
+              print_debug_info comment print_file_line preg "sp" oc
+                               (P.to_int kind) (extern_atom txt) args;
+              0
           | EF_inline_asm(txt, sg, clob) ->
               fprintf oc "%s begin inline assembly\n\t" comment;
-              print_inline_asm preg oc (extern_atom txt) sg args res;
+              print_inline_asm preg oc (camlstring_of_coqstring txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment;
               5 (* hoping this is an upper bound...  *)
           | _ ->
               assert false
           end
-      | Pannot(ef, args) ->
-          begin match ef with
-          | EF_annot(txt, targs) ->
-              print_annot_stmt oc (extern_atom txt) targs args; 0
-          | _ ->
-              assert false
-          end
+      | Pcfi_adjust sz -> cfi_adjust oc (camlint_of_coqint sz); 0
 
     let no_fallthrough = function
       | Pb _ -> true
@@ -1112,7 +887,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
             fprintf oc "	.space	%s\n" (Z.to_string n)
       | Init_addrof(symb, ofs) ->
           fprintf oc "	.word	%a\n" symbol_offset (symb, ofs)
-            
+
     let print_prologue oc =
       fprintf oc "	.syntax	unified\n";
       fprintf oc "	.arch	%s\n"
@@ -1124,37 +899,37 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
         | _ -> "armv7");
       fprintf oc "	.fpu	%s\n"
         (if Opt.vfpv3 then "vfpv3-d16" else "vfpv2");
-      fprintf oc "	.%s\n" (if !Clflags.option_mthumb then "thumb" else "arm")
+      fprintf oc "	.%s\n" (if !Clflags.option_mthumb then "thumb" else "arm");
+      if !Clflags.option_g then begin
+        section oc Section_text;
+        fprintf oc "	.cfi_sections	.debug_frame\n"
+      end
 
-    let print_epilogue oc = ()
+
+    let print_epilogue oc =
+      if !Clflags.option_g then begin
+        Debug.compute_gnu_file_enum (fun f -> ignore (print_file oc f));
+        section oc Section_text;
+      end
+
 
     let default_falignment = 4
 
-    let get_start_addr () = -1 (* Dummy constant *)
-
-    let get_end_addr () = -1 (* Dummy constant *)
-
-    let get_stmt_list_addr () = -1 (* Dummy constant *)
-
-    module DwarfAbbrevs = DwarfUtil.DefaultAbbrevs (* Dummy Abbrev types *)
-        
     let label = elf_label
-       
+
     let new_label = new_label
-        
-    let print_file_loc _ _ = () (* Dummy function *)
   end
 
-let sel_target () = 
+let sel_target () =
   let module S : PRINTER_OPTIONS = struct
-   
+
    let vfpv3 = Configuration.model >= "armv7"
-   
+
    let float_abi = match Configuration.abi with
    | "eabi"      -> Soft
    | "hardfloat" -> Hard
    | _ -> assert false
-   
+
    let hardware_idiv  =
    match  Configuration.model with
    | "armv7r" | "armv7m" -> !Clflags.option_mthumb

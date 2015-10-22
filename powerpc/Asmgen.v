@@ -126,7 +126,7 @@ Definition accessind {A: Type}
        (instr1: A -> constant -> ireg -> instruction)
        (instr2: A -> ireg -> ireg -> instruction)
        (base: ireg) (ofs: int) (r: A) (k: code) :=
-  if Int.eq (high_s ofs) Int.zero 
+  if Int.eq (high_s ofs) Int.zero
   then instr1 r (Cint ofs) base :: k
   else loadimm GPR0 ofs (instr2 r base GPR0 :: k).
 
@@ -496,6 +496,15 @@ Definition transl_op
   | Ointoffloat, a1 :: nil =>
       do r1 <- freg_of a1; do r <- ireg_of res;
       OK (Pfcti r r1 :: k)
+  | Ointuoffloat, a1 :: nil =>
+      do r1 <- freg_of a1; do r <- ireg_of res;
+      OK (Pfctiu r r1 :: k)
+  | Ofloatofint, a1 :: nil =>
+      do r1 <- ireg_of a1; do r <- freg_of res;
+      OK (Pfcfi r r1 :: k)
+  | Ofloatofintu, a1 :: nil =>
+      do r1 <- ireg_of a1; do r <- freg_of res;
+      OK (Pfcfiu r r1 :: k)
   | Ofloatofwords, a1 :: a2 :: nil =>
       do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- freg_of res;
       OK (Pfmake r r1 r2 :: k)
@@ -513,7 +522,7 @@ Definition int_temp_for (r: mreg) :=
 Definition transl_memory_access
      (mk1: constant -> ireg -> instruction)
      (mk2: ireg -> ireg -> instruction)
-     (addr: addressing) (args: list mreg) 
+     (addr: addressing) (args: list mreg)
      (temp: ireg) (k: code) :=
   match addr, args with
   | Aindexed ofs, a1 :: nil =>
@@ -640,17 +649,15 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
       OK (Pmtctr r1 ::
           Plwz GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 ::
           Pmtlr GPR0 ::
-          Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: 
+          Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) ::
           Pbctr sig :: k)
   | Mtailcall sig (inr symb) =>
       OK (Plwz GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 ::
           Pmtlr GPR0 ::
-          Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: 
+          Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) ::
           Pbs symb sig :: k)
   | Mbuiltin ef args res =>
-      OK (Pbuiltin ef (map preg_of args) (map preg_of res) :: k)
-  | Mannot ef args =>
-      OK (Pannot ef (List.map (map_annot_arg preg_of) args) :: k)
+      OK (Pbuiltin ef (List.map (map_builtin_arg preg_of) args) (map_builtin_res preg_of res) :: k)
   | Mlabel lbl =>
       OK (Plabel lbl :: k)
   | Mgoto lbl =>
@@ -713,7 +720,7 @@ Definition transl_code' (f: Mach.function) (il: list Mach.instruction) (it1p: bo
 Definition transl_function (f: Mach.function) :=
   do c <- transl_code' f f.(Mach.fn_code) false;
   OK (mkfunction f.(Mach.fn_sig)
-       (Pallocframe f.(fn_stacksize) f.(fn_link_ofs) ::
+       (Pallocframe f.(fn_stacksize) f.(fn_link_ofs) f.(fn_retaddr_ofs) ::
         Pmflr GPR0 ::
         Pstw GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 ::
         Pcfi_rel_offset f.(fn_retaddr_ofs) :: c)).

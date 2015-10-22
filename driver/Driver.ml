@@ -108,6 +108,7 @@ let preprocess ifile ofile =
 (* From preprocessed C to Csyntax *)
 
 let parse_c_file sourcename ifile =
+  Debug.init_compile_unit sourcename;
   Sections.initialize();
   (* Simplification options *)
   let simplifs =
@@ -117,10 +118,10 @@ let parse_c_file sourcename ifile =
   ^ (if !option_fpacked_structs then "p" else "")
   in
   (* Parsing and production of a simplified C AST *)
-  let ast,debug =
+  let ast =
     match Parse.preprocessed_file simplifs sourcename ifile with
-    | None,_ -> exit 2
-    | Some p,d -> p,d in
+    | None -> exit 2
+    | Some p -> p in
   (* Save C AST if requested *)
   if !option_dparse then begin
     let ofile = output_filename sourcename ".c" ".parsed.c" in
@@ -141,26 +142,16 @@ let parse_c_file sourcename ifile =
     PrintCsyntax.print_program (Format.formatter_of_out_channel oc) csyntax;
     close_out oc
   end;
-  csyntax,debug
+  csyntax,None
 
-(* Dump Asm code in binary format for the validator *)
-
-let sdump_magic_number = "CompCertSDUMP" ^ Version.version
-
-let dump_asm asm destfile =
-  let oc = open_out_bin destfile in
-  output_string oc sdump_magic_number;
-  output_value oc asm;
-  output_value oc Camlcoq.string_of_atom;
-  output_value oc C2C.decl_atom;
-  close_out oc
+(* Dump Asm code in asm format for the validator *)
 
 let jdump_magic_number = "CompCertJDUMP" ^ Version.version
 
 let dump_jasm asm destfile =
   let oc = open_out_bin destfile in
-  fprintf oc "{\n\"Version\":\"%s\",\n\"Asm Ast\":%a}"
-    jdump_magic_number AsmToJSON.p_program asm;
+  fprintf oc "{\n\"Version\":\"%s\",\n\"System\":\"%s\",\n\"Asm Ast\":%a}"
+    jdump_magic_number Configuration.system AsmToJSON.p_program asm;
   close_out oc
 
 
@@ -179,18 +170,17 @@ let compile_c_ast sourcename csyntax ofile debug =
   set_dest PrintMach.destination option_dmach ".mach";
   (* Convert to Asm *)
   let asm =
-    match Compiler.transf_c_program csyntax with
+    match Compiler.apply_partial
+               (Compiler.transf_c_program csyntax)
+               Asmexpand.expand_program with
     | Errors.OK asm ->
-        Asmexpand.expand_program asm
+        asm
     | Errors.Error msg ->
-        print_error stderr msg;
+        eprintf "%s: %a" sourcename print_error msg;
         exit 2 in
-  (* Dump Asm in binary and JSON format *)  
+  (* Dump Asm in binary and JSON format *)
   if !option_sdump then
-    begin
-      dump_asm asm (output_filename sourcename ".c" ".sdump");
-      dump_jasm asm (output_filename sourcename ".c" ".json")
-    end;
+      dump_jasm asm (output_filename sourcename ".c" ".json");
   (* Print Asm in text form *)
   let oc = open_out ofile in
   PrintAsm.print_program oc asm debug;
@@ -221,7 +211,7 @@ let compile_cminor_file ifile ofile =
             (CMtypecheck.type_program
               (CMparser.prog CMlexer.token lb)) with
     | Errors.Error msg ->
-        print_error stderr msg;
+        eprintf "%s: %a" ifile print_error msg;
         exit 2
     | Errors.OK p ->
         let oc = open_out ofile in
@@ -441,6 +431,7 @@ Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fnone         Turn off all language support options above
 Debugging options:
   -g             Generate debugging information
+  -gdwarf-       (GCC only) Generate debug information in DWARF v2 or DWARF v3
   -frename-static Rename static functions and declarations
 Optimization options: (use -fno-<opt> to turn off -f<opt>)
   -O             Optimize the compiled code [on by default]
@@ -468,6 +459,7 @@ Assembling options:
 Linking options:
   -l<lib>        Link library <lib>
   -L<dir>        Add <dir> to search path for libraries
+  -T <file>      Use <file> as linker command file
   -Wl,<opt>      Pass option <opt> to the linker
 Tracing options:
   -dparse        Save C file after parsing and elaboration in <file>.parse.c
@@ -513,6 +505,8 @@ let unset_all opts = List.iter (fun r -> r := false) opts
 
 let num_source_files = ref 0
 
+let num_input_files = ref 0
+
 let cmdline_actions =
   let f_opt name ref =
     [Exact("-f" ^ name), Set ref; Exact("-fno-" ^ name), Unset ref] in
@@ -543,7 +537,12 @@ let cmdline_actions =
   Exact "-fall", Self (fun _ -> set_all language_support_options);
   Exact "-fnone", Self (fun _ -> unset_all language_support_options);
 (* Debugging options *)
-  Exact "-g", Self (fun s -> option_g := true);
+  Exact "-g", Self (fun s -> option_g := true;
+    option_gdwarf := 3);
+  Exact "-gdwarf-2", Self (fun s -> option_g:=true;
+    option_gdwarf := 2);
+  Exact "-gdwarf-3", Self (fun s -> option_g := true;
+    option_gdwarf := 3);
   Exact "-frename-static", Self (fun s -> option_rename_static:= true);
 (* Code generation options -- more below *)
   Exact "-O0", Self (fun _ -> unset_all optimization_options);
@@ -564,6 +563,12 @@ let cmdline_actions =
 (* Linking options *)
   Prefix "-l", Self push_linker_arg;
   Prefix "-L", Self push_linker_arg;
+  Exact "-T", String (fun s -> if Configuration.system = "diab" then
+    push_linker_arg ("-Wm"^s)
+  else begin
+      push_linker_arg ("-T");
+      push_linker_arg(s)
+    end);
   Prefix "-Wl,", Self push_linker_arg;
 (* Tracing options *)
   Exact "-dparse", Set option_dparse;
@@ -631,25 +636,25 @@ let cmdline_actions =
       eprintf "Unknown option `%s'\n" s; exit 2);
 (* File arguments *)
   Suffix ".c", Self (fun s ->
-      push_action process_c_file s; incr num_source_files);
+      push_action process_c_file s; incr num_source_files; incr num_input_files);
   Suffix ".i", Self (fun s ->
-      push_action process_i_file s; incr num_source_files);
+      push_action process_i_file s; incr num_source_files; incr num_input_files);
   Suffix ".p", Self (fun s ->
-      push_action process_i_file s; incr num_source_files);
+      push_action process_i_file s; incr num_source_files; incr num_input_files);
   Suffix ".cm", Self (fun s ->
-      push_action process_cminor_file s; incr num_source_files);
+      push_action process_cminor_file s; incr num_source_files; incr num_input_files);
   Suffix ".s", Self (fun s ->
-      push_action process_s_file s; incr num_source_files);
+      push_action process_s_file s; incr num_source_files; incr num_input_files);
   Suffix ".S", Self (fun s ->
-      push_action process_S_file s; incr num_source_files);
-  Suffix ".o", Self push_linker_arg;
-  Suffix ".a", Self push_linker_arg;
+      push_action process_S_file s; incr num_source_files; incr num_input_files);
+  Suffix ".o", Self (fun s -> push_linker_arg s; incr num_input_files);
+  Suffix ".a", Self (fun s -> push_linker_arg s; incr num_input_files);
   (* GCC compatibility: .o.ext files and .so files are also object files *)
-  _Regexp ".*\\.o\\.", Self push_linker_arg;
-  Suffix ".so", Self push_linker_arg;
+  _Regexp ".*\\.o\\.", Self (fun s -> push_linker_arg s; incr num_input_files);
+  Suffix ".so", Self (fun s -> push_linker_arg s; incr num_input_files);
   (* GCC compatibility: .h files can be preprocessed with -E *)
   Suffix ".h", Self (fun s ->
-      push_action process_h_file s; incr num_source_files);
+      push_action process_h_file s; incr num_source_files; incr num_input_files);
   ]
 
 let _ =
@@ -661,7 +666,9 @@ let _ =
     Printexc.record_backtrace true;
     Machine.config :=
       begin match Configuration.arch with
-      | "powerpc" -> Machine.ppc_32_bigendian
+      | "powerpc" -> if Configuration.system = "linux"
+                     then Machine.ppc_32_bigendian
+                     else Machine.ppc_32_diab_bigendian
       | "arm"     -> Machine.arm_littleendian
       | "ia32"    -> if Configuration.abi = "macosx"
                      then Machine.x86_32_macosx
@@ -671,11 +678,17 @@ let _ =
     Builtins.set C2C.builtins;
     CPragmas.initialize();
     parse_cmdline cmdline_actions;
+    DebugInit.init (); (* Initialize the debug functions *)
     let nolink = !option_c || !option_S || !option_E || !option_interp in
     if nolink && !option_o <> None && !num_source_files >= 2 then begin
       eprintf "Ambiguous '-o' option (multiple source files)\n";
       exit 2
     end;
+    if !num_input_files = 0 then
+      begin
+        eprintf "ccomp: error: no input file\n";
+        exit 2
+      end;
     let linker_args = time "Total compilation time" perform_actions () in
     if (not nolink) && linker_args <> [] then begin
       linker (output_filename_default "a.out") linker_args

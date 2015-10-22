@@ -173,13 +173,13 @@ Definition loadimm (r: ireg) (n: int) (k: code) :=
   let d2 := decompose_int (Int.not n) in
   let l1 := List.length d1 in
   let l2 := List.length d2 in
-  if NPeano.leb l1 1%nat then
+  if Nat.leb l1 1%nat then
     Pmov r (SOimm n) :: k
-  else if NPeano.leb l2 1%nat then
+  else if Nat.leb l2 1%nat then
     Pmvn r (SOimm (Int.not n)) :: k
   else if thumb tt then
     loadimm_thumb r n k
-  else if NPeano.leb l1 l2 then
+  else if Nat.leb l1 l2 then
     iterate_op (Pmov r) (Porr r r) d1 k
   else
     iterate_op (Pmvn r) (Pbic r r) d2 k.
@@ -190,7 +190,7 @@ Definition addimm (r1 r2: ireg) (n: int) (k: code) :=
   else
    (let d1 := decompose_int n in
     let d2 := decompose_int (Int.neg n) in
-    if NPeano.leb (List.length d1) (List.length d2)
+    if Nat.leb (List.length d1) (List.length d2)
     then iterate_op (Padd r1 r2) (Padd r1 r1) d1 k
     else iterate_op (Psub r1 r2) (Psub r1 r1) d2 k).
 
@@ -198,7 +198,7 @@ Definition rsubimm (r1 r2: ireg) (n: int) (k: code) :=
   iterate_op (Prsb r1 r2) (Padd r1 r1) (decompose_int n) k.
 
 Definition andimm (r1 r2: ireg) (n: int) (k: code) :=
-  if is_immed_arith n 
+  if is_immed_arith n
   then Pand r1 r2 (SOimm n) :: k
   else iterate_op (Pbic r1 r2) (Pbic r1 r1) (decompose_int (Int.not n)) k.
 
@@ -402,7 +402,7 @@ Definition transl_op
       do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
       OK (Pmul r r1 r2 :: k)
   | Omla, a1 :: a2 :: a3 :: nil =>
-      do r <- ireg_of res; do r1 <- ireg_of a1; 
+      do r <- ireg_of res; do r1 <- ireg_of a1;
       do r2 <- ireg_of a2; do r3 <- ireg_of a3;
       OK (Pmla r r1 r2 r3 :: k)
   | Omulhs, a1 :: a2 :: nil =>
@@ -727,9 +727,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
       OK (loadind_int IR13 f.(fn_retaddr_ofs) IR14
            (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: Pbsymb symb sig :: k))
   | Mbuiltin ef args res =>
-      OK (Pbuiltin ef (map preg_of args) (map preg_of res) :: k)
-  | Mannot ef args =>
-      OK (Pannot ef (List.map (map_annot_arg preg_of) args) :: k)
+      OK (Pbuiltin ef (List.map (map_builtin_arg preg_of) args) (map_builtin_res preg_of res) :: k)
   | Mlabel lbl =>
       OK (Plabel lbl :: k)
   | Mgoto lbl =>
@@ -803,4 +801,3 @@ Definition transf_fundef (f: Mach.fundef) : res Asm.fundef :=
 
 Definition transf_program (p: Mach.program) : res Asm.program :=
   transform_partial_program transf_fundef p.
-

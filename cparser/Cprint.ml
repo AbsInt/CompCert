@@ -20,6 +20,8 @@ open C
 
 let print_idents_in_full = ref false
 
+let print_debug_idents = ref false
+
 let print_line_numbers = ref false
 
 let location pp (file, lineno) =
@@ -27,7 +29,9 @@ let location pp (file, lineno) =
     fprintf pp "# %d \"%s\"@ " lineno file
 
 let ident pp i =
-  if !print_idents_in_full
+  if !print_debug_idents
+  then fprintf pp "$%d" i.stamp
+  else if !print_idents_in_full
   then fprintf pp "%s$%d" i.name i.stamp
   else fprintf pp "%s" i.name
 
@@ -77,7 +81,7 @@ let const pp = function
           if c >= 32L && c <= 126L && c <> 34L && c <>92L
           then fprintf pp "%c" (Char.chr (Int64.to_int c))
           else fprintf pp "\" \"\\x%02Lx\" \"" c)
-        l;      
+        l;
       fprintf pp "\""
   | CEnum(id, v) ->
       ident pp id
@@ -212,7 +216,7 @@ let rec exp pp (prec, a) =
     if assoc = LtoR
     then (prec', prec' + 1)
     else (prec' + 1, prec') in
-  if prec' < prec 
+  if prec' < prec
   then fprintf pp "@[<hov 2>("
   else fprintf pp "@[<hov 2>";
   begin match a.edesc with
@@ -325,7 +329,7 @@ let rec exp pp (prec, a) =
       begin match al with
       | [] -> ()
       | a1 :: al ->
-          fprintf pp "%a" exp (2, a1); 
+          fprintf pp "%a" exp (2, a1);
           List.iter (fun a -> fprintf pp ",@ %a" exp (2, a)) al
       end;
       fprintf pp ")@]"
@@ -390,7 +394,7 @@ exception Not_expr
 let rec exp_of_stmt s =
   match s.sdesc with
   | Sdo e -> e
-  | Sseq(s1, s2) -> 
+  | Sseq(s1, s2) ->
       {edesc = EBinop(Ocomma, exp_of_stmt s1, exp_of_stmt s2, TVoid []);
        etyp = TVoid []}
   | Sif(e, s1, s2) ->

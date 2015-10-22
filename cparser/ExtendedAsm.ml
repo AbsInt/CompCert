@@ -18,7 +18,7 @@
 (* The [transf_asm] function in this module takes a full GCC-style
    extended asm statement and puts it in the form supported by
    CompCert, namely:
-   - 0 or 1 output of kind "r" 
+   - 0 or 1 output of kind "r"
    - 0, 1 or several inputs of kind "r".
    Inputs and outputs of kind "m" (memory location) are emulated
    by taking the address of the operand and treating it as
@@ -57,10 +57,9 @@ let set_label_reg lbl pos pos' subst =
    have this feature and with which syntax. *)
 
 let set_label_regpair lbl pos pos' subst =
-  StringMap.add (name_of_label ~modifier:"R" lbl pos) (sprintf "%%%d" pos')
-    (StringMap.add (name_of_label ~modifier:"Q" lbl pos)
-                   (sprintf "%%%d" (pos' + 1))
-                   subst)
+  StringMap.add (name_of_label ~modifier:"R" lbl pos) (sprintf "%%R%d" pos')
+    (StringMap.add (name_of_label ~modifier:"Q" lbl pos) (sprintf "%%Q%d" pos')
+       subst)
 
 let set_label_mem lbl pos pos' subst =
   StringMap.add (name_of_label lbl pos)
@@ -91,7 +90,7 @@ let rec transf_inputs loc env accu pos pos' subst = function
       let valid = Str.string_match re_valid_input cstr 0 in
       if valid && String.contains cstr 'r' then
         if is_reg_pair env e.etyp then
-          transf_inputs loc env (e :: accu) (pos + 1) (pos' + 2)
+          transf_inputs loc env (e :: accu) (pos + 1) (pos' + 1)
                       (set_label_regpair lbl pos pos' subst) inputs
         else
           transf_inputs loc env (e :: accu) (pos + 1) (pos' + 1)
@@ -117,7 +116,7 @@ let rec transf_inputs loc env accu pos pos' subst = function
         transf_inputs loc env (e :: accu) (pos + 1) (pos' + 1)
                     (set_label_reg lbl pos pos' subst) inputs
       end
-  
+
 (* Transform the output operands:
      - outputs of kind "=m" become an input (equal to the address of the output)
 *)
@@ -133,7 +132,7 @@ let transf_outputs loc env = function
       let valid = Str.string_match re_valid_output cstr 0 in
       if valid && String.contains cstr 'r' then
         if is_reg_pair env e.etyp then
-          (Some e, [], set_label_regpair lbl 0 0 StringMap.empty, 1, 2)
+          (Some e, [], set_label_regpair lbl 0 0 StringMap.empty, 1, 1)
         else
           (Some e, [], set_label_reg lbl 0 0 StringMap.empty, 1, 1)
       else
@@ -148,7 +147,7 @@ let transf_outputs loc env = function
   | outputs ->
       error "%aUnsupported feature: asm statement with 2 or more outputs"
             formatloc loc;
-      (* Bind the outputs so that we don't get another error 
+      (* Bind the outputs so that we don't get another error
          when substituting the text *)
       let rec bind_outputs pos subst = function
       | [] -> (None, [], subst, pos, pos)
@@ -166,7 +165,7 @@ let check_clobbers loc clob =
       || List.mem c' Machregsaux.scratch_register_names
       || c' = "MEMORY" || c' = "CC"
       then ()
-      else error "%aError: unrecognized asm register clobber '%s'" 
+      else error "%aError: unrecognized asm register clobber '%s'"
                  formatloc loc c)
     clob
 
@@ -175,7 +174,7 @@ let check_clobbers loc clob =
 let re_asm_placeholder =
   Str.regexp "\\(%[QR]?\\([0-9]+\\|\\[[a-zA-Z_][a-zA-Z_0-9]*\\]\\)\\|%%\\)"
 
-let rename_placeholders loc template subst =       
+let rename_placeholders loc template subst =
   let rename p =
     if p = "%%" then p else
       try

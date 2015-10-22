@@ -51,6 +51,7 @@ Require Allocation.
 Require Tunneling.
 Require Linearize.
 Require CleanupLabels.
+Require Debugvar.
 Require Stacking.
 Require Asmgen.
 (** Proofs of semantic preservation. *)
@@ -71,6 +72,7 @@ Require Allocproof.
 Require Tunnelingproof.
 Require Linearizeproof.
 Require CleanupLabelsproof.
+Require Debugvarproof.
 Require Stackingproof.
 Require Asmgenproof.
 (** Command-line flags. *)
@@ -144,6 +146,7 @@ Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
    @@ time "Branch tunneling" Tunneling.tunnel_program
   @@@ time "CFG linearization" Linearize.transf_program
    @@ time "Label cleanup" CleanupLabels.transf_program
+  @@@ partial_if Compopts.debug (time "Debugging info for local variables" Debugvar.transf_program)
   @@@ time "Mach generation" Stacking.transf_program
    @@ print print_Mach
   @@@ time "Asm generation" Asmgen.transf_program.
@@ -156,7 +159,7 @@ Definition transf_cminor_program (p: Cminor.program) : res Asm.program :=
   @@@ transf_rtl_program.
 
 Definition transf_clight_program (p: Clight.program) : res Asm.program :=
-  OK p 
+  OK p
    @@ print print_Clight
   @@@ time "Simplification of locals" SimplLocals.transf_program
   @@@ time "C#minor generation" Cshmgen.transl_program
@@ -164,7 +167,7 @@ Definition transf_clight_program (p: Clight.program) : res Asm.program :=
   @@@ transf_cminor_program.
 
 Definition transf_c_program (p: Csyntax.program) : res Asm.program :=
-  OK p 
+  OK p
   @@@ time "Clight generation" SimplExpr.transl_program
   @@@ transf_clight_program.
 
@@ -179,14 +182,14 @@ Lemma print_identity:
   forall (A: Type) (printer: A -> unit) (prog: A),
   print printer prog = prog.
 Proof.
-  intros; unfold print. destruct (printer prog); auto. 
+  intros; unfold print. destruct (printer prog); auto.
 Qed.
 
 Lemma compose_print_identity:
-  forall (A: Type) (x: res A) (f: A -> unit), 
+  forall (A: Type) (x: res A) (f: A -> unit),
   x @@ print f = x.
 Proof.
-  intros. destruct x; simpl. rewrite print_identity. auto. auto. 
+  intros. destruct x; simpl. rewrite print_identity. auto. auto.
 Qed.
 
 Remark forward_simulation_identity:
@@ -196,8 +199,8 @@ Proof.
 - auto.
 - exists s1; auto.
 - subst s2; auto.
-- subst s2. exists s1'; auto. 
-Qed. 
+- subst s2. exists s1'; auto.
+Qed.
 
 Lemma total_if_simulation:
   forall (A: Type) (sem: A -> semantics) (flag: unit -> bool) (f: A -> A) (prog: A),
@@ -253,17 +256,18 @@ Proof.
   set (p5 := Tunneling.tunnel_program p4) in *.
   destruct (Linearize.transf_program p5) as [p6|] eqn:?; simpl in H; try discriminate.
   set (p7 := CleanupLabels.transf_program p6) in *.
-  destruct (Stacking.transf_program p7) as [p8|] eqn:?; simpl in H; try discriminate.
+  destruct (partial_if debug Debugvar.transf_program p7) as [p71|] eqn:?; simpl in H; try discriminate.
+  destruct (Stacking.transf_program p71) as [p8|] eqn:?; simpl in H; try discriminate.
   apply compose_forward_simulation with (RTL.semantics p1).
-    apply total_if_simulation. apply Tailcallproof.transf_program_correct. 
+    apply total_if_simulation. apply Tailcallproof.transf_program_correct.
   apply compose_forward_simulation with (RTL.semantics p11).
     apply Inliningproof.transf_program_correct; auto.
   apply compose_forward_simulation with (RTL.semantics p12).
-    apply Renumberproof.transf_program_correct. 
+    apply Renumberproof.transf_program_correct.
   apply compose_forward_simulation with (RTL.semantics p2).
     apply total_if_simulation. apply Constpropproof.transf_program_correct.
   apply compose_forward_simulation with (RTL.semantics p21).
-    apply total_if_simulation. apply Renumberproof.transf_program_correct. 
+    apply total_if_simulation. apply Renumberproof.transf_program_correct.
   apply compose_forward_simulation with (RTL.semantics p3).
     eapply partial_if_simulation; eauto.  apply CSEproof.transf_program_correct.
   apply compose_forward_simulation with (RTL.semantics p31).
@@ -277,14 +281,16 @@ Proof.
   apply compose_forward_simulation with (Linear.semantics p6).
     apply Linearizeproof.transf_program_correct; auto.
   apply compose_forward_simulation with (Linear.semantics p7).
-    apply CleanupLabelsproof.transf_program_correct. 
+    apply CleanupLabelsproof.transf_program_correct.
+  apply compose_forward_simulation with (Linear.semantics p71).
+    eapply partial_if_simulation; eauto. apply Debugvarproof.transf_program_correct.
   apply compose_forward_simulation with (Mach.semantics Asmgenproof0.return_address_offset p8).
     apply Stackingproof.transf_program_correct.
     exact Asmgenproof.return_address_exists.
     auto.
   apply Asmgenproof.transf_program_correct; eauto.
-  split. auto. 
-  apply forward_to_backward_simulation. auto. 
+  split. auto.
+  apply forward_to_backward_simulation. auto.
   apply RTL.semantics_receptive.
   apply Asm.semantics_determinate.
 Qed.
@@ -299,15 +305,15 @@ Proof.
   assert (F: forward_simulation (Cminor.semantics p) (Asm.semantics tp)).
   unfold transf_cminor_program, time in H.
   repeat rewrite compose_print_identity in H.
-  simpl in H. 
+  simpl in H.
   destruct (Selection.sel_program p) as [p1|] eqn:?; simpl in H; try discriminate.
   destruct (RTLgen.transl_program p1) as [p2|] eqn:?; simpl in H; try discriminate.
   eapply compose_forward_simulation. apply Selectionproof.transf_program_correct. eauto.
   eapply compose_forward_simulation. apply RTLgenproof.transf_program_correct. eassumption.
   exact (fst (transf_rtl_program_correct _ _ H)).
 
-  split. auto. 
-  apply forward_to_backward_simulation. auto. 
+  split. auto.
+  apply forward_to_backward_simulation. auto.
   apply Cminor.semantics_receptive.
   apply Asm.semantics_determinate.
 Qed.
@@ -318,7 +324,7 @@ Theorem transf_clight_program_correct:
   forward_simulation (Clight.semantics1 p) (Asm.semantics tp)
   * backward_simulation (Clight.semantics1 p) (Asm.semantics tp).
 Proof.
-  intros. 
+  intros.
   assert (F: forward_simulation (Clight.semantics1 p) (Asm.semantics tp)).
   revert H; unfold transf_clight_program, time; simpl.
   rewrite print_identity.
@@ -329,10 +335,10 @@ Proof.
   eapply compose_forward_simulation. apply SimplLocalsproof.transf_program_correct. eauto.
   eapply compose_forward_simulation. apply Cshmgenproof.transl_program_correct. eauto.
   eapply compose_forward_simulation. apply Cminorgenproof.transl_program_correct. eauto.
-  exact (fst (transf_cminor_program_correct _ _ EQ3)). 
+  exact (fst (transf_cminor_program_correct _ _ EQ3)).
 
-  split. auto. 
-  apply forward_to_backward_simulation. auto. 
+  split. auto.
+  apply forward_to_backward_simulation. auto.
   apply Clight.semantics_receptive.
   apply Asm.semantics_determinate.
 Qed.
@@ -349,9 +355,9 @@ Proof.
   caseEq (SimplExpr.transl_program p); simpl; try congruence; intros p0 EQ0.
   intros EQ1.
   eapply compose_forward_simulation. apply SimplExprproof.transl_program_correct. eauto.
-  exact (fst (transf_clight_program_correct _ _ EQ1)). 
+  exact (fst (transf_clight_program_correct _ _ EQ1)).
 
-  split. auto. 
+  split. auto.
   apply forward_to_backward_simulation.
   apply factor_forward_simulation. auto. eapply sd_traces. eapply Asm.semantics_determinate.
   apply atomic_receptive. apply Cstrategy.semantics_strongly_receptive.
@@ -363,10 +369,10 @@ Theorem transf_c_program_correct:
   transf_c_program p = OK tp ->
   backward_simulation (Csem.semantics p) (Asm.semantics tp).
 Proof.
-  intros. 
+  intros.
   apply compose_backward_simulation with (atomic (Cstrategy.semantics p)).
   eapply sd_traces; eapply Asm.semantics_determinate.
-  apply factor_backward_simulation. 
+  apply factor_backward_simulation.
   apply Cstrategy.strategy_simulation.
   apply Csem.semantics_single_events.
   eapply ssr_well_behaved; eapply Cstrategy.semantics_strongly_receptive.

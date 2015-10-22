@@ -14,7 +14,6 @@
 open AST
 open Asm
 open Camlcoq
-open DwarfTypes
 open Datatypes
 open Memdata
 open Printf
@@ -45,13 +44,8 @@ module type TARGET =
       val comment: string
       val symbol: out_channel -> P.t -> unit
       val default_falignment: int
-      val get_start_addr: unit -> int
-      val get_end_addr: unit -> int
-      val get_stmt_list_addr: unit -> int
       val new_label: unit -> int
       val label: out_channel -> int -> unit
-      val print_file_loc: out_channel -> file_loc -> unit
-      module DwarfAbbrevs:  DWARF_ABBREVS
     end
 
 (* On-the-fly label renaming *)
@@ -104,7 +98,7 @@ let elf_symbol_offset oc (symb, ofs) =
 let elf_print_fun_info oc name =
   fprintf oc "	.type	%a, @function\n" elf_symbol name;
   fprintf oc "	.size	%a, . - %a\n" elf_symbol name elf_symbol name
-   
+
 let elf_print_var_info oc name =
   fprintf oc "	.type	%a, @object\n" elf_symbol name;
   fprintf oc "	.size	%a, . - %a\n" elf_symbol name elf_symbol name
@@ -115,134 +109,59 @@ let cfi_startproc =
     (fun oc -> fprintf oc "	.cfi_startproc\n")
   else
     (fun _ -> ())
-      
+
 let cfi_endproc =
   if Configuration.asm_supports_cfi then
     (fun oc -> fprintf oc "	.cfi_endproc\n")
   else
     (fun _ -> ())
-      
-      
+
+
 let cfi_adjust =
   if Configuration.asm_supports_cfi then
        (fun oc delta -> fprintf oc "	.cfi_adjust_cfa_offset	%ld\n" delta)
   else
     (fun _ _ -> ())
-      
+
 let cfi_rel_offset =
   if Configuration.asm_supports_cfi then
     (fun oc reg ofs -> fprintf oc "	.cfi_rel_offset	%s, %ld\n" reg ofs)
   else
     (fun _ _ _ -> ())
 
-(* For handling of annotations *)
-let re_file_line = Str.regexp "#line:\\(.*\\):\\([1-9][0-9]*\\)$"
-
 (* Basic printing functions *)
 let coqint oc n =
   fprintf oc "%ld" (camlint_of_coqint n)
 
-(* Printing annotations in asm syntax *)
-(** All files used in the debug entries *)
-module StringSet = Set.Make(String)
-let all_files : StringSet.t ref = ref StringSet.empty
-let add_file file =
-  all_files := StringSet.add file !all_files
-
-
-let filename_info : (string, int * Printlines.filebuf option) Hashtbl.t
-                  = Hashtbl.create 7
-
-let last_file = ref ""
-
-let reset_filenames () =
-  Hashtbl.clear filename_info; last_file := ""
-
-let close_filenames () =
-  Hashtbl.iter
-    (fun file (num, fb) ->
-       match fb with Some b -> Printlines.close b | None -> ())
-    filename_info;
-  reset_filenames()
-
-let enter_filename f =
-  let num = Hashtbl.length filename_info + 1 in
-  let filebuf =
-    if !Clflags.option_S || !Clflags.option_dasm then begin
-      try Some (Printlines.openfile f)
-      with Sys_error _ -> None
-    end else None in
-  Hashtbl.add filename_info f (num, filebuf);
-  (num, filebuf)
-
-(* Add file and line debug location, using GNU assembler-style DWARF2
-   directives *)
-
-let print_file_line oc pref file line =
-  if !Clflags.option_g && file <> "" then begin
-    let (filenum, filebuf) =
-      try
-        Hashtbl.find filename_info file
-      with Not_found ->
-        let (filenum, filebuf as res) = enter_filename file in
-        fprintf oc "	.file	%d %S\n" filenum file;
-        res in
-    fprintf oc "	.loc	%d %d\n" filenum line;
-    match filebuf with
-    | None -> ()
-    | Some fb -> Printlines.copy oc pref fb line line
-  end
-
-(* Add file and line debug location, using DWARF2 directives in the style
-   of Diab C 5 *)
-
-let print_file_line_d2 oc pref file line =
-  if !Clflags.option_g && file <> "" then begin
-    let (_, filebuf) =
-      try
-        Hashtbl.find filename_info file
-      with Not_found ->
-        enter_filename file in
-    if file <> !last_file then begin
-      fprintf oc "	.d2file	%S\n" file;
-      last_file := file
-    end;
-    fprintf oc "	.d2line	%d\n" line;
-    match filebuf with
-    | None -> ()
-    | Some fb -> Printlines.copy oc pref fb line line
-  end
-
-					    
-(** "True" annotations *)
+(** Programmer-supplied annotations (__builtin_annot). *)
 
 let re_annot_param = Str.regexp "%%\\|%[1-9][0-9]*"
 
 let rec print_annot print_preg sp_reg_name oc = function
-  | AA_base x -> print_preg oc x
-  | AA_int n -> fprintf oc "%ld" (camlint_of_coqint n)
-  | AA_long n -> fprintf oc "%Ld" (camlint64_of_coqint n)
-  | AA_float n -> fprintf oc "%.18g" (camlfloat_of_coqfloat n)
-  | AA_single n -> fprintf oc "%.18g" (camlfloat_of_coqfloat32 n)
-  | AA_loadstack(chunk, ofs) ->
+  | BA x -> print_preg oc x
+  | BA_int n -> fprintf oc "%ld" (camlint_of_coqint n)
+  | BA_long n -> fprintf oc "%Ld" (camlint64_of_coqint n)
+  | BA_float n -> fprintf oc "%.18g" (camlfloat_of_coqfloat n)
+  | BA_single n -> fprintf oc "%.18g" (camlfloat_of_coqfloat32 n)
+  | BA_loadstack(chunk, ofs) ->
       fprintf oc "mem(%s + %ld, %ld)"
          sp_reg_name
          (camlint_of_coqint ofs)
          (camlint_of_coqint (size_chunk chunk))
-  | AA_addrstack ofs ->
+  | BA_addrstack ofs ->
       fprintf oc "(%s + %ld)"
          sp_reg_name
          (camlint_of_coqint ofs)
-  | AA_loadglobal(chunk, id, ofs) ->
+  | BA_loadglobal(chunk, id, ofs) ->
       fprintf oc "mem(\"%s\" + %ld, %ld)"
          (extern_atom id)
          (camlint_of_coqint ofs)
          (camlint_of_coqint (size_chunk chunk))
-  | AA_addrglobal(id, ofs) ->
+  | BA_addrglobal(id, ofs) ->
       fprintf oc "(\"%s\" + %ld)"
          (extern_atom id)
          (camlint_of_coqint ofs)
-  | AA_longofwords(hi, lo) ->
+  | BA_splitlong(hi, lo) ->
       fprintf oc "(%a * 0x100000000 + %a)"
         (print_annot print_preg sp_reg_name) hi
         (print_annot print_preg sp_reg_name) lo
@@ -262,39 +181,87 @@ let print_annot_text print_preg sp_reg_name oc txt args =
   List.iter print_fragment (Str.full_split re_annot_param txt);
   fprintf oc "\n"
 
-let print_annot_stmt print_preg sp_reg_name oc txt tys args =
-  print_annot_text print_preg sp_reg_name oc txt args
+(* Printing of [EF_debug] info.  To be completed. *)
 
-let print_annot_val print_preg oc txt args =
-  print_annot_text print_preg "<internal error>" oc txt
-    (List.map (fun r -> AA_base r) args)
+let re_file_line = Str.regexp "#line:\\(.*\\):\\([1-9][0-9]*\\)$"
+
+let print_debug_info comment print_line print_preg sp_name oc kind txt args =
+  let print_debug_args oc args =
+    List.iter
+      (fun a -> fprintf oc " %a" (print_annot print_preg sp_name) a)
+      args in
+  match kind with
+  | 1 ->  (* line number *)
+      if Str.string_match re_file_line txt 0 then
+        print_line oc (Str.matched_group 1 txt)
+                      (int_of_string (Str.matched_group 2 txt))
+  | 2 ->  (* assignment to local variable, not useful *)
+      ()
+  | 3 ->  (* beginning of live range for local variable *)
+      fprintf oc "%s debug: start live range %s =%a\n"
+                 comment txt print_debug_args args
+  | 4 ->  (* end of live range for local variable *)
+      fprintf oc "%s debug: end live range %s\n"
+                 comment txt
+  | 5 ->  (* local variable preallocated in stack *)
+      fprintf oc "%s debug: %s resides at%a\n"
+                 comment txt print_debug_args args
+  | 6 ->  (* scope annotations *)
+      fprintf oc "%s debug: current scopes%a\n"
+                 comment print_debug_args args;
+  | _ ->
+      ()
 
 (** Inline assembly *)
 
-let re_asm_param = Str.regexp "%%\\|%[0-9]+"
+let print_asm_argument print_preg oc modifier = function
+  | BA r -> print_preg oc r
+  | BA_splitlong(BA hi, BA lo) ->
+      begin match modifier with
+      | "R" -> print_preg oc hi
+      | "Q" -> print_preg oc lo
+      |  _  -> fprintf oc "%a:%a" print_preg hi print_preg lo
+                  (* Probably not what was intended *)
+      end
+  | _ -> failwith "bad asm argument"
+
+let builtin_arg_of_res = function
+  | BR r -> BA r
+  | BR_splitlong(BR hi, BR lo) -> BA_splitlong(BA hi, BA lo)
+  | _ -> assert false
+
+let re_asm_param_1 = Str.regexp "%%\\|%[QR]?[0-9]+"
+let re_asm_param_2 = Str.regexp "%\\([QR]?\\)\\([0-9]+\\)"
 
 let print_inline_asm print_preg oc txt sg args res =
   let operands =
-    if sg.sig_res = None then args else res @ args in
+    if sg.sig_res = None then args else builtin_arg_of_res res :: args in
   let print_fragment = function
   | Str.Text s ->
       output_string oc s
   | Str.Delim "%%" ->
       output_char oc '%'
   | Str.Delim s ->
-      let n = int_of_string (String.sub s 1 (String.length s - 1)) in
+      assert (Str.string_match re_asm_param_2 s 0);
+      let modifier = Str.matched_group 1 s
+      and number = int_of_string (Str.matched_group 2 s) in
       try
-        print_preg oc (List.nth operands n)
+        print_asm_argument print_preg oc modifier (List.nth operands number)
       with Failure _ ->
         fprintf oc "<bad parameter %s>" s in
-  List.iter print_fragment (Str.full_split re_asm_param txt);
+  List.iter print_fragment (Str.full_split re_asm_param_1 txt);
   fprintf oc "\n"
 
 
 (** Print CompCert version and command-line as asm comment *)
 
 let print_version_and_options oc comment =
-  fprintf oc "%s File generated by CompCert %s\n" comment Version.version;
+  let version_string =
+    if Version.buildnr <> "" && Version.tag <> "" then
+      sprintf "%s, Build: %s, Tag: %s" Version.version Version.buildnr Version.tag
+    else
+      Version.version in
+  fprintf oc "%s File generated by CompCert %s\n" comment version_string;
   fprintf oc "%s Command line:" comment;
   for i = 1 to Array.length Sys.argv - 1 do
     fprintf oc " %s" Sys.argv.(i)

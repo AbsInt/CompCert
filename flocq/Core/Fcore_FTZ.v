@@ -23,6 +23,7 @@ Require Import Fcore_defs.
 Require Import Fcore_rnd.
 Require Import Fcore_generic_fmt.
 Require Import Fcore_float_prop.
+Require Import Fcore_ulp.
 Require Import Fcore_FLX.
 
 Section RND_FTZ.
@@ -183,7 +184,7 @@ Theorem FTZ_format_FLXN :
   FLXN_format beta prec x -> FTZ_format x.
 Proof.
 intros x Hx Fx.
-eapply FTZ_format_generic.
+apply FTZ_format_generic.
 apply generic_format_FLXN in Fx.
 revert Hx Fx.
 apply generic_inclusion_ge.
@@ -193,6 +194,21 @@ rewrite Zlt_bool_false.
 apply Zle_refl.
 omega.
 Qed.
+
+Theorem ulp_FTZ_0: ulp beta FTZ_exp 0 = bpow (emin+prec-1).
+Proof with auto with typeclass_instances.
+unfold ulp; rewrite Req_bool_true; trivial.
+case (negligible_exp_spec FTZ_exp).
+intros T; specialize (T (emin-1)%Z); contradict T.
+apply Zle_not_lt; unfold FTZ_exp; unfold Prec_gt_0 in prec_gt_0_.
+rewrite Zlt_bool_true; omega.
+assert (V:(FTZ_exp (emin+prec-1) = emin+prec-1)%Z).
+unfold FTZ_exp; rewrite Zlt_bool_true; omega.
+intros n H2; rewrite <-V.
+apply f_equal, fexp_negligible_exp_eq...
+omega.
+Qed.
+
 
 Section FTZ_round.
 

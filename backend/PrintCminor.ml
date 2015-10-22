@@ -139,7 +139,7 @@ let rec expr p (prec, e) =
     if assoc = LtoR
     then (prec', prec' + 1)
     else (prec' + 1, prec') in
-  if prec' < prec 
+  if prec' < prec
   then fprintf p "@[<hov 2>("
   else fprintf p "@[<hov 2>";
   begin match e with
@@ -238,14 +238,14 @@ let rec print_stmt p s =
                 print_expr_list (true, el)
 	        print_sig (ef_sig ef)
   | Sbuiltin(Some id, ef, el) ->
-      fprintf p "@[<hv 2>%s =@ builtin %s@,(@[<hov 0>%a@]) : @[<hov 0>%a@];@]" 
+      fprintf p "@[<hv 2>%s =@ builtin %s@,(@[<hov 0>%a@]) : @[<hov 0>%a@];@]"
                 (ident_name id)
                 (name_of_external ef)
                 print_expr_list (true, el)
 	        print_sig (ef_sig ef)
   | Sseq(s1,s2) when just_skips s1 && just_skips s2 ->
       ()
-  | Sseq(s1, s2) when just_skips s1 -> 
+  | Sseq(s1, s2) when just_skips s1 ->
       print_stmt p s2
   | Sseq(s1, s2) when just_skips s2 ->
       print_stmt p s1
@@ -277,7 +277,7 @@ let rec print_stmt p s =
         (if long then "l" else "") print_expr e;
       List.iter
         (fun (n, x) ->
-           fprintf p "@ case %s%s: exit %d;" 
+           fprintf p "@ case %s%s: exit %d;"
                      (Z.to_string n)
                      (if long then "LL" else "")
                      (Nat.to_int x))
@@ -334,12 +334,12 @@ let print_init_data p = function
 let rec print_init_data_list p = function
   | [] -> ()
   | [item] -> print_init_data p item
-  | item::rest -> 
+  | item::rest ->
       (print_init_data p item;
        fprintf p ",";
        print_init_data_list p rest)
 
-let print_globvar p gv = 
+let print_globvar p gv =
   if (gv.gvar_readonly) then
     fprintf p "readonly ";
   if (gv.gvar_volatile) then

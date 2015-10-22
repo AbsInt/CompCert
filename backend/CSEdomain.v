@@ -78,7 +78,7 @@ Definition valnums_rhs (r: rhs): list valnum :=
   end.
 
 Definition wf_rhs (next: valnum) (r: rhs) : Prop :=
-forall v, In v (valnums_rhs r) -> Plt v next.  
+forall v, In v (valnums_rhs r) -> Plt v next.
 
 Definition wf_equation (next: valnum) (e: equation) : Prop :=
   match e with Eq l str r => Plt l next /\ wf_rhs next r end.

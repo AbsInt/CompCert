@@ -13,14 +13,14 @@ struct s {
   long long ll;
 };
 
-struct s x;                     /* normal absolute addressing */
+struct s x = {0, };                     /* normal absolute addressing */
 
 #pragma use_section SDATA y
-struct s y;                     /* small data area */
+struct s y = {0, };                     /* small data area */
 
 #pragma section MYDATA ".mydata" ".mydata" far-data RW
 #pragma use_section MYDATA z
-struct s z;                     /* far data area, relative addressing */
+struct s z = {0, };                    /* far data area, relative addressing */
 
 #define TEST(msg,ty,x,v1,v2,v3)                                    \
   x = v1;                                                          \

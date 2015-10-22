@@ -42,10 +42,6 @@ Extract Inlined Constant Coqlib.proj_sumbool => "(fun x -> x)".
 (* Wfsimpl *)
 Extraction Inline Wfsimpl.Fix Wfsimpl.Fixm.
 
-(* AST *)
-Extract Constant AST.ident_of_string =>
-  "fun s -> Camlcoq.intern_string (Camlcoq.camlstring_of_coqstring s)".
-
 (* Memory - work around an extraction bug. *)
 Extraction NoInline Memory.Mem.valid_pointer.
 
@@ -100,6 +96,8 @@ Extract Constant Compopts.optim_redundancy =>
   "fun _ -> !Clflags.option_fredundancy".
 Extract Constant Compopts.thumb =>
   "fun _ -> !Clflags.option_mthumb".
+Extract Constant Compopts.debug =>
+  "fun _ -> !Clflags.option_g".
 
 (* Compiler *)
 Extract Constant Compiler.print_Clight => "PrintClight.print_if".
@@ -113,7 +111,7 @@ Extract Constant Compiler.time  => "Timing.time_coq".
 (*Extraction Inline Compiler.apply_total Compiler.apply_partial.*)
 
 (* Cabs *)
-Extract Constant Cabs.cabsloc => 
+Extract Constant Cabs.cabsloc =>
 "{ lineno : int;
    filename: string;
    byteno: int;
@@ -168,4 +166,5 @@ Separate Extraction
    AST.signature_main
    Floats.Float32.from_parsed Floats.Float.from_parsed
    Globalenvs.Senv.invert_symbol
+   AST.transform_partial_ident_program
    Parser.translation_unit_file.

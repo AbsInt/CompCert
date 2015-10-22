@@ -16,8 +16,8 @@
 (** This file defines a number of data types and operations used in
   the abstract syntax trees of many of the intermediate languages. *)
 
+Require Import String.
 Require Import Coqlib.
-Require String.
 Require Import Errors.
 Require Import Integers.
 Require Import Floats.
@@ -32,8 +32,6 @@ Set Implicit Arguments.
 Definition ident := positive.
 
 Definition ident_eq := peq.
-
-Parameter ident_of_string : String.string -> ident.
 
 (** The intermediate languages are weakly typed, using the following types: *)
 
@@ -123,7 +121,7 @@ Definition proj_sig_res (s: signature) : typ :=
 Definition signature_eq: forall (s1 s2: signature), {s1=s2} + {s1<>s2}.
 Proof.
   generalize opt_typ_eq, list_typ_eq; intros; decide equality.
-  generalize bool_dec; intros. decide equality. 
+  generalize bool_dec; intros. decide equality.
 Defined.
 Global Opaque signature_eq.
 
@@ -257,29 +255,70 @@ Lemma transform_program_function:
   exists f, In (i, Gfun f) p.(prog_defs) /\ transf f = tf.
 Proof.
   simpl. unfold transform_program. intros.
-  exploit list_in_map_inv; eauto. 
-  intros [[i' gd] [EQ IN]]. simpl in EQ. destruct gd; inv EQ. 
+  exploit list_in_map_inv; eauto.
+  intros [[i' gd] [EQ IN]]. simpl in EQ. destruct gd; inv EQ.
   exists f; auto.
 Qed.
 
 End TRANSF_PROGRAM.
 
-(** The following is a more general presentation of [transform_program] where 
+(** General iterator over program that applies a given code transfomration
+    function to all function descriptions with their identifers and leaves
+    teh other parts of the program unchanged. *)
+
+Section TRANSF_PROGRAM_IDENT.
+
+Variable A B V: Type.
+Variable transf: ident -> A -> B.
+
+Definition transform_program_globdef_ident (idg: ident * globdef A V) : ident * globdef B V :=
+  match idg with
+  | (id, Gfun f) => (id, Gfun (transf id f))
+  | (id, Gvar v) => (id, Gvar v)
+  end.
+
+Definition transform_program_ident (p: program A V): program B V :=
+  mkprogram
+    (List.map transform_program_globdef_ident p.(prog_defs))
+    p.(prog_public)
+    p.(prog_main).
+
+Lemma tranforma_program_function_ident:
+  forall p i tf,
+  In (i, Gfun tf) (transform_program_ident p).(prog_defs) ->
+  exists f, In (i, Gfun f) p.(prog_defs) /\ transf i f = tf.
+Proof.
+  simpl. unfold transform_program_ident. intros.
+  exploit list_in_map_inv; eauto.
+  intros [[i' gd] [EQ IN]]. simpl in EQ. destruct gd; inv EQ.
+  exists f; auto.
+Qed.
+
+End TRANSF_PROGRAM_IDENT.
+
+(** The following is a more general presentation of [transform_program] where
   global variable information can be transformed, in addition to function
   definitions.  Moreover, the transformation functions can fail and
-  return an error message. *)
+  return an error message. Also the transformation functions are defined
+  for the case the identifier of the function is passed as additional
+  argument *)
 
-Open Local Scope error_monad_scope.
-Open Local Scope string_scope.
+Local Open Scope error_monad_scope.
 
 Section TRANSF_PROGRAM_GEN.
 
 Variables A B V W: Type.
 Variable transf_fun: A -> res B.
+Variable transf_fun_ident: ident -> A -> res B.
 Variable transf_var: V -> res W.
+Variable transf_var_ident: ident -> V -> res W.
 
 Definition transf_globvar (g: globvar V) : res (globvar W) :=
   do info' <- transf_var g.(gvar_info);
+  OK (mkglobvar info' g.(gvar_init) g.(gvar_readonly) g.(gvar_volatile)).
+
+Definition transf_globvar_ident (i: ident) (g: globvar V) : res (globvar W) :=
+  do info' <- transf_var_ident i g.(gvar_info);
   OK (mkglobvar info' g.(gvar_init) g.(gvar_readonly) g.(gvar_volatile)).
 
 Fixpoint transf_globdefs (l: list (ident * globdef A V)) : res (list (ident * globdef B W)) :=
@@ -299,8 +338,29 @@ Fixpoint transf_globdefs (l: list (ident * globdef A V)) : res (list (ident * gl
       end
   end.
 
+Fixpoint transf_globdefs_ident (l: list (ident * globdef A V)) : res (list (ident * globdef B W)) :=
+  match l with
+  | nil => OK nil
+  | (id, Gfun f) :: l' =>
+    match transf_fun_ident id f with
+      | Error msg => Error (MSG "In function " :: CTX id :: MSG ": " :: msg)
+      | OK tf =>
+        do tl' <- transf_globdefs_ident l'; OK ((id, Gfun tf) :: tl')
+    end
+  | (id, Gvar v) :: l' =>
+    match transf_globvar_ident id v with
+      | Error msg => Error (MSG "In variable " :: CTX id :: MSG ": " :: msg)
+      | OK tv =>
+        do tl' <- transf_globdefs_ident l'; OK ((id, Gvar tv) :: tl')
+    end
+  end.
+
 Definition transform_partial_program2 (p: program A V) : res (program B W) :=
   do gl' <- transf_globdefs p.(prog_defs);
+  OK (mkprogram gl' p.(prog_public) p.(prog_main)).
+
+Definition transform_partial_ident_program2 (p: program A V) : res (program B W) :=
+  do gl' <- transf_globdefs_ident p.(prog_defs);
   OK (mkprogram gl' p.(prog_public) p.(prog_main)).
 
 Lemma transform_partial_program2_function:
@@ -309,14 +369,32 @@ Lemma transform_partial_program2_function:
   In (i, Gfun tf) tp.(prog_defs) ->
   exists f, In (i, Gfun f) p.(prog_defs) /\ transf_fun f = OK tf.
 Proof.
-  intros. monadInv H. simpl in H0. 
+  intros. monadInv H. simpl in H0.
   revert x EQ H0. induction (prog_defs p); simpl; intros.
   inv EQ. contradiction.
   destruct a as [id [f|v]].
   destruct (transf_fun f) as [tf1|msg] eqn:?; monadInv EQ.
-  simpl in H0; destruct H0. inv H. exists f; auto. 
+  simpl in H0; destruct H0. inv H. exists f; auto.
   exploit IHl; eauto. intros [f' [P Q]]; exists f'; auto.
   destruct (transf_globvar v) as [tv1|msg] eqn:?; monadInv EQ.
+  simpl in H0; destruct H0. inv H.
+  exploit IHl; eauto. intros [f' [P Q]]; exists f'; auto.
+Qed.
+
+Lemma transform_partial_ident_program2_function:
+  forall p tp i tf,
+  transform_partial_ident_program2 p = OK tp ->
+  In (i, Gfun tf) tp.(prog_defs) ->
+  exists f, In (i, Gfun f) p.(prog_defs) /\ transf_fun_ident i f = OK tf.
+Proof.
+  intros. monadInv H. simpl in H0.
+  revert x EQ H0. induction (prog_defs p); simpl; intros.
+  inv EQ. contradiction.
+  destruct a as [id [f|v]].
+  destruct (transf_fun_ident id f) as [tf1|msg] eqn:?; monadInv EQ.
+  simpl in H0; destruct H0. inv H. exists f; auto.
+  exploit IHl; eauto. intros [f' [P Q]]; exists f'; auto.
+  destruct (transf_globvar_ident id v) as [tv1|msg] eqn:?; monadInv EQ.
   simpl in H0; destruct H0. inv H.
   exploit IHl; eauto. intros [f' [P Q]]; exists f'; auto.
 Qed.
@@ -329,7 +407,7 @@ Lemma transform_partial_program2_variable:
      In (i, Gvar(mkglobvar v tv.(gvar_init) tv.(gvar_readonly) tv.(gvar_volatile))) p.(prog_defs)
   /\ transf_var v = OK tv.(gvar_info).
 Proof.
-  intros. monadInv H. simpl in H0. 
+  intros. monadInv H. simpl in H0.
   revert x EQ H0. induction (prog_defs p); simpl; intros.
   inv EQ. contradiction.
   destruct a as [id [f|v]].
@@ -337,6 +415,28 @@ Proof.
   simpl in H0; destruct H0. inv H.
   exploit IHl; eauto. intros [v' [P Q]]; exists v'; auto.
   destruct (transf_globvar v) as [tv1|msg] eqn:?; monadInv EQ.
+  simpl in H0; destruct H0. inv H.
+  monadInv Heqr. simpl. exists (gvar_info v). split. left. destruct v; auto. auto.
+  exploit IHl; eauto. intros [v' [P Q]]; exists v'; auto.
+Qed.
+
+
+Lemma transform_partial_ident_program2_variable:
+  forall p tp i tv,
+  transform_partial_ident_program2 p = OK tp ->
+  In (i, Gvar tv) tp.(prog_defs) ->
+  exists v,
+     In (i, Gvar(mkglobvar v tv.(gvar_init) tv.(gvar_readonly) tv.(gvar_volatile))) p.(prog_defs)
+  /\ transf_var_ident i v = OK tv.(gvar_info).
+Proof.
+  intros. monadInv H. simpl in H0.
+  revert x EQ H0. induction (prog_defs p); simpl; intros.
+  inv EQ. contradiction.
+  destruct a as [id [f|v]].
+  destruct (transf_fun_ident id f) as [tf1|msg] eqn:?; monadInv EQ.
+  simpl in H0; destruct H0. inv H.
+  exploit IHl; eauto. intros [v' [P Q]]; exists v'; auto.
+  destruct (transf_globvar_ident id v) as [tv1|msg] eqn:?; monadInv EQ.
   simpl in H0; destruct H0. inv H.
   monadInv Heqr. simpl. exists (gvar_info v). split. left. destruct v; auto. auto.
   exploit IHl; eauto. intros [v' [P Q]]; exists v'; auto.
@@ -351,13 +451,32 @@ Lemma transform_partial_program2_succeeds:
   | Gvar gv => exists tv, transf_var gv.(gvar_info) = OK tv
   end.
 Proof.
-  intros. monadInv H. 
+  intros. monadInv H.
   revert x EQ H0. induction (prog_defs p); simpl; intros.
   contradiction.
   destruct a as [id1 g1]. destruct g1.
-  destruct (transf_fun f) eqn:TF; try discriminate. monadInv EQ. 
+  destruct (transf_fun f) eqn:TF; try discriminate. monadInv EQ.
   destruct H0. inv H. econstructor; eauto. eapply IHl; eauto.
   destruct (transf_globvar v) eqn:TV; try discriminate. monadInv EQ.
+  destruct H0. inv H. monadInv TV. econstructor; eauto. eapply IHl; eauto.
+Qed.
+
+Lemma transform_partial_ident_program2_succeeds:
+  forall p tp i g,
+  transform_partial_ident_program2 p = OK tp ->
+  In (i, g) p.(prog_defs) ->
+  match g with
+  | Gfun fd => exists tfd, transf_fun_ident i fd = OK tfd
+  | Gvar gv => exists tv, transf_var_ident i gv.(gvar_info) = OK tv
+  end.
+Proof.
+  intros. monadInv H.
+  revert x EQ H0. induction (prog_defs p); simpl; intros.
+  contradiction.
+  destruct a as [id1 g1]. destruct g1.
+  destruct (transf_fun_ident id1 f) eqn:TF; try discriminate. monadInv EQ.
+  destruct H0. inv H. econstructor; eauto. eapply IHl; eauto.
+  destruct (transf_globvar_ident id1 v) eqn:TV; try discriminate. monadInv EQ.
   destruct H0. inv H. monadInv TV. econstructor; eauto. eapply IHl; eauto.
 Qed.
 
@@ -369,9 +488,25 @@ Proof.
   intros. monadInv H. reflexivity.
 Qed.
 
+Lemma transform_partial_ident_program2_main:
+  forall p tp,
+  transform_partial_ident_program2 p = OK tp ->
+  tp.(prog_main) = p.(prog_main).
+Proof.
+  intros. monadInv H. reflexivity.
+Qed.
+
 Lemma transform_partial_program2_public:
   forall p tp,
   transform_partial_program2 p = OK tp ->
+  tp.(prog_public) = p.(prog_public).
+Proof.
+  intros. monadInv H. reflexivity.
+Qed.
+
+Lemma transform_partial_ident_program2_public:
+  forall p tp,
+  transform_partial_ident_program2 p = OK tp ->
   tp.(prog_public) = p.(prog_public).
 Proof.
   intros. monadInv H. reflexivity.
@@ -397,6 +532,18 @@ Proof.
   intros. monadInv H. reflexivity.
 Qed.
 
+Definition transform_partial_augment_ident_program (p: program A V) : res (program B W) :=
+  do gl' <- transf_globdefs_ident p.(prog_defs);
+  OK(mkprogram (gl' ++ new_globs) p.(prog_public) new_main).
+
+Lemma transform_partial_augment_ident_program_main:
+  forall p tp,
+  transform_partial_augment_ident_program p = OK tp ->
+  tp.(prog_main) = new_main.
+Proof.
+  intros. monadInv H. reflexivity.
+Qed.
+
 End AUGMENT.
 
 Remark transform_partial_program2_augment:
@@ -409,6 +556,16 @@ Proof.
   simpl. f_equal. f_equal. rewrite <- app_nil_end. auto.
 Qed.
 
+Remark transform_partial_ident_program2_augment:
+  forall p,
+  transform_partial_ident_program2 p =
+  transform_partial_augment_ident_program nil p.(prog_main) p.
+Proof.
+  unfold transform_partial_ident_program2, transform_partial_augment_ident_program; intros.
+  destruct (transf_globdefs_ident (prog_defs p)); auto.
+  simpl. f_equal. f_equal. rewrite <- app_nil_end. auto.
+Qed.
+
 End TRANSF_PROGRAM_GEN.
 
 (** The following is a special case of [transform_partial_program2],
@@ -418,9 +575,13 @@ Section TRANSF_PARTIAL_PROGRAM.
 
 Variable A B V: Type.
 Variable transf_partial: A -> res B.
+Variable transf_partial_ident: ident -> A -> res B.
 
 Definition transform_partial_program (p: program A V) : res (program B V) :=
   transform_partial_program2 transf_partial (fun v => OK v) p.
+
+Definition transform_partial_ident_program (p: program A V) : res (program B V) :=
+  transform_partial_ident_program2 transf_partial_ident (fun _ v => OK v) p.
 
 Lemma transform_partial_program_main:
   forall p tp,
@@ -428,6 +589,14 @@ Lemma transform_partial_program_main:
   tp.(prog_main) = p.(prog_main).
 Proof.
   apply transform_partial_program2_main.
+Qed.
+
+Lemma transform_partial_ident_program_main:
+  forall p tp,
+  transform_partial_ident_program p = OK tp ->
+  tp.(prog_main) = p.(prog_main).
+Proof.
+  apply transform_partial_ident_program2_main.
 Qed.
 
 Lemma transform_partial_program_public:
@@ -438,13 +607,30 @@ Proof.
   apply transform_partial_program2_public.
 Qed.
 
+Lemma transform_partial_ident_program_public:
+  forall p tp,
+  transform_partial_ident_program p = OK tp ->
+  tp.(prog_public) = p.(prog_public).
+Proof.
+  apply transform_partial_ident_program2_public.
+Qed.
+
 Lemma transform_partial_program_function:
   forall p tp i tf,
   transform_partial_program p = OK tp ->
   In (i, Gfun tf) tp.(prog_defs) ->
   exists f, In (i, Gfun f) p.(prog_defs) /\ transf_partial f = OK tf.
 Proof.
-  apply transform_partial_program2_function. 
+  apply transform_partial_program2_function.
+Qed.
+
+Lemma transform_partial_ident_program_function:
+  forall p tp i tf,
+  transform_partial_ident_program p = OK tp ->
+  In (i, Gfun tf) tp.(prog_defs) ->
+  exists f, In (i, Gfun f) p.(prog_defs) /\ transf_partial_ident i f = OK tf.
+Proof.
+  apply transform_partial_ident_program2_function.
 Qed.
 
 Lemma transform_partial_program_succeeds:
@@ -453,8 +639,18 @@ Lemma transform_partial_program_succeeds:
   In (i, Gfun fd) p.(prog_defs) ->
   exists tfd, transf_partial fd = OK tfd.
 Proof.
-  unfold transform_partial_program; intros. 
-  exploit transform_partial_program2_succeeds; eauto. 
+  unfold transform_partial_program; intros.
+  exploit transform_partial_program2_succeeds; eauto.
+Qed.
+
+Lemma transform_partial_ident_program_succeeds:
+  forall p tp i fd,
+  transform_partial_ident_program p = OK tp ->
+  In (i, Gfun fd) p.(prog_defs) ->
+  exists tfd, transf_partial_ident i fd = OK tfd.
+Proof.
+  unfold transform_partial_ident_program; intros.
+  exploit transform_partial_ident_program2_succeeds; eauto.
 Qed.
 
 End TRANSF_PARTIAL_PROGRAM.
@@ -467,7 +663,7 @@ Proof.
   unfold transform_partial_program, transform_partial_program2, transform_program; intros.
   replace (transf_globdefs (fun f => OK (transf f)) (fun v => OK v) p.(prog_defs))
      with (OK (map (transform_program_globdef transf) p.(prog_defs))).
-  auto. 
+  auto.
   induction (prog_defs p); simpl.
   auto.
   destruct a as [id [f|v]]; rewrite <- IHl.
@@ -475,11 +671,27 @@ Proof.
     destruct v; auto.
 Qed.
 
-(** The following is a relational presentation of 
+Lemma transform_program_partial_ident_program:
+  forall (A B V: Type) (transf: ident -> A -> B) (p: program A V),
+  transform_partial_ident_program (fun id f => OK(transf id f)) p = OK(transform_program_ident transf p).
+Proof.
+  intros.
+  unfold transform_partial_ident_program, transform_partial_ident_program2, transform_program; intros.
+  replace (transf_globdefs_ident (fun id f => OK (transf id f)) (fun _  v => OK v) p.(prog_defs))
+     with (OK (map (transform_program_globdef_ident transf) p.(prog_defs))).
+  auto.
+  induction (prog_defs p); simpl.
+  auto.
+  destruct a as [id [f|v]]; rewrite <- IHl.
+    auto.
+    destruct v; auto.
+Qed.
+
+(** The following is a relational presentation of
   [transform_partial_augment_preogram].  Given relations between function
   definitions and between variable information, it defines a relation
   between programs stating that the two programs have appropriately related
-  shapes (global names are preserved and possibly augmented, etc) 
+  shapes (global names are preserved and possibly augmented, etc)
   and that identically-named function definitions
   and variable information are related. *)
 
@@ -511,24 +723,24 @@ Lemma transform_partial_augment_program_match:
   forall (A B V W: Type)
          (transf_fun: A -> res B)
          (transf_var: V -> res W)
-         (p: program A V) 
+         (p: program A V)
          (new_globs : list (ident * globdef B W))
          (new_main : ident)
          (tp: program B W),
   transform_partial_augment_program transf_fun transf_var new_globs new_main p = OK tp ->
-  match_program 
+  match_program
     (fun fd tfd => transf_fun fd = OK tfd)
     (fun info tinfo => transf_var info = OK tinfo)
     new_globs new_main
     p tp.
 Proof.
-  unfold transform_partial_augment_program; intros. monadInv H. 
+  unfold transform_partial_augment_program; intros. monadInv H.
   red; simpl. split; auto. exists x; split; auto.
   revert x EQ. generalize (prog_defs p). induction l; simpl; intros.
   monadInv EQ. constructor.
-  destruct a as [id [f|v]]. 
+  destruct a as [id [f|v]].
   (* function *)
-  destruct (transf_fun f) as [tf|?] eqn:?; monadInv EQ. 
+  destruct (transf_fun f) as [tf|?] eqn:?; monadInv EQ.
   constructor; auto. constructor; auto.
   (* variable *)
   unfold transf_globvar in EQ.
@@ -545,10 +757,10 @@ Qed.
   and associated operations. *)
 
 Inductive external_function : Type :=
-  | EF_external (name: ident) (sg: signature)
+  | EF_external (name: string) (sg: signature)
      (** A system call or library function.  Produces an event
          in the trace. *)
-  | EF_builtin (name: ident) (sg: signature)
+  | EF_builtin (name: string) (sg: signature)
      (** A compiler built-in function.  Behaves like an external, but
          can be inlined by the compiler. *)
   | EF_vload (chunk: memory_chunk)
@@ -560,12 +772,6 @@ Inductive external_function : Type :=
      (** A volatile store operation.   If the adress given as first argument
          points within a volatile global variable, generate an event.
          Otherwise, produce no event and behave like a regular memory store. *)
-  | EF_vload_global (chunk: memory_chunk) (id: ident) (ofs: int)
-     (** A volatile load operation from a global variable. 
-         Specialized version of [EF_vload]. *)
-  | EF_vstore_global (chunk: memory_chunk) (id: ident) (ofs: int)
-     (** A volatile store operation in a global variable. 
-         Specialized version of [EF_vstore]. *)
   | EF_malloc
      (** Dynamic memory allocation.  Takes the requested size in bytes
          as argument; returns a pointer to a fresh block of the given size.
@@ -577,20 +783,24 @@ Inductive external_function : Type :=
          Produces no observable event. *)
   | EF_memcpy (sz: Z) (al: Z)
      (** Block copy, of [sz] bytes, between addresses that are [al]-aligned. *)
-  | EF_annot (text: ident) (targs: list typ)
+  | EF_annot (text: string) (targs: list typ)
      (** A programmer-supplied annotation.  Takes zero, one or several arguments,
          produces an event carrying the text and the values of these arguments,
          and returns no value. *)
-  | EF_annot_val (text: ident) (targ: typ)
+  | EF_annot_val (text: string) (targ: typ)
      (** Another form of annotation that takes one argument, produces
          an event carrying the text and the value of this argument,
          and returns the value of the argument. *)
-  | EF_inline_asm (text: ident) (sg: signature) (clobbers: list String.string).
+  | EF_inline_asm (text: string) (sg: signature) (clobbers: list string)
      (** Inline [asm] statements.  Semantically, treated like an
          annotation with no parameters ([EF_annot text nil]).  To be
          used with caution, as it can invalidate the semantic
          preservation theorem.  Generated only if [-finline-asm] is
          given. *)
+  | EF_debug (kind: positive) (text: ident) (targs: list typ).
+     (** Transport debugging information from the front-end to the generated
+         assembly.  Takes zero, one or several arguments like [EF_annot].
+         Unlike [EF_annot], produces no observable event. *)
 
 (** The type signature of an external function. *)
 
@@ -600,14 +810,13 @@ Definition ef_sig (ef: external_function): signature :=
   | EF_builtin name sg => sg
   | EF_vload chunk => mksignature (Tint :: nil) (Some (type_of_chunk chunk)) cc_default
   | EF_vstore chunk => mksignature (Tint :: type_of_chunk chunk :: nil) None cc_default
-  | EF_vload_global chunk _ _ => mksignature nil (Some (type_of_chunk chunk)) cc_default
-  | EF_vstore_global chunk _ _ => mksignature (type_of_chunk chunk :: nil) None cc_default
   | EF_malloc => mksignature (Tint :: nil) (Some Tint) cc_default
   | EF_free => mksignature (Tint :: nil) None cc_default
   | EF_memcpy sz al => mksignature (Tint :: Tint :: nil) None cc_default
   | EF_annot text targs => mksignature targs None cc_default
   | EF_annot_val text targ => mksignature (targ :: nil) (Some targ) cc_default
   | EF_inline_asm text sg clob => sg
+  | EF_debug kind text targs => mksignature targs None cc_default
   end.
 
 (** Whether an external function should be inlined by the compiler. *)
@@ -618,14 +827,13 @@ Definition ef_inline (ef: external_function) : bool :=
   | EF_builtin name sg => true
   | EF_vload chunk => true
   | EF_vstore chunk => true
-  | EF_vload_global chunk id ofs => true
-  | EF_vstore_global chunk id ofs => true
   | EF_malloc => false
   | EF_free => false
   | EF_memcpy sz al => true
   | EF_annot text targs => true
   | EF_annot_val text targ => true
   | EF_inline_asm text sg clob => true
+  | EF_debug kind text targs => true
   end.
 
 (** Whether an external function must reload its arguments. *)
@@ -633,6 +841,7 @@ Definition ef_inline (ef: external_function) : bool :=
 Definition ef_reloads (ef: external_function) : bool :=
   match ef with
   | EF_annot text targs => false
+  | EF_debug kind text targs => false
   | _ => true
   end.
 
@@ -640,21 +849,10 @@ Definition ef_reloads (ef: external_function) : bool :=
 
 Definition external_function_eq: forall (ef1 ef2: external_function), {ef1=ef2} + {ef1<>ef2}.
 Proof.
-  generalize ident_eq signature_eq chunk_eq typ_eq zeq Int.eq_dec; intros.
+  generalize ident_eq string_dec signature_eq chunk_eq typ_eq list_eq_dec zeq Int.eq_dec; intros.
   decide equality.
-  apply list_eq_dec. auto.
-  apply list_eq_dec. apply String.string_dec. 
 Defined.
 Global Opaque external_function_eq.
-
-(** Global variables referenced by an external function *)
-
-Definition globals_external (ef: external_function) : list ident :=
-  match ef with
-  | EF_vload_global _ id _ => id :: nil
-  | EF_vstore_global _ id _ => id :: nil
-  | _ => nil
-  end.
 
 (** Function definitions are the union of internal and external functions. *)
 
@@ -690,55 +888,95 @@ Definition transf_partial_fundef (fd: fundef A): res (fundef B) :=
 
 End TRANSF_PARTIAL_FUNDEF.
 
-(** * Arguments to annotations *)
+(** * Arguments and results to builtin functions *)
 
-Set Contextual Implicit. 
+Set Contextual Implicit.
 
-Inductive annot_arg (A: Type) : Type :=
-  | AA_base (x: A)
-  | AA_int (n: int)
-  | AA_long (n: int64)
-  | AA_float (f: float)
-  | AA_single (f: float32)
-  | AA_loadstack (chunk: memory_chunk) (ofs: int)
-  | AA_addrstack (ofs: int)
-  | AA_loadglobal (chunk: memory_chunk) (id: ident) (ofs: int)
-  | AA_addrglobal (id: ident) (ofs: int)
-  | AA_longofwords (hi lo: annot_arg A).
+Inductive builtin_arg (A: Type) : Type :=
+  | BA (x: A)
+  | BA_int (n: int)
+  | BA_long (n: int64)
+  | BA_float (f: float)
+  | BA_single (f: float32)
+  | BA_loadstack (chunk: memory_chunk) (ofs: int)
+  | BA_addrstack (ofs: int)
+  | BA_loadglobal (chunk: memory_chunk) (id: ident) (ofs: int)
+  | BA_addrglobal (id: ident) (ofs: int)
+  | BA_splitlong (hi lo: builtin_arg A).
 
-Fixpoint globals_of_annot_arg (A: Type) (a: annot_arg A) : list ident :=
+Inductive builtin_res (A: Type) : Type :=
+  | BR (x: A)
+  | BR_none
+  | BR_splitlong (hi lo: builtin_res A).
+
+Fixpoint globals_of_builtin_arg (A: Type) (a: builtin_arg A) : list ident :=
   match a with
-  | AA_loadglobal chunk id ofs => id :: nil
-  | AA_addrglobal id ofs => id :: nil
-  | AA_longofwords hi lo => globals_of_annot_arg hi ++ globals_of_annot_arg lo
+  | BA_loadglobal chunk id ofs => id :: nil
+  | BA_addrglobal id ofs => id :: nil
+  | BA_splitlong hi lo => globals_of_builtin_arg hi ++ globals_of_builtin_arg lo
   | _ => nil
   end.
 
-Definition globals_of_annot_args (A: Type) (al: list (annot_arg A)) : list ident :=
-  List.fold_right (fun a l => globals_of_annot_arg a ++ l) nil al.
+Definition globals_of_builtin_args (A: Type) (al: list (builtin_arg A)) : list ident :=
+  List.fold_right (fun a l => globals_of_builtin_arg a ++ l) nil al.
 
-Fixpoint params_of_annot_arg (A: Type) (a: annot_arg A) : list A :=
+Fixpoint params_of_builtin_arg (A: Type) (a: builtin_arg A) : list A :=
   match a with
-  | AA_base x => x :: nil
-  | AA_longofwords hi lo => params_of_annot_arg hi ++ params_of_annot_arg lo
+  | BA x => x :: nil
+  | BA_splitlong hi lo => params_of_builtin_arg hi ++ params_of_builtin_arg lo
   | _ => nil
   end.
 
-Definition params_of_annot_args (A: Type) (al: list (annot_arg A)) : list A :=
-  List.fold_right (fun a l => params_of_annot_arg a ++ l) nil al.
+Definition params_of_builtin_args (A: Type) (al: list (builtin_arg A)) : list A :=
+  List.fold_right (fun a l => params_of_builtin_arg a ++ l) nil al.
 
-Fixpoint map_annot_arg (A B: Type) (f: A -> B) (a: annot_arg A) : annot_arg B :=
+Fixpoint params_of_builtin_res (A: Type) (a: builtin_res A) : list A :=
   match a with
-  | AA_base x => AA_base (f x)
-  | AA_int n => AA_int n
-  | AA_long n => AA_long n
-  | AA_float n => AA_float n
-  | AA_single n => AA_single n
-  | AA_loadstack chunk ofs => AA_loadstack chunk ofs
-  | AA_addrstack ofs => AA_addrstack ofs
-  | AA_loadglobal chunk id ofs => AA_loadglobal chunk id ofs
-  | AA_addrglobal id ofs => AA_addrglobal id ofs
-  | AA_longofwords hi lo => 
-      AA_longofwords (map_annot_arg f hi) (map_annot_arg f lo)
+  | BR x => x :: nil
+  | BR_none => nil
+  | BR_splitlong hi lo => params_of_builtin_res hi ++ params_of_builtin_res lo
   end.
 
+Fixpoint map_builtin_arg (A B: Type) (f: A -> B) (a: builtin_arg A) : builtin_arg B :=
+  match a with
+  | BA x => BA (f x)
+  | BA_int n => BA_int n
+  | BA_long n => BA_long n
+  | BA_float n => BA_float n
+  | BA_single n => BA_single n
+  | BA_loadstack chunk ofs => BA_loadstack chunk ofs
+  | BA_addrstack ofs => BA_addrstack ofs
+  | BA_loadglobal chunk id ofs => BA_loadglobal chunk id ofs
+  | BA_addrglobal id ofs => BA_addrglobal id ofs
+  | BA_splitlong hi lo =>
+      BA_splitlong (map_builtin_arg f hi) (map_builtin_arg f lo)
+  end.
+
+Fixpoint map_builtin_res (A B: Type) (f: A -> B) (a: builtin_res A) : builtin_res B :=
+  match a with
+  | BR x => BR (f x)
+  | BR_none => BR_none
+  | BR_splitlong hi lo =>
+      BR_splitlong (map_builtin_res f hi) (map_builtin_res f lo)
+  end.
+
+(** Which kinds of builtin arguments are supported by which external function. *)
+
+Inductive builtin_arg_constraint : Type :=
+  | OK_default
+  | OK_const
+  | OK_addrstack
+  | OK_addrglobal
+  | OK_addrany
+  | OK_all.
+
+Definition builtin_arg_ok
+       (A: Type) (ba: builtin_arg A) (c: builtin_arg_constraint) :=
+  match ba, c with
+  | (BA _ | BA_splitlong _ _), _ => true
+  | (BA_int _ | BA_long _ | BA_float _ | BA_single _), OK_const => true
+  | BA_addrstack _, (OK_addrstack | OK_addrany) => true
+  | BA_addrglobal _ _, (OK_addrglobal | OK_addrany) => true
+  | _, OK_all => true
+  | _, _ => false
+  end.

@@ -67,7 +67,7 @@ Lemma find_function_translated:
   find_function ge ros rs = Some fd ->
   find_function tge ros rs = Some (transf_fundef fd).
 Proof.
-  unfold find_function; intros. destruct ros as [r|id]. 
+  unfold find_function; intros. destruct ros as [r|id].
   eapply functions_translated; eauto.
   rewrite symbols_preserved. destruct (Genv.find_symbol ge id); try congruence.
   eapply function_ptr_translated; eauto.
@@ -87,18 +87,18 @@ Lemma renum_cfg_nodes:
 Proof.
   set (P := fun (c c': code) =>
               forall x y i, c!x = Some i -> f!x = Some y -> c'!y = Some(renum_instr f i)).
-  intros c0. change (P c0 (renum_cfg f c0)). unfold renum_cfg. 
+  intros c0. change (P c0 (renum_cfg f c0)). unfold renum_cfg.
   apply PTree_Properties.fold_rec; unfold P; intros.
   (* extensionality *)
-  eapply H0; eauto. rewrite H; auto. 
+  eapply H0; eauto. rewrite H; auto.
   (* base *)
   rewrite PTree.gempty in H; congruence.
   (* induction *)
-  rewrite PTree.gsspec in H2. unfold renum_node. destruct (peq x k). 
-  inv H2. rewrite H3. apply PTree.gss. 
-  destruct f!k as [y'|] eqn:?. 
-  rewrite PTree.gso. eauto. red; intros; subst y'. elim n. eapply f_inj; eauto. 
-  eauto. 
+  rewrite PTree.gsspec in H2. unfold renum_node. destruct (peq x k).
+  inv H2. rewrite H3. apply PTree.gss.
+  destruct f!k as [y'|] eqn:?.
+  rewrite PTree.gso. eauto. red; intros; subst y'. elim n. eapply f_inj; eauto.
+  eauto.
 Qed.
 
 End RENUMBER.
@@ -113,9 +113,9 @@ Lemma transf_function_at:
   reach f pc ->
   (transf_function f).(fn_code)!(renum_pc (pnum f) pc) = Some(renum_instr (pnum f) i).
 Proof.
-  intros. 
+  intros.
   destruct (postorder_correct (successors_map f) f.(fn_entrypoint)) as [A B].
-  fold (pnum f) in *. 
+  fold (pnum f) in *.
   unfold renum_pc. destruct (pnum f)! pc as [pc'|] eqn:?.
   simpl. eapply renum_cfg_nodes; eauto.
   elim (B pc); auto. unfold successors_map. rewrite PTree.gmap1. rewrite H. simpl. congruence.
@@ -132,10 +132,10 @@ Lemma reach_succ:
   f.(fn_code)!pc = Some i -> In s (successors_instr i) ->
   reach f pc -> reach f s.
 Proof.
-  unfold reach; intros. econstructor; eauto. 
-  unfold successors_map. rewrite PTree.gmap1. rewrite H. auto. 
+  unfold reach; intros. econstructor; eauto.
+  unfold successors_map. rewrite PTree.gmap1. rewrite H. auto.
 Qed.
-  
+
 Inductive match_frames: RTL.stackframe -> RTL.stackframe -> Prop :=
   | match_frames_intro: forall res f sp pc rs
         (REACH: reach f pc),
@@ -164,23 +164,23 @@ Lemma step_simulation:
 Proof.
   induction 1; intros S1' MS; inv MS; try TR_AT.
 (* nop *)
-  econstructor; split. eapply exec_Inop; eauto. 
-  constructor; auto. eapply reach_succ; eauto. simpl; auto. 
+  econstructor; split. eapply exec_Inop; eauto.
+  constructor; auto. eapply reach_succ; eauto. simpl; auto.
 (* op *)
   econstructor; split.
   eapply exec_Iop; eauto.
-  instantiate (1 := v). rewrite <- H0. apply eval_operation_preserved. exact symbols_preserved. 
+  instantiate (1 := v). rewrite <- H0. apply eval_operation_preserved. exact symbols_preserved.
   constructor; auto. eapply reach_succ; eauto. simpl; auto.
 (* load *)
   econstructor; split.
   assert (eval_addressing tge sp addr rs ## args = Some a).
-  rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved. 
+  rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved.
   eapply exec_Iload; eauto.
   constructor; auto. eapply reach_succ; eauto. simpl; auto.
 (* store *)
   econstructor; split.
   assert (eval_addressing tge sp addr rs ## args = Some a).
-  rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved. 
+  rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved.
   eapply exec_Istore; eauto.
   constructor; auto. eapply reach_succ; eauto. simpl; auto.
 (* call *)
@@ -198,35 +198,29 @@ Proof.
 (* builtin *)
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
-    eapply external_call_symbols_preserved; eauto.
-    exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
-  constructor; auto. eapply reach_succ; eauto. simpl; auto.
-(* annot *)
-  econstructor; split.
-  eapply exec_Iannot; eauto.
-    eapply eval_annot_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
+    eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
     eapply external_call_symbols_preserved; eauto.
     exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   constructor; auto. eapply reach_succ; eauto. simpl; auto.
 (* cond *)
   econstructor; split.
-  eapply exec_Icond; eauto. 
+  eapply exec_Icond; eauto.
   replace (if b then renum_pc (pnum f) ifso else renum_pc (pnum f) ifnot)
      with (renum_pc (pnum f) (if b then ifso else ifnot)).
-  constructor; auto. eapply reach_succ; eauto. simpl. destruct b; auto. 
+  constructor; auto. eapply reach_succ; eauto. simpl. destruct b; auto.
   destruct b; auto.
 (* jumptbl *)
   econstructor; split.
-  eapply exec_Ijumptable; eauto. rewrite list_nth_z_map. rewrite H1. simpl; eauto. 
-  constructor; auto. eapply reach_succ; eauto. simpl. eapply list_nth_z_in; eauto. 
+  eapply exec_Ijumptable; eauto. rewrite list_nth_z_map. rewrite H1. simpl; eauto.
+  constructor; auto. eapply reach_succ; eauto. simpl. eapply list_nth_z_in; eauto.
 (* return *)
   econstructor; split.
-  eapply exec_Ireturn; eauto. 
+  eapply exec_Ireturn; eauto.
   constructor; auto.
 (* internal function *)
   simpl. econstructor; split.
-  eapply exec_function_internal; eauto. 
-  constructor; auto. unfold reach. constructor. 
+  eapply exec_function_internal; eauto.
+  constructor; auto. unfold reach. constructor.
 (* external function *)
   econstructor; split.
   eapply exec_function_external; eauto.
@@ -235,8 +229,8 @@ Proof.
   constructor; auto.
 (* return *)
   inv STACKS. inv H1.
-  econstructor; split. 
-  eapply exec_return; eauto. 
+  econstructor; split.
+  eapply exec_return; eauto.
   constructor; auto.
 Qed.
 
@@ -245,10 +239,10 @@ Lemma transf_initial_states:
   exists S2, RTL.initial_state tprog S2 /\ match_states S1 S2.
 Proof.
   intros. inv H. econstructor; split.
-  econstructor. 
-    eapply Genv.init_mem_transf; eauto. 
-    simpl. rewrite symbols_preserved. eauto. 
-    eapply function_ptr_translated; eauto. 
+  econstructor.
+    eapply Genv.init_mem_transf; eauto.
+    simpl. rewrite symbols_preserved. eauto.
+    eapply function_ptr_translated; eauto.
     rewrite <- H3; apply sig_preserved.
   constructor. constructor.
 Qed.
@@ -266,14 +260,14 @@ Proof.
   eexact public_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
-  exact step_simulation. 
+  exact step_simulation.
 Qed.
 
 End PRESERVATION.
 
 
 
- 
 
-  
+
+
 

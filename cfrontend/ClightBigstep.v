@@ -66,9 +66,9 @@ Definition outcome_result_value (out: outcome) (t: type) (v: val) : Prop :=
   | Out_return None, Tvoid => v = Vundef
   | Out_return (Some (v',t')), ty => ty <> Tvoid /\ sem_cast v' t' t = Some v
   | _, _ => False
-  end. 
+  end.
 
-(** [exec_stmt ge e m1 s t m2 out] describes the execution of 
+(** [exec_stmt ge e m1 s t m2 out] describes the execution of
   the statement [s].  [out] is the outcome for this execution.
   [m1] is the initial memory state, [m2] the final memory state.
   [t] is the trace of input/output events performed during this
@@ -88,7 +88,7 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
   | exec_Sset:     forall e le m id a v,
       eval_expr ge e le m a v ->
       exec_stmt e le m (Sset id a)
-               E0 (PTree.set id v le) m Out_normal 
+               E0 (PTree.set id v le) m Out_normal
   | exec_Scall:   forall e le m optid a al tyargs tyres cconv vf vargs f t m' vres,
       classify_fun (typeof a) = fun_case_f tyargs tyres cconv ->
       eval_expr ge e le m a vf ->
@@ -244,7 +244,7 @@ End BIGSTEP.
 
 Inductive bigstep_program_terminates (p: program): trace -> int -> Prop :=
   | bigstep_program_terminates_intro: forall b f m0 m1 t r,
-      let ge := globalenv p in 
+      let ge := globalenv p in
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
@@ -254,7 +254,7 @@ Inductive bigstep_program_terminates (p: program): trace -> int -> Prop :=
 
 Inductive bigstep_program_diverges (p: program): traceinf -> Prop :=
   | bigstep_program_diverges_intro: forall b f m0 t,
-      let ge := globalenv p in 
+      let ge := globalenv p in
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
@@ -282,7 +282,7 @@ Inductive outcome_state_match
       outcome_state_match e le m f k Out_continue (State f Scontinue k e le m)
   | osm_return_none: forall k',
       call_cont k' = call_cont k ->
-      outcome_state_match e le m f k 
+      outcome_state_match e le m f k
         (Out_return None) (State f (Sreturn None) k' e le m)
   | osm_return_some: forall a v k',
       call_cont k' = call_cont k ->
@@ -322,7 +322,7 @@ Proof.
 
 (* call *)
   econstructor; split.
-  eapply star_left. econstructor; eauto. 
+  eapply star_left. econstructor; eauto.
   eapply star_right. apply H5. simpl; auto. econstructor. reflexivity. traceEq.
   constructor.
 
@@ -331,10 +331,10 @@ Proof.
 
 (* sequence 2 *)
   destruct (H0 f (Kseq s2 k)) as [S1 [A1 B1]]. inv B1.
-  destruct (H2 f k) as [S2 [A2 B2]]. 
+  destruct (H2 f k) as [S2 [A2 B2]].
   econstructor; split.
   eapply star_left. econstructor.
-  eapply star_trans. eexact A1. 
+  eapply star_trans. eexact A1.
   eapply star_left. constructor. eexact A2.
   reflexivity. reflexivity. traceEq.
   auto.
@@ -385,10 +385,10 @@ Proof.
     | _ => S1
     end).
   exists S2; split.
-  eapply star_left. eapply step_loop. 
+  eapply star_left. eapply step_loop.
   eapply star_trans. eexact A1.
   unfold S2. inversion H1; subst.
-  inv B1. apply star_one. constructor.    
+  inv B1. apply star_one. constructor.
   apply star_refl.
   reflexivity. traceEq.
   unfold S2. inversion H1; subst. constructor. inv B1; econstructor; eauto.
@@ -402,14 +402,14 @@ Proof.
     | _ => S2
     end).
   exists S3; split.
-  eapply star_left. eapply step_loop. 
+  eapply star_left. eapply step_loop.
   eapply star_trans. eexact A1.
   eapply star_left with (s2 := State f s2 (Kloop2 s1 s2 k) e le1 m1).
   inv H1; inv B1; constructor; auto.
   eapply star_trans. eexact A2.
   unfold S3. inversion H4; subst.
   inv B2. apply star_one. constructor. apply star_refl.
-  reflexivity. reflexivity. reflexivity. traceEq. 
+  reflexivity. reflexivity. reflexivity. traceEq.
   unfold S3. inversion H4; subst. constructor. inv B2; econstructor; eauto.
 
 (* loop loop *)
@@ -417,15 +417,15 @@ Proof.
   destruct (H3 f (Kloop2 s1 s2 k)) as [S2 [A2 B2]].
   destruct (H5 f k) as [S3 [A3 B3]].
   exists S3; split.
-  eapply star_left. eapply step_loop. 
+  eapply star_left. eapply step_loop.
   eapply star_trans. eexact A1.
   eapply star_left with (s2 := State f s2 (Kloop2 s1 s2 k) e le1 m1).
   inv H1; inv B1; constructor; auto.
   eapply star_trans. eexact A2.
   eapply star_left with (s2 := State f (Sloop s1 s2) k e le2 m2).
-  inversion H4; subst; inv B2; constructor; auto. 
+  inversion H4; subst; inv B2; constructor; auto.
   eexact A3.
-  reflexivity. reflexivity. reflexivity. reflexivity. traceEq. 
+  reflexivity. reflexivity. reflexivity. reflexivity. traceEq.
   auto.
 
 (* switch *)
@@ -438,12 +438,12 @@ Proof.
     | _ => S1
     end).
   exists S2; split.
-  eapply star_left. eapply step_switch; eauto. 
-  eapply star_trans. eexact A1. 
-  unfold S2; inv B1. 
-    apply star_one. constructor. auto. 
-    apply star_one. constructor. auto. 
-    apply star_one. constructor. 
+  eapply star_left. eapply step_switch; eauto.
+  eapply star_trans. eexact A1.
+  unfold S2; inv B1.
+    apply star_one. constructor. auto.
+    apply star_one. constructor. auto.
+    apply star_one. constructor.
     apply star_refl.
     apply star_refl.
   reflexivity. traceEq.
@@ -452,7 +452,7 @@ Proof.
 (* call internal *)
   destruct (H3 f k) as [S1 [A1 B1]].
   eapply star_left. eapply step_internal_function; eauto. econstructor; eauto.
-  eapply star_right. eexact A1. 
+  eapply star_right. eexact A1.
    inv B1; simpl in H4; try contradiction.
   (* Out_normal *)
   assert (fn_return f = Tvoid /\ vres = Vundef).
@@ -471,7 +471,7 @@ Proof.
   reflexivity. traceEq.
 
 (* call external *)
-  apply star_one. apply step_external_function; auto. 
+  apply star_one. apply step_external_function; auto.
 Qed.
 
 Lemma exec_stmt_steps:
@@ -506,7 +506,7 @@ Proof.
 
 (* call  *)
   eapply forever_N_plus.
-  apply plus_one. eapply step_call; eauto. 
+  apply plus_one. eapply step_call; eauto.
   eapply CIH_FUN. eauto. traceEq.
 
 (* seq 1 *)
@@ -517,25 +517,25 @@ Proof.
   destruct (exec_stmt_steps _ _ _ _ _ _ _ _ H0 f (Kseq s2 k)) as [S1 [A1 B1]].
   inv B1.
   eapply forever_N_plus.
-  eapply plus_left. constructor. eapply star_trans. eexact A1. 
+  eapply plus_left. constructor. eapply star_trans. eexact A1.
   apply star_one. constructor. reflexivity. reflexivity.
   apply CIH_STMT; eauto. traceEq.
 
 (* ifthenelse *)
   eapply forever_N_plus.
-  apply plus_one. eapply step_ifthenelse with (b := b); eauto. 
+  apply plus_one. eapply step_ifthenelse with (b := b); eauto.
   apply CIH_STMT; eauto. traceEq.
 
 (* loop body 1 *)
   eapply forever_N_plus.
-  eapply plus_one. constructor. 
+  eapply plus_one. constructor.
   apply CIH_STMT; eauto. traceEq.
 (* loop body 2 *)
   destruct (exec_stmt_steps _ _ _ _ _ _ _ _ H0 f (Kloop1 s1 s2 k)) as [S1 [A1 B1]].
   eapply forever_N_plus with (s2 := State f s2 (Kloop2 s1 s2 k) e le1 m1).
   eapply plus_left. constructor.
   eapply star_right. eexact A1.
-  inv H1; inv B1; constructor; auto. 
+  inv H1; inv B1; constructor; auto.
   reflexivity. reflexivity.
   apply CIH_STMT; eauto. traceEq.
 (* loop loop *)
@@ -571,14 +571,14 @@ Proof.
 (* termination *)
   inv H. econstructor; econstructor.
   split. econstructor; eauto.
-  split. eapply eval_funcall_steps. eauto. red; auto. 
+  split. eapply eval_funcall_steps. eauto. red; auto.
   econstructor.
 (* divergence *)
   inv H. econstructor.
   split. econstructor; eauto.
   eapply forever_N_forever with (order := order).
   red; intros. constructor; intros. red in H. elim H.
-  eapply evalinf_funcall_forever; eauto. 
+  eapply evalinf_funcall_forever; eauto.
 Qed.
 
 End BIGSTEP_TO_TRANSITIONS.

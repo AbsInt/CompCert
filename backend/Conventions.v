@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Function calling conventions and other conventions regarding the use of 
+(** Function calling conventions and other conventions regarding the use of
     machine registers and stack slots. *)
 
 Require Import Coqlib.
@@ -44,14 +44,14 @@ Lemma incoming_slot_in_parameters:
   In (S Outgoing ofs ty) (loc_arguments sg).
 Proof.
   intros.
-  unfold loc_parameters in H. 
+  unfold loc_parameters in H.
   change (S Incoming ofs ty) with (parameter_of_argument (S Outgoing ofs ty)) in H.
   exploit list_in_map_inv. eexact H. intros [x [A B]]. simpl in A.
   exploit loc_arguments_acceptable; eauto. unfold loc_argument_acceptable; intros.
   destruct x; simpl in A; try discriminate.
-  destruct sl; try contradiction. 
+  destruct sl; try contradiction.
   inv A. auto.
-Qed. 
+Qed.
 
 (** * Tail calls *)
 
@@ -82,16 +82,16 @@ Proof.
   intro s. unfold tailcall_is_possible, tailcall_possible.
   generalize (loc_arguments s). induction l; simpl; intros.
   elim H0.
-  destruct a. 
+  destruct a.
   destruct H0. subst l0. auto. apply IHl. auto. auto. discriminate.
 Qed.
 
 Lemma zero_size_arguments_tailcall_possible:
   forall sg, size_arguments sg = 0 -> tailcall_possible sg.
 Proof.
-  intros; red; intros. exploit loc_arguments_acceptable; eauto. 
-  unfold loc_argument_acceptable. 
-  destruct l; intros. auto. destruct sl; try contradiction. destruct H1. 
+  intros; red; intros. exploit loc_arguments_acceptable; eauto.
+  unfold loc_argument_acceptable.
+  destruct l; intros. auto. destruct sl; try contradiction. destruct H1.
   generalize (loc_arguments_bounded _ _ _ H0).
-  generalize (typesize_pos ty). omega. 
+  generalize (typesize_pos ty). omega.
 Qed.

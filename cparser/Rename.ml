@@ -42,19 +42,20 @@ let enter_public env id =
     { re_id = IdentMap.add id id env.re_id;
       re_public = StringMap.add id.name id env.re_public;
       re_used = StringSet.add id.name env.re_used }
-      
+
 let enter_static env id file =
   try
     let id' = StringMap.find id.name env.re_public in
     { env with re_id = IdentMap.add id id' env.re_id }
   with Not_found ->
-    let id' = {id with name = Printf.sprintf "_%s_%s" file id.name} in 
+    let file = String.map (fun a -> match a with 'a'..'z' | 'A'..'Z' | '0'..'9' -> a | _ -> '_') file in
+    let id' = {id with name = Printf.sprintf "_%s_%s" file id.name} in
     { re_id = IdentMap.add id id' env.re_id;
       re_public = env.re_public;
       re_used = StringSet.add id'.name env.re_used }
 
 (* For static or local identifiers, we make up a new name if needed *)
-(* If the same identifier has already been declared, 
+(* If the same identifier has already been declared,
    don't rename a second time *)
 
 let rename env id =
@@ -93,7 +94,7 @@ let ident env id =
   try
     IdentMap.find id env.re_id
   with Not_found ->
-    Cerrors.fatal_error "Internal error: Rename: %s__%d unbound" 
+    Cerrors.fatal_error "Internal error: Rename: %s__%d unbound"
                         id.name id.stamp
 
 let rec typ env = function
@@ -110,7 +111,7 @@ let rec typ env = function
   | ty -> ty
 
 and param env (id, ty) =
-  if id.name = "" then 
+  if id.name = "" then
     ((id, typ env ty), env)
   else
     let (id', env') = rename env id in ((id', typ env' ty), env')
@@ -215,7 +216,7 @@ let fundef env f =
       fd_body = stmt env2 f.fd_body },
     env0 )
 
-let enum env (id, v, opte) = 
+let enum env (id, v, opte) =
   let (id', env') = rename env id in
   ((id', v, optexp env' opte), env')
 
@@ -268,7 +269,7 @@ let rec reserve_public env file = function
             begin match sto with
             | Storage_default | Storage_extern -> enter_public env id
             | Storage_static -> if !Clflags.option_rename_static then
-                enter_static env id file 
+                enter_static env id file
                   else
                 env
             | _ -> assert false
@@ -291,4 +292,4 @@ let program p file =
   globdecls
     (reserve_public (reserve_builtins()) file p)
     [] p
-  
+

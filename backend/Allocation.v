@@ -34,7 +34,7 @@ Require Import RTLtyping.
 Require Import LTL.
 
 (** The validation algorithm used here is described in
-  "Validating register allocation and spilling", 
+  "Validating register allocation and spilling",
   by Silvain Rideau and Xavier Leroy,
   in Compiler Construction (CC 2010), LNCS 6011, Springer, 2010. *)
 
@@ -93,12 +93,10 @@ Inductive block_shape: Type :=
          (mv1: moves) (ros': mreg + ident) (mv2: moves) (s: node)
   | BStailcall (sg: signature) (ros: reg + ident) (args: list reg)
          (mv1: moves) (ros': mreg + ident)
-  | BSbuiltin (ef: external_function) (args: list reg) (res: reg)
-         (mv1: moves) (args': list mreg) (res': list mreg)
+  | BSbuiltin (ef: external_function)
+         (args: list (builtin_arg reg)) (res: builtin_res reg)
+         (mv1: moves) (args': list (builtin_arg loc)) (res': builtin_res mreg)
          (mv2: moves) (s: node)
-  | BSannot (ef: external_function)
-         (args: list (annot_arg reg)) (args': list (annot_arg loc))
-         (s: node)
   | BScond (cond: condition) (args: list reg)
          (mv: moves) (args': list mreg) (s1 s2: node)
   | BSjumptable (arg: reg)
@@ -159,7 +157,7 @@ Definition classify_operation (op: operation) (args: list reg) : operation_kind 
   | op, args => operation_other op args
   end.
 
-(** Check RTL instruction [i] against LTL basic block [b].  
+(** Check RTL instruction [i] against LTL basic block [b].
   On success, return [Some] with a [block_shape] describing the correspondence.
   On error, return [None]. *)
 
@@ -280,14 +278,6 @@ Definition pair_instr_block
           Some(BSbuiltin ef args res mv1 args' res' mv2 s)
       | _ => None
       end
-  | Iannot ef args s =>
-      match b with
-      | Lannot ef' args' :: b1 =>
-          assertion (external_function_eq ef ef');
-          assertion (check_succ s b1);
-          Some(BSannot ef args args' s)
-      | _ => None
-      end
   | Icond cond args s1 s2 =>
       let (mv1, b1) := extract_moves nil b in
       match b1 with
@@ -382,7 +372,7 @@ Module OrderedEquation <: OrderedType.
     (OrderedLoc.lt (eloc x) (eloc y) \/ (eloc x = eloc y /\
     OrderedEqKind.lt (ekind x) (ekind y)))).
   Lemma eq_refl : forall x : t, eq x x.
-  Proof (@refl_equal t). 
+  Proof (@refl_equal t).
   Lemma eq_sym : forall x y : t, eq x y -> eq y x.
   Proof (@sym_equal t).
   Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
@@ -390,13 +380,13 @@ Module OrderedEquation <: OrderedType.
   Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
   Proof.
     unfold lt; intros.
-    destruct H. 
+    destruct H.
     destruct H0. left; eapply Plt_trans; eauto.
     destruct H0. rewrite <- H0. auto.
-    destruct H. rewrite H. 
-    destruct H0. auto. 
+    destruct H. rewrite H.
+    destruct H0. auto.
     destruct H0. right; split; auto.
-    intuition. 
+    intuition.
     left; eapply OrderedLoc.lt_trans; eauto.
     left; congruence.
     left; congruence.
@@ -415,10 +405,10 @@ Module OrderedEquation <: OrderedType.
     destruct (OrderedPositive.compare (ereg x) (ereg y)).
   - apply LT. red; auto.
   - destruct (OrderedLoc.compare (eloc x) (eloc y)).
-    + apply LT. red; auto. 
+    + apply LT. red; auto.
     + destruct (OrderedEqKind.compare (ekind x) (ekind y)).
       * apply LT. red; auto.
-      * apply EQ. red in e; red in e0; red in e1; red. 
+      * apply EQ. red in e; red in e0; red in e1; red.
         destruct x; destruct y; simpl in *; congruence.
       * apply GT. red; auto.
    + apply GT. red; auto.
@@ -426,7 +416,7 @@ Module OrderedEquation <: OrderedType.
   Defined.
   Definition eq_dec (x y: t) : {x = y} + {x <> y}.
   Proof.
-    intros. decide equality. 
+    intros. decide equality.
     apply Loc.eq.
     apply peq.
     apply IndexedEqKind.eq.
@@ -444,7 +434,7 @@ Module OrderedEquation' <: OrderedType.
     (Plt (ereg x) (ereg y) \/ (ereg x = ereg y /\
     OrderedEqKind.lt (ekind x) (ekind y)))).
   Lemma eq_refl : forall x : t, eq x x.
-  Proof (@refl_equal t). 
+  Proof (@refl_equal t).
   Lemma eq_sym : forall x y : t, eq x y -> eq y x.
   Proof (@sym_equal t).
   Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
@@ -452,14 +442,14 @@ Module OrderedEquation' <: OrderedType.
   Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
   Proof.
     unfold lt; intros.
-    destruct H. 
-    destruct H0. left; eapply OrderedLoc.lt_trans; eauto. 
+    destruct H.
+    destruct H0. left; eapply OrderedLoc.lt_trans; eauto.
     destruct H0. rewrite <- H0. auto.
-    destruct H. rewrite H. 
-    destruct H0. auto. 
+    destruct H. rewrite H.
+    destruct H0. auto.
     destruct H0. right; split; auto.
-    intuition. 
-    left; eapply Plt_trans; eauto. 
+    intuition.
+    left; eapply Plt_trans; eauto.
     left; congruence.
     left; congruence.
     right; split. congruence. eapply OrderedEqKind.lt_trans; eauto.
@@ -477,10 +467,10 @@ Module OrderedEquation' <: OrderedType.
     destruct (OrderedLoc.compare (eloc x) (eloc y)).
   - apply LT. red; auto.
   - destruct (OrderedPositive.compare (ereg x) (ereg y)).
-    + apply LT. red; auto. 
+    + apply LT. red; auto.
     + destruct (OrderedEqKind.compare (ekind x) (ekind y)).
       * apply LT. red; auto.
-      * apply EQ. red in e; red in e0; red in e1; red. 
+      * apply EQ. red in e; red in e0; red in e1; red.
         destruct x; destruct y; simpl in *; congruence.
       * apply GT. red; auto.
    + apply GT. red; auto.
@@ -520,10 +510,10 @@ Program Definition add_equation (q: equation) (e: eqs) :=
   mkeqs (EqSet.add q (eqs1 e)) (EqSet2.add q (eqs2 e)) _.
 Next Obligation.
   split; intros.
-  destruct (OrderedEquation'.eq_dec q q0). 
+  destruct (OrderedEquation'.eq_dec q q0).
   apply EqSet.add_1; auto.
   apply EqSet.add_2. apply (eqs_same e). apply EqSet2.add_3 with q; auto.
-  destruct (OrderedEquation.eq_dec q q0). 
+  destruct (OrderedEquation.eq_dec q q0).
   apply EqSet2.add_1; auto.
   apply EqSet2.add_2. apply (eqs_same e). apply EqSet.add_3 with q; auto.
 Qed.
@@ -532,10 +522,10 @@ Program Definition remove_equation (q: equation) (e: eqs) :=
   mkeqs (EqSet.remove q (eqs1 e)) (EqSet2.remove q (eqs2 e)) _.
 Next Obligation.
   split; intros.
-  destruct (OrderedEquation'.eq_dec q q0). 
+  destruct (OrderedEquation'.eq_dec q q0).
   eelim EqSet2.remove_1; eauto.
   apply EqSet.remove_2; auto. apply (eqs_same e). apply EqSet2.remove_3 with q; auto.
-  destruct (OrderedEquation.eq_dec q q0). 
+  destruct (OrderedEquation.eq_dec q q0).
   eelim EqSet.remove_1; eauto.
   apply EqSet2.remove_2; auto. apply (eqs_same e). apply EqSet.remove_3 with q; auto.
 Qed.
@@ -595,7 +585,7 @@ Definition subst_reg_kind (r1: reg) (k1: equation_kind) (r2: reg) (k2: equation_
 (** [subst_loc l1 l2 e] simulates the effect of assigning [l2] to [l1] on [e].
   All equations of the form [r = l1 [kind]] are replaced by [r = l2 [kind]].
   Return [None] if [e] contains an equation of the form [r = l] with [l]
-  partially overlapping [l1]. 
+  partially overlapping [l1].
 *)
 
 Definition subst_loc (l1 l2: loc) (e: eqs) : option eqs :=
@@ -699,54 +689,86 @@ Definition add_equation_ros (ros: reg + ident) (ros': mreg + ident) (e: eqs) : o
   | _, _ => None
   end.
 
-(** [add_equations_annot_arg] adds the needed equations for annotation
-   arguments. *)
+(** [add_equations_builtin_arg] adds the needed equations for arguments
+    to builtin functions. *)
 
-Fixpoint add_equations_annot_arg (env: regenv) (arg: annot_arg reg) (arg': annot_arg loc) (e: eqs) : option eqs :=
+Fixpoint add_equations_builtin_arg
+     (env: regenv) (arg: builtin_arg reg) (arg': builtin_arg loc) (e: eqs) : option eqs :=
   match arg, arg' with
-  | AA_base r, AA_base l =>
+  | BA r, BA l =>
       Some (add_equation (Eq Full r l) e)
-  | AA_base r, AA_longofwords (AA_base lhi) (AA_base llo) =>
+  | BA r, BA_splitlong (BA lhi) (BA llo) =>
       assertion (typ_eq (env r) Tlong);
       Some (add_equation (Eq Low r llo) (add_equation (Eq High r lhi) e))
-  | AA_int n, AA_int n' =>
+  | BA_int n, BA_int n' =>
       assertion (Int.eq_dec n n'); Some e
-  | AA_long n, AA_long n' =>
+  | BA_long n, BA_long n' =>
       assertion (Int64.eq_dec n n'); Some e
-  | AA_float f, AA_float f' =>
+  | BA_float f, BA_float f' =>
       assertion (Float.eq_dec f f'); Some e
-  | AA_single f, AA_single f' =>
+  | BA_single f, BA_single f' =>
       assertion (Float32.eq_dec f f'); Some e
-  | AA_loadstack chunk ofs, AA_loadstack chunk' ofs' =>
+  | BA_loadstack chunk ofs, BA_loadstack chunk' ofs' =>
       assertion (chunk_eq chunk chunk');
       assertion (Int.eq_dec ofs ofs');
       Some e
-  | AA_addrstack ofs, AA_addrstack ofs' =>
+  | BA_addrstack ofs, BA_addrstack ofs' =>
       assertion (Int.eq_dec ofs ofs');
       Some e
-  | AA_loadglobal chunk id ofs, AA_loadglobal chunk' id' ofs' =>
+  | BA_loadglobal chunk id ofs, BA_loadglobal chunk' id' ofs' =>
       assertion (chunk_eq chunk chunk');
       assertion (ident_eq id id');
       assertion (Int.eq_dec ofs ofs');
       Some e
-  | AA_addrglobal id ofs, AA_addrglobal id' ofs' =>
+  | BA_addrglobal id ofs, BA_addrglobal id' ofs' =>
       assertion (ident_eq id id');
       assertion (Int.eq_dec ofs ofs');
       Some e
-  | AA_longofwords hi lo, AA_longofwords hi' lo' =>
-      do e1 <- add_equations_annot_arg env hi hi' e;
-      add_equations_annot_arg env lo lo' e1
+  | BA_splitlong hi lo, BA_splitlong hi' lo' =>
+      do e1 <- add_equations_builtin_arg env hi hi' e;
+      add_equations_builtin_arg env lo lo' e1
   | _, _ =>
       None
   end.
 
-Fixpoint add_equations_annot_args (env: regenv)
-   (args: list(annot_arg reg)) (args': list(annot_arg loc)) (e: eqs) : option eqs :=
+Fixpoint add_equations_builtin_args
+   (env: regenv) (args: list (builtin_arg reg))
+   (args': list (builtin_arg loc)) (e: eqs) : option eqs :=
   match args, args' with
   | nil, nil => Some e
   | a1 :: al, a1' :: al' =>
-      do e1 <- add_equations_annot_arg env a1 a1' e;
-      add_equations_annot_args env al al' e1
+      do e1 <- add_equations_builtin_arg env a1 a1' e;
+      add_equations_builtin_args env al al' e1
+  | _, _ => None
+  end.
+
+(** For [EF_debug] builtins, some arguments can be removed. *)
+
+Fixpoint add_equations_debug_args
+   (env: regenv) (args: list (builtin_arg reg))
+   (args': list (builtin_arg loc)) (e: eqs) : option eqs :=
+  match args, args' with
+  | _, nil => Some e
+  | a1 :: al, a1' :: al' =>
+      match add_equations_builtin_arg env a1 a1' e with
+      | None => add_equations_debug_args env al args' e
+      | Some e1 => add_equations_debug_args env al al' e1
+      end
+  | _, _ => None
+  end.
+
+(** Checking of the result of a builtin *)
+
+Definition remove_equations_builtin_res
+    (env: regenv) (res: builtin_res reg) (res': builtin_res mreg) (e: eqs) : option eqs :=
+  match res, res' with
+  | BR r, BR r' => Some (remove_equation (Eq Full r (R r')) e)
+  | BR r, BR_splitlong (BR rhi) (BR rlo) =>
+      assertion (typ_eq (env r) Tlong);
+      if mreg_eq rhi rlo then None else
+        Some (remove_equation (Eq Low r (R rlo))
+                (remove_equation (Eq High r (R rhi)) e))
+  | BR_none, BR_none => Some e
   | _, _ => None
   end.
 
@@ -762,7 +784,7 @@ Fixpoint can_undef (ml: list mreg) (e: eqs) : bool :=
 Fixpoint can_undef_except (l: loc) (ml: list mreg) (e: eqs) : bool :=
   match ml with
   | nil => true
-  | m1 :: ml => 
+  | m1 :: ml =>
       (Loc.eq l (R m1) || loc_unconstrained (R m1) e) && can_undef_except l ml e
   end.
 
@@ -945,11 +967,11 @@ Definition transfer_aux (f: RTL.function) (env: regenv)
       track_moves env mv e1
   | BSstore2 addr addr' args src mv1 args1' src1' mv2 args2' src2' s =>
       assertion (can_undef (destroyed_by_store Mint32 addr') e);
-      do e1 <- add_equations args args2' 
+      do e1 <- add_equations args args2'
                   (add_equation (Eq kind_second_word src (R src2')) e);
       do e2 <- track_moves env mv2 e1;
       assertion (can_undef (destroyed_by_store Mint32 addr) e2);
-      do e3 <- add_equations args args1' 
+      do e3 <- add_equations args args1'
                   (add_equation (Eq kind_first_word src (R src1')) e2);
       track_moves env mv1 e3
   | BScall sg ros args res mv1 ros' mv2 s =>
@@ -972,16 +994,18 @@ Definition transfer_aux (f: RTL.function) (env: regenv)
       track_moves env mv1 e2
   | BSbuiltin ef args res mv1 args' res' mv2 s =>
       do e1 <- track_moves env mv2 e;
-      let args' := map R args' in
-      let res' := map R res' in
-      do e2 <- remove_equations_res res (sig_res (ef_sig ef)) res' e1;
-      assertion (reg_unconstrained res e2);
-      assertion (forallb (fun l => loc_unconstrained l e2) res');
+      do e2 <- remove_equations_builtin_res env res res' e1;
+      assertion (forallb (fun r => reg_unconstrained r e2)
+                         (params_of_builtin_res res));
+      assertion (forallb (fun mr => loc_unconstrained (R mr) e2)
+                         (params_of_builtin_res res'));
       assertion (can_undef (destroyed_by_builtin ef) e2);
-      do e3 <- add_equations_args args (sig_args (ef_sig ef)) args' e2;
+      do e3 <-
+        match ef with
+        | EF_debug _ _ _ => add_equations_debug_args env args args' e2
+        | _              => add_equations_builtin_args env args args' e2
+        end;
       track_moves env mv1 e3
-  | BSannot ef args args' s =>
-      add_equations_annot_args env args args' e
   | BScond cond args mv args' s1 s2 =>
       assertion (can_undef (destroyed_by_cond cond) e);
       do e1 <- add_equations args args' e;
@@ -1035,22 +1059,22 @@ Module LEq <: SEMILATTICE.
 
   Lemma eq_refl: forall x, eq x x.
   Proof.
-    intros; destruct x; simpl; auto. red; tauto. 
+    intros; destruct x; simpl; auto. red; tauto.
   Qed.
 
   Lemma eq_sym: forall x y, eq x y -> eq y x.
   Proof.
-    unfold eq; intros; destruct x; destruct y; auto. 
+    unfold eq; intros; destruct x; destruct y; auto.
     red in H; red; intros. rewrite H; tauto.
-  Qed. 
+  Qed.
 
   Lemma eq_trans: forall x y z, eq x y -> eq y z -> eq x z.
   Proof.
     unfold eq; intros. destruct x; destruct y; try contradiction; destruct z; auto.
-    red in H; red in H0; red; intros. rewrite H. auto. 
+    red in H; red in H0; red; intros. rewrite H. auto.
   Qed.
 
-  Definition beq (x y: t) := 
+  Definition beq (x y: t) :=
     match x, y with
     | OK a, OK b => EqSet.equal a b
     | Error _, Error _ => true
@@ -1059,14 +1083,14 @@ Module LEq <: SEMILATTICE.
 
   Lemma beq_correct: forall x y, beq x y = true -> eq x y.
   Proof.
-    unfold beq, eq; intros. destruct x; destruct y. 
+    unfold beq, eq; intros. destruct x; destruct y.
     apply EqSet.equal_2. auto.
     discriminate.
     discriminate.
     auto.
   Qed.
 
-  Definition ge (x y: t) := 
+  Definition ge (x y: t) :=
     match x, y with
     | OK a, OK b => EqSet.Subset b a
     | Error _, _ => True
@@ -1075,18 +1099,18 @@ Module LEq <: SEMILATTICE.
 
   Lemma ge_refl: forall x y, eq x y -> ge x y.
   Proof.
-    unfold eq, ge, EqSet.Equal, EqSet.Subset; intros. 
+    unfold eq, ge, EqSet.Equal, EqSet.Subset; intros.
     destruct x; destruct y; auto. intros; rewrite H; auto.
   Qed.
   Lemma ge_trans: forall x y z, ge x y -> ge y z -> ge x z.
   Proof.
     unfold ge, EqSet.Subset; intros.
     destruct x; auto; destruct y; try contradiction.
-    destruct z; eauto. 
+    destruct z; eauto.
   Qed.
 
   Definition bot: t := OK empty_eqs.
- 
+
   Lemma ge_bot: forall x, ge x bot.
   Proof.
     unfold ge, bot, EqSet.Subset; simpl; intros.
@@ -1102,25 +1126,25 @@ Module LEq <: SEMILATTICE.
     | Error _, _ => x
     end.
   Next Obligation.
-    split; intros. 
-    apply EqSet2.union_1 in H. destruct H; rewrite eqs_same in H. 
+    split; intros.
+    apply EqSet2.union_1 in H. destruct H; rewrite eqs_same in H.
     apply EqSet.union_2; auto. apply EqSet.union_3; auto.
-    apply EqSet.union_1 in H. destruct H; rewrite <- eqs_same in H. 
+    apply EqSet.union_1 in H. destruct H; rewrite <- eqs_same in H.
     apply EqSet2.union_2; auto. apply EqSet2.union_3; auto.
   Qed.
 
   Lemma ge_lub_left: forall x y, ge (lub x y) x.
   Proof.
-    unfold lub, ge, EqSet.Subset; intros. 
-    destruct x; destruct y; auto. 
-    intros; apply EqSet.union_2; auto. 
+    unfold lub, ge, EqSet.Subset; intros.
+    destruct x; destruct y; auto.
+    intros; apply EqSet.union_2; auto.
   Qed.
 
   Lemma ge_lub_right: forall x y, ge (lub x y) y.
   Proof.
-    unfold lub, ge, EqSet.Subset; intros. 
-    destruct x; destruct y; auto. 
-    intros; apply EqSet.union_3; auto. 
+    unfold lub, ge, EqSet.Subset; intros.
+    destruct x; destruct y; auto.
+    intros; apply EqSet.union_3; auto.
   Qed.
 
 End LEq.
@@ -1152,7 +1176,6 @@ Definition successors_block_shape (bsh: block_shape) : list node :=
   | BScall sg ros args res mv1 ros' mv2 s => s :: nil
   | BStailcall sg ros args mv1 ros' => nil
   | BSbuiltin ef args res mv1 args' res' mv2 s => s :: nil
-  | BSannot ef args args' s => s :: nil
   | BScond cond args mv args' s1 s2 => s1 :: s2 :: nil
   | BSjumptable arg mv arg' tbl => tbl
   | BSreturn optarg mv => nil

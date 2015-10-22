@@ -92,7 +92,7 @@ let rec add_stmt s =
   | Sbreak -> ()
   | Scontinue -> ()
   | Sswitch(e, s1) -> add_exp e; add_stmt s1
-  | Slabeled(lbl, s) -> 
+  | Slabeled(lbl, s) ->
       begin match lbl with Scase e -> add_exp e | _ -> () end;
       add_stmt s
   | Sgoto lbl -> ()
@@ -184,6 +184,11 @@ let saturate p =
 
 (* Remove unreferenced definitions *)
 
+let remove_unused_debug =  function
+  | Gdecl (_,id,_,_) ->  Debug.remove_unused id
+  | Gfundef f -> Debug.remove_unused f.fd_name
+  | _ -> ()
+
 let rec simpl_globdecls accu = function
   | [] -> accu
   | g :: rem ->
@@ -199,7 +204,7 @@ let rec simpl_globdecls accu = function
         | Gpragma s -> true in
       if need
       then simpl_globdecls (g :: accu) rem
-      else simpl_globdecls accu rem
+      else begin remove_unused_debug g.gdesc; simpl_globdecls accu rem end
 
 let program p =
   referenced := IdentSet.empty;
@@ -207,6 +212,6 @@ let program p =
   let p' = simpl_globdecls [] p in
   referenced := IdentSet.empty;
   p'
-  
+
 
 

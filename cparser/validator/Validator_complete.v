@@ -514,7 +514,7 @@ Qed.
 
 (** The automaton is complete **)
 Definition complete :=
-  nullable_stable /\ first_stable /\ start_future /\ terminal_shift 
+  nullable_stable /\ first_stable /\ start_future /\ terminal_shift
   /\ end_reduce /\ non_terminal_goto /\ start_goto /\ non_terminal_closed.
 
 Definition is_complete (_:unit) :=
