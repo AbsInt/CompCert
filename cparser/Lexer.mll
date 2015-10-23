@@ -440,15 +440,19 @@ and singleline_comment = parse
   open Parser
   open Aut.GramDefs
 
+  (* This is the main entry point to the lexer. *)
+
+  let lexer : lexbuf -> Pre_parser.token =
+    fun lexbuf ->
+      if lexbuf.lex_curr_p.pos_cnum = lexbuf.lex_curr_p.pos_bol then
+        initial_linebegin lexbuf
+      else
+        initial lexbuf
+
   let tokens_stream filename text : token coq_Stream =
     let tokens = Queue.create () in
     let lexer_wraper lexbuf : Pre_parser.token =
-      let res =
-        if lexbuf.lex_curr_p.pos_cnum = lexbuf.lex_curr_p.pos_bol then
-          initial_linebegin lexbuf
-        else
-          initial lexbuf
-      in
+      let res = lexer lexbuf in
       Queue.push res tokens;
       res
     in
