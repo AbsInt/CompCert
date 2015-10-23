@@ -61,3 +61,4 @@ let option_small_data =
 let option_small_const = ref (!option_small_data)
 let option_timings = ref false
 let option_rename_static = ref false
+let option_cpu = ref ArchConfig.Generic

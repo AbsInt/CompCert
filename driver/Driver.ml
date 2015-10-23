@@ -561,6 +561,8 @@ let cmdline_actions =
 (* Target processor options *)
   Exact "-mthumb", Set option_mthumb;
   Exact "-marm", Unset option_mthumb;
+  Prefix "-mcpu=",  Self (fun s -> let s = String.sub s 6 ((String.length s) - 6)  in
+  option_cpu := ArchConfig.cpu_of_string s);
 (* Assembling options *)
   Prefix "-Wa,", Self (fun s -> assembler_options := s :: !assembler_options);
 (* Linking options *)
