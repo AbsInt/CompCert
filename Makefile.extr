@@ -17,9 +17,14 @@
 
 include Makefile.config
 
-# Menhir configuration and rules.
+# Menhir configuration.
 
 include Makefile.menhir
+
+# The pre-parser's error message database is compiled as follows.
+
+cparser/pre_parser_messages.ml:
+	$(MAKE) -C cparser correct
 
 # Directories containing plain Caml code (no preprocessing)
 
@@ -87,7 +92,7 @@ LIBS_BYTE=$(patsubst %.cmxa,%.cma,$(patsubst %.cmx,%.cmo,$(LIBS)))
 CHECKLINK_LIBS=str.cmxa
 
 EXECUTABLES=ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte
-GENERATED=$(PARSERS:.mly=.mli) $(PARSERS:.mly=.ml) $(LEXERS:.mll=.ml)
+GENERATED=$(PARSERS:.mly=.mli) $(PARSERS:.mly=.ml) $(LEXERS:.mll=.ml) cparser/pre_parser_messages.ml
 
 # Beginning of part that assumes .depend.extr already exists
 

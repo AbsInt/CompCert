@@ -449,19 +449,24 @@ and singleline_comment = parse
       else
         initial lexbuf
 
-  (* [lexer tokens buffer] is a new lexer, which wraps [lexer], and also
-     records the token stream into the FIFO queue [tokens]. *)
+  (* [lexer tokens buffer] is a new lexer, which wraps [lexer], and also: 1-
+     records the token stream into the FIFO queue [tokens] and 2- records the
+     start and end positions of the last two tokens in the two-place buffer
+     [buffer]. *)
 
-  let lexer tokens : lexbuf -> Pre_parser.token =
+  let lexer tokens buffer : lexbuf -> Pre_parser.token =
     fun lexbuf ->
       let token = lexer lexbuf in
       Queue.push token tokens;
+      let startp = lexbuf.lex_start_p
+      and endp = lexbuf.lex_curr_p in
+      buffer := ErrorReports.update !buffer (startp, endp);
       token
 
   (* [invoke_pre_parser] is in charge of calling the pre_parser. It uses
      the incremental API, which allows us to do our own error handling. *)
 
-  let invoke_pre_parser filename text lexer =
+  let invoke_pre_parser filename text lexer buffer =
     let lexbuf = Lexing.from_string text in
     lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_fname = filename; pos_lnum = 1};
     let module I = Pre_parser.MenhirInterpreter in
@@ -469,14 +474,18 @@ and singleline_comment = parse
     and supplier = I.lexer_lexbuf_to_supplier lexer lexbuf
     and succeed () = ()
     and fail checkpoint =
-      Cerrors.fatal_error_raw "syntax error"
+      Cerrors.fatal_error_raw "%s" (ErrorReports.report text !buffer checkpoint)
     in
     I.loop_handle succeed fail supplier checkpoint
+
+  (* [tokens_stream filename text] runs the pre_parser and produces a stream
+     of (appropriately classified) tokens. *)
 
   let tokens_stream filename text : token coq_Stream =
     contexts_stk := [init_ctx];
     let tokens = Queue.create () in
-    invoke_pre_parser filename text (lexer tokens);
+    let buffer = ref ErrorReports.Zero in
+    invoke_pre_parser filename text (lexer tokens buffer) buffer;
     assert (List.length !contexts_stk = 1);
     let rec compute_token_stream () =
       let loop t v =
