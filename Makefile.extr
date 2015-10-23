@@ -160,6 +160,7 @@ clean:
 	rm -f $(EXECUTABLES)
 	rm -f $(GENERATED)
 	for d in $(ALLDIRS); do rm -f $$d/*.cm[iox] $$d/*.o; done
+	rm -f cparser/pre_parser.automaton backend/CMparser.automaton
 
 # Generation of .depend.extr
 
