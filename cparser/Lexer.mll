@@ -449,17 +449,21 @@ and singleline_comment = parse
       else
         initial lexbuf
 
+  (* [lexer tokens buffer] is a new lexer, which wraps [lexer], and also
+     records the token stream into the FIFO queue [tokens]. *)
+
+  let lexer tokens : lexbuf -> Pre_parser.token =
+    fun lexbuf ->
+      let token = lexer lexbuf in
+      Queue.push token tokens;
+      token
+
   let tokens_stream filename text : token coq_Stream =
     let tokens = Queue.create () in
-    let lexer_wraper lexbuf : Pre_parser.token =
-      let res = lexer lexbuf in
-      Queue.push res tokens;
-      res
-    in
     let lexbuf = Lexing.from_string text in
     lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_fname = filename; pos_lnum = 1};
     contexts_stk := [init_ctx];
-    Pre_parser.translation_unit_file lexer_wraper lexbuf;
+    Pre_parser.translation_unit_file (lexer tokens) lexbuf;
     assert (List.length !contexts_stk = 1);
     let rec compute_token_stream () =
       let loop t v =
