@@ -1,3 +1,15 @@
+#######################################################################
+#                                                                     #
+#              The Compcert verified compiler                         #
+#                                                                     #
+#        François Pottier, INRIA Paris-Rocquencourt                   #
+#                                                                     #
+#  Copyright Institut National de Recherche en Informatique et en     #
+#  Automatique.  All rights reserved.  This file is distributed       #
+#  under the terms of the INRIA Non-Commercial License Agreement.     #
+#                                                                     #
+#######################################################################
+
 .PHONY: all clean
 
 SOURCES := $(wildcard *.c)

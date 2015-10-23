@@ -3,6 +3,7 @@
 /*              The Compcert verified compiler                         */
 /*                                                                     */
 /*          Jacques-Henri Jourdan, INRIA Paris-Rocquencourt            */
+/*             François Pottier, INRIA Paris-Rocquencourt              */
 /*                                                                     */
 /*  Copyright Institut National de Recherche en Informatique et en     */
 /*  Automatique.  All rights reserved.  This file is distributed       */
