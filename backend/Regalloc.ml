@@ -234,7 +234,7 @@ let block_of_RTL_instr funsig tyenv = function
       and res' = vmregs (loc_result sg) in
       xparmove (expand_regs tyenv args) args'
        (Xcall(sg, sum_left_map (vreg tyenv) ros, args', res') ::
-         xparmove res' (expand_regs tyenv [res]) 
+         xparmove res' (expand_regs tyenv [res])
            [Xbranch s])
   | RTL.Itailcall(sg, ros, args) ->
       let args' = vlocs (loc_arguments sg) in
@@ -273,7 +273,7 @@ let function_of_RTL_function f tyenv =
   let xc = PTree.map1 (block_of_RTL_instr f.RTL.fn_sig tyenv) f.RTL.fn_code in
   (* Add moves for function parameters *)
   let pc_entrypoint = next_pc f in
-  let b_entrypoint = 
+  let b_entrypoint =
      xparmove (vlocs (loc_parameters f.RTL.fn_sig))
               (expand_regs tyenv f.RTL.fn_params)
               [Xbranch f.RTL.fn_entrypoint] in
@@ -465,7 +465,7 @@ let spill_costs f =
           let c1 = st.cost + amount in
           let c2 = if c1 >= 0 then c1 else max_int (* overflow *) in
           st.cost <- c2
-        end;           
+        end;
         st.usedefs <- st.usedefs + uses in
 
   let charge_list amount uses vl =
@@ -624,7 +624,7 @@ let add_interfs_instr g instr live =
       add_interfs_destroyed g (VSet.remove res live) (destroyed_by_op op)
   | Xload(chunk, addr, args, dst) ->
       add_interfs_def g dst live;
-      add_interfs_destroyed g (VSet.remove dst live) 
+      add_interfs_destroyed g (VSet.remove dst live)
                               (destroyed_by_load chunk addr)
   | Xstore(chunk, addr, args, src) ->
       add_interfs_destroyed g live (destroyed_by_store chunk addr)
@@ -655,7 +655,7 @@ let add_interfs_instr g instr live =
             | Some mr ->
                 add_interfs_list_mreg g vargs mr;
                 add_interfs_list_mreg g vres mr)
-            clob          
+            clob
       | _ -> ()
       end
   | Xbranch s ->
@@ -776,7 +776,7 @@ let add v t eqs = (v, t, 0) :: eqs
 
 let kill x eqs =
   List.filter (fun (v, t, date) -> v <> x && t <> x) eqs
-  
+
 let reload_var tospill eqs v =
   if not (VSet.mem v tospill) then
     (v, [], eqs)
@@ -845,7 +845,7 @@ let rec trim count eqs =
   if count <= 0 then [] else
     match eqs with
     | [] -> []
-    | (v, t, date) :: eqs' -> 
+    | (v, t, date) :: eqs' ->
         if date <= !max_age
         then (v, t, date + 1) :: trim (count - 1) eqs'
         else []
@@ -882,7 +882,7 @@ let spill_instr tospill eqs instr =
           | true, false ->
               let tmp = new_temp (typeof res) in
               let (argl', c1, eqs1) = reload_vars tospill eqs argl in
-              (c1 @ [Xmove(arg1, tmp); Xop(op, tmp :: argl', tmp); Xspill(tmp, res)], 
+              (c1 @ [Xmove(arg1, tmp); Xop(op, tmp :: argl', tmp); Xspill(tmp, res)],
                add res tmp (kill res eqs1))
           | false, true ->
               let eqs1 = add arg1 res (kill res eqs) in
@@ -890,13 +890,13 @@ let spill_instr tospill eqs instr =
               (Xreload(arg1, res) :: c1 @ [Xop(op, res :: argl', res)],
                kill res eqs2)
           | true, true ->
-              let tmp = new_temp (typeof res) in              
+              let tmp = new_temp (typeof res) in
               let eqs1 = add arg1 tmp eqs in
               let (argl', c1, eqs2) = reload_vars tospill eqs1 argl in
               (Xreload(arg1, tmp) :: c1 @ [Xop(op, tmp :: argl', tmp); Xspill(tmp, res)],
                add res tmp (kill tmp (kill res eqs2)))
           end
-      end          
+      end
   | Xload(chunk, addr, args, dst) ->
       let (args', c1, eqs1) = reload_vars tospill eqs args in
       let (dst', c2, eqs2) = save_var tospill eqs1 dst in
@@ -1047,7 +1047,7 @@ let transl_instr alloc instr k =
           if rarg1 = rres then
             LTL.Lop(op, rargs, rres) :: k
           else
-            LTL.Lop(Omove, [rarg1], rres) :: 
+            LTL.Lop(Omove, [rarg1], rres) ::
             LTL.Lop(op, rres :: rargl, rres) :: k
       end
   | Xload(chunk, addr, args, dst) ->
@@ -1079,7 +1079,7 @@ let transl_function fn alloc =
   { LTL.fn_sig = fn.fn_sig;
     LTL.fn_stacksize = fn.fn_stacksize;
     LTL.fn_entrypoint = fn.fn_entrypoint;
-    LTL.fn_code = PTree.map1 (transl_block alloc) fn.fn_code 
+    LTL.fn_code = PTree.map1 (transl_block alloc) fn.fn_code
   }
 
 
@@ -1113,7 +1113,7 @@ and more_rounds f ts count =
       fprintf !pp "--- Remain to be spilled:\n";
       VSet.iter (fun v -> fprintf !pp "%a " PrintXTL.var v) ts';
       fprintf !pp "\n\n"
-    end;      
+    end;
     more_rounds f (VSet.union ts ts') (count + 1)
   end
 
@@ -1148,7 +1148,7 @@ let regalloc f =
       | Timeout ->
           Error(msg (coqstring_of_camlstring "Spilling fails to converge"))
       | Type_error_at pc ->
-          Error [MSG(coqstring_of_camlstring "Ill-typed XTL code at PC "); 
+          Error [MSG(coqstring_of_camlstring "Ill-typed XTL code at PC ");
                  POS pc]
       | Bad_LTL ->
           Error(msg (coqstring_of_camlstring "Bad LTL after spilling"))

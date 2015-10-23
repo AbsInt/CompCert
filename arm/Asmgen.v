@@ -198,7 +198,7 @@ Definition rsubimm (r1 r2: ireg) (n: int) (k: code) :=
   iterate_op (Prsb r1 r2) (Padd r1 r1) (decompose_int n) k.
 
 Definition andimm (r1 r2: ireg) (n: int) (k: code) :=
-  if is_immed_arith n 
+  if is_immed_arith n
   then Pand r1 r2 (SOimm n) :: k
   else iterate_op (Pbic r1 r2) (Pbic r1 r1) (decompose_int (Int.not n)) k.
 
@@ -402,7 +402,7 @@ Definition transl_op
       do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
       OK (Pmul r r1 r2 :: k)
   | Omla, a1 :: a2 :: a3 :: nil =>
-      do r <- ireg_of res; do r1 <- ireg_of a1; 
+      do r <- ireg_of res; do r1 <- ireg_of a1;
       do r2 <- ireg_of a2; do r3 <- ireg_of a3;
       OK (Pmla r r1 r2 r3 :: k)
   | Omulhs, a1 :: a2 :: nil =>

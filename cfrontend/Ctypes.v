@@ -24,7 +24,7 @@ Require Archi.
 (** * Syntax of types *)
 
 (** Compcert C types are similar to those of C.  They include numeric types,
-  pointers, arrays, function types, and composite types (struct and 
+  pointers, arrays, function types, and composite types (struct and
   union).  Numeric types (integers and floats) fully specify the
   bit size of the type.  An integer type is a pair of a signed/unsigned
   flag and a bit size: 8, 16, or 32 bits, or the special [IBool] size
@@ -140,7 +140,7 @@ Definition attr_union (a1 a2: attr) : attr :=
        | None, al => al
        | al, None => al
        | Some n1, Some n2 => Some (N.max n1 n2)
-       end 
+       end
   |}.
 
 Definition merge_attributes (ty: type) (a: attr) : type :=
@@ -184,7 +184,7 @@ Definition type_int32s := Tint I32 Signed noattr.
 Definition type_bool := Tint IBool Signed noattr.
 
 (** The usual unary conversion.  Promotes small integer types to [signed int32]
-  and degrades array types and function types to pointer types. 
+  and degrades array types and function types to pointer types.
   Attributes are erased. *)
 
 Definition typeconv (ty: type) : type :=
@@ -272,7 +272,7 @@ Remark align_attr_two_p:
   (exists n, al = two_power_nat n) ->
   (exists n, align_attr a al = two_power_nat n).
 Proof.
-  intros. unfold align_attr. destruct (attr_alignas a).   
+  intros. unfold align_attr. destruct (attr_alignas a).
   exists (N.to_nat n). rewrite two_power_nat_two_p. rewrite N_nat_Z. auto.
   auto.
 Qed.
@@ -309,7 +309,7 @@ Qed.
 (** In the ISO C standard, size is defined only for complete
   types.  However, it is convenient that [sizeof] is a total
   function.  For [void] and function types, we follow GCC and define
-  their size to be 1.  For undefined structures and unions, the size is 
+  their size to be 1.  For undefined structures and unions, the size is
   arbitrarily taken to be 0.
 *)
 
@@ -355,16 +355,16 @@ Fixpoint naturally_aligned (t: type) : Prop :=
 Lemma sizeof_alignof_compat:
   forall env t, naturally_aligned t -> (alignof env t | sizeof env t).
 Proof.
-  induction t; intros [A B]; unfold alignof, align_attr; rewrite A; simpl. 
+  induction t; intros [A B]; unfold alignof, align_attr; rewrite A; simpl.
 - apply Zdivide_refl.
 - destruct i; apply Zdivide_refl.
-- exists (8 / Archi.align_int64); reflexivity. 
-- destruct f. apply Zdivide_refl. exists (8 / Archi.align_float64); reflexivity. 
+- exists (8 / Archi.align_int64); reflexivity.
+- destruct f. apply Zdivide_refl. exists (8 / Archi.align_float64); reflexivity.
 - apply Zdivide_refl.
-- apply Z.divide_mul_l; auto. 
+- apply Z.divide_mul_l; auto.
 - apply Zdivide_refl.
-- destruct (env!i). apply co_sizeof_alignof. apply Zdivide_0. 
-- destruct (env!i). apply co_sizeof_alignof. apply Zdivide_0. 
+- destruct (env!i). apply co_sizeof_alignof. apply Zdivide_0.
+- destruct (env!i). apply co_sizeof_alignof. apply Zdivide_0.
 Qed.
 
 (** ** Size and alignment for composite definitions *)
@@ -399,7 +399,7 @@ Fixpoint sizeof_union (env: composite_env) (m: members) : Z :=
 Lemma alignof_composite_two_p:
   forall env m, exists n, alignof_composite env m = two_power_nat n.
 Proof.
-  induction m as [|[id t]]; simpl. 
+  induction m as [|[id t]]; simpl.
 - exists 0%nat; auto.
 - apply Z.max_case; auto. apply alignof_two_p.
 Qed.
@@ -408,8 +408,8 @@ Lemma alignof_composite_pos:
   forall env m a, align_attr a (alignof_composite env m) > 0.
 Proof.
   intros.
-  exploit align_attr_two_p. apply (alignof_composite_two_p env m). 
-  instantiate (1 := a). intros [n EQ]. 
+  exploit align_attr_two_p. apply (alignof_composite_two_p env m).
+  instantiate (1 := a). intros [n EQ].
   rewrite EQ; apply two_power_nat_pos.
 Qed.
 
@@ -418,10 +418,10 @@ Lemma sizeof_struct_incr:
 Proof.
   induction m as [|[id t]]; simpl; intros.
 - omega.
-- apply Zle_trans with (align cur (alignof env t)). 
+- apply Zle_trans with (align cur (alignof env t)).
   apply align_le. apply alignof_pos.
   apply Zle_trans with (align cur (alignof env t) + sizeof env t).
-  generalize (sizeof_pos env t); omega. 
+  generalize (sizeof_pos env t); omega.
   apply IHm.
 Qed.
 
@@ -457,7 +457,7 @@ Fixpoint field_type (id: ident) (fld: members) {struct fld} : res type :=
   | (id', t) :: fld' => if ident_eq id id' then OK t else field_type id fld'
   end.
 
-(** Some sanity checks about field offsets.  First, field offsets are 
+(** Some sanity checks about field offsets.  First, field offsets are
   within the range of acceptable offsets. *)
 
 Remark field_offset_rec_in_range:
@@ -470,9 +470,9 @@ Proof.
 - destruct (ident_eq id i); intros.
   inv H. inv H0. split.
   apply align_le. apply alignof_pos. apply sizeof_struct_incr.
-  exploit IHfld; eauto. intros [A B]. split; auto. 
+  exploit IHfld; eauto. intros [A B]. split; auto.
   eapply Zle_trans; eauto. apply Zle_trans with (align pos (alignof env t)).
-  apply align_le. apply alignof_pos. generalize (sizeof_pos env t). omega. 
+  apply align_le. apply alignof_pos. generalize (sizeof_pos env t). omega.
 Qed.
 
 Lemma field_offset_in_range:
@@ -496,11 +496,11 @@ Proof.
   induction fld as [|[i t]]; simpl; intros.
 - discriminate.
 - destruct (ident_eq id1 i); destruct (ident_eq id2 i).
-+ congruence. 
++ congruence.
 + subst i. inv H; inv H0.
-  exploit field_offset_rec_in_range. eexact H1. eauto. tauto.  
+  exploit field_offset_rec_in_range. eexact H1. eauto. tauto.
 + subst i. inv H1; inv H2.
-  exploit field_offset_rec_in_range. eexact H. eauto. tauto. 
+  exploit field_offset_rec_in_range. eexact H. eauto. tauto.
 + eapply IHfld; eauto.
 Qed.
 
@@ -512,10 +512,10 @@ Lemma field_offset_prefix:
   field_offset env id fld1 = OK ofs ->
   field_offset env id (fld1 ++ fld2) = OK ofs.
 Proof.
-  intros until fld1. unfold field_offset. generalize 0 as pos. 
+  intros until fld1. unfold field_offset. generalize 0 as pos.
   induction fld1 as [|[i t]]; simpl; intros.
 - discriminate.
-- destruct (ident_eq id i); auto. 
+- destruct (ident_eq id i); auto.
 Qed.
 
 (** Fourth, the position of each field respects its alignment. *)
@@ -525,7 +525,7 @@ Lemma field_offset_aligned:
   field_offset env id fld = OK ofs -> field_type id fld = OK ty ->
   (alignof env ty | ofs).
 Proof.
-  intros until ty. unfold field_offset. generalize 0 as pos. revert fld. 
+  intros until ty. unfold field_offset. generalize 0 as pos. revert fld.
   induction fld as [|[i t]]; simpl; intros.
 - discriminate.
 - destruct (ident_eq id i).
@@ -613,18 +613,18 @@ Proof.
   assert (X: forall co, let a := Zmin 8 (co_alignof co) in
              a = 1 \/ a = 2 \/ a = 4 \/ a = 8).
   {
-    intros. destruct (co_alignof_two_p co) as [n EQ]. unfold a; rewrite EQ. 
+    intros. destruct (co_alignof_two_p co) as [n EQ]. unfold a; rewrite EQ.
     destruct n; auto.
     destruct n; auto.
     destruct n; auto.
     right; right; right. apply Z.min_l.
-    rewrite two_power_nat_two_p. rewrite ! inj_S. 
+    rewrite two_power_nat_two_p. rewrite ! inj_S.
     change 8 with (two_p 3). apply two_p_monotone. omega.
   }
   induction ty; simpl; auto.
   destruct i; auto.
   destruct f; auto.
-  destruct (env!i); auto. 
+  destruct (env!i); auto.
   destruct (env!i); auto.
 Qed.
 
@@ -644,9 +644,9 @@ Proof.
     destruct n. apply Zdivide_refl.
     destruct n. apply Zdivide_refl.
     destruct n. apply Zdivide_refl.
-    apply Z.min_case. 
-    exists (two_p (Z.of_nat n)). 
-    change 8 with (two_p 3). 
+    apply Z.min_case.
+    exists (two_p (Z.of_nat n)).
+    change 8 with (two_p 3).
     rewrite <- two_p_is_exp by omega.
     rewrite two_power_nat_two_p. rewrite !inj_S. f_equal. omega.
     apply Zdivide_refl.
@@ -659,8 +659,8 @@ Proof.
   apply Zdivide_refl.
   apply Z.divide_mul_l. auto.
   apply Zdivide_refl.
-  destruct (env!i). apply X. apply Zdivide_0. 
-  destruct (env!i). apply X. apply Zdivide_0. 
+  destruct (env!i). apply X. apply Zdivide_0.
+  destruct (env!i). apply X. apply Zdivide_0.
 Qed.
 
 (** Type ranks *)
@@ -761,7 +761,7 @@ Qed.
   The size and alignment of the composite are determined at this time.
   The alignment takes into account the [__Alignas] attributes
   associated with the definition.  The size is rounded up to a multiple
-  of the alignment.  
+  of the alignment.
 
   The conversion fails if a type of a member is not complete.  This rules
   out incorrect recursive definitions such as
@@ -800,7 +800,7 @@ Program Definition composite_of_def
             co_sizeof_alignof := _ |}
   end.
 Next Obligation.
-  apply Zle_ge. eapply Zle_trans. eapply sizeof_composite_pos. 
+  apply Zle_ge. eapply Zle_trans. eapply sizeof_composite_pos.
   apply align_le; apply alignof_composite_pos.
 Defined.
 Next Obligation.
@@ -842,9 +842,9 @@ Lemma alignof_stable:
   forall t, complete_type env t = true -> alignof env' t = alignof env t.
 Proof.
   induction t; simpl; intros; f_equal; auto.
-  destruct (env!i) as [co|] eqn:E; try discriminate. 
+  destruct (env!i) as [co|] eqn:E; try discriminate.
   erewrite extends by eauto. auto.
-  destruct (env!i) as [co|] eqn:E; try discriminate. 
+  destruct (env!i) as [co|] eqn:E; try discriminate.
   erewrite extends by eauto. auto.
 Qed.
 
@@ -853,9 +853,9 @@ Lemma sizeof_stable:
 Proof.
   induction t; simpl; intros; auto.
   rewrite IHt by auto. auto.
-  destruct (env!i) as [co|] eqn:E; try discriminate. 
+  destruct (env!i) as [co|] eqn:E; try discriminate.
   erewrite extends by eauto. auto.
-  destruct (env!i) as [co|] eqn:E; try discriminate. 
+  destruct (env!i) as [co|] eqn:E; try discriminate.
   erewrite extends by eauto. auto.
 Qed.
 
@@ -863,9 +863,9 @@ Lemma complete_type_stable:
   forall t, complete_type env t = true -> complete_type env' t = true.
 Proof.
   induction t; simpl; intros; auto.
-  destruct (env!i) as [co|] eqn:E; try discriminate. 
+  destruct (env!i) as [co|] eqn:E; try discriminate.
   erewrite extends by eauto. auto.
-  destruct (env!i) as [co|] eqn:E; try discriminate. 
+  destruct (env!i) as [co|] eqn:E; try discriminate.
   erewrite extends by eauto. auto.
 Qed.
 
@@ -873,16 +873,16 @@ Lemma rank_type_stable:
   forall t, complete_type env t = true -> rank_type env' t = rank_type env t.
 Proof.
   induction t; simpl; intros; auto.
-  destruct (env!i) as [co|] eqn:E; try discriminate. 
+  destruct (env!i) as [co|] eqn:E; try discriminate.
   erewrite extends by eauto. auto.
-  destruct (env!i) as [co|] eqn:E; try discriminate. 
+  destruct (env!i) as [co|] eqn:E; try discriminate.
   erewrite extends by eauto. auto.
 Qed.
 
 Lemma alignof_composite_stable:
   forall m, complete_members env m = true -> alignof_composite env' m = alignof_composite env m.
 Proof.
-  induction m as [|[id t]]; simpl; intros. 
+  induction m as [|[id t]]; simpl; intros.
   auto.
   InvBooleans. rewrite alignof_stable by auto. rewrite IHm by auto. auto.
 Qed.
@@ -892,7 +892,7 @@ Lemma sizeof_struct_stable:
 Proof.
   induction m as [|[id t]]; simpl; intros.
   auto.
-  InvBooleans. rewrite alignof_stable by auto. rewrite sizeof_stable by auto. 
+  InvBooleans. rewrite alignof_stable by auto. rewrite sizeof_stable by auto.
   rewrite IHm by auto. auto.
 Qed.
 
@@ -907,8 +907,8 @@ Qed.
 Lemma sizeof_composite_stable:
   forall su m, complete_members env m = true -> sizeof_composite env' su m = sizeof_composite env su m.
 Proof.
-  intros. destruct su; simpl. 
-  apply sizeof_struct_stable; auto. 
+  intros. destruct su; simpl.
+  apply sizeof_struct_stable; auto.
   apply sizeof_union_stable; auto.
 Qed.
 
@@ -937,7 +937,7 @@ Lemma add_composite_definitions_incr:
 Proof.
   induction defs; simpl; intros.
 - inv H; auto.
-- destruct a; monadInv H. 
+- destruct a; monadInv H.
   eapply IHdefs; eauto. rewrite PTree.gso; auto.
   red; intros; subst id0. unfold composite_of_def in EQ. rewrite H0 in EQ; discriminate.
 Qed.
@@ -974,22 +974,22 @@ Proof.
   eapply IHdefs; eauto.
   set (env1 := PTree.set id x env0) in *.
   unfold composite_of_def in EQ.
-  destruct (env0!id) eqn:E; try discriminate. 
+  destruct (env0!id) eqn:E; try discriminate.
   destruct (complete_members env0 m) eqn:C; inversion EQ; clear EQ.
   assert (forall id1 co1, env0!id1 = Some co1 -> env1!id1 = Some co1).
   { intros. unfold env1. rewrite PTree.gso; auto. congruence. }
   red; intros. unfold env1 in H2; rewrite PTree.gsspec in H2; destruct (peq id0 id).
-+ subst id0. inversion H2; clear H2. subst co. 
++ subst id0. inversion H2; clear H2. subst co.
 (*
   assert (A: alignof_composite env1 m = alignof_composite env0 m)
   by (apply alignof_composite_stable; assumption).
 *)
   rewrite <- H1; constructor; simpl.
-* eapply complete_members_stable; eauto. 
-* f_equal. symmetry. apply alignof_composite_stable; auto. 
-* f_equal. symmetry. apply sizeof_composite_stable; auto. 
+* eapply complete_members_stable; eauto.
+* f_equal. symmetry. apply alignof_composite_stable; auto.
+* f_equal. symmetry. apply sizeof_composite_stable; auto.
 * symmetry. apply rank_members_stable; auto.
-+ exploit H0; eauto. intros [P Q R S]. 
++ exploit H0; eauto. intros [P Q R S].
   constructor; intros.
 * eapply complete_members_stable; eauto.
 * rewrite Q. f_equal. symmetry. apply alignof_composite_stable; auto.
@@ -1005,13 +1005,13 @@ Theorem build_composite_env_charact:
   In (Composite id su m a) defs ->
   exists co, env!id = Some co /\ co_members co = m /\ co_attr co = a /\ co_su co = su.
 Proof.
-  intros until defs. unfold build_composite_env. generalize (PTree.empty composite) as env0. 
+  intros until defs. unfold build_composite_env. generalize (PTree.empty composite) as env0.
   revert defs. induction defs as [|d1 defs]; simpl; intros.
 - contradiction.
 - destruct d1; monadInv H.
-  destruct H0; [idtac|eapply IHdefs;eauto]. inv H. 
-  unfold composite_of_def in EQ. 
-  destruct (env0!id) eqn:E; try discriminate. 
+  destruct H0; [idtac|eapply IHdefs;eauto]. inv H.
+  unfold composite_of_def in EQ.
+  destruct (env0!id) eqn:E; try discriminate.
   destruct (complete_members env0 m) eqn:C; simplify_eq EQ. clear EQ; intros EQ.
   exists x.
   split. eapply add_composite_definitions_incr; eauto. apply PTree.gss.

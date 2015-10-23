@@ -17,7 +17,7 @@
 - [operation]: arithmetic and logical operations;
 - [addressing]: addressing modes for load and store operations.
 
-  These types are processor-specific and correspond roughly to what the 
+  These types are processor-specific and correspond roughly to what the
   processor can compute in one instruction.  In other terms, these
   types reflect the state of the program after instruction selection.
   For a processor-independent set of operations, see the abstract
@@ -36,7 +36,7 @@ Require Import Events.
 
 Set Implicit Arguments.
 
-Record shift_amount: Type := 
+Record shift_amount: Type :=
   { s_amount: int;
     s_range: Int.ltu s_amount Int.iwordsize = true }.
 
@@ -141,7 +141,7 @@ Inductive operation : Type :=
 (*c Boolean tests: *)
   | Ocmp: condition -> operation.       (**r [rd = 1] if condition holds, [rd = 0] otherwise. *)
 
-(** Addressing modes.  [r1], [r2], etc, are the arguments to the 
+(** Addressing modes.  [r1], [r2], etc, are the arguments to the
   addressing. *)
 
 Inductive addressing: Type :=
@@ -510,15 +510,15 @@ Program Definition mk_shift_amount (n: int) : shift_amount :=
   {| s_amount := Int.modu n Int.iwordsize; s_range := _ |}.
 Next Obligation.
   assert (0 <= Zmod (Int.unsigned n) 32 < 32). apply Z_mod_lt. omega.
-  unfold Int.ltu, Int.modu. change (Int.unsigned Int.iwordsize) with 32. 
-  rewrite Int.unsigned_repr. apply zlt_true. omega. 
+  unfold Int.ltu, Int.modu. change (Int.unsigned Int.iwordsize) with 32.
+  rewrite Int.unsigned_repr. apply zlt_true. omega.
   assert (32 < Int.max_unsigned). compute; auto. omega.
 Qed.
 
 Lemma mk_shift_amount_eq:
   forall n, Int.ltu n Int.iwordsize = true -> s_amount (mk_shift_amount n) = n.
 Proof.
-  intros; simpl. unfold Int.modu. transitivity (Int.repr (Int.unsigned n)). 
+  intros; simpl. unfold Int.modu. transitivity (Int.repr (Int.unsigned n)).
   decEq. apply Zmod_small. apply Int.ltu_inv; auto.
   apply Int.repr_unsigned.
 Qed.
@@ -540,7 +540,7 @@ Proof.
   intros until a. unfold is_move_operation; destruct op;
   try (intros; discriminate).
   destruct args. intros; discriminate.
-  destruct args. intros. intuition congruence. 
+  destruct args. intros. intuition congruence.
   intros; discriminate.
 Qed.
 
@@ -576,13 +576,13 @@ Proof.
   repeat (destruct vl; auto). apply Val.negate_cmpu_bool.
   repeat (destruct vl; auto). apply Val.negate_cmp_bool.
   repeat (destruct vl; auto). apply Val.negate_cmpu_bool.
-  repeat (destruct vl; auto). 
+  repeat (destruct vl; auto).
   repeat (destruct vl; auto). destruct (Val.cmpf_bool c v v0); auto. destruct b; auto.
-  repeat (destruct vl; auto). 
+  repeat (destruct vl; auto).
   repeat (destruct vl; auto). destruct (Val.cmpf_bool c v (Vfloat Float.zero)); auto. destruct b; auto.
-  repeat (destruct vl; auto). 
+  repeat (destruct vl; auto).
   repeat (destruct vl; auto). destruct (Val.cmpfs_bool c v v0); auto. destruct b; auto.
-  repeat (destruct vl; auto). 
+  repeat (destruct vl; auto).
   repeat (destruct vl; auto). destruct (Val.cmpfs_bool c v (Vsingle Float32.zero)); auto. destruct b; auto.
 Qed.
 
@@ -603,7 +603,7 @@ Definition shift_stack_operation (delta: int) (op: operation) :=
 Lemma type_shift_stack_addressing:
   forall delta addr, type_of_addressing (shift_stack_addressing delta addr) = type_of_addressing addr.
 Proof.
-  intros. destruct addr; auto. 
+  intros. destruct addr; auto.
 Qed.
 
 Lemma type_shift_stack_operation:
@@ -650,7 +650,7 @@ Lemma eval_offset_addressing:
 Proof.
   intros. destruct addr; simpl in H; inv H; simpl in *; FuncInv; subst.
   rewrite Val.add_assoc; auto.
-  rewrite Val.add_assoc. auto. 
+  rewrite Val.add_assoc. auto.
 Qed.
 
 (** Transformation of addressing modes with two operands or more
@@ -750,7 +750,7 @@ Lemma eval_operation_preserved:
   eval_operation ge2 sp op vl m = eval_operation ge1 sp op vl m.
 Proof.
   intros.
-  unfold eval_operation; destruct op; auto. 
+  unfold eval_operation; destruct op; auto.
   unfold Genv.symbol_address. rewrite agree_on_symbols; auto.
 Qed.
 
@@ -826,7 +826,7 @@ Ltac InvInject :=
 Remark eval_shift_inj:
   forall s v v', Val.inject f v v' -> Val.inject f (eval_shift s v) (eval_shift s v').
 Proof.
-  intros. inv H; destruct s; simpl; auto; rewrite s_range; auto. 
+  intros. inv H; destruct s; simpl; auto; rewrite s_range; auto.
 Qed.
 
 Lemma eval_condition_inj:
@@ -887,9 +887,9 @@ Proof.
   apply Values.Val.add_inject; auto. inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.
-  inv H4; inv H3; simpl in H1; inv H1. simpl. 
+  inv H4; inv H3; simpl in H1; inv H1. simpl.
     destruct (Int.eq i0 Int.zero || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone); inv H2. TrivialExists.
-  inv H4; inv H3; simpl in H1; inv H1. simpl. 
+  inv H4; inv H3; simpl in H1; inv H1. simpl.
     destruct (Int.eq i0 Int.zero); inv H2. TrivialExists.
 
   inv H4; inv H2; simpl; auto.
@@ -987,7 +987,7 @@ Remark valid_pointer_extends:
   Mem.valid_pointer m1 b1 (Int.unsigned ofs) = true ->
   Mem.valid_pointer m2 b2 (Int.unsigned (Int.add ofs (Int.repr delta))) = true.
 Proof.
-  intros. inv H0. rewrite Int.add_zero. eapply Mem.valid_pointer_extends; eauto. 
+  intros. inv H0. rewrite Int.add_zero. eapply Mem.valid_pointer_extends; eauto.
 Qed.
 
 Remark weak_valid_pointer_extends:
@@ -1055,8 +1055,8 @@ Proof.
   apply valid_different_pointers_extends; auto.
   intros. rewrite <- val_inject_lessdef; auto.
   rewrite <- val_inject_lessdef; auto.
-  eauto. auto. 
-  destruct H2 as [v2 [A B]]. exists v2; split; auto. rewrite val_inject_lessdef; auto. 
+  eauto. auto.
+  destruct H2 as [v2 [A B]]. exists v2; split; auto. rewrite val_inject_lessdef; auto.
 Qed.
 
 Lemma eval_addressing_lessdef:
@@ -1070,10 +1070,10 @@ Proof.
           eval_addressing genv sp addr vl2 = Some v2
           /\ Val.inject (fun b => Some(b, 0)) v1 v2).
   eapply eval_addressing_inj with (sp1 := sp).
-  intros. rewrite <- val_inject_lessdef; auto. 
-  rewrite <- val_inject_lessdef; auto. 
-  eauto. auto. 
-  destruct H1 as [v2 [A B]]. exists v2; split; auto. rewrite val_inject_lessdef; auto. 
+  intros. rewrite <- val_inject_lessdef; auto.
+  rewrite <- val_inject_lessdef; auto.
+  eauto. auto.
+  destruct H1 as [v2 [A B]]. exists v2; split; auto. rewrite val_inject_lessdef; auto.
 Qed.
 
 End EVAL_LESSDEF.
@@ -1095,7 +1095,7 @@ Remark symbol_address_inject:
   forall id ofs, Val.inject f (Genv.symbol_address genv id ofs) (Genv.symbol_address genv id ofs).
 Proof.
   intros. unfold Genv.symbol_address. destruct (Genv.find_symbol genv id) eqn:?; auto.
-  exploit (proj1 globals); eauto. intros. 
+  exploit (proj1 globals); eauto. intros.
   econstructor; eauto. rewrite Int.add_zero; auto.
 Qed.
 
@@ -1117,11 +1117,11 @@ Lemma eval_addressing_inject:
   forall addr vl1 vl2 v1,
   Val.inject_list f vl1 vl2 ->
   eval_addressing genv (Vptr sp1 Int.zero) addr vl1 = Some v1 ->
-  exists v2, 
+  exists v2,
      eval_addressing genv (Vptr sp2 Int.zero) (shift_stack_addressing (Int.repr delta) addr) vl2 = Some v2
   /\ Val.inject f v1 v2.
 Proof.
-  intros. 
+  intros.
   rewrite eval_shift_stack_addressing. simpl.
   eapply eval_addressing_inj with (sp1 := Vptr sp1 Int.zero); eauto.
   intros; apply symbol_address_inject.
@@ -1136,7 +1136,7 @@ Lemma eval_operation_inject:
      eval_operation genv (Vptr sp2 Int.zero) (shift_stack_operation (Int.repr delta) op) vl2 m2 = Some v2
   /\ Val.inject f v1 v2.
 Proof.
-  intros. 
+  intros.
   rewrite eval_shift_stack_operation. simpl.
   eapply eval_operation_inj with (sp1 := Vptr sp1 Int.zero) (m1 := m1); eauto.
   intros; eapply Mem.valid_pointer_inject_val; eauto.

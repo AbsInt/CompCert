@@ -164,7 +164,7 @@ now apply Rlt_le.
 assert (Hxe2 : (fexp (ex + 1) <= ex)%Z) by now apply valid_exp.
 assert (Hud: (F2R xu = F2R xd + ulp beta fexp x)%R).
 rewrite Hxu, Hxd.
-now apply ulp_DN_UP.
+now apply round_UP_DN_ulp.
 destruct (total_order_T (bpow ex) (F2R xu)) as [[Hu2|Hu2]|Hu2].
 (* - xu > bpow ex  *)
 elim (Rlt_not_le _ _ Hu2).
@@ -191,7 +191,8 @@ rewrite Rmult_plus_distr_r.
 rewrite Z2R_Zpower, <- bpow_plus.
 ring_simplify (ex - fexp ex + fexp ex)%Z.
 rewrite Hu2, Hud.
-unfold ulp, canonic_exp.
+rewrite ulp_neq_0;[idtac|now apply Rgt_not_eq].
+unfold canonic_exp.
 rewrite ln_beta_unique with beta x ex.
 unfold F2R.
 simpl. ring.
@@ -223,7 +224,8 @@ specialize (H ex).
 omega.
 (* - xu < bpow ex *)
 revert Hud.
-unfold ulp, F2R.
+rewrite ulp_neq_0;[idtac|now apply Rgt_not_eq].
+unfold F2R.
 rewrite Hd, Hu.
 unfold canonic_exp.
 rewrite ln_beta_unique with beta (F2R xu) ex.

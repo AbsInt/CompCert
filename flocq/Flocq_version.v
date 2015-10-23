@@ -25,7 +25,8 @@ Definition Flocq_version := Eval vm_compute in
   let fix parse s major minor :=
     match s with
     | String "."%char t => parse t (major * 100 + minor)%N N0
-    | String h t => parse t major (minor + N_of_ascii h - N_of_ascii "0"%char)%N
+    | String h t =>
+      parse t major (minor * 10 + N_of_ascii h - N_of_ascii "0"%char)%N
     | Empty_string => (major * 100 + minor)%N
     end in
-  parse "2.4.0"%string N0 N0.
+  parse "2.5.0"%string N0 N0.

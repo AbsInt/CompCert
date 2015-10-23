@@ -181,7 +181,7 @@ Definition add_rhs (n: numbering) (rd: reg) (rh: rhs) : numbering :=
 (** [add_op n rd op rs] specializes [add_rhs] for the case of an
   arithmetic operation.  The right-hand side corresponding to [op]
   and the value numbers for the argument registers [rs] is built
-  and added to [n] as described in [add_rhs].   
+  and added to [n] as described in [add_rhs].
 
   If [op] is a move instruction, we simply assign the value number of
   the source register to the destination register, since we know that
@@ -190,7 +190,7 @@ Definition add_rhs (n: numbering) (rd: reg) (rh: rhs) : numbering :=
 <<
      z = add(x, y);  u = x; v = add(u, y);
 >>
-  Since [u] and [x] have the same value number, the second [add] 
+  Since [u] and [x] have the same value number, the second [add]
   is recognized as computing the same result as the first [add],
   and therefore [u] and [z] have the same value number. *)
 
@@ -212,13 +212,13 @@ Definition add_op (n: numbering) (rd: reg) (op: operation) (rs: list reg) :=
   and the value numbers for the argument registers [rs] is built
   and added to [n] as described in [add_rhs]. *)
 
-Definition add_load (n: numbering) (rd: reg) 
+Definition add_load (n: numbering) (rd: reg)
                     (chunk: memory_chunk) (addr: addressing)
                     (rs: list reg) :=
   let (n1, vs) := valnum_regs n rs in
   add_rhs n1 rd (Load chunk addr vs).
 
-(** [set_unknown n rd] returns a numbering where [rd] is mapped to 
+(** [set_unknown n rd] returns a numbering where [rd] is mapped to
   no value number, and no equations are added.  This is useful
   to model instructions with unpredictable results such as [Ibuiltin]. *)
 
@@ -323,7 +323,7 @@ Definition kill_loads_after_storebytes
              (app: VA.t) (n: numbering) (dst: aptr) (sz: Z) :=
   kill_equations (filter_after_store app n dst sz) n.
 
-(** [add_memcpy app n1 n2 rsrc rdst sz] adds equations to [n2] that 
+(** [add_memcpy app n1 n2 rsrc rdst sz] adds equations to [n2] that
   represent the effect of a [memcpy] block copy operation of [sz] bytes
   from the address denoted by [rsrc] to the address denoted by [rdst].
   [n2] is the numbering returned by [kill_loads_after_storebytes]
@@ -415,7 +415,7 @@ End REDUCE.
 Module Numbering.
   Definition t := numbering.
   Definition ge (n1 n2: numbering) : Prop :=
-    forall valu ge sp rs m, 
+    forall valu ge sp rs m,
     numbering_holds valu ge sp rs m n2 ->
     numbering_holds valu ge sp rs m n1.
   Definition top := empty_numbering.
@@ -443,7 +443,7 @@ Module Solver := BBlock_solver(Numbering).
   then add an equation for loads from the same location stored to.
   For [Icall] instructions, we could simply associate a fresh, unconstrained by equations value number
   to the result register.  However, it is often undesirable to eliminate
-  common subexpressions across a function call (there is a risk of 
+  common subexpressions across a function call (there is a risk of
   increasing too much the register pressure across the call), so we
   just forget all equations and start afresh with an empty numbering.
   Finally, for instructions that modify neither registers nor

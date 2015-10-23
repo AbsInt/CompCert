@@ -31,7 +31,7 @@ Open Local Scope cminorsel_scope.
 
 (** The following are trivial lemmas and custom tactics that help
   perform backward (inversion) and forward reasoning over the evaluation
-  of operator applications. *)  
+  of operator applications. *)
 
 Ltac EvalOp := eapply eval_Eop; eauto with evalexpr.
 
@@ -116,8 +116,8 @@ Theorem eval_addrsymbol:
   forall le id ofs,
   exists v, eval_expr ge sp e m le (addrsymbol id ofs) v /\ Val.lessdef (Genv.symbol_address ge id ofs) v.
 Proof.
-  intros. unfold addrsymbol. econstructor; split. 
-  EvalOp. simpl; eauto. 
+  intros. unfold addrsymbol. econstructor; split.
+  EvalOp. simpl; eauto.
   auto.
 Qed.
 
@@ -126,7 +126,7 @@ Theorem eval_addrstack:
   exists v, eval_expr ge sp e m le (addrstack ofs) v /\ Val.lessdef (Val.add sp (Vint ofs)) v.
 Proof.
   intros. unfold addrstack. econstructor; split.
-  EvalOp. simpl; eauto. 
+  EvalOp. simpl; eauto.
   auto.
 Qed.
 
@@ -146,14 +146,14 @@ Theorem eval_addimm:
 Proof.
   red; unfold addimm; intros until x.
   predSpec Int.eq Int.eq_spec n Int.zero.
-  subst n. intros. exists x; split; auto. 
+  subst n. intros. exists x; split; auto.
   destruct x; simpl; auto. rewrite Int.add_zero. auto. rewrite Int.add_zero. auto.
   case (addimm_match a); intros; InvEval; simpl; TrivialExists; simpl.
   rewrite Int.add_commut. auto.
   unfold Genv.symbol_address. destruct (Genv.find_symbol ge s); simpl; auto. rewrite Int.add_commut; auto.
   rewrite Val.add_assoc. rewrite Int.add_commut. auto.
   subst x. rewrite Val.add_assoc. rewrite Int.add_commut. auto.
-Qed. 
+Qed.
 
 Theorem eval_add: binary_constructor_sound add Val.add.
 Proof.
@@ -161,12 +161,12 @@ Proof.
   unfold add; case (add_match a b); intros; InvEval.
   rewrite Val.add_commut. apply eval_addimm; auto.
   apply eval_addimm; auto.
-  subst. 
+  subst.
   replace (Val.add (Val.add v1 (Vint n1)) (Val.add v0 (Vint n2)))
      with (Val.add (Val.add v1 v0) (Val.add (Vint n1) (Vint n2))).
   apply eval_addimm. EvalOp.
   repeat rewrite Val.add_assoc. decEq. apply Val.add_permut.
-  subst. 
+  subst.
   replace (Val.add (Val.add v1 (Vint n1)) y)
      with (Val.add (Val.add v1 y) (Vint n1)).
   apply eval_addimm. EvalOp.
@@ -174,7 +174,7 @@ Proof.
   subst. rewrite <- Val.add_assoc. apply eval_addimm. EvalOp.
   subst. rewrite Val.add_commut. TrivialExists.
   subst. TrivialExists.
-  subst. TrivialExists. 
+  subst. TrivialExists.
   subst. rewrite Val.add_commut. TrivialExists.
   TrivialExists.
 Qed.
@@ -184,7 +184,7 @@ Proof.
   red; intros until x. unfold rsubimm; case (rsubimm_match a); intros.
   InvEval. TrivialExists.
   InvEval. subst x. econstructor; split. EvalOp. unfold eval_operation; eauto.
-  destruct v1; simpl; auto. rewrite Int.sub_add_r. rewrite <- Int.sub_add_opp. 
+  destruct v1; simpl; auto. rewrite Int.sub_add_r. rewrite <- Int.sub_add_opp.
   auto.
   InvEval. subst x. econstructor; split. EvalOp. simpl; eauto.
   fold (Val.sub (Vint m0) v1). destruct v1; simpl; auto.
@@ -198,7 +198,7 @@ Proof.
   red; intros until y.
   unfold sub; case (sub_match a b); intros; InvEval.
   rewrite Val.sub_add_opp. apply eval_addimm; auto.
-  subst. rewrite Val.sub_add_l. rewrite Val.sub_add_r. 
+  subst. rewrite Val.sub_add_l. rewrite Val.sub_add_r.
     rewrite Val.add_assoc. simpl. rewrite Int.add_commut. rewrite <- Int.sub_add_opp.
     apply eval_addimm; EvalOp.
   subst. rewrite Val.sub_add_l. apply eval_addimm; EvalOp.
@@ -211,7 +211,7 @@ Qed.
 
 Theorem eval_negint: unary_constructor_sound negint (fun v => Val.sub Vzero v).
 Proof.
-  red; intros. unfold negint. apply eval_rsubimm; auto. 
+  red; intros. unfold negint. apply eval_rsubimm; auto.
 Qed.
 
 Theorem eval_shlimm:
@@ -227,11 +227,11 @@ Opaque mk_shift_amount.
   InvEval. simpl; rewrite Heqb. TrivialExists.
   destruct (Int.ltu (Int.add n n1) Int.iwordsize) eqn:?.
   InvEval. subst x. exists (Val.shl v1 (Vint (Int.add n n1))); split. EvalOp.
-  simpl. rewrite mk_shift_amount_eq; auto. 
+  simpl. rewrite mk_shift_amount_eq; auto.
   destruct v1; simpl; auto. rewrite s_range. simpl. rewrite Heqb. rewrite Heqb0.
   rewrite Int.add_commut. rewrite Int.shl_shl; auto. apply s_range. rewrite Int.add_commut; auto.
-  TrivialExists. simpl. rewrite mk_shift_amount_eq; auto. 
-  TrivialExists. simpl. rewrite mk_shift_amount_eq; auto. 
+  TrivialExists. simpl. rewrite mk_shift_amount_eq; auto.
+  TrivialExists. simpl. rewrite mk_shift_amount_eq; auto.
   intros; TrivialExists. simpl. constructor. eauto. constructor. EvalOp. simpl; eauto. constructor. auto.
 Qed.
 
@@ -247,11 +247,11 @@ Proof.
   InvEval. simpl; rewrite Heqb. TrivialExists.
   destruct (Int.ltu (Int.add n n1) Int.iwordsize) eqn:?.
   InvEval. subst x. exists (Val.shr v1 (Vint (Int.add n n1))); split. EvalOp.
-  simpl. rewrite mk_shift_amount_eq; auto. 
+  simpl. rewrite mk_shift_amount_eq; auto.
   destruct v1; simpl; auto. rewrite s_range. simpl. rewrite Heqb. rewrite Heqb0.
   rewrite Int.add_commut. rewrite Int.shr_shr; auto. apply s_range. rewrite Int.add_commut; auto.
-  TrivialExists. simpl. rewrite mk_shift_amount_eq; auto.  
-  TrivialExists. simpl. rewrite mk_shift_amount_eq; auto. 
+  TrivialExists. simpl. rewrite mk_shift_amount_eq; auto.
+  TrivialExists. simpl. rewrite mk_shift_amount_eq; auto.
   intros; TrivialExists. simpl. constructor. eauto. constructor. EvalOp. simpl; eauto. constructor. auto.
 Qed.
 
@@ -267,11 +267,11 @@ Proof.
   InvEval. simpl; rewrite Heqb. TrivialExists.
   destruct (Int.ltu (Int.add n n1) Int.iwordsize) eqn:?.
   InvEval. subst x. exists (Val.shru v1 (Vint (Int.add n n1))); split. EvalOp.
-  simpl. rewrite mk_shift_amount_eq; auto. 
+  simpl. rewrite mk_shift_amount_eq; auto.
   destruct v1; simpl; auto. destruct (Int.ltu n1 Int.iwordsize) eqn:?; simpl; auto.
   rewrite Heqb; rewrite Heqb0. rewrite Int.add_commut. rewrite Int.shru_shru; auto. rewrite Int.add_commut; auto.
-  TrivialExists. simpl. rewrite mk_shift_amount_eq; auto. 
-  TrivialExists. simpl. rewrite mk_shift_amount_eq; auto. 
+  TrivialExists. simpl. rewrite mk_shift_amount_eq; auto.
+  TrivialExists. simpl. rewrite mk_shift_amount_eq; auto.
   intros; TrivialExists. simpl. constructor. eauto. constructor. EvalOp. simpl; eauto. constructor. auto.
 Qed.
 
@@ -282,12 +282,12 @@ Proof.
   assert (DFL: exists v, eval_expr ge sp e m le (Eop Omul (Eop (Ointconst n) Enil ::: a ::: Enil)) v /\ Val.lessdef (Val.mul x (Vint n)) v).
   TrivialExists. econstructor. EvalOp. simpl; eauto. econstructor. eauto. constructor.
   rewrite Val.mul_commut. auto.
-  generalize (Int.one_bits_decomp n). 
+  generalize (Int.one_bits_decomp n).
   generalize (Int.one_bits_range n).
   destruct (Int.one_bits n).
   intros. auto.
   destruct l.
-  intros. rewrite H1. simpl. 
+  intros. rewrite H1. simpl.
   rewrite Int.add_zero.
   replace (Vint (Int.shl Int.one i)) with (Val.shl Vone (Vint i)). rewrite Val.shl_mul.
   apply eval_shlimm. auto. simpl. rewrite H0; auto with coqlib.
@@ -296,13 +296,13 @@ Proof.
   exploit (eval_shlimm i (x :: le) (Eletvar 0) x). constructor; auto. intros [v1 [A1 B1]].
   exploit (eval_shlimm i0 (x :: le) (Eletvar 0) x). constructor; auto. intros [v2 [A2 B2]].
   exploit (eval_add (x :: le)). eexact A1. eexact A2. intros [v [A B]].
-  exists v; split. econstructor; eauto. 
+  exists v; split. econstructor; eauto.
   rewrite Int.add_zero.
   replace (Vint (Int.add (Int.shl Int.one i) (Int.shl Int.one i0)))
      with (Val.add (Val.shl Vone (Vint i)) (Val.shl Vone (Vint i0))).
   rewrite Val.mul_add_distr_r.
   repeat rewrite Val.shl_mul. eapply Val.lessdef_trans. 2: eauto. apply Val.add_lessdef; auto.
-  simpl. repeat rewrite H0; auto with coqlib. 
+  simpl. repeat rewrite H0; auto with coqlib.
   intros. auto.
 Qed.
 
@@ -311,18 +311,18 @@ Theorem eval_mulimm:
   forall n, unary_constructor_sound (mulimm n) (fun x => Val.mul x (Vint n)).
 Proof.
   intros; red; intros until x; unfold mulimm.
-  predSpec Int.eq Int.eq_spec n Int.zero. 
-  intros. exists (Vint Int.zero); split. EvalOp. 
+  predSpec Int.eq Int.eq_spec n Int.zero.
+  intros. exists (Vint Int.zero); split. EvalOp.
   destruct x; simpl; auto. subst n. rewrite Int.mul_zero. auto.
   predSpec Int.eq Int.eq_spec n Int.one.
   intros. exists x; split; auto.
   destruct x; simpl; auto. subst n. rewrite Int.mul_one. auto.
   case (mulimm_match a); intros; InvEval.
   TrivialExists. simpl. rewrite Int.mul_commut; auto.
-  subst. rewrite Val.mul_add_distr_l. 
+  subst. rewrite Val.mul_add_distr_l.
   exploit eval_mulimm_base; eauto. instantiate (1 := n). intros [v' [A1 B1]].
   exploit (eval_addimm (Int.mul n n2) le (mulimm_base n t2) v'). auto. intros [v'' [A2 B2]].
-  exists v''; split; auto. eapply Val.lessdef_trans. eapply Val.add_lessdef; eauto. 
+  exists v''; split; auto. eapply Val.lessdef_trans. eapply Val.add_lessdef; eauto.
   rewrite Val.mul_commut; auto.
   apply eval_mulimm_base; auto.
 Qed.
@@ -331,7 +331,7 @@ Theorem eval_mul: binary_constructor_sound mul Val.mul.
 Proof.
   red; intros until y.
   unfold mul; case (mul_match a b); intros; InvEval.
-  rewrite Val.mul_commut. apply eval_mulimm. auto. 
+  rewrite Val.mul_commut. apply eval_mulimm. auto.
   apply eval_mulimm. auto.
   TrivialExists.
 Qed.
@@ -340,15 +340,15 @@ Theorem eval_andimm:
   forall n, unary_constructor_sound (andimm n) (fun x => Val.and x (Vint n)).
 Proof.
   intros; red; intros until x. unfold andimm.
-  predSpec Int.eq Int.eq_spec n Int.zero. 
-  intros. exists (Vint Int.zero); split. EvalOp. 
+  predSpec Int.eq Int.eq_spec n Int.zero.
+  intros. exists (Vint Int.zero); split. EvalOp.
   destruct x; simpl; auto. subst n. rewrite Int.and_zero. auto.
   predSpec Int.eq Int.eq_spec n Int.mone.
-  intros. exists x; split; auto. 
+  intros. exists x; split; auto.
   subst. destruct x; simpl; auto. rewrite Int.and_mone; auto.
   case (andimm_match a); intros.
   InvEval. TrivialExists. simpl. rewrite Int.and_commut; auto.
-  InvEval. subst. rewrite Val.and_assoc. simpl. rewrite Int.and_commut. TrivialExists. 
+  InvEval. subst. rewrite Val.and_assoc. simpl. rewrite Int.and_commut. TrivialExists.
   TrivialExists.
 Qed.
 
@@ -374,11 +374,11 @@ Proof.
   intros. subst. exists x; split; auto.
   destruct x; simpl; auto. rewrite Int.or_zero; auto.
   predSpec Int.eq Int.eq_spec n Int.mone.
-  intros. exists (Vint Int.mone); split. EvalOp. 
+  intros. exists (Vint Int.mone); split. EvalOp.
   destruct x; simpl; auto. subst n. rewrite Int.or_mone. auto.
   destruct (orimm_match a); intros; InvEval.
   TrivialExists. simpl. rewrite Int.or_commut; auto.
-  subst. rewrite Val.or_assoc. simpl. rewrite Int.or_commut. TrivialExists. 
+  subst. rewrite Val.or_assoc. simpl. rewrite Int.or_commut. TrivialExists.
   TrivialExists.
 Qed.
 
@@ -390,10 +390,10 @@ Remark eval_same_expr:
   a1 = a2 /\ v1 = v2.
 Proof.
   intros until v2.
-  destruct a1; simpl; try (intros; discriminate). 
+  destruct a1; simpl; try (intros; discriminate).
   destruct a2; simpl; try (intros; discriminate).
   case (ident_eq i i0); intros.
-  subst i0. inversion H0. inversion H1. split. auto. congruence. 
+  subst i0. inversion H0. inversion H1. split. auto. congruence.
   discriminate.
 Qed.
 
@@ -406,9 +406,9 @@ Proof.
   destruct (Int.eq (Int.add n1 n2) Int.iwordsize && same_expr_pure t1 t2) eqn:?.
   destruct (andb_prop _ _ Heqb0).
   generalize (Int.eq_spec (Int.add n1 n2) Int.iwordsize); rewrite H1; intros.
-  exploit eval_same_expr; eauto. intros [EQ1 EQ2]. subst. 
+  exploit eval_same_expr; eauto. intros [EQ1 EQ2]. subst.
   exists (Val.ror v0 (Vint n2)); split. EvalOp.
-  destruct v0; simpl; auto. 
+  destruct v0; simpl; auto.
   destruct (Int.ltu n1 Int.iwordsize) eqn:?; auto.
   destruct (Int.ltu n2 Int.iwordsize) eqn:?; auto.
   simpl. rewrite <- Int.or_ror; auto.
@@ -419,9 +419,9 @@ Proof.
   destruct (Int.eq (Int.add n2 n1) Int.iwordsize && same_expr_pure t1 t2) eqn:?.
   destruct (andb_prop _ _ Heqb0).
   generalize (Int.eq_spec (Int.add n2 n1) Int.iwordsize); rewrite H1; intros.
-  exploit eval_same_expr; eauto. intros [EQ1 EQ2]. subst. 
+  exploit eval_same_expr; eauto. intros [EQ1 EQ2]. subst.
   exists (Val.ror v0 (Vint n1)); split. EvalOp.
-  destruct v0; simpl; auto. 
+  destruct v0; simpl; auto.
   destruct (Int.ltu n1 Int.iwordsize) eqn:?; auto.
   destruct (Int.ltu n2 Int.iwordsize) eqn:?; auto.
   simpl. rewrite Int.or_commut. rewrite <- Int.or_ror; auto.
@@ -439,15 +439,15 @@ Theorem eval_xorimm:
   forall n, unary_constructor_sound (xorimm n) (fun x => Val.xor x (Vint n)).
 Proof.
   intros; red; intros until x. unfold xorimm.
-  predSpec Int.eq Int.eq_spec n Int.zero. 
-  intros. exists x; split. auto.  
+  predSpec Int.eq Int.eq_spec n Int.zero.
+  intros. exists x; split. auto.
   destruct x; simpl; auto. subst n. rewrite Int.xor_zero. auto.
   predSpec Int.eq Int.eq_spec n Int.mone.
   intros. subst n. rewrite <- Val.not_xor. apply eval_notint; auto.
   intros. destruct (xorimm_match a); intros; InvEval.
   TrivialExists. simpl. rewrite Int.xor_commut; auto.
   subst. rewrite Val.xor_assoc. simpl. rewrite Int.xor_commut. TrivialExists.
-  subst x. rewrite Val.not_xor. rewrite Val.xor_assoc. 
+  subst x. rewrite Val.not_xor. rewrite Val.xor_assoc.
   rewrite (Val.xor_commut (Vint Int.mone)). TrivialExists.
   TrivialExists.
 Qed.
@@ -472,19 +472,19 @@ Lemma eval_mod_aux:
   eval_expr ge sp e m le (mod_aux divop a b) (Val.sub x (Val.mul z y)).
 Proof.
   intros; unfold mod_aux.
-  eapply eval_Elet. eexact H0. eapply eval_Elet. 
+  eapply eval_Elet. eexact H0. eapply eval_Elet.
   apply eval_lift. eexact H1.
-  eapply eval_Eop. eapply eval_Econs. 
+  eapply eval_Eop. eapply eval_Econs.
   eapply eval_Eletvar. simpl; reflexivity.
-  eapply eval_Econs. eapply eval_Eop. 
+  eapply eval_Econs. eapply eval_Eop.
   eapply eval_Econs. eapply eval_Eop.
   eapply eval_Econs. apply eval_Eletvar. simpl; reflexivity.
   eapply eval_Econs. apply eval_Eletvar. simpl; reflexivity.
-  apply eval_Enil.  
+  apply eval_Enil.
   rewrite H. eauto.
   eapply eval_Econs. apply eval_Eletvar. simpl; reflexivity.
-  apply eval_Enil.  
-  simpl; reflexivity. apply eval_Enil. 
+  apply eval_Enil.
+  simpl; reflexivity. apply eval_Enil.
   reflexivity.
 Qed.
 
@@ -505,7 +505,7 @@ Theorem eval_mods_base:
   Val.mods x y = Some z ->
   exists v, eval_expr ge sp e m le (mods_base a b) v /\ Val.lessdef z v.
 Proof.
-  intros; unfold mods_base. 
+  intros; unfold mods_base.
   exploit Val.mods_divs; eauto. intros [v [A B]].
   subst. econstructor; split; eauto.
   apply eval_mod_aux with (semdivop := Val.divs); auto.
@@ -528,7 +528,7 @@ Theorem eval_modu_base:
   Val.modu x y = Some z ->
   exists v, eval_expr ge sp e m le (modu_base a b) v /\ Val.lessdef z v.
 Proof.
-  intros; unfold modu_base. 
+  intros; unfold modu_base.
   exploit Val.modu_divu; eauto. intros [v [A B]].
   subst. econstructor; split; eauto.
   apply eval_mod_aux with (semdivop := Val.divu); auto.
@@ -540,13 +540,13 @@ Theorem eval_shrximm:
   Val.shrx x (Vint n) = Some z ->
   exists v, eval_expr ge sp e m le (shrximm a n) v /\ Val.lessdef z v.
 Proof.
-  intros. unfold shrximm. 
+  intros. unfold shrximm.
   predSpec Int.eq Int.eq_spec n Int.zero.
-  subst n. exists x; split; auto. 
+  subst n. exists x; split; auto.
   destruct x; simpl in H0; try discriminate.
   destruct (Int.ltu Int.zero (Int.repr 31)); inv H0.
-  replace (Int.shrx i Int.zero) with i. auto. 
-  unfold Int.shrx, Int.divs. rewrite Int.shl_zero. 
+  replace (Int.shrx i Int.zero) with i. auto.
+  unfold Int.shrx, Int.divs. rewrite Int.shl_zero.
   change (Int.signed Int.one) with 1. rewrite Z.quot_1_r. rewrite Int.repr_signed; auto.
   econstructor; split. EvalOp. auto.
 Qed.
@@ -555,39 +555,39 @@ Theorem eval_shl: binary_constructor_sound shl Val.shl.
 Proof.
   red; intros until y; unfold shl; case (shl_match b); intros.
   InvEval. apply eval_shlimm; auto.
-  TrivialExists. 
+  TrivialExists.
 Qed.
 
 Theorem eval_shr: binary_constructor_sound shr Val.shr.
 Proof.
   red; intros until y; unfold shr; case (shr_match b); intros.
   InvEval. apply eval_shrimm; auto.
-  TrivialExists. 
+  TrivialExists.
 Qed.
 
 Theorem eval_shru: binary_constructor_sound shru Val.shru.
 Proof.
   red; intros until y; unfold shru; case (shru_match b); intros.
   InvEval. apply eval_shruimm; auto.
-  TrivialExists. 
+  TrivialExists.
 Qed.
 
 
 Theorem eval_negf: unary_constructor_sound negf Val.negf.
 Proof.
-  red; intros. TrivialExists. 
+  red; intros. TrivialExists.
 Qed.
 
 Theorem eval_absf: unary_constructor_sound absf Val.absf.
 Proof.
-  red; intros. TrivialExists. 
+  red; intros. TrivialExists.
 Qed.
 
 Theorem eval_addf: binary_constructor_sound addf Val.addf.
 Proof.
   red; intros; TrivialExists.
 Qed.
- 
+
 Theorem eval_subf: binary_constructor_sound subf Val.subf.
 Proof.
   red; intros; TrivialExists.
@@ -600,19 +600,19 @@ Qed.
 
 Theorem eval_negfs: unary_constructor_sound negfs Val.negfs.
 Proof.
-  red; intros. TrivialExists. 
+  red; intros. TrivialExists.
 Qed.
 
 Theorem eval_absfs: unary_constructor_sound absfs Val.absfs.
 Proof.
-  red; intros. TrivialExists. 
+  red; intros. TrivialExists.
 Qed.
 
 Theorem eval_addfs: binary_constructor_sound addfs Val.addfs.
 Proof.
   red; intros; TrivialExists.
 Qed.
- 
+
 Theorem eval_subfs: binary_constructor_sound subfs Val.subfs.
 Proof.
   red; intros; TrivialExists.
@@ -646,8 +646,8 @@ Proof.
 (* constant *)
   InvEval. rewrite sem_int. TrivialExists. simpl. destruct (intsem c0 n1 n2); auto.
 (* eq cmp *)
-  InvEval. inv H. simpl in H5. inv H5. 
-  destruct (Int.eq_dec n2 Int.zero). subst n2. TrivialExists. 
+  InvEval. inv H. simpl in H5. inv H5.
+  destruct (Int.eq_dec n2 Int.zero). subst n2. TrivialExists.
   simpl. rewrite eval_negate_condition.
   destruct (eval_condition c0 vl m); simpl.
   unfold Vtrue, Vfalse. destruct b; simpl; rewrite sem_eq; auto.
@@ -656,13 +656,13 @@ Proof.
   simpl. destruct (eval_condition c0 vl m); simpl.
   unfold Vtrue, Vfalse. destruct b; simpl; rewrite sem_eq; auto.
   rewrite sem_undef; auto.
-  exists (Vint Int.zero); split. EvalOp. 
+  exists (Vint Int.zero); split. EvalOp.
   destruct (eval_condition c0 vl m); simpl.
   unfold Vtrue, Vfalse. destruct b; rewrite sem_eq; rewrite Int.eq_false; auto.
   rewrite sem_undef; auto.
 (* ne cmp *)
-  InvEval. inv H. simpl in H5. inv H5. 
-  destruct (Int.eq_dec n2 Int.zero). subst n2. TrivialExists. 
+  InvEval. inv H. simpl in H5. inv H5.
+  destruct (Int.eq_dec n2 Int.zero). subst n2. TrivialExists.
   simpl. destruct (eval_condition c0 vl m); simpl.
   unfold Vtrue, Vfalse. destruct b; simpl; rewrite sem_ne; auto.
   rewrite sem_undef; auto.
@@ -670,7 +670,7 @@ Proof.
   simpl. rewrite eval_negate_condition. destruct (eval_condition c0 vl m); simpl.
   unfold Vtrue, Vfalse. destruct b; simpl; rewrite sem_ne; auto.
   rewrite sem_undef; auto.
-  exists (Vint Int.one); split. EvalOp. 
+  exists (Vint Int.one); split. EvalOp.
   destruct (eval_condition c0 vl m); simpl.
   unfold Vtrue, Vfalse. destruct b; rewrite sem_ne; rewrite Int.eq_false; auto.
   rewrite sem_undef; auto.
@@ -687,7 +687,7 @@ Lemma eval_compimm_swap:
   exists v, eval_expr ge sp e m le (compimm default intsem (swap_comparison c) a n2) v
          /\ Val.lessdef (sem c (Vint n2) x) v.
 Proof.
-  intros. rewrite <- sem_swap. eapply eval_compimm; eauto. 
+  intros. rewrite <- sem_swap. eapply eval_compimm; eauto.
 Qed.
 
 End COMP_IMM.
@@ -696,9 +696,9 @@ Theorem eval_comp:
   forall c, binary_constructor_sound (comp c) (Val.cmp c).
 Proof.
   intros; red; intros until y. unfold comp; case (comp_match a b); intros; InvEval.
-  eapply eval_compimm_swap; eauto. 
+  eapply eval_compimm_swap; eauto.
   intros. unfold Val.cmp. rewrite Val.swap_cmp_bool; auto.
-  eapply eval_compimm; eauto. 
+  eapply eval_compimm; eauto.
   TrivialExists.
 Qed.
 
@@ -706,9 +706,9 @@ Theorem eval_compu:
   forall c, binary_constructor_sound (compu c) (Val.cmpu (Mem.valid_pointer m) c).
 Proof.
   intros; red; intros until y. unfold compu; case (compu_match a b); intros; InvEval.
-  eapply eval_compimm_swap; eauto. 
+  eapply eval_compimm_swap; eauto.
   intros. unfold Val.cmpu. rewrite Val.swap_cmpu_bool; auto.
-  eapply eval_compimm; eauto. 
+  eapply eval_compimm; eauto.
   TrivialExists.
 Qed.
 
@@ -766,7 +766,7 @@ Theorem eval_intoffloat:
   Val.intoffloat x = Some y ->
   exists v, eval_expr ge sp e m le (intoffloat a) v /\ Val.lessdef y v.
 Proof.
-  intros; unfold intoffloat. TrivialExists. 
+  intros; unfold intoffloat. TrivialExists.
 Qed.
 
 Theorem eval_floatofint:
@@ -776,8 +776,8 @@ Theorem eval_floatofint:
   exists v, eval_expr ge sp e m le (floatofint a) v /\ Val.lessdef y v.
 Proof.
   intros until y; unfold floatofint. case (floatofint_match a); intros.
-  InvEval. simpl in H0. TrivialExists. 
-  TrivialExists. 
+  InvEval. simpl in H0. TrivialExists.
+  TrivialExists.
 Qed.
 
 Theorem eval_intuoffloat:
@@ -786,7 +786,7 @@ Theorem eval_intuoffloat:
   Val.intuoffloat x = Some y ->
   exists v, eval_expr ge sp e m le (intuoffloat a) v /\ Val.lessdef y v.
 Proof.
-  intros; unfold intuoffloat. TrivialExists. 
+  intros; unfold intuoffloat. TrivialExists.
 Qed.
 
 Theorem eval_floatofintu:
@@ -796,7 +796,7 @@ Theorem eval_floatofintu:
   exists v, eval_expr ge sp e m le (floatofintu a) v /\ Val.lessdef y v.
 Proof.
   intros until y; unfold floatofintu. case (floatofintu_match a); intros.
-  InvEval. simpl in H0. TrivialExists. 
+  InvEval. simpl in H0. TrivialExists.
   TrivialExists.
 Qed.
 
@@ -806,7 +806,7 @@ Theorem eval_intofsingle:
   Val.intofsingle x = Some y ->
   exists v, eval_expr ge sp e m le (intofsingle a) v /\ Val.lessdef y v.
 Proof.
-  intros; unfold intofsingle. TrivialExists. 
+  intros; unfold intofsingle. TrivialExists.
 Qed.
 
 Theorem eval_singleofint:
@@ -816,8 +816,8 @@ Theorem eval_singleofint:
   exists v, eval_expr ge sp e m le (singleofint a) v /\ Val.lessdef y v.
 Proof.
   intros until y; unfold singleofint. case (singleofint_match a); intros.
-  InvEval. simpl in H0. TrivialExists. 
-  TrivialExists. 
+  InvEval. simpl in H0. TrivialExists.
+  TrivialExists.
 Qed.
 
 Theorem eval_intuofsingle:
@@ -826,7 +826,7 @@ Theorem eval_intuofsingle:
   Val.intuofsingle x = Some y ->
   exists v, eval_expr ge sp e m le (intuofsingle a) v /\ Val.lessdef y v.
 Proof.
-  intros; unfold intuofsingle. TrivialExists. 
+  intros; unfold intuofsingle. TrivialExists.
 Qed.
 
 Theorem eval_singleofintu:
@@ -836,7 +836,7 @@ Theorem eval_singleofintu:
   exists v, eval_expr ge sp e m le (singleofintu a) v /\ Val.lessdef y v.
 Proof.
   intros until y; unfold singleofintu. case (singleofintu_match a); intros.
-  InvEval. simpl in H0. TrivialExists. 
+  InvEval. simpl in H0. TrivialExists.
   TrivialExists.
 Qed.
 
@@ -846,7 +846,7 @@ Theorem eval_addressing:
   v = Vptr b ofs ->
   match addressing chunk a with (mode, args) =>
     exists vl,
-    eval_exprlist ge sp e m le args vl /\ 
+    eval_exprlist ge sp e m le args vl /\
     eval_addressing ge sp mode vl = Some v
   end.
 Proof.
@@ -872,12 +872,12 @@ Proof.
   intros until v. unfold builtin_arg; case (builtin_arg_match a); intros; InvEval.
 - constructor.
 - constructor.
-- constructor. 
+- constructor.
 - simpl in H5. inv H5. constructor.
 - subst v. constructor; auto.
 - inv H. InvEval. simpl in H6; inv H6. constructor; auto.
 - inv H. InvEval. simpl in H6. rewrite <- Genv.shift_symbol_address in H6.
-  inv H6. constructor; auto.  
+  inv H6. constructor; auto.
 - constructor; auto.
 Qed.
 

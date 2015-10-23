@@ -28,7 +28,7 @@ let error msg lexbuf =
                        lexbuf.lex_curr_p.pos_lnum,
                        msg)))
 
-let ill_formed_line lexbuf = error "Ill-formed line" lexbuf 
+let ill_formed_line lexbuf = error "Ill-formed line" lexbuf
 let unterminated_quote lexbuf = error "Unterminated quote" lexbuf
 let lone_backslash lexbuf = error "Lone \\ (backslash) at end of file" lexbuf
 
@@ -41,7 +41,7 @@ let ident = ['A'-'Z' 'a'-'z' '_'] ['A'-'Z' 'a'-'z' '0'-'9' '_' '.']*
 rule begline = parse
   | '#' [^ '\n']* ('\n' | eof)
       { Lexing.new_line lexbuf; begline lexbuf }
-  | whitespace* (ident as key) whitespace* '=' 
+  | whitespace* (ident as key) whitespace* '='
       { let words = unquoted false [] lexbuf in
         Hashtbl.add key_val_tbl key (List.rev words);
         begline lexbuf }

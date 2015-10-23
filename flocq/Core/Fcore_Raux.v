@@ -207,6 +207,27 @@ rewrite 3!(Rmult_comm r).
 now apply Rmult_min_distr_r.
 Qed.
 
+Lemma Rmin_opp: forall x y, (Rmin (-x) (-y) = - Rmax x y)%R.
+Proof.
+intros x y.
+apply Rmax_case_strong; intros H.
+rewrite Rmin_left; trivial.
+now apply Ropp_le_contravar.
+rewrite Rmin_right; trivial.
+now apply Ropp_le_contravar.
+Qed.
+
+Lemma Rmax_opp: forall x y, (Rmax (-x) (-y) = - Rmin x y)%R.
+Proof.
+intros x y.
+apply Rmin_case_strong; intros H.
+rewrite Rmax_left; trivial.
+now apply Ropp_le_contravar.
+rewrite Rmax_right; trivial.
+now apply Ropp_le_contravar.
+Qed.
+
+
 Theorem exp_le :
   forall x y : R,
   (x <= y)%R -> (exp x <= exp y)%R.
@@ -1930,6 +1951,16 @@ destruct (ln_beta x) as (ex, Ex) ; simpl.
 now apply Ex.
 Qed.
 
+Theorem bpow_ln_beta_le :
+  forall x, (x <> 0)%R ->
+    (bpow (ln_beta x-1) <= Rabs x)%R.
+Proof.
+intros x Hx.
+destruct (ln_beta x) as (ex, Ex) ; simpl.
+now apply Ex.
+Qed.
+
+
 Theorem ln_beta_le_Zpower :
   forall m e,
   m <> Z0 ->
@@ -2305,6 +2336,160 @@ apply refl_equal.
 Qed.
 
 End cond_Ropp.
+
+
+(** LPO taken from Coquelicot *)
+
+Theorem LPO_min :
+  forall P : nat -> Prop, (forall n, P n \/ ~ P n) ->
+  {n : nat | P n /\ forall i, (i < n)%nat -> ~ P i} + {forall n, ~ P n}.
+Proof.
+assert (Hi: forall n, (0 < INR n + 1)%R).
+  intros N.
+  rewrite <- S_INR.
+  apply lt_0_INR.
+  apply lt_0_Sn.
+intros P HP.
+set (E y := exists n, (P n /\ y = / (INR n + 1))%R \/ (~ P n /\ y = 0)%R).
+assert (HE: forall n, P n -> E (/ (INR n + 1))%R).
+  intros n Pn.
+  exists n.
+  left.
+  now split.
+assert (BE: is_upper_bound E 1).
+  intros x [y [[_ ->]|[_ ->]]].
+  rewrite <- Rinv_1 at 2.
+  apply Rinv_le.
+  exact Rlt_0_1.
+  rewrite <- S_INR.
+  apply (le_INR 1), le_n_S, le_0_n.
+  exact Rle_0_1.
+destruct (completeness E) as [l [ub lub]].
+  now exists 1%R.
+  destruct (HP O) as [H0|H0].
+  exists 1%R.
+  exists O.
+  left.
+  apply (conj H0).
+  rewrite Rplus_0_l.
+  apply sym_eq, Rinv_1.
+  exists 0%R.
+  exists O.
+  right.
+  now split.
+destruct (Rle_lt_dec l 0) as [Hl|Hl].
+  right.
+  intros n Pn.
+  apply Rle_not_lt with (1 := Hl).
+  apply Rlt_le_trans with (/ (INR n + 1))%R.
+  now apply Rinv_0_lt_compat.
+  apply ub.
+  now apply HE.
+left.
+set (N := Zabs_nat (up (/l) - 2)).
+exists N.
+assert (HN: (INR N + 1 = IZR (up (/ l)) - 1)%R).
+  unfold N.
+  rewrite INR_IZR_INZ.
+  rewrite inj_Zabs_nat.
+  replace (IZR (up (/ l)) - 1)%R with (IZR (up (/ l) - 2) + 1)%R.
+  apply (f_equal (fun v => IZR v + 1)%R).
+  apply Zabs_eq.
+  apply Zle_minus_le_0.
+  apply (Zlt_le_succ 1).
+  apply lt_IZR.
+  apply Rle_lt_trans with (/l)%R.
+  apply Rmult_le_reg_r with (1 := Hl).
+  rewrite Rmult_1_l, Rinv_l by now apply Rgt_not_eq.
+  apply lub.
+  exact BE.
+  apply archimed.
+  rewrite minus_IZR.
+  simpl.
+  ring.
+assert (H: forall i, (i < N)%nat -> ~ P i).
+  intros i HiN Pi.
+  unfold is_upper_bound in ub.
+  refine (Rle_not_lt _ _ (ub (/ (INR i + 1))%R _) _).
+  now apply HE.
+  rewrite <- (Rinv_involutive l) by now apply Rgt_not_eq.
+  apply Rinv_1_lt_contravar.
+  rewrite <- S_INR.
+  apply (le_INR 1).
+  apply le_n_S.
+  apply le_0_n.
+  apply Rlt_le_trans with (INR N + 1)%R.
+  apply Rplus_lt_compat_r.
+  now apply lt_INR.
+  rewrite HN.
+  apply Rplus_le_reg_r with (-/l + 1)%R.
+  ring_simplify.
+  apply archimed.
+destruct (HP N) as [PN|PN].
+  now split.
+elimtype False.
+refine (Rle_not_lt _ _ (lub (/ (INR (S N) + 1))%R _) _).
+  intros x [y [[Py ->]|[_ ->]]].
+  destruct (eq_nat_dec y N) as [HyN|HyN].
+  elim PN.
+  now rewrite <- HyN.
+  apply Rinv_le.
+  apply Hi.
+  apply Rplus_le_compat_r.
+  apply Rnot_lt_le.
+  intros Hy.
+  refine (H _ _ Py).
+  apply INR_lt in Hy.
+  clear -Hy HyN.
+  omega.
+  now apply Rlt_le, Rinv_0_lt_compat.
+rewrite S_INR, HN.
+ring_simplify (IZR (up (/ l)) - 1 + 1)%R.
+rewrite <- (Rinv_involutive l) at 2 by now apply Rgt_not_eq.
+apply Rinv_1_lt_contravar.
+rewrite <- Rinv_1.
+apply Rinv_le.
+exact Hl.
+now apply lub.
+apply archimed.
+Qed.
+
+Theorem LPO :
+  forall P : nat -> Prop, (forall n, P n \/ ~ P n) ->
+  {n : nat | P n} + {forall n, ~ P n}.
+Proof.
+intros P HP.
+destruct (LPO_min P HP) as [[n [Pn _]]|Pn].
+left.
+now exists n.
+now right.
+Qed.
+
+
+Lemma LPO_Z : forall P : Z -> Prop, (forall n, P n \/ ~P n) ->
+  {n : Z| P n} + {forall n, ~ P n}.
+Proof.
+intros P H.
+destruct (LPO (fun n => P (Z.of_nat n))) as [J|J].
+intros n; apply H.
+destruct J as (n, Hn).
+left; now exists (Z.of_nat n).
+destruct (LPO (fun n => P (-Z.of_nat n)%Z)) as [K|K].
+intros n; apply H.
+destruct K as (n, Hn).
+left; now exists (-Z.of_nat n)%Z.
+right; intros n; case (Zle_or_lt 0 n); intros M.
+rewrite <- (Zabs_eq n); trivial.
+rewrite <- Zabs2Nat.id_abs.
+apply J.
+rewrite <- (Zopp_involutive n).
+rewrite <- (Z.abs_neq n).
+rewrite <- Zabs2Nat.id_abs.
+apply K.
+omega.
+Qed.
+
+
 
 (** A little tactic to simplify terms of the form [bpow a * bpow b]. *)
 Ltac bpow_simplify :=

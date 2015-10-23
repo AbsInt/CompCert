@@ -16,8 +16,9 @@ open C
 open Camlcoq
 open Cutil
 open DebugTypes
+open Sections
 
-(* This implements an interface for the collection of debugging 
+(* This implements an interface for the collection of debugging
    information. *)
 
 (* Simple id generator *)
@@ -60,53 +61,7 @@ let typ_to_string (ty: typ) =
   Buffer.contents buf
 
 (* Helper functions for the attributes *)
-let strip_attributes typ =
-  let strip =  List.filter (fun a -> a = AConst || a = AVolatile) in 
-  match typ with
-  | TVoid at -> TVoid (strip at)
-  | TInt (k,at) ->  TInt (k,strip at)
-  | TFloat (k,at) -> TFloat(k,strip at)
-  | TPtr (t,at) -> TPtr(t,strip at)
-  | TArray (t,s,at) -> TArray(t,s,strip at)
-  | TFun (t,arg,v,at) -> TFun(t,arg,v,strip at)
-  | TNamed (n,at) -> TNamed(n,strip at)
-  | TStruct (n,at) -> TStruct(n,strip at)
-  | TUnion (n,at) -> TUnion(n,strip at)
-  | TEnum (n,at) -> TEnum(n,strip at)
-
-let strip_last_attribute typ  = 
-  let rec hd_opt l = match l with
-    [] -> None,[]
-  | AConst::rest -> Some AConst,rest
-  | AVolatile::rest -> Some AVolatile,rest 
-  | _::rest -> hd_opt rest in
-  match typ with
-  | TVoid at -> let l,r = hd_opt at in
-    l,TVoid r
-  | TInt (k,at) -> let l,r = hd_opt at in
-    l,TInt (k,r)
-  | TFloat (k,at) -> let l,r = hd_opt at in
-    l,TFloat (k,r)
-  | TPtr (t,at) -> let l,r = hd_opt at in
-    l,TPtr(t,r)
-  | TArray (t,s,at) -> let l,r = hd_opt at in
-    l,TArray(t,s,r)
-  | TFun (t,arg,v,at) -> let l,r = hd_opt at in
-    l,TFun(t,arg,v,r)
-  | TNamed (n,at) -> let l,r = hd_opt at in
-    l,TNamed(n,r)
-  | TStruct (n,at) -> let l,r = hd_opt at in
-    l,TStruct(n,r)
-  | TUnion (n,at) -> let l,r = hd_opt at in
-    l,TUnion(n,r)
-  | TEnum (n,at) -> let l,r = hd_opt at in
-    l,TEnum(n,r)
-
-(* Does the type already exist? *)
-let exist_type (ty: typ) =
-  (* We are only interrested in Const and Volatile *)
-  let ty = strip_attributes ty in
-  Hashtbl.mem lookup_types (typ_to_string ty)
+let strip_attributes typ = strip_attributes_type typ [AConst; AVolatile]
 
 (* Find the type id to an type *)
 let find_type (ty: typ) =
@@ -117,20 +72,20 @@ let find_type (ty: typ) =
 (* Add type and information *)
 let insert_type (ty: typ) =
   let insert d_ty ty =
-    let id = next_id () 
+    let id = next_id ()
     and name = typ_to_string ty in
     Hashtbl.add types id d_ty;
     Hashtbl.add lookup_types name id;
     id in
   (* We are only interrested in Const and Volatile *)
   let ty = strip_attributes ty in
-  let rec typ_aux ty = 
+  let rec typ_aux ty =
     try find_type ty with
     | Not_found ->
         let d_ty =
           match ty with
           | TVoid _ -> Void
-          | TInt (k,_) -> 
+          | TInt (k,_) ->
               IntegerType ({int_kind = k })
           | TFloat (k,_) ->
               FloatType ({float_kind = k})
@@ -150,14 +105,14 @@ let insert_type (ty: typ) =
               } in
               ArrayType arr
           | TFun (t,param,va,_) ->
-              let param,prot = (match param with 
+              let param,prot = (match param with
               | None -> [],false
-              | Some p -> List.map (fun (i,t) -> let t = attr_aux t in 
+              | Some p -> List.map (fun (i,t) -> let t = attr_aux t in
                 {
                  param_type = t;
-                 param_name = i.name;               
+                 param_name = i.name;
                }) p,true) in
-              let ret = (match t with 
+              let ret = (match t with
               | TVoid _ -> None
               | _ -> Some (attr_aux t)) in
               let ftype = {
@@ -201,7 +156,7 @@ let insert_type (ty: typ) =
                } in
               CompositeType union
           | TEnum (id,_) ->
-              let enum = 
+              let enum =
                 {
                  enum_name = id.name;
                  enum_byte_size = None;
@@ -210,13 +165,13 @@ let insert_type (ty: typ) =
                } in
               EnumType enum in
         insert d_ty ty
-  and attr_aux ty = 
+  and attr_aux ty =
     try
       find_type ty
     with
       Not_found ->
         match strip_last_attribute ty with
-        | Some AConst,t -> 
+        | Some AConst,t ->
             let id = attr_aux t in
             let const = { cst_type = id} in
             insert (ConstType const) ty
@@ -267,6 +222,7 @@ let name_to_definition: (string,int) Hashtbl.t = Hashtbl.create 7
 (* Mapping from atom to debug id *)
 let atom_to_definition: (atom, int) Hashtbl.t = Hashtbl.create 7
 
+(* Various lookup functions for defintions *)
 let find_gvar_stamp id =
   let id = (Hashtbl.find stamp_to_definition id) in
   let var = Hashtbl.find definitions id in
@@ -302,9 +258,6 @@ let local_variables: (int, local_information) Hashtbl.t = Hashtbl.create 7
 (* Mapping from stampt to the debug id of the local variable *)
 let stamp_to_local: (int,int) Hashtbl.t = Hashtbl.create 7
 
-(* Mapping form atom to the debug id of the local variable *)
-let atom_to_local: (atom, int) Hashtbl.t = Hashtbl.create 7
-
 (* Map from scope id + function id to debug id *)
 let scope_to_local: (int * int,int) Hashtbl.t = Hashtbl.create 7
 
@@ -333,7 +286,7 @@ let replace_scope id var =
   let var = Scope var in
   Hashtbl.replace local_variables id var
 
-let gen_comp_typ sou id at = 
+let gen_comp_typ sou id at =
   if sou = Struct then
     TStruct (id,at)
   else
@@ -377,11 +330,11 @@ let insert_global_declaration env dec=
         end
       end else begin
         (* Implict declarations need special handling *)
-        let id' = try Hashtbl.find name_to_definition id.name with Not_found -> 
+        let id' = try Hashtbl.find name_to_definition id.name with Not_found ->
           let id' = next_id () in
           Hashtbl.add name_to_definition id.name id';id' in
         Hashtbl.add stamp_to_definition id.stamp id'
-      end       
+      end
   | Gfundef f ->
       let ret =  (match f.fd_ret with
       | TVoid _ -> None
@@ -398,7 +351,7 @@ let insert_global_declaration env dec=
          parameter_type = ty;
        }) f.fd_params in
       let fd =
-      { 
+      {
         fun_name = f.fd_name.name;
         fun_atom = None;
         fun_file_loc = dec.gloc;
@@ -411,19 +364,19 @@ let insert_global_declaration env dec=
         fun_scope = None;
       } in
       begin
-        let id' = try Hashtbl.find name_to_definition f.fd_name.name with Not_found -> 
+        let id' = try Hashtbl.find name_to_definition f.fd_name.name with Not_found ->
           let id' = next_id () in
           Hashtbl.add name_to_definition f.fd_name.name id';id' in
         Hashtbl.add stamp_to_definition f.fd_name.stamp id';
         Hashtbl.add definitions id' (Function fd)
       end
-  | Gcompositedecl (sou,id,at) -> 
+  | Gcompositedecl (sou,id,at) ->
       ignore (insert_type (gen_comp_typ sou id at));
       let id = find_type (gen_comp_typ sou id []) in
       replace_composite id (fun comp -> if comp.ct_file_loc = None then
         {comp with ct_file_loc = Some (dec.gloc);}
       else comp)
-  | Gcompositedef (sou,id,at,fi) -> 
+  | Gcompositedef (sou,id,at,fi) ->
       ignore (insert_type (gen_comp_typ sou id at));
       let id = find_type (gen_comp_typ sou id []) in
       let fi = List.filter (fun f -> f.fld_name <> "") fi in (* Fields without names need no info *)
@@ -440,15 +393,15 @@ let insert_global_declaration env dec=
       replace_composite id (fun comp ->
         let loc = if comp.ct_file_loc = None then Some dec.gloc else comp.ct_file_loc in
         {comp with ct_file_loc = loc; ct_members = fields; ct_declaration = false;})
-  | Gtypedef (id,t) -> 
+  | Gtypedef (id,t) ->
       let id = insert_type (TNamed (id,[])) in
       let tid = insert_type t in
       replace_typedef id (fun typ -> {typ with typedef_file_loc = Some dec.gloc; typ = Some tid;});
-  | Genumdef (n,at,e) -> 
+  | Genumdef (n,at,e) ->
       ignore(insert_type (TEnum (n,at)));
       let id = find_type (TEnum (n,[])) in
       let enumerator = List.map (fun (i,c,_) ->
-        {    
+        {
              enumerator_name = i.name;
              enumerator_const = c;
        }) e in
@@ -459,37 +412,35 @@ let insert_global_declaration env dec=
 let set_member_offset str field offset =
   let id = find_type (TStruct (str,[])) in
   replace_composite id (fun comp ->
-    let name f = f.cfd_name = field || match f.cfd_bitfield with Some n -> n = field | _ -> false in 
+    let name f = f.cfd_name = field || match f.cfd_bitfield with Some n -> n = field | _ -> false in
     let members = list_replace name (fun a -> {a with cfd_byte_offset = Some offset;}) comp.ct_members in
     {comp with ct_members = members;})
 
 let set_composite_size comp sou size =
   let id = find_type (gen_comp_typ sou comp []) in
-  replace_composite id (fun comp -> {comp with ct_sizeof = size;}) 
+  replace_composite id (fun comp -> {comp with ct_sizeof = size;})
 
 let set_bitfield_offset str field offset underlying size =
   let id = find_type (TStruct (str,[])) in
   replace_composite id (fun comp ->
     let name f = f.cfd_name = field in
-    let members = list_replace name (fun a -> 
+    let members = list_replace name (fun a ->
       {a with cfd_bit_offset = Some offset; cfd_bitfield = Some underlying; cfd_byte_size = Some size})
         comp.ct_members in
     {comp with ct_members = members;})
 
-let atom_global_variable id atom = 
+let atom_global id atom =
   try
-    let id,var = find_gvar_stamp id.stamp in
-    replace_var id ({var with gvar_atom = Some atom;});
-    Hashtbl.add atom_to_definition atom id 
-  with Not_found -> ()
-    
-let atom_function id atom =
-  try
-    let id',f = find_fun_stamp id.stamp in
-    replace_fun id' ({f with fun_atom = Some atom;});
-    Hashtbl.add atom_to_definition atom id';
-    Hashtbl.iter (fun (fid,sid) tid -> if fid = id.stamp then 
-      Hashtbl.add atom_to_scope (atom,sid) tid) scope_to_local
+    let id' = (Hashtbl.find stamp_to_definition id.stamp) in
+    let g = Hashtbl.find definitions id' in
+    match g with
+    | Function f ->
+        replace_fun id' ({f with fun_atom = Some atom;});
+        Hashtbl.add atom_to_definition atom id';
+        Hashtbl.iter (fun (fid,sid) tid -> if fid = id.stamp then
+          Hashtbl.add atom_to_scope (atom,sid) tid) scope_to_local
+    | GlobalVariable var ->
+        replace_var id' ({var with gvar_atom = Some atom;})
   with Not_found -> ()
 
 let atom_parameter fid id atom =
@@ -499,7 +450,7 @@ let atom_parameter fid id atom =
     let params = list_replace name (fun p -> {p with parameter_atom = Some atom;}) f.fun_parameter in
     replace_fun fid' ({f with fun_parameter = params;})
   with Not_found -> ()
-    
+
 let add_fun_addr atom (high,low) =
   try
     let id,f = find_fun_atom atom in
@@ -509,14 +460,13 @@ let add_fun_addr atom (high,low) =
 let atom_local_variable id atom =
   try
     let id,var = find_lvar_stamp id.stamp in
-    replace_lvar id ({var with lvar_atom = Some atom;});
-    Hashtbl.add atom_to_local atom id
+    replace_lvar id ({var with lvar_atom = Some atom;})
   with Not_found -> ()
 
 let add_lvar_scope f_id var_id s_id =
   try
     let s_id',scope = find_scope_id f_id s_id in
-    let var_id,_ = find_lvar_stamp var_id.stamp in 
+    let var_id,_ = find_lvar_stamp var_id.stamp in
     replace_scope s_id' ({scope_variables = var_id::scope.scope_variables;})
   with Not_found -> ()
 
@@ -582,21 +532,11 @@ let label_translation: (atom * positive, int) Hashtbl.t = Hashtbl.create 7
 let add_label atom p i =
   Hashtbl.add label_translation (atom,p) i
 
-(* Auxiliary data structures and functions *)
-module IntSet = Set.Make(struct
-  type t = int
-  let compare (x:int) (y:int) = compare x y
-end)
-
-let open_scopes: IntSet.t ref = ref IntSet.empty
-let open_vars: atom list ref = ref []
-
 let open_scope atom s_id lbl =
   try
     let s_id = Hashtbl.find atom_to_scope (atom,s_id) in
     let old_r = try Hashtbl.find scope_ranges s_id with Not_found -> [] in
     let n_scop = { start_addr = Some lbl; end_addr = None;} in
-    open_scopes := IntSet.add s_id !open_scopes;
     Hashtbl.replace scope_ranges s_id (n_scop::old_r)
   with Not_found -> ()
 
@@ -604,14 +544,13 @@ let close_scope atom s_id lbl =
   try
     let s_id = Hashtbl.find atom_to_scope (atom,s_id) in
     let old_r = try Hashtbl.find scope_ranges s_id with Not_found -> [] in
-    let last_r,rest = 
+    let last_r,rest =
       begin
         match old_r with
         | a::rest -> a,rest
         | _ -> assert false (* We must have an opening scope *)
       end in
     let new_r = ({last_r with end_addr = Some lbl;})::rest in
-    open_scopes := IntSet.remove s_id !open_scopes;
     Hashtbl.replace scope_ranges s_id new_r
   with Not_found -> ()
 
@@ -620,7 +559,6 @@ let start_live_range (f,v) lbl loc =
   match old_r with
   | RangeLoc old_r ->
       let n_r = { range_start = Some lbl; range_end = None; var_loc = loc } in
-      open_vars := v::!open_vars;
       Hashtbl.replace var_locations (f,v) (RangeLoc (n_r::old_r))
   | _ -> () (* Parameter that is passed as variable *)
 
@@ -638,28 +576,39 @@ let end_live_range (f,v) lbl =
 let stack_variable (f,v) (sp,loc) =
   Hashtbl.add var_locations (f,v) (FunctionLoc (sp,loc))
 
-let function_end atom loc =
-  IntSet.iter (fun id -> close_scope atom id loc) !open_scopes;
-  open_scopes := IntSet.empty;
-  List.iter (fun id-> end_live_range (atom,id) loc) !open_vars;
-  open_vars:= []
-
 let compilation_section_start: (string,int) Hashtbl.t = Hashtbl.create 7
 let compilation_section_end: (string,int) Hashtbl.t = Hashtbl.create 7
 
-let diab_additional: (string,int * int * string) Hashtbl.t = Hashtbl.create 7
+let diab_additional: (string,int * int * section_name) Hashtbl.t = Hashtbl.create 7
+
+let section_to_string = function
+  | Section_user (n,_,_) -> n
+  | _ -> ".text"
 
 let add_compilation_section_start sec addr =
+  let sec = section_to_string sec in
   Hashtbl.add compilation_section_start sec addr
 
 let add_compilation_section_end sec addr =
+  let sec = section_to_string sec in
   Hashtbl.add compilation_section_end sec addr
 
-let add_diab_info sec addr =
-  Hashtbl.add diab_additional sec addr
+let add_diab_info sec addr1 add2 addr3 =
+  let sec' = section_to_string sec in
+  Hashtbl.add compilation_section_start sec' addr3;
+  Hashtbl.add diab_additional sec' (addr1,add2,sec)
+
+let diab_add_fun_addr name _ addr = add_fun_addr name addr
+
+let gnu_add_fun_addr name sec (high,low) =
+  let sec = section_to_string sec in
+  if not (Hashtbl.mem compilation_section_start sec) then
+    Hashtbl.add compilation_section_start sec low;
+  Hashtbl.replace compilation_section_end sec high;
+  add_fun_addr name (high,low)
 
 let exists_section sec =
-  Hashtbl.mem compilation_section_start sec
+  Hashtbl.mem compilation_section_start (section_to_string sec)
 
 let filenum: (string * string,int) Hashtbl.t = Hashtbl.create 7
 
@@ -690,11 +639,14 @@ let init name =
   Hashtbl.reset atom_to_definition;
   Hashtbl.reset local_variables;
   Hashtbl.reset stamp_to_local;
-  Hashtbl.reset atom_to_local;
   Hashtbl.reset scope_to_local;
+  Hashtbl.reset atom_to_scope;
   Hashtbl.reset compilation_section_start;
   Hashtbl.reset compilation_section_end;
-  Hashtbl.reset filenum;
-  all_files := StringSet.singleton name;
   Hashtbl.reset diab_additional;
-  printed_vars := StringSet.empty;
+  Hashtbl.reset filenum;
+  Hashtbl.reset var_locations;
+  Hashtbl.reset scope_ranges;
+  Hashtbl.reset label_translation;
+  all_files := StringSet.singleton name;
+  printed_vars := StringSet.empty

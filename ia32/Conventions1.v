@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Function calling conventions and other conventions regarding the use of 
+(** Function calling conventions and other conventions regarding the use of
     machine registers and stack slots. *)
 
 Require Import Coqlib.
@@ -106,19 +106,19 @@ Proof.
 Qed.
 
 Lemma index_int_callee_save_inj:
-  forall r1 r2, 
+  forall r1 r2,
   In r1 int_callee_save_regs ->
   In r2 int_callee_save_regs ->
   r1 <> r2 ->
   index_int_callee_save r1 <> index_int_callee_save r2.
 Proof.
-  intros r1 r2. 
+  intros r1 r2.
   simpl; ElimOrEq; ElimOrEq; unfold index_int_callee_save;
   intros; congruence.
 Qed.
 
 Lemma index_float_callee_save_inj:
-  forall r1 r2, 
+  forall r1 r2,
   In r1 float_callee_save_regs ->
   In r2 float_callee_save_regs ->
   r1 <> r2 ->
@@ -138,24 +138,24 @@ Proof.
 Qed.
 
 Lemma register_classification:
-  forall r, 
+  forall r,
   In r destroyed_at_call \/ In r int_callee_save_regs \/ In r float_callee_save_regs.
 Proof.
-  destruct r; 
+  destruct r;
   try (left; simpl; OrEq);
   try (right; left; simpl; OrEq);
   try (right; right; simpl; OrEq).
 Qed.
 
 Lemma int_callee_save_not_destroyed:
-  forall r, 
+  forall r,
     In r destroyed_at_call -> In r int_callee_save_regs -> False.
 Proof.
   intros. revert H0 H. simpl. ElimOrEq; NotOrEq.
 Qed.
 
 Lemma float_callee_save_not_destroyed:
-  forall r, 
+  forall r,
     In r destroyed_at_call -> In r float_callee_save_regs -> False.
 Proof.
   intros. revert H0 H. simpl. ElimOrEq; NotOrEq.
@@ -198,9 +198,9 @@ Qed.
 (** The functions in this section determine the locations (machine registers
   and stack slots) used to communicate arguments and results between the
   caller and the callee during function calls.  These locations are functions
-  of the signature of the function and of the call instruction.  
+  of the signature of the function and of the call instruction.
   Agreement between the caller and the callee on the locations to use
-  is guaranteed by our dynamic semantics for Cminor and RTL, which demand 
+  is guaranteed by our dynamic semantics for Cminor and RTL, which demand
   that the signature of the call instruction is identical to that of the
   called function.
 
@@ -282,7 +282,7 @@ Fixpoint size_arguments_rec
 Definition size_arguments (s: signature) : Z :=
   size_arguments_rec s.(sig_args) 0.
 
-(** Argument locations are either caller-save registers or [Outgoing] 
+(** Argument locations are either caller-save registers or [Outgoing]
   stack slots at nonnegative offsets. *)
 
 Definition loc_argument_acceptable (l: loc) : Prop :=
@@ -302,7 +302,7 @@ Remark loc_arguments_rec_charact:
 Proof.
   induction tyl; simpl loc_arguments_rec; intros.
 - destruct H.
-- assert (REC: forall ofs1, In l (loc_arguments_rec tyl ofs1) -> ofs1 > ofs -> 
+- assert (REC: forall ofs1, In l (loc_arguments_rec tyl ofs1) -> ofs1 > ofs ->
                match l with
                | R _ => False
                | S Local _ _ => False
@@ -320,7 +320,7 @@ Lemma loc_arguments_acceptable:
   In l (loc_arguments s) -> loc_argument_acceptable l.
 Proof.
   unfold loc_arguments; intros.
-  exploit loc_arguments_rec_charact; eauto. 
+  exploit loc_arguments_rec_charact; eauto.
   unfold loc_argument_acceptable.
   destruct l; tauto.
 Qed.
@@ -334,14 +334,14 @@ Remark size_arguments_rec_above:
 Proof.
   induction tyl; simpl; intros.
   omega.
-  apply Zle_trans with (ofs0 + typesize a); auto. 
+  apply Zle_trans with (ofs0 + typesize a); auto.
   generalize (typesize_pos a); omega.
 Qed.
 
 Lemma size_arguments_above:
   forall s, size_arguments s >= 0.
 Proof.
-  intros; unfold size_arguments. apply Zle_ge.  
+  intros; unfold size_arguments. apply Zle_ge.
   apply size_arguments_rec_above.
 Qed.
 

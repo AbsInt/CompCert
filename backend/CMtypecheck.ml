@@ -323,7 +323,7 @@ let rec type_stmt env blk ret s =
   | Sreturn (Some e) ->
       begin match ret with
       | None -> raise (Error "return with argument")
-      | Some tret -> 
+      | Some tret ->
           begin try
             unify (type_expr env [] e) (ty_of_typ tret)
           with Error s ->

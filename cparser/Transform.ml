@@ -81,7 +81,7 @@ let op_for_assignop = function
   | Odiv_assign -> Odiv
   | Omod_assign -> Omod
   | Oand_assign -> Oand
-  | Oor_assign -> Oor 
+  | Oor_assign -> Oor
   | Oxor_assign -> Oxor
   | Oshl_assign -> Oshl
   | Oshr_assign -> Oshr
@@ -118,7 +118,7 @@ let expand_assignop ~read ~write env ctx op l r ty =
         ecomma (eassign tmp res) (ecomma (write l tmp) tmp))
 
 let expand_preincrdecr ~read ~write env ctx op l =
-  expand_assignop ~read ~write env ctx (assignop_for_incr_decr op) 
+  expand_assignop ~read ~write env ctx (assignop_for_incr_decr op)
               l (intconst 1L IInt) (unary_conversion env l.etyp)
 
 let expand_postincrdecr ~read ~write env ctx op l =
@@ -147,7 +147,7 @@ let stmt ~expr ?(decl = fun env decl -> assert false) env s =
   | Sskip -> s
   | Sdo e ->
       {s with sdesc = Sdo(expr s.sloc env Effects e)}
-  | Sseq(s1, s2) -> 
+  | Sseq(s1, s2) ->
       {s with sdesc = Sseq(stm s1, stm s2)}
   | Sif(e, s1, s2) ->
       {s with sdesc = Sif(expr s.sloc env Val e, stm s1, stm s2)}

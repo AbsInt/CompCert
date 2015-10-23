@@ -292,7 +292,7 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
       deref_loc ty m b ofs t v1 ->
       op = match id with Incr => Oadd | Decr => Osub end ->
       rred (Epostincr id (Eloc b ofs ty) ty) m
-         t (Ecomma (Eassign (Eloc b ofs ty) 
+         t (Ecomma (Eassign (Eloc b ofs ty)
                             (Ebinop op (Eval v1 ty)
                                        (Eval (Vint Int.one) type_int32s)
                                        (incrdecr_type ty))
@@ -408,7 +408,7 @@ with contextlist: kind -> (expr -> exprlist) -> Prop :=
   This expression is never stuck because the evaluation of [f()] can make
   infinitely many transitions.  Yet it contains a subexpression [10 / x]
   that can go wrong if [x = 0], and the compiler may choose to evaluate
-  [10 / x] first, before calling [f()].  
+  [10 / x] first, before calling [f()].
 
   Therefore, we must make sure that not only an expression cannot get stuck,
   but none of its subexpressions can either.  We say that a subexpression
@@ -437,10 +437,10 @@ Inductive imm_safe: kind -> expr -> mem -> Prop :=
    is immediately stuck. *)
 (*
 Definition not_stuck (e: expr) (m: mem) : Prop :=
-  forall k C e' , 
+  forall k C e' ,
   context k RV C -> e = C e' -> not_imm_stuck k e' m.
 *)
-End EXPR. 
+End EXPR.
 
 (** ** Transition semantics. *)
 
@@ -527,11 +527,11 @@ Inductive state: Type :=
       (k: cont)
       (m: mem) : state
   | Stuckstate.                         (**r undefined behavior occurred *)
-                 
-(** Find the statement and manufacture the continuation 
+
+(** Find the statement and manufacture the continuation
   corresponding to a label. *)
 
-Fixpoint find_label (lbl: label) (s: statement) (k: cont) 
+Fixpoint find_label (lbl: label) (s: statement) (k: cont)
                     {struct s}: option (statement * cont) :=
   match s with
   | Ssequence s1 s2 =>
@@ -564,7 +564,7 @@ Fixpoint find_label (lbl: label) (s: statement) (k: cont)
   | _ => None
   end
 
-with find_label_ls (lbl: label) (sl: labeled_statements) (k: cont) 
+with find_label_ls (lbl: label) (sl: labeled_statements) (k: cont)
                     {struct sl}: option (statement * cont) :=
   match sl with
   | LSnil => None
@@ -793,7 +793,7 @@ Definition semantics (p: program) :=
 
 (** This semantics has the single-event property. *)
 
-Lemma semantics_single_events: 
+Lemma semantics_single_events:
   forall p, single_events (semantics p).
 Proof.
   unfold semantics; intros; red; simpl; intros.

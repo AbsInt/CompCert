@@ -76,14 +76,14 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
       (forall tge e le' m,
          (forall id, In id tmp -> le'!id = le!id) ->
          eval_expr tge e le' m a v) ->
-      tr_expr le For_val (Csyntax.Eval v ty) 
+      tr_expr le For_val (Csyntax.Eval v ty)
                            nil a tmp
   | tr_val_set: forall le sd v ty a any tmp,
       typeof a = ty ->
       (forall tge e le' m,
          (forall id, In id tmp -> le'!id = le!id) ->
          eval_expr tge e le' m a v) ->
-      tr_expr le (For_set sd) (Csyntax.Eval v ty) 
+      tr_expr le (For_set sd) (Csyntax.Eval v ty)
                    (do_set sd a) any tmp
   | tr_sizeof: forall le dst ty' ty tmp,
       tr_expr le dst (Csyntax.Esizeof ty' ty)
@@ -102,7 +102,7 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
                     a2 tmp
   | tr_addrof: forall le dst e1 ty tmp sl1 a1,
       tr_expr le For_val e1 sl1 a1 tmp ->
-      tr_expr le dst (Csyntax.Eaddrof e1 ty) 
+      tr_expr le dst (Csyntax.Eaddrof e1 ty)
                    (sl1 ++ final dst (Eaddrof a1 ty))
                    (Eaddrof a1 ty) tmp
   | tr_unop: forall le dst op e1 ty tmp sl1 a1,
@@ -207,7 +207,7 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
   | tr_assign_effects: forall le e1 e2 ty sl1 a1 tmp1 sl2 a2 tmp2 any tmp,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
       tr_expr le For_val e2 sl2 a2 tmp2 ->
-      list_disjoint tmp1 tmp2 ->  
+      list_disjoint tmp1 tmp2 ->
       incl tmp1 tmp -> incl tmp2 tmp ->
       tr_expr le For_effects (Csyntax.Eassign e1 e2 ty)
                       (sl1 ++ sl2 ++ make_assign a1 a2 :: nil)
@@ -216,12 +216,12 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
       tr_expr le For_val e1 sl1 a1 tmp1 ->
       tr_expr le For_val e2 sl2 a2 tmp2 ->
       incl tmp1 tmp -> incl tmp2 tmp ->
-      list_disjoint tmp1 tmp2 ->  
+      list_disjoint tmp1 tmp2 ->
       In t tmp -> ~In t tmp1 -> ~In t tmp2 ->
       ty1 = Csyntax.typeof e1 ->
       ty2 = Csyntax.typeof e2 ->
       tr_expr le dst (Csyntax.Eassign e1 e2 ty)
-                   (sl1 ++ sl2 ++ 
+                   (sl1 ++ sl2 ++
                     Sset t a2 ::
                     make_assign a1 (Etempvar t ty2) ::
                     final dst (Ecast (Etempvar t ty2) ty1))
@@ -255,7 +255,7 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
       tr_rvalof ty1 a1 sl2 a2 tmp2 ->
       ty1 = Csyntax.typeof e1 ->
       incl tmp1 tmp -> incl tmp2 tmp ->
-      list_disjoint tmp1 tmp2 ->  
+      list_disjoint tmp1 tmp2 ->
       tr_expr le For_effects (Csyntax.Epostincr id e1 ty)
                       (sl1 ++ sl2 ++ make_assign a1 (transl_incrdecr id a2 ty1) :: nil)
                       any tmp
@@ -271,7 +271,7 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
   | tr_comma: forall le dst e1 e2 ty sl1 a1 tmp1 sl2 a2 tmp2 tmp,
       tr_expr le For_effects e1 sl1 a1 tmp1 ->
       tr_expr le dst e2 sl2 a2 tmp2 ->
-      list_disjoint tmp1 tmp2 ->  
+      list_disjoint tmp1 tmp2 ->
       incl tmp1 tmp -> incl tmp2 tmp ->
       tr_expr le dst (Csyntax.Ecomma e1 e2 ty) (sl1 ++ sl2) a2 tmp
   | tr_call_effects: forall le e1 el2 ty sl1 a1 tmp1 sl2 al2 tmp2 any tmp,
@@ -306,7 +306,7 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
                    (Etempvar t ty) tmp
   | tr_paren_val: forall le e1 tycast ty sl1 a1 t tmp,
       tr_expr le (For_set (SDbase tycast ty t)) e1 sl1 a1 tmp ->
-      In t tmp -> 
+      In t tmp ->
       tr_expr le For_val (Csyntax.Eparen e1 tycast ty)
                        sl1
                        (Etempvar t ty) tmp
@@ -499,7 +499,7 @@ Proof.
   intros until I. unfold bind. destruct (f z1).
   congruence.
   caseEq (g a g'); intros; inv H0.
-  econstructor; econstructor; econstructor; econstructor; eauto. 
+  econstructor; econstructor; econstructor; econstructor; eauto.
 Qed.
 
 Remark bind2_inversion:
@@ -508,9 +508,9 @@ Remark bind2_inversion:
   exists x1, exists x2, exists z2, exists I1, exists I2,
   f z1 = Res (x1,x2) z2 I1 /\ g x1 x2 z2 = Res y z3 I2.
 Proof.
-  unfold bind2. intros. 
-  exploit bind_inversion; eauto. 
-  intros [[x1 x2] [z2 [I1 [I2 [P Q]]]]]. simpl in Q. 
+  unfold bind2. intros.
+  exploit bind_inversion; eauto.
+  intros [[x1 x2] [z2 [I1 [I2 [P Q]]]]]. simpl in Q.
   exists x1; exists x2; exists z2; exists I1; exists I2; auto.
 Qed.
 
@@ -551,7 +551,7 @@ Ltac monadInv H :=
   | (@error _ _ _ = Res _ _ _) => monadInv1 H
   | (bind ?F ?G ?Z = Res ?X ?Z' ?I) => monadInv1 H
   | (bind2 ?F ?G ?Z = Res ?X ?Z' ?I) => monadInv1 H
-  | (?F _ _ _ _ _ _ _ _ = Res _ _ _) => 
+  | (?F _ _ _ _ _ _ _ _ = Res _ _ _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
   | (?F _ _ _ _ _ _ _ = Res _ _ _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
@@ -588,7 +588,7 @@ Lemma within_widen:
   Ple (gen_next g2) (gen_next g2') ->
   within id g1' g2'.
 Proof.
-  intros. destruct H. split. 
+  intros. destruct H. split.
   eapply Ple_trans; eauto.
   eapply Plt_Ple_trans; eauto.
 Qed.
@@ -609,14 +609,14 @@ Lemma contained_widen:
   Ple (gen_next g2) (gen_next g2') ->
   contained l g1' g2'.
 Proof.
-  intros; red; intros. eapply within_widen; eauto. 
+  intros; red; intros. eapply within_widen; eauto.
 Qed.
 
 Lemma contained_cons:
   forall id l g1 g2,
   within id g1 g2 -> contained l g1 g2 -> contained (id :: l) g1 g2.
 Proof.
-  intros; red; intros. simpl in H1; destruct H1. subst id0. auto. auto. 
+  intros; red; intros. simpl in H1; destruct H1. subst id0. auto. auto.
 Qed.
 
 Lemma contained_app:
@@ -630,7 +630,7 @@ Lemma contained_disjoint:
   forall g1 l1 g2 l2 g3,
   contained l1 g1 g2 -> contained l2 g2 g3 -> list_disjoint l1 l2.
 Proof.
-  intros; red; intros. red; intro; subst y. 
+  intros; red; intros. red; intro; subst y.
   exploit H; eauto. intros [A B]. exploit H0; eauto. intros [Csyntax D].
   elim (Plt_strict x). apply Plt_Ple_trans with (gen_next g2); auto.
 Qed.
@@ -665,7 +665,7 @@ Qed.
 Lemma dest_for_set_seqbool_set:
   forall sd ty g, dest_below (For_set sd) g -> dest_below (For_set (sd_seqbool_set ty sd)) g.
 Proof.
-  intros. assumption. 
+  intros. assumption.
 Qed.
 
 Lemma dest_for_set_condition_val:
@@ -683,7 +683,7 @@ Qed.
 Lemma sd_temp_notin:
   forall sd g1 g2 l, dest_below (For_set sd) g1 -> contained l g1 g2 -> ~In (sd_temp sd) l.
 Proof.
-  intros. simpl in H. red; intros. exploit H0; eauto. intros [A B]. 
+  intros. simpl in H. red; intros. exploit H0; eauto. intros [A B].
   elim (Plt_strict (sd_temp sd)). apply Plt_Ple_trans with (gen_next g1); auto.
 Qed.
 
@@ -701,7 +701,7 @@ Hint Resolve gensym_within within_widen contained_widen
              dest_for_set_condition_val dest_for_set_condition_set
              sd_temp_notin dest_below_le
              incl_refl incl_tl incl_app incl_appl incl_appr incl_same_head
-             in_eq in_cons 
+             in_eq in_cons
              Ple_trans Ple_refl: gensym.
 
 Hint Resolve dest_for_val_below dest_for_effect_below.
@@ -787,27 +787,27 @@ Proof.
 (* val *)
   simpl in H. destruct v; monadInv H; exists (@nil ident); split; auto with gensym.
 Opaque makeif.
-  intros. destruct dst; simpl in *; inv H2. 
+  intros. destruct dst; simpl in *; inv H2.
     constructor. auto. intros; constructor.
     constructor.
     constructor. auto. intros; constructor.
-  intros. destruct dst; simpl in *; inv H2. 
+  intros. destruct dst; simpl in *; inv H2.
     constructor. auto. intros; constructor.
     constructor.
     constructor. auto. intros; constructor.
-  intros. destruct dst; simpl in *; inv H2. 
+  intros. destruct dst; simpl in *; inv H2.
     constructor. auto. intros; constructor.
     constructor.
     constructor. auto. intros; constructor.
-  intros. destruct dst; simpl in *; inv H2. 
+  intros. destruct dst; simpl in *; inv H2.
     constructor. auto. intros; constructor.
     constructor.
     constructor. auto. intros; constructor.
 (* var *)
   monadInv H; econstructor; split; auto with gensym. UseFinish. constructor.
 (* field *)
-  monadInv H0. exploit H; eauto. auto. intros [tmp [A B]]. UseFinish. 
-  econstructor; split; eauto. intros; apply tr_expr_add_dest. constructor; auto. 
+  monadInv H0. exploit H; eauto. auto. intros [tmp [A B]]. UseFinish.
+  econstructor; split; eauto. intros; apply tr_expr_add_dest. constructor; auto.
 (* valof *)
   monadInv H0. exploit H; eauto. intros [tmp1 [A B]].
   exploit transl_valof_meets_spec; eauto. intros [tmp2 [Csyntax D]]. UseFinish.
@@ -815,22 +815,22 @@ Opaque makeif.
   intros; apply tr_expr_add_dest. econstructor; eauto with gensym.
   eauto with gensym.
 (* deref *)
-  monadInv H0. exploit H; eauto. intros [tmp [A B]]. UseFinish. 
-  econstructor; split; eauto. intros; apply tr_expr_add_dest. constructor; auto. 
+  monadInv H0. exploit H; eauto. intros [tmp [A B]]. UseFinish.
+  econstructor; split; eauto. intros; apply tr_expr_add_dest. constructor; auto.
 (* addrof *)
-  monadInv H0. exploit H; eauto. intros [tmp [A B]]. UseFinish. 
+  monadInv H0. exploit H; eauto. intros [tmp [A B]]. UseFinish.
   econstructor; split; eauto. intros; apply tr_expr_add_dest. econstructor; eauto.
 (* unop *)
-  monadInv H0. exploit H; eauto. intros [tmp [A B]]. UseFinish. 
-  econstructor; split; eauto. intros; apply tr_expr_add_dest. constructor; auto. 
+  monadInv H0. exploit H; eauto. intros [tmp [A B]]. UseFinish.
+  econstructor; split; eauto. intros; apply tr_expr_add_dest. constructor; auto.
 (* binop *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
   exploit H0; eauto. intros [tmp2 [Csyntax D]]. UseFinish.
-  exists (tmp1 ++ tmp2); split. 
+  exists (tmp1 ++ tmp2); split.
   intros; apply tr_expr_add_dest. econstructor; eauto with gensym.
   eauto with gensym.
 (* cast *)
-  monadInv H0. exploit H; eauto. intros [tmp [A B]]. UseFinish. 
+  monadInv H0. exploit H; eauto. intros [tmp [A B]]. UseFinish.
   econstructor; split; eauto. intros; apply tr_expr_add_dest. constructor; auto.
 (* seqand *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
@@ -841,7 +841,7 @@ Opaque makeif.
   exists (x0 :: tmp1 ++ tmp2); split.
   intros; eapply tr_seqand_val; eauto with gensym.
   apply list_disjoint_cons_r; eauto with gensym.
-  apply contained_cons. eauto with gensym. 
+  apply contained_cons. eauto with gensym.
   apply contained_app; eauto with gensym.
   (* for effects *)
   exploit H0; eauto with gensym. intros [tmp2 [Csyntax D]].
@@ -880,18 +880,18 @@ Opaque makeif.
   intros; eapply tr_seqor_set; eauto with gensym.
   apply list_disjoint_cons_r; eauto with gensym.
   apply contained_app; eauto with gensym.
-(* condition *) 
+(* condition *)
   monadInv H2. exploit H; eauto. intros [tmp1 [A B]].
   destruct dst; monadInv EQ0.
   (* for value *)
   exploit H0; eauto with gensym. intros [tmp2 [C D]].
   exploit H1; eauto with gensym. intros [tmp3 [E F]].
   simpl add_dest in *.
-  exists (x0 :: tmp1 ++ tmp2 ++ tmp3); split. 
+  exists (x0 :: tmp1 ++ tmp2 ++ tmp3); split.
   simpl; intros; eapply tr_condition_val; eauto with gensym.
   apply list_disjoint_cons_r; eauto with gensym.
   apply list_disjoint_cons_r; eauto with gensym.
-  apply contained_cons. eauto with gensym. 
+  apply contained_cons. eauto with gensym.
   apply contained_app. eauto with gensym.
   apply contained_app; eauto with gensym.
   (* for effects *)
@@ -899,7 +899,7 @@ Opaque makeif.
   exploit H1; eauto. intros [tmp3 [E F]].
   simpl add_dest in *.
   exists (tmp1 ++ tmp2 ++ tmp3); split.
-  intros; eapply tr_condition_effects; eauto with gensym. 
+  intros; eapply tr_condition_effects; eauto with gensym.
   apply contained_app; eauto with gensym.
   (* for test *)
   exploit H0; eauto with gensym. intros [tmp2 [C D]].
@@ -909,7 +909,7 @@ Opaque makeif.
   intros; eapply tr_condition_set; eauto with gensym.
   apply list_disjoint_cons_r; eauto with gensym.
   apply list_disjoint_cons_r; eauto with gensym.
-  apply contained_cons; eauto with gensym. 
+  apply contained_cons; eauto with gensym.
   apply contained_app; eauto with gensym.
   apply contained_app; eauto with gensym.
 (* sizeof *)
@@ -923,19 +923,19 @@ Opaque makeif.
   exploit H0; eauto. intros [tmp2 [Csyntax D]].
   destruct dst; monadInv EQ2; simpl add_dest in *.
   (* for value *)
-  exists (x1 :: tmp1 ++ tmp2); split. 
+  exists (x1 :: tmp1 ++ tmp2); split.
   intros. eapply tr_assign_val with (dst := For_val); eauto with gensym.
-  apply contained_cons. eauto with gensym. 
+  apply contained_cons. eauto with gensym.
   apply contained_app; eauto with gensym.
   (* for effects *)
-  exists (tmp1 ++ tmp2); split. 
+  exists (tmp1 ++ tmp2); split.
   econstructor; eauto with gensym.
   apply contained_app; eauto with gensym.
   (* for set *)
   exists (x1 :: tmp1 ++ tmp2); split.
-  repeat rewrite app_ass. simpl. 
+  repeat rewrite app_ass. simpl.
   intros. eapply tr_assign_val with (dst := For_set sd); eauto with gensym.
-  apply contained_cons. eauto with gensym. 
+  apply contained_cons. eauto with gensym.
   apply contained_app; eauto with gensym.
 (* assignop *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
@@ -945,43 +945,43 @@ Opaque makeif.
   (* for value *)
   exists (x2 :: tmp1 ++ tmp2 ++ tmp3); split.
   intros. eapply tr_assignop_val with (dst := For_val); eauto with gensym.
-  apply contained_cons. eauto with gensym. 
+  apply contained_cons. eauto with gensym.
   apply contained_app; eauto with gensym.
   (* for effects *)
-  exists (tmp1 ++ tmp2 ++ tmp3); split. 
+  exists (tmp1 ++ tmp2 ++ tmp3); split.
   econstructor; eauto with gensym.
   apply contained_app; eauto with gensym.
   (* for set *)
   exists (x2 :: tmp1 ++ tmp2 ++ tmp3); split.
   repeat rewrite app_ass. simpl.
   intros. eapply tr_assignop_val with (dst := For_set sd); eauto with gensym.
-  apply contained_cons. eauto with gensym. 
+  apply contained_cons. eauto with gensym.
   apply contained_app; eauto with gensym.
 (* postincr *)
   monadInv H0. exploit H; eauto. intros [tmp1 [A B]].
   destruct dst; monadInv EQ0; simpl add_dest in *.
   (* for value *)
-  exists (x0 :: tmp1); split. 
+  exists (x0 :: tmp1); split.
   econstructor; eauto with gensym.
-  apply contained_cons; eauto with gensym. 
+  apply contained_cons; eauto with gensym.
   (* for effects *)
   exploit transl_valof_meets_spec; eauto. intros [tmp2 [Csyntax D]].
-  exists (tmp1 ++ tmp2); split. 
+  exists (tmp1 ++ tmp2); split.
   econstructor; eauto with gensym.
-  eauto with gensym. 
+  eauto with gensym.
   (* for set *)
   repeat rewrite app_ass; simpl.
-  exists (x0 :: tmp1); split. 
+  exists (x0 :: tmp1); split.
   econstructor; eauto with gensym.
-  apply contained_cons; eauto with gensym. 
+  apply contained_cons; eauto with gensym.
 (* comma *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
   exploit H0; eauto with gensym. intros [tmp2 [Csyntax D]].
-  exists (tmp1 ++ tmp2); split. 
+  exists (tmp1 ++ tmp2); split.
   econstructor; eauto with gensym.
-  destruct dst; simpl; eauto with gensym. 
+  destruct dst; simpl; eauto with gensym.
   apply list_disjoint_cons_r; eauto with gensym.
-  simpl. eapply incl_tran. 2: apply add_dest_incl. auto with gensym. 
+  simpl. eapply incl_tran. 2: apply add_dest_incl. auto with gensym.
   destruct dst; simpl; auto with gensym.
   apply contained_app; eauto with gensym.
 (* call *)
@@ -989,44 +989,44 @@ Opaque makeif.
   exploit H0; eauto. intros [tmp2 [Csyntax D]].
   destruct dst; monadInv EQ2; simpl add_dest in *.
   (* for value *)
-  exists (x1 :: tmp1 ++ tmp2); split. 
+  exists (x1 :: tmp1 ++ tmp2); split.
   econstructor; eauto with gensym. congruence.
-  apply contained_cons. eauto with gensym. 
+  apply contained_cons. eauto with gensym.
   apply contained_app; eauto with gensym.
   (* for effects *)
-  exists (tmp1 ++ tmp2); split. 
+  exists (tmp1 ++ tmp2); split.
   econstructor; eauto with gensym.
   apply contained_app; eauto with gensym.
   (* for set *)
-  exists (x1 :: tmp1 ++ tmp2); split. 
+  exists (x1 :: tmp1 ++ tmp2); split.
   repeat rewrite app_ass. econstructor; eauto with gensym. congruence.
-  apply contained_cons. eauto with gensym. 
+  apply contained_cons. eauto with gensym.
   apply contained_app; eauto with gensym.
 (* builtin *)
   monadInv H0. exploit H; eauto. intros [tmp1 [A B]].
   destruct dst; monadInv EQ0; simpl add_dest in *.
   (* for value *)
-  exists (x0 :: tmp1); split. 
+  exists (x0 :: tmp1); split.
   econstructor; eauto with gensym. congruence.
-  apply contained_cons; eauto with gensym. 
+  apply contained_cons; eauto with gensym.
   (* for effects *)
-  exists tmp1; split. 
+  exists tmp1; split.
   econstructor; eauto with gensym.
   auto.
   (* for set *)
-  exists (x0 :: tmp1); split. 
+  exists (x0 :: tmp1); split.
   repeat rewrite app_ass. econstructor; eauto with gensym. congruence.
-  apply contained_cons; eauto with gensym. 
+  apply contained_cons; eauto with gensym.
 (* loc *)
   monadInv H.
 (* paren *)
-  monadInv H0. 
+  monadInv H0.
 (* nil *)
   monadInv H; exists (@nil ident); split; auto with gensym. constructor.
 (* cons *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
   exploit H0; eauto. intros [tmp2 [Csyntax D]].
-  exists (tmp1 ++ tmp2); split. 
+  exists (tmp1 ++ tmp2); split.
   econstructor; eauto with gensym.
   eauto with gensym.
 Qed.
@@ -1038,7 +1038,7 @@ Lemma transl_expr_meets_spec:
    exists tmps, forall ge e le m, tr_top ge e le m dst r sl a tmps.
 Proof.
   intros. exploit (proj1 transl_meets_spec); eauto. intros [tmps [A B]].
-  exists (add_dest dst tmps); intros. apply tr_top_base. auto. 
+  exists (add_dest dst tmps); intros. apply tr_top_base. auto.
 Qed.
 
 Lemma transl_expression_meets_spec:
@@ -1046,8 +1046,8 @@ Lemma transl_expression_meets_spec:
   transl_expression r g = Res (s, a) g' I ->
   tr_expression r s a.
 Proof.
-  intros. monadInv H. exploit transl_expr_meets_spec; eauto. 
-  intros [tmps A]. econstructor; eauto. 
+  intros. monadInv H. exploit transl_expr_meets_spec; eauto.
+  intros [tmps A]. econstructor; eauto.
 Qed.
 
 Lemma transl_expr_stmt_meets_spec:
@@ -1055,8 +1055,8 @@ Lemma transl_expr_stmt_meets_spec:
   transl_expr_stmt r g = Res s g' I ->
   tr_expr_stmt r s.
 Proof.
-  intros. monadInv H. exploit transl_expr_meets_spec; eauto. 
-  intros [tmps A]. econstructor; eauto. 
+  intros. monadInv H. exploit transl_expr_meets_spec; eauto.
+  intros [tmps A]. econstructor; eauto.
 Qed.
 
 Lemma transl_if_meets_spec:
@@ -1064,8 +1064,8 @@ Lemma transl_if_meets_spec:
   transl_if r s1 s2 g = Res s g' I ->
   tr_if r s1 s2 s.
 Proof.
-  intros. monadInv H. exploit transl_expr_meets_spec; eauto. 
-  intros [tmps A]. econstructor; eauto. 
+  intros. monadInv H. exploit transl_expr_meets_spec; eauto.
+  intros [tmps A]. econstructor; eauto.
 Qed.
 
 Lemma transl_stmt_meets_spec:
@@ -1076,11 +1076,11 @@ Proof.
   generalize transl_expression_meets_spec transl_expr_stmt_meets_spec transl_if_meets_spec; intros T1 T2 T3.
 Opaque transl_expression transl_expr_stmt.
   clear transl_stmt_meets_spec.
-  induction s; simpl; intros until I; intros TR; 
+  induction s; simpl; intros until I; intros TR;
   try (monadInv TR); try (constructor; eauto).
   destruct (is_Sskip s1); monadInv EQ4.
   apply tr_for_1; eauto.
-  apply tr_for_2; eauto. 
+  apply tr_for_2; eauto.
   destruct o; monadInv TR; constructor; eauto.
 
   clear transl_lblstmt_meets_spec.
@@ -1112,7 +1112,7 @@ Lemma transl_function_spec:
   tr_function f tf.
 Proof.
   unfold transl_function; intros. monadInv H.
-  constructor; auto. simpl. eapply transl_stmt_meets_spec; eauto. 
+  constructor; auto. simpl. eapply transl_stmt_meets_spec; eauto.
 Qed.
 
 Lemma transl_fundef_spec:
@@ -1122,7 +1122,7 @@ Lemma transl_fundef_spec:
 Proof.
   unfold transl_fundef; intros.
   destruct fd; monadInv H.
-+ constructor. eapply transl_function_spec; eauto. 
++ constructor. eapply transl_function_spec; eauto.
 + constructor.
 Qed.
 
@@ -1146,9 +1146,9 @@ Theorem transl_program_spec:
   transl_program p = OK tp ->
   match_program tr_fundef (fun v1 v2 => v1 = v2) nil (Csyntax.prog_main p) p tp.
 Proof.
-  unfold transl_program; intros. 
+  unfold transl_program; intros.
   destruct (transl_globdefs (Csyntax.prog_defs p) (initial_generator tt)) eqn:E; simpl in H; inv H.
-  split; auto. exists l; split. eapply transl_globdefs_spec; eauto. 
+  split; auto. exists l; split. eapply transl_globdefs_spec; eauto.
   rewrite <- app_nil_end; auto.
 Qed.
 

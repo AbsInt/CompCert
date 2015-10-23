@@ -50,7 +50,7 @@ Hypothesis step_decr: forall a a', step a = inr _ a' -> ord a' a.
 
 Definition step_info (a: A) : {b | step a = inl _ b} + {a' | step a = inr _ a' & ord a' a}.
 Proof.
-  caseEq (step a); intros. left; exists b; auto. right; exists a0; auto. 
+  caseEq (step a); intros. left; exists b; auto. right; exists a0; auto.
 Defined.
 
 Definition iterate_F (a: A) (rec: forall a', ord a' a -> B) : B :=
@@ -75,10 +75,10 @@ Lemma iterate_prop:
   forall a, P a -> Q (iterate a).
 Proof.
   intros a0. pattern a0. apply well_founded_ind with (R := ord). auto.
-  intros. unfold iterate; rewrite unroll_Fix. unfold iterate_F. 
-  destruct (step_info x) as [[b U] | [a' U V]]. 
+  intros. unfold iterate; rewrite unroll_Fix. unfold iterate_F.
+  destruct (step_info x) as [[b U] | [a' U V]].
   exploit step_prop; eauto. rewrite U; auto.
-  apply H. auto. exploit step_prop; eauto. rewrite U; auto. 
+  apply H. auto. exploit step_prop; eauto. rewrite U; auto.
 Qed.
 
 End ITERATION.
@@ -105,7 +105,7 @@ End WfIter.
   Since we know (informally) that our computations terminate, we can
   take a very large constant as the maximal number of iterations.
   Failure will therefore never happen in practice, but of
-  course our proofs also cover the failure case and show that 
+  course our proofs also cover the failure case and show that
   nothing bad happens in this hypothetical case either.  *)
 
 Module PrimIter.
@@ -169,11 +169,11 @@ Hypothesis step_prop:
 Lemma iter_prop:
   forall n a b, P a -> iter n a = Some b -> Q b.
 Proof.
-  apply (well_founded_ind Plt_wf 
+  apply (well_founded_ind Plt_wf
          (fun p => forall a b, P a -> iter p a = Some b -> Q b)).
   intros. unfold iter in H1. rewrite unroll_Fix in H1. unfold iter_step in H1.
   destruct (peq x 1). discriminate.
-  specialize (step_prop a H0). 
+  specialize (step_prop a H0).
   destruct (step a) as [b'|a'] eqn:?.
   inv H1. auto.
   apply H with (Ppred x) a'. apply Ppred_Plt; auto. auto. auto.
@@ -222,8 +222,8 @@ Definition F_iter (next: A -> option B) (a: A) : option B :=
 Lemma F_iter_monot:
  forall f g, F_le f g -> F_le (F_iter f) (F_iter g).
 Proof.
-  intros; red; intros. unfold F_iter. 
-  destruct (step a) as [b | a']. red; auto. apply H. 
+  intros; red; intros. unfold F_iter.
+  destruct (step a) as [b | a']. red; auto. apply H.
 Qed.
 
 Fixpoint iter (n: nat) : A -> option B :=
@@ -235,9 +235,9 @@ Fixpoint iter (n: nat) : A -> option B :=
 Lemma iter_monot:
   forall p q, (p <= q)%nat -> F_le (iter p) (iter q).
 Proof.
-  induction p; intros. 
+  induction p; intros.
   simpl. red; intros; red; auto.
-  destruct q. elimtype False; omega. 
+  destruct q. elimtype False; omega.
   simpl. apply F_iter_monot. apply IHp. omega.
 Qed.
 
@@ -249,7 +249,7 @@ Proof.
   intro a. elim (classic (forall n, iter n a = None)); intro.
   right; assumption.
   left. generalize (not_all_ex_not nat (fun n => iter n a = None) H).
-  intros [n D]. exists n. generalize D. 
+  intros [n D]. exists n. generalize D.
   case (iter n a); intros. exists b; auto. congruence.
 Qed.
 
@@ -259,23 +259,23 @@ Definition converges_to (a: A) (b: option B) : Prop :=
 Lemma converges_to_Some:
   forall a n b, iter n a = Some b -> converges_to a (Some b).
 Proof.
-  intros. exists n. intros. 
+  intros. exists n. intros.
   assert (B_le (iter n a) (iter m a)). apply iter_monot. auto.
-  elim H1; intro; congruence. 
+  elim H1; intro; congruence.
 Qed.
 
 Lemma converges_to_exists:
   forall a, exists b, converges_to a b.
 Proof.
-  intros. elim (iter_either a). 
+  intros. elim (iter_either a).
   intros [n [b EQ]]. exists (Some b). apply converges_to_Some with n. assumption.
-  intro. exists (@None B). exists O. intros. auto. 
+  intro. exists (@None B). exists O. intros. auto.
 Qed.
 
 Lemma converges_to_unique:
   forall a b, converges_to a b -> forall b', converges_to a b' -> b = b'.
 Proof.
-  intros a b [n C] b' [n' C']. 
+  intros a b [n C] b' [n' C'].
   rewrite <- (C (max n n')). rewrite <- (C' (max n n')). auto.
   apply le_max_r. apply le_max_l.
 Qed.
@@ -283,7 +283,7 @@ Qed.
 Lemma converges_to_exists_uniquely:
   forall a, exists! b, converges_to a b .
 Proof.
-  intro. destruct (converges_to_exists a) as [b CT]. 
+  intro. destruct (converges_to_exists a) as [b CT].
   exists b. split. assumption. exact (converges_to_unique _ _ CT).
 Qed.
 
@@ -293,7 +293,7 @@ Definition iterate (a: A) : option B :=
 Lemma converges_to_iterate:
   forall a b, converges_to a b -> iterate a = b.
 Proof.
-  intros. unfold iterate. 
+  intros. unfold iterate.
   destruct (constructive_definite_description (converges_to a) (converges_to_exists_uniquely a)) as [b' P].
   simpl. apply converges_to_unique with a; auto.
 Qed.
@@ -301,7 +301,7 @@ Qed.
 Lemma iterate_converges_to:
   forall a, converges_to a (iterate a).
 Proof.
-  intros. unfold iterate. 
+  intros. unfold iterate.
   destruct (constructive_definite_description (converges_to a) (converges_to_exists_uniquely a)) as [b' P].
   simpl; auto.
 Qed.
@@ -320,15 +320,15 @@ Lemma iter_prop:
 Proof.
   induction n; intros until b; intro H; simpl.
   congruence.
-  unfold F_iter. generalize (step_prop a H). 
-  case (step a); intros. congruence. 
+  unfold F_iter. generalize (step_prop a H).
+  case (step a); intros. congruence.
   apply IHn with a0; auto.
 Qed.
 
 Lemma iterate_prop:
   forall a b, iterate a = Some b -> P a -> Q b.
 Proof.
-  intros. destruct (iterate_converges_to a) as [n IT]. 
+  intros. destruct (iterate_converges_to a) as [n IT].
   rewrite H in IT. apply iter_prop with n a. auto. apply IT. auto.
 Qed.
 

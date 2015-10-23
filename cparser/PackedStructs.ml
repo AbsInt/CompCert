@@ -190,7 +190,7 @@ let bswap_write loc env lhs rhs =
       let (id, fty) =
         lookup_function loc env (sprintf "__builtin_write%d_reversed" bsize) in
       let fn = {edesc = EVar id; etyp = fty} in
-      let args = [ecast_opt env (TPtr(aty,[])) (eaddrof lhs); 
+      let args = [ecast_opt env (TPtr(aty,[])) (eaddrof lhs);
                   ecast_opt env aty rhs] in
       {edesc = ECall(fn, args); etyp = TVoid[]}
     end else begin
@@ -216,7 +216,7 @@ let transf_expr loc env ctx e =
   let is_byteswapped_ptr ty fieldname =
     match unroll env ty with
     | TPtr(ty', _) -> is_byteswapped ty' fieldname
-    | _ -> false in 
+    | _ -> false in
 
   (* Transformation of l-values.  Return transformed expr plus
      [true] if l-value is a byte-swapped field and [false] otherwise. *)
@@ -232,7 +232,7 @@ let transf_expr loc env ctx e =
         let (e1', swap) = lvalue e1 in
         ({edesc = EBinop(Oindex, e1', e2, tyres); etyp = e.etyp}, swap)
     | _ ->
-        (texp Val e, false) 
+        (texp Val e, false)
 
   and texp ctx e =
     match e.edesc with
@@ -401,7 +401,7 @@ let rec transf_globdecls env accu = function
           let attr' =
             match su with
             | Union -> attr
-            | Struct -> remove_custom_attributes  ["packed";"__packed__"] attr in 
+            | Struct -> remove_custom_attributes  ["packed";"__packed__"] attr in
           transf_globdecls
             (Env.add_composite env id (composite_info_decl env su attr'))
             ({g with gdesc = Gcompositedecl(su, id, attr')} :: accu)

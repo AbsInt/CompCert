@@ -80,7 +80,7 @@ let attributes a =
       sprintf " _Alignas(%Ld)%s" (Int64.shift_left 1L (N.to_int l)) s1
 
 let attributes_space a =
-  let s = attributes a in 
+  let s = attributes a in
   if String.length s = 0 then s else s ^ " "
 
 let name_optid id =
@@ -202,7 +202,7 @@ let rec expr p (prec, e) =
     if assoc = LtoR
     then (prec', prec' + 1)
     else (prec' + 1, prec') in
-  if prec' < prec 
+  if prec' < prec
   then fprintf p "@[<hov 2>("
   else fprintf p "@[<hov 2>";
   begin match e with
@@ -258,12 +258,12 @@ let rec expr p (prec, e) =
                 exprlist (true, args)
   | Ebuiltin(EF_annot(txt, _), _, args, _) ->
       fprintf p "__builtin_annot@[<hov 1>(%S%a)@]"
-                (extern_atom txt) exprlist (false, args)
+                (camlstring_of_coqstring txt) exprlist (false, args)
   | Ebuiltin(EF_annot_val(txt, _), _, args, _) ->
       fprintf p "__builtin_annot_val@[<hov 1>(%S%a)@]"
-                (extern_atom txt) exprlist (false, args)
+                (camlstring_of_coqstring txt) exprlist (false, args)
   | Ebuiltin(EF_external(id, sg), _, args, _) ->
-      fprintf p "%s@[<hov 1>(%a)@]" (extern_atom id) exprlist (true, args)
+      fprintf p "%s@[<hov 1>(%a)@]" (camlstring_of_coqstring id) exprlist (true, args)
   | Ebuiltin(EF_inline_asm(txt, sg, clob), _, args, _) ->
       extended_asm p txt None args clob
   | Ebuiltin(_, _, args, _) ->
@@ -282,7 +282,7 @@ and exprlist p (first, rl) =
       exprlist p (false, rl)
 
 and extended_asm p txt res args clob =
-  fprintf p "asm volatile (@[<hv 0>%S" (extern_atom txt);
+  fprintf p "asm volatile (@[<hv 0>%S" (camlstring_of_coqstring txt);
   fprintf p "@ :";
   begin match res with
   | None -> ()

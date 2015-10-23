@@ -77,8 +77,8 @@ Definition genv := Genv.t fundef unit.
 Definition locset := Locmap.t.
 
 (** Calling conventions are reflected at the level of location sets
-  (environments mapping locations to values) by the following two 
-  functions.  
+  (environments mapping locations to values) by the following two
+  functions.
 
   [call_regs caller] returns the location set at function entry,
   as a function of the location set [caller] of the calling function.
@@ -87,7 +87,7 @@ Definition locset := Locmap.t.
   values as the corresponding outgoing stack slots (used for argument
   passing) in the caller.
 - Local and outgoing stack slots are initialized to undefined values.
-*) 
+*)
 
 Definition call_regs (caller: locset) : locset :=
   fun (l: loc) =>
