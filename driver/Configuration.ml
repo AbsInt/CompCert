@@ -30,7 +30,7 @@ let ini_file_name =
     try
       List.find  Sys.file_exists files
     with Not_found ->
-      begin 
+      begin
         eprintf "Cannot find compcert.ini configuration file.\n";
         exit 2
       end
@@ -73,19 +73,19 @@ let get_config_list key =
 let prepro = get_config_list "prepro"
 let asm = get_config_list "asm"
 let linker = get_config_list "linker"
-let arch = 
+let arch =
   match get_config_string "arch" with
   | "powerpc"|"arm"|"ia32" as a -> a
   | v -> bad_config "arch" [v]
 let model = get_config_string "model"
 let abi = get_config_string "abi"
 let system = get_config_string "system"
-let has_runtime_lib = 
+let has_runtime_lib =
   match get_config_string "has_runtime_lib" with
   | "true" -> true
   | "false" -> false
   | v -> bad_config "has_runtime_lib" [v]
-let has_standard_headers = 
+let has_standard_headers =
   match get_config_string "has_standard_headers" with
   | "true" -> true
   | "false" -> false
@@ -95,7 +95,7 @@ let stdlib_path =
     get_config_string "stdlib_path"
   else
     ""
-let asm_supports_cfi = 
+let asm_supports_cfi =
   match get_config_string "asm_supports_cfi" with
   | "true" -> true
   | "false" -> false
@@ -117,7 +117,7 @@ type struct_return_style =
   | SR_int1248      (* return by content if size is 1, 2, 4 or 8 bytes *)
   | SR_int1to4      (* return by content if size is <= 4 *)
   | SR_int1to8      (* return by content if size is <= 8 *)
-  | SR_ref          (* always return by assignment to a reference 
+  | SR_ref          (* always return by assignment to a reference
                        given as extra argument *)
 
 let struct_passing_style =

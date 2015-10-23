@@ -23,6 +23,13 @@ open Asmexpandaux
 
 exception Error of string
 
+(* FreeScale's EREF extensions *)
+
+let eref =
+  match Configuration.model with
+  | "e5500" -> true
+  | _ -> false
+
 (* Useful constants and helper functions *)
 
 let _0 = Integers.Int.zero
@@ -477,7 +484,7 @@ let expand_builtin_inline name args res =
   | "__builtin_call_frame", _,BR (IR res) ->
       let sz = !current_function_stacksize
       and ofs = !linkregister_offset in
-      if sz < 0x8000l then
+      if sz < 0x8000l && sz >= 0l then
         emit (Paddi(res, GPR1, Cint(coqint_of_camlint sz)))
       else
         emit (Plwz(res, Cint ofs, GPR1))
@@ -485,8 +492,24 @@ let expand_builtin_inline name args res =
       emit (Plwz (res, Cint! retaddr_offset,GPR1))
   (* isel *)
   | "__builtin_isel", [BA (IR a1); BA (IR a2); BA (IR a3)],BR (IR res) ->
-      emit (Pcmpwi (a1,Cint (_0)));
-      emit (Pisel (res,a3,a2,CRbit_2))
+      if eref then begin
+        emit (Pcmpwi (a1,Cint (Int.zero)));
+        emit (Pisel (res,a3,a2,CRbit_2))
+      end else if a2 = a3 then
+        emit (Pmr (res, a2))
+      else begin
+        (* a1 has type _Bool, hence it is 0 or 1 *)
+        emit (Psubfic (GPR0, a1, Cint _0));
+        (* r0 = 0xFFFF_FFFF if a1 is true, r0 = 0 if a1 is false *)
+        if res <> a3 then begin
+          emit (Pand_ (res, a2, GPR0));
+          emit (Pandc (GPR0, a3, GPR0))
+        end else begin
+          emit (Pandc (res, a3, GPR0));
+          emit (Pand_ (GPR0, a2, GPR0))
+        end;
+        emit (Por (res, res, GPR0))
+      end
   (* atomic operations *)
   | "__builtin_atomic_exchange", [BA (IR a1); BA (IR a2); BA (IR a3)],_ ->
       emit (Plwz (GPR10,Cint _0,a2));
@@ -563,7 +586,7 @@ let num_crbit = function
   | CRbit_3 -> 3
   | CRbit_6 -> 6
 
-let expand_instruction_simple instr =
+let expand_instruction instr =
   match instr with
   | Pallocframe(sz, ofs,retofs) ->
       let variadic = (!current_function).fn_sig.sig_cc.cc_vararg in
@@ -571,7 +594,7 @@ let expand_instruction_simple instr =
       assert (ofs = _0);
       let sz = if variadic then Int32.add sz 96l else sz in
       let adj = Int32.neg sz in
-      if adj >= -0x8000l then
+      if adj >= -0x8000l && adj < 0l then
         emit (Pstwu(GPR1, Cint(coqint_of_camlint adj), GPR1))
       else begin
         emit_loadimm GPR0 (coqint_of_camlint adj);
@@ -594,12 +617,38 @@ let expand_instruction_simple instr =
       let variadic = (!current_function).fn_sig.sig_cc.cc_vararg in
       let sz = camlint_of_coqint sz in
       let sz = if variadic then Int32.add sz 96l else sz in
-      if sz < 0x8000l then
+      if sz < 0x8000l && sz >= 0l then
         emit (Paddi(GPR1, GPR1, Cint(coqint_of_camlint sz)))
       else
         emit (Plwz(GPR1, Cint ofs, GPR1))
+  | Pfcfi(r1, r2) ->
+      assert (Archi.ppc64);
+      emit (Pextsw(GPR0, r2));
+      emit (Pstdu(GPR0, Cint _m8, GPR1));
+      emit (Pcfi_adjust _8);
+      emit (Plfd(r1, Cint _0, GPR1));
+      emit (Pfcfid(r1, r1));
+      emit (Paddi(GPR1, GPR1, Cint _8));
+      emit (Pcfi_adjust _m8)
+  | Pfcfiu(r1, r2) ->
+      assert (Archi.ppc64);
+      emit (Prldicl(GPR0, r2, _0, coqint_of_camlint 32l));
+      emit (Pstdu(GPR0, Cint _m8, GPR1));
+      emit (Pcfi_adjust _8);
+      emit (Plfd(r1, Cint _0, GPR1));
+      emit (Pfcfid(r1, r1));
+      emit (Paddi(GPR1, GPR1, Cint _8));
+      emit (Pcfi_adjust _m8)
   | Pfcti(r1, r2) ->
       emit (Pfctiwz(FPR13, r2));
+      emit (Pstfdu(FPR13, Cint _m8, GPR1));
+      emit (Pcfi_adjust _8);
+      emit (Plwz(r1, Cint _4, GPR1));
+      emit (Paddi(GPR1, GPR1, Cint _8));
+      emit (Pcfi_adjust _m8)
+  | Pfctiu(r1, r2) ->
+      assert (Archi.ppc64);
+      emit (Pfctidz(FPR13, r2));
       emit (Pstfdu(FPR13, Cint _m8, GPR1));
       emit (Pcfi_adjust _8);
       emit (Plwz(r1, Cint _4, GPR1));
@@ -620,7 +669,7 @@ let expand_instruction_simple instr =
   | Pbuiltin(ef, args, res) ->
       begin match ef with
       | EF_builtin(name, sg) ->
-          expand_builtin_inline (extern_atom name) args res
+          expand_builtin_inline (camlstring_of_coqstring name) args res
       | EF_vload chunk ->
           expand_builtin_vload chunk args res
       | EF_vstore chunk ->
@@ -660,107 +709,19 @@ let float_reg_to_dwarf = function
    | FPR24 -> 56 | FPR25 -> 57 | FPR26 -> 58 | FPR27 -> 59
    | FPR28 -> 60 | FPR29 -> 61 | FPR30 -> 62 | FPR31 -> 63
 
-let preg_to_dwarf_int = function
+let preg_to_dwarf = function
    | IR r -> int_reg_to_dwarf r
    | FR r -> float_reg_to_dwarf r
    | _ -> assert false
 
 
-let translate_annot annot = 
-  let rec aux = function
-    | BA x -> Some (BA (preg_to_dwarf_int x))
-    | BA_int _
-    | BA_long _
-    | BA_float _
-    | BA_single _
-    | BA_loadglobal _
-    | BA_addrglobal _
-    | BA_loadstack _ -> None
-    | BA_addrstack ofs -> Some (BA_addrstack ofs)
-    | BA_splitlong (hi,lo) -> 
-        begin
-          match (aux hi,aux lo) with
-          | Some hi ,Some lo -> Some (BA_splitlong (hi,lo))
-          | _,_ -> None
-        end in
-  (match annot with
-  | [] -> None
-  | a::_ -> aux a)
-
-let expand_scope id lbl oldscopes newscopes =
-  let opening = List.filter (fun a -> not (List.mem a oldscopes)) newscopes
-  and closing = List.filter (fun a -> not (List.mem a newscopes)) oldscopes in
-  List.iter (fun i -> Debug.open_scope id i lbl) opening;
-  List.iter (fun i -> Debug.close_scope id i lbl) closing
-
-let expand_instruction id l =
-  let get_lbl = function
-    | None -> 
-        let lbl = new_label () in
-        emit (Plabel lbl);
-        lbl
-    | Some lbl -> lbl in
-  let rec  aux lbl scopes = function
-    | [] -> let lbl = get_lbl lbl in
-      Debug.function_end id lbl
-    | (Pbuiltin(EF_debug (kind,txt,_x),args,_) as i)::rest ->
-        let kind = (P.to_int kind) in
-        begin
-          match kind with
-          | 1-> 
-              emit i;aux lbl scopes rest
-          | 2 ->
-              aux  lbl scopes rest
-          | 3 ->
-             begin 
-               match translate_annot args with
-               | Some a ->
-                   let lbl = get_lbl lbl in
-                   Debug.start_live_range (id,txt) lbl (1,a);
-                   aux (Some lbl) scopes rest
-               | None ->  aux lbl scopes rest
-             end
-          | 4 ->
-              let lbl = get_lbl lbl in
-              Debug.end_live_range (id,txt) lbl;
-              aux (Some lbl) scopes rest
-          | 5 ->
-              begin
-                match translate_annot args with
-                | Some a->
-                    Debug.stack_variable (id,txt) (1,a);
-                    aux lbl scopes rest
-                | _ ->  aux lbl scopes rest
-              end
-          | 6  ->
-              let lbl = get_lbl lbl in
-              let scopes' = List.map (function BA_int x -> Int32.to_int (camlint_of_coqint x) | _ -> assert false) args in
-              expand_scope id lbl scopes scopes';
-              aux (Some lbl) scopes' rest
-          | _ ->
-              aux None scopes rest
-        end
-    | i::rest -> expand_instruction_simple i; aux None scopes rest in
-  (* We need to move all closing debug annotations before the last real statement *)
-  let rec move_debug acc bcc = function
-    | (Pbuiltin(EF_debug (kind,_,_),_,_) as i)::rest ->
-        let kind = (P.to_int kind) in
-        if kind = 1 then
-          move_debug acc (i::bcc) rest (* Do not move debug line *)
-        else
-          move_debug (i::acc) bcc rest (* Move the debug annotations forward *)
-    | b::rest -> List.rev ((List.rev (b::bcc)@List.rev acc)@rest) (* We found the first non debug location *)
-    | [] -> List.rev acc (* This actually can never happen *) in
-  aux None [] (move_debug [] [] (List.rev l))
-      
-
 let expand_function id fn =
   try
     set_current_function fn;
     if !Clflags.option_g then
-      expand_instruction id fn.fn_code
+      expand_debug id 1 preg_to_dwarf expand_instruction fn.fn_code
     else
-      List.iter expand_instruction_simple fn.fn_code;
+      List.iter expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->
     Errors.Error (Errors.msg (coqstring_of_camlstring s))
@@ -774,26 +735,5 @@ let expand_fundef id = function
   | External ef ->
       Errors.OK (External ef)
 
-let rec transform_partial_prog transfun p =
-  match p with
-  | [] -> Errors.OK []
-  | (id,Gvar v)::l ->
-      (match transform_partial_prog transfun l with
-      | Errors.OK x -> Errors.OK ((id,Gvar v)::x)
-      | Errors.Error msg -> Errors.Error msg)
-  | (id,Gfun f)::l ->
-      (match transfun id f with
-      | Errors.OK tf ->
-          (match transform_partial_prog transfun l with
-          | Errors.OK x -> Errors.OK ((id,Gfun tf)::x)
-          | Errors.Error msg -> Errors.Error msg)
-      | Errors.Error msg ->
-          Errors.Error ((Errors.MSG (coqstring_of_camlstring "In function"))::((Errors.CTX
-          id) :: (Errors.MSG (coqstring_of_camlstring ": ") :: msg))))
-
 let expand_program (p: Asm.program) : Asm.program Errors.res =
-  match transform_partial_prog expand_fundef p.prog_defs with
-  | Errors.OK x-> 
-      Errors.OK { prog_defs = x; prog_public = p.prog_public; prog_main =
-      p.prog_main }
-  | Errors.Error msg -> Errors.Error msg
+  AST.transform_partial_ident_program expand_fundef p

@@ -13,7 +13,7 @@
 (** The Mach intermediate language: abstract syntax.
 
   Mach is the last intermediate language before generation of assembly
-  code.  
+  code.
 *)
 
 Require Import Coqlib.
@@ -34,14 +34,14 @@ Require Stacklayout.
 
 (** Like Linear, the Mach language is organized as lists of instructions
   operating over machine registers, with default fall-through behaviour
-  and explicit labels and branch instructions.  
+  and explicit labels and branch instructions.
 
   The main difference with Linear lies in the instructions used to
   access the activation record.  Mach has three such instructions:
   [Mgetstack] and [Msetstack] to read and write within the activation
   record for the current function, at a given word offset and with a
   given type; and [Mgetparam], to read within the activation record of
-  the caller. 
+  the caller.
 
   These instructions implement a more concrete view of the activation
   record than the the [Lgetstack] and [Lsetstack] instructions of
@@ -153,7 +153,7 @@ Lemma undef_regs_same:
 Proof.
   induction rl; simpl; intros. tauto.
   destruct H. subst a. apply Regmap.gss.
-  unfold Regmap.set. destruct (RegEq.eq r a); auto. 
+  unfold Regmap.set. destruct (RegEq.eq r a); auto.
 Qed.
 
 Fixpoint set_regs (rl: list mreg) (vl: list val) (rs: regset) : regset :=
@@ -193,7 +193,7 @@ Lemma find_label_incl:
   forall lbl c c', find_label lbl c = Some c' -> incl c' c.
 Proof.
   induction c; simpl; intros. discriminate.
-  destruct (is_label lbl a). inv H. auto with coqlib. eauto with coqlib. 
+  destruct (is_label lbl a). inv H. auto with coqlib. eauto with coqlib.
 Qed.
 
 Section RELSEM.

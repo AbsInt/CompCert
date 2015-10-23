@@ -65,7 +65,7 @@ let builtins = {
   "__builtin_acosl",  (longDoubleType, [ longDoubleType ], false);
 
   "__builtin_alloca",  (voidPtrType, [ uintType ], false);
-  
+
   "__builtin_asin",  (doubleType, [ doubleType ], false);
   "__builtin_asinf",  (floatType, [ floatType ], false);
   "__builtin_asinl",  (longDoubleType, [ longDoubleType ], false);
@@ -76,7 +76,7 @@ let builtins = {
 
   "__builtin_atan2",  (doubleType, [ doubleType; doubleType ], false);
   "__builtin_atan2f",  (floatType, [ floatType; floatType ], false);
-  "__builtin_atan2l",  (longDoubleType, [ longDoubleType; 
+  "__builtin_atan2l",  (longDoubleType, [ longDoubleType;
                                                 longDoubleType ], false);
 
   "__builtin_ceil",  (doubleType, [ doubleType ], false);
@@ -133,12 +133,12 @@ let builtins = {
 
   "__builtin_frexp",  (doubleType, [ doubleType; intPtrType ], false);
   "__builtin_frexpf",  (floatType, [ floatType; intPtrType  ], false);
-  "__builtin_frexpl",  (longDoubleType, [ longDoubleType; 
+  "__builtin_frexpl",  (longDoubleType, [ longDoubleType;
                                                 intPtrType  ], false);
 
   "__builtin_ldexp",  (doubleType, [ doubleType; intType ], false);
   "__builtin_ldexpf",  (floatType, [ floatType; intType  ], false);
-  "__builtin_ldexpl",  (longDoubleType, [ longDoubleType; 
+  "__builtin_ldexpl",  (longDoubleType, [ longDoubleType;
                                                 intType  ], false);
 
   "__builtin_log",  (doubleType, [ doubleType ], false);
@@ -149,10 +149,10 @@ let builtins = {
   "__builtin_log10f",  (floatType, [ floatType ], false);
   "__builtin_log10l",  (longDoubleType, [ longDoubleType ], false);
 
-  "__builtin_modff",  (floatType, [ floatType; 
+  "__builtin_modff",  (floatType, [ floatType;
                                           TPtr(floatType,[]) ], false);
-  "__builtin_modfl",  (longDoubleType, [ longDoubleType; 
-                                               TPtr(longDoubleType, []) ], 
+  "__builtin_modfl",  (longDoubleType, [ longDoubleType;
+                                               TPtr(longDoubleType, []) ],
                              false);
 
   "__builtin_nan",  (doubleType, [ charConstPtrType ], false);
@@ -210,7 +210,7 @@ let builtins = {
   "__builtin_tanhl",  (longDoubleType, [ longDoubleType ], false);
 
   "__builtin_va_end",  (voidType, [ voidPtrType ], false);
-  "__builtin_varargs_start",  
+  "__builtin_varargs_start",
     (voidType, [ voidPtrType ], false);
   (* When we elaborate builtin_stdarg_start/builtin_va_start,
      second argument is passed by address *)

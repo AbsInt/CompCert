@@ -11,12 +11,12 @@
 (* *********************************************************************)
 
 (** Removal of useless labels introduced by the linearization pass.
-  
-  The linearization pass introduces one label for each node of the 
+
+  The linearization pass introduces one label for each node of the
   control-flow graph.  Many of these labels are never branched to,
   which can complicate further optimizations over linearized code.
   (There are no such optimizations yet.)  In preparation for these
-  further optimizations, and to make the generated Linear code 
+  further optimizations, and to make the generated Linear code
   better-looking, the present pass removes labels that cannot be
   branched to. *)
 

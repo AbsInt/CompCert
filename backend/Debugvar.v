@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Computation of live ranges for local variables that carry 
+(** Computation of live ranges for local variables that carry
     debugging information. *)
 
 Require Import Coqlib.
@@ -154,7 +154,7 @@ Definition eq_debuginfo (i1 i2: debuginfo) : {i1=i2} + {i1 <> i2}.
 Proof.
   destruct (eq_arg (proj1_sig i1) (proj1_sig i2)).
   left. destruct i1, i2; simpl in *. subst x0. f_equal. apply proof_irr.
-  right. congruence. 
+  right. congruence.
 Defined.
 Global Opaque eq_debuginfo.
 
@@ -177,7 +177,7 @@ Fixpoint join (s1: avail) (s2: avail) {struct s1} : avail :=
 
 Definition eq_state (s1 s2: avail) : {s1=s2} + {s1<>s2}.
 Proof.
-  apply list_eq_dec. decide equality. apply eq_debuginfo. apply ident_eq. 
+  apply list_eq_dec. decide equality. apply eq_debuginfo. apply ident_eq.
 Defined.
 Global Opaque eq_state.
 
@@ -273,7 +273,7 @@ Definition transfer (lm: labelmap) (before: option avail) (i: instruction):
       end
   end.
 
-(** One pass of forward analysis over the code [c].  
+(** One pass of forward analysis over the code [c].
     Return an updated label map. *)
 
 Fixpoint ana_code (lm: labelmap) (before: option avail) (c: code) : labelmap :=

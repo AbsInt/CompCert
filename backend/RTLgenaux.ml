@@ -72,7 +72,7 @@ let size_eos = function
 let rec size_stmt = function
   | Sskip -> 0
   | Sassign(id, a) -> size_expr a
-  | Sstore(chunk, addr, args, src) -> 1 + size_exprs args + size_expr src 
+  | Sstore(chunk, addr, args, src) -> 1 + size_exprs args + size_expr src
   | Scall(optid, sg, eos, args) ->
       3 + size_eos eos + size_exprs args + length_exprs args
   | Stailcall(sg, eos, args) ->
@@ -91,6 +91,6 @@ let rec size_stmt = function
   | Slabel(lbl, s) -> size_stmt s
   | Sgoto lbl -> 1
 
-let more_likely (c: condexpr) (ifso: stmt) (ifnot: stmt) = 
+let more_likely (c: condexpr) (ifso: stmt) (ifnot: stmt) =
   size_stmt ifso > size_stmt ifnot
 

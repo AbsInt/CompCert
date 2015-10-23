@@ -39,9 +39,9 @@ let rec repr lr =
   | Link lr' -> let lr'' = repr lr' in lr.kind <- Link lr''; lr''
   | _ -> lr
 
-let same_range lr1 lr2 = 
-  lr1 == lr2 || (* quick test for speed *) 
-  repr lr1 == repr lr2 (* the real test *) 
+let same_range lr1 lr2 =
+  lr1 == lr2 || (* quick test for speed *)
+  repr lr1 == repr lr2 (* the real test *)
 
 let unify lr1 lr2 =
   let lr1 = repr lr1 and lr2 = repr lr2 in

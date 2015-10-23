@@ -124,7 +124,7 @@ let comparison env direction ptraction tyop ty1 v1 ty2 v2 =
   (* tyop = type at which the comparison is done *)
   let b =
     match cast env tyop ty1 v1, cast env tyop ty2 v2 with
-    | I n1, I n2 -> 
+    | I n1, I n2 ->
         if is_signed env tyop
         then direction (compare n1 n2) 0
         else direction (int64_unsigned_compare n1 n2) 0 (* including pointers *)
@@ -162,7 +162,7 @@ let binop env op tyop tyres ty1 v1 ty2 v2 =
         end
     | Odiv ->
         begin match cast env tyop ty1 v1, cast env tyop ty2 v2 with
-          | I n1, I n2 -> 
+          | I n1, I n2 ->
               if n2 = 0L then raise Notconst else
               if is_signed env tyop then I (Int64.div n1 n2)
               else I (int64_unsigned_div n1 n2)
@@ -170,7 +170,7 @@ let binop env op tyop tyres ty1 v1 ty2 v2 =
         end
     | Omod ->
         begin match v1, v2 with
-          | I n1, I n2 -> 
+          | I n1, I n2 ->
               if n2 = 0L then raise Notconst else
               if is_signed env tyop then I (Int64.rem n1 n2)
               else I (int64_unsigned_mod n1 n2)
@@ -220,11 +220,11 @@ let binop env op tyop tyres ty1 v1 ty2 v2 =
     | Ocomma ->
         v2
     | Ologand ->
-        if boolean_value v1 
+        if boolean_value v1
         then if boolean_value v2 then I 1L else I 0L
         else I 0L
     | Ologor ->
-        if boolean_value v1 
+        if boolean_value v1
         then I 1L
         else if boolean_value v2 then I 1L else I 0L
     | _ -> raise Notconst

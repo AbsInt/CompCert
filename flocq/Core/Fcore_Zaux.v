@@ -927,3 +927,65 @@ intros [|a|a] [|b|b] ; try rewrite Zpos_div_eucl_aux_correct ; easy.
 Qed.
 
 End faster_div.
+
+Section Iter.
+
+Context {A : Type}.
+Variable (f : A -> A).
+
+Fixpoint iter_nat (n : nat) (x : A) {struct n} : A :=
+  match n with
+  | S n' => iter_nat n' (f x)
+  | O => x
+  end.
+
+Lemma iter_nat_plus :
+  forall (p q : nat) (x : A),
+  iter_nat (p + q) x = iter_nat p (iter_nat q x).
+Proof.
+induction q.
+now rewrite plus_0_r.
+intros x.
+rewrite <- plus_n_Sm.
+apply IHq.
+Qed.
+
+Lemma iter_nat_S :
+  forall (p : nat) (x : A),
+  iter_nat (S p) x = f (iter_nat p x).
+Proof.
+induction p.
+easy.
+simpl.
+intros x.
+apply IHp.
+Qed.
+
+Fixpoint iter_pos (n : positive) (x : A) {struct n} : A :=
+  match n with
+  | xI n' => iter_pos n' (iter_pos n' (f x))
+  | xO n' => iter_pos n' (iter_pos n' x)
+  | xH => f x
+  end.
+
+Lemma iter_pos_nat :
+  forall (p : positive) (x : A),
+  iter_pos p x = iter_nat (Pos.to_nat p) x.
+Proof.
+induction p ; intros x.
+rewrite Pos2Nat.inj_xI.
+simpl.
+rewrite plus_0_r.
+rewrite iter_nat_plus.
+rewrite (IHp (f x)).
+apply IHp.
+rewrite Pos2Nat.inj_xO.
+simpl.
+rewrite plus_0_r.
+rewrite iter_nat_plus.
+rewrite (IHp x).
+apply IHp.
+easy.
+Qed.
+
+End Iter.

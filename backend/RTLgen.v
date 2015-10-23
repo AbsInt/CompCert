@@ -27,7 +27,7 @@ Open Local Scope string_scope.
 
 (** * Translation environments and state *)
 
-(** The translation functions are parameterized by the following 
+(** The translation functions are parameterized by the following
   compile-time environment, which maps CminorSel local variables and
   let-bound variables to RTL registers.   The mapping for local variables
   is computed from the CminorSel variable declarations at the beginning of
@@ -78,7 +78,7 @@ Lemma state_incr_trans:
   forall s1 s2 s3, state_incr s1 s2 -> state_incr s2 s3 -> state_incr s1 s3.
 Proof.
   intros. inv H; inv H0. apply state_incr_intro.
-  apply Ple_trans with (st_nextnode s2); assumption. 
+  apply Ple_trans with (st_nextnode s2); assumption.
   apply Ple_trans with (st_nextreg s2); assumption.
   intros. generalize (H3 pc) (H5 pc). intuition congruence.
 Qed.
@@ -93,7 +93,7 @@ Qed.
   to modify the global state.  These luxuries are not available in Coq,
   however.  Instead, we use a monadic encoding of the translation:
   translation functions take the current global state as argument,
-  and return either [Error msg] to denote an error, 
+  and return either [Error msg] to denote an error,
   or [OK r s incr] to denote success.  [s] is the modified state, [r]
   the result value of the translation function.  and [incr] a proof
   that the final state is in the [state_incr] relation with the
@@ -198,7 +198,7 @@ Definition add_instr (i: instruction) : mon node :=
   fun s =>
     let n := s.(st_nextnode) in
     OK n
-       (mkstate s.(st_nextreg) (Psucc n) (PTree.set n i s.(st_code)) 
+       (mkstate s.(st_nextreg) (Psucc n) (PTree.set n i s.(st_code))
                 (add_instr_wf s i))
        (add_instr_incr s i).
 
@@ -306,7 +306,7 @@ Definition add_var (map: mapping) (name: ident) : mon (reg * mapping) :=
      ret (r, mkmapping (PTree.set name r map.(map_vars))
                        map.(map_letvars)).
 
-Fixpoint add_vars (map: mapping) (names: list ident) 
+Fixpoint add_vars (map: mapping) (names: list ident)
                   {struct names} : mon (list reg * mapping) :=
   match names with
   | nil => ret (nil, map)
@@ -339,7 +339,7 @@ Definition find_letvar (map: mapping) (idx: nat) : mon reg :=
   fresh temporary register.  Exception: if [a] is a let-bound variable
   or a local variable, we return the RTL register associated
   with that variable instead.  Returning a fresh temporary in all cases
-  would be semantically correct, but would generate less efficient 
+  would be semantically correct, but would generate less efficient
   RTL code. *)
 
 Definition alloc_reg (map: mapping) (a: expr) : mon reg :=

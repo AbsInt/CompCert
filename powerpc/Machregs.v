@@ -21,7 +21,7 @@ Require Import Op.
 (** The following type defines the machine registers that can be referenced
   as locations.  These include:
 - Integer registers that can be allocated to RTL pseudo-registers ([Rxx]).
-- Floating-point registers that can be allocated to RTL pseudo-registers 
+- Floating-point registers that can be allocated to RTL pseudo-registers
   ([Fxx]).
 
   The type [mreg] does not include special-purpose or reserved
@@ -134,7 +134,7 @@ Definition destroyed_by_op (op: operation): list mreg :=
   match op with
   | Ofloatconst _ => R12 :: nil
   | Osingleconst _ => R12 :: nil
-  | Ointoffloat => F13 :: nil
+  | Ointoffloat | Ointuoffloat => F13 :: nil
   | _ => nil
   end.
 
@@ -160,15 +160,11 @@ Fixpoint destroyed_by_clobber (cl: list string): list mreg :=
       end
   end.
 
-Definition builtin_atomic_exchange := ident_of_string "__builtin_atomic_exchange".
-Definition builtin_sync_and_fetch := ident_of_string "__builtin_sync_fetch_and_add".
-Definition builtin_atomic_compare_exchange := ident_of_string "__builtin_atomic_compare_exchange".
-
 Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_builtin id sg =>
-    if ident_eq id builtin_atomic_exchange then R10::nil
-    else if ident_eq id builtin_atomic_compare_exchange then R10::R11::nil
+    if string_dec id "__builtin_atomic_exchange" then R10::nil
+    else if string_dec id "__builtin_atomic_compare_exchange" then R10::R11::nil
     else F13 :: nil
   | EF_vload _ => R11 :: nil
   | EF_vstore Mint64 => R10 :: R11 :: R12 :: nil
@@ -194,9 +190,9 @@ Definition mregs_for_operation (op: operation): list (option mreg) * option mreg
 Definition mregs_for_builtin (ef: external_function): list (option mreg) * list (option mreg) :=
   match ef with
     | EF_builtin id sg =>
-      if ident_eq id builtin_atomic_exchange then ((Some R3)::(Some R4)::(Some R5)::nil,nil)
-      else if ident_eq id builtin_sync_and_fetch then ((Some R4)::(Some R5)::nil,(Some R3)::nil)
-      else if ident_eq id builtin_atomic_compare_exchange then ((Some R4)::(Some R5)::(Some R6)::nil, (Some R3):: nil)
+      if string_dec id "__builtin_atomic_exchange" then ((Some R3)::(Some R4)::(Some R5)::nil,nil)
+      else if string_dec id "__builtin_sync_fetch_and_add" then ((Some R4)::(Some R5)::nil,(Some R3)::nil)
+      else if string_dec id "___builtin_atomic_compare_exchange" then ((Some R4)::(Some R5)::(Some R6)::nil, (Some R3):: nil)
       else (nil, nil)
     | _ => (nil, nil)
   end.
@@ -219,23 +215,16 @@ Definition two_address_op (op: operation) : bool :=
 
 (* Constraints on constant propagation for builtins *)
 
-Definition builtin_get_spr := ident_of_string "__builtin_get_spr".
-Definition builtin_set_spr := ident_of_string "__builtin_set_spr".
-Definition builtin_prefetch := ident_of_string "__builtin_prefetch".
-Definition builtin_dcbtls := ident_of_string "__builtin_dcbtls".
-Definition builtin_icbtls := ident_of_string "__builtin_icbtls".
-Definition builtin_mbar := ident_of_string "__builtin_mbar".
-
 Definition builtin_constraints (ef: external_function) :
                                        list builtin_arg_constraint :=
   match ef with
   | EF_builtin id sg =>
-      if ident_eq id builtin_get_spr then OK_const :: nil
-      else if ident_eq id builtin_set_spr then OK_const :: OK_default :: nil
-      else if ident_eq id builtin_prefetch then OK_default :: OK_const :: OK_const :: nil
-      else if ident_eq id builtin_dcbtls then OK_default::OK_const::nil
-      else if ident_eq id builtin_icbtls then OK_default::OK_const::nil
-      else if ident_eq id builtin_mbar then OK_const::nil
+      if string_dec id "__builtin_get_spr" then OK_const :: nil
+      else if string_dec id "__builtin_set_spr" then OK_const :: OK_default :: nil
+      else if string_dec id "__builtin_prefetch" then OK_default :: OK_const :: OK_const :: nil
+      else if string_dec id "__builtin_dcbtls" then OK_default::OK_const::nil
+      else if string_dec id "__builtin_icbtls" then OK_default::OK_const::nil
+      else if string_dec id "__builtin_mbar" then OK_const::nil
       else nil
   | EF_vload _ => OK_addrany :: nil
   | EF_vstore _ => OK_addrany :: OK_default :: nil

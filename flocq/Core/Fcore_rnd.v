@@ -39,7 +39,7 @@ exists f.
 intros g Hg.
 now apply H2 with (3 := Rle_refl x).
 (* . *)
-exists (projT1 (completeness _ H3 H1)).
+exists (proj1_sig (completeness _ H3 H1)).
 destruct completeness as (f1, (H4, H5)).
 simpl.
 destruct H1 as (f2, H1).
@@ -58,7 +58,7 @@ Theorem round_fun_of_pred :
   { f : R -> R | forall x, rnd x (f x) }.
 Proof.
 intros rnd H.
-exists (fun x => projT1 (round_val_of_pred rnd H x)).
+exists (fun x => proj1_sig (round_val_of_pred rnd H x)).
 intros x.
 now destruct round_val_of_pred as (f, H1).
 Qed.

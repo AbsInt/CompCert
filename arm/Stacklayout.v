@@ -112,7 +112,7 @@ Proof.
   set (x1 := 4 * bound_outgoing b).
   assert (4 | x1). unfold x1; exists (bound_outgoing b); ring.
   set (x2 := align x1 8).
-  assert (8 | x2). apply align_divides. omega. 
+  assert (8 | x2). apply align_divides. omega.
   set (x3 := x2 + 4 * bound_local b).
   assert (4 | x3). apply Zdivide_plus_r. apply Zdivides_trans with 8; auto. exists 2; auto.
   exists (bound_local b); ring.
@@ -121,10 +121,10 @@ Proof.
   set (x5 := x4 + 8 * bound_float_callee_save b).
   assert (8 | x5). apply Zdivide_plus_r; auto. exists (bound_float_callee_save b); ring.
   assert (4 | x5). apply Zdivides_trans with 8; auto. exists 2; auto.
-  set (x6 := x5 + 4). 
+  set (x6 := x5 + 4).
   assert (4 | x6). apply Zdivide_plus_r; auto. exists 1; auto.
   set (x7 := x6 + 4).
-  assert (8 | x7). unfold x7, x6. replace (x5 + 4 + 4) with (x5 + 8) by omega. 
+  assert (8 | x7). unfold x7, x6. replace (x5 + 4 + 4) with (x5 + 8) by omega.
   apply Zdivide_plus_r; auto. exists 1; auto.
   set (x8 := align (x7 + bound_stack_data b) 8).
   assert (8 | x8). apply align_divides. omega.

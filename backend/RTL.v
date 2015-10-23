@@ -64,7 +64,7 @@ Inductive instruction: Type :=
   | Icall: signature -> reg + ident -> list reg -> reg -> node -> instruction
       (** [Icall sig fn args dest succ] invokes the function determined by
           [fn] (either a function pointer found in a register or a
-          function name), giving it the values of registers [args] 
+          function name), giving it the values of registers [args]
           as arguments.  It stores the return value in [dest] and branches
           to [succ]. *)
   | Itailcall: signature -> reg + ident -> list reg -> instruction
@@ -127,7 +127,7 @@ Fixpoint init_regs (vl: list val) (rl: list reg) {struct rl} : regset :=
   | _, _ => Regmap.init Vundef
   end.
 
-(** The dynamic semantics of RTL is given in small-step style, as a 
+(** The dynamic semantics of RTL is given in small-step style, as a
   set of transitions between states.  A state captures the current
   point in the execution.  Three kinds of states appear in the transitions:
 
@@ -149,7 +149,7 @@ Fixpoint init_regs (vl: list val) (rl: list reg) {struct rl} : regset :=
 
 In all three kinds of states, the [cs] parameter represents the call stack.
 It is a list of frames [Stackframe res f sp pc rs].  Each frame represents
-a function call in progress.  
+a function call in progress.
 [res] is the pseudo-register that will receive the result of the call.
 [f] is the calling function.
 [sp] is its stack pointer.
@@ -355,9 +355,9 @@ Proof.
   assert (t1 = E0 -> exists s2, step (Genv.globalenv p) s t2 s2).
     intros. subst. inv H0. exists s1; auto.
   inversion H; subst; auto.
-  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
+  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]].
   exists (State s0 f sp pc' (regmap_setres res vres2 rs) m2). eapply exec_Ibuiltin; eauto.
-  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
+  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]].
   exists (Returnstate s0 vres2 m2). econstructor; eauto.
 (* trace length *)
   red; intros; inv H; simpl; try omega.
@@ -450,15 +450,15 @@ Definition max_pc_function (f: function) :=
 Lemma max_pc_function_sound:
   forall f pc i, f.(fn_code)!pc = Some i -> Ple pc (max_pc_function f).
 Proof.
-  intros until i. unfold max_pc_function. 
+  intros until i. unfold max_pc_function.
   apply PTree_Properties.fold_rec with (P := fun c m => c!pc = Some i -> Ple pc m).
   (* extensionality *)
-  intros. apply H0. rewrite H; auto. 
+  intros. apply H0. rewrite H; auto.
   (* base case *)
   rewrite PTree.gempty. congruence.
   (* inductive case *)
-  intros. rewrite PTree.gsspec in H2. destruct (peq pc k). 
-  inv H2. xomega. 
+  intros. rewrite PTree.gsspec in H2. destruct (peq pc k).
+  inv H2. xomega.
   apply Ple_trans with a. auto. xomega.
 Qed.
 
@@ -493,9 +493,9 @@ Definition max_reg_function (f: function) :=
 Remark max_reg_instr_ge:
   forall m pc i, Ple m (max_reg_instr m pc i).
 Proof.
-  intros. 
+  intros.
   assert (X: forall l n, Ple m n -> Ple m (fold_left Pmax l n)).
-  { induction l; simpl; intros. 
+  { induction l; simpl; intros.
     auto.
     apply IHl. xomega. }
   destruct i; simpl; try (destruct s0); repeat (apply X); try xomega.
@@ -518,9 +518,9 @@ Qed.
 Remark max_reg_instr_uses:
   forall m pc i r, In r (instr_uses i) -> Ple r (max_reg_instr m pc i).
 Proof.
-  intros. 
+  intros.
   assert (X: forall l n, In r l \/ Ple r n -> Ple r (fold_left Pmax l n)).
-  { induction l; simpl; intros. 
+  { induction l; simpl; intros.
     tauto.
     apply IHl. destruct H0 as [[A|A]|A]. right; subst; xomega. auto. right; xomega. }
   destruct i; simpl in *; try (destruct s0); try (apply X; auto).
@@ -536,36 +536,36 @@ Lemma max_reg_function_def:
   forall f pc i r,
   f.(fn_code)!pc = Some i -> instr_defs i = Some r -> Ple r (max_reg_function f).
 Proof.
-  intros. 
+  intros.
   assert (Ple r (PTree.fold max_reg_instr f.(fn_code) 1%positive)).
-  {  revert H. 
+  {  revert H.
      apply PTree_Properties.fold_rec with
        (P := fun c m => c!pc = Some i -> Ple r m).
    - intros. rewrite H in H1; auto.
    - rewrite PTree.gempty; congruence.
-   - intros. rewrite PTree.gsspec in H3. destruct (peq pc k). 
-     + inv H3. eapply max_reg_instr_def; eauto. 
+   - intros. rewrite PTree.gsspec in H3. destruct (peq pc k).
+     + inv H3. eapply max_reg_instr_def; eauto.
      + apply Ple_trans with a. auto. apply max_reg_instr_ge.
   }
-  unfold max_reg_function. xomega. 
+  unfold max_reg_function. xomega.
 Qed.
 
 Lemma max_reg_function_use:
   forall f pc i r,
   f.(fn_code)!pc = Some i -> In r (instr_uses i) -> Ple r (max_reg_function f).
 Proof.
-  intros. 
+  intros.
   assert (Ple r (PTree.fold max_reg_instr f.(fn_code) 1%positive)).
-  {  revert H. 
+  {  revert H.
      apply PTree_Properties.fold_rec with
        (P := fun c m => c!pc = Some i -> Ple r m).
    - intros. rewrite H in H1; auto.
    - rewrite PTree.gempty; congruence.
-   - intros. rewrite PTree.gsspec in H3. destruct (peq pc k). 
-     + inv H3. eapply max_reg_instr_uses; eauto. 
+   - intros. rewrite PTree.gsspec in H3. destruct (peq pc k).
+     + inv H3. eapply max_reg_instr_uses; eauto.
      + apply Ple_trans with a. auto. apply max_reg_instr_ge.
   }
-  unfold max_reg_function. xomega. 
+  unfold max_reg_function. xomega.
 Qed.
 
 Lemma max_reg_function_params:
@@ -573,7 +573,7 @@ Lemma max_reg_function_params:
 Proof.
   intros.
   assert (X: forall l n, In r l \/ Ple r n -> Ple r (fold_left Pmax l n)).
-  { induction l; simpl; intros. 
+  { induction l; simpl; intros.
     tauto.
     apply IHl. destruct H0 as [[A|A]|A]. right; subst; xomega. auto. right; xomega. }
   assert (Y: Ple r (fold_left Pmax f.(fn_params) 1%positive)).

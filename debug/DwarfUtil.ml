@@ -53,6 +53,30 @@ let rec entry_fold f acc entry =
   let acc = f acc entry.tag in
   List.fold_left (entry_fold f) acc entry.children
 
+(* Return the code and the corresponding comment for a DW_FORM *)
+let code_of_dw_form = function
+  | DW_FORM_addr -> 0x01,"DW_FORM_addr"
+  | DW_FORM_block2 -> 0x03,"DW_FORM_block2"
+  | DW_FORM_block4 -> 0x04,"DW_FORM_block4"
+  | DW_FORM_data2 -> 0x05,"DW_FORM_data2"
+  | DW_FORM_data4 -> 0x06,"DW_FORM_data4"
+  | DW_FORM_data8 -> 0x07,"DW_FORM_data8"
+  | DW_FORM_string -> 0x08,"DW_FORM_string"
+  | DW_FORM_block -> 0x09,"DW_FORM_block"
+  | DW_FORM_block1 -> 0x0a,"DW_FORM_block1"
+  | DW_FORM_data1 -> 0x0b,"DW_FORM_data1"
+  | DW_FORM_flag -> 0x0c,"DW_FORM_flag"
+  | DW_FORM_sdata -> 0x0d,"DW_FORM_sdata"
+  | DW_FORM_strp -> 0x0e,"DW_FORM_strp"
+  | DW_FORM_udata -> 0x0f,"DW_FORM_udata"
+  | DW_FORM_ref_addr -> 0x10,"DW_FORM_ref_addr"
+  | DW_FORM_ref1 -> 0x11,"DW_FORM_ref1"
+  | DW_FORM_ref2 -> 0x12,"DW_FORM_ref2"
+  | DW_FORM_ref4 -> 0x13,"DW_FORM_ref4"
+  | DW_FORM_ref8 -> 0x14,"DW_FORM_ref8"
+  | DW_FORM_ref_udata -> 0x15,"DW_FORM_ref_udata"
+  | DW_FORM_ref_indirect -> 0x16,"DW_FORM_ref_indirect"
+
 (* Attribute form encoding *)
 let dw_form_addr     = 0x01
 let dw_form_block2   = 0x03
@@ -84,35 +108,28 @@ let dw_op_regx = 0x90
 let dw_op_bregx = 0x92
 let dw_op_piece = 0x93
 
-
-(* Default corresponding encoding for the different abbreviations *)
-let sibling_type_abbr = dw_form_ref4
-let file_loc_type_abbr = dw_form_data4,dw_form_udata
-let type_abbr = dw_form_ref_addr
-let name_type_abbr = dw_form_string
-let encoding_type_abbr = dw_form_data1
-let byte_size_type_abbr = dw_form_data1
-let member_size_abbr = dw_form_udata
-let high_pc_type_abbr = dw_form_addr
-let low_pc_type_abbr = dw_form_addr
-let stmt_list_type_abbr = dw_form_data4
-let declaration_type_abbr = dw_form_flag
-let external_type_abbr = dw_form_flag
-let prototyped_type_abbr = dw_form_flag
-let bit_offset_type_abbr = dw_form_data1
-let comp_dir_type_abbr = dw_form_string
-let language_type_abbr = dw_form_udata
-let producer_type_abbr = dw_form_string
-let value_type_abbr = dw_form_sdata
-let artificial_type_abbr = dw_form_flag
-let variable_parameter_type_abbr = dw_form_flag
-let bit_size_type_abbr = dw_form_data1
-let location_ref_type_abbr = dw_form_data4
-let location_block_type_abbr = dw_form_block
-let data_location_block_type_abbr = dw_form_block
-let data_location_ref_type_abbr = dw_form_ref4
-let bound_const_type_abbr = dw_form_udata
-let bound_ref_type_abbr=dw_form_ref4
+(* Tag to string function *)
+let string_of_dw_tag = function
+  | DW_TAG_array_type _ -> "DW_TAG_array_type"
+  | DW_TAG_compile_unit _ -> "DW_TAG_compile_unit"
+  | DW_TAG_base_type _ -> "DW_TAG_base_type"
+  | DW_TAG_const_type _ -> "DW_TAG_const_type"
+  | DW_TAG_enumeration_type _ -> "DW_TAG_enumeration_type"
+  | DW_TAG_enumerator _ -> "DW_TAG_enumerator"
+  | DW_TAG_formal_parameter _ -> "DW_TAG_formal_parameter"
+  | DW_TAG_label _ -> "DW_TAG_label"
+  | DW_TAG_lexical_block _ -> "DW_TAG_lexical_block"
+  | DW_TAG_member _ -> "DW_TAG_member"
+  | DW_TAG_pointer_type _ -> "DW_TAG_pointer_type"
+  | DW_TAG_structure_type _ -> "DW_TAG_structure_type"
+  | DW_TAG_subprogram _ -> "DW_TAG_subprogram"
+  | DW_TAG_subrange_type _ -> "DW_TAG_subrange_type"
+  | DW_TAG_subroutine_type _ -> "DW_TAG_subroutine_type"
+  | DW_TAG_typedef _ -> "DW_TAG_typedef"
+  | DW_TAG_union_type _ -> "DW_TAG_union_type"
+  | DW_TAG_unspecified_parameter _ -> "DW_TAG_unspecified_parameter"
+  | DW_TAG_variable _ -> "DW_TAG_variable"
+  | DW_TAG_volatile_type _ -> "DW_TAG_volatile_type"
 
 (* Sizeof functions for the encoding of uleb128 and sleb128 *)
 let sizeof_uleb128 value =

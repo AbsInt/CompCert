@@ -50,7 +50,7 @@ Proof. decide equality. Defined.
 
 (** Bits of the flags register. *)
 
-Inductive crbit: Type := 
+Inductive crbit: Type :=
   | ZF | CF | PF | SF | OF.
 
 (** All registers modeled here. *)
@@ -169,7 +169,7 @@ Inductive instruction: Type :=
   | Psar_ri (rd: ireg) (n: int)
   | Pshld_ri (rd: ireg) (r1: ireg) (n: int)
   | Pror_ri (rd: ireg) (n: int)
-  | Pcmp_rr (r1 r2: ireg) 
+  | Pcmp_rr (r1 r2: ireg)
   | Pcmp_ri (r1: ireg) (n: int)
   | Ptest_rr (r1 r2: ireg)
   | Ptest_ri (r1: ireg) (n: int)
@@ -517,7 +517,7 @@ Definition exec_store (chunk: memory_chunk) (m: mem)
     that correspond to actual IA32 instructions, the cases are
     straightforward transliterations of the informal descriptions
     given in the IA32 reference manuals.  For pseudo-instructions,
-    refer to the informal descriptions given above.  
+    refer to the informal descriptions given above.
 
     Note that we set to [Vundef] the registers used as temporaries by
     the expansions of the pseudo-instructions, so that the IA32 code
@@ -735,7 +735,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       end
   | Pjmptbl r tbl =>
       match rs#r with
-      | Vint n => 
+      | Vint n =>
           match list_nth_z tbl (Int.unsigned n) with
           | None => Stuck
           | Some lbl => goto_label f lbl rs m
@@ -818,14 +818,14 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pminsd _ _
   | Pmovb_rm _ _
   | Pmovq_rm _ _
-  | Pmovq_mr _ _   
+  | Pmovq_mr _ _
   | Pmovsb
   | Pmovsw
-  | Pmovw_rm _ _ 
+  | Pmovw_rm _ _
   | Prep_movsl
   | Psbb_rr _ _
   | Psqrtsd _ _
-  | Psub_ri _ _ => Stuck 
+  | Psub_ri _ _ => Stuck
   end.
 
 (** Translation of the LTL/Linear/Mach view of machine registers
@@ -891,7 +891,7 @@ Inductive step: state -> trace -> state -> Prop :=
       find_instr (Int.unsigned ofs) f.(fn_code) = Some (Pbuiltin ef args res) ->
       eval_builtin_args ge rs (rs ESP) m args vargs ->
       external_call ef ge vargs m t vres m' ->
-      rs' = nextinstr_nf 
+      rs' = nextinstr_nf
              (set_res res vres
                (undef_regs (map preg_of (destroyed_by_builtin ef)) rs)) ->
       step (State rs m) t (State rs' m')
@@ -924,7 +924,7 @@ Inductive final_state: state -> int -> Prop :=
       rs#PC = Vzero ->
       rs#EAX = Vint r ->
       final_state (State rs m) r.
-      
+
 Definition semantics (p: program) :=
   Semantics step (initial_state p) final_state (Genv.globalenv p).
 
@@ -939,9 +939,9 @@ Proof.
           forall vl2, list_forall2 (extcall_arg rs m) ll vl2 -> vl1 = vl2).
     induction 1; intros vl2 EA; inv EA.
     auto.
-    f_equal; auto. 
+    f_equal; auto.
     inv H; inv H3; congruence.
-  intros. red in H0; red in H1. eauto. 
+  intros. red in H0; red in H1. eauto.
 Qed.
 
 Lemma semantics_determinate: forall p, determinate (semantics p).

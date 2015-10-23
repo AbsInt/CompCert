@@ -356,6 +356,80 @@ simpl; ring.
 apply Rgt_not_eq, bpow_gt_0.
 Qed.
 
+
+
+Theorem Rnd_odd_pt_unicity :
+  forall x f1 f2 : R,
+  Rnd_odd_pt x f1 -> Rnd_odd_pt x f2 ->
+  f1 = f2.
+Proof.
+intros x f1 f2 (Ff1,H1) (Ff2,H2).
+(* *)
+case (generic_format_EM beta fexp x); intros L.
+apply trans_eq with x.
+case H1; try easy.
+intros (J,_); case J; intros J'.
+apply Rnd_DN_pt_idempotent with format; assumption.
+apply Rnd_UP_pt_idempotent with format; assumption.
+case H2; try easy.
+intros (J,_); case J; intros J'; apply sym_eq.
+apply Rnd_DN_pt_idempotent with format; assumption.
+apply Rnd_UP_pt_idempotent with format; assumption.
+(* *)
+destruct H1 as [H1|(H1,H1')].
+contradict L; now rewrite <- H1.
+destruct H2 as [H2|(H2,H2')].
+contradict L; now rewrite <- H2.
+destruct H1 as [H1|H1]; destruct H2 as [H2|H2].
+apply Rnd_DN_pt_unicity with format x; assumption.
+destruct H1' as (ff,(K1,(K2,K3))).
+destruct H2' as (gg,(L1,(L2,L3))).
+absurd (true = false); try discriminate.
+rewrite <- L3.
+apply trans_eq with (negb (Zeven (Fnum ff))).
+rewrite K3; easy.
+apply sym_eq.
+generalize (DN_UP_parity_generic beta fexp).
+unfold DN_UP_parity_prop; intros T; apply (T x); clear T; try assumption...
+rewrite <- K1; apply Rnd_DN_pt_unicity with (generic_format beta fexp) x; try easy...
+now apply round_DN_pt...
+rewrite <- L1; apply Rnd_UP_pt_unicity with (generic_format beta fexp) x; try easy...
+now apply round_UP_pt...
+(* *)
+destruct H1' as (ff,(K1,(K2,K3))).
+destruct H2' as (gg,(L1,(L2,L3))).
+absurd (true = false); try discriminate.
+rewrite <- K3.
+apply trans_eq with (negb (Zeven (Fnum gg))).
+rewrite L3; easy.
+apply sym_eq.
+generalize (DN_UP_parity_generic beta fexp).
+unfold DN_UP_parity_prop; intros T; apply (T x); clear T; try assumption...
+rewrite <- L1; apply Rnd_DN_pt_unicity with (generic_format beta fexp) x; try easy...
+now apply round_DN_pt...
+rewrite <- K1; apply Rnd_UP_pt_unicity with (generic_format beta fexp) x; try easy...
+now apply round_UP_pt...
+apply Rnd_UP_pt_unicity with format x; assumption.
+Qed.
+
+
+
+Theorem Rnd_odd_pt_monotone :
+  round_pred_monotone (Rnd_odd_pt).
+Proof with auto with typeclass_instances.
+intros x y f g H1 H2 Hxy.
+apply Rle_trans with (round beta fexp Zrnd_odd x).
+right; apply Rnd_odd_pt_unicity with x; try assumption.
+apply round_odd_pt.
+apply Rle_trans with (round beta fexp Zrnd_odd y).
+apply round_le...
+right; apply Rnd_odd_pt_unicity with y; try assumption.
+apply round_odd_pt.
+Qed.
+
+
+
+
 End Fcore_rnd_odd.
 
 Section Odd_prop_aux.
@@ -462,7 +536,7 @@ Lemma ln_beta_d:  (0< F2R d)%R ->
     (ln_beta beta (F2R d) = ln_beta beta x :>Z).
 Proof with auto with typeclass_instances.
 intros Y.
-rewrite d_eq; apply ln_beta_round_DN...
+rewrite d_eq; apply ln_beta_DN...
 now rewrite <- d_eq.
 Qed.
 
@@ -861,13 +935,9 @@ case K2; clear K2; intros K2.
 case (Rle_or_lt  x m); intros Y;[destruct Y|idtac].
 (* . *)
 apply trans_eq with (F2R d).
-apply round_N_DN_betw with (F2R u)...
+apply round_N_eq_DN_pt with (F2R u)...
 apply DN_odd_d_aux; split; try left; assumption.
 apply UP_odd_d_aux; split; try left; assumption.
-split.
-apply round_ge_generic...
-apply generic_format_fexpe_fexp, Hd.
-apply Hd.
 assert (o <= (F2R d + F2R u) / 2)%R.
 apply round_le_generic...
 apply Fm.
@@ -876,10 +946,7 @@ destruct H1; trivial.
 apply P.
 now apply Rlt_not_eq.
 trivial.
-apply sym_eq, round_N_DN_betw with (F2R u)...
-split.
-apply Hd.
-exact H0.
+apply sym_eq, round_N_eq_DN_pt with (F2R u)...
 (* . *)
 replace o with x.
 reflexivity.
@@ -887,10 +954,9 @@ apply sym_eq, round_generic...
 rewrite H0; apply Fm.
 (* . *)
 apply trans_eq with (F2R u).
-apply round_N_UP_betw with (F2R d)...
+apply round_N_eq_UP_pt with (F2R d)...
 apply DN_odd_d_aux; split; try left; assumption.
 apply UP_odd_d_aux; split; try left; assumption.
-split.
 assert ((F2R d + F2R u) / 2 <= o)%R.
 apply round_ge_generic...
 apply Fm.
@@ -899,13 +965,7 @@ destruct H0; trivial.
 apply P.
 now apply Rgt_not_eq.
 rewrite <- H0; trivial.
-apply round_le_generic...
-apply generic_format_fexpe_fexp, Hu.
-apply Hu.
-apply sym_eq, round_N_UP_betw with (F2R d)...
-split.
-exact Y.
-apply Hu.
+apply sym_eq, round_N_eq_UP_pt with (F2R d)...
 Qed.
 
 

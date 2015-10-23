@@ -183,12 +183,12 @@ Definition transf_instr (f: function) (an: PMap.t VA.t) (rm: romem)
               Iop cop nil dst s
           | None =>
               let (addr', args') := addr_strength_reduction addr args aargs in
-              Iload chunk addr' args' dst s      
+              Iload chunk addr' args' dst s
           end
       | Istore chunk addr args src s =>
           let aargs := aregs ae args in
           let (addr', args') := addr_strength_reduction addr args aargs in
-          Istore chunk addr' args' src s      
+          Istore chunk addr' args' src s
       | Icall sig ros args res s =>
           Icall sig (transf_ros ae ros) args res s
       | Itailcall sig ros args =>

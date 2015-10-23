@@ -58,18 +58,18 @@ Qed.
 Lemma transf_code_match:
   forall lm c before, match_code c (transf_code lm before c).
 Proof.
-  intros lm. fix REC 1. destruct c; intros before; simpl. 
+  intros lm. fix REC 1. destruct c; intros before; simpl.
 - constructor.
 - assert (DEFAULT: forall before after,
             match_code (i :: c)
                        (i :: add_delta_ranges before after (transf_code lm after c))).
   { intros. constructor. apply REC. }
-  destruct i; auto. destruct c; auto. destruct i; auto. 
+  destruct i; auto. destruct c; auto. destruct i; auto.
   set (after := get_label l0 lm).
   set (c1 := Llabel l0 :: add_delta_ranges before after (transf_code lm after c)).
   replace c1 with (add_delta_ranges before before c1).
   constructor. constructor. apply REC.
-  unfold add_delta_ranges. rewrite delta_state_same. auto. 
+  unfold add_delta_ranges. rewrite delta_state_same. auto.
 Qed.
 
 Inductive match_function: function -> function -> Prop :=
@@ -80,15 +80,15 @@ Inductive match_function: function -> function -> Prop :=
 Lemma transf_function_match:
   forall f tf, transf_function f = OK tf -> match_function f tf.
 Proof.
-  unfold transf_function; intros. 
-  destruct (ana_function f) as [lm|]; inv H. 
-  constructor. apply transf_code_match. 
+  unfold transf_function; intros.
+  destruct (ana_function f) as [lm|]; inv H.
+  constructor. apply transf_code_match.
 Qed.
 
 Remark find_label_add_delta_ranges:
   forall lbl c before after, find_label lbl (add_delta_ranges before after c) = find_label lbl c.
 Proof.
-  intros. unfold add_delta_ranges. 
+  intros. unfold add_delta_ranges.
   destruct (delta_state before after) as [killed born].
   induction killed as [ | [v i] l]; simpl; auto.
   induction born as [ | [v i] l]; simpl; auto.
@@ -104,7 +104,7 @@ Proof.
 - discriminate.
 - destruct (is_label lbl i).
   inv H0. econstructor; econstructor; econstructor; eauto.
-  rewrite find_label_add_delta_ranges. auto. 
+  rewrite find_label_add_delta_ranges. auto.
 Qed.
 
 Lemma find_label_match:
@@ -113,7 +113,7 @@ Lemma find_label_match:
   find_label lbl f.(fn_code) = Some c ->
   exists before after tc, find_label lbl tf.(fn_code) = Some (add_delta_ranges before after tc) /\ match_code c tc.
 Proof.
-  intros. inv H. eapply find_label_match_rec; eauto. 
+  intros. inv H. eapply find_label_match_rec; eauto.
 Qed.
 
 (** * Properties of availability sets *)
@@ -135,9 +135,9 @@ Inductive wf_avail: avail -> Prop :=
 Lemma set_state_1:
   forall v i s, In (v, i) (set_state v i s).
 Proof.
-  induction s as [ | [v' i'] s]; simpl. 
+  induction s as [ | [v' i'] s]; simpl.
 - auto.
-- destruct (Pos.compare v v'); simpl; auto. 
+- destruct (Pos.compare v v'); simpl; auto.
 Qed.
 
 Lemma set_state_2:
@@ -153,7 +153,7 @@ Proof.
 Qed.
 
 Lemma set_state_3:
-  forall v i v' i' s, 
+  forall v i v' i' s,
   wf_avail s ->
   In (v', i') (set_state v i s) ->
   (v' = v /\ i' = i) \/ (v' <> v /\ In (v', i') s).
@@ -162,7 +162,7 @@ Proof.
 - intuition congruence.
 - destruct (Pos.compare_spec v v0); simpl in H1.
 + subst v0. destruct H1. inv H1; auto. right; split.
-  apply sym_not_equal. apply Plt_ne. eapply H; eauto. 
+  apply sym_not_equal. apply Plt_ne. eapply H; eauto.
   auto.
 + destruct H1. inv H1; auto.
   destruct H1. inv H1. right; split; auto. apply sym_not_equal. apply Plt_ne. auto.
@@ -177,12 +177,12 @@ Proof.
   induction 1; simpl.
 - constructor. red; simpl; tauto. constructor.
 - destruct (Pos.compare_spec v v0).
-+ subst v0. constructor; auto. 
-+ constructor. 
-  red; simpl; intros. destruct H2. 
-  inv H2. auto. apply Plt_trans with v0; eauto. 
++ subst v0. constructor; auto.
++ constructor.
+  red; simpl; intros. destruct H2.
+  inv H2. auto. apply Plt_trans with v0; eauto.
   constructor; auto.
-+ constructor. 
++ constructor.
   red; intros. exploit set_state_3. eexact H0. eauto. intros [[A B] | [A B]]; subst; eauto.
   auto.
 Qed.
@@ -194,8 +194,8 @@ Proof.
 - auto.
 - destruct (Pos.compare_spec v v0); simpl in *.
 + subst v0. elim (Plt_strict v); eauto.
-+ destruct H1. inv H1.  elim (Plt_strict v); eauto. 
-  elim (Plt_strict v). apply Plt_trans with v0; eauto. 
++ destruct H1. inv H1.  elim (Plt_strict v); eauto.
+  elim (Plt_strict v). apply Plt_trans with v0; eauto.
 + destruct H1. inv H1. elim (Plt_strict v); eauto.  tauto.
 Qed.
 
@@ -219,7 +219,7 @@ Proof.
 + subst v0. split; auto. apply sym_not_equal; apply Plt_ne; eauto.
 + destruct H1. inv H1. split; auto. apply sym_not_equal; apply Plt_ne; eauto.
   split; auto. apply sym_not_equal; apply Plt_ne. apply Plt_trans with v0; eauto.
-+ destruct H1. inv H1. split; auto. apply Plt_ne; auto. 
++ destruct H1. inv H1. split; auto. apply Plt_ne; auto.
   destruct IHwf_avail as [A B] ; auto.
 Qed.
 
@@ -240,9 +240,9 @@ Lemma wf_filter:
 Proof.
   induction 1; simpl.
 - constructor.
-- destruct (pred (v, i)) eqn:P; auto. 
-  constructor; auto. 
-  red; intros. apply filter_In in H1. destruct H1. eauto. 
+- destruct (pred (v, i)) eqn:P; auto.
+  constructor; auto.
+  red; intros. apply filter_In in H1. destruct H1. eauto.
 Qed.
 
 Lemma join_1:
@@ -252,12 +252,12 @@ Proof.
   induction 1; simpl; try tauto; induction 1; simpl; intros I1 I2; auto.
   destruct I1, I2.
 - inv H3; inv H4. rewrite Pos.compare_refl. rewrite dec_eq_true; auto with coqlib.
-- inv H3. 
-  assert (L: Plt v1 v) by eauto. apply Pos.compare_gt_iff in L. rewrite L. auto. 
+- inv H3.
+  assert (L: Plt v1 v) by eauto. apply Pos.compare_gt_iff in L. rewrite L. auto.
 - inv H4.
   assert (L: Plt v0 v) by eauto. apply Pos.compare_lt_iff in L. rewrite L. apply IHwf_avail. constructor; auto. auto. auto with coqlib.
 - destruct (Pos.compare v0 v1).
-+ destruct (eq_debuginfo i0 i1); auto with coqlib. 
++ destruct (eq_debuginfo i0 i1); auto with coqlib.
 + apply IHwf_avail; auto with coqlib. constructor; auto.
 + eauto.
 Qed.
@@ -266,12 +266,12 @@ Lemma join_2:
   forall v i s1, wf_avail s1 -> forall s2, wf_avail s2 ->
   In (v, i) (join s1 s2) -> In (v, i) s1 /\ In (v, i) s2.
 Proof.
-  induction 1; simpl; try tauto; induction 1; simpl; intros I; try tauto. 
+  induction 1; simpl; try tauto; induction 1; simpl; intros I; try tauto.
   destruct (Pos.compare_spec v0 v1).
 - subst v1. destruct (eq_debuginfo i0 i1).
   + subst i1. destruct I. auto. exploit IHwf_avail; eauto. tauto.
   + exploit IHwf_avail; eauto. tauto.
-- exploit (IHwf_avail ((v1, i1) :: s0)); eauto. constructor; auto. 
+- exploit (IHwf_avail ((v1, i1) :: s0)); eauto. constructor; auto.
   simpl. tauto.
 - exploit IHwf_avail0; eauto. tauto.
 Qed.
@@ -281,10 +281,10 @@ Lemma wf_join:
 Proof.
   induction 1; simpl; induction 1; simpl; try constructor.
   destruct (Pos.compare_spec v v0).
-- subst v0. destruct (eq_debuginfo i i0); auto. constructor; auto. 
+- subst v0. destruct (eq_debuginfo i i0); auto. constructor; auto.
   red; intros. apply join_2 in H3; auto. destruct H3. eauto.
-- apply IHwf_avail. constructor; auto. 
-- apply IHwf_avail0. 
+- apply IHwf_avail. constructor; auto.
+- apply IHwf_avail0.
 Qed.
 
 (** * Semantic preservation *)
@@ -334,7 +334,7 @@ Lemma sig_preserved:
 Proof.
   unfold transf_fundef, transf_partial_fundef; intros.
   destruct f. monadInv H.
-  exploit transf_function_match; eauto. intros M; inv M; auto. 
+  exploit transf_function_match; eauto. intros M; inv M; auto.
   inv H. reflexivity.
 Qed.
 
@@ -360,7 +360,7 @@ Proof.
   induction a; simpl; intros; try contradiction;
   try (econstructor; now eauto with barg).
   destruct H as [S1 S2].
-  destruct (IHa1 S1) as [v1 E1]. destruct (IHa2 S2) as [v2 E2]. 
+  destruct (IHa1 S1) as [v1 E1]. destruct (IHa2 S2) as [v2 E2].
   exists (Val.longofwords v1 v2); auto with barg.
 Qed.
 
@@ -369,24 +369,24 @@ Lemma eval_add_delta_ranges:
   star step tge (State s f sp (add_delta_ranges before after c) rs m)
              E0 (State s f sp c rs m).
 Proof.
-  intros. unfold add_delta_ranges. 
+  intros. unfold add_delta_ranges.
   destruct (delta_state before after) as [killed born].
   induction killed as [ | [v i] l]; simpl.
 - induction born as [ | [v i] l]; simpl.
 + apply star_refl.
-+ destruct i as [a SAFE]; simpl. 
-  exploit can_eval_safe_arg; eauto. intros [v1 E1]. 
-  eapply star_step; eauto. 
-  econstructor. 
++ destruct i as [a SAFE]; simpl.
+  exploit can_eval_safe_arg; eauto. intros [v1 E1].
+  eapply star_step; eauto.
+  econstructor.
   constructor. eexact E1. constructor.
   simpl; constructor.
-  simpl; auto. 
+  simpl; auto.
   traceEq.
-- eapply star_step; eauto. 
-  econstructor. 
+- eapply star_step; eauto.
+  econstructor.
   constructor.
   simpl; constructor.
-  simpl; auto. 
+  simpl; auto.
   traceEq.
 Qed.
 
@@ -426,7 +426,7 @@ Lemma parent_locset_match:
   list_forall2 match_stackframes s ts ->
   parent_locset ts = parent_locset s.
 Proof.
-  induction 1; simpl. auto. inv H; auto. 
+  induction 1; simpl. auto. inv H; auto.
 Qed.
 
 (** The simulation diagram. *)
@@ -455,9 +455,9 @@ Proof.
 - (* load *)
   econstructor; split.
   eapply plus_left.
-  eapply exec_Lload with (a := a). 
+  eapply exec_Lload with (a := a).
   rewrite <- H; apply eval_addressing_preserved; exact symbols_preserved.
-  eauto. eauto. 
+  eauto. eauto.
   apply eval_add_delta_ranges. traceEq.
   constructor; auto.
 - (* store *)
@@ -465,7 +465,7 @@ Proof.
   eapply plus_left.
   eapply exec_Lstore with (a := a).
   rewrite <- H; apply eval_addressing_preserved; exact symbols_preserved.
-  eauto. eauto. 
+  eauto. eauto.
   apply eval_add_delta_ranges. traceEq.
   constructor; auto.
 - (* call *)
@@ -473,16 +473,16 @@ Proof.
   econstructor; split.
   apply plus_one.
   econstructor. eexact A. symmetry; apply sig_preserved; auto. traceEq.
-  constructor; auto. constructor; auto. constructor; auto. 
+  constructor; auto. constructor; auto. constructor; auto.
 - (* tailcall *)
   exploit find_function_translated; eauto. intros (tf' & A & B).
   exploit parent_locset_match; eauto. intros PLS.
   econstructor; split.
-  apply plus_one.  
-  econstructor. eauto. rewrite PLS. eexact A. 
+  apply plus_one.
+  econstructor. eauto. rewrite PLS. eexact A.
   symmetry; apply sig_preserved; auto.
   inv TRF; eauto. traceEq.
-  rewrite PLS. constructor; auto. 
+  rewrite PLS. constructor; auto.
 - (* builtin *)
   econstructor; split.
   eapply plus_left.
@@ -513,28 +513,28 @@ Proof.
 - (* jumptable *)
   exploit find_label_match; eauto. intros (before' & after' & tc' & A & B).
   econstructor; split.
-  eapply plus_left. econstructor; eauto. 
+  eapply plus_left. econstructor; eauto.
   apply eval_add_delta_ranges. reflexivity. traceEq.
   constructor; auto.
 - (* return *)
   econstructor; split.
   apply plus_one.  constructor. inv TRF; eauto. traceEq.
-  rewrite (parent_locset_match _ _ STACKS). constructor; auto. 
+  rewrite (parent_locset_match _ _ STACKS). constructor; auto.
 - (* internal function *)
-  monadInv H7. rename x into tf. 
+  monadInv H7. rename x into tf.
   assert (MF: match_function f tf) by (apply transf_function_match; auto).
   inversion MF; subst.
   econstructor; split.
-  apply plus_one. constructor. simpl; eauto. reflexivity. 
-  constructor; auto. 
+  apply plus_one. constructor. simpl; eauto. reflexivity.
+  constructor; auto.
 - (* external function *)
   monadInv H8. econstructor; split.
-  apply plus_one. econstructor; eauto. 
+  apply plus_one. econstructor; eauto.
   eapply external_call_symbols_preserved'. eauto.
   exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   constructor; auto.
 - (* return *)
-  inv H3. inv H1. 
+  inv H3. inv H1.
   econstructor; split.
   eapply plus_left. econstructor. apply eval_add_delta_ranges. traceEq.
   constructor; auto.
@@ -545,18 +545,18 @@ Lemma transf_initial_states:
   exists st2, initial_state tprog st2 /\ match_states st1 st2.
 Proof.
   intros. inversion H.
-  exploit function_ptr_translated; eauto. intros [tf [A B]].  
+  exploit function_ptr_translated; eauto. intros [tf [A B]].
   exists (Callstate nil tf (Locmap.init Vundef) m0); split.
-  econstructor; eauto. eapply Genv.init_mem_transf_partial; eauto. 
+  econstructor; eauto. eapply Genv.init_mem_transf_partial; eauto.
   replace (prog_main tprog) with (prog_main prog).
   rewrite symbols_preserved. eauto.
-  symmetry. apply (transform_partial_program_main transf_fundef _ TRANSF). 
+  symmetry. apply (transform_partial_program_main transf_fundef _ TRANSF).
   rewrite <- H3. apply sig_preserved. auto.
   constructor. constructor. auto.
 Qed.
 
 Lemma transf_final_states:
-  forall st1 st2 r, 
+  forall st1 st2 r,
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
 Proof.
   intros. inv H0. inv H. inv H6. econstructor; eauto.

@@ -107,7 +107,7 @@ Definition initstate :=
   mkstate 1%positive 1%positive (PTree.empty instruction) 0.
 
 Program Definition set_instr (pc: node) (i: instruction): mon unit :=
-  fun s => 
+  fun s =>
     R tt
       (mkstate s.(st_nextreg) s.(st_nextnode) (PTree.set pc i s.(st_code)) s.(st_stksize))
       _.
@@ -144,7 +144,7 @@ Next Obligation.
 Qed.
 
 Program Definition request_stack (sz: Z): mon unit :=
-  fun s => 
+  fun s =>
     R tt
       (mkstate s.(st_nextreg) s.(st_nextnode) s.(st_code) (Zmax s.(st_stksize) sz))
       _.
@@ -154,14 +154,14 @@ Qed.
 
 Program Definition ptree_mfold {A: Type} (f: positive -> A -> mon unit) (t: PTree.t A): mon unit :=
   fun s =>
-    R tt 
+    R tt
       (PTree.fold (fun s1 k v => match f k v s1 return _ with R _ s2 _ => s2 end) t s)
       _.
 Next Obligation.
   apply PTree_Properties.fold_rec.
   auto.
   apply sincr_refl.
-  intros. destruct (f k v a). eapply sincr_trans; eauto. 
+  intros. destruct (f k v a). eapply sincr_trans; eauto.
 Qed.
 
 (** ** Inlining contexts *)
@@ -280,7 +280,7 @@ Section EXPAND_CFG.
 
 Variable fenv: funenv.
 
-(** The [rec] parameter is the recursor: [rec fenv' P ctx f] copies 
+(** The [rec] parameter is the recursor: [rec fenv' P ctx f] copies
   the body of function [f], with inline expansion within, as governed
   by context [ctx].  It can only be called for function environments
   [fenv'] strictly smaller than the current environment [fenv]. *)
@@ -311,7 +311,7 @@ Definition inline_function (ctx: context) (id: ident) (f: function)
   let nreg := max_reg_function f in
   do dpc <- reserve_nodes npc;
   do dreg <- reserve_regs nreg;
-  let ctx' := callcontext ctx dpc dreg nreg f.(fn_stacksize) retpc retreg in 
+  let ctx' := callcontext ctx dpc dreg nreg f.(fn_stacksize) retpc retreg in
   do x <- rec (PTree.remove id fenv) (PTree_Properties.cardinal_remove P) ctx' f;
   add_moves (sregs ctx args) (sregs ctx' f.(fn_params)) (spc ctx' f.(fn_entrypoint)).
 
@@ -325,7 +325,7 @@ Definition inline_tail_function (ctx: context) (id: ident) (f: function)
   let nreg := max_reg_function f in
   do dpc <- reserve_nodes npc;
   do dreg <- reserve_regs nreg;
-  let ctx' := tailcontext ctx dpc dreg nreg f.(fn_stacksize) in 
+  let ctx' := tailcontext ctx dpc dreg nreg f.(fn_stacksize) in
   do x <- rec (PTree.remove id fenv) (PTree_Properties.cardinal_remove P) ctx' f;
   add_moves (sregs ctx args) (sregs ctx' f.(fn_params)) (spc ctx' f.(fn_entrypoint)).
 
@@ -341,7 +341,7 @@ Definition inline_return (ctx: context) (or: option reg) (retinfo: node * reg) :
 (** Expansion and copying of an instruction.  For most instructions,
   its registers and successor PC are shifted as per the context [ctx],
   then the instruction is inserted in the final CFG at its final position
-  [spc ctx pc].  
+  [spc ctx pc].
 
   [Icall] instructions are either replaced by a "goto" to the expansion
   of the called function, or shifted as described above.
@@ -393,7 +393,7 @@ Definition expand_instr (ctx: context) (pc: node) (i: instruction): mon unit :=
       | Can_inline id f P Q =>
           do n <- inline_tail_function ctx id f Q args;
           set_instr (spc ctx pc) (Inop n)
-      end          
+      end
   | Ibuiltin ef args res s =>
       set_instr (spc ctx pc)
                 (Ibuiltin ef (map (sbuiltinarg ctx) args) (sbuiltinres ctx res) (spc ctx s))
@@ -434,7 +434,7 @@ Definition expand_function (fenv: funenv) (f: function): mon context :=
   let nreg := max_reg_function f in
   do dpc <- reserve_nodes npc;
   do dreg <- reserve_regs nreg;
-  let ctx := initcontext dpc dreg nreg f.(fn_stacksize) in 
+  let ctx := initcontext dpc dreg nreg f.(fn_stacksize) in
   do x <- expand_cfg fenv ctx f;
   ret ctx.
 
@@ -450,7 +450,7 @@ Local Open Scope string_scope.
 Definition transf_function (fenv: funenv) (f: function) : Errors.res function :=
   let '(R ctx s _) := expand_function fenv f initstate in
   if zlt s.(st_stksize) Int.max_unsigned then
-    OK (mkfunction f.(fn_sig) 
+    OK (mkfunction f.(fn_sig)
                    (sregs ctx f.(fn_params))
                    s.(st_stksize)
                    s.(st_code)

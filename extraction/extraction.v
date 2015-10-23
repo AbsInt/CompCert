@@ -42,10 +42,6 @@ Extract Inlined Constant Coqlib.proj_sumbool => "(fun x -> x)".
 (* Wfsimpl *)
 Extraction Inline Wfsimpl.Fix Wfsimpl.Fixm.
 
-(* AST *)
-Extract Constant AST.ident_of_string =>
-  "fun s -> Camlcoq.intern_string (Camlcoq.camlstring_of_coqstring s)".
-
 (* Memory - work around an extraction bug. *)
 Extraction NoInline Memory.Mem.valid_pointer.
 
@@ -115,7 +111,7 @@ Extract Constant Compiler.time  => "Timing.time_coq".
 (*Extraction Inline Compiler.apply_total Compiler.apply_partial.*)
 
 (* Cabs *)
-Extract Constant Cabs.cabsloc => 
+Extract Constant Cabs.cabsloc =>
 "{ lineno : int;
    filename: string;
    byteno: int;
@@ -168,4 +164,5 @@ Separate Extraction
    Machregs.mregs_for_operation Machregs.mregs_for_builtin
    Machregs.two_address_op Machregs.is_stack_reg
    AST.signature_main
+   AST.transform_partial_ident_program
    Parser.translation_unit_file.

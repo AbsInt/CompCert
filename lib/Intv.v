@@ -30,18 +30,18 @@ Lemma In_dec:
   forall x i, {In x i} + {~In x i}.
 Proof.
   unfold In; intros.
-  case (zle (fst i) x); intros. 
+  case (zle (fst i) x); intros.
   case (zlt x (snd i)); intros.
   left; auto.
-  right; intuition. 
+  right; intuition.
   right; intuition.
 Qed.
 
-Lemma notin_range: 
+Lemma notin_range:
   forall x i,
   x < fst i \/ x >= snd i -> ~In x i.
 Proof.
-  unfold In; intros; omega. 
+  unfold In; intros; omega.
 Qed.
 
 Lemma range_notin:
@@ -58,7 +58,7 @@ Definition empty (i: interv) : Prop := fst i >= snd i.
 Lemma empty_dec:
   forall i, {empty i} + {~empty i}.
 Proof.
-  unfold empty; intros. 
+  unfold empty; intros.
   case (zle (snd i) (fst i)); intros.
   left; omega.
   right; omega.
@@ -90,7 +90,7 @@ Definition disjoint (i j: interv) : Prop :=
 Lemma disjoint_sym:
   forall i j, disjoint i j -> disjoint j i.
 Proof.
-  unfold disjoint; intros; red; intros. elim (H x); auto. 
+  unfold disjoint; intros; red; intros. elim (H x); auto.
 Qed.
 
 Lemma empty_disjoint_r:
@@ -102,7 +102,7 @@ Qed.
 Lemma empty_disjoint_l:
   forall i j, empty i -> disjoint i j.
 Proof.
-  intros. apply disjoint_sym. apply empty_disjoint_r; auto. 
+  intros. apply disjoint_sym. apply empty_disjoint_r; auto.
 Qed.
 
 Lemma disjoint_range:
@@ -147,12 +147,12 @@ Qed.
 Lemma disjoint_dec:
   forall i j, {disjoint i j} + {~disjoint i j}.
 Proof.
-  intros. 
+  intros.
   destruct (empty_dec i). left; apply empty_disjoint_l; auto.
   destruct (empty_dec j). left; apply empty_disjoint_r; auto.
   destruct (zle (snd i) (fst j)). left; apply disjoint_range; auto.
   destruct (zle (snd j) (fst i)). left; apply disjoint_range; auto.
-  right; red; intro. exploit range_disjoint; eauto. intuition. 
+  right; red; intro. exploit range_disjoint; eauto. intuition.
 Qed.
 
 (** * Shifting an interval by some amount *)
@@ -170,7 +170,7 @@ Lemma in_shift_inv:
   forall x i delta,
   In x (shift i delta) -> In (x - delta) i.
 Proof.
-  unfold shift, In; simpl; intros. omega. 
+  unfold shift, In; simpl; intros. omega.
 Qed.
 
 (** * Enumerating the elements of an interval *)
@@ -182,7 +182,7 @@ Variable lo: Z.
 Function elements_rec (hi: Z) {wf (Zwf lo) hi} : list Z :=
   if zlt lo hi then (hi-1) :: elements_rec (hi-1) else nil.
 Proof.
-  intros. red. omega. 
+  intros. red. omega.
   apply Zwf_well_founded.
 Qed.
 
@@ -190,11 +190,11 @@ Lemma In_elements_rec:
   forall hi x,
   List.In x (elements_rec hi) <-> lo <= x < hi.
 Proof.
-  intros. functional induction (elements_rec hi). 
+  intros. functional induction (elements_rec hi).
   simpl; split; intros.
   destruct H. clear IHl. omega. rewrite IHl in H. clear IHl. omega.
   destruct (zeq (hi - 1) x); auto. right. rewrite IHl. clear IHl. omega.
-  simpl; intuition. 
+  simpl; intuition.
 Qed.
 
 End ELEMENTS.
@@ -213,8 +213,8 @@ Lemma elements_in:
   forall x i,
   List.In x (elements i) -> In x i.
 Proof.
-  unfold elements; intros. 
-  rewrite In_elements_rec in H. auto. 
+  unfold elements; intros.
+  rewrite In_elements_rec in H. auto.
 Qed.
 
 (** * Checking properties on all elements of an interval *)
@@ -241,11 +241,11 @@ Program Fixpoint forall_rec (hi: Z) {wf (Zwf lo) hi}:
     left _ _
 .
 Next Obligation.
-  red. omega. 
+  red. omega.
 Qed.
 Next Obligation.
   assert (x = hi - 1 \/ x < hi - 1) by omega.
-  destruct H2. congruence. auto. 
+  destruct H2. congruence. auto.
 Qed.
 Next Obligation.
   exists wildcard'0; split; auto. omega.
@@ -276,7 +276,7 @@ Variable a: A.
 Function fold_rec (hi: Z) {wf (Zwf lo) hi} : A :=
   if zlt lo hi then f (hi - 1) (fold_rec (hi - 1)) else a.
 Proof.
-  intros. red. omega. 
+  intros. red. omega.
   apply Zwf_well_founded.
 Qed.
 
@@ -284,9 +284,9 @@ Lemma fold_rec_elements:
   forall hi, fold_rec hi = List.fold_right f a (elements_rec lo hi).
 Proof.
   intros. functional induction (fold_rec hi).
-  rewrite elements_rec_equation. rewrite zlt_true; auto. 
-  simpl. congruence. 
-  rewrite elements_rec_equation. rewrite zlt_false; auto. 
+  rewrite elements_rec_equation. rewrite zlt_true; auto.
+  simpl. congruence.
+  rewrite elements_rec_equation. rewrite zlt_false; auto.
 Qed.
 
 End FOLD.
@@ -298,7 +298,7 @@ Lemma fold_elements:
   forall (A: Type) (f: Z -> A -> A) a i,
   fold f a i = List.fold_right f a (elements i).
 Proof.
-  intros. unfold fold, elements. apply fold_rec_elements. 
+  intros. unfold fold, elements. apply fold_rec_elements.
 Qed.
 
 (** Hints *)
@@ -313,4 +313,4 @@ Hint Resolve
 
 
 
-    
+

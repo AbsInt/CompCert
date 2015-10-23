@@ -234,39 +234,37 @@ let name_of_chunk = function
   | Many64 -> "Many64"
 
 let signatur p sg =
-  fprintf p "@[<hov 2>(mksignature@ %a@ %a@ %a)@]" 
+  fprintf p "@[<hov 2>(mksignature@ %a@ %a@ %a)@]"
      (print_list asttype) sg.sig_args
-     (print_option asttype) sg.sig_res 
+     (print_option asttype) sg.sig_res
      callconv sg.sig_cc
 
-let assertions = ref ([]: (ident * typ list) list)
+let assertions = ref ([]: (string * typ list) list)
 
 let external_function p = function
   | EF_external(name, sg) ->
-      fprintf p "@[<hov 2>(EF_external %a@ %a)@]" ident name signatur sg
+      fprintf p "@[<hov 2>(EF_external %a@ %a)@]" coqstring name signatur sg
   | EF_builtin(name, sg) ->
-      fprintf p "@[<hov 2>(EF_builtin %a@ %a)@]" ident name signatur sg
+      fprintf p "@[<hov 2>(EF_builtin %a@ %a)@]" coqstring name signatur sg
   | EF_vload chunk ->
       fprintf p "(EF_vload %s)" (name_of_chunk chunk)
   | EF_vstore chunk ->
       fprintf p "(EF_vstore %s)" (name_of_chunk chunk)
-  | EF_vload_global(chunk, id, ofs) ->
-      fprintf p "(EF_vload_global %s %a %a)" (name_of_chunk chunk) ident id coqint ofs
-  | EF_vstore_global(chunk, id, ofs) ->
-      fprintf p "(EF_vstore_global %s %a %a)" (name_of_chunk chunk) ident id coqint ofs
   | EF_malloc -> fprintf p "EF_malloc"
   | EF_free -> fprintf p "EF_free"
   | EF_memcpy(sz, al) ->
       fprintf p "(EF_memcpy %ld %ld)" (Z.to_int32 sz) (Z.to_int32 al)
-  | EF_annot(text, targs) -> 
-      assertions := (text, targs) :: !assertions;
-      fprintf p "(EF_annot %ld%%positive %a)" (P.to_int32 text) (print_list asttype) targs
+  | EF_annot(text, targs) ->
+      assertions := (camlstring_of_coqstring text, targs) :: !assertions;
+      fprintf p "(EF_annot %a %a)" coqstring text (print_list asttype) targs
   | EF_annot_val(text, targ) ->
-      assertions := (text, [targ]) :: !assertions;
-      fprintf p "(EF_annot_val %ld%%positive %a)" (P.to_int32 text) asttype targ
+      assertions := (camlstring_of_coqstring text, [targ]) :: !assertions;
+      fprintf p "(EF_annot_val %a %a)" coqstring text asttype targ
+  | EF_debug(kind, text, targs) ->
+      fprintf p "(EF_debug %ld%%positive %ld%%positive %a)" (P.to_int32 kind) (P.to_int32 text) (print_list asttype) targs
   | EF_inline_asm(text, sg, clob) ->
-      fprintf p "@[<hov 2>(EF_inline_asm %ld%%positive@ %a@ %a)@]"
-              (P.to_int32 text)
+      fprintf p "@[<hov 2>(EF_inline_asm %a@ %a@ %a)@]"
+              coqstring text
               signatur sg
               (print_list coqstring) clob
 
@@ -342,7 +340,7 @@ let rec stmt p = function
         (print_option ident) optid expr e1 (print_list expr) el
   | Sbuiltin(optid, ef, tyl, el) ->
       fprintf p "@[<hov 2>(Sbuiltin %a@ %a@ %a@ %a)@]"
-        (print_option ident) optid 
+        (print_option ident) optid
         external_function ef
         typlist tyl
         (print_list expr) el
@@ -416,7 +414,7 @@ let print_globdef p (id, gd) =
   | Gvar v -> print_variable p (id, v)
 
 let print_ident_globdef p = function
-  | (id, Gfun(Internal f)) -> 
+  | (id, Gfun(Internal f)) ->
       fprintf p "(%a, Gfun(Internal f_%s))" ident id (extern_atom id)
   | (id, Gfun(External(ef, targs, tres, cc))) ->
       fprintf p "@[<hov 2>(%a,@ @[<hov 2>Gfun(External %a@ %a@ %a@ %a))@]@]"
@@ -453,14 +451,14 @@ let print_assertion p (txt, targs) =
        | Str.Text s -> Text s
        | Str.Delim "%%" -> Text "%"
        | Str.Delim s -> Param(int_of_string(String.sub s 1 (String.length s - 1))))
-      (Str.full_split re_annot_param (extern_atom txt)) in
+      (Str.full_split re_annot_param txt) in
   let max_param = ref 0 in
   List.iter
     (function
      | Text _ -> ()
      | Param n -> max_param := max n !max_param)
     frags;
-  fprintf p "  | %ld%%positive, " (P.to_int32 txt);
+  fprintf p "  | \"%s\"%%string, " txt;
   list_iteri
     (fun i targ -> fprintf p "_x%d :: " (i + 1))
     targs;
@@ -475,8 +473,8 @@ let print_assertion p (txt, targs) =
 
 let print_assertions p =
   if !assertions <> [] then begin
-    fprintf p "Definition assertions (id: ident) args : Prop :=@ ";
-    fprintf p "  match id, args with@ ";
+    fprintf p "Definition assertions (txt: string) args : Prop :=@ ";
+    fprintf p "  match txt, args with@ ";
     List.iter (print_assertion p) !assertions;
     fprintf p "  | _, _ => False@ ";
     fprintf p "  end.@ @ "

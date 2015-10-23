@@ -41,8 +41,8 @@ Module PositiveOrd.
   Theorem leb_total : forall x y, is_true (leb x y) \/ is_true (leb y x).
   Proof.
     unfold leb, is_true; intros.
-    destruct (plt x y); auto. destruct (plt y x); auto. 
-    elim (Plt_strict x). eapply Plt_trans; eauto. 
+    destruct (plt x y); auto. destruct (plt y x); auto.
+    elim (Plt_strict x). eapply Plt_trans; eauto.
   Qed.
 End PositiveOrd.
 
@@ -114,7 +114,7 @@ Inductive invariant (s: state) : Prop :=
     (REM: forall x y, s.(gr)!x = Some y -> s.(map)!x = None)
     (* black nodes have no white son *)
     (COLOR: forall x succs n y,
-            ginit!x = Some succs -> s.(map)!x = Some n -> 
+            ginit!x = Some succs -> s.(map)!x = Some n ->
             In y succs -> s.(gr)!y = None)
     (* worklist is well-formed *)
     (WKLIST: forall x l, In (x, l) s.(wrk) ->
@@ -140,15 +140,15 @@ Proof.
 Qed.
 
 Lemma transition_spec:
-  forall s, invariant s -> 
+  forall s, invariant s ->
   match transition s with inr s' => invariant s' | inl m => postcondition m end.
 Proof.
-  intros. inv H. unfold transition. destruct (wrk s) as [ | [x succ_x] l]. 
+  intros. inv H. unfold transition. destruct (wrk s) as [ | [x succ_x] l].
   (* finished *)
   constructor; intros.
   eauto.
   caseEq (s.(map)!root); intros. congruence. exploit GREY; eauto. intros [? ?]; contradiction.
-  destruct (s.(map)!x) eqn:?; try congruence. 
+  destruct (s.(map)!x) eqn:?; try congruence.
   destruct (s.(map)!y) eqn:?; try congruence.
   exploit COLOR; eauto. intros. exploit GREY; eauto. intros [? ?]; contradiction.
   (* not finished *)
@@ -160,30 +160,30 @@ Proof.
   (* root *)
   eauto.
   (* below *)
-  rewrite PTree.gsspec in H. destruct (peq x0 x). inv H. 
+  rewrite PTree.gsspec in H. destruct (peq x0 x). inv H.
   apply Plt_succ.
   apply Plt_trans_succ. eauto.
   (* inj *)
-  rewrite PTree.gsspec in H. rewrite PTree.gsspec in H0. 
+  rewrite PTree.gsspec in H. rewrite PTree.gsspec in H0.
   destruct (peq x1 x); destruct (peq x2 x); subst.
   auto.
-  inv H. exploit BELOW; eauto. intros. eelim Plt_strict; eauto.  
+  inv H. exploit BELOW; eauto. intros. eelim Plt_strict; eauto.
   inv H0. exploit BELOW; eauto. intros. eelim Plt_strict; eauto.
   eauto.
   (* rem *)
-  intros. rewrite PTree.gso; eauto. red; intros; subst x0. 
+  intros. rewrite PTree.gso; eauto. red; intros; subst x0.
   exploit (WKLIST x nil); auto with coqlib. intros [A B]. congruence.
   (* color *)
-  rewrite PTree.gsspec in H0. destruct (peq x0 x). 
-  inv H0.  exploit (WKLIST x nil); auto with coqlib. 
+  rewrite PTree.gsspec in H0. destruct (peq x0 x).
+  inv H0.  exploit (WKLIST x nil); auto with coqlib.
   intros [A [l' [B C]]].
   assert (l' = succs) by congruence. subst l'.
-  apply C; auto. 
+  apply C; auto.
   eauto.
   (* wklist *)
   apply WKLIST. auto with coqlib.
   (* grey *)
-  rewrite PTree.gsspec in H1. destruct (peq x0 x). inv H1. 
+  rewrite PTree.gsspec in H1. destruct (peq x0 x). inv H1.
   exploit GREY; eauto. intros [l' A]. simpl in A; destruct A.
   congruence.
   exists l'; auto.
@@ -191,11 +191,11 @@ Proof.
   (* children y needs traversing *)
   destruct ((gr s)!y) as [ succs_y | ] eqn:?.
   (* y has children *)
-  constructor; simpl; intros. 
+  constructor; simpl; intros.
   (* sub *)
   rewrite PTree.grspec in H. destruct (PTree.elt_eq x0 y); eauto. inv H.
   (* root *)
-  rewrite PTree.gro. auto. congruence. 
+  rewrite PTree.gro. auto. congruence.
   (* below *)
   eauto.
   (* inj *)
@@ -203,33 +203,33 @@ Proof.
   (* rem *)
   rewrite PTree.grspec in H. destruct (PTree.elt_eq x0 y); eauto. inv H.
   (* color *)
-  rewrite PTree.grspec. destruct (PTree.elt_eq y0 y); eauto. 
+  rewrite PTree.grspec. destruct (PTree.elt_eq y0 y); eauto.
   (* wklist *)
-  destruct H. 
-  inv H. split. apply PTree.grs. exists succs_y; split. eauto. 
+  destruct H.
+  inv H. split. apply PTree.grs. exists succs_y; split. eauto.
   intros. rewrite In_sort in H. tauto.
   destruct H.
   inv H. exploit WKLIST; eauto with coqlib. intros [A [l' [B C]]].
-  split. rewrite PTree.grspec. destruct (PTree.elt_eq x0 y); auto. 
+  split. rewrite PTree.grspec. destruct (PTree.elt_eq x0 y); auto.
   exists l'; split. auto. intros. rewrite PTree.grspec. destruct (PTree.elt_eq y0 y); auto.
-  apply C; auto. simpl. intuition congruence. 
+  apply C; auto. simpl. intuition congruence.
   exploit (WKLIST x0 l0); eauto with coqlib. intros [A [l' [B C]]].
-  split. rewrite PTree.grspec. destruct (PTree.elt_eq x0 y); auto. 
-  exists l'; split; auto. intros. 
+  split. rewrite PTree.grspec. destruct (PTree.elt_eq x0 y); auto.
+  exists l'; split; auto. intros.
   rewrite PTree.grspec. destruct (PTree.elt_eq y0 y); auto.
   (* grey *)
-  rewrite PTree.grspec in H0. destruct (PTree.elt_eq x0 y) in H0. 
+  rewrite PTree.grspec in H0. destruct (PTree.elt_eq x0 y) in H0.
   subst. exists (Sort.sort succs_y); auto with coqlib.
-  exploit GREY; eauto. simpl. intros [l1 A]. destruct A. 
-  inv H2. exists succ_x; auto. 
+  exploit GREY; eauto. simpl. intros [l1 A]. destruct A.
+  inv H2. exists succ_x; auto.
   exists l1; auto.
 
   (* y has no children *)
   constructor; simpl; intros; eauto.
   (* wklist *)
-  destruct H. inv H. 
+  destruct H. inv H.
   exploit (WKLIST x0); eauto with coqlib. intros [A [l' [B C]]].
-  split. auto. exists l'; split. auto. 
+  split. auto. exists l'; split. auto.
   intros. destruct (peq y y0). congruence. apply C; auto. simpl. intuition congruence.
   eapply WKLIST; eauto with coqlib.
   (* grey *)
@@ -257,18 +257,18 @@ Proof.
   (* color *)
   rewrite PTree.gempty in H0; inv H0.
   (* wklist *)
-  destruct H; inv H. 
-  split. apply PTree.grs. exists succs; split; auto. 
+  destruct H; inv H.
+  split. apply PTree.grs. exists succs; split; auto.
   intros. rewrite In_sort in H. intuition.
   (* grey *)
   rewrite PTree.grspec in H0. destruct (PTree.elt_eq x root).
-  subst. exists (Sort.sort succs); auto. 
+  subst. exists (Sort.sort succs); auto.
   contradiction.
 
   (* root has no succs *)
   constructor; simpl; intros.
   (* sub *)
-  auto.  
+  auto.
   (* root *)
   auto.
   (* below *)
@@ -302,12 +302,12 @@ Lemma lt_state_wf: well_founded lt_state.
 Proof.
   set (f := fun s => (PTree_Properties.cardinal s.(gr), size_worklist s.(wrk))).
   change (well_founded (fun s1 s2 => lex_ord lt lt (f s1) (f s2))).
-  apply wf_inverse_image. 
-  apply wf_lex_ord. 
+  apply wf_inverse_image.
+  apply wf_lex_ord.
   apply lt_wf. apply lt_wf.
 Qed.
 
-Lemma transition_decreases: 
+Lemma transition_decreases:
   forall s s', transition s = inr _ s' -> lt_state s' s.
 Proof.
   unfold transition, lt_state; intros.
@@ -338,11 +338,11 @@ Theorem postorder_correct:
   (forall x1 x2 y, m!x1 = Some y -> m!x2 = Some y -> x1 = x2)
   /\ (forall x, reachable g root x -> g!x <> None -> m!x <> None).
 Proof.
-  intros. 
+  intros.
   assert (postcondition g root m).
     unfold m. unfold postorder.
     apply WfIter.iterate_prop with (P := invariant g root).
-    apply transition_spec. 
+    apply transition_spec.
     apply initial_state_spec.
   inv H.
   split. auto.

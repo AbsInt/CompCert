@@ -56,6 +56,10 @@ val attr_is_type_related: attribute -> bool
   (* Is an attribute type-related (true) or variable-related (false)? *)
 val attr_inherited_by_members: attribute -> bool
   (* Is an attribute of a composite inherited by members of the composite? *)
+val strip_attributes_type: typ -> attribute list -> typ
+  (* Remove all attributes from the given type that are not contained in the list *)
+val strip_last_attribute: typ -> attribute option * typ
+  (* Remove the last top level attribute and return it *)
 
 (* Type compatibility *)
 
@@ -65,7 +69,7 @@ type attr_handling =
   | AttrIgnoreAll
 
 val compatible_types : attr_handling -> Env.t -> typ -> typ -> bool
-  (* Check that the two given types are compatible.  
+  (* Check that the two given types are compatible.
      The attributes in the types are compared according to the first argument:
 - [AttrCompat]: the types must have the same standard attributes
     ([const], [volatile], [restrict]) but may differ on custom attributes.
@@ -225,7 +229,7 @@ val ecommalist :  exp list -> exp -> exp
 val sskip: stmt
   (* The [skip] statement.  No location. *)
 val sseq : location -> stmt -> stmt -> stmt
-  (* Return the statement [s1; s2], optimizing the cases 
+  (* Return the statement [s1; s2], optimizing the cases
      where [s1] or [s2] is [skip], or [s2] is a block. *)
 val sassign : location -> exp -> exp -> stmt
   (* Return the statement [exp1 = exp2;] *)

@@ -132,7 +132,7 @@ let lookup_struct env s =
     res
   with Not_found ->
     raise(Error(Unbound_tag(s, "struct")))
- 
+
 let lookup_union env s =
   try
     let (id, ci as res) = IdentMap.lookup s env.env_tag in
@@ -141,7 +141,7 @@ let lookup_union env s =
     res
   with Not_found ->
     raise(Error(Unbound_tag(s, "union")))
- 
+
 let lookup_composite env s =
   try Some (IdentMap.lookup s env.env_tag)
   with Not_found -> None
@@ -191,7 +191,7 @@ let find_union env id =
     ci
   with Not_found ->
     raise(Error(Unbound_tag(id.name, "union")))
- 
+
 let find_member ci m =
   List.find (fun f -> f.fld_name = m) ci
 
@@ -258,7 +258,7 @@ let add_typedef env id info =
 let add_enum env id info =
   let add_enum_item env (id, v, exp) =
     { env with env_ident = IdentMap.add id (II_enum v) env.env_ident } in
-  List.fold_left add_enum_item 
+  List.fold_left add_enum_item
     { env with env_enum = IdentMap.add id info env.env_enum }
     info.ei_members
 
@@ -270,12 +270,12 @@ let composite_tag_name name =
   if name = "" then "<anonymous>" else name
 
 let error_message = function
-  | Unbound_identifier name -> 
+  | Unbound_identifier name ->
       sprintf "Unbound identifier '%s'" name
   | Unbound_tag(name, kind) ->
       sprintf "Unbound %s '%s'" kind (composite_tag_name name)
   | Tag_mismatch(name, expected, actual) ->
-      sprintf "'%s' was declared as a %s but is used as a %s" 
+      sprintf "'%s' was declared as a %s but is used as a %s"
               (composite_tag_name name) actual expected
   | Unbound_typedef name ->
       sprintf "Unbound typedef '%s'" name

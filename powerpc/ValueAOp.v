@@ -102,6 +102,9 @@ Definition eval_static_operation (op: operation) (vl: list aval): aval :=
   | Osingleoffloat, v1::nil => singleoffloat v1
   | Ofloatofsingle, v1::nil => floatofsingle v1
   | Ointoffloat, v1::nil => intoffloat v1
+  | Ointuoffloat, v1::nil => intuoffloat v1
+  | Ofloatofint, v1::nil => floatofint v1
+  | Ofloatofintu, v1::nil => floatofintu v1
   | Ofloatofwords, v1::v2::nil => floatofwords v1 v2
   | Omakelong, v1::v2::nil => longofwords v1 v2
   | Olowlong, v1::nil => loword v1
@@ -159,7 +162,7 @@ Theorem eval_static_addressing_sound:
 Proof.
   unfold eval_addressing, eval_static_addressing; intros;
   destruct addr; InvHyps; eauto with va.
-  rewrite Int.add_zero_l; auto with va. 
+  rewrite Int.add_zero_l; auto with va.
 Qed.
 
 Theorem eval_static_operation_sound:
@@ -174,8 +177,8 @@ Proof.
   destruct (propagate_float_constants tt); constructor.
   rewrite Int.add_zero_l; eauto with va.
   fold (Val.sub (Vint i) a1). auto with va.
-  apply floatofwords_sound; auto. 
-  apply of_optbool_sound. eapply eval_static_condition_sound; eauto. 
+  apply floatofwords_sound; auto.
+  apply of_optbool_sound. eapply eval_static_condition_sound; eauto.
 Qed.
 
 End SOUNDNESS.

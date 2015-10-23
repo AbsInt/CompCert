@@ -186,7 +186,7 @@ let type_block blk =
 let type_function f =
   PTree.fold
     (fun () pc blk ->
-       try 
+       try
          type_block blk
        with Type_error ->
          raise (Type_error_at pc))

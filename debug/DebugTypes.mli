@@ -68,7 +68,7 @@ type enum_type = {
     enum_name:        string;
     enum_byte_size:   int option;
     enum_file_loc:    location option;
-    enum_enumerators: enumerator list; 
+    enum_enumerators: enumerator list;
   }
 
 type int_type = {
@@ -115,7 +115,7 @@ type global_variable_information = {
     gvar_type:        int;
   }
 
-type parameter_information = 
+type parameter_information =
  {
   parameter_name:     string;
   parameter_ident:    int;
@@ -150,7 +150,7 @@ type local_variable_information = {
     lvar_static:  bool;  (* Static variable are mapped to symbols *)
   }
 
-type scope_information = 
+type scope_information =
   {
    scope_variables: int list; (* Variable and Scope ids *)
  }

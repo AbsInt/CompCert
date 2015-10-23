@@ -98,7 +98,7 @@ Fixpoint pop (symbols_to_pop:list symbol) (stack_cur:stack):
     result (stack * A) :=
   match symbols_to_pop return forall {A:Type} (action:arrows_right A (map _ symbols_to_pop)), _ with
     | [] => fun A action => OK (stack_cur, action)
-    | t::q => fun A action => 
+    | t::q => fun A action =>
       match stack_cur with
         | existT state_cur sem::stack_rec =>
           match compare_eqdec (last_symb_of_non_init_state state_cur) t with
