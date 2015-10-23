@@ -20,6 +20,9 @@ open Timing
 
 let stdlib_path = ref Configuration.stdlib_path
 
+(* Optional sdump suffix *)
+let sdump_suffix = ref ".json"
+
 (* Invocation of external tools *)
 
 let command ?stdout args =
@@ -180,7 +183,7 @@ let compile_c_ast sourcename csyntax ofile debug =
         exit 2 in
   (* Dump Asm in binary and JSON format *)
   if !option_sdump then
-      dump_jasm asm (output_filename sourcename ".c" ".json");
+      dump_jasm asm (output_filename sourcename ".c" !sdump_suffix);
   (* Print Asm in text form *)
   let oc = open_out ofile in
   PrintAsm.print_program oc asm debug;
@@ -470,7 +473,7 @@ Tracing options:
   -dltl          Save LTL after register allocation in <file>.ltl
   -dmach         Save generated Mach code in <file>.mach
   -dasm          Save generated assembly in <file>.s
-  -sdump         Save info for post-linking validation in <file>.sdump
+  -sdump         Save info for post-linking validation in <file>.json
 General options:
   -stdlib <dir>  Set the path of the Compcert run-time library
   -v             Print external commands before invoking them
@@ -581,6 +584,7 @@ let cmdline_actions =
   Exact "-dmach", Set option_dmach;
   Exact "-dasm", Set option_dasm;
   Exact "-sdump", Set option_sdump;
+  Exact "-sdump-suffix", String (fun s -> option_sdump := true; sdump_suffix:= s);
 (* General options *)
   Exact "-v", Set option_v;
   Exact "-stdlib", String(fun s -> stdlib_path := s);
