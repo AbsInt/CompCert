@@ -9,7 +9,7 @@ MENHIR = menhir
 # bit slower, but supports more features, including advanced error
 # reporting.
 
-MENHIR_TABLE = false
+MENHIR_TABLE = true
 
 # To pass or not to pass --table.
 
