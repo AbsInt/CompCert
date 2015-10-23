@@ -458,12 +458,25 @@ and singleline_comment = parse
       Queue.push token tokens;
       token
 
-  let tokens_stream filename text : token coq_Stream =
-    let tokens = Queue.create () in
+  (* [invoke_pre_parser] is in charge of calling the pre_parser. It uses
+     the incremental API, which allows us to do our own error handling. *)
+
+  let invoke_pre_parser filename text lexer =
     let lexbuf = Lexing.from_string text in
     lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_fname = filename; pos_lnum = 1};
+    let module I = Pre_parser.MenhirInterpreter in
+    let checkpoint = Pre_parser.Incremental.translation_unit_file()
+    and supplier = I.lexer_lexbuf_to_supplier lexer lexbuf
+    and succeed () = ()
+    and fail checkpoint =
+      Cerrors.fatal_error_raw "syntax error"
+    in
+    I.loop_handle succeed fail supplier checkpoint
+
+  let tokens_stream filename text : token coq_Stream =
     contexts_stk := [init_ctx];
-    Pre_parser.translation_unit_file (lexer tokens) lexbuf;
+    let tokens = Queue.create () in
+    invoke_pre_parser filename text (lexer tokens);
     assert (List.length !contexts_stk = 1);
     let rec compute_token_stream () =
       let loop t v =
