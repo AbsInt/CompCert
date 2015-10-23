@@ -567,20 +567,24 @@ parameter_list:
 parameter_declaration:
 | declaration_specifiers id=declare_varname(fst(declarator))
     { Some id }
-| declaration_specifiers abstract_declarator?
+| declaration_specifiers abstract_declarator(parameter_declaration)?
     { None }
 
 type_name:
-| specifier_qualifier_list(type_name) abstract_declarator?
+| specifier_qualifier_list(type_name) abstract_declarator(type_name)?
     {}
 
-abstract_declarator:
+(* The phantom parameter can be [parameter_declaration] or [type_name].
+   We take the latter to mean [type_or_name] or [direct_abstract_declarator].
+   We need not distinguish these two cases: in both cases, a closing parenthesis
+   is permitted (and we do not wish to keep track of why it is permitted). *)
+abstract_declarator(phantom):
 | pointer
 | ioption(pointer) direct_abstract_declarator
     {}
 
 direct_abstract_declarator:
-| LPAREN abstract_declarator RPAREN
+| LPAREN abstract_declarator(type_name) RPAREN
 | direct_abstract_declarator? LBRACK type_qualifier_list? optional(assignment_expression, RBRACK)
 | ioption(direct_abstract_declarator) LPAREN in_context(parameter_type_list?) RPAREN
     {}
