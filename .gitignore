@@ -40,6 +40,7 @@ cparser/Lexer.ml
 cparser/pre_parser.ml
 cparser/pre_parser.mli
 cparser/pre_parser.automaton
+backend/CMparser.automaton
 lib/Readconfig.ml
 lib/Tokenize.ml
 driver/Version.ml
