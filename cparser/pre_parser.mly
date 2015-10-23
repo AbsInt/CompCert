@@ -60,6 +60,48 @@
 %nonassoc highPrec
 
 %start<unit> translation_unit_file
+
+(* The following declarations cause certain nonterminal symbols to be
+   reduced when an error is detected. This replaces error actions in
+   the automaton with reduction actions. So, if the input is correct,
+   this makes no difference, and if the input is incorrect, this only
+   forces a few more reductions to take place before the error is
+   detected and reported. If used properly, this facilitates error
+   reports. *)
+
+%on_error_reduce
+  primary_expression
+  postfix_expression
+  unary_expression
+  cast_expression
+  multiplicative_expression
+  additive_expression
+  shift_expression
+  relational_expression
+  equality_expression
+  and_expression
+  exclusive_or_expression
+  inclusive_or_expression
+  logical_and_expression
+  logical_or_expression
+  conditional_expression
+  assignment_expression
+  expression
+  attribute_specifier_list
+  declarator
+  statement_finish_close
+  iteration_statement(nop,statement_finish_close)
+  enum_specifier
+  struct_or_union_specifier
+  specifier_qualifier_list(struct_declaration)
+  specifier_qualifier_list(type_name)
+  option(abstract_declarator(type_name))
+  abstract_declarator(type_name)
+  abstract_declarator(parameter_declaration)
+  asm_flags
+  asm_operands
+  init_declarator
+
 %%
 
 (* Helpers *)
