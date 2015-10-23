@@ -484,7 +484,7 @@ let expand_builtin_inline name args res =
   | "__builtin_call_frame", _,BR (IR res) ->
       let sz = !current_function_stacksize
       and ofs = !linkregister_offset in
-      if sz < 0x8000l then
+      if sz < 0x8000l && sz >= 0l then
         emit (Paddi(res, GPR1, Cint(coqint_of_camlint sz)))
       else
         emit (Plwz(res, Cint ofs, GPR1))
@@ -594,7 +594,7 @@ let expand_instruction instr =
       assert (ofs = _0);
       let sz = if variadic then Int32.add sz 96l else sz in
       let adj = Int32.neg sz in
-      if adj >= -0x8000l then
+      if adj >= -0x8000l && adj < 0l then
         emit (Pstwu(GPR1, Cint(coqint_of_camlint adj), GPR1))
       else begin
         emit_loadimm GPR0 (coqint_of_camlint adj);
@@ -617,7 +617,7 @@ let expand_instruction instr =
       let variadic = (!current_function).fn_sig.sig_cc.cc_vararg in
       let sz = camlint_of_coqint sz in
       let sz = if variadic then Int32.add sz 96l else sz in
-      if sz < 0x8000l then
+      if sz < 0x8000l && sz >= 0l then
         emit (Paddi(GPR1, GPR1, Cint(coqint_of_camlint sz)))
       else
         emit (Plwz(GPR1, Cint ofs, GPR1))
