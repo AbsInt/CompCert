@@ -170,6 +170,6 @@ clean:
 	rm -f pre_parser.automaton
 	rm -f pre_parser.conflicts
 	rm -f pre_parser.messages
-	rm -f $(DATABASE).raw
+	rm -f $(DATABASE).raw $(DATABASE).bak
 	rm -f deLexer
 
