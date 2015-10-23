@@ -845,7 +845,7 @@ asm_op_name:
 
 asm_flags:
 | string_literals_list
-| string_literals_list COMMA asm_flags
+| asm_flags COMMA string_literals_list
     {}
 
 translation_unit_file:
