@@ -299,7 +299,7 @@ let p_instruction oc ic =
   | Pstwcx_ (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Pstwcx_\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Psubfc (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Psubfc\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
   | Psubfe (ir1,ir2,ir3) -> fprintf oc "{\"Instruction Name\":\"Psubfe\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3
-  | Psubfze (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Psubfe\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
+  | Psubfze (ir1,ir2) -> fprintf oc "{\"Instruction Name\":\"Psubfze\",\"Args\":[%a,%a]}" p_ireg ir1 p_ireg ir2
   | Psubfic (ir1,ir2,c) -> fprintf oc "{\"Instruction Name\":\"Psubfic\",\"Args\":[%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_constant c
   | Psync -> fprintf oc "{\"Instruction Name\":\"Psync\",\"Args\":[]}"
   | Ptrap -> fprintf oc "{\"Instruction Name\":\"Ptrap\",\"Args\":[]}"
