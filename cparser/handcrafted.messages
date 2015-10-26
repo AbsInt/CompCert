@@ -2754,11 +2754,9 @@ translation_unit_file: INT VAR_NAME LPAREN INT VAR_NAME RPAREN LBRACE DO ASM XOR
 ## ASM 
 ##
 
-# TEMPORARY maybe 'const' does not make sense here; gcc and clang ignore it; check.
-
 Ill-formed assembly statement.
 At this point, one of the following is expected:
-  an assembly attribute, such as 'const' or 'volatile'; or
+  an assembly attribute, such as 'volatile'; or
   an opening parenthesis '('.
 
 # ------------------------------------------------------------------------------
@@ -2843,8 +2841,6 @@ translation_unit_file: INT VAR_NAME LPAREN INT VAR_NAME RPAREN LBRACE ASM LPAREN
 ##
 
 # We have seen one COLON, hence the outputs. (The list of outputs may be empty.)
-
-# TEMPORARY the grammar allows a list of outputs, but the documentation allows at most one output.
 
 Ill-formed assembly statement.
 Up to this point, a list of outputs has been recognized:
