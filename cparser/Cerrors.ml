@@ -26,6 +26,18 @@ let reset () = num_errors := 0; num_warnings := 0
 
 exception Abort
 
+(* [fatal_error_raw] is identical to [fatal_error], except it uses [Printf]
+   to print its message, as opposed to [Format], and does not automatically
+   introduce indentation and a final dot into the message. This is useful
+   for multi-line messages. *)
+   
+let fatal_error_raw fmt =
+  incr num_errors;
+  Printf.kfprintf
+    (fun _ -> raise Abort)
+    stderr
+    (fmt ^^ "Fatal error; compilation aborted.\n%!")
+
 let fatal_error fmt =
   incr num_errors;
   kfprintf
