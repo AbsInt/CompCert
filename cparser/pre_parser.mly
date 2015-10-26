@@ -3,6 +3,7 @@
 /*              The Compcert verified compiler                         */
 /*                                                                     */
 /*          Jacques-Henri Jourdan, INRIA Paris-Rocquencourt            */
+/*             François Pottier, INRIA Paris-Rocquencourt              */
 /*                                                                     */
 /*  Copyright Institut National de Recherche en Informatique et en     */
 /*  Automatique.  All rights reserved.  This file is distributed       */
@@ -24,16 +25,6 @@
 
   let declare_typename (i,_,_) =
     !declare_typename i
-
-  let syntax_error pos =
-    Cerrors.fatal_error "%s:%d: syntax error"
-        pos.Lexing.pos_fname pos.Lexing.pos_lnum
-
-  let unclosed opening closing pos1 pos2 =
-    Cerrors.info "%s:%d: syntax error: expecting '%s'"
-        pos2.Lexing.pos_fname pos2.Lexing.pos_lnum closing;
-    Cerrors.fatal_error "%s:%d: this is the location of the unclosed '%s'"
-        pos1.Lexing.pos_fname pos1.Lexing.pos_lnum opening
 
 %}
 
@@ -70,6 +61,48 @@
 %nonassoc highPrec
 
 %start<unit> translation_unit_file
+
+(* The following declarations cause certain nonterminal symbols to be
+   reduced when an error is detected. This replaces error actions in
+   the automaton with reduction actions. So, if the input is correct,
+   this makes no difference, and if the input is incorrect, this only
+   forces a few more reductions to take place before the error is
+   detected and reported. If used properly, this facilitates error
+   reports. *)
+
+%on_error_reduce
+  primary_expression
+  postfix_expression
+  unary_expression
+  cast_expression
+  multiplicative_expression
+  additive_expression
+  shift_expression
+  relational_expression
+  equality_expression
+  and_expression
+  exclusive_or_expression
+  inclusive_or_expression
+  logical_and_expression
+  logical_or_expression
+  conditional_expression
+  assignment_expression
+  expression
+  attribute_specifier_list
+  declarator
+  statement_finish_close
+  iteration_statement(nop,statement_finish_close)
+  enum_specifier
+  struct_or_union_specifier
+  specifier_qualifier_list(struct_declaration)
+  specifier_qualifier_list(type_name)
+  option(abstract_declarator(type_name))
+  abstract_declarator(type_name)
+  abstract_declarator(parameter_declaration)
+  asm_flags
+  asm_operands
+  init_declarator
+
 %%
 
 (* Helpers *)
@@ -78,12 +111,6 @@
    so this definition of [option] is actually used, even though the
    word [option] does not appear in the rest of this file. *)
 
-option(X):
-| /* nothing */
-    { None }
-| x = X
-    { Some x }
-
 (* [ioption(X)] is equivalent to [option(X)], but is marked [%inline],
    so its definition is expanded. In the absence of conflicts, the two
    are equivalent. Using [ioption] instead of [option] in well-chosen
@@ -91,11 +118,19 @@ option(X):
    of [ioption] in well-chosen places can help reduce the number of
    states of the automaton. *)
 
+(* Defining the non-%inline version in terms of the %inline version is
+   a standard idiom. It obviates the need to duplicate the definition.
+   The same idiom is used elsewhere below. *)
+
 %inline ioption(X):
 | /* nothing */
     { None }
 | x = X
     { Some x }
+
+option(X):
+  o = ioption(X)
+    { o }
 
 (* [optional(X, Y)] is equivalent to [X? Y]. However, by inlining
    the two possibilies -- either [X Y] or just [Y] -- we are able
@@ -104,6 +139,21 @@ option(X):
    explosion of cases. *)
 optional(X, Y):
   ioption(X) Y {}
+
+(* This is a standard left-recursive, possibly empty list, without
+   separators. Note that, by convention, [X*] is syntactic sugar for
+   [list(X)]. *)
+
+(* [ilist(X)] is equivalent to [list(X)], but is marked [%inline],
+   so its definition is expanded (only one level deep, of course). *)
+
+%inline ilist(X):
+| (* empty *) {}
+| list(X) X   {}
+
+list(X):
+  xs = ilist(X)
+    { xs }
 
 %inline fst(X):
 | x = X
@@ -155,6 +205,22 @@ declare_varname(nt):
 declare_typename(nt):
   i = nt { declare_typename i; i }
 
+(* A note about phantom parameters. The definition of a non-terminal symbol
+   [nt] is sometimes parameterized with a parameter that is unused in the
+   right-hand side. This parameter disappears when macro-expansion takes
+   place. Thus, the presence of this parameter does not influence the language
+   that is accepted by the parser. Yet, it carries information about the
+   context, since different call sites can supply different values of this
+   parameter. This forces the creation of two (or more) identical copies of
+   the definition of [nt], which leads to a larger automaton, where some
+   states have been duplicated. In these states, more information about the
+   context is available, which allows better syntax error messages to be
+   given.
+   
+   By convention, a formal phantom parameter is named [phantom], so as to be
+   easily recognizable. For clarity, we usually explicitly document which
+   actual values it can take. *)
+
 (* Actual grammar *)
 
 primary_expression:
@@ -163,30 +229,18 @@ primary_expression:
 | string_literals_list
 | LPAREN expression RPAREN
     {}
-| LPAREN expression error
-    { unclosed "(" ")" $startpos($1) $endpos }
 
 postfix_expression:
 | primary_expression
 | postfix_expression LBRACK expression RBRACK
 | postfix_expression LPAREN argument_expression_list? RPAREN
-    {}
-| postfix_expression LPAREN argument_expression_list? error
-    { unclosed "(" ")" $startpos($2) $endpos }
 | BUILTIN_VA_ARG LPAREN assignment_expression COMMA type_name RPAREN
-    {}
-| BUILTIN_VA_ARG LPAREN assignment_expression COMMA type_name error
-    { unclosed "(" ")" $startpos($2) $endpos }
 | postfix_expression DOT other_identifier
 | postfix_expression PTR other_identifier
 | postfix_expression INC
 | postfix_expression DEC
 | LPAREN type_name RPAREN LBRACE initializer_list COMMA? RBRACE
     {}
-| LPAREN type_name error
-    { unclosed "(" ")" $startpos($1) $endpos }
-| LPAREN type_name RPAREN LBRACE initializer_list COMMA? error
-    { unclosed "{" "}" $startpos($4) $endpos }
 
 argument_expression_list:
 | assignment_expression
@@ -312,7 +366,7 @@ expression:
 | expression COMMA assignment_expression
     {}
 
-constant_expression:
+%inline constant_expression:
 | conditional_expression
     {}
 
@@ -324,9 +378,12 @@ constant_expression:
    cannot contain an initialization (this is an error to initialize a
    typedef). *)
 
-declaration:
-| declaration_specifiers         init_declarator_list?    SEMICOLON
-| declaration_specifiers_typedef typedef_declarator_list? SEMICOLON
+(* The phantom parameter is either [block_item], which means we are
+   definitely reading a declaration, or [external_declaration], which
+   means we could also be reading the beginning of a function definition. *)
+declaration(phantom):
+| declaration_specifiers(declaration(phantom)) init_declarator_list?    SEMICOLON
+| declaration_specifiers_typedef               typedef_declarator_list? SEMICOLON
     {}
 
 init_declarator_list:
@@ -355,23 +412,23 @@ storage_class_specifier_no_typedef:
 | REGISTER
     {}
 
-(* [declaration_specifiers_no_type] matches declaration specifiers
+(* [declaration_specifier_no_type] matches declaration specifiers
    that do not contain either "typedef" nor type specifiers. *)
-declaration_specifiers_no_type:
-| storage_class_specifier_no_typedef declaration_specifiers_no_type?
-| type_qualifier                     declaration_specifiers_no_type?
-| function_specifier                 declaration_specifiers_no_type?
+declaration_specifier_no_type:
+| storage_class_specifier_no_typedef
+| type_qualifier
+| function_specifier
     {}
 
-(* [declaration_specifiers_no_typedef_name] matches declaration
+(* [declaration_specifier_no_typedef_name] matches declaration
    specifiers that contain neither "typedef" nor a typedef name
    (i.e. type specifier declared using a previous "typedef
    keyword"). *)
-declaration_specifiers_no_typedef_name:
-| storage_class_specifier_no_typedef declaration_specifiers_no_typedef_name?
-| type_qualifier                     declaration_specifiers_no_typedef_name?
-| function_specifier                 declaration_specifiers_no_typedef_name?
-| type_specifier_no_typedef_name     declaration_specifiers_no_typedef_name?
+declaration_specifier_no_typedef_name:
+| storage_class_specifier_no_typedef
+| type_qualifier
+| function_specifier
+| type_specifier_no_typedef_name
     {}
 
 (* [declaration_specifiers_no_type] matches declaration_specifiers
@@ -390,19 +447,23 @@ declaration_specifiers_no_typedef_name:
 
    The first field is a named t, while the second is unnamed of type t.
 *)
-declaration_specifiers:
-| ioption(declaration_specifiers_no_type) TYPEDEF_NAME                   declaration_specifiers_no_type?
-| declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+(* The phantom parameter is either [declaration(_)], which means that
+   this is the beginning of a declaration or a function definition, or
+   [parameter_declaration], which means that this is the beginning of a
+   parameter declaration. *)
+declaration_specifiers(phantom):
+| ilist(declaration_specifier_no_type) TYPEDEF_NAME                   declaration_specifier_no_type*
+|       declaration_specifier_no_type* type_specifier_no_typedef_name declaration_specifier_no_typedef_name*
     {}
 
 (* This matches declaration_specifiers that do contains once the
    "typedef" keyword. To avoid conflicts, we also encode the
    constraint described in the comment for [declaration_specifiers]. *)
 declaration_specifiers_typedef:
-| declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?         TYPEDEF_NAME                   declaration_specifiers_no_type?
-| ioption(declaration_specifiers_no_type) TYPEDEF_NAME                   declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?
-| declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
-| declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name? TYPEDEF                        declaration_specifiers_no_typedef_name?
+|       declaration_specifier_no_type*   TYPEDEF                        declaration_specifier_no_type*          TYPEDEF_NAME                   declaration_specifier_no_type*
+| ilist(declaration_specifier_no_type)   TYPEDEF_NAME                   declaration_specifier_no_type*          TYPEDEF                        declaration_specifier_no_type*
+|       declaration_specifier_no_type*   TYPEDEF                        declaration_specifier_no_type*          type_specifier_no_typedef_name declaration_specifier_no_typedef_name*
+|       declaration_specifier_no_type*   type_specifier_no_typedef_name declaration_specifier_no_typedef_name*  TYPEDEF                        declaration_specifier_no_typedef_name*
     {}
 
 (* A type specifier which is not a typedef name. *)
@@ -425,8 +486,6 @@ struct_or_union_specifier:
 | struct_or_union attribute_specifier_list other_identifier? LBRACE struct_declaration_list RBRACE
 | struct_or_union attribute_specifier_list other_identifier
     {}
-| struct_or_union attribute_specifier_list other_identifier? LBRACE struct_declaration_list error
-    { unclosed "{" "}" $startpos($4) $endpos }
 
 struct_or_union:
 | STRUCT
@@ -439,19 +498,20 @@ struct_declaration_list:
     {}
 
 struct_declaration:
-| specifier_qualifier_list struct_declarator_list? SEMICOLON
+| specifier_qualifier_list(struct_declaration) struct_declarator_list? SEMICOLON
     {}
 
 (* As in the standard, except it also encodes the constraint described
    in the comment above [declaration_specifiers]. *)
-specifier_qualifier_list:
+(* The phantom parameter can be [struct_declaration] or [type_name]. *)
+specifier_qualifier_list(phantom):
 | type_qualifier_list? TYPEDEF_NAME                   type_qualifier_list?
-| type_qualifier_list? type_specifier_no_typedef_name specifier_qualifier_list_no_typedef_name?
+| type_qualifier_list? type_specifier_no_typedef_name specifier_qualifier_no_typedef_name*
     {}
 
-specifier_qualifier_list_no_typedef_name:
-| type_specifier_no_typedef_name specifier_qualifier_list_no_typedef_name?
-| type_qualifier                 specifier_qualifier_list_no_typedef_name?
+specifier_qualifier_no_typedef_name:
+| type_specifier_no_typedef_name
+| type_qualifier
     {}
 
 struct_declarator_list:
@@ -468,8 +528,6 @@ enum_specifier:
 | ENUM attribute_specifier_list other_identifier? LBRACE enumerator_list COMMA? RBRACE
 | ENUM attribute_specifier_list other_identifier
     {}
-| ENUM attribute_specifier_list other_identifier? LBRACE enumerator_list COMMA? error
-    { unclosed "{" "}" $startpos($4) $endpos }
 
 enumerator_list:
 | declare_varname(enumerator)
@@ -537,7 +595,7 @@ function_specifier:
    has to be restored if entering the body of the function being
    defined, if so. *)
 declarator:
-| ioption(pointer) x = direct_declarator attribute_specifier_list
+| ilist(pointer1) x = direct_declarator attribute_specifier_list
     { x }
 
 direct_declarator:
@@ -553,9 +611,26 @@ direct_declarator:
       | None -> (fst x, Some restore_fun)
       | Some _ -> x }
 
-pointer:
-| STAR type_qualifier_list?
-| STAR type_qualifier_list? pointer
+(* The C standard defines [pointer] as a right-recursive list. We prefer to
+   define it as a left-recursive list, because this provides better static
+   context (that is, this changes the automaton in such a way that it is
+   easier to give good error messages, in at least 2 states).
+
+   The non-terminal symbol [pointer1] represents one list element.
+
+   [pointer], which represents a non-empty list of [pointer1]'s, is defined
+   as [pointer1* pointer1].
+
+   When the C standard writes [pointer?], which represents a possibly empty
+   list of [pointer1]'s, we write [pointer1*] or [ilist(pointer1)]. The two
+   are equivalent, as long as there is no conflict. *)
+
+%inline pointer1:
+  STAR type_qualifier_list?
+    {}
+
+%inline pointer:
+  pointer1* pointer1
     {}
 
 type_qualifier_list:
@@ -574,22 +649,26 @@ parameter_list:
     { i::l }
 
 parameter_declaration:
-| declaration_specifiers id=declare_varname(fst(declarator))
+| declaration_specifiers(parameter_declaration) id=declare_varname(fst(declarator))
     { Some id }
-| declaration_specifiers abstract_declarator?
+| declaration_specifiers(parameter_declaration) abstract_declarator(parameter_declaration)?
     { None }
 
 type_name:
-| specifier_qualifier_list abstract_declarator?
+| specifier_qualifier_list(type_name) abstract_declarator(type_name)?
     {}
 
-abstract_declarator:
+(* The phantom parameter can be [parameter_declaration] or [type_name].
+   We take the latter to mean [type_or_name] or [direct_abstract_declarator].
+   We need not distinguish these two cases: in both cases, a closing parenthesis
+   is permitted (and we do not wish to keep track of why it is permitted). *)
+abstract_declarator(phantom):
 | pointer
-| ioption(pointer) direct_abstract_declarator
+| ilist(pointer1) direct_abstract_declarator
     {}
 
 direct_abstract_declarator:
-| LPAREN abstract_declarator RPAREN
+| LPAREN abstract_declarator(type_name) RPAREN
 | direct_abstract_declarator? LBRACK type_qualifier_list? optional(assignment_expression, RBRACK)
 | ioption(direct_abstract_declarator) LPAREN in_context(parameter_type_list?) RPAREN
     {}
@@ -598,8 +677,6 @@ c_initializer:
 | assignment_expression
 | LBRACE initializer_list COMMA? RBRACE
     {}
-| LBRACE initializer_list COMMA? error
-    { unclosed "{" "}" $startpos($1) $endpos }
 
 initializer_list:
 | designation? c_initializer
@@ -677,15 +754,13 @@ labeled_statement(last_statement):
 compound_statement(openc):
 | LBRACE openc block_item_list? close_context RBRACE
     {}
-| LBRACE openc block_item_list? close_context error
-    { unclosed "{" "}" $startpos($1) $endpos }
 
 block_item_list:
 | block_item_list? block_item
     {}
 
 block_item:
-| declaration
+| declaration(block_item)
 | statement_finish_noclose
 | PRAGMA
     {}
@@ -776,7 +851,7 @@ iteration_statement(openc,last_statement):
 
 for_statement_header:
 | optional(expression, SEMICOLON)
-| declaration
+| declaration(block_item)
     {}
 
 asm_attributes:
@@ -813,15 +888,13 @@ asm_op_name:
 
 asm_flags:
 | string_literals_list
-| string_literals_list COMMA asm_flags
+| asm_flags COMMA string_literals_list
     {}
 
 translation_unit_file:
 | translation_unit EOF
 | EOF
     {}
-| error
-    { syntax_error $endpos }
 
 translation_unit:
 | external_declaration
@@ -832,20 +905,27 @@ translation_unit:
 
 external_declaration:
 | function_definition
-| declaration
+| declaration(external_declaration)
 | PRAGMA
     {}
 
 function_definition_begin:
-| declaration_specifiers ioption(pointer) x=direct_declarator
+| declaration_specifiers(declaration(external_declaration))
+  ilist(pointer1) x=direct_declarator
     { match x with
-      | (_, None) -> $syntaxerror
+      | (_, None) -> !open_context()
+                     (* this case does not make sense, but we let it pass anyway;
+                        this error will be caught later on by a type check *)
       | (i, Some restore_fun) -> restore_fun ()
     }
-| declaration_specifiers ioption(pointer) x=direct_declarator
+| declaration_specifiers(declaration(external_declaration))
+  ilist(pointer1) x=direct_declarator
   LPAREN params=identifier_list RPAREN open_context declaration_list
     { match x with
-      | (_, Some _) -> $syntaxerror
+      | (i, Some _) -> declare_varname i
+                       (* this case does not make sense; the syntax of K&R
+                          declarators is broken anyway, Jacques-Henri should
+                          propose a fix soon *)
       | (i, None) ->
 	declare_varname i;
 	List.iter declare_varname params
@@ -860,11 +940,9 @@ identifier_list:
 declaration_list:
 | /*empty*/
     {}
-| declaration_list declaration
+| declaration_list declaration(block_item)
     {}
 
 function_definition:
 | function_definition_begin LBRACE block_item_list? close_context RBRACE
     {}
-| function_definition_begin LBRACE block_item_list? close_context error
-    { unclosed "{" "}" $startpos($2) $endpos }
