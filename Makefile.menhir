@@ -64,11 +64,13 @@ endif
 # can instead ask ocamlfind where Menhir's library was installed. Otherwise,
 # Menhir answers directly with a "-I ..." directive, which we use.
 
+ifndef $(MENHIR_INCLUDES)
+
 ifeq ($(MENHIR_TABLE),true)
 
   MENHIR_SUGGESTION = $(MENHIR) $(MENHIR_MODE) --suggest-comp-flags
 
-  MENHIR_INCLUDES ?= $(shell \
+  MENHIR_INCLUDES := $(shell \
     if $(MENHIR_SUGGESTION) | grep -e "-package" >/dev/null ; then \
       echo "-I `ocamlfind query menhirLib`" ; \
     else \
@@ -78,5 +80,7 @@ ifeq ($(MENHIR_TABLE),true)
 else
 
   MENHIR_INCLUDES =
+
+endif
 
 endif
