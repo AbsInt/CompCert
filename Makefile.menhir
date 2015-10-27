@@ -14,7 +14,7 @@
 
 # Executable.
 
-MENHIR = menhir 
+MENHIR = menhir
 
 # This flag can be set to true or false. It controls whether we use
 # Menhir's table back-end or code back-end. The table back-end is a
@@ -28,7 +28,7 @@ MENHIR_TABLE = true
 ifeq ($(MENHIR_TABLE),true)
   MENHIR_MODE = --table
 else
-  MENHIR_MODE = 
+  MENHIR_MODE =
 endif
 
 # Options.
@@ -68,7 +68,7 @@ ifeq ($(MENHIR_TABLE),true)
 
   MENHIR_SUGGESTION = $(MENHIR) $(MENHIR_MODE) --suggest-comp-flags
 
-  MENHIR_INCLUDES := $(shell \
+  MENHIR_INCLUDES ?= $(shell \
     if $(MENHIR_SUGGESTION) | grep -e "-package" >/dev/null ; then \
       echo "-I `ocamlfind query menhirLib`" ; \
     else \
@@ -80,4 +80,3 @@ else
   MENHIR_INCLUDES =
 
 endif
-
