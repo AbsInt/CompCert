@@ -154,7 +154,7 @@ Separate Extraction
    Compiler.transf_c_program Compiler.transf_cminor_program
    Cexec.do_initial_state Cexec.do_step Cexec.at_final_state
    Ctypes.merge_attributes Ctypes.remove_attributes Ctypes.build_composite_env
-   Initializers.transl_init Initializers.constval
+   Initializers.transl_init_tr Initializers.constval
    Csyntax.Eindex Csyntax.Epreincr
    Ctyping.typecheck_program
    Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr

@@ -412,7 +412,7 @@ and transf_init env = function
   | Init_single e ->
       Init_single (transf_expr env Val e)
   | Init_array il ->
-      Init_array (List.map (transf_init env) il)
+      Init_array (List.rev (List.rev_map (transf_init env) il))
   | Init_struct(id, fil) ->
       Init_struct (id, List.map (fun (fld, i) -> (fld, transf_init env i)) fil)
   | Init_union(id, fld, i) ->

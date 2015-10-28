@@ -1098,27 +1098,32 @@ let convertFundecl env (sto, id, ty, optinit) =
 
 (** Initializers *)
 
+let listToInitializer l =
+  List.fold_left (fun acc e -> Init_cons(e, acc)) Init_nil l
+
 let rec convertInit env init =
   match init with
   | C.Init_single e ->
       Init_single (convertExpr env e)
   | C.Init_array il ->
-      Init_array (convertInitList env il)
+    let l = convertInitList env il [] in
+    Init_array (listToInitializer l)
   | C.Init_struct(_, flds) ->
-      Init_struct (convertInitList env (List.map snd flds))
+    let l = convertInitList env (List.map snd flds) [] in
+    Init_struct (listToInitializer l)
   | C.Init_union(_, fld, i) ->
       Init_union (intern_string fld.fld_name, convertInit env i)
 
-and convertInitList env il =
+and convertInitList env il acc =
   match il with
-  | [] -> Init_nil
-  | i :: il' -> Init_cons(convertInit env i, convertInitList env il')
+  | [] -> acc
+  | i :: il' -> convertInitList env il' (convertInit env i :: acc)
 
 let convertInitializer env ty i =
-  match Initializers.transl_init
-               !comp_env (convertTyp env ty) (convertInit env i)
+  match Initializers.transl_init_tr
+               !comp_env (convertTyp env ty) (convertInit env i) []
   with
-  | Errors.OK init -> init
+  | Errors.OK init -> List.rev init
   | Errors.Error msg ->
       error (sprintf "Initializer is not a compile-time constant (%s)"
                      (string_of_errmsg msg)); []

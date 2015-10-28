@@ -793,6 +793,126 @@ Local Opaque sizeof.
   apply align_le. apply alignof_pos.
 Qed.
 
+(** Proof of equivalence between transl_init and its tail-recursive version. *)
+
+Remark padding_tr':
+  forall l frm to,
+    padding_tr frm to l = rev (rev l ++ padding frm to).
+Proof.
+  intros.
+  unfold padding_tr, padding.
+  destruct (zlt frm to) eqn:?;
+  rewrite rev_app_distr; rewrite rev_involutive;
+  reflexivity.
+Qed.
+
+Lemma transl_init_tr_correct:
+  forall i acc ty data,
+    transl_init_tr ge ty i acc = OK data ->
+    exists data',
+      data' ++ acc = data /\
+      transl_init ge ty i = OK (rev data')
+
+with transl_init_list_tr_correct:
+  forall il,
+  (forall acc ty sz data,
+   transl_init_array_tr ge ty il sz acc = OK data ->
+   exists data',
+     data' ++ acc = data /\
+     transl_init_array ge ty il sz = OK (rev data'))
+  /\
+  (forall acc ty fl pos data,
+   transl_init_struct_tr ge ty fl il pos acc = OK data ->
+   exists data',
+     data' ++ acc = data /\
+   transl_init_struct ge ty fl il pos = OK (rev data')).
+Proof.
+- induction i; intros.
++ (* single *)
+  monadInv H. simpl. rewrite EQ. simpl.
+  exists (x :: nil).
+  simpl. split; reflexivity.
++ (* array *)
+  simpl in H. destruct ty; try discriminate.
+  apply (proj1 (transl_init_list_tr_correct il)). auto.
++ (* struct *)
+  simpl in *. destruct ty; try discriminate.
+  monadInv H. destruct (co_su x) eqn:?; try discriminate.
+  unfold lookup_composite in *. destruct (ge.(genv_cenv)!i) as [co|] eqn:?; inv EQ.
+  simpl. rewrite Heqs.
+  apply (proj2 (transl_init_list_tr_correct il)). auto.
++ (* union *)
+  simpl in *. destruct ty; try discriminate.
+  monadInv H. destruct (co_su x) eqn:?; try discriminate.
+  unfold lookup_composite in *. destruct (ge.(genv_cenv)!i0) as [co|] eqn:?; inv EQ.
+  simpl. rewrite Heqs.
+  monadInv EQ0. rewrite EQ.
+  simpl.
+  apply IHi in EQ0.
+  destruct EQ0 as [data' [APP TI]].
+  subst x1.
+  rewrite padding_tr'.
+  exists (rev (padding (sizeof ge x0) (sizeof ge (Tunion i0 a))) ++ data').
+  split.
+  rewrite rev_app_distr. rewrite rev_involutive.
+  rewrite app_assoc. reflexivity.
+  rewrite TI. simpl.
+  rewrite rev_app_distr. rewrite rev_involutive. reflexivity.
+
+  (*il*)
+- induction il.
++ simpl. intuition auto.
+* (* arrays *)
+  destruct (zeq sz 0). inv H. exists nil. auto.
+  destruct (zle 0 sz); inv H. exists (Init_space (sz * sizeof ge ty) :: nil). auto.
+* (* structs *)
+  destruct fl; inv H.
+  rewrite padding_tr'. rewrite rev_app_distr. rewrite rev_involutive.
+  exists (rev (padding pos (sizeof ge ty))). rewrite rev_involutive. auto.
++ (* inductive cases *)
+  destruct IHil as [A B]. split.
+* (* arrays *)
+  intros. monadInv H. simpl.
+  pose proof (transl_init_tr_correct _ _ _ _ EQ).
+  destruct H as [data' [AP TI]].
+  pose proof (A _ _ _ _ EQ0).
+  destruct H as [data'' [AP' TI']].
+  subst x data.
+  exists (data'' ++ data').
+  split. rewrite app_assoc. reflexivity.
+  rewrite TI. rewrite TI'.
+  simpl. rewrite rev_app_distr. reflexivity.
+* (* structs *)
+  intros. simpl in H. destruct fl; try discriminate.
+  destruct p; try discriminate. monadInv H. simpl.
+  pose proof (transl_init_tr_correct _ _ _ _ EQ).
+  destruct H as [data' [AP TI]].
+  pose proof (B _ _ _ _ _ EQ0).
+  destruct H as [data'' [AP' TI']].
+  subst x data.
+  exists (data'' ++ data' ++ rev (padding pos (align pos (alignof ge t)))).
+  split. rewrite app_assoc. rewrite padding_tr'. rewrite rev_app_distr.
+  rewrite rev_involutive. rewrite app_assoc. rewrite app_assoc.
+  reflexivity.
+  rewrite TI. rewrite TI'.
+  simpl. rewrite rev_app_distr. rewrite rev_app_distr. rewrite rev_involutive.
+  rewrite app_assoc. reflexivity.
+Qed.
+
+Lemma transl_init_tr_equiv:
+  forall i ty data,
+    transl_init_tr ge ty i nil = OK data ->
+    transl_init ge ty i = OK (rev data).
+Proof.
+  intros. apply transl_init_tr_correct in H.
+  destruct H.
+  destruct H.
+  rewrite app_nil_r in H.
+  subst data. assumption.
+Qed.
+
+
+
 End SOUNDNESS.
 
 Theorem transl_init_sound:
@@ -804,6 +924,21 @@ Proof.
   intros.
   set (ge := globalenv p) in *.
   change (prog_comp_env p) with (genv_cenv ge) in H0.
+  destruct (transl_init_sound_gen ge) as (A & B & C).
+  eapply build_composite_env_consistent. apply prog_comp_env_eq.
+  eapply A; eauto.
+Qed.
+
+Theorem transl_init_tr_sound:
+  forall p m b ty i m' rev_data,
+  exec_init (globalenv p) m b 0 ty i m' ->
+  transl_init_tr (prog_comp_env p) ty i nil = OK rev_data ->
+  Genv.store_init_data_list (globalenv p) m b 0 (rev rev_data) = Some m'.
+Proof.
+  intros. 
+  set (ge := globalenv p) in *.
+  change (prog_comp_env p) with (genv_cenv ge) in H0.
+  apply transl_init_tr_equiv in H0.
   destruct (transl_init_sound_gen ge) as (A & B & C).
   eapply build_composite_env_consistent. apply prog_comp_env_eq.
   eapply A; eauto.

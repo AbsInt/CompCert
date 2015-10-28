@@ -232,3 +232,62 @@ with transl_init_struct (ce: composite_env) (ty: type)
   end.
 
 
+(* Tail-recursive version of transl_init and associated functions,
+   to handle files with several 100k's of initializers. *)
+
+Definition padding_tr (frm to: Z) (acc : list init_data) : list init_data :=
+  if zlt frm to then Init_space (to - frm) :: acc else acc.
+
+Fixpoint transl_init_tr (ce: composite_env) (ty: type) (i: initializer)
+         (acc : list init_data) {struct i} : res (list init_data) :=
+  match i, ty with
+  | Init_single a, _ =>
+    do e <- transl_init_single ce ty a;
+      OK (e :: acc)
+  | Init_array il, Tarray tyelt nelt _ =>
+    transl_init_array_tr ce tyelt il (Zmax 0 nelt) acc
+  | Init_struct il, Tstruct id _ =>
+    do co <- lookup_composite ce id;
+      match co_su co with
+      | Struct => transl_init_struct_tr ce ty (co_members co) il 0 acc
+      | Union  => Error (MSG "struct/union mismatch on " :: CTX id :: nil)
+      end
+  | Init_union f i1, Tunion id _ =>
+      do co <- lookup_composite ce id;
+      match co_su co with
+      | Struct => Error (MSG "union/struct mismatch on " :: CTX id :: nil)
+      | Union =>
+          do ty1 <- field_type f (co_members co);
+          do acc' <- transl_init_tr ce ty1 i1 acc;
+          OK (padding_tr (sizeof ce ty1) (sizeof ce ty) acc')
+      end
+  | _, _ =>
+      Error (msg "wrong type for compound initializer")
+  end
+
+with transl_init_array_tr (ce: composite_env) (ty: type) (il: initializer_list) (sz: Z)
+                       (acc : list init_data) {struct il} : res (list init_data) :=
+  match il with
+  | Init_nil =>
+      if zeq sz 0 then OK acc
+      else if zle 0 sz then OK (Init_space (sz * sizeof ce ty) :: acc)
+      else Error (msg "wrong number of elements in array initializer")
+  | Init_cons i1 il' =>
+      do acc' <- transl_init_tr ce ty i1 acc;
+      transl_init_array_tr ce ty il' (sz - 1) acc'
+  end
+
+with transl_init_struct_tr (ce: composite_env) (ty: type)
+                        (fl: members) (il: initializer_list) (pos: Z)
+                        (acc : list init_data) {struct il} : res (list init_data) :=
+  match il, fl with
+  | Init_nil, nil =>
+      OK (padding_tr pos (sizeof ce ty) acc)
+  | Init_cons i1 il', (_, ty1) :: fl' =>
+      let pos1 := align pos (alignof ce ty1) in
+      let acc' := padding_tr pos pos1 acc in
+      do acc'' <- transl_init_tr ce ty1 i1 acc';
+      transl_init_struct_tr ce ty fl' il' (pos1 + sizeof ce ty1) acc''
+  | _, _ =>
+      Error (msg "wrong number of elements in struct initializer")
+  end.
