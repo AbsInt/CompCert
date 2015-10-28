@@ -78,8 +78,8 @@
 # quite dramatically.
 
 # Instead, we prefer to dynamically distinguish between these contexts. We do
-# so in a very simple way: we give --on-error-reduce directives to Menhir (in
-# the Makefile) so as to replace certain error actions with reduction actions.
+# so in a very simple way: we give %on_error_reduce declarations to Menhir (in
+# pre_parser.mly) so as to replace certain error actions with reduction actions.
 # Thus, when Menhir finds an error and whatever is on the stack can be reduced
 # to an expression, the automaton will reduce it to an expression. By carrying
 # out this extra (spurious) reduction, the automaton ends up in a state where
@@ -94,7 +94,7 @@
 # understand how the expression should be completed. Our error message exhibits
 # a bias towards ending expressions.
 
-# OTHER USES OF --on-reduce-error:
+# OTHER USES OF %on_error_reduce:
 
 # We apply this technique also to attribute_specifier_list and declarator. This
 # means, intuitively, that when we find an error at a position where an
@@ -103,9 +103,9 @@
 # into account in messages where an attribute_specifier_list or a declarator has
 # just been recognized.
 
-# ABOUT STRICT VERSUS LAX INTERPRETATIONS OF --on-reduce-error:
+# ABOUT STRICT VERSUS LAX INTERPRETATIONS OF %on_error_reduce:
 
-# There are two ways in which Menhir could implement --on-reduce-error. In the
+# There are two ways in which Menhir could implement %on_error_reduce. In the
 # strict interpretation, an extra reduction takes place only if this is the
 # only reduction that can take place in this state. (Thus, we do not choose
 # between two interpretations of the past.) In the lax interpretation, an extra
@@ -122,7 +122,7 @@
 
 # In the strict interpretation, no extra reduction is permitted here, because
 # two reductions are enabled. In the lax interpretation, because we have 
-# requested --on-error-reduce primary_expression, the second production is
+# declared %on_error_reduce primary_expression, the second production is
 # reduced. Hence, we implicitly assume that this name forms an expression
 # (as opposed to a label). This is slightly inaccurate (we lose completeness)
 # but removes an error state that is rather unpleasant.
@@ -139,8 +139,8 @@
 # In another instance of this phenomemon, there is a rather tricky state,
 # where we have read "int f" at the toplevel, and we do not know whether this
 # will be a variable definition (declarator) or a function definition
-# (direct_declarator). In the lax interpretation, because we have requested
-# --on-error-reduce declarator, we implicitly assume this must be the
+# (direct_declarator). In the lax interpretation, because we have declared
+# %on_error_reduce declarator, we implicitly assume this must be the
 # beginning of a declarator. Again, we lose completeness (we will not suggest
 # that an opening parenthesis would have been accepted) but this makes our
 # life easier, and does not sound too bad.
@@ -148,24 +148,24 @@
 # Another instance is a state where we have read "enum foo". This could be a
 # complete enum_specifier, or it could be continued with an opening brace. If it
 # is complete, though, we lack static context to tell what should come after it.
-# Using lax --on-error-reduce enum_specifier allows us to force a reduction,
+# Using lax %on_error_reduce enum_specifier allows us to force a reduction,
 # (thus forgetting that an opening brace would have been permitted) and to move
 # to another state where more contextual information is available. As noted
 # above, this reduction can already take place naturally, depending on the
 # lookahead token, so we are only adding more cases where it takes place.
 
-# The lax --on-reduce-error is used also to deal with a family of error states
+# The lax %on_error_reduce is used also to deal with a family of error states
 # where we have recognized a complete statement which could be continued with an
 # ELSE branch. These error states are difficult to explain: although we can
 # definitely say that ELSE is permitted, we have difficulty telling what else is
 # permitted, by lack of static context. We could recover this static information
 # by introducing a phantom parameter on statements, but that would be heavy. We
-# just cut a corner and use --on-reduce-error to view this as a complete
+# just cut a corner and use %on_error_reduce to view this as a complete
 # statement. Thus, we abandon the possibility that the statement could be
 # continued with ELSE: our error message will not mention it. Again, this makes
 # our life easier, and does not sound too bad.
 
-# We also apply --on-error-reduce to specifier_qualifier_list and
+# We also apply %on_error_reduce to specifier_qualifier_list and
 # option(abstract_declarator(type_name)). This allows us to recognize
 # a valid type name, even when this type name could be continued. This
 # allows us to go back to a state where we see the opening parenthesis
@@ -2622,8 +2622,8 @@ translation_unit_file: TYPEDEF INT STAR RPAREN
 #   one more '*', possibly followed with type qualifiers.
 # If the pointer is finished, then we expect a direct declarator.
 
-# If may seem tempting to declare --on-error-reduce "list(pointer1)", but
-# that would clash with --on-error-reduce "abstract_declarator(type_name)".
+# If may seem tempting to declare %on_error_reduce "list(pointer1)", but
+# that would clash with %on_error_reduce "abstract_declarator(type_name)".
 # There are states where both reductions are enabled, and Menhir currently
 # refuses to choose between them.
 
@@ -2659,7 +2659,7 @@ translation_unit_file: TYPEDEF INT VAR_NAME XOR_ASSIGN
 ##
 
 # Because attribute_specifier_list and declarator have been marked
-# --on-error-reduce, we perform several spurious reductions and end up here.
+# %on_error_reduce, we perform several spurious reductions and end up here.
 # Which is good, because the context is clear.
 
 # If the attribute_specifier_list or declarator was not finished, then we could have accepted:
@@ -4633,7 +4633,7 @@ translation_unit_file: INT VAR_NAME LPAREN INT VAR_NAME RPAREN LBRACE XOR_ASSIGN
 ##
 # We are possibly at the end of a function body.
 #
-# Note that, because we have used --on-error-reduce to consider some statements
+# Note that, because we have used %on_error_reduce to consider some statements
 # as complete even when they could be continued ELSE, we may end up here even
 # though ELSE is permitted. There is nothing we can do about it. We just omit
 # this permitted continuation in our message.

@@ -24,7 +24,7 @@ module S = MenhirLib.General (* Streams *)
    silently cover up for our internal error. Thus, we typically use an idiom of
    the form [if debug then assert false else <some default value>]. *)
 
-let debug = true
+let debug = false
 
 (* -------------------------------------------------------------------------- *)
 
