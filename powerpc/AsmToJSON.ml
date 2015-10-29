@@ -220,7 +220,7 @@ let p_instruction oc ic =
   | Pfnmadd (fr1,fr2,fr3,fr4) -> fprintf oc "{\"Instruction Name\":\"Pfmadd\",\"Args\":[%a,%a,%a,%a]}" p_freg fr1 p_freg fr2 p_freg fr3 p_freg fr4
   | Pfnmsub (fr1,fr2,fr3,fr4) -> fprintf oc "{\"Instruction Name\":\"Pfnmsub\",\"Args\":[%a,%a,%a,%a]}" p_freg fr1 p_freg fr2 p_freg fr3 p_freg fr4
   | Pfsqrt (fr1,fr2) -> fprintf oc "{\"Instruction Name\":\"Pfsqrt\",\"Args\":[%a,%a]}" p_freg fr1 p_freg fr2
-  | Pfrsqrte (fr1,fr2) -> fprintf oc "{\"Instruction Name\":\"Pfsqrte\",\"Args\":[%a,%a]}" p_freg fr1 p_freg fr2
+  | Pfrsqrte (fr1,fr2) -> fprintf oc "{\"Instruction Name\":\"Pfrsqrte\",\"Args\":[%a,%a]}" p_freg fr1 p_freg fr2
   | Pfres (fr1,fr2) -> fprintf oc "{\"Instruction Name\":\"Pfres\",\"Args\":[%a,%a]}" p_freg fr1 p_freg fr2
   | Pfsel (fr1,fr2,fr3,fr4) -> fprintf oc "{\"Instruction Name\":\"Pfsel\",\"Args\":[%a,%a,%a,%a]}" p_freg fr1 p_freg fr2 p_freg fr3 p_freg fr4
   | Pisel (ir1,ir2,ir3,cr) -> fprintf oc "{\"Instruction Name\":\"Pisel\",\"Args\":[%a,%a,%a,%a]}" p_ireg ir1 p_ireg ir2 p_ireg ir3 p_crbit cr
