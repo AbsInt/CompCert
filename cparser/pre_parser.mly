@@ -13,6 +13,13 @@
 /*                                                                     */
 /* *********************************************************************/
 
+(*
+   WARNING: The precedence declarations tend to silently solve
+   conflicts. So, if you change the grammar (especially for
+   statements), you should check that without these declarations, it
+   has ONLY 3 CONFLICTS in 3 STATES.
+*)
+
 %{
   open Pre_parser_aux
 
@@ -34,6 +41,12 @@
         pos2.Lexing.pos_fname pos2.Lexing.pos_lnum closing;
     Cerrors.fatal_error "%s:%d: this is the location of the unclosed '%s'"
         pos1.Lexing.pos_fname pos1.Lexing.pos_lnum opening
+
+  type 'id fun_declarator_ctx =
+  | Decl_ident
+  | Decl_other
+  | Decl_fun of (unit -> unit)
+  | Decl_krfun of 'id
 
 %}
 
@@ -57,7 +70,7 @@
 %token EOF
 
 (* These precedence declarations solve the conflict in the following
-   declaration :
+   declaration:
 
    int f(int (a));
 
@@ -71,13 +84,6 @@
 %nonassoc lowPrec2
 %nonassoc ELSE
 
-(*
-   WARNING: These precedence declarations tend to silently solve other
-   conflicts. So, if you change the grammar (especially or
-   statements), you should check that without these declarations, it
-   has ONLY 3 CONFLICTS.
-*)
-
 %start<unit> translation_unit_file
 %%
 
@@ -88,10 +94,6 @@
     { None }
 | x = X
     { Some x }
-
-%inline fst(X):
-| x = X
-    { fst x }
 
 (* The kind of an identifier should not be determined when looking
    ahead, because the context may not be up to date. For this reason,
@@ -113,16 +115,6 @@ general_identifier:
 | i = var_name
     { i }
 
-(* We add this non-terminal here to force the resolution of the
-   conflict at the point of shifting the TYPEDEF_NAME. If we had
-   already shifted it, reduce/reduce conflict appear, and menhir is
-   not able to solve them. *)
-low_prec : %prec lowPrec1 {}
-general_identifier_red:
-| PRE_NAME low_prec i = TYPEDEF_NAME
-| PRE_NAME i = VAR_NAME
-    { i }
-
 string_literals_list:
 | string_literals_list? STRING_LITERAL
     {}
@@ -131,9 +123,9 @@ save_context:
   (* empty *) { !save_context () }
 
 declare_varname(nt):
-  i = nt { declare_varname i; i }
+  i = nt { declare_varname (fst i); i }
 declare_typename(nt):
-  i = nt { declare_typename i; i }
+  i = nt { declare_typename (fst i); i }
 
 (* Actual grammar *)
 
@@ -301,7 +293,6 @@ constant_expression:
 
 declaration:
 | declaration_specifiers init_declarator_list? SEMICOLON
-    {}
 | declaration_specifiers_typedef typedef_declarator_list? SEMICOLON
     {}
 
@@ -311,9 +302,9 @@ init_declarator_list:
     {}
 
 init_declarator:
-| declare_varname(fst(declarator))
-| declare_varname(fst(declarator)) EQ c_initializer
-    { }
+| declare_varname(declarator_noattrend) save_context attribute_specifier_list
+| declare_varname(declarator_noattrend) save_context attribute_specifier_list EQ c_initializer
+    {}
 
 typedef_declarator_list:
 | typedef_declarator
@@ -321,8 +312,8 @@ typedef_declarator_list:
     {}
 
 typedef_declarator:
-| declare_typename(fst(declarator))
-    { }
+| declare_typename(declarator)
+    {}
 
 storage_class_specifier_no_typedef:
 | EXTERN
@@ -334,9 +325,9 @@ storage_class_specifier_no_typedef:
 (* [declaration_specifiers_no_type] matches declaration specifiers
    that do not contain either "typedef" nor type specifiers. *)
 declaration_specifiers_no_type:
-| declaration_specifiers_no_type? storage_class_specifier_no_typedef
-| declaration_specifiers_no_type? type_qualifier
-| declaration_specifiers_no_type? function_specifier
+| storage_class_specifier_no_typedef declaration_specifiers_no_type?
+| type_qualifier declaration_specifiers_no_type?
+| function_specifier declaration_specifiers_no_type?
     {}
 
 (* [declaration_specifiers_no_typedef_name] matches declaration
@@ -350,10 +341,8 @@ declaration_specifiers_no_typedef_name:
 | declaration_specifiers_no_typedef_name? type_specifier_no_typedef_name
     {}
 
-(* [declaration_specifiers_no_type] matches declaration_specifiers
-   that do not contains "typedef". Moreover, it makes sure that it
-   contains either one typename and not other type specifier or no
-   typename.
+(* [declaration_specifiers] makes sure one type specifier is given, and,
+   if a typedef_name is given, then no other type specifier is given.
 
    This is a weaker condition than 6.7.2 2. It is necessary to enforce
    this in the grammar to disambiguate the example in 6.7.7 6:
@@ -474,13 +463,13 @@ enumerator_list:
 enumerator:
 | i = enumeration_constant
 | i = enumeration_constant EQ constant_expression
-    { i }
+    { (i, ()) }
 
 enumeration_constant:
 | i = general_identifier
     { set_id_type i VarId; i }
 
-type_qualifier:
+%inline type_qualifier:
 | CONST
 | RESTRICT
 | VOLATILE
@@ -489,7 +478,7 @@ type_qualifier:
 
 attribute_specifier_list:
 | /* empty */
-| attribute_specifier_list attribute_specifier
+| attribute_specifier attribute_specifier_list
     {}
 
 attribute_specifier:
@@ -528,24 +517,50 @@ function_specifier:
 | INLINE
     {}
 
+(* We add this non-terminal here to force the resolution of the
+   conflict at the point of shifting the TYPEDEF_NAME. If we had
+   already shifted it, reduce/reduce conflict appear, and menhir is
+   not able to solve them. *)
+low_prec : %prec lowPrec1 {}
+declarator_identifier:
+| PRE_NAME low_prec i = TYPEDEF_NAME
+| PRE_NAME i = VAR_NAME
+    { i }
+
 (* The semantic action returned by [declarator] is a pair of the
-   identifier being defined and an option of the context stack that
-   has to be restored if entering the body of the function being
+   identifier being defined and a value containing the context stack
+   that has to be restored if entering the body of the function being
    defined, if so. *)
 declarator:
-| pointer? x = direct_declarator attribute_specifier_list
+| x = declarator_noattrend attribute_specifier_list
     { x }
 
-direct_declarator:
-| i = general_identifier_red
-    { set_id_type i VarId; (i, None) }
-| LPAREN save_context x = declarator RPAREN
-| x = direct_declarator LBRACK type_qualifier_list? assignment_expression? RBRACK
+declarator_noattrend:
+| x = direct_declarator
     { x }
+| pointer x = direct_declarator
+    { match snd x with
+      | Decl_ident -> (fst x, Decl_other)
+      | _ -> x }
+
+direct_declarator:
+| i = declarator_identifier
+    { set_id_type i VarId; (i, Decl_ident) }
+| LPAREN save_context x = declarator RPAREN
+    { x }
+| x = direct_declarator LBRACK type_qualifier_list? assignment_expression? RBRACK
+    { match snd x with
+      | Decl_ident -> (fst x, Decl_other)
+      | _ -> x }
 | x = direct_declarator LPAREN ctx = context_parameter_type_list RPAREN
     { match snd x with
-      | None -> (fst x, Some ctx)
-      | Some _ -> x }
+      | Decl_ident -> (fst x, Decl_fun ctx)
+      | _ -> x }
+| x = direct_declarator LPAREN save_context il=identifier_list? RPAREN
+    { match snd x, il with
+      | Decl_ident, Some il -> (fst x, Decl_krfun il)
+      | Decl_ident, None -> (fst x, Decl_krfun [])
+      | _ -> x }
 
 pointer:
 | STAR type_qualifier_list?
@@ -557,25 +572,23 @@ type_qualifier_list:
     {}
 
 context_parameter_type_list:
-| ctx1 = save_context parameter_type_list? ctx2 = save_context
+| ctx1 = save_context parameter_type_list ctx2 = save_context
     { ctx1 (); ctx2 }
 
 parameter_type_list:
-| l=parameter_list
-| l=parameter_list COMMA ELLIPSIS
-    { l }
+| parameter_list
+| parameter_list COMMA ELLIPSIS
+    {}
 
 parameter_list:
-| i=parameter_declaration
-    { [i] }
-| l=parameter_list COMMA i=parameter_declaration
-    { i::l }
+| parameter_declaration
+| parameter_list COMMA parameter_declaration
+    {}
 
 parameter_declaration:
-| declaration_specifiers id=declare_varname(fst(declarator))
-    { Some id }
+| declaration_specifiers declare_varname(declarator)
 | declaration_specifiers abstract_declarator?
-    { None }
+    {}
 
 type_name:
 | specifier_qualifier_list abstract_declarator?
@@ -745,39 +758,28 @@ external_declaration:
     {}
 
 identifier_list:
-| id = var_name
-    { [id] }
-| idl = identifier_list COMMA id = var_name
-    { id :: idl }
+| x = var_name
+    { [x] }
+| l = identifier_list COMMA x = var_name
+    { x::l }
 
 declaration_list:
-| /*empty*/
-    { }
+| declaration
 | declaration_list declaration
-    { }
+    {}
 
 function_definition1:
-| declaration_specifiers pointer? x=direct_declarator ctx = save_context
-    { match x with
-      | (_, None) -> $syntaxerror
-      | (_, Some ctx') -> ctx'(); ctx
-    }
-| declaration_specifiers pointer? x=direct_declarator
-  LPAREN save_context params=identifier_list RPAREN ctx = save_context declaration_list
-    { match x with
-      | (_, Some _) -> $syntaxerror
-      | (i, None) ->
-	declare_varname i;
-	List.iter declare_varname params;
-        ctx
-    }
-
-function_definition2:
-| ctx = function_definition1 LBRACE block_item_list?
-    { ctx() }
-| ctx = function_definition1 LBRACE block_item_list? error
-    { unclosed "{" "}" $startpos($2) $endpos }
+| declaration_specifiers func = declare_varname(declarator_noattrend)
+    save_context attribute_specifier_list ctx = save_context
+| declaration_specifiers func = declare_varname(declarator_noattrend)
+    ctx = save_context declaration_list
+    { begin match snd func with
+      | Decl_fun ctx -> ctx (); declare_varname (fst func)
+      | Decl_krfun il -> List.iter declare_varname il
+      | _ -> ()
+      end;
+      ctx }
 
 function_definition:
-| function_definition2 RBRACE
-    { }
+| ctx = function_definition1 compound_statement
+    { ctx () }
