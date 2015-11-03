@@ -154,8 +154,8 @@ let p_arg oc = function
   | Constant c -> p_constant oc c
   | Crbit cr -> p_crbit oc cr
   | Label lbl -> p_label oc lbl
-  | Float32 f -> p_float32 oc f
-  | Float64 f  -> p_float64 oc f
+  | Float32 f -> p_float32_constant oc f
+  | Float64 f  -> p_float64_constant oc f
   | Atom a -> p_atom_constant oc a
 
 let p_instruction oc ic =
@@ -188,7 +188,7 @@ let p_instruction oc ic =
   | Pbt (cr,l) ->  instruction "Pbt" [Crbit cr; Label l]
   | Pbtbl (i,lb) -> instruction "Pbtbl" ((Ireg i)::(List.map (fun a -> Label a) lb))
   | Pcmpb (ir1,ir2,ir3) -> instruction "Pcmpb" [Ireg ir1; Ireg ir2; Ireg ir3]
-  | Pcmplw (ir1,ir2) -> instruction "Pcmplwi" [Ireg ir1; Ireg ir2]
+  | Pcmplw (ir1,ir2) -> instruction "Pcmplw" [Ireg ir1; Ireg ir2]
   | Pcmplwi (ir,c) -> instruction "Pcmplwi" [Ireg ir; Constant c]
   | Pcmpw (ir1,ir2) -> instruction "Pcmpw" [Ireg ir1; Ireg ir2]
   | Pcmpwi (ir,c) -> instruction "Pcmpwi" [Ireg ir; Constant c]
