@@ -130,8 +130,6 @@ let p_crbit oc c =
 
 let p_label oc l = fprintf oc "{\"Label\":%ld}" (P.to_int32 l)
 
-let p_char_list oc l = fprintf oc "{\"String\":\"%a\"}" (fun oc -> List.iter (output_char oc)) l
-
 let p_list elem oc l =
   match l with
   | [] -> fprintf oc "[]"
