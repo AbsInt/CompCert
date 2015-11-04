@@ -435,6 +435,7 @@ Language support options (use -fno-<opt> to turn off -f<opt>) :
 Debugging options:
   -g             Generate debugging information
   -gdwarf-       (GCC only) Generate debug information in DWARF v2 or DWARF v3
+  -gonly-global  Generate debugging information only for globals
   -frename-static Rename static functions and declarations
 Optimization options: (use -fno-<opt> to turn off -f<opt>)
   -O             Optimize the compiled code [on by default]
@@ -547,6 +548,7 @@ let cmdline_actions =
   Exact "-gdwarf-3", Self (fun s -> option_g := true;
     option_gdwarf := 3);
   Exact "-frename-static", Self (fun s -> option_rename_static:= true);
+  Exact "-gonly-global", Self (fun s -> option_gglobal := true);
 (* Code generation options -- more below *)
   Exact "-O0", Self (fun _ -> unset_all optimization_options);
   Exact "-O", Self (fun _ -> set_all optimization_options);

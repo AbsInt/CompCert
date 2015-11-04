@@ -475,9 +475,14 @@ module Dwarfgenaux (Target: TARGET) =
       let f_id = get_opt_val f.fun_atom in
       let acc = match f.fun_return_type with Some s -> acc =<< s | None -> acc in
       let f_entry =  new_entry id (DW_TAG_subprogram f_tag) in
-      let params,acc = mmap (function_parameter_to_entry f_id) acc f.fun_parameter in
-      let vars,acc = fun_scope_to_entries f_id acc f.fun_scope in
-      add_children f_entry (params@vars),acc
+      let children,acc =
+        if not !Clflags.option_gglobal then
+          let params,acc = mmap (function_parameter_to_entry f_id) acc f.fun_parameter in
+          let vars,acc = fun_scope_to_entries f_id acc f.fun_scope in
+          params@vars,acc
+        else
+          [],acc in
+      add_children f_entry (children),acc
 
     let definition_to_entry acc id t =
       match t with
