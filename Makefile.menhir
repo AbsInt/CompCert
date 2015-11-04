@@ -1,0 +1,86 @@
+#######################################################################
+#                                                                     #
+#              The Compcert verified compiler                         #
+#                                                                     #
+#        François Pottier, INRIA Paris-Rocquencourt                   #
+#                                                                     #
+#  Copyright Institut National de Recherche en Informatique et en     #
+#  Automatique.  All rights reserved.  This file is distributed       #
+#  under the terms of the INRIA Non-Commercial License Agreement.     #
+#                                                                     #
+#######################################################################
+
+# This is a Makefile fragment for Menhir-specific aspects.
+
+# Executable.
+
+MENHIR = menhir
+
+# This flag can be set to true or false. It controls whether we use
+# Menhir's table back-end or code back-end. The table back-end is a
+# bit slower, but supports more features, including advanced error
+# reporting.
+
+MENHIR_TABLE = true
+
+# To pass or not to pass --table.
+
+ifeq ($(MENHIR_TABLE),true)
+  MENHIR_MODE = --table
+else
+  MENHIR_MODE =
+endif
+
+# Options.
+
+MENHIR_FLAGS = -v --no-stdlib -la 1
+
+# Using Menhir in --table mode requires MenhirLib.
+
+ifeq ($(MENHIR_TABLE),true)
+  MENHIR_LIBS = menhirLib.cmx
+else
+  MENHIR_LIBS =
+endif
+
+# The compilation rule.
+
+%.ml %.mli: %.mly
+	$(MENHIR) $(MENHIR_MODE) $(MENHIR_FLAGS) $<
+
+# Note 1: finding where MenhirLib has been installed would be easier if we
+# could depend on ocamlfind, but as far as I understand and as of today,
+# CompCert can be compiled and linked even in the absence of ocamlfind.
+# So, we should not require ocamlfind.
+
+# Note 2: Menhir has options --suggest-comp-flags and --suggest-link-flags
+# which we are supposed to help solve this difficulty. However, they don't
+# work for us out of the box, because if Menhir has been installed using
+# ocamlfind, then Menhir will suggest using ocamlfind (i.e. it will suggest
+# -package and -linkpkg options), which we don't want to do.
+
+# Solution: Ask Menhir first. If Menhir answers "-package menhirLib", then
+# Menhir was installed with ocamlfind, so we should not ask Menhir, but we
+# can instead ask ocamlfind where Menhir's library was installed. Otherwise,
+# Menhir answers directly with a "-I ..." directive, which we use.
+
+ifndef MENHIR_INCLUDES
+
+ifeq ($(MENHIR_TABLE),true)
+
+  MENHIR_SUGGESTION = $(MENHIR) $(MENHIR_MODE) --suggest-comp-flags
+
+  MENHIR_INCLUDES := $(shell \
+    if $(MENHIR_SUGGESTION) | grep -e "-package" >/dev/null ; then \
+      echo "-I `ocamlfind query menhirLib`" ; \
+    else \
+      $(MENHIR_SUGGESTION) ; \
+    fi)
+
+else
+
+  MENHIR_INCLUDES =
+
+endif
+
+endif

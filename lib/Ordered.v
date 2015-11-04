@@ -31,7 +31,7 @@ Definition eq (x y: t) := x = y.
 Definition lt := Plt.
 
 Lemma eq_refl : forall x : t, eq x x.
-Proof (@refl_equal t). 
+Proof (@refl_equal t).
 Lemma eq_sym : forall x y : t, eq x y -> eq y x.
 Proof (@sym_equal t).
 Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
@@ -61,7 +61,7 @@ Definition eq (x y: t) := x = y.
 Definition lt := Zlt.
 
 Lemma eq_refl : forall x : t, eq x x.
-Proof (@refl_equal t). 
+Proof (@refl_equal t).
 Lemma eq_sym : forall x y : t, eq x y -> eq y x.
 Proof (@sym_equal t).
 Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
@@ -69,7 +69,7 @@ Proof (@trans_equal t).
 Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
 Proof Zlt_trans.
 Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
-Proof. unfold lt, eq, t; intros. omega. Qed. 
+Proof. unfold lt, eq, t; intros. omega. Qed.
 Lemma compare : forall x y : t, Compare lt eq x y.
 Proof.
   intros. destruct (Z.compare x y) as [] eqn:E.
@@ -91,7 +91,7 @@ Definition eq (x y: t) := x = y.
 Definition lt (x y: t) := Int.unsigned x < Int.unsigned y.
 
 Lemma eq_refl : forall x : t, eq x x.
-Proof (@refl_equal t). 
+Proof (@refl_equal t).
 Lemma eq_sym : forall x y : t, eq x y -> eq y x.
 Proof (@sym_equal t).
 Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
@@ -129,7 +129,7 @@ Definition eq (x y: t) := x = y.
 Definition lt (x y: t) := Plt (A.index x) (A.index y).
 
 Lemma eq_refl : forall x : t, eq x x.
-Proof (@refl_equal t). 
+Proof (@refl_equal t).
 Lemma eq_sym : forall x y : t, eq x y -> eq y x.
 Proof (@sym_equal t).
 Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
@@ -149,7 +149,7 @@ Qed.
 Lemma compare : forall x y : t, Compare lt eq x y.
 Proof.
   intros. case (OrderedPositive.compare (A.index x) (A.index y)); intro.
-  apply LT. exact l. 
+  apply LT. exact l.
   apply EQ. red; red in e. apply A.index_inj; auto.
   apply GT. exact l.
 Defined.
@@ -158,7 +158,7 @@ Lemma eq_dec : forall x y, { eq x y } + { ~ eq x y }.
 Proof.
   intros. case (peq (A.index x) (A.index y)); intros.
   left. apply A.index_inj; auto.
-  right; red; unfold eq; intros; subst. congruence. 
+  right; red; unfold eq; intros; subst. congruence.
 Defined.
 
 End OrderedIndexed.
@@ -211,7 +211,7 @@ Proof.
   case (A.compare (fst x) (fst z)); intro.
   assumption.
   generalize (A.lt_not_eq H1); intro. elim H5.
-  apply A.eq_trans with (fst x). 
+  apply A.eq_trans with (fst x).
   apply A.eq_sym. auto. auto.
   generalize (@A.lt_not_eq (fst y) (fst x)); intro.
   elim H5. apply A.lt_trans with (fst z); auto.
@@ -231,7 +231,7 @@ Proof.
   elim H3; intros.
   apply (@B.lt_not_eq _ _ H5 H2).
 Qed.
-  
+
 Lemma compare : forall x y : t, Compare lt eq x y.
 Proof.
   intros.

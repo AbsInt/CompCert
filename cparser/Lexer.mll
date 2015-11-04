@@ -268,15 +268,15 @@ rule initial = parse
                                       currentLoc lexbuf)}
   | preprocessing_number as s     { error lexbuf "invalid numerical constant '%s'@ These characters form a preprocessor number, but not a constant" s;
                                     CONSTANT (Cabs.CONST_INT "0", currentLoc lexbuf) }
-  | "'"                           { let l = char_literal [] lexbuf in
+  | "'"                           { let l = char_literal lexbuf.lex_start_p [] lexbuf in
                                     CONSTANT (Cabs.CONST_CHAR(false, l),
                                               currentLoc lexbuf) }
-  | "L'"                          { let l = char_literal [] lexbuf in
+  | "L'"                          { let l = char_literal lexbuf.lex_start_p [] lexbuf in
                                     CONSTANT (Cabs.CONST_CHAR(true, l),
                                               currentLoc lexbuf) }
-  | "\""                          { let l = string_literal [] lexbuf in
+  | "\""                          { let l = string_literal lexbuf.lex_start_p [] lexbuf in
                                     STRING_LITERAL(false, l, currentLoc lexbuf) }
-  | "L\""                         { let l = string_literal [] lexbuf in
+  | "L\""                         { let l = string_literal lexbuf.lex_start_p [] lexbuf in
                                     STRING_LITERAL(true, l, currentLoc lexbuf) }
   | "..."                         { ELLIPSIS(currentLoc lexbuf) }
   | "+="                          { ADD_ASSIGN(currentLoc lexbuf) }
@@ -361,15 +361,17 @@ and char = parse
   | _ as c
       { Int64.of_int (Char.code c) }
 
-and char_literal accu = parse
-  | '\''       { List.rev accu }
+and char_literal startp accu = parse
+  | '\''       { lexbuf.lex_start_p <- startp;
+                 List.rev accu }
   | '\n' | eof { fatal_error lexbuf "missing terminating \"'\" character" }
-  | ""         { let c = char lexbuf in char_literal (c :: accu) lexbuf }
+  | ""         { let c = char lexbuf in char_literal startp (c :: accu) lexbuf }
 
-and string_literal accu = parse
-  | '\"'       { List.rev accu }
+and string_literal startp accu = parse
+  | '\"'       { lexbuf.lex_start_p <- startp;
+                 List.rev accu }
   | '\n' | eof { fatal_error lexbuf "missing terminating '\"' character" }
-  | ""         { let c = char lexbuf in string_literal (c :: accu) lexbuf }
+  | ""         { let c = char lexbuf in string_literal startp (c :: accu) lexbuf }
 
 (* We assume gcc -E syntax but try to tolerate variations. *)
 and hash = parse
@@ -423,37 +425,68 @@ and singleline_comment = parse
   open Parser
   open Aut.GramDefs
 
-  let tokens_stream filename channel : token coq_Stream =
-    let tokens = Queue.create () in
+  (* This is the main entry point to the lexer. *)
+
+  let lexer : lexbuf -> Pre_parser.token =
+    fun lexbuf ->
+      if lexbuf.lex_curr_p.pos_cnum = lexbuf.lex_curr_p.pos_bol then
+        initial_linebegin lexbuf
+      else
+        initial lexbuf
+
+  (* [lexer tokens buffer] is a new lexer, which wraps [lexer], and also: 1-
+     records the token stream into the FIFO queue [tokens] and 2- records the
+     start and end positions of the last two tokens in the two-place buffer
+     [buffer] and 3- duplicates identifier tokens into PRE_NAME and
+     VAR/TYPE_NAME. *)
+
+  let lexer tokens buffer : lexbuf -> Pre_parser.token =
     let curr_id = ref None in
-    let lexer_wraper lexbuf : Pre_parser.token =
+    types_context := init_ctx;
+    fun lexbuf ->
       match !curr_id with
       | Some id ->
         curr_id := None;
         let loc = currentLoc lexbuf in
-        let res =
+        let token =
           if SSet.mem id !types_context then TYPEDEF_NAME (id, ref TypedefId, loc)
           else VAR_NAME (id, ref VarId, loc)
         in
-        Queue.push res tokens;
-        res
+        Queue.push token tokens;
+        token
       | None ->
-        let res =
-          if lexbuf.lex_curr_p.pos_cnum = lexbuf.lex_curr_p.pos_bol then
-            initial_linebegin lexbuf
-          else
-            initial lexbuf
-        in
-        begin match res with
+        let token = lexer lexbuf in
+        begin match token with
         | PRE_NAME id -> curr_id := Some id
-        | _ -> Queue.push res tokens
+        | _ -> Queue.push token tokens
         end;
-        res
-    in
-    let lexbuf = Lexing.from_channel channel in
+        let startp = lexbuf.lex_start_p
+        and endp = lexbuf.lex_curr_p in
+        buffer := ErrorReports.update !buffer (startp, endp);
+        token
+
+  (* [invoke_pre_parser] is in charge of calling the pre_parser. It uses
+     the incremental API, which allows us to do our own error handling. *)
+
+  let invoke_pre_parser filename text lexer buffer =
+    let lexbuf = Lexing.from_string text in
     lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_fname = filename; pos_lnum = 1};
-    types_context := init_ctx;
-    Pre_parser.translation_unit_file lexer_wraper lexbuf;
+    let module I = Pre_parser.MenhirInterpreter in
+    let checkpoint = Pre_parser.Incremental.translation_unit_file()
+    and supplier = I.lexer_lexbuf_to_supplier lexer lexbuf
+    and succeed () = ()
+    and fail checkpoint =
+      Cerrors.fatal_error_raw "%s" (ErrorReports.report text !buffer checkpoint)
+    in
+    I.loop_handle succeed fail supplier checkpoint
+
+  (* [tokens_stream filename text] runs the pre_parser and produces a stream
+     of (appropriately classified) tokens. *)
+
+  let tokens_stream filename text : token coq_Stream =
+    let tokens = Queue.create () in
+    let buffer = ref ErrorReports.Zero in
+    invoke_pre_parser filename text (lexer tokens buffer) buffer;
     let rec compute_token_stream () =
       let loop t v =
         Cons (Coq_existT (t, Obj.magic v), Lazy.from_fun compute_token_stream)

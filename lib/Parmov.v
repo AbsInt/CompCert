@@ -61,7 +61,7 @@ Section PARMOV.
 
 (** * Registers, moves, and their semantics *)
 
-(** The development is parameterized by the type of registers, 
+(** The development is parameterized by the type of registers,
     equipped with a decidable equality. *)
 
 Variable reg: Type.
@@ -102,7 +102,7 @@ Lemma env_ext:
   (forall r, e1 r = e2 r) -> e1 = e2.
 Proof (@extensionality reg val).
 
-(** The main operation over environments is update: it assigns 
+(** The main operation over environments is update: it assigns
   a value [v] to a register [r] and preserves the values of other
   registers. *)
 
@@ -132,7 +132,7 @@ Lemma update_commut:
   r1 <> r2 ->
   update r1 v1 (update r2 v2 e) = update r2 v2 (update r1 v1 e).
 Proof.
-  intros. apply env_ext; intro; unfold update. 
+  intros. apply env_ext; intro; unfold update.
   destruct (reg_eq r r1); destruct (reg_eq r r2); auto.
   congruence.
 Qed.
@@ -174,7 +174,7 @@ Fixpoint exec_seq (m: moves) (e: env) {struct m}: env :=
 Fixpoint exec_seq_rev (m: moves) (e: env) {struct m}: env :=
   match m with
   | nil => e
-  | (s, d) :: m' => 
+  | (s, d) :: m' =>
       let e' := exec_seq_rev m' e in
       update d (e' s) e'
   end.
@@ -274,7 +274,7 @@ Inductive state_wf: state -> Prop :=
 Lemma dests_append:
   forall m1 m2, dests (m1 ++ m2) = dests m1 ++ dests m2.
 Proof.
-  intros. unfold dests. apply map_app. 
+  intros. unfold dests. apply map_app.
 Qed.
 
 Lemma dests_decomp:
@@ -286,7 +286,7 @@ Qed.
 Lemma srcs_append:
   forall m1 m2, srcs (m1 ++ m2) = srcs m1 ++ srcs m2.
 Proof.
-  intros. unfold srcs. apply map_app. 
+  intros. unfold srcs. apply map_app.
 Qed.
 
 Lemma srcs_decomp:
@@ -317,7 +317,7 @@ Lemma dests_disjoint_sym:
   forall m1 m2,
   dests_disjoint m1 m2 <-> dests_disjoint m2 m1.
 Proof.
-  unfold dests_disjoint; intros. 
+  unfold dests_disjoint; intros.
   split; intros; apply list_disjoint_sym; auto.
 Qed.
 
@@ -326,9 +326,9 @@ Lemma dests_disjoint_cons_left:
   dests_disjoint ((s, d) :: m1) m2 <->
   dests_disjoint m1 m2 /\ ~In d (dests m2).
 Proof.
-  unfold dests_disjoint, list_disjoint. 
+  unfold dests_disjoint, list_disjoint.
   simpl; intros; split; intros.
-  split. auto. firstorder. 
+  split. auto. firstorder.
   destruct H. elim H0; intro.
   red; intro; subst. contradiction.
   apply H; auto.
@@ -339,7 +339,7 @@ Lemma dests_disjoint_cons_right:
   dests_disjoint m1 ((s, d) :: m2) <->
   dests_disjoint m1 m2 /\ ~In d (dests m1).
 Proof.
-  intros. rewrite dests_disjoint_sym. rewrite dests_disjoint_cons_left. 
+  intros. rewrite dests_disjoint_sym. rewrite dests_disjoint_cons_left.
   rewrite dests_disjoint_sym. tauto.
 Qed.
 
@@ -348,11 +348,11 @@ Lemma dests_disjoint_append_left:
   dests_disjoint (m1 ++ m2) m3 <->
   dests_disjoint m1 m3 /\ dests_disjoint m2 m3.
 Proof.
-  unfold dests_disjoint, list_disjoint. 
+  unfold dests_disjoint, list_disjoint.
   intros; split; intros. split; intros.
   apply H; eauto. rewrite dests_append. apply in_or_app. auto.
   apply H; eauto. rewrite dests_append. apply in_or_app. auto.
-  destruct H. 
+  destruct H.
   rewrite dests_append in H0. elim (in_app_or _ _ _ H0); auto.
 Qed.
 
@@ -361,7 +361,7 @@ Lemma dests_disjoint_append_right:
   dests_disjoint m1 (m2 ++ m3) <->
   dests_disjoint m1 m2 /\ dests_disjoint m1 m3.
 Proof.
-  intros. rewrite dests_disjoint_sym. rewrite dests_disjoint_append_left. 
+  intros. rewrite dests_disjoint_sym. rewrite dests_disjoint_append_left.
   intuition; rewrite dests_disjoint_sym; assumption.
 Qed.
 
@@ -371,7 +371,7 @@ Lemma is_mill_cons:
   is_mill m /\ ~In d (dests m).
 Proof.
   unfold is_mill, dests_disjoint; intros. simpl.
-  split; intros. 
+  split; intros.
   inversion H; tauto.
   constructor; tauto.
 Qed.
@@ -381,7 +381,7 @@ Lemma is_mill_append:
   is_mill (m1 ++ m2) <->
   is_mill m1 /\ is_mill m2 /\ dests_disjoint m1 m2.
 Proof.
-  unfold is_mill, dests_disjoint; intros. rewrite dests_append. 
+  unfold is_mill, dests_disjoint; intros. rewrite dests_append.
   apply list_norepet_app.
 Qed.
 
@@ -391,7 +391,7 @@ Lemma move_no_temp_append:
   forall m1 m2,
   move_no_temp m1 -> move_no_temp m2 -> move_no_temp (m1 ++ m2).
 Proof.
-  intros; red; intros. elim (in_app_or _ _ _ H1); intro. 
+  intros; red; intros. elim (in_app_or _ _ _ H1); intro.
   apply H; auto. apply H0; auto.
 Qed.
 
@@ -418,12 +418,12 @@ Lemma temp_last_push:
   is_not_temp s1 -> is_not_temp d1 ->
   temp_last ((s1, d1) :: (s2, d2) :: sigma).
 Proof.
-  unfold temp_last; intros. simpl. simpl in H. 
+  unfold temp_last; intros. simpl. simpl in H.
   destruct (rev sigma); simpl in *.
-  intuition. red; simpl; intros. 
-  elim H; intros. inversion H4. subst; tauto. tauto. 
-  destruct p as [sN dN]. intuition. 
-  red; intros. elim (in_app_or _ _ _ H); intros. 
+  intuition. red; simpl; intros.
+  elim H; intros. inversion H4. subst; tauto. tauto.
+  destruct p as [sN dN]. intuition.
+  red; intros. elim (in_app_or _ _ _ H); intros.
   apply H3; auto.
   elim H4; intros. inversion H5; subst; tauto. elim H5.
 Qed.
@@ -433,12 +433,12 @@ Lemma temp_last_pop:
   temp_last ((s1, d1) :: sigma ++ (s2, d2) :: nil) ->
   temp_last (sigma ++ (s2, d2) :: nil).
 Proof.
-  intros until d2. 
+  intros until d2.
   change ((s1, d1) :: sigma ++ (s2, d2) :: nil)
     with ((((s1, d1) :: nil) ++ sigma) ++ ((s2, d2) :: nil)).
-  unfold temp_last. repeat rewrite rev_unit. 
-  intuition. simpl in H1. red; intros. apply H1. 
-  apply in_or_app. auto. 
+  unfold temp_last. repeat rewrite rev_unit.
+  intuition. simpl in H1. red; intros. apply H1.
+  apply in_or_app. auto.
 Qed.
 
 (** Some properties of [is_path]. *)
@@ -458,7 +458,7 @@ Proof.
   induction sigma; simpl; intros.
   constructor. red; auto. constructor.
   inversion H; subst; clear H.
-  constructor. 
+  constructor.
   destruct sigma as [ | [s1 d1] sigma']; simpl; simpl in H2; auto.
   auto.
 Qed.
@@ -471,12 +471,12 @@ Lemma path_sources_dests:
 Proof.
   induction sigma; simpl; intros.
   red; simpl; tauto.
-  inversion H; subst; clear H. simpl. 
+  inversion H; subst; clear H. simpl.
   assert (In s (dests (sigma ++ (s0, d0) :: nil))).
-    destruct sigma as [ | [s1 d1] sigma']; simpl; simpl in H2; intuition. 
-  apply incl_cons. simpl; tauto. 
+    destruct sigma as [ | [s1 d1] sigma']; simpl; simpl in H2; intuition.
+  apply incl_cons. simpl; tauto.
   apply incl_tran with (s0 :: dests (sigma ++ (s0, d0) :: nil)).
-  eapply IHsigma; eauto.   
+  eapply IHsigma; eauto.
   red; simpl; tauto.
 Qed.
 
@@ -484,11 +484,11 @@ Lemma no_read_path:
   forall d1 sigma s0 d0,
   d1 <> s0 ->
   is_path (sigma ++ (s0, d0) :: nil) ->
-  ~In d1 (dests (sigma ++ (s0, d0) :: nil)) ->  
+  ~In d1 (dests (sigma ++ (s0, d0) :: nil)) ->
   no_read (sigma ++ (s0, d0) :: nil) d1.
 Proof.
   intros.
-  generalize (path_sources_dests _ _ _ H0). intro. 
+  generalize (path_sources_dests _ _ _ H0). intro.
   intro. elim H1. elim (H2 _ H3); intro. congruence. auto.
 Qed.
 
@@ -499,7 +499,7 @@ Lemma notin_dests_cons:
   forall x s d m,
   ~In x (dests ((s, d) :: m)) <-> x <> d /\ ~In x (dests m).
 Proof.
-  intros. simpl. intuition auto. 
+  intros. simpl. intuition auto.
 Qed.
 
 Lemma notin_dests_append:
@@ -509,7 +509,7 @@ Proof.
   intros. rewrite dests_append. rewrite in_app. tauto.
 Qed.
 
-Hint Rewrite is_mill_cons is_mill_append 
+Hint Rewrite is_mill_cons is_mill_append
   dests_disjoint_cons_left dests_disjoint_cons_right
   dests_disjoint_append_left dests_disjoint_append_right
   notin_dests_cons notin_dests_append: pmov.
@@ -525,29 +525,29 @@ Proof.
   autorewrite with pmov in A; constructor; autorewrite with pmov.
 
   (* Nop *)
-  tauto. 
+  tauto.
   red; intros. apply B. apply list_in_insert; auto.
   auto. auto.
 
   (* Start *)
   tauto.
   red; intros. apply B. apply list_in_insert; auto.
-  red. simpl. split. elim (B s d). auto. 
-  apply in_or_app. right. apply in_eq. 
+  red. simpl. split. elim (B s d). auto.
+  apply in_or_app. right. apply in_eq.
   red; simpl; tauto.
-  constructor. exact I. constructor. 
+  constructor. exact I. constructor.
 
   (* Push *)
   intuition.
   red; intros. apply B. apply list_in_insert; auto.
-  elim (B d r). apply temp_last_push; auto. 
+  elim (B d r). apply temp_last_push; auto.
   apply in_or_app; right; apply in_eq.
   constructor. simpl. auto. auto.
 
   (* Loop *)
-  tauto. 
+  tauto.
   auto.
-  eapply temp_last_change_last_source; eauto. 
+  eapply temp_last_change_last_source; eauto.
   eapply is_path_change_last_source; eauto.
 
   (* Pop *)
@@ -557,7 +557,7 @@ Proof.
   eapply is_path_pop; eauto.
 
   (* Last *)
-  intuition. 
+  intuition.
   auto.
   unfold temp_last. simpl. auto.
   constructor.
@@ -577,7 +577,7 @@ Qed.
   reverse sequential order, then the moves [mu ++ sigma] in parallel. *)
 
 Definition statemove (st: state) (e: env) :=
-  match st with 
+  match st with
   | State mu sigma tau => exec_par (mu ++ sigma) (exec_seq_rev tau e)
   end.
 
@@ -589,7 +589,7 @@ Lemma exec_par_outside:
   forall m e r, ~In r (dests m) -> exec_par m e r = e r.
 Proof.
   induction m; simpl; intros. auto.
-  destruct a as [s d]. rewrite update_o. apply IHm. tauto. 
+  destruct a as [s d]. rewrite update_o. apply IHm. tauto.
   simpl in H. intuition.
 Qed.
 
@@ -600,8 +600,8 @@ Lemma exec_par_lift:
 Proof.
   induction m1; simpl; intros.
   auto.
-  destruct a as [s0 d0]. simpl in H. rewrite IHm1. simpl. 
-  apply update_commut. tauto. tauto. 
+  destruct a as [s0 d0]. simpl in H. rewrite IHm1. simpl.
+  apply update_commut. tauto. tauto.
 Qed.
 
 Lemma exec_par_ident:
@@ -609,9 +609,9 @@ Lemma exec_par_ident:
   is_mill (m1 ++ (r, r) :: m2) ->
   exec_par (m1 ++ (r, r) :: m2) e = exec_par (m1 ++ m2) e.
 Proof.
-  intros. autorewrite with pmov in H. 
-  rewrite exec_par_lift. simpl. 
-  replace (e r) with (exec_par (m1 ++ m2) e r). apply update_ident. 
+  intros. autorewrite with pmov in H.
+  rewrite exec_par_lift. simpl.
+  replace (e r) with (exec_par (m1 ++ m2) e r). apply update_ident.
   apply exec_par_outside. autorewrite with pmov. tauto. tauto.
 Qed.
 
@@ -619,7 +619,7 @@ Lemma exec_seq_app:
   forall m1 m2 e,
   exec_seq (m1 ++ m2) e = exec_seq m2 (exec_seq m1 e).
 Proof.
-  induction m1; simpl; intros. auto. 
+  induction m1; simpl; intros. auto.
   destruct a as [s d]. rewrite IHm1. auto.
 Qed.
 
@@ -627,7 +627,7 @@ Lemma exec_seq_rev_app:
   forall m1 m2 e,
   exec_seq_rev (m1 ++ m2) e = exec_seq_rev m1 (exec_seq_rev m2 e).
 Proof.
-  induction m1; simpl; intros. auto. 
+  induction m1; simpl; intros. auto.
   destruct a as [s d]. rewrite IHm1. auto.
 Qed.
 
@@ -657,8 +657,8 @@ Lemma exec_par_update_no_read:
 Proof.
   unfold no_read; induction m; simpl; intros.
   auto.
-  destruct a as [s0 d0]; simpl in *. rewrite IHm. 
-  rewrite update_commut. f_equal. f_equal. 
+  destruct a as [s0 d0]; simpl in *. rewrite IHm.
+  rewrite update_commut. f_equal. f_equal.
   apply update_o. tauto. tauto. tauto. tauto.
 Qed.
 
@@ -682,14 +682,14 @@ Lemma exec_par_combine:
 Proof.
   induction sl; destruct dl; simpl; intros; try discriminate.
   split; auto.
-  inversion H0; subst; clear H0. 
+  inversion H0; subst; clear H0.
   injection H; intro; clear H.
   destruct (IHsl dl H0 H4) as [A B].
   set (e' := exec_par (combine sl dl) e) in *.
   split.
-  decEq. apply update_s. 
+  decEq. apply update_s.
   rewrite <- A. apply list_map_exten; intros.
-  rewrite update_o. auto. congruence. 
+  rewrite update_o. auto. congruence.
   intros. rewrite update_o. apply B. tauto. intuition.
 Qed.
 
@@ -733,10 +733,10 @@ Lemma exec_par_env_equiv:
 Proof.
   unfold move_no_temp; induction m; simpl; intros.
   auto.
-  destruct a as [s d]. 
+  destruct a as [s d].
   red; intros. unfold update. destruct (reg_eq r d).
-  apply H0. elim (H s d); tauto. 
-  apply IHm; auto. 
+  apply H0. elim (H s d); tauto.
+  apply IHm; auto.
 Qed.
 
 (** The proof that transitions preserve semantics (up to the values of
@@ -750,57 +750,57 @@ Proof.
   induction 1; intro WF; inversion WF as [mu0 sigma0 tau0 A B C D]; subst; simpl.
 
   (* nop *)
-  apply env_equiv_refl'. unfold statemove. 
-  repeat rewrite app_ass. simpl. symmetry. apply exec_par_ident. 
-  rewrite app_ass in A. exact A. 
+  apply env_equiv_refl'. unfold statemove.
+  repeat rewrite app_ass. simpl. symmetry. apply exec_par_ident.
+  rewrite app_ass in A. exact A.
 
   (* start *)
-  apply env_equiv_refl'. unfold statemove. 
-  autorewrite with pmov in A. 
+  apply env_equiv_refl'. unfold statemove.
+  autorewrite with pmov in A.
   rewrite exec_par_lift. repeat rewrite app_ass. simpl. rewrite exec_par_lift. reflexivity.
-  tauto. autorewrite with pmov. tauto. 
+  tauto. autorewrite with pmov. tauto.
 
   (* push *)
-  apply env_equiv_refl'. unfold statemove. 
+  apply env_equiv_refl'. unfold statemove.
   autorewrite with pmov in A.
   rewrite exec_par_lift. rewrite exec_par_lift. simpl.
-  rewrite exec_par_lift. repeat rewrite app_ass. simpl. rewrite exec_par_lift. 
-  simpl. apply update_commut. intuition. 
-  tauto. autorewrite with pmov; tauto. 
-  autorewrite with pmov; intuition. 
+  rewrite exec_par_lift. repeat rewrite app_ass. simpl. rewrite exec_par_lift.
+  simpl. apply update_commut. intuition.
+  tauto. autorewrite with pmov; tauto.
+  autorewrite with pmov; intuition.
   autorewrite with pmov; intuition.
 
   (* loop *)
-  unfold statemove. simpl exec_seq_rev. 
-  set (e1 := exec_seq_rev tau e). 
+  unfold statemove. simpl exec_seq_rev.
+  set (e1 := exec_seq_rev tau e).
   autorewrite with pmov in A.
-  repeat rewrite <- app_ass. 
-  assert (~In d (dests (mu ++ sigma))). autorewrite with pmov. tauto. 
-  repeat rewrite exec_par_lift; auto. simpl. 
+  repeat rewrite <- app_ass.
+  assert (~In d (dests (mu ++ sigma))). autorewrite with pmov. tauto.
+  repeat rewrite exec_par_lift; auto. simpl.
   repeat rewrite <- app_nil_end.
   assert (move_no_temp (mu ++ sigma)).
-    red in C. rewrite rev_unit in C. destruct C. 
+    red in C. rewrite rev_unit in C. destruct C.
     apply move_no_temp_append; auto. apply move_no_temp_rev; auto.
   set (e2 := update (temp s) (e1 s) e1).
   set (e3 := exec_par (mu ++ sigma) e1).
   set (e4 := exec_par (mu ++ sigma) e2).
   assert (env_equiv e2 e1).
-    unfold e2; red; intros. apply update_o. apply H1. 
+    unfold e2; red; intros. apply update_o. apply H1.
   assert (env_equiv e4 e3).
     unfold e4, e3. apply exec_par_env_equiv; auto.
-  red; intros. unfold update. destruct (reg_eq r d). 
+  red; intros. unfold update. destruct (reg_eq r d).
   unfold e2. apply update_s. apply H2. auto.
 
   (* pop *)
-  apply env_equiv_refl'. unfold statemove. simpl exec_seq_rev. 
+  apply env_equiv_refl'. unfold statemove. simpl exec_seq_rev.
   set (e1 := exec_seq_rev tau e).
   autorewrite with pmov in A.
-  apply exec_par_append_eq. simpl. 
-  apply exec_par_update_no_read. 
-  apply no_read_path; auto. eapply is_path_pop; eauto. 
+  apply exec_par_append_eq. simpl.
+  apply exec_par_update_no_read.
+  apply no_read_path; auto. eapply is_path_pop; eauto.
   autorewrite with pmov; tauto.
   autorewrite with pmov; tauto.
-  intros. apply update_o. red; intro; subst r. elim (H H1). 
+  intros. apply update_o. red; intro; subst r. elim (H H1).
 
   (* last *)
   apply env_equiv_refl'. unfold statemove. simpl exec_seq_rev.
@@ -814,9 +814,9 @@ Lemma transitions_preserve_semantics:
   transitions st st' -> state_wf st ->
   env_equiv (statemove st' e) (statemove st e).
 Proof.
-  induction 1; intros. 
+  induction 1; intros.
   eapply transition_preserves_semantics; eauto.
-  apply env_equiv_refl. 
+  apply env_equiv_refl.
   apply env_equiv_trans with (statemove y e); auto.
   apply IHclos_refl_trans2. eapply transitions_preserve_wf; eauto.
 Qed.
@@ -828,10 +828,10 @@ Lemma state_wf_start:
   state_wf (State mu nil nil).
 Proof.
   intros. constructor. rewrite <- app_nil_end. auto.
-  auto. 
+  auto.
   red. simpl. auto.
   constructor.
-Qed.  
+Qed.
 
 (** The main correctness result in this section is the following:
   if we can transition repeatedly from an initial state [mu, nil, nil]
@@ -846,10 +846,10 @@ Theorem transitions_correctness:
   transitions (State mu nil nil) (State nil nil tau) ->
   forall e, env_equiv (exec_seq (List.rev tau) e) (exec_par mu e).
 Proof.
-  intros. 
+  intros.
   generalize (transitions_preserve_semantics _ _ e H1
               (state_wf_start _ H H0)).
-  unfold statemove. simpl. rewrite <- app_nil_end. 
+  unfold statemove. simpl. rewrite <- app_nil_end.
   rewrite exec_seq_exec_seq_rev. auto.
 Qed.
 
@@ -897,23 +897,23 @@ Lemma transition_determ:
   transitions st st'.
 Proof.
   induction 1; intro; unfold transitions.
-  apply rt_step. exact (tr_nop nil r mu nil tau). 
-  apply rt_step. exact (tr_start nil s d mu tau). 
-  apply rt_step. apply tr_push. 
+  apply rt_step. exact (tr_nop nil r mu nil tau).
+  apply rt_step. exact (tr_start nil s d mu tau).
+  apply rt_step. apply tr_push.
   eapply rt_trans.
-    apply rt_step. 
+    apply rt_step.
     change ((s, r0) :: sigma ++ (r0, d) :: nil)
       with (((s, r0) :: sigma) ++ (r0, d) :: nil).
-    apply tr_loop. 
-    apply rt_step. simpl. apply tr_pop. auto. 
-    inv H0.  generalize H6. 
+    apply tr_loop.
+    apply rt_step. simpl. apply tr_pop. auto.
+    inv H0.  generalize H6.
     change ((s, r0) :: sigma ++ (r0, d) :: nil)
       with (((s, r0) :: sigma) ++ (r0, d) :: nil).
     unfold temp_last; rewrite List.rev_unit. intros [E F].
-    elim (F s r0). unfold is_not_temp. auto. 
+    elim (F s r0). unfold is_not_temp. auto.
     rewrite <- List.In_rev. apply in_eq.
-  apply rt_step. apply tr_pop. auto. auto. 
-  apply rt_step. apply tr_last. auto. 
+  apply rt_step. apply tr_pop. auto. auto.
+  apply rt_step. apply tr_last. auto.
 Qed.
 
 Lemma transitions_determ:
@@ -939,9 +939,9 @@ Theorem dtransitions_correctness:
   dtransitions (State mu nil nil) (State nil nil tau) ->
   forall e, env_equiv (exec_seq (List.rev tau) e) (exec_par mu e).
 Proof.
-  intros. 
+  intros.
   eapply transitions_correctness; eauto.
-  apply transitions_determ. auto. apply state_wf_start; auto. 
+  apply transitions_determ. auto. apply state_wf_start; auto.
 Qed.
 
 (** * The compilation function *)
@@ -1017,10 +1017,10 @@ Lemma split_move_charact:
 Proof.
   unfold no_read. induction m; simpl; intros.
 - tauto.
-- destruct a as [s d]. destruct (reg_eq s r). 
+- destruct a as [s d]. destruct (reg_eq s r).
   + subst s. auto.
   + specialize (IHm r). destruct (split_move m r) as [[[before d'] after] | ].
-    * destruct IHm. subst m. simpl. intuition. 
+    * destruct IHm. subst m. simpl. intuition.
     * simpl; intuition.
 Qed.
 
@@ -1030,11 +1030,11 @@ Lemma is_last_source_charact:
   then s = r
   else s <> r.
 Proof.
-  induction m; simpl. 
+  induction m; simpl.
   destruct (reg_eq s r); congruence.
   destruct a as [s0 d0]. case_eq (m ++ (s, d) :: nil); intros.
   generalize (app_cons_not_nil m nil (s, d)). congruence.
-  rewrite <- H. auto. 
+  rewrite <- H. auto.
 Qed.
 
 Lemma replace_last_source_charact:
@@ -1055,24 +1055,24 @@ Lemma parmove_step_compatible:
   dtransition st (parmove_step st).
 Proof.
   intros st NOTFINAL. destruct st as [mu sigma tau]. unfold parmove_step.
-  case_eq mu; [intros MEQ | intros [ms md] mtl MEQ]. 
-  case_eq sigma; [intros SEQ | intros [ss sd] stl SEQ]. 
-  subst mu sigma. simpl in NOTFINAL. discriminate. 
-  simpl. 
+  case_eq mu; [intros MEQ | intros [ms md] mtl MEQ].
+  case_eq sigma; [intros SEQ | intros [ss sd] stl SEQ].
+  subst mu sigma. simpl in NOTFINAL. discriminate.
+  simpl.
   case_eq stl; [intros STLEQ | intros xx1 xx2 STLEQ].
   apply dtr_last. red; simpl; auto.
-  elim (@exists_last _ stl). 2:congruence. intros sigma1 [[ss1 sd1] SEQ2]. 
-  rewrite <- STLEQ. clear STLEQ xx1 xx2. 
-  generalize (is_last_source_charact sd ss1 sd1 sigma1). 
+  elim (@exists_last _ stl). 2:congruence. intros sigma1 [[ss1 sd1] SEQ2].
+  rewrite <- STLEQ. clear STLEQ xx1 xx2.
+  generalize (is_last_source_charact sd ss1 sd1 sigma1).
   rewrite SEQ2. destruct (is_last_source sd (sigma1 ++ (ss1, sd1) :: nil)).
-  intro. subst ss1. 
-  rewrite replace_last_source_charact. apply dtr_loop_pop. 
+  intro. subst ss1.
+  rewrite replace_last_source_charact. apply dtr_loop_pop.
   red; simpl; auto.
-  intro. apply dtr_pop. red; simpl; auto. auto. 
+  intro. apply dtr_pop. red; simpl; auto. auto.
 
-  case_eq sigma; [intros SEQ | intros [ss sd] stl SEQ]. 
-  destruct (reg_eq ms md). 
-  subst. apply dtr_nop. 
+  case_eq sigma; [intros SEQ | intros [ss sd] stl SEQ].
+  destruct (reg_eq ms md).
+  subst. apply dtr_nop.
   apply dtr_start. auto.
 
   generalize (split_move_charact ((ms, md) :: mtl) sd).
@@ -1082,9 +1082,9 @@ Proof.
   intro NOREAD.
   case_eq stl; [intros STLEQ | intros xx1 xx2 STLEQ].
   apply dtr_last. auto.
-  elim (@exists_last _ stl). 2:congruence. intros sigma1 [[ss1 sd1] SEQ2]. 
-  rewrite <- STLEQ. clear STLEQ xx1 xx2. 
-  generalize (is_last_source_charact sd ss1 sd1 sigma1). 
+  elim (@exists_last _ stl). 2:congruence. intros sigma1 [[ss1 sd1] SEQ2].
+  rewrite <- STLEQ. clear STLEQ xx1 xx2.
+  generalize (is_last_source_charact sd ss1 sd1 sigma1).
   rewrite SEQ2. destruct (is_last_source sd (sigma1 ++ (ss1, sd1) :: nil)).
   intro. subst ss1.
   rewrite replace_last_source_charact. apply dtr_loop_pop. auto.
@@ -1120,7 +1120,7 @@ Qed.
 (** Compilation function for parallel moves. *)
 
 Function parmove_aux (st: state) {measure measure st} : moves :=
-  if final_state st 
+  if final_state st
   then match st with State _ _ tau => tau end
   else parmove_aux (parmove_step st).
 Proof.
@@ -1134,7 +1134,7 @@ Proof.
   unfold dtransitions. intro st. functional induction (parmove_aux st).
   destruct _x; destruct _x0; simpl in e; discriminate || apply rt_refl.
   eapply rt_trans. apply rt_step. apply parmove_step_compatible; eauto.
-  auto. 
+  auto.
 Qed.
 
 Definition parmove (mu: moves) : moves :=
@@ -1151,7 +1151,7 @@ Theorem parmove_correctness:
   env_equiv (exec_seq (parmove mu) e) (exec_par mu e).
 Proof.
   intros. unfold parmove. apply dtransitions_correctness; auto.
-  apply parmove_aux_transitions. 
+  apply parmove_aux_transitions.
 Qed.
 
 (** Here is an alternate formulation of [parmove], where the
@@ -1172,7 +1172,7 @@ Theorem parmove2_correctness:
   List.map e' dl = List.map e sl /\
   forall r, ~In r dl -> is_not_temp r -> e' r = e r.
 Proof.
-  intros. 
+  intros.
   destruct (srcs_dests_combine sl dl H) as [A B].
   assert (env_equiv e' (exec_par (List.combine sl dl) e)).
     unfold e', parmove2. apply parmove_correctness.
@@ -1182,8 +1182,8 @@ Proof.
     red. rewrite B. auto.
   destruct (exec_par_combine e sl dl H H0) as [C D].
   set (e1 := exec_par (combine sl dl) e) in *.
-  split. rewrite <- C. apply list_map_exten; intros. 
-  symmetry. apply H3. auto. 
+  split. rewrite <- C. apply list_map_exten; intros.
+  symmetry. apply H3. auto.
   intros. transitivity (e1 r); auto.
 Qed.
 
@@ -1213,7 +1213,7 @@ Definition wf_moves (m: moves) : Prop :=
 Lemma wf_moves_cons: forall s d m,
   wf_moves ((s, d) :: m) <-> wf_move s d /\ wf_moves m.
 Proof.
-  unfold wf_moves; intros; simpl. firstorder. 
+  unfold wf_moves; intros; simpl. firstorder.
   inversion H0; subst s0 d0. auto.
 Qed.
 
@@ -1237,7 +1237,7 @@ Lemma dtransition_preserves_wf_state:
   dtransition st st' -> wf_state st -> wf_state st'.
 Proof.
   induction 1; intro WF; inv WF; constructor; autorewrite with pmov in *; intuition.
-  apply wf_move_temp_left; auto. 
+  apply wf_move_temp_left; auto.
   eapply wf_move_temp_right; eauto.
 Qed.
 
@@ -1245,31 +1245,31 @@ Lemma dtransitions_preserve_wf_state:
   forall st st',
   dtransitions st st' -> wf_state st -> wf_state st'.
 Proof.
-  induction 1; intros; eauto. 
+  induction 1; intros; eauto.
   eapply dtransition_preserves_wf_state; eauto.
-Qed.  
+Qed.
 
 End PROPERTIES.
 
 Lemma parmove_wf_moves:
   forall mu, wf_moves mu (parmove mu).
 Proof.
-  intros. 
+  intros.
   assert (wf_state mu (State mu nil nil)).
     constructor. red; intros. apply wf_move_same. auto.
     red; simpl; tauto. red; simpl; tauto.
   generalize (dtransitions_preserve_wf_state mu
               _ _
               (parmove_aux_transitions (State mu nil nil)) H).
-  intro WFS. inv WFS. 
-  unfold parmove. red; intros. apply H5.  
+  intro WFS. inv WFS.
+  unfold parmove. red; intros. apply H5.
   rewrite List.In_rev. auto.
 Qed.
 
 Lemma parmove2_wf_moves:
   forall sl dl, wf_moves (List.combine sl dl) (parmove2 sl dl).
 Proof.
-  intros. unfold parmove2. apply parmove_wf_moves. 
+  intros. unfold parmove2. apply parmove_wf_moves.
 Qed.
 
 (** As a corollary, we show that all sources of [parmove mu]
@@ -1278,12 +1278,12 @@ Qed.
     or temporaries. *)
 
 Remark wf_move_initial_reg_or_temp:
-  forall mu s d, 
+  forall mu s d,
   wf_move mu s d ->
   (In s (srcs mu) \/ is_temp s) /\ (In d (dests mu) \/ is_temp d).
 Proof.
-  induction 1. 
-  split; left. 
+  induction 1.
+  split; left.
   change s with (fst (s, d)). unfold srcs. apply List.in_map; auto.
   change d with (snd (s, d)). unfold dests. apply List.in_map; auto.
   split. right. exists s; auto. tauto.
@@ -1316,7 +1316,7 @@ Lemma parmove_srcs_initial_reg_or_temp:
   forall mu s,
   In s (srcs (parmove mu)) -> In s (srcs mu) \/ is_temp s.
 Proof.
-  intros. destruct (in_srcs _ _ H) as [d A]. 
+  intros. destruct (in_srcs _ _ H) as [d A].
   destruct (parmove_initial_reg_or_temp _ _ _ A). auto.
 Qed.
 
@@ -1324,7 +1324,7 @@ Lemma parmove_dests_initial_reg_or_temp:
   forall mu d,
   In d (dests (parmove mu)) -> In d (dests mu) \/ is_temp d.
 Proof.
-  intros. destruct (in_dests _ _ H) as [s A]. 
+  intros. destruct (in_dests _ _ H) as [s A].
   destruct (parmove_initial_reg_or_temp _ _ _ A). auto.
 Qed.
 
@@ -1455,11 +1455,11 @@ Hypothesis temps_no_overlap:
 Lemma disjoint_list_notin:
   forall r l, disjoint_list r l -> ~In r l.
 Proof.
-  intros. red; intro. 
-  assert (r <> r). apply disjoint_not_equal. apply H; auto. 
+  intros. red; intro.
+  assert (r <> r). apply disjoint_not_equal. apply H; auto.
   congruence.
 Qed.
-  
+
 Lemma pairwise_disjoint_norepet:
   forall l, pairwise_disjoint l -> list_norepet l.
 Proof.
@@ -1513,7 +1513,7 @@ Proof.
   subst. right. apply H. auto.
   subst. right. apply disjoint_sym. apply H. auto.
   auto.
-Qed. 
+Qed.
 
 Lemma no_adherence_dst:
   forall d, In d (dests mu) -> no_adherence d.
@@ -1547,7 +1547,7 @@ Qed.
 Definition env_match (e1 e2: env) : Prop :=
   forall r, no_adherence r -> e1 r = e2 r.
 
-(** The following lemmas relate the effect of executing moves 
+(** The following lemmas relate the effect of executing moves
   using normal, overlap-unaware update and weak, overlap-aware update. *)
 
 Lemma weak_update_match:
@@ -1558,9 +1558,9 @@ Lemma weak_update_match:
   env_match (update d (e1 s) e1)
             (weak_update d (e2 s) e2).
 Proof.
-  intros. red; intros. 
+  intros. red; intros.
   assert (no_overlap d r). apply H2. auto.
-  destruct H3. 
+  destruct H3.
   subst. rewrite update_s. rewrite weak_update_s. apply H1.
   destruct H. apply no_adherence_src; auto. apply no_adherence_tmp; auto.
   rewrite update_o. rewrite weak_update_d. apply H1. auto.
@@ -1576,8 +1576,8 @@ Lemma weak_exec_seq_match:
 Proof.
   induction m; intros; simpl.
   auto.
-  destruct a as [s d]. simpl in H. simpl in H0. 
-  apply IHm; auto. 
+  destruct a as [s d]. simpl in H. simpl in H0.
+  apply IHm; auto.
   apply weak_update_match; auto.
 Qed.
 
@@ -1600,7 +1600,7 @@ Theorem parmove2_correctness_with_overlap:
   forall r, disjoint_list r dl -> disjoint_temps r -> e' r = e r.
 Proof.
   intros.
-  assert (list_norepet dl). 
+  assert (list_norepet dl).
     apply pairwise_disjoint_norepet; auto.
   assert (forall r : reg, In r sl -> is_not_temp r).
     intros. apply disjoint_temps_not_temp; auto.
@@ -1608,7 +1608,7 @@ Proof.
     intros. apply disjoint_temps_not_temp; auto.
   generalize (parmove2_correctness sl dl H H5 H6 H7 e).
   set (e1 := exec_seq (parmove2 sl dl) e). intros [A B].
-  destruct (srcs_dests_combine sl dl H) as [C D]. 
+  destruct (srcs_dests_combine sl dl H) as [C D].
   assert (env_match (combine sl dl) e1 e').
     unfold parmove2. unfold e1, e'.
     apply weak_exec_seq_match; try (rewrite C); try (rewrite D); auto.
@@ -1616,11 +1616,11 @@ Proof.
     intros. rewrite <- D. apply parmove_dests_initial_reg_or_temp. auto.
     red; auto.
   split.
-  rewrite <- A. 
+  rewrite <- A.
   apply list_map_exten; intros. apply H8.
-  apply no_adherence_dst. rewrite D; auto. rewrite D; auto. rewrite D; auto. 
+  apply no_adherence_dst. rewrite D; auto. rewrite D; auto. rewrite D; auto.
   intros. transitivity (e1 r).
-  symmetry. apply H8. red. rewrite D. intros. destruct H11. 
+  symmetry. apply H8. red. rewrite D. intros. destruct H11.
   right. apply disjoint_sym. apply H9. auto.
   right. apply disjoint_sym. apply H10. auto.
   apply B. apply disjoint_list_notin; auto. apply disjoint_temps_not_temp; auto.

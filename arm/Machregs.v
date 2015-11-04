@@ -21,7 +21,7 @@ Require Import Op.
 (** The following type defines the machine registers that can be referenced
   as locations.  These include:
 - Integer registers that can be allocated to RTL pseudo-registers ([Rxx]).
-- Floating-point registers that can be allocated to RTL pseudo-registers 
+- Floating-point registers that can be allocated to RTL pseudo-registers
   ([Fxx]).
 
   The type [mreg] does not include reserved machine registers
@@ -45,9 +45,9 @@ Global Opaque mreg_eq.
 
 Definition mreg_type (r: mreg): typ :=
   match r with
-  | R0  | R1  | R2  | R3   | R4  | R5  | R6  | R7 
+  | R0  | R1  | R2  | R3   | R4  | R5  | R6  | R7
   | R8  | R9  | R10 | R11  | R12 => Tany32
-  | F0  | F1  | F2  | F3   | F4 | F5   | F6  | F7 
+  | F0  | F1  | F2  | F3   | F4 | F5   | F6  | F7
   | F8  | F9  | F10  | F11 | F12  | F13  | F14  | F15 => Tany64
   end.
 

@@ -16,8 +16,8 @@
 
 open Cabs
 
-let cabslu = {lineno = -10; 
-	      filename = "cabs loc unknown"; 
+let cabslu = {lineno = -10;
+	      filename = "cabs loc unknown";
 	      byteno = -10;
               ident = 0}
 

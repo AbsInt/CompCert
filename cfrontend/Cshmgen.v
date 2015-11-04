@@ -130,10 +130,10 @@ Definition make_cmp_ne_zero (e: expr) :=
 
 Definition make_cast_int (e: expr) (sz: intsize) (si: signedness) :=
   match sz, si with
-  | I8, Signed => Eunop Ocast8signed e  
-  | I8, Unsigned => Eunop Ocast8unsigned e  
-  | I16, Signed => Eunop Ocast16signed e  
-  | I16, Unsigned => Eunop Ocast16unsigned e  
+  | I8, Signed => Eunop Ocast8signed e
+  | I8, Unsigned => Eunop Ocast8unsigned e
+  | I16, Signed => Eunop Ocast16signed e
+  | I16, Unsigned => Eunop Ocast16unsigned e
   | I32, _ => e
   | IBool, _ => make_cmp_ne_zero e
   end.
@@ -356,7 +356,7 @@ Definition make_memcpy (ce: composite_env) (dst src: expr) (ty: type) :=
 
 (** [make_store addr ty rhs] stores the value of the
    Csharpminor expression [rhs] into the memory location denoted by the
-   Csharpminor expression [addr].  
+   Csharpminor expression [addr].
    [ty] is the type of the memory location. *)
 
 Definition make_store (ce: composite_env) (addr: expr) (ty: type) (rhs: expr) :=
@@ -376,7 +376,7 @@ Definition transl_unop (op: Cop.unary_operation) (a: expr) (ta: type) : res expr
   | Cop.Oabsfloat => make_absfloat a ta
   end.
 
-Definition transl_binop (ce: composite_env) 
+Definition transl_binop (ce: composite_env)
                         (op: Cop.binary_operation)
                         (a: expr) (ta: type)
                         (b: expr) (tb: type) : res expr :=
@@ -473,10 +473,10 @@ with transl_lvalue (ce: composite_env) (a: Clight.expr) {struct a} : res expr :=
       OK (Eaddrof id)
   | Clight.Ederef b _ =>
       transl_expr ce b
-  | Clight.Efield b i ty => 
+  | Clight.Efield b i ty =>
       do tb <- transl_expr ce b;
       make_field_access ce (typeof b) i tb
-  | _ => 
+  | _ =>
       Error(msg "Cshmgen.transl_lvalue")
   end.
 
@@ -492,7 +492,7 @@ Fixpoint transl_arglist (ce: composite_env) (al: list Clight.expr) (tyl: typelis
   | a1 :: a2, Tcons ty1 ty2 =>
       do ta1 <- transl_expr ce a1;
       do ta1' <- make_cast (typeof a1) ty1 ta1;
-      do ta2 <- transl_arglist ce a2 ty2;      
+      do ta2 <- transl_arglist ce a2 ty2;
       OK (ta1' :: ta2)
   | a1 :: a2, Tnil =>
       (* Tolerance for calls to K&R or variadic functions *)
@@ -630,7 +630,7 @@ Definition signature_of_function (f: Clight.function) :=
 
 Definition transl_function (ce: composite_env) (f: Clight.function) : res function :=
   do tbody <- transl_statement ce f.(Clight.fn_return) 1%nat 0%nat (Clight.fn_body f);
-  OK (mkfunction 
+  OK (mkfunction
        (signature_of_function f)
        (map fst (Clight.fn_params f))
        (map (transl_var ce) (Clight.fn_vars f))
@@ -639,7 +639,7 @@ Definition transl_function (ce: composite_env) (f: Clight.function) : res functi
 
 Definition transl_fundef (ce: composite_env) (f: Clight.fundef) : res fundef :=
   match f with
-  | Clight.Internal g => 
+  | Clight.Internal g =>
       do tg <- transl_function ce g; OK(AST.Internal tg)
   | Clight.External ef args res cconv =>
       if signature_eq (ef_sig ef) (signature_of_type args res cconv)

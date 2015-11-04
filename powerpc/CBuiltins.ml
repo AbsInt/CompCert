@@ -19,7 +19,7 @@ open C
 
 let builtins = {
   Builtins.typedefs = [
-    "__builtin_va_list", 
+    "__builtin_va_list",
     TArray(TInt(IUInt, []), Some 3L, [])
   ];
   Builtins.functions = [
@@ -40,19 +40,19 @@ let builtins = {
       (TInt (IUInt, []),  [TInt(IUInt, []);TInt(IUInt, [])], false);
     (* Float arithmetic *)
     "__builtin_fmadd",
-      (TFloat(FDouble, []), 
+      (TFloat(FDouble, []),
        [TFloat(FDouble, []); TFloat(FDouble, []); TFloat(FDouble, [])],
        false);
     "__builtin_fmsub",
-      (TFloat(FDouble, []), 
+      (TFloat(FDouble, []),
        [TFloat(FDouble, []); TFloat(FDouble, []); TFloat(FDouble, [])],
        false);
     "__builtin_fnmadd",
-      (TFloat(FDouble, []), 
+      (TFloat(FDouble, []),
        [TFloat(FDouble, []); TFloat(FDouble, []); TFloat(FDouble, [])],
        false);
     "__builtin_fnmsub",
-      (TFloat(FDouble, []), 
+      (TFloat(FDouble, []),
        [TFloat(FDouble, []); TFloat(FDouble, []); TFloat(FDouble, [])],
        false);
     "__builtin_fsqrt",
@@ -62,7 +62,7 @@ let builtins = {
     "__builtin_fres",
       (TFloat(FFloat, []), [TFloat(FFloat, [])], false);
     "__builtin_fsel",
-      (TFloat(FDouble, []), 
+      (TFloat(FDouble, []),
        [TFloat(FDouble, []); TFloat(FDouble, []); TFloat(FDouble, [])],
        false);
     "__builtin_fcti",

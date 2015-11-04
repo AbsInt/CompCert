@@ -19,17 +19,16 @@ toolprefix=''
 target=''
 has_runtime_lib=true
 has_standard_headers=true
-build_checklink=true
 advanced_debug=false
 
 usage='Usage: ./configure [options] target
 
 Supported targets:
-  ppc-linux        (PowerPC, Linux)
   ppc-eabi         (PowerPC, EABI with GNU/Unix tools)
   ppc-eabi-diab    (PowerPC, EABI with Diab tools)
-  arm-linux        (ARM, EABI)
+  ppc-linux        (PowerPC, Linux)
   arm-eabi         (ARM, EABI)
+  arm-linux        (ARM, EABI)
   arm-eabihf       (ARM, EABI using hardware FP registers)
   arm-hardfloat    (ARM, EABI using hardware FP registers)
   ia32-linux       (x86 32 bits, Linux)
@@ -37,6 +36,10 @@ Supported targets:
   ia32-macosx      (x86 32 bits, MacOS X)
   ia32-cygwin      (x86 32 bits, Cygwin environment under Windows)
   manual           (edit configuration file by hand)
+
+For PowerPC targets, the "ppc-" prefix can be refined into:
+  ppc64-           PowerPC 64 bits
+  e5500-           Freescale e5500 core (PowerPC 64 bits + EREF extensions)
 
 For ARM targets, the "arm-" prefix can be refined into:
   armv6-           ARMv6   + VFPv2
@@ -70,8 +73,6 @@ while : ; do
         has_runtime_lib=false;;
     -no-standard-headers)
         has_standard_headers=false;;
-    -no-checklink)
-        build_checklink=false;;
     *)
         if test -n "$target"; then echo "$usage" 1>&2; exit 2; fi
         target="$1";;
@@ -81,46 +82,45 @@ done
 
 # Per-target configuration
 
-cchecklink=false
 casmruntime=""
 asm_supports_cfi=""
 struct_passing=""
 struct_return=""
 
 case "$target" in
-  powerpc-linux|ppc-linux|powerpc-eabi|ppc-eabi)
+  powerpc-*|ppc-*|powerpc64-*|ppc64-*|e5500-*)
     arch="powerpc"
-    model="standard"
+    case "$target" in
+      powerpc64-*|ppc64-*) model="ppc64";;
+      e5500-*) model="e5500";;
+      *) model="ppc32";;
+    esac
     abi="eabi"
     struct_passing="ref-caller"
     case "$target" in
       *-linux) struct_return="ref";;
-      *-eabi)  struct_return="int1-8";;
+      *)  struct_return="int1-8";;
     esac
-    system="linux"
-    cc="${toolprefix}gcc"
-    cprepro="${toolprefix}gcc -std=c99 -U__GNUC__ -E"
-    casm="${toolprefix}gcc -c"
-    casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
-    clinker="${toolprefix}gcc"
-    libmath="-lm"
-    cchecklink=${build_checklink}
-    advanced_debug=true;;
-  powerpc-eabi-diab|ppc-eabi-diab)
-    arch="powerpc"
-    model="standard"
-    abi="eabi"
-    struct_passing="ref-caller"
-    struct_return="int1-8"
-    system="diab"
-    cc="${toolprefix}dcc"
-    cprepro="${toolprefix}dcc -E -D__GNUC__"
-    casm="${toolprefix}das"
-    asm_supports_cfi=false
-    clinker="${toolprefix}dcc"
-    libmath="-lm"
-    cchecklink=${build_checklink}
-    advanced_debug=true;;
+    case "$target" in
+      *-eabi-diab)
+        system="diab"
+        cc="${toolprefix}dcc"
+        cprepro="${toolprefix}dcc -E -D__GNUC__"
+        casm="${toolprefix}das"
+        asm_supports_cfi=false
+        clinker="${toolprefix}dcc"
+        libmath="-lm"
+        advanced_debug=true;;
+      *)
+        system="linux"
+        cc="${toolprefix}gcc"
+        cprepro="${toolprefix}gcc -std=c99 -U__GNUC__ -E"
+        casm="${toolprefix}gcc -c"
+        casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
+        clinker="${toolprefix}gcc"
+        libmath="-lm"
+        advanced_debug=true;;
+    esac;;
   arm*-*)
     arch="arm"
     case "$target" in
@@ -281,20 +281,21 @@ else
   ocaml_opt_comp=false
 fi
 
+MENHIR_REQUIRED=20151023
 echo "Testing Menhir... " | tr -d '\n'
 menhir_ver=`menhir --version 2>/dev/null | sed -n -e 's/^.*version \([0-9]*\).*$/\1/p'`
 case "$menhir_ver" in
   20[0-9][0-9][0-9][0-9][0-9][0-9])
-        if test "$menhir_ver" -ge 20140422; then
+        if test "$menhir_ver" -ge $MENHIR_REQUIRED; then
           echo "version $menhir_ver -- good!"
         else
           echo "version $menhir_ver -- UNSUPPORTED"
-          echo "Error: CompCert requires Menhir version 20140422 or later."
+          echo "Error: CompCert requires Menhir version $MENHIR_REQUIRED or later."
           missingtools=true
         fi;;
   *)
         echo "NOT FOUND"
-        echo "Error: make sure Menhir version 20140422 or later is installed."
+        echo "Error: make sure Menhir version $MENHIR_REQUIRED or later is installed."
         missingtools=true;;
 esac
 
@@ -318,20 +319,6 @@ fi
 if $missingtools; then
   echo "One or several required tools are missing or too old.  Aborting."
   exit 2
-fi
-
-# Additional packages needed for cchecklink
-
-if $cchecklink; then
-  echo "Testing availability of ocaml-bitstring... " | tr -d '\n'
-  if ocamlfind query bitstring > /dev/null
-  then
-    echo "yes"
-  else 
-    echo "no"
-    echo "ocamlfind or ocaml-bitstring missing, cchecklink will not be built"
-    cchecklink=false
-  fi
 fi
 
 # Generate Makefile.config
@@ -363,7 +350,6 @@ CLINKER=$clinker
 LIBMATH=$libmath
 HAS_RUNTIME_LIB=$has_runtime_lib
 HAS_STANDARD_HEADERS=$has_standard_headers
-CCHECKLINK=$cchecklink
 ASM_SUPPORTS_CFI=$asm_supports_cfi
 ADVANCED_DEBUG=$advanced_debug
 EOF
@@ -377,7 +363,9 @@ cat >> Makefile.config <<'EOF'
 ARCH=
 
 # Hardware variant
-# MODEL=standard  # for PowerPC
+# MODEL=ppc32     # for plain PowerPC 
+# MODEL=ppc64     # for PowerPC with 64-bit instructions
+# MODEL=e5500     # for Freescale e5500 PowerPC variant
 # MODEL=armv6     # for ARM
 # MODEL=armv7a    # for ARM
 # MODEL=armv7r    # for ARM
@@ -482,7 +470,6 @@ CompCert configuration:
     Library files installed in.... $libdirexp
     Standard headers provided..... $has_standard_headers
     Standard headers installed in. $libdirexp/include
-    cchecklink tool supported..... $cchecklink
     Build command to use.......... $make
 
 If anything above looks wrong, please edit file ./Makefile.config to correct.

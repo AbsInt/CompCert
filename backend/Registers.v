@@ -81,7 +81,7 @@ Lemma set_reg_lessdef:
   forall r v1 v2 rs1 rs2,
   Val.lessdef v1 v2 -> regs_lessdef rs1 rs2 -> regs_lessdef (rs1#r <- v1) (rs2#r <- v2).
 Proof.
-  intros; red; intros. repeat rewrite Regmap.gsspec. 
+  intros; red; intros. repeat rewrite Regmap.gsspec.
   destruct (peq r0 r); auto.
 Qed.
 

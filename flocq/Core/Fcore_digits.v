@@ -21,7 +21,7 @@ Require Import ZArith.
 Require Import Zquot.
 Require Import Fcore_Zaux.
 
-(** Computes the number of bits (radix 2) of a positive integer.
+(** Number of bits (radix 2) of a positive integer.
 
 It serves as an upper bound on the number of digits to ensure termination.
 *)
@@ -466,6 +466,8 @@ now apply Hd.
 now rewrite 3!Zdigit_lt.
 Qed.
 
+(** Left and right shifts *)
+
 Definition Zscale n k :=
   if Zle_bool 0 k then (n * Zpower beta k)%Z else Z.quot n (Zpower beta (-k)).
 
@@ -544,6 +546,8 @@ unfold Zscale at 2.
 rewrite Zle_bool_true with (1 := Hk).
 now apply Zscale_mul_pow.
 Qed.
+
+(** Slice of an integer *)
 
 Definition Zslice n k1 k2 :=
   if Zle_bool 0 k2 then Z.rem (Zscale n (-k1)) (Zpower beta k2) else Z0.
@@ -756,6 +760,7 @@ Fixpoint Zdigits_aux (nb pow : Z) (n : nat) { struct n } : Z :=
 End digits_aux.
 
 (** Number of digits of an integer *)
+
 Definition Zdigits n :=
   match n with
   | Z0 => Z0
@@ -1011,7 +1016,7 @@ generalize (Zpower_gt_Zdigits e x).
 omega.
 Qed.
 
-(** Characterizes the number digits of a product.
+(** Number of digits of a product.
 
 This strong version is needed for proofs of division and square root
 algorithms, since they involve operation remainders.
@@ -1125,6 +1130,8 @@ now rewrite <- (Zabs_eq m) at 1.
 Qed.
 
 End Fcore_digits.
+
+(** Specialized version for computing the number of bits of an integer *)
 
 Section Zdigits2.
 

@@ -27,7 +27,7 @@ Require Import Conventions.
 
 If the current function had a non-empty stack block, it could be that
 the called function accesses it, for instance if a pointer into the
-stack block is passed as an argument.  In this case, it would be 
+stack block is passed as an argument.  In this case, it would be
 semantically incorrect to deallocate the stack block before the call,
 as [Itailcall] does.  Therefore, the optimization can only be performed if
 the stack block of the current function is empty, in which case it makes
@@ -47,7 +47,7 @@ The general pattern we recognize is therefore:
 The [is_return] function below recognizes this pattern.
 *)
 
-Fixpoint is_return (n: nat) (f: function) (pc: node) (rret: reg) 
+Fixpoint is_return (n: nat) (f: function) (pc: node) (rret: reg)
                    {struct n}: bool :=
   match n with
   | O => false

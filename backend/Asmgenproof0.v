@@ -69,7 +69,7 @@ Hint Resolve data_diff: asmgen.
 Lemma preg_of_not_SP:
   forall r, preg_of r <> SP.
 Proof.
-  intros. unfold preg_of; destruct r; simpl; congruence. 
+  intros. unfold preg_of; destruct r; simpl; congruence.
 Qed.
 
 Lemma preg_of_not_PC:
@@ -83,7 +83,7 @@ Hint Resolve preg_of_not_SP preg_of_not_PC: asmgen.
 Lemma nextinstr_pc:
   forall rs, (nextinstr rs)#PC = Val.add rs#PC Vone.
 Proof.
-  intros. apply Pregmap.gss. 
+  intros. apply Pregmap.gss.
 Qed.
 
 Lemma nextinstr_inv:
@@ -102,16 +102,16 @@ Lemma nextinstr_set_preg:
   forall rs m v,
   (nextinstr (rs#(preg_of m) <- v))#PC = Val.add rs#PC Vone.
 Proof.
-  intros. unfold nextinstr. rewrite Pregmap.gss. 
-  rewrite Pregmap.gso. auto. apply sym_not_eq. apply preg_of_not_PC. 
+  intros. unfold nextinstr. rewrite Pregmap.gss.
+  rewrite Pregmap.gso. auto. apply sym_not_eq. apply preg_of_not_PC.
 Qed.
 
 Lemma undef_regs_other:
-  forall r rl rs, 
+  forall r rl rs,
   (forall r', In r' rl -> r <> r') ->
   undef_regs rl rs r = rs r.
 Proof.
-  induction rl; simpl; intros. auto. 
+  induction rl; simpl; intros. auto.
   rewrite IHrl by auto. rewrite Pregmap.gso; auto.
 Qed.
 
@@ -129,9 +129,9 @@ Proof.
   induction rl; simpl; intros.
   tauto.
   destruct rl.
-  simpl. split. intros. intuition congruence. auto. 
-  rewrite IHrl. split. 
-  intros [A B]. intros. destruct H. congruence. auto. 
+  simpl. split. intros. intuition congruence. auto.
+  rewrite IHrl. split.
+  intros [A B]. intros. destruct H. congruence. auto.
   auto.
 Qed.
 
@@ -140,7 +140,7 @@ Lemma undef_regs_other_2:
   preg_notin r rl ->
   undef_regs (map preg_of rl) rs r = rs r.
 Proof.
-  intros. apply undef_regs_other. intros. 
+  intros. apply undef_regs_other. intros.
   exploit list_in_map_inv; eauto. intros [mr [A B]]. subst.
   rewrite preg_notin_charact in H. auto.
 Qed.
@@ -150,12 +150,12 @@ Lemma set_pregs_other_2:
   preg_notin r rl ->
   set_regs (map preg_of rl) vl rs r = rs r.
 Proof.
-  induction rl; simpl; intros. 
+  induction rl; simpl; intros.
   auto.
   destruct vl; auto.
   assert (r <> preg_of a) by (destruct rl; tauto).
   assert (preg_notin r rl) by (destruct rl; simpl; tauto).
-  rewrite IHrl by auto. apply Pregmap.gso; auto. 
+  rewrite IHrl by auto. apply Pregmap.gso; auto.
 Qed.
 
 (** * Agreement between Mach registers and processor registers *)
@@ -225,7 +225,7 @@ Lemma agree_set_mreg:
 Proof.
   intros. destruct H. split; auto.
   rewrite H1; auto. apply sym_not_equal. apply preg_of_not_SP.
-  intros. unfold Regmap.set. destruct (RegEq.eq r0 r). congruence. 
+  intros. unfold Regmap.set. destruct (RegEq.eq r0 r). congruence.
   rewrite H1. auto. apply preg_of_data.
   red; intros; elim n. eapply preg_of_injective; eauto.
 Qed.
@@ -253,12 +253,12 @@ Lemma agree_set_mregs:
   Val.lessdef_list vl vl' ->
   agree (Mach.set_regs rl vl ms) sp (set_regs (map preg_of rl) vl' rs).
 Proof.
-  induction rl; simpl; intros. 
+  induction rl; simpl; intros.
   auto.
-  inv H0. auto. apply IHrl; auto. 
-  eapply agree_set_mreg. eexact H. 
+  inv H0. auto. apply IHrl; auto.
+  eapply agree_set_mreg. eexact H.
   rewrite Pregmap.gss. auto.
-  intros. apply Pregmap.gso; auto. 
+  intros. apply Pregmap.gso; auto.
 Qed.
 
 Lemma agree_undef_nondata_regs:
@@ -281,13 +281,13 @@ Lemma agree_undef_regs:
   agree (Mach.undef_regs rl ms) sp rs'.
 Proof.
   intros. destruct H. split; auto.
-  rewrite <- agree_sp0. apply H0; auto. 
-  rewrite preg_notin_charact. intros. apply not_eq_sym. apply preg_of_not_SP. 
+  rewrite <- agree_sp0. apply H0; auto.
+  rewrite preg_notin_charact. intros. apply not_eq_sym. apply preg_of_not_SP.
   intros. destruct (In_dec mreg_eq r rl).
   rewrite Mach.undef_regs_same; auto.
-  rewrite Mach.undef_regs_other; auto. rewrite H0; auto. 
+  rewrite Mach.undef_regs_other; auto. rewrite H0; auto.
   apply preg_of_data.
-  rewrite preg_notin_charact. intros; red; intros. elim n. 
+  rewrite preg_notin_charact. intros; red; intros. elim n.
   exploit preg_of_injective; eauto. congruence.
 Qed.
 
@@ -299,10 +299,10 @@ Lemma agree_set_undef_mreg:
   agree (Regmap.set r v (Mach.undef_regs rl ms)) sp rs'.
 Proof.
   intros. apply agree_set_mreg with (rs'#(preg_of r) <- (rs#(preg_of r))); auto.
-  apply agree_undef_regs with rs; auto. 
-  intros. unfold Pregmap.set. destruct (PregEq.eq r' (preg_of r)). 
-  congruence. auto. 
-  intros. rewrite Pregmap.gso; auto. 
+  apply agree_undef_regs with rs; auto.
+  intros. unfold Pregmap.set. destruct (PregEq.eq r' (preg_of r)).
+  congruence. auto.
+  intros. rewrite Pregmap.gso; auto.
 Qed.
 
 Lemma agree_change_sp:
@@ -330,7 +330,7 @@ Proof.
   exploit Mem.loadv_extends; eauto. intros [v' [A B]].
   rewrite (sp_val _ _ _ H) in A.
   exists v'; split; auto.
-  econstructor. eauto. assumption. 
+  econstructor. eauto. assumption.
 Qed.
 
 Lemma extcall_args_match:
@@ -339,7 +339,7 @@ Lemma extcall_args_match:
   list_forall2 (Mach.extcall_arg ms m sp) ll vl ->
   exists vl', list_forall2 (Asm.extcall_arg rs m') ll vl' /\ Val.lessdef_list vl vl'.
 Proof.
-  induction 3; intros. 
+  induction 3; intros.
   exists (@nil val); split. constructor. constructor.
   exploit extcall_arg_match; eauto. intros [v1' [A B]].
   destruct IHlist_forall2 as [vl' [C D]].
@@ -374,11 +374,11 @@ Lemma builtin_args_match:
 Proof.
   induction 3; intros; simpl.
   exists (@nil val); split; constructor.
-  exploit (@eval_builtin_arg_lessdef _ ge ms (fun r => rs (preg_of r))); eauto. 
+  exploit (@eval_builtin_arg_lessdef _ ge ms (fun r => rs (preg_of r))); eauto.
   intros; eapply preg_val; eauto.
   intros (v1' & A & B).
   destruct IHlist_forall2 as [vl' [C D]].
-  exists (v1' :: vl'); split; constructor; auto. apply builtin_arg_match; auto. 
+  exists (v1' :: vl'); split; constructor; auto. apply builtin_arg_match; auto.
 Qed.
 
 Lemma agree_set_res:
@@ -391,7 +391,7 @@ Proof.
 - eapply agree_set_mreg; eauto. rewrite Pregmap.gss. auto.
   intros. apply Pregmap.gso; auto.
 - auto.
-- apply IHres2. apply IHres1. auto. 
+- apply IHres2. apply IHres1. auto.
   apply Val.hiword_lessdef; auto.
   apply Val.loword_lessdef; auto.
 Qed.
@@ -452,7 +452,7 @@ Remark code_tail_bounds_1:
   code_tail ofs fn c -> 0 <= ofs <= list_length_z fn.
 Proof.
   induction 1; intros; simpl.
-  generalize (list_length_z_pos c). omega. 
+  generalize (list_length_z_pos c). omega.
   rewrite list_length_z_cons. omega.
 Qed.
 
@@ -462,7 +462,7 @@ Remark code_tail_bounds_2:
 Proof.
   assert (forall ofs fn c, code_tail ofs fn c ->
           forall i c', c = i :: c' -> 0 <= ofs < list_length_z fn).
-  induction 1; intros; simpl. 
+  induction 1; intros; simpl.
   rewrite H. rewrite list_length_z_cons. generalize (list_length_z_pos c'). omega.
   rewrite list_length_z_cons. generalize (IHcode_tail _ _ H0). omega.
   eauto.
@@ -490,7 +490,7 @@ Proof.
   intros. rewrite Int.add_unsigned.
   change (Int.unsigned Int.one) with 1.
   rewrite Int.unsigned_repr. apply code_tail_next with i; auto.
-  generalize (code_tail_bounds_2 _ _ _ _ H0). omega. 
+  generalize (code_tail_bounds_2 _ _ _ _ H0). omega.
 Qed.
 
 (** [transl_code_at_pc pc fb f c ep tf tc] holds if the code pointer [pc] points
@@ -526,8 +526,8 @@ Lemma transl_code'_transl_code:
   forall f il ep,
   transl_code' f il ep = transl_code f il ep.
 Proof.
-  intros. unfold transl_code'. rewrite transl_code_rec_transl_code. 
-  destruct (transl_code f il ep); auto. 
+  intros. unfold transl_code'. rewrite transl_code_rec_transl_code.
+  destruct (transl_code f il ep); auto.
 Qed.
 
 (** Predictor for return addresses in generated Asm code.
@@ -584,7 +584,7 @@ Hypothesis transf_function_inv:
 Hypothesis transf_function_len:
   forall f tf, transf_function f = OK tf -> list_length_z (fn_code tf) <= Int.max_unsigned.
 
-Lemma transl_code_tail: 
+Lemma transl_code_tail:
   forall f c1 c2, is_tail c1 c2 ->
   forall tc2 ep2, transl_code f c2 ep2 = OK tc2 ->
   exists tc1, exists ep1, transl_code f c1 ep1 = OK tc1 /\ is_tail tc1 tc2.
@@ -592,7 +592,7 @@ Proof.
   induction 1; simpl; intros.
   exists tc2; exists ep2; split; auto with coqlib.
   monadInv H0. exploit IHis_tail; eauto. intros [tc1 [ep1 [A B]]].
-  exists tc1; exists ep1; split. auto. 
+  exists tc1; exists ep1; split. auto.
   apply is_tail_trans with x. auto. eapply transl_instr_tail; eauto.
 Qed.
 
@@ -604,17 +604,17 @@ Proof.
 + exploit transf_function_inv; eauto. intros (tc1 & ep1 & TR1 & TL1).
   exploit transl_code_tail; eauto. intros (tc2 & ep2 & TR2 & TL2).
 Opaque transl_instr.
-  monadInv TR2. 
+  monadInv TR2.
   assert (TL3: is_tail x (fn_code tf)).
-  { apply is_tail_trans with tc1; auto. 
+  { apply is_tail_trans with tc1; auto.
     apply is_tail_trans with tc2; auto.
     eapply transl_instr_tail; eauto. }
   exploit is_tail_code_tail. eexact TL3. intros [ofs CT].
-  exists (Int.repr ofs). red; intros. 
-  rewrite Int.unsigned_repr. congruence. 
+  exists (Int.repr ofs). red; intros.
+  rewrite Int.unsigned_repr. congruence.
   exploit code_tail_bounds_1; eauto.
-  apply transf_function_len in TF. omega. 
-+ exists Int.zero; red; intros. congruence. 
+  apply transf_function_len in TF. omega.
++ exists Int.zero; red; intros. congruence.
 Qed.
 
 End RETADDR_EXISTS.
@@ -641,9 +641,9 @@ Lemma return_address_offset_correct:
   return_address_offset f c ofs' ->
   ofs' = ofs.
 Proof.
-  intros. inv H. red in H0.  
+  intros. inv H. red in H0.
   exploit code_tail_unique. eexact H12. eapply H0; eauto. intro.
-  rewrite <- (Int.repr_unsigned ofs). 
+  rewrite <- (Int.repr_unsigned ofs).
   rewrite <- (Int.repr_unsigned ofs').
   congruence.
 Qed.
@@ -662,26 +662,26 @@ Lemma label_pos_code_tail:
   forall lbl c pos c',
   find_label lbl c = Some c' ->
   exists pos',
-  label_pos lbl pos c = Some pos' 
+  label_pos lbl pos c = Some pos'
   /\ code_tail (pos' - pos) c c'
   /\ pos < pos' <= pos + list_length_z c.
 Proof.
-  induction c. 
+  induction c.
   simpl; intros. discriminate.
   simpl; intros until c'.
   case (is_label lbl a).
   intro EQ; injection EQ; intro; subst c'.
   exists (pos + 1). split. auto. split.
-  replace (pos + 1 - pos) with (0 + 1) by omega. constructor. constructor. 
-  rewrite list_length_z_cons. generalize (list_length_z_pos c). omega. 
+  replace (pos + 1 - pos) with (0 + 1) by omega. constructor. constructor.
+  rewrite list_length_z_cons. generalize (list_length_z_pos c). omega.
   intros. generalize (IHc (pos + 1) c' H). intros [pos' [A [B C]]].
   exists pos'. split. auto. split.
   replace (pos' - pos) with ((pos' - (pos + 1)) + 1) by omega.
-  constructor. auto. 
+  constructor. auto.
   rewrite list_length_z_cons. omega.
 Qed.
 
-(** Helper lemmas to reason about 
+(** Helper lemmas to reason about
 - the "code is tail of" property
 - correct translation of labels. *)
 
@@ -697,7 +697,7 @@ Qed.
 Lemma tail_nolabel_trans:
   forall c1 c2 c3, tail_nolabel c2 c3 -> tail_nolabel c1 c2 -> tail_nolabel c1 c3.
 Proof.
-  intros. destruct H; destruct H0; split. 
+  intros. destruct H; destruct H0; split.
   eapply is_tail_trans; eauto.
   intros. rewrite H1; auto.
 Qed.
@@ -711,7 +711,7 @@ Lemma tail_nolabel_cons:
   forall i c k,
   nolabel i -> tail_nolabel k c -> tail_nolabel k (i :: c).
 Proof.
-  intros. destruct H0. split. 
+  intros. destruct H0. split.
   constructor; auto.
   intros. simpl. rewrite <- H1. destruct i; reflexivity || contradiction.
 Qed.
@@ -745,7 +745,7 @@ Variable fn: function.
   Instructions are taken from the first list instead of being fetched
   from memory. *)
 
-Inductive exec_straight: code -> regset -> mem -> 
+Inductive exec_straight: code -> regset -> mem ->
                          code -> regset -> mem -> Prop :=
   | exec_straight_one:
       forall i1 c rs1 m1 rs2 m2,
@@ -811,18 +811,18 @@ Lemma exec_straight_steps_1:
 Proof.
   induction 1; intros.
   apply plus_one.
-  econstructor; eauto. 
+  econstructor; eauto.
   eapply find_instr_tail. eauto.
   eapply plus_left'.
-  econstructor; eauto. 
+  econstructor; eauto.
   eapply find_instr_tail. eauto.
-  apply IHexec_straight with b (Int.add ofs Int.one). 
+  apply IHexec_straight with b (Int.add ofs Int.one).
   auto. rewrite H0. rewrite H3. reflexivity.
-  auto. 
+  auto.
   apply code_tail_next_int with i; auto.
   traceEq.
 Qed.
-    
+
 Lemma exec_straight_steps_2:
   forall c rs m c' rs' m',
   exec_straight c rs m c' rs' m' ->
@@ -840,7 +840,7 @@ Proof.
   rewrite H0. rewrite H2. auto.
   apply code_tail_next_int with i1; auto.
   apply IHexec_straight with (Int.add ofs Int.one).
-  auto. rewrite H0. rewrite H3. reflexivity. auto. 
+  auto. rewrite H0. rewrite H3. reflexivity. auto.
   apply code_tail_next_int with i; auto.
 Qed.
 

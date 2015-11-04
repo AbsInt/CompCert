@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Recognition of combined operations, addressing modes and conditions 
+(** Recognition of combined operations, addressing modes and conditions
   during the [CSE] phase. *)
 
 Require Import Coqlib.
@@ -98,7 +98,7 @@ Function combine_op (op: operation) (args: list valnum) : option(operation * lis
       end
   | Oandimm n, x :: nil =>
       match get x with
-      | Some(Op (Oandimm m) ys) => 
+      | Some(Op (Oandimm m) ys) =>
           Some(let p := Int.and m n in
                if Int.eq p m then (Omove, x :: nil) else (Oandimm p, ys))
       | _ => None

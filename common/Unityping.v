@@ -96,7 +96,7 @@ Definition move (e: typenv) (r1 r2: positive) : res (bool * typenv) :=
 (** Solve the remaining subtyping constraints by iteration. *)
 
 Fixpoint solve_rec (e: typenv) (changed: bool) (q: list constraint) : res (typenv * bool) :=
-  match q with 
+  match q with
   | nil =>
       OK (e, changed)
   | (r1, r2) :: q' =>
@@ -112,7 +112,7 @@ Lemma move_shape:
   /\ (changed = true -> e'.(te_equ) = e.(te_equ)).
 Proof.
   unfold move; intros.
-  destruct (peq r1 r2). inv H. auto. 
+  destruct (peq r1 r2). inv H. auto.
   destruct e.(te_typ)!r1 as [ty1|]; destruct e.(te_typ)!r2 as [ty2|]; inv H; simpl.
   destruct (T.eq ty1 ty2); inv H1. auto.
   auto.
@@ -163,8 +163,8 @@ Function solve_constraints (e: typenv) {measure weight_typenv e}: res typenv :=
   | Error msg => Error msg
   end.
 Proof.
-  intros. exploit length_solve_rec; eauto. simpl. intros. 
-  unfold weight_typenv. omega. 
+  intros. exploit length_solve_rec; eauto. simpl. intros.
+  unfold weight_typenv. omega.
 Qed.
 
 Definition typassign := positive -> T.t.
@@ -183,7 +183,7 @@ Definition satisf (te: typassign) (e: typenv) : Prop :=
 
 Lemma satisf_initial: forall te, satisf te initial.
 Proof.
-  unfold initial; intros; split; simpl; intros. 
+  unfold initial; intros; split; simpl; intros.
   rewrite PTree.gempty in H; discriminate.
   contradiction.
 Qed.
@@ -235,11 +235,11 @@ Proof.
   destruct (te_typ e)!r1 as [ty1|] eqn:E1;
   destruct (te_typ e)!r2 as [ty2|] eqn:E2.
 - destruct (T.eq ty1 ty2); inv H. split; auto.
-- inv H; simpl in *; split; auto. intros. apply P. 
+- inv H; simpl in *; split; auto. intros. apply P.
   rewrite PTree.gso by congruence. auto.
-- inv H; simpl in *; split; auto. intros. apply P. 
+- inv H; simpl in *; split; auto. intros. apply P.
   rewrite PTree.gso by congruence. auto.
-- inv H; simpl in *; split; auto. 
+- inv H; simpl in *; split; auto.
 Qed.
 
 Hint Resolve move_incr: ty.
@@ -253,11 +253,11 @@ Proof.
   destruct (te_typ e)!r1 as [ty1|] eqn:E1;
   destruct (te_typ e)!r2 as [ty2|] eqn:E2.
 - destruct (T.eq ty1 ty2); inv H. erewrite ! P by eauto. auto.
-- inv H; simpl in *. rewrite (P r1 ty1). rewrite (P r2 ty1). auto. 
+- inv H; simpl in *. rewrite (P r1 ty1). rewrite (P r2 ty1). auto.
   apply PTree.gss. rewrite PTree.gso by congruence. auto.
-- inv H; simpl in *. rewrite (P r1 ty2). rewrite (P r2 ty2). auto. 
+- inv H; simpl in *. rewrite (P r1 ty2). rewrite (P r2 ty2). auto.
   rewrite PTree.gso by congruence. auto. apply PTree.gss.
-- inv H; simpl in *. apply Q; auto. 
+- inv H; simpl in *. apply Q; auto.
 Qed.
 
 Lemma solve_rec_incr:
@@ -271,12 +271,12 @@ Qed.
 
 Lemma solve_rec_sound:
   forall te r1 r2 q e changed e' changed',
-  solve_rec e changed q = OK(e', changed') -> In (r1, r2) q -> satisf te e' -> 
+  solve_rec e changed q = OK(e', changed') -> In (r1, r2) q -> satisf te e' ->
   te r1 = te r2.
 Proof.
   induction q; simpl; intros.
 - contradiction.
-- destruct a as [r3 r4]; monadInv H. destruct H0. 
+- destruct a as [r3 r4]; monadInv H. destruct H0.
   + inv H. eapply move_sound; eauto. eapply solve_rec_incr; eauto.
   + eapply IHq; eauto with ty.
 Qed.
@@ -286,7 +286,7 @@ Lemma move_false:
   move e r1 r2 = OK(false, e') ->
   te_typ e' = te_typ e /\ makeassign e r1 = makeassign e r2.
 Proof.
-  unfold move; intros. 
+  unfold move; intros.
   destruct (peq r1 r2). inv H. split; auto.
   unfold makeassign;
   destruct (te_typ e)!r1 as [ty1|] eqn:E1;
@@ -300,17 +300,17 @@ Qed.
 Lemma solve_rec_false:
   forall r1 r2 q e changed e',
   solve_rec e changed q = OK(e', false) ->
-  changed = false /\ 
+  changed = false /\
   (In (r1, r2) q -> makeassign e r1 = makeassign e r2).
 Proof.
   induction q; simpl; intros.
-- inv H. tauto. 
+- inv H. tauto.
 - destruct a as [r3 r4]; monadInv H.
   exploit IHq; eauto. intros [P Q].
   destruct changed; try discriminate. destruct x; try discriminate.
   exploit move_false; eauto. intros [U V].
-  split. auto. intros [A|A]. inv A. auto. exploit Q; auto. 
-  unfold makeassign; rewrite U; auto.    
+  split. auto. intros [A|A]. inv A. auto. exploit Q; auto.
+  unfold makeassign; rewrite U; auto.
 Qed.
 
 Lemma solve_constraints_incr:
@@ -329,7 +329,7 @@ Proof.
   intros e0; functional induction (solve_constraints e0); intros.
 - inv H. split; intros.
   unfold makeassign; rewrite H. split; auto with ty.
-  exploit solve_rec_false. eauto. intros [A B]. eapply B; eauto. 
+  exploit solve_rec_false. eauto. intros [A B]. eapply B; eauto.
 - eauto.
 - discriminate.
 Qed.
@@ -337,7 +337,7 @@ Qed.
 Theorem solve_sound:
   forall e te, solve e = OK te -> satisf te e.
 Proof.
-  unfold solve; intros. monadInv H. 
+  unfold solve; intros. monadInv H.
   eapply solve_constraints_incr. eauto. eapply solve_constraints_sound; eauto.
 Qed.
 
@@ -347,12 +347,12 @@ Lemma set_complete:
   forall te e x ty,
   satisf te e -> te x = ty -> exists e', set e x ty = OK e' /\ satisf te e'.
 Proof.
-  unfold set; intros. generalize H; intros [P Q]. 
-  destruct (te_typ e)!x as [ty1|] eqn:E. 
-- replace ty1 with ty. rewrite dec_eq_true. exists e; auto. 
-  exploit P; eauto. congruence. 
-- econstructor; split; eauto. split; simpl; intros; auto. 
-  rewrite PTree.gsspec in H1. destruct (peq x0 x). congruence. eauto. 
+  unfold set; intros. generalize H; intros [P Q].
+  destruct (te_typ e)!x as [ty1|] eqn:E.
+- replace ty1 with ty. rewrite dec_eq_true. exists e; auto.
+  exploit P; eauto. congruence.
+- econstructor; split; eauto. split; simpl; intros; auto.
+  rewrite PTree.gsspec in H1. destruct (peq x0 x). congruence. eauto.
 Qed.
 
 Lemma set_list_complete:
@@ -379,16 +379,16 @@ Proof.
   destruct (te_typ e)!r1 as [ty1|] eqn:E1;
   destruct (te_typ e)!r2 as [ty2|] eqn:E2.
 - replace ty2 with ty1. rewrite dec_eq_true. econstructor; econstructor; eauto.
-  exploit (P r1); eauto. exploit (P r2); eauto. congruence. 
-- econstructor; econstructor; split; eauto. 
-  split; simpl; intros; auto. rewrite PTree.gsspec in H1. destruct (peq x r2). 
-  inv H1. rewrite <- H0. eauto. 
+  exploit (P r1); eauto. exploit (P r2); eauto. congruence.
+- econstructor; econstructor; split; eauto.
+  split; simpl; intros; auto. rewrite PTree.gsspec in H1. destruct (peq x r2).
+  inv H1. rewrite <- H0. eauto.
   eauto.
-- econstructor; econstructor; split; eauto. 
-  split; simpl; intros; auto. rewrite PTree.gsspec in H1. destruct (peq x r1). 
-  inv H1. rewrite H0. eauto. 
+- econstructor; econstructor; split; eauto.
+  split; simpl; intros; auto. rewrite PTree.gsspec in H1. destruct (peq x r1).
+  inv H1. rewrite H0. eauto.
   eauto.
-- econstructor; econstructor; split; eauto. 
+- econstructor; econstructor; split; eauto.
   split; eauto.
 Qed.
 
@@ -400,7 +400,7 @@ Lemma solve_rec_complete:
 Proof.
   induction q; simpl; intros.
 - econstructor; econstructor; eauto.
-- destruct a as [r1 r2]. 
+- destruct a as [r1 r2].
   exploit (move_complete te e r1 r2); auto. intros (changed1 & e1 & A & B).
   exploit (IHq e1 (changed || changed1)); auto. intros (e' & changed' & C & D).
   exists e'; exists changed'. rewrite A; simpl; rewrite C; auto.
@@ -409,26 +409,26 @@ Qed.
 Lemma solve_constraints_complete:
   forall te e, satisf te e -> exists e', solve_constraints e = OK e' /\ satisf te e'.
 Proof.
-  intros te e. functional induction (solve_constraints e); intros. 
+  intros te e. functional induction (solve_constraints e); intros.
 - exists e; auto.
 - exploit (solve_rec_complete te (te_equ e) {| te_typ := te_typ e; te_equ := nil |} false).
   destruct H; split; auto. simpl; tauto.
   destruct H; auto.
-  intros (e1 & changed1 & P & Q). 
-  apply IHr. congruence. 
+  intros (e1 & changed1 & P & Q).
+  apply IHr. congruence.
 - exploit (solve_rec_complete te (te_equ e) {| te_typ := te_typ e; te_equ := nil |} false).
   destruct H; split; auto. simpl; tauto.
   destruct H; auto.
-  intros (e1 & changed1 & P & Q). 
+  intros (e1 & changed1 & P & Q).
   congruence.
 Qed.
 
 Lemma solve_complete:
   forall te e, satisf te e -> exists te', solve e = OK te'.
 Proof.
-  intros. unfold solve. 
-  destruct (solve_constraints_complete te e H) as (e' & P & Q). 
-  econstructor. rewrite P. simpl. eauto. 
+  intros. unfold solve.
+  destruct (solve_constraints_complete te e H) as (e' & P & Q).
+  econstructor. rewrite P. simpl. eauto.
 Qed.
 
 End UniSolver.

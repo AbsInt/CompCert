@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Recognition of combined operations, addressing modes and conditions 
+(** Recognition of combined operations, addressing modes and conditions
   during the [CSE] phase. *)
 
 Require Import Coqlib.
@@ -34,7 +34,7 @@ Hypothesis get_sound: forall v rhs, get v = Some rhs -> rhs_eval_to valu ge sp m
 Lemma get_op_sound:
   forall v op vl, get v = Some (Op op vl) -> eval_operation ge sp op (map valu vl) m = Some (valu v).
 Proof.
-  intros. exploit get_sound; eauto. intros REV; inv REV; auto. 
+  intros. exploit get_sound; eauto. intros REV; inv REV; auto.
 Qed.
 
 Ltac UseGetSound :=
@@ -42,7 +42,7 @@ Ltac UseGetSound :=
   | [ H: get _ = Some _ |- _ ] =>
       let x := fresh "EQ" in (generalize (get_op_sound _ _ _ H); intros x; simpl in x; FuncInv)
   end.
-  
+
 Lemma combine_compimm_ne_0_sound:
   forall x cond args,
   combine_compimm_ne_0 get x = Some(cond, args) ->
@@ -51,11 +51,11 @@ Lemma combine_compimm_ne_0_sound:
 Proof.
   intros until args. functional induction (combine_compimm_ne_0 get x); intros EQ; inv EQ.
   (* of cmp *)
-  UseGetSound. rewrite <- H. 
+  UseGetSound. rewrite <- H.
   destruct (eval_condition cond (map valu args) m); simpl; auto. destruct b; auto.
   (* of and *)
-  UseGetSound. rewrite <- H. 
-  destruct v; simpl; auto. 
+  UseGetSound. rewrite <- H.
+  destruct v; simpl; auto.
 Qed.
 
 Lemma combine_compimm_eq_0_sound:
@@ -67,10 +67,10 @@ Proof.
   intros until args. functional induction (combine_compimm_eq_0 get x); intros EQ; inv EQ.
   (* of cmp *)
   UseGetSound. rewrite <- H.
-  rewrite eval_negate_condition. 
+  rewrite eval_negate_condition.
   destruct (eval_condition c (map valu args) m); simpl; auto. destruct b; auto.
   (* of and *)
-  UseGetSound. rewrite <- H. destruct v; auto. 
+  UseGetSound. rewrite <- H. destruct v; auto.
 Qed.
 
 Lemma combine_compimm_eq_1_sound:
@@ -81,7 +81,7 @@ Lemma combine_compimm_eq_1_sound:
 Proof.
   intros until args. functional induction (combine_compimm_eq_1 get x); intros EQ; inv EQ.
   (* of cmp *)
-  UseGetSound. rewrite <- H. 
+  UseGetSound. rewrite <- H.
   destruct (eval_condition cond (map valu args) m); simpl; auto. destruct b; auto.
 Qed.
 
@@ -93,7 +93,7 @@ Lemma combine_compimm_ne_1_sound:
 Proof.
   intros until args. functional induction (combine_compimm_ne_1 get x); intros EQ; inv EQ.
   (* of cmp *)
-  UseGetSound. rewrite <- H. 
+  UseGetSound. rewrite <- H.
   rewrite eval_negate_condition.
   destruct (eval_condition c (map valu args) m); simpl; auto. destruct b; auto.
 Qed.
@@ -129,7 +129,7 @@ Theorem combine_addr_sound:
 Proof.
   intros. functional inversion H; subst.
   (* indexed - lea *)
-  UseGetSound. simpl. eapply eval_offset_addressing_total; eauto. 
+  UseGetSound. simpl. eapply eval_offset_addressing_total; eauto.
 Qed.
 
 Theorem combine_op_sound:
@@ -139,7 +139,7 @@ Theorem combine_op_sound:
 Proof.
   intros. functional inversion H; subst.
 (* lea-lea *)
-  simpl. eapply combine_addr_sound; eauto. 
+  simpl. eapply combine_addr_sound; eauto.
 (* andimm - andimm *)
   UseGetSound; simpl. rewrite <- H0. rewrite Val.and_assoc. auto.
 (* orimm - orimm *)

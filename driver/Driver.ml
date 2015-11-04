@@ -20,6 +20,9 @@ open Timing
 
 let stdlib_path = ref Configuration.stdlib_path
 
+(* Optional sdump suffix *)
+let sdump_suffix = ref ".json"
+
 (* Invocation of external tools *)
 
 let command ?stdout args =
@@ -144,17 +147,7 @@ let parse_c_file sourcename ifile =
   end;
   csyntax,None
 
-(* Dump Asm code in binary format for the validator *)
-
-let sdump_magic_number = "CompCertSDUMP" ^ Version.version
-
-let dump_asm asm destfile =
-  let oc = open_out_bin destfile in
-  output_string oc sdump_magic_number;
-  output_value oc asm;
-  output_value oc Camlcoq.string_of_atom;
-  output_value oc C2C.decl_atom;
-  close_out oc
+(* Dump Asm code in asm format for the validator *)
 
 let jdump_magic_number = "CompCertJDUMP" ^ Version.version
 
@@ -188,12 +181,9 @@ let compile_c_ast sourcename csyntax ofile debug =
     | Errors.Error msg ->
         eprintf "%s: %a" sourcename print_error msg;
         exit 2 in
-  (* Dump Asm in binary and JSON format *)  
+  (* Dump Asm in binary and JSON format *)
   if !option_sdump then
-    begin
-      dump_asm asm (output_filename sourcename ".c" ".sdump");
-      dump_jasm asm (output_filename sourcename ".c" ".json")
-    end;
+      dump_jasm asm (output_filename sourcename ".c" !sdump_suffix);
   (* Print Asm in text form *)
   let oc = open_out ofile in
   PrintAsm.print_program oc asm debug;
@@ -444,6 +434,7 @@ Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fnone         Turn off all language support options above
 Debugging options:
   -g             Generate debugging information
+  -gdwarf-       (GCC only) Generate debug information in DWARF v2 or DWARF v3
   -frename-static Rename static functions and declarations
 Optimization options: (use -fno-<opt> to turn off -f<opt>)
   -O             Optimize the compiled code [on by default]
@@ -482,7 +473,7 @@ Tracing options:
   -dltl          Save LTL after register allocation in <file>.ltl
   -dmach         Save generated Mach code in <file>.mach
   -dasm          Save generated assembly in <file>.s
-  -sdump         Save info for post-linking validation in <file>.sdump
+  -sdump         Save info for post-linking validation in <file>.json
 General options:
   -stdlib <dir>  Set the path of the Compcert run-time library
   -v             Print external commands before invoking them
@@ -518,7 +509,7 @@ let unset_all opts = List.iter (fun r -> r := false) opts
 let num_source_files = ref 0
 
 let num_input_files = ref 0
-    
+
 let cmdline_actions =
   let f_opt name ref =
     [Exact("-f" ^ name), Set ref; Exact("-fno-" ^ name), Unset ref] in
@@ -549,7 +540,12 @@ let cmdline_actions =
   Exact "-fall", Self (fun _ -> set_all language_support_options);
   Exact "-fnone", Self (fun _ -> unset_all language_support_options);
 (* Debugging options *)
-  Exact "-g", Self (fun s -> option_g := true);
+  Exact "-g", Self (fun s -> option_g := true;
+    option_gdwarf := 3);
+  Exact "-gdwarf-2", Self (fun s -> option_g:=true;
+    option_gdwarf := 2);
+  Exact "-gdwarf-3", Self (fun s -> option_g := true;
+    option_gdwarf := 3);
   Exact "-frename-static", Self (fun s -> option_rename_static:= true);
 (* Code generation options -- more below *)
   Exact "-O0", Self (fun _ -> unset_all optimization_options);
@@ -570,10 +566,12 @@ let cmdline_actions =
 (* Linking options *)
   Prefix "-l", Self push_linker_arg;
   Prefix "-L", Self push_linker_arg;
-  Exact "-T", String (fun s -> if Configuration.system = "diab" then 
-    push_linker_arg ("-Wm"^s) 
-  else
-    push_linker_arg ("-T "^s));
+  Exact "-T", String (fun s -> if Configuration.system = "diab" then
+    push_linker_arg ("-Wm"^s)
+  else begin
+      push_linker_arg ("-T");
+      push_linker_arg(s)
+    end);
   Prefix "-Wl,", Self push_linker_arg;
 (* Tracing options *)
   Exact "-dparse", Set option_dparse;
@@ -586,6 +584,7 @@ let cmdline_actions =
   Exact "-dmach", Set option_dmach;
   Exact "-dasm", Set option_dasm;
   Exact "-sdump", Set option_sdump;
+  Exact "-sdump-suffix", String (fun s -> option_sdump := true; sdump_suffix:= s);
 (* General options *)
   Exact "-v", Set option_v;
   Exact "-stdlib", String(fun s -> stdlib_path := s);

@@ -16,6 +16,7 @@
 val warn_error : bool ref
 val reset : unit -> unit
 exception Abort
+val fatal_error_raw : ('a, out_channel, unit, 'b) format4 -> 'a
 val fatal_error : ('a, Format.formatter, unit, unit, unit, 'b) format6 -> 'a
 val error : ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
 val warning : ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a

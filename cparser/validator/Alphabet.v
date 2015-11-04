@@ -193,7 +193,7 @@ Program Instance NumberedAlphabet {A:Type} (N:Numbered A) : Alphabet A :=
   { AlphabetComparable :=
       {| compare := fun x y => compare31 (inj x) (inj y) |};
     AlphabetFinite :=
-      {| all_list := fst (iter_int31 inj_bound _ 
+      {| all_list := fst (iter_int31 inj_bound _
         (fun p => (cons (surj (snd p)) (fst p), incr (snd p))) ([], 0%int31)) |} }.
 Next Obligation. apply Zcompare_antisym. Qed.
 Next Obligation.
@@ -229,7 +229,7 @@ rewrite <- surj_inj_compat, <- phi_inv_phi with (inj x0), H0, phi_inv_phi; refle
 replace (Zsucc (phi i)) with (2 ^ Z_of_nat size)%Z in H0 by omega.
 rewrite Z_mod_same_full in H0.
 exfalso; omega.
-exfalso; inversion Heqp; subst; 
+exfalso; inversion Heqp; subst;
   pose proof (phi_bounded (inj x)); change (phi 0) with 0%Z in H; omega.
 clear H.
 rewrite <- phi_inv_phi with i, <- phi_inv_phi with inj_bound; f_equal.

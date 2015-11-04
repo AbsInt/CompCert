@@ -21,7 +21,7 @@ open AST
 open Camlcoq
 open Datatypes
 open Integers
-       
+
 exception Error of string
 
 (* Useful constants and helper functions *)
@@ -33,16 +33,16 @@ let _4 = coqint_of_camlint 4l
 let _8 = coqint_of_camlint 8l
 
 let stack_alignment () =
-  if Configuration.system = "macoxs" then 16
+  if Configuration.system = "macosx" then 16
   else 8
-	 
+
 (* SP adjustment to allocate or free a stack frame *)
-			   
+
 let int32_align n a =
   if n >= 0l
   then Int32.logand (Int32.add n (Int32.of_int (a-1))) (Int32.of_int (-a))
   else Int32.logand n (Int32.of_int (-a))
-		    
+
 let sp_adjustment sz =
   let sz = camlint_of_coqint sz in
   (* Preserve proper alignment of the stack *)
@@ -50,9 +50,9 @@ let sp_adjustment sz =
   (* The top 4 bytes have already been allocated by the "call" instruction. *)
   let sz = Int32.sub sz 4l in
   sz
-			   
-			   
-(* Built-ins.  They come in two flavors: 
+
+
+(* Built-ins.  They come in two flavors:
    - annotation statements: take their arguments in registers or stack
    locations; generate no code;
    - inlined by the compiler: take their arguments in arbitrary
@@ -88,7 +88,7 @@ let offset_addressing (Addrmode(base, ofs, cst)) delta =
 
 let linear_addr reg ofs = Addrmode(Some reg, None, Coq_inl ofs)
 let global_addr id ofs = Addrmode(None, None, Coq_inr(id, ofs))
-			   
+
 (* Handling of memcpy *)
 
 (* Unaligned memory accesses are quite fast on IA32, so use large
@@ -128,7 +128,7 @@ let expand_builtin_memcpy sz al args =
   if sz <= 32
   then expand_builtin_memcpy_small sz al src dst
   else expand_builtin_memcpy_big sz al src dst
- 	   
+
 (* Handling of volatile reads and writes *)
 
 let expand_builtin_vload_common chunk addr res =
@@ -197,9 +197,9 @@ let expand_builtin_vstore chunk args =
      expand_builtin_vstore_common chunk addr src
        (if Asmgen.addressing_mentions addr EAX then ECX else EAX)
   | _ -> assert false
-		 
+
 (* Handling of varargs *)
-		 
+
 let expand_builtin_va_start r =
   if not !current_function.fn_sig.sig_cc.cc_vararg then
     invalid_arg "Fatal error: va_start used in non-vararg function";
@@ -231,7 +231,7 @@ let expand_fma args res i132 i213 i231 =
       end
   | _ ->
      invalid_arg ("ill-formed fma builtin")
-	   
+
 (* Handling of compiler-inlined builtins *)
 
 let expand_builtin_inline name args res =
@@ -348,7 +348,7 @@ let expand_builtin_inline name args res =
      raise (Error ("unrecognized builtin " ^ name))
 
 (* Expansion of instructions *)
-       
+
 let expand_instruction instr =
   match instr with
   | Pallocframe (sz, ofs_ra, ofs_link) ->
@@ -368,7 +368,7 @@ let expand_instruction instr =
      begin
        match ef with
        | EF_builtin(name, sg) ->
-	  expand_builtin_inline (extern_atom name) args res
+	  expand_builtin_inline (camlstring_of_coqstring name) args res
        | EF_vload chunk ->
           expand_builtin_vload chunk args res
        | EF_vstore chunk ->
@@ -379,25 +379,54 @@ let expand_instruction instr =
 	    (Int32.to_int (camlint_of_coqint al))
             args
        | EF_annot_val(txt, targ) ->
-          expand_annot_val txt targ args res      
+          expand_annot_val txt targ args res
        | EF_annot _ | EF_debug _ | EF_inline_asm _ ->
           emit instr
        | _ ->
           assert false
      end
   | _ -> emit instr
-       
-let expand_function fn =
+
+let int_reg_to_dwarf = function
+  | EAX -> 0
+  | EBX -> 3
+  | ECX -> 1
+  | EDX -> 2
+  | ESI -> 6
+  | EDI -> 7
+  | EBP -> 5
+  | ESP -> 4
+
+let float_reg_to_dwarf = function
+  | XMM0 -> 21
+  | XMM1 -> 22
+  | XMM2 -> 23
+  | XMM3 -> 24
+  | XMM4 -> 25
+  | XMM5 -> 26
+  | XMM6 -> 27
+  | XMM7 -> 28
+
+let preg_to_dwarf = function
+   | IR r -> int_reg_to_dwarf r
+   | FR r -> float_reg_to_dwarf r
+   | _ -> assert false
+
+
+let expand_function id fn =
   try
     set_current_function fn;
-    List.iter expand_instruction fn.fn_code;
+    if !Clflags.option_g then
+      expand_debug id 4 preg_to_dwarf expand_instruction fn.fn_code
+    else
+      List.iter expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->
     Errors.Error (Errors.msg (coqstring_of_camlstring s))
 
-let expand_fundef = function
+let expand_fundef id = function
   | Internal f ->
-      begin match expand_function f with
+      begin match expand_function id f with
       | Errors.OK tf -> Errors.OK (Internal tf)
       | Errors.Error msg -> Errors.Error msg
       end
@@ -405,23 +434,4 @@ let expand_fundef = function
       Errors.OK (External ef)
 
 let expand_program (p: Asm.program) : Asm.program Errors.res =
-  AST.transform_partial_program expand_fundef p
-let expand_function fn =
-  try
-    set_current_function fn;
-    List.iter expand_instruction fn.fn_code;
-    Errors.OK (get_current_function ())
-  with Error s ->
-    Errors.Error (Errors.msg (coqstring_of_camlstring s))
-
-let expand_fundef = function
-  | Internal f ->
-      begin match expand_function f with
-      | Errors.OK tf -> Errors.OK (Internal tf)
-      | Errors.Error msg -> Errors.Error msg
-      end
-  | External ef ->
-      Errors.OK (External ef)
-
-let expand_program (p: Asm.program) : Asm.program Errors.res =
-  AST.transform_partial_program expand_fundef p
+  AST.transform_partial_ident_program expand_fundef p

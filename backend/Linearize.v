@@ -56,7 +56,7 @@ Open Scope error_monad_scope.
   The main challenge in code linearization is therefore to pick a
   ``good'' order for the nodes that exploits well the
   fall-through behavior.  Many clever trace picking heuristics
-  have been developed for this purpose.  
+  have been developed for this purpose.
 
   In this file, we present linearization in a way that clearly
   separates the heuristic part (choosing an order for the basic blocks)
@@ -96,7 +96,7 @@ Definition reachable_aux (f: LTL.function) : option (PMap.t bool) :=
     f.(fn_entrypoint) true.
 
 Definition reachable (f: LTL.function) : PMap.t bool :=
-  match reachable_aux f with  
+  match reachable_aux f with
   | None => PMap.init true
   | Some rs => rs
   end.
@@ -118,7 +118,7 @@ Fixpoint nodeset_of_list (l: list node) (s: Nodeset.t)
   match l with
   | nil => OK s
   | hd :: tl =>
-      if Nodeset.mem hd s 
+      if Nodeset.mem hd s
       then Error (msg "Linearize: duplicates in enumeration")
       else nodeset_of_list tl (Nodeset.add hd s)
   end.

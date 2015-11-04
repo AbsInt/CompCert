@@ -160,6 +160,8 @@ void (*krk(a, b, c))(int)
   return aa;
 }
 
+int hhh(int());
+
 int main () {
   f(g);
   i();
@@ -173,5 +175,7 @@ int main () {
   krj(&x, aa);
   krk(12, 13, 14)(4);
   (*krk(12, 13, 14))(4);
+
+  printf("aaa" "bbb\n");
   return 0;
 }

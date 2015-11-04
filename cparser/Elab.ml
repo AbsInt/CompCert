@@ -103,7 +103,7 @@ let elab_funbody_f : (C.typ -> Env.t -> statement -> C.stmt) ref
 
 (** * Elaboration of constants - C99 section 6.4.4 *)
 
-let has_suffix s suff = 
+let has_suffix s suff =
   let ls = String.length s and lsuff = String.length suff in
   ls >= lsuff && String.sub s (ls - lsuff) lsuff = suff
 
@@ -111,7 +111,7 @@ let chop_last s n =
   assert (String.length s >= n);
   String.sub s 0 (String.length s - n)
 
-let has_prefix s pref = 
+let has_prefix s pref =
   let ls = String.length s and lpref = String.length pref in
   ls >= lpref && String.sub s 0 lpref = pref
 
@@ -195,7 +195,7 @@ let elab_int_constant loc s0 =
   in
   (* Find smallest allowable type that fits *)
   let ty =
-    try List.find (fun ty -> integer_representable v ty) 
+    try List.find (fun ty -> integer_representable v ty)
                   (if base = 10 then dec_kinds else hex_kinds)
     with Not_found ->
       error loc "integer literal '%s' cannot be represented" s0;
@@ -224,7 +224,7 @@ let elab_char_constant loc wide chars =
   let max_digit = Int64.shift_left 1L nbits in
   let max_val = Int64.shift_left 1L (64 - nbits) in
   let v =
-    List.fold_left 
+    List.fold_left
       (fun acc d ->
         if acc < 0L || acc >= max_val then
           error loc "character constant overflows";
@@ -243,7 +243,7 @@ let elab_char_constant loc wide chars =
        IInt)
 
 let elab_string_literal loc wide chars =
-  let nbits = if wide then 8 * !config.sizeof_wchar else 8 in 
+  let nbits = if wide then 8 * !config.sizeof_wchar else 8 in
   let char_max = Int64.shift_left 1L nbits in
   List.iter
     (fun c ->
@@ -390,7 +390,7 @@ let rec elab_specifier ?(only = false) loc env specifier =
   let sto = ref Storage_default
   and inline = ref false
   and attr = ref []
-  and tyspecs = ref [] 
+  and tyspecs = ref []
   and typedef = ref false in
 
   let do_specifier = function
@@ -404,7 +404,7 @@ let rec elab_specifier ?(only = false) loc env specifier =
       | STATIC -> sto := Storage_static
       | EXTERN -> sto := Storage_extern
       | REGISTER -> sto := Storage_register
-      | TYPEDEF -> 
+      | TYPEDEF ->
           if !typedef then
             error loc "multiple uses of 'typedef'";
           typedef := true
@@ -690,7 +690,7 @@ and elab_field_group env (Field_group (spec, fieldlist, loc)) =
                 error loc "bit size of '%s' is not a compile-time constant" id;
                 None
           end in
-    { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize' } 
+    { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize' }
   in
   (List.map2 elab_bitfield fieldlist names, env')
 
@@ -986,7 +986,7 @@ module I = struct
                  if fld.fld_name = fld1.fld_name
                  then i
                  else default_init env fld1.fld_typ)
-        end 
+        end
     | (TStruct _ | TUnion _), Init_single a ->
         (* This is a previous whole-struct initialization that we
            are going to overwrite.  Revert to the default initializer. *)
@@ -999,7 +999,7 @@ module I = struct
   let index env (z, i as zi) n =
     match unroll env (typeof zi), i with
     | TArray(ty, sz, _), Init_array il ->
-        if n >= 0L && index_below n sz then begin 
+        if n >= 0L && index_below n sz then begin
           let dfl = default_init env ty in
           let rec loop p before after =
             if p = n then
@@ -1053,7 +1053,7 @@ end
 
 let rec elab_designator loc env zi desig =
   match desig with
-  | [] -> 
+  | [] ->
       zi
   | INFIELD_INIT name :: desig' ->
       begin match I.member env zi name with
@@ -1112,7 +1112,7 @@ let rec elab_list zi il first =
 and elab_item zi item il =
   let ty = I.typeof zi in
   match item, unroll env ty with
-  (* Special case char array = "string literal" 
+  (* Special case char array = "string literal"
                or wchar array = L"wide string literal" *)
   | (SINGLE_INIT (CONSTANT (CONST_STRING(w, s)))
      | COMPOUND_INIT [_, SINGLE_INIT(CONSTANT (CONST_STRING(w, s)))]),
@@ -1782,7 +1782,7 @@ let elab_for_expr loc env = function
 
 (* Handling of __func__ (section 6.4.2.2) *)
 
-let __func__type_and_init s = 
+let __func__type_and_init s =
   (TArray(TInt(IChar, [AConst]), Some(Int64.of_int (String.length s + 1)), []),
    init_char_array_string None s)
 
@@ -2113,7 +2113,7 @@ let rec elab_stmt env ctx s =
       if not (is_scalar_type env a'.etyp) then
         error loc "the condition of 'if' does not have scalar type";
       let s1' = elab_stmt env ctx s1 in
-      let s2' = 
+      let s2' =
         match s2 with
           | None -> sskip
           | Some s2 -> elab_stmt env ctx s2
@@ -2146,12 +2146,12 @@ let rec elab_stmt env ctx s =
         | Some (FC_DECL def) ->
             let (dcl, env') = elab_definition true (Env.new_scope env) def in
             let loc = elab_loc (get_definitionloc def) in
-            (sskip, env', 
+            (sskip, env',
              Some(List.map (fun d -> {sdesc = Sdecl d; sloc = loc}) dcl)) in
       let a2' =
         match a2 with
           | None -> intconst 1L IInt
-          | Some a2 -> elab_expr loc env' a2 
+          | Some a2 -> elab_expr loc env' a2
       in
       if not (is_scalar_type env' a2'.etyp) then
         error loc "the condition of 'for' does not have scalar type";

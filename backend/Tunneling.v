@@ -55,7 +55,7 @@ Require Import LTL.
 <<   L1: nop L2;
      L2: nop L1;
 >>
-  Coq warns us of this fact by not accepting the definition 
+  Coq warns us of this fact by not accepting the definition
   of [branch_target] above.
 
   To handle this problem, we proceed in two passes.  The first pass
