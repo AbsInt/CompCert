@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(* Utility functions for the dwarf debuging type *)
+(* Utility functions for the dwarf debugging type *)
 
 open DwarfTypes
 
@@ -22,12 +22,12 @@ let new_entry id tag =
    id = id;
  }
 
-(* Add an entry as child to  another entry *)
+(* Add an entry as child to another entry *)
 let add_child entry child =
   {entry with children = child::entry.children;}
 
 
-(* Add entries as children to  another entry *)
+(* Add entries as children to another entry *)
 let add_children entry children =
   {entry with children = entry.children@children;}
 
