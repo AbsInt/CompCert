@@ -18,7 +18,7 @@ open BinNums
 open Sections
 
 
-(* Record used for stroring references to the actual implementation functions *)
+(* Record used for storing references to the actual implementation functions *)
 type implem =
     {
      init: string -> unit;

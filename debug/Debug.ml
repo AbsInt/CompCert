@@ -20,7 +20,7 @@ open Sections
 
 (* Interface for generating and printing debug information *)
 
-(* Record used for stroring references to the actual implementation functions *)
+(* Record used for storing references to the actual implementation functions *)
 type implem =
     {
       init: string -> unit;
