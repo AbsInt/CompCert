@@ -182,8 +182,8 @@ module Dwarfgenaux (Target: TARGET) =
         enumeration_name = string_entry e.enum_name;
       } in
       let enum = new_entry id (DW_TAG_enumeration_type enum) in
-      let child = List.map enumerator_to_entry e.enum_enumerators in
-      add_children enum child
+      let children = List.map enumerator_to_entry e.enum_enumerators in
+      add_children enum children
 
     let fun_type_to_entry id f =
       let children = if f.fun_prototyped then
