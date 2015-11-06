@@ -918,11 +918,8 @@ let rec groupSwitch = function
       let (fst, cases) = groupSwitch rem in
       (Cutil.sskip, (case, fst) :: cases)
   | Stmt s :: rem ->
-      if Cutil.is_debug_stmt s then
-        groupSwitch rem
-      else
-        let (fst, cases) = groupSwitch rem in
-        (Cutil.sseq s.sloc s fst, cases)
+      let (fst, cases) = groupSwitch rem in
+      (Cutil.sseq s.sloc s fst, cases)
 
 (* Test whether the statement contains case and give an *)
 let rec contains_case s =
@@ -986,7 +983,12 @@ let rec convertStmt env s =
       Scontinue
   | C.Sswitch(e, s1) ->
       let (init, cases) = groupSwitch (flattenSwitch s1) in
-      if init.sdesc <> C.Sskip then
+      let rec init_debug s =
+        match s.sdesc with
+        | Sseq (a,b) -> init_debug a && init_debug b
+        | C.Sskip -> true
+        | _ -> Cutil.is_debug_stmt s in
+      if init.sdesc <> C.Sskip && not (init_debug init) then
         begin
           warning "ignored code at beginning of 'switch'";
           contains_case init
