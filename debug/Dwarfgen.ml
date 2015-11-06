@@ -186,7 +186,7 @@ module Dwarfgenaux (Target: TARGET) =
       add_children enum child
 
     let fun_type_to_entry id f =
-      let children = if f.fun_prototyped then
+      let children = if not f.fun_prototyped then
         let u = {
           unspecified_parameter_artificial = None;
         } in
@@ -195,7 +195,7 @@ module Dwarfgenaux (Target: TARGET) =
         List.map (fun p ->
           let fp = {
             formal_parameter_artificial = None;
-            formal_parameter_name = name_opt p.param_name;
+            formal_parameter_name = None;
             formal_parameter_type = p.param_type;
             formal_parameter_variable_parameter = None;
             formal_parameter_location = None;
