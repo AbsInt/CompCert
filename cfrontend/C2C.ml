@@ -918,8 +918,11 @@ let rec groupSwitch = function
       let (fst, cases) = groupSwitch rem in
       (Cutil.sskip, (case, fst) :: cases)
   | Stmt s :: rem ->
-      let (fst, cases) = groupSwitch rem in
-      (Cutil.sseq s.sloc s fst, cases)
+      if Cutil.is_debug_stmt s then
+        groupSwitch rem
+      else
+        let (fst, cases) = groupSwitch rem in
+        (Cutil.sseq s.sloc s fst, cases)
 
 (* Test whether the statement contains case and give an *)
 let rec contains_case s =
@@ -1313,4 +1316,3 @@ let convertProgram p =
         if Cerrors.check_errors () then None else Some p'
   with Env.Error msg ->
     error (Env.error_message msg); None
-
