@@ -297,7 +297,7 @@ type debug_entries =
   | Gnu of gnu_entries
 
 (* The target specific functions for printing the debug information *)
-module type DWARF_TARGET=
+module type DWARF_TARGET =
   sig
     val label: out_channel -> int -> unit
     val section: out_channel -> section_name -> unit

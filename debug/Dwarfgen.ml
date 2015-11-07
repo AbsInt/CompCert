@@ -182,11 +182,11 @@ module Dwarfgenaux (Target: TARGET) =
         enumeration_name = string_entry e.enum_name;
       } in
       let enum = new_entry id (DW_TAG_enumeration_type enum) in
-      let child = List.map enumerator_to_entry e.enum_enumerators in
-      add_children enum child
+      let children = List.map enumerator_to_entry e.enum_enumerators in
+      add_children enum children
 
     let fun_type_to_entry id f =
-      let children = if f.fun_prototyped then
+      let children = if not f.fun_prototyped then
         let u = {
           unspecified_parameter_artificial = None;
         } in
@@ -195,7 +195,7 @@ module Dwarfgenaux (Target: TARGET) =
         List.map (fun p ->
           let fp = {
             formal_parameter_artificial = None;
-            formal_parameter_name = name_opt p.param_name;
+            formal_parameter_name = None;
             formal_parameter_type = p.param_type;
             formal_parameter_variable_parameter = None;
             formal_parameter_location = None;
@@ -475,9 +475,14 @@ module Dwarfgenaux (Target: TARGET) =
       let f_id = get_opt_val f.fun_atom in
       let acc = match f.fun_return_type with Some s -> acc =<< s | None -> acc in
       let f_entry =  new_entry id (DW_TAG_subprogram f_tag) in
-      let params,acc = mmap (function_parameter_to_entry f_id) acc f.fun_parameter in
-      let vars,acc = fun_scope_to_entries f_id acc f.fun_scope in
-      add_children f_entry (params@vars),acc
+      let children,acc =
+        if not !Clflags.option_gglobal then
+          let params,acc = mmap (function_parameter_to_entry f_id) acc f.fun_parameter in
+          let vars,acc = fun_scope_to_entries f_id acc f.fun_scope in
+          params@vars,acc
+        else
+          [],acc in
+      add_children f_entry (children),acc
 
     let definition_to_entry acc id t =
       match t with

@@ -983,7 +983,12 @@ let rec convertStmt env s =
       Scontinue
   | C.Sswitch(e, s1) ->
       let (init, cases) = groupSwitch (flattenSwitch s1) in
-      if init.sdesc <> C.Sskip then
+      let rec init_debug s =
+        match s.sdesc with
+        | Sseq (a,b) -> init_debug a && init_debug b
+        | C.Sskip -> true
+        | _ -> Cutil.is_debug_stmt s in
+      if init.sdesc <> C.Sskip && not (init_debug init) then
         begin
           warning "ignored code at beginning of 'switch'";
           contains_case init
@@ -1313,4 +1318,3 @@ let convertProgram p =
         if Cerrors.check_errors () then None else Some p'
   with Env.Error msg ->
     error (Env.error_message msg); None
-

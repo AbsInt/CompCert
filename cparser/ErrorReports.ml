@@ -92,6 +92,14 @@ let extract text (pos1, pos2) : string =
 
 (* -------------------------------------------------------------------------- *)
 
+(* [compress text] replaces every run of at least one whitespace character
+   with exactly one space character. *)
+
+let compress text =
+  Str.global_replace (Str.regexp "[ \t\n\r]+") " " text
+
+(* -------------------------------------------------------------------------- *)
+
 (* [sanitize text] eliminates any special characters from the text [text].
    They are (arbitrarily) replaced with a single dot character. *)
 
@@ -182,7 +190,7 @@ let range text (e : element) : string =
   (* Get the underlying source text fragment. *)
   let fragment = extract text (pos1, pos2) in
   (* Sanitize it and limit its length. Enclose it in single quotes. *)
-  "'" ^ shorten width (sanitize fragment) ^ "'"
+  "'" ^ shorten width (sanitize (compress fragment)) ^ "'"
 
 (* -------------------------------------------------------------------------- *)
 

@@ -880,6 +880,18 @@ let is_literal_0 e =
   | EConst(CInt(0L, _, _)) -> true
   | _ -> false
 
+(* Check that a C statement is a debug annotation *)
+
+let is_debug_stmt s =
+  let is_debug_call = function
+    | (ECall ({edesc = EVar id; _},_)) -> id.name = "__builtin_debug"
+    | _ -> false in
+  match s.sdesc with
+  | Sdo {edesc = e;_} ->
+      is_debug_call e
+  | _ -> false
+
+
 (* Assignment compatibility check over attributes.
    Standard attributes ("const", "volatile", "restrict") can safely
    be added (to the rhs type to get the lhs type) but must not be dropped.
@@ -1099,7 +1111,3 @@ let rec subst_stmt phi s =
                List.map subst_asm_operand inputs,
                clob)
   }
-
-
-
-
