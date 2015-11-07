@@ -634,10 +634,11 @@ function_specifier:
   and with TYPEDEF_NAME in lookahead position, we know (1) can safely
   be ignored (if (1) is still possible after reading the next token,
   (2) will also be possible, and the conflict has to be solved in
-  favor of (2)). We add low_prec in declaration_specifier, but not in
+  favor of (2)). We add low_prec in declaration_identifier, but not in
   typedef_name, so that it has to be reduced in (1) but not in (2).
-  This is a shift/reduce conflict that can be solved using precedences.
-*)
+  This is a shift/reduce conflict that can be solved using
+  precedences.
+ *)
 low_prec : %prec lowPrec1 {}
 declarator_identifier:
 | PRE_NAME low_prec i = TYPEDEF_NAME

@@ -1277,8 +1277,8 @@ translation_unit_file: INT PRE_NAME VAR_NAME EQ LPAREN PRE_NAME VAR_NAME SEMICOL
 # can be continued with a comma and another expression.
 # So, let's just say a closing parenthesis is expected.
 
-Up to this point, a parenthesis '(' and an expression have been recognized:
-  $1 $0
+Up to this point, an expression have been recognized:
+  $0
 If this expression is complete,
 then at this point, a closing parenthesis ')' is expected.
 
@@ -2668,8 +2668,8 @@ translation_unit_file: INT LPAREN PRE_NAME VAR_NAME SEMICOLON
 ## In state 256, spurious reduction of production declarator -> declarator_noattrend attribute_specifier_list 
 ##
 
-Up to this point, an opening parenthesis and a declarator have been recognized:
-  $1 $0
+Up to this point, a declarator have been recognized:
+  $0
 If this declarator is complete,
 then at this point, a closing parenthesis ')' is expected.
 
