@@ -17,8 +17,9 @@
 (*
    WARNING: The precedence declarations tend to silently solve
    conflicts. So, if you change the grammar (especially for
-   statements), you should check that without these declarations, it
-   has ONLY 2 CONFLICTS in 2 STATES.
+   statements), you should check that when you run "make correct"
+   in the cparser/ directory, Menhir should say:
+     2 shift/reduce conflicts were silently solved.
 *)
 
 %{
@@ -65,13 +66,15 @@
 
    int f(int (a));
 
-   when a is a TYPEDEF_NAME. It is specified by 6.7.5.3 11: a should
-   be taken as the type of parameter the anonymous function
+   when a is a TYPEDEF_NAME. It is specified by 6.7.5.3 11: 'a' should
+   be taken as the type of parameter of the anonymous function.
+
+   See below comment on [low_prec]
 *)
 %nonassoc lowPrec1
 %nonassoc TYPEDEF_NAME
 
-(* These precedence declaration solve the dangling else conflict. *)
+(* These precedence declarations solve the dangling else conflict. *)
 %nonassoc lowPrec2
 %nonassoc ELSE
 
@@ -182,6 +185,9 @@ rlist(X):
    one (PRE_NAME) is eaten as a lookahead token, the second one is the
    actual identifier.
 *)
+(* For [var_name] we need more context on error reporting, so we use
+   %inline. Not using %inline for typedef_name helps foctorizing many
+   similar error messages. *)
 
 typedef_name:
 | PRE_NAME i = TYPEDEF_NAME
@@ -606,8 +612,32 @@ function_specifier:
 
 (* We add this non-terminal here to force the resolution of the
    conflict at the point of shifting the TYPEDEF_NAME. If we had
-   already shifted it, reduce/reduce conflict appear, and menhir is
-   not able to solve them. *)
+   already shifted it, a reduce/reduce conflict appears, and menhir is
+   not able to solve them.
+
+   The conflict in question is when parsing :
+     int f(int (t
+   With lookahead ')', in a context where 't' is a type name.
+   In this case, we are able to reduce the two productions:
+     (1) "declarator_identifier -> PRE_NAME TYPEDEF_NAME"
+           followed by "direct_declarator -> declarator_identifier"
+       meaning that 't' is the parameter of function 'f'
+     (2) "list(declaration_specifier_no_type) -> "
+           followed by "list(declaration_specifier_no_type) -> PRE_NAME TYPEDEF_NAME list(declaration_specifier_no_type)"
+           followed by "declaration_specifiers(...) -> ..."
+           followed by "parameter_declaration -> ..."
+       meaning that 't' is the type of the parameter of a function
+       passed as parameter to 'f'
+
+  By adding this non-terminal at this point, we force this conflict to
+  be solved earlier: once we have seen "f(int (", followed by PRE_NAME
+  and with TYPEDEF_NAME in lookahead position, we know (1) can safely
+  be ignored (if (1) is still possible after reading the next token,
+  (2) will also be possible, and the conflict has to be solved in
+  favor of (2)). We add low_prec in declaration_specifier, but not in
+  typedef_name, so that it has to be reduced in (1) but not in (2).
+  This is a shift/reduce conflict that can be solved using precedences.
+*)
 low_prec : %prec lowPrec1 {}
 declarator_identifier:
 | PRE_NAME low_prec i = TYPEDEF_NAME
@@ -765,14 +795,14 @@ block_item:
     {}
 
 expression_statement:
-| ioption(expression) SEMICOLON
+| expression? SEMICOLON
     {}
 
 jump_statement:
 | GOTO other_identifier SEMICOLON
 | CONTINUE SEMICOLON
 | BREAK SEMICOLON
-| RETURN ioption(expression) SEMICOLON
+| RETURN expression? SEMICOLON
     {}
 
 asm_statement:

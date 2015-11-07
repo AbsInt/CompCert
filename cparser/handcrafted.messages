@@ -1807,7 +1807,7 @@ At this point, a list of expressions is expected.
 
 # ------------------------------------------------------------------------------
 
-translation_unit_file: INT PRE_NAME VAR_NAME EQ PRE_NAME XOR_ASSIGN 
+translation_unit_file: INT PRE_NAME VAR_NAME EQ PRE_NAME TYPEDEF_NAME 
 ##
 ## Ends in an error in state: 22.
 ##
@@ -2265,7 +2265,7 @@ At this point, one of the following is expected:
   a comma ',', followed with a parameter declaration; or
   a closing parenthesis ')'.
 
-# # ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 translation_unit_file: VOLATILE XOR_ASSIGN 
 ##
@@ -2314,7 +2314,7 @@ At this point, one of the following is expected:
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE VOLATILE XOR_ASSIGN 
 ##
-## Ends in an error in state: 512.
+## Ends in an error in state: 511.
 ##
 ## declaration_specifiers(declaration(block_item)) -> rlist(declaration_specifier_no_type) . typedef_name list(declaration_specifier_no_type) [ STAR SEMICOLON PRE_NAME LPAREN ]
 ## declaration_specifiers(declaration(block_item)) -> rlist(declaration_specifier_no_type) . type_specifier_no_typedef_name list(declaration_specifier_no_typedef_name) [ STAR SEMICOLON PRE_NAME LPAREN ]
@@ -2345,7 +2345,7 @@ At this point, one of the following is expected:
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE PRE_NAME TYPEDEF_NAME VOLATILE XOR_ASSIGN 
 ##
-## Ends in an error in state: 509.
+## Ends in an error in state: 508.
 ##
 ## declaration_specifiers(declaration(block_item)) -> typedef_name list(declaration_specifier_no_type) . [ STAR SEMICOLON PRE_NAME LPAREN ]
 ## declaration_specifiers_typedef -> typedef_name list(declaration_specifier_no_type) . TYPEDEF list(declaration_specifier_no_type) [ STAR SEMICOLON PRE_NAME LPAREN ]
@@ -2359,7 +2359,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN
 ##
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE VOLATILE PRE_NAME TYPEDEF_NAME XOR_ASSIGN 
 ##
-## Ends in an error in state: 514.
+## Ends in an error in state: 513.
 ##
 ## declaration_specifiers(declaration(block_item)) -> rlist(declaration_specifier_no_type) typedef_name list(declaration_specifier_no_type) . [ STAR SEMICOLON PRE_NAME LPAREN ]
 ## declaration_specifiers_typedef -> rlist(declaration_specifier_no_type) typedef_name list(declaration_specifier_no_type) . TYPEDEF list(declaration_specifier_no_type) [ STAR SEMICOLON PRE_NAME LPAREN ]
@@ -2373,7 +2373,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN
 ##
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE INT XOR_ASSIGN 
 ##
-## Ends in an error in state: 511.
+## Ends in an error in state: 510.
 ##
 ## declaration_specifiers(declaration(block_item)) -> type_specifier_no_typedef_name list(declaration_specifier_no_typedef_name) . [ STAR SEMICOLON PRE_NAME LPAREN ]
 ## declaration_specifiers_typedef -> type_specifier_no_typedef_name list(declaration_specifier_no_typedef_name) . TYPEDEF list(declaration_specifier_no_typedef_name) [ STAR SEMICOLON PRE_NAME LPAREN ]
@@ -2384,7 +2384,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN
 ##
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE VOLATILE INT XOR_ASSIGN 
 ##
-## Ends in an error in state: 516.
+## Ends in an error in state: 515.
 ##
 ## declaration_specifiers(declaration(block_item)) -> rlist(declaration_specifier_no_type) type_specifier_no_typedef_name list(declaration_specifier_no_typedef_name) . [ STAR SEMICOLON PRE_NAME LPAREN ]
 ## declaration_specifiers_typedef -> rlist(declaration_specifier_no_type) type_specifier_no_typedef_name list(declaration_specifier_no_typedef_name) . TYPEDEF list(declaration_specifier_no_typedef_name) [ STAR SEMICOLON PRE_NAME LPAREN ]
@@ -2770,7 +2770,7 @@ At this point, one of the following is expected:
 
 translation_unit_file: TYPEDEF INT PRE_NAME VAR_NAME XOR_ASSIGN 
 ##
-## Ends in an error in state: 528.
+## Ends in an error in state: 527.
 ##
 ## option(typedef_declarator_list) -> typedef_declarator_list . [ SEMICOLON ]
 ## typedef_declarator_list -> typedef_declarator_list . COMMA typedef_declarator [ SEMICOLON COMMA ]
@@ -2785,9 +2785,9 @@ translation_unit_file: TYPEDEF INT PRE_NAME VAR_NAME XOR_ASSIGN
 ## In state 250, spurious reduction of production declarator_noattrend -> direct_declarator 
 ## In state 255, spurious reduction of production attribute_specifier_list -> 
 ## In state 256, spurious reduction of production declarator -> declarator_noattrend attribute_specifier_list 
-## In state 532, spurious reduction of production declare_typename(declarator) -> declarator 
-## In state 531, spurious reduction of production typedef_declarator -> declare_typename(declarator) 
-## In state 533, spurious reduction of production typedef_declarator_list -> typedef_declarator 
+## In state 531, spurious reduction of production declare_typename(declarator) -> declarator 
+## In state 530, spurious reduction of production typedef_declarator -> declare_typename(declarator) 
+## In state 532, spurious reduction of production typedef_declarator_list -> typedef_declarator 
 ##
 
 # Because attribute_specifier_list, declarator and declarator_noattrend have been marked
@@ -2813,7 +2813,7 @@ then at this point, a semicolon ';' is expected.
 
 translation_unit_file: TYPEDEF INT PRE_NAME VAR_NAME COMMA XOR_ASSIGN 
 ##
-## Ends in an error in state: 529.
+## Ends in an error in state: 528.
 ##
 ## typedef_declarator_list -> typedef_declarator_list COMMA . typedef_declarator [ SEMICOLON COMMA ]
 ##
@@ -2842,7 +2842,7 @@ followed with a closing parenthesis ')', is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE ASM CONST XOR_ASSIGN 
 ##
-## Ends in an error in state: 444.
+## Ends in an error in state: 443.
 ##
 ## asm_attributes -> CONST . asm_attributes [ LPAREN ]
 ##
@@ -2851,7 +2851,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN
 ##
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE ASM VOLATILE XOR_ASSIGN 
 ##
-## Ends in an error in state: 443.
+## Ends in an error in state: 442.
 ##
 ## asm_attributes -> VOLATILE . asm_attributes [ LPAREN ]
 ##
@@ -2860,7 +2860,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN
 ##
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE ASM XOR_ASSIGN 
 ##
-## Ends in an error in state: 442.
+## Ends in an error in state: 441.
 ##
 ## asm_statement -> ASM . asm_attributes LPAREN string_literals_list asm_arguments RPAREN SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -2877,7 +2877,7 @@ At this point, one of the following is expected:
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE ASM LPAREN STRING_LITERAL COLON COLON COLON STRING_LITERAL COMMA XOR_ASSIGN 
 ##
-## Ends in an error in state: 468.
+## Ends in an error in state: 467.
 ##
 ## asm_flags -> asm_flags COMMA . string_literals_list [ RPAREN COMMA ]
 ##
@@ -2889,7 +2889,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN
 # first(asm_flags) = STRING_LITERAL
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE ASM LPAREN STRING_LITERAL COLON COLON COLON XOR_ASSIGN 
 ##
-## Ends in an error in state: 465.
+## Ends in an error in state: 464.
 ##
 ## asm_arguments -> COLON asm_operands COLON asm_operands COLON . asm_flags [ RPAREN ]
 ##
@@ -2909,7 +2909,7 @@ Examples of clobbered resources:
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE ASM LPAREN STRING_LITERAL COLON COLON COLON STRING_LITERAL XOR_ASSIGN 
 ##
-## Ends in an error in state: 467.
+## Ends in an error in state: 466.
 ##
 ## asm_arguments -> COLON asm_operands COLON asm_operands COLON asm_flags . [ RPAREN ]
 ## asm_flags -> asm_flags . COMMA string_literals_list [ RPAREN COMMA ]
@@ -2921,7 +2921,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN
 ## This implies that, although the LR(1) items shown above provide an
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 466, spurious reduction of production asm_flags -> string_literals_list 
+## In state 465, spurious reduction of production asm_flags -> string_literals_list 
 ##
 
 # Let's ignore the possibility of concatenating string literals.
@@ -2938,7 +2938,7 @@ then at this point, a closing parenthesis ')' is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE ASM LPAREN STRING_LITERAL COLON STRING_LITERAL LPAREN CONSTANT RPAREN XOR_ASSIGN 
 ##
-## Ends in an error in state: 462.
+## Ends in an error in state: 461.
 ##
 ## asm_arguments -> COLON asm_operands . [ RPAREN ]
 ## asm_arguments -> COLON asm_operands . COLON asm_operands [ RPAREN ]
@@ -2951,7 +2951,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN
 ## This implies that, although the LR(1) items shown above provide an
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 454, spurious reduction of production asm_operands -> asm_operands_ne 
+## In state 453, spurious reduction of production asm_operands -> asm_operands_ne 
 ##
 
 # We have seen one COLON, hence the outputs. (The list of outputs may be empty.)
@@ -2968,7 +2968,7 @@ then at this point, one of the following is expected:
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE ASM LPAREN STRING_LITERAL COLON COLON XOR_ASSIGN 
 ##
-## Ends in an error in state: 464.
+## Ends in an error in state: 463.
 ##
 ## asm_arguments -> COLON asm_operands COLON asm_operands . [ RPAREN ]
 ## asm_arguments -> COLON asm_operands COLON asm_operands . COLON asm_flags [ RPAREN ]
@@ -2980,7 +2980,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN
 ## This implies that, although the LR(1) items shown above provide an
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 463, spurious reduction of production asm_operands -> 
+## In state 462, spurious reduction of production asm_operands -> 
 ##
 
 # We have seen two COLONs, hence the outputs and inputs. (The list of inputs may be empty.)
@@ -3000,7 +3000,7 @@ then at this point, one of the following is expected:
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE ASM LPAREN STRING_LITERAL COLON LBRACK PRE_NAME VAR_NAME RBRACK XOR_ASSIGN 
 ##
-## Ends in an error in state: 457.
+## Ends in an error in state: 456.
 ##
 ## asm_operand -> asm_op_name . string_literals_list LPAREN expression RPAREN [ RPAREN COMMA COLON ]
 ##
@@ -3019,7 +3019,7 @@ At this point, a string literal, representing a constraint, is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE ASM LPAREN STRING_LITERAL COLON LBRACK PRE_NAME VAR_NAME XOR_ASSIGN 
 ##
-## Ends in an error in state: 452.
+## Ends in an error in state: 451.
 ##
 ## asm_op_name -> LBRACK general_identifier . RBRACK [ STRING_LITERAL ]
 ##
@@ -3034,7 +3034,7 @@ At this point, a closing bracket ']' is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE ASM LPAREN STRING_LITERAL COLON LBRACK XOR_ASSIGN 
 ##
-## Ends in an error in state: 451.
+## Ends in an error in state: 450.
 ##
 ## asm_op_name -> LBRACK . general_identifier RBRACK [ STRING_LITERAL ]
 ##
@@ -3049,7 +3049,7 @@ At this point, an identifier is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE ASM LPAREN STRING_LITERAL COLON STRING_LITERAL LPAREN CONSTANT RPAREN COMMA XOR_ASSIGN 
 ##
-## Ends in an error in state: 455.
+## Ends in an error in state: 454.
 ##
 ## asm_operands_ne -> asm_operands_ne COMMA . asm_operand [ RPAREN COMMA COLON ]
 ##
@@ -3066,7 +3066,7 @@ At this point, an assembly operand is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE ASM LPAREN STRING_LITERAL COLON STRING_LITERAL LPAREN PRE_NAME VAR_NAME SEMICOLON 
 ##
-## Ends in an error in state: 460.
+## Ends in an error in state: 459.
 ##
 ## asm_operand -> asm_op_name string_literals_list LPAREN expression . RPAREN [ RPAREN COMMA COLON ]
 ## expression -> expression . COMMA assignment_expression [ RPAREN COMMA ]
@@ -3105,7 +3105,7 @@ then at this point, a closing parenthesis ')' is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE ASM LPAREN STRING_LITERAL COLON STRING_LITERAL LPAREN XOR_ASSIGN 
 ##
-## Ends in an error in state: 459.
+## Ends in an error in state: 458.
 ##
 ## asm_operand -> asm_op_name string_literals_list LPAREN . expression RPAREN [ RPAREN COMMA COLON ]
 ##
@@ -3120,7 +3120,7 @@ At this point, an expression is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE ASM LPAREN STRING_LITERAL COLON STRING_LITERAL XOR_ASSIGN 
 ##
-## Ends in an error in state: 458.
+## Ends in an error in state: 457.
 ##
 ## asm_operand -> asm_op_name string_literals_list . LPAREN expression RPAREN [ RPAREN COMMA COLON ]
 ## string_literals_list -> string_literals_list . STRING_LITERAL [ STRING_LITERAL LPAREN ]
@@ -3140,7 +3140,7 @@ followed with an expression and a closing parenthesis ')', is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE ASM LPAREN STRING_LITERAL XOR_ASSIGN 
 ##
-## Ends in an error in state: 449.
+## Ends in an error in state: 448.
 ##
 ## asm_statement -> ASM asm_attributes LPAREN string_literals_list . asm_arguments RPAREN SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ## string_literals_list -> string_literals_list . STRING_LITERAL [ STRING_LITERAL RPAREN COLON ]
@@ -3162,7 +3162,7 @@ At this point, one of the following is expected:
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE ASM LPAREN XOR_ASSIGN 
 ##
-## Ends in an error in state: 448.
+## Ends in an error in state: 447.
 ##
 ## asm_statement -> ASM asm_attributes LPAREN . string_literals_list asm_arguments RPAREN SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3177,7 +3177,7 @@ At this point, a string literal, representing an instruction, is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE BREAK XOR_ASSIGN 
 ##
-## Ends in an error in state: 440.
+## Ends in an error in state: 439.
 ##
 ## jump_statement -> BREAK . SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3186,7 +3186,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN
 ##
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE CONTINUE XOR_ASSIGN 
 ##
-## Ends in an error in state: 435.
+## Ends in an error in state: 434.
 ##
 ## jump_statement -> CONTINUE . SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3195,7 +3195,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN
 ##
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE DO SEMICOLON WHILE LPAREN PRE_NAME VAR_NAME RPAREN XOR_ASSIGN 
 ##
-## Ends in an error in state: 559.
+## Ends in an error in state: 558.
 ##
 ## iteration_statement -> save_context do_statement1 WHILE LPAREN expression RPAREN . SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3204,7 +3204,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN
 ##
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE GOTO PRE_NAME VAR_NAME XOR_ASSIGN 
 ##
-## Ends in an error in state: 431.
+## Ends in an error in state: 430.
 ##
 ## jump_statement -> GOTO general_identifier . SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3213,7 +3213,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN
 ##
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE ASM LPAREN STRING_LITERAL RPAREN XOR_ASSIGN 
 ##
-## Ends in an error in state: 472.
+## Ends in an error in state: 471.
 ##
 ## asm_statement -> ASM asm_attributes LPAREN string_literals_list asm_arguments RPAREN . SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3228,7 +3228,7 @@ At this point, a semicolon ';' is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE CASE CONSTANT COLON XOR_ASSIGN 
 ##
-## Ends in an error in state: 439.
+## Ends in an error in state: 438.
 ##
 ## labeled_statement -> CASE conditional_expression COLON . statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3237,7 +3237,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN
 ##
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE DEFAULT COLON XOR_ASSIGN 
 ##
-## Ends in an error in state: 434.
+## Ends in an error in state: 433.
 ##
 ## labeled_statement -> DEFAULT COLON . statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3246,7 +3246,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN
 ##
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE PRE_NAME VAR_NAME COLON XOR_ASSIGN 
 ##
-## Ends in an error in state: 486.
+## Ends in an error in state: 487.
 ##
 ## labeled_statement -> general_identifier COLON . statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3263,7 +3263,7 @@ At this point, a statement is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE CASE CONSTANT SEMICOLON 
 ##
-## Ends in an error in state: 438.
+## Ends in an error in state: 437.
 ##
 ## labeled_statement -> CASE conditional_expression . COLON statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3299,7 +3299,7 @@ then at this point, a colon ':' is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE CASE XOR_ASSIGN 
 ##
-## Ends in an error in state: 437.
+## Ends in an error in state: 436.
 ##
 ## labeled_statement -> CASE . conditional_expression COLON statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3314,7 +3314,7 @@ At this point, a constant expression is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE DEFAULT XOR_ASSIGN 
 ##
-## Ends in an error in state: 433.
+## Ends in an error in state: 432.
 ##
 ## labeled_statement -> DEFAULT . COLON statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3323,7 +3323,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN
 ##
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE DO PRE_NAME TYPEDEF_NAME XOR_ASSIGN 
 ##
-## Ends in an error in state: 485.
+## Ends in an error in state: 486.
 ##
 ## labeled_statement -> general_identifier . COLON statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3340,7 +3340,7 @@ At this point, a colon ':' is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE DO SEMICOLON WHILE LPAREN PRE_NAME VAR_NAME SEMICOLON 
 ##
-## Ends in an error in state: 558.
+## Ends in an error in state: 557.
 ##
 ## expression -> expression . COMMA assignment_expression [ RPAREN COMMA ]
 ## iteration_statement -> save_context do_statement1 WHILE LPAREN expression . RPAREN SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
@@ -3379,7 +3379,7 @@ then at this point, a closing parenthesis ')' and a semicolon ';' are expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE DO SEMICOLON WHILE LPAREN XOR_ASSIGN 
 ##
-## Ends in an error in state: 557.
+## Ends in an error in state: 556.
 ##
 ## iteration_statement -> save_context do_statement1 WHILE LPAREN . expression RPAREN SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3394,7 +3394,7 @@ At this point, an expression is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE DO SEMICOLON WHILE XOR_ASSIGN 
 ##
-## Ends in an error in state: 556.
+## Ends in an error in state: 555.
 ##
 ## iteration_statement -> save_context do_statement1 WHILE . LPAREN expression RPAREN SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3409,7 +3409,7 @@ At this point, an opening parenthesis '(' is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE DO SEMICOLON XOR_ASSIGN 
 ##
-## Ends in an error in state: 555.
+## Ends in an error in state: 554.
 ##
 ## iteration_statement -> save_context do_statement1 . WHILE LPAREN expression RPAREN SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3430,7 +3430,7 @@ At this point, a 'while' keyword is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE DO XOR_ASSIGN 
 ##
-## Ends in an error in state: 551.
+## Ends in an error in state: 550.
 ##
 ## do_statement1 -> save_context DO . statement [ WHILE ]
 ##
@@ -3447,7 +3447,7 @@ At this point, a statement (the loop body) is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE FOR LPAREN SEMICOLON SEMICOLON RPAREN XOR_ASSIGN 
 ##
-## Ends in an error in state: 521.
+## Ends in an error in state: 520.
 ##
 ## iteration_statement -> save_context FOR LPAREN for_statement_header optional(expression,SEMICOLON) optional(expression,RPAREN) . statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3462,7 +3462,7 @@ At this point, a statement (the loop body) is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE FOR LPAREN SEMICOLON SEMICOLON PRE_NAME VAR_NAME SEMICOLON 
 ##
-## Ends in an error in state: 523.
+## Ends in an error in state: 522.
 ##
 ## expression -> expression . COMMA assignment_expression [ RPAREN COMMA ]
 ## optional(expression,RPAREN) -> expression . RPAREN [ WHILE TILDE SWITCH STRING_LITERAL STAR SIZEOF SEMICOLON RETURN PRE_NAME PLUS MINUS LPAREN LBRACE INC IF GOTO FOR DO DEFAULT DEC CONTINUE CONSTANT CASE BUILTIN_VA_ARG BREAK BANG ASM AND ALIGNOF ]
@@ -3504,7 +3504,7 @@ then at this point, a closing parenthesis ')' is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE FOR LPAREN SEMICOLON SEMICOLON XOR_ASSIGN 
 ##
-## Ends in an error in state: 519.
+## Ends in an error in state: 518.
 ##
 ## iteration_statement -> save_context FOR LPAREN for_statement_header optional(expression,SEMICOLON) . optional(expression,RPAREN) statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3524,7 +3524,7 @@ followed with a closing parenthesis ')', is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE FOR LPAREN SEMICOLON XOR_ASSIGN 
 ##
-## Ends in an error in state: 518.
+## Ends in an error in state: 517.
 ##
 ## iteration_statement -> save_context FOR LPAREN for_statement_header . optional(expression,SEMICOLON) optional(expression,RPAREN) statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3543,7 +3543,7 @@ followed with a semicolon ';', is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE FOR LPAREN PRE_NAME VAR_NAME RPAREN 
 ##
-## Ends in an error in state: 525.
+## Ends in an error in state: 524.
 ##
 ## expression -> expression . COMMA assignment_expression [ SEMICOLON COMMA ]
 ## optional(expression,SEMICOLON) -> expression . SEMICOLON [ TILDE STRING_LITERAL STAR SIZEOF SEMICOLON RPAREN PRE_NAME PLUS MINUS LPAREN INC DEC CONSTANT BUILTIN_VA_ARG BANG AND ALIGNOF ]
@@ -3585,7 +3585,7 @@ then at this point, a semicolon ';' is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE FOR LPAREN XOR_ASSIGN 
 ##
-## Ends in an error in state: 506.
+## Ends in an error in state: 505.
 ##
 ## iteration_statement -> save_context FOR LPAREN . for_statement_header optional(expression,SEMICOLON) optional(expression,RPAREN) statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3606,7 +3606,7 @@ At this point, one of the following is expected:
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE FOR XOR_ASSIGN 
 ##
-## Ends in an error in state: 505.
+## Ends in an error in state: 504.
 ##
 ## iteration_statement -> save_context FOR . LPAREN for_statement_header optional(expression,SEMICOLON) optional(expression,RPAREN) statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3621,7 +3621,7 @@ At this point, an opening parenthesis '(' is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE GOTO XOR_ASSIGN 
 ##
-## Ends in an error in state: 430.
+## Ends in an error in state: 429.
 ##
 ## jump_statement -> GOTO . general_identifier SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3636,7 +3636,7 @@ At this point, an identifier (a 'goto' label) is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE DO IF LPAREN CONSTANT RPAREN SEMICOLON ELSE XOR_ASSIGN 
 ##
-## Ends in an error in state: 553.
+## Ends in an error in state: 552.
 ##
 ## selection_statement -> save_context ifelse_statement1 . statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3651,7 +3651,7 @@ At this point, a statement is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE IF LPAREN PRE_NAME VAR_NAME RPAREN XOR_ASSIGN 
 ##
-## Ends in an error in state: 502.
+## Ends in an error in state: 501.
 ##
 ## ifelse_statement1 -> IF LPAREN expression RPAREN save_context . statement ELSE [ WHILE TILDE SWITCH STRING_LITERAL STAR SIZEOF SEMICOLON RETURN PRE_NAME PLUS MINUS LPAREN LBRACE INC IF GOTO FOR DO DEFAULT DEC CONTINUE CONSTANT CASE BUILTIN_VA_ARG BREAK BANG ASM AND ALIGNOF ]
 ## selection_statement -> save_context IF LPAREN expression RPAREN save_context . statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
@@ -3667,7 +3667,7 @@ At this point, a statement is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE IF LPAREN PRE_NAME VAR_NAME SEMICOLON 
 ##
-## Ends in an error in state: 500.
+## Ends in an error in state: 499.
 ##
 ## expression -> expression . COMMA assignment_expression [ RPAREN COMMA ]
 ## ifelse_statement1 -> IF LPAREN expression . RPAREN save_context statement ELSE [ WHILE TILDE SWITCH STRING_LITERAL STAR SIZEOF SEMICOLON RETURN PRE_NAME PLUS MINUS LPAREN LBRACE INC IF GOTO FOR DO DEFAULT DEC CONTINUE CONSTANT CASE BUILTIN_VA_ARG BREAK BANG ASM AND ALIGNOF ]
@@ -3707,7 +3707,7 @@ then at this point, a closing parenthesis ')' is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE IF LPAREN XOR_ASSIGN 
 ##
-## Ends in an error in state: 499.
+## Ends in an error in state: 498.
 ##
 ## ifelse_statement1 -> IF LPAREN . expression RPAREN save_context statement ELSE [ WHILE TILDE SWITCH STRING_LITERAL STAR SIZEOF SEMICOLON RETURN PRE_NAME PLUS MINUS LPAREN LBRACE INC IF GOTO FOR DO DEFAULT DEC CONTINUE CONSTANT CASE BUILTIN_VA_ARG BREAK BANG ASM AND ALIGNOF ]
 ## selection_statement -> save_context IF LPAREN . expression RPAREN save_context statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
@@ -3723,7 +3723,7 @@ At this point, an expression is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE IF XOR_ASSIGN 
 ##
-## Ends in an error in state: 498.
+## Ends in an error in state: 497.
 ##
 ## ifelse_statement1 -> IF . LPAREN expression RPAREN save_context statement ELSE [ WHILE TILDE SWITCH STRING_LITERAL STAR SIZEOF SEMICOLON RETURN PRE_NAME PLUS MINUS LPAREN LBRACE INC IF GOTO FOR DO DEFAULT DEC CONTINUE CONSTANT CASE BUILTIN_VA_ARG BREAK BANG ASM AND ALIGNOF ]
 ## selection_statement -> save_context IF . LPAREN expression RPAREN save_context statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
@@ -3739,7 +3739,7 @@ At this point, an opening parenthesis '(' is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE SWITCH LPAREN PRE_NAME VAR_NAME RPAREN XOR_ASSIGN 
 ##
-## Ends in an error in state: 496.
+## Ends in an error in state: 495.
 ##
 ## selection_statement -> save_context SWITCH LPAREN expression RPAREN . statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3763,7 +3763,7 @@ enclosed within braces '{' and '}'.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE SWITCH LPAREN PRE_NAME VAR_NAME SEMICOLON 
 ##
-## Ends in an error in state: 495.
+## Ends in an error in state: 494.
 ##
 ## expression -> expression . COMMA assignment_expression [ RPAREN COMMA ]
 ## selection_statement -> save_context SWITCH LPAREN expression . RPAREN statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
@@ -3802,7 +3802,7 @@ then at this point, a closing parenthesis ')' is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE SWITCH LPAREN XOR_ASSIGN 
 ##
-## Ends in an error in state: 494.
+## Ends in an error in state: 493.
 ##
 ## selection_statement -> save_context SWITCH LPAREN . expression RPAREN statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3817,7 +3817,7 @@ At this point, an expression is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE SWITCH XOR_ASSIGN 
 ##
-## Ends in an error in state: 493.
+## Ends in an error in state: 492.
 ##
 ## selection_statement -> save_context SWITCH . LPAREN expression RPAREN statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3832,7 +3832,7 @@ At this point, an opening parenthesis '(' is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE WHILE LPAREN PRE_NAME VAR_NAME RPAREN XOR_ASSIGN 
 ##
-## Ends in an error in state: 480.
+## Ends in an error in state: 479.
 ##
 ## iteration_statement -> save_context WHILE LPAREN expression RPAREN . statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3847,7 +3847,7 @@ At this point, a statement (the loop body) is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE WHILE LPAREN PRE_NAME VAR_NAME SEMICOLON 
 ##
-## Ends in an error in state: 479.
+## Ends in an error in state: 478.
 ##
 ## expression -> expression . COMMA assignment_expression [ RPAREN COMMA ]
 ## iteration_statement -> save_context WHILE LPAREN expression . RPAREN statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
@@ -3886,7 +3886,7 @@ then at this point, a closing parenthesis ')' is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE WHILE LPAREN XOR_ASSIGN 
 ##
-## Ends in an error in state: 478.
+## Ends in an error in state: 477.
 ##
 ## iteration_statement -> save_context WHILE LPAREN . expression RPAREN statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3901,7 +3901,7 @@ At this point, an expression is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE WHILE XOR_ASSIGN 
 ##
-## Ends in an error in state: 477.
+## Ends in an error in state: 476.
 ##
 ## iteration_statement -> save_context WHILE . LPAREN expression RPAREN statement [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
@@ -3926,10 +3926,11 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN
 ##
 # We are possibly at the end of a block.
 #
-# Note that, because we have used %on_error_reduce to consider some statements
-# as complete even when they could be continued ELSE, we may end up here even
-# though ELSE is permitted. There is nothing we can do about it. We just omit
-# this permitted continuation in our message.
+# Note that, because we have used %on_error_reduce to consider some
+# statements as complete even when they could be continued with ELSE,
+# we may end up here even though ELSE is permitted. There is nothing
+# we can do about it. We just omit this permitted continuation in our
+# message.
 
 # clang and gcc say an expression is expected.
 
@@ -3943,10 +3944,9 @@ At this point, one of the following is expected:
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE RETURN XOR_ASSIGN 
 ##
-## Ends in an error in state: 422.
+## Ends in an error in state: 421.
 ##
-## jump_statement -> RETURN . SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
-## jump_statement -> RETURN . expression SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
+## jump_statement -> RETURN . option(expression) SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
 ##
 ## The known suffix of the stack is as follows:
 ## RETURN 
@@ -3963,45 +3963,13 @@ At this point, one of the following is expected:
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE STRING_LITERAL RPAREN 
 ##
-## Ends in an error in state: 489.
-##
-## expression -> expression . COMMA assignment_expression [ SEMICOLON COMMA ]
-## expression_statement -> expression . SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
-##
-## The known suffix of the stack is as follows:
-## expression 
-##
-## WARNING: This example involves spurious reductions.
-## This implies that, although the LR(1) items shown above provide an
-## accurate view of the past (what has been recognized so far), they
-## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 58, spurious reduction of production primary_expression -> string_literals_list 
-## In state 60, spurious reduction of production postfix_expression -> primary_expression 
-## In state 61, spurious reduction of production unary_expression -> postfix_expression 
-## In state 65, spurious reduction of production cast_expression -> unary_expression 
-## In state 88, spurious reduction of production multiplicative_expression -> cast_expression 
-## In state 82, spurious reduction of production additive_expression -> multiplicative_expression 
-## In state 101, spurious reduction of production shift_expression -> additive_expression 
-## In state 78, spurious reduction of production relational_expression -> shift_expression 
-## In state 94, spurious reduction of production equality_expression -> relational_expression 
-## In state 110, spurious reduction of production and_expression -> equality_expression 
-## In state 118, spurious reduction of production exclusive_or_expression -> and_expression 
-## In state 119, spurious reduction of production inclusive_or_expression -> exclusive_or_expression 
-## In state 120, spurious reduction of production logical_and_expression -> inclusive_or_expression 
-## In state 104, spurious reduction of production logical_or_expression -> logical_and_expression 
-## In state 102, spurious reduction of production conditional_expression -> logical_or_expression 
-## In state 123, spurious reduction of production assignment_expression -> conditional_expression 
-## In state 127, spurious reduction of production expression -> assignment_expression 
-##
-translation_unit_file: VOID PRE_NAME TYPEDEF_NAME LBRACE RETURN STRING_LITERAL WHILE 
-##
 ## Ends in an error in state: 424.
 ##
 ## expression -> expression . COMMA assignment_expression [ SEMICOLON COMMA ]
-## jump_statement -> RETURN expression . SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
+## option(expression) -> expression . [ SEMICOLON ]
 ##
 ## The known suffix of the stack is as follows:
-## RETURN expression 
+## expression 
 ##
 ## WARNING: This example involves spurious reductions.
 ## This implies that, although the LR(1) items shown above provide an
@@ -4035,7 +4003,7 @@ then at this point, a semicolon ';' is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN INT PRE_NAME VAR_NAME RPAREN LBRACE PRE_NAME TYPEDEF_NAME XOR_ASSIGN 
 ##
-## Ends in an error in state: 562.
+## Ends in an error in state: 561.
 ##
 ## declaration_specifiers(declaration(block_item)) -> typedef_name . list(declaration_specifier_no_type) [ STAR SEMICOLON PRE_NAME LPAREN ]
 ## declaration_specifiers_typedef -> typedef_name . list(declaration_specifier_no_type) TYPEDEF list(declaration_specifier_no_type) [ STAR SEMICOLON PRE_NAME LPAREN ]
@@ -4085,7 +4053,7 @@ At this point, an expression is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME COMMA PRE_NAME VAR_NAME RPAREN 
 ##
-## Ends in an error in state: 539.
+## Ends in an error in state: 538.
 ##
 ## init_declarator_list -> init_declarator_list . COMMA init_declarator [ SEMICOLON COMMA ]
 ## option(init_declarator_list) -> init_declarator_list . [ SEMICOLON ]
@@ -4098,11 +4066,11 @@ translation_unit_file: INT PRE_NAME VAR_NAME COMMA PRE_NAME VAR_NAME RPAREN
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 250, spurious reduction of production declarator_noattrend -> direct_declarator 
-## In state 547, spurious reduction of production declare_varname(declarator_noattrend) -> declarator_noattrend 
-## In state 542, spurious reduction of production save_context -> 
-## In state 543, spurious reduction of production attribute_specifier_list -> 
-## In state 544, spurious reduction of production init_declarator -> declare_varname(declarator_noattrend) save_context attribute_specifier_list 
-## In state 541, spurious reduction of production init_declarator_list -> init_declarator_list COMMA init_declarator 
+## In state 546, spurious reduction of production declare_varname(declarator_noattrend) -> declarator_noattrend 
+## In state 541, spurious reduction of production save_context -> 
+## In state 542, spurious reduction of production attribute_specifier_list -> 
+## In state 543, spurious reduction of production init_declarator -> declare_varname(declarator_noattrend) save_context attribute_specifier_list 
+## In state 540, spurious reduction of production init_declarator_list -> init_declarator_list COMMA init_declarator 
 ##
 
 Up to this point, a list of declarators has been recognized:
@@ -4114,7 +4082,7 @@ then at this point, a semicolon ';' is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME COMMA XOR_ASSIGN 
 ##
-## Ends in an error in state: 540.
+## Ends in an error in state: 539.
 ##
 ## init_declarator_list -> init_declarator_list COMMA . init_declarator [ SEMICOLON COMMA ]
 ##
@@ -4327,7 +4295,7 @@ followed with an initializer, is expected.
 
 translation_unit_file: INT PRE_NAME VAR_NAME EQ XOR_ASSIGN 
 ##
-## Ends in an error in state: 545.
+## Ends in an error in state: 544.
 ##
 ## init_declarator -> declare_varname(declarator_noattrend) save_context attribute_specifier_list EQ . c_initializer [ SEMICOLON COMMA ]
 ##
@@ -4419,7 +4387,7 @@ The following type name is used as a K&R parameter name:
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN PRE_NAME VAR_NAME RPAREN INT XOR_ASSIGN 
 ##
-## Ends in an error in state: 581.
+## Ends in an error in state: 580.
 ##
 ## declaration_specifiers(declaration(block_item)) -> type_specifier_no_typedef_name list(declaration_specifier_no_typedef_name) . [ STAR SEMICOLON PRE_NAME LPAREN ]
 ## list(declaration_specifier_no_typedef_name) -> list(declaration_specifier_no_typedef_name) . declaration_specifier_no_typedef_name [ VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL STRUCT STATIC STAR SIGNED SHORT SEMICOLON RESTRICT REGISTER PRE_NAME PACKED LPAREN LONG INT INLINE FLOAT EXTERN ENUM DOUBLE CONST CHAR AUTO ATTRIBUTE ALIGNAS ]
@@ -4429,7 +4397,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN PRE_NAME VAR_NAME RPAREN INT
 ##
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN PRE_NAME VAR_NAME RPAREN VOLATILE INT XOR_ASSIGN 
 ##
-## Ends in an error in state: 586.
+## Ends in an error in state: 585.
 ##
 ## declaration_specifiers(declaration(block_item)) -> rlist(declaration_specifier_no_type) type_specifier_no_typedef_name list(declaration_specifier_no_typedef_name) . [ STAR SEMICOLON PRE_NAME LPAREN ]
 ## list(declaration_specifier_no_typedef_name) -> list(declaration_specifier_no_typedef_name) . declaration_specifier_no_typedef_name [ VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL STRUCT STATIC STAR SIGNED SHORT SEMICOLON RESTRICT REGISTER PRE_NAME PACKED LPAREN LONG INT INLINE FLOAT EXTERN ENUM DOUBLE CONST CHAR AUTO ATTRIBUTE ALIGNAS ]
@@ -4439,7 +4407,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN PRE_NAME VAR_NAME RPAREN VOL
 ##
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN PRE_NAME VAR_NAME RPAREN PRE_NAME TYPEDEF_NAME XOR_ASSIGN 
 ##
-## Ends in an error in state: 579.
+## Ends in an error in state: 578.
 ##
 ## declaration_specifiers(declaration(block_item)) -> typedef_name list(declaration_specifier_no_type) . [ STAR SEMICOLON PRE_NAME LPAREN ]
 ## list(declaration_specifier_no_type) -> list(declaration_specifier_no_type) . storage_class_specifier_no_typedef [ VOLATILE STATIC STAR SEMICOLON RESTRICT REGISTER PRE_NAME PACKED LPAREN INLINE EXTERN CONST AUTO ATTRIBUTE ALIGNAS ]
@@ -4452,7 +4420,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME LPAREN PRE_NAME VAR_NAME RPAREN PRE
 ##
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN PRE_NAME VAR_NAME RPAREN VOLATILE PRE_NAME TYPEDEF_NAME XOR_ASSIGN 
 ##
-## Ends in an error in state: 584.
+## Ends in an error in state: 583.
 ##
 ## declaration_specifiers(declaration(block_item)) -> rlist(declaration_specifier_no_type) typedef_name list(declaration_specifier_no_type) . [ STAR SEMICOLON PRE_NAME LPAREN ]
 ## list(declaration_specifier_no_type) -> list(declaration_specifier_no_type) . storage_class_specifier_no_typedef [ VOLATILE STATIC STAR SEMICOLON RESTRICT REGISTER PRE_NAME PACKED LPAREN INLINE EXTERN CONST AUTO ATTRIBUTE ALIGNAS ]
@@ -4471,13 +4439,13 @@ Ill-formed K&R parameter declaration.
 At this point, one of the following is expected:
   a storage class specifier; or
   a type qualifier; or
-  a list of declarator.
+  a list of declarators.
 
 # ------------------------------------------------------------------------------
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN PRE_NAME VAR_NAME RPAREN VOLATILE XOR_ASSIGN 
 ##
-## Ends in an error in state: 582.
+## Ends in an error in state: 581.
 ##
 ## declaration_specifiers(declaration(block_item)) -> rlist(declaration_specifier_no_type) . typedef_name list(declaration_specifier_no_type) [ STAR SEMICOLON PRE_NAME LPAREN ]
 ## declaration_specifiers(declaration(block_item)) -> rlist(declaration_specifier_no_type) . type_specifier_no_typedef_name list(declaration_specifier_no_typedef_name) [ STAR SEMICOLON PRE_NAME LPAREN ]
@@ -4502,7 +4470,7 @@ At this point, one of the following is expected:
 
 translation_unit_file: VOID PRE_NAME TYPEDEF_NAME PACKED LPAREN CONSTANT RPAREN XOR_ASSIGN 
 ##
-## Ends in an error in state: 595.
+## Ends in an error in state: 594.
 ##
 ## attribute_specifier_list -> attribute_specifier . attribute_specifier_list [ SEMICOLON LBRACE EQ COMMA ]
 ## rlist(declaration_specifier_no_type) -> attribute_specifier . [ VOID UNSIGNED UNION UNDERSCORE_BOOL STRUCT SIGNED SHORT PRE_NAME LONG INT FLOAT ENUM DOUBLE CHAR ]
@@ -4599,14 +4567,14 @@ translation_unit_file: PRE_NAME VAR_NAME
 # This can only happen in a declaration
 
 Ill-formed declaration.
-The following identifier is not a type name, but a type specifier was expected:
-$0
+The following identifier is used as a type, but has not been defined as such:
+  $0
 
 # ------------------------------------------------------------------------------
 
 translation_unit_file: INT PRE_NAME VAR_NAME LPAREN PRE_NAME VAR_NAME RPAREN INT SEMICOLON XOR_ASSIGN 
 ##
-## Ends in an error in state: 591.
+## Ends in an error in state: 590.
 ##
 ## declaration_list -> declaration_list . kr_param_declaration [ VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL STRUCT STATIC SIGNED SHORT RESTRICT REGISTER PRE_NAME PACKED LONG LBRACE INT INLINE FLOAT EXTERN ENUM DOUBLE CONST CHAR AUTO ATTRIBUTE ALIGNAS ]
 ## function_definition1 -> declaration_specifiers(declaration(external_declaration)) declare_varname(declarator_noattrend) save_context declaration_list . [ LBRACE ]
@@ -4656,7 +4624,7 @@ translation_unit_file: UNION PRE_NAME XOR_ASSIGN
 ##
 translation_unit_file: VOID PRE_NAME TYPEDEF_NAME LBRACE PRE_NAME XOR_ASSIGN 
 ##
-## Ends in an error in state: 427.
+## Ends in an error in state: 426.
 ##
 ## general_identifier -> PRE_NAME . VAR_NAME [ COLON ]
 ## primary_expression -> PRE_NAME . VAR_NAME [ XOR_ASSIGN SUB_ASSIGN STAR SLASH SEMICOLON RIGHT_ASSIGN RIGHT QUESTION PTR PLUS PERCENT OR_ASSIGN NEQ MUL_ASSIGN MOD_ASSIGN MINUS LT LPAREN LEQ LEFT_ASSIGN LEFT LBRACK INC HAT GT GEQ EQEQ EQ DOT DIV_ASSIGN DEC COMMA BARBAR BAR AND_ASSIGN ANDAND AND ADD_ASSIGN ]

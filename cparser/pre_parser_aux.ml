@@ -18,7 +18,7 @@ type identifier_type =
   | TypedefId
   | OtherId
 
-(* Applying once this functions saves the current context stack, and
+(* Applying once this functions saves the current context, and
    applying it the second time restores it. *)
 let save_context:(unit -> (unit -> unit)) ref = ref (fun _ -> assert false)
 
