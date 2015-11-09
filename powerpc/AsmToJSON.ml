@@ -93,7 +93,7 @@ let p_freg oc = function
 let p_preg oc = function
   | IR ir -> p_ireg oc ir
   | FR fr -> p_freg oc fr
-  | _ -> assert false  (* This registers should not be used. *)
+  | _ -> assert false  (* This register should not be used. *)
 
 let p_atom oc a = p_jstring oc (extern_atom a)
 
@@ -126,7 +126,6 @@ let p_crbit oc c =
   | CRbit_3 -> 3
   | CRbit_6 -> 6 in
   fprintf oc "{\"CRbit\":%d}" number
-
 
 let p_label oc l = fprintf oc "{\"Label\":%ld}" (P.to_int32 l)
 
@@ -269,7 +268,7 @@ let p_instruction oc ic =
   | Plwarx (ir1,ir2,ir3) -> instruction "Plwarx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Plwbrx (ir1,ir2,ir3) -> instruction "Plwbrx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pmbar c -> instruction "Pmbar" [Constant (Cint c)]
-  | Pmfcr ir -> fprintf oc "{%a,\"Args\":[%a]}" inst_name "Pmfcr" p_ireg ir
+  | Pmfcr ir -> instruction "Pmfcr" [Ireg ir]
   | Pmfcrbit (ir,crb) -> () (* Should not occur *)
   | Pmflr ir -> instruction "Pmflr" [Ireg ir]
   | Pmr (ir1,ir2) -> instruction "Pmr" [Ireg ir1; Ireg ir2]
