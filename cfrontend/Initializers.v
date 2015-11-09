@@ -172,22 +172,26 @@ Definition transl_init_single (ce: composite_env) (ty: type) (a: expr) : res ini
   end.
 
 (** Translate an initializer [i] for a variable of type [ty].
-  Return the corresponding list of initialization data. *)
+  [transl_init ce ty i] returns the appropriate list of initialization data.
+  The intermediate functions [transl_init_rec], [transl_init_array]
+  and [transl_init_struct] append initialization data to the given
+  list [k], and build the list of initialization data in reverse order,
+  so as to remain tail-recursive. *)
 
-Definition padding (frm to: Z) : list init_data :=
-  if zlt frm to then Init_space (to - frm) :: nil else nil.
+Definition padding (frm to: Z) (k: list init_data) : list init_data :=
+  if zlt frm to then Init_space (to - frm) :: k else k.
 
-Fixpoint transl_init (ce: composite_env) (ty: type) (i: initializer)
-                     {struct i} : res (list init_data) :=
+Fixpoint transl_init_rec (ce: composite_env) (ty: type) (i: initializer)
+                         (k: list init_data) {struct i} : res (list init_data) :=
   match i, ty with
   | Init_single a, _ =>
-      do d <- transl_init_single ce ty a; OK (d :: nil)
+      do d <- transl_init_single ce ty a; OK (d :: k)
   | Init_array il, Tarray tyelt nelt _ =>
-      transl_init_array ce tyelt il (Zmax 0 nelt)
+      transl_init_array ce tyelt il (Zmax 0 nelt) k
   | Init_struct il, Tstruct id _ =>
       do co <- lookup_composite ce id;
       match co_su co with
-      | Struct => transl_init_struct ce ty (co_members co) il 0
+      | Struct => transl_init_struct ce ty (co_members co) il 0 k
       | Union  => Error (MSG "struct/union mismatch on " :: CTX id :: nil)
       end
   | Init_union f i1, Tunion id _ =>
@@ -196,39 +200,40 @@ Fixpoint transl_init (ce: composite_env) (ty: type) (i: initializer)
       | Struct => Error (MSG "union/struct mismatch on " :: CTX id :: nil)
       | Union =>
           do ty1 <- field_type f (co_members co);
-          do d <- transl_init ce ty1 i1;
-          OK (d ++ padding (sizeof ce ty1) (sizeof ce ty))
+          do k1  <- transl_init_rec ce ty1 i1 k;
+          OK (padding (sizeof ce ty1) (sizeof ce ty) k1)
       end
   | _, _ =>
       Error (msg "wrong type for compound initializer")
   end
 
 with transl_init_array (ce: composite_env) (ty: type) (il: initializer_list) (sz: Z)
-                       {struct il} : res (list init_data) :=
+                       (k: list init_data) {struct il} : res (list init_data) :=
   match il with
   | Init_nil =>
-      if zeq sz 0 then OK nil
-      else if zle 0 sz then OK (Init_space (sz * sizeof ce ty) :: nil)
+      if zeq sz 0 then OK k
+      else if zle 0 sz then OK (Init_space (sz * sizeof ce ty) :: k)
       else Error (msg "wrong number of elements in array initializer")
   | Init_cons i1 il' =>
-      do d1 <- transl_init ce ty i1;
-      do d2 <- transl_init_array ce ty il' (sz - 1);
-      OK (d1 ++ d2)
+      do k1 <- transl_init_rec ce ty i1 k;
+      transl_init_array ce ty il' (sz - 1) k1
   end
 
 with transl_init_struct (ce: composite_env) (ty: type)
                         (fl: members) (il: initializer_list) (pos: Z)
+                        (k: list init_data)
                         {struct il} : res (list init_data) :=
   match il, fl with
   | Init_nil, nil =>
-      OK (padding pos (sizeof ce ty))
+      OK (padding pos (sizeof ce ty) k)
   | Init_cons i1 il', (_, ty1) :: fl' =>
       let pos1 := align pos (alignof ce ty1) in
-      do d1 <- transl_init ce ty1 i1;
-      do d2 <- transl_init_struct ce ty fl' il' (pos1 + sizeof ce ty1);
-      OK (padding pos pos1 ++ d1 ++ d2)
+      do k1 <- transl_init_rec ce ty1 i1 (padding pos pos1 k);
+      transl_init_struct ce ty fl' il' (pos1 + sizeof ce ty1) k1
   | _, _ =>
       Error (msg "wrong number of elements in struct initializer")
   end.
 
-
+Definition transl_init (ce: composite_env) (ty: type) (i: initializer)
+                       : res (list init_data) :=
+  do k <- transl_init_rec ce ty i nil; OK (List.rev' k).

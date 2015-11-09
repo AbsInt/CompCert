@@ -169,7 +169,7 @@ and expand_init islocal env i =
     | Init_single e ->
         Init_single (expand_expr islocal env e)
     | Init_array il ->
-        Init_array (List.map expand il)
+        Init_array (List.rev (List.rev_map expand il))
     | Init_struct(id, flds) ->
         Init_struct(id, List.map (fun (f, i) -> (f, expand i)) flds)
     | Init_union(id, fld, i) ->

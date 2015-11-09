@@ -142,7 +142,7 @@ and exp_desc env = function
 
 and init env = function
   | Init_single e -> Init_single(exp env e)
-  | Init_array il -> Init_array (List.map (init env) il)
+  | Init_array il -> Init_array (List.rev (List.rev_map (init env) il))
   | Init_struct(id, il) ->
       Init_struct(ident env id,
                   List.map (fun (f, i) -> (field env f, init env i)) il)

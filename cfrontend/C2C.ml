@@ -1108,16 +1108,16 @@ let rec convertInit env init =
   | C.Init_single e ->
       Init_single (convertExpr env e)
   | C.Init_array il ->
-      Init_array (convertInitList env il)
+      Init_array (convertInitList env (List.rev il) Init_nil)
   | C.Init_struct(_, flds) ->
-      Init_struct (convertInitList env (List.map snd flds))
+      Init_struct (convertInitList env (List.rev_map snd flds) Init_nil)
   | C.Init_union(_, fld, i) ->
       Init_union (intern_string fld.fld_name, convertInit env i)
 
-and convertInitList env il =
+and convertInitList env il accu =
   match il with
-  | [] -> Init_nil
-  | i :: il' -> Init_cons(convertInit env i, convertInitList env il')
+  | [] -> accu
+  | i :: il' -> convertInitList env il' (Init_cons(convertInit env i, accu))
 
 let convertInitializer env ty i =
   match Initializers.transl_init
