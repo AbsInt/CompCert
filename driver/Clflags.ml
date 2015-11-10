@@ -33,7 +33,7 @@ let option_falignfunctions = ref (None: int option)
 let option_falignbranchtargets = ref 0
 let option_faligncondbranchs = ref 0
 let option_finline_asm = ref false
-let option_mthumb = ref (Configuration.model = ArchConfig.Armv7m)
+let option_mthumb = ref (ArchConfig.needs_thumb Configuration.model)
 let option_Osize = ref false
 let option_dparse = ref false
 let option_dcmedium = ref false

@@ -28,3 +28,5 @@ let model_of_string = function
   | "ppc32" -> PPC32
   | "ppc64" -> PPC64
   | s -> Printf.eprintf "Invalid model `%s' is not supported\n" s; exit 2
+
+let needs_thumb _ = false

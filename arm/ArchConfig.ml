@@ -36,3 +36,7 @@ let string_of_model = function
   | Armv7a -> "armv7a"
   | Armv7r -> "armv7r"
   | Armv7m -> "armv7m"
+
+let needs_thumb = function
+  | Armv7m -> true
+  | _ -> false
