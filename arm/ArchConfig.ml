@@ -17,3 +17,22 @@ type cpus=
 
 let cpu_of_string = function
   | _ -> Generic (* Others are currently not supported *)
+
+type model =
+  | Armv6
+  | Armv7a
+  | Armv7r
+  | Armv7m
+
+let model_of_string = function
+  | "armv6" -> Armv6
+  | "armv7a" -> Armv7a
+  | "armv7r" -> Armv7r
+  | "armv7m" -> Armv7m
+  | s -> Printf.eprintf "Invalid model `%s' is not supported\n" s; exit 2
+
+let string_of_model = function
+  | Armv6 -> "armv6"
+  | Armv7a -> "armv7a"
+  | Armv7r -> "armv7r"
+  | Armv7m -> "armv7m"

@@ -892,11 +892,10 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       fprintf oc "	.syntax	unified\n";
       fprintf oc "	.arch	%s\n"
         (match Configuration.model with
-        | "armv6" -> "armv6"
-        | "armv7a" -> "armv7-a"
-        | "armv7r" -> "armv7-r"
-        | "armv7m" -> "armv7-m"
-        | _ -> "armv7");
+        | ArchConfig.Armv6 -> "armv6"
+        | ArchConfig.Armv7a -> "armv7-a"
+        | ArchConfig.Armv7r -> "armv7-r"
+        | ArchConfig.Armv7m -> "armv7-m");
       fprintf oc "	.fpu	%s\n"
         (if Opt.vfpv3 then "vfpv3-d16" else "vfpv2");
       fprintf oc "	.%s\n" (if !Clflags.option_mthumb then "thumb" else "arm");
@@ -923,7 +922,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
 let sel_target () =
   let module S : PRINTER_OPTIONS = struct
 
-   let vfpv3 = Configuration.model >= "armv7"
+   let vfpv3 = Configuration.model <> ArchConfig.Armv6
 
    let float_abi = match Configuration.abi with
    | "eabi"      -> Soft
@@ -932,7 +931,7 @@ let sel_target () =
 
    let hardware_idiv  =
    match  Configuration.model with
-   | "armv7r" | "armv7m" -> !Clflags.option_mthumb
+   | ArchConfig.Armv7r | ArchConfig.Armv7m -> !Clflags.option_mthumb
    | _ -> false
 
    end in

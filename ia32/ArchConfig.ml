@@ -17,3 +17,10 @@ type cpus=
 
 let cpu_of_string = function
   | _ -> Generic (* Others are currently not supported *)
+
+type model =
+  | SSE2
+
+let model_of_string = function
+  | "sse2" -> SSE2
+  | s -> Printf.eprintf "Invalid model `%s' is not supported\n" s; exit 2

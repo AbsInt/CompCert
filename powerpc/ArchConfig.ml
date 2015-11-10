@@ -19,3 +19,12 @@ type cpus=
 let cpu_of_string = function
   | "e5500" -> E5500
   | _ -> Generic (* Others are currently not supported *)
+
+type model =
+  | PPC32
+  | PPC64
+
+let model_of_string = function
+  | "ppc32" -> PPC32
+  | "ppc64" -> PPC64
+  | s -> Printf.eprintf "Invalid model `%s' is not supported\n" s; exit 2

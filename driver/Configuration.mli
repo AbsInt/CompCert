@@ -12,7 +12,7 @@
 
 val arch: string
   (** Target architecture *)
-val model: string
+val model: ArchConfig.model
   (** Sub-model for this architecture *)
 val abi: string
   (** ABI to use *)

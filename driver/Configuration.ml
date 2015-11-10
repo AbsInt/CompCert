@@ -77,7 +77,7 @@ let arch =
   match get_config_string "arch" with
   | "powerpc"|"arm"|"ia32" as a -> a
   | v -> bad_config "arch" [v]
-let model = get_config_string "model"
+let model = ArchConfig.model_of_string (get_config_string "model")
 let abi = get_config_string "abi"
 let system = get_config_string "system"
 let has_runtime_lib =
