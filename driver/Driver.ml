@@ -25,6 +25,10 @@ let sdump_suffix = ref ".json"
 
 (* Invocation of external tools *)
 
+let rec waitpid_no_intr pid =
+  try Unix.waitpid [] pid
+  with Unix.Unix_error (Unix.EINTR, _, _) -> waitpid_no_intr pid
+
 let command ?stdout args =
   if !option_v then begin
     eprintf "+ %s" (String.concat " " args);
@@ -45,7 +49,7 @@ let command ?stdout args =
     let pid =
       Unix.create_process argv.(0) argv Unix.stdin fd_out Unix.stderr in
     let (_, status) =
-      Unix.waitpid [] pid in
+      waitpid_no_intr pid in
     if stdout <> None then Unix.close fd_out;
     match status with
     | Unix.WEXITED rc -> rc
