@@ -384,7 +384,9 @@ module Dwarfgenaux (Target: TARGET) =
       with Not_found -> None,[]
 
     let function_parameter_to_entry f_id acc p =
-      let loc,loc_list = location_entry f_id (get_opt_val p.parameter_atom) in
+      let loc,loc_list = match p.parameter_atom with
+      | None -> None,[]
+      | Some p -> location_entry f_id p in
       let p = {
         formal_parameter_artificial = None;
         formal_parameter_name = name_opt p.parameter_name;
