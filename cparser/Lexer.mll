@@ -470,7 +470,7 @@ and singleline_comment = parse
     let lexbuf = Lexing.from_string text in
     lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_fname = filename; pos_lnum = 1};
     let module I = Pre_parser.MenhirInterpreter in
-    let checkpoint = Pre_parser.Incremental.translation_unit_file()
+    let checkpoint = Pre_parser.Incremental.translation_unit_file lexbuf.lex_curr_p
     and supplier = I.lexer_lexbuf_to_supplier lexer lexbuf
     and succeed () = ()
     and fail checkpoint =
