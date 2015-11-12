@@ -65,6 +65,7 @@ let delex (symbol : string) : string =
   | "WHILE" -> "while"
   | "TYPEDEF_NAME" -> "t"          (* this should be a type name *)
   | "VAR_NAME" -> "x"          (* this should be a variable name *)
+  | "PRE_NAME" -> ""
   | "CONSTANT" -> "42"
   | "STRING_LITERAL" -> "\"\""
   | "ELLIPSIS" -> "..."
@@ -121,6 +122,8 @@ let delex (symbol : string) : string =
 
 let delex sentence =
   let symbols = Str.split (Str.regexp " ") sentence in
+  if List.nth symbols (List.length symbols - 1) = "PRE_NAME" then
+    failwith "token sequence terminating with PRE_NAME";
   let symbols = List.map delex symbols in
   List.iter (fun symbol ->
     Printf.printf "%s " symbol
