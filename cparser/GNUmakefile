@@ -68,7 +68,7 @@ DATABASE := handcrafted.messages
 
 # We use (GNU) cut when de-lexing examples sentences.
 
-CUT      := $(shell if which gcut >&/dev/null ; then echo gcut ; else echo cut ; fi)
+CUT       = $(shell if command -v gcut >/dev/null ; then echo gcut ; else echo cut ; fi)
 
 # ------------------------------------------------------------------------------
 
