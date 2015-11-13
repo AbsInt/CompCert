@@ -7,6 +7,12 @@ T f(T a(T)) {
   T b;
   return 1;
 }
+
+T f1(T(x));
+T f1(T x) {
+  return x;
+}
+
 int g(int x) {
  T:;
   T y;
@@ -36,9 +42,9 @@ struct S {
   unsigned T:3;
   const T:3;
 };
-
+struct S stru;
 void i() {
-  struct S s;
+  struct S s = stru;
   s.T = -1;
   if(s.T < 0) printf("ERROR i\n");
 }
@@ -96,9 +102,80 @@ void m() {
             else printf("ERROR m\n");
 }
 
+int j() {
+  T T;
+}
+
+T k() {
+  { T T; }
+  T t;
+  for(T T; ; );
+  T u;
+}
+
+void krf(a)
+     int a;
+{
+  printf("%d\n", a);
+}
+
+void krg();
+void krg(int a)
+{
+  printf("%d\n", a);
+}
+
+void krh(int);
+void krh(b)
+  T b;
+{
+  printf("%d\n", b);
+}
+
+void kri();
+void kri(b, c)
+  int b;
+  double c;
+{
+  printf("%d %f %f\n", b, c, 2*c);
+}
+
+void krj();
+void krj(a, aa)
+     int a[];
+     void aa(int);
+{
+  printf("%d\n", *a);
+  aa(3);
+}
+
+void aa(int x) {
+  printf("%d\n", x);
+}
+
+void (*krk(a, b, c))(int)
+  int b, a, c;
+{
+  printf("%d %d %d\n", a, b, c);
+  return aa;
+}
+
+int hhh(int());
+
 int main () {
   f(g);
   i();
   m();
+
+  krf(2);
+  krg(3);
+  krh(4);
+  kri(5.5, 4.5);
+  int x = 23;
+  krj(&x, aa);
+  krk(12, 13, 14)(4);
+  (*krk(12, 13, 14))(4);
+
+  printf("aaa" "bbb\n");
   return 0;
 }
