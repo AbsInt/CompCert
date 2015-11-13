@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <stdio.h>
 
 int x0;
@@ -67,6 +68,11 @@ char * x25[] = { "/tmp" };
 /* One more */
 char x26[] = { "world" };
 
+/* Wide strings (issue #71) */
+wchar_t x27[] = L"abc";
+wchar_t x28[2] = L"abc";
+wchar_t x29[10] = L"abc";
+
 static void print_chars(char * s, int sz)
 {
   int i;
@@ -75,6 +81,17 @@ static void print_chars(char * s, int sz)
       printf("'%c', ", s[i]);
     else
       printf("%d, ", s[i]);
+  }
+}
+
+static void print_wchars(wchar_t * s, int sz)
+{
+  int i;
+  for (i = 0; i < sz; i++) {
+    if (s[i] >= 32 && s[i] < 127)
+      printf("'%c', ", (char) s[i]);
+    else
+      printf("%d, ", (int) s[i]);
   }
 }
 
@@ -136,6 +153,15 @@ int main()
   printf("x25[%d] = { \"%s\" }\n", (int) sizeof(x25), x25[0]);
   printf("x26[%d] = { ", (int) sizeof(x26));
   print_chars(x26, sizeof(x26));
+  printf("}\n");
+  printf("x27[%d] = { ", (int) (sizeof(x27) / sizeof(wchar_t)));
+  print_wchars(x27, sizeof(x27) / sizeof(wchar_t));
+  printf("}\n");
+  printf("x28[%d] = { ", (int) (sizeof(x28) / sizeof(wchar_t)));
+  print_wchars(x28, sizeof(x28) / sizeof(wchar_t));
+  printf("}\n");
+  printf("x29[%d] = { ", (int) (sizeof(x29) / sizeof(wchar_t)));
+  print_wchars(x29, sizeof(x29) / sizeof(wchar_t));
   printf("}\n");
   return 0;
 }

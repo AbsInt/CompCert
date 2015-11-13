@@ -850,18 +850,18 @@ let init_char_array_string opt_size s =
   Init_array (add_chars (Int64.pred size) [])
 
 let init_int_array_wstring opt_size s =
-  let len = Int64.of_int (List.length s) in
+  let a = Array.of_list s in
+  let len = Int64.of_int (Array.length a) in
   let size =
     match opt_size with
     | Some sz -> sz
     | None -> Int64.succ len  (* include final 0 character *) in
-  let rec add_chars i s init =
+  let rec add_chars i init =
     if i < 0L then init else begin
-      let (c, s') =
-        match s with [] -> (0L, []) | c::s' -> (c, s') in
-      add_chars (Int64.pred i) s' (Init_single (intconst c IInt) :: init)
+      let c = if i < len then a.(Int64.to_int i) else 0L in
+      add_chars (Int64.pred i) (Init_single (intconst c IInt) :: init)
     end in
-  Init_array (add_chars (Int64.pred size) (List.rev s) [])
+  Init_array (add_chars (Int64.pred size) [])
 
 let check_init_type loc env a ty =
   if wrap2 valid_assignment loc env a ty then ()
