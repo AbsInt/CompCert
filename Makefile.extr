@@ -32,7 +32,7 @@ DIRS=extraction \
   lib common $(ARCH) backend cfrontend cparser driver \
   exportclight debug
 
-INCLUDES=$(patsubst %,-I %, $(DIRS)) $(MENHIR_INCLUDES)
+INCLUDES=$(patsubst %,-I %, $(DIRS))
 
 # Control of warnings:
 # warning 3 = deprecated feature.  Turned off for OCaml 4.02 (bytes vs strings)
@@ -42,7 +42,7 @@ WARNINGS=-w -3
 extraction/%.cmx: WARNINGS +=-w -20
 extraction/%.cmo: WARNINGS +=-w -20
 
-COMPFLAGS=-g $(INCLUDES) $(WARNINGS)
+COMPFLAGS=-g $(INCLUDES) $(MENHIR_INCLUDES) $(WARNINGS)
 
 # Using .opt compilers if available
 
