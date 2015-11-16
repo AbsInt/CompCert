@@ -40,3 +40,16 @@ let string_of_model = function
 let needs_thumb = function
   | Armv7m -> true
   | _ -> false
+
+type abi =
+  | Eabi
+  | Eabihf
+
+let abi_of_string = function
+  | "eabi" -> Eabi
+  | "hardfloat" -> Eabihf
+  | s ->  Printf.eprintf "Invalid abi `%s' is not supported\n" s; exit 2
+
+let string_of_abi = function
+  | Eabi -> "eabi"
+  | Eabihf -> "hardfloat"
