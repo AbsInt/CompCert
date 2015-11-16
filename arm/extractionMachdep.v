@@ -20,7 +20,6 @@ Extract Constant Asm.preg_eq => "fun (x: preg) (y: preg) -> x = y".
 (* Choice of calling conventions *)
 Extract Constant Archi.abi =>
   "begin match Configuration.abi with
-   | ""eabi"" -> Softfloat
-   | ""hardfloat"" -> Hardfloat
-   | _ -> assert false
+   | ArchConfig.Eabi -> Softfloat
+   | ArchConfig.Eabihf -> Hardfloat
    end".

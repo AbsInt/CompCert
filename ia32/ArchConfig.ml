@@ -40,3 +40,5 @@ let abi_of_string = function
 
 let string_of_abi = function
   | Standard -> "standard"
+
+let small_data _ _ = 0

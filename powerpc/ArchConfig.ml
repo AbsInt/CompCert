@@ -47,3 +47,8 @@ let abi_of_string = function
 let string_of_abi = function
   | Eabi -> "eabi"
   | Gnu -> "gnu"
+
+let small_data abi system =
+  match abi,system with
+  | Eabi,"diab" -> 8
+  | _ -> 0

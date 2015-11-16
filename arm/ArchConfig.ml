@@ -53,3 +53,5 @@ let abi_of_string = function
 let string_of_abi = function
   | Eabi -> "eabi"
   | Eabihf -> "hardfloat"
+
+let small_data _ _ = 0

@@ -925,9 +925,8 @@ let sel_target () =
    let vfpv3 = Configuration.model <> ArchConfig.Armv6
 
    let float_abi = match Configuration.abi with
-   | "eabi"      -> Soft
-   | "hardfloat" -> Hard
-   | _ -> assert false
+   | ArchConfig.Eabi   -> Soft
+   | ArchConfig.Eabihf -> Hard
 
    let hardware_idiv  =
    match  Configuration.model with
