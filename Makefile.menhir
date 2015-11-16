@@ -64,7 +64,7 @@ endif
 # can instead ask ocamlfind where Menhir's library was installed. Otherwise,
 # Menhir answers directly with a "-I ..." directive, which we use.
 
-ifndef $(MENHIR_INCLUDES)
+ifndef MENHIR_INCLUDES
 
 ifeq ($(MENHIR_TABLE),true)
 

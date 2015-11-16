@@ -147,7 +147,7 @@ type local_variable_information = {
     lvar_atom:    atom option;
     lvar_file_loc:location;
     lvar_type:    int;
-    lvar_static:  bool;  (* Static variable are mapped to symbols *)
+    lvar_static:  bool;  (* Static variables are mapped to symbols *)
   }
 
 type scope_information =

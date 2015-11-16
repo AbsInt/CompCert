@@ -65,7 +65,7 @@ let strip_attributes typ = strip_attributes_type typ [AConst; AVolatile]
 
 (* Find the type id to an type *)
 let find_type (ty: typ) =
-  (* We are only interrested in Const and Volatile *)
+  (* We are only interested in Const and Volatile *)
   let ty = strip_attributes ty in
   Hashtbl.find lookup_types (typ_to_string ty)
 
@@ -77,7 +77,7 @@ let insert_type (ty: typ) =
     Hashtbl.add types id d_ty;
     Hashtbl.add lookup_types name id;
     id in
-  (* We are only interrested in Const and Volatile *)
+  (* We are only interested in Const and Volatile *)
   let ty = strip_attributes ty in
   let rec typ_aux ty =
     try find_type ty with
@@ -255,14 +255,14 @@ let replace_fun id f =
 (* All local variables *)
 let local_variables: (int, local_information) Hashtbl.t = Hashtbl.create 7
 
-(* Mapping from stampt to the debug id of the local variable *)
+(* Mapping from stamp to the debug id of the local variable *)
 let stamp_to_local: (int,int) Hashtbl.t = Hashtbl.create 7
 
-(* Map from scope id + function id to debug id *)
+(* Map from function id + scope id to debug id *)
 let scope_to_local: (int * int,int) Hashtbl.t = Hashtbl.create 7
 
-(* Map from scope id + function atom to debug id *)
-let atom_to_scope: (atom * int, int) Hashtbl.t = Hashtbl.create 7
+(* Map from function atom + scope id atom to debug id *)
+let atom_to_scope: (atom * int,int) Hashtbl.t = Hashtbl.create 7
 
 let find_lvar_stamp id =
   let id = (Hashtbl.find stamp_to_local id) in
@@ -299,7 +299,7 @@ let remove_unused id =
     Hashtbl.remove stamp_to_definition id.stamp
   with Not_found -> ()
 
-let insert_global_declaration env dec=
+let insert_global_declaration env dec =
   add_file (fst dec.gloc);
   let insert d_dec stamp =
     let id = next_id () in

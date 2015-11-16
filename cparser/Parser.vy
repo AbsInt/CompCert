@@ -52,6 +52,7 @@ Require Import List.
 %type<list expression (* Reverse order *)> argument_expression_list
 %type<definition> declaration
 %type<list spec_elem * cabsloc> declaration_specifiers
+%type<list spec_elem> declaration_specifiers_typespec_opt
 %type<list init_name (* Reverse order *)> init_declarator_list
 %type<init_name> init_declarator
 %type<storage * cabsloc> storage_class_specifier
@@ -65,9 +66,9 @@ Require Import List.
 %type<list (string * option expression * cabsloc) (* Reverse order *)> enumerator_list
 %type<string * option expression * cabsloc> enumerator
 %type<string * cabsloc> enumeration_constant
-%type<cvspec * cabsloc> type_qualifier
+%type<cvspec * cabsloc> type_qualifier type_qualifier_noattr
 %type<cabsloc> function_specifier
-%type<name> declarator direct_declarator
+%type<name> declarator declarator_noattrend direct_declarator
 %type<(decl_type -> decl_type) * cabsloc> pointer
 %type<list cvspec (* Reverse order *)> type_qualifier_list
 %type<list parameter * bool> parameter_type_list
@@ -95,7 +96,6 @@ Require Import List.
 %type<gcc_attribute> gcc_attribute
 %type<list gcc_attribute> gcc_attribute_list
 %type<gcc_attribute_word> gcc_attribute_word
-%type<name * list string> old_function_declarator direct_old_function_declarator
 %type<list string (* Reverse order *)> identifier_list
 %type<list asm_flag> asm_flags
 %type<option string> asm_op_name
@@ -337,23 +337,34 @@ declaration:
 | decspec = declaration_specifiers SEMICOLON
     { DECDEF (fst decspec, []) (snd decspec) }
 
+declaration_specifiers_typespec_opt:
+| storage = storage_class_specifier rest = declaration_specifiers_typespec_opt
+    { SpecStorage (fst storage)::rest }
+| typ = type_specifier rest = declaration_specifiers_typespec_opt
+    { SpecType (fst typ)::rest }
+| qual = type_qualifier rest = declaration_specifiers_typespec_opt
+    { SpecCV (fst qual)::rest }
+| loc = function_specifier rest = declaration_specifiers_typespec_opt
+    { SpecInline::rest }
+| /* empty */
+    { [] }
+
+
+(* We impose a lighter constraint on declaration specifiers than in the
+   pre_parser: declaration specifiers should have at least one type
+   specifier. *)
 declaration_specifiers:
 | storage = storage_class_specifier rest = declaration_specifiers
     { (SpecStorage (fst storage)::fst rest, snd storage) }
-| storage = storage_class_specifier
-    { ([SpecStorage (fst storage)], snd storage) }
-| typ = type_specifier rest = declaration_specifiers
-    { (SpecType (fst typ)::fst rest, snd typ) }
-| typ = type_specifier
-    { ([SpecType (fst typ)], snd typ) }
-| qual = type_qualifier rest = declaration_specifiers
+| typ = type_specifier rest = declaration_specifiers_typespec_opt
+    { (SpecType (fst typ)::rest, snd typ) }
+(* We have to inline type_qualifier in order to avoid a conflict. *)
+| qual = type_qualifier_noattr rest = declaration_specifiers
     { (SpecCV (fst qual)::fst rest, snd qual) }
-| qual = type_qualifier
-    { ([SpecCV (fst qual)], snd qual) }
+| attr = attribute_specifier rest = declaration_specifiers
+    { (SpecCV (CV_ATTR (fst attr))::fst rest, snd attr) }
 | loc = function_specifier rest = declaration_specifiers
     { (SpecInline::fst rest, loc) }
-| loc = function_specifier
-    { ([SpecInline], loc) }
 
 init_declarator_list:
 | init = init_declarator
@@ -411,12 +422,17 @@ type_specifier:
 
 (* 6.7.2.1 *)
 struct_or_union_specifier:
-| str_uni = struct_or_union attrs = attribute_specifier_list id = OTHER_NAME LBRACE decls = struct_declaration_list RBRACE
-    { (Tstruct_union (fst str_uni) (Some (fst id)) (Some (rev' decls)) (rev' attrs), snd str_uni) }
-| str_uni = struct_or_union attrs = attribute_specifier_list LBRACE decls = struct_declaration_list RBRACE
-    { (Tstruct_union (fst str_uni) None (Some (rev' decls)) (rev' attrs),            snd str_uni) }
 | str_uni = struct_or_union attrs = attribute_specifier_list id = OTHER_NAME
-    { (Tstruct_union (fst str_uni) (Some (fst id)) None (rev' attrs),         snd str_uni) }
+  LBRACE decls = struct_declaration_list RBRACE
+    { (Tstruct_union (fst str_uni) (Some (fst id)) (Some (rev' decls)) attrs,
+       snd str_uni) }
+| str_uni = struct_or_union attrs = attribute_specifier_list
+  LBRACE decls = struct_declaration_list RBRACE
+    { (Tstruct_union (fst str_uni) None (Some (rev' decls)) attrs,
+       snd str_uni) }
+| str_uni = struct_or_union attrs = attribute_specifier_list id = OTHER_NAME
+    { (Tstruct_union (fst str_uni) (Some (fst id)) None attrs,
+       snd str_uni) }
 
 struct_or_union:
 | loc = STRUCT
@@ -463,16 +479,20 @@ struct_declarator:
 
 (* 6.7.2.2 *)
 enum_specifier:
-| loc = ENUM attrs = attribute_specifier_list name = OTHER_NAME LBRACE enum_list = enumerator_list RBRACE
-    { (Tenum (Some (fst name)) (Some (rev' enum_list)) (rev' attrs), loc) }
-| loc = ENUM attrs = attribute_specifier_list LBRACE enum_list = enumerator_list RBRACE
-    { (Tenum None (Some (rev' enum_list)) (rev' attrs), loc) }
-| loc = ENUM attrs = attribute_specifier_list name = OTHER_NAME LBRACE enum_list = enumerator_list COMMA RBRACE
-    { (Tenum (Some (fst name)) (Some (rev' enum_list)) (rev' attrs), loc) }
-| loc = ENUM attrs = attribute_specifier_list LBRACE enum_list = enumerator_list COMMA RBRACE
-    { (Tenum None (Some (rev' enum_list)) (rev' attrs), loc) }
 | loc = ENUM attrs = attribute_specifier_list name = OTHER_NAME
-    { (Tenum (Some (fst name)) None (rev' attrs), loc) }
+  LBRACE enum_list = enumerator_list RBRACE
+    { (Tenum (Some (fst name)) (Some (rev' enum_list)) attrs, loc) }
+| loc = ENUM attrs = attribute_specifier_list
+  LBRACE enum_list = enumerator_list RBRACE
+    { (Tenum None (Some (rev' enum_list)) attrs, loc) }
+| loc = ENUM attrs = attribute_specifier_list name = OTHER_NAME
+  LBRACE enum_list = enumerator_list COMMA RBRACE
+    { (Tenum (Some (fst name)) (Some (rev' enum_list)) attrs, loc) }
+| loc = ENUM attrs = attribute_specifier_list
+  LBRACE enum_list = enumerator_list COMMA RBRACE
+    { (Tenum None (Some (rev' enum_list)) attrs, loc) }
+| loc = ENUM attrs = attribute_specifier_list name = OTHER_NAME
+    { (Tenum (Some (fst name)) None attrs, loc) }
 
 enumerator_list:
 | enum = enumerator
@@ -491,13 +511,17 @@ enumeration_constant:
     { cst }
 
 (* 6.7.3 *)
-type_qualifier:
+type_qualifier_noattr:
 | loc = CONST
     { (CV_CONST, loc) }
 | loc = RESTRICT
     { (CV_RESTRICT, loc) }
 | loc = VOLATILE
     { (CV_VOLATILE, loc) }
+
+type_qualifier:
+| qual = type_qualifier_noattr
+    { qual }
 (* Non-standard *)
 | attr = attribute_specifier
     { (CV_ATTR (fst attr), snd attr) }
@@ -507,17 +531,14 @@ type_qualifier:
 attribute_specifier_list:
 | /* empty */
     { [] }
-|  attrs = attribute_specifier_list attr = attribute_specifier
-    { fst attr :: attrs }
+|  attr = attribute_specifier attrs = attribute_specifier_list
+   { fst attr :: attrs }
 
 attribute_specifier:
 | loc = ATTRIBUTE LPAREN LPAREN attr = gcc_attribute_list RPAREN RPAREN
     { (GCC_ATTR (rev' attr) loc, loc) }
 | loc = PACKED LPAREN args = argument_expression_list RPAREN
     { (PACKED_ATTR (rev' args) loc, loc) }
-/* TODO: slove conflict */
-/*| loc = PACKED
-    { (PACKED_ATTR [] loc, loc) }*/
 | loc = ALIGNAS LPAREN args = argument_expression_list RPAREN
     { (ALIGNAS_ATTR (rev' args) loc, loc) }
 | loc = ALIGNAS LPAREN typ = type_name RPAREN
@@ -554,12 +575,16 @@ function_specifier:
 
 (* 6.7.5 *)
 declarator:
-| decl = direct_declarator attrs = attribute_specifier_list
+| decl = declarator_noattrend attrs = attribute_specifier_list
     { match decl with Name name typ attr loc =>
         Name name typ (List.app attr attrs) loc end }
-| pt = pointer decl = direct_declarator attrs = attribute_specifier_list
+
+declarator_noattrend:
+| decl = direct_declarator
+    { decl }
+| pt = pointer decl = direct_declarator
     { match decl with Name name typ attr _ =>
-        Name name ((fst pt) typ) (List.app attr attrs) (snd pt) end }
+        Name name ((fst pt) typ) attr (snd pt) end }
 
 direct_declarator:
 | id = VAR_NAME
@@ -585,7 +610,10 @@ direct_declarator:
         Name name (PROTO typ params) attr loc end }
 | decl = direct_declarator LPAREN RPAREN
     { match decl with Name name typ attr loc =>
-        Name name (PROTO typ ([], false)) attr loc end }
+        Name name (PROTO_OLD typ []) attr loc end }
+| decl = direct_declarator LPAREN params = identifier_list RPAREN
+    { match decl with Name name typ attr loc =>
+        Name name (PROTO_OLD typ (rev' params)) attr loc end }
 
 pointer:
 | loc = STAR
@@ -623,6 +651,12 @@ parameter_declaration:
     { PARAM (fst specs) None decl [] (snd specs) }
 | specs = declaration_specifiers
     { PARAM (fst specs) None JUSTBASE [] (snd specs) }
+
+identifier_list:
+| id = VAR_NAME
+    { [fst id] }
+| idl = identifier_list COMMA id = VAR_NAME
+    { fst id :: idl }
 
 (* 6.7.6 *)
 type_name:
@@ -902,40 +936,18 @@ external_declaration:
 (* 6.9.1 *)
 function_definition:
 | specs = declaration_specifiers
-  decl = declarator
-  stmt = compound_statement
-    { FUNDEF (fst specs) decl stmt (snd specs) }
-| specs = declaration_specifiers
-  decl = old_function_declarator
+  decl = declarator_noattrend
   dlist = declaration_list
   stmt = compound_statement
-    { KRFUNDEF (fst specs) (fst decl) (snd decl) (List.rev' dlist) stmt (snd specs) }
-
-(* Hack to parse old-style, unprototyped function definitions
-   without causing ambiguities between a regular declarator
-   (which can end with attributes) and a declaration list
-   (which can start with attributes). *)
-
-old_function_declarator:
-| decl = direct_old_function_declarator
-    { decl }
-| pt = pointer decl = direct_old_function_declarator
-    { match decl with (Name name typ attr _, params) =>
-        (Name name ((fst pt) typ) attr (snd pt), params) end }
-
-direct_old_function_declarator:
-| decl = direct_declarator LPAREN params = identifier_list RPAREN
-    { (decl, List.rev' params) }
-
-identifier_list:
-| id = VAR_NAME
-    { [fst id] }
-| idl = identifier_list COMMA id = VAR_NAME
-    { fst id :: idl }
+   { FUNDEF (fst specs) decl (List.rev' dlist) stmt (snd specs) }
+| specs = declaration_specifiers
+  decl = declarator
+  stmt = compound_statement
+    { FUNDEF (fst specs) decl [] stmt (snd specs) }
 
 declaration_list:
-| /*empty*/
-    { [] }
+| d = declaration
+    { [d] }
 | dl = declaration_list d = declaration
     { d :: dl }
 

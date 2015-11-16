@@ -24,7 +24,7 @@ module S = MenhirLib.General (* Streams *)
    silently cover up for our internal error. Thus, we typically use an idiom of
    the form [if debug then assert false else <some default value>]. *)
 
-let debug = true
+let debug = false
 
 (* -------------------------------------------------------------------------- *)
 
@@ -89,6 +89,14 @@ let extract text (pos1, pos2) : string =
     (* In principle, this should not happen, but if it does, let's make this
        a non-fatal error. *)
     if debug then assert false else "???"
+
+(* -------------------------------------------------------------------------- *)
+
+(* [compress text] replaces every run of at least one whitespace character
+   with exactly one space character. *)
+
+let compress text =
+  Str.global_replace (Str.regexp "[ \t\n\r]+") " " text
 
 (* -------------------------------------------------------------------------- *)
 
@@ -182,7 +190,7 @@ let range text (e : element) : string =
   (* Get the underlying source text fragment. *)
   let fragment = extract text (pos1, pos2) in
   (* Sanitize it and limit its length. Enclose it in single quotes. *)
-  "'" ^ shorten width (sanitize fragment) ^ "'"
+  "'" ^ shorten width (sanitize (compress fragment)) ^ "'"
 
 (* -------------------------------------------------------------------------- *)
 
