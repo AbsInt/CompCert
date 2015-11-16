@@ -366,22 +366,25 @@ module Dwarfgenaux (Target: TARGET) =
       | a::rest -> LocList (a::rest)
 
     let location_entry f_id atom =
-      try
-        begin
-          match (Hashtbl.find var_locations (f_id,atom)) with
-          | FunctionLoc (a,r) ->
-              translate_function_loc a r
-          | RangeLoc l ->
-              let l = List.rev_map (fun i ->
-                let hi = get_opt_val i.range_start
-                and lo = get_opt_val i.range_end in
-                let hi = Hashtbl.find label_translation (f_id,hi)
-                and lo = Hashtbl.find label_translation (f_id,lo) in
-                hi,lo,range_entry_loc i.var_loc) l in
-              let id = next_id () in
-              Some (LocRef id),[{loc = l;loc_id = id;}]
-        end
-      with Not_found -> None,[]
+      if !Clflags.option_gdepth > 2 then
+        try
+          begin
+            match (Hashtbl.find var_locations (f_id,atom)) with
+            | FunctionLoc (a,r) ->
+                translate_function_loc a r
+            | RangeLoc l ->
+                let l = List.rev_map (fun i ->
+                  let hi = get_opt_val i.range_start
+                  and lo = get_opt_val i.range_end in
+                  let hi = Hashtbl.find label_translation (f_id,hi)
+                  and lo = Hashtbl.find label_translation (f_id,lo) in
+                  hi,lo,range_entry_loc i.var_loc) l in
+                let id = next_id () in
+                Some (LocRef id),[{loc = l;loc_id = id;}]
+          end
+        with Not_found -> None,[]
+      else
+        None,[]
 
     let function_parameter_to_entry f_id acc p =
       let loc,loc_list = match p.parameter_atom with
@@ -478,7 +481,7 @@ module Dwarfgenaux (Target: TARGET) =
       let acc = match f.fun_return_type with Some s -> acc =<< s | None -> acc in
       let f_entry =  new_entry id (DW_TAG_subprogram f_tag) in
       let children,acc =
-        if not !Clflags.option_gglobal then
+        if !Clflags.option_gdepth > 1 then
           let params,acc = mmap (function_parameter_to_entry f_id) acc f.fun_parameter in
           let vars,acc = fun_scope_to_entries f_id acc f.fun_scope in
           params@vars,acc
