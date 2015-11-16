@@ -682,7 +682,7 @@ let _ =
                      then Machine.ppc_32_bigendian
                      else Machine.ppc_32_diab_bigendian
       | "arm"     -> Machine.arm_littleendian
-      | "ia32"    -> if Configuration.abi = "macosx"
+      | "ia32"    -> if Configuration.system = "macosx"
                      then Machine.x86_32_macosx
                      else Machine.x86_32
       | _         -> assert false

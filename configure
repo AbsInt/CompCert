@@ -174,7 +174,7 @@ case "$target" in
   ia32-macosx)
     arch="ia32"
     model="sse2"
-    abi="macosx"
+    abi="standard"
     struct_passing="ints"
     struct_return="int1248"
     system="macosx"
