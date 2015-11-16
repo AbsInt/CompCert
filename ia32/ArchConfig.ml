@@ -29,3 +29,14 @@ let string_of_model = function
   | SSE2 -> "sse2"
 
 let needs_thumb _ = false
+
+type abi =
+  | Standard
+
+
+let abi_of_string = function
+  | "standard" -> Standard
+  | s ->  Printf.eprintf "Invalid abi `%s' is not supported\n" s; exit 2
+
+let string_of_abi = function
+  | Standard -> "standard"
