@@ -34,3 +34,16 @@ let string_of_model = function
   | PPC64 -> "ppc64"
 
 let needs_thumb _ = false
+
+type abi =
+  | Eabi
+  | Gnu
+
+let abi_of_string = function
+  | "eabi" -> Eabi
+  | "gnu" -> Gnu
+  | s ->  Printf.eprintf "Invalid abi `%s' is not supported\n" s; exit 2
+
+let string_of_abi = function
+  | Eabi -> "eabi"
+  | Gnu -> "gnu"
