@@ -789,7 +789,7 @@ module Target (System : SYSTEM):TARGET =
       let nlo = Int64.to_int32 n
       and nhi = Int64.to_int32(Int64.shift_right_logical n 32) in
       fprintf oc "%a:	.long	0x%lx, 0x%lx\n" label lbl nhi nlo
-        
+
     let print_literal32 oc (lbl, n) =
       fprintf oc "%a:	.long	0x%lx\n" label lbl n
 
@@ -880,7 +880,6 @@ module Target (System : SYSTEM):TARGET =
 let sel_target () =
   let module S  = (val
     (match Configuration.system with
-    | "linux"  -> (module Linux_System:SYSTEM)
-    | "diab"   -> (module Diab_System:SYSTEM)
-    | _        -> invalid_arg ("System " ^ Configuration.system ^ " not supported")):SYSTEM) in
+    | ArchConfig.Linux  -> (module Linux_System:SYSTEM)
+    | ArchConfig.Diab   -> (module Diab_System:SYSTEM)):SYSTEM) in
   (module Target(S):TARGET)

@@ -505,7 +505,7 @@ let prod_name =
     else
       Version.version in
   Printf.sprintf "AbsInt Angewandte Informatik GmbH:CompCert Version %s:(%s,%s,%s,%s)"
-    version_string Configuration.arch Configuration.system (ArchConfig.string_of_abi Configuration.abi) (ArchConfig.string_of_model Configuration.model)
+    version_string Configuration.arch (ArchConfig.string_of_system Configuration.system) (ArchConfig.string_of_abi Configuration.abi) (ArchConfig.string_of_model Configuration.model)
 
 let diab_gen_compilation_section s defs acc =
   let module Gen = Dwarfgenaux(struct
@@ -550,7 +550,7 @@ let gnu_file_loc (f,l) =
 let string_table: (string,int) Hashtbl.t = Hashtbl.create 7
 
 let gnu_string_entry s =
-  if String.length s < 4 || Configuration.system = "cygwin" then (*Cygwin does not use the debug_str seciton *)
+  if String.length s < 4 || ArchConfig.debug_str Configuration.system then (*Cygwin does not use the debug_str seciton *)
     Simple_string s
   else
     try

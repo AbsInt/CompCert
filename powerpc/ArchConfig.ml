@@ -48,7 +48,28 @@ let string_of_abi = function
   | Eabi -> "eabi"
   | Gnu -> "gnu"
 
+type system =
+  | Linux
+  | Diab
+
+let system_of_string = function
+  | "linux" -> Linux
+  | "diab" -> Diab
+  | s -> Printf.eprintf "Invald system `%s' is not supported\n" s; exit 2
+
+let string_of_system = function
+  | Linux -> "linux"
+  | Diab -> "diab"
+
 let small_data abi system =
   match abi,system with
-  | Eabi,"diab" -> 8
+  | Eabi,Diab -> 8
   | _ -> 0
+
+let debug_str system = true
+
+let diab_system = function
+  | Diab -> true
+  | Linux -> false
+
+let macosx_system _ = false

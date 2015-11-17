@@ -79,7 +79,7 @@ let arch =
   | v -> bad_config "arch" [v]
 let model = ArchConfig.model_of_string (get_config_string "model")
 let abi = ArchConfig.abi_of_string (get_config_string "abi")
-let system = get_config_string "system"
+let system = ArchConfig.system_of_string (get_config_string "system")
 let has_runtime_lib =
   match get_config_string "has_runtime_lib" with
   | "true" -> true
