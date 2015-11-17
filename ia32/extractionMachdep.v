@@ -17,4 +17,4 @@ Require SelectOp.
 (* SelectOp *)
 
 Extract Constant SelectOp.symbol_is_external =>
-  "fun id -> Configuration.system = ""macosx"" && C2C.atom_is_extern id".
+  "fun id -> Configuration.system = ArchConfig.Macosx && C2C.atom_is_extern id".

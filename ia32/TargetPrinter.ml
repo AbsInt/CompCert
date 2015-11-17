@@ -794,9 +794,8 @@ end
 
 let sel_target () =
  let module S = (val (match Configuration.system with
-  | "macosx" -> (module MacOS_System:SYSTEM)
-  | "linux"
-  | "bsd" -> (module ELF_System:SYSTEM)
-  | "cygwin" -> (module Cygwin_System:SYSTEM)
-  | _ -> invalid_arg ("System " ^ Configuration.system ^ " not supported")  ):SYSTEM) in
+  | ArchConfig.Macosx-> (module MacOS_System:SYSTEM)
+  | ArchConfig.Linux
+  | ArchConfig.Bsd -> (module ELF_System:SYSTEM)
+  | ArchConfig.Cygwin -> (module Cygwin_System:SYSTEM)):SYSTEM) in
  (module Target(S):TARGET)
