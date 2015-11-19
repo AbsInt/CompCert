@@ -24,27 +24,37 @@ type model =
   | PPC32
   | PPC64
 
-let model_of_string = function
-  | "ppc32" -> PPC32
-  | "ppc64" -> PPC64
+let model_config: model ref = ref PPC32
+
+let set_model = function
+  | "ppc32" -> model_config := PPC32
+  | "ppc64" -> model_config := PPC64
   | s -> Printf.eprintf "Invalid model `%s' is not supported\n" s; exit 2
 
-let string_of_model = function
+let get_model () = !model_config
+
+let string_of_model () =
+  match !model_config with
   | PPC32 -> "ppc32"
   | PPC64 -> "ppc64"
 
-let needs_thumb _ = false
+let needs_thumb () = false
 
 type abi =
   | Eabi
   | Gnu
 
-let abi_of_string = function
-  | "eabi" -> Eabi
-  | "gnu" -> Gnu
+let abi_config: abi ref = ref Eabi
+
+let set_abi = function
+  | "eabi" -> abi_config := Eabi
+  | "gnu" -> abi_config := Gnu
   | s ->  Printf.eprintf "Invalid abi `%s' is not supported\n" s; exit 2
 
-let string_of_abi = function
+let get_abi () = !abi_config
+
+let string_of_abi () =
+  match !abi_config with
   | Eabi -> "eabi"
   | Gnu -> "gnu"
 
@@ -52,23 +62,29 @@ type system =
   | Linux
   | Diab
 
-let system_of_string = function
-  | "linux" -> Linux
-  | "diab" -> Diab
+let system_config: system ref = ref Linux
+
+let set_system = function
+  | "linux" -> system_config := Linux
+  | "diab" -> system_config := Diab
   | s -> Printf.eprintf "Invald system `%s' is not supported\n" s; exit 2
 
-let string_of_system = function
+let get_system () = !system_config
+
+let string_of_system () =
+  match !system_config with
   | Linux -> "linux"
   | Diab -> "diab"
 
-let small_data abi system =
-  match abi,system with
+let small_data () =
+  match !abi_config,!system_config with
   | Eabi,Diab -> 8
   | _ -> 0
 
-let debug_str system = true
+let debug_str _ = true
 
-let diab_system = function
+let diab_system () =
+  match !system_config with
   | Diab -> true
   | Linux -> false
 

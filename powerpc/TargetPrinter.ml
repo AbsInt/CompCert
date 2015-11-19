@@ -879,7 +879,7 @@ module Target (System : SYSTEM):TARGET =
 
 let sel_target () =
   let module S  = (val
-    (match Configuration.system with
+    (match ArchConfig.get_system () with
     | ArchConfig.Linux  -> (module Linux_System:SYSTEM)
     | ArchConfig.Diab   -> (module Diab_System:SYSTEM)):SYSTEM) in
   (module Target(S):TARGET)

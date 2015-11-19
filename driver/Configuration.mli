@@ -12,12 +12,6 @@
 
 val arch: string
   (** Target architecture *)
-val model: ArchConfig.model
-  (** Sub-model for this architecture *)
-val abi: ArchConfig.abi
-  (** ABI to use *)
-val system: ArchConfig.system
-  (** Flavor of operating system that runs CompCert *)
 
 val prepro: string list
   (** How to invoke the external preprocessor *)
