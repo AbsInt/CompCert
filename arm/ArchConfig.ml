@@ -24,20 +24,26 @@ type model =
   | Armv7r
   | Armv7m
 
-let model_of_string = function
-  | "armv6" -> Armv6
-  | "armv7a" -> Armv7a
-  | "armv7r" -> Armv7r
-  | "armv7m" -> Armv7m
+let model_config: model ref = ref Armv7a
+
+let set_model = function
+  | "armv6" -> model_config := Armv6
+  | "armv7a" -> model_config := Armv7a
+  | "armv7r" -> model_config := Armv7r
+  | "armv7m" -> model_config := Armv7m
   | s -> Printf.eprintf "Invalid model `%s' is not supported\n" s; exit 2
 
-let string_of_model = function
+let get_model () = !model_config
+
+let string_of_model () =
+  match !model_config with
   | Armv6 -> "armv6"
   | Armv7a -> "armv7a"
   | Armv7r -> "armv7r"
   | Armv7m -> "armv7m"
 
-let needs_thumb = function
+let needs_thumb () =
+  match !model_config with
   | Armv7m -> true
   | _ -> false
 
@@ -45,25 +51,35 @@ type abi =
   | Eabi
   | Eabihf
 
-let abi_of_string = function
-  | "eabi" -> Eabi
-  | "hardfloat" -> Eabihf
+let abi_config: abi ref = ref Eabi
+
+let set_abi = function
+  | "eabi" -> abi_config := Eabi
+  | "hardfloat" -> abi_config := Eabihf
   | s ->  Printf.eprintf "Invalid abi `%s' is not supported\n" s; exit 2
 
-let string_of_abi = function
+let get_abi () = !abi_config
+
+let string_of_abi () =
+  match !abi_config with
   | Eabi -> "eabi"
   | Eabihf -> "hardfloat"
 
-let small_data _ _ = 0
+let small_data () = 0
 
 type system =
   | Linux
 
-let system_of_string = function
-  | "linux" -> Linux
+let system_config: system ref = ref Linux
+
+let set_system = function
+  | "linux" -> system_config := Linux
   | s -> Printf.eprintf "Invald system `%s' is not supported\n" s; exit 2
 
-let string_of_system = function
+let get_system () = !system_config
+
+let string_of_system () =
+  match !system_config with
   | Linux -> "linux"
 
 let debug_str system = true

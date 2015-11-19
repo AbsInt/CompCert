@@ -891,7 +891,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
     let print_prologue oc =
       fprintf oc "	.syntax	unified\n";
       fprintf oc "	.arch	%s\n"
-        (match Configuration.model with
+        (match ArchConfig.get_model () with
         | ArchConfig.Armv6 -> "armv6"
         | ArchConfig.Armv7a -> "armv7-a"
         | ArchConfig.Armv7r -> "armv7-r"
@@ -922,14 +922,14 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
 let sel_target () =
   let module S : PRINTER_OPTIONS = struct
 
-   let vfpv3 = Configuration.model <> ArchConfig.Armv6
+   let vfpv3 = ArchConfig.get_model () <> ArchConfig.Armv6
 
-   let float_abi = match Configuration.abi with
+   let float_abi = match ArchConfig.get_abi () with
    | ArchConfig.Eabi   -> Soft
    | ArchConfig.Eabihf -> Hard
 
    let hardware_idiv  =
-   match  Configuration.model with
+   match ArchConfig.get_model ()  with
    | ArchConfig.Armv7r | ArchConfig.Armv7m -> !Clflags.option_mthumb
    | _ -> false
 
