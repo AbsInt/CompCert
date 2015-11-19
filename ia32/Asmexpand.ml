@@ -33,7 +33,7 @@ let _4 = coqint_of_camlint 4l
 let _8 = coqint_of_camlint 8l
 
 let stack_alignment () =
-  if Configuration.system = ArchConfig.Macosx then 16
+  if ArchConfig.macosx_system () then 16
   else 8
 
 (* SP adjustment to allocate or free a stack frame *)

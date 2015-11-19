@@ -21,11 +21,16 @@ let cpu_of_string = function
 type model =
   | SSE2
 
-let model_of_string = function
-  | "sse2" -> SSE2
+let model_config: model ref = ref SSE2
+
+let set_model = function
+  | "sse2" -> model_config := SSE2
   | s -> Printf.eprintf "Invalid model `%s' is not supported\n" s; exit 2
 
-let string_of_model = function
+let get_model () = !model_config
+
+let string_of_model () =
+  match !model_config with
   | SSE2 -> "sse2"
 
 let needs_thumb _ = false
@@ -33,16 +38,19 @@ let needs_thumb _ = false
 type abi =
   | Standard
 
+let abi_config: abi ref = ref Standard
 
-let abi_of_string = function
-  | "standard" -> Standard
+let set_abi = function
+  | "standard" -> abi_config := Standard
   | s ->  Printf.eprintf "Invalid abi `%s' is not supported\n" s; exit 2
 
-let string_of_abi = function
+let get_abi = !abi_config
+
+let string_of_abi () =
+  match !abi_config with
   | Standard -> "standard"
 
-let small_data _ _ = 0
-
+let small_data () = 0
 
 type system =
   | Linux
@@ -50,23 +58,29 @@ type system =
   | Macosx
   | Cygwin
 
-let system_of_string = function
-  | "linux" -> Linux
-  | "bsd" -> Bsd
-  | "cygwin" -> Cygwin
-  | "macosx" -> Macosx
+let system_config: system ref = ref Linux
+
+let set_system = function
+  | "linux" -> system_config := Linux
+  | "bsd" -> system_config := Bsd
+  | "cygwin" -> system_config := Cygwin
+  | "macosx" -> system_config := Macosx
   | s -> Printf.eprintf "Invald system `%s' is not supported\n" s; exit 2
 
-let string_of_system = function
+let get_system () = !system_config
+
+let string_of_system () =
+  match !system_config with
   | Linux -> "linux"
   | Bsd -> "bsd"
   | Cygwin -> "cygwin"
   | Macosx -> "macosx"
 
-let debug_str system = true
+let debug_str () = !system_config <> Cygwin
 
 let diab_system _ = false
 
-let macosx_system = function
+let macosx_system () =
+  match !system_config with
   | Macosx -> true
   | _ -> false

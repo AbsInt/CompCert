@@ -793,7 +793,7 @@ module Target(System: SYSTEM):TARGET =
 end
 
 let sel_target () =
- let module S = (val (match Configuration.system with
+ let module S = (val (match ArchConfig.get_system () with
   | ArchConfig.Macosx-> (module MacOS_System:SYSTEM)
   | ArchConfig.Linux
   | ArchConfig.Bsd -> (module ELF_System:SYSTEM)
