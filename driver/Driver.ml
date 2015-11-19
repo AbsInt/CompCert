@@ -155,10 +155,10 @@ let parse_c_file sourcename ifile =
 
 let jdump_magic_number = "CompCertJDUMP" ^ Version.version
 
-let dump_jasm asm destfile =
+let dump_jasm asm sourcename destfile =
   let oc = open_out_bin destfile in
-  fprintf oc "{\n\"Version\":\"%s\",\n\"System\":\"%s\",\n\"Asm Ast\":%a}"
-    jdump_magic_number Configuration.system AsmToJSON.p_program asm;
+  fprintf oc "{\n\"Version\":\"%s\",\n\"System\":\"%s\"\n,\"Compilation Unit\":\"%s\",\n\"Asm Ast\":%a}"
+    jdump_magic_number Configuration.system sourcename AsmToJSON.p_program asm;
   close_out oc
 
 
@@ -187,7 +187,7 @@ let compile_c_ast sourcename csyntax ofile debug =
         exit 2 in
   (* Dump Asm in binary and JSON format *)
   if !option_sdump then
-      dump_jasm asm (output_filename sourcename ".c" !sdump_suffix);
+      dump_jasm asm sourcename (output_filename sourcename ".c" !sdump_suffix);
   (* Print Asm in text form *)
   let oc = open_out ofile in
   PrintAsm.print_program oc asm debug;
