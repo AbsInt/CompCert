@@ -12,6 +12,7 @@
 
 (* Printing ARM assembly code in asm syntax *)
 
+open ArchConfig
 open Printf
 open Datatypes
 open Camlcoq
@@ -22,15 +23,10 @@ open Asm
 open PrintAsmaux
 open Fileinfo
 
-(* Type for the ABI versions *)
-type float_abi_type =
-  | Hard
-  | Soft
-
 (* Module type for the options *)
 module type PRINTER_OPTIONS =
     sig
-      val float_abi: float_abi_type
+      val float_abi: abi
       val vfpv3: bool
       val hardware_idiv: bool
      end
@@ -455,8 +451,8 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
 
     let (fixup_arguments, fixup_result) =
       match Opt.float_abi with
-      | Soft -> (FixupEABI.fixup_arguments, FixupEABI.fixup_result)
-      | Hard -> (FixupHF.fixup_arguments, FixupHF.fixup_result)
+      | Eabi -> (FixupEABI.fixup_arguments, FixupEABI.fixup_result)
+      | Eabihf -> (FixupHF.fixup_arguments, FixupHF.fixup_result)
 
 (* Printing of instructions *)
 
@@ -924,9 +920,7 @@ let sel_target () =
 
    let vfpv3 = ArchConfig.get_model () <> ArchConfig.Armv6
 
-   let float_abi = match ArchConfig.get_abi () with
-   | ArchConfig.Eabi   -> Soft
-   | ArchConfig.Eabihf -> Hard
+    let float_abi = ArchConfig.get_abi ()
 
    let hardware_idiv  =
    match ArchConfig.get_model ()  with

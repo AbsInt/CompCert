@@ -84,3 +84,5 @@ let macosx_system () =
   match !system_config with
   | Macosx -> true
   | _ -> false
+
+let arch = "ia32"

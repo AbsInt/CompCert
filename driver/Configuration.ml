@@ -79,10 +79,6 @@ let _ =
 let prepro = get_config_list "prepro"
 let asm = get_config_list "asm"
 let linker = get_config_list "linker"
-let arch =
-  match get_config_string "arch" with
-  | "powerpc"|"arm"|"ia32" as a -> a
-  | v -> bad_config "arch" [v]
 let has_runtime_lib =
   match get_config_string "has_runtime_lib" with
   | "true" -> true

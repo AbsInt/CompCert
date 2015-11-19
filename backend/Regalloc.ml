@@ -607,7 +607,7 @@ let add_interfs_instr g instr live =
             add_interfs_list g (vmreg mr) srcs;
             IRC.add_interf g (vmreg mr) ftmp)
           (destroyed_by_setstack Tsingle)
-  | Xop(Ofloatofsingle, arg1::_, res) when Configuration.arch = "powerpc" ->
+  | Xop(Ofloatofsingle, arg1::_, res) when ArchConfig.arch = "powerpc" ->
       add_interfs_def g res live;
       IRC.add_pref g arg1 res
   | Xop(op, args, res) ->

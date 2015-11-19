@@ -89,3 +89,5 @@ let diab_system () =
   | Linux -> false
 
 let macosx_system _ = false
+
+let arch = "powerpc"

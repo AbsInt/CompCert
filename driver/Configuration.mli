@@ -10,9 +10,6 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-val arch: string
-  (** Target architecture *)
-
 val prepro: string list
   (** How to invoke the external preprocessor *)
 val asm: string list

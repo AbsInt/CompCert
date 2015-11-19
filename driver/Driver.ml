@@ -677,7 +677,7 @@ let _ =
            };
     Printexc.record_backtrace true;
     Machine.config :=
-      begin match Configuration.arch with
+      begin match ArchConfig.arch with
       | "powerpc" -> if ArchConfig.diab_system ()
                      then Machine.ppc_32_diab_bigendian
                      else Machine.ppc_32_bigendian

@@ -87,3 +87,5 @@ let debug_str system = true
 let diab_system _ = false
 
 let macosx_system _ = false
+
+let arch = "arm"
