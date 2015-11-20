@@ -575,7 +575,10 @@ let cmdline_actions =
   Exact "-mthumb", Set option_mthumb;
   Exact "-marm", Unset option_mthumb;
 (* Assembling options *)
-  Prefix "-Wa,", Self (fun s -> assembler_options := s :: !assembler_options);
+  Prefix "-Wa,", Self (fun s -> if Configuration.system = "diab" then
+    assembler_options := List.rev_append (explode_comma_option s) !assembler_options
+  else
+    assembler_options := s :: !assembler_options);
 (* Linking options *)
   Prefix "-l", Self push_linker_arg;
   Prefix "-L", Self push_linker_arg;
