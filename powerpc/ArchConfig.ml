@@ -35,8 +35,8 @@ let get_model () = !model_config
 
 let string_of_model () =
   match !model_config with
-  | PPC32 -> "ppc32"
-  | PPC64 -> "ppc64"
+  | PPC32 -> ""
+  | PPC64 -> "64"
 
 let needs_thumb () = false
 
@@ -53,11 +53,6 @@ let set_abi = function
 
 let get_abi () = !abi_config
 
-let string_of_abi () =
-  match !abi_config with
-  | Eabi -> "eabi"
-  | Gnu -> "gnu"
-
 type system =
   | Linux
   | Diab
@@ -69,12 +64,12 @@ let set_system = function
   | "diab" -> system_config := Diab
   | s -> Printf.eprintf "Invald system `%s' is not supported\n" s; exit 2
 
-let get_system () = !system_config
-
 let string_of_system () =
   match !system_config with
   | Linux -> "linux"
   | Diab -> "diab"
+
+let get_system () = !system_config
 
 let small_data () =
   match !abi_config,!system_config with
@@ -91,3 +86,15 @@ let diab_system () =
 let macosx_system _ = false
 
 let arch = "powerpc"
+
+let target_string () =
+  let abi =    match !abi_config with
+    | Eabi -> "eabi"
+    | Gnu -> "gnueabi"
+  and system  =  match !system_config with
+  | Linux -> "linux"
+  | Diab -> "diab"
+  and model = match !model_config with
+  | PPC32 -> ""
+  | PPC64 -> "64" in
+  Printf.sprintf "%s%s-%s-%s" arch model system abi

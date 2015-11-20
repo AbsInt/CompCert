@@ -504,8 +504,8 @@ let prod_name =
       Printf.sprintf "%s, Build: %s, Tag: %s" Version.version Version.buildnr Version.tag
     else
       Version.version in
-  Printf.sprintf "AbsInt Angewandte Informatik GmbH:CompCert Version %s:(%s,%s,%s,%s)"
-    version_string ArchConfig.arch (ArchConfig.string_of_system ()) (ArchConfig.string_of_abi ()) (ArchConfig.string_of_model ())
+  Printf.sprintf "AbsInt Angewandte Informatik GmbH:CompCert Version %s:%s"
+    version_string (ArchConfig.target_string ())
 
 let diab_gen_compilation_section s defs acc =
   let module Gen = Dwarfgenaux(struct

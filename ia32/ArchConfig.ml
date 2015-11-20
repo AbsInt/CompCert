@@ -29,10 +29,6 @@ let set_model = function
 
 let get_model () = !model_config
 
-let string_of_model () =
-  match !model_config with
-  | SSE2 -> "sse2"
-
 let needs_thumb _ = false
 
 type abi =
@@ -45,10 +41,6 @@ let set_abi = function
   | s ->  Printf.eprintf "Invalid abi `%s' is not supported\n" s; exit 2
 
 let get_abi = !abi_config
-
-let string_of_abi () =
-  match !abi_config with
-  | Standard -> "standard"
 
 let small_data () = 0
 
@@ -86,3 +78,15 @@ let macosx_system () =
   | _ -> false
 
 let arch = "ia32"
+
+let target_string () =
+  let abi =  match !abi_config with
+  | Standard -> "gnu"
+  and system  =  match !system_config with
+  | Linux -> "linux"
+  | Bsd -> "bsd"
+  | Cygwin -> "cygwin"
+  | Macosx -> "macosx"
+  and model = match !model_config with
+  | SSE2 -> ""
+  Printf.sprintf "%s%s-%s-%s" arch model system abi

@@ -35,13 +35,6 @@ let set_model = function
 
 let get_model () = !model_config
 
-let string_of_model () =
-  match !model_config with
-  | Armv6 -> "armv6"
-  | Armv7a -> "armv7a"
-  | Armv7r -> "armv7r"
-  | Armv7m -> "armv7m"
-
 let needs_thumb () =
   match !model_config with
   | Armv7m -> true
@@ -59,11 +52,6 @@ let set_abi = function
   | s ->  Printf.eprintf "Invalid abi `%s' is not supported\n" s; exit 2
 
 let get_abi () = !abi_config
-
-let string_of_abi () =
-  match !abi_config with
-  | Eabi -> "eabi"
-  | Eabihf -> "hardfloat"
 
 let small_data () = 0
 
@@ -89,3 +77,16 @@ let diab_system _ = false
 let macosx_system _ = false
 
 let arch = "arm"
+
+let target_string () =
+  let abi =    match !abi_config with
+  | Eabi -> "eabi"
+  | Eabihf -> "eabihf"
+  and system  =  match !system_config with
+  | Linux -> "linux"
+  and model =  match !model_config with
+  | Armv6 -> "v6"
+  | Armv7a -> "v7a"
+  | Armv7r -> "v7r"
+  | Armv7m -> "v7m"
+  Printf.sprintf "%s%s-%s-%s" arch model system abi
