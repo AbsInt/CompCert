@@ -33,7 +33,7 @@ let option_falignfunctions = ref (None: int option)
 let option_falignbranchtargets = ref 0
 let option_faligncondbranchs = ref 0
 let option_finline_asm = ref false
-let option_mthumb = ref (Configuration.model = "armv7m")
+let option_mthumb = ref (ArchConfig.needs_thumb ())
 let option_Osize = ref false
 let option_dparse = ref false
 let option_dcmedium = ref false
@@ -54,11 +54,8 @@ let option_S = ref false
 let option_c = ref false
 let option_v = ref false
 let option_interp = ref false
-let option_small_data =
-  ref (if Configuration.arch = "powerpc"
-       && Configuration.abi = "eabi"
-       && Configuration.system = "diab"
-       then 8 else 0)
+let option_small_data = ref (ArchConfig.small_data ())
 let option_small_const = ref (!option_small_data)
 let option_timings = ref false
 let option_rename_static = ref false
+let option_cpu = ref ArchConfig.Generic

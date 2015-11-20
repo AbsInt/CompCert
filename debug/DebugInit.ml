@@ -51,7 +51,7 @@ let default_debug =
 
 let init_debug () =
   implem :=
-  if Configuration.system = "diab" then
+  if ArchConfig.diab_system () then
     let gen = (fun a b -> Some (Dwarfgen.gen_diab_debug_info a b)) in
     Clflags.option_gdwarf := 2; (* Dwarf 2 is the only supported target *)
     {default_debug with generate_debug_info = gen;

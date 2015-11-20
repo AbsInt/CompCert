@@ -10,15 +10,6 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-val arch: string
-  (** Target architecture *)
-val model: string
-  (** Sub-model for this architecture *)
-val abi: string
-  (** ABI to use *)
-val system: string
-  (** Flavor of operating system that runs CompCert *)
-
 val prepro: string list
   (** How to invoke the external preprocessor *)
 val asm: string list

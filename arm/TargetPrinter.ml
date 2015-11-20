@@ -12,6 +12,7 @@
 
 (* Printing ARM assembly code in asm syntax *)
 
+open ArchConfig
 open Printf
 open Datatypes
 open Camlcoq
@@ -22,15 +23,10 @@ open Asm
 open PrintAsmaux
 open Fileinfo
 
-(* Type for the ABI versions *)
-type float_abi_type =
-  | Hard
-  | Soft
-
 (* Module type for the options *)
 module type PRINTER_OPTIONS =
     sig
-      val float_abi: float_abi_type
+      val float_abi: abi
       val vfpv3: bool
       val hardware_idiv: bool
      end
@@ -455,8 +451,8 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
 
     let (fixup_arguments, fixup_result) =
       match Opt.float_abi with
-      | Soft -> (FixupEABI.fixup_arguments, FixupEABI.fixup_result)
-      | Hard -> (FixupHF.fixup_arguments, FixupHF.fixup_result)
+      | Eabi -> (FixupEABI.fixup_arguments, FixupEABI.fixup_result)
+      | Eabihf -> (FixupHF.fixup_arguments, FixupHF.fixup_result)
 
 (* Printing of instructions *)
 
@@ -891,12 +887,11 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
     let print_prologue oc =
       fprintf oc "	.syntax	unified\n";
       fprintf oc "	.arch	%s\n"
-        (match Configuration.model with
-        | "armv6" -> "armv6"
-        | "armv7a" -> "armv7-a"
-        | "armv7r" -> "armv7-r"
-        | "armv7m" -> "armv7-m"
-        | _ -> "armv7");
+        (match ArchConfig.get_model () with
+        | ArchConfig.Armv6 -> "armv6"
+        | ArchConfig.Armv7a -> "armv7-a"
+        | ArchConfig.Armv7r -> "armv7-r"
+        | ArchConfig.Armv7m -> "armv7-m");
       fprintf oc "	.fpu	%s\n"
         (if Opt.vfpv3 then "vfpv3-d16" else "vfpv2");
       fprintf oc "	.%s\n" (if !Clflags.option_mthumb then "thumb" else "arm");
@@ -923,16 +918,13 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
 let sel_target () =
   let module S : PRINTER_OPTIONS = struct
 
-   let vfpv3 = Configuration.model >= "armv7"
+   let vfpv3 = ArchConfig.get_model () <> ArchConfig.Armv6
 
-   let float_abi = match Configuration.abi with
-   | "eabi"      -> Soft
-   | "hardfloat" -> Hard
-   | _ -> assert false
+    let float_abi = ArchConfig.get_abi ()
 
    let hardware_idiv  =
-   match  Configuration.model with
-   | "armv7r" | "armv7m" -> !Clflags.option_mthumb
+   match ArchConfig.get_model ()  with
+   | ArchConfig.Armv7r | ArchConfig.Armv7m -> !Clflags.option_mthumb
    | _ -> false
 
    end in

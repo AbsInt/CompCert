@@ -158,7 +158,7 @@ let jdump_magic_number = "CompCertJDUMP" ^ Version.version
 let dump_jasm asm sourcename destfile =
   let oc = open_out_bin destfile in
   fprintf oc "{\n\"Version\":\"%s\",\n\"System\":\"%s\"\n,\"Compilation Unit\":\"%s\",\n\"Asm Ast\":%a}"
-    jdump_magic_number Configuration.system sourcename AsmToJSON.p_program asm;
+    jdump_magic_number (ArchConfig.string_of_system ()) sourcename AsmToJSON.p_program asm;
   close_out oc
 
 
@@ -574,12 +574,17 @@ let cmdline_actions =
 (* Target processor options *)
   Exact "-mthumb", Set option_mthumb;
   Exact "-marm", Unset option_mthumb;
+  Prefix "-mcpu=",  Self (fun s -> let s = String.sub s 6 ((String.length s) - 6)  in
+  option_cpu := ArchConfig.cpu_of_string s);
 (* Assembling options *)
-  Prefix "-Wa,", Self (fun s -> assembler_options := s :: !assembler_options);
+  Prefix "-Wa,", Self (fun s -> if ArchConfig.diab_system () then
+    assembler_options := List.rev_append (explode_comma_option s) !assembler_options
+  else
+    assembler_options := s :: !assembler_options);
 (* Linking options *)
   Prefix "-l", Self push_linker_arg;
   Prefix "-L", Self push_linker_arg;
-  Exact "-T", String (fun s -> if Configuration.system = "diab" then
+  Exact "-T", String (fun s -> if ArchConfig.diab_system () then
     push_linker_arg ("-Wm"^s)
   else begin
       push_linker_arg ("-T");
@@ -682,12 +687,12 @@ let _ =
            };
     Printexc.record_backtrace true;
     Machine.config :=
-      begin match Configuration.arch with
-      | "powerpc" -> if Configuration.system = "linux"
-                     then Machine.ppc_32_bigendian
-                     else Machine.ppc_32_diab_bigendian
+      begin match ArchConfig.arch with
+      | "powerpc" -> if ArchConfig.diab_system ()
+                     then Machine.ppc_32_diab_bigendian
+                     else Machine.ppc_32_bigendian
       | "arm"     -> Machine.arm_littleendian
-      | "ia32"    -> if Configuration.abi = "macosx"
+      | "ia32"    -> if ArchConfig.macosx_system ()
                      then Machine.x86_32_macosx
                      else Machine.x86_32
       | _         -> assert false

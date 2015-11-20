@@ -39,7 +39,6 @@ Supported targets:
 
 For PowerPC targets, the "ppc-" prefix can be refined into:
   ppc64-           PowerPC 64 bits
-  e5500-           Freescale e5500 core (PowerPC 64 bits + EREF extensions)
 
 For ARM targets, the "arm-" prefix can be refined into:
   armv6-           ARMv6   + VFPv2
@@ -88,11 +87,10 @@ struct_passing=""
 struct_return=""
 
 case "$target" in
-  powerpc-*|ppc-*|powerpc64-*|ppc64-*|e5500-*)
+  powerpc-*|ppc-*|powerpc64-*|ppc64-*)
     arch="powerpc"
     case "$target" in
       powerpc64-*|ppc64-*) model="ppc64";;
-      e5500-*) model="e5500";;
       *) model="ppc32";;
     esac
     abi="eabi"
@@ -176,7 +174,7 @@ case "$target" in
   ia32-macosx)
     arch="ia32"
     model="sse2"
-    abi="macosx"
+    abi="standard"
     struct_passing="ints"
     struct_return="int1248"
     system="macosx"
@@ -310,7 +308,7 @@ for mk in make gmake gnumake; do
         break;;
   esac
 done
-if test -z "$make"; then 
+if test -z "$make"; then
   echo "NOT FOUND"
   echo "Error: make sure GNU Make version 3.80 or later is installed."
   missingtools=true
@@ -363,9 +361,8 @@ cat >> Makefile.config <<'EOF'
 ARCH=
 
 # Hardware variant
-# MODEL=ppc32     # for plain PowerPC 
+# MODEL=ppc32     # for plain PowerPC
 # MODEL=ppc64     # for PowerPC with 64-bit instructions
-# MODEL=e5500     # for Freescale e5500 PowerPC variant
 # MODEL=armv6     # for ARM
 # MODEL=armv7a    # for ARM
 # MODEL=armv7r    # for ARM

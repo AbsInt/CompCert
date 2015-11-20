@@ -37,7 +37,7 @@ let ini_file_name =
 
 (* Read in the .ini file *)
 
-let _ =
+let read_ini_file () =
   try
     Readconfig.read_config_file ini_file_name
   with
@@ -70,16 +70,15 @@ let get_config_list key =
   | [] -> bad_config key []
   | vl -> vl
 
+let _ =
+  read_ini_file ();
+  ArchConfig.set_model (get_config_string "model");
+  ArchConfig.set_system (get_config_string "system");
+  ArchConfig.set_abi (get_config_string "abi")
+
 let prepro = get_config_list "prepro"
 let asm = get_config_list "asm"
 let linker = get_config_list "linker"
-let arch =
-  match get_config_string "arch" with
-  | "powerpc"|"arm"|"ia32" as a -> a
-  | v -> bad_config "arch" [v]
-let model = get_config_string "model"
-let abi = get_config_string "abi"
-let system = get_config_string "system"
 let has_runtime_lib =
   match get_config_string "has_runtime_lib" with
   | "true" -> true

@@ -25,10 +25,7 @@ exception Error of string
 
 (* FreeScale's EREF extensions *)
 
-let eref =
-  match Configuration.model with
-  | "e5500" -> true
-  | _ -> false
+let eref = !Clflags.option_cpu =  ArchConfig.E5500
 
 (* Useful constants and helper functions *)
 
