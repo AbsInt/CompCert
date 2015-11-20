@@ -88,5 +88,5 @@ let target_string () =
   | Armv6 -> "v6"
   | Armv7a -> "v7a"
   | Armv7r -> "v7r"
-  | Armv7m -> "v7m"
+  | Armv7m -> "v7m" in
   Printf.sprintf "%s%s-%s-%s" arch model system abi

@@ -88,5 +88,5 @@ let target_string () =
   | Cygwin -> "cygwin"
   | Macosx -> "macosx"
   and model = match !model_config with
-  | SSE2 -> ""
+  | SSE2 -> "" in
   Printf.sprintf "%s%s-%s-%s" arch model system abi
