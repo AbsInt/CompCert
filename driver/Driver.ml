@@ -155,10 +155,10 @@ let parse_c_file sourcename ifile =
 
 let jdump_magic_number = "CompCertJDUMP" ^ Version.version
 
-let dump_jasm asm destfile =
+let dump_jasm asm sourcename destfile =
   let oc = open_out_bin destfile in
-  fprintf oc "{\n\"Version\":\"%s\",\n\"System\":\"%s\",\n\"Asm Ast\":%a}"
-    jdump_magic_number (ArchConfig.string_of_system ()) AsmToJSON.p_program asm;
+  fprintf oc "{\n\"Version\":\"%s\",\n\"System\":\"%s\"\n,\"Compilation Unit\":\"%s\",\n\"Asm Ast\":%a}"
+    jdump_magic_number (ArchConfig.string_of_system ()) sourcename AsmToJSON.p_program asm;
   close_out oc
 
 
@@ -187,7 +187,7 @@ let compile_c_ast sourcename csyntax ofile debug =
         exit 2 in
   (* Dump Asm in binary and JSON format *)
   if !option_sdump then
-      dump_jasm asm (output_filename sourcename ".c" !sdump_suffix);
+      dump_jasm asm sourcename (output_filename sourcename ".c" !sdump_suffix);
   (* Print Asm in text form *)
   let oc = open_out ofile in
   PrintAsm.print_program oc asm debug;
@@ -439,7 +439,9 @@ Language support options (use -fno-<opt> to turn off -f<opt>) :
 Debugging options:
   -g             Generate debugging information
   -gdwarf-       (GCC only) Generate debug information in DWARF v2 or DWARF v3
-  -gonly-global  Generate debugging information only for globals
+  -gdepth <n>    Control generation of debugging information
+                 (<n>=0: none, <n>=1: only-globals, <n>=2: globals + locals
+                 without locations, <n>=3: full;)
   -frename-static Rename static functions and declarations
 Optimization options: (use -fno-<opt> to turn off -f<opt>)
   -O             Optimize the compiled code [on by default]
@@ -552,7 +554,12 @@ let cmdline_actions =
   Exact "-gdwarf-3", Self (fun s -> option_g := true;
     option_gdwarf := 3);
   Exact "-frename-static", Self (fun s -> option_rename_static:= true);
-  Exact "-gonly-global", Self (fun s -> option_gglobal := true);
+   Exact "-gdepth", Integer (fun n -> if n = 0 || n <0 then begin
+     option_g := false
+   end else begin
+     option_g := true;
+     option_gdepth := if n > 3 then 3 else n
+   end);
 (* Code generation options -- more below *)
   Exact "-O0", Self (fun _ -> unset_all optimization_options);
   Exact "-O", Self (fun _ -> set_all optimization_options);
@@ -570,7 +577,10 @@ let cmdline_actions =
   Prefix "-mcpu=",  Self (fun s -> let s = String.sub s 6 ((String.length s) - 6)  in
   option_cpu := ArchConfig.cpu_of_string s);
 (* Assembling options *)
-  Prefix "-Wa,", Self (fun s -> assembler_options := s :: !assembler_options);
+  Prefix "-Wa,", Self (fun s -> if ArchConfig.diab_system () then
+    assembler_options := List.rev_append (explode_comma_option s) !assembler_options
+  else
+    assembler_options := s :: !assembler_options);
 (* Linking options *)
   Prefix "-l", Self push_linker_arg;
   Prefix "-L", Self push_linker_arg;
