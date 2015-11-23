@@ -67,7 +67,7 @@ static void render_ray(struct point * amb,
                multx, multy, multz, &is);
   /* Compute final color */
   color->x = (sc.kd * amb->x + il.x + sc.ks * is.x) * sc.x;
-  color->y = (sc.kd * amb->y + il.y + sc.ks * is.y) * sc.y;
+  color->y = (sc.kd * amb->y + il.y + sc.ks * is.y * sc.y;
   color->z = (sc.kd * amb->z + il.z + sc.ks * is.z) * sc.z;
 }
 
