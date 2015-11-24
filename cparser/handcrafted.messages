@@ -1277,6 +1277,7 @@ translation_unit_file: INT PRE_NAME VAR_NAME EQ LPAREN PRE_NAME VAR_NAME SEMICOL
 # can be continued with a comma and another expression.
 # So, let's just say a closing parenthesis is expected.
 
+Ill-formed expression.
 Up to this point, an expression has been recognized:
   $0
 If this expression is complete,
