@@ -233,7 +233,7 @@ let fragments text checkpoint (message : string) : string =
 let report text buffer checkpoint : string =
   (* Extract the position where the error occurred, that is, the start
      position of the invalid token. We display it as a filename, a  (1-based)
-     line number, and a (0-based) column number. *)
+     line number, and a (1-based) column number. *)
   let (pos, _) = last buffer in
   (* Construct a readable description of where the error occurred, that is,
      after which token and before which token. *)
@@ -256,7 +256,7 @@ let report text buffer checkpoint : string =
   Printf.sprintf "%s:%d:%d: syntax error %s.\n%s"
     pos.pos_fname
     pos.pos_lnum
-    (pos.pos_cnum - pos.pos_bol)
+    (pos.pos_cnum - pos.pos_bol + 1)
     where
     message
 
