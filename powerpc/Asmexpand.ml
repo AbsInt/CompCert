@@ -26,7 +26,7 @@ exception Error of string
 (* FreeScale's EREF extensions *)
 
 let eref =
-  match Configuration.model with
+  match !Clflags.option_mcpu with
   | "e5500" -> true
   | _ -> false
 
