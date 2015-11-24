@@ -1843,17 +1843,6 @@ is expected.
 
 # ------------------------------------------------------------------------------
 
-translation_unit_file: SEMICOLON XOR_ASSIGN 
-##
-## Ends in an error in state: 399.
-##
-## translation_unit -> translation_unit . external_declaration [ VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF STRUCT STATIC SIGNED SHORT SEMICOLON RESTRICT REGISTER PRE_NAME PRAGMA PACKED LONG INT INLINE FLOAT EXTERN EOF ENUM DOUBLE CONST CHAR AUTO ATTRIBUTE ALIGNAS ]
-## translation_unit -> translation_unit . SEMICOLON [ VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF STRUCT STATIC SIGNED SHORT SEMICOLON RESTRICT REGISTER PRE_NAME PRAGMA PACKED LONG INT INLINE FLOAT EXTERN EOF ENUM DOUBLE CONST CHAR AUTO ATTRIBUTE ALIGNAS ]
-## translation_unit_file -> translation_unit . EOF [ # ]
-##
-## The known suffix of the stack is as follows:
-## translation_unit 
-##
 translation_unit_file: XOR_ASSIGN 
 ##
 ## Ends in an error in state: 0.
@@ -1863,9 +1852,8 @@ translation_unit_file: XOR_ASSIGN
 ## The known suffix of the stack is as follows:
 ## 
 ##
-# The king of all syntax errors: an error in the initial state.
 
-# Anyway, we are at the toplevel.
+# We are at the toplevel.
 
 # clang and gcc want an identifier or an opening parenthesis, which is way incomplete.
 

@@ -873,18 +873,15 @@ asm_flags:
     {}
 
 translation_unit_file:
-| translation_unit EOF
-| EOF
+| translation_item* EOF
     {}
 
-translation_unit:
+translation_item:
 | external_declaration
-| translation_unit external_declaration
-| translation_unit SEMICOLON
 | SEMICOLON
     {}
 
-external_declaration:
+%inline external_declaration:
 | function_definition
 | declaration(external_declaration)
 | PRAGMA
