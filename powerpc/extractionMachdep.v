@@ -28,6 +28,5 @@ Extract Constant Asm.preg_eq => "fun (x: preg) (y: preg) -> x = y".
 Extract Constant Archi.ppc64 =>
   "begin match Configuration.model with
    | ""ppc64"" -> true
-   | ""e5500"" -> true
    | _ -> false
    end".

@@ -574,6 +574,11 @@ let cmdline_actions =
 (* Target processor options *)
   Exact "-mthumb", Set option_mthumb;
   Exact "-marm", Unset option_mthumb;
+  Prefix "-mcpu=", Self (fun s -> let s = String.sub s 6 ((String.length s) -6) in
+  if Configuration.model <> "ppc64" || s <> "e5500" then begin
+    eprintf "Unrecognized argument in option `-mcpu=%s'\n" s; exit 2
+  end else
+    option_mcpu := s);
 (* Assembling options *)
   Prefix "-Wa,", Self (fun s -> if Configuration.system = "diab" then
     assembler_options := List.rev_append (explode_comma_option s) !assembler_options
