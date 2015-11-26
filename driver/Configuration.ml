@@ -12,28 +12,40 @@
 
 open Printf
 
+let search_argv key =
+  let len = Array.length Sys.argv in
+  let res: string option ref = ref None in
+  for i = 1 to len - 2 do
+    if Sys.argv.(i) = key then
+      res := Some Sys.argv.(i + 1);
+  done;
+  !res
+
 (* Locate the .ini file, which is either in the same directory as
   the executable or in the directory ../share *)
 
 let ini_file_name =
-  try
-    Sys.getenv "COMPCERT_CONFIG"
-  with Not_found ->
-    let exe_dir = Filename.dirname Sys.executable_name in
-    let share_dir =
-      Filename.concat (Filename.concat exe_dir Filename.parent_dir_name)
-        "share" in
-    let share_compcert_dir =
-      Filename.concat share_dir "compcert" in
-    let search_path = [exe_dir;share_dir;share_compcert_dir] in
-    let files = List.map (fun s -> Filename.concat s "compcert.ini") search_path in
-    try
-      List.find  Sys.file_exists files
-    with Not_found ->
-      begin
-        eprintf "Cannot find compcert.ini configuration file.\n";
-        exit 2
-      end
+  match search_argv "--conf" with
+  | Some s -> s
+  | None ->
+      try
+        Sys.getenv "COMPCERT_CONFIG"
+      with Not_found ->
+        let exe_dir = Filename.dirname Sys.executable_name in
+        let share_dir =
+          Filename.concat (Filename.concat exe_dir Filename.parent_dir_name)
+            "share" in
+        let share_compcert_dir =
+          Filename.concat share_dir "compcert" in
+        let search_path = [exe_dir;share_dir;share_compcert_dir] in
+        let files = List.map (fun s -> Filename.concat s "compcert.ini") search_path in
+        try
+          List.find  Sys.file_exists files
+        with Not_found ->
+          begin
+            eprintf "Cannot find compcert.ini configuration file.\n";
+            exit 2
+          end
 
 (* Read in the .ini file *)
 
