@@ -39,7 +39,7 @@ let parse_transformations s =
   !t
 
 let read_file sourcefile =
-  let ic = open_in sourcefile in
+  let ic = open_in_bin sourcefile in
   let n = in_channel_length ic in
   let text = really_input_string ic n in
   close_in ic;

@@ -82,7 +82,7 @@ and doublequote = parse
 (* The entry point *)
 
 let read_config_file filename =
-  let ic = open_in filename in
+  let ic = open_in_bin filename in
   let lexbuf = Lexing.from_channel ic in
   Lexing.(lexbuf.lex_start_p <- {lexbuf.lex_start_p with pos_fname = filename});
   try
@@ -108,4 +108,3 @@ let _ =
 *)
 
 }
-
