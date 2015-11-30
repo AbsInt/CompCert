@@ -21,12 +21,18 @@ let search_argv key =
   done;
   !res
 
+let absolute_path base file =
+  if Filename.is_relative file then
+    Filename.concat base file
+  else
+    file
+
 (* Locate the .ini file, which is either in the same directory as
   the executable or in the directory ../share *)
 
 let ini_file_name =
   match search_argv "--conf" with
-  | Some s -> s
+  | Some s -> absolute_path (Sys.getcwd ()) s
   | None ->
       try
         Sys.getenv "COMPCERT_CONFIG"
@@ -46,6 +52,8 @@ let ini_file_name =
             eprintf "Cannot find compcert.ini configuration file.\n";
             exit 2
           end
+
+let ini_dir = Filename.dirname ini_file_name
 
 (* Read in the .ini file *)
 
@@ -104,7 +112,8 @@ let has_standard_headers =
   | v -> bad_config "has_standard_headers" [v]
 let stdlib_path =
   if has_runtime_lib then
-    get_config_string "stdlib_path"
+    let path = get_config_string "stdlib_path" in
+    absolute_path ini_dir path
   else
     ""
 let asm_supports_cfi =
