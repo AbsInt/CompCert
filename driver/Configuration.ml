@@ -10,6 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+open Filename
 open Printf
 
 let search_argv key =
@@ -22,8 +23,8 @@ let search_argv key =
   !res
 
 let absolute_path base file =
-  if Filename.is_relative file then
-    Filename.concat base file
+  if is_relative file then
+    concat base file
   else
     file
 
@@ -37,14 +38,14 @@ let ini_file_name =
       try
         Sys.getenv "COMPCERT_CONFIG"
       with Not_found ->
-        let exe_dir = Filename.dirname Sys.executable_name in
+        let exe_dir = dirname Sys.executable_name in
         let share_dir =
-          Filename.concat (Filename.concat exe_dir Filename.parent_dir_name)
+          concat (concat exe_dir parent_dir_name)
             "share" in
         let share_compcert_dir =
-          Filename.concat share_dir "compcert" in
+          concat share_dir "compcert" in
         let search_path = [exe_dir;share_dir;share_compcert_dir] in
-        let files = List.map (fun s -> Filename.concat s "compcert.ini") search_path in
+        let files = List.map (fun s -> concat s "compcert.ini") search_path in
         try
           List.find  Sys.file_exists files
         with Not_found ->
@@ -53,7 +54,7 @@ let ini_file_name =
             exit 2
           end
 
-let ini_dir = Filename.dirname ini_file_name
+let ini_dir = dirname ini_file_name
 
 (* Read in the .ini file *)
 
@@ -90,9 +91,19 @@ let get_config_list key =
   | [] -> bad_config key []
   | vl -> vl
 
-let prepro = get_config_list "prepro"
-let asm = get_config_list "asm"
-let linker = get_config_list "linker"
+let tool_absolute_path tools =
+  match tools with
+  | [] -> []
+  | tool::args -> let tool =
+      if is_implicit tool && dirname tool = current_dir_name then
+        tool
+      else
+        absolute_path ini_dir tool in
+    tool::args
+
+let prepro = tool_absolute_path (get_config_list "prepro")
+let asm = tool_absolute_path (get_config_list "asm")
+let linker = tool_absolute_path (get_config_list "linker")
 let arch =
   match get_config_string "arch" with
   | "powerpc"|"arm"|"ia32" as a -> a
