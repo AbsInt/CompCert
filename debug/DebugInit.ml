@@ -45,6 +45,7 @@ let default_debug =
    compute_gnu_file_enum = DebugInformation.compute_gnu_file_enum;
    exists_section = DebugInformation.exists_section;
    remove_unused = DebugInformation.remove_unused;
+   remove_unused_function = DebugInformation.remove_unused_function;
    variable_printed = DebugInformation.variable_printed;
    add_diab_info = (fun _ _ _ _ -> ());
  }

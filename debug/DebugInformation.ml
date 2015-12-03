@@ -295,6 +295,16 @@ let gen_comp_typ sou id at =
 let remove_unused id =
   try
     let id' = Hashtbl.find stamp_to_definition id.stamp in
+    let var = Hashtbl.find definitions id' in
+    match var with
+    | Function _ -> ()
+    | _ -> Hashtbl.remove definitions id';
+        Hashtbl.remove stamp_to_definition id.stamp
+  with Not_found -> ()
+
+let remove_unused_function id =
+  try
+    let id' = Hashtbl.find stamp_to_definition id.stamp in
     Hashtbl.remove definitions id';
     Hashtbl.remove stamp_to_definition id.stamp
   with Not_found -> ()

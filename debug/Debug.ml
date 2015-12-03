@@ -48,6 +48,7 @@ type implem =
       compute_gnu_file_enum: (string -> unit) -> unit;
       exists_section: section_name -> bool;
       remove_unused: ident -> unit;
+      remove_unused_function: ident -> unit;
       variable_printed: string -> unit;
       add_diab_info: section_name -> int -> int -> int -> unit;
    }
@@ -79,6 +80,7 @@ let default_implem =
    compute_gnu_file_enum = (fun _ -> ());
    exists_section = (fun _ -> true);
    remove_unused = (fun _ -> ());
+   remove_unused_function = (fun _ -> ());
    variable_printed = (fun _ -> ());
    add_diab_info = (fun _ _ _ _ -> ());
 }
@@ -110,5 +112,6 @@ let exists_section sec = !implem.exists_section sec
 let compute_diab_file_enum end_l entry_l line_e = !implem.compute_diab_file_enum end_l entry_l line_e
 let compute_gnu_file_enum f = !implem.compute_gnu_file_enum f
 let remove_unused ident = !implem.remove_unused ident
+let remove_unused_function ident = !implem.remove_unused_function ident
 let variable_printed ident = !implem.variable_printed ident
 let add_diab_info sec line_start debug_info low_pc = !implem.add_diab_info sec line_start debug_info low_pc
