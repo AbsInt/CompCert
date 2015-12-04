@@ -658,6 +658,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_label oc line_start;
       list_opt s (fun () ->
         section oc Section_debug_str;
+        let s = List.sort (fun (a,_) (b,_) -> Pervasives.compare a b) s in
         List.iter (fun (id,s) ->
           print_label oc (loc_to_label id);
           fprintf oc "	.asciz		\"%s\"\n" s) s)
