@@ -120,7 +120,7 @@ let parse_c_file sourcename ifile =
   (* Simplification options *)
   let simplifs =
     "b" (* blocks: mandatory *)
-  ^ (if !option_fstruct_return then "s" else "")
+  ^ (if !option_fstruct_passing then "s" else "")
   ^ (if !option_fbitfields then "f" else "")
   ^ (if !option_fpacked_structs then "p" else "")
   in
@@ -425,11 +425,9 @@ Preprocessing options:
 Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fbitfields    Emulate bit fields in structs [off]
   -flongdouble   Treat 'long double' as 'double' [off]
-  -fstruct-return  Emulate returning structs and unions by value [off]
-  -fstruct-return=<convention>
-                 Set the calling conventions used to return structs by value
-  -fstruct-passing=<convention>
-                 Set the calling conventions used to pass structs by value
+  -fstruct-passing  Support passing structs and unions by value as function
+                    results or function arguments [off]
+  -fstruct-return   Like -fstruct-passing (deprecated)
   -fvararg-calls Support calls to variable-argument functions [on]
   -funprototyped Support calls to old-style functions without prototypes [on]
   -fpacked-structs  Emulate packed structs [off]
@@ -502,7 +500,7 @@ let print_version_and_exit _ =
 
 let language_support_options = [
   option_fbitfields; option_flongdouble;
-  option_fstruct_return; option_fvararg_calls; option_funprototyped;
+  option_fstruct_passing; option_fvararg_calls; option_funprototyped;
   option_fpacked_structs; option_finline_asm
 ]
 
@@ -611,33 +609,13 @@ let cmdline_actions =
   Exact "-quiet", Self (fun _ -> Interp.trace := 0);
   Exact "-trace", Self (fun _ -> Interp.trace := 2);
   Exact "-random", Self (fun _ -> Interp.mode := Interp.Random);
-  Exact "-all", Self (fun _ -> Interp.mode := Interp.All);
-(* Special -f options *)
-  Exact "-fstruct-passing=ref-callee",
-    Self (fun _ -> option_fstruct_passing_style := Configuration.SP_ref_callee);
-  Exact "-fstruct-passing=ref-caller",
-    Self (fun _ -> option_fstruct_return := true;
-                   option_fstruct_passing_style := Configuration.SP_ref_caller);
-  Exact "-fstruct-passing=ints",
-    Self (fun _ -> option_fstruct_return := true;
-                   option_fstruct_passing_style := Configuration.SP_split_args);
-  Exact "-fstruct-return=ref",
-    Self (fun _ -> option_fstruct_return := true;
-                   option_fstruct_return_style := Configuration.SR_ref);
-  Exact "-fstruct-return=int1248",
-    Self (fun _ -> option_fstruct_return := true;
-                   option_fstruct_return_style := Configuration.SR_int1248);
-  Exact "-fstruct-return=int1-4",
-    Self (fun _ -> option_fstruct_return := true;
-                   option_fstruct_return_style := Configuration.SR_int1to4);
-  Exact "-fstruct-return=int1-8",
-    Self (fun _ -> option_fstruct_return := true;
-                   option_fstruct_return_style := Configuration.SR_int1to8)
+  Exact "-all", Self (fun _ -> Interp.mode := Interp.All)
   ]
 (* -f options: come in -f and -fno- variants *)
 (* Language support options *)
   @ f_opt "longdouble" option_flongdouble
-  @ f_opt "struct-return" option_fstruct_return
+  @ f_opt "struct-return" option_fstruct_passing
+  @ f_opt "struct-passing" option_fstruct_passing
   @ f_opt "bitfields" option_fbitfields
   @ f_opt "vararg-calls" option_fvararg_calls
   @ f_opt "unprototyped" option_funprototyped

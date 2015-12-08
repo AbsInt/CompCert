@@ -582,11 +582,11 @@ let program p =
   struct_passing_style :=
     if !Clflags.option_interp
     then SP_ref_callee
-    else !Clflags.option_fstruct_passing_style;
+    else Configuration.struct_passing_style;
   struct_return_style :=
     if !Clflags.option_interp
     then SR_ref
-    else !Clflags.option_fstruct_return_style;
+    else Configuration.struct_return_style;
   Transform.program
     ~decl:transf_decl
     ~fundef:transf_fundef
