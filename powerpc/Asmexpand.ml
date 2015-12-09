@@ -490,8 +490,8 @@ let expand_builtin_inline name args res =
         emit (Plwz(res, Cint ofs, GPR1))
   | "__builtin_return_address",_,BR (IR res) ->
       emit (Plwz (res, Cint! retaddr_offset,GPR1))
-  (* isel *)
-  | "__builtin_isel", [BA (IR a1); BA (IR a2); BA (IR a3)],BR (IR res) ->
+  (* Integer selection *)
+  | ("__builtin_isel" | "__builtin_uisel"), [BA (IR a1); BA (IR a2); BA (IR a3)],BR (IR res) ->
       if eref then begin
         emit (Pcmpwi (a1,Cint (Int.zero)));
         emit (Pisel (res,a3,a2,CRbit_2))

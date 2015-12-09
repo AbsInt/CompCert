@@ -119,6 +119,9 @@ let builtins = {
     (* isel *)
     "__builtin_isel",
       (TInt (IInt, []),[TInt(IBool, []);TInt(IInt, []);TInt(IInt, [])],false);
+    (* uisel *)
+    "__builtin_uisel",
+      (TInt (IUInt, []),[TInt(IBool, []);TInt(IUInt, []);TInt(IUInt, [])],false);
     (* atomic operations *)
     "__builtin_atomic_exchange",
       (TVoid [], [TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[])],false);
