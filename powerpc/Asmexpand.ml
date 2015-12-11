@@ -38,6 +38,7 @@ let _2 = coqint_of_camlint 2l
 let _4 = coqint_of_camlint 4l
 let _6 = coqint_of_camlint 6l
 let _8 = coqint_of_camlint 8l
+let _32 = coqint_of_camlint 32l
 let _m4 = coqint_of_camlint (-4l)
 let _m8 = coqint_of_camlint (-8l)
 
@@ -344,8 +345,18 @@ let expand_builtin_inline name args res =
       emit (Pmulhw(res, a1, a2))
   | "__builtin_mulhwu", [BA(IR a1); BA(IR a2)], BR(IR res) ->
       emit (Pmulhwu(res, a1, a2))
-  | "__builtin_clz", [BA(IR a1)], BR(IR res) ->
+  | ("__builtin_clz" | "__builtin_clzl"), [BA(IR a1)], BR(IR res) ->
       emit (Pcntlzw(res, a1))
+  | "__builtin_clzll", [BA_splitlong(BA(IR ah), BA(IR al))], BR(IR res) ->
+      let lbl = new_label () in
+      emit (Pcntlzw(res, ah));
+      (* less than 32 bits zero? *)
+      emit (Pcmpwi (res, Cint _32));
+      emit (Pbf (CRbit_2, lbl));
+      (* high bits all zero, count bits in low word and increment by 32*)
+      emit (Pcntlzw(res, al));
+      emit (Paddi(res, res, Cint _32));
+      emit (Plabel lbl)
   | "__builtin_cmpb",  [BA(IR a1); BA(IR a2)], BR(IR res) ->
       emit (Pcmpb (res,a1,a2))
   | ("__builtin_bswap" | "__builtin_bswap32"), [BA(IR a1)], BR(IR res) ->

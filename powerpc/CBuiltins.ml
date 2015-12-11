@@ -30,6 +30,10 @@ let builtins = {
       (TInt(IUInt, []), [TInt(IUInt, []); TInt(IUInt, [])], false);
     "__builtin_clz",
       (TInt(IUInt, []), [TInt(IUInt, [])], false);
+    "__builtin_clzl",
+      (TInt(IUInt, []), [TInt(IULong, [])], false);
+    "__builtin_clzll",
+      (TInt(IUInt, []), [TInt(IULongLong, [])], false);
     "__builtin_bswap",
       (TInt(IUInt, []), [TInt(IUInt, [])], false);
     "__builtin_bswap32",
