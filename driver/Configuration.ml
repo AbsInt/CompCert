@@ -10,7 +10,6 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-open Filename
 open Printf
 
 let search_argv key =
@@ -23,8 +22,8 @@ let search_argv key =
   !res
 
 let absolute_path base file =
-  if is_relative file then
-    concat base file
+  if Filename.is_relative file then
+    Filename.concat base file
   else
     file
 
@@ -41,14 +40,14 @@ let ini_file_name =
         let ini_name = match search_argv "-target" with
         | Some s -> s^".ini"
         | None -> "compcert.ini" in
-        let exe_dir = dirname Sys.executable_name in
+        let exe_dir = Filename.dirname Sys.executable_name in
         let share_dir =
-          concat (concat exe_dir parent_dir_name)
+          Filename.concat (Filename.concat exe_dir Filename.parent_dir_name)
             "share" in
         let share_compcert_dir =
-          concat share_dir "compcert" in
+          Filename.concat share_dir "compcert" in
         let search_path = [exe_dir;share_dir;share_compcert_dir] in
-        let files = List.map (fun s -> concat s ini_name) search_path in
+        let files = List.map (fun s -> Filename.concat s ini_name) search_path in
         try
           List.find  Sys.file_exists files
         with Not_found ->
@@ -57,7 +56,7 @@ let ini_file_name =
             exit 2
           end
 
-let ini_dir = dirname ini_file_name
+let ini_dir = Filename.dirname ini_file_name
 
 (* Read in the .ini file *)
 
@@ -98,7 +97,7 @@ let tool_absolute_path tools =
   match tools with
   | [] -> []
   | tool::args -> let tool =
-      if is_implicit tool && dirname tool = current_dir_name then
+      if Filename.is_implicit tool && Filename.dirname tool = Filename.current_dir_name then
         tool
       else
         absolute_path ini_dir tool in
