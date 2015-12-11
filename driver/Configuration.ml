@@ -32,12 +32,15 @@ let absolute_path base file =
   the executable or in the directory ../share *)
 
 let ini_file_name =
-  match search_argv "--conf" with
+  match search_argv "-conf" with
   | Some s -> absolute_path (Sys.getcwd ()) s
   | None ->
       try
         Sys.getenv "COMPCERT_CONFIG"
       with Not_found ->
+        let ini_name = match search_argv "-target" with
+        | Some s -> s^".ini"
+        | None -> "compcert.ini" in
         let exe_dir = dirname Sys.executable_name in
         let share_dir =
           concat (concat exe_dir parent_dir_name)
@@ -45,7 +48,7 @@ let ini_file_name =
         let share_compcert_dir =
           concat share_dir "compcert" in
         let search_path = [exe_dir;share_dir;share_compcert_dir] in
-        let files = List.map (fun s -> concat s "compcert.ini") search_path in
+        let files = List.map (fun s -> concat s ini_name) search_path in
         try
           List.find  Sys.file_exists files
         with Not_found ->
