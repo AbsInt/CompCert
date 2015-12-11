@@ -122,6 +122,9 @@ let builtins = {
     (* uisel *)
     "__builtin_uisel",
       (TInt (IUInt, []),[TInt(IBool, []);TInt(IUInt, []);TInt(IUInt, [])],false);
+    (* no operation *)
+    "__builtin_nop",
+      (TVoid [], [], false);
     (* atomic operations *)
     "__builtin_atomic_exchange",
       (TVoid [], [TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[])],false);

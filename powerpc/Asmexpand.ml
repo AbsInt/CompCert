@@ -510,6 +510,9 @@ let expand_builtin_inline name args res =
         end;
         emit (Por (res, res, GPR0))
       end
+  (* no operation *)
+  | "__builtin_nop", [], _ ->
+      emit (Pori (GPR0, GPR0, Cint _0))
   (* atomic operations *)
   | "__builtin_atomic_exchange", [BA (IR a1); BA (IR a2); BA (IR a3)],_ ->
       emit (Plwz (GPR10,Cint _0,a2));
