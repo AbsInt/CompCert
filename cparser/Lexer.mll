@@ -23,6 +23,7 @@ open Camlcoq
 module SSet = Set.Make(String)
 
 let lexicon : (string, Cabs.cabsloc -> token) Hashtbl.t = Hashtbl.create 17
+let ignored_keyworkds : SSet.t ref = ref SSet.empty
 
 let () =
   List.iter (fun (key, builder) -> Hashtbl.add lexicon key builder)
@@ -81,7 +82,10 @@ let () =
       ("unsigned", fun loc -> UNSIGNED loc);
       ("void", fun loc -> VOID loc);
       ("volatile", fun loc -> VOLATILE loc);
-      ("while", fun loc -> WHILE loc)]
+      ("while", fun loc -> WHILE loc)];
+  if Configuration.system <> "diab" then
+    (* We can ignore the __extension__ GCC keyword. *)
+    ignored_keyworkds := SSet.add "__extension__" !ignored_keyworkds
 
 let init_ctx = SSet.singleton "__builtin_va_list"
 let types_context : SSet.t ref = ref init_ctx
@@ -325,6 +329,9 @@ rule initial = parse
   | ","                           { COMMA(currentLoc lexbuf) }
   | "."                           { DOT(currentLoc lexbuf) }
   | identifier as id              {
+    if SSet.mem id !ignored_keyworkds then
+      initial lexbuf
+    else
       try Hashtbl.find lexicon id (currentLoc lexbuf)
       with Not_found -> PRE_NAME id }
   | eof                           { EOF }

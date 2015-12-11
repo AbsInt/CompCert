@@ -13,7 +13,7 @@
  *     * Neither the name of the <organization> nor the
  *       names of its contributors may be used to endorse or promote products
  *       derived from this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -90,6 +90,18 @@ typedef signed int wchar_t;
 #endif
 #endif
 
+#if defined (__need_wint_t)
+#ifndef _WINT_T
+#define _WINT_T
+
+#ifndef __WINT_TYPE__
+#define __WINT_TYPE__ unsigned int
+#endif
+typedef __WINT_TYPE__ wint_t;
+#endif
+#undef __need_wint_t
+#endif
+
 #if defined(_STDDEF_H) || defined(__need_NULL)
 #ifndef NULL
 #define NULL 0
@@ -102,4 +114,3 @@ typedef signed int wchar_t;
 #endif
 
 #endif
-
