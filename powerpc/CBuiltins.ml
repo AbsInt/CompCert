@@ -95,7 +95,7 @@ let builtins = {
       (TVoid [], [TInt(IInt, [])], false);
     "__builtin_trap",
       (TVoid [], [], false);
-    (* Cache isntructions *)
+    (* Cache instructions *)
     "__builtin_dcbf",
       (TVoid [],[TPtr(TVoid [], [])],false);
     "__builtin_dcbi",
@@ -115,6 +115,9 @@ let builtins = {
       (TInt(IUInt, []), [TInt(IInt, [])], false);
     "__builtin_set_spr",
       (TVoid [], [TInt(IInt, []); TInt(IUInt, [])], false);
+    (* Move register *)
+    "__builtin_mr",
+      (TVoid [], [TInt(IUInt, []); TInt(IUInt, [])], false);
     (* Frame and return address *)
     "__builtin_call_frame",
       (TPtr (TVoid [],[]),[],false);

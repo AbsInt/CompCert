@@ -335,6 +335,19 @@ let expand_builtin_va_start r =
 let expand_int64_arith conflict rl fn =
   if conflict then (fn GPR0; emit (Pmr(rl, GPR0))) else fn rl
 
+(* Convert integer constant into GPR with corresponding number *)
+let int_to_int_reg = function
+   | 0 -> Some GPR0  | 1 -> Some GPR1  | 2 -> Some GPR2  | 3 -> Some GPR3
+   | 4 -> Some GPR4  | 5 -> Some GPR5  | 6 -> Some GPR6  | 7 -> Some GPR7
+   | 8 -> Some GPR8  | 9 -> Some GPR9  | 10 -> Some GPR10 | 11 -> Some GPR11
+   | 12 -> Some GPR12 | 13 -> Some GPR13 | 14 -> Some GPR14 | 15 -> Some GPR15
+   | 16 -> Some GPR16 | 17 -> Some GPR17 | 18 -> Some GPR18 | 19 -> Some GPR19
+   | 20 -> Some GPR20 | 21 -> Some GPR21 | 22 -> Some GPR22 | 23 -> Some GPR23
+   | 24 -> Some GPR24 | 25 -> Some GPR25 | 26 -> Some GPR26 | 27 -> Some GPR27
+   | 28 -> Some GPR28 | 29 -> Some GPR29 | 30 -> Some GPR30 | 31 -> Some GPR31
+   | _ -> None
+
+
 (* Handling of compiler-inlined builtins *)
 
 let expand_builtin_inline name args res =
@@ -439,11 +452,11 @@ let expand_builtin_inline name args res =
       emit (Pisync)
   | "__builtin_lwsync", [], _ ->
       emit (Plwsync)
-  | "__builtin_mbar",  [BA_int mo], _ ->
+  | "__builtin_mbar", [BA_int mo], _ ->
       if not (mo = _0 || mo = _1) then
         raise (Error "the argument of __builtin_mbar must be 0 or 1");
       emit (Pmbar mo)
-  | "__builin_mbar",_, _ ->
+  | "__builin_mbar", _, _ ->
       raise (Error "the argument of __builtin_mbar must be a constant");
   | "__builtin_trap", [], _ ->
       emit (Ptrap)
@@ -491,6 +504,13 @@ let expand_builtin_inline name args res =
       emit (Pmtspr(n, a1))
   | "__builtin_set_spr", _, _ ->
       raise (Error "the first argument of __builtin_set_spr must be a constant")
+  (* Move registers *)
+  | "__builtin_mr", [BA_int dst; BA_int src], _ ->
+      (match int_to_int_reg (Z.to_int dst), int_to_int_reg (Z.to_int src) with
+       | Some dst, Some src -> emit (Pori (dst, src, Cint _0))
+       | _, _ -> raise (Error "the arguments of __builtin_mr must be in the range of 0..31"))
+  | "__builtin_mr", _, _ ->
+      raise (Error "the arguments of __builtin_mr must be constants")
   (* Frame and return address *)
   | "__builtin_call_frame", _,BR (IR res) ->
       let sz = !current_function_stacksize
@@ -699,6 +719,7 @@ let expand_instruction instr =
       end
   | _ ->
       emit instr
+
 
 (* Translate to the integer identifier of the register as
    the EABI specifies *)

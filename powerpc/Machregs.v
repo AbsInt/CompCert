@@ -222,9 +222,10 @@ Definition builtin_constraints (ef: external_function) :
       if string_dec id "__builtin_get_spr" then OK_const :: nil
       else if string_dec id "__builtin_set_spr" then OK_const :: OK_default :: nil
       else if string_dec id "__builtin_prefetch" then OK_default :: OK_const :: OK_const :: nil
-      else if string_dec id "__builtin_dcbtls" then OK_default::OK_const::nil
-      else if string_dec id "__builtin_icbtls" then OK_default::OK_const::nil
-      else if string_dec id "__builtin_mbar" then OK_const::nil
+      else if string_dec id "__builtin_dcbtls" then OK_default :: OK_const :: nil
+      else if string_dec id "__builtin_icbtls" then OK_default :: OK_const :: nil
+      else if string_dec id "__builtin_mbar" then OK_const :: nil
+      else if string_dec id "__builtin_mr" then OK_const :: OK_const :: nil
       else nil
   | EF_vload _ => OK_addrany :: nil
   | EF_vstore _ => OK_addrany :: OK_default :: nil
