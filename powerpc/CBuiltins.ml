@@ -117,7 +117,7 @@ let builtins = {
       (TVoid [], [TInt(IInt, []); TInt(IUInt, [])], false);
     (* Move register *)
     "__builtin_mr",
-      (TVoid [], [TInt(IUInt, []); TInt(IUInt, [])], false);
+      (TVoid [], [TInt(IInt, []); TInt(IInt, [])], false);
     (* Frame and return address *)
     "__builtin_call_frame",
       (TPtr (TVoid [],[]),[],false);
