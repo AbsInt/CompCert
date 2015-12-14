@@ -343,6 +343,9 @@ let expand_builtin_inline name args res =
   (* Synchronization *)
   | "__builtin_membar", [], _ ->
      ()
+  (* no operation *)
+  | "__builtin_nop", [], _ ->
+     emit (Pxchg_rr (EAX,EAX))
   (* Catch-all *)
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))
