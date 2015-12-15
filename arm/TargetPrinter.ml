@@ -902,7 +902,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       fprintf oc "	.%s\n" (if !Clflags.option_mthumb then "thumb" else "arm");
       if !Clflags.option_g then begin
         section oc Section_text;
-        fprintf oc "	.cfi_sections	.debug_frame\n"
+        cfi_section oc
       end
 
 

@@ -759,7 +759,7 @@ module Target(System: SYSTEM):TARGET =
       need_masks := false;
       if !Clflags.option_g then begin
         section oc Section_text;
-        fprintf oc "	.cfi_sections	.debug_frame\n"
+        cfi_section oc
       end
 
     let print_epilogue oc =

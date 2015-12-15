@@ -151,9 +151,9 @@ module Linux_System : SYSTEM =
 
     let print_prologue oc =
       if !Clflags.option_g then  begin
-          section oc Section_text;
-          fprintf oc "	.cfi_sections	.debug_frame\n"
-        end
+        section oc Section_text;
+        cfi_section oc
+      end
 
     let print_epilogue oc =
       if !Clflags.option_g then

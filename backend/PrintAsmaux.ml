@@ -129,6 +129,12 @@ let cfi_rel_offset =
   else
     (fun _ _ _ -> ())
 
+let cfi_section =
+  if Configuration.asm_supports_cfi then
+    (fun oc -> fprintf oc "	.cfi_sections	.debug_frame\n")
+  else
+    (fun _ -> ())
+
 (* Basic printing functions *)
 let coqint oc n =
   fprintf oc "%ld" (camlint_of_coqint n)
