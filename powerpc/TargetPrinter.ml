@@ -648,7 +648,7 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	rldicl	%a, %a, %ld, %ld\n"
             ireg r1 ireg r2 (camlint_of_coqint c1) (camlint_of_coqint c2)
       | Prldicr(r1, r2, c1, c2) ->
-          fprintf oc "  rldicr  %a, %a, %ld, %ld\n"
+          fprintf oc "	rldicr	%a, %a, %ld, %ld\n"
             ireg r1 ireg r2 (camlint_of_coqint c1) (camlint_of_coqint c2)
       | Prlwinm(r1, r2, c1, c2) ->
           let (mb, me) = rolm_mask (camlint_of_coqint c2) in
