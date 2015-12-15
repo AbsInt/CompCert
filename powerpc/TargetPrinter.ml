@@ -647,6 +647,9 @@ module Target (System : SYSTEM):TARGET =
       | Prldicl(r1, r2, c1, c2) ->
           fprintf oc "	rldicl	%a, %a, %ld, %ld\n"
             ireg r1 ireg r2 (camlint_of_coqint c1) (camlint_of_coqint c2)
+      | Prldicr(r1, r2, c1, c2) ->
+          fprintf oc "  rldicr  %a, %a, %ld, %ld\n"
+            ireg r1 ireg r2 (camlint_of_coqint c1) (camlint_of_coqint c2)
       | Prlwinm(r1, r2, c1, c2) ->
           let (mb, me) = rolm_mask (camlint_of_coqint c2) in
           fprintf oc "	rlwinm	%a, %a, %ld, %d, %d %s 0x%lx\n"
@@ -789,7 +792,7 @@ module Target (System : SYSTEM):TARGET =
       let nlo = Int64.to_int32 n
       and nhi = Int64.to_int32(Int64.shift_right_logical n 32) in
       fprintf oc "%a:	.long	0x%lx, 0x%lx\n" label lbl nhi nlo
-        
+
     let print_literal32 oc (lbl, n) =
       fprintf oc "%a:	.long	0x%lx\n" label lbl n
 

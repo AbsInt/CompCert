@@ -259,6 +259,7 @@ Inductive instruction : Type :=
   | Pori: ireg -> ireg -> constant -> instruction             (**r or with immediate *)
   | Poris: ireg -> ireg -> constant -> instruction            (**r or with immediate high *)
   | Prldicl: ireg -> ireg -> int -> int -> instruction        (**r rotate and mask left (PPC64) *)
+  | Prldicr: ireg -> ireg -> int -> int -> instruction        (**r rotate and mask right (PPC64) *)
   | Prlwinm: ireg -> ireg -> int -> int -> instruction        (**r rotate and mask *)
   | Prlwimi: ireg -> ireg -> int -> int -> instruction        (**r rotate and insert *)
   | Pslw: ireg -> ireg -> ireg -> instruction                 (**r shift left *)
@@ -267,7 +268,7 @@ Inductive instruction : Type :=
   | Psrw: ireg -> ireg -> ireg -> instruction                 (**r shift right unsigned *)
   | Pstb: ireg -> constant -> ireg -> instruction             (**r store 8-bit int *)
   | Pstbx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
-  | Pstdu: ireg -> constant -> ireg -> instruction           (**r store 64-bit integer with update (PPC64) *)
+  | Pstdu: ireg -> constant -> ireg -> instruction            (**r store 64-bit integer with update (PPC64) *)
   | Pstfd: freg -> constant -> ireg -> instruction            (**r store 64-bit float *)
   | Pstfdu: freg -> constant -> ireg -> instruction           (**r store 64-bit float with update *)
   | Pstfdx: freg -> ireg -> ireg -> instruction               (**r same, with 2 index regs *)
@@ -925,6 +926,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pmfspr _ _
   | Pmtspr _ _
   | Prldicl _ _ _ _
+  | Prldicr _ _ _ _
   | Pstdu _ _ _
   | Pstwbrx _ _ _
   | Pstwcx_ _ _ _

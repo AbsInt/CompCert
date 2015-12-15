@@ -287,6 +287,7 @@ let p_instruction oc ic =
   | Pori (ir1,ir2,c) -> instruction "Pori" [Ireg ir1; Ireg ir2; Constant c]
   | Poris (ir1,ir2,c) -> instruction "Poris" [Ireg ir1; Ireg ir2; Constant c]
   | Prldicl (ir1,ir2,ic1,ic2) -> instruction "Prldicl" [Ireg ir1; Ireg ir2; Constant (Cint ic1); Constant (Cint ic2)]
+  | Prldicr (ir1,ir2,ic1,ic2) -> instruction "Prldicr" [Ireg ir1; Ireg ir2; Constant (Cint ic1); Constant (Cint ic2)]
   | Prlwinm (ir1,ir2,ic1,ic2) -> instruction "Prlwinm" [Ireg ir1; Ireg ir2; Constant (Cint ic1); Constant (Cint ic2)]
   | Prlwimi  (ir1,ir2,ic1,ic2) ->instruction "Prlwimi" [Ireg ir1; Ireg ir2; Constant (Cint ic1); Constant (Cint ic2)]
   | Pslw (ir1,ir2,ir3) -> instruction "Pslw" [Ireg ir1; Ireg ir2; Ireg ir3]
