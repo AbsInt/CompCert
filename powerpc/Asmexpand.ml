@@ -506,19 +506,19 @@ let expand_builtin_inline name args res =
   | "__builtin_set_spr", _, _ ->
       raise (Error "the first argument of __builtin_set_spr must be a constant")
   (* Special registers in 32bit hybrid mode *)
-  | "__builtin64_get_spr", [BA_int n], BR_splitlong(BR(IR rh), BR(IR rl)) ->
+  | "__builtin_get_spr64", [BA_int n], BR_splitlong(BR(IR rh), BR(IR rl)) ->
       emit (Pmfspr(rl, n));
       emit (Prldicl(rh, rl, _32, _32));
       emit (Prldicl(rl, rl, _0, _32))
-  | "__builtin64_get_spr", _, _ ->
-      raise (Error "the argument of __builtin64_get_spr must be a constant")
-  | "__builtin64_set_spr", [BA_int n; BA_splitlong(BA(IR ah), BA(IR al))], _ ->
+  | "__builtin_get_spr64", _, _ ->
+      raise (Error "the argument of __builtin_get_spr64 must be a constant")
+  | "__builtin_set_spr64", [BA_int n; BA_splitlong(BA(IR ah), BA(IR al))], _ ->
     emit (Prldicr(GPR10, ah, _32, _31));
     emit (Prldicl(al, al, _0, _32));
     emit (Pori(GPR10, al, Cint _0));
     emit (Pmtspr(n, GPR10))
-  | "__builtin64_set_spr", _, _ ->
-      raise (Error "the first argument of __builtin64_set_spr must be a constant")
+  | "__builtin_set_spr64", _, _ ->
+      raise (Error "the first argument of __builtin_set_spr64 must be a constant")
   (* Move registers *)
   | "__builtin_mr", [BA_int dst; BA_int src], _ ->
       (match int_to_int_reg (Z.to_int dst), int_to_int_reg (Z.to_int src) with
