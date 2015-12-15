@@ -163,7 +163,8 @@ Fixpoint destroyed_by_clobber (cl: list string): list mreg :=
 Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_builtin id sg =>
-    if string_dec id "__builtin_atomic_exchange" then R10::nil
+    if string_dec id "__builtin64_set_spr" then R10::nil
+    else if string_dec id "__builtin_atomic_exchange" then R10::nil
     else if string_dec id "__builtin_atomic_compare_exchange" then R10::R11::nil
     else F13 :: nil
   | EF_vload _ => R11 :: nil

@@ -38,6 +38,7 @@ let _2 = coqint_of_camlint 2l
 let _4 = coqint_of_camlint 4l
 let _6 = coqint_of_camlint 6l
 let _8 = coqint_of_camlint 8l
+let _31 = coqint_of_camlint 31l
 let _32 = coqint_of_camlint 32l
 let _m4 = coqint_of_camlint (-4l)
 let _m8 = coqint_of_camlint (-8l)
@@ -366,7 +367,7 @@ let expand_builtin_inline name args res =
       (* less than 32 bits zero? *)
       emit (Pcmpwi (res, Cint _32));
       emit (Pbf (CRbit_2, lbl));
-      (* high bits all zero, count bits in low word and increment by 32*)
+      (* high bits all zero, count bits in low word and increment by 32 *)
       emit (Pcntlzw(res, al));
       emit (Paddi(res, res, Cint _32));
       emit (Plabel lbl)
@@ -504,6 +505,20 @@ let expand_builtin_inline name args res =
       emit (Pmtspr(n, a1))
   | "__builtin_set_spr", _, _ ->
       raise (Error "the first argument of __builtin_set_spr must be a constant")
+  (* Special registers in 32bit hybrid mode *)
+  | "__builtin64_get_spr", [BA_int n], BR_splitlong(BR(IR rh), BR(IR rl)) ->
+      emit (Pmfspr(rl, n));
+      emit (Prldicl(rh, rl, _32, _32));
+      emit (Prldicl(rl, rl, _0, _32))
+  | "__builtin64_get_spr", _, _ ->
+      raise (Error "the argument of __builtin64_get_spr must be a constant")
+  | "__builtin64_set_spr", [BA_int n; BA_splitlong(BA(IR ah), BA(IR al))], _ ->
+    emit (Prldicr(GPR10, ah, _32, _31));
+    emit (Prldicl(al, al, _0, _32));
+    emit (Pori(GPR10, al, Cint _0));
+    emit (Pmtspr(n, GPR10))
+  | "__builtin64_set_spr", _, _ ->
+      raise (Error "the first argument of __builtin64_set_spr must be a constant")
   (* Move registers *)
   | "__builtin_mr", [BA_int dst; BA_int src], _ ->
       (match int_to_int_reg (Z.to_int dst), int_to_int_reg (Z.to_int src) with
@@ -666,7 +681,7 @@ let expand_instruction instr =
       emit (Pcfi_adjust _m8)
   | Pfcfiu(r1, r2) ->
       assert (Archi.ppc64);
-      emit (Prldicl(GPR0, r2, _0, coqint_of_camlint 32l));
+      emit (Prldicl(GPR0, r2, _0, _32));
       emit (Pstdu(GPR0, Cint _m8, GPR1));
       emit (Pcfi_adjust _8);
       emit (Plfd(r1, Cint _0, GPR1));

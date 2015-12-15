@@ -115,6 +115,11 @@ let builtins = {
       (TInt(IUInt, []), [TInt(IInt, [])], false);
     "__builtin_set_spr",
       (TVoid [], [TInt(IInt, []); TInt(IUInt, [])], false);
+    (* Access to special registers in 32bit hybrid mode*)
+    "__builtin64_get_spr",
+      (TInt(IULongLong, []), [TInt(IInt, [])], false);
+    "__builtin64_set_spr",
+      (TVoid [], [TInt(IInt, []); TInt(IULongLong, [])], false);
     (* Move register *)
     "__builtin_mr",
       (TVoid [], [TInt(IInt, []); TInt(IInt, [])], false);
