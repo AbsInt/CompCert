@@ -519,7 +519,7 @@ let expand_builtin_inline name args res =
       if Archi.ppc64 then begin
         emit (Prldicr(GPR10, ah, _32, _31));
         emit (Prldicl(al, al, _0, _32));
-        emit (Pori(GPR10, al, Cint _0));
+        emit (Por(GPR10, GPR10, al));
         emit (Pmtspr(n, GPR10))
       end else
         raise (Error "__builtin_set_spr64 is only supported for PPC64 targets")
