@@ -310,6 +310,9 @@ let combine_types mode env t1 t2 =
         TUnion(comp_base s1 s2, comp_attr m a1 a2)
     | TEnum(s1, a1), TEnum(s2, a2) ->
         TEnum(comp_base s1 s2, comp_attr m a1 a2)
+    | TEnum(s,a1), TInt(enum_ikind,a2)
+    | TInt(enum_ikind,a2), TEnum (s,a1) ->
+        TEnum(s,comp_attr m a1 a2)
     | _, _ ->
         raise Incompat
 
