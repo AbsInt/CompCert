@@ -570,7 +570,8 @@ let cmdline_actions =
   Exact "-falign-branch-targets", Integer(fun n -> option_falignbranchtargets := n);
   Exact "-falign-cond-branches", Integer(fun n -> option_faligncondbranchs := n);
 (* Target processor options *)
-  Exact "--conf", String (fun _ -> ()); (* Ignore option since it is already handled *)
+  Exact "-conf", String (fun _ -> ()); (* Ignore option since it is already handled *)
+  Exact "-target", String (fun _ -> ()); (* Ignore option since it is already handled *)
   Exact "-mthumb", Set option_mthumb;
   Exact "-marm", Unset option_mthumb;
 (* Assembling options *)
