@@ -363,13 +363,13 @@ let expand_builtin_inline name args res =
       emit (Pcntlzw(res, a1))
   | "__builtin_clzll", [BA_splitlong(BA(IR ah), BA(IR al))], BR(IR res) ->
       let lbl = new_label () in
+      emit (Pcntlzw(GPR0, al));
       emit (Pcntlzw(res, ah));
       (* less than 32 bits zero? *)
       emit (Pcmpwi (res, Cint _32));
       emit (Pbf (CRbit_2, lbl));
       (* high bits all zero, count bits in low word and increment by 32 *)
-      emit (Pcntlzw(res, al));
-      emit (Paddi(res, res, Cint _32));
+      emit (Padd(res, res, GPR0));
       emit (Plabel lbl)
   | "__builtin_cmpb",  [BA(IR a1); BA(IR a2)], BR(IR res) ->
       emit (Pcmpb (res,a1,a2))
