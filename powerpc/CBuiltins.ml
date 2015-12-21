@@ -29,11 +29,11 @@ let builtins = {
     "__builtin_mulhwu",
       (TInt(IUInt, []), [TInt(IUInt, []); TInt(IUInt, [])], false);
     "__builtin_clz",
-      (TInt(IUInt, []), [TInt(IUInt, [])], false);
+      (TInt(IInt, []), [TInt(IUInt, [])], false);
     "__builtin_clzl",
-      (TInt(IUInt, []), [TInt(IULong, [])], false);
+      (TInt(IInt, []), [TInt(IULong, [])], false);
     "__builtin_clzll",
-      (TInt(IUInt, []), [TInt(IULongLong, [])], false);
+      (TInt(IInt, []), [TInt(IULongLong, [])], false);
     "__builtin_bswap",
       (TInt(IUInt, []), [TInt(IUInt, [])], false);
     "__builtin_bswap32",

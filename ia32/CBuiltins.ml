@@ -30,9 +30,9 @@ let builtins = {
     "__builtin_bswap16",
       (TInt(IUShort, []), [TInt(IUShort, [])], false);
     "__builtin_clz",
-      (TInt(IUInt, []), [TInt(IUInt, [])], false);
+      (TInt(IInt, []), [TInt(IUInt, [])], false);
     "__builtin_ctz",
-      (TInt(IUInt, []), [TInt(IUInt, [])], false);
+      (TInt(IInt, []), [TInt(IUInt, [])], false);
     (* Float arithmetic *)
     "__builtin_fsqrt",
       (TFloat(FDouble, []), [TFloat(FDouble, [])], false);

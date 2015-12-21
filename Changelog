@@ -45,6 +45,8 @@ Miscellaneous:
   passing a struct/union as function argument is now rejected.
 - The -fstruct-return command-line option is deprecated and
   becomes a synonymous for -fstruct-passing.
+- The return type of __builtin_clz() is "int", as documented,
+  and not "unsigned int", as previously implemented.
 
 
 Release 2.5, 2015-06-12
