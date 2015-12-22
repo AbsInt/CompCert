@@ -292,7 +292,7 @@ let expand_builtin_inline name args res =
   | "__builtin_clzll", [BA_splitlong(BA (IR ah), BA (IR al))], BR(IR res) ->
      emit (Pclz (IR14, al));
      emit (Pcmp (ah, SOimm _0));
-     emit (Pmovite (TCeq, IR14, SOimm _0, SOreg IR14));
+     emit (Pmovite (TCeq, IR14, SOreg IR14, SOimm _0));
      emit (Pclz (res, ah));
      emit (Padd (res, res, SOreg IR14))
   (* Float arithmetic *)
