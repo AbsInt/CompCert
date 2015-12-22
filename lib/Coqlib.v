@@ -88,8 +88,7 @@ Ltac exploit x :=
  || refine (modusponens _ _ (x _ _ _ _) _)
  || refine (modusponens _ _ (x _ _ _) _)
  || refine (modusponens _ _ (x _ _) _)
- || refine (modusponens _ _ (x _) _));
-  shelve_unifiable.
+ || refine (modusponens _ _ (x _) _)).
 
 (** * Definitions and theorems over the type [positive] *)
 
