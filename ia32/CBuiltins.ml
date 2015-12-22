@@ -31,8 +31,16 @@ let builtins = {
       (TInt(IUShort, []), [TInt(IUShort, [])], false);
     "__builtin_clz",
       (TInt(IInt, []), [TInt(IUInt, [])], false);
+    "__builtin_clzl",
+      (TInt(IInt, []), [TInt(IULong, [])], false);
+    "__builtin_clzll",
+      (TInt(IInt, []), [TInt(IULongLong, [])], false);
     "__builtin_ctz",
       (TInt(IInt, []), [TInt(IUInt, [])], false);
+    "__builtin_ctzl",
+      (TInt(IInt, []), [TInt(IULong, [])], false);
+    "__builtin_ctzll",
+      (TInt(IInt, []), [TInt(IULongLong, [])], false);
     (* Float arithmetic *)
     "__builtin_fsqrt",
       (TFloat(FDouble, []), [TFloat(FDouble, [])], false);

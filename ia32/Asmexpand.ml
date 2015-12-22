@@ -245,11 +245,34 @@ let expand_builtin_inline name args res =
      if a1 <> res then
        emit (Pmov_rr (res,a1));
      emit (Pbswap16 res)
-  | "__builtin_clz", [BA(IR a1)], BR(IR res) ->
+  | ("__builtin_clz"|"__builtin_clzl"), [BA(IR a1)], BR(IR res) ->
      emit (Pbsr (res,a1));
      emit (Pxor_ri(res,coqint_of_camlint 31l))
-  | "__builtin_ctz", [BA(IR a1)], BR(IR res) ->
+  | "__builtin_clzll", [BA_splitlong(BA (IR ah), BA (IR al))], BR(IR res) ->
+     let lbl1 = new_label() in
+     let lbl2 = new_label() in
+     emit (Ptest_rr(ah, ah));
+     emit (Pjcc(Cond_e, lbl1));
+     emit (Pbsr(res, ah));
+     emit (Pxor_ri(res, coqint_of_camlint 31l));
+     emit (Pjmp_l lbl2);
+     emit (Plabel lbl1);
+     emit (Pbsr(res, al));
+     emit (Pxor_ri(res, coqint_of_camlint 63l));
+     emit (Plabel lbl2)
+  | ("__builtin_ctz" | "__builtin_ctzl"), [BA(IR a1)], BR(IR res) ->
      emit (Pbsf (res,a1))
+  | "__builtin_ctzll", [BA_splitlong(BA (IR ah), BA (IR al))], BR(IR res) ->
+     let lbl1 = new_label() in
+     let lbl2 = new_label() in
+     emit (Ptest_rr(al, al));
+     emit (Pjcc(Cond_e, lbl1));
+     emit (Pbsf(res, al));
+     emit (Pjmp_l lbl2);
+     emit (Plabel lbl1);
+     emit (Pbsf(res, ah));
+     emit (Padd_ri(res, coqint_of_camlint 32l));
+     emit (Plabel lbl2)
   (* Float arithmetic *)
   | "__builtin_fabs", [BA(FR a1)], BR(FR res) ->
      if a1 <> res then
