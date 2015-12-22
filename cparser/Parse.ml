@@ -38,9 +38,22 @@ let parse_transformations s =
     s;
   !t
 
+let read_file sourcefile =
+  let ic = open_in_bin sourcefile in
+  let n = in_channel_length ic in
+  let text = really_input_string ic n in
+  close_in ic;
+  text
+
 let preprocessed_file transfs name sourcefile =
   Cerrors.reset();
-  let ic = open_in sourcefile in
+  (* Reading the whole file at once may seem costly, but seems to be
+     the simplest / most robust way of accessing the text underlying
+     a range of positions. This is used when printing an error message.
+     Plus, I note that reading the whole file into memory leads to a
+     speed increase: "make -C test" speeds up by 3 seconds out of 40
+     on my machine. *)
+  let text = read_file sourcefile in
   let p =
     try
       let t = parse_transformations transfs in
@@ -52,7 +65,7 @@ let preprocessed_file transfs name sourcefile =
                  parsing of the entire file. This is non-negligeabe,
                  so we cannot use Timing.time2 *)
               (fun () ->
-                Parser.translation_unit_file inf (Lexer.tokens_stream name ic)) ()
+                Parser.translation_unit_file inf (Lexer.tokens_stream name text)) ()
            with
              | Parser.Parser.Inter.Fail_pr ->
                  (* Theoretically impossible : implies inconsistencies
@@ -65,5 +78,4 @@ let preprocessed_file transfs name sourcefile =
     with
     | Cerrors.Abort ->
         [] in
-  close_in ic;
   if Cerrors.check_errors() then None else Some p

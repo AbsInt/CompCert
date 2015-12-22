@@ -163,7 +163,8 @@ Fixpoint destroyed_by_clobber (cl: list string): list mreg :=
 Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_builtin id sg =>
-    if string_dec id "__builtin_atomic_exchange" then R10::nil
+    if string_dec id "__builtin_set_spr64" then R10::nil
+    else if string_dec id "__builtin_atomic_exchange" then R10::nil
     else if string_dec id "__builtin_atomic_compare_exchange" then R10::R11::nil
     else F13 :: nil
   | EF_vload _ => R11 :: nil
@@ -220,11 +221,14 @@ Definition builtin_constraints (ef: external_function) :
   match ef with
   | EF_builtin id sg =>
       if string_dec id "__builtin_get_spr" then OK_const :: nil
+      else if string_dec id "__builtin_get_spr64" then OK_const :: nil
       else if string_dec id "__builtin_set_spr" then OK_const :: OK_default :: nil
+      else if string_dec id "__builtin_set_spr64" then OK_const :: OK_default :: nil
       else if string_dec id "__builtin_prefetch" then OK_default :: OK_const :: OK_const :: nil
-      else if string_dec id "__builtin_dcbtls" then OK_default::OK_const::nil
-      else if string_dec id "__builtin_icbtls" then OK_default::OK_const::nil
-      else if string_dec id "__builtin_mbar" then OK_const::nil
+      else if string_dec id "__builtin_dcbtls" then OK_default :: OK_const :: nil
+      else if string_dec id "__builtin_icbtls" then OK_default :: OK_const :: nil
+      else if string_dec id "__builtin_mbar" then OK_const :: nil
+      else if string_dec id "__builtin_mr" then OK_const :: OK_const :: nil
       else nil
   | EF_vload _ => OK_addrany :: nil
   | EF_vstore _ => OK_addrany :: OK_default :: nil

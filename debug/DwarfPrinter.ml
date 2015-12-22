@@ -623,8 +623,10 @@ module DwarfPrinter(Target: DWARF_TARGET):
         let name = if e.section_name <> ".text" then Some e.section_name else None in
         section oc (Section_debug_info name);
         print_debug_info oc e.start_label e.line_label e.entry) entries;
-      section oc Section_debug_loc;
-      List.iter (fun e -> print_location_list oc e.locs) entries
+      if List.exists (fun e -> match e.locs with _,[] -> false | _,_ -> true) entries then begin
+        section oc Section_debug_loc;
+        List.iter (fun e -> print_location_list oc e.locs) entries
+      end
 
     let print_ranges oc r =
       section oc Section_debug_ranges;
@@ -656,6 +658,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_label oc line_start;
       list_opt s (fun () ->
         section oc Section_debug_str;
+        let s = List.sort (fun (a,_) (b,_) -> Pervasives.compare a b) s in
         List.iter (fun (id,s) ->
           print_label oc (loc_to_label id);
           fprintf oc "	.asciz		\"%s\"\n" s) s)

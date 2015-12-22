@@ -29,7 +29,11 @@ let builtins = {
     "__builtin_mulhwu",
       (TInt(IUInt, []), [TInt(IUInt, []); TInt(IUInt, [])], false);
     "__builtin_clz",
-      (TInt(IUInt, []), [TInt(IUInt, [])], false);
+      (TInt(IInt, []), [TInt(IUInt, [])], false);
+    "__builtin_clzl",
+      (TInt(IInt, []), [TInt(IULong, [])], false);
+    "__builtin_clzll",
+      (TInt(IInt, []), [TInt(IULongLong, [])], false);
     "__builtin_bswap",
       (TInt(IUInt, []), [TInt(IUInt, [])], false);
     "__builtin_bswap32",
@@ -91,7 +95,7 @@ let builtins = {
       (TVoid [], [TInt(IInt, [])], false);
     "__builtin_trap",
       (TVoid [], [], false);
-    (* Cache isntructions *)
+    (* Cache instructions *)
     "__builtin_dcbf",
       (TVoid [],[TPtr(TVoid [], [])],false);
     "__builtin_dcbi",
@@ -111,6 +115,14 @@ let builtins = {
       (TInt(IUInt, []), [TInt(IInt, [])], false);
     "__builtin_set_spr",
       (TVoid [], [TInt(IInt, []); TInt(IUInt, [])], false);
+    (* Access to special registers in 32bit hybrid mode*)
+    "__builtin_get_spr64",
+      (TInt(IULongLong, []), [TInt(IInt, [])], false);
+    "__builtin_set_spr64",
+      (TVoid [], [TInt(IInt, []); TInt(IULongLong, [])], false);
+    (* Move register *)
+    "__builtin_mr",
+      (TVoid [], [TInt(IInt, []); TInt(IInt, [])], false);
     (* Frame and return address *)
     "__builtin_call_frame",
       (TPtr (TVoid [],[]),[],false);
@@ -119,6 +131,12 @@ let builtins = {
     (* isel *)
     "__builtin_isel",
       (TInt (IInt, []),[TInt(IBool, []);TInt(IInt, []);TInt(IInt, [])],false);
+    (* uisel *)
+    "__builtin_uisel",
+      (TInt (IUInt, []),[TInt(IBool, []);TInt(IUInt, []);TInt(IUInt, [])],false);
+    (* no operation *)
+    "__builtin_nop",
+      (TVoid [], [], false);
     (* atomic operations *)
     "__builtin_atomic_exchange",
       (TVoid [], [TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[])],false);

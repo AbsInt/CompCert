@@ -502,7 +502,7 @@ and transf_post env ctx op e1 bf tyfield  =
 and transf_init env i =
   match i with
   | Init_single e -> Init_single (transf_exp env Val e)
-  | Init_array il -> Init_array (List.map (transf_init env) il)
+  | Init_array il -> Init_array (List.rev (List.rev_map (transf_init env) il))
   | Init_struct(id, fld_init_list) ->
       let fld_init_list' =
         List.map (fun (f, i) -> (f, transf_init env i)) fld_init_list in

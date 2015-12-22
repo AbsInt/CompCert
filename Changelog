@@ -1,3 +1,54 @@
+Release 2.6, 2015-12-21
+=======================
+
+Usability:
+- Generation of full DWARF v2 debugging information in "-g" mode,
+  including function-local variables.  This is fully supported
+  for the PowerPC target with GNU tools or Diab tools.  Support
+  for IA32 and ARM is nearly there.
+- Production of detailed explanations for syntax errors during parsing.
+  (Exploiting recent work by F. Pottier on the Menhir parser generator.)
+- PowerPC port: added many new builtin functions.
+
+Code generation and optimization:
+- Support for PowerPC 64-bits (pointers are still 32-bit wide)
+  and Freescale's E5500 variant.
+- More prudent alias analysis for operations over pointers that are
+  formally undefined, such as bit masking.
+- New pass: Debugvar, to associate debug information to local variables.
+
+Coq development:
+- Richer representation of arguments and results to builtin operations.
+- As a consequence, annotation builtins no longer need special handling.
+- Added EF_debug builtins to transport debugging information throughout
+  the compiler back-end.
+- Upgraded the Flocq library to version 2.5.0.
+
+Bug fixing:
+- Issue #71: incorrect initialization of an array of wchar_t
+- Corrected the handling of bit-fields of type _Bool and width > 1
+- Removed copy optimization when returning a struct from a function.
+- Full parsing of unprototyped (K&R-style) function definitions.
+  (Before, the parsing was incomplete and would reject some definitions.)
+
+Miscellaneous:
+- The cchecklink tool (for a posteriori validation of assembly
+  and linking) was removed.  It is replaced by the Valex tool,
+  available from AbsInt.
+- Added a command-line option -conf <config file> to select
+  a different "compcert.ini" configuration file.
+- Removed the command-line options -fstruct-passing=<convention>
+  and -fstruct-return=<convention>, more confusing than useful.
+- Added a command-line option -fstruct-passing that activates
+  ABI-conformant by-value passing of structs and unions as
+  function arguments or results.  If this option is not set,
+  passing a struct/union as function argument is now rejected.
+- The -fstruct-return command-line option is deprecated and
+  becomes a synonymous for -fstruct-passing.
+- The return type of __builtin_clz() is "int", as documented,
+  and not "unsigned int", as previously implemented.
+
+
 Release 2.5, 2015-06-12
 =======================
 

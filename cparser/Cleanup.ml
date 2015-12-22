@@ -186,7 +186,7 @@ let saturate p =
 
 let remove_unused_debug =  function
   | Gdecl (_,id,_,_) ->  Debug.remove_unused id
-  | Gfundef f -> Debug.remove_unused f.fd_name
+  | Gfundef f -> Debug.remove_unused_function f.fd_name
   | _ -> ()
 
 let rec simpl_globdecls accu = function
@@ -212,6 +212,3 @@ let program p =
   let p' = simpl_globdecls [] p in
   referenced := IdentSet.empty;
   p'
-
-
-

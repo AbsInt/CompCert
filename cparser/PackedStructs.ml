@@ -360,7 +360,7 @@ let transf_init loc env i =
             match unroll env ty with
             | TArray(ty_elt, _, _) -> Some ty_elt
             | _ -> assert false in
-      Init_array (List.map (trinit swap_elt) il)
+      Init_array (List.rev (List.rev_map (trinit swap_elt) il))
   | Init_struct(id, fld_init_list) ->
       let trinit_field (f, i) =
         let swap_f =

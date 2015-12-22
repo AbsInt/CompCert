@@ -12,28 +12,51 @@
 
 open Printf
 
+let search_argv key =
+  let len = Array.length Sys.argv in
+  let res: string option ref = ref None in
+  for i = 1 to len - 2 do
+    if Sys.argv.(i) = key then
+      res := Some Sys.argv.(i + 1);
+  done;
+  !res
+
+let absolute_path base file =
+  if Filename.is_relative file then
+    Filename.concat base file
+  else
+    file
+
 (* Locate the .ini file, which is either in the same directory as
   the executable or in the directory ../share *)
 
 let ini_file_name =
-  try
-    Sys.getenv "COMPCERT_CONFIG"
-  with Not_found ->
-    let exe_dir = Filename.dirname Sys.executable_name in
-    let share_dir =
-      Filename.concat (Filename.concat exe_dir Filename.parent_dir_name)
-        "share" in
-    let share_compcert_dir =
-      Filename.concat share_dir "compcert" in
-    let search_path = [exe_dir;share_dir;share_compcert_dir] in
-    let files = List.map (fun s -> Filename.concat s "compcert.ini") search_path in
-    try
-      List.find  Sys.file_exists files
-    with Not_found ->
-      begin
-        eprintf "Cannot find compcert.ini configuration file.\n";
-        exit 2
-      end
+  match search_argv "-conf" with
+  | Some s -> absolute_path (Sys.getcwd ()) s
+  | None ->
+      try
+        Sys.getenv "COMPCERT_CONFIG"
+      with Not_found ->
+        let ini_name = match search_argv "-target" with
+        | Some s -> s^".ini"
+        | None -> "compcert.ini" in
+        let exe_dir = Filename.dirname Sys.executable_name in
+        let share_dir =
+          Filename.concat (Filename.concat exe_dir Filename.parent_dir_name)
+            "share" in
+        let share_compcert_dir =
+          Filename.concat share_dir "compcert" in
+        let search_path = [exe_dir;share_dir;share_compcert_dir] in
+        let files = List.map (fun s -> Filename.concat s ini_name) search_path in
+        try
+          List.find  Sys.file_exists files
+        with Not_found ->
+          begin
+            eprintf "Cannot find compcert.ini configuration file.\n";
+            exit 2
+          end
+
+let ini_dir = Filename.dirname ini_file_name
 
 (* Read in the .ini file *)
 
@@ -70,9 +93,19 @@ let get_config_list key =
   | [] -> bad_config key []
   | vl -> vl
 
-let prepro = get_config_list "prepro"
-let asm = get_config_list "asm"
-let linker = get_config_list "linker"
+let tool_absolute_path tools =
+  match tools with
+  | [] -> []
+  | tool::args -> let tool =
+      if Filename.is_implicit tool && Filename.dirname tool = Filename.current_dir_name then
+        tool
+      else
+        absolute_path ini_dir tool in
+    tool::args
+
+let prepro = tool_absolute_path (get_config_list "prepro")
+let asm = tool_absolute_path (get_config_list "asm")
+let linker = tool_absolute_path (get_config_list "linker")
 let arch =
   match get_config_string "arch" with
   | "powerpc"|"arm"|"ia32" as a -> a
@@ -92,7 +125,8 @@ let has_standard_headers =
   | v -> bad_config "has_standard_headers" [v]
 let stdlib_path =
   if has_runtime_lib then
-    get_config_string "stdlib_path"
+    let path = get_config_string "stdlib_path" in
+    absolute_path ini_dir path
   else
     ""
 let asm_supports_cfi =

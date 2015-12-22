@@ -187,6 +187,8 @@ val type_of_member : Env.t -> field -> typ
   (* Return the type of accessing the given field [fld].
      Normally it's [fld.fld_type] but there is a special case for
      small unsigned bitfields. *)
+val is_debug_stmt : stmt -> bool
+  (* Is the given statement a call to debug builtin? *)
 val is_literal_0 : exp -> bool
   (* Is the given expression the integer literal "0"?  *)
 val is_lvalue : exp -> bool

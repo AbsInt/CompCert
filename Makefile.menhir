@@ -1,18 +1,34 @@
+#######################################################################
+#                                                                     #
+#              The Compcert verified compiler                         #
+#                                                                     #
+#        François Pottier, INRIA Paris-Rocquencourt                   #
+#                                                                     #
+#  Copyright Institut National de Recherche en Informatique et en     #
+#  Automatique.  All rights reserved.  This file is distributed       #
+#  under the terms of the INRIA Non-Commercial License Agreement.     #
+#                                                                     #
+#######################################################################
+
 # This is a Makefile fragment for Menhir-specific aspects.
+
+# Executable.
+
+MENHIR = menhir
 
 # This flag can be set to true or false. It controls whether we use
 # Menhir's table back-end or code back-end. The table back-end is a
 # bit slower, but supports more features, including advanced error
 # reporting.
 
-MENHIR_TABLE = false
+MENHIR_TABLE = true
 
-# Executable.
+# To pass or not to pass --table.
 
 ifeq ($(MENHIR_TABLE),true)
-  MENHIR = menhir --table
+  MENHIR_MODE = --table
 else
-  MENHIR = menhir
+  MENHIR_MODE =
 endif
 
 # Options.
@@ -30,7 +46,7 @@ endif
 # The compilation rule.
 
 %.ml %.mli: %.mly
-	$(MENHIR) $(MENHIR_FLAGS) $<
+	$(MENHIR) $(MENHIR_MODE) $(MENHIR_FLAGS) $<
 
 # Note 1: finding where MenhirLib has been installed would be easier if we
 # could depend on ocamlfind, but as far as I understand and as of today,
@@ -48,9 +64,11 @@ endif
 # can instead ask ocamlfind where Menhir's library was installed. Otherwise,
 # Menhir answers directly with a "-I ..." directive, which we use.
 
+ifndef MENHIR_INCLUDES
+
 ifeq ($(MENHIR_TABLE),true)
 
-  MENHIR_SUGGESTION = $(MENHIR) --suggest-comp-flags
+  MENHIR_SUGGESTION = $(MENHIR) $(MENHIR_MODE) --suggest-comp-flags
 
   MENHIR_INCLUDES := $(shell \
     if $(MENHIR_SUGGESTION) | grep -e "-package" >/dev/null ; then \
@@ -65,3 +83,4 @@ else
 
 endif
 
+endif

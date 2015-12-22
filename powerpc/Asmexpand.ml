@@ -38,6 +38,8 @@ let _2 = coqint_of_camlint 2l
 let _4 = coqint_of_camlint 4l
 let _6 = coqint_of_camlint 6l
 let _8 = coqint_of_camlint 8l
+let _31 = coqint_of_camlint 31l
+let _32 = coqint_of_camlint 32l
 let _m4 = coqint_of_camlint (-4l)
 let _m8 = coqint_of_camlint (-8l)
 
@@ -334,6 +336,19 @@ let expand_builtin_va_start r =
 let expand_int64_arith conflict rl fn =
   if conflict then (fn GPR0; emit (Pmr(rl, GPR0))) else fn rl
 
+(* Convert integer constant into GPR with corresponding number *)
+let int_to_int_reg = function
+   | 0 -> Some GPR0  | 1 -> Some GPR1  | 2 -> Some GPR2  | 3 -> Some GPR3
+   | 4 -> Some GPR4  | 5 -> Some GPR5  | 6 -> Some GPR6  | 7 -> Some GPR7
+   | 8 -> Some GPR8  | 9 -> Some GPR9  | 10 -> Some GPR10 | 11 -> Some GPR11
+   | 12 -> Some GPR12 | 13 -> Some GPR13 | 14 -> Some GPR14 | 15 -> Some GPR15
+   | 16 -> Some GPR16 | 17 -> Some GPR17 | 18 -> Some GPR18 | 19 -> Some GPR19
+   | 20 -> Some GPR20 | 21 -> Some GPR21 | 22 -> Some GPR22 | 23 -> Some GPR23
+   | 24 -> Some GPR24 | 25 -> Some GPR25 | 26 -> Some GPR26 | 27 -> Some GPR27
+   | 28 -> Some GPR28 | 29 -> Some GPR29 | 30 -> Some GPR30 | 31 -> Some GPR31
+   | _ -> None
+
+
 (* Handling of compiler-inlined builtins *)
 
 let expand_builtin_inline name args res =
@@ -344,8 +359,18 @@ let expand_builtin_inline name args res =
       emit (Pmulhw(res, a1, a2))
   | "__builtin_mulhwu", [BA(IR a1); BA(IR a2)], BR(IR res) ->
       emit (Pmulhwu(res, a1, a2))
-  | "__builtin_clz", [BA(IR a1)], BR(IR res) ->
+  | ("__builtin_clz" | "__builtin_clzl"), [BA(IR a1)], BR(IR res) ->
       emit (Pcntlzw(res, a1))
+  | "__builtin_clzll", [BA_splitlong(BA(IR ah), BA(IR al))], BR(IR res) ->
+      let lbl = new_label () in
+      emit (Pcntlzw(GPR0, al));
+      emit (Pcntlzw(res, ah));
+      (* less than 32 bits zero? *)
+      emit (Pcmpwi (res, Cint _32));
+      emit (Pbf (CRbit_2, lbl));
+      (* high bits all zero, count bits in low word and increment by 32 *)
+      emit (Padd(res, res, GPR0));
+      emit (Plabel lbl)
   | "__builtin_cmpb",  [BA(IR a1); BA(IR a2)], BR(IR res) ->
       emit (Pcmpb (res,a1,a2))
   | ("__builtin_bswap" | "__builtin_bswap32"), [BA(IR a1)], BR(IR res) ->
@@ -428,11 +453,11 @@ let expand_builtin_inline name args res =
       emit (Pisync)
   | "__builtin_lwsync", [], _ ->
       emit (Plwsync)
-  | "__builtin_mbar",  [BA_int mo], _ ->
+  | "__builtin_mbar", [BA_int mo], _ ->
       if not (mo = _0 || mo = _1) then
         raise (Error "the argument of __builtin_mbar must be 0 or 1");
       emit (Pmbar mo)
-  | "__builin_mbar",_, _ ->
+  | "__builin_mbar", _, _ ->
       raise (Error "the argument of __builtin_mbar must be a constant");
   | "__builtin_trap", [], _ ->
       emit (Ptrap)
@@ -480,18 +505,45 @@ let expand_builtin_inline name args res =
       emit (Pmtspr(n, a1))
   | "__builtin_set_spr", _, _ ->
       raise (Error "the first argument of __builtin_set_spr must be a constant")
+  (* Special registers in 32bit hybrid mode *)
+  | "__builtin_get_spr64", [BA_int n], BR_splitlong(BR(IR rh), BR(IR rl)) ->
+      if Archi.ppc64 then begin
+        emit (Pmfspr(rl, n));
+        emit (Prldicl(rh, rl, _32, _32));
+        emit (Prldicl(rl, rl, _0, _32))
+      end else
+        raise (Error "__builtin_get_spr64 is only supported for PPC64 targets")
+  | "__builtin_get_spr64", _, _ ->
+      raise (Error "the argument of __builtin_get_spr64 must be a constant")
+  | "__builtin_set_spr64", [BA_int n; BA_splitlong(BA(IR ah), BA(IR al))], _ ->
+      if Archi.ppc64 then begin
+        emit (Prldicr(GPR10, ah, _32, _31));
+        emit (Prldicl(al, al, _0, _32));
+        emit (Por(GPR10, GPR10, al));
+        emit (Pmtspr(n, GPR10))
+      end else
+        raise (Error "__builtin_set_spr64 is only supported for PPC64 targets")
+  | "__builtin_set_spr64", _, _ ->
+      raise (Error "the first argument of __builtin_set_spr64 must be a constant")
+  (* Move registers *)
+  | "__builtin_mr", [BA_int dst; BA_int src], _ ->
+      (match int_to_int_reg (Z.to_int dst), int_to_int_reg (Z.to_int src) with
+       | Some dst, Some src -> emit (Pori (dst, src, Cint _0))
+       | _, _ -> raise (Error "the arguments of __builtin_mr must be in the range of 0..31"))
+  | "__builtin_mr", _, _ ->
+      raise (Error "the arguments of __builtin_mr must be constants")
   (* Frame and return address *)
   | "__builtin_call_frame", _,BR (IR res) ->
       let sz = !current_function_stacksize
       and ofs = !linkregister_offset in
-      if sz < 0x8000l then
+      if sz < 0x8000l && sz >= 0l then
         emit (Paddi(res, GPR1, Cint(coqint_of_camlint sz)))
       else
         emit (Plwz(res, Cint ofs, GPR1))
   | "__builtin_return_address",_,BR (IR res) ->
       emit (Plwz (res, Cint! retaddr_offset,GPR1))
-  (* isel *)
-  | "__builtin_isel", [BA (IR a1); BA (IR a2); BA (IR a3)],BR (IR res) ->
+  (* Integer selection *)
+  | ("__builtin_isel" | "__builtin_uisel"), [BA (IR a1); BA (IR a2); BA (IR a3)],BR (IR res) ->
       if eref then begin
         emit (Pcmpwi (a1,Cint (Int.zero)));
         emit (Pisel (res,a3,a2,CRbit_2))
@@ -510,6 +562,9 @@ let expand_builtin_inline name args res =
         end;
         emit (Por (res, res, GPR0))
       end
+  (* no operation *)
+  | "__builtin_nop", [], _ ->
+      emit (Pori (GPR0, GPR0, Cint _0))
   (* atomic operations *)
   | "__builtin_atomic_exchange", [BA (IR a1); BA (IR a2); BA (IR a3)],_ ->
       emit (Plwz (GPR10,Cint _0,a2));
@@ -594,7 +649,7 @@ let expand_instruction instr =
       assert (ofs = _0);
       let sz = if variadic then Int32.add sz 96l else sz in
       let adj = Int32.neg sz in
-      if adj >= -0x8000l then
+      if adj >= -0x8000l && adj < 0l then
         emit (Pstwu(GPR1, Cint(coqint_of_camlint adj), GPR1))
       else begin
         emit_loadimm GPR0 (coqint_of_camlint adj);
@@ -617,7 +672,7 @@ let expand_instruction instr =
       let variadic = (!current_function).fn_sig.sig_cc.cc_vararg in
       let sz = camlint_of_coqint sz in
       let sz = if variadic then Int32.add sz 96l else sz in
-      if sz < 0x8000l then
+      if sz < 0x8000l && sz >= 0l then
         emit (Paddi(GPR1, GPR1, Cint(coqint_of_camlint sz)))
       else
         emit (Plwz(GPR1, Cint ofs, GPR1))
@@ -632,7 +687,7 @@ let expand_instruction instr =
       emit (Pcfi_adjust _m8)
   | Pfcfiu(r1, r2) ->
       assert (Archi.ppc64);
-      emit (Prldicl(GPR0, r2, _0, coqint_of_camlint 32l));
+      emit (Prldicl(GPR0, r2, _0, _32));
       emit (Pstdu(GPR0, Cint _m8, GPR1));
       emit (Pcfi_adjust _8);
       emit (Plfd(r1, Cint _0, GPR1));
@@ -685,6 +740,7 @@ let expand_instruction instr =
       end
   | _ ->
       emit instr
+
 
 (* Translate to the integer identifier of the register as
    the EABI specifies *)

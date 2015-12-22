@@ -466,6 +466,21 @@ let convertFkind = function
       if not !Clflags.option_flongdouble then unsupported "'long double' type";
       F64
 
+let checkFunctionType env tres targs =
+  if not !Clflags.option_fstruct_passing then begin
+    if Cutil.is_composite_type env tres then
+      unsupported "function returning a struct or union (consider adding option -fstruct-passing)";
+    begin match targs with
+    | None -> ()
+    | Some l ->
+        List.iter
+          (fun (id, ty) ->
+            if Cutil.is_composite_type env ty then
+              unsupported "function parameter of struct or union type (consider adding option -fstruct-passing)")
+          l
+    end
+  end
+    
 let rec convertTyp env t =
   match t with
   | C.TVoid a -> Tvoid
@@ -487,8 +502,7 @@ let rec convertTyp env t =
   | C.TArray(ty, Some sz, a) ->
       Tarray(convertTyp env ty, convertInt sz, convertAttr a)
   | C.TFun(tres, targs, va, a) ->
-      if Cutil.is_composite_type env tres then
-        unsupported "return type is a struct or union (consider adding option -fstruct-return)";
+      checkFunctionType env tres targs;
       Tfunction(begin match targs with
                 | None -> Tnil
                 | Some tl -> convertParams env tl
@@ -548,11 +562,6 @@ let string_of_type ty =
   Cprint.typ fb ty;
   Format.pp_print_flush fb ();
   Buffer.contents b
-
-let supported_return_type env ty =
-  match Cutil.unroll env ty with
-  | C.TStruct _  | C.TUnion _ -> false
-  | _ -> true
 
 let is_longlong env ty =
   match Cutil.unroll env ty with
@@ -826,12 +835,11 @@ let rec convertExpr env e =
                targs, convertExprList env args, tres)
 
   | C.ECall(fn, args) ->
-      if not (supported_return_type env e.etyp) then
-        unsupported ("function returning a result of type " ^ string_of_type e.etyp ^ " (consider adding option -fstruct-return)");
       begin match projFunType env fn.etyp with
       | None ->
           error "wrong type for function part of a call"
       | Some(tres, targs, va) ->
+          checkFunctionType env tres targs;
           if targs = None && not !Clflags.option_funprototyped then
             unsupported "call to unprototyped function (consider adding option -funprototyped)";
           if va && not !Clflags.option_fvararg_calls then
@@ -983,7 +991,12 @@ let rec convertStmt env s =
       Scontinue
   | C.Sswitch(e, s1) ->
       let (init, cases) = groupSwitch (flattenSwitch s1) in
-      if init.sdesc <> C.Sskip then
+      let rec init_debug s =
+        match s.sdesc with
+        | Sseq (a,b) -> init_debug a && init_debug b
+        | C.Sskip -> true
+        | _ -> Cutil.is_debug_stmt s in
+      if init.sdesc <> C.Sskip && not (init_debug init) then
         begin
           warning "ignored code at beginning of 'switch'";
           contains_case init
@@ -1034,8 +1047,7 @@ and convertSwitch env is_64 = function
 (** Function definitions *)
 
 let convertFundef loc env fd =
-  if Cutil.is_composite_type env fd.fd_ret then
-    unsupported "function returning a struct or union (consider adding option -fstruct-return)";
+  checkFunctionType env fd.fd_ret (Some fd.fd_params);
   if fd.fd_vararg && not !Clflags.option_fvararg_calls then
     unsupported "variable-argument function (consider adding option -fvararg-calls)";
   let ret =
@@ -1103,16 +1115,16 @@ let rec convertInit env init =
   | C.Init_single e ->
       Init_single (convertExpr env e)
   | C.Init_array il ->
-      Init_array (convertInitList env il)
+      Init_array (convertInitList env (List.rev il) Init_nil)
   | C.Init_struct(_, flds) ->
-      Init_struct (convertInitList env (List.map snd flds))
+      Init_struct (convertInitList env (List.rev_map snd flds) Init_nil)
   | C.Init_union(_, fld, i) ->
       Init_union (intern_string fld.fld_name, convertInit env i)
 
-and convertInitList env il =
+and convertInitList env il accu =
   match il with
-  | [] -> Init_nil
-  | i :: il' -> Init_cons(convertInit env i, convertInitList env il')
+  | [] -> accu
+  | i :: il' -> convertInitList env il' (Init_cons(convertInit env i, accu))
 
 let convertInitializer env ty i =
   match Initializers.transl_init
@@ -1313,4 +1325,3 @@ let convertProgram p =
         if Cerrors.check_errors () then None else Some p'
   with Env.Error msg ->
     error (Env.error_message msg); None
-

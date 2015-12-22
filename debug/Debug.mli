@@ -18,7 +18,7 @@ open BinNums
 open Sections
 
 
-(* Record used for stroring references to the actual implementation functions *)
+(* Record used for storing references to the actual implementation functions *)
 type implem =
     {
      init: string -> unit;
@@ -46,6 +46,7 @@ type implem =
      compute_gnu_file_enum: (string -> unit) -> unit;
      exists_section: section_name -> bool;
      remove_unused: ident -> unit;
+     remove_unused_function: ident -> unit;
      variable_printed: string -> unit;
      add_diab_info: section_name ->  int -> int -> int -> unit;
    }
@@ -79,5 +80,6 @@ val compute_diab_file_enum: (section_name -> int) -> (string-> int) -> (unit -> 
 val compute_gnu_file_enum: (string -> unit) -> unit
 val exists_section: section_name -> bool
 val remove_unused: ident -> unit
+val remove_unused_function: ident -> unit
 val variable_printed: string -> unit
 val add_diab_info: section_name ->  int -> int  -> int -> unit

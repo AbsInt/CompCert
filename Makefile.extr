@@ -17,9 +17,14 @@
 
 include Makefile.config
 
-# Menhir configuration and rules.
+# Menhir configuration.
 
 include Makefile.menhir
+
+# The pre-parser's error message database is compiled as follows.
+
+cparser/pre_parser_messages.ml:
+	$(MAKE) -C cparser correct
 
 # Directories containing plain Caml code
 
@@ -37,7 +42,7 @@ WARNINGS=-w -3
 extraction/%.cmx: WARNINGS +=-w -20
 extraction/%.cmo: WARNINGS +=-w -20
 
-COMPFLAGS=-g $(INCLUDES) $(WARNINGS)
+COMPFLAGS+=-g $(INCLUDES) $(MENHIR_INCLUDES) $(WARNINGS)
 
 # Using .opt compilers if available
 
@@ -64,7 +69,7 @@ LIBS_BYTE=$(patsubst %.cmxa,%.cma,$(patsubst %.cmx,%.cmo,$(LIBS)))
 CHECKLINK_LIBS=str.cmxa
 
 EXECUTABLES=ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte
-GENERATED=$(PARSERS:.mly=.mli) $(PARSERS:.mly=.ml) $(LEXERS:.mll=.ml)
+GENERATED=$(PARSERS:.mly=.mli) $(PARSERS:.mly=.ml) $(LEXERS:.mll=.ml) cparser/pre_parser_messages.ml
 
 # Beginning of part that assumes .depend.extr already exists
 
@@ -112,12 +117,12 @@ endif
 clean:
 	rm -f $(EXECUTABLES)
 	rm -f $(GENERATED)
-	for d in $(DIRS); do rm -f $$d/*.cm[iox] $$d/*.o; done
+	for d in $(DIRS); do rm -f $$d/*.cm[iotx] $$d/*cmti $$d/*.o; done
+	rm -f backend/CMparser.automaton
+	$(MAKE) -C cparser clean
 
 # Generation of .depend.extr
 
 depend: $(GENERATED)
 	@echo "Analyzing OCaml dependencies"
 	@$(OCAMLDEP) $(foreach d,$(DIRS),$(wildcard $(d)/*.mli $(d)/*.ml)) $(GENERATED) >.depend.extr || { rm -f .depend.extr; exit 2; }
-
-

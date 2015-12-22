@@ -81,6 +81,7 @@ with decl_type :=
  | PTR : list cvspec -> decl_type -> decl_type
 (* The bool is true for variable length parameters. *)
  | PROTO : decl_type -> list parameter * bool -> decl_type
+ | PROTO_OLD : decl_type -> list string -> decl_type
 
 with parameter :=
   | PARAM : list spec_elem -> option string -> decl_type -> list attribute -> cabsloc -> parameter
@@ -190,8 +191,7 @@ Definition asm_flag := (bool * list char_code)%type.
 ** Declaration definition (at toplevel)
 *)
 Inductive definition :=
- | FUNDEF : list spec_elem -> name -> statement -> cabsloc -> definition
- | KRFUNDEF : list spec_elem -> name -> list string ->  list definition -> statement -> cabsloc -> definition
+ | FUNDEF : list spec_elem -> name -> list definition -> statement -> cabsloc -> definition
  | DECDEF : init_name_group -> cabsloc -> definition  (* global variable(s), or function prototype *)
  | PRAGMA : string -> cabsloc -> definition
 

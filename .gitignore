@@ -9,6 +9,9 @@
 *.cma
 *.cmxa
 .*.aux
+*.cmti
+*.cmt
+*.merlin
 # Emacs saves
 *~
 # Executables and configuration
@@ -38,7 +41,15 @@ cparser/Parser.v
 cparser/Lexer.ml
 cparser/pre_parser.ml
 cparser/pre_parser.mli
+cparser/pre_parser_messages.ml
 cparser/pre_parser.automaton
+cparser/pre_parser.messages
+cparser/handcrafted.messages.bak
+cparser/handcrafted.messages.raw
+cparser/deLexer
+cparser/tests/generated/*.c
+cparser/tests/generated/*.err
+backend/CMparser.automaton
 lib/Readconfig.ml
 lib/Tokenize.ml
 driver/Version.ml

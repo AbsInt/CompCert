@@ -412,7 +412,7 @@ and transf_init env = function
   | Init_single e ->
       Init_single (transf_expr env Val e)
   | Init_array il ->
-      Init_array (List.map (transf_init env) il)
+      Init_array (List.rev (List.rev_map (transf_init env) il))
   | Init_struct(id, fil) ->
       Init_struct (id, List.map (fun (fld, i) -> (fld, transf_init env i)) fil)
   | Init_union(id, fld, i) ->
@@ -582,11 +582,11 @@ let program p =
   struct_passing_style :=
     if !Clflags.option_interp
     then SP_ref_callee
-    else !Clflags.option_fstruct_passing_style;
+    else Configuration.struct_passing_style;
   struct_return_style :=
     if !Clflags.option_interp
     then SR_ref
-    else !Clflags.option_fstruct_return_style;
+    else Configuration.struct_return_style;
   Transform.program
     ~decl:transf_decl
     ~fundef:transf_fundef

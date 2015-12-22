@@ -3,6 +3,7 @@
 /*              The Compcert verified compiler                         */
 /*                                                                     */
 /*          Jacques-Henri Jourdan, INRIA Paris-Rocquencourt            */
+/*             François Pottier, INRIA Paris-Rocquencourt              */
 /*                                                                     */
 /*  Copyright Institut National de Recherche en Informatique et en     */
 /*  Automatique.  All rights reserved.  This file is distributed       */
@@ -12,6 +13,14 @@
 /*  under the terms of the INRIA Non-Commercial License Agreement.     */
 /*                                                                     */
 /* *********************************************************************/
+
+(*
+   WARNING: The precedence declarations tend to silently solve
+   conflicts. So, if you change the grammar (especially for
+   statements), you should check that when you run "make correct"
+   in the cparser/ directory, Menhir should say:
+     2 shift/reduce conflicts were silently solved.
+*)
 
 %{
   open Pre_parser_aux
@@ -25,18 +34,15 @@
   let declare_typename (i,_,_) =
     !declare_typename i
 
-  let syntax_error pos =
-    Cerrors.fatal_error "%s:%d: syntax error"
-        pos.Lexing.pos_fname pos.Lexing.pos_lnum
-
-  let unclosed opening closing pos1 pos2 =
-    Cerrors.info "%s:%d: syntax error: expecting '%s'"
-        pos2.Lexing.pos_fname pos2.Lexing.pos_lnum closing;
-    Cerrors.fatal_error "%s:%d: this is the location of the unclosed '%s'"
-        pos1.Lexing.pos_fname pos1.Lexing.pos_lnum opening
+  type 'id fun_declarator_ctx =
+  | Decl_ident
+  | Decl_other
+  | Decl_fun of (unit -> unit)
+  | Decl_krfun of 'id
 
 %}
 
+%token<string> PRE_NAME
 %token<string * Pre_parser_aux.identifier_type ref * Cabs.cabsloc>
   VAR_NAME TYPEDEF_NAME
 %token<Cabs.constant * Cabs.cabsloc> CONSTANT
@@ -55,21 +61,67 @@
 
 %token EOF
 
-(* These precedences declarations solve the conflict in the following declaration :
+(* These precedence declarations solve the conflict in the following
+   declaration:
 
    int f(int (a));
 
-   when a is a TYPEDEF_NAME. It is specified by 6.7.5.3 11.
+   when a is a TYPEDEF_NAME. It is specified by 6.7.5.3 11: 'a' should
+   be taken as the type of parameter of the anonymous function.
 
-   WARNING: These precedence declarations tend to silently solve other
-   conflicts. So, if you change the grammar (especially or
-   statements), you should check that without these declarations, it
-   has ONLY ONE CONFLICT.
+   See below comment on [low_prec]
 *)
+%nonassoc lowPrec1
 %nonassoc TYPEDEF_NAME
-%nonassoc highPrec
+
+(* These precedence declarations solve the dangling else conflict. *)
+%nonassoc lowPrec2
+%nonassoc ELSE
 
 %start<unit> translation_unit_file
+
+(* The following declarations cause certain nonterminal symbols to be
+   reduced when an error is detected. This replaces error actions in
+   the automaton with reduction actions. So, if the input is correct,
+   this makes no difference, and if the input is incorrect, this only
+   forces a few more reductions to take place before the error is
+   detected and reported. If used properly, this facilitates error
+   reports. *)
+
+%on_error_reduce
+  primary_expression
+  postfix_expression
+  unary_expression
+  cast_expression
+  multiplicative_expression
+  additive_expression
+  shift_expression
+  relational_expression
+  equality_expression
+  and_expression
+  exclusive_or_expression
+  inclusive_or_expression
+  logical_and_expression
+  logical_or_expression
+  conditional_expression
+  assignment_expression
+  expression
+  attribute_specifier_list
+  declarator
+  declarator_noattrend
+  selection_statement
+  enum_specifier
+  struct_or_union_specifier
+  specifier_qualifier_list(struct_declaration)
+  specifier_qualifier_list(type_name)
+  option(abstract_declarator(type_name))
+  abstract_declarator(type_name)
+  abstract_declarator(parameter_declaration)
+  asm_flags
+  asm_operands
+  init_declarator
+  rlist(declaration_specifier_no_type)
+
 %%
 
 (* Helpers *)
@@ -78,12 +130,6 @@
    so this definition of [option] is actually used, even though the
    word [option] does not appear in the rest of this file. *)
 
-option(X):
-| /* nothing */
-    { None }
-| x = X
-    { Some x }
-
 (* [ioption(X)] is equivalent to [option(X)], but is marked [%inline],
    so its definition is expanded. In the absence of conflicts, the two
    are equivalent. Using [ioption] instead of [option] in well-chosen
@@ -91,11 +137,19 @@ option(X):
    of [ioption] in well-chosen places can help reduce the number of
    states of the automaton. *)
 
+(* Defining the non-%inline version in terms of the %inline version is
+   a standard idiom. It obviates the need to duplicate the definition.
+   The same idiom is used elsewhere below. *)
+
 %inline ioption(X):
 | /* nothing */
     { None }
 | x = X
     { Some x }
+
+option(X):
+  o = ioption(X)
+    { o }
 
 (* [optional(X, Y)] is equivalent to [X? Y]. However, by inlining
    the two possibilies -- either [X Y] or just [Y] -- we are able
@@ -105,13 +159,47 @@ option(X):
 optional(X, Y):
   ioption(X) Y {}
 
-%inline fst(X):
-| x = X
-    { fst x }
+(* This is a standard left-recursive, possibly empty list, without
+   separators. Note that, by convention, [X*] is syntactic sugar for
+   [list(X)]. *)
+
+(* [ilist(X)] is equivalent to [list(X)], but is marked [%inline],
+   so its definition is expanded (only one level deep, of course). *)
+
+%inline ilist(X):
+| (* empty *) {}
+| list(X) X   {}
+
+list(X):
+| ilist(X)    {}
+
+(* [rlist(X)] is right-recursive non-empty list. *)
+
+rlist(X):
+| X           {}
+| X rlist(X)  {}
+
+(* The kind of an identifier should not be determined when looking
+   ahead, because the context may not be up to date. For this reason,
+   when reading an identifier, the lexer emits two tokens: the first
+   one (PRE_NAME) is eaten as a lookahead token, the second one is the
+   actual identifier.
+*)
+(* For [var_name] we need more context on error reporting, so we use
+   %inline. Not using %inline for typedef_name helps foctorizing many
+   similar error messages. *)
+
+typedef_name:
+| PRE_NAME i = TYPEDEF_NAME
+    { i }
+
+%inline var_name:
+| PRE_NAME i = VAR_NAME
+    { i }
 
 general_identifier:
-| i = VAR_NAME
-| i = TYPEDEF_NAME
+| i = typedef_name
+| i = var_name
     { i }
 
 (* [other_identifier] is equivalent to [general_identifier], but adds
@@ -128,65 +216,50 @@ string_literals_list:
 | string_literals_list STRING_LITERAL
     {}
 
-(* WARNING : because of the lookahead token, the context might be
-   opened or closed one token after the position of this non-terminal !
-
-   Opening too late is not dangerous for us, because this does not
-   change the token stream. However, we have to make sure the
-   lookahead token present just after closing/declaring/restoring is
-   not an identifier. An easy way to check that is to look at the
-   follow set of the non-terminal in question. The follow sets are
-   given by menhir with option -lg 3. *)
-
-%inline nop: (* empty *) {}
-
-open_context:
-  (* empty *)%prec highPrec { !open_context () }
-close_context:
-  (* empty *) { !close_context () }
-in_context(nt):
-  open_context x = nt close_context { x }
-
-save_contexts_stk:
-  (* empty *) { !save_contexts_stk () }
+save_context:
+  (* empty *) { !save_context () }
 
 declare_varname(nt):
-  i = nt { declare_varname i; i }
+  i = nt { declare_varname (fst i); i }
 declare_typename(nt):
-  i = nt { declare_typename i; i }
+  i = nt { declare_typename (fst i); i }
+
+(* A note about phantom parameters. The definition of a non-terminal symbol
+   [nt] is sometimes parameterized with a parameter that is unused in the
+   right-hand side. This parameter disappears when macro-expansion takes
+   place. Thus, the presence of this parameter does not influence the language
+   that is accepted by the parser. Yet, it carries information about the
+   context, since different call sites can supply different values of this
+   parameter. This forces the creation of two (or more) identical copies of
+   the definition of [nt], which leads to a larger automaton, where some
+   states have been duplicated. In these states, more information about the
+   context is available, which allows better syntax error messages to be
+   given.
+
+   By convention, a formal phantom parameter is named [phantom], so as to be
+   easily recognizable. For clarity, we usually explicitly document which
+   actual values it can take. *)
 
 (* Actual grammar *)
 
 primary_expression:
-| VAR_NAME
+| var_name
 | CONSTANT
 | string_literals_list
 | LPAREN expression RPAREN
     {}
-| LPAREN expression error
-    { unclosed "(" ")" $startpos($1) $endpos }
 
 postfix_expression:
 | primary_expression
 | postfix_expression LBRACK expression RBRACK
 | postfix_expression LPAREN argument_expression_list? RPAREN
-    {}
-| postfix_expression LPAREN argument_expression_list? error
-    { unclosed "(" ")" $startpos($2) $endpos }
 | BUILTIN_VA_ARG LPAREN assignment_expression COMMA type_name RPAREN
-    {}
-| BUILTIN_VA_ARG LPAREN assignment_expression COMMA type_name error
-    { unclosed "(" ")" $startpos($2) $endpos }
 | postfix_expression DOT other_identifier
 | postfix_expression PTR other_identifier
 | postfix_expression INC
 | postfix_expression DEC
 | LPAREN type_name RPAREN LBRACE initializer_list COMMA? RBRACE
     {}
-| LPAREN type_name error
-    { unclosed "(" ")" $startpos($1) $endpos }
-| LPAREN type_name RPAREN LBRACE initializer_list COMMA? error
-    { unclosed "{" "}" $startpos($4) $endpos }
 
 argument_expression_list:
 | assignment_expression
@@ -312,7 +385,7 @@ expression:
 | expression COMMA assignment_expression
     {}
 
-constant_expression:
+%inline constant_expression:
 | conditional_expression
     {}
 
@@ -324,9 +397,12 @@ constant_expression:
    cannot contain an initialization (this is an error to initialize a
    typedef). *)
 
-declaration:
-| declaration_specifiers         init_declarator_list?    SEMICOLON
-| declaration_specifiers_typedef typedef_declarator_list? SEMICOLON
+(* The phantom parameter is either [block_item], which means we are
+   definitely reading a declaration, or [external_declaration], which
+   means we could also be reading the beginning of a function definition. *)
+declaration(phantom):
+| declaration_specifiers(declaration(phantom)) init_declarator_list?    SEMICOLON
+| declaration_specifiers_typedef               typedef_declarator_list? SEMICOLON
     {}
 
 init_declarator_list:
@@ -335,8 +411,8 @@ init_declarator_list:
     {}
 
 init_declarator:
-| declare_varname(fst(declarator))
-| declare_varname(fst(declarator)) EQ c_initializer
+| declare_varname(declarator_noattrend) save_context attribute_specifier_list
+| declare_varname(declarator_noattrend) save_context attribute_specifier_list EQ c_initializer
     {}
 
 typedef_declarator_list:
@@ -345,7 +421,7 @@ typedef_declarator_list:
     {}
 
 typedef_declarator:
-| declare_typename(fst(declarator))
+| declare_typename(declarator)
     {}
 
 storage_class_specifier_no_typedef:
@@ -355,29 +431,28 @@ storage_class_specifier_no_typedef:
 | REGISTER
     {}
 
-(* [declaration_specifiers_no_type] matches declaration specifiers
+(* [declaration_specifier_no_type] matches declaration specifiers
    that do not contain either "typedef" nor type specifiers. *)
-declaration_specifiers_no_type:
-| storage_class_specifier_no_typedef declaration_specifiers_no_type?
-| type_qualifier                     declaration_specifiers_no_type?
-| function_specifier                 declaration_specifiers_no_type?
+%inline declaration_specifier_no_type:
+| storage_class_specifier_no_typedef
+| type_qualifier_noattr
+| function_specifier
+| attribute_specifier
     {}
 
-(* [declaration_specifiers_no_typedef_name] matches declaration
+(* [declaration_specifier_no_typedef_name] matches declaration
    specifiers that contain neither "typedef" nor a typedef name
    (i.e. type specifier declared using a previous "typedef
    keyword"). *)
-declaration_specifiers_no_typedef_name:
-| storage_class_specifier_no_typedef declaration_specifiers_no_typedef_name?
-| type_qualifier                     declaration_specifiers_no_typedef_name?
-| function_specifier                 declaration_specifiers_no_typedef_name?
-| type_specifier_no_typedef_name     declaration_specifiers_no_typedef_name?
+declaration_specifier_no_typedef_name:
+| storage_class_specifier_no_typedef
+| type_qualifier
+| function_specifier
+| type_specifier_no_typedef_name
     {}
 
-(* [declaration_specifiers_no_type] matches declaration_specifiers
-   that do not contains "typedef". Moreover, it makes sure that it
-   contains either one typename and not other type specifier or no
-   typename.
+(* [declaration_specifiers] makes sure one type specifier is given, and,
+   if a typedef_name is given, then no other type specifier is given.
 
    This is a weaker condition than 6.7.2 2. It is necessary to enforce
    this in the grammar to disambiguate the example in 6.7.7 6:
@@ -390,19 +465,23 @@ declaration_specifiers_no_typedef_name:
 
    The first field is a named t, while the second is unnamed of type t.
 *)
-declaration_specifiers:
-| ioption(declaration_specifiers_no_type) TYPEDEF_NAME                   declaration_specifiers_no_type?
-| declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+(* The phantom parameter is either [declaration(_)], which means that
+   this is the beginning of a declaration or a function definition, or
+   [parameter_declaration], which means that this is the beginning of a
+   parameter declaration. *)
+declaration_specifiers(phantom):
+| ioption(rlist(declaration_specifier_no_type)) typedef_name                   declaration_specifier_no_type*
+| ioption(rlist(declaration_specifier_no_type)) type_specifier_no_typedef_name declaration_specifier_no_typedef_name*
     {}
 
 (* This matches declaration_specifiers that do contains once the
    "typedef" keyword. To avoid conflicts, we also encode the
    constraint described in the comment for [declaration_specifiers]. *)
 declaration_specifiers_typedef:
-| declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?         TYPEDEF_NAME                   declaration_specifiers_no_type?
-| ioption(declaration_specifiers_no_type) TYPEDEF_NAME                   declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?
-| declaration_specifiers_no_type?         TYPEDEF                        declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
-| declaration_specifiers_no_type?         type_specifier_no_typedef_name declaration_specifiers_no_typedef_name? TYPEDEF                        declaration_specifiers_no_typedef_name?
+| ioption(rlist(declaration_specifier_no_type)) TYPEDEF                        declaration_specifier_no_type*         typedef_name                   declaration_specifier_no_type*
+| ioption(rlist(declaration_specifier_no_type)) typedef_name                   declaration_specifier_no_type*         TYPEDEF                        declaration_specifier_no_type*
+| ioption(rlist(declaration_specifier_no_type)) TYPEDEF                        declaration_specifier_no_type*         type_specifier_no_typedef_name declaration_specifier_no_typedef_name*
+| ioption(rlist(declaration_specifier_no_type)) type_specifier_no_typedef_name declaration_specifier_no_typedef_name* TYPEDEF                        declaration_specifier_no_typedef_name*
     {}
 
 (* A type specifier which is not a typedef name. *)
@@ -425,8 +504,6 @@ struct_or_union_specifier:
 | struct_or_union attribute_specifier_list other_identifier? LBRACE struct_declaration_list RBRACE
 | struct_or_union attribute_specifier_list other_identifier
     {}
-| struct_or_union attribute_specifier_list other_identifier? LBRACE struct_declaration_list error
-    { unclosed "{" "}" $startpos($4) $endpos }
 
 struct_or_union:
 | STRUCT
@@ -439,19 +516,20 @@ struct_declaration_list:
     {}
 
 struct_declaration:
-| specifier_qualifier_list struct_declarator_list? SEMICOLON
+| specifier_qualifier_list(struct_declaration) struct_declarator_list? SEMICOLON
     {}
 
 (* As in the standard, except it also encodes the constraint described
    in the comment above [declaration_specifiers]. *)
-specifier_qualifier_list:
-| type_qualifier_list? TYPEDEF_NAME                   type_qualifier_list?
-| type_qualifier_list? type_specifier_no_typedef_name specifier_qualifier_list_no_typedef_name?
+(* The phantom parameter can be [struct_declaration] or [type_name]. *)
+specifier_qualifier_list(phantom):
+| ioption(type_qualifier_list) typedef_name                   type_qualifier_list?
+| ioption(type_qualifier_list) type_specifier_no_typedef_name specifier_qualifier_no_typedef_name*
     {}
 
-specifier_qualifier_list_no_typedef_name:
-| type_specifier_no_typedef_name specifier_qualifier_list_no_typedef_name?
-| type_qualifier                 specifier_qualifier_list_no_typedef_name?
+specifier_qualifier_no_typedef_name:
+| type_specifier_no_typedef_name
+| type_qualifier
     {}
 
 struct_declarator_list:
@@ -468,8 +546,6 @@ enum_specifier:
 | ENUM attribute_specifier_list other_identifier? LBRACE enumerator_list COMMA? RBRACE
 | ENUM attribute_specifier_list other_identifier
     {}
-| ENUM attribute_specifier_list other_identifier? LBRACE enumerator_list COMMA? error
-    { unclosed "{" "}" $startpos($4) $endpos }
 
 enumerator_list:
 | declare_varname(enumerator)
@@ -479,29 +555,31 @@ enumerator_list:
 enumerator:
 | i = enumeration_constant
 | i = enumeration_constant EQ constant_expression
-    { i }
+    { (i, ()) }
 
 enumeration_constant:
 | i = general_identifier
     { set_id_type i VarId; i }
 
-type_qualifier:
+type_qualifier_noattr:
 | CONST
 | RESTRICT
 | VOLATILE
+    {}
+
+%inline type_qualifier:
+| type_qualifier_noattr
 | attribute_specifier
     {}
 
 attribute_specifier_list:
 | /* empty */
-| attribute_specifier_list attribute_specifier
+| attribute_specifier attribute_specifier_list
     {}
 
 attribute_specifier:
 | ATTRIBUTE LPAREN LPAREN gcc_attribute_list RPAREN RPAREN
 | PACKED LPAREN argument_expression_list RPAREN
-(* TODO: slove conflict *)
-(* | PACKED *)
 | ALIGNAS LPAREN argument_expression_list RPAREN
 | ALIGNAS LPAREN type_name RPAREN
     {}
@@ -516,7 +594,7 @@ gcc_attribute:
 | gcc_attribute_word
 | gcc_attribute_word LPAREN argument_expression_list? RPAREN
     {}
-| gcc_attribute_word LPAREN i = TYPEDEF_NAME COMMA argument_expression_list RPAREN
+| gcc_attribute_word LPAREN i = typedef_name COMMA argument_expression_list RPAREN
     (* This is to emulate GCC's attribute syntax : we make this identifier
        a var name identifier, so that the parser will see it as a variable
        reference *)
@@ -532,74 +610,142 @@ function_specifier:
 | INLINE
     {}
 
+(* We add this non-terminal here to force the resolution of the
+   conflict at the point of shifting the TYPEDEF_NAME. If we had
+   already shifted it, a reduce/reduce conflict appears, and menhir is
+   not able to solve them.
+
+   The conflict in question is when parsing :
+     int f(int (t
+   With lookahead ')', in a context where 't' is a type name.
+   In this case, we are able to reduce the two productions:
+     (1) "declarator_identifier -> PRE_NAME TYPEDEF_NAME"
+           followed by "direct_declarator -> declarator_identifier"
+       meaning that 't' is the parameter of function 'f'
+     (2) "list(declaration_specifier_no_type) -> "
+           followed by "list(declaration_specifier_no_type) -> PRE_NAME TYPEDEF_NAME list(declaration_specifier_no_type)"
+           followed by "declaration_specifiers(...) -> ..."
+           followed by "parameter_declaration -> ..."
+       meaning that 't' is the type of the parameter of a function
+       passed as parameter to 'f'
+
+  By adding this non-terminal at this point, we force this conflict to
+  be solved earlier: once we have seen "f(int (", followed by PRE_NAME
+  and with TYPEDEF_NAME in lookahead position, we know (1) can safely
+  be ignored (if (1) is still possible after reading the next token,
+  (2) will also be possible, and the conflict has to be solved in
+  favor of (2)). We add low_prec in declaration_identifier, but not in
+  typedef_name, so that it has to be reduced in (1) but not in (2).
+  This is a shift/reduce conflict that can be solved using
+  precedences.
+ *)
+low_prec : %prec lowPrec1 {}
+declarator_identifier:
+| PRE_NAME low_prec i = TYPEDEF_NAME
+| i = var_name
+    { i }
+
 (* The semantic action returned by [declarator] is a pair of the
-   identifier being defined and an option of the context stack that
-   has to be restored if entering the body of the function being
+   identifier being defined and a value containing the context stack
+   that has to be restored if entering the body of the function being
    defined, if so. *)
 declarator:
-| ioption(pointer) x = direct_declarator attribute_specifier_list
+| x = declarator_noattrend attribute_specifier_list
     { x }
+
+declarator_noattrend:
+| x = direct_declarator
+    { x }
+| pointer x = direct_declarator
+    { match snd x with
+      | Decl_ident -> (fst x, Decl_other)
+      | _ -> x }
 
 direct_declarator:
-| i = general_identifier
-    { set_id_type i VarId; (i, None) }
-| LPAREN x = declarator RPAREN
+| i = declarator_identifier
+    { set_id_type i VarId; (i, Decl_ident) }
+| LPAREN save_context x = declarator RPAREN
 | x = direct_declarator LBRACK type_qualifier_list? optional(assignment_expression, RBRACK)
-    { x }
-| x = direct_declarator LPAREN
-    open_context parameter_type_list? restore_fun = save_contexts_stk
-    close_context RPAREN
     { match snd x with
-      | None -> (fst x, Some restore_fun)
-      | Some _ -> x }
+      | Decl_ident -> (fst x, Decl_other)
+      | _ -> x }
+| x = direct_declarator LPAREN ctx = context_parameter_type_list RPAREN
+    { match snd x with
+      | Decl_ident -> (fst x, Decl_fun ctx)
+      | _ -> x }
+| x = direct_declarator LPAREN save_context il=identifier_list? RPAREN
+    { match snd x, il with
+      | Decl_ident, Some il -> (fst x, Decl_krfun il)
+      | Decl_ident, None -> (fst x, Decl_krfun [])
+      | _ -> x }
 
-pointer:
-| STAR type_qualifier_list?
-| STAR type_qualifier_list? pointer
+(* The C standard defines [pointer] as a right-recursive list. We prefer to
+   define it as a left-recursive list, because this provides better static
+   context (that is, this changes the automaton in such a way that it is
+   easier to give good error messages, in at least 2 states).
+
+   The non-terminal symbol [pointer1] represents one list element.
+
+   [pointer], which represents a non-empty list of [pointer1]'s, is defined
+   as [pointer1* pointer1].
+
+   When the C standard writes [pointer?], which represents a possibly empty
+   list of [pointer1]'s, we write [pointer1*]. *)
+
+%inline pointer1:
+  STAR type_qualifier_list?
+    {}
+
+%inline pointer:
+  pointer1* pointer1
     {}
 
 type_qualifier_list:
 | type_qualifier_list? type_qualifier
     {}
 
+context_parameter_type_list:
+| ctx1 = save_context parameter_type_list ctx2 = save_context
+    { ctx1 (); ctx2 }
+
 parameter_type_list:
-| l=parameter_list
-| l=parameter_list COMMA ELLIPSIS
-    { l }
-
-parameter_list:
-| i=parameter_declaration
-    { [i] }
-| l=parameter_list COMMA i=parameter_declaration
-    { i::l }
-
-parameter_declaration:
-| declaration_specifiers id=declare_varname(fst(declarator))
-    { Some id }
-| declaration_specifiers abstract_declarator?
-    { None }
-
-type_name:
-| specifier_qualifier_list abstract_declarator?
+| parameter_list
+| parameter_list COMMA ELLIPSIS
     {}
 
-abstract_declarator:
+parameter_list:
+| parameter_declaration
+| parameter_list COMMA parameter_declaration
+    {}
+
+parameter_declaration:
+| declaration_specifiers(parameter_declaration) declare_varname(declarator)
+| declaration_specifiers(parameter_declaration) abstract_declarator(parameter_declaration)?
+    {}
+
+type_name:
+| specifier_qualifier_list(type_name) abstract_declarator(type_name)?
+    {}
+
+(* The phantom parameter can be [parameter_declaration] or [type_name].
+   We take the latter to mean [type_or_name] or [direct_abstract_declarator].
+   We need not distinguish these two cases: in both cases, a closing parenthesis
+   is permitted (and we do not wish to keep track of why it is permitted). *)
+abstract_declarator(phantom):
 | pointer
 | ioption(pointer) direct_abstract_declarator
     {}
 
 direct_abstract_declarator:
-| LPAREN abstract_declarator RPAREN
+| LPAREN save_context abstract_declarator(type_name) RPAREN
 | direct_abstract_declarator? LBRACK type_qualifier_list? optional(assignment_expression, RBRACK)
-| ioption(direct_abstract_declarator) LPAREN in_context(parameter_type_list?) RPAREN
+| ioption(direct_abstract_declarator) LPAREN context_parameter_type_list? RPAREN
     {}
 
 c_initializer:
 | assignment_expression
 | LBRACE initializer_list COMMA? RBRACE
     {}
-| LBRACE initializer_list COMMA? error
-    { unclosed "{" "}" $startpos($1) $endpos }
 
 initializer_list:
 | designation? c_initializer
@@ -619,164 +765,74 @@ designator:
 | DOT other_identifier
     {}
 
-(* The grammar of statements is replicated three times.
-
-   [statement_finish_close] should close the current context just
-   before its last token.
-
-   [statement_finish_noclose] should not close the current context. It
-   should modify it only if this modification actually changes the
-   context of the current block.
-
-   [statement_intern_close] is like [statement_finish_close], except
-   it cannot reduce to a single-branch if statement.
-*)
-
-statement_finish_close:
-| labeled_statement(statement_finish_close)
-| compound_statement(nop)
-| expression_statement(close_context)
-| selection_statement_finish(nop)
-| iteration_statement(nop,statement_finish_close)
-| jump_statement(close_context)
-| asm_statement(close_context)
+statement:
+| labeled_statement
+| compound_statement
+| expression_statement
+| selection_statement
+| iteration_statement
+| jump_statement
+| asm_statement
     {}
 
-statement_finish_noclose:
-| labeled_statement(statement_finish_noclose)
-| compound_statement(open_context)
-| expression_statement(nop)
-| selection_statement_finish(open_context)
-| iteration_statement(open_context,statement_finish_close)
-| jump_statement(nop)
-| asm_statement(nop)
+labeled_statement:
+| other_identifier COLON statement
+| CASE constant_expression COLON statement
+| DEFAULT COLON statement
     {}
 
-statement_intern_close:
-| labeled_statement(statement_intern_close)
-| compound_statement(nop)
-| expression_statement(close_context)
-| selection_statement_intern_close
-| iteration_statement(nop,statement_intern_close)
-| jump_statement(close_context)
-| asm_statement(close_context)
-    {}
-
-(* [labeled_statement(last_statement)] has the same effect on contexts
-   as [last_statement]. *)
-labeled_statement(last_statement):
-| other_identifier COLON last_statement
-| CASE constant_expression COLON last_statement
-| DEFAULT COLON last_statement
-    {}
-
-(* [compound_statement] uses a local context and closes it before its
-   last token. It uses [openc] to open this local context if needed.
-   That is, if a local context has already been opened, [openc] = [nop],
-   otherwise, [openc] = [open_context]. *)
-compound_statement(openc):
-| LBRACE openc block_item_list? close_context RBRACE
-    {}
-| LBRACE openc block_item_list? close_context error
-    { unclosed "{" "}" $startpos($1) $endpos }
+compound_statement:
+| ctx = save_context LBRACE block_item_list? RBRACE
+    { ctx() }
 
 block_item_list:
 | block_item_list? block_item
     {}
 
 block_item:
-| declaration
-| statement_finish_noclose
+| declaration(block_item)
+| statement
 | PRAGMA
     {}
 
-(* [expression_statement], [jump_statement] and [asm_statement] close
-   the local context if needed, depending of the close parameter. If
-   there is no local context, [close] = [nop]. Otherwise,
-   [close] = [close_context]. *)
-expression_statement(close):
-| expression? close SEMICOLON
+expression_statement:
+| expression? SEMICOLON
     {}
 
-jump_statement(close):
-| GOTO other_identifier close SEMICOLON
-| CONTINUE close SEMICOLON
-| BREAK close SEMICOLON
-| RETURN expression? close SEMICOLON
+jump_statement:
+| GOTO other_identifier SEMICOLON
+| CONTINUE SEMICOLON
+| BREAK SEMICOLON
+| RETURN expression? SEMICOLON
     {}
 
-asm_statement(close):
-| ASM asm_attributes LPAREN string_literals_list asm_arguments RPAREN close SEMICOLON
+asm_statement:
+| ASM asm_attributes LPAREN string_literals_list asm_arguments RPAREN SEMICOLON
     {}
 
-(* [selection_statement_finish] and [selection_statement_intern] use a
-   local context and close it before their last token.
+ifelse_statement1:
+| IF LPAREN expression RPAREN ctx = save_context statement ELSE
+    { ctx() }
 
-   [selection_statement_finish(openc)] uses [openc] to open this local
-   context if needed. That is, if a local context has already been
-   opened, [openc] = [nop], otherwise, [openc] = [open_context].
+selection_statement:
+| ctx = save_context ifelse_statement1 statement
+| ctx = save_context IF LPAREN expression RPAREN save_context statement %prec lowPrec2
+| ctx = save_context SWITCH LPAREN expression RPAREN statement
+    { ctx() }
 
-   [selection_statement_intern_close] is always called with a local
-   context openned. It closes it before its last token.  *)
+do_statement1:
+| ctx = save_context DO statement
+    { ctx () }
 
-(* It should be noted that the token [ELSE] should be lookaheaded
-   /outside/ of the local context because if the lookaheaded token is
-   not [ELSE], then this is the end of the statement.
-
-   This is especially important to parse correctly the following
-   example:
-
-     typedef int a;
-
-     int f() {
-       for(int a; ;)
-         if(1);
-       a * x;
-     }
-
-   However, if the lookahead token is [ELSE], we should parse the
-   second branch in the same context as the first branch, so we have
-   to reopen the previously closed context. This is the reason for the
-   save/restore system.
-*)
-
-if_else_statement_begin(openc):
-| IF openc LPAREN expression RPAREN restore_fun = save_contexts_stk
-  statement_intern_close
-    { restore_fun () }
-
-selection_statement_finish(openc):
-| IF openc LPAREN expression RPAREN save_contexts_stk statement_finish_close
-| if_else_statement_begin(openc) ELSE statement_finish_close
-| SWITCH openc LPAREN expression RPAREN statement_finish_close
-    {}
-
-selection_statement_intern_close:
-| if_else_statement_begin(nop) ELSE statement_intern_close
-| SWITCH LPAREN expression RPAREN statement_intern_close
-    {}
-
-(* [iteration_statement] uses a local context and closes it before
-   their last token.
-
-   [iteration_statement] uses [openc] to open this local context if
-   needed. That is, if a local context has already been opened,
-   [openc] = [nop], otherwise, [openc] = [open_context].
-
-   [last_statement] is either [statement_intern_close] or
-   [statement_finish_close]. That is, it should /always/ close the
-   local context. *)
-
-iteration_statement(openc,last_statement):
-| WHILE openc LPAREN expression RPAREN last_statement
-| DO open_context statement_finish_close WHILE
-    openc LPAREN expression RPAREN close_context SEMICOLON
-| FOR openc LPAREN for_statement_header optional(expression, SEMICOLON) optional(expression, RPAREN) last_statement
-    {}
+iteration_statement:
+| ctx = save_context WHILE LPAREN expression RPAREN statement
+| ctx = save_context do_statement1 WHILE LPAREN expression RPAREN SEMICOLON
+| ctx = save_context FOR LPAREN for_statement_header optional(expression, SEMICOLON) optional(expression, RPAREN) statement
+    { ctx() }
 
 for_statement_header:
 | optional(expression, SEMICOLON)
-| declaration
+| declaration(block_item)
     {}
 
 asm_attributes:
@@ -813,58 +869,53 @@ asm_op_name:
 
 asm_flags:
 | string_literals_list
-| string_literals_list COMMA asm_flags
+| asm_flags COMMA string_literals_list
     {}
 
 translation_unit_file:
-| translation_unit EOF
-| EOF
+| translation_item* EOF
     {}
-| error
-    { syntax_error $endpos }
 
-translation_unit:
+translation_item:
 | external_declaration
-| translation_unit external_declaration
-| translation_unit SEMICOLON
 | SEMICOLON
     {}
 
-external_declaration:
+%inline external_declaration:
 | function_definition
-| declaration
+| declaration(external_declaration)
 | PRAGMA
     {}
 
-function_definition_begin:
-| declaration_specifiers ioption(pointer) x=direct_declarator
-    { match x with
-      | (_, None) -> $syntaxerror
-      | (i, Some restore_fun) -> restore_fun ()
-    }
-| declaration_specifiers ioption(pointer) x=direct_declarator
-  LPAREN params=identifier_list RPAREN open_context declaration_list
-    { match x with
-      | (_, Some _) -> $syntaxerror
-      | (i, None) ->
-	declare_varname i;
-	List.iter declare_varname params
-    }
-
 identifier_list:
-| id = VAR_NAME
-    { [id] }
-| idl = identifier_list COMMA id = VAR_NAME
-    { id :: idl }
+| x = var_name
+    { [x] }
+| l = identifier_list COMMA x = var_name
+    { x::l }
+
+kr_param_declaration:
+| declaration_specifiers(declaration(block_item)) init_declarator_list? SEMICOLON
+    {}
 
 declaration_list:
-| /*empty*/
-    {}
-| declaration_list declaration
+| kr_param_declaration
+| declaration_list kr_param_declaration
     {}
 
+function_definition1:
+| declaration_specifiers(declaration(external_declaration))
+    func = declare_varname(declarator_noattrend)
+    save_context attribute_specifier_list ctx = save_context
+| declaration_specifiers(declaration(external_declaration))
+    func = declare_varname(declarator_noattrend)
+    ctx = save_context declaration_list
+    { begin match snd func with
+      | Decl_fun ctx -> ctx (); declare_varname (fst func)
+      | Decl_krfun il -> List.iter declare_varname il
+      | _ -> ()
+      end;
+      ctx }
+
 function_definition:
-| function_definition_begin LBRACE block_item_list? close_context RBRACE
-    {}
-| function_definition_begin LBRACE block_item_list? close_context error
-    { unclosed "{" "}" $startpos($2) $endpos }
+| ctx = function_definition1 compound_statement
+    { ctx () }
