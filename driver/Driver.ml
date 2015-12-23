@@ -533,8 +533,10 @@ let cmdline_actions =
   Prefix "-o", Self (fun s -> let s = String.sub s 2 ((String.length s) - 2) in
                               option_o := Some s);
 (* Preprocessing options *)
-  Exact "-I", String(fun s -> prepro_options := s :: "-I" :: !prepro_options);
-  Prefix "-I", Self(fun s -> prepro_options := s :: !prepro_options);
+  Exact "-I", String(fun s -> prepro_options := s :: "-I" :: !prepro_options;
+    assembler_options := s :: "-I" :: !assembler_options);
+  Prefix "-I", Self(fun s -> prepro_options := s :: !prepro_options;
+    assembler_options := s :: !assembler_options);
   Exact "-D", String(fun s -> prepro_options := s :: "-D" :: !prepro_options);
   Prefix "-D", Self(fun s -> prepro_options := s :: !prepro_options);
   Exact "-U", String(fun s -> prepro_options := s :: "-U" :: !prepro_options);
