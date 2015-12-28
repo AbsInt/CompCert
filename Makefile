@@ -123,9 +123,10 @@ all:
 ifeq ($(HAS_RUNTIME_LIB),true)
 	$(MAKE) runtime
 endif
-ifeq ($(CCHECKLINK),true)
-	$(MAKE) cchecklink
+ifeq ($(CLIGHTGEN),true)
+	$(MAKE) clightgen
 endif
+
 
 proof: $(FILES:.v=.vo)
 
@@ -143,11 +144,6 @@ ccomp: .depend.extr compcert.ini driver/Version.ml FORCE
 	$(MAKE) -f Makefile.extr ccomp
 ccomp.byte: .depend.extr compcert.ini driver/Version.ml FORCE
 	$(MAKE) -f Makefile.extr ccomp.byte
-
-cchecklink: .depend.extr compcert.ini driver/Version.ml FORCE
-	$(MAKE) -f Makefile.extr cchecklink
-cchecklink.byte: .depend.extr compcert.ini driver/Version.ml FORCE
-	$(MAKE) -f Makefile.extr cchecklink.byte
 
 clightgen: .depend.extr compcert.ini exportclight/Clightdefs.vo driver/Version.ml FORCE
 	$(MAKE) -f Makefile.extr clightgen
@@ -228,10 +224,10 @@ install:
 	install -m 0755 ./ccomp $(BINDIR)
 	install -d $(SHAREDIR)
 	install -m 0644 ./compcert.ini $(SHAREDIR)
-ifeq ($(CCHECKLINK),true)
-	install -m 0755 ./cchecklink $(BINDIR)
-endif
 	$(MAKE) -C runtime install
+ifeq ($(CLIGHTGEN),true)
+	install -m 0755 ./clightgen $(BINDIR)
+endif
 
 clean:
 	rm -f $(patsubst %, %/*.vo, $(DIRS))
