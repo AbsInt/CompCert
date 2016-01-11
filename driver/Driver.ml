@@ -60,6 +60,9 @@ let command ?stdout args =
             argv.(0) fn (Unix.error_message err) param;
     -1
 
+let command_error n exc =
+  eprintf "Error: %s command failed with exit code %d (use -v to see invocation)\n" n exc
+
 let safe_remove file =
   try Sys.remove file with Sys_error _ -> ()
 
@@ -106,8 +109,10 @@ let preprocess ifile ofile =
     List.rev !prepro_options;
     [ifile]
   ] in
-  if command ?stdout:output cmd <> 0 then begin
+  let exc = command ?stdout:output cmd in
+  if exc <> 0 then begin
     if ofile <> "-" then safe_remove ofile;
+    command_error "preprocessor" exc;
     eprintf "Error during preprocessing.\n";
     exit 2
   end
@@ -246,9 +251,10 @@ let assemble ifile ofile =
     List.rev !assembler_options;
     [ifile]
   ] in
-  if command cmd <> 0 then begin
+  let exc = command cmd in
+  if exc <> 0 then begin
     safe_remove ofile;
-    eprintf "Error during assembling.\n";
+    command_error "assembler" exc;
     exit 2
   end
 
@@ -263,7 +269,11 @@ let linker exe_name files =
      then ["-L" ^ !stdlib_path; "-lcompcert"]
      else [])
   ] in
-  if command cmd <> 0 then exit 2
+  let exc = command cmd in
+  if exc <> 0 then begin
+    command_error "linker" exc;
+    exit 2
+  end
 
 (* Processing of a .c file *)
 
