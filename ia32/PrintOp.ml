@@ -119,6 +119,9 @@ let print_operation reg pp = function
   | Omakelong, [r1;r2] -> fprintf pp "makelong(%a,%a)" reg r1 reg r2
   | Olowlong, [r1] -> fprintf pp "lowlong(%a)" reg r1
   | Ohighlong, [r1] -> fprintf pp "highlong(%a)" reg r1
+  | Onot, [r1] -> fprintf pp "not(%a)" reg r1
+  | Omulhs, [r1;r2] -> fprintf pp "mulhs(%a,%a)" reg r1 reg r2
+  | Omulhu, [r1;r2] -> fprintf pp "mulhu(%a,%a)" reg r1 reg r2
   | Ocmp c, args -> print_condition reg pp (c, args)
   | _ -> fprintf pp "<bad operator>"
 

@@ -123,6 +123,7 @@ rule token = parse
   | "-"    { MINUS }
   | "->"    { MINUSGREATER }
   | "-f"    { MINUSF }
+  | "-s"    { MINUSS }
   | "-l"    { MINUSL }
   | "%"    { PERCENT }
   | "%l"    { PERCENTL }
@@ -131,6 +132,7 @@ rule token = parse
   | "+"    { PLUS }
   | "+f"    { PLUSF }
   | "+l"    { PLUSL }
+  | "+s"    { PLUSS }
   | "}"    { RBRACE }
   | "}}"    { RBRACERBRACE }
   | "]"    { RBRACKET }
@@ -140,14 +142,17 @@ rule token = parse
   | ";"    { SEMICOLON }
   | "/"    { SLASH }
   | "/f"    { SLASHF }
+  | "/s"    { SLASHS }
   | "/l"    { SLASHL }
   | "/lu"    { SLASHLU }
   | "/u"    { SLASHU }
   | "single" { SINGLE }
+  | "singleofint" { SINGLEOFINT }
   | "stack"    { STACK }
   | "*" { STAR }
   | "*f"    { STARF }
   | "*l"    { STARL }
+  | "*s"    { STARS }
   | "switch"    { SWITCH }
   | "switchl"    { SWITCHL }
   | "tailcall"  { TAILCALL }
