@@ -116,9 +116,9 @@ let insert_type (ty: typ) =
               | TVoid _ -> None
               | _ -> Some (attr_aux t)) in
               let ftype = {
-                fun_return_type = ret;
-                fun_prototyped = prot;
-                fun_params = param;
+                fun_type_return_type = ret;
+                fun_type_prototyped = prot;
+                fun_type_params = param;
               } in
               FunctionType ftype
           | TNamed (id,_) ->
@@ -128,8 +128,8 @@ let insert_type (ty: typ) =
                 Some (attr_aux t)
               with Not_found -> None in
               let t = {
-                typedef_file_loc = None;
-                typedef_name = id.name;
+                td_file_loc = None;
+                td_name = id.name;
                 typ = typ;
               } in
               Typedef t
@@ -406,14 +406,14 @@ let insert_global_declaration env dec =
   | Gtypedef (id,t) ->
       let id = insert_type (TNamed (id,[])) in
       let tid = insert_type t in
-      replace_typedef id (fun typ -> {typ with typedef_file_loc = Some dec.gloc; typ = Some tid;});
+      replace_typedef id (fun typ -> {typ with td_file_loc = Some dec.gloc; typ = Some tid;});
   | Genumdef (n,at,e) ->
       ignore(insert_type (TEnum (n,at)));
       let id = find_type (TEnum (n,[])) in
       let enumerator = List.map (fun (i,c,_) ->
         {
-             enumerator_name = i.name;
-             enumerator_const = c;
+             e_name = i.name;
+             e_const = c;
        }) e in
       replace_enum id (fun en ->
         {en with enum_file_loc = Some dec.gloc; enum_enumerators = enumerator;})
