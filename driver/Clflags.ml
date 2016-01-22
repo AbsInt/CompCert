@@ -33,6 +33,7 @@ let option_faligncondbranchs = ref 0
 let option_finline_asm = ref false
 let option_mthumb = ref (Configuration.model = "armv7m")
 let option_Osize = ref false
+let option_dprepro = ref false
 let option_dparse = ref false
 let option_dcmedium = ref false
 let option_dclight = ref false

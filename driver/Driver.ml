@@ -282,18 +282,23 @@ let process_c_file sourcename =
     preprocess sourcename (output_filename_default "-");
     ""
   end else begin
-    let preproname = Filename.temp_file "compcert" ".i" in
+    let preproname = if !option_dprepro then 
+      output_filename sourcename ".c" ".i"
+    else
+      Filename.temp_file "compcert" ".i" in
     preprocess sourcename preproname;
     if !option_interp then begin
       Machine.config := Machine.compcert_interpreter !Machine.config;
       let csyntax,_ = parse_c_file sourcename preproname in
-      safe_remove preproname;
+      if not !option_dprepro then
+        safe_remove preproname;
       Interp.execute csyntax;
       ""
     end else if !option_S then begin
       compile_c_file sourcename preproname
                      (output_filename ~final:true sourcename ".c" ".s");
-      safe_remove preproname;
+      if not !option_dprepro then
+        safe_remove preproname;
       ""
     end else begin
       let asmname =
@@ -301,7 +306,8 @@ let process_c_file sourcename =
         then output_filename sourcename ".c" ".s"
         else Filename.temp_file "compcert" ".s" in
       compile_c_file sourcename preproname asmname;
-      safe_remove preproname;
+      if not !option_dprepro then
+        safe_remove preproname;
       let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
       assemble asmname objname;
       if not !option_dasm then safe_remove asmname;
@@ -480,6 +486,7 @@ Linking options:
   -T <file>      Use <file> as linker command file
   -Wl,<opt>      Pass option <opt> to the linker
 Tracing options:
+  -dprepro       Save C file after preprocessing in <file>.i
   -dparse        Save C file after parsing and elaboration in <file>.parse.c
   -dc            Save generated Compcert C in <file>.compcert.c
   -dclight       Save generated Clight in <file>.light.c
@@ -602,6 +609,7 @@ let cmdline_actions =
     end);
   Prefix "-Wl,", Self push_linker_arg;
 (* Tracing options *)
+  Exact "-dprepro", Set option_dprepro;
   Exact "-dparse", Set option_dparse;
   Exact "-dc", Set option_dcmedium;
   Exact "-dclight", Set option_dclight;
