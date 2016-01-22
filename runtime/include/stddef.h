@@ -29,12 +29,27 @@
 
 /* <stddef.h> -- common definitions (ISO C99 7.17) */
 
+/* We actually need to define this also if stddef.h is included and __STDDEF_H is
+   already defined since the gcc stddef also defines it if __need_wint_t is present
+   in any case */
+#if defined (__need_wint_t)
+#ifndef _WINT_T
+#define _WINT_T
+
+#ifndef __WINT_TYPE__
+#define __WINT_TYPE__ unsigned int
+#endif
+typedef __WINT_TYPE__ wint_t;
+#endif
+#undef __need_wint_t
+#endif
+
 #ifndef _STDDEF_H
 
 /* Glibc compatibility: if one of the __need_ macros is set,
    just define the corresponding type or macro
    and don't consider this file as fully included yet. */
-#if !defined(__need_size_t) && !defined(__need_ptrdiff_t) && !defined(__need_wchar_t) && !defined(__need_NULL)
+#if !defined(__need_size_t) && !defined(__need_ptrdiff_t) && !defined(__need_wchar_t) && !defined(__need_NULL) && !defined(__need_wint_t)
 #define _STDDEF_H
 #endif
 
@@ -90,17 +105,6 @@ typedef signed int wchar_t;
 #endif
 #endif
 
-#if defined (__need_wint_t)
-#ifndef _WINT_T
-#define _WINT_T
-
-#ifndef __WINT_TYPE__
-#define __WINT_TYPE__ unsigned int
-#endif
-typedef __WINT_TYPE__ wint_t;
-#endif
-#undef __need_wint_t
-#endif
 
 #if defined(_STDDEF_H) || defined(__need_NULL)
 #ifndef NULL

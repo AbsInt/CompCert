@@ -132,8 +132,8 @@ module Dwarfgenaux (Target: TARGET) =
     let typedef_to_entry id t =
       let i = get_opt_val t.typ in
       let td = {
-        typedef_file_loc = file_loc_opt t.typedef_file_loc;
-        typedef_name = string_entry t.typedef_name;
+        typedef_file_loc = file_loc_opt t.td_file_loc;
+        typedef_name = string_entry t.td_name;
         typedef_type = i;
       } in
       new_entry id (DW_TAG_typedef td)
@@ -170,8 +170,8 @@ module Dwarfgenaux (Target: TARGET) =
       let enumerator_to_entry e =
         let tag =
           {
-           enumerator_value = Int64.to_int (e.enumerator_const);
-           enumerator_name = string_entry e.enumerator_name;
+           enumerator_value = Int64.to_int (e.e_const);
+           enumerator_name = string_entry e.e_name;
          } in
         new_entry (next_id ()) (DW_TAG_enumerator tag) in
       let bs = sizeof_ikind enum_ikind in
@@ -186,7 +186,7 @@ module Dwarfgenaux (Target: TARGET) =
       add_children enum children
 
     let fun_type_to_entry id f =
-      let children = if not f.fun_prototyped then
+      let children = if not f.fun_type_prototyped then
         let u = {
           unspecified_parameter_artificial = None;
         } in
@@ -200,11 +200,11 @@ module Dwarfgenaux (Target: TARGET) =
             formal_parameter_variable_parameter = None;
             formal_parameter_location = None;
           } in
-          new_entry (next_id ()) (DW_TAG_formal_parameter fp)) f.fun_params;
+          new_entry (next_id ()) (DW_TAG_formal_parameter fp)) f.fun_type_params;
       in
       let s = {
-        subroutine_type = f.fun_return_type;
-        subroutine_prototyped = f.fun_prototyped
+        subroutine_type = f.fun_type_return_type;
+        subroutine_prototyped = f.fun_type_prototyped
       } in
       let s = new_entry id (DW_TAG_subroutine_type s) in
       add_children s children
@@ -287,12 +287,12 @@ module Dwarfgenaux (Target: TARGET) =
       | VolatileType v ->
           add_type v.vol_type d
       | FunctionType f ->
-          let d,c = match f.fun_return_type with
+          let d,c = match f.fun_type_return_type with
           | Some t -> add_type t d
           | None -> d,false in
           List.fold_left (fun (d,c) p ->
             let d,c' = add_type p.param_type d in
-            d,c||c') (d,c) f.fun_params
+            d,c||c') (d,c) f.fun_type_params
       | CompositeType c ->
           List.fold_left (fun (d,c) f ->
             let d,c' = add_type f.cfd_typ d in

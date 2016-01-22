@@ -38,7 +38,7 @@ INCLUDES=$(patsubst %,-I %, $(DIRS))
 # warning 3 = deprecated feature.  Turned off for OCaml 4.02 (bytes vs strings)
 # warning 20 = unused function argument.  There are some in extracted code
 
-WARNINGS=-w -3
+WARNINGS=-w -3 -strict-sequence
 extraction/%.cmx: WARNINGS +=-w -20
 extraction/%.cmo: WARNINGS +=-w -20
 
@@ -65,8 +65,6 @@ LEXERS=backend/CMlexer.mll cparser/Lexer.mll \
 
 LIBS=str.cmxa unix.cmxa $(MENHIR_LIBS)
 LIBS_BYTE=$(patsubst %.cmxa,%.cma,$(patsubst %.cmx,%.cmo,$(LIBS)))
-
-CHECKLINK_LIBS=str.cmxa
 
 EXECUTABLES=ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte
 GENERATED=$(PARSERS:.mly=.mli) $(PARSERS:.mly=.ml) $(LEXERS:.mll=.ml) cparser/pre_parser_messages.ml

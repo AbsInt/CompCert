@@ -20,6 +20,7 @@ target=''
 has_runtime_lib=true
 has_standard_headers=true
 advanced_debug=false
+clightgen=false
 
 usage='Usage: ./configure [options] target
 
@@ -54,6 +55,7 @@ Options:
   -toolprefix <pref>  Prefix names of tools ("gcc", etc) with <pref>
   -no-runtime-lib  Do not compile nor install the runtime support library
   -no-standard-headers Do not install nor use the standard .h headers
+  -clightgen       Also compile the clightgen tool
 '
 
 # Parse command-line arguments
@@ -73,6 +75,8 @@ while : ; do
         has_runtime_lib=false;;
     -no-standard-headers)
         has_standard_headers=false;;
+    -clightgen)
+        clightgen=true;;
     *)
         if test -n "$target"; then echo "$usage" 1>&2; exit 2; fi
         target="$1";;
@@ -352,6 +356,7 @@ HAS_RUNTIME_LIB=$has_runtime_lib
 HAS_STANDARD_HEADERS=$has_standard_headers
 ASM_SUPPORTS_CFI=$asm_supports_cfi
 ADVANCED_DEBUG=$advanced_debug
+CLIGHTGEN=$clightgen
 EOF
 else
 cat >> Makefile.config <<'EOF'
@@ -431,6 +436,9 @@ HAS_STANDARD_HEADERS=true
 # Whether the assembler $(CASM) supports .cfi debug directives
 ASM_SUPPORTS_CFI=false
 #ASM_SUPPORTS_CFI=true
+
+# Turn on/off compilation of clightgen
+CLIGHTGEN=false
 
 EOF
 

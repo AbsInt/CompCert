@@ -54,14 +54,14 @@ type array_type = {
   }
 
 type typedef = {
-    typedef_file_loc: location option;
-    typedef_name:     string;
-    typ:              int option;
+    td_file_loc: location option;
+    td_name:     string;
+    typ:         int option;
   }
 
 type enumerator = {
-    enumerator_name:     string;
-    enumerator_const:    int64;
+    e_name:     string;
+    e_const:    int64;
   }
 
 type enum_type = {
@@ -85,9 +85,9 @@ type parameter_type = {
   }
 
 type function_type = {
-    fun_return_type: int option;
-    fun_prototyped:  bool;
-    fun_params:      parameter_type list;
+    fun_type_return_type: int option;
+    fun_type_prototyped:  bool;
+    fun_type_params:      parameter_type list;
   }
 
 type debug_types =

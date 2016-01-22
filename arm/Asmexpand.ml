@@ -287,8 +287,14 @@ let expand_builtin_inline name args res =
      emit (Prev (res, a1))
   | "__builtin_bswap16", [BA(IR a1)], BR(IR res) ->
      emit (Prev16 (res, a1))
-  | "__builtin_clz", [BA(IR a1)], BR(IR res) ->
+  | ("__builtin_clz" | "__builtin_clzl"), [BA(IR a1)], BR(IR res) ->
      emit (Pclz (res, a1))
+  | "__builtin_clzll", [BA_splitlong(BA (IR ah), BA (IR al))], BR(IR res) ->
+     emit (Pclz (IR14, al));
+     emit (Pcmp (ah, SOimm _0));
+     emit (Pmovite (TCeq, IR14, SOreg IR14, SOimm _0));
+     emit (Pclz (res, ah));
+     emit (Padd (res, res, SOreg IR14))
   (* Float arithmetic *)
   | "__builtin_fabs",  [BA(FR a1)], BR(FR res) ->
      emit (Pfabsd (res,a1))
