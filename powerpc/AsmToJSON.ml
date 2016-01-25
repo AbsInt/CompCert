@@ -17,10 +17,9 @@ open AST
 open BinNums
 open C2C
 open Camlcoq
+open Json
 open Printf
 open Sections
-
-let p_jstring oc s = fprintf oc "\"%s\"" s
 
 let p_ireg oc = function
   | GPR0 -> fprintf oc "{\"Register\":\"r0\"}"
@@ -129,12 +128,6 @@ let p_crbit oc c =
 
 let p_label oc l = fprintf oc "{\"Label\":%ld}" (P.to_int32 l)
 
-let p_list elem oc l =
-  match l with
-  | [] -> fprintf oc "[]"
-  | hd::tail ->
-     output_string oc "["; elem oc hd;List.iter (fprintf oc ",%a" elem) tail;output_string oc "]"
-
 type instruction_arg =
   | Ireg of ireg
   | Freg of freg
@@ -156,7 +149,7 @@ let p_arg oc = function
   | Atom a -> p_atom_constant oc a
 
 let p_instruction oc ic =
-  let p_args oc l= fprintf oc "%a:%a" p_jstring "Args" (p_list p_arg) l
+  let p_args oc l= fprintf oc "%a:%a" p_jstring "Args" (p_jarray p_arg) l
   and inst_name oc s = fprintf  oc"%a:%a" p_jstring "Instruction Name" p_jstring s in
   let first = ref true in
   let sep oc = if !first then first := false else output_string oc ", " in
@@ -385,7 +378,7 @@ let p_vardef oc (name,v) =
   fprintf oc "{\"Var Name\":%a,\"Var Readonly\":%B,\"Var Volatile\":%B,\n\"Var Storage Class\":%a,\n\"Var Alignment\":%a,\n\"Var Section\":%a,\n\"Var Init\":%a}\n"
     p_atom name v.gvar_readonly v.gvar_volatile
     p_storage static p_int_opt alignment p_section section
-    (p_list p_init_data) v.gvar_init
+    (p_jarray p_init_data) v.gvar_init
 
 let p_program oc prog =
   let prog_vars,prog_funs = List.fold_left (fun (vars,funs) (ident,def) ->
@@ -394,5 +387,5 @@ let p_program oc prog =
     | Gvar v -> (ident,v)::vars,funs
     | _ -> vars,funs) ([],[]) prog.prog_defs in
   fprintf oc "{\"Global Variables\":%a,\n\"Functions\":%a}"
-    (p_list p_vardef) prog_vars
-    (p_list p_fundef) prog_funs
+    (p_jarray p_vardef) prog_vars
+    (p_jarray p_fundef) prog_funs

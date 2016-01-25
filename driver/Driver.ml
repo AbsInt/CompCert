@@ -14,6 +14,7 @@ open Printf
 open Commandline
 open Camlcoq
 open Clflags
+open Clflagsprinter
 open Timing
 
 (* Location of the compatibility library *)
