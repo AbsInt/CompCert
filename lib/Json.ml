@@ -31,3 +31,12 @@ let p_jbool oc = fprintf oc "%B"
 
 (* Print a int as json int *)
 let p_jint oc = fprintf oc "%d"
+
+(* Print a member *)
+let p_jmember oc name p_mem mem =
+  fprintf oc "\n%a:%a" p_jstring name p_mem mem
+
+(* Print optional value *)
+let p_jopt p_elem oc = function
+  | None -> output_string oc "null"
+  | Some i -> p_elem oc i

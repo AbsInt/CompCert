@@ -14,7 +14,7 @@ open Printf
 open Commandline
 open Camlcoq
 open Clflags
-open Clflagsprinter
+open Optionsprinter
 open Timing
 
 (* Location of the compatibility library *)
@@ -283,37 +283,35 @@ let process_c_file sourcename =
     preprocess sourcename (output_filename_default "-");
     ""
   end else begin
-    let preproname = if !option_dprepro then 
+    let preproname = if !option_dprepro then
       output_filename sourcename ".c" ".i"
     else
       Filename.temp_file "compcert" ".i" in
     preprocess sourcename preproname;
-    if !option_interp then begin
-      Machine.config := Machine.compcert_interpreter !Machine.config;
-      let csyntax,_ = parse_c_file sourcename preproname in
-      if not !option_dprepro then
-        safe_remove preproname;
-      Interp.execute csyntax;
-      ""
-    end else if !option_S then begin
-      compile_c_file sourcename preproname
-                     (output_filename ~final:true sourcename ".c" ".s");
-      if not !option_dprepro then
-        safe_remove preproname;
-      ""
-    end else begin
-      let asmname =
-        if !option_dasm
-        then output_filename sourcename ".c" ".s"
-        else Filename.temp_file "compcert" ".s" in
-      compile_c_file sourcename preproname asmname;
-      if not !option_dprepro then
-        safe_remove preproname;
-      let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
-      assemble asmname objname;
-      if not !option_dasm then safe_remove asmname;
-      objname
-    end
+    let name =
+      if !option_interp then begin
+        Machine.config := Machine.compcert_interpreter !Machine.config;
+        let csyntax,_ = parse_c_file sourcename preproname in
+        Interp.execute csyntax;
+        ""
+      end else if !option_S then begin
+        compile_c_file sourcename preproname
+          (output_filename ~final:true sourcename ".c" ".s");
+        ""
+      end else begin
+        let asmname =
+          if !option_dasm
+          then output_filename sourcename ".c" ".s"
+          else Filename.temp_file "compcert" ".s" in
+        compile_c_file sourcename preproname asmname;
+        let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
+        assemble asmname objname;
+        if not !option_dasm then safe_remove asmname;
+        objname
+      end in
+    if not !option_dprepro then
+      safe_remove preproname;
+    name
   end
 
 (* Processing of a .i / .p file (preprocessed C) *)
