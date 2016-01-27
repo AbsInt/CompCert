@@ -132,6 +132,10 @@ let print_machine oc  =
 let print file stdlib =
   let oc = open_out file in
   fprintf oc "{";
+  p_jmember oc "Version" p_jstring Version.version;
+  p_jmember oc "Buildnr" p_jstring Version.buildnr;
+  p_jmember oc "Tag" p_jstring Version.tag;
+  p_jmember oc "Cwd" p_jstring (Sys.getcwd ());
   fprintf oc "%a:%t" p_jstring "Clflags" print_clflags;
   p_jmember oc "Configurations" print_configurations stdlib;
   fprintf oc "%a:%t" p_jstring "Machine" print_machine;
