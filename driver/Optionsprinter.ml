@@ -12,12 +12,13 @@
 
 open Clflags
 open Json
+open Machine
 open Printf
 
 let print_list oc name l =
   p_jmember oc name (p_jarray p_jstring) l
 
-let print_clflags oc ((): unit) =
+let print_clflags oc =
   fprintf oc "{";
   print_list oc "prepro_options" !prepro_options;
   print_list oc "linker_options" !linker_options;
@@ -94,3 +95,45 @@ let print_configurations oc lib_path =
   p_jmember oc "struct_passing_style" print_struct_passing_style Configuration.struct_passing_style;
   p_jmember oc "struct_return_style" print_struct_return_style Configuration.struct_return_style;
   fprintf oc "\n}"
+
+let print_machine oc  =
+  fprintf oc "{";
+  p_jmember oc "name" p_jstring !config.name;
+  p_jmember oc "char_signed" p_jbool !config.char_signed;
+  p_jmember oc "sizeof_ptr" p_jint !config.sizeof_ptr;
+  p_jmember oc "sizeof_short" p_jint !config.sizeof_short;
+  p_jmember oc "sizeof_int" p_jint !config.sizeof_int;
+  p_jmember oc "sizeof_long" p_jint !config.sizeof_long;
+  p_jmember oc "sizeof_longlong" p_jint !config.sizeof_longlong;
+  p_jmember oc "sizeof_float" p_jint !config.sizeof_float;
+  p_jmember oc "sizeof_double" p_jint !config.sizeof_double;
+  p_jmember oc "sizeof_longdouble" p_jint !config.sizeof_longdouble;
+  p_jmember oc "sizeof_void" (p_jopt p_jint) !config.sizeof_void;
+  p_jmember oc "sizeof_fun" (p_jopt p_jint) !config.sizeof_fun;
+  p_jmember oc "sizeof_wchar" p_jint !config.sizeof_wchar;
+  p_jmember oc "wchar_signed" p_jbool !config.wchar_signed;
+  p_jmember oc "sizeof_size_t" p_jint !config.sizeof_size_t;
+  p_jmember oc "sizeof_ptrdiff_t" p_jint !config.sizeof_ptrdiff_t;
+  p_jmember oc "alignof_ptr" p_jint !config.alignof_ptr;
+  p_jmember oc "alignof_short" p_jint !config.alignof_short;
+  p_jmember oc "alignof_int" p_jint !config.alignof_int;
+  p_jmember oc "alignof_long" p_jint !config.alignof_long;
+  p_jmember oc "alignof_longlong" p_jint !config.alignof_longlong;
+  p_jmember oc "alignof_float" p_jint !config.alignof_float;
+  p_jmember oc "alignof_double" p_jint !config.alignof_double;
+  p_jmember oc "alignof_longdouble" p_jint !config.alignof_longdouble;
+  p_jmember oc "alignof_void" (p_jopt p_jint) !config.alignof_void;
+  p_jmember oc "alignof_fun" (p_jopt p_jint) !config.alignof_fun;
+  p_jmember oc "bigendian" p_jbool !config.bigendian;
+  p_jmember oc "bitfields_msb_first" p_jbool !config.bitfields_msb_first;
+  p_jmember oc "supports_unaligned_accesses" p_jbool !config.supports_unaligned_accesses;
+  fprintf oc "\n}"
+
+let print file stdlib =
+  let oc = open_out file in
+  fprintf oc "{";
+  fprintf oc "%a:%t" p_jstring "Clflags" print_clflags;
+  p_jmember oc "Configurations" print_configurations stdlib;
+  fprintf oc "%a:%t" p_jstring "Machine" print_machine;
+  fprintf oc "}";
+  close_out oc
