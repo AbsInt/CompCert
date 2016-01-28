@@ -131,7 +131,7 @@ let parse_int base s =
     |  _ -> assert false in
   let v = ref 0L in
   for i = 0 to String.length s - 1 do
-    if !v > max_val then raise Overflow;
+    if !v < 0L || !v > max_val then raise Overflow;
     v := Int64.mul !v (Int64.of_int base);
     let c = s.[i] in
     let digit =
