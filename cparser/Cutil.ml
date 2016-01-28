@@ -898,12 +898,12 @@ let is_debug_stmt s =
 (* Assignment compatibility check over attributes.
    Standard attributes ("const", "volatile", "restrict") can safely
    be added (to the rhs type to get the lhs type) but must not be dropped.
-   Custom attributes can safely be dropped but must not be added. *)
+   Custom attributes can safely be dropped or added. *)
 
 let valid_assignment_attr afrom ato =
   let (afromstd, afromcustom) = List.partition attr_is_standard afrom
   and (atostd, atocustom) = List.partition attr_is_standard ato in
-  incl_attributes afromstd atostd && incl_attributes atocustom afromcustom
+  incl_attributes afromstd atostd
 
 (* Check that an assignment is allowed *)
 
