@@ -25,6 +25,7 @@ let floatlit =
  ("-"? (['0'-'9'] ['0'-'9' '_']*
   ('.' ['0'-'9' '_']* )?
   (['e' 'E'] ['+' '-']? ['0'-'9'] ['0'-'9' '_']*)? )) | "inf" | "nan"
+let floatlithex = "0X" ['0'-'9' 'a'-'f' 'A'-'F']+
 let ident = ['A'-'Z' 'a'-'z' '_'] ['A'-'Z' 'a'-'z' '_' '$' '0'-'9']*
 let qident = '\'' [ ^ '\'' ]+ '\''
 let temp = "$" ['1'-'9'] ['0'-'9']*
@@ -167,6 +168,11 @@ rule token = parse
                 LONGLIT(Int64.of_string(String.sub s 0 (String.length s - 2))) }
   | intlit    { INTLIT(Int32.of_string(Lexing.lexeme lexbuf)) }
   | floatlit     { FLOATLIT(float_of_string(Lexing.lexeme lexbuf)) }
+  | floatlithex  { let s = Lexing.lexeme lexbuf in
+                   match String.length s with
+		   | 18 -> FLOATLIT(Int64.float_of_bits(Int64.of_string s))
+		   | 10 -> FLOATLIT(Int32.float_of_bits(Int64.to_int32(Int64.of_string s)))
+                   | er -> raise(Error("illegal floating-point literal: "^s)) }
   | stringlit { let s = Lexing.lexeme lexbuf in
                 STRINGLIT(String.sub s 1 (String.length s - 2)) }
   | ident | temp  { IDENT(Lexing.lexeme lexbuf) }
