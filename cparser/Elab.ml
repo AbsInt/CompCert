@@ -706,7 +706,8 @@ and elab_struct_or_union_info kind loc env members attrs =
         (* C99: ty[] allowed as last field of a struct *)
   | fld :: rem ->
       if wrap incomplete_type loc env' fld.fld_typ then
-        error loc "member '%s' has incomplete type" fld.fld_name;
+        (* Must be fatal otherwise we get problems constructing the init *)
+        fatal_error loc "member '%s' has incomplete type" fld.fld_name;
       check_incomplete rem in
   check_incomplete m;
   (* Warn for empty structs or unions *)

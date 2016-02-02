@@ -552,7 +552,12 @@ let struct_layout env members =
 (* Determine whether a type is incomplete *)
 
 let incomplete_type env t =
-  match sizeof env t with None -> true | Some _ -> false
+  match unroll env t with
+  | TVoid _ -> true (* Void is always incomplete *)
+  | _ -> begin match sizeof env t with
+    | None -> true
+    | Some _ -> false
+  end
 
 (* Computing composite_info records *)
 
