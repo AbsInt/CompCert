@@ -17,78 +17,81 @@ open AST
 open BinNums
 open C2C
 open Camlcoq
+open Json
 open Printf
 open Sections
 
-let p_jstring oc s = fprintf oc "\"%s\"" s
+let p_ireg oc reg =
+  let num = match reg with
+  | GPR0 -> 0
+  | GPR1 -> 1
+  | GPR2 -> 2
+  | GPR3 -> 3
+  | GPR4 -> 4
+  | GPR5 -> 5
+  | GPR6 -> 6
+  | GPR7 -> 7
+  | GPR8 -> 8
+  | GPR9 -> 9
+  | GPR10 -> 10
+  | GPR11 -> 11
+  | GPR12 -> 12
+  | GPR13 -> 13
+  | GPR14 -> 14
+  | GPR15 -> 15
+  | GPR16 -> 16
+  | GPR17 -> 17
+  | GPR18 -> 18
+  | GPR19 -> 19
+  | GPR20 -> 20
+  | GPR21 -> 21
+  | GPR22 -> 22
+  | GPR23 -> 23
+  | GPR24 -> 24
+  | GPR25 -> 25
+  | GPR26 -> 26
+  | GPR27 -> 27
+  | GPR28 -> 28
+  | GPR29 -> 29
+  | GPR30 -> 30
+  | GPR31 -> 31
+  in p_jmember oc "Register" (fun oc -> fprintf oc "r%d") num
 
-let p_ireg oc = function
-  | GPR0 -> fprintf oc "{\"Register\":\"r0\"}"
-  | GPR1 -> fprintf oc "{\"Register\":\"r1\"}"
-  | GPR2 -> fprintf oc "{\"Register\":\"r2\"}"
-  | GPR3 -> fprintf oc "{\"Register\":\"r3\"}"
-  | GPR4 -> fprintf oc "{\"Register\":\"r4\"}"
-  | GPR5 -> fprintf oc "{\"Register\":\"r5\"}"
-  | GPR6 -> fprintf oc "{\"Register\":\"r6\"}"
-  | GPR7 -> fprintf oc "{\"Register\":\"r7\"}"
-  | GPR8 -> fprintf oc "{\"Register\":\"r8\"}"
-  | GPR9 -> fprintf oc "{\"Register\":\"r9\"}"
-  | GPR10 -> fprintf oc "{\"Register\":\"r10\"}"
-  | GPR11 -> fprintf oc "{\"Register\":\"r11\"}"
-  | GPR12 -> fprintf oc "{\"Register\":\"r12\"}"
-  | GPR13 -> fprintf oc "{\"Register\":\"r13\"}"
-  | GPR14 -> fprintf oc "{\"Register\":\"r14\"}"
-  | GPR15 -> fprintf oc "{\"Register\":\"r15\"}"
-  | GPR16 -> fprintf oc "{\"Register\":\"r16\"}"
-  | GPR17 -> fprintf oc "{\"Register\":\"r17\"}"
-  | GPR18 -> fprintf oc "{\"Register\":\"r18\"}"
-  | GPR19 -> fprintf oc "{\"Register\":\"r19\"}"
-  | GPR20 -> fprintf oc "{\"Register\":\"r20\"}"
-  | GPR21 -> fprintf oc "{\"Register\":\"r21\"}"
-  | GPR22 -> fprintf oc "{\"Register\":\"r22\"}"
-  | GPR23 -> fprintf oc "{\"Register\":\"r23\"}"
-  | GPR24 -> fprintf oc "{\"Register\":\"r24\"}"
-  | GPR25 -> fprintf oc "{\"Register\":\"r25\"}"
-  | GPR26 -> fprintf oc "{\"Register\":\"r26\"}"
-  | GPR27 -> fprintf oc "{\"Register\":\"r27\"}"
-  | GPR28 -> fprintf oc "{\"Register\":\"r28\"}"
-  | GPR29 -> fprintf oc "{\"Register\":\"r29\"}"
-  | GPR30 -> fprintf oc "{\"Register\":\"r30\"}"
-  | GPR31 -> fprintf oc "{\"Register\":\"r31\"}"
-
-let p_freg oc = function
-  | FPR0 -> fprintf oc "{\"Register\":\"f0\"}"
-  | FPR1 -> fprintf oc "{\"Register\":\"f1\"}"
-  | FPR2 -> fprintf oc "{\"Register\":\"f2\"}"
-  | FPR3 -> fprintf oc "{\"Register\":\"f3\"}"
-  | FPR4 -> fprintf oc "{\"Register\":\"f4\"}"
-  | FPR5 -> fprintf oc "{\"Register\":\"f5\"}"
-  | FPR6 -> fprintf oc "{\"Register\":\"f6\"}"
-  | FPR7 -> fprintf oc "{\"Register\":\"f7\"}"
-  | FPR8 -> fprintf oc "{\"Register\":\"f8\"}"
-  | FPR9 -> fprintf oc "{\"Register\":\"f9\"}"
-  | FPR10 -> fprintf oc "{\"Register\":\"f10\"}"
-  | FPR11 -> fprintf oc "{\"Register\":\"f11\"}"
-  | FPR12 -> fprintf oc "{\"Register\":\"f12\"}"
-  | FPR13 -> fprintf oc "{\"Register\":\"f13\"}"
-  | FPR14 -> fprintf oc "{\"Register\":\"f14\"}"
-  | FPR15 -> fprintf oc "{\"Register\":\"f15\"}"
-  | FPR16 -> fprintf oc "{\"Register\":\"f16\"}"
-  | FPR17 -> fprintf oc "{\"Register\":\"f17\"}"
-  | FPR18 -> fprintf oc "{\"Register\":\"f18\"}"
-  | FPR19 -> fprintf oc "{\"Register\":\"f19\"}"
-  | FPR20 -> fprintf oc "{\"Register\":\"f20\"}"
-  | FPR21 -> fprintf oc "{\"Register\":\"f21\"}"
-  | FPR22 -> fprintf oc "{\"Register\":\"f22\"}"
-  | FPR23 -> fprintf oc "{\"Register\":\"f23\"}"
-  | FPR24 -> fprintf oc "{\"Register\":\"f24\"}"
-  | FPR25 -> fprintf oc "{\"Register\":\"f25\"}"
-  | FPR26 -> fprintf oc "{\"Register\":\"f26\"}"
-  | FPR27 -> fprintf oc "{\"Register\":\"f27\"}"
-  | FPR28 -> fprintf oc "{\"Register\":\"f28\"}"
-  | FPR29 -> fprintf oc "{\"Register\":\"f29\"}"
-  | FPR30 -> fprintf oc "{\"Register\":\"f30\"}"
-  | FPR31 -> fprintf oc "{\"Register\":\"f31\"}"
+let p_freg oc reg =
+  let num = match reg with
+  | FPR0 -> 0
+  | FPR1 -> 1
+  | FPR2 -> 2
+  | FPR3 -> 3
+  | FPR4 -> 4
+  | FPR5 -> 5
+  | FPR6 -> 6
+  | FPR7 -> 7
+  | FPR8 -> 8
+  | FPR9 -> 9
+  | FPR10 -> 10
+  | FPR11 -> 11
+  | FPR12 -> 12
+  | FPR13 -> 13
+  | FPR14 -> 14
+  | FPR15 -> 15
+  | FPR16 -> 16
+  | FPR17 -> 17
+  | FPR18 -> 18
+  | FPR19 -> 19
+  | FPR20 -> 20
+  | FPR21 -> 21
+  | FPR22 -> 22
+  | FPR23 -> 23
+  | FPR24 -> 24
+  | FPR25 -> 25
+  | FPR26 -> 26
+  | FPR27 -> 27
+  | FPR28 -> 28
+  | FPR29 -> 29
+  | FPR30 -> 30
+  | FPR31 -> 31
+  in p_jmember oc "Register" (fun oc -> fprintf oc "f%d") num
 
 let p_preg oc = function
   | IR ir -> p_ireg oc ir
@@ -129,12 +132,6 @@ let p_crbit oc c =
 
 let p_label oc l = fprintf oc "{\"Label\":%ld}" (P.to_int32 l)
 
-let p_list elem oc l =
-  match l with
-  | [] -> fprintf oc "[]"
-  | hd::tail ->
-     output_string oc "["; elem oc hd;List.iter (fprintf oc ",%a" elem) tail;output_string oc "]"
-
 type instruction_arg =
   | Ireg of ireg
   | Freg of freg
@@ -156,7 +153,7 @@ let p_arg oc = function
   | Atom a -> p_atom_constant oc a
 
 let p_instruction oc ic =
-  let p_args oc l= fprintf oc "%a:%a" p_jstring "Args" (p_list p_arg) l
+  let p_args oc l= fprintf oc "%a:%a" p_jstring "Args" (p_jarray p_arg) l
   and inst_name oc s = fprintf  oc"%a:%a" p_jstring "Instruction Name" p_jstring s in
   let first = ref true in
   let sep oc = if !first then first := false else output_string oc ", " in
@@ -385,7 +382,7 @@ let p_vardef oc (name,v) =
   fprintf oc "{\"Var Name\":%a,\"Var Readonly\":%B,\"Var Volatile\":%B,\n\"Var Storage Class\":%a,\n\"Var Alignment\":%a,\n\"Var Section\":%a,\n\"Var Init\":%a}\n"
     p_atom name v.gvar_readonly v.gvar_volatile
     p_storage static p_int_opt alignment p_section section
-    (p_list p_init_data) v.gvar_init
+    (p_jarray p_init_data) v.gvar_init
 
 let p_program oc prog =
   let prog_vars,prog_funs = List.fold_left (fun (vars,funs) (ident,def) ->
@@ -394,5 +391,5 @@ let p_program oc prog =
     | Gvar v -> (ident,v)::vars,funs
     | _ -> vars,funs) ([],[]) prog.prog_defs in
   fprintf oc "{\"Global Variables\":%a,\n\"Functions\":%a}"
-    (p_list p_vardef) prog_vars
-    (p_list p_fundef) prog_funs
+    (p_jarray p_vardef) prog_vars
+    (p_jarray p_fundef) prog_funs

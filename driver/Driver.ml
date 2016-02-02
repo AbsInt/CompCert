@@ -20,6 +20,8 @@ open Timing
 
 let stdlib_path = ref Configuration.stdlib_path
 
+let dump_options = ref false
+
 (* Optional sdump suffix *)
 let sdump_suffix = ref ".json"
 
@@ -282,37 +284,37 @@ let process_c_file sourcename =
     preprocess sourcename (output_filename_default "-");
     ""
   end else begin
-    let preproname = if !option_dprepro then 
+    let preproname = if !option_dprepro then
       output_filename sourcename ".c" ".i"
     else
       Filename.temp_file "compcert" ".i" in
     preprocess sourcename preproname;
-    if !option_interp then begin
-      Machine.config := Machine.compcert_interpreter !Machine.config;
-      let csyntax,_ = parse_c_file sourcename preproname in
-      if not !option_dprepro then
-        safe_remove preproname;
-      Interp.execute csyntax;
-      ""
-    end else if !option_S then begin
-      compile_c_file sourcename preproname
-                     (output_filename ~final:true sourcename ".c" ".s");
-      if not !option_dprepro then
-        safe_remove preproname;
-      ""
-    end else begin
-      let asmname =
-        if !option_dasm
-        then output_filename sourcename ".c" ".s"
-        else Filename.temp_file "compcert" ".s" in
-      compile_c_file sourcename preproname asmname;
-      if not !option_dprepro then
-        safe_remove preproname;
-      let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
-      assemble asmname objname;
-      if not !option_dasm then safe_remove asmname;
-      objname
-    end
+    let name =
+      if !option_interp then begin
+        Machine.config := Machine.compcert_interpreter !Machine.config;
+        let csyntax,_ = parse_c_file sourcename preproname in
+        Interp.execute csyntax;
+        ""
+      end else if !option_S then begin
+        compile_c_file sourcename preproname
+          (output_filename ~final:true sourcename ".c" ".s");
+        ""
+      end else begin
+        let asmname =
+          if !option_dasm
+          then output_filename sourcename ".c" ".s"
+          else Filename.temp_file "compcert" ".s" in
+        compile_c_file sourcename preproname asmname;
+        let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
+        assemble asmname objname;
+        if not !option_dasm then safe_remove asmname;
+        objname
+      end in
+    if not !option_dprepro then
+      safe_remove preproname;
+    if !dump_options then
+      Optionsprinter.print (output_filename sourcename ".c" ".opt.json") !stdlib_path;
+    name
   end
 
 (* Processing of a .i / .p file (preprocessed C) *)
@@ -324,7 +326,9 @@ let process_i_file sourcename =
     ""
   end else if !option_S then begin
     compile_c_file sourcename sourcename
-                   (output_filename ~final:true sourcename ".c" ".s");
+      (output_filename ~final:true sourcename ".c" ".s");
+    if !dump_options then
+      Optionsprinter.print (output_filename sourcename ".c" ".opt.json") !stdlib_path;
     ""
   end else begin
     let asmname =
@@ -335,6 +339,8 @@ let process_i_file sourcename =
     let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
     assemble asmname objname;
     if not !option_dasm then safe_remove asmname;
+    if !dump_options then
+      Optionsprinter.print (output_filename sourcename ".c" ".opt.json") !stdlib_path;
     objname
   end
 
@@ -354,6 +360,8 @@ let process_cminor_file sourcename =
     let objname = output_filename ~final: !option_c sourcename ".cm" ".o" in
     assemble asmname objname;
     if not !option_dasm then safe_remove asmname;
+    if !dump_options then
+      Optionsprinter.print (output_filename sourcename ".cm" ".opt.json") !stdlib_path;
     objname
   end
 
@@ -496,6 +504,7 @@ Tracing options:
   -dmach         Save generated Mach code in <file>.mach
   -dasm          Save generated assembly in <file>.s
   -sdump         Save info for post-linking validation in <file>.json
+  -doptions      Save the compiler configurations in <file>.opt.json
 General options:
   -stdlib <dir>  Set the path of the Compcert run-time library
   -v             Print external commands before invoking them
@@ -621,6 +630,7 @@ let cmdline_actions =
   Exact "-dasm", Set option_dasm;
   Exact "-sdump", Set option_sdump;
   Exact "-sdump-suffix", String (fun s -> option_sdump := true; sdump_suffix:= s);
+  Exact "-doptions", Set dump_options;
 (* General options *)
   Exact "-v", Set option_v;
   Exact "-stdlib", String(fun s -> stdlib_path := s);
@@ -712,6 +722,6 @@ let _ =
     let linker_args = time "Total compilation time" perform_actions () in
     if (not nolink) && linker_args <> [] then begin
       linker (output_filename_default "a.out") linker_args
-    end
+    end;
   with Sys_error msg ->
     eprintf "I/O error: %s.\n" msg; exit 2
