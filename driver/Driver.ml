@@ -446,6 +446,8 @@ Preprocessing options:
   -D<symb>=<val> Define preprocessor symbol
   -U<symb>       Undefine preprocessor symbol
   -Wp,<opt>      Pass option <opt> to the preprocessor
+  -include <file> Process <file> as if #include \"<file>\" appears at the first
+                  line of the primary source file.
 Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fbitfields    Emulate bit fields in structs [off]
   -flongdouble   Treat 'long double' as 'double' [off]
@@ -569,6 +571,7 @@ let cmdline_actions =
   Prefix "-U", Self(fun s -> prepro_options := s :: !prepro_options);
   Prefix "-Wp,", Self (fun s ->
     prepro_options := List.rev_append (explode_comma_option s) !prepro_options);
+  Exact "-include", String (fun s -> prepro_options := s :: "-include" :: !prepro_options);
 (* Language support options -- more below *)
   Exact "-fall", Self (fun _ -> set_all language_support_options);
   Exact "-fnone", Self (fun _ -> unset_all language_support_options);
