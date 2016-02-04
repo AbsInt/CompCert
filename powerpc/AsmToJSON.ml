@@ -55,7 +55,9 @@ let p_ireg oc reg =
   | GPR29 -> 29
   | GPR30 -> 30
   | GPR31 -> 31
-  in p_jmember oc "Register" (fun oc d -> p_jstring oc ("r"^(string_of_int d))) num
+  in output_string oc "{";
+    p_jmember oc "Register" (fun oc d -> p_jstring oc ("r"^(string_of_int d))) num;
+    output_string oc "}"
 
 let p_freg oc reg =
   let num = match reg with
@@ -91,7 +93,10 @@ let p_freg oc reg =
   | FPR29 -> 29
   | FPR30 -> 30
   | FPR31 -> 31
-  in p_jmember oc "Register" (fun oc d -> p_jstring oc ("f"^(string_of_int d))) num
+  in output_string oc "{";
+  p_jmember oc "Register" (fun oc d -> p_jstring oc ("f"^(string_of_int d))) num;
+  output_string oc "}"
+
 
 let p_preg oc = function
   | IR ir -> p_ireg oc ir
