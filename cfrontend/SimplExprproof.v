@@ -2235,8 +2235,9 @@ Proof.
   econstructor; split.
   econstructor.
   exploit Genv.init_mem_match; eauto.
-  change (Genv.globalenv tprog) with (genv_genv tge). rewrite symbols_preserved.
-  rewrite <- H4; simpl; eauto.
+  change (Genv.globalenv tprog) with (genv_genv tge).
+  rewrite symbols_preserved. rewrite <- H4; simpl.
+  rewrite (transform_partial_program_main _ _ EQ). eauto. 
   eexact FIND.
   rewrite <- H3. apply type_of_fundef_preserved. auto.
   constructor. auto. constructor.
