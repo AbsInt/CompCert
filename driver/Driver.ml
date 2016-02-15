@@ -293,11 +293,15 @@ let process_c_file sourcename =
       if !option_interp then begin
         Machine.config := Machine.compcert_interpreter !Machine.config;
         let csyntax,_ = parse_c_file sourcename preproname in
-        Interp.execute csyntax;
+        if not !option_dprepro then
+          safe_remove preproname;
+       Interp.execute csyntax;
         ""
       end else if !option_S then begin
         compile_c_file sourcename preproname
           (output_filename ~final:true sourcename ".c" ".s");
+        if not !option_dprepro then
+          safe_remove preproname;
         ""
       end else begin
         let asmname =
@@ -305,13 +309,13 @@ let process_c_file sourcename =
           then output_filename sourcename ".c" ".s"
           else Filename.temp_file "compcert" ".s" in
         compile_c_file sourcename preproname asmname;
+        if not !option_dprepro then
+          safe_remove preproname;
         let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
         assemble asmname objname;
         if not !option_dasm then safe_remove asmname;
         objname
       end in
-    if not !option_dprepro then
-      safe_remove preproname;
     if !dump_options then
       Optionsprinter.print (output_filename sourcename ".c" ".opt.json") !stdlib_path;
     name
