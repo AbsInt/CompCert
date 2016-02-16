@@ -497,6 +497,7 @@ Assembling options:
 Linking options:
   -l<lib>        Link library <lib>
   -L<dir>        Add <dir> to search path for libraries
+  -static        Prevent linking with the shared libraries
   -T <file>      Use <file> as linker command file
   -Wl,<opt>      Pass option <opt> to the linker
 Tracing options:
@@ -617,6 +618,7 @@ let cmdline_actions =
 (* Linking options *)
   Prefix "-l", Self push_linker_arg;
   Prefix "-L", Self push_linker_arg;
+  Exact "-static", Self push_linker_arg;
   Exact "-T", String (fun s -> if Configuration.system = "diab" then
     push_linker_arg ("-Wm"^s)
   else begin
