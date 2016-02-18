@@ -126,11 +126,14 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
        eor
        lsl
        lsr
-       mov
        mvn
        orr
        rsb
        sub    (but not sp - imm)
+   On the other hand, "mov rd, rs" and "mov rd, #imm" have shorter 
+   encodings if they do not have the "S" flag.  Moreover, the "S"
+   flag is not supported if rd or rs is sp.
+
    The proof of Asmgen shows that CompCert-generated code behaves the
    same whether flags are updated or not by those instructions.  The
    following printing function adds a "S" suffix if we are in Thumb2
@@ -320,7 +323,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
     let print_int64_arith oc conflict rl fn =
       if conflict then begin
         let n = fn IR14 in
-        fprintf oc "	mov%t	%a, %a\n" thumbS ireg rl ireg IR14;
+        fprintf oc "	mov	%a, %a\n" ireg rl ireg IR14;
         n + 1
       end else
         fn rl
@@ -551,6 +554,9 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
             thumbS ireg r1 ireg r2 ireg r3; 1
       | Pmla(r1, r2, r3, r4) ->
           fprintf oc "	mla	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 ireg r4; 1
+      | Pmov(r1, (SOimm _ | SOreg _ as so)) ->
+          (* No S flag even in Thumb2 mode *)
+          fprintf oc "	mov	%a, %a\n" ireg r1 shift_op so; 1
       | Pmov(r1, so) ->
           fprintf oc "	mov%t	%a, %a\n" thumbS ireg r1 shift_op so; 1
       | Pmovw(r1, n) ->
