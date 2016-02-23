@@ -277,9 +277,18 @@ let linker exe_name files =
     exit 2
   end
 
+(* All input files should exist *)
+
+let ensure_inputfile_exists name =
+  if not (Sys.file_exists name) then begin
+    eprintf "error: no such file or directory: %s\n" name;
+    exit 2
+  end
+
 (* Processing of a .c file *)
 
 let process_c_file sourcename =
+  ensure_inputfile_exists sourcename;
   if !option_E then begin
     preprocess sourcename (output_filename_default "-");
     ""
@@ -324,6 +333,7 @@ let process_c_file sourcename =
 (* Processing of a .i / .p file (preprocessed C) *)
 
 let process_i_file sourcename =
+  ensure_inputfile_exists sourcename;
   if !option_interp then begin
     let csyntax,_ = parse_c_file sourcename sourcename in
     Interp.execute csyntax;
@@ -351,6 +361,7 @@ let process_i_file sourcename =
 (* Processing of a .cm file *)
 
 let process_cminor_file sourcename =
+  ensure_inputfile_exists sourcename;
   if !option_S then begin
     compile_cminor_file sourcename
                         (output_filename ~final:true sourcename ".cm" ".s");
@@ -372,11 +383,13 @@ let process_cminor_file sourcename =
 (* Processing of .S and .s files *)
 
 let process_s_file sourcename =
+  ensure_inputfile_exists sourcename;
   let objname = output_filename ~final: !option_c sourcename ".s" ".o" in
   assemble sourcename objname;
   objname
 
 let process_S_file sourcename =
+  ensure_inputfile_exists sourcename;
   if !option_E then begin
     preprocess sourcename (output_filename_default "-");
     ""
@@ -393,6 +406,7 @@ let process_S_file sourcename =
 
 let process_h_file sourcename =
   if !option_E then begin
+    ensure_inputfile_exists sourcename;
     preprocess sourcename (output_filename_default "-");
     ""
   end else begin
