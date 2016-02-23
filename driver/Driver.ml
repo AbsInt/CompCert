@@ -281,7 +281,7 @@ let linker exe_name files =
 
 let ensure_inputfile_exists name =
   if not (Sys.file_exists name) then begin
-    eprintf "error: no such file or directory: %s\n" name;
+    eprintf "error: no such file or directory: '%s'\n" name;
     exit 2
   end
 
