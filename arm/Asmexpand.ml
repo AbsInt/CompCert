@@ -257,7 +257,7 @@ let align n a = (n + a - 1) land (-a)
 
 let rec next_arg_location ir ofs = function
   | [] ->
-     Int32.of_int (ir * 4 + ofs)
+     Int32.of_int (16 + ofs)
   | (Tint | Tsingle | Tany32) :: l ->
      if ir < 4
      then next_arg_location (ir + 1) ofs l
