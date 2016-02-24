@@ -257,7 +257,7 @@ let align n a = (n + a - 1) land (-a)
 
 let rec next_arg_location ir ofs = function
   | [] ->
-     Int32.of_int (16 + ofs)
+     Int32.of_int (ir * 4 + ofs)
   | (Tint | Tsingle | Tany32) :: l ->
      if ir < 4
      then next_arg_location (ir + 1) ofs l
@@ -265,7 +265,7 @@ let rec next_arg_location ir ofs = function
   | (Tfloat | Tlong | Tany64) :: l ->
      if ir < 3
      then next_arg_location (align ir 2 + 2) ofs l
-     else next_arg_location ir (align ofs 8 + 8) l
+     else next_arg_location 4 (align ofs 8 + 8) l
 
 let expand_builtin_va_start r =
   if not !current_function.fn_sig.sig_cc.cc_vararg then
