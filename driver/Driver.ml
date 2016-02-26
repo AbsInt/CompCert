@@ -511,9 +511,19 @@ Assembling options:
 Linking options:
   -l<lib>        Link library <lib>
   -L<dir>        Add <dir> to search path for libraries
+  -nostartfiles  (GCC only) Do not use the standard system startup files when 
+                 linking
+  -nodefaultlibs (GCC only) Do no use the standard system libraries
+  -nostdlib      (GCC only) Do not use the standard system libraries when 
+                 linking
+  -s             Remove all symbol table and relocation information from the
+                 executable
   -static        Prevent linking with the shared libraries
   -T <file>      Use <file> as linker command file
+  -Xlinker <opt> Pass <opt> as an option to the linker
   -Wl,<opt>      Pass option <opt> to the linker
+  -u <symb>      Pretend the symbol <symb> is undefined to force linking of
+                 library modules to define it.
 Tracing options:
   -dprepro       Save C file after preprocessing in <file>.i
   -dparse        Save C file after parsing and elaboration in <file>.parse.c
@@ -557,6 +567,9 @@ let optimization_options = [
 
 let set_all opts = List.iter (fun r -> r := true) opts
 let unset_all opts = List.iter (fun r -> r := false) opts
+let gnu_linker_opt s =
+  if Configuration.system <> "diab" then
+    push_linker_arg s
 
 let num_source_files = ref 0
 
@@ -632,6 +645,10 @@ let cmdline_actions =
 (* Linking options *)
   Prefix "-l", Self push_linker_arg;
   Prefix "-L", Self push_linker_arg;
+  Exact "-nostartfiles", Self gnu_linker_opt;
+  Exact "-nodefaultlibs", Self gnu_linker_opt;
+  Exact "-nostdlib", Self gnu_linker_opt;
+  Exact "-s", Self push_linker_arg;
   Exact "-static", Self push_linker_arg;
   Exact "-T", String (fun s -> if Configuration.system = "diab" then
     push_linker_arg ("-Wm"^s)
@@ -639,7 +656,12 @@ let cmdline_actions =
       push_linker_arg ("-T");
       push_linker_arg(s)
     end);
+  Exact "-Xlinker", String (fun s -> if Configuration.system = "diab" then
+    push_linker_arg ("-Wl,"^s)
+  else
+    push_linker_arg s);
   Prefix "-Wl,", Self push_linker_arg;
+  Exact "-u", Self push_linker_arg;
 (* Tracing options *)
   Exact "-dprepro", Set option_dprepro;
   Exact "-dparse", Set option_dparse;
