@@ -90,6 +90,9 @@ casmruntime=""
 asm_supports_cfi=""
 struct_passing=""
 struct_return=""
+casm_options=""
+cprepro_options=""
+clinker_options=""
 
 case "$target" in
   powerpc-*|ppc-*|powerpc64-*|ppc64-*|e5500-*)
@@ -109,7 +112,8 @@ case "$target" in
       *-eabi-diab)
         system="diab"
         cc="${toolprefix}dcc"
-        cprepro="${toolprefix}dcc -E -D__GNUC__"
+        cprepro="${toolprefix}dcc"
+        cprepro_options="-E -D__GNUC__"
         casm="${toolprefix}das"
         asm_supports_cfi=false
         clinker="${toolprefix}dcc"
@@ -118,8 +122,10 @@ case "$target" in
       *)
         system="linux"
         cc="${toolprefix}gcc"
-        cprepro="${toolprefix}gcc -std=c99 -U__GNUC__ -E"
-        casm="${toolprefix}gcc -c"
+        cprepro="${toolprefix}gcc"
+        cprepro_options="-std=c99 -U__GNUC__ -E"
+        casm="${toolprefix}gcc"
+        casm_options="-c"
         casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
         clinker="${toolprefix}gcc"
         libmath="-lm"
@@ -149,8 +155,10 @@ case "$target" in
     struct_return="int1-4"
     system="linux"
     cc="${toolprefix}gcc"
-    cprepro="${toolprefix}gcc -std=c99 -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
-    casm="${toolprefix}gcc -c"
+    cprepro="${toolprefix}gcc"
+    cprepro_options="-std=c99 -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
+    casm="${toolprefix}gcc"
+    casm_options="-c"
     clinker="${toolprefix}gcc"
     libmath="-lm";;
   ia32-linux)
@@ -161,9 +169,12 @@ case "$target" in
     struct_return="ref"
     system="linux"
     cc="${toolprefix}gcc -m32"
-    cprepro="${toolprefix}gcc -std=c99 -m32 -U__GNUC__ -E"
-    casm="${toolprefix}gcc -m32 -c"
-    clinker="${toolprefix}gcc -m32"
+    cprepro="${toolprefix}gcc"
+    cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
+    casm="${toolprefix}gcc"
+    casm_options="-m32 -c"
+    clinker="${toolprefix}gcc"
+    clinker_options="-m32"
     libmath="-lm";;
   ia32-bsd)
     arch="ia32"
@@ -173,9 +184,12 @@ case "$target" in
     struct_return="int1248"    # to check!
     system="bsd"
     cc="${toolprefix}gcc -m32"
-    cprepro="${toolprefix}gcc -std=c99 -m32 -U__GNUC__ -E"
-    casm="${toolprefix}gcc -m32 -c"
-    clinker="${toolprefix}gcc -m32"
+    cprepro="${toolprefix}gcc"
+    cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
+    casm="${toolprefix}gcc"
+    casm_options="-m32 -c"
+    clinker="${toolprefix}gcc"
+    clinker_options="-m32"
     libmath="-lm";;
   ia32-macosx)
     arch="ia32"
@@ -185,13 +199,16 @@ case "$target" in
     struct_return="int1248"
     system="macosx"
     cc="${toolprefix}gcc -arch i386"
-    cprepro="${toolprefix}gcc -std=c99 -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' -E"
-    casm="${toolprefix}gcc -arch i386 -c"
+    cprepro="${toolprefix}gcc"
+    cprepro_options="-std=c99 -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' -E"
+    casm="${toolprefix}gcc"
+    casm_options="-arch i386 -c"
+    clinker="${toolprefix}gcc"
     case `uname -r` in
       [1-9].*|10.*|11.*)    # up to MacOS 10.7 included
-        clinker="${toolprefix}gcc -arch i386";;
+        clinker_option="-arch i386";;
       *)                    # MacOS 10.8 and up
-        clinker="${toolprefix}gcc -arch i386 -Wl,-no_pie";;
+        clinker_option="-arch i386 -Wl,-no_pie";;
     esac
     libmath="";;
   ia32-cygwin)
@@ -202,9 +219,12 @@ case "$target" in
     struct_return="ref"
     system="cygwin"
     cc="${toolprefix}gcc -m32"
-    cprepro="${toolprefix}gcc -std=c99 -m32 -U__GNUC__ -E"
-    casm="${toolprefix}gcc -m32 -c"
-    clinker="${toolprefix}gcc -m32"
+    cprepro="${toolprefix}gcc"
+    cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
+    casm="${toolprefix}gcc"
+    casm_options="-m32 -c"
+    clinker="${toolprefix}gcc"
+    clinker_options="-m32"
     libmath="-lm";;
   manual)
     ;;
@@ -218,7 +238,7 @@ case "$target" in
     exit 2;;
 esac
 
-if test -z "$casmruntime"; then casmruntime="$casm"; fi
+if test -z "$casmruntime"; then casmruntime="$casm $casm_options"; fi
 
 # Test assembler support for CFI directives
 
@@ -348,9 +368,12 @@ STRUCT_RETURN=$struct_return
 SYSTEM=$system
 CC=$cc
 CPREPRO=$cprepro
+CPREPRO_OPTIONS=$cprepro_options
 CASM=$casm
+CASM_OPTIONS=$casm_options
 CASMRUNTIME=$casmruntime
 CLINKER=$clinker
+CLINKER_OPTIONS=$clinker_options
 LIBMATH=$libmath
 HAS_RUNTIME_LIB=$has_runtime_lib
 HAS_STANDARD_HEADERS=$has_standard_headers

@@ -103,9 +103,18 @@ let tool_absolute_path tools =
         absolute_path ini_dir tool in
     tool::args
 
-let prepro = tool_absolute_path (get_config_list "prepro")
-let asm = tool_absolute_path (get_config_list "asm")
-let linker = tool_absolute_path (get_config_list "linker")
+let opt_config_list key =
+  match Readconfig.key_val key with
+  | Some v -> v
+  | None -> []
+
+let prepro = 
+  tool_absolute_path (get_config_list "prepro")@(opt_config_list "prepro_options")
+let asm =
+  tool_absolute_path (get_config_list "asm")@(opt_config_list "asm_options")
+let linker =
+  tool_absolute_path (get_config_list "linker")@(opt_config_list "linker_options")
+
 let arch =
   match get_config_string "arch" with
   | "powerpc"|"arm"|"ia32" as a -> a

@@ -192,8 +192,11 @@ latexdoc:
 compcert.ini: Makefile.config
 	(echo "stdlib_path=$(LIBDIR)"; \
          echo "prepro=$(CPREPRO)"; \
-         echo "asm=$(CASM)"; \
          echo "linker=$(CLINKER)"; \
+         echo "asm=$(CASM)"; \
+	 echo "prepro_options=$(CPREPRO_OPTIONS)";\
+	 echo "asm_options=$(CASM_OPTIONS)";\
+	 echo "linker_options=$(CLINKER_OPTIONS)";\
          echo "arch=$(ARCH)"; \
          echo "model=$(MODEL)"; \
          echo "abi=$(ABI)"; \
