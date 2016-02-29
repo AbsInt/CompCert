@@ -508,6 +508,7 @@ Target processor options:
   -marm          (ARM only) Use classic ARM instruction encoding
 Assembling options:
   -Wa,<opt>      Pass option <opt> to the assembler
+  -Xassembler <opt> Pass <opt> as an option to the assembler
 Linking options:
   -l<lib>        Link library <lib>
   -L<dir>        Add <dir> to search path for libraries
@@ -515,14 +516,14 @@ Linking options:
                  linking
   -nodefaultlibs (GCC only) Do not use the standard system libraries when
                  linking
-  -nostdlib      (GCC only) Do not use the standard system libraries when
-                 linking
+  -nostdlib      (GCC only) Do not use the standard system startup files or
+                 libraries when linking
   -s             Remove all symbol table and relocation information from the
                  executable
   -static        Prevent linking with the shared libraries
   -T <file>      Use <file> as linker command file
-  -Xlinker <opt> Pass <opt> as an option to the linker
   -Wl,<opt>      Pass option <opt> to the linker
+  -Xlinker <opt> Pass <opt> as an option to the linker
   -u <symb>      Pretend the symbol <symb> is undefined to force linking of
                  library modules to define it.
 Tracing options:
@@ -643,6 +644,10 @@ let cmdline_actions =
     assembler_options := List.rev_append (explode_comma_option s) !assembler_options
   else
     assembler_options := s :: !assembler_options);
+  Exact "-Xassembler", String (fun s -> if Configuration.system = "diab" then
+    assembler_options := s::!assembler_options
+  else
+    assembler_options := s::"-Xassembler":: !assembler_options);
 (* Linking options *)
   Prefix "-l", Self push_linker_arg;
   Prefix "-L", Self push_linker_arg;
