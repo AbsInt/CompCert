@@ -511,10 +511,11 @@ Assembling options:
 Linking options:
   -l<lib>        Link library <lib>
   -L<dir>        Add <dir> to search path for libraries
-  -nostartfiles  (GCC only) Do not use the standard system startup files when 
+  -nostartfiles  (GCC only) Do not use the standard system startup files when
                  linking
-  -nodefaultlibs (GCC only) Do no use the standard system libraries
-  -nostdlib      (GCC only) Do not use the standard system libraries when 
+  -nodefaultlibs (GCC only) Do not use the standard system libraries when
+                 linking
+  -nostdlib      (GCC only) Do not use the standard system libraries when
                  linking
   -s             Remove all symbol table and relocation information from the
                  executable
