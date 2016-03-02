@@ -47,7 +47,7 @@ If [a] is a l-value, the returned value denotes:
 *)
 
 Definition do_cast (v: val) (t1 t2: type) : res val :=
-  match sem_cast v t1 t2 with
+  match sem_cast v t1 t2 Mem.empty with
   | Some v' => OK v'
   | None => Error(msg "undefined cast")
   end.

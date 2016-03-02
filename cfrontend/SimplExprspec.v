@@ -222,10 +222,10 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
       ty2 = Csyntax.typeof e2 ->
       tr_expr le dst (Csyntax.Eassign e1 e2 ty)
                    (sl1 ++ sl2 ++
-                    Sset t a2 ::
-                    make_assign a1 (Etempvar t ty2) ::
-                    final dst (Ecast (Etempvar t ty2) ty1))
-                   (Ecast (Etempvar t ty2) ty1) tmp
+                    Sset t (Ecast a2 ty1) ::
+                    make_assign a1 (Etempvar t ty1) ::
+                    final dst (Etempvar t ty1))
+                   (Etempvar t ty1) tmp
   | tr_assignop_effects: forall le op e1 e2 tyres ty ty1 sl1 a1 tmp1 sl2 a2 tmp2 sl3 a3 tmp3 any tmp,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
       tr_expr le For_val e2 sl2 a2 tmp2 ->
@@ -246,10 +246,10 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
       ty1 = Csyntax.typeof e1 ->
       tr_expr le dst (Csyntax.Eassignop op e1 e2 tyres ty)
                    (sl1 ++ sl2 ++ sl3 ++
-                    Sset t (Ebinop op a3 a2 tyres) ::
-                    make_assign a1 (Etempvar t tyres) ::
-                    final dst (Ecast (Etempvar t tyres) ty1))
-                   (Ecast (Etempvar t tyres) ty1) tmp
+                    Sset t (Ecast (Ebinop op a3 a2 tyres) ty1) ::
+                    make_assign a1 (Etempvar t ty1) ::
+                    final dst (Etempvar t ty1))
+                   (Etempvar t ty1) tmp
   | tr_postincr_effects: forall le id e1 ty ty1 sl1 a1 tmp1 sl2 a2 tmp2 any tmp,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
       tr_rvalof ty1 a1 sl2 a2 tmp2 ->
@@ -375,8 +375,7 @@ Qed.
   between Csyntax values and Cminor expressions: in the case of
   [tr_expr], the Cminor expression must not depend on memory,
   while in the case of [tr_top] it can depend on the current memory
-  state.  This special case is extended to values occurring under
-  one or several [Csyntax.Eparen]. *)
+  state. *)
 
 Section TR_TOP.
 
@@ -389,19 +388,9 @@ Inductive tr_top: destination -> Csyntax.expr -> list statement -> expr -> list 
   | tr_top_val_val: forall v ty a tmp,
       typeof a = ty -> eval_expr ge e le m a v ->
       tr_top For_val (Csyntax.Eval v ty) nil a tmp
-(*
-  | tr_top_val_set: forall t tyl v ty a any tmp,
-      typeof a = ty -> eval_expr ge e le m a v ->
-      tr_top (For_set tyl t) (Csyntax.Eval v ty) (Sset t (fold_left Ecast tyl a) :: nil) any tmp
-*)
   | tr_top_base: forall dst r sl a tmp,
       tr_expr le dst r sl a tmp ->
       tr_top dst r sl a tmp.
-(*
-  | tr_top_paren_test: forall tyl t r ty sl a tmp,
-      tr_top (For_set (ty :: tyl) t) r sl a tmp ->
-      tr_top (For_set tyl t) (Csyntax.Eparen r ty) sl a tmp.
-*)
 
 End TR_TOP.
 

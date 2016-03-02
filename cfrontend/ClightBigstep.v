@@ -60,11 +60,11 @@ Definition outcome_switch (out: outcome) : outcome :=
   | o => o
   end.
 
-Definition outcome_result_value (out: outcome) (t: type) (v: val) : Prop :=
+Definition outcome_result_value (out: outcome) (t: type) (v: val) (m: mem): Prop :=
   match out, t with
   | Out_normal, Tvoid => v = Vundef
   | Out_return None, Tvoid => v = Vundef
-  | Out_return (Some (v',t')), ty => ty <> Tvoid /\ sem_cast v' t' t = Some v
+  | Out_return (Some (v',t')), ty => ty <> Tvoid /\ sem_cast v' t' t m = Some v
   | _, _ => False
   end.
 
@@ -81,7 +81,7 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
   | exec_Sassign:   forall e le m a1 a2 loc ofs v2 v m',
       eval_lvalue ge e le m a1 loc ofs ->
       eval_expr ge e le m a2 v2 ->
-      sem_cast v2 (typeof a2) (typeof a1) = Some v ->
+      sem_cast v2 (typeof a2) (typeof a1) m = Some v ->
       assign_loc ge (typeof a1) m loc ofs v m' ->
       exec_stmt e le m (Sassign a1 a2)
                E0 le m' Out_normal
@@ -168,7 +168,7 @@ with eval_funcall: mem -> fundef -> list val -> trace -> mem -> val -> Prop :=
       list_norepet (var_names f.(fn_params) ++ var_names f.(fn_vars)) ->
       bind_parameters ge e m1 f.(fn_params) vargs m2 ->
       exec_stmt e (create_undef_temps f.(fn_temps)) m2 f.(fn_body) t le m3 out ->
-      outcome_result_value out f.(fn_return) vres ->
+      outcome_result_value out f.(fn_return) vres m3 ->
       Mem.free_list m3 (blocks_of_env ge e) = Some m4 ->
       eval_funcall m (Internal f) vargs t m4 vres
   | eval_funcall_external: forall m ef targs tres cconv vargs t vres m',
