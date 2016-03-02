@@ -20,6 +20,9 @@ open Timing
 
 let stdlib_path = ref Configuration.stdlib_path
 
+(* Use standard headers *)
+let use_standard_headers =  ref Configuration.has_standard_headers
+
 let dump_options = ref false
 
 (* Optional sdump suffix *)
@@ -105,7 +108,7 @@ let preprocess ifile ofile =
   let cmd = List.concat [
     Configuration.prepro;
     ["-D__COMPCERT__"];
-    (if Configuration.has_standard_headers
+    (if !use_standard_headers
      then ["-I" ^ Filename.concat !stdlib_path "include" ]
      else []);
     List.rev !prepro_options;
@@ -461,11 +464,36 @@ Processing options:
   -o <file>      Generate output in <file>
 Preprocessing options:
   -I<dir>        Add <dir> to search path for #include files
+  -include <file> Process <file> as if #include \"<file>\" appears at the first
+                  line of the primary source file.
   -D<symb>=<val> Define preprocessor symbol
   -U<symb>       Undefine preprocessor symbol
   -Wp,<opt>      Pass option <opt> to the preprocessor
-  -include <file> Process <file> as if #include \"<file>\" appears at the first
-                  line of the primary source file.
+  -Xpreprocessor <opt> Pass option <opt> to the preprocessor
+  -M             (GCC only) Ouput a rule suitable for make describing the
+                 dependencies of the main source file
+  -MM            (GCC only) Like -M but do not mention system header files
+  -MF <file>     (GCC only) Specifies file <file> as output file for -M or -MM
+  -MG            (GCC only) Assumes missing header files are generated for -M
+  -MP            (GCC only) Add a phony target for each dependency other than
+                 the main file
+  -MT <target>   (GCC only) Change the target of the rule emitted by dependency
+                 generation
+  -MQ <target>   (GCC only) Like -MT but quotes <target>
+  -nostdinc      (GCC only) Do not search the standard system directories for
+                 header files
+  -imacros <file> (GCC only) Like -include but throws output produced by
+                  preprocessing of <file> away
+  -idirafter <dir> (GCC only) Search <dir> for header files after all directories
+                   specified with -I and the standard system directories
+  -isystem <dir>  (GCC only) Search <dir> for header files after all directories
+                  specified by -I but before the standard system directories
+  -iquote <dir>   (GCC only) Like -isystem but only for headers included with
+                   quotes
+  -P              (GCC only) Do not generate linemarkers
+  -C              (GCC only) Do not discard comments
+  -CC             (GCC only) Do not discard comments, including during macro
+                  expansion
 Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fbitfields    Emulate bit fields in structs [off]
   -flongdouble   Treat 'long double' as 'double' [off]
@@ -569,9 +597,35 @@ let optimization_options = [
 
 let set_all opts = List.iter (fun r -> r := true) opts
 let unset_all opts = List.iter (fun r -> r := false) opts
-let gnu_linker_opt s =
+
+let gnu_option s =
   if Configuration.system <> "diab" then
+    true
+  else begin
+    eprintf "ccomp: warning: option %s only supported for gcc backend\n" s;
+    false
+  end
+
+let gnu_linker_opt s =
+  if gnu_option s then
     push_linker_arg s
+
+(* Add gnu preprocessor list *)
+let gnu_prepro_opt_key key s =
+  if gnu_option s then
+    prepro_options := s::key::!prepro_options
+
+(* Add gnu preprocessor option *)
+let gnu_prepro_opt s =
+ if gnu_option s then
+    prepro_options := s::!prepro_options
+
+(* Add gnu preprocessor option s and the implict -E *)
+let gnu_prepro_opt_e s =
+  if gnu_option s then begin
+    prepro_options := s :: !prepro_options;
+    option_E := true
+  end
 
 let num_source_files = ref 0
 
@@ -605,7 +659,24 @@ let cmdline_actions =
   Prefix "-U", Self(fun s -> prepro_options := s :: !prepro_options);
   Prefix "-Wp,", Self (fun s ->
     prepro_options := List.rev_append (explode_comma_option s) !prepro_options);
+  Exact "-Xpreprocessor", String (fun s ->
+    prepro_options := s :: !prepro_options);
   Exact "-include", String (fun s -> prepro_options := s :: "-include" :: !prepro_options);
+  Exact "-M", Self gnu_prepro_opt_e;
+  Exact "-MM", Self gnu_prepro_opt_e;
+  Exact "-MF", String (gnu_prepro_opt_key "-MF");
+  Exact "-MG", Self gnu_prepro_opt;
+  Exact "-MP", Self gnu_prepro_opt;
+  Exact "-MT", String (gnu_prepro_opt_key "-MT");
+  Exact "-MQ", String (gnu_prepro_opt_key "-MQ");
+  Exact "-nostdinc", Self (fun s -> gnu_prepro_opt s; use_standard_headers := false);
+  Exact "-imacros", String (gnu_prepro_opt_key "-imacros");
+  Exact "-idirafter", String (gnu_prepro_opt_key "-idirafter");
+  Exact "-isystem", String (gnu_prepro_opt_key "-isystem");
+  Exact "-iquote", String (gnu_prepro_opt_key "-iquore");
+  Exact "-P", Self gnu_prepro_opt;
+  Exact "-C", Self gnu_prepro_opt;
+  Exact "-CC", Self gnu_prepro_opt;
 (* Language support options -- more below *)
   Exact "-fall", Self (fun _ -> set_all language_support_options);
   Exact "-fnone", Self (fun _ -> unset_all language_support_options);
