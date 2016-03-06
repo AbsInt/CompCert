@@ -39,6 +39,7 @@ let name_of_chunk = function
 let name_of_external = function
   | EF_external(name, sg) -> sprintf "extern %S" (camlstring_of_coqstring name)
   | EF_builtin(name, sg) -> sprintf "builtin %S" (camlstring_of_coqstring name)
+  | EF_runtime(name, sg) -> sprintf "runtime %S" (camlstring_of_coqstring name)
   | EF_vload chunk -> sprintf "volatile load %s" (name_of_chunk chunk)
   | EF_vstore chunk -> sprintf "volatile store %s" (name_of_chunk chunk)
   | EF_malloc -> "malloc"
