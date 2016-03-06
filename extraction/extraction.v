@@ -158,11 +158,10 @@ Separate Extraction
    Csyntax.Eindex Csyntax.Epreincr
    Ctyping.typecheck_program
    Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
-   Clight.make_program
+   Ctypes.make_program
    Conventions1.dummy_int_reg Conventions1.dummy_float_reg
    RTL.instr_defs RTL.instr_uses
    Machregs.mregs_for_operation Machregs.mregs_for_builtin
    Machregs.two_address_op Machregs.is_stack_reg
    AST.signature_main
-   AST.transform_partial_ident_program
    Parser.translation_unit_file.
