@@ -146,9 +146,7 @@ Definition var_names (vars: list(ident * type)) : list ident :=
 (** Functions can either be defined ([Internal]) or declared as
   external functions ([External]). *)
 
-Inductive fundef : Type :=
-  | Internal: function -> fundef
-  | External: external_function -> typelist -> type -> calling_convention -> fundef.
+Definition fundef := Ctypes.fundef function.
 
 (** The type of a function definition. *)
 
@@ -163,45 +161,16 @@ Definition type_of_fundef (f: fundef) : type :=
 
 (** ** Programs *)
 
-(** A program is composed of:
+(** As defined in module [Ctypes], a program, or compilation unit, is
+  composed of:
 - a list of definitions of functions and global variables;
 - the names of functions and global variables that are public (not static);
 - the name of the function that acts as entry point ("main" function).
-- a list of definitions for structure and union names;
-- the corresponding composite environment;
-*)
+- a list of definitions for structure and union names
+- the corresponding composite environment
+- a proof that this environment is consistent with the definitions. *)
 
-Record program : Type := {
-  prog_defs: list (ident * globdef fundef type);
-  prog_public: list ident;
-  prog_main: ident;
-  prog_types: list composite_definition;
-  prog_comp_env: composite_env;
-  prog_comp_env_eq: build_composite_env prog_types = OK prog_comp_env
-}.
-
-Definition program_of_program (p: program) : AST.program fundef type :=
-  {| AST.prog_defs := p.(prog_defs);
-     AST.prog_public := p.(prog_public);
-     AST.prog_main := p.(prog_main) |}.
-
-Coercion program_of_program: program >-> AST.program.
-
-Program Definition make_program (types: list composite_definition)
-                                (defs: list (ident * globdef fundef type))
-                                (public: list ident)
-                                (main: ident): res program :=
-  match build_composite_env types with
-  | OK env =>
-      OK {| prog_defs := defs;
-            prog_public := public;
-            prog_main := main;
-            prog_types := types;
-            prog_comp_env := env;
-            prog_comp_env_eq := _ |}
-  | Error msg =>
-      Error msg
-  end.
+Definition program := Ctypes.program function.
 
 (** * Operational semantics *)
 
@@ -774,4 +743,3 @@ Proof.
   eapply external_call_trace_length; eauto.
   eapply external_call_trace_length; eauto.
 Qed.
-
