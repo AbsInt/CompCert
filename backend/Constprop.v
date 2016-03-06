@@ -14,21 +14,11 @@
   performed at RTL level.  It proceeds by a standard dataflow analysis
   and the corresponding code rewriting. *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Op.
-Require Machregs.
-Require Import Registers.
-Require Import RTL.
-Require Import Lattice.
-Require Import Kildall.
-Require Import Liveness.
-Require Import ValueDomain.
-Require Import ValueAOp.
-Require Import ValueAnalysis.
+Require Import Coqlib Maps Integers Floats Lattice Kildall.
+Require Import AST Linking.
+Require Compopts Machregs.
+Require Import Op Registers RTL.
+Require Import Liveness ValueDomain ValueAOp ValueAnalysis.
 Require Import ConstpropOp.
 
 (** The code transformation builds on the results of the static analysis
@@ -231,5 +221,5 @@ Definition transf_fundef (rm: romem) (fd: fundef) : fundef :=
   AST.transf_fundef (transf_function rm) fd.
 
 Definition transf_program (p: program) : program :=
-  let rm := romem_for_program p in
+  let rm := romem_for p in
   transform_program (transf_fundef rm) p.

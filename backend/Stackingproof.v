@@ -14,25 +14,21 @@
 
 (** This file proves semantic preservation for the [Stacking] pass. *)
 
-Require Import Coqlib.
-Require Import Errors.
-Require Import AST.
-Require Import Integers.
-Require Import Values.
-Require Import Op.
-Require Import Memory.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Smallstep.
-Require Import Locations.
-Require Import LTL.
-Require Import Linear.
-Require Import Lineartyping.
-Require Import Mach.
-Require Import Bounds.
-Require Import Conventions.
-Require Import Stacklayout.
+Require Import Coqlib Errors.
+Require Import Integers AST Linking.
+Require Import Values Memory Events Globalenvs Smallstep.
+Require Import LTL Op Locations Linear Mach.
+Require Import Bounds Conventions Stacklayout Lineartyping.
 Require Import Stacking.
+
+Definition match_prog (p: Linear.program) (tp: Mach.program) :=
+  match_program (fun _ f tf => transf_fundef f = OK tf) eq p tp.
+
+Lemma transf_program_match:
+  forall p tp, transf_program p = OK tp -> match_prog p tp.
+Proof.
+  intros. eapply match_transform_partial_program; eauto.
+Qed.
 
 (** * Properties of frame offsets *)
 
@@ -61,10 +57,9 @@ Let step := Mach.step return_address_offset.
 
 Variable prog: Linear.program.
 Variable tprog: Mach.program.
-Hypothesis TRANSF: transf_program prog = OK tprog.
+Hypothesis TRANSF: match_prog prog tprog.
 Let ge := Genv.globalenv prog.
 Let tge := Genv.globalenv tprog.
-
 
 Section FRAME_PROPERTIES.
 
@@ -2261,44 +2256,26 @@ Qed.
 (** Preservation / translation of global symbols and functions. *)
 
 Lemma symbols_preserved:
-  forall id, Genv.find_symbol tge id = Genv.find_symbol ge id.
-Proof.
-  intros. unfold ge, tge.
-  apply Genv.find_symbol_transf_partial with transf_fundef.
-  exact TRANSF.
-Qed.
+  forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
+Proof (Genv.find_symbol_match TRANSF).
 
-Lemma public_preserved:
-  forall id, Genv.public_symbol tge id = Genv.public_symbol ge id.
-Proof.
-  intros. unfold ge, tge.
-  apply Genv.public_symbol_transf_partial with transf_fundef.
-  exact TRANSF.
-Qed.
-
-Lemma varinfo_preserved:
-  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
-Proof.
-  intros. unfold ge, tge.
-  apply Genv.find_var_info_transf_partial with transf_fundef.
-  exact TRANSF.
-Qed.
+Lemma senv_preserved:
+  Senv.equiv ge tge.
+Proof (Genv.senv_match TRANSF).
 
 Lemma functions_translated:
   forall v f,
   Genv.find_funct ge v = Some f ->
   exists tf,
   Genv.find_funct tge v = Some tf /\ transf_fundef f = OK tf.
-Proof
-  (Genv.find_funct_transf_partial transf_fundef _ TRANSF).
+Proof (Genv.find_funct_transf_partial TRANSF).
 
 Lemma function_ptr_translated:
-  forall v f,
-  Genv.find_funct_ptr ge v = Some f ->
+  forall b f,
+  Genv.find_funct_ptr ge b = Some f ->
   exists tf,
-  Genv.find_funct_ptr tge v = Some tf /\ transf_fundef f = OK tf.
-Proof
-  (Genv.find_funct_ptr_transf_partial transf_fundef _ TRANSF).
+  Genv.find_funct_ptr tge b = Some tf /\ transf_fundef f = OK tf.
+Proof (Genv.find_funct_ptr_transf_partial TRANSF).
 
 Lemma sig_preserved:
   forall f tf, transf_fundef f = OK tf -> Mach.funsig tf = Linear.funsig f.
@@ -2749,8 +2726,7 @@ Proof.
   econstructor; split.
   apply plus_one. econstructor; eauto.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved. eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto with coqlib.
   eapply match_stack_change_extcall; eauto.
   apply Plt_Ple. change (Mem.valid_block m sp0). eapply agree_valid_linear; eauto.
@@ -2858,8 +2834,7 @@ Proof.
   intros [j' [res' [m1' [A [B [C [D [E [F G]]]]]]]]].
   econstructor; split.
   apply plus_one. eapply exec_function_external; eauto.
-  eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved'; eauto. apply senv_preserved.
   econstructor; eauto.
   apply match_stacks_change_bounds with (Mem.nextblock m) (Mem.nextblock m'0).
   inv H0; inv A. eapply match_stack_change_extcall; eauto. apply Ple_refl. apply Ple_refl.
@@ -2884,8 +2859,8 @@ Proof.
   exploit function_ptr_translated; eauto. intros [tf [FIND TR]].
   econstructor; split.
   econstructor.
-  eapply Genv.init_mem_transf_partial; eauto.
-  rewrite (transform_partial_program_main _ _ TRANSF).
+  eapply (Genv.init_mem_transf_partial TRANSF); eauto.
+  rewrite (match_program_main TRANSF).
   rewrite symbols_preserved. eauto.
   econstructor; eauto.
   eapply Genv.initmem_inject; eauto.
@@ -2913,9 +2888,10 @@ Qed.
 Lemma wt_prog:
   forall i fd, In (i, Gfun fd) prog.(prog_defs) -> wt_fundef fd.
 Proof.
-  intros. exploit transform_partial_program_succeeds; eauto.
-  intros [tfd TF]. destruct fd; simpl in *.
-- monadInv TF. unfold transf_function in EQ.
+  intros.
+  exploit list_forall2_in_left. eexact (proj1 TRANSF). eauto.
+  intros ([i' g] & P & Q & R). simpl in *. inv R. destruct fd; simpl in *.
+- monadInv H2. unfold transf_function in EQ.
   destruct (wt_function f). auto. discriminate.
 - auto.
 Qed.
@@ -2925,7 +2901,7 @@ Theorem transf_program_correct:
 Proof.
   set (ms := fun s s' => wt_state s /\ match_states s s').
   eapply forward_simulation_plus with (match_states := ms).
-- exact public_preserved.
+- apply senv_preserved.
 - intros. exploit transf_initial_states; eauto. intros [st2 [A B]].
   exists st2; split; auto. split; auto.
   apply wt_initial_state with (prog := prog); auto. exact wt_prog.

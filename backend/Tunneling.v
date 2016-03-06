@@ -12,9 +12,7 @@
 
 (** Branch tunneling (optimization of branches to branches). *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import UnionFind.
+Require Import Coqlib Maps UnionFind.
 Require Import AST.
 Require Import LTL.
 

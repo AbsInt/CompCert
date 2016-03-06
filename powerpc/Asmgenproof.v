@@ -12,75 +12,52 @@
 
 (** Correctness proof for PPC generation: main proof. *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import Errors.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Smallstep.
-Require Import Op.
-Require Import Locations.
-Require Import Conventions.
-Require Import Mach.
-Require Import Asm.
-Require Import Asmgen.
-Require Import Asmgenproof0.
-Require Import Asmgenproof1.
+Require Import Coqlib Errors.
+Require Import Integers Floats AST Linking.
+Require Import Values Memory Events Globalenvs Smallstep.
+Require Import Op Locations Mach Conventions Asm.
+Require Import Asmgen Asmgenproof0 Asmgenproof1.
+
+Definition match_prog (p: Mach.program) (tp: Asm.program) :=
+  match_program (fun _ f tf => transf_fundef f = OK tf) eq p tp.
+
+Lemma transf_program_match:
+  forall p tp, transf_program p = OK tp -> match_prog p tp.
+Proof.
+  intros. eapply match_transform_partial_program; eauto.
+Qed.
 
 Section PRESERVATION.
 
 Variable prog: Mach.program.
 Variable tprog: Asm.program.
-Hypothesis TRANSF: transf_program prog = Errors.OK tprog.
-
+Hypothesis TRANSF: match_prog prog tprog.
 Let ge := Genv.globalenv prog.
 Let tge := Genv.globalenv tprog.
 
 Lemma symbols_preserved:
-  forall id, Genv.find_symbol tge id = Genv.find_symbol ge id.
-Proof.
-  intros. unfold ge, tge.
-  apply Genv.find_symbol_transf_partial with transf_fundef.
-  exact TRANSF.
-Qed.
+  forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
+Proof (Genv.find_symbol_match TRANSF).
 
-Lemma public_preserved:
-  forall id, Genv.public_symbol tge id = Genv.public_symbol ge id.
-Proof.
-  intros. unfold ge, tge.
-  apply Genv.public_symbol_transf_partial with transf_fundef.
-  exact TRANSF.
-Qed.
-
-Lemma varinfo_preserved:
-  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
-Proof.
-  intros. unfold ge, tge.
-  apply Genv.find_var_info_transf_partial with transf_fundef.
-  exact TRANSF.
-Qed.
+Lemma senv_preserved:
+  Senv.equiv ge tge.
+Proof (Genv.senv_match TRANSF).
 
 Lemma functions_translated:
   forall b f,
   Genv.find_funct_ptr ge b = Some f ->
-  exists tf, Genv.find_funct_ptr tge b = Some tf /\ transf_fundef f = Errors.OK tf.
-Proof
-  (Genv.find_funct_ptr_transf_partial transf_fundef _ TRANSF).
+  exists tf,
+  Genv.find_funct_ptr tge b = Some tf /\ transf_fundef f = OK tf.
+Proof (Genv.find_funct_ptr_transf_partial TRANSF).
 
 Lemma functions_transl:
-  forall f b tf,
-  Genv.find_funct_ptr ge b = Some (Internal f) ->
+  forall fb f tf,
+  Genv.find_funct_ptr ge fb = Some (Internal f) ->
   transf_function f = OK tf ->
-  Genv.find_funct_ptr tge b = Some (Internal tf).
+  Genv.find_funct_ptr tge fb = Some (Internal tf).
 Proof.
-  intros.
-  destruct (functions_translated _ _ H) as [tf' [A B]].
-  rewrite A. monadInv B. f_equal. congruence.
+  intros. exploit functions_translated; eauto. intros [tf' [A B]].
+  monadInv B. rewrite H0 in EQ; inv EQ; auto.
 Qed.
 
 (** * Properties of control flow *)
@@ -765,8 +742,7 @@ Hint Resolve agree_nextinstr agree_set_other: asmgen.
   eapply find_instr_tail; eauto.
   erewrite <- sp_val by eauto.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   eauto.
   econstructor; eauto.
   instantiate (2 := tf); instantiate (1 := x).
@@ -954,8 +930,7 @@ Local Transparent destroyed_by_jumptable.
   intros [res' [m2' [P [Q [R S]]]]].
   left; econstructor; split.
   apply plus_one. eapply exec_step_external; eauto.
-  eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved'; eauto. apply senv_preserved.
   econstructor; eauto.
   unfold loc_external_result.
   apply agree_set_other; auto. apply agree_set_mregs; auto.
@@ -974,7 +949,7 @@ Proof.
   intros. inversion H. unfold ge0 in *.
   econstructor; split.
   econstructor.
-  eapply Genv.init_mem_transf_partial; eauto.
+  eapply (Genv.init_mem_transf_partial TRANSF); eauto.
   replace (Genv.symbol_address (Genv.globalenv tprog) (prog_main tprog) Int.zero)
      with (Vptr fb Int.zero).
   econstructor; eauto.
@@ -982,7 +957,7 @@ Proof.
   apply Mem.extends_refl.
   split. auto. simpl. unfold Vzero; congruence. intros. rewrite Regmap.gi. auto.
   unfold Genv.symbol_address.
-  rewrite (transform_partial_program_main _ _ TRANSF).
+  rewrite (match_program_main TRANSF).
   rewrite symbols_preserved.
   unfold ge; rewrite H1. auto.
 Qed.
@@ -1000,7 +975,7 @@ Theorem transf_program_correct:
   forward_simulation (Mach.semantics return_address_offset prog) (Asm.semantics tprog).
 Proof.
   eapply forward_simulation_star with (measure := measure).
-  eexact public_preserved.
+  apply senv_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
   exact step_simulation.

@@ -12,15 +12,9 @@
 
 (** RTL function inlining *)
 
-Require Import Coqlib.
-Require Import Wfsimpl.
-Require Import Errors.
-Require Import Maps.
-Require Import AST.
-Require Import Integers.
-Require Import Op.
-Require Import Registers.
-Require Import RTL.
+Require Import Coqlib Wfsimpl Maps Errors Integers.
+Require Import AST Linking.
+Require Import Op Registers RTL.
 
 (** ** Environment of inlinable functions *)
 
