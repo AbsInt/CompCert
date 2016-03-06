@@ -647,7 +647,7 @@ Qed.
 Lemma transl_init_single_size:
   forall ty a data,
   transl_init_single ge ty a = OK data ->
-  Genv.init_data_size data = sizeof ge ty.
+  init_data_size data = sizeof ge ty.
 Proof.
   intros. monadInv H. destruct x0.
 - monadInv EQ2.
@@ -664,7 +664,7 @@ Proof.
   inv EQ2; auto.
 Qed.
 
-Notation idlsize := Genv.init_data_list_size.
+Notation idlsize := init_data_list_size.
 
 Remark padding_size:
   forall frm to, frm <= to -> idlsize (tr_padding frm to) = to - frm.

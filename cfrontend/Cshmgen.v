@@ -20,17 +20,9 @@
    Csharpminor's simpler control structures.
 *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import Errors.
-Require Import Integers.
-Require Import Floats.
-Require Import AST.
-Require Import Ctypes.
-Require Import Cop.
-Require Import Clight.
-Require Import Cminor.
-Require Import Csharpminor.
+Require Import Coqlib Maps Errors Integers Floats.
+Require Import AST Linking.
+Require Import Ctypes Cop Clight Cminor Csharpminor.
 
 Open Local Scope string_scope.
 Open Local Scope error_monad_scope.
@@ -124,6 +116,18 @@ Definition make_cmp_ne_zero (e: expr) :=
   | Ebinop (Ocmplu c) e1 e2 => e
   | _ => Ebinop (Ocmp Cne) e (make_intconst Int.zero)
   end.
+
+(** Variants of [sizeof] and [alignof] that check that the given type is complete. *)
+
+Definition sizeof (ce: composite_env) (t: type) : res Z :=
+  if complete_type ce t
+  then OK (Ctypes.sizeof ce t)
+  else Error (msg "incomplete type").
+
+Definition alignof (ce: composite_env) (t: type) : res Z :=
+  if complete_type ce t
+  then OK (Ctypes.alignof ce t)
+  else Error (msg "incomplete type").
 
 (** [make_cast from to e] applies to [e] the numeric conversions needed
    to transform a result of type [from] to a result of type [to]. *)
@@ -238,16 +242,20 @@ Definition make_binarith (iop iopu fop sop lop lopu: binary_operation)
 Definition make_add (ce: composite_env) (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_add ty1 ty2 with
   | add_case_pi ty =>
-      let n := make_intconst (Int.repr (Ctypes.sizeof ce ty)) in
+      do sz <- sizeof ce ty;
+      let n := make_intconst (Int.repr sz) in
       OK (Ebinop Oadd e1 (Ebinop Omul n e2))
   | add_case_ip ty =>
-      let n := make_intconst (Int.repr (Ctypes.sizeof ce ty)) in
+      do sz <- sizeof ce ty;
+      let n := make_intconst (Int.repr sz) in
       OK (Ebinop Oadd e2 (Ebinop Omul n e1))
   | add_case_pl ty =>
-      let n := make_intconst (Int.repr (Ctypes.sizeof ce ty)) in
+      do sz <- sizeof ce ty;
+      let n := make_intconst (Int.repr sz) in
       OK (Ebinop Oadd e1 (Ebinop Omul n (Eunop Ointoflong e2)))
   | add_case_lp ty =>
-      let n := make_intconst (Int.repr (Ctypes.sizeof ce ty)) in
+      do sz <- sizeof ce ty;
+      let n := make_intconst (Int.repr sz) in
       OK (Ebinop Oadd e2 (Ebinop Omul n (Eunop Ointoflong e1)))
   | add_default =>
       make_binarith Oadd Oadd Oaddf Oaddfs Oaddl Oaddl e1 ty1 e2 ty2
@@ -256,13 +264,16 @@ Definition make_add (ce: composite_env) (e1: expr) (ty1: type) (e2: expr) (ty2: 
 Definition make_sub (ce: composite_env) (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_sub ty1 ty2 with
   | sub_case_pi ty =>
-      let n := make_intconst (Int.repr (Ctypes.sizeof ce ty)) in
+      do sz <- sizeof ce ty;
+      let n := make_intconst (Int.repr sz) in
       OK (Ebinop Osub e1 (Ebinop Omul n e2))
   | sub_case_pp ty =>
-      let n := make_intconst (Int.repr (Ctypes.sizeof ce ty)) in
+      do sz <- sizeof ce ty;
+      let n := make_intconst (Int.repr sz) in
       OK (Ebinop Odiv (Ebinop Osub e1 e2) n)
   | sub_case_pl ty =>
-      let n := make_intconst (Int.repr (Ctypes.sizeof ce ty)) in
+      do sz <- sizeof ce ty;
+      let n := make_intconst (Int.repr sz) in
       OK (Ebinop Osub e1 (Ebinop Omul n (Eunop Ointoflong e2)))
   | sub_default =>
       make_binarith Osub Osub Osubf Osubfs Osubl Osubl e1 ty1 e2 ty2
@@ -351,8 +362,9 @@ Definition make_load (addr: expr) (ty_res: type) :=
   by-copy assignment of a value of Clight type [ty]. *)
 
 Definition make_memcpy (ce: composite_env) (dst src: expr) (ty: type) :=
-  Sbuiltin None (EF_memcpy (Ctypes.sizeof ce ty) (Ctypes.alignof_blockcopy ce ty))
-                (dst :: src :: nil).
+  do sz <- sizeof ce ty;
+  OK (Sbuiltin None (EF_memcpy sz (Ctypes.alignof_blockcopy ce ty))
+                    (dst :: src :: nil)).
 
 (** [make_store addr ty rhs] stores the value of the
    Csharpminor expression [rhs] into the memory location denoted by the
@@ -362,7 +374,7 @@ Definition make_memcpy (ce: composite_env) (dst src: expr) (ty: type) :=
 Definition make_store (ce: composite_env) (addr: expr) (ty: type) (rhs: expr) :=
   match access_mode ty with
   | By_value chunk => OK (Sstore chunk addr rhs)
-  | By_copy => OK (make_memcpy ce addr rhs ty)
+  | By_copy => make_memcpy ce addr rhs ty
   | _ => Error (msg "Cshmgen.make_store")
   end.
 
@@ -457,9 +469,9 @@ Fixpoint transl_expr (ce: composite_env) (a: Clight.expr) {struct a} : res expr 
       do addr <- make_field_access ce (typeof b) i tb;
       make_load addr ty
   | Clight.Esizeof ty' ty =>
-      OK(make_intconst (Int.repr (sizeof ce ty')))
+      do sz <- sizeof ce ty'; OK(make_intconst (Int.repr sz))
   | Clight.Ealignof ty' ty =>
-      OK(make_intconst (Int.repr (alignof ce ty')))
+      do al <- alignof ce ty'; OK(make_intconst (Int.repr al))
   end
 
 (** [transl_lvalue a] returns the Csharpminor code that evaluates
@@ -621,7 +633,8 @@ with transl_lbl_stmt (ce: composite_env) (tyret: type) (nbrk ncnt: nat)
 
 (*** Translation of functions *)
 
-Definition transl_var (ce: composite_env) (v: ident * type) := (fst v, sizeof ce (snd v)).
+Definition transl_var (ce: composite_env) (v: ident * type) :=
+  do sz <- sizeof ce (snd v); OK (fst v, sz).
 
 Definition signature_of_function (f: Clight.function) :=
   {| sig_args := map typ_of_type (map snd (Clight.fn_params f));
@@ -630,18 +643,19 @@ Definition signature_of_function (f: Clight.function) :=
 
 Definition transl_function (ce: composite_env) (f: Clight.function) : res function :=
   do tbody <- transl_statement ce f.(Clight.fn_return) 1%nat 0%nat (Clight.fn_body f);
+  do tvars <- mmap (transl_var ce) (Clight.fn_vars f);
   OK (mkfunction
        (signature_of_function f)
        (map fst (Clight.fn_params f))
-       (map (transl_var ce) (Clight.fn_vars f))
+       tvars
        (map fst (Clight.fn_temps f))
        tbody).
 
-Definition transl_fundef (ce: composite_env) (f: Clight.fundef) : res fundef :=
+Definition transl_fundef (ce: composite_env) (id: ident) (f: Clight.fundef) : res fundef :=
   match f with
-  | Clight.Internal g =>
+  | Internal g =>
       do tg <- transl_function ce g; OK(AST.Internal tg)
-  | Clight.External ef args res cconv =>
+  | External ef args res cconv =>
       if signature_eq (ef_sig ef) (signature_of_type args res cconv)
       then OK(AST.External ef)
       else Error(msg "Cshmgen.transl_fundef: wrong external signature")
@@ -649,7 +663,7 @@ Definition transl_fundef (ce: composite_env) (f: Clight.fundef) : res fundef :=
 
 (** ** Translation of programs *)
 
-Definition transl_globvar (ty: type) := OK tt.
+Definition transl_globvar (id: ident) (ty: type) := OK tt.
 
 Definition transl_program (p: Clight.program) : res program :=
   transform_partial_program2 (transl_fundef p.(prog_comp_env)) transl_globvar p.

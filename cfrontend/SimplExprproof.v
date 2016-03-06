@@ -12,30 +12,34 @@
 
 (** Correctness proof for expression simplification. *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import AST.
-Require Import Errors.
-Require Import Integers.
-Require Import Values.
-Require Import Memory.
-Require Import Events.
-Require Import Smallstep.
-Require Import Globalenvs.
-Require Import Ctypes.
-Require Import Cop.
-Require Import Csyntax.
-Require Import Csem.
-Require Import Cstrategy.
-Require Import Clight.
-Require Import SimplExpr.
-Require Import SimplExprspec.
+Require Import Coqlib Maps Errors Integers.
+Require Import AST Linking.
+Require Import Values Memory Events Globalenvs Smallstep.
+Require Import Ctypes Cop Csyntax Csem Cstrategy Clight.
+Require Import SimplExpr SimplExprspec.
+
+(** ** Relational specification of the translation. *)
+
+Definition match_prog (p: Csyntax.program) (tp: Clight.program) :=
+    match_program (fun ctx f tf => tr_fundef f tf) eq p tp
+ /\ prog_types tp = prog_types p.
+
+Lemma transf_program_match:
+  forall p tp, transl_program p = OK tp -> match_prog p tp.
+Proof.
+  unfold transl_program; intros. monadInv H. split; auto.
+  unfold program_of_program; simpl. destruct x; simpl.
+  eapply match_transform_partial_program_contextual. eexact EQ. 
+  intros. apply transl_fundef_spec; auto. 
+Qed.
+
+(** ** Semantic preservation *)
 
 Section PRESERVATION.
 
 Variable prog: Csyntax.program.
 Variable tprog: Clight.program.
-Hypothesis TRANSL: transl_program prog = OK tprog.
+Hypothesis TRANSL: match_prog prog tprog.
 
 Let ge := Csem.globalenv prog.
 Let tge := Clight.globalenv tprog.
@@ -45,22 +49,17 @@ Let tge := Clight.globalenv tprog.
 Lemma comp_env_preserved:
   Clight.genv_cenv tge = Csem.genv_cenv ge.
 Proof.
-  monadInv TRANSL. unfold tge; rewrite <- H0; auto.
+  simpl. destruct TRANSL. generalize (prog_comp_env_eq tprog) (prog_comp_env_eq prog). 
+  congruence.
 Qed.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof.
-  intros. eapply Genv.find_symbol_match. eapply transl_program_spec; eauto.
-  simpl. tauto.
-Qed.
+Proof (Genv.find_symbol_match (proj1 TRANSL)).
 
-Lemma public_preserved:
-  forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
-Proof.
-  intros. eapply Genv.public_symbol_match. eapply transl_program_spec; eauto.
-  simpl. tauto.
-Qed.
+Lemma senv_preserved:
+  Senv.equiv ge tge.
+Proof (Genv.senv_match (proj1 TRANSL)).
 
 Lemma function_ptr_translated:
   forall b f,
@@ -68,9 +67,8 @@ Lemma function_ptr_translated:
   exists tf,
   Genv.find_funct_ptr tge b = Some tf /\ tr_fundef f tf.
 Proof.
-  intros. eapply Genv.find_funct_ptr_match.
-  eapply transl_program_spec; eauto.
-  assumption.
+  intros.
+  edestruct (Genv.find_funct_ptr_match (proj1 TRANSL)) as (ctx & tf & A & B & C); eauto.
 Qed.
 
 Lemma functions_translated:
@@ -79,27 +77,8 @@ Lemma functions_translated:
   exists tf,
   Genv.find_funct tge v = Some tf /\ tr_fundef f tf.
 Proof.
-  intros. eapply Genv.find_funct_match.
-  eapply transl_program_spec; eauto.
-  assumption.
-Qed.
-
-Lemma varinfo_preserved:
-  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
-Proof.
-  intros. destruct (Genv.find_var_info ge b) as [v|] eqn:V.
-- exploit Genv.find_var_info_match. eapply transl_program_spec; eauto. eassumption.
-  intros [tv [A B]]. inv B. assumption.
-- destruct (Genv.find_var_info tge b) as [v'|] eqn:V'; auto.
-  exploit Genv.find_var_info_rev_match. eapply transl_program_spec; eauto. eassumption.
-  simpl. destruct (plt b (Genv.genv_next (Genv.globalenv prog))); try tauto.
-  intros [v [A B]]. inv B. change (Genv.globalenv prog) with (Csem.genv_genv ge) in A. congruence.
-Qed.
-
-Lemma block_is_volatile_preserved:
-  forall b, Genv.block_is_volatile tge b = Genv.block_is_volatile ge b.
-Proof.
-  intros. unfold Genv.block_is_volatile. rewrite varinfo_preserved. auto.
+  intros.
+  edestruct (Genv.find_funct_match (proj1 TRANSL)) as (ctx & tf & A & B & C); eauto.
 Qed.
 
 Lemma type_of_fundef_preserved:
@@ -167,8 +146,7 @@ Proof.
   (* By_value, not volatile *)
   rewrite H1. split; auto. eapply deref_loc_value; eauto.
   (* By_value, volatile *)
-  rewrite H0; rewrite H1. eapply volatile_load_preserved with (ge1 := ge); auto.
-  exact symbols_preserved. exact public_preserved. exact block_is_volatile_preserved.
+  rewrite H0; rewrite H1. eapply volatile_load_preserved with (ge1 := ge); auto. apply senv_preserved.
   (* By reference *)
   rewrite H0. destruct (type_is_volatile ty); split; auto; eapply deref_loc_reference; eauto.
   (* By copy *)
@@ -187,8 +165,7 @@ Proof.
   (* By_value, not volatile *)
   rewrite H1. split; auto. eapply assign_loc_value; eauto.
   (* By_value, volatile *)
-  rewrite H0; rewrite H1. eapply volatile_store_preserved with (ge1 := ge); auto.
-  exact symbols_preserved. exact public_preserved. exact block_is_volatile_preserved.
+  rewrite H0; rewrite H1. eapply volatile_store_preserved with (ge1 := ge); auto. apply senv_preserved.
   (* By copy *)
   rewrite H0. rewrite <- comp_env_preserved in *.
   destruct (type_is_volatile ty); split; auto; eapply assign_loc_copy; eauto.
@@ -1890,8 +1867,7 @@ Proof.
   econstructor; split.
   left. eapply plus_left. constructor.  apply star_one.
   econstructor; eauto.
-  eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   traceEq.
   econstructor; eauto.
   change sl2 with (nil ++ sl2). apply S. constructor. simpl; auto. auto.
@@ -1901,8 +1877,7 @@ Proof.
   econstructor; split.
   left. eapply plus_left. constructor. apply star_one.
   econstructor; eauto.
-  eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   traceEq.
   econstructor; eauto.
   change sl2 with (nil ++ sl2). apply S.
@@ -2198,8 +2173,7 @@ Proof.
   inv H5.
   econstructor; split.
   left; apply plus_one. econstructor; eauto.
-  eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   constructor; auto.
 
 (* return *)
@@ -2229,15 +2203,14 @@ Lemma transl_initial_states:
   Csem.initial_state prog S ->
   exists S', Clight.initial_state tprog S' /\ match_states S S'.
 Proof.
-  intros. inv H. generalize TRANSL; intros TR; monadInv TR. rewrite H4.
-  exploit transl_program_spec; eauto. intros MP.
+  intros. inv H.
   exploit function_ptr_translated; eauto. intros [tf [FIND TR]].
   econstructor; split.
   econstructor.
-  exploit Genv.init_mem_match; eauto.
-  change (Genv.globalenv tprog) with (genv_genv tge).
-  rewrite symbols_preserved. rewrite <- H4; simpl.
-  rewrite (transform_partial_program_main _ _ EQ). eauto. 
+  eapply (Genv.init_mem_match (proj1 TRANSL)); eauto.
+  replace (prog_main tprog) with (prog_main prog).
+  rewrite symbols_preserved. eauto. 
+  destruct TRANSL. destruct H as (A & B & C). simpl in B. auto. 
   eexact FIND.
   rewrite <- H3. apply type_of_fundef_preserved. auto.
   constructor. auto. constructor.
@@ -2254,7 +2227,7 @@ Theorem transl_program_correct:
   forward_simulation (Cstrategy.semantics prog) (Clight.semantics1 tprog).
 Proof.
   eapply forward_simulation_star_wf with (order := ltof _ measure).
-  eexact public_preserved.
+  eapply senv_preserved.
   eexact transl_initial_states.
   eexact transl_final_states.
   apply well_founded_ltof.
@@ -2262,3 +2235,18 @@ Proof.
 Qed.
 
 End PRESERVATION.
+
+(** ** Commutation with linking *)
+
+Instance TransfSimplExprLink : TransfLink match_prog.
+Proof.
+  red; intros. eapply Ctypes.link_match_program; eauto. 
+- intros.
+Local Transparent Linker_fundef.
+  simpl in *; unfold link_fundef in *. inv H3; inv H4; try discriminate.
+  destruct ef; inv H2. exists (Internal tf); split; auto. constructor; auto.
+  destruct ef; inv H2. exists (Internal tf); split; auto. constructor; auto.
+  destruct (external_function_eq ef ef0 && typelist_eq targs targs0 &&
+            type_eq tres tres0 && calling_convention_eq cconv cconv0); inv H2.
+  exists (External ef targs tres cconv); split; auto. constructor.
+Qed.
