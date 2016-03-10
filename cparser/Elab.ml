@@ -253,11 +253,11 @@ let elab_string_literal loc wide chars =
   if wide then
     CWStr chars
   else begin
-    let res = String.create (List.length chars) in
+    let res = Bytes.create (List.length chars) in
     List.iteri
-      (fun i c -> res.[i] <- Char.unsafe_chr (Int64.to_int c))
+      (fun i c -> Bytes.set res i (Char.unsafe_chr (Int64.to_int c)))
       chars;
-    CStr res
+    CStr (Bytes.to_string res)
   end
 
 let elab_constant loc = function

@@ -38,9 +38,9 @@ INCLUDES=$(patsubst %,-I %, $(DIRS))
 # warning 3 = deprecated feature.  Turned off for OCaml 4.02 (bytes vs strings)
 # warning 20 = unused function argument.  There are some in extracted code
 
-WARNINGS=-w -3 -strict-sequence
-extraction/%.cmx: WARNINGS +=-w -20
-extraction/%.cmo: WARNINGS +=-w -20
+WARNINGS=-w +a-4-9-29 -strict-sequence -safe-string -warn-error +a
+extraction/%.cmx: WARNINGS +=-w -20-27-32..34-39-41-44..45
+extraction/%.cmo: WARNINGS +=-w -20-27-32..34-39-41-44..45
 
 COMPFLAGS+=-g $(INCLUDES) $(MENHIR_INCLUDES) $(WARNINGS)
 
