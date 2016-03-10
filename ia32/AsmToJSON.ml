@@ -13,5 +13,4 @@
 (* Simple functions to serialize ia32 Asm to JSON *)
 
 (* Dummy function *)
-let p_program oc prog =
-  ()
+let p_program _ _ = ()
