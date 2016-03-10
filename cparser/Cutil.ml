@@ -333,7 +333,7 @@ let rec equal_types env t1 t2 =
       | None, None -> true
       | Some s1, Some s2 -> s1 = s2
       | _ -> false end in
-      size && a1 = a2 && equal_types env t1 t2
+      size && a1 = a2 && equal_types env ty1 ty2
   | TFun(ty1, params1, vararg1, a1), TFun(ty2, params2, vararg2, a2) ->
       let params =
         match params1, params2 with
