@@ -17,10 +17,8 @@ open Camlcoq
 open Datatypes
 open Maps
 open AST
-open Integers
 open RTL
 open PrintAST
-open PrintOp
 
 (* Printing of RTL code *)
 
@@ -63,11 +61,11 @@ let print_instruction pp (pc, i) =
          (PrintOp.print_addressing reg) (addr, args)
          reg src;
       print_succ pp s (pc - 1)
-  | Icall(sg, fn, args, res, s) ->
+  | Icall(_, fn, args, res, s) ->
       fprintf pp "%a = %a(%a)\n"
         reg res ros fn regs args;
       print_succ pp s (pc - 1)
-  | Itailcall(sg, fn, args) ->
+  | Itailcall(_, fn, args) ->
       fprintf pp "tailcall %a(%a)\n"
         ros fn regs args
   | Ibuiltin(ef, args, res, s) ->

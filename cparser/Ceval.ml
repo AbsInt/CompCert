@@ -80,10 +80,10 @@ let boolean_value v =
 
 let constant = function
   | CInt(v, ik, _) -> I (normalize_int v ik)
-  | CFloat(v, fk) -> raise Notconst
+  | CFloat _ -> raise Notconst
   | CStr s -> S s
   | CWStr s -> WS s
-  | CEnum(id, v) -> I v
+  | CEnum(_, v) -> I v
 
 let is_signed env ty =
   match unroll env ty with
@@ -91,7 +91,7 @@ let is_signed env ty =
   | TEnum(_, _) -> is_signed_ikind enum_ikind
   | _ -> false
 
-let cast env ty_to ty_from v =
+let cast env ty_to v =
   match unroll env ty_to, v with
   | TInt(IBool, _), _ ->
       if boolean_value v then I 1L else I 0L
@@ -101,11 +101,11 @@ let cast env ty_to ty_from v =
       if sizeof_ikind ik >= !config.sizeof_ptr
       then v
       else raise Notconst
-  | TPtr(ty, _), I n ->
+  | TPtr _, I n ->
       I (normalize_int n (ptr_t_ikind ()))
-  | TPtr(ty, _), (S _ | WS _) ->
+  | TPtr _, (S _ | WS _) ->
       v
-  | TEnum(_, _), I n ->
+  | TEnum _, I n ->
       I (normalize_int n enum_ikind)
   | _, _ ->
       raise Notconst
@@ -118,12 +118,12 @@ let unop env op tyres ty v =
    | Olognot, _, _ -> if boolean_value v then I 0L else I 1L
    | Onot, _, I n -> I (Int64.lognot n)
    | _ -> raise Notconst
-  in cast env ty tyres res
+  in cast env ty res
 
-let comparison env direction ptraction tyop ty1 v1 ty2 v2 =
+let comparison env direction ptraction tyop v1 v2 =
   (* tyop = type at which the comparison is done *)
   let b =
-    match cast env tyop ty1 v1, cast env tyop ty2 v2 with
+    match cast env tyop v1, cast env tyop v2 with
     | I n1, I n2 ->
         if is_signed env tyop
         then direction (compare n1 n2) 0
@@ -143,25 +143,25 @@ let binop env op tyop tyres ty1 v1 ty2 v2 =
     match op with
     | Oadd ->
         if is_arith_type env ty1 && is_arith_type env ty2 then begin
-          match cast env tyop ty1 v1, cast env tyop ty2 v2 with
+          match cast env tyop v1, cast env tyop v2 with
           | I n1, I n2 -> I (Int64.add n1 n2)
           | _, _ -> raise Notconst
         end else
           raise Notconst
     | Osub ->
         if is_arith_type env ty1 && is_arith_type env ty2 then begin
-          match cast env tyop ty1 v1, cast env tyop ty2 v2 with
+          match cast env tyop v1, cast env tyop v2 with
           | I n1, I n2 -> I (Int64.sub n1 n2)
           | _, _ -> raise Notconst
         end else
           raise Notconst
     | Omul ->
-        begin match cast env tyop ty1 v1, cast env tyop ty2 v2 with
+        begin match cast env tyop v1, cast env tyop v2 with
           | I n1, I n2 -> I (Int64.mul n1 n2)
           | _, _ -> raise Notconst
         end
     | Odiv ->
-        begin match cast env tyop ty1 v1, cast env tyop ty2 v2 with
+        begin match cast env tyop v1, cast env tyop v2 with
           | I n1, I n2 ->
               if n2 = 0L then raise Notconst else
               if is_signed env tyop then I (Int64.div n1 n2)
@@ -206,17 +206,17 @@ let binop env op tyop tyres ty1 v1 ty2 v2 =
           | _, _ -> raise Notconst
         end
     | Oeq ->
-        comparison env (=) (Some false) tyop ty1 v1 ty2 v2
+        comparison env (=) (Some false) tyop v1 v2
     | One ->
-        comparison env (<>) (Some true) tyop ty1 v1 ty2 v2
+        comparison env (<>) (Some true) tyop v1 v2
     | Olt ->
-        comparison env (<) None tyop ty1 v1 ty2 v2
+        comparison env (<) None tyop v1 v2
     | Ogt ->
-        comparison env (>) None tyop ty1 v1 ty2 v2
+        comparison env (>) None tyop v1 v2
     | Ole ->
-        comparison env (<=) None tyop ty1 v1 ty2 v2
+        comparison env (<=) None tyop v1 v2
     | Oge ->
-        comparison env (>=) None tyop ty1 v1 ty2 v2
+        comparison env (>=) None tyop v1 v2
     | Ocomma ->
         v2
     | Ologand ->
@@ -229,7 +229,7 @@ let binop env op tyop tyres ty1 v1 ty2 v2 =
         else if boolean_value v2 then I 1L else I 0L
     | _ -> raise Notconst
   (* force normalization of result, e.g. of double to float *)
-  in cast env tyres tyres res
+  in cast env tyres res
 
 let rec expr env e =
   match e.edesc with
@@ -253,11 +253,10 @@ let rec expr env e =
       binop env op ty e.etyp e1.etyp (expr env e1) e2.etyp (expr env e2)
   | EConditional(e1, e2, e3) ->
       if boolean_value (expr env e1)
-      then cast env e.etyp e2.etyp (expr env e2)
-      else cast env e.etyp e3.etyp (expr env e3)
-  (* | ECast(TInt (_, _), EConst (CFloat (_, _))) -> TODO *)
+      then cast env e.etyp (expr env e2)
+      else cast env e.etyp (expr env e3)
   | ECast(ty, e1) ->
-      cast env ty e1.etyp (expr env e1)
+      cast env ty (expr env e1)
   | ECompound _ ->
       raise Notconst
   | ECall _ ->
@@ -265,14 +264,14 @@ let rec expr env e =
 
 let integer_expr env e =
   try
-    match cast env (TInt(ILongLong, [])) e.etyp (expr env e) with
+    match cast env (TInt(ILongLong, [])) (expr env e) with
     | I n -> Some n
     | _   -> None
   with Notconst -> None
 
 let constant_expr env ty e =
   try
-    match unroll env ty, cast env ty e.etyp (expr env e) with
+    match unroll env ty, cast env ty (expr env e) with
     | TInt(ik, _), I n -> Some(CInt(n, ik, ""))
     | TPtr(_, _), I n -> Some(CInt(n, IInt, ""))
     | TPtr(_, _), S s -> Some(CStr s)

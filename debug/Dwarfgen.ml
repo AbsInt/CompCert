@@ -534,7 +534,7 @@ let diab_gen_compilation_section s defs acc =
     start_label = debug_start;
     line_label = line_start;
     entry = cp;
-    locs = Some low_pc,accu.locs;
+    dlocs = Some low_pc,accu.locs;
   }::acc
 
 let gen_diab_debug_info sec_name var_section : debug_entries =

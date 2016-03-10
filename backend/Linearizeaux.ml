@@ -10,10 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-open Coqlib
-open Datatypes
 open LTL
-open Lattice
 open Maps
 open Camlcoq
 
@@ -82,13 +79,13 @@ let basic_blocks f joins =
        let rec do_instr_list = function
        | [] -> assert false
        | Lbranch s :: _ -> next_in_block blk minpc s
-       | Ltailcall (sig0, ros) :: _ -> end_block blk minpc
-       | Lcond (cond, args, ifso, ifnot) :: _ ->
+       | Ltailcall _ :: _ -> end_block blk minpc
+       | Lcond (_, _, ifso, ifnot) :: _ ->
              end_block blk minpc; start_block ifso; start_block ifnot
-       | Ljumptable(arg, tbl) :: _ ->
+       | Ljumptable(_, tbl) :: _ ->
              end_block blk minpc; List.iter start_block tbl
        | Lreturn :: _ -> end_block blk minpc
-       | instr :: b' -> do_instr_list b' in
+       | _ :: b' -> do_instr_list b' in
        do_instr_list b
   (* next_in_block: check if join point and either extend block
      or start block *)
@@ -113,5 +110,5 @@ let flatten_blocks blks =
 
 (* Build the enumeration *)
 
-let enumerate_aux f reach =
+let enumerate_aux f _ =
   flatten_blocks (basic_blocks f (join_points f))

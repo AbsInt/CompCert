@@ -10,12 +10,6 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-open AST
-open BinNums
-open C
-open Camlcoq
-open Dwarfgen
-open DwarfTypes
 open Debug
 
 let default_debug =

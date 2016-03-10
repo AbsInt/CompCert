@@ -19,9 +19,9 @@
 
 open Format
 open Machine
-open Cabs
+open !Cabs
 open Cabshelper
-open C
+open !C
 open Cutil
 open Env
 
@@ -90,7 +90,7 @@ let previous_def fn env arg =
 let redef fn env arg =
   match previous_def fn env arg with
   | None -> false
-  | Some(id, info) -> Env.in_current_scope env id
+  | Some(id, _) -> Env.in_current_scope env id
 
 (* Forward declarations *)
 
@@ -203,7 +203,7 @@ let elab_int_constant loc s0 =
   in
   (v, ty)
 
-let elab_float_constant loc f =
+let elab_float_constant f =
   let ty = match f.suffix_FI with
     | Some ("l"|"L") -> FLongDouble
     | Some ("f"|"F") -> FFloat
@@ -265,7 +265,7 @@ let elab_constant loc = function
       let (v, ik) = elab_int_constant loc s in
       CInt(v, ik, s)
   | CONST_FLOAT f ->
-      let (v, fk) = elab_float_constant loc f in
+      let (v, fk) = elab_float_constant f in
       CFloat(v, fk)
   | CONST_CHAR(wide, s) ->
       CInt(elab_char_constant loc wide s, IInt, "")
@@ -289,8 +289,8 @@ let elab_attr_arg loc env a =
   | VARIABLE s ->
       begin try
         match Env.lookup_ident env s with
-        | (id, II_ident(sto, ty)) ->  AIdent s
-        | (id, II_enum v) -> AInt v
+        | (_, II_ident _) ->  AIdent s
+        | (_, II_enum v) -> AInt v
       with Env.Error _ ->
         AIdent s
       end
@@ -319,7 +319,7 @@ let elab_gcc_attr loc env = function
         warning loc "cannot parse '%s' attribute, ignored" v; []
       end
 
-let is_power_of_two n = n > 0L && Int64.(logand n (pred n)) = 0L
+let is_power_of_two n = n > 0L && Int64.logand n (Int64.pred n) = 0L
 
 let extract_alignas loc a =
   match a with
@@ -477,7 +477,7 @@ let rec elab_specifier ?(only = false) loc env specifier =
     (* Now the other type specifiers *)
 
     | [Cabs.Tnamed id] ->
-        let (id', info) = wrap Env.lookup_typedef loc env id in
+        let (id', _) = wrap Env.lookup_typedef loc env id in
         simple (TNamed(id', []))
 
     | [Cabs.Tstruct_union(STRUCT, id, optmembers, a)] ->
@@ -569,7 +569,7 @@ and elab_parameters env params =
   let (vars, _) = mmap elab_parameter (Env.new_scope env) params in
   (* Catch special case f(t) where t is void or a typedef to void *)
   match vars with
-    | [ ( {name=""}, t) ] when is_void_type env t -> []
+    | [ ( {C.name=""}, t) ] when is_void_type env t -> []
     | _ -> vars
 
 (* Elaboration of a function parameter *)
@@ -578,7 +578,7 @@ and elab_parameter env (PARAM (spec, id, decl, attr, loc)) =
   let (sto, inl, tydef, bty, env1) = elab_specifier loc env spec in
   if tydef then
     error loc "'typedef' used in function parameter";
-  let ((ty, _), env2) = elab_type_declarator loc env1 bty false decl in
+  let ((ty, _), _) = elab_type_declarator loc env1 bty false decl in
   let ty = add_attributes_type (elab_attributes env attr) ty in
   if sto <> Storage_default && sto <> Storage_register then
     error loc
@@ -702,7 +702,7 @@ and elab_struct_or_union_info kind loc env members attrs =
   (* Check for incomplete types *)
   let rec check_incomplete = function
   | [] -> ()
-  | [ { fld_typ = TArray(ty_elt, None, _) } ] when kind = Struct -> ()
+  | [ { fld_typ = TArray(_, None, _) } ] when kind = Struct -> ()
         (* C99: ty[] allowed as last field of a struct *)
   | fld :: rem ->
       if wrap incomplete_type loc env' fld.fld_typ then
@@ -726,7 +726,7 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
           Env.lookup_composite env s, s
   in
   match optbinding, optmembers with
-  | Some(tag', ci), None
+  | Some(tag', _), None
     when (not only) || Env.in_current_scope env tag' ->
       (* Reference to an already declared struct or union.
          Special case: if this is an "only" declaration (without variable names)
@@ -753,7 +753,7 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
       (* declaration of an incomplete struct or union *)
       if tag = "" then
         error loc "anonymous, incomplete struct or union";
-      let ci = composite_info_decl env kind attrs in
+      let ci = composite_info_decl kind attrs in
       (* enter it with a new name *)
       let (tag', env') = Env.enter_composite env tag ci in
       (* emit it *)
@@ -761,7 +761,7 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
       (tag', env')
   | _, Some members ->
       (* definition of a complete struct or union *)
-      let ci1 = composite_info_decl env kind attrs in
+      let ci1 = composite_info_decl kind attrs in
       (* enter it, incomplete, with a new name *)
       let (tag', env') = Env.enter_composite env tag ci1 in
       (* emit a declaration so that inner structs and unions can refer to it *)
@@ -808,7 +808,7 @@ and elab_enum only loc tag optmembers attrs env =
     if only then
       fatal_error loc
          "forward declaration of 'enum %s' is not allowed in ISO C" tag;
-      let (tag', info) = wrap Env.lookup_enum loc env tag in (tag', env)
+      let (tag', _) = wrap Env.lookup_enum loc env tag in (tag', env)
   | Some members ->
       if tag <> "" && redef Env.lookup_enum env tag then
         error loc "redefinition of 'enum %s'" tag;
@@ -900,18 +900,16 @@ module I = struct
               * ident                   (* union type *)
               * field                   (* current member *)
 
-  type state = zipinit * init        (* current point & init for this point *)
-
   (* The initial state: default initialization, current point at top *)
   let top env name ty = (Ztop(name, ty), default_init env ty)
 
   (* Change the initializer for the current point *)
-  let set (z, i) i' = (z, i')
+  let set (z, _) i' = (z, i')
 
   (* Put the current point back to the top *)
   let rec to_top = function
-    | Ztop(name, ty), i as zi -> zi
-    | Zarray(z, ty, sz, dfl, before, idx, after), i ->
+    | Ztop _, _ as zi -> zi
+    | Zarray(z, _, _,_, before, _, after), i ->
         to_top (z, Init_array (List.rev_append before (i :: after)))
     | Zstruct(z, id, before, fld, after), i ->
         to_top (z, Init_struct(id, List.rev_append before ((fld, i) :: after)))
@@ -923,34 +921,34 @@ module I = struct
 
   (* The type of the current point *)
   let typeof = function
-    | Ztop(name, ty), i -> ty
-    | Zarray(z, ty, sz, dfl, before, idx, after), i -> ty
-    | Zstruct(z, id, before, fld, after), i -> fld.fld_typ
-    | Zunion(z, id, fld), i -> fld.fld_typ
+    | Ztop(_, ty), _ -> ty
+    | Zarray(_, ty, _, _, _, _, _), _ -> ty
+    | Zstruct(_, _, _, fld, _), _ -> fld.fld_typ
+    | Zunion(_, _, fld), _ -> fld.fld_typ
 
   (* The name of the path leading to the current point, for error reporting *)
   let rec zipname = function
-    | Ztop(name, ty) -> name
-    | Zarray(z, ty, sz, dfl, before, idx, after) ->
+    | Ztop(name, _) -> name
+    | Zarray(z, _, _, _, _, idx, _) ->
         sprintf "%s[%Ld]" (zipname z) idx
-    | Zstruct(z, id, before, fld, after) ->
+    | Zstruct(z, _, _, fld, _) ->
         sprintf "%s.%s" (zipname z) fld.fld_name
-    | Zunion(z, id, fld) ->
+    | Zunion(z, _, fld) ->
         sprintf "%s.%s" (zipname z) fld.fld_name
 
-  let name (z, i) = zipname z
+  let name (z, _) = zipname z
 
   (* Auxiliary functions to deal with arrays *)
   let index_below (idx: int64) (sz: int64 option) =
     match sz with None -> true | Some sz -> idx < sz
 
-  let il_head dfl = function [] -> dfl | i1 :: il -> i1
-  let il_tail = function [] -> [] | i1 :: il -> il
+  let il_head dfl = function [] -> dfl | ih :: _ -> ih
+  let il_tail = function [] -> [] | _ :: il -> il
 
   (* Advance the current point to the next point in right-up order.
      Return None if no next point, i.e. we are at top *)
   let rec next = function
-    | Ztop(name, ty), i -> None
+    | Ztop _, _ -> None
     | Zarray(z, ty, sz, dfl, before, idx, after), i ->
         let idx' = Int64.succ idx in
         if index_below idx' sz
@@ -975,11 +973,11 @@ module I = struct
           Some(Zarray(z, ty, sz, dfl, [], 0L, il_tail il), il_head dfl il)
         end
         else None
-    | TStruct(id, _), Init_struct(id', []) ->
+    | TStruct _, Init_struct(_, []) ->
         None
-    | TStruct(id, _), Init_struct(id', (fld1, i1) :: flds) ->
+    | TStruct(id, _), Init_struct(_, (fld1, i1) :: flds) ->
         Some(Zstruct(z, id, [], fld1, flds), i1)
-    | TUnion(id, _), Init_union(id', fld, i) ->
+    | TUnion(id, _), Init_union(_, fld, i) ->
         begin match (Env.find_union env id).ci_members with
         | [] -> None
         | fld1 :: _ ->
@@ -988,7 +986,7 @@ module I = struct
                  then i
                  else default_init env fld1.fld_typ)
         end
-    | (TStruct _ | TUnion _), Init_single a ->
+    | (TStruct _ | TUnion _), Init_single _ ->
         (* This is a previous whole-struct initialization that we
            are going to overwrite.  Revert to the default initializer. *)
         first env (z, default_init env ty)
@@ -1021,7 +1019,7 @@ module I = struct
   let rec member env (z, i as zi) name =
     let ty = typeof zi in
     match unroll env ty, i with
-    | TStruct(id, _), Init_struct(id', flds) ->
+    | TStruct(id, _), Init_struct(_, flds) ->
         let rec find before = function
           | [] -> None
           | (fld, i as f_i) :: after ->
@@ -1030,7 +1028,7 @@ module I = struct
               else
                 find (f_i :: before) after
         in find [] flds
-    | TUnion(id, _), Init_union(id', fld, i) ->
+    | TUnion(id, _), Init_union(_, fld, i) ->
         if fld.fld_name = name then
           Some(Zunion(z, id, fld), i)
         else begin
@@ -1043,7 +1041,7 @@ module I = struct
                   find rem
            in find (Env.find_union env id).ci_members
          end
-    | (TStruct _ | TUnion _), Init_single a ->
+    | (TStruct _ | TUnion _), Init_single _ ->
         member env (z, default_init env ty) name
     | _, _ ->
         None
@@ -1128,7 +1126,7 @@ and elab_item zi item il =
       | CStr _, _ ->
           error loc "initialization of an array of non-char elements with a string literal";
           elab_list zi il false
-      | CWStr s, TInt(ik, _) ->
+      | CWStr s, TInt _ ->
           if not (I.index_below (Int64.of_int(List.length s - 1)) sz) then
             warning loc "initializer string for array of wide chars %s is too long"
                         (I.name zi);
@@ -1231,7 +1229,7 @@ let elab_expr loc env a =
 
   | VARIABLE s ->
       begin match wrap Env.lookup_ident loc env s with
-      | (id, II_ident(sto, ty)) ->
+      | (id, II_ident(_, ty)) ->
           { edesc = EVar id; etyp = ty }
       | (id, II_enum v) ->
           { edesc = EConst(CEnum(id, v)); etyp = TInt(enum_ikind, []) }
@@ -1249,7 +1247,7 @@ let elab_expr loc env a =
         match (unroll env b1.etyp, unroll env b2.etyp) with
         | (TPtr(t, _) | TArray(t, _, _)), (TInt _ | TEnum _) -> t
         | (TInt _ | TEnum _), (TPtr(t, _) | TArray(t, _, _)) -> t
-        | t1, t2 -> error "incorrect types for array subscripting" in
+        | _, _ -> error "incorrect types for array subscripting" in
       { edesc = EBinop(Oindex, b1, b2, TPtr(tres, [])); etyp = tres }
 
   | MEMBEROF(a1, fieldname) ->
@@ -1302,7 +1300,7 @@ let elab_expr loc env a =
   | BUILTIN_VA_ARG (a2, a3) ->
       let ident =
         match wrap Env.lookup_ident loc env "__builtin_va_arg" with
-          | (id, II_ident(sto, ty)) -> { edesc = EVar id; etyp = ty }
+          | (id, II_ident(_, ty)) -> { edesc = EVar id; etyp = ty }
           | _ -> assert false
       in
       let b2 = elab a2 and b3 = elab (TYPE_SIZEOF a3) in
@@ -1331,10 +1329,10 @@ let elab_expr loc env a =
       (* Extract type information *)
       let (res, args, vararg) =
         match unroll env b1.etyp with
-        | TFun(res, args, vararg, a) -> (res, args, vararg)
-        | TPtr(ty, a) ->
+        | TFun(res, args, vararg, _) -> (res, args, vararg)
+        | TPtr(ty, _) ->
             begin match unroll env ty with
-            | TFun(res, args, vararg, a) -> (res, args, vararg)
+            | TFun(res, args, vararg, _) -> (res, args, vararg)
             | _ -> error "the function part of a call does not have a function type"
             end
         | _ -> error "the function part of a call does not have a function type"
@@ -1366,7 +1364,7 @@ let elab_expr loc env a =
       let (ty, _) = elab_type loc env spec dcl in
       begin match elab_initializer loc env "<compound literal>" ty ie with
       | (ty', Some i) -> { edesc = ECompound(ty', i); etyp = ty' }
-      | (ty', None)   -> error "ill-formed compound literal"
+      | (_, None)   -> error "ill-formed compound literal"
       end
 
 (* 6.5.3 Unary expressions *)
@@ -1489,8 +1487,8 @@ let elab_expr loc env a =
         else begin
           let ty =
             match unroll env b1.etyp, unroll env b2.etyp with
-            | (TPtr(ty, a) | TArray(ty, _, a)), (TInt _ | TEnum _) -> ty
-            | (TInt _ | TEnum _), (TPtr(ty, a) | TArray(ty, _, a)) -> ty
+            | (TPtr(ty, _) | TArray(ty, _, _)), (TInt _ | TEnum _) -> ty
+            | (TInt _ | TEnum _), (TPtr(ty, _) | TArray(ty, _, _)) -> ty
             | _, _ -> error "type error in binary '+'" in
           if not (pointer_arithmetic_ok env ty) then
             err "illegal pointer arithmetic in binary '+'";
@@ -1507,16 +1505,16 @@ let elab_expr loc env a =
           (tyres, tyres)
         end else begin
           match unroll env b1.etyp, unroll env b2.etyp with
-          | (TPtr(ty, a) | TArray(ty, _, a)), (TInt _ | TEnum _) ->
+          | (TPtr(ty, _) | TArray(ty, _, _)), (TInt _ | TEnum _) ->
               if not (pointer_arithmetic_ok env ty) then
                 err "illegal pointer arithmetic in binary '-'";
               (TPtr(ty, []), TPtr(ty, []))
-          | (TInt _ | TEnum _), (TPtr(ty, a) | TArray(ty, _, a)) ->
+          | (TInt _ | TEnum _), (TPtr(ty, _) | TArray(ty, _, _)) ->
               if not (pointer_arithmetic_ok env ty) then
                 err "illegal pointer arithmetic in binary '-'";
               (TPtr(ty, []), TPtr(ty, []))
-          | (TPtr(ty1, a1) | TArray(ty1, _, a1)),
-            (TPtr(ty2, a2) | TArray(ty2, _, a2)) ->
+          | (TPtr(ty1, _) | TArray(ty1, _, _)),
+            (TPtr(ty2, _) | TArray(ty2, _, _)) ->
               if not (compatible_types AttrIgnoreAll env ty1 ty2) then
                 err "mismatch between pointer types in binary '-'";
               if not (pointer_arithmetic_ok env ty1) then
@@ -1587,9 +1585,9 @@ let elab_expr loc env a =
               | Some ty -> ty
             in
           { edesc = EConditional(b1, b2, b3); etyp = tyres }
-      | TPtr(ty1, a1), TInt _ when is_literal_0 b3 ->
+      | TPtr(ty1, _), TInt _ when is_literal_0 b3 ->
           { edesc = EConditional(b1, b2, nullconst); etyp = TPtr(ty1, []) }
-      | TInt _, TPtr(ty2, a2) when is_literal_0 b2 ->
+      | TInt _, TPtr(ty2, _) when is_literal_0 b2 ->
           { edesc = EConditional(b1, nullconst, b3); etyp = TPtr(ty2, []) }
       | ty1, ty2 ->
           match combine_types AttrIgnoreAll env ty1 ty2 with
@@ -1727,7 +1725,7 @@ let elab_expr loc env a =
         | (TInt _ | TEnum _), TPtr _ ->
             warning "comparison between integer and pointer";
             EBinop(op, b1, b2, TPtr(TVoid [], []))
-        | ty1, ty2 ->
+        | _, _ ->
             error "illegal comparison between types@ %a@ and %a"
                   Cprint.typ b1.etyp Cprint.typ b2.etyp in
       { edesc = resdesc; etyp = TInt(IInt, []) }
@@ -1797,7 +1795,7 @@ let enter_typedefs loc env sto dl =
     if init <> NO_INIT then
       error loc "initializer in typedef";
     match previous_def Env.lookup_typedef env s with
-    | Some (s',ty') ->
+    | Some (_ ,ty') ->
         if equal_types env ty ty' then begin
           warning loc "redefinition of typedef '%s'" s;
           env
@@ -1848,7 +1846,7 @@ let enter_or_refine_ident local loc env s sto ty =
 	| Storage_register,_ -> Storage_register
       in
       (id, new_sto, Env.add_ident env id new_sto new_ty,new_ty)
-  | Some(id, II_enum v) when Env.in_current_scope env id ->
+  | Some(id, II_enum _) when Env.in_current_scope env id ->
       error loc "redefinition of enumerator '%s'" s;
       (id, sto, Env.add_ident env id sto ty,ty)
   | _ ->
@@ -1860,7 +1858,7 @@ let enter_decdefs local loc env sto dl =
     fatal_error loc "'register' on global declaration";
   if sto <> Storage_default && dl = [] then
     warning loc "Storage class specifier on empty declaration";
-  let rec enter_decdef (decls, env) (s, ty, init) =
+  let enter_decdef (decls, env) (s, ty, init) =
     let isfun = is_function_type env ty in
     if sto = Storage_extern && init <> NO_INIT then
       error loc "'extern' declaration cannot have an initializer";
@@ -1915,7 +1913,7 @@ let elab_fundef env spec name defs body loc =
           fatal_error loc "Parameter '%s' appears more than once in function declaration" id)
         params;
       (* Check that the declarations only declare parameters *)
-      let extract_name (Init_name(Name(s, dty, attrs, loc') as name, ie)) =
+      let extract_name (Init_name(Name(s, _, _, loc') as name, ie)) =
         if not (List.mem s params) then
           error loc' "Declaration of '%s' which is not a function parameter" s;
         if ie <> NO_INIT then
@@ -1936,7 +1934,7 @@ let elab_fundef env spec name defs body loc =
                       "Illegal declaration of function parameter" in
       let (kr_params_defs, env1) = mmap elab_kr_param_def env1 defs in
       let kr_params_defs = List.concat kr_params_defs in
-      let rec search_param_type param =
+      let search_param_type param =
         match List.filter (fun (p, _) -> p = param) kr_params_defs with
         | [] ->
           (* Parameter is not declared, defaults to "int" in ISO C90,
@@ -1949,7 +1947,7 @@ let elab_fundef env spec name defs body loc =
       in
       let params' = List.map search_param_type params in
       (TFun(ty_ret, Some params', false, attr), env1)
-    | _, Some params -> assert false
+    | _, Some _ -> assert false
   in
   (* Extract info from type *)
   let (ty_ret, params, vararg, attr) =
@@ -1960,7 +1958,7 @@ let elab_fundef env spec name defs body loc =
         (ty_ret, params, vararg, attr)
     | _ -> fatal_error loc "wrong type for function definition" in
   (* Enter function in the environment, for recursive references *)
-  let (fun_id, sto1, env1,ty) = enter_or_refine_ident false loc env1 s sto ty in
+  let (fun_id, sto1, env1, _) = enter_or_refine_ident false loc env1 s sto ty in
   (* Enter parameters in the environment *)
   let env2 =
     List.fold_left (fun e (id, ty) -> Env.add_ident e id Storage_default ty)
@@ -2095,7 +2093,7 @@ let rec elab_stmt env ctx s =
       begin match Ceval.integer_expr env a' with
         | None ->
             error loc "argument of 'case' must be an integer compile-time constant"
-        | Some n -> ()
+        | Some _ -> ()
       end;
       { sdesc = Slabeled(Scase a', elab_stmt env ctx s1); sloc = elab_loc loc }
 

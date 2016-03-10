@@ -15,16 +15,13 @@
 
 (** Pretty-printer for Csyntax *)
 
-open Printf
 open Format
 open Camlcoq
-open Datatypes
 open Values
 open AST
-open Globalenvs
-open Ctypes
+open !Ctypes
 open Cop
-open Csyntax
+open !Csyntax
 
 let name_unop = function
   | Onotbool -> "!"
@@ -102,7 +99,7 @@ let rec name_cdecl id ty =
         | Tfunction _ | Tarray _ -> sprintf "(*%s%s)" (attributes_space a) id
         | _                      -> sprintf "*%s%s" (attributes_space a) id in
       name_cdecl id' t
-  | Tarray(t, n, a) ->
+  | Tarray(t, n, _) ->
       name_cdecl (sprintf "%s[%ld]" id (camlint_of_coqint n)) t
   | Tfunction(args, res, cconv) ->
       let b = Buffer.create 20 in
@@ -173,11 +170,11 @@ let rec precedence = function
 
 let print_pointer_hook
    : (formatter -> Values.block * Integers.Int.int -> unit) ref
-   = ref (fun p (b, ofs) -> ())
+   = ref (fun  _ _ -> ())
 
 let print_typed_value p v ty =
   match v, ty with
-  | Vint n, Tint(I32, Unsigned, _) ->
+  | Vint n, Ctypes.Tint(I32, Unsigned, _) ->
       fprintf p "%luU" (camlint_of_coqint n)
   | Vint n, _ ->
       fprintf p "%ld" (camlint_of_coqint n)
@@ -236,7 +233,7 @@ let rec expr p (prec, e) =
                  expr (prec1, a1) (name_binop op) expr (prec2, a2)
   | Ecast(a1, ty) ->
       fprintf p "(%s) %a" (name_type ty) expr (prec', a1)
-  | Eassign(res, Ebuiltin(EF_inline_asm(txt, sg, clob), _, args, _), _) ->
+  | Eassign(res, Ebuiltin(EF_inline_asm(txt, _, clob), _, args, _), _) ->
       extended_asm p txt (Some res) args clob
   | Eassign(a1, a2, _) ->
       fprintf p "%a =@ %a" expr (prec1, a1) expr (prec2, a2)
@@ -262,16 +259,16 @@ let rec expr p (prec, e) =
   | Ebuiltin(EF_annot_val(txt, _), _, args, _) ->
       fprintf p "__builtin_annot_val@[<hov 1>(%S%a)@]"
                 (camlstring_of_coqstring txt) exprlist (false, args)
-  | Ebuiltin(EF_external(id, sg), _, args, _) ->
+  | Ebuiltin(EF_external(id, _), _, args, _) ->
       fprintf p "%s@[<hov 1>(%a)@]" (camlstring_of_coqstring id) exprlist (true, args)
-  | Ebuiltin(EF_inline_asm(txt, sg, clob), _, args, _) ->
+  | Ebuiltin(EF_inline_asm(txt, _, clob), _, args, _) ->
       extended_asm p txt None args clob
   | Ebuiltin(EF_debug(kind,txt,_),_,args,_) ->
       fprintf p "__builtin_debug@[<hov 1>(%d,%S%a)@]"
         (P.to_int kind) (extern_atom txt) exprlist (false,args)
   | Ebuiltin(_, _, args, _) ->
       fprintf p "<unknown builtin>@[<hov 1>(%a)@]" exprlist (true, args)
-  | Eparen(a1, tycast, ty) ->
+  | Eparen(a1, tycast, _) ->
       fprintf p "(%s) %a" (name_type tycast) expr (prec', a1)
   end;
   if prec' < prec then fprintf p ")@]" else fprintf p "@]"
@@ -427,12 +424,12 @@ let print_function p id f =
 
 let print_fundef p id fd =
   match fd with
-  | External(EF_external(_,_), args, res, cconv) ->
+  | Csyntax.External(EF_external(_,_), args, res, cconv) ->
       fprintf p "extern %s;@ @ "
                 (name_cdecl (extern_atom id) (Tfunction(args, res, cconv)))
-  | External(_, _, _, _) ->
+  | Csyntax.External(_, _, _, _) ->
       ()
-  | Internal f ->
+  | Csyntax.Internal f ->
       print_function p id f
 
 let string_of_init id =
@@ -509,7 +506,7 @@ let print_globdef p (id, gd) =
 
 let struct_or_union = function Struct -> "struct" | Union -> "union"
 
-let declare_composite p (Composite(id, su, m, a)) =
+let declare_composite p (Composite(id, su, _, _)) =
   fprintf p "%s %s;@ " (struct_or_union su) (extern_atom id)
 
 let define_composite p (Composite(id, su, m, a)) =

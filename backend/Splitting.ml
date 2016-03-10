@@ -13,10 +13,8 @@
 (* Live range splitting over RTL *)
 
 open Camlcoq
-open Datatypes
 open Coqlib
 open Maps
-open AST
 open Kildall
 open Registers
 open RTL
@@ -75,7 +73,7 @@ module LRMap = struct
 
   let bot : t = RMap.empty
 
-  let lub_opt_range r olr1 olr2 =
+  let lub_opt_range _ olr1 olr2 =
     match olr1, olr2 with
     | Some lr1, Some lr2 -> unify lr1 lr2; olr1
     | Some _, None -> olr1

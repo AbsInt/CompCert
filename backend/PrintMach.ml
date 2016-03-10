@@ -15,14 +15,10 @@
 open Printf
 open Camlcoq
 open Datatypes
-open Maps
 open AST
-open Integers
-open Locations
 open Machregsaux
 open Mach
 open PrintAST
-open PrintOp
 
 let reg pp r =
   match name_of_register r with
@@ -61,9 +57,9 @@ let print_instruction pp i =
          (name_of_chunk chunk)
          (PrintOp.print_addressing reg) (addr, args)
          reg src
-  | Mcall(sg, fn) ->
+  | Mcall(_, fn) ->
       fprintf pp "\tcall %a\n" ros fn
-  | Mtailcall(sg, fn) ->
+  | Mtailcall(_, fn) ->
       fprintf pp "\ttailcall %a\n" ros fn
   | Mbuiltin(ef, args, res) ->
       fprintf pp "\t%a = %s(%a)\n"

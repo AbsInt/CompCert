@@ -17,7 +17,7 @@
    including function calls in expressions, matches, while statements, etc. */
 
 %{
-open Datatypes
+open !Datatypes
 open Camlcoq
 open BinNums
 open Integers
@@ -210,17 +210,17 @@ let mkmatch_aux expr cases =
   let ncases = List.length cases in
   let rec mktable n = function
     | [] -> assert false
-    | [key, action] -> []
-    | (key, action) :: rem ->
+    | [_, _] -> []
+    | (key, _) :: rem ->
         (coqint_of_camlint key, Nat.of_int n)
         :: mktable (n + 1) rem in
   let sw =
     Sswitch(false, expr, mktable 0 cases, Nat.of_int (ncases - 1)) in
   let rec mkblocks body n = function
     | [] -> assert false
-    | [key, action] ->
+    | [_, action] ->
         Sblock(Sseq(body, action))
-    | (key, action) :: rem ->
+    | (_, action) :: rem ->
         mkblocks
           (Sblock(Sseq(body, Sseq(action, Sexit (Nat.of_int n)))))
           (n - 1)
@@ -233,7 +233,7 @@ let mkmatch expr cases =
   let s =
     match cases with
     | [] -> Sskip (* ??? *)
-    | [key, action] -> action
+    | [_, action] -> action
     | _ -> mkmatch_aux c cases in
   prepend_seq !convert_accu s
 

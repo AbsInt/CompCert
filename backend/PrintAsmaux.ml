@@ -14,7 +14,6 @@
 open AST
 open Asm
 open Camlcoq
-open Datatypes
 open Memdata
 open Printf
 open Sections

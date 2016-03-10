@@ -33,9 +33,7 @@ open Datatypes
 open Coqlib
 open Maps
 open AST
-open Memdata
 open Kildall
-open Registers
 open Op
 open Machregs
 open Locations
@@ -87,16 +85,16 @@ let constrain_reg v c =
 let rec constrain_regs vl cl =
   match vl, cl with
   | [], _ -> []
-  | v1 :: vl', [] -> vl
-  | v1 :: vl', Some mr1 :: cl' -> L(R mr1) :: constrain_regs vl' cl'
+  | _ :: _, [] -> vl
+  | _ :: vl', Some mr1 :: cl' -> L(R mr1) :: constrain_regs vl' cl'
   | v1 :: vl', None :: cl' -> v1 :: constrain_regs vl' cl'
 
 let move v1 v2 k =
   if v1 = v2 then
     k
-  else if is_stack_reg v1 then begin
+  else if XTL.is_stack_reg v1 then begin
     let t = new_temp (typeof v2) in Xmove(v1, t) :: Xmove(t, v2) :: k
-  end else if is_stack_reg v2 then begin
+  end else if XTL.is_stack_reg v2 then begin
     let t = new_temp (typeof v1) in Xmove(v1, t) :: Xmove(t, v2) :: k
   end else
     Xmove(v1, v2) :: k
@@ -142,8 +140,8 @@ let convert_builtin_res tyenv = function
 
 let rec constrain_builtin_arg a cl =
   match a, cl with
-  | BA x, None :: cl' -> (a, cl')
-  | BA x, Some mr :: cl' -> (BA (L(R mr)), cl')
+  | BA _, None :: cl' -> (a, cl')
+  | BA _, Some mr :: cl' -> (BA (L(R mr)), cl')
   | BA_splitlong(hi, lo), _ ->
       let (hi', cl1) = constrain_builtin_arg hi cl in
       let (lo', cl2) = constrain_builtin_arg lo cl1 in
@@ -160,8 +158,8 @@ let rec constrain_builtin_args al cl =
 
 let rec constrain_builtin_res a cl =
   match a, cl with
-  | BR x, None :: cl' -> (a, cl')
-  | BR x, Some mr :: cl' -> (BR (L(R mr)), cl')
+  | BR _, None :: cl' -> (a, cl')
+  | BR _, Some mr :: cl' -> (BR (L(R mr)), cl')
   | BR_splitlong(hi, lo), _ ->
       let (hi', cl1) = constrain_builtin_res hi cl in
       let (lo', cl2) = constrain_builtin_res lo cl1 in
@@ -264,7 +262,7 @@ let block_of_RTL_instr funsig tyenv = function
 
 let next_pc f =
   PTree.fold
-    (fun npc pc i -> if P.lt pc npc then npc else P.succ pc)
+    (fun npc pc _ -> if P.lt pc npc then npc else P.succ pc)
     f.RTL.fn_code P.one
 
 (* Translate an RTL function to an XTL function *)
@@ -289,7 +287,7 @@ let vset_removelist vl after = List.fold_right VSet.remove vl after
 let vset_addlist vl after = List.fold_right VSet.add vl after
 
 let vset_addros vos after =
-  match vos with Coq_inl v -> VSet.add v after | Coq_inr id -> after
+  match vos with Coq_inl v -> VSet.add v after | Coq_inr _ -> after
 
 let rec vset_addarg a after =
   match a with
@@ -308,34 +306,34 @@ let rec vset_removeres r after =
 let live_before instr after =
   match instr with
   | Xmove(src, dst) | Xspill(src, dst) | Xreload(src, dst) ->
-      if VSet.mem dst after || is_stack_reg src
+      if VSet.mem dst after || XTL.is_stack_reg src
       then VSet.add src (VSet.remove dst after)
       else after
-  | Xparmove(srcs, dsts, itmp, ftmp) ->
+  | Xparmove(srcs, dsts, _, _) ->
       vset_addlist srcs (vset_removelist dsts after)
-  | Xop(op, args, res) ->
+  | Xop(_, args, res) ->
       if VSet.mem res after
       then vset_addlist args (VSet.remove res after)
       else after
-  | Xload(chunk, addr, args, dst) ->
+  | Xload(_, _, args, dst) ->
       if VSet.mem dst after
       then vset_addlist args (VSet.remove dst after)
       else after
-  | Xstore(chunk, addr, args, src) ->
+  | Xstore(_, _, args, src) ->
       vset_addlist args (VSet.add src after)
-  | Xcall(sg, ros, args, res) ->
+  | Xcall(_, ros, args, res) ->
       vset_addlist args (vset_addros ros (vset_removelist res after))
-  | Xtailcall(sg, ros, args) ->
+  | Xtailcall(_, ros, args) ->
       vset_addlist args (vset_addros ros VSet.empty)
-  | Xbuiltin(EF_debug _, args, res) ->
+  | Xbuiltin(EF_debug _, _, res) ->
       vset_removeres res after
-  | Xbuiltin(ef, args, res) ->
+  | Xbuiltin(_, args, res) ->
       vset_addargs args (vset_removeres res after)
-  | Xbranch s ->
+  | Xbranch _ ->
       after
-  | Xcond(cond, args, s1, s2) ->
+  | Xcond(_, args, _, _) ->
       List.fold_right VSet.add args after
-  | Xjumptable(arg, tbl) ->
+  | Xjumptable(arg, _) ->
       VSet.add arg after
   | Xreturn args ->
       vset_addlist args VSet.empty
@@ -385,7 +383,7 @@ let rec dce_parmove srcs dsts after =
   | [], [] -> [], []
   | src1 :: srcs, dst1 :: dsts ->
       let (srcs', dsts') = dce_parmove srcs dsts after in
-      if VSet.mem dst1 after || is_stack_reg src1
+      if VSet.mem dst1 after || XTL.is_stack_reg src1
       then (src1 :: srcs', dst1 :: dsts')
       else (srcs', dsts')
   | _, _ -> assert false
@@ -399,7 +397,7 @@ let rec keep_builtin_arg after = function
 let dce_instr instr after k =
   match instr with
   | Xmove(src, dst) ->
-      if VSet.mem dst after || is_stack_reg src
+      if VSet.mem dst after || XTL.is_stack_reg src
       then instr :: k
       else k
   | Xparmove(srcs, dsts, itmp, ftmp) ->
@@ -408,11 +406,11 @@ let dce_instr instr after k =
       | ([src], [dst]) -> Xmove(src, dst) :: k
       | (srcs', dsts') -> Xparmove(srcs', dsts', itmp, ftmp) :: k
       end
-  | Xop(op, args, res) ->
+  | Xop(_, _, res) ->
       if VSet.mem res after
       then instr :: k
       else k
-  | Xload(chunk, addr, args, dst) ->
+  | Xload(_, _, _, dst) ->
       if VSet.mem dst after
       then instr :: k
       else k
@@ -431,7 +429,7 @@ let rec dce_block blk after =
 
 let dead_code_elimination f liveness =
   { f with fn_code =
-      PTree.map (fun pc blk -> snd(dce_block blk (PMap.get pc liveness)))
+      PTree.map (fun pc blk -> Datatypes.snd(dce_block blk (PMap.get pc liveness)))
                  f.fn_code }
 
 
@@ -454,8 +452,8 @@ let spill_costs f =
 
   let charge amount uses v =
     match v with
-    | L l -> ()
-    | V(r, ty) ->
+    | L _ -> ()
+    | V(r, _) ->
         let st = get_stats r in
         if st.cost < 0 then
           (* the variable must be spilled, don't change its cost *)
@@ -472,21 +470,21 @@ let spill_costs f =
     List.iter (charge amount uses) vl in
 
   let charge_ros amount ros =
-    match ros with Coq_inl v -> charge amount 1 v | Coq_inr id -> () in
+    match ros with Coq_inl v -> charge amount 1 v | Coq_inr _ -> () in
 
   let force_stack_allocation v =
     match v with
-    | L l -> ()
-    | V(r, ty) ->
+    | L _ -> ()
+    | V(r,_) ->
         let st = get_stats r in
         assert (st.cost < max_int);
         st.cost <- (-1) in
 
   let charge_instr = function
     | Xmove(src, dst) ->
-        if is_stack_reg src then
+        if XTL.is_stack_reg src then
           force_stack_allocation dst
-        else if is_stack_reg dst then
+        else if XTL.is_stack_reg dst then
           force_stack_allocation src
         else begin
           charge 1 1 src; charge 1 1 dst
@@ -501,15 +499,15 @@ let spill_costs f =
         charge_list 1 1 srcs; charge_list 1 1 dsts;
         charge max_int 0 itmp; charge max_int 0 ftmp
         (* temps must not be spilled *)
-    | Xop(op, args, res) ->
+    | Xop(_, args, res) ->
         charge_list 10 1 args; charge 10 1 res
-    | Xload(chunk, addr, args, dst) ->
+    | Xload(_, _, args, dst) ->
         charge_list 10 1 args; charge 10 1 dst
-    | Xstore(chunk, addr, args, src) ->
+    | Xstore(_, _, args, src) ->
         charge_list 10 1 args; charge 10 1 src
-    | Xcall(sg, vos, args, res) ->
+    | Xcall(_, vos, _, _) ->
         charge_ros 10 vos
-    | Xtailcall(sg, vos, args) ->
+    | Xtailcall(_, vos, _) ->
         charge_ros 10 vos
     | Xbuiltin(ef, args, res) ->
         begin match ef with
@@ -528,11 +526,11 @@ let spill_costs f =
             charge_list 10 1 (params_of_builtin_res res)
         end
     | Xbranch _ -> ()
-    | Xcond(cond, args, _, _) ->
+    | Xcond(_, args, _, _) ->
         charge_list 10 1 args
     | Xjumptable(arg, _) ->
         charge 10 1 arg
-    | Xreturn optarg ->
+    | Xreturn _ ->
         () in
 
   let charge_block blk = List.iter charge_instr blk in
@@ -595,12 +593,12 @@ let add_interfs_instr g instr live =
       add_interfs_list g itmp srcs; add_interfs_list g itmp dsts;
       add_interfs_list g ftmp srcs; add_interfs_list g ftmp dsts;
       (* Take into account destroyed reg when accessing Incoming param *)
-      if List.exists (function (L(S(Incoming, _, _))) -> true | _ -> false) srcs
+      if List.exists (function (L(Locations.S(Incoming, _, _))) -> true | _ -> false) srcs
       then add_interfs_list g (vmreg temp_for_parent_frame) dsts;
       (* Take into account destroyed reg when initializing Outgoing
          arguments of type Tsingle *)
       if List.exists
-           (function (L(S(Outgoing, _, Tsingle))) -> true | _ -> false) dsts
+           (function (L(Locations.S(Outgoing, _, Tsingle))) -> true | _ -> false) dsts
       then
         List.iter
           (fun mr ->
@@ -622,17 +620,17 @@ let add_interfs_instr g instr live =
             (vset_addlist (res :: argl) (VSet.remove res live))
       end;
       add_interfs_destroyed g (VSet.remove res live) (destroyed_by_op op)
-  | Xload(chunk, addr, args, dst) ->
+  | Xload(chunk, addr, _, dst) ->
       add_interfs_def g dst live;
       add_interfs_destroyed g (VSet.remove dst live)
                               (destroyed_by_load chunk addr)
-  | Xstore(chunk, addr, args, src) ->
+  | Xstore(chunk, addr, _,_) ->
       add_interfs_destroyed g live (destroyed_by_store chunk addr)
-  | Xcall(sg, vos, args, res) ->
+  | Xcall(_, _,_, res) ->
       add_interfs_destroyed g (vset_removelist res live) destroyed_at_call
-  | Xtailcall(sg, Coq_inl v, args) ->
+  | Xtailcall(_, Coq_inl v, _) ->
       List.iter (fun r -> IRC.add_interf g (vmreg r) v) int_callee_save_regs
-  | Xtailcall(sg, Coq_inr id, args) ->
+  | Xtailcall(_, Coq_inr _, _) ->
       ()
   | Xbuiltin(ef, args, res) ->
       (* Interferences with live across *)
@@ -646,7 +644,7 @@ let add_interfs_instr g instr live =
       | EF_annot_val _, [BA arg], BR res ->
           (* like a move *)
           IRC.add_pref g arg res
-      | EF_inline_asm(txt, sg, clob), _, _ ->
+      | EF_inline_asm(_, _, clob), _, _ ->
           let vargs = params_of_builtin_args args in
           (* clobbered regs interfere with res and args for GCC compatibility *)
           List.iter (fun c ->
@@ -658,13 +656,13 @@ let add_interfs_instr g instr live =
             clob
       | _ -> ()
       end
-  | Xbranch s ->
+  | Xbranch _ ->
       ()
-  | Xcond(cond, args, s1, s2) ->
+  | Xcond(cond, _, _,_) ->
       add_interfs_destroyed g live (destroyed_by_cond cond)
-  | Xjumptable(arg, tbl) ->
+  | Xjumptable _ ->
       add_interfs_destroyed g live destroyed_by_jumptable
-  | Xreturn optarg ->
+  | Xreturn _ ->
       ()
 
 let rec add_interfs_block g blk live =
@@ -690,16 +688,16 @@ let find_coloring f liveness =
 (*********** Determination of variables that need spill code insertion *****)
 
 let is_reg alloc v =
-  match alloc v with R _ -> true | S _ -> false
+  match alloc v with R _ -> true | Locations.S _ -> false
 
 let add_tospill alloc v ts =
-  match alloc v with R _ -> ts | S _ -> VSet.add v ts
+  match alloc v with R _ -> ts | Locations.S _ -> VSet.add v ts
 
 let addlist_tospill alloc vl ts =
   List.fold_right (add_tospill alloc) vl ts
 
 let addros_tospill alloc ros ts =
-  match ros with Coq_inl v -> add_tospill alloc v ts | Coq_inr s -> ts
+  match ros with Coq_inl v -> add_tospill alloc v ts | Coq_inr _ -> ts
 
 let tospill_instr alloc instr ts =
   match instr with
@@ -707,43 +705,43 @@ let tospill_instr alloc instr ts =
       if is_reg alloc src || is_reg alloc dst || alloc src = alloc dst
       then ts
       else VSet.add src (VSet.add dst ts)
-  | Xreload(src, dst) ->
+  | Xreload(_, dst) ->
       if not (is_reg alloc dst) then begin
         printf "Error: %a was spilled\n" PrintXTL.var dst;
         assert false
       end;
       ts
-  | Xspill(src, dst) ->
+  | Xspill(src, _) ->
       if not (is_reg alloc src) then begin
         printf "Error: %a was spilled\n" PrintXTL.var src;
         assert false
       end;
       ts
-  | Xparmove(srcs, dsts, itmp, ftmp) ->
+  | Xparmove(_, _, itmp, ftmp) ->
       assert (is_reg alloc itmp && is_reg alloc ftmp);
       ts
-  | Xop(op, args, res) ->
+  | Xop(_, args, res) ->
       addlist_tospill alloc args (add_tospill alloc res ts)
-  | Xload(chunk, addr, args, dst) ->
+  | Xload(_, _, args, dst) ->
       addlist_tospill alloc args (add_tospill alloc dst ts)
-  | Xstore(chunk, addr, args, src) ->
+  | Xstore(_, _, args, src) ->
       addlist_tospill alloc args (add_tospill alloc src ts)
-  | Xcall(sg, vos, args, res) ->
+  | Xcall(_, vos, _, _) ->
       addros_tospill alloc vos ts
-  | Xtailcall(sg, vos, args) ->
+  | Xtailcall(_, vos, _) ->
       addros_tospill alloc vos ts
   | Xbuiltin((EF_annot _ | EF_debug _), _, _) ->
       ts
-  | Xbuiltin(ef, args, res) ->
+  | Xbuiltin(_, args, res) ->
       addlist_tospill alloc (params_of_builtin_args args)
          (addlist_tospill alloc (params_of_builtin_res res) ts)
-  | Xbranch s ->
+  | Xbranch _ ->
       ts
-  | Xcond(cond, args, s1, s2) ->
+  | Xcond(_, args, _, _) ->
       addlist_tospill alloc args ts
-  | Xjumptable(arg, tbl) ->
+  | Xjumptable(arg, _) ->
       add_tospill alloc arg ts
-  | Xreturn optarg ->
+  | Xreturn _ ->
       ts
 
 let rec tospill_block alloc blk ts =
@@ -769,13 +767,13 @@ let tospill_function f alloc =
 
 let rec find_reg_containing v = function
   | [] -> None
-  | (var, temp, date) :: eqs ->
+  | (var, temp, _) :: eqs ->
       if var = v then Some temp else find_reg_containing v eqs
 
 let add v t eqs = (v, t, 0) :: eqs
 
 let kill x eqs =
-  List.filter (fun (v, t, date) -> v <> x && t <> x) eqs
+  List.filter (fun (v, t, _) -> v <> x && t <> x) eqs
 
 let reload_var tospill eqs v =
   if not (VSet.mem v tospill) then
@@ -862,11 +860,11 @@ let spill_instr tospill eqs instr =
       end else begin
         ([instr], kill dst eqs)
       end
-  | Xreload(src, dst) ->
+  | Xreload _ ->
       assert false
-  | Xspill(src, dst) ->
+  | Xspill _ ->
       assert false
-  | Xparmove(srcs, dsts, itmp, ftmp) ->
+  | Xparmove(_, dsts, _, _) ->
       ([instr], List.fold_right kill dsts eqs)
   | Xop(op, args, res) ->
       begin match is_two_address op args with
@@ -906,22 +904,22 @@ let spill_instr tospill eqs instr =
       let (src', c2, eqs2) = reload_var tospill eqs1 src in
       (c1 @ c2 @ [Xstore(chunk, addr, args', src')], eqs2)
   | Xcall(sg, Coq_inl v, args, res) ->
-      let (v', c1, eqs1) = reload_var tospill eqs v in
+      let (v', c1, _) = reload_var tospill eqs v in
       (c1 @ [Xcall(sg, Coq_inl v', args, res)], [])
-  | Xcall(sg, Coq_inr id, args, res) ->
+  | Xcall _ ->
       ([instr], [])
   | Xtailcall(sg, Coq_inl v, args) ->
-      let (v', c1, eqs1) = reload_var tospill eqs v in
+      let (v', c1, _) = reload_var tospill eqs v in
       (c1 @ [Xtailcall(sg, Coq_inl v', args)], [])
-  | Xtailcall(sg, Coq_inr id, args) ->
+  | Xtailcall _ ->
       ([instr], [])
-  | Xbuiltin((EF_annot _ | EF_debug _), args, res) ->
+  | Xbuiltin((EF_annot _ | EF_debug _), _, _) ->
       ([instr], eqs)
   | Xbuiltin(ef, args, res) ->
       let (args', c1, eqs1) = reload_args tospill eqs args in
       let (res', c2, eqs2) = save_res tospill eqs1 res in
       (c1 @ Xbuiltin(ef, args', res') :: c2, eqs2)
-  | Xbranch s ->
+  | Xbranch _ ->
       ([instr], eqs)
   | Xcond(cond, args, s1, s2) ->
      let (args', c1, eqs1) = reload_vars tospill eqs args in
@@ -929,7 +927,7 @@ let spill_instr tospill eqs instr =
   | Xjumptable(arg, tbl) ->
       let (arg', c1, eqs1) = reload_var tospill eqs arg in
       (c1 @ [Xjumptable(arg', tbl)], eqs1)
-  | Xreturn optarg ->
+  | Xreturn _ ->
       ([instr], [])
 
 let rec spill_block tospill pc blk eqs =
@@ -963,7 +961,7 @@ let spill_function f tospill round =
 
 exception Bad_LTL
 
-let mreg_of alloc v = match alloc v with R mr -> mr | S _ -> raise Bad_LTL
+let mreg_of alloc v = match alloc v with R mr -> mr | Locations.S _ -> raise Bad_LTL
 
 let mregs_of alloc vl = List.map (mreg_of alloc) vl
 
@@ -973,11 +971,11 @@ let make_move src dst k =
   match src, dst with
   | R rsrc, R rdst ->
       if rsrc = rdst then k else LTL.Lop(Omove, [rsrc], rdst) :: k
-  | R rsrc, S(sl, ofs, ty) ->
+  | R rsrc, Locations.S(sl, ofs, ty) ->
       LTL.Lsetstack(rsrc, sl, ofs, ty) :: k
-  | S(sl, ofs, ty), R rdst ->
+  | Locations.S(sl, ofs, ty), R rdst ->
       LTL.Lgetstack(sl, ofs, ty, rdst) :: k
-  | S _, S _ ->
+  | Locations.S _, Locations.S _ ->
       if src = dst then k else raise Bad_LTL
 
 type parmove_status = To_move | Being_moved | Moved
@@ -997,11 +995,11 @@ let make_parmove srcs dsts itmp ftmp k =
     match s, d with
     | R rs, R rd ->
         code := LTL.Lop(Omove, [rs], rd) :: !code
-    | R rs, S(sl, ofs, ty) ->
+    | R rs, Locations.S(sl, ofs, ty) ->
         code := LTL.Lsetstack(rs, sl, ofs, ty) :: !code
-    | S(sl, ofs, ty), R rd ->
+    | Locations.S(sl, ofs, ty), R rd ->
         code := LTL.Lgetstack(sl, ofs, ty, rd) :: !code
-    | S(sls, ofss, tys), S(sld, ofsd, tyd) ->
+    | Locations.S(sls, ofss, tys), Locations.S(sld, ofsd, tyd) ->
         let tmp = temp_for tys in
         (* code will be reversed at the end *)
         code := LTL.Lsetstack(tmp, sld, ofsd, tyd) ::
@@ -1054,9 +1052,9 @@ let transl_instr alloc instr k =
       LTL.Lload(chunk, addr, mregs_of alloc args, mreg_of alloc dst) :: k
   | Xstore(chunk, addr, args, src) ->
       LTL.Lstore(chunk, addr, mregs_of alloc args, mreg_of alloc src) :: k
-  | Xcall(sg, vos, args, res) ->
+  | Xcall(sg, vos, _, _) ->
       LTL.Lcall(sg, mros_of alloc vos) :: k
-  | Xtailcall(sg, vos, args) ->
+  | Xtailcall(sg, vos, _) ->
       LTL.Ltailcall(sg, mros_of alloc vos) :: []
   | Xbuiltin(ef, args, res) ->
       LTL.Lbuiltin(ef, List.map (AST.map_builtin_arg alloc) args,
@@ -1067,7 +1065,7 @@ let transl_instr alloc instr k =
       LTL.Lcond(cond, mregs_of alloc args, s1, s2) :: []
   | Xjumptable(arg, tbl) ->
       LTL.Ljumptable(mreg_of alloc arg, tbl) :: []
-  | Xreturn optarg ->
+  | Xreturn _ ->
       LTL.Lreturn :: []
 
 let rec transl_block alloc blk =

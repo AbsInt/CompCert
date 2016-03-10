@@ -51,7 +51,7 @@ let types: (int,debug_types) Hashtbl.t = Hashtbl.create 7
 let lookup_types: (string, int) Hashtbl.t = Hashtbl.create 7
 
 (* Translate a C.typ to a string needed for hashing *)
-let typ_to_string (ty: typ) =
+let typ_to_string ty =
   let buf = Buffer.create 7 in
   let chan = Format.formatter_of_buffer buf in
   Cprint.print_debug_idents := true;
@@ -64,13 +64,13 @@ let typ_to_string (ty: typ) =
 let strip_attributes typ = strip_attributes_type typ [AConst; AVolatile]
 
 (* Find the type id to an type *)
-let find_type (ty: typ) =
+let find_type ty =
   (* We are only interested in Const and Volatile *)
   let ty = strip_attributes ty in
   Hashtbl.find lookup_types (typ_to_string ty)
 
 (* Add type and information *)
-let insert_type (ty: typ) =
+let insert_type ty =
   let insert d_ty ty =
     let id = next_id ()
     and name = typ_to_string ty in
@@ -104,7 +104,7 @@ let insert_type (ty: typ) =
                 arr_size= s;
               } in
               ArrayType arr
-          | TFun (t,param,va,_) ->
+          | TFun (t,param,_,_) ->
               let param,prot = (match param with
               | None -> [],false
               | Some p -> List.map (fun (i,t) -> let t = attr_aux t in

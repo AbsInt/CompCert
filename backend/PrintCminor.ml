@@ -17,7 +17,6 @@
 
 open Format
 open Camlcoq
-open Datatypes
 open Integers
 open AST
 open PrintAST
@@ -27,7 +26,7 @@ open Cminor
 
 type associativity = LtoR | RtoL | NA
 
-let rec precedence = function
+let precedence = function
   | Evar _ -> (16, NA)
   | Econst _ -> (16, NA)
   | Eunop _ -> (15, RtoL)

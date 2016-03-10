@@ -25,7 +25,7 @@ let reset_filenames () =
 
 let close_filenames () =
   Hashtbl.iter
-    (fun file (num, fb) ->
+    (fun _ (_, fb) ->
        match fb with Some b -> Printlines.close b | None -> ())
     filename_info;
   reset_filenames()
@@ -46,7 +46,7 @@ let print_file oc file =
   try
     Hashtbl.find filename_info file
   with Not_found ->
-    let (filenum, filebuf as res) = enter_filename file in
+    let (filenum, _ as res) = enter_filename file in
     fprintf oc "	.file	%d %S\n" filenum file;
     res
 

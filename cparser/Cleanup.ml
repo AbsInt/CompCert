@@ -51,18 +51,18 @@ let rec add_typ = function
   | _ -> ()
 
 and add_vars vl =
-  List.iter (fun (id, ty) -> add_typ ty) vl
+  List.iter (fun (_, ty) -> add_typ ty) vl
 
 let rec add_exp e =
   add_typ e.etyp; (* perhaps not necessary but play it safe *)
   match e.edesc with
-  | EConst (CEnum(id, v)) -> addref id
+  | EConst (CEnum(id, _)) -> addref id
   | EConst _ -> ()
   | ESizeof ty -> add_typ ty
   | EAlignof ty -> add_typ ty
   | EVar id -> addref id
-  | EUnop(op, e1) -> add_exp e1
-  | EBinop(op, e1, e2, ty) -> add_exp e1; add_exp e2
+  | EUnop(_, e1) -> add_exp e1
+  | EBinop(_, e1, e2, _) -> add_exp e1; add_exp e2
   | EConditional(e1, e2, e3) -> add_exp e1; add_exp e2; add_exp e3
   | ECast(ty, e1) -> add_typ ty; add_exp e1
   | ECompound(ty, ie) -> add_typ ty; add_init ie
@@ -74,11 +74,11 @@ and add_init = function
   | Init_struct(id, il) -> addref id; List.iter (fun (_, i) -> add_init i) il
   | Init_union(id, _, i) -> addref id; add_init i
 
-let add_decl (sto, id, ty, init) =
+let add_decl (_, _, ty, init) =
   add_typ ty;
   match init with None -> () | Some i -> add_init i
 
-let add_asm_operand (lbl, cstr, e) = add_exp e
+let add_asm_operand (_, _, e) = add_exp e
 
 let rec add_stmt s =
   match s.sdesc with
@@ -95,12 +95,12 @@ let rec add_stmt s =
   | Slabeled(lbl, s) ->
       begin match lbl with Scase e -> add_exp e | _ -> () end;
       add_stmt s
-  | Sgoto lbl -> ()
+  | Sgoto _ -> ()
   | Sreturn None -> ()
   | Sreturn(Some e) -> add_exp e
   | Sblock sl -> List.iter add_stmt sl
   | Sdecl d -> add_decl d
-  | Sasm(attr, template, outputs, inputs, flags) ->
+  | Sasm(_, _, outputs, inputs, _) ->
       List.iter add_asm_operand outputs;
       List.iter add_asm_operand inputs
 
@@ -114,13 +114,13 @@ let add_field f = add_typ f.fld_typ
 
 let add_enum e =
   List.iter
-    (fun (id, v, opt_e) -> match opt_e with Some e -> add_exp e | None -> ())
+    (fun (_, _, opt_e) -> match opt_e with Some e -> add_exp e | None -> ())
     e
 
 (* Saturate the set of referenced identifiers, starting with externally
    visible global declarations *)
 
-let visible_decl (sto, id, ty, init) =
+let visible_decl (sto, _, ty, _) =
   sto = Storage_default &&
   match ty with TFun _ -> false | _ -> true
 
@@ -150,7 +150,7 @@ let rec add_needed_globdecls accu = function
   | [] -> accu
   | g :: rem ->
       match g.gdesc with
-      | Gdecl((sto, id, ty, init) as decl) ->
+      | Gdecl((_, id, _, _) as decl) ->
           if needed id
           then (add_decl decl; add_needed_globdecls accu rem)
           else add_needed_globdecls (g :: accu) rem
@@ -194,14 +194,14 @@ let rec simpl_globdecls accu = function
   | g :: rem ->
       let need =
         match g.gdesc with
-        | Gdecl((sto, id, ty, init) as decl) -> visible_decl decl || needed id
+        | Gdecl((_, id, _, _) as decl) -> visible_decl decl || needed id
         | Gfundef f -> visible_fundef f || needed f.fd_name
         | Gcompositedecl(_, id, _) -> needed id
-        | Gcompositedef(_, id, _, flds) -> needed id
-        | Gtypedef(id, ty) -> needed id
+        | Gcompositedef(_, id, _, _) -> needed id
+        | Gtypedef(id, _) -> needed id
         | Genumdef(id, _, enu) ->
             needed id || List.exists (fun (id, _, _) -> needed id) enu
-        | Gpragma s -> true in
+        | Gpragma _ -> true in
       if need
       then simpl_globdecls (g :: accu) rem
       else begin remove_unused_debug g.gdesc; simpl_globdecls accu rem end

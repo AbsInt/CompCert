@@ -17,14 +17,12 @@
 
 open Format
 open Camlcoq
-open Datatypes
-open Values
 open AST
 open PrintAST
-open Ctypes
+open !Ctypes
 open Cop
 open PrintCsyntax
-open Clight
+open !Clight
 
 (* Naming temporaries *)
 
@@ -34,9 +32,7 @@ let temp_name (id: ident) = "$" ^ Z.to_string (Z.Zpos id)
 
 (* Precedences and associativity (H&S section 7.2) *)
 
-type associativity = LtoR | RtoL | NA
-
-let rec precedence = function
+let precedence = function
   | Evar _ -> (16, NA)
   | Etempvar _ -> (16, NA)
   | Ederef _ -> (15, RtoL)
@@ -138,11 +134,11 @@ let rec print_stmt p s =
                 (temp_name id)
                 print_expr e1
                 print_expr_list (true, el)
-  | Sbuiltin(None, ef, tyargs, el) ->
+  | Sbuiltin(None, ef, _, el) ->
       fprintf p "@[<hv 2>builtin %s@,(@[<hov 0>%a@]);@]"
                 (name_of_external ef)
                 print_expr_list (true, el)
-  | Sbuiltin(Some id, ef, tyargs, el) ->
+  | Sbuiltin(Some id, ef, _, el) ->
       fprintf p "@[<hv 2>%s =@ builtin %s@,(@[<hov 0>%a@]);@]"
                 (temp_name id)
                 (name_of_external ef)
@@ -227,11 +223,11 @@ and print_stmt_for p s =
                 (temp_name id)
                 print_expr e1
                 print_expr_list (true, el)
-  | Sbuiltin(None, ef, tyargs, el) ->
+  | Sbuiltin(None, ef, _, el) ->
       fprintf p "@[<hv 2>builtin %s@,(@[<hov 0>%a@]);@]"
                 (name_of_external ef)
                 print_expr_list (true, el)
-  | Sbuiltin(Some id, ef, tyargs, el) ->
+  | Sbuiltin(Some id, ef, _, el) ->
       fprintf p "@[<hv 2>%s =@ builtin %s@,(@[<hov 0>%a@]);@]"
                 (temp_name id)
                 (name_of_external ef)
@@ -258,10 +254,10 @@ let print_function p id f =
 
 let print_fundef p id fd =
   match fd with
-  | External(EF_external(_,_), args, res, cconv) ->
+  | Clight.External(EF_external(_,_), args, res, cconv) ->
       fprintf p "extern %s;@ @ "
                 (name_cdecl (extern_atom id) (Tfunction(args, res, cconv)))
-  | External(_, _, _, _) ->
+  | Clight.External(_, _, _, _) ->
       ()
   | Internal f ->
       print_function p id f

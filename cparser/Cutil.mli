@@ -102,13 +102,11 @@ val sizeof_ikind: ikind -> int
   (* Return the size of the given integer kind. *)
 val sizeof_fkind: fkind -> int
   (* Return the size of the given float kind. *)
-val is_signed_ikind: ikind -> bool
-  (* Return true if the given integer kind is signed, false if unsigned. *)
 
 (* Computing composite_info records *)
 
 val composite_info_decl:
-  Env.t -> struct_or_union -> attributes -> Env.composite_info
+  struct_or_union -> attributes -> Env.composite_info
 val composite_info_def:
   Env.t -> struct_or_union -> attributes -> field list -> Env.composite_info
 val struct_layout:

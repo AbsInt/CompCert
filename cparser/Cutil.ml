@@ -15,7 +15,6 @@
 
 (* Operations on C types and abstract syntax *)
 
-open Printf
 open Cerrors
 open C
 open Env
@@ -74,7 +73,7 @@ let rec find_custom_attributes (names: string list)  (al: attributes) =
 let rec remove_custom_attributes (names: string list)  (al: attributes) =
   match al with
   | [] -> []
-  | Attr(name, args) :: tl when List.mem name names ->
+  | Attr(name, _) :: tl when List.mem name names ->
       remove_custom_attributes names tl
   | a :: tl ->
       a :: remove_custom_attributes names tl
@@ -138,12 +137,12 @@ let rec unroll env t =
 let rec attributes_of_type env t =
   match t with
   | TVoid a -> a
-  | TInt(ik, a) -> a
-  | TFloat(fk, a) -> a
-  | TPtr(ty, a) -> a
-  | TArray(ty, sz, a) -> add_attributes a (attributes_of_type env ty)
-  | TFun(ty, params, vararg, a) -> a
-  | TNamed(s, a) -> attributes_of_type env (unroll env t)
+  | TInt(_, a) -> a
+  | TFloat(_, a) -> a
+  | TPtr(_, a) -> a
+  | TArray(ty, _, a) -> add_attributes a (attributes_of_type env ty)
+  | TFun(_, _,_, a) -> a
+  | TNamed(_, _) -> attributes_of_type env (unroll env t)
   | TStruct(s, a) ->
       let ci = Env.find_struct env s in add_attributes ci.ci_attr a
   | TUnion(s, a) ->
@@ -163,7 +162,7 @@ let rec change_attributes_type env (f: attributes -> attributes) t =
   | TArray(ty, sz, a) ->
       TArray(change_attributes_type env f ty, sz, f a)
   | TFun(ty, params, vararg, a) -> TFun(ty, params, vararg, f a)
-  | TNamed(s, a) ->
+  | TNamed(_, _) ->
       let t1 = unroll env t in
       let t2 = change_attributes_type env f t1 in
       if t2 = t1 then t else t2         (* avoid useless expansion *)
@@ -175,7 +174,7 @@ let remove_attributes_type env attr t =
   change_attributes_type env (fun a -> remove_attributes a attr) t
 
 let erase_attributes_type env t =
-  change_attributes_type env (fun a -> []) t
+  change_attributes_type env (fun _ -> []) t
 
 (* Remove all attributes from type that are not contained in attr *)
 let strip_attributes_type t attr =
@@ -194,7 +193,7 @@ let strip_attributes_type t attr =
 
 (* Remove the last attribute from the toplevel and return the changed type *)
 let strip_last_attribute typ  =
-  let rec hd_opt l = match l with
+  let hd_opt l = match l with
     [] -> None,[]
   | a::rest -> Some a,rest in
   match typ with
@@ -225,7 +224,7 @@ let alignas_attribute al =
   let rec alignas_attr accu = function
   | [] -> accu
   | AAlignas n :: al -> alignas_attr (max n accu) al
-  | a :: al -> alignas_attr accu al
+  | _ :: al -> alignas_attr accu al
   in alignas_attr 0 al
 
 (* Type compatibility *)
@@ -261,14 +260,14 @@ let combine_types mode env t1 t2 =
     | None, _ -> sz2
     | _, None -> sz1
     | Some n1, Some n2 -> if n1 = n2 then Some n2 else raise Incompat
-  and comp_conv (id, ty) =
+  and comp_conv (_, ty) =
     match unroll env ty with
-    | TInt(kind, attr) ->
+    | TInt(kind, _) ->
         begin match kind with
         | IBool | IChar | ISChar | IUChar | IShort | IUShort -> raise Incompat
         | _ -> ()
         end
-    | TFloat(kind, attr) ->
+    | TFloat(kind, _) ->
         begin match kind with
         | FFloat -> raise Incompat
         | _ -> ()
@@ -296,7 +295,7 @@ let combine_types mode env t1 t2 =
           | Some l1, None -> List.iter comp_conv l1; (params1, vararg1)
           | Some l1, Some l2 ->
               if List.length l1 <> List.length l2 then raise Incompat;
-              let comp_param (id1, ty1) (id2, ty2) =
+              let comp_param (_, ty1) (id2, ty2) =
                 (id2, comp AttrIgnoreTop ty1 ty2) in
               (Some(List.map2 comp_param l1 l2), comp_base vararg1 vararg2)
         in
@@ -310,8 +309,8 @@ let combine_types mode env t1 t2 =
         TUnion(comp_base s1 s2, comp_attr m a1 a2)
     | TEnum(s1, a1), TEnum(s2, a2) ->
         TEnum(comp_base s1 s2, comp_attr m a1 a2)
-    | TEnum(s,a1), TInt(enum_ikind,a2)
-    | TInt(enum_ikind,a2), TEnum (s,a1) ->
+    | TEnum(s,a1), TInt(_,a2)
+    | TInt(_,a2), TEnum (s,a1) ->
         TEnum(s,comp_attr m a1 a2)
     | _, _ ->
         raise Incompat
@@ -433,7 +432,7 @@ let alignof_struct_union env members =
         | None -> None
         | Some a -> align_rec (max a al) rem
       end else begin
-        let (s, a, ml') = pack_bitfields ml in
+        let (_, a, ml') = pack_bitfields ml in
         align_rec (max a al) ml'
       end
   in align_rec 1 members
@@ -472,7 +471,7 @@ let rec sizeof env t =
   | TInt(ik, _) -> Some(sizeof_ikind ik)
   | TFloat(fk, _) -> Some(sizeof_fkind fk)
   | TPtr(_, _) -> Some(!config.sizeof_ptr)
-  | TArray(ty, None, _) -> None
+  | TArray(_, None, _) -> None
   | TArray(ty, Some n, _) as t' ->
       begin match sizeof env ty with
       | None -> None
@@ -561,7 +560,7 @@ let incomplete_type env t =
 
 (* Computing composite_info records *)
 
-let composite_info_decl env su attr =
+let composite_info_decl su attr =
   { ci_kind = su; ci_members = [];
     ci_alignof = None; ci_sizeof = None;
     ci_attr = attr }
@@ -722,7 +721,7 @@ let pointer_decay env t =
 let unary_conversion env t =
   match unroll env t with
   (* Promotion of small integer types *)
-  | TInt(kind, attr) ->
+  | TInt(kind, _) ->
       begin match kind with
       | IBool | IChar | ISChar | IUChar | IShort | IUShort ->
           TInt(IInt, [])
@@ -730,13 +729,13 @@ let unary_conversion env t =
           TInt(kind, [])
       end
   (* Enums are like signed ints *)
-  | TEnum(id, attr) -> TInt(enum_ikind, [])
+  | TEnum(_, _) -> TInt(enum_ikind, [])
   (* Arrays and functions decay automatically to pointers *)
   | TArray(ty, _, _) -> TPtr(ty, [])
   | TFun _ as ty -> TPtr(ty, [])
   (* Float types and pointer types lose their attributes *)
-  | TFloat(kind, attr) -> TFloat(kind, [])
-  | TPtr(ty, attr) -> TPtr(ty, [])
+  | TFloat(kind, _) -> TFloat(kind, [])
+  | TPtr(ty, _) -> TPtr(ty, [])
   (* Other types should not occur, but in doubt... *)
   | _ -> t
 
@@ -860,7 +859,7 @@ let type_of_constant = function
 
 let rec is_lvalue e =
   match e.edesc with
-  | EVar id -> true
+  | EVar _ -> true
   | EUnop((Oderef | Oarrow _), _) -> true
   | EUnop(Odot _, e') -> is_lvalue e'
   | EBinop(Oindex, _, _, _) -> true
@@ -892,7 +891,7 @@ let is_literal_0 e =
 
 let is_debug_stmt s =
   let is_debug_call = function
-    | (ECall ({edesc = EVar id; _},_)) -> id.name = "__builtin_debug"
+    | (ECall ({edesc = EVar id; _},_)) -> id.C.name = "__builtin_debug"
     | _ -> false in
   match s.sdesc with
   | Sdo {edesc = e;_} ->
@@ -906,8 +905,8 @@ let is_debug_stmt s =
    Custom attributes can safely be dropped or added. *)
 
 let valid_assignment_attr afrom ato =
-  let (afromstd, afromcustom) = List.partition attr_is_standard afrom
-  and (atostd, atocustom) = List.partition attr_is_standard ato in
+  let (afromstd, _) = List.partition attr_is_standard afrom
+  and (atostd,_) = List.partition attr_is_standard ato in
   incl_attributes afromstd atostd
 
 (* Check that an assignment is allowed *)
@@ -1032,11 +1031,11 @@ let rec default_init env ty =
   match unroll env ty with
   | TInt _ | TEnum _ ->
       Init_single (intconst 0L IInt)
-  | TFloat(fk, _) ->
+  | TFloat(_, _) ->
       Init_single floatconst0
-  | TPtr(ty, _) ->
+  | TPtr(_, _) ->
       Init_single nullconst
-  | TArray(ty, sz, _) ->
+  | TArray(_, _, _) ->
       Init_array []
   | TStruct(id, _) ->
       let rec default_init_fields = function

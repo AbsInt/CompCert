@@ -12,9 +12,8 @@
 (* *********************************************************************)
 
 open AST
-open Asm
 open Camlcoq
-open Datatypes
+open !Datatypes
 open DwarfPrinter
 open PrintAsmaux
 open Printf
@@ -105,7 +104,7 @@ module Printer(Target:TARGET) =
     let print_globdef oc (name,gdef) =
       match gdef with
       | Gfun (Internal code) -> print_function oc name code
-      | Gfun (External ef) ->   ()
+      | Gfun (External _) ->   ()
       | Gvar v -> print_var oc name v
 
     module DwarfTarget: DwarfTypes.DWARF_TARGET =
@@ -119,7 +118,7 @@ module Printer(Target:TARGET) =
     module DebugPrinter = DwarfPrinter (DwarfTarget)
   end
 
-let print_program oc p db =
+let print_program oc p =
   let module Target = (val (sel_target ()):TARGET) in
   let module Printer = Printer(Target) in
   Fileinfo.reset_filenames ();

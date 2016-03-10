@@ -12,27 +12,37 @@
 
 val arch: string
   (** Target architecture *)
+
 val model: string
   (** Sub-model for this architecture *)
+
 val abi: string
   (** ABI to use *)
+
 val system: string
   (** Flavor of operating system that runs CompCert *)
 
 val prepro: string list
   (** How to invoke the external preprocessor *)
+
 val asm: string list
   (** How to invoke the external assembler *)
+
 val linker: string list
   (** How to invoke the external linker *)
+
 val asm_supports_cfi: bool
   (** True if the assembler supports Call Frame Information *)
+
 val stdlib_path: string
   (** Path to CompCert's library *)
+
 val has_runtime_lib: bool
   (** True if CompCert's library is available. *)
+
 val has_standard_headers: bool
   (** True if CompCert's standard header files is available. *)
+
 val advanced_debug: bool
   (** True if advanced debug is implement for the Target *)
 
@@ -52,6 +62,7 @@ type struct_return_style =
 val struct_passing_style: struct_passing_style
   (** Calling conventions to use for passing structs and unions as
       first-class values *)
+
 val struct_return_style: struct_return_style
   (** Calling conventions to use for returning structs and unions as
       first-class values *)

@@ -22,10 +22,10 @@ open Builtins
 open Camlcoq
 open AST
 open Values
-open Ctypes
-open Cop
-open Csyntax
-open Initializers
+open !Ctypes
+open !Cop
+open !Csyntax
+open !Initializers
 open Floats
 
 (** ** Extracting information about global variables from their atom *)
@@ -76,13 +76,13 @@ let atom_sections a =
   with Not_found ->
     []
 
-let atom_is_small_data a ofs =
+let atom_is_small_data a _ =
   try
     (Hashtbl.find decl_atom a).a_access = Sections.Access_near
   with Not_found ->
     false
 
-let atom_is_rel_data a ofs =
+let atom_is_rel_data a _ =
   try
     (Hashtbl.find decl_atom a).a_access = Sections.Access_far
   with Not_found ->
@@ -106,7 +106,7 @@ let comp_env : composite_env ref = ref Maps.PTree.empty
 
 (** Hooks -- overriden in machine-dependent CPragmas module *)
 
-let process_pragma_hook = ref (fun (s: string) -> false)
+let process_pragma_hook = ref (fun (_: string) -> false)
 
 (** ** Error handling *)
 
@@ -267,7 +267,7 @@ let stringNum = ref 0   (* number of next global for string literals *)
 let stringTable : (string, AST.ident) Hashtbl.t = Hashtbl.create 47
 let wstringTable : (int64 list, AST.ident) Hashtbl.t = Hashtbl.create 47
 
-let name_for_string_literal env s =
+let name_for_string_literal _ s =
   try
     Hashtbl.find stringTable s
   with Not_found ->
@@ -297,7 +297,7 @@ let global_for_string s id =
   (id, Gvar {gvar_info = typeStringLiteral s; gvar_init = !init;
              gvar_readonly = true; gvar_volatile = false})
 
-let name_for_wide_string_literal env s =
+let name_for_wide_string_literal _ s =
   try
     Hashtbl.find wstringTable s
   with Not_found ->
@@ -357,13 +357,11 @@ let make_builtin_memcpy args =
       let sz1 =
         match Initializers.constval !comp_env sz with
         | Errors.OK(Vint n) -> n
-        | _ -> error "ill-formed __builtin_memcpy_aligned (3rd argument must be
-a constant)"; Integers.Int.zero in
+        | _ -> error "ill-formed __builtin_memcpy_aligned (3rd argument must be a constant)"; Integers.Int.zero in
       let al1 =
         match Initializers.constval !comp_env al with
         | Errors.OK(Vint n) -> n
-        | _ -> error "ill-formed __builtin_memcpy_aligned (4th argument must be
-a constant)"; Integers.Int.one in
+        | _ -> error "ill-formed __builtin_memcpy_aligned (4th argument must be a constant)"; Integers.Int.one in
       (* to check: sz1 > 0, al1 divides sz1, al1 = 1|2|4|8 *)
       (* Issue #28: must decay array types to pointer types *)
       Ebuiltin(EF_memcpy(sz1, al1),
@@ -403,9 +401,9 @@ let make_builtin_va_arg_by_ref helper ty arg =
           Tpointer(Tvoid, noattr)) in
   Evalof(Ederef(Ecast(call, ty_ptr), ty), ty)
 
-let make_builtin_va_arg env ty e =
+let make_builtin_va_arg _ ty e =
   match ty with
-  | Tint _ | Tpointer _ ->
+  | Ctypes.Tint _ | Tpointer _ ->
       make_builtin_va_arg_by_val
         "__compcert_va_int32" ty (Tint(I32, Unsigned, noattr)) e
   | Tlong _ ->
@@ -445,7 +443,7 @@ let convertCallconv va unproto attr =
 (** Types *)
 
 let convertIkind = function
-  | C.IBool -> (Unsigned, IBool)
+  | C.IBool -> (Unsigned, Ctypes.IBool)
   | C.IChar -> ((if (!Machine.config).Machine.char_signed
                  then Signed else Unsigned), I8)
   | C.ISChar -> (Signed, I8)
@@ -474,7 +472,7 @@ let checkFunctionType env tres targs =
     | None -> ()
     | Some l ->
         List.iter
-          (fun (id, ty) ->
+          (fun (_, ty) ->
             if Cutil.is_composite_type env ty then
               unsupported "function parameter of struct or union type (consider adding option -fstruct-passing)")
           l
@@ -483,7 +481,7 @@ let checkFunctionType env tres targs =
     
 let rec convertTyp env t =
   match t with
-  | C.TVoid a -> Tvoid
+  | C.TVoid _ -> Tvoid
   | C.TInt(C.ILongLong, a) ->
       Tlong(Signed, convertAttr a)
   | C.TInt(C.IULongLong, a) ->
@@ -515,13 +513,13 @@ let rec convertTyp env t =
       Tstruct(intern_string id.name, convertAttr a)
   | C.TUnion(id, a) ->
       Tunion(intern_string id.name, convertAttr a)
-  | C.TEnum(id, a) ->
+  | C.TEnum(_, a) ->
       let (sg, sz) = convertIkind Cutil.enum_ikind in
       Tint(sz, sg, convertAttr a)
 
 and convertParams env = function
     | [] -> Tnil
-    | (id, ty) :: rem -> Tcons(convertTyp env ty, convertParams env rem)
+    | (_, ty) :: rem -> Tcons(convertTyp env ty, convertParams env rem)
 
 let rec convertTypArgs env tl el =
   match tl, el with
@@ -529,7 +527,7 @@ let rec convertTypArgs env tl el =
   | [], e1 :: el ->
       Tcons(convertTyp env (Cutil.default_argument_conversion env e1.etyp),
             convertTypArgs env [] el)
-  | (id, t1) :: tl, e1 :: el ->
+  | (_, t1) :: tl, _ :: el ->
       Tcons(convertTyp env t1, convertTypArgs env tl el)
 
 let convertField env f =
@@ -552,8 +550,8 @@ let convertCompositedef env su id attr members =
 
 let rec projFunType env ty =
   match Cutil.unroll env ty with
-  | TFun(res, args, vararg, attr) -> Some(res, args, vararg)
-  | TPtr(ty', attr) -> projFunType env ty'
+  | TFun(res, args, vararg, _) -> Some(res, args, vararg)
+  | TPtr(ty', _) -> projFunType env ty'
   | _ -> None
 
 let string_of_type ty =
@@ -665,7 +663,7 @@ let rec convertExpr env e =
   | C.EConst(C.CWStr s) ->
       let ty = typeWideStringLiteral s in
       Evalof(Evar(name_for_wide_string_literal env s, ty), ty)
-  | C.EConst(C.CEnum(id, i)) ->
+  | C.EConst(C.CEnum(_, i)) ->
       Ctyping.econst_int (convertInt i) Signed
   | C.ESizeof ty1 ->
       Ctyping.esizeof (convertTyp env ty1)
@@ -693,25 +691,25 @@ let rec convertExpr env e =
 
   | C.EBinop((C.Oadd|C.Osub|C.Omul|C.Odiv|C.Omod|C.Oand|C.Oor|C.Oxor|
               C.Oshl|C.Oshr|C.Oeq|C.One|C.Olt|C.Ogt|C.Ole|C.Oge) as op,
-             e1, e2, tyres) ->
+             e1, e2, _) ->
       let op' =
         match op with
-        | C.Oadd -> Oadd
-        | C.Osub -> Osub
-        | C.Omul -> Omul
-        | C.Odiv -> Odiv
-        | C.Omod -> Omod
-        | C.Oand -> Oand
-        | C.Oor  -> Oor
-        | C.Oxor -> Oxor
-        | C.Oshl -> Oshl
-        | C.Oshr -> Oshr
-        | C.Oeq  -> Oeq
-        | C.One  -> One
-        | C.Olt  -> Olt
-        | C.Ogt  -> Ogt
-        | C.Ole  -> Ole
-        | C.Oge  -> Oge
+        | C.Oadd -> Cop.Oadd
+        | C.Osub -> Cop.Osub
+        | C.Omul -> Cop.Omul
+        | C.Odiv -> Cop.Odiv
+        | C.Omod -> Cop.Omod
+        | C.Oand -> Cop.Oand
+        | C.Oor  -> Cop.Oor
+        | C.Oxor -> Cop.Oxor
+        | C.Oshl -> Cop.Oshl
+        | C.Oshr -> Cop.Oshr
+        | C.Oeq  -> Cop.Oeq
+        | C.One  -> Cop.One
+        | C.Olt  -> Cop.Olt
+        | C.Ogt  -> Cop.Ogt
+        | C.Ole  -> Cop.Ole
+        | C.Oge  -> Cop.Oge
         | _ -> assert false in
       ewrap (Ctyping.ebinop op' (convertExpr env e1) (convertExpr env e2))
   | C.EBinop(C.Oassign, e1, e2, _) ->
@@ -725,19 +723,19 @@ let rec convertExpr env e =
   | C.EBinop((C.Oadd_assign|C.Osub_assign|C.Omul_assign|C.Odiv_assign|
               C.Omod_assign|C.Oand_assign|C.Oor_assign|C.Oxor_assign|
               C.Oshl_assign|C.Oshr_assign) as op,
-             e1, e2, tyres) ->
+             e1, e2, _) ->
       let op' =
         match op with
-        | C.Oadd_assign -> Oadd
-        | C.Osub_assign -> Osub
-        | C.Omul_assign -> Omul
-        | C.Odiv_assign -> Odiv
-        | C.Omod_assign -> Omod
-        | C.Oand_assign -> Oand
-        | C.Oor_assign  -> Oor
-        | C.Oxor_assign -> Oxor
-        | C.Oshl_assign -> Oshl
-        | C.Oshr_assign -> Oshr
+        | C.Oadd_assign -> Cop.Oadd
+        | C.Osub_assign -> Cop.Osub
+        | C.Omul_assign -> Cop.Omul
+        | C.Odiv_assign -> Cop.Odiv
+        | C.Omod_assign -> Cop.Omod
+        | C.Oand_assign -> Cop.Oand
+        | C.Oor_assign  -> Cop.Oor
+        | C.Oxor_assign -> Cop.Oxor
+        | C.Oshl_assign -> Cop.Oshl
+        | C.Oshr_assign -> Cop.Oshr
         | _ -> assert false in
       let e1' = convertLvalue env e1 in
       let e2' = convertExpr env e2 in
@@ -754,7 +752,7 @@ let rec convertExpr env e =
                                 (convertExpr env e2) (convertExpr env e3))
   | C.ECast(ty1, e1) ->
       ewrap (Ctyping.ecast (convertTyp env ty1) (convertExpr env e1))
-  | C.ECompound(ty1, ie) ->
+  | C.ECompound _ ->
       unsupported "compound literals"; ezero
 
   | C.ECall({edesc = C.EVar {name = "__builtin_debug"}}, args) ->
@@ -809,7 +807,7 @@ let rec convertExpr env e =
             Econs(va_list_ptr(convertExpr env arg), Enil),
             convertTyp env e.etyp)
 
-  | C.ECall({edesc = C.EVar {name = "__builtin_va_arg"}}, [arg1; arg2]) ->
+  | C.ECall({edesc = C.EVar {name = "__builtin_va_arg"}}, [arg1; _]) ->
       make_builtin_va_arg env (convertTyp env e.etyp) (convertExpr env arg1)
 
   | C.ECall({edesc = C.EVar {name = "__builtin_va_end"}}, _) ->
@@ -945,7 +943,7 @@ let rec contains_case s =
   | C.Sif(_,s1,s2) -> contains_case s1; contains_case s2
   | C.Swhile (_,s1)
   | C.Sdowhile (s1,_) -> contains_case s1
-  | C.Sfor (s1,e,s2,s3) ->  contains_case s1; contains_case s2; contains_case s3
+  | C.Sfor (s1,_,s2,s3) ->  contains_case s1; contains_case s2; contains_case s3
   | C.Slabeled(C.Scase _, _) ->
       unsupported "'case' outside of 'switch'"
   | C.Slabeled(_,s) -> contains_case s
@@ -958,13 +956,13 @@ let rec contains_case s =
 let swrap = function
   | Errors.OK s -> s
   | Errors.Error msg ->
-      error ("retyping error: " ^  string_of_errmsg msg); Sskip
+      error ("retyping error: " ^  string_of_errmsg msg); Csyntax.Sskip
 
 let rec convertStmt env s =
   updateLoc s.sloc;
   match s.sdesc with
   | C.Sskip ->
-      Sskip
+      Csyntax.Sskip
   | C.Sdo e ->
       swrap (Ctyping.sdo (convertExpr env e))
   | C.Sseq(s1, s2) ->
@@ -1020,7 +1018,7 @@ let rec convertStmt env s =
       unsupported "nested blocks"; Sskip
   | C.Sdecl _ ->
       unsupported "inner declarations"; Sskip
-  | C.Sasm(attrs, txt, outputs, inputs, clobber) ->
+  | C.Sasm(_, txt, outputs, inputs, clobber) ->
       if not !Clflags.option_finline_asm then
         unsupported "inline 'asm' statement (consider adding option -finline-asm)";
       Sdo (convertAsm s.sloc env txt outputs inputs clobber)
@@ -1080,7 +1078,7 @@ let convertFundef loc env fd =
       a_access = Sections.Access_default;
       a_inline = fd.fd_inline && not fd.fd_vararg;  (* PR#15 *)
       a_loc = loc };
-  (id', Gfun(Internal
+  (id', Gfun(Csyntax.Internal
           {fn_return = ret;
            fn_callconv = convertCallconv fd.fd_vararg false fd.fd_attrib;
            fn_params = params;
@@ -1091,7 +1089,7 @@ let convertFundef loc env fd =
 
 let re_builtin = Str.regexp "__builtin_"
 
-let convertFundecl env (sto, id, ty, optinit) =
+let convertFundecl env (_, id, ty, _) =
   let (args, res, cconv) =
     match convertTyp env ty with
     | Tfunction(args, res, cconv) -> (args, res, cconv)
@@ -1106,20 +1104,20 @@ let convertFundecl env (sto, id, ty, optinit) =
     && List.mem_assoc id.name builtins.functions
     then EF_builtin(id'', sg)
     else EF_external(id'', sg) in
-  (id', Gfun(External(ef, args, res, cconv)))
+  (id', Gfun(Csyntax.External(ef, args, res, cconv)))
 
 (** Initializers *)
 
 let rec convertInit env init =
   match init with
   | C.Init_single e ->
-      Init_single (convertExpr env e)
+      Initializers.Init_single (convertExpr env e)
   | C.Init_array il ->
-      Init_array (convertInitList env (List.rev il) Init_nil)
+      Initializers.Init_array (convertInitList env (List.rev il) Init_nil)
   | C.Init_struct(_, flds) ->
-      Init_struct (convertInitList env (List.rev_map snd flds) Init_nil)
+      Initializers.Init_struct (convertInitList env (List.rev_map snd flds) Init_nil)
   | C.Init_union(_, fld, i) ->
-      Init_union (intern_string fld.fld_name, convertInit env i)
+      Initializers.Init_union (intern_string fld.fld_name, convertInit env i)
 
 and convertInitList env il accu =
   match il with
@@ -1179,11 +1177,11 @@ let rec convertGlobdecls env res gl =
   | g :: gl' ->
       updateLoc g.gloc;
       match g.gdesc with
-      | C.Gdecl((sto, id, ty, optinit) as d) ->
+      | C.Gdecl((_, id, ty, _) as d) ->
           (* Functions become external declarations.
              Other types become variable declarations. *)
           begin match Cutil.unroll env ty with
-          | TFun(tres, targs, va, a) ->
+          | TFun(_, targs, _, _) ->
               if targs = None then
                 warning ("'" ^ id.name ^ "' is declared without a function prototype");
               convertGlobdecls env (convertFundecl env d :: res) gl'
@@ -1225,7 +1223,7 @@ let rec translEnv env = function
       let env' =
         match g.gdesc with
         | C.Gcompositedecl(su, id, attr) ->
-            Env.add_composite env id (Cutil.composite_info_decl env su attr)
+            Env.add_composite env id (Cutil.composite_info_decl su attr)
         | C.Gcompositedef(su, id, attr, fld) ->
             Env.add_composite env id (Cutil.composite_info_def env su attr fld)
         | C.Gtypedef(id, ty) ->
@@ -1253,13 +1251,13 @@ let cleanupGlobals p =
         if IdentSet.mem fd.fd_name !strong then
           error ("multiple definitions of " ^ fd.fd_name.name);
         strong := IdentSet.add fd.fd_name !strong
-    | C.Gdecl(Storage_extern, id, ty, init) ->
+    | C.Gdecl(Storage_extern, id, _, _) ->
         extern := IdentSet.add id !extern
-    | C.Gdecl(sto, id, ty, Some i) ->
+    | C.Gdecl(_, id, _, Some _) ->
         if IdentSet.mem id !strong then
           error ("multiple definitions of " ^ id.name);
         strong := IdentSet.add id !strong
-    | C.Gdecl(sto, id, ty, None) ->
+    | C.Gdecl(_, id, _, None) ->
         weak := IdentSet.add id !weak
     | _ -> () in
   List.iter classify_def p;
@@ -1270,7 +1268,7 @@ let cleanupGlobals p =
     | g :: gl ->
         updateLoc g.gloc;
         match g.gdesc with
-        | C.Gdecl(sto, id, ty, init) ->
+        | C.Gdecl(sto, id, _, init) ->
             let better_def_exists =
               if sto = Storage_extern then
                 IdentSet.mem id !strong || IdentSet.mem id !weak
@@ -1291,7 +1289,7 @@ let cleanupGlobals p =
 
 let public_globals gl =
   List.fold_left
-    (fun accu (id, g) -> if atom_is_static id then accu else id :: accu)
+    (fun accu (id, _) -> if atom_is_static id then accu else id :: accu)
     [] gl
 
 (** Convert a [C.program] into a [Csyntax.program] *)

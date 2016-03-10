@@ -11,9 +11,7 @@
 (* *********************************************************************)
 
 open Datatypes
-open Camlcoq
 open AST
-open Switch
 open CminorSel
 
 (* Heuristic to orient if-then-else statements.
@@ -28,22 +26,22 @@ open CminorSel
    putting the bigger of the two branches in fall-through position. *)
 
 let rec size_expr = function
-  | Evar id -> 0
-  | Eop(op, args) -> 1 + size_exprs args
-  | Eload(chunk, addr, args) -> 1 + size_exprs args
+  | Evar _ -> 0
+  | Eop(_, args) -> 1 + size_exprs args
+  | Eload(_, _, args) -> 1 + size_exprs args
   | Econdition(ce, e1, e2) ->
       1 + size_condexpr ce + max (size_expr e1) (size_expr e2)
   | Elet(e1, e2) -> size_expr e1 + size_expr e2
-  | Eletvar n -> 0
-  | Ebuiltin(ef, el) -> 2 + size_exprs el
-  | Eexternal(id, sg, el) -> 5 + size_exprs el
+  | Eletvar _ -> 0
+  | Ebuiltin(_, el) -> 2 + size_exprs el
+  | Eexternal(_, _, el) -> 5 + size_exprs el
 
 and size_exprs = function
   | Enil -> 0
   | Econs(e1, el) -> size_expr e1 + size_exprs el
 
 and size_condexpr = function
-  | CEcond(c, args) -> size_exprs args
+  | CEcond(_, args) -> size_exprs args
   | CEcondition(c1, c2, c3) ->
       1 + size_condexpr c1 + size_condexpr c2 + size_condexpr c3
   | CElet(a, c) ->
@@ -54,8 +52,8 @@ let size_exprlist al = List.fold_right (fun a s -> size_expr a + s) al 0
 let size_builtin_args al = size_exprlist (params_of_builtin_args al)
 
 let rec size_exitexpr = function
-  | XEexit n -> 0
-  | XEjumptable(arg, tbl) -> 2 + size_expr arg
+  | XEexit _ -> 0
+  | XEjumptable(arg, _) -> 2 + size_expr arg
   | XEcondition(c1, c2, c3) ->
       1 + size_condexpr c1 + size_exitexpr c2 + size_exitexpr c3
   | XElet(a, c) ->
@@ -63,34 +61,34 @@ let rec size_exitexpr = function
 
 let rec length_exprs = function
   | Enil -> 0
-  | Econs(e1, el) -> 1 + length_exprs el
+  | Econs(_, el) -> 1 + length_exprs el
 
 let size_eos = function
   | Coq_inl e -> size_expr e
-  | Coq_inr id -> 0
+  | Coq_inr _ -> 0
 
 let rec size_stmt = function
   | Sskip -> 0
-  | Sassign(id, a) -> size_expr a
-  | Sstore(chunk, addr, args, src) -> 1 + size_exprs args + size_expr src
-  | Scall(optid, sg, eos, args) ->
+  | Sassign(_, a) -> size_expr a
+  | Sstore(_, _, args, src) -> 1 + size_exprs args + size_expr src
+  | Scall(_, _, eos, args) ->
       3 + size_eos eos + size_exprs args + length_exprs args
-  | Stailcall(sg, eos, args) ->
+  | Stailcall(_, eos, args) ->
       3 + size_eos eos + size_exprs args + length_exprs args
   | Sbuiltin(_, (EF_annot _ | EF_debug _), _) -> 0
-  | Sbuiltin(optid, ef, args) -> 1 + size_builtin_args args
+  | Sbuiltin(_, _, args) -> 1 + size_builtin_args args
   | Sseq(s1, s2) -> size_stmt s1 + size_stmt s2
   | Sifthenelse(ce, s1, s2) ->
       size_condexpr ce + max (size_stmt s1) (size_stmt s2)
   | Sloop s -> 1 + 4 * size_stmt s
   | Sblock s -> size_stmt s
-  | Sexit n -> 1
+  | Sexit _ -> 1
   | Sswitch xe -> size_exitexpr xe
   | Sreturn None -> 2
   | Sreturn (Some arg) -> 2 + size_expr arg
-  | Slabel(lbl, s) -> size_stmt s
-  | Sgoto lbl -> 1
+  | Slabel(_, s) -> size_stmt s
+  | Sgoto _ -> 1
 
-let more_likely (c: condexpr) (ifso: stmt) (ifnot: stmt) =
+let more_likely (_: condexpr) (ifso: stmt) (ifnot: stmt) =
   size_stmt ifso > size_stmt ifnot
 

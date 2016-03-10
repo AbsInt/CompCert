@@ -45,7 +45,7 @@ let new_temp ?(name = "t") ty =
 
 let attributes_to_remove_from_temp = add_attributes [AConst] [AVolatile]
 
-let mk_temp env ?(name = "t") ty =
+let mk_temp env ty =
   new_temp (remove_attributes_type env attributes_to_remove_from_temp ty)
 
 (* Bind a l-value to a temporary variable if it is not invariant. *)
@@ -141,7 +141,7 @@ let expand_postincrdecr ~read ~write env ctx op l =
    and preserving the statement structure.
    If [decl] is not given, it applies only to unblocked code. *)
 
-let stmt ~expr ?(decl = fun env decl -> assert false) env s =
+let stmt ~expr ?(decl = fun _ _ -> assert false) env s =
   let rec stm s =
   match s.sdesc with
   | Sskip -> s
@@ -163,7 +163,7 @@ let stmt ~expr ?(decl = fun env decl -> assert false) env s =
       {s with sdesc = Sswitch(expr s.sloc env Val e, stm s1)}
   | Slabeled(lbl, s) ->
       {s with sdesc = Slabeled(lbl, stm s)}
-  | Sgoto lbl -> s
+  | Sgoto _ -> s
   | Sreturn None -> s
   | Sreturn (Some e) ->
       {s with sdesc = Sreturn(Some(expr s.sloc env Val e))}
@@ -191,12 +191,12 @@ let fundef trstmt env f =
 (* Generic transformation of a program *)
 
 let program
-    ?(decl = fun env d -> d)
-    ?(fundef = fun env fd -> fd)
-    ?(composite = fun env su id attr fl -> (attr, fl))
-    ?(typedef = fun env id ty -> ty)
-    ?(enum = fun env id attr members -> (attr, members))
-    ?(pragma = fun env s -> s)
+    ?(decl = fun _ d -> d)
+    ?(fundef = fun _ fd -> fd)
+    ?(composite = fun _ _ _ attr fl -> (attr, fl))
+    ?(typedef = fun _ _ ty -> ty)
+    ?(enum = fun _ _ attr members -> (attr, members))
+    ?(pragma = fun _ s -> s)
     p =
 
   let rec transf_globdecls env accu = function
@@ -204,14 +204,14 @@ let program
   | g :: gl ->
       let (desc', env') =
         match g.gdesc with
-        | Gdecl((sto, id, ty, init) as d) ->
+        | Gdecl((sto, id, ty, _) as d) ->
            (Gdecl(decl env d), Env.add_ident env id sto ty)
         | Gfundef f ->
            (Gfundef(fundef env f),
             Env.add_ident env f.fd_name f.fd_storage (fundef_typ f))
         | Gcompositedecl(su, id, attr) ->
             (Gcompositedecl(su, id, attr),
-             Env.add_composite env id (composite_info_decl env su attr))
+             Env.add_composite env id (composite_info_decl su attr))
         | Gcompositedef(su, id, attr, fl) ->
             let (attr', fl') = composite env su id attr fl in
             (Gcompositedef(su, id, attr', fl'),

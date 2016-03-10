@@ -142,7 +142,7 @@ type instruction_arg =
   | Freg of freg
   | Constant of constant
   | Crbit of crbit
-  | Label of positive
+  | ALabel of positive
   | Float32 of Floats.float32
   | Float64 of Floats.float
   | Atom of positive
@@ -152,7 +152,7 @@ let p_arg oc = function
   | Freg fr -> p_freg oc fr
   | Constant c -> p_constant oc c
   | Crbit cr -> p_crbit oc cr
-  | Label lbl -> p_label oc lbl
+  | ALabel lbl -> p_label oc lbl
   | Float32 f -> p_float32_constant oc f
   | Float64 f  -> p_float64_constant oc f
   | Atom a -> p_atom_constant oc a
@@ -176,16 +176,16 @@ let p_instruction oc ic =
   | Pandc (ir1,ir2,ir3) -> instruction "Pandc" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pandi_ (ir1,ir2,c) -> instruction "Pandi_" [Ireg ir1; Ireg ir2; Constant c]
   | Pandis_ (ir1,ir2,c) -> instruction "Pandis_" [Ireg ir1; Ireg ir2; Constant c]
-  | Pb l -> instruction "Pb" [Label l]
-  | Pbctr s -> instruction "Pbctr" []
-  | Pbctrl s -> instruction "Pbctrl" []
-  | Pbdnz l -> instruction "Pbdnz" [Label l]
-  | Pbf (cr,l) -> instruction "Pbf" [Crbit cr; Label l]
-  | Pbl (i,s) -> instruction "Pbl" [Atom i]
-  | Pbs (i,s) -> instruction "Pbs" [Atom i]
+  | Pb l -> instruction "Pb" [ALabel l]
+  | Pbctr _ -> instruction "Pbctr" []
+  | Pbctrl _ -> instruction "Pbctrl" []
+  | Pbdnz l -> instruction "Pbdnz" [ALabel l]
+  | Pbf (cr,l) -> instruction "Pbf" [Crbit cr; ALabel l]
+  | Pbl (i,_) -> instruction "Pbl" [Atom i]
+  | Pbs (i,_) -> instruction "Pbs" [Atom i]
   | Pblr -> instruction "Pblr" []
-  | Pbt (cr,l) ->  instruction "Pbt" [Crbit cr; Label l]
-  | Pbtbl (i,lb) -> instruction "Pbtbl" ((Ireg i)::(List.map (fun a -> Label a) lb))
+  | Pbt (cr,l) ->  instruction "Pbt" [Crbit cr; ALabel l]
+  | Pbtbl (i,lb) -> instruction "Pbtbl" ((Ireg i)::(List.map (fun a -> ALabel a) lb))
   | Pcmpb (ir1,ir2,ir3) -> instruction "Pcmpb" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pcmplw (ir1,ir2) -> instruction "Pcmplw" [Ireg ir1; Ireg ir2]
   | Pcmplwi (ir,c) -> instruction "Pcmplwi" [Ireg ir; Constant c]
@@ -208,13 +208,13 @@ let p_instruction oc ic =
   | Pextsb (ir1,ir2) -> instruction "Pextsb" [Ireg ir1; Ireg ir2]
   | Pextsh (ir1,ir2) -> instruction "Pextsh" [Ireg ir1; Ireg ir2]
   | Pextsw (ir1,ir2) -> instruction "Pextsw" [Ireg ir1; Ireg ir2]
-  | Pfreeframe (c,i) -> assert false (* Should not occur *)
+  | Pfreeframe _ -> assert false (* Should not occur *)
   | Pfabs (fr1,fr2)
   | Pfabss (fr1,fr2) -> instruction "Pfabs" [Freg fr1; Freg fr2]
   | Pfadd (fr1,fr2,fr3) -> instruction "Pfadd" [Freg fr1; Freg fr2; Freg fr3]
   | Pfadds (fr1,fr2,fr3) -> instruction "Pfadds" [Freg fr1; Freg fr2; Freg fr3]
   | Pfcmpu (fr1,fr2) -> instruction "Pfcmpu" [Freg fr1; Freg fr2]
-  | Pfcfi (ir,fr) -> () (* Should not occur *)
+  | Pfcfi _ -> () (* Should not occur *)
   | Pfcfid (fr1,fr2) -> instruction "Pfcfid" [Freg fr1; Freg fr2]
   | Pfcfiu _ (* Should not occur *)
   | Pfcti _ (* Should not occur *)
@@ -224,14 +224,14 @@ let p_instruction oc ic =
   | Pfctiwz (fr1,fr2) -> instruction "Pfctiwz" [Freg fr1; Freg fr2]
   | Pfdiv (fr1,fr2,fr3) -> instruction "Pfdiv" [Freg fr1; Freg fr2; Freg fr3]
   | Pfdivs (fr1,fr2,fr3) -> instruction "Pfdivs" [Freg fr1; Freg fr2; Freg fr3]
-  | Pfmake (fr,ir1,ir2) -> ()(* Should not occur *)
+  | Pfmake _ -> ()(* Should not occur *)
   | Pfmr (fr1,fr2) -> instruction "Pfmr" [Freg fr1; Freg fr2]
   | Pfmul (fr1,fr2,fr3) -> instruction "Pfmul" [Freg fr1; Freg fr2; Freg fr3]
   | Pfmuls(fr1,fr2,fr3) -> instruction "Pfmuls" [Freg fr1; Freg fr2; Freg fr3]
   | Pfneg (fr1,fr2)
   | Pfnegs (fr1,fr2) -> instruction "Pfneg" [Freg fr1; Freg fr2]
   | Pfrsp (fr1,fr2) -> instruction "Pfrsp" [Freg fr1; Freg fr2]
-  | Pfxdp (fr1,fr2) -> () (* Should not occur *)
+  | Pfxdp _ -> () (* Should not occur *)
   | Pfsub (fr1,fr2,fr3) -> instruction "Pfsub" [Freg fr1; Freg fr2; Freg fr3]
   | Pfsubs (fr1,fr2,fr3) ->  instruction "Pfsubs" [Freg fr1; Freg fr2; Freg fr3]
   | Pfmadd (fr1,fr2,fr3,fr4) -> instruction "Pfmadd" [Freg fr1; Freg fr2; Freg fr3; Freg fr4]
@@ -271,7 +271,7 @@ let p_instruction oc ic =
   | Plwbrx (ir1,ir2,ir3) -> instruction "Plwbrx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pmbar c -> instruction "Pmbar" [Constant (Cint c)]
   | Pmfcr ir -> instruction "Pmfcr" [Ireg ir]
-  | Pmfcrbit (ir,crb) -> () (* Should not occur *)
+  | Pmfcrbit _ -> () (* Should not occur *)
   | Pmflr ir -> instruction "Pmflr" [Ireg ir]
   | Pmr (ir1,ir2) -> instruction "Pmr" [Ireg ir1; Ireg ir2]
   | Pmtctr ir -> instruction "Pmtctr" [Ireg ir]
@@ -326,7 +326,7 @@ let p_instruction oc ic =
   | Pxor (ir1,ir2,ir3) -> instruction "Pxor" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pxori (ir1,ir2,c) ->instruction "Pxori" [Ireg ir1; Ireg ir2; Constant c]
   | Pxoris (ir1,ir2,c) -> instruction "Pxoris" [Ireg ir1; Ireg ir2; Constant c]
-  | Plabel l -> instruction "Plabel" [Label l]
+  | Plabel l -> instruction "Plabel" [ALabel l]
   | Pbuiltin _ -> ()
   | Pcfi_adjust _  (* Only debug relevant *)
   | Pcfi_rel_offset _ ->  () (* Only debug relevant *) in

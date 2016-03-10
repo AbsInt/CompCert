@@ -17,8 +17,7 @@
 open Lexing
 open Pre_parser
 open Pre_parser_aux
-open Cabshelper
-open Camlcoq
+open !Cabshelper
 
 module SSet = Set.Make(String)
 
@@ -430,7 +429,7 @@ and singleline_comment = parse
   open Streams
   open Specif
   open Parser
-  open Aut.GramDefs
+  open !Aut.GramDefs
 
   (* This is the main entry point to the lexer. *)
 
@@ -578,7 +577,7 @@ and singleline_comment = parse
           let rec doConcat wide str =
             try
               match Queue.peek tokens with
-              | STRING_LITERAL (wide', str', loc) ->
+              | STRING_LITERAL (wide', str', _) ->
                   ignore (Queue.pop tokens);
                   let (wide'', str'') = doConcat wide' str' in
                   if str'' <> []

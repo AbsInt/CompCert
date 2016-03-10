@@ -18,11 +18,9 @@
 (* FIXME: proper support for type Tsingle *)
 
 open Printf
-open Datatypes
 open Camlcoq
 open AST
 open PrintAST
-open Integers
 open Cminor
 
 exception Error of string
@@ -73,21 +71,6 @@ let type_var env id =
     List.assoc id env
   with Not_found ->
     raise (Error (sprintf "Unbound variable %s\n" (extern_atom id)))
-
-let type_letvar env n =
-  let n = Nat.to_int n in
-  try
-    List.nth env n
-  with Not_found ->
-    raise (Error (sprintf "Unbound let variable #%d\n" n))
-
-let name_of_comparison = function
-  | Ceq -> "eq"
-  | Cne -> "ne"
-  | Clt -> "lt"
-  | Cle -> "le"
-  | Cgt -> "gt"
-  | Cge -> "ge"
 
 let type_constant = function
   | Ointconst _ -> tint
@@ -313,12 +296,12 @@ let rec type_stmt env blk ret s =
   | Sexit n ->
       if Nat.to_int n >= blk then
         raise (Error (sprintf "Bad exit(%d)\n" (Nat.to_int n)))
-  | Sswitch(islong, e, cases, deflt) ->
+  | Sswitch(islong, e, _, _) ->
       unify (type_expr env [] e) (if islong then tlong else tint)
   | Sreturn None ->
       begin match ret with
       | None -> ()
-      | Some tret -> raise (Error ("return without argument"))
+      | Some _ -> raise (Error ("return without argument"))
       end
   | Sreturn (Some e) ->
       begin match ret with
@@ -339,9 +322,9 @@ let rec type_stmt env blk ret s =
       with Error s ->
         raise (Error (sprintf "In tail call:\n%s" s))
       end
-  | Slabel(lbl, s1) ->
+  | Slabel(_, s1) ->
       type_stmt env blk ret s1
-  | Sgoto lbl ->
+  | Sgoto _ ->
       ()
 
 let rec env_of_vars idl =
@@ -360,8 +343,8 @@ let type_function id f =
 let type_globdef (id, gd) =
   match gd with
   | Gfun(Internal f) -> type_function id f
-  | Gfun(External ef) -> ()
-  | Gvar v -> ()
+  | Gfun(External _) -> ()
+  | Gvar _ -> ()
 
 let type_program p =
   List.iter type_globdef p.prog_defs; p

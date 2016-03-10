@@ -33,7 +33,6 @@ open Printf
 open Machine
 open C
 open Cutil
-open Env
 open Cerrors
 
 (* Renaming of labeled and numbered operands *)
@@ -151,7 +150,7 @@ let transf_outputs loc env = function
          when substituting the text *)
       let rec bind_outputs pos subst = function
       | [] -> (None, [], subst, pos, pos)
-      | (lbl, cstr, e) :: outputs ->
+      | (lbl, _, _) :: outputs ->
           bind_outputs (pos + 1) (set_label_reg lbl pos pos subst) outputs
       in bind_outputs 0 StringMap.empty outputs
 

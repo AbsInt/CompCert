@@ -17,8 +17,7 @@ open Camlcoq
 open Datatypes
 open Maps
 open AST
-open Integers
-open Locations
+open !Locations
 open LTL
 open PrintAST
 open PrintOp
@@ -73,9 +72,9 @@ let print_instruction pp succ = function
   | Lstore(chunk, addr, args, src) ->
       fprintf pp "%s[%a] = %a"
          (name_of_chunk chunk) (print_addressing mreg) (addr, args) mreg src
-  | Lcall(sg, fn) ->
+  | Lcall(_, fn) ->
       fprintf pp "call %a" ros fn
-  | Ltailcall(sg, fn) ->
+  | Ltailcall(_, fn) ->
       fprintf pp "tailcall %a" ros fn
   | Lbuiltin(ef, args, res) ->
       fprintf pp "%a = %s(%a)"

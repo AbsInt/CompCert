@@ -99,11 +99,11 @@ let twin_reg r =
 
 let rec successors_block = function
   | Xbranch s :: _ -> [s]
-  | Xtailcall(sg, vos, args) :: _ -> []
-  | Xcond(cond, args, s1, s2) :: _ -> [s1; s2]
-  | Xjumptable(arg, tbl) :: _ -> tbl
+  | Xtailcall(_,_,_) :: _ -> []
+  | Xcond(_,_, s1, s2) :: _ -> [s1; s2]
+  | Xjumptable(_, tbl) :: _ -> tbl
   | Xreturn  _:: _ -> []
-  | instr :: blk -> successors_block blk
+  | _ :: blk -> successors_block blk
   | [] -> assert false
 
 (**** Type checking for XTL *)
@@ -159,25 +159,25 @@ let type_instr = function
   | Xstore(chunk, addr, args, src) ->
       set_vars_type args (type_of_addressing addr);
       set_var_type src (type_of_chunk chunk)
-  | Xcall(sg, Coq_inl v, args, res) ->
+  | Xcall(_, Coq_inl v, _, _) ->
       set_var_type v Tint
-  | Xcall(sg, Coq_inr id, args, res) ->
+  | Xcall(_, Coq_inr _, _, _) ->
       ()
-  | Xtailcall(sg, Coq_inl v, args) ->
+  | Xtailcall(_, Coq_inl v, _) ->
       set_var_type v Tint
-  | Xtailcall(sg, Coq_inr id, args) ->
+  | Xtailcall(_, Coq_inr _,_) ->
       ()
   | Xbuiltin(ef, args, res) ->
       let sg = ef_sig ef in
       type_builtin_args args sg.sig_args;
       type_builtin_res res (proj_sig_res sg)
-  | Xbranch s ->
+  | Xbranch _ ->
       ()
-  | Xcond(cond, args, s1, s2) ->
+  | Xcond(cond, args, _, _) ->
       set_vars_type args (type_of_condition cond)
-  | Xjumptable(arg, tbl) ->
+  | Xjumptable(arg, _) ->
       set_var_type arg Tint
-  | Xreturn args ->
+  | Xreturn _ ->
       ()
 
 let type_block blk =
