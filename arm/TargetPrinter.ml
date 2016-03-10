@@ -13,11 +13,10 @@
 (* Printing ARM assembly code in asm syntax *)
 
 open Printf
-open Datatypes
+open !Datatypes
 open Camlcoq
 open Sections
 open AST
-open Memdata
 open Asm
 open PrintAsmaux
 open Fileinfo
@@ -67,12 +66,6 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | FR4 -> "d4"  | FR5 -> "d5"  | FR6 -> "d6"  | FR7 -> "d7"
       | FR8 -> "d8"  | FR9 -> "d9"  | FR10 -> "d10"  | FR11 -> "d11"
       | FR12 -> "d12"  | FR13 -> "d13"  | FR14 -> "d14"  | FR15 -> "d15"
-
-    let single_float_reg_index = function
-      | FR0 -> 0  | FR1 -> 2  | FR2 -> 4  | FR3 -> 6
-      | FR4 -> 8  | FR5 -> 10  | FR6 -> 12  | FR7 -> 14
-      | FR8 -> 16  | FR9 -> 18  | FR10 -> 20  | FR11 -> 22
-      | FR12 -> 24  | FR13 -> 26  | FR14 -> 28  | FR15 -> 30
 
     let single_float_reg_name = function
       | FR0 -> "s0"  | FR1 -> "s2"  | FR2 -> "s4"  | FR3 -> "s6"
@@ -130,7 +123,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
        orr
        rsb
        sub    (but not sp - imm)
-   On the other hand, "mov rd, rs" and "mov rd, #imm" have shorter 
+   On the other hand, "mov rd, rs" and "mov rd, #imm" have shorter
    encodings if they do not have the "S" flag.  Moreover, the "S"
    flag is not supported if rd or rs is sp.
 
@@ -257,39 +250,6 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           ireg r lbl symbol_offset (id, ofs); 1
       end
 
-(* Emit instruction sequences that set or offset a register by a constant. *)
-(* No S suffix because they are applied to SP most of the time. *)
-
-    let movimm oc dst n =
-      match Asmgen.decompose_int n with
-      | [] -> assert false
-      | hd::tl as l ->
-          fprintf oc "	mov	%s, #%a\n" dst coqint hd;
-          List.iter
-            (fun n -> fprintf oc "	orr	%s, %s, #%a\n" dst dst coqint n)
-            tl;
-          List.length l
-
-    let addimm oc dst src n =
-      match Asmgen.decompose_int n with
-      | [] -> assert false
-      | hd::tl as l ->
-          fprintf oc "	add	%s, %s, #%a\n" dst src coqint hd;
-          List.iter
-            (fun n -> fprintf oc "	add	%s, %s, #%a\n" dst dst coqint n)
-            tl;
-          List.length l
-
-    let subimm oc dst src n =
-      match Asmgen.decompose_int n with
-      | [] -> assert false
-      | hd::tl as l ->
-          fprintf oc "	sub	%s, %s, #%a\n" dst src coqint hd;
-          List.iter
-            (fun n -> fprintf oc "	sub	%s, %s, #%a\n" dst dst coqint n)
-            tl;
-          List.length l
-
 (* Recognition of float constants appropriate for VMOV.
    a normalized binary floating point encoding with 1 sign bit, 4
    bits of fraction and a 3-bit exponent *)
@@ -310,23 +270,6 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
     let print_file_line oc file line =
       print_file_line oc comment file line
 
-    let print_location oc loc =
-      if loc <> Cutil.no_loc then print_file_line oc (fst loc) (snd loc)
-
-(* Auxiliary for 64-bit integer arithmetic built-ins.  They expand to
-   two instructions, one computing the low 32 bits of the result,
-   followed by another computing the high 32 bits.  In cases where
-   the first instruction would overwrite arguments to the second
-   instruction, we must go through IR14 to hold the low 32 bits of the result.
- *)
-
-    let print_int64_arith oc conflict rl fn =
-      if conflict then begin
-        let n = fn IR14 in
-        fprintf oc "	mov	%a, %a\n" ireg rl ireg IR14;
-        n + 1
-      end else
-        fn rl
 
 (* Fixing up calling conventions *)
 
@@ -747,9 +690,9 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | Pfsts(r1, r2, n) ->
           fprintf oc "	vstr	%a, [%a, #%a]\n" freg_single r1 ireg r2 coqint n; 1
             (* Pseudo-instructions *)
-      | Pallocframe(sz, ofs) ->
+      | Pallocframe _ ->
          assert false
-      | Pfreeframe(sz, ofs) ->
+      | Pfreeframe _ ->
 	 assert false
       | Plabel lbl ->
           fprintf oc "%a:\n" print_label lbl; 0
@@ -782,15 +725,15 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           end
       | Pbuiltin(ef, args, res) ->
           begin match ef with
-          | EF_annot(txt, targs) ->
+          | EF_annot(txt, _) ->
               fprintf oc "%s annotation: " comment;
               print_annot_text preg "sp" oc (camlstring_of_coqstring txt) args;
               0
-          | EF_debug(kind, txt, targs) ->
+          | EF_debug(kind, txt, _) ->
               print_debug_info comment print_file_line preg "sp" oc
                                (P.to_int kind) (extern_atom txt) args;
               0
-          | EF_inline_asm(txt, sg, clob) ->
+          | EF_inline_asm(txt, sg, _) ->
               fprintf oc "%s begin inline assembly\n\t" comment;
               print_inline_asm preg oc (camlstring_of_coqstring txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment;
