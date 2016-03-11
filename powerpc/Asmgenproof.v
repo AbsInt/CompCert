@@ -254,8 +254,8 @@ Proof.
 Opaque Int.eq.
   unfold transl_op; intros; destruct op; TailNoLabel.
   destruct (preg_of r); try discriminate; destruct (preg_of m); inv H; TailNoLabel.
-  destruct (symbol_is_small_data i i0). TailNoLabel. destruct (symbol_is_rel_data i i0); TailNoLabel.
-  destruct (symbol_is_small_data i i0). TailNoLabel. destruct (symbol_is_rel_data i i0); TailNoLabel.
+  destruct (symbol_is_small_data i). TailNoLabel. destruct (symbol_is_rel_data i); TailNoLabel.
+  destruct (symbol_is_small_data i). TailNoLabel. destruct (symbol_is_rel_data i); TailNoLabel.
   destruct (Int.eq (high_s i) Int.zero); TailNoLabel; eapply tail_nolabel_trans; TailNoLabel.
   destruct (Int.eq (high_s i) Int.zero); TailNoLabel; eapply tail_nolabel_trans; TailNoLabel.
   eapply transl_cond_op_label; eauto.
@@ -271,8 +271,8 @@ Remark transl_memory_access_label:
 Proof.
   unfold transl_memory_access; intros; destruct addr; TailNoLabel.
   destruct (Int.eq (high_s i) Int.zero); TailNoLabel.
-  destruct (symbol_is_small_data i i0). TailNoLabel. destruct (symbol_is_rel_data i i0); TailNoLabel.
-  destruct (symbol_is_small_data i i0). TailNoLabel. destruct (symbol_is_rel_data i i0); TailNoLabel.
+  destruct (symbol_is_small_data i). TailNoLabel. destruct (symbol_is_rel_data i); TailNoLabel.
+  destruct (symbol_is_small_data i). TailNoLabel. destruct (symbol_is_rel_data i); TailNoLabel.
   destruct (Int.eq (high_s i) Int.zero); TailNoLabel.
 Qed.
 

@@ -76,13 +76,13 @@ let atom_sections a =
   with Not_found ->
     []
 
-let atom_is_small_data a _ =
+let atom_is_small_data a =
   try
     (Hashtbl.find decl_atom a).a_access = Sections.Access_near
   with Not_found ->
     false
 
-let atom_is_rel_data a _ =
+let atom_is_rel_data a =
   try
     (Hashtbl.find decl_atom a).a_access = Sections.Access_far
   with Not_found ->
@@ -478,7 +478,7 @@ let checkFunctionType env tres targs =
           l
     end
   end
-    
+
 let rec convertTyp env t =
   match t with
   | C.TVoid _ -> Tvoid

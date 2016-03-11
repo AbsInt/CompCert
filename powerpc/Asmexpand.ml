@@ -211,9 +211,9 @@ let expand_builtin_vload chunk args res =
         expand_builtin_vload_common chunk GPR11 (Cint _0) res
       end
   | [BA_addrglobal(id, ofs)] ->
-      if symbol_is_small_data id ofs then
+      if symbol_is_small_data id then
         expand_builtin_vload_common chunk GPR0 (Csymbol_sda(id, ofs)) res
-      else if symbol_is_rel_data id ofs then begin
+      else if symbol_is_rel_data id then begin
         emit (Paddis(GPR11, GPR0, Csymbol_rel_high(id, ofs)));
         expand_builtin_vload_common chunk GPR11 (Csymbol_rel_low(id, ofs)) res
       end else begin
@@ -268,9 +268,9 @@ let expand_builtin_vstore chunk args =
         expand_builtin_vstore_common chunk tmp (Cint _0) src
       end
   | [BA_addrglobal(id, ofs); src] ->
-      if symbol_is_small_data id ofs then
+      if symbol_is_small_data id then
         expand_builtin_vstore_common chunk GPR0 (Csymbol_sda(id, ofs)) src
-      else if symbol_is_rel_data id ofs then begin
+      else if symbol_is_rel_data id then begin
         let tmp = temp_for_vstore src in
         emit (Paddis(tmp, GPR0, Csymbol_rel_high(id, ofs)));
         expand_builtin_vstore_common chunk tmp (Csymbol_rel_low(id, ofs)) src
