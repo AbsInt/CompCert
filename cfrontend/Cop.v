@@ -130,7 +130,7 @@ Definition classify_cast (tfrom tto: type) : classify_cast_cases :=
   | _, _ => cast_case_default
   end.
 
-(** Semantics of casts.  [sem_cast v1 t1 t2 = Some v2] if value [v1],
+(** Semantics of casts.  [sem_cast v1 t1 t2 m = Some v2] if value [v1],
   viewed with static type [t1], can be converted  to type [t2],
   resulting in value [v2].  *)
 
@@ -198,7 +198,7 @@ Definition cast_single_long (si : signedness) (f: float32) : option int64 :=
   | Unsigned => Float32.to_longu f
   end.
 
-Definition sem_cast (v: val) (t1 t2: type) : option val :=
+Definition sem_cast (v: val) (t1 t2: type) (m: mem): option val :=
   match classify_cast t1 t2 with
   | cast_case_neutral =>
       match v with
@@ -273,6 +273,7 @@ Definition sem_cast (v: val) (t1 t2: type) : option val :=
   | cast_case_p2bool =>
       match v with
       | Vint i => Some (Vint (cast_int_int IBool Signed i))
+      | Vptr b ofs => if Mem.weak_valid_pointer m b (Int.unsigned ofs) then Some Vone else None
       | _ => None
       end
   | cast_case_l2l =>
@@ -586,13 +587,13 @@ Definition sem_binarith
     (sem_long: signedness -> int64 -> int64 -> option val)
     (sem_float: float -> float -> option val)
     (sem_single: float32 -> float32 -> option val)
-    (v1: val) (t1: type) (v2: val) (t2: type) : option val :=
+    (v1: val) (t1: type) (v2: val) (t2: type) (m: mem): option val :=
   let c := classify_binarith t1 t2 in
   let t := binarith_type c in
-  match sem_cast v1 t1 t with
+  match sem_cast v1 t1 t m with
   | None => None
   | Some v1' =>
-  match sem_cast v2 t2 t with
+  match sem_cast v2 t2 t m with
   | None => None
   | Some v2' =>
   match c with
@@ -637,7 +638,7 @@ Definition classify_add (ty1: type) (ty2: type) :=
   | _, _ => add_default
   end.
 
-Definition sem_add (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+Definition sem_add (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) (m: mem): option val :=
   match classify_add t1 t2 with
   | add_case_pi ty =>                 (**r pointer plus integer *)
       match v1,v2 with
@@ -681,7 +682,7 @@ Definition sem_add (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) 
         (fun sg n1 n2 => Some(Vlong(Int64.add n1 n2)))
         (fun n1 n2 => Some(Vfloat(Float.add n1 n2)))
         (fun n1 n2 => Some(Vsingle(Float32.add n1 n2)))
-        v1 t1 v2 t2
+        v1 t1 v2 t2 m
   end.
 
 (** *** Subtraction *)
@@ -700,7 +701,7 @@ Definition classify_sub (ty1: type) (ty2: type) :=
   | _, _ => sub_default
   end.
 
-Definition sem_sub (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+Definition sem_sub (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) (m:mem): option val :=
   match classify_sub t1 t2 with
   | sub_case_pi ty =>            (**r pointer minus integer *)
       match v1,v2 with
@@ -737,20 +738,20 @@ Definition sem_sub (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) 
         (fun sg n1 n2 => Some(Vlong(Int64.sub n1 n2)))
         (fun n1 n2 => Some(Vfloat(Float.sub n1 n2)))
         (fun n1 n2 => Some(Vsingle(Float32.sub n1 n2)))
-        v1 t1 v2 t2
+        v1 t1 v2 t2 m
   end.
 
 (** *** Multiplication, division, modulus *)
 
-Definition sem_mul (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+Definition sem_mul (v1:val) (t1:type) (v2: val) (t2:type) (m:mem) : option val :=
   sem_binarith
     (fun sg n1 n2 => Some(Vint(Int.mul n1 n2)))
     (fun sg n1 n2 => Some(Vlong(Int64.mul n1 n2)))
     (fun n1 n2 => Some(Vfloat(Float.mul n1 n2)))
     (fun n1 n2 => Some(Vsingle(Float32.mul n1 n2)))
-    v1 t1 v2 t2.
+    v1 t1 v2 t2 m.
 
-Definition sem_div (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+Definition sem_div (v1:val) (t1:type) (v2: val) (t2:type) (m:mem) : option val :=
   sem_binarith
     (fun sg n1 n2 =>
       match sg with
@@ -774,9 +775,9 @@ Definition sem_div (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
       end)
     (fun n1 n2 => Some(Vfloat(Float.div n1 n2)))
     (fun n1 n2 => Some(Vsingle(Float32.div n1 n2)))
-    v1 t1 v2 t2.
+    v1 t1 v2 t2 m.
 
-Definition sem_mod (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+Definition sem_mod (v1:val) (t1:type) (v2: val) (t2:type) (m:mem) : option val :=
   sem_binarith
     (fun sg n1 n2 =>
       match sg with
@@ -800,31 +801,31 @@ Definition sem_mod (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
       end)
     (fun n1 n2 => None)
     (fun n1 n2 => None)
-    v1 t1 v2 t2.
+    v1 t1 v2 t2 m.
 
-Definition sem_and (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+Definition sem_and (v1:val) (t1:type) (v2: val) (t2:type) (m:mem) : option val :=
   sem_binarith
     (fun sg n1 n2 => Some(Vint(Int.and n1 n2)))
     (fun sg n1 n2 => Some(Vlong(Int64.and n1 n2)))
     (fun n1 n2 => None)
     (fun n1 n2 => None)
-    v1 t1 v2 t2.
+    v1 t1 v2 t2 m.
 
-Definition sem_or (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+Definition sem_or (v1:val) (t1:type) (v2: val) (t2:type) (m:mem) : option val :=
   sem_binarith
     (fun sg n1 n2 => Some(Vint(Int.or n1 n2)))
     (fun sg n1 n2 => Some(Vlong(Int64.or n1 n2)))
     (fun n1 n2 => None)
     (fun n1 n2 => None)
-    v1 t1 v2 t2.
+    v1 t1 v2 t2 m.
 
-Definition sem_xor (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+Definition sem_xor (v1:val) (t1:type) (v2: val) (t2:type) (m:mem) : option val :=
   sem_binarith
     (fun sg n1 n2 => Some(Vint(Int.xor n1 n2)))
     (fun sg n1 n2 => Some(Vlong(Int64.xor n1 n2)))
     (fun n1 n2 => None)
     (fun n1 n2 => None)
-    v1 t1 v2 t2.
+    v1 t1 v2 t2 m.
 
 (** *** Shifts *)
 
@@ -946,7 +947,7 @@ Definition sem_cmp (c:comparison)
             Some(Val.of_bool(Float.cmp c n1 n2)))
         (fun n1 n2 =>
             Some(Val.of_bool(Float32.cmp c n1 n2)))
-        v1 t1 v2 t2
+        v1 t1 v2 t2 m
   end.
 
 (** ** Function applications *)
@@ -1003,14 +1004,14 @@ Definition sem_binary_operation
     (v1: val) (t1: type) (v2: val) (t2:type)
     (m: mem): option val :=
   match op with
-  | Oadd => sem_add cenv v1 t1 v2 t2
-  | Osub => sem_sub cenv v1 t1 v2 t2
-  | Omul => sem_mul v1 t1 v2 t2
-  | Omod => sem_mod v1 t1 v2 t2
-  | Odiv => sem_div v1 t1 v2 t2
-  | Oand => sem_and v1 t1 v2 t2
-  | Oor  => sem_or v1 t1 v2 t2
-  | Oxor  => sem_xor v1 t1 v2 t2
+  | Oadd => sem_add cenv v1 t1 v2 t2 m
+  | Osub => sem_sub cenv v1 t1 v2 t2 m
+  | Omul => sem_mul v1 t1 v2 t2 m
+  | Omod => sem_mod v1 t1 v2 t2 m
+  | Odiv => sem_div v1 t1 v2 t2 m
+  | Oand => sem_and v1 t1 v2 t2 m
+  | Oor  => sem_or v1 t1 v2 t2 m
+  | Oxor  => sem_xor v1 t1 v2 t2 m
   | Oshl => sem_shl v1 t1 v2 t2
   | Oshr  => sem_shr v1 t1 v2 t2
   | Oeq => sem_cmp Ceq v1 t1 v2 t2 m
@@ -1021,10 +1022,10 @@ Definition sem_binary_operation
   | Oge => sem_cmp Cge v1 t1 v2 t2 m
   end.
 
-Definition sem_incrdecr (cenv: composite_env) (id: incr_or_decr) (v: val) (ty: type) :=
+Definition sem_incrdecr (cenv: composite_env) (id: incr_or_decr) (v: val) (ty: type) (m: mem) :=
   match id with
-  | Incr => sem_add cenv v ty (Vint Int.one) type_int32s
-  | Decr => sem_sub cenv v ty (Vint Int.one) type_int32s
+  | Incr => sem_add cenv v ty (Vint Int.one) type_int32s m
+  | Decr => sem_sub cenv v ty (Vint Int.one) type_int32s m
   end.
 
 Definition incrdecr_type (ty: type) :=
@@ -1089,11 +1090,11 @@ Ltac TrivialInject :=
   | _ => idtac
   end.
 
-Lemma sem_cast_inject:
+Lemma sem_cast_inj:
   forall v1 ty1 ty v tv1,
-  sem_cast v1 ty1 ty = Some v ->
+  sem_cast v1 ty1 ty m = Some v ->
   Val.inject f v1 tv1 ->
-  exists tv, sem_cast tv1 ty1 ty = Some tv /\ Val.inject f v tv.
+  exists tv, sem_cast tv1 ty1 ty m'= Some tv /\ Val.inject f v tv.
 Proof.
   unfold sem_cast; intros; destruct (classify_cast ty1 ty);
   inv H0; inv H; TrivialInject.
@@ -1102,6 +1103,8 @@ Proof.
 - destruct (cast_single_int si2 f0); inv H1; TrivialInject.
 - destruct (cast_float_long si2 f0); inv H1; TrivialInject.
 - destruct (cast_single_long si2 f0); inv H1; TrivialInject.
+- destruct (Mem.weak_valid_pointer m b1 (Int.unsigned ofs1)) eqn:VALID; inv H2.
+  erewrite weak_valid_pointer_inj by eauto. TrivialInject. 
 - destruct (ident_eq id1 id2); inv H2; TrivialInject. econstructor; eauto.
 - destruct (ident_eq id1 id2); inv H2; TrivialInject. econstructor; eauto.
 - econstructor; eauto.
@@ -1134,13 +1137,13 @@ Definition optval_self_injects (ov: option val) : Prop :=
 
 Remark sem_binarith_inject:
   forall sem_int sem_long sem_float sem_single v1 t1 v2 t2 v v1' v2',
-  sem_binarith sem_int sem_long sem_float sem_single v1 t1 v2 t2 = Some v ->
+  sem_binarith sem_int sem_long sem_float sem_single v1 t1 v2 t2 m = Some v ->
   Val.inject f v1 v1' -> Val.inject f v2 v2' ->
   (forall sg n1 n2, optval_self_injects (sem_int sg n1 n2)) ->
   (forall sg n1 n2, optval_self_injects (sem_long sg n1 n2)) ->
   (forall n1 n2, optval_self_injects (sem_float n1 n2)) ->
   (forall n1 n2, optval_self_injects (sem_single n1 n2)) ->
-  exists v', sem_binarith sem_int sem_long sem_float sem_single v1' t1 v2' t2 = Some v' /\ Val.inject f v v'.
+  exists v', sem_binarith sem_int sem_long sem_float sem_single v1' t1 v2' t2 m' = Some v' /\ Val.inject f v v'.
 Proof.
   intros.
   assert (SELF: forall ov v, ov = Some v -> optval_self_injects ov -> Val.inject f v v).
@@ -1150,10 +1153,10 @@ Proof.
   unfold sem_binarith in *.
   set (c := classify_binarith t1 t2) in *.
   set (t := binarith_type c) in *.
-  destruct (sem_cast v1 t1 t) as [w1|] eqn:C1; try discriminate.
-  destruct (sem_cast v2 t2 t) as [w2|] eqn:C2; try discriminate.
-  exploit (sem_cast_inject v1); eauto. intros (w1' & C1' & INJ1).
-  exploit (sem_cast_inject v2); eauto. intros (w2' & C2' & INJ2).
+  destruct (sem_cast v1 t1 t m) as [w1|] eqn:C1; try discriminate.
+  destruct (sem_cast v2 t2 t m) as [w2|] eqn:C2; try discriminate.
+  exploit (sem_cast_inj v1); eauto. intros (w1' & C1' & INJ1).
+  exploit (sem_cast_inj v2); eauto. intros (w2' & C2' & INJ2).
   rewrite C1'; rewrite C2'.
   destruct c; inv INJ1; inv INJ2; discriminate || eauto.
 Qed.
@@ -1297,6 +1300,17 @@ Qed.
 
 End GENERIC_INJECTION.
 
+Lemma sem_cast_inject:
+  forall f v1 ty1 ty m v tv1 tm,
+  sem_cast v1 ty1 ty m = Some v ->
+  Val.inject f v1 tv1 ->
+  Mem.inject f m tm ->
+  exists tv, sem_cast tv1 ty1 ty tm = Some tv /\ Val.inject f v tv.
+Proof.
+  intros. eapply sem_cast_inj; eauto.
+  intros; eapply Mem.weak_valid_pointer_inject_val; eauto.
+Qed.
+
 Lemma sem_unary_operation_inject:
   forall f m m' op v1 ty1 v tv1,
   sem_unary_operation op v1 ty1 m = Some v ->
@@ -1336,20 +1350,16 @@ Qed.
 (** * Some properties of operator semantics *)
 
 (** This section collects some common-sense properties about the type
-  classification and semantic functions above.  These properties are
-  not used in the CompCert semantics preservation proofs, but increase
+  classification and semantic functions above.  Some properties are used
+  in the CompCert semantics preservation proofs.  Others are not, but increase
   confidence in the specification and its relation with the ISO C99 standard. *)
 
 (** Relation between Boolean value and casting to [_Bool] type. *)
 
 Lemma cast_bool_bool_val:
   forall v t m,
-  match sem_cast v t (Tint IBool Signed noattr), bool_val v t m with
-  | Some v', Some b => v' = Val.of_bool b
-  | Some v', None => False
-  | None, _ => True
-  end.
-Proof.
+  sem_cast v t (Tint IBool Signed noattr) m =
+  match bool_val v t m with None => None | Some b => Some(Val.of_bool b) end.
   intros.
   assert (A: classify_bool t =
     match t with
@@ -1375,8 +1385,11 @@ Proof.
   destruct (Float32.cmp Ceq f0 Float32.zero); auto.
   destruct f; auto.
   destruct (Int.eq i Int.zero); auto.
+  destruct (Mem.weak_valid_pointer m b (Int.unsigned i)); auto.
   destruct (Int.eq i Int.zero); auto.
+  destruct (Mem.weak_valid_pointer m b (Int.unsigned i)); auto.
   destruct (Int.eq i Int.zero); auto.
+  destruct (Mem.weak_valid_pointer m b (Int.unsigned i)); auto.
 Qed.
 
 (** Relation between Boolean value and Boolean negation. *)
@@ -1389,6 +1402,119 @@ Proof.
   intros. unfold sem_notbool, bool_val.
   destruct (classify_bool t); auto; destruct v; auto; rewrite ? negb_involutive; auto.
   destruct (Mem.weak_valid_pointer m b (Int.unsigned i)); auto.
+Qed.
+
+(** Properties of values obtained by casting to a given type. *)
+
+Inductive val_casted: val -> type -> Prop :=
+  | val_casted_int: forall sz si attr n,
+      cast_int_int sz si n = n ->
+      val_casted (Vint n) (Tint sz si attr)
+  | val_casted_float: forall attr n,
+       val_casted (Vfloat n) (Tfloat F64 attr)
+  | val_casted_single: forall attr n,
+       val_casted (Vsingle n) (Tfloat F32 attr)
+  | val_casted_long: forall si attr n,
+      val_casted (Vlong n) (Tlong si attr)
+  | val_casted_ptr_ptr: forall b ofs ty attr,
+      val_casted (Vptr b ofs) (Tpointer ty attr)
+  | val_casted_int_ptr: forall n ty attr,
+      val_casted (Vint n) (Tpointer ty attr)
+  | val_casted_ptr_int: forall b ofs si attr,
+      val_casted (Vptr b ofs) (Tint I32 si attr)
+  | val_casted_struct: forall id attr b ofs,
+      val_casted (Vptr b ofs) (Tstruct id attr)
+  | val_casted_union: forall id attr b ofs,
+      val_casted (Vptr b ofs) (Tunion id attr)
+  | val_casted_void: forall v,
+      val_casted v Tvoid.
+
+Remark cast_int_int_idem:
+  forall sz sg i, cast_int_int sz sg (cast_int_int sz sg i) = cast_int_int sz sg i.
+Proof.
+  intros. destruct sz; simpl; auto.
+  destruct sg; [apply Int.sign_ext_idem|apply Int.zero_ext_idem]; compute; intuition congruence.
+  destruct sg; [apply Int.sign_ext_idem|apply Int.zero_ext_idem]; compute; intuition congruence.
+  destruct (Int.eq i Int.zero); auto.
+Qed.
+
+Lemma cast_val_is_casted:
+  forall v ty ty' v' m, sem_cast v ty ty' m = Some v' -> val_casted v' ty'.
+Proof.
+  unfold sem_cast; intros. destruct ty'; simpl in *.
+- (* void *)
+  constructor.
+- (* int *)
+  destruct i; destruct ty; simpl in H; try (destruct f); try discriminate; destruct v; inv H.
+  constructor. apply (cast_int_int_idem I8 s).
+  constructor. apply (cast_int_int_idem I8 s).
+  destruct (cast_single_int s f); inv H1. constructor. apply (cast_int_int_idem I8 s).
+  destruct (cast_float_int s f); inv H1. constructor. apply (cast_int_int_idem I8 s).
+  constructor. apply (cast_int_int_idem I16 s).
+  constructor. apply (cast_int_int_idem I16 s).
+  destruct (cast_single_int s f); inv H1. constructor. apply (cast_int_int_idem I16 s).
+  destruct (cast_float_int s f); inv H1. constructor. apply (cast_int_int_idem I16 s).
+  constructor. auto.
+  constructor.
+  constructor. auto.
+  destruct (cast_single_int s f); inv H1. constructor. auto.
+  destruct (cast_float_int s f); inv H1. constructor; auto.
+  constructor; auto.
+  constructor.
+  constructor; auto.
+  constructor.
+  constructor; auto.
+  constructor.
+  constructor. simpl. destruct (Int.eq i0 Int.zero); auto.
+  constructor. simpl. destruct (Int64.eq i Int64.zero); auto.
+  constructor. simpl. destruct (Float32.cmp Ceq f Float32.zero); auto.
+  constructor. simpl. destruct (Float.cmp Ceq f Float.zero); auto.
+  constructor. simpl. destruct (Int.eq i Int.zero); auto.
+  destruct (Mem.weak_valid_pointer m b (Int.unsigned i)); inv H1. constructor; auto.
+  constructor. simpl. destruct (Int.eq i Int.zero); auto.
+  destruct (Mem.weak_valid_pointer m b (Int.unsigned i)); inv H1. constructor; auto.
+  constructor. simpl. destruct (Int.eq i Int.zero); auto.
+  destruct (Mem.weak_valid_pointer m b (Int.unsigned i)); inv H1. constructor; auto.
+- (* long *)
+  destruct ty; try (destruct f); try discriminate.
+  destruct v; inv H. constructor.
+  destruct v; inv H. constructor.
+  destruct v; try discriminate. destruct (cast_single_long s f); inv H. constructor.
+  destruct v; try discriminate. destruct (cast_float_long s f); inv H. constructor.
+  destruct v; inv H. constructor.
+  destruct v; inv H. constructor.
+  destruct v; inv H. constructor.
+- (* float *)
+  destruct f; destruct ty; simpl in H; try (destruct f); try discriminate; destruct v; inv H; constructor.
+- (* pointer *)
+  destruct ty; simpl in H; try discriminate; destruct v; inv H; try constructor.
+- (* array (impossible case) *)
+  discriminate.
+- (* function (impossible case) *)
+  discriminate.
+- (* structs *)
+  destruct ty; try discriminate; destruct v; try discriminate.
+  destruct (ident_eq i0 i); inv H; constructor.
+- (* unions *)
+  destruct ty; try discriminate; destruct v; try discriminate.
+  destruct (ident_eq i0 i); inv H; constructor.
+Qed.
+
+(** As a consequence, casting twice is equivalent to casting once. *)
+
+Lemma cast_val_casted:
+  forall v ty m, val_casted v ty -> sem_cast v ty ty m = Some v.
+Proof.
+  intros. inversion H; clear H; subst v ty; unfold sem_cast; simpl; auto.
+  destruct sz; congruence.
+  unfold proj_sumbool; repeat rewrite dec_eq_true; auto.
+  unfold proj_sumbool; repeat rewrite dec_eq_true; auto.
+Qed.
+
+Lemma cast_idempotent:
+  forall v ty ty' v' m, sem_cast v ty ty' m = Some v' -> sem_cast v' ty' ty' m = Some v'.
+Proof.
+  intros. apply cast_val_casted. eapply cast_val_is_casted; eauto.
 Qed.
 
 (** Relation with the arithmetic conversions of ISO C99, section 6.3.1 *)

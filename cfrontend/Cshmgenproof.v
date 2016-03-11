@@ -255,7 +255,7 @@ Lemma make_cast_correct:
   forall e le m a b v ty1 ty2 v',
   make_cast ty1 ty2 a = OK b ->
   eval_expr ge e le m a v ->
-  sem_cast v ty1 ty2 = Some v' ->
+  sem_cast v ty1 ty2 m = Some v' ->
   eval_expr ge e le m b v'.
 Proof.
   intros. unfold make_cast, sem_cast in *;
@@ -302,6 +302,12 @@ Proof.
   econstructor; eauto with cshm.
   simpl. unfold Val.cmpu, Val.cmpu_bool, Int.cmpu.
   destruct (Int.eq i Int.zero); auto.
+  (* pointer -> bool *)
+  destruct (Mem.weak_valid_pointer m b (Int.unsigned i)) eqn:VALID; inv H2.
+  econstructor; eauto with cshm.
+  simpl. unfold Val.cmpu. simpl. rewrite Int.eq_true.
+  unfold Mem.weak_valid_pointer in VALID; rewrite VALID. 
+  auto.
   (* struct *)
   destruct (ident_eq id1 id2); inv H2; auto.
   (* union *)
@@ -394,6 +400,16 @@ Qed.
 
 Definition binary_constructor_correct
     (make: expr -> type -> expr -> type -> res expr)
+    (sem: val -> type -> val -> type -> mem -> option val): Prop :=
+  forall a tya b tyb c va vb v e le m,
+  sem va tya vb tyb m = Some v ->
+  make a tya b tyb = OK c ->
+  eval_expr ge e le m a va ->
+  eval_expr ge e le m b vb ->
+  eval_expr ge e le m c v.
+
+Definition shift_constructor_correct
+    (make: expr -> type -> expr -> type -> res expr)
     (sem: val -> type -> val -> type -> option val): Prop :=
   forall a tya b tyb c va vb v e le m,
   sem va tya vb tyb = Some v ->
@@ -433,8 +449,8 @@ Proof.
   set (cls := classify_binarith tya tyb) in *.
   set (ty := binarith_type cls) in *.
   monadInv MAKE.
-  destruct (sem_cast va tya ty) as [va'|] eqn:Ca; try discriminate.
-  destruct (sem_cast vb tyb ty) as [vb'|] eqn:Cb; try discriminate.
+  destruct (sem_cast va tya ty m) as [va'|] eqn:Ca; try discriminate.
+  destruct (sem_cast vb tyb ty m) as [vb'|] eqn:Cb; try discriminate.
   exploit make_cast_correct. eexact EQ. eauto. eauto. intros EV1'.
   exploit make_cast_correct. eexact EQ1. eauto. eauto. intros EV2'.
   destruct cls; inv EQ2; destruct va'; try discriminate; destruct vb'; try discriminate.
@@ -456,8 +472,8 @@ Proof.
   set (cls := classify_binarith tya tyb) in *.
   set (ty := binarith_type cls) in *.
   monadInv MAKE.
-  destruct (sem_cast va tya ty) as [va'|] eqn:Ca; try discriminate.
-  destruct (sem_cast vb tyb ty) as [vb'|] eqn:Cb; try discriminate.
+  destruct (sem_cast va tya ty m) as [va'|] eqn:Ca; try discriminate.
+  destruct (sem_cast vb tyb ty m) as [vb'|] eqn:Cb; try discriminate.
   exploit make_cast_correct. eexact EQ. eauto. eauto. intros EV1'.
   exploit make_cast_correct. eexact EQ1. eauto. eauto. intros EV2'.
   destruct cls; inv EQ2; destruct va'; try discriminate; destruct vb'; try discriminate.
@@ -578,7 +594,7 @@ Proof.
   apply Int64.unsigned_repr. comput Int64.max_unsigned; omega.
 Qed.
 
-Lemma make_shl_correct: binary_constructor_correct make_shl sem_shl.
+Lemma make_shl_correct: shift_constructor_correct make_shl sem_shl.
 Proof.
   red; unfold make_shl, sem_shl, sem_shift;
   intros until m; intros SEM MAKE EV1 EV2;
@@ -597,7 +613,7 @@ Proof.
   unfold Int64.shl', Int64.shl. rewrite small_shift_amount_3; auto.
 Qed.
 
-Lemma make_shr_correct: binary_constructor_correct make_shr sem_shr.
+Lemma make_shr_correct: shift_constructor_correct make_shr sem_shr.
 Proof.
   red; unfold make_shr, sem_shr, sem_shift;
   intros until m; intros SEM MAKE EV1 EV2;
@@ -619,15 +635,9 @@ Proof.
   unfold Int64.shru', Int64.shru; rewrite small_shift_amount_3; auto.
 Qed.
 
-Lemma make_cmp_correct:
-  forall cmp a tya b tyb c va vb v e le m,
-  sem_cmp cmp va tya vb tyb m = Some v ->
-  make_cmp cmp a tya b tyb = OK c ->
-  eval_expr ge e le m a va ->
-  eval_expr ge e le m b vb ->
-  eval_expr ge e le m c v.
+Lemma make_cmp_correct: forall cmp, binary_constructor_correct (make_cmp cmp) (sem_cmp cmp).
 Proof.
-  unfold sem_cmp, make_cmp; intros until m; intros SEM MAKE EV1 EV2;
+  red; unfold sem_cmp, make_cmp; intros until m; intros SEM MAKE EV1 EV2;
   destruct (classify_cmp tya tyb).
 - inv MAKE. destruct (Val.cmpu_bool (Mem.valid_pointer m) cmp va vb) as [bv|] eqn:E;
   simpl in SEM; inv SEM.

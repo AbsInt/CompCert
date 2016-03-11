@@ -412,7 +412,7 @@ Inductive eval_expr: expr -> val -> Prop :=
       eval_expr (Ebinop op a1 a2 ty) v
   | eval_Ecast:   forall a ty v1 v,
       eval_expr a v1 ->
-      sem_cast v1 (typeof a) ty = Some v ->
+      sem_cast v1 (typeof a) ty m = Some v ->
       eval_expr (Ecast a ty) v
   | eval_Esizeof: forall ty1 ty,
       eval_expr (Esizeof ty1 ty) (Vint (Int.repr (sizeof ge ty1)))
@@ -464,7 +464,7 @@ Inductive eval_exprlist: list expr -> typelist -> list val -> Prop :=
       eval_exprlist nil Tnil nil
   | eval_Econs:   forall a bl ty tyl v1 v2 vl,
       eval_expr a v1 ->
-      sem_cast v1 (typeof a) ty = Some v2 ->
+      sem_cast v1 (typeof a) ty m = Some v2 ->
       eval_exprlist bl tyl vl ->
       eval_exprlist (a :: bl) (Tcons ty tyl) (v2 :: vl).
 
@@ -580,7 +580,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | step_assign:   forall f a1 a2 k e le m loc ofs v2 v m',
       eval_lvalue e le m a1 loc ofs ->
       eval_expr e le m a2 v2 ->
-      sem_cast v2 (typeof a2) (typeof a1) = Some v ->
+      sem_cast v2 (typeof a2) (typeof a1) m = Some v ->
       assign_loc ge (typeof a1) m loc ofs v m' ->
       step (State f (Sassign a1 a2) k e le m)
         E0 (State f Sskip k e le m')
@@ -647,7 +647,7 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (Returnstate Vundef (call_cont k) m')
   | step_return_1: forall f a k e le m v v' m',
       eval_expr e le m a v ->
-      sem_cast v (typeof a) f.(fn_return) = Some v' ->
+      sem_cast v (typeof a) f.(fn_return) m = Some v' ->
       Mem.free_list m (blocks_of_env e) = Some m' ->
       step (State f (Sreturn (Some a)) k e le m)
         E0 (Returnstate v' (call_cont k) m')

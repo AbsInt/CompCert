@@ -1370,7 +1370,7 @@ Qed.
 Hint Resolve pres_cast_int_int: ty.
 
 Lemma pres_sem_cast:
-  forall v2 ty2 v1 ty1, wt_val v1 ty1 -> sem_cast v1 ty1 ty2 = Some v2 -> wt_val v2 ty2.
+  forall m v2 ty2 v1 ty1, wt_val v1 ty1 -> sem_cast v1 ty1 ty2 m = Some v2 -> wt_val v2 ty2.
 Proof.
   unfold sem_cast, classify_cast; induction 1; simpl; intros; DestructCases; auto with ty.
 - constructor. apply (pres_cast_int_int I8 s).
@@ -1385,7 +1385,10 @@ Proof.
 - constructor. apply (pres_cast_int_int I8 s).
 - constructor. apply (pres_cast_int_int I16 s).
 - destruct (Float32.cmp Ceq f Float32.zero); auto with ty.
+- constructor. reflexivity.
 - destruct (Int.eq n Int.zero); auto with ty.
+- constructor. reflexivity.
+- constructor. reflexivity.
 Qed.
 
 Lemma pres_sem_binarith:
@@ -1394,7 +1397,7 @@ Lemma pres_sem_binarith:
     (sem_long: signedness -> int64 -> int64 -> option val)
     (sem_float: float -> float -> option val)
     (sem_single: float32 -> float32 -> option val)
-    v1 ty1 v2 ty2 v ty msg,
+    v1 ty1 v2 ty2 m v ty msg,
     (forall sg n1 n2,
      match sem_int sg n1 n2 with None | Some (Vint _) | Some Vundef => True | _ => False end) ->
     (forall sg n1 n2,
@@ -1403,14 +1406,14 @@ Lemma pres_sem_binarith:
      match sem_float n1 n2 with None | Some (Vfloat _) | Some Vundef => True | _ => False end) ->
     (forall n1 n2,
      match sem_single n1 n2 with None | Some (Vsingle _) | Some Vundef => True | _ => False end) ->
-    sem_binarith sem_int sem_long sem_float sem_single v1 ty1 v2 ty2 = Some v ->
+    sem_binarith sem_int sem_long sem_float sem_single v1 ty1 v2 ty2 m = Some v ->
     binarith_type ty1 ty2 msg = OK ty ->
     wt_val v ty.
 Proof with (try discriminate).
   intros. unfold sem_binarith, binarith_type in *.
   set (ty' := Cop.binarith_type (classify_binarith ty1 ty2)) in *.
-  destruct (sem_cast v1 ty1 ty') as [v1'|] eqn:CAST1...
-  destruct (sem_cast v2 ty2 ty') as [v2'|] eqn:CAST2...
+  destruct (sem_cast v1 ty1 ty' m) as [v1'|] eqn:CAST1...
+  destruct (sem_cast v2 ty2 ty' m) as [v2'|] eqn:CAST2...
   DestructCases.
 - specialize (H s i i0). rewrite H3 in H.
   destruct v; auto with ty; contradiction.
@@ -1426,12 +1429,12 @@ Lemma pres_sem_binarith_int:
   forall
     (sem_int: signedness -> int -> int -> option val)
     (sem_long: signedness -> int64 -> int64 -> option val)
-    v1 ty1 v2 ty2 v ty msg,
+    v1 ty1 v2 ty2 m v ty msg,
     (forall sg n1 n2,
      match sem_int sg n1 n2 with None | Some (Vint _) | Some Vundef => True | _ => False end) ->
     (forall sg n1 n2,
      match sem_long sg n1 n2 with None | Some (Vlong _) | Some Vundef => True | _ => False end) ->
-    sem_binarith sem_int sem_long (fun n1 n2 => None) (fun n1 n2 => None) v1 ty1 v2 ty2 = Some v ->
+    sem_binarith sem_int sem_long (fun n1 n2 => None) (fun n1 n2 => None) v1 ty1 v2 ty2 m = Some v ->
     binarith_int_type ty1 ty2 msg = OK ty ->
     wt_val v ty.
 Proof.

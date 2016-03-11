@@ -752,12 +752,27 @@ Qed.
 
 (** Semantics of smart constructors *)
 
+Remark sem_cast_deterministic:
+  forall v ty ty' m1 v1 m2 v2,
+  sem_cast v ty ty' m1 = Some v1 ->
+  sem_cast v ty ty' m2 = Some v2 ->
+  v1 = v2.
+Proof.
+  unfold sem_cast; intros. destruct (classify_cast ty ty'); try congruence.
+  destruct v; try congruence.
+  destruct (Mem.weak_valid_pointer m1 b (Int.unsigned i)); inv H.
+  destruct (Mem.weak_valid_pointer m2 b (Int.unsigned i)); inv H0.
+  auto.
+Qed.
+
 Lemma eval_simpl_expr_sound:
   forall e le m a v, eval_expr tge e le m a v ->
   match eval_simpl_expr a with Some v' => v' = v | None => True end.
 Proof.
   induction 1; simpl; auto.
-  destruct (eval_simpl_expr a); auto. subst. rewrite H0. auto.
+  destruct (eval_simpl_expr a); auto. subst.
+  destruct (sem_cast v1 (typeof a) ty Mem.empty) as [v'|] eqn:C; auto.
+  eapply sem_cast_deterministic; eauto.
   inv H; simpl; auto.
 Qed.
 
@@ -811,7 +826,7 @@ Lemma step_make_assign:
   Csem.assign_loc ge ty m b ofs v t m' ->
   eval_lvalue tge e le m a1 b ofs ->
   eval_expr tge e le m a2 v2 ->
-  sem_cast v2 (typeof a2) ty = Some v ->
+  sem_cast v2 (typeof a2) ty m = Some v ->
   typeof a1 = ty ->
   step1 tge (State f (make_assign a1 a2) k e le m)
           t (State f Sskip k e le m').
@@ -1649,18 +1664,19 @@ Proof.
   (* for value *)
   exploit tr_simple_rvalue; eauto. intros [SL2 [TY2 EV2]].
   exploit tr_simple_lvalue. eauto.
-    eapply tr_expr_invariant with (le' := PTree.set t0 v le). eauto.
+    eapply tr_expr_invariant with (le' := PTree.set t0 v' le). eauto.
     intros. apply PTree.gso. intuition congruence.
   intros [SL1 [TY1 EV1]].
   subst; simpl Kseqlist.
   econstructor; split.
   left. eapply plus_left. constructor.
-  eapply star_left. constructor. eauto.
+  eapply star_left. constructor. econstructor. eauto. rewrite <- TY2; eauto. 
   eapply star_left. constructor.
   apply star_one. eapply step_make_assign; eauto.
-  constructor. apply PTree.gss. reflexivity. reflexivity. traceEq.
+  constructor. apply PTree.gss. simpl. eapply cast_idempotent; eauto. 
+  reflexivity. reflexivity. traceEq.
   econstructor. auto. apply S.
-  apply tr_val_gen. auto. intros. econstructor; eauto. constructor.
+  apply tr_val_gen. auto. intros. constructor.
   rewrite H4; auto. apply PTree.gss.
   intros. apply PTree.gso. intuition congruence.
   auto. auto.
@@ -1692,7 +1708,7 @@ Proof.
   exploit tr_simple_rvalue. eauto. eapply tr_expr_invariant with (le := le) (le' := le'). eauto.
   intros. apply INV. NOTIN. simpl. intros [SL2 [TY2 EV2]].
   exploit tr_simple_lvalue. eauto.
-    eapply tr_expr_invariant with (le := le) (le' := PTree.set t v3 le'). eauto.
+    eapply tr_expr_invariant with (le := le) (le' := PTree.set t v4 le'). eauto.
     intros. rewrite PTree.gso. apply INV. NOTIN. intuition congruence.
   intros [? [? EV1'']].
   subst; simpl Kseqlist.
@@ -1700,13 +1716,14 @@ Proof.
   left. rewrite app_ass. rewrite Kseqlist_app.
   eapply star_plus_trans. eexact EXEC.
   simpl. eapply plus_four. econstructor. econstructor.
-    econstructor. eexact EV3. eexact EV2.
+    econstructor. econstructor. eexact EV3. eexact EV2.
     rewrite TY3; rewrite <- TY1; rewrite <- TY2; rewrite comp_env_preserved; eauto.
+    eassumption.
   econstructor. eapply step_make_assign; eauto.
-    constructor. apply PTree.gss.
+    constructor. apply PTree.gss. simpl. eapply cast_idempotent; eauto.
     reflexivity. traceEq.
   econstructor. auto. apply S.
-  apply tr_val_gen. auto. intros. econstructor; eauto. constructor.
+  apply tr_val_gen. auto. intros. constructor.
   rewrite H10; auto. apply PTree.gss.
   intros. rewrite PTree.gso. apply INV.
   red; intros; elim H10; auto.

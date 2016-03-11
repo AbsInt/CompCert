@@ -201,97 +201,7 @@ Proof.
   xomegaContradiction.
 Qed.
 
-(** Properties of values obtained by casting to a given type. *)
-
-Inductive val_casted: val -> type -> Prop :=
-  | val_casted_int: forall sz si attr n,
-      cast_int_int sz si n = n ->
-      val_casted (Vint n) (Tint sz si attr)
-  | val_casted_float: forall attr n,
-       val_casted (Vfloat n) (Tfloat F64 attr)
-  | val_casted_single: forall attr n,
-       val_casted (Vsingle n) (Tfloat F32 attr)
-  | val_casted_long: forall si attr n,
-      val_casted (Vlong n) (Tlong si attr)
-  | val_casted_ptr_ptr: forall b ofs ty attr,
-      val_casted (Vptr b ofs) (Tpointer ty attr)
-  | val_casted_int_ptr: forall n ty attr,
-      val_casted (Vint n) (Tpointer ty attr)
-  | val_casted_ptr_int: forall b ofs si attr,
-      val_casted (Vptr b ofs) (Tint I32 si attr)
-  | val_casted_struct: forall id attr b ofs,
-      val_casted (Vptr b ofs) (Tstruct id attr)
-  | val_casted_union: forall id attr b ofs,
-      val_casted (Vptr b ofs) (Tunion id attr)
-  | val_casted_void: forall v,
-      val_casted v Tvoid.
-
-Remark cast_int_int_idem:
-  forall sz sg i, cast_int_int sz sg (cast_int_int sz sg i) = cast_int_int sz sg i.
-Proof.
-  intros. destruct sz; simpl; auto.
-  destruct sg; [apply Int.sign_ext_idem|apply Int.zero_ext_idem]; compute; intuition congruence.
-  destruct sg; [apply Int.sign_ext_idem|apply Int.zero_ext_idem]; compute; intuition congruence.
-  destruct (Int.eq i Int.zero); auto.
-Qed.
-
-Lemma cast_val_is_casted:
-  forall v ty ty' v', sem_cast v ty ty' = Some v' -> val_casted v' ty'.
-Proof.
-  unfold sem_cast; intros. destruct ty'; simpl in *.
-(* void *)
-  constructor.
-(* int *)
-  destruct i; destruct ty; simpl in H; try (destruct f); try discriminate; destruct v; inv H.
-  constructor. apply (cast_int_int_idem I8 s).
-  constructor. apply (cast_int_int_idem I8 s).
-  destruct (cast_single_int s f); inv H1. constructor. apply (cast_int_int_idem I8 s).
-  destruct (cast_float_int s f); inv H1. constructor. apply (cast_int_int_idem I8 s).
-  constructor. apply (cast_int_int_idem I16 s).
-  constructor. apply (cast_int_int_idem I16 s).
-  destruct (cast_single_int s f); inv H1. constructor. apply (cast_int_int_idem I16 s).
-  destruct (cast_float_int s f); inv H1. constructor. apply (cast_int_int_idem I16 s).
-  constructor. auto.
-  constructor.
-  constructor. auto.
-  destruct (cast_single_int s f); inv H1. constructor. auto.
-  destruct (cast_float_int s f); inv H1. constructor; auto.
-  constructor; auto.
-  constructor.
-  constructor; auto.
-  constructor.
-  constructor; auto.
-  constructor.
-  constructor. simpl. destruct (Int.eq i0 Int.zero); auto.
-  constructor. simpl. destruct (Int64.eq i Int64.zero); auto.
-  constructor. simpl. destruct (Float32.cmp Ceq f Float32.zero); auto.
-  constructor. simpl. destruct (Float.cmp Ceq f Float.zero); auto.
-  constructor. simpl. destruct (Int.eq i Int.zero); auto.
-  constructor. simpl. destruct (Int.eq i Int.zero); auto.
-  constructor. simpl. destruct (Int.eq i Int.zero); auto.
-(* long *)
-  destruct ty; try (destruct f); try discriminate.
-  destruct v; inv H. constructor.
-  destruct v; inv H. constructor.
-  destruct v; try discriminate. destruct (cast_single_long s f); inv H. constructor.
-  destruct v; try discriminate. destruct (cast_float_long s f); inv H. constructor.
-  destruct v; inv H. constructor.
-  destruct v; inv H. constructor.
-  destruct v; inv H. constructor.
-(* float *)
-  destruct f; destruct ty; simpl in H; try (destruct f); try discriminate; destruct v; inv H; constructor.
-(* pointer *)
-  destruct ty; simpl in H; try discriminate; destruct v; inv H; try constructor.
-(* impossible cases *)
-  discriminate.
-  discriminate.
-(* structs *)
-  destruct ty; try discriminate; destruct v; try discriminate.
-  destruct (ident_eq i0 i); inv H; constructor.
-(* unions *)
-  destruct ty; try discriminate; destruct v; try discriminate.
-  destruct (ident_eq i0 i); inv H; constructor.
-Qed.
+(** Properties of values resulting from a cast *)
 
 Lemma val_casted_load_result:
   forall v ty chunk,
@@ -314,15 +224,6 @@ Proof.
   discriminate.
   discriminate.
   discriminate.
-Qed.
-
-Lemma cast_val_casted:
-  forall v ty, val_casted v ty -> sem_cast v ty ty = Some v.
-Proof.
-  intros. inversion H; clear H; subst v ty; unfold sem_cast; simpl; auto.
-  destruct sz; congruence.
-  unfold proj_sumbool; repeat rewrite dec_eq_true; auto.
-  unfold proj_sumbool; repeat rewrite dec_eq_true; auto.
 Qed.
 
 Lemma val_casted_inject:
@@ -363,7 +264,7 @@ Qed.
 Lemma make_cast_correct:
   forall e le m a v1 tto v2,
   eval_expr tge e le m a v1 ->
-  sem_cast v1 (typeof a) tto = Some v2 ->
+  sem_cast v1 (typeof a) tto m = Some v2 ->
   eval_expr tge e le m (make_cast a tto) v2.
 Proof.
   intros.
@@ -386,9 +287,9 @@ Qed.
 (** Debug annotations. *)
 
 Lemma cast_typeconv:
-  forall v ty,
+  forall v ty m,
   val_casted v ty ->
-  sem_cast v ty (typeconv ty) = Some v.
+  sem_cast v ty (typeconv ty) m = Some v.
 Proof.
   induction 1; simpl; auto.
 - destruct sz; auto.
@@ -423,7 +324,7 @@ Qed.
 Lemma step_Sset_debug:
   forall f id ty a k e le m v v',
   eval_expr tge e le m a v ->
-  sem_cast v (typeof a) ty = Some v' ->
+  sem_cast v (typeof a) ty m = Some v' ->
   plus step2 tge (State f (Sset_debug id ty a) k e le m)
               E0 (State f Sskip k e (PTree.set id v' le) m).
 Proof.

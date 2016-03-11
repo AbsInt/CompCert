@@ -645,11 +645,11 @@ Section EXPRS.
 Variable e: env.
 Variable w: world.
 
-Fixpoint sem_cast_arguments (vtl: list (val * type)) (tl: typelist) : option (list val) :=
+Fixpoint sem_cast_arguments (vtl: list (val * type)) (tl: typelist) (m: mem) : option (list val) :=
   match vtl, tl with
   | nil, Tnil => Some nil
   | (v1,t1)::vtl, Tcons t1' tl =>
-      do v <- sem_cast v1 t1 t1'; do vl <- sem_cast_arguments vtl tl; Some(v::vl)
+      do v <- sem_cast v1 t1 t1' m; do vl <- sem_cast_arguments vtl tl m; Some(v::vl)
   | _, _ => None
   end.
 
@@ -772,7 +772,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
   | RV, Ecast r1 ty =>
       match is_val r1 with
       | Some(v1, ty1) =>
-          do v <- sem_cast v1 ty1 ty;
+          do v <- sem_cast v1 ty1 ty m;
           topred (Rred "red_cast" (Eval v ty) m E0)
       | None =>
           incontext (fun x => Ecast x ty) (step_expr RV r1 m)
@@ -811,7 +811,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       match is_loc l1, is_val r2 with
       | Some(b, ofs, ty1), Some(v2, ty2) =>
           check type_eq ty1 ty;
-          do v <- sem_cast v2 ty2 ty1;
+          do v <- sem_cast v2 ty2 ty1 m;
           do w',t,m' <- do_assign_loc w ty1 m b ofs v;
           topred (Rred "red_assign" (Eval v ty) m' t)
       | _, _ =>
@@ -856,7 +856,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
   | RV, Eparen r1 tycast ty =>
       match is_val r1 with
       | Some (v1, ty1) =>
-          do v <- sem_cast v1 ty1 tycast;
+          do v <- sem_cast v1 ty1 tycast m;
           topred (Rred "red_paren" (Eval v ty) m E0)
       | None =>
           incontext (fun x => Eparen x tycast ty) (step_expr RV r1 m)
@@ -867,7 +867,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
           match classify_fun tyf with
           | fun_case_f tyargs tyres cconv =>
               do fd <- Genv.find_funct ge vf;
-              do vargs <- sem_cast_arguments vtl tyargs;
+              do vargs <- sem_cast_arguments vtl tyargs m;
               check type_eq (type_of_fundef fd) (Tfunction tyargs tyres cconv);
               topred (Callred "red_call" fd vargs ty m)
           | _ => stuck
@@ -879,7 +879,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
   | RV, Ebuiltin ef tyargs rargs ty =>
       match is_val_list rargs with
       | Some vtl =>
-          do vargs <- sem_cast_arguments vtl tyargs;
+          do vargs <- sem_cast_arguments vtl tyargs m;
           match do_external ef w vargs m with
           | None => stuck
           | Some(w',t,v,m') => topred (Rred "red_builtin" (Eval v ty) m' t)
@@ -915,7 +915,7 @@ Inductive imm_safe_t: kind -> expr -> mem -> Prop :=
       context RV to C ->
       imm_safe_t to (C r) m
   | imm_safe_t_callred: forall to C r m fd args ty,
-      callred ge r fd args ty ->
+      callred ge r m fd args ty ->
       context RV to C ->
       imm_safe_t to (C r) m.
 
@@ -961,7 +961,7 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
   | Ebinop op (Eval v1 ty1) (Eval v2 ty2) ty =>
       exists v, sem_binary_operation ge op v1 ty1 v2 ty2 m = Some v
   | Ecast (Eval v1 ty1) ty =>
-      exists v, sem_cast v1 ty1 ty = Some v
+      exists v, sem_cast v1 ty1 ty m = Some v
   | Eseqand (Eval v1 ty1) r2 ty =>
       exists b, bool_val v1 ty1 m = Some b
   | Eseqor (Eval v1 ty1) r2 ty =>
@@ -970,7 +970,7 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
       exists b, bool_val v1 ty1 m = Some b
   | Eassign (Eloc b ofs ty1) (Eval v2 ty2) ty =>
       exists v, exists m', exists t, exists w',
-      ty = ty1 /\ sem_cast v2 ty2 ty1 = Some v /\ assign_loc ge ty1 m b ofs v t m' /\ possible_trace w t w'
+      ty = ty1 /\ sem_cast v2 ty2 ty1 m = Some v /\ assign_loc ge ty1 m b ofs v t m' /\ possible_trace w t w'
   | Eassignop op (Eloc b ofs ty1) (Eval v2 ty2) tyres ty =>
       exists t, exists v1, exists w',
       ty = ty1 /\ deref_loc ge ty1 m b ofs t v1 /\ possible_trace w t w'
@@ -980,18 +980,18 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
   | Ecomma (Eval v ty1) r2 ty =>
       typeof r2 = ty
   | Eparen (Eval v1 ty1) tycast ty =>
-      exists v, sem_cast v1 ty1 tycast = Some v
+      exists v, sem_cast v1 ty1 tycast m = Some v
   | Ecall (Eval vf tyf) rargs ty =>
       exprlist_all_values rargs ->
       exists tyargs tyres cconv fd vl,
          classify_fun tyf = fun_case_f tyargs tyres cconv
       /\ Genv.find_funct ge vf = Some fd
-      /\ cast_arguments rargs tyargs vl
+      /\ cast_arguments m rargs tyargs vl
       /\ type_of_fundef fd = Tfunction tyargs tyres cconv
   | Ebuiltin ef tyargs rargs ty =>
       exprlist_all_values rargs ->
       exists vargs t vres m' w',
-         cast_arguments rargs tyargs vargs
+         cast_arguments m rargs tyargs vargs
       /\ external_call ef ge vargs m t vres m'
       /\ possible_trace w t w'
   | _ => True
@@ -1028,7 +1028,7 @@ Qed.
 
 Lemma callred_invert:
   forall r fd args ty m,
-  callred ge r fd args ty ->
+  callred ge r m fd args ty ->
   invert_expr_prop r m.
 Proof.
   intros. inv H. simpl.
@@ -1124,7 +1124,7 @@ Definition reduction_ok (k: kind) (a: expr) (m: mem) (rd: reduction) : Prop :=
   match k, rd with
   | LV, Lred _ l' m' => lred ge e a m l' m'
   | RV, Rred _ r' m' t => rred ge a m t r' m' /\ exists w', possible_trace w t w'
-  | RV, Callred _ fd args tyres m' => callred ge a fd args tyres /\ m' = m
+  | RV, Callred _ fd args tyres m' => callred ge a m fd args tyres /\ m' = m
   | LV, Stuckred => ~imm_safe_t k a m
   | RV, Stuckred => ~imm_safe_t k a m
   | _, _ => False
@@ -1152,10 +1152,10 @@ Ltac monadInv :=
   end.
 
 Lemma sem_cast_arguments_sound:
-  forall rargs vtl tyargs vargs,
+  forall m rargs vtl tyargs vargs,
   is_val_list rargs = Some vtl ->
-  sem_cast_arguments vtl tyargs = Some vargs ->
-  cast_arguments rargs tyargs vargs.
+  sem_cast_arguments vtl tyargs m = Some vargs ->
+  cast_arguments m rargs tyargs vargs.
 Proof.
   induction rargs; simpl; intros.
   inv H. destruct tyargs; simpl in H0; inv H0. constructor.
@@ -1164,9 +1164,9 @@ Proof.
 Qed.
 
 Lemma sem_cast_arguments_complete:
-  forall al tyl vl,
-  cast_arguments al tyl vl ->
-  exists vtl, is_val_list al = Some vtl /\ sem_cast_arguments vtl tyl = Some vl.
+  forall m al tyl vl,
+  cast_arguments m al tyl vl ->
+  exists vtl, is_val_list al = Some vtl /\ sem_cast_arguments vtl tyl m = Some vl.
 Proof.
   induction 1.
   exists (@nil (val * type)); auto.
@@ -1396,7 +1396,7 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
 (* cast *)
   destruct (is_val a) as [[v ty'] | ] eqn:?. rewrite (is_val_inv _ _ _ Heqo).
   (* top *)
-  destruct (sem_cast v ty' ty) as [v'|] eqn:?...
+  destruct (sem_cast v ty' ty m) as [v'|] eqn:?...
   apply topred_ok; auto. split. apply red_cast; auto. exists w; constructor.
   (* depth *)
   eapply incontext_ok; eauto.
@@ -1433,7 +1433,7 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   rewrite (is_loc_inv _ _ _ _ Heqo). rewrite (is_val_inv _ _ _ Heqo0).
   (* top *)
   destruct (type_eq ty1 ty)... subst ty1.
-  destruct (sem_cast v2 ty2 ty) as [v|] eqn:?...
+  destruct (sem_cast v2 ty2 ty m) as [v|] eqn:?...
   destruct (do_assign_loc w ty m b ofs v) as [[[w' t] m']|] eqn:?.
   exploit do_assign_loc_sound; eauto. intros [P Q].
   apply topred_ok; auto. split. apply red_assign; auto. exists w'; auto.
@@ -1478,7 +1478,7 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   (* top *)
   destruct (classify_fun tyf) as [tyargs tyres cconv|] eqn:?...
   destruct (Genv.find_funct ge vf) as [fd|] eqn:?...
-  destruct (sem_cast_arguments vtl tyargs) as [vargs|] eqn:?...
+  destruct (sem_cast_arguments vtl tyargs m) as [vargs|] eqn:?...
   destruct (type_eq (type_of_fundef fd) (Tfunction tyargs tyres cconv))...
   apply topred_ok; auto. red. split; auto. eapply red_call; eauto.
   eapply sem_cast_arguments_sound; eauto.
@@ -1494,7 +1494,7 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   destruct (is_val_list rargs) as [vtl | ] eqn:?.
   exploit is_val_list_all_values; eauto. intros ALLVAL.
   (* top *)
-  destruct (sem_cast_arguments vtl tyargs) as [vargs|] eqn:?...
+  destruct (sem_cast_arguments vtl tyargs m) as [vargs|] eqn:?...
   destruct (do_external ef w vargs m) as [[[[? ?] v] m'] | ] eqn:?...
   exploit do_ef_external_sound; eauto. intros [EC PT].
   apply topred_ok; auto. red. split; auto. eapply red_builtin; eauto.
@@ -1514,7 +1514,7 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
 (* paren *)
   destruct (is_val a) as [[v ty'] | ] eqn:?. rewrite (is_val_inv _ _ _ Heqo).
   (* top *)
-  destruct (sem_cast v ty' tycast) as [v'|] eqn:?...
+  destruct (sem_cast v ty' tycast m) as [v'|] eqn:?...
   apply topred_ok; auto. split. apply red_paren; auto. exists w; constructor.
   (* depth *)
   eapply incontext_ok; eauto.
@@ -1607,7 +1607,7 @@ Qed.
 
 Lemma callred_topred:
   forall a fd args ty m,
-  callred ge a fd args ty ->
+  callred ge a m fd args ty ->
   exists rule, step_expr RV a m = topred (Callred rule fd args ty m).
 Proof.
   induction 1; simpl.
@@ -1961,7 +1961,7 @@ Definition do_step (w: world) (s: state) : list transition :=
             then ret "step_for_true" (State f s (Kfor3 a2 a3 s k) e m)
             else ret "step_for_false" (State f Sskip k e m)
         | Kreturn k =>
-            do v' <- sem_cast v ty f.(fn_return);
+            do v' <- sem_cast v ty f.(fn_return) m;
             do m' <- Mem.free_list m (blocks_of_env ge e);
             ret "step_return_2" (Returnstate v' (call_cont k) m')
         | Kswitch1 sl k =>
@@ -2165,7 +2165,7 @@ Proof with (unfold ret; eauto with coqlib).
   apply extensionality; auto.
 (* callred *)
   unfold do_step; rewrite NOTVAL.
-  exploit callred_topred; eauto. instantiate (1 := m). instantiate (1 := w). instantiate (1 := e).
+  exploit callred_topred; eauto. instantiate (1 := w). instantiate (1 := e).
   intros (rule & STEP). exists rule.
   change (TR rule E0 (Callstate fd vargs (Kcall f e C ty k) m)) with (expr_final_state f k e (C, Callred rule fd vargs ty m)).
   apply in_map.
