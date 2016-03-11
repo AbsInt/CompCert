@@ -643,12 +643,16 @@ Definition sem_add (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) 
       match v1,v2 with
       | Vptr b1 ofs1, Vint n2 =>
         Some (Vptr b1 (Int.add ofs1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
+      | Vint n1, Vint n2 =>
+        Some (Vint (Int.add n1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
       | _,  _ => None
       end
   | add_case_ip ty =>                 (**r integer plus pointer *)
       match v1,v2 with
       | Vint n1, Vptr b2 ofs2 =>
         Some (Vptr b2 (Int.add ofs2 (Int.mul (Int.repr (sizeof cenv ty)) n1)))
+      | Vint n1, Vint n2 =>
+        Some (Vint (Int.add n2 (Int.mul (Int.repr (sizeof cenv ty)) n1)))
       | _,  _ => None
       end
   | add_case_pl ty =>                 (**r pointer plus long *)
@@ -656,6 +660,9 @@ Definition sem_add (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) 
       | Vptr b1 ofs1, Vlong n2 =>
         let n2 := Int.repr (Int64.unsigned n2) in
         Some (Vptr b1 (Int.add ofs1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
+      | Vint n1, Vlong n2 =>
+        let n2 := Int.repr (Int64.unsigned n2) in
+        Some (Vint (Int.add n1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
       | _,  _ => None
       end
   | add_case_lp ty =>                 (**r long plus pointer *)
@@ -663,6 +670,9 @@ Definition sem_add (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) 
       | Vlong n1, Vptr b2 ofs2 =>
         let n1 := Int.repr (Int64.unsigned n1) in
         Some (Vptr b2 (Int.add ofs2 (Int.mul (Int.repr (sizeof cenv ty)) n1)))
+      | Vlong n1, Vint n2 =>
+        let n1 := Int.repr (Int64.unsigned n1) in
+        Some (Vint (Int.add n2 (Int.mul (Int.repr (sizeof cenv ty)) n1)))
       | _,  _ => None
       end
   | add_default =>
@@ -696,6 +706,8 @@ Definition sem_sub (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) 
       match v1,v2 with
       | Vptr b1 ofs1, Vint n2 =>
           Some (Vptr b1 (Int.sub ofs1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
+      | Vint n1, Vint n2 =>
+          Some (Vint (Int.sub n1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
       | _,  _ => None
       end
   | sub_case_pl ty =>            (**r pointer minus long *)
@@ -703,6 +715,9 @@ Definition sem_sub (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) 
       | Vptr b1 ofs1, Vlong n2 =>
           let n2 := Int.repr (Int64.unsigned n2) in
           Some (Vptr b1 (Int.sub ofs1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
+      | Vint n1, Vlong n2 =>
+          let n2 := Int.repr (Int64.unsigned n2) in
+          Some (Vint (Int.sub n1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
       | _,  _ => None
       end
   | sub_case_pp ty =>          (**r pointer minus pointer *)
@@ -1202,25 +1217,25 @@ Proof.
   unfold sem_binary_operation; intros; destruct op.
 - (* add *)
   unfold sem_add in *; destruct (classify_add ty1 ty2).
-  + inv H0; inv H1; inv H. TrivialInject.
+  + inv H0; inv H1; inv H. TrivialInject. TrivialInject.
     econstructor. eauto. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  + inv H0; inv H1; inv H. TrivialInject.
+  + inv H0; inv H1; inv H. TrivialInject. TrivialInject.
     econstructor. eauto. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  + inv H0; inv H1; inv H. TrivialInject.
+  + inv H0; inv H1; inv H. TrivialInject. TrivialInject.
     econstructor. eauto. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  + inv H0; inv H1; inv H. TrivialInject.
+  + inv H0; inv H1; inv H. TrivialInject. TrivialInject.
     econstructor. eauto. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
   + eapply sem_binarith_inject; eauto; intros; exact I.
 - (* sub *)
   unfold sem_sub in *; destruct (classify_sub ty1 ty2).
-  + inv H0; inv H1; inv H. TrivialInject.
+  + inv H0; inv H1; inv H. TrivialInject. TrivialInject.
     econstructor. eauto. rewrite Int.sub_add_l. auto.
   + inv H0; inv H1; inv H. TrivialInject.
     destruct (eq_block b1 b0); try discriminate. subst b1.
     rewrite H0 in H2; inv H2. rewrite dec_eq_true.
     destruct (zlt 0 (sizeof cenv ty) && zle (sizeof cenv ty) Int.max_signed); inv H3.
     rewrite Int.sub_shifted. TrivialInject.
-  + inv H0; inv H1; inv H. TrivialInject.
+  + inv H0; inv H1; inv H. TrivialInject. TrivialInject.
     econstructor. eauto. rewrite Int.sub_add_l. auto.
   + eapply sem_binarith_inject; eauto; intros; exact I.
 - (* mul *)
