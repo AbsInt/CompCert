@@ -331,9 +331,9 @@ Definition transl_op
       do r <- freg_of res; OK (Plfis r f :: k)
   | Oaddrsymbol s ofs, nil =>
       do r <- ireg_of res;
-      OK (if symbol_is_small_data s then
+      OK (if symbol_is_small_data s ofs then
            Paddi r GPR0 (Csymbol_sda s ofs) :: k
-         else if symbol_is_rel_data s then
+         else if symbol_is_rel_data s ofs then
            Paddis r GPR0 (Csymbol_rel_high s ofs) ::
            Paddi r r (Csymbol_rel_low s ofs) :: k
          else
@@ -352,10 +352,10 @@ Definition transl_op
        do r1 <- ireg_of a1; do r <- ireg_of res; OK (addimm r r1 n k)
   | Oaddsymbol s ofs, a1 :: nil =>
        do r1 <- ireg_of a1; do r <- ireg_of res;
-       OK (if symbol_is_small_data s then
+       OK (if symbol_is_small_data s ofs then
              Paddi GPR0 GPR0 (Csymbol_sda s ofs) ::
              Padd r r1 GPR0 :: k
-           else if symbol_is_rel_data s then
+           else if symbol_is_rel_data s ofs then
              Pmr GPR0 r1 ::
              Paddis r GPR0 (Csymbol_rel_high s ofs) ::
              Paddi r r (Csymbol_rel_low s ofs) ::
@@ -536,9 +536,9 @@ Definition transl_memory_access
       do r1 <- ireg_of a1; do r2 <- ireg_of a2;
       OK (mk2 r1 r2 :: k)
   | Aglobal symb ofs, nil =>
-      OK (if symbol_is_small_data symb then
+      OK (if symbol_is_small_data symb ofs then
            mk1 (Csymbol_sda symb ofs) GPR0 :: k
-         else if symbol_is_rel_data symb then
+         else if symbol_is_rel_data symb ofs then
            Paddis temp GPR0 (Csymbol_rel_high symb ofs) ::
            Paddi temp temp (Csymbol_rel_low symb ofs) ::
            mk1 (Cint Int.zero) temp :: k
@@ -547,10 +547,10 @@ Definition transl_memory_access
            mk1 (Csymbol_low symb ofs) temp :: k)
   | Abased symb ofs, a1 :: nil =>
       do r1 <- ireg_of a1;
-      OK (if symbol_is_small_data symb then
+      OK (if symbol_is_small_data symb ofs then
             Paddi GPR0 GPR0 (Csymbol_sda symb ofs) ::
             mk2 r1 GPR0 :: k
-          else if symbol_is_rel_data symb then
+          else if symbol_is_rel_data symb ofs then
             Pmr GPR0 r1 ::
             Paddis temp GPR0 (Csymbol_rel_high symb ofs) ::
             Paddi temp temp (Csymbol_rel_low symb ofs) ::
@@ -736,3 +736,4 @@ Definition transf_fundef (f: Mach.fundef) : res Asm.fundef :=
 
 Definition transf_program (p: Mach.program) : res Asm.program :=
   transform_partial_program transf_fundef p.
+

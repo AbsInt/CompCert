@@ -477,15 +477,15 @@ Axiom low_high_half:
   register pointing to the base of the small data area containing
   symbol [symb].  We leave this transformation up to the linker. *)
 
-Parameter symbol_is_small_data: ident -> bool.
+Parameter symbol_is_small_data: ident -> int -> bool.
 Parameter small_data_area_offset: genv -> ident -> int -> val.
 
 Axiom small_data_area_addressing:
   forall id ofs,
-  symbol_is_small_data id = true ->
+  symbol_is_small_data id ofs = true ->
   small_data_area_offset ge id ofs = Genv.symbol_address ge id ofs.
 
-Parameter symbol_is_rel_data: ident -> bool.
+Parameter symbol_is_rel_data: ident -> int -> bool.
 
 (** Armed with the [low_half] and [high_half] functions,
   we can define the evaluation of a symbolic constant.

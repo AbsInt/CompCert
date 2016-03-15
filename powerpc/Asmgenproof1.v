@@ -844,7 +844,7 @@ Opaque Int.eq.
   exists rs'. auto with asmgen.
   (* Oaddrsymbol *)
   set (v' := Genv.symbol_address ge i i0).
-  destruct (symbol_is_small_data i) eqn:SD; [ | destruct (symbol_is_rel_data i) ].
+  destruct (symbol_is_small_data i i0) eqn:SD; [ | destruct (symbol_is_rel_data i i0) ].
   (* small data *)
 Opaque Val.add.
   econstructor; split. apply exec_straight_one; simpl; reflexivity.
@@ -867,7 +867,7 @@ Opaque Val.add.
   destruct (addimm_correct x0 x i k rs m) as [rs' [A [B C]]]; eauto with asmgen.
   exists rs'; auto with asmgen.
   (* Oaddsymbol *)
-  destruct (symbol_is_small_data i) eqn:SD; [ | destruct (symbol_is_rel_data i) ].
+  destruct (symbol_is_small_data i i0) eqn:SD; [ | destruct (symbol_is_rel_data i i0) ].
   (* small data *)
   econstructor; split. eapply exec_straight_two; simpl; reflexivity.
   split. Simpl. rewrite (Val.add_commut (rs x)). f_equal.
@@ -1020,7 +1020,7 @@ Transparent Val.add.
   (* Aindexed2 *)
   apply MK2; auto.
   (* Aglobal *)
-  destruct (symbol_is_small_data i) eqn:SISD; [ | destruct (symbol_is_rel_data i) ]; inv TR.
+  destruct (symbol_is_small_data i i0) eqn:SISD; [ | destruct (symbol_is_rel_data i i0) ]; inv TR.
   (* Aglobal from small data *)
   apply MK1. unfold const_low. rewrite small_data_area_addressing by auto.
   apply add_zero_symbol_address.
@@ -1048,7 +1048,7 @@ Transparent Val.add.
   exists rs'; split. apply exec_straight_step with rs1 m; auto.
   eexact EX'. auto.
   (* Abased *)
-  destruct (symbol_is_small_data i) eqn:SISD; [ | destruct (symbol_is_rel_data i) ].
+  destruct (symbol_is_small_data i i0) eqn:SISD; [ | destruct (symbol_is_rel_data i i0) ].
   (* Abased from small data *)
   set (rs1 := nextinstr (rs#GPR0 <- (Genv.symbol_address ge i i0))).
   exploit (MK2 x GPR0 rs1 k).
@@ -1232,3 +1232,4 @@ Local Transparent destroyed_by_store.
 Qed.
 
 End CONSTRUCTORS.
+
