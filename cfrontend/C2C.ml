@@ -267,7 +267,7 @@ let stringNum = ref 0   (* number of next global for string literals *)
 let stringTable : (string, AST.ident) Hashtbl.t = Hashtbl.create 47
 let wstringTable : (int64 list, AST.ident) Hashtbl.t = Hashtbl.create 47
 
-let name_for_string_literal env s =
+let name_for_string_literal s =
   try
     Hashtbl.find stringTable s
   with Not_found ->
@@ -297,7 +297,7 @@ let global_for_string s id =
   (id, Gvar {gvar_info = typeStringLiteral s; gvar_init = !init;
              gvar_readonly = true; gvar_volatile = false})
 
-let name_for_wide_string_literal env s =
+let name_for_wide_string_literal s =
   try
     Hashtbl.find wstringTable s
   with Not_found ->
@@ -478,7 +478,7 @@ let checkFunctionType env tres targs =
           l
     end
   end
-    
+
 let rec convertTyp env t =
   match t with
   | C.TVoid a -> Tvoid
@@ -659,10 +659,10 @@ let rec convertExpr env e =
       convertFloat f k
   | C.EConst(C.CStr s) ->
       let ty = typeStringLiteral s in
-      Evalof(Evar(name_for_string_literal env s, ty), ty)
+      Evalof(Evar(name_for_string_literal s, ty), ty)
   | C.EConst(C.CWStr s) ->
       let ty = typeWideStringLiteral s in
-      Evalof(Evar(name_for_wide_string_literal env s, ty), ty)
+      Evalof(Evar(name_for_wide_string_literal s, ty), ty)
   | C.EConst(C.CEnum(id, i)) ->
       Ctyping.econst_int (convertInt i) Signed
   | C.ESizeof ty1 ->
