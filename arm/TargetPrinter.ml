@@ -690,9 +690,9 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | Pfsts(r1, r2, n) ->
           fprintf oc "	vstr	%a, [%a, #%a]\n" freg_single r1 ireg r2 coqint n; 1
             (* Pseudo-instructions *)
-      | Pallocframe _ ->
+      | Pallocframe(sz, ofs) ->
          assert false
-      | Pfreeframe _ ->
+      | Pfreeframe(sz, ofs) ->
 	 assert false
       | Plabel lbl ->
           fprintf oc "%a:\n" print_label lbl; 0
@@ -725,15 +725,15 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           end
       | Pbuiltin(ef, args, res) ->
           begin match ef with
-          | EF_annot(txt, _) ->
+          | EF_annot(txt, targs) ->
               fprintf oc "%s annotation: " comment;
               print_annot_text preg "sp" oc (camlstring_of_coqstring txt) args;
               0
-          | EF_debug(kind, txt, _) ->
+          | EF_debug(kind, txt, targs) ->
               print_debug_info comment print_file_line preg "sp" oc
                                (P.to_int kind) (extern_atom txt) args;
               0
-          | EF_inline_asm(txt, sg, _) ->
+          | EF_inline_asm(txt, sg, clob) ->
               fprintf oc "%s begin inline assembly\n\t" comment;
               print_inline_asm preg oc (camlstring_of_coqstring txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment;

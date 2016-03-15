@@ -229,7 +229,7 @@ module Diab_System : SYSTEM =
       let name = name_of_section sec in
       assert (name <> "COMM");
       match sec with
-      | Section_debug_info (Some _) ->
+      | Section_debug_info (Some s) ->
           fprintf oc "	%s\n" name;
           fprintf oc "	.sectionlink	.debug_info\n"
       | _ ->
@@ -239,13 +239,13 @@ module Diab_System : SYSTEM =
       print_file_line_d2 oc comment file line
 
     (* Emit .cfi directives *)
-    let cfi_startproc _ = ()
+    let cfi_startproc oc = ()
 
-    let cfi_endproc _ = ()
+    let cfi_endproc oc = ()
 
-    let cfi_adjust _ _ = ()
+    let cfi_adjust oc delta = ()
 
-    let cfi_rel_offset _ _ _ = ()
+    let cfi_rel_offset oc reg ofs = ()
 
     let debug_section oc sec =
       match sec with
@@ -380,7 +380,7 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	addis	%a, %a, %a\n" ireg r1 ireg_or_zero r2 constant c
       | Paddze(r1, r2) ->
           fprintf oc "	addze	%a, %a\n" ireg r1 ireg r2
-      | Pallocframe _ ->
+      | Pallocframe(sz, ofs, _) ->
           assert false
       | Pand_(r1, r2, r3) ->
           fprintf oc "	and.	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
@@ -392,9 +392,9 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	andis.	%a, %a, %a\n" ireg r1 ireg r2 constant c
       | Pb lbl ->
           fprintf oc "	b	%a\n" label (transl_label lbl)
-      | Pbctr _ ->
+      | Pbctr sg ->
           fprintf oc "	bctr\n"
-      | Pbctrl _ ->
+      | Pbctrl sg ->
           fprintf oc "	bctrl\n"
       | Pbdnz lbl ->
           fprintf oc "	bdnz	%a\n" label (transl_label lbl)
@@ -409,9 +409,9 @@ module Target (System : SYSTEM):TARGET =
             fprintf oc "	b	%a\n" label (transl_label lbl);
             fprintf oc "%a:\n" label next
           end
-      | Pbl(s, _) ->
+      | Pbl(s, sg) ->
           fprintf oc "	bl	%a\n" symbol s
-      | Pbs(s, _) ->
+      | Pbs(s, sg) ->
           fprintf oc "	b	%a\n" symbol s
       | Pblr ->
           fprintf oc "	blr\n"
@@ -483,7 +483,7 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	extsh	%a, %a\n" ireg r1 ireg r2
       | Pextsw(r1, r2) ->
           fprintf oc "	extsw	%a, %a\n" ireg r1 ireg r2
-      | Pfreeframe _ ->
+      | Pfreeframe(sz, ofs) ->
           assert false
       | Pfabs(r1, r2) | Pfabss(r1, r2) ->
           fprintf oc "	fabs	%a, %a\n" freg r1 freg r2
@@ -493,17 +493,17 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	fadds	%a, %a, %a\n" freg r1 freg r2 freg r3
       | Pfcmpu(r1, r2) ->
           fprintf oc "	fcmpu	%a, %a, %a\n" creg 0 freg r1 freg r2
-      | Pfcfi _ ->
+      | Pfcfi(r1, r2) ->
           assert false
       | Pfcfid(r1, r2) ->
           fprintf oc "	fcfid	%a, %a\n" freg r1 freg r2
-      | Pfcfiu _ ->
+      | Pfcfiu(r1, r2) ->
           assert false
-      | Pfcti _ ->
+      | Pfcti(r1, r2) ->
           assert false
       | Pfctidz(r1, r2) ->
           fprintf oc "	fctidz	%a, %a\n" freg r1 freg r2
-      | Pfctiu _ ->
+      | Pfctiu(r1, r2) ->
           assert false
       | Pfctiw(r1, r2) ->
           fprintf oc "	fctiw	%a, %a\n" freg r1 freg r2
@@ -513,7 +513,7 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	fdiv	%a, %a, %a\n" freg r1 freg r2 freg r3
       | Pfdivs(r1, r2, r3) ->
           fprintf oc "	fdivs	%a, %a, %a\n" freg r1 freg r2 freg r3
-      | Pfmake _ ->
+      | Pfmake(rd, r1, r2) ->
           assert false
       | Pfmr(r1, r2) ->
           fprintf oc "	fmr	%a, %a\n" freg r1 freg r2
@@ -525,7 +525,7 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	fneg	%a, %a\n" freg r1 freg r2
       | Pfrsp(r1, r2) ->
           fprintf oc "	frsp	%a, %a\n" freg r1 freg r2
-      | Pfxdp _ ->
+      | Pfxdp(r1, r2) ->
           assert false
       | Pfsub(r1, r2, r3) ->
           fprintf oc "	fsub	%a, %a, %a\n" freg r1 freg r2 freg r3
@@ -603,7 +603,7 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	mbar	%ld\n" (camlint_of_coqint mo)
       | Pmfcr(r1) ->
           fprintf oc "	mfcr	%a\n" ireg r1
-      | Pmfcrbit _ ->
+      | Pmfcrbit(r1, bit) ->
           assert false
       | Pmflr(r1) ->
           fprintf oc "	mflr	%a\n" ireg r1
@@ -719,13 +719,13 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "%a:\n" label (transl_label lbl)
       | Pbuiltin(ef, args, res) ->
           begin match ef with
-          | EF_annot(txt, _) ->
+          | EF_annot(txt, targs) ->
               fprintf oc "%s annotation: " comment;
               print_annot_text preg_annot "r1" oc (camlstring_of_coqstring txt) args
-          | EF_debug(kind, txt, _) ->
+          | EF_debug(kind, txt, targs) ->
               print_debug_info comment print_file_line preg_annot "r1" oc
                                (P.to_int kind) (extern_atom txt) args
-          | EF_inline_asm(txt, sg, _) ->
+          | EF_inline_asm(txt, sg, clob) ->
               fprintf oc "%s begin inline assembly\n\t" comment;
               print_inline_asm preg oc (camlstring_of_coqstring txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment
@@ -750,14 +750,14 @@ module Target (System : SYSTEM):TARGET =
        PowerPC instructions.  We can over-approximate. *)
 
     let instr_size = function
-      | Pbf _ -> 2
-      | Pbt _ -> 2
-      | Pbtbl _ -> 5
-      | Plfi _ -> 2
-      | Plfis _ -> 2
-      | Plabel _-> 0
-      | Pbuiltin ((EF_annot _ | EF_debug _), _, _) -> 0
-      | Pbuiltin _ -> 3
+      | Pbf(bit, lbl) -> 2
+      | Pbt(bit, lbl) -> 2
+      | Pbtbl(r, tbl) -> 5
+      | Plfi(r1, c) -> 2
+      | Plfis(r1, c) -> 2
+      | Plabel lbl -> 0
+      | Pbuiltin((EF_annot _ | EF_debug _), args, res) -> 0
+      | Pbuiltin(ef, args, res) -> 3
       | Pcfi_adjust _ | Pcfi_rel_offset _ -> 0
       | _ -> 1
 

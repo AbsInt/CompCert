@@ -217,7 +217,7 @@ let rec transf_type env t =
           TFun(tres', None, vararg, attr)
       | Ret_ref ->
           TFun(TVoid [], None, vararg, add_attributes attr attr_structret)
-      | Ret_value(ty, _, _) ->
+      | Ret_value(ty, sz, al) ->
           TFun(ty, None, vararg, attr)
       end
   | TFun(tres, Some args, vararg, attr) ->
@@ -230,7 +230,7 @@ let rec transf_type env t =
           let res = Env.fresh_ident "_res" in
           TFun(TVoid [], Some((res, TPtr(tres', [])) :: args'), vararg,
                add_attributes attr attr_structret)
-      | Ret_value(ty, _, _) ->
+      | Ret_value(ty, sz, al) ->
           TFun(ty, Some args', vararg, attr)
       end
   | TPtr(t1, attr) ->
@@ -251,7 +251,7 @@ and transf_funargs env = function
           (id, t') :: args'
       | Param_ref_caller ->
           (id, TPtr(t', [])) :: args'
-      | Param_flattened(n, _, _) ->
+      | Param_flattened(n, sz, al) ->
           list_map_n (fun _ -> (Env.fresh_ident id.name, uint)) n
           @ args'
 
@@ -261,7 +261,7 @@ let rec translates_to_extended_lvalue arg =
   is_lvalue arg ||
   (match arg.edesc with
    | ECall _ -> true
-   | EBinop(Ocomma, _, b, _) -> translates_to_extended_lvalue b
+   | EBinop(Ocomma, a, b, _) -> translates_to_extended_lvalue b
    | _ -> false)
 
 let rec transf_expr env ctx e =
@@ -279,7 +279,7 @@ let rec transf_expr env ctx e =
       {edesc = EUnop(op, transf_expr env Val e1); etyp = newty}
   | EBinop(Oassign, lhs, {edesc = ECall(fn, args); etyp = ty}, _) ->
       transf_call env ctx (Some (transf_expr env Val lhs)) fn args ty
-  | EBinop(Ocomma, e1, e2, _) ->
+  | EBinop(Ocomma, e1, e2, ty) ->
       ecomma (transf_expr env Effects e1) (transf_expr env ctx e2)
   | EBinop(op, e1, e2, ty) ->
       {edesc = EBinop(op, transf_expr env Val e1,
@@ -349,7 +349,7 @@ and transf_call env ctx opt_lhs fn args ty =
               ecomma {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
                      (eassign lhs tmp)
           end
-      | Ret_value(ty_ret, _, _) ->
+      | Ret_value(ty_ret, sz, al) ->
           let ecall = {edesc = ECall(fn', args'); etyp = ty_ret} in
           begin match ctx, opt_lhs with
           | Effects, None ->
@@ -461,7 +461,7 @@ let rec transf_stmt s =
       {s with sdesc = Sswitch(transf_expr Val e, transf_stmt s1)}
   | Slabeled(lbl, s1) ->
       {s with sdesc = Slabeled(lbl, transf_stmt s1)}
-  | Sgoto _ -> s
+  | Sgoto lbl -> s
   | Sreturn None -> s
   | Sreturn(Some e) ->
       let e' = transf_expr Val e in
@@ -524,7 +524,7 @@ let rec transf_funparams loc env params =
           ((x, tpx) :: params',
            actions,
            IdentMap.add x estarx subst)
-      | Param_flattened(n, _, _) ->
+      | Param_flattened(n, sz, al) ->
           let y = new_temp ~name:x.name (ty_buffer n) in
           let yparts = list_map_n (fun _ -> Env.fresh_ident x.name) n in
           let assign_part e p act =
@@ -559,7 +559,7 @@ let transf_fundef env f =
          TVoid [],
          (vres, tres) :: params,
          transf_funbody env (subst_stmt subst f.fd_body) (Some eeres))
-    | Ret_value(ty, _, _) ->
+    | Ret_value(ty, sz, al) ->
         (f.fd_attrib,
          ty,
          params,
@@ -573,7 +573,7 @@ let transf_fundef env f =
 
 (* Composites *)
 
-let transf_composite env _ _ attr fl =
+let transf_composite env su id attr fl =
   (attr, List.map (fun f -> {f with fld_typ = transf_type env f.fld_typ}) fl)
 
 (* Entry point *)
@@ -591,5 +591,5 @@ let program p =
     ~decl:transf_decl
     ~fundef:transf_fundef
     ~composite:transf_composite
-    ~typedef:(fun env _ ty -> transf_type env ty)
+    ~typedef:(fun env id ty -> transf_type env ty)
     p

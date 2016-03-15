@@ -210,17 +210,17 @@ let mkmatch_aux expr cases =
   let ncases = List.length cases in
   let rec mktable n = function
     | [] -> assert false
-    | [_, _] -> []
-    | (key, _) :: rem ->
+    | [key, action] -> []
+    | (key, action) :: rem ->
         (coqint_of_camlint key, Nat.of_int n)
         :: mktable (n + 1) rem in
   let sw =
     Sswitch(false, expr, mktable 0 cases, Nat.of_int (ncases - 1)) in
   let rec mkblocks body n = function
     | [] -> assert false
-    | [_, action] ->
+    | [key, action] ->
         Sblock(Sseq(body, action))
-    | (_, action) :: rem ->
+    | (key, action) :: rem ->
         mkblocks
           (Sblock(Sseq(body, Sseq(action, Sexit (Nat.of_int n)))))
           (n - 1)
@@ -233,7 +233,7 @@ let mkmatch expr cases =
   let s =
     match cases with
     | [] -> Sskip (* ??? *)
-    | [_, action] -> action
+    | [key, action] -> action
     | _ -> mkmatch_aux c cases in
   prepend_seq !convert_accu s
 

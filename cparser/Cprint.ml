@@ -83,7 +83,7 @@ let const pp = function
           else fprintf pp "\" \"\\x%02Lx\" \"" c)
         l;
       fprintf pp "\""
-  | CEnum(id, _) ->
+  | CEnum(id, v) ->
       ident pp id
 
 let attr_arg pp = function
@@ -343,11 +343,11 @@ and init pp = function
       fprintf pp "@[<hov 1>{";
       List.iter (fun i -> fprintf pp "%a,@ " init i) il;
       fprintf pp "}@]"
-  | Init_struct(_, il) ->
+  | Init_struct(id, il) ->
       fprintf pp "@[<hov 1>{";
-      List.iter (fun (_, i) -> fprintf pp "%a,@ " init i) il;
+      List.iter (fun (fld, i) -> fprintf pp "%a,@ " init i) il;
       fprintf pp "}@]"
-  | Init_union(_, fld, i) ->
+  | Init_union(id, fld, i) ->
       fprintf pp "@[<hov 2>{.%s =@ %a}@]" fld.fld_name init i
 
 let simple_decl pp (id, ty) =
@@ -450,7 +450,7 @@ let rec stmt pp s =
       fprintf pp "return;"
   | Sreturn (Some e) ->
       fprintf pp "return %a;" exp (0, e)
-  | Sblock _ ->
+  | Sblock sl ->
       fprintf pp "@[<v 2>{@ %a@;<0 -2>}@]" stmt_block s
   | Sdecl d ->
       full_decl pp d
@@ -535,7 +535,7 @@ let globdecl pp g =
   | Genumdef(id, attrs, vals) ->
       fprintf pp "@[<v 2>enum%a %a {" attributes attrs ident id;
       List.iter
-        (fun (name, _, opt_e) ->
+        (fun (name, v, opt_e) ->
            fprintf pp "@ %a" ident name;
            begin match opt_e with
            | None -> ()

@@ -129,8 +129,8 @@ let transf_composite loc env su id attrs ml =
 
 let lookup_function env name =
   match Env.lookup_ident env name with
-  | (id, II_ident(_, ty)) -> (id, ty)
-  | (_, II_enum _) -> raise (Env.Error(Env.Unbound_identifier name))
+  | (id, II_ident(sto, ty)) -> (id, ty)
+  | (id, II_enum _) -> raise (Env.Error(Env.Unbound_identifier name))
 
 (* Type for the access *)
 
@@ -387,7 +387,7 @@ let rec transf_globdecls env accu = function
   | [] -> List.rev accu
   | g :: gl ->
       match g.gdesc with
-      | Gdecl((sto, id, ty, _) as d) ->
+      | Gdecl((sto, id, ty, init) as d) ->
           transf_globdecls
             (Env.add_ident env id sto ty)
             ({g with gdesc = Gdecl(transf_decl g.gloc env d)} :: accu)
@@ -422,7 +422,7 @@ let rec transf_globdecls env accu = function
             (Env.add_enum env id {ei_members =  el; ei_attr = attr})
             (g :: accu)
             gl
-      | Gpragma _ ->
+      | Gpragma p ->
           transf_globdecls env (g :: accu) gl
 
 (* Program *)

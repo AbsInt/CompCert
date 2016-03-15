@@ -120,7 +120,7 @@ let memcpy_big_arg arg tmp =
   | _ ->
       assert false
 
-let expand_builtin_memcpy_big sz _ src dst =
+let expand_builtin_memcpy_big sz al src dst =
   assert (sz >= 4);
   emit_loadimm GPR0 (Z.of_uint (sz / 4));
   emit (Pmtctr GPR0);
@@ -721,7 +721,7 @@ let expand_instruction instr =
       emit (Prlwinm(r1, r1, Z.of_uint (1 + num_crbit bit), _1))
   | Pbuiltin(ef, args, res) ->
       begin match ef with
-      | EF_builtin(name, _) ->
+      | EF_builtin(name, sg) ->
           expand_builtin_inline (camlstring_of_coqstring name) args res
       | EF_vload chunk ->
           expand_builtin_vload chunk args res

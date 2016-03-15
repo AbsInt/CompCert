@@ -134,11 +134,11 @@ let rec print_stmt p s =
                 (temp_name id)
                 print_expr e1
                 print_expr_list (true, el)
-  | Sbuiltin(None, ef, _, el) ->
+  | Sbuiltin(None, ef, tyargs, el) ->
       fprintf p "@[<hv 2>builtin %s@,(@[<hov 0>%a@]);@]"
                 (name_of_external ef)
                 print_expr_list (true, el)
-  | Sbuiltin(Some id, ef, _, el) ->
+  | Sbuiltin(Some id, ef, tyargs, el) ->
       fprintf p "@[<hv 2>%s =@ builtin %s@,(@[<hov 0>%a@]);@]"
                 (temp_name id)
                 (name_of_external ef)
@@ -223,11 +223,11 @@ and print_stmt_for p s =
                 (temp_name id)
                 print_expr e1
                 print_expr_list (true, el)
-  | Sbuiltin(None, ef, _, el) ->
+  | Sbuiltin(None, ef, tyargs, el) ->
       fprintf p "@[<hv 2>builtin %s@,(@[<hov 0>%a@]);@]"
                 (name_of_external ef)
                 print_expr_list (true, el)
-  | Sbuiltin(Some id, ef, _, el) ->
+  | Sbuiltin(Some id, ef, tyargs, el) ->
       fprintf p "@[<hv 2>%s =@ builtin %s@,(@[<hov 0>%a@]);@]"
                 (temp_name id)
                 (name_of_external ef)

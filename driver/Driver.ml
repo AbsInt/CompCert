@@ -58,7 +58,7 @@ let command ?stdout args =
     if stdout <> None then Unix.close fd_out;
     match status with
     | Unix.WEXITED rc -> rc
-    | Unix.WSIGNALED _ | Unix.WSTOPPED _ ->
+    | Unix.WSIGNALED n | Unix.WSTOPPED n ->
         eprintf "Command '%s' killed on a signal.\n" argv.(0); -1
   with Unix.Unix_error(err, fn, param) ->
     eprintf "Error executing '%s': %s: %s %s\n"
@@ -681,13 +681,13 @@ let cmdline_actions =
   Exact "-fall", Self (fun _ -> set_all language_support_options);
   Exact "-fnone", Self (fun _ -> unset_all language_support_options);
 (* Debugging options *)
-  Exact "-g", Self (fun _ -> option_g := true;
+  Exact "-g", Self (fun s -> option_g := true;
     option_gdwarf := 3);
-  Exact "-gdwarf-2", Self (fun _ -> option_g:=true;
+  Exact "-gdwarf-2", Self (fun s -> option_g:=true;
     option_gdwarf := 2);
-  Exact "-gdwarf-3", Self (fun _ -> option_g := true;
+  Exact "-gdwarf-3", Self (fun s -> option_g := true;
     option_gdwarf := 3);
-  Exact "-frename-static", Self (fun _ -> option_rename_static:= true);
+  Exact "-frename-static", Self (fun s -> option_rename_static:= true);
    Exact "-gdepth", Integer (fun n -> if n = 0 || n <0 then begin
      option_g := false
    end else begin

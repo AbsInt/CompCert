@@ -46,13 +46,13 @@ let rec local_initializer env path init k =
             (array_init (Int64.succ pos) il')
         end in
       array_init 0L il
-  | Init_struct(_, fil) ->
+  | Init_struct(id, fil) ->
       let field_init (fld, i) k =
         local_initializer env
           { edesc = EUnop(Odot fld.fld_name, path); etyp = fld.fld_typ }
           i k in
       List.fold_right field_init fil k
-  | Init_union(_, fld, i) ->
+  | Init_union(id, fld, i) ->
       local_initializer env
         { edesc = EUnop(Odot fld.fld_name, path); etyp = fld.fld_typ }
         i k
@@ -293,7 +293,7 @@ let rec unblock_stmt env ctx ploc s =
   | Slabeled(lbl, s1) ->
       add_lineno ctx ploc s.sloc
         {s with sdesc = Slabeled(lbl, unblock_stmt env ctx s.sloc s1)}
-  | Sgoto _ ->
+  | Sgoto lbl ->
       add_lineno ctx ploc s.sloc s
   | Sreturn None ->
       add_lineno ctx ploc s.sloc s
@@ -311,7 +311,7 @@ let rec unblock_stmt env ctx ploc s =
           id:: ctx
         else ctx in
       unblock_block env ctx' ploc sl
-  | Sdecl _ ->
+  | Sdecl d ->
       assert false
   | Sasm(attr, template, outputs, inputs, clob) ->
       let expand_asm_operand (lbl, cstr, e) =

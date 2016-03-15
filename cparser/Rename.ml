@@ -182,7 +182,7 @@ and stmt_desc env = function
   | Sgoto lbl -> Sgoto lbl
   | Sreturn a -> Sreturn (optexp env a)
   | Sblock sl -> let (sl', _) = mmap stmt_or_decl env sl in Sblock sl'
-  | Sdecl _ -> assert false
+  | Sdecl d -> assert false
   | Sasm(attr, txt, outputs, inputs, flags) ->
        Sasm(attr, txt,
             List.map (asm_operand env) outputs,

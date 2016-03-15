@@ -14,4 +14,5 @@
 
 (* Dummy function *)
 
-let p_program _ _ = ()
+let p_program oc prog =
+  ()

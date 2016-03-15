@@ -67,8 +67,8 @@ let ros pp = function
 
 let liveset pp lv =
   fprintf pp "{";
-  VSet.iter (function V(r, _) -> fprintf pp " x%d" (P.to_int r)
-                    | L _ -> ())
+  VSet.iter (function V(r, ty) -> fprintf pp " x%d" (P.to_int r)
+                    | L l -> ())
     lv;
   fprintf pp " }"
 
@@ -93,9 +93,9 @@ let print_instruction pp succ = function
   | Xstore(chunk, addr, args, src) ->
       fprintf pp "%s[%a] = %a"
          (name_of_chunk chunk) (print_addressing var) (addr, args) var src
-  | Xcall(_, fn, args, res) ->
+  | Xcall(sg, fn, args, res) ->
       fprintf pp "%a = call %a(%a)" vars res ros fn vars args
-  | Xtailcall(_, fn, args) ->
+  | Xtailcall(sg, fn, args) ->
       fprintf pp "tailcall %a(%a)" ros fn vars args
   | Xbuiltin(ef, args, res) ->
       fprintf pp "%a = %s(%a)"

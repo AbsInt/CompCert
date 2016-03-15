@@ -35,7 +35,7 @@ let print_list fn p l =
   match l with
   | [] ->
       fprintf p "nil"
-  | _ :: _ ->
+  | hd :: tl ->
       fprintf p "@[<hov 1>(";
       let rec plist = function
       | [] -> fprintf p "nil"
@@ -73,7 +73,7 @@ let ident p id =
 
 let iter_hashtbl_sorted (h: ('a, string) Hashtbl.t) (f: 'a * string -> unit) =
   List.iter f
-    (List.fast_sort (fun (_, d1) (_, d2) -> String.compare d1 d2)
+    (List.fast_sort (fun (k1, d1) (k2, d2) -> String.compare d1 d2)
       (Hashtbl.fold (fun k d accu -> (k, d) :: accu) h []))
 
 let define_idents p =
@@ -403,12 +403,12 @@ let print_globdef p (id, gd) =
   | Gvar v -> print_variable p (id, v)
 
 let print_ident_globdef p = function
-  | (id, Gfun(Clight.Internal _)) ->
+  | (id, Gfun(Clight.Internal f)) ->
       fprintf p "(%a, Gfun(Internal f_%s))" ident id (extern_atom id)
   | (id, Gfun(Clight.External(ef, targs, tres, cc))) ->
       fprintf p "@[<hov 2>(%a,@ @[<hov 2>Gfun(External %a@ %a@ %a@ %a))@]@]"
         ident id external_function ef typlist targs typ tres callconv cc
-  | (id, Gvar _) ->
+  | (id, Gvar v) ->
       fprintf p "(%a, Gvar v_%s)" ident id (extern_atom id)
 
 (* Composite definitions *)
@@ -449,7 +449,7 @@ let print_assertion p (txt, targs) =
     frags;
   fprintf p "  | \"%s\"%%string, " txt;
   list_iteri
-    (fun i _ -> fprintf p "_x%d :: " (i + 1))
+    (fun i targ -> fprintf p "_x%d :: " (i + 1))
     targs;
   fprintf p "nil =>@ ";
   fprintf p "    ";
@@ -481,20 +481,20 @@ Local Open Scope Z_scope.
 (* Naming the compiler-generated temporaries occurring in the program *)
 
 let rec name_expr = function
-  | Evar _ -> ()
-  | Etempvar(id, _) -> name_temporary id
-  | Ederef(a1, _) -> name_expr a1
-  | Efield(a1, _, _) -> name_expr a1
-  | Econst_int _ -> ()
-  | Econst_float _ -> ()
-  | Econst_long  _ -> ()
-  | Econst_single _ -> ()
-  | Eunop(_, a1, _) -> name_expr a1
-  | Eaddrof(a1, _) -> name_expr a1
-  | Ebinop(_, a1, a2, _) -> name_expr a1; name_expr a2
-  | Ecast(a1, _) -> name_expr a1
-  | Esizeof _ -> ()
-  | Ealignof _ -> ()
+  | Evar(id, t) -> ()
+  | Etempvar(id, t) -> name_temporary id
+  | Ederef(a1, t) -> name_expr a1
+  | Efield(a1, f, t) -> name_expr a1
+  | Econst_int(n, t) -> ()
+  | Econst_float(n, t) -> ()
+  | Econst_long(n, t) -> ()
+  | Econst_single(n, t) -> ()
+  | Eunop(op, a1, t) -> name_expr a1
+  | Eaddrof(a1, t) -> name_expr a1
+  | Ebinop(op, a1, a2, t) -> name_expr a1; name_expr a2
+  | Ecast(a1, t) -> name_expr a1
+  | Esizeof(t1, t) -> ()
+  | Ealignof(t1, t) -> ()
 
 let rec name_stmt = function
   | Sskip -> ()
@@ -502,7 +502,7 @@ let rec name_stmt = function
   | Sset(id, e2) -> name_temporary id; name_expr e2
   | Scall(optid, e1, el) ->
       name_opt_temporary optid; name_expr e1; List.iter name_expr el
-  | Sbuiltin(optid, _, _, el) ->
+  | Sbuiltin(optid, ef, tyl, el) ->
       name_opt_temporary optid; List.iter name_expr el
   | Ssequence(s1, s2) -> name_stmt s1; name_stmt s2
   | Sifthenelse(e, s1, s2) -> name_expr e; name_stmt s1; name_stmt s2
@@ -512,18 +512,18 @@ let rec name_stmt = function
   | Sswitch(e, cases) -> name_expr e; name_lblstmts cases
   | Sreturn (Some e) -> name_expr e
   | Sreturn None -> ()
-  | Slabel(_, s1) -> name_stmt s1
-  | Sgoto _ -> ()
+  | Slabel(lbl, s1) -> name_stmt s1
+  | Sgoto lbl -> ()
 
 and name_lblstmts = function
   | LSnil -> ()
-  | LScons(_, s, ls) -> name_stmt s; name_lblstmts ls
+  | LScons(lbl, s, ls) -> name_stmt s; name_lblstmts ls
 
 let name_function f =
-  List.iter (fun (id, _) -> name_temporary id) f.fn_temps;
+  List.iter (fun (id, ty) -> name_temporary id) f.fn_temps;
   name_stmt f.fn_body
 
-let name_globdef (_, g) =
+let name_globdef (id, g) =
   match g with
   | Gfun(Clight.Internal f) -> name_function f
   | _ -> ()

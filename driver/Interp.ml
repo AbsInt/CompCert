@@ -81,7 +81,7 @@ let name_of_fundef prog fd =
   | [] -> "<unknown function>"
   | (id, Gfun fd') :: rem ->
       if fd == fd' then extern_atom id else find_name rem
-  | (_, Gvar _) :: rem ->
+  | (id, Gvar v) :: rem ->
       find_name rem
   in find_name prog.Csyntax.prog_defs
 
@@ -90,7 +90,7 @@ let name_of_function prog fn =
   | [] -> "<unknown function>"
   | (id, Gfun(Csyntax.Internal fn')) :: rem ->
       if fn == fn' then extern_atom id else find_name rem
-  | _ :: rem ->
+  | (id, _) :: rem ->
       find_name rem
   in find_name prog.Csyntax.prog_defs
 
@@ -118,22 +118,22 @@ let print_val_list p vl =
 
 let print_state p (prog, ge, s) =
   match s with
-  | State(f, s, _, e, _) ->
+  | State(f, s, k, e, m) ->
       PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv e;
       fprintf p "in function %s, statement@ @[<hv 0>%a@]"
               (name_of_function prog f)
               PrintCsyntax.print_stmt s
-  | ExprState(f, r, _, e, _) ->
+  | ExprState(f, r, k, e, m) ->
       PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv e;
       fprintf p "in function %s, expression@ @[<hv 0>%a@]"
               (name_of_function prog f)
               PrintCsyntax.print_expr r
-  | Callstate(fd, args, _, _) ->
+  | Callstate(fd, args, k, m) ->
       PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv Maps.PTree.empty;
       fprintf p "calling@ @[<hov 2>%s(%a)@]"
               (name_of_fundef prog fd)
               print_val_list args
-  | Returnstate(res, _, _) ->
+  | Returnstate(res, k, m) ->
       PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv Maps.PTree.empty;
       fprintf p "returning@ %a"
               print_val res
@@ -220,10 +220,10 @@ let rank_state = function
   | Stuckstate -> assert false
 
 let mem_state = function
-  | State(_, _, _, _, m) -> m
-  | ExprState(_, _, _, _, m) -> m
-  | Callstate(_, _, _, m) -> m
-  | Returnstate(_, _, m) -> m
+  | State(f, s, k, e, m) -> m
+  | ExprState(f, r, k, e, m) -> m
+  | Callstate(fd, args, k, m) -> m
+  | Returnstate(res, k, m) -> m
   | Stuckstate -> assert false
 
 let compare_state s1 s2 =
@@ -394,14 +394,14 @@ let do_external_function id sg ge w args m =
   | _ ->
       None
 
-let do_inline_assembly _ _ _ _ _ _ = None
+let do_inline_assembly txt sg ge w args m = None
 
 (* Implementing external functions producing observable events *)
 
 let rec world ge m =
   lazy (Determinism.World(world_io ge m, world_vload ge m, world_vstore ge m))
 
-and world_io _ _ _ _ =
+and world_io ge m id args =
   None
 
 and world_vload ge m chunk id ofs =
@@ -416,7 +416,7 @@ and world_vstore ge m chunk id ofs ev =
   Mem.store chunk m b ofs v >>= fun m' ->
   Some(world ge m')
 
-let do_event p _ time w ev =
+let do_event p ge time w ev =
   if !trace >= 1 then
     fprintf p "@[<hov 2>Time %d: observable event:@ %a@]@."
               time print_event ev;
@@ -438,30 +438,30 @@ let rec do_events p ge time w t =
 
 let (|||) a b = a || b (* strict boolean or *)
 
-let diagnose_stuck_expr p ge w _ a _ e m =
+let diagnose_stuck_expr p ge w f a kont e m =
   let rec diagnose k a =
   (* diagnose subexpressions first *)
   let found =
     match k, a with
-    | LV, Ederef(r, _) -> diagnose RV r
-    | LV, Efield(r, _, _) -> diagnose RV r
-    | RV, Evalof(l, _) -> diagnose LV l
-    | RV, Eaddrof(l, _) -> diagnose LV l
-    | RV, Eunop(_, r1, _) -> diagnose RV r1
-    | RV, Ebinop(_, r1, r2, _) -> diagnose RV r1 ||| diagnose RV r2
-    | RV, Ecast(r1, _) -> diagnose RV r1
-    | RV, Econdition(r1, _, _, _) -> diagnose RV r1
-    | RV, Eassign(l1, r2, _) -> diagnose LV l1 ||| diagnose RV r2
-    | RV, Eassignop(_, l1, r2, _, _) -> diagnose LV l1 ||| diagnose RV r2
-    | RV, Epostincr(_, l, _) -> diagnose LV l
-    | RV, Ecomma(r1, _, _) -> diagnose RV r1
-    | RV, Eparen(r1, _, _) -> diagnose RV r1
-    | RV, Ecall(r1, rargs, _) -> diagnose RV r1 ||| diagnose_list rargs
-    | RV, Ebuiltin(_, _, rargs, _) -> diagnose_list rargs
+    | LV, Ederef(r, ty) -> diagnose RV r
+    | LV, Efield(r, f, ty) -> diagnose RV r
+    | RV, Evalof(l, ty) -> diagnose LV l
+    | RV, Eaddrof(l, ty) -> diagnose LV l
+    | RV, Eunop(op, r1, ty) -> diagnose RV r1
+    | RV, Ebinop(op, r1, r2, ty) -> diagnose RV r1 ||| diagnose RV r2
+    | RV, Ecast(r1, ty) -> diagnose RV r1
+    | RV, Econdition(r1, r2, r3, ty) -> diagnose RV r1
+    | RV, Eassign(l1, r2, ty) -> diagnose LV l1 ||| diagnose RV r2
+    | RV, Eassignop(op, l1, r2, tyres, ty) -> diagnose LV l1 ||| diagnose RV r2
+    | RV, Epostincr(id, l, ty) -> diagnose LV l
+    | RV, Ecomma(r1, r2, ty) -> diagnose RV r1
+    | RV, Eparen(r1, tycast, ty) -> diagnose RV r1
+    | RV, Ecall(r1, rargs, ty) -> diagnose RV r1 ||| diagnose_list rargs
+    | RV, Ebuiltin(ef, tyargs, rargs, ty) -> diagnose_list rargs
     | _, _ -> false in
   if found then true else begin
     let l = Cexec.step_expr ge do_external_function do_inline_assembly e w k a m in
-    if List.exists (fun (_,red) -> red = Cexec.Stuckred) l then begin
+    if List.exists (fun (ctx,red) -> red = Cexec.Stuckred) l then begin
       PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv e;
       fprintf p "@[<hov 2>Stuck subexpression:@ %a@]@."
               PrintCsyntax.print_expr a;
@@ -496,7 +496,7 @@ let do_step p prog ge time s w =
   | None ->
       let l = Cexec.do_step ge do_external_function do_inline_assembly w s in
       if l = []
-      || List.exists (fun (Cexec.TR(_,_,s)) -> s = Stuckstate) l
+      || List.exists (fun (Cexec.TR(r,t,s)) -> s = Stuckstate) l
       then begin
         pp_set_max_boxes p 1000;
         fprintf p "@[<hov 2>Stuck state: %a@]@." print_state (prog, ge, s);
@@ -529,7 +529,7 @@ let rec explore_one p prog ge time s w =
 let rec explore_all p prog ge time states =
   if !trace >= 2 then begin
     List.iter
-      (fun (n, s, _) ->
+      (fun (n, s, w) ->
          fprintf p "@[<hov 2>State %d.%d: @ %a@]@."
                    time n print_state (prog, ge, s))
       states
@@ -579,7 +579,7 @@ let world_program prog =
           else
             {gv with gvar_init = []} in
         (id, Gvar gv')
-    | Gfun _ ->
+    | Gfun fd ->
         (id, gd) in
  {prog with Csyntax.prog_defs = List.map change_def prog.Csyntax.prog_defs}
 
@@ -604,7 +604,7 @@ let change_main_function p old_main old_main_ty =
 let rec find_main_function name = function
   | [] -> None
   | (id, Gfun fd) :: gdl -> if id = name then Some fd else find_main_function name gdl
-  | (_, Gvar _) :: gdl -> find_main_function name gdl
+  | (id, Gvar v) :: gdl -> find_main_function name gdl
 
 let fixup_main p =
   match find_main_function p.Csyntax.prog_main p.prog_defs with

@@ -618,18 +618,18 @@ module Target(System: SYSTEM):TARGET =
       (* Pseudo-instructions *)
       | Plabel(l) ->
           fprintf oc "%a:\n" label (transl_label l)
-      | Pallocframe _
-      | Pfreeframe _ ->
+      | Pallocframe(sz, ofs_ra, ofs_link)
+      | Pfreeframe(sz, ofs_ra, ofs_link) ->
 	 assert false
       | Pbuiltin(ef, args, res) ->
           begin match ef with
-          | EF_annot(txt, _) ->
+          | EF_annot(txt, targs) ->
               fprintf oc "%s annotation: " comment;
               print_annot_text preg "%esp" oc (camlstring_of_coqstring txt) args
-          | EF_debug(kind, txt, _) ->
+          | EF_debug(kind, txt, targs) ->
               print_debug_info comment print_file_line preg "%esp" oc
                                (P.to_int kind) (extern_atom txt) args
-          | EF_inline_asm(txt, sg, _) ->
+          | EF_inline_asm(txt, sg, clob) ->
               fprintf oc "%s begin inline assembly\n\t" comment;
               print_inline_asm preg oc (camlstring_of_coqstring txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment

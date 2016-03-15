@@ -61,11 +61,11 @@ let print_instruction pp (pc, i) =
          (PrintOp.print_addressing reg) (addr, args)
          reg src;
       print_succ pp s (pc - 1)
-  | Icall(_, fn, args, res, s) ->
+  | Icall(sg, fn, args, res, s) ->
       fprintf pp "%a = %a(%a)\n"
         reg res ros fn regs args;
       print_succ pp s (pc - 1)
-  | Itailcall(_, fn, args) ->
+  | Itailcall(sg, fn, args) ->
       fprintf pp "tailcall %a(%a)\n"
         ros fn regs args
   | Ibuiltin(ef, args, res, s) ->

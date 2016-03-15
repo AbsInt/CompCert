@@ -72,9 +72,9 @@ let print_instruction pp succ = function
   | Lstore(chunk, addr, args, src) ->
       fprintf pp "%s[%a] = %a"
          (name_of_chunk chunk) (print_addressing mreg) (addr, args) mreg src
-  | Lcall(_, fn) ->
+  | Lcall(sg, fn) ->
       fprintf pp "call %a" ros fn
-  | Ltailcall(_, fn) ->
+  | Ltailcall(sg, fn) ->
       fprintf pp "tailcall %a" ros fn
   | Lbuiltin(ef, args, res) ->
       fprintf pp "%a = %s(%a)"

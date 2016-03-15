@@ -47,7 +47,7 @@ let command ?stdout args =
     if stdout <> None then Unix.close fd_out;
     match status with
     | Unix.WEXITED rc -> rc
-    | Unix.WSIGNALED _ | Unix.WSTOPPED _ ->
+    | Unix.WSIGNALED n | Unix.WSTOPPED n ->
         eprintf "Command '%s' killed on a signal.\n" argv.(0); -1
   with Unix.Unix_error(err, fn, param) ->
     eprintf "Error executing '%s': %s: %s %s\n"
@@ -186,7 +186,7 @@ let process_c_file sourcename =
 let explode_comma_option s =
   match Str.split (Str.regexp ",") s with
   | [] -> assert false
-  | _ :: tl -> tl
+  | hd :: tl -> tl
 
 let usage_string =
 "The CompCert Clight generator

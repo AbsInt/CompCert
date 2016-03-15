@@ -114,7 +114,7 @@ let name_of_loc = function
 
 let name_of_node n =
   match n.var with
-  | V(r, _) -> sprintf "x%ld" (P.to_int32 r)
+  | V(r, ty) -> sprintf "x%ld" (P.to_int32 r)
   | L l -> name_of_loc l
 
 (* The algorithm manipulates partitions of the nodes and of the moves
@@ -455,7 +455,7 @@ let initialNodePartition g =
 
 let _degreeInvariant _ n =
   let c = ref 0 in
-  iterAdjacent (fun _ -> incr c) n;
+  iterAdjacent (fun n -> incr c) n;
   if !c <> n.degree then
     failwith("degree invariant violated by " ^ name_of_node n)
 
@@ -726,7 +726,7 @@ let selectSpill g =
   (* Find a spillable node of minimal cost *)
   let (n, cost) =
     DLinkNode.fold
-      (fun n (_, best_cost as best) ->
+      (fun n (best_node, best_cost as best) ->
         (* Manual inlining of [spillCost] above plus algebraic simplif *)
         let deg = float n.degree in
         let deg2 = deg *. deg in
@@ -883,7 +883,7 @@ let assign_color g n =
 let location_of_var g v =
   match v with
   | L l -> l
-  | V(_, ty) ->
+  | V(r, ty) ->
       try
         let n = Hashtbl.find g.varTable v in
         let n' = getAlias n in

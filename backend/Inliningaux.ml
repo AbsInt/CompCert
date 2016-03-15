@@ -12,5 +12,5 @@
 
 (* To be considered: heuristics based on size of function? *)
 
-let should_inline (id: AST.ident) (_: RTL.coq_function) =
+let should_inline (id: AST.ident) (f: RTL.coq_function) =
   C2C.atom_is_inline id

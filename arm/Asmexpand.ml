@@ -381,7 +381,7 @@ let expand_instruction instr =
      else emit (Pldr (IR13,IR13,SOimm ofs))
   | Pbuiltin (ef,args,res) ->
      begin match ef with
-	   | EF_builtin (name,_) ->
+	   | EF_builtin (name,sg) ->
 	      expand_builtin_inline (camlstring_of_coqstring name) args res
 	   | EF_vload chunk ->
 	      expand_builtin_vload chunk args res

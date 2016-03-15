@@ -577,7 +577,7 @@ and singleline_comment = parse
           let rec doConcat wide str =
             try
               match Queue.peek tokens with
-              | STRING_LITERAL (wide', str', _) ->
+              | STRING_LITERAL (wide', str', loc) ->
                   ignore (Queue.pop tokens);
                   let (wide'', str'') = doConcat wide' str' in
                   if str'' <> []

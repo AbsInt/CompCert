@@ -37,18 +37,18 @@ let name_of_chunk = function
   | Many64 -> "any64"
 
 let name_of_external = function
-  | EF_external(name, _) -> sprintf "extern %S" (camlstring_of_coqstring name)
-  | EF_builtin(name, _) -> sprintf "builtin %S" (camlstring_of_coqstring name)
+  | EF_external(name, sg) -> sprintf "extern %S" (camlstring_of_coqstring name)
+  | EF_builtin(name, sg) -> sprintf "builtin %S" (camlstring_of_coqstring name)
   | EF_vload chunk -> sprintf "volatile load %s" (name_of_chunk chunk)
   | EF_vstore chunk -> sprintf "volatile store %s" (name_of_chunk chunk)
   | EF_malloc -> "malloc"
   | EF_free -> "free"
   | EF_memcpy(sz, al) ->
       sprintf "memcpy size %s align %s " (Z.to_string sz) (Z.to_string al)
-  | EF_annot(text, _) -> sprintf "annot %S" (camlstring_of_coqstring text)
-  | EF_annot_val(text, _) ->  sprintf "annot_val %S" (camlstring_of_coqstring text)
-  | EF_inline_asm(text, _, _) -> sprintf "inline_asm %S" (camlstring_of_coqstring text)
-  | EF_debug(kind, text, _) ->
+  | EF_annot(text, targs) -> sprintf "annot %S" (camlstring_of_coqstring text)
+  | EF_annot_val(text, targ) ->  sprintf "annot_val %S" (camlstring_of_coqstring text)
+  | EF_inline_asm(text, sg, clob) -> sprintf "inline_asm %S" (camlstring_of_coqstring text)
+  | EF_debug(kind, text, targs) ->
       sprintf "debug%d %S" (P.to_int kind) (extern_atom text)
 
 let rec print_builtin_arg px oc = function

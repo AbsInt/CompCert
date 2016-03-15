@@ -120,7 +120,7 @@ let lookup_ident env s =
 
 let lookup_struct env s =
   try
-    let (_, ci as res) = IdentMap.lookup s env.env_tag in
+    let (id, ci as res) = IdentMap.lookup s env.env_tag in
     if ci.ci_kind <> Struct then
       raise(Error(Tag_mismatch(s, "struct", "union")));
     res
@@ -129,7 +129,7 @@ let lookup_struct env s =
 
 let lookup_union env s =
   try
-    let (_, ci as res) = IdentMap.lookup s env.env_tag in
+    let (id, ci as res) = IdentMap.lookup s env.env_tag in
     if ci.ci_kind <> Union then
       raise(Error(Tag_mismatch(s, "union", "struct")));
     res
@@ -245,7 +245,7 @@ let add_typedef env id info =
   { env with env_typedef = IdentMap.add id info env.env_typedef }
 
 let add_enum env id info =
-  let add_enum_item env (id, v, _) =
+  let add_enum_item env (id, v, exp) =
     { env with env_ident = IdentMap.add id (II_enum v) env.env_ident } in
   List.fold_left add_enum_item
     { env with env_enum = IdentMap.add id info env.env_enum }

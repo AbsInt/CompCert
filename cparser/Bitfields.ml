@@ -513,7 +513,7 @@ let transf_decl env (sto, id, ty, init_opt) =
 
 let transf_stmt env s =
   Transform.stmt
-     ~expr:(fun _ env ctx e -> transf_exp env ctx e)
+     ~expr:(fun loc env ctx e -> transf_exp env ctx e)
      ~decl:transf_decl
      env s
 

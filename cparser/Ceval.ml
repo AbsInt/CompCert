@@ -80,10 +80,10 @@ let boolean_value v =
 
 let constant = function
   | CInt(v, ik, _) -> I (normalize_int v ik)
-  | CFloat _ -> raise Notconst
+  | CFloat(v, fk) -> raise Notconst
   | CStr s -> S s
   | CWStr s -> WS s
-  | CEnum(_, v) -> I v
+  | CEnum(id, v) -> I v
 
 let is_signed env ty =
   match unroll env ty with
@@ -101,11 +101,11 @@ let cast env ty_to v =
       if sizeof_ikind ik >= !config.sizeof_ptr
       then v
       else raise Notconst
-  | TPtr _, I n ->
+  | TPtr(ty, _), I n ->
       I (normalize_int n (ptr_t_ikind ()))
-  | TPtr _, (S _ | WS _) ->
+  | TPtr(ty, _), (S _ | WS _) ->
       v
-  | TEnum _, I n ->
+  | TEnum(_, _), I n ->
       I (normalize_int n enum_ikind)
   | _, _ ->
       raise Notconst

@@ -93,7 +93,7 @@ let global_addr id ofs = Addrmode(None, None, Coq_inr(id, ofs))
 (* Unaligned memory accesses are quite fast on IA32, so use large
    memory accesses regardless of alignment. *)
 
-let expand_builtin_memcpy_small sz _ src dst =
+let expand_builtin_memcpy_small sz al src dst =
   let rec copy src dst sz =
     if sz >= 8 && !Clflags.option_ffpu then begin
 	emit (Pmovq_rm (XMM7, src));
@@ -114,7 +114,7 @@ let expand_builtin_memcpy_small sz _ src dst =
       end in
   copy (addressing_of_builtin_arg src) (addressing_of_builtin_arg dst) sz
 
-let expand_builtin_memcpy_big sz _ src dst =
+let expand_builtin_memcpy_big sz al src dst =
   if src <> BA (IR ESI) then emit (Plea (ESI, addressing_of_builtin_arg src));
   if dst <> BA (IR EDI) then emit (Plea (EDI, addressing_of_builtin_arg dst));
   emit (Pmov_ri (ECX,coqint_of_camlint (Int32.of_int (sz / 4))));
@@ -376,7 +376,7 @@ let expand_builtin_inline name args res =
 
 let expand_instruction instr =
   match instr with
-  | Pallocframe (sz, _, ofs_link) ->
+  | Pallocframe (sz, ofs_ra, ofs_link) ->
      let sz = sp_adjustment sz in
      let addr = linear_addr ESP (coqint_of_camlint (Int32.add sz 4l)) in
      let addr' = linear_addr ESP ofs_link in
@@ -386,13 +386,13 @@ let expand_instruction instr =
      emit (Plea (EDX,addr));
      emit (Pmov_mr (addr',EDX));
      PrintAsmaux.current_function_stacksize := sz
-  | Pfreeframe(sz, _, _) ->
+  | Pfreeframe(sz, ofs_ra, ofs_link) ->
      let sz = sp_adjustment sz in
      emit (Padd_ri (ESP,coqint_of_camlint sz))
   | Pbuiltin (ef,args, res) ->
      begin
        match ef with
-       | EF_builtin(name, _) ->
+       | EF_builtin(name, sg) ->
 	  expand_builtin_inline (camlstring_of_coqstring name) args res
        | EF_vload chunk ->
           expand_builtin_vload chunk args res

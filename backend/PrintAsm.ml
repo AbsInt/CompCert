@@ -104,7 +104,7 @@ module Printer(Target:TARGET) =
     let print_globdef oc (name,gdef) =
       match gdef with
       | Gfun (Internal code) -> print_function oc name code
-      | Gfun (External _) ->   ()
+      | Gfun (External ef) ->   ()
       | Gvar v -> print_var oc name v
 
     module DwarfTarget: DwarfTypes.DWARF_TARGET =

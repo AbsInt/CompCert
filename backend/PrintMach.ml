@@ -57,9 +57,9 @@ let print_instruction pp i =
          (name_of_chunk chunk)
          (PrintOp.print_addressing reg) (addr, args)
          reg src
-  | Mcall(_, fn) ->
+  | Mcall(sg, fn) ->
       fprintf pp "\tcall %a\n" ros fn
-  | Mtailcall(_, fn) ->
+  | Mtailcall(sg, fn) ->
       fprintf pp "\ttailcall %a\n" ros fn
   | Mbuiltin(ef, args, res) ->
       fprintf pp "\t%a = %s(%a)\n"
