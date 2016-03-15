@@ -451,6 +451,42 @@ let initialNodePartition g =
     | _ -> assert false in
   Hashtbl.iter (fun _ a -> part_node a) g.varTable
 
+(* Check invariants *)
+
+let _degreeInvariant _ n =
+  let c = ref 0 in
+  iterAdjacent (fun _ -> incr c) n;
+  if !c <> n.degree then
+    failwith("degree invariant violated by " ^ name_of_node n)
+
+let _simplifyWorklistInvariant g n =
+  if n.degree < g.num_available_registers.(n.regclass)
+  && not (moveRelated n)
+  then ()
+  else failwith("simplify worklist invariant violated by " ^ name_of_node n)
+
+let _freezeWorklistInvariant g n =
+  if n.degree < g.num_available_registers.(n.regclass)
+  && moveRelated n
+  then ()
+  else failwith("freeze worklist invariant violated by " ^ name_of_node n)
+
+let _spillWorklistInvariant g n =
+  if n.degree >= g.num_available_registers.(n.regclass)
+  then ()
+  else failwith("spill worklist invariant violated by " ^ name_of_node n)
+
+let _checkInvariants g =
+  DLinkNode.iter
+    (fun n -> _degreeInvariant g n; _simplifyWorklistInvariant g n)
+    g.simplifyWorklist;
+  DLinkNode.iter
+    (fun n -> _degreeInvariant g n; _freezeWorklistInvariant g n)
+    g.freezeWorklist;
+  DLinkNode.iter
+    (fun n -> _degreeInvariant g n; _spillWorklistInvariant g n)
+    g.spillWorklist
+
 (* Enable moves that have become low-degree related *)
 
 let enableMoves g n =
