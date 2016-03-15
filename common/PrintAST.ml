@@ -55,8 +55,8 @@ let rec print_builtin_arg px oc = function
   | BA x -> px oc x
   | BA_int n -> fprintf oc "int %ld" (camlint_of_coqint n)
   | BA_long n -> fprintf oc "long %Ld" (camlint64_of_coqint n)
-  | BA_float n -> fprintf oc "float %F" (camlfloat_of_coqfloat n)
-  | BA_single n -> fprintf oc "single %F" (camlfloat_of_coqfloat32 n)
+  | BA_float n -> fprintf oc "float %.15F" (camlfloat_of_coqfloat n)
+  | BA_single n -> fprintf oc "single %.15F" (camlfloat_of_coqfloat32 n)
   | BA_loadstack(chunk, ofs) ->
       fprintf oc "%s[sp + %ld]" (name_of_chunk chunk) (camlint_of_coqint ofs)
   | BA_addrstack(ofs) ->

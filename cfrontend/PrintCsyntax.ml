@@ -182,9 +182,9 @@ let print_typed_value p v ty =
   | Vint n, _ ->
       fprintf p "%ld" (camlint_of_coqint n)
   | Vfloat f, _ ->
-      fprintf p "%F" (camlfloat_of_coqfloat f)
+      fprintf p "%.15F" (camlfloat_of_coqfloat f)
   | Vsingle f, _ ->
-      fprintf p "%Ff" (camlfloat_of_coqfloat32 f)
+      fprintf p "%.15Ff" (camlfloat_of_coqfloat32 f)
   | Vlong n, Tlong(Unsigned, _) ->
       fprintf p "%LuLLU" (camlint64_of_coqint n)
   | Vlong n, _ ->
@@ -457,8 +457,8 @@ let print_init p = function
   | Init_int16 n -> fprintf p "%ld" (camlint_of_coqint n)
   | Init_int32 n -> fprintf p "%ld" (camlint_of_coqint n)
   | Init_int64 n -> fprintf p "%LdLL" (camlint64_of_coqint n)
-  | Init_float32 n -> fprintf p "%F" (camlfloat_of_coqfloat n)
-  | Init_float64 n -> fprintf p "%F" (camlfloat_of_coqfloat n)
+  | Init_float32 n -> fprintf p "%.15F" (camlfloat_of_coqfloat n)
+  | Init_float64 n -> fprintf p "%.15F" (camlfloat_of_coqfloat n)
   | Init_space n -> fprintf p "/* skip %ld */@ " (camlint_of_coqint n)
   | Init_addrof(symb, ofs) ->
       let ofs = camlint_of_coqint ofs in

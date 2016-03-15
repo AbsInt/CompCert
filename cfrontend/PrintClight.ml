@@ -84,9 +84,9 @@ let rec expr p (prec, e) =
   | Econst_int(n, _) ->
       fprintf p "%ld" (camlint_of_coqint n)
   | Econst_float(f, _) ->
-      fprintf p "%F" (camlfloat_of_coqfloat f)
+      fprintf p "%.15F" (camlfloat_of_coqfloat f)
   | Econst_single(f, _) ->
-      fprintf p "%Ff" (camlfloat_of_coqfloat32 f)
+      fprintf p "%.15Ff" (camlfloat_of_coqfloat32 f)
   | Econst_long(n, Tlong(Unsigned, _)) ->
       fprintf p "%LuLLU" (camlint64_of_coqint n)
   | Econst_long(n, _) ->

@@ -148,9 +148,9 @@ let rec expr p (prec, e) =
   | Econst(Ointconst n) ->
       fprintf p "%ld" (camlint_of_coqint n)
   | Econst(Ofloatconst f) ->
-      fprintf p "%F" (camlfloat_of_coqfloat f)
+      fprintf p "%.15F" (camlfloat_of_coqfloat f)
   | Econst(Osingleconst f) ->
-      fprintf p "%Ff" (camlfloat_of_coqfloat32 f)
+      fprintf p "%.15Ff" (camlfloat_of_coqfloat32 f)
   | Econst(Olongconst n) ->
       fprintf p "%LdLL" (camlint64_of_coqint n)
   | Econst(Oaddrsymbol(id, ofs)) ->
@@ -326,8 +326,8 @@ let print_init_data p = function
   | Init_int16 i -> fprintf p "int16 %ld" (camlint_of_coqint i)
   | Init_int32 i -> fprintf p "%ld" (camlint_of_coqint i)
   | Init_int64 i -> fprintf p "%LdLL" (camlint64_of_coqint i)
-  | Init_float32 f -> fprintf p "float32 %F" (camlfloat_of_coqfloat f)
-  | Init_float64 f -> fprintf p "%F" (camlfloat_of_coqfloat f)
+  | Init_float32 f -> fprintf p "float32 %.15F" (camlfloat_of_coqfloat f)
+  | Init_float64 f -> fprintf p "%.15F" (camlfloat_of_coqfloat f)
   | Init_space i -> fprintf p "[%ld]" (camlint_of_coqint i)
   | Init_addrof(id,off) -> fprintf p "%ld(\"%s\")" (camlint_of_coqint off) (extern_atom id)
 
