@@ -34,7 +34,7 @@ let p_freg oc reg =
 
 let p_atom oc a = p_jstring oc (extern_atom a)
 
-let p_atom_constant oc a = fprintf oc "{\"Atom\":%a}" p_atom a
+let p_atom_constant oc a = p_jsingle_object oc "Atom" p_atom a
 
 let p_int oc i = fprintf oc "%ld" (camlint_of_coqint i)
 let p_int64 oc i = fprintf oc "%Ld" (camlint64_of_coqint i)
