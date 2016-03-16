@@ -71,6 +71,14 @@ let float_reg_name = function
   | FPR24 -> "24" | FPR25 -> "25" | FPR26 -> "26" | FPR27 -> "27"
   | FPR28 -> "28" | FPR29 -> "29" | FPR30 -> "30" | FPR31 -> "31"
 
+let num_crbit = function
+  | CRbit_0 -> 0
+  | CRbit_1 -> 1
+  | CRbit_2 -> 2
+  | CRbit_3 -> 3
+  | CRbit_6 -> 6
+
+
 let label = elf_label
 
 module Linux_System : SYSTEM =
@@ -309,14 +317,6 @@ module Target (System : SYSTEM):TARGET =
 
     let label_high oc lbl =
       fprintf oc ".L%d@ha" lbl
-
-
-    let num_crbit = function
-      | CRbit_0 -> 0
-      | CRbit_1 -> 1
-      | CRbit_2 -> 2
-      | CRbit_3 -> 3
-      | CRbit_6 -> 6
 
     let crbit oc bit =
       fprintf oc "%d" (num_crbit bit)
