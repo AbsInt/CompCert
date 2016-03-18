@@ -115,6 +115,7 @@ case "$target" in
         cprepro="${toolprefix}dcc"
         cprepro_options="-E -D__GNUC__"
         casm="${toolprefix}das"
+        casm_options="-Xalign-value"
         asm_supports_cfi=false
         clinker="${toolprefix}dcc"
         libmath="-lm"
@@ -334,7 +335,7 @@ for mk in make gmake gnumake; do
         break;;
   esac
 done
-if test -z "$make"; then 
+if test -z "$make"; then
   echo "NOT FOUND"
   echo "Error: make sure GNU Make version 3.80 or later is installed."
   missingtools=true
@@ -391,7 +392,7 @@ cat >> Makefile.config <<'EOF'
 ARCH=
 
 # Hardware variant
-# MODEL=ppc32     # for plain PowerPC 
+# MODEL=ppc32     # for plain PowerPC
 # MODEL=ppc64     # for PowerPC with 64-bit instructions
 # MODEL=e5500     # for Freescale e5500 PowerPC variant
 # MODEL=armv6     # for ARM
