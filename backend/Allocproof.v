@@ -14,28 +14,21 @@
   RTL to LTL). *)
 
 Require Import FSets.
+Require Import Coqlib Ordered Maps Errors Integers Floats.
+Require Import AST Linking Lattice Kildall.
+Require Import Values Memory Globalenvs Events Smallstep.
 Require Archi.
-Require Import Coqlib.
-Require Import Ordered.
-Require Import Errors.
-Require Import Maps.
-Require Import Lattice.
-Require Import AST.
-Require Import Integers.
-Require Import Values.
-Require Import Memory.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Smallstep.
-Require Import Op.
-Require Import Registers.
-Require Import RTL.
-Require Import RTLtyping.
-Require Import Kildall.
-Require Import Locations.
-Require Import Conventions.
-Require Import LTL.
+Require Import Op Registers RTL Locations Conventions RTLtyping LTL.
 Require Import Allocation.
+
+Definition match_prog (p: RTL.program) (tp: LTL.program) :=
+  match_program (fun _ f tf => transf_fundef f = OK tf) eq p tp.
+
+Lemma transf_program_match:
+  forall p tp, transf_program p = OK tp -> match_prog p tp.
+Proof.
+  intros. eapply match_transform_partial_program; eauto.
+Qed.
 
 (** * Soundness of structural checks *)
 
@@ -1608,48 +1601,32 @@ Section PRESERVATION.
 
 Variable prog: RTL.program.
 Variable tprog: LTL.program.
-Hypothesis TRANSF: transf_program prog = OK tprog.
+Hypothesis TRANSF: match_prog prog tprog.
 
 Let ge := Genv.globalenv prog.
 Let tge := Genv.globalenv tprog.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof.
-  intro. unfold ge, tge.
-  apply Genv.find_symbol_transf_partial with transf_fundef.
-  exact TRANSF.
-Qed.
+Proof (Genv.find_symbol_match TRANSF).
 
-Lemma public_preserved:
-  forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
-Proof.
-  intro. unfold ge, tge.
-  apply Genv.public_symbol_transf_partial with transf_fundef.
-  exact TRANSF.
-Qed.
-
-Lemma varinfo_preserved:
-  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
-Proof.
-  intro. unfold ge, tge.
-  apply Genv.find_var_info_transf_partial with transf_fundef.
-  exact TRANSF.
-Qed.
+Lemma senv_preserved:
+  Senv.equiv ge tge.
+Proof (Genv.senv_match TRANSF).
 
 Lemma functions_translated:
   forall (v: val) (f: RTL.fundef),
   Genv.find_funct ge v = Some f ->
   exists tf,
   Genv.find_funct tge v = Some tf /\ transf_fundef f = OK tf.
-Proof (Genv.find_funct_transf_partial transf_fundef _ TRANSF).
+Proof (Genv.find_funct_transf_partial TRANSF).
 
 Lemma function_ptr_translated:
   forall (b: block) (f: RTL.fundef),
   Genv.find_funct_ptr ge b = Some f ->
   exists tf,
   Genv.find_funct_ptr tge b = Some tf /\ transf_fundef f = OK tf.
-Proof (Genv.find_funct_ptr_transf_partial transf_fundef _ TRANSF).
+Proof (Genv.find_funct_ptr_transf_partial TRANSF).
 
 Lemma sig_function_translated:
   forall f tf,
@@ -2185,8 +2162,7 @@ Proof.
   eapply star_trans. eexact A1.
   eapply star_left. econstructor.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved. eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved. apply senv_preserved. eauto.
   instantiate (1 := ls2); auto.
   eapply star_right. eexact A3.
   econstructor.
@@ -2278,8 +2254,7 @@ Proof.
   econstructor; split.
   apply plus_one. econstructor; eauto.
   eapply external_call_symbols_preserved' with (ge1 := ge).
-  econstructor; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  econstructor; eauto. apply senv_preserved.
   econstructor; eauto. simpl.
   replace (map
            (Locmap.setlist (map R (loc_result (ef_sig ef)))
@@ -2314,9 +2289,9 @@ Proof.
   exploit sig_function_translated; eauto. intros SIG.
   exists (LTL.Callstate nil tf (Locmap.init Vundef) m0); split.
   econstructor; eauto.
-  eapply Genv.init_mem_transf_partial; eauto.
+  eapply (Genv.init_mem_transf_partial TRANSF); eauto.
   rewrite symbols_preserved.
-  rewrite (transform_partial_program_main _ _ TRANSF).  auto.
+  rewrite (match_program_main TRANSF).  auto.
   congruence.
   constructor; auto.
   constructor. rewrite SIG; rewrite H3; auto.
@@ -2334,12 +2309,15 @@ Proof.
   econstructor. simpl; reflexivity.
   unfold loc_result in RES; rewrite H in RES. simpl in RES. inv RES. inv H3; auto.
 Qed.
-
+ 
 Lemma wt_prog: wt_program prog.
 Proof.
-  red; intros. exploit transform_partial_program_succeeds; eauto.
-  intros [tfd TF]. destruct f; simpl in *.
-- monadInv TF. unfold transf_function in EQ.
+  red; intros. 
+  exploit list_forall2_in_left. eexact (proj1 TRANSF). eauto. 
+  intros ([i' gd] & A & B & C). simpl in *; subst i'.
+  inv C. destruct f; simpl in *.
+- monadInv H2.  
+  unfold transf_function in EQ.
   destruct (type_function f) as [env|] eqn:TF; try discriminate.
   econstructor. eapply type_function_correct; eauto.
 - constructor.
@@ -2350,7 +2328,7 @@ Theorem transf_program_correct:
 Proof.
   set (ms := fun s s' => wt_state s /\ match_states s s').
   eapply forward_simulation_plus with (match_states := ms).
-- exact public_preserved.
+- apply senv_preserved.
 - intros. exploit initial_states_simulation; eauto. intros [st2 [A B]].
   exists st2; split; auto. split; auto.
   apply wt_initial_state with (p := prog); auto. exact wt_prog.

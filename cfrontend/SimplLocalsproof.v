@@ -13,80 +13,58 @@
 (** Semantic preservation for the SimplLocals pass. *)
 
 Require Import FSets.
-Require FSetAVL.
-Require Import Coqlib.
-Require Import Errors.
-Require Import Ordered.
-Require Import AST.
-Require Import Maps.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Globalenvs.
-Require Import Events.
-Require Import Smallstep.
-Require Import Ctypes.
-Require Import Cop.
-Require Import Clight.
-Require Import SimplLocals.
+Require Import Coqlib Errors Ordered Maps Integers Floats.
+Require Import AST Linking.
+Require Import Values Memory Globalenvs Events Smallstep.
+Require Import Ctypes Cop Clight SimplLocals.
 
 Module VSF := FSetFacts.Facts(VSet).
 Module VSP := FSetProperties.Properties(VSet).
+
+Definition match_prog (p tp: program) : Prop :=
+    match_program (fun ctx f tf => transf_fundef f = OK tf) eq p tp
+ /\ prog_types tp = prog_types p.
+
+Lemma match_transf_program:
+  forall p tp, transf_program p = OK tp -> match_prog p tp.
+Proof.
+  unfold transf_program; intros. monadInv H. 
+  split; auto. apply match_transform_partial_program. rewrite EQ. destruct x; auto.
+Qed.
 
 Section PRESERVATION.
 
 Variable prog: program.
 Variable tprog: program.
-Hypothesis TRANSF: transf_program prog = OK tprog.
+Hypothesis TRANSF: match_prog prog tprog.
 Let ge := globalenv prog.
 Let tge := globalenv tprog.
 
 Lemma comp_env_preserved:
   genv_cenv tge = genv_cenv ge.
 Proof.
-  monadInv TRANSF. unfold tge; rewrite <- H0; auto.
-Qed.
-
-Lemma transf_programs:
-  AST.transform_partial_program transf_fundef (program_of_program prog) = OK (program_of_program tprog).
-Proof.
-  monadInv TRANSF. rewrite EQ. destruct x; reflexivity.
+  unfold tge, ge. destruct prog, tprog; simpl. destruct TRANSF as [_ EQ]. simpl in EQ. congruence.
 Qed.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof.
-  exact (Genv.find_symbol_transf_partial _ _ transf_programs).
-Qed.
+Proof (Genv.find_symbol_match (proj1 TRANSF)).
 
-Lemma public_preserved:
-  forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
-Proof.
-  exact (Genv.public_symbol_transf_partial _ _ transf_programs).
-Qed.
-
-Lemma varinfo_preserved:
-  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
-Proof.
-  exact (Genv.find_var_info_transf_partial _ _ transf_programs).
-Qed.
+Lemma senv_preserved:
+  Senv.equiv ge tge.
+Proof (Genv.senv_match (proj1 TRANSF)).
 
 Lemma functions_translated:
   forall (v: val) (f: fundef),
   Genv.find_funct ge v = Some f ->
   exists tf, Genv.find_funct tge v = Some tf /\ transf_fundef f = OK tf.
-Proof.
-  exact (Genv.find_funct_transf_partial _ _ transf_programs).
-Qed.
+Proof (Genv.find_funct_transf_partial (proj1 TRANSF)).
 
 Lemma function_ptr_translated:
   forall (b: block) (f: fundef),
   Genv.find_funct_ptr ge b = Some f ->
   exists tf, Genv.find_funct_ptr tge b = Some tf /\ transf_fundef f = OK tf.
-Proof.
-  exact (Genv.find_funct_ptr_transf_partial _ _ transf_programs).
-Qed.
+Proof (Genv.find_funct_ptr_transf_partial (proj1 TRANSF)).
 
 Lemma type_of_fundef_preserved:
   forall fd tfd,
@@ -2073,8 +2051,7 @@ Proof.
   exploit external_call_mem_inject; eauto. apply match_globalenvs_preserves_globals; eauto with compat.
   intros [j' [tvres [tm' [P [Q [R [S [T [U V]]]]]]]]].
   econstructor; split.
-  apply plus_one. econstructor; eauto. eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  apply plus_one. econstructor; eauto. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto with compat.
   eapply match_envs_set_opttemp; eauto.
   eapply match_envs_extcall; eauto.
@@ -2235,8 +2212,7 @@ Proof.
   eapply match_cont_globalenv. eexact (MCONT VSet.empty).
   intros [j' [tvres [tm' [P [Q [R [S [T [U V]]]]]]]]].
   econstructor; split.
-  apply plus_one. econstructor; eauto. eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  apply plus_one. econstructor; eauto. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto.
   intros. apply match_cont_incr_bounds with (Mem.nextblock m) (Mem.nextblock tm).
   eapply match_cont_extcall; eauto. xomega. xomega.
@@ -2259,10 +2235,10 @@ Proof.
   exploit function_ptr_translated; eauto. intros [tf [A B]].
   econstructor; split.
   econstructor.
-  eapply Genv.init_mem_transf_partial. eexact transf_programs. eauto.
-  change (prog_main tprog) with (AST.prog_main tprog).
-  rewrite (transform_partial_program_main _ _ transf_programs).
+  eapply (Genv.init_mem_transf_partial (proj1 TRANSF)). eauto.
+  replace (prog_main tprog) with (prog_main prog). 
   instantiate (1 := b). rewrite <- H1. apply symbols_preserved.
+  generalize (match_program_main (proj1 TRANSF)). simpl; auto.
   eauto.
   rewrite <- H3; apply type_of_fundef_preserved; auto.
   econstructor; eauto.
@@ -2292,10 +2268,27 @@ Theorem transf_program_correct:
   forward_simulation (semantics1 prog) (semantics2 tprog).
 Proof.
   eapply forward_simulation_plus.
-  eexact public_preserved.
+  apply senv_preserved.
   eexact initial_states_simulation.
   eexact final_states_simulation.
   eexact step_simulation.
 Qed.
 
 End PRESERVATION.
+
+(** ** Commutation with linking *)
+
+Instance TransfSimplLocalsLink : TransfLink match_prog.
+Proof.
+  red; intros. eapply Ctypes.link_match_program; eauto. 
+- intros.
+Local Transparent Linker_fundef.
+  simpl in *; unfold link_fundef in *.
+  destruct f1; monadInv H3; destruct f2; monadInv H4; try discriminate.
+  destruct e; inv H2. exists (Internal x); split; auto. simpl; rewrite EQ; auto.
+  destruct e; inv H2. exists (Internal x); split; auto. simpl; rewrite EQ; auto.
+  destruct (external_function_eq e e0 && typelist_eq t t1 &&
+            type_eq t0 t2 && calling_convention_eq c c0); inv H2.
+  econstructor; split; eauto. 
+Qed.
+

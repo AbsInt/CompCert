@@ -440,4 +440,4 @@ let expand_fundef id = function
       Errors.OK (External ef)
 
 let expand_program (p: Asm.program) : Asm.program Errors.res =
-  AST.transform_partial_ident_program expand_fundef p
+  AST.transform_partial_program2 expand_fundef (fun id v -> Errors.OK v) p

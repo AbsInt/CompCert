@@ -10,21 +10,12 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Import Coqlib.
-Require Import Zwf.
-Require Import Maps.
-Require Import Compopts.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Globalenvs.
-Require Import Events.
-Require Import Lattice.
-Require Import Kildall.
-Require Import Registers.
-Require Import RTL.
+Require Import Zwf Coqlib Maps Integers Floats Lattice.
+Require Import Compopts AST.
+Require Import Values Memory Globalenvs Events.
+Require Import Registers RTL.
+
+(** The abstract domains for value analysis *)
 
 Inductive block_class : Type :=
   | BCinvalid
@@ -3814,7 +3805,8 @@ Lemma inj_of_bc_preserves_globals:
 Proof.
   intros. destruct H as [A B].
   split. intros. apply inj_of_bc_valid. rewrite A in H. congruence.
-  split. intros. apply inj_of_bc_valid. apply B. eapply Genv.genv_vars_range; eauto.
+  split. intros. apply inj_of_bc_valid. apply B.
+    rewrite Genv.find_var_info_iff in H. eapply Genv.genv_defs_range; eauto.
   intros. exploit inj_of_bc_inv; eauto. intros (P & Q & R). auto.
 Qed.
 

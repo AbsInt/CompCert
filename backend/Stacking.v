@@ -12,18 +12,10 @@
 
 (** Layout of activation records; translation from Linear to Mach. *)
 
-Require Import Coqlib.
-Require Import Errors.
-Require Import AST.
-Require Import Integers.
-Require Import Op.
-Require Import Locations.
-Require Import Linear.
-Require Import Bounds.
-Require Import Mach.
-Require Import Conventions.
-Require Import Stacklayout.
-Require Import Lineartyping.
+Require Import Coqlib Errors.
+Require Import Integers AST.
+Require Import Op Locations Linear Mach.
+Require Import Bounds Conventions Stacklayout Lineartyping.
 
 (** * Layout of activation records *)
 

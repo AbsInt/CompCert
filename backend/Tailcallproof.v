@@ -12,20 +12,9 @@
 
 (** Recognition of tail calls: correctness proof *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import AST.
-Require Import Integers.
-Require Import Values.
-Require Import Memory.
-Require Import Op.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Smallstep.
-Require Import Registers.
-Require Import RTL.
-Require Import Conventions.
-Require Import Tailcall.
+Require Import Coqlib Maps Integers AST Linking.
+Require Import Values Memory Events Globalenvs Smallstep.
+Require Import Op Registers RTL Conventions Tailcall.
 
 (** * Syntactic properties of the code transformation *)
 
@@ -212,36 +201,42 @@ Qed.
 
 (** * Proof of semantic preservation *)
 
+Definition match_prog (p tp: RTL.program) :=
+  match_program (fun cu f tf => tf = transf_fundef f) eq p tp.
+
+Lemma transf_program_match:
+  forall p, match_prog p (transf_program p).
+Proof.
+  intros. apply match_transform_program; auto.
+Qed.
+
 Section PRESERVATION.
 
-Variable prog: program.
-Let tprog := transf_program prog.
+Variable prog tprog: program.
+Hypothesis TRANSL: match_prog prog tprog.
+
 Let ge := Genv.globalenv prog.
 Let tge := Genv.globalenv tprog.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof (Genv.find_symbol_transf transf_fundef prog).
-
-Lemma public_preserved:
-  forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
-Proof (Genv.public_symbol_transf transf_fundef prog).
-
-Lemma varinfo_preserved:
-  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
-Proof (Genv.find_var_info_transf transf_fundef prog).
+Proof (Genv.find_symbol_transf TRANSL).
 
 Lemma functions_translated:
   forall (v: val) (f: RTL.fundef),
   Genv.find_funct ge v = Some f ->
   Genv.find_funct tge v = Some (transf_fundef f).
-Proof (@Genv.find_funct_transf _ _ _ transf_fundef prog).
+Proof (Genv.find_funct_transf TRANSL).
 
 Lemma funct_ptr_translated:
   forall (b: block) (f: RTL.fundef),
   Genv.find_funct_ptr ge b = Some f ->
   Genv.find_funct_ptr tge b = Some (transf_fundef f).
-Proof (@Genv.find_funct_ptr_transf _ _ _ transf_fundef prog).
+Proof (Genv.find_funct_ptr_transf TRANSL).
+
+Lemma senv_preserved:
+  Senv.equiv ge tge.
+Proof (Genv.senv_transf TRANSL).
 
 Lemma sig_preserved:
   forall f, funsig (transf_fundef f) = funsig f.
@@ -409,15 +404,15 @@ Lemma transf_step_correct:
 Proof.
   induction 1; intros; inv MS; EliminatedInstr.
 
-(* nop *)
+- (* nop *)
   TransfInstr. left. econstructor; split.
   eapply exec_Inop; eauto. constructor; auto.
-(* eliminated nop *)
+- (* eliminated nop *)
   assert (s0 = pc') by congruence. subst s0.
   right. split. simpl. omega. split. auto.
   econstructor; eauto.
 
-(* op *)
+- (* op *)
   TransfInstr.
   assert (Val.lessdef_list (rs##args) (rs'##args)). apply regs_lessdef_regs; auto.
   exploit eval_operation_lessdef; eauto.
@@ -426,12 +421,12 @@ Proof.
   eapply exec_Iop; eauto.  rewrite <- EVAL'.
   apply eval_operation_preserved. exact symbols_preserved.
   econstructor; eauto. apply set_reg_lessdef; auto.
-(* eliminated move *)
+- (* eliminated move *)
   rewrite H1 in H. clear H1. inv H.
   right. split. simpl. omega. split. auto.
   econstructor; eauto. simpl in H0. rewrite PMap.gss. congruence.
 
-(* load *)
+- (* load *)
   TransfInstr.
   assert (Val.lessdef_list (rs##args) (rs'##args)). apply regs_lessdef_regs; auto.
   exploit eval_addressing_lessdef; eauto.
@@ -443,7 +438,7 @@ Proof.
   apply eval_addressing_preserved. exact symbols_preserved. eauto.
   econstructor; eauto. apply set_reg_lessdef; auto.
 
-(* store *)
+- (* store *)
   TransfInstr.
   assert (Val.lessdef_list (rs##args) (rs'##args)). apply regs_lessdef_regs; auto.
   exploit eval_addressing_lessdef; eauto.
@@ -456,10 +451,10 @@ Proof.
   destruct a; simpl in H1; try discriminate.
   econstructor; eauto.
 
-(* call *)
+- (* call *)
   exploit find_function_translated; eauto. intro FIND'.
   TransfInstr.
-(* call turned tailcall *)
++ (* call turned tailcall *)
   assert ({ m'' | Mem.free m' sp0 0 (fn_stacksize (transf_function f)) = Some m''}).
     apply Mem.range_perm_free. rewrite stacksize_preserved. rewrite H7.
     red; intros; omegaContradiction.
@@ -469,13 +464,13 @@ Proof.
   constructor. eapply match_stackframes_tail; eauto. apply regs_lessdef_regs; auto.
   eapply Mem.free_right_extends; eauto.
   rewrite stacksize_preserved. rewrite H7. intros. omegaContradiction.
-(* call that remains a call *)
++ (* call that remains a call *)
   left. exists (Callstate (Stackframe res (transf_function f) (Vptr sp0 Int.zero) pc' rs' :: s')
                           (transf_fundef fd) (rs'##args) m'); split.
   eapply exec_Icall; eauto. apply sig_preserved.
   constructor. constructor; auto. apply regs_lessdef_regs; auto. auto.
 
-(* tailcall *)
+- (* tailcall *)
   exploit find_function_translated; eauto. intro FIND'.
   exploit Mem.free_parallel_extends; eauto. intros [m'1 [FREE EXT]].
   TransfInstr.
@@ -484,7 +479,7 @@ Proof.
   rewrite stacksize_preserved; auto.
   constructor. auto.  apply regs_lessdef_regs; auto. auto.
 
-(* builtin *)
+- (* builtin *)
   TransfInstr.
   exploit (@eval_builtin_args_lessdef _ ge (fun r => rs#r) (fun r => rs'#r)); eauto.
   intros (vargs' & P & Q).
@@ -493,25 +488,24 @@ Proof.
   left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) pc' (regmap_setres res v' rs') m'1); split.
   eapply exec_Ibuiltin; eauto.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto. apply set_res_lessdef; auto.
 
-(* cond *)
+- (* cond *)
   TransfInstr.
   left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) (if b then ifso else ifnot) rs' m'); split.
   eapply exec_Icond; eauto.
   apply eval_condition_lessdef with (rs##args) m; auto. apply regs_lessdef_regs; auto.
   constructor; auto.
 
-(* jumptable *)
+- (* jumptable *)
   TransfInstr.
   left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) pc' rs' m'); split.
   eapply exec_Ijumptable; eauto.
   generalize (RLD arg). rewrite H0. intro. inv H2. auto.
   constructor; auto.
 
-(* return *)
+- (* return *)
   exploit Mem.free_parallel_extends; eauto. intros [m'1 [FREE EXT]].
   TransfInstr.
   left. exists (Returnstate s' (regmap_optget or Vundef rs') m'1); split.
@@ -520,21 +514,21 @@ Proof.
   destruct or; simpl. apply RLD. constructor.
   auto.
 
-(* eliminated return None *)
+- (* eliminated return None *)
   assert (or = None) by congruence. subst or.
   right. split. simpl. omega. split. auto.
   constructor. auto.
   simpl. constructor.
   eapply Mem.free_left_extends; eauto.
 
-(* eliminated return Some *)
+- (* eliminated return Some *)
   assert (or = Some r) by congruence. subst or.
   right. split. simpl. omega. split. auto.
   constructor. auto.
   simpl. auto.
   eapply Mem.free_left_extends; eauto.
 
-(* internal call *)
+- (* internal call *)
   exploit Mem.alloc_extends; eauto.
     instantiate (1 := 0). omega.
     instantiate (1 := fn_stacksize f). omega.
@@ -549,22 +543,21 @@ Proof.
   rewrite EQ2. rewrite EQ3. constructor; auto.
   apply regs_lessdef_init_regs. auto.
 
-(* external call *)
+- (* external call *)
   exploit external_call_mem_extends; eauto.
   intros [res' [m2' [A [B [C D]]]]].
   left. exists (Returnstate s' res' m2'); split.
   simpl. econstructor; eauto.
-  eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   constructor; auto.
 
-(* returnstate *)
+- (* returnstate *)
   inv H2.
-(* synchronous return in both programs *)
++ (* synchronous return in both programs *)
   left. econstructor; split.
   apply exec_return.
   constructor; auto. apply set_reg_lessdef; auto.
-(* return instr in source program, eliminated because of tailcall *)
++ (* return instr in source program, eliminated because of tailcall *)
   right. split. unfold measure. simpl length.
   change (S (length s) * (niter + 2))%nat
    with ((niter + 2) + (length s) * (niter + 2))%nat.
@@ -581,10 +574,10 @@ Proof.
   intros. inv H.
   exploit funct_ptr_translated; eauto. intro FIND.
   exists (Callstate nil (transf_fundef f) nil m0); split.
-  econstructor; eauto. apply Genv.init_mem_transf. auto.
+  econstructor; eauto. apply (Genv.init_mem_transf TRANSL). auto.
   replace (prog_main tprog) with (prog_main prog).
   rewrite symbols_preserved. eauto.
-  reflexivity.
+  symmetry; eapply match_program_main; eauto. 
   rewrite <- H3. apply sig_preserved.
   constructor. constructor. constructor. apply Mem.extends_refl.
 Qed.
@@ -604,12 +597,11 @@ Theorem transf_program_correct:
   forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
   eapply forward_simulation_opt with (measure := measure); eauto.
-  eexact public_preserved.
+  apply senv_preserved. 
   eexact transf_initial_states.
   eexact transf_final_states.
   exact transf_step_correct.
 Qed.
 
 End PRESERVATION.
-
 

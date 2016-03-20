@@ -12,22 +12,10 @@
 
 (** Elimination of unneeded computations over RTL. *)
 
-Require Import Coqlib.
-Require Import Errors.
-Require Import Maps.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Memory.
-Require Import Registers.
-Require Import Op.
-Require Import RTL.
-Require Import Lattice.
-Require Import Kildall.
-Require Import ValueDomain.
-Require Import ValueAnalysis.
-Require Import NeedDomain.
-Require Import NeedOp.
+Require Import Coqlib Maps Errors Integers Floats Lattice Kildall.
+Require Import AST Linking.
+Require Import Memory Registers Op RTL.
+Require Import ValueDomain ValueAnalysis NeedDomain NeedOp.
 
 (** * Part 1: the static analysis *)
 
@@ -205,10 +193,8 @@ Definition transf_instr (approx: PMap.t VA.t) (an: PMap.t NA.t)
       instr
   end.
 
-Definition vanalyze := ValueAnalysis.analyze.
-
 Definition transf_function (rm: romem) (f: function) : res function :=
-  let approx := vanalyze rm f in
+  let approx := ValueAnalysis.analyze rm f in
   match analyze approx f with
   | Some an =>
       OK {| fn_sig := f.(fn_sig);
@@ -220,10 +206,9 @@ Definition transf_function (rm: romem) (f: function) : res function :=
       Error (msg "Neededness analysis failed")
   end.
 
-
 Definition transf_fundef (rm: romem) (fd: fundef) : res fundef :=
   AST.transf_partial_fundef (transf_function rm) fd.
 
 Definition transf_program (p: program) : res program :=
-  transform_partial_program (transf_fundef (romem_for_program p)) p.
+  transform_partial_program (transf_fundef (romem_for p)) p.
 

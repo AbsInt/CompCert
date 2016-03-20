@@ -12,13 +12,7 @@
 
 (** Recognition of tail calls. *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import AST.
-Require Import Registers.
-Require Import Op.
-Require Import RTL.
-Require Import Conventions.
+Require Import Coqlib Maps AST Registers Op RTL Conventions.
 
 (** An [Icall] instruction that stores its result in register [rreg]
   can be turned into a tail call if:
@@ -95,8 +89,7 @@ Definition transf_instr (f: function) (pc: node) (instr: instruction) :=
   end.
 
 (** A function is transformed only if its stack block is empty,
-  as explained above.  Moreover, we can turn tail calls off
-  using a compilation option. *)
+    as explained above.  *)
 
 Definition transf_function (f: function) : function :=
   if zeq f.(fn_stacksize) 0

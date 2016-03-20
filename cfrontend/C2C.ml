@@ -1090,6 +1090,7 @@ let convertFundef loc env fd =
 (** External function declaration *)
 
 let re_builtin = Str.regexp "__builtin_"
+let re_runtime = Str.regexp "__i64_"
 
 let convertFundecl env (sto, id, ty, optinit) =
   let (args, res, cconv) =
@@ -1102,6 +1103,7 @@ let convertFundecl env (sto, id, ty, optinit) =
   let ef =
     if id.name = "malloc" then EF_malloc else
     if id.name = "free" then EF_free else
+    if Str.string_match re_runtime id.name 0 then EF_runtime(id'', sg) else
     if Str.string_match re_builtin id.name 0
     && List.mem_assoc id.name builtins.functions
     then EF_builtin(id'', sg)

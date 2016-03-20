@@ -12,19 +12,10 @@
 
 (** Translation from Csharpminor to Cminor. *)
 
-Require Import FSets.
-Require FSetAVL.
-Require Import Orders.
-Require Mergesort.
-Require Import Coqlib.
-Require Import Errors.
-Require Import Maps.
-Require Import Ordered.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Csharpminor.
-Require Import Cminor.
+Require Import FSets FSetAVL Orders Mergesort.
+Require Import Coqlib Maps Ordered Errors Integers Floats.
+Require Import AST Linking.
+Require Import Csharpminor Cminor.
 
 Local Open Scope string_scope.
 Local Open Scope error_monad_scope.

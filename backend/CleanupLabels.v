@@ -20,10 +20,8 @@
   better-looking, the present pass removes labels that cannot be
   branched to. *)
 
-Require Import FSets.
-Require FSetAVL.
-Require Import Coqlib.
-Require Import Ordered.
+Require Import FSets FSetAVL.
+Require Import Coqlib Ordered.
 Require Import Linear.
 
 Module Labelset := FSetAVL.Make(OrderedPositive).

@@ -536,6 +536,7 @@ Definition do_external (ef: external_function):
   match ef with
   | EF_external name sg => do_external_function name sg ge
   | EF_builtin name sg => do_external_function name sg ge
+  | EF_runtime name sg => do_external_function name sg ge
   | EF_vload chunk => do_ef_volatile_load chunk
   | EF_vstore chunk => do_ef_volatile_store chunk
   | EF_malloc => do_ef_malloc
@@ -557,6 +558,8 @@ Proof with try congruence.
 (* EF_external *)
   eapply do_external_function_sound; eauto.
 (* EF_builtin *)
+  eapply do_external_function_sound; eauto.
+(* EF_runtime *)
   eapply do_external_function_sound; eauto.
 (* EF_vload *)
   unfold do_ef_volatile_load. destruct vargs... destruct v... destruct vargs...
@@ -603,6 +606,8 @@ Proof.
 (* EF_external *)
   eapply do_external_function_complete; eauto.
 (* EF_builtin *)
+  eapply do_external_function_complete; eauto.
+(* EF_runtime *)
   eapply do_external_function_complete; eauto.
 (* EF_vload *)
   inv H; unfold do_ef_volatile_load.

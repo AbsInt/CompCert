@@ -237,6 +237,8 @@ let external_function p = function
       fprintf p "@[<hov 2>(EF_external %a@ %a)@]" coqstring name signatur sg
   | EF_builtin(name, sg) ->
       fprintf p "@[<hov 2>(EF_builtin %a@ %a)@]" coqstring name signatur sg
+  | EF_runtime(name, sg) ->
+      fprintf p "@[<hov 2>(EF_runtime %a@ %a)@]" coqstring name signatur sg
   | EF_vload chunk ->
       fprintf p "(EF_vload %s)" (name_of_chunk chunk)
   | EF_vstore chunk ->

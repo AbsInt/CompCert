@@ -12,16 +12,9 @@
 
 (** Translation from Mach to IA32 Asm. *)
 
-Require Import Coqlib.
-Require Import Errors.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Memdata.
-Require Import Op.
-Require Import Locations.
-Require Import Mach.
-Require Import Asm.
+Require Import Coqlib Errors.
+Require Import Integers Floats AST Memdata.
+Require Import Op Locations Mach Asm.
 
 Open Local Scope string_scope.
 Open Local Scope error_monad_scope.

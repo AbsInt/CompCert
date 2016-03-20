@@ -15,21 +15,11 @@
 
 (** Typing rules and type-checking for the Compcert C language *)
 
-Require Import Coqlib.
 Require Import String.
-Require Import Maps.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Globalenvs.
-Require Import Events.
-Require Import AST.
-Require Import Ctypes.
-Require Import Cop.
-Require Import Csyntax.
-Require Import Csem.
-Require Import Errors.
+Require Import Coqlib Maps Integers Floats Errors.
+Require Import AST Linking.
+Require Import Values Memory Globalenvs Events.
+Require Import Ctypes Cop Csyntax Csem.
 
 Local Open Scope error_monad_scope.
 
@@ -911,8 +901,8 @@ Definition retype_fundef (ce: composite_env) (e: typenv) (fd: fundef) : res fund
 Definition typecheck_program (p: program) : res program :=
   let e := bind_globdef (PTree.empty _) p.(prog_defs) in
   let ce := p.(prog_comp_env) in
-  do defs <- transf_globdefs (retype_fundef ce e) (fun v => OK v) p.(prog_defs);
-  OK {| prog_defs := defs;
+  do tp <- transform_partial_program (retype_fundef ce e) p;
+  OK {| prog_defs := tp.(AST.prog_defs);
         prog_public := p.(prog_public);
         prog_main := p.(prog_main);
         prog_types := p.(prog_types);
@@ -1325,32 +1315,29 @@ Theorem typecheck_program_sound:
   forall p p', typecheck_program p = OK p' -> wt_program p'.
 Proof.
   unfold typecheck_program; intros. monadInv H.
-  rename x into defs.
+  rename x into tp.
   constructor; simpl.
   set (ce := prog_comp_env p) in *.
   set (e := bind_globdef (PTree.empty type) (prog_defs p)) in *.
-  set (e' := bind_globdef (PTree.empty type) defs) in *.
-  assert (MATCH:
-    list_forall2 (match_globdef (fun f tf => retype_fundef ce e f = OK tf) (fun v tv => tv = v)) (prog_defs p) defs).
-  {
-    revert EQ; generalize (prog_defs p) defs.
-    induction l as [ | [id gd] l ]; intros l'; simpl; intros.
-    inv EQ. constructor.
-    destruct gd as [f | v].
-    destruct (retype_fundef ce e f) as [tf|msg] eqn:R; monadInv EQ.
-    constructor; auto. constructor; auto.
-    monadInv EQ. constructor; auto. destruct v; constructor; auto. }
+  set (e' := bind_globdef (PTree.empty type) (AST.prog_defs tp)) in *.
+  assert (M: match_program (fun ctx f tf => retype_fundef ce e f = OK tf) eq p tp)
+  by (eapply match_transform_partial_program; eauto).
+  destruct M as (MATCH & _). simpl in MATCH.
   assert (ENVS: e' = e).
-  { unfold e, e'. revert MATCH; generalize (prog_defs p) defs (PTree.empty type).
+  { unfold e, e'. revert MATCH; generalize (prog_defs p) (AST.prog_defs tp) (PTree.empty type).
     induction l as [ | [id gd] l ]; intros l' t M; inv M.
-    auto. inv H1; simpl; auto. replace (type_of_fundef f2) with (type_of_fundef f1); auto.
-    unfold retype_fundef in H4. destruct f1; monadInv H4; auto. monadInv EQ0; auto.
+    auto.
+    destruct b1 as [id' gd']; destruct H1; simpl in *. inv H0; simpl.
+    replace (type_of_fundef f2) with (type_of_fundef f1); auto.
+    unfold retype_fundef in H2. destruct f1; monadInv H2; auto. monadInv EQ0; auto.
+    inv H1. simpl. auto.
   }
   rewrite ENVS.
-  intros id f. revert MATCH; generalize (prog_defs p) defs. induction 1; simpl; intros.
+  intros id f. revert MATCH; generalize (prog_defs p) (AST.prog_defs tp).
+  induction 1; simpl; intros.
   contradiction.
-  destruct H0; auto. subst b1; inv H. destruct f1; simpl in H2.
-  monadInv H2. eapply retype_function_sound; eauto. congruence.
+  destruct H0; auto. subst b1; inv H. simpl in H1. inv H1. 
+  destruct f1; monadInv H4. eapply retype_function_sound; eauto.
 Qed.
 
 (** * Subject reduction *)
@@ -2122,28 +2109,3 @@ Proof.
 Qed.
 
 End PRESERVATION.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

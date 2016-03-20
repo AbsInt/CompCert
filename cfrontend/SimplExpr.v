@@ -512,9 +512,9 @@ Local Open Scope error_monad_scope.
 
 Definition transl_fundef (fd: Csyntax.fundef) : res fundef :=
   match fd with
-  | Csyntax.Internal f =>
+  | Internal f =>
       do tf <- transl_function f; OK (Internal tf)
-  | Csyntax.External ef targs tres cc =>
+  | External ef targs tres cc =>
       OK (External ef targs tres cc)
   end.
 
@@ -523,6 +523,6 @@ Definition transl_program (p: Csyntax.program) : res program :=
   OK {| prog_defs := AST.prog_defs p1;
         prog_public := AST.prog_public p1;
         prog_main := AST.prog_main p1;
-        prog_types := Csyntax.prog_types p;
-        prog_comp_env := Csyntax.prog_comp_env p;
-        prog_comp_env_eq := Csyntax.prog_comp_env_eq p |}.
+        prog_types := prog_types p;
+        prog_comp_env := prog_comp_env p;
+        prog_comp_env_eq := prog_comp_env_eq p |}.

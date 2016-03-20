@@ -12,18 +12,9 @@
 
 (** Relational specification of expression simplification. *)
 
-Require Import Coqlib.
-Require Import Errors.
-Require Import Maps.
-Require Import Integers.
-Require Import Floats.
-Require Import Memory.
-Require Import AST.
-Require Import Ctypes.
-Require Import Cop.
-Require Import Csyntax.
-Require Import Clight.
-Require Import SimplExpr.
+Require Import Coqlib Maps Errors Integers Floats.
+Require Import AST Linking Memory.
+Require Import Ctypes Cop Csyntax Clight SimplExpr.
 
 Section SPEC.
 
@@ -1077,8 +1068,7 @@ Opaque transl_expression transl_expr_stmt.
   monadInv TR; constructor; eauto.
 Qed.
 
-(** Relational presentation for the transformation of functions, fundefs, and va
-riables. *)
+(** Relational presentation for the transformation of functions, fundefs, and variables. *)
 
 Inductive tr_function: Csyntax.function -> Clight.function -> Prop :=
   | tr_function_intro: forall f tf,
@@ -1092,9 +1082,9 @@ Inductive tr_function: Csyntax.function -> Clight.function -> Prop :=
 Inductive tr_fundef: Csyntax.fundef -> Clight.fundef -> Prop :=
   | tr_internal: forall f tf,
       tr_function f tf ->
-      tr_fundef (Csyntax.Internal f) (Clight.Internal tf)
+      tr_fundef (Internal f) (Internal tf)
   | tr_external: forall ef targs tres cconv,
-      tr_fundef (Csyntax.External ef targs tres cconv) (External ef targs tres cconv).
+      tr_fundef (External ef targs tres cconv) (External ef targs tres cconv).
 
 Lemma transl_function_spec:
   forall f tf,
@@ -1115,31 +1105,6 @@ Proof.
   destruct fd; Errors.monadInv H.
 + constructor. eapply transl_function_spec; eauto.
 + constructor.
-Qed.
-
-Lemma transl_globdefs_spec:
-  forall l l',
-  transf_globdefs transl_fundef (fun v : type => OK v) l = OK l' ->
-  list_forall2 (match_globdef tr_fundef (fun v1 v2 => v1 = v2)) l l'.
-Proof.
-  induction l; simpl; intros.
-- inv H. constructor.
-- destruct a as [id gd]. destruct gd.
-  + destruct (transl_fundef f) as [tf | ?] eqn:E1; Errors.monadInv H.
-    constructor; eauto. constructor. eapply transl_fundef_spec; eauto.
-  + Errors.monadInv H. 
-    constructor; eauto. destruct v; constructor; auto.
-Qed.
-
-Theorem transl_program_spec:
-  forall p tp,
-  transl_program p = OK tp ->
-  match_program tr_fundef (fun v1 v2 => v1 = v2) nil (Csyntax.prog_main p) p tp.
-Proof.
-  unfold transl_program, transform_partial_program; intros. Errors.monadInv H. Errors.monadInv EQ; simpl.
-  split; auto. exists x0; split.
-  eapply transl_globdefs_spec; eauto.
-  rewrite <- app_nil_end; auto.
 Qed.
 
 End SPEC.
