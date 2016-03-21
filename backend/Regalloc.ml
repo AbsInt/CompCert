@@ -33,9 +33,7 @@ open Datatypes
 open Coqlib
 open Maps
 open AST
-open Memdata
 open Kildall
-open Registers
 open Op
 open Machregs
 open Locations
@@ -94,9 +92,9 @@ let rec constrain_regs vl cl =
 let move v1 v2 k =
   if v1 = v2 then
     k
-  else if is_stack_reg v1 then begin
+  else if XTL.is_stack_reg v1 then begin
     let t = new_temp (typeof v2) in Xmove(v1, t) :: Xmove(t, v2) :: k
-  end else if is_stack_reg v2 then begin
+  end else if XTL.is_stack_reg v2 then begin
     let t = new_temp (typeof v1) in Xmove(v1, t) :: Xmove(t, v2) :: k
   end else
     Xmove(v1, v2) :: k
@@ -308,7 +306,7 @@ let rec vset_removeres r after =
 let live_before instr after =
   match instr with
   | Xmove(src, dst) | Xspill(src, dst) | Xreload(src, dst) ->
-      if VSet.mem dst after || is_stack_reg src
+      if VSet.mem dst after || XTL.is_stack_reg src
       then VSet.add src (VSet.remove dst after)
       else after
   | Xparmove(srcs, dsts, itmp, ftmp) ->
@@ -385,7 +383,7 @@ let rec dce_parmove srcs dsts after =
   | [], [] -> [], []
   | src1 :: srcs, dst1 :: dsts ->
       let (srcs', dsts') = dce_parmove srcs dsts after in
-      if VSet.mem dst1 after || is_stack_reg src1
+      if VSet.mem dst1 after || XTL.is_stack_reg src1
       then (src1 :: srcs', dst1 :: dsts')
       else (srcs', dsts')
   | _, _ -> assert false
@@ -399,7 +397,7 @@ let rec keep_builtin_arg after = function
 let dce_instr instr after k =
   match instr with
   | Xmove(src, dst) ->
-      if VSet.mem dst after || is_stack_reg src
+      if VSet.mem dst after || XTL.is_stack_reg src
       then instr :: k
       else k
   | Xparmove(srcs, dsts, itmp, ftmp) ->
@@ -431,7 +429,7 @@ let rec dce_block blk after =
 
 let dead_code_elimination f liveness =
   { f with fn_code =
-      PTree.map (fun pc blk -> snd(dce_block blk (PMap.get pc liveness)))
+      PTree.map (fun pc blk -> Datatypes.snd(dce_block blk (PMap.get pc liveness)))
                  f.fn_code }
 
 
@@ -484,9 +482,9 @@ let spill_costs f =
 
   let charge_instr = function
     | Xmove(src, dst) ->
-        if is_stack_reg src then
+        if XTL.is_stack_reg src then
           force_stack_allocation dst
-        else if is_stack_reg dst then
+        else if XTL.is_stack_reg dst then
           force_stack_allocation src
         else begin
           charge 1 1 src; charge 1 1 dst
@@ -595,12 +593,12 @@ let add_interfs_instr g instr live =
       add_interfs_list g itmp srcs; add_interfs_list g itmp dsts;
       add_interfs_list g ftmp srcs; add_interfs_list g ftmp dsts;
       (* Take into account destroyed reg when accessing Incoming param *)
-      if List.exists (function (L(S(Incoming, _, _))) -> true | _ -> false) srcs
+      if List.exists (function (L(Locations.S(Incoming, _, _))) -> true | _ -> false) srcs
       then add_interfs_list g (vmreg temp_for_parent_frame) dsts;
       (* Take into account destroyed reg when initializing Outgoing
          arguments of type Tsingle *)
       if List.exists
-           (function (L(S(Outgoing, _, Tsingle))) -> true | _ -> false) dsts
+           (function (L(Locations.S(Outgoing, _, Tsingle))) -> true | _ -> false) dsts
       then
         List.iter
           (fun mr ->
@@ -690,10 +688,10 @@ let find_coloring f liveness =
 (*********** Determination of variables that need spill code insertion *****)
 
 let is_reg alloc v =
-  match alloc v with R _ -> true | S _ -> false
+  match alloc v with R _ -> true | Locations.S _ -> false
 
 let add_tospill alloc v ts =
-  match alloc v with R _ -> ts | S _ -> VSet.add v ts
+  match alloc v with R _ -> ts | Locations.S _ -> VSet.add v ts
 
 let addlist_tospill alloc vl ts =
   List.fold_right (add_tospill alloc) vl ts
@@ -963,7 +961,7 @@ let spill_function f tospill round =
 
 exception Bad_LTL
 
-let mreg_of alloc v = match alloc v with R mr -> mr | S _ -> raise Bad_LTL
+let mreg_of alloc v = match alloc v with R mr -> mr | Locations.S _ -> raise Bad_LTL
 
 let mregs_of alloc vl = List.map (mreg_of alloc) vl
 
@@ -973,11 +971,11 @@ let make_move src dst k =
   match src, dst with
   | R rsrc, R rdst ->
       if rsrc = rdst then k else LTL.Lop(Omove, [rsrc], rdst) :: k
-  | R rsrc, S(sl, ofs, ty) ->
+  | R rsrc, Locations.S(sl, ofs, ty) ->
       LTL.Lsetstack(rsrc, sl, ofs, ty) :: k
-  | S(sl, ofs, ty), R rdst ->
+  | Locations.S(sl, ofs, ty), R rdst ->
       LTL.Lgetstack(sl, ofs, ty, rdst) :: k
-  | S _, S _ ->
+  | Locations.S _, Locations.S _ ->
       if src = dst then k else raise Bad_LTL
 
 type parmove_status = To_move | Being_moved | Moved
@@ -997,11 +995,11 @@ let make_parmove srcs dsts itmp ftmp k =
     match s, d with
     | R rs, R rd ->
         code := LTL.Lop(Omove, [rs], rd) :: !code
-    | R rs, S(sl, ofs, ty) ->
+    | R rs, Locations.S(sl, ofs, ty) ->
         code := LTL.Lsetstack(rs, sl, ofs, ty) :: !code
-    | S(sl, ofs, ty), R rd ->
+    | Locations.S(sl, ofs, ty), R rd ->
         code := LTL.Lgetstack(sl, ofs, ty, rd) :: !code
-    | S(sls, ofss, tys), S(sld, ofsd, tyd) ->
+    | Locations.S(sls, ofss, tys), Locations.S(sld, ofsd, tyd) ->
         let tmp = temp_for tys in
         (* code will be reversed at the end *)
         code := LTL.Lsetstack(tmp, sld, ofsd, tyd) ::

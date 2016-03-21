@@ -20,8 +20,10 @@ type filebuf
 
 val openfile: string -> filebuf
         (** Open the file with the given name. *)
+
 val close: filebuf -> unit
         (** Close the file underlying the given buffer. *)
+
 val copy: out_channel -> string -> filebuf -> int -> int -> unit
         (** [copy oc pref buf first last] copies lines number [first]
             to [last], included, to the channel [oc].  Each line is

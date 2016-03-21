@@ -10,7 +10,6 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-open AST
 open BinNums
 open C
 open Camlcoq
@@ -28,8 +27,6 @@ let next_id () =
   let nid = !id in
   incr id; nid
 
-let reset_id () =
-  id := 0
 
 (* Auximilary functions *)
 let list_replace c f l =
@@ -47,11 +44,15 @@ let add_file file =
 (* All types encountered *)
 let types: (int,debug_types) Hashtbl.t = Hashtbl.create 7
 
+let get_type = Hashtbl.find types
+
+let fold_types f a = Hashtbl.fold f types a
+
 (* Lookup table for types *)
 let lookup_types: (string, int) Hashtbl.t = Hashtbl.create 7
 
 (* Translate a C.typ to a string needed for hashing *)
-let typ_to_string (ty: typ) =
+let typ_to_string ty =
   let buf = Buffer.create 7 in
   let chan = Format.formatter_of_buffer buf in
   Cprint.print_debug_idents := true;
@@ -64,13 +65,13 @@ let typ_to_string (ty: typ) =
 let strip_attributes typ = strip_attributes_type typ [AConst; AVolatile]
 
 (* Find the type id to an type *)
-let find_type (ty: typ) =
+let find_type ty =
   (* We are only interested in Const and Volatile *)
   let ty = strip_attributes ty in
   Hashtbl.find lookup_types (typ_to_string ty)
 
 (* Add type and information *)
-let insert_type (ty: typ) =
+let insert_type ty =
   let insert d_ty ty =
     let id = next_id ()
     and name = typ_to_string ty in
@@ -104,7 +105,7 @@ let insert_type (ty: typ) =
                 arr_size= s;
               } in
               ArrayType arr
-          | TFun (t,param,va,_) ->
+          | TFun (t,param,_,_) ->
               let param,prot = (match param with
               | None -> [],false
               | Some p -> List.map (fun (i,t) -> let t = attr_aux t in
@@ -213,6 +214,8 @@ let replace_typedef id f =
 (* All global definitions encountered *)
 let definitions: (int,definition_type) Hashtbl.t = Hashtbl.create 7
 
+let fold_definitions f a  = Hashtbl.fold f definitions a
+
 (* Mapping from stamp to debug id *)
 let stamp_to_definition: (int,int) Hashtbl.t = Hashtbl.create 7
 
@@ -254,6 +257,8 @@ let replace_fun id f =
 
 (* All local variables *)
 let local_variables: (int, local_information) Hashtbl.t = Hashtbl.create 7
+
+let get_local_variable id = Hashtbl.find local_variables id
 
 (* Mapping from stamp to the debug id of the local variable *)
 let stamp_to_local: (int,int) Hashtbl.t = Hashtbl.create 7
@@ -516,28 +521,17 @@ let enter_scope f_id p_id id =
   with Not_found  -> ()
 
 
-type scope_range =
-    {
-     start_addr: positive option;
-     end_addr: positive option;
-   }
-
-type var_range =
-    {
-     range_start: positive option;
-     range_end:   positive option;
-     var_loc:     int * int builtin_arg;
-   }
-
-type var_location =
-  | RangeLoc of var_range list
-  | FunctionLoc of  int * int builtin_arg (* Stack allocated variables *)
-
 let var_locations: (atom * atom,var_location) Hashtbl.t = Hashtbl.create 7
+
+let variable_location var f = Hashtbl.find var_locations (var,f)
 
 let scope_ranges: (int,scope_range list) Hashtbl.t = Hashtbl.create 7
 
+let get_scope_ranges = Hashtbl.find scope_ranges
+
 let label_translation: (atom * positive, int) Hashtbl.t = Hashtbl.create 7
+
+let translate_label f l = Hashtbl.find label_translation (f,l)
 
 let add_label atom p i =
   Hashtbl.add label_translation (atom,p) i
@@ -589,19 +583,21 @@ let stack_variable (f,v) (sp,loc) =
 let compilation_section_start: (string,int) Hashtbl.t = Hashtbl.create 7
 let compilation_section_end: (string,int) Hashtbl.t = Hashtbl.create 7
 
+let section_start n = Hashtbl.find compilation_section_start n
+
+let fold_section_start f a =  Hashtbl.fold f compilation_section_start a
+
+let section_end n = Hashtbl.find compilation_section_end n
+
 let diab_additional: (string,int * int * section_name) Hashtbl.t = Hashtbl.create 7
+
+let diab_additional_section s =
+  let line_start,debug_start,_ = Hashtbl.find diab_additional s in
+  line_start,debug_start
 
 let section_to_string = function
   | Section_user (n,_,_) -> n
   | _ -> ".text"
-
-let add_compilation_section_start sec addr =
-  let sec = section_to_string sec in
-  Hashtbl.add compilation_section_start sec addr
-
-let add_compilation_section_end sec addr =
-  let sec = section_to_string sec in
-  Hashtbl.add compilation_section_end sec addr
 
 let add_diab_info sec addr1 add2 addr3 =
   let sec' = section_to_string sec in
@@ -622,6 +618,8 @@ let exists_section sec =
 
 let filenum: (string * string,int) Hashtbl.t = Hashtbl.create 7
 
+let diab_file_loc f l = Hashtbl.find filenum (f,l)
+
 let compute_diab_file_enum end_label entry_label line_end =
   Hashtbl.iter (fun sec (_,_,secname) ->
     Hashtbl.add compilation_section_end sec (end_label secname);
@@ -633,7 +631,11 @@ let compute_diab_file_enum end_label entry_label line_end =
 let compute_gnu_file_enum f =
   StringSet.iter f !all_files
 
+let all_files_iter f = StringSet.iter f !all_files
+
 let printed_vars: StringSet.t ref = ref StringSet.empty
+
+let is_variable_printed id = StringSet.mem id !printed_vars
 
 let variable_printed id =
   printed_vars := StringSet.add id !printed_vars

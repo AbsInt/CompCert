@@ -17,8 +17,7 @@
 open Lexing
 open Pre_parser
 open Pre_parser_aux
-open Cabshelper
-open Camlcoq
+open !Cabshelper
 
 module SSet = Set.Make(String)
 
@@ -430,7 +429,7 @@ and singleline_comment = parse
   open Streams
   open Specif
   open Parser
-  open Aut.GramDefs
+  open !Aut.GramDefs
 
   (* This is the main entry point to the lexer. *)
 

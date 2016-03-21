@@ -17,12 +17,10 @@
 
 open Format
 open Camlcoq
-open Datatypes
-open Values
 open AST
-open Ctypes
+open !Ctypes
 open Cop
-open Clight
+open !Clight
 
 (* Options, lists, pairs *)
 
@@ -50,15 +48,15 @@ let print_list fn p l =
 exception Not_an_identifier
 
 let sanitize s =
-  let s' = String.create (String.length s) in
+  let s' = Bytes.create (String.length s) in
   for i = 0 to String.length s - 1 do
-    s'.[i] <-
-      match s.[i] with
+    Bytes.set  s' i
+    (match String.get s i with
       | 'A'..'Z' | 'a'..'z' | '0'..'9' | '_' as c -> c
       | ' ' | '$' -> '_'
-      | _ -> raise Not_an_identifier
+      | _ -> raise Not_an_identifier)
   done;
-  s'
+  Bytes.to_string s'
 
 let temp_names : (ident, string) Hashtbl.t = Hashtbl.create 17
 
@@ -79,7 +77,7 @@ let iter_hashtbl_sorted (h: ('a, string) Hashtbl.t) (f: 'a * string -> unit) =
       (Hashtbl.fold (fun k d accu -> (k, d) :: accu) h []))
 
 let define_idents p =
-  iter_hashtbl_sorted 
+  iter_hashtbl_sorted
     string_of_atom
     (fun (id, name) ->
       try
@@ -402,14 +400,14 @@ let print_variable p (id, v) =
 
 let print_globdef p (id, gd) =
   match gd with
-  | Gfun(Internal f) -> print_function p (id, f)
-  | Gfun(External _) -> ()
+  | Gfun(Clight.Internal f) -> print_function p (id, f)
+  | Gfun(Clight.External _) -> ()
   | Gvar v -> print_variable p (id, v)
 
 let print_ident_globdef p = function
-  | (id, Gfun(Internal f)) ->
+  | (id, Gfun(Clight.Internal f)) ->
       fprintf p "(%a, Gfun(Internal f_%s))" ident id (extern_atom id)
-  | (id, Gfun(External(ef, targs, tres, cc))) ->
+  | (id, Gfun(Clight.External(ef, targs, tres, cc))) ->
       fprintf p "@[<hov 2>(%a,@ @[<hov 2>Gfun(External %a@ %a@ %a@ %a))@]@]"
         ident id external_function ef typlist targs typ tres callconv cc
   | (id, Gvar v) ->
@@ -529,12 +527,12 @@ let name_function f =
 
 let name_globdef (id, g) =
   match g with
-  | Gfun(Internal f) -> name_function f
+  | Gfun(Clight.Internal f) -> name_function f
   | _ -> ()
 
 let name_program p =
-  List.iter name_globdef p.prog_defs
-  
+  List.iter name_globdef p.Clight.prog_defs
+
 (* All together *)
 
 let print_program p prog =
@@ -557,4 +555,3 @@ let print_program p prog =
   fprintf p "|}.@ ";
   print_assertions p;
   fprintf p "@]@."
-

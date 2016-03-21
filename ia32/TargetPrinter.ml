@@ -13,11 +13,10 @@
 (* Printing IA32 assembly code in asm syntax *)
 
 open Printf
-open Datatypes
+open !Datatypes
 open Camlcoq
 open Sections
 open AST
-open Memdata
 open Asm
 open PrintAsmaux
 open Fileinfo
@@ -309,27 +308,6 @@ module Target(System: SYSTEM):TARGET =
     let section oc sec =
       fprintf oc "	%s\n" (name_of_section sec)
 
-(* SP adjustment to allocate or free a stack frame *)
-
-    let int32_align n a =
-      if n >= 0l
-      then Int32.logand (Int32.add n (Int32.of_int (a-1))) (Int32.of_int (-a))
-      else Int32.logand n (Int32.of_int (-a))
-
-    let sp_adjustment sz =
-      let sz = camlint_of_coqint sz in
-      (* Preserve proper alignment of the stack *)
-      let sz = int32_align sz stack_alignment in
-      (* The top 4 bytes have already been allocated by the "call" instruction. *)
-      let sz = Int32.sub sz 4l in
-      sz
-
-(* Base-2 log of a Caml integer *)
-
-    let rec log2 n =
-      assert (n > 0);
-      if n = 1 then 0 else 1 + log2 (n lsr 1)
-
 (* Emit a align directive *)
 
     let need_masks = ref false
@@ -339,8 +317,6 @@ module Target(System: SYSTEM):TARGET =
     let print_file_line oc file line =
       print_file_line oc comment file line
 
-    let print_location oc loc =
-      if loc <> Cutil.no_loc then print_file_line oc (fst loc) (snd loc)
 
 
 (* Built-in functions *)
@@ -350,19 +326,6 @@ module Target(System: SYSTEM):TARGET =
    locations; generate no code;
    - inlined by the compiler: take their arguments in arbitrary
    registers; preserve all registers except ECX, EDX, XMM6 and XMM7. *)
-
- (* Handling of varargs *)
-
-    let print_builtin_va_start oc r =
-      if not (!current_function_sig).sig_cc.cc_vararg then
-        invalid_arg "Fatal error: va_start used in non-vararg function";
-      let ofs =
-        Int32.(add (add !current_function_stacksize 4l)
-                 (mul 4l (Z.to_int32 (Conventions1.size_arguments
-                                        !current_function_sig)))) in
-      fprintf oc "	movl	%%esp, 0(%a)\n" ireg r;
-      fprintf oc "	addl	$%ld, 0(%a)\n" ofs ireg r
-
 
 (* Printing of instructions *)
 
@@ -410,7 +373,7 @@ module Target(System: SYSTEM):TARGET =
           fprintf oc "	fstps	%a\n" addressing a
       | Pxchg_rr(r1, r2) ->
           fprintf oc "	xchgl	%a, %a\n" ireg r1 ireg r2
-            (** Moves with conversion *)
+            (* Moves with conversion *)
       | Pmovb_mr(a, r1) ->
           fprintf oc "	movb	%a, %a\n" ireg8 r1 addressing a
       | Pmovw_mr(a, r1) ->
@@ -443,7 +406,7 @@ module Target(System: SYSTEM):TARGET =
           fprintf oc "	cvttss2si %a, %a\n" freg r1 ireg rd
       | Pcvtsi2ss_fr(rd, r1) ->
           fprintf oc "	cvtsi2ss %a, %a\n" ireg r1 freg rd
-            (** Arithmetic and logical operations over integers *)
+            (* Arithmetic and logical operations over integers *)
       | Plea(rd, a) ->
           fprintf oc "	leal	%a, %a\n" addressing a ireg rd
       | Pneg(rd) ->
@@ -509,7 +472,7 @@ module Target(System: SYSTEM):TARGET =
       | Psetcc(c, rd) ->
           fprintf oc "	set%s	%a\n" (name_of_condition c) ireg8 rd;
           fprintf oc "	movzbl	%a, %a\n" ireg8 rd ireg rd
-            (** Arithmetic operations over floats *)
+            (* Arithmetic operations over floats *)
       | Paddd_ff(rd, r1) ->
           fprintf oc "	addsd	%a, %a\n" freg r1 freg rd
       | Psubd_ff(rd, r1) ->
@@ -546,7 +509,7 @@ module Target(System: SYSTEM):TARGET =
           fprintf oc "	comiss	%a, %a\n" freg r2 freg r1
       | Pxorps_f (rd) ->
           fprintf oc "	xorpd	%a, %a\n" freg rd freg rd
-            (** Branches and calls *)
+            (* Branches and calls *)
       | Pjmp_l(l) ->
           fprintf oc "	jmp	%a\n" label (transl_label l)
       | Pjmp_s(f, sg) ->
@@ -652,7 +615,7 @@ module Target(System: SYSTEM):TARGET =
 	 fprintf oc "	sqrtsd	%a, %a\n" freg a1 freg res
       | Psub_ri (res,n) ->
 	  fprintf oc "	subl	$%ld, %a\n" (camlint_of_coqint n) ireg res;
-      (** Pseudo-instructions *)
+      (* Pseudo-instructions *)
       | Plabel(l) ->
           fprintf oc "%a:\n" label (transl_label l)
       | Pallocframe(sz, ofs_ra, ofs_link)

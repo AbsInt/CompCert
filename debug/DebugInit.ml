@@ -10,12 +10,6 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-open AST
-open BinNums
-open C
-open Camlcoq
-open Dwarfgen
-open DwarfTypes
 open Debug
 
 let default_debug =
@@ -28,7 +22,7 @@ let default_debug =
    insert_global_declaration = DebugInformation.insert_global_declaration;
    add_fun_addr = (fun _ _ _ -> ());
    generate_debug_info = (fun _ _  -> None);
-   all_files_iter = (fun f -> DebugInformation.StringSet.iter f !DebugInformation.all_files);
+   all_files_iter = DebugInformation.all_files_iter;
    insert_local_declaration = DebugInformation.insert_local_declaration;
    atom_local_variable = DebugInformation.atom_local_variable;
    enter_scope = DebugInformation.enter_scope;

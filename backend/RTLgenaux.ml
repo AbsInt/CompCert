@@ -11,9 +11,7 @@
 (* *********************************************************************)
 
 open Datatypes
-open Camlcoq
 open AST
-open Switch
 open CminorSel
 
 (* Heuristic to orient if-then-else statements.

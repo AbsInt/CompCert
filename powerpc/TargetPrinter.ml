@@ -14,12 +14,11 @@
 
 open Printf
 open Fileinfo
-open Datatypes
+open !Datatypes
 open Maps
 open Camlcoq
 open Sections
 open AST
-open Memdata
 open Asm
 open PrintAsmaux
 
@@ -71,6 +70,14 @@ let float_reg_name = function
   | FPR20 -> "20" | FPR21 -> "21" | FPR22 -> "22" | FPR23 -> "23"
   | FPR24 -> "24" | FPR25 -> "25" | FPR26 -> "26" | FPR27 -> "27"
   | FPR28 -> "28" | FPR29 -> "29" | FPR30 -> "30" | FPR31 -> "31"
+
+let num_crbit = function
+  | CRbit_0 -> 0
+  | CRbit_1 -> 1
+  | CRbit_2 -> 2
+  | CRbit_3 -> 3
+  | CRbit_6 -> 6
+
 
 let label = elf_label
 
@@ -303,9 +310,6 @@ module Target (System : SYSTEM):TARGET =
     (* Basic printing functions *)
     let symbol = symbol
 
-    let raw_symbol oc s =
-      fprintf oc "%s" s
-
     let label = label
 
     let label_low oc lbl =
@@ -313,14 +317,6 @@ module Target (System : SYSTEM):TARGET =
 
     let label_high oc lbl =
       fprintf oc ".L%d@ha" lbl
-
-
-    let num_crbit = function
-      | CRbit_0 -> 0
-      | CRbit_1 -> 1
-      | CRbit_2 -> 2
-      | CRbit_3 -> 3
-      | CRbit_6 -> 6
 
     let crbit oc bit =
       fprintf oc "%d" (num_crbit bit)
@@ -339,9 +335,6 @@ module Target (System : SYSTEM):TARGET =
       | IR r -> fprintf oc "r%s" (int_reg_name r)
       | FR r -> fprintf oc "f%s" (float_reg_name r)
       | _    -> assert false
-
-    let print_location oc loc =
-      if loc <> Cutil.no_loc then print_file_line oc (fst loc) (snd loc)
 
     (* Encoding masks for rlwinm instructions *)
 

@@ -12,9 +12,8 @@
 (* *********************************************************************)
 
 open AST
-open Asm
 open Camlcoq
-open Datatypes
+open !Datatypes
 open DwarfPrinter
 open PrintAsmaux
 open Printf
@@ -119,7 +118,7 @@ module Printer(Target:TARGET) =
     module DebugPrinter = DwarfPrinter (DwarfTarget)
   end
 
-let print_program oc p db =
+let print_program oc p =
   let module Target = (val (sel_target ()):TARGET) in
   let module Printer = Printer(Target) in
   Fileinfo.reset_filenames ();

@@ -12,7 +12,6 @@
 
 (* Types used for writing dwarf debug information *)
 
-open BinNums
 open Camlcoq
 open Sections
 
@@ -285,7 +284,7 @@ type diab_entry =
      start_label:  int;
      line_label:   int;
      entry:        dw_entry;
-     locs:         dw_locations;
+     dlocs:        dw_locations;
    }
 
 type diab_entries =  diab_entry list

@@ -19,7 +19,7 @@
 
 open Machine
 open Configuration
-open C
+open !C
 open Cutil
 open Transform
 

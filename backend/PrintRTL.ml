@@ -17,10 +17,8 @@ open Camlcoq
 open Datatypes
 open Maps
 open AST
-open Integers
 open RTL
 open PrintAST
-open PrintOp
 
 (* Printing of RTL code *)
 

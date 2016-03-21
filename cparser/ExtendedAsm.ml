@@ -33,7 +33,6 @@ open Printf
 open Machine
 open C
 open Cutil
-open Env
 open Cerrors
 
 (* Renaming of labeled and numbered operands *)

@@ -12,9 +12,8 @@
 
 open AST
 open BinNums
-open C
+open !C
 open Camlcoq
-open Dwarfgen
 open DwarfTypes
 open Sections
 
@@ -32,7 +31,7 @@ type implem =
       add_fun_addr: atom -> section_name -> (int * int) -> unit;
       generate_debug_info: (atom -> string) -> string -> debug_entries option;
       all_files_iter: (string -> unit) -> unit;
-      insert_local_declaration:  storage -> ident -> typ -> location -> unit;
+      insert_local_declaration:  storage -> ident -> C.typ -> location -> unit;
       atom_local_variable: ident -> atom -> unit;
       enter_scope: int -> int -> int -> unit;
       enter_function_scope: int -> int -> unit;

@@ -17,8 +17,7 @@ open Camlcoq
 open Datatypes
 open Maps
 open AST
-open Integers
-open Locations
+open !Locations
 open LTL
 open PrintAST
 open PrintOp

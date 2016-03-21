@@ -12,20 +12,17 @@
 
 (* Interpreting CompCert C sources *)
 
-open Format
+open !Format
 open Camlcoq
-open Datatypes
 open AST
 open Integers
 open Values
 open Memory
 open Globalenvs
 open Events
-open Ctypes
-open Cop
-open Csyntax
+open !Ctypes
+open !Csyntax
 open Csem
-open Clflags
 
 (* Configuration *)
 
@@ -86,16 +83,16 @@ let name_of_fundef prog fd =
       if fd == fd' then extern_atom id else find_name rem
   | (id, Gvar v) :: rem ->
       find_name rem
-  in find_name prog.prog_defs
+  in find_name prog.Ctypes.prog_defs
 
 let name_of_function prog fn =
   let rec find_name = function
   | [] -> "<unknown function>"
-  | (id, Gfun(Internal fn')) :: rem ->
+  | (id, Gfun(Ctypes.Internal fn')) :: rem ->
       if fn == fn' then extern_atom id else find_name rem
   | (id, _) :: rem ->
       find_name rem
-  in find_name prog.prog_defs
+  in find_name prog.Ctypes.prog_defs
 
 let invert_local_variable e b =
   Maps.PTree.fold
@@ -584,7 +581,7 @@ let world_program prog =
         (id, Gvar gv')
     | Gfun fd ->
         (id, gd) in
- {prog with prog_defs = List.map change_def prog.prog_defs}
+ {prog with Ctypes.prog_defs = List.map change_def prog.Ctypes.prog_defs}
 
 (* Massaging the program to get a suitable "main" function *)
 
@@ -599,7 +596,7 @@ let change_main_function p old_main old_main_ty =
       fn_params = []; fn_vars = []; fn_body = body } in
   let new_main_id = intern_string "___main" in
   { prog_main = new_main_id;
-    prog_defs = (new_main_id, Gfun(Internal new_main_fn)) :: p.prog_defs;
+    Ctypes.prog_defs = (new_main_id, Gfun(Internal new_main_fn)) :: p.Ctypes.prog_defs;
     prog_public = p.prog_public;
     prog_types = p.prog_types;
     prog_comp_env = p.prog_comp_env }
@@ -610,7 +607,7 @@ let rec find_main_function name = function
   | (id, Gvar v) :: gdl -> find_main_function name gdl
 
 let fixup_main p =
-  match find_main_function p.prog_main p.prog_defs with
+  match find_main_function p.Ctypes.prog_main p.prog_defs with
   | None ->
       fprintf err_formatter "ERROR: no main() function@.";
       None

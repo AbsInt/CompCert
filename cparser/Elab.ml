@@ -19,9 +19,9 @@
 
 open Format
 open Machine
-open Cabs
+open !Cabs
 open Cabshelper
-open C
+open !C
 open Cutil
 open Env
 
@@ -203,7 +203,7 @@ let elab_int_constant loc s0 =
   in
   (v, ty)
 
-let elab_float_constant loc f =
+let elab_float_constant f =
   let ty = match f.suffix_FI with
     | Some ("l"|"L") -> FLongDouble
     | Some ("f"|"F") -> FFloat
@@ -253,11 +253,11 @@ let elab_string_literal loc wide chars =
   if wide then
     CWStr chars
   else begin
-    let res = String.create (List.length chars) in
+    let res = Bytes.create (List.length chars) in
     List.iteri
-      (fun i c -> res.[i] <- Char.unsafe_chr (Int64.to_int c))
+      (fun i c -> Bytes.set res i (Char.unsafe_chr (Int64.to_int c)))
       chars;
-    CStr res
+    CStr (Bytes.to_string res)
   end
 
 let elab_constant loc = function
@@ -265,7 +265,7 @@ let elab_constant loc = function
       let (v, ik) = elab_int_constant loc s in
       CInt(v, ik, s)
   | CONST_FLOAT f ->
-      let (v, fk) = elab_float_constant loc f in
+      let (v, fk) = elab_float_constant f in
       CFloat(v, fk)
   | CONST_CHAR(wide, s) ->
       CInt(elab_char_constant loc wide s, IInt, "")
@@ -319,7 +319,7 @@ let elab_gcc_attr loc env = function
         warning loc "cannot parse '%s' attribute, ignored" v; []
       end
 
-let is_power_of_two n = n > 0L && Int64.(logand n (pred n)) = 0L
+let is_power_of_two n = n > 0L && Int64.logand n (Int64.pred n) = 0L
 
 let extract_alignas loc a =
   match a with
@@ -569,7 +569,7 @@ and elab_parameters env params =
   let (vars, _) = mmap elab_parameter (Env.new_scope env) params in
   (* Catch special case f(t) where t is void or a typedef to void *)
   match vars with
-    | [ ( {name=""}, t) ] when is_void_type env t -> []
+    | [ ( {C.name=""}, t) ] when is_void_type env t -> []
     | _ -> vars
 
 (* Elaboration of a function parameter *)
@@ -578,7 +578,7 @@ and elab_parameter env (PARAM (spec, id, decl, attr, loc)) =
   let (sto, inl, tydef, bty, env1) = elab_specifier loc env spec in
   if tydef then
     error loc "'typedef' used in function parameter";
-  let ((ty, _), env2) = elab_type_declarator loc env1 bty false decl in
+  let ((ty, _), _) = elab_type_declarator loc env1 bty false decl in
   let ty = add_attributes_type (elab_attributes env attr) ty in
   if sto <> Storage_default && sto <> Storage_register then
     error loc
@@ -753,7 +753,7 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
       (* declaration of an incomplete struct or union *)
       if tag = "" then
         error loc "anonymous, incomplete struct or union";
-      let ci = composite_info_decl env kind attrs in
+      let ci = composite_info_decl kind attrs in
       (* enter it with a new name *)
       let (tag', env') = Env.enter_composite env tag ci in
       (* emit it *)
@@ -761,7 +761,7 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
       (tag', env')
   | _, Some members ->
       (* definition of a complete struct or union *)
-      let ci1 = composite_info_decl env kind attrs in
+      let ci1 = composite_info_decl kind attrs in
       (* enter it, incomplete, with a new name *)
       let (tag', env') = Env.enter_composite env tag ci1 in
       (* emit a declaration so that inner structs and unions can refer to it *)
@@ -899,8 +899,6 @@ module I = struct
     | Zunion of zipinit                 (* ancestor *)
               * ident                   (* union type *)
               * field                   (* current member *)
-
-  type state = zipinit * init        (* current point & init for this point *)
 
   (* The initial state: default initialization, current point at top *)
   let top env name ty = (Ztop(name, ty), default_init env ty)
@@ -1727,7 +1725,7 @@ let elab_expr loc env a =
         | (TInt _ | TEnum _), TPtr _ ->
             warning "comparison between integer and pointer";
             EBinop(op, b1, b2, TPtr(TVoid [], []))
-        | ty1, ty2 ->
+        | _, _ ->
             error "illegal comparison between types@ %a@ and %a"
                   Cprint.typ b1.etyp Cprint.typ b2.etyp in
       { edesc = resdesc; etyp = TInt(IInt, []) }
@@ -1860,7 +1858,7 @@ let enter_decdefs local loc env sto dl =
     fatal_error loc "'register' on global declaration";
   if sto <> Storage_default && dl = [] then
     warning loc "Storage class specifier on empty declaration";
-  let rec enter_decdef (decls, env) (s, ty, init) =
+  let enter_decdef (decls, env) (s, ty, init) =
     let isfun = is_function_type env ty in
     if sto = Storage_extern && init <> NO_INIT then
       error loc "'extern' declaration cannot have an initializer";
@@ -1936,7 +1934,7 @@ let elab_fundef env spec name defs body loc =
                       "Illegal declaration of function parameter" in
       let (kr_params_defs, env1) = mmap elab_kr_param_def env1 defs in
       let kr_params_defs = List.concat kr_params_defs in
-      let rec search_param_type param =
+      let search_param_type param =
         match List.filter (fun (p, _) -> p = param) kr_params_defs with
         | [] ->
           (* Parameter is not declared, defaults to "int" in ISO C90,
@@ -1960,7 +1958,7 @@ let elab_fundef env spec name defs body loc =
         (ty_ret, params, vararg, attr)
     | _ -> fatal_error loc "wrong type for function definition" in
   (* Enter function in the environment, for recursive references *)
-  let (fun_id, sto1, env1,ty) = enter_or_refine_ident false loc env1 s sto ty in
+  let (fun_id, sto1, env1, _) = enter_or_refine_ident false loc env1 s sto ty in
   (* Enter parameters in the environment *)
   let env2 =
     List.fold_left (fun e (id, ty) -> Env.add_ident e id Storage_default ty)

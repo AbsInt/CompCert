@@ -118,12 +118,6 @@ let lookup_ident env s =
   with Not_found ->
     raise(Error(Unbound_identifier s))
 
-let lookup_tag env s =
-  try
-    IdentMap.lookup s env.env_tag
-  with Not_found ->
-    raise(Error(Unbound_tag(s, "tag")))
-
 let lookup_struct env s =
   try
     let (id, ci as res) = IdentMap.lookup s env.env_tag in
@@ -168,11 +162,6 @@ let find_ident env id =
   try IdentMap.find id env.env_ident
   with Not_found ->
     raise(Error(Unbound_identifier(id.name)))
-
-let find_tag env id =
-  try IdentMap.find id env.env_tag
-  with Not_found ->
-    raise(Error(Unbound_tag(id.name, "tag")))
 
 let find_struct env id =
   try

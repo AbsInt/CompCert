@@ -16,7 +16,6 @@
 
 open Asm
 open Asmexpandaux
-open Asmgen
 open AST
 open Camlcoq
 open Datatypes
@@ -201,12 +200,12 @@ let expand_builtin_vstore chunk args =
 (* Handling of varargs *)
 
 let expand_builtin_va_start r =
-  if not !current_function.fn_sig.sig_cc.cc_vararg then
+  if not (is_current_function_variadic ()) then
     invalid_arg "Fatal error: va_start used in non-vararg function";
   let ofs = coqint_of_camlint
     Int32.(add (add !PrintAsmaux.current_function_stacksize 4l)
                (mul 4l (Z.to_int32 (Conventions1.size_arguments
-                                      !current_function.fn_sig)))) in
+                                      (get_current_function_sig ()))))) in
   emit (Pmov_mr (linear_addr r _0, ESP));
   emit (Padd_mi (linear_addr r _0, ofs))
 

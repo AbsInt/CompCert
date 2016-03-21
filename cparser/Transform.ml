@@ -45,7 +45,7 @@ let new_temp ?(name = "t") ty =
 
 let attributes_to_remove_from_temp = add_attributes [AConst] [AVolatile]
 
-let mk_temp env ?(name = "t") ty =
+let mk_temp env ty =
   new_temp (remove_attributes_type env attributes_to_remove_from_temp ty)
 
 (* Bind a l-value to a temporary variable if it is not invariant. *)
@@ -211,7 +211,7 @@ let program
             Env.add_ident env f.fd_name f.fd_storage (fundef_typ f))
         | Gcompositedecl(su, id, attr) ->
             (Gcompositedecl(su, id, attr),
-             Env.add_composite env id (composite_info_decl env su attr))
+             Env.add_composite env id (composite_info_decl su attr))
         | Gcompositedef(su, id, attr, fl) ->
             let (attr', fl') = composite env su id attr fl in
             (Gcompositedef(su, id, attr', fl'),

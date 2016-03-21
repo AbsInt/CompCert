@@ -18,7 +18,7 @@ val reset_temps : unit -> unit
 val get_temps : unit -> C.decl list
 val new_temp_var : ?name:string -> C.typ -> C.ident
 val new_temp : ?name:string -> C.typ -> C.exp
-val mk_temp : Env.t -> ?name:string -> C.typ -> C.exp
+val mk_temp : Env.t -> C.typ -> C.exp
 
 (** Avoiding repeated evaluation of a l-value *)
 

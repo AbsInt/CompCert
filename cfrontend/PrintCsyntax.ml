@@ -15,16 +15,13 @@
 
 (** Pretty-printer for Csyntax *)
 
-open Printf
 open Format
 open Camlcoq
-open Datatypes
 open Values
 open AST
-open Globalenvs
-open Ctypes
+open !Ctypes
 open Cop
-open Csyntax
+open !Csyntax
 
 let name_unop = function
   | Onotbool -> "!"
@@ -177,7 +174,7 @@ let print_pointer_hook
 
 let print_typed_value p v ty =
   match v, ty with
-  | Vint n, Tint(I32, Unsigned, _) ->
+  | Vint n, Ctypes.Tint(I32, Unsigned, _) ->
       fprintf p "%luU" (camlint_of_coqint n)
   | Vint n, _ ->
       fprintf p "%ld" (camlint_of_coqint n)
@@ -429,12 +426,12 @@ let print_function p id f =
 
 let print_fundef p id fd =
   match fd with
-  | External((EF_external _ | EF_runtime _), args, res, cconv) ->
+  | Ctypes.External((EF_external _ | EF_runtime _), args, res, cconv) ->
       fprintf p "extern %s;@ @ "
                 (name_cdecl (extern_atom id) (Tfunction(args, res, cconv)))
-  | External(_, _, _, _) ->
+  | Ctypes.External(_, _, _, _) ->
       ()
-  | Internal f ->
+  | Ctypes.Internal f ->
       print_function p id f
 
 let string_of_init id =

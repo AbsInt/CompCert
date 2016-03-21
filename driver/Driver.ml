@@ -159,7 +159,7 @@ let parse_c_file sourcename ifile =
     PrintCsyntax.print_program (Format.formatter_of_out_channel oc) csyntax;
     close_out oc
   end;
-  csyntax,None
+  csyntax
 
 (* Dump Asm code in asm format for the validator *)
 
@@ -174,7 +174,7 @@ let dump_jasm asm sourcename destfile =
 
 (* From CompCert C AST to asm *)
 
-let compile_c_ast sourcename csyntax ofile debug =
+let compile_c_ast sourcename csyntax ofile =
   (* Prepare to dump Clight, RTL, etc, if requested *)
   let set_dest dst opt ext =
     dst := if !opt then Some (output_filename sourcename ".c" ext)
@@ -200,14 +200,14 @@ let compile_c_ast sourcename csyntax ofile debug =
       dump_jasm asm sourcename (output_filename sourcename ".c" !sdump_suffix);
   (* Print Asm in text form *)
   let oc = open_out ofile in
-  PrintAsm.print_program oc asm debug;
+  PrintAsm.print_program oc asm;
   close_out oc
 
 (* From C source to asm *)
 
 let compile_c_file sourcename ifile ofile =
-  let ast,debug = parse_c_file sourcename ifile in
-  compile_c_ast sourcename ast ofile debug
+  let ast = parse_c_file sourcename ifile in
+  compile_c_ast sourcename ast ofile
 
 (* From Cminor to asm *)
 
@@ -232,7 +232,7 @@ let compile_cminor_file ifile ofile =
         exit 2
     | Errors.OK p ->
         let oc = open_out ofile in
-        PrintAsm.print_program oc p None;
+        PrintAsm.print_program oc p;
         close_out oc
   with Parsing.Parse_error ->
          eprintf "File %s, character %d: Syntax error\n"
@@ -304,7 +304,7 @@ let process_c_file sourcename =
     let name =
       if !option_interp then begin
         Machine.config := Machine.compcert_interpreter !Machine.config;
-        let csyntax,_ = parse_c_file sourcename preproname in
+        let csyntax = parse_c_file sourcename preproname in
         if not !option_dprepro then
           safe_remove preproname;
        Interp.execute csyntax;
@@ -338,7 +338,7 @@ let process_c_file sourcename =
 let process_i_file sourcename =
   ensure_inputfile_exists sourcename;
   if !option_interp then begin
-    let csyntax,_ = parse_c_file sourcename sourcename in
+    let csyntax = parse_c_file sourcename sourcename in
     Interp.execute csyntax;
     ""
   end else if !option_S then begin
@@ -438,7 +438,7 @@ let perform_actions () =
 let explode_comma_option s =
   match Str.split (Str.regexp ",") s with
   | [] -> assert false
-  | hd :: tl -> tl
+  | _ :: tl -> tl
 
 let version_string =
   if Version.buildnr <> "" && Version.tag <> "" then

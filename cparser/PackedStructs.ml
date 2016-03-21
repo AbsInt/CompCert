@@ -127,7 +127,7 @@ let transf_composite loc env su id attrs ml =
 
 (* Accessor functions *)
 
-let lookup_function loc env name =
+let lookup_function env name =
   match Env.lookup_ident env name with
   | (id, II_ident(sto, ty)) -> (id, ty)
   | (id, II_enum _) -> raise (Env.Error(Env.Unbound_identifier name))
@@ -161,14 +161,14 @@ let bswap_read loc env lval =
   try
     if !use_reversed then begin
       let (id, fty) =
-        lookup_function loc env (sprintf "__builtin_read%d_reversed" bsize) in
+        lookup_function env (sprintf "__builtin_read%d_reversed" bsize) in
       let fn = {edesc = EVar id; etyp = fty} in
       let args = [ecast_opt env (TPtr(aty,[])) (eaddrof lval)] in
       let call = {edesc = ECall(fn, args); etyp = aty} in
       ecast_opt env ty call
     end else begin
       let (id, fty) =
-        lookup_function loc env (sprintf "__builtin_bswap%d" bsize) in
+        lookup_function env (sprintf "__builtin_bswap%d" bsize) in
       let fn = {edesc = EVar id; etyp = fty} in
       let args = [ecast_opt env aty lval] in
       let call = {edesc = ECall(fn, args); etyp = aty} in
@@ -188,14 +188,14 @@ let bswap_write loc env lhs rhs =
   try
     if !use_reversed then begin
       let (id, fty) =
-        lookup_function loc env (sprintf "__builtin_write%d_reversed" bsize) in
+        lookup_function env (sprintf "__builtin_write%d_reversed" bsize) in
       let fn = {edesc = EVar id; etyp = fty} in
       let args = [ecast_opt env (TPtr(aty,[])) (eaddrof lhs);
                   ecast_opt env aty rhs] in
       {edesc = ECall(fn, args); etyp = TVoid[]}
     end else begin
       let (id, fty) =
-        lookup_function loc env (sprintf "__builtin_bswap%d" bsize) in
+        lookup_function env (sprintf "__builtin_bswap%d" bsize) in
       let fn = {edesc = EVar id; etyp = fty} in
       let args = [ecast_opt env aty rhs] in
       let call = {edesc = ECall(fn, args); etyp = aty} in
@@ -403,7 +403,7 @@ let rec transf_globdecls env accu = function
             | Union -> attr
             | Struct -> remove_custom_attributes  ["packed";"__packed__"] attr in
           transf_globdecls
-            (Env.add_composite env id (composite_info_decl env su attr'))
+            (Env.add_composite env id (composite_info_decl su attr'))
             ({g with gdesc = Gcompositedecl(su, id, attr')} :: accu)
             gl
       | Gcompositedef(su, id, attr, fl) ->

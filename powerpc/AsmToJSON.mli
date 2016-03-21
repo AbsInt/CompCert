@@ -2,15 +2,12 @@
 (*                                                                     *)
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
-(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*          Bernhard Schommer, AbsInt Angewandte Informatik GmbH       *)
 (*                                                                     *)
-(*  Copyright Institut National de Recherche en Informatique et en     *)
-(*  Automatique.  All rights reserved.  This file is distributed       *)
-(*  under the terms of the INRIA Non-Commercial License Agreement.     *)
+(*  AbsInt Angewandte Informatik GmbH. All rights reserved. This file  *)
+(*  is distributed under the terms of the INRIA Non-Commercial         *)
+(*  License Agreement.                                                 *)
 (*                                                                     *)
 (* *********************************************************************)
 
-(* To be considered: heuristics based on size of function? *)
-
-let should_inline (id: AST.ident) (f: RTL.coq_function) =
-  C2C.atom_is_inline id
+val p_program: out_channel -> (Asm.coq_function AST.fundef, 'a) AST.program -> unit

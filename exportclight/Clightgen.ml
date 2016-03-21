@@ -293,4 +293,3 @@ let _ =
   Builtins.set C2C.builtins;
   CPragmas.initialize();
   parse_cmdline cmdline_actions
-

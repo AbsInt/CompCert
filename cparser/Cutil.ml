@@ -15,7 +15,6 @@
 
 (* Operations on C types and abstract syntax *)
 
-open Printf
 open Cerrors
 open C
 open Env
@@ -194,7 +193,7 @@ let strip_attributes_type t attr =
 
 (* Remove the last attribute from the toplevel and return the changed type *)
 let strip_last_attribute typ  =
-  let rec hd_opt l = match l with
+  let hd_opt l = match l with
     [] -> None,[]
   | a::rest -> Some a,rest in
   match typ with
@@ -561,7 +560,7 @@ let incomplete_type env t =
 
 (* Computing composite_info records *)
 
-let composite_info_decl env su attr =
+let composite_info_decl su attr =
   { ci_kind = su; ci_members = [];
     ci_alignof = None; ci_sizeof = None;
     ci_attr = attr }
@@ -892,7 +891,7 @@ let is_literal_0 e =
 
 let is_debug_stmt s =
   let is_debug_call = function
-    | (ECall ({edesc = EVar id; _},_)) -> id.name = "__builtin_debug"
+    | (ECall ({edesc = EVar id; _},_)) -> id.C.name = "__builtin_debug"
     | _ -> false in
   match s.sdesc with
   | Sdo {edesc = e;_} ->

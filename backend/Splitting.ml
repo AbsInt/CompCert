@@ -13,10 +13,8 @@
 (* Live range splitting over RTL *)
 
 open Camlcoq
-open Datatypes
 open Coqlib
 open Maps
-open AST
 open Kildall
 open Registers
 open RTL
