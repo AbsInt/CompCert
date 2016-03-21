@@ -20,7 +20,7 @@ let identcont  = [ '0'-'9' 'A'-'Z' 'a'-'z' '$' '_' '-' '.' ]
 
 rule tokenize acc = parse
   | eof                 { List.rev acc }
-  | [' ' '\t' '\n'] +   { tokenize acc lexbuf }
+  | [' ' '\t' '\n' '\r'] +   { tokenize acc lexbuf }
   | "\""                { tok_dquote acc (Buffer.create 16) lexbuf }
   | "'"                 { tok_squote acc (Buffer.create 16) lexbuf }
   | (identstart identcont*) as s
@@ -31,6 +31,7 @@ and tok_dquote acc buf = parse
   | "\"" | eof          { tokenize (Buffer.contents buf :: acc) lexbuf }
   | "\\t"               { Buffer.add_char buf '\t'; tok_dquote acc buf lexbuf }
   | "\\n"               { Buffer.add_char buf '\n'; tok_dquote acc buf lexbuf }
+  | "\\r"               { Buffer.add_char buf '\r'; tok_dquote acc buf lexbuf }
   | "\\" ([ '\\' '\"' ] as c)
                         { Buffer.add_char buf c; tok_dquote acc buf lexbuf }
   | _ as c              { Buffer.add_char buf c; tok_dquote acc buf lexbuf }
