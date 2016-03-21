@@ -643,6 +643,12 @@ Definition option_eq (A: Type) (eqA: forall (x y: A), {x=y} + {x<>y}):
 Proof. decide equality. Defined.
 Global Opaque option_eq.
 
+(** Lifting a relation to an option type. *)
+
+Inductive option_rel (A B: Type) (R: A -> B -> Prop) : option A -> option B -> Prop :=
+  | option_rel_none: option_rel R None None
+  | option_rel_some: forall x y, R x y -> option_rel R (Some x) (Some y).
+
 (** Mapping a function over an option type. *)
 
 Definition option_map (A B: Type) (f: A -> B) (x: option A) : option B :=
@@ -1184,6 +1190,24 @@ Proof.
   induction 1; simpl; congruence.
 Qed.
 
+Lemma list_forall2_in_left:
+  forall x1 l1 l2,
+  list_forall2 l1 l2 -> In x1 l1 -> exists x2, In x2 l2 /\ P x1 x2.
+Proof.
+  induction 1; simpl; intros. contradiction. destruct H1.
+  subst; exists b1; auto.
+  exploit IHlist_forall2; eauto. intros (x2 & U & V); exists x2; auto.
+Qed.
+  
+Lemma list_forall2_in_right:
+  forall x2 l1 l2,
+  list_forall2 l1 l2 -> In x2 l2 -> exists x1, In x1 l1 /\ P x1 x2.
+Proof.
+  induction 1; simpl; intros. contradiction. destruct H1.
+  subst; exists a1; auto.
+  exploit IHlist_forall2; eauto. intros (x1 & U & V); exists x1; auto.
+Qed.
+  
 End FORALL2.
 
 Lemma list_forall2_imply:
@@ -1375,4 +1399,36 @@ Proof.
 Qed.
 
 End LEX_ORDER.
+
+(** * Nonempty lists *)
+
+Inductive nlist (A: Type) : Type :=
+  | nbase: A -> nlist A
+  | ncons: A -> nlist A -> nlist A.
+
+Definition nfirst {A: Type} (l: nlist A) :=
+  match l with nbase a => a | ncons a l' => a end.
+
+Fixpoint nlast {A: Type} (l: nlist A) :=
+  match l with nbase a => a | ncons a l' => nlast l' end.
+
+Fixpoint nIn {A: Type} (x: A) (l: nlist A) : Prop :=
+  match l with
+  | nbase a => a = x
+  | ncons a l => a = x \/ nIn x l
+  end.
+
+Inductive nlist_forall2 {A B: Type} (R: A -> B -> Prop) : nlist A -> nlist B -> Prop :=
+  | nbase_forall2: forall a b, R a b -> nlist_forall2 R (nbase a) (nbase b)
+  | ncons_forall2: forall a l b m, R a b -> nlist_forall2 R l m -> nlist_forall2 R (ncons a l) (ncons b m).
+
+Lemma nlist_forall2_imply:
+  forall (A B: Type) (P1: A -> B -> Prop) (l1: nlist A) (l2: nlist B),
+  nlist_forall2 P1 l1 l2 ->
+  forall (P2: A -> B -> Prop),
+  (forall v1 v2, nIn v1 l1 -> nIn v2 l2 -> P1 v1 v2 -> P2 v1 v2) ->
+  nlist_forall2 P2 l1 l2.
+Proof.
+  induction 1; simpl; intros; constructor; auto.
+Qed.
 

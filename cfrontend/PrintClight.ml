@@ -80,9 +80,9 @@ let rec expr p (prec, e) =
   | Econst_int(n, _) ->
       fprintf p "%ld" (camlint_of_coqint n)
   | Econst_float(f, _) ->
-      fprintf p "%F" (camlfloat_of_coqfloat f)
+      fprintf p "%.15F" (camlfloat_of_coqfloat f)
   | Econst_single(f, _) ->
-      fprintf p "%Ff" (camlfloat_of_coqfloat32 f)
+      fprintf p "%.15Ff" (camlfloat_of_coqfloat32 f)
   | Econst_long(n, Tlong(Unsigned, _)) ->
       fprintf p "%LuLLU" (camlint64_of_coqint n)
   | Econst_long(n, _) ->
@@ -254,10 +254,10 @@ let print_function p id f =
 
 let print_fundef p id fd =
   match fd with
-  | Clight.External(EF_external(_,_), args, res, cconv) ->
+  | Ctypes.External((EF_external _ | EF_runtime _), args, res, cconv) ->
       fprintf p "extern %s;@ @ "
                 (name_cdecl (extern_atom id) (Tfunction(args, res, cconv)))
-  | Clight.External(_, _, _, _) ->
+  | Ctypes.External(_, _, _, _) ->
       ()
   | Internal f ->
       print_function p id f

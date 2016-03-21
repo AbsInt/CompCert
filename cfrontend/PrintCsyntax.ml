@@ -179,9 +179,9 @@ let print_typed_value p v ty =
   | Vint n, _ ->
       fprintf p "%ld" (camlint_of_coqint n)
   | Vfloat f, _ ->
-      fprintf p "%F" (camlfloat_of_coqfloat f)
+      fprintf p "%.15F" (camlfloat_of_coqfloat f)
   | Vsingle f, _ ->
-      fprintf p "%Ff" (camlfloat_of_coqfloat32 f)
+      fprintf p "%.15Ff" (camlfloat_of_coqfloat32 f)
   | Vlong n, Tlong(Unsigned, _) ->
       fprintf p "%LuLLU" (camlint64_of_coqint n)
   | Vlong n, _ ->
@@ -260,6 +260,8 @@ let rec expr p (prec, e) =
       fprintf p "__builtin_annot_val@[<hov 1>(%S%a)@]"
                 (camlstring_of_coqstring txt) exprlist (false, args)
   | Ebuiltin(EF_external(id, sg), _, args, _) ->
+      fprintf p "%s@[<hov 1>(%a)@]" (camlstring_of_coqstring id) exprlist (true, args)
+  | Ebuiltin(EF_runtime(id, sg), _, args, _) ->
       fprintf p "%s@[<hov 1>(%a)@]" (camlstring_of_coqstring id) exprlist (true, args)
   | Ebuiltin(EF_inline_asm(txt, sg, clob), _, args, _) ->
       extended_asm p txt None args clob
@@ -424,12 +426,12 @@ let print_function p id f =
 
 let print_fundef p id fd =
   match fd with
-  | Csyntax.External(EF_external(_,_), args, res, cconv) ->
+  | Ctypes.External((EF_external _ | EF_runtime _), args, res, cconv) ->
       fprintf p "extern %s;@ @ "
                 (name_cdecl (extern_atom id) (Tfunction(args, res, cconv)))
-  | Csyntax.External(_, _, _, _) ->
+  | Ctypes.External(_, _, _, _) ->
       ()
-  | Csyntax.Internal f ->
+  | Ctypes.Internal f ->
       print_function p id f
 
 let string_of_init id =
@@ -454,8 +456,8 @@ let print_init p = function
   | Init_int16 n -> fprintf p "%ld" (camlint_of_coqint n)
   | Init_int32 n -> fprintf p "%ld" (camlint_of_coqint n)
   | Init_int64 n -> fprintf p "%LdLL" (camlint64_of_coqint n)
-  | Init_float32 n -> fprintf p "%F" (camlfloat_of_coqfloat n)
-  | Init_float64 n -> fprintf p "%F" (camlfloat_of_coqfloat n)
+  | Init_float32 n -> fprintf p "%.15F" (camlfloat_of_coqfloat n)
+  | Init_float64 n -> fprintf p "%.15F" (camlfloat_of_coqfloat n)
   | Init_space n -> fprintf p "/* skip %ld */@ " (camlint_of_coqint n)
   | Init_addrof(symb, ofs) ->
       let ofs = camlint_of_coqint ofs in

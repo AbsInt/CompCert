@@ -13,32 +13,29 @@
 (** Correctness proof for code linearization *)
 
 Require Import FSets.
-Require Import Coqlib.
-Require Import Maps.
-Require Import Ordered.
-Require Import Lattice.
-Require Import AST.
-Require Import Integers.
-Require Import Values.
-Require Import Memory.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Errors.
-Require Import Smallstep.
-Require Import Op.
-Require Import Locations.
-Require Import LTL.
-Require Import Linear.
+Require Import Coqlib Maps Ordered Errors Lattice Kildall Integers.
+Require Import AST Linking.
+Require Import Values Memory Events Globalenvs Smallstep.
+Require Import Op Locations LTL Linear.
 Require Import Linearize.
 
 Module NodesetFacts := FSetFacts.Facts(Nodeset).
+
+Definition match_prog (p: LTL.program) (tp: Linear.program) :=
+  match_program (fun ctx f tf => transf_fundef f = OK tf) eq p tp.
+
+Lemma transf_program_match:
+  forall p tp, transf_program p = OK tp -> match_prog p tp.
+Proof.
+  intros. eapply match_transform_partial_program; eauto.
+Qed.
 
 Section LINEARIZATION.
 
 Variable prog: LTL.program.
 Variable tprog: Linear.program.
 
-Hypothesis TRANSF: transf_program prog = OK tprog.
+Hypothesis TRANSF: match_prog prog tprog.
 
 Let ge := Genv.globalenv prog.
 Let tge := Genv.globalenv tprog.
@@ -48,28 +45,23 @@ Lemma functions_translated:
   Genv.find_funct ge v = Some f ->
   exists tf,
   Genv.find_funct tge v = Some tf /\ transf_fundef f = OK tf.
-Proof (Genv.find_funct_transf_partial transf_fundef _ TRANSF).
+Proof (Genv.find_funct_transf_partial TRANSF).
 
 Lemma function_ptr_translated:
   forall v f,
   Genv.find_funct_ptr ge v = Some f ->
   exists tf,
   Genv.find_funct_ptr tge v = Some tf /\ transf_fundef f = OK tf.
-Proof (Genv.find_funct_ptr_transf_partial transf_fundef _ TRANSF).
+Proof (Genv.find_funct_ptr_transf_partial TRANSF).
 
 Lemma symbols_preserved:
   forall id,
   Genv.find_symbol tge id = Genv.find_symbol ge id.
-Proof (Genv.find_symbol_transf_partial transf_fundef _ TRANSF).
+Proof (Genv.find_symbol_transf_partial TRANSF).
 
-Lemma public_preserved:
-  forall id,
-  Genv.public_symbol tge id = Genv.public_symbol ge id.
-Proof (Genv.public_symbol_transf_partial transf_fundef _ TRANSF).
-
-Lemma varinfo_preserved:
-  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
-Proof (Genv.find_var_info_transf_partial transf_fundef _ TRANSF).
+Lemma senv_preserved:
+  Senv.equiv ge tge.
+Proof (Genv.senv_transf_partial TRANSF).
 
 Lemma sig_preserved:
   forall f tf,
@@ -645,8 +637,7 @@ Proof.
   left; econstructor; split. simpl.
   apply plus_one. eapply exec_Lbuiltin; eauto.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto.
 
   (* Lbranch *)
@@ -703,8 +694,7 @@ Proof.
   (* external function *)
   monadInv H8. left; econstructor; split.
   apply plus_one. eapply exec_function_external; eauto.
-  eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved'; eauto. apply senv_preserved.
   econstructor; eauto.
 
   (* return *)
@@ -721,10 +711,9 @@ Proof.
   intros. inversion H.
   exploit function_ptr_translated; eauto. intros [tf [A B]].
   exists (Callstate nil tf (Locmap.init Vundef) m0); split.
-  econstructor; eauto. eapply Genv.init_mem_transf_partial; eauto.
-  replace (prog_main tprog) with (prog_main prog).
+  econstructor; eauto. eapply (Genv.init_mem_transf_partial TRANSF); eauto.
+  rewrite (match_program_main TRANSF).
   rewrite symbols_preserved. eauto.
-  symmetry. apply (transform_partial_program_main transf_fundef _ TRANSF).
   rewrite <- H3. apply sig_preserved. auto.
   constructor. constructor. auto.
 Qed.
@@ -740,7 +729,7 @@ Theorem transf_program_correct:
   forward_simulation (LTL.semantics prog) (Linear.semantics tprog).
 Proof.
   eapply forward_simulation_star.
-  eexact public_preserved.
+  apply senv_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
   eexact transf_step_correct.

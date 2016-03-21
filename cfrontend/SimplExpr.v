@@ -114,7 +114,7 @@ Fixpoint eval_simpl_expr (a: expr) : option val :=
   | Ecast b ty =>
       match eval_simpl_expr b with
       | None => None
-      | Some v => sem_cast v (typeof b) ty
+      | Some v => sem_cast v (typeof b) ty Mem.empty
       end
   | _ => None
   end.
@@ -327,10 +327,10 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
       let ty2 := Csyntax.typeof r2 in
       match dst with
       | For_val | For_set _ =>
-          do t <- gensym ty2;
+          do t <- gensym ty1;
           ret (finish dst
-                 (sl1 ++ sl2 ++ Sset t a2 :: make_assign a1 (Etempvar t ty2) :: nil)
-                 (Ecast (Etempvar t ty2) ty1))
+                 (sl1 ++ sl2 ++ Sset t (Ecast a2 ty1) :: make_assign a1 (Etempvar t ty1) :: nil)
+                 (Etempvar t ty1))
       | For_effects =>
           ret (sl1 ++ sl2 ++ make_assign a1 a2 :: nil,
                dummy_expr)
@@ -342,12 +342,12 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
       do (sl3, a3) <- transl_valof ty1 a1;
       match dst with
       | For_val | For_set _ =>
-          do t <- gensym tyres;
+          do t <- gensym ty1;
           ret (finish dst
                  (sl1 ++ sl2 ++ sl3 ++
-                  Sset t (Ebinop op a3 a2 tyres) ::
-                  make_assign a1 (Etempvar t tyres) :: nil)
-                 (Ecast (Etempvar t tyres) ty1))
+                  Sset t (Ecast (Ebinop op a3 a2 tyres) ty1) ::
+                  make_assign a1 (Etempvar t ty1) :: nil)
+                 (Etempvar t ty1))
       | For_effects =>
           ret (sl1 ++ sl2 ++ sl3 ++ make_assign a1 (Ebinop op a3 a2 tyres) :: nil,
                dummy_expr)
@@ -512,9 +512,9 @@ Local Open Scope error_monad_scope.
 
 Definition transl_fundef (fd: Csyntax.fundef) : res fundef :=
   match fd with
-  | Csyntax.Internal f =>
+  | Internal f =>
       do tf <- transl_function f; OK (Internal tf)
-  | Csyntax.External ef targs tres cc =>
+  | External ef targs tres cc =>
       OK (External ef targs tres cc)
   end.
 
@@ -523,6 +523,6 @@ Definition transl_program (p: Csyntax.program) : res program :=
   OK {| prog_defs := AST.prog_defs p1;
         prog_public := AST.prog_public p1;
         prog_main := AST.prog_main p1;
-        prog_types := Csyntax.prog_types p;
-        prog_comp_env := Csyntax.prog_comp_env p;
-        prog_comp_env_eq := Csyntax.prog_comp_env_eq p |}.
+        prog_types := prog_types p;
+        prog_comp_env := prog_comp_env p;
+        prog_comp_env_eq := prog_comp_env_eq p |}.

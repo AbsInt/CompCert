@@ -12,19 +12,20 @@
 
 (** Correctness proof for the branch tunneling optimization. *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import UnionFind.
-Require Import AST.
-Require Import Values.
-Require Import Memory.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Smallstep.
-Require Import Op.
-Require Import Locations.
-Require Import LTL.
+Require Import Coqlib Maps UnionFind.
+Require Import AST Linking.
+Require Import Values Memory Events Globalenvs Smallstep.
+Require Import Op Locations LTL.
 Require Import Tunneling.
+
+Definition match_prog (p tp: program) :=
+  match_program (fun ctx f tf => tf = tunnel_fundef f) eq p tp.
+
+Lemma transf_program_match:
+  forall p, match_prog p (tunnel_program p).
+Proof.
+  intros. eapply match_transform_program; eauto.
+Qed.
 
 (** * Properties of the branch map computed using union-find. *)
 
@@ -138,8 +139,8 @@ Qed.
 
 Section PRESERVATION.
 
-Variable prog: program.
-Let tprog := tunnel_program prog.
+Variables prog tprog: program.
+Hypothesis TRANSL: match_prog prog tprog.
 Let ge := Genv.globalenv prog.
 Let tge := Genv.globalenv tprog.
 
@@ -147,27 +148,22 @@ Lemma functions_translated:
   forall v f,
   Genv.find_funct ge v = Some f ->
   Genv.find_funct tge v = Some (tunnel_fundef f).
-Proof (@Genv.find_funct_transf _ _ _ tunnel_fundef prog).
+Proof (Genv.find_funct_transf TRANSL).
 
 Lemma function_ptr_translated:
   forall v f,
   Genv.find_funct_ptr ge v = Some f ->
   Genv.find_funct_ptr tge v = Some (tunnel_fundef f).
-Proof (@Genv.find_funct_ptr_transf _ _ _ tunnel_fundef prog).
+Proof (Genv.find_funct_ptr_transf TRANSL).
 
 Lemma symbols_preserved:
   forall id,
   Genv.find_symbol tge id = Genv.find_symbol ge id.
-Proof (@Genv.find_symbol_transf _ _ _ tunnel_fundef prog).
+Proof (Genv.find_symbol_transf TRANSL).
 
-Lemma public_preserved:
-  forall id,
-  Genv.public_symbol tge id = Genv.public_symbol ge id.
-Proof (@Genv.public_symbol_transf _ _ _ tunnel_fundef prog).
-
-Lemma varinfo_preserved:
-  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
-Proof (@Genv.find_var_info_transf _ _ _ tunnel_fundef prog).
+Lemma senv_preserved:
+  Senv.equiv ge tge.
+Proof (Genv.senv_transf TRANSL).
 
 Lemma sig_preserved:
   forall f, funsig (tunnel_fundef f) = funsig f.
@@ -340,8 +336,7 @@ Proof.
   left; simpl; econstructor; split.
   eapply exec_Lbuiltin; eauto.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved. eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved. apply senv_preserved. eauto.
   econstructor; eauto.
 
   (* Lbranch (preserved) *)
@@ -372,8 +367,7 @@ Proof.
   (* external function *)
   left; simpl; econstructor; split.
   eapply exec_function_external; eauto.
-  eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved'; eauto. apply senv_preserved.
   simpl. econstructor; eauto.
   (* return *)
   inv H3. inv H1.
@@ -389,8 +383,8 @@ Proof.
   intros. inversion H.
   exists (Callstate nil (tunnel_fundef f) (Locmap.init Vundef) m0); split.
   econstructor; eauto.
-  apply Genv.init_mem_transf; auto.
-  change (prog_main tprog) with (prog_main prog).
+  apply (Genv.init_mem_transf TRANSL); auto.
+  rewrite (match_program_main TRANSL).
   rewrite symbols_preserved. eauto.
   apply function_ptr_translated; auto.
   rewrite <- H3. apply sig_preserved.
@@ -408,7 +402,7 @@ Theorem transf_program_correct:
   forward_simulation (LTL.semantics prog) (LTL.semantics tprog).
 Proof.
   eapply forward_simulation_opt.
-  eexact public_preserved.
+  apply senv_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
   eexact tunnel_step_correct.

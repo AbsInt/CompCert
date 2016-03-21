@@ -593,7 +593,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | Pflid(r1, f) ->
           let f = camlint64_of_coqint(Floats.Float.to_bits f) in
           if Opt.vfpv3 && is_immediate_float64 f then begin
-            fprintf oc "	vmov.f64 %a, #%F\n"
+            fprintf oc "	vmov.f64 %a, #%.15F\n"
               freg r1 (Int64.float_of_bits f); 1
               (* immediate floats have at most 4 bits of fraction, so they
                  should print exactly with OCaml's F decimal format. *)
@@ -645,7 +645,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | Pflis(r1, f) ->
           let f = camlint_of_coqint(Floats.Float32.to_bits f) in
           if Opt.vfpv3 && is_immediate_float32 f then begin
-            fprintf oc "	vmov.f32 %a, #%F\n"
+            fprintf oc "	vmov.f32 %a, #%.15F\n"
               freg_single r1 (Int32.float_of_bits f); 1
               (* immediate floats have at most 4 bits of fraction, so they
                  should print exactly with OCaml's F decimal format. *)

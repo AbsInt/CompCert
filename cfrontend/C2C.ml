@@ -1078,7 +1078,7 @@ let convertFundef loc env fd =
       a_access = Sections.Access_default;
       a_inline = fd.fd_inline && not fd.fd_vararg;  (* PR#15 *)
       a_loc = loc };
-  (id', Gfun(Csyntax.Internal
+  (id', Gfun(Ctypes.Internal
           {fn_return = ret;
            fn_callconv = convertCallconv fd.fd_vararg false fd.fd_attrib;
            fn_params = params;
@@ -1088,6 +1088,7 @@ let convertFundef loc env fd =
 (** External function declaration *)
 
 let re_builtin = Str.regexp "__builtin_"
+let re_runtime = Str.regexp "__i64_"
 
 let convertFundecl env (sto, id, ty, optinit) =
   let (args, res, cconv) =
@@ -1100,11 +1101,12 @@ let convertFundecl env (sto, id, ty, optinit) =
   let ef =
     if id.name = "malloc" then EF_malloc else
     if id.name = "free" then EF_free else
+    if Str.string_match re_runtime id.name 0 then EF_runtime(id'', sg) else
     if Str.string_match re_builtin id.name 0
     && List.mem_assoc id.name builtins.functions
     then EF_builtin(id'', sg)
     else EF_external(id'', sg) in
-  (id', Gfun(Csyntax.External(ef, args, res, cconv)))
+  (id', Gfun(Ctypes.External(ef, args, res, cconv)))
 
 (** Initializers *)
 

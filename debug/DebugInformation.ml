@@ -27,8 +27,6 @@ let next_id () =
   let nid = !id in
   incr id; nid
 
-let reset_id () =
-  id := 0
 
 (* Auximilary functions *)
 let list_replace c f l =
@@ -600,14 +598,6 @@ let diab_additional_section s =
 let section_to_string = function
   | Section_user (n,_,_) -> n
   | _ -> ".text"
-
-let add_compilation_section_start sec addr =
-  let sec = section_to_string sec in
-  Hashtbl.add compilation_section_start sec addr
-
-let add_compilation_section_end sec addr =
-  let sec = section_to_string sec in
-  Hashtbl.add compilation_section_end sec addr
 
 let add_diab_info sec addr1 add2 addr3 =
   let sec' = section_to_string sec in

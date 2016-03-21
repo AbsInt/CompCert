@@ -12,61 +12,54 @@
 
 (** Correctness proof for Cminor generation. *)
 
-Require Import Coq.Program.Equality.
-Require Import FSets.
-Require Import Permutation.
-Require Import Coqlib.
+Require Import Coq.Program.Equality FSets Permutation.
+Require Import FSets FSetAVL Orders Mergesort.
+Require Import Coqlib Maps Ordered Errors Integers Floats.
 Require Intv.
-Require Import Errors.
-Require Import Maps.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Smallstep.
-Require Import Switch.
-Require Import Csharpminor.
-Require Import Cminor.
-Require Import Cminorgen.
+Require Import AST Linking.
+Require Import Values Memory Events Globalenvs Smallstep.
+Require Import Csharpminor Switch Cminor Cminorgen.
 
 Open Local Scope error_monad_scope.
+
+Definition match_prog (p: Csharpminor.program) (tp: Cminor.program) :=
+  match_program (fun cu f tf => transl_fundef f = OK tf) eq p tp.
+
+Lemma transf_program_match:
+  forall p tp, transl_program p = OK tp -> match_prog p tp.
+Proof.
+  intros. apply match_transform_partial_program; auto.
+Qed.
 
 Section TRANSLATION.
 
 Variable prog: Csharpminor.program.
 Variable tprog: program.
-Hypothesis TRANSL: transl_program prog = OK tprog.
+Hypothesis TRANSL: match_prog prog tprog.
 Let ge : Csharpminor.genv := Genv.globalenv prog.
 Let tge: genv := Genv.globalenv tprog.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof (Genv.find_symbol_transf_partial transl_fundef _ TRANSL).
+Proof (Genv.find_symbol_transf_partial TRANSL).
 
-Lemma public_preserved:
-  forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
-Proof (Genv.public_symbol_transf_partial transl_fundef _ TRANSL).
+Lemma senv_preserved:
+  Senv.equiv ge tge.
+Proof (Genv.senv_transf_partial TRANSL).
 
 Lemma function_ptr_translated:
   forall (b: block) (f: Csharpminor.fundef),
   Genv.find_funct_ptr ge b = Some f ->
   exists tf,
   Genv.find_funct_ptr tge b = Some tf /\ transl_fundef f = OK tf.
-Proof (Genv.find_funct_ptr_transf_partial transl_fundef _ TRANSL).
+Proof (Genv.find_funct_ptr_transf_partial TRANSL).
 
 Lemma functions_translated:
   forall (v: val) (f: Csharpminor.fundef),
   Genv.find_funct ge v = Some f ->
   exists tf,
   Genv.find_funct tge v = Some tf /\ transl_fundef f = OK tf.
-Proof (Genv.find_funct_transf_partial transl_fundef _ TRANSL).
-
-Lemma varinfo_preserved:
-  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
-Proof (Genv.find_var_info_transf_partial transl_fundef _ TRANSL).
+Proof (Genv.find_funct_transf_partial TRANSL).
 
 Lemma sig_preserved_body:
   forall f tf cenv size,
@@ -2029,8 +2022,7 @@ Proof.
   intros [f' [vres' [tm' [EC [VINJ [MINJ' [UNMAPPED [OUTOFREACH [INCR SEPARATED]]]]]]]]].
   left; econstructor; split.
   apply plus_one. econstructor. eauto.
-  eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact public_preserved. eexact varinfo_preserved.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   assert (MCS': match_callstack f' m' tm'
                  (Frame cenv tfn e le te sp lo hi :: cs)
                  (Mem.nextblock m') (Mem.nextblock tm')).
@@ -2184,8 +2176,7 @@ Opaque PTree.set.
   intros [f' [vres' [tm' [EC [VINJ [MINJ' [UNMAPPED [OUTOFREACH [INCR SEPARATED]]]]]]]]].
   left; econstructor; split.
   apply plus_one. econstructor.
-  eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact public_preserved. eexact varinfo_preserved.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto.
   apply match_callstack_incr_bound with (Mem.nextblock m) (Mem.nextblock tm).
   eapply match_callstack_external_call; eauto.
@@ -2224,11 +2215,11 @@ Proof.
   exploit function_ptr_translated; eauto. intros [tf [FIND TR]].
   econstructor; split.
   econstructor.
-  apply (Genv.init_mem_transf_partial _ _ TRANSL). eauto.
+  apply (Genv.init_mem_transf_partial TRANSL). eauto.
   simpl. fold tge. rewrite symbols_preserved.
   replace (prog_main tprog) with (prog_main prog). eexact H0.
   symmetry. unfold transl_program in TRANSL.
-  eapply transform_partial_program_main; eauto.
+  eapply match_program_main; eauto. 
   eexact FIND.
   rewrite <- H2. apply sig_preserved; auto.
   eapply match_callstate with (f := Mem.flat_inj (Mem.nextblock m0)) (cs := @nil frame) (cenv := PTree.empty Z).
@@ -2250,7 +2241,7 @@ Theorem transl_program_correct:
   forward_simulation (Csharpminor.semantics prog) (Cminor.semantics tprog).
 Proof.
   eapply forward_simulation_star; eauto.
-  eexact public_preserved.
+  apply senv_preserved.
   eexact transl_initial_states.
   eexact transl_final_states.
   eexact transl_step_correct.

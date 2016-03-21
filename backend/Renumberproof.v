@@ -12,21 +12,24 @@
 
 (** Postorder renumbering of RTL control-flow graphs. *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import Postorder.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Smallstep.
-Require Import Op.
-Require Import Registers.
-Require Import RTL.
-Require Import Renumber.
+Require Import Coqlib Maps Postorder.
+Require Import AST Linking.
+Require Import Values Memory Globalenvs Events Smallstep.
+Require Import Op Registers RTL Renumber.
+
+Definition match_prog (p tp: RTL.program) :=
+  match_program (fun ctx f tf => tf = transf_fundef f) eq p tp.
+
+Lemma transf_program_match:
+  forall p, match_prog p (transf_program p).
+Proof.
+  intros. eapply match_transform_program; eauto.
+Qed.
 
 Section PRESERVATION.
 
-Variable prog: program.
-Let tprog := transf_program prog.
+Variables prog tprog: program.
+Hypothesis TRANSL: match_prog prog tprog.
 Let ge := Genv.globalenv prog.
 Let tge := Genv.globalenv tprog.
 
@@ -34,27 +37,22 @@ Lemma functions_translated:
   forall v f,
   Genv.find_funct ge v = Some f ->
   Genv.find_funct tge v = Some (transf_fundef f).
-Proof (@Genv.find_funct_transf _ _ _ transf_fundef prog).
+Proof (Genv.find_funct_transf TRANSL).
 
 Lemma function_ptr_translated:
   forall v f,
   Genv.find_funct_ptr ge v = Some f ->
   Genv.find_funct_ptr tge v = Some (transf_fundef f).
-Proof (@Genv.find_funct_ptr_transf _ _ _ transf_fundef prog).
+Proof (Genv.find_funct_ptr_transf TRANSL).
 
 Lemma symbols_preserved:
   forall id,
   Genv.find_symbol tge id = Genv.find_symbol ge id.
-Proof (@Genv.find_symbol_transf _ _ _ transf_fundef prog).
+Proof (Genv.find_symbol_transf TRANSL).
 
-Lemma public_preserved:
-  forall id,
-  Genv.public_symbol tge id = Genv.public_symbol ge id.
-Proof (@Genv.public_symbol_transf _ _ _ transf_fundef prog).
-
-Lemma varinfo_preserved:
-  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
-Proof (@Genv.find_var_info_transf _ _ _ transf_fundef prog).
+Lemma senv_preserved:
+  Senv.equiv ge tge.
+Proof (Genv.senv_transf TRANSL).
 
 Lemma sig_preserved:
   forall f, funsig (transf_fundef f) = funsig f.
@@ -199,8 +197,7 @@ Proof.
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
     eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-    eapply external_call_symbols_preserved; eauto.
-    exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+    eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   constructor; auto. eapply reach_succ; eauto. simpl; auto.
 (* cond *)
   econstructor; split.
@@ -224,8 +221,7 @@ Proof.
 (* external function *)
   econstructor; split.
   eapply exec_function_external; eauto.
-    eapply external_call_symbols_preserved; eauto.
-    exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+    eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   constructor; auto.
 (* return *)
   inv STACKS. inv H1.
@@ -240,8 +236,8 @@ Lemma transf_initial_states:
 Proof.
   intros. inv H. econstructor; split.
   econstructor.
-    eapply Genv.init_mem_transf; eauto.
-    simpl. rewrite symbols_preserved. eauto.
+    eapply (Genv.init_mem_transf TRANSL); eauto.
+    rewrite symbols_preserved. rewrite (match_program_main TRANSL). eauto.
     eapply function_ptr_translated; eauto.
     rewrite <- H3; apply sig_preserved.
   constructor. constructor.
@@ -257,7 +253,7 @@ Theorem transf_program_correct:
   forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
   eapply forward_simulation_step.
-  eexact public_preserved.
+  apply senv_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
   exact step_simulation.

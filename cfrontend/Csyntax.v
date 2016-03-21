@@ -15,14 +15,9 @@
 
 (** Abstract syntax for the Compcert C language *)
 
-Require Import Coqlib.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import AST.
-Require Import Errors.
-Require Import Ctypes.
-Require Import Cop.
+Require Import Coqlib Maps Integers Floats Errors.
+Require Import AST Linking Values.
+Require Import Ctypes Cop.
 
 (** ** Expressions *)
 
@@ -191,9 +186,7 @@ Definition var_names (vars: list(ident * type)) : list ident :=
 (** Functions can either be defined ([Internal]) or declared as
   external functions ([External]). *)
 
-Inductive fundef : Type :=
-  | Internal: function -> fundef
-  | External: external_function -> typelist -> type -> calling_convention -> fundef.
+Definition fundef := Ctypes.fundef function.
 
 (** The type of a function definition. *)
 
@@ -206,50 +199,15 @@ Definition type_of_fundef (f: fundef) : type :=
   | External id args res cc => Tfunction args res cc
   end.
 
-(** ** Programs *)
+(** ** Programs and compilation units *)
 
-(** A "pre-program", as produced by the elaborator is composed of:
+(** As defined in module [Ctypes], a program, or compilation unit, is
+  composed of:
 - a list of definitions of functions and global variables;
 - the names of functions and global variables that are public (not static);
 - the name of the function that acts as entry point ("main" function).
 - a list of definitions for structure and union names
+- the corresponding composite environment
+- a proof that this environment is consistent with the definitions. *)
 
-A program is composed of the same information, plus the corresponding
-composite environment, and a proof that this environment is consistent
-with the composite definitions. *)
-
-Record pre_program : Type := {
-  pprog_defs: list (ident * globdef fundef type);
-  pprog_public: list ident;
-  pprog_main: ident;
-  pprog_types: list composite_definition
-}.
-
-Record program : Type := {
-  prog_defs: list (ident * globdef fundef type);
-  prog_public: list ident;
-  prog_main: ident;
-  prog_types: list composite_definition;
-  prog_comp_env: composite_env;
-  prog_comp_env_eq: build_composite_env prog_types = OK prog_comp_env
-}.
-
-Definition program_of_program (p: program) : AST.program fundef type :=
-  {| AST.prog_defs := p.(prog_defs);
-     AST.prog_public := p.(prog_public);
-     AST.prog_main := p.(prog_main) |}.
-
-Coercion program_of_program: program >-> AST.program.
-
-Program Definition program_of_pre_program (p: pre_program) : res program :=
-  match build_composite_env p.(pprog_types) with
-  | Error e => Error e
-  | OK ce =>
-      OK {| prog_defs := p.(pprog_defs);
-            prog_public := p.(pprog_public);
-            prog_main := p.(pprog_main);
-            prog_types := p.(pprog_types);
-            prog_comp_env := ce;
-            prog_comp_env_eq := _ |}
-  end.
-
+Definition program := Ctypes.program function.

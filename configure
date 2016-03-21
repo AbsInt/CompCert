@@ -115,6 +115,7 @@ case "$target" in
         cprepro="${toolprefix}dcc"
         cprepro_options="-E -D__GNUC__"
         casm="${toolprefix}das"
+        casm_options="-Xalign-value"
         asm_supports_cfi=false
         clinker="${toolprefix}dcc"
         libmath="-lm"

@@ -12,18 +12,9 @@
 
 (** Relational specification of expression simplification. *)
 
-Require Import Coqlib.
-Require Import Errors.
-Require Import Maps.
-Require Import Integers.
-Require Import Floats.
-Require Import Memory.
-Require Import AST.
-Require Import Ctypes.
-Require Import Cop.
-Require Import Csyntax.
-Require Import Clight.
-Require Import SimplExpr.
+Require Import Coqlib Maps Errors Integers Floats.
+Require Import AST Linking Memory.
+Require Import Ctypes Cop Csyntax Clight SimplExpr.
 
 Section SPEC.
 
@@ -222,10 +213,10 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
       ty2 = Csyntax.typeof e2 ->
       tr_expr le dst (Csyntax.Eassign e1 e2 ty)
                    (sl1 ++ sl2 ++
-                    Sset t a2 ::
-                    make_assign a1 (Etempvar t ty2) ::
-                    final dst (Ecast (Etempvar t ty2) ty1))
-                   (Ecast (Etempvar t ty2) ty1) tmp
+                    Sset t (Ecast a2 ty1) ::
+                    make_assign a1 (Etempvar t ty1) ::
+                    final dst (Etempvar t ty1))
+                   (Etempvar t ty1) tmp
   | tr_assignop_effects: forall le op e1 e2 tyres ty ty1 sl1 a1 tmp1 sl2 a2 tmp2 sl3 a3 tmp3 any tmp,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
       tr_expr le For_val e2 sl2 a2 tmp2 ->
@@ -246,10 +237,10 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
       ty1 = Csyntax.typeof e1 ->
       tr_expr le dst (Csyntax.Eassignop op e1 e2 tyres ty)
                    (sl1 ++ sl2 ++ sl3 ++
-                    Sset t (Ebinop op a3 a2 tyres) ::
-                    make_assign a1 (Etempvar t tyres) ::
-                    final dst (Ecast (Etempvar t tyres) ty1))
-                   (Ecast (Etempvar t tyres) ty1) tmp
+                    Sset t (Ecast (Ebinop op a3 a2 tyres) ty1) ::
+                    make_assign a1 (Etempvar t ty1) ::
+                    final dst (Etempvar t ty1))
+                   (Etempvar t ty1) tmp
   | tr_postincr_effects: forall le id e1 ty ty1 sl1 a1 tmp1 sl2 a2 tmp2 any tmp,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
       tr_rvalof ty1 a1 sl2 a2 tmp2 ->
@@ -375,8 +366,7 @@ Qed.
   between Csyntax values and Cminor expressions: in the case of
   [tr_expr], the Cminor expression must not depend on memory,
   while in the case of [tr_top] it can depend on the current memory
-  state.  This special case is extended to values occurring under
-  one or several [Csyntax.Eparen]. *)
+  state. *)
 
 Section TR_TOP.
 
@@ -389,19 +379,9 @@ Inductive tr_top: destination -> Csyntax.expr -> list statement -> expr -> list 
   | tr_top_val_val: forall v ty a tmp,
       typeof a = ty -> eval_expr ge e le m a v ->
       tr_top For_val (Csyntax.Eval v ty) nil a tmp
-(*
-  | tr_top_val_set: forall t tyl v ty a any tmp,
-      typeof a = ty -> eval_expr ge e le m a v ->
-      tr_top (For_set tyl t) (Csyntax.Eval v ty) (Sset t (fold_left Ecast tyl a) :: nil) any tmp
-*)
   | tr_top_base: forall dst r sl a tmp,
       tr_expr le dst r sl a tmp ->
       tr_top dst r sl a tmp.
-(*
-  | tr_top_paren_test: forall tyl t r ty sl a tmp,
-      tr_top (For_set (ty :: tyl) t) r sl a tmp ->
-      tr_top (For_set tyl t) (Csyntax.Eparen r ty) sl a tmp.
-*)
 
 End TR_TOP.
 
@@ -1088,8 +1068,7 @@ Opaque transl_expression transl_expr_stmt.
   monadInv TR; constructor; eauto.
 Qed.
 
-(** Relational presentation for the transformation of functions, fundefs, and va
-riables. *)
+(** Relational presentation for the transformation of functions, fundefs, and variables. *)
 
 Inductive tr_function: Csyntax.function -> Clight.function -> Prop :=
   | tr_function_intro: forall f tf,
@@ -1103,9 +1082,9 @@ Inductive tr_function: Csyntax.function -> Clight.function -> Prop :=
 Inductive tr_fundef: Csyntax.fundef -> Clight.fundef -> Prop :=
   | tr_internal: forall f tf,
       tr_function f tf ->
-      tr_fundef (Csyntax.Internal f) (Clight.Internal tf)
+      tr_fundef (Internal f) (Internal tf)
   | tr_external: forall ef targs tres cconv,
-      tr_fundef (Csyntax.External ef targs tres cconv) (External ef targs tres cconv).
+      tr_fundef (External ef targs tres cconv) (External ef targs tres cconv).
 
 Lemma transl_function_spec:
   forall f tf,
@@ -1126,31 +1105,6 @@ Proof.
   destruct fd; Errors.monadInv H.
 + constructor. eapply transl_function_spec; eauto.
 + constructor.
-Qed.
-
-Lemma transl_globdefs_spec:
-  forall l l',
-  transf_globdefs transl_fundef (fun v : type => OK v) l = OK l' ->
-  list_forall2 (match_globdef tr_fundef (fun v1 v2 => v1 = v2)) l l'.
-Proof.
-  induction l; simpl; intros.
-- inv H. constructor.
-- destruct a as [id gd]. destruct gd.
-  + destruct (transl_fundef f) as [tf | ?] eqn:E1; Errors.monadInv H.
-    constructor; eauto. constructor. eapply transl_fundef_spec; eauto.
-  + Errors.monadInv H. 
-    constructor; eauto. destruct v; constructor; auto.
-Qed.
-
-Theorem transl_program_spec:
-  forall p tp,
-  transl_program p = OK tp ->
-  match_program tr_fundef (fun v1 v2 => v1 = v2) nil (Csyntax.prog_main p) p tp.
-Proof.
-  unfold transl_program, transform_partial_program; intros. Errors.monadInv H. Errors.monadInv EQ; simpl.
-  split; auto. exists x0; split.
-  eapply transl_globdefs_spec; eauto.
-  rewrite <- app_nil_end; auto.
 Qed.
 
 End SPEC.

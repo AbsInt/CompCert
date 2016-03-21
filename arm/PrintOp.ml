@@ -66,8 +66,8 @@ let print_condition reg pp = function
 let print_operation reg pp = function
   | Omove, [r1] -> reg pp r1
   | Ointconst n, [] -> fprintf pp "%ld" (camlint_of_coqint n)
-  | Ofloatconst n, [] -> fprintf pp "%F" (camlfloat_of_coqfloat n)
-  | Osingleconst n, [] -> fprintf pp "%Ff" (camlfloat_of_coqfloat32 n)
+  | Ofloatconst n, [] -> fprintf pp "%.15F" (camlfloat_of_coqfloat n)
+  | Osingleconst n, [] -> fprintf pp "%.15Ff" (camlfloat_of_coqfloat32 n)
   | Oaddrsymbol(id, ofs), [] ->
       fprintf pp "\"%s\" + %ld" (extern_atom id) (camlint_of_coqint ofs)
   | Oaddrstack ofs, [] ->

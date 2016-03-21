@@ -13,22 +13,11 @@
 (** Common subexpression elimination over RTL.  This optimization
   proceeds by value numbering over extended basic blocks. *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import Errors.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Op.
-Require Import Registers.
-Require Import RTL.
-Require Import ValueDomain.
-Require Import ValueAnalysis.
-Require Import CSEdomain.
-Require Import Kildall.
-Require Import CombineOp.
+Require Import Coqlib Maps Errors Integers Floats Lattice Kildall.
+Require Import AST Linking.
+Require Import Values Memory.
+Require Import Op Registers RTL.
+Require Import ValueDomain ValueAnalysis CSEdomain CombineOp.
 
 (** The idea behind value numbering algorithms is to associate
   abstract identifiers (``value numbers'') to the contents of registers
@@ -451,7 +440,8 @@ Module Solver := BBlock_solver(Numbering).
 
   For builtin invocations [Ibuiltin], we have three strategies:
 - Forget all equations.  This is appropriate for builtins that can be
-  turned into function calls ([EF_external], [EF_malloc], [EF_free]).
+  turned into function calls
+  ([EF_external], [EF_runtime], [EF_malloc], [EF_free]).
 - Forget equations involving loads but keep equations over registers.
   This is appropriate for builtins that can modify memory,
   e.g. volatile stores, or [EF_builtin]
@@ -481,7 +471,7 @@ Definition transfer (f: function) (approx: PMap.t VA.t) (pc: node) (before: numb
           empty_numbering
       | Ibuiltin ef args res s =>
           match ef with
-          | EF_external _ _ | EF_malloc | EF_free | EF_inline_asm _ _ _ =>
+          | EF_external _ _ | EF_runtime _ _ | EF_malloc | EF_free | EF_inline_asm _ _ _ =>
               empty_numbering
           | EF_builtin _ _ | EF_vstore _ =>
               set_res_unknown (kill_all_loads before) res
@@ -582,5 +572,5 @@ Definition transf_fundef (rm: romem) (f: fundef) : res fundef :=
   AST.transf_partial_fundef (transf_function rm) f.
 
 Definition transf_program (p: program) : res program :=
-  transform_partial_program (transf_fundef (romem_for_program p)) p.
+  transform_partial_program (transf_fundef (romem_for p)) p.
 

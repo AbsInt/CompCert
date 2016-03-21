@@ -619,9 +619,7 @@ Record extcall_properties (sem: extcall_sem) (sg: signature) : Prop :=
 (** The semantics is invariant under change of global environment that preserves symbols. *)
   ec_symbols_preserved:
     forall ge1 ge2 vargs m1 t vres m2,
-    (forall id, Senv.find_symbol ge2 id = Senv.find_symbol ge1 id) ->
-    (forall id, Senv.public_symbol ge2 id = Senv.public_symbol ge1 id) ->
-    (forall b, Senv.block_is_volatile ge2 b = Senv.block_is_volatile ge1 b) ->
+    Senv.equiv ge1 ge2 ->
     sem ge1 vargs m1 t vres m2 ->
     sem ge2 vargs m1 t vres m2;
 
@@ -704,17 +702,15 @@ Inductive volatile_load_sem (chunk: memory_chunk) (ge: Senv.t):
 
 Lemma volatile_load_preserved:
   forall ge1 ge2 chunk m b ofs t v,
-  (forall id, Senv.find_symbol ge2 id = Senv.find_symbol ge1 id) ->
-  (forall id, Senv.public_symbol ge2 id = Senv.public_symbol ge1 id) ->
-  (forall b, Senv.block_is_volatile ge2 b = Senv.block_is_volatile ge1 b) ->
+  Senv.equiv ge1 ge2 ->
   volatile_load ge1 chunk m b ofs t v ->
   volatile_load ge2 chunk m b ofs t v.
 Proof.
-  intros. inv H2; constructor; auto.
-  rewrite H1; auto.
-  rewrite H; auto.
+  intros. destruct H as (A & B & C). inv H0; constructor; auto.
+  rewrite C; auto.
+  rewrite A; auto.
   eapply eventval_match_preserved; eauto.
-  rewrite H1; auto.
+  rewrite C; auto.
 Qed.
 
 Lemma volatile_load_extends:
@@ -773,7 +769,7 @@ Proof.
 - unfold proj_sig_res; simpl. inv H. inv H0. apply Val.load_result_type.
   eapply Mem.load_type; eauto.
 (* symbols *)
-- inv H2. constructor. eapply volatile_load_preserved; eauto.
+- inv H0. constructor. eapply volatile_load_preserved; eauto.
 (* valid blocks *)
 - inv H; auto.
 (* max perms *)
@@ -817,17 +813,15 @@ Inductive volatile_store_sem (chunk: memory_chunk) (ge: Senv.t):
 
 Lemma volatile_store_preserved:
   forall ge1 ge2 chunk m1 b ofs v t m2,
-  (forall id, Senv.find_symbol ge2 id = Senv.find_symbol ge1 id) ->
-  (forall id, Senv.public_symbol ge2 id = Senv.public_symbol ge1 id) ->
-  (forall b, Senv.block_is_volatile ge2 b = Senv.block_is_volatile ge1 b) ->
+  Senv.equiv ge1 ge2 ->
   volatile_store ge1 chunk m1 b ofs v t m2 ->
   volatile_store ge2 chunk m1 b ofs v t m2.
 Proof.
-  intros. inv H2; constructor; auto.
-  rewrite H1; auto.
-  rewrite H; auto.
+  intros. destruct H as (A & B & C). inv H0; constructor; auto.
+  rewrite C; auto.
+  rewrite A; auto.
   eapply eventval_match_preserved; eauto.
-  rewrite H1; auto.
+  rewrite C; auto.
 Qed.
 
 Lemma volatile_store_readonly:
@@ -925,7 +919,7 @@ Proof.
 (* well typed *)
 - unfold proj_sig_res; simpl. inv H; constructor.
 (* symbols preserved *)
-- inv H2. constructor. eapply volatile_store_preserved; eauto.
+- inv H0. constructor. eapply volatile_store_preserved; eauto.
 (* valid block *)
 - inv H. inv H1. auto. eauto with mem.
 (* perms *)
@@ -972,19 +966,18 @@ Proof.
     Mem.store Mint32 m' b (-4) (Vint n) = Some m'' ->
     Mem.unchanged_on P m m'').
   {
-    intros; constructor; intros.
-  - split; intros; eauto with mem.
-  - assert (b0 <> b) by (eapply Mem.valid_not_valid_diff; eauto with mem).
-    erewrite Mem.store_mem_contents; eauto. rewrite Maps.PMap.gso by auto.
-    Local Transparent Mem.alloc. unfold Mem.alloc in H. injection H; intros A B.
-    rewrite <- B; simpl. rewrite A. rewrite Maps.PMap.gso by auto. auto.
+    intros.
+    apply Mem.unchanged_on_implies with (fun b1 ofs1 => b1 <> b).
+    apply Mem.unchanged_on_trans with m'. 
+    eapply Mem.alloc_unchanged_on; eauto.
+    eapply Mem.store_unchanged_on; eauto.
+    intros. eapply Mem.valid_not_valid_diff; eauto with mem.
   }
-
   constructor; intros.
 (* well typed *)
 - inv H. unfold proj_sig_res; simpl. auto.
 (* symbols preserved *)
-- inv H2; econstructor; eauto.
+- inv H0; econstructor; eauto.
 (* valid block *)
 - inv H. eauto with mem.
 (* perms *)
@@ -1045,7 +1038,7 @@ Proof.
 (* well typed *)
 - inv H. unfold proj_sig_res. simpl. auto.
 (* symbols preserved *)
-- inv H2; econstructor; eauto.
+- inv H0; econstructor; eauto.
 (* valid block *)
 - inv H. eauto with mem.
 (* perms *)
@@ -1124,7 +1117,7 @@ Proof.
 - (* return type *)
   intros. inv H. constructor.
 - (* change of globalenv *)
-  intros. inv H2. econstructor; eauto.
+  intros. inv H0. econstructor; eauto.
 - (* valid blocks *)
   intros. inv H. eauto with mem.
 - (* perms *)
@@ -1235,7 +1228,7 @@ Proof.
 (* well typed *)
 - inv H. simpl. auto.
 (* symbols *)
-- inv H2. econstructor; eauto.
+- destruct H as (A & B & C). inv H0. econstructor; eauto.
   eapply eventval_list_match_preserved; eauto.
 (* valid blocks *)
 - inv H; auto.
@@ -1280,7 +1273,7 @@ Proof.
 (* well typed *)
 - inv H. unfold proj_sig_res; simpl. eapply eventval_match_type; eauto.
 (* symbols *)
-- inv H2. econstructor; eauto.
+- destruct H as (A & B & C). inv H0. econstructor; eauto.
   eapply eventval_match_preserved; eauto.
 (* valid blocks *)
 - inv H; auto.
@@ -1324,7 +1317,7 @@ Proof.
 (* well typed *)
 - inv H. simpl. auto.
 (* symbols *)
-- inv H2. econstructor; eauto.
+- inv H0. econstructor; eauto.
 (* valid blocks *)
 - inv H; auto.
 (* perms *)
@@ -1351,8 +1344,9 @@ Qed.
 
 (** ** Semantics of external functions. *)
 
-(** For functions defined outside the program ([EF_external] and [EF_builtin]),
-  we do not define their semantics, but only assume that it satisfies
+(** For functions defined outside the program ([EF_external],
+  [EF_builtin] and [EF_runtime]), we do not define their
+  semantics, but only assume that it satisfies
   [extcall_properties]. *)
 
 Parameter external_functions_sem: String.string -> signature -> extcall_sem.
@@ -1384,6 +1378,7 @@ Definition external_call (ef: external_function): extcall_sem :=
   match ef with
   | EF_external name sg  => external_functions_sem name sg
   | EF_builtin name sg   => external_functions_sem name sg
+  | EF_runtime name sg   => external_functions_sem name sg
   | EF_vload chunk       => volatile_load_sem chunk
   | EF_vstore chunk      => volatile_store_sem chunk
   | EF_malloc            => extcall_malloc_sem
@@ -1402,6 +1397,7 @@ Proof.
   intros. unfold external_call, ef_sig; destruct ef.
   apply external_functions_properties.
   apply external_functions_properties.
+  apply external_functions_properties.
   apply volatile_load_ok.
   apply volatile_store_ok.
   apply extcall_malloc_ok.
@@ -1414,7 +1410,7 @@ Proof.
 Qed.
 
 Definition external_call_well_typed ef := ec_well_typed (external_call_spec ef).
-Definition external_call_symbols_preserved_gen ef := ec_symbols_preserved (external_call_spec ef).
+Definition external_call_symbols_preserved ef := ec_symbols_preserved (external_call_spec ef).
 Definition external_call_valid_block ef := ec_valid_block (external_call_spec ef).
 Definition external_call_max_perm ef := ec_max_perm (external_call_spec ef).
 Definition external_call_readonly ef := ec_readonly (external_call_spec ef).
@@ -1423,20 +1419,6 @@ Definition external_call_mem_inject_gen ef := ec_mem_inject (external_call_spec 
 Definition external_call_trace_length ef := ec_trace_length (external_call_spec ef).
 Definition external_call_receptive ef := ec_receptive (external_call_spec ef).
 Definition external_call_determ ef := ec_determ (external_call_spec ef).
-
-(** Special cases of [external_call_symbols_preserved_gen]. *)
-
-Lemma external_call_symbols_preserved:
-  forall ef F1 F2 V (ge1: Genv.t F1 V) (ge2: Genv.t F2 V) vargs m1 t vres m2,
-  external_call ef ge1 vargs m1 t vres m2 ->
-  (forall id, Genv.find_symbol ge2 id = Genv.find_symbol ge1 id) ->
-  (forall id, Genv.public_symbol ge2 id = Genv.public_symbol ge1 id) ->
-  (forall b, Genv.find_var_info ge2 b = Genv.find_var_info ge1 b) ->
-  external_call ef ge2 vargs m1 t vres m2.
-Proof.
-  intros. apply external_call_symbols_preserved_gen with (ge1 := ge1); auto.
-  intros. simpl. unfold Genv.block_is_volatile. rewrite H2. auto.
-Qed.
 
 (** Corollary of [external_call_valid_block]. *)
 
@@ -1596,9 +1578,7 @@ Qed.
 Lemma external_call_symbols_preserved':
   forall ef F1 F2 V (ge1: Genv.t F1 V) (ge2: Genv.t F2 V) vargs m1 t vres m2,
   external_call' ef ge1 vargs m1 t vres m2 ->
-  (forall id, Genv.find_symbol ge2 id = Genv.find_symbol ge1 id) ->
-  (forall id, Genv.public_symbol ge2 id = Genv.public_symbol ge1 id) ->
-  (forall b, Genv.find_var_info ge2 b = Genv.find_var_info ge1 b) ->
+  Senv.equiv ge1 ge2 ->
   external_call' ef ge2 vargs m1 t vres m2.
 Proof.
   intros. inv H. exists v; auto. eapply external_call_symbols_preserved; eauto.

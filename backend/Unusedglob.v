@@ -12,16 +12,9 @@
 
 (** Elimination of unreferenced static definitions *)
 
-Require Import FSets.
-Require Import Coqlib.
-Require Import Ordered.
-Require Import Maps.
-Require Import Iteration.
-Require Import AST.
-Require Import Errors.
-Require Import Op.
-Require Import Registers.
-Require Import RTL.
+Require Import FSets Coqlib Maps Ordered Iteration Errors.
+Require Import AST Linking.
+Require Import Op Registers RTL.
 
 Local Open Scope string_scope.
 
@@ -90,6 +83,15 @@ Definition add_ref_definition (pm: prog_map) (id: ident) (w: workset): workset :
   | Some (Gvar gv) => add_ref_globvar gv w
   end.
 
+(** The initial workset is composed of all public definitions of the compilation unit,
+    plus the "main" entry point. *)
+
+Definition initial_workset (p: program): workset :=
+  add_workset p.(prog_main)
+    (List.fold_left (fun w id => add_workset id w)
+                    p.(prog_public)
+                    {| w_seen := IS.empty; w_todo := nil |}).
+
 (** Traversal of the dependency graph. *)
 
 Definition iter_step (pm: prog_map) (w: workset) : IS.t + workset :=
@@ -100,20 +102,7 @@ Definition iter_step (pm: prog_map) (w: workset) : IS.t + workset :=
       inr _ (add_ref_definition pm id {| w_seen := w.(w_seen); w_todo := rem |})
   end.
 
-Definition initial_workset (p: program): workset :=
-  add_workset p.(prog_main)
-    (List.fold_left (fun w id => add_workset id w)
-                    p.(prog_public)
-                    {| w_seen := IS.empty; w_todo := nil |}).
-
-Definition add_def_prog_map (pm: prog_map) (id_df: ident * globdef fundef unit) : prog_map :=
-  PTree.set (fst id_df) (snd id_df) pm.
-
-Definition program_map (p: program) : prog_map :=
-  List.fold_left add_def_prog_map p.(prog_defs) (PTree.empty _).
-
-Definition used_globals (p: program) : option IS.t :=
-  let pm := program_map p in
+Definition used_globals (p: program) (pm: prog_map) : option IS.t :=
   PrimIter.iterate _ _ (iter_step pm) (initial_workset p).
 
 (** * Elimination of unreferenced global definitions *)
@@ -130,12 +119,23 @@ Fixpoint filter_globdefs (used: IS.t) (accu defs: list (ident * globdef fundef u
       else filter_globdefs used accu defs'
   end.
 
+(** To ensure compatibility with linking, we must ensure that all the
+  global names referenced are defined in the compilation unit, with
+  the possible exception of the [prog_main] name. *)
+
+Definition global_defined (p: program) (pm: prog_map) (id: ident) : bool :=
+  match pm!id with Some _ => true | None => ident_eq id (prog_main p) end.
+
 Definition transform_program (p: program) : res program :=
-  match used_globals p with
+  let pm := prog_defmap p in
+  match used_globals p pm with
   | None => Error (msg "Unusedglob: analysis failed")
   | Some used =>
-      OK {| prog_defs := filter_globdefs used nil (List.rev p.(prog_defs));
-            prog_public := p.(prog_public);
-            prog_main := p.(prog_main) |}
+      if IS.for_all (global_defined p pm) used then
+        OK {| prog_defs := filter_globdefs used nil (List.rev p.(prog_defs));
+              prog_public := p.(prog_public);
+              prog_main := p.(prog_main) |}
+      else
+        Error (msg "Unusedglob: reference to undefined global")
   end.
 

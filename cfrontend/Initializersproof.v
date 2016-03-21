@@ -120,7 +120,7 @@ with eval_simple_rvalue: expr -> val -> Prop :=
       eval_simple_rvalue (Ebinop op r1 r2 ty) v
   | esr_cast: forall ty r1 v1 v,
       eval_simple_rvalue r1 v1 ->
-      sem_cast v1 (typeof r1) ty = Some v ->
+      sem_cast v1 (typeof r1) ty m = Some v ->
       eval_simple_rvalue (Ecast r1 ty) v
   | esr_sizeof: forall ty1 ty,
       eval_simple_rvalue (Esizeof ty1 ty) (Vint (Int.repr (sizeof ge ty1)))
@@ -129,7 +129,7 @@ with eval_simple_rvalue: expr -> val -> Prop :=
   | esr_seqand_true: forall r1 r2 ty v1 v2 v3,
       eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) m = Some true ->
       eval_simple_rvalue r2 v2 ->
-      sem_cast v2 (typeof r2) type_bool = Some v3 ->
+      sem_cast v2 (typeof r2) type_bool m = Some v3 ->
       eval_simple_rvalue (Eseqand r1 r2 ty) v3
   | esr_seqand_false: forall r1 r2 ty v1,
       eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) m = Some false ->
@@ -137,7 +137,7 @@ with eval_simple_rvalue: expr -> val -> Prop :=
   | esr_seqor_false: forall r1 r2 ty v1 v2 v3,
       eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) m = Some false ->
       eval_simple_rvalue r2 v2 ->
-      sem_cast v2 (typeof r2) type_bool = Some v3 ->
+      sem_cast v2 (typeof r2) type_bool m = Some v3 ->
       eval_simple_rvalue (Eseqor r1 r2 ty) v3
   | esr_seqor_true: forall r1 r2 ty v1,
       eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) m = Some true ->
@@ -145,13 +145,13 @@ with eval_simple_rvalue: expr -> val -> Prop :=
   | esr_condition: forall r1 r2 r3 ty v v1 b v',
       eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) m = Some b ->
       eval_simple_rvalue (if b then r2 else r3) v' ->
-      sem_cast v' (typeof (if b then r2 else r3)) ty = Some v ->
+      sem_cast v' (typeof (if b then r2 else r3)) ty m = Some v ->
       eval_simple_rvalue (Econdition r1 r2 r3 ty) v
   | esr_comma: forall r1 r2 ty v1 v,
       eval_simple_rvalue r1 v1 -> eval_simple_rvalue r2 v ->
       eval_simple_rvalue (Ecomma r1 r2 ty) v
   | esr_paren: forall r tycast ty v v',
-      eval_simple_rvalue r v -> sem_cast v (typeof r) tycast = Some v' ->
+      eval_simple_rvalue r v -> sem_cast v (typeof r) tycast m = Some v' ->
       eval_simple_rvalue (Eparen r tycast ty) v'.
 
 End SIMPLE_EXPRS.
@@ -355,14 +355,16 @@ Proof.
 Qed.
 
 Lemma sem_cast_match:
-  forall v1 ty1 ty2 v2 v1' v2',
-  sem_cast v1 ty1 ty2 = Some v2 ->
+  forall v1 ty1 ty2 m v2 v1' v2',
+  sem_cast v1 ty1 ty2 m = Some v2 ->
   do_cast v1' ty1 ty2 = OK v2' ->
   Val.inject inj v1' v1 ->
   Val.inject inj v2' v2.
 Proof.
-  intros. unfold do_cast in H0. destruct (sem_cast v1' ty1 ty2) as [v2''|] eqn:E; inv H0.
-  exploit sem_cast_inject. eexact E. eauto.
+  intros. unfold do_cast in H0. destruct (sem_cast v1' ty1 ty2 Mem.empty) as [v2''|] eqn:E; inv H0.
+  exploit (sem_cast_inj inj Mem.empty m).
+  intros. rewrite mem_empty_not_weak_valid_pointer in H2. discriminate.
+  eexact E. eauto.
   intros [v' [A B]]. congruence.
 Qed.
 
@@ -605,7 +607,7 @@ Theorem transl_init_single_steps:
   forall ty a data f m v1 ty1 m' v chunk b ofs m'',
   transl_init_single ge ty a = OK data ->
   star step ge (ExprState f a Kstop empty_env m) E0 (ExprState f (Eval v1 ty1) Kstop empty_env m') ->
-  sem_cast v1 ty1 ty = Some v ->
+  sem_cast v1 ty1 ty m' = Some v ->
   access_mode ty = By_value chunk ->
   Mem.store chunk m' b ofs v = Some m'' ->
   Genv.store_init_data ge m b ofs data = Some m''.
@@ -647,7 +649,7 @@ Qed.
 Lemma transl_init_single_size:
   forall ty a data,
   transl_init_single ge ty a = OK data ->
-  Genv.init_data_size data = sizeof ge ty.
+  init_data_size data = sizeof ge ty.
 Proof.
   intros. monadInv H. destruct x0.
 - monadInv EQ2.
@@ -664,7 +666,7 @@ Proof.
   inv EQ2; auto.
 Qed.
 
-Notation idlsize := Genv.init_data_list_size.
+Notation idlsize := init_data_list_size.
 
 Remark padding_size:
   forall frm to, frm <= to -> idlsize (tr_padding frm to) = to - frm.
@@ -760,7 +762,7 @@ Inductive exec_init: mem -> block -> Z -> type -> initializer -> mem -> Prop :=
   | exec_init_single: forall m b ofs ty a v1 ty1 chunk m' v m'',
       star step ge (ExprState dummy_function a Kstop empty_env m)
                 E0 (ExprState dummy_function (Eval v1 ty1) Kstop empty_env m') ->
-      sem_cast v1 ty1 ty = Some v ->
+      sem_cast v1 ty1 ty m' = Some v ->
       access_mode ty = By_value chunk ->
       Mem.store chunk m' b ofs v = Some m'' ->
       exec_init m b ofs ty (Init_single a) m''
