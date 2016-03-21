@@ -308,7 +308,7 @@ let p_fundef oc (name,f) =
   p_sep oc;
   p_jmember oc "Fun Section Code" p_section c_section;
   p_sep oc;
-  p_jmember oc "Fun Section Literal" p_section l_section;
+  p_jmember oc "Fun Section Literals" p_section l_section;
   p_sep oc;
   p_jmember oc "Fun Section Jumptable" p_section j_section;
   p_sep oc;
