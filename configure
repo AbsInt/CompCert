@@ -255,7 +255,7 @@ testfun:
 	.cfi_adjust_cfa_offset 16
 	.cfi_endproc
 EOF
-  if $casm -o /dev/null $f 2>/dev/null
+  if $casm $casm_options -o /dev/null $f 2>/dev/null
   then echo "yes"; asm_supports_cfi=true
   else echo "no";  asm_supports_cfi=false
   fi
