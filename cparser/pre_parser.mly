@@ -665,6 +665,7 @@ direct_declarator:
 | i = declarator_identifier
     { set_id_type i VarId; (i, Decl_ident) }
 | LPAREN save_context x = declarator RPAREN
+    { x }
 | x = direct_declarator LBRACK type_qualifier_list? optional(assignment_expression, RBRACK)
     { match snd x with
       | Decl_ident -> (fst x, Decl_other)
