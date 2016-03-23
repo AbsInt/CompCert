@@ -35,7 +35,7 @@ let rec isExtern = function
 
 let rec isInline = function
     [] -> false
-  | SpecInline :: _ -> true
+  | (SpecFunction INLINE) :: _ -> true
   | _ :: rest -> isInline rest
 
 let rec isTypedef = function
