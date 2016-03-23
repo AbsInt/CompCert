@@ -400,14 +400,14 @@ let print_variable p (id, v) =
 
 let print_globdef p (id, gd) =
   match gd with
-  | Gfun(Clight.Internal f) -> print_function p (id, f)
-  | Gfun(Clight.External _) -> ()
+  | Gfun(Ctypes.Internal f) -> print_function p (id, f)
+  | Gfun(Ctypes.External _) -> ()
   | Gvar v -> print_variable p (id, v)
 
 let print_ident_globdef p = function
-  | (id, Gfun(Clight.Internal f)) ->
+  | (id, Gfun(Ctypes.Internal f)) ->
       fprintf p "(%a, Gfun(Internal f_%s))" ident id (extern_atom id)
-  | (id, Gfun(Clight.External(ef, targs, tres, cc))) ->
+  | (id, Gfun(Ctypes.External(ef, targs, tres, cc))) ->
       fprintf p "@[<hov 2>(%a,@ @[<hov 2>Gfun(External %a@ %a@ %a@ %a))@]@]"
         ident id external_function ef typlist targs typ tres callconv cc
   | (id, Gvar v) ->
@@ -527,11 +527,11 @@ let name_function f =
 
 let name_globdef (id, g) =
   match g with
-  | Gfun(Clight.Internal f) -> name_function f
+  | Gfun(Ctypes.Internal f) -> name_function f
   | _ -> ()
 
 let name_program p =
-  List.iter name_globdef p.Clight.prog_defs
+  List.iter name_globdef p.Ctypes.prog_defs
 
 (* All together *)
 
