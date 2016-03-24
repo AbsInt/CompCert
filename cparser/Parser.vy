@@ -34,7 +34,7 @@ Require Import List.
 %token<cabsloc> LPAREN RPAREN LBRACK RBRACK LBRACE RBRACE DOT COMMA
   SEMICOLON ELLIPSIS TYPEDEF EXTERN STATIC RESTRICT AUTO REGISTER INLINE
   CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE CONST VOLATILE VOID
-  STRUCT UNION ENUM UNDERSCORE_BOOL PACKED ALIGNAS ATTRIBUTE ASM
+  STRUCT UNION ENUM UNDERSCORE_BOOL PACKED ALIGNAS ATTRIBUTE ASM GENERIC
 
 %token<cabsloc> CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK
   RETURN BUILTIN_VA_ARG
@@ -103,6 +103,8 @@ Require Import List.
 %type<list asm_operand> asm_operands asm_operands_ne
 %type<list asm_operand * list asm_operand * list asm_flag> asm_arguments
 %type<list cvspec> asm_attributes
+%type<list generic_association> generic_selection_list
+%type<generic_association> generic_association
 
 %start<list definition> translation_unit_file
 %%
@@ -120,6 +122,20 @@ primary_expression:
       (CONSTANT (CONST_STRING wide chars), loc) }
 | loc = LPAREN expr = expression RPAREN
     { (fst expr, loc)}
+| loc = GENERIC LPAREN sel = assignment_expression COMMA gen = generic_selection_list RPAREN
+    { (GENERIC (fst sel) (rev' gen), loc) }
+
+generic_association:
+| ty = type_name COLON ass = assignment_expression
+  { (GENERIC_ASSOC ty (fst ass)) }
+| loc = DEFAULT COLON ass = assignment_expression
+  { (GENERIC_DEFAULT (fst ass)) }
+
+generic_selection_list:
+| expr = generic_association
+    { [expr] }
+| exprq = generic_selection_list COMMA exprt = generic_association
+    { exprt::exprq }
 
 (* 6.5.2 *)
 postfix_expression:

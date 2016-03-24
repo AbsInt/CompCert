@@ -1657,6 +1657,15 @@ let elab_expr loc env a =
       let b2 = elab a2 in
       { edesc = EBinop (Ocomma, b1, b2, b2.etyp); etyp = b2.etyp }
 
+  | GENERIC (e,s) -> 
+      let e = elab e in
+      let s = List.map (function
+        | GENERIC_DEFAULT e -> None,elab e
+        | GENERIC_ASSOC ((spec,dcl),e) ->
+            let (ty, env') = elab_type loc env spec dcl in
+            Some ty,elab e) s in
+      elab_selection e.etyp s
+
 (* Elaboration of pre- or post- increment/decrement *)
   and elab_pre_post_incr_decr op msg a1 =
       let b1 = elab a1 in
@@ -1766,6 +1775,30 @@ let elab_expr loc env a =
         end;
         arg1 :: elab_arguments (argno + 1) argl paraml vararg
 
+  and elab_selection t l =
+    let compat_opt t1 (t2,_) = match t1,t2 with
+    | None,None -> error "duplicated default generic association" ()
+    | None, Some _   
+    | Some _ ,None -> ()
+    | Some t1, Some t2 -> if compatible_types AttrIgnoreAll env t1 t2 then
+        error "type '%a' in generic association compatible with previously specified type '%a'"
+          Cprint.typ t1 Cprint.typ t2 ()
+    in
+    let rec check = function 
+      | [] -> ()
+      | (t,_)::tl ->
+          List.iter (compat_opt t) tl;
+          check tl in
+    check l;
+    let find_compat t1 (t2,_) = match t2 with
+    | None -> true
+    | Some t2 -> compatible_types AttrIgnoreAll env t1 t2 in
+    try
+      snd (List.find (find_compat t) l)
+    with Not_found ->
+      error "controlling expression type '%a' not compatible with any generic association type" 
+        Cprint.typ t
+  
   in elab a
 
 (* Filling in forward declaration *)

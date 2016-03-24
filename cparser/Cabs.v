@@ -139,6 +139,7 @@ with expression :=
     (* Non-standard *)
   | EXPR_ALIGNOF : expression -> expression
   | TYPE_ALIGNOF : (list spec_elem * decl_type) -> expression
+  | GENERIC: expression -> (list generic_association) -> expression
 
 with constant :=
   (* The string is the textual representation of the constant in
@@ -147,6 +148,7 @@ with constant :=
   | CONST_FLOAT : floatInfo -> constant
   | CONST_CHAR : bool -> list char_code -> constant
   | CONST_STRING : bool -> list char_code -> constant
+
 
 with init_expression :=
   | NO_INIT
@@ -170,7 +172,11 @@ with gcc_attribute :=
 with gcc_attribute_word :=
   | GCC_ATTR_IDENT : string -> gcc_attribute_word
   | GCC_ATTR_CONST
-  | GCC_ATTR_PACKED.
+  | GCC_ATTR_PACKED
+
+with generic_association :=
+  | GENERIC_DEFAULT: expression -> generic_association
+  | GENERIC_ASSOC: (list spec_elem * decl_type) -> expression -> generic_association.
 
 (* like name_group, except the declared variables are allowed to have initializers *)
 (* e.g.: int x=1, y=2; *)
