@@ -1657,7 +1657,7 @@ let elab_expr loc env a =
       let b2 = elab a2 in
       { edesc = EBinop (Ocomma, b1, b2, b2.etyp); etyp = b2.etyp }
 
-  | GENERIC (e,s) -> 
+  | GENERIC (e,s) ->
       let e = elab e in
       let s = List.map (function
         | GENERIC_DEFAULT e -> None,elab e
@@ -1778,27 +1778,28 @@ let elab_expr loc env a =
   and elab_selection t l =
     let compat_opt t1 (t2,_) = match t1,t2 with
     | None,None -> error "duplicated default generic association" ()
-    | None, Some _   
+    | None, Some _
     | Some _ ,None -> ()
     | Some t1, Some t2 -> if compatible_types AttrIgnoreAll env t1 t2 then
         error "type '%a' in generic association compatible with previously specified type '%a'"
           Cprint.typ t1 Cprint.typ t2 ()
     in
-    let rec check = function 
+    let rec check acc = function
       | [] -> ()
-      | (t,_)::tl ->
+      | ((t,_) as e)::tl ->
+          List.iter (compat_opt t) acc;
           List.iter (compat_opt t) tl;
-          check tl in
-    check l;
+          check (e::acc) tl in
+    check [] l;
     let find_compat t1 (t2,_) = match t2 with
     | None -> true
     | Some t2 -> compatible_types AttrIgnoreAll env t1 t2 in
     try
       snd (List.find (find_compat t) l)
     with Not_found ->
-      error "controlling expression type '%a' not compatible with any generic association type" 
+      error "controlling expression type '%a' not compatible with any generic association type"
         Cprint.typ t
-  
+
   in elab a
 
 (* Filling in forward declaration *)
