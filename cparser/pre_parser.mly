@@ -23,7 +23,7 @@
 *)
 
 %{
-  open Pre_parser_aux
+  open !Pre_parser_aux
 
   let set_id_type (_,r,_) t =
     r := t

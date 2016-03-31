@@ -1123,7 +1123,7 @@ and success f alloc =
   end;
   f'
 
-open Errors
+open !Errors
 
 let regalloc f =
   init_trace();
@@ -1131,7 +1131,7 @@ let regalloc f =
   let f1 = Splitting.rename_function f in
   match RTLtyping.type_function f1 with
   | Error msg ->
-      Error(MSG (coqstring_of_camlstring "RTL code after splitting is ill-typed:") :: msg)
+      Errors.Error(MSG (coqstring_of_camlstring "RTL code after splitting is ill-typed:") :: msg)
   | OK tyenv ->
       let f2 = function_of_RTL_function f1 tyenv in
       let liveness = liveness_analysis f2 in

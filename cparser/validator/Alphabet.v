@@ -199,8 +199,8 @@ Next Obligation. apply Zcompare_antisym. Qed.
 Next Obligation.
 destruct c. unfold compare31 in *.
 rewrite Z.compare_eq_iff in *. congruence.
-eapply Zcompare_Lt_trans; eauto.
-eapply Zcompare_Gt_trans; eauto.
+eapply Zcompare_Lt_trans. apply H.  apply H0.
+eapply Zcompare_Gt_trans. apply H. apply H0.
 Qed.
 Next Obligation.
 intros x y H. unfold compare, compare31 in H.
