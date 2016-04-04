@@ -32,7 +32,7 @@ Require Import List.
   LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN XOR_ASSIGN OR_ASSIGN
 
 %token<cabsloc> LPAREN RPAREN LBRACK RBRACK LBRACE RBRACE DOT COMMA
-  SEMICOLON ELLIPSIS TYPEDEF EXTERN STATIC RESTRICT AUTO REGISTER INLINE
+  SEMICOLON ELLIPSIS TYPEDEF EXTERN STATIC RESTRICT AUTO REGISTER INLINE NORETURN
   CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE CONST VOLATILE VOID
   STRUCT UNION ENUM UNDERSCORE_BOOL PACKED ALIGNAS ATTRIBUTE ASM
 
@@ -67,7 +67,7 @@ Require Import List.
 %type<string * option expression * cabsloc> enumerator
 %type<string * cabsloc> enumeration_constant
 %type<cvspec * cabsloc> type_qualifier type_qualifier_noattr
-%type<cabsloc> function_specifier
+%type<funspec * cabsloc> function_specifier
 %type<name> declarator declarator_noattrend direct_declarator
 %type<(decl_type -> decl_type) * cabsloc> pointer
 %type<list cvspec (* Reverse order *)> type_qualifier_list
@@ -344,8 +344,8 @@ declaration_specifiers_typespec_opt:
     { SpecType (fst typ)::rest }
 | qual = type_qualifier rest = declaration_specifiers_typespec_opt
     { SpecCV (fst qual)::rest }
-| loc = function_specifier rest = declaration_specifiers_typespec_opt
-    { SpecInline::rest }
+| func = function_specifier rest = declaration_specifiers_typespec_opt
+    { SpecFunction (fst func)::rest }
 | /* empty */
     { [] }
 
@@ -363,8 +363,8 @@ declaration_specifiers:
     { (SpecCV (fst qual)::fst rest, snd qual) }
 | attr = attribute_specifier rest = declaration_specifiers
     { (SpecCV (CV_ATTR (fst attr))::fst rest, snd attr) }
-| loc = function_specifier rest = declaration_specifiers
-    { (SpecInline::fst rest, loc) }
+| func = function_specifier rest = declaration_specifiers
+    { (SpecFunction (fst func)::fst rest, snd func) }
 
 init_declarator_list:
 | init = init_declarator
@@ -571,7 +571,9 @@ gcc_attribute_word:
 (* 6.7.4 *)
 function_specifier:
 | loc = INLINE
-    { loc }
+   { (INLINE, loc) }
+| loc = NORETURN
+  { (NORETURN, loc)}
 
 (* 6.7.5 *)
 declarator:
@@ -870,7 +872,7 @@ asm_attributes:
      { [] }
 | CONST attr = asm_attributes
      { CV_CONST :: attr }
-| VOLATILE attr = asm_attributes 
+| VOLATILE attr = asm_attributes
      { CV_VOLATILE :: attr }
 
 asm_arguments:
@@ -950,4 +952,3 @@ declaration_list:
     { [d] }
 | dl = declaration_list d = declaration
     { d :: dl }
-

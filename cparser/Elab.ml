@@ -389,6 +389,7 @@ let rec elab_specifier ?(only = false) loc env specifier =
        - a list of type specifiers *)
   let sto = ref Storage_default
   and inline = ref false
+  and noreturn = ref false
   and attr = ref []
   and tyspecs = ref []
   and typedef = ref false in
@@ -409,12 +410,13 @@ let rec elab_specifier ?(only = false) loc env specifier =
             error loc "multiple uses of 'typedef'";
           typedef := true
       end
-  | SpecInline -> inline := true
+  | SpecFunction INLINE -> inline := true
+  | SpecFunction NORETURN -> noreturn := true
   | SpecType tys -> tyspecs := tys :: !tyspecs in
 
   List.iter do_specifier specifier;
 
-  let simple ty = (!sto, !inline, !typedef, add_attributes_type !attr ty, env) in
+  let simple ty = (!sto, !inline, !noreturn ,!typedef, add_attributes_type !attr ty, env) in
 
   (* As done in CIL, partition !attr into type-related attributes,
      which are returned, and other attributes, which are left in !attr.
@@ -485,21 +487,21 @@ let rec elab_specifier ?(only = false) loc env specifier =
           add_attributes (get_type_attrs()) (elab_attributes env a) in
         let (id', env') =
           elab_struct_or_union only Struct loc id optmembers a' env in
-        (!sto, !inline, !typedef, TStruct(id', !attr), env')
+        (!sto, !inline, !noreturn, !typedef, TStruct(id', !attr), env')
 
     | [Cabs.Tstruct_union(UNION, id, optmembers, a)] ->
         let a' =
           add_attributes (get_type_attrs()) (elab_attributes env a) in
         let (id', env') =
           elab_struct_or_union only Union loc id optmembers a' env in
-        (!sto, !inline, !typedef, TUnion(id', !attr), env')
+        (!sto, !inline, !noreturn, !typedef, TUnion(id', !attr), env')
 
     | [Cabs.Tenum(id, optmembers, a)] ->
         let a' =
           add_attributes (get_type_attrs()) (elab_attributes env a) in
         let (id', env') =
           elab_enum only loc id optmembers a' env in
-        (!sto, !inline, !typedef, TEnum(id', !attr), env')
+        (!sto, !inline, !noreturn, !typedef, TEnum(id', !attr), env')
 
     (* Specifier doesn't make sense *)
     | _ ->
@@ -575,7 +577,7 @@ and elab_parameters env params =
 (* Elaboration of a function parameter *)
 
 and elab_parameter env (PARAM (spec, id, decl, attr, loc)) =
-  let (sto, inl, tydef, bty, env1) = elab_specifier loc env spec in
+  let (sto, inl, noret, tydef, bty, env1) = elab_specifier loc env spec in
   if tydef then
     error loc "'typedef' used in function parameter";
   let ((ty, _), _) = elab_type_declarator loc env1 bty false decl in
@@ -585,6 +587,8 @@ and elab_parameter env (PARAM (spec, id, decl, attr, loc)) =
       "'extern' or 'static' storage not supported for function parameter";
   if inl then
     error loc "'inline' can only appear on functions";
+  if noret then
+    error loc "'_Noreturn' can only appear on functions";
   let id = match id with None -> "" | Some id -> id in
   if id <> "" && redef Env.lookup_ident env id then
     error loc "redefinition of parameter '%s'" id;
@@ -596,22 +600,24 @@ and elab_parameter env (PARAM (spec, id, decl, attr, loc)) =
 (* Elaboration of a (specifier, Cabs "name") pair *)
 
 and elab_fundef_name env spec (Name (id, decl, attr, loc)) =
-  let (sto, inl, tydef, bty, env') = elab_specifier loc env spec in
+  let (sto, inl, noret, tydef, bty, env') = elab_specifier loc env spec in
   if tydef then
     error loc "'typedef' is forbidden here";
   let ((ty, kr_params), env'') = elab_type_declarator loc env' bty true decl in
   let a = elab_attributes env attr in
-  (id, sto, inl, add_attributes_type a ty, kr_params, env'')
+  (id, sto, inl, noret, add_attributes_type a ty, kr_params, env'')
 
 (* Elaboration of a name group.  C99 section 6.7.6 *)
 
 and elab_name_group loc env (spec, namelist) =
-  let (sto, inl, tydef, bty, env') =
+  let (sto, inl, noret, tydef, bty, env') =
     elab_specifier loc env spec in
   if tydef then
     error loc "'typedef' is forbidden here";
   if inl then
     error loc "'inline' is forbidden here";
+  if noret then
+    error loc "'_Noreturn' is forbidden here";
   let elab_one_name env (Name (id, decl, attr, loc)) =
     let ((ty, _), env1) =
       elab_type_declarator loc env bty false decl in
@@ -622,7 +628,7 @@ and elab_name_group loc env (spec, namelist) =
 (* Elaboration of an init-name group *)
 
 and elab_init_name_group loc env (spec, namelist) =
-  let (sto, inl, tydef, bty, env') =
+  let (sto, inl, noret, tydef, bty, env') =
     elab_specifier ~only:(namelist=[]) loc env spec in
   let elab_one_name env (Init_name (Name (id, decl, attr, loc), init)) =
     let ((ty, _), env1) =
@@ -630,6 +636,8 @@ and elab_init_name_group loc env (spec, namelist) =
     let a = elab_attributes env attr in
     if inl && not (is_function_type env ty) then
       error loc "'inline' can only appear on functions";
+    if noret && not (is_function_type env ty) then
+      error loc "'_Noreturn' can only appear on functions";
     ((id, add_attributes_type a ty, init), env1) in
   (mmap elab_one_name env' namelist, sto, tydef)
 
@@ -827,9 +835,9 @@ and elab_enum only loc tag optmembers attrs env =
 (* Elaboration of a naked type, e.g. in a cast *)
 
 let elab_type loc env spec decl =
-  let (sto, inl, tydef, bty, env') = elab_specifier loc env spec in
+  let (sto, inl, noret, tydef, bty, env') = elab_specifier loc env spec in
   let ((ty, _), env'') = elab_type_declarator loc env' bty false decl in
-  if sto <> Storage_default || inl || tydef then
+  if sto <> Storage_default || inl || noret || tydef then
     error loc "'typedef', 'extern', 'static', 'register' and 'inline' are meaningless in cast";
   (ty, env'')
 
@@ -1890,7 +1898,7 @@ let enter_decdefs local loc env sto dl =
   (List.rev decls, env')
 
 let elab_fundef env spec name defs body loc =
-  let (s, sto, inline, ty, kr_params, env1) = elab_fundef_name env spec name in
+  let (s, sto, inline, noret, ty, kr_params, env1) = elab_fundef_name env spec name in
   if sto = Storage_register then
     fatal_error loc "A function definition cannot have 'register' storage class";
   begin match kr_params, defs with
@@ -1982,6 +1990,8 @@ let elab_fundef env spec name defs body loc =
           warning loc "return type of 'main' should be 'int'";
           body'
     end else body' in
+  if noret && contains_return body' then
+    warning loc "function '%s' declared 'noreturn' should not return" s;
   (* Build and emit function definition *)
   let fn =
     { fd_storage = sto1;

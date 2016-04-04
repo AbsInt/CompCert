@@ -7,7 +7,8 @@ OBJS=i64_dtos.o i64_dtou.o i64_sar.o i64_sdiv.o i64_shl.o \
   vararg.o
 LIB=libcompcert.a
 INCLUDES=include/float.h include/stdarg.h include/stdbool.h \
-  include/stddef.h include/varargs.h
+  include/stddef.h include/varargs.h include/stdalign.h \
+  include/stdnoreturn.h
 
 VPATH=$(ARCH)
 
