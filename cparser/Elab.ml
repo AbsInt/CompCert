@@ -1150,14 +1150,6 @@ and elab_item zi item il =
       let ini' = elab_list (I.top env (I.name zi) ty) il' true in
       (* Initialize current subobject with this state, and continue *)
       elab_list (I.set zi ini') il false
-  (* Single expression to initialize an array *)
-  | SINGLE_INIT a, TArray(ty_elt, sz, _) ->
-        let m = match unroll env ty_elt with
-        | TInt((IChar | ISChar | IUChar), _) -> " or string literal"
-        | TInt(ik, _) when sizeof_ikind ik = !config.sizeof_wchar -> " or wide string literal"
-        | _ -> "" in
-        error loc "array initializer must be an initializer list%s" m;
-        elab_list zi il false
   (* Single expression *)
   | SINGLE_INIT a, _ ->
       let a' = !elab_expr_f loc env a in
