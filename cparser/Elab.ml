@@ -1153,8 +1153,8 @@ and elab_item zi item il =
   (* Single expression to initialize an array *)
   | SINGLE_INIT a, TArray(ty_elt, sz, _) ->
         let m = match unroll env ty_elt with
-        | TInt(t, _) when sizeof_ikind t = 1 -> " or string literal"
-        | TInt(t, _) when sizeof_ikind t = !config.sizeof_wchar -> " or wide string literal"
+        | TInt((IChar | ISChar | IUChar), _) -> " or string literal"
+        | TInt(ik, _) when sizeof_ikind ik = !config.sizeof_wchar -> " or wide string literal"
         | _ -> "" in
         error loc "array initializer must be an initializer list%s" m;
         elab_list zi il false
