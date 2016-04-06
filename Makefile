@@ -166,7 +166,7 @@ documentation: doc/coq2html $(FILES)
 	cp doc/coq2html.css doc/coq2html.js doc/html/
 
 doc/coq2html: doc/coq2html.ml
-	ocamlopt -o doc/coq2html str.cmxa doc/coq2html.ml
+	ocamlopt -w +a-29 -o doc/coq2html str.cmxa doc/coq2html.ml
 
 doc/coq2html.ml: doc/coq2html.mll
 	ocamllex -q doc/coq2html.mll
@@ -262,7 +262,7 @@ check-admitted: $(FILES)
 # UnionFind.UF.elt gives "Anomaly: Uncaught exception Reduction.NotConvertible"
 
 check-proof: $(FILES)
-	$(COQCHK) -admit Integers -admit Floats -admit AST -admit Asm -admit Mach -admit UnionFind Complements 
+	$(COQCHK) -admit Integers -admit Floats -admit AST -admit Asm -admit Mach -admit UnionFind Complements
 
 print-includes:
 	@echo $(COQINCLUDES)
