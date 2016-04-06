@@ -1134,7 +1134,7 @@ and elab_item zi item il =
       | CStr _, _ ->
           error loc "initialization of an array of non-char elements with a string literal";
           elab_list zi il false
-      | CWStr s, TInt(ik, _) when sizeof_ikind ik = !config.sizeof_wchar ->
+      | CWStr s, TInt(_, _) when compatible_types AttrCompat env ty_elt (TInt(wchar_ikind(), [])) ->
           if not (I.index_below (Int64.of_int(List.length s - 1)) sz) then
             warning loc "initializer string for array of wide chars %s is too long"
                         (I.name zi);
