@@ -804,7 +804,7 @@ module Target (System : SYSTEM):TARGET =
       | Init_float32 n ->
           fprintf oc "	.long	0x%lx %s %.18g\n"
             (camlint_of_coqint (Floats.Float32.to_bits n))
-            comment (camlfloat_of_coqfloat n)
+            comment (camlfloat_of_coqfloat32 n)
       | Init_float64 n ->
           let b = camlint64_of_coqint (Floats.Float.to_bits n) in
           fprintf oc "	.long	0x%Lx, 0x%Lx %s %.18g\n"

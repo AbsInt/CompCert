@@ -827,7 +827,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           fprintf oc "	.quad	%Ld\n" (camlint64_of_coqint n)
       | Init_float32 n ->
           fprintf oc "	.word	0x%lx %s %.15g \n" (camlint_of_coqint (Floats.Float32.to_bits n))
-	    comment (camlfloat_of_coqfloat n)
+	    comment (camlfloat_of_coqfloat32 n)
       | Init_float64 n ->
           fprintf oc "	.quad	%Ld %s %.18g\n" (camlint64_of_coqint (Floats.Float.to_bits n))
 	    comment (camlfloat_of_coqfloat n)
