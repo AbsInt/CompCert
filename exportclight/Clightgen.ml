@@ -211,7 +211,7 @@ Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fall          Activate all language support options above
   -fnone         Turn off all language support options above
 Tracing options:
-  -dparse        Save C file after parsing and elaboration in <file>.parse.c
+  -dparse        Save C file after parsing and elaboration in <file>.parsed.c
   -dc            Save generated Compcert C in <file>.compcert.c
   -dclight       Save generated Clight in <file>.light.c
 General options:

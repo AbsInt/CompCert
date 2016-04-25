@@ -556,7 +556,7 @@ Linking options:
                  library modules to define it.
 Tracing options:
   -dprepro       Save C file after preprocessing in <file>.i
-  -dparse        Save C file after parsing and elaboration in <file>.parse.c
+  -dparse        Save C file after parsing and elaboration in <file>.parsed.c
   -dc            Save generated Compcert C in <file>.compcert.c
   -dclight       Save generated Clight in <file>.light.c
   -dcminor       Save generated Cminor in <file>.cm
