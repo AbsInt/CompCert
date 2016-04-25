@@ -757,6 +757,7 @@ let cmdline_actions =
   Exact "-v", Set option_v;
   Exact "-stdlib", String(fun s -> stdlib_path := s);
   Exact "-timings", Set option_timings;
+  Exact "-Werror", Set Cerrors.warn_error;
 (* Interpreter mode *)
   Exact "-interp", Set option_interp;
   Exact "-quiet", Self (fun _ -> Interp.trace := 0);
