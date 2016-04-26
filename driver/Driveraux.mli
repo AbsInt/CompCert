@@ -32,3 +32,12 @@ val output_filename_default: string -> string
 
 val ensure_inputfile_exists: string -> unit
    (** Test whether the given input file exists *)
+
+val print_error:out_channel -> Errors.errcode list -> unit
+   (** Printing of error messages *)
+
+val gnu_option: string -> bool
+   (** Set the options for gnu systems *)
+
+val explode_comma_option: string -> string list
+   (** Split options by whitespace *)

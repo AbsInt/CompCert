@@ -83,3 +83,28 @@ let ensure_inputfile_exists name =
     eprintf "error: no such file or directory: '%s'\n" name;
     exit 2
   end
+(* Printing of error messages *)
+
+let print_error oc msg =
+  let print_one_error = function
+  | Errors.MSG s -> output_string oc (Camlcoq.camlstring_of_coqstring s)
+  | Errors.CTX i -> output_string oc (Camlcoq.extern_atom i)
+  | Errors.POS i -> fprintf oc "%ld" (Camlcoq.P.to_int32 i)
+  in
+    List.iter print_one_error msg;
+    output_char oc '\n'
+
+let gnu_option s =
+  if Configuration.system <> "diab" then
+    true
+  else begin
+    eprintf "ccomp: warning: option %s only supported for gcc backend\n" s;
+    false
+  end
+
+
+(* Command-line parsing *)
+let explode_comma_option s =
+  match Str.split (Str.regexp ",") s with
+  | [] -> assert false
+  | _ :: tl -> tl
