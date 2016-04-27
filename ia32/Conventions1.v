@@ -14,6 +14,7 @@
     machine registers and stack slots. *)
 
 Require Import Coqlib.
+Require Import Decidableplus.
 Require Import AST.
 Require Import Events.
 Require Import Locations.
@@ -29,6 +30,14 @@ Require Import Locations.
   of callee- and caller-save registers.
 *)
 
+Definition is_callee_save (r: mreg) : bool :=
+  match r with
+  | AX | CX | DX => false
+  | BX | SI | DI | BP => true
+  | X0 | X1 | X2 | X3 | X4 | X5 | X6 | X7 => false
+  | FP0 => false
+  end.
+
 Definition int_caller_save_regs := AX :: CX :: DX :: nil.
 
 Definition float_caller_save_regs := X0 :: X1 :: X2 :: X3 :: X4 :: X5 :: X6 :: X7 :: nil.
@@ -38,160 +47,10 @@ Definition int_callee_save_regs := BX :: SI :: DI :: BP :: nil.
 Definition float_callee_save_regs : list mreg := nil.
 
 Definition destroyed_at_call :=
-  FP0 :: int_caller_save_regs ++ float_caller_save_regs.
+  List.filter (fun r => negb (is_callee_save r)) all_mregs.
 
 Definition dummy_int_reg := AX.     (**r Used in [Regalloc]. *)
 Definition dummy_float_reg := X0.   (**r Used in [Regalloc]. *)
-
-(** The [index_int_callee_save] and [index_float_callee_save] associate
-  a unique positive integer to callee-save registers.  This integer is
-  used in [Stacking] to determine where to save these registers in
-  the activation record if they are used by the current function. *)
-
-Definition index_int_callee_save (r: mreg) :=
-  match r with
-  | BX => 0 | SI => 1 | DI => 2 | BP => 3 | _ => -1
-  end.
-
-Definition index_float_callee_save (r: mreg) := -1.
-
-Ltac ElimOrEq :=
-  match goal with
-  |  |- (?x = ?y) \/ _ -> _ =>
-       let H := fresh in
-       (intro H; elim H; clear H;
-        [intro H; rewrite <- H; clear H | ElimOrEq])
-  |  |- False -> _ =>
-       let H := fresh in (intro H; contradiction)
-  end.
-
-Ltac OrEq :=
-  match goal with
-  | |- (?x = ?x) \/ _ => left; reflexivity
-  | |- (?x = ?y) \/ _ => right; OrEq
-  | |- False => fail
-  end.
-
-Ltac NotOrEq :=
-  match goal with
-  | |- (?x = ?y) \/ _ -> False =>
-       let H := fresh in (
-       intro H; elim H; clear H; [intro; discriminate | NotOrEq])
-  | |- False -> False =>
-       contradiction
-  end.
-
-Lemma index_int_callee_save_pos:
-  forall r, In r int_callee_save_regs -> index_int_callee_save r >= 0.
-Proof.
-  intro r. simpl; ElimOrEq; unfold index_int_callee_save; omega.
-Qed.
-
-Lemma index_float_callee_save_pos:
-  forall r, In r float_callee_save_regs -> index_float_callee_save r >= 0.
-Proof.
-  intro r. simpl; ElimOrEq; unfold index_float_callee_save; omega.
-Qed.
-
-Lemma index_int_callee_save_pos2:
-  forall r, index_int_callee_save r >= 0 -> In r int_callee_save_regs.
-Proof.
-  destruct r; simpl; intro; omegaContradiction || OrEq.
-Qed.
-
-Lemma index_float_callee_save_pos2:
-  forall r, index_float_callee_save r >= 0 -> In r float_callee_save_regs.
-Proof.
-  unfold index_float_callee_save; intros. omegaContradiction.
-Qed.
-
-Lemma index_int_callee_save_inj:
-  forall r1 r2,
-  In r1 int_callee_save_regs ->
-  In r2 int_callee_save_regs ->
-  r1 <> r2 ->
-  index_int_callee_save r1 <> index_int_callee_save r2.
-Proof.
-  intros r1 r2.
-  simpl; ElimOrEq; ElimOrEq; unfold index_int_callee_save;
-  intros; congruence.
-Qed.
-
-Lemma index_float_callee_save_inj:
-  forall r1 r2,
-  In r1 float_callee_save_regs ->
-  In r2 float_callee_save_regs ->
-  r1 <> r2 ->
-  index_float_callee_save r1 <> index_float_callee_save r2.
-Proof.
-  simpl; intros. contradiction.
-Qed.
-
-(** The following lemmas show that
-    (destroyed at call, integer callee-save, float callee-save)
-    is a partition of the set of machine registers. *)
-
-Lemma int_float_callee_save_disjoint:
-  list_disjoint int_callee_save_regs float_callee_save_regs.
-Proof.
-  red; intros r1 r2. simpl; ElimOrEq; ElimOrEq; discriminate.
-Qed.
-
-Lemma register_classification:
-  forall r,
-  In r destroyed_at_call \/ In r int_callee_save_regs \/ In r float_callee_save_regs.
-Proof.
-  destruct r;
-  try (left; simpl; OrEq);
-  try (right; left; simpl; OrEq);
-  try (right; right; simpl; OrEq).
-Qed.
-
-Lemma int_callee_save_not_destroyed:
-  forall r,
-    In r destroyed_at_call -> In r int_callee_save_regs -> False.
-Proof.
-  intros. revert H0 H. simpl. ElimOrEq; NotOrEq.
-Qed.
-
-Lemma float_callee_save_not_destroyed:
-  forall r,
-    In r destroyed_at_call -> In r float_callee_save_regs -> False.
-Proof.
-  intros. revert H0 H. simpl. ElimOrEq; NotOrEq.
-Qed.
-
-Lemma int_callee_save_type:
-  forall r, In r int_callee_save_regs -> mreg_type r = Tany32.
-Proof.
-  intro. simpl; ElimOrEq; reflexivity.
-Qed.
-
-Lemma float_callee_save_type:
-  forall r, In r float_callee_save_regs -> mreg_type r = Tany64.
-Proof.
-  intro. simpl; ElimOrEq; reflexivity.
-Qed.
-
-Ltac NoRepet :=
-  match goal with
-  | |- list_norepet nil =>
-      apply list_norepet_nil
-  | |- list_norepet (?a :: ?b) =>
-      apply list_norepet_cons; [simpl; intuition discriminate | NoRepet]
-  end.
-
-Lemma int_callee_save_norepet:
-  list_norepet int_callee_save_regs.
-Proof.
-  unfold int_callee_save_regs; NoRepet.
-Qed.
-
-Lemma float_callee_save_norepet:
-  list_norepet float_callee_save_regs.
-Proof.
-  unfold float_callee_save_regs; NoRepet.
-Qed.
 
 (** * Function calling conventions *)
 
@@ -239,12 +98,12 @@ Qed.
 
 Lemma loc_result_caller_save:
   forall (s: signature) (r: mreg),
-  In r (loc_result s) -> In r destroyed_at_call.
+  In r (loc_result s) -> is_callee_save r = false.
 Proof.
   intros.
   assert (r = AX \/ r = DX \/ r = FP0 \/ r = X0).
     unfold loc_result in H. destruct (sig_res s) as [[]|]; simpl in H; intuition.
-  destruct H0 as [A | [A | [A | A]]]; subst r; simpl; OrEq.
+  destruct H0 as [A | [A | [A | A]]]; subst r; reflexivity.
 Qed.
 
 (** ** Location of function arguments *)
@@ -287,8 +146,8 @@ Definition size_arguments (s: signature) : Z :=
 
 Definition loc_argument_acceptable (l: loc) : Prop :=
   match l with
-  | R r => In r destroyed_at_call
-  | S Outgoing ofs ty => ofs >= 0 /\ ty <> Tlong
+  | R r => is_callee_save r = false
+  | S Outgoing ofs ty => ofs >= 0 /\ (typealign ty | ofs)
   | _ => False
   end.
 
@@ -296,7 +155,7 @@ Remark loc_arguments_rec_charact:
   forall tyl ofs l,
   In l (loc_arguments_rec tyl ofs) ->
   match l with
-  | S Outgoing ofs' ty => ofs' >= ofs /\ ty <> Tlong
+  | S Outgoing ofs' ty => ofs' >= ofs /\ typealign ty = 1
   | _ => False
   end.
 Proof.
@@ -307,12 +166,12 @@ Proof.
                | R _ => False
                | S Local _ _ => False
                | S Incoming _ _ => False
-               | S Outgoing ofs' ty => ofs' >= ofs /\ ty <> Tlong
+               | S Outgoing ofs' ty => ofs' >= ofs /\ typealign ty = 1
                end).
   { intros. exploit IHtyl; eauto. destruct l; auto. destruct sl; intuition omega
 . }
   destruct a; simpl in H; repeat (destruct H);
-  ((eapply REC; eauto; omega) || (split; [omega|congruence])).
+  ((eapply REC; eauto; omega) || (split; [omega|reflexivity])).
 Qed.
 
 Lemma loc_arguments_acceptable:
@@ -322,7 +181,7 @@ Proof.
   unfold loc_arguments; intros.
   exploit loc_arguments_rec_charact; eauto.
   unfold loc_argument_acceptable.
-  destruct l; tauto.
+  destruct l as [r | [] ofs ty]; intuition auto. rewrite H2; apply Z.divide_1_l. 
 Qed.
 
 Hint Resolve loc_arguments_acceptable: locs.

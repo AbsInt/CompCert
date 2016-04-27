@@ -111,10 +111,7 @@ Definition call_regs (caller: locset) : locset :=
 Definition return_regs (caller callee: locset) : locset :=
   fun (l: loc) =>
     match l with
-    | R r =>
-        if In_dec mreg_eq r destroyed_at_call
-        then callee (R r)
-        else caller (R r)
+    | R r => if is_callee_save r then caller (R r) else callee (R r)
     | S sl ofs ty => caller (S sl ofs ty)
     end.
 

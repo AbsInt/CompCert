@@ -1120,7 +1120,7 @@ Qed.
 
 Definition callee_save_loc (l: loc) :=
   match l with
-  | R r => ~(In r destroyed_at_call)
+  | R r => is_callee_save r = true
   | S sl ofs ty => sl <> Outgoing
   end.
 
@@ -1133,7 +1133,7 @@ Lemma return_regs_agree_callee_save:
 Proof.
   intros; red; intros. unfold return_regs. red in H.
   destruct l.
-  rewrite pred_dec_false; auto.
+  rewrite H; auto. 
   destruct sl; auto || congruence.
 Qed.
 
@@ -1146,13 +1146,7 @@ Proof.
   unfold no_caller_saves, callee_save_loc; intros.
   exploit EqSet.for_all_2; eauto.
   hnf. intros. simpl in H1. rewrite H1. auto.
-  lazy beta. destruct (eloc q).
-  intros; red; intros. destruct (orb_true_elim _ _ H1); InvBooleans.
-  eapply int_callee_save_not_destroyed; eauto.
-  apply index_int_callee_save_pos2. omega.
-  eapply float_callee_save_not_destroyed; eauto.
-  apply index_float_callee_save_pos2. omega.
-  destruct sl; congruence.
+  lazy beta. destruct (eloc q). auto. destruct sl; congruence.
 Qed.
 
 Lemma function_return_satisf:
@@ -1304,7 +1298,7 @@ Proof.
   exploit tailcall_is_possible_correct; eauto.
   unfold loc_argument_acceptable, return_regs.
   destruct x; intros.
-  rewrite pred_dec_true; auto.
+  rewrite H2; auto.
   contradiction.
 Qed.
 
@@ -1315,8 +1309,7 @@ Lemma find_function_tailcall:
 Proof.
   unfold ros_compatible_tailcall, find_function; intros.
   destruct ros as [r|id]; auto.
-  unfold return_regs. destruct (in_dec mreg_eq r destroyed_at_call); simpl in H.
-  auto. congruence.
+  unfold return_regs. destruct (is_callee_save r). discriminate. auto.
 Qed.
 
 Lemma loadv_int64_split:
@@ -2224,7 +2217,7 @@ Proof.
      with (map ls1 (map R (loc_result (RTL.fn_sig f)))).
   eapply add_equations_res_lessdef; eauto.
   rewrite !list_map_compose. apply list_map_exten; intros.
-  unfold return_regs. apply pred_dec_true. eapply loc_result_caller_save; eauto.
+  unfold return_regs. erewrite loc_result_caller_save by eauto. auto.
   apply return_regs_agree_callee_save.
   unfold proj_sig_res. rewrite <- H11; rewrite H13. apply WTRS.
 
@@ -2267,8 +2260,7 @@ Proof.
   red; intros. rewrite Locmap.gsetlisto. apply AG; auto.
   apply Loc.notin_iff. intros.
   exploit list_in_map_inv; eauto. intros [r [A B]]; subst l'.
-  destruct l; simpl; auto. red; intros; subst r0; elim H0.
-  eapply loc_result_caller_save; eauto.
+  destruct l; simpl; auto. red in H0. apply loc_result_caller_save in B. congruence.
   simpl. eapply external_call_well_typed; eauto.
 
 (* return *)

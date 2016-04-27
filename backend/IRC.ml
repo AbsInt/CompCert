@@ -833,10 +833,10 @@ let find_slot conflicts typ =
   | [] ->
       S(Local, curr, typ)
   | S(Local, ofs, typ') :: l ->
-      if Z.le (Z.add curr (typesize typ)) ofs then
+      if Z.le (Z.add curr (Locations.typesize typ)) ofs then
         S(Local, curr, typ)
       else begin
-        let ofs' = Z.add ofs (typesize typ') in
+        let ofs' = Z.add ofs (Locations.typesize typ') in
         find (if Z.le ofs' curr then curr else ofs') l
       end
   | _ :: l ->

@@ -13,6 +13,7 @@
 (** Machine- and ABI-dependent layout information for activation records. *)
 
 Require Import Coqlib.
+Require Import Memory Separation.
 Require Import Bounds.
 
 (** In the PowerPC/EABI application binary interface,
@@ -25,8 +26,7 @@ Require Import Bounds.
   frame, we will not use these 4 bytes, and just reserve them.
 - Space for outgoing arguments to function calls.
 - Local stack slots.
-- Saved values of integer callee-save registers used by the function.
-- Saved values of float callee-save registers used by the function.
+- Saved values of callee-save registers used by the function.
 - Space for the stack-allocated data declared in Cminor.
 
 The [frame_env] compilation environment records the positions of
@@ -35,100 +35,111 @@ the boundaries between areas in the frame part.
 
 Definition fe_ofs_arg := 8.
 
-Record frame_env : Type := mk_frame_env {
-  fe_size: Z;
-  fe_ofs_link: Z;
-  fe_ofs_retaddr: Z;
-  fe_ofs_local: Z;
-  fe_ofs_int_callee_save: Z;
-  fe_num_int_callee_save: Z;
-  fe_ofs_float_callee_save: Z;
-  fe_num_float_callee_save: Z;
-  fe_stack_data: Z
-}.
-
 (** Computation of the frame environment from the bounds of the current
   function. *)
 
 Definition make_env (b: bounds) :=
   let ol := align (8 + 4 * b.(bound_outgoing)) 8 in    (* locals *)
   let ora := ol + 4 * b.(bound_local) in (* saved return address *)
-  let oics := ora + 4 in            (* integer callee-saves *)
-  let oendi := oics + 4 * b.(bound_int_callee_save) in
-  let ofcs := align oendi 8 in       (* float callee-saves *)
-  let ostkdata := ofcs + 8 * b.(bound_float_callee_save) in (* stack data *)
+  let ocs := ora + 4 in            (* callee-saves *)
+  let oendcs := size_callee_save_area b ocs in
+  let ostkdata := align oendcs 8 in (* stack data *)
   let sz := align (ostkdata + b.(bound_stack_data)) 16 in
-  mk_frame_env sz 0 ora
-                  ol
-                  oics b.(bound_int_callee_save)
-                  ofcs b.(bound_float_callee_save)
-                  ostkdata.
+  {| fe_size := sz;
+     fe_ofs_link := 0;
+     fe_ofs_retaddr := ora;
+     fe_ofs_local := ol;
+     fe_ofs_callee_save := ocs;
+     fe_stack_data := ostkdata;
+     fe_used_callee_save := b.(used_callee_save) |}.
 
 (** Separation property *)
 
-Remark frame_env_separated:
-  forall b,
+Local Open Scope sep_scope.
+
+Lemma frame_env_separated:
+  forall b sp m P,
   let fe := make_env b in
-  0 <= fe.(fe_ofs_link)
-  /\ fe.(fe_ofs_link) + 4 <= fe_ofs_arg
-  /\ fe_ofs_arg + 4 * b.(bound_outgoing) <= fe.(fe_ofs_local)
-  /\ fe.(fe_ofs_local) + 4 * b.(bound_local) <= fe.(fe_ofs_retaddr)
-  /\ fe.(fe_ofs_retaddr) + 4 <= fe.(fe_ofs_int_callee_save)
-  /\ fe.(fe_ofs_int_callee_save) + 4 * b.(bound_int_callee_save) <= fe.(fe_ofs_float_callee_save)
-  /\ fe.(fe_ofs_float_callee_save) + 8 * b.(bound_float_callee_save) <= fe.(fe_stack_data)
-  /\ fe.(fe_stack_data) + b.(bound_stack_data) <= fe.(fe_size)
-  /\ fe.(fe_ofs_retaddr) + 4 <= fe.(fe_size).
+  m |= range sp 0 (fe_stack_data fe) ** range sp (fe_stack_data fe + bound_stack_data b) (fe_size fe) ** P ->
+  m |= range sp (fe_ofs_local fe) (fe_ofs_local fe + 4 * bound_local b)
+       ** range sp fe_ofs_arg (fe_ofs_arg + 4 * bound_outgoing b)
+       ** range sp (fe_ofs_link fe) (fe_ofs_link fe + 4)
+       ** range sp (fe_ofs_retaddr fe) (fe_ofs_retaddr fe + 4)
+       ** range sp (fe_ofs_callee_save fe) (size_callee_save_area b (fe_ofs_callee_save fe))
+       ** P.
 Proof.
-  intros.
-  generalize (align_le (8 + 4 * b.(bound_outgoing)) 8 (refl_equal _)).
-  generalize (align_le (fe.(fe_ofs_int_callee_save) + 4 * b.(bound_int_callee_save)) 8 (refl_equal _)).
-  generalize (align_le (fe.(fe_stack_data) + b.(bound_stack_data)) 16 (refl_equal _)).
-  unfold fe, make_env, fe_size, fe_ofs_link, fe_ofs_retaddr,
-    fe_ofs_local, fe_ofs_int_callee_save,
-    fe_num_int_callee_save,
-    fe_ofs_float_callee_save, fe_num_float_callee_save,
-    fe_stack_data, fe_ofs_arg.
-  intros.
-  generalize (bound_local_pos b); intro;
-  generalize (bound_int_callee_save_pos b); intro;
-  generalize (bound_float_callee_save_pos b); intro;
-  generalize (bound_outgoing_pos b); intro;
-  generalize (bound_stack_data_pos b); intro.
-  omega.
+Local Opaque Z.add Z.mul sepconj range.
+  intros; simpl.
+  set (ol := align (8 + 4 * b.(bound_outgoing)) 8).
+  set (ora := ol + 4 * b.(bound_local)).
+  set (ocs := ora + 4).
+  set (oendcs := size_callee_save_area b ocs).
+  set (ostkdata := align oendcs 8).
+  generalize b.(bound_local_pos) b.(bound_outgoing_pos) b.(bound_stack_data_pos); intros.
+  unfold fe_ofs_arg.
+  assert (8 + 4 * b.(bound_outgoing) <= ol) by (apply align_le; omega).
+  assert (ol <= ora) by (unfold ora; omega).
+  assert (ora <= ocs) by (unfold ocs; omega).
+  assert (ocs <= oendcs) by (apply size_callee_save_area_incr).
+  assert (oendcs <= ostkdata) by (apply align_le; omega).
+(* Reorder as:
+     back link
+     outgoing
+     locals
+     retaddr
+     callee-save *)
+  rewrite sep_swap3.
+(* Apply range_split and range_split2 repeatedly *)
+  apply range_drop_right with 8. omega.
+  apply range_split. omega.
+  apply range_split_2. fold ol; omega. omega.
+  apply range_split. omega. 
+  apply range_split. omega.
+  apply range_drop_right with ostkdata. omega.
+  eapply sep_drop2. eexact H.
 Qed.
 
-(** Alignment property *)
-
-Remark frame_env_aligned:
+Lemma frame_env_range:
   forall b,
   let fe := make_env b in
-  (4 | fe.(fe_ofs_link))
-  /\ (8 | fe.(fe_ofs_local))
-  /\ (4 | fe.(fe_ofs_int_callee_save))
-  /\ (8 | fe.(fe_ofs_float_callee_save))
-  /\ (4 | fe.(fe_ofs_retaddr))
-  /\ (8 | fe.(fe_stack_data))
-  /\ (16 | fe.(fe_size)).
+  0 <= fe_stack_data fe /\ fe_stack_data fe + bound_stack_data b <= fe_size fe.
 Proof.
-  intros.
-  unfold fe, make_env, fe_size, fe_ofs_link, fe_ofs_retaddr,
-    fe_ofs_local, fe_ofs_int_callee_save,
-    fe_num_int_callee_save,
-    fe_ofs_float_callee_save, fe_num_float_callee_save,
-    fe_stack_data.
-  set (x1 := align (8 + 4 * bound_outgoing b) 8).
-  assert (8 | x1). unfold x1; apply align_divides. omega.
-  set (x2 := x1 + 4 * bound_local b).
-  assert (4 | x2). unfold x2; apply Zdivide_plus_r; auto.
-  apply Zdivides_trans with 8. exists 2; auto. auto.
-  exists (bound_local b); ring.
-  set (x3 := x2 + 4).
-  assert (4 | x3). unfold x3; apply Zdivide_plus_r; auto. exists 1; auto.
-  set (x4 := align (x3 + 4 * bound_int_callee_save b) 8).
-  assert (8 | x4). unfold x4. apply align_divides. omega.
-  set (x5 := x4 + 8 * bound_float_callee_save b).
-  assert (8 | x5). unfold x5. apply Zdivide_plus_r; auto. exists (bound_float_callee_save b); ring.
-  set (x6 := align (x5 + bound_stack_data b) 16).
-  assert (16 | x6). unfold x6; apply align_divides. omega.
-  intuition.
+  intros; simpl.
+  set (ol := align (8 + 4 * b.(bound_outgoing)) 8).
+  set (ora := ol + 4 * b.(bound_local)).
+  set (ocs := ora + 4).
+  set (oendcs := size_callee_save_area b ocs).
+  set (ostkdata := align oendcs 8).
+  generalize b.(bound_local_pos) b.(bound_outgoing_pos) b.(bound_stack_data_pos); intros.
+  unfold fe_ofs_arg.
+  assert (8 + 4 * b.(bound_outgoing) <= ol) by (apply align_le; omega).
+  assert (ol <= ora) by (unfold ora; omega).
+  assert (ora <= ocs) by (unfold ocs; omega).
+  assert (ocs <= oendcs) by (apply size_callee_save_area_incr).
+  assert (oendcs <= ostkdata) by (apply align_le; omega).
+  split. omega. apply align_le. omega.
+Qed.
+
+Lemma frame_env_aligned:
+  forall b,
+  let fe := make_env b in
+     (8 | fe_ofs_arg)
+  /\ (8 | fe_ofs_local fe)
+  /\ (8 | fe_stack_data fe)
+  /\ (4 | fe_ofs_link fe)
+  /\ (4 | fe_ofs_retaddr fe).
+Proof.
+  intros; simpl.
+  set (ol := align (8 + 4 * b.(bound_outgoing)) 8).
+  set (ora := ol + 4 * b.(bound_local)).
+  set (ocs := ora + 4).
+  set (oendcs := size_callee_save_area b ocs).
+  set (ostkdata := align oendcs 8).
+  split. exists (fe_ofs_arg / 8); reflexivity.
+  split. apply align_divides; omega.
+  split. apply align_divides; omega.
+  split. apply Zdivide_0.
+  apply Z.divide_add_r.
+    apply Zdivide_trans with 8. exists 2; auto. apply align_divides; omega.
+    apply Z.divide_factor_l.
 Qed.

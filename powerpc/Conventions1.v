@@ -14,6 +14,7 @@
     machine registers and stack slots. *)
 
 Require Import Coqlib.
+Require Import Decidableplus.
 Require Import AST.
 Require Import Events.
 Require Import Locations.
@@ -28,6 +29,17 @@ Require Import Locations.
   We follow the PowerPC/EABI application binary interface (ABI) in our choice
   of callee- and caller-save registers.
 *)
+
+Definition is_callee_save (r: mreg): bool :=
+  match r with
+  | R3  | R4  | R5  | R6  | R7  | R8  | R9  | R10  | R11 | R12 => false
+  | R14 | R15 | R16 | R17 | R18 | R19 | R20 | R21 | R22 | R23 | R24
+  | R25 | R26 | R27 | R28 | R29 | R30 | R31 => true
+  | F0  | F1  | F2  | F3  | F4  | F5  | F6  | F7
+  | F8  | F9  | F10 | F11 | F12 | F13 => false
+  | F14 | F15 | F16 | F17 | F18 | F19 | F20 | F21 | F22 | F23
+  | F24 | F25 | F26 | F27 | F28 | F29 | F30 | F31 => true
+  end.
 
 Definition int_caller_save_regs :=
   R3 :: R4 :: R5 :: R6 :: R7 :: R8 :: R9 :: R10 :: R11 :: R12 :: nil.
@@ -44,173 +56,10 @@ Definition float_callee_save_regs :=
   F22 :: F21 :: F20 :: F19 :: F18 :: F17 :: F16 :: F15 :: F14 :: nil.
 
 Definition destroyed_at_call :=
-  int_caller_save_regs ++ float_caller_save_regs.
+  List.filter (fun r => negb (is_callee_save r)) all_mregs.
 
 Definition dummy_int_reg := R3.     (**r Used in [Coloring]. *)
 Definition dummy_float_reg := F0.   (**r Used in [Coloring]. *)
-
-(** The [index_int_callee_save] and [index_float_callee_save] associate
-  a unique positive integer to callee-save registers.  This integer is
-  used in [Stacking] to determine where to save these registers in
-  the activation record if they are used by the current function. *)
-
-Definition index_int_callee_save (r: mreg) :=
-  match r with
-  | R14 => 17 | R15 => 16 | R16 => 15 | R17 => 14
-  | R18 => 13 | R19 => 12 | R20 => 11 | R21 => 10
-  | R22 => 9  | R23 => 8  | R24 => 7  | R25 => 6
-  | R26 => 5  | R27 => 4  | R28 => 3  | R29 => 2
-  | R30 => 1  | R31 => 0  | _ => -1
-  end.
-
-Definition index_float_callee_save (r: mreg) :=
-  match r with
-  | F14 => 17 | F15 => 16 | F16 => 15 | F17 => 14
-  | F18 => 13 | F19 => 12 | F20 => 11 | F21 => 10
-  | F22 => 9  | F23 => 8  | F24 => 7  | F25 => 6
-  | F26 => 5  | F27 => 4  | F28 => 3  | F29 => 2
-  | F30 => 1  | F31 => 0  | _ => -1
-  end.
-
-Ltac ElimOrEq :=
-  match goal with
-  |  |- (?x = ?y) \/ _ -> _ =>
-       let H := fresh in
-       (intro H; elim H; clear H;
-        [intro H; rewrite <- H; clear H | ElimOrEq])
-  |  |- False -> _ =>
-       let H := fresh in (intro H; contradiction)
-  end.
-
-Ltac OrEq :=
-  match goal with
-  | |- (?x = ?x) \/ _ => left; reflexivity
-  | |- (?x = ?y) \/ _ => right; OrEq
-  | |- False => fail
-  end.
-
-Ltac NotOrEq :=
-  match goal with
-  | |- (?x = ?y) \/ _ -> False =>
-       let H := fresh in (
-       intro H; elim H; clear H; [intro; discriminate | NotOrEq])
-  | |- False -> False =>
-       contradiction
-  end.
-
-Lemma index_int_callee_save_pos:
-  forall r, In r int_callee_save_regs -> index_int_callee_save r >= 0.
-Proof.
-  intro r. simpl; ElimOrEq; unfold index_int_callee_save; omega.
-Qed.
-
-Lemma index_float_callee_save_pos:
-  forall r, In r float_callee_save_regs -> index_float_callee_save r >= 0.
-Proof.
-  intro r. simpl; ElimOrEq; unfold index_float_callee_save; omega.
-Qed.
-
-Lemma index_int_callee_save_pos2:
-  forall r, index_int_callee_save r >= 0 -> In r int_callee_save_regs.
-Proof.
-  destruct r; simpl; intro; omegaContradiction || OrEq.
-Qed.
-
-Lemma index_float_callee_save_pos2:
-  forall r, index_float_callee_save r >= 0 -> In r float_callee_save_regs.
-Proof.
-  destruct r; simpl; intro; omegaContradiction || OrEq.
-Qed.
-
-Lemma index_int_callee_save_inj:
-  forall r1 r2,
-  In r1 int_callee_save_regs ->
-  In r2 int_callee_save_regs ->
-  r1 <> r2 ->
-  index_int_callee_save r1 <> index_int_callee_save r2.
-Proof.
-  intros r1 r2.
-  simpl; ElimOrEq; ElimOrEq; unfold index_int_callee_save;
-  intros; congruence.
-Qed.
-
-Lemma index_float_callee_save_inj:
-  forall r1 r2,
-  In r1 float_callee_save_regs ->
-  In r2 float_callee_save_regs ->
-  r1 <> r2 ->
-  index_float_callee_save r1 <> index_float_callee_save r2.
-Proof.
-  intros r1 r2.
-  simpl; ElimOrEq; ElimOrEq; unfold index_float_callee_save;
-  intros; congruence.
-Qed.
-
-(** The following lemmas show that
-    (temporaries, destroyed at call, integer callee-save, float callee-save)
-    is a partition of the set of machine registers. *)
-
-Lemma int_float_callee_save_disjoint:
-  list_disjoint int_callee_save_regs float_callee_save_regs.
-Proof.
-  red; intros r1 r2. simpl; ElimOrEq; ElimOrEq; discriminate.
-Qed.
-
-Lemma register_classification:
-  forall r,
-  In r destroyed_at_call \/ In r int_callee_save_regs \/ In r float_callee_save_regs.
-Proof.
-  destruct r;
-  try (left; simpl; OrEq);
-  try (right; left; simpl; OrEq);
-  try (right; right; simpl; OrEq).
-Qed.
-
-Lemma int_callee_save_not_destroyed:
-  forall r,
-    In r destroyed_at_call -> In r int_callee_save_regs -> False.
-Proof.
-  intros. revert H0 H. simpl. ElimOrEq; NotOrEq.
-Qed.
-
-Lemma float_callee_save_not_destroyed:
-  forall r,
-    In r destroyed_at_call -> In r float_callee_save_regs -> False.
-Proof.
-  intros. revert H0 H. simpl. ElimOrEq; NotOrEq.
-Qed.
-
-Lemma int_callee_save_type:
-  forall r, In r int_callee_save_regs -> mreg_type r = Tany32.
-Proof.
-  intro. simpl; ElimOrEq; reflexivity.
-Qed.
-
-Lemma float_callee_save_type:
-  forall r, In r float_callee_save_regs -> mreg_type r = Tany64.
-Proof.
-  intro. simpl; ElimOrEq; reflexivity.
-Qed.
-
-Ltac NoRepet :=
-  match goal with
-  | |- list_norepet nil =>
-      apply list_norepet_nil
-  | |- list_norepet (?a :: ?b) =>
-      apply list_norepet_cons; [simpl; intuition discriminate | NoRepet]
-  end.
-
-Lemma int_callee_save_norepet:
-  list_norepet int_callee_save_regs.
-Proof.
-  unfold int_callee_save_regs; NoRepet.
-Qed.
-
-Lemma float_callee_save_norepet:
-  list_norepet float_callee_save_regs.
-Proof.
-  unfold float_callee_save_regs; NoRepet.
-Qed.
 
 (** * Function calling conventions *)
 
@@ -258,12 +107,12 @@ Qed.
 
 Lemma loc_result_caller_save:
   forall (s: signature) (r: mreg),
-  In r (loc_result s) -> In r destroyed_at_call.
+  In r (loc_result s) -> is_callee_save r = false.
 Proof.
   intros.
   assert (r = R3 \/ r = R4 \/ r = F1).
     unfold loc_result in H. destruct (sig_res s); [destruct t|idtac]; simpl in H; intuition.
-  destruct H0 as [A | [A | A]]; subst r; simpl; OrEq.
+  destruct H0 as [A | [A | A]]; subst r; reflexivity.
 Qed.
 
 (** ** Location of function arguments *)
@@ -347,20 +196,13 @@ Fixpoint size_arguments_rec (tyl: list typ) (ir fr ofs: Z) {struct tyl} : Z :=
 Definition size_arguments (s: signature) : Z :=
   size_arguments_rec s.(sig_args) 0 0 0.
 
-(** A tail-call is possible for a signature if the corresponding
-    arguments are all passed in registers. *)
-
-Definition tailcall_possible (s: signature) : Prop :=
-  forall l, In l (loc_arguments s) ->
-  match l with R _ => True | S _ _ _ => False end.
-
 (** Argument locations are either caller-save registers or [Outgoing]
   stack slots at nonnegative offsets. *)
 
 Definition loc_argument_acceptable (l: loc) : Prop :=
   match l with
-  | R r => In r destroyed_at_call
-  | S Outgoing ofs ty => ofs >= 0 /\ ty <> Tlong
+  | R r => is_callee_save r = false
+  | S Outgoing ofs ty => ofs >= 0 /\ (typealign ty | ofs)
   | _ => False
   end.
 
@@ -369,7 +211,7 @@ Remark loc_arguments_rec_charact:
   In l (loc_arguments_rec tyl ir fr ofs) ->
   match l with
   | R r => In r int_param_regs \/ In r float_param_regs
-  | S Outgoing ofs' ty => ofs' >= ofs /\ ty <> Tlong
+  | S Outgoing ofs' ty => ofs' >= ofs /\ (typealign ty | ofs')
   | S _ _ _ => False
   end.
 Proof.
@@ -381,13 +223,13 @@ Opaque list_nth_z.
   destruct (list_nth_z int_param_regs ir) as [r|] eqn:E; destruct H.
   subst. left. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
-  subst. split. omega. congruence.
+  subst. split. omega. apply Z.divide_1_l.
   exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
 - (* float *)
   destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H.
   subst. right. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
-  subst. split. apply Zle_ge. apply align_le. omega. congruence.
+  subst. split. apply Zle_ge. apply align_le. omega. apply Z.divide_1_l.
   exploit IHtyl; eauto. destruct l; auto. destruct sl; auto.
   assert (ofs <= align ofs 2) by (apply align_le; omega).
   intuition omega.
@@ -399,18 +241,18 @@ Opaque list_nth_z.
   destruct H. subst; left; eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
   assert (ofs <= align ofs 2) by (apply align_le; omega).
-  destruct H. subst. split. omega. congruence.
-  destruct H. subst. split. omega. congruence.
+  destruct H. subst. split. omega. apply Z.divide_1_l.
+  destruct H. subst. split. omega. apply Z.divide_1_l.
   exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
   assert (ofs <= align ofs 2) by (apply align_le; omega).
-  destruct H. subst. split. omega. congruence.
-  destruct H. subst. split. omega. congruence.
+  destruct H. subst. split. omega. apply Z.divide_1_l.
+  destruct H. subst. split. omega. apply Z.divide_1_l.
   exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
 - (* single *)
   destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H.
   subst. right. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
-  subst. split. apply Zle_ge. apply align_le. omega. congruence.
+  subst. split. apply Zle_ge. apply align_le. omega. apply Z.divide_1_l.
   exploit IHtyl; eauto. destruct l; auto. destruct sl; auto.
   assert (ofs <= align ofs 2) by (apply align_le; omega).
   intuition omega.
@@ -418,13 +260,13 @@ Opaque list_nth_z.
   destruct (list_nth_z int_param_regs ir) as [r|] eqn:E; destruct H.
   subst. left. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
-  subst. split. omega. congruence.
+  subst. split. omega. apply Z.divide_1_l.
   exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
 - (* any64 *)
   destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H.
   subst. right. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
-  subst. split. apply Zle_ge. apply align_le. omega. congruence.
+  subst. split. apply Zle_ge. apply align_le. omega. apply Z.divide_1_l.
   exploit IHtyl; eauto. destruct l; auto. destruct sl; auto.
   assert (ofs <= align ofs 2) by (apply align_le; omega).
   intuition omega.
@@ -435,10 +277,12 @@ Lemma loc_arguments_acceptable:
   In l (loc_arguments s) -> loc_argument_acceptable l.
 Proof.
   unfold loc_arguments; intros.
+  assert (A: forall r, In r int_param_regs -> is_callee_save r = false) by decide_goal.
+  assert (B: forall r, In r float_param_regs -> is_callee_save r = false) by decide_goal.
   generalize (loc_arguments_rec_charact _ _ _ _ _ H).
   destruct l.
-  intro H0; elim H0; simpl; ElimOrEq; OrEq.
-  destruct sl; try contradiction. simpl. intuition omega.
+  intros [C|C]; simpl; auto.
+  destruct sl; try contradiction. simpl; auto.
 Qed.
 Hint Resolve loc_arguments_acceptable: locs.
 

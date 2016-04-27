@@ -38,8 +38,8 @@ Definition slot_valid (sl: slot) (ofs: Z) (ty: typ): bool :=
   | Local => zle 0 ofs
   | Outgoing => zle 0 ofs
   | Incoming => In_dec Loc.eq (S Incoming ofs ty) (loc_parameters funct.(fn_sig))
-  end &&
-  match ty with Tlong => false | _ => true end.
+  end
+  && Zdivide_dec (typealign ty) ofs (typealign_pos ty).
 
 Definition slot_writable (sl: slot) : bool :=
   match sl with
@@ -146,8 +146,7 @@ Lemma wt_return_regs:
   wt_locset caller -> wt_locset callee -> wt_locset (return_regs caller callee).
 Proof.
   intros; red; intros.
-  unfold return_regs. destruct l; auto.
-  destruct (in_dec mreg_eq r destroyed_at_call); auto.
+  unfold return_regs. destruct l; auto. destruct (is_callee_save r); auto.
 Qed.
 
 Lemma wt_init:

@@ -12,12 +12,17 @@
 
 (** Computation of resource bounds for Linear code. *)
 
-Require Import Coqlib.
+Require Import FSets FSetAVL.
+Require Import Coqlib Ordered.
+Require Intv.
 Require Import AST.
 Require Import Op.
-Require Import Locations.
+Require Import Machregs Locations.
 Require Import Linear.
 Require Import Conventions.
+
+Module RegOrd := OrderedIndexed (IndexedMreg).
+Module RegSet := FSetAVL.Make (RegOrd).
 
 (** * Resource bounds for a function *)
 
@@ -29,16 +34,15 @@ Require Import Conventions.
   the activation record. *)
 
 Record bounds : Type := mkbounds {
+  used_callee_save: list mreg;
   bound_local: Z;
-  bound_int_callee_save: Z;
-  bound_float_callee_save: Z;
   bound_outgoing: Z;
   bound_stack_data: Z;
   bound_local_pos: bound_local >= 0;
-  bound_int_callee_save_pos: bound_int_callee_save >= 0;
-  bound_float_callee_save_pos: bound_float_callee_save >= 0;
   bound_outgoing_pos: bound_outgoing >= 0;
-  bound_stack_data_pos: bound_stack_data >= 0
+  bound_stack_data_pos: bound_stack_data >= 0;
+  used_callee_save_norepet: list_norepet used_callee_save;
+  used_callee_save_prop: forall r, In r used_callee_save -> is_callee_save r = true
 }.
 
 (** The following predicates define the correctness of a set of bounds
@@ -49,8 +53,7 @@ Section WITHIN_BOUNDS.
 Variable b: bounds.
 
 Definition mreg_within_bounds (r: mreg) :=
-  index_int_callee_save r < bound_int_callee_save b
-  /\ index_float_callee_save r < bound_float_callee_save b.
+  is_callee_save r = true -> In r (used_callee_save b).
 
 Definition slot_within_bounds (sl: slot) (ofs: Z) (ty: typ) :=
   match sl with
@@ -86,27 +89,36 @@ Section BOUNDS.
 
 Variable f: function.
 
-(** In the proof of the [Stacking] pass, we only need to bound the
-  registers written by an instruction.  Therefore, this function
-  returns these registers, ignoring registers used only as
-  arguments. *)
+Definition record_reg (u: RegSet.t) (r: mreg) : RegSet.t :=
+  if is_callee_save r then RegSet.add r u else u.
 
-Definition regs_of_instr (i: instruction) : list mreg :=
+Definition record_regs (u: RegSet.t) (rl: list mreg) : RegSet.t :=
+  fold_left record_reg rl u.
+
+(** In the proof of the [Stacking] pass, we only need to bound the
+  registers written by an instruction.  Therefore, we examine the
+  result registers only, not the argument registers. *)
+
+Definition record_regs_of_instr (u: RegSet.t) (i: instruction) : RegSet.t :=
   match i with
-  | Lgetstack sl ofs ty r => r :: nil
-  | Lsetstack r sl ofs ty => r :: nil
-  | Lop op args res => res :: nil
-  | Lload chunk addr args dst => dst :: nil
-  | Lstore chunk addr args src => nil
-  | Lcall sig ros => nil
-  | Ltailcall sig ros => nil
-  | Lbuiltin ef args res => params_of_builtin_res res ++ destroyed_by_builtin ef
-  | Llabel lbl => nil
-  | Lgoto lbl => nil
-  | Lcond cond args lbl => nil
-  | Ljumptable arg tbl => nil
-  | Lreturn => nil
+  | Lgetstack sl ofs ty r => record_reg u r
+  | Lsetstack r sl ofs ty => record_reg u r
+  | Lop op args res => record_reg u res
+  | Lload chunk addr args dst => record_reg u dst
+  | Lstore chunk addr args src => u
+  | Lcall sig ros => u
+  | Ltailcall sig ros => u
+  | Lbuiltin ef args res =>
+      record_regs (record_regs u (params_of_builtin_res res)) (destroyed_by_builtin ef)
+  | Llabel lbl => u
+  | Lgoto lbl => u
+  | Lcond cond args lbl => u
+  | Ljumptable arg tbl => u
+  | Lreturn => u
   end.
+
+Definition record_regs_of_function : RegSet.t :=
+  fold_left record_regs_of_instr f.(fn_code) RegSet.empty.
 
 Fixpoint slots_of_locs (l: list loc) : list (slot * Z * typ) :=
   match l with
@@ -129,21 +141,11 @@ Definition max_over_list {A: Type} (valu: A -> Z) (l: list A) : Z :=
 Definition max_over_instrs (valu: instruction -> Z) : Z :=
   max_over_list valu f.(fn_code).
 
-Definition max_over_regs_of_instr (valu: mreg -> Z) (i: instruction) : Z :=
-  max_over_list valu (regs_of_instr i).
-
 Definition max_over_slots_of_instr (valu: slot * Z * typ -> Z) (i: instruction) : Z :=
   max_over_list valu (slots_of_instr i).
 
-Definition max_over_regs_of_funct (valu: mreg -> Z) : Z :=
-  max_over_instrs (max_over_regs_of_instr valu).
-
 Definition max_over_slots_of_funct (valu: slot * Z * typ -> Z) : Z :=
   max_over_instrs (max_over_slots_of_instr valu).
-
-Definition int_callee_save (r: mreg) := 1 + index_int_callee_save r.
-
-Definition float_callee_save (r: mreg) := 1 + index_float_callee_save r.
 
 Definition local_slot (s: slot * Z * typ) :=
   match s with (Local, ofs, ty) => ofs + typesize ty | _ => 0 end.
@@ -172,25 +174,63 @@ Proof.
   unfold max_over_instrs. apply max_over_list_pos.
 Qed.
 
-Lemma max_over_regs_of_funct_pos:
-  forall (valu: mreg -> Z), max_over_regs_of_funct valu >= 0.
+(* Move elsewhere? *)
+
+Remark fold_left_preserves:
+  forall (A B: Type) (f: A -> B -> A) (P: A -> Prop),
+  (forall a b, P a -> P (f a b)) ->
+  forall l a, P a -> P (fold_left f l a).
 Proof.
-  intros. unfold max_over_regs_of_funct.
-  unfold max_over_instrs. apply max_over_list_pos.
+  induction l; simpl; auto.
 Qed.
 
-Program Definition function_bounds :=
-  mkbounds
-    (max_over_slots_of_funct local_slot)
-    (max_over_regs_of_funct int_callee_save)
-    (max_over_regs_of_funct float_callee_save)
-    (Zmax (max_over_instrs outgoing_space)
-          (max_over_slots_of_funct outgoing_slot))
-    (Zmax f.(fn_stacksize) 0)
-    (max_over_slots_of_funct_pos local_slot)
-    (max_over_regs_of_funct_pos int_callee_save)
-    (max_over_regs_of_funct_pos float_callee_save)
-    _ _.
+Remark fold_left_ensures:
+  forall (A B: Type) (f: A -> B -> A) (P: A -> Prop) b0,
+  (forall a b, P a -> P (f a b)) ->
+  (forall a, P (f a b0)) ->
+  forall l a, In b0 l -> P (fold_left f l a).
+Proof.
+  induction l; simpl; intros. contradiction. 
+  destruct H1. subst a. apply fold_left_preserves; auto. apply IHl; auto.
+Qed.
+
+Definition only_callee_saves (u: RegSet.t) : Prop :=
+  forall r, RegSet.In r u -> is_callee_save r = true.
+
+Lemma record_reg_only: forall u r, only_callee_saves u -> only_callee_saves (record_reg u r).
+Proof.
+  unfold only_callee_saves, record_reg; intros. 
+  destruct (is_callee_save r) eqn:CS; auto.
+  destruct (mreg_eq r r0). congruence. apply H; eapply RegSet.add_3; eauto.
+Qed.
+
+Lemma record_regs_only: forall rl u, only_callee_saves u -> only_callee_saves (record_regs u rl).
+Proof.
+  intros. unfold record_regs. apply fold_left_preserves; auto using record_reg_only.
+Qed.
+
+Lemma record_regs_of_instr_only: forall u i, only_callee_saves u -> only_callee_saves (record_regs_of_instr u i).
+Proof.
+  intros. destruct i; simpl; auto using record_reg_only, record_regs_only.
+Qed.
+
+Lemma record_regs_of_function_only: 
+  only_callee_saves record_regs_of_function.
+Proof.
+  intros. unfold record_regs_of_function.
+  apply fold_left_preserves. apply record_regs_of_instr_only. 
+  red; intros. eelim RegSet.empty_1; eauto.
+Qed.
+
+Program Definition function_bounds := {|
+  used_callee_save := RegSet.elements record_regs_of_function;
+  bound_local := max_over_slots_of_funct local_slot;
+  bound_outgoing := Zmax (max_over_instrs outgoing_space) (max_over_slots_of_funct outgoing_slot);
+  bound_stack_data := Zmax f.(fn_stacksize) 0
+|}.
+Next Obligation.
+  apply max_over_slots_of_funct_pos.
+Qed.
 Next Obligation.
   apply Zle_ge. eapply Zle_trans. 2: apply Zmax2.
   apply Zge_le. apply max_over_slots_of_funct_pos.
@@ -198,8 +238,65 @@ Qed.
 Next Obligation.
   apply Zle_ge. apply Zmax2.
 Qed.
-
+Next Obligation.
+  generalize (RegSet.elements_3w record_regs_of_function).
+  generalize (RegSet.elements record_regs_of_function).
+  induction 1. constructor. constructor; auto.
+  red; intros; elim H. apply InA_alt. exists x; auto.
+Qed.
+Next Obligation.
+  apply record_regs_of_function_only. apply RegSet.elements_2.
+  apply InA_alt. exists r; auto.
+Qed.
+  
 (** We now show the correctness of the inferred bounds. *)
+
+Lemma record_reg_incr: forall u r r', RegSet.In r' u -> RegSet.In r' (record_reg u r).
+Proof.
+  unfold record_reg; intros. destruct (is_callee_save r); auto. apply RegSet.add_2; auto.
+Qed.
+
+Lemma record_reg_ok: forall u r, is_callee_save r = true -> RegSet.In r (record_reg u r).
+Proof.
+  unfold record_reg; intros. rewrite H. apply RegSet.add_1; auto.
+Qed.
+
+Lemma record_regs_incr: forall r' rl u, RegSet.In r' u -> RegSet.In r' (record_regs u rl).
+Proof.
+  intros. unfold record_regs. apply fold_left_preserves; auto using record_reg_incr.
+Qed.
+
+Lemma record_regs_ok: forall r rl u, In r rl -> is_callee_save r = true -> RegSet.In r (record_regs u rl).
+Proof.
+  intros. unfold record_regs. eapply fold_left_ensures; eauto using record_reg_incr, record_reg_ok. 
+Qed.
+
+Lemma record_regs_of_instr_incr: forall r' u i, RegSet.In r' u -> RegSet.In r' (record_regs_of_instr u i).
+Proof.
+  intros. destruct i; simpl; auto using record_reg_incr, record_regs_incr.
+Qed.
+
+Definition defined_by_instr (r': mreg) (i: instruction) :=
+  match i with
+  | Lgetstack sl ofs ty r => r' = r
+  | Lop op args res => r' = res
+  | Lload chunk addr args dst => r' = dst
+  | Lbuiltin ef args res => In r' (params_of_builtin_res res) \/ In r' (destroyed_by_builtin ef)
+  | _ => False
+  end.
+
+Lemma record_regs_of_instr_ok: forall r' u i, defined_by_instr r' i -> is_callee_save r' = true -> RegSet.In r' (record_regs_of_instr u i).
+Proof.
+  intros. destruct i; simpl in *; try contradiction; subst; auto using record_reg_ok.
+  destruct H; auto using record_regs_incr, record_regs_ok.
+Qed.
+
+Lemma record_regs_of_function_ok: 
+  forall r i, In i f.(fn_code) -> defined_by_instr r i -> is_callee_save r = true -> RegSet.In r record_regs_of_function.
+Proof.
+  intros. unfold record_regs_of_function.
+  eapply fold_left_ensures; eauto using record_regs_of_instr_incr, record_regs_of_instr_ok.
+Qed.
 
 Lemma max_over_list_bound:
   forall (A: Type) (valu: A -> Z) (l: list A) (x: A),
@@ -226,17 +323,6 @@ Proof.
   intros. unfold max_over_instrs. apply max_over_list_bound; auto.
 Qed.
 
-Lemma max_over_regs_of_funct_bound:
-  forall (valu: mreg -> Z) i r,
-  In i f.(fn_code) -> In r (regs_of_instr i) ->
-  valu r <= max_over_regs_of_funct valu.
-Proof.
-  intros. unfold max_over_regs_of_funct.
-  apply Zle_trans with (max_over_regs_of_instr valu i).
-  unfold max_over_regs_of_instr. apply max_over_list_bound. auto.
-  apply max_over_instrs_bound. auto.
-Qed.
-
 Lemma max_over_slots_of_funct_bound:
   forall (valu: slot * Z * typ -> Z) i s,
   In i f.(fn_code) -> In s (slots_of_instr i) ->
@@ -246,28 +332,6 @@ Proof.
   apply Zle_trans with (max_over_slots_of_instr valu i).
   unfold max_over_slots_of_instr. apply max_over_list_bound. auto.
   apply max_over_instrs_bound. auto.
-Qed.
-
-Lemma int_callee_save_bound:
-  forall i r,
-  In i f.(fn_code) -> In r (regs_of_instr i) ->
-  index_int_callee_save r < bound_int_callee_save function_bounds.
-Proof.
-  intros. apply Zlt_le_trans with (int_callee_save r).
-  unfold int_callee_save. omega.
-  unfold function_bounds, bound_int_callee_save.
-  eapply max_over_regs_of_funct_bound; eauto.
-Qed.
-
-Lemma float_callee_save_bound:
-  forall i r,
-  In i f.(fn_code) -> In r (regs_of_instr i) ->
-  index_float_callee_save r < bound_float_callee_save function_bounds.
-Proof.
-  intros. apply Zlt_le_trans with (float_callee_save r).
-  unfold float_callee_save. omega.
-  unfold function_bounds, bound_float_callee_save.
-  eapply max_over_regs_of_funct_bound; eauto.
 Qed.
 
 Lemma local_slot_bound:
@@ -306,12 +370,13 @@ Qed.
 
 Lemma mreg_is_within_bounds:
   forall i, In i f.(fn_code) ->
-  forall r, In r (regs_of_instr i) ->
+  forall r, defined_by_instr r i ->
   mreg_within_bounds function_bounds r.
 Proof.
-  intros. unfold mreg_within_bounds. split.
-  eapply int_callee_save_bound; eauto.
-  eapply float_callee_save_bound; eauto.
+  intros. unfold mreg_within_bounds. intros. 
+  exploit record_regs_of_function_ok; eauto. intros.
+  apply RegSet.elements_1 in H2. rewrite InA_alt in H2. destruct H2 as (r' & A & B). 
+  subst r'; auto.
 Qed.
 
 Lemma slot_is_within_bounds:
@@ -350,7 +415,7 @@ Proof.
   eapply size_arguments_bound; eauto.
 (* builtin *)
   split; intros.
-  apply H1. apply in_or_app; auto.
+  apply H1; auto.
   apply H0. rewrite slots_of_locs_charact; auto.
 Qed.
 
@@ -362,3 +427,90 @@ Qed.
 
 End BOUNDS.
 
+(** Helper to determine the size of the frame area that holds the contents of saved registers. *)
+
+Fixpoint size_callee_save_area_rec (l: list mreg) (ofs: Z) : Z :=
+  match l with
+  | nil => ofs
+  | r :: l =>
+      let ty := mreg_type r in
+      let sz := AST.typesize ty in
+      size_callee_save_area_rec l (align ofs sz + sz)
+  end.
+
+Definition size_callee_save_area (b: bounds) (ofs: Z) : Z :=
+  size_callee_save_area_rec (used_callee_save b) ofs.
+
+Lemma size_callee_save_area_rec_incr:
+  forall l ofs, ofs <= size_callee_save_area_rec l ofs.
+Proof.
+  induction l as [ | r l]; intros; simpl.
+- omega.
+- eapply Zle_trans. 2: apply IHl. 
+  generalize (AST.typesize_pos (mreg_type r)); intros.
+  apply Zle_trans with (align ofs (AST.typesize (mreg_type r))). 
+  apply align_le; auto.
+  omega.
+Qed.
+
+Lemma size_callee_save_area_incr:
+  forall b ofs, ofs <= size_callee_save_area b ofs.
+Proof.
+  intros. apply size_callee_save_area_rec_incr.
+Qed.
+
+(** Layout of the stack frame and its properties.  These definitions
+  are used in the machine-dependent [Stacklayout] module and in the
+  [Stacking] pass. *)
+
+Record frame_env : Type := mk_frame_env {
+  fe_size: Z;
+  fe_ofs_link: Z;
+  fe_ofs_retaddr: Z;
+  fe_ofs_local: Z;
+  fe_ofs_callee_save: Z;
+  fe_stack_data: Z;
+  fe_used_callee_save: list mreg
+}.
+
+(*
+Record frame_env_properties (b: bounds) (fe: frame_env) (fe_ofs_arg: Z) := mk_frame_env_properties {
+  (** Separation property *)
+  fe_separated:
+    Intv.pairwise_disjoint (
+       (fe.(fe_ofs_link), fe.(fe_ofs_link) + 4)
+    :: (fe.(fe_ofs_retaddr), fe.(fe_ofs_retaddr) + 4)
+    :: (fe.(fe_ofs_local), fe.(fe_ofs_local) + 4 * b.(bound_local))
+    :: (fe_ofs_arg, fe_ofs_arg + 4 * b.(bound_outgoing))
+    :: (fe.(fe_ofs_callee_save), size_callee_save_area b fe.(fe_ofs_callee_save))
+    :: (fe.(fe_stack_data), fe.(fe_stack_data) + b.(bound_stack_data))
+    :: nil);
+  (** Inclusion properties *)
+  fe_incl_link:
+    Intv.incl (fe.(fe_ofs_link), fe.(fe_ofs_link) + 4) (0, fe.(fe_size));
+  fe_incl_retaddr:
+    Intv.incl (fe.(fe_ofs_retaddr), fe.(fe_ofs_retaddr) + 4) (0, fe.(fe_size));
+  fe_incl_local:
+    Intv.incl (fe.(fe_ofs_local), fe.(fe_ofs_local) + 4 * b.(bound_local)) (0, fe.(fe_size));
+  fe_incl_outgoing:
+    Intv.incl (fe_ofs_arg, fe_ofs_arg + 4 * b.(bound_outgoing)) (0, fe.(fe_size));
+  fe_incl_callee_save:
+    Intv.incl (fe.(fe_ofs_callee_save), size_callee_save_area b fe.(fe_ofs_callee_save)) (0, fe.(fe_size));
+  fe_incl_stack_data:
+    Intv.incl (fe.(fe_stack_data), fe.(fe_stack_data) + b.(bound_stack_data)) (0, fe.(fe_size));
+  (** Alignment properties *)
+  fe_align_link:
+    (4 | fe.(fe_ofs_link));
+  fe_align_retaddr:
+    (4 | fe.(fe_ofs_retaddr));
+  fe_align_local:
+    (8 | fe.(fe_ofs_local));
+  fe_align_stack_data:
+    (8 | fe.(fe_stack_data));
+  fe_align_size:
+    (4 | fe.(fe_size));
+  (** Callee-save registers *)
+  fe_used_callee_save_eq:
+    fe.(fe_used_callee_save) = b.(used_callee_save)
+}.
+*)

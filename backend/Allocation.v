@@ -781,8 +781,7 @@ Definition no_caller_saves (e: eqs) : bool :=
   EqSet.for_all
    (fun eq =>
      match eloc eq with
-       | R r =>
-           zle 0 (index_int_callee_save r) || zle 0 (index_float_callee_save r)
+       | R r => is_callee_save r
        | S Outgoing _ _ => false
        | S _ _ _ => true
        end)
@@ -821,7 +820,7 @@ Definition compat_left2 (r: reg) (l1 l2: loc) (e: eqs) : bool :=
 
 Definition ros_compatible_tailcall (ros: mreg + ident) : bool :=
   match ros with
-  | inl r => In_dec mreg_eq r destroyed_at_call
+  | inl r => negb (is_callee_save r)
   | inr id => true
   end.
 
