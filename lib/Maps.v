@@ -1201,6 +1201,86 @@ Module EMap(X: EQUALITY_TYPE) <: MAP.
   Qed.
 End EMap.
 
+(** * A partial implementation of trees over any type that injects into type [positive] *)
+
+Module ITree(X: INDEXED_TYPE).
+
+  Definition elt := X.t.
+  Definition elt_eq := X.eq.
+  Definition t : Type -> Type := PTree.t.
+
+  Definition empty (A: Type): t A := PTree.empty A.
+  Definition get (A: Type) (k: elt) (m: t A): option A := PTree.get (X.index k) m.
+  Definition set (A: Type) (k: elt) (v: A) (m: t A): t A := PTree.set (X.index k) v m.
+  Definition remove (A: Type) (k: elt) (m: t A): t A := PTree.remove (X.index k) m.
+
+  Theorem gempty:
+    forall (A: Type) (i: elt), get i (empty A) = None.
+  Proof.
+    intros. apply PTree.gempty.
+  Qed.
+  Theorem gss:
+    forall (A: Type) (i: elt) (x: A) (m: t A), get i (set i x m) = Some x.
+  Proof.
+    intros. apply PTree.gss.
+  Qed.
+  Theorem gso:
+    forall (A: Type) (i j: elt) (x: A) (m: t A),
+    i <> j -> get i (set j x m) = get i m.
+  Proof.
+    intros. apply PTree.gso. red; intros; elim H; apply X.index_inj; auto.
+  Qed.
+  Theorem gsspec:
+    forall (A: Type) (i j: elt) (x: A) (m: t A),
+    get i (set j x m) = if elt_eq i j then Some x else get i m.
+  Proof.
+    intros. destruct (elt_eq i j). subst j; apply gss. apply gso; auto.
+  Qed.
+  Theorem grs:
+    forall (A: Type) (i: elt) (m: t A), get i (remove i m) = None.
+  Proof.
+    intros. apply PTree.grs.
+  Qed.
+  Theorem gro:
+    forall (A: Type) (i j: elt) (m: t A),
+    i <> j -> get i (remove j m) = get i m.
+  Proof.
+    intros. apply PTree.gro. red; intros; elim H; apply X.index_inj; auto.
+  Qed.
+  Theorem grspec:
+    forall (A: Type) (i j: elt) (m: t A),
+    get i (remove j m) = if elt_eq i j then None else get i m.
+  Proof.
+    intros. destruct (elt_eq i j). subst j; apply grs. apply gro; auto.
+  Qed.
+
+  Definition beq: forall (A: Type), (A -> A -> bool) -> t A -> t A -> bool := PTree.beq.
+  Theorem beq_sound:
+    forall (A: Type) (eqA: A -> A -> bool) (t1 t2: t A),
+    beq eqA t1 t2 = true ->
+    forall (x: elt),
+     match get x t1, get x t2 with
+     | None, None => True
+     | Some y1, Some y2 => eqA y1 y2 = true
+     | _, _ => False
+    end.
+  Proof.
+    unfold beq, get. intros. rewrite PTree.beq_correct in H. apply H. 
+  Qed.
+
+  Definition combine: forall (A B C: Type), (option A -> option B -> option C) -> t A -> t B -> t C := PTree.combine.
+  Theorem gcombine:
+    forall (A B C: Type) (f: option A -> option B -> option C),
+    f None None = None ->
+    forall (m1: t A) (m2: t B) (i: elt),
+    get i (combine f m1 m2) = f (get i m1) (get i m2).
+  Proof.
+    intros. apply PTree.gcombine. auto.
+  Qed.
+End ITree.
+
+Module ZTree := ITree(ZIndexed).
+
 (** * Additional properties over trees *)
 
 Module Tree_Properties(T: TREE).

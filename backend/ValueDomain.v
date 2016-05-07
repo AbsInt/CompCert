@@ -2409,8 +2409,7 @@ Qed.
 (** Abstracting memory blocks *)
 
 Inductive acontent : Type :=
-  | ACany
-  | ACval (chunk: memory_chunk) (av: aval).
+ | ACval (chunk: memory_chunk) (av: aval).
 
 Definition eq_acontent : forall (c1 c2: acontent), {c1=c2} + {c1<>c2}.
 Proof.
@@ -2418,15 +2417,14 @@ Proof.
 Defined.
 
 Record ablock : Type := ABlock {
-  ab_contents: ZMap.t acontent;
-  ab_summary: aptr;
-  ab_default: fst ab_contents = ACany
+  ab_contents: ZTree.t acontent;
+  ab_summary: aptr
 }.
 
-Local Notation "a ## b" := (ZMap.get b a) (at level 1).
+Local Notation "a ## b" := (ZTree.get b a) (at level 1).
 
 Definition ablock_init (p: aptr) : ablock :=
-  {| ab_contents := ZMap.init ACany; ab_summary := p; ab_default := refl_equal _ |}.
+  {| ab_contents := ZTree.empty _; ab_summary := p |}.
 
 Definition chunk_compat (chunk chunk': memory_chunk) : bool :=
   match chunk, chunk' with
@@ -2443,8 +2441,8 @@ Definition chunk_compat (chunk chunk': memory_chunk) : bool :=
 
 Definition ablock_load (chunk: memory_chunk) (ab: ablock) (i: Z) : aval :=
   match ab.(ab_contents)##i with
-  | ACany => vnormalize chunk (Ifptr ab.(ab_summary))
-  | ACval chunk' av =>
+  | None => vnormalize chunk (Ifptr ab.(ab_summary))
+  | Some (ACval chunk' av) =>
       if chunk_compat chunk chunk'
       then vnormalize chunk av
       else vnormalize chunk (Ifptr ab.(ab_summary))
@@ -2453,22 +2451,22 @@ Definition ablock_load (chunk: memory_chunk) (ab: ablock) (i: Z) : aval :=
 Definition ablock_load_anywhere (chunk: memory_chunk) (ab: ablock) : aval :=
   vnormalize chunk (Ifptr ab.(ab_summary)).
 
-Function inval_after (lo: Z) (hi: Z) (c: ZMap.t acontent) { wf (Zwf lo) hi } : ZMap.t acontent :=
+Function inval_after (lo: Z) (hi: Z) (c: ZTree.t acontent) { wf (Zwf lo) hi } : ZTree.t acontent :=
   if zle lo hi
-  then inval_after lo (hi - 1) (ZMap.set hi ACany c)
+  then inval_after lo (hi - 1) (ZTree.remove hi c)
   else c.
 Proof.
   intros; red; omega.
   apply Zwf_well_founded.
 Qed.
 
-Definition inval_if (hi: Z) (lo: Z) (c: ZMap.t acontent) :=
+Definition inval_if (hi: Z) (lo: Z) (c: ZTree.t acontent) :=
   match c##lo with
-  | ACany => c
-  | ACval chunk av => if zle (lo + size_chunk chunk) hi then c else ZMap.set lo ACany c
+  | None => c
+  | Some (ACval chunk av) => if zle (lo + size_chunk chunk) hi then c else ZTree.remove lo c
   end.
 
-Function inval_before (hi: Z) (lo: Z) (c: ZMap.t acontent) { wf (Zwf_up hi) lo } : ZMap.t acontent :=
+Function inval_before (hi: Z) (lo: Z) (c: ZTree.t acontent) { wf (Zwf_up hi) lo } : ZTree.t acontent :=
   if zlt lo hi
   then inval_before hi (lo + 1) (inval_if hi lo c)
   else c.
@@ -2477,45 +2475,25 @@ Proof.
   apply Zwf_up_well_founded.
 Qed.
 
-Remark fst_inval_after: forall lo hi c, fst (inval_after lo hi c) = fst c.
-Proof.
-  intros. functional induction (inval_after lo hi c); auto.
-Qed.
-
-Remark fst_inval_before: forall hi lo c, fst (inval_before hi lo c) = fst c.
-Proof.
-  intros. functional induction (inval_before hi lo c); auto.
-  rewrite IHt. unfold inval_if. destruct c##lo; auto.
-  destruct (zle (lo + size_chunk chunk) hi); auto.
-Qed.
-
-Program Definition ablock_store (chunk: memory_chunk) (ab: ablock) (i: Z) (av: aval) : ablock :=
+Definition ablock_store (chunk: memory_chunk) (ab: ablock) (i: Z) (av: aval) : ablock :=
   {| ab_contents :=
-       ZMap.set i (ACval chunk av)
+       ZTree.set i (ACval chunk av)
          (inval_before i (i - 7)
             (inval_after (i + 1) (i + size_chunk chunk - 1) ab.(ab_contents)));
      ab_summary :=
-       vplub av ab.(ab_summary);
-     ab_default := _ |}.
-Next Obligation.
-  rewrite fst_inval_before, fst_inval_after. apply ab_default.
-Qed.
+       vplub av ab.(ab_summary) |}.
 
 Definition ablock_store_anywhere (chunk: memory_chunk) (ab: ablock) (av: aval) : ablock :=
   ablock_init (vplub av ab.(ab_summary)).
 
 Definition ablock_loadbytes (ab: ablock) : aptr := ab.(ab_summary).
 
-Program Definition ablock_storebytes (ab: ablock) (p: aptr) (ofs: Z) (sz: Z) :=
+Definition ablock_storebytes (ab: ablock) (p: aptr) (ofs: Z) (sz: Z) :=
   {| ab_contents :=
        inval_before ofs (ofs - 7)
          (inval_after ofs (ofs + sz - 1) ab.(ab_contents));
      ab_summary :=
-       plub p ab.(ab_summary);
-     ab_default := _ |}.
-Next Obligation.
-  rewrite fst_inval_before, fst_inval_after. apply ab_default.
-Qed.
+       plub p ab.(ab_summary) |}.
 
 Definition ablock_storebytes_anywhere (ab: ablock) (p: aptr) :=
   ablock_init (plub p ab.(ab_summary)).
@@ -2767,7 +2745,7 @@ Lemma ablock_init_sound:
   forall m b p, smatch m b p -> bmatch m b (ablock_init p).
 Proof.
   intros; split; auto; intros.
-  unfold ablock_load, ablock_init; simpl. rewrite ZMap.gi.
+  unfold ablock_load, ablock_init; simpl. rewrite ZTree.gempty.
   eapply vnormalize_cast; eauto. eapply H; eauto.
 Qed.
 
@@ -2786,19 +2764,19 @@ Remark inval_after_outside:
   forall i lo hi c, i < lo \/ i > hi -> (inval_after lo hi c)##i = c##i.
 Proof.
   intros until c. functional induction (inval_after lo hi c); intros.
-  rewrite IHt by omega. apply ZMap.gso. unfold ZIndexed.t; omega.
+  rewrite IHt by omega. apply ZTree.gro. unfold ZTree.elt, ZIndexed.t; omega.
   auto.
 Qed.
 
 Remark inval_after_contents:
   forall chunk av i lo hi c,
-  (inval_after lo hi c)##i = ACval chunk av ->
-  c##i = ACval chunk av /\ (i < lo \/ i > hi).
+  (inval_after lo hi c)##i = Some (ACval chunk av) ->
+  c##i = Some (ACval chunk av) /\ (i < lo \/ i > hi).
 Proof.
   intros until c. functional induction (inval_after lo hi c); intros.
   destruct (zeq i hi).
-  subst i. rewrite inval_after_outside in H by omega. rewrite ZMap.gss in H. discriminate.
-  exploit IHt; eauto. intros [A B]. rewrite ZMap.gso in A by auto. split. auto. omega.
+  subst i. rewrite inval_after_outside in H by omega. rewrite ZTree.grs in H. discriminate.
+  exploit IHt; eauto. intros [A B]. rewrite ZTree.gro in A by auto. split. auto. omega.
   split. auto. omega.
 Qed.
 
@@ -2806,28 +2784,28 @@ Remark inval_before_outside:
   forall i hi lo c, i < lo \/ i >= hi -> (inval_before hi lo c)##i = c##i.
 Proof.
   intros until c. functional induction (inval_before hi lo c); intros.
-  rewrite IHt by omega. unfold inval_if. destruct (c##lo); auto.
+  rewrite IHt by omega. unfold inval_if. destruct (c##lo) as [[chunk av]|]; auto.
   destruct (zle (lo + size_chunk chunk) hi); auto.
-  apply ZMap.gso. unfold ZIndexed.t; omega.
+  apply ZTree.gro. unfold ZTree.elt, ZIndexed.t; omega.
   auto.
 Qed.
 
 Remark inval_before_contents_1:
   forall i chunk av lo hi c,
-  lo <= i < hi -> (inval_before hi lo c)##i = ACval chunk av ->
-  c##i = ACval chunk av /\ i + size_chunk chunk <= hi.
+  lo <= i < hi -> (inval_before hi lo c)##i = Some(ACval chunk av) ->
+  c##i = Some(ACval chunk av) /\ i + size_chunk chunk <= hi.
 Proof.
   intros until c. functional induction (inval_before hi lo c); intros.
 - destruct (zeq lo i).
 + subst i. rewrite inval_before_outside in H0 by omega.
-  unfold inval_if in H0. destruct (c##lo) eqn:C. congruence.
+  unfold inval_if in H0. destruct (c##lo) as [[chunk0 v0]|] eqn:C; try congruence.
   destruct (zle (lo + size_chunk chunk0) hi).
   rewrite C in H0; inv H0. auto.
-  rewrite ZMap.gss in H0. congruence.
+  rewrite ZTree.grs in H0. congruence.
 + exploit IHt. omega. auto. intros [A B]; split; auto.
-  unfold inval_if in A. destruct (c##lo) eqn:C. auto.
+  unfold inval_if in A. destruct (c##lo) as [[chunk0 v0]|] eqn:C; auto.
   destruct (zle (lo + size_chunk chunk0) hi); auto.
-  rewrite ZMap.gso in A; auto.
+  rewrite ZTree.gro in A; auto.
 - omegaContradiction.
 Qed.
 
@@ -2838,8 +2816,8 @@ Qed.
 
 Remark inval_before_contents:
   forall i c chunk' av' j,
-  (inval_before i (i - 7) c)##j = ACval chunk' av' ->
-  c##j = ACval chunk' av' /\ (j + size_chunk chunk' <= i \/ i <= j).
+  (inval_before i (i - 7) c)##j = Some (ACval chunk' av') ->
+  c##j = Some (ACval chunk' av') /\ (j + size_chunk chunk' <= i \/ i <= j).
 Proof.
   intros. destruct (zlt j (i - 7)).
   rewrite inval_before_outside in H by omega.
@@ -2852,15 +2830,15 @@ Qed.
 
 Lemma ablock_store_contents:
   forall chunk ab i av j chunk' av',
-  (ablock_store chunk ab i av).(ab_contents)##j = ACval chunk' av' ->
+  (ablock_store chunk ab i av).(ab_contents)##j = Some(ACval chunk' av') ->
      (i = j /\ chunk' = chunk /\ av' = av)
-  \/ (ab.(ab_contents)##j = ACval chunk' av'
+  \/ (ab.(ab_contents)##j = Some(ACval chunk' av')
       /\ (j + size_chunk chunk' <= i \/ i + size_chunk chunk <= j)).
 Proof.
   unfold ablock_store; simpl; intros.
   destruct (zeq i j).
-  subst j. rewrite ZMap.gss in H. inv H; auto.
-  right. rewrite ZMap.gso in H by auto.
+  subst j. rewrite ZTree.gss in H. inv H; auto.
+  right. rewrite ZTree.gso in H by auto.
   exploit inval_before_contents; eauto. intros [A B].
   exploit inval_after_contents; eauto. intros [C D].
   split. auto. omega.
@@ -2887,8 +2865,7 @@ Proof.
   assert (SUMMARY: vmatch v' (vnormalize chunk' (Ifptr (vplub av ab.(ab_summary))))).
   { exploit smatch_store; eauto. intros [A B]. eapply vnormalize_cast; eauto. }
   unfold ablock_load.
-  destruct ((ab_contents (ablock_store chunk ab ofs av)) ## ofs') as [ | chunk1 av1] eqn:C.
-  apply SUMMARY.
+  destruct ((ab_contents (ablock_store chunk ab ofs av)) ## ofs') as [[chunk1 av1]|] eqn:C; auto.
   destruct (chunk_compat chunk' chunk1) eqn:COMPAT; auto.
   exploit chunk_compat_true; eauto. intros (U & V & W).
   exploit ablock_store_contents; eauto. intros [(P & Q & R) | (P & Q)].
@@ -2927,8 +2904,8 @@ Qed.
 
 Lemma ablock_storebytes_contents:
   forall ab p i sz j chunk' av',
-  (ablock_storebytes ab p i sz).(ab_contents)##j = ACval chunk' av' ->
-  ab.(ab_contents)##j = ACval chunk' av'
+  (ablock_storebytes ab p i sz).(ab_contents)##j = Some(ACval chunk' av') ->
+  ab.(ab_contents)##j = Some (ACval chunk' av')
   /\ (j + size_chunk chunk' <= i \/ i + Zmax sz 0 <= j).
 Proof.
   unfold ablock_storebytes; simpl; intros.
@@ -2951,8 +2928,7 @@ Proof.
   assert (SUMMARY: vmatch v' (vnormalize chunk' (Ifptr (plub p ab.(ab_summary))))).
   { exploit smatch_storebytes; eauto. intros [A B]. eapply vnormalize_cast; eauto. }
   unfold ablock_load.
-  destruct (ab_contents (ablock_storebytes ab p ofs sz))##ofs' eqn:C.
-  exact SUMMARY.
+  destruct (ab_contents (ablock_storebytes ab p ofs sz))##ofs' as [[chunk av]|] eqn:C; auto.
   destruct (chunk_compat chunk' chunk) eqn:COMPAT; auto.
   exploit chunk_compat_true; eauto. intros (U & V & W).
   exploit ablock_storebytes_contents; eauto. intros [A B].
@@ -2966,8 +2942,7 @@ Qed.
 
 Definition bbeq (ab1 ab2: ablock) : bool :=
   eq_aptr ab1.(ab_summary) ab2.(ab_summary) &&
-  PTree.beq (fun c1 c2 => proj_sumbool (eq_acontent c1 c2))
-            (snd ab1.(ab_contents)) (snd ab2.(ab_contents)).
+  ZTree.beq (fun c1 c2 => proj_sumbool (eq_acontent c1 c2)) ab1.(ab_contents) ab2.(ab_contents).
 
 Lemma bbeq_load:
   forall ab1 ab2,
@@ -2977,15 +2952,12 @@ Lemma bbeq_load:
 Proof.
   unfold bbeq; intros. InvBooleans. split.
 - unfold ablock_load_anywhere; intros; congruence.
-- rewrite PTree.beq_correct in H1.
-  assert (A: forall i, ZMap.get i (ab_contents ab1) = ZMap.get i (ab_contents ab2)).
+- assert (A: forall i, ZTree.get i (ab_contents ab1) = ZTree.get i (ab_contents ab2)).
   {
-    intros. unfold ZMap.get, PMap.get. set (j := ZIndexed.index i).
-    specialize (H1 j).
-    destruct (snd (ab_contents ab1))!j; destruct (snd (ab_contents ab2))!j; try contradiction.
-    InvBooleans; auto.
-    rewrite ! ab_default. auto.
-  }
+    intros. exploit ZTree.beq_sound; eauto. instantiate (1 := i). 
+    destruct (ab_contents ab1)##i, (ab_contents ab2)##i; intros; try contradiction.
+    InvBooleans; subst; auto.
+    auto. }
   intros. unfold ablock_load. rewrite A, H.
   destruct (ab_contents ab2)##i; auto.
 Qed.
@@ -3001,7 +2973,7 @@ Qed.
 
 (** Least upper bound *)
 
-Definition combine_acontents_opt (c1 c2: option acontent) : option acontent :=
+Definition combine_acontents (c1 c2: option acontent) : option acontent :=
   match c1, c2 with
   | Some (ACval chunk1 v1), Some (ACval chunk2 v2) =>
       if chunk_eq chunk1 chunk2 then Some(ACval chunk1 (vlub v1 v2)) else None
@@ -3009,33 +2981,9 @@ Definition combine_acontents_opt (c1 c2: option acontent) : option acontent :=
       None
   end.
 
-Definition combine_contentmaps (m1 m2: ZMap.t acontent) : ZMap.t acontent :=
-  (ACany, PTree.combine combine_acontents_opt (snd m1) (snd m2)).
-
 Definition blub (ab1 ab2: ablock) : ablock :=
-  {| ab_contents := combine_contentmaps ab1.(ab_contents) ab2.(ab_contents);
-     ab_summary := plub ab1.(ab_summary) ab2.(ab_summary);
-     ab_default := refl_equal _ |}.
-
-Definition combine_acontents (c1 c2: acontent) : acontent :=
-  match c1, c2 with
-  | ACval chunk1 v1, ACval chunk2 v2 =>
-      if chunk_eq chunk1 chunk2 then ACval chunk1 (vlub v1 v2) else ACany
-  | _, _ => ACany
-  end.
-
-Lemma get_combine_contentmaps:
-  forall m1 m2 i,
-  fst m1 = ACany -> fst m2 = ACany ->
-  ZMap.get i (combine_contentmaps m1 m2) = combine_acontents (ZMap.get i m1) (ZMap.get i m2).
-Proof.
-  intros. destruct m1 as [dfl1 pt1]. destruct m2 as [dfl2 pt2]; simpl in *.
-  subst dfl1 dfl2. unfold combine_contentmaps, ZMap.get, PMap.get, fst, snd.
-  set (j := ZIndexed.index i).
-  rewrite PTree.gcombine by auto.
-  destruct (pt1!j) as [[]|]; destruct (pt2!j) as [[]|]; simpl; auto.
-  destruct (chunk_eq chunk chunk0); auto.
-Qed.
+  {| ab_contents := ZTree.combine combine_acontents ab1.(ab_contents) ab2.(ab_contents);
+     ab_summary := plub ab1.(ab_summary) ab2.(ab_summary) |}.
 
 Lemma smatch_lub_l:
   forall m b p q, smatch m b p -> smatch m b (plub p q).
@@ -3064,10 +3012,11 @@ Proof.
   { exploit smatch_lub_l; eauto. instantiate (1 := ab_summary y).
     intros [SUMM _]. eapply vnormalize_cast; eauto. }
   exploit BM2; eauto.
-  unfold ablock_load; simpl. rewrite get_combine_contentmaps by (apply ab_default).
-  unfold combine_acontents; destruct (ab_contents x)##ofs, (ab_contents y)##ofs; auto.
-  destruct (chunk_eq chunk0 chunk1); auto. subst chunk0.
-  destruct (chunk_compat chunk chunk1); auto.
+  unfold ablock_load; simpl. rewrite ZTree.gcombine by auto. 
+  unfold combine_acontents;
+  destruct (ab_contents x)##ofs as [[chunkx avx]|], (ab_contents y)##ofs as [[chunky avy]|]; auto.
+  destruct (chunk_eq chunkx chunky); auto. subst chunky.
+  destruct (chunk_compat chunk chunkx); auto.
   intros. eapply vmatch_ge; eauto. apply vnormalize_monotone. apply vge_lub_l.
 Qed.
 
@@ -3082,10 +3031,11 @@ Proof.
   { exploit smatch_lub_r; eauto. instantiate (1 := ab_summary x).
     intros [SUMM _]. eapply vnormalize_cast; eauto. }
   exploit BM2; eauto.
-  unfold ablock_load; simpl. rewrite get_combine_contentmaps by (apply ab_default).
-  unfold combine_acontents; destruct (ab_contents x)##ofs, (ab_contents y)##ofs; auto.
-  destruct (chunk_eq chunk0 chunk1); auto. subst chunk0.
-  destruct (chunk_compat chunk chunk1); auto.
+  unfold ablock_load; simpl. rewrite ZTree.gcombine by auto. 
+  unfold combine_acontents;
+  destruct (ab_contents x)##ofs as [[chunkx avx]|], (ab_contents y)##ofs as [[chunky avy]|]; auto.
+  destruct (chunk_eq chunkx chunky); auto. subst chunky.
+  destruct (chunk_compat chunk chunkx); auto.
   intros. eapply vmatch_ge; eauto. apply vnormalize_monotone. apply vge_lub_r.
 Qed.
 
