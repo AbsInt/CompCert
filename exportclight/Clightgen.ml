@@ -67,9 +67,15 @@ let process_c_file sourcename =
     compile_c_file sourcename preproname (prefixname ^ ".v")
   end
 
+let version_string =
+  if Version.buildnr <> "" && Version.tag <> "" then
+    sprintf "The CompCert Clight generator, %s, Build: %s, Tag: %s\n" Version.version Version.buildnr Version.tag
+  else
+    "The CompCert Clight generator, version "^ Version.version ^ "\n"
+
 let usage_string =
-"The CompCert Clight generator\n\
-Usage: clightgen [options] <source files>\n\
+  version_string ^
+"Usage: clightgen [options] <source files>\n\
 Recognized source files:\n\
 \  .c             C source file\n\
 Processing options:\n\
@@ -95,6 +101,9 @@ General options:\n\
 let print_usage_and_exit _ =
   printf "%s" usage_string; exit 0
 
+let print_version_and_exit _ =
+  printf "%s" version_string; exit 0
+
 let language_support_options = [
   option_fbitfields; option_flongdouble;
   option_fstruct_passing; option_fvararg_calls; option_funprototyped;
@@ -111,6 +120,9 @@ let cmdline_actions =
 (* Getting help *)
   Exact "-help", Self print_usage_and_exit;
   Exact "--help", Self print_usage_and_exit;
+(* Getting version info *)
+  Exact "-version", Self print_version_and_exit;
+  Exact "--version", Self print_version_and_exit;
 (* Processing options *)
   Exact "-E", Set option_E;]
 (* Preprocessing options *)
