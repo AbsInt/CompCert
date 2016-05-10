@@ -193,7 +193,7 @@ case "$target" in
     clinker_options="-m32"
     libmath="-lm";;
   ia32-macosx)
-    # kernel major versions count upwards from 4 for OSX 10.0 to 11 for OSX 10.11
+    # kernel major versions count upwards from 4 for OSX 10.0 to 15 for OSX 10.11
     kernel_major=`uname -r | cut -d "." -f 1`
     arch="ia32"
     model="sse2"
