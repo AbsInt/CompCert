@@ -193,6 +193,8 @@ case "$target" in
     clinker_options="-m32"
     libmath="-lm";;
   ia32-macosx)
+    # kernel major versions count upwards from 4 for OSX 10.0 to 11 for OSX 10.11
+    kernel_major=`uname -r | cut -d "." -f 1`
     arch="ia32"
     model="sse2"
     abi="macosx"
@@ -205,12 +207,14 @@ case "$target" in
     casm="${toolprefix}gcc"
     casm_options="-arch i386 -c"
     clinker="${toolprefix}gcc"
-    case `uname -r` in
-      [1-9].*|10.*|11.*)    # up to MacOS 10.7 included
-        clinker_option="-arch i386";;
-      *)                    # MacOS 10.8 and up
-        clinker_option="-arch i386 -Wl,-no_pie";;
-    esac
+    if [[ $kernel_major -gt 11 ]]
+    then
+      # OSX >= 10.8
+      clinker_options="-arch i386 -Wl,-no_pie" ;;
+    else
+      # OSX <= 10.7
+      clinker_options="-arch i386" ;;
+    fi
     libmath="";;
   ia32-cygwin)
     arch="ia32"
