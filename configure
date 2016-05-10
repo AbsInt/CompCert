@@ -210,10 +210,10 @@ case "$target" in
     if [[ $kernel_major -gt 11 ]]
     then
       # OSX >= 10.8
-      clinker_options="-arch i386 -Wl,-no_pie" ;;
+      clinker_options="-arch i386 -Wl,-no_pie"
     else
       # OSX <= 10.7
-      clinker_options="-arch i386" ;;
+      clinker_options="-arch i386"
     fi
     libmath="";;
   ia32-cygwin)
