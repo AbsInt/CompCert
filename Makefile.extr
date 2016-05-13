@@ -127,4 +127,5 @@ clean:
 
 depend: $(GENERATED)
 	@echo "Analyzing OCaml dependencies"
-	@$(OCAMLDEP) $(foreach d,$(DIRS),$(wildcard $(d)/*.mli $(d)/*.ml)) $(GENERATED) >.depend.extr || { rm -f .depend.extr; exit 2; }
+	@$(OCAMLDEP) $(foreach d,$(DIRS),$(wildcard $(d)/*.ml)) $(GENERATED) >.depend.extr || { rm -f .depend.extr; exit 2; }
+	@$(OCAMLDEP) $(foreach d,$(DIRS),$(wildcard $(d)/*.mli)) $(GENERATED) >>.depend.extr || { rm -f .depend.extr; exit 2; }
