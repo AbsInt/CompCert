@@ -239,7 +239,8 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
 (* Generate code to load the address of id + ofs in register r *)
 
     let loadsymbol oc r id ofs =
-      if !Clflags.option_mthumb then begin
+      let o = camlint_of_coqint ofs in
+      if o >= -32768l && o <= 32767l && !Clflags.option_mthumb then begin
         fprintf oc "	movw	%a, #:lower16:%a\n"
           ireg r symbol_offset (id, ofs);
         fprintf oc "	movt	%a, #:upper16:%a\n"
