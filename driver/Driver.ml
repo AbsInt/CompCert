@@ -551,6 +551,7 @@ Linking options:
   -static        Prevent linking with the shared libraries
   -T <file>      Use <file> as linker command file
   -Wl,<opt>      Pass option <opt> to the linker
+  -WUl,<opt>     (GCC only) Pass option <opt> to the gcc used for linking
   -Xlinker <opt> Pass <opt> as an option to the linker
   -u <symb>      Pretend the symbol <symb> is undefined to force linking of
                  library modules to define it.
@@ -738,6 +739,7 @@ let cmdline_actions =
   else
     push_linker_arg s);
   Prefix "-Wl,", Self push_linker_arg;
+  Prefix "-WUl,", Self (fun s -> List.iter push_linker_arg (explode_comma_option s));
   Exact "-u", Self push_linker_arg;
 (* Tracing options *)
   Exact "-dprepro", Set option_dprepro;
