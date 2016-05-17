@@ -64,6 +64,11 @@ let vlocs ll = List.map vloc ll
 let vmreg mr = L(R mr)
 let vmregs mrl = List.map vmreg mrl
 
+let rec vlocpairs = function
+  | [] -> []
+  | One l :: ll -> L l :: vlocpairs ll
+  | Twolong(l1, l2) :: ll -> L l1 :: L l2 :: vlocpairs ll
+
 (* Tests over variables *)
 
 let is_stack_reg = function

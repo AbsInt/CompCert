@@ -73,37 +73,47 @@ Definition dummy_float_reg := X0.   (**r Used in [Regalloc]. *)
 (** ** Location of function result *)
 
 (** The result value of a function is passed back to the caller in
-  registers [AX] or [FP0], depending on the type of the returned value.
+  registers [AX] or [DX:AX] or [FP0], depending on the type of the returned value.
   We treat a function without result as a function with one integer result. *)
 
-Definition loc_result (s: signature) : list mreg :=
+Definition loc_result (s: signature) : rpair mreg :=
   match s.(sig_res) with
-  | None => AX :: nil
-  | Some (Tint | Tany32) => AX :: nil
-  | Some (Tfloat | Tsingle) => FP0 :: nil
-  | Some Tany64 => X0 :: nil
-  | Some Tlong => DX :: AX :: nil
+  | None => One AX
+  | Some (Tint | Tany32) => One AX
+  | Some (Tfloat | Tsingle) => One FP0
+  | Some Tany64 => One X0
+  | Some Tlong => Twolong DX AX
   end.
 
 (** The result registers have types compatible with that given in the signature. *)
 
 Lemma loc_result_type:
   forall sig,
-  subtype_list (proj_sig_res' sig) (map mreg_type (loc_result sig)) = true.
+  subtype (proj_sig_res sig) (typ_rpair mreg_type (loc_result sig)) = true.
 Proof.
-  intros. unfold proj_sig_res', loc_result. destruct (sig_res sig) as [[]|]; auto.
+  intros. unfold proj_sig_res, loc_result. destruct (sig_res sig) as [[]|]; auto.
 Qed.
 
 (** The result locations are caller-save registers *)
 
 Lemma loc_result_caller_save:
-  forall (s: signature) (r: mreg),
-  In r (loc_result s) -> is_callee_save r = false.
+  forall (s: signature),
+  forall_rpair (fun r => is_callee_save r = false) (loc_result s).
 Proof.
   intros.
-  assert (r = AX \/ r = DX \/ r = FP0 \/ r = X0).
-    unfold loc_result in H. destruct (sig_res s) as [[]|]; simpl in H; intuition.
-  destruct H0 as [A | [A | [A | A]]]; subst r; reflexivity.
+  unfold loc_result. destruct (sig_res s) as [[]|]; simpl; auto.
+Qed.
+
+(** If the result is in a pair of registers, those registers are distinct and have type [Tint] at least. *)
+
+Lemma loc_result_pair:
+  forall sg,
+  match loc_result sg with
+  | One _ => True
+  | Twolong r1 r2 => r1 <> r2 /\ sg.(sig_res) = Some Tlong /\ subtype Tint (mreg_type r1) = true /\ subtype Tint (mreg_type r2) = true
+  end.
+Proof.
+  intros; unfold loc_result; destruct (sig_res sg) as [[]|]; auto. intuition congruence. 
 Qed.
 
 (** ** Location of function arguments *)
@@ -111,21 +121,21 @@ Qed.
 (** All arguments are passed on stack. (Snif.) *)
 
 Fixpoint loc_arguments_rec
-    (tyl: list typ) (ofs: Z) {struct tyl} : list loc :=
+    (tyl: list typ) (ofs: Z) {struct tyl} : list (rpair loc) :=
   match tyl with
   | nil => nil
-  | Tint :: tys => S Outgoing ofs Tint :: loc_arguments_rec tys (ofs + 1)
-  | Tfloat :: tys => S Outgoing ofs Tfloat :: loc_arguments_rec tys (ofs + 2)
-  | Tsingle :: tys => S Outgoing ofs Tsingle :: loc_arguments_rec tys (ofs + 1)
-  | Tlong :: tys => S Outgoing (ofs + 1) Tint :: S Outgoing ofs Tint :: loc_arguments_rec tys (ofs + 2)
-  | Tany32 :: tys => S Outgoing ofs Tany32 :: loc_arguments_rec tys (ofs + 1)
-  | Tany64 :: tys => S Outgoing ofs Tany64 :: loc_arguments_rec tys (ofs + 2)
+  | ty :: tys =>
+      match ty with
+      | Tlong => Twolong (S Outgoing (ofs + 1) Tint) (S Outgoing ofs Tint)
+      | _     => One (S Outgoing ofs ty)
+      end
+      :: loc_arguments_rec tys (ofs + typesize ty)
   end.
 
 (** [loc_arguments s] returns the list of locations where to store arguments
   when calling a function with signature [s].  *)
 
-Definition loc_arguments (s: signature) : list loc :=
+Definition loc_arguments (s: signature) : list (rpair loc) :=
   loc_arguments_rec s.(sig_args) 0.
 
 (** [size_arguments s] returns the number of [Outgoing] slots used
@@ -151,37 +161,36 @@ Definition loc_argument_acceptable (l: loc) : Prop :=
   | _ => False
   end.
 
-Remark loc_arguments_rec_charact:
-  forall tyl ofs l,
-  In l (loc_arguments_rec tyl ofs) ->
+Definition loc_argument_charact (ofs: Z) (l: loc) : Prop :=
   match l with
   | S Outgoing ofs' ty => ofs' >= ofs /\ typealign ty = 1
   | _ => False
   end.
+
+Remark loc_arguments_rec_charact:
+  forall tyl ofs p,
+  In p (loc_arguments_rec tyl ofs) -> forall_rpair (loc_argument_charact ofs) p.
 Proof.
-  induction tyl; simpl loc_arguments_rec; intros.
+  assert (X: forall ofs1 ofs2 l, loc_argument_charact ofs2 l -> ofs1 <= ofs2 -> loc_argument_charact ofs1 l).
+  { destruct l; simpl; intros; auto. destruct sl; auto. intuition omega. }
+  induction tyl as [ | ty tyl]; simpl loc_arguments_rec; intros.
+- contradiction.
 - destruct H.
-- assert (REC: forall ofs1, In l (loc_arguments_rec tyl ofs1) -> ofs1 > ofs ->
-               match l with
-               | R _ => False
-               | S Local _ _ => False
-               | S Incoming _ _ => False
-               | S Outgoing ofs' ty => ofs' >= ofs /\ typealign ty = 1
-               end).
-  { intros. exploit IHtyl; eauto. destruct l; auto. destruct sl; intuition omega
-. }
-  destruct a; simpl in H; repeat (destruct H);
-  ((eapply REC; eauto; omega) || (split; [omega|reflexivity])).
++ destruct ty; subst p; simpl; omega.
++ apply IHtyl in H. generalize (typesize_pos ty); intros. destruct p; simpl in *.
+* eapply X; eauto; omega.
+* destruct H; split; eapply X; eauto; omega.
 Qed.
 
 Lemma loc_arguments_acceptable:
-  forall (s: signature) (l: loc),
-  In l (loc_arguments s) -> loc_argument_acceptable l.
+  forall (s: signature) (p: rpair loc),
+  In p (loc_arguments s) -> forall_rpair loc_argument_acceptable p.
 Proof.
   unfold loc_arguments; intros.
   exploit loc_arguments_rec_charact; eauto.
-  unfold loc_argument_acceptable.
-  destruct l as [r | [] ofs ty]; intuition auto. rewrite H2; apply Z.divide_1_l. 
+  assert (X: forall l, loc_argument_charact 0 l -> loc_argument_acceptable l).
+  { destruct l as [r | [] ofs ty]; simpl; intuition auto. rewrite H2; apply Z.divide_1_l. }
+  destruct p; simpl; intuition auto.
 Qed.
 
 Hint Resolve loc_arguments_acceptable: locs.
@@ -204,23 +213,41 @@ Proof.
   apply size_arguments_rec_above.
 Qed.
 
+(*
+Lemma loc_arguments_bounded:
+  forall (s: signature) (p: rpair loc),
+  In p (loc_arguments s) ->
+  forall_rpair
+    (fun l => match l with S Outgoing ofs ty => ofs + typesize ty <= size_arguments s | _ => True end)
+    p.
+Proof.
+  intros until p. unfold loc_arguments, size_arguments. generalize (sig_args s) 0.
+  induction l as [ | ty l]; simpl; intros x IN.
+- contradiction.
+- destruct IN as [EQ|IN].
++ generalize (size_arguments_rec_above l (x + typesize ty)); intros A.
+  subst p. destruct ty; simpl in *; omega.
++ apply IHl; auto.
+Qed.
+*)
 Lemma loc_arguments_bounded:
   forall (s: signature) (ofs: Z) (ty: typ),
-  In (S Outgoing ofs ty) (loc_arguments s) ->
+  In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments s)) ->
   ofs + typesize ty <= size_arguments s.
 Proof.
   intros until ty. unfold loc_arguments, size_arguments. generalize (sig_args s) 0.
-  induction l; simpl; intros.
+  induction l as [ | t l]; simpl; intros x IN.
 - contradiction.
-- Ltac decomp :=
+- rewrite in_app_iff in IN; destruct IN as [IN|IN].
++ apply Zle_trans with (x + typesize t); [|apply size_arguments_rec_above].
+  Ltac decomp :=
   match goal with
   | [ H: _ \/ _ |- _ ] => destruct H; decomp
   | [ H: S _ _ _ = S _ _ _ |- _ ] => inv H
-  | _ => idtac
+  | [ H: False |- _ ] => contradiction
   end.
-  destruct a; simpl in H; decomp; auto; try apply size_arguments_rec_above.
-  simpl typesize. replace (z + 1 + 1) with (z + 2) by omega. apply size_arguments_rec_above.
-  simpl typesize. apply Zle_trans with (ofs + 2). omega. apply size_arguments_rec_above.
+  destruct t; simpl in IN; decomp; simpl; omega.
++ apply IHl; auto.
 Qed.
 
 Lemma loc_arguments_main:

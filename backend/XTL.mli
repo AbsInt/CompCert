@@ -64,6 +64,7 @@ val vloc: loc -> var
 val vlocs: loc list -> var list
 val vmreg: mreg -> var
 val vmregs: mreg list -> var list
+val vlocpairs: loc rpair list -> var list
 
 (* Tests over variables *)
 

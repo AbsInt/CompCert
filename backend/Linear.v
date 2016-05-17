@@ -246,9 +246,9 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State s f (Vptr stk Int.zero) f.(fn_code) rs' m')
   | exec_function_external:
       forall s ef args res rs1 rs2 m t m',
-      args = map rs1 (loc_arguments (ef_sig ef)) ->
-      external_call' ef ge args m t res m' ->
-      rs2 = Locmap.setlist (map R (loc_result (ef_sig ef))) res rs1 ->
+      args = map (fun p => Locmap.getpair p rs1) (loc_arguments (ef_sig ef)) ->
+      external_call ef ge args m t res m' ->
+      rs2 = Locmap.setpair (loc_result (ef_sig ef)) res rs1 ->
       step (Callstate s (External ef) rs1 m)
          t (Returnstate s rs2 m')
   | exec_return:
@@ -268,9 +268,8 @@ Inductive initial_state (p: program): state -> Prop :=
       initial_state p (Callstate nil f (Locmap.init Vundef) m0).
 
 Inductive final_state: state -> int -> Prop :=
-  | final_state_intro: forall rs m r retcode,
-      loc_result signature_main = r :: nil ->
-      rs (R r) = Vint retcode ->
+  | final_state_intro: forall rs m retcode,
+      Locmap.getpair (map_rpair R (loc_result signature_main)) rs = Vint retcode ->
       final_state (Returnstate nil rs m) retcode.
 
 Definition semantics (p: program) :=

@@ -693,10 +693,8 @@ Proof.
   rewrite A; simpl; rewrite C; simpl.
   rewrite H2; rewrite dec_eq_true.
   replace (tailcall_is_possible sig) with true; auto.
-  revert H3. unfold tailcall_possible, tailcall_is_possible. generalize (loc_arguments sig).
-  induction l; simpl; intros. auto.
-  exploit (H3 a); auto. intros. destruct a; try contradiction. apply IHl.
-  intros; apply H3; auto.
+  symmetry. unfold tailcall_is_possible. apply forallb_forall. 
+  intros. apply H3 in H4. destruct x; intuition auto.
 - (* builtin *)
   exploit type_builtin_args_complete; eauto. instantiate (1 := args). intros [e1 [A B]].
   exploit type_builtin_res_complete; eauto. instantiate (1 := res). intros [e2 [C D]].

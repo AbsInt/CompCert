@@ -694,7 +694,7 @@ Proof.
   (* external function *)
   monadInv H8. left; econstructor; split.
   apply plus_one. eapply exec_function_external; eauto.
-  eapply external_call_symbols_preserved'; eauto. apply senv_preserved.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto.
 
   (* return *)
@@ -722,7 +722,7 @@ Lemma transf_final_states:
   forall st1 st2 r,
   match_states st1 st2 -> LTL.final_state st1 r -> Linear.final_state st2 r.
 Proof.
-  intros. inv H0. inv H. inv H6. econstructor; eauto.
+  intros. inv H0. inv H. inv H5. econstructor; eauto.
 Qed.
 
 Theorem transf_program_correct:

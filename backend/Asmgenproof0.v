@@ -145,19 +145,6 @@ Proof.
   rewrite preg_notin_charact in H. auto.
 Qed.
 
-Lemma set_pregs_other_2:
-  forall r rl vl rs,
-  preg_notin r rl ->
-  set_regs (map preg_of rl) vl rs r = rs r.
-Proof.
-  induction rl; simpl; intros.
-  auto.
-  destruct vl; auto.
-  assert (r <> preg_of a) by (destruct rl; tauto).
-  assert (preg_notin r rl) by (destruct rl; simpl; tauto).
-  rewrite IHrl by auto. apply Pregmap.gso; auto.
-Qed.
-
 (** * Agreement between Mach registers and processor registers *)
 
 Record agree (ms: Mach.regset) (sp: val) (rs: Asm.regset) : Prop := mkagree {
@@ -230,6 +217,15 @@ Proof.
   red; intros; elim n. eapply preg_of_injective; eauto.
 Qed.
 
+Corollary agree_set_mreg_parallel:
+  forall ms sp rs r v v',
+  agree ms sp rs ->
+  Val.lessdef v v' ->
+  agree (Regmap.set r v ms) sp (Pregmap.set (preg_of r) v' rs).
+Proof.
+  intros. eapply agree_set_mreg; eauto. rewrite Pregmap.gss; auto. intros; apply Pregmap.gso; auto.
+Qed.
+
 Lemma agree_set_other:
   forall ms sp rs r v,
   agree ms sp rs ->
@@ -247,18 +243,16 @@ Proof.
   intros. unfold nextinstr. apply agree_set_other. auto. auto.
 Qed.
 
-Lemma agree_set_mregs:
-  forall sp rl vl vl' ms rs,
+Lemma agree_set_pair:
+  forall sp p v v' ms rs,
   agree ms sp rs ->
-  Val.lessdef_list vl vl' ->
-  agree (Mach.set_regs rl vl ms) sp (set_regs (map preg_of rl) vl' rs).
+  Val.lessdef v v' ->
+  agree (Mach.set_pair p v ms) sp (set_pair (map_rpair preg_of p) v' rs).
 Proof.
-  induction rl; simpl; intros.
-  auto.
-  inv H0. auto. apply IHrl; auto.
-  eapply agree_set_mreg. eexact H.
-  rewrite Pregmap.gss. auto.
-  intros. apply Pregmap.gso; auto.
+  intros. destruct p; simpl.
+- apply agree_set_mreg_parallel; auto.
+- apply agree_set_mreg_parallel. apply agree_set_mreg_parallel; auto.
+  apply Val.hiword_lessdef; auto. apply Val.loword_lessdef; auto.
 Qed.
 
 Lemma agree_undef_nondata_regs:
@@ -333,15 +327,29 @@ Proof.
   econstructor. eauto. assumption.
 Qed.
 
+Lemma extcall_arg_pair_match:
+  forall ms sp rs m m' p v,
+  agree ms sp rs ->
+  Mem.extends m m' ->
+  Mach.extcall_arg_pair ms m sp p v ->
+  exists v', Asm.extcall_arg_pair rs m' p v' /\ Val.lessdef v v'.
+Proof.
+  intros. inv H1.
+- exploit extcall_arg_match; eauto. intros (v' & A & B). exists v'; split; auto. constructor; auto.
+- exploit extcall_arg_match. eauto. eauto. eexact H2. intros (v1 & A1 & B1).
+  exploit extcall_arg_match. eauto. eauto. eexact H3. intros (v2 & A2 & B2).
+  exists (Val.longofwords v1 v2); split. constructor; auto. apply Val.longofwords_lessdef; auto. 
+Qed.
+
 Lemma extcall_args_match:
   forall ms sp rs m m', agree ms sp rs -> Mem.extends m m' ->
   forall ll vl,
-  list_forall2 (Mach.extcall_arg ms m sp) ll vl ->
-  exists vl', list_forall2 (Asm.extcall_arg rs m') ll vl' /\ Val.lessdef_list vl vl'.
+  list_forall2 (Mach.extcall_arg_pair ms m sp) ll vl ->
+  exists vl', list_forall2 (Asm.extcall_arg_pair rs m') ll vl' /\ Val.lessdef_list vl vl'.
 Proof.
   induction 3; intros.
   exists (@nil val); split. constructor. constructor.
-  exploit extcall_arg_match; eauto. intros [v1' [A B]].
+  exploit extcall_arg_pair_match; eauto. intros [v1' [A B]].
   destruct IHlist_forall2 as [vl' [C D]].
   exists (v1' :: vl'); split; constructor; auto.
 Qed.

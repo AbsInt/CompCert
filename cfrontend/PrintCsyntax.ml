@@ -41,7 +41,7 @@ let name_binop = function
   | Oshl -> "<<"
   | Oshr -> ">>"
   | Oeq  -> "=="
-  | One  -> "!="
+  | Cop.One  -> "!="
   | Olt  -> "<"
   | Ogt  -> ">"
   | Ole  -> "<="
@@ -154,7 +154,7 @@ let rec precedence = function
   | Ebinop((Oadd|Osub), _, _, _) -> (12, LtoR)
   | Ebinop((Oshl|Oshr), _, _, _) -> (11, LtoR)
   | Ebinop((Olt|Ogt|Ole|Oge), _, _, _) -> (10, LtoR)
-  | Ebinop((Oeq|One), _, _, _) -> (9, LtoR)
+  | Ebinop((Oeq|Cop.One), _, _, _) -> (9, LtoR)
   | Ebinop(Oand, _, _, _) -> (8, LtoR)
   | Ebinop(Oxor, _, _, _) -> (7, LtoR)
   | Ebinop(Oor, _, _, _) -> (6, LtoR)
