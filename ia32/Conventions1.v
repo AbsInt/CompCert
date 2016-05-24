@@ -213,23 +213,6 @@ Proof.
   apply size_arguments_rec_above.
 Qed.
 
-(*
-Lemma loc_arguments_bounded:
-  forall (s: signature) (p: rpair loc),
-  In p (loc_arguments s) ->
-  forall_rpair
-    (fun l => match l with S Outgoing ofs ty => ofs + typesize ty <= size_arguments s | _ => True end)
-    p.
-Proof.
-  intros until p. unfold loc_arguments, size_arguments. generalize (sig_args s) 0.
-  induction l as [ | ty l]; simpl; intros x IN.
-- contradiction.
-- destruct IN as [EQ|IN].
-+ generalize (size_arguments_rec_above l (x + typesize ty)); intros A.
-  subst p. destruct ty; simpl in *; omega.
-+ apply IHl; auto.
-Qed.
-*)
 Lemma loc_arguments_bounded:
   forall (s: signature) (ofs: Z) (ty: typ),
   In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments s)) ->
