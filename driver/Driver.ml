@@ -12,154 +12,15 @@
 
 open Printf
 open Commandline
-open Camlcoq
 open Clflags
 open Timing
-
-(* Location of the compatibility library *)
-
-let stdlib_path = ref Configuration.stdlib_path
-
-(* Use standard headers *)
-let use_standard_headers =  ref Configuration.has_standard_headers
+open Driveraux
+open Frontend
 
 let dump_options = ref false
 
 (* Optional sdump suffix *)
 let sdump_suffix = ref ".json"
-
-(* Invocation of external tools *)
-
-let rec waitpid_no_intr pid =
-  try Unix.waitpid [] pid
-  with Unix.Unix_error (Unix.EINTR, _, _) -> waitpid_no_intr pid
-
-let command ?stdout args =
-  if !option_v then begin
-    eprintf "+ %s" (String.concat " " args);
-    begin match stdout with
-    | None -> ()
-    | Some f -> eprintf " > %s" f
-    end;
-    prerr_endline ""
-  end;
-  let argv = Array.of_list args in
-  assert (Array.length argv > 0);
-  try
-    let fd_out =
-      match stdout with
-      | None -> Unix.stdout
-      | Some f ->
-          Unix.openfile f [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC] 0o666 in
-    let pid =
-      Unix.create_process argv.(0) argv Unix.stdin fd_out Unix.stderr in
-    let (_, status) =
-      waitpid_no_intr pid in
-    if stdout <> None then Unix.close fd_out;
-    match status with
-    | Unix.WEXITED rc -> rc
-    | Unix.WSIGNALED n | Unix.WSTOPPED n ->
-        eprintf "Command '%s' killed on a signal.\n" argv.(0); -1
-  with Unix.Unix_error(err, fn, param) ->
-    eprintf "Error executing '%s': %s: %s %s\n"
-            argv.(0) fn (Unix.error_message err) param;
-    -1
-
-let command_error n exc =
-  eprintf "Error: %s command failed with exit code %d (use -v to see invocation)\n" n exc
-
-let safe_remove file =
-  try Sys.remove file with Sys_error _ -> ()
-
-(* Printing of error messages *)
-
-let print_error oc msg =
-  let print_one_error = function
-  | Errors.MSG s -> output_string oc (camlstring_of_coqstring s)
-  | Errors.CTX i -> output_string oc (extern_atom i)
-  | Errors.POS i -> fprintf oc "%ld" (P.to_int32 i)
-  in
-    List.iter print_one_error msg;
-    output_char oc '\n'
-
-(* Determine names for output files.  We use -o option if specified
-   and if this is the final destination file (not a dump file).
-   Otherwise, we generate a file in the current directory. *)
-
-let output_filename ?(final = false) source_file source_suffix output_suffix =
-  match !option_o with
-  | Some file when final -> file
-  | _ ->
-    Filename.basename (Filename.chop_suffix source_file source_suffix)
-    ^ output_suffix
-
-(* A variant of [output_filename] where the default output name is fixed *)
-
-let output_filename_default default_file =
-  match !option_o with
-  | Some file -> file
-  | None -> default_file
-
-(* From C to preprocessed C *)
-
-let preprocess ifile ofile =
-  let output =
-    if ofile = "-" then None else Some ofile in
-  let cmd = List.concat [
-    Configuration.prepro;
-    ["-D__COMPCERT__"];
-    (if !use_standard_headers
-     then ["-I" ^ Filename.concat !stdlib_path "include" ]
-     else []);
-    List.rev !prepro_options;
-    [ifile]
-  ] in
-  let exc = command ?stdout:output cmd in
-  if exc <> 0 then begin
-    if ofile <> "-" then safe_remove ofile;
-    command_error "preprocessor" exc;
-    eprintf "Error during preprocessing.\n";
-    exit 2
-  end
-
-(* From preprocessed C to Csyntax *)
-
-let parse_c_file sourcename ifile =
-  Debug.init_compile_unit sourcename;
-  Sections.initialize();
-  (* Simplification options *)
-  let simplifs =
-    "b" (* blocks: mandatory *)
-  ^ (if !option_fstruct_passing then "s" else "")
-  ^ (if !option_fbitfields then "f" else "")
-  ^ (if !option_fpacked_structs then "p" else "")
-  in
-  (* Parsing and production of a simplified C AST *)
-  let ast =
-    match Parse.preprocessed_file simplifs sourcename ifile with
-    | None -> exit 2
-    | Some p -> p in
-  (* Save C AST if requested *)
-  if !option_dparse then begin
-    let ofile = output_filename sourcename ".c" ".parsed.c" in
-    let oc = open_out ofile in
-    Cprint.program (Format.formatter_of_out_channel oc) ast;
-    close_out oc
-  end;
-  (* Conversion to Csyntax *)
-  let csyntax =
-    match Timing.time "CompCert C generation" C2C.convertProgram ast with
-    | None -> exit 2
-    | Some p -> p in
-  flush stderr;
-  (* Save CompCert C AST if requested *)
-  if !option_dcmedium then begin
-    let ofile = output_filename sourcename ".c" ".compcert.c" in
-    let oc = open_out ofile in
-    PrintCsyntax.print_program (Format.formatter_of_out_channel oc) csyntax;
-    close_out oc
-  end;
-  csyntax
 
 (* Dump Asm code in asm format for the validator *)
 
@@ -280,13 +141,6 @@ let linker exe_name files =
     exit 2
   end
 
-(* All input files should exist *)
-
-let ensure_inputfile_exists name =
-  if not (Sys.file_exists name) then begin
-    eprintf "error: no such file or directory: '%s'\n" name;
-    exit 2
-  end
 
 (* Processing of a .c file *)
 
@@ -433,152 +287,113 @@ let perform_actions () =
   | (fn, arg) :: rem -> let res = fn arg in res :: perform rem
   in perform (List.rev !actions)
 
-(* Command-line parsing *)
-
-let explode_comma_option s =
-  match Str.split (Str.regexp ",") s with
-  | [] -> assert false
-  | _ :: tl -> tl
-
 let version_string =
   if Version.buildnr <> "" && Version.tag <> "" then
-    sprintf "The CompCert verified compiler, %s, Build: %s, Tag: %s\n" Version.version Version.buildnr Version.tag
+    sprintf "The CompCert C verified compiler, %s, Build: %s, Tag: %s\n" Version.version Version.buildnr Version.tag
   else
     "The CompCert C verified compiler, version "^ Version.version ^ "\n"
 
 let usage_string =
   version_string ^
-  "Usage: ccomp [options] <source files>
-Recognized source files:
-  .c             C source file
-  .i or .p       C source file that should not be preprocessed
-  .cm            Cminor source file
-  .s             Assembly file
-  .S             Assembly file that must be preprocessed
-  .o             Object file
-  .a             Library file
-Processing options:
-  -c             Compile to object file only (no linking), result in <file>.o
-  -E             Preprocess only, send result to standard output
-  -S             Compile to assembler only, save result in <file>.s
-  -o <file>      Generate output in <file>
-Preprocessing options:
-  -I<dir>        Add <dir> to search path for #include files
-  -include <file> Process <file> as if #include \"<file>\" appears at the first
-                  line of the primary source file.
-  -D<symb>=<val> Define preprocessor symbol
-  -U<symb>       Undefine preprocessor symbol
-  -Wp,<opt>      Pass option <opt> to the preprocessor
-  -Xpreprocessor <opt> Pass option <opt> to the preprocessor
-  -M             (GCC only) Ouput a rule suitable for make describing the
-                 dependencies of the main source file
-  -MM            (GCC only) Like -M but do not mention system header files
-  -MF <file>     (GCC only) Specifies file <file> as output file for -M or -MM
-  -MG            (GCC only) Assumes missing header files are generated for -M
-  -MP            (GCC only) Add a phony target for each dependency other than
-                 the main file
-  -MT <target>   (GCC only) Change the target of the rule emitted by dependency
-                 generation
-  -MQ <target>   (GCC only) Like -MT but quotes <target>
-  -nostdinc      (GCC only) Do not search the standard system directories for
-                 header files
-  -imacros <file> (GCC only) Like -include but throws output produced by
-                  preprocessing of <file> away
-  -idirafter <dir> (GCC only) Search <dir> for header files after all directories
-                   specified with -I and the standard system directories
-  -isystem <dir>  (GCC only) Search <dir> for header files after all directories
-                  specified by -I but before the standard system directories
-  -iquote <dir>   (GCC only) Like -isystem but only for headers included with
-                   quotes
-  -P              (GCC only) Do not generate linemarkers
-  -C              (GCC only) Do not discard comments
-  -CC             (GCC only) Do not discard comments, including during macro
-                  expansion
-Language support options (use -fno-<opt> to turn off -f<opt>) :
-  -fbitfields    Emulate bit fields in structs [off]
-  -flongdouble   Treat 'long double' as 'double' [off]
-  -fstruct-passing  Support passing structs and unions by value as function
-                    results or function arguments [off]
-  -fstruct-return   Like -fstruct-passing (deprecated)
-  -fvararg-calls Support calls to variable-argument functions [on]
-  -funprototyped Support calls to old-style functions without prototypes [on]
-  -fpacked-structs  Emulate packed structs [off]
-  -finline-asm   Support inline 'asm' statements [off]
-  -fall          Activate all language support options above
-  -fnone         Turn off all language support options above
-Debugging options:
-  -g             Generate debugging information
-  -gdwarf-       (GCC only) Generate debug information in DWARF v2 or DWARF v3
-  -gdepth <n>    Control generation of debugging information
-                 (<n>=0: none, <n>=1: only-globals, <n>=2: globals + locals
-                 without locations, <n>=3: full;)
-  -frename-static Rename static functions and declarations
-Optimization options: (use -fno-<opt> to turn off -f<opt>)
-  -O             Optimize the compiled code [on by default]
-  -O0            Do not optimize the compiled code
-  -O1 -O2 -O3    Synonymous for -O
-  -Os            Optimize for code size in preference to code speed
-  -ftailcalls    Optimize function calls in tail position [on]
-  -fconst-prop   Perform global constant propagation  [on]
-  -ffloat-const-prop <n>  Control constant propagation of floats
-                   (<n>=0: none, <n>=1: limited, <n>=2: full; default is full)
-  -fcse          Perform common subexpression elimination [on]
-  -fredundancy   Perform redundancy elimination [on]
-Code generation options: (use -fno-<opt> to turn off -f<opt>)
-  -ffpu          Use FP registers for some integer operations [on]
-  -fsmall-data <n>  Set maximal size <n> for allocation in small data area
-  -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
-  -falign-functions <n>  Set alignment (in bytes) of function entry points
-  -falign-branch-targets <n>  Set alignment (in bytes) of branch targets
-  -falign-cond-branches <n>  Set alignment (in bytes) of conditional branches
-Target processor options:
-  -mthumb        (ARM only) Use Thumb2 instruction encoding
-  -marm          (ARM only) Use classic ARM instruction encoding
-Assembling options:
-  -Wa,<opt>      Pass option <opt> to the assembler
-  -Xassembler <opt> Pass <opt> as an option to the assembler
-Linking options:
-  -l<lib>        Link library <lib>
-  -L<dir>        Add <dir> to search path for libraries
-  -nostartfiles  (GCC only) Do not use the standard system startup files when
-                 linking
-  -nodefaultlibs (GCC only) Do not use the standard system libraries when
-                 linking
-  -nostdlib      (GCC only) Do not use the standard system startup files or
-                 libraries when linking
-  -s             Remove all symbol table and relocation information from the
-                 executable
-  -static        Prevent linking with the shared libraries
-  -T <file>      Use <file> as linker command file
-  -Wl,<opt>      Pass option <opt> to the linker
-  -WUl,<opt>     (GCC only) Pass option <opt> to the gcc used for linking
-  -Xlinker <opt> Pass <opt> as an option to the linker
-  -u <symb>      Pretend the symbol <symb> is undefined to force linking of
-                 library modules to define it.
-Tracing options:
-  -dprepro       Save C file after preprocessing in <file>.i
-  -dparse        Save C file after parsing and elaboration in <file>.parsed.c
-  -dc            Save generated Compcert C in <file>.compcert.c
-  -dclight       Save generated Clight in <file>.light.c
-  -dcminor       Save generated Cminor in <file>.cm
-  -drtl          Save RTL at various optimization points in <file>.rtl.<n>
-  -dltl          Save LTL after register allocation in <file>.ltl
-  -dmach         Save generated Mach code in <file>.mach
-  -dasm          Save generated assembly in <file>.s
-  -sdump         Save info for post-linking validation in <file>.json
-  -doptions      Save the compiler configurations in <file>.opt.json
-General options:
-  -stdlib <dir>  Set the path of the Compcert run-time library
-  -v             Print external commands before invoking them
-  -timings       Show the time spent in various compiler passes
-  -version       Print the version string and exit
-Interpreter mode:
-  -interp        Execute given .c files using the reference interpreter
-  -quiet         Suppress diagnostic messages for the interpreter
-  -trace         Have the interpreter produce a detailed trace of reductions
-  -random        Randomize execution order
-  -all           Simulate all possible execution orders
-"
+  "Usage: ccomp [options] <source files>\n\
+Recognized source files:\n\
+\  .c             C source file\n\
+\  .i or .p       C source file that should not be preprocessed\n\
+\  .cm            Cminor source file\n\
+\  .s             Assembly file\n\
+\  .S             Assembly file that must be preprocessed\n\
+\  .o             Object file\n\
+\  .a             Library file\n\
+Processing options:\n\
+\  -c             Compile to object file only (no linking), result in <file>.o\n\
+\  -E             Preprocess only, send result to standard output\n\
+\  -S             Compile to assembler only, save result in <file>.s\n\
+\  -o <file>      Generate output in <file>\n" ^
+  prepro_help ^
+"Language support options (use -fno-<opt> to turn off -f<opt>) :\n\
+\  -fbitfields    Emulate bit fields in structs [off]\n\
+\  -flongdouble   Treat 'long double' as 'double' [off]\n\
+\  -fstruct-passing  Support passing structs and unions by value as function\n\
+\                    results or function arguments [off]\n\
+\  -fstruct-return   Like -fstruct-passing (deprecated)\n\
+\  -fvararg-calls Support calls to variable-argument functions [on]\n\
+\  -funprototyped Support calls to old-style functions without prototypes [on]\n\
+\  -fpacked-structs  Emulate packed structs [off]\n\
+\  -finline-asm   Support inline 'asm' statements [off]\n\
+\  -fall          Activate all language support options above\n\
+\  -fnone         Turn off all language support options above\n\
+Debugging options:\n\
+\  -g             Generate debugging information\n\
+\  -gdwarf-       (GCC only) Generate debug information in DWARF v2 or DWARF v3\n\
+\  -gdepth <n>    Control generation of debugging information\n\
+\                 (<n>=0: none, <n>=1: only-globals, <n>=2: globals + locals\n\
+\                 without locations, <n>=3: full;)\n\
+\  -frename-static Rename static functions and declarations\n\
+Optimization options: (use -fno-<opt> to turn off -f<opt>)\n\
+\  -O             Optimize the compiled code [on by default]\n\
+\  -O0            Do not optimize the compiled code\n\
+\  -O1 -O2 -O3    Synonymous for -O\n\
+\  -Os            Optimize for code size in preference to code speed\n\
+\  -ftailcalls    Optimize function calls in tail position [on]\n\
+\  -fconst-prop   Perform global constant propagation  [on]\n\
+\  -ffloat-const-prop <n>  Control constant propagation of floats\n\
+\                   (<n>=0: none, <n>=1: limited, <n>=2: full; default is full)\n\
+\  -fcse          Perform common subexpression elimination [on]\n\
+\  -fredundancy   Perform redundancy elimination [on]\n\
+Code generation options: (use -fno-<opt> to turn off -f<opt>)\n\
+\  -ffpu          Use FP registers for some integer operations [on]\n\
+\  -fsmall-data <n>  Set maximal size <n> for allocation in small data area\n\
+\  -fsmall-const <n>  Set maximal size <n> for allocation in small constant area\n\
+\  -falign-functions <n>  Set alignment (in bytes) of function entry points\n\
+\  -falign-branch-targets <n>  Set alignment (in bytes) of branch targets\n\
+\  -falign-cond-branches <n>  Set alignment (in bytes) of conditional branches\n\
+Target processor options:\n\
+\  -mthumb        (ARM only) Use Thumb2 instruction encoding\n\
+\  -marm          (ARM only) Use classic ARM instruction encoding\n\
+Assembling options:\n\
+\  -Wa,<opt>      Pass option <opt> to the assembler\n\
+\  -Xassembler <opt> Pass <opt> as an option to the assembler\n\
+Linking options:\n\
+\  -l<lib>        Link library <lib>\n\
+\  -L<dir>        Add <dir> to search path for libraries\n\
+\  -nostartfiles  (GCC only) Do not use the standard system startup files when\n\
+\                 linking\n\
+\  -nodefaultlibs (GCC only) Do not use the standard system libraries when\n\
+\                 linking\n\
+\  -nostdlib      (GCC only) Do not use the standard system startup files or\n\
+\                 libraries when linking\n\
+\  -s             Remove all symbol table and relocation information from the\n\
+\                 executable\n\
+\  -static        Prevent linking with the shared libraries\n\
+\  -T <file>      Use <file> as linker command file\n\
+\  -Wl,<opt>      Pass option <opt> to the linker\n\
+\  -WUl,<opt>     (GCC only) Pass option <opt> to the gcc used for linking\n\
+\  -Xlinker <opt> Pass <opt> as an option to the linker\n\
+\  -u <symb>      Pretend the symbol <symb> is undefined to force linking of\n\
+\                 library modules to define it.\n\
+Tracing options:\n\
+\  -dprepro       Save C file after preprocessing in <file>.i\n\
+\  -dparse        Save C file after parsing and elaboration in <file>.parsed.c\n\
+\  -dc            Save generated Compcert C in <file>.compcert.c\n\
+\  -dclight       Save generated Clight in <file>.light.c\n\
+\  -dcminor       Save generated Cminor in <file>.cm\n\
+\  -drtl          Save RTL at various optimization points in <file>.rtl.<n>\n\
+\  -dltl          Save LTL after register allocation in <file>.ltl\n\
+\  -dmach         Save generated Mach code in <file>.mach\n\
+\  -dasm          Save generated assembly in <file>.s\n\
+\  -sdump         Save info for post-linking validation in <file>.json\n\
+\  -doptions      Save the compiler configurations in <file>.opt.json\n\
+General options:\n\
+\  -stdlib <dir>  Set the path of the Compcert run-time library\n\
+\  -v             Print external commands before invoking them\n\
+\  -timings       Show the time spent in various compiler passes\n\
+\  -version       Print the version string and exit\n\
+Interpreter mode:\n\
+\  -interp        Execute given .c files using the reference interpreter\n\
+\  -quiet         Suppress diagnostic messages for the interpreter\n\
+\  -trace         Have the interpreter produce a detailed trace of reductions\n\
+\  -random        Randomize execution order\n\
+\  -all           Simulate all possible execution orders\n"
 
 let print_usage_and_exit _ =
   printf "%s" usage_string; exit 0
@@ -599,34 +414,9 @@ let optimization_options = [
 let set_all opts = List.iter (fun r -> r := true) opts
 let unset_all opts = List.iter (fun r -> r := false) opts
 
-let gnu_option s =
-  if Configuration.system <> "diab" then
-    true
-  else begin
-    eprintf "ccomp: warning: option %s only supported for gcc backend\n" s;
-    false
-  end
-
 let gnu_linker_opt s =
   if gnu_option s then
     push_linker_arg s
-
-(* Add gnu preprocessor list *)
-let gnu_prepro_opt_key key s =
-  if gnu_option s then
-    prepro_options := s::key::!prepro_options
-
-(* Add gnu preprocessor option *)
-let gnu_prepro_opt s =
- if gnu_option s then
-    prepro_options := s::!prepro_options
-
-(* Add gnu preprocessor option s and the implict -E *)
-let gnu_prepro_opt_e s =
-  if gnu_option s then begin
-    prepro_options := s :: !prepro_options;
-    option_E := true
-  end
 
 let num_source_files = ref 0
 
@@ -648,38 +438,11 @@ let cmdline_actions =
   Exact "-S", Set option_S;
   Exact "-o", String(fun s -> option_o := Some s);
   Prefix "-o", Self (fun s -> let s = String.sub s 2 ((String.length s) - 2) in
-                              option_o := Some s);
-(* Preprocessing options *)
-  Exact "-I", String(fun s -> prepro_options := s :: "-I" :: !prepro_options;
-    assembler_options := s :: "-I" :: !assembler_options);
-  Prefix "-I", Self(fun s -> prepro_options := s :: !prepro_options;
-    assembler_options := s :: !assembler_options);
-  Exact "-D", String(fun s -> prepro_options := s :: "-D" :: !prepro_options);
-  Prefix "-D", Self(fun s -> prepro_options := s :: !prepro_options);
-  Exact "-U", String(fun s -> prepro_options := s :: "-U" :: !prepro_options);
-  Prefix "-U", Self(fun s -> prepro_options := s :: !prepro_options);
-  Prefix "-Wp,", Self (fun s ->
-    prepro_options := List.rev_append (explode_comma_option s) !prepro_options);
-  Exact "-Xpreprocessor", String (fun s ->
-    prepro_options := s :: !prepro_options);
-  Exact "-include", String (fun s -> prepro_options := s :: "-include" :: !prepro_options);
-  Exact "-M", Self gnu_prepro_opt_e;
-  Exact "-MM", Self gnu_prepro_opt_e;
-  Exact "-MF", String (gnu_prepro_opt_key "-MF");
-  Exact "-MG", Self gnu_prepro_opt;
-  Exact "-MP", Self gnu_prepro_opt;
-  Exact "-MT", String (gnu_prepro_opt_key "-MT");
-  Exact "-MQ", String (gnu_prepro_opt_key "-MQ");
-  Exact "-nostdinc", Self (fun s -> gnu_prepro_opt s; use_standard_headers := false);
-  Exact "-imacros", String (gnu_prepro_opt_key "-imacros");
-  Exact "-idirafter", String (gnu_prepro_opt_key "-idirafter");
-  Exact "-isystem", String (gnu_prepro_opt_key "-isystem");
-  Exact "-iquote", String (gnu_prepro_opt_key "-iquore");
-  Exact "-P", Self gnu_prepro_opt;
-  Exact "-C", Self gnu_prepro_opt;
-  Exact "-CC", Self gnu_prepro_opt;
+                              option_o := Some s);]
+  (* Preprocessing options *)
+    @ prepro_actions @
 (* Language support options -- more below *)
-  Exact "-fall", Self (fun _ -> set_all language_support_options);
+ [ Exact "-fall", Self (fun _ -> set_all language_support_options);
   Exact "-fnone", Self (fun _ -> unset_all language_support_options);
 (* Debugging options *)
   Exact "-g", Self (fun s -> option_g := true;
