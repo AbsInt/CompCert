@@ -35,7 +35,7 @@ type 'a buffer =
 | One of 'a
 | Two of 'a * (* most recent: *) 'a
 
-(* [push buffer x] pushes [x] into [buffer], causing the buffer to slide. *)
+(* [update buffer x] pushes [x] into [buffer], causing the buffer to slide. *)
 
 let update buffer x : _ buffer =
   match buffer, x with
@@ -240,7 +240,7 @@ let report text buffer checkpoint : string =
   let where = show (extract text) buffer in
   (* Find out in which state the parser failed. *)
   let s : int = state checkpoint in
-  (* Choose an error message, based on the state number [s]. 
+  (* Choose an error message, based on the state number [s].
      Then, customize it, based on dynamic information. *)
   let message = try
     Pre_parser_messages.message s |>
@@ -259,4 +259,3 @@ let report text buffer checkpoint : string =
     (pos.pos_cnum - pos.pos_bol + 1)
     where
     message
-

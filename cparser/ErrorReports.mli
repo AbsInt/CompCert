@@ -25,7 +25,7 @@ type 'a buffer =
 | One of 'a
 | Two of 'a * (* most recent: *) 'a
 
-(* [push buffer x] pushes [x] into [buffer], causing the buffer to slide. *)
+(* [update buffer x] pushes [x] into [buffer], causing the buffer to slide. *)
 
 val update: 'a buffer -> 'a -> 'a buffer
 
@@ -40,4 +40,3 @@ val report:
   (Lexing.position * Lexing.position) buffer ->
   _ checkpoint ->
   string
-
