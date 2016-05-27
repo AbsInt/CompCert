@@ -54,9 +54,9 @@ Qed.
 
 Lemma slot_outgoing_argument_valid:
   forall f ofs ty sg,
-  In (S Outgoing ofs ty) (loc_arguments sg) -> slot_valid f Outgoing ofs ty = true.
+  In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments sg)) -> slot_valid f Outgoing ofs ty = true.
 Proof.
-  intros. exploit loc_arguments_acceptable; eauto. intros [A B].
+  intros. exploit loc_arguments_acceptable_2; eauto. intros [A B].
   unfold slot_valid. unfold proj_sumbool.
   rewrite zle_true by omega.
   rewrite pred_dec_true by auto.
@@ -511,12 +511,14 @@ Local Opaque sepconj.
 - apply frame_set_reg; auto. 
 Qed.
 
-Corollary frame_set_regs:
-  forall j sp ls0 parent retaddr m P rl vl ls,
+Corollary frame_set_regpair:
+  forall j sp ls0 parent retaddr m P p v ls,
   m |= frame_contents j sp ls ls0 parent retaddr ** P ->
-  m |= frame_contents j sp (Locmap.setlist (map R rl) vl ls) ls0 parent retaddr ** P.
+  m |= frame_contents j sp (Locmap.setpair p v ls) ls0 parent retaddr ** P.
 Proof.
-  induction rl; destruct vl; simpl; intros; trivial. apply IHrl. apply frame_set_reg; auto.
+  intros. destruct p; simpl.
+  apply frame_set_reg; auto.
+  apply frame_set_reg; apply frame_set_reg; auto.
 Qed.
 
 Corollary frame_set_res:
@@ -565,7 +567,7 @@ Record agree_locs (ls ls0: locset) : Prop :=
         corresponding Outgoing stack slots in the caller *)
     agree_incoming:
        forall ofs ty,
-       In (S Incoming ofs ty) (loc_parameters f.(Linear.fn_sig)) ->
+       In (S Incoming ofs ty) (regs_of_rpairs (loc_parameters f.(Linear.fn_sig))) ->
        ls (S Incoming ofs ty) = ls0 (S Outgoing ofs ty)
 }.
 
@@ -614,16 +616,16 @@ Proof.
   rewrite Locmap.gso; auto. red. auto.
 Qed.
 
-Lemma agree_regs_set_regs:
-  forall j rl vl vl' ls rs,
+Lemma agree_regs_set_pair:
+  forall j p v v' ls rs,
   agree_regs j ls rs ->
-  Val.inject_list j vl vl' ->
-  agree_regs j (Locmap.setlist (map R rl) vl ls) (set_regs rl vl' rs).
+  Val.inject j v v' ->
+  agree_regs j (Locmap.setpair p v ls) (set_pair p v' rs).
 Proof.
-  induction rl; simpl; intros.
-  auto.
-  inv H0. auto.
-  apply IHrl; auto. apply agree_regs_set_reg; auto.
+  intros. destruct p; simpl.
+- apply agree_regs_set_reg; auto.
+- apply agree_regs_set_reg. apply agree_regs_set_reg; auto. 
+  apply Val.hiword_inject; auto. apply Val.loword_inject; auto.
 Qed.
 
 Lemma agree_regs_set_res:
@@ -706,14 +708,25 @@ Proof.
   rewrite Locmap.gso. auto. red. intuition congruence.
 Qed.
 
-Lemma agree_locs_set_regs:
-  forall ls0 rl vl ls,
-  agree_locs ls ls0 ->
-  (forall r, In r rl -> mreg_within_bounds b r) ->
-  agree_locs (Locmap.setlist (map R rl) vl ls) ls0.
+Lemma caller_save_reg_within_bounds:
+  forall r,
+  is_callee_save r = false -> mreg_within_bounds b r.
 Proof.
-  induction rl; destruct vl; simpl; intros; auto.
-  apply IHrl; auto. apply agree_locs_set_reg; auto.
+  intros; red; intros. congruence.
+Qed.
+
+Lemma agree_locs_set_pair:
+  forall ls0 p v ls,
+  agree_locs ls ls0 ->
+  forall_rpair (fun r => is_callee_save r = false) p ->
+  agree_locs (Locmap.setpair p v ls) ls0.
+Proof.
+  intros.
+  destruct p; simpl in *.
+  apply agree_locs_set_reg; auto. apply caller_save_reg_within_bounds; auto.
+  destruct H0.
+  apply agree_locs_set_reg; auto. apply agree_locs_set_reg; auto.
+  apply caller_save_reg_within_bounds; auto. apply caller_save_reg_within_bounds; auto. 
 Qed.
 
 Lemma agree_locs_set_res:
@@ -737,13 +750,6 @@ Proof.
   induction regs; simpl; intros.
   auto.
   apply agree_locs_set_reg; auto.
-Qed.
-
-Lemma caller_save_reg_within_bounds:
-  forall r,
-  is_callee_save r = false -> mreg_within_bounds b r.
-Proof.
-  intros; red; intros. congruence.
 Qed.
 
 Lemma agree_locs_undef_locs_1:
@@ -819,19 +825,14 @@ Proof.
 Qed.
 
 Lemma agree_callee_save_set_result:
-  forall sg vl ls1 ls2,
+  forall sg v ls1 ls2,
   agree_callee_save ls1 ls2 ->
-  agree_callee_save (Locmap.setlist (map R (loc_result sg)) vl ls1) ls2.
+  agree_callee_save (Locmap.setpair (loc_result sg) v ls1) ls2.
 Proof.
-  intros sg. generalize (loc_result_caller_save sg).
-  generalize (loc_result sg).
-  induction l; simpl; intros.
-  auto.
-  destruct vl; auto.
-  apply IHl; auto.
-  red; intros. rewrite Locmap.gso. apply H0; auto.
-  destruct l0; simpl; auto. red; intros; subst a. 
-  assert (is_callee_save r = false) by auto. congruence. 
+  intros; red; intros. rewrite Locmap.gpo. apply H; auto. 
+  assert (X: forall r, is_callee_save r = false -> Loc.diff l (R r)).
+  { intros. destruct l; auto. simpl; congruence. }
+  generalize (loc_result_caller_save sg). destruct (loc_result sg); simpl; intuition auto.
 Qed.
 
 (** ** Properties of destroyed registers. *)
@@ -1355,7 +1356,7 @@ Inductive match_stacks (j: meminj):
         (TY_RA: Val.has_type ra Tint)
         (AGL: agree_locs f ls (parent_locset cs))
         (ARGS: forall ofs ty,
-           In (S Outgoing ofs ty) (loc_arguments sg) ->
+           In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments sg)) ->
            slot_within_bounds (function_bounds f) Outgoing ofs ty)
         (STK: match_stacks j cs cs' (Linear.fn_sig f)),
       match_stacks j
@@ -1617,11 +1618,11 @@ Hypothesis SEP: m' |= stack_contents j cs cs'.
 
 Lemma transl_external_argument:
   forall l,
-  In l (loc_arguments sg) ->
+  In l (regs_of_rpairs (loc_arguments sg)) ->
   exists v, extcall_arg rs m' (parent_sp cs') l v /\ Val.inject j (ls l) v.
 Proof.
   intros.
-  assert (loc_argument_acceptable l) by (apply loc_arguments_acceptable with sg; auto).
+  assert (loc_argument_acceptable l) by (apply loc_arguments_acceptable_2 with sg; auto).
   destruct l; red in H0.
 - exists (rs r); split. constructor. auto.
 - destruct sl; try contradiction.
@@ -1637,23 +1638,39 @@ Proof.
   constructor. exact A. red in AGCS. rewrite AGCS; auto.
 Qed.
 
+Lemma transl_external_argument_2:
+  forall p,
+  In p (loc_arguments sg) ->
+  exists v, extcall_arg_pair rs m' (parent_sp cs') p v /\ Val.inject j (Locmap.getpair p ls) v.
+Proof.
+  intros. destruct p as [l | l1 l2].
+- destruct (transl_external_argument l) as (v & A & B). eapply in_regs_of_rpairs; eauto; simpl; auto.
+  exists v; split; auto. constructor; auto. 
+- destruct (transl_external_argument l1) as (v1 & A1 & B1). eapply in_regs_of_rpairs; eauto; simpl; auto.
+  destruct (transl_external_argument l2) as (v2 & A2 & B2). eapply in_regs_of_rpairs; eauto; simpl; auto.
+  exists (Val.longofwords v1 v2); split. 
+  constructor; auto.
+  apply Val.longofwords_inject; auto.
+Qed.
+
 Lemma transl_external_arguments_rec:
   forall locs,
   incl locs (loc_arguments sg) ->
   exists vl,
-  list_forall2 (extcall_arg rs m' (parent_sp cs')) locs vl /\ Val.inject_list j ls##locs vl.
+      list_forall2 (extcall_arg_pair rs m' (parent_sp cs')) locs vl
+   /\ Val.inject_list j (map (fun p => Locmap.getpair p ls) locs) vl.
 Proof.
   induction locs; simpl; intros.
   exists (@nil val); split. constructor. constructor.
-  exploit transl_external_argument; eauto with coqlib. intros [v [A B]].
+  exploit transl_external_argument_2; eauto with coqlib. intros [v [A B]].
   exploit IHlocs; eauto with coqlib. intros [vl [C D]].
   exists (v :: vl); split; constructor; auto.
 Qed.
 
 Lemma transl_external_arguments:
   exists vl,
-  extcall_arguments rs m' (parent_sp cs') sg vl /\
-  Val.inject_list j (ls ## (loc_arguments sg)) vl.
+      extcall_arguments rs m' (parent_sp cs') sg vl
+   /\ Val.inject_list j (map (fun p => Locmap.getpair p ls) (loc_arguments sg)) vl.
 Proof.
   unfold extcall_arguments.
   apply transl_external_arguments_rec.
@@ -2079,16 +2096,14 @@ Proof.
   simpl in TRANSL. inversion TRANSL; subst tf.
   exploit transl_external_arguments; eauto. apply sep_proj1 in SEP; eauto. intros [vl [ARGS VINJ]].
   rewrite sep_comm, sep_assoc in SEP.
-  inv H0. 
   exploit external_call_parallel_rule; eauto.
-  eapply decode_longs_inject; eauto. 
   intros (j' & res' & m1' & A & B & C & D & E).
   econstructor; split.
   apply plus_one. eapply exec_function_external; eauto.
-  eapply external_call_symbols_preserved'. econstructor; eauto. apply senv_preserved.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   eapply match_states_return with (j := j').
   eapply match_stacks_change_meminj; eauto.
-  apply agree_regs_set_regs. apply agree_regs_inject_incr with j; auto. apply encode_long_inject; auto.
+  apply agree_regs_set_pair. apply agree_regs_inject_incr with j; auto. auto.
   apply agree_callee_save_set_result; auto.
   apply stack_contents_change_meminj with j; auto. 
   rewrite sep_comm, sep_assoc; auto.
@@ -2135,7 +2150,9 @@ Lemma transf_final_states:
   match_states st1 st2 -> Linear.final_state st1 r -> Mach.final_state st2 r.
 Proof.
   intros. inv H0. inv H. inv STACKS.
-  generalize (AGREGS r0). rewrite H2. intros A; inv A.
+  assert (R: exists r, loc_result signature_main = One r) by (econstructor; reflexivity). 
+  destruct R as [rres EQ]. rewrite EQ in H1. simpl in H1.
+  generalize (AGREGS rres). rewrite H1. intros A; inv A.
   econstructor; eauto.
 Qed.
 

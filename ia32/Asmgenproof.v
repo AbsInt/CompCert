@@ -840,14 +840,14 @@ Transparent destroyed_at_function_entry.
   intros [tf [A B]]. simpl in B. inv B.
   exploit extcall_arguments_match; eauto.
   intros [args' [C D]].
-  exploit external_call_mem_extends'; eauto.
+  exploit external_call_mem_extends; eauto.
   intros [res' [m2' [P [Q [R S]]]]].
   left; econstructor; split.
   apply plus_one. eapply exec_step_external; eauto.
-  eapply external_call_symbols_preserved'; eauto. apply senv_preserved.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto.
   unfold loc_external_result.
-  apply agree_set_other; auto. apply agree_set_mregs; auto.
+  apply agree_set_other; auto. apply agree_set_pair; auto.
 
 - (* return *)
   inv STACKS. simpl in *.

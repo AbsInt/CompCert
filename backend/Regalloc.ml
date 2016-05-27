@@ -70,13 +70,6 @@ let vreg tyenv r = V(r, tyenv r)
 
 let vregs tyenv rl = List.map (vreg tyenv) rl
 
-let rec expand_regs tyenv = function
-  | [] -> []
-  | r :: rl ->
-      match tyenv r with
-      | Tlong -> V(r, Tint) :: V(twin_reg r, Tint) :: expand_regs tyenv rl
-      | ty    -> V(r, ty) :: expand_regs tyenv rl
-
 let constrain_reg v c =
   match c with
   | None -> v
@@ -105,12 +98,47 @@ let rec movelist vl1 vl2 k =
   | v1 :: vl1, v2 :: vl2 -> move v1 v2 (movelist vl1 vl2 k)
   | _, _ -> assert false
 
-let xparmove srcs dsts k =
+let parmove_regs2locs tyenv srcs dsts k =
   assert (List.length srcs = List.length dsts);
-  match srcs, dsts with
+  let rec expand srcs' dsts' rl ll =
+    match rl, ll with
+    | [], [] -> (srcs', dsts')
+    | r :: rl, One l :: ll ->
+        let ty = tyenv r in
+        expand (V(r, ty) :: srcs') (L l :: dsts') rl ll
+    | r :: rl, Twolong(l1, l2) :: ll ->
+        assert (tyenv r = Tlong);
+        expand (V(r, Tint) :: V(twin_reg r, Tint) :: srcs')
+               (L l1 :: L l2 :: dsts')
+               rl ll
+    | _, _ ->
+        assert false in
+  let (srcs', dsts') = expand [] [] srcs dsts in
+  match srcs', dsts' with
   | [], [] -> k
   | [src], [dst] -> move src dst k
-  | _, _ -> Xparmove(srcs, dsts, new_temp Tint, new_temp Tfloat) :: k
+  | _, _ -> Xparmove(srcs', dsts', new_temp Tint, new_temp Tfloat) :: k
+
+let parmove_locs2regs tyenv srcs dsts k =
+  assert (List.length srcs = List.length dsts);
+  let rec expand srcs' dsts' ll rl =
+    match ll, rl with
+    | [], [] -> (srcs', dsts')
+    | One l :: ll, r :: rl ->
+        let ty = tyenv r in
+        expand (L l :: srcs') (V(r, ty) :: dsts') ll rl
+    | Twolong(l1, l2) :: ll, r :: rl ->
+        assert (tyenv r = Tlong);
+        expand (L l1 :: L l2 :: srcs')
+               (V(r, Tint) :: V(twin_reg r, Tint) :: dsts')
+               ll rl
+    | _, _ ->
+        assert false in
+  let (srcs', dsts') = expand [] [] srcs dsts in
+  match srcs', dsts' with
+  | [], [] -> k
+  | [src], [dst] -> move src dst k
+  | _, _ -> Xparmove(srcs', dsts', new_temp Tint, new_temp Tfloat) :: k
 
 let rec convert_builtin_arg tyenv = function
   | BA r ->
@@ -228,16 +256,17 @@ let block_of_RTL_instr funsig tyenv = function
       end else
         [Xstore(chunk, addr, vregs tyenv args, vreg tyenv src); Xbranch s]
   | RTL.Icall(sg, ros, args, res, s) ->
-      let args' = vlocs (loc_arguments sg)
-      and res' = vmregs (loc_result sg) in
-      xparmove (expand_regs tyenv args) args'
-       (Xcall(sg, sum_left_map (vreg tyenv) ros, args', res') ::
-         xparmove res' (expand_regs tyenv [res])
+      let args' = loc_arguments sg
+      and res' = [map_rpair (fun r -> R r) (loc_result sg)] in
+      parmove_regs2locs tyenv args args'
+       (Xcall(sg, sum_left_map (vreg tyenv) ros,
+              vlocpairs args', vlocpairs res') ::
+         parmove_locs2regs tyenv res' [res]
            [Xbranch s])
   | RTL.Itailcall(sg, ros, args) ->
-      let args' = vlocs (loc_arguments sg) in
-      xparmove (expand_regs tyenv args) args'
-        [Xtailcall(sg, sum_left_map (vreg tyenv) ros, args')]
+      let args' = loc_arguments sg in
+      parmove_regs2locs tyenv args args'
+        [Xtailcall(sg, sum_left_map (vreg tyenv) ros, vlocpairs args')]
   | RTL.Ibuiltin(ef, args, res, s) ->
       let (cargs, cres) = mregs_for_builtin ef in
       let args1 = List.map (convert_builtin_arg tyenv) args
@@ -255,8 +284,8 @@ let block_of_RTL_instr funsig tyenv = function
   | RTL.Ireturn None ->
       [Xreturn []]
   | RTL.Ireturn (Some arg) ->
-      let args' = vmregs (loc_result funsig) in
-      xparmove (expand_regs tyenv [arg]) args' [Xreturn args']
+      let args' = [map_rpair (fun r -> R r) (loc_result funsig)] in
+      parmove_regs2locs tyenv [arg] args' [Xreturn (vlocpairs args')]
 
 (* One above the [pc] nodes of the given RTL function *)
 
@@ -272,8 +301,9 @@ let function_of_RTL_function f tyenv =
   (* Add moves for function parameters *)
   let pc_entrypoint = next_pc f in
   let b_entrypoint =
-     xparmove (vlocs (loc_parameters f.RTL.fn_sig))
-              (expand_regs tyenv f.RTL.fn_params)
+    parmove_locs2regs tyenv
+              (loc_parameters f.RTL.fn_sig)
+              f.RTL.fn_params
               [Xbranch f.RTL.fn_entrypoint] in
   { fn_sig = f.RTL.fn_sig;
     fn_stacksize = f.RTL.fn_stacksize;

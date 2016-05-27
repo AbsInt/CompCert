@@ -544,9 +544,64 @@ Definition transf_partial_fundef (fd: fundef A): res (fundef B) :=
 
 End TRANSF_PARTIAL_FUNDEF.
 
-(** * Arguments and results to builtin functions *)
+(** * Register pairs *)
 
 Set Contextual Implicit.
+
+(** In some intermediate languages (LTL, Mach), 64-bit integers can be
+  split into two 32-bit halves and held in a pair of registers.  
+  Syntactically, this is captured by the type [rpair] below. *)
+
+Inductive rpair (A: Type) : Type :=
+  | One (r: A)
+  | Twolong (rhi rlo: A).
+
+Definition typ_rpair (A: Type) (typ_of: A -> typ) (p: rpair A): typ :=
+  match p with
+  | One r => typ_of r
+  | Twolong rhi rlo => Tlong
+  end.
+
+Definition map_rpair (A B: Type) (f: A -> B) (p: rpair A): rpair B :=
+  match p with
+  | One r => One (f r)
+  | Twolong rhi rlo => Twolong (f rhi) (f rlo)
+  end.
+
+Definition regs_of_rpair (A: Type) (p: rpair A): list A :=
+  match p with
+  | One r => r :: nil
+  | Twolong rhi rlo => rhi :: rlo :: nil
+  end.
+
+Fixpoint regs_of_rpairs (A: Type) (l: list (rpair A)): list A :=
+  match l with 
+  | nil => nil
+  | p :: l => regs_of_rpair p ++ regs_of_rpairs l
+  end.
+
+Lemma in_regs_of_rpairs:
+  forall (A: Type) (x: A) p, In x (regs_of_rpair p) -> forall l, In p l -> In x (regs_of_rpairs l).
+Proof.
+  induction l; simpl; intros. auto. apply in_app. destruct H0; auto. subst a. auto.
+Qed.
+
+Lemma in_regs_of_rpairs_inv:
+  forall (A: Type) (x: A) l, In x (regs_of_rpairs l) -> exists p, In p l /\ In x (regs_of_rpair p).
+Proof.
+  induction l; simpl; intros. contradiction. 
+  rewrite in_app_iff in H; destruct H. 
+  exists a; auto.
+  apply IHl in H. firstorder auto.
+Qed.
+
+Definition forall_rpair (A: Type) (P: A -> Prop) (p: rpair A): Prop :=
+  match p with
+  | One r => P r
+  | Twolong rhi rlo => P rhi /\ P rlo
+  end.
+
+(** * Arguments and results to builtin functions *)
 
 Inductive builtin_arg (A: Type) : Type :=
   | BA (x: A)

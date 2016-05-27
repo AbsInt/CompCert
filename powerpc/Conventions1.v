@@ -86,33 +86,43 @@ Definition dummy_float_reg := F0.   (**r Used in [Coloring]. *)
   registers [R3] or [F1] or [R3, R4], depending on the type of the returned value.
   We treat a function without result as a function with one integer result. *)
 
-Definition loc_result (s: signature) : list mreg :=
+Definition loc_result (s: signature) : rpair mreg :=
   match s.(sig_res) with
-  | None => R3 :: nil
-  | Some (Tint | Tany32) => R3 :: nil
-  | Some (Tfloat | Tsingle | Tany64) => F1 :: nil
-  | Some Tlong => R3 :: R4 :: nil
+  | None => One R3
+  | Some (Tint | Tany32) => One R3
+  | Some (Tfloat | Tsingle | Tany64) => One F1
+  | Some Tlong => Twolong R3 R4
   end.
-
-(** The result registers have types compatible with that given in the signature. *)
 
 Lemma loc_result_type:
   forall sig,
-  subtype_list (proj_sig_res' sig) (map mreg_type (loc_result sig)) = true.
+  subtype (proj_sig_res sig) (typ_rpair mreg_type (loc_result sig)) = true.
 Proof.
-  intros. unfold proj_sig_res', loc_result. destruct (sig_res sig) as [[]|]; auto.
+  intros. unfold proj_sig_res, loc_result.
+  destruct (sig_res sig) as [[]|]; simpl; destruct Archi.ppc64; auto.
 Qed.
 
 (** The result locations are caller-save registers *)
 
 Lemma loc_result_caller_save:
-  forall (s: signature) (r: mreg),
-  In r (loc_result s) -> is_callee_save r = false.
+  forall (s: signature),
+  forall_rpair (fun r => is_callee_save r = false) (loc_result s).
 Proof.
   intros.
-  assert (r = R3 \/ r = R4 \/ r = F1).
-    unfold loc_result in H. destruct (sig_res s); [destruct t|idtac]; simpl in H; intuition.
-  destruct H0 as [A | [A | A]]; subst r; reflexivity.
+  unfold loc_result. destruct (sig_res s) as [[]|]; simpl; auto.
+Qed.
+
+(** If the result is in a pair of registers, those registers are distinct and have type [Tint] at least. *)
+
+Lemma loc_result_pair:
+  forall sg,
+  match loc_result sg with
+  | One _ => True
+  | Twolong r1 r2 => r1 <> r2 /\ sg.(sig_res) = Some Tlong /\ subtype Tint (mreg_type r1) = true /\ subtype Tint (mreg_type r2) = true
+  end.
+Proof.
+  intros; unfold loc_result; destruct (sig_res sg) as [[]|]; auto.
+  simpl; destruct Archi.ppc64; intuition congruence. 
 Qed.
 
 (** ** Location of function arguments *)
@@ -134,39 +144,39 @@ Definition float_param_regs :=
   F1 :: F2 :: F3 :: F4 :: F5 :: F6 :: F7 :: F8 :: nil.
 
 Fixpoint loc_arguments_rec
-    (tyl: list typ) (ir fr ofs: Z) {struct tyl} : list loc :=
+    (tyl: list typ) (ir fr ofs: Z) {struct tyl} : list (rpair loc) :=
   match tyl with
   | nil => nil
   | (Tint | Tany32) as ty :: tys =>
       match list_nth_z int_param_regs ir with
       | None =>
-          S Outgoing ofs ty :: loc_arguments_rec tys ir fr (ofs + 1)
+          One (S Outgoing ofs ty) :: loc_arguments_rec tys ir fr (ofs + 1)
       | Some ireg =>
-          R ireg :: loc_arguments_rec tys (ir + 1) fr ofs
+          One (R ireg) :: loc_arguments_rec tys (ir + 1) fr ofs
       end
   | (Tfloat | Tsingle | Tany64) as ty :: tys =>
       match list_nth_z float_param_regs fr with
       | None =>
           let ofs := align ofs 2 in
-          S Outgoing ofs ty :: loc_arguments_rec tys ir fr (ofs + 2)
+          One (S Outgoing ofs ty) :: loc_arguments_rec tys ir fr (ofs + 2)
       | Some freg =>
-          R freg :: loc_arguments_rec tys ir (fr + 1) ofs
+          One (R freg) :: loc_arguments_rec tys ir (fr + 1) ofs
       end
   | Tlong :: tys =>
       let ir := align ir 2 in
       match list_nth_z int_param_regs ir, list_nth_z int_param_regs (ir + 1) with
       | Some r1, Some r2 =>
-          R r1 :: R r2 :: loc_arguments_rec tys (ir + 2) fr ofs
+          Twolong (R r1) (R r2) :: loc_arguments_rec tys (ir + 2) fr ofs
       | _, _ =>
           let ofs := align ofs 2 in
-          S Outgoing ofs Tint :: S Outgoing (ofs + 1) Tint :: loc_arguments_rec tys ir fr (ofs + 2)
+          Twolong (S Outgoing ofs Tint) (S Outgoing (ofs + 1) Tint) :: loc_arguments_rec tys ir fr (ofs + 2)
       end
   end.
 
 (** [loc_arguments s] returns the list of locations where to store arguments
   when calling a function with signature [s].  *)
 
-Definition loc_arguments (s: signature) : list loc :=
+Definition loc_arguments (s: signature) : list (rpair loc) :=
   loc_arguments_rec s.(sig_args) 0 0 0.
 
 (** [size_arguments s] returns the number of [Outgoing] slots used
@@ -206,15 +216,22 @@ Definition loc_argument_acceptable (l: loc) : Prop :=
   | _ => False
   end.
 
-Remark loc_arguments_rec_charact:
-  forall tyl ir fr ofs l,
-  In l (loc_arguments_rec tyl ir fr ofs) ->
+Definition loc_argument_charact (ofs: Z) (l: loc) : Prop :=
   match l with
   | R r => In r int_param_regs \/ In r float_param_regs
   | S Outgoing ofs' ty => ofs' >= ofs /\ (typealign ty | ofs')
-  | S _ _ _ => False
+  | _ => False
   end.
+
+Remark loc_arguments_rec_charact:
+  forall tyl ir fr ofs p,
+  In p (loc_arguments_rec tyl ir fr ofs) ->
+  forall_rpair (loc_argument_charact ofs) p.
 Proof.
+  assert (X: forall ofs1 ofs2 l, loc_argument_charact ofs2 l -> ofs1 <= ofs2 -> loc_argument_charact ofs1 l).
+  { destruct l; simpl; intros; auto. destruct sl; auto. intuition omega. }
+  assert (Y: forall ofs1 ofs2 p, forall_rpair (loc_argument_charact ofs2) p -> ofs1 <= ofs2 -> forall_rpair (loc_argument_charact ofs1) p).
+  { destruct p; simpl; intuition eauto. }
 Opaque list_nth_z.
   induction tyl; simpl loc_arguments_rec; intros.
   elim H.
@@ -224,66 +241,63 @@ Opaque list_nth_z.
   subst. left. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
   subst. split. omega. apply Z.divide_1_l.
-  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
+  eapply Y; eauto. omega.
 - (* float *)
+  assert (ofs <= align ofs 2) by (apply align_le; omega).
   destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H.
   subst. right. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
-  subst. split. apply Zle_ge. apply align_le. omega. apply Z.divide_1_l.
-  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto.
-  assert (ofs <= align ofs 2) by (apply align_le; omega).
-  intuition omega.
+  subst. split. omega. apply Z.divide_1_l.
+  eapply Y; eauto. omega.
 - (* long *)
+  assert (ofs <= align ofs 2) by (apply align_le; omega).
   set (ir' := align ir 2) in *.
   destruct (list_nth_z int_param_regs ir') as [r1|] eqn:E1.
   destruct (list_nth_z int_param_regs (ir' + 1)) as [r2|] eqn:E2.
-  destruct H. subst; left; eapply list_nth_z_in; eauto.
-  destruct H. subst; left; eapply list_nth_z_in; eauto.
+  destruct H. subst; split; left; eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
-  assert (ofs <= align ofs 2) by (apply align_le; omega).
-  destruct H. subst. split. omega. apply Z.divide_1_l.
-  destruct H. subst. split. omega. apply Z.divide_1_l.
-  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
-  assert (ofs <= align ofs 2) by (apply align_le; omega).
-  destruct H. subst. split. omega. apply Z.divide_1_l.
-  destruct H. subst. split. omega. apply Z.divide_1_l.
-  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
+  destruct H.
+  subst. split; (split; [omega|apply Z.divide_1_l]).
+  eapply Y; eauto. omega.
+  destruct H.
+  subst. split; (split; [omega|apply Z.divide_1_l]).
+  eapply Y; eauto. omega.
 - (* single *)
+  assert (ofs <= align ofs 2) by (apply align_le; omega).
   destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H.
   subst. right. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
-  subst. split. apply Zle_ge. apply align_le. omega. apply Z.divide_1_l.
-  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto.
-  assert (ofs <= align ofs 2) by (apply align_le; omega).
-  intuition omega.
+  subst. split. omega. apply Z.divide_1_l.
+  eapply Y; eauto. omega.
 - (* any32 *)
   destruct (list_nth_z int_param_regs ir) as [r|] eqn:E; destruct H.
   subst. left. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
   subst. split. omega. apply Z.divide_1_l.
-  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
-- (* any64 *)
+  eapply Y; eauto. omega.
+- (* float *)
+  assert (ofs <= align ofs 2) by (apply align_le; omega).
   destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H.
   subst. right. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
-  subst. split. apply Zle_ge. apply align_le. omega. apply Z.divide_1_l.
-  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto.
-  assert (ofs <= align ofs 2) by (apply align_le; omega).
-  intuition omega.
+  subst. split. omega. apply Z.divide_1_l.
+  eapply Y; eauto. omega.
 Qed.
 
 Lemma loc_arguments_acceptable:
-  forall (s: signature) (l: loc),
-  In l (loc_arguments s) -> loc_argument_acceptable l.
+  forall (s: signature) (p: rpair loc),
+  In p (loc_arguments s) -> forall_rpair loc_argument_acceptable p.
 Proof.
   unfold loc_arguments; intros.
+  exploit loc_arguments_rec_charact; eauto.
   assert (A: forall r, In r int_param_regs -> is_callee_save r = false) by decide_goal.
   assert (B: forall r, In r float_param_regs -> is_callee_save r = false) by decide_goal.
-  generalize (loc_arguments_rec_charact _ _ _ _ _ H).
-  destruct l.
-  intros [C|C]; simpl; auto.
-  destruct sl; try contradiction. simpl; auto.
+  assert (X: forall l, loc_argument_charact 0 l -> loc_argument_acceptable l).
+  { unfold loc_argument_charact, loc_argument_acceptable.
+    destruct l as [r | [] ofs ty]; auto.  intros [C|C]; auto. }
+  unfold forall_rpair; destruct p; intuition auto.
 Qed.
+
 Hint Resolve loc_arguments_acceptable: locs.
 
 (** The offsets of [Outgoing] arguments are below [size_arguments s]. *)
@@ -324,12 +338,12 @@ Qed.
 
 Lemma loc_arguments_bounded:
   forall (s: signature) (ofs: Z) (ty: typ),
-  In (S Outgoing ofs ty) (loc_arguments s) ->
+  In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments s)) ->
   ofs + typesize ty <= size_arguments s.
 Proof.
   intros.
   assert (forall tyl ir fr ofs0,
-    In (S Outgoing ofs ty) (loc_arguments_rec tyl ir fr ofs0) ->
+    In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments_rec tyl ir fr ofs0)) ->
     ofs + typesize ty <= size_arguments_rec tyl ir fr ofs0).
 {
   induction tyl; simpl; intros.
@@ -348,19 +362,19 @@ Proof.
   inv H0. apply size_arguments_rec_above. eauto.
 - (* long *)
   set (ir' := align ir 2) in *.
-  destruct (list_nth_z int_param_regs ir').
-  destruct (list_nth_z int_param_regs (ir' + 1)).
+  assert (DFL:
+    In (S Outgoing ofs ty) (regs_of_rpairs
+                             (Twolong (S Outgoing (align ofs0 2) Tint)
+                                      (S Outgoing (align ofs0 2 + 1) Tint)
+                          :: loc_arguments_rec tyl ir' fr (align ofs0 2 + 2))) ->
+    ofs + typesize ty <= size_arguments_rec tyl ir' fr (align ofs0 2 + 2)).
+  { intros IN. destruct IN. inv H1.
+    transitivity (align ofs0 2 + 2). simpl; omega. apply size_arguments_rec_above. 
+    destruct H1. inv H1. transitivity (align ofs0 2 + 2). simpl; omega. apply size_arguments_rec_above.
+    auto. }
+  destruct (list_nth_z int_param_regs ir'); auto.
+  destruct (list_nth_z int_param_regs (ir' + 1)); auto.
   destruct H0. congruence. destruct H0. congruence. eauto.
-  destruct H0. inv H0.
-  transitivity (align ofs0 2 + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
-  destruct H0. inv H0.
-  transitivity (align ofs0 2 + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
-  eauto.
-  destruct H0. inv H0.
-  transitivity (align ofs0 2 + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
-  destruct H0. inv H0.
-  transitivity (align ofs0 2 + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
-  eauto.
 - (* single *)
   destruct (list_nth_z float_param_regs fr); destruct H0.
   congruence.

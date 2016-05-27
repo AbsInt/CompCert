@@ -892,14 +892,14 @@ Opaque loadind.
   intros [tf [A B]]. simpl in B. inv B.
   exploit extcall_arguments_match; eauto.
   intros [args' [C D]].
-  exploit external_call_mem_extends'; eauto.
+  exploit external_call_mem_extends; eauto.
   intros [res' [m2' [P [Q [R S]]]]].
   left; econstructor; split.
   apply plus_one. eapply exec_step_external; eauto.
-  eapply external_call_symbols_preserved'; eauto. apply senv_preserved.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto.
   apply agree_set_other; auto with asmgen.
-  eapply agree_set_mregs; eauto.
+  eapply agree_set_pair; eauto.
 
 - (* return *)
   inv STACKS. simpl in *.

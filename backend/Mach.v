@@ -156,10 +156,10 @@ Proof.
   unfold Regmap.set. destruct (RegEq.eq r a); auto.
 Qed.
 
-Fixpoint set_regs (rl: list mreg) (vl: list val) (rs: regset) : regset :=
-  match rl, vl with
-  | r1 :: rl', v1 :: vl' => set_regs rl' vl' (Regmap.set r1 v1 rs)
-  | _, _ => rs
+Definition set_pair (p: rpair mreg) (v: val) (rs: regset) : regset :=
+  match p with
+  | One r => rs#r <- v
+  | Twolong rhi rlo => rs#rhi <- (Val.hiword v) #rlo <- (Val.loword v)
   end.
 
 Fixpoint set_res (res: builtin_res mreg) (v: val) (rs: regset) : regset :=
@@ -216,16 +216,25 @@ Definition find_function_ptr
 
 (** Extract the values of the arguments to an external call. *)
 
-Inductive extcall_arg: regset -> mem -> val -> loc -> val -> Prop :=
-  | extcall_arg_reg: forall rs m sp r,
+Inductive extcall_arg (rs: regset) (m: mem) (sp: val): loc -> val -> Prop :=
+  | extcall_arg_reg: forall r,
       extcall_arg rs m sp (R r) (rs r)
-  | extcall_arg_stack: forall rs m sp ofs ty v,
+  | extcall_arg_stack: forall ofs ty v,
       load_stack m sp ty (Int.repr (Stacklayout.fe_ofs_arg + 4 * ofs)) = Some v ->
       extcall_arg rs m sp (S Outgoing ofs ty) v.
 
+Inductive extcall_arg_pair (rs: regset) (m: mem) (sp: val): rpair loc -> val -> Prop :=
+  | extcall_arg_one: forall l v,
+      extcall_arg rs m sp l v ->
+      extcall_arg_pair rs m sp (One l) v
+  | extcall_arg_twolong: forall hi lo vhi vlo,
+      extcall_arg rs m sp hi vhi ->
+      extcall_arg rs m sp lo vlo ->
+      extcall_arg_pair rs m sp (Twolong hi lo) (Val.longofwords vhi vlo).
+
 Definition extcall_arguments
     (rs: regset) (m: mem) (sp: val) (sg: signature) (args: list val) : Prop :=
-  list_forall2 (extcall_arg rs m sp) (loc_arguments sg) args.
+  list_forall2 (extcall_arg_pair rs m sp) (loc_arguments sg) args.
 
 (** Mach execution states. *)
 
@@ -391,8 +400,8 @@ Inductive step: state -> trace -> state -> Prop :=
       forall s fb rs m t rs' ef args res m',
       Genv.find_funct_ptr ge fb = Some (External ef) ->
       extcall_arguments rs m (parent_sp s) (ef_sig ef) args ->
-      external_call' ef ge args m t res m' ->
-      rs' = set_regs (loc_result (ef_sig ef)) res rs ->
+      external_call ef ge args m t res m' ->
+      rs' = set_pair (loc_result (ef_sig ef)) res rs ->
       step (Callstate s fb rs m)
          t (Returnstate s rs' m')
   | exec_return:
@@ -411,7 +420,7 @@ Inductive initial_state (p: program): state -> Prop :=
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m r retcode,
-      loc_result signature_main = r :: nil ->
+      loc_result signature_main = One r ->
       rs r = Vint retcode ->
       final_state (Returnstate nil rs m) retcode.
 
