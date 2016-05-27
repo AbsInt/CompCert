@@ -38,6 +38,7 @@ let () =
       ("__builtin_va_arg", fun loc -> BUILTIN_VA_ARG loc);
       ("__const", fun loc -> CONST loc);
       ("__const__", fun loc -> CONST loc);
+      ("_Generic", fun loc -> GENERIC loc);
       ("__inline", fun loc -> INLINE loc);
       ("__inline__", fun loc -> INLINE loc);
       ("__packed__", fun loc -> PACKED loc);
@@ -615,6 +616,7 @@ and singleline_comment = parse
       | ASM loc -> loop ASM't loc
       | PRAGMA (s, loc) -> loop PRAGMA't (s, loc)
       | PRE_NAME _ -> assert false
+      | GENERIC loc -> loop GENERIC't loc
     in
     Lazy.from_fun compute_token_stream
 
