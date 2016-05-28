@@ -19,7 +19,7 @@ open Format
 open Camlcoq
 open AST
 open !Ctypes
-open Cop
+open !Cop
 open !Clight
 
 (* Options, lists, pairs *)
