@@ -82,7 +82,7 @@ let expand_annot_val txt targ args res =
   | [BA(FR src)], BR(FR dst) ->
      if dst <> src then emit (Pfcpyd (dst,src))
   | _, _ ->
-     raise (Error "ill-formed __builtin_annot_val")
+     raise (Error "ill-formed __builtin_annot_intval")
 
 (* Handling of memcpy *)
 
