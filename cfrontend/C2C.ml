@@ -876,7 +876,7 @@ let convertAsm loc env txt outputs inputs clobber =
   let (txt', output', inputs') =
     ExtendedAsm.transf_asm loc env txt outputs inputs clobber in
   let clobber' =
-    List.map (fun s -> coqstring_of_camlstring (String.uppercase s)) clobber in
+    List.map (fun s -> coqstring_uppercase_ascii_of_camlstring s) clobber in
   let ty_res =
     match output' with None -> TVoid [] | Some e -> e.etyp in
   (* Build the Ebuiltin expression *)

@@ -22,13 +22,13 @@ let _ =
     (fun (s, r) -> Hashtbl.add register_names r (camlstring_of_coqstring s))
     Machregs.register_names
 
-let scratch_register_names = [ "R14" ]
+let is_scratch_register s =  s = "R14"  || s = "r14"
 
 let name_of_register r =
   try Some (Hashtbl.find register_names r) with Not_found -> None
 
 let register_by_name s =
-  Machregs.register_by_name (coqstring_of_camlstring (String.uppercase s))
+  Machregs.register_by_name (coqstring_uppercase_ascii_of_camlstring s)
 
 let can_reserve_register r =
   List.mem r Conventions1.int_callee_save_regs

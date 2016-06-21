@@ -159,10 +159,9 @@ let transf_outputs loc env = function
 let check_clobbers loc clob =
   List.iter
     (fun c ->
-      let c' = String.uppercase c in
-      if Machregsaux.register_by_name c' <> None
-      || List.mem c' Machregsaux.scratch_register_names
-      || c' = "MEMORY" || c' = "CC"
+      if Machregsaux.register_by_name c <> None
+      || Machregsaux.is_scratch_register c
+      || c = "memory" || c = "cc" (* GCC does not accept MEMORY or CC *)
       then ()
       else error "%aError: unrecognized asm register clobber '%s'"
                  formatloc loc c)

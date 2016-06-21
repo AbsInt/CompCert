@@ -318,6 +318,16 @@ let coqstring_of_camlstring s =
     if pos < 0 then accu else cstring (s.[pos] :: accu) (pos - 1)
   in cstring [] (String.length s - 1)
 
+let coqstring_uppercase_ascii_of_camlstring s =
+  let rec cstring accu pos =
+    if pos < 0 then accu else
+    let d = if s.[pos] >= 'a' && s.[pos] <= 'z' then
+      Char.chr (Char.code s.[pos] - 32)
+    else
+      s.[pos] in
+    cstring (d :: accu) (pos - 1)
+  in cstring [] (String.length s - 1)
+
 (* Floats *)
 
 let coqfloat_of_camlfloat f =
