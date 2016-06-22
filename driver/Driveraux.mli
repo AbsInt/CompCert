@@ -40,4 +40,4 @@ val gnu_option: string -> bool
    (** Set the options for gnu systems *)
 
 val explode_comma_option: string -> string list
-   (** Split options by whitespace *)
+   (** Split option at commas *)
