@@ -404,6 +404,12 @@ Definition shru (v1 v2: val): val :=
   | _, _ => Vundef
   end.
 
+Definition rol (v1 v2: val): val :=
+  match v1, v2 with
+  | Vint n1, Vint n2 => Vint(Int.rol n1 n2)
+  | _, _ => Vundef
+  end.
+
 Definition rolm (v: val) (amount mask: int): val :=
   match v with
   | Vint n => Vint(Int.rolm n amount mask)
@@ -412,10 +418,7 @@ Definition rolm (v: val) (amount mask: int): val :=
 
 Definition ror (v1 v2: val): val :=
   match v1, v2 with
-  | Vint n1, Vint n2 =>
-     if Int.ltu n2 Int.iwordsize
-     then Vint(Int.ror n1 n2)
-     else Vundef
+  | Vint n1, Vint n2 => Vint(Int.ror n1 n2)
   | _, _ => Vundef
   end.
 

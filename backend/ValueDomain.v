@@ -1430,9 +1430,39 @@ Proof.
   intros. unfold Val.notint, notint; inv H; eauto with va.
 Qed.
 
+Definition rol (x y: aval) :=
+  match y, x with
+  | I j, I i => I(Int.rol i j)
+  | I j, Uns p n => uns p (n + Int.unsigned j)
+  | I j, Sgn p n => if zlt n Int.zwordsize then sgn p (n + Int.unsigned j) else ntop1 x
+  | _, _ => ntop1 x
+  end.
+
+Lemma rol_sound:
+  forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.rol v w) (rol x y).
+Proof.
+  intros.
+  assert (DEFAULT: forall p, vmatch (Val.rol v w) (Ifptr p)).
+  {
+    destruct v; destruct w; simpl; constructor.
+  }
+  unfold rol; destruct y; try apply DEFAULT; auto. inv H0. unfold Val.rol.
+  inv H; auto with va.
+- apply vmatch_uns. red; intros. rewrite Int.bits_rol by auto.
+  generalize (Int.unsigned_range n); intros.
+  rewrite Zmod_small by omega.
+  apply H1. omega. omega. 
+- destruct (zlt n0 Int.zwordsize); auto with va.
+  apply vmatch_sgn. red; intros. rewrite ! Int.bits_rol by omega.
+  generalize (Int.unsigned_range n); intros.
+  rewrite ! Zmod_small by omega.
+  rewrite H1 by omega. symmetry. rewrite H1 by omega. auto.
+- destruct (zlt n0 Int.zwordsize); auto with va.
+Qed.
+
 Definition ror (x y: aval) :=
   match y, x with
-  | I j, I i => if Int.ltu j Int.iwordsize then I(Int.ror i j) else ntop
+  | I j, I i => I(Int.ror i j)
   | _, _ => ntop1 x
   end.
 
@@ -1442,35 +1472,23 @@ Proof.
   intros.
   assert (DEFAULT: forall p, vmatch (Val.ror v w) (Ifptr p)).
   {
-    destruct v; destruct w; simpl; try constructor.
-    destruct (Int.ltu i0 Int.iwordsize); constructor.
+    destruct v; destruct w; simpl; constructor.
   }
   unfold ror; destruct y; try apply DEFAULT; auto. inv H0. unfold Val.ror.
-  destruct (Int.ltu n Int.iwordsize) eqn:LTU.
-  inv H; auto with va.
   inv H; auto with va.
 Qed.
 
 Definition rolm (x: aval) (amount mask: int) :=
-  match x with
-  | I i => I (Int.rolm i amount mask)
-  | _   => uns (provenance x) (usize mask)
-  end.
+  and (rol x (I amount)) (I mask).
 
 Lemma rolm_sound:
   forall v x amount mask,
   vmatch v x -> vmatch (Val.rolm v amount mask) (rolm x amount mask).
 Proof.
   intros.
-  assert (UNS_r: forall i j n, is_uns n j -> is_uns n (Int.and i j)).
-  {
-    intros; red; intros. rewrite Int.bits_and by auto. rewrite (H0 m) by auto.
-    apply andb_false_r.
-  }
-  assert (UNS: forall i, vmatch (Vint (Int.rolm i amount mask))
-                                (uns (provenance x) (usize mask))).
-  { intros. unfold Int.rolm. apply vmatch_uns. apply UNS_r. auto with va. }
-  unfold Val.rolm, rolm. inv H; auto with va.
+  replace (Val.rolm v amount mask) with (Val.and (Val.rol v (Vint amount)) (Vint mask)).
+  apply and_sound. apply rol_sound. auto. constructor. constructor.
+  destruct v; auto.
 Qed.
 
 (** Integer arithmetic operations *)
