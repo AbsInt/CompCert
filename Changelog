@@ -1,3 +1,49 @@
+Release 2.7, 2016-06-29
+=======================
+
+Major improvement:
+- The proof of semantic preservation now accounts for separate compilation
+  and linking, following the approach of Kang, Kim, Hur, Dreyer and
+  Vafeiadis, "Lightweight verification of separate compilation", POPL 2016.
+  Namely, the proof considers a set of C compilation units, separately
+  compiled to assembly then linked, and shows that the resulting
+  assembly program preserves the semantics of the C program that would
+  be obtained by syntactic linking of the source C compilation units.
+
+Language features:
+- Parse the _Noreturn function attribute from ISO C11.
+- New standard includes files: <iso646.h> and <stdnoreturn.h> from ISO C11.
+- New built-in functions: __builtin_clzl, __builtin_clzll
+  (count leading zeros, 32 and 64 bits) for ARM, IA32 and PowerPC;
+  __builtin_ctz, __builtin_ctzl, __builtin_ctzll
+  (count trailing zeros, 32 and 64 bits) for IA32.
+
+Formal C semantics:
+- The semantics of conversions from pointer types to _Bool
+  is fully defined (again).
+
+Coq development:
+- Revised the Stacking pass and its proof to make it more extensible
+  later to e.g. 64-bit integer registers.
+- Use register pairs in function calling conventions to control more
+  precisely the splitting of 64-bit integer arguments and results
+  into pairs of 32-bit quantities
+- Revised the way register conventions are described in Machregs
+  and Conventions.
+- Simulation diagrams now live in Prop instead of Type.
+
+OCaml development:
+- Code cleanup to remove warnings, support "safe strings" mode,
+  and be fully compatible with OCaml 4.02 and 4.03.
+- Cminor parser: support for single-precision FP numbers and operators.
+
+Bug fixing:
+- Some declarations within C expressions were incorrectly ignored
+  (e.g. "sizeof(enum e {A})").
+- ARM in Thumb mode: incorrect "movs" instructions involving the stack
+  pointer register were generated.
+
+
 Release 2.6, 2015-12-21
 =======================
 
