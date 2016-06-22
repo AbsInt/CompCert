@@ -146,9 +146,7 @@ Definition var_names (vars: list(ident * type)) : list ident :=
 (** Functions can either be defined ([Internal]) or declared as
   external functions ([External]). *)
 
-Inductive fundef : Type :=
-  | Internal: function -> fundef
-  | External: external_function -> typelist -> type -> calling_convention -> fundef.
+Definition fundef := Ctypes.fundef function.
 
 (** The type of a function definition. *)
 
@@ -163,45 +161,16 @@ Definition type_of_fundef (f: fundef) : type :=
 
 (** ** Programs *)
 
-(** A program is composed of:
+(** As defined in module [Ctypes], a program, or compilation unit, is
+  composed of:
 - a list of definitions of functions and global variables;
 - the names of functions and global variables that are public (not static);
 - the name of the function that acts as entry point ("main" function).
-- a list of definitions for structure and union names;
-- the corresponding composite environment;
-*)
+- a list of definitions for structure and union names
+- the corresponding composite environment
+- a proof that this environment is consistent with the definitions. *)
 
-Record program : Type := {
-  prog_defs: list (ident * globdef fundef type);
-  prog_public: list ident;
-  prog_main: ident;
-  prog_types: list composite_definition;
-  prog_comp_env: composite_env;
-  prog_comp_env_eq: build_composite_env prog_types = OK prog_comp_env
-}.
-
-Definition program_of_program (p: program) : AST.program fundef type :=
-  {| AST.prog_defs := p.(prog_defs);
-     AST.prog_public := p.(prog_public);
-     AST.prog_main := p.(prog_main) |}.
-
-Coercion program_of_program: program >-> AST.program.
-
-Program Definition make_program (types: list composite_definition)
-                                (defs: list (ident * globdef fundef type))
-                                (public: list ident)
-                                (main: ident): res program :=
-  match build_composite_env types with
-  | OK env =>
-      OK {| prog_defs := defs;
-            prog_public := public;
-            prog_main := main;
-            prog_types := types;
-            prog_comp_env := env;
-            prog_comp_env_eq := _ |}
-  | Error msg =>
-      Error msg
-  end.
+Definition program := Ctypes.program function.
 
 (** * Operational semantics *)
 
@@ -412,7 +381,7 @@ Inductive eval_expr: expr -> val -> Prop :=
       eval_expr (Ebinop op a1 a2 ty) v
   | eval_Ecast:   forall a ty v1 v,
       eval_expr a v1 ->
-      sem_cast v1 (typeof a) ty = Some v ->
+      sem_cast v1 (typeof a) ty m = Some v ->
       eval_expr (Ecast a ty) v
   | eval_Esizeof: forall ty1 ty,
       eval_expr (Esizeof ty1 ty) (Vint (Int.repr (sizeof ge ty1)))
@@ -464,7 +433,7 @@ Inductive eval_exprlist: list expr -> typelist -> list val -> Prop :=
       eval_exprlist nil Tnil nil
   | eval_Econs:   forall a bl ty tyl v1 v2 vl,
       eval_expr a v1 ->
-      sem_cast v1 (typeof a) ty = Some v2 ->
+      sem_cast v1 (typeof a) ty m = Some v2 ->
       eval_exprlist bl tyl vl ->
       eval_exprlist (a :: bl) (Tcons ty tyl) (v2 :: vl).
 
@@ -580,7 +549,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | step_assign:   forall f a1 a2 k e le m loc ofs v2 v m',
       eval_lvalue e le m a1 loc ofs ->
       eval_expr e le m a2 v2 ->
-      sem_cast v2 (typeof a2) (typeof a1) = Some v ->
+      sem_cast v2 (typeof a2) (typeof a1) m = Some v ->
       assign_loc ge (typeof a1) m loc ofs v m' ->
       step (State f (Sassign a1 a2) k e le m)
         E0 (State f Sskip k e le m')
@@ -647,7 +616,7 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (Returnstate Vundef (call_cont k) m')
   | step_return_1: forall f a k e le m v v' m',
       eval_expr e le m a v ->
-      sem_cast v (typeof a) f.(fn_return) = Some v' ->
+      sem_cast v (typeof a) f.(fn_return) m = Some v' ->
       Mem.free_list m (blocks_of_env e) = Some m' ->
       step (State f (Sreturn (Some a)) k e le m)
         E0 (Returnstate v' (call_cont k) m')
@@ -774,4 +743,3 @@ Proof.
   eapply external_call_trace_length; eauto.
   eapply external_call_trace_length; eauto.
 Qed.
-

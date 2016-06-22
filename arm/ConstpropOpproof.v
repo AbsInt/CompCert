@@ -98,7 +98,7 @@ Ltac SimplVM :=
 Lemma eval_static_shift_correct:
   forall s n, eval_shift s (Vint n) = Vint (eval_static_shift s n).
 Proof.
-  intros. destruct s; simpl; rewrite s_range; auto.
+  intros. destruct s; simpl; rewrite ? s_range; auto.
 Qed.
 
 Lemma cond_strength_reduction_correct:

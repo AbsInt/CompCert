@@ -84,6 +84,28 @@ Proof.
   destruct ty; compute; auto.
 Qed.
 
+Definition typealign (ty: typ) : Z :=
+  match ty with
+  | Tint => 1
+  | Tlong => 2
+  | Tfloat => 1
+  | Tsingle => 1
+  | Tany32 => 1
+  | Tany64 => 1
+  end.
+
+Lemma typealign_pos:
+  forall (ty: typ), typealign ty > 0.
+Proof.
+  destruct ty; compute; auto.
+Qed.
+
+Lemma typealign_typesize:
+  forall (ty: typ), (typealign ty | typesize ty).
+Proof.
+  intros. exists (typesize ty / typealign ty); destruct ty; reflexivity.
+Qed.
+
 (** ** Locations *)
 
 (** Locations are just the disjoint union of machine registers and
@@ -364,17 +386,35 @@ Module Locmap.
     auto.
   Qed.
 
-  Fixpoint setlist (ll: list loc) (vl: list val) (m: t) {struct ll} : t :=
-    match ll, vl with
-    | l1 :: ls, v1 :: vs => setlist ls vs (set l1 v1 m)
-    | _, _ => m
+  Definition getpair (p: rpair loc) (m: t) : val :=
+    match p with
+    | One l => m l
+    | Twolong l1 l2 => Val.longofwords (m l1) (m l2)
     end.
 
-  Lemma gsetlisto: forall l ll vl m, Loc.notin l ll -> (setlist ll vl m) l = m l.
+  Definition setpair (p: rpair mreg) (v: val) (m: t) : t :=
+    match p with
+    | One r => set (R r) v m
+    | Twolong hi lo => set (R lo) (Val.loword  v) (set (R hi) (Val.hiword v) m)
+    end.
+
+  Lemma getpair_exten:
+    forall p ls1 ls2,
+    (forall l, In l (regs_of_rpair p) -> ls2 l = ls1 l) ->
+    getpair p ls2 = getpair p ls1.
   Proof.
-    induction ll; simpl; intros.
-    auto.
-    destruct vl; auto. destruct H. rewrite IHll; auto. apply gso; auto. apply Loc.diff_sym; auto.
+    intros. destruct p; simpl. 
+    apply H; simpl; auto.
+    f_equal; apply H; simpl; auto.
+  Qed.
+
+  Lemma gpo:
+    forall p v m l,
+    forall_rpair (fun r => Loc.diff l (R r)) p -> setpair p v m l = m l.
+  Proof.
+    intros; destruct p; simpl in *. 
+  - apply gso. apply Loc.diff_sym; auto.
+  - destruct H. rewrite ! gso by (apply Loc.diff_sym; auto). auto.
   Qed.
 
   Fixpoint setres (res: builtin_res mreg) (v: val) (m: t) : t :=

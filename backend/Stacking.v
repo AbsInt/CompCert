@@ -12,106 +12,55 @@
 
 (** Layout of activation records; translation from Linear to Mach. *)
 
-Require Import Coqlib.
-Require Import Errors.
-Require Import AST.
-Require Import Integers.
-Require Import Op.
-Require Import Locations.
-Require Import Linear.
-Require Import Bounds.
-Require Import Mach.
-Require Import Conventions.
-Require Import Stacklayout.
-Require Import Lineartyping.
+Require Import Coqlib Errors.
+Require Import Integers AST.
+Require Import Op Locations Linear Mach.
+Require Import Bounds Conventions Stacklayout Lineartyping.
 
 (** * Layout of activation records *)
 
 (** The machine- and ABI-dependent aspects of the layout are defined
   in module [Stacklayout]. *)
 
-(** Computation the frame offset for the given component of the frame.
-  The component is expressed by the following [frame_index] sum type. *)
+(** Offsets (in bytes) corresponding to stack slots. *)
 
-Inductive frame_index: Type :=
-  | FI_link: frame_index
-  | FI_retaddr: frame_index
-  | FI_local: Z -> typ -> frame_index
-  | FI_arg: Z -> typ -> frame_index
-  | FI_saved_int: Z -> frame_index
-  | FI_saved_float: Z -> frame_index.
+Definition offset_local (fe: frame_env) (x: Z) := fe.(fe_ofs_local) + 4 * x.
 
-Definition offset_of_index (fe: frame_env) (idx: frame_index) :=
-  match idx with
-  | FI_link => fe.(fe_ofs_link)
-  | FI_retaddr => fe.(fe_ofs_retaddr)
-  | FI_local x ty => fe.(fe_ofs_local) + 4 * x
-  | FI_arg x ty => fe_ofs_arg + 4 * x
-  | FI_saved_int x => fe.(fe_ofs_int_callee_save) + 4 * x
-  | FI_saved_float x => fe.(fe_ofs_float_callee_save) + 8 * x
+Definition offset_arg (x: Z) := fe_ofs_arg + 4 * x.
+
+(** [save_callee_save rl ofs k] adds before [k] the instructions that
+  store in the frame the values of callee-save registers [rl],
+  starting at offset [ofs]. *)
+
+Fixpoint save_callee_save_rec (rl: list mreg) (ofs: Z) (k: Mach.code) :=
+  match rl with
+  | nil => k
+  | r :: rl =>
+      let ty := mreg_type r in
+      let sz := AST.typesize ty in
+      let ofs1 := align ofs sz in
+      Msetstack r (Int.repr ofs1) ty :: save_callee_save_rec rl (ofs1 + sz) k
   end.
 
-(** * Saving and restoring callee-save registers *)
-
-(** [save_callee_save fe k] adds before [k] the instructions that
-  store in the frame the values of callee-save registers used by the
-  current function. *)
-
-Definition save_callee_save_reg
-    (bound: frame_env -> Z) (number: mreg -> Z) (mkindex: Z -> frame_index)
-    (ty: typ) (fe: frame_env) (cs: mreg) (k: Mach.code) :=
-  let i := number cs in
-  if zlt i (bound fe)
-  then Msetstack cs (Int.repr (offset_of_index fe (mkindex i))) ty :: k
-  else k.
-
-Definition save_callee_save_regs
-    (bound: frame_env -> Z) (number: mreg -> Z) (mkindex: Z -> frame_index)
-    (ty: typ) (fe: frame_env) (csl: list mreg) (k: Mach.code) :=
-  List.fold_right (save_callee_save_reg bound number mkindex ty fe) k csl.
-
-Definition save_callee_save_int (fe: frame_env) :=
-  save_callee_save_regs
-    fe_num_int_callee_save index_int_callee_save FI_saved_int
-    Tany32 fe int_callee_save_regs.
-
-Definition save_callee_save_float (fe: frame_env) :=
-  save_callee_save_regs
-    fe_num_float_callee_save index_float_callee_save FI_saved_float
-    Tany64 fe float_callee_save_regs.
-
 Definition save_callee_save (fe: frame_env) (k: Mach.code) :=
-  save_callee_save_int fe (save_callee_save_float fe k).
+  save_callee_save_rec fe.(fe_used_callee_save) fe.(fe_ofs_callee_save) k.
 
 (** [restore_callee_save fe k] adds before [k] the instructions that
   re-load from the frame the values of callee-save registers used by the
   current function, restoring these registers to their initial values. *)
 
-Definition restore_callee_save_reg
-    (bound: frame_env -> Z) (number: mreg -> Z) (mkindex: Z -> frame_index)
-    (ty: typ) (fe: frame_env) (cs: mreg) (k: Mach.code) :=
-  let i := number cs in
-  if zlt i (bound fe)
-  then Mgetstack (Int.repr (offset_of_index fe (mkindex i))) ty cs :: k
-  else k.
-
-Definition restore_callee_save_regs
-    (bound: frame_env -> Z) (number: mreg -> Z) (mkindex: Z -> frame_index)
-    (ty: typ) (fe: frame_env) (csl: list mreg) (k: Mach.code) :=
-  List.fold_right (restore_callee_save_reg bound number mkindex ty fe) k csl.
-
-Definition restore_callee_save_int (fe: frame_env) :=
-  restore_callee_save_regs
-    fe_num_int_callee_save index_int_callee_save FI_saved_int
-    Tany32 fe int_callee_save_regs.
-
-Definition restore_callee_save_float (fe: frame_env) :=
-  restore_callee_save_regs
-    fe_num_float_callee_save index_float_callee_save FI_saved_float
-    Tany64 fe float_callee_save_regs.
+Fixpoint restore_callee_save_rec (rl: list mreg) (ofs: Z) (k: Mach.code) :=
+  match rl with
+  | nil => k
+  | r :: rl =>
+      let ty := mreg_type r in
+      let sz := AST.typesize ty in
+      let ofs1 := align ofs sz in
+      Mgetstack (Int.repr ofs1) ty r :: restore_callee_save_rec rl (ofs1 + sz) k
+  end.
 
 Definition restore_callee_save (fe: frame_env) (k: Mach.code) :=
-  restore_callee_save_int fe (restore_callee_save_float fe k).
+  restore_callee_save_rec fe.(fe_used_callee_save) fe.(fe_ofs_callee_save) k.
 
 (** * Code transformation. *)
 
@@ -134,7 +83,7 @@ Fixpoint transl_builtin_arg (fe: frame_env) (a: builtin_arg loc) : builtin_arg m
   match a with
   | BA (R r) => BA r
   | BA (S Local ofs ty) =>
-      BA_loadstack (chunk_of_type ty) (Int.repr (offset_of_index fe (FI_local ofs ty)))
+      BA_loadstack (chunk_of_type ty) (Int.repr (offset_local fe ofs))
   | BA (S _ _ _) => BA_int Int.zero  (**r never happens *)
   | BA_int n => BA_int n
   | BA_long n => BA_long n
@@ -165,20 +114,20 @@ Definition transl_instr
   | Lgetstack sl ofs ty r =>
       match sl with
       | Local =>
-          Mgetstack (Int.repr (offset_of_index fe (FI_local ofs ty))) ty r :: k
+          Mgetstack (Int.repr (offset_local fe ofs)) ty r :: k
       | Incoming =>
-          Mgetparam (Int.repr (offset_of_index fe (FI_arg ofs ty))) ty r :: k
+          Mgetparam (Int.repr (offset_arg ofs)) ty r :: k
       | Outgoing =>
-          Mgetstack (Int.repr (offset_of_index fe (FI_arg ofs ty))) ty r :: k
+          Mgetstack (Int.repr (offset_arg ofs)) ty r :: k
       end
   | Lsetstack r sl ofs ty =>
       match sl with
       | Local =>
-          Msetstack r (Int.repr (offset_of_index fe (FI_local ofs ty))) ty :: k
+          Msetstack r (Int.repr (offset_local fe ofs)) ty :: k
       | Incoming =>
           k (* should not happen *)
       | Outgoing =>
-          Msetstack r (Int.repr (offset_of_index fe (FI_arg ofs ty))) ty :: k
+          Msetstack r (Int.repr (offset_arg ofs)) ty :: k
       end
   | Lop op args res =>
       Mop (transl_op fe op) args res :: k
@@ -189,8 +138,7 @@ Definition transl_instr
   | Lcall sig ros =>
       Mcall sig ros :: k
   | Ltailcall sig ros =>
-      restore_callee_save fe
-        (Mtailcall sig ros :: k)
+      restore_callee_save fe (Mtailcall sig ros :: k)
   | Lbuiltin ef args dst =>
       Mbuiltin ef (map (transl_builtin_arg fe) args) dst :: k
   | Llabel lbl =>
@@ -202,8 +150,7 @@ Definition transl_instr
   | Ljumptable arg tbl =>
       Mjumptable arg tbl :: k
   | Lreturn =>
-      restore_callee_save fe
-        (Mreturn :: k)
+      restore_callee_save fe (Mreturn :: k)
   end.
 
 (** Translation of a function.  Code that saves the values of used

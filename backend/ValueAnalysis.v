@@ -10,24 +10,11 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import Compopts.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Globalenvs.
-Require Import Events.
-Require Import Lattice.
-Require Import Kildall.
-Require Import Registers.
-Require Import Op.
-Require Import RTL.
-Require Import ValueDomain.
-Require Import ValueAOp.
-Require Import Liveness.
+Require Import Coqlib Maps Integers Floats Lattice Kildall.
+Require Import Compopts AST Linking.
+Require Import Values Memory Globalenvs Events.
+Require Import Registers Op RTL.
+Require Import ValueDomain ValueAOp Liveness.
 
 (** * The dataflow analysis *)
 
@@ -208,7 +195,7 @@ Fixpoint store_init_data_list (ab: ablock) (p: Z) (idl: list init_data)
                               {struct idl}: ablock :=
   match idl with
   | nil => ab
-  | id :: idl' => store_init_data_list (store_init_data ab p id) (p + Genv.init_data_size id) idl'
+  | id :: idl' => store_init_data_list (store_init_data ab p id) (p + init_data_size id) idl'
   end.
 
 (** When CompCert is used in separate compilation mode, the [gvar_init]
@@ -239,7 +226,7 @@ Definition alloc_global (rm: romem) (idg: ident * globdef fundef unit): romem :=
       else PTree.remove id rm
   end.
 
-Definition romem_for_program (p: program) : romem :=
+Definition romem_for (p: program) : romem :=
   List.fold_left alloc_global p.(prog_defs) (PTree.empty _).
 
 (** * Soundness proof *)
@@ -1045,10 +1032,9 @@ Qed.
 Section SOUNDNESS.
 
 Variable prog: program.
+Variable ge: genv.
 
-Let ge : genv := Genv.globalenv prog.
-
-Let rm := romem_for_program prog.
+Let rm := romem_for prog.
 
 Inductive sound_stack: block_classification -> list stackframe -> mem -> block -> Prop :=
   | sound_stack_nil: forall bc m bound,
@@ -1079,7 +1065,7 @@ Inductive sound_stack: block_classification -> list stackframe -> mem -> block -
         (CONTENTS: bmatch bc' m sp am.(am_stack)),
       sound_stack bc (Stackframe res f (Vptr sp Int.zero) pc e :: stk) m bound.
 
-Inductive sound_state: state -> Prop :=
+Inductive sound_state_base: state -> Prop :=
   | sound_regular_state:
       forall s f sp pc e m ae am bc
         (STK: sound_stack bc s m sp)
@@ -1089,7 +1075,7 @@ Inductive sound_state: state -> Prop :=
         (MM: mmatch bc m am)
         (GE: genv_match bc ge)
         (SP: bc sp = BCstack),
-      sound_state (State s f (Vptr sp Int.zero) pc e m)
+      sound_state_base (State s f (Vptr sp Int.zero) pc e m)
   | sound_call_state:
       forall s fd args m bc
         (STK: sound_stack bc s m (Mem.nextblock m))
@@ -1098,7 +1084,7 @@ Inductive sound_state: state -> Prop :=
         (MM: mmatch bc m mtop)
         (GE: genv_match bc ge)
         (NOSTK: bc_nostack bc),
-      sound_state (Callstate s fd args m)
+      sound_state_base (Callstate s fd args m)
   | sound_return_state:
       forall s v m bc
         (STK: sound_stack bc s m (Mem.nextblock m))
@@ -1107,7 +1093,7 @@ Inductive sound_state: state -> Prop :=
         (MM: mmatch bc m mtop)
         (GE: genv_match bc ge)
         (NOSTK: bc_nostack bc),
-      sound_state (Returnstate s v m).
+      sound_state_base (Returnstate s v m).
 
 (** Properties of the [sound_stack] invariant on call stacks. *)
 
@@ -1223,14 +1209,14 @@ Lemma sound_succ_state:
   genv_match bc ge ->
   bc sp = BCstack ->
   sound_stack bc s m' sp ->
-  sound_state (State s f (Vptr sp Int.zero) pc' e' m').
+  sound_state_base (State s f (Vptr sp Int.zero) pc' e' m').
 Proof.
   intros. exploit analyze_succ; eauto. intros (ae'' & am'' & AN & EM & MM).
   econstructor; eauto.
 Qed.
 
-Theorem sound_step:
-  forall st t st', RTL.step ge st t st' -> sound_state st -> sound_state st'.
+Theorem sound_step_base:
+  forall st t st', RTL.step ge st t st' -> sound_state_base st -> sound_state_base st'.
 Proof.
   induction 1; intros SOUND; inv SOUND.
 
@@ -1309,7 +1295,7 @@ Proof.
   (* The default case *)
   assert (DEFAULT:
             transfer f rm pc ae am = transfer_builtin_default ae am rm args res ->
-            sound_state
+            sound_state_base
                (State s f (Vptr sp0 Int.zero) pc' (regmap_setres res vres rs) m')).
   { unfold transfer_builtin_default, analyze_call; intros TR'.
   set (aargs := map (abuiltin_arg ae am rm) args) in *.
@@ -1479,6 +1465,37 @@ Proof.
 Qed.
 
 End SOUNDNESS.
+
+(** ** Extension to separate compilation *)
+
+(** Following Kang et al, POPL 2016, we now extend the results above 
+  to the case where only one compilation unit is analyzed, and not the
+  whole program.  *)
+
+Section LINKING.
+
+Variable prog: program.
+Let ge := Genv.globalenv prog.
+
+Inductive sound_state: state -> Prop :=
+  | sound_state_intro: forall st,
+      (forall cunit, linkorder cunit prog -> sound_state_base cunit ge st) ->
+      sound_state st.
+
+Theorem sound_step:
+  forall st t st', RTL.step ge st t st' -> sound_state st -> sound_state st'.
+Proof.
+  intros. inv H0. constructor; intros. eapply sound_step_base; eauto. 
+Qed.
+
+Remark sound_state_inv:
+  forall st cunit,
+  sound_state st -> linkorder cunit prog -> sound_state_base cunit ge st.
+Proof.
+  intros. inv H. eauto. 
+Qed.
+
+End LINKING.
 
 (** ** Soundness of the initial memory abstraction *)
 
@@ -1660,8 +1677,8 @@ Proof.
 Qed.
 
 Definition initial_mem_match (bc: block_classification) (m: mem) (g: genv) :=
-  forall b v,
-  Genv.find_var_info g b = Some v ->
+  forall id b v,
+  Genv.find_symbol g id = Some b -> Genv.find_var_info g b = Some v ->
   v.(gvar_volatile) = false -> v.(gvar_readonly) = true ->
   bmatch bc m b (store_init_data_list (ablock_init Pbot) 0 v.(gvar_init)).
 
@@ -1672,27 +1689,32 @@ Lemma alloc_global_match:
   Genv.alloc_global ge m idg = Some m' ->
   initial_mem_match bc m' (Genv.add_global g idg).
 Proof.
-  intros; red; intros. destruct idg as [id [fd | gv]]; simpl in *.
+  intros; red; intros. destruct idg as [id1 [fd | gv]]; simpl in *.
 - destruct (Mem.alloc m 0 1) as [m1 b1] eqn:ALLOC.
-  unfold Genv.find_var_info, Genv.add_global in H2; simpl in H2.
-  assert (Plt b (Mem.nextblock m)).
-  { rewrite <- H. eapply Genv.genv_vars_range; eauto. }
-  assert (b <> b1).
-  { apply Plt_ne. erewrite Mem.alloc_result by eauto. auto. }
+  unfold Genv.find_symbol in H2; simpl in H2.
+  unfold Genv.find_var_info, Genv.find_def in H3; simpl in H3.
+  rewrite PTree.gsspec in H2. destruct (peq id id1).
+  inv H2. rewrite PTree.gss in H3. discriminate.
+  assert (Plt b (Genv.genv_next g)) by (eapply Genv.genv_symb_range; eauto).
+  rewrite PTree.gso in H3 by (apply Plt_ne; auto). 
+  assert (Mem.valid_block m b) by (red; rewrite <- H; auto).
+  assert (b <> b1) by (apply Mem.valid_not_valid_diff with m; eauto with mem).
   apply bmatch_inv with m.
   eapply H0; eauto.
-  intros. transitivity (Mem.loadbytes m1 b ofs n).
+  intros. transitivity (Mem.loadbytes m1 b ofs n0).
   eapply Mem.loadbytes_drop; eauto.
   eapply Mem.loadbytes_alloc_unchanged; eauto.
-- set (sz := Genv.init_data_list_size (gvar_init gv)) in *.
+- set (sz := init_data_list_size (gvar_init gv)) in *.
   destruct (Mem.alloc m 0 sz) as [m1 b1] eqn:ALLOC.
   destruct (store_zeros m1 b1 0 sz) as [m2 | ] eqn:STZ; try discriminate.
   destruct (Genv.store_init_data_list ge m2 b1 0 (gvar_init gv)) as [m3 | ] eqn:SIDL; try discriminate.
-  unfold Genv.find_var_info, Genv.add_global in H2; simpl in H2.
-  rewrite PTree.gsspec in H2. destruct (peq b (Genv.genv_next g)).
-+ inversion H2; clear H2; subst v.
+  unfold Genv.find_symbol in H2; simpl in H2.
+  unfold Genv.find_var_info, Genv.find_def in H3; simpl in H3.
+  rewrite PTree.gsspec in H2. destruct (peq id id1).
++ injection H2; clear H2; intro EQ.
+  rewrite EQ, PTree.gss in H3. injection H3; clear H3; intros EQ'; subst v.
   assert (b = b1). { erewrite Mem.alloc_result by eauto. congruence. }
-  clear e. subst b.
+  clear EQ. subst b.
   apply bmatch_inv with m3.
   eapply store_init_data_list_sound; eauto.
   apply ablock_init_sound.
@@ -1701,11 +1723,11 @@ Proof.
   exploit Mem.load_alloc_same; eauto. intros EQ; subst v; constructor.
   exploit Mem.loadbytes_alloc_same; eauto with coqlib. congruence.
   intros. eapply Mem.loadbytes_drop; eauto.
-  right; right; right. unfold Genv.perm_globvar. rewrite H3, H4. constructor.
-+ assert (Plt b (Mem.nextblock m)).
-  { rewrite <- H. eapply Genv.genv_vars_range; eauto. }
-  assert (b <> b1).
-  { apply Plt_ne. erewrite Mem.alloc_result by eauto. auto. }
+  right; right; right. unfold Genv.perm_globvar. rewrite H4, H5. constructor.
++ assert (Plt b (Genv.genv_next g)) by (eapply Genv.genv_symb_range; eauto).
+  rewrite PTree.gso in H3 by (apply Plt_ne; auto). 
+  assert (Mem.valid_block m b) by (red; rewrite <- H; auto).
+  assert (b <> b1) by (apply Mem.valid_not_valid_diff with m; eauto with mem).
   apply bmatch_inv with m3.
   eapply store_init_data_list_other; eauto.
   eapply store_zeros_other; eauto.
@@ -1730,44 +1752,56 @@ Proof.
   eapply alloc_global_match; eauto.
 Qed.
 
-Definition romem_consistent (g: genv) (rm: romem) :=
-  forall id b ab,
-  Genv.find_symbol g id = Some b -> rm!id = Some ab ->
+Definition romem_consistent (defmap: PTree.t (globdef fundef unit)) (rm: romem) :=
+  forall id ab,
+  rm!id = Some ab ->
   exists v,
-     Genv.find_var_info g b = Some v
+     defmap!id = Some (Gvar v)
   /\ v.(gvar_readonly) = true
   /\ v.(gvar_volatile) = false
+  /\ definitive_initializer v.(gvar_init) = true
   /\ ab = store_init_data_list (ablock_init Pbot) 0 v.(gvar_init).
 
 Lemma alloc_global_consistent:
-  forall g rm idg,
-  romem_consistent g rm ->
-  romem_consistent (Genv.add_global g idg) (alloc_global rm idg).
+  forall dm rm idg,
+  romem_consistent dm rm ->
+  romem_consistent (PTree.set (fst idg) (snd idg) dm) (alloc_global rm idg).
 Proof.
-  intros; red; intros. destruct idg as [id1 [fd1 | v1]];
-  unfold Genv.add_global, Genv.find_symbol, Genv.find_var_info, alloc_global in *; simpl in *.
-- rewrite PTree.gsspec in H0. rewrite PTree.grspec in H1. unfold PTree.elt_eq in *.
-  destruct (peq id id1). congruence. eapply H; eauto.
-- rewrite PTree.gsspec in H0. destruct (peq id id1).
-+ inv H0. rewrite PTree.gss.
-  destruct (gvar_readonly v1 && negb (gvar_volatile v1) && definitive_initializer (gvar_init v1)) eqn:RO.
-  InvBooleans. rewrite negb_true_iff in H4.
-  rewrite PTree.gss in H1.
-  exists v1. intuition congruence.
-  rewrite PTree.grs in H1. discriminate.
-+ rewrite PTree.gso. eapply H; eauto.
-  destruct (gvar_readonly v1 && negb (gvar_volatile v1) && definitive_initializer (gvar_init v1)).
-  rewrite PTree.gso in H1; auto.
-  rewrite PTree.gro in H1; auto.
-  apply Plt_ne. eapply Genv.genv_symb_range; eauto.
+  intros; red; intros. destruct idg as [id1 [f1 | v1]]; simpl in *.
+- rewrite PTree.grspec in H0. destruct (PTree.elt_eq id id1); try discriminate.
+  rewrite PTree.gso by auto. apply H; auto. 
+- destruct (gvar_readonly v1 && negb (gvar_volatile v1) && definitive_initializer (gvar_init v1)) eqn:RO.
++ InvBooleans. rewrite negb_true_iff in H4.
+  rewrite PTree.gsspec in *. destruct (peq id id1).
+* inv H0. exists v1; auto.
+* apply H; auto.
++ rewrite PTree.grspec in H0. destruct (PTree.elt_eq id id1); try discriminate.
+  rewrite PTree.gso by auto. apply H; auto. 
 Qed.
 
-Lemma alloc_globals_consistent:
-  forall gl g rm,
-  romem_consistent g rm ->
-  romem_consistent (Genv.add_globals g gl) (List.fold_left alloc_global gl rm).
+Lemma romem_for_consistent:
+  forall cunit, romem_consistent (prog_defmap cunit) (romem_for cunit).
 Proof.
-  induction gl; simpl; intros. auto. apply IHgl. apply alloc_global_consistent; auto.
+  assert (REC: forall l dm rm,
+            romem_consistent dm rm ->
+            romem_consistent (fold_left (fun m idg => PTree.set (fst idg) (snd idg) m) l dm)
+                             (fold_left alloc_global l rm)).
+  { induction l; intros; simpl; auto. apply IHl. apply alloc_global_consistent; auto. }
+  intros. apply REC.
+  red; intros. rewrite PTree.gempty in H; discriminate.
+Qed.
+
+Lemma romem_for_consistent_2:
+  forall cunit, linkorder cunit prog -> romem_consistent (prog_defmap prog) (romem_for cunit).
+Proof.
+  intros; red; intros.
+  exploit (romem_for_consistent cunit); eauto. intros (v & DM & RO & VO & DEFN & AB).
+  destruct (prog_defmap_linkorder _ _ _ _ H DM) as (gd & P & Q).
+  assert (gd = Gvar v).
+  { inv Q. inv H2. simpl in *. f_equal. f_equal. 
+    destruct info1, info2; auto.
+    inv H3; auto; discriminate. }
+  subst gd. exists v; auto.
 Qed.
 
 End INIT.
@@ -1779,27 +1813,28 @@ Theorem initial_mem_matches:
      genv_match bc ge
   /\ bc_below bc (Mem.nextblock m)
   /\ bc_nostack bc
-  /\ romatch bc m (romem_for_program prog)
+  /\ (forall cunit, linkorder cunit prog -> romatch bc m (romem_for cunit))
   /\ (forall b, Mem.valid_block m b -> bc b <> BCinvalid).
 Proof.
   intros.
   exploit initial_block_classification; eauto. intros (bc & GE & BELOW & NOSTACK & INV & VALID).
   exists bc; splitall; auto.
+  intros.
   assert (A: initial_mem_match bc m ge).
   {
     apply alloc_globals_match with (m := Mem.empty); auto.
-    red. unfold Genv.find_var_info; simpl. intros. rewrite PTree.gempty in H0; discriminate.
+    red. unfold Genv.find_symbol; simpl; intros. rewrite PTree.gempty in H1; discriminate.
   }
-  assert (B: romem_consistent ge (romem_for_program prog)).
-  {
-    apply alloc_globals_consistent.
-    red; intros. rewrite PTree.gempty in H1; discriminate.
-  }
+  assert (B: romem_consistent (prog_defmap prog) (romem_for cunit)) by (apply romem_for_consistent_2; auto).
   red; intros.
-  exploit B; eauto. intros (v & FV & RO & NVOL & EQ).
+  exploit B; eauto. intros (v & DM & RO & NVOL & DEFN & EQ).
+  rewrite Genv.find_def_symbol in DM. destruct DM as (b1 & FS & FD).
+  rewrite <- Genv.find_var_info_iff in FD.
+  assert (b1 = b). { apply INV in H1. unfold ge in H1; congruence. }
+  subst b1.
   split. subst ab. apply store_init_data_list_summary. constructor.
   split. subst ab. eapply A; eauto.
-  unfold ge in FV; exploit Genv.init_mem_characterization; eauto.
+  exploit Genv.init_mem_characterization; eauto.
   intros (P & Q & R).
   intros; red; intros. exploit Q; eauto. intros [U V].
   unfold Genv.perm_globvar in V; rewrite RO, NVOL in V. inv V.
@@ -1814,10 +1849,10 @@ Theorem sound_initial:
 Proof.
   destruct 1.
   exploit initial_mem_matches; eauto. intros (bc & GE & BELOW & NOSTACK & RM & VALID).
-  apply sound_call_state with bc.
+  constructor; intros. apply sound_call_state with bc.
 - constructor.
 - simpl; tauto.
-- exact RM.
+- apply RM; auto.
 - apply mmatch_inj_top with m0.
   replace (inj_of_bc bc) with (Mem.flat_inj (Mem.nextblock m0)).
   eapply Genv.initmem_inject; eauto.
@@ -1833,6 +1868,12 @@ Hint Resolve areg_sound aregs_sound: va.
 
 (** * Interface with other optimizations *)
 
+Ltac InvSoundState :=
+  match goal with
+  | H1: sound_state ?prog ?st, H2: linkorder ?cunit ?prog |- _ =>
+      let S := fresh "S" in generalize (sound_state_inv _ _ _ H1 H2); intros S; inv S
+  end.
+
 Definition avalue (a: VA.t) (r: reg) : aval :=
   match a with
   | VA.Bot => Vbot
@@ -1840,14 +1881,15 @@ Definition avalue (a: VA.t) (r: reg) : aval :=
   end.
 
 Lemma avalue_sound:
-  forall prog s f sp pc e m r,
+  forall cunit prog s f sp pc e m r,
   sound_state prog (State s f (Vptr sp Int.zero) pc e m) ->
+  linkorder cunit prog ->
   exists bc,
-     vmatch bc e#r (avalue (analyze (romem_for_program prog) f)!!pc r)
+     vmatch bc e#r (avalue (analyze (romem_for cunit) f)!!pc r)
   /\ genv_match bc (Genv.globalenv prog)
   /\ bc sp = BCstack.
 Proof.
-  intros. inv H. exists bc; split; auto. rewrite AN. apply EM.
+  intros. InvSoundState. exists bc; split; auto. rewrite AN. apply EM.
 Qed.
 
 Definition aaddr (a: VA.t) (r: reg) : aptr :=
@@ -1857,16 +1899,17 @@ Definition aaddr (a: VA.t) (r: reg) : aptr :=
   end.
 
 Lemma aaddr_sound:
-  forall prog s f sp pc e m r b ofs,
+  forall cunit prog s f sp pc e m r b ofs,
   sound_state prog (State s f (Vptr sp Int.zero) pc e m) ->
+  linkorder cunit prog ->
   e#r = Vptr b ofs ->
   exists bc,
-     pmatch bc b ofs (aaddr (analyze (romem_for_program prog) f)!!pc r)
+     pmatch bc b ofs (aaddr (analyze (romem_for cunit) f)!!pc r)
   /\ genv_match bc (Genv.globalenv prog)
   /\ bc sp = BCstack.
 Proof.
-  intros. inv H. exists bc; split; auto.
-  unfold aaddr; rewrite AN. apply match_aptr_of_aval. rewrite <- H0. apply EM.
+  intros. InvSoundState. exists bc; split; auto.
+  unfold aaddr; rewrite AN. apply match_aptr_of_aval. rewrite <- H1. apply EM.
 Qed.
 
 Definition aaddressing (a: VA.t) (addr: addressing) (args: list reg) : aptr :=
@@ -1876,15 +1919,16 @@ Definition aaddressing (a: VA.t) (addr: addressing) (args: list reg) : aptr :=
   end.
 
 Lemma aaddressing_sound:
-  forall prog s f sp pc e m addr args b ofs,
+  forall cunit prog s f sp pc e m addr args b ofs,
   sound_state prog (State s f (Vptr sp Int.zero) pc e m) ->
+  linkorder cunit prog ->
   eval_addressing (Genv.globalenv prog) (Vptr sp Int.zero) addr e##args = Some (Vptr b ofs) ->
   exists bc,
-     pmatch bc b ofs (aaddressing (analyze (romem_for_program prog) f)!!pc addr args)
+     pmatch bc b ofs (aaddressing (analyze (romem_for cunit) f)!!pc addr args)
   /\ genv_match bc (Genv.globalenv prog)
   /\ bc sp = BCstack.
 Proof.
-  intros. inv H. exists bc; split; auto.
+  intros. InvSoundState. exists bc; split; auto.
   unfold aaddressing. rewrite AN. apply match_aptr_of_aval.
   eapply eval_static_addressing_sound; eauto with va.
 Qed.
@@ -1921,14 +1965,15 @@ Proof.
 Qed.
 
 Lemma aaddr_arg_sound:
-  forall prog s f sp pc e m a b ofs,
+  forall cunit prog s f sp pc e m a b ofs,
   sound_state prog (State s f (Vptr sp Int.zero) pc e m) ->
+  linkorder cunit prog ->
   eval_builtin_arg (Genv.globalenv prog) (fun r => e#r) (Vptr sp Int.zero) m a (Vptr b ofs) ->
   exists bc,
-     pmatch bc b ofs (aaddr_arg (analyze (romem_for_program prog) f)!!pc a)
+     pmatch bc b ofs (aaddr_arg (analyze (romem_for cunit) f)!!pc a)
   /\ genv_match bc (Genv.globalenv prog)
   /\ bc sp = BCstack.
 Proof.
-  intros. inv H. rewrite AN. exists bc; split; auto.
+  intros. InvSoundState. rewrite AN. exists bc; split; auto.
   eapply aaddr_arg_sound_1; eauto.
 Qed.

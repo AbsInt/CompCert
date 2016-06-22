@@ -539,25 +539,23 @@ Proof.
 - destruct v; auto with na.
 Qed.
 
-Definition rolm (x: nval) (amount mask: int) :=
+Definition rol (x: nval) (amount: int) :=
   match x with
   | Nothing => Nothing
-  | I m => I (Int.ror (Int.and m mask) amount)
-  | _ => I (Int.ror mask amount)
+  | I m => I (Int.ror m amount)
+  | All => All
   end.
 
-Lemma rolm_sound:
-  forall v w x amount mask,
-  vagree v w (rolm x amount mask) ->
-  vagree (Val.rolm v amount mask) (Val.rolm w amount mask) x.
+Lemma rol_sound:
+  forall v w x n,
+  vagree v w (rol x n) ->
+  vagree (Val.rol v (Vint n)) (Val.rol w (Vint n)) x.
 Proof.
-  unfold rolm; intros; destruct x; simpl in *.
+  unfold rol, Val.rol; intros.
+  destruct x; simpl in *.
 - auto.
-- unfold Val.rolm; InvAgree. unfold Int.rolm.
-  apply iagree_and. apply iagree_rol. auto.
-- unfold Val.rolm; InvAgree. apply Val.lessdef_same. f_equal. apply iagree_mone.
-  unfold Int.rolm. apply iagree_and. apply iagree_rol. rewrite Int.and_commut.
-  rewrite Int.and_mone. auto.
+- InvAgree. apply iagree_rol; auto.
+- inv H; auto.
 Qed.
 
 Definition ror (x: nval) (amount: int) :=
@@ -572,13 +570,25 @@ Lemma ror_sound:
   vagree v w (ror x n) ->
   vagree (Val.ror v (Vint n)) (Val.ror w (Vint n)) x.
 Proof.
-  unfold ror; intros. unfold Val.ror.
-  destruct (Int.ltu n Int.iwordsize).
+  unfold ror, Val.ror; intros.
   destruct x; simpl in *.
 - auto.
 - InvAgree. apply iagree_ror; auto.
 - inv H; auto.
-- destruct v; auto with na.
+Qed.
+
+Definition rolm (x: nval) (amount mask: int) := rol (andimm x mask) amount.
+
+Lemma rolm_sound:
+  forall v w x amount mask,
+  vagree v w (rolm x amount mask) ->
+  vagree (Val.rolm v amount mask) (Val.rolm w amount mask) x.
+Proof.
+  unfold rolm; intros.
+  assert (X: forall u, Val.rolm u amount mask = Val.and (Val.rol u (Vint amount)) (Vint mask)).
+  { destruct u; auto. }
+  rewrite ! X.
+  apply andimm_sound. apply rol_sound. auto.
 Qed.
 
 (** Modular arithmetic operations: add, mul, opposite.
@@ -935,7 +945,7 @@ Proof.
   assert (forall n, Int.ror n Int.zero = n).
   { intros. rewrite Int.ror_rol_neg by apply int_wordsize_divides_modulus.
     rewrite Int.neg_zero. apply Int.rol_zero. }
-  unfold rolm, andimm in *. destruct x; auto.
+  unfold rolm, rol, andimm in *. destruct x; auto.
   rewrite H in H0. auto.
   rewrite H in H0. auto.
 Qed.

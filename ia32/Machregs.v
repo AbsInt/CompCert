@@ -12,6 +12,7 @@
 
 Require Import String.
 Require Import Coqlib.
+Require Import Decidableplus.
 Require Import Maps.
 Require Import AST.
 Require Import Integers.
@@ -41,6 +42,25 @@ Lemma mreg_eq: forall (r1 r2: mreg), {r1 = r2} + {r1 <> r2}.
 Proof. decide equality. Defined.
 Global Opaque mreg_eq.
 
+Definition all_mregs :=
+     AX :: BX :: CX :: DX :: SI :: DI :: BP
+  :: X0 :: X1 :: X2 :: X3 :: X4 :: X5 :: X6 :: X7
+  :: FP0 :: nil.
+
+Lemma all_mregs_complete:
+  forall (r: mreg), In r all_mregs.
+Proof.
+  assert (forall r, proj_sumbool (In_dec mreg_eq r all_mregs) = true) by (destruct r; reflexivity).
+  intros. specialize (H r). InvBooleans. auto.
+Qed.
+
+Instance Decidable_eq_mreg : forall (x y: mreg), Decidable (eq x y) := Decidable_eq mreg_eq.
+  
+Instance Finite_mreg : Finite mreg := {
+  Finite_elements := all_mregs;
+  Finite_elements_spec := all_mregs_complete
+}.
+
 Definition mreg_type (r: mreg): typ :=
   match r with
   | AX | BX | CX | DX | SI | DI | BP => Tany32
@@ -62,7 +82,7 @@ Module IndexedMreg <: INDEXED_TYPE.
   Lemma index_inj:
     forall r1 r2, index r1 = index r2 -> r1 = r2.
   Proof.
-    destruct r1; destruct r2; simpl; intro; discriminate || reflexivity.
+    decide_goal.
   Qed.
 End IndexedMreg.
 

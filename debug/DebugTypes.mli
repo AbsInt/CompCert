@@ -10,6 +10,8 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+open AST
+open BinNums
 open C
 open Camlcoq
 
@@ -158,3 +160,21 @@ type scope_information =
 type local_information =
   | LocalVariable of local_variable_information
   | Scope of scope_information
+
+
+type scope_range =
+    {
+     start_addr: positive option;
+     end_addr: positive option;
+   }
+
+type var_range =
+    {
+     range_start: positive option;
+     range_end:   positive option;
+     var_loc:     int * int builtin_arg;
+   }
+
+type var_location =
+  | RangeLoc of var_range list
+  | FunctionLoc of  int * int builtin_arg (* Stack allocated variables *)

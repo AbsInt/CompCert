@@ -64,17 +64,6 @@ let add_inits_stmt loc inits s =
     (fun e s -> sseq loc {sdesc = Sdo e; sloc = loc} s)
     inits s
 
-(* Prepend assignments to the given expression. *)
-(* Associate to the left so that it prints more nicely *)
-
-let add_inits_expr inits e =
-  match inits with
-  | [] -> e
-  | i1 :: il ->
-      let comma a b =
-        { edesc = EBinop(Ocomma, a, b, b.etyp); etyp = b.etyp } in
-      comma (List.fold_left comma i1 il) e
-
 (* Record new variables to be locally or globally defined *)
 
 let local_variables = ref ([]: decl list)
@@ -357,7 +346,7 @@ let unblock_fundef env f =
 
 (* Simplification of compound literals within a top-level declaration *)
 
-let unblock_decl loc env ((sto, id, ty, optinit) as d) =
+let unblock_decl env ((sto, id, ty, optinit) as d) =
   match optinit with
   | None -> [d]
   | Some init ->
@@ -375,8 +364,8 @@ let rec unblock_glob env accu = function
   | [] -> List.rev accu
   | g :: gl ->
       match g.gdesc with
-      | Gdecl((sto, id, ty, init) as d) ->
-          let dl = unblock_decl g.gloc env d in
+      | Gdecl d ->
+          let dl = unblock_decl env d in
           unblock_glob env
             (List.rev_append
                (List.map (fun d' -> {g with gdesc = Gdecl d'}) dl)
@@ -387,7 +376,7 @@ let rec unblock_glob env accu = function
           unblock_glob env ({g with gdesc = Gfundef f'} :: accu) gl
       | Gcompositedecl(su, id, attr) ->
           unblock_glob
-            (Env.add_composite env id (composite_info_decl env su attr))
+            (Env.add_composite env id (composite_info_decl su attr))
             (g :: accu) gl
       | Gcompositedef(su, id, attr, fl) ->
           unblock_glob

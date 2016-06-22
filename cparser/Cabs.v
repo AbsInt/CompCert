@@ -60,6 +60,9 @@ with cvspec :=
 | CV_CONST | CV_VOLATILE | CV_RESTRICT
 | CV_ATTR : attribute -> cvspec
 
+with funspec :=
+ INLINE | NORETURN
+
 (* Type specifier elements. These appear at the start of a declaration *)
 (* Everywhere they appear in this file, they appear as a 'list spec_elem', *)
 (* which is not interpreted by cabs -- rather, this "word soup" is passed *)
@@ -68,7 +71,7 @@ with cvspec :=
 with spec_elem :=
   | SpecCV : cvspec -> spec_elem            (* const/volatile *)
   | SpecStorage : storage -> spec_elem
-  | SpecInline
+  | SpecFunction: funspec -> spec_elem
   | SpecType : typeSpecifier -> spec_elem
 
 (* Declarator type. They modify the base type given in the specifier. Keep

@@ -33,9 +33,7 @@ open Datatypes
 open Coqlib
 open Maps
 open AST
-open Memdata
 open Kildall
-open Registers
 open Op
 open Machregs
 open Locations
@@ -72,13 +70,6 @@ let vreg tyenv r = V(r, tyenv r)
 
 let vregs tyenv rl = List.map (vreg tyenv) rl
 
-let rec expand_regs tyenv = function
-  | [] -> []
-  | r :: rl ->
-      match tyenv r with
-      | Tlong -> V(r, Tint) :: V(twin_reg r, Tint) :: expand_regs tyenv rl
-      | ty    -> V(r, ty) :: expand_regs tyenv rl
-
 let constrain_reg v c =
   match c with
   | None -> v
@@ -94,9 +85,9 @@ let rec constrain_regs vl cl =
 let move v1 v2 k =
   if v1 = v2 then
     k
-  else if is_stack_reg v1 then begin
+  else if XTL.is_stack_reg v1 then begin
     let t = new_temp (typeof v2) in Xmove(v1, t) :: Xmove(t, v2) :: k
-  end else if is_stack_reg v2 then begin
+  end else if XTL.is_stack_reg v2 then begin
     let t = new_temp (typeof v1) in Xmove(v1, t) :: Xmove(t, v2) :: k
   end else
     Xmove(v1, v2) :: k
@@ -107,12 +98,47 @@ let rec movelist vl1 vl2 k =
   | v1 :: vl1, v2 :: vl2 -> move v1 v2 (movelist vl1 vl2 k)
   | _, _ -> assert false
 
-let xparmove srcs dsts k =
+let parmove_regs2locs tyenv srcs dsts k =
   assert (List.length srcs = List.length dsts);
-  match srcs, dsts with
+  let rec expand srcs' dsts' rl ll =
+    match rl, ll with
+    | [], [] -> (srcs', dsts')
+    | r :: rl, One l :: ll ->
+        let ty = tyenv r in
+        expand (V(r, ty) :: srcs') (L l :: dsts') rl ll
+    | r :: rl, Twolong(l1, l2) :: ll ->
+        assert (tyenv r = Tlong);
+        expand (V(r, Tint) :: V(twin_reg r, Tint) :: srcs')
+               (L l1 :: L l2 :: dsts')
+               rl ll
+    | _, _ ->
+        assert false in
+  let (srcs', dsts') = expand [] [] srcs dsts in
+  match srcs', dsts' with
   | [], [] -> k
   | [src], [dst] -> move src dst k
-  | _, _ -> Xparmove(srcs, dsts, new_temp Tint, new_temp Tfloat) :: k
+  | _, _ -> Xparmove(srcs', dsts', new_temp Tint, new_temp Tfloat) :: k
+
+let parmove_locs2regs tyenv srcs dsts k =
+  assert (List.length srcs = List.length dsts);
+  let rec expand srcs' dsts' ll rl =
+    match ll, rl with
+    | [], [] -> (srcs', dsts')
+    | One l :: ll, r :: rl ->
+        let ty = tyenv r in
+        expand (L l :: srcs') (V(r, ty) :: dsts') ll rl
+    | Twolong(l1, l2) :: ll, r :: rl ->
+        assert (tyenv r = Tlong);
+        expand (L l1 :: L l2 :: srcs')
+               (V(r, Tint) :: V(twin_reg r, Tint) :: dsts')
+               ll rl
+    | _, _ ->
+        assert false in
+  let (srcs', dsts') = expand [] [] srcs dsts in
+  match srcs', dsts' with
+  | [], [] -> k
+  | [src], [dst] -> move src dst k
+  | _, _ -> Xparmove(srcs', dsts', new_temp Tint, new_temp Tfloat) :: k
 
 let rec convert_builtin_arg tyenv = function
   | BA r ->
@@ -230,16 +256,17 @@ let block_of_RTL_instr funsig tyenv = function
       end else
         [Xstore(chunk, addr, vregs tyenv args, vreg tyenv src); Xbranch s]
   | RTL.Icall(sg, ros, args, res, s) ->
-      let args' = vlocs (loc_arguments sg)
-      and res' = vmregs (loc_result sg) in
-      xparmove (expand_regs tyenv args) args'
-       (Xcall(sg, sum_left_map (vreg tyenv) ros, args', res') ::
-         xparmove res' (expand_regs tyenv [res])
+      let args' = loc_arguments sg
+      and res' = [map_rpair (fun r -> R r) (loc_result sg)] in
+      parmove_regs2locs tyenv args args'
+       (Xcall(sg, sum_left_map (vreg tyenv) ros,
+              vlocpairs args', vlocpairs res') ::
+         parmove_locs2regs tyenv res' [res]
            [Xbranch s])
   | RTL.Itailcall(sg, ros, args) ->
-      let args' = vlocs (loc_arguments sg) in
-      xparmove (expand_regs tyenv args) args'
-        [Xtailcall(sg, sum_left_map (vreg tyenv) ros, args')]
+      let args' = loc_arguments sg in
+      parmove_regs2locs tyenv args args'
+        [Xtailcall(sg, sum_left_map (vreg tyenv) ros, vlocpairs args')]
   | RTL.Ibuiltin(ef, args, res, s) ->
       let (cargs, cres) = mregs_for_builtin ef in
       let args1 = List.map (convert_builtin_arg tyenv) args
@@ -257,8 +284,8 @@ let block_of_RTL_instr funsig tyenv = function
   | RTL.Ireturn None ->
       [Xreturn []]
   | RTL.Ireturn (Some arg) ->
-      let args' = vmregs (loc_result funsig) in
-      xparmove (expand_regs tyenv [arg]) args' [Xreturn args']
+      let args' = [map_rpair (fun r -> R r) (loc_result funsig)] in
+      parmove_regs2locs tyenv [arg] args' [Xreturn (vlocpairs args')]
 
 (* One above the [pc] nodes of the given RTL function *)
 
@@ -274,8 +301,9 @@ let function_of_RTL_function f tyenv =
   (* Add moves for function parameters *)
   let pc_entrypoint = next_pc f in
   let b_entrypoint =
-     xparmove (vlocs (loc_parameters f.RTL.fn_sig))
-              (expand_regs tyenv f.RTL.fn_params)
+    parmove_locs2regs tyenv
+              (loc_parameters f.RTL.fn_sig)
+              f.RTL.fn_params
               [Xbranch f.RTL.fn_entrypoint] in
   { fn_sig = f.RTL.fn_sig;
     fn_stacksize = f.RTL.fn_stacksize;
@@ -308,7 +336,7 @@ let rec vset_removeres r after =
 let live_before instr after =
   match instr with
   | Xmove(src, dst) | Xspill(src, dst) | Xreload(src, dst) ->
-      if VSet.mem dst after || is_stack_reg src
+      if VSet.mem dst after || XTL.is_stack_reg src
       then VSet.add src (VSet.remove dst after)
       else after
   | Xparmove(srcs, dsts, itmp, ftmp) ->
@@ -385,7 +413,7 @@ let rec dce_parmove srcs dsts after =
   | [], [] -> [], []
   | src1 :: srcs, dst1 :: dsts ->
       let (srcs', dsts') = dce_parmove srcs dsts after in
-      if VSet.mem dst1 after || is_stack_reg src1
+      if VSet.mem dst1 after || XTL.is_stack_reg src1
       then (src1 :: srcs', dst1 :: dsts')
       else (srcs', dsts')
   | _, _ -> assert false
@@ -399,7 +427,7 @@ let rec keep_builtin_arg after = function
 let dce_instr instr after k =
   match instr with
   | Xmove(src, dst) ->
-      if VSet.mem dst after || is_stack_reg src
+      if VSet.mem dst after || XTL.is_stack_reg src
       then instr :: k
       else k
   | Xparmove(srcs, dsts, itmp, ftmp) ->
@@ -431,7 +459,7 @@ let rec dce_block blk after =
 
 let dead_code_elimination f liveness =
   { f with fn_code =
-      PTree.map (fun pc blk -> snd(dce_block blk (PMap.get pc liveness)))
+      PTree.map (fun pc blk -> Datatypes.snd(dce_block blk (PMap.get pc liveness)))
                  f.fn_code }
 
 
@@ -484,9 +512,9 @@ let spill_costs f =
 
   let charge_instr = function
     | Xmove(src, dst) ->
-        if is_stack_reg src then
+        if XTL.is_stack_reg src then
           force_stack_allocation dst
-        else if is_stack_reg dst then
+        else if XTL.is_stack_reg dst then
           force_stack_allocation src
         else begin
           charge 1 1 src; charge 1 1 dst
@@ -595,12 +623,12 @@ let add_interfs_instr g instr live =
       add_interfs_list g itmp srcs; add_interfs_list g itmp dsts;
       add_interfs_list g ftmp srcs; add_interfs_list g ftmp dsts;
       (* Take into account destroyed reg when accessing Incoming param *)
-      if List.exists (function (L(S(Incoming, _, _))) -> true | _ -> false) srcs
+      if List.exists (function (L(Locations.S(Incoming, _, _))) -> true | _ -> false) srcs
       then add_interfs_list g (vmreg temp_for_parent_frame) dsts;
       (* Take into account destroyed reg when initializing Outgoing
          arguments of type Tsingle *)
       if List.exists
-           (function (L(S(Outgoing, _, Tsingle))) -> true | _ -> false) dsts
+           (function (L(Locations.S(Outgoing, _, Tsingle))) -> true | _ -> false) dsts
       then
         List.iter
           (fun mr ->
@@ -690,10 +718,10 @@ let find_coloring f liveness =
 (*********** Determination of variables that need spill code insertion *****)
 
 let is_reg alloc v =
-  match alloc v with R _ -> true | S _ -> false
+  match alloc v with R _ -> true | Locations.S _ -> false
 
 let add_tospill alloc v ts =
-  match alloc v with R _ -> ts | S _ -> VSet.add v ts
+  match alloc v with R _ -> ts | Locations.S _ -> VSet.add v ts
 
 let addlist_tospill alloc vl ts =
   List.fold_right (add_tospill alloc) vl ts
@@ -963,7 +991,7 @@ let spill_function f tospill round =
 
 exception Bad_LTL
 
-let mreg_of alloc v = match alloc v with R mr -> mr | S _ -> raise Bad_LTL
+let mreg_of alloc v = match alloc v with R mr -> mr | Locations.S _ -> raise Bad_LTL
 
 let mregs_of alloc vl = List.map (mreg_of alloc) vl
 
@@ -973,11 +1001,11 @@ let make_move src dst k =
   match src, dst with
   | R rsrc, R rdst ->
       if rsrc = rdst then k else LTL.Lop(Omove, [rsrc], rdst) :: k
-  | R rsrc, S(sl, ofs, ty) ->
+  | R rsrc, Locations.S(sl, ofs, ty) ->
       LTL.Lsetstack(rsrc, sl, ofs, ty) :: k
-  | S(sl, ofs, ty), R rdst ->
+  | Locations.S(sl, ofs, ty), R rdst ->
       LTL.Lgetstack(sl, ofs, ty, rdst) :: k
-  | S _, S _ ->
+  | Locations.S _, Locations.S _ ->
       if src = dst then k else raise Bad_LTL
 
 type parmove_status = To_move | Being_moved | Moved
@@ -997,11 +1025,11 @@ let make_parmove srcs dsts itmp ftmp k =
     match s, d with
     | R rs, R rd ->
         code := LTL.Lop(Omove, [rs], rd) :: !code
-    | R rs, S(sl, ofs, ty) ->
+    | R rs, Locations.S(sl, ofs, ty) ->
         code := LTL.Lsetstack(rs, sl, ofs, ty) :: !code
-    | S(sl, ofs, ty), R rd ->
+    | Locations.S(sl, ofs, ty), R rd ->
         code := LTL.Lgetstack(sl, ofs, ty, rd) :: !code
-    | S(sls, ofss, tys), S(sld, ofsd, tyd) ->
+    | Locations.S(sls, ofss, tys), Locations.S(sld, ofsd, tyd) ->
         let tmp = temp_for tys in
         (* code will be reversed at the end *)
         code := LTL.Lsetstack(tmp, sld, ofsd, tyd) ::
@@ -1125,7 +1153,7 @@ and success f alloc =
   end;
   f'
 
-open Errors
+open !Errors
 
 let regalloc f =
   init_trace();
@@ -1133,7 +1161,7 @@ let regalloc f =
   let f1 = Splitting.rename_function f in
   match RTLtyping.type_function f1 with
   | Error msg ->
-      Error(MSG (coqstring_of_camlstring "RTL code after splitting is ill-typed:") :: msg)
+      Errors.Error(MSG (coqstring_of_camlstring "RTL code after splitting is ill-typed:") :: msg)
   | OK tyenv ->
       let f2 = function_of_RTL_function f1 tyenv in
       let liveness = liveness_analysis f2 in

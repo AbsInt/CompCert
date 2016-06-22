@@ -15,10 +15,8 @@
 
 (** Type expressions for the Compcert C and Clight languages *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import AST.
-Require Import Errors.
+Require Import Axioms Coqlib Maps Errors.
+Require Import AST Linking.
 Require Archi.
 
 (** * Syntax of types *)
@@ -156,6 +154,20 @@ Definition members : Type := list (ident * type).
 
 Inductive composite_definition : Type :=
   Composite (id: ident) (su: struct_or_union) (m: members) (a: attr).
+
+Definition name_composite_def (c: composite_definition) : ident :=
+  match c with Composite id su m a => id end.
+
+Definition composite_def_eq (x y: composite_definition): {x=y} + {x<>y}.
+Proof.
+  decide equality.
+- decide equality. decide equality. apply N.eq_dec. apply bool_dec.
+- apply list_eq_dec. decide equality. apply type_eq. apply ident_eq.
+- decide equality.
+- apply ident_eq.
+Defined.
+
+Global Opaque composite_def_eq. 
 
 (** For type-checking, compilation and semantics purposes, the composite
   definitions are collected in the following [composite_env] environment.
@@ -960,6 +972,29 @@ Record composite_consistent (env: composite_env) (co: composite) : Prop := {
 Definition composite_env_consistent (env: composite_env) : Prop :=
   forall id co, env!id = Some co -> composite_consistent env co.
 
+Lemma composite_consistent_stable:
+  forall (env env': composite_env)
+         (EXTENDS: forall id co, env!id = Some co -> env'!id = Some co)
+         co,
+  composite_consistent env co -> composite_consistent env' co.
+Proof.
+  intros. destruct H as [A B C D]. constructor. 
+  eapply complete_members_stable; eauto.
+  symmetry; rewrite B. f_equal. apply alignof_composite_stable; auto. 
+  symmetry; rewrite C. f_equal. apply sizeof_composite_stable; auto.
+  symmetry; rewrite D. apply rank_members_stable; auto.
+Qed.
+
+Lemma composite_of_def_consistent:
+  forall env id su m a co,
+  composite_of_def env id su m a = OK co ->
+  composite_consistent env co.
+Proof.
+  unfold composite_of_def; intros. 
+  destruct (env!id); try discriminate. destruct (complete_members env m) eqn:C; inv H.
+  constructor; auto.
+Qed. 
+
 Theorem build_composite_env_consistent:
   forall defs env, build_composite_env defs = OK env -> composite_env_consistent env.
 Proof.
@@ -973,28 +1008,15 @@ Proof.
 - destruct d1; monadInv H.
   eapply IHdefs; eauto.
   set (env1 := PTree.set id x env0) in *.
-  unfold composite_of_def in EQ.
-  destruct (env0!id) eqn:E; try discriminate.
-  destruct (complete_members env0 m) eqn:C; inversion EQ; clear EQ.
+  assert (env0!id = None). 
+  { unfold composite_of_def in EQ. destruct (env0!id). discriminate. auto. }
   assert (forall id1 co1, env0!id1 = Some co1 -> env1!id1 = Some co1).
   { intros. unfold env1. rewrite PTree.gso; auto. congruence. }
-  red; intros. unfold env1 in H2; rewrite PTree.gsspec in H2; destruct (peq id0 id).
+  red; intros. apply composite_consistent_stable with env0; auto.
+  unfold env1 in H2; rewrite PTree.gsspec in H2; destruct (peq id0 id).
 + subst id0. inversion H2; clear H2. subst co.
-(*
-  assert (A: alignof_composite env1 m = alignof_composite env0 m)
-  by (apply alignof_composite_stable; assumption).
-*)
-  rewrite <- H1; constructor; simpl.
-* eapply complete_members_stable; eauto.
-* f_equal. symmetry. apply alignof_composite_stable; auto.
-* f_equal. symmetry. apply sizeof_composite_stable; auto.
-* symmetry. apply rank_members_stable; auto.
-+ exploit H0; eauto. intros [P Q R S].
-  constructor; intros.
-* eapply complete_members_stable; eauto.
-* rewrite Q. f_equal. symmetry. apply alignof_composite_stable; auto.
-* rewrite R. f_equal. symmetry. apply sizeof_composite_stable; auto.
-* rewrite S. symmetry; apply rank_members_stable; auto.
+  eapply composite_of_def_consistent; eauto.
++ eapply H0; eauto. 
 Qed.
 
 (** Moreover, every composite definition is reflected in the composite environment. *)
@@ -1016,6 +1038,29 @@ Proof.
   exists x.
   split. eapply add_composite_definitions_incr; eauto. apply PTree.gss.
   subst x; auto.
+Qed.
+
+Theorem build_composite_env_domain:
+  forall env defs id co,
+  build_composite_env defs = OK env ->
+  env!id = Some co ->
+  In (Composite id (co_su co) (co_members co) (co_attr co)) defs.
+Proof.
+  intros env0 defs0 id co.
+  assert (REC: forall l env env',
+    add_composite_definitions env l = OK env' ->
+    env'!id = Some co ->
+    env!id = Some co \/ In (Composite id (co_su co) (co_members co) (co_attr co)) l).
+  { induction l; simpl; intros. 
+  - inv H; auto.
+  - destruct a; monadInv H. exploit IHl; eauto.
+    unfold composite_of_def in EQ. destruct (env!id0) eqn:E; try discriminate.
+    destruct (complete_members env m) eqn:C; simplify_eq EQ. clear EQ; intros EQ.
+    rewrite PTree.gsspec. intros [A|A]; auto.
+    destruct (peq id id0); auto.
+    inv A. rewrite <- H1; auto.
+  }
+  intros. exploit REC; eauto. rewrite PTree.gempty. intuition congruence.
 Qed.
 
 (** As a corollay, in a consistent environment, the rank of a composite type
@@ -1054,3 +1099,441 @@ Proof.
   exploit (rank_type_members ce); eauto.
   omega.
 Qed.
+
+(** * Programs and compilation units *)
+
+(** The definitions in this section are parameterized over a type [F] of 
+  internal function definitions, so that they apply both to CompCert C and to Clight. *)
+
+Set Implicit Arguments.
+
+Section PROGRAMS.
+
+Variable F: Type.
+
+(** Functions can either be defined ([Internal]) or declared as
+  external functions ([External]). *)
+
+Inductive fundef : Type :=
+  | Internal: F -> fundef
+  | External: external_function -> typelist -> type -> calling_convention -> fundef.
+
+(** A program, or compilation unit, is composed of:
+- a list of definitions of functions and global variables;
+- the names of functions and global variables that are public (not static);
+- the name of the function that acts as entry point ("main" function).
+- a list of definitions for structure and union names
+- the corresponding composite environment
+- a proof that this environment is consistent with the definitions. *)
+
+Record program : Type := {
+  prog_defs: list (ident * globdef fundef type);
+  prog_public: list ident;
+  prog_main: ident;
+  prog_types: list composite_definition;
+  prog_comp_env: composite_env;
+  prog_comp_env_eq: build_composite_env prog_types = OK prog_comp_env
+}.
+
+Definition program_of_program (p: program) : AST.program fundef type :=
+  {| AST.prog_defs := p.(prog_defs);
+     AST.prog_public := p.(prog_public);
+     AST.prog_main := p.(prog_main) |}.
+
+Coercion program_of_program: program >-> AST.program.
+
+Program Definition make_program (types: list composite_definition)
+                                (defs: list (ident * globdef fundef type))
+                                (public: list ident)
+                                (main: ident) : res program :=
+  match build_composite_env types with
+  | Error e => Error e
+  | OK ce =>
+      OK {| prog_defs := defs;
+            prog_public := public;
+            prog_main := main;
+            prog_types := types;
+            prog_comp_env := ce;
+            prog_comp_env_eq := _ |}
+  end.
+
+End PROGRAMS.
+
+Arguments External {F} _ _ _ _.
+
+Unset Implicit Arguments.
+
+(** * Separate compilation and linking *)
+
+(** ** Linking types *)
+
+Instance Linker_types : Linker type := {
+  link := fun t1 t2 => if type_eq t1 t2 then Some t1 else None;
+  linkorder := fun t1 t2 => t1 = t2
+}.
+Proof.
+  auto.
+  intros; congruence.
+  intros. destruct (type_eq x y); inv H. auto.
+Defined.
+
+Global Opaque Linker_types.
+
+(** ** Linking composite definitions *)
+
+Definition check_compat_composite (l: list composite_definition) (cd: composite_definition) : bool :=
+  List.forallb
+    (fun cd' =>
+      if ident_eq (name_composite_def cd') (name_composite_def cd) then composite_def_eq cd cd' else true)
+    l.
+
+Definition filter_redefs (l1 l2: list composite_definition) :=
+  let names1 := map name_composite_def l1 in
+  List.filter (fun cd => negb (In_dec ident_eq (name_composite_def cd) names1)) l2.
+
+Definition link_composite_defs (l1 l2: list composite_definition): option (list composite_definition) :=
+  if List.forallb (check_compat_composite l2) l1
+  then Some (l1 ++ filter_redefs l1 l2)
+  else None.
+
+Lemma link_composite_def_inv:
+  forall l1 l2 l,
+  link_composite_defs l1 l2 = Some l ->
+     (forall cd1 cd2, In cd1 l1 -> In cd2 l2 -> name_composite_def cd2 = name_composite_def cd1 -> cd2 = cd1)
+  /\ l = l1 ++ filter_redefs l1 l2
+  /\ (forall x, In x l <-> In x l1 \/ In x l2).
+Proof.
+  unfold link_composite_defs; intros.
+  destruct (forallb (check_compat_composite l2) l1) eqn:C; inv H.
+  assert (A: 
+    forall cd1 cd2, In cd1 l1 -> In cd2 l2 -> name_composite_def cd2 = name_composite_def cd1 -> cd2 = cd1).
+  { rewrite forallb_forall in C. intros.
+    apply C in H. unfold check_compat_composite in H. rewrite forallb_forall in H. 
+    apply H in H0. rewrite H1, dec_eq_true in H0. symmetry; eapply proj_sumbool_true; eauto. }
+  split. auto. split. auto. 
+  unfold filter_redefs; intros. 
+  rewrite in_app_iff. rewrite filter_In. intuition auto. 
+  destruct (in_dec ident_eq (name_composite_def x) (map name_composite_def l1)); simpl; auto.
+  exploit list_in_map_inv; eauto. intros (y & P & Q).
+  assert (x = y) by eauto. subst y. auto.
+Qed.
+
+Instance Linker_composite_defs : Linker (list composite_definition) := {
+  link := link_composite_defs;
+  linkorder := @List.incl composite_definition
+}.
+Proof.
+- intros; apply incl_refl.
+- intros; red; intros; eauto.
+- intros. apply link_composite_def_inv in H; destruct H as (A & B & C).
+  split; red; intros; apply C; auto.
+Defined.
+
+(** Connections with [build_composite_env]. *)
+
+Lemma add_composite_definitions_append:
+  forall l1 l2 env env'',
+  add_composite_definitions env (l1 ++ l2) = OK env'' <->
+  exists env', add_composite_definitions env l1 = OK env' /\ add_composite_definitions env' l2 = OK env''.
+Proof.
+  induction l1; simpl; intros.
+- split; intros. exists env; auto. destruct H as (env' & A & B). congruence.
+- destruct a; simpl. destruct (composite_of_def env id su m a); simpl.
+  apply IHl1. 
+  split; intros. discriminate. destruct H as (env' & A & B); discriminate.
+Qed.
+
+Lemma composite_eq:
+  forall su1 m1 a1 sz1 al1 r1 pos1 al2p1 szal1
+         su2 m2 a2 sz2 al2 r2 pos2 al2p2 szal2,
+  su1 = su2 -> m1 = m2 -> a1 = a2 -> sz1 = sz2 -> al1 = al2 -> r1 = r2 ->
+  Build_composite su1 m1 a1 sz1 al1 r1 pos1 al2p1 szal1 = Build_composite su2 m2 a2 sz2 al2 r2 pos2 al2p2 szal2.
+Proof.
+  intros. subst.
+  assert (pos1 = pos2) by apply proof_irr. 
+  assert (al2p1 = al2p2) by apply proof_irr.
+  assert (szal1 = szal2) by apply proof_irr.
+  subst. reflexivity.
+Qed.
+
+Lemma composite_of_def_eq:
+  forall env id co,
+  composite_consistent env co ->
+  env!id = None ->
+  composite_of_def env id (co_su co) (co_members co) (co_attr co) = OK co.
+Proof.
+  intros. destruct H as [A B C D]. unfold composite_of_def. rewrite H0, A.
+  destruct co; simpl in *. f_equal. apply composite_eq; auto. rewrite C, B; auto. 
+Qed.
+
+Lemma composite_consistent_unique:
+  forall env co1 co2,
+  composite_consistent env co1 ->
+  composite_consistent env co2 ->
+  co_su co1 = co_su co2 ->
+  co_members co1 = co_members co2 ->
+  co_attr co1 = co_attr co2 ->
+  co1 = co2.
+Proof.
+  intros. destruct H, H0. destruct co1, co2; simpl in *. apply composite_eq; congruence.
+Qed.
+
+Lemma composite_of_def_stable:
+  forall (env env': composite_env)
+         (EXTENDS: forall id co, env!id = Some co -> env'!id = Some co)
+         id su m a co,
+  env'!id = None ->
+  composite_of_def env id su m a = OK co ->
+  composite_of_def env' id su m a = OK co.
+Proof.
+  intros. 
+  unfold composite_of_def in H0. 
+  destruct (env!id) eqn:E; try discriminate.
+  destruct (complete_members env m) eqn:CM; try discriminate.
+  transitivity (composite_of_def env' id (co_su co) (co_members co) (co_attr co)).
+  inv H0; auto. 
+  apply composite_of_def_eq; auto. 
+  apply composite_consistent_stable with env; auto. 
+  inv H0; constructor; auto.
+Qed.
+
+Lemma link_add_composite_definitions:
+  forall l0 env0,
+  build_composite_env l0 = OK env0 ->
+  forall l env1 env1' env2,
+  add_composite_definitions env1 l = OK env1' ->
+  (forall id co, env1!id = Some co -> env2!id = Some co) ->
+  (forall id co, env0!id = Some co -> env2!id = Some co) ->
+  (forall id, env2!id = if In_dec ident_eq id (map name_composite_def l0) then env0!id else env1!id) ->
+  ((forall cd1 cd2, In cd1 l0 -> In cd2 l -> name_composite_def cd2 = name_composite_def cd1 -> cd2 = cd1)) ->
+  { env2' |
+      add_composite_definitions env2 (filter_redefs l0 l) = OK env2'
+  /\ (forall id co, env1'!id = Some co -> env2'!id = Some co)
+  /\ (forall id co, env0!id = Some co -> env2'!id = Some co) }.
+Proof.
+  induction l; simpl; intros until env2; intros ACD AGREE1 AGREE0 AGREE2 UNIQUE.
+- inv ACD. exists env2; auto.
+- destruct a. destruct (composite_of_def env1 id su m a) as [x|e] eqn:EQ; try discriminate.
+  simpl in ACD.
+  generalize EQ. unfold composite_of_def at 1. 
+  destruct (env1!id) eqn:E1; try congruence.
+  destruct (complete_members env1 m) eqn:CM1; try congruence. 
+  intros EQ1.
+  simpl. destruct (in_dec ident_eq id (map name_composite_def l0)); simpl.
++ eapply IHl; eauto.
+* intros. rewrite PTree.gsspec in H0. destruct (peq id0 id); auto.
+  inv H0.
+  exploit list_in_map_inv; eauto. intros ([id' su' m' a'] & P & Q).
+  assert (X: Composite id su m a = Composite id' su' m' a').
+  { eapply UNIQUE. auto. auto. rewrite <- P; auto. }
+  inv X.
+  exploit build_composite_env_charact; eauto. intros (co' & U & V & W & X). 
+  assert (co' = co).
+  { apply composite_consistent_unique with env2.
+    apply composite_consistent_stable with env0; auto. 
+    eapply build_composite_env_consistent; eauto.
+    apply composite_consistent_stable with env1; auto.
+    inversion EQ1; constructor; auto. 
+    inversion EQ1; auto.
+    inversion EQ1; auto.
+    inversion EQ1; auto. }
+  subst co'. apply AGREE0; auto. 
+* intros. rewrite AGREE2. destruct (in_dec ident_eq id0 (map name_composite_def l0)); auto. 
+  rewrite PTree.gsspec. destruct (peq id0 id); auto. subst id0. contradiction.
++ assert (E2: env2!id = None).
+  { rewrite AGREE2. rewrite pred_dec_false by auto. auto. }
+  assert (E3: composite_of_def env2 id su m a = OK x).
+  { eapply composite_of_def_stable. eexact AGREE1. eauto. eauto. }
+  rewrite E3. simpl. eapply IHl; eauto. 
+* intros until co; rewrite ! PTree.gsspec. destruct (peq id0 id); auto.
+* intros until co; rewrite ! PTree.gsspec. intros. destruct (peq id0 id); auto.
+  subst id0. apply AGREE0 in H0. congruence.
+* intros. rewrite ! PTree.gsspec. destruct (peq id0 id); auto. subst id0. 
+  rewrite pred_dec_false by auto. auto.
+Qed.
+
+Theorem link_build_composite_env:
+  forall l1 l2 l env1 env2,
+  build_composite_env l1 = OK env1 ->
+  build_composite_env l2 = OK env2 ->
+  link l1 l2 = Some l ->
+  { env |
+     build_composite_env l = OK env
+  /\ (forall id co, env1!id = Some co -> env!id = Some co)
+  /\ (forall id co, env2!id = Some co -> env!id = Some co) }.
+Proof.
+  intros. edestruct link_composite_def_inv as (A & B & C); eauto.
+  edestruct link_add_composite_definitions as (env & P & Q & R).
+  eexact H.
+  eexact H0.
+  instantiate (1 := env1). intros. rewrite PTree.gempty in H2; discriminate.
+  auto.
+  intros. destruct (in_dec ident_eq id (map name_composite_def l1)); auto.
+  rewrite PTree.gempty. destruct (env1!id) eqn:E1; auto. 
+  exploit build_composite_env_domain. eexact H. eauto.
+  intros. apply (in_map name_composite_def) in H2. elim n; auto. 
+  auto.
+  exists env; split; auto. subst l. apply add_composite_definitions_append. exists env1; auto. 
+Qed.
+
+(** ** Linking function definitions *)
+
+Definition link_fundef {F: Type} (fd1 fd2: fundef F) :=
+  match fd1, fd2 with
+  | Internal _, Internal _ => None
+  | External ef1 targs1 tres1 cc1, External ef2 targs2 tres2 cc2 =>
+      if external_function_eq ef1 ef2
+      && typelist_eq targs1 targs2
+      && type_eq tres1 tres2
+      && calling_convention_eq cc1 cc2
+      then Some (External ef1 targs1 tres1 cc1)
+      else None
+  | Internal f, External ef targs tres cc =>
+      match ef with EF_external id sg => Some (Internal f) | _ => None end
+  | External ef targs tres cc, Internal f =>
+      match ef with EF_external id sg => Some (Internal f) | _ => None end
+  end.
+
+Inductive linkorder_fundef {F: Type}: fundef F -> fundef F -> Prop :=
+  | linkorder_fundef_refl: forall fd,
+      linkorder_fundef fd fd
+  | linkorder_fundef_ext_int: forall f id sg targs tres cc,
+      linkorder_fundef (External (EF_external id sg) targs tres cc) (Internal f).
+
+Instance Linker_fundef (F: Type): Linker (fundef F) := {
+  link := link_fundef;
+  linkorder := linkorder_fundef
+}.
+Proof.
+- intros; constructor.
+- intros. inv H; inv H0; constructor.
+- intros x y z EQ. destruct x, y; simpl in EQ.
++ discriminate.
++ destruct e; inv EQ. split; constructor.
++ destruct e; inv EQ. split; constructor.
++ destruct (external_function_eq e e0 && typelist_eq t t1 && type_eq t0 t2 && calling_convention_eq c c0) eqn:A; inv EQ.
+  InvBooleans. subst. split; constructor.
+Defined.
+
+Remark link_fundef_either:
+  forall (F: Type) (f1 f2 f: fundef F), link f1 f2 = Some f -> f = f1 \/ f = f2.
+Proof.
+  simpl; intros. unfold link_fundef in H. destruct f1, f2; try discriminate.
+- destruct e; inv H. auto.
+- destruct e; inv H. auto.
+- destruct (external_function_eq e e0 && typelist_eq t t1 && type_eq t0 t2 && calling_convention_eq c c0); inv H; auto.
+Qed.
+
+Global Opaque Linker_fundef.
+
+(** ** Linking programs *)
+
+Definition lift_option {A: Type} (opt: option A) : { x | opt = Some x } + { opt = None }.
+Proof.
+  destruct opt. left; exists a; auto. right; auto. 
+Defined.
+
+Definition link_program {F:Type} (p1 p2: program F): option (program F) :=
+  match link (program_of_program p1) (program_of_program p2) with
+  | None => None
+  | Some p =>
+      match lift_option (link p1.(prog_types) p2.(prog_types)) with
+      | inright _ => None
+      | inleft (exist typs EQ) =>
+          match link_build_composite_env
+                   p1.(prog_types) p2.(prog_types) typs
+                   p1.(prog_comp_env) p2.(prog_comp_env)
+                   p1.(prog_comp_env_eq) p2.(prog_comp_env_eq) EQ with
+          | exist env (conj P Q) =>
+              Some {| prog_defs := p.(AST.prog_defs);
+                      prog_public := p.(AST.prog_public);
+                      prog_main := p.(AST.prog_main);
+                      prog_types := typs;
+                      prog_comp_env := env;
+                      prog_comp_env_eq := P |}
+          end
+      end
+  end.
+
+Definition linkorder_program {F: Type} (p1 p2: program F) : Prop :=
+     linkorder (program_of_program p1) (program_of_program p2)
+  /\ (forall id co, p1.(prog_comp_env)!id = Some co -> p2.(prog_comp_env)!id = Some co).
+
+Instance Linker_program (F: Type): Linker (program F) := {
+  link := link_program;
+  linkorder := linkorder_program
+}.
+Proof.
+- intros; split. apply linkorder_refl. auto. 
+- intros. destruct H, H0. split. eapply linkorder_trans; eauto.
+  intros; auto.
+- intros until z. unfold link_program. 
+  destruct (link (program_of_program x) (program_of_program y)) as [p|] eqn:LP; try discriminate.
+  destruct (lift_option (link (prog_types x) (prog_types y))) as [[typs EQ]|EQ]; try discriminate.
+  destruct (link_build_composite_env (prog_types x) (prog_types y) typs
+       (prog_comp_env x) (prog_comp_env y) (prog_comp_env_eq x)
+       (prog_comp_env_eq y) EQ) as (env & P & Q & R).
+  destruct (link_linkorder _ _ _ LP). 
+  intros X; inv X.
+  split; split; auto.
+Defined.
+
+Global Opaque Linker_program.
+
+(** ** Commutation between linking and program transformations *)
+
+Section LINK_MATCH_PROGRAM.
+
+Context {F G: Type}.
+Variable match_fundef: fundef F -> fundef G -> Prop.
+
+Hypothesis link_match_fundef:
+  forall f1 tf1 f2 tf2 f,
+  link f1 f2 = Some f ->
+  match_fundef f1 tf1 -> match_fundef f2 tf2 ->
+  exists tf, link tf1 tf2 = Some tf /\ match_fundef f tf.
+
+Let match_program (p: program F) (tp: program G) : Prop :=
+    Linking.match_program (fun ctx f tf => match_fundef f tf) eq p tp
+ /\ prog_types tp = prog_types p.
+
+Theorem link_match_program:
+  forall p1 p2 tp1 tp2 p,
+  link p1 p2 = Some p -> match_program p1 tp1 -> match_program p2 tp2 ->
+  exists tp, link tp1 tp2 = Some tp /\ match_program p tp.
+Proof.
+  intros. destruct H0, H1. 
+Local Transparent Linker_program.
+  simpl in H; unfold link_program in H.
+  destruct (link (program_of_program p1) (program_of_program p2)) as [pp|] eqn:LP; try discriminate.
+  assert (A: exists tpp,
+               link (program_of_program tp1) (program_of_program tp2) = Some tpp
+             /\ Linking.match_program (fun ctx f tf => match_fundef f tf) eq pp tpp).
+  { eapply Linking.link_match_program. 
+  - intros. exploit link_match_fundef; eauto. intros (tf & A & B). exists tf; auto.
+  - intros.
+    Local Transparent Linker_types.
+    simpl in *. destruct (type_eq v1 v2); inv H4. subst v tv2. exists tv1; rewrite dec_eq_true; auto.
+  - eauto.
+  - eauto.
+  - eauto.
+  - apply (link_linkorder _ _ _ LP).
+  - apply (link_linkorder _ _ _ LP). }
+  destruct A as (tpp & TLP & MP).
+  simpl; unfold link_program. rewrite TLP.
+  destruct (lift_option (link (prog_types p1) (prog_types p2))) as [[typs EQ]|EQ]; try discriminate.
+  destruct (link_build_composite_env (prog_types p1) (prog_types p2) typs
+           (prog_comp_env p1) (prog_comp_env p2) (prog_comp_env_eq p1)
+           (prog_comp_env_eq p2) EQ) as (env & P & Q). 
+  rewrite <- H2, <- H3 in EQ.
+  destruct (lift_option (link (prog_types tp1) (prog_types tp2))) as [[ttyps EQ']|EQ']; try congruence.
+  assert (ttyps = typs) by congruence. subst ttyps. 
+  destruct (link_build_composite_env (prog_types tp1) (prog_types tp2) typs
+         (prog_comp_env tp1) (prog_comp_env tp2) (prog_comp_env_eq tp1)
+         (prog_comp_env_eq tp2) EQ') as (tenv & R & S).
+  assert (tenv = env) by congruence. subst tenv.
+  econstructor; split; eauto. inv H. split; auto.
+  unfold program_of_program; simpl. destruct pp, tpp; exact MP.
+Qed.
+
+End LINK_MATCH_PROGRAM.

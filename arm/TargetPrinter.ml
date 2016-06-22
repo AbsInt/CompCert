@@ -13,11 +13,10 @@
 (* Printing ARM assembly code in asm syntax *)
 
 open Printf
-open Datatypes
+open !Datatypes
 open Camlcoq
 open Sections
 open AST
-open Memdata
 open Asm
 open PrintAsmaux
 open Fileinfo
@@ -67,12 +66,6 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | FR4 -> "d4"  | FR5 -> "d5"  | FR6 -> "d6"  | FR7 -> "d7"
       | FR8 -> "d8"  | FR9 -> "d9"  | FR10 -> "d10"  | FR11 -> "d11"
       | FR12 -> "d12"  | FR13 -> "d13"  | FR14 -> "d14"  | FR15 -> "d15"
-
-    let single_float_reg_index = function
-      | FR0 -> 0  | FR1 -> 2  | FR2 -> 4  | FR3 -> 6
-      | FR4 -> 8  | FR5 -> 10  | FR6 -> 12  | FR7 -> 14
-      | FR8 -> 16  | FR9 -> 18  | FR10 -> 20  | FR11 -> 22
-      | FR12 -> 24  | FR13 -> 26  | FR14 -> 28  | FR15 -> 30
 
     let single_float_reg_name = function
       | FR0 -> "s0"  | FR1 -> "s2"  | FR2 -> "s4"  | FR3 -> "s6"
@@ -126,11 +119,14 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
        eor
        lsl
        lsr
-       mov
        mvn
        orr
        rsb
        sub    (but not sp - imm)
+   On the other hand, "mov rd, rs" and "mov rd, #imm" have shorter
+   encodings if they do not have the "S" flag.  Moreover, the "S"
+   flag is not supported if rd or rs is sp.
+
    The proof of Asmgen shows that CompCert-generated code behaves the
    same whether flags are updated or not by those instructions.  The
    following printing function adds a "S" suffix if we are in Thumb2
@@ -243,7 +239,8 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
 (* Generate code to load the address of id + ofs in register r *)
 
     let loadsymbol oc r id ofs =
-      if !Clflags.option_mthumb then begin
+      let o = camlint_of_coqint ofs in
+      if o >= -32768l && o <= 32767l && !Clflags.option_mthumb then begin
         fprintf oc "	movw	%a, #:lower16:%a\n"
           ireg r symbol_offset (id, ofs);
         fprintf oc "	movt	%a, #:upper16:%a\n"
@@ -253,39 +250,6 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
         fprintf oc "	ldr	%a, .L%d @ %a\n"
           ireg r lbl symbol_offset (id, ofs); 1
       end
-
-(* Emit instruction sequences that set or offset a register by a constant. *)
-(* No S suffix because they are applied to SP most of the time. *)
-
-    let movimm oc dst n =
-      match Asmgen.decompose_int n with
-      | [] -> assert false
-      | hd::tl as l ->
-          fprintf oc "	mov	%s, #%a\n" dst coqint hd;
-          List.iter
-            (fun n -> fprintf oc "	orr	%s, %s, #%a\n" dst dst coqint n)
-            tl;
-          List.length l
-
-    let addimm oc dst src n =
-      match Asmgen.decompose_int n with
-      | [] -> assert false
-      | hd::tl as l ->
-          fprintf oc "	add	%s, %s, #%a\n" dst src coqint hd;
-          List.iter
-            (fun n -> fprintf oc "	add	%s, %s, #%a\n" dst dst coqint n)
-            tl;
-          List.length l
-
-    let subimm oc dst src n =
-      match Asmgen.decompose_int n with
-      | [] -> assert false
-      | hd::tl as l ->
-          fprintf oc "	sub	%s, %s, #%a\n" dst src coqint hd;
-          List.iter
-            (fun n -> fprintf oc "	sub	%s, %s, #%a\n" dst dst coqint n)
-            tl;
-          List.length l
 
 (* Recognition of float constants appropriate for VMOV.
    a normalized binary floating point encoding with 1 sign bit, 4
@@ -307,23 +271,6 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
     let print_file_line oc file line =
       print_file_line oc comment file line
 
-    let print_location oc loc =
-      if loc <> Cutil.no_loc then print_file_line oc (fst loc) (snd loc)
-
-(* Auxiliary for 64-bit integer arithmetic built-ins.  They expand to
-   two instructions, one computing the low 32 bits of the result,
-   followed by another computing the high 32 bits.  In cases where
-   the first instruction would overwrite arguments to the second
-   instruction, we must go through IR14 to hold the low 32 bits of the result.
- *)
-
-    let print_int64_arith oc conflict rl fn =
-      if conflict then begin
-        let n = fn IR14 in
-        fprintf oc "	mov%t	%a, %a\n" thumbS ireg rl ireg IR14;
-        n + 1
-      end else
-        fn rl
 
 (* Fixing up calling conventions *)
 
@@ -551,6 +498,9 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
             thumbS ireg r1 ireg r2 ireg r3; 1
       | Pmla(r1, r2, r3, r4) ->
           fprintf oc "	mla	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 ireg r4; 1
+      | Pmov(r1, (SOimm _ | SOreg _ as so)) ->
+          (* No S flag even in Thumb2 mode *)
+          fprintf oc "	mov	%a, %a\n" ireg r1 shift_op so; 1
       | Pmov(r1, so) ->
           fprintf oc "	mov%t	%a, %a\n" thumbS ireg r1 shift_op so; 1
       | Pmovw(r1, n) ->
@@ -644,7 +594,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | Pflid(r1, f) ->
           let f = camlint64_of_coqint(Floats.Float.to_bits f) in
           if Opt.vfpv3 && is_immediate_float64 f then begin
-            fprintf oc "	vmov.f64 %a, #%F\n"
+            fprintf oc "	vmov.f64 %a, #%.15F\n"
               freg r1 (Int64.float_of_bits f); 1
               (* immediate floats have at most 4 bits of fraction, so they
                  should print exactly with OCaml's F decimal format. *)
@@ -696,7 +646,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       | Pflis(r1, f) ->
           let f = camlint_of_coqint(Floats.Float32.to_bits f) in
           if Opt.vfpv3 && is_immediate_float32 f then begin
-            fprintf oc "	vmov.f32 %a, #%F\n"
+            fprintf oc "	vmov.f32 %a, #%.15F\n"
               freg_single r1 (Int32.float_of_bits f); 1
               (* immediate floats have at most 4 bits of fraction, so they
                  should print exactly with OCaml's F decimal format. *)
@@ -878,7 +828,7 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           fprintf oc "	.quad	%Ld\n" (camlint64_of_coqint n)
       | Init_float32 n ->
           fprintf oc "	.word	0x%lx %s %.15g \n" (camlint_of_coqint (Floats.Float32.to_bits n))
-	    comment (camlfloat_of_coqfloat n)
+	    comment (camlfloat_of_coqfloat32 n)
       | Init_float64 n ->
           fprintf oc "	.quad	%Ld %s %.18g\n" (camlint64_of_coqint (Floats.Float.to_bits n))
 	    comment (camlfloat_of_coqfloat n)

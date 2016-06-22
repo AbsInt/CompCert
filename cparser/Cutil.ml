@@ -15,7 +15,6 @@
 
 (* Operations on C types and abstract syntax *)
 
-open Printf
 open Cerrors
 open C
 open Env
@@ -194,7 +193,7 @@ let strip_attributes_type t attr =
 
 (* Remove the last attribute from the toplevel and return the changed type *)
 let strip_last_attribute typ  =
-  let rec hd_opt l = match l with
+  let hd_opt l = match l with
     [] -> None,[]
   | a::rest -> Some a,rest in
   match typ with
@@ -333,7 +332,7 @@ let rec equal_types env t1 t2 =
       | None, None -> true
       | Some s1, Some s2 -> s1 = s2
       | _ -> false end in
-      size && a1 = a2 && equal_types env t1 t2
+      size && a1 = a2 && equal_types env ty1 ty2
   | TFun(ty1, params1, vararg1, a1), TFun(ty2, params2, vararg2, a2) ->
       let params =
         match params1, params2 with
@@ -552,11 +551,16 @@ let struct_layout env members =
 (* Determine whether a type is incomplete *)
 
 let incomplete_type env t =
-  match sizeof env t with None -> true | Some _ -> false
+  match unroll env t with
+  | TVoid _ -> true (* Void is always incomplete *)
+  | _ -> begin match sizeof env t with
+    | None -> true
+    | Some _ -> false
+  end
 
 (* Computing composite_info records *)
 
-let composite_info_decl env su attr =
+let composite_info_decl su attr =
   { ci_kind = su; ci_members = [];
     ci_alignof = None; ci_sizeof = None;
     ci_attr = attr }
@@ -887,7 +891,7 @@ let is_literal_0 e =
 
 let is_debug_stmt s =
   let is_debug_call = function
-    | (ECall ({edesc = EVar id; _},_)) -> id.name = "__builtin_debug"
+    | (ECall ({edesc = EVar id; _},_)) -> id.C.name = "__builtin_debug"
     | _ -> false in
   match s.sdesc with
   | Sdo {edesc = e;_} ->
@@ -898,12 +902,12 @@ let is_debug_stmt s =
 (* Assignment compatibility check over attributes.
    Standard attributes ("const", "volatile", "restrict") can safely
    be added (to the rhs type to get the lhs type) but must not be dropped.
-   Custom attributes can safely be dropped but must not be added. *)
+   Custom attributes can safely be dropped or added. *)
 
 let valid_assignment_attr afrom ato =
   let (afromstd, afromcustom) = List.partition attr_is_standard afrom
   and (atostd, atocustom) = List.partition attr_is_standard ato in
-  incl_attributes afromstd atostd && incl_attributes atocustom afromcustom
+  incl_attributes afromstd atostd
 
 (* Check that an assignment is allowed *)
 
@@ -1114,3 +1118,24 @@ let rec subst_stmt phi s =
                List.map subst_asm_operand inputs,
                clob)
   }
+
+let contains_return s =
+  let rec aux s =
+    match s.sdesc with
+    | Sskip
+    | Sbreak
+    | Scontinue
+    | Sdo _
+    | Sdecl _
+    | Sasm _
+    | Sgoto _ -> false
+    | Sif(_, s1, s2)
+    | Sseq(s1, s2) -> aux s1 || aux s2
+    | Sswitch (_, s)
+    | Slabeled (_, s)
+    | Swhile (_, s)
+    | Sdowhile(s, _ ) -> aux s
+    | Sfor(s1, _ , s2, s3) ->  aux s1 || aux s2 || aux s3
+    | Sreturn _ -> true
+    | Sblock sl -> List.fold_left (fun acc s -> acc || aux s) false sl in
+  aux s

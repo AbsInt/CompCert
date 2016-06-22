@@ -21,6 +21,8 @@ open DwarfUtil
 
 (* Generate the dwarf DIE's from the information collected in DebugInformation *)
 
+module StringSet = Set.Make(String)
+
 (* Helper function to get values that must be set. *)
 let get_opt_val = function
   | Some a -> a
@@ -270,7 +272,7 @@ module Dwarfgenaux (Target: TARGET) =
           IntSet.add id d,true
         else
           d,false in
-      let t = Hashtbl.find types id in
+      let t = get_type id in
       match t with
       | IntegerType _
       | FloatType _
@@ -308,15 +310,15 @@ module Dwarfgenaux (Target: TARGET) =
         else
           d in
       let typs = aux needed in
-      List.rev (Hashtbl.fold (fun id t acc ->
+      List.rev (fold_types (fun id t acc ->
         if IntSet.mem id typs then
           (infotype_to_entry id t)::acc
         else
-          acc) types [])
+          acc) [])
 
     let global_variable_to_entry acc id v =
       let loc = match v.gvar_atom with
-      | Some a when StringSet.mem (extern_atom a) !printed_vars ->
+      | Some a when is_variable_printed (extern_atom a) ->
           Some (LocSymbol a)
       | _ -> None in
       let var = {
@@ -369,15 +371,15 @@ module Dwarfgenaux (Target: TARGET) =
       if !Clflags.option_gdepth > 2 then
         try
           begin
-            match (Hashtbl.find var_locations (f_id,atom)) with
+            match variable_location f_id atom with
             | FunctionLoc (a,r) ->
                 translate_function_loc a r
             | RangeLoc l ->
                 let l = List.rev_map (fun i ->
                   let hi = get_opt_val i.range_start
                   and lo = get_opt_val i.range_end in
-                  let hi = Hashtbl.find label_translation (f_id,hi)
-                  and lo = Hashtbl.find label_translation (f_id,lo) in
+                  let hi = translate_label f_id hi
+                  and lo = translate_label f_id lo in
                   hi,lo,range_entry_loc i.var_loc) l in
                 let id = next_id () in
                 Some (LocRef id),[{loc = l;loc_id = id;}]
@@ -402,11 +404,11 @@ module Dwarfgenaux (Target: TARGET) =
 
     let scope_range f_id id (o,dwr) =
       try
-        let r = Hashtbl.find scope_ranges id in
+        let r = get_scope_ranges id in
         let lbl l h = match l,h with
         | Some l,Some h->
-            let l = (Hashtbl.find label_translation (f_id,l))
-            and h = (Hashtbl.find label_translation (f_id,h)) in
+            let l = translate_label f_id l
+            and h = translate_label f_id h in
             l,h
         | _ -> raise Not_found in
         begin
@@ -451,7 +453,7 @@ module Dwarfgenaux (Target: TARGET) =
       add_children entry vars,(acc >>= dwr)
 
     and local_to_entry f_id acc id =
-      match Hashtbl.find local_variables id with
+      match get_local_variable id with
       | LocalVariable v -> local_variable_to_entry f_id acc v id
       | Scope v -> let s,acc = (scope_to_entry f_id acc v id) in
         Some s,acc
@@ -460,7 +462,7 @@ module Dwarfgenaux (Target: TARGET) =
       match id with
       | None -> [],acc
       | Some id ->
-          let sc = Hashtbl.find local_variables id in
+          let sc = get_local_variable id in
           (match sc with
           | Scope sc -> mmap_opt (local_to_entry f_id) acc sc.scope_variables
           | _ -> assert false)
@@ -499,7 +501,7 @@ module Dwarfgenaux (Target: TARGET) =
 module StringMap = Map.Make(String)
 
 let diab_file_loc sec (f,l)  =
-  Diab_file_loc (Hashtbl.find filenum (sec,f),l)
+  Diab_file_loc ((diab_file_loc sec f),l)
 
 let prod_name =
   let version_string =
@@ -518,9 +520,9 @@ let diab_gen_compilation_section s defs acc =
   let defs,accu = List.fold_left (fun (acc,bcc) (id,t) ->
     let t,bcc = Gen.definition_to_entry bcc id t in
     t::acc,bcc) ([],empty_accu) defs in
-  let low_pc = Hashtbl.find compilation_section_start s
-  and line_start,debug_start,_ = Hashtbl.find diab_additional s
-  and high_pc = Hashtbl.find compilation_section_end s in
+  let low_pc = section_start s
+  and line_start,debug_start = diab_additional_section s
+  and high_pc = section_end s in
   let cp = {
     compile_unit_name = Simple_string !file_name;
     compile_unit_range = Pc_pair (low_pc,high_pc);
@@ -534,16 +536,16 @@ let diab_gen_compilation_section s defs acc =
     start_label = debug_start;
     line_label = line_start;
     entry = cp;
-    locs = Some low_pc,accu.locs;
+    dlocs = Some low_pc,accu.locs;
   }::acc
 
 let gen_diab_debug_info sec_name var_section : debug_entries =
-  let defs = Hashtbl.fold (fun id t acc ->
+  let defs = fold_definitions (fun id t acc ->
     let s = match t with
     | GlobalVariable _ -> var_section
     | Function f -> sec_name (get_opt_val f.fun_atom) in
     let old = try StringMap.find s acc with Not_found -> [] in
-    StringMap.add s ((id,t)::old) acc) definitions StringMap.empty in
+    StringMap.add s ((id,t)::old) acc) StringMap.empty in
   let entries = StringMap.fold diab_gen_compilation_section defs [] in
   Diab entries
 
@@ -567,15 +569,15 @@ let gnu_string_entry s =
 let gen_gnu_debug_info sec_name var_section : debug_entries =
   let r,dwr,low_pc =
     try if !Clflags.option_gdwarf > 3 then
-        let pcs  = Hashtbl.fold (fun s low acc ->
-          (low,Hashtbl.find compilation_section_end s)::acc) compilation_section_start [] in
+        let pcs  = fold_section_start (fun s low acc ->
+          (low,section_end s)::acc) [] in
         match pcs with
         | [] ->  Empty,(0,[]),None
         | [(l,h)] ->   Pc_pair (l,h),(0,[]),Some l
         | _ -> Offset 0,(2 + 4 * (List.length pcs),[pcs]),None
     else
-        let l = Hashtbl.find compilation_section_start ".text"
-        and h = Hashtbl.find compilation_section_end ".text" in
+        let l = section_start ".text"
+        and h = section_end ".text" in
         Pc_pair(l,h),(0,[]),Some l
     with Not_found ->  Empty,(0,[]),None in
   let accu = empty_accu >>= dwr in
@@ -583,12 +585,12 @@ let gen_gnu_debug_info sec_name var_section : debug_entries =
     let file_loc = gnu_file_loc
     let string_entry = gnu_string_entry
   end) in
-  let defs,accu,sec = Hashtbl.fold (fun  id t (acc,bcc,sec) ->
+  let defs,accu,sec = fold_definitions (fun  id t (acc,bcc,sec) ->
     let s = match t with
     | GlobalVariable _ -> var_section
     | Function f -> sec_name (get_opt_val f.fun_atom) in
     let t,bcc = Gen.definition_to_entry bcc id t in
-    t::acc,bcc,StringSet.add s sec) definitions ([],accu,StringSet.empty) in
+    t::acc,bcc,StringSet.add s sec) ([],accu,StringSet.empty) in
   let types = Gen.gen_types accu.typs in
   let cp = {
     compile_unit_name = gnu_string_entry !file_name;

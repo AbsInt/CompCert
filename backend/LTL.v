@@ -111,10 +111,7 @@ Definition call_regs (caller: locset) : locset :=
 Definition return_regs (caller callee: locset) : locset :=
   fun (l: loc) =>
     match l with
-    | R r =>
-        if In_dec mreg_eq r destroyed_at_call
-        then callee (R r)
-        else caller (R r)
+    | R r => if is_callee_save r then caller (R r) else callee (R r)
     | S sl ofs ty => caller (S sl ofs ty)
     end.
 
@@ -269,9 +266,9 @@ Inductive step: state -> trace -> state -> Prop :=
       step (Callstate s (Internal f) rs m)
         E0 (State s f (Vptr sp Int.zero) f.(fn_entrypoint) rs' m')
   | exec_function_external: forall s ef t args res rs m rs' m',
-      args = map rs (loc_arguments (ef_sig ef)) ->
-      external_call' ef ge args m t res m' ->
-      rs' = Locmap.setlist (map R (loc_result (ef_sig ef))) res rs ->
+      args = map (fun p => Locmap.getpair p rs) (loc_arguments (ef_sig ef)) ->
+      external_call ef ge args m t res m' ->
+      rs' = Locmap.setpair (loc_result (ef_sig ef)) res rs ->
       step (Callstate s (External ef) rs m)
          t (Returnstate s rs' m')
   | exec_return: forall f sp rs1 bb s rs m,
@@ -295,9 +292,8 @@ Inductive initial_state (p: program): state -> Prop :=
       initial_state p (Callstate nil f (Locmap.init Vundef) m0).
 
 Inductive final_state: state -> int -> Prop :=
-  | final_state_intro: forall rs m r retcode,
-      loc_result signature_main = r :: nil ->
-      rs (R r) = Vint retcode ->
+  | final_state_intro: forall rs m retcode,
+      Locmap.getpair (map_rpair R (loc_result signature_main)) rs = Vint retcode ->
       final_state (Returnstate nil rs m) retcode.
 
 Definition semantics (p: program) :=

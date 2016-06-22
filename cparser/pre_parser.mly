@@ -23,7 +23,7 @@
 *)
 
 %{
-  open Pre_parser_aux
+  open !Pre_parser_aux
 
   let set_id_type (_,r,_) t =
     r := t
@@ -54,7 +54,7 @@
   COLON AND MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN SUB_ASSIGN LEFT_ASSIGN
   RIGHT_ASSIGN AND_ASSIGN XOR_ASSIGN OR_ASSIGN LPAREN RPAREN LBRACK RBRACK
   LBRACE RBRACE DOT COMMA SEMICOLON ELLIPSIS TYPEDEF EXTERN STATIC RESTRICT
-  AUTO REGISTER INLINE CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE
+  AUTO REGISTER INLINE NORETURN CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE
   UNDERSCORE_BOOL CONST VOLATILE VOID STRUCT UNION ENUM CASE DEFAULT IF ELSE
   SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN BUILTIN_VA_ARG ALIGNOF
   ATTRIBUTE ALIGNAS PACKED ASM
@@ -608,6 +608,7 @@ gcc_attribute_word:
 
 function_specifier:
 | INLINE
+| NORETURN
     {}
 
 (* We add this non-terminal here to force the resolution of the
@@ -665,6 +666,7 @@ direct_declarator:
 | i = declarator_identifier
     { set_id_type i VarId; (i, Decl_ident) }
 | LPAREN save_context x = declarator RPAREN
+    { x }
 | x = direct_declarator LBRACK type_qualifier_list? optional(assignment_expression, RBRACK)
     { match snd x with
       | Decl_ident -> (fst x, Decl_other)

@@ -35,12 +35,14 @@ DIRS=extraction \
 INCLUDES=$(patsubst %,-I %, $(DIRS))
 
 # Control of warnings:
-# warning 3 = deprecated feature.  Turned off for OCaml 4.02 (bytes vs strings)
-# warning 20 = unused function argument.  There are some in extracted code
 
-WARNINGS=-w -3 -strict-sequence
-extraction/%.cmx: WARNINGS +=-w -20
-extraction/%.cmo: WARNINGS +=-w -20
+WARNINGS=-w +a-4-9-27 -strict-sequence -safe-string -warn-error +a #Deprication returns with ocaml 4.03
+extraction/%.cmx: WARNINGS +=-w -20-27-32..34-39-41-44..45
+extraction/%.cmo: WARNINGS +=-w -20-27-32..34-39-41-44..45
+cparser/pre_parser.cmx: WARNINGS += -w -41
+cparser/pre_parser.cmo: WARNINGS += -w -41
+backend/CMparser.cmx: WARNINGS += -w -41
+backend/CMparser.cmo: WARNINGS += -w -41
 
 COMPFLAGS+=-g $(INCLUDES) $(MENHIR_INCLUDES) $(WARNINGS)
 
@@ -123,4 +125,5 @@ clean:
 
 depend: $(GENERATED)
 	@echo "Analyzing OCaml dependencies"
-	@$(OCAMLDEP) $(foreach d,$(DIRS),$(wildcard $(d)/*.mli $(d)/*.ml)) $(GENERATED) >.depend.extr || { rm -f .depend.extr; exit 2; }
+	@$(OCAMLDEP) $(foreach d,$(DIRS),$(wildcard $(d)/*.ml)) $(GENERATED) >.depend.extr || { rm -f .depend.extr; exit 2; }
+	@$(OCAMLDEP) $(foreach d,$(DIRS),$(wildcard $(d)/*.mli)) $(GENERATED) >>.depend.extr || { rm -f .depend.extr; exit 2; }

@@ -80,17 +80,19 @@ Theorem transf_cstrategy_program_preservation:
 Proof.
   assert (WBT: forall p, well_behaved_traces (Cstrategy.semantics p)).
     intros. eapply ssr_well_behaved. apply Cstrategy.semantics_strongly_receptive.
-  intros. intuition.
+  intros. 
+  assert (MATCH: match_prog p tp) by (apply transf_c_program_match; auto).
+  intuition auto.
   eapply forward_simulation_behavior_improves; eauto.
-    apply (fst (transf_cstrategy_program_correct _ _ H)).
+    apply (proj1 (cstrategy_semantic_preservation _ _ MATCH)).
   exploit backward_simulation_behavior_improves.
-    apply (snd (transf_cstrategy_program_correct _ _ H)).
+    apply (proj2 (cstrategy_semantic_preservation _ _ MATCH)).
     eauto.
   intros [beh1 [A B]]. exists beh1; split; auto. rewrite atomic_behaviors; auto.
   eapply forward_simulation_same_safe_behavior; eauto.
-    apply (fst (transf_cstrategy_program_correct _ _ H)).
+    apply (proj1 (cstrategy_semantic_preservation _ _ MATCH)).
   exploit backward_simulation_same_safe_behavior.
-    apply (snd (transf_cstrategy_program_correct _ _ H)).
+    apply (proj2 (cstrategy_semantic_preservation _ _ MATCH)).
     intros. rewrite <- atomic_behaviors in H2; eauto. eauto.
     intros. rewrite atomic_behaviors; auto.
 Qed.

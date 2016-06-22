@@ -15,14 +15,10 @@
 open Printf
 open Camlcoq
 open Datatypes
-open Maps
 open AST
-open Integers
-open Locations
 open Machregsaux
 open Mach
 open PrintAST
-open PrintOp
 
 let reg pp r =
   match name_of_register r with

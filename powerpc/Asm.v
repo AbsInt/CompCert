@@ -396,12 +396,12 @@ Fixpoint undef_regs (l: list preg) (rs: regset) : regset :=
   | r :: l' => undef_regs l' (rs#r <- Vundef)
   end.
 
-(** Assigning multiple registers *)
+(** Assigning a register pair *)
 
-Fixpoint set_regs (rl: list preg) (vl: list val) (rs: regset) : regset :=
-  match rl, vl with
-  | r1 :: rl', v1 :: vl' => set_regs rl' vl' (rs#r1 <- v1)
-  | _, _ => rs
+Definition set_pair (p: rpair preg) (v: val) (rs: regset) : regset :=
+  match p with
+  | One r => rs#r <- v
+  | Twolong rhi rlo => rs#rhi <- (Val.hiword v) #rlo <- (Val.loword v)
   end.
 
 (** Assigning the result of a builtin *)
@@ -980,12 +980,21 @@ Inductive extcall_arg (rs: regset) (m: mem): loc -> val -> Prop :=
                 (Val.add (rs (IR GPR1)) (Vint (Int.repr bofs))) = Some v ->
       extcall_arg rs m (S Outgoing ofs ty) v.
 
+Inductive extcall_arg_pair (rs: regset) (m: mem): rpair loc -> val -> Prop :=
+  | extcall_arg_one: forall l v,
+      extcall_arg rs m l v ->
+      extcall_arg_pair rs m (One l) v
+  | extcall_arg_twolong: forall hi lo vhi vlo,
+      extcall_arg rs m hi vhi ->
+      extcall_arg rs m lo vlo ->
+      extcall_arg_pair rs m (Twolong hi lo) (Val.longofwords vhi vlo).
+
 Definition extcall_arguments
     (rs: regset) (m: mem) (sg: signature) (args: list val) : Prop :=
-  list_forall2 (extcall_arg rs m) (loc_arguments sg) args.
+  list_forall2 (extcall_arg_pair rs m) (loc_arguments sg) args.
 
-Definition loc_external_result (sg: signature) : list preg :=
-  map preg_of (loc_result sg).
+Definition loc_external_result (sg: signature) : rpair preg :=
+  map_rpair preg_of (loc_result sg).
 
 (** Execution of the instruction at [rs#PC]. *)
 
@@ -1015,9 +1024,9 @@ Inductive step: state -> trace -> state -> Prop :=
       forall b ef args res rs m t rs' m',
       rs PC = Vptr b Int.zero ->
       Genv.find_funct_ptr ge b = Some (External ef) ->
-      external_call' ef ge args m t res m' ->
+      external_call ef ge args m t res m' ->
       extcall_arguments rs m (ef_sig ef) args ->
-      rs' = (set_regs (loc_external_result (ef_sig ef)) res rs) #PC <- (rs RA) ->
+      rs' = (set_pair (loc_external_result (ef_sig ef)) res rs) #PC <- (rs RA) ->
       step (State rs m) t (State rs' m').
 
 End RELSEM.
@@ -1051,13 +1060,21 @@ Remark extcall_arguments_determ:
   extcall_arguments rs m sg args1 -> extcall_arguments rs m sg args2 -> args1 = args2.
 Proof.
   intros until m.
-  assert (forall ll vl1, list_forall2 (extcall_arg rs m) ll vl1 ->
-          forall vl2, list_forall2 (extcall_arg rs m) ll vl2 -> vl1 = vl2).
+  assert (A: forall l v1 v2,
+             extcall_arg rs m l v1 -> extcall_arg rs m l v2 -> v1 = v2).
+  { intros. inv H; inv H0; congruence. }
+  assert (B: forall p v1 v2,
+             extcall_arg_pair rs m p v1 -> extcall_arg_pair rs m p v2 -> v1 = v2).
+  { intros. inv H; inv H0. 
+    eapply A; eauto.
+    f_equal; eapply A; eauto. }
+  assert (C: forall ll vl1, list_forall2 (extcall_arg_pair rs m) ll vl1 ->
+             forall vl2, list_forall2 (extcall_arg_pair rs m) ll vl2 -> vl1 = vl2).
+  {
     induction 1; intros vl2 EA; inv EA.
     auto.
-    f_equal; auto.
-    inv H; inv H3; congruence.
-  intros. red in H0; red in H1. eauto.
+    f_equal; eauto. }
+  intros. eapply C; eauto.
 Qed.
 
 Lemma semantics_determinate: forall p, determinate (semantics p).
@@ -1078,13 +1095,13 @@ Ltac Equalities :=
   exploit external_call_determ. eexact H5. eexact H11. intros [A B].
   split. auto. intros. destruct B; auto. subst. auto.
   assert (args0 = args) by (eapply extcall_arguments_determ; eauto). subst args0.
-  exploit external_call_determ'. eexact H3. eexact H8. intros [A B].
+  exploit external_call_determ. eexact H3. eexact H8. intros [A B].
   split. auto. intros. destruct B; auto. subst. auto.
 (* trace length *)
   red; intros. inv H; simpl.
   omega.
   eapply external_call_trace_length; eauto.
-  inv H2; eapply external_call_trace_length; eauto.
+  eapply external_call_trace_length; eauto.
 (* initial states *)
   inv H; inv H0. f_equal. congruence.
 (* final no step *)

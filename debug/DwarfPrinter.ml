@@ -33,9 +33,6 @@ module DwarfPrinter(Target: DWARF_TARGET):
 
     let string_of_comment s = sprintf "	%s %s" comment s
 
-    let add_comment buf s =
-      Buffer.add_string buf (sprintf "	%s %s" comment s)
-
     (* Byte value to string *)
     let string_of_byte value ct =
       sprintf "	.byte		%s%s\n" (if value then "0x1" else "0x0") (string_of_comment ct)
@@ -66,8 +63,6 @@ module DwarfPrinter(Target: DWARF_TARGET):
     let add_byte_size = add_abbr_entry (0x0b,"DW_AT_byte_size",DW_FORM_data1)
 
     let add_member_size = add_abbr_entry (0x0b,"DW_AT_byte_size",DW_FORM_udata)
-
-    let add_high_pc = add_abbr_entry (0x12,"DW_AT_high_pc",DW_FORM_addr)
 
     let add_low_pc = add_abbr_entry (0x11,"DW_AT_low_pc",DW_FORM_addr)
 
@@ -115,7 +110,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
         if has_sibling then add_abbr_entry (0x1,"DW_AT_sibling",DW_FORM_ref4) buf;
       in
       (match entity.tag with
-      | DW_TAG_array_type e ->
+      | DW_TAG_array_type _ ->
           prologue 0x1 "DW_TAG_array_type";
           add_type buf
       | DW_TAG_base_type b ->
@@ -623,9 +618,9 @@ module DwarfPrinter(Target: DWARF_TARGET):
         let name = if e.section_name <> ".text" then Some e.section_name else None in
         section oc (Section_debug_info name);
         print_debug_info oc e.start_label e.line_label e.entry) entries;
-      if List.exists (fun e -> match e.locs with _,[] -> false | _,_ -> true) entries then begin
+      if List.exists (fun e -> match e.dlocs with _,[] -> false | _,_ -> true) entries then begin
         section oc Section_debug_loc;
-        List.iter (fun e -> print_location_list oc e.locs) entries
+        List.iter (fun e -> print_location_list oc e.dlocs) entries
       end
 
     let print_ranges oc r =

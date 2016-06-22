@@ -17,87 +17,24 @@ open AST
 open BinNums
 open C2C
 open Camlcoq
+open Json
 open Printf
 open Sections
 
-let p_jstring oc s = fprintf oc "\"%s\"" s
+let p_reg oc t n =
+  let s = sprintf "%s%s" t n in
+  p_jsingle_object oc "Register" p_jstring s
 
-let p_ireg oc = function
-  | GPR0 -> fprintf oc "{\"Register\":\"r0\"}"
-  | GPR1 -> fprintf oc "{\"Register\":\"r1\"}"
-  | GPR2 -> fprintf oc "{\"Register\":\"r2\"}"
-  | GPR3 -> fprintf oc "{\"Register\":\"r3\"}"
-  | GPR4 -> fprintf oc "{\"Register\":\"r4\"}"
-  | GPR5 -> fprintf oc "{\"Register\":\"r5\"}"
-  | GPR6 -> fprintf oc "{\"Register\":\"r6\"}"
-  | GPR7 -> fprintf oc "{\"Register\":\"r7\"}"
-  | GPR8 -> fprintf oc "{\"Register\":\"r8\"}"
-  | GPR9 -> fprintf oc "{\"Register\":\"r9\"}"
-  | GPR10 -> fprintf oc "{\"Register\":\"r10\"}"
-  | GPR11 -> fprintf oc "{\"Register\":\"r11\"}"
-  | GPR12 -> fprintf oc "{\"Register\":\"r12\"}"
-  | GPR13 -> fprintf oc "{\"Register\":\"r13\"}"
-  | GPR14 -> fprintf oc "{\"Register\":\"r14\"}"
-  | GPR15 -> fprintf oc "{\"Register\":\"r15\"}"
-  | GPR16 -> fprintf oc "{\"Register\":\"r16\"}"
-  | GPR17 -> fprintf oc "{\"Register\":\"r17\"}"
-  | GPR18 -> fprintf oc "{\"Register\":\"r18\"}"
-  | GPR19 -> fprintf oc "{\"Register\":\"r19\"}"
-  | GPR20 -> fprintf oc "{\"Register\":\"r20\"}"
-  | GPR21 -> fprintf oc "{\"Register\":\"r21\"}"
-  | GPR22 -> fprintf oc "{\"Register\":\"r22\"}"
-  | GPR23 -> fprintf oc "{\"Register\":\"r23\"}"
-  | GPR24 -> fprintf oc "{\"Register\":\"r24\"}"
-  | GPR25 -> fprintf oc "{\"Register\":\"r25\"}"
-  | GPR26 -> fprintf oc "{\"Register\":\"r26\"}"
-  | GPR27 -> fprintf oc "{\"Register\":\"r27\"}"
-  | GPR28 -> fprintf oc "{\"Register\":\"r28\"}"
-  | GPR29 -> fprintf oc "{\"Register\":\"r29\"}"
-  | GPR30 -> fprintf oc "{\"Register\":\"r30\"}"
-  | GPR31 -> fprintf oc "{\"Register\":\"r31\"}"
+let p_ireg oc reg =
+  p_reg oc "r" (TargetPrinter.int_reg_name reg)
 
-let p_freg oc = function
-  | FPR0 -> fprintf oc "{\"Register\":\"f0\"}"
-  | FPR1 -> fprintf oc "{\"Register\":\"f1\"}"
-  | FPR2 -> fprintf oc "{\"Register\":\"f2\"}"
-  | FPR3 -> fprintf oc "{\"Register\":\"f3\"}"
-  | FPR4 -> fprintf oc "{\"Register\":\"f4\"}"
-  | FPR5 -> fprintf oc "{\"Register\":\"f5\"}"
-  | FPR6 -> fprintf oc "{\"Register\":\"f6\"}"
-  | FPR7 -> fprintf oc "{\"Register\":\"f7\"}"
-  | FPR8 -> fprintf oc "{\"Register\":\"f8\"}"
-  | FPR9 -> fprintf oc "{\"Register\":\"f9\"}"
-  | FPR10 -> fprintf oc "{\"Register\":\"f10\"}"
-  | FPR11 -> fprintf oc "{\"Register\":\"f11\"}"
-  | FPR12 -> fprintf oc "{\"Register\":\"f12\"}"
-  | FPR13 -> fprintf oc "{\"Register\":\"f13\"}"
-  | FPR14 -> fprintf oc "{\"Register\":\"f14\"}"
-  | FPR15 -> fprintf oc "{\"Register\":\"f15\"}"
-  | FPR16 -> fprintf oc "{\"Register\":\"f16\"}"
-  | FPR17 -> fprintf oc "{\"Register\":\"f17\"}"
-  | FPR18 -> fprintf oc "{\"Register\":\"f18\"}"
-  | FPR19 -> fprintf oc "{\"Register\":\"f19\"}"
-  | FPR20 -> fprintf oc "{\"Register\":\"f20\"}"
-  | FPR21 -> fprintf oc "{\"Register\":\"f21\"}"
-  | FPR22 -> fprintf oc "{\"Register\":\"f22\"}"
-  | FPR23 -> fprintf oc "{\"Register\":\"f23\"}"
-  | FPR24 -> fprintf oc "{\"Register\":\"f24\"}"
-  | FPR25 -> fprintf oc "{\"Register\":\"f25\"}"
-  | FPR26 -> fprintf oc "{\"Register\":\"f26\"}"
-  | FPR27 -> fprintf oc "{\"Register\":\"f27\"}"
-  | FPR28 -> fprintf oc "{\"Register\":\"f28\"}"
-  | FPR29 -> fprintf oc "{\"Register\":\"f29\"}"
-  | FPR30 -> fprintf oc "{\"Register\":\"f30\"}"
-  | FPR31 -> fprintf oc "{\"Register\":\"f31\"}"
 
-let p_preg oc = function
-  | IR ir -> p_ireg oc ir
-  | FR fr -> p_freg oc fr
-  | _ -> assert false  (* This register should not be used. *)
+let p_freg oc reg =
+  p_reg oc "f" (TargetPrinter.float_reg_name reg)
 
 let p_atom oc a = p_jstring oc (extern_atom a)
 
-let p_atom_constant oc a = fprintf oc "{\"Atom\":%a}" p_atom a
+let p_atom_constant oc a = p_jsingle_object oc "Atom" p_atom a
 
 let p_int oc i = fprintf oc "%ld" (camlint_of_coqint i)
 let p_int64 oc i = fprintf oc "%Ld" (camlint64_of_coqint i)
@@ -105,42 +42,44 @@ let p_float32 oc f = fprintf oc "%ld" (camlint_of_coqint (Floats.Float32.to_bits
 let p_float64 oc f = fprintf oc "%Ld" (camlint64_of_coqint (Floats.Float.to_bits f))
 let p_z oc z = fprintf oc "%s" (Z.to_string z)
 
-let p_int_constant oc i = fprintf oc "{\"Integer\":%a}" p_int i
-let p_float64_constant oc f = fprintf oc "{\"Float\":%a}" p_float64 f
-let p_float32_constant oc f = fprintf oc "{\"Float\":%a}" p_float32 f
-let p_z_constant oc z = fprintf oc "{\"Integer\":%s}" (Z.to_string z)
+let p_int_constant oc i = p_jsingle_object oc "Integer" p_int i
+let p_float64_constant oc f = p_jsingle_object oc "Float" p_float64 f
+let p_float32_constant oc f = p_jsingle_object oc "Float" p_float32 f
 
-let p_constant oc  = function
+let p_sep oc = fprintf oc ","
+
+let p_constant oc c =
+  let p_symbol oc (i,c) =
+    output_string oc "{";
+    p_jmember oc "Name" p_atom i;
+    p_sep oc;
+    p_jmember oc "Offset" p_int c;
+    output_string oc "}" in
+  match c with
   | Cint i ->  p_int_constant oc i
-  | Csymbol_low (i,c) -> fprintf oc "{\"Symbol_low\":{\"Name\":%a,\"Offset\":%a}}" p_atom i p_int c
-  | Csymbol_high (i,c) -> fprintf oc "{\"Symbol_high\":{\"Name\":%a,\"Offset\":%a}}" p_atom i p_int c
-  | Csymbol_sda (i,c) -> fprintf oc "{\"Symbol_sda\":{\"Name\":%a,\"Offset\":%a}}" p_atom i p_int c
-  | Csymbol_rel_low (i,c) -> fprintf oc "{\"Symbol_rel_low\":{\"Name\":%a,\"Offset\":%a}}" p_atom i p_int c
-  | Csymbol_rel_high (i,c) -> fprintf oc "{\"Symbol_rel_high\":{\"Name\":%a,\"Offset\":%a}}" p_atom i p_int c
+  | Csymbol_low (i,c) ->
+      p_jsingle_object oc "Symbol_low" p_symbol (i,c)
+  | Csymbol_high (i,c) ->
+      p_jsingle_object oc "Symbol_high" p_symbol (i,c)
+  | Csymbol_sda (i,c) ->
+      p_jsingle_object oc "Symbol_sda" p_symbol (i,c)
+  | Csymbol_rel_low (i,c) ->
+      p_jsingle_object oc "Symbol_rel_low" p_symbol (i,c)
+  | Csymbol_rel_high (i,c) ->
+      p_jsingle_object oc "Symbol_rel_high" p_symbol (i,c)
 
 let p_crbit oc c =
-  let number = match c with
-  | CRbit_0 -> 0
-  | CRbit_1 -> 1
-  | CRbit_2 -> 2
-  | CRbit_3 -> 3
-  | CRbit_6 -> 6 in
-  fprintf oc "{\"CRbit\":%d}" number
+  p_jsingle_object oc "CRbit" p_jint (TargetPrinter.num_crbit c)
 
-let p_label oc l = fprintf oc "{\"Label\":%ld}" (P.to_int32 l)
-
-let p_list elem oc l =
-  match l with
-  | [] -> fprintf oc "[]"
-  | hd::tail ->
-     output_string oc "["; elem oc hd;List.iter (fprintf oc ",%a" elem) tail;output_string oc "]"
+let p_label oc l =
+  p_jsingle_object oc "Label" p_jint32 (P.to_int32 l)
 
 type instruction_arg =
   | Ireg of ireg
   | Freg of freg
   | Constant of constant
   | Crbit of crbit
-  | Label of positive
+  | ALabel of positive
   | Float32 of Floats.float32
   | Float64 of Floats.float
   | Atom of positive
@@ -150,14 +89,14 @@ let p_arg oc = function
   | Freg fr -> p_freg oc fr
   | Constant c -> p_constant oc c
   | Crbit cr -> p_crbit oc cr
-  | Label lbl -> p_label oc lbl
+  | ALabel lbl -> p_label oc lbl
   | Float32 f -> p_float32_constant oc f
   | Float64 f  -> p_float64_constant oc f
   | Atom a -> p_atom_constant oc a
 
 let p_instruction oc ic =
-  let p_args oc l= fprintf oc "%a:%a" p_jstring "Args" (p_list p_arg) l
-  and inst_name oc s = fprintf  oc"%a:%a" p_jstring "Instruction Name" p_jstring s in
+  let p_args oc l= fprintf oc "%a:%a" p_jstring "Args" (p_jarray p_arg) l
+  and inst_name oc s = p_jmember oc  "Instruction Name" p_jstring s in
   let first = ref true in
   let sep oc = if !first then first := false else output_string oc ", " in
   let instruction n args = fprintf oc "\n%t{%a,%a}" sep inst_name n p_args args in
@@ -174,16 +113,16 @@ let p_instruction oc ic =
   | Pandc (ir1,ir2,ir3) -> instruction "Pandc" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pandi_ (ir1,ir2,c) -> instruction "Pandi_" [Ireg ir1; Ireg ir2; Constant c]
   | Pandis_ (ir1,ir2,c) -> instruction "Pandis_" [Ireg ir1; Ireg ir2; Constant c]
-  | Pb l -> instruction "Pb" [Label l]
+  | Pb l -> instruction "Pb" [ALabel l]
   | Pbctr s -> instruction "Pbctr" []
   | Pbctrl s -> instruction "Pbctrl" []
-  | Pbdnz l -> instruction "Pbdnz" [Label l]
-  | Pbf (cr,l) -> instruction "Pbf" [Crbit cr; Label l]
+  | Pbdnz l -> instruction "Pbdnz" [ALabel l]
+  | Pbf (cr,l) -> instruction "Pbf" [Crbit cr; ALabel l]
   | Pbl (i,s) -> instruction "Pbl" [Atom i]
   | Pbs (i,s) -> instruction "Pbs" [Atom i]
   | Pblr -> instruction "Pblr" []
-  | Pbt (cr,l) ->  instruction "Pbt" [Crbit cr; Label l]
-  | Pbtbl (i,lb) -> instruction "Pbtbl" ((Ireg i)::(List.map (fun a -> Label a) lb))
+  | Pbt (cr,l) ->  instruction "Pbt" [Crbit cr; ALabel l]
+  | Pbtbl (i,lb) -> instruction "Pbtbl" ((Ireg i)::(List.map (fun a -> ALabel a) lb))
   | Pcmpb (ir1,ir2,ir3) -> instruction "Pcmpb" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pcmplw (ir1,ir2) -> instruction "Pcmplw" [Ireg ir1; Ireg ir2]
   | Pcmplwi (ir,c) -> instruction "Pcmplwi" [Ireg ir; Constant c]
@@ -324,17 +263,14 @@ let p_instruction oc ic =
   | Pxor (ir1,ir2,ir3) -> instruction "Pxor" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pxori (ir1,ir2,c) ->instruction "Pxori" [Ireg ir1; Ireg ir2; Constant c]
   | Pxoris (ir1,ir2,c) -> instruction "Pxoris" [Ireg ir1; Ireg ir2; Constant c]
-  | Plabel l -> instruction "Plabel" [Label l]
+  | Plabel l -> instruction "Plabel" [ALabel l]
   | Pbuiltin _ -> ()
   | Pcfi_adjust _  (* Only debug relevant *)
   | Pcfi_rel_offset _ ->  () (* Only debug relevant *) in
   List.iter instruction ic
 
 let p_storage oc static =
-  if static then
-    fprintf oc "\"Static\""
-  else
-    fprintf oc "\"Extern\""
+    p_jstring oc (if static then "Static" else "Extern")
 
 let p_section oc = function
   | Section_text -> fprintf oc "{\"Section Name\":\"Text\"}"
@@ -363,29 +299,60 @@ let p_fundef oc (name,f) =
   and inline = atom_is_inline name
   and static = atom_is_static name
   and c_section,l_section,j_section = match (atom_sections name) with [a;b;c] -> a,b,c | _ -> assert false in
-  fprintf oc "{\"Fun Name\":%a,\n\"Fun Storage Class\":%a,\n\"Fun Alignment\":%a,\n\"Fun Section Code\":%a,\"Fun Section Literals\":%a,\"Fun Section Jumptable\":%a,\n\"Fun Inline\":%B,\n\"Fun Code\":[%a]}\n"
-    p_atom name  p_storage static p_int_opt alignment
-    p_section c_section p_section l_section p_section j_section inline
-    p_instruction f.fn_code
+  output_string oc "{";
+  p_jmember oc "Fun Name" p_atom name;
+  p_sep oc;
+  p_jmember oc "Fun Storage Class" p_storage static;
+  p_sep oc;
+  p_jmember oc "Fun Alignment" p_int_opt alignment;
+  p_sep oc;
+  p_jmember oc "Fun Section Code" p_section c_section;
+  p_sep oc;
+  p_jmember oc "Fun Section Literals" p_section l_section;
+  p_sep oc;
+  p_jmember oc "Fun Section Jumptable" p_section j_section;
+  p_sep oc;
+  p_jmember oc "Fun Inline" p_jbool inline;
+  p_sep oc;
+  p_jmember oc "Fun Code" (fun oc a -> fprintf oc "[%a]" p_instruction a) f.fn_code;
+  output_string oc "}\n"
 
 let p_init_data oc = function
-  | Init_int8 ic -> fprintf oc "{\"Init_int8\":%a}" p_int ic
-  | Init_int16 ic -> fprintf oc "{\"Init_int16\":%a}" p_int ic
-  | Init_int32 ic -> fprintf oc "{\"Init_int32\":%a}" p_int ic
-  | Init_int64 lc -> fprintf oc "{\"Init_int64\":%a}" p_int64 lc
-  | Init_float32 f -> fprintf oc "{\"Init_float32\":%a}" p_float32 f
-  | Init_float64 f -> fprintf oc "{\"Init_float64\":%a}" p_float64 f
-  | Init_space z -> fprintf oc "{\"Init_space\":%a}" p_z z
-  | Init_addrof (p,i) -> fprintf oc "{\"Init_addrof\":{\"Addr\":%a,\"Offset\":%a}}" p_atom p p_int i
+  | Init_int8 ic -> p_jsingle_object oc "Init_int8" p_int ic
+  | Init_int16 ic -> p_jsingle_object oc "Init_int16" p_int ic
+  | Init_int32 ic -> p_jsingle_object oc "Init_int32" p_int ic
+  | Init_int64 lc -> p_jsingle_object oc "Init_int64" p_int64 lc
+  | Init_float32 f -> p_jsingle_object oc "Init_float32" p_float32 f
+  | Init_float64 f -> p_jsingle_object oc "Init_float64" p_float64 f
+  | Init_space z -> p_jsingle_object oc "Init_space" p_z z
+  | Init_addrof (p,i) ->
+      let p_addr_of oc (p,i) =
+        output_string oc "{";
+        p_jmember oc "Addr" p_atom p;
+        p_sep oc;
+        p_jmember oc "Offset" p_int i;
+        output_string oc "}" in
+      p_jsingle_object oc "Init_addrof" p_addr_of (p,i)
 
 let p_vardef oc (name,v) =
   let alignment = atom_alignof name
   and static = atom_is_static name
-  and section = match  (atom_sections name) with [s] -> s | _ -> assert false (* Should only have one section *) in
-  fprintf oc "{\"Var Name\":%a,\"Var Readonly\":%B,\"Var Volatile\":%B,\n\"Var Storage Class\":%a,\n\"Var Alignment\":%a,\n\"Var Section\":%a,\n\"Var Init\":%a}\n"
-    p_atom name v.gvar_readonly v.gvar_volatile
-    p_storage static p_int_opt alignment p_section section
-    (p_list p_init_data) v.gvar_init
+  and section = match  (atom_sections name) with [s] -> s | _ -> assert false in(* Should only have one section *)
+  output_string oc "{";
+  p_jmember oc "Var Name" p_atom name;
+  p_sep oc;
+  p_jmember oc "Var Readonly" p_jbool v.gvar_readonly;
+  p_sep oc;
+  p_jmember oc "Var Volatile" p_jbool v.gvar_volatile;
+  p_sep oc;
+  p_jmember oc "Var Storage Class" p_storage static;
+  p_sep oc;
+  p_jmember oc "Var Alignment" p_int_opt alignment;
+  p_sep oc;
+  p_jmember oc "Var Section" p_section section;
+  p_sep oc;
+  p_jmember oc "Var Init" (p_jarray p_init_data) v.gvar_init;
+  output_string oc "}\n"
 
 let p_program oc prog =
   let prog_vars,prog_funs = List.fold_left (fun (vars,funs) (ident,def) ->
@@ -394,5 +361,5 @@ let p_program oc prog =
     | Gvar v -> (ident,v)::vars,funs
     | _ -> vars,funs) ([],[]) prog.prog_defs in
   fprintf oc "{\"Global Variables\":%a,\n\"Functions\":%a}"
-    (p_list p_vardef) prog_vars
-    (p_list p_fundef) prog_funs
+    (p_jarray p_vardef) prog_vars
+    (p_jarray p_fundef) prog_funs

@@ -90,6 +90,9 @@ casmruntime=""
 asm_supports_cfi=""
 struct_passing=""
 struct_return=""
+casm_options=""
+cprepro_options=""
+clinker_options=""
 
 case "$target" in
   powerpc-*|ppc-*|powerpc64-*|ppc64-*|e5500-*)
@@ -109,8 +112,10 @@ case "$target" in
       *-eabi-diab)
         system="diab"
         cc="${toolprefix}dcc"
-        cprepro="${toolprefix}dcc -E -D__GNUC__"
+        cprepro="${toolprefix}dcc"
+        cprepro_options="-E -D__GNUC__"
         casm="${toolprefix}das"
+        casm_options="-Xalign-value"
         asm_supports_cfi=false
         clinker="${toolprefix}dcc"
         libmath="-lm"
@@ -118,8 +123,10 @@ case "$target" in
       *)
         system="linux"
         cc="${toolprefix}gcc"
-        cprepro="${toolprefix}gcc -std=c99 -U__GNUC__ -E"
-        casm="${toolprefix}gcc -c"
+        cprepro="${toolprefix}gcc"
+        cprepro_options="-std=c99 -U__GNUC__ -E"
+        casm="${toolprefix}gcc"
+        casm_options="-c"
         casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
         clinker="${toolprefix}gcc"
         libmath="-lm"
@@ -149,8 +156,10 @@ case "$target" in
     struct_return="int1-4"
     system="linux"
     cc="${toolprefix}gcc"
-    cprepro="${toolprefix}gcc -std=c99 -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
-    casm="${toolprefix}gcc -c"
+    cprepro="${toolprefix}gcc"
+    cprepro_options="-std=c99 -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
+    casm="${toolprefix}gcc"
+    casm_options="-c"
     clinker="${toolprefix}gcc"
     libmath="-lm";;
   ia32-linux)
@@ -161,9 +170,12 @@ case "$target" in
     struct_return="ref"
     system="linux"
     cc="${toolprefix}gcc -m32"
-    cprepro="${toolprefix}gcc -std=c99 -m32 -U__GNUC__ -E"
-    casm="${toolprefix}gcc -m32 -c"
-    clinker="${toolprefix}gcc -m32"
+    cprepro="${toolprefix}gcc"
+    cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
+    casm="${toolprefix}gcc"
+    casm_options="-m32 -c"
+    clinker="${toolprefix}gcc"
+    clinker_options="-m32"
     libmath="-lm";;
   ia32-bsd)
     arch="ia32"
@@ -173,11 +185,16 @@ case "$target" in
     struct_return="int1248"    # to check!
     system="bsd"
     cc="${toolprefix}gcc -m32"
-    cprepro="${toolprefix}gcc -std=c99 -m32 -U__GNUC__ -E"
-    casm="${toolprefix}gcc -m32 -c"
-    clinker="${toolprefix}gcc -m32"
+    cprepro="${toolprefix}gcc"
+    cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
+    casm="${toolprefix}gcc"
+    casm_options="-m32 -c"
+    clinker="${toolprefix}gcc"
+    clinker_options="-m32"
     libmath="-lm";;
   ia32-macosx)
+    # kernel major versions count upwards from 4 for OSX 10.0 to 15 for OSX 10.11
+    kernel_major=`uname -r | cut -d "." -f 1`
     arch="ia32"
     model="sse2"
     abi="macosx"
@@ -185,14 +202,19 @@ case "$target" in
     struct_return="int1248"
     system="macosx"
     cc="${toolprefix}gcc -arch i386"
-    cprepro="${toolprefix}gcc -std=c99 -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' -E"
-    casm="${toolprefix}gcc -arch i386 -c"
-    case `uname -r` in
-      [1-9].*|10.*|11.*)    # up to MacOS 10.7 included
-        clinker="${toolprefix}gcc -arch i386";;
-      *)                    # MacOS 10.8 and up
-        clinker="${toolprefix}gcc -arch i386 -Wl,-no_pie";;
-    esac
+    cprepro="${toolprefix}gcc"
+    cprepro_options="-std=c99 -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' -E"
+    casm="${toolprefix}gcc"
+    casm_options="-arch i386 -c"
+    clinker="${toolprefix}gcc"
+    if [[ $kernel_major -gt 11 ]]
+    then
+      # OSX >= 10.8
+      clinker_options="-arch i386 -Wl,-no_pie"
+    else
+      # OSX <= 10.7
+      clinker_options="-arch i386"
+    fi
     libmath="";;
   ia32-cygwin)
     arch="ia32"
@@ -202,9 +224,12 @@ case "$target" in
     struct_return="ref"
     system="cygwin"
     cc="${toolprefix}gcc -m32"
-    cprepro="${toolprefix}gcc -std=c99 -m32 -U__GNUC__ -E"
-    casm="${toolprefix}gcc -m32 -c"
-    clinker="${toolprefix}gcc -m32"
+    cprepro="${toolprefix}gcc"
+    cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
+    casm="${toolprefix}gcc"
+    casm_options="-m32 -c"
+    clinker="${toolprefix}gcc"
+    clinker_options="-m32"
     libmath="-lm";;
   manual)
     ;;
@@ -218,7 +243,7 @@ case "$target" in
     exit 2;;
 esac
 
-if test -z "$casmruntime"; then casmruntime="$casm"; fi
+if test -z "$casmruntime"; then casmruntime="$casm $casm_options"; fi
 
 # Test assembler support for CFI directives
 
@@ -234,7 +259,7 @@ testfun:
 	.cfi_adjust_cfa_offset 16
 	.cfi_endproc
 EOF
-  if $casm -o /dev/null $f 2>/dev/null
+  if $casm $casm_options -o /dev/null $f 2>/dev/null
   then echo "yes"; asm_supports_cfi=true
   else echo "no";  asm_supports_cfi=false
   fi
@@ -246,7 +271,7 @@ fi
 missingtools=false
 
 echo "Testing Coq... " | tr -d '\n'
-coq_ver=`coqc -v 2>/dev/null | sed -n -e 's/The Coq Proof Assistant, version \([^ ]*\).*$/\1/p'`
+coq_ver=$(${COQBIN}coqc -v 2>/dev/null | sed -n -e 's/The Coq Proof Assistant, version \([^ ]*\).*$/\1/p')
 case "$coq_ver" in
   8.5*)
         echo "version $coq_ver -- good!";;
@@ -263,15 +288,19 @@ esac
 echo "Testing OCaml... " | tr -d '\n'
 ocaml_ver=`ocamlopt -version 2>/dev/null`
 case "$ocaml_ver" in
-  4.*)
+  4.00.*|4.01.*)
+        echo "version $ocaml_ver -- UNSUPPORTED"
+        echo "Error: CompCert requires OCaml version 4.02 or later."
+        missingtools=true;;
+  4.0*)
         echo "version $ocaml_ver -- good!";;
   ?.*)
         echo "version $ocaml_ver -- UNSUPPORTED"
-        echo "Error: CompCert requires OCaml version 4.00 or later."
+        echo "Error: CompCert requires OCaml version 4.02 or later."
         missingtools=true;;
   *)
         echo "NOT FOUND"
-        echo "Error: make sure OCaml version 4.00 or later is installed."
+        echo "Error: make sure OCaml version 4.02 or later is installed."
         missingtools=true;;
 esac
 
@@ -285,7 +314,7 @@ else
   ocaml_opt_comp=false
 fi
 
-MENHIR_REQUIRED=20151110
+MENHIR_REQUIRED=20160303
 echo "Testing Menhir... " | tr -d '\n'
 menhir_ver=`menhir --version 2>/dev/null | sed -n -e 's/^.*version \([0-9]*\).*$/\1/p'`
 case "$menhir_ver" in
@@ -314,7 +343,7 @@ for mk in make gmake gnumake; do
         break;;
   esac
 done
-if test -z "$make"; then 
+if test -z "$make"; then
   echo "NOT FOUND"
   echo "Error: make sure GNU Make version 3.80 or later is installed."
   missingtools=true
@@ -348,9 +377,12 @@ STRUCT_RETURN=$struct_return
 SYSTEM=$system
 CC=$cc
 CPREPRO=$cprepro
+CPREPRO_OPTIONS=$cprepro_options
 CASM=$casm
+CASM_OPTIONS=$casm_options
 CASMRUNTIME=$casmruntime
 CLINKER=$clinker
+CLINKER_OPTIONS=$clinker_options
 LIBMATH=$libmath
 HAS_RUNTIME_LIB=$has_runtime_lib
 HAS_STANDARD_HEADERS=$has_standard_headers
@@ -368,7 +400,7 @@ cat >> Makefile.config <<'EOF'
 ARCH=
 
 # Hardware variant
-# MODEL=ppc32     # for plain PowerPC 
+# MODEL=ppc32     # for plain PowerPC
 # MODEL=ppc64     # for PowerPC with 64-bit instructions
 # MODEL=e5500     # for Freescale e5500 PowerPC variant
 # MODEL=armv6     # for ARM

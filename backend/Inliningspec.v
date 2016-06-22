@@ -12,64 +12,60 @@
 
 (** RTL function inlining: relational specification *)
 
-Require Import Coqlib.
-Require Import Wfsimpl.
-Require Import Errors.
-Require Import Maps.
-Require Import AST.
-Require Import Integers.
-Require Import Globalenvs.
-Require Import Op.
-Require Import Registers.
-Require Import RTL.
+Require Import Coqlib Wfsimpl Maps Errors Integers.
+Require Import AST Linking.
+Require Import Op Registers RTL.
 Require Import Inlining.
 
 (** ** Soundness of function environments. *)
 
-(** A (compile-time) function environment is compatible with a
-  (run-time) global environment if the following condition holds. *)
+(** A compile-time function environment is compatible with a whole
+  program if the following condition holds. *)
 
-Definition fenv_compat (ge: genv) (fenv: funenv) : Prop :=
-  forall id b f,
-  fenv!id = Some f -> Genv.find_symbol ge id = Some b ->
-  Genv.find_funct_ptr ge b = Some (Internal f).
-
-Remark add_globdef_compat:
-  forall ge fenv idg,
-  fenv_compat ge fenv ->
-  fenv_compat (Genv.add_global ge idg) (Inlining.add_globdef fenv idg).
-Proof.
-  intros. destruct idg as [id gd]. red; simpl; intros.
-  unfold Genv.find_symbol in H1; simpl in H1.
-  unfold Genv.find_funct_ptr; simpl.
-  rewrite PTree.gsspec in H1. destruct (peq id0 id).
-  (* same *)
-  subst id0. inv H1. destruct gd. destruct f0.
-  destruct (should_inline id f0).
-  rewrite PTree.gss in H0. rewrite PTree.gss. inv H0; auto.
-  rewrite PTree.grs in H0; discriminate.
-  rewrite PTree.grs in H0; discriminate.
-  rewrite PTree.grs in H0; discriminate.
-  (* different *)
-  destruct gd. rewrite PTree.gso. eapply H; eauto.
-  destruct f0. destruct (should_inline id f0).
-  rewrite PTree.gso in H0; auto.
-  rewrite PTree.gro in H0; auto.
-  rewrite PTree.gro in H0; auto.
-  red; intros; subst b. eelim Plt_strict. eapply Genv.genv_symb_range; eauto.
-  rewrite PTree.gro in H0; auto. eapply H; eauto.
-Qed.
+Definition fenv_compat (p: program) (fenv: funenv) : Prop :=
+  forall id f,
+  fenv!id = Some f -> (prog_defmap p)!id = Some (Gfun (Internal f)).
 
 Lemma funenv_program_compat:
-  forall p, fenv_compat (Genv.globalenv p) (funenv_program p).
+  forall p, fenv_compat p (funenv_program p).
 Proof.
-  intros.
-  unfold Genv.globalenv, funenv_program.
-  assert (forall gl ge fenv,
-         fenv_compat ge fenv ->
-         fenv_compat (Genv.add_globals ge gl) (fold_left add_globdef gl fenv)).
-    induction gl; simpl; intros. auto. apply IHgl. apply add_globdef_compat; auto.
-  apply H. red; intros. rewrite PTree.gempty in H0; discriminate.
+  set (P := fun (dm: PTree.t (globdef fundef unit)) (fenv: funenv) =>
+              forall id f,
+              fenv!id = Some f -> dm!id = Some (Gfun (Internal f))).
+  assert (REMOVE: forall dm fenv id g,
+             P dm fenv ->
+             P (PTree.set id g dm) (PTree.remove id fenv)).
+  { unfold P; intros. rewrite PTree.grspec in H0. destruct (PTree.elt_eq id0 id).
+    discriminate.
+    rewrite PTree.gso; auto.
+  }
+  assert (ADD: forall dm fenv idg,
+             P dm fenv ->
+             P (PTree.set (fst idg) (snd idg) dm) (add_globdef fenv idg)).
+  { intros dm fenv [id g]; simpl; intros.
+    destruct g as [ [f|ef] | v]; auto.
+    destruct (should_inline id f); auto.
+    red; intros. rewrite ! PTree.gsspec in *.
+    destruct (peq id0 id); auto. inv H0; auto.
+  }
+  assert (REC: forall l dm fenv,
+            P dm fenv ->
+            P (fold_left (fun x idg => PTree.set (fst idg) (snd idg) x) l dm)
+              (fold_left add_globdef l fenv)).
+  { induction l; simpl; intros. 
+  - auto.
+  - apply IHl. apply ADD; auto. 
+  }
+  intros. apply REC. red; intros.  rewrite PTree.gempty in H; discriminate.
+Qed.
+
+Lemma fenv_compat_linkorder:
+  forall cunit prog fenv,
+  linkorder cunit prog -> fenv_compat cunit fenv -> fenv_compat prog fenv.
+Proof.
+  intros; red; intros. apply H0 in H1. 
+  destruct (prog_defmap_linkorder _ _ _ _ H H1) as (gd' & P & Q). 
+  inv Q. inv H3. auto.
 Qed.
 
 (** ** Properties of shifting *)
@@ -684,29 +680,45 @@ Qed.
 
 End INLINING_BODY_SPEC.
 
+End INLINING_SPEC.
+
 (** ** Relational specification of the translation of a function *)
 
-Inductive tr_function: function -> function -> Prop :=
-  | tr_function_intro: forall f f' ctx,
-      tr_funbody f'.(fn_stacksize) ctx f f'.(fn_code) ->
+Inductive tr_function: program -> function -> function -> Prop :=
+  | tr_function_intro: forall p fenv f f' ctx,
+      fenv_compat p fenv ->
+      tr_funbody fenv f'.(fn_stacksize) ctx f f'.(fn_code) ->
       ctx.(dstk) = 0 ->
       ctx.(retinfo) = None ->
       f'.(fn_sig) = f.(fn_sig) ->
       f'.(fn_params) = sregs ctx f.(fn_params) ->
       f'.(fn_entrypoint) = spc ctx f.(fn_entrypoint) ->
       0 <= fn_stacksize f' < Int.max_unsigned ->
-      tr_function f f'.
+      tr_function p f f'.
+
+Lemma tr_function_linkorder:
+  forall cunit prog f f',
+  linkorder cunit prog ->
+  tr_function cunit f f' ->
+  tr_function prog f f'.
+Proof.
+  intros. inv H0. econstructor; eauto. eapply fenv_compat_linkorder; eauto. 
+Qed.
 
 Lemma transf_function_spec:
-  forall f f', transf_function fenv f = OK f' -> tr_function f f'.
+  forall cunit f f',
+  transf_function (funenv_program cunit) f = OK f' ->
+  tr_function cunit f f'.
 Proof.
   intros. unfold transf_function in H.
+  set (fenv := funenv_program cunit) in *.
   destruct (expand_function fenv f initstate) as [ctx s i] eqn:?.
   destruct (zlt (st_stksize s) Int.max_unsigned); inv H.
   monadInv Heqr. set (ctx := initcontext x x0 (max_reg_function f) (fn_stacksize f)) in *.
 Opaque initstate.
   destruct INCR3. inversion EQ1. inversion EQ.
-  apply tr_function_intro with ctx; auto.
+  apply tr_function_intro with fenv ctx; auto.
+  apply funenv_program_compat.
   eapply expand_cfg_spec with (fe := fenv); eauto.
     red; auto.
     unfold ctx; rewrite <- H1; rewrite <- H2; rewrite <- H3; simpl. xomega.
@@ -718,5 +730,3 @@ Opaque initstate.
   simpl. split; auto. destruct INCR2. destruct INCR1. destruct INCR0. destruct INCR.
   simpl. change 0 with (st_stksize initstate). omega.
 Qed.
-
-End INLINING_SPEC.

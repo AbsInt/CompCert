@@ -187,12 +187,12 @@ Fixpoint seq_of_labeled_statement (sl: labeled_statements) : statement :=
 
 (** Extract the values from a list of function arguments *)
 
-Inductive cast_arguments: exprlist -> typelist -> list val -> Prop :=
+Inductive cast_arguments (m: mem): exprlist -> typelist -> list val -> Prop :=
   | cast_args_nil:
-      cast_arguments Enil Tnil nil
+      cast_arguments m Enil Tnil nil
   | cast_args_cons: forall v ty el targ1 targs v1 vl,
-      sem_cast v ty targ1 = Some v1 -> cast_arguments el targs vl ->
-      cast_arguments (Econs (Eval v ty) el) (Tcons targ1 targs) (v1 :: vl).
+      sem_cast v ty targ1 m = Some v1 -> cast_arguments m el targs vl ->
+      cast_arguments m (Econs (Eval v ty) el) (Tcons targ1 targs) (v1 :: vl).
 
 (** ** Reduction semantics for expressions *)
 
@@ -249,7 +249,7 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
       rred (Ebinop op (Eval v1 ty1) (Eval v2 ty2) ty) m
         E0 (Eval v ty) m
   | red_cast: forall ty v1 ty1 m v,
-      sem_cast v1 ty1 ty = Some v ->
+      sem_cast v1 ty1 ty m = Some v ->
       rred (Ecast (Eval v1 ty1) ty) m
         E0 (Eval v ty) m
   | red_seqand_true: forall v1 ty1 r2 ty m,
@@ -279,7 +279,7 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
       rred (Ealignof ty1 ty) m
         E0 (Eval (Vint (Int.repr (alignof ge ty1))) ty) m
   | red_assign: forall b ofs ty1 v2 ty2 m v t m',
-      sem_cast v2 ty2 ty1 = Some v ->
+      sem_cast v2 ty2 ty1 m = Some v ->
       assign_loc ty1 m b ofs v t m' ->
       rred (Eassign (Eloc b ofs ty1) (Eval v2 ty2) ty1) m
          t (Eval v ty1) m'
@@ -303,11 +303,11 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
       rred (Ecomma (Eval v ty1) r2 ty) m
         E0 r2 m
   | red_paren: forall v1 ty1 ty2 ty m v,
-      sem_cast v1 ty1 ty2 = Some v ->
+      sem_cast v1 ty1 ty2 m = Some v ->
       rred (Eparen (Eval v1 ty1) ty2 ty) m
         E0 (Eval v ty) m
   | red_builtin: forall ef tyargs el ty m vargs t vres m',
-      cast_arguments el tyargs vargs ->
+      cast_arguments m el tyargs vargs ->
       external_call ef ge vargs m t vres m' ->
       rred (Ebuiltin ef tyargs el ty) m
          t (Eval vres ty) m'.
@@ -316,13 +316,13 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
 (** Head reduction for function calls.
     (More exactly, identification of function calls that can reduce.) *)
 
-Inductive callred: expr -> fundef -> list val -> type -> Prop :=
-  | red_call: forall vf tyf tyargs tyres cconv el ty fd vargs,
+Inductive callred: expr -> mem -> fundef -> list val -> type -> Prop :=
+  | red_call: forall vf tyf m tyargs tyres cconv el ty fd vargs,
       Genv.find_funct ge vf = Some fd ->
-      cast_arguments el tyargs vargs ->
+      cast_arguments m el tyargs vargs ->
       type_of_fundef fd = Tfunction tyargs tyres cconv ->
       classify_fun tyf = fun_case_f tyargs tyres cconv ->
-      callred (Ecall (Eval vf tyf) el ty)
+      callred (Ecall (Eval vf tyf) el ty) m
               fd vargs ty.
 
 (** Reduction contexts.  In accordance with C's nondeterministic semantics,
@@ -429,17 +429,14 @@ Inductive imm_safe: kind -> expr -> mem -> Prop :=
       context RV to C ->
       imm_safe to (C e) m
   | imm_safe_callred: forall to C e m fd args ty,
-      callred e fd args ty ->
+      callred e m fd args ty ->
       context RV to C ->
       imm_safe to (C e) m.
 
-(* An expression is not stuck if none of the potential redexes contained within
-   is immediately stuck. *)
-(*
 Definition not_stuck (e: expr) (m: mem) : Prop :=
   forall k C e' ,
-  context k RV C -> e = C e' -> not_imm_stuck k e' m.
-*)
+  context k RV C -> e = C e' -> imm_safe k e' m.
+
 End EXPR.
 
 (** ** Transition semantics. *)
@@ -597,7 +594,7 @@ Inductive estep: state -> trace -> state -> Prop :=
           t (ExprState f (C a') k e m')
 
   | step_call: forall C f a k e m fd vargs ty,
-      callred a fd vargs ty ->
+      callred a m fd vargs ty ->
       context RV RV C ->
       estep (ExprState f (C a) k e m)
          E0 (Callstate fd vargs (Kcall f e C ty k) m)
@@ -709,7 +706,7 @@ Inductive sstep: state -> trace -> state -> Prop :=
       sstep (State f (Sreturn (Some x)) k e m)
          E0 (ExprState f x (Kreturn k) e  m)
   | step_return_2:  forall f v1 ty k e m v2 m',
-      sem_cast v1 ty f.(fn_return) = Some v2 ->
+      sem_cast v1 ty f.(fn_return) m = Some v2 ->
       Mem.free_list m (blocks_of_env e) = Some m' ->
       sstep (ExprState f (Eval v1 ty) (Kreturn k) e m)
          E0 (Returnstate v2 (call_cont k) m')

@@ -12,7 +12,6 @@
 
 (* Iterated Register Coalescing: George and Appel's graph coloring algorithm *)
 
-open AST
 open Registers
 open Machregs
 open Locations

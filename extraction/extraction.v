@@ -158,7 +158,9 @@ Separate Extraction
    Csyntax.Eindex Csyntax.Epreincr
    Ctyping.typecheck_program
    Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
-   Clight.make_program
+   Ctypes.make_program
+   Conventions1.int_caller_save_regs Conventions1.float_caller_save_regs 
+   Conventions1.int_callee_save_regs Conventions1.float_callee_save_regs 
    Conventions1.dummy_int_reg Conventions1.dummy_float_reg
    RTL.instr_defs RTL.instr_uses
    Machregs.mregs_for_operation Machregs.mregs_for_builtin
@@ -166,5 +168,4 @@ Separate Extraction
    AST.signature_main
    Floats.Float32.from_parsed Floats.Float.from_parsed
    Globalenvs.Senv.invert_symbol
-   AST.transform_partial_ident_program
    Parser.translation_unit_file.

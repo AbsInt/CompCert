@@ -13,8 +13,6 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-open Camlcoq
-
 (* Handling of linker sections *)
 
 type section_name =

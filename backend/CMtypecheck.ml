@@ -18,11 +18,9 @@
 (* FIXME: proper support for type Tsingle *)
 
 open Printf
-open Datatypes
 open Camlcoq
 open AST
 open PrintAST
-open Integers
 open Cminor
 
 exception Error of string
@@ -73,21 +71,6 @@ let type_var env id =
     List.assoc id env
   with Not_found ->
     raise (Error (sprintf "Unbound variable %s\n" (extern_atom id)))
-
-let type_letvar env n =
-  let n = Nat.to_int n in
-  try
-    List.nth env n
-  with Not_found ->
-    raise (Error (sprintf "Unbound let variable #%d\n" n))
-
-let name_of_comparison = function
-  | Ceq -> "eq"
-  | Cne -> "ne"
-  | Clt -> "lt"
-  | Cle -> "le"
-  | Cgt -> "gt"
-  | Cge -> "ge"
 
 let type_constant = function
   | Ointconst _ -> tint

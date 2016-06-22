@@ -12,68 +12,51 @@
 
 (** Correctness proof for clean-up of labels *)
 
-Require Import Coqlib.
-Require Import Ordered.
 Require Import FSets.
-Require Import AST.
-Require Import Integers.
-Require Import Values.
-Require Import Memory.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Smallstep.
-Require Import Op.
-Require Import Locations.
-Require Import Linear.
+Require Import Coqlib Ordered Integers.
+Require Import AST Linking.
+Require Import Values Memory Events Globalenvs Smallstep.
+Require Import Op Locations Linear.
 Require Import CleanupLabels.
 
 Module LabelsetFacts := FSetFacts.Facts(Labelset).
 
+Definition match_prog (p tp: Linear.program) :=
+  match_program (fun ctx f tf => tf = transf_fundef f) eq p tp.
+
+Lemma transf_program_match:
+  forall p, match_prog p (transf_program p).
+Proof.
+  intros. eapply match_transform_program; eauto.
+Qed.
+
 Section CLEANUP.
 
-Variable prog: program.
-Let tprog := transf_program prog.
+Variables prog tprog: program.
+Hypothesis TRANSL: match_prog prog tprog.
 Let ge := Genv.globalenv prog.
 Let tge := Genv.globalenv tprog.
 
 Lemma symbols_preserved:
-  forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof.
-  intros; unfold ge, tge, tprog, transf_program.
-  apply Genv.find_symbol_transf.
-Qed.
+  forall id,
+  Genv.find_symbol tge id = Genv.find_symbol ge id.
+Proof (Genv.find_symbol_transf TRANSL).
 
-Lemma public_preserved:
-  forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
-Proof.
-  intros; unfold ge, tge, tprog, transf_program.
-  apply Genv.public_symbol_transf.
-Qed.
-
-Lemma varinfo_preserved:
-  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
-Proof.
-  intros; unfold ge, tge, tprog, transf_program.
-  apply Genv.find_var_info_transf.
-Qed.
+Lemma senv_preserved:
+  Senv.equiv ge tge.
+Proof (Genv.senv_transf TRANSL).
 
 Lemma functions_translated:
-  forall (v: val) (f: fundef),
+  forall v f,
   Genv.find_funct ge v = Some f ->
   Genv.find_funct tge v = Some (transf_fundef f).
-Proof.
-  intros.
-  exact (Genv.find_funct_transf transf_fundef _ _ H).
-Qed.
+Proof (Genv.find_funct_transf TRANSL).
 
 Lemma function_ptr_translated:
-  forall (b: block) (f: fundef),
-  Genv.find_funct_ptr ge b = Some f ->
-  Genv.find_funct_ptr tge b = Some (transf_fundef f).
-Proof.
-  intros.
-  exact (Genv.find_funct_ptr_transf transf_fundef _ _ H).
-Qed.
+  forall v f,
+  Genv.find_funct_ptr ge v = Some f ->
+  Genv.find_funct_ptr tge v = Some (transf_fundef f).
+Proof (Genv.find_funct_ptr_transf TRANSL).
 
 Lemma sig_function_translated:
   forall f,
@@ -293,8 +276,7 @@ Proof.
   left; econstructor; split.
   econstructor.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved.  exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   eauto.
   econstructor; eauto with coqlib.
 (* Llabel *)
@@ -333,8 +315,7 @@ Proof.
   econstructor; eauto with coqlib.
 (* external function *)
   left; econstructor; split.
-  econstructor; eauto. eapply external_call_symbols_preserved'; eauto.
-  exact symbols_preserved.  exact public_preserved.  exact varinfo_preserved.
+  econstructor; eauto. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto with coqlib.
 (* return *)
   inv H3. inv H1. left; econstructor; split.
@@ -349,8 +330,8 @@ Proof.
   intros. inv H.
   econstructor; split.
   eapply initial_state_intro with (f := transf_fundef f).
-  eapply Genv.init_mem_transf; eauto.
-  rewrite symbols_preserved; eauto.
+  eapply (Genv.init_mem_transf TRANSL); eauto.
+  rewrite (match_program_main TRANSL), symbols_preserved; eauto.
   apply function_ptr_translated; auto.
   rewrite sig_function_translated. auto.
   constructor; auto. constructor.
@@ -360,14 +341,14 @@ Lemma transf_final_states:
   forall st1 st2 r,
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
 Proof.
-  intros. inv H0. inv H. inv H6. econstructor; eauto.
+  intros. inv H0. inv H. inv H5. econstructor; eauto.
 Qed.
 
 Theorem transf_program_correct:
   forward_simulation (Linear.semantics prog) (Linear.semantics tprog).
 Proof.
   eapply forward_simulation_opt.
-  eexact public_preserved.
+  apply senv_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
   eexact transf_step_correct.

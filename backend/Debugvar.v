@@ -13,18 +13,9 @@
 (** Computation of live ranges for local variables that carry
     debugging information. *)
 
-Require Import Coqlib.
-Require Import Axioms.
-Require Import Maps.
-Require Import Iteration.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Errors.
-Require Import Machregs.
-Require Import Locations.
-Require Import Conventions.
-Require Import Linear.
+Require Import Axioms Coqlib Maps Iteration Errors.
+Require Import Integers Floats AST.
+Require Import Machregs Locations Conventions Linear.
 
 (** A debug info is a [builtin_arg loc] expression that safely evaluates
    in any context. *)

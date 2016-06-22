@@ -69,6 +69,8 @@ Definition store (chunk: memory_chunk) (e1 e2: expr) :=
 
 Section SELECTION.
 
+Definition globdef := AST.globdef Cminor.fundef unit.
+Variable defmap: PTree.t globdef.
 Variable hf: helper_functions.
 
 Definition sel_constant (cst: Cminor.constant) : expr :=
@@ -194,17 +196,13 @@ Definition expr_is_addrof_ident (e: Cminor.expr) : option ident :=
   | _ => None
   end.
 
-Definition classify_call (ge: Cminor.genv) (e: Cminor.expr) : call_kind :=
+Definition classify_call (e: Cminor.expr) : call_kind :=
   match expr_is_addrof_ident e with
   | None => Call_default
   | Some id =>
-      match Genv.find_symbol ge id with
-      | None => Call_imm id
-      | Some b =>
-          match Genv.find_funct_ptr ge b with
-          | Some(External ef) => if ef_inline ef then Call_builtin ef else Call_imm id
-          | _ => Call_imm id
-          end
+      match defmap!id with
+      | Some(Gfun(External ef)) => if ef_inline ef then Call_builtin ef else Call_imm id
+      | _ => Call_imm id
       end
   end.
 
@@ -279,13 +277,13 @@ Definition sel_switch_long :=
 
 (** Conversion from Cminor statements to Cminorsel statements. *)
 
-Fixpoint sel_stmt (ge: Cminor.genv) (s: Cminor.stmt) : res stmt :=
+Fixpoint sel_stmt (s: Cminor.stmt) : res stmt :=
   match s with
   | Cminor.Sskip => OK Sskip
   | Cminor.Sassign id e => OK (Sassign id (sel_expr e))
   | Cminor.Sstore chunk addr rhs => OK (store chunk (sel_expr addr) (sel_expr rhs))
   | Cminor.Scall optid sg fn args =>
-      OK (match classify_call ge fn with
+      OK (match classify_call fn with
       | Call_default => Scall optid sg (inl _ (sel_expr fn)) (sel_exprlist args)
       | Call_imm id  => Scall optid sg (inr _ id) (sel_exprlist args)
       | Call_builtin ef => Sbuiltin (sel_builtin_res optid) ef
@@ -296,20 +294,20 @@ Fixpoint sel_stmt (ge: Cminor.genv) (s: Cminor.stmt) : res stmt :=
       OK (Sbuiltin (sel_builtin_res optid) ef
                    (sel_builtin_args args (Machregs.builtin_constraints ef)))
   | Cminor.Stailcall sg fn args =>
-      OK (match classify_call ge fn with
+      OK (match classify_call fn with
       | Call_imm id  => Stailcall sg (inr _ id) (sel_exprlist args)
       | _            => Stailcall sg (inl _ (sel_expr fn)) (sel_exprlist args)
       end)
   | Cminor.Sseq s1 s2 =>
-      do s1' <- sel_stmt ge s1; do s2' <- sel_stmt ge s2;
+      do s1' <- sel_stmt s1; do s2' <- sel_stmt s2;
       OK (Sseq s1' s2')
   | Cminor.Sifthenelse e ifso ifnot =>
-      do ifso' <- sel_stmt ge ifso; do ifnot' <- sel_stmt ge ifnot;
+      do ifso' <- sel_stmt ifso; do ifnot' <- sel_stmt ifnot;
       OK (Sifthenelse (condexpr_of_expr (sel_expr e)) ifso' ifnot')
   | Cminor.Sloop body =>
-      do body' <- sel_stmt ge body; OK (Sloop body')
+      do body' <- sel_stmt body; OK (Sloop body')
   | Cminor.Sblock body =>
-      do body' <- sel_stmt ge body; OK (Sblock body')
+      do body' <- sel_stmt body; OK (Sblock body')
   | Cminor.Sexit n => OK (Sexit n)
   | Cminor.Sswitch false e cases dfl =>
       let t := compile_switch Int.modulus dfl cases in
@@ -324,14 +322,14 @@ Fixpoint sel_stmt (ge: Cminor.genv) (s: Cminor.stmt) : res stmt :=
   | Cminor.Sreturn None => OK (Sreturn None)
   | Cminor.Sreturn (Some e) => OK (Sreturn (Some (sel_expr e)))
   | Cminor.Slabel lbl body =>
-      do body' <- sel_stmt ge body; OK (Slabel lbl body')
+      do body' <- sel_stmt body; OK (Slabel lbl body')
   | Cminor.Sgoto lbl => OK (Sgoto lbl)
   end.
 
 (** Conversion of functions. *)
 
-Definition sel_function (ge: Cminor.genv) (f: Cminor.function) : res function :=
-  do body' <- sel_stmt ge f.(Cminor.fn_body);
+Definition sel_function (f: Cminor.function) : res function :=
+  do body' <- sel_stmt f.(Cminor.fn_body);
   OK (mkfunction
         f.(Cminor.fn_sig)
         f.(Cminor.fn_params)
@@ -339,41 +337,36 @@ Definition sel_function (ge: Cminor.genv) (f: Cminor.function) : res function :=
         f.(Cminor.fn_stackspace)
         body').
 
-Definition sel_fundef (ge: Cminor.genv) (f: Cminor.fundef) : res fundef :=
-  transf_partial_fundef (sel_function ge) f.
+Definition sel_fundef (f: Cminor.fundef) : res fundef :=
+  transf_partial_fundef sel_function f.
 
 End SELECTION.
 
 (** Setting up the helper functions. *)
 
-Definition globdef := AST.globdef Cminor.fundef unit.
-
 (** We build a partial mapping from global identifiers to their definitions,
   restricting ourselves to the globals we are interested in, namely
-  the external function declarations whose name starts with "__i64_".
+  the external function declarations that are marked as runtime library
+  helpers. 
   This ensures that the mapping remains small and that [lookup_helper]
   below is efficient. *)
 
 Definition globdef_of_interest (gd: globdef) : bool :=
   match gd with
-  | Gfun (External (EF_external name sg)) => String.prefix "__i64_" name
+  | Gfun (External (EF_runtime name sg)) => true
   | _ => false
   end.
 
-Definition record_globdef (globs: PTree.t globdef) (id_gd: ident * globdef) :=
-  let (id, gd) := id_gd in
-  if globdef_of_interest gd
-  then PTree.set id gd globs
-  else PTree.remove id globs.
-
-Definition record_globdefs (p: Cminor.program) : PTree.t globdef :=
-  List.fold_left record_globdef p.(prog_defs) (PTree.empty _).
+Definition record_globdefs (defmap: PTree.t globdef) : PTree.t globdef :=
+  PTree.fold 
+    (fun m id gd => if globdef_of_interest gd then PTree.set id gd m else m)
+    defmap (PTree.empty globdef).
 
 Definition lookup_helper_aux
      (name: String.string) (sg: signature) (res: option ident)
      (id: ident) (gd: globdef) :=
   match gd with
-  | Gfun (External (EF_external name' sg')) =>
+  | Gfun (External (EF_runtime name' sg')) =>
       if String.string_dec name name' && signature_eq sg sg'
       then Some id
       else res
@@ -389,8 +382,8 @@ Definition lookup_helper (globs: PTree.t globdef)
 
 Local Open Scope string_scope.
 
-Definition get_helpers (p: Cminor.program) : res helper_functions :=
-  let globs := record_globdefs p in
+Definition get_helpers (defmap: PTree.t globdef) : res helper_functions :=
+  let globs := record_globdefs defmap in
   do i64_dtos <- lookup_helper globs "__i64_dtos" sig_f_l ;
   do i64_dtou <- lookup_helper globs "__i64_dtou" sig_f_l ;
   do i64_stod <- lookup_helper globs "__i64_stod" sig_l_f ;
@@ -412,6 +405,7 @@ Definition get_helpers (p: Cminor.program) : res helper_functions :=
 (** Conversion of programs. *)
 
 Definition sel_program (p: Cminor.program) : res program :=
-  do hf <- get_helpers p;
-  transform_partial_program (sel_fundef hf (Genv.globalenv p)) p.
+  let dm := prog_defmap p in
+  do hf <- get_helpers dm;
+  transform_partial_program (sel_fundef dm hf) p.
 

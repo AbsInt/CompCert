@@ -37,9 +37,9 @@ Definition slot_valid (sl: slot) (ofs: Z) (ty: typ): bool :=
   match sl with
   | Local => zle 0 ofs
   | Outgoing => zle 0 ofs
-  | Incoming => In_dec Loc.eq (S Incoming ofs ty) (loc_parameters funct.(fn_sig))
-  end &&
-  match ty with Tlong => false | _ => true end.
+  | Incoming => In_dec Loc.eq (S Incoming ofs ty) (regs_of_rpairs (loc_parameters funct.(fn_sig)))
+  end
+  && Zdivide_dec (typealign ty) ofs (typealign_pos ty).
 
 Definition slot_writable (sl: slot) : bool :=
   match sl with
@@ -146,8 +146,7 @@ Lemma wt_return_regs:
   wt_locset caller -> wt_locset callee -> wt_locset (return_regs caller callee).
 Proof.
   intros; red; intros.
-  unfold return_regs. destruct l; auto.
-  destruct (in_dec mreg_eq r destroyed_at_call); auto.
+  unfold return_regs. destruct l; auto. destruct (is_callee_save r); auto.
 Qed.
 
 Lemma wt_init:
@@ -156,15 +155,19 @@ Proof.
   red; intros. unfold Locmap.init. red; auto.
 Qed.
 
-Lemma wt_setlist:
-  forall vl rl rs,
-  Val.has_type_list vl (map mreg_type rl) ->
+Lemma wt_setpair:
+  forall sg v rs,
+  Val.has_type v (proj_sig_res sg) ->
   wt_locset rs ->
-  wt_locset (Locmap.setlist (map R rl) vl rs).
+  wt_locset (Locmap.setpair (loc_result sg) v rs).
 Proof.
-  induction vl; destruct rl; simpl; intros; try contradiction.
+  intros. generalize (loc_result_pair sg) (loc_result_type sg).
+  destruct (loc_result sg); simpl Locmap.setpair.
+- intros. apply wt_setreg; auto. eapply Val.has_subtype; eauto.
+- intros (A & B & C & D) E. 
+  apply wt_setreg. eapply Val.has_subtype; eauto. destruct v; exact I.
+  apply wt_setreg. eapply Val.has_subtype; eauto. destruct v; exact I.
   auto.
-  destruct H. apply IHvl; auto. apply wt_setreg; auto.
 Qed.
 
 Lemma wt_setres:
@@ -335,8 +338,8 @@ Proof.
   econstructor. eauto. eauto. eauto.
   apply wt_undef_regs. apply wt_call_regs. auto.
 - (* external function *)
-  econstructor. auto. apply wt_setlist; auto.
-  eapply Val.has_subtype_list. apply loc_result_type. eapply external_call_well_typed'; eauto.
+  econstructor. auto. apply wt_setpair; auto.
+  eapply external_call_well_typed; eauto.
 - (* return *)
   inv WTSTK. econstructor; eauto.
 Qed.

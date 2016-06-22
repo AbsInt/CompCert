@@ -52,12 +52,14 @@ FLOCQ=\
 VLIB=Axioms.v Coqlib.v Intv.v Maps.v Heaps.v Lattice.v Ordered.v \
   Iteration.v Integers.v Archi.v Fappli_IEEE_extra.v Floats.v \
   Parmov.v UnionFind.v Wfsimpl.v \
-  Postorder.v FSetAVLplus.v IntvSets.v
+  Postorder.v FSetAVLplus.v IntvSets.v Decidableplus.v
 
 # Parts common to the front-ends and the back-end (in common/)
 
-COMMON=Errors.v AST.v Events.v Globalenvs.v Memdata.v Memtype.v Memory.v \
-  Values.v Smallstep.v Behaviors.v Switch.v Determinism.v Unityping.v
+COMMON=Errors.v AST.v Linking.v \
+  Events.v Globalenvs.v Memdata.v Memtype.v Memory.v \
+  Values.v Smallstep.v Behaviors.v Switch.v Determinism.v Unityping.v \
+  Separation.v
 
 # Back-end modules (in backend/, $(ARCH)/)
 
@@ -165,7 +167,7 @@ documentation: doc/coq2html $(FILES)
 	cp doc/coq2html.css doc/coq2html.js doc/html/
 
 doc/coq2html: doc/coq2html.ml
-	ocamlopt -o doc/coq2html str.cmxa doc/coq2html.ml
+	ocamlopt -w +a-29 -o doc/coq2html str.cmxa doc/coq2html.ml
 
 doc/coq2html.ml: doc/coq2html.mll
 	ocamllex -q doc/coq2html.mll
@@ -192,8 +194,11 @@ latexdoc:
 compcert.ini: Makefile.config
 	(echo "stdlib_path=$(LIBDIR)"; \
          echo "prepro=$(CPREPRO)"; \
-         echo "asm=$(CASM)"; \
          echo "linker=$(CLINKER)"; \
+         echo "asm=$(CASM)"; \
+	 echo "prepro_options=$(CPREPRO_OPTIONS)";\
+	 echo "asm_options=$(CASM_OPTIONS)";\
+	 echo "linker_options=$(CLINKER_OPTIONS)";\
          echo "arch=$(ARCH)"; \
          echo "model=$(MODEL)"; \
          echo "abi=$(ABI)"; \

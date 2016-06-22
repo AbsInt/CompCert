@@ -11,7 +11,7 @@
 (* *********************************************************************)
 
 open AST
-open C
+open !C
 open Camlcoq
 open DwarfTypes
 open BinNums

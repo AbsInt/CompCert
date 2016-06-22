@@ -48,7 +48,7 @@ let forward b dest =
 (* Position [b] to the beginning of line [dest], which must be less than
    the current line. *)
 
-let backward_buf = lazy (String.create 65536)
+let backward_buf = lazy (Bytes.create 65536)
   (* 65536 to match [IO_BUFFER_SIZE] in the OCaml runtime.
      lazy to allocate on demand. *)
 
@@ -65,13 +65,13 @@ let backward b dest =
         seek_in b.chan 0;
         b.lineno <- 1
       end else begin
-        let pos' = max 0 (pos - String.length buf) in
+        let pos' = max 0 (pos - Bytes.length buf) in
         let len = pos - pos' in
         seek_in b.chan pos';
         really_input b.chan buf 0 len;
         backward pos' (pos - pos')
       end
-    end else if buf.[idx-1] = '\n' then begin
+    end else if Bytes.get buf (idx-1) = '\n' then begin
       (* Reached beginning of current line *)
       if b.lineno = dest then begin
         (* Found line number dest *)

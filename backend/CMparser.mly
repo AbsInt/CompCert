@@ -17,7 +17,7 @@
    including function calls in expressions, matches, while statements, etc. */
 
 %{
-open Datatypes
+open !Datatypes
 open Camlcoq
 open BinNums
 open Integers
@@ -331,6 +331,7 @@ let mkmatch expr cases =
 %token MATCH
 %token MINUS
 %token MINUSF
+%token MINUSS
 %token MINUSL
 %token MINUSGREATER
 %token PERCENT
@@ -339,6 +340,7 @@ let mkmatch expr cases =
 %token PERCENTLU
 %token PLUS
 %token PLUSF
+%token PLUSS
 %token PLUSL
 %token RBRACE
 %token RBRACERBRACE
@@ -348,14 +350,17 @@ let mkmatch expr cases =
 %token RPAREN
 %token SEMICOLON
 %token SINGLE
+%token SINGLEOFINT
 %token SLASH
 %token SLASHF
+%token SLASHS
 %token SLASHU
 %token SLASHL
 %token SLASHLU
 %token STACK
 %token STAR
 %token STARF
+%token STARS
 %token STARL
 %token <string> STRINGLIT
 %token SWITCH
@@ -376,9 +381,9 @@ let mkmatch expr cases =
 %left AMPERSAND AMPERSANDL
 %left EQUALEQUAL BANGEQUAL LESS LESSEQUAL GREATER GREATEREQUAL EQUALEQUALU BANGEQUALU LESSU LESSEQUALU GREATERU GREATEREQUALU EQUALEQUALF BANGEQUALF LESSF LESSEQUALF GREATERF GREATEREQUALF EQUALEQUALL BANGEQUALL LESSL LESSEQUALL GREATERL GREATEREQUALL EQUALEQUALLU BANGEQUALLU LESSLU LESSEQUALLU GREATERLU GREATEREQUALLU
 %left LESSLESS GREATERGREATER GREATERGREATERU LESSLESSL GREATERGREATERL GREATERGREATERLU
-%left PLUS PLUSF PLUSL MINUS MINUSF MINUSL
-%left STAR SLASH PERCENT STARF SLASHF SLASHU PERCENTU STARL SLASHL SLASHLU PERCENTL PERCENTLU
-%nonassoc BANG TILDE TILDEL p_uminus ABSF INTOFFLOAT INTUOFFLOAT FLOATOFINT FLOATOFINTU INT8S INT8U INT16S INT16U FLOAT32 INTOFLONG LONGOFINT LONGOFINTU LONGOFFLOAT LONGUOFFLOAT FLOATOFLONG FLOATOFLONGU
+%left PLUS PLUSF PLUSS PLUSL MINUS MINUSF MINUSS MINUSL
+%left STAR SLASH PERCENT STARF STARS SLASHF SLASHS SLASHU PERCENTU STARL SLASHL SLASHLU PERCENTL PERCENTLU
+%nonassoc BANG TILDE TILDEL p_uminus ABSF INTOFFLOAT INTUOFFLOAT FLOATOFINT FLOATOFINTU SINGLEOFINT INT8S INT8U INT16S INT16U FLOAT32 FLOAT64 INTOFLONG LONGOFINT LONGOFINTU LONGOFFLOAT LONGUOFFLOAT FLOATOFLONG FLOATOFLONGU
 %left LPAREN
 
 /* Entry point */
@@ -580,10 +585,12 @@ expr:
   | AMPERSAND INTLIT                            { Rconst(Oaddrstack(coqint_of_camlint $2)) }
   | MINUS expr    %prec p_uminus                { Runop(Onegint, $2) }
   | MINUSF expr   %prec p_uminus                { Runop(Onegf, $2) }
+  | MINUSS expr   %prec p_uminus                { Runop(Onegfs, $2) }
   | ABSF expr                                   { Runop(Oabsf, $2) }
   | INTOFFLOAT expr                             { Runop(Ointoffloat, $2) }
   | INTUOFFLOAT expr                            { Runop(Ointuoffloat, $2) }
   | FLOATOFINT expr                             { Runop(Ofloatofint, $2) }
+  | SINGLEOFINT expr                            { Runop(Osingleofint, $2) }
   | FLOATOFINTU expr                            { Runop(Ofloatofintu, $2) }
   | TILDE expr                                  { Runop(Onotint, $2) }
   | BANG expr                                   { Rbinop(Ocmpu Ceq, $2, intconst 0l) }
@@ -592,6 +599,7 @@ expr:
   | INT16S expr                                 { Runop(Ocast16signed, $2) }
   | INT16U expr                                 { Runop(Ocast16unsigned, $2) }
   | FLOAT32 expr                                { Runop(Osingleoffloat, $2) }
+  | FLOAT64 expr                                { Runop(Ofloatofsingle, $2) }
   | MINUSL expr %prec p_uminus                  { Runop(Onegl, $2) }
   | TILDEL expr                                 { Runop(Onotl, $2) }
   | INTOFLONG expr                              { Runop(Ointoflong, $2) }
@@ -628,9 +636,13 @@ expr:
   | expr GREATERGREATERL expr                   { Rbinop(Oshrl, $1, $3) }
   | expr GREATERGREATERLU expr                  { Rbinop(Oshrlu, $1, $3) }
   | expr PLUSF expr                             { Rbinop(Oaddf, $1, $3) }
+  | expr PLUSS expr                             { Rbinop(Oaddfs, $1, $3) }
   | expr MINUSF expr                            { Rbinop(Osubf, $1, $3) }
+  | expr MINUSS expr                            { Rbinop(Osubfs, $1, $3) }
   | expr STARF expr                             { Rbinop(Omulf, $1, $3) }
+  | expr STARS expr                             { Rbinop(Omulfs, $1, $3) }
   | expr SLASHF expr                            { Rbinop(Odivf, $1, $3) }
+  | expr SLASHS expr                            { Rbinop(Odivfs, $1, $3) }
   | expr EQUALEQUAL expr                        { Rbinop(Ocmp Ceq, $1, $3) }
   | expr BANGEQUAL expr                         { Rbinop(Ocmp Cne, $1, $3) }
   | expr LESS expr                              { Rbinop(Ocmp Clt, $1, $3) }

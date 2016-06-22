@@ -10,8 +10,6 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-open Camlcoq
-
 (* To be considered: heuristics based on size of function? *)
 
 let should_inline (id: AST.ident) (f: RTL.coq_function) =

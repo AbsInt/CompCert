@@ -33,6 +33,7 @@ let option_faligncondbranchs = ref 0
 let option_finline_asm = ref false
 let option_mthumb = ref (Configuration.model = "armv7m")
 let option_Osize = ref false
+let option_dprepro = ref false
 let option_dparse = ref false
 let option_dcmedium = ref false
 let option_dclight = ref false
@@ -60,3 +61,5 @@ let option_small_data =
 let option_small_const = ref (!option_small_data)
 let option_timings = ref false
 let option_rename_static = ref false
+let stdlib_path = ref Configuration.stdlib_path
+let use_standard_headers =  ref Configuration.has_standard_headers

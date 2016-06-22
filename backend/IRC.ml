@@ -12,13 +12,11 @@
 
 open Printf
 open Camlcoq
-open Datatypes
 open AST
 open Registers
 open Machregs
 open Locations
 open Conventions1
-open Conventions
 open XTL
 
 (* Iterated Register Coalescing: George and Appel's graph coloring algorithm *)
@@ -138,7 +136,6 @@ module DLinkNode = struct
         nstate = state; nprev = empty; nnext = empty }
     in empty
   let dummy = make Colored
-  let clear dl = dl.nnext <- dl; dl.nprev <- dl
   let notempty dl = dl.nnext != dl
   let insert n dl =
     n.nstate <- dl.nstate;
@@ -167,7 +164,6 @@ module DLinkMove = struct
         mstate = state; mprev = empty; mnext = empty }
     in empty
   let dummy = make CoalescedMoves
-  let clear dl = dl.mnext <- dl; dl.mprev <- dl
   let notempty dl = dl.mnext != dl
   let insert m dl =
     m.mstate <- dl.mstate;
@@ -180,12 +176,6 @@ module DLinkMove = struct
     remove m dl1; insert m dl2
   let pick dl =
     let m = dl.mnext in remove m dl; m
-  let iter f dl =
-    let rec iter m = if m != dl then (f m; iter m.mnext)
-    in iter dl.mnext
-  let fold f dl accu =
-    let rec fold m accu = if m == dl then accu else fold m.mnext (f m accu)
-    in fold dl.mnext accu
 end
 
 (* Auxiliary data structures *)
@@ -447,7 +437,7 @@ let moveRelated n =
 (* Initial partition of nodes into spill / freeze / simplify *)
 
 let initialNodePartition g =
-  let part_node v n =
+  let part_node n =
     match n.nstate with
     | Initial ->
         let k = g.num_available_registers.(n.regclass) in
@@ -459,43 +449,42 @@ let initialNodePartition g =
           DLinkNode.insert n g.simplifyWorklist
     | Colored -> ()
     | _ -> assert false in
-  Hashtbl.iter part_node g.varTable
-
+  Hashtbl.iter (fun _ a -> part_node a) g.varTable
 
 (* Check invariants *)
 
-let degreeInvariant g n =
+let _degreeInvariant _ n =
   let c = ref 0 in
   iterAdjacent (fun n -> incr c) n;
   if !c <> n.degree then
     failwith("degree invariant violated by " ^ name_of_node n)
 
-let simplifyWorklistInvariant g n =
+let _simplifyWorklistInvariant g n =
   if n.degree < g.num_available_registers.(n.regclass)
   && not (moveRelated n)
   then ()
   else failwith("simplify worklist invariant violated by " ^ name_of_node n)
 
-let freezeWorklistInvariant g n =
+let _freezeWorklistInvariant g n =
   if n.degree < g.num_available_registers.(n.regclass)
   && moveRelated n
   then ()
   else failwith("freeze worklist invariant violated by " ^ name_of_node n)
 
-let spillWorklistInvariant g n =
+let _spillWorklistInvariant g n =
   if n.degree >= g.num_available_registers.(n.regclass)
   then ()
   else failwith("spill worklist invariant violated by " ^ name_of_node n)
 
-let checkInvariants g =
+let _checkInvariants g =
   DLinkNode.iter
-    (fun n -> degreeInvariant g n; simplifyWorklistInvariant g n)
+    (fun n -> _degreeInvariant g n; _simplifyWorklistInvariant g n)
     g.simplifyWorklist;
   DLinkNode.iter
-    (fun n -> degreeInvariant g n; freezeWorklistInvariant g n)
+    (fun n -> _degreeInvariant g n; _freezeWorklistInvariant g n)
     g.freezeWorklist;
   DLinkNode.iter
-    (fun n -> degreeInvariant g n; spillWorklistInvariant g n)
+    (fun n -> _degreeInvariant g n; _spillWorklistInvariant g n)
     g.spillWorklist
 
 (* Enable moves that have become low-degree related *)
@@ -844,10 +833,10 @@ let find_slot conflicts typ =
   | [] ->
       S(Local, curr, typ)
   | S(Local, ofs, typ') :: l ->
-      if Z.le (Z.add curr (typesize typ)) ofs then
+      if Z.le (Z.add curr (Locations.typesize typ)) ofs then
         S(Local, curr, typ)
       else begin
-        let ofs' = Z.add ofs (typesize typ') in
+        let ofs' = Z.add ofs (Locations.typesize typ') in
         find (if Z.le ofs' curr then curr else ofs') l
       end
   | _ :: l ->

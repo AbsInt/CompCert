@@ -14,8 +14,6 @@
 (* *********************************************************************)
 
 {
-open BinNums
-open Camlcoq
 open CMparser
 exception Error of string
 }
@@ -123,6 +121,7 @@ rule token = parse
   | "-"    { MINUS }
   | "->"    { MINUSGREATER }
   | "-f"    { MINUSF }
+  | "-s"    { MINUSS }
   | "-l"    { MINUSL }
   | "%"    { PERCENT }
   | "%l"    { PERCENTL }
@@ -130,6 +129,7 @@ rule token = parse
   | "%u"    { PERCENTU }
   | "+"    { PLUS }
   | "+f"    { PLUSF }
+  | "+s"    { PLUSS }
   | "+l"    { PLUSL }
   | "}"    { RBRACE }
   | "}}"    { RBRACERBRACE }
@@ -140,13 +140,16 @@ rule token = parse
   | ";"    { SEMICOLON }
   | "/"    { SLASH }
   | "/f"    { SLASHF }
+  | "/s"    { SLASHS }
   | "/l"    { SLASHL }
   | "/lu"    { SLASHLU }
   | "/u"    { SLASHU }
   | "single" { SINGLE }
+  | "singleofint" { SINGLEOFINT }
   | "stack"    { STACK }
   | "*" { STAR }
   | "*f"    { STARF }
+  | "*s"    { STARS }
   | "*l"    { STARL }
   | "switch"    { SWITCH }
   | "switchl"    { SWITCHL }

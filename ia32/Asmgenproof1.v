@@ -38,7 +38,7 @@ Lemma agree_nextinstr_nf:
 Proof.
   intros. unfold nextinstr_nf. apply agree_nextinstr.
   apply agree_undef_nondata_regs. auto.
-  intro. simpl. ElimOrEq; auto.
+  simpl; intros. intuition (subst r; auto).
 Qed.
 
 (** Useful properties of the PC register. *)

@@ -11,4 +11,4 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-val print_program: out_channel -> Asm.program -> DwarfTypes.dw_entry option -> unit
+val print_program: out_channel -> Asm.program -> unit

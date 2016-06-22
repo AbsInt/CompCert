@@ -12,26 +12,11 @@
 
 (** Register allocation by external oracle and a posteriori validation. *)
 
-Require Import FSets.
-Require FSetAVLplus.
+Require Import FSets FSetAVLplus.
+Require Import Coqlib Ordered Maps Errors Integers Floats.
+Require Import AST Lattice Kildall Memdata.
 Require Archi.
-Require Import Coqlib.
-Require Import Ordered.
-Require Import Errors.
-Require Import Maps.
-Require Import Lattice.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Memdata.
-Require Import Op.
-Require Import Registers.
-Require Import RTL.
-Require Import Kildall.
-Require Import Locations.
-Require Import Conventions.
-Require Import RTLtyping.
-Require Import LTL.
+Require Import Op Registers RTL Locations Conventions RTLtyping LTL.
 
 (** The validation algorithm used here is described in
   "Validating register allocation and spilling",
@@ -631,51 +616,40 @@ Fixpoint add_equations (rl: list reg) (ml: list mreg) (e: eqs) : option eqs :=
   of pseudoregisters of type [Tlong] in two locations containing the
   two 32-bit halves of the 64-bit integer. *)
 
-Function add_equations_args (rl: list reg) (tyl: list typ) (ll: list loc) (e: eqs) : option eqs :=
+Function add_equations_args (rl: list reg) (tyl: list typ) (ll: list (rpair loc)) (e: eqs) : option eqs :=
   match rl, tyl, ll with
   | nil, nil, nil => Some e
-  | r1 :: rl, Tlong :: tyl, l1 :: l2 :: ll =>
-      add_equations_args rl tyl ll (add_equation (Eq Low r1 l2) (add_equation (Eq High r1 l1) e))
-  | r1 :: rl, (Tint|Tfloat|Tsingle) :: tyl, l1 :: ll =>
+  | r1 :: rl, ty :: tyl, One l1 :: ll =>
       add_equations_args rl tyl ll (add_equation (Eq Full r1 l1) e)
+  | r1 :: rl, Tlong :: tyl, Twolong l1 l2 :: ll =>
+      add_equations_args rl tyl ll (add_equation (Eq Low r1 l2) (add_equation (Eq High r1 l1) e))
   | _, _, _ => None
   end.
 
 (** [add_equations_res] is similar but is specialized to the case where
   there is only one pseudo-register. *)
 
-Function add_equations_res (r: reg) (oty: option typ) (ll: list loc) (e: eqs) : option eqs :=
-  match oty with
-  | Some Tlong =>
-      match ll with
-      | l1 :: l2 :: nil => Some (add_equation (Eq Low r l2) (add_equation (Eq High r l1) e))
-      | _ => None
-      end
-  | _ =>
-      match ll with
-      | l1 :: nil => Some (add_equation (Eq Full r l1) e)
-      | _ => None
-      end
+Function add_equations_res (r: reg) (oty: option typ) (p: rpair mreg) (e: eqs) : option eqs :=
+  match p, oty with
+  | One mr, _ =>
+      Some (add_equation (Eq Full r (R mr)) e)
+  | Twolong mr1 mr2, Some Tlong =>
+      Some (add_equation (Eq Low r (R mr2)) (add_equation (Eq High r (R mr1)) e))
+  | _, _ =>
+      None
   end.
 
 (** [remove_equations_res] is similar to [add_equations_res] but removes
   equations instead of adding them. *)
 
-Function remove_equations_res (r: reg) (oty: option typ) (ll: list loc) (e: eqs) : option eqs :=
-  match oty with
-  | Some Tlong =>
-      match ll with
-      | l1 :: l2 :: nil =>
-          if Loc.diff_dec l2 l1
-          then Some (remove_equation (Eq Low r l2) (remove_equation (Eq High r l1) e))
-          else None
-      | _ => None
-      end
-  | _ =>
-      match ll with
-      | l1 :: nil => Some (remove_equation (Eq Full r l1) e)
-      | _ => None
-      end
+Function remove_equations_res (r: reg) (p: rpair mreg) (e: eqs) : option eqs :=
+  match p with
+  | One mr =>
+      Some (remove_equation (Eq Full r (R mr)) e)
+  | Twolong mr1 mr2 =>
+      if mreg_eq mr2 mr1
+      then None
+      else Some (remove_equation (Eq Low r (R mr2)) (remove_equation (Eq High r (R mr1)) e))
   end.
 
 (** [add_equations_ros] adds an equation, if needed, between an optional
@@ -796,8 +770,7 @@ Definition no_caller_saves (e: eqs) : bool :=
   EqSet.for_all
    (fun eq =>
      match eloc eq with
-       | R r =>
-           zle 0 (index_int_callee_save r) || zle 0 (index_float_callee_save r)
+       | R r => is_callee_save r
        | S Outgoing _ _ => false
        | S _ _ _ => true
        end)
@@ -836,7 +809,7 @@ Definition compat_left2 (r: reg) (l1 l2: loc) (e: eqs) : bool :=
 
 Definition ros_compatible_tailcall (ros: mreg + ident) : bool :=
   match ros with
-  | inl r => In_dec mreg_eq r destroyed_at_call
+  | inl r => negb (is_callee_save r)
   | inr id => true
   end.
 
@@ -976,10 +949,11 @@ Definition transfer_aux (f: RTL.function) (env: regenv)
       track_moves env mv1 e3
   | BScall sg ros args res mv1 ros' mv2 s =>
       let args' := loc_arguments sg in
-      let res' := map R (loc_result sg) in
+      let res' := loc_result sg in
       do e1 <- track_moves env mv2 e;
-      do e2 <- remove_equations_res res (sig_res sg) res' e1;
-      assertion (forallb (fun l => reg_loc_unconstrained res l e2) res');
+      do e2 <- remove_equations_res res res' e1;
+      assertion (forallb (fun l => reg_loc_unconstrained res l e2)
+                         (map R (regs_of_rpair res')));
       assertion (no_caller_saves e2);
       do e3 <- add_equation_ros ros ros' e2;
       do e4 <- add_equations_args args (sig_args sg) args' e3;
@@ -1016,7 +990,7 @@ Definition transfer_aux (f: RTL.function) (env: regenv)
   | BSreturn None mv =>
       track_moves env mv empty_eqs
   | BSreturn (Some arg) mv =>
-      let arg' := map R (loc_result (RTL.fn_sig f)) in
+      let arg' := loc_result (RTL.fn_sig f) in
       do e1 <- add_equations_res arg (sig_res (RTL.fn_sig f)) arg' empty_eqs;
       track_moves env mv e1
   end.
@@ -1200,15 +1174,15 @@ Definition analyze (f: RTL.function) (env: regenv) (bsh: PTree.t block_shape) :=
   involving pseudoregs [r'] not in [rparams]: these equations are
   automatically satisfied since the initial value of [r'] is [Vundef]. *)
 
-Function compat_entry (rparams: list reg) (tys: list typ) (lparams: list loc) (e: eqs)
+Function compat_entry (rparams: list reg) (lparams: list (rpair loc)) (e: eqs)
                       {struct rparams} : bool :=
-  match rparams, tys, lparams with
-  | nil, nil, nil => true
-  | r1 :: rl, Tlong :: tyl, l1 :: l2 :: ll =>
-      compat_left2 r1 l1 l2 e && compat_entry rl tyl ll e
-  | r1 :: rl, (Tint|Tfloat|Tsingle) :: tyl, l1 :: ll =>
-      compat_left r1 l1 e && compat_entry rl tyl ll e
-  | _, _, _ => false
+  match rparams, lparams with
+  | nil, nil => true
+  | r1 :: rl,  One l1 :: ll =>
+      compat_left r1 l1 e && compat_entry rl ll e
+  | r1 :: rl, Twolong l1 l2 :: ll =>
+      compat_left2 r1 l1 l2 e && compat_entry rl ll e
+  | _, _ => false
   end.
 
 (** Checking the satisfiability of equations inferred at function entry
@@ -1220,7 +1194,6 @@ Definition check_entrypoints_aux (rtl: RTL.function) (ltl: LTL.function)
   do mv <- pair_entrypoints rtl ltl;
   do e2 <- track_moves env mv e1;
   assertion (compat_entry (RTL.fn_params rtl)
-                          (sig_args (RTL.fn_sig rtl))
                           (loc_parameters (RTL.fn_sig rtl)) e2);
   assertion (can_undef destroyed_at_function_entry e2);
   assertion (zeq (RTL.fn_stacksize rtl) (LTL.fn_stacksize ltl));

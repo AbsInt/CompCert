@@ -12,28 +12,20 @@
 
 (** Elimination of unneeded computations over RTL: correctness proof. *)
 
-Require Import Coqlib.
-Require Import Errors.
-Require Import Maps.
-Require Import IntvSets.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Globalenvs.
-Require Import Events.
-Require Import Smallstep.
-Require Import Op.
-Require Import Registers.
-Require Import RTL.
-Require Import Lattice.
-Require Import Kildall.
-Require Import ValueDomain.
-Require Import ValueAnalysis.
-Require Import NeedDomain.
-Require Import NeedOp.
-Require Import Deadcode.
+Require Import Coqlib Maps Errors Integers Floats Lattice Kildall.
+Require Import AST Linking.
+Require Import Values Memory Globalenvs Events Smallstep.
+Require Import Registers Op RTL.
+Require Import ValueDomain ValueAnalysis NeedDomain NeedOp Deadcode.
+
+Definition match_prog (prog tprog: RTL.program) :=
+  match_program (fun cu f tf => transf_fundef (romem_for cu) f = OK tf) eq prog tprog.
+
+Lemma transf_program_match:
+  forall prog tprog, transf_program prog = OK tprog -> match_prog prog tprog.
+Proof.
+  intros. eapply match_transform_partial_program_contextual; eauto.
+Qed.
 
 (** * Relating the memory states *)
 
@@ -377,75 +369,61 @@ Section PRESERVATION.
 
 Variable prog: program.
 Variable tprog: program.
-Hypothesis TRANSF: transf_program prog = OK tprog.
+Hypothesis TRANSF: match_prog prog tprog.
 Let ge := Genv.globalenv prog.
 Let tge := Genv.globalenv tprog.
-Let rm := romem_for_program prog.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof.
-  intro. unfold ge, tge.
-  apply Genv.find_symbol_transf_partial with (transf_fundef rm).
-  exact TRANSF.
-Qed.
+Proof (Genv.find_symbol_match TRANSF).
 
-Lemma public_preserved:
-  forall (s: ident), Genv.public_symbol tge s = Genv.public_symbol ge s.
-Proof.
-  intro. unfold ge, tge.
-  apply Genv.public_symbol_transf_partial with (transf_fundef rm).
-  exact TRANSF.
-Qed.
-
-Lemma varinfo_preserved:
-  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
-Proof.
-  intro. unfold ge, tge.
-  apply Genv.find_var_info_transf_partial with (transf_fundef rm).
-  exact TRANSF.
-Qed.
+Lemma senv_preserved:
+  Senv.equiv ge tge.
+Proof (Genv.senv_match TRANSF).
 
 Lemma functions_translated:
   forall (v: val) (f: RTL.fundef),
   Genv.find_funct ge v = Some f ->
-  exists tf,
-  Genv.find_funct tge v = Some tf /\ transf_fundef rm f = OK tf.
-Proof (Genv.find_funct_transf_partial (transf_fundef rm) _ TRANSF).
+  exists cu tf,
+  Genv.find_funct tge v = Some tf /\ transf_fundef (romem_for cu) f = OK tf /\ linkorder cu prog.
+Proof (Genv.find_funct_match TRANSF).
 
 Lemma function_ptr_translated:
   forall (b: block) (f: RTL.fundef),
   Genv.find_funct_ptr ge b = Some f ->
-  exists tf,
-  Genv.find_funct_ptr tge b = Some tf /\ transf_fundef rm f = OK tf.
-Proof (Genv.find_funct_ptr_transf_partial (transf_fundef rm) _ TRANSF).
+  exists cu tf,
+  Genv.find_funct_ptr tge b = Some tf /\ transf_fundef (romem_for cu) f = OK tf /\ linkorder cu prog.
+Proof (Genv.find_funct_ptr_match TRANSF).
 
 Lemma sig_function_translated:
-  forall f tf,
+  forall rm f tf,
   transf_fundef rm f = OK tf ->
   funsig tf = funsig f.
 Proof.
   intros; destruct f; monadInv H.
   unfold transf_function in EQ.
-  destruct (analyze (vanalyze rm f) f); inv EQ; auto.
+  destruct (analyze (ValueAnalysis.analyze rm f) f); inv EQ; auto.
   auto.
 Qed.
 
 Lemma stacksize_translated:
-  forall f tf,
+  forall rm f tf,
   transf_function rm f = OK tf -> tf.(fn_stacksize) = f.(fn_stacksize).
 Proof.
-  unfold transf_function; intros. destruct (analyze (vanalyze rm f) f); inv H; auto.
+  unfold transf_function; intros. destruct (analyze (ValueAnalysis.analyze rm f) f); inv H; auto.
 Qed.
 
+Definition vanalyze (cu: program) (f: function) :=
+  ValueAnalysis.analyze (romem_for cu) f.
+
 Lemma transf_function_at:
-  forall f tf an pc instr,
-  transf_function rm f = OK tf ->
-  analyze (vanalyze rm f) f = Some an ->
+  forall cu f tf an pc instr,
+  transf_function (romem_for cu) f = OK tf ->
+  analyze (vanalyze cu f) f = Some an ->
   f.(fn_code)!pc = Some instr ->
-  tf.(fn_code)!pc = Some(transf_instr (vanalyze rm f) an pc instr).
+  tf.(fn_code)!pc = Some(transf_instr (vanalyze cu f) an pc instr).
 Proof.
-  intros. unfold transf_function in H. rewrite H0 in H. inv H; simpl.
+  intros. unfold transf_function in H. unfold vanalyze in H0. rewrite H0 in H. inv H; simpl.
   rewrite PTree.gmap. rewrite H1; auto.
 Qed.
 
@@ -474,7 +452,10 @@ Lemma find_function_translated:
   forall ros rs fd trs ne,
   find_function ge ros rs = Some fd ->
   eagree rs trs (add_ros_need_all ros ne) ->
-  exists tfd, find_function tge ros trs = Some tfd /\ transf_fundef rm fd = OK tfd.
+  exists cu tfd,
+     find_function tge ros trs = Some tfd
+  /\ transf_fundef (romem_for cu) fd = OK tfd
+  /\ linkorder cu prog.
 Proof.
   intros. destruct ros as [r|id]; simpl in *.
 - assert (LD: Val.lessdef rs#r trs#r) by eauto with na. inv LD.
@@ -488,30 +469,33 @@ Qed.
 
 Inductive match_stackframes: stackframe -> stackframe -> Prop :=
   | match_stackframes_intro:
-      forall res f sp pc e tf te an
-        (FUN: transf_function rm f = OK tf)
-        (ANL: analyze (vanalyze rm f) f = Some an)
+      forall res f sp pc e tf te cu an
+        (LINK: linkorder cu prog)
+        (FUN: transf_function (romem_for cu) f = OK tf)
+        (ANL: analyze (vanalyze cu f) f = Some an)
         (RES: forall v tv,
               Val.lessdef v tv ->
               eagree (e#res <- v) (te#res<- tv)
-                     (fst (transfer f (vanalyze rm f) pc an!!pc))),
+                     (fst (transfer f (vanalyze cu f) pc an!!pc))),
       match_stackframes (Stackframe res f (Vptr sp Int.zero) pc e)
                         (Stackframe res tf (Vptr sp Int.zero) pc te).
 
 Inductive match_states: state -> state -> Prop :=
   | match_regular_states:
-      forall s f sp pc e m ts tf te tm an
+      forall s f sp pc e m ts tf te tm cu an
         (STACKS: list_forall2 match_stackframes s ts)
-        (FUN: transf_function rm f = OK tf)
-        (ANL: analyze (vanalyze rm f) f = Some an)
-        (ENV: eagree e te (fst (transfer f (vanalyze rm f) pc an!!pc)))
-        (MEM: magree m tm (nlive ge sp (snd (transfer f (vanalyze rm f) pc an!!pc)))),
+        (LINK: linkorder cu prog)
+        (FUN: transf_function (romem_for cu) f = OK tf)
+        (ANL: analyze (vanalyze cu f) f = Some an)
+        (ENV: eagree e te (fst (transfer f (vanalyze cu f) pc an!!pc)))
+        (MEM: magree m tm (nlive ge sp (snd (transfer f (vanalyze cu f) pc an!!pc)))),
       match_states (State s f (Vptr sp Int.zero) pc e m)
                    (State ts tf (Vptr sp Int.zero) pc te tm)
   | match_call_states:
-      forall s f args m ts tf targs tm
+      forall s f args m ts tf targs tm cu
         (STACKS: list_forall2 match_stackframes s ts)
-        (FUN: transf_fundef rm f = OK tf)
+        (LINK: linkorder cu prog)
+        (FUN: transf_fundef (romem_for cu) f = OK tf)
         (ARGS: Val.lessdef_list args targs)
         (MEM: Mem.extends m tm),
       match_states (Callstate s f args m)
@@ -527,21 +511,22 @@ Inductive match_states: state -> state -> Prop :=
 (** [match_states] and CFG successors *)
 
 Lemma analyze_successors:
-  forall f an pc instr pc',
-  analyze (vanalyze rm f) f = Some an ->
+  forall cu f an pc instr pc',
+  analyze (vanalyze cu f) f = Some an ->
   f.(fn_code)!pc = Some instr ->
   In pc' (successors_instr instr) ->
-  NA.ge an!!pc (transfer f (vanalyze rm f) pc' an!!pc').
+  NA.ge an!!pc (transfer f (vanalyze cu f) pc' an!!pc').
 Proof.
   intros. eapply DS.fixpoint_solution; eauto.
   intros. unfold transfer; rewrite H2. destruct a. apply DS.L.eq_refl.
 Qed.
 
 Lemma match_succ_states:
-  forall s f sp pc e m ts tf te tm an pc' instr ne nm
+  forall s f sp pc e m ts tf te tm an pc' cu instr ne nm
+    (LINK: linkorder cu prog)
     (STACKS: list_forall2 match_stackframes s ts)
-    (FUN: transf_function rm f = OK tf)
-    (ANL: analyze (vanalyze rm f) f = Some an)
+    (FUN: transf_function (romem_for cu) f = OK tf)
+    (ANL: analyze (vanalyze cu f) f = Some an)
     (INSTR: f.(fn_code)!pc = Some instr)
     (SUCC: In pc' (successors_instr instr))
     (ANPC: an!!pc = (ne, nm))
@@ -719,7 +704,7 @@ Ltac TransfInstr :=
   | [INSTR: (fn_code _)!_ = Some _,
      FUN: transf_function _ _ = OK _,
      ANL: analyze _ _ = Some _ |- _ ] =>
-       generalize (transf_function_at _ _ _ _ _ FUN ANL INSTR);
+       generalize (transf_function_at _ _ _ _ _ _ FUN ANL INSTR);
        intro TI;
        unfold transf_instr in TI
   end.
@@ -824,7 +809,7 @@ Ltac UseTransfer :=
 
 - (* store *)
   TransfInstr; UseTransfer.
-  destruct (nmem_contains nm (aaddressing (vanalyze rm f) # pc addr args)
+  destruct (nmem_contains nm (aaddressing (vanalyze cu f) # pc addr args)
              (size_chunk chunk)) eqn:CONTAINS.
 + (* preserved *)
   simpl in *.
@@ -853,39 +838,41 @@ Ltac UseTransfer :=
 
 - (* call *)
   TransfInstr; UseTransfer.
-  exploit find_function_translated; eauto 2 with na. intros (tfd & A & B).
+  exploit find_function_translated; eauto 2 with na. intros (cu' & tfd & A & B & C).
   econstructor; split.
-  eapply exec_Icall; eauto. apply sig_function_translated; auto.
-  constructor.
-  constructor; auto. econstructor; eauto.
+  eapply exec_Icall; eauto. eapply sig_function_translated; eauto.
+  eapply match_call_states with (cu := cu'); eauto.
+  constructor; auto. eapply match_stackframes_intro with (cu := cu); eauto.
   intros.
   edestruct analyze_successors; eauto. simpl; eauto.
   eapply eagree_ge; eauto. rewrite ANPC. simpl.
   apply eagree_update; eauto with na.
-  auto. eauto 2 with na. eapply magree_extends; eauto. apply nlive_all.
+  eauto 2 with na.
+  eapply magree_extends; eauto. apply nlive_all.
 
 - (* tailcall *)
   TransfInstr; UseTransfer.
-  exploit find_function_translated; eauto 2 with na. intros (tfd & A & B).
+  exploit find_function_translated; eauto 2 with na. intros (cu' & tfd & A & B & L).
   exploit magree_free. eauto. eauto. instantiate (1 := nlive ge stk nmem_all).
   intros; eapply nlive_dead_stack; eauto.
   intros (tm' & C & D).
   econstructor; split.
-  eapply exec_Itailcall; eauto. apply sig_function_translated; auto.
+  eapply exec_Itailcall; eauto. eapply sig_function_translated; eauto.
   erewrite stacksize_translated by eauto. eexact C.
-  constructor; eauto 2 with na. eapply magree_extends; eauto. apply nlive_all.
+  eapply match_call_states with (cu := cu'); eauto 2 with na.
+  eapply magree_extends; eauto. apply nlive_all.
 
 - (* builtin *)
   TransfInstr; UseTransfer. revert ENV MEM TI.
-  functional induction (transfer_builtin (vanalyze rm f)#pc ef args res ne nm);
+  functional induction (transfer_builtin (vanalyze cu f)#pc ef args res ne nm);
   simpl in *; intros.
 + (* volatile load *)
   inv H0. inv H6. rename b1 into v1.
   destruct (transfer_builtin_arg All
               (kill_builtin_res res ne,
-              nmem_add nm (aaddr_arg (vanalyze rm f) # pc a1)
+              nmem_add nm (aaddr_arg (vanalyze cu f) # pc a1)
                 (size_chunk chunk)) a1) as (ne1, nm1) eqn: TR.
-  inversion SS; subst. exploit transfer_builtin_arg_sound; eauto.
+  InvSoundState. exploit transfer_builtin_arg_sound; eauto.
   intros (tv1 & A & B & C & D).
   inv H1. simpl in B. inv B.
   assert (X: exists tvres, volatile_load ge chunk tm b ofs t tvres /\ Val.lessdef vres tvres).
@@ -903,9 +890,8 @@ Ltac UseTransfer :=
   eapply exec_Ibuiltin; eauto.
   apply eval_builtin_args_preserved with (ge1 := ge). exact symbols_preserved.
   constructor. eauto. constructor.
-  eapply external_call_symbols_preserved.
+  eapply external_call_symbols_preserved. apply senv_preserved.
   constructor. simpl. eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_set_res; auto.
   eapply magree_monotone; eauto. intros. apply incl_nmem_add; auto.
@@ -914,7 +900,7 @@ Ltac UseTransfer :=
   destruct (transfer_builtin_arg (store_argument chunk)
               (kill_builtin_res res ne, nm) a2) as (ne2, nm2) eqn: TR2.
   destruct (transfer_builtin_arg All (ne2, nm2) a1) as (ne1, nm1) eqn: TR1.
-  inversion SS; subst.
+  InvSoundState.
   exploit transfer_builtin_arg_sound. eexact H4. eauto. eauto. eauto. eauto. eauto.
   intros (tv1 & A1 & B1 & C1 & D1).
   exploit transfer_builtin_arg_sound. eexact H3. eauto. eauto. eauto. eauto. eauto.
@@ -925,21 +911,21 @@ Ltac UseTransfer :=
   eapply exec_Ibuiltin; eauto.
   apply eval_builtin_args_preserved with (ge1 := ge). exact symbols_preserved.
   constructor. eauto. constructor. eauto. constructor.
-  eapply external_call_symbols_preserved. simpl; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved. apply senv_preserved.
+  simpl; eauto.
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_set_res; auto.
 + (* memcpy *)
   rewrite e1 in TI.
   inv H0. inv H6. inv H7. rename b1 into v1. rename b0 into v2.
-  set (adst := aaddr_arg (vanalyze rm f) # pc dst) in *.
-  set (asrc := aaddr_arg (vanalyze rm f) # pc src) in *.
+  set (adst := aaddr_arg (vanalyze cu f) # pc dst) in *.
+  set (asrc := aaddr_arg (vanalyze cu f) # pc src) in *.
   destruct (transfer_builtin_arg All
               (kill_builtin_res res ne,
                nmem_add (nmem_remove nm adst sz) asrc sz) dst)
            as (ne2, nm2) eqn: TR2.
   destruct (transfer_builtin_arg All (ne2, nm2) src) as (ne1, nm1) eqn: TR1.
-  inversion SS; subst.
+  InvSoundState.
   exploit transfer_builtin_arg_sound. eexact H3. eauto. eauto. eauto. eauto. eauto.
   intros (tv1 & A1 & B1 & C1 & D1).
   exploit transfer_builtin_arg_sound. eexact H4. eauto. eauto. eauto. eauto. eauto.
@@ -947,7 +933,7 @@ Ltac UseTransfer :=
   inv H1.
   exploit magree_loadbytes. eauto. eauto.
   intros. eapply nlive_add; eauto.
-  unfold asrc, vanalyze, rm; rewrite AN; eapply aaddr_arg_sound_1; eauto.
+  unfold asrc, vanalyze; rewrite AN; eapply aaddr_arg_sound_1; eauto.
   intros (tbytes & P & Q).
   exploit magree_storebytes_parallel.
   eapply magree_monotone. eexact D2.
@@ -956,7 +942,7 @@ Ltac UseTransfer :=
   eauto.
   instantiate (1 := nlive ge sp0 nm).
   intros. eapply nlive_remove; eauto.
-  unfold adst, vanalyze, rm; rewrite AN; eapply aaddr_arg_sound_1; eauto.
+  unfold adst, vanalyze; rewrite AN; eapply aaddr_arg_sound_1; eauto.
   erewrite Mem.loadbytes_length in H1 by eauto.
   rewrite nat_of_Z_eq in H1 by omega. auto.
   eauto.
@@ -965,51 +951,49 @@ Ltac UseTransfer :=
   eapply exec_Ibuiltin; eauto.
   apply eval_builtin_args_preserved with (ge1 := ge). exact symbols_preserved.
   constructor. eauto. constructor. eauto. constructor.
-  eapply external_call_symbols_preserved. simpl.
+  eapply external_call_symbols_preserved. apply senv_preserved.
   simpl in B1; inv B1. simpl in B2; inv B2. econstructor; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_set_res; auto.
 + (* memcpy eliminated *)
   rewrite e1 in TI.
   inv H0. inv H6. inv H7. rename b1 into v1. rename b0 into v2.
-  set (adst := aaddr_arg (vanalyze rm f) # pc dst) in *.
-  set (asrc := aaddr_arg (vanalyze rm f) # pc src) in *.
+  set (adst := aaddr_arg (vanalyze cu f) # pc dst) in *.
+  set (asrc := aaddr_arg (vanalyze cu f) # pc src) in *.
   inv H1.
   econstructor; split.
   eapply exec_Inop; eauto.
   eapply match_succ_states; eauto. simpl; auto.
   destruct res; auto. apply eagree_set_undef; auto.
   eapply magree_storebytes_left; eauto.
-  exploit aaddr_arg_sound. eauto. eauto.
+  exploit aaddr_arg_sound; eauto. 
   intros (bc & A & B & C).
   intros. eapply nlive_contains; eauto.
   erewrite Mem.loadbytes_length in H0 by eauto.
   rewrite nat_of_Z_eq in H0 by omega. auto.
 + (* annot *)
   destruct (transfer_builtin_args (kill_builtin_res res ne, nm) _x1) as (ne1, nm1) eqn:TR.
-  inversion SS; subst.
+  InvSoundState.
   exploit transfer_builtin_args_sound; eauto. intros (tvl & A & B & C & D).
   inv H1.
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
   apply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved. simpl; constructor.
-  eapply eventval_list_match_lessdef; eauto 2 with na.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved. apply senv_preserved.
+  constructor. eapply eventval_list_match_lessdef; eauto 2 with na.
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_set_res; auto.
 + (* annot val *)
   destruct (transfer_builtin_args (kill_builtin_res res ne, nm) _x1) as (ne1, nm1) eqn:TR.
-  inversion SS; subst.
+  InvSoundState.
   exploit transfer_builtin_args_sound; eauto. intros (tvl & A & B & C & D).
   inv H1. inv B. inv H6.
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
   apply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved. simpl; constructor.
+  eapply external_call_symbols_preserved. apply senv_preserved.
+  constructor.
   eapply eventval_match_lessdef; eauto 2 with na.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_set_res; auto.
 + (* debug *)
@@ -1026,7 +1010,7 @@ Ltac UseTransfer :=
   }
   clear y TI.
   destruct (transfer_builtin_args (kill_builtin_res res ne, nmem_all) _x0) as (ne1, nm1) eqn:TR.
-  inversion SS; subst.
+  InvSoundState.
   exploit transfer_builtin_args_sound; eauto. intros (tvl & A & B & C & D).
   exploit external_call_mem_extends; eauto 2 with na.
   eapply magree_extends; eauto. intros. apply nlive_all.
@@ -1034,8 +1018,7 @@ Ltac UseTransfer :=
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
   apply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved. eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved. apply senv_preserved. eauto.
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_set_res; auto.
   eapply mextends_agree; eauto.
@@ -1070,8 +1053,8 @@ Ltac UseTransfer :=
   eapply magree_extends; eauto. apply nlive_all.
 
 - (* internal function *)
-  monadInv FUN. generalize EQ. unfold transf_function. intros EQ'.
-  destruct (analyze (vanalyze rm f) f) as [an|] eqn:AN; inv EQ'.
+  monadInv FUN. generalize EQ. unfold transf_function. fold (vanalyze cu f). intros EQ'.
+  destruct (analyze (vanalyze cu f) f) as [an|] eqn:AN; inv EQ'.
   exploit Mem.alloc_extends; eauto. apply Zle_refl. apply Zle_refl.
   intros (tm' & A & B).
   econstructor; split.
@@ -1086,8 +1069,7 @@ Ltac UseTransfer :=
   simpl in FUN. inv FUN.
   econstructor; split.
   econstructor; eauto.
-  eapply external_call_symbols_preserved; eauto.
-  exact symbols_preserved. exact public_preserved. exact varinfo_preserved.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto.
 
 - (* return *)
@@ -1102,14 +1084,15 @@ Lemma transf_initial_states:
   exists st2, initial_state tprog st2 /\ match_states st1 st2.
 Proof.
   intros. inversion H.
-  exploit function_ptr_translated; eauto. intros (tf & A & B).
+  exploit function_ptr_translated; eauto. intros (cu & tf & A & B & C).
   exists (Callstate nil tf nil m0); split.
   econstructor; eauto.
-  eapply Genv.init_mem_transf_partial; eauto.
-  rewrite (transform_partial_program_main _ _ TRANSF).
+  eapply (Genv.init_mem_match TRANSF); eauto.
+  replace (prog_main tprog) with (prog_main prog). 
   rewrite symbols_preserved. eauto.
-  rewrite <- H3. apply sig_function_translated; auto.
-  constructor. constructor. auto. constructor. apply Mem.extends_refl.
+  symmetry; eapply match_program_main; eauto.
+  rewrite <- H3. eapply sig_function_translated; eauto.
+  econstructor; eauto. constructor. apply Mem.extends_refl.
 Qed.
 
 Lemma transf_final_states:
@@ -1127,7 +1110,7 @@ Proof.
   intros.
   apply forward_simulation_step with
      (match_states := fun s1 s2 => sound_state prog s1 /\ match_states s1 s2).
-- exact public_preserved.
+- apply senv_preserved.
 - simpl; intros. exploit transf_initial_states; eauto. intros [st2 [A B]].
   exists st2; intuition. eapply sound_initial; eauto.
 - simpl; intros. destruct H. eapply transf_final_states; eauto.

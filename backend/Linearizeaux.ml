@@ -10,10 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-open Coqlib
-open Datatypes
 open LTL
-open Lattice
 open Maps
 open Camlcoq
 

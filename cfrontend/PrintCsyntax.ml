@@ -15,16 +15,13 @@
 
 (** Pretty-printer for Csyntax *)
 
-open Printf
 open Format
 open Camlcoq
-open Datatypes
 open Values
 open AST
-open Globalenvs
-open Ctypes
+open !Ctypes
 open Cop
-open Csyntax
+open !Csyntax
 
 let name_unop = function
   | Onotbool -> "!"
@@ -44,7 +41,7 @@ let name_binop = function
   | Oshl -> "<<"
   | Oshr -> ">>"
   | Oeq  -> "=="
-  | One  -> "!="
+  | Cop.One  -> "!="
   | Olt  -> "<"
   | Ogt  -> ">"
   | Ole  -> "<="
@@ -157,7 +154,7 @@ let rec precedence = function
   | Ebinop((Oadd|Osub), _, _, _) -> (12, LtoR)
   | Ebinop((Oshl|Oshr), _, _, _) -> (11, LtoR)
   | Ebinop((Olt|Ogt|Ole|Oge), _, _, _) -> (10, LtoR)
-  | Ebinop((Oeq|One), _, _, _) -> (9, LtoR)
+  | Ebinop((Oeq|Cop.One), _, _, _) -> (9, LtoR)
   | Ebinop(Oand, _, _, _) -> (8, LtoR)
   | Ebinop(Oxor, _, _, _) -> (7, LtoR)
   | Ebinop(Oor, _, _, _) -> (6, LtoR)
@@ -177,14 +174,14 @@ let print_pointer_hook
 
 let print_typed_value p v ty =
   match v, ty with
-  | Vint n, Tint(I32, Unsigned, _) ->
+  | Vint n, Ctypes.Tint(I32, Unsigned, _) ->
       fprintf p "%luU" (camlint_of_coqint n)
   | Vint n, _ ->
       fprintf p "%ld" (camlint_of_coqint n)
   | Vfloat f, _ ->
-      fprintf p "%F" (camlfloat_of_coqfloat f)
+      fprintf p "%.15F" (camlfloat_of_coqfloat f)
   | Vsingle f, _ ->
-      fprintf p "%Ff" (camlfloat_of_coqfloat32 f)
+      fprintf p "%.15Ff" (camlfloat_of_coqfloat32 f)
   | Vlong n, Tlong(Unsigned, _) ->
       fprintf p "%LuLLU" (camlint64_of_coqint n)
   | Vlong n, _ ->
@@ -260,9 +257,11 @@ let rec expr p (prec, e) =
       fprintf p "__builtin_annot@[<hov 1>(%S%a)@]"
                 (camlstring_of_coqstring txt) exprlist (false, args)
   | Ebuiltin(EF_annot_val(txt, _), _, args, _) ->
-      fprintf p "__builtin_annot_val@[<hov 1>(%S%a)@]"
+      fprintf p "__builtin_annot_intval@[<hov 1>(%S%a)@]"
                 (camlstring_of_coqstring txt) exprlist (false, args)
   | Ebuiltin(EF_external(id, sg), _, args, _) ->
+      fprintf p "%s@[<hov 1>(%a)@]" (camlstring_of_coqstring id) exprlist (true, args)
+  | Ebuiltin(EF_runtime(id, sg), _, args, _) ->
       fprintf p "%s@[<hov 1>(%a)@]" (camlstring_of_coqstring id) exprlist (true, args)
   | Ebuiltin(EF_inline_asm(txt, sg, clob), _, args, _) ->
       extended_asm p txt None args clob
@@ -427,12 +426,12 @@ let print_function p id f =
 
 let print_fundef p id fd =
   match fd with
-  | External(EF_external(_,_), args, res, cconv) ->
+  | Ctypes.External((EF_external _ | EF_runtime _), args, res, cconv) ->
       fprintf p "extern %s;@ @ "
                 (name_cdecl (extern_atom id) (Tfunction(args, res, cconv)))
-  | External(_, _, _, _) ->
+  | Ctypes.External(_, _, _, _) ->
       ()
-  | Internal f ->
+  | Ctypes.Internal f ->
       print_function p id f
 
 let string_of_init id =
@@ -457,8 +456,8 @@ let print_init p = function
   | Init_int16 n -> fprintf p "%ld" (camlint_of_coqint n)
   | Init_int32 n -> fprintf p "%ld" (camlint_of_coqint n)
   | Init_int64 n -> fprintf p "%LdLL" (camlint64_of_coqint n)
-  | Init_float32 n -> fprintf p "%F" (camlfloat_of_coqfloat n)
-  | Init_float64 n -> fprintf p "%F" (camlfloat_of_coqfloat n)
+  | Init_float32 n -> fprintf p "%.15F" (camlfloat_of_coqfloat n)
+  | Init_float64 n -> fprintf p "%.15F" (camlfloat_of_coqfloat n)
   | Init_space n -> fprintf p "/* skip %ld */@ " (camlint_of_coqint n)
   | Init_addrof(symb, ofs) ->
       let ofs = camlint_of_coqint ofs in

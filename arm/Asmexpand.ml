@@ -16,7 +16,6 @@
 
 open Asm
 open Asmexpandaux
-open Asmgen
 open AST
 open Camlcoq
 open Integers
@@ -83,7 +82,7 @@ let expand_annot_val txt targ args res =
   | [BA(FR src)], BR(FR dst) ->
      if dst <> src then emit (Pfcpyd (dst,src))
   | _, _ ->
-     raise (Error "ill-formed __builtin_annot_val")
+     raise (Error "ill-formed __builtin_annot_intval")
 
 (* Handling of memcpy *)
 
@@ -265,14 +264,14 @@ let rec next_arg_location ir ofs = function
   | (Tfloat | Tlong | Tany64) :: l ->
      if ir < 3
      then next_arg_location (align ir 2 + 2) ofs l
-     else next_arg_location ir (align ofs 8 + 8) l
+     else next_arg_location 4 (align ofs 8 + 8) l
 
 let expand_builtin_va_start r =
-  if not !current_function.fn_sig.sig_cc.cc_vararg then
+  if not (is_current_function_variadic ()) then
     invalid_arg "Fatal error: va_start used in non-vararg function";
   let ofs =
     Int32.add
-      (next_arg_location 0 0 !current_function.fn_sig.sig_args)
+      (next_arg_location 0 0 (get_current_function_args ()))
       !PrintAsmaux.current_function_stacksize in
   expand_addimm IR14 IR13 (coqint_of_camlint ofs);
   emit (Pstr (IR14,r,SOimm _0))
@@ -364,7 +363,7 @@ let expand_instruction instr =
   match instr with
   | Pallocframe (sz, ofs) ->
      emit (Pmov (IR12,SOreg IR13));
-     if (!current_function).fn_sig.sig_cc.cc_vararg then begin
+     if (is_current_function_variadic ()) then begin
 	 emit (Ppush [IR0;IR1;IR2;IR3]);
 	 emit (Pcfi_adjust _16);
        end;
@@ -374,7 +373,7 @@ let expand_instruction instr =
      PrintAsmaux.current_function_stacksize := camlint_of_coqint sz
   | Pfreeframe (sz, ofs) ->
      let sz =
-       if (!current_function).fn_sig.sig_cc.cc_vararg
+       if (is_current_function_variadic ())
        then coqint_of_camlint (Int32.add 16l (camlint_of_coqint sz))
        else sz in
      if Asmgen.is_immed_arith sz
@@ -440,4 +439,4 @@ let expand_fundef id = function
       Errors.OK (External ef)
 
 let expand_program (p: Asm.program) : Asm.program Errors.res =
-  AST.transform_partial_ident_program expand_fundef p
+  AST.transform_partial_program2 expand_fundef (fun id v -> Errors.OK v) p

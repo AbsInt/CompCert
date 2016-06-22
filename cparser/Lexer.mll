@@ -17,8 +17,7 @@
 open Lexing
 open Pre_parser
 open Pre_parser_aux
-open Cabshelper
-open Camlcoq
+open !Cabshelper
 
 module SSet = Set.Make(String)
 
@@ -66,6 +65,7 @@ let () =
       ("goto", fun loc -> GOTO loc);
       ("if", fun loc -> IF loc);
       ("inline", fun loc -> INLINE loc);
+      ("_Noreturn", fun loc -> NORETURN loc);
       ("int", fun loc -> INT loc);
       ("long", fun loc -> LONG loc);
       ("register", fun loc -> REGISTER loc);
@@ -430,7 +430,7 @@ and singleline_comment = parse
   open Streams
   open Specif
   open Parser
-  open Aut.GramDefs
+  open !Aut.GramDefs
 
   (* This is the main entry point to the lexer. *)
 
@@ -552,6 +552,7 @@ and singleline_comment = parse
       | MOD_ASSIGN loc -> loop MOD_ASSIGN't loc
       | MUL_ASSIGN loc -> loop MUL_ASSIGN't loc
       | NEQ loc -> loop NEQ't loc
+      | NORETURN loc -> loop NORETURN't loc
       | OR_ASSIGN loc -> loop OR_ASSIGN't loc
       | PACKED loc -> loop PACKED't loc
       | PERCENT loc -> loop PERCENT't loc

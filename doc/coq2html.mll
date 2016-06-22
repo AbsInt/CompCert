@@ -60,9 +60,9 @@ let shortname m = Str.replace_first re_shortname "" m
 let crossref m pos =
   (*eprintf "crossref %s %d\n" m pos;*)
   try match Hashtbl.find xref_table (m, pos) with
-  | Def(p, ty) ->
+  | Def(p, _) ->
       Anchor p
-  | Ref(m', p, ty) ->
+  | Ref(m', p, _) ->
       let url =
         if Hashtbl.mem xref_modules m' then
           shortname m' ^ ".html"
@@ -152,7 +152,7 @@ let end_doc_right () =
 
 let enum_depth = ref 0
 
-let rec set_enum_depth d =
+let  set_enum_depth d =
   if !enum_depth < d then begin
     fprintf !oc "<ul>\n";
     fprintf !oc "<li>\n";
@@ -188,7 +188,7 @@ let ident pos id =
       fprintf !oc "<span class=\"id\"><a name=\"%s\">%s</a></span>" p id
 
 let space s =
-  for i = 1 to String.length s do fprintf !oc "&nbsp;" done
+  for _ = 1 to String.length s do fprintf !oc "&nbsp;" done
 
 let newline () =
   fprintf !oc "<br/>\n"
@@ -396,7 +396,7 @@ and globfile = parse
   | "F" (path as m) space* "\n"
       { current_module := m; add_module m;
         globfile lexbuf }
-  | "R" (integer as pos) ":" (integer as pos2)
+  | "R" (integer as pos) ":" (integer)
     space+ (xref as dp)
     space+ (xref as sp)
     space+ (xref as id)
@@ -405,7 +405,7 @@ and globfile = parse
       { add_reference !current_module (int_of_string pos) dp sp id ty;
         globfile lexbuf }
   | (ident as ty)
-    space+ (integer as pos) ":" (integer as pos2)
+    space+ (integer as pos) ":" (integer)
     space+ (xref as sp)
     space+ (xref as id)
     space* "\n"

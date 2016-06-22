@@ -789,6 +789,28 @@ Module PTree <: TREE.
     intros. apply (H (xO i0)).
   Qed.
 
+  Theorem elements_canonical_order':
+    forall (A B: Type) (R: A -> B -> Prop) (m: t A) (n: t B),
+    (forall i, option_rel R (get i m) (get i n)) ->
+    list_forall2
+      (fun i_x i_y => fst i_x = fst i_y /\ R (snd i_x) (snd i_y))
+      (elements m) (elements n).
+  Proof.
+    intros until n. unfold elements. generalize 1%positive. revert m n.
+    induction m; intros.
+  - simpl. rewrite xelements_empty. constructor.
+    intros. specialize (H i). rewrite gempty in H. inv H; auto.
+  - destruct n as [ | n1 o' n2 ].
+  + rewrite (xelements_empty (Node m1 o m2)). simpl; constructor.
+    intros. specialize (H i). rewrite gempty in H. inv H; auto.
+  + rewrite ! xelements_node. repeat apply list_forall2_app.
+    apply IHm1. intros. apply (H (xO i)).
+    generalize (H xH); simpl; intros OR; inv OR.
+    constructor.
+    constructor. auto. constructor.
+    apply IHm2. intros. apply (H (xI i)).
+  Qed.
+
   Theorem elements_canonical_order:
     forall (A B: Type) (R: A -> B -> Prop) (m: t A) (n: t B),
     (forall i x, get i m = Some x -> exists y, get i n = Some y /\ R x y) ->
@@ -797,38 +819,12 @@ Module PTree <: TREE.
       (fun i_x i_y => fst i_x = fst i_y /\ R (snd i_x) (snd i_y))
       (elements m) (elements n).
   Proof.
-    intros until R.
-    assert (forall m n j,
-    (forall i x, get i m = Some x -> exists y, get i n = Some y /\ R x y) ->
-    (forall i y, get i n = Some y -> exists x, get i m = Some x /\ R x y) ->
-    list_forall2
-      (fun i_x i_y => fst i_x = fst i_y /\ R (snd i_x) (snd i_y))
-      (xelements m j nil) (xelements n j nil)).
-  {
-    induction m; intros.
-  - rewrite xelements_leaf. rewrite xelements_empty. constructor.
-    intros. destruct (get i n) eqn:E; auto. exploit H0; eauto.
-    intros [x [P Q]]. rewrite gleaf in P; congruence.
-  - destruct n as [ | n1 o' n2 ].
-    + rewrite xelements_leaf, xelements_empty. constructor.
-      intros. destruct (get i (Node m1 o m2)) eqn:E; auto. exploit H; eauto.
-      intros [x [P Q]]. rewrite gleaf in P; congruence.
-    + rewrite ! xelements_node. apply list_forall2_app.
-      apply IHm1.
-      intros. apply (H (xO i) x); auto.
-      intros. apply (H0 (xO i) y); auto.
-      apply list_forall2_app.
-      destruct o, o'.
-      destruct (H xH a) as [x [P Q]]. auto. simpl in P. inv P.
-      constructor. auto. constructor.
-      destruct (H xH a) as [x [P Q]]. auto. simpl in P. inv P.
-      destruct (H0 xH b) as [x [P Q]]. auto. simpl in P. inv P.
-      constructor.
-      apply IHm2.
-      intros. apply (H (xI i) x); auto.
-      intros. apply (H0 (xI i) y); auto.
-    }
-    intros. apply H with (j := xH); auto.
+    intros. apply elements_canonical_order'. 
+    intros. destruct (get i m) as [x|] eqn:GM. 
+    exploit H; eauto. intros (y & P & Q). rewrite P; constructor; auto.
+    destruct (get i n) as [y|] eqn:GN.
+    exploit H0; eauto. intros (x & P & Q). congruence.
+    constructor.
   Qed.
 
   Theorem elements_extensional:
@@ -837,9 +833,8 @@ Module PTree <: TREE.
     elements m = elements n.
   Proof.
     intros.
-    exploit (elements_canonical_order (fun (x y: A) => x = y) m n).
-    intros. rewrite H in H0. exists x; auto.
-    intros. rewrite <- H in H0. exists y; auto.
+    exploit (@elements_canonical_order' _ _ (fun (x y: A) => x = y) m n).
+    intros. rewrite H. destruct (get i n); constructor; auto.
     induction 1. auto. destruct a1 as [a2 a3]; destruct b1 as [b2 b3]; simpl in *.
     destruct H0. congruence.
   Qed.
@@ -1206,6 +1201,86 @@ Module EMap(X: EQUALITY_TYPE) <: MAP.
   Qed.
 End EMap.
 
+(** * A partial implementation of trees over any type that injects into type [positive] *)
+
+Module ITree(X: INDEXED_TYPE).
+
+  Definition elt := X.t.
+  Definition elt_eq := X.eq.
+  Definition t : Type -> Type := PTree.t.
+
+  Definition empty (A: Type): t A := PTree.empty A.
+  Definition get (A: Type) (k: elt) (m: t A): option A := PTree.get (X.index k) m.
+  Definition set (A: Type) (k: elt) (v: A) (m: t A): t A := PTree.set (X.index k) v m.
+  Definition remove (A: Type) (k: elt) (m: t A): t A := PTree.remove (X.index k) m.
+
+  Theorem gempty:
+    forall (A: Type) (i: elt), get i (empty A) = None.
+  Proof.
+    intros. apply PTree.gempty.
+  Qed.
+  Theorem gss:
+    forall (A: Type) (i: elt) (x: A) (m: t A), get i (set i x m) = Some x.
+  Proof.
+    intros. apply PTree.gss.
+  Qed.
+  Theorem gso:
+    forall (A: Type) (i j: elt) (x: A) (m: t A),
+    i <> j -> get i (set j x m) = get i m.
+  Proof.
+    intros. apply PTree.gso. red; intros; elim H; apply X.index_inj; auto.
+  Qed.
+  Theorem gsspec:
+    forall (A: Type) (i j: elt) (x: A) (m: t A),
+    get i (set j x m) = if elt_eq i j then Some x else get i m.
+  Proof.
+    intros. destruct (elt_eq i j). subst j; apply gss. apply gso; auto.
+  Qed.
+  Theorem grs:
+    forall (A: Type) (i: elt) (m: t A), get i (remove i m) = None.
+  Proof.
+    intros. apply PTree.grs.
+  Qed.
+  Theorem gro:
+    forall (A: Type) (i j: elt) (m: t A),
+    i <> j -> get i (remove j m) = get i m.
+  Proof.
+    intros. apply PTree.gro. red; intros; elim H; apply X.index_inj; auto.
+  Qed.
+  Theorem grspec:
+    forall (A: Type) (i j: elt) (m: t A),
+    get i (remove j m) = if elt_eq i j then None else get i m.
+  Proof.
+    intros. destruct (elt_eq i j). subst j; apply grs. apply gro; auto.
+  Qed.
+
+  Definition beq: forall (A: Type), (A -> A -> bool) -> t A -> t A -> bool := PTree.beq.
+  Theorem beq_sound:
+    forall (A: Type) (eqA: A -> A -> bool) (t1 t2: t A),
+    beq eqA t1 t2 = true ->
+    forall (x: elt),
+     match get x t1, get x t2 with
+     | None, None => True
+     | Some y1, Some y2 => eqA y1 y2 = true
+     | _, _ => False
+    end.
+  Proof.
+    unfold beq, get. intros. rewrite PTree.beq_correct in H. apply H. 
+  Qed.
+
+  Definition combine: forall (A B C: Type), (option A -> option B -> option C) -> t A -> t B -> t C := PTree.combine.
+  Theorem gcombine:
+    forall (A B C: Type) (f: option A -> option B -> option C),
+    f None None = None ->
+    forall (m1: t A) (m2: t B) (i: elt),
+    get i (combine f m1 m2) = f (get i m1) (get i m2).
+  Proof.
+    intros. apply PTree.gcombine. auto.
+  Qed.
+End ITree.
+
+Module ZTree := ITree(ZIndexed).
+
 (** * Additional properties over trees *)
 
 Module Tree_Properties(T: TREE).
@@ -1541,6 +1616,110 @@ Qed.
 Instance Equal_EqDec : EqDec (T.t A) Equal := Equal_dec.
 
 End EXTENSIONAL_EQUALITY.
+
+(** Creating a tree from a list of (key, value) pairs. *)
+
+Section OF_LIST.
+
+Variable A: Type.
+
+Let f := fun (m: T.t A) (k_v: T.elt * A) => T.set (fst k_v) (snd k_v) m.
+
+Definition of_list (l: list (T.elt * A)) : T.t A :=
+  List.fold_left f l (T.empty _).
+
+Lemma in_of_list:
+  forall l k v, T.get k (of_list l) = Some v -> In (k, v) l.
+Proof.
+  assert (REC: forall k v l m,
+           T.get k (fold_left f l m) = Some v -> In (k, v) l \/ T.get k m = Some v).
+  { induction l as [ | [k1 v1] l]; simpl; intros.
+  - tauto.
+  - apply IHl in H. unfold f in H. simpl in H. rewrite T.gsspec in H.
+    destruct H; auto. 
+    destruct (T.elt_eq k k1). inv H. auto. auto. 
+  }
+  intros. apply REC in H. rewrite T.gempty in H. intuition congruence.
+Qed.
+
+Lemma of_list_dom:
+  forall l k, In k (map fst l) -> exists v, T.get k (of_list l) = Some v.
+Proof.
+  assert (REC: forall k l m,
+            In k (map fst l) \/ (exists v, T.get k m = Some v) ->
+            exists v, T.get k (fold_left f l m) = Some v).
+  { induction l as [ | [k1 v1] l]; simpl; intros.
+  - tauto.
+  - apply IHl. unfold f; rewrite T.gsspec. simpl. destruct (T.elt_eq k k1). 
+    right; econstructor; eauto.
+    intuition congruence.
+  }
+  intros. apply REC. auto.
+Qed.
+
+Remark of_list_unchanged:
+  forall k l m, ~In k (map fst l) -> T.get k (List.fold_left f l m) = T.get k m.
+Proof.
+  induction l as [ | [k1 v1] l]; simpl; intros.
+- auto.
+- rewrite IHl by tauto. unfold f; apply T.gso; intuition auto.
+Qed.
+
+Lemma of_list_unique:
+  forall k v l1 l2,
+  ~In k (map fst l2) -> T.get k (of_list (l1 ++ (k, v) :: l2)) = Some v.
+Proof.
+  intros. unfold of_list. rewrite fold_left_app. simpl. 
+  rewrite of_list_unchanged by auto. unfold f; apply T.gss.
+Qed.
+
+Lemma of_list_norepet:
+  forall l k v, list_norepet (map fst l) -> In (k, v) l -> T.get k (of_list l) = Some v.
+Proof.
+  assert (REC: forall k v l m,
+            list_norepet (map fst l) ->
+            In (k, v) l ->
+            T.get k (fold_left f l m) = Some v).
+  { induction l as [ | [k1 v1] l]; simpl; intros.
+    contradiction.
+    inv H. destruct H0.
+    inv H. rewrite of_list_unchanged by auto. apply T.gss. 
+    apply IHl; auto. 
+  }
+  intros; apply REC; auto.
+Qed.
+
+Lemma of_list_elements:
+  forall m k, T.get k (of_list (T.elements m)) = T.get k m.
+Proof.
+  intros. destruct (T.get k m) as [v|] eqn:M.
+- apply of_list_norepet. apply T.elements_keys_norepet. apply T.elements_correct; auto.
+- destruct (T.get k (of_list (T.elements m))) as [v|] eqn:M'; auto.
+  apply in_of_list in M'. apply T.elements_complete in M'. congruence.
+Qed.
+
+End OF_LIST.
+
+Lemma of_list_related:
+  forall (A B: Type) (R: A -> B -> Prop) k l1 l2,
+  list_forall2 (fun ka kb => fst ka = fst kb /\ R (snd ka) (snd kb)) l1 l2 ->
+  option_rel R (T.get k (of_list l1)) (T.get k (of_list l2)).
+Proof.
+  intros until k. unfold of_list.
+  set (R' := fun ka kb => fst ka = fst kb /\ R (snd ka) (snd kb)).
+  set (fa := fun (m : T.t A) (k_v : T.elt * A) => T.set (fst k_v) (snd k_v) m).
+  set (fb := fun (m : T.t B) (k_v : T.elt * B) => T.set (fst k_v) (snd k_v) m).
+  assert (REC: forall l1 l2, list_forall2 R' l1 l2 ->
+               forall m1 m2, option_rel R (T.get k m1) (T.get k m2) ->
+               option_rel R (T.get k (fold_left fa l1 m1)) (T.get k (fold_left fb l2 m2))).
+  { induction 1; intros; simpl.
+  - auto.
+  - apply IHlist_forall2. unfold fa, fb. rewrite ! T.gsspec.
+    destruct H as [E F]. rewrite E. destruct (T.elt_eq k (fst b1)).
+    constructor; auto.
+    auto. }
+  intros. apply REC; auto. rewrite ! T.gempty. constructor.
+Qed.
 
 End Tree_Properties.
 
