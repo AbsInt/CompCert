@@ -627,6 +627,10 @@ Next Obligation.
 - intros. eapply Mem.valid_block_unchanged_on; eauto. 
 - assumption.
 - assumption.
+- intros. destruct (Mem.perm_dec m0 b1 ofs Max Nonempty); auto.
+  eapply mi_perm_inv; eauto. 
+  eapply Mem.perm_unchanged_on_2; eauto.
+  eapply IMG; eauto. 
 Qed.
 Next Obligation.
   eapply Mem.valid_block_inject_2; eauto.
