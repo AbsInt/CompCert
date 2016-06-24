@@ -60,22 +60,22 @@ let linker_help =
 let linker_actions =
   [ Prefix "-l", Self push_linker_arg;
     Prefix "-L", Self push_linker_arg; ] @
-  if gnu_system then
+  (if gnu_system then
     [ Exact "-nostartfiles", Self push_linker_arg;
       Exact "-nodefaultlibs", Self push_linker_arg;
       Exact "-nostdlib", Self push_linker_arg;]
-  else [] @
-    [ Exact "-s", Self push_linker_arg;
-      Exact "-static", Self push_linker_arg;
-      Exact "-T", String (fun s -> if gnu_system then begin
-        push_linker_arg ("-T");
-        push_linker_arg(s)
-      end else
-        push_linker_arg ("-Wm"^s));
-      Exact "-Xlinker", String (fun s -> if Configuration.system = "diab" then
-        push_linker_arg ("-Wl,"^s)
-      else
-        push_linker_arg s);
-      Prefix "-Wl,", Self push_linker_arg;
-      Prefix "-WUl,", Self (fun s -> List.iter push_linker_arg (explode_comma_option s));
-      Exact "-u", Self push_linker_arg;]
+  else []) @
+  [ Exact "-s", Self push_linker_arg;
+    Exact "-static", Self push_linker_arg;
+    Exact "-T", String (fun s -> if gnu_system then begin
+      push_linker_arg ("-T");
+      push_linker_arg(s)
+    end else
+      push_linker_arg ("-Wm"^s));
+    Exact "-Xlinker", String (fun s -> if Configuration.system = "diab" then
+      push_linker_arg ("-Wl,"^s)
+    else
+      push_linker_arg s);
+    Prefix "-Wl,", Self push_linker_arg;
+    Prefix "-WUl,", Self (fun s -> List.iter push_linker_arg (explode_comma_option s));
+    Exact "-u", Self push_linker_arg;]
