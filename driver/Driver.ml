@@ -415,10 +415,10 @@ let cmdline_actions =
 (* Target processor options *)
   Exact "-conf", String (fun _ -> ()); (* Ignore option since it is already handled *)
   Exact "-target", String (fun _ -> ());] @ (* Ignore option since it is already handled *)
-  if Configuration.arch = "arm" then
+  (if Configuration.arch = "arm" then
     [ Exact "-mthumb", Set option_mthumb;
       Exact "-marm", Unset option_mthumb; ]
-  else [] @
+  else []) @
 (* Assembling options *)
   assembler_actions @
 (* Linking options *)
