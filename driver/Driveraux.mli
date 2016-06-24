@@ -36,8 +36,17 @@ val ensure_inputfile_exists: string -> unit
 val print_error:out_channel -> Errors.errcode list -> unit
    (** Printing of error messages *)
 
-val gnu_option: string -> bool
-   (** Set the options for gnu systems *)
+val gnu_system: bool
+   (** Are the target tools gnu tools? *)
 
 val explode_comma_option: string -> string list
    (** Split option at commas *)
+
+val push_action: (string -> string) -> string -> unit
+  (** Add an action to be performed after parsing the command line *)
+
+val push_linker_arg: string -> unit
+  (** Add a linker arguments *)
+
+val perform_actions: unit -> string list
+  (** Perform actions *)

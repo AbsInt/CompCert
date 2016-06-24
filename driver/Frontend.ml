@@ -125,7 +125,7 @@ let prepro_actions = [
   Exact "-Xpreprocessor", String (fun s ->
     prepro_options := s :: !prepro_options);
   Exact "-include", String (fun s -> prepro_options := s :: "-include" :: !prepro_options);]
-  @ (if Configuration.system <> "diab" then gnu_prepro_actions else [])
+  @ (if gnu_system then gnu_prepro_actions else [])
 
 let gnu_prepro_help =
 "\  -M            Ouput a rule suitable for make describing the\n\
@@ -161,4 +161,4 @@ let prepro_help = "Preprocessing options:\n\
 \  -U<symb>       Undefine preprocessor symbol\n\
 \  -Wp,<opt>      Pass option <opt> to the preprocessor\n\
 \  -Xpreprocessor <opt> Pass option <opt> to the preprocessor\n"
-  ^ (if Configuration.system <> "diab" then gnu_prepro_help else "")
+  ^ (if gnu_system then gnu_prepro_help else "")

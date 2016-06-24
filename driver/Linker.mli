@@ -11,14 +11,11 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-val preprocess: string -> string -> unit
-  (** From C to preprocessed C *)
+val linker: string -> string list -> unit
+  (** Link files into executbale *)
 
-val parse_c_file: string -> string -> Csyntax.coq_function Ctypes.program
-  (** From preprocessed C to Csyntax *)
+val linker_actions: (Commandline.pattern * Commandline.action) list
+  (** Commandline optins affecting the assembler *)
 
-val prepro_actions: (Commandline.pattern * Commandline.action) list
-  (** Commandline optins affecting the frontend *)
-
-val prepro_help: string
+val linker_help: string
   (** Commandline help description *)

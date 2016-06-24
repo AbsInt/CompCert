@@ -16,6 +16,8 @@ open Clflags
 open Timing
 open Driveraux
 open Frontend
+open Assembler
+open Linker
 
 let dump_options = ref false
 
@@ -107,40 +109,6 @@ let compile_cminor_file ifile ofile =
          eprintf "File %s, type-checking error:\n%s"
                  ifile msg;
          exit 2
-
-(* From asm to object file *)
-
-let assemble ifile ofile =
-  let cmd = List.concat [
-    Configuration.asm;
-    ["-o"; ofile];
-    List.rev !assembler_options;
-    [ifile]
-  ] in
-  let exc = command cmd in
-  if exc <> 0 then begin
-    safe_remove ofile;
-    command_error "assembler" exc;
-    exit 2
-  end
-
-(* Linking *)
-
-let linker exe_name files =
-  let cmd = List.concat [
-    Configuration.linker;
-    ["-o"; exe_name];
-    files;
-    (if Configuration.has_runtime_lib
-     then ["-L" ^ !stdlib_path; "-lcompcert"]
-     else [])
-  ] in
-  let exc = command cmd in
-  if exc <> 0 then begin
-    command_error "linker" exc;
-    exit 2
-  end
-
 
 (* Processing of a .c file *)
 
@@ -271,22 +239,6 @@ let process_h_file sourcename =
     exit 2
   end
 
-(* Record actions to be performed after parsing the command line *)
-
-let actions : ((string -> string) * string) list ref = ref []
-
-let push_action fn arg =
-  actions := (fn, arg) :: !actions
-
-let push_linker_arg arg =
-  push_action (fun s -> s) arg
-
-let perform_actions () =
-  let rec perform = function
-  | [] -> []
-  | (fn, arg) :: rem -> let res = fn arg in res :: perform rem
-  in perform (List.rev !actions)
-
 let version_string =
   if Version.buildnr <> "" && Version.tag <> "" then
     sprintf "The CompCert C verified compiler, %s, Build: %s, Tag: %s\n" Version.version Version.buildnr Version.tag
@@ -313,30 +265,6 @@ let target_help = if Configuration.arch = "arm" then
 \  -marm          Use classic ARM instruction encoding\n"
 else
   ""
-
-let gnu_linker_help =
-"  -nostartfiles  Do not use the standard system startup files when\n\
-\                 linking\n\
-\  -nodefaultlibs Do not use the standard system libraries when\n\
-\                 linking\n\
-\  -nostdlib      Do not use the standard system startup files or\n\
-\                 libraries when linking\n"
-
-let linker_help =
-"Linking options:\n\
-\  -l<lib>        Link library <lib>\n\
-\  -L<dir>        Add <dir> to search path for libraries\n" ^
- (if gnu_system then gnu_linker_help else "") ^
-"  -s             Remove all symbol table and relocation information from the\n\
-\                 executable\n\
-\  -static        Prevent linking with the shared libraries\n\
-\  -T <file>      Use <file> as linker command file\n\
-\  -Wl,<opt>      Pass option <opt> to the linker\n\
-\  -WUl,<opt>     Pass option <opt> to the gcc or dcc used for linking\n\
-\  -Xlinker <opt> Pass <opt> as an option to the linker\n\
-\  -u <symb>      Pretend the symbol <symb> is undefined to force linking of\n\
-\                 library modules to define it.\n"
-
 
 let usage_string =
   version_string ^
@@ -387,9 +315,7 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>)\n\
 \  -falign-branch-targets <n>  Set alignment (in bytes) of branch targets\n\
 \  -falign-cond-branches <n>  Set alignment (in bytes) of conditional branches\n" ^
  target_help ^
-"Assembling options:\n\
-\  -Wa,<opt>      Pass option <opt> to the assembler\n\
-\  -Xassembler <opt> Pass <opt> as an option to the assembler\n" ^
+ assembler_help ^
  linker_help ^
 "Tracing options:\n\
 \  -dprepro       Save C file after preprocessing in <file>.i\n\
@@ -463,11 +389,11 @@ let cmdline_actions =
 (* Debugging options *)
   Exact "-g", Self (fun s -> option_g := true;
     option_gdwarf := 3);] @
-  if gnu_system then
+  (if gnu_system then
  [ Exact "-gdwarf-2", Self (fun s -> option_g:=true;
     option_gdwarf := 2);
   Exact "-gdwarf-3", Self (fun s -> option_g := true;
-    option_gdwarf := 3);] else [] @
+    option_gdwarf := 3);] else []) @
  [ Exact "-frename-static", Self (fun s -> option_rename_static:= true);
    Exact "-gdepth", Integer (fun n -> if n = 0 || n <0 then begin
      option_g := false
@@ -494,38 +420,11 @@ let cmdline_actions =
       Exact "-marm", Unset option_mthumb; ]
   else [] @
 (* Assembling options *)
- [ Prefix "-Wa,", Self (fun s -> if gnu_system then
-    assembler_options := s :: !assembler_options
-  else
-    assembler_options := List.rev_append (explode_comma_option s) !assembler_options);
-  Exact "-Xassembler", String (fun s -> if gnu_system then
-    assembler_options := s::"-Xassembler":: !assembler_options
-  else
-    assembler_options := s::!assembler_options );
+  assembler_actions @
 (* Linking options *)
-  Prefix "-l", Self push_linker_arg;
-  Prefix "-L", Self push_linker_arg; ] @
-  if gnu_system then
-    [ Exact "-nostartfiles", Self push_linker_arg;
-      Exact "-nodefaultlibs", Self push_linker_arg;
-      Exact "-nostdlib", Self push_linker_arg;]
-  else [] @
- [ Exact "-s", Self push_linker_arg;
-  Exact "-static", Self push_linker_arg;
-  Exact "-T", String (fun s -> if gnu_system then begin
-    push_linker_arg ("-T");
-    push_linker_arg(s)
-  end else
-    push_linker_arg ("-Wm"^s));
-  Exact "-Xlinker", String (fun s -> if Configuration.system = "diab" then
-    push_linker_arg ("-Wl,"^s)
-  else
-    push_linker_arg s);
-  Prefix "-Wl,", Self push_linker_arg;
-  Prefix "-WUl,", Self (fun s -> List.iter push_linker_arg (explode_comma_option s));
-  Exact "-u", Self push_linker_arg;
+  linker_actions @
 (* Tracing options *)
-  Exact "-dprepro", Set option_dprepro;
+ [ Exact "-dprepro", Set option_dprepro;
   Exact "-dparse", Set option_dparse;
   Exact "-dc", Set option_dcmedium;
   Exact "-dclight", Set option_dclight;
@@ -549,7 +448,7 @@ let cmdline_actions =
   Exact "-trace", Self (fun _ -> Interp.trace := 2);
   Exact "-random", Self (fun _ -> Interp.mode := Interp.Random);
   Exact "-all", Self (fun _ -> Interp.mode := Interp.All)
-  ]
+ ]
 (* -f options: come in -f and -fno- variants *)
 (* Language support options *)
   @ f_opt "longdouble" option_flongdouble

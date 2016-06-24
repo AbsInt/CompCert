@@ -94,17 +94,26 @@ let print_error oc msg =
     List.iter print_one_error msg;
     output_char oc '\n'
 
-let gnu_option s =
-  if Configuration.system <> "diab" then
-    true
-  else begin
-    eprintf "ccomp: warning: option %s only supported for gcc backend\n" s;
-    false
-  end
-
+let gnu_system = Configuration.system <> "diab"
 
 (* Command-line parsing *)
 let explode_comma_option s =
   match Str.split (Str.regexp ",") s with
   | [] -> assert false
   | _ :: tl -> tl
+
+(* Record actions to be performed after parsing the command line *)
+
+let actions : ((string -> string) * string) list ref = ref []
+
+let push_action fn arg =
+  actions := (fn, arg) :: !actions
+
+let push_linker_arg arg =
+  push_action (fun s -> s) arg
+
+let perform_actions () =
+  let rec perform = function
+  | [] -> []
+  | (fn, arg) :: rem -> let res = fn arg in res :: perform rem
+  in perform (List.rev !actions)
