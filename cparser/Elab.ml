@@ -1924,7 +1924,7 @@ let enter_decdefs local loc env sto dl =
   Since float arguments are promoted by default to double, this must
   be converted as
       float f(double x)  { float x1 = x; return x1; }
-*)  
+*)
 
 let elab_KR_function_parameters env params defs loc =
   (* Check that the parameters have unique names *)
@@ -1962,7 +1962,7 @@ let elab_KR_function_parameters env params defs loc =
         warning loc "Type of '%s' defaults to 'int'" param;
         TInt (IInt, [])
     | (_, ty) :: rem ->
-        if rem <> [] then 
+        if rem <> [] then
           error loc "Parameter '%s' defined more than once" param;
         ty in
   (* Match parameters against declarations *)
@@ -1971,7 +1971,7 @@ let elab_KR_function_parameters env params defs loc =
         (List.rev params', List.rev extra_decls)
     | p :: ps ->
         let ty = type_of_param p in
-        let ty_var = argument_conversion env ty 
+        let ty_var = argument_conversion env ty
         and ty_param = default_argument_conversion env ty in
         if compatible_types AttrIgnoreTop env ty_var ty_param then begin
           (* No need for an extra conversion *)
@@ -1990,6 +1990,21 @@ let elab_KR_function_parameters env params defs loc =
         end
   in
     match_params [] [] params
+
+
+(* Look for varargs flag in previous definitions of a function *)
+
+let inherit_vararg env s sto ty =
+  match previous_def Env.lookup_ident env s with
+  | Some(id, II_ident(_, old_ty))
+    when sto = Storage_extern || Env.in_current_scope env id ->
+    begin
+      match old_ty, ty with
+      | TFun(_, _, true, _), TFun(_, _, _, _) -> true
+      | _, _ -> false
+    end
+  | _ -> false
+
 
 (* Function definitions *)
 
@@ -2018,7 +2033,7 @@ let elab_fundef env spec name defs body loc =
         warning loc "Non-prototype, pre-standard function definition.@  Converting to prototype form";
         let (params', extra_decls) =
           elab_KR_function_parameters env params defs loc in
-        (TFun(ty_ret, Some params', false, attr), extra_decls)
+        (TFun(ty_ret, Some params', inherit_vararg env s sto ty, attr), extra_decls)
     | _, Some params ->
         assert false
   in
