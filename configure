@@ -19,7 +19,6 @@ toolprefix=''
 target=''
 has_runtime_lib=true
 has_standard_headers=true
-advanced_debug=false
 clightgen=false
 
 usage='Usage: ./configure [options] target
@@ -119,7 +118,6 @@ case "$target" in
         asm_supports_cfi=false
         clinker="${toolprefix}dcc"
         libmath="-lm"
-        advanced_debug=true;;
       *)
         system="linux"
         cc="${toolprefix}gcc"
@@ -130,7 +128,6 @@ case "$target" in
         casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
         clinker="${toolprefix}gcc"
         libmath="-lm"
-        advanced_debug=true;;
     esac;;
   arm*-*)
     arch="arm"
@@ -387,7 +384,6 @@ LIBMATH=$libmath
 HAS_RUNTIME_LIB=$has_runtime_lib
 HAS_STANDARD_HEADERS=$has_standard_headers
 ASM_SUPPORTS_CFI=$asm_supports_cfi
-ADVANCED_DEBUG=$advanced_debug
 CLIGHTGEN=$clightgen
 EOF
 else

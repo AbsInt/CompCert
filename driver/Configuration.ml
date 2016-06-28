@@ -108,7 +108,7 @@ let opt_config_list key =
   | Some v -> v
   | None -> []
 
-let prepro = 
+let prepro =
   tool_absolute_path (get_config_list "prepro")@(opt_config_list "prepro_options")
 let asm =
   tool_absolute_path (get_config_list "asm")@(opt_config_list "asm_options")
@@ -143,12 +143,6 @@ let asm_supports_cfi =
   | "true" -> true
   | "false" -> false
   | v -> bad_config "asm_supports_cfi" [v]
-
-let advanced_debug =
-  match get_config_string "advanced_debug" with
-  | "true" -> true
-  | "false" -> false
-  | v -> bad_config "advanced_debug" [v]
 
 
 type struct_passing_style =

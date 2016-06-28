@@ -206,7 +206,6 @@ compcert.ini: Makefile.config
          echo "has_runtime_lib=$(HAS_RUNTIME_LIB)"; \
          echo "has_standard_headers=$(HAS_STANDARD_HEADERS)"; \
          echo "asm_supports_cfi=$(ASM_SUPPORTS_CFI)"; \
-         echo "advanced_debug=$(ADVANCED_DEBUG)"; \
          echo "struct_passing_style=$(STRUCT_PASSING)"; \
          echo "struct_return_style=$(STRUCT_RETURN)";) \
         > compcert.ini

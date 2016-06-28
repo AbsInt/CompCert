@@ -30,7 +30,7 @@ module Printer(Target:TARGET) =
       s,e
 
     let print_debug_label oc l =
-      if !Clflags.option_g && Configuration.advanced_debug then
+      if !Clflags.option_g then
         fprintf oc "%a:\n" Target.label l
       else
         ()
@@ -49,7 +49,7 @@ module Printer(Target:TARGET) =
       if not (C2C.atom_is_static name) then
         fprintf oc "	.globl %a\n" Target.symbol name;
       Target.print_optional_fun_info oc;
-      let s,e = if !Clflags.option_g && Configuration.advanced_debug then
+      let s,e = if !Clflags.option_g then
         get_fun_addr name text
       else
         -1,-1 in
@@ -126,7 +126,7 @@ let print_program oc p =
   Target.print_prologue oc;
   List.iter (Printer.print_globdef oc) p.prog_defs;
   Target.print_epilogue oc;
-  if !Clflags.option_g && Configuration.advanced_debug then
+  if !Clflags.option_g then
     begin
       let atom_to_s s =
         let s = C2C.atom_sections s in

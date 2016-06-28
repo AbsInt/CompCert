@@ -60,7 +60,7 @@ let init_none () =
   implem := default_implem
 
 let init () =
-  if !Clflags.option_g && Configuration.advanced_debug then
+  if !Clflags.option_g then
     init_debug ()
   else
     init_none ()
