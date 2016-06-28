@@ -118,6 +118,7 @@ case "$target" in
         asm_supports_cfi=false
         clinker="${toolprefix}dcc"
         libmath="-lm"
+        ;;
       *)
         system="linux"
         cc="${toolprefix}gcc"
