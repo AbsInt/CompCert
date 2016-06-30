@@ -24,20 +24,7 @@ option) any later version:
 
   all files in the lib/ directory
 
-  common/AST.v
-  common/Behaviors.v
-  common/Errors.v
-  common/Events.v
-  common/Globalenvs.v
-  common/Linking.v
-  common/Memdata.v
-  common/Memory.v
-  common/Memtype.v
-  common/Smallstep.v
-  common/Subtyping.v
-  common/Switch.v
-  common/Unityping.v
-  common/Values.v
+  all files in the common/ directory
 
   cfrontend/Clight.v
   cfrontend/ClightBigstep.v
