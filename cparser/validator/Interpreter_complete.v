@@ -147,16 +147,16 @@ with ptl_zipper:
 Fixpoint ptlz_cost {hole_symbs hole_word hole_sems}
   (ptlz:ptl_zipper hole_symbs hole_word hole_sems) :=
   match ptlz with
-    | Non_terminal_pt_ptlz _ _ _ ptz =>
+    | Non_terminal_pt_ptlz ptz =>
       ptz_cost ptz
-    | Cons_ptl_ptlz _ _ _ pt _ _ _ ptlz' =>
+    | Cons_ptl_ptlz pt ptlz' =>
       ptlz_cost ptlz'
   end
 with ptz_cost {hole_symb hole_word hole_sem}
   (ptz:pt_zipper hole_symb hole_word hole_sem) :=
   match ptz with
     | Top_ptz => 0
-    | Cons_ptl_ptz _ _ _ _ _ _ ptl ptlz' =>
+    | Cons_ptl_ptz ptl ptlz' =>
       1 + ptl_size ptl + ptlz_cost ptlz'
   end.
 
@@ -172,29 +172,29 @@ Inductive pt_dot: Type :=
 Definition ptd_cost (ptd:pt_dot) :=
   match ptd with
     | Reduce_ptd ptlz => ptlz_cost ptlz
-    | Shift_ptd _ _ _ _ _ ptl ptlz => 1 + ptl_size ptl + ptlz_cost ptlz
+    | Shift_ptd _ _ ptl ptlz => 1 + ptl_size ptl + ptlz_cost ptlz
   end.
 
 Fixpoint ptlz_buffer {hole_symbs hole_word hole_sems}
   (ptlz:ptl_zipper hole_symbs hole_word hole_sems): Stream token :=
   match ptlz with
-    | Non_terminal_pt_ptlz _ _ _ ptz =>
+    | Non_terminal_pt_ptlz ptz =>
       ptz_buffer ptz
-    | Cons_ptl_ptlz _ _ _ _ _ _ _ ptlz' =>
+    | Cons_ptl_ptlz _ ptlz' =>
       ptlz_buffer ptlz'
   end
 with ptz_buffer {hole_symb hole_word hole_sem}
   (ptz:pt_zipper hole_symb hole_word hole_sem): Stream token :=
   match ptz with
     | Top_ptz => buffer_end
-    | Cons_ptl_ptz _ _ _ _ wordq _ ptl ptlz' =>
+    | @Cons_ptl_ptz _ _ _ _ wordq _ ptl ptlz' =>
       wordq++ptlz_buffer ptlz'
   end.
 
 Definition ptd_buffer (ptd:pt_dot) :=
   match ptd with
     | Reduce_ptd ptlz => ptlz_buffer ptlz
-    | Shift_ptd term sem _ wordq _ _ ptlz =>
+    | @Shift_ptd term sem _ wordq _ _ ptlz =>
       Cons (existT (fun t => symbol_semantic_type (T t)) term sem)
            (wordq ++ ptlz_buffer ptlz)
   end.
@@ -202,16 +202,16 @@ Definition ptd_buffer (ptd:pt_dot) :=
 Fixpoint ptlz_prod {hole_symbs hole_word hole_sems}
   (ptlz:ptl_zipper hole_symbs hole_word hole_sems): production :=
   match ptlz with
-    | Non_terminal_pt_ptlz prod _ _ _ => prod
-    | Cons_ptl_ptlz _ _ _ _ _ _ _ ptlz' =>
+    | @Non_terminal_pt_ptlz prod _ _ _ => prod
+    | Cons_ptl_ptlz _ ptlz' =>
       ptlz_prod ptlz'
   end.
 
 Fixpoint ptlz_past {hole_symbs hole_word hole_sems}
   (ptlz:ptl_zipper hole_symbs hole_word hole_sems): list symbol :=
   match ptlz with
-    | Non_terminal_pt_ptlz _ _ _ _ => []
-    | Cons_ptl_ptlz s _ _ _ _ _ _ ptlz' => s::ptlz_past ptlz'
+    | Non_terminal_pt_ptlz _ => []
+    | @Cons_ptl_ptlz s _ _ _ _ _ _ ptlz' => s::ptlz_past ptlz'
   end.
 
 Lemma ptlz_past_ptlz_prod:
@@ -236,12 +236,12 @@ Fixpoint ptlz_stack_compat {hole_symbs hole_word hole_sems}
   (stack:stack): Prop :=
   ptlz_state_compat ptlz (state_of_stack init stack) /\
   match ptlz with
-    | Non_terminal_pt_ptlz _ _ _ ptz =>
+    | Non_terminal_pt_ptlz ptz =>
       ptz_stack_compat ptz stack
-    | Cons_ptl_ptlz _ _ sem _ _ _ _ ptlz' =>
+    | @Cons_ptl_ptlz _ _ sem _ _ _ _ ptlz' =>
       match stack with
         | [] => False
-        | existT _ sem'::stackq =>
+        | existT _ _ sem'::stackq =>
           ptlz_stack_compat ptlz' stackq /\
           sem ~= sem'
       end
@@ -251,7 +251,7 @@ with ptz_stack_compat {hole_symb hole_word hole_sem}
   (stack:stack): Prop :=
   match ptz with
     | Top_ptz => stack = []
-    | Cons_ptl_ptz _ _ _ _ _ _ _ ptlz' =>
+    | Cons_ptl_ptz _ ptlz' =>
       ptlz_stack_compat ptlz' stack
   end.
 
@@ -267,7 +267,7 @@ Qed.
 Definition ptd_stack_compat (ptd:pt_dot) (stack:stack): Prop :=
   match ptd with
     | Reduce_ptd ptlz => ptlz_stack_compat ptlz stack
-    | Shift_ptd _ _ _ _ _ _ ptlz => ptlz_stack_compat ptlz stack
+    | Shift_ptd _ _ _ ptlz => ptlz_stack_compat ptlz stack
   end.
 
 Fixpoint build_pt_dot {hole_symbs hole_word hole_sems}
@@ -279,13 +279,13 @@ Fixpoint build_pt_dot {hole_symbs hole_word hole_sems}
   with
     | Nil_ptl => fun ptlz =>
       Reduce_ptd ptlz
-    | Cons_ptl _ _ _ pt _ _ _ ptl' =>
+    | Cons_ptl pt ptl' =>
       match pt in parse_tree hole_symb hole_word hole_sem
         return ptl_zipper (hole_symb::_) (hole_word++_) (hole_sem,_) -> _
       with
         | Terminal_pt term sem => fun ptlz =>
           Shift_ptd term sem ptl' ptlz
-        | Non_terminal_pt _ _ _ ptl'' => fun ptlz =>
+        | Non_terminal_pt ptl'' => fun ptlz =>
           build_pt_dot ptl''
             (Non_terminal_pt_ptlz (Cons_ptl_ptz ptl' ptlz))
       end
@@ -360,10 +360,10 @@ Program Fixpoint pop_ptlz {hole_symbs hole_word hole_sems}
       (pt_zipper (NT (prod_lhs (ptlz_prod ptlz))) word sem *
        parse_tree (NT (prod_lhs (ptlz_prod ptlz))) word sem)%type } }
   with
-    | Non_terminal_pt_ptlz prod word sem ptz => fun ptl =>
+    | @Non_terminal_pt_ptlz prod word sem ptz => fun ptl =>
       let sem := uncurry (prod_action prod) sem in
       existT _ word (existT _ sem (ptz, Non_terminal_pt ptl))
-    | Cons_ptl_ptlz _ _ _ pt _ _ _ ptlz' => fun ptl =>
+    | Cons_ptl_ptlz pt ptlz' => fun ptl =>
       pop_ptlz (Cons_ptl pt ptl) ptlz'
   end ptl.
 
@@ -371,7 +371,7 @@ Lemma pop_ptlz_cost:
   forall hole_symbs hole_word hole_sems
     (ptl:parse_tree_list hole_symbs hole_word hole_sems)
     (ptlz:ptl_zipper hole_symbs hole_word hole_sems),
-  let 'existT word (existT sem (ptz, pt)) := pop_ptlz ptl ptlz in
+  let 'existT _ word (existT _ sem (ptz, pt)) := pop_ptlz ptl ptlz in
   ptlz_cost ptlz = ptz_cost ptz.
 Proof.
 fix 5.
@@ -384,7 +384,7 @@ Lemma pop_ptlz_buffer:
   forall hole_symbs hole_word hole_sems
     (ptl:parse_tree_list hole_symbs hole_word hole_sems)
     (ptlz:ptl_zipper hole_symbs hole_word hole_sems),
-  let 'existT word (existT sem (ptz, pt)) := pop_ptlz ptl ptlz in
+  let 'existT _ word (existT _ sem (ptz, pt)) := pop_ptlz ptl ptlz in
   ptlz_buffer ptlz = ptz_buffer ptz.
 Proof.
 fix 5.
@@ -419,7 +419,7 @@ Lemma pop_ptlz_pop_stack_compat:
       eq_rect _ (fun x=>x) (prod_action (ptlz_prod ptlz)) _
       (pop_ptlz_pop_stack_compat_converter _ _ _ _ _)
     in
-    let 'existT word (existT sem (ptz, pt)) := pop_ptlz ptl ptlz in
+    let 'existT _ word (existT _ sem (ptz, pt)) := pop_ptlz ptl ptlz in
       match pop (ptlz_past ptlz) stack (uncurry action' hole_sems) with
         | OK (stack', sem') =>
            ptz_stack_compat ptz stack' /\ sem = sem'
@@ -431,7 +431,7 @@ fix 5.
 destruct ptlz. intros; simpl.
 split.
 apply H.
-f_equal.
+eapply (f_equal (fun X => uncurry X semantic_values)).
 apply JMeq_eq, JMeq_sym, JMeq_eqrect with (P:=fun x => x).
 simpl; intros; destruct stack0.
 destruct (proj2 H).
@@ -451,13 +451,13 @@ Qed.
 
 Definition next_ptd (ptd:pt_dot): option pt_dot :=
   match ptd with
-    | Shift_ptd term sem _ _ _ ptl ptlz =>
+    | Shift_ptd term sem ptl ptlz =>
       Some (build_pt_dot ptl (Cons_ptl_ptlz (Terminal_pt term sem) ptlz))
     | Reduce_ptd ptlz =>
-      let 'existT _ (existT _ (ptz, pt)) := pop_ptlz Nil_ptl ptlz in
+      let 'existT _ _ (existT _ _ (ptz, pt)) := pop_ptlz Nil_ptl ptlz in
       match ptz in pt_zipper sym _ _ return parse_tree sym _ _ -> _ with
         | Top_ptz => fun pt => None
-        | Cons_ptl_ptz _ _ _ _ _ _ ptl ptlz' =>
+        | Cons_ptl_ptz ptl ptlz' =>
           fun pt => Some (build_pt_dot ptl (Cons_ptl_ptlz pt ptlz'))
       end pt
   end.
@@ -615,7 +615,7 @@ Definition init_ptd :=
     match head return Type with | T _ => unit | NT _ => pt_dot end
   with
     | Terminal_pt _ _ => fun _ => ()
-    | Non_terminal_pt _ _ _ ptl =>
+    | Non_terminal_pt ptl =>
       fun top => build_pt_dot ptl (Non_terminal_pt_ptlz top)
   end Top_ptz.
 

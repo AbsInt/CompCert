@@ -1500,11 +1500,11 @@ Qed.
 Theorem loadbytes_storebytes_same:
   loadbytes m2 b ofs (Z_of_nat (length bytes)) = Some bytes.
 Proof.
-  intros. unfold storebytes in STORE. unfold loadbytes.
+  intros. assert (STORE2:=STORE). unfold storebytes in STORE2. unfold loadbytes. 
   destruct (range_perm_dec m1 b ofs (ofs + Z_of_nat (length bytes)) Cur Writable);
   try discriminate.
   rewrite pred_dec_true.
-  decEq. inv STORE; simpl. rewrite PMap.gss. rewrite nat_of_Z_of_nat.
+  decEq. inv STORE2; simpl. rewrite PMap.gss. rewrite nat_of_Z_of_nat.
   apply getN_setN_same.
   red; eauto with mem.
 Qed.

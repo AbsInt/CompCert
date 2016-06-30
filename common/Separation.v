@@ -620,7 +620,7 @@ Next Obligation.
     eauto with mem. }
   destruct H. constructor.
 - destruct mi_inj. constructor; intros.
-+ eapply Mem.perm_unchanged_on; eauto. eapply IMG; eauto.
++ eapply Mem.perm_unchanged_on; eauto.
 + eauto.
 + rewrite (Mem.unchanged_on_contents _ _ _ H0); eauto.
 - assumption.
@@ -630,7 +630,6 @@ Next Obligation.
 - intros. destruct (Mem.perm_dec m0 b1 ofs Max Nonempty); auto.
   eapply mi_perm_inv; eauto. 
   eapply Mem.perm_unchanged_on_2; eauto.
-  eapply IMG; eauto. 
 Qed.
 Next Obligation.
   eapply Mem.valid_block_inject_2; eauto.

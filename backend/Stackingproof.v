@@ -1585,7 +1585,7 @@ Lemma find_function_translated:
   /\ Genv.find_funct_ptr tge bf = Some tf
   /\ transf_fundef f = OK tf.
 Proof.
-  intros until f; intros AG [bound [_ []]] FF.
+  intros until f; intros AG [bound [_ [?????]]] FF.
   destruct ros; simpl in FF.
 - exploit Genv.find_funct_inv; eauto. intros [b EQ]. rewrite EQ in FF.
   rewrite Genv.find_funct_find_funct_ptr in FF.

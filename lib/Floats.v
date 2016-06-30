@@ -109,7 +109,7 @@ Module Float.
 (** Transform a Nan payload to a quiet Nan payload. *)
 
 Program Definition transform_quiet_pl (pl:nan_pl 53) : nan_pl 53 :=
-  Pos.lor pl (nat_iter 51 xO xH).
+  Pos.lor pl (iter_nat xO 51 xH).
 Next Obligation.
   destruct pl.
   simpl. rewrite Z.ltb_lt in *.
@@ -147,7 +147,7 @@ Definition expand_pl (pl: nan_pl 24) : nan_pl 53.
 Proof.
   refine (exist _ (Pos.shiftl_nat (proj1_sig pl) 29) _).
   abstract (
-    destruct pl; unfold proj1_sig, Pos.shiftl_nat, nat_iter, Fcore_digits.digits2_pos;
+    destruct pl; unfold proj1_sig, Pos.shiftl_nat, nat_rect, Fcore_digits.digits2_pos;
     fold (Fcore_digits.digits2_pos x);
     rewrite Z.ltb_lt in *;
     zify; omega).
@@ -163,7 +163,7 @@ Definition reduce_pl (pl: nan_pl 53) : nan_pl 24.
 Proof.
   refine (exist _ (Pos.shiftr_nat (proj1_sig pl) 29) _).
   abstract (
-    destruct pl; unfold proj1_sig, Pos.shiftr_nat, nat_iter;
+    destruct pl; unfold proj1_sig, Pos.shiftr_nat, nat_rect;
     rewrite Z.ltb_lt in *;
     assert (forall x, Fcore_digits.digits2_pos (Pos.div2 x) =
                       (Fcore_digits.digits2_pos x - 1)%positive)
@@ -473,13 +473,11 @@ Proof.
     apply Rgt_ge; apply Rcompare_Gt_inv; auto.
   }
   assert (EQ: ZofB_range _ _ (sub x y) Int.min_signed Int.max_signed = Some (p - Int.unsigned ox8000_0000)).
-  {
-    apply ZofB_range_minus. exact E.
+  { apply ZofB_range_minus. exact E.
     compute_this (Int.unsigned ox8000_0000). smart_omega.
     apply Rge_le; auto.
   }
-  unfold to_int; rewrite EQ. simpl. f_equal. unfold Int.sub. f_equal. f_equal.
-  symmetry; apply Int.unsigned_repr. omega.
+  unfold to_int; rewrite EQ. simpl. unfold Int.sub. rewrite Int.unsigned_repr by omega. auto.
 Qed.
 
 (** Conversions from ints to floats can be defined as bitwise manipulations
@@ -538,7 +536,7 @@ Theorem of_intu_from_words:
 Proof.
   intros. pose proof (Int.unsigned_range x).
   rewrite ! from_words_eq. unfold sub. rewrite BofZ_minus.
-  unfold of_intu. f_equal. rewrite Int.unsigned_zero. omega.
+  unfold of_intu. apply (f_equal (BofZ 53 1024 __ __)). rewrite Int.unsigned_zero. omega.
   apply integer_representable_n; auto; smart_omega.
   apply integer_representable_n; auto; rewrite Int.unsigned_zero; smart_omega.
 Qed.
@@ -565,7 +563,7 @@ Proof.
   rewrite ! from_words_eq. rewrite ox8000_0000_signed_unsigned.
   change (Int.unsigned ox8000_0000) with Int.half_modulus.
   unfold sub. rewrite BofZ_minus.
-  unfold of_int. f_equal. omega.
+  unfold of_int. apply f_equal. omega.
   apply integer_representable_n; auto; smart_omega.
   apply integer_representable_n; auto; smart_omega.
 Qed.
@@ -674,7 +672,7 @@ Proof.
      with ((xh - 2^20) * 2^32)
        by (compute_this p; compute_this Int.half_modulus; ring).
   unfold add. rewrite BofZ_plus.
-  unfold of_long. f_equal.
+  unfold of_long. apply f_equal.
   rewrite <- (Int64.ofwords_recompose l) at 1. rewrite Int64.ofwords_add''.
   fold xh; fold xl. compute_this (two_p 32); ring.
   apply integer_representable_n2p; auto.
@@ -831,7 +829,7 @@ Module Float32.
 (** ** NaN payload manipulations *)
 
 Program Definition transform_quiet_pl (pl:nan_pl 24) : nan_pl 24 :=
-  Pos.lor pl (nat_iter 22 xO xH).
+  Pos.lor pl (iter_nat xO 22 xH).
 Next Obligation.
   destruct pl.
   simpl. rewrite Z.ltb_lt in *.
@@ -1280,4 +1278,3 @@ Global Opaque
   Float32.to_int Float32.to_intu Float32.to_long Float32.to_longu
   Float32.add Float32.sub Float32.mul Float32.div Float32.cmp
   Float32.to_bits Float32.of_bits.
-

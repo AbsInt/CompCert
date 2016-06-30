@@ -17,6 +17,7 @@ Require Import List.
 Require Import Syntax.
 Require Import Alphabet.
 Require Import Orders.
+Require Tuples.
 
 (** The terminal non-terminal alphabets of the grammar. **)
 Module Type Alphs.
@@ -65,7 +66,7 @@ Module Symbol(Import A:Alphs).
 End Symbol.
 
 Module Type T.
-  Require Export Tuples.
+  Export Tuples.
 
   Include Alphs <+ Symbol.
 
@@ -154,12 +155,12 @@ Module Defs(Import G:T).
   Fixpoint pt_size {head_symbol word sem} (tree:parse_tree head_symbol word sem) :=
     match tree with
       | Terminal_pt _ _ => 1
-      | Non_terminal_pt _ _ _ l => S (ptl_size l)
+      | Non_terminal_pt l => S (ptl_size l)
     end
   with ptl_size {head_symbols word sems} (tree:parse_tree_list head_symbols word sems) :=
     match tree with
       | Nil_ptl => 0
-      | Cons_ptl _ _ _ t _ _ _ q =>
+      | Cons_ptl t q =>
          pt_size t + ptl_size q
     end.
 End Defs.

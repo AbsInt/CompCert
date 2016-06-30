@@ -22,6 +22,8 @@ Require Export Znumtheory.
 Require Export List.
 Require Export Bool.
 
+Global Set Asymmetric Patterns.
+
 (** * Useful tactics *)
 
 Ltac inv H := inversion H; clear H; subst.
@@ -768,7 +770,7 @@ Proof.
   discriminate.
   rewrite list_length_z_cons. destruct (zeq n 0).
   generalize (list_length_z_pos l); omega.
-  exploit IHl; eauto. unfold Zpred. omega.
+  exploit IHl; eauto. omega.
 Qed.
 
 (** Properties of [List.incl] (list inclusion). *)
@@ -1431,4 +1433,3 @@ Lemma nlist_forall2_imply:
 Proof.
   induction 1; simpl; intros; constructor; auto.
 Qed.
-

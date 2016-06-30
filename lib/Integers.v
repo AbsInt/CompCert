@@ -53,7 +53,7 @@ Definition swap_comparison (c: comparison): comparison :=
 (** * Parameterization by the word size, in bits. *)
 
 Module Type WORDSIZE.
-  Variable wordsize: nat.
+  Parameter wordsize: nat.
   Axiom wordsize_not_zero: wordsize <> 0%nat.
 End WORDSIZE.
 
@@ -3378,7 +3378,7 @@ Proof.
     repeat rewrite unsigned_repr. tauto.
     generalize wordsize_max_unsigned; omega.
     generalize wordsize_max_unsigned; omega.
-  intros. unfold one_bits in H.
+  unfold one_bits. intros.
   destruct (list_in_map_inv _ _ _ H) as [i0 [EQ IN]].
   subst i. apply A. apply Z_one_bits_range with (unsigned x); auto.
 Qed.
@@ -3576,8 +3576,8 @@ Proof.
   intros.
   destruct (andb_prop _ _ H1). clear H1.
   destruct (andb_prop _ _ H2). clear H2.
-  exploit proj_sumbool_true. eexact H1. intro A; clear H1.
-  exploit proj_sumbool_true. eexact H4. intro B; clear H4.
+  apply proj_sumbool_true in H1.
+  apply proj_sumbool_true in H4.
   assert (unsigned ofs1 + sz1 <= unsigned ofs2 \/ unsigned ofs2 + sz2 <= unsigned ofs1).
   destruct (orb_prop _ _ H3). left. eapply proj_sumbool_true; eauto. right. eapply proj_sumbool_true; eauto.
   clear H3.
