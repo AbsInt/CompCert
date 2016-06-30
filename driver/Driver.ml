@@ -16,6 +16,8 @@ open Clflags
 open Timing
 open Driveraux
 open Frontend
+open Assembler
+open Linker
 
 let dump_options = ref false
 
@@ -107,40 +109,6 @@ let compile_cminor_file ifile ofile =
          eprintf "File %s, type-checking error:\n%s"
                  ifile msg;
          exit 2
-
-(* From asm to object file *)
-
-let assemble ifile ofile =
-  let cmd = List.concat [
-    Configuration.asm;
-    ["-o"; ofile];
-    List.rev !assembler_options;
-    [ifile]
-  ] in
-  let exc = command cmd in
-  if exc <> 0 then begin
-    safe_remove ofile;
-    command_error "assembler" exc;
-    exit 2
-  end
-
-(* Linking *)
-
-let linker exe_name files =
-  let cmd = List.concat [
-    Configuration.linker;
-    ["-o"; exe_name];
-    files;
-    (if Configuration.has_runtime_lib
-     then ["-L" ^ !stdlib_path; "-lcompcert"]
-     else [])
-  ] in
-  let exc = command cmd in
-  if exc <> 0 then begin
-    command_error "linker" exc;
-    exit 2
-  end
-
 
 (* Processing of a .c file *)
 
@@ -271,27 +239,32 @@ let process_h_file sourcename =
     exit 2
   end
 
-(* Record actions to be performed after parsing the command line *)
-
-let actions : ((string -> string) * string) list ref = ref []
-
-let push_action fn arg =
-  actions := (fn, arg) :: !actions
-
-let push_linker_arg arg =
-  push_action (fun s -> s) arg
-
-let perform_actions () =
-  let rec perform = function
-  | [] -> []
-  | (fn, arg) :: rem -> let res = fn arg in res :: perform rem
-  in perform (List.rev !actions)
-
 let version_string =
   if Version.buildnr <> "" && Version.tag <> "" then
     sprintf "The CompCert C verified compiler, %s, Build: %s, Tag: %s\n" Version.version Version.buildnr Version.tag
   else
     "The CompCert C verified compiler, version "^ Version.version ^ "\n"
+
+let gnu_system = Configuration.system <> "diab"
+
+let gnu_debugging_help =
+"  -gdwarf-       Generate debug information in DWARF v2 or DWARF v3\n"
+
+let debugging_help =
+"Debugging options:\n\
+\  -g             Generate debugging information\n\
+\  -gdepth <n>    Control generation of debugging information\n\
+\                 (<n>=0: none, <n>=1: only-globals, <n>=2: globals + locals\n\
+\                 without locations, <n>=3: full;)\n"
+^ (if gnu_system then gnu_debugging_help else "")^
+"  -frename-static Rename static functions and declarations\n"
+
+let target_help = if Configuration.arch = "arm" then
+"Target processor options:\n\
+\  -mthumb        Use Thumb2 instruction encoding\n\
+\  -marm          Use classic ARM instruction encoding\n"
+else
+  ""
 
 let usage_string =
   version_string ^
@@ -321,15 +294,9 @@ Processing options:\n\
 \  -fpacked-structs  Emulate packed structs [off]\n\
 \  -finline-asm   Support inline 'asm' statements [off]\n\
 \  -fall          Activate all language support options above\n\
-\  -fnone         Turn off all language support options above\n\
-Debugging options:\n\
-\  -g             Generate debugging information\n\
-\  -gdwarf-       (GCC only) Generate debug information in DWARF v2 or DWARF v3\n\
-\  -gdepth <n>    Control generation of debugging information\n\
-\                 (<n>=0: none, <n>=1: only-globals, <n>=2: globals + locals\n\
-\                 without locations, <n>=3: full;)\n\
-\  -frename-static Rename static functions and declarations\n\
-Optimization options: (use -fno-<opt> to turn off -f<opt>)\n\
+\  -fnone         Turn off all language support options above\n" ^
+ debugging_help ^
+"Optimization options: (use -fno-<opt> to turn off -f<opt>)\n\
 \  -O             Optimize the compiled code [on by default]\n\
 \  -O0            Do not optimize the compiled code\n\
 \  -O1 -O2 -O3    Synonymous for -O\n\
@@ -346,32 +313,11 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>)\n\
 \  -fsmall-const <n>  Set maximal size <n> for allocation in small constant area\n\
 \  -falign-functions <n>  Set alignment (in bytes) of function entry points\n\
 \  -falign-branch-targets <n>  Set alignment (in bytes) of branch targets\n\
-\  -falign-cond-branches <n>  Set alignment (in bytes) of conditional branches\n\
-Target processor options:\n\
-\  -mthumb        (ARM only) Use Thumb2 instruction encoding\n\
-\  -marm          (ARM only) Use classic ARM instruction encoding\n\
-Assembling options:\n\
-\  -Wa,<opt>      Pass option <opt> to the assembler\n\
-\  -Xassembler <opt> Pass <opt> as an option to the assembler\n\
-Linking options:\n\
-\  -l<lib>        Link library <lib>\n\
-\  -L<dir>        Add <dir> to search path for libraries\n\
-\  -nostartfiles  (GCC only) Do not use the standard system startup files when\n\
-\                 linking\n\
-\  -nodefaultlibs (GCC only) Do not use the standard system libraries when\n\
-\                 linking\n\
-\  -nostdlib      (GCC only) Do not use the standard system startup files or\n\
-\                 libraries when linking\n\
-\  -s             Remove all symbol table and relocation information from the\n\
-\                 executable\n\
-\  -static        Prevent linking with the shared libraries\n\
-\  -T <file>      Use <file> as linker command file\n\
-\  -Wl,<opt>      Pass option <opt> to the linker\n\
-\  -WUl,<opt>     (GCC only) Pass option <opt> to the gcc used for linking\n\
-\  -Xlinker <opt> Pass <opt> as an option to the linker\n\
-\  -u <symb>      Pretend the symbol <symb> is undefined to force linking of\n\
-\                 library modules to define it.\n\
-Tracing options:\n\
+\  -falign-cond-branches <n>  Set alignment (in bytes) of conditional branches\n" ^
+ target_help ^
+ assembler_help ^
+ linker_help ^
+"Tracing options:\n\
 \  -dprepro       Save C file after preprocessing in <file>.i\n\
 \  -dparse        Save C file after parsing and elaboration in <file>.parsed.c\n\
 \  -dc            Save generated Compcert C in <file>.compcert.c\n\
@@ -414,10 +360,6 @@ let optimization_options = [
 let set_all opts = List.iter (fun r -> r := true) opts
 let unset_all opts = List.iter (fun r -> r := false) opts
 
-let gnu_linker_opt s =
-  if gnu_option s then
-    push_linker_arg s
-
 let num_source_files = ref 0
 
 let num_input_files = ref 0
@@ -446,12 +388,13 @@ let cmdline_actions =
   Exact "-fnone", Self (fun _ -> unset_all language_support_options);
 (* Debugging options *)
   Exact "-g", Self (fun s -> option_g := true;
-    option_gdwarf := 3);
-  Exact "-gdwarf-2", Self (fun s -> option_g:=true;
+    option_gdwarf := 3);] @
+  (if gnu_system then
+ [ Exact "-gdwarf-2", Self (fun s -> option_g:=true;
     option_gdwarf := 2);
   Exact "-gdwarf-3", Self (fun s -> option_g := true;
-    option_gdwarf := 3);
-  Exact "-frename-static", Self (fun s -> option_rename_static:= true);
+    option_gdwarf := 3);] else []) @
+ [ Exact "-frename-static", Self (fun s -> option_rename_static:= true);
    Exact "-gdepth", Integer (fun n -> if n = 0 || n <0 then begin
      option_g := false
    end else begin
@@ -471,41 +414,17 @@ let cmdline_actions =
   Exact "-falign-cond-branches", Integer(fun n -> option_faligncondbranchs := n);
 (* Target processor options *)
   Exact "-conf", String (fun _ -> ()); (* Ignore option since it is already handled *)
-  Exact "-target", String (fun _ -> ()); (* Ignore option since it is already handled *)
-  Exact "-mthumb", Set option_mthumb;
-  Exact "-marm", Unset option_mthumb;
+  Exact "-target", String (fun _ -> ());] @ (* Ignore option since it is already handled *)
+  (if Configuration.arch = "arm" then
+    [ Exact "-mthumb", Set option_mthumb;
+      Exact "-marm", Unset option_mthumb; ]
+  else []) @
 (* Assembling options *)
-  Prefix "-Wa,", Self (fun s -> if Configuration.system = "diab" then
-    assembler_options := List.rev_append (explode_comma_option s) !assembler_options
-  else
-    assembler_options := s :: !assembler_options);
-  Exact "-Xassembler", String (fun s -> if Configuration.system = "diab" then
-    assembler_options := s::!assembler_options
-  else
-    assembler_options := s::"-Xassembler":: !assembler_options);
+  assembler_actions @
 (* Linking options *)
-  Prefix "-l", Self push_linker_arg;
-  Prefix "-L", Self push_linker_arg;
-  Exact "-nostartfiles", Self gnu_linker_opt;
-  Exact "-nodefaultlibs", Self gnu_linker_opt;
-  Exact "-nostdlib", Self gnu_linker_opt;
-  Exact "-s", Self push_linker_arg;
-  Exact "-static", Self push_linker_arg;
-  Exact "-T", String (fun s -> if Configuration.system = "diab" then
-    push_linker_arg ("-Wm"^s)
-  else begin
-      push_linker_arg ("-T");
-      push_linker_arg(s)
-    end);
-  Exact "-Xlinker", String (fun s -> if Configuration.system = "diab" then
-    push_linker_arg ("-Wl,"^s)
-  else
-    push_linker_arg s);
-  Prefix "-Wl,", Self push_linker_arg;
-  Prefix "-WUl,", Self (fun s -> List.iter push_linker_arg (explode_comma_option s));
-  Exact "-u", Self push_linker_arg;
+  linker_actions @
 (* Tracing options *)
-  Exact "-dprepro", Set option_dprepro;
+ [ Exact "-dprepro", Set option_dprepro;
   Exact "-dparse", Set option_dparse;
   Exact "-dc", Set option_dcmedium;
   Exact "-dclight", Set option_dclight;
@@ -529,7 +448,7 @@ let cmdline_actions =
   Exact "-trace", Self (fun _ -> Interp.trace := 2);
   Exact "-random", Self (fun _ -> Interp.mode := Interp.Random);
   Exact "-all", Self (fun _ -> Interp.mode := Interp.All)
-  ]
+ ]
 (* -f options: come in -f and -fno- variants *)
 (* Language support options *)
   @ f_opt "longdouble" option_flongdouble

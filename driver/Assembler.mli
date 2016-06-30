@@ -11,14 +11,11 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-val preprocess: string -> string -> unit
-  (** From C to preprocessed C *)
+val assemble: string -> string -> unit
+  (** From asm to object file *)
 
-val parse_c_file: string -> string -> Csyntax.coq_function Ctypes.program
-  (** From preprocessed C to Csyntax *)
+val assembler_actions: (Commandline.pattern * Commandline.action) list
+  (** Commandline optins affecting the assembler *)
 
-val prepro_actions: (Commandline.pattern * Commandline.action) list
-  (** Commandline optins affecting the frontend *)
-
-val prepro_help: string
+val assembler_help: string
   (** Commandline help description *)

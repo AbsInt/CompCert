@@ -82,36 +82,18 @@ let parse_c_file sourcename ifile =
 
 (* Add gnu preprocessor list *)
 let gnu_prepro_opt_key key s =
-  if gnu_option s then
-    prepro_options := s::key::!prepro_options
+  prepro_options := s::key::!prepro_options
 
 (* Add gnu preprocessor option *)
 let gnu_prepro_opt s =
- if gnu_option s then
-    prepro_options := s::!prepro_options
+  prepro_options := s::!prepro_options
 
 (* Add gnu preprocessor option s and the implict -E *)
 let gnu_prepro_opt_e s =
-  if gnu_option s then begin
-    prepro_options := s :: !prepro_options;
-    option_E := true
-  end
+  prepro_options := s :: !prepro_options;
+  option_E := true
 
-let prepro_actions = [
-  (* Preprocessing options *)
-  Exact "-I", String(fun s -> prepro_options := s :: "-I" :: !prepro_options;
-    assembler_options := s :: "-I" :: !assembler_options);
-  Prefix "-I", Self(fun s -> prepro_options := s :: !prepro_options;
-    assembler_options := s :: !assembler_options);
-  Exact "-D", String(fun s -> prepro_options := s :: "-D" :: !prepro_options);
-  Prefix "-D", Self(fun s -> prepro_options := s :: !prepro_options);
-  Exact "-U", String(fun s -> prepro_options := s :: "-U" :: !prepro_options);
-  Prefix "-U", Self(fun s -> prepro_options := s :: !prepro_options);
-  Prefix "-Wp,", Self (fun s ->
-    prepro_options := List.rev_append (explode_comma_option s) !prepro_options);
-  Exact "-Xpreprocessor", String (fun s ->
-    prepro_options := s :: !prepro_options);
-  Exact "-include", String (fun s -> prepro_options := s :: "-include" :: !prepro_options);
+let gnu_prepro_actions = [
   Exact "-M", Self gnu_prepro_opt_e;
   Exact "-MM", Self gnu_prepro_opt_e;
   Exact "-MF", String (gnu_prepro_opt_key "-MF");
@@ -128,6 +110,49 @@ let prepro_actions = [
   Exact "-C", Self gnu_prepro_opt;
   Exact "-CC", Self gnu_prepro_opt;]
 
+let prepro_actions = [
+  (* Preprocessing options *)
+  Exact "-I", String(fun s -> prepro_options := s :: "-I" :: !prepro_options;
+    assembler_options := s :: "-I" :: !assembler_options);
+  Prefix "-I", Self(fun s -> prepro_options := s :: !prepro_options;
+    assembler_options := s :: !assembler_options);
+  Exact "-D", String(fun s -> prepro_options := s :: "-D" :: !prepro_options);
+  Prefix "-D", Self(fun s -> prepro_options := s :: !prepro_options);
+  Exact "-U", String(fun s -> prepro_options := s :: "-U" :: !prepro_options);
+  Prefix "-U", Self(fun s -> prepro_options := s :: !prepro_options);
+  Prefix "-Wp,", Self (fun s ->
+    prepro_options := List.rev_append (explode_comma_option s) !prepro_options);
+  Exact "-Xpreprocessor", String (fun s ->
+    prepro_options := s :: !prepro_options);
+  Exact "-include", String (fun s -> prepro_options := s :: "-include" :: !prepro_options);]
+  @ (if gnu_system then gnu_prepro_actions else [])
+
+let gnu_prepro_help =
+"\  -M            Ouput a rule suitable for make describing the\n\
+\                 dependencies of the main source file\n\
+\  -MM            Like -M but do not mention system header files\n\
+\  -MF <file>     Specifies file <file> as output file for -M or -MM\n\
+\  -MG            Assumes missing header files are generated for -M\n\
+\  -MP            Add a phony target for each dependency other than\n\
+\                 the main file\n\
+\  -MT <target>   Change the target of the rule emitted by dependency\n\
+\                 generation\n\
+\  -MQ <target>   Like -MT but quotes <target>\n\
+\  -nostdinc      Do not search the standard system directories for\n\
+\                 header files\n\
+\  -imacros <file> Like -include but throws output produced by\n\
+\                  preprocessing of <file> away\n\
+\  -idirafter <dir> Search <dir> for header files after all directories\n\
+\                   specified with -I and the standard system directories\n\
+\  -isystem <dir>  Search <dir> for header files after all directories\n\
+\                  specified by -I but before the standard system directories\n\
+\  -iquote <dir>   Like -isystem but only for headers included with\n\
+\                  quotes\n\
+\  -P              Do not generate linemarkers\n\
+\  -C              Do not discard comments\n\
+\  -CC             Do not discard comments, including during macro\n\
+\                  expansion\n"
+
 let prepro_help = "Preprocessing options:\n\
 \  -I<dir>        Add <dir> to search path for #include files\n\
 \  -include <file> Process <file> as if #include \"<file>\" appears at the first\n\
@@ -135,29 +160,5 @@ let prepro_help = "Preprocessing options:\n\
 \  -D<symb>=<val> Define preprocessor symbol\n\
 \  -U<symb>       Undefine preprocessor symbol\n\
 \  -Wp,<opt>      Pass option <opt> to the preprocessor\n\
-\  -Xpreprocessor <opt> Pass option <opt> to the preprocessor\n\
-\  -M             (GCC only) Ouput a rule suitable for make describing the\n\
-\                 dependencies of the main source file\n\
-\  -MM            (GCC only) Like -M but do not mention system header files\n\
-\  -MF <file>     (GCC only) Specifies file <file> as output file for -M or -MM\n\
-\  -MG            (GCC only) Assumes missing header files are generated for -M\n\
-\  -MP            (GCC only) Add a phony target for each dependency other than\n\
-\                 the main file\n\
-\  -MT <target>   (GCC only) Change the target of the rule emitted by dependency\n\
-\                 generation\n\
-\  -MQ <target>   (GCC only) Like -MT but quotes <target>\n\
-\  -nostdinc      (GCC only) Do not search the standard system directories for\n\
-\                 header files\n\
-\  -imacros <file> (GCC only) Like -include but throws output produced by\n\
-\                  preprocessing of <file> away\n\
-\  -idirafter <dir> (GCC only) Search <dir> for header files after all directories\n\
-\                   specified with -I and the standard system directories\n\
-\  -isystem <dir>  (GCC only) Search <dir> for header files after all directories\n\
-\
-\                  specified by -I but before the standard system directories\n\
-\  -iquote <dir>   (GCC only) Like -isystem but only for headers included with\n\
-\                   quotes\n\
-\  -P              (GCC only) Do not generate linemarkers\n\
-\  -C              (GCC only) Do not discard comments\n\
-\  -CC             (GCC only) Do not discard comments, including during macro\n\
-\                  expansion\n"
+\  -Xpreprocessor <opt> Pass option <opt> to the preprocessor\n"
+  ^ (if gnu_system then gnu_prepro_help else "")

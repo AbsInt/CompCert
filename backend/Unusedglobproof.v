@@ -1178,6 +1178,17 @@ Proof.
   destruct (ident_eq id1 id2). congruence. left; eapply Genv.global_addresses_distinct; eauto.
 - exploit init_meminj_invert; eauto. intros (A & id & B & C). subst delta.
   split. omega. generalize (Int.unsigned_range_2 ofs). omega.
+- exploit init_meminj_invert_strong; eauto. intros (A & id & gd & B & C & D & E & F).
+  exploit (Genv.init_mem_characterization_gen p); eauto.
+  exploit (Genv.init_mem_characterization_gen tp); eauto.
+  destruct gd as [f|v].
++ intros (P2 & Q2) (P1 & Q1).
+  apply Q2 in H0. destruct H0. subst. replace ofs with 0 by omega.
+  left; apply Mem.perm_cur; auto.
++ intros (P2 & Q2 & R2 & S2) (P1 & Q1 & R1 & S1).
+  apply Q2 in H0. destruct H0. subst.
+  left. apply Mem.perm_cur. eapply Mem.perm_implies; eauto. 
+  apply P1. omega.
 Qed.
 
 End INIT_MEM.

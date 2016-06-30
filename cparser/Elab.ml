@@ -1909,100 +1909,180 @@ let enter_decdefs local loc env sto dl =
   let (decls, env') = List.fold_left enter_decdef ([], env) dl in
   (List.rev decls, env')
 
+(* Processing of K&R-style function definitions.  Synopsis:
+      T f(X1, ..., Xn)
+          T1 Y1; ...; Tm Ym;
+      { ... }
+  "params" is the list [X1; ...; Xn]
+  "defs" is the list of declarations [T1 Y1; ... Tm Ym]
+  We need to match the names Xi's with the Yj's so as to find the types Ti'
+  of the Xi and produce a typed argument list in prototyped style.
+  Owing to default argument promotion, the types Ti' and Tj may not match,
+  in which case we need to declare a local variable with the correct type.
+  Consider:
+      float f(x)  float x;  { return x; }
+  Since float arguments are promoted by default to double, this must
+  be converted as
+      float f(double x)  { float x1 = x; return x1; }
+*)
+
+let elab_KR_function_parameters env params defs loc =
+  (* Check that the parameters have unique names *)
+  List.iter (fun id ->
+    if List.length (List.filter ((=) id) params) > 1 then
+      error loc "Parameter '%s' appears more than once in function declaration" id)
+    params;
+  (* Check that the declarations only declare parameters *)
+  let extract_name (Init_name(Name(s, dty, attrs, loc') as name, ie)) =
+    if not (List.mem s params) then
+      error loc' "Declaration of '%s' which is not a function parameter" s;
+    if ie <> NO_INIT then
+      error loc' "Illegal initialization of function parameter '%s'" s;
+    name
+  in
+  (* Extract names and types from the declarations *)
+  let elab_param_def env = function
+  | DECDEF((spec', name_init_list), loc') ->
+      let name_list = List.map extract_name name_init_list in
+      let (paramsenv, sto) = elab_name_group loc' env (spec', name_list) in
+      if sto <> Storage_default && sto <> Storage_register then
+        error loc' "'extern' or 'static' storage not supported for function parameter";
+      paramsenv
+  | d -> (* Should never be produced by the parser *)
+      fatal_error (get_definitionloc d)
+                      "Illegal declaration of function parameter" in
+  let kr_params_defs =
+    List.concat (fst (mmap elab_param_def env defs)) in
+  (* Find the type of a parameter *)
+  let type_of_param param =
+    match List.filter (fun (p, _) -> p = param) kr_params_defs with
+    | [] ->
+        (* Parameter is not declared, defaults to "int" in ISO C90,
+           is an error in ISO C99.  Just emit a warning. *)
+        warning loc "Type of '%s' defaults to 'int'" param;
+        TInt (IInt, [])
+    | (_, ty) :: rem ->
+        if rem <> [] then
+          error loc "Parameter '%s' defined more than once" param;
+        ty in
+  (* Match parameters against declarations *)
+  let rec match_params params' extra_decls = function
+    | [] ->
+        (List.rev params', List.rev extra_decls)
+    | p :: ps ->
+        let ty = type_of_param p in
+        let ty_var = argument_conversion env ty
+        and ty_param = default_argument_conversion env ty in
+        if compatible_types AttrIgnoreTop env ty_var ty_param then begin
+          (* No need for an extra conversion *)
+          let id = Env.fresh_ident p in
+          match_params ((id, ty_var) :: params') extra_decls ps
+        end else begin
+          (* Local variable of type ty_var is to be initialized from
+             the parameter of type ty_param *)
+          let id_param = Env.fresh_ident p in
+          let id_var = Env.fresh_ident p in
+          let init = Init_single { edesc = EVar id_param; etyp = ty_param } in
+          match_params ((id_param, ty_param) :: params')
+                       ((Storage_default, id_var, ty_var, Some init)
+                                                           :: extra_decls)
+                       ps
+        end
+  in
+    match_params [] [] params
+
+
+(* Look for varargs flag in previous definitions of a function *)
+
+let inherit_vararg env s sto ty =
+  match previous_def Env.lookup_ident env s with
+  | Some(id, II_ident(_, old_ty))
+    when sto = Storage_extern || Env.in_current_scope env id ->
+    begin
+      match old_ty, ty with
+      | TFun(_, _, true, _), TFun(_, _, _, _) -> true
+      | _, _ -> false
+    end
+  | _ -> false
+
+
+(* Function definitions *)
+
 let elab_fundef env spec name defs body loc =
-  let (s, sto, inline, noret, ty, kr_params, env1) = elab_fundef_name env spec name in
+  let (s, sto, inline, noret, ty, kr_params, env1) =
+    elab_fundef_name env spec name in
   if sto = Storage_register then
     fatal_error loc "A function definition cannot have 'register' storage class";
   begin match kr_params, defs with
-  | None, d::_ ->
-    error (get_definitionloc d)
-      "Old-style parameter declaration in a new-style function definition"
+  | None, d :: _ ->
+      error (get_definitionloc d)
+        "Old-style parameter declaration in a new-style function definition"
   | _ -> ()
   end;
-  let (ty, env1) =
+  (* Process the parameters and the K&R declarations, if any, to obtain:
+      - [ty]: the full, prototyped type of the function
+      - [extra_decls]: extra declarations to be inserted at the
+        beginning of the function *)
+  let (ty, extra_decls) =
     match ty, kr_params with
     | TFun(ty_ret, None, vararg, attr), None ->
-      (TFun(ty_ret, Some [], vararg, attr), env1)
+        (TFun(ty_ret, Some [], vararg, attr), [])
     | ty, None ->
-      (ty, env1)
+        (ty, [])
     | TFun(ty_ret, None, false, attr), Some params ->
-      warning loc "Non-prototype, pre-standard function definition.@  Converting to prototype form";
-      (* Check that the parameters have unique names *)
-      List.iter (fun id ->
-        if List.length (List.filter ((=) id) params) > 1 then
-          fatal_error loc "Parameter '%s' appears more than once in function declaration" id)
-        params;
-      (* Check that the declarations only declare parameters *)
-      let extract_name (Init_name(Name(s, dty, attrs, loc') as name, ie)) =
-        if not (List.mem s params) then
-          error loc' "Declaration of '%s' which is not a function parameter" s;
-        if ie <> NO_INIT then
-          error loc' "Illegal initialization of function parameter '%s'" s;
-        name
-      in
-      (* Convert old-style K&R function definition to modern prototyped form *)
-      let elab_kr_param_def env = function
-      | DECDEF((spec', name_init_list), loc') ->
-          let name_list = List.map extract_name name_init_list in
-          let (paramsenv, sto) = elab_name_group loc' env (spec', name_list) in
-          if sto <> Storage_default && sto <> Storage_register then
-            error loc' "'extern' or 'static' storage not supported for function parameter";
-          paramsenv
-      | d ->
-          (* Should never be produced by the parser *)
-          fatal_error (get_definitionloc d)
-                      "Illegal declaration of function parameter" in
-      let (kr_params_defs, env1) = mmap elab_kr_param_def env1 defs in
-      let kr_params_defs = List.concat kr_params_defs in
-      let search_param_type param =
-        match List.filter (fun (p, _) -> p = param) kr_params_defs with
-        | [] ->
-          (* Parameter is not declared, defaults to "int" in ISO C90,
-             is an error in ISO C99.  Just emit a warning. *)
-          warning loc "Type of '%s' defaults to 'int'" param;
-          (Env.fresh_ident param, TInt (IInt, []))
-        | (_,ty)::q ->
-          if q <> [] then error loc "Parameter '%s' defined more than once" param;
-          (Env.fresh_ident param, argument_conversion env1 ty)
-      in
-      let params' = List.map search_param_type params in
-      (TFun(ty_ret, Some params', false, attr), env1)
-    | _, Some params -> assert false
+        warning loc "Non-prototype, pre-standard function definition.@  Converting to prototype form";
+        let (params', extra_decls) =
+          elab_KR_function_parameters env params defs loc in
+        (TFun(ty_ret, Some params', inherit_vararg env s sto ty, attr), extra_decls)
+    | _, Some params ->
+        assert false
   in
-  (* Extract info from type *)
+  (* Extract infos from the type of the function *)
   let (ty_ret, params, vararg, attr) =
     match ty with
     | TFun(ty_ret, Some params, vararg, attr) ->
-         if wrap incomplete_type loc env1 ty_ret && not (is_void_type env ty_ret) then
-           fatal_error loc "return type is an incomplete type";
-        (ty_ret, params, vararg, attr)
-    | _ -> fatal_error loc "wrong type for function definition" in
+         if wrap incomplete_type loc env1 ty_ret
+         && not (is_void_type env ty_ret)
+         then error loc "return type is an incomplete type";
+         (ty_ret, params, vararg, attr)
+    | _ ->
+         fatal_error loc "wrong type for function definition" in
   (* Enter function in the environment, for recursive references *)
   let (fun_id, sto1, env1, _) = enter_or_refine_ident false loc env1 s sto ty in
-  (* Enter parameters in the environment *)
+  (* Enter parameters and extra declarations in the environment *)
   let env2 =
     List.fold_left (fun e (id, ty) -> Env.add_ident e id Storage_default ty)
                    (Env.new_scope env1) params in
+  let env2 =
+    List.fold_left (fun e (sto, id, ty, init) -> Env.add_ident e id sto ty)
+                   env2 extra_decls in
   (* Define "__func__" and enter it in the environment *)
   let (func_ty, func_init) = __func__type_and_init s in
-  let (func_id, _, env3,func_ty) =
+  let (func_id, _, env3, func_ty) =
     enter_or_refine_ident true loc env2 "__func__" Storage_static func_ty in
   emit_elab ~enter:false env3 loc (Gdecl(Storage_static, func_id, func_ty, Some func_init));
   (* Elaborate function body *)
-  let body' = !elab_funbody_f ty_ret env3 body in
+  let body1 = !elab_funbody_f ty_ret env3 body in
   (* Special treatment of the "main" function *)
-  let body'' =
+  let body2 =
     if s = "main" then begin
       match unroll env ty_ret with
       | TInt(IInt, []) ->
           (* Add implicit "return 0;" at end of function body *)
-          sseq no_loc body'
+          sseq no_loc body1
             {sdesc = Sreturn(Some(intconst 0L IInt)); sloc = no_loc}
       | _ ->
           warning loc "return type of 'main' should be 'int'";
-          body'
-    end else body' in
-  if noret && contains_return body' then
+          body1
+    end else body1 in
+  (* Add the extra declarations if any *)
+  let body3 =
+    if extra_decls = [] then body2 else begin
+      let mkdecl d = { sdesc = Sdecl d; sloc = no_loc } in
+      { sdesc = Sblock (List.map mkdecl extra_decls @ [body2]);
+        sloc = no_loc }
+    end in
+  if noret && contains_return body1 then
     warning loc "function '%s' declared 'noreturn' should not return" s;
   (* Build and emit function definition *)
   let fn =
@@ -2014,9 +2094,11 @@ let elab_fundef env spec name defs body loc =
       fd_params = params;
       fd_vararg = vararg;
       fd_locals = [];
-      fd_body = body'' } in
+      fd_body = body3 } in
   emit_elab env1 loc (Gfundef fn);
   env1
+
+(* Definitions *)
 
 let rec elab_definition (local: bool) (env: Env.t) (def: Cabs.definition)
                     : decl list * Env.t =

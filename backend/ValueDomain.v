@@ -3766,6 +3766,9 @@ Proof.
 - (* overflow *)
   intros. exploit inj_of_bc_inv; eauto. intros (A & B & C); subst.
   rewrite Zplus_0_r. split. omega. apply Int.unsigned_range_2.
+- (* perm inv *)
+  intros. exploit inj_of_bc_inv; eauto. intros (A & B & C); subst.
+  rewrite Zplus_0_r in H2. auto.
 Qed.
 
 Lemma inj_of_bc_preserves_globals:

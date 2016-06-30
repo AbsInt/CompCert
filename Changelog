@@ -22,6 +22,10 @@ Formal C semantics:
 - The semantics of conversions from pointer types to _Bool
   is fully defined (again).
 
+Usability:
+- The generation of DWARF debugging information in "-g" mode is now
+  supported for ARM and IA32 (in addition to PowerPC).
+
 Coq development:
 - Revised the Stacking pass and its proof to make it more extensible
   later to e.g. 64-bit integer registers.

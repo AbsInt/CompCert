@@ -12,7 +12,7 @@ The latter is a separate contract document.
 The INRIA Non-Commercial License Agreement is a non-free license that 
 grants you the right to use the CompCert verified compiler for 
 educational, research or evaluation purposes only, but prohibits 
-any commercial uses.
+any commercial use.
 
 For commercial use you need a Software Usage Agreement from 
 AbsInt Angewandte Informatik GmbH.
@@ -24,17 +24,7 @@ option) any later version:
 
   all files in the lib/ directory
 
-  common/AST.v
-  common/Behaviors.v
-  common/Errors.v
-  common/Events.v
-  common/Globalenvs.v
-  common/Memdata.v
-  common/Memory.v
-  common/Memtype.v
-  common/Smallstep.v
-  common/Switch.v
-  common/Values.v
+  all files in the common/ directory
 
   cfrontend/Clight.v
   cfrontend/ClightBigstep.v
@@ -43,13 +33,18 @@ option) any later version:
   cfrontend/Cstrategy.v
   cfrontend/Csyntax.v
   cfrontend/Ctypes.v
-
+  cfrontend/Ctyping.v
+  
   backend/Cminor.v
   backend/CMlexer.mli
   backend/CMlexer.mll
   backend/CMparser.mly
   backend/CMtypecheck.ml
   backend/CMtypecheck.mli
+
+  arm/Archi.v
+  ia32/Archi.v
+  powerpc/Archi.v
 
   all files in the cparser/ directory
 

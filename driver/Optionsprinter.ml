@@ -91,7 +91,6 @@ let print_configurations oc lib_path =
   p_jmember oc "stdlib_path" p_jstring lib_path;
   p_jmember oc "has_runtime_lib" p_jbool Configuration.has_runtime_lib;
   p_jmember oc "has_standard_headers" p_jbool Configuration.has_standard_headers;
-  p_jmember oc "advanced_debug" p_jbool Configuration.advanced_debug;
   p_jmember oc "struct_passing_style" print_struct_passing_style Configuration.struct_passing_style;
   p_jmember oc "struct_return_style" print_struct_return_style Configuration.struct_return_style;
   fprintf oc "\n}"
