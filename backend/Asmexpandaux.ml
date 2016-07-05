@@ -154,3 +154,16 @@ let expand_debug id sp preg simple l =
     | b::rest -> List.rev ((List.rev (b::bcc)@List.rev acc)@rest) (* We found the first non debug location *)
     | [] -> List.rev acc (* This actually can never happen *) in
   aux None [] (move_debug [] [] (List.rev l))
+
+(* Count leading or trailing zero bits of 32bit immediates represented as Coq Integers *)
+
+let count_zeros shiftfn accstart imm =
+  let rec cnt acc x = if x = 0l then
+    acc
+  else
+    cnt (Int32.sub acc 1l) (shiftfn x 1) in
+  coqint_of_camlint (cnt accstart (camlint_of_coqint imm))
+
+let count_leading_zeros imm = count_zeros Int32.shift_right_logical 32l imm
+let count_trailing_zeros imm = count_zeros Int32.shift_left 32l imm
+let count_trailing_zeros_plus32 imm = count_zeros Int32.shift_left 64l imm

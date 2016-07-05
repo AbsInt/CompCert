@@ -34,3 +34,9 @@ val get_current_function: unit -> coq_function
 val expand_debug: positive -> int -> (preg -> int) -> (instruction -> unit) -> instruction list -> unit
   (* Expand builtin debug function. Takes the function id, the register number of the stackpointer, a
      function to get the dwarf mapping of varibale names  and for the expansion of simple instructions *)
+val count_leading_zeros: Integers.Int.int -> Integers.Int.int
+    (* Count number of leading zero bits *)
+val count_trailing_zeros: Integers.Int.int -> Integers.Int.int
+    (* Count number of trailing zero bits *)
+val count_trailing_zeros_plus32: Integers.Int.int -> Integers.Int.int
+    (* Count number of trailing zero bits, add 32 to the result *)
