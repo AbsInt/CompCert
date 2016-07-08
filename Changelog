@@ -1,3 +1,9 @@
+Release 2.7.1, 2016-07-10
+=========================
+
+- Ported to Coq 8.5pl2.  No other changes in functionality.
+
+
 Release 2.7, 2016-06-29
 =======================
 

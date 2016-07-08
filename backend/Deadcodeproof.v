@@ -168,8 +168,7 @@ Proof.
 + subst b0. apply SETN with (access := fun ofs => Mem.perm m1' b ofs Cur Readable /\ Q b ofs); auto.
   intros. destruct H5. eapply ma_memval; eauto.
   eapply Mem.perm_storebytes_2; eauto.
-  apply H1; auto.
-+ eapply ma_memval; eauto. eapply Mem.perm_storebytes_2; eauto. apply H1; auto.
++ eapply ma_memval; eauto. eapply Mem.perm_storebytes_2; eauto.
 - rewrite (Mem.nextblock_storebytes _ _ _ _ _ H0).
   rewrite (Mem.nextblock_storebytes _ _ _ _ _ ST2).
   eapply ma_nextblock; eauto.
@@ -551,7 +550,7 @@ Proof.
   intros. exploit analyze_successors; eauto. rewrite ANPC; simpl. intros [A B].
   econstructor; eauto.
   eapply eagree_ge; eauto.
-  eapply magree_monotone; eauto. intros; apply B; auto.
+  eapply magree_monotone; eauto.
 Qed.
 
 (** Builtin arguments and results *)
@@ -1134,5 +1133,3 @@ Proof.
 Qed.
 
 End PRESERVATION.
-
-

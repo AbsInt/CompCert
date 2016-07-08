@@ -8,6 +8,7 @@
 *.cmx
 *.cma
 *.cmxa
+.*.aux
 *.cmti
 *.cmt
 *.merlin

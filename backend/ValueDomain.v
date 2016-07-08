@@ -3739,7 +3739,7 @@ Proof.
 - (* contents *)
   intros. exploit inj_of_bc_inv; eauto. intros (A & B & C); subst.
   rewrite Zplus_0_r.
-  set (mv := ZMap.get ofs (Mem.mem_contents m)#b1).
+  set (mv := ZMap.get ofs (PMap.get b1 (Mem.mem_contents m))).
   assert (Mem.loadbytes m b1 ofs 1 = Some (mv :: nil)).
   {
     Local Transparent Mem.loadbytes.

@@ -865,9 +865,9 @@ Qed.
 Remark match_call_cont_cont:
   forall k k', match_call_cont k k' -> exists cunit hf, match_cont cunit hf k k'.
 Proof.
-  intros. refine (let cunit : Cminor.program := _ in _). 
+  intros. simple refine (let cunit : Cminor.program := _ in _).
   econstructor. apply nil. apply nil. apply xH.
-  refine (let hf : helper_functions := _ in _).
+  simple refine (let hf : helper_functions := _ in _).
   econstructor; apply xH.
   exists cunit, hf; auto.
 Qed.
