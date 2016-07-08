@@ -684,7 +684,7 @@ Inductive builtin_arg_constraint : Type :=
 Definition builtin_arg_ok
        (A: Type) (ba: builtin_arg A) (c: builtin_arg_constraint) :=
   match ba, c with
-  | (BA _ | BA_splitlong _ _), _ => true
+  | (BA _ | BA_splitlong (BA _) (BA _)), _ => true
   | (BA_int _ | BA_long _ | BA_float _ | BA_single _), OK_const => true
   | BA_addrstack _, (OK_addrstack | OK_addrany) => true
   | BA_addrglobal _ _, (OK_addrglobal | OK_addrany) => true
