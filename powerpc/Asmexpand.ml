@@ -38,6 +38,8 @@ let _6 = coqint_of_camlint 6l
 let _8 = coqint_of_camlint 8l
 let _31 = coqint_of_camlint 31l
 let _32 = coqint_of_camlint 32l
+let _64 = coqint_of_camlint 64l
+let _m1 = coqint_of_camlint (-1l)
 let _m4 = coqint_of_camlint (-4l)
 let _m8 = coqint_of_camlint (-8l)
 
@@ -369,6 +371,30 @@ let expand_builtin_inline name args res =
       (* high bits all zero, count bits in low word and increment by 32 *)
       emit (Padd(res, res, GPR0));
       emit (Plabel lbl)
+  | ("__builtin_ctz" | "__builtin_ctzl"), [BA(IR a1)], BR(IR res) ->
+      emit (Paddi(GPR0, a1, Cint _m1));   (* tmp := x-1 *)
+      emit (Pandc(res, GPR0, a1));        (* res := tmp & ~(x) *)
+      emit (Pcntlzw(res, res));           (* res := #leading zeros *)
+      emit (Psubfic(res, res, Cint _32))  (* res := 32 - #leading zeros *)
+  | "__builtin_ctzll", [BA_splitlong(BA(IR ah), BA(IR al))], BR(IR res) ->
+      let lbl1 = new_label () in
+      let lbl2 = new_label () in
+      (* low word equal to zero? *)
+      emit (Pcmpwi (al, Cint _0));
+      emit (Pbf (CRbit_2, lbl1));
+      (* low word is zero, count trailing zeros in high word and increment by 32 *)
+      emit (Paddi(GPR0, ah, Cint _m1));
+      emit (Pandc(res, GPR0, ah));
+      emit (Pcntlzw(res, res));
+      emit (Psubfic(res, res, Cint _64));
+      emit (Pb lbl2);
+      (* count trailing zeros in low word *)
+      emit (Plabel lbl1);
+      emit (Paddi(GPR0, al, Cint _m1));
+      emit (Pandc(res, GPR0, al));
+      emit (Pcntlzw(res, res));
+      emit (Psubfic(res, res, Cint _32));
+      emit (Plabel lbl2)
   | "__builtin_cmpb",  [BA(IR a1); BA(IR a2)], BR(IR res) ->
       emit (Pcmpb (res,a1,a2))
   | ("__builtin_bswap" | "__builtin_bswap32"), [BA(IR a1)], BR(IR res) ->
