@@ -30,6 +30,9 @@ let _2 = coqint_of_camlint 2l
 let _4 = coqint_of_camlint 4l
 let _8 = coqint_of_camlint 8l
 let _16 = coqint_of_camlint 16l
+let _32 = coqint_of_camlint 32l
+let _64 = coqint_of_camlint 64l
+let _m1 = coqint_of_camlint (-1l)
 
 (* Emit instruction sequences that set or offset a register by a constant. *)
 (* No S suffix because they are applied to SP most of the time. *)
@@ -294,6 +297,33 @@ let expand_builtin_inline name args res =
      emit (Pmovite (TCeq, IR14, SOreg IR14, SOimm _0));
      emit (Pclz (res, ah));
      emit (Padd (res, res, SOreg IR14))
+  | ("__builtin_ctz" | "__builtin_ctzl"), [BA(IR a1)], BR(IR res) ->
+     emit (Padd(IR14, a1, SOimm _m1));   (* tmp := x-1 *)
+     emit (Pmvn(res, SOreg a1));         (* res := ~(x) *)
+     emit (Pand(res, IR14, SOreg res));  (* res := tmp & ~(x) *)
+     emit (Pclz(res, res));              (* res := #leading zeros *)
+     emit (Prsb(res, res, SOimm _32))    (* res := 32 - #leading zeros *)
+  | "__builtin_ctzll", [BA_splitlong(BA(IR ah), BA(IR al))], BR(IR res) ->
+     let lbl1 = new_label () in
+     let lbl2 = new_label () in
+     (* low word equal to zero? *)
+     emit (Pcmp (al, SOimm _0));
+     emit (Pbne lbl1);
+     (* low word is zero, count trailing zeros in high word and increment by 32 *)
+     emit (Padd(IR14, ah, SOimm _m1));
+     emit (Pmvn(res, SOreg ah));
+     emit (Pand(res, IR14, SOreg res));
+     emit (Pclz(res, res));
+     emit (Prsb(res, res, SOimm _64));
+     emit (Pb lbl2);
+     (* count trailing zeros in low word *)
+     emit (Plabel lbl1);
+     emit (Padd(IR14, al, SOimm _m1));
+     emit (Pmvn(res, SOreg al));
+     emit (Pand(res, IR14, SOreg res));
+     emit (Pclz(res, res));
+     emit (Prsb(res, res, SOimm _32));
+     emit (Plabel lbl2)
   (* Float arithmetic *)
   | "__builtin_fabs",  [BA(FR a1)], BR(FR res) ->
      emit (Pfabsd (res,a1))
