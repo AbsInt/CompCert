@@ -16,6 +16,7 @@
 (* Parsing of command-line flags and arguments *)
 
 open Printf
+open Responsefile
 
 type pattern =
   | Exact of string
@@ -99,4 +100,9 @@ let parse_array spec argv first last =
   in parse first
 
 let parse_cmdline spec =
-  parse_array spec Sys.argv 1 (Array.length Sys.argv - 1)
+  try
+    let argv = expand_responsefiles Sys.argv in
+    parse_array spec argv 1 (Array.length argv - 1)
+  with Arg.Bad s ->
+    eprintf "%s" s;
+    exit 2

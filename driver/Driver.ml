@@ -334,6 +334,7 @@ General options:\n\
 \  -v             Print external commands before invoking them\n\
 \  -timings       Show the time spent in various compiler passes\n\
 \  -version       Print the version string and exit\n\
+\  @<file>        Read command line options from <file>\n\
 Interpreter mode:\n\
 \  -interp        Execute given .c files using the reference interpreter\n\
 \  -quiet         Suppress diagnostic messages for the interpreter\n\
