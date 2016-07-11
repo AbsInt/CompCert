@@ -86,29 +86,35 @@ let compile_cminor_file ifile ofile =
   Sections.initialize();
   let ic = open_in ifile in
   let lb = Lexing.from_channel ic in
-  try
-    match Compiler.transf_cminor_program
-            (CMtypecheck.type_program
-              (CMparser.prog CMlexer.token lb)) with
+  (* Parse cminor *)
+  let cm =
+    try CMtypecheck.type_program (CMparser.prog CMlexer.token lb)
+    with Parsing.Parse_error ->
+           eprintf "File %s, character %d: Syntax error\n"
+                   ifile (Lexing.lexeme_start lb);
+           exit 2
+       | CMlexer.Error msg ->
+           eprintf "File %s, character %d: %s\n"
+                   ifile (Lexing.lexeme_start lb) msg;
+           exit 2
+       | CMtypecheck.Error msg ->
+           eprintf "File %s, type-checking error:\n%s"
+                   ifile msg;
+           exit 2 in
+  (* Convert to Asm *)
+  let asm =
+    match Compiler.apply_partial
+               (Compiler.transf_cminor_program cm)
+               Asmexpand.expand_program with
+    | Errors.OK asm ->
+        asm
     | Errors.Error msg ->
         eprintf "%s: %a" ifile print_error msg;
-        exit 2
-    | Errors.OK p ->
-        let oc = open_out ofile in
-        PrintAsm.print_program oc p;
-        close_out oc
-  with Parsing.Parse_error ->
-         eprintf "File %s, character %d: Syntax error\n"
-                 ifile (Lexing.lexeme_start lb);
-         exit 2
-     | CMlexer.Error msg ->
-         eprintf "File %s, character %d: %s\n"
-                 ifile (Lexing.lexeme_start lb) msg;
-         exit 2
-     | CMtypecheck.Error msg ->
-         eprintf "File %s, type-checking error:\n%s"
-                 ifile msg;
-         exit 2
+        exit 2 in
+  (* Print Asm in text form *)
+  let oc = open_out ofile in
+  PrintAsm.print_program oc asm;
+  close_out oc
 
 (* Processing of a .c file *)
 
