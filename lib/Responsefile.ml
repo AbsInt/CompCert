@@ -131,3 +131,19 @@ let expand_responsefiles args =
       acc := file::!acc
   done;
   Array.of_list !acc
+
+let write_responsefile oc args start =
+  let whitespace = Str.regexp "[ \t\r\n]" in
+  let quote arg =
+    if Str.string_match whitespace arg 0 then
+      Filename.quote arg (* We need to quote arguments containing whitespaces *)
+    else
+      arg in
+  let first = ref true in
+  let sep oc = if !first then
+    first := false
+  else
+    output_string oc " " in
+  for i = start to (Array.length args -1) do
+    Printf.fprintf oc "%t%s" sep (quote args.(i))
+  done
