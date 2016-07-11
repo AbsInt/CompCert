@@ -21,7 +21,7 @@ DIRS=lib common $(ARCH) backend cfrontend driver debug\
 
 RECDIRS=lib common $(ARCH) backend cfrontend driver flocq exportclight cparser
 
-COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) -as compcert.$(d))
+COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) compcert.$(d))
 
 COQC="$(COQBIN)coqc" -q $(COQINCLUDES)
 COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
@@ -253,16 +253,13 @@ distclean:
 check-admitted: $(FILES)
 	@grep -w 'admit\|Admitted\|ADMITTED' $^ || echo "Nothing admitted."
 
-# Problems with coqchk (coq 8.4.pl2):
+# Problems with coqchk (coq 8.5pl1):
 # Integers.Int.Z_mod_modulus_range takes forever to check
-# Floats.Float.double_of_bits_of_double takes forever to check
-# AST.external_function gives "Failure: impredicative Type inductive type"
-# Asm.instruction gives "Failure: impredicative Type inductive type"
-# Mach.instruction gives "Failure: impredicative Type inductive type"
-# UnionFind.UF.elt gives "Anomaly: Uncaught exception Reduction.NotConvertible"
+# compcert.lib.Floats.Float.of_longu_from_words takes forever to check
+# compcert.backend.SelectDivproof.divs_mul_shift_2 takes forever to check
 
 check-proof: $(FILES)
-	$(COQCHK) -admit Integers -admit Floats -admit AST -admit Asm -admit Mach -admit UnionFind Complements
+	$(COQCHK) -admit Integers -admit Floats -admit SelectDivproof Complements
 
 print-includes:
 	@echo $(COQINCLUDES)

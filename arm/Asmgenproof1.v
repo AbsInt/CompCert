@@ -333,11 +333,11 @@ Proof.
   intros. unfold loadimm.
   set (l1 := length (decompose_int n)).
   set (l2 := length (decompose_int (Int.not n))).
-  destruct (NPeano.leb l1 1%nat).
+  destruct (Nat.leb l1 1%nat).
 { (* single mov *)
   econstructor; split. apply exec_straight_one. simpl; reflexivity. auto.
   split; intros; Simpl. }
-  destruct (NPeano.leb l2 1%nat).
+  destruct (Nat.leb l2 1%nat).
 { (* single movn *)
   econstructor; split. apply exec_straight_one.
   simpl. rewrite Int.not_involutive. reflexivity. auto.
@@ -359,7 +359,7 @@ Proof.
   rewrite andb_false_r; simpl. rewrite Int.bits_shru by omega.
   change (Int.unsigned (Int.repr 16)) with 16. rewrite zlt_true by omega. f_equal; omega.
 }
-  destruct (NPeano.leb l1 l2).
+  destruct (Nat.leb l1 l2).
 { (* mov - orr* *)
   replace (Vint n) with (List.fold_left (fun v i => Val.or v (Vint i)) (decompose_int n) Vzero).
   apply iterate_op_correct.
@@ -390,7 +390,7 @@ Proof.
   (* sub *)
   econstructor; split. apply exec_straight_one; simpl; auto.
   split; intros; Simpl. apply Val.sub_opp_add.
-  destruct (NPeano.leb (length (decompose_int n)) (length (decompose_int (Int.neg n)))).
+  destruct (Nat.leb (length (decompose_int n)) (length (decompose_int (Int.neg n)))).
   (* add - add* *)
   replace (Val.add (rs r2) (Vint n))
      with (List.fold_left (fun v i => Val.add v (Vint i)) (decompose_int n) (rs r2)).
@@ -1498,5 +1498,3 @@ Proof.
 Qed.
 
 End CONSTRUCTORS.
-
-

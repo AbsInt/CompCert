@@ -44,24 +44,24 @@ Set Implicit Arguments.
 (** * The abstract signatures of trees *)
 
 Module Type TREE.
-  Variable elt: Type.
-  Variable elt_eq: forall (a b: elt), {a = b} + {a <> b}.
-  Variable t: Type -> Type.
-  Variable empty: forall (A: Type), t A.
-  Variable get: forall (A: Type), elt -> t A -> option A.
-  Variable set: forall (A: Type), elt -> A -> t A -> t A.
-  Variable remove: forall (A: Type), elt -> t A -> t A.
+  Parameter elt: Type.
+  Parameter elt_eq: forall (a b: elt), {a = b} + {a <> b}.
+  Parameter t: Type -> Type.
+  Parameter empty: forall (A: Type), t A.
+  Parameter get: forall (A: Type), elt -> t A -> option A.
+  Parameter set: forall (A: Type), elt -> A -> t A -> t A.
+  Parameter remove: forall (A: Type), elt -> t A -> t A.
 
   (** The ``good variables'' properties for trees, expressing
     commutations between [get], [set] and [remove]. *)
-  Hypothesis gempty:
+  Axiom gempty:
     forall (A: Type) (i: elt), get i (empty A) = None.
-  Hypothesis gss:
+  Axiom gss:
     forall (A: Type) (i: elt) (x: A) (m: t A), get i (set i x m) = Some x.
-  Hypothesis gso:
+  Axiom gso:
     forall (A: Type) (i j: elt) (x: A) (m: t A),
     i <> j -> get i (set j x m) = get i m.
-  Hypothesis gsspec:
+  Axiom gsspec:
     forall (A: Type) (i j: elt) (x: A) (m: t A),
     get i (set j x m) = if elt_eq i j then Some x else get i m.
   (* We could implement the following, but it's not needed for the moment.
@@ -72,18 +72,18 @@ Module Type TREE.
     forall (A: Type) (i: elt) (m: t A) (v: A),
     get i m = None -> remove i m = m.
   *)
-  Hypothesis grs:
+  Axiom grs:
     forall (A: Type) (i: elt) (m: t A), get i (remove i m) = None.
-  Hypothesis gro:
+  Axiom gro:
     forall (A: Type) (i j: elt) (m: t A),
     i <> j -> get i (remove j m) = get i m.
-  Hypothesis grspec:
+  Axiom grspec:
     forall (A: Type) (i j: elt) (m: t A),
     get i (remove j m) = if elt_eq i j then None else get i m.
 
   (** Extensional equality between trees. *)
-  Variable beq: forall (A: Type), (A -> A -> bool) -> t A -> t A -> bool.
-  Hypothesis beq_correct:
+  Parameter beq: forall (A: Type), (A -> A -> bool) -> t A -> t A -> bool.
+  Axiom beq_correct:
     forall (A: Type) (eqA: A -> A -> bool) (t1 t2: t A),
     beq eqA t1 t2 = true <->
     (forall (x: elt),
@@ -94,60 +94,60 @@ Module Type TREE.
     end).
 
   (** Applying a function to all data of a tree. *)
-  Variable map:
+  Parameter map:
     forall (A B: Type), (elt -> A -> B) -> t A -> t B.
-  Hypothesis gmap:
+  Axiom gmap:
     forall (A B: Type) (f: elt -> A -> B) (i: elt) (m: t A),
     get i (map f m) = option_map (f i) (get i m).
 
   (** Same as [map], but the function does not receive the [elt] argument. *)
-  Variable map1:
+  Parameter map1:
     forall (A B: Type), (A -> B) -> t A -> t B.
-  Hypothesis gmap1:
+  Axiom gmap1:
     forall (A B: Type) (f: A -> B) (i: elt) (m: t A),
     get i (map1 f m) = option_map f (get i m).
 
   (** Applying a function pairwise to all data of two trees. *)
-  Variable combine:
+  Parameter combine:
     forall (A B C: Type), (option A -> option B -> option C) -> t A -> t B -> t C.
-  Hypothesis gcombine:
+  Axiom gcombine:
     forall (A B C: Type) (f: option A -> option B -> option C),
     f None None = None ->
     forall (m1: t A) (m2: t B) (i: elt),
     get i (combine f m1 m2) = f (get i m1) (get i m2).
 
   (** Enumerating the bindings of a tree. *)
-  Variable elements:
+  Parameter elements:
     forall (A: Type), t A -> list (elt * A).
-  Hypothesis elements_correct:
+  Axiom elements_correct:
     forall (A: Type) (m: t A) (i: elt) (v: A),
     get i m = Some v -> In (i, v) (elements m).
-  Hypothesis elements_complete:
+  Axiom elements_complete:
     forall (A: Type) (m: t A) (i: elt) (v: A),
     In (i, v) (elements m) -> get i m = Some v.
-  Hypothesis elements_keys_norepet:
+  Axiom elements_keys_norepet:
     forall (A: Type) (m: t A),
     list_norepet (List.map (@fst elt A) (elements m)).
-  Hypothesis elements_extensional:
+  Axiom elements_extensional:
     forall (A: Type) (m n: t A),
     (forall i, get i m = get i n) ->
     elements m = elements n.
-  Hypothesis elements_remove:
+  Axiom elements_remove:
     forall (A: Type) i v (m: t A),
     get i m = Some v ->
     exists l1 l2, elements m = l1 ++ (i,v) :: l2 /\ elements (remove i m) = l1 ++ l2.
 
   (** Folding a function over all bindings of a tree. *)
-  Variable fold:
+  Parameter fold:
     forall (A B: Type), (B -> elt -> A -> B) -> t A -> B -> B.
-  Hypothesis fold_spec:
+  Axiom fold_spec:
     forall (A B: Type) (f: B -> elt -> A -> B) (v: B) (m: t A),
     fold f m v =
     List.fold_left (fun a p => f a (fst p) (snd p)) (elements m) v.
   (** Same as [fold], but the function does not receive the [elt] argument. *)
-  Variable fold1:
+  Parameter fold1:
     forall (A B: Type), (B -> A -> B) -> t A -> B -> B.
-  Hypothesis fold1_spec:
+  Axiom fold1_spec:
     forall (A B: Type) (f: B -> A -> B) (v: B) (m: t A),
     fold1 f m v =
     List.fold_left (fun a p => f a (snd p)) (elements m) v.
@@ -156,26 +156,26 @@ End TREE.
 (** * The abstract signatures of maps *)
 
 Module Type MAP.
-  Variable elt: Type.
-  Variable elt_eq: forall (a b: elt), {a = b} + {a <> b}.
-  Variable t: Type -> Type.
-  Variable init: forall (A: Type), A -> t A.
-  Variable get: forall (A: Type), elt -> t A -> A.
-  Variable set: forall (A: Type), elt -> A -> t A -> t A.
-  Hypothesis gi:
+  Parameter elt: Type.
+  Parameter elt_eq: forall (a b: elt), {a = b} + {a <> b}.
+  Parameter t: Type -> Type.
+  Parameter init: forall (A: Type), A -> t A.
+  Parameter get: forall (A: Type), elt -> t A -> A.
+  Parameter set: forall (A: Type), elt -> A -> t A -> t A.
+  Axiom gi:
     forall (A: Type) (i: elt) (x: A), get i (init x) = x.
-  Hypothesis gss:
+  Axiom gss:
     forall (A: Type) (i: elt) (x: A) (m: t A), get i (set i x m) = x.
-  Hypothesis gso:
+  Axiom gso:
     forall (A: Type) (i j: elt) (x: A) (m: t A),
     i <> j -> get i (set j x m) = get i m.
-  Hypothesis gsspec:
+  Axiom gsspec:
     forall (A: Type) (i j: elt) (x: A) (m: t A),
     get i (set j x m) = if elt_eq i j then x else get i m.
-  Hypothesis gsident:
+  Axiom gsident:
     forall (A: Type) (i j: elt) (m: t A), get j (set i (get i m) m) = get j m.
-  Variable map: forall (A B: Type), (A -> B) -> t A -> t B.
-  Hypothesis gmap:
+  Parameter map: forall (A B: Type), (A -> B) -> t A -> t B.
+  Axiom gmap:
     forall (A B: Type) (f: A -> B) (i: elt) (m: t A),
     get i (map f m) = f(get i m).
 End MAP.
@@ -1040,10 +1040,10 @@ End PMap.
 (** * An implementation of maps over any type that injects into type [positive] *)
 
 Module Type INDEXED_TYPE.
-  Variable t: Type.
-  Variable index: t -> positive.
-  Hypothesis index_inj: forall (x y: t), index x = index y -> x = y.
-  Variable eq: forall (x y: t), {x = y} + {x <> y}.
+  Parameter t: Type.
+  Parameter index: t -> positive.
+  Axiom index_inj: forall (x y: t), index x = index y -> x = y.
+  Parameter eq: forall (x y: t), {x = y} + {x <> y}.
 End INDEXED_TYPE.
 
 Module IMap(X: INDEXED_TYPE).
@@ -1148,8 +1148,8 @@ Module NMap := IMap(NIndexed).
 (** * An implementation of maps over any type with decidable equality *)
 
 Module Type EQUALITY_TYPE.
-  Variable t: Type.
-  Variable eq: forall (x y: t), {x = y} + {x <> y}.
+  Parameter t: Type.
+  Parameter eq: forall (x y: t), {x = y} + {x <> y}.
 End EQUALITY_TYPE.
 
 Module EMap(X: EQUALITY_TYPE) <: MAP.

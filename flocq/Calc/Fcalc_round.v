@@ -646,7 +646,7 @@ case Zlt_bool_spec ; intros Hk.
 (* *)
 unfold truncate_aux.
 rewrite Fx at 1.
-refine (let H := _ in conj _ H).
+unshelve refine (let H := _ in conj _ H).
 unfold k. ring.
 rewrite <- H.
 apply F2R_eq_compat.

@@ -59,7 +59,7 @@ Proof.
 intros.
 unfold arrows_right, arrows_left.
 rewrite rev_append_rev, map_app, map_rev, fold_left_app.
-f_equal.
+apply f_equal.
 rewrite <- fold_left_rev_right, rev_involutive.
 reflexivity.
 Qed.
@@ -87,7 +87,7 @@ Lemma pop_invariant:
     end.
 Proof.
 induction symbols_to_pop; intros; unfold pop; fold pop.
-exists word_stack ([]:list token) sem_popped; intuition.
+exists word_stack, ([]:list token), sem_popped; intuition.
 f_equal.
 apply JMeq_eq, JMeq_eqrect with (P:=(fun x => x)).
 destruct stack_cur as [|[]]; eauto.

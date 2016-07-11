@@ -13,6 +13,7 @@ unsigned char guc;
 signed short gss;
 unsigned short gus;
 int gi;
+unsigned gu;
 float gf;
 double gd;
 long long gll;
@@ -44,6 +45,8 @@ int main()
   TEST("global float", float, gf, 0.5, 256.0);
   TEST("global double", double, gd, 3.1415, 2.718);
   TEST("global long long", long long, gll, 0x123456789ABCDEFLL, 0x789ABCDEF1234567LL);
+  /* Test for unwanted partial constant propagation */
+  *((volatile long long *) &gll) = gu;
   return 0;
 }
 

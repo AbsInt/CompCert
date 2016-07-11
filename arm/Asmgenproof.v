@@ -166,11 +166,11 @@ Proof.
   intros. unfold loadimm.
   set (l1 := length (decompose_int n)).
   set (l2 := length (decompose_int (Int.not n))).
-  destruct (NPeano.leb l1 1%nat). TailNoLabel.
-  destruct (NPeano.leb l2 1%nat). TailNoLabel.
+  destruct (Nat.leb l1 1%nat). TailNoLabel.
+  destruct (Nat.leb l2 1%nat). TailNoLabel.
   destruct (thumb tt). unfold loadimm_thumb.
   destruct (Int.eq (Int.shru n (Int.repr 16)) Int.zero); TailNoLabel.
-  destruct (NPeano.leb l1 l2); auto with labels.
+  destruct (Nat.leb l1 l2); auto with labels.
 Qed.
 Hint Resolve loadimm_label: labels.
 
@@ -179,7 +179,7 @@ Remark addimm_label:
 Proof.
   intros; unfold addimm.
   destruct (Int.ltu (Int.repr (-256)) n). TailNoLabel.
-  destruct (NPeano.leb (length (decompose_int n)) (length (decompose_int (Int.neg n))));
+  destruct (Nat.leb (length (decompose_int n)) (length (decompose_int (Int.neg n))));
   auto with labels.
 Qed.
 Hint Resolve addimm_label: labels.

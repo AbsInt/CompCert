@@ -173,13 +173,13 @@ Definition loadimm (r: ireg) (n: int) (k: code) :=
   let d2 := decompose_int (Int.not n) in
   let l1 := List.length d1 in
   let l2 := List.length d2 in
-  if NPeano.leb l1 1%nat then
+  if Nat.leb l1 1%nat then
     Pmov r (SOimm n) :: k
-  else if NPeano.leb l2 1%nat then
+  else if Nat.leb l2 1%nat then
     Pmvn r (SOimm (Int.not n)) :: k
   else if thumb tt then
     loadimm_thumb r n k
-  else if NPeano.leb l1 l2 then
+  else if Nat.leb l1 l2 then
     iterate_op (Pmov r) (Porr r r) d1 k
   else
     iterate_op (Pmvn r) (Pbic r r) d2 k.
@@ -190,7 +190,7 @@ Definition addimm (r1 r2: ireg) (n: int) (k: code) :=
   else
    (let d1 := decompose_int n in
     let d2 := decompose_int (Int.neg n) in
-    if NPeano.leb (List.length d1) (List.length d2)
+    if Nat.leb (List.length d1) (List.length d2)
     then iterate_op (Padd r1 r2) (Padd r1 r1) d1 k
     else iterate_op (Psub r1 r2) (Psub r1 r1) d2 k).
 
@@ -801,4 +801,3 @@ Definition transf_fundef (f: Mach.fundef) : res Asm.fundef :=
 
 Definition transf_program (p: Mach.program) : res Asm.program :=
   transform_partial_program transf_fundef p.
-
