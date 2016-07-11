@@ -136,6 +136,7 @@ rule token = parse
   | "]"    { RBRACKET }
   | "readonly" { READONLY }
   | "return"    { RETURN }
+  | "runtime"    { RUNTIME }
   | ")"    { RPAREN }
   | ";"    { SEMICOLON }
   | "/"    { SLASH }

@@ -38,6 +38,8 @@ let mkef sg toks =
       EF_external(coqstring_of_camlstring s, sg)
   | [EFT_tok "builtin"; EFT_string s] ->
       EF_builtin(coqstring_of_camlstring s, sg)
+  | [EFT_tok "runtime"; EFT_string s] ->
+      EF_runtime(coqstring_of_camlstring s, sg)
   | [EFT_tok "volatile"; EFT_tok "load"; EFT_chunk c] ->
       EF_vload c
   | [EFT_tok "volatile"; EFT_tok "store"; EFT_chunk c] ->
@@ -348,6 +350,7 @@ let mkmatch expr cases =
 %token READONLY
 %token RETURN
 %token RPAREN
+%token RUNTIME
 %token SEMICOLON
 %token SINGLE
 %token SINGLEOFINT
@@ -719,6 +722,7 @@ eftok:
   | VOLATILE                                    { EFT_tok "volatile" }
   | EXTERN                                      { EFT_tok "extern" }
   | BUILTIN                                     { EFT_tok "builtin" }
+  | RUNTIME                                     { EFT_tok "runtime" }
   | memory_chunk                                { EFT_chunk $1 }
 ;
 
