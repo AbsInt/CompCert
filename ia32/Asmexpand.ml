@@ -182,6 +182,11 @@ let expand_builtin_vstore_common chunk addr src tmp =
      let addr' = offset_addressing addr _4 in
      emit (Pmov_mr (addr,src2));
      emit (Pmov_mr (addr',src1))
+  | Mint64, BA_splitlong(BA_int(hi),BA(IR src2)) ->
+     let addr' = offset_addressing addr _4 in
+     emit (Pmov_mr (addr,src2));
+     emit (Pmov_ri (tmp,hi));
+     emit (Pmov_mr (addr',tmp))
   | Mfloat32, BA(FR src) ->
      emit (Pmovss_mf (addr,src))
   | Mfloat64, BA(FR src) ->
@@ -259,6 +264,13 @@ let expand_builtin_inline name args res =
      emit (Pbsr(res, al));
      emit (Pxor_ri(res, coqint_of_camlint 63l));
      emit (Plabel lbl2)
+  | "__builtin_clzll", [BA_splitlong(BA_int (hi), BA (IR al))], BR(IR res) ->
+     if hi <> _0 then
+       emit (Pmov_ri(res, count_leading_zeros hi))
+     else begin
+       emit (Pbsr(res, al));
+       emit (Pxor_ri(res, coqint_of_camlint 63l))
+     end
   | ("__builtin_ctz" | "__builtin_ctzl"), [BA(IR a1)], BR(IR res) ->
      emit (Pbsf (res,a1))
   | "__builtin_ctzll", [BA_splitlong(BA (IR ah), BA (IR al))], BR(IR res) ->
@@ -271,6 +283,16 @@ let expand_builtin_inline name args res =
      emit (Plabel lbl1);
      emit (Pbsf(res, ah));
      emit (Padd_ri(res, coqint_of_camlint 32l));
+     emit (Plabel lbl2)
+  | "__builtin_ctzll", [BA_splitlong(BA_int (hi), BA (IR al))], BR(IR res) ->
+     let lbl1 = new_label() in
+     let lbl2 = new_label() in
+     emit (Ptest_rr(al, al));
+     emit (Pjcc(Cond_e, lbl1));
+     emit (Pbsf(res, al));
+     emit (Pjmp_l lbl2);
+     emit (Plabel lbl1);
+     emit (Pmov_ri(res, count_trailing_zeros_plus32 hi));
      emit (Plabel lbl2)
   (* Float arithmetic *)
   | "__builtin_fabs", [BA(FR a1)], BR(FR res) ->
