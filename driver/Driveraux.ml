@@ -14,11 +14,32 @@
 open Printf
 open Clflags
 
+(* Is this a gnu based tool chain *)
+let gnu_system = Configuration.system <> "diab"
+
 (* Invocation of external tools *)
 
 let rec waitpid_no_intr pid =
   try Unix.waitpid [] pid
   with Unix.Unix_error (Unix.EINTR, _, _) -> waitpid_no_intr pid
+
+let responsefile args resp_arg =
+  try
+    if Sys.win32 && (String.length (String.concat "" args) > 7000) then
+      let file,oc = Filename.open_temp_file "compcert" "" in
+      let whitespace = Str.regexp "[ \t\r\n]" in
+      let quote arg =
+        if Str.string_match whitespace arg 0 then
+          Filename.quote arg (* We need to quote arguments containing whitespaces *)
+        else
+          arg in
+      List.iter (fun a -> Printf.fprintf oc "%s " (quote a)) args;
+      close_out oc;
+      resp_arg file
+    else
+      args
+  with Sys_error _ ->
+    args
 
 let command ?stdout args =
   if !option_v then begin
@@ -93,8 +114,6 @@ let print_error oc msg =
   in
     List.iter print_one_error msg;
     output_char oc '\n'
-
-let gnu_system = Configuration.system <> "diab"
 
 (* Command-line parsing *)
 let explode_comma_option s =
