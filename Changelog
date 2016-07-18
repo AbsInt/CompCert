@@ -1,9 +1,15 @@
-Release 2.7.1, 2016-07-10
+Release 2.7.1, 2016-07-18
 =========================
 
-- Ported to Coq 8.5pl2.  No other changes in functionality.
+- Ported to Coq 8.5pl2.
 
+Bug fixing:
+- Fixed a compile-time assertion failure involving builtins
+  taking a 64-bit integer parameter and given an unsigned 32-bit integer
+  argument.
+- Updates to the Cminor parser.	
 
+	
 Release 2.7, 2016-06-29
 =======================
 
