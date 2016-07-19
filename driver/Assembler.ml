@@ -18,17 +18,12 @@ open Driveraux
 (* From asm to object file *)
 
 let assemble ifile ofile =
-  let cmd,opts = match Configuration.asm with
-  | name::opts -> name,opts
-  | [] -> assert false (* Should be catched in Configuration *) in
-  let opts = List.concat [
-    opts;
+  let cmd = List.concat [
+    Configuration.asm;
     ["-o"; ofile];
     List.rev !assembler_options;
     [ifile]
   ] in
-  let opts = responsefile opts (fun a -> if gnu_system then ["@"^a] else ["@"^a]) in
-  let cmd = cmd::opts in
   let exc = command cmd in
   if exc <> 0 then begin
     safe_remove ofile;

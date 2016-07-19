@@ -24,11 +24,8 @@ open Printf
 let preprocess ifile ofile =
   let output =
     if ofile = "-" then None else Some ofile in
-  let cmd,opts = match Configuration.prepro with
-  | name::opts -> name,opts
-  | [] -> assert false (* Should be catched in Configuration *) in
-  let opts = List.concat [
-    opts;
+  let cmd = List.concat [
+    Configuration.prepro;
     ["-D__COMPCERT__"];
     (if !Clflags.use_standard_headers
      then ["-I" ^ Filename.concat !Clflags.stdlib_path "include" ]
@@ -36,8 +33,6 @@ let preprocess ifile ofile =
     List.rev !prepro_options;
     [ifile]
   ] in
-  let opts = responsefile opts (fun a -> if gnu_system then ["@"^a] else ["@"^a]) in
-  let cmd = cmd::opts in
   let exc = command ?stdout:output cmd in
   if exc <> 0 then begin
     if ofile <> "-" then safe_remove ofile;

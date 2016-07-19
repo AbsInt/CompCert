@@ -12,12 +12,6 @@
 (* *********************************************************************)
 
 
-val responsefile: string list -> (string -> string list) -> string list
-    (** [responsefiles args resp_arg] Test whether [args] should be passed
-        via responsefile and writes them into a file. [resp_arg] generates
-        the new argument constructed from the responsefile. If no
-        responsefile is written the arguments are returned unchanged. *)
-
 val command: ?stdout:string -> string list -> int
     (** Execute the command with the given arguments and an optional file for
         the stdout. Returns the exit code. *)

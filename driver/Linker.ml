@@ -19,19 +19,14 @@ open Driveraux
 (* Linking *)
 
 let linker exe_name files =
-  let cmd,opts = match Configuration.linker with
-  | name::opts -> name,opts
-  | [] -> assert false (* Should be catched in Configuration *) in
-  let opts = List.concat [
-    opts;
+  let cmd = List.concat [
+    Configuration.linker;
     ["-o"; exe_name];
     files;
     (if Configuration.has_runtime_lib
     then ["-L" ^ !stdlib_path; "-lcompcert"]
     else [])
   ] in
-  let opts = responsefile opts (fun a -> if gnu_system then ["@"^a] else ["-@"^a]) in
-  let cmd = cmd::opts in
   let exc = command cmd in
   if exc <> 0 then begin
     command_error "linker" exc;

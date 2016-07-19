@@ -17,31 +17,17 @@ open Clflags
 (* Is this a gnu based tool chain *)
 let gnu_system = Configuration.system <> "diab"
 
+(* Sage removale of files *)
+let safe_remove file =
+  try Sys.remove file with Sys_error _ -> ()
+
 (* Invocation of external tools *)
 
 let rec waitpid_no_intr pid =
   try Unix.waitpid [] pid
   with Unix.Unix_error (Unix.EINTR, _, _) -> waitpid_no_intr pid
 
-let responsefile args resp_arg =
-  try
-    if Sys.win32 && (String.length (String.concat "" args) > 7000) then
-      let file,oc = Filename.open_temp_file "compcert" "" in
-      let whitespace = Str.regexp "[ \t\r\n]" in
-      let quote arg =
-        if Str.string_match whitespace arg 0 then
-          Filename.quote arg (* We need to quote arguments containing whitespaces *)
-        else
-          arg in
-      List.iter (fun a -> Printf.fprintf oc "%s " (quote a)) args;
-      close_out oc;
-      resp_arg file
-    else
-      args
-  with Sys_error _ ->
-    args
-
-let command ?stdout args =
+let command stdout args =
   if !option_v then begin
     eprintf "+ %s" (String.concat " " args);
     begin match stdout with
@@ -72,11 +58,30 @@ let command ?stdout args =
             argv.(0) fn (Unix.error_message err) param;
     -1
 
+let quote arg =
+  let whitespace = Str.regexp "[ \t\r\n]" in
+  if Str.string_match whitespace arg 0 then
+    Filename.quote arg (* We need to quote arguments containing whitespaces *)
+  else
+    arg
+
+let command ?stdout args =
+  if Sys.win32 && List.fold_left (fun len arg -> len + String.length arg + 1) 0 args > 7000 then
+    let file,oc = Filename.open_temp_file "compcert" "" in
+    let cmd,args = match args with
+    | cmd::args -> cmd,args
+    | [] -> assert false (* Should never happen *) in
+    List.iter (fun a -> Printf.fprintf oc "%s " (quote a)) args;
+    close_out oc;
+    let arg = if gnu_system then "@"^file else "-@"^file in
+    let ret = command stdout [cmd;arg] in
+    safe_remove file;
+    ret
+  else
+    command stdout args
+
 let command_error n exc =
   eprintf "Error: %s command failed with exit code %d (use -v to see invocation)\n" n exc
-
-let safe_remove file =
-  try Sys.remove file with Sys_error _ -> ()
 
 
 (* Determine names for output files.  We use -o option if specified
