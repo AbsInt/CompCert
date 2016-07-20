@@ -171,3 +171,13 @@ let struct_return_style =
   | "int1-8"   -> SR_int1to8
   | "ref"      -> SR_ref
   | v -> bad_config "struct_return_style" [v]
+
+type response_file_style =
+  | Gnu         (* responsefiles in gnu compatible syntax *)
+  | Unsupported (* responsefiles are not supported *)
+
+let response_file_style =
+  match get_config_string "response_file_style" with
+  | "unsupported" -> Unsupported
+  | "gnu" -> Gnu
+  | v -> bad_config "response_file_style" [v]

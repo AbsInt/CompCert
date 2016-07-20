@@ -15,6 +15,6 @@
 (* *********************************************************************)
 
 
-val expand_responsefiles: string array -> string array
+val expandargv: string array -> string array
   (** Expand responsefile arguments contained in the array and return the full
       set of arguments. *)

@@ -58,20 +58,25 @@ let command stdout args =
             argv.(0) fn (Unix.error_message err) param;
     -1
 
-let quote arg =
-  let whitespace = Str.regexp "[ \t\r\n]" in
-  if Str.string_match whitespace arg 0 then
-    Filename.quote arg (* We need to quote arguments containing whitespaces *)
-  else
-    arg
+(* This function reimplements quoting of writeargv from libiberty *)
+let gnu_quote arg =
+  let len = String.length arg in
+  let buf = Buffer.create len in
+  String.iter (fun c -> match c with
+    | ' ' | '\t' | '\r' | '\n' | '\\' | '\'' | '"' ->
+        Buffer.add_char buf '\\'
+    | _ -> ();
+    Buffer.add_char buf c) arg;
+  Buffer.contents buf
 
 let command ?stdout args =
-  if Sys.win32 && List.fold_left (fun len arg -> len + String.length arg + 1) 0 args > 7000 then
+  let resp = Sys.win32 && Configuration.response_file_style <> Configuration.Unsupported in
+  if resp && List.fold_left (fun len arg -> len + String.length arg + 1) 0 args > 7000 then
     let file,oc = Filename.open_temp_file "compcert" "" in
     let cmd,args = match args with
     | cmd::args -> cmd,args
     | [] -> assert false (* Should never happen *) in
-    List.iter (fun a -> Printf.fprintf oc "%s " (quote a)) args;
+    List.iter (fun a -> Printf.fprintf oc "%s " (gnu_quote a)) args;
     close_out oc;
     let arg = if gnu_system then "@"^file else "-@"^file in
     let ret = command stdout [cmd;arg] in

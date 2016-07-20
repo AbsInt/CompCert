@@ -63,3 +63,10 @@ val struct_passing_style: struct_passing_style
 val struct_return_style: struct_return_style
   (** Calling conventions to use for returning structs and unions as
       first-class values *)
+
+type response_file_style =
+  | Gnu         (* responsefiles in gnu compatible syntax *)
+  | Unsupported (* responsefiles are not supported *)
+
+val response_file_style: response_file_style
+  (** Style of supported responsefiles *)

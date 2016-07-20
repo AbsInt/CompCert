@@ -101,7 +101,7 @@ let parse_array spec argv first last =
 
 let parse_cmdline spec =
   try
-    let argv = expand_responsefiles Sys.argv in
+    let argv = expandargv Sys.argv in
     parse_array spec argv 1 (Array.length argv - 1)
   with Arg.Bad s ->
     eprintf "%s" s;
