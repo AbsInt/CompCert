@@ -69,14 +69,30 @@ let gnu_quote arg =
     Buffer.add_char buf c) arg;
   Buffer.contents buf
 
+let re_whitespace = Str.regexp ".*[ \t\n\r]"
+
+let diab_quote arg =
+  let buf = Buffer.create ((String.length arg) + 8) in
+  let doublequote = Str.string_match re_whitespace arg 0 in
+  if doublequote then Buffer.add_char buf '"';
+  String.iter (fun c ->
+    if c = '"' then Buffer.add_char buf '\\';
+    Buffer.add_char buf c) arg;
+  if doublequote then Buffer.add_char buf '"';
+  Buffer.contents buf
+
 let command ?stdout args =
   let resp = Sys.win32 && Configuration.response_file_style <> Configuration.Unsupported in
   if resp && List.fold_left (fun len arg -> len + String.length arg + 1) 0 args > 7000 then
+    let quote = match Configuration.response_file_style with
+    | Configuration.Unsupported -> assert false
+    | Configuration.Gnu -> gnu_quote
+    | Configuration.Diab -> diab_quote in
     let file,oc = Filename.open_temp_file "compcert" "" in
     let cmd,args = match args with
     | cmd::args -> cmd,args
     | [] -> assert false (* Should never happen *) in
-    List.iter (fun a -> Printf.fprintf oc "%s " (gnu_quote a)) args;
+    List.iter (fun a -> Printf.fprintf oc "%s " (quote a)) args;
     close_out oc;
     let arg = if gnu_system then "@"^file else "-@"^file in
     let ret = command stdout [cmd;arg] in

@@ -174,10 +174,12 @@ let struct_return_style =
 
 type response_file_style =
   | Gnu         (* responsefiles in gnu compatible syntax *)
+  | Diab        (* responsefiles in diab compatible syntax *)
   | Unsupported (* responsefiles are not supported *)
 
 let response_file_style =
   match get_config_string "response_file_style" with
   | "unsupported" -> Unsupported
   | "gnu" -> Gnu
+  | "diab" -> Diab
   | v -> bad_config "response_file_style" [v]

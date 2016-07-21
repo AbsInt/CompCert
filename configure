@@ -119,7 +119,7 @@ case "$target" in
         asm_supports_cfi=false
         clinker="${toolprefix}dcc"
         libmath="-lm"
-        responsefile="unsupported"
+        responsefile="diab"
         ;;
       *)
         system="linux"

@@ -66,6 +66,7 @@ val struct_return_style: struct_return_style
 
 type response_file_style =
   | Gnu         (* responsefiles in gnu compatible syntax *)
+  | Diab        (* responsefiles in diab compatible syntax *)
   | Unsupported (* responsefiles are not supported *)
 
 val response_file_style: response_file_style
