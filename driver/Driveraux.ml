@@ -69,17 +69,20 @@ let gnu_quote arg =
     Buffer.add_char buf c) arg;
   Buffer.contents buf
 
-let re_whitespace = Str.regexp ".*[ \t\n\r]"
+let re_quote = Str.regexp ".*[ \t\n\r\"]"
 
 let diab_quote arg =
   let buf = Buffer.create ((String.length arg) + 8) in
-  let doublequote = Str.string_match re_whitespace arg 0 in
-  if doublequote then Buffer.add_char buf '"';
-  String.iter (fun c ->
-    if c = '"' then Buffer.add_char buf '\\';
-    Buffer.add_char buf c) arg;
-  if doublequote then Buffer.add_char buf '"';
-  Buffer.contents buf
+  let doublequote = Str.string_match re_quote arg 0 in
+  if doublequote then begin
+    Buffer.add_char buf '"';
+    String.iter (fun c ->
+      if c = '"' then Buffer.add_char buf '\\';
+      Buffer.add_char buf c) arg;
+    if doublequote then Buffer.add_char buf '"';
+    Buffer.contents buf
+  end else
+    arg
 
 let command ?stdout args =
   let resp = Sys.win32 && Configuration.response_file_style <> Configuration.Unsupported in
