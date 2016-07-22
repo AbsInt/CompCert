@@ -115,11 +115,12 @@ let combine_toplevel_definitions loc env s old_sto old_ty sto ty =
     | Some new_ty ->
         new_ty
     | None ->
+        let id = Env.fresh_ident s in
         error loc
            "redefinition of '%s' with incompatible type.@ \
-            Previous type: %a.@ \
-            New type: %a"
-          s Cprint.typ old_ty Cprint.typ ty;
+            Previous declaration: %a.@ \
+            New declaration: %a"
+          s Cprint.simple_decl (id, old_ty) Cprint.simple_decl (id, ty);
         ty in
   let new_sto =
     (* The only case not allowed is removing static *)
