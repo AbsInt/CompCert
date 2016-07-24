@@ -147,6 +147,14 @@ static void get_number(int firstchar)
   exit(2);
 }
 
+static char * my_strdup(char * s)
+{
+  size_t l = strlen(s);
+  char * t = malloc(l + 1);
+  if (t != NULL) memcpy(t, s, l + 1);
+  return t;
+}
+
 static void get_string()
 {
   int c, pos;
@@ -159,7 +167,7 @@ static void get_string()
   }
   buffer[pos] = 0;
   current_lexeme.kind = STRING;
-  current_lexeme.u.s = strdup(buffer);
+  current_lexeme.u.s = my_strdup(buffer);
   return;
  bad_string:
   fprintf(stderr, "Illegal string literal\n");
