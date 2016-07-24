@@ -4,10 +4,6 @@ CC=../../ccomp
 CFLAGS=-U__GNUC__ -stdlib ../../runtime -dclight -dasm
 LIBS=
 TIME=xtime -o /dev/null -mintime 1.0
-ifeq ($(CCHECKLINK),true)
-CCHECK=../../cchecklink
-CFLAGS+= -sdump
-endif
 
 EXE=arcode lzw lzss
 
@@ -35,7 +31,7 @@ TESTCOMPR=/tmp/testcompr.out
 TESTEXPND=/tmp/testexpnd.out
 
 test:
-	rm -f $(TESTCOMPR) $(TESTEXPND)
+	@rm -f $(TESTCOMPR) $(TESTEXPND)
 	@echo "Test data: $(TESTFILE)"
 	@for i in $(EXE); do \
           echo "$$i: compression..."; \
@@ -47,23 +43,15 @@ test:
           else echo "$$i: FAILED"; exit 2; \
           fi; \
         done
-	rm -f $(TESTCOMPR) $(TESTEXPND)
+	@rm -f $(TESTCOMPR) $(TESTEXPND)
 
 bench:
-	rm -f $(TESTCOMPR)
+	@rm -f $(TESTCOMPR)
 	@for i in $(EXE); do \
-          echo -n "$$i "; \
+          echo -n "$$i: "; \
           $(TIME) sh -c "./$$i -c -i $(TESTFILE) -o $(TESTCOMPR) && ./$$i -d -i $(TESTCOMPR) -o /dev/null"; \
          done
-	rm -f $(TESTCOMPR)
-
-ccheck:
-	@echo "---- arcode"
-	@$(CCHECK) -exe arcode $(ARCODE_OBJS:.o=.sdump)
-	@echo "---- lzw"
-	@$(CCHECK) -exe lzw $(LZW_OBJS:.o=.sdump)
-	@echo "---- lzss"
-	@$(CCHECK) -exe lzss $(LZSS_OBJS:.o=.sdump)
+	@rm -f $(TESTCOMPR)
 
 include .depend
 

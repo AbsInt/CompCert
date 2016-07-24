@@ -2,10 +2,6 @@ include ../../Makefile.config
 
 CCOMP=../../ccomp
 CCOMPFLAGS=-stdlib ../../runtime -dparse -dc -dclight -dasm -fall
-ifeq ($(CCHECKLINK),true)
-CCHECK=../../cchecklink
-CCOMPFLAGS+= -sdump
-endif
 
 LIBS=$(LIBMATH)
 
@@ -103,10 +99,4 @@ test:
          done
 
 bench:
-
-ccheck:
-	@for i in $(TESTS) $(TESTS_COMP); do \
-           echo "---- $$i"; \
-           $(CCHECK) -exe $$i.compcert $$i.sdump; \
-         done
 

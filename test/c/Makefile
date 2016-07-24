@@ -1,11 +1,7 @@
 include ../../Makefile.config
 
 CCOMP=../../ccomp
-CCOMPFLAGS=-stdlib ../../runtime -dc -dclight -dasm
-ifeq ($(CCHECKLINK),true)
-CCHECK=../../cchecklink
-CCOMPFLAGS+= -sdump
-endif
+CCOMPFLAGS=$(CCOMPOPTS) -stdlib ../../runtime -dc -dclight -dasm
 
 CFLAGS=-O1 -Wall
 
@@ -40,12 +36,6 @@ test:
            then echo "$$i: passed"; \
            else echo "$$i: FAILED"; exit 2; \
 	   fi; \
-         done
-
-ccheck:
-	@for i in $(PROGS); do \
-           echo "---- $$i"; \
-           $(CCHECK) -exe $$i.compcert $$i.sdump; \
          done
 
 test_gcc:

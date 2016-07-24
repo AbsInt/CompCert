@@ -10,7 +10,7 @@
 typedef unsigned char boolean;
 
 
-static void nsieve(int m) {
+static unsigned int nsieve(int m) {
     unsigned int count = 0, i, j;
     boolean * flags = (boolean *) malloc(m * sizeof(boolean));
     memset(flags, 1, m);
@@ -23,14 +23,20 @@ static void nsieve(int m) {
     }
 
     free(flags);
-    printf("Primes up to %8u %8u\n", m, count);
+    return count;
 }
+
+#define NITER 10
 
 int main(int argc, char * argv[]) {
     int m = argc < 2 ? 9 : atoi(argv[1]);
-    int i;
-    for (i = 0; i < 3; i++)
-        nsieve(10000 << (m-i));
+    int i, j;
+    for (i = 0; i < 3; i++) {
+      int n = 10000 << (m-i);
+      unsigned count;
+      for (j = 0; j < NITER; j++) { count = nsieve(n); }
+      printf("Primes up to %8d %8u\n", n, count);
+    }
     return 0;
 }
 

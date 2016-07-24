@@ -41,15 +41,15 @@ struct ht_ht {
 #endif /* HT_DEBUG */
 };
 
-/*inline*/ int ht_val(struct ht_node *node) {
+static inline int ht_val(struct ht_node *node) {
     return(node->val);
 }
 
-/*inline*/ char *ht_key(struct ht_node *node) {
+static inline char *ht_key(struct ht_node *node) {
     return(node->key);
 }
 
-/*inline*/ int ht_hashcode(struct ht_ht *ht, char *key) {
+static inline int ht_hashcode(struct ht_ht *ht, char *key) {
     unsigned long val = 0;
     for (; *key; ++key) val = 5 * val + *key;
     return(val % ht->size);
@@ -129,7 +129,7 @@ void ht_destroy(struct ht_ht *ht) {
 #endif /* HT_DEBUG */
 }
 
-/*inline*/ struct ht_node *ht_find(struct ht_ht *ht, char *key) {
+struct ht_node *ht_find(struct ht_ht *ht, char *key) {
     int hash_code = ht_hashcode(ht, key);
     struct ht_node *node = ht->tbl[hash_code];
     while (node) {
@@ -139,7 +139,7 @@ void ht_destroy(struct ht_ht *ht) {
     return((struct ht_node *)NULL);
 }
 
-/*inline*/ struct ht_node *ht_find_new(struct ht_ht *ht, char *key) {
+struct ht_node *ht_find_new(struct ht_ht *ht, char *key) {
     int hash_code = ht_hashcode(ht, key);
     struct ht_node *prev = 0, *node = ht->tbl[hash_code];
     while (node) {
@@ -161,7 +161,7 @@ void ht_destroy(struct ht_ht *ht) {
 /*
  *  Hash Table iterator data/functions
  */
-/*inline*/ struct ht_node *ht_next(struct ht_ht *ht) {
+struct ht_node *ht_next(struct ht_ht *ht) {
     unsigned long index;
     struct ht_node *node = ht->iter_next;
     if (node) {
@@ -179,13 +179,13 @@ void ht_destroy(struct ht_ht *ht) {
     return((struct ht_node *)NULL);
 }
 
-/*inline*/ struct ht_node *ht_first(struct ht_ht *ht) {
+struct ht_node *ht_first(struct ht_ht *ht) {
     ht->iter_index = 0;
     ht->iter_next = (struct ht_node *)NULL;
     return(ht_next(ht));
 }
 
-/*inline*/ int ht_count(struct ht_ht *ht) {
+static inline int ht_count(struct ht_ht *ht) {
     return(ht->items);
 }
 
@@ -281,6 +281,8 @@ write_count (char *searchFor, char *buffer, long buflen)
   ht_destroy (ht);
 }
 
+#define NRUNS 500
+
 int
 main ()
 {
@@ -347,6 +349,10 @@ main ()
   write_count ("GGTATT", buffer, seqlen);
   write_count ("GGTATTTTAATT", buffer, seqlen);
   write_count ("GGTATTTTAATTTATAGT", buffer, seqlen);
+  for (i = 0; i < NRUNS; i++) {
+    struct ht_ht *  ht = generate_frequencies (6, buffer, seqlen);
+    ht_destroy(ht);
+  }
   free (buffer);
   fclose (f);
   return 0;

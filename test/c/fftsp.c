@@ -145,13 +145,13 @@ int dfft(float x[], float y[], int np)
 
 /* Test harness */
 
-float * xr, * xi;
+#define NRUNS 3000
 
 int main(int argc, char ** argv)
 {
-  int n, np, npm, n2, i, j;
+  int n, np, npm, n2, i, j, nruns;
   float enp, t, y, z, zr, zi, zm, a;
-  float * pxr, * pxi;
+  float * xr, * xi, * pxr, * pxi;
 
   if (argc >= 2) n = atoi(argv[1]); else n = 12;
   np = 1 << n;
@@ -162,21 +162,23 @@ int main(int argc, char ** argv)
   xi = calloc(np, sizeof(float));
   pxr = xr;
   pxi = xi;
-  *pxr = (enp - 1.0) * 0.5f;
-  *pxi = 0.0;
-  n2 = np / 2;  
-  *(pxr+n2) = -0.5;
-  *(pxi+n2) =  0.0;
-  for (i = 1; i <= npm; i++) {
-    j = np - i;
-    *(pxr+i) = -0.5;
-    *(pxr+j) = -0.5;
-    z = t * (float)i;  
-    y = -0.5f*(cosf(z)/sinf(z));
-    *(pxi+i) =  y;
-    *(pxi+j) = -y;
+  for (nruns = 0; nruns < NRUNS; nruns++) {
+    *pxr = (enp - 1.0) * 0.5f;
+    *pxi = 0.0;
+    n2 = np / 2;  
+    *(pxr+n2) = -0.5;
+    *(pxi+n2) =  0.0;
+    for (i = 1; i <= npm; i++) {
+      j = np - i;
+      *(pxr+i) = -0.5;
+      *(pxr+j) = -0.5;
+      z = t * (float)i;  
+      y = -0.5f*(cosf(z)/sinf(z));
+      *(pxi+i) =  y;
+      *(pxi+j) = -y;
+    }
+    dfft(xr,xi,np);
   }
-  dfft(xr,xi,np);
   zr = 0.0; 
   zi = 0.0; 
   npm = np-1;

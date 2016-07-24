@@ -207,8 +207,8 @@ int main(int argc, char ** argv)
 
   printf("fib(30) = %ld\n", wordcode_interp(wordcode_fib));
   printf("tak(18, 12, 6) = %ld\n", wordcode_interp(wordcode_tak));
-  for (i = 0; i < 20; i++) (void)  wordcode_interp(wordcode_fib);
-  for (i = 0; i < 1000; i++) (void)  wordcode_interp(wordcode_tak);
+  for (i = 0; i < 10; i++) (void)  wordcode_interp(wordcode_fib);
+  for (i = 0; i < 500; i++) (void)  wordcode_interp(wordcode_tak);
 
   return 0;
 }

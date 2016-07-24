@@ -11,6 +11,3 @@ bench:
 
 clean:
 	for i in $(DIRS); do $(MAKE) -C $$i clean; done
-
-ccheck:
-	for i in $(DIRS); do $(MAKE) -C $$i ccheck; done

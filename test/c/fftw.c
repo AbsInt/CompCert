@@ -74,14 +74,16 @@ const E KP1_847759065 = ((E) +1.847759065022573512256366378793576573644833252);
 
 /* Test harness */
 
+#define NRUNS (1024 * 1024)
+
 int main()
 {
-	INT s[8] = { 0,1,2,3,4,5,6,7 };
+	static INT s[8] = { 0,1,2,3,4,5,6,7 };
 	static R i[1024];
 	static R o[1024];
 	int k;
 	for (k = 0; k < 1024; ++k) i[k] = k;
-	for (k = 0; k < 1024 * 1024 * 2; ++k)
+	for (k = 0; k < NRUNS; ++k)
 		e01_8(i, o, s, s, 64, 8, 8);
         for (k = 0; k < 16; ++k)
           printf("o[%d] = %.6e\n", k, o[k]);

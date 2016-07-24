@@ -242,6 +242,7 @@ int speed_test(void)
 
   for(i = 0; i < 16; ++i ) k[i] = i;
   for(i = 0; i < 10000000; i++) {
+    testdata[99] = (u8) i;
     crypto_auth(out, testdata, 100, k);
   }
   return out[0];

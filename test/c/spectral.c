@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-inline double eval_A(int i, int j) { return 1.0/((i+j)*(i+j+1)/2+i+1); }
+static inline double eval_A(int i, int j) { return 1.0/((i+j)*(i+j+1)/2+i+1); }
 
 void eval_A_times_u(int N, const double u[], double Au[])
 {

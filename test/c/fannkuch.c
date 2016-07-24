@@ -98,7 +98,7 @@ fannkuch( int n )
     int
 main( int argc, char* argv[] )
 {
-    int		n = (argc>1) ? atoi(argv[1]) : 10;
+    int		n = (argc>1) ? atoi(argv[1]) : 11;
 
     printf("Pfannkuchen(%d) = %ld\n", n, fannkuch(n));
     return 0;

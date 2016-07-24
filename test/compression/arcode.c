@@ -702,7 +702,7 @@ int ReadHeader(bit_file_t *bfpIn)
 
     cumulativeProb = 0;
 
-    for (c = 0; c <= UPPER(EOF_CHAR); c++)
+    for (c = 0; c < UPPER(EOF_CHAR); c++)
     {
         ranges[UPPER(c)] = 0;
     }

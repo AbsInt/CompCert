@@ -191,7 +191,7 @@ test_triplet_t testvec[4] = {
 };
 
 #define DATALEN 100000
-#define NITER 1000
+#define NITER 250
 
 int main()
 {

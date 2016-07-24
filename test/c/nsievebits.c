@@ -30,13 +30,16 @@ nsieve(unsigned int m)
 	return (count);
 }
 
+#define NITER 10
+
 static void
 test(unsigned int n)
 {
 	unsigned int count, m;
+        int i;
 
 	m = (1 << n) * 10000;
-	count = nsieve(m);
+        for (i = 0; i < NITER; i++) { count = nsieve(m); }
 	printf("Primes up to %8u %8u\n", m, count);
 }
 

@@ -27,24 +27,24 @@ int cmpint(const void * i, const void * j)
   return 1;
 }
 
+#define NITER 100
+
 int main(int argc, char ** argv)
 {
-  int n, i;
+  int n, i, j;
   int * a, * b;
-  int bench = 0;
 
-  if (argc >= 2) n = atoi(argv[1]); else n = 1000000;
-  if (argc >= 3) bench = 1;
+  if (argc >= 2) n = atoi(argv[1]); else n = 100000;
   a = malloc(n * sizeof(int));
   b = malloc(n * sizeof(int));
-  for (i = 0; i < n; i++) b[i] = a[i] = rand() & 0xFFFF;
-  quicksort(0, n - 1, a);
-  if (!bench) {
-    qsort(b, n, sizeof(int), cmpint);
-    for (i = 0; i < n; i++) {
-      if (a[i] != b[i]) { printf("Bug!\n"); return 2; }
-    }
-    printf("OK\n");
+  for (j = 0; j < NITER; j++) {
+    for (i = 0; i < n; i++) b[i] = a[i] = rand() & 0xFFFF;
+    quicksort(0, n - 1, a);
   }
+  qsort(b, n, sizeof(int), cmpint);
+  for (i = 0; i < n; i++) {
+    if (a[i] != b[i]) { printf("Bug!\n"); return 2; }
+  }
+  printf("OK\n");
   return 0;
 }
