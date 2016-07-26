@@ -53,13 +53,10 @@ let lookup_types: (string, int) Hashtbl.t = Hashtbl.create 7
 
 (* Translate a C.typ to a string needed for hashing *)
 let typ_to_string ty =
-  let buf = Buffer.create 7 in
-  let chan = Format.formatter_of_buffer buf in
   Cprint.print_debug_idents := true;
-  Cprint.typ chan ty;
+  let s = Format.asprintf "%a" Cprint.typ ty in
   Cprint.print_debug_idents := false;
-  Format.pp_print_flush chan ();
-  Buffer.contents buf
+  s
 
 (* Helper functions for the attributes *)
 let strip_attributes typ = strip_attributes_type typ [AConst; AVolatile]
