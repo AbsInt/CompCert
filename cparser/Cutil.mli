@@ -198,6 +198,9 @@ val valid_assignment : Env.t -> exp -> typ -> bool
      the given type is allowed. *)
 val valid_cast : Env.t -> typ -> typ -> bool
   (* Check that a cast from the first type to the second is allowed. *)
+val int_pointer_conversion: Env.t -> typ -> typ -> bool
+  (* Check that a cast from the first type to the second is an integer
+     conversion *)
 val fundef_typ: fundef -> typ
   (* Return the function type for the given function definition. *)
 val int_representable: int64 -> int -> bool -> bool

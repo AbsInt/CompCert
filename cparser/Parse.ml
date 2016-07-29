@@ -70,7 +70,7 @@ let preprocessed_file transfs name sourcefile =
              | Parser.Parser.Inter.Fail_pr ->
                  (* Theoretically impossible : implies inconsistencies
                     between grammars. *)
-                 Cerrors.fatal_error "Internal error while parsing"
+                 Cerrors.fatal_error Cutil.no_loc "Internal error while parsing"
              | Parser.Parser.Inter.Timeout_pr -> assert false
              | Parser.Parser.Inter.Parsed_pr (ast, _ ) -> ast) in
       let p1 = Timing.time "Elaboration" Elab.elab_file ast in

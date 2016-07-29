@@ -115,13 +115,13 @@ let currentLocation = ref Cutil.no_loc
 let updateLoc l = currentLocation := l
 
 let error msg =
-  Cerrors.error "%aError: %s" Cutil.formatloc !currentLocation msg
+  Cerrors.error !currentLocation "%s" msg
 
 let unsupported msg =
-  Cerrors.error "%aUnsupported feature: %s" Cutil.formatloc !currentLocation msg
+  Cerrors.error !currentLocation "unsupported feature: %s"  msg
 
-let warning msg =
-  Cerrors.warning "%aWarning: %s" Cutil.formatloc !currentLocation msg
+let warning t msg =
+  Cerrors.warning !currentLocation t msg
 
 let string_of_errmsg msg =
   let string_of_err = function
@@ -357,11 +357,11 @@ let make_builtin_memcpy args =
       let sz1 =
         match Initializers.constval !comp_env sz with
         | Errors.OK(Vint n) -> n
-        | _ -> error "ill-formed __builtin_memcpy_aligned (3rd argument must be a constant)"; Integers.Int.zero in
+        | _ -> error "argument 3 of of '__builtin_memcpy_aligned' must be a constant"; Integers.Int.zero in
       let al1 =
         match Initializers.constval !comp_env al with
         | Errors.OK(Vint n) -> n
-        | _ -> error "ill-formed __builtin_memcpy_aligned (4th argument must be a constant)"; Integers.Int.one in
+        | _ -> error "argument 4 of of '__builtin_memcpy_aligned' must be a constant"; Integers.Int.one in
       (* to check: sz1 > 0, al1 divides sz1, al1 = 1|2|4|8 *)
       (* Issue #28: must decay array types to pointer types *)
       Ebuiltin(EF_memcpy(sz1, al1),
@@ -587,15 +587,15 @@ let z_of_str hex str fst =
   !res
 
 
-let checkFloatOverflow f =
+let checkFloatOverflow f typ =
   match f with
   | Fappli_IEEE.B754_finite _ -> ()
   | Fappli_IEEE.B754_zero _ ->
-      warning "Floating-point literal is so small that it converts to 0"
+      warning Cerrors.Literal_range "magnitude of floating-point constant too small for type '%s'"  typ
   | Fappli_IEEE.B754_infinity _ ->
-      warning "Floating-point literal is so large that it converts to infinity"
+      warning Cerrors.Literal_range "magnitude of floating-point constant too large for type '%s'"  typ
   | Fappli_IEEE.B754_nan _ ->
-      warning "Floating-point literal converts to Not-a-Number"
+      warning Cerrors.Literal_range "floating-point converts converts to 'NaN'"
 
 let convertFloat f kind =
   let mant = z_of_str f.C.hex (f.C.intPart ^ f.C.fracPart) 0 in
@@ -621,11 +621,11 @@ let convertFloat f kind =
       begin match kind with
       | FFloat ->
 	  let f = Float32.from_parsed base mant exp in
-          checkFloatOverflow f;
+          checkFloatOverflow f "float";
           Ctyping.econst_single f
       | FDouble | FLongDouble ->
 	  let f = Float.from_parsed base mant exp in
-          checkFloatOverflow f;
+          checkFloatOverflow f "double";
           Ctyping.econst_float f
       end
 
@@ -655,7 +655,7 @@ let rec convertExpr env e =
       else Ctyping.econst_int (convertInt i) sg
   | C.EConst(C.CFloat(f, k)) ->
       if k = C.FLongDouble && not !Clflags.option_flongdouble then
-        unsupported "'long double' floating-point literal";
+        unsupported "'long double' floating-point constant";
       convertFloat f k
   | C.EConst(C.CStr s) ->
       let ty = typeStringLiteral s in
@@ -717,8 +717,7 @@ let rec convertExpr env e =
       let e2' = convertExpr env e2 in
       if Cutil.is_composite_type env e1.etyp
       && List.mem AVolatile (Cutil.attributes_of_type env e1.etyp) then
-        warning "assignment to a l-value of volatile composite type. \
-                 The 'volatile' qualifier is ignored.";
+        warning Cerrors.Unnamed "assignment to a lvalue of volatile composite type";
       ewrap (Ctyping.eassign e1' e2')
   | C.EBinop((C.Oadd_assign|C.Osub_assign|C.Omul_assign|C.Odiv_assign|
               C.Omod_assign|C.Oand_assign|C.Oor_assign|C.Oxor_assign|
@@ -759,12 +758,12 @@ let rec convertExpr env e =
       let (kind, args1) =
         match args with
         | {edesc = C.EConst(CInt(n,_,_))} :: args1 -> (n, args1)
-        | _ -> error "ill_formed __builtin_debug"; (0L, args) in
+        | _ -> error "argument 1 of '__builtin_debug' must be constant"; (0L, args) in
       let (text, args2) =
         match args1 with
         | {edesc = C.EConst(CStr(txt))} :: args2 -> (txt, args2)
         | {edesc = C.EVar id} :: args2 -> (id.name, args2)
-        | _ -> error "ill_formed __builtin_debug"; ("", args1) in
+        | _ -> error "argument 2 of '__builtin_debug' must be either a string or variable"; ("", args1) in
       let targs2 = convertTypArgs env [] args2 in
       Ebuiltin(
         EF_debug(P.of_int64 kind, intern_string text,
@@ -779,7 +778,7 @@ let rec convertExpr env e =
             EF_annot(coqstring_of_camlstring txt, typlist_of_typelist targs1),
             targs1, convertExprList env args1, convertTyp env e.etyp)
       | _ ->
-          error "ill-formed __builtin_annot (first argument must be string literal)";
+          error "argument 1 of '__builtin_annot' must be a string";
           ezero
       end
 
@@ -792,7 +791,7 @@ let rec convertExpr env e =
                    Tcons(targ, Tnil), convertExprList env [arg],
                    convertTyp env e.etyp)
       | _ ->
-          error "ill-formed __builtin_annot_intval (first argument must be string literal)";
+          error "argument 1 of '__builtin_annot_intval' must be a string";
           ezero
       end
 
@@ -839,9 +838,9 @@ let rec convertExpr env e =
       | Some(tres, targs, va) ->
           checkFunctionType env tres targs;
           if targs = None && not !Clflags.option_funprototyped then
-            unsupported "call to unprototyped function (consider adding option -funprototyped)";
+            unsupported "call to unprototyped function (consider adding option [-funprototyped])";
           if va && not !Clflags.option_fvararg_calls then
-            unsupported "call to variable-argument function (consider adding option -fvararg-calls)"
+            unsupported "call to variable-argument function (consider adding option [-fvararg-calls])"
       end;
       ewrap (Ctyping.ecall (convertExpr env fn) (convertExprList env args))
 
@@ -863,7 +862,7 @@ and convertLvalue env e =
       let e3' = ewrap (Ctyping.ebinop Oadd e1' e2') in
       ewrap (Ctyping.ederef e3')
   | _ ->
-      error "illegal l-value"; ezero
+      error "illegal lvalue"; ezero
 
 and convertExprList env el =
   match el with
@@ -945,7 +944,7 @@ let rec contains_case s =
   | C.Sdowhile (s1,_) -> contains_case s1
   | C.Sfor (s1,e,s2,s3) ->  contains_case s1; contains_case s2; contains_case s3
   | C.Slabeled(C.Scase _, _) ->
-      unsupported "'case' outside of 'switch'"
+      unsupported "'case' statement not in switch statement"
   | C.Slabeled(_,s) -> contains_case s
   | C.Sblock b -> List.iter contains_case b
 
@@ -996,7 +995,7 @@ let rec convertStmt env s =
         | _ -> Cutil.is_debug_stmt s in
       if init.sdesc <> C.Sskip && not (init_debug init) then
         begin
-          warning "ignored code at beginning of 'switch'";
+          warning Cerrors.Unnamed "ignored code at beginning of 'switch'";
           contains_case init
         end;
       let te = convertExpr env e in
@@ -1005,9 +1004,9 @@ let rec convertStmt env s =
   | C.Slabeled(C.Slabel lbl, s1) ->
       Slabel(intern_string lbl, convertStmt env s1)
   | C.Slabeled(C.Scase _, _) ->
-      unsupported "'case' outside of 'switch'"; Sskip
+      unsupported "'case' statement not in switch statement"; Sskip
   | C.Slabeled(C.Sdefault, _) ->
-      unsupported "'default' outside of 'switch'"; Sskip
+      unsupported "'default' statement not in switch statement"; Sskip
   | C.Sgoto lbl ->
       Sgoto(intern_string lbl)
   | C.Sreturn None ->
@@ -1020,7 +1019,7 @@ let rec convertStmt env s =
       unsupported "inner declarations"; Sskip
   | C.Sasm(attrs, txt, outputs, inputs, clobber) ->
       if not !Clflags.option_finline_asm then
-        unsupported "inline 'asm' statement (consider adding option -finline-asm)";
+        unsupported "inline 'asm' statement (consider adding option [-finline-asm])";
       Sdo (convertAsm s.sloc env txt outputs inputs clobber)
 
 and convertSwitch env is_64 = function
@@ -1034,7 +1033,7 @@ and convertSwitch env is_64 = function
             None
         | Case e ->
             match Ceval.integer_expr env e with
-            | None -> unsupported "'case' label is not a compile-time integer";
+            | None -> unsupported "expression is not an integer constant expression";
                       None
             | Some v -> Some (if is_64
                               then Z.of_uint64 v
@@ -1047,7 +1046,7 @@ and convertSwitch env is_64 = function
 let convertFundef loc env fd =
   checkFunctionType env fd.fd_ret (Some fd.fd_params);
   if fd.fd_vararg && not !Clflags.option_fvararg_calls then
-    unsupported "variable-argument function (consider adding option -fvararg-calls)";
+    unsupported "variable-argument function (consider adding option [-fvararg-calls])";
   let ret =
     convertTyp env fd.fd_ret in
   let params =
@@ -1132,7 +1131,7 @@ let convertInitializer env ty i =
   with
   | Errors.OK init -> init
   | Errors.Error msg ->
-      error (sprintf "Initializer is not a compile-time constant (%s)"
+      error (sprintf "initializer element is not a compile-time constant (%s)"
                      (string_of_errmsg msg)); []
 
 (** Global variable *)
@@ -1185,7 +1184,7 @@ let rec convertGlobdecls env res gl =
           begin match Cutil.unroll env ty with
           | TFun(tres, targs, va, a) ->
               if targs = None then
-                warning ("'" ^ id.name ^ "' is declared without a function prototype");
+                warning Cerrors.Unnamed "'%s' is declared without a function prototype" id.name;
               convertGlobdecls env (convertFundecl env d :: res) gl'
           | _ ->
               convertGlobdecls env (convertGlobvar g.gloc env d :: res) gl'
@@ -1199,7 +1198,7 @@ let rec convertGlobdecls env res gl =
           convertGlobdecls env res gl'
       | C.Gpragma s ->
           if not (!process_pragma_hook s) then
-            warning ("'#pragma " ^ s ^ "' directive ignored");
+            warning Cerrors.Unknown_pragmas "unknown pragma ignored";
           convertGlobdecls env res gl'
 
 (** Convert struct and union declarations.
@@ -1308,7 +1307,7 @@ let convertProgram p =
     let typs = convertCompositedefs env [] p in
     match build_composite_env typs with
     | Errors.Error msg ->
-        error (sprintf "Incorrect struct or union definition: %s"
+        error (sprintf "incorrect struct or union definition: %s"
                        (string_of_errmsg msg));
         None
     | Errors.OK ce ->

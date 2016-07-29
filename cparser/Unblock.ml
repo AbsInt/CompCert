@@ -32,7 +32,7 @@ let rec local_initializer env path init k =
       let (ty_elt, sz) =
         match unroll env path.etyp with
         | TArray(ty_elt, Some sz, _) -> (ty_elt, sz)
-        | _ -> fatal_error "Wrong type for array initializer" in
+        | _ -> fatal_error no_loc "Wrong type for array initializer" in
       let rec array_init pos il =
         if pos >= sz then k else begin
           let (i1, il') =

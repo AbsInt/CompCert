@@ -339,8 +339,9 @@ General options:\n\
 \  -stdlib <dir>  Set the path of the Compcert run-time library\n\
 \  -v             Print external commands before invoking them\n\
 \  -timings       Show the time spent in various compiler passes\n\
-\  -version       Print the version string and exit\n\
-Interpreter mode:\n\
+\  -version       Print the version string and exit\n" ^
+  Cerrors.warning_help ^
+"Interpreter mode:\n\
 \  -interp        Execute given .c files using the reference interpreter\n\
 \  -quiet         Suppress diagnostic messages for the interpreter\n\
 \  -trace         Have the interpreter produce a detailed trace of reductions\n\
@@ -446,10 +447,11 @@ let cmdline_actions =
 (* General options *)
   Exact "-v", Set option_v;
   Exact "-stdlib", String(fun s -> stdlib_path := s);
-  Exact "-timings", Set option_timings;
-  Exact "-Werror", Set Cerrors.warn_error;
+  Exact "-timings", Set option_timings;] @
+(* Diagnostic options *)
+  Cerrors.warning_options @
 (* Interpreter mode *)
-  Exact "-interp", Set option_interp;
+ [ Exact "-interp", Set option_interp;
   Exact "-quiet", Self (fun _ -> Interp.trace := 0);
   Exact "-trace", Self (fun _ -> Interp.trace := 2);
   Exact "-random", Self (fun _ -> Interp.mode := Interp.Random);

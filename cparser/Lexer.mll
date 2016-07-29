@@ -126,16 +126,16 @@ let currentLoc =
 (* Error reporting *)
 
 let fatal_error lb fmt =
-  Cerrors.fatal_error ("%s:%d: Error:@ " ^^ fmt)
-      lb.lex_curr_p.pos_fname lb.lex_curr_p.pos_lnum
+  Cerrors.fatal_error
+    (lb.lex_curr_p.pos_fname,lb.lex_curr_p.pos_lnum) fmt
 
 let error lb fmt =
-  Cerrors.error ("%s:%d: Error:@ " ^^ fmt)
-      lb.lex_curr_p.pos_fname lb.lex_curr_p.pos_lnum
+  Cerrors.error
+    (lb.lex_curr_p.pos_fname,lb.lex_curr_p.pos_lnum) fmt
 
 let warning lb fmt =
-  Cerrors.warning ("%s:%d: Warning:@ " ^^ fmt)
-      lb.lex_curr_p.pos_fname lb.lex_curr_p.pos_lnum
+  Cerrors.warning
+      (lb.lex_curr_p.pos_fname,lb.lex_curr_p.pos_lnum) Cerrors.Unnamed ("warning: " ^^ fmt)
 
 (* Simple character escapes *)
 
