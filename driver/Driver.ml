@@ -333,6 +333,7 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>)\n\
 \  -dltl          Save LTL after register allocation in <file>.ltl\n\
 \  -dmach         Save generated Mach code in <file>.mach\n\
 \  -dasm          Save generated assembly in <file>.s\n\
+\  -dall          Save all generated intermidate files in <file>.<ext>\n\
 \  -sdump         Save info for post-linking validation in <file>.json\n\
 \  -doptions      Save the compiler configurations in <file>.opt.json\n\
 General options:\n\
@@ -440,6 +441,17 @@ let cmdline_actions =
   Exact "-dalloctrace", Set option_dalloctrace;
   Exact "-dmach", Set option_dmach;
   Exact "-dasm", Set option_dasm;
+  Exact "-dall", Self (fun _ ->
+    option_dprepro := true;
+    option_dparse := true;
+    option_dcmedium := true;
+    option_dclight := true;
+    option_dcminor := true;
+    option_drtl := true;
+    option_dalloctrace := true;
+    option_dmach := true;
+    option_dasm := true;
+    dump_options:=true);
   Exact "-sdump", Set option_sdump;
   Exact "-sdump-suffix", String (fun s -> option_sdump := true; sdump_suffix:= s);
   Exact "-doptions", Set dump_options;
