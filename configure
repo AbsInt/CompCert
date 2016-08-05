@@ -31,6 +31,10 @@ Supported targets:
   arm-linux            (ARM, EABI)
   arm-eabihf           (ARM, EABI using hardware FP registers)
   arm-hardfloat        (ARM, EABI using hardware FP registers)
+  armeb-eabi           (ARM, EABI big endian)
+  armeb-linux          (ARM, EABI big endian)
+  armeb-eabihf         (ARM, EABI using hardware FP registers big endian)
+  armeb-hardfloat      (ARM, EABI using hardware FP registers big endian)
   ia32-linux           (x86 32 bits, Linux)
   ia32-bsd             (x86 32 bits, BSD)
   ia32-macosx          (x86 32 bits, MacOS X)
@@ -103,6 +107,14 @@ case "$target" in
       arch="arm"; model="armv7r"; endianness="little";;
   armv7m-*)
       arch="arm"; model="armv7m"; endianness="little";;
+  armeb-*|armebv7a-*)
+      arch="arm"; model="armv7a"; endianness="big";;
+  armebv6-*)
+      arch="arm"; model="armv6"; endianness="big";;
+  armebv7r-*)
+      arch="arm"; model="armv7r"; endianness="big";;
+  armebv7m-*)
+      arch="arm"; model="armv7m"; endianness="big";;
   ia32-*)
       arch="ia32"; model="sse2"; endianness="little";;
   powerpc-*|ppc-*)
@@ -126,33 +138,6 @@ case "$target" in
 esac
 
 target=${target#[a-zA-Z0-9]*-}
-
-
-#
-# ARM: Optional Endianness Specification
-#
-if test "$arch" = "arm"; then
-  case "$target" in
-    *-big)
-        endianness="big";
-        target=${target%"-big"}
-        ;;
-    *-little)
-        endianness="little";
-        target=${target%"-little"}
-        ;;
-  esac
-else
-  case "$target" in
-    *-big|*-little)
-        echo "Error: endianness may only be specified for ARM architecture." 1>&2
-        echo "$usage" 1>&2
-        exit 2
-        ;;
-    *)
-        ;;
-  esac
-fi
 
 
 # Per-target configuration
