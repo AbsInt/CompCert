@@ -98,10 +98,10 @@ Tracing options:\n\
 General options:\n\
 \  -v             Print external commands before invoking them\n"
 
-let print_usage_and_exit _ =
+let print_usage_and_exit () =
   printf "%s" usage_string; exit 0
 
-let print_version_and_exit _ =
+let print_version_and_exit () =
   printf "%s" version_string; exit 0
 
 let language_support_options = [
@@ -110,26 +110,26 @@ let language_support_options = [
   option_fpacked_structs; option_finline_asm
 ]
 
-let set_all opts = List.iter (fun r -> r := true) opts
-let unset_all opts = List.iter (fun r -> r := false) opts
+let set_all opts () = List.iter (fun r -> r := true) opts
+let unset_all opts () = List.iter (fun r -> r := false) opts
 
 let cmdline_actions =
   let f_opt name ref =
     [Exact("-f" ^ name), Set ref; Exact("-fno-" ^ name), Unset ref] in
   [
 (* Getting help *)
-  Exact "-help", Self print_usage_and_exit;
-  Exact "--help", Self print_usage_and_exit;
+  Exact "-help", Unit print_usage_and_exit;
+  Exact "--help", Unit print_usage_and_exit;
 (* Getting version info *)
-  Exact "-version", Self print_version_and_exit;
-  Exact "--version", Self print_version_and_exit;
+  Exact "-version", Unit print_version_and_exit;
+  Exact "--version", Unit print_version_and_exit;
 (* Processing options *)
   Exact "-E", Set option_E;]
 (* Preprocessing options *)
   @ prepro_actions @
 (* Language support options -- more below *)
-  [Exact "-fall", Self (fun _ -> set_all language_support_options);
-  Exact "-fnone", Self (fun _ -> unset_all language_support_options);
+  [Exact "-fall", Unit (set_all language_support_options);
+  Exact "-fnone", Unit (unset_all language_support_options);
 (* Tracing options *)
   Exact "-dparse", Set option_dparse;
   Exact "-dc", Set option_dcmedium;

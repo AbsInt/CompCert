@@ -18,9 +18,10 @@
 open Format
 open Commandline
 
-let warn_error = ref false
 let error_fatal = ref false
-let color_diagnostics = ref true
+let color_diagnostics =
+  let term = try Sys.getenv "TERM" with Not_found -> "" in
+  ref (Unix.isatty Unix.stderr && term <> "dumb" && term <>"")
 
 let num_errors = ref 0
 let num_warnings = ref 0
@@ -106,20 +107,20 @@ let string_of_warning = function
   | Literal_range -> "literal-range"
   | Unknown_pragmas -> "unknown-pragmas"
 
-let activate_warning w =
+let activate_warning w () =
   if not (List.mem w !active_warnings) then
     active_warnings:=w::!active_warnings
 
-let deactivate_warning w =
+let deactivate_warning w  () =
   active_warnings:=List.filter ((<>) w) !active_warnings;
   error_warnings:= List.filter ((<>) w) !error_warnings
 
-let warning_as_error w =
-  activate_warning w;
+let warning_as_error w ()=
+  activate_warning w ();
   if not (List.mem w !error_warnings) then
     error_warnings := w::!error_warnings
 
-let warning_not_as_error w =
+let warning_not_as_error w () =
   error_warnings:= List.filter ((<>) w) !error_warnings
 
 let wall () =
@@ -256,18 +257,14 @@ let check_errors () =
     eprintf "@[<hov 0>%d error%s detected.@]@."
             !num_errors
             (if !num_errors = 1 then "" else "s");
-  if !warn_error && !num_warnings > 0 then
-    eprintf "@[<hov 0>%d error-enabled warning%s detected.@]@."
-            !num_warnings
-            (if !num_warnings = 1 then "" else "s");
-  !num_errors > 0 || (!warn_error && !num_warnings > 0)
+  !num_errors > 0
 
 let error_option w =
   let key = string_of_warning w in
-  [Exact ("-W"^key), Self (fun _ -> activate_warning w);
-   Exact ("-Wno"^key), Self (fun _ -> deactivate_warning w);
-   Exact ("-Werror="^key), Self (fun _ -> warning_as_error w);
-   Exact ("-Wno-error="^key), Self (fun _ -> warning_not_as_error w)]
+  [Exact ("-W"^key), Unit (activate_warning w);
+   Exact ("-Wno"^key), Unit (deactivate_warning w);
+   Exact ("-Werror="^key), Unit ( warning_as_error w);
+   Exact ("-Wno-error="^key), Unit ( warning_not_as_error w)]
 
 let warning_options =
   error_option Unnamed @
@@ -289,10 +286,10 @@ let warning_options =
   error_option Literal_range @
   error_option Unknown_pragmas @
   [Exact ("-Wfatal-errors"), Set error_fatal;
-   Exact ("-fdiagnostics-color"), Set color_diagnostics;
+   Exact ("-fdiagnostics-color"), Ignore; (* Either output supports it or no color *)
    Exact ("-fno-diagnostics-color"), Unset color_diagnostics;
-   Exact ("-Werror"), Self (fun _ -> werror ());
-   Exact ("-Wall"), Self (fun _ -> wall());]
+   Exact ("-Werror"), Unit werror;
+   Exact ("-Wall"), Unit wall;]
 
 let warning_help = "Diagnostic options:\n\
 \  -W<warning>        Enable the specific <warning>\n\

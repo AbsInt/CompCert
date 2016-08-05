@@ -31,6 +31,8 @@ type action =
   | Self of (string -> unit)
   | String of (string -> unit)
   | Integer of (int -> unit)
+  | Ignore
+  | Unit of (unit -> unit)
 
 let match_pattern text = function
   | Exact s ->
@@ -95,6 +97,8 @@ let parse_array spec argv first last =
           end else begin
             eprintf "Option `%s' expects an argument\n" s; exit 2
           end
+      | Some (Ignore) -> parse (i+1)
+      | Some (Unit f) -> f (); parse (i+1)
     end
   in parse first
 

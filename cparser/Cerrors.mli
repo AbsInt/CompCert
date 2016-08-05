@@ -13,35 +13,58 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-val warn_error : bool ref
+(* Printing of warnings and error messages *)
+
 val reset : unit -> unit
+  (** Reset the error counters. *)
+
 exception Abort
-val fatal_error_raw : ('a, out_channel, unit, 'b) format4 -> 'a
+  (** Exception raised upon fatal errors *)
+
 val check_errors : unit -> bool
+  (** Check whether errors occured *)
 
 type warning_type =
-  | Unnamed
-  | Unknown_attribute
-  | Zero_length_array
-  | Celeven_extension
-  | Gnu_empty_struct
-  | Missing_declarations
-  | Constant_conversion
-  | Int_conversion
-  | Varargs
-  | Implicit_function_declaration
-  | Pointer_type_mismatch
-  | Compare_distinct_pointer_types
-  | Pedantic
-  | Main_return_type
-  | Invalid_noreturn
-  | Return_type
-  | Literal_range
-  | Unknown_pragmas
+  | Unnamed                        (** warnings which cannot be turned off *)
+  | Unknown_attribute              (** usage of unsupported/unknown attributes *)
+  | Zero_length_array              (** gnu extension for zero lenght arrays *)
+  | Celeven_extension              (** C11 fetatures *)
+  | Gnu_empty_struct               (** gnu extension for empty struct *)
+  | Missing_declarations           (** declation which do not declare anything *)
+  | Constant_conversion            (** dangerous constant conversions *)
+  | Int_conversion                 (** pointer <-> int conversions *)
+  | Varargs                        (** promotable vararg argument *)
+  | Implicit_function_declaration  (** deprecated implicit function declaration *)
+  | Pointer_type_mismatch          (** pointer type mismatch in ?: operator *)
+  | Compare_distinct_pointer_types (** comparison between different pointer types *)
+  | Pedantic                       (** non C99 code *)
+  | Main_return_type               (** wrong return type for main *)
+  | Invalid_noreturn               (** noreturn function containing return *)
+  | Return_type                    (** void return in non-void function *)
+  | Literal_range                  (** literal ranges *)
+  | Unknown_pragmas                (** unknown/unsupported pragma *)
 
 val warning  : (string * int) -> warning_type -> ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
+(** [warning (f,c) w fmt arg1 ... argN] formats the arguments [arg1] to [argN] as warining according to
+    the format string [fmt] and outputs the result on [stderr] with additional file [f] and column [c]
+    and warning key for [w] *)
+
 val error : (string * int) -> ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
+(** [error (f,c) w fmt arg1 ... argN] formats the arguments [arg1] to [argN] as error according to
+    the format string [fmt] and outputs the result on [stderr] with additional file [f] and column [c]
+    and warning key for [w]. *)
+
 val fatal_error : (string * int) -> ('a, Format.formatter, unit, unit, unit, 'b) format6 -> 'a
+(** [fatal_error (f,c) w fmt arg1 ... argN] formats the arguments [arg1] to [argN] as error according to
+    the format string [fmt] and outputs the result on [stderr] with additional file [f] and column [c]
+    and warning key for [w]. Additionally raises the excpetion [Abort] after printing the error message *)
+
+val fatal_error_raw : ('a, out_channel, unit, 'b) format4 -> 'a
+(** [fatal_error_raw] is identical to fatal_error, except it uses [Printf] and does not automatically
+    introduce indentation *)
 
 val warning_help : string
+(** Help string for all warning options *)
+
 val warning_options : (Commandline.pattern * Commandline.action) list
+(** List of all options for diagnostics *)
