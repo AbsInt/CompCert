@@ -17,7 +17,7 @@
 @     * Neither the name of the <organization> nor the
 @       names of its contributors may be used to endorse or promote products
 @       derived from this software without specific prior written permission.
-@ 
+@
 @ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 @ "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 @ LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -37,25 +37,25 @@
 #include "sysdeps.h"
 
 @@@ Signed modulus
-	
+
 FUNCTION(__i64_smod)
         push {r4, r5, r6, r7, r8, r10, lr}
-        ASR r4, r1, #31          @ r4 = sign of N
-        ASR r5, r3, #31          @ r5 = sign of D
+        ASR r4, Reg0HI, #31      @ r4 = sign of N
+        ASR r5, Reg1HI, #31      @ r5 = sign of D
         MOV r10, r4              @ r10 = sign of result
-        EOR r0, r0, r4           @ take absolute value of N
-        EOR r1, r1, r4           @ N = (N ^ (N >>s 31)) - (N >>s 31)
-        subs r0, r0, r4
-        sbc r1, r1, r4
-        EOR r2, r2, r5           @ take absolute value of D
-        EOR r3, r3, r5
-        subs r2, r2, r5
-        sbc r3, r3, r5
+        EOR Reg0LO, Reg0LO, r4   @ take absolute value of N
+        EOR Reg0HI, Reg0HI, r4   @ N = (N ^ (N >>s 31)) - (N >>s 31)
+        subs Reg0LO, Reg0LO, r4
+        sbc Reg0HI, Reg0HI, r4
+        EOR Reg1LO, Reg1LO, r5   @ take absolute value of D
+        EOR Reg1HI, Reg1HI, r5
+        subs Reg1LO, Reg1LO, r5
+        sbc Reg1HI, Reg1HI, r5
         bl __i64_udivmod         @ do unsigned division
-        EOR r0, r0, r10          @ apply expected sign
-        EOR r1, r1, r10
-        subs r0, r0, r10
-        sbc r1, r1, r10
+        EOR Reg0LO, Reg0LO, r10  @ apply expected sign
+        EOR Reg0HI, Reg0HI, r10
+        subs Reg0LO, Reg0LO, r10
+        sbc Reg0HI, Reg0HI, r10
         pop {r4, r5, r6, r7, r8, r10, lr}
         bx lr
 ENDFUNCTION(__i64_smod)

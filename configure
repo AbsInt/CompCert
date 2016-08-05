@@ -12,7 +12,7 @@
 #                                                                     #
 #######################################################################
 
-prefix=/usr/local
+prefix='/usr/local'
 bindir='$(PREFIX)/bin'
 libdir='$(PREFIX)/lib/compcert'
 toolprefix=''
@@ -24,44 +24,51 @@ clightgen=false
 usage='Usage: ./configure [options] target
 
 Supported targets:
-  ppc-eabi         (PowerPC, EABI with GNU/Unix tools)
-  ppc-eabi-diab    (PowerPC, EABI with Diab tools)
-  ppc-linux        (PowerPC, Linux)
-  arm-eabi         (ARM, EABI)
-  arm-linux        (ARM, EABI)
-  arm-eabihf       (ARM, EABI using hardware FP registers)
-  arm-hardfloat    (ARM, EABI using hardware FP registers)
-  ia32-linux       (x86 32 bits, Linux)
-  ia32-bsd         (x86 32 bits, BSD)
-  ia32-macosx      (x86 32 bits, MacOS X)
-  ia32-cygwin      (x86 32 bits, Cygwin environment under Windows)
-  manual           (edit configuration file by hand)
+  ppc-eabi             (PowerPC, EABI with GNU/Unix tools)
+  ppc-eabi-diab        (PowerPC, EABI with Diab tools)
+  ppc-linux            (PowerPC, Linux)
+  arm-eabi             (ARM, EABI)
+  arm-linux            (ARM, EABI)
+  arm-eabihf           (ARM, EABI using hardware FP registers)
+  arm-hardfloat        (ARM, EABI using hardware FP registers)
+  ia32-linux           (x86 32 bits, Linux)
+  ia32-bsd             (x86 32 bits, BSD)
+  ia32-macosx          (x86 32 bits, MacOS X)
+  ia32-cygwin          (x86 32 bits, Cygwin environment under Windows)
+  manual               (edit configuration file by hand)
 
 For PowerPC targets, the "ppc-" prefix can be refined into:
-  ppc64-           PowerPC 64 bits
-  e5500-           Freescale e5500 core (PowerPC 64 bits + EREF extensions)
+  ppc64-               PowerPC 64 bits
+  e5500-               Freescale e5500 core (PowerPC 64 bit, EREF extensions)
 
 For ARM targets, the "arm-" prefix can be refined into:
-  armv6-           ARMv6   + VFPv2
-  armv7a-          ARMv7-A + VFPv3-d16   (default)
-  armv7r-          ARMv7-R + VFPv3-d16
-  armv7m-          ARMv7-M + VFPv3-d16
+  armv6-               ARMv6   + VFPv2
+  armv7a-              ARMv7-A + VFPv3-d16   (default)
+  armv7r-              ARMv7-R + VFPv3-d16
+  armv7m-              ARMv7-M + VFPv3-d16
+
+For ARM targets, the endianness can optionally be speficied as a suffix:
+  -big                 Big endian
+  -little              Little endian   (default)
 
 Options:
-  -prefix <dir>    Install in <dir>/bin and <dir>/lib/compcert
-  -bindir <dir>    Install binaries in <dir>
-  -libdir <dir>    Install libraries in <dir>
-  -toolprefix <pref>  Prefix names of tools ("gcc", etc) with <pref>
-  -no-runtime-lib  Do not compile nor install the runtime support library
+  -prefix <dir>        Install in <dir>/bin and <dir>/lib/compcert
+  -bindir <dir>        Install binaries in <dir>
+  -libdir <dir>        Install libraries in <dir>
+  -toolprefix <pref>   Prefix names of tools ("gcc", etc) with <pref>
+  -no-runtime-lib      Do not compile nor install the runtime support library
   -no-standard-headers Do not install nor use the standard .h headers
-  -clightgen       Also compile the clightgen tool
+  -clightgen           Also compile the clightgen tool
 '
 
-# Parse command-line arguments
 
+#
+# Parse Command-Line Arguments
+#
 while : ; do
   case "$1" in
-    "") break;;
+    "")
+        break;;
     -prefix|--prefix)
         prefix="$2"; shift;;
     -bindir|--bindir)
@@ -83,179 +90,260 @@ while : ; do
   shift
 done
 
-# Per-target configuration
 
-casmruntime=""
+#
+# Extract Architecture, Model and Default Endianness
+#
+case "$target" in
+  arm-*|armv7a-*)
+      arch="arm"; model="armv7a"; endianness="little";;
+  armv6-*)
+      arch="arm"; model="armv6"; endianness="little";;
+  armv7r-*)
+      arch="arm"; model="armv7r"; endianness="little";;
+  armv7m-*)
+      arch="arm"; model="armv7m"; endianness="little";;
+  ia32-*)
+      arch="ia32"; model="sse2"; endianness="little";;
+  powerpc-*|ppc-*)
+      arch="powerpc"; model="ppc32"; endianness="big";;
+  powerpc64-*|ppc64-*)
+      arch="powerpc"; model="ppc64"; endianness="big";;
+  e5500-*)
+      arch="powerpc"; model="e5500"; endianness="big";;
+  manual)
+      ;;
+  "")
+      echo "Error: no target architecture specified." 1>&2
+      echo "$usage" 1>&2
+      exit 2
+      ;;
+  *)
+      echo "Error: unknown target architecture: '$target'." 1>&2
+      echo "$usage" 1>&2
+      exit 2
+      ;;
+esac
+
+target=${target#[a-zA-Z0-9]*-}
+
+
+#
+# ARM: Optional Endianness Specification
+#
+if test "$arch" = "arm"; then
+  case "$target" in
+    *-big)
+        endianness="big";
+        target=${target%"-big"}
+        ;;
+    *-little)
+        endianness="little";
+        target=${target%"-little"}
+        ;;
+  esac
+else
+  case "$target" in
+    *-big|*-little)
+        echo "Error: endianness may only be specified for ARM architecture." 1>&2
+        echo "$usage" 1>&2
+        exit 2
+        ;;
+    *)
+        ;;
+  esac
+fi
+
+
+# Per-target configuration
 asm_supports_cfi=""
+casm_options=""
+casmruntime=""
+clinker_options=""
+cprepro_options=""
 struct_passing=""
 struct_return=""
-casm_options=""
-cprepro_options=""
-clinker_options=""
 
-case "$target" in
-  powerpc-*|ppc-*|powerpc64-*|ppc64-*|e5500-*)
-    arch="powerpc"
-    case "$target" in
-      powerpc64-*|ppc64-*) model="ppc64";;
-      e5500-*) model="e5500";;
-      *) model="ppc32";;
-    esac
-    abi="eabi"
-    struct_passing="ref-caller"
-    case "$target" in
-      *-linux) struct_return="ref";;
-      *)  struct_return="int1-8";;
-    esac
-    case "$target" in
-      *-eabi-diab)
-        system="diab"
-        cc="${toolprefix}dcc"
-        cprepro="${toolprefix}dcc"
-        cprepro_options="-E -D__GNUC__"
+
+#
+# ARM Target Configuration
+#
+if test "$arch" = "arm"; then
+
+  case "$target" in
+    eabi|linux)
+        abi="eabi"
+        ;;
+    eabihf|hf|hardfloat)
+        abi="hardfloat"
+        ;;
+    *)
+        echo "Error: invalid eabi/system '$target' for architecture ARM." 1>&2
+        echo "$usage" 1>&2
+        exit 2;;
+  esac
+
+  casm="${toolprefix}gcc"
+  casm_options="-c"
+  cc="${toolprefix}gcc"
+  clinker="${toolprefix}gcc"
+  cprepro="${toolprefix}gcc"
+  cprepro_options="-std=c99 -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
+  libmath="-lm"
+  struct_passing="ints"
+  struct_return="int1-4"
+  system="linux"
+fi
+
+
+#
+# PowerPC Target Configuration
+#
+if test "$arch" = "powerpc"; then
+
+  case "$target" in
+    eabi|eabi-diab|linux)
+        ;;
+    *)
+        echo "Error: invalid eabi/system '$target' for architecture PowerPC." 1>&2
+        echo "$usage" 1>&2
+        exit 2;;
+  esac
+
+  case "$target" in
+    linux)
+        struct_return="ref"
+        ;;
+    *)
+        struct_return="int1-8"
+        ;;
+  esac
+
+  case "$target" in
+    eabi-diab)
+        abi="eabi"
+        asm_supports_cfi=false
         casm="${toolprefix}das"
         casm_options="-Xalign-value"
-        asm_supports_cfi=false
+        cc="${toolprefix}dcc"
         clinker="${toolprefix}dcc"
+        cprepro="${toolprefix}dcc"
+        cprepro_options="-E -D__GNUC__"
         libmath="-lm"
+        struct_passing="ref-caller"
+        system="diab"
         ;;
-      *)
-        system="linux"
-        cc="${toolprefix}gcc"
-        cprepro="${toolprefix}gcc"
-        cprepro_options="-std=c99 -U__GNUC__ -E"
+    *)
+        abi="eabi"
         casm="${toolprefix}gcc"
         casm_options="-c"
         casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
+        cc="${toolprefix}gcc"
         clinker="${toolprefix}gcc"
+        cprepro="${toolprefix}gcc"
+        cprepro_options="-std=c99 -U__GNUC__ -E"
         libmath="-lm"
-    esac;;
-  arm*-*)
-    arch="arm"
-    case "$target" in
-      armv6-*) model="armv6";;
-      arm-*|armv7a-*) model="armv7a";;
-      armv7r-*) model="armv7r";;
-      armv7m-*) model="armv7m";;
-      *)
-        echo "Unknown target '$target'." 1>&2
+        struct_passing="ref-caller"
+        system="linux"
+        ;;
+  esac
+fi
+
+
+#
+# IA32 Target Configuration
+#
+if test "$arch" = "ia32"; then
+
+  case "$target" in
+    bsd)
+        abi="standard"
+        casm="${toolprefix}gcc"
+        casm_options="-m32 -c"
+        cc="${toolprefix}gcc -m32"
+        clinker="${toolprefix}gcc"
+        clinker_options="-m32"
+        cprepro="${toolprefix}gcc"
+        cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
+        libmath="-lm"
+        struct_passing="ints"
+        struct_return="int1248"    # to check!
+        system="bsd"
+        ;;
+    cygwin)
+        abi="standard"
+        casm="${toolprefix}gcc"
+        casm_options="-m32 -c"
+        cc="${toolprefix}gcc -m32"
+        clinker="${toolprefix}gcc"
+        clinker_options="-m32"
+        cprepro="${toolprefix}gcc"
+        cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
+        libmath="-lm"
+        struct_passing="ints"
+        struct_return="ref"
+        system="cygwin"
+        ;;
+    linux)
+        abi="standard"
+        casm="${toolprefix}gcc"
+        casm_options="-m32 -c"
+        cc="${toolprefix}gcc -m32"
+        clinker="${toolprefix}gcc"
+        clinker_options="-m32"
+        cprepro="${toolprefix}gcc"
+        cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
+        libmath="-lm"
+        struct_passing="ints"
+        struct_return="ref"
+        system="linux"
+        ;;
+    macosx)
+        # kernel major versions count upwards from 4 for OSX 10.0 to 15 for OSX 10.11
+        kernel_major=`uname -r | cut -d "." -f 1`
+
+        abi="macosx"
+        casm="${toolprefix}gcc"
+        casm_options="-arch i386 -c"
+        cc="${toolprefix}gcc -arch i386"
+        clinker="${toolprefix}gcc"
+        cprepro="${toolprefix}gcc"
+        cprepro_options="-std=c99 -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' -E"
+        libmath=""
+        struct_passing="ints"
+        struct_return="int1248"
+        system="macosx"
+
+        if [[ $kernel_major -gt 11 ]]; then
+          # OSX >= 10.8
+          clinker_options="-arch i386 -Wl,-no_pie"
+        else
+          # OSX <= 10.7
+          clinker_options="-arch i386"
+        fi
+        ;;
+    *)
+        echo "Error: invalid eabi/system '$target' for architecture IA32." 1>&2
         echo "$usage" 1>&2
         exit 2;;
-    esac
-    case "$target" in
-      *-eabi|*-linux) abi="eabi";;
-      *-eabihf|*-hf|*-hardfloat) abi="hardfloat";;
-      *)
-        echo "Unknown target '$target'." 1>&2
-        echo "$usage" 1>&2
-        exit 2;;
-    esac
-    struct_passing="ints"
-    struct_return="int1-4"
-    system="linux"
-    cc="${toolprefix}gcc"
-    cprepro="${toolprefix}gcc"
-    cprepro_options="-std=c99 -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
-    casm="${toolprefix}gcc"
-    casm_options="-c"
-    clinker="${toolprefix}gcc"
-    libmath="-lm";;
-  ia32-linux)
-    arch="ia32"
-    model="sse2"
-    abi="standard"
-    struct_passing="ints"
-    struct_return="ref"
-    system="linux"
-    cc="${toolprefix}gcc -m32"
-    cprepro="${toolprefix}gcc"
-    cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
-    casm="${toolprefix}gcc"
-    casm_options="-m32 -c"
-    clinker="${toolprefix}gcc"
-    clinker_options="-m32"
-    libmath="-lm";;
-  ia32-bsd)
-    arch="ia32"
-    model="sse2"
-    abi="standard"
-    struct_passing="ints"
-    struct_return="int1248"    # to check!
-    system="bsd"
-    cc="${toolprefix}gcc -m32"
-    cprepro="${toolprefix}gcc"
-    cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
-    casm="${toolprefix}gcc"
-    casm_options="-m32 -c"
-    clinker="${toolprefix}gcc"
-    clinker_options="-m32"
-    libmath="-lm";;
-  ia32-macosx)
-    # kernel major versions count upwards from 4 for OSX 10.0 to 15 for OSX 10.11
-    kernel_major=`uname -r | cut -d "." -f 1`
-    arch="ia32"
-    model="sse2"
-    abi="macosx"
-    struct_passing="ints"
-    struct_return="int1248"
-    system="macosx"
-    cc="${toolprefix}gcc -arch i386"
-    cprepro="${toolprefix}gcc"
-    cprepro_options="-std=c99 -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' -E"
-    casm="${toolprefix}gcc"
-    casm_options="-arch i386 -c"
-    clinker="${toolprefix}gcc"
-    if [[ $kernel_major -gt 11 ]]
-    then
-      # OSX >= 10.8
-      clinker_options="-arch i386 -Wl,-no_pie"
-    else
-      # OSX <= 10.7
-      clinker_options="-arch i386"
-    fi
-    libmath="";;
-  ia32-cygwin)
-    arch="ia32"
-    model="sse2"
-    abi="standard"
-    struct_passing="ints"
-    struct_return="ref"
-    system="cygwin"
-    cc="${toolprefix}gcc -m32"
-    cprepro="${toolprefix}gcc"
-    cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
-    casm="${toolprefix}gcc"
-    casm_options="-m32 -c"
-    clinker="${toolprefix}gcc"
-    clinker_options="-m32"
-    libmath="-lm";;
-  manual)
-    ;;
-  "")
-    echo "No target specified." 1>&2
-    echo "$usage" 1>&2
-    exit 2;;
-  *)
-    echo "Unknown target '$target'." 1>&2
-    echo "$usage" 1>&2
-    exit 2;;
-esac
+  esac
+fi
 
-if test -z "$casmruntime"; then casmruntime="$casm $casm_options"; fi
 
-# Test assembler support for CFI directives
-
+#
+# Test Assembler Support for CFI Directives
+#
 if test "$target" != "manual" && test -z "$asm_supports_cfi"; then
   echo "Testing assembler support for CFI directives... " | tr -d '\n'
   f=/tmp/compcert-configure-$$.s
   rm -f $f
   cat >> $f <<EOF
 testfun:
-	.file 1 "testfun.c"
-	.loc 1 1
-	.cfi_startproc
-	.cfi_adjust_cfa_offset 16
-	.cfi_endproc
+  .file 1 "testfun.c"
+  .loc 1 1
+  .cfi_startproc
+  .cfi_adjust_cfa_offset 16
+  .cfi_endproc
 EOF
   if $casm $casm_options -o /dev/null $f 2>/dev/null
   then echo "yes"; asm_supports_cfi=true
@@ -264,8 +352,10 @@ EOF
   rm -f $f
 fi
 
-# Testing availability of required tools
 
+#
+# Test Availability of Required Tools
+#
 missingtools=false
 
 echo "Testing Coq... " | tr -d '\n'
@@ -352,8 +442,10 @@ if $missingtools; then
   exit 2
 fi
 
-# Generate Makefile.config
 
+#
+# Generate Makefile.config
+#
 sharedir="$(dirname "$bindir")"/share
 
 rm -f Makefile.config
@@ -367,25 +459,26 @@ EOF
 
 if test "$target" != "manual"; then
 cat >> Makefile.config <<EOF
-ARCH=$arch
-MODEL=$model
 ABI=$abi
-STRUCT_PASSING=$struct_passing
-STRUCT_RETURN=$struct_return
-SYSTEM=$system
-CC=$cc
-CPREPRO=$cprepro
-CPREPRO_OPTIONS=$cprepro_options
+ARCH=$arch
+ASM_SUPPORTS_CFI=$asm_supports_cfi
 CASM=$casm
 CASM_OPTIONS=$casm_options
 CASMRUNTIME=$casmruntime
+CC=$cc
+CLIGHTGEN=$clightgen
 CLINKER=$clinker
 CLINKER_OPTIONS=$clinker_options
-LIBMATH=$libmath
+CPREPRO=$cprepro
+CPREPRO_OPTIONS=$cprepro_options
+ENDIANNESS=$endianness
 HAS_RUNTIME_LIB=$has_runtime_lib
 HAS_STANDARD_HEADERS=$has_standard_headers
-ASM_SUPPORTS_CFI=$asm_supports_cfi
-CLIGHTGEN=$clightgen
+LIBMATH=$libmath
+MODEL=$model
+STRUCT_PASSING=$struct_passing
+STRUCT_RETURN=$struct_return
+SYSTEM=$system
 EOF
 else
 cat >> Makefile.config <<'EOF'
@@ -397,40 +490,50 @@ cat >> Makefile.config <<'EOF'
 ARCH=
 
 # Hardware variant
-# MODEL=ppc32     # for plain PowerPC
-# MODEL=ppc64     # for PowerPC with 64-bit instructions
-# MODEL=e5500     # for Freescale e5500 PowerPC variant
-# MODEL=armv6     # for ARM
-# MODEL=armv7a    # for ARM
-# MODEL=armv7r    # for ARM
-# MODEL=armv7m    # for ARM
-# MODEL=sse2      # for IA32
+# MODEL=ppc32       # for plain PowerPC
+# MODEL=ppc64       # for PowerPC with 64-bit instructions
+# MODEL=e5500       # for Freescale e5500 PowerPC variant
+# MODEL=armv6       # for ARM
+# MODEL=armv7a      # for ARM
+# MODEL=armv7r      # for ARM
+# MODEL=armv7m      # for ARM
+# MODEL=sse2        # for IA32
 MODEL=
 
 # Target ABI
-# ABI=eabi     # for PowerPC / Linux and other SVR4 or EABI platforms
-# ABI=eabi     # for ARM
-# ABI=hardfloat # for ARM
-# ABI=standard # for IA32
+# ABI=eabi          # for PowerPC / Linux and other SVR4 or EABI platforms
+# ABI=eabi          # for ARM
+# ABI=hardfloat     # for ARM
+# ABI=standard      # for IA32
 ABI=
+
+# Target endianness
+# ENDIANNESS=big     # for ARM or PowerPC
+# ENDIANNESS=little  # for ARM or IA32
+ENDIANNESS=
 
 # Default calling conventions for passing structs and unions by value
 # See options -fstruct-passing=<style> and -fstruct-return=<style>
 # in the CompCert user's manual
+#
 STRUCT_PASSING=ref_callee
 # STRUCT_PASSING=ref_caller
 # STRUCT_PASSING=ints
+#
 STRUCT_RETURN=ref
 # STRUCT_RETURN=int1248
 # STRUCT_RETURN=int1-4
 # STRUCT_RETURN=int1-8
 
 # Target operating system and development environment
+#
 # Possible choices for PowerPC:
 # SYSTEM=linux
 # SYSTEM=diab
+#
 # Possible choices for ARM:
 # SYSTEM=linux
+#
 # Possible choices for IA32:
 # SYSTEM=linux
 # SYSTEM=bsd
@@ -453,7 +556,7 @@ CASMRUNTIME=gcc -c
 # Linker
 CLINKER=gcc
 
-# Math library.  Set to empty under MacOS X
+# Math library. Set to empty under MacOS X
 LIBMATH=-lm
 
 # Turn on/off the installation and use of the runtime support library
@@ -470,18 +573,18 @@ ASM_SUPPORTS_CFI=false
 CLIGHTGEN=false
 
 EOF
-
 fi
 
-# Summarize configuration
 
+#
+# Summarize Configuration
+#
 if test "$target" = "manual"; then
 cat <<EOF
 
 Please finish the configuration by editing file ./Makefile.config.
 
 EOF
-
 else
 
 bindirexp=`echo "$bindir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
@@ -493,6 +596,7 @@ CompCert configuration:
     Target architecture........... $arch
     Hardware model................ $model
     Application binary interface.. $abi
+    Endianness.................... $endianness
     Composite passing conventions. arguments: $struct_passing, return values: $struct_return
     OS and development env........ $system
     C compiler.................... $cc
@@ -512,5 +616,4 @@ CompCert configuration:
 If anything above looks wrong, please edit file ./Makefile.config to correct.
 
 EOF
-
 fi

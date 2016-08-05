@@ -24,3 +24,7 @@ Extract Constant Archi.abi =>
    | ""hardfloat"" -> Hardfloat
    | _ -> assert false
    end".
+
+(* Choice of endianness *)
+Extract Constant Archi.big_endian =>
+  "Configuration.is_big_endian".

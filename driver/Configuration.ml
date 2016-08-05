@@ -121,6 +121,11 @@ let arch =
   | v -> bad_config "arch" [v]
 let model = get_config_string "model"
 let abi = get_config_string "abi"
+let is_big_endian =
+  match get_config_string "endianness" with
+  | "big" -> true
+  | "little" -> false
+  | v -> bad_config "endianness" [v]
 let system = get_config_string "system"
 let has_runtime_lib =
   match get_config_string "has_runtime_lib" with

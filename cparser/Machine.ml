@@ -173,9 +173,12 @@ let ppc_32_bigendian =
 let ppc_32_diab_bigendian =
   { ppc_32_bigendian with sizeof_wchar = 2; wchar_signed = false }
 
-
 let arm_littleendian =
   { ilp32ll64 with name = "arm" }
+
+let arm_bigendian =
+  { arm_littleendian with bigendian = true;
+                          bitfields_msb_first = true }
 
 (* Add GCC extensions re: sizeof and alignof *)
 

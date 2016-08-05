@@ -4,7 +4,7 @@
 #define STR_EXPAND(tok) #tok
 #define STR(tok) STR_EXPAND(tok)
 
-#if defined(__ppc__) || defined(__PPC__)
+#if defined(__ppc__) || defined(__PPC__) || defined(__ARMEB__)
 #define ARCH_BIG_ENDIAN
 #elif defined(__i386__) || defined(__x86_64__) || defined(__ARMEL__)
 #undef ARCH_BIG_ENDIAN
@@ -69,7 +69,7 @@ int main(void) {
   compd(15./16, 0x.Fp0, STR(__LINE__));
   compd(15./16, 0x.fP0, STR(__LINE__));
   compd(15./16, 0X.fp0, STR(__LINE__));
-    
+
   printf("%d error(s) detected.\n", num_errors);
   return 0;
 }

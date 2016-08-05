@@ -34,7 +34,7 @@ $(LIB): $(OBJS)
 	$(CASMRUNTIME) -o $@ $^
 
 %.o: %.S
-	$(CASMRUNTIME) -DMODEL_$(MODEL) -DABI_$(ABI) -DSYS_$(SYSTEM) -o $@ $^
+	$(CASMRUNTIME) -DMODEL_$(MODEL) -DABI_$(ABI) -DENDIANNESS_$(ENDIANNESS) -DSYS_$(SYSTEM) -o $@ $^
 
 clean::
 	rm -f *.o $(LIB)

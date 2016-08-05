@@ -3,7 +3,7 @@
 #define STR_EXPAND(tok) #tok
 #define STR(tok) STR_EXPAND(tok)
 
-#if defined(__ppc__) || defined(__PPC__)
+#if defined(__ppc__) || defined(__PPC__) || defined(__ARMEB__)
 #define ARCH_BIG_ENDIAN
 #elif defined(__i386__) || defined(__x86_64__) || defined(__ARMEL__)
 #undef ARCH_BIG_ENDIAN

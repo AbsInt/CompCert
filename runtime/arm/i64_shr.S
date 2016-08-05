@@ -17,7 +17,7 @@
 @     * Neither the name of the <organization> nor the
 @       names of its contributors may be used to endorse or promote products
 @       derived from this software without specific prior written permission.
-@ 
+@
 @ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 @ "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 @ LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -36,20 +36,20 @@
 
 #include "sysdeps.h"
 
-@@@ Shift right unsigned	
+@@@ Shift right unsigned
 
 @ Note on ARM shifts: the shift amount is taken modulo 256.
 @ If shift amount mod 256 >= 32, the shift produces 0.
 
 @ Algorithm:
 @    RL = (XL >> N) | (XH << (32-N) | (XH >> (N-32))
-@    RH = XH >> N        
+@    RH = XH >> N
 @ If N = 0:
 @    RL = XL | 0 | 0
 @    RH = XH
 @ If 1 <= N <= 31:  1 <= 32-N <= 31  and  255 <= N-32 mod 256 <= 255
 @    RL = (XL >> N) | (XH >> (32-N) | 0
-@    RH = XH >> N        
+@    RH = XH >> N
 @ If N = 32:
 @    RL = 0 | XH | 0
 @    RH = 0
@@ -60,12 +60,12 @@
 FUNCTION(__i64_shr)
         AND r2, r2, #63         @ normalize amount to 0...63
         RSB r3, r2, #32         @ r3 = 32 - amount
-        LSR r0, r0, r2
-        LSL r3, r1, r3
-        ORR r0, r0, r3
-	SUB r3, r2, #32         @ r3 = amount - 32
-	LSR r3, r1, r3
-	ORR r0, r0, r3
-        LSR r1, r1, r2
+        LSR Reg0LO, Reg0LO, r2
+        LSL r3, Reg0HI, r3
+        ORR Reg0LO, Reg0LO, r3
+        SUB r3, r2, #32         @ r3 = amount - 32
+        LSR r3, Reg0HI, r3
+        ORR Reg0LO, Reg0LO, r3
+        LSR Reg0HI, Reg0HI, r2
         bx lr
 ENDFUNCTION(__i64_shr)
