@@ -314,6 +314,11 @@ if test "$arch" = "ia32"; then
   esac
 fi
 
+#
+# Finalize Target Configuration
+#
+if test -z "$casmruntime"; then casmruntime="$casm $casm_options"; fi
+
 
 #
 # Test Assembler Support for CFI Directives
