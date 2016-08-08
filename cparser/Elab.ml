@@ -2361,7 +2361,7 @@ let rec elab_stmt env ctx s =
                  instead of the expected type@ %a"
                 Cprint.typ b.etyp Cprint.typ ctx.ctx_return_typ
             else
-              fatal_error loc
+              error loc
                 "return value has type@ %a@ \
                  instead of the expected type@ %a"
                 Cprint.typ b.etyp Cprint.typ ctx.ctx_return_typ

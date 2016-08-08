@@ -22,3 +22,4 @@ val error : ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
 val warning : ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
 val info : ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
 val check_errors : unit -> bool
+val raise_on_errors : unit -> unit

@@ -30,7 +30,7 @@ exception Abort
    to print its message, as opposed to [Format], and does not automatically
    introduce indentation and a final dot into the message. This is useful
    for multi-line messages. *)
-   
+
 let fatal_error_raw fmt =
   incr num_errors;
   Printf.kfprintf
@@ -67,4 +67,6 @@ let check_errors () =
             (if !num_warnings = 1 then "" else "s");
   !num_errors > 0 || (!warn_error && !num_warnings > 0)
 
-
+let raise_on_errors () =
+  if !num_warnings > 0 || (!warn_error && !num_warnings > 0) then
+    raise Abort
