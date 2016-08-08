@@ -27,14 +27,14 @@ Supported targets:
   ppc-eabi             (PowerPC, EABI with GNU/Unix tools)
   ppc-eabi-diab        (PowerPC, EABI with Diab tools)
   ppc-linux            (PowerPC, Linux)
-  arm-eabi             (ARM, EABI)
-  arm-linux            (ARM, EABI)
-  arm-eabihf           (ARM, EABI using hardware FP registers)
-  arm-hardfloat        (ARM, EABI using hardware FP registers)
-  armeb-eabi           (ARM, EABI big endian)
-  armeb-linux          (ARM, EABI big endian)
-  armeb-eabihf         (ARM, EABI using hardware FP registers big endian)
-  armeb-hardfloat      (ARM, EABI using hardware FP registers big endian)
+  arm-eabi             (ARM, EABI, little endian)
+  arm-linux            (ARM, EABI, little endian)
+  arm-eabihf           (ARM, EABI using hardware FP registers, little endian)
+  arm-hardfloat        (ARM, EABI using hardware FP registers, little endian)
+  armeb-eabi           (ARM, EABI, big endian)
+  armeb-linux          (ARM, EABI, big endian)
+  armeb-eabihf         (ARM, EABI using hardware FP registers, big endian)
+  armeb-hardfloat      (ARM, EABI using hardware FP registers, big endian)
   ia32-linux           (x86 32 bits, Linux)
   ia32-bsd             (x86 32 bits, BSD)
   ia32-macosx          (x86 32 bits, MacOS X)
@@ -45,15 +45,16 @@ For PowerPC targets, the "ppc-" prefix can be refined into:
   ppc64-               PowerPC 64 bits
   e5500-               Freescale e5500 core (PowerPC 64 bit, EREF extensions)
 
-For ARM targets, the "arm-" prefix can be refined into:
+For ARM targets, the "arm-" or "armeb-" prefix can be refined into:
   armv6-               ARMv6   + VFPv2
-  armv7a-              ARMv7-A + VFPv3-d16   (default)
+  armv7a-              ARMv7-A + VFPv3-d16   (default for arm-)
   armv7r-              ARMv7-R + VFPv3-d16
   armv7m-              ARMv7-M + VFPv3-d16
 
-For ARM targets, the endianness can optionally be speficied as a suffix:
-  -big                 Big endian
-  -little              Little endian   (default)
+  armebv6-             ARMv6   + VFPv2
+  armebv7a-            ARMv7-A + VFPv3-d16   (default for armeb-)
+  armebv7r-            ARMv7-R + VFPv3-d16
+  armebv7m-            ARMv7-M + VFPv3-d16
 
 Options:
   -prefix <dir>        Install in <dir>/bin and <dir>/lib/compcert
