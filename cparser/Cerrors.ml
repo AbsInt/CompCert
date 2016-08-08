@@ -68,5 +68,5 @@ let check_errors () =
   !num_errors > 0 || (!warn_error && !num_warnings > 0)
 
 let raise_on_errors () =
-  if !num_warnings > 0 || (!warn_error && !num_warnings > 0) then
+  if !num_errors > 0 || (!warn_error && !num_warnings > 0) then
     raise Abort
