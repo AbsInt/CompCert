@@ -62,10 +62,10 @@ let command stdout args =
 let gnu_quote arg =
   let len = String.length arg in
   let buf = Buffer.create len in
-  String.iter (fun c -> match c with
+  String.iter (fun c -> begin match c with
     | ' ' | '\t' | '\r' | '\n' | '\\' | '\'' | '"' ->
         Buffer.add_char buf '\\'
-    | _ -> ();
+    | _ -> () end;
     Buffer.add_char buf c) arg;
   Buffer.contents buf
 
