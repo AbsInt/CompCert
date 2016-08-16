@@ -103,6 +103,6 @@ let parse_cmdline spec =
   try
     let argv = expandargv Sys.argv in
     parse_array spec argv 1 (Array.length argv - 1)
-  with Arg.Bad s ->
+  with Responsefile.Error s ->
     eprintf "%s" s;
     exit 2

@@ -17,7 +17,7 @@ open Clflags
 (* Is this a gnu based tool chain *)
 let gnu_system = Configuration.system <> "diab"
 
-(* Sage removale of files *)
+(* Safe removal of files *)
 let safe_remove file =
   try Sys.remove file with Sys_error _ -> ()
 
@@ -58,46 +58,20 @@ let command stdout args =
             argv.(0) fn (Unix.error_message err) param;
     -1
 
-(* This function reimplements quoting of writeargv from libiberty *)
-let gnu_quote arg =
-  let len = String.length arg in
-  let buf = Buffer.create len in
-  String.iter (fun c -> begin match c with
-    | ' ' | '\t' | '\r' | '\n' | '\\' | '\'' | '"' ->
-        Buffer.add_char buf '\\'
-    | _ -> () end;
-    Buffer.add_char buf c) arg;
-  Buffer.contents buf
-
-let re_quote = Str.regexp ".*[ \t\n\r\"]"
-
-let diab_quote arg =
-  let buf = Buffer.create ((String.length arg) + 8) in
-  let doublequote = Str.string_match re_quote arg 0 in
-  if doublequote then begin
-    Buffer.add_char buf '"';
-    String.iter (fun c ->
-      if c = '"' then Buffer.add_char buf '\\';
-      Buffer.add_char buf c) arg;
-    if doublequote then Buffer.add_char buf '"';
-    Buffer.contents buf
-  end else
-    arg
-
 let command ?stdout args =
   let resp = Sys.win32 && Configuration.response_file_style <> Configuration.Unsupported in
   if resp && List.fold_left (fun len arg -> len + String.length arg + 1) 0 args > 7000 then
-    let quote = match Configuration.response_file_style with
+    let quote,prefix = match Configuration.response_file_style with
     | Configuration.Unsupported -> assert false
-    | Configuration.Gnu -> gnu_quote
-    | Configuration.Diab -> diab_quote in
+    | Configuration.Gnu -> Responsefile.gnu_quote,"@"
+    | Configuration.Diab -> Responsefile.diab_quote,"-@" in
     let file,oc = Filename.open_temp_file "compcert" "" in
     let cmd,args = match args with
     | cmd::args -> cmd,args
     | [] -> assert false (* Should never happen *) in
     List.iter (fun a -> Printf.fprintf oc "%s " (quote a)) args;
     close_out oc;
-    let arg = if gnu_system then "@"^file else "-@"^file in
+    let arg = prefix^file in
     let ret = command stdout [cmd;arg] in
     safe_remove file;
     ret

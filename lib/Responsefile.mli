@@ -18,3 +18,14 @@
 val expandargv: string array -> string array
   (** Expand responsefile arguments contained in the array and return the full
       set of arguments. *)
+
+exception Error of string
+  (** Raised by [expandargv] in case of an error *)
+
+val gnu_quote : string -> string
+  (** [gnu_quote arg] returns [arg] quoted compatible with the gnu tool chain
+      quoting conventions. *)
+
+val diab_quote : string -> string
+  (** [diab_quote arg] returns [arg] quoted compatible with the diab tool chain
+      quoting conventions. *)

@@ -15,8 +15,6 @@
 (* *********************************************************************)
 
 
-(* Parsing response files with various quoting styles *)
-
 {
 (* To accumulate the characters in a word or quoted string *)
 let buf = Buffer.create 32
@@ -94,4 +92,29 @@ let expandargv argv =
   let args = Array.to_list argv in
    Array.of_list (List.rev (expand_args [] args []))
 
+(* This function reimplements quoting of writeargv from libiberty *)
+let gnu_quote arg =
+  let len = String.length arg in
+  let buf = Buffer.create len in
+  String.iter (fun c -> begin match c with
+    | ' ' | '\t' | '\r' | '\n' | '\\' | '\'' | '"' ->
+        Buffer.add_char buf '\\'
+    | _ -> () end;
+    Buffer.add_char buf c) arg;
+  Buffer.contents buf
+
+let re_quote = Str.regexp ".*[ \t\n\r\"]"
+
+let diab_quote arg =
+  let buf = Buffer.create ((String.length arg) + 8) in
+  let doublequote = Str.string_match re_quote arg 0 in
+  if doublequote then begin
+    Buffer.add_char buf '"';
+    String.iter (fun c ->
+      if c = '"' then Buffer.add_char buf '\\';
+      Buffer.add_char buf c) arg;
+    if doublequote then Buffer.add_char buf '"';
+    Buffer.contents buf
+  end else
+    arg
 }

@@ -24,8 +24,8 @@ let linker exe_name files =
     ["-o"; exe_name];
     files;
     (if Configuration.has_runtime_lib
-    then ["-L" ^ !stdlib_path; "-lcompcert"]
-    else [])
+     then ["-L" ^ !stdlib_path; "-lcompcert"]
+     else [])
   ] in
   let exc = command cmd in
   if exc <> 0 then begin
