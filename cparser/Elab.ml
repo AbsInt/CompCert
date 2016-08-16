@@ -42,8 +42,8 @@ let warning loc =
 let print_typ env fmt ty =
   match ty with
   | TNamed _  ->
-      Format.fprintf fmt "'%a' (aka '%a')" Cprint.typ ty Cprint.typ (Cutil.unroll env ty)
-  | _ -> Format.fprintf fmt "'%a'" Cprint.typ ty
+      Format.fprintf fmt "'%a' (aka '%a')" Cprint.typ_raw ty Cprint.typ_raw (Cutil.unroll env ty)
+  | _ -> Format.fprintf fmt "'%a'" Cprint.typ_raw ty
 
 (* Error reporting for Env functions *)
 

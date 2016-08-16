@@ -126,7 +126,7 @@ let name_of_fkind = function
   | FDouble -> "double"
   | FLongDouble -> "long double"
 
-let rec dcl pp ty n =
+let rec dcl ?(pp_indication=true) pp ty n =
   match ty with
   | TVoid a ->
       fprintf pp "void%a%t" attributes a n
@@ -160,7 +160,8 @@ let rec dcl pp ty n =
         | [] -> n pp
         | _  -> fprintf pp " (%a%t)" attributes a n
         end;
-        fprintf pp "(@[<hov 0>";
+        fprintf pp "(";
+        if pp_indication then fprintf pp "@[<hov 0>";
         begin match args with
         | None -> ()
         | Some [] -> if vararg then fprintf pp "..." else fprintf pp "void"
@@ -169,7 +170,8 @@ let rec dcl pp ty n =
             List.iter (fun a -> fprintf pp ",@ "; param a) al;
             if vararg then fprintf pp ",@ ..."
         end;
-        fprintf pp "@])" in
+        if pp_indication then fprintf pp "@]";
+        fprintf pp ")" in
       dcl pp tres n'
   | TNamed(id, a) ->
       fprintf pp "%a%a%t" ident id attributes a n
@@ -182,6 +184,9 @@ let rec dcl pp ty n =
 
 let typ pp ty =
   dcl pp ty (fun _ -> ())
+
+let typ_raw pp ty =
+  dcl ~pp_indication:false pp ty (fun _ -> ())
 
 type associativity = LtoR | RtoL | NA
 
