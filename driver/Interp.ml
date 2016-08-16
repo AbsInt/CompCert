@@ -387,10 +387,12 @@ let do_external_function id sg ge w args m =
   match camlstring_of_coqstring id, args with
   | "printf", Vptr(b, ofs) :: args' ->
       extract_string m b ofs >>= fun fmt ->
-      print_string (do_printf m fmt args');
+      let formatted = do_printf m fmt args' in
+      let len = coqint_of_camlint (Int32.of_int (String.length formatted)) in
+      print_string formatted;
       flush stdout;
       convert_external_args ge args sg.sig_args >>= fun eargs ->
-      Some(((w, [Event_syscall(id, eargs, EVint Int.zero)]), Vint Int.zero), m)
+      Some(((w, [Event_syscall(id, eargs, EVint len)]), Vint len), m)
   | _ ->
       None
 
