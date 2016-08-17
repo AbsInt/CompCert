@@ -433,6 +433,7 @@ let elab_attribute env = function
       begin match elab_attr_arg loc env a with
       | AInt n when is_power_of_two n -> [AAlignas (Int64.to_int n)]
       | _ -> warning loc "bad _Alignas value, ignored"; []
+      | exception Wrong_attr_arg -> warning loc "bad _Alignas value, ignored"; []
       end
   | ALIGNAS_ATTR (_, loc) ->
       warning loc "_Alignas takes exactly one parameter, ignored"; []
@@ -812,7 +813,11 @@ and elab_struct_or_union_info kind loc env members attrs =
   check_incomplete m;
   (* Warn for empty structs or unions *)
   if m = [] then
-    warning loc "empty %s" (if kind = Struct then "struct" else "union");
+    if kind = Struct then begin
+      warning loc "empty struct"
+    end else begin
+      fatal_error loc "empty union"
+    end;
   (composite_info_def env' kind attrs m, env')
 
 and elab_struct_or_union only kind loc tag optmembers attrs env =

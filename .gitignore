@@ -52,6 +52,7 @@ cparser/tests/generated/*.err
 backend/CMparser.automaton
 lib/Readconfig.ml
 lib/Tokenize.ml
+lib/Responsefile.ml
 driver/Version.ml
 # Documentation
 doc/coq2html

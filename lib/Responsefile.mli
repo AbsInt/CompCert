@@ -3,6 +3,7 @@
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
 (*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*        Bernhard Schommer, AbsInt Angewandte Informatik GmbH         *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
 (*  Automatique.  All rights reserved.  This file is distributed       *)
@@ -13,13 +14,18 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-val warn_error : bool ref
-val reset : unit -> unit
-exception Abort
-val fatal_error_raw : ('a, out_channel, unit, 'b) format4 -> 'a
-val fatal_error : ('a, Format.formatter, unit, unit, unit, 'b) format6 -> 'a
-val error : ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
-val warning : ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
-val info : ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
-val check_errors : unit -> bool
-val raise_on_errors : unit -> unit
+
+val expandargv: string array -> string array
+  (** Expand responsefile arguments contained in the array and return the full
+      set of arguments. *)
+
+exception Error of string
+  (** Raised by [expandargv] in case of an error *)
+
+val gnu_quote : string -> string
+  (** [gnu_quote arg] returns [arg] quoted compatible with the gnu tool chain
+      quoting conventions. *)
+
+val diab_quote : string -> string
+  (** [diab_quote arg] returns [arg] quoted compatible with the diab tool chain
+      quoting conventions. *)

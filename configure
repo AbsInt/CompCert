@@ -20,6 +20,7 @@ target=''
 has_runtime_lib=true
 has_standard_headers=true
 clightgen=false
+responsefile="gnu"
 
 usage='Usage: ./configure [options] target
 
@@ -218,6 +219,7 @@ if test "$arch" = "powerpc"; then
         libmath="-lm"
         struct_passing="ref-caller"
         system="diab"
+        responsefile="diab"
         ;;
     *)
         abi="eabi"
@@ -470,6 +472,7 @@ MODEL=$model
 STRUCT_PASSING=$struct_passing
 STRUCT_RETURN=$struct_return
 SYSTEM=$system
+RESPONSEFILE=$responsefile
 EOF
 else
 cat >> Makefile.config <<'EOF'
@@ -562,6 +565,9 @@ ASM_SUPPORTS_CFI=false
 
 # Turn on/off compilation of clightgen
 CLIGHTGEN=false
+
+# Whether the other tools support responsefiles in gnu syntax
+RESPONSEFILE="none"
 
 EOF
 fi
