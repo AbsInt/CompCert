@@ -813,7 +813,11 @@ and elab_struct_or_union_info kind loc env members attrs =
   check_incomplete m;
   (* Warn for empty structs or unions *)
   if m = [] then
-    warning loc "empty %s" (if kind = Struct then "struct" else "union");
+    if kind = Struct then begin
+      warning loc "empty struct"
+    end else begin
+      fatal_error loc "empty union"
+    end;
   (composite_info_def env' kind attrs m, env')
 
 and elab_struct_or_union only kind loc tag optmembers attrs env =
