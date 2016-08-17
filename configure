@@ -20,6 +20,7 @@ target=''
 has_runtime_lib=true
 has_standard_headers=true
 clightgen=false
+responsefile="gnu"
 
 usage='Usage: ./configure [options] target
 
@@ -118,6 +119,7 @@ case "$target" in
         asm_supports_cfi=false
         clinker="${toolprefix}dcc"
         libmath="-lm"
+        responsefile="diab"
         ;;
       *)
         system="linux"
@@ -386,6 +388,7 @@ HAS_RUNTIME_LIB=$has_runtime_lib
 HAS_STANDARD_HEADERS=$has_standard_headers
 ASM_SUPPORTS_CFI=$asm_supports_cfi
 CLIGHTGEN=$clightgen
+RESPONSEFILE=$responsefile
 EOF
 else
 cat >> Makefile.config <<'EOF'
@@ -468,6 +471,9 @@ ASM_SUPPORTS_CFI=false
 
 # Turn on/off compilation of clightgen
 CLIGHTGEN=false
+
+# Whether the other tools support responsefiles in gnu syntax
+RESPONSEFILE="none"
 
 EOF
 
