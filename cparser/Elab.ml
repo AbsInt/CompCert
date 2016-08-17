@@ -433,6 +433,7 @@ let elab_attribute env = function
       begin match elab_attr_arg loc env a with
       | AInt n when is_power_of_two n -> [AAlignas (Int64.to_int n)]
       | _ -> warning loc "bad _Alignas value, ignored"; []
+      | exception Wrong_attr_arg -> warning loc "bad _Alignas value, ignored"; []
       end
   | ALIGNAS_ATTR (_, loc) ->
       warning loc "_Alignas takes exactly one parameter, ignored"; []
