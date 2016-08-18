@@ -1942,6 +1942,8 @@ let enter_decdefs local loc env sto dl =
        initializer can refer to the ident *)
     let (id, sto', env1, ty, linkage) =
       enter_or_refine_ident local loc env s sto1 ty in
+    if not isfun && is_void_type env ty then
+      fatal_error loc "'%s' has incomplete type" s;
     (* process the initializer *)
     let (ty', init') = elab_initializer loc env1 s ty init in
     (* update environment with refined type *)
