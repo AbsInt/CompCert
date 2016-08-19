@@ -1484,7 +1484,7 @@ let elab_expr loc env a =
   | EXPR_SIZEOF a1 ->
       let b1,env = elab env a1 in
       if wrap incomplete_type loc env b1.etyp then
-        err "incomplete type %a" Cprint.typ b1.etyp;
+        error "incomplete type %a" Cprint.typ b1.etyp;
       let bdesc =
         (* Catch special cases sizeof("string literal") *)
         match b1.edesc with
@@ -1501,19 +1501,19 @@ let elab_expr loc env a =
   | TYPE_SIZEOF (spec, dcl) ->
       let (ty, env') = elab_type loc env spec dcl in
       if wrap incomplete_type loc env' ty then
-        err "incomplete type %a" Cprint.typ ty;
+        error "incomplete type %a" Cprint.typ ty;
       { edesc = ESizeof ty; etyp = TInt(size_t_ikind(), []) },env'
 
   | EXPR_ALIGNOF a1 ->
       let b1,env = elab env a1 in
       if wrap incomplete_type loc env b1.etyp then
-        err "incomplete type %a" Cprint.typ b1.etyp;
+        error "incomplete type %a" Cprint.typ b1.etyp;
       { edesc = EAlignof b1.etyp; etyp =  TInt(size_t_ikind(), []) },env
 
   | TYPE_ALIGNOF (spec, dcl) ->
       let (ty, env') = elab_type loc env spec dcl in
       if wrap incomplete_type loc env' ty then
-        err "incomplete type %a" Cprint.typ ty;
+        error "incomplete type %a" Cprint.typ ty;
       { edesc = EAlignof ty; etyp =  TInt(size_t_ikind(), []) },env
 
   | UNARY(PLUS, a1) ->
