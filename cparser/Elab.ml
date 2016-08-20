@@ -2105,9 +2105,13 @@ let elab_fundef env spec name defs body loc =
   (* Enter function in the environment, for recursive references *)
   let (fun_id, sto1, env1, _, _) =
     enter_or_refine_ident false loc env1 s sto ty in
+  let incomplete_param env ty =
+    if wrap incomplete_type loc env ty then
+      fatal_error loc "parameter has incomplete type" in
   (* Enter parameters and extra declarations in the environment *)
   let env2 =
-    List.fold_left (fun e (id, ty) -> Env.add_ident e id Storage_default ty)
+    List.fold_left (fun e (id, ty) -> incomplete_param e ty;
+      Env.add_ident e id Storage_default ty)
                    (Env.new_scope env1) params in
   let env2 =
     List.fold_left (fun e (sto, id, ty, init) -> Env.add_ident e id sto ty)
