@@ -401,7 +401,7 @@ let name_function_parameters fun_name params cconv =
   | _ ->
       let rec add_params first = function
       | [] ->
-          if cconv.cc_vararg then Buffer.add_string b "..."
+          if cconv.cc_vararg then Buffer.add_string b ",..."
       | (id, ty) :: rem ->
           if not first then Buffer.add_string b ", ";
           Buffer.add_string b (name_cdecl (extern_atom id) ty);
