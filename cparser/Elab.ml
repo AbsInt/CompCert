@@ -1288,6 +1288,10 @@ and elab_single zi a il =
 (* Start with top-level object initialized to default *)
 
 in
+if is_function_type env ty_root then begin
+  error loc "illegal initializer (only variables can be initialized)";
+  raise Exit
+end;
 if wrap incomplete_type loc env ty_root then begin
   error loc "variable has incomplete type %a" Cprint.typ ty_root;
   raise Exit
