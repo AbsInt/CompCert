@@ -28,14 +28,6 @@ let rec waitpid_no_intr pid =
   with Unix.Unix_error (Unix.EINTR, _, _) -> waitpid_no_intr pid
 
 let command stdout args =
-  if !option_v then begin
-    eprintf "+ %s" (String.concat " " args);
-    begin match stdout with
-    | None -> ()
-    | Some f -> eprintf " > %s" f
-    end;
-    prerr_endline ""
-  end;
   let argv = Array.of_list args in
   assert (Array.length argv > 0);
   try
@@ -59,6 +51,14 @@ let command stdout args =
     -1
 
 let command ?stdout args =
+  if !option_v then begin
+    eprintf "+ %s" (String.concat " " args);
+    begin match stdout with
+    | None -> ()
+    | Some f -> eprintf " > %s" f
+    end;
+    prerr_endline ""
+  end;
   let resp = Sys.win32 && Configuration.response_file_style <> Configuration.Unsupported in
   if resp && List.fold_left (fun len arg -> len + String.length arg + 1) 0 args > 7000 then
     let quote,prefix = match Configuration.response_file_style with
