@@ -184,8 +184,8 @@ let enter_or_refine_ident local loc env s sto ty =
 let elab_expr_f : (cabsloc -> Env.t -> Cabs.expression -> C.exp * Env.t) ref
   = ref (fun _ _ _ -> assert false)
 
-let elab_funbody_f : (C.typ -> Env.t -> statement -> C.stmt) ref
-  = ref (fun _ _ _ -> assert false)
+let elab_funbody_f : (C.typ -> bool -> Env.t -> statement -> C.stmt) ref
+  = ref (fun _ _ _ _ -> assert false)
 
 
 (** * Elaboration of constants - C99 section 6.4.4 *)
@@ -1323,7 +1323,7 @@ let elab_initializer loc env root ty ie =
 
 (* Elaboration of expressions *)
 
-let elab_expr loc env a =
+let elab_expr vararg loc env a =
 
   let err fmt = error loc fmt in  (* non-fatal error *)
   let error fmt = fatal_error loc fmt in
@@ -1400,6 +1400,8 @@ let elab_expr loc env a =
       (elaboration)   --> __builtin_va_arg(ap, sizeof(ty))
 *)
   | CALL((VARIABLE "__builtin_va_start" as a1), [a2; a3]) ->
+      if not vararg then
+        err "'va_start' used in function with fixed args";
       let b1,env = elab env a1 in
       let b2,env = elab env a2 in
       let _b3,env = elab env a3 in
@@ -1881,16 +1883,16 @@ let elab_expr loc env a =
   in elab env a
 
 (* Filling in forward declaration *)
-let _ = elab_expr_f := elab_expr
+let _ = elab_expr_f := (elab_expr false)
 
-let elab_opt_expr loc env = function
+let elab_opt_expr vararg loc env = function
   | None -> None,env
-  | Some a -> let a,env = (elab_expr loc env a) in
+  | Some a -> let a,env = (elab_expr vararg loc env a) in
     Some a,env
 
-let elab_for_expr loc env = function
+let elab_for_expr vararg loc env = function
   | None -> { sdesc = Sskip; sloc = elab_loc loc },env
-  | Some a -> let a,env = elab_expr loc env a in
+  | Some a -> let a,env = elab_expr vararg loc env a in
     { sdesc = Sdo a; sloc = elab_loc loc },env
 
 (* Handling of __func__ (section 6.4.2.2) *)
@@ -2123,7 +2125,7 @@ let elab_fundef env spec name defs body loc =
   emit_elab ~debuginfo:false env3 loc
                   (Gdecl(Storage_static, func_id, func_ty, Some func_init));
   (* Elaborate function body *)
-  let body1 = !elab_funbody_f ty_ret env3 body in
+  let body1 = !elab_funbody_f ty_ret vararg env3 body in
   (* Special treatment of the "main" function *)
   let body2 =
     if s = "main" then begin
@@ -2195,9 +2197,9 @@ and elab_definitions local env = function
 
 (* Extended asm *)
 
-let elab_asm_operand loc env (ASMOPERAND(label, wide, chars, e)) =
+let elab_asm_operand vararg loc env (ASMOPERAND(label, wide, chars, e)) =
   let s = elab_simple_string loc wide chars in
-  let e',env = elab_expr loc env e in
+  let e',env = elab_expr vararg loc env e in
   (label, s, e'),env
 
 
@@ -2209,7 +2211,8 @@ type stmt_context = {
   ctx_return_typ: typ;          (**r return type for the function *)
   ctx_labels: StringSet.t;      (**r all labels defined in the function *)
   ctx_break: bool;              (**r is 'break' allowed? *)
-  ctx_continue: bool            (**r is 'continue' allowed? *)
+  ctx_continue: bool;           (**r is 'continue' allowed? *)
+  ctx_vararg: bool;             (**r is this a vararg function? *)
 }
 
 let stmt_labels stmt =
@@ -2246,7 +2249,7 @@ let rec elab_stmt env ctx s =
 (* 6.8.3 Expression statements *)
 
   | COMPUTATION(a, loc) ->
-      let a,env =  (elab_expr loc env a) in
+      let a,env =  (elab_expr ctx.ctx_vararg loc env a) in
       { sdesc = Sdo a; sloc = elab_loc loc },env
 
 (* 6.8.1 Labeled statements *)
@@ -2256,7 +2259,7 @@ let rec elab_stmt env ctx s =
       { sdesc = Slabeled(Slabel lbl, s1); sloc = elab_loc loc },env
 
   | CASE(a, s1, loc) ->
-      let a',env = elab_expr loc env a in
+      let a',env = elab_expr ctx.ctx_vararg loc env a in
       begin match Ceval.integer_expr env a' with
         | None ->
             error loc "argument of 'case' must be an integer compile-time constant"
@@ -2277,7 +2280,7 @@ let rec elab_stmt env ctx s =
 (* 6.8.4 Conditional statements *)
 
   | If(a, s1, s2, loc) ->
-      let a',env = elab_expr loc env a in
+      let a',env = elab_expr ctx.ctx_vararg loc env a in
       if not (is_scalar_type env a'.etyp) then
         error loc "the condition of 'if' does not have scalar type";
       let s1',env = elab_stmt env ctx s1 in
@@ -2291,7 +2294,7 @@ let rec elab_stmt env ctx s =
 (* 6.8.5 Iterative statements *)
 
   | WHILE(a, s1, loc) ->
-      let a',env = elab_expr loc env a in
+      let a',env = elab_expr ctx.ctx_vararg loc env a in
       if not (is_scalar_type env a'.etyp) then
         error loc "the condition of 'while' does not have scalar type";
       let s1',env = elab_stmt env (ctx_loop ctx) s1 in
@@ -2299,7 +2302,7 @@ let rec elab_stmt env ctx s =
 
   | DOWHILE(a, s1, loc) ->
       let s1',env = elab_stmt env (ctx_loop ctx) s1 in
-      let a',env = elab_expr loc env a in
+      let a',env = elab_expr ctx.ctx_vararg loc env a in
       if not (is_scalar_type env a'.etyp) then
         error loc "the condition of 'while' does not have scalar type";
       { sdesc = Sdowhile(s1', a'); sloc = elab_loc loc },env
@@ -2308,10 +2311,10 @@ let rec elab_stmt env ctx s =
       let (a1', env', decls') =
         match fc with
         | Some (FC_EXP a1) ->
-            let a1,env = elab_for_expr loc env (Some a1) in
+            let a1,env = elab_for_expr ctx.ctx_vararg loc env (Some a1) in
             (a1, env, None)
         | None ->
-            let a1,env = elab_for_expr loc env None in
+            let a1,env = elab_for_expr ctx.ctx_vararg loc env None in
             (a1, env, None)
         | Some (FC_DECL def) ->
             let (dcl, env') = elab_definition true (Env.new_scope env) def in
@@ -2321,11 +2324,11 @@ let rec elab_stmt env ctx s =
       let a2',env =
         match a2 with
           | None -> intconst 1L IInt,env
-          | Some a2 -> elab_expr loc env' a2
+          | Some a2 -> elab_expr ctx.ctx_vararg loc env' a2
       in
       if not (is_scalar_type env' a2'.etyp) then
         error loc "the condition of 'for' does not have scalar type";
-      let a3',env' = elab_for_expr loc env' a3 in
+      let a3',env' = elab_for_expr ctx.ctx_vararg loc env' a3 in
       let s1',env' = elab_stmt env' (ctx_loop ctx) s1 in
       let sfor = { sdesc = Sfor(a1', a2', a3', s1'); sloc = elab_loc loc } in
       begin match decls' with
@@ -2335,7 +2338,7 @@ let rec elab_stmt env ctx s =
 
 (* 6.8.4 Switch statement *)
   | SWITCH(a, s1, loc) ->
-      let a',env = elab_expr loc env a in
+      let a',env = elab_expr ctx.ctx_vararg loc env a in
       if not (is_integer_type env a'.etyp) then
         error loc "the argument of 'switch' is not an integer";
       let s1',env = elab_stmt env (ctx_switch ctx) s1 in
@@ -2353,7 +2356,7 @@ let rec elab_stmt env ctx s =
 
 (* 6.8.6 Return statements *)
   | RETURN(a, loc) ->
-      let a',env = elab_opt_expr loc env a in
+      let a',env = elab_opt_expr ctx.ctx_vararg loc env a in
       begin match (unroll env ctx.ctx_return_typ, a') with
       | TVoid _, None -> ()
       | TVoid _, Some _ ->
@@ -2394,8 +2397,8 @@ let rec elab_stmt env ctx s =
   | ASM(cv_specs, wide, chars, outputs, inputs, flags, loc) ->
       let a = elab_cvspecs env cv_specs in
       let s = elab_simple_string loc wide chars in
-      let outputs,env = mmap (elab_asm_operand loc) env outputs in
-      let inputs ,env= mmap (elab_asm_operand loc) env inputs in
+      let outputs,env = mmap (elab_asm_operand ctx.ctx_vararg loc) env outputs in
+      let inputs ,env= mmap (elab_asm_operand ctx.ctx_vararg loc) env inputs in
       let flags = List.map (fun (w,c) -> elab_simple_string loc w c) flags in
       { sdesc = Sasm(a, s, outputs, inputs, flags);
         sloc = elab_loc loc },env
@@ -2428,12 +2431,13 @@ and elab_block_body env ctx sl =
 
 (* Elaboration of a function body.  Return the corresponding C statement. *)
 
-let elab_funbody return_typ env b =
+let elab_funbody return_typ vararg env b =
   let ctx =
     { ctx_return_typ = return_typ;
       ctx_labels = stmt_labels b;
       ctx_break = false;
-      ctx_continue = false } in
+      ctx_continue = false;
+      ctx_vararg = vararg;} in
   fst(elab_stmt env ctx b)
 
 (* Filling in forward declaration *)
