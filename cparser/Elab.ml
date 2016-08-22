@@ -1287,7 +1287,12 @@ and elab_single zi a il =
 
 (* Start with top-level object initialized to default *)
 
-in elab_item (I.top env root ty_root) ie []
+in
+if wrap incomplete_type loc env ty_root then begin
+  error loc "variable has incomplete type %a" Cprint.typ ty_root;
+  raise Exit
+end;
+elab_item (I.top env root ty_root) ie []
 
 (* Elaboration of a top-level initializer *)
 
