@@ -640,7 +640,7 @@ and elab_type_declarator loc env ty kr_ok = function
           error loc "Illegal function return type@ %a" Cprint.typ ty
       | _ -> ()
       end;
-      let params',env = elab_parameters env params in
+      let params' = elab_parameters env params in
       elab_type_declarator loc env (TFun(ty, Some params', vararg, [])) kr_ok d
   | Cabs.PROTO_OLD(d, params) ->
       begin match unroll env ty with
@@ -660,11 +660,11 @@ and elab_type_declarator loc env ty kr_ok = function
 
 and elab_parameters env params =
   (* Prototype introduces a new scope *)
-  let (vars, env) = mmap elab_parameter (Env.new_scope env) params in
+  let (vars, _) = mmap elab_parameter (Env.new_scope env) params in
   (* Catch special case f(t) where t is void or a typedef to void *)
   match vars with
-    | [ ( {C.name=""}, t) ] when is_void_type env t -> [],env
-    | _ -> vars,env
+    | [ ( {C.name=""}, t) ] when is_void_type env t -> []
+    | _ -> vars
 
 (* Elaboration of a function parameter *)
 
