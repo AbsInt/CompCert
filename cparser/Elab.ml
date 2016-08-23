@@ -1292,11 +1292,11 @@ if is_function_type env ty_root then begin
   error loc "illegal initializer (only variables can be initialized)";
   raise Exit
 end;
-if wrap incomplete_type loc env ty_root then begin
+try
+  elab_item (I.top env root ty_root) ie []
+with No_default_init ->
   error loc "variable has incomplete type %a" Cprint.typ ty_root;
   raise Exit
-end;
-elab_item (I.top env root ty_root) ie []
 
 (* Elaboration of a top-level initializer *)
 

@@ -244,6 +244,8 @@ val formatloc: Format.formatter -> location -> unit
   (* Printer for locations (for Format) *)
 
 (* Initializers *)
+exception No_default_init
+  (* Raised if no default initilaizer exists *)
 
 val default_init: Env.t -> typ -> init
   (* Return a default initializer for the given type
