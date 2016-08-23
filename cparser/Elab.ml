@@ -1475,7 +1475,7 @@ let elab_expr vararg loc env a =
 (* 6.5.4 Cast operators *)
 
   | CAST ((spec, dcl), SINGLE_INIT a1) ->
-      let (ty, _) = elab_type loc env spec dcl in
+      let (ty, env) = elab_type loc env spec dcl in
       let b1,env = elab env a1 in
       if not (wrap2 valid_cast loc env b1.etyp ty) then
         err "illegal cast from %a@ to %a" Cprint.typ b1.etyp Cprint.typ ty;
@@ -1484,7 +1484,7 @@ let elab_expr vararg loc env a =
 (* 6.5.2.5 Compound literals *)
 
   | CAST ((spec, dcl), ie) ->
-      let (ty, _) = elab_type loc env spec dcl in
+      let (ty, env) = elab_type loc env spec dcl in
       begin match elab_initializer loc env "<compound literal>" ty ie with
       | (ty', Some i) -> { edesc = ECompound(ty', i); etyp = ty' },env
       | (ty', None)   -> error "ill-formed compound literal"
