@@ -32,11 +32,11 @@
 #define MAXKB	(256/8)
 #define MAXNR	14
 
-typedef unsigned char	u8;	
-typedef unsigned short	u16;	
+typedef unsigned char	u8;
+typedef unsigned short	u16;
 typedef unsigned int	u32;
 
-#if defined(__ppc__) || defined(__PPC__)
+#if defined(__ppc__) || defined(__PPC__) || defined(__ARMEB__)
 #define ARCH_BIG_ENDIAN
 #elif defined(__i386__) || defined(__x86_64__) || defined(__ARMEL__)
 #undef ARCH_BIG_ENDIAN
@@ -1295,7 +1295,7 @@ void rijndaelEncryptRound(const u32 rk[/*4*(Nr + 1)*/], int Nr, u8 block[16], in
     		(Te4[(s1 >>  8) & 0xff] & 0x0000ff00) ^
     		(Te4[(s2      ) & 0xff] & 0x000000ff) ^
     		rk[3];
-		
+
 		s0 = t0;
 		s1 = t1;
 		s2 = t2;
@@ -1433,7 +1433,7 @@ static void do_bench(int nblocks)
 
 int main(int argc, char ** argv)
 {
-  do_test(128, 
+  do_test(128,
           (u8 *)"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F",
           (u8 *)"\x00\x11\x22\x33\x44\x55\x66\x77\x88\x99\xAA\xBB\xCC\xDD\xEE\xFF",
           (u8 *)"\x69\xC4\xE0\xD8\x6A\x7B\x04\x30\xD8\xCD\xB7\x80\x70\xB4\xC5\x5A",

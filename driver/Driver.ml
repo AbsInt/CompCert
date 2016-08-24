@@ -525,7 +525,9 @@ let _ =
       | "powerpc" -> if Configuration.system = "linux"
                      then Machine.ppc_32_bigendian
                      else Machine.ppc_32_diab_bigendian
-      | "arm"     -> Machine.arm_littleendian
+      | "arm"     -> if Configuration.is_big_endian
+                     then Machine.arm_bigendian
+                     else Machine.arm_littleendian
       | "ia32"    -> if Configuration.abi = "macosx"
                      then Machine.x86_32_macosx
                      else Machine.x86_32

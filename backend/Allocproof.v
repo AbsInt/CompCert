@@ -1890,7 +1890,8 @@ Proof.
   { eapply loc_unconstrained_satisf. eapply can_undef_satisf; eauto.
     eapply reg_unconstrained_satisf. eauto.
     eapply add_equations_satisf; eauto. assumption.
-    rewrite Regmap.gss. apply Val.lessdef_trans with v1'; auto.
+    rewrite Regmap.gss.
+    apply Val.lessdef_trans with v1'; unfold sel_val; unfold kind_first_word; unfold v1'; destruct Archi.big_endian; auto.
   }
   exploit (exec_moves mv2); eauto. intros [ls3 [A3 B3]].
   assert (LD3: Val.lessdef_list rs##args (reglist ls3 args2')).
@@ -1906,7 +1907,8 @@ Proof.
   assert (SAT4: satisf (rs#dst <- v) ls4 e0).
   { eapply loc_unconstrained_satisf. eapply can_undef_satisf; eauto.
     eapply add_equations_satisf; eauto. assumption.
-    rewrite Regmap.gss. apply Val.lessdef_trans with v2'; auto.
+    rewrite Regmap.gss.
+    apply Val.lessdef_trans with v2'; unfold sel_val; unfold kind_second_word; unfold v2'; destruct Archi.big_endian; auto.
   }
   exploit (exec_moves mv3); eauto. intros [ls5 [A5 B5]].
   econstructor; split.
@@ -1938,7 +1940,8 @@ Proof.
   set (ls2 := Locmap.set (R dst') v1'' (undef_regs (destroyed_by_load Mint32 addr) ls1)).
   assert (SAT2: satisf (rs#dst <- v) ls2 e0).
   { eapply parallel_assignment_satisf; eauto.
-    apply Val.lessdef_trans with v1'; auto.
+    apply Val.lessdef_trans with v1';
+    unfold sel_val; unfold kind_first_word; unfold v1'; destruct Archi.big_endian; auto.
     eapply can_undef_satisf. eauto. eapply add_equations_satisf; eauto.
   }
   exploit (exec_moves mv2); eauto. intros [ls3 [A3 B3]].
@@ -1968,7 +1971,7 @@ Proof.
   set (ls2 := Locmap.set (R dst') v2'' (undef_regs (destroyed_by_load Mint32 addr2) ls1)).
   assert (SAT2: satisf (rs#dst <- v) ls2 e0).
   { eapply parallel_assignment_satisf; eauto.
-    apply Val.lessdef_trans with v2'; auto.
+    apply Val.lessdef_trans with v2'; unfold sel_val; unfold kind_second_word; unfold v2'; destruct Archi.big_endian; auto.
     eapply can_undef_satisf. eauto. eapply add_equations_satisf; eauto.
   }
   exploit (exec_moves mv2); eauto. intros [ls3 [A3 B3]].

@@ -17,7 +17,7 @@
 @     * Neither the name of the <organization> nor the
 @       names of its contributors may be used to endorse or promote products
 @       derived from this software without specific prior written permission.
-@ 
+@
 @ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 @ "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 @ LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -70,9 +70,9 @@ FUNCTION(__compcert_va_float64)
 #ifdef ABI_eabi
         ldr     r0, [r1, #-8]   @ load next argument and return it in r0,r1
         ldr     r1, [r1, #-4]
-#else	
+#else
         vldr    d0, [r1, #-8]   @ load next argument and return it in d0
-#endif	
+#endif
         bx      lr
 ENDFUNCTION(__compcert_va_float64)
 

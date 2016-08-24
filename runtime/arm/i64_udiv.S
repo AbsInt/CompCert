@@ -17,7 +17,7 @@
 @     * Neither the name of the <organization> nor the
 @       names of its contributors may be used to endorse or promote products
 @       derived from this software without specific prior written permission.
-@ 
+@
 @ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 @ "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 @ LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -36,13 +36,13 @@
 
 #include "sysdeps.h"
 
-@@@ Unsigned division	
-	
+@@@ Unsigned division
+
 FUNCTION(__i64_udiv)
         push {r4, r5, r6, r7, r8, lr}
         bl __i64_udivmod
-        MOV r0, r4
-        MOV r1, r5
+        MOV Reg0LO, Reg2LO
+        MOV Reg0HI, Reg2HI
         pop {r4, r5, r6, r7, r8, lr}
         bx lr
-ENDFUNCTION(__i64_udiv)	
+ENDFUNCTION(__i64_udiv)

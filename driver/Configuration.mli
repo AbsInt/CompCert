@@ -19,6 +19,9 @@ val model: string
 val abi: string
   (** ABI to use *)
 
+val is_big_endian: bool
+  (** Endianness to use *)
+
 val system: string
   (** Flavor of operating system that runs CompCert *)
 
