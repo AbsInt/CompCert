@@ -838,6 +838,8 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
          and the composite was bound in another scope,
          create a new incomplete composite instead via the case
          "_, None" below. *)
+      if ci.ci_kind <> kind then
+        fatal_error loc "struct/union mismatch on tag '%s'" tag;
       warn_attrs();
       (tag', env)
   | Some(tag', ({ci_sizeof = None} as ci)), Some members
