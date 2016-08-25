@@ -758,8 +758,12 @@ let rec convertExpr env e =
   | C.ECall({edesc = C.EVar {name = "__builtin_debug"}}, args) ->
       let (kind, args1) =
         match args with
-        | {edesc = C.EConst(CInt(n,_,_))} :: args1 -> (n, args1)
-        | _ -> error "ill_formed __builtin_debug"; (0L, args) in
+        | {edesc = C.EConst(CInt(n,_,_))} :: args1 ->
+            if n <= 0L then begin
+              error "ill_formed __builtin_debug"; (1L,args1)
+            end else
+              (n, args1)
+        | _ -> error "ill_formed __builtin_debug"; (1L, args) in
       let (text, args2) =
         match args1 with
         | {edesc = C.EConst(CStr(txt))} :: args2 -> (txt, args2)
