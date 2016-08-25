@@ -251,6 +251,9 @@ let add_enum env id info =
     { env with env_enum = IdentMap.add id info env.env_enum }
     info.ei_members
 
+let add_types env_old env_new =
+  { env_new with env_ident = env_old.env_ident;}
+
 (* Error reporting *)
 
 open Printf

@@ -76,3 +76,5 @@ val add_ident : t -> C.ident -> C.storage -> C.typ -> t
 val add_composite : t -> C.ident -> composite_info -> t
 val add_typedef : t -> C.ident -> typedef_info -> t
 val add_enum : t -> C.ident -> enum_info -> t
+
+val add_types : t -> t -> t
