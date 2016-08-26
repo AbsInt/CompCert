@@ -252,7 +252,7 @@ let add_enum env id info =
     info.ei_members
 
 let add_types env_old env_new =
-  { env_new with env_ident = env_old.env_ident;}
+  { env_new with env_ident = env_old.env_ident;env_scope = env_old.env_scope;}
 
 (* Error reporting *)
 
