@@ -801,6 +801,11 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
 and elab_struct_or_union_info keep_ty kind loc env members attrs =
   let (m, env') = mmap (elab_field_group keep_ty) env members in
   let m = List.flatten m in
+  ignore (List.fold_left (fun acc fld ->
+    let n = fld.fld_name in
+    if List.exists ((=) n) acc then
+      error loc "duplicate memeber '%s'" n;
+    n::acc) [] m);
   (* Check for incomplete types *)
   let rec check_incomplete = function
   | [] -> ()
