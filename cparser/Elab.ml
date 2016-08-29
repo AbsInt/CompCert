@@ -820,6 +820,14 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
 and elab_struct_or_union_info keep_ty kind loc env members attrs =
   let (m, env') = mmap (elab_field_group keep_ty) env members in
   let m = List.flatten m in
+  ignore (List.fold_left (fun acc fld ->
+    let n = fld.fld_name in
+    if n <> "" then begin
+      if List.exists ((=) n) acc then
+        error loc "duplicate member '%s'" n;
+      n::acc
+    end else
+      acc) [] m);
   (* Check for incomplete types *)
   let rec check_incomplete = function
   | [] -> ()
@@ -2081,8 +2089,9 @@ let elab_KR_function_parameters env params defs loc =
   | d -> (* Should never be produced by the parser *)
       fatal_error (get_definitionloc d)
                       "Illegal declaration of function parameter" in
-  let kr_params_defs =
-    List.concat (fst (mmap elab_param_def env defs)) in
+  let kr_params_defs,paramsenv =
+    let params,paramsenv = mmap elab_param_def env defs in
+    List.concat params,paramsenv in
   (* Find the type of a parameter *)
   let type_of_param param =
     match List.filter (fun (p, _) -> p = param) kr_params_defs with
@@ -2119,7 +2128,8 @@ let elab_KR_function_parameters env params defs loc =
                        ps
         end
   in
-    match_params [] [] params
+  let a,b = match_params [] [] params in
+  a,b,paramsenv
 
 
 (* Look for varargs flag in previous definitions of a function *)
@@ -2153,16 +2163,16 @@ let elab_fundef env spec name defs body loc =
       - [ty]: the full, prototyped type of the function
       - [extra_decls]: extra declarations to be inserted at the
         beginning of the function *)
-  let (ty, extra_decls) =
+  let (ty, extra_decls,env1) =
     match ty, kr_params with
     | TFun(ty_ret, None, vararg, attr), None ->
-        (TFun(ty_ret, Some [], vararg, attr), [])
+        (TFun(ty_ret, Some [], vararg, attr), [],env1)
     | ty, None ->
-        (ty, [])
+        (ty, [],env1)
     | TFun(ty_ret, None, false, attr), Some params ->
-        let (params', extra_decls) =
+        let (params', extra_decls,env) =
           elab_KR_function_parameters env params defs loc in
-        (TFun(ty_ret, Some params', inherit_vararg env s sto ty, attr), extra_decls)
+        (TFun(ty_ret, Some params', inherit_vararg env s sto ty, attr), extra_decls,env)
     | _, Some params ->
         assert false
   in
