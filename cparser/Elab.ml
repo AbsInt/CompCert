@@ -508,7 +508,7 @@ let rec elab_specifier keep_ty ?(only = false) loc env specifier =
       attr := add_attributes (elab_cvspec env cv) !attr
   | SpecStorage st ->
       if !sto <> Storage_default && st <> TYPEDEF then
-        error loc "multiple storage classes in declaration specifiers";
+        error loc "multiple storage classes in declaration specifier";
       begin match st with
       | AUTO -> ()
       | STATIC -> sto := Storage_static
@@ -787,7 +787,7 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
             | _ -> ILongLong (* trigger next error message *) in
           if integer_rank ik > integer_rank IInt then begin
             error loc
-              "the type of bitfield '%s' must be an integer type no bigger than 'int'" id;
+              "the type of bit-field '%s' must be an integer type no bigger than 'int'" id;
             None
           end else begin
             let expr,env' =(!elab_expr_f loc env sz) in
@@ -1266,7 +1266,7 @@ and elab_item zi item il =
           elab_list zi il false
       | CWStr s, TInt(_, _) when compatible_types AttrIgnoreTop env ty_elt (TInt(wchar_ikind(), [])) ->
           if not (I.index_below (Int64.of_int(List.length s - 1)) sz) then
-            warning loc Unnamed "initializer string for array of wide chars is too long";
+            warning loc Unnamed "initializer-string for array of wide chars is too long";
           elab_list (I.set zi (init_int_array_wstring sz s)) il false
       | CWStr _, _ ->
           error loc "initialization of an array of non-wchar_t elements with a wide string literal";
@@ -1470,7 +1470,7 @@ let elab_expr vararg loc env a =
       let ty = match b3.edesc with ESizeof ty -> ty | _ -> assert false in
       let ty' = default_argument_conversion env ty in
       if not (compatible_types AttrIgnoreTop env ty ty') then
-        warning Varargs "second argument of va_rarg is of promotable type %a; this var_arg has undefined behavior because arguments will be promoted to %a"
+        warning Varargs "second argument to 'va_arg' is of promotable type %a; this va_arg has undefined behavior because arguments will be promoted to %a"
           (print_typ env) ty (print_typ env) ty';
       { edesc = ECall(ident, [b2; b3]); etyp = ty },env
 
@@ -1857,7 +1857,7 @@ let elab_expr vararg loc env a =
     if not (is_modifiable_lvalue env b1) then
       err "expression is not assignable";
     if not (is_scalar_type env b1.etyp) then
-      err "cannot %s value of type %a" msg  (print_typ env) b1.etyp;
+      err "cannot %s value of type %a" msg (print_typ env) b1.etyp;
     { edesc = EUnop(op, b1); etyp = b1.etyp },env
 
 (* Elaboration of binary operators over integers *)
