@@ -207,7 +207,7 @@ let rc fmt =
   cprintf fmt "\x1b[31;1m"
 
 let mc fmt  =
-  cprintf fmt "\x1b35;1m"
+  cprintf fmt "\x1b[35;1m"
 
 let pp_key key fmt =
   let key = match key with
@@ -240,7 +240,7 @@ let warning loc ty fmt =
   | WarningMsg ->
       incr num_warnings;
       kfprintf (pp_key key)
-        err_formatter ("%a %twarning:%tm: %t" ^^ fmt) pp_loc loc mc rsc bc
+        err_formatter ("%a %twarning:%t: %t" ^^ fmt) pp_loc loc mc rsc bc
   | SuppressedMsg -> ifprintf err_formatter fmt
 
 let error loc fmt =
@@ -301,3 +301,7 @@ let warning_help = "Diagnostic options:\n\
 \  -Wfatal-errors     Turn all errors into fatal errors aborting the compilation\n\
 \  -fdiagnostics-color Turn on colored diagnostics\n\
 \  -fno-diagnostics-color Turn of colored diagnostics\n"
+
+let raise_on_errors () =
+  if !num_errors > 0 then
+    raise Abort

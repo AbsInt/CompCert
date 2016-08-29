@@ -95,3 +95,43 @@ f:
         .arch   armv7
 #endif
 	.fpu	vfpv2
+
+
+
+// Endianness dependencies
+
+// Location of high and low word of first register pair (r0:r1)
+#ifdef ENDIANNESS_big
+#define Reg0HI r0
+#define Reg0LO r1
+#else
+#define Reg0HI r1
+#define Reg0LO r0
+#endif
+
+// Location of high and low word of second register pair (r2:r3)
+#ifdef ENDIANNESS_big
+#define Reg1HI r2
+#define Reg1LO r3
+#else
+#define Reg1HI r3
+#define Reg1LO r2
+#endif
+
+// Location of high and low word of third register pair (r4:r5)
+#ifdef ENDIANNESS_big
+#define Reg2HI r4
+#define Reg2LO r5
+#else
+#define Reg2HI r5
+#define Reg2LO r4
+#endif
+
+// Location of high and low word of fourth register pair (r6:r7)
+#ifdef ENDIANNESS_big
+#define Reg3HI r6
+#define Reg3LO r7
+#else
+#define Reg3HI r7
+#define Reg3LO r6
+#endif

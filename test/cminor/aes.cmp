@@ -1,6 +1,6 @@
 /* AES cipher.  To be preprocessed with cpp -P. */
 
-#if defined(__ppc__) || defined(__PPC__)
+#if defined(__ppc__) || defined(__PPC__) || defined(__ARMEB__)
 #define ARCH_BIG_ENDIAN
 #elif defined(__i386__) || defined(__x86_64__) || defined(__ARMEL__)
 #undef ARCH_BIG_ENDIAN
@@ -111,7 +111,7 @@
       rk(13) = rk( 5) ^ rk(12);
       rk(14) = rk( 6) ^ rk(13);
       rk(15) = rk( 7) ^ rk(14);
-      
+
       rk_ = rk_ + 8 * 4;
     } }}
   }
@@ -316,7 +316,7 @@
       Td2((s1 >>u  8) & 0xff) ^
       Td3((s0      ) & 0xff) ^
       rk(7);
-    
+
     rk_ = rk_ + 8 * 4;
     r = r - 1;
     if (r == 0) exit;

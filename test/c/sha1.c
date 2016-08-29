@@ -178,7 +178,7 @@ static void do_test(unsigned char * txt, unsigned char * expected_output)
   SHA1_add_data(&ctx, txt, strlen((char *) txt));
   SHA1_finish(&ctx, output);
   ok = memcmp(output, expected_output, 20) == 0;
-  printf("Test `%s': %s\n", 
+  printf("Test `%s': %s\n",
          (char *) txt, (ok ? "passed" : "FAILED"));
 }
 
@@ -197,7 +197,7 @@ unsigned char test_output_1[20] =
 { 0xA9, 0x99, 0x3E, 0x36, 0x47, 0x06, 0x81, 0x6A, 0xBA, 0x3E ,
   0x25, 0x71, 0x78, 0x50, 0xC2, 0x6C, 0x9C, 0xD0, 0xD8, 0x9D };
 
-unsigned char test_input_2[] = 
+unsigned char test_input_2[] =
   "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
 
 unsigned char test_output_2[20] =
@@ -214,7 +214,7 @@ static void do_bench(int nblocks)
 
   for (i = 0; i < 64; i++) data[i] = i;
   SHA1_init(&ctx);
-  for (; nblocks > 0; nblocks--) 
+  for (; nblocks > 0; nblocks--)
     SHA1_add_data(&ctx, data, 64);
   SHA1_finish(&ctx, output);
 }

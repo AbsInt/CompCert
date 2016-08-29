@@ -864,11 +864,12 @@ Proof.
       with ((Byte Byte.zero :: nil) ++ list_repeat n0 (Byte Byte.zero)).
     apply Mem.loadbytes_concat.
     eapply Mem.loadbytes_unchanged_on with (P := fun b1 ofs1 => ofs1 = p).
-    eapply store_zeros_unchanged; eauto. intros; omega. 
+    eapply store_zeros_unchanged; eauto. intros; omega.
     intros; omega.
-    change (Byte Byte.zero :: nil) with (encode_val Mint8unsigned Vzero).
+    replace (Byte Byte.zero :: nil) with (encode_val Mint8unsigned Vzero).
     change 1 with (size_chunk Mint8unsigned).
     eapply Mem.loadbytes_store_same; eauto.
+    unfold encode_val; unfold encode_int; unfold rev_if_be; destruct Archi.big_endian; reflexivity.
     eapply IHo; eauto. omega. omega. omega. omega.
   + eapply IHo; eauto. omega. omega.
 - discriminate.
@@ -973,7 +974,7 @@ Proof.
   transitivity (Some(decode_val chunk (list_repeat (size_chunk_nat chunk) (Byte Byte.zero)))).
   apply Mem.loadbytes_load; auto. rewrite size_chunk_conv.
   eapply store_zeros_loadbytes; eauto. rewrite <- size_chunk_conv; auto.
-  f_equal. destruct chunk; reflexivity.
+  f_equal. destruct chunk; unfold decode_val; unfold decode_int; unfold rev_if_be; destruct Archi.big_endian; reflexivity.
 Qed.
 
 Fixpoint load_store_init_data (m: mem) (b: block) (p: Z) (il: list init_data) {struct il} : Prop :=

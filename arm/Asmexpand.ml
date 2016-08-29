@@ -185,13 +185,14 @@ let expand_builtin_vload_common chunk base ofs res =
   | Mint32, BR(IR res) ->
      emit (Pldr (res, base, SOimm ofs))
   | Mint64, BR_splitlong(BR(IR res1), BR(IR res2)) ->
-     let ofs' = Int.add ofs _4 in
+     let ofs_hi = if Archi.big_endian then ofs else Int.add ofs _4 in
+     let ofs_lo = if Archi.big_endian then Int.add ofs _4 else ofs in
      if base <> res2 then begin
-	 emit (Pldr (res2, base, SOimm ofs));
-	 emit (Pldr (res1, base, SOimm ofs'))
+	 emit (Pldr (res2, base, SOimm ofs_lo));
+	 emit (Pldr (res1, base, SOimm ofs_hi))
        end else begin
-	 emit (Pldr (res1, base, SOimm ofs'));
-	 emit (Pldr (res2, base, SOimm ofs))
+	 emit (Pldr (res1, base, SOimm ofs_hi));
+	 emit (Pldr (res2, base, SOimm ofs_lo))
        end
   | Mfloat32, BR(FR res) ->
      emit (Pflds (res, base, ofs))
@@ -226,9 +227,10 @@ let expand_builtin_vstore_common chunk base ofs src =
   | Mint32, BA(IR src) ->
      emit (Pstr (src, base, SOimm ofs))
   | Mint64, BA_splitlong(BA(IR src1), BA(IR src2)) ->
-     let ofs' = Int.add ofs _4 in
-     emit (Pstr (src2, base, SOimm ofs));
-     emit (Pstr (src1, base, SOimm ofs'))
+     let ofs_hi = if Archi.big_endian then ofs else Int.add ofs _4 in
+     let ofs_lo = if Archi.big_endian then Int.add ofs _4 else ofs in
+     emit (Pstr (src2, base, SOimm ofs_lo));
+     emit (Pstr (src1, base, SOimm ofs_hi))
   | Mfloat32, BA(FR src) ->
      emit (Pfsts (src, base, ofs))
   | Mfloat64, BA(FR src) ->

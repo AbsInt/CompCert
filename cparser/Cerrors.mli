@@ -68,3 +68,5 @@ val warning_help : string
 
 val warning_options : (Commandline.pattern * Commandline.action) list
 (** List of all options for diagnostics *)
+
+val raise_on_errors : unit -> unit

@@ -915,7 +915,12 @@ let spill_instr tospill eqs instr =
           | false, true ->
               let eqs1 = add arg1 res (kill res eqs) in
               let (argl', c1, eqs2) = reload_vars tospill eqs1 argl in
-              (Xreload(arg1, res) :: c1 @ [Xop(op, res :: argl', res)],
+              (* PR#113, PR#122: [Xreload] here causes [res] to become
+                 unspillable in the future.  This is too strong, hence
+                 the [Xmove].  Alternatively, this [false, true]
+                 case could be removed and the [true, true] case
+                 below used instead. *)
+              (Xmove(arg1, res) :: c1 @ [Xop(op, res :: argl', res)],
                kill res eqs2)
           | true, true ->
               let tmp = new_temp (typeof res) in

@@ -19,6 +19,9 @@ val model: string
 val abi: string
   (** ABI to use *)
 
+val is_big_endian: bool
+  (** Endianness to use *)
+
 val system: string
   (** Flavor of operating system that runs CompCert *)
 
@@ -63,3 +66,11 @@ val struct_passing_style: struct_passing_style
 val struct_return_style: struct_return_style
   (** Calling conventions to use for returning structs and unions as
       first-class values *)
+
+type response_file_style =
+  | Gnu         (* responsefiles in gnu compatible syntax *)
+  | Diab        (* responsefiles in diab compatible syntax *)
+  | Unsupported (* responsefiles are not supported *)
+
+val response_file_style: response_file_style
+  (** Style of supported responsefiles *)

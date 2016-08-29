@@ -14,21 +14,20 @@
 open Printf
 open Clflags
 
+(* Is this a gnu based tool chain *)
+let gnu_system = Configuration.system <> "diab"
+
+(* Safe removal of files *)
+let safe_remove file =
+  try Sys.remove file with Sys_error _ -> ()
+
 (* Invocation of external tools *)
 
 let rec waitpid_no_intr pid =
   try Unix.waitpid [] pid
   with Unix.Unix_error (Unix.EINTR, _, _) -> waitpid_no_intr pid
 
-let command ?stdout args =
-  if !option_v then begin
-    eprintf "+ %s" (String.concat " " args);
-    begin match stdout with
-    | None -> ()
-    | Some f -> eprintf " > %s" f
-    end;
-    prerr_endline ""
-  end;
+let command stdout args =
   let argv = Array.of_list args in
   assert (Array.length argv > 0);
   try
@@ -51,11 +50,36 @@ let command ?stdout args =
             argv.(0) fn (Unix.error_message err) param;
     -1
 
+let command ?stdout args =
+  if !option_v then begin
+    eprintf "+ %s" (String.concat " " args);
+    begin match stdout with
+    | None -> ()
+    | Some f -> eprintf " > %s" f
+    end;
+    prerr_endline ""
+  end;
+  let resp = Sys.win32 && Configuration.response_file_style <> Configuration.Unsupported in
+  if resp && List.fold_left (fun len arg -> len + String.length arg + 1) 0 args > 7000 then
+    let quote,prefix = match Configuration.response_file_style with
+    | Configuration.Unsupported -> assert false
+    | Configuration.Gnu -> Responsefile.gnu_quote,"@"
+    | Configuration.Diab -> Responsefile.diab_quote,"-@" in
+    let file,oc = Filename.open_temp_file "compcert" "" in
+    let cmd,args = match args with
+    | cmd::args -> cmd,args
+    | [] -> assert false (* Should never happen *) in
+    List.iter (fun a -> Printf.fprintf oc "%s " (quote a)) args;
+    close_out oc;
+    let arg = prefix^file in
+    let ret = command stdout [cmd;arg] in
+    safe_remove file;
+    ret
+  else
+    command stdout args
+
 let command_error n exc =
   eprintf "Error: %s command failed with exit code %d (use -v to see invocation)\n" n exc
-
-let safe_remove file =
-  try Sys.remove file with Sys_error _ -> ()
 
 
 (* Determine names for output files.  We use -o option if specified
@@ -93,8 +117,6 @@ let print_error oc msg =
   in
     List.iter print_one_error msg;
     output_char oc '\n'
-
-let gnu_system = Configuration.system <> "diab"
 
 (* Command-line parsing *)
 let explode_comma_option s =

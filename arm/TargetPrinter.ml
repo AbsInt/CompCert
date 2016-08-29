@@ -220,10 +220,12 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
       fprintf oc "	.balign	4\n";
       Hashtbl.iter
         (fun bf lbl ->
-          (* Little-endian floats *)
+          (* Big or little-endian floats *)
           let bfhi = Int64.shift_right_logical bf 32
           and bflo = Int64.logand bf 0xFFFF_FFFFL in
-          fprintf oc ".L%d:	.word	0x%Lx, 0x%Lx\n" lbl bflo bfhi)
+          if Archi.big_endian
+          then fprintf oc ".L%d:	.word	0x%Lx, 0x%Lx\n" lbl bfhi bflo
+          else fprintf oc ".L%d:	.word	0x%Lx, 0x%Lx\n" lbl bflo bfhi)
         float_labels;
       Hashtbl.iter
         (fun bf lbl ->
@@ -310,7 +312,9 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
           | (Tfloat | Tany64) :: tyl' ->
               let i = (i + 1) land (-2) in
               if i >= 4 then 0 else begin
-                fixup_double oc dir (freg_param i) (ireg_param i) (ireg_param (i+1));
+                if Archi.big_endian
+                then fixup_double oc dir (freg_param i) (ireg_param (i+1)) (ireg_param i)
+                else fixup_double oc dir (freg_param i) (ireg_param i) (ireg_param (i+1));
                 1 + fixup (i+2) tyl'
               end
           | Tsingle :: tyl' ->
@@ -855,13 +859,11 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
         cfi_section oc
       end
 
-
     let print_epilogue oc =
       if !Clflags.option_g then begin
         Debug.compute_gnu_file_enum (fun f -> ignore (print_file oc f));
         section oc Section_text;
       end
-
 
     let default_falignment = 4
 

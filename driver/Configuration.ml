@@ -121,6 +121,11 @@ let arch =
   | v -> bad_config "arch" [v]
 let model = get_config_string "model"
 let abi = get_config_string "abi"
+let is_big_endian =
+  match get_config_string "endianness" with
+  | "big" -> true
+  | "little" -> false
+  | v -> bad_config "endianness" [v]
 let system = get_config_string "system"
 let has_runtime_lib =
   match get_config_string "has_runtime_lib" with
@@ -171,3 +176,15 @@ let struct_return_style =
   | "int1-8"   -> SR_int1to8
   | "ref"      -> SR_ref
   | v -> bad_config "struct_return_style" [v]
+
+type response_file_style =
+  | Gnu         (* responsefiles in gnu compatible syntax *)
+  | Diab        (* responsefiles in diab compatible syntax *)
+  | Unsupported (* responsefiles are not supported *)
+
+let response_file_style =
+  match get_config_string "response_file_style" with
+  | "unsupported" -> Unsupported
+  | "gnu" -> Gnu
+  | "diab" -> Diab
+  | v -> bad_config "response_file_style" [v]

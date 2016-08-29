@@ -1034,6 +1034,7 @@ let formatloc pp (filename, lineno) =
   if filename <> "" then Format.fprintf pp "%s:%d: " filename lineno
 
 (* Generate the default initializer for the given type *)
+exception No_default_init
 
 let rec default_init env ty =
   match unroll env ty with
@@ -1057,11 +1058,11 @@ let rec default_init env ty =
   | TUnion(id, _) ->
       let ci = Env.find_union env id in
       begin match ci.ci_members with
-      | [] -> assert false
+      | [] -> raise No_default_init
       | fld :: _ -> Init_union(id, fld, default_init env fld.fld_typ)
       end
   | _ ->
-      assert false
+      raise No_default_init
 
 (* Substitution of variables by expressions *)
 

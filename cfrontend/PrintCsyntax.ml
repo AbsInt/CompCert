@@ -401,7 +401,7 @@ let name_function_parameters fun_name params cconv =
   | _ ->
       let rec add_params first = function
       | [] ->
-          if cconv.cc_vararg then Buffer.add_string b "..."
+          if cconv.cc_vararg then Buffer.add_string b ",..."
       | (id, ty) :: rem ->
           if not first then Buffer.add_string b ", ";
           Buffer.add_string b (name_cdecl (extern_atom id) ty);
@@ -426,13 +426,21 @@ let print_function p id f =
 
 let print_fundef p id fd =
   match fd with
-  | Ctypes.External((EF_external _ | EF_runtime _), args, res, cconv) ->
+  | Ctypes.External((EF_external _ | EF_runtime _| EF_malloc | EF_free), args, res, cconv) ->
       fprintf p "extern %s;@ @ "
                 (name_cdecl (extern_atom id) (Tfunction(args, res, cconv)))
   | Ctypes.External(_, _, _, _) ->
       ()
   | Ctypes.Internal f ->
       print_function p id f
+
+let print_fundecl p id fd =
+  match fd with
+  | Ctypes.Internal f ->
+      let linkage = if C2C.atom_is_static id then "static" else "extern" in
+      fprintf p "%s %s;@ @ " linkage
+                (name_cdecl (extern_atom id) (Csyntax.type_of_function f))
+  | _ -> ()
 
 let string_of_init id =
   let b = Buffer.create (List.length id) in
@@ -501,6 +509,17 @@ let print_globvar p id v =
       end;
       fprintf p ";@]@ @ "
 
+let print_globvardecl p  id v =
+  let name = extern_atom id in
+  let name = if v.gvar_readonly then "const "^name else name in
+  let linkage = if C2C.atom_is_static id then "static" else "extern" in
+  fprintf p "%s %s;@ @ " linkage (name_cdecl name v.gvar_info)
+
+let print_globdecl p (id,gd) =
+  match gd with
+  | Gfun f -> print_fundecl p id f
+  | Gvar v -> print_globvardecl p id v
+
 let print_globdef p (id, gd) =
   match gd with
   | Gfun f -> print_fundef p id f
@@ -524,6 +543,7 @@ let print_program p prog =
   fprintf p "@[<v 0>";
   List.iter (declare_composite p) prog.prog_types;
   List.iter (define_composite p) prog.prog_types;
+  List.iter (print_globdecl p) prog.prog_defs;
   List.iter (print_globdef p) prog.prog_defs;
   fprintf p "@]@."
 

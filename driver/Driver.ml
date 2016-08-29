@@ -333,13 +333,15 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>)\n\
 \  -dltl          Save LTL after register allocation in <file>.ltl\n\
 \  -dmach         Save generated Mach code in <file>.mach\n\
 \  -dasm          Save generated assembly in <file>.s\n\
+\  -dall          Save all generated intermidate files in <file>.<ext>\n\
 \  -sdump         Save info for post-linking validation in <file>.json\n\
 \  -doptions      Save the compiler configurations in <file>.opt.json\n\
 General options:\n\
 \  -stdlib <dir>  Set the path of the Compcert run-time library\n\
 \  -v             Print external commands before invoking them\n\
 \  -timings       Show the time spent in various compiler passes\n\
-\  -version       Print the version string and exit\n" ^
+\  -version       Print the version string and exit\n\
+\  @<file>        Read command line options from <file>\n" ^
   Cerrors.warning_help ^
 "Interpreter mode:\n\
 \  -interp        Execute given .c files using the reference interpreter\n\
@@ -442,6 +444,17 @@ let cmdline_actions =
   Exact "-dalloctrace", Set option_dalloctrace;
   Exact "-dmach", Set option_dmach;
   Exact "-dasm", Set option_dasm;
+  Exact "-dall", Self (fun _ ->
+    option_dprepro := true;
+    option_dparse := true;
+    option_dcmedium := true;
+    option_dclight := true;
+    option_dcminor := true;
+    option_drtl := true;
+    option_dalloctrace := true;
+    option_dmach := true;
+    option_dasm := true;
+    dump_options:=true);
   Exact "-sdump", Set option_sdump;
   Exact "-sdump-suffix", String (fun s -> option_sdump := true; sdump_suffix:= s);
   Exact "-doptions", Set dump_options;
@@ -515,7 +528,9 @@ let _ =
       | "powerpc" -> if Configuration.system = "linux"
                      then Machine.ppc_32_bigendian
                      else Machine.ppc_32_diab_bigendian
-      | "arm"     -> Machine.arm_littleendian
+      | "arm"     -> if Configuration.is_big_endian
+                     then Machine.arm_bigendian
+                     else Machine.arm_littleendian
       | "ia32"    -> if Configuration.abi = "macosx"
                      then Machine.x86_32_macosx
                      else Machine.x86_32

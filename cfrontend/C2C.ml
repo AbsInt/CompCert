@@ -758,7 +758,7 @@ let rec convertExpr env e =
       let (kind, args1) =
         match args with
         | {edesc = C.EConst(CInt(n,_,_))} :: args1 -> (n, args1)
-        | _ -> error "argument 1 of '__builtin_debug' must be constant"; (0L, args) in
+        | _ -> error "argument 1 of '__builtin_debug' must be constant"; (1L, args) in
       let (text, args2) =
         match args1 with
         | {edesc = C.EConst(CStr(txt))} :: args2 -> (txt, args2)

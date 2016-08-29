@@ -17,7 +17,7 @@
 @     * Neither the name of the <organization> nor the
 @       names of its contributors may be used to endorse or promote products
 @       derived from this software without specific prior written permission.
-@ 
+@
 @ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 @ "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 @ LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -37,17 +37,17 @@
 #include "sysdeps.h"
 
 @@@ Conversion from signed 64-bit integer to double float
-	
+
 FUNCTION(__i64_stod)
 __i64_stod:
-        vmov    s0, r0
-        vcvt.f64.u32 d0, s0     @ convert low half to double (unsigned)
-        vmov    s2, r1
-        vcvt.f64.s32 d1, s2     @ convert high half to double (signed)
-        vldr    d2, .LC1        @ d2 = 2^32
-        vmla.f64 d0, d1, d2     @ d0 = d0 + d1 * d2 = double value of int64
-#ifdef ABI_eabi	
-	vmov	r0, r1, d0      @ return result in r0, r1
+        vmov    s0, Reg0LO
+        vcvt.f64.u32 d0, s0         @ convert low half to double (unsigned)
+        vmov    s2, Reg0HI
+        vcvt.f64.s32 d1, s2         @ convert high half to double (signed)
+        vldr    d2, .LC1            @ d2 = 2^32
+        vmla.f64 d0, d1, d2         @ d0 = d0 + d1 * d2 = double value of int64
+#ifdef ABI_eabi
+        vmov    Reg0LO, Reg0HI, d0  @ return result in register pair r0:r1
 #endif
         bx lr
 ENDFUNCTION(__i64_stod)

@@ -63,7 +63,8 @@ MODORDER=tools/modorder .depend.extr
 
 PARSERS=backend/CMparser.mly cparser/pre_parser.mly
 LEXERS=backend/CMlexer.mll cparser/Lexer.mll \
-       lib/Tokenize.mll lib/Readconfig.mll
+       lib/Tokenize.mll lib/Readconfig.mll \
+       lib/Responsefile.mll
 
 LIBS=str.cmxa unix.cmxa $(MENHIR_LIBS)
 LIBS_BYTE=$(patsubst %.cmxa,%.cma,$(patsubst %.cmx,%.cmo,$(LIBS)))

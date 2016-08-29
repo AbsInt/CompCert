@@ -74,6 +74,7 @@ let preprocessed_file transfs name sourcefile =
              | Parser.Parser.Inter.Timeout_pr -> assert false
              | Parser.Parser.Inter.Parsed_pr (ast, _ ) -> ast) in
       let p1 = Timing.time "Elaboration" Elab.elab_file ast in
+      Cerrors.raise_on_errors ();
       Timing.time2 "Emulations" transform_program t p1 name
     with
     | Cerrors.Abort ->

@@ -17,7 +17,7 @@
 @     * Neither the name of the <organization> nor the
 @       names of its contributors may be used to endorse or promote products
 @       derived from this software without specific prior written permission.
-@ 
+@
 @ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 @ "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 @ LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -36,18 +36,18 @@
 
 #include "sysdeps.h"
 
-@@@ Conversion from double float to unsigned 64-bit integer	
+@@@ Conversion from double float to unsigned 64-bit integer
 
 FUNCTION(__i64_dtou)
 #ifndef ABI_eabi
-	vmov r0, r1, d0
-#endif	
-        cmp r1, #0              @ is double < 0 ?
+        vmov Reg0LO, Reg0HI, d0
+#endif
+        cmp Reg0HI, #0          @ is double < 0 ?
         blt 1f                  @ then it converts to 0
   @ extract unbiased exponent ((HI & 0x7FF00000) >> 20) - (1023 + 52) in r2
   @ note: 1023 + 52 = 1075 = 1024 + 51
   @ note: (HI & 0x7FF00000) >> 20 = (HI << 1) >> 21
-        LSL r2, r1, #1
+        LSL r2, Reg0HI, #1
         LSR r2, r2, #21
         SUB r2, r2, #51
         SUB r2, r2, #1024
@@ -57,35 +57,35 @@ FUNCTION(__i64_dtou)
         cmp r2, #12             @ if EXP >= 64 - 52, double is >= 2^64
         bge 2f
   @ extract true mantissa
-        BIC r1, r1, #0xFF000000
-        BIC r1, r1, #0x00F00000 @ HI &= ~0xFFF00000
-        ORR r1, r1, #0x00100000 @ HI |= 0x00100000
+        BIC Reg0HI, Reg0HI, #0xFF000000
+        BIC Reg0HI, Reg0HI, #0x00F00000 @ HI &= ~0xFFF00000
+        ORR Reg0HI, Reg0HI, #0x00100000 @ HI |= 0x00100000
   @ shift it appropriately
         cmp r2, #0
         blt 3f
-  @ EXP >= 0: shift left by EXP.  Note that EXP < 12        
+  @ EXP >= 0: shift left by EXP.  Note that EXP < 12
         rsb r3, r2, #32         @ r3 = 32 - amount
-        LSL r1, r1, r2
-        LSR r3, r0, r3
-        ORR r1, r1, r3
-        LSL r0, r0, r2
+        LSL Reg0HI, Reg0HI, r2
+        LSR r3, Reg0LO, r3
+        ORR Reg0HI, Reg0HI, r3
+        LSL Reg0LO, Reg0LO, r2
 	bx lr
-  @ EXP < 0: shift right by -EXP.  Note that -EXP <= 52 but can be >= 32        
+  @ EXP < 0: shift right by -EXP.  Note that -EXP <= 52 but can be >= 32
 3:      RSB r2, r2, #0          @ r2 = -EXP = shift amount
         RSB r3, r2, #32         @ r3 = 32 - amount
-        LSR r0, r0, r2
-        LSL r3, r1, r3
-        ORR r0, r0, r3
-	SUB r3, r2, #32         @ r3 = amount - 32  (see i64_shr.s)
-	LSR r3, r1, r3
-	ORR r0, r0, r3
-        LSR r1, r1, r2
+        LSR Reg0LO, Reg0LO, r2
+        LSL r3, Reg0HI, r3
+        ORR Reg0LO, Reg0LO, r3
+        SUB r3, r2, #32         @ r3 = amount - 32  (see i64_shr.s)
+        LSR r3, Reg0HI, r3
+        ORR Reg0LO, Reg0LO, r3
+        LSR Reg0HI, Reg0HI, r2
         bx lr
   @ special cases
-1:      MOV r0, #0              @ result is 0
-        MOV r1, #0
+1:      MOV Reg0LO, #0          @ result is 0
+        MOV Reg0HI, #0
         bx lr
-2:      mvn r0, #0              @ result is 0xFF....FF (MAX_UINT)
-        MOV r1, r0
+2:      mvn Reg0LO, #0          @ result is 0xFF....FF (MAX_UINT)
+        MOV Reg0HI, Reg0LO
         bx lr
 ENDFUNCTION(__i64_dtou)

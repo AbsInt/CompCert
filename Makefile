@@ -202,12 +202,14 @@ compcert.ini: Makefile.config
          echo "arch=$(ARCH)"; \
          echo "model=$(MODEL)"; \
          echo "abi=$(ABI)"; \
+         echo "endianness=$(ENDIANNESS)"; \
          echo "system=$(SYSTEM)"; \
          echo "has_runtime_lib=$(HAS_RUNTIME_LIB)"; \
          echo "has_standard_headers=$(HAS_STANDARD_HEADERS)"; \
          echo "asm_supports_cfi=$(ASM_SUPPORTS_CFI)"; \
          echo "struct_passing_style=$(STRUCT_PASSING)"; \
-         echo "struct_return_style=$(STRUCT_RETURN)";) \
+         echo "struct_return_style=$(STRUCT_RETURN)"; \
+	 echo "response_file_style=$(RESPONSEFILE)";) \
         > compcert.ini
 
 driver/Version.ml: VERSION
