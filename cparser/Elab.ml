@@ -803,9 +803,12 @@ and elab_struct_or_union_info keep_ty kind loc env members attrs =
   let m = List.flatten m in
   ignore (List.fold_left (fun acc fld ->
     let n = fld.fld_name in
-    if List.exists ((=) n) acc then
-      error loc "duplicate memeber '%s'" n;
-    n::acc) [] m);
+    if n <> "" then begin
+      if List.exists ((=) n) acc then
+        error loc "duplicate member '%s'" n;
+      n::acc
+    end else
+      acc) [] m);
   (* Check for incomplete types *)
   let rec check_incomplete = function
   | [] -> ()
