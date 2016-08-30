@@ -717,7 +717,7 @@ let rec convertExpr env e =
       let e2' = convertExpr env e2 in
       if Cutil.is_composite_type env e1.etyp
       && List.mem AVolatile (Cutil.attributes_of_type env e1.etyp) then
-        warning Cerrors.Unnamed "assignment to a lvalue of volatile composite type";
+        warning Cerrors.Unnamed "assignment to an lvalue of volatile composite type";
       ewrap (Ctyping.eassign e1' e2')
   | C.EBinop((C.Oadd_assign|C.Osub_assign|C.Omul_assign|C.Odiv_assign|
               C.Omod_assign|C.Oand_assign|C.Oor_assign|C.Oxor_assign|
