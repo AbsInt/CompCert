@@ -794,7 +794,7 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
             match Ceval.integer_expr env' expr with
             | Some n ->
                 if n < 0L then begin
-                  error loc "bit-filed '%s' has negative width (%Ld)" id n;
+                  error loc "bit-field '%s' has negative width (%Ld)" id n;
                   None
                 end else
                   let max = Int64.of_int(sizeof_ikind ik * 8) in
@@ -808,7 +808,7 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
                 end else
                   Some(Int64.to_int n)
             | None ->
-                error loc "bit-field '%s' witdth not an integer constant" id;
+                error loc "bit-field '%s' width not an integer constant" id;
                 None
           end in
     { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize' }
@@ -1199,7 +1199,7 @@ let rec elab_designator loc env zi desig =
       | Some zi' ->
           elab_designator loc env zi' desig'
       | None ->
-          error loc "field designator '%s' does not have refer to any field in type '%s'" name (I.name zi);
+          error loc "field designator '%s' does not refer to any field in type '%s'" name (I.name zi);
           raise Exit
       end
   | ATINDEX_INIT a :: desig' ->
@@ -1992,7 +1992,7 @@ let enter_typedefs loc env sto dl =
         if equal_types env ty ty' then
           env
         else begin
-          error loc "typdef redefinition with different types (%a vs %a)"
+          error loc "typedef redefinition with different types (%a vs %a)"
             (print_typ env) ty (print_typ env) ty';
           env
         end
