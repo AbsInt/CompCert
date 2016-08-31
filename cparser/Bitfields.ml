@@ -67,7 +67,7 @@ let is_signed_enum_bitfield env sid fld eid n =
   else if List.for_all (fun (_, v, _) -> int_representable v n true) info.Env.ei_members
   then true
   else begin
-    Cerrors.warning Cutil.no_loc Cerrors.Unnamed "warning: '%s' is narrower than values of its type" fld;
+    Cerrors.warning Cutil.no_loc Cerrors.Unnamed "not all values of type 'enum %s' can be represented in bit-field '%s' of struct '%s' (%d bits are not enough)" eid.name fld sid.C.name n;
     false
   end
 
