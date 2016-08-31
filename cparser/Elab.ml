@@ -2186,6 +2186,7 @@ let elab_fundef env spec name defs body loc =
     | ty, None ->
         (ty, [],env1)
     | TFun(ty_ret, None, false, attr), Some params ->
+        warning loc Cerrors.CompCert_conformance "non-prototype, pre-standard function definition, converting to prototype form";
         let (params', extra_decls,env) =
           elab_KR_function_parameters env params defs loc in
         (TFun(ty_ret, Some params', inherit_vararg env s sto ty, attr), extra_decls,env)

@@ -43,6 +43,7 @@ type warning_type =
   | Return_type                    (** void return in non-void function *)
   | Literal_range                  (** literal ranges *)
   | Unknown_pragmas                (** unknown/unsupported pragma *)
+  | CompCert_conformance           (** features that are not part of the CompCert C core language *)
 
 val warning  : (string * int) -> warning_type -> ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
 (** [warning (f,c) w fmt arg1 ... argN] formats the arguments [arg1] to [argN] as warining according to

@@ -67,6 +67,7 @@ type warning_type =
   | Return_type
   | Literal_range
   | Unknown_pragmas
+  | CompCert_conformance
 
 let active_warnings: warning_type list ref = ref [
   Unknown_attribute;
@@ -106,6 +107,7 @@ let string_of_warning = function
   | Return_type -> "return-type"
   | Literal_range -> "literal-range"
   | Unknown_pragmas -> "unknown-pragmas"
+  | CompCert_conformance -> "compcert-conformance"
 
 let activate_warning w () =
   if not (List.mem w !active_warnings) then
