@@ -946,7 +946,7 @@ let valid_cast env tfrom tto =
   | TUnion(s1, _), TUnion(s2, _) -> s1 = s2
   | _, _ -> false
 
-(* Check that a cast from the first type to the second is an integer conversion *)
+(* Check that the cast from tfrom to tto is an integer to pointer conversion *)
 
 let int_pointer_conversion env tfrom tto =
   match unroll env tfrom, unroll env tto with
