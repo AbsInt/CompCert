@@ -357,11 +357,11 @@ let make_builtin_memcpy args =
       let sz1 =
         match Initializers.constval !comp_env sz with
         | Errors.OK(Vint n) -> n
-        | _ -> error "argument 3 of of '__builtin_memcpy_aligned' must be a constant"; Integers.Int.zero in
+        | _ -> error "argument 3 of '__builtin_memcpy_aligned' must be a constant"; Integers.Int.zero in
       let al1 =
         match Initializers.constval !comp_env al with
         | Errors.OK(Vint n) -> n
-        | _ -> error "argument 4 of of '__builtin_memcpy_aligned' must be a constant"; Integers.Int.one in
+        | _ -> error "argument 4 of '__builtin_memcpy_aligned' must be a constant"; Integers.Int.one in
       (* to check: sz1 > 0, al1 divides sz1, al1 = 1|2|4|8 *)
       (* Issue #28: must decay array types to pointer types *)
       Ebuiltin(EF_memcpy(sz1, al1),
@@ -758,12 +758,12 @@ let rec convertExpr env e =
       let (kind, args1) =
         match args with
         | {edesc = C.EConst(CInt(n,_,_))} :: args1 -> (n, args1)
-        | _ -> error "argument 1 of '__builtin_debug' must be constant"; (1L, args) in
+        | _ -> error "argument 1 of '__builtin_debug' must be a constant"; (1L, args) in
       let (text, args2) =
         match args1 with
         | {edesc = C.EConst(CStr(txt))} :: args2 -> (txt, args2)
         | {edesc = C.EVar id} :: args2 -> (id.name, args2)
-        | _ -> error "argument 2 of '__builtin_debug' must be either a string or variable"; ("", args1) in
+        | _ -> error "argument 2 of '__builtin_debug' must be either a string literal or a variable"; ("", args1) in
       let targs2 = convertTypArgs env [] args2 in
       Ebuiltin(
         EF_debug(P.of_int64 kind, intern_string text,
@@ -778,7 +778,7 @@ let rec convertExpr env e =
             EF_annot(coqstring_of_camlstring txt, typlist_of_typelist targs1),
             targs1, convertExprList env args1, convertTyp env e.etyp)
       | _ ->
-          error "argument 1 of '__builtin_annot' must be a string";
+          error "argument 1 of '__builtin_annot' must be a string literal";
           ezero
       end
 
@@ -944,7 +944,7 @@ let rec contains_case s =
   | C.Sdowhile (s1,_) -> contains_case s1
   | C.Sfor (s1,e,s2,s3) ->  contains_case s1; contains_case s2; contains_case s3
   | C.Slabeled(C.Scase _, _) ->
-      unsupported "'case' statement not in switch statement"
+      unsupported "'case' statement not in 'switch' statement"
   | C.Slabeled(_,s) -> contains_case s
   | C.Sblock b -> List.iter contains_case b
 
@@ -1004,9 +1004,9 @@ let rec convertStmt env s =
   | C.Slabeled(C.Slabel lbl, s1) ->
       Slabel(intern_string lbl, convertStmt env s1)
   | C.Slabeled(C.Scase _, _) ->
-      unsupported "'case' statement not in switch statement"; Sskip
+      unsupported "'case' statement not in 'switch' statement"; Sskip
   | C.Slabeled(C.Sdefault, _) ->
-      unsupported "'default' statement not in switch statement"; Sskip
+      unsupported "'default' statement not in 'switch' statement"; Sskip
   | C.Sgoto lbl ->
       Sgoto(intern_string lbl)
   | C.Sreturn None ->
