@@ -1928,7 +1928,7 @@ let elab_expr vararg loc env a =
     let b1,env = elab env a1 in
     let b2,env = elab env a2 in
     if not ((is_scalar_type env b1.etyp) && (is_scalar_type env b2.etyp)) then
-      error "invalid operands to binary expression (%a and %a)"
+      error "invalid operands to binary %s (%a and %a)" msg
         (print_typ env) b1.etyp (print_typ env) b2.etyp;
     { edesc = EBinop(op, b1, b2, TInt(IInt, [])); etyp = TInt(IInt, []) },env
 
