@@ -1609,7 +1609,7 @@ let elab_expr vararg loc env a =
   | UNARY(ADDROF, a1) ->
       let b1,env = elab env a1 in
       if not (is_lvalue b1 || is_function_type env b1.etyp) then
-        err "cannot take the address of an rvalue of type %a" (print_typ env) b1.etyp;
+        err "argument of '&' is not an lvalue (invalid %a)" (print_typ env) b1.etyp;
       begin match b1.edesc with
       | EVar id ->
           begin match wrap Env.find_ident loc env id with
