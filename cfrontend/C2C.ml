@@ -791,7 +791,7 @@ let rec convertExpr env e =
                    Tcons(targ, Tnil), convertExprList env [arg],
                    convertTyp env e.etyp)
       | _ ->
-          error "argument 1 of '__builtin_annot_intval' must be a string";
+          error "argument 1 of '__builtin_annot_intval' must be a string literal";
           ezero
       end
 
