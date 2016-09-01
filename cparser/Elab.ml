@@ -1954,16 +1954,16 @@ let elab_expr vararg loc env a =
           if wrap2 valid_cast loc env ty_a ty_p then begin
             if wrap2 int_pointer_conversion loc env ty_a ty_p then
               warning Int_conversion
-                "incompatible integer-pointer conversion passing %a to parameter of type %a"
-                (print_typ env) ty_a (print_typ env) ty_p
+                "incompatible integer-pointer conversion passing %a to parameter %d of type %a"
+                (print_typ env) ty_a argno (print_typ env) ty_p
             else
               warning Unnamed
-                "incompatible conversion passing %a to parameter of type %a"
-                (print_typ env) ty_a (print_typ env) ty_p end
+                "incompatible conversion passing %a to parameter %d of type %a"
+                (print_typ env) ty_a argno (print_typ env) ty_p end
           else
             err
-              "passing %a to parameter of incompatible type %a"
-              (print_typ env) ty_a (print_typ env) ty_p
+              "passing %a to parameter %d of incompatible type %a"
+              (print_typ env) ty_a argno (print_typ env) ty_p
         end;
         let rest,env = elab_arguments (argno + 1) (argl,env) paraml vararg in
         arg1 :: rest,env
