@@ -1004,11 +1004,11 @@ let check_init_type loc env a ty =
   else if wrap2 valid_cast loc env a.etyp ty then
     if wrap2 int_pointer_conversion loc env a.etyp ty then
       warning loc Int_conversion
-        "incompatible integer to pointer conversion initializing %a with an expression of type %a"
+        "incompatible integer-pointer conversion initializing %a with an expression of type %a"
         (print_typ env) ty (print_typ env) a.etyp
     else
-      warning loc Int_conversion
-        "incompatible pointer to integer conversion initializing %a with an expression of type %a"
+      warning loc Unnamed
+        "incompatible conversion initializing %a with an expression of type %a"
         (print_typ env) ty (print_typ env) a.etyp
   else
     error loc
@@ -1792,11 +1792,11 @@ let elab_expr vararg loc env a =
         if wrap2 valid_cast loc env b2.etyp b1.etyp then
           if wrap2 int_pointer_conversion loc env b2.etyp b1.etyp then
             warning Int_conversion
-              "incompatible integer to pointer conversion assigning to %a from %a"
+              "incompatible integer-pointer conversion assigning to %a from %a"
               (print_typ env) b1.etyp (print_typ env) b2.etyp
           else
-            warning Int_conversion
-              "incompatible pointer to integer conversion assgining to %a from %a"
+            warning Unnamed
+              "incompatible conversion assgining to %a from %a"
                (print_typ env) b1.etyp (print_typ env) b2.etyp
         else
           err "assigning to %a from incompatible type %a"
@@ -1830,11 +1830,11 @@ let elab_expr vararg loc env a =
             if wrap2 valid_cast loc env ty b1.etyp then
               if wrap2 int_pointer_conversion loc env ty b1.etyp then
                 warning Int_conversion
-                  "incompatible integer to pointer conversion assigning to %a from %a"
+                  "incompatible integer-pointer conversion assigning to %a from %a"
                    (print_typ env) b1.etyp  (print_typ env) ty
               else
-                warning Int_conversion
-                  "incompatible pointer to integer conversion assgining to %a from %a"
+                warning Unnamed
+                  "incompatible conversion assgining to %a from %a"
                   (print_typ env) b1.etyp (print_typ env) ty
             else
               err "assigning to %a from incompatible type %a"
@@ -1954,11 +1954,11 @@ let elab_expr vararg loc env a =
           if wrap2 valid_cast loc env ty_a ty_p then begin
             if wrap2 int_pointer_conversion loc env ty_a ty_p then
               warning Int_conversion
-                "incompatible integer to pointer conversion passing %a to parameter of type %a"
+                "incompatible integer-pointer conversion passing %a to parameter of type %a"
                 (print_typ env) ty_a (print_typ env) ty_p
             else
-              warning Int_conversion
-                "incompatible pointer to integer conversion passing %a to parameter of type %a"
+              warning Unnamed
+                "incompatible conversion passing %a to parameter of type %a"
                 (print_typ env) ty_a (print_typ env) ty_p end
           else
             err
@@ -2473,11 +2473,11 @@ let rec elab_stmt env ctx s =
             if wrap2 valid_cast loc env b.etyp ctx.ctx_return_typ then
               if wrap2 int_pointer_conversion loc env b.etyp ctx.ctx_return_typ then
                 warning loc Int_conversion
-                  "incompatible integer to pointer conversion returning %a from a function with result type %a"
+                  "incompatible integer-pointer conversion returning %a from a function with result type %a"
                   (print_typ env) b.etyp (print_typ env) ctx.ctx_return_typ
               else
-                warning loc Int_conversion
-                  "incompatible integer to pointer conversion returning %a from a function with result type %a"
+                warning loc Unnamed
+                  "incompatible conversion returning %a from a function with result type %a"
                   (print_typ env) b.etyp (print_typ env) ctx.ctx_return_typ
             else
               error loc

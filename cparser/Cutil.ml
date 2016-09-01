@@ -950,7 +950,8 @@ let valid_cast env tfrom tto =
 
 let int_pointer_conversion env tfrom tto =
   match unroll env tfrom, unroll env tto with
-  | (TInt _ | TEnum _),(TPtr _) -> true
+  | (TInt _ | TEnum _),(TPtr _)
+  | (TPtr _),(TInt _ | TEnum _) -> true
   | _,_ -> false
 
 (* Construct an integer constant *)
