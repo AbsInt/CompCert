@@ -1004,16 +1004,16 @@ let check_init_type loc env a ty =
   else if wrap2 valid_cast loc env a.etyp ty then
     if wrap2 int_pointer_conversion loc env a.etyp ty then
       warning loc Int_conversion
-        "incompatible integer-pointer conversion initializing %a with an expression of type %a"
-        (print_typ env) ty (print_typ env) a.etyp
+        "incompatible integer-pointer conversion initializer has type %a instead of the expected type %a"
+         (print_typ env) a.etyp (print_typ env) ty
     else
       warning loc Unnamed
-        "incompatible conversion initializing %a with an expression of type %a"
-        (print_typ env) ty (print_typ env) a.etyp
+        "incompatible conversion initializer has type %a instead of the expected type %a"
+        (print_typ env) a.etyp (print_typ env) ty
   else
     error loc
-      "initializing %a with an expression of incompatible type %a"
-      (print_typ env) ty (print_typ env) a.etyp
+      "initializer has type %a instead of the expected type %a"
+      (print_typ env) a.etyp (print_typ env) ty
 
 (* Representing initialization state using zippers *)
 
