@@ -1470,8 +1470,8 @@ let elab_expr vararg loc env a =
       let ty = match b3.edesc with ESizeof ty -> ty | _ -> assert false in
       let ty' = default_argument_conversion env ty in
       if not (compatible_types AttrIgnoreTop env ty ty') then
-        warning Varargs "second argument to 'va_arg' is of promotable type %a; this va_arg has undefined behavior because arguments will be promoted to %a"
-          (print_typ env) ty (print_typ env) ty';
+        warning Varargs "%a is promoted to %a when passed through '...'. You should pass %a, not %a, to 'va_arg'"
+          (print_typ env) ty (print_typ env) ty'  (print_typ env) ty'  (print_typ env) ty;
       { edesc = ECall(ident, [b2; b3]); etyp = ty },env
 
   | CALL(a1, al) ->
@@ -1527,7 +1527,7 @@ let elab_expr vararg loc env a =
             err "operand of type %a where arithmetic or pointer type is required"
               (print_typ env) b1.etyp
         | TFloat _, TPtr _  ->
-            err "operand of type %a cannot be cast to a pointer typ"
+            err "operand of type %a cannot be cast to a pointer type"
               (print_typ env) b1.etyp
         | TPtr _ , TFloat _ ->
             err "pointer cannot be cast to type %a" (print_typ env) ty
@@ -1792,11 +1792,11 @@ let elab_expr vararg loc env a =
         if wrap2 valid_cast loc env b2.etyp b1.etyp then
           if wrap2 int_pointer_conversion loc env b2.etyp b1.etyp then
             warning Int_conversion
-              "incompatible integer-pointer conversion assigning to %a from %a"
+              "incompatible integer-pointer conversion: assigning to %a from %a"
               (print_typ env) b1.etyp (print_typ env) b2.etyp
           else
             warning Unnamed
-              "incompatible conversion assgining to %a from %a"
+              "incompatible conversion assigning to %a from %a"
                (print_typ env) b1.etyp (print_typ env) b2.etyp
         else
           err "assigning to %a from incompatible type %a"
@@ -1830,11 +1830,11 @@ let elab_expr vararg loc env a =
             if wrap2 valid_cast loc env ty b1.etyp then
               if wrap2 int_pointer_conversion loc env ty b1.etyp then
                 warning Int_conversion
-                  "incompatible integer-pointer conversion assigning to %a from %a"
+                  "incompatible integer-pointer conversion: assigning to %a from %a"
                    (print_typ env) b1.etyp  (print_typ env) ty
               else
                 warning Unnamed
-                  "incompatible conversion assgining to %a from %a"
+                  "incompatible conversion assigning to %a from %a"
                   (print_typ env) b1.etyp (print_typ env) ty
             else
               err "assigning to %a from incompatible type %a"
@@ -1954,7 +1954,7 @@ let elab_expr vararg loc env a =
           if wrap2 valid_cast loc env ty_a ty_p then begin
             if wrap2 int_pointer_conversion loc env ty_a ty_p then
               warning Int_conversion
-                "incompatible integer-pointer conversion passing %a to parameter %d of type %a"
+                "incompatible integer-pointer conversion: passing %a to parameter %d of type %a"
                 (print_typ env) ty_a argno (print_typ env) ty_p
             else
               warning Unnamed
@@ -2473,7 +2473,7 @@ let rec elab_stmt env ctx s =
             if wrap2 valid_cast loc env b.etyp ctx.ctx_return_typ then
               if wrap2 int_pointer_conversion loc env b.etyp ctx.ctx_return_typ then
                 warning loc Int_conversion
-                  "incompatible integer-pointer conversion returning %a from a function with result type %a"
+                  "incompatible integer-pointer conversion: returning %a from a function with result type %a"
                   (print_typ env) b.etyp (print_typ env) ctx.ctx_return_typ
               else
                 warning loc Unnamed
