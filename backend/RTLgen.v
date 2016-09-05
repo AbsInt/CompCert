@@ -23,7 +23,7 @@ Require Import Registers.
 Require Import CminorSel.
 Require Import RTL.
 
-Open Local Scope string_scope.
+Local Open Scope string_scope.
 
 (** * Translation environments and state *)
 
@@ -112,16 +112,13 @@ Implicit Arguments Error [A s].
 
 Definition mon (A: Type) : Type := forall (s: state), res A s.
 
-Definition ret (A: Type) (x: A) : mon A :=
+Definition ret {A: Type} (x: A) : mon A :=
   fun (s: state) => OK x s (state_incr_refl s).
 
-Implicit Arguments ret [A].
 
-Definition error (A: Type) (msg: Errors.errmsg) : mon A := fun (s: state) => Error msg.
+Definition error {A: Type} (msg: Errors.errmsg) : mon A := fun (s: state) => Error msg.
 
-Implicit Arguments error [A].
-
-Definition bind (A B: Type) (f: mon A) (g: A -> mon B) : mon B :=
+Definition bind {A B: Type} (f: mon A) (g: A -> mon B) : mon B :=
   fun (s: state) =>
     match f s with
     | Error msg => Error msg
@@ -132,26 +129,20 @@ Definition bind (A B: Type) (f: mon A) (g: A -> mon B) : mon B :=
         end
     end.
 
-Implicit Arguments bind [A B].
-
-Definition bind2 (A B C: Type) (f: mon (A * B)) (g: A -> B -> mon C) : mon C :=
+Definition bind2 {A B C: Type} (f: mon (A * B)) (g: A -> B -> mon C) : mon C :=
   bind f (fun xy => g (fst xy) (snd xy)).
-
-Implicit Arguments bind2 [A B C].
 
 Notation "'do' X <- A ; B" := (bind A (fun X => B))
    (at level 200, X ident, A at level 100, B at level 200).
 Notation "'do' ( X , Y ) <- A ; B" := (bind2 A (fun X Y => B))
    (at level 200, X ident, Y ident, A at level 100, B at level 200).
 
-Definition handle_error (A: Type) (f g: mon A) : mon A :=
+Definition handle_error {A: Type} (f g: mon A) : mon A :=
   fun (s: state) =>
     match f s with
     | OK a s' i => OK a s' i
     | Error _ => g s
     end.
-
-Implicit Arguments handle_error [A].
 
 (** ** Operations on state *)
 
