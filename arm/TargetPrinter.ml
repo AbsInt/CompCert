@@ -382,10 +382,8 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
             end
         | (fr, Single, sr) :: act ->
             let n = fixup_incoming oc act in
-            if fr = sr then n else begin
               fprintf oc "	vmov.f32 s%d, s%d\n" (2*fr) sr;
               1 + n
-            end
 
       let fixup_arguments oc dir sg =
         if sg.sig_cc.cc_vararg then
