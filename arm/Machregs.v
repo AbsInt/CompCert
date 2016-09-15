@@ -58,7 +58,7 @@ Proof.
 Qed.
 
 Instance Decidable_eq_mreg : forall (x y: mreg), Decidable (eq x y) := Decidable_eq mreg_eq.
-  
+
 Instance Finite_mreg : Finite mreg := {
   Finite_elements := all_mregs;
   Finite_elements_spec := all_mregs_complete
@@ -161,6 +161,9 @@ Definition destroyed_by_setstack (ty: typ): list mreg := nil.
 Definition destroyed_at_function_entry: list mreg :=
   R12 :: nil.
 
+Definition destroyed_at_indirect_call: list mreg :=
+  R0 :: R1 :: R2 :: R3 :: nil.
+
 Definition temp_for_parent_frame: mreg :=
   R12.
 
@@ -177,6 +180,7 @@ Global Opaque
     destroyed_by_op destroyed_by_load destroyed_by_store
     destroyed_by_cond destroyed_by_jumptable destroyed_by_builtin
     destroyed_by_setstack destroyed_at_function_entry temp_for_parent_frame
+    destroyed_at_indirect_call
     mregs_for_operation mregs_for_builtin.
 
 (** Two-address operations.  Return [true] if the first argument and

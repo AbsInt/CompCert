@@ -657,9 +657,12 @@ let add_interfs_instr g instr live =
   | Xstore(chunk, addr, args, src) ->
       add_interfs_destroyed g live (destroyed_by_store chunk addr)
   | Xcall(sg, vos, args, res) ->
+      begin match vos with
+      | Coq_inl v ->  List.iter (fun r -> IRC.add_interf g (vmreg r) v) destroyed_at_indirect_call
+      | _ -> () end;
       add_interfs_destroyed g (vset_removelist res live) destroyed_at_call
   | Xtailcall(sg, Coq_inl v, args) ->
-      List.iter (fun r -> IRC.add_interf g (vmreg r) v) int_callee_save_regs
+      List.iter (fun r -> IRC.add_interf g (vmreg r) v) (int_callee_save_regs @ destroyed_at_indirect_call)
   | Xtailcall(sg, Coq_inr id, args) ->
       ()
   | Xbuiltin(ef, args, res) ->
