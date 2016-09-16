@@ -23,6 +23,7 @@ let dump_options = ref false
 
 (* Optional sdump suffix *)
 let sdump_suffix = ref ".json"
+let sdump_folder = ref ""
 
 (* Dump Asm code in asm format for the validator *)
 
@@ -59,8 +60,11 @@ let compile_c_ast sourcename csyntax ofile =
         eprintf "%s: %a" sourcename print_error msg;
         exit 2 in
   (* Dump Asm in binary and JSON format *)
-  if !option_sdump then
-      dump_jasm asm sourcename (output_filename sourcename ".c" !sdump_suffix);
+  if !option_sdump then begin
+    let sf = output_filename sourcename ".c" !sdump_suffix in
+    let csf = Filename.concat !sdump_folder sf in
+    dump_jasm asm sourcename csf
+  end;
   (* Print Asm in text form *)
   let oc = open_out ofile in
   PrintAsm.print_program oc asm;
@@ -455,6 +459,7 @@ let cmdline_actions =
     dump_options:=true);
   Exact "-sdump", Set option_sdump;
   Exact "-sdump-suffix", String (fun s -> option_sdump := true; sdump_suffix:= s);
+  Exact "-sdump-folder", String (fun s -> sdump_folder := s);
   Exact "-doptions", Set dump_options;
 (* General options *)
   Exact "-v", Set option_v;
