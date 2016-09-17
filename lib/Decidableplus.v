@@ -19,55 +19,8 @@
   of Coq 8.5 with more instances of decidable properties, including
   universal and existential quantification over finite types. *)
 
-(** Temporarily and for compatibility with Coq 8.4, this file includes
-  a copy of the relevant definitions from the Coq 8.5 [DecidableClass]
-  library.  This library is copyright INRIA. *)
-
+Require Export DecidableClass.
 Require Import Coqlib.
-
-Class Decidable (P : Prop) := {
-  Decidable_witness : bool;
-  Decidable_spec : Decidable_witness = true <-> P
-}.
-
-Lemma Decidable_sound : forall P (H : Decidable P),
-  Decidable_witness = true -> P.
-Proof.
-  intros. rewrite <- Decidable_spec. auto.
-Qed.
-
-Lemma Decidable_complete : forall P (H : Decidable P),
-  P -> Decidable_witness = true.
-Proof.
-  intros. rewrite Decidable_spec. auto.
-Qed.
-
-Lemma Decidable_sound_alt : forall P (H : Decidable P),
-   ~ P -> Decidable_witness = false.
-Proof.
-  intros. destruct Decidable_witness eqn:E; auto. elim H0. eapply Decidable_sound; eauto.
-Qed.
-
-Lemma Decidable_complete_alt : forall P (H : Decidable P),
-  Decidable_witness = false -> ~ P.
-Proof.
-  intros; red; intros. rewrite (Decidable_complete P H) in H0 by auto. discriminate.
-Qed.
-
-Definition decide P {H : Decidable P} := Decidable_witness (Decidable:=H).
-
-Ltac _decide_ P H :=
-  let b := fresh "b" in
-  set (b := decide P) in *;
-  assert (H : decide P = b) by reflexivity;
-  clearbody b;
-  destruct b; [apply Decidable_sound in H|apply Decidable_complete_alt in H].
-
-Tactic Notation "decide" constr(P) "as" ident(H) :=
-  _decide_ P H.
-
-Tactic Notation "decide" constr(P) :=
-  let H := fresh "H" in _decide_ P H.
 
 Ltac decide_goal := eapply Decidable_sound; reflexivity.
 
