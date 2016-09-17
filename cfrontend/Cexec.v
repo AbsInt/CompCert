@@ -15,6 +15,7 @@
 Require Import String.
 Require Import Axioms.
 Require Import Classical.
+Require Import Decidableplus.
 Require Import Coqlib.
 Require Import Errors.
 Require Import Maps.
@@ -473,39 +474,11 @@ Definition memcpy_args_ok
    /\ (sz > 0 -> (al | odst))
    /\ (bsrc <> bdst \/ osrc = odst \/ osrc + sz <= odst \/ odst + sz <= osrc).
 
-Remark memcpy_check_args:
-  forall sz al bdst odst bsrc osrc,
-  {memcpy_args_ok sz al bdst odst bsrc osrc} + {~memcpy_args_ok sz al bdst odst bsrc osrc}.
-Proof with try (right; intuition omega).
-  intros.
-  assert (X: {al = 1 \/ al = 2 \/ al = 4 \/ al = 8} + {~(al = 1 \/ al = 2 \/ al = 4 \/ al = 8)}).
-    destruct (zeq al 1); auto. destruct (zeq al 2); auto.
-    destruct (zeq al 4); auto. destruct (zeq al 8); auto...
-  unfold memcpy_args_ok. destruct X...
-  assert (al > 0) by (intuition omega).
-  destruct (zle 0 sz)...
-  destruct (Zdivide_dec al sz); auto...
-  assert(U: forall x, {sz > 0 -> (al | x)} + {~(sz > 0 -> (al | x))}).
-    intros. destruct (zeq sz 0).
-    left; intros; omegaContradiction.
-    destruct (Zdivide_dec al x); auto. right; red; intros. elim n0. apply H0. omega.
-  destruct (U osrc); auto...
-  destruct (U odst); auto...
-  assert (Y: {bsrc <> bdst \/ osrc = odst \/ osrc + sz <= odst \/ odst + sz <= osrc}
-           +{~(bsrc <> bdst \/ osrc = odst \/ osrc + sz <= odst \/ odst + sz <= osrc)}).
-    destruct (eq_block bsrc bdst); auto.
-    destruct (zeq osrc odst); auto.
-    destruct (zle (osrc + sz) odst); auto.
-    destruct (zle (odst + sz) osrc); auto.
-    right; intuition omega.
-  destruct Y... left; intuition omega.
-Defined.
-
 Definition do_ef_memcpy (sz al: Z)
        (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
   match vargs with
   | Vptr bdst odst :: Vptr bsrc osrc :: nil =>
-      if memcpy_check_args sz al bdst (Int.unsigned odst) bsrc (Int.unsigned osrc) then
+      if decide (memcpy_args_ok sz al bdst (Int.unsigned odst) bsrc (Int.unsigned osrc)) then
         do bytes <- Mem.loadbytes m bsrc (Int.unsigned osrc) sz;
         do m' <- Mem.storebytes m bdst (Int.unsigned odst) bytes;
         Some(w, E0, Vundef, m')
@@ -581,7 +554,7 @@ Proof with try congruence.
   split. econstructor; eauto. omega. constructor.
 (* EF_memcpy *)
   unfold do_ef_memcpy. destruct vargs... destruct v... destruct vargs...
-  destruct v... destruct vargs... mydestr. red in m0.
+  destruct v... destruct vargs... mydestr. apply Decidable_sound in Heqb1. red in Heqb1.
   split. econstructor; eauto; tauto. constructor.
 (* EF_annot *)
   unfold do_ef_annot. mydestr.
@@ -623,7 +596,7 @@ Proof.
   inv H0. rewrite H1. rewrite zlt_true. rewrite H3. auto. omega.
 (* EF_memcpy *)
   inv H; unfold do_ef_memcpy.
-  inv H0. rewrite pred_dec_true. rewrite H7; rewrite H8; auto.
+  inv H0. rewrite Decidable_complete, H7, H8. auto.
   red. tauto.
 (* EF_annot *)
   inv H; unfold do_ef_annot. inv H0. inv H6. inv H4.

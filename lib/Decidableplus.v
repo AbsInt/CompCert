@@ -122,6 +122,34 @@ Next Obligation.
   apply Z.ltb_lt. 
 Qed.
 
+Program Instance Decidable_ge_Z : forall (x y: Z), Decidable (x >= y) := {
+  Decidable_witness := Z.geb x y
+}.
+Next Obligation.
+  rewrite Z.geb_le. intuition omega.
+Qed.
+
+Program Instance Decidable_gt_Z : forall (x y: Z), Decidable (x > y) := {
+  Decidable_witness := Z.gtb x y
+}.
+Next Obligation.
+  rewrite Z.gtb_lt. intuition omega.
+Qed.
+
+Program Instance Decidable_divides : forall (x y: Z), Decidable (x | y) := {
+  Decidable_witness := Z.eqb y ((y / x) * x)%Z
+}.
+Next Obligation.
+  split.
+  intros. apply Z.eqb_eq in H. exists (y / x). auto.
+  intros [k EQ]. apply Z.eqb_eq. 
+  destruct (Z.eq_dec x 0). 
+  subst x. rewrite Z.mul_0_r in EQ. subst y. reflexivity.
+  assert (k = y / x).
+  { apply Zdiv_unique_full with 0. red; omega. rewrite EQ; ring. }
+  congruence.
+Qed.
+
 (** Deciding properties over lists *)
 
 Program Instance Decidable_forall_in_list : 

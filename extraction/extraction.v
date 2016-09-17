@@ -12,6 +12,7 @@
 
 Require Coqlib.
 Require Wfsimpl.
+Require DecidableClass Decidableplus.
 Require AST.
 Require Iteration.
 Require Floats.
@@ -38,6 +39,12 @@ Require Import ExtrOcamlString.
 
 (* Coqlib *)
 Extract Inlined Constant Coqlib.proj_sumbool => "(fun x -> x)".
+
+(* Decidable *)
+
+Extraction Inline DecidableClass.Decidable_witness DecidableClass.decide
+   Decidableplus.Decidable_and Decidableplus.Decidable_or
+   Decidableplus.Decidable_not Decidableplus.Decidable_implies.
 
 (* Wfsimpl *)
 Extraction Inline Wfsimpl.Fix Wfsimpl.Fixm.
