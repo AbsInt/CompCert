@@ -403,6 +403,18 @@ Definition is_false (x: int) : Prop := x = zero.
 Definition is_true  (x: int) : Prop := x <> zero.
 Definition notbool  (x: int) : int  := if eq x zero then one else zero.
 
+(** x86-style extended division and modulus *)
+
+Definition divmodu2 (nhi nlo: int) (d: int) : option (int * int) :=
+  if eq_dec d zero then None else
+   (let (q, r) := Z.div_eucl (unsigned nhi * modulus + unsigned nlo) (unsigned d) in
+    if zle q max_unsigned then Some(repr q, repr r) else None).
+
+Definition divmods2 (nhi nlo: int) (d: int) : option (int * int) :=
+  if eq_dec d zero then None else
+   (let (q, r) := Z.quotrem (signed nhi * modulus + unsigned nlo) (signed d) in
+    if zle min_signed q && zle q max_signed then Some(repr q, repr r) else None).
+
 (** * Properties of integers and integer arithmetic *)
 
 (** ** Properties of [modulus], [max_unsigned], etc. *)
@@ -1191,6 +1203,86 @@ Theorem mods_mone:
 Proof.
   intros. rewrite mods_divs. rewrite divs_mone.
   rewrite <- neg_mul_distr_l. rewrite mul_mone. rewrite neg_involutive. apply sub_idem.
+Qed.
+
+Theorem divmodu2_divu_modu:
+  forall n d,
+  d <> zero -> divmodu2 zero n d = Some (divu n d, modu n d).
+Proof.
+  unfold divmodu2, divu, modu; intros.
+  rewrite dec_eq_false by auto.
+  set (N := unsigned zero * modulus + unsigned n).
+  assert (E1: unsigned n = N) by (unfold N; rewrite unsigned_zero; ring). rewrite ! E1.
+  set (D := unsigned d).
+  set (Q := N / D); set (R := N mod D).
+  assert (E2: Z.div_eucl N D = (Q, R)).
+  { unfold Q, R, Z.div, Z.modulo. destruct (Z.div_eucl N D); auto. }
+  rewrite E2. rewrite zle_true. auto.
+  assert (unsigned d <> 0).
+  { red; intros. elim H. rewrite <- (repr_unsigned d). rewrite H0; auto. }   
+  assert (0 < D).
+  { unfold D. generalize (unsigned_range d); intros. omega. } 
+  assert (0 <= Q <= max_unsigned).
+  { unfold Q. apply Zdiv_interval_2.
+    rewrite <- E1; apply unsigned_range_2.
+    omega. unfold max_unsigned; generalize modulus_pos; omega. omega. }
+  omega.
+Qed.
+
+Lemma unsigned_signed:
+  forall n, unsigned n = if lt n zero then signed n + modulus else signed n.
+Proof.
+  intros. unfold lt. rewrite signed_zero. unfold signed.
+  generalize (unsigned_range n). rewrite half_modulus_modulus. intros.
+  destruct (zlt (unsigned n) half_modulus).
+- rewrite zlt_false by omega. auto.
+- rewrite zlt_true by omega. ring.
+Qed.
+
+Theorem divmods2_divs_mods:
+  forall n d,
+  d <> zero -> n <> repr min_signed \/ d <> mone ->
+  divmods2 (if lt n zero then mone else zero) n d = Some (divs n d, mods n d).
+Proof.
+  unfold divmods2, divs, mods; intros.
+  rewrite dec_eq_false by auto.
+  set (N := signed (if lt n zero then mone else zero) * modulus + unsigned n).
+  set (D := signed d).
+  assert (D <> 0).
+  { unfold D; red; intros. elim H. rewrite <- (repr_signed d). rewrite H1; auto. }
+  assert (N = signed n).
+  { unfold N. rewrite unsigned_signed. destruct (lt n zero).
+    rewrite signed_mone. ring.
+    rewrite signed_zero. ring. }
+  set (Q := Z.quot N D); set (R := Z.rem N D).
+  assert (E2: Z.quotrem N D = (Q, R)).
+  { unfold Q, R, Z.quot, Z.rem. destruct (Z.quotrem N D); auto. }
+  rewrite E2. 
+  assert (min_signed <= N <= max_signed) by (rewrite H2; apply signed_range).
+  assert (min_signed <= Q <= max_signed).
+  { unfold Q. destruct (zeq D 1); [ | destruct (zeq D (-1))].
+  - (* D = 1 *)
+    rewrite e. rewrite Z.quot_1_r; auto.
+  - (* D = -1 *)
+    rewrite e. change (-1) with (Z.opp 1). rewrite Z.quot_opp_r by omega.
+    rewrite Z.quot_1_r.
+    assert (N <> min_signed).
+    { red; intros; destruct H0.
+    + elim H0. rewrite <- (repr_signed n). rewrite <- H2. rewrite H4. auto.
+    + elim H0. rewrite <- (repr_signed d). unfold D in e; rewrite e; auto. }
+    unfold min_signed, max_signed in *. omega.
+  - (* |D| > 1 *)
+    assert (Z.abs (Z.quot N D) < half_modulus).
+    { rewrite <- Z.quot_abs by omega. apply Zquot_lt_upper_bound.
+      xomega. xomega.
+      apply Zle_lt_trans with (half_modulus * 1).
+      rewrite Z.mul_1_r. unfold min_signed, max_signed in H3; xomega.
+      apply Zmult_lt_compat_l. generalize half_modulus_pos; omega. xomega. }
+    rewrite Z.abs_lt in H4.
+    unfold min_signed, max_signed; omega. 
+  }
+  unfold proj_sumbool; rewrite ! zle_true by omega; simpl.
+  unfold Q, R; rewrite H2; auto.
 Qed.
 
 (** ** Bit-level properties *)

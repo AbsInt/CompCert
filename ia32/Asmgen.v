@@ -315,22 +315,22 @@ Definition transl_op
       assertion (mreg_eq a1 AX);
       assertion (mreg_eq a2 CX);
       assertion (mreg_eq res AX);
-      OK(Pidiv ECX :: k)
+      OK(Pcltd :: Pidiv ECX :: k)
   | Odivu, a1 :: a2 :: nil =>
       assertion (mreg_eq a1 AX);
       assertion (mreg_eq a2 CX);
       assertion (mreg_eq res AX);
-      OK(Pdiv ECX :: k)
+      OK(Pxor_r EDX :: Pdiv ECX :: k)
   | Omod, a1 :: a2 :: nil =>
       assertion (mreg_eq a1 AX);
       assertion (mreg_eq a2 CX);
       assertion (mreg_eq res DX);
-      OK(Pidiv ECX :: k)
+      OK(Pcltd :: Pidiv ECX :: k)
   | Omodu, a1 :: a2 :: nil =>
       assertion (mreg_eq a1 AX);
       assertion (mreg_eq a2 CX);
       assertion (mreg_eq res DX);
-      OK(Pdiv ECX :: k)
+      OK(Pxor_r EDX :: Pdiv ECX :: k)
   | Oand, a1 :: a2 :: nil =>
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; do r2 <- ireg_of a2; OK (Pand_rr r r2 :: k)

@@ -121,28 +121,44 @@ Qed.
 
 (** Properties of division *)
 
-Remark divs_mods_exist:
+Lemma divu_modu_exists:
   forall v1 v2,
-  match Val.divs v1 v2, Val.mods v1 v2 with
-  | Some _, Some _ => True
-  | None, None => True
-  | _, _ => False
-  end.
+  Val.divu v1 v2 <> None \/ Val.modu v1 v2 <> None ->
+  exists n d q r,
+     v1 = Vint n /\ v2 = Vint d
+  /\ Int.divmodu2 Int.zero n d = Some(q, r)
+  /\ Val.divu v1 v2 = Some (Vint q) /\ Val.modu v1 v2 = Some (Vint r).
 Proof.
-  intros. unfold Val.divs, Val.mods. destruct v1; auto. destruct v2; auto.
-  destruct (Int.eq i0 Int.zero || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone); auto.
+  intros v1 v2; unfold Val.divu, Val.modu.
+  destruct v1; try (intuition discriminate).
+  destruct v2; try (intuition discriminate).
+  predSpec Int.eq Int.eq_spec i0 Int.zero ; try (intuition discriminate).
+  intros _. exists i, i0, (Int.divu i i0), (Int.modu i i0); intuition auto.
+  apply Int.divmodu2_divu_modu; auto.
 Qed.
 
-Remark divu_modu_exist:
+Lemma divs_mods_exists:
   forall v1 v2,
-  match Val.divu v1 v2, Val.modu v1 v2 with
-  | Some _, Some _ => True
-  | None, None => True
-  | _, _ => False
-  end.
+  Val.divs v1 v2 <> None \/ Val.mods v1 v2 <> None ->
+  exists nh nl d q r,
+     Val.shr v1 (Vint (Int.repr 31)) = Vint nh /\ v1 = Vint nl /\ v2 = Vint d
+  /\ Int.divmods2 nh nl d = Some(q, r)
+  /\ Val.divs v1 v2 = Some (Vint q) /\ Val.mods v1 v2 = Some (Vint r).
 Proof.
-  intros. unfold Val.divu, Val.modu. destruct v1; auto. destruct v2; auto.
-  destruct (Int.eq i0 Int.zero); auto.
+  intros v1 v2; unfold Val.divs, Val.mods.
+  destruct v1; try (intuition discriminate).
+  destruct v2; try (intuition discriminate).
+  destruct (Int.eq i0 Int.zero
+            || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone) eqn:OK;
+  try (intuition discriminate).
+  intros _.
+  InvBooleans. 
+  exists (Int.shr i (Int.repr 31)), i, i0, (Int.divs i i0), (Int.mods i i0); intuition auto.
+  rewrite Int.shr_lt_zero. apply Int.divmods2_divs_mods.
+  red; intros; subst i0; rewrite Int.eq_true in H; discriminate.
+  revert H0. predSpec Int.eq Int.eq_spec i (Int.repr Int.min_signed); auto.
+  predSpec Int.eq Int.eq_spec i0 Int.mone; auto.
+  discriminate.
 Qed.
 
 (** Smart constructor for [shrx] *)
@@ -1031,32 +1047,52 @@ Transparent destroyed_by_op.
   apply SAME. TranslOp. destruct H1. Simplifs.
 (* div *)
   apply SAME.
-  specialize (divs_mods_exist (rs EAX) (rs ECX)). rewrite H0.
-  destruct (Val.mods (rs EAX) (rs ECX)) as [vr|] eqn:?; intros; try contradiction.
-  TranslOp. change (rs#EDX<-Vundef ECX) with (rs#ECX). rewrite H0; rewrite Heqo. eauto.
-  auto. auto.
-  simpl in H3. destruct H3; Simplifs.
+  exploit (divs_mods_exists (rs EAX) (rs ECX)). left; congruence.
+  intros (nh & nl & d & q & r & A & B & C & D & E & F).
+  set (rs1 := nextinstr_nf (rs#EDX <- (Vint nh))).
+  econstructor; split.
+  eapply exec_straight_two with (rs2 := rs1). simpl. rewrite A. reflexivity.
+  simpl. change (rs1 EAX) with (rs EAX); rewrite B.
+  change (rs1 ECX) with (rs ECX); rewrite C.
+  rewrite D. reflexivity. auto. auto.
+  split. change (Vint q = v). congruence.
+  simpl; intros. destruct H2. unfold rs1; Simplifs.
 (* divu *)
   apply SAME.
-  specialize (divu_modu_exist (rs EAX) (rs ECX)). rewrite H0.
-  destruct (Val.modu (rs EAX) (rs ECX)) as [vr|] eqn:?; intros; try contradiction.
-  TranslOp. change (rs#EDX<-Vundef ECX) with (rs#ECX). rewrite H0; rewrite Heqo. eauto.
-  auto. auto.
-  simpl in H3. destruct H3; Simplifs.
+  exploit (divu_modu_exists (rs EAX) (rs ECX)). left; congruence.
+  intros (n & d & q & r & B & C & D & E & F).
+  set (rs1 := nextinstr_nf (rs#EDX <- Vzero)).
+  econstructor; split.
+  eapply exec_straight_two with (rs2 := rs1). reflexivity.
+  simpl. change (rs1 EAX) with (rs EAX); rewrite B.
+  change (rs1 ECX) with (rs ECX); rewrite C.
+  rewrite D. reflexivity. auto. auto.
+  split. change (Vint q = v). congruence.
+  simpl; intros. destruct H2. unfold rs1; Simplifs.
 (* mod *)
   apply SAME.
-  specialize (divs_mods_exist (rs EAX) (rs ECX)). rewrite H0.
-  destruct (Val.divs (rs EAX) (rs ECX)) as [vr|] eqn:?; intros; try contradiction.
-  TranslOp. change (rs#EDX<-Vundef ECX) with (rs#ECX). rewrite H0; rewrite Heqo. eauto.
-  auto. auto.
-  simpl in H3. destruct H3; Simplifs.
+  exploit (divs_mods_exists (rs EAX) (rs ECX)). right; congruence.
+  intros (nh & nl & d & q & r & A & B & C & D & E & F).
+  set (rs1 := nextinstr_nf (rs#EDX <- (Vint nh))).
+  econstructor; split.
+  eapply exec_straight_two with (rs2 := rs1). simpl. rewrite A. reflexivity.
+  simpl. change (rs1 EAX) with (rs EAX); rewrite B.
+  change (rs1 ECX) with (rs ECX); rewrite C.
+  rewrite D. reflexivity. auto. auto.
+  split. change (Vint r = v). congruence.
+  simpl; intros. destruct H2. unfold rs1; Simplifs.
 (* modu *)
   apply SAME.
-  specialize (divu_modu_exist (rs EAX) (rs ECX)). rewrite H0.
-  destruct (Val.divu (rs EAX) (rs ECX)) as [vr|] eqn:?; intros; try contradiction.
-  TranslOp. change (rs#EDX<-Vundef ECX) with (rs#ECX). rewrite H0; rewrite Heqo. eauto.
-  auto. auto.
-  simpl in H3. destruct H3; Simplifs.
+  exploit (divu_modu_exists (rs EAX) (rs ECX)). right; congruence.
+  intros (n & d & q & r & B & C & D & E & F).
+  set (rs1 := nextinstr_nf (rs#EDX <- Vzero)).
+  econstructor; split.
+  eapply exec_straight_two with (rs2 := rs1). reflexivity.
+  simpl. change (rs1 EAX) with (rs EAX); rewrite B.
+  change (rs1 ECX) with (rs ECX); rewrite C.
+  rewrite D. reflexivity. auto. auto.
+  split. change (Vint r = v). congruence.
+  simpl; intros. destruct H2. unfold rs1; Simplifs.
 (* shrximm *)
   apply SAME. eapply mk_shrximm_correct; eauto.
 (* lea *)

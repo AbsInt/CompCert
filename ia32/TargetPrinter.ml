@@ -421,11 +421,11 @@ module Target(System: SYSTEM):TARGET =
           fprintf oc "	imull	%a\n" ireg r1
       | Pmul_r(r1) ->
           fprintf oc "	mull	%a\n" ireg r1
+      | Pcltd ->
+          fprintf oc "	cltd\n"
       | Pdiv(r1) ->
-          fprintf oc "	xorl	%%edx, %%edx\n";
           fprintf oc "	divl	%a\n" ireg r1
       | Pidiv(r1) ->
-          fprintf oc "	cltd\n";
           fprintf oc "	idivl	%a\n" ireg r1
       | Pand_rr(rd, r1) ->
           fprintf oc "	andl	%a, %a\n" ireg r1 ireg rd

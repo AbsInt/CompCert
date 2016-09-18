@@ -151,6 +151,7 @@ Inductive instruction: Type :=
   | Pimul_ri (rd: ireg) (n: int)
   | Pimul_r (r1: ireg)
   | Pmul_r (r1: ireg)
+  | Pcltd
   | Pdiv (r1: ireg)
   | Pidiv (r1: ireg)
   | Pand_rr (rd: ireg) (r1: ireg)
@@ -618,17 +619,25 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pmul_r r1 =>
       Next (nextinstr_nf (rs#EAX <- (Val.mul rs#EAX rs#r1)
                             #EDX <- (Val.mulhu rs#EAX rs#r1))) m
+  | Pcltd =>
+      Next (nextinstr_nf (rs#EDX <- (Val.shr rs#EAX (Vint (Int.repr 31))))) m
   | Pdiv r1 =>
-      let vn := rs#EAX in let vd := (rs#EDX <- Vundef)#r1 in
-      match Val.divu vn vd, Val.modu vn vd with
-      | Some vq, Some vr => Next (nextinstr_nf (rs#EAX <- vq #EDX <- vr)) m
-      | _, _ => Stuck
+      match rs#EDX, rs#EAX, rs#r1 with
+      | Vint nh, Vint nl, Vint d =>
+          match Int.divmodu2 nh nl d with
+          | Some(q, r) => Next (nextinstr_nf (rs#EAX <- (Vint q) #EDX <- (Vint r))) m
+          | None => Stuck
+          end
+      | _, _, _ => Stuck
       end
   | Pidiv r1 =>
-      let vn := rs#EAX in let vd := (rs#EDX <- Vundef)#r1 in
-      match Val.divs vn vd, Val.mods vn vd with
-      | Some vq, Some vr => Next (nextinstr_nf (rs#EAX <- vq #EDX <- vr)) m
-      | _, _ => Stuck
+      match rs#EDX, rs#EAX, rs#r1 with
+      | Vint nh, Vint nl, Vint d =>
+          match Int.divmods2 nh nl d with
+          | Some(q, r) => Next (nextinstr_nf (rs#EAX <- (Vint q) #EDX <- (Vint r))) m
+          | None => Stuck
+          end
+      | _, _, _ => Stuck
       end
   | Pand_rr rd r1 =>
       Next (nextinstr_nf (rs#rd <- (Val.and rs#rd rs#r1))) m
