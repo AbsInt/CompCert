@@ -94,7 +94,7 @@ let ident env id =
   try
     IdentMap.find id env.re_id
   with Not_found ->
-    Cerrors.fatal_error "Internal error: Rename: %s__%d unbound"
+    Cerrors.fatal_error no_loc "internal error: rename: %s__%d unbound"
                         id.name id.stamp
 
 let rec typ env = function
@@ -292,4 +292,3 @@ let program p file =
   globdecls
     (reserve_public (reserve_builtins()) file p)
     [] p
-

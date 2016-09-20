@@ -263,17 +263,17 @@ let composite_tag_name name =
 
 let error_message = function
   | Unbound_identifier name ->
-      sprintf "Unbound identifier '%s'" name
+      sprintf "use of undeclared identifier '%s'" name
   | Unbound_tag(name, kind) ->
-      sprintf "Unbound %s '%s'" kind (composite_tag_name name)
+      sprintf "unbound %s '%s'" kind (composite_tag_name name)
   | Tag_mismatch(name, expected, actual) ->
       sprintf "'%s' was declared as a %s but is used as a %s"
               (composite_tag_name name) actual expected
   | Unbound_typedef name ->
-      sprintf "Unbound typedef '%s'" name
+      sprintf "unbound typedef '%s'" name
   | No_member(compname, compkind, memname) ->
-      sprintf "%s '%s' has no member named '%s'"
-              compkind (composite_tag_name compname) memname
+      sprintf "no member named '%s' in '%s %s'"
+        memname compkind (composite_tag_name compname) 
 
 let _ =
   Printexc.register_printer

@@ -20,6 +20,11 @@ open C
 open Env
 open Machine
 
+
+(* Empty location *)
+
+let no_loc = ("", -1)
+
 (* Set and Map structures over identifiers *)
 
 module Ident = struct
@@ -478,7 +483,7 @@ let rec sizeof env t =
       | Some s ->
           match cautious_mul n s with
           | Some sz -> Some sz
-          | None -> error "sizeof(%a) overflows" Cprint.typ t'; Some 1
+          | None -> error no_loc "sizeof(%a) overflows" Cprint.typ t'; Some 1
       end
   | TFun(_, _, _, _) -> !config.sizeof_fun
   | TNamed(_, _) -> sizeof env (unroll env t)
@@ -941,6 +946,14 @@ let valid_cast env tfrom tto =
   | TUnion(s1, _), TUnion(s2, _) -> s1 = s2
   | _, _ -> false
 
+(* Check that the cast from tfrom to tto is an integer to pointer conversion *)
+
+let int_pointer_conversion env tfrom tto =
+  match unroll env tfrom, unroll env tto with
+  | (TInt _ | TEnum _),(TPtr _)
+  | (TPtr _),(TInt _ | TEnum _) -> true
+  | _,_ -> false
+
 (* Construct an integer constant *)
 
 let intconst v ik =
@@ -1006,10 +1019,6 @@ let sseq loc s1 s2 =
 
 let sassign loc lv rv =
   { sdesc = Sdo (eassign lv rv); sloc = loc }
-
-(* Empty location *)
-
-let no_loc = ("", -1)
 
 (* Dummy skip statement *)
 

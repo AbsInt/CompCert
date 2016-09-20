@@ -345,18 +345,19 @@ General options:\n\
 \  -v             Print external commands before invoking them\n\
 \  -timings       Show the time spent in various compiler passes\n\
 \  -version       Print the version string and exit\n\
-\  @<file>        Read command line options from <file>\n\
-Interpreter mode:\n\
+\  @<file>        Read command line options from <file>\n" ^
+  Cerrors.warning_help ^
+"Interpreter mode:\n\
 \  -interp        Execute given .c files using the reference interpreter\n\
 \  -quiet         Suppress diagnostic messages for the interpreter\n\
 \  -trace         Have the interpreter produce a detailed trace of reductions\n\
 \  -random        Randomize execution order\n\
 \  -all           Simulate all possible execution orders\n"
 
-let print_usage_and_exit _ =
+let print_usage_and_exit () =
   printf "%s" usage_string; exit 0
 
-let print_version_and_exit _ =
+let print_version_and_exit () =
   printf "%s" version_string; exit 0
 
 let language_support_options = [
@@ -369,8 +370,8 @@ let optimization_options = [
   option_ftailcalls; option_fconstprop; option_fcse; option_fredundancy
 ]
 
-let set_all opts = List.iter (fun r -> r := true) opts
-let unset_all opts = List.iter (fun r -> r := false) opts
+let set_all opts () = List.iter (fun r -> r := true) opts
+let unset_all opts () = List.iter (fun r -> r := false) opts
 
 let num_source_files = ref 0
 
@@ -379,13 +380,16 @@ let num_input_files = ref 0
 let cmdline_actions =
   let f_opt name ref =
     [Exact("-f" ^ name), Set ref; Exact("-fno-" ^ name), Unset ref] in
+  let dwarf_version version () =
+    option_g:=true;
+    option_gdwarf := version in
   [
 (* Getting help *)
-  Exact "-help", Self print_usage_and_exit;
-  Exact "--help", Self print_usage_and_exit;
+  Exact "-help", Unit print_usage_and_exit;
+  Exact "--help", Unit print_usage_and_exit;
 (* Getting version info *)
-  Exact "-version", Self print_version_and_exit;
-  Exact "--version", Self print_version_and_exit;
+  Exact "-version", Unit print_version_and_exit;
+  Exact "--version", Unit print_version_and_exit;
 (* Processing options *)
   Exact "-c", Set option_c;
   Exact "-E", Set option_E;
@@ -396,17 +400,15 @@ let cmdline_actions =
   (* Preprocessing options *)
     @ prepro_actions @
 (* Language support options -- more below *)
- [ Exact "-fall", Self (fun _ -> set_all language_support_options);
-  Exact "-fnone", Self (fun _ -> unset_all language_support_options);
+ [ Exact "-fall", Unit (set_all language_support_options);
+  Exact "-fnone", Unit (unset_all language_support_options);
 (* Debugging options *)
-  Exact "-g", Self (fun s -> option_g := true;
-    option_gdwarf := 3);] @
+  Exact "-g", Unit (dwarf_version 3);] @
   (if gnu_system then
- [ Exact "-gdwarf-2", Self (fun s -> option_g:=true;
-    option_gdwarf := 2);
-  Exact "-gdwarf-3", Self (fun s -> option_g := true;
-    option_gdwarf := 3);] else []) @
- [ Exact "-frename-static", Self (fun s -> option_rename_static:= true);
+    [ Exact "-gdwarf-2", Unit (dwarf_version 2);
+      Exact "-gdwarf-3", Unit (dwarf_version 3);]
+  else []) @
+ [ Exact "-frename-static", Set option_rename_static;
    Exact "-gdepth", Integer (fun n -> if n = 0 || n <0 then begin
      option_g := false
    end else begin
@@ -414,9 +416,9 @@ let cmdline_actions =
      option_gdepth := if n > 3 then 3 else n
    end);
 (* Code generation options -- more below *)
-  Exact "-O0", Self (fun _ -> unset_all optimization_options);
-  Exact "-O", Self (fun _ -> set_all optimization_options);
-  _Regexp "-O[123]$", Self (fun _ -> set_all optimization_options);
+  Exact "-O0", Unit (unset_all optimization_options);
+  Exact "-O", Unit (set_all optimization_options);
+  _Regexp "-O[123]$", Unit (set_all optimization_options);
   Exact "-Os", Set option_Osize;
   Exact "-fsmall-data", Integer(fun n -> option_small_data := n);
   Exact "-fsmall-const", Integer(fun n -> option_small_const := n);
@@ -425,8 +427,8 @@ let cmdline_actions =
   Exact "-falign-branch-targets", Integer(fun n -> option_falignbranchtargets := n);
   Exact "-falign-cond-branches", Integer(fun n -> option_faligncondbranchs := n);
 (* Target processor options *)
-  Exact "-conf", String (fun _ -> ()); (* Ignore option since it is already handled *)
-  Exact "-target", String (fun _ -> ());] @ (* Ignore option since it is already handled *)
+  Exact "-conf", Ignore; (* Ignore option since it is already handled *)
+  Exact "-target", Ignore;] @ (* Ignore option since it is already handled *)
   (if Configuration.arch = "arm" then
     [ Exact "-mthumb", Set option_mthumb;
       Exact "-marm", Unset option_mthumb; ]
@@ -464,14 +466,15 @@ let cmdline_actions =
 (* General options *)
   Exact "-v", Set option_v;
   Exact "-stdlib", String(fun s -> stdlib_path := s);
-  Exact "-timings", Set option_timings;
-  Exact "-Werror", Set Cerrors.warn_error;
+  Exact "-timings", Set option_timings;] @
+(* Diagnostic options *)
+  Cerrors.warning_options @
 (* Interpreter mode *)
-  Exact "-interp", Set option_interp;
-  Exact "-quiet", Self (fun _ -> Interp.trace := 0);
-  Exact "-trace", Self (fun _ -> Interp.trace := 2);
-  Exact "-random", Self (fun _ -> Interp.mode := Interp.Random);
-  Exact "-all", Self (fun _ -> Interp.mode := Interp.All)
+ [ Exact "-interp", Set option_interp;
+  Exact "-quiet", Unit (fun () -> Interp.trace := 0);
+  Exact "-trace", Unit (fun () -> Interp.trace := 2);
+  Exact "-random", Unit (fun () -> Interp.mode := Interp.Random);
+  Exact "-all", Unit (fun () -> Interp.mode := Interp.All)
  ]
 (* -f options: come in -f and -fno- variants *)
 (* Language support options *)

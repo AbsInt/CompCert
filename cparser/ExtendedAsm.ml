@@ -104,14 +104,14 @@ let rec transf_inputs loc env accu pos pos' subst = function
         let n =
           match Ceval.integer_expr env e with
           | Some n -> n
-          | None -> error "%aError: asm argument of kind '%s' is not a constant"
-                          formatloc loc cstr;
+          | None -> error loc "asm argument of kind '%s' is not a constant"
+                           cstr;
                     0L in
         transf_inputs loc env accu (pos + 1) pos'
                       (set_label_const lbl pos n subst) inputs
       end else begin
-        error "%aUnsupported feature: asm argument of kind '%s'"
-              formatloc loc cstr;
+        error loc "unsupported feature: asm argument of kind '%s'"
+          cstr;
         transf_inputs loc env (e :: accu) (pos + 1) (pos' + 1)
                     (set_label_reg lbl pos pos' subst) inputs
       end
@@ -127,7 +127,7 @@ let transf_outputs loc env = function
       (None, [], StringMap.empty, 0, 0)
   | [(lbl, cstr, e)] ->
       if not (is_modifiable_lvalue env e) then
-        error "%aError: asm output is not a modifiable l-value" formatloc loc;
+        error loc "asm output is not a modifiable l-value";
       let valid = Str.string_match re_valid_output cstr 0 in
       if valid && String.contains cstr 'r' then
         if is_reg_pair env e.etyp then
@@ -139,13 +139,12 @@ let transf_outputs loc env = function
         (None, [eaddrof e],
            set_label_mem lbl 0 0 StringMap.empty, 1, 1)
       else begin
-        error "%aUnsupported feature: asm result of kind '%s'"
-              formatloc loc cstr;
+        error loc "unsupported feature: asm result of kind '%s'"
+          cstr;
         (None, [], set_label_reg lbl 0 0 StringMap.empty, 1, 1)
       end
   | outputs ->
-      error "%aUnsupported feature: asm statement with 2 or more outputs"
-            formatloc loc;
+      error loc "unsupported feature: asm statement with 2 or more outputs";
       (* Bind the outputs so that we don't get another error
          when substituting the text *)
       let rec bind_outputs pos subst = function
@@ -163,8 +162,7 @@ let check_clobbers loc clob =
       || Machregsaux.is_scratch_register c
       || c = "memory" || c = "cc" (* GCC does not accept MEMORY or CC *)
       then ()
-      else error "%aError: unrecognized asm register clobber '%s'"
-                 formatloc loc c)
+      else error loc "unrecognized asm register clobber '%s'" c)
     clob
 
 (* Renaming of the %nnn and %[ident] placeholders in the asm text *)
@@ -178,8 +176,7 @@ let rename_placeholders loc template subst =
       try
         StringMap.find p subst
       with Not_found ->
-        error "%aError: '%s' in asm text does not designate any operand"
-              formatloc loc p;
+        error loc"'%s' in asm text does not designate any operand" p;
         "%<error>"
   in
     Str.global_substitute re_asm_placeholder

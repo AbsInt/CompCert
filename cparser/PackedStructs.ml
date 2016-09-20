@@ -48,7 +48,7 @@ let safe_alignof loc env ty =
   match alignof env ty with
   | Some al -> al
   | None ->
-      error "%aError: incomplete type for a struct field" formatloc loc; 1
+      error loc "incomplete type for a struct field"; 1
 
 (* Remove existing [_Alignas] attributes and add the given [_Alignas] attr. *)
 
@@ -61,14 +61,13 @@ let set_alignas_attr al attrs =
 
 let transf_field_decl mfa swapped loc env struct_id f =
   if f.fld_bitfield <> None then
-    error "%aError: bitfields in packed structs not allowed"
-          formatloc loc;
+    error loc "bitfields in packed structs not allowed";
   (* Register as byte-swapped if needed *)
   if swapped then begin
     let (can_swap, must_swap) = can_byte_swap env f.fld_typ in
     if not can_swap then
-      error "%aError: cannot byte-swap field of type '%a'"
-            formatloc loc Cprint.typ f.fld_typ;
+      error loc "cannot byte-swap field of type '%a'"
+        Cprint.typ f.fld_typ;
     if must_swap then
       Hashtbl.add byteswapped_fields (struct_id, f.fld_name) ()
   end;
@@ -99,11 +98,11 @@ let is_pow2 n = n > 0 && n land (n - 1) = 0
 let packed_param_value loc n =
   let m = Int64.to_int n in
   if n <> Int64.of_int m then
-    (error "%a: __packed__ parameter `%Ld' is too large" formatloc loc n; 0)
+    (error loc "__packed__ parameter `%Ld' is too large" n; 0)
   else if m = 0 || is_pow2 m then
     m
   else
-    (error "%a: __packed__ parameter `%Ld' must be a power of 2" formatloc loc n; 0)
+    (error loc "__packed__ parameter `%Ld' must be a power of 2" n; 0)
 
 let transf_composite loc env su id attrs ml =
   match su with
@@ -117,8 +116,7 @@ let transf_composite loc env su id attrs ml =
         | [[AInt n; AInt p]] -> (n, p, false)
         | [[AInt n; AInt p; AInt q]] -> (n, p, q <> 0L)
         | _ ->
-          error "%a: ill-formed or ambiguous __packed__ attribute"
-                formatloc loc;
+          error loc "ill-formed or ambiguous __packed__ attribute";
           (0L, 0L, false) in
       let mfa = packed_param_value loc mfa in
       let msa = packed_param_value loc msa in
@@ -140,7 +138,7 @@ let accessor_type loc env ty =
   | TEnum(_,_) -> (8 * sizeof_ikind enum_ikind, TInt(unsigned_ikind_of enum_ikind,[]))
   | TPtr _     -> (8 * !config.sizeof_ptr, TInt(ptr_t_ikind(),[]))
   | _ ->
-     error "%a: unsupported type for byte-swapped field access" formatloc loc;
+     error loc "unsupported type for byte-swapped field access";
      (32, TVoid [])
 
 (*  (ty) e *)
@@ -175,7 +173,7 @@ let bswap_read loc env lval =
       ecast_opt env ty call
     end
   with Env.Error msg ->
-    fatal_error "%aError: %s" formatloc loc (Env.error_message msg)
+    fatal_error loc "%s" (Env.error_message msg)
 
 (*  __builtin_write_intNN_reversed(&lhs,rhs)
   or  lhs = __builtin_bswapNN(rhs) *)
@@ -202,7 +200,7 @@ let bswap_write loc env lhs rhs =
       eassign lhs (ecast_opt env ty call)
     end
   with Env.Error msg ->
-    fatal_error "%aError: %s" formatloc loc (Env.error_message msg)
+    fatal_error loc "%s" (Env.error_message msg)
 
 (* Expressions *)
 
@@ -248,7 +246,7 @@ let transf_expr loc env ctx e =
     | EUnop(Oaddrof, e1) ->
         let (e1', swap) = lvalue e1 in
         if swap then
-          error "%aError: & over byte-swapped field" formatloc loc;
+          error loc "& over byte-swapped field";
         {edesc = EUnop(Oaddrof, e1'); etyp = e.etyp}
 
     | EUnop((Opreincr|Opredecr) as op, e1) ->
@@ -349,8 +347,8 @@ let transf_init loc env i =
               let n' = byteswap_int (sizeof_ikind ik) n in
               Init_single {edesc = EConst(CInt(n', ik, "")); etyp = e.etyp}
           | _ ->
-              error "%aError: initializer for byte-swapped field is not \
-                         a compile-time integer constant" formatloc loc; i
+              error loc "initializer for byte-swapped field is not \
+                         a compile-time integer constant"; i
       end
   | Init_array il ->
       let swap_elt =
