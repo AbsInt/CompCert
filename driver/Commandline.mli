@@ -33,7 +33,7 @@ type action =
   | Self of (string -> unit)    (** call the function with the matched string *)
   | String of (string -> unit)  (** read next arg as a string, call function *)
   | Integer of (int -> unit)    (** read next arg as an int, call function *)
-  | Ignore                      (** ignore the arg *)
+  | Ignore                      (** ignore the next arg *)
   | Unit of (unit -> unit)      (** call the function with unit as argument *)
 
 val parse_cmdline: (pattern * action) list -> unit

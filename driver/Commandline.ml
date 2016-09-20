@@ -98,7 +98,12 @@ let parse_array spec argv first last =
           end else begin
             eprintf "Option `%s' expects an argument\n" s; exit 2
           end
-      | Some (Ignore) -> parse (i+1)
+      | Some (Ignore) ->
+          if i + 1 <= last then begin
+            parse (i+2)
+          end else begin
+            eprintf "Option `%s' expects an argument\n" s; exit 2
+          end
       | Some (Unit f) -> f (); parse (i+1)
     end
   in parse first
