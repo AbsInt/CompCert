@@ -429,6 +429,7 @@ let extract_alignas loc a =
       | [AInt n] when is_power_of_two n  -> AAlignas (Int64.to_int n)
       | [AInt n] -> error loc "requested alignment is not a power of 2"; a
       | [_] -> error loc "requested alignment is not an integer constant"; a
+      | [] -> a (* Use the default alignment as the gcc does *)
       | _ -> error loc "'aligned' attribute takes no more than 1 argument"; a
       end
   | _ -> a
