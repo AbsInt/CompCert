@@ -1064,7 +1064,7 @@ Proof.
     destruct (complete_members env m) eqn:C; simplify_eq EQ. clear EQ; intros EQ.
     rewrite PTree.gsspec. intros [A|A]; auto.
     destruct (peq id id0); auto.
-    inv A. rewrite <- H1; auto.
+    inv A. rewrite <- H0; auto.
   }
   intros. exploit REC; eauto. rewrite PTree.gempty. intuition congruence.
 Qed.
