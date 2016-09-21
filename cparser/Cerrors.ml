@@ -96,7 +96,7 @@ let string_of_warning = function
   | Celeven_extension -> "c11-extensions"
   | Gnu_empty_struct -> "gnu-empty-struct"
   | Missing_declarations -> "missing-declarations"
-  | Constant_conversion -> "constant_conversion"
+  | Constant_conversion -> "constant-conversion"
   | Int_conversion -> "int-conversion"
   | Varargs -> "varargs"
   | Implicit_function_declaration -> "implicit-function-declaration"
