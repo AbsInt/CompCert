@@ -14,6 +14,7 @@
 (* *********************************************************************)
 
 Require Import Streams.
+Require Import ProofIrrelevance.
 Require Import Equality.
 Require Import List.
 Require Import Syntax.

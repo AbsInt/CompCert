@@ -217,8 +217,8 @@ Definition do_volatile_store (w: world) (chunk: memory_chunk) (m: mem) (b: block
 
 Ltac mydestr :=
   match goal with
-  | [ |- None = Some _ -> _ ] => intro X; discriminate
-  | [ |- Some _ = Some _ -> _ ] => intro X; inv X
+  | [ |- None = Some _ -> _ ] => let X := fresh "X" in intro X; discriminate
+  | [ |- Some _ = Some _ -> _ ] => let X := fresh "X" in intro X; inv X
   | [ |- match ?x with Some _ => _ | None => _ end = Some _ -> _ ] => destruct x eqn:?; mydestr
   | [ |- match ?x with true => _ | false => _ end = Some _ -> _ ] => destruct x eqn:?; mydestr
   | [ |- match ?x with left _ => _ | right _ => _ end = Some _ -> _ ] => destruct x; mydestr
@@ -2061,12 +2061,15 @@ Definition do_step (w: world) (s: state) : list transition :=
 
 Ltac myinv :=
   match goal with
-  | [ |- In _ nil -> _ ] => intro X; elim X
+  | [ |- In _ nil -> _ ] => let X := fresh "X" in intro X; elim X
   | [ |- In _ (ret _ _) -> _ ] =>
+        let X := fresh "X" in
         intro X; elim X; clear X;
-        [intro EQ; unfold ret in EQ; inv EQ; myinv | myinv]
+        [let EQ := fresh "EQ" in intro EQ; unfold ret in EQ; inv EQ; myinv | myinv]
   | [ |- In _ (_ :: nil) -> _ ] =>
-        intro X; elim X; clear X; [intro EQ; inv EQ; myinv | myinv]
+        let X := fresh "X" in
+        intro X; elim X; clear X;
+        [let EQ := fresh "EQ" in intro EQ; inv EQ; myinv | myinv]
   | [ |- In _ (match ?x with Some _ => _ | None => _ end) -> _ ] => destruct x eqn:?; myinv
   | [ |- In _ (match ?x with false => _ | true => _ end) -> _ ] => destruct x eqn:?; myinv
   | [ |- In _ (match ?x with left _ => _ | right _ => _ end) -> _ ] => destruct x; myinv

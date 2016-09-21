@@ -717,8 +717,8 @@ Ltac TransfInstr :=
      FUN: transf_function _ _ = OK _,
      ANL: analyze _ _ = Some _ |- _ ] =>
        generalize (transf_function_at _ _ _ _ _ _ FUN ANL INSTR);
-       intro TI;
-       unfold transf_instr in TI
+       let TI := fresh "TI" in
+       intro TI; unfold transf_instr in TI
   end.
 
 Ltac UseTransfer :=
@@ -1026,7 +1026,7 @@ Ltac UseTransfer :=
   exploit transfer_builtin_args_sound; eauto. intros (tvl & A & B & C & D).
   exploit external_call_mem_extends; eauto 2 with na.
   eapply magree_extends; eauto. intros. apply nlive_all.
-  intros (v' & tm' & P & Q & R & S & T).
+  intros (v' & tm' & P & Q & R & S).
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
   apply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
@@ -1077,7 +1077,7 @@ Ltac UseTransfer :=
 
 - (* external function *)
   exploit external_call_mem_extends; eauto.
-  intros (res' & tm' & A & B & C & D & E).
+  intros (res' & tm' & A & B & C & D).
   simpl in FUN. inv FUN.
   econstructor; split.
   econstructor; eauto.
