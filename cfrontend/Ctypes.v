@@ -1519,7 +1519,7 @@ Local Transparent Linker_program.
   - intros. exploit link_match_fundef; eauto. intros (tf & A & B). exists tf; auto.
   - intros.
     Local Transparent Linker_types.
-    simpl in *. destruct (type_eq v1 v2); inv H4. subst v tv2. exists tv1; rewrite dec_eq_true; auto.
+    simpl in *. destruct (type_eq v1 v2); inv H4. exists v; rewrite dec_eq_true; auto.
   - eauto.
   - eauto.
   - eauto.
