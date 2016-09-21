@@ -70,6 +70,7 @@ type warning_type =
   | CompCert_conformance
 
 let active_warnings: warning_type list ref = ref [
+  Unnamed;
   Unknown_attribute;
   Celeven_extension;
   Gnu_empty_struct;

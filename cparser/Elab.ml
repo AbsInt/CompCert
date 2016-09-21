@@ -843,9 +843,9 @@ and elab_struct_or_union_info keep_ty kind loc env members attrs =
   (* Warn for empty structs or unions *)
   if m = [] then
     if kind = Struct then begin
-      warning loc Celeven_extension "anonymous structs are a C11 extension"
+      warning loc Gnu_empty_struct "empty struct is a GNU extension"
     end else begin
-      fatal_error loc "anonymous unions are a C11 extension"
+      fatal_error loc "empty union is a GNU extension"
     end;
   (composite_info_def env' kind attrs m, env')
 
