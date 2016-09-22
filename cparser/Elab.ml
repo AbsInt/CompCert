@@ -2019,7 +2019,7 @@ let enter_decdefs local loc env sto dl =
   (* Sanity checks on storage class *)
   if sto = Storage_register && not local then
     fatal_error loc "'register' storage-class on file-scoped variable";
-  if dl = [] then
+  if sto <> Storage_default && dl = [] then
     warning loc Missing_declarations "declaration does not declare anything";
   let enter_decdef (decls, env) (s, ty, init) =
     let isfun = is_function_type env ty in
