@@ -61,7 +61,7 @@ type warning_type =
   | Implicit_function_declaration
   | Pointer_type_mismatch
   | Compare_distinct_pointer_types
-  | Pedantic
+  | Implicit_int
   | Main_return_type
   | Invalid_noreturn
   | Return_type
@@ -81,6 +81,7 @@ let active_warnings: warning_type list ref = ref [
   Implicit_function_declaration;
   Pointer_type_mismatch;
   Compare_distinct_pointer_types;
+  Implicit_int;
   Main_return_type;
   Invalid_noreturn;
   Return_type;
@@ -102,7 +103,7 @@ let string_of_warning = function
   | Implicit_function_declaration -> "implicit-function-declaration"
   | Pointer_type_mismatch -> "pointer-type-mismatch"
   | Compare_distinct_pointer_types -> "compare-distinct-pointer-types"
-  | Pedantic -> "pedantic"
+  | Implicit_int -> "implicit-int"
   | Main_return_type -> "main-return-type"
   | Invalid_noreturn -> "invalid-noreturn"
   | Return_type -> "return-type"
@@ -140,7 +141,7 @@ let wall () =
     Implicit_function_declaration;
     Pointer_type_mismatch;
     Compare_distinct_pointer_types;
-    Pedantic;
+    Implicit_int;
     Main_return_type;
     Invalid_noreturn;
     Return_type;
@@ -162,7 +163,7 @@ let werror () =
     Implicit_function_declaration;
     Pointer_type_mismatch;
     Compare_distinct_pointer_types;
-    Pedantic;
+    Implicit_int;
     Main_return_type;
     Invalid_noreturn;
     Return_type;
@@ -282,7 +283,7 @@ let warning_options =
   error_option Implicit_function_declaration @
   error_option Pointer_type_mismatch @
   error_option Compare_distinct_pointer_types @
-  error_option Pedantic @
+  error_option Implicit_int @
   error_option Main_return_type @
   error_option Invalid_noreturn @
   error_option Return_type @

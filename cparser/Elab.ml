@@ -2115,7 +2115,7 @@ let elab_KR_function_parameters env params defs loc =
     | [] ->
         (* Parameter is not declared, defaults to "int" in ISO C90,
            is an error in ISO C99.  Just emit a warning. *)
-        warning loc Pedantic "type of '%s' defaults to 'int'" param;
+        warning loc Implicit_int "type of '%s' defaults to 'int'" param;
         TInt (IInt, [])
     | (_, ty) :: rem ->
         if rem <> [] then
