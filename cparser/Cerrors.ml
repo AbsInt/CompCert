@@ -298,6 +298,7 @@ let warning_options =
    Exact ("-Wall"), Unit wall;]
 
 let warning_help = "Diagnostic options:\n\
+\  -Wall              Enable all warnings\n\
 \  -W<warning>        Enable the specific <warning>\n\
 \  -Wno-<warning>     Disable the specific <warning>\n\
 \  -Werror            Make all warnings into errors\n\
