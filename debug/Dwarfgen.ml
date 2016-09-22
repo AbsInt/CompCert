@@ -88,18 +88,21 @@ module Dwarfgenaux (Target: TARGET) =
 
     let name_opt n = if n <> "" then Some (string_entry n) else None
 
+    let subrange_type : int option ref = ref None
+
+    let encoding_of_ikind = function
+      | IBool -> DW_ATE_boolean
+      | IChar ->
+          if !Machine.config.Machine.char_signed then
+            DW_ATE_signed_char
+          else
+            DW_ATE_unsigned_char
+      | IInt | ILong | ILongLong | IShort | ISChar -> DW_ATE_signed
+      | _ -> DW_ATE_unsigned
+
     (* Functions to translate the basetypes. *)
     let int_type_to_entry id i =
-      let encoding =
-        (match i.int_kind with
-        | IBool -> DW_ATE_boolean
-        | IChar ->
-            if !Machine.config.Machine.char_signed then
-              DW_ATE_signed_char
-            else
-              DW_ATE_unsigned_char
-        | IInt | ILong | ILongLong | IShort | ISChar -> DW_ATE_signed
-        | _ -> DW_ATE_unsigned)in
+      let encoding = encoding_of_ikind i.int_kind in
       let int = {
         base_type_byte_size = sizeof_ikind i.int_kind;
         base_type_encoding = Some encoding;
@@ -153,10 +156,18 @@ module Dwarfgenaux (Target: TARGET) =
         let r = match a with
         | None -> None
         | Some i ->
-            let bound = Int64.to_int (Int64.sub i Int64.one) in
-            Some (BoundConst bound) in
+            if i <> 0L then
+              let bound = Int64.to_int (Int64.sub i Int64.one) in
+              Some (BoundConst bound)
+            else
+              None in
+        let st = match !subrange_type with
+        | None -> let id = next_id () in
+          subrange_type := Some id;
+          id
+        | Some id  -> id in
         let s = {
-          subrange_type = None;
+          subrange_type = st;
           subrange_upper_bound = r;
         } in
         new_entry (next_id ()) (DW_TAG_subrange_type s)) arr.arr_size in
@@ -310,11 +321,22 @@ module Dwarfgenaux (Target: TARGET) =
         else
           d in
       let typs = aux needed in
-      List.rev (fold_types (fun id t acc ->
-        if IntSet.mem id typs then
-          (infotype_to_entry id t)::acc
-        else
-          acc) [])
+      let res =
+        List.rev (fold_types (fun id t acc ->
+          if IntSet.mem id typs then
+            (infotype_to_entry id t)::acc
+          else
+            acc) []) in
+      match !subrange_type with
+      | None -> res
+      | Some id ->
+          let encoding = encoding_of_ikind (Cutil.size_t_ikind ()) in
+          let tag = {
+            base_type_byte_size = !Machine.config.Machine.sizeof_size_t;
+            base_type_encoding = Some encoding;
+            base_type_name = string_entry "sizetype";
+          } in
+          (new_entry id (DW_TAG_base_type tag))::res
 
     let global_variable_to_entry acc id v =
       let loc = match v.gvar_atom with

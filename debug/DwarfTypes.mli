@@ -188,7 +188,7 @@ type dw_tag_subprogram =
 
 type dw_tag_subrange_type =
     {
-     subrange_type:        reference   option;
+     subrange_type:        reference;
      subrange_upper_bound: bound_value option;
    }
 

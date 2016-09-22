@@ -184,7 +184,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
           add_attr_some e.subprogram_type add_type;
       | DW_TAG_subrange_type e ->
           prologue 0x21 "DW_TAG_subrange_type";
-          add_attr_some e.subrange_type add_type;
+          add_type buf;
           (match e.subrange_upper_bound with
           | None -> ()
           | Some (BoundConst _) -> add_abbr_entry (0x2f,"DW_AT_upper_bound",DW_FORM_udata) buf
@@ -491,7 +491,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_opt_value oc "DW_AT_type" sp.subprogram_type print_ref
 
     let print_subrange oc sr =
-      print_opt_value oc "DW_AT_type" sr.subrange_type print_ref;
+      print_ref oc "DW_AT_type" sr.subrange_type;
       print_opt_value oc  "DW_AT_upper_bound" sr.subrange_upper_bound print_bound_value
 
     let print_subroutine oc st =
