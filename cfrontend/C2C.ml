@@ -757,8 +757,8 @@ let rec convertExpr env e =
   | C.ECall({edesc = C.EVar {name = "__builtin_debug"}}, args) ->
       let (kind, args1) =
         match args with
-        | {edesc = C.EConst(CInt(n,_,_))} :: args1 -> (n, args1)
-        | _ -> error "argument 1 of '__builtin_debug' must be a constant"; (1L, args) in
+        | {edesc = C.EConst(CInt(n,_,_))} :: args1 when n <> 0L-> (n, args1)
+        | _ -> error "argument 1 of '__builtin_debug' must be a non-zero constant"; (1L, args) in
       let (text, args2) =
         match args1 with
         | {edesc = C.EConst(CStr(txt))} :: args2 -> (txt, args2)
