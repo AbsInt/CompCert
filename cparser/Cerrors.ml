@@ -147,6 +147,7 @@ let wall () =
     Return_type;
     Literal_range;
     Unknown_pragmas;
+    CompCert_conformance;
   ]
 
 let werror () =
@@ -289,6 +290,7 @@ let warning_options =
   error_option Return_type @
   error_option Literal_range @
   error_option Unknown_pragmas @
+  error_option CompCert_conformance @
   [Exact ("-Wfatal-errors"), Set error_fatal;
    Exact ("-fdiagnostics-color"), Ignore; (* Either output supports it or no color *)
    Exact ("-fno-diagnostics-color"), Unset color_diagnostics;
