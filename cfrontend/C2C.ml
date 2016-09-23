@@ -755,15 +755,20 @@ let rec convertExpr env e =
       unsupported "compound literals"; ezero
 
   | C.ECall({edesc = C.EVar {name = "__builtin_debug"}}, args) ->
+      let len = List.length args in
+      if len < 2 then
+        error "too few arguments to function call, expected at least 2, have 0";
       let (kind, args1) =
         match args with
         | {edesc = C.EConst(CInt(n,_,_))} :: args1 when n <> 0L-> (n, args1)
-        | _ -> error "argument 1 of '__builtin_debug' must be a non-zero constant"; (1L, args) in
+        | _::args -> error "argument 1 of '__builtin_debug' must be a non-zero constant"; (1L, args)
+        | [] -> assert false (* catched earlier *) in
       let (text, args2) =
         match args1 with
         | {edesc = C.EConst(CStr(txt))} :: args2 -> (txt, args2)
         | {edesc = C.EVar id} :: args2 -> (id.name, args2)
-        | _ -> error "argument 2 of '__builtin_debug' must be either a string literal or a variable"; ("", args1) in
+        | _::args2 -> error "argument 2 of '__builtin_debug' must be either a string literal or a variable"; ("", args2)
+        | [] -> assert false (* catched earlier *) in
       let targs2 = convertTypArgs env [] args2 in
       Ebuiltin(
         EF_debug(P.of_int64 kind, intern_string text,

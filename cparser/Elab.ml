@@ -1940,10 +1940,11 @@ let elab_expr vararg loc env a =
     | ([],env), _::_ ->
        let found = argno - 1 in
        let expected = List.length params + found in
-       err "too few arguments to function call, expected %d, have %d" expected found; [],env
+       let vararg = if vararg then "at least " else "" in
+       err "too few arguments to function call, expected %s%d, have %d" vararg expected found; [],env
    | (_::_,env), [] ->
         if vararg
-        then  args
+        then args
         else
           let expected = argno - 1 in
           let found = List.length (fst args) + expected in
