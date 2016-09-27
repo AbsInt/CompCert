@@ -827,8 +827,10 @@ and elab_struct_or_union_info keep_ty kind loc env members attrs =
       if List.exists ((=) n) acc then
         error loc "duplicate member '%s'" n;
       n::acc
-    end else
-      acc) [] m);
+    end else begin
+      if Cutil.is_composite_type env fld.fld_typ then
+        warning loc Celeven_extension  "anonymous structs/unions are a C11 extension";
+      acc end) [] m);
   (* Check for incomplete types *)
   let rec check_incomplete = function
   | [] -> ()

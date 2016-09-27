@@ -451,7 +451,7 @@ struct_declaration:
     { Field_group (fst decspec) (rev' decls) (snd decspec) }
 (* Extension to C99 grammar needed to parse some GNU header files. *)
 | decspec = specifier_qualifier_list SEMICOLON
-    { Field_group (fst decspec) [] (snd decspec) }
+    { Field_group (fst decspec) [(None,None)] (snd decspec) }
 
 specifier_qualifier_list:
 | typ = type_specifier rest = specifier_qualifier_list
