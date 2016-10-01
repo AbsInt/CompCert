@@ -125,12 +125,13 @@ Definition rolm (r1 r2: ireg) (amount mask: int) (k: code) :=
 Definition accessind {A: Type}
        (instr1: A -> constant -> ireg -> instruction)
        (instr2: A -> ireg -> ireg -> instruction)
-       (base: ireg) (ofs: int) (r: A) (k: code) :=
+       (base: ireg) (ofs: ptrofs) (r: A) (k: code) :=
+  let ofs := Ptrofs.to_int ofs in
   if Int.eq (high_s ofs) Int.zero
   then instr1 r (Cint ofs) base :: k
   else loadimm GPR0 ofs (instr2 r base GPR0 :: k).
 
-Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
+Definition loadind (base: ireg) (ofs: ptrofs) (ty: typ) (dst: mreg) (k: code) :=
   match ty, preg_of dst with
   | Tint, IR r => OK(accessind Plwz Plwzx base ofs r k)
   | Tany32, IR r => OK(accessind Plwz_a Plwzx_a base ofs r k)
@@ -140,7 +141,7 @@ Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
   | _, _ => Error (msg "Asmgen.loadind")
   end.
 
-Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
+Definition storeind (src: mreg) (base: ireg) (ofs: ptrofs) (ty: typ) (k: code) :=
   match ty, preg_of src with
   | Tint, IR r => OK(accessind Pstw Pstwx base ofs r k)
   | Tany32, IR r => OK(accessind Pstw_a Pstwx_a base ofs r k)
@@ -340,7 +341,7 @@ Definition transl_op
            Paddis r GPR0 (Csymbol_high s ofs) ::
            Paddi r r (Csymbol_low s ofs) :: k)
   | Oaddrstack n, nil =>
-      do r <- ireg_of res; OK (addimm r GPR1 n k)
+      do r <- ireg_of res; OK (addimm r GPR1 (Ptrofs.to_int n) k)
   | Ocast8signed, a1 :: nil =>
       do r1 <- ireg_of a1; do r <- ireg_of res; OK (Pextsb r r1 :: k)
   | Ocast16signed, a1 :: nil =>
@@ -559,6 +560,7 @@ Definition transl_memory_access
             Paddis temp r1 (Csymbol_high symb ofs) ::
             mk1 (Csymbol_low symb ofs) temp :: k)
   | Ainstack ofs, nil =>
+      let ofs := Ptrofs.to_int ofs in
       OK (if Int.eq (high_s ofs) Int.zero then
            mk1 (Cint ofs) GPR1 :: k
          else
@@ -647,12 +649,12 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
   | Mtailcall sig (inl r) =>
       do r1 <- ireg_of r;
       OK (Pmtctr r1 ::
-          Plwz GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 ::
+          Plwz GPR0 (Cint (Ptrofs.to_int f.(fn_retaddr_ofs))) GPR1 ::
           Pmtlr GPR0 ::
           Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) ::
           Pbctr sig :: k)
   | Mtailcall sig (inr symb) =>
-      OK (Plwz GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 ::
+      OK (Plwz GPR0 (Cint (Ptrofs.to_int f.(fn_retaddr_ofs))) GPR1 ::
           Pmtlr GPR0 ::
           Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) ::
           Pbs symb sig :: k)
@@ -670,7 +672,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
       do r <- ireg_of arg;
       OK (Pbtbl r tbl :: k)
   | Mreturn =>
-      OK (Plwz GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 ::
+      OK (Plwz GPR0 (Cint (Ptrofs.to_int f.(fn_retaddr_ofs))) GPR1 ::
           Pmtlr GPR0 ::
           Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) ::
           Pblr :: k)
@@ -722,12 +724,12 @@ Definition transl_function (f: Mach.function) :=
   OK (mkfunction f.(Mach.fn_sig)
        (Pallocframe f.(fn_stacksize) f.(fn_link_ofs) f.(fn_retaddr_ofs) ::
         Pmflr GPR0 ::
-        Pstw GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 ::
-        Pcfi_rel_offset f.(fn_retaddr_ofs) :: c)).
+        Pstw GPR0 (Cint (Ptrofs.to_int f.(fn_retaddr_ofs))) GPR1 ::
+        Pcfi_rel_offset (Ptrofs.to_int f.(fn_retaddr_ofs)) :: c)).
 
 Definition transf_function (f: Mach.function) : res Asm.function :=
   do tf <- transl_function f;
-  if zlt Int.max_unsigned (list_length_z tf.(fn_code))
+  if zlt Ptrofs.max_unsigned (list_length_z tf.(fn_code))
   then Error (msg "code size exceeded")
   else OK tf.
 

@@ -48,10 +48,10 @@ Open Local Scope cminorsel_scope.
 
 (** ** Constants **)
 
-Definition addrsymbol (id: ident) (ofs: int) :=
+Definition addrsymbol (id: ident) (ofs: ptrofs) :=
   Eop (Oaddrsymbol id ofs) Enil.
 
-Definition addrstack (ofs: int) :=
+Definition addrstack (ofs: ptrofs) :=
   Eop (Oaddrstack ofs) Enil.
 
 (** ** Integer logical negation *)
@@ -78,17 +78,17 @@ Nondetfunction addimm (n: int) (e: expr) :=
   if Int.eq n Int.zero then e else
   match e with
   | Eop (Ointconst m) Enil       => Eop (Ointconst(Int.add n m)) Enil
-  | Eop (Oaddrsymbol s m) Enil   => Eop (Oaddrsymbol s (Int.add n m)) Enil
-  | Eop (Oaddrstack m) Enil      => Eop (Oaddrstack (Int.add n m)) Enil
+  | Eop (Oaddrsymbol s m) Enil   => Eop (Oaddrsymbol s (Ptrofs.add (Ptrofs.of_int n) m)) Enil
+  | Eop (Oaddrstack m) Enil      => Eop (Oaddrstack (Ptrofs.add (Ptrofs.of_int n) m)) Enil
   | Eop (Oaddimm m) (t ::: Enil) => Eop (Oaddimm(Int.add n m)) (t ::: Enil)
-  | Eop (Oaddsymbol s m) (t ::: Enil) => Eop (Oaddsymbol s (Int.add n m)) (t ::: Enil)
+  | Eop (Oaddsymbol s m) (t ::: Enil) => Eop (Oaddsymbol s (Ptrofs.add (Ptrofs.of_int n) m)) (t ::: Enil)
   | _                            => Eop (Oaddimm n) (e ::: Enil)
   end.
 
-Nondetfunction addsymbol (s: ident) (ofs: int) (e: expr) :=
+Nondetfunction addsymbol (s: ident) (ofs: ptrofs) (e: expr) :=
   match e with
-  | Eop (Ointconst n) Enil => Eop (Oaddrsymbol s (Int.add ofs n)) Enil
-  | Eop (Oaddimm n) (t ::: Enil) => Eop (Oaddsymbol s (Int.add ofs n)) (t ::: Enil)
+  | Eop (Ointconst n) Enil => Eop (Oaddrsymbol s (Ptrofs.add ofs (Ptrofs.of_int n))) Enil
+  | Eop (Oaddimm n) (t ::: Enil) => Eop (Oaddsymbol s (Ptrofs.add ofs (Ptrofs.of_int n))) (t ::: Enil)
   | _ => Eop (Oaddsymbol s ofs) (e ::: Enil)
   end.
 
@@ -107,9 +107,9 @@ Nondetfunction add (e1: expr) (e2: expr) :=
   | Eop (Oaddimm n1) (t1:::Enil), t2 =>
       addimm n1 (Eop Oadd (t1:::t2:::Enil))
   | Eop (Oaddrstack n1) Enil, Eop (Oaddimm n2) (t2:::Enil) =>
-      Eop Oadd (Eop (Oaddrstack (Int.add n1 n2)) Enil ::: t2 ::: Enil)
+      Eop Oadd (Eop (Oaddrstack (Ptrofs.add n1 (Ptrofs.of_int n2))) Enil ::: t2 ::: Enil)
   | Eop (Oaddsymbol s ofs) (t1:::Enil), Eop (Oaddimm n) (t2:::Enil) =>
-      addsymbol s (Int.add ofs n) (Eop Oadd (t1:::t2:::Enil))
+      addsymbol s (Ptrofs.add ofs (Ptrofs.of_int n)) (Eop Oadd (t1:::t2:::Enil))
   | Eop (Oaddsymbol s ofs) (t1:::Enil), t2 =>
       addsymbol s ofs (Eop Oadd (t1:::t2:::Enil))
   | t1, Eop (Oaddimm n2) (t2:::Enil) =>

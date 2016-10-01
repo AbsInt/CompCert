@@ -100,11 +100,11 @@ Notation "'RA'" := LR (only parsing).
 
 Inductive constant: Type :=
   | Cint: int -> constant
-  | Csymbol_low: ident -> int -> constant
-  | Csymbol_high: ident -> int -> constant
-  | Csymbol_sda: ident -> int -> constant
-  | Csymbol_rel_low: ident -> int -> constant
-  | Csymbol_rel_high: ident -> int -> constant.
+  | Csymbol_low: ident -> ptrofs -> constant
+  | Csymbol_high: ident -> ptrofs -> constant
+  | Csymbol_sda: ident -> ptrofs -> constant
+  | Csymbol_rel_low: ident -> ptrofs -> constant
+  | Csymbol_rel_high: ident -> ptrofs -> constant.
 
 (** A note on constants: while immediate operands to PowerPC
   instructions must be representable in 16 bits (with
@@ -142,7 +142,7 @@ Inductive instruction : Type :=
   | Paddic: ireg -> ireg -> constant -> instruction           (**r add immediate and set carry *)
   | Paddis: ireg -> ireg -> constant -> instruction           (**r add immediate high *)
   | Paddze: ireg -> ireg -> instruction                       (**r add carry *)
-  | Pallocframe: Z -> int -> int -> instruction               (**r allocate new stack frame (pseudo) *)
+  | Pallocframe: Z -> ptrofs -> ptrofs -> instruction               (**r allocate new stack frame (pseudo) *)
   | Pand_: ireg -> ireg -> ireg -> instruction                (**r bitwise and *)
   | Pandc: ireg -> ireg -> ireg -> instruction                (**r bitwise and-complement *)
   | Pandi_: ireg -> ireg -> constant -> instruction           (**r and immediate and set conditions *)
@@ -179,7 +179,7 @@ Inductive instruction : Type :=
   | Pextsb: ireg -> ireg -> instruction                       (**r 8-bit sign extension *)
   | Pextsh: ireg -> ireg -> instruction                       (**r 16-bit sign extension *)
   | Pextsw: ireg -> ireg -> instruction                       (**r 64-bit sign extension (PPC64) *)
-  | Pfreeframe: Z -> int -> instruction                       (**r deallocate stack frame and restore previous frame (pseudo) *)
+  | Pfreeframe: Z -> ptrofs -> instruction                       (**r deallocate stack frame and restore previous frame (pseudo) *)
   | Pfabs: freg -> freg -> instruction                        (**r float absolute value *)
   | Pfabss: freg -> freg -> instruction                       (**r float absolute value *)
   | Pfadd: freg -> freg -> freg -> instruction                (**r float addition *)
@@ -458,8 +458,8 @@ Variable ge: genv.
   symbolic references [symbol + offset] and splits their
   actual values into two 16-bit halves. *)
 
-Parameter low_half: genv -> ident -> int -> val.
-Parameter high_half: genv -> ident -> int -> val.
+Parameter low_half: genv -> ident -> ptrofs -> val.
+Parameter high_half: genv -> ident -> ptrofs -> val.
 
 (** The fundamental property of these operations is that, when applied
   to the address of a symbol, their results can be recombined by
@@ -477,15 +477,15 @@ Axiom low_high_half:
   register pointing to the base of the small data area containing
   symbol [symb].  We leave this transformation up to the linker. *)
 
-Parameter symbol_is_small_data: ident -> int -> bool.
-Parameter small_data_area_offset: genv -> ident -> int -> val.
+Parameter symbol_is_small_data: ident -> ptrofs -> bool.
+Parameter small_data_area_offset: genv -> ident -> ptrofs -> val.
 
 Axiom small_data_area_addressing:
   forall id ofs,
   symbol_is_small_data id ofs = true ->
   small_data_area_offset ge id ofs = Genv.symbol_address ge id ofs.
 
-Parameter symbol_is_rel_data: ident -> int -> bool.
+Parameter symbol_is_rel_data: ident -> ptrofs -> bool.
 
 (** Armed with the [low_half] and [high_half] functions,
   we can define the evaluation of a symbolic constant.
@@ -529,14 +529,14 @@ Inductive outcome: Type :=
   instruction ([nextinstr]) or branching to a label ([goto_label]). *)
 
 Definition nextinstr (rs: regset) :=
-  rs#PC <- (Val.add rs#PC Vone).
+  rs#PC <- (Val.offset_ptr rs#PC Ptrofs.one).
 
 Definition goto_label (f: function) (lbl: label) (rs: regset) (m: mem) :=
   match label_pos lbl 0 (fn_code f) with
   | None => Stuck
   | Some pos =>
       match rs#PC with
-      | Vptr b ofs => Next (rs#PC <- (Vptr b (Int.repr pos))) m
+      | Vptr b ofs => Next (rs#PC <- (Vptr b (Ptrofs.repr pos))) m
       | _ => Stuck
     end
   end.
@@ -635,8 +635,8 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
                        #CARRY <- (Val.add_carry rs#r1 Vzero rs#CARRY))) m
   | Pallocframe sz ofs _ =>
       let (m1, stk) := Mem.alloc m 0 sz in
-      let sp := Vptr stk Int.zero in
-      match Mem.storev Mint32 m1 (Val.add sp (Vint ofs)) rs#GPR1 with
+      let sp := Vptr stk Ptrofs.zero in
+      match Mem.storev Mint32 m1 (Val.offset_ptr sp ofs) rs#GPR1 with
       | None => Stuck
       | Some m2 => Next (nextinstr (rs#GPR1 <- sp #GPR0 <- Vundef)) m2
       end
@@ -656,16 +656,16 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pbctr sg =>
       Next (rs#PC <- (rs#CTR)) m
   | Pbctrl sg =>
-      Next (rs#LR <- (Val.add rs#PC Vone) #PC <- (rs#CTR)) m
+      Next (rs#LR <- (Val.offset_ptr rs#PC Ptrofs.one) #PC <- (rs#CTR)) m
   | Pbf bit lbl =>
       match rs#(reg_of_crbit bit) with
       | Vint n => if Int.eq n Int.zero then goto_label f lbl rs m else Next (nextinstr rs) m
       | _ => Stuck
       end
   | Pbl ident sg =>
-      Next (rs#LR <- (Val.add rs#PC Vone) #PC <- (Genv.symbol_address ge ident Int.zero)) m
+      Next (rs#LR <- (Val.offset_ptr rs#PC Ptrofs.one) #PC <- (Genv.symbol_address ge ident Ptrofs.zero)) m
   | Pbs ident sg =>
-      Next (rs#PC <- (Genv.symbol_address ge ident Int.zero)) m
+      Next (rs#PC <- (Genv.symbol_address ge ident Ptrofs.zero)) m
   | Pblr =>
       Next (rs#PC <- (rs#LR)) m
   | Pbt bit lbl =>
@@ -703,7 +703,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pextsh rd r1 =>
       Next (nextinstr (rs#rd <- (Val.sign_ext 16 rs#r1))) m
   | Pfreeframe sz ofs =>
-      match Mem.loadv Mint32 m (Val.add rs#GPR1 (Vint ofs)) with
+      match Mem.loadv Mint32 m (Val.offset_ptr rs#GPR1 ofs) with
       | None => Stuck
       | Some v =>
           match rs#GPR1 with
@@ -977,7 +977,7 @@ Inductive extcall_arg (rs: regset) (m: mem): loc -> val -> Prop :=
   | extcall_arg_stack: forall ofs ty bofs v,
       bofs = Stacklayout.fe_ofs_arg + 4 * ofs ->
       Mem.loadv (chunk_of_type ty) m
-                (Val.add (rs (IR GPR1)) (Vint (Int.repr bofs))) = Some v ->
+                (Val.offset_ptr (rs (IR GPR1)) (Ptrofs.repr bofs)) = Some v ->
       extcall_arg rs m (S Outgoing ofs ty) v.
 
 Inductive extcall_arg_pair (rs: regset) (m: mem): rpair loc -> val -> Prop :=
@@ -1006,14 +1006,14 @@ Inductive step: state -> trace -> state -> Prop :=
       forall b ofs f i rs m rs' m',
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
-      find_instr (Int.unsigned ofs) f.(fn_code) = Some i ->
+      find_instr (Ptrofs.unsigned ofs) f.(fn_code) = Some i ->
       exec_instr f i rs m = Next rs' m' ->
       step (State rs m) E0 (State rs' m')
   | exec_step_builtin:
       forall b ofs f ef args res rs m vargs t vres rs' m',
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
-      find_instr (Int.unsigned ofs) f.(fn_code) = Some (Pbuiltin ef args res) ->
+      find_instr (Ptrofs.unsigned ofs) f.(fn_code) = Some (Pbuiltin ef args res) ->
       eval_builtin_args ge rs (rs GPR1) m args vargs ->
       external_call ef ge vargs m t vres m' ->
       rs' = nextinstr
@@ -1022,7 +1022,7 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State rs m) t (State rs' m')
   | exec_step_external:
       forall b ef args res rs m t rs' m',
-      rs PC = Vptr b Int.zero ->
+      rs PC = Vptr b Ptrofs.zero ->
       Genv.find_funct_ptr ge b = Some (External ef) ->
       external_call ef ge args m t res m' ->
       extcall_arguments rs m (ef_sig ef) args ->
@@ -1039,14 +1039,14 @@ Inductive initial_state (p: program): state -> Prop :=
       let ge := Genv.globalenv p in
       let rs0 :=
         (Pregmap.init Vundef)
-        # PC <- (Genv.symbol_address ge p.(prog_main) Int.zero)
-        # LR <- Vzero
-        # GPR1 <- Vzero in
+        # PC <- (Genv.symbol_address ge p.(prog_main) Ptrofs.zero)
+        # LR <- Vnullptr
+        # GPR1 <- Vnullptr in
       initial_state p (State rs0 m0).
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m r,
-      rs#PC = Vzero ->
+      rs#PC = Vnullptr ->
       rs#GPR3 = Vint r ->
       final_state (State rs m) r.
 
@@ -1105,7 +1105,7 @@ Ltac Equalities :=
 (* initial states *)
   inv H; inv H0. f_equal. congruence.
 (* final no step *)
-  inv H. unfold Vzero in H0. red; intros; red; intros. inv H; congruence.
+  inv H. red; intros; red; intros. inv H; rewrite H0 in *; discriminate. 
 (* final states *)
   inv H; inv H0. congruence.
 Qed.

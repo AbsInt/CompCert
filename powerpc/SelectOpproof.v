@@ -27,6 +27,7 @@ Require Import CminorSel.
 Require Import SelectOp.
 
 Open Local Scope cminorsel_scope.
+Local Transparent Archi.ptr64.
 
 (** * Useful lemmas and tactics *)
 
@@ -124,7 +125,7 @@ Qed.
 
 Theorem eval_addrstack:
   forall le ofs,
-  exists v, eval_expr ge sp e m le (addrstack ofs) v /\ Val.lessdef (Val.add sp (Vint ofs)) v.
+  exists v, eval_expr ge sp e m le (addrstack ofs) v /\ Val.lessdef (Val.offset_ptr sp ofs) v.
 Proof.
   intros. unfold addrstack. econstructor; split.
   EvalOp. simpl; eauto.
@@ -154,19 +155,26 @@ Proof.
   TrivialExists.
 Qed.
 
+Remark shift_symbol_address:
+  forall id ofs delta,
+  Genv.symbol_address ge id (Ptrofs.add ofs (Ptrofs.of_int delta)) = Val.add (Genv.symbol_address ge id ofs) (Vint delta).
+Proof.
+  intros. unfold Genv.symbol_address. destruct (Genv.find_symbol ge id); auto.
+Qed.   
+
 Theorem eval_addimm:
   forall n, unary_constructor_sound (addimm n) (fun x => Val.add x (Vint n)).
 Proof.
   red; unfold addimm; intros until x.
   predSpec Int.eq Int.eq_spec n Int.zero.
   subst n. intros. exists x; split; auto.
-  destruct x; simpl; auto. rewrite Int.add_zero. auto. rewrite Int.add_zero. auto.
+  destruct x; simpl; auto. rewrite Int.add_zero. auto. rewrite Ptrofs.add_zero. auto.
   case (addimm_match a); intros; InvEval; simpl; TrivialExists; simpl.
   rewrite Int.add_commut. auto.
-  unfold Genv.symbol_address. destruct (Genv.find_symbol ge s); simpl; auto. rewrite Int.add_commut; auto.
-  rewrite Val.add_assoc. rewrite Int.add_commut. auto.
+  unfold Genv.symbol_address. destruct (Genv.find_symbol ge s); simpl; auto. rewrite Ptrofs.add_commut; auto.
+  destruct sp; simpl; auto. rewrite Ptrofs.add_assoc. do 3 f_equal. apply Ptrofs.add_commut.   
   subst. rewrite Val.add_assoc. rewrite Int.add_commut. auto.
-  subst. rewrite Int.add_commut. rewrite Genv.shift_symbol_address. rewrite ! Val.add_assoc. f_equal. f_equal. apply Val.add_commut.
+  subst. rewrite Ptrofs.add_commut. rewrite shift_symbol_address. rewrite ! Val.add_assoc. f_equal. f_equal. apply Val.add_commut.
 Qed.
 
 Theorem eval_addsymbol:
@@ -174,8 +182,8 @@ Theorem eval_addsymbol:
 Proof.
   red; unfold addsymbol; intros until x.
   case (addsymbol_match a); intros; InvEval; simpl; TrivialExists; simpl.
-  rewrite Genv.shift_symbol_address. auto.
-  rewrite Genv.shift_symbol_address. subst x. rewrite Val.add_assoc. f_equal. f_equal.
+  rewrite shift_symbol_address. auto.
+  rewrite shift_symbol_address. subst x. rewrite Val.add_assoc. f_equal. f_equal.
   apply Val.add_commut.
 Qed.
 
@@ -199,12 +207,12 @@ Proof.
   repeat rewrite Val.add_assoc. decEq. apply Val.add_commut.
 - subst. TrivialExists.
     econstructor. EvalOp. simpl. reflexivity. econstructor. eauto. constructor.
-    simpl. repeat rewrite Val.add_assoc. decEq; decEq.
-    rewrite Val.add_commut. rewrite Val.add_permut. auto.
+    simpl. rewrite Val.add_permut, Val.add_commut. do 2 f_equal.  
+    destruct sp; simpl; auto. rewrite Ptrofs.add_assoc; auto.
 - replace (Val.add x y) with
-    (Val.add (Genv.symbol_address ge s (Int.add ofs n)) (Val.add v1 v0)).
+    (Val.add (Genv.symbol_address ge s (Ptrofs.add ofs (Ptrofs.of_int n))) (Val.add v1 v0)).
   apply eval_addsymbol; auto. EvalOp.
-  subst. rewrite Genv.shift_symbol_address. rewrite ! Val.add_assoc. f_equal.
+  subst. rewrite shift_symbol_address. rewrite ! Val.add_assoc. f_equal.
   rewrite Val.add_permut. f_equal. apply Val.add_commut.
 - subst. rewrite Val.add_assoc. apply eval_addsymbol. EvalOp.
 - subst. rewrite <- Val.add_assoc. apply eval_addimm. EvalOp.
@@ -1000,9 +1008,9 @@ Proof.
   exists (v1 :: v0 :: nil). split. eauto with evalexpr. simpl. congruence.
   exists (Vptr b ofs :: nil). split.
   constructor. EvalOp. simpl; congruence. constructor.
-  simpl. rewrite Int.add_zero. auto.
+  simpl. rewrite Ptrofs.add_zero. auto.
   exists (v :: nil). split. eauto with evalexpr. subst v. simpl.
-  rewrite Int.add_zero. auto.
+  rewrite Ptrofs.add_zero. auto.
 Qed.
 
 Theorem eval_builtin_arg:

@@ -108,11 +108,11 @@ Qed.
 
 Lemma needs_of_operation_sound:
   forall op args v nv args',
-  eval_operation ge (Vptr sp Int.zero) op args m = Some v ->
+  eval_operation ge (Vptr sp Ptrofs.zero) op args m = Some v ->
   vagree_list args args' (needs_of_operation op nv) ->
   nv <> Nothing ->
   exists v',
-     eval_operation ge (Vptr sp Int.zero) op args' m' = Some v'
+     eval_operation ge (Vptr sp Ptrofs.zero) op args' m' = Some v'
   /\ vagree v v' nv.
 Proof.
   unfold needs_of_operation; intros; destruct op; try (eapply default_needs_of_operation_sound; eauto; fail);
@@ -147,7 +147,7 @@ Qed.
 Lemma operation_is_redundant_sound:
   forall op nv arg1 args v arg1' args',
   operation_is_redundant op nv = true ->
-  eval_operation ge (Vptr sp Int.zero) op (arg1 :: args) m = Some v ->
+  eval_operation ge (Vptr sp Ptrofs.zero) op (arg1 :: args) m = Some v ->
   vagree_list (arg1 :: args) (arg1' :: args') (needs_of_operation op nv) ->
   vagree v arg1' nv.
 Proof.
