@@ -31,12 +31,13 @@ Require Import Op.
 
 Inductive mreg: Type :=
   (** Allocatable integer regs *)
-  | AX: mreg | BX: mreg | CX: mreg | DX: mreg | SI: mreg | DI: mreg | BP: mreg
+  | AX | BX | CX | DX | SI | DI | BP
+  | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15  (**r only in 64-bit mode *)
   (** Allocatable float regs *)
-  | X0: mreg | X1: mreg | X2: mreg | X3: mreg
-  | X4: mreg | X5: mreg | X6: mreg | X7: mreg
+  | X0 | X1 | X2 | X3 | X4 | X5 | X6 | X7
+  | X8 | X9 | X10 | X11 | X12 | X13 | X14 | X15  (**r only in 64-bit mode *)
   (** Special float reg *)
-  | FP0: mreg (**r top of x87 FP stack *).
+  | FP0.
 
 Lemma mreg_eq: forall (r1 r2: mreg), {r1 = r2} + {r1 <> r2}.
 Proof. decide equality. Defined.
@@ -44,7 +45,9 @@ Global Opaque mreg_eq.
 
 Definition all_mregs :=
      AX :: BX :: CX :: DX :: SI :: DI :: BP
+  :: R8 :: R9 :: R10 :: R11 :: R12 :: R13 :: R14 :: R15
   :: X0 :: X1 :: X2 :: X3 :: X4 :: X5 :: X6 :: X7
+  :: X8 :: X9 :: X10 :: X11 :: X12 :: X13 :: X14 :: X15
   :: FP0 :: nil.
 
 Lemma all_mregs_complete:
@@ -55,7 +58,7 @@ Proof.
 Qed.
 
 Instance Decidable_eq_mreg : forall (x y: mreg), Decidable (eq x y) := Decidable_eq mreg_eq.
-
+  
 Instance Finite_mreg : Finite mreg := {
   Finite_elements := all_mregs;
   Finite_elements_spec := all_mregs_complete
@@ -63,8 +66,11 @@ Instance Finite_mreg : Finite mreg := {
 
 Definition mreg_type (r: mreg): typ :=
   match r with
-  | AX | BX | CX | DX | SI | DI | BP => Tany32
-  | X0 | X1 | X2 | X3 | X4 | X5 | X6 | X7 | FP0 => Tany64
+  | AX | BX | CX | DX | SI | DI | BP => if Archi.ptr64 then Tany64 else Tany32
+  | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 => Tany64
+  | X0 | X1 | X2 | X3 | X4 | X5 | X6 | X7 => Tany64
+  | X8 | X9 | X10 | X11 | X12 | X13 | X14 | X15 => Tany64
+  | FP0 => Tany64
   end.
 
 Local Open Scope positive_scope.
@@ -75,9 +81,10 @@ Module IndexedMreg <: INDEXED_TYPE.
   Definition index (r: mreg): positive :=
     match r with
     | AX => 1 | BX => 2 | CX => 3 | DX => 4 | SI => 5 | DI => 6 | BP => 7
-    | X0 => 8 | X1 => 9 | X2 => 10 | X3 => 11
-    | X4 => 12 | X5 => 13 | X6 => 14 | X7 => 15
-    | FP0 => 16
+    | R8 => 8 | R9 => 9 | R10 => 10 | R11 => 11 | R12 => 12 | R13 => 13 | R14 => 14 | R15 => 15
+    | X0 => 16 | X1 => 17 | X2 => 18 | X3 => 19 | X4 => 20 | X5 => 21 | X6 => 22 | X7 => 23
+    | X8 => 24 | X9 => 25 | X10 => 26 | X11 => 27 | X12 => 28 | X13 => 29 | X14 => 30 | X15 => 31
+    | FP0 => 32
     end.
   Lemma index_inj:
     forall r1 r2, index r1 = index r2 -> r1 = r2.
@@ -94,10 +101,16 @@ Definition is_stack_reg (r: mreg) : bool :=
 Local Open Scope string_scope.
 
 Definition register_names :=
+  ("RAX", AX) :: ("RBX", BX) :: ("RCX", CX) :: ("RDX", DX) ::
+  ("RSI", SI) :: ("RDI", DI) :: ("RBP", BP) ::
   ("EAX", AX) :: ("EBX", BX) :: ("ECX", CX) :: ("EDX", DX) ::
   ("ESI", SI) :: ("EDI", DI) :: ("EBP", BP) ::
+  ("R8", R8) :: ("R9", R9) :: ("R10", R10) :: ("R11", R11) ::
+  ("R12", R12) :: ("R13", R13) :: ("R14", R14) :: ("R15", R15) ::
   ("XMM0", X0) :: ("XMM1", X1) :: ("XMM2", X2) :: ("XMM3", X3) ::
   ("XMM4", X4) :: ("XMM5", X5) :: ("XMM6", X6) :: ("XMM7", X7) ::
+  ("XMM8", X8) :: ("XMM9", X9) :: ("XMM10", X10) :: ("XMM11", X11) ::
+  ("XMM12", X12) :: ("XMM13", X13) :: ("XMM14", X14) :: ("XMM15", X15) ::
   ("ST0", FP0) :: nil.
 
 Definition register_by_name (s: string) : option mreg :=
@@ -112,7 +125,7 @@ Definition register_by_name (s: string) : option mreg :=
 
 Definition destroyed_by_op (op: operation): list mreg :=
   match op with
-  | Ocast8signed | Ocast8unsigned | Ocast16signed | Ocast16unsigned => AX :: nil
+  | Ocast8signed | Ocast8unsigned => AX :: nil
   | Omulhs => AX :: DX :: nil
   | Omulhu => AX :: DX :: nil
   | Odiv => AX :: DX :: nil
@@ -120,6 +133,10 @@ Definition destroyed_by_op (op: operation): list mreg :=
   | Omod => AX :: DX :: nil
   | Omodu => AX :: DX :: nil
   | Oshrximm _ => CX :: nil
+  | Odivl => AX :: DX :: nil
+  | Odivlu => AX :: DX :: nil
+  | Omodl => AX :: DX :: nil
+  | Omodlu => AX :: DX :: nil
   | Ocmp _ => AX :: CX :: nil
   | _ => nil
   end.
@@ -129,9 +146,9 @@ Definition destroyed_by_load (chunk: memory_chunk) (addr: addressing): list mreg
 
 Definition destroyed_by_store (chunk: memory_chunk) (addr: addressing): list mreg :=
   match chunk with
-  | Mint8signed | Mint8unsigned => AX :: CX :: nil
+  | Mint8signed | Mint8unsigned => if Archi.ptr64 then nil else AX :: CX :: nil
   | _ => nil
-  end.
+  end. 
 
 Definition destroyed_by_cond (cond: condition): list mreg :=
   nil.
@@ -153,21 +170,21 @@ Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_memcpy sz al =>
       if zle sz 32 then CX :: X7 :: nil else CX :: SI :: DI :: nil
-  | EF_vstore (Mint8unsigned|Mint8signed) => AX :: CX :: nil
+  | EF_vstore (Mint8unsigned|Mint8signed) =>
+      if Archi.ptr64 then nil else AX :: CX :: nil
   | EF_builtin name sg =>
-      if string_dec name "__builtin_write16_reversed"
-      || string_dec name "__builtin_write32_reversed"
-      then CX :: DX :: nil else nil
+      if string_dec name "__builtin_va_start" then AX :: nil
+      else if string_dec name "__builtin_write16_reversed"
+           || string_dec name "__builtin_write32_reversed"
+      then CX :: DX :: nil
+      else nil
   | EF_inline_asm txt sg clob => destroyed_by_clobber clob
   | _ => nil
   end.
 
 Definition destroyed_at_function_entry: list mreg :=
   (* must include [destroyed_by_setstack ty] *)
-  DX :: FP0 :: nil.
-
-Definition destroyed_at_indirect_call: list mreg :=
-  nil.
+  AX :: FP0 :: nil.
 
 Definition destroyed_by_setstack (ty: typ): list mreg :=
   match ty with
@@ -175,8 +192,11 @@ Definition destroyed_by_setstack (ty: typ): list mreg :=
   | _ => nil
   end.
 
+Definition destroyed_at_indirect_call: list mreg :=
+  nil.
+
 Definition temp_for_parent_frame: mreg :=
-  DX.
+  AX.
 
 Definition mregs_for_operation (op: operation): list (option mreg) * option mreg :=
   match op with
@@ -190,6 +210,13 @@ Definition mregs_for_operation (op: operation): list (option mreg) * option mreg
   | Oshr => (None :: Some CX :: nil, None)
   | Oshru => (None :: Some CX :: nil, None)
   | Oshrximm _ => (Some AX :: nil, Some AX)
+  | Odivl => (Some AX :: Some CX :: nil, Some AX)
+  | Odivlu => (Some AX :: Some CX :: nil, Some AX)
+  | Omodl => (Some AX :: Some CX :: nil, Some DX)
+  | Omodlu => (Some AX :: Some CX :: nil, Some DX)
+  | Oshll => (None :: Some CX :: nil, None)
+  | Oshrl => (None :: Some CX :: nil, None)
+  | Oshrlu => (None :: Some CX :: nil, None)
   | _ => (nil, None)
   end.
 
@@ -205,6 +232,8 @@ Definition mregs_for_builtin (ef: external_function): list (option mreg) * list 
        (Some DX :: Some AX :: Some CX :: Some BX :: nil, Some DX :: Some AX :: nil)
      else if string_dec name "__builtin_mull" then
        (Some AX :: Some DX :: nil, Some DX :: Some AX :: nil)
+     else if string_dec name "__builtin_va_start" then
+       (Some DX :: nil, nil)
      else
        (nil, nil)
   | _ => (nil, nil)
@@ -213,7 +242,6 @@ Definition mregs_for_builtin (ef: external_function): list (option mreg) * list 
 Global Opaque
     destroyed_by_op destroyed_by_load destroyed_by_store
     destroyed_by_cond destroyed_by_jumptable destroyed_by_builtin
-    destroyed_at_indirect_call
     destroyed_by_setstack destroyed_at_function_entry temp_for_parent_frame
     mregs_for_operation mregs_for_builtin.
 
@@ -225,6 +253,7 @@ Definition two_address_op (op: operation) : bool :=
   match op with
   | Omove => false
   | Ointconst _ => false
+  | Olongconst _ => false
   | Ofloatconst _ => false
   | Osingleconst _ => false
   | Oindirectsymbol _ => false
@@ -259,6 +288,35 @@ Definition two_address_op (op: operation) : bool :=
   | Ororimm _ => true
   | Oshldimm _ => true
   | Olea addr => false
+  | Omakelong => true
+  | Olowlong => true
+  | Ohighlong => true
+  | Ocast32signed => false
+  | Ocast32unsigned => false
+  | Onegl => true
+  | Oaddlimm _ => true
+  | Osubl => true
+  | Omull => true
+  | Omullimm _ => true
+  | Odivl => false
+  | Odivlu => false
+  | Omodl => false
+  | Omodlu => false
+  | Oandl => true
+  | Oandlimm _ => true
+  | Oorl => true
+  | Oorlimm _ => true
+  | Oxorl => true
+  | Oxorlimm _ => true
+  | Onotl => true
+  | Oshll => true
+  | Oshllimm _ => true
+  | Oshrl => true
+  | Oshrlimm _ => true
+  | Oshrlu => true
+  | Oshrluimm _ => true
+  | Ororlimm _ => true
+  | Oleal addr => false
   | Onegf => true
   | Oabsf => true
   | Oaddf => true
@@ -277,9 +335,10 @@ Definition two_address_op (op: operation) : bool :=
   | Ofloatofint => false
   | Ointofsingle => false
   | Osingleofint => false
-  | Omakelong => false
-  | Olowlong => false
-  | Ohighlong => false
+  | Olongoffloat => false
+  | Ofloatoflong => false
+  | Olongofsingle => false
+  | Osingleoflong => false
   | Ocmp c => false
   end.
 

@@ -2,8 +2,8 @@
 (*                                                                     *)
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
-(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
-(*          Jacques-Henri Jourdan, INRIA Paris-Rocquencourt            *)
+(*                Xavier Leroy, INRIA Paris                            *)
+(*                Jacques-Henri Jourdan, INRIA Paris                   *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
 (*  Automatique.  All rights reserved.  This file is distributed       *)
@@ -20,10 +20,19 @@ Require Import ZArith.
 Require Import Fappli_IEEE.
 Require Import Fappli_IEEE_bits.
 
+Parameter ptr64: bool.
+
 Definition big_endian := false.
 
-Notation align_int64 := 4%Z (only parsing).
-Notation align_float64 := 4%Z (only parsing).
+Definition align_int64 := if ptr64 then 8%Z else 4%Z.
+Definition align_float64 := if ptr64 then 8%Z else 4%Z.
+
+Definition splitlong := negb ptr64.
+
+Lemma splitlong_ptr32: splitlong = true -> ptr64 = false.
+Proof.
+  unfold splitlong. destruct ptr64; simpl; congruence. 
+Qed.
 
 Program Definition default_pl_64 : bool * nan_pl 53 :=
   (true, iter_nat 51 _ xO xH).
@@ -39,7 +48,7 @@ Definition choose_binop_pl_32 (s1: bool) (pl1: nan_pl 24) (s2: bool) (pl2: nan_p
 
 Definition float_of_single_preserves_sNaN := false.
 
-Global Opaque big_endian
+Global Opaque ptr64 big_endian splitlong
               default_pl_64 choose_binop_pl_64
               default_pl_32 choose_binop_pl_32
               float_of_single_preserves_sNaN.

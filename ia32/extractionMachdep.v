@@ -10,11 +10,22 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(* Additional extraction directives specific to the IA32 port *)
+(* Additional extraction directives specific to the x86-64 port *)
 
-Require SelectOp.
+Require Archi SelectOp ConstpropOp.
+
+(* Archi *)
+
+Extract Constant Archi.ptr64 =>
+  "Configuration.model = ""64"" ".
 
 (* SelectOp *)
 
 Extract Constant SelectOp.symbol_is_external =>
   "fun id -> Configuration.system = ""macosx"" && C2C.atom_is_extern id".
+
+(* ConstpropOp *)
+
+Extract Constant ConstpropOp.symbol_is_external =>
+  "fun id -> Configuration.system = ""macosx"" && C2C.atom_is_extern id".
+

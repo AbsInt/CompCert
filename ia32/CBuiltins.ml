@@ -19,12 +19,15 @@ open C
 
 let builtins = {
   Builtins.typedefs = [
-    "__builtin_va_list", TPtr(TVoid [], [])
+    (* Actually a struct passed by reference; equivalent to 3 64-bit words *)
+    "__builtin_va_list", TArray(TInt(IULong, []), Some 3L, [])
   ];
   Builtins.functions = [
     (* Integer arithmetic *)
     "__builtin_bswap",
       (TInt(IUInt, []), [TInt(IUInt, [])], false);
+    "__builtin_bswap64",
+      (TInt(IULongLong, []), [TInt(IULongLong, [])], false);
     "__builtin_bswap32",
       (TInt(IUInt, []), [TInt(IUInt, [])], false);
     "__builtin_bswap16",
@@ -79,8 +82,8 @@ let builtins = {
   ]
 }
 
-let size_va_list = 4
-let va_list_scalar = true
+let size_va_list = 3*8
+let va_list_scalar = false
 
 (* Expand memory references inside extended asm statements.  Used in C2C. *)
 

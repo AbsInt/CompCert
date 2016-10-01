@@ -2,7 +2,7 @@
 (*                                                                     *)
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
-(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*                Xavier Leroy, INRIA Paris                            *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
 (*  Automatique.  All rights reserved.  This file is distributed       *)
@@ -10,19 +10,13 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Import Coqlib.
-Require Import Compopts.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Globalenvs.
-Require Import Op.
-Require Import ValueDomain.
-Require Import RTL.
+Require Import Coqlib Compopts.
+Require Import AST Integers Floats Values Memory Globalenvs.
+Require Import Op RTL ValueDomain.
 
-(** Value analysis for IA32 operators *)
+Local Transparent Archi.ptr64.
+
+(** Value analysis for x86_64 operators *)
 
 Definition eval_static_condition (cond: condition) (vl: list aval): abool :=
   match cond, vl with
@@ -30,6 +24,10 @@ Definition eval_static_condition (cond: condition) (vl: list aval): abool :=
   | Ccompu c, v1 :: v2 :: nil => cmpu_bool c v1 v2
   | Ccompimm c n, v1 :: nil => cmp_bool c v1 (I n)
   | Ccompuimm c n, v1 :: nil => cmpu_bool c v1 (I n)
+  | Ccompl c, v1 :: v2 :: nil => cmpl_bool c v1 v2
+  | Ccomplu c, v1 :: v2 :: nil => cmplu_bool c v1 v2
+  | Ccomplimm c n, v1 :: nil => cmpl_bool c v1 (L n)
+  | Ccompluimm c n, v1 :: nil => cmplu_bool c v1 (L n)
   | Ccompf c, v1 :: v2 :: nil => cmpf_bool c v1 v2
   | Cnotcompf c, v1 :: v2 :: nil => cnot (cmpf_bool c v1 v2)
   | Ccompfs c, v1 :: v2 :: nil => cmpfs_bool c v1 v2
@@ -39,26 +37,45 @@ Definition eval_static_condition (cond: condition) (vl: list aval): abool :=
   | _, _ => Bnone
   end.
 
-Definition eval_static_addressing (addr: addressing) (vl: list aval): aval :=
+Definition eval_static_addressing_32 (addr: addressing) (vl: list aval): aval :=
   match addr, vl with
-  | Aindexed n, v1::nil => add v1 (I n)
-  | Aindexed2 n, v1::v2::nil => add (add v1 v2) (I n)
-  | Ascaled sc ofs, v1::nil => add (mul v1 (I sc)) (I ofs)
-  | Aindexed2scaled sc ofs, v1::v2::nil => add v1 (add (mul v2 (I sc)) (I ofs))
+  | Aindexed n, v1::nil => add v1 (I (Int.repr n))
+  | Aindexed2 n, v1::v2::nil => add (add v1 v2) (I (Int.repr n))
+  | Ascaled sc ofs, v1::nil => add (mul v1 (I (Int.repr sc))) (I (Int.repr ofs))
+  | Aindexed2scaled sc ofs, v1::v2::nil => add v1 (add (mul v2 (I (Int.repr sc))) (I (Int.repr ofs)))
   | Aglobal s ofs, nil => Ptr (Gl s ofs)
   | Abased s ofs, v1::nil => add (Ptr (Gl s ofs)) v1
-  | Abasedscaled sc s ofs, v1::nil => add (Ptr (Gl s ofs)) (mul v1 (I sc))
+  | Abasedscaled sc s ofs, v1::nil => add (Ptr (Gl s ofs)) (mul v1 (I (Int.repr sc)))
   | Ainstack ofs, nil => Ptr(Stk ofs)
   | _, _ => Vbot
   end.
+
+Definition eval_static_addressing_64 (addr: addressing) (vl: list aval): aval :=
+  match addr, vl with
+  | Aindexed n, v1::nil => addl v1 (L (Int64.repr n))
+  | Aindexed2 n, v1::v2::nil => addl (addl v1 v2) (L (Int64.repr n))
+  | Ascaled sc ofs, v1::nil => addl (mull v1 (L (Int64.repr sc))) (L (Int64.repr ofs))
+  | Aindexed2scaled sc ofs, v1::v2::nil => addl v1 (addl (mull v2 (L (Int64.repr sc))) (L (Int64.repr ofs)))
+  | Aglobal s ofs, nil => Ptr (Gl s ofs)
+  | Abased s ofs, v1::nil => addl (Ptr (Gl s ofs)) v1
+  | Abasedscaled sc s ofs, v1::nil => addl (Ptr (Gl s ofs)) (mull v1 (L (Int64.repr sc)))
+  | Ainstack ofs, nil => Ptr(Stk ofs)
+  | _, _ => Vbot
+  end.
+
+Definition eval_static_addressing (addr: addressing) (vl: list aval): aval :=
+  if Archi.ptr64
+  then eval_static_addressing_64 addr vl
+  else eval_static_addressing_32 addr vl.
 
 Definition eval_static_operation (op: operation) (vl: list aval): aval :=
   match op, vl with
   | Omove, v1::nil => v1
   | Ointconst n, nil => I n
+  | Olongconst n, nil => L n
   | Ofloatconst n, nil => if propagate_float_constants tt then F n else ntop
   | Osingleconst n, nil => if propagate_float_constants tt then FS n else ntop
-  | Oindirectsymbol id, nil => Ifptr (Gl id Int.zero)
+  | Oindirectsymbol id, nil => Ifptr (Gl id Ptrofs.zero)
   | Ocast8signed, v1 :: nil => sign_ext 8 v1
   | Ocast8unsigned, v1 :: nil => zero_ext 8 v1
   | Ocast16signed, v1 :: nil => sign_ext 16 v1
@@ -89,7 +106,36 @@ Definition eval_static_operation (op: operation) (vl: list aval): aval :=
   | Oshruimm n, v1::nil => shru v1 (I n)
   | Ororimm n, v1::nil => ror v1 (I n)
   | Oshldimm n, v1::v2::nil => or (shl v1 (I n)) (shru v2 (I (Int.sub Int.iwordsize n)))
-  | Olea addr, _ => eval_static_addressing addr vl
+  | Olea addr, _ => eval_static_addressing_32 addr vl
+  | Omakelong, v1::v2::nil => longofwords v1 v2
+  | Olowlong, v1::nil => loword v1
+  | Ohighlong, v1::nil => hiword v1
+  | Ocast32signed, v1::nil => longofint v1
+  | Ocast32unsigned, v1::nil => longofintu v1
+  | Onegl, v1::nil => negl v1
+  | Oaddlimm n, v1::nil => addl v1 (L n)
+  | Osubl, v1::v2::nil => subl v1 v2
+  | Omull, v1::v2::nil => mull v1 v2
+  | Omullimm n, v1::nil => mull v1 (L n)
+  | Odivl, v1::v2::nil => divls v1 v2
+  | Odivlu, v1::v2::nil => divlu v1 v2
+  | Omodl, v1::v2::nil => modls v1 v2
+  | Omodlu, v1::v2::nil => modlu v1 v2
+  | Oandl, v1::v2::nil => andl v1 v2
+  | Oandlimm n, v1::nil => andl v1 (L n)
+  | Oorl, v1::v2::nil => orl v1 v2
+  | Oorlimm n, v1::nil => orl v1 (L n)
+  | Oxorl, v1::v2::nil => xorl v1 v2
+  | Oxorlimm n, v1::nil => xorl v1 (L n)
+  | Onotl, v1::nil => notl v1
+  | Oshll, v1::v2::nil => shll v1 v2
+  | Oshllimm n, v1::nil => shll v1 (I n)
+  | Oshrl, v1::v2::nil => shrl v1 v2
+  | Oshrlimm n, v1::nil => shrl v1 (I n)
+  | Oshrlu, v1::v2::nil => shrlu v1 v2
+  | Oshrluimm n, v1::nil => shrlu v1 (I n)
+  | Ororlimm n, v1::nil => rorl v1 (I n)
+  | Oleal addr, _ => eval_static_addressing_64 addr vl
   | Onegf, v1::nil => negf v1
   | Oabsf, v1::nil => absf v1
   | Oaddf, v1::v2::nil => addf v1 v2
@@ -108,9 +154,10 @@ Definition eval_static_operation (op: operation) (vl: list aval): aval :=
   | Ofloatofint, v1::nil => floatofint v1
   | Ointofsingle, v1::nil => intofsingle v1
   | Osingleofint, v1::nil => singleofint v1
-  | Omakelong, v1::v2::nil => longofwords v1 v2
-  | Olowlong, v1::nil => loword v1
-  | Ohighlong, v1::nil => hiword v1
+  | Olongoffloat, v1::nil => longoffloat v1
+  | Ofloatoflong, v1::nil => floatoflong v1
+  | Olongofsingle, v1::nil => longofsingle v1
+  | Osingleoflong, v1::nil => singleoflong v1
   | Ocmp c, _ => of_optbool (eval_static_condition c vl)
   | _, _ => Vbot
   end.
@@ -128,8 +175,7 @@ Theorem eval_static_condition_sound:
   list_forall2 (vmatch bc) vargs aargs ->
   cmatch (eval_condition cond vargs m) (eval_static_condition cond aargs).
 Proof.
-  intros until aargs; intros VM.
-  inv VM.
+  intros until aargs; intros VM. inv VM.
   destruct cond; auto with va.
   inv H0.
   destruct cond; simpl; eauto with va.
@@ -162,23 +208,45 @@ Ltac InvHyps :=
   | [H: Some _ = Some _ |- _] => inv H
   | [H1: match ?vl with nil => _ | _ :: _ => _ end = Some _ ,
      H2: list_forall2 _ ?vl _ |- _ ] => inv H2; InvHyps
+  | [H: (if Archi.ptr64 then _ else _) = Some _ |- _] => destruct Archi.ptr64 eqn:?; InvHyps
   | _ => idtac
   end.
 
+Theorem eval_static_addressing_32_sound:
+  forall addr vargs vres aargs,
+  eval_addressing32 ge (Vptr sp Ptrofs.zero) addr vargs = Some vres ->
+  list_forall2 (vmatch bc) vargs aargs ->
+  vmatch bc vres (eval_static_addressing_32 addr aargs).
+Proof.
+  unfold eval_addressing32, eval_static_addressing_32; intros;
+  destruct addr; InvHyps; eauto with va.
+  rewrite Ptrofs.add_zero_l; eauto with va.
+Qed.
+
+Theorem eval_static_addressing_64_sound:
+  forall addr vargs vres aargs,
+  eval_addressing64 ge (Vptr sp Ptrofs.zero) addr vargs = Some vres ->
+  list_forall2 (vmatch bc) vargs aargs ->
+  vmatch bc vres (eval_static_addressing_64 addr aargs).
+Proof.
+  unfold eval_addressing64, eval_static_addressing_64; intros;
+  destruct addr; InvHyps; eauto with va.
+  rewrite Ptrofs.add_zero_l; eauto with va.
+Qed.
+
 Theorem eval_static_addressing_sound:
   forall addr vargs vres aargs,
-  eval_addressing ge (Vptr sp Int.zero) addr vargs = Some vres ->
+  eval_addressing ge (Vptr sp Ptrofs.zero) addr vargs = Some vres ->
   list_forall2 (vmatch bc) vargs aargs ->
   vmatch bc vres (eval_static_addressing addr aargs).
 Proof.
-  unfold eval_addressing, eval_static_addressing; intros;
-  destruct addr; InvHyps; eauto with va.
-  rewrite Int.add_zero_l; auto with va.
+  unfold eval_addressing, eval_static_addressing; intros.
+  destruct Archi.ptr64; eauto using eval_static_addressing_32_sound, eval_static_addressing_64_sound.
 Qed.
 
 Theorem eval_static_operation_sound:
   forall op vargs m vres aargs,
-  eval_operation ge (Vptr sp Int.zero) op vargs m = Some vres ->
+  eval_operation ge (Vptr sp Ptrofs.zero) op vargs m = Some vres ->
   list_forall2 (vmatch bc) vargs aargs ->
   vmatch bc vres (eval_static_operation op aargs).
 Proof.
@@ -186,7 +254,8 @@ Proof.
   destruct op; InvHyps; eauto with va.
   destruct (propagate_float_constants tt); constructor.
   destruct (propagate_float_constants tt); constructor.
-  eapply eval_static_addressing_sound; eauto.
+  eapply eval_static_addressing_32_sound; eauto.
+  eapply eval_static_addressing_64_sound; eauto.
   apply of_optbool_sound. eapply eval_static_condition_sound; eauto.
 Qed.
 

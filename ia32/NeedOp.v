@@ -1,15 +1,20 @@
-Require Import Coqlib.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Globalenvs.
-Require Import Op.
-Require Import NeedDomain.
-Require Import RTL.
+(* *********************************************************************)
+(*                                                                     *)
+(*              The Compcert verified compiler                         *)
+(*                                                                     *)
+(*                 Xavier Leroy, INRIA Paris                           *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique.  All rights reserved.  This file is distributed       *)
+(*  under the terms of the INRIA Non-Commercial License Agreement.     *)
+(*                                                                     *)
+(* *********************************************************************)
 
-(** Neededness analysis for IA32 operators *)
+(** Neededness analysis for x86_64 operators *)
+
+Require Import Coqlib.
+Require Import AST Integers Floats Values Memory Globalenvs.
+Require Import Op NeedDomain RTL.
 
 Definition op1 (nv: nval) := nv :: nil.
 Definition op2 (nv: nval) := nv :: nv :: nil.
@@ -20,7 +25,7 @@ Definition needs_of_condition (cond: condition): list nval :=
   | _ => nil
   end.
 
-Definition needs_of_addressing (addr: addressing) (nv: nval): list nval :=
+Definition needs_of_addressing_32 (addr: addressing) (nv: nval): list nval :=
   match addr with
   | Aindexed n => op1 (modarith nv)
   | Aindexed2 n => op2 (modarith nv)
@@ -32,10 +37,26 @@ Definition needs_of_addressing (addr: addressing) (nv: nval): list nval :=
   | Ainstack ofs => nil
   end.
 
+Definition needs_of_addressing_64 (addr: addressing) (nv: nval): list nval :=
+  match addr with
+  | Aindexed n => op1 (default nv)
+  | Aindexed2 n => op2 (default nv)
+  | Ascaled sc ofs => op1 (default nv)
+  | Aindexed2scaled sc ofs => op2 (default nv)
+  | Aglobal s ofs => nil
+  | Abased s ofs => op1 (default nv)
+  | Abasedscaled sc s ofs => op1 (default nv)
+  | Ainstack ofs => nil
+  end.
+
+Definition needs_of_addressing (addr: addressing) (nv: nval): list nval :=
+  if Archi.ptr64 then needs_of_addressing_64 addr nv else needs_of_addressing_32 addr nv.
+
 Definition needs_of_operation (op: operation) (nv: nval): list nval :=
   match op with
   | Omove => op1 nv
   | Ointconst n => nil
+  | Olongconst n => nil
   | Ofloatconst n => nil
   | Osingleconst n => nil
   | Oindirectsymbol id => nil
@@ -64,15 +85,42 @@ Definition needs_of_operation (op: operation) (nv: nval): list nval :=
   | Oshruimm n => op1 (shruimm nv n)
   | Ororimm n => op1 (ror nv n)
   | Oshldimm n => op1 (default nv)
-  | Olea addr => needs_of_addressing addr nv
+  | Olea addr => needs_of_addressing_32 addr nv
+  | Omakelong => op2 (default nv)
+  | Olowlong | Ohighlong => op1 (default nv)
+  | Ocast32signed => op1 (default nv)
+  | Ocast32unsigned => op1 (default nv)
+  | Onegl => op1 (default nv)
+  | Oaddlimm _ => op1 (default nv)
+  | Osubl => op2 (default nv)
+  | Omull => op2 (default nv)
+  | Omullimm _ => op1 (default nv)
+  | Odivl => op2 (default nv)
+  | Odivlu => op2 (default nv)
+  | Omodl => op2 (default nv)
+  | Omodlu => op2 (default nv)
+  | Oandl => op2 (default nv)
+  | Oandlimm _ => op1 (default nv)
+  | Oorl => op2 (default nv)
+  | Oorlimm _ => op1 (default nv)
+  | Oxorl => op2 (default nv)
+  | Oxorlimm _ => op1 (default nv)
+  | Onotl => op1 (default nv)
+  | Oshll => op2 (default nv)
+  | Oshllimm _ => op1 (default nv)
+  | Oshrl => op2 (default nv)
+  | Oshrlimm _ => op1 (default nv)
+  | Oshrlu => op2 (default nv)
+  | Oshrluimm _ => op1 (default nv)
+  | Ororlimm _ => op1 (default nv)
+  | Oleal addr => needs_of_addressing_64 addr nv
   | Onegf | Oabsf => op1 (default nv)
   | Oaddf | Osubf | Omulf | Odivf => op2 (default nv)
   | Onegfs | Oabsfs => op1 (default nv)
   | Oaddfs | Osubfs | Omulfs | Odivfs => op2 (default nv)
   | Osingleoffloat | Ofloatofsingle => op1 (default nv)
   | Ointoffloat | Ofloatofint | Ointofsingle | Osingleofint => op1 (default nv)
-  | Omakelong => op2 (default nv)
-  | Olowlong | Ohighlong => op1 (default nv)
+  | Olongoffloat | Ofloatoflong | Olongofsingle | Osingleoflong => op1 (default nv)
   | Ocmp c => needs_of_condition c
   end.
 
@@ -117,19 +165,19 @@ Proof.
   try (eapply default_needs_of_condition_sound; eauto; fail);
   simpl in *; FuncInv; InvAgree.
 - eapply maskzero_sound; eauto.
-- destruct (Val.maskzero_bool v i) as [b'|] eqn:MZ; try discriminate.
+- destruct (Val.maskzero_bool v n) as [b'|] eqn:MZ; try discriminate.
   erewrite maskzero_sound; eauto.
 Qed.
 
-Lemma needs_of_addressing_sound:
-  forall (ge: genv) sp addr args v nv args',
-  eval_addressing ge (Vptr sp Int.zero) addr args = Some v ->
-  vagree_list args args' (needs_of_addressing addr nv) ->
+Lemma needs_of_addressing_32_sound:
+  forall sp addr args v nv args',
+  eval_addressing32 ge (Vptr sp Ptrofs.zero) addr args = Some v ->
+  vagree_list args args' (needs_of_addressing_32 addr nv) ->
   exists v',
-     eval_addressing ge (Vptr sp Int.zero) addr args' = Some v'
+     eval_addressing32 ge (Vptr sp Ptrofs.zero) addr args' = Some v'
   /\ vagree v v' nv.
 Proof.
-  unfold needs_of_addressing; intros.
+  unfold needs_of_addressing_32; intros.
   destruct addr; simpl in *; FuncInv; InvAgree; TrivialExists;
   auto using add_sound, mul_sound with na.
   apply add_sound; auto with na. apply add_sound; rewrite modarith_idem; auto.
@@ -137,13 +185,23 @@ Proof.
   apply mul_sound; rewrite modarith_idem; auto with na.
 Qed.
 
+(*
+Lemma needs_of_addressing_64_sound:
+  forall sp addr args v nv args',
+  eval_addressing64 ge (Vptr sp Ptrofs.zero) addr args = Some v ->
+  vagree_list args args' (needs_of_addressing_64 addr nv) ->
+  exists v',
+     eval_addressing64 ge (Vptr sp Ptrofs.zero) addr args' = Some v'
+  /\ vagree v v' nv.
+*)
+
 Lemma needs_of_operation_sound:
   forall op args v nv args',
-  eval_operation ge (Vptr sp Int.zero) op args m = Some v ->
+  eval_operation ge (Vptr sp Ptrofs.zero) op args m = Some v ->
   vagree_list args args' (needs_of_operation op nv) ->
   nv <> Nothing ->
   exists v',
-     eval_operation ge (Vptr sp Int.zero) op args' m' = Some v'
+     eval_operation ge (Vptr sp Ptrofs.zero) op args' m' = Some v'
   /\ vagree v v' nv.
 Proof.
   unfold needs_of_operation; intros; destruct op; try (eapply default_needs_of_operation_sound; eauto; fail);
@@ -166,8 +224,12 @@ Proof.
 - apply shrimm_sound; auto.
 - apply shruimm_sound; auto.
 - apply ror_sound; auto.
-- eapply needs_of_addressing_sound; eauto.
-- destruct (eval_condition c args m) as [b|] eqn:EC; simpl in H2.
+- eapply needs_of_addressing_32_sound; eauto.
+- change (eval_addressing64 ge (Vptr sp Ptrofs.zero) a args')
+    with (eval_operation ge (Vptr sp Ptrofs.zero) (Oleal a) args' m').
+  eapply default_needs_of_operation_sound; eauto. 
+  destruct a; simpl in H0; auto.
+- destruct (eval_condition cond args m) as [b|] eqn:EC; simpl in H2.
   erewrite needs_of_condition_sound by eauto.
   subst v; simpl. auto with na.
   subst v; auto with na.
@@ -176,7 +238,7 @@ Qed.
 Lemma operation_is_redundant_sound:
   forall op nv arg1 args v arg1' args',
   operation_is_redundant op nv = true ->
-  eval_operation ge (Vptr sp Int.zero) op (arg1 :: args) m = Some v ->
+  eval_operation ge (Vptr sp Ptrofs.zero) op (arg1 :: args) m = Some v ->
   vagree_list (arg1 :: args) (arg1' :: args') (needs_of_operation op nv) ->
   vagree v arg1' nv.
 Proof.

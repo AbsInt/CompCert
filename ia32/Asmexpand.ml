@@ -19,38 +19,60 @@ open Asmexpandaux
 open AST
 open Camlcoq
 open Datatypes
-open Integers
 
 exception Error of string
 
 (* Useful constants and helper functions *)
 
-let _0 = Int.zero
-let _1 = Int.one
+let _0 = Integers.Int.zero
+let _1 = Integers.Int.one
 let _2 = coqint_of_camlint 2l
 let _4 = coqint_of_camlint 4l
 let _8 = coqint_of_camlint 8l
+  
+let _0z = Z.zero
+let _1z = Z.one
+let _2z = Z.of_sint 2
+let _4z = Z.of_sint 4
+let _8z = Z.of_sint 8
+let _16z = Z.of_sint 16
 
-let stack_alignment () =
-  if Configuration.system = "macosx" then 16
-  else 8
+let stack_alignment () = 16
+
+(* Pseudo instructions for 32/64 bit compatibility *)
+
+let _Plea (r, addr) =
+  if Archi.ptr64 then Pleaq (r, addr) else Pleal (r, addr)
 
 (* SP adjustment to allocate or free a stack frame *)
 
-let int32_align n a =
-  if n >= 0l
-  then Int32.logand (Int32.add n (Int32.of_int (a-1))) (Int32.of_int (-a))
-  else Int32.logand n (Int32.of_int (-a))
+let align n a =
+  if n >= 0 then (n + a - 1) land (-a) else n land (-a)
 
-let sp_adjustment sz =
-  let sz = camlint_of_coqint sz in
+let sp_adjustment_32 sz =  
+  let sz = Z.to_int sz in
   (* Preserve proper alignment of the stack *)
-  let sz = int32_align sz (stack_alignment ()) in
+  let sz = align sz (stack_alignment ()) in
   (* The top 4 bytes have already been allocated by the "call" instruction. *)
-  let sz = Int32.sub sz 4l in
-  sz
+  sz - 4
 
-
+let sp_adjustment_64 sz =
+  let sz = Z.to_int sz in
+  if is_current_function_variadic() then begin
+    (* If variadic, add room for register save area, which must be 16-aligned *)
+    let ofs = align (sz - 8) 16 in
+    let sz = ofs + 176 (* save area *) + 8 (* return address *) in
+    (* Preserve proper alignment of the stack *)
+    let sz = align sz 16 in
+    (* The top 8 bytes have already been allocated by the "call" instruction. *)
+    (sz - 8, ofs)
+  end else begin
+    (* Preserve proper alignment of the stack *)
+    let sz = align sz 16 in
+    (* The top 8 bytes have already been allocated by the "call" instruction. *)
+    (sz - 8, -1)
+  end
+  
 (* Built-ins.  They come in two flavors:
    - annotation statements: take their arguments in registers or stack
    locations; generate no code;
@@ -69,24 +91,24 @@ let expand_annot_val txt targ args res =
   | _, _ ->
      raise (Error "ill-formed __builtin_annot_intval")
 
-(* Translate a builtin argument into an addressing mode *)
-
-let addressing_of_builtin_arg = function
-  | BA (IR r) -> Addrmode(Some r, None, Coq_inl Integers.Int.zero)
-  | BA_addrstack ofs -> Addrmode(Some ESP, None, Coq_inl ofs)
-  | BA_addrglobal(id, ofs) -> Addrmode(None, None, Coq_inr(id, ofs))
-  | _ -> assert false
-
 (* Operations on addressing modes *)
 
 let offset_addressing (Addrmode(base, ofs, cst)) delta =
   Addrmode(base, ofs,
            match cst with
-           | Coq_inl n -> Coq_inl(Int.add n delta)
-           | Coq_inr(id, n) -> Coq_inr(id, Int.add n delta))
+           | Coq_inl n -> Coq_inl(Z.add n delta)
+           | Coq_inr(id, n) -> Coq_inr(id, Integers.Ptrofs.add n delta))
 
 let linear_addr reg ofs = Addrmode(Some reg, None, Coq_inl ofs)
 let global_addr id ofs = Addrmode(None, None, Coq_inr(id, ofs))
+
+(* Translate a builtin argument into an addressing mode *)
+
+let addressing_of_builtin_arg = function
+  | BA (IR r) -> linear_addr r Z.zero
+  | BA_addrstack ofs -> linear_addr RSP (Integers.Ptrofs.unsigned ofs)
+  | BA_addrglobal(id, ofs) -> global_addr id ofs
+  | _ -> assert false
 
 (* Handling of memcpy *)
 
@@ -95,29 +117,34 @@ let global_addr id ofs = Addrmode(None, None, Coq_inr(id, ofs))
 
 let expand_builtin_memcpy_small sz al src dst =
   let rec copy src dst sz =
-    if sz >= 8 && !Clflags.option_ffpu then begin
-	emit (Pmovq_rm (XMM7, src));
-	emit (Pmovq_mr (dst, XMM7));
-        copy (offset_addressing src _8) (offset_addressing dst _8) (sz - 8)
+    if sz >= 8 && Archi.ptr64 then begin
+	emit (Pmovq_rm (RCX, src));
+	emit (Pmovq_mr (dst, RCX));
+        copy (offset_addressing src _8z) (offset_addressing dst _8z) (sz - 8)
+    end else if sz >= 8 && !Clflags.option_ffpu then begin
+	emit (Pmovsq_rm (XMM7, src));
+	emit (Pmovsq_mr (dst, XMM7));
+        copy (offset_addressing src _8z) (offset_addressing dst _8z) (sz - 8)
       end else if sz >= 4 then begin
-	emit (Pmov_rm (ECX, src));
-	emit (Pmov_mr (dst, ECX));
-        copy (offset_addressing src _4) (offset_addressing dst _4) (sz - 4)
+	emit (Pmovl_rm (RCX, src));
+	emit (Pmovl_mr (dst, RCX));
+        copy (offset_addressing src _4z) (offset_addressing dst _4z) (sz - 4)
       end else if sz >= 2 then begin
-	emit (Pmovw_rm (ECX, src));
-	emit (Pmovw_mr (dst, ECX));
-        copy (offset_addressing src _2) (offset_addressing dst _2) (sz - 2)
+	emit (Pmovw_rm (RCX, src));
+	emit (Pmovw_mr (dst, RCX));
+        copy (offset_addressing src _2z) (offset_addressing dst _2z) (sz - 2)
       end else if sz >= 1 then begin
-	emit (Pmovb_rm (ECX, src));
-	emit (Pmovb_mr (dst, ECX));
-        copy (offset_addressing src _1) (offset_addressing dst _1) (sz - 1)
+	emit (Pmovb_rm (RCX, src));
+	emit (Pmovb_mr (dst, RCX));
+        copy (offset_addressing src _1z) (offset_addressing dst _1z) (sz - 1)
       end in
   copy (addressing_of_builtin_arg src) (addressing_of_builtin_arg dst) sz
 
 let expand_builtin_memcpy_big sz al src dst =
-  if src <> BA (IR ESI) then emit (Plea (ESI, addressing_of_builtin_arg src));
-  if dst <> BA (IR EDI) then emit (Plea (EDI, addressing_of_builtin_arg dst));
-  emit (Pmov_ri (ECX,coqint_of_camlint (Int32.of_int (sz / 4))));
+  if src <> BA (IR RSI) then emit (_Plea (RSI, addressing_of_builtin_arg src));
+  if dst <> BA (IR RDI) then emit (_Plea (RDI, addressing_of_builtin_arg dst));
+  (* TODO: movsq? *)
+  emit (Pmovl_ri (RCX,coqint_of_camlint (Int32.of_int (sz / 4))));
   emit Prep_movsl;
   if sz mod 4 >= 2 then emit Pmovsw;
   if sz mod 2 >= 1 then emit Pmovsb
@@ -141,15 +168,17 @@ let expand_builtin_vload_common chunk addr res =
   | Mint16signed, BR(IR res) ->
      emit (Pmovsw_rm (res,addr))
   | Mint32, BR(IR res) ->
-     emit (Pmov_rm (res,addr))
+     emit (Pmovl_rm (res,addr))
+  | Mint64, BR(IR res) ->
+     emit (Pmovq_rm (res,addr))
   | Mint64, BR_splitlong(BR(IR res1), BR(IR res2)) ->
-     let addr' = offset_addressing addr _4 in
+     let addr' = offset_addressing addr _4z in
      if not (Asmgen.addressing_mentions addr res2) then begin
-	 emit (Pmov_rm (res2,addr));
-	 emit (Pmov_rm (res1,addr'))
+	 emit (Pmovl_rm (res2,addr));
+	 emit (Pmovl_rm (res1,addr'))
        end else begin
-	 emit (Pmov_rm (res1,addr'));
-	 emit (Pmov_rm (res2,addr))
+	 emit (Pmovl_rm (res1,addr'));
+	 emit (Pmovl_rm (res2,addr))
        end
   | Mfloat32, BR(FR res) ->
      emit (Pmovss_fm (res,addr))
@@ -168,20 +197,22 @@ let expand_builtin_vload chunk args res =
 let expand_builtin_vstore_common chunk addr src tmp =
   match chunk, src with
   | (Mint8signed | Mint8unsigned), BA(IR src) ->
-     if Asmgen.low_ireg src then
+     if Archi.ptr64 || Asmgen.low_ireg src then
        emit (Pmovb_mr (addr,src))
      else begin
-	 emit (Pmov_rr (tmp,src));
-	 emit (Pmovb_mr (addr,tmp))
-       end
+       emit (Pmov_rr (tmp,src));
+       emit (Pmovb_mr (addr,tmp))
+     end
   | (Mint16signed | Mint16unsigned), BA(IR src) ->
      emit (Pmovw_mr (addr,src))
   | Mint32, BA(IR src) ->
-     emit (Pmov_mr (addr,src))
+     emit (Pmovl_mr (addr,src))
+  | Mint64, BA(IR src) ->
+     emit (Pmovq_mr (addr,src))
   | Mint64, BA_splitlong(BA(IR src1), BA(IR src2)) ->
-     let addr' = offset_addressing addr _4 in
-     emit (Pmov_mr (addr,src2));
-     emit (Pmov_mr (addr',src1))
+     let addr' = offset_addressing addr _4z in
+     emit (Pmovl_mr (addr,src2));
+     emit (Pmovl_mr (addr',src1))
   | Mfloat32, BA(FR src) ->
      emit (Pmovss_mf (addr,src))
   | Mfloat64, BA(FR src) ->
@@ -194,20 +225,65 @@ let expand_builtin_vstore chunk args =
   | [addr; src] ->
      let addr = addressing_of_builtin_arg addr in
      expand_builtin_vstore_common chunk addr src
-       (if Asmgen.addressing_mentions addr EAX then ECX else EAX)
+       (if Asmgen.addressing_mentions addr RAX then RCX else RAX)
   | _ -> assert false
 
 (* Handling of varargs *)
 
-let expand_builtin_va_start r =
+let rec next_arg_locations ir fr ofs = function
+  | [] ->
+      (ir, fr, ofs)
+  | (Tint | Tlong | Tany32 | Tany64) :: l ->
+      if ir < 6
+      then next_arg_locations (ir + 1) fr ofs l
+      else next_arg_locations ir fr (ofs + 8) l
+  | (Tfloat | Tsingle) :: l ->
+      if fr < 8
+      then next_arg_locations ir (fr + 1) ofs l
+      else next_arg_locations ir fr (ofs + 8) l
+
+let current_function_stacksize = ref 0L
+
+let expand_builtin_va_start_32 r =
   if not (is_current_function_variadic ()) then
     invalid_arg "Fatal error: va_start used in non-vararg function";
-  let ofs = coqint_of_camlint
+  let ofs =
     Int32.(add (add !PrintAsmaux.current_function_stacksize 4l)
                (mul 4l (Z.to_int32 (Conventions1.size_arguments
                                       (get_current_function_sig ()))))) in
-  emit (Pmov_mr (linear_addr r _0, ESP));
-  emit (Padd_mi (linear_addr r _0, ofs))
+  emit (Pleal (RAX, linear_addr RSP (Z.of_uint32 ofs)));
+  emit (Pmovl_mr (linear_addr r _0z, RAX))
+
+let expand_builtin_va_start_64 r =
+  if not (is_current_function_variadic ()) then
+    invalid_arg "Fatal error: va_start used in non-vararg function";
+  let (ir, fr, ofs) =
+    next_arg_locations 0 0 0 (get_current_function_args ()) in
+  (* [r] points to the following struct:
+       struct {
+         unsigned int gp_offset;
+         unsigned int fp_offset;
+         void *overflow_arg_area;
+         void *reg_save_area;
+       }
+     gp_offset is initialized to ir * 8
+     fp_offset is initialized to  6 * 8 + fr * 16
+     overflow_arg_area is initialized to sp + current stacksize + ofs
+     reg_save_area is initialized to
+         sp + current stacksize - 16 - save area size (6 * 8 + 8 * 16) *)
+  let gp_offset = Int32.of_int (ir * 8)
+  and fp_offset = Int32.of_int (6 * 8 + fr * 16)
+  and overflow_arg_area = Int64.(add !current_function_stacksize (of_int ofs))
+  and reg_save_area = Int64.(sub !current_function_stacksize 192L) in
+  assert (r <> RAX);
+  emit (Pmovl_ri (RAX, coqint_of_camlint gp_offset));
+  emit (Pmovl_mr (linear_addr r _0z, RAX));
+  emit (Pmovl_ri (RAX, coqint_of_camlint fp_offset));
+  emit (Pmovl_mr (linear_addr r _4z, RAX));
+  emit (Pleaq (RAX, linear_addr RSP (Z.of_uint64 overflow_arg_area)));
+  emit (Pmovq_mr (linear_addr r _8z, RAX));
+  emit (Pleaq (RAX, linear_addr RSP (Z.of_uint64 reg_save_area)));
+  emit (Pmovq_mr (linear_addr r _16z, RAX))
 
 (* FMA operations *)
 
@@ -239,38 +315,47 @@ let expand_builtin_inline name args res =
   | ("__builtin_bswap"| "__builtin_bswap32"), [BA(IR a1)], BR(IR res) ->
      if a1 <> res then
        emit (Pmov_rr (res,a1));
-     emit (Pbswap res)
+     emit (Pbswap32 res)
+  | "__builtin_bswap64", [BA(IR a1)], BR(IR res) ->
+     if a1 <> res then
+       emit (Pmov_rr (res,a1));
+     emit (Pbswap64 res)
   | "__builtin_bswap16", [BA(IR a1)], BR(IR res) ->
      if a1 <> res then
        emit (Pmov_rr (res,a1));
      emit (Pbswap16 res)
   | ("__builtin_clz"|"__builtin_clzl"), [BA(IR a1)], BR(IR res) ->
-     emit (Pbsr (res,a1));
-     emit (Pxor_ri(res,coqint_of_camlint 31l))
+     emit (Pbsrl (res,a1));
+     emit (Pxorl_ri(res,coqint_of_camlint 31l))
+  | "__builtin_clzll", [BA(IR a1)], BR(IR res) ->
+     emit (Pbsrq (res,a1));
+     emit (Pxorl_ri(res,coqint_of_camlint 63l))
   | "__builtin_clzll", [BA_splitlong(BA (IR ah), BA (IR al))], BR(IR res) ->
      let lbl1 = new_label() in
      let lbl2 = new_label() in
-     emit (Ptest_rr(ah, ah));
+     emit (Ptestl_rr(ah, ah));
      emit (Pjcc(Cond_e, lbl1));
-     emit (Pbsr(res, ah));
-     emit (Pxor_ri(res, coqint_of_camlint 31l));
+     emit (Pbsrl(res, ah));
+     emit (Pxorl_ri(res, coqint_of_camlint 31l));
      emit (Pjmp_l lbl2);
      emit (Plabel lbl1);
-     emit (Pbsr(res, al));
-     emit (Pxor_ri(res, coqint_of_camlint 63l));
+     emit (Pbsrl(res, al));
+     emit (Pxorl_ri(res, coqint_of_camlint 63l));
      emit (Plabel lbl2)
   | ("__builtin_ctz" | "__builtin_ctzl"), [BA(IR a1)], BR(IR res) ->
-     emit (Pbsf (res,a1))
+     emit (Pbsfl (res,a1))
+  | "__builtin_ctzll", [BA(IR a1)], BR(IR res) ->
+     emit (Pbsfq (res,a1))
   | "__builtin_ctzll", [BA_splitlong(BA (IR ah), BA (IR al))], BR(IR res) ->
      let lbl1 = new_label() in
      let lbl2 = new_label() in
-     emit (Ptest_rr(al, al));
+     emit (Ptestl_rr(al, al));
      emit (Pjcc(Cond_e, lbl1));
-     emit (Pbsf(res, al));
+     emit (Pbsfl(res, al));
      emit (Pjmp_l lbl2);
      emit (Plabel lbl1);
-     emit (Pbsf(res, ah));
-     emit (Padd_ri(res, coqint_of_camlint 32l));
+     emit (Pbsfl(res, ah));
+     emit (Paddl_ri(res, coqint_of_camlint 32l));
      emit (Plabel lbl2)
   (* Float arithmetic *)
   | "__builtin_fabs", [BA(FR a1)], BR(FR res) ->
@@ -320,75 +405,120 @@ let expand_builtin_inline name args res =
   (* 64-bit integer arithmetic *)
   | "__builtin_negl", [BA_splitlong(BA(IR ah), BA(IR al))],
                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
-     assert (ah = EDX && al = EAX && rh = EDX && rl = EAX);
-     emit (Pneg EAX);
-     emit (Padc_ri (EDX,_0));
-     emit (Pneg EDX)
+     assert (ah = RDX && al = RAX && rh = RDX && rl = RAX);
+     emit (Pnegl RAX);
+     emit (Padcl_ri (RDX,_0));
+     emit (Pnegl RDX)
   | "__builtin_addl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
                        BR_splitlong(BR(IR rh), BR(IR rl)) ->
-     assert (ah = EDX && al = EAX && bh = ECX && bl = EBX && rh = EDX && rl = EAX);
-     emit (Padd_rr (EAX,EBX));
-     emit (Padc_rr (EDX,ECX))
+     assert (ah = RDX && al = RAX && bh = RCX && bl = RBX && rh = RDX && rl = RAX);
+     emit (Paddl_rr (RAX,RBX));
+     emit (Padcl_rr (RDX,RCX))
   | "__builtin_subl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
                        BR_splitlong(BR(IR rh), BR(IR rl)) ->
-     assert (ah = EDX && al = EAX && bh = ECX && bl = EBX && rh = EDX && rl = EAX);
-     emit (Psub_rr (EAX,EBX));
-     emit (Psbb_rr (EDX,ECX))
+     assert (ah = RDX && al = RAX && bh = RCX && bl = RBX && rh = RDX && rl = RAX);
+     emit (Psubl_rr (RAX,RBX));
+     emit (Psbbl_rr (RDX,RCX))
   | "__builtin_mull", [BA(IR a); BA(IR b)],
                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
-     assert (a = EAX && b = EDX && rh = EDX && rl = EAX);
-     emit (Pmul_r EDX)
+     assert (a = RAX && b = RDX && rh = RDX && rl = RAX);
+     emit (Pmull_r RDX)
   (* Memory accesses *)
   | "__builtin_read16_reversed", [BA(IR a1)], BR(IR res) ->
      emit (Pmovzw_rm (res, linear_addr a1 _0));
      emit (Pbswap16 res)
   | "__builtin_read32_reversed", [BA(IR a1)], BR(IR res) ->
-     emit (Pmov_rm (res, linear_addr a1 _0));
-     emit (Pbswap res)
+     emit (Pmovl_rm (res, linear_addr a1 _0));
+     emit (Pbswap32 res)
   | "__builtin_write16_reversed", [BA(IR a1); BA(IR a2)], _ ->
-     let tmp = if a1 = ECX then EDX else ECX in
+     let tmp = if a1 = RCX then RDX else RCX in
      if a2 <> tmp then
        emit (Pmov_rr (tmp,a2));
      emit (Pbswap16 tmp);
-     emit (Pmovw_mr (linear_addr a1 _0, tmp))
+     emit (Pmovw_mr (linear_addr a1 _0z, tmp))
   | "__builtin_write32_reversed", [BA(IR a1); BA(IR a2)], _ ->
-     let tmp = if a1 = ECX then EDX else ECX in
+     let tmp = if a1 = RCX then RDX else RCX in
      if a2 <> tmp then
        emit (Pmov_rr (tmp,a2));
-     emit (Pbswap tmp);
-     emit (Pmov_mr (linear_addr a1 _0, tmp))
+     emit (Pbswap32 tmp);
+     emit (Pmovl_mr (linear_addr a1 _0z, tmp))
   (* Vararg stuff *)
   | "__builtin_va_start", [BA(IR a)], _ ->
-     expand_builtin_va_start a
+     assert (a = RDX);
+     if Archi.ptr64
+     then expand_builtin_va_start_64 a
+     else expand_builtin_va_start_32 a
   (* Synchronization *)
   | "__builtin_membar", [], _ ->
      ()
   (* no operation *)
   | "__builtin_nop", [], _ ->
-     emit (Pxchg_rr (EAX,EAX))
+     emit (Pmov_rr (RAX,RAX))
   (* Catch-all *)
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))
+
+(* Calls to variadic functions for x86-64: register AL must contain
+   the number of XMM registers used for parameter passing.  To be on
+   the safe side.  do the same if the called function is
+   unprototyped. *)
+
+let set_al sg =
+  if Archi.ptr64 && (sg.sig_cc.cc_vararg || sg.sig_cc.cc_unproto) then begin
+    let (ir, fr, ofs) = next_arg_locations 0 0 0 sg.sig_args in
+    emit (Pmovl_ri (RAX, coqint_of_camlint (Int32.of_int fr)))
+  end
 
 (* Expansion of instructions *)
 
 let expand_instruction instr =
   match instr with
   | Pallocframe (sz, ofs_ra, ofs_link) ->
-     let sz = sp_adjustment sz in
-     let addr = linear_addr ESP (coqint_of_camlint (Int32.add sz 4l)) in
-     let addr' = linear_addr ESP ofs_link in
-     let sz' = coqint_of_camlint sz in
-     emit (Psub_ri (ESP,sz'));
-     emit (Pcfi_adjust sz');
-     emit (Plea (EDX,addr));
-     emit (Pmov_mr (addr',EDX));
-     PrintAsmaux.current_function_stacksize := sz
+     if Archi.ptr64 then begin
+       let (sz, save_regs) = sp_adjustment_64 sz in
+       (* Allocate frame *)
+       let sz' = Z.of_uint sz in
+       emit (Psubq_ri (RSP, sz'));
+       emit (Pcfi_adjust sz');
+       if save_regs >= 0 then begin
+         (* Save the registers *)
+         emit (Pleaq (R10, linear_addr RSP (Z.of_uint save_regs)));
+         emit (Pcall_s (intern_string "__compcert_va_saveregs",
+                        {sig_args = []; sig_res = None; sig_cc = cc_default}))
+       end;
+       (* Stack chaining *)
+       let fullsz = sz + 8 in
+       let addr1 = linear_addr RSP (Z.of_uint fullsz) in
+       let addr2 = linear_addr RSP ofs_link in
+       emit (Pleaq (RAX, addr1));
+       emit (Pmovq_mr (addr2, RAX));
+       current_function_stacksize := Int64.of_int fullsz
+     end else begin     
+       let sz = sp_adjustment_32 sz in
+       (* Allocate frame *)
+       let sz' = Z.of_uint sz in
+       emit (Psubl_ri (RSP, sz'));
+       emit (Pcfi_adjust sz');
+       (* Stack chaining *)
+       let addr1 = linear_addr RSP (Z.of_uint (sz + 4)) in
+       let addr2 = linear_addr RSP ofs_link in
+       emit (Pleal (RAX,addr1));
+       emit (Pmovl_mr (addr2,RAX));
+       PrintAsmaux.current_function_stacksize := Int32.of_int sz
+     end  
   | Pfreeframe(sz, ofs_ra, ofs_link) ->
-     let sz = sp_adjustment sz in
-     emit (Padd_ri (ESP,coqint_of_camlint sz))
+     if Archi.ptr64 then begin
+       let (sz, _) = sp_adjustment_64 sz in
+       emit (Paddq_ri (RSP, Z.of_uint sz))
+     end else begin
+       let sz = sp_adjustment_32 sz in
+       emit (Paddl_ri (RSP, Z.of_uint sz))
+     end
+  | Pjmp_s(_, sg) | Pjmp_r(_, sg) | Pcall_s(_, sg) | Pcall_r(_, sg) ->
+     set_al sg;
+     emit instr
   | Pbuiltin (ef,args, res) ->
      begin
        match ef with
@@ -399,10 +529,7 @@ let expand_instruction instr =
        | EF_vstore chunk ->
           expand_builtin_vstore chunk args
        | EF_memcpy(sz, al) ->
-          expand_builtin_memcpy
-            (Int32.to_int (camlint_of_coqint sz))
-	    (Int32.to_int (camlint_of_coqint al))
-            args
+          expand_builtin_memcpy (Z.to_int sz) (Z.to_int al) args
        | EF_annot_val(txt, targ) ->
           expand_annot_val txt targ args res
        | EF_annot _ | EF_debug _ | EF_inline_asm _ ->
@@ -413,14 +540,15 @@ let expand_instruction instr =
   | _ -> emit instr
 
 let int_reg_to_dwarf = function
-  | EAX -> 0
-  | EBX -> 3
-  | ECX -> 1
-  | EDX -> 2
-  | ESI -> 6
-  | EDI -> 7
-  | EBP -> 5
-  | ESP -> 4
+  | RAX -> 0
+  | RBX -> 3
+  | RCX -> 1
+  | RDX -> 2
+  | RSI -> 6
+  | RDI -> 7
+  | RBP -> 5
+  | RSP -> 4
+  | _ -> assert false (* TODO *)
 
 let float_reg_to_dwarf = function
   | XMM0 -> 21
@@ -431,6 +559,7 @@ let float_reg_to_dwarf = function
   | XMM5 -> 26
   | XMM6 -> 27
   | XMM7 -> 28
+  | _ -> assert false (* TODO *)
 
 let preg_to_dwarf = function
    | IR r -> int_reg_to_dwarf r

@@ -2,7 +2,7 @@
 (*                                                                     *)
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
-(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*                 Xavier Leroy, INRIA Paris                           *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
 (*  Automatique.  All rights reserved.  This file is distributed       *)
@@ -14,10 +14,8 @@
   during the [CSE] phase. *)
 
 Require Import Coqlib.
-Require Import AST.
-Require Import Integers.
-Require Import Op.
-Require Import CSEdomain.
+Require Import AST Integers.
+Require Import Op CSEdomain.
 
 Definition valnum := positive.
 
@@ -72,21 +70,41 @@ Function combine_cond (cond: condition) (args: list valnum) : option(condition *
   | _, _ => None
   end.
 
-Function combine_addr (addr: addressing) (args: list valnum) : option(addressing * list valnum) :=
+Function combine_addr_32 (addr: addressing) (args: list valnum) : option(addressing * list valnum) :=
   match addr, args with
   | Aindexed n, x::nil =>
       match get x with
-      | Some(Op (Olea a) ys) => Some(offset_addressing_total a n, ys)
+      | Some(Op (Olea a) ys) =>
+          match offset_addressing a n with Some a' => Some (a', ys) | None => None end
       | _ => None
       end
   | _, _ => None
   end.
 
+Function combine_addr_64 (addr: addressing) (args: list valnum) : option(addressing * list valnum) :=
+  match addr, args with
+  | Aindexed n, x::nil =>
+      match get x with
+      | Some(Op (Oleal a) ys) =>
+          match offset_addressing a n with Some a' => Some (a', ys) | None => None end
+      | _ => None
+      end
+  | _, _ => None
+  end.
+
+Definition combine_addr (addr: addressing) (args: list valnum) : option(addressing * list valnum) :=
+  if Archi.ptr64 then combine_addr_64 addr args else combine_addr_32 addr args.
+
 Function combine_op (op: operation) (args: list valnum) : option(operation * list valnum) :=
   match op, args with
   | Olea addr, _ =>
-      match combine_addr addr args with
+      match combine_addr_32 addr args with
       | Some(addr', args') => Some(Olea addr', args')
+      | None => None
+      end
+  | Oleal addr, _ =>
+      match combine_addr_64 addr args with
+      | Some(addr', args') => Some(Oleal addr', args')
       | None => None
       end
   | Oandimm n, x :: nil =>
@@ -102,6 +120,21 @@ Function combine_op (op: operation) (args: list valnum) : option(operation * lis
   | Oxorimm n, x :: nil =>
       match get x with
       | Some(Op (Oxorimm m) ys) => Some(Oxorimm (Int.xor m n), ys)
+      | _ => None
+      end
+  | Oandlimm n, x :: nil =>
+      match get x with
+      | Some(Op (Oandlimm m) ys) => Some(Oandlimm (Int64.and m n), ys)
+      | _ => None
+      end
+  | Oorlimm n, x :: nil =>
+      match get x with
+      | Some(Op (Oorlimm m) ys) => Some(Oorlimm (Int64.or m n), ys)
+      | _ => None
+      end
+  | Oxorlimm n, x :: nil =>
+      match get x with
+      | Some(Op (Oxorlimm m) ys) => Some(Oxorlimm (Int64.xor m n), ys)
       | _ => None
       end
   | Ocmp cond, _ =>

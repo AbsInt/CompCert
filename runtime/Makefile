@@ -1,11 +1,24 @@
 include ../Makefile.config
 
 CFLAGS=-O1 -g -Wall
+
+ifeq ($(ARCH),ia32)
+ifeq ($(MODEL),64)
+ARCH=x86_64
+endif
+endif
+
+ifeq ($(ARCH),x86_64)
+OBJS=i64_dtou.o i64_utod.o i64_utof.o vararg.o
+else
 OBJS=i64_dtos.o i64_dtou.o i64_sar.o i64_sdiv.o i64_shl.o \
   i64_shr.o i64_smod.o i64_stod.o i64_stof.o \
   i64_udivmod.o i64_udiv.o i64_umod.o i64_utod.o i64_utof.o \
   vararg.o
+endif
+
 LIB=libcompcert.a
+
 INCLUDES=include/float.h include/stdarg.h include/stdbool.h \
   include/stddef.h include/varargs.h include/stdalign.h \
   include/stdnoreturn.h

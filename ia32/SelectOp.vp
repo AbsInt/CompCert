@@ -2,7 +2,7 @@
 (*                                                                     *)
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
-(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*                 Xavier Leroy, INRIA Paris                           *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
 (*  Automatique.  All rights reserved.  This file is distributed       *)
@@ -38,33 +38,33 @@
 
 Require Import Coqlib.
 Require Import Compopts.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Op.
-Require Import CminorSel.
+Require Import AST Integers Floats.
+Require Import Op CminorSel.
 
 Open Local Scope cminorsel_scope.
 
 (** ** Constants **)
 
-(** External oracle to determine whether a symbol is external and must
-  be addressed through [Oaddrsymbol], or is local and can be addressed
-  through [Olea Aglobal].  This is to accommodate MacOS X's limitations
-  on references to data symbols imported from shared libraries. *)
+(** External oracle to determine whether a symbol should be addressed
+  through [Oindirectsymbol] or can be addressed via [Oleal Aglobal].
+  This is to accommodate MacOS X's limitations on references to data
+  symbols imported from shared libraries.  It can also help with PIC
+  code under ELF. *)
 
 Parameter symbol_is_external: ident -> bool.
 
-Definition addrsymbol (id: ident) (ofs: int) :=
-  if symbol_is_external id then
-    if Int.eq ofs Int.zero
-    then Eop (Oindirectsymbol id) Enil
-    else Eop (Olea (Aindexed ofs)) (Eop (Oindirectsymbol id) Enil ::: Enil)
-  else
-    Eop (Olea (Aglobal id ofs)) Enil.
+Definition Olea_ptr (a: addressing) := if Archi.ptr64 then Oleal a else Olea a.
 
-Definition addrstack (ofs: int) :=
-  Eop (Olea (Ainstack ofs)) Enil.
+Definition addrsymbol (id: ident) (ofs: ptrofs) :=
+  if symbol_is_external id then
+    if Ptrofs.eq ofs Ptrofs.zero
+    then Eop (Oindirectsymbol id) Enil
+    else Eop (Olea_ptr (Aindexed (Ptrofs.unsigned ofs))) (Eop (Oindirectsymbol id) Enil ::: Enil)
+  else
+    Eop (Olea_ptr (Aglobal id ofs)) Enil.
+
+Definition addrstack (ofs: ptrofs) :=
+  Eop (Olea_ptr (Ainstack ofs)) Enil.
 
 (** ** Integer logical negation *)
 
@@ -81,8 +81,8 @@ Nondetfunction addimm (n: int) (e: expr) :=
   if Int.eq n Int.zero then e else
   match e with
   | Eop (Ointconst m) Enil => Eop (Ointconst(Int.add n m)) Enil
-  | Eop (Olea addr) args   => Eop (Olea (offset_addressing_total addr n)) args
-  | _                      => Eop (Olea (Aindexed n)) (e ::: Enil)
+  | Eop (Olea addr) args   => Eop (Olea (offset_addressing_total addr (Int.signed n))) args
+  | _                      => Eop (Olea (Aindexed (Int.signed n))) (e ::: Enil)
   end.
 
 Nondetfunction add (e1: expr) (e2: expr) :=
@@ -90,19 +90,19 @@ Nondetfunction add (e1: expr) (e2: expr) :=
   | Eop (Ointconst n1) Enil, t2 => addimm n1 t2
   | t1, Eop (Ointconst n2) Enil => addimm n2 t1
   | Eop (Olea (Aindexed n1)) (t1:::Enil), Eop (Olea (Aindexed n2)) (t2:::Enil) =>
-      Eop (Olea (Aindexed2 (Int.add n1 n2))) (t1:::t2:::Enil)
+      Eop (Olea (Aindexed2 (n1 + n2))) (t1:::t2:::Enil)
   | Eop (Olea (Aindexed n1)) (t1:::Enil), Eop (Olea (Ascaled sc n2)) (t2:::Enil) =>
-      Eop (Olea (Aindexed2scaled sc (Int.add n1 n2))) (t1:::t2:::Enil)
+      Eop (Olea (Aindexed2scaled sc (n1 + n2))) (t1:::t2:::Enil)
   | Eop (Olea (Ascaled sc n1)) (t1:::Enil), Eop (Olea (Aindexed n2)) (t2:::Enil) =>
-      Eop (Olea (Aindexed2scaled sc (Int.add n1 n2))) (t2:::t1:::Enil)
+      Eop (Olea (Aindexed2scaled sc (n1 + n2))) (t2:::t1:::Enil)
   | Eop (Olea (Aindexed n1)) (t1:::Enil), Eop (Olea (Aglobal id ofs)) Enil =>
-      Eop (Olea (Abased id (Int.add ofs n1))) (t1:::Enil)
+      Eop (Olea (Abased id (Ptrofs.add ofs (Ptrofs.repr n1)))) (t1:::Enil)
   | Eop (Olea (Aglobal id ofs)) Enil, Eop (Olea (Aindexed n2)) (t2:::Enil) =>
-      Eop (Olea (Abased id (Int.add ofs n2))) (t2:::Enil)
+      Eop (Olea (Abased id (Ptrofs.add ofs (Ptrofs.repr n2)))) (t2:::Enil)
   | Eop (Olea (Ascaled sc n1)) (t1:::Enil), Eop (Olea (Aglobal id ofs)) Enil =>
-      Eop (Olea (Abasedscaled sc id (Int.add ofs n1))) (t1:::Enil)
+      Eop (Olea (Abasedscaled sc id (Ptrofs.add ofs (Ptrofs.repr n1)))) (t1:::Enil)
   | Eop (Olea (Aglobal id ofs)) Enil, Eop (Olea (Ascaled sc n2)) (t2:::Enil) =>
-      Eop (Olea (Abasedscaled sc id (Int.add ofs n2))) (t2:::Enil)
+      Eop (Olea (Abasedscaled sc id (Ptrofs.add ofs (Ptrofs.repr n2)))) (t2:::Enil)
   | Eop (Olea (Ascaled sc n)) (t1:::Enil), t2 =>
       Eop (Olea (Aindexed2scaled sc n)) (t2:::t1:::Enil)
   | t1, Eop (Olea (Ascaled sc n)) (t2:::Enil) =>
@@ -112,7 +112,7 @@ Nondetfunction add (e1: expr) (e2: expr) :=
   | t1, Eop (Olea (Aindexed n)) (t2:::Enil) =>
       Eop (Olea (Aindexed2 n)) (t1:::t2:::Enil)
   | _, _ =>
-      Eop (Olea (Aindexed2 Int.zero)) (e1:::e2:::Enil)
+      Eop (Olea (Aindexed2 0)) (e1:::e2:::Enil)
   end.
 
 (** ** Opposite *)
@@ -129,11 +129,11 @@ Nondetfunction sub (e1: expr) (e2: expr) :=
   match e1, e2 with
   | t1, Eop (Ointconst n2) Enil => addimm (Int.neg n2) t1
   | Eop (Olea (Aindexed n1)) (t1:::Enil), Eop (Olea (Aindexed n2)) (t2:::Enil) =>
-      addimm (Int.sub n1 n2) (Eop Osub (t1:::t2:::Enil))
+      addimm (Int.repr (n1 - n2)) (Eop Osub (t1:::t2:::Enil))
   | Eop (Olea (Aindexed n1)) (t1:::Enil), t2 =>
-      addimm n1 (Eop Osub (t1:::t2:::Enil))
+      addimm (Int.repr n1) (Eop Osub (t1:::t2:::Enil))
   | t1, Eop (Olea (Aindexed n2)) (t2:::Enil) =>
-      addimm (Int.neg n2) (Eop Osub (t1:::t2:::Enil))
+      addimm (Int.repr (-n2)) (Eop Osub (t1:::t2:::Enil))
   | _, _ =>
       Eop Osub (e1:::e2:::Enil)
   end.
@@ -157,11 +157,12 @@ Nondetfunction shlimm (e1: expr) (n: int) :=
         else Eop (Oshlimm n) (e1:::Enil)
     | Eop (Olea (Aindexed n1)) (t1:::Enil) =>
         if shift_is_scale n
-        then Eop (Olea (Ascaled (Int.shl Int.one n) (Int.shl n1 n))) (t1:::Enil)
+        then Eop (Olea (Ascaled (Int.unsigned (Int.shl Int.one n))
+                                (Int.unsigned (Int.shl (Int.repr n1) n)))) (t1:::Enil)
         else Eop (Oshlimm n) (e1:::Enil)
     | _ =>
         if shift_is_scale n
-        then Eop (Olea (Ascaled (Int.shl Int.one n) Int.zero)) (e1:::Enil)
+        then Eop (Olea (Ascaled (Int.unsigned (Int.shl Int.one n)) 0)) (e1:::Enil)
         else Eop (Oshlimm n) (e1:::Enil)
     end.
 
@@ -214,7 +215,7 @@ Nondetfunction mulimm (n1: int) (e2: expr) :=
   else if Int.eq n1 Int.one then e2
   else match e2 with
   | Eop (Ointconst n2) Enil => Eop (Ointconst(Int.mul n1 n2)) Enil
-  | Eop (Olea (Aindexed n2)) (t2:::Enil) => addimm (Int.mul n1 n2) (mulimm_base n1 t2)
+  | Eop (Olea (Aindexed n2)) (t2:::Enil) => addimm (Int.mul n1 (Int.repr n2)) (mulimm_base n1 t2)
   | _ => mulimm_base n1 e2
   end.
 
@@ -503,8 +504,11 @@ Nondetfunction singleofintu (e: expr) :=
 
 Nondetfunction addressing (chunk: memory_chunk) (e: expr) :=
   match e with
-  | Eop (Olea addr) args => (addr, args)
-  | _ => (Aindexed Int.zero, e:::Enil)
+  | Eop (Olea addr) args =>
+      if (negb Archi.ptr64) && addressing_valid addr then (addr, args) else (Aindexed 0, e:::Enil)
+  | Eop (Oleal addr) args =>
+      if Archi.ptr64 && addressing_valid addr then (addr, args) else (Aindexed 0, e:::Enil)
+  | _ => (Aindexed 0, e:::Enil)
   end.
 
 (** ** Arguments of builtins *)
@@ -512,8 +516,11 @@ Nondetfunction addressing (chunk: memory_chunk) (e: expr) :=
 Nondetfunction builtin_arg (e: expr) :=
   match e with
   | Eop (Ointconst n) Enil => BA_int n
-  | Eop (Olea (Aglobal id ofs)) Enil => BA_addrglobal id ofs
-  | Eop (Olea (Ainstack ofs)) Enil => BA_addrstack ofs
+  | Eop (Olongconst n) Enil => BA_long n
+  | Eop (Olea (Aglobal id ofs)) Enil => if Archi.ptr64 then BA e else BA_addrglobal id ofs
+  | Eop (Olea (Ainstack ofs)) Enil => if Archi.ptr64 then BA e else BA_addrstack ofs
+  | Eop (Oleal (Aglobal id ofs)) Enil => if Archi.ptr64 then BA_addrglobal id ofs else BA e
+  | Eop (Oleal (Ainstack ofs)) Enil => if Archi.ptr64 then BA_addrstack ofs else BA e
   | Eop Omakelong (Eop (Ointconst h) Enil ::: Eop (Ointconst l) Enil ::: Enil) =>
         BA_long (Int64.ofwords h l)
   | Eop Omakelong (h ::: l ::: Enil) => BA_splitlong (BA h) (BA l)

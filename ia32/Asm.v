@@ -2,7 +2,7 @@
 (*                                                                     *)
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
-(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*                  Xavier Leroy, INRIA Paris                          *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
 (*  Automatique.  All rights reserved.  This file is distributed       *)
@@ -12,19 +12,9 @@
 
 (** Abstract syntax and semantics for IA32 assembly language *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Smallstep.
-Require Import Locations.
-Require Import Stacklayout.
-Require Import Conventions.
+Require Import Coqlib Maps.
+Require Import AST Integers Floats Values Memory Events Globalenvs Smallstep.
+Require Import Locations Stacklayout Conventions.
 
 (** * Abstract syntax *)
 
@@ -33,14 +23,14 @@ Require Import Conventions.
 (** Integer registers. *)
 
 Inductive ireg: Type :=
-  | EAX: ireg  | EBX: ireg  | ECX: ireg  | EDX: ireg
-  | ESI: ireg  | EDI: ireg  | EBP: ireg  | ESP: ireg.
+  | RAX | RBX | RCX | RDX | RSI | RDI | RBP | RSP
+  | R8  | R9  | R10 | R11 | R12 | R13 | R14 | R15.
 
 (** Floating-point registers, i.e. SSE2 registers *)
 
 Inductive freg: Type :=
-  | XMM0: freg  | XMM1: freg  | XMM2: freg  | XMM3: freg
-  | XMM4: freg  | XMM5: freg  | XMM6: freg  | XMM7: freg.
+  | XMM0  | XMM1  | XMM2  | XMM3  | XMM4  | XMM5  | XMM6  | XMM7
+  | XMM8  | XMM9  | XMM10 | XMM11 | XMM12 | XMM13 | XMM14 | XMM15.
 
 Lemma ireg_eq: forall (x y: ireg), {x=y} + {x<>y}.
 Proof. decide equality. Defined.
@@ -69,7 +59,7 @@ Coercion CR: crbit >-> preg.
 
 (** Conventional names for stack pointer ([SP]) and return address ([RA]) *)
 
-Notation SP := ESP (only parsing).
+Notation SP := RSP (only parsing).
 
 (** ** Instruction set. *)
 
@@ -79,8 +69,8 @@ Definition label := positive.
 
 Inductive addrmode: Type :=
   | Addrmode (base: option ireg)
-             (ofs: option (ireg * int))
-             (const: int + ident * int).
+             (ofs: option (ireg * Z))
+             (const: Z + ident * ptrofs).
 
 (** Testable conditions (for conditional jumps and more). *)
 
@@ -94,7 +84,15 @@ Inductive testcond: Type :=
   registers, memory references and immediate constants as arguments.
   Here, we list only the combinations that we actually use.
 
-  Naming conventions:
+  Naming conventions for types:
+- [b]: 8 bits
+- [w]: 16 bits ("word")
+- [l]: 32 bits ("longword")
+- [q]: 64 bits ("quadword")
+- [d] or [sd]: FP double precision (64 bits)
+- [s] or [ss]: FP single precision (32 bits)
+
+  Naming conventions for operands:
 - [r]: integer register operand
 - [f]: XMM register operand
 - [m]: memory operand
@@ -109,11 +107,14 @@ Inductive testcond: Type :=
 
 Inductive instruction: Type :=
   (** Moves *)
-  | Pmov_rr (rd: ireg) (r1: ireg)       (**r [mov] (32-bit int) *)
-  | Pmov_ri (rd: ireg) (n: int)
-  | Pmov_ra (rd: ireg) (id: ident)
-  | Pmov_rm (rd: ireg) (a: addrmode)
-  | Pmov_mr (a: addrmode) (rs: ireg)
+  | Pmov_rr (rd: ireg) (r1: ireg)       (**r [mov] (integer) *)
+  | Pmovl_ri (rd: ireg) (n: int)
+  | Pmovq_ri (rd: ireg) (n: int64)
+  | Pmov_rs (rd: ireg) (id: ident)
+  | Pmovl_rm (rd: ireg) (a: addrmode)
+  | Pmovq_rm (rd: ireg) (a: addrmode)
+  | Pmovl_mr (a: addrmode) (rs: ireg)
+  | Pmovq_mr (a: addrmode) (rs: ireg)
   | Pmovsd_ff (rd: freg) (r1: freg)     (**r [movsd] (single 64-bit float) *)
   | Pmovsd_fi (rd: freg) (n: float)     (**r (pseudo-instruction) *)
   | Pmovsd_fm (rd: freg) (a: addrmode)
@@ -125,7 +126,6 @@ Inductive instruction: Type :=
   | Pfstpl_m (a: addrmode)              (**r [fstp] double precision *)
   | Pflds_m (a: addrmode)               (**r [fld] simple precision *)
   | Pfstps_m (a: addrmode)              (**r [fstp] simple precision *)
-  | Pxchg_rr (r1: ireg) (r2: ireg)      (**r register-register exchange *)
   (** Moves with conversion *)
   | Pmovb_mr (a: addrmode) (rs: ireg)   (**r [mov] (8-bit int) *)
   | Pmovw_mr (a: addrmode) (rs: ireg)   (**r [mov] (16-bit int) *)
@@ -137,43 +137,81 @@ Inductive instruction: Type :=
   | Pmovzw_rm (rd: ireg) (a: addrmode)
   | Pmovsw_rr (rd: ireg) (rs: ireg)     (**r [movsw] (16-bit sign-extension) *)
   | Pmovsw_rm (rd: ireg) (a: addrmode)
+  | Pmovzl_rr (rd: ireg) (rs: ireg)     (**r [movzl] (32-bit zero-extension) *)
+  | Pmovsl_rr (rd: ireg) (rs: ireg)     (**r [movsl] (32-bit sign-extension) *)
+  | Pmovls_rr (rd: ireg)                (** 64 to 32 bit conversion (pseudo) *)
   | Pcvtsd2ss_ff (rd: freg) (r1: freg)  (**r conversion to single float *)
   | Pcvtss2sd_ff (rd: freg) (r1: freg)  (**r conversion to double float *)
   | Pcvttsd2si_rf (rd: ireg) (r1: freg) (**r double to signed int *)
   | Pcvtsi2sd_fr (rd: freg) (r1: ireg)  (**r signed int to double *)
   | Pcvttss2si_rf (rd: ireg) (r1: freg) (**r single to signed int *)
   | Pcvtsi2ss_fr (rd: freg) (r1: ireg)  (**r signed int to single *)
+  | Pcvttsd2sl_rf (rd: ireg) (r1: freg) (**r double to signed long *)
+  | Pcvtsl2sd_fr (rd: freg) (r1: ireg)  (**r signed long to double *)
+  | Pcvttss2sl_rf (rd: ireg) (r1: freg) (**r single to signed long *)
+  | Pcvtsl2ss_fr (rd: freg) (r1: ireg)  (**r signed long to single *)
   (** Integer arithmetic *)
-  | Plea (rd: ireg) (a: addrmode)
-  | Pneg (rd: ireg)
-  | Psub_rr (rd: ireg) (r1: ireg)
-  | Pimul_rr (rd: ireg) (r1: ireg)
-  | Pimul_ri (rd: ireg) (n: int)
-  | Pimul_r (r1: ireg)
-  | Pmul_r (r1: ireg)
+  | Pleal (rd: ireg) (a: addrmode)
+  | Pleaq (rd: ireg) (a: addrmode)
+  | Pnegl (rd: ireg)
+  | Pnegq (rd: ireg)
+  | Paddl_ri (rd: ireg) (n: int)
+  | Paddq_ri (rd: ireg) (n: int64)
+  | Psubl_rr (rd: ireg) (r1: ireg)
+  | Psubq_rr (rd: ireg) (r1: ireg)
+  | Pimull_rr (rd: ireg) (r1: ireg)
+  | Pimulq_rr (rd: ireg) (r1: ireg)
+  | Pimull_ri (rd: ireg) (n: int)
+  | Pimulq_ri (rd: ireg) (n: int64)
+  | Pimull_r (r1: ireg)
+(*  | Pimulq_r (r1: ireg) *)
+  | Pmull_r (r1: ireg)
+(*  | Pmulq_r (r1: ireg) *)
   | Pcltd
-  | Pdiv (r1: ireg)
-  | Pidiv (r1: ireg)
-  | Pand_rr (rd: ireg) (r1: ireg)
-  | Pand_ri (rd: ireg) (n: int)
-  | Por_rr (rd: ireg) (r1: ireg)
-  | Por_ri (rd: ireg) (n: int)
-  | Pxor_r (rd: ireg)                  (**r [xor] with self = set to zero *)
-  | Pxor_rr (rd: ireg) (r1: ireg)
-  | Pxor_ri (rd: ireg) (n: int)
-  | Pnot (rd: ireg)
-  | Psal_rcl (rd: ireg)
-  | Psal_ri (rd: ireg) (n: int)
-  | Pshr_rcl (rd: ireg)
-  | Pshr_ri (rd: ireg) (n: int)
-  | Psar_rcl (rd: ireg)
-  | Psar_ri (rd: ireg) (n: int)
+  | Pcqto
+  | Pdivl (r1: ireg)
+  | Pdivq (r1: ireg)
+  | Pidivl (r1: ireg)
+  | Pidivq (r1: ireg)
+  | Pandl_rr (rd: ireg) (r1: ireg)
+  | Pandq_rr (rd: ireg) (r1: ireg)
+  | Pandl_ri (rd: ireg) (n: int)
+  | Pandq_ri (rd: ireg) (n: int64)
+  | Porl_rr (rd: ireg) (r1: ireg)
+  | Porq_rr (rd: ireg) (r1: ireg)
+  | Porl_ri (rd: ireg) (n: int)
+  | Porq_ri (rd: ireg) (n: int64)
+  | Pxorl_r (rd: ireg)                  (**r [xor] with self = set to zero *)
+  | Pxorq_r (rd: ireg)
+  | Pxorl_rr (rd: ireg) (r1: ireg)
+  | Pxorq_rr (rd: ireg) (r1: ireg)
+  | Pxorl_ri (rd: ireg) (n: int)
+  | Pxorq_ri (rd: ireg) (n: int64)
+  | Pnotl (rd: ireg)
+  | Pnotq (rd: ireg)
+  | Psall_rcl (rd: ireg)
+  | Psalq_rcl (rd: ireg)
+  | Psall_ri (rd: ireg) (n: int)
+  | Psalq_ri (rd: ireg) (n: int)
+  | Pshrl_rcl (rd: ireg)
+  | Pshrq_rcl (rd: ireg)
+  | Pshrl_ri (rd: ireg) (n: int)
+  | Pshrq_ri (rd: ireg) (n: int)
+  | Psarl_rcl (rd: ireg)
+  | Psarq_rcl (rd: ireg)
+  | Psarl_ri (rd: ireg) (n: int)
+  | Psarq_ri (rd: ireg) (n: int)
   | Pshld_ri (rd: ireg) (r1: ireg) (n: int)
-  | Pror_ri (rd: ireg) (n: int)
-  | Pcmp_rr (r1 r2: ireg)
-  | Pcmp_ri (r1: ireg) (n: int)
-  | Ptest_rr (r1 r2: ireg)
-  | Ptest_ri (r1: ireg) (n: int)
+  | Prorl_ri (rd: ireg) (n: int)
+  | Prorq_ri (rd: ireg) (n: int)
+  | Pcmpl_rr (r1 r2: ireg)
+  | Pcmpq_rr (r1 r2: ireg)
+  | Pcmpl_ri (r1: ireg) (n: int)
+  | Pcmpq_ri (r1: ireg) (n: int64)
+  | Ptestl_rr (r1 r2: ireg)
+  | Ptestq_rr (r1 r2: ireg) 
+  | Ptestl_ri (r1: ireg) (n: int)
+  | Ptestq_ri (r1: ireg) (n: int64)
   | Pcmov (c: testcond) (rd: ireg) (r1: ireg)
   | Psetcc (c: testcond) (rd: ireg)
   (** Floating-point arithmetic *)
@@ -204,24 +242,26 @@ Inductive instruction: Type :=
   | Pcall_r (r: ireg) (sg: signature)
   | Pret
   (** Saving and restoring registers *)
-  | Pmov_rm_a (rd: ireg) (a: addrmode)  (**r like [Pmov_rm], using [Many32] chunk *)
-  | Pmov_mr_a (a: addrmode) (rs: ireg)  (**r like [Pmov_mr], using [Many32] chunk *)
+  | Pmov_rm_a (rd: ireg) (a: addrmode)  (**r like [Pmov_rm], using [Many64] chunk *)
+  | Pmov_mr_a (a: addrmode) (rs: ireg)  (**r like [Pmov_mr], using [Many64] chunk *)
   | Pmovsd_fm_a (rd: freg) (a: addrmode) (**r like [Pmovsd_fm], using [Many64] chunk *)
   | Pmovsd_mf_a (a: addrmode) (r1: freg) (**r like [Pmovsd_mf], using [Many64] chunk *)
   (** Pseudo-instructions *)
   | Plabel(l: label)
-  | Pallocframe(sz: Z)(ofs_ra ofs_link: int)
-  | Pfreeframe(sz: Z)(ofs_ra ofs_link: int)
+  | Pallocframe(sz: Z)(ofs_ra ofs_link: ptrofs)
+  | Pfreeframe(sz: Z)(ofs_ra ofs_link: ptrofs)
   | Pbuiltin(ef: external_function)(args: list (builtin_arg preg))(res: builtin_res preg)
-  (** Instructions not generated by [Asmgen] *)
-  | Padc_ri (rd: ireg) (n: int)
-  | Padc_rr (rd: ireg) (r2: ireg)
-  | Padd_mi (a: addrmode) (n: int)
-  | Padd_ri (rd: ireg) (n: int)
-  | Padd_rr (rd: ireg) (r2: ireg)
-  | Pbsf (rd: ireg) (r1: ireg)
-  | Pbsr (rd: ireg) (r1: ireg)
-  | Pbswap (rd: ireg)
+  (** Instructions not generated by [Asmgen] -- TO CHECK *)
+  | Padcl_ri (rd: ireg) (n: int)
+  | Padcl_rr (rd: ireg) (r2: ireg)
+  | Paddl_mi (a: addrmode) (n: int)
+  | Paddl_rr (rd: ireg) (r2: ireg)
+  | Pbsfl (rd: ireg) (r1: ireg)
+  | Pbsfq (rd: ireg) (r1: ireg)
+  | Pbsrl (rd: ireg) (r1: ireg)
+  | Pbsrq (rd: ireg) (r1: ireg)
+  | Pbswap64 (rd: ireg)
+  | Pbswap32 (rd: ireg)
   | Pbswap16 (rd: ireg)
   | Pcfi_adjust (n: int)
   | Pfmadd132 (rd: freg) (r2: freg) (r3: freg)
@@ -239,15 +279,16 @@ Inductive instruction: Type :=
   | Pmaxsd (rd: freg) (r2: freg)
   | Pminsd (rd: freg) (r2: freg)
   | Pmovb_rm (rd: ireg) (a: addrmode)
-  | Pmovq_mr  (a: addrmode) (rs: freg)
-  | Pmovq_rm (rd: freg) (a: addrmode)
+  | Pmovsq_mr  (a: addrmode) (rs: freg)
+  | Pmovsq_rm (rd: freg) (a: addrmode)
   | Pmovsb
   | Pmovsw
   | Pmovw_rm (rd: ireg) (ad: addrmode)
   | Prep_movsl
-  | Psbb_rr (rd: ireg) (r2: ireg)
+  | Psbbl_rr (rd: ireg) (r2: ireg)
   | Psqrtsd (rd: freg) (r1: freg)
-  | Psub_ri (rd: ireg) (n: int).
+  | Psubl_ri (rd: ireg) (n: int)
+  | Psubq_ri (rd: ireg) (n: int64).
 
 Definition code := list instruction.
 Record function : Type := mkfunction { fn_sig: signature; fn_code: code }.
@@ -334,22 +375,44 @@ Variable ge: genv.
 
 (** Evaluating an addressing mode *)
 
-Definition eval_addrmode (a: addrmode) (rs: regset) : val :=
-  match a with Addrmode base ofs const =>
-    Val.add (match base with
-              | None => Vzero
-              | Some r => rs r
+Definition eval_addrmode32 (a: addrmode) (rs: regset) : val :=
+  let '(Addrmode base ofs const) := a in
+  Val.add  (match base with
+             | None => Vint Int.zero
+             | Some r => rs r
+            end)
+  (Val.add (match ofs with
+             | None => Vint Int.zero
+             | Some(r, sc) =>
+                if zeq sc 1
+                then rs r
+                else Val.mul (rs r) (Vint (Int.repr sc))
              end)
-    (Val.add (match ofs with
-              | None => Vzero
-              | Some(r, sc) =>
-                  if Int.eq sc Int.one then rs r else Val.mul (rs r) (Vint sc)
-              end)
-             (match const with
-              | inl ofs => Vint ofs
-              | inr(id, ofs) => Genv.symbol_address ge id ofs
-              end))
-  end.
+           (match const with
+            | inl ofs => Vint (Int.repr ofs)
+            | inr(id, ofs) => Genv.symbol_address ge id ofs
+            end)).
+
+Definition eval_addrmode64 (a: addrmode) (rs: regset) : val :=
+  let '(Addrmode base ofs const) := a in
+  Val.addl (match base with
+             | None => Vlong Int64.zero
+             | Some r => rs r
+            end)
+  (Val.addl (match ofs with
+             | None => Vlong Int64.zero
+             | Some(r, sc) =>
+                if zeq sc 1
+                then rs r
+                else Val.mull (rs r) (Vlong (Int64.repr sc))
+             end)
+           (match const with
+            | inl ofs => Vlong (Int64.repr ofs)
+            | inr(id, ofs) => Genv.symbol_address ge id ofs
+            end)).
+
+Definition eval_addrmode (a: addrmode) (rs: regset) : val :=
+  if Archi.ptr64 then eval_addrmode64 a rs else eval_addrmode32 a rs.
 
 (** Performing a comparison *)
 
@@ -366,6 +429,13 @@ Definition compare_ints (x y: val) (rs: regset) (m: mem): regset :=
      #CF  <- (Val.cmpu (Mem.valid_pointer m) Clt x y)
      #SF  <- (Val.negative (Val.sub x y))
      #OF  <- (Val.sub_overflow x y)
+     #PF  <- Vundef.
+
+Definition compare_longs (x y: val) (rs: regset) (m: mem): regset :=
+  rs #ZF  <- (Val.maketotal (Val.cmplu (Mem.valid_pointer m) Ceq x y))
+     #CF  <- (Val.maketotal (Val.cmplu (Mem.valid_pointer m) Clt x y))
+     #SF  <- (Val.negativel (Val.subl x y))
+     #OF  <- (Val.subl_overflow x y)
      #PF  <- Vundef.
 
 (** Floating-point comparison between x and y:
@@ -481,7 +551,7 @@ Inductive outcome: Type :=
   to [Vundef] in addition to incrementing the [PC]. *)
 
 Definition nextinstr (rs: regset) :=
-  rs#PC <- (Val.add rs#PC Vone).
+  rs#PC <- (Val.offset_ptr rs#PC Ptrofs.one).
 
 Definition nextinstr_nf (rs: regset) : regset :=
   nextinstr (undef_regs (CR ZF :: CR CF :: CR PF :: CR SF :: CR OF :: nil) rs).
@@ -491,7 +561,7 @@ Definition goto_label (f: function) (lbl: label) (rs: regset) (m: mem) :=
   | None => Stuck
   | Some pos =>
       match rs#PC with
-      | Vptr b ofs => Next (rs#PC <- (Vptr b (Int.repr pos))) m
+      | Vptr b ofs => Next (rs#PC <- (Vptr b (Ptrofs.repr pos))) m
       | _ => Stuck
     end
   end.
@@ -537,14 +607,20 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   (** Moves *)
   | Pmov_rr rd r1 =>
       Next (nextinstr (rs#rd <- (rs r1))) m
-  | Pmov_ri rd n =>
+  | Pmovl_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Vint n))) m
-  | Pmov_ra rd id =>
-      Next (nextinstr_nf (rs#rd <- (Genv.symbol_address ge id Int.zero))) m
-  | Pmov_rm rd a =>
+  | Pmovq_ri rd n =>
+      Next (nextinstr_nf (rs#rd <- (Vlong n))) m
+  | Pmov_rs rd id =>
+      Next (nextinstr_nf (rs#rd <- (Genv.symbol_address ge id Ptrofs.zero))) m
+  | Pmovl_rm rd a =>
       exec_load Mint32 m a rs rd
-  | Pmov_mr a r1 =>
+  | Pmovq_rm rd a =>
+      exec_load Mint64 m a rs rd
+  | Pmovl_mr a r1 =>
       exec_store Mint32 m a rs r1 nil
+  | Pmovq_mr a r1 =>
+      exec_store Mint64 m a rs r1 nil
   | Pmovsd_ff rd r1 =>
       Next (nextinstr (rs#rd <- (rs r1))) m
   | Pmovsd_fi rd n =>
@@ -567,8 +643,6 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       exec_load Mfloat32 m a rs ST0
   | Pfstps_m a =>
       exec_store Mfloat32 m a rs ST0 (ST0 :: nil)
-  | Pxchg_rr r1 r2 =>
-      Next (nextinstr (rs#r1 <- (rs r2) #r2 <- (rs r1))) m
   (** Moves with conversion *)
   | Pmovb_mr a r1 =>
       exec_store Mint8unsigned m a rs r1 nil
@@ -590,6 +664,12 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (rs#rd <- (Val.sign_ext 16 rs#r1))) m
   | Pmovsw_rm rd a =>
       exec_load Mint16signed m a rs rd
+  | Pmovzl_rr rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.longofintu rs#r1))) m
+  | Pmovsl_rr rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.longofint rs#r1))) m
+  | Pmovls_rr rd =>
+      Next (nextinstr (rs#rd <- (Val.loword rs#rd))) m
   | Pcvtsd2ss_ff rd r1 =>
       Next (nextinstr (rs#rd <- (Val.singleoffloat rs#r1))) m
   | Pcvtss2sd_ff rd r1 =>
@@ -602,85 +682,165 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (rs#rd <- (Val.maketotal (Val.intofsingle rs#r1)))) m
   | Pcvtsi2ss_fr rd r1 =>
       Next (nextinstr (rs#rd <- (Val.maketotal (Val.singleofint rs#r1)))) m
+  | Pcvttsd2sl_rf rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.maketotal (Val.longoffloat rs#r1)))) m
+  | Pcvtsl2sd_fr rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.maketotal (Val.floatoflong rs#r1)))) m
+  | Pcvttss2sl_rf rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.maketotal (Val.longofsingle rs#r1)))) m
+  | Pcvtsl2ss_fr rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.maketotal (Val.singleoflong rs#r1)))) m
   (** Integer arithmetic *)
-  | Plea rd a =>
-      Next (nextinstr (rs#rd <- (eval_addrmode a rs))) m
-  | Pneg rd =>
+  | Pleal rd a =>
+      Next (nextinstr (rs#rd <- (eval_addrmode32 a rs))) m
+  | Pleaq rd a =>
+      Next (nextinstr (rs#rd <- (eval_addrmode64 a rs))) m
+  | Pnegl rd =>
       Next (nextinstr_nf (rs#rd <- (Val.neg rs#rd))) m
-  | Psub_rr rd r1 =>
+  | Pnegq rd =>
+      Next (nextinstr_nf (rs#rd <- (Val.negl rs#rd))) m
+  | Paddl_ri rd n =>
+      Next (nextinstr_nf (rs#rd <- (Val.add rs#rd (Vint n)))) m
+  | Paddq_ri rd n =>
+      Next (nextinstr_nf (rs#rd <- (Val.addl rs#rd (Vlong n)))) m
+  | Psubl_rr rd r1 =>
       Next (nextinstr_nf (rs#rd <- (Val.sub rs#rd rs#r1))) m
-  | Pimul_rr rd r1 =>
+  | Psubq_rr rd r1 =>
+      Next (nextinstr_nf (rs#rd <- (Val.subl rs#rd rs#r1))) m
+  | Pimull_rr rd r1 =>
       Next (nextinstr_nf (rs#rd <- (Val.mul rs#rd rs#r1))) m
-  | Pimul_ri rd n =>
+  | Pimulq_rr rd r1 =>
+      Next (nextinstr_nf (rs#rd <- (Val.mull rs#rd rs#r1))) m
+  | Pimull_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Val.mul rs#rd (Vint n)))) m
-  | Pimul_r r1 =>
-      Next (nextinstr_nf (rs#EAX <- (Val.mul rs#EAX rs#r1)
-                            #EDX <- (Val.mulhs rs#EAX rs#r1))) m
-  | Pmul_r r1 =>
-      Next (nextinstr_nf (rs#EAX <- (Val.mul rs#EAX rs#r1)
-                            #EDX <- (Val.mulhu rs#EAX rs#r1))) m
+  | Pimulq_ri rd n =>
+      Next (nextinstr_nf (rs#rd <- (Val.mull rs#rd (Vlong n)))) m
+  | Pimull_r r1 =>
+      Next (nextinstr_nf (rs#RAX <- (Val.mul rs#RAX rs#r1)
+                            #RDX <- (Val.mulhs rs#RAX rs#r1))) m
+  | Pmull_r r1 =>
+      Next (nextinstr_nf (rs#RAX <- (Val.mul rs#RAX rs#r1)
+                            #RDX <- (Val.mulhu rs#RAX rs#r1))) m
   | Pcltd =>
-      Next (nextinstr_nf (rs#EDX <- (Val.shr rs#EAX (Vint (Int.repr 31))))) m
-  | Pdiv r1 =>
-      match rs#EDX, rs#EAX, rs#r1 with
+      Next (nextinstr_nf (rs#RDX <- (Val.shr rs#RAX (Vint (Int.repr 31))))) m
+  | Pcqto =>
+      Next (nextinstr_nf (rs#RDX <- (Val.shrl rs#RAX (Vint (Int.repr 63))))) m
+  | Pdivl r1 =>
+      match rs#RDX, rs#RAX, rs#r1 with
       | Vint nh, Vint nl, Vint d =>
           match Int.divmodu2 nh nl d with
-          | Some(q, r) => Next (nextinstr_nf (rs#EAX <- (Vint q) #EDX <- (Vint r))) m
+          | Some(q, r) => Next (nextinstr_nf (rs#RAX <- (Vint q) #RDX <- (Vint r))) m
           | None => Stuck
           end
       | _, _, _ => Stuck
       end
-  | Pidiv r1 =>
-      match rs#EDX, rs#EAX, rs#r1 with
+  | Pdivq r1 =>
+      match rs#RDX, rs#RAX, rs#r1 with
+      | Vlong nh, Vlong nl, Vlong d =>
+          match Int64.divmodu2 nh nl d with
+          | Some(q, r) => Next (nextinstr_nf (rs#RAX <- (Vlong q) #RDX <- (Vlong r))) m
+          | None => Stuck
+          end
+      | _, _, _ => Stuck
+      end
+  | Pidivl r1 =>
+      match rs#RDX, rs#RAX, rs#r1 with
       | Vint nh, Vint nl, Vint d =>
           match Int.divmods2 nh nl d with
-          | Some(q, r) => Next (nextinstr_nf (rs#EAX <- (Vint q) #EDX <- (Vint r))) m
+          | Some(q, r) => Next (nextinstr_nf (rs#RAX <- (Vint q) #RDX <- (Vint r))) m
           | None => Stuck
           end
       | _, _, _ => Stuck
       end
-  | Pand_rr rd r1 =>
+  | Pidivq r1 =>
+      match rs#RDX, rs#RAX, rs#r1 with
+      | Vlong nh, Vlong nl, Vlong d =>
+          match Int64.divmods2 nh nl d with
+          | Some(q, r) => Next (nextinstr_nf (rs#RAX <- (Vlong q) #RDX <- (Vlong r))) m
+          | None => Stuck
+          end
+      | _, _, _ => Stuck
+      end
+  | Pandl_rr rd r1 =>
       Next (nextinstr_nf (rs#rd <- (Val.and rs#rd rs#r1))) m
-  | Pand_ri rd n =>
+  | Pandq_rr rd r1 =>
+      Next (nextinstr_nf (rs#rd <- (Val.andl rs#rd rs#r1))) m
+  | Pandl_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Val.and rs#rd (Vint n)))) m
-  | Por_rr rd r1 =>
+  | Pandq_ri rd n =>
+      Next (nextinstr_nf (rs#rd <- (Val.andl rs#rd (Vlong n)))) m
+  | Porl_rr rd r1 =>
       Next (nextinstr_nf (rs#rd <- (Val.or rs#rd rs#r1))) m
-  | Por_ri rd n =>
+  | Porq_rr rd r1 =>
+      Next (nextinstr_nf (rs#rd <- (Val.orl rs#rd rs#r1))) m
+  | Porl_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Val.or rs#rd (Vint n)))) m
-  | Pxor_r rd =>
+  | Porq_ri rd n =>
+      Next (nextinstr_nf (rs#rd <- (Val.orl rs#rd (Vlong n)))) m
+  | Pxorl_r rd =>
       Next (nextinstr_nf (rs#rd <- Vzero)) m
-  | Pxor_rr rd r1 =>
+  | Pxorq_r rd =>
+      Next (nextinstr_nf (rs#rd <- (Vlong Int64.zero))) m
+  | Pxorl_rr rd r1 =>
       Next (nextinstr_nf (rs#rd <- (Val.xor rs#rd rs#r1))) m
-  | Pxor_ri rd n =>
+  | Pxorq_rr rd r1 =>
+      Next (nextinstr_nf (rs#rd <- (Val.xorl rs#rd rs#r1))) m 
+  | Pxorl_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Val.xor rs#rd (Vint n)))) m
-  | Pnot rd =>
+  | Pxorq_ri rd n =>
+      Next (nextinstr_nf (rs#rd <- (Val.xorl rs#rd (Vlong n)))) m
+  | Pnotl rd =>
       Next (nextinstr_nf (rs#rd <- (Val.notint rs#rd))) m
-  | Psal_rcl rd =>
-      Next (nextinstr_nf (rs#rd <- (Val.shl rs#rd rs#ECX))) m
-  | Psal_ri rd n =>
+  | Pnotq rd =>
+      Next (nextinstr_nf (rs#rd <- (Val.notl rs#rd))) m
+  | Psall_rcl rd =>
+      Next (nextinstr_nf (rs#rd <- (Val.shl rs#rd rs#RCX))) m
+  | Psalq_rcl rd =>
+      Next (nextinstr_nf (rs#rd <- (Val.shll rs#rd rs#RCX))) m
+  | Psall_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Val.shl rs#rd (Vint n)))) m
-  | Pshr_rcl rd =>
-      Next (nextinstr_nf (rs#rd <- (Val.shru rs#rd rs#ECX))) m
-  | Pshr_ri rd n =>
+  | Psalq_ri rd n =>
+      Next (nextinstr_nf (rs#rd <- (Val.shll rs#rd (Vint n)))) m
+  | Pshrl_rcl rd =>
+      Next (nextinstr_nf (rs#rd <- (Val.shru rs#rd rs#RCX))) m
+  | Pshrq_rcl rd =>
+      Next (nextinstr_nf (rs#rd <- (Val.shrlu rs#rd rs#RCX))) m
+  | Pshrl_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Val.shru rs#rd (Vint n)))) m
-  | Psar_rcl rd =>
-      Next (nextinstr_nf (rs#rd <- (Val.shr rs#rd rs#ECX))) m
-  | Psar_ri rd n =>
+  | Pshrq_ri rd n =>
+      Next (nextinstr_nf (rs#rd <- (Val.shrlu rs#rd (Vint n)))) m
+  | Psarl_rcl rd =>
+      Next (nextinstr_nf (rs#rd <- (Val.shr rs#rd rs#RCX))) m
+  | Psarq_rcl rd =>
+      Next (nextinstr_nf (rs#rd <- (Val.shrl rs#rd rs#RCX))) m
+  | Psarl_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Val.shr rs#rd (Vint n)))) m
+  | Psarq_ri rd n =>
+      Next (nextinstr_nf (rs#rd <- (Val.shrl rs#rd (Vint n)))) m
   | Pshld_ri rd r1 n =>
       Next (nextinstr_nf
               (rs#rd <- (Val.or (Val.shl rs#rd (Vint n))
                                 (Val.shru rs#r1 (Vint (Int.sub Int.iwordsize n)))))) m
-  | Pror_ri rd n =>
+  | Prorl_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Val.ror rs#rd (Vint n)))) m
-  | Pcmp_rr r1 r2 =>
+  | Prorq_ri rd n =>
+      Next (nextinstr_nf (rs#rd <- (Val.rorl rs#rd (Vint n)))) m
+  | Pcmpl_rr r1 r2 =>
       Next (nextinstr (compare_ints (rs r1) (rs r2) rs m)) m
-  | Pcmp_ri r1 n =>
+  | Pcmpq_rr r1 r2 =>
+      Next (nextinstr (compare_longs (rs r1) (rs r2) rs m)) m
+  | Pcmpl_ri r1 n =>
       Next (nextinstr (compare_ints (rs r1) (Vint n) rs m)) m
-  | Ptest_rr r1 r2 =>
+  | Pcmpq_ri r1 n =>
+      Next (nextinstr (compare_longs (rs r1) (Vlong n) rs m)) m
+  | Ptestl_rr r1 r2 =>
       Next (nextinstr (compare_ints (Val.and (rs r1) (rs r2)) Vzero rs m)) m
-  | Ptest_ri r1 n =>
+  | Ptestq_rr r1 r2 =>
+      Next (nextinstr (compare_longs (Val.andl (rs r1) (rs r2)) (Vlong Int64.zero) rs m)) m
+  | Ptestl_ri r1 n =>
       Next (nextinstr (compare_ints (Val.and (rs r1) (Vint n)) Vzero rs m)) m
+  | Ptestq_ri r1 n =>
+      Next (nextinstr (compare_longs (Val.andl (rs r1) (Vlong n)) (Vlong Int64.zero) rs m)) m
   | Pcmov c rd r1 =>
       match eval_testcond c rs with
       | Some true => Next (nextinstr (rs#rd <- (rs#r1))) m
@@ -727,7 +887,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pjmp_l lbl =>
       goto_label f lbl rs m
   | Pjmp_s id sg =>
-      Next (rs#PC <- (Genv.symbol_address ge id Int.zero)) m
+      Next (rs#PC <- (Genv.symbol_address ge id Ptrofs.zero)) m
   | Pjmp_r r sg =>
       Next (rs#PC <- (rs r)) m
   | Pjcc cond lbl =>
@@ -752,16 +912,16 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       | _ => Stuck
       end
   | Pcall_s id sg =>
-      Next (rs#RA <- (Val.add rs#PC Vone) #PC <- (Genv.symbol_address ge id Int.zero)) m
+      Next (rs#RA <- (Val.offset_ptr rs#PC Ptrofs.one) #PC <- (Genv.symbol_address ge id Ptrofs.zero)) m
   | Pcall_r r sg =>
-      Next (rs#RA <- (Val.add rs#PC Vone) #PC <- (rs r)) m
+      Next (rs#RA <- (Val.offset_ptr rs#PC Ptrofs.one) #PC <- (rs r)) m
   | Pret =>
       Next (rs#PC <- (rs#RA)) m
   (** Saving and restoring registers *)
   | Pmov_rm_a rd a =>
-      exec_load Many32 m a rs rd
+      exec_load (if Archi.ptr64 then Many64 else Many32) m a rs rd
   | Pmov_mr_a a r1 =>
-      exec_store Many32 m a rs r1 nil
+      exec_store (if Archi.ptr64 then Many64 else Many32) m a rs r1 nil
   | Pmovsd_fm_a rd a =>
       exec_load Many64 m a rs rd
   | Pmovsd_mf_a a r1 =>
@@ -771,27 +931,27 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr rs) m
   | Pallocframe sz ofs_ra ofs_link =>
       let (m1, stk) := Mem.alloc m 0 sz in
-      let sp := Vptr stk Int.zero in
-      match Mem.storev Mint32 m1 (Val.add sp (Vint ofs_link)) rs#ESP with
+      let sp := Vptr stk Ptrofs.zero in
+      match Mem.storev Mptr m1 (Val.offset_ptr sp ofs_link) rs#RSP with
       | None => Stuck
       | Some m2 =>
-          match Mem.storev Mint32 m2 (Val.add sp (Vint ofs_ra)) rs#RA with
+          match Mem.storev Mptr m2 (Val.offset_ptr sp ofs_ra) rs#RA with
           | None => Stuck
-          | Some m3 => Next (nextinstr (rs #EDX <- (rs#ESP) #ESP <- sp)) m3
+          | Some m3 => Next (nextinstr (rs #RAX <- (rs#RSP) #RSP <- sp)) m3
           end
       end
   | Pfreeframe sz ofs_ra ofs_link =>
-      match Mem.loadv Mint32 m (Val.add rs#ESP (Vint ofs_ra)) with
+      match Mem.loadv Mptr m (Val.offset_ptr rs#RSP ofs_ra) with
       | None => Stuck
       | Some ra =>
-          match Mem.loadv Mint32 m (Val.add rs#ESP (Vint ofs_link)) with
+          match Mem.loadv Mptr m (Val.offset_ptr rs#RSP ofs_link) with
           | None => Stuck
           | Some sp =>
-              match rs#ESP with
+              match rs#RSP with
               | Vptr stk ofs =>
                   match Mem.free m stk 0 sz with
                   | None => Stuck
-                  | Some m' => Next (nextinstr (rs#ESP <- sp #RA <- ra)) m'
+                  | Some m' => Next (nextinstr (rs#RSP <- sp #RA <- ra)) m'
                   end
               | _ => Stuck
               end
@@ -801,14 +961,16 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Stuck                             (**r treated specially below *)
   (** The following instructions and directives are not generated
       directly by [Asmgen], so we do not model them. *)
-  | Padc_ri _ _
-  | Padc_rr _ _
-  | Padd_mi _ _
-  | Padd_ri _ _
-  | Padd_rr _ _
-  | Pbsf _ _
-  | Pbsr _ _
-  | Pbswap _
+  | Padcl_ri _ _
+  | Padcl_rr _ _
+  | Paddl_mi _ _
+  | Paddl_rr _ _
+  | Pbsfl _ _
+  | Pbsfq _ _
+  | Pbsrl _ _
+  | Pbsrq _ _
+  | Pbswap64 _
+  | Pbswap32 _
   | Pbswap16 _
   | Pcfi_adjust _
   | Pfmadd132 _ _ _
@@ -826,15 +988,16 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pmaxsd _ _
   | Pminsd _ _
   | Pmovb_rm _ _
-  | Pmovq_rm _ _
-  | Pmovq_mr _ _
+  | Pmovsq_rm _ _
+  | Pmovsq_mr _ _
   | Pmovsb
   | Pmovsw
   | Pmovw_rm _ _
   | Prep_movsl
-  | Psbb_rr _ _
+  | Psbbl_rr _ _
   | Psqrtsd _ _
-  | Psub_ri _ _ => Stuck
+  | Psubl_ri _ _
+  | Psubq_ri _ _ => Stuck
   end.
 
 (** Translation of the LTL/Linear/Mach view of machine registers
@@ -842,13 +1005,21 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
 
 Definition preg_of (r: mreg) : preg :=
   match r with
-  | AX => IR EAX
-  | BX => IR EBX
-  | CX => IR ECX
-  | DX => IR EDX
-  | SI => IR ESI
-  | DI => IR EDI
-  | BP => IR EBP
+  | AX => IR RAX
+  | BX => IR RBX
+  | CX => IR RCX
+  | DX => IR RDX
+  | SI => IR RSI
+  | DI => IR RDI
+  | BP => IR RBP
+  | Machregs.R8 => IR R8
+  | Machregs.R9 => IR R9
+  | Machregs.R10 => IR R10
+  | Machregs.R11 => IR R11
+  | Machregs.R12 => IR R12
+  | Machregs.R13 => IR R13
+  | Machregs.R14 => IR R14
+  | Machregs.R15 => IR R15
   | X0 => FR XMM0
   | X1 => FR XMM1
   | X2 => FR XMM2
@@ -857,6 +1028,14 @@ Definition preg_of (r: mreg) : preg :=
   | X5 => FR XMM5
   | X6 => FR XMM6
   | X7 => FR XMM7
+  | X8 => FR XMM8
+  | X9 => FR XMM9
+  | X10 => FR XMM10
+  | X11 => FR XMM11
+  | X12 => FR XMM12
+  | X13 => FR XMM13
+  | X14 => FR XMM14
+  | X15 => FR XMM15
   | FP0 => ST0
   end.
 
@@ -870,7 +1049,7 @@ Inductive extcall_arg (rs: regset) (m: mem): loc -> val -> Prop :=
   | extcall_arg_stack: forall ofs ty bofs v,
       bofs = Stacklayout.fe_ofs_arg + 4 * ofs ->
       Mem.loadv (chunk_of_type ty) m
-                (Val.add (rs (IR ESP)) (Vint (Int.repr bofs))) = Some v ->
+                (Val.offset_ptr (rs (IR RSP)) (Ptrofs.repr bofs)) = Some v ->
       extcall_arg rs m (S Outgoing ofs ty) v.
 
 Inductive extcall_arg_pair (rs: regset) (m: mem): rpair loc -> val -> Prop :=
@@ -899,15 +1078,15 @@ Inductive step: state -> trace -> state -> Prop :=
       forall b ofs f i rs m rs' m',
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
-      find_instr (Int.unsigned ofs) f.(fn_code) = Some i ->
+      find_instr (Ptrofs.unsigned ofs) f.(fn_code) = Some i ->
       exec_instr f i rs m = Next rs' m' ->
       step (State rs m) E0 (State rs' m')
   | exec_step_builtin:
       forall b ofs f ef args res rs m vargs t vres rs' m',
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
-      find_instr (Int.unsigned ofs) f.(fn_code) = Some (Pbuiltin ef args res) ->
-      eval_builtin_args ge rs (rs ESP) m args vargs ->
+      find_instr (Ptrofs.unsigned ofs) f.(fn_code) = Some (Pbuiltin ef args res) ->
+      eval_builtin_args ge rs (rs RSP) m args vargs ->
       external_call ef ge vargs m t vres m' ->
       rs' = nextinstr_nf
              (set_res res vres
@@ -915,7 +1094,7 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State rs m) t (State rs' m')
   | exec_step_external:
       forall b ef args res rs m t rs' m',
-      rs PC = Vptr b Int.zero ->
+      rs PC = Vptr b Ptrofs.zero ->
       Genv.find_funct_ptr ge b = Some (External ef) ->
       extcall_arguments rs m (ef_sig ef) args ->
       external_call ef ge args m t res m' ->
@@ -932,15 +1111,15 @@ Inductive initial_state (p: program): state -> Prop :=
       let ge := Genv.globalenv p in
       let rs0 :=
         (Pregmap.init Vundef)
-        # PC <- (Genv.symbol_address ge p.(prog_main) Int.zero)
-        # RA <- Vzero
-        # ESP <- Vzero in
+        # PC <- (Genv.symbol_address ge p.(prog_main) Ptrofs.zero)
+        # RA <- Vnullptr
+        # RSP <- Vnullptr in
       initial_state p (State rs0 m0).
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m r,
-      rs#PC = Vzero ->
-      rs#EAX = Vint r ->
+      rs#PC = Vnullptr ->
+      rs#RAX = Vint r ->
       final_state (State rs m) r.
 
 Definition semantics (p: program) :=
@@ -998,7 +1177,9 @@ Ltac Equalities :=
 - (* initial states *)
   inv H; inv H0. f_equal. congruence.
 - (* final no step *)
-  inv H. unfold Vzero in H0. red; intros; red; intros. inv H; congruence.
+  assert (NOTNULL: forall b ofs, Vnullptr <> Vptr b ofs).
+  { intros; unfold Vnullptr; destruct Archi.ptr64; congruence. }
+  inv H. red; intros; red; intros. inv H; rewrite H0 in *; eelim NOTNULL; eauto.
 - (* final states *)
   inv H; inv H0. congruence.
 Qed.

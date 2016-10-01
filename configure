@@ -40,6 +40,7 @@ Supported targets:
   ia32-bsd             (x86 32 bits, BSD)
   ia32-macosx          (x86 32 bits, MacOS X)
   ia32-cygwin          (x86 32 bits, Cygwin environment under Windows)
+  x86_64-linux         (x86 64 bits, Linux)
   manual               (edit configuration file by hand)
 
 For PowerPC targets, the "ppc-" prefix can be refined into:
@@ -118,7 +119,9 @@ case "$target" in
   armebv7m-*)
       arch="arm"; model="armv7m"; endianness="big";;
   ia32-*)
-      arch="ia32"; model="sse2"; endianness="little";;
+      arch="ia32"; model="32sse2"; endianness="little";;
+  x86_64-*)
+      arch="ia32"; model="64"; endianness="little";;
   powerpc-*|ppc-*)
       arch="powerpc"; model="ppc32"; endianness="big";;
   powerpc64-*|ppc64-*)
@@ -239,9 +242,9 @@ fi
 
 
 #
-# IA32 Target Configuration
+# IA32 (32 bits) Target Configuration
 #
-if test "$arch" = "ia32"; then
+if test "$arch" = "ia32" -a "$model" != "64"; then
 
   case "$target" in
     bsd)
@@ -312,6 +315,33 @@ if test "$arch" = "ia32"; then
         ;;
     *)
         echo "Error: invalid eabi/system '$target' for architecture IA32." 1>&2
+        echo "$usage" 1>&2
+        exit 2;;
+  esac
+fi
+
+#
+# IA32 (64 bits) Target Configuration
+#
+if test "$arch" = "ia32" -a "$model" = "64"; then
+
+  case "$target" in
+    linux)
+        abi="standard"
+        casm="${toolprefix}gcc"
+        casm_options="-m64 -c"
+        cc="${toolprefix}gcc -m64"
+        clinker="${toolprefix}gcc"
+        clinker_options="-m64"
+        cprepro="${toolprefix}gcc"
+        cprepro_options="-std=c99 -m64 -U__GNUC__ -E"
+        libmath="-lm"
+        struct_passing="ref-callee"   # wrong!
+        struct_return="ref"           # to check!
+        system="linux"
+        ;;
+    *)
+        echo "Error: invalid eabi/system '$target' for architecture X86_64." 1>&2
         echo "$usage" 1>&2
         exit 2;;
   esac
@@ -491,7 +521,8 @@ ARCH=
 # MODEL=armv7a      # for ARM
 # MODEL=armv7r      # for ARM
 # MODEL=armv7m      # for ARM
-# MODEL=sse2        # for IA32
+# MODEL=32sse2      # for IA32 in 32-bit mode
+# MODEL=64          # for IA32 in 64-bit mode
 MODEL=
 
 # Target ABI
