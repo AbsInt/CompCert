@@ -76,7 +76,7 @@ Lemma sig_preserved:
 Proof.
   intros until tf; destruct f; simpl.
   unfold transl_function. destruct (build_compilenv f).
-  case (zle z Int.max_unsigned); simpl bind; try congruence.
+  case (zle z Ptrofs.max_unsigned); simpl bind; try congruence.
   intros. monadInv H. simpl. eapply sig_preserved_body; eauto.
   intro. inv H. reflexivity.
 Qed.
@@ -190,7 +190,7 @@ Qed.
 
 Inductive match_var (f: meminj) (sp: block): option (block * Z) -> option Z -> Prop :=
   | match_var_local: forall b sz ofs,
-      Val.inject f (Vptr b Int.zero) (Vptr sp (Int.repr ofs)) ->
+      Val.inject f (Vptr b Ptrofs.zero) (Vptr sp (Ptrofs.repr ofs)) ->
       match_var f sp (Some(b, sz)) (Some ofs)
   | match_var_global:
       match_var f sp None None.
@@ -311,7 +311,7 @@ Proof.
   intros. rewrite PTree.gsspec. destruct (peq id0 id).
   (* the new var *)
   subst id0. rewrite CENV. constructor. econstructor. eauto.
-  rewrite Int.add_commut; rewrite Int.add_zero; auto.
+  rewrite Ptrofs.add_commut; rewrite Ptrofs.add_zero; auto.
   (* old vars *)
   generalize (me_vars0 id0). rewrite PTree.gro; auto. intros M; inv M.
   constructor; eauto.
@@ -794,7 +794,7 @@ Definition cenv_mem_separated (cenv: compilenv) (vars: list (ident * Z)) (f: mem
 Lemma match_callstack_alloc_variables_rec:
   forall tm sp tf cenv le te lo cs,
   Mem.valid_block tm sp ->
-  fn_stackspace tf <= Int.max_unsigned ->
+  fn_stackspace tf <= Ptrofs.max_unsigned ->
   (forall ofs k p, Mem.perm tm sp ofs k p -> 0 <= ofs < fn_stackspace tf) ->
   (forall ofs k p, 0 <= ofs < fn_stackspace tf -> Mem.perm tm sp ofs k p) ->
   forall e1 m1 vars e2 m2,
@@ -854,7 +854,7 @@ Qed.
 Lemma match_callstack_alloc_variables:
   forall tm1 sp tm2 m1 vars e m2 cenv f1 cs fn le te,
   Mem.alloc tm1 0 (fn_stackspace fn) = (tm2, sp) ->
-  fn_stackspace fn <= Int.max_unsigned ->
+  fn_stackspace fn <= Ptrofs.max_unsigned ->
   alloc_variables empty_env m1 vars e m2 ->
   list_norepet (map fst vars) ->
   cenv_compat cenv vars (fn_stackspace fn) ->
@@ -1225,7 +1225,7 @@ Qed.
 Theorem match_callstack_function_entry:
   forall fn cenv tf m e m' tm tm' sp f cs args targs le,
   build_compilenv fn = (cenv, tf.(fn_stackspace)) ->
-  tf.(fn_stackspace) <= Int.max_unsigned ->
+  tf.(fn_stackspace) <= Ptrofs.max_unsigned ->
   list_norepet (map fst (Csharpminor.fn_vars fn)) ->
   list_norepet (Csharpminor.fn_params fn) ->
   list_disjoint (Csharpminor.fn_params fn) (Csharpminor.fn_temps fn) ->
@@ -1334,82 +1334,91 @@ Lemma eval_binop_compat:
      eval_binop op tv1 tv2 tm = Some tv
   /\ Val.inject f v tv.
 Proof.
-  destruct op; simpl; intros.
-  inv H; inv H0; inv H1; TrivialExists.
-    repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-    repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  inv H; inv H0; inv H1; TrivialExists.
-    apply Int.sub_add_l.
-    simpl. destruct (eq_block b1 b0); auto.
-    subst b1. rewrite H in H0; inv H0.
-    rewrite dec_eq_true. rewrite Int.sub_shifted. auto.
-  inv H; inv H0; inv H1; TrivialExists.
-  inv H0; try discriminate; inv H1; try discriminate. simpl in *.
+  destruct op; simpl; intros; inv H.
+- TrivialExists. apply Val.add_inject; auto.
+- TrivialExists. apply Val.sub_inject; auto.
+- TrivialExists. inv H0; inv H1; constructor.
+- inv H0; try discriminate; inv H1; try discriminate. simpl in *.
     destruct (Int.eq i0 Int.zero
-      || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone); inv H; TrivialExists.
-  inv H0; try discriminate; inv H1; try discriminate. simpl in *.
-    destruct (Int.eq i0 Int.zero); inv H. TrivialExists.
-  inv H0; try discriminate; inv H1; try discriminate. simpl in *.
+      || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone); inv H4; TrivialExists.
+- inv H0; try discriminate; inv H1; try discriminate. simpl in *.
+    destruct (Int.eq i0 Int.zero); inv H4. TrivialExists.
+- inv H0; try discriminate; inv H1; try discriminate. simpl in *.
     destruct (Int.eq i0 Int.zero
-      || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone); inv H; TrivialExists.
-  inv H0; try discriminate; inv H1; try discriminate. simpl in *.
-    destruct (Int.eq i0 Int.zero); inv H. TrivialExists.
-  inv H; inv H0; inv H1; TrivialExists.
-  inv H; inv H0; inv H1; TrivialExists.
-  inv H; inv H0; inv H1; TrivialExists.
-  inv H; inv H0; inv H1; TrivialExists. simpl. destruct (Int.ltu i0 Int.iwordsize); auto.
-  inv H; inv H0; inv H1; TrivialExists. simpl. destruct (Int.ltu i0 Int.iwordsize); auto.
-  inv H; inv H0; inv H1; TrivialExists. simpl. destruct (Int.ltu i0 Int.iwordsize); auto.
-  inv H; inv H0; inv H1; TrivialExists.
-  inv H; inv H0; inv H1; TrivialExists.
-  inv H; inv H0; inv H1; TrivialExists.
-  inv H; inv H0; inv H1; TrivialExists.
-  inv H; inv H0; inv H1; TrivialExists.
-  inv H; inv H0; inv H1; TrivialExists.
-  inv H; inv H0; inv H1; TrivialExists.
-  inv H; inv H0; inv H1; TrivialExists.
-  inv H; inv H0; inv H1; TrivialExists.
-  inv H; inv H0; inv H1; TrivialExists.
-  inv H; inv H0; inv H1; TrivialExists.
-  inv H0; try discriminate; inv H1; try discriminate. simpl in *.
+      || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone); inv H4; TrivialExists.
+- inv H0; try discriminate; inv H1; try discriminate. simpl in *.
+    destruct (Int.eq i0 Int.zero); inv H4. TrivialExists.
+- TrivialExists; inv H0; inv H1; constructor.
+- TrivialExists; inv H0; inv H1; constructor.
+- TrivialExists; inv H0; inv H1; constructor.
+- TrivialExists; inv H0; inv H1; simpl; auto.
+  destruct (Int.ltu i0 Int.iwordsize); constructor.
+- TrivialExists; inv H0; inv H1; simpl; auto.
+  destruct (Int.ltu i0 Int.iwordsize); constructor.
+- TrivialExists; inv H0; inv H1; simpl; auto.
+  destruct (Int.ltu i0 Int.iwordsize); constructor.
+- TrivialExists; inv H0; inv H1; constructor.
+- TrivialExists; inv H0; inv H1; constructor.
+- TrivialExists; inv H0; inv H1; constructor.
+- TrivialExists; inv H0; inv H1; constructor.
+- TrivialExists; inv H0; inv H1; constructor.
+- TrivialExists; inv H0; inv H1; constructor.
+- TrivialExists; inv H0; inv H1; constructor.
+- TrivialExists; inv H0; inv H1; constructor.
+- TrivialExists. apply Val.addl_inject; auto.
+- TrivialExists. apply Val.subl_inject; auto.
+- TrivialExists. inv H0; inv H1; constructor.
+- inv H0; try discriminate; inv H1; try discriminate. simpl in *.
     destruct (Int64.eq i0 Int64.zero
-      || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq i0 Int64.mone); inv H; TrivialExists.
-  inv H0; try discriminate; inv H1; try discriminate. simpl in *.
-    destruct (Int64.eq i0 Int64.zero); inv H. TrivialExists.
-  inv H0; try discriminate; inv H1; try discriminate. simpl in *.
+      || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq i0 Int64.mone); inv H4; TrivialExists.
+- inv H0; try discriminate; inv H1; try discriminate. simpl in *.
+    destruct (Int64.eq i0 Int64.zero); inv H4. TrivialExists.
+- inv H0; try discriminate; inv H1; try discriminate. simpl in *.
     destruct (Int64.eq i0 Int64.zero
-      || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq i0 Int64.mone); inv H; TrivialExists.
-  inv H0; try discriminate; inv H1; try discriminate. simpl in *.
-    destruct (Int64.eq i0 Int64.zero); inv H. TrivialExists.
-  inv H; inv H0; inv H1; TrivialExists.
-  inv H; inv H0; inv H1; TrivialExists.
-  inv H; inv H0; inv H1; TrivialExists.
-  inv H; inv H0; inv H1; TrivialExists. simpl. destruct (Int.ltu i0 Int64.iwordsize'); auto.
-  inv H; inv H0; inv H1; TrivialExists. simpl. destruct (Int.ltu i0 Int64.iwordsize'); auto.
-  inv H; inv H0; inv H1; TrivialExists. simpl. destruct (Int.ltu i0 Int64.iwordsize'); auto.
-  inv H; inv H0; inv H1; TrivialExists. apply val_inject_val_of_optbool.
-(* cmpu *)
-  inv H. econstructor; split; eauto.
-  unfold Val.cmpu.
+      || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq i0 Int64.mone); inv H4; TrivialExists.
+- inv H0; try discriminate; inv H1; try discriminate. simpl in *.
+    destruct (Int64.eq i0 Int64.zero); inv H4. TrivialExists.
+- TrivialExists; inv H0; inv H1; constructor.
+- TrivialExists; inv H0; inv H1; constructor.
+- TrivialExists; inv H0; inv H1; constructor.
+- TrivialExists; inv H0; inv H1; simpl; auto.
+  destruct (Int.ltu i0 Int64.iwordsize'); constructor.
+- TrivialExists; inv H0; inv H1; simpl; auto.
+  destruct (Int.ltu i0 Int64.iwordsize'); constructor.
+- TrivialExists; inv H0; inv H1; simpl; auto.
+  destruct (Int.ltu i0 Int64.iwordsize'); constructor.
+- (* cmp *)
+  TrivialExists. inv H0; inv H1; auto. apply val_inject_val_of_optbool.
+- (* cmpu *)
+  TrivialExists. unfold Val.cmpu.
   destruct (Val.cmpu_bool (Mem.valid_pointer m) c v1 v2) as [b|] eqn:E.
   replace (Val.cmpu_bool (Mem.valid_pointer tm) c tv1 tv2) with (Some b).
-  destruct b; simpl; constructor.
+  apply val_inject_val_of_optbool.
   symmetry. eapply Val.cmpu_bool_inject; eauto.
   intros; eapply Mem.valid_pointer_inject_val; eauto.
   intros; eapply Mem.weak_valid_pointer_inject_val; eauto.
   intros; eapply Mem.weak_valid_pointer_inject_no_overflow; eauto.
   intros; eapply Mem.different_pointers_inject; eauto.
   simpl; auto.
-(* cmpf *)
-  inv H; inv H0; inv H1; TrivialExists. apply val_inject_val_of_optbool.
-(* cmpfs *)
-  inv H; inv H0; inv H1; TrivialExists. apply val_inject_val_of_optbool.
-(* cmpl *)
-  unfold Val.cmpl in *. inv H0; inv H1; simpl in H; inv H.
+- (* cmpf *)
+  TrivialExists. inv H0; inv H1; auto. apply val_inject_val_of_optbool.
+- (* cmpfs *)
+  TrivialExists. inv H0; inv H1; auto. apply val_inject_val_of_optbool.
+- (* cmpl *)
+  unfold Val.cmpl in *. inv H0; inv H1; simpl in H4; inv H4.
   econstructor; split. simpl; eauto. apply val_inject_val_of_bool.
-(* cmplu *)
-  unfold Val.cmplu in *. inv H0; inv H1; simpl in H; inv H.
+- (* cmplu *)
+  unfold Val.cmplu in *.
+  destruct (Val.cmplu_bool (Mem.valid_pointer m) c v1 v2) as [b|] eqn:E.
+  simpl in H4; inv H4.
+  replace (Val.cmplu_bool (Mem.valid_pointer tm) c tv1 tv2) with (Some b).
   econstructor; split. simpl; eauto. apply val_inject_val_of_bool.
+  symmetry. eapply Val.cmplu_bool_inject; eauto.
+  intros; eapply Mem.valid_pointer_inject_val; eauto.
+  intros; eapply Mem.weak_valid_pointer_inject_val; eauto.
+  intros; eapply Mem.weak_valid_pointer_inject_no_overflow; eauto.
+  intros; eapply Mem.different_pointers_inject; eauto.
+  discriminate.
 Qed.
 
 (** * Correctness of Cminor construction functions *)
@@ -1421,21 +1430,22 @@ Lemma var_addr_correct:
   match_callstack f m tm (Frame cenv tf e le te sp lo hi :: cs) (Mem.nextblock m) (Mem.nextblock tm) ->
   eval_var_addr ge e id b ->
   exists tv,
-     eval_expr tge (Vptr sp Int.zero) te tm (var_addr cenv id) tv
-  /\ Val.inject f (Vptr b Int.zero) tv.
+     eval_expr tge (Vptr sp Ptrofs.zero) te tm (var_addr cenv id) tv
+  /\ Val.inject f (Vptr b Ptrofs.zero) tv.
 Proof.
   unfold var_addr; intros.
   assert (match_var f sp e!id cenv!id).
     inv H. inv MENV. auto.
   inv H1; inv H0; try congruence.
   (* local *)
-  exists (Vptr sp (Int.repr ofs)); split.
-  constructor. simpl. rewrite Int.add_zero_l; auto.
+  exists (Vptr sp (Ptrofs.repr ofs)); split.
+  constructor. simpl. rewrite Ptrofs.add_zero_l; auto.
   congruence.
   (* global *)
   exploit match_callstack_match_globalenvs; eauto. intros [bnd MG]. inv MG.
-  exists (Vptr b Int.zero); split.
-  constructor. simpl. rewrite symbols_preserved. rewrite H2. auto.
+  exists (Vptr b Ptrofs.zero); split.
+  constructor. simpl. unfold Genv.symbol_address. 
+  rewrite symbols_preserved. rewrite H2. auto.
   econstructor; eauto.
 Qed.
 
@@ -1497,7 +1507,7 @@ Lemma transl_expr_correct:
   forall ta
     (TR: transl_expr cenv a = OK ta),
   exists tv,
-     eval_expr tge (Vptr sp Int.zero) te tm ta tv
+     eval_expr tge (Vptr sp Ptrofs.zero) te tm ta tv
   /\ Val.inject f v tv.
 Proof.
   induction 3; intros; simpl in TR; try (monadInv TR).
@@ -1535,7 +1545,7 @@ Lemma transl_exprlist_correct:
   forall ta
     (TR: transl_exprlist cenv a = OK ta),
   exists tv,
-     eval_exprlist tge (Vptr sp Int.zero) te tm ta tv
+     eval_exprlist tge (Vptr sp Ptrofs.zero) te tm ta tv
   /\ Val.inject_list f v tv.
 Proof.
   induction 3; intros; monadInv TR.
@@ -1569,7 +1579,7 @@ Inductive match_cont: Csharpminor.cont -> Cminor.cont -> compilenv -> exit_env -
       transl_funbody cenv sz fn = OK tfn ->
       match_cont k tk cenv xenv cs ->
       match_cont (Csharpminor.Kcall optid fn e le k)
-                 (Kcall optid tfn (Vptr sp Int.zero) te tk)
+                 (Kcall optid tfn (Vptr sp Ptrofs.zero) te tk)
                  cenv' nil
                  (Frame cenv tfn e le te sp lo hi :: cs).
 
@@ -1584,7 +1594,7 @@ Inductive match_states: Csharpminor.state -> Cminor.state -> Prop :=
                (Mem.nextblock m) (Mem.nextblock tm))
       (MK: match_cont k tk cenv xenv cs),
       match_states (Csharpminor.State fn s k e le m)
-                   (State tfn ts tk (Vptr sp Int.zero) te tm)
+                   (State tfn ts tk (Vptr sp Ptrofs.zero) te tm)
   | match_state_seq:
       forall fn s1 s2 k e le m tfn ts1 tk sp te tm cenv xenv f lo hi cs sz
       (TRF: transl_funbody cenv sz fn = OK tfn)
@@ -1595,7 +1605,7 @@ Inductive match_states: Csharpminor.state -> Cminor.state -> Prop :=
                (Mem.nextblock m) (Mem.nextblock tm))
       (MK: match_cont (Csharpminor.Kseq s2 k) tk cenv xenv cs),
       match_states (Csharpminor.State fn (Csharpminor.Sseq s1 s2) k e le m)
-                   (State tfn ts1 tk (Vptr sp Int.zero) te tm)
+                   (State tfn ts1 tk (Vptr sp Ptrofs.zero) te tm)
   | match_callstate:
       forall fd args k m tfd targs tk tm f cs cenv
       (TR: transl_fundef fd = OK tfd)
@@ -1789,7 +1799,7 @@ Lemma switch_match_states:
     (MK: match_cont k tk cenv xenv cs)
     (TK: transl_lblstmt_cont cenv xenv ls tk tk'),
   exists S,
-  plus step tge (State tfn (Sexit O) tk' (Vptr sp Int.zero) te tm) E0 S
+  plus step tge (State tfn (Sexit O) tk' (Vptr sp Ptrofs.zero) te tm) E0 S
   /\ match_states (Csharpminor.State fn (seq_of_lbl_stmt ls) k e le m) S.
 Proof.
   intros. inv TK.
@@ -2050,7 +2060,7 @@ Opaque PTree.set.
 (* ifthenelse *)
   monadInv TR.
   exploit transl_expr_correct; eauto. intros [tv [EVAL VINJ]].
-  left; exists (State tfn (if b then x0 else x1) tk (Vptr sp Int.zero) te tm); split.
+  left; exists (State tfn (if b then x0 else x1) tk (Vptr sp Ptrofs.zero) te tm); split.
   apply plus_one. eapply step_ifthenelse; eauto. eapply bool_of_val_inject; eauto.
   econstructor; eauto. destruct b; auto.
 
@@ -2152,7 +2162,7 @@ Opaque PTree.set.
 (* internal call *)
   monadInv TR. generalize EQ; clear EQ; unfold transl_function.
   caseEq (build_compilenv f). intros ce sz BC.
-  destruct (zle sz Int.max_unsigned); try congruence.
+  destruct (zle sz Ptrofs.max_unsigned); try congruence.
   intro TRBODY.
   generalize TRBODY; intro TMP. monadInv TMP.
   set (tf := mkfunction (Csharpminor.fn_sig f)

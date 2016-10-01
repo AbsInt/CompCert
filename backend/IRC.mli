@@ -41,3 +41,7 @@ val coloring: graph -> (var -> loc)
 
 (* Machine registers that are reserved and not available for allocation. *)
 val reserved_registers: mreg list ref
+
+(* Auxiliaries to deal with register classes *)
+val class_of_type: AST.typ -> int
+val class_of_loc: loc -> int

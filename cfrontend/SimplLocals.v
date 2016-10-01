@@ -40,7 +40,7 @@ Definition is_liftable_var (cenv: compilenv) (a: expr) : option ident :=
 
 Definition make_cast (a: expr) (tto: type) : expr :=
   match classify_cast (typeof a) tto with
-  | cast_case_neutral => a
+  | cast_case_pointer => a
   | cast_case_i2i I32 _ => a
   | cast_case_f2f => a
   | cast_case_s2s => a

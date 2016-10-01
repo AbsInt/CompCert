@@ -379,6 +379,7 @@ Ltac InvAgree :=
   match goal with
   | [ H: False |- _ ] => contradiction
   | [ H: match ?v with Vundef => _ | Vint _ => _ | Vlong _ => _ | Vfloat _ => _ | Vsingle _ => _ | Vptr _ _ => _ end |- _ ] => destruct v
+  | [ |- context [if Archi.ptr64 then _ else _] ] => destruct Archi.ptr64 eqn:?
   end).
 
 (** And immediate, or immediate *)
@@ -608,7 +609,8 @@ Lemma add_sound:
 Proof.
   unfold modarith; intros. destruct x; simpl in *.
 - auto.
-- unfold Val.add; InvAgree. apply eqmod_iagree. apply Int.eqmod_add; apply iagree_eqmod; auto.
+- unfold Val.add; InvAgree.
+  apply eqmod_iagree. apply Int.eqmod_add; apply iagree_eqmod; auto.
 - inv H; auto. inv H0; auto. destruct w1; auto.
 Qed.
 
@@ -802,20 +804,20 @@ Hypothesis PERM: forall b ofs k p, Mem.perm m1 b ofs k p -> Mem.perm m2 b ofs k 
 Let valid_pointer_inj:
   forall b1 ofs b2 delta,
   inject_id b1 = Some(b2, delta) ->
-  Mem.valid_pointer m1 b1 (Int.unsigned ofs) = true ->
-  Mem.valid_pointer m2 b2 (Int.unsigned (Int.add ofs (Int.repr delta))) = true.
+  Mem.valid_pointer m1 b1 (Ptrofs.unsigned ofs) = true ->
+  Mem.valid_pointer m2 b2 (Ptrofs.unsigned (Ptrofs.add ofs (Ptrofs.repr delta))) = true.
 Proof.
-  unfold inject_id; intros. inv H. rewrite Int.add_zero.
+  unfold inject_id; intros. inv H. rewrite Ptrofs.add_zero.
   rewrite Mem.valid_pointer_nonempty_perm in *. eauto.
 Qed.
 
 Let weak_valid_pointer_inj:
   forall b1 ofs b2 delta,
   inject_id b1 = Some(b2, delta) ->
-  Mem.weak_valid_pointer m1 b1 (Int.unsigned ofs) = true ->
-  Mem.weak_valid_pointer m2 b2 (Int.unsigned (Int.add ofs (Int.repr delta))) = true.
+  Mem.weak_valid_pointer m1 b1 (Ptrofs.unsigned ofs) = true ->
+  Mem.weak_valid_pointer m2 b2 (Ptrofs.unsigned (Ptrofs.add ofs (Ptrofs.repr delta))) = true.
 Proof.
-  unfold inject_id; intros. inv H. rewrite Int.add_zero.
+  unfold inject_id; intros. inv H. rewrite Ptrofs.add_zero.
   rewrite Mem.weak_valid_pointer_spec in *.
   rewrite ! Mem.valid_pointer_nonempty_perm in *.
   destruct H0; [left|right]; eauto.
@@ -824,21 +826,21 @@ Qed.
 Let weak_valid_pointer_no_overflow:
   forall b1 ofs b2 delta,
   inject_id b1 = Some(b2, delta) ->
-  Mem.weak_valid_pointer m1 b1 (Int.unsigned ofs) = true ->
-  0 <= Int.unsigned ofs + Int.unsigned (Int.repr delta) <= Int.max_unsigned.
+  Mem.weak_valid_pointer m1 b1 (Ptrofs.unsigned ofs) = true ->
+  0 <= Ptrofs.unsigned ofs + Ptrofs.unsigned (Ptrofs.repr delta) <= Ptrofs.max_unsigned.
 Proof.
-  unfold inject_id; intros. inv H. rewrite Zplus_0_r. apply Int.unsigned_range_2.
+  unfold inject_id; intros. inv H. rewrite Zplus_0_r. apply Ptrofs.unsigned_range_2.
 Qed.
 
 Let valid_different_pointers_inj:
   forall b1 ofs1 b2 ofs2 b1' delta1 b2' delta2,
   b1 <> b2 ->
-  Mem.valid_pointer m1 b1 (Int.unsigned ofs1) = true ->
-  Mem.valid_pointer m1 b2 (Int.unsigned ofs2) = true ->
+  Mem.valid_pointer m1 b1 (Ptrofs.unsigned ofs1) = true ->
+  Mem.valid_pointer m1 b2 (Ptrofs.unsigned ofs2) = true ->
   inject_id b1 = Some (b1', delta1) ->
   inject_id b2 = Some (b2', delta2) ->
   b1' <> b2' \/
-  Int.unsigned (Int.add ofs1 (Int.repr delta1)) <> Int.unsigned (Int.add ofs2 (Int.repr delta2)).
+  Ptrofs.unsigned (Ptrofs.add ofs1 (Ptrofs.repr delta1)) <> Ptrofs.unsigned (Ptrofs.add ofs2 (Ptrofs.repr delta2)).
 Proof.
   unfold inject_id; intros. left; congruence.
 Qed.
@@ -855,13 +857,13 @@ Qed.
 
 Lemma default_needs_of_operation_sound:
   forall op args1 v1 args2 nv,
-  eval_operation ge (Vptr sp Int.zero) op args1 m1 = Some v1 ->
+  eval_operation ge (Vptr sp Ptrofs.zero) op args1 m1 = Some v1 ->
   vagree_list args1 args2 nil
   \/ vagree_list args1 args2 (default nv :: nil)
   \/ vagree_list args1 args2 (default nv :: default nv :: nil) ->
   nv <> Nothing ->
   exists v2,
-     eval_operation ge (Vptr sp Int.zero) op args2 m2 = Some v2
+     eval_operation ge (Vptr sp Ptrofs.zero) op args2 m2 = Some v2
   /\ vagree v1 v2 nv.
 Proof.
   intros. assert (default nv = All) by (destruct nv; simpl; congruence).
@@ -875,7 +877,7 @@ Proof.
   exploit (@eval_operation_inj _ _ _ _ ge ge inject_id).
   eassumption. auto. auto. auto.
   instantiate (1 := op). intros. apply val_inject_lessdef; auto.
-  apply val_inject_lessdef. instantiate (1 := Vptr sp Int.zero). instantiate (1 := Vptr sp Int.zero). auto.
+  apply val_inject_lessdef. instantiate (1 := Vptr sp Ptrofs.zero). instantiate (1 := Vptr sp Ptrofs.zero). auto.
   apply val_inject_list_lessdef; eauto.
   eauto.
   intros (v2 & A & B). exists v2; split; auto.
@@ -1135,13 +1137,13 @@ Definition nmem_add (nm: nmem) (p: aptr) (sz: Z) : nmem :=
       match p with
       | Gl id ofs =>
           match gl!id with
-          | Some iv => NMem stk (PTree.set id (ISet.remove (Int.unsigned ofs) (Int.unsigned ofs + sz) iv) gl)
+          | Some iv => NMem stk (PTree.set id (ISet.remove (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz) iv) gl)
           | None => nm
           end
       | Glo id =>
           NMem stk (PTree.remove id gl)
       | Stk ofs =>
-          NMem (ISet.remove (Int.unsigned ofs) (Int.unsigned ofs + sz) stk) gl
+          NMem (ISet.remove (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz) stk) gl
       | Stack =>
           NMem ISet.empty gl
       | _ => nmem_all
@@ -1153,7 +1155,7 @@ Lemma nlive_add:
   genv_match bc ge ->
   bc sp = BCstack ->
   pmatch bc b ofs p ->
-  Int.unsigned ofs <= i < Int.unsigned ofs + sz ->
+  Ptrofs.unsigned ofs <= i < Ptrofs.unsigned ofs + sz ->
   nlive (nmem_add nm p sz) b i.
 Proof.
   intros. unfold nmem_add. destruct nm. apply nlive_all.
@@ -1221,12 +1223,12 @@ Definition nmem_remove (nm: nmem) (p: aptr) (sz: Z) : nmem :=
     | Gl id ofs =>
         let iv' :=
         match gl!id with
-        | Some iv => ISet.add (Int.unsigned ofs) (Int.unsigned ofs + sz) iv
-        | None    => ISet.interval (Int.unsigned ofs) (Int.unsigned ofs + sz)
+        | Some iv => ISet.add (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz) iv
+        | None    => ISet.interval (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz)
         end in
         NMem stk (PTree.set id iv' gl)
     | Stk ofs =>
-        NMem (ISet.add (Int.unsigned ofs) (Int.unsigned ofs + sz) stk) gl
+        NMem (ISet.add (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz) stk) gl
     | _ => nm
     end
   end.
@@ -1237,17 +1239,17 @@ Lemma nlive_remove:
   bc sp = BCstack ->
   pmatch bc b ofs p ->
   nlive nm b' i ->
-  b' <> b \/ i < Int.unsigned ofs \/ Int.unsigned ofs + sz <= i ->
+  b' <> b \/ i < Ptrofs.unsigned ofs \/ Ptrofs.unsigned ofs + sz <= i ->
   nlive (nmem_remove nm p sz) b' i.
 Proof.
   intros. inversion H2; subst. unfold nmem_remove; inv H1; auto.
 - (* Gl id ofs *)
   set (iv' := match gl!id with
                   | Some iv =>
-                      ISet.add (Int.unsigned ofs) (Int.unsigned ofs + sz) iv
+                      ISet.add (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz) iv
                   | None =>
-                      ISet.interval (Int.unsigned ofs)
-                        (Int.unsigned ofs + sz)
+                      ISet.interval (Ptrofs.unsigned ofs)
+                        (Ptrofs.unsigned ofs + sz)
               end).
   assert (Genv.find_symbol ge id = Some b) by (eapply H; eauto).
   split; simpl; auto; intros.
@@ -1272,11 +1274,11 @@ Definition nmem_contains (nm: nmem) (p: aptr) (sz: Z) :=
       match p with
       | Gl id ofs =>
           match gl!id with
-          | Some iv => negb (ISet.contains (Int.unsigned ofs) (Int.unsigned ofs + sz) iv)
+          | Some iv => negb (ISet.contains (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz) iv)
           | None => true
           end
       | Stk ofs =>
-          negb (ISet.contains (Int.unsigned ofs) (Int.unsigned ofs + sz) stk)
+          negb (ISet.contains (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz) stk)
       | _ => true  (**r conservative answer *)
       end
   end.
@@ -1287,7 +1289,7 @@ Lemma nlive_contains:
   bc sp = BCstack ->
   pmatch bc b ofs p ->
   nmem_contains nm p sz = false ->
-  Int.unsigned ofs <= i < Int.unsigned ofs + sz ->
+  Ptrofs.unsigned ofs <= i < Ptrofs.unsigned ofs + sz ->
   ~(nlive nm b i).
 Proof.
   unfold nmem_contains; intros. red; intros L; inv L.
@@ -1295,10 +1297,10 @@ Proof.
 - (* Gl id ofs *)
   assert (Genv.find_symbol ge id = Some b) by (eapply H; eauto).
   destruct gl!id as [iv|] eqn:HG; inv H2.
-  destruct (ISet.contains (Int.unsigned ofs) (Int.unsigned ofs + sz) iv) eqn:IC; try discriminate.
+  destruct (ISet.contains (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz) iv) eqn:IC; try discriminate.
   rewrite ISet.contains_spec in IC. eelim GL; eauto.
 - (* Stk ofs *)
-  destruct (ISet.contains (Int.unsigned ofs) (Int.unsigned ofs + sz) stk) eqn:IC; try discriminate.
+  destruct (ISet.contains (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz) stk) eqn:IC; try discriminate.
   rewrite ISet.contains_spec in IC. eelim STK; eauto. eapply bc_stack; eauto.
 Qed.
 

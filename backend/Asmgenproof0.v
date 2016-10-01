@@ -81,7 +81,7 @@ Qed.
 Hint Resolve preg_of_not_SP preg_of_not_PC: asmgen.
 
 Lemma nextinstr_pc:
-  forall rs, (nextinstr rs)#PC = Val.add rs#PC Vone.
+  forall rs, (nextinstr rs)#PC = Val.offset_ptr rs#PC Ptrofs.one.
 Proof.
   intros. apply Pregmap.gss.
 Qed.
@@ -100,7 +100,7 @@ Qed.
 
 Lemma nextinstr_set_preg:
   forall rs m v,
-  (nextinstr (rs#(preg_of m) <- v))#PC = Val.add rs#PC Vone.
+  (nextinstr (rs#(preg_of m) <- v))#PC = Val.offset_ptr rs#PC Ptrofs.one.
 Proof.
   intros. unfold nextinstr. rewrite Pregmap.gss.
   rewrite Pregmap.gso. auto. apply sym_not_eq. apply preg_of_not_PC.
@@ -491,13 +491,12 @@ Qed.
 
 Lemma code_tail_next_int:
   forall fn ofs i c,
-  list_length_z fn <= Int.max_unsigned ->
-  code_tail (Int.unsigned ofs) fn (i :: c) ->
-  code_tail (Int.unsigned (Int.add ofs Int.one)) fn c.
+  list_length_z fn <= Ptrofs.max_unsigned ->
+  code_tail (Ptrofs.unsigned ofs) fn (i :: c) ->
+  code_tail (Ptrofs.unsigned (Ptrofs.add ofs Ptrofs.one)) fn c.
 Proof.
-  intros. rewrite Int.add_unsigned.
-  change (Int.unsigned Int.one) with 1.
-  rewrite Int.unsigned_repr. apply code_tail_next with i; auto.
+  intros. rewrite Ptrofs.add_unsigned, Ptrofs.unsigned_one.
+  rewrite Ptrofs.unsigned_repr. apply code_tail_next with i; auto.
   generalize (code_tail_bounds_2 _ _ _ _ H0). omega.
 Qed.
 
@@ -513,7 +512,7 @@ Inductive transl_code_at_pc (ge: Mach.genv):
     Genv.find_funct_ptr ge b = Some(Internal f) ->
     transf_function f = Errors.OK tf ->
     transl_code f c ep = OK tc ->
-    code_tail (Int.unsigned ofs) (fn_code tf) tc ->
+    code_tail (Ptrofs.unsigned ofs) (fn_code tf) tc ->
     transl_code_at_pc ge (Vptr b ofs) b f c ep tf tc.
 
 (** Equivalence between [transl_code] and [transl_code']. *)
@@ -563,11 +562,11 @@ Qed.
 >>
 *)
 
-Definition return_address_offset (f: Mach.function) (c: Mach.code) (ofs: int) : Prop :=
+Definition return_address_offset (f: Mach.function) (c: Mach.code) (ofs: ptrofs) : Prop :=
   forall tf tc,
   transf_function f = OK tf ->
   transl_code f c false = OK tc ->
-  code_tail (Int.unsigned ofs) (fn_code tf) tc.
+  code_tail (Ptrofs.unsigned ofs) (fn_code tf) tc.
 
 (** We now show that such an offset always exists if the Mach code [c]
   is a suffix of [f.(fn_code)].  This holds because the translation
@@ -590,7 +589,7 @@ Hypothesis transf_function_inv:
   forall f tf, transf_function f = OK tf ->
   exists tc, exists ep, transl_code f (Mach.fn_code f) ep = OK tc /\ is_tail tc (fn_code tf).
 Hypothesis transf_function_len:
-  forall f tf, transf_function f = OK tf -> list_length_z (fn_code tf) <= Int.max_unsigned.
+  forall f tf, transf_function f = OK tf -> list_length_z (fn_code tf) <= Ptrofs.max_unsigned.
 
 Lemma transl_code_tail:
   forall f c1 c2, is_tail c1 c2 ->
@@ -618,11 +617,11 @@ Opaque transl_instr.
     apply is_tail_trans with tc2; auto.
     eapply transl_instr_tail; eauto. }
   exploit is_tail_code_tail. eexact TL3. intros [ofs CT].
-  exists (Int.repr ofs). red; intros.
-  rewrite Int.unsigned_repr. congruence.
+  exists (Ptrofs.repr ofs). red; intros.
+  rewrite Ptrofs.unsigned_repr. congruence.
   exploit code_tail_bounds_1; eauto.
   apply transf_function_len in TF. omega.
-+ exists Int.zero; red; intros. congruence.
++ exists Ptrofs.zero; red; intros. congruence.
 Qed.
 
 End RETADDR_EXISTS.
@@ -651,8 +650,8 @@ Lemma return_address_offset_correct:
 Proof.
   intros. inv H. red in H0.
   exploit code_tail_unique. eexact H12. eapply H0; eauto. intro.
-  rewrite <- (Int.repr_unsigned ofs).
-  rewrite <- (Int.repr_unsigned ofs').
+  rewrite <- (Ptrofs.repr_unsigned ofs).
+  rewrite <- (Ptrofs.repr_unsigned ofs').
   congruence.
 Qed.
 
@@ -758,12 +757,12 @@ Inductive exec_straight: code -> regset -> mem ->
   | exec_straight_one:
       forall i1 c rs1 m1 rs2 m2,
       exec_instr ge fn i1 rs1 m1 = Next rs2 m2 ->
-      rs2#PC = Val.add rs1#PC Vone ->
+      rs2#PC = Val.offset_ptr rs1#PC Ptrofs.one ->
       exec_straight (i1 :: c) rs1 m1 c rs2 m2
   | exec_straight_step:
       forall i c rs1 m1 rs2 m2 c' rs3 m3,
       exec_instr ge fn i rs1 m1 = Next rs2 m2 ->
-      rs2#PC = Val.add rs1#PC Vone ->
+      rs2#PC = Val.offset_ptr rs1#PC Ptrofs.one ->
       exec_straight c rs2 m2 c' rs3 m3 ->
       exec_straight (i :: c) rs1 m1 c' rs3 m3.
 
@@ -782,8 +781,8 @@ Lemma exec_straight_two:
   forall i1 i2 c rs1 m1 rs2 m2 rs3 m3,
   exec_instr ge fn i1 rs1 m1 = Next rs2 m2 ->
   exec_instr ge fn i2 rs2 m2 = Next rs3 m3 ->
-  rs2#PC = Val.add rs1#PC Vone ->
-  rs3#PC = Val.add rs2#PC Vone ->
+  rs2#PC = Val.offset_ptr rs1#PC Ptrofs.one ->
+  rs3#PC = Val.offset_ptr rs2#PC Ptrofs.one ->
   exec_straight (i1 :: i2 :: c) rs1 m1 c rs3 m3.
 Proof.
   intros. apply exec_straight_step with rs2 m2; auto.
@@ -795,9 +794,9 @@ Lemma exec_straight_three:
   exec_instr ge fn i1 rs1 m1 = Next rs2 m2 ->
   exec_instr ge fn i2 rs2 m2 = Next rs3 m3 ->
   exec_instr ge fn i3 rs3 m3 = Next rs4 m4 ->
-  rs2#PC = Val.add rs1#PC Vone ->
-  rs3#PC = Val.add rs2#PC Vone ->
-  rs4#PC = Val.add rs3#PC Vone ->
+  rs2#PC = Val.offset_ptr rs1#PC Ptrofs.one ->
+  rs3#PC = Val.offset_ptr rs2#PC Ptrofs.one ->
+  rs4#PC = Val.offset_ptr rs3#PC Ptrofs.one ->
   exec_straight (i1 :: i2 :: i3 :: c) rs1 m1 c rs4 m4.
 Proof.
   intros. apply exec_straight_step with rs2 m2; auto.
@@ -810,11 +809,11 @@ Qed.
 Lemma exec_straight_steps_1:
   forall c rs m c' rs' m',
   exec_straight c rs m c' rs' m' ->
-  list_length_z (fn_code fn) <= Int.max_unsigned ->
+  list_length_z (fn_code fn) <= Ptrofs.max_unsigned ->
   forall b ofs,
   rs#PC = Vptr b ofs ->
   Genv.find_funct_ptr ge b = Some (Internal fn) ->
-  code_tail (Int.unsigned ofs) (fn_code fn) c ->
+  code_tail (Ptrofs.unsigned ofs) (fn_code fn) c ->
   plus step ge (State rs m) E0 (State rs' m').
 Proof.
   induction 1; intros.
@@ -824,7 +823,7 @@ Proof.
   eapply plus_left'.
   econstructor; eauto.
   eapply find_instr_tail. eauto.
-  apply IHexec_straight with b (Int.add ofs Int.one).
+  apply IHexec_straight with b (Ptrofs.add ofs Ptrofs.one).
   auto. rewrite H0. rewrite H3. reflexivity.
   auto.
   apply code_tail_next_int with i; auto.
@@ -834,20 +833,20 @@ Qed.
 Lemma exec_straight_steps_2:
   forall c rs m c' rs' m',
   exec_straight c rs m c' rs' m' ->
-  list_length_z (fn_code fn) <= Int.max_unsigned ->
+  list_length_z (fn_code fn) <= Ptrofs.max_unsigned ->
   forall b ofs,
   rs#PC = Vptr b ofs ->
   Genv.find_funct_ptr ge b = Some (Internal fn) ->
-  code_tail (Int.unsigned ofs) (fn_code fn) c ->
+  code_tail (Ptrofs.unsigned ofs) (fn_code fn) c ->
   exists ofs',
      rs'#PC = Vptr b ofs'
-  /\ code_tail (Int.unsigned ofs') (fn_code fn) c'.
+  /\ code_tail (Ptrofs.unsigned ofs') (fn_code fn) c'.
 Proof.
   induction 1; intros.
-  exists (Int.add ofs Int.one). split.
+  exists (Ptrofs.add ofs Ptrofs.one). split.
   rewrite H0. rewrite H2. auto.
   apply code_tail_next_int with i1; auto.
-  apply IHexec_straight with (Int.add ofs Int.one).
+  apply IHexec_straight with (Ptrofs.add ofs Ptrofs.one).
   auto. rewrite H0. rewrite H3. reflexivity. auto.
   apply code_tail_next_int with i; auto.
 Qed.
@@ -871,10 +870,18 @@ Inductive match_stack: list Mach.stackframe -> Prop :=
       match_stack (Stackframe fb sp ra c :: s).
 
 Lemma parent_sp_def: forall s, match_stack s -> parent_sp s <> Vundef.
-Proof. induction 1; simpl. unfold Vzero; congruence. auto. Qed.
+Proof.
+  induction 1; simpl. 
+  unfold Vnullptr; destruct Archi.ptr64; congruence.
+  auto.
+Qed.
 
 Lemma parent_ra_def: forall s, match_stack s -> parent_ra s <> Vundef.
-Proof. induction 1; simpl. unfold Vzero; congruence. inv H0. congruence. Qed.
+Proof. 
+  induction 1; simpl.
+  unfold Vnullptr; destruct Archi.ptr64; congruence.
+  inv H0. congruence.
+Qed.
 
 Lemma lessdef_parent_sp:
   forall s v,

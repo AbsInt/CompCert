@@ -39,7 +39,8 @@ Require Import Op Registers RTL Locations Conventions RTLtyping LTL.
   maching between an RTL instruction and an LTL basic block.
 *)
 
-Definition moves := list (loc * loc)%type.
+Definition move := (loc * loc)%type.
+Definition moves := list move.
 
 Inductive block_shape: Type :=
   | BSnop (mv: moves) (s: node)
@@ -89,6 +90,25 @@ Inductive block_shape: Type :=
   | BSreturn (arg: option reg)
          (mv: moves).
 
+(** Classify operations into moves, 64-bit split integer operations, and other
+  arithmetic/logical operations. *)
+
+Inductive operation_kind {A: Type}: operation -> list A -> Type :=
+  | operation_Omove: forall arg, operation_kind Omove (arg :: nil)
+  | operation_Omakelong: forall arg1 arg2, operation_kind Omakelong (arg1 :: arg2 :: nil)
+  | operation_Olowlong: forall arg, operation_kind Olowlong (arg :: nil)
+  | operation_Ohighlong: forall arg, operation_kind Ohighlong (arg :: nil)
+  | operation_other: forall op args, operation_kind op args.
+
+Definition classify_operation {A: Type} (op: operation) (args: list A) : operation_kind op args :=
+  match op, args with
+  | Omove, arg::nil => operation_Omove arg
+  | Omakelong, arg1::arg2::nil => operation_Omakelong arg1 arg2
+  | Olowlong, arg::nil => operation_Olowlong arg
+  | Ohighlong, arg::nil => operation_Ohighlong arg
+  | op, args => operation_other op args
+  end.
+
 (** Extract the move instructions at the beginning of block [b].
   Return the list of moves and the suffix of [b] after the moves. *)
 
@@ -100,8 +120,10 @@ Fixpoint extract_moves (accu: moves) (b: bblock) {struct b} : moves * bblock :=
       extract_moves ((R src, S sl ofs ty) :: accu) b'
   | Lop op args res :: b' =>
       match is_move_operation op args with
-      | Some arg => extract_moves ((R arg, R res) :: accu) b'
-      | None => (List.rev accu, b)
+      | Some arg =>
+          extract_moves ((R arg, R res) :: accu) b'
+      | None =>
+          (List.rev accu, b)
       end
   | _ =>
       (List.rev accu, b)
@@ -123,28 +145,22 @@ Notation "'assertion' A ; B" := (if A then B else None)
 
 Local Open Scope option_monad_scope.
 
-(** Classify operations into moves, 64-bit integer operations, and other
-  arithmetic/logical operations. *)
-
-Inductive operation_kind: operation -> list reg -> Type :=
-  | operation_Omove: forall arg, operation_kind Omove (arg :: nil)
-  | operation_Omakelong: forall arg1 arg2, operation_kind Omakelong (arg1 :: arg2 :: nil)
-  | operation_Olowlong: forall arg, operation_kind Olowlong (arg :: nil)
-  | operation_Ohighlong: forall arg, operation_kind Ohighlong (arg :: nil)
-  | operation_other: forall op args, operation_kind op args.
-
-Definition classify_operation (op: operation) (args: list reg) : operation_kind op args :=
-  match op, args with
-  | Omove, arg::nil => operation_Omove arg
-  | Omakelong, arg1::arg2::nil => operation_Omakelong arg1 arg2
-  | Olowlong, arg::nil => operation_Olowlong arg
-  | Ohighlong, arg::nil => operation_Ohighlong arg
-  | op, args => operation_other op args
-  end.
-
 (** Check RTL instruction [i] against LTL basic block [b].
   On success, return [Some] with a [block_shape] describing the correspondence.
   On error, return [None]. *)
+
+Definition pair_Iop_block (op: operation) (args: list reg) (res: reg) (s: node) (b: LTL.bblock) :=
+  let (mv1, b1) := extract_moves nil b in
+  match b1 with
+  | Lop op' args' res' :: b2 =>
+      let (mv2, b3) := extract_moves nil b2 in
+      assertion (eq_operation op op');
+      assertion (check_succ s b3);
+      Some(BSop op args res mv1 args' res' mv2 s)
+  | _ =>
+      assertion (check_succ s b1);
+      Some(BSopdead op args res mv1 s)
+  end.
 
 Definition pair_instr_block
                (i: RTL.instruction) (b: LTL.bblock) : option block_shape :=
@@ -158,32 +174,31 @@ Definition pair_instr_block
           let (mv, b1) := extract_moves nil b in
           assertion (check_succ s b1); Some(BSmove arg res mv s)
       | operation_Omakelong arg1 arg2 =>
-          let (mv, b1) := extract_moves nil b in
-          assertion (check_succ s b1); Some(BSmakelong arg1 arg2 res mv s)
+          if Archi.splitlong then
+           (let (mv, b1) := extract_moves nil b in
+            assertion (check_succ s b1); Some(BSmakelong arg1 arg2 res mv s))
+          else
+            pair_Iop_block op args res s b
       | operation_Olowlong arg =>
-          let (mv, b1) := extract_moves nil b in
-          assertion (check_succ s b1); Some(BSlowlong arg res mv s)
+          if Archi.splitlong then
+           (let (mv, b1) := extract_moves nil b in
+            assertion (check_succ s b1); Some(BSlowlong arg res mv s))
+          else
+            pair_Iop_block op args res s b
       | operation_Ohighlong arg =>
-          let (mv, b1) := extract_moves nil b in
-          assertion (check_succ s b1); Some(BShighlong arg res mv s)
+          if Archi.splitlong then
+           (let (mv, b1) := extract_moves nil b in
+            assertion (check_succ s b1); Some(BShighlong arg res mv s))
+          else
+            pair_Iop_block op args res s b
       | operation_other _ _ =>
-          let (mv1, b1) := extract_moves nil b in
-          match b1 with
-          | Lop op' args' res' :: b2 =>
-              let (mv2, b3) := extract_moves nil b2 in
-              assertion (eq_operation op op');
-              assertion (check_succ s b3);
-              Some(BSop op args res mv1 args' res' mv2 s)
-          | _ =>
-              assertion (check_succ s b1);
-              Some(BSopdead op args res mv1 s)
-          end
+          pair_Iop_block op args res s b
       end
   | Iload chunk addr args dst s =>
       let (mv1, b1) := extract_moves nil b in
       match b1 with
       | Lload chunk' addr' args' dst' :: b2 =>
-          if chunk_eq chunk Mint64 then
+          if chunk_eq chunk Mint64 && Archi.splitlong then
             assertion (chunk_eq chunk' Mint32);
             let (mv2, b3) := extract_moves nil b2 in
             match b3 with
@@ -191,7 +206,7 @@ Definition pair_instr_block
                 let (mv3, b5) := extract_moves nil b4 in
                 assertion (chunk_eq chunk'' Mint32);
                 assertion (eq_addressing addr addr');
-                assertion (option_eq eq_addressing (offset_addressing addr (Int.repr 4)) (Some addr''));
+                assertion (option_eq eq_addressing (offset_addressing addr 4) (Some addr''));
                 assertion (check_succ s b5);
                 Some(BSload2 addr addr'' args dst mv1 args' dst' mv2 args'' dst'' mv3 s)
             | _ =>
@@ -199,7 +214,7 @@ Definition pair_instr_block
                 if (eq_addressing addr addr') then
                   Some(BSload2_1 addr args dst mv1 args' dst' mv2 s)
                 else
-                 (assertion (option_eq eq_addressing (offset_addressing addr (Int.repr 4)) (Some addr'));
+                 (assertion (option_eq eq_addressing (offset_addressing addr 4) (Some addr'));
                   Some(BSload2_2 addr addr' args dst mv1 args' dst' mv2 s))
             end
           else (
@@ -216,14 +231,14 @@ Definition pair_instr_block
       let (mv1, b1) := extract_moves nil b in
       match b1 with
       | Lstore chunk' addr' args' src' :: b2 =>
-          if chunk_eq chunk Mint64 then
+          if chunk_eq chunk Mint64 && Archi.splitlong then
             let (mv2, b3) := extract_moves nil b2 in
             match b3 with
             | Lstore chunk'' addr'' args'' src'' :: b4 =>
                 assertion (chunk_eq chunk' Mint32);
                 assertion (chunk_eq chunk'' Mint32);
                 assertion (eq_addressing addr addr');
-                assertion (option_eq eq_addressing (offset_addressing addr (Int.repr 4)) (Some addr''));
+                assertion (option_eq eq_addressing (offset_addressing addr 4) (Some addr''));
                 assertion (check_succ s b4);
                 Some(BSstore2 addr addr'' args src mv1 args' src' mv2 args'' src'' s)
             | _ => None
@@ -622,7 +637,9 @@ Function add_equations_args (rl: list reg) (tyl: list typ) (ll: list (rpair loc)
   | r1 :: rl, ty :: tyl, One l1 :: ll =>
       add_equations_args rl tyl ll (add_equation (Eq Full r1 l1) e)
   | r1 :: rl, Tlong :: tyl, Twolong l1 l2 :: ll =>
-      add_equations_args rl tyl ll (add_equation (Eq Low r1 l2) (add_equation (Eq High r1 l1) e))
+      if Archi.splitlong then
+        add_equations_args rl tyl ll (add_equation (Eq Low r1 l2) (add_equation (Eq High r1 l1) e))
+      else None
   | _, _, _ => None
   end.
 
@@ -634,7 +651,9 @@ Function add_equations_res (r: reg) (oty: option typ) (p: rpair mreg) (e: eqs) :
   | One mr, _ =>
       Some (add_equation (Eq Full r (R mr)) e)
   | Twolong mr1 mr2, Some Tlong =>
-      Some (add_equation (Eq Low r (R mr2)) (add_equation (Eq High r (R mr1)) e))
+      if Archi.splitlong then
+        Some (add_equation (Eq Low r (R mr2)) (add_equation (Eq High r (R mr1)) e))
+      else None
   | _, _ =>
       None
   end.
@@ -673,6 +692,7 @@ Fixpoint add_equations_builtin_arg
       Some (add_equation (Eq Full r l) e)
   | BA r, BA_splitlong (BA lhi) (BA llo) =>
       assertion (typ_eq (env r) Tlong);
+      assertion (Archi.splitlong);
       Some (add_equation (Eq Low r llo) (add_equation (Eq High r lhi) e))
   | BA_int n, BA_int n' =>
       assertion (Int.eq_dec n n'); Some e
@@ -684,19 +704,19 @@ Fixpoint add_equations_builtin_arg
       assertion (Float32.eq_dec f f'); Some e
   | BA_loadstack chunk ofs, BA_loadstack chunk' ofs' =>
       assertion (chunk_eq chunk chunk');
-      assertion (Int.eq_dec ofs ofs');
+      assertion (Ptrofs.eq_dec ofs ofs');
       Some e
   | BA_addrstack ofs, BA_addrstack ofs' =>
-      assertion (Int.eq_dec ofs ofs');
+      assertion (Ptrofs.eq_dec ofs ofs');
       Some e
   | BA_loadglobal chunk id ofs, BA_loadglobal chunk' id' ofs' =>
       assertion (chunk_eq chunk chunk');
       assertion (ident_eq id id');
-      assertion (Int.eq_dec ofs ofs');
+      assertion (Ptrofs.eq_dec ofs ofs');
       Some e
   | BA_addrglobal id ofs, BA_addrglobal id' ofs' =>
       assertion (ident_eq id id');
-      assertion (Int.eq_dec ofs ofs');
+      assertion (Ptrofs.eq_dec ofs ofs');
       Some e
   | BA_splitlong hi lo, BA_splitlong hi' lo' =>
       do e1 <- add_equations_builtin_arg env hi hi' e;

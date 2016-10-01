@@ -411,8 +411,8 @@ Lemma tr_builtin_arg:
   F sp = Some(sp', ctx.(dstk)) ->
   Mem.inject F m m' ->
   forall a v,
-  eval_builtin_arg ge (fun r => rs#r) (Vptr sp Int.zero) m a v ->
-  exists v', eval_builtin_arg tge (fun r => rs'#r) (Vptr sp' Int.zero) m' (sbuiltinarg ctx a) v'
+  eval_builtin_arg ge (fun r => rs#r) (Vptr sp Ptrofs.zero) m a v ->
+  exists v', eval_builtin_arg tge (fun r => rs'#r) (Vptr sp' Ptrofs.zero) m' (sbuiltinarg ctx a) v'
           /\ Val.inject F v v'.
 Proof.
   intros until m'; intros MG AG SP MI. induction 1; simpl.
@@ -422,20 +422,20 @@ Proof.
 - econstructor; eauto with barg.
 - econstructor; eauto with barg.
 - exploit Mem.loadv_inject; eauto.
-  instantiate (1 := Vptr sp' (Int.add ofs (Int.repr (dstk ctx)))).
-  simpl. econstructor; eauto. rewrite Int.add_zero_l; auto.
-  intros (v' & A & B). exists v'; split; auto. constructor. simpl. rewrite Int.add_zero_l; auto.
-- econstructor; split. constructor. simpl. econstructor; eauto. rewrite ! Int.add_zero_l; auto.
+  instantiate (1 := Vptr sp' (Ptrofs.add ofs (Ptrofs.repr (dstk ctx)))).
+  simpl. econstructor; eauto. rewrite Ptrofs.add_zero_l; auto.
+  intros (v' & A & B). exists v'; split; auto. constructor. simpl. rewrite Ptrofs.add_zero_l; auto.
+- econstructor; split. constructor. simpl. econstructor; eauto. rewrite ! Ptrofs.add_zero_l; auto.
 - assert (Val.inject F (Senv.symbol_address ge id ofs) (Senv.symbol_address tge id ofs)).
   { unfold Senv.symbol_address; simpl; unfold Genv.symbol_address.
     rewrite symbols_preserved. destruct (Genv.find_symbol ge id) as [b|] eqn:FS; auto.
-    inv MG. econstructor. eauto. rewrite Int.add_zero; auto. }
+    inv MG. econstructor. eauto. rewrite Ptrofs.add_zero; auto. }
   exploit Mem.loadv_inject; eauto. intros (v' & A & B).
   exists v'; eauto with barg.
 - econstructor; split. constructor.
   unfold Senv.symbol_address; simpl; unfold Genv.symbol_address.
   rewrite symbols_preserved. destruct (Genv.find_symbol ge id) as [b|] eqn:FS; auto.
-  inv MG. econstructor. eauto. rewrite Int.add_zero; auto.
+  inv MG. econstructor. eauto. rewrite Ptrofs.add_zero; auto.
 - destruct IHeval_builtin_arg1 as (v1 & A1 & B1).
   destruct IHeval_builtin_arg2 as (v2 & A2 & B2).
   econstructor; split. eauto with barg. apply Val.longofwords_inject; auto.
@@ -448,8 +448,8 @@ Lemma tr_builtin_args:
   F sp = Some(sp', ctx.(dstk)) ->
   Mem.inject F m m' ->
   forall al vl,
-  eval_builtin_args ge (fun r => rs#r) (Vptr sp Int.zero) m al vl ->
-  exists vl', eval_builtin_args tge (fun r => rs'#r) (Vptr sp' Int.zero) m' (map (sbuiltinarg ctx) al) vl'
+  eval_builtin_args ge (fun r => rs#r) (Vptr sp Ptrofs.zero) m al vl ->
+  exists vl', eval_builtin_args tge (fun r => rs'#r) (Vptr sp' Ptrofs.zero) m' (map (sbuiltinarg ctx) al) vl'
           /\ Val.inject_list F vl vl'.
 Proof.
   induction 5; simpl.
@@ -474,24 +474,24 @@ Inductive match_stacks (F: meminj) (m m': mem):
         (AG: agree_regs F ctx rs rs')
         (SP: F sp = Some(sp', ctx.(dstk)))
         (PRIV: range_private F m m' sp' (ctx.(dstk) + ctx.(mstk)) f'.(fn_stacksize))
-        (SSZ1: 0 <= f'.(fn_stacksize) < Int.max_unsigned)
+        (SSZ1: 0 <= f'.(fn_stacksize) < Ptrofs.max_unsigned)
         (SSZ2: forall ofs, Mem.perm m' sp' ofs Max Nonempty -> 0 <= ofs <= f'.(fn_stacksize))
         (RES: Ple res ctx.(mreg))
         (BELOW: Plt sp' bound),
       match_stacks F m m'
-                   (Stackframe res f (Vptr sp Int.zero) pc rs :: stk)
-                   (Stackframe (sreg ctx res) f' (Vptr sp' Int.zero) (spc ctx pc) rs' :: stk')
+                   (Stackframe res f (Vptr sp Ptrofs.zero) pc rs :: stk)
+                   (Stackframe (sreg ctx res) f' (Vptr sp' Ptrofs.zero) (spc ctx pc) rs' :: stk')
                    bound
   | match_stacks_untailcall: forall stk res f' sp' rpc rs' stk' bound ctx
         (MS: match_stacks_inside F m m' stk stk' f' ctx sp' rs')
         (PRIV: range_private F m m' sp' ctx.(dstk) f'.(fn_stacksize))
-        (SSZ1: 0 <= f'.(fn_stacksize) < Int.max_unsigned)
+        (SSZ1: 0 <= f'.(fn_stacksize) < Ptrofs.max_unsigned)
         (SSZ2: forall ofs, Mem.perm m' sp' ofs Max Nonempty -> 0 <= ofs <= f'.(fn_stacksize))
         (RET: ctx.(retinfo) = Some (rpc, res))
         (BELOW: Plt sp' bound),
       match_stacks F m m'
                    stk
-                   (Stackframe res f' (Vptr sp' Int.zero) rpc rs' :: stk')
+                   (Stackframe res f' (Vptr sp' Ptrofs.zero) rpc rs' :: stk')
                    bound
 
 with match_stacks_inside (F: meminj) (m m': mem):
@@ -512,7 +512,7 @@ with match_stacks_inside (F: meminj) (m m': mem):
         (RET: ctx.(retinfo) = Some (spc ctx' pc, sreg ctx' res))
         (BELOW: context_below ctx' ctx)
         (SBELOW: context_stack_call ctx' ctx),
-      match_stacks_inside F m m' (Stackframe res f (Vptr sp Int.zero) pc rs :: stk)
+      match_stacks_inside F m m' (Stackframe res f (Vptr sp Ptrofs.zero) pc rs :: stk)
                                  stk' f' ctx sp' rs'.
 
 (** Properties of match_stacks *)
@@ -863,10 +863,10 @@ Inductive match_states: RTL.state -> RTL.state -> Prop :=
         (MINJ: Mem.inject F m m')
         (VB: Mem.valid_block m' sp')
         (PRIV: range_private F m m' sp' (ctx.(dstk) + ctx.(mstk)) f'.(fn_stacksize))
-        (SSZ1: 0 <= f'.(fn_stacksize) < Int.max_unsigned)
+        (SSZ1: 0 <= f'.(fn_stacksize) < Ptrofs.max_unsigned)
         (SSZ2: forall ofs, Mem.perm m' sp' ofs Max Nonempty -> 0 <= ofs <= f'.(fn_stacksize)),
-      match_states (State stk f (Vptr sp Int.zero) pc rs m)
-                   (State stk' f' (Vptr sp' Int.zero) (spc ctx pc) rs' m')
+      match_states (State stk f (Vptr sp Ptrofs.zero) pc rs m)
+                   (State stk' f' (Vptr sp' Ptrofs.zero) (spc ctx pc) rs' m')
   | match_call_states: forall stk fd args m stk' fd' args' m' cunit F
         (MS: match_stacks F m m' stk stk' (Mem.nextblock m'))
         (LINK: linkorder cunit prog)
@@ -886,10 +886,10 @@ Inductive match_states: RTL.state -> RTL.state -> Prop :=
         (MINJ: Mem.inject F m m')
         (VB: Mem.valid_block m' sp')
         (PRIV: range_private F m m' sp' ctx.(dstk) f'.(fn_stacksize))
-        (SSZ1: 0 <= f'.(fn_stacksize) < Int.max_unsigned)
+        (SSZ1: 0 <= f'.(fn_stacksize) < Ptrofs.max_unsigned)
         (SSZ2: forall ofs, Mem.perm m' sp' ofs Max Nonempty -> 0 <= ofs <= f'.(fn_stacksize)),
       match_states (Callstate stk (Internal f) vargs m)
-                   (State stk' f' (Vptr sp' Int.zero) pc' rs' m')
+                   (State stk' f' (Vptr sp' Ptrofs.zero) pc' rs' m')
   | match_return_states: forall stk v m stk' v' m' F
         (MS: match_stacks F m m' stk stk' (Mem.nextblock m'))
         (VINJ: Val.inject F v v')
@@ -904,10 +904,10 @@ Inductive match_states: RTL.state -> RTL.state -> Prop :=
         (MINJ: Mem.inject F m m')
         (VB: Mem.valid_block m' sp')
         (PRIV: range_private F m m' sp' ctx.(dstk) f'.(fn_stacksize))
-        (SSZ1: 0 <= f'.(fn_stacksize) < Int.max_unsigned)
+        (SSZ1: 0 <= f'.(fn_stacksize) < Ptrofs.max_unsigned)
         (SSZ2: forall ofs, Mem.perm m' sp' ofs Max Nonempty -> 0 <= ofs <= f'.(fn_stacksize)),
       match_states (Returnstate stk v m)
-                   (State stk' f' (Vptr sp' Int.zero) pc' rs' m').
+                   (State stk' f' (Vptr sp' Ptrofs.zero) pc' rs' m').
 
 (** ** Forward simulation *)
 
@@ -964,7 +964,7 @@ Proof.
     eauto.
   fold (saddr ctx addr). intros [a' [P Q]].
   exploit Mem.loadv_inject; eauto. intros [v' [U V]].
-  assert (eval_addressing tge (Vptr sp' Int.zero) (saddr ctx addr) rs' ## (sregs ctx args) = Some a').
+  assert (eval_addressing tge (Vptr sp' Ptrofs.zero) (saddr ctx addr) rs' ## (sregs ctx args) = Some a').
   rewrite <- P. apply eval_addressing_preserved. exact symbols_preserved.
   left; econstructor; split.
   eapply plus_one. eapply exec_Iload; eauto.
@@ -982,7 +982,7 @@ Proof.
   fold saddr. intros [a' [P Q]].
   exploit Mem.storev_mapped_inject; eauto. eapply agree_val_reg; eauto.
   intros [m1' [U V]].
-  assert (eval_addressing tge (Vptr sp' Int.zero) (saddr ctx addr) rs' ## (sregs ctx args) = Some a').
+  assert (eval_addressing tge (Vptr sp' Ptrofs.zero) (saddr ctx addr) rs' ## (sregs ctx args) = Some a').
     rewrite <- P. apply eval_addressing_preserved. exact symbols_preserved.
   left; econstructor; split.
   eapply plus_one. eapply exec_Istore; eauto.

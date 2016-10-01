@@ -23,19 +23,11 @@
   The source language is Cminor and the target language is CminorSel. *)
 
 Require String.
-Require Import Coqlib.
-Require Import Maps.
-Require Import AST.
-Require Import Errors.
-Require Import Integers.
-Require Import Globalenvs.
-Require Import Switch.
+Require Import Coqlib Maps.
+Require Import AST Errors Integers Globalenvs Switch.
 Require Cminor.
-Require Import Op.
-Require Import CminorSel.
-Require Import SelectOp.
-Require Import SelectDiv.
-Require Import SelectLong.
+Require Import Op CminorSel.
+Require Import SelectOp SelectDiv SplitLong SelectLong.
 Require Machregs.
 
 Local Open Scope cminorsel_scope.
@@ -71,7 +63,7 @@ Section SELECTION.
 
 Definition globdef := AST.globdef Cminor.fundef unit.
 Variable defmap: PTree.t globdef.
-Variable hf: helper_functions.
+Context {hf: helper_functions}.
 
 Definition sel_constant (cst: Cminor.constant) : expr :=
   match cst with
@@ -110,14 +102,14 @@ Definition sel_unop (op: Cminor.unary_operation) (arg: expr) : expr :=
   | Cminor.Ointoflong => intoflong arg
   | Cminor.Olongofint => longofint arg
   | Cminor.Olongofintu => longofintu arg
-  | Cminor.Olongoffloat => longoffloat hf arg
-  | Cminor.Olonguoffloat => longuoffloat hf arg
-  | Cminor.Ofloatoflong => floatoflong hf arg
-  | Cminor.Ofloatoflongu => floatoflongu hf arg
-  | Cminor.Olongofsingle => longofsingle hf arg
-  | Cminor.Olonguofsingle => longuofsingle hf arg
-  | Cminor.Osingleoflong => singleoflong hf arg
-  | Cminor.Osingleoflongu => singleoflongu hf arg
+  | Cminor.Olongoffloat => longoffloat arg
+  | Cminor.Olonguoffloat => longuoffloat arg
+  | Cminor.Ofloatoflong => floatoflong arg
+  | Cminor.Ofloatoflongu => floatoflongu arg
+  | Cminor.Olongofsingle => longofsingle arg
+  | Cminor.Olonguofsingle => longuofsingle arg
+  | Cminor.Osingleoflong => singleoflong arg
+  | Cminor.Osingleoflongu => singleoflongu arg
   end.
 
 Definition sel_binop (op: Cminor.binary_operation) (arg1 arg2: expr) : expr :=
@@ -145,17 +137,17 @@ Definition sel_binop (op: Cminor.binary_operation) (arg1 arg2: expr) : expr :=
   | Cminor.Odivfs => divfs arg1 arg2
   | Cminor.Oaddl => addl arg1 arg2
   | Cminor.Osubl => subl arg1 arg2
-  | Cminor.Omull => mull hf arg1 arg2
-  | Cminor.Odivl => divl hf arg1 arg2
-  | Cminor.Odivlu => divlu hf arg1 arg2
-  | Cminor.Omodl => modl hf arg1 arg2
-  | Cminor.Omodlu => modlu hf arg1 arg2
+  | Cminor.Omull => mull arg1 arg2
+  | Cminor.Odivl => divl arg1 arg2
+  | Cminor.Odivlu => divlu arg1 arg2
+  | Cminor.Omodl => modl arg1 arg2
+  | Cminor.Omodlu => modlu arg1 arg2
   | Cminor.Oandl => andl arg1 arg2
   | Cminor.Oorl => orl arg1 arg2
   | Cminor.Oxorl => xorl arg1 arg2
-  | Cminor.Oshll => shll hf arg1 arg2
-  | Cminor.Oshrl => shrl hf arg1 arg2
-  | Cminor.Oshrlu => shrlu hf arg1 arg2
+  | Cminor.Oshll => shll arg1 arg2
+  | Cminor.Oshrl => shrl arg1 arg2
+  | Cminor.Oshrlu => shrlu arg1 arg2
   | Cminor.Ocmp c => comp c arg1 arg2
   | Cminor.Ocmpu c => compu c arg1 arg2
   | Cminor.Ocmpf c => compf c arg1 arg2
@@ -192,7 +184,7 @@ Inductive call_kind : Type :=
 Definition expr_is_addrof_ident (e: Cminor.expr) : option ident :=
   match e with
   | Cminor.Econst (Cminor.Oaddrsymbol id ofs) =>
-      if Int.eq ofs Int.zero then Some id else None
+      if Ptrofs.eq ofs Ptrofs.zero then Some id else None
   | _ => None
   end.
 
@@ -326,10 +318,12 @@ Fixpoint sel_stmt (s: Cminor.stmt) : res stmt :=
   | Cminor.Sgoto lbl => OK (Sgoto lbl)
   end.
 
+End SELECTION.
+
 (** Conversion of functions. *)
 
-Definition sel_function (f: Cminor.function) : res function :=
-  do body' <- sel_stmt f.(Cminor.fn_body);
+Definition sel_function (dm: PTree.t globdef) (hf: helper_functions) (f: Cminor.function) : res function :=
+  do body' <- sel_stmt dm f.(Cminor.fn_body);
   OK (mkfunction
         f.(Cminor.fn_sig)
         f.(Cminor.fn_params)
@@ -337,10 +331,8 @@ Definition sel_function (f: Cminor.function) : res function :=
         f.(Cminor.fn_stackspace)
         body').
 
-Definition sel_fundef (f: Cminor.fundef) : res fundef :=
-  transf_partial_fundef sel_function f.
-
-End SELECTION.
+Definition sel_fundef (dm: PTree.t globdef) (hf: helper_functions) (f: Cminor.fundef) : res fundef :=
+  transf_partial_fundef (sel_function dm hf) f.
 
 (** Setting up the helper functions. *)
 

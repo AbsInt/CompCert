@@ -73,9 +73,9 @@ Definition type_of_builtin_arg (a: builtin_arg reg) : typ :=
   | BA_float _ => Tfloat
   | BA_single _ => Tsingle
   | BA_loadstack chunk ofs => type_of_chunk chunk
-  | BA_addrstack ofs => Tint
+  | BA_addrstack ofs => Tptr
   | BA_loadglobal chunk id ofs => type_of_chunk chunk
-  | BA_addrglobal id ofs => Tint
+  | BA_addrglobal id ofs => Tptr
   | BA_splitlong hi lo => Tlong
   end.
 
@@ -116,14 +116,14 @@ Inductive wt_instr : instruction -> Prop :=
       wt_instr (Istore chunk addr args src s)
   | wt_Icall:
       forall sig ros args res s,
-      match ros with inl r => env r = Tint | inr s => True end ->
+      match ros with inl r => env r = Tptr | inr s => True end ->
       map env args = sig.(sig_args) ->
       env res = proj_sig_res sig ->
       valid_successor s ->
       wt_instr (Icall sig ros args res s)
   | wt_Itailcall:
       forall sig ros args,
-      match ros with inl r => env r = Tint | inr s => True end ->
+      match ros with inl r => env r = Tptr | inr s => True end ->
       map env args = sig.(sig_args) ->
       sig.(sig_res) = funct.(fn_sig).(sig_res) ->
       tailcall_possible sig ->
@@ -227,7 +227,7 @@ Fixpoint check_successors (sl: list node): res unit :=
 
 Definition type_ros (e: S.typenv) (ros: reg + ident) : res S.typenv :=
   match ros with
-  | inl r => S.set e r Tint
+  | inl r => S.set e r Tptr
   | inr s => OK e
   end.
 
@@ -245,9 +245,9 @@ Definition type_builtin_arg (e: S.typenv) (a: builtin_arg reg) (ty: typ) : res S
   | BA_float _ => type_expect e ty Tfloat
   | BA_single _ => type_expect e ty Tsingle
   | BA_loadstack chunk ofs => type_expect e ty (type_of_chunk chunk)
-  | BA_addrstack ofs => type_expect e ty Tint
+  | BA_addrstack ofs => type_expect e ty Tptr
   | BA_loadglobal chunk id ofs => type_expect e ty (type_of_chunk chunk)
-  | BA_addrglobal id ofs => type_expect e ty Tint
+  | BA_addrglobal id ofs => type_expect e ty Tptr
   | BA_splitlong hi lo => type_expect e ty Tlong
   end.
 
@@ -367,7 +367,7 @@ Hint Resolve type_ros_incr: ty.
 
 Lemma type_ros_sound:
   forall e ros e' te, type_ros e ros = OK e' -> S.satisf te e' ->
-  match ros with inl r => te r = Tint | inr s => True end.
+  match ros with inl r => te r = Tptr | inr s => True end.
 Proof.
   unfold type_ros; intros. destruct ros.
   eapply S.set_sound; eauto.
@@ -594,7 +594,7 @@ Qed.
 Lemma type_ros_complete:
   forall te ros e,
   S.satisf te e ->
-  match ros with inl r => te r = Tint | inr s => True end ->
+  match ros with inl r => te r = Tptr | inr s => True end ->
   exists e', type_ros e ros = OK e' /\ S.satisf te e'.
 Proof.
   intros; destruct ros; simpl.

@@ -39,7 +39,7 @@ Fixpoint save_callee_save_rec (rl: list mreg) (ofs: Z) (k: Mach.code) :=
       let ty := mreg_type r in
       let sz := AST.typesize ty in
       let ofs1 := align ofs sz in
-      Msetstack r (Int.repr ofs1) ty :: save_callee_save_rec rl (ofs1 + sz) k
+      Msetstack r (Ptrofs.repr ofs1) ty :: save_callee_save_rec rl (ofs1 + sz) k
   end.
 
 Definition save_callee_save (fe: frame_env) (k: Mach.code) :=
@@ -56,7 +56,7 @@ Fixpoint restore_callee_save_rec (rl: list mreg) (ofs: Z) (k: Mach.code) :=
       let ty := mreg_type r in
       let sz := AST.typesize ty in
       let ofs1 := align ofs sz in
-      Mgetstack (Int.repr ofs1) ty r :: restore_callee_save_rec rl (ofs1 + sz) k
+      Mgetstack (Ptrofs.repr ofs1) ty r :: restore_callee_save_rec rl (ofs1 + sz) k
   end.
 
 Definition restore_callee_save (fe: frame_env) (k: Mach.code) :=
@@ -72,10 +72,10 @@ Definition restore_callee_save (fe: frame_env) (k: Mach.code) :=
   behaviour. *)
 
 Definition transl_op (fe: frame_env) (op: operation) :=
-  shift_stack_operation (Int.repr fe.(fe_stack_data)) op.
+  shift_stack_operation fe.(fe_stack_data) op.
 
 Definition transl_addr (fe: frame_env) (addr: addressing) :=
-  shift_stack_addressing (Int.repr fe.(fe_stack_data)) addr.
+  shift_stack_addressing fe.(fe_stack_data) addr.
 
 (** Translation of a builtin argument. *)
 
@@ -83,16 +83,16 @@ Fixpoint transl_builtin_arg (fe: frame_env) (a: builtin_arg loc) : builtin_arg m
   match a with
   | BA (R r) => BA r
   | BA (S Local ofs ty) =>
-      BA_loadstack (chunk_of_type ty) (Int.repr (offset_local fe ofs))
+      BA_loadstack (chunk_of_type ty) (Ptrofs.repr (offset_local fe ofs))
   | BA (S _ _ _) => BA_int Int.zero  (**r never happens *)
   | BA_int n => BA_int n
   | BA_long n => BA_long n
   | BA_float n => BA_float n
   | BA_single n => BA_single n
   | BA_loadstack chunk ofs =>
-      BA_loadstack chunk (Int.add ofs (Int.repr fe.(fe_stack_data)))
+      BA_loadstack chunk (Ptrofs.add ofs (Ptrofs.repr fe.(fe_stack_data)))
   | BA_addrstack ofs =>
-      BA_addrstack (Int.add ofs (Int.repr fe.(fe_stack_data)))
+      BA_addrstack (Ptrofs.add ofs (Ptrofs.repr fe.(fe_stack_data)))
   | BA_loadglobal chunk id ofs => BA_loadglobal chunk id ofs
   | BA_addrglobal id ofs => BA_addrglobal id ofs
   | BA_splitlong hi lo =>
@@ -114,20 +114,20 @@ Definition transl_instr
   | Lgetstack sl ofs ty r =>
       match sl with
       | Local =>
-          Mgetstack (Int.repr (offset_local fe ofs)) ty r :: k
+          Mgetstack (Ptrofs.repr (offset_local fe ofs)) ty r :: k
       | Incoming =>
-          Mgetparam (Int.repr (offset_arg ofs)) ty r :: k
+          Mgetparam (Ptrofs.repr (offset_arg ofs)) ty r :: k
       | Outgoing =>
-          Mgetstack (Int.repr (offset_arg ofs)) ty r :: k
+          Mgetstack (Ptrofs.repr (offset_arg ofs)) ty r :: k
       end
   | Lsetstack r sl ofs ty =>
       match sl with
       | Local =>
-          Msetstack r (Int.repr (offset_local fe ofs)) ty :: k
+          Msetstack r (Ptrofs.repr (offset_local fe ofs)) ty :: k
       | Incoming =>
           k (* should not happen *)
       | Outgoing =>
-          Msetstack r (Int.repr (offset_arg ofs)) ty :: k
+          Msetstack r (Ptrofs.repr (offset_arg ofs)) ty :: k
       end
   | Lop op args res =>
       Mop (transl_op fe op) args res :: k
@@ -175,15 +175,15 @@ Definition transf_function (f: Linear.function) : res Mach.function :=
   let fe := make_env (function_bounds f) in
   if negb (wt_function f) then
     Error (msg "Ill-formed Linear code")
-  else if zlt Int.max_unsigned fe.(fe_size) then
+  else if zlt Ptrofs.max_unsigned fe.(fe_size) then
     Error (msg "Too many spilled variables, stack size exceeded")
   else
     OK (Mach.mkfunction
          f.(Linear.fn_sig)
          (transl_body f fe)
          fe.(fe_size)
-         (Int.repr fe.(fe_ofs_link))
-         (Int.repr fe.(fe_ofs_retaddr))).
+         (Ptrofs.repr fe.(fe_ofs_link))
+         (Ptrofs.repr fe.(fe_ofs_retaddr))).
 
 Definition transf_fundef (f: Linear.fundef) : res Mach.fundef :=
   AST.transf_partial_fundef transf_function f.

@@ -55,7 +55,7 @@ Inductive expr : Type :=
                                              (**r function call [r1(rargs)] *)
   | Ebuiltin (ef: external_function) (tyargs: typelist) (rargs: exprlist) (ty: type)
                                                  (**r builtin function call *)
-  | Eloc (b: block) (ofs: int) (ty: type)
+  | Eloc (b: block) (ofs: ptrofs) (ty: type)
                        (**r memory location, result of evaluating a l-value *)
   | Eparen (r: expr) (tycast: type) (ty: type)   (**r marked subexpression *)
 

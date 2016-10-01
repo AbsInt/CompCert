@@ -12,18 +12,9 @@
 
 (** Compile-time evaluation of initializers for global C variables. *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import Errors.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import AST.
-Require Import Memory.
-Require Import Globalenvs.
-Require Import Ctypes.
-Require Import Cop.
-Require Import Csyntax.
+Require Import Coqlib Maps Errors.
+Require Import Integers Floats Values AST Memory Globalenvs.
+Require Import Ctypes Cop Csyntax.
 
 Open Scope error_monad_scope.
 
@@ -38,7 +29,7 @@ Open Scope error_monad_scope.
 (** [constval a] evaluates the constant expression [a].
 
 If [a] is a r-value, the returned value denotes:
-- [Vint n], [Vfloat f]: the corresponding number
+- [Vint n], [Vlong n], [Vfloat f], [Vsingle f]: the corresponding number
 - [Vptr id ofs]: address of global variable [id] plus byte offset [ofs]
 - [Vundef]: erroneous expression
 
@@ -88,9 +79,9 @@ Fixpoint constval (ce: composite_env) (a: expr) : res val :=
   | Ecast r ty =>
       do v1 <- constval ce r; do_cast v1 (typeof r) ty
   | Esizeof ty1 ty =>
-      OK (Vint (Int.repr (sizeof ce ty1)))
+      OK (Vptrofs (Ptrofs.repr (sizeof ce ty1)))
   | Ealignof ty1 ty =>
-      OK (Vint (Int.repr (alignof ce ty1)))
+      OK (Vptrofs (Ptrofs.repr (alignof ce ty1)))
   | Eseqand r1 r2 ty =>
       do v1 <- constval ce r1;
       do v2 <- constval ce r2;
@@ -119,7 +110,7 @@ Fixpoint constval (ce: composite_env) (a: expr) : res val :=
   | Ecomma r1 r2 ty =>
       do v1 <- constval ce r1; constval ce r2
   | Evar x ty =>
-      OK(Vptr x Int.zero)
+      OK(Vptr x Ptrofs.zero)
   | Ederef r ty =>
       constval ce r
   | Efield l f ty =>
@@ -128,7 +119,7 @@ Fixpoint constval (ce: composite_env) (a: expr) : res val :=
           do co <- lookup_composite ce id;
           do delta <- field_offset ce f (co_members co);
           do v <- constval ce l;
-          OK (Val.add v (Vint (Int.repr delta)))
+          OK (Val.offset_ptr v (Ptrofs.repr delta))
       | Tunion id _ =>
           constval ce l
       | _ =>
@@ -161,11 +152,13 @@ Definition transl_init_single (ce: composite_env) (ty: type) (a: expr) : res ini
   | Vint n, Tint (I8|IBool) sg _ => OK(Init_int8 n)
   | Vint n, Tint I16 sg _ => OK(Init_int16 n)
   | Vint n, Tint I32 sg _ => OK(Init_int32 n)
-  | Vint n, Tpointer _ _ => OK(Init_int32 n)
+  | Vint n, Tpointer _ _ => assertion (negb Archi.ptr64); OK(Init_int32 n)
   | Vlong n, Tlong _ _ => OK(Init_int64 n)
+  | Vlong n, Tpointer _ _ => assertion (Archi.ptr64); OK(Init_int64 n)
   | Vsingle f, Tfloat F32 _ => OK(Init_float32 f)
   | Vfloat f, Tfloat F64 _ => OK(Init_float64 f)
-  | Vptr id ofs, Tint I32 sg _ => OK(Init_addrof id ofs)
+  | Vptr id ofs, Tint I32 sg _ => assertion (negb Archi.ptr64); OK(Init_addrof id ofs)
+  | Vptr id ofs, Tlong _ _ => assertion (Archi.ptr64); OK(Init_addrof id ofs)
   | Vptr id ofs, Tpointer _ _ => OK(Init_addrof id ofs)
   | Vundef, _ => Error(msg "undefined operation in initializer")
   | _, _ => Error (msg "type mismatch in initializer")

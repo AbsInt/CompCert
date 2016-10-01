@@ -327,14 +327,14 @@ Definition kill_loads_after_storebytes
 Definition shift_memcpy_eq (src sz delta: Z) (e: equation) :=
   match e with
   | Eq l strict (Load chunk (Ainstack i) _) =>
-      let i := Int.unsigned i in
+      let i := Ptrofs.unsigned i in
       let j := i + delta in
       if zle src i
       && zle (i + size_chunk chunk) (src + sz)
       && zeq (Zmod delta (align_chunk chunk)) 0
       && zle 0 j
-      && zle j Int.max_unsigned
-      then Some(Eq l strict (Load chunk (Ainstack (Int.repr j)) nil))
+      && zle j Ptrofs.max_unsigned
+      then Some(Eq l strict (Load chunk (Ainstack (Ptrofs.repr j)) nil))
       else None
   | _ => None
   end.
@@ -353,8 +353,8 @@ Definition add_memcpy (n1 n2: numbering) (asrc adst: aptr) (sz: Z) :=
   match asrc, adst with
   | Stk src, Stk dst =>
       {| num_next := n2.(num_next);
-         num_eqs  := add_memcpy_eqs (Int.unsigned src) sz
-                                    (Int.unsigned dst - Int.unsigned src)
+         num_eqs  := add_memcpy_eqs (Ptrofs.unsigned src) sz
+                                    (Ptrofs.unsigned dst - Ptrofs.unsigned src)
                                     n1.(num_eqs) n2.(num_eqs);
          num_reg  := n2.(num_reg);
          num_val  := n2.(num_val) |}

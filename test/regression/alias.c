@@ -69,14 +69,14 @@ int get4(void)
   return x;
 }
 
-/* Byte-swapping a pointer */
+/* Byte-swapping a pointer.  For 32/64 bit compatibility, we just swap
+   the two low bytes, but that's in the spirit. */
 
 inline uintptr_t bswap(uintptr_t x)
 {
-  return (x >> 24)
-    | (((x >> 16) & 0xFF) << 8)
-    | (((x >> 8) & 0xFF) << 16)
-    | ((x & 0xFF) << 24);
+  return (x & ~((uintptr_t) 0xFFFF))
+    | ((x >> 8) & 0xFF)
+    | ((x << 8) & 0xFF00);
 }
 
 void NOINLINE set5(uintptr_t x)

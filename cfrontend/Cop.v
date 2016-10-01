@@ -22,6 +22,7 @@ Require Import Floats.
 Require Import Values.
 Require Import Memory.
 Require Import Ctypes.
+Require Archi.
 
 (** * Syntax of operators. *)
 
@@ -72,7 +73,7 @@ Inductive incr_or_decr : Type := Incr | Decr.
 (** ** Casts and truth values *)
 
 Inductive classify_cast_cases : Type :=
-  | cast_case_neutral                   (**r int|pointer -> int32|pointer *)
+  | cast_case_pointer                              (**r between pointer types or intptr_t types *)
   | cast_case_i2i (sz2:intsize) (si2:signedness)   (**r int -> int *)
   | cast_case_f2f                                  (**r double -> double *)
   | cast_case_s2s                                  (**r single -> single *)
@@ -89,10 +90,10 @@ Inductive classify_cast_cases : Type :=
   | cast_case_l2s (si1: signedness)                (**r long -> single *)
   | cast_case_f2l (si2:signedness)                 (**r double -> long *)
   | cast_case_s2l (si2:signedness)                 (**r single -> long *)
+  | cast_case_i2bool                               (**r int -> bool *)
+  | cast_case_l2bool                               (**r long -> bool *)
   | cast_case_f2bool                               (**r double -> bool *)
   | cast_case_s2bool                               (**r single -> bool *)
-  | cast_case_l2bool                               (**r long -> bool *)
-  | cast_case_p2bool                               (**r pointer -> bool *)
   | cast_case_struct (id1 id2: ident)              (**r struct -> struct *)
   | cast_case_union  (id1 id2: ident)              (**r union -> union *)
   | cast_case_void                                 (**r any -> void *)
@@ -100,33 +101,54 @@ Inductive classify_cast_cases : Type :=
 
 Definition classify_cast (tfrom tto: type) : classify_cast_cases :=
   match tto, tfrom with
-  | Tint I32 si2 _, (Tint _ _ _ | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_neutral
+  (* To [void] *)
+  | Tvoid, _ => cast_case_void
+  (* To [_Bool] *)
+  | Tint IBool _ _, Tint _ _ _ => cast_case_i2bool
+  | Tint IBool _ _, Tlong _ _ => cast_case_l2bool
   | Tint IBool _ _, Tfloat F64 _ => cast_case_f2bool
   | Tint IBool _ _, Tfloat F32 _ => cast_case_s2bool
-  | Tint IBool _ _, (Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_p2bool
-  | Tint sz2 si2 _, Tint sz1 si1 _ => cast_case_i2i sz2 si2
+  | Tint IBool _ _, (Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _) => 
+      if Archi.ptr64 then cast_case_l2bool else cast_case_i2bool
+  (* To [int] other than [_Bool] *)
+  | Tint sz2 si2 _, Tint _ _ _ =>
+      if Archi.ptr64 then cast_case_i2i sz2 si2
+      else if intsize_eq sz2 I32 then cast_case_pointer
+      else cast_case_i2i sz2 si2
+  | Tint sz2 si2 _, Tlong _ _ => cast_case_l2i sz2 si2
   | Tint sz2 si2 _, Tfloat F64 _ => cast_case_f2i sz2 si2
   | Tint sz2 si2 _, Tfloat F32 _ => cast_case_s2i sz2 si2
+  | Tint sz2 si2 _, (Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _) =>
+      if Archi.ptr64 then cast_case_l2i sz2 si2
+      else if intsize_eq sz2 I32 then cast_case_pointer
+      else cast_case_i2i sz2 si2
+  (* To [long] *)
+  | Tlong _ _, Tlong _ _ =>
+      if Archi.ptr64 then cast_case_pointer else cast_case_l2l
+  | Tlong _ _, Tint sz1 si1 _ => cast_case_i2l si1
+  | Tlong si2 _, Tfloat F64 _ => cast_case_f2l si2
+  | Tlong si2 _, Tfloat F32 _ => cast_case_s2l si2
+  | Tlong si2 _, (Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _) =>
+      if Archi.ptr64 then cast_case_pointer else cast_case_i2l si2
+  (* To [float] *)
+  | Tfloat F64 _, Tint sz1 si1 _ => cast_case_i2f si1
+  | Tfloat F32 _, Tint sz1 si1 _ => cast_case_i2s si1
+  | Tfloat F64 _, Tlong si1 _ => cast_case_l2f si1
+  | Tfloat F32 _, Tlong si1 _ => cast_case_l2s si1
   | Tfloat F64 _, Tfloat F64 _ => cast_case_f2f
   | Tfloat F32 _, Tfloat F32 _ => cast_case_s2s
   | Tfloat F64 _, Tfloat F32 _ => cast_case_s2f
   | Tfloat F32 _, Tfloat F64 _ => cast_case_f2s
-  | Tfloat F64 _, Tint sz1 si1 _ => cast_case_i2f si1
-  | Tfloat F32 _, Tint sz1 si1 _ => cast_case_i2s si1
-  | Tpointer _ _, (Tint _ _ _ | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_neutral
-  | Tlong _ _, Tlong _ _ => cast_case_l2l
-  | Tlong _ _, Tint sz1 si1 _ => cast_case_i2l si1
-  | Tint IBool _ _, Tlong _ _ => cast_case_l2bool
-  | Tint sz2 si2 _, Tlong _ _ => cast_case_l2i sz2 si2
-  | Tlong si2 _, Tfloat F64 _ => cast_case_f2l si2
-  | Tlong si2 _, Tfloat F32 _ => cast_case_s2l si2
-  | Tfloat F64 _, Tlong si1 _ => cast_case_l2f si1
-  | Tfloat F32 _, Tlong si1 _ => cast_case_l2s si1
-  | Tpointer _ _, Tlong _ _ => cast_case_l2i I32 Unsigned
-  | Tlong si2 _, (Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_i2l si2
+  (* To pointer types *)
+  | Tpointer _ _, Tint _ _ _ =>
+      if Archi.ptr64 then cast_case_i2l Unsigned else cast_case_pointer
+  | Tpointer _ _, Tlong _ _ =>
+      if Archi.ptr64 then cast_case_pointer else cast_case_l2i I32 Unsigned
+  | Tpointer _ _, (Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_pointer
+  (* To struct or union types *)
   | Tstruct id2 _, Tstruct id1 _ => cast_case_struct id1 id2
   | Tunion id2 _, Tunion id1 _ => cast_case_union id1 id2
-  | Tvoid, _ => cast_case_void
+  (* Catch-all *)
   | _, _ => cast_case_default
   end.
 
@@ -200,9 +222,11 @@ Definition cast_single_long (si : signedness) (f: float32) : option int64 :=
 
 Definition sem_cast (v: val) (t1 t2: type) (m: mem): option val :=
   match classify_cast t1 t2 with
-  | cast_case_neutral =>
+  | cast_case_pointer =>
       match v with
-      | Vint _ | Vptr _ _ => Some v
+      | Vptr _ _ => Some v
+      | Vint _ => if Archi.ptr64 then None else Some v
+      | Vlong _ => if Archi.ptr64 then Some v else None
       | _ => None
       end
   | cast_case_i2i sz2 si2 =>
@@ -258,6 +282,25 @@ Definition sem_cast (v: val) (t1 t2: type) (m: mem): option val :=
           end
       | _ => None
       end
+  | cast_case_i2bool =>
+      match v with
+      | Vint n =>
+          Some(Vint(if Int.eq n Int.zero then Int.zero else Int.one))
+      | Vptr b ofs =>
+          if Archi.ptr64 then None else
+          if Mem.weak_valid_pointer m b (Ptrofs.unsigned ofs) then Some Vone else None
+      | _ => None
+      end
+  | cast_case_l2bool =>
+      match v with
+      | Vlong n =>
+          Some(Vint(if Int64.eq n Int64.zero then Int.zero else Int.one))
+      | Vptr b ofs =>
+          if negb Archi.ptr64 then None else
+          if Mem.weak_valid_pointer m b (Ptrofs.unsigned ofs) then Some Vone else None
+
+      | _ => None
+      end
   | cast_case_f2bool =>
       match v with
       | Vfloat f =>
@@ -268,12 +311,6 @@ Definition sem_cast (v: val) (t1 t2: type) (m: mem): option val :=
       match v with
       | Vsingle f =>
           Some(Vint(if Float32.cmp Ceq f Float32.zero then Int.zero else Int.one))
-      | _ => None
-      end
-  | cast_case_p2bool =>
-      match v with
-      | Vint i => Some (Vint (cast_int_int IBool Signed i))
-      | Vptr b ofs => if Mem.weak_valid_pointer m b (Int.unsigned ofs) then Some Vone else None
       | _ => None
       end
   | cast_case_l2l =>
@@ -289,12 +326,6 @@ Definition sem_cast (v: val) (t1 t2: type) (m: mem): option val :=
   | cast_case_l2i sz si =>
       match v with
       | Vlong n => Some(Vint (cast_int_int sz si (Int.repr (Int64.unsigned n))))
-      | _ => None
-      end
-  | cast_case_l2bool =>
-      match v with
-      | Vlong n =>
-          Some(Vint(if Int64.eq n Int64.zero then Int.zero else Int.one))
       | _ => None
       end
   | cast_case_l2f si1 =>
@@ -350,16 +381,15 @@ Definition sem_cast (v: val) (t1 t2: type) (m: mem): option val :=
 
 Inductive classify_bool_cases : Type :=
   | bool_case_i                           (**r integer *)
+  | bool_case_l                           (**r long *)
   | bool_case_f                           (**r double float *)
   | bool_case_s                           (**r single float *)
-  | bool_case_p                           (**r pointer *)
-  | bool_case_l                           (**r long *)
   | bool_default.
 
 Definition classify_bool (ty: type) : classify_bool_cases :=
   match typeconv ty with
   | Tint _ _ _ => bool_case_i
-  | Tpointer _ _ => bool_case_p
+  | Tpointer _ _ => if Archi.ptr64 then bool_case_l else bool_case_i
   | Tfloat F64 _ => bool_case_f
   | Tfloat F32 _ => bool_case_s
   | Tlong _ _ => bool_case_l
@@ -376,6 +406,17 @@ Definition bool_val (v: val) (t: type) (m: mem) : option bool :=
   | bool_case_i =>
       match v with
       | Vint n => Some (negb (Int.eq n Int.zero))
+      | Vptr b ofs =>
+          if Archi.ptr64 then None else
+          if Mem.weak_valid_pointer m b (Ptrofs.unsigned ofs) then Some true else None
+      | _ => None
+      end
+  | bool_case_l =>
+      match v with
+      | Vlong n => Some (negb (Int64.eq n Int64.zero))
+      | Vptr b ofs =>
+          if negb Archi.ptr64 then None else
+          if Mem.weak_valid_pointer m b (Ptrofs.unsigned ofs) then Some true else None
       | _ => None
       end
   | bool_case_f =>
@@ -388,17 +429,6 @@ Definition bool_val (v: val) (t: type) (m: mem) : option bool :=
       | Vsingle f => Some (negb (Float32.cmp Ceq f Float32.zero))
       | _ => None
       end
-  | bool_case_p =>
-      match v with
-      | Vint n => Some (negb (Int.eq n Int.zero))
-      | Vptr b ofs => if Mem.weak_valid_pointer m b (Int.unsigned ofs) then Some true else None
-      | _ => None
-      end
-  | bool_case_l =>
-      match v with
-      | Vlong n => Some (negb (Int64.eq n Int64.zero))
-      | _ => None
-      end
   | bool_default => None
   end.
 
@@ -407,35 +437,7 @@ Definition bool_val (v: val) (t: type) (m: mem) : option bool :=
 (** *** Boolean negation *)
 
 Definition sem_notbool (v: val) (ty: type) (m: mem): option val :=
-  match classify_bool ty with
-  | bool_case_i =>
-      match v with
-      | Vint n => Some (Val.of_bool (Int.eq n Int.zero))
-      | _ => None
-      end
-  | bool_case_f =>
-      match v with
-      | Vfloat f => Some (Val.of_bool (Float.cmp Ceq f Float.zero))
-      | _ => None
-      end
-  | bool_case_s =>
-      match v with
-      | Vsingle f => Some (Val.of_bool (Float32.cmp Ceq f Float32.zero))
-      | _ => None
-      end
-  | bool_case_p =>
-      match v with
-      | Vint n => Some (Val.of_bool (Int.eq n Int.zero))
-      | Vptr b ofs => if Mem.weak_valid_pointer m b (Int.unsigned ofs) then Some Vfalse else None
-      | _ => None
-      end
-  | bool_case_l =>
-      match v with
-      | Vlong n => Some (Val.of_bool (Int64.eq n Int64.zero))
-      | _ => None
-      end
-  | bool_default => None
-  end.
+  option_map (fun b => Val.of_bool (negb b)) (bool_val v ty m).
 
 (** *** Opposite and absolute value *)
 
@@ -623,57 +625,55 @@ Definition sem_binarith
 (** *** Addition *)
 
 Inductive classify_add_cases : Type :=
-  | add_case_pi(ty: type)     (**r pointer, int *)
-  | add_case_ip(ty: type)     (**r int, pointer *)
-  | add_case_pl(ty: type)     (**r pointer, long *)
-  | add_case_lp(ty: type)     (**r long, pointer *)
-  | add_default.                       (**r numerical type, numerical type *)
+  | add_case_pi (ty: type) (si: signedness)     (**r pointer, int *)
+  | add_case_pl (ty: type)     (**r pointer, long *)
+(*
+  | add_case_ip (si: signedness) (ty: type)     (**r int, pointer *)
+  | add_case_lp (ty: type)     (**r long, pointer *)
+*)
+  | add_default.               (**r numerical type, numerical type *)
 
 Definition classify_add (ty1: type) (ty2: type) :=
   match typeconv ty1, typeconv ty2 with
-  | Tpointer ty _, Tint _ _ _ => add_case_pi ty
-  | Tint _ _ _, Tpointer ty _ => add_case_ip ty
+  | Tpointer ty _, Tint _ si _ => add_case_pi ty si
   | Tpointer ty _, Tlong _ _ => add_case_pl ty
+(*
+  | Tint _ si _, Tpointer ty _ => add_case_ip si ty
   | Tlong _ _, Tpointer ty _ => add_case_lp ty
+*)
   | _, _ => add_default
+  end.
+
+Definition ptrofs_of_int (si: signedness) (n: int) : ptrofs :=
+  match si with
+  | Signed => Ptrofs.of_ints n
+  | Unsigned => Ptrofs.of_intu n
   end.
 
 Definition sem_add (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) (m: mem): option val :=
   match classify_add t1 t2 with
-  | add_case_pi ty =>                 (**r pointer plus integer *)
-      match v1,v2 with
+  | add_case_pi ty si =>             (**r pointer plus integer *)
+      match v1, v2 with
       | Vptr b1 ofs1, Vint n2 =>
-        Some (Vptr b1 (Int.add ofs1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
+        let n2 := ptrofs_of_int si n2 in
+        Some (Vptr b1 (Ptrofs.add ofs1 (Ptrofs.mul (Ptrofs.repr (sizeof cenv ty)) n2)))
       | Vint n1, Vint n2 =>
-        Some (Vint (Int.add n1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
-      | _,  _ => None
-      end
-  | add_case_ip ty =>                 (**r integer plus pointer *)
-      match v1,v2 with
-      | Vint n1, Vptr b2 ofs2 =>
-        Some (Vptr b2 (Int.add ofs2 (Int.mul (Int.repr (sizeof cenv ty)) n1)))
-      | Vint n1, Vint n2 =>
-        Some (Vint (Int.add n2 (Int.mul (Int.repr (sizeof cenv ty)) n1)))
+        if Archi.ptr64 then None else Some (Vint (Int.add n1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
+      | Vlong n1, Vint n2 =>
+        let n2 := cast_int_long si n2 in
+        if Archi.ptr64 then Some (Vlong (Int64.add n1 (Int64.mul (Int64.repr (sizeof cenv ty)) n2))) else None
       | _,  _ => None
       end
   | add_case_pl ty =>                 (**r pointer plus long *)
-      match v1,v2 with
+      match v1, v2 with
       | Vptr b1 ofs1, Vlong n2 =>
-        let n2 := Int.repr (Int64.unsigned n2) in
-        Some (Vptr b1 (Int.add ofs1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
+        let n2 := Ptrofs.of_int64 n2 in
+        Some (Vptr b1 (Ptrofs.add ofs1 (Ptrofs.mul (Ptrofs.repr (sizeof cenv ty)) n2)))
       | Vint n1, Vlong n2 =>
         let n2 := Int.repr (Int64.unsigned n2) in
-        Some (Vint (Int.add n1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
-      | _,  _ => None
-      end
-  | add_case_lp ty =>                 (**r long plus pointer *)
-      match v1,v2 with
-      | Vlong n1, Vptr b2 ofs2 =>
-        let n1 := Int.repr (Int64.unsigned n1) in
-        Some (Vptr b2 (Int.add ofs2 (Int.mul (Int.repr (sizeof cenv ty)) n1)))
-      | Vlong n1, Vint n2 =>
-        let n1 := Int.repr (Int64.unsigned n1) in
-        Some (Vint (Int.add n2 (Int.mul (Int.repr (sizeof cenv ty)) n1)))
+        if Archi.ptr64 then None else Some (Vint (Int.add n1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
+      | Vlong n1, Vlong n2 =>
+        if Archi.ptr64 then Some (Vlong (Int64.add n1 (Int64.mul (Int64.repr (sizeof cenv ty)) n2))) else None
       | _,  _ => None
       end
   | add_default =>
@@ -688,14 +688,14 @@ Definition sem_add (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) 
 (** *** Subtraction *)
 
 Inductive classify_sub_cases : Type :=
-  | sub_case_pi(ty: type)               (**r pointer, int *)
-  | sub_case_pp(ty: type)               (**r pointer, pointer *)
-  | sub_case_pl(ty: type)               (**r pointer, long *)
-  | sub_default.                        (**r numerical type, numerical type *)
+  | sub_case_pi (ty: type) (si: signedness)  (**r pointer, int *)
+  | sub_case_pp (ty: type)               (**r pointer, pointer *)
+  | sub_case_pl (ty: type)               (**r pointer, long *)
+  | sub_default.                         (**r numerical type, numerical type *)
 
 Definition classify_sub (ty1: type) (ty2: type) :=
   match typeconv ty1, typeconv ty2 with
-  | Tpointer ty _, Tint _ _ _ => sub_case_pi ty
+  | Tpointer ty _, Tint _ si _ => sub_case_pi ty si
   | Tpointer ty _ , Tpointer _ _ => sub_case_pp ty
   | Tpointer ty _, Tlong _ _ => sub_case_pl ty
   | _, _ => sub_default
@@ -703,22 +703,28 @@ Definition classify_sub (ty1: type) (ty2: type) :=
 
 Definition sem_sub (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) (m:mem): option val :=
   match classify_sub t1 t2 with
-  | sub_case_pi ty =>            (**r pointer minus integer *)
-      match v1,v2 with
+  | sub_case_pi ty si =>            (**r pointer minus integer *)
+      match v1, v2 with
       | Vptr b1 ofs1, Vint n2 =>
-          Some (Vptr b1 (Int.sub ofs1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
+          let n2 := ptrofs_of_int si n2 in
+          Some (Vptr b1 (Ptrofs.sub ofs1 (Ptrofs.mul (Ptrofs.repr (sizeof cenv ty)) n2)))
       | Vint n1, Vint n2 =>
-          Some (Vint (Int.sub n1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
+          if Archi.ptr64 then None else Some (Vint (Int.sub n1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
+      | Vlong n1, Vint n2 =>
+          let n2 := cast_int_long si n2 in
+          if Archi.ptr64 then Some (Vlong (Int64.sub n1 (Int64.mul (Int64.repr (sizeof cenv ty)) n2))) else None
       | _,  _ => None
       end
   | sub_case_pl ty =>            (**r pointer minus long *)
-      match v1,v2 with
+      match v1, v2 with
       | Vptr b1 ofs1, Vlong n2 =>
-          let n2 := Int.repr (Int64.unsigned n2) in
-          Some (Vptr b1 (Int.sub ofs1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
+          let n2 := Ptrofs.of_int64 n2 in
+          Some (Vptr b1 (Ptrofs.sub ofs1 (Ptrofs.mul (Ptrofs.repr (sizeof cenv ty)) n2)))
       | Vint n1, Vlong n2 =>
           let n2 := Int.repr (Int64.unsigned n2) in
-          Some (Vint (Int.sub n1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
+          if Archi.ptr64 then None else Some (Vint (Int.sub n1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
+      | Vlong n1, Vlong n2 =>
+          if Archi.ptr64 then Some (Vlong (Int64.sub n1 (Int64.mul (Int64.repr (sizeof cenv ty)) n2))) else None
       | _,  _ => None
       end
   | sub_case_pp ty =>          (**r pointer minus pointer *)
@@ -726,8 +732,8 @@ Definition sem_sub (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) 
       | Vptr b1 ofs1, Vptr b2 ofs2 =>
           if eq_block b1 b2 then
             let sz := sizeof cenv ty in
-            if zlt 0 sz && zle sz Int.max_signed
-            then Some (Vint (Int.divs (Int.sub ofs1 ofs2) (Int.repr sz)))
+            if zlt 0 sz && zle sz Ptrofs.max_signed
+            then Some (Vptrofs (Ptrofs.divs (Ptrofs.sub ofs1 ofs2) (Ptrofs.repr sz)))
             else None
           else None
       | _, _ => None
@@ -903,6 +909,8 @@ Definition sem_shr (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
 
 Inductive classify_cmp_cases : Type :=
   | cmp_case_pp                       (**r pointer, pointer *)
+  | cmp_case_pi (si: signedness)      (**r pointer, int *)
+  | cmp_case_ip (si: signedness)      (**r int, pointer *)
   | cmp_case_pl                       (**r pointer, long *)
   | cmp_case_lp                       (**r long, pointer *)
   | cmp_default.                      (**r numerical, numerical *)
@@ -910,32 +918,64 @@ Inductive classify_cmp_cases : Type :=
 Definition classify_cmp (ty1: type) (ty2: type) :=
   match typeconv ty1, typeconv ty2 with
   | Tpointer _ _ , Tpointer _ _ => cmp_case_pp
-  | Tpointer _ _ , Tint _ _ _ => cmp_case_pp
-  | Tint _ _ _, Tpointer _ _ => cmp_case_pp
+  | Tpointer _ _ , Tint _ si _ => cmp_case_pi si
+  | Tint _ si _, Tpointer _ _ => cmp_case_ip si
   | Tpointer _ _ , Tlong _ _ => cmp_case_pl
   | Tlong _ _ , Tpointer _ _ => cmp_case_lp
   | _, _ => cmp_default
   end.
+
+Definition cmp_ptr (m: mem) (c: comparison) (v1 v2: val): option val :=
+  option_map Val.of_bool
+   (if Archi.ptr64
+    then Val.cmplu_bool (Mem.valid_pointer m) c v1 v2
+    else Val.cmpu_bool (Mem.valid_pointer m) c v1 v2).
 
 Definition sem_cmp (c:comparison)
                   (v1: val) (t1: type) (v2: val) (t2: type)
                   (m: mem): option val :=
   match classify_cmp t1 t2 with
   | cmp_case_pp =>
-      option_map Val.of_bool (Val.cmpu_bool (Mem.valid_pointer m) c v1 v2)
+      cmp_ptr m c v1 v2
+  | cmp_case_pi si =>
+      match v2 with
+      | Vint n2 =>
+          let v2' := Vptrofs (ptrofs_of_int si n2) in
+          cmp_ptr m c v1 v2'
+      | Vptr b ofs =>
+          if Archi.ptr64 then None else cmp_ptr m c v1 v2
+      | _ =>
+          None
+      end
+  | cmp_case_ip si =>
+      match v1 with
+      | Vint n1 =>
+          let v1' := Vptrofs (ptrofs_of_int si n1) in
+          cmp_ptr m c v1' v2
+      | Vptr b ofs =>
+          if Archi.ptr64 then None else cmp_ptr m c v1 v2
+      | _ =>
+          None
+      end
   | cmp_case_pl =>
       match v2 with
       | Vlong n2 =>
-          let n2 := Int.repr (Int64.unsigned n2) in
-          option_map Val.of_bool (Val.cmpu_bool (Mem.valid_pointer m) c v1 (Vint n2))
-      | _ => None
+          let v2' := Vptrofs (Ptrofs.of_int64 n2) in
+          cmp_ptr m c v1 v2'
+      | Vptr b ofs =>
+          if Archi.ptr64 then cmp_ptr m c v1 v2 else None
+      | _ =>
+          None
       end
   | cmp_case_lp =>
       match v1 with
       | Vlong n1 =>
-          let n1 := Int.repr (Int64.unsigned n1) in
-          option_map Val.of_bool (Val.cmpu_bool (Mem.valid_pointer m) c (Vint n1) v2)
-      | _ => None
+          let v1' := Vptrofs (Ptrofs.of_int64 n1) in
+          cmp_ptr m c v1' v2
+      | Vptr b ofs =>
+          if Archi.ptr64 then cmp_ptr m c v1 v2 else None
+      | _ =>
+          None
       end
   | cmp_default =>
       sem_binarith
@@ -1047,30 +1087,30 @@ Variables m m': mem.
 Hypothesis valid_pointer_inj:
   forall b1 ofs b2 delta,
   f b1 = Some(b2, delta) ->
-  Mem.valid_pointer m b1 (Int.unsigned ofs) = true ->
-  Mem.valid_pointer m' b2 (Int.unsigned (Int.add ofs (Int.repr delta))) = true.
+  Mem.valid_pointer m b1 (Ptrofs.unsigned ofs) = true ->
+  Mem.valid_pointer m' b2 (Ptrofs.unsigned (Ptrofs.add ofs (Ptrofs.repr delta))) = true.
 
 Hypothesis weak_valid_pointer_inj:
   forall b1 ofs b2 delta,
   f b1 = Some(b2, delta) ->
-  Mem.weak_valid_pointer m b1 (Int.unsigned ofs) = true ->
-  Mem.weak_valid_pointer m' b2 (Int.unsigned (Int.add ofs (Int.repr delta))) = true.
+  Mem.weak_valid_pointer m b1 (Ptrofs.unsigned ofs) = true ->
+  Mem.weak_valid_pointer m' b2 (Ptrofs.unsigned (Ptrofs.add ofs (Ptrofs.repr delta))) = true.
 
 Hypothesis weak_valid_pointer_no_overflow:
   forall b1 ofs b2 delta,
   f b1 = Some(b2, delta) ->
-  Mem.weak_valid_pointer m b1 (Int.unsigned ofs) = true ->
-  0 <= Int.unsigned ofs + Int.unsigned (Int.repr delta) <= Int.max_unsigned.
+  Mem.weak_valid_pointer m b1 (Ptrofs.unsigned ofs) = true ->
+  0 <= Ptrofs.unsigned ofs + Ptrofs.unsigned (Ptrofs.repr delta) <= Ptrofs.max_unsigned.
 
 Hypothesis valid_different_pointers_inj:
   forall b1 ofs1 b2 ofs2 b1' delta1 b2' delta2,
   b1 <> b2 ->
-  Mem.valid_pointer m b1 (Int.unsigned ofs1) = true ->
-  Mem.valid_pointer m b2 (Int.unsigned ofs2) = true ->
+  Mem.valid_pointer m b1 (Ptrofs.unsigned ofs1) = true ->
+  Mem.valid_pointer m b2 (Ptrofs.unsigned ofs2) = true ->
   f b1 = Some (b1', delta1) ->
   f b2 = Some (b2', delta2) ->
   b1' <> b2' \/
-  Int.unsigned (Int.add ofs1 (Int.repr delta1)) <> Int.unsigned (Int.add ofs2 (Int.repr delta2)).
+  Ptrofs.unsigned (Ptrofs.add ofs1 (Ptrofs.repr delta1)) <> Ptrofs.unsigned (Ptrofs.add ofs2 (Ptrofs.repr delta2)).
 
 Remark val_inject_vtrue: forall f, Val.inject f Vtrue Vtrue.
 Proof. unfold Vtrue; auto. Qed.
@@ -1082,11 +1122,18 @@ Remark val_inject_of_bool: forall f b, Val.inject f (Val.of_bool b) (Val.of_bool
 Proof. intros. unfold Val.of_bool. destruct b; [apply val_inject_vtrue|apply val_inject_vfalse].
 Qed.
 
-Hint Resolve val_inject_vtrue val_inject_vfalse val_inject_of_bool.
+Remark val_inject_vptrofs: forall n, Val.inject f (Vptrofs n) (Vptrofs n).
+Proof. intros. unfold Vptrofs. destruct Archi.ptr64; auto. Qed.
+
+Hint Resolve val_inject_vtrue val_inject_vfalse val_inject_of_bool val_inject_vptrofs.
 
 Ltac TrivialInject :=
   match goal with
-  | |- exists v', Some ?v = Some v' /\ _ => exists v; split; auto
+  | [ H: None = Some _ |- _ ] => discriminate
+  | [ H: Some _ = Some _ |- _ ] => inv H; TrivialInject
+  | [ H: match ?x with Some _ => _ | None => _ end = Some _ |- _ ] => destruct x; TrivialInject
+  | [ H: match ?x with true => _ | false => _ end = Some _ |- _ ] => destruct x eqn:?; TrivialInject
+  | [ |- exists v', Some ?v = Some v' /\ _ ] => exists v; split; auto
   | _ => idtac
   end.
 
@@ -1096,18 +1143,29 @@ Lemma sem_cast_inj:
   Val.inject f v1 tv1 ->
   exists tv, sem_cast tv1 ty1 ty m'= Some tv /\ Val.inject f v tv.
 Proof.
-  unfold sem_cast; intros; destruct (classify_cast ty1 ty);
-  inv H0; inv H; TrivialInject.
+  unfold sem_cast; intros; destruct (classify_cast ty1 ty); inv H0; TrivialInject.
 - econstructor; eauto.
-- destruct (cast_float_int si2 f0); inv H1; TrivialInject.
-- destruct (cast_single_int si2 f0); inv H1; TrivialInject.
-- destruct (cast_float_long si2 f0); inv H1; TrivialInject.
-- destruct (cast_single_long si2 f0); inv H1; TrivialInject.
-- destruct (Mem.weak_valid_pointer m b1 (Int.unsigned ofs1)) eqn:VALID; inv H2.
-  erewrite weak_valid_pointer_inj by eauto. TrivialInject. 
-- destruct (ident_eq id1 id2); inv H2; TrivialInject. econstructor; eauto.
-- destruct (ident_eq id1 id2); inv H2; TrivialInject. econstructor; eauto.
+- erewrite weak_valid_pointer_inj by eauto. TrivialInject. 
+- erewrite weak_valid_pointer_inj by eauto. TrivialInject. 
+- destruct (ident_eq id1 id2); TrivialInject. econstructor; eauto.
+- destruct (ident_eq id1 id2); TrivialInject. econstructor; eauto.
 - econstructor; eauto.
+Qed.
+
+Lemma bool_val_inj:
+  forall v ty b tv,
+  bool_val v ty m = Some b ->
+  Val.inject f v tv ->
+  bool_val tv ty m' = Some b.
+Proof.
+  unfold bool_val; intros.
+  destruct (classify_bool ty); inv H0; try congruence.
+  destruct Archi.ptr64; try discriminate.
+  destruct (Mem.weak_valid_pointer m b1 (Ptrofs.unsigned ofs1)) eqn:VP; inv H.
+  erewrite weak_valid_pointer_inj by eauto. auto.
+  destruct Archi.ptr64; try discriminate.
+  destruct (Mem.weak_valid_pointer m b1 (Ptrofs.unsigned ofs1)) eqn:VP; inv H.
+  erewrite weak_valid_pointer_inj by eauto. auto.
 Qed.
 
 Lemma sem_unary_operation_inj:
@@ -1117,15 +1175,14 @@ Lemma sem_unary_operation_inj:
   exists tv, sem_unary_operation op tv1 ty m' = Some tv /\ Val.inject f v tv.
 Proof.
   unfold sem_unary_operation; intros. destruct op.
-  (* notbool *)
-  unfold sem_notbool in *; destruct (classify_bool ty); inv H0; inv H; TrivialInject.
-  destruct (Mem.weak_valid_pointer m b1 (Int.unsigned ofs1)) eqn:VP; inv H2.
-  erewrite weak_valid_pointer_inj by eauto. TrivialInject.
-  (* notint *)
+- (* notbool *)
+  unfold sem_notbool in *. destruct (bool_val v1 ty m) as [b|] eqn:BV; simpl in H; inv H.
+  erewrite bool_val_inj by eauto. simpl. TrivialInject.
+- (* notint *)
   unfold sem_notint in *; destruct (classify_notint ty); inv H0; inv H; TrivialInject.
-  (* neg *)
+- (* neg *)
   unfold sem_neg in *; destruct (classify_neg ty); inv H0; inv H; TrivialInject.
-  (* absfloat *)
+- (* absfloat *)
   unfold sem_absfloat in *; destruct (classify_neg ty); inv H0; inv H; TrivialInject.
 Qed.
 
@@ -1175,6 +1232,24 @@ Proof.
   destruct (Int.ltu i0 Int64.iwordsize'); inv H; auto.
 Qed.
 
+Remark sem_cmp_ptr_inj:
+  forall c v1 v2 v tv1 tv2,
+  cmp_ptr m c v1 v2 = Some v ->
+  Val.inject f v1 tv1 ->
+  Val.inject f v2 tv2 ->
+  exists tv, cmp_ptr m' c tv1 tv2 = Some tv /\ Val.inject f v tv.
+Proof.
+  unfold cmp_ptr; intros. 
+  remember (if Archi.ptr64
+       then Val.cmplu_bool (Mem.valid_pointer m) c v1 v2
+       else Val.cmpu_bool (Mem.valid_pointer m) c v1 v2) as ob.
+  destruct ob as [b|]; simpl in H; inv H.
+  exists (Val.of_bool b); split; auto.
+  destruct Archi.ptr64. 
+  erewrite Val.cmplu_bool_inject by eauto. auto.
+  erewrite Val.cmpu_bool_inject by eauto. auto.
+Qed.
+
 Remark sem_cmp_inj:
   forall cmp v1 tv1 ty1 v2 tv2 ty2 v,
   sem_cmp cmp v1 ty1 v2 ty2 m = Some v ->
@@ -1185,24 +1260,15 @@ Proof.
   intros.
   unfold sem_cmp in *; destruct (classify_cmp ty1 ty2).
 - (* pointer - pointer *)
-  destruct (Val.cmpu_bool (Mem.valid_pointer m) cmp v1 v2) as [b|] eqn:E; simpl in H; inv H.
-  replace (Val.cmpu_bool (Mem.valid_pointer m') cmp tv1 tv2) with (Some b).
-  simpl. TrivialInject.
-  symmetry. eapply Val.cmpu_bool_inject; eauto.
+  eapply sem_cmp_ptr_inj; eauto.
+- (* pointer - int *)
+  inversion H1; subst; TrivialInject; eapply sem_cmp_ptr_inj; eauto.
+- (* int - pointer *)
+  inversion H0; subst; TrivialInject; eapply sem_cmp_ptr_inj; eauto.
 - (* pointer - long *)
-  destruct v2; try discriminate. inv H1.
-  set (v2 := Vint (Int.repr (Int64.unsigned i))) in *.
-  destruct (Val.cmpu_bool (Mem.valid_pointer m) cmp v1 v2) as [b|] eqn:E; simpl in H; inv H.
-  replace (Val.cmpu_bool (Mem.valid_pointer m') cmp tv1 v2) with (Some b).
-  simpl. TrivialInject.
-  symmetry. eapply Val.cmpu_bool_inject with (v2 := v2); eauto. constructor.
+  inversion H1; subst; TrivialInject; eapply sem_cmp_ptr_inj; eauto.
 - (* long - pointer *)
-  destruct v1; try discriminate. inv H0.
-  set (v1 := Vint (Int.repr (Int64.unsigned i))) in *.
-  destruct (Val.cmpu_bool (Mem.valid_pointer m) cmp v1 v2) as [b|] eqn:E; simpl in H; inv H.
-  replace (Val.cmpu_bool (Mem.valid_pointer m') cmp v1 tv2) with (Some b).
-  simpl. TrivialInject.
-  symmetry. eapply Val.cmpu_bool_inject with (v1 := v1); eauto. constructor.
+  inversion H0; subst; TrivialInject; eapply sem_cmp_ptr_inj; eauto.
 - (* numerical - numerical *)
   assert (SELF: forall b, optval_self_injects (Some (Val.of_bool b))).
   {
@@ -1220,26 +1286,22 @@ Proof.
   unfold sem_binary_operation; intros; destruct op.
 - (* add *)
   unfold sem_add in *; destruct (classify_add ty1 ty2).
-  + inv H0; inv H1; inv H. TrivialInject. TrivialInject.
-    econstructor. eauto. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  + inv H0; inv H1; inv H. TrivialInject. TrivialInject.
-    econstructor. eauto. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  + inv H0; inv H1; inv H. TrivialInject. TrivialInject.
-    econstructor. eauto. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  + inv H0; inv H1; inv H. TrivialInject. TrivialInject.
-    econstructor. eauto. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
+  + inv H0; inv H1; TrivialInject.
+    econstructor. eauto. repeat rewrite Ptrofs.add_assoc. decEq. apply Ptrofs.add_commut.
+  + inv H0; inv H1; TrivialInject.
+    econstructor. eauto. repeat rewrite Ptrofs.add_assoc. decEq. apply Ptrofs.add_commut.
   + eapply sem_binarith_inject; eauto; intros; exact I.
 - (* sub *)
   unfold sem_sub in *; destruct (classify_sub ty1 ty2).
-  + inv H0; inv H1; inv H. TrivialInject. TrivialInject.
-    econstructor. eauto. rewrite Int.sub_add_l. auto.
-  + inv H0; inv H1; inv H. TrivialInject.
+  + inv H0; inv H1; TrivialInject.
+    econstructor. eauto. rewrite Ptrofs.sub_add_l. auto. 
+  + inv H0; inv H1; TrivialInject.
     destruct (eq_block b1 b0); try discriminate. subst b1.
     rewrite H0 in H2; inv H2. rewrite dec_eq_true.
-    destruct (zlt 0 (sizeof cenv ty) && zle (sizeof cenv ty) Int.max_signed); inv H3.
-    rewrite Int.sub_shifted. TrivialInject.
-  + inv H0; inv H1; inv H. TrivialInject. TrivialInject.
-    econstructor. eauto. rewrite Int.sub_add_l. auto.
+    destruct (zlt 0 (sizeof cenv ty) && zle (sizeof cenv ty) Ptrofs.max_signed); inv H.
+    rewrite Ptrofs.sub_shifted. TrivialInject.
+  + inv H0; inv H1; TrivialInject.
+    econstructor. eauto. rewrite Ptrofs.sub_add_l. auto. 
   + eapply sem_binarith_inject; eauto; intros; exact I.
 - (* mul *)
   eapply sem_binarith_inject; eauto; intros; exact I.
@@ -1284,18 +1346,6 @@ Proof.
 - eapply sem_cmp_inj; eauto.
 - eapply sem_cmp_inj; eauto.
 - eapply sem_cmp_inj; eauto.
-Qed.
-
-Lemma bool_val_inj:
-  forall v ty b tv,
-  bool_val v ty m = Some b ->
-  Val.inject f v tv ->
-  bool_val tv ty m' = Some b.
-Proof.
-  unfold bool_val; intros.
-  destruct (classify_bool ty); inv H0; try congruence.
-  destruct (Mem.weak_valid_pointer m b1 (Int.unsigned ofs1)) eqn:VP; inv H.
-  erewrite weak_valid_pointer_inj by eauto. auto.
 Qed.
 
 End GENERIC_INJECTION.
@@ -1364,7 +1414,7 @@ Lemma cast_bool_bool_val:
   assert (A: classify_bool t =
     match t with
     | Tint _ _ _ => bool_case_i
-    | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _ => bool_case_p
+    | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _ => if Archi.ptr64 then bool_case_l else bool_case_i
     | Tfloat F64 _ => bool_case_f
     | Tfloat F32 _ => bool_case_s
     | Tlong _ _ => bool_case_l
@@ -1373,9 +1423,12 @@ Lemma cast_bool_bool_val:
   {
     unfold classify_bool; destruct t; simpl; auto. destruct i; auto.
   }
-  unfold bool_val. rewrite A. unfold sem_cast. destruct t; simpl; auto; destruct v; auto.
+  unfold bool_val. rewrite A.
+  unfold sem_cast, classify_cast; remember Archi.ptr64 as ptr64; destruct t; simpl; auto; destruct v; auto.
   destruct (Int.eq i0 Int.zero); auto.
+  destruct ptr64; auto. destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i0)); auto.
   destruct (Int64.eq i Int64.zero); auto.
+  destruct (negb ptr64); auto. destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i)); auto.
   destruct f; auto.
   destruct f; auto.
   destruct f; auto.
@@ -1383,13 +1436,30 @@ Lemma cast_bool_bool_val:
   destruct (Float.cmp Ceq f0 Float.zero); auto.
   destruct f; auto.
   destruct (Float32.cmp Ceq f0 Float32.zero); auto.
-  destruct f; auto.
+  destruct f; auto. 
+  destruct ptr64; auto.
   destruct (Int.eq i Int.zero); auto.
-  destruct (Mem.weak_valid_pointer m b (Int.unsigned i)); auto.
-  destruct (Int.eq i Int.zero); auto.
-  destruct (Mem.weak_valid_pointer m b (Int.unsigned i)); auto.
-  destruct (Int.eq i Int.zero); auto.
-  destruct (Mem.weak_valid_pointer m b (Int.unsigned i)); auto.
+  destruct ptr64; auto.
+  destruct ptr64; auto.
+  destruct ptr64; auto. destruct (Int64.eq i Int64.zero); auto.
+  destruct ptr64; auto.
+  destruct ptr64; auto.
+  destruct ptr64; auto. destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i)); auto.
+  destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i)); auto.
+  destruct ptr64; auto.
+  destruct ptr64; auto. destruct (Int.eq i Int.zero); auto.
+  destruct ptr64; auto. destruct (Int64.eq i Int64.zero); auto.
+  destruct ptr64; auto.
+  destruct ptr64; auto.
+  destruct ptr64; auto. destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i)); auto.
+  destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i)); auto.
+  destruct ptr64; auto.
+  destruct ptr64; auto. destruct (Int.eq i Int.zero); auto.
+  destruct ptr64; auto. destruct (Int64.eq i Int64.zero); auto.
+  destruct ptr64; auto.
+  destruct ptr64; auto.
+  destruct ptr64; auto. destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i)); auto.
+  destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i)); auto.
 Qed.
 
 (** Relation between Boolean value and Boolean negation. *)
@@ -1399,12 +1469,12 @@ Lemma notbool_bool_val:
   sem_notbool v t m =
   match bool_val v t m with None => None | Some b => Some(Val.of_bool (negb b)) end.
 Proof.
-  intros. unfold sem_notbool, bool_val.
-  destruct (classify_bool t); auto; destruct v; auto; rewrite ? negb_involutive; auto.
-  destruct (Mem.weak_valid_pointer m b (Int.unsigned i)); auto.
+  intros. unfold sem_notbool. destruct (bool_val v t m) as [[] | ]; reflexivity.
 Qed.
 
 (** Properties of values obtained by casting to a given type. *)
+
+Section VAL_CASTED.
 
 Inductive val_casted: val -> type -> Prop :=
   | val_casted_int: forall sz si attr n,
@@ -1419,15 +1489,21 @@ Inductive val_casted: val -> type -> Prop :=
   | val_casted_ptr_ptr: forall b ofs ty attr,
       val_casted (Vptr b ofs) (Tpointer ty attr)
   | val_casted_int_ptr: forall n ty attr,
-      val_casted (Vint n) (Tpointer ty attr)
+      Archi.ptr64 = false -> val_casted (Vint n) (Tpointer ty attr)
   | val_casted_ptr_int: forall b ofs si attr,
-      val_casted (Vptr b ofs) (Tint I32 si attr)
+      Archi.ptr64 = false -> val_casted (Vptr b ofs) (Tint I32 si attr)
+  | val_casted_long_ptr: forall n ty attr,
+      Archi.ptr64 = true -> val_casted (Vlong n) (Tpointer ty attr)
+  | val_casted_ptr_long: forall b ofs si attr,
+      Archi.ptr64 = true -> val_casted (Vptr b ofs) (Tlong si attr)
   | val_casted_struct: forall id attr b ofs,
       val_casted (Vptr b ofs) (Tstruct id attr)
   | val_casted_union: forall id attr b ofs,
       val_casted (Vptr b ofs) (Tunion id attr)
   | val_casted_void: forall v,
       val_casted v Tvoid.
+
+Hint Constructors val_casted.
 
 Remark cast_int_int_idem:
   forall sz sg i, cast_int_int sz sg (cast_int_int sz sg i) = cast_int_int sz sg i.
@@ -1438,77 +1514,50 @@ Proof.
   destruct (Int.eq i Int.zero); auto.
 Qed.
 
+Ltac DestructCases :=
+  match goal with
+  | [H: match match ?x with _ => _ end with _ => _ end = Some _ |- _ ] => destruct x eqn:?; DestructCases
+  | [H: match ?x with _ => _ end = Some _ |- _ ] => destruct x eqn:?; DestructCases
+  | [H: Some _ = Some _ |- _ ] => inv H; DestructCases
+  | [H: None = Some _ |- _ ] => discriminate H
+  | [H: @eq intsize _ _ |- _ ] => discriminate H || (clear H; DestructCases)
+  | [ |- val_casted (Vint (if ?x then Int.zero else Int.one)) _ ] =>
+       try (constructor; destruct x; reflexivity)
+  | [ |- val_casted (Vint _) (Tint ?sz ?sg _) ] =>
+       try (constructor; apply (cast_int_int_idem sz sg))
+  | _ => idtac
+  end.
+
 Lemma cast_val_is_casted:
   forall v ty ty' v' m, sem_cast v ty ty' m = Some v' -> val_casted v' ty'.
 Proof.
-  unfold sem_cast; intros. destruct ty'; simpl in *.
-- (* void *)
-  constructor.
-- (* int *)
-  destruct i; destruct ty; simpl in H; try (destruct f); try discriminate; destruct v; inv H.
-  constructor. apply (cast_int_int_idem I8 s).
-  constructor. apply (cast_int_int_idem I8 s).
-  destruct (cast_single_int s f); inv H1. constructor. apply (cast_int_int_idem I8 s).
-  destruct (cast_float_int s f); inv H1. constructor. apply (cast_int_int_idem I8 s).
-  constructor. apply (cast_int_int_idem I16 s).
-  constructor. apply (cast_int_int_idem I16 s).
-  destruct (cast_single_int s f); inv H1. constructor. apply (cast_int_int_idem I16 s).
-  destruct (cast_float_int s f); inv H1. constructor. apply (cast_int_int_idem I16 s).
-  constructor. auto.
-  constructor.
-  constructor. auto.
-  destruct (cast_single_int s f); inv H1. constructor. auto.
-  destruct (cast_float_int s f); inv H1. constructor; auto.
-  constructor; auto.
-  constructor.
-  constructor; auto.
-  constructor.
-  constructor; auto.
-  constructor.
-  constructor. simpl. destruct (Int.eq i0 Int.zero); auto.
-  constructor. simpl. destruct (Int64.eq i Int64.zero); auto.
-  constructor. simpl. destruct (Float32.cmp Ceq f Float32.zero); auto.
-  constructor. simpl. destruct (Float.cmp Ceq f Float.zero); auto.
-  constructor. simpl. destruct (Int.eq i Int.zero); auto.
-  destruct (Mem.weak_valid_pointer m b (Int.unsigned i)); inv H1. constructor; auto.
-  constructor. simpl. destruct (Int.eq i Int.zero); auto.
-  destruct (Mem.weak_valid_pointer m b (Int.unsigned i)); inv H1. constructor; auto.
-  constructor. simpl. destruct (Int.eq i Int.zero); auto.
-  destruct (Mem.weak_valid_pointer m b (Int.unsigned i)); inv H1. constructor; auto.
-- (* long *)
-  destruct ty; try (destruct f); try discriminate.
-  destruct v; inv H. constructor.
-  destruct v; inv H. constructor.
-  destruct v; try discriminate. destruct (cast_single_long s f); inv H. constructor.
-  destruct v; try discriminate. destruct (cast_float_long s f); inv H. constructor.
-  destruct v; inv H. constructor.
-  destruct v; inv H. constructor.
-  destruct v; inv H. constructor.
-- (* float *)
-  destruct f; destruct ty; simpl in H; try (destruct f); try discriminate; destruct v; inv H; constructor.
-- (* pointer *)
-  destruct ty; simpl in H; try discriminate; destruct v; inv H; try constructor.
-- (* array (impossible case) *)
-  discriminate.
-- (* function (impossible case) *)
-  discriminate.
-- (* structs *)
-  destruct ty; try discriminate; destruct v; try discriminate.
-  destruct (ident_eq i0 i); inv H; constructor.
-- (* unions *)
-  destruct ty; try discriminate; destruct v; try discriminate.
-  destruct (ident_eq i0 i); inv H; constructor.
+  unfold sem_cast; intros.
+  destruct ty, ty'; simpl in H; DestructCases; constructor; auto.
 Qed.
+
+End VAL_CASTED.
 
 (** As a consequence, casting twice is equivalent to casting once. *)
 
 Lemma cast_val_casted:
   forall v ty m, val_casted v ty -> sem_cast v ty ty m = Some v.
 Proof.
-  intros. inversion H; clear H; subst v ty; unfold sem_cast; simpl; auto.
-  destruct sz; congruence.
-  unfold proj_sumbool; repeat rewrite dec_eq_true; auto.
-  unfold proj_sumbool; repeat rewrite dec_eq_true; auto.
+  intros. unfold sem_cast; inversion H; clear H; subst v ty; simpl.
+- destruct Archi.ptr64; [ | destruct (intsize_eq sz I32)].
++ destruct sz; f_equal; f_equal; assumption.
++ subst sz; auto.
++ destruct sz; f_equal; f_equal; assumption.
+- auto.
+- auto.
+- destruct Archi.ptr64; auto.
+- auto.
+- rewrite H0; auto.
+- rewrite H0; auto.
+- rewrite H0; auto.
+- rewrite H0; auto.
+- rewrite dec_eq_true; auto.
+- rewrite dec_eq_true; auto.
+- auto. 
 Qed.
 
 Lemma cast_idempotent:

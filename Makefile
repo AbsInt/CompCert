@@ -65,8 +65,9 @@ COMMON=Errors.v AST.v Linking.v \
 
 BACKEND=\
   Cminor.v Op.v CminorSel.v \
-  SelectOp.v SelectDiv.v SelectLong.v Selection.v \
-  SelectOpproof.v SelectDivproof.v SelectLongproof.v Selectionproof.v \
+  SelectOp.v SelectDiv.v SplitLong.v SelectLong.v Selection.v \
+  SelectOpproof.v SelectDivproof.v SplitLongproof.v \
+  SelectLongproof.v Selectionproof.v \
   Registers.v RTL.v \
   RTLgen.v RTLgenspec.v RTLgenproof.v \
   Tailcall.v Tailcallproof.v \

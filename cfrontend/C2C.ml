@@ -197,7 +197,7 @@ let builtins_generic = {
           false);
     "__compcert_va_composite",
         (TPtr(TVoid [], []),
-          [TPtr(TVoid [], []); TInt(IUInt, [])],
+          [TPtr(TVoid [], []); TInt(IULong, [])],
           false);
   (* Helper functions for int64 arithmetic *)
     "__i64_dtos",
@@ -390,14 +390,13 @@ let make_builtin_va_arg_by_val helper ty ty_ret arg =
 
 let make_builtin_va_arg_by_ref helper ty arg =
   let ty_fun =
-    Tfunction(Tcons(Tpointer(Tvoid, noattr), Tnil),
+    Tfunction(Tcons(Tpointer(Tvoid, noattr), Tcons(Ctyping.size_t, Tnil)),
               Tpointer(Tvoid, noattr), cc_default) in
   let ty_ptr =
     Tpointer(ty, noattr) in
   let call =
     Ecall(Evalof(Evar(intern_string helper, ty_fun), ty_fun),
-          Econs(va_list_ptr arg,
-                Econs(Esizeof(ty, Tint(I32, Unsigned, noattr)), Enil)),
+          Econs(va_list_ptr arg, Econs(Esizeof(ty, Ctyping.size_t), Enil)),
           Tpointer(Tvoid, noattr)) in
   Evalof(Ederef(Ecast(call, ty_ptr), ty), ty)
 
@@ -442,27 +441,31 @@ let convertCallconv va unproto attr =
 
 (** Types *)
 
-let convertIkind = function
-  | C.IBool -> (Unsigned, Ctypes.IBool)
-  | C.IChar -> ((if (!Machine.config).Machine.char_signed
-                 then Signed else Unsigned), I8)
-  | C.ISChar -> (Signed, I8)
-  | C.IUChar -> (Unsigned, I8)
-  | C.IInt -> (Signed, I32)
-  | C.IUInt -> (Unsigned, I32)
-  | C.IShort -> (Signed, I16)
-  | C.IUShort -> (Unsigned, I16)
-  | C.ILong -> (Signed, I32)
-  | C.IULong -> (Unsigned, I32)
-  (* Special-cased in convertTyp below *)
-  | C.ILongLong | C.IULongLong -> assert false
+let convertIkind k a : coq_type =
+    match k with
+  | C.IBool -> Tint (IBool, Unsigned, a)
+  | C.IChar -> Tint (I8, (if Machine.((!config).char_signed)
+                          then Signed else Unsigned), a)
+  | C.ISChar -> Tint (I8, Signed, a)
+  | C.IUChar -> Tint (I8, Unsigned, a)
+  | C.IInt -> Tint (I32, Signed, a)
+  | C.IUInt -> Tint (I32, Unsigned, a)
+  | C.IShort -> Tint (I16, Signed, a)
+  | C.IUShort -> Tint (I16, Unsigned, a)
+  | C.ILong -> if Machine.((!config).sizeof_long) = 8
+               then Tlong (Signed, a) else Tint (I32, Signed, a)
+  | C.IULong -> if Machine.((!config).sizeof_long) = 8
+                then Tlong (Unsigned, a) else Tint (I32, Unsigned, a)
+  | C.ILongLong -> Tlong (Signed, a)
+  | C.IULongLong -> Tlong (Unsigned, a)
 
-let convertFkind = function
-  | C.FFloat -> F32
-  | C.FDouble -> F64
+let convertFkind k a : coq_type =
+  match k with
+  | C.FFloat -> Tfloat (F32, a)
+  | C.FDouble -> Tfloat (F64, a)
   | C.FLongDouble ->
       if not !Clflags.option_flongdouble then unsupported "'long double' type";
-      F64
+      Tfloat (F64, a)
 
 let checkFunctionType env tres targs =
   if not !Clflags.option_fstruct_passing then begin
@@ -482,14 +485,10 @@ let checkFunctionType env tres targs =
 let rec convertTyp env t =
   match t with
   | C.TVoid a -> Tvoid
-  | C.TInt(C.ILongLong, a) ->
-      Tlong(Signed, convertAttr a)
-  | C.TInt(C.IULongLong, a) ->
-      Tlong(Unsigned, convertAttr a)
   | C.TInt(ik, a) ->
-      let (sg, sz) = convertIkind ik in Tint(sz, sg, convertAttr a)
+      convertIkind ik (convertAttr a)
   | C.TFloat(fk, a) ->
-      Tfloat(convertFkind fk, convertAttr a)
+      convertFkind fk (convertAttr a)
   | C.TPtr(ty, a) ->
       Tpointer(convertTyp env ty, convertAttr a)
   | C.TArray(ty, None, a) ->
@@ -514,8 +513,7 @@ let rec convertTyp env t =
   | C.TUnion(id, a) ->
       Tunion(intern_string id.name, convertAttr a)
   | C.TEnum(id, a) ->
-      let (sg, sz) = convertIkind Cutil.enum_ikind in
-      Tint(sz, sg, convertAttr a)
+      convertIkind Cutil.enum_ikind (convertAttr a)
 
 and convertParams env = function
     | [] -> Tnil
@@ -650,7 +648,7 @@ let rec convertExpr env e =
 
   | C.EConst(C.CInt(i, k, _)) ->
       let sg = if Cutil.is_signed_ikind k then Signed else Unsigned in
-      if k = ILongLong || k = IULongLong
+      if Cutil.sizeof_ikind k = 8
       then Ctyping.econst_long (coqint_of_camlint64 i) sg
       else Ctyping.econst_int (convertInt i) sg
   | C.EConst(C.CFloat(f, k)) ->

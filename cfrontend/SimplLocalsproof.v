@@ -187,21 +187,23 @@ Lemma val_casted_load_result:
   Val.load_result chunk v = v.
 Proof.
   intros. inversion H; clear H; subst v ty; simpl in H0.
-  destruct sz.
+- destruct sz.
   destruct si; inversion H0; clear H0; subst chunk; simpl in *; congruence.
   destruct si; inversion H0; clear H0; subst chunk; simpl in *; congruence.
   clear H1. inv H0. auto.
   inversion H0; clear H0; subst chunk. simpl in *.
   destruct (Int.eq n Int.zero); subst n; reflexivity.
-  inv H0; auto.
-  inv H0; auto.
-  inv H0; auto.
-  inv H0; auto.
-  inv H0; auto.
-  inv H0; auto.
-  discriminate.
-  discriminate.
-  discriminate.
+- inv H0; auto.
+- inv H0; auto.
+- inv H0; auto.
+- inv H0. unfold Mptr, Val.load_result; destruct Archi.ptr64; auto. 
+- inv H0. unfold Mptr, Val.load_result; rewrite H1; auto.
+- inv H0. unfold Val.load_result; rewrite H1; auto.
+- inv H0. unfold Mptr, Val.load_result; rewrite H1; auto.
+- inv H0. unfold Val.load_result; rewrite H1; auto.
+- discriminate.
+- discriminate.
+- discriminate.
 Qed.
 
 Lemma val_casted_inject:
@@ -209,7 +211,7 @@ Lemma val_casted_inject:
   Val.inject f v v' -> val_casted v ty -> val_casted v' ty.
 Proof.
   intros. inv H; auto.
-  inv H0; constructor.
+  inv H0; constructor; auto.
   inv H0; constructor.
 Qed.
 
@@ -250,7 +252,7 @@ Proof.
     econstructor; eauto.
   unfold sem_cast, make_cast in *.
   destruct (classify_cast (typeof a) tto); auto.
-  destruct v1; inv H0; auto.
+  destruct v1; destruct Archi.ptr64; inv H0; auto.
   destruct sz2; auto. destruct v1; inv H0; auto.
   destruct v1; inv H0; auto.
   destruct v1; inv H0; auto.
@@ -269,10 +271,19 @@ Lemma cast_typeconv:
   val_casted v ty ->
   sem_cast v ty (typeconv ty) m = Some v.
 Proof.
-  induction 1; simpl; auto.
-- destruct sz; auto.
+  induction 1; simpl.
+- unfold sem_cast, classify_cast; destruct sz, Archi.ptr64; auto.
+- auto.
+- auto.
+- unfold sem_cast, classify_cast; destruct Archi.ptr64; auto.
+- auto.
+- unfold sem_cast; simpl; rewrite H; auto.
+- unfold sem_cast; simpl; rewrite H; auto.
+- unfold sem_cast; simpl; rewrite H; auto.
+- unfold sem_cast; simpl; rewrite H; auto.
+- unfold sem_cast; simpl. rewrite dec_eq_true; auto.
 - unfold sem_cast. simpl. rewrite dec_eq_true; auto.
-- unfold sem_cast. simpl. rewrite dec_eq_true; auto.
+- auto.
 Qed.
 
 Lemma step_Sdebug_temp:
@@ -380,13 +391,13 @@ Lemma match_envs_assign_lifted:
   e!id = Some(b, ty) ->
   val_casted v ty ->
   Val.inject f v tv ->
-  assign_loc ge ty m b Int.zero v m' ->
+  assign_loc ge ty m b Ptrofs.zero v m' ->
   VSet.mem id cenv = true ->
   match_envs f cenv e le m' lo hi te (PTree.set id tv tle) tlo thi.
 Proof.
   intros. destruct H. generalize (me_vars0 id); intros MV; inv MV; try congruence.
   rewrite ENV in H0; inv H0. inv H3; try congruence.
-  unfold Mem.storev in H0. rewrite Int.unsigned_zero in H0.
+  unfold Mem.storev in H0. rewrite Ptrofs.unsigned_zero in H0.
   constructor; eauto; intros.
 (* vars *)
   destruct (peq id0 id). subst id0.
@@ -746,7 +757,8 @@ Proof.
   unfold access_mode; intros.
   assert (size_chunk chunk = sizeof ge ty).
   {
-    destruct ty; try destruct i; try destruct s; try destruct f; inv H; auto.
+    destruct ty; try destruct i; try destruct s; try destruct f; inv H; auto;
+    unfold Mptr; simpl; destruct Archi.ptr64; auto.
   }
   omega.
 Qed.
@@ -1019,10 +1031,10 @@ Proof.
   destruct (zeq (sizeof tge ty) 0).
 + (* special case size = 0 *)
   assert (bytes = nil).
-  { exploit (Mem.loadbytes_empty m bsrc (Int.unsigned osrc) (sizeof tge ty)).
+  { exploit (Mem.loadbytes_empty m bsrc (Ptrofs.unsigned osrc) (sizeof tge ty)).
     omega. congruence. }
   subst.
-  destruct (Mem.range_perm_storebytes tm bdst' (Int.unsigned (Int.add odst (Int.repr delta))) nil)
+  destruct (Mem.range_perm_storebytes tm bdst' (Ptrofs.unsigned (Ptrofs.add odst (Ptrofs.repr delta))) nil)
   as [tm' SB].
   simpl. red; intros; omegaContradiction.
   exists tm'.
@@ -1038,15 +1050,15 @@ Proof.
   exploit Mem.loadbytes_length; eauto. intros LEN.
   assert (SZPOS: sizeof tge ty > 0).
   { generalize (sizeof_pos tge ty); omega. }
-  assert (RPSRC: Mem.range_perm m bsrc (Int.unsigned osrc) (Int.unsigned osrc + sizeof tge ty) Cur Nonempty).
+  assert (RPSRC: Mem.range_perm m bsrc (Ptrofs.unsigned osrc) (Ptrofs.unsigned osrc + sizeof tge ty) Cur Nonempty).
     eapply Mem.range_perm_implies. eapply Mem.loadbytes_range_perm; eauto. auto with mem.
-  assert (RPDST: Mem.range_perm m bdst (Int.unsigned odst) (Int.unsigned odst + sizeof tge ty) Cur Nonempty).
+  assert (RPDST: Mem.range_perm m bdst (Ptrofs.unsigned odst) (Ptrofs.unsigned odst + sizeof tge ty) Cur Nonempty).
     replace (sizeof tge ty) with (Z_of_nat (length bytes)).
     eapply Mem.range_perm_implies. eapply Mem.storebytes_range_perm; eauto. auto with mem.
     rewrite LEN. apply nat_of_Z_eq. omega.
-  assert (PSRC: Mem.perm m bsrc (Int.unsigned osrc) Cur Nonempty).
+  assert (PSRC: Mem.perm m bsrc (Ptrofs.unsigned osrc) Cur Nonempty).
     apply RPSRC. omega.
-  assert (PDST: Mem.perm m bdst (Int.unsigned odst) Cur Nonempty).
+  assert (PDST: Mem.perm m bdst (Ptrofs.unsigned odst) Cur Nonempty).
     apply RPDST. omega.
   exploit Mem.address_inject.  eauto. eexact PSRC. eauto. intros EQ1.
   exploit Mem.address_inject.  eauto. eexact PDST. eauto. intros EQ2.
@@ -1449,7 +1461,7 @@ Proof.
   rewrite ENV in H6; inv H6.
   inv H0; try congruence.
   assert (chunk0 = chunk). simpl in H. congruence. subst chunk0.
-  assert (v0 = v). unfold Mem.loadv in H2. rewrite Int.unsigned_zero in H2. congruence. subst v0.
+  assert (v0 = v). unfold Mem.loadv in H2. rewrite Ptrofs.unsigned_zero in H2. congruence. subst v0.
   exists tv; split; auto. constructor; auto.
   simpl in H; congruence.
   simpl in H; congruence.
@@ -1464,13 +1476,13 @@ Proof.
   rewrite H1.
   exploit me_vars; eauto. instantiate (1 := id). intros MV. inv MV; try congruence.
   rewrite ENV in H; inv H.
-  exists b'; exists Int.zero; split.
+  exists b'; exists Ptrofs.zero; split.
   apply eval_Evar_local; auto.
   econstructor; eauto.
 (* global var *)
   rewrite H2.
   exploit me_vars; eauto. instantiate (1 := id). intros MV. inv MV; try congruence.
-  exists l; exists Int.zero; split.
+  exists l; exists Ptrofs.zero; split.
   apply eval_Evar_global. auto. rewrite <- H0. apply symbols_preserved.
   destruct GLOB as [bound GLOB1]. inv GLOB1.
   econstructor; eauto.
@@ -1484,7 +1496,7 @@ Proof.
   inversion B. subst.
   econstructor; econstructor; split.
   eapply eval_Efield_struct; eauto. rewrite typeof_simpl_expr; eauto.
-  econstructor; eauto. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
+  econstructor; eauto. repeat rewrite Ptrofs.add_assoc. decEq. apply Ptrofs.add_commut.
 (* field union *)
   rewrite <- comp_env_preserved in *.
   exploit eval_simpl_expr; eauto. intros [tv [A B]].
@@ -1721,12 +1733,12 @@ Lemma match_cont_find_funct:
   exists tfd, Genv.find_funct tge tvf = Some tfd /\ transf_fundef fd = OK tfd.
 Proof.
   intros. exploit match_cont_globalenv; eauto. intros [bound1 MG]. destruct MG.
-  inv H1; simpl in H0; try discriminate. destruct (Int.eq_dec ofs1 Int.zero); try discriminate.
+  inv H1; simpl in H0; try discriminate. destruct (Ptrofs.eq_dec ofs1 Ptrofs.zero); try discriminate.
   subst ofs1.
   assert (f b1 = Some(b1, 0)).
     apply DOMAIN. eapply FUNCTIONS; eauto.
   rewrite H1 in H2; inv H2.
-  rewrite Int.add_zero. simpl. rewrite dec_eq_true. apply function_ptr_translated; auto.
+  rewrite Ptrofs.add_zero. simpl. rewrite dec_eq_true. apply function_ptr_translated; auto.
 Qed.
 
 (** Relating execution states *)

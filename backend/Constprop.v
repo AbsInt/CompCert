@@ -56,20 +56,10 @@ Definition transf_ros (ae: AE.t) (ros: reg + ident) : reg + ident :=
   match ros with
   | inl r =>
       match areg ae r with
-      | Ptr(Gl symb ofs) => if Int.eq ofs Int.zero then inr _ symb else ros
+      | Ptr(Gl symb ofs) => if Ptrofs.eq ofs Ptrofs.zero then inr _ symb else ros
       | _ => ros
       end
   | inr s => ros
-  end.
-
-Definition const_for_result (a: aval) : option operation :=
-  match a with
-  | I n => Some(Ointconst n)
-  | F n => if Compopts.generate_float_constants tt then Some(Ofloatconst n) else None
-  | FS n => if Compopts.generate_float_constants tt then Some(Osingleconst n) else None
-  | Ptr(Gl symb ofs) => Some(Oaddrsymbol symb ofs)
-  | Ptr(Stk ofs) => Some(Oaddrstack ofs)
-  | _ => None
   end.
 
 Fixpoint successor_rec (n: nat) (f: function) (ae: AE.t) (pc: node) : node :=

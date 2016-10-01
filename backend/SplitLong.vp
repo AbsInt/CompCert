@@ -14,21 +14,18 @@
 
 Require String.
 Require Import Coqlib.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Op.
-Require Import CminorSel.
+Require Import AST Integers Floats.
+Require Import Op CminorSel.
 Require Import SelectOp.
 
 Local Open Scope cminorsel_scope.
 Local Open Scope string_scope.
 
 (** Some operations on 64-bit integers are transformed into calls to
-  runtime library functions.  The following record type collects
+  runtime library functions.  The following type class collects
   the names of these functions. *)
 
-Record helper_functions : Type := mk_helper_functions {
+Class helper_functions := mk_helper_functions {
   i64_dtos: ident;                      (**r float64 -> signed long *)
   i64_dtou: ident;                      (**r float64 -> unsigned long *)
   i64_stod: ident;                      (**r signed long -> float64 *)
@@ -54,7 +51,7 @@ Definition sig_ii_l := mksignature (Tint :: Tint :: nil) (Some Tlong) cc_default
 
 Section SELECT.
 
-Variable hf: helper_functions.
+Context {hf: helper_functions}.
 
 Definition makelong (h l: expr): expr :=
   Eop Omakelong (h ::: l ::: Enil).
@@ -129,21 +126,21 @@ Definition notl (e: expr) :=
   splitlong e (fun h l => makelong (notint h) (notint l)).
 
 Definition longoffloat (arg: expr) := 
-  Eexternal hf.(i64_dtos) sig_f_l (arg ::: Enil).
+  Eexternal i64_dtos sig_f_l (arg ::: Enil).
 Definition longuoffloat (arg: expr) :=
-  Eexternal hf.(i64_dtou) sig_f_l (arg ::: Enil).
+  Eexternal i64_dtou sig_f_l (arg ::: Enil).
 Definition floatoflong (arg: expr) :=
-  Eexternal hf.(i64_stod) sig_l_f (arg ::: Enil).
+  Eexternal i64_stod sig_l_f (arg ::: Enil).
 Definition floatoflongu (arg: expr) :=
-  Eexternal hf.(i64_utod) sig_l_f (arg ::: Enil).
+  Eexternal i64_utod sig_l_f (arg ::: Enil).
 Definition longofsingle (arg: expr) := 
   longoffloat (floatofsingle arg).
 Definition longuofsingle (arg: expr) :=
   longuoffloat (floatofsingle arg).
 Definition singleoflong (arg: expr) :=
-  Eexternal hf.(i64_stof) sig_l_s (arg ::: Enil).
+  Eexternal i64_stof sig_l_s (arg ::: Enil).
 Definition singleoflongu (arg: expr) :=
-  Eexternal hf.(i64_utof) sig_l_s (arg ::: Enil).
+  Eexternal i64_utof sig_l_s (arg ::: Enil).
 
 Definition andl (e1 e2: expr) :=
   splitlong2 e1 e2 (fun h1 l1 h2 l2 => makelong (and h1 h2) (and l1 l2)).
@@ -164,7 +161,7 @@ Definition shllimm (e1: expr) (n: int) :=
     makelong (shlimm (lowlong e1) (Int.sub n Int.iwordsize))
              (Eop (Ointconst Int.zero) Enil)
   else
-    Eexternal hf.(i64_shl) sig_li_l (e1 ::: Eop (Ointconst n) Enil ::: Enil).
+    Eexternal i64_shl sig_li_l (e1 ::: Eop (Ointconst n) Enil ::: Enil).
 
 Definition shrluimm (e1: expr) (n: int) :=
   if Int.eq n Int.zero then e1 else
@@ -176,7 +173,7 @@ Definition shrluimm (e1: expr) (n: int) :=
     makelong (Eop (Ointconst Int.zero) Enil)
              (shruimm (highlong e1) (Int.sub n Int.iwordsize))
   else
-    Eexternal hf.(i64_shr) sig_li_l (e1 ::: Eop (Ointconst n) Enil ::: Enil).
+    Eexternal i64_shr sig_li_l (e1 ::: Eop (Ointconst n) Enil ::: Enil).
 
 Definition shrlimm (e1: expr) (n: int) :=
   if Int.eq n Int.zero then e1 else
@@ -189,7 +186,7 @@ Definition shrlimm (e1: expr) (n: int) :=
       (makelong (shrimm (Eletvar 0) (Int.repr 31))
                 (shrimm (Eletvar 0) (Int.sub n Int.iwordsize)))
   else
-    Eexternal hf.(i64_sar) sig_li_l (e1 ::: Eop (Ointconst n) Enil ::: Enil).
+    Eexternal i64_sar sig_li_l (e1 ::: Eop (Ointconst n) Enil ::: Enil).
 
 Definition is_intconst (e: expr) :=
   match e with
@@ -200,19 +197,19 @@ Definition is_intconst (e: expr) :=
 Definition shll (e1 e2: expr) :=
   match is_intconst e2 with
   | Some n => shllimm e1 n
-  | None => Eexternal hf.(i64_shl) sig_li_l (e1 ::: e2 ::: Enil)
+  | None => Eexternal i64_shl sig_li_l (e1 ::: e2 ::: Enil)
   end.
 
 Definition shrlu (e1 e2: expr) :=
   match is_intconst e2 with
   | Some n => shrluimm e1 n
-  | None => Eexternal hf.(i64_shr) sig_li_l (e1 ::: e2 ::: Enil)
+  | None => Eexternal i64_shr sig_li_l (e1 ::: e2 ::: Enil)
   end.
 
 Definition shrl (e1 e2: expr) :=
   match is_intconst e2 with
   | Some n => shrlimm e1 n
-  | None => Eexternal hf.(i64_sar) sig_li_l (e1 ::: e2 ::: Enil)
+  | None => Eexternal i64_sar sig_li_l (e1 ::: e2 ::: Enil)
   end.
 
 Definition addl (e1 e2: expr) :=
@@ -245,8 +242,8 @@ Definition mull_base (e1 e2: expr) :=
 Definition mullimm (e: expr) (n: int64) :=
   if Int64.eq n Int64.zero then longconst Int64.zero else
   if Int64.eq n Int64.one then e else
-  match Int64.is_power2 n with
-  | Some l => shllimm e (Int.repr (Int64.unsigned l))
+  match Int64.is_power2' n with
+  | Some l => shllimm e l
   | None   => mull_base e (longconst n)
   end.
 
@@ -264,23 +261,23 @@ Definition binop_long (id: ident) (sem: int64 -> int64 -> int64) (e1 e2: expr) :
   | _, _ => Eexternal id sig_ll_l (e1 ::: e2 ::: Enil)
   end.
 
-Definition divl e1 e2 := binop_long hf.(i64_sdiv) Int64.divs e1 e2.
-Definition modl e1 e2 := binop_long hf.(i64_smod) Int64.mods e1 e2.
+Definition divl e1 e2 := binop_long i64_sdiv Int64.divs e1 e2.
+Definition modl e1 e2 := binop_long i64_smod Int64.mods e1 e2.
 
 Definition divlu (e1 e2: expr) :=
-  let default := Eexternal hf.(i64_udiv) sig_ll_l (e1 ::: e2 ::: Enil) in
+  let default := Eexternal i64_udiv sig_ll_l (e1 ::: e2 ::: Enil) in
   match is_longconst e1, is_longconst e2 with
   | Some n1, Some n2 => longconst (Int64.divu n1 n2)
   | _, Some n2 =>
-      match Int64.is_power2 n2 with
-      | Some l => shrluimm e1 (Int.repr (Int64.unsigned l))
+      match Int64.is_power2' n2 with
+      | Some l => shrluimm e1 l
       | None   => default
       end
   | _, _ => default
   end.
 
 Definition modlu (e1 e2: expr) :=
-  let default := Eexternal hf.(i64_umod) sig_ll_l (e1 ::: e2 ::: Enil) in
+  let default := Eexternal i64_umod sig_ll_l (e1 ::: e2 ::: Enil) in
   match is_longconst e1, is_longconst e2 with
   | Some n1, Some n2 => longconst (Int64.modu n1 n2)
   | _, Some n2 =>
@@ -307,15 +304,8 @@ Definition cmplu (c: comparison) (e1 e2: expr) :=
   match c with
   | Ceq =>
       cmpl_eq_zero (xorl e1 e2)
-(*
-        (if is_longconst_zero e2 then e1
-         else if is_longconst_zero e1 then e2
-         else xorl e1 e2) *)
   | Cne =>
       cmpl_ne_zero (xorl e1 e2)
-(*        (if is_longconst_zero e2 then e1
-         else if is_longconst_zero e1 then e2
-         else xorl e1 e2) *)
   | Clt =>
       cmplu_gen Clt Clt e1 e2
   | Cle =>

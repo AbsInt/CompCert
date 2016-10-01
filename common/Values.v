@@ -16,6 +16,7 @@
 (** This module defines the type of values that is used in the dynamic
   semantics of all our intermediate languages. *)
 
+Require Archi.
 Require Import Coqlib.
 Require Import AST.
 Require Import Integers.
@@ -39,7 +40,7 @@ Inductive val: Type :=
   | Vlong: int64 -> val
   | Vfloat: float -> val
   | Vsingle: float32 -> val
-  | Vptr: block -> int -> val.
+  | Vptr: block -> ptrofs -> val.
 
 Definition Vzero: val := Vint Int.zero.
 Definition Vone: val := Vint Int.one.
@@ -47,6 +48,12 @@ Definition Vmone: val := Vint Int.mone.
 
 Definition Vtrue: val := Vint Int.one.
 Definition Vfalse: val := Vint Int.zero.
+
+Definition Vnullptr :=
+  if Archi.ptr64 then Vlong Int64.zero else Vint Int.zero.
+
+Definition Vptrofs (n: ptrofs) :=
+  if Archi.ptr64 then Vlong (Ptrofs.to_int64 n) else Vint (Ptrofs.to_int n).
 
 (** * Operations over values *)
 
@@ -63,7 +70,7 @@ Proof.
   apply Int64.eq_dec.
   apply Float.eq_dec.
   apply Float32.eq_dec.
-  apply Int.eq_dec.
+  apply Ptrofs.eq_dec.
   apply eq_block.
 Defined.
 Global Opaque eq.
@@ -75,8 +82,10 @@ Definition has_type (v: val) (t: typ) : Prop :=
   | Vlong _, Tlong => True
   | Vfloat _, Tfloat => True
   | Vsingle _, Tsingle => True
-  | Vptr _ _, Tint => True
-  | (Vint _ | Vptr _ _ | Vsingle _), Tany32 => True
+  | Vptr _ _, Tint => Archi.ptr64 = false
+  | Vptr _ _, Tlong => Archi.ptr64 = true
+  | (Vint _ | Vsingle _), Tany32 => True
+  | Vptr _ _, Tany32 => Archi.ptr64 = false
   | _, Tany64 => True
   | _, _ => False
   end.
@@ -94,12 +103,25 @@ Definition has_opttype (v: val) (ot: option typ) : Prop :=
   | Some t => has_type v t
   end.
 
+Lemma Vptr_has_type:
+  forall b ofs, has_type (Vptr b ofs) Tptr.
+Proof.
+  intros. unfold Tptr, has_type; destruct Archi.ptr64; reflexivity.
+Qed.
+
+Lemma Vnullptr_has_type:
+  has_type Vnullptr Tptr.
+Proof.
+  unfold has_type, Vnullptr, Tptr; destruct Archi.ptr64; reflexivity.
+Qed.
+
 Lemma has_subtype:
   forall ty1 ty2 v,
   subtype ty1 ty2 = true -> has_type v ty1 -> has_type v ty2.
 Proof.
-  intros. destruct ty1; destruct ty2; simpl in H; discriminate || assumption || idtac;
-  unfold has_type in *; destruct v; auto.
+  intros. destruct ty1; destruct ty2; simpl in H;
+  (contradiction || discriminate || assumption || idtac);
+  unfold has_type in *; destruct v; auto; contradiction.
 Qed.
 
 Lemma has_subtype_list:
@@ -257,17 +279,18 @@ Definition floatofsingle (v: val) : val :=
 Definition add (v1 v2: val): val :=
   match v1, v2 with
   | Vint n1, Vint n2 => Vint(Int.add n1 n2)
-  | Vptr b1 ofs1, Vint n2 => Vptr b1 (Int.add ofs1 n2)
-  | Vint n1, Vptr b2 ofs2 => Vptr b2 (Int.add ofs2 n1)
+  | Vptr b1 ofs1, Vint n2 => if Archi.ptr64 then Vundef else Vptr b1 (Ptrofs.add ofs1 (Ptrofs.of_int n2))
+  | Vint n1, Vptr b2 ofs2 => if Archi.ptr64 then Vundef else Vptr b2 (Ptrofs.add ofs2 (Ptrofs.of_int n1))
   | _, _ => Vundef
   end.
 
 Definition sub (v1 v2: val): val :=
   match v1, v2 with
   | Vint n1, Vint n2 => Vint(Int.sub n1 n2)
-  | Vptr b1 ofs1, Vint n2 => Vptr b1 (Int.sub ofs1 n2)
+  | Vptr b1 ofs1, Vint n2 => if Archi.ptr64 then Vundef else Vptr b1 (Ptrofs.sub ofs1 (Ptrofs.of_int n2))
   | Vptr b1 ofs1, Vptr b2 ofs2 =>
-      if eq_block b1 b2 then Vint(Int.sub ofs1 ofs2) else Vundef
+      if Archi.ptr64 then Vundef else
+      if eq_block b1 b2 then Vint(Ptrofs.to_int (Ptrofs.sub ofs1 ofs2)) else Vundef
   | _, _ => Vundef
   end.
 
@@ -571,12 +594,19 @@ Definition singleoflongu (v: val) : option val :=
 Definition addl (v1 v2: val): val :=
   match v1, v2 with
   | Vlong n1, Vlong n2 => Vlong(Int64.add n1 n2)
+  | Vptr b1 ofs1, Vlong n2 => if Archi.ptr64 then Vptr b1 (Ptrofs.add ofs1 (Ptrofs.of_int64 n2)) else Vundef
+  | Vlong n1, Vptr b2 ofs2 => if Archi.ptr64 then Vptr b2 (Ptrofs.add ofs2 (Ptrofs.of_int64 n1)) else Vundef
   | _, _ => Vundef
   end.
 
 Definition subl (v1 v2: val): val :=
   match v1, v2 with
   | Vlong n1, Vlong n2 => Vlong(Int64.sub n1 n2)
+  | Vptr b1 ofs1, Vlong n2 =>
+      if Archi.ptr64 then Vptr b1 (Ptrofs.sub ofs1 (Ptrofs.of_int64 n2)) else Vundef
+  | Vptr b1 ofs1, Vptr b2 ofs2 =>
+      if negb Archi.ptr64 then Vundef else
+      if eq_block b1 b2 then Vlong(Ptrofs.to_int64 (Ptrofs.sub ofs1 ofs2)) else Vundef
   | _, _ => Vundef
   end.
 
@@ -626,6 +656,18 @@ Definition modlu (v1 v2: val): option val :=
   | _, _ => None
   end.
 
+Definition subl_overflow (v1 v2: val) : val :=
+  match v1, v2 with
+  | Vlong n1, Vlong n2 => Vint (Int.repr (Int64.unsigned (Int64.sub_overflow n1 n2 Int64.zero)))
+  | _, _ => Vundef
+  end.
+
+Definition negativel (v: val) : val :=
+  match v with
+  | Vlong n => Vint (Int.repr (Int64.unsigned (Int64.negative n)))
+  | _ => Vundef
+  end.
+
 Definition andl (v1 v2: val): val :=
   match v1, v2 with
   | Vlong n1, Vlong n2 => Vlong(Int64.and n1 n2)
@@ -671,6 +713,24 @@ Definition shrlu (v1 v2: val): val :=
   | _, _ => Vundef
   end.
 
+Definition roll (v1 v2: val): val :=
+  match v1, v2 with
+  | Vlong n1, Vint n2 => Vlong(Int64.rol n1 (Int64.repr (Int.unsigned n2)))
+  | _, _ => Vundef
+  end.
+
+Definition rorl (v1 v2: val): val :=
+  match v1, v2 with
+  | Vlong n1, Vint n2 => Vlong(Int64.ror n1 (Int64.repr (Int.unsigned n2)))
+  | _, _ => Vundef
+  end.
+
+Definition rolml (v: val) (amount mask: int64): val :=
+  match v with
+  | Vlong n => Vlong(Int64.rolm n amount mask)
+  | _ => Vundef
+  end.
+
 (** Comparisons *)
 
 Section COMPARISONS.
@@ -696,22 +756,25 @@ Definition cmpu_bool (c: comparison) (v1 v2: val): option bool :=
   | Vint n1, Vint n2 =>
       Some (Int.cmpu c n1 n2)
   | Vint n1, Vptr b2 ofs2 =>
-      if Int.eq n1 Int.zero && weak_valid_ptr b2 (Int.unsigned ofs2)
+      if Archi.ptr64 then None else
+      if Int.eq n1 Int.zero && weak_valid_ptr b2 (Ptrofs.unsigned ofs2)
       then cmp_different_blocks c
       else None
   | Vptr b1 ofs1, Vptr b2 ofs2 =>
+      if Archi.ptr64 then None else
       if eq_block b1 b2 then
-        if weak_valid_ptr b1 (Int.unsigned ofs1)
-           && weak_valid_ptr b2 (Int.unsigned ofs2)
-        then Some (Int.cmpu c ofs1 ofs2)
+        if weak_valid_ptr b1 (Ptrofs.unsigned ofs1)
+           && weak_valid_ptr b2 (Ptrofs.unsigned ofs2)
+        then Some (Ptrofs.cmpu c ofs1 ofs2)
         else None
       else
-        if valid_ptr b1 (Int.unsigned ofs1)
-           && valid_ptr b2 (Int.unsigned ofs2)
+        if valid_ptr b1 (Ptrofs.unsigned ofs1)
+           && valid_ptr b2 (Ptrofs.unsigned ofs2)
         then cmp_different_blocks c
         else None
   | Vptr b1 ofs1, Vint n2 =>
-      if Int.eq n2 Int.zero && weak_valid_ptr b1 (Int.unsigned ofs1)
+      if Archi.ptr64 then None else
+      if Int.eq n2 Int.zero && weak_valid_ptr b1 (Ptrofs.unsigned ofs1)
       then cmp_different_blocks c
       else None
   | _, _ => None
@@ -738,6 +801,28 @@ Definition cmpl_bool (c: comparison) (v1 v2: val): option bool :=
 Definition cmplu_bool (c: comparison) (v1 v2: val): option bool :=
   match v1, v2 with
   | Vlong n1, Vlong n2 => Some (Int64.cmpu c n1 n2)
+  | Vlong n1, Vptr b2 ofs2 =>
+      if negb Archi.ptr64 then None else
+      if Int64.eq n1 Int64.zero && weak_valid_ptr b2 (Ptrofs.unsigned ofs2)
+      then cmp_different_blocks c
+      else None
+  | Vptr b1 ofs1, Vptr b2 ofs2 =>
+      if negb Archi.ptr64 then None else
+      if eq_block b1 b2 then
+        if weak_valid_ptr b1 (Ptrofs.unsigned ofs1)
+           && weak_valid_ptr b2 (Ptrofs.unsigned ofs2)
+        then Some (Ptrofs.cmpu c ofs1 ofs2)
+        else None
+      else
+        if valid_ptr b1 (Ptrofs.unsigned ofs1)
+           && valid_ptr b2 (Ptrofs.unsigned ofs2)
+        then cmp_different_blocks c
+        else None
+  | Vptr b1 ofs1, Vlong n2 =>
+      if negb Archi.ptr64 then None else
+      if Int64.eq n2 Int64.zero && weak_valid_ptr b1 (Ptrofs.unsigned ofs1)
+      then cmp_different_blocks c
+      else None
   | _, _ => None
   end.
 
@@ -770,6 +855,14 @@ Definition maskzero_bool (v: val) (mask: int): option bool :=
 
 End COMPARISONS.
 
+(** Add the given offset to the given pointer. *)
+
+Definition offset_ptr (v: val) (delta: ptrofs) : val :=
+  match v with
+  | Vptr b ofs => Vptr b (Ptrofs.add ofs delta)
+  | _ => Vundef
+  end.
+
 (** [load_result] reflects the effect of storing a value with a given
   memory chunk, then reading it back with the same chunk.  Depending
   on the chunk and the type of the value, some normalization occurs.
@@ -786,11 +879,13 @@ Definition load_result (chunk: memory_chunk) (v: val) :=
   | Mint16signed, Vint n => Vint (Int.sign_ext 16 n)
   | Mint16unsigned, Vint n => Vint (Int.zero_ext 16 n)
   | Mint32, Vint n => Vint n
-  | Mint32, Vptr b ofs => Vptr b ofs
+  | Mint32, Vptr b ofs => if Archi.ptr64 then Vundef else Vptr b ofs
   | Mint64, Vlong n => Vlong n
+  | Mint64, Vptr b ofs => if Archi.ptr64 then Vptr b ofs else Vundef
   | Mfloat32, Vsingle f => Vsingle f
   | Mfloat64, Vfloat f => Vfloat f
-  | Many32, (Vint _ | Vptr _ _ | Vsingle _) => v
+  | Many32, (Vint _ | Vsingle _) => v
+  | Many32, Vptr _ _ => if Archi.ptr64 then Vundef else v
   | Many64, _ => v
   | _, _ => Vundef
   end.
@@ -798,13 +893,14 @@ Definition load_result (chunk: memory_chunk) (v: val) :=
 Lemma load_result_type:
   forall chunk v, has_type (load_result chunk v) (type_of_chunk chunk).
 Proof.
-  intros. destruct chunk; destruct v; simpl; auto.
+  intros. unfold has_type; destruct chunk; destruct v; simpl; auto; destruct Archi.ptr64 eqn:SF; simpl; auto.
 Qed.
 
 Lemma load_result_same:
   forall v ty, has_type v ty -> load_result (chunk_of_type ty) v = v.
 Proof.
-  unfold has_type; intros. destruct v; destruct ty; try contradiction; auto.
+  unfold has_type, load_result; intros.
+  destruct v; destruct ty; destruct Archi.ptr64; try contradiction; try discriminate; auto.
 Qed.
 
 (** Theorems on arithmetic operations. *)
@@ -882,13 +978,15 @@ Qed.
 
 Theorem add_assoc: forall x y z, add (add x y) z = add x (add y z).
 Proof.
-  destruct x; destruct y; destruct z; simpl; auto.
-  rewrite Int.add_assoc; auto.
-  rewrite Int.add_assoc; auto.
-  decEq. decEq. apply Int.add_commut.
-  decEq. rewrite Int.add_commut. rewrite <- Int.add_assoc.
-  decEq. apply Int.add_commut.
-  decEq. rewrite Int.add_assoc. auto.
+  unfold add; intros; destruct Archi.ptr64 eqn:SF, x, y, z; simpl; auto.
+- rewrite Int.add_assoc; auto.
+- rewrite Int.add_assoc; auto.
+- rewrite ! Ptrofs.add_assoc. f_equal. f_equal.
+  rewrite Ptrofs.add_commut. auto with ptrofs.
+- rewrite ! Ptrofs.add_assoc. f_equal. f_equal.
+  apply Ptrofs.add_commut.
+- rewrite ! Ptrofs.add_assoc. f_equal. f_equal.
+  symmetry. auto with ptrofs.
 Qed.
 
 Theorem add_permut: forall x y z, add x (add y z) = add y (add x z).
@@ -910,7 +1008,8 @@ Qed.
 
 Theorem neg_add_distr: forall x y, neg(add x y) = add (neg x) (neg y).
 Proof.
-  destruct x; destruct y; simpl; auto. decEq. apply Int.neg_add_distr.
+  unfold neg, add; intros; destruct Archi.ptr64 eqn:SF, x, y; simpl; auto;
+  rewrite Int.neg_add_distr; auto.
 Qed.
 
 Theorem sub_zero_r: forall x, sub Vzero x = neg x.
@@ -920,37 +1019,40 @@ Qed.
 
 Theorem sub_add_opp: forall x y, sub x (Vint y) = add x (Vint (Int.neg y)).
 Proof.
-  destruct x; intro y; simpl; auto; rewrite Int.sub_add_opp; auto.
+  unfold sub, add; intros; destruct Archi.ptr64 eqn:SF, x; auto.
+- rewrite Int.sub_add_opp; auto.
+- rewrite Int.sub_add_opp; auto.
+- rewrite Ptrofs.sub_add_opp. f_equal. f_equal. symmetry. auto with ptrofs.
 Qed.
 
 Theorem sub_opp_add: forall x y, sub x (Vint (Int.neg y)) = add x (Vint y).
 Proof.
-  intros. unfold sub, add.
-  destruct x; auto; rewrite Int.sub_add_opp; rewrite Int.neg_involutive; auto.
+  intros. rewrite sub_add_opp. rewrite Int.neg_involutive. auto.
 Qed.
 
 Theorem sub_add_l:
   forall v1 v2 i, sub (add v1 (Vint i)) v2 = add (sub v1 v2) (Vint i).
 Proof.
-  destruct v1; destruct v2; intros; simpl; auto.
-  rewrite Int.sub_add_l. auto.
-  rewrite Int.sub_add_l. auto.
-  case (eq_block b b0); intro. rewrite Int.sub_add_l. auto. reflexivity.
+  unfold sub, add; intros; destruct Archi.ptr64 eqn:SF, v1, v2; auto.
+- rewrite Int.sub_add_l; auto.
+- rewrite Int.sub_add_l; auto.
+- rewrite Ptrofs.sub_add_l; auto.
+- destruct (eq_block b b0); auto.
+  f_equal. rewrite Ptrofs.sub_add_l. auto with ptrofs.
 Qed.
 
 Theorem sub_add_r:
   forall v1 v2 i, sub v1 (add v2 (Vint i)) = add (sub v1 v2) (Vint (Int.neg i)).
 Proof.
-  destruct v1; destruct v2; intros; simpl; auto.
-  rewrite Int.sub_add_r. auto.
-  repeat rewrite Int.sub_add_opp. decEq.
-  repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  decEq. repeat rewrite Int.sub_add_opp.
-  rewrite Int.add_assoc. decEq. apply Int.neg_add_distr.
-  case (eq_block b b0); intro. simpl. decEq.
-  repeat rewrite Int.sub_add_opp. rewrite Int.add_assoc. decEq.
-  apply Int.neg_add_distr.
-  reflexivity.
+  unfold sub, add; intros; destruct Archi.ptr64 eqn:SF, v1, v2; auto.
+- rewrite Int.add_commut. rewrite Int.sub_add_r. auto.
+- rewrite Int.add_commut. rewrite Int.sub_add_r. auto.
+- f_equal. replace (Ptrofs.of_int (Int.add i1 i)) with (Ptrofs.add (Ptrofs.of_int i) (Ptrofs.of_int i1)).
+  rewrite Ptrofs.sub_add_r. f_equal.
+  symmetry. auto with ptrofs.
+  symmetry. rewrite Int.add_commut. auto with ptrofs.
+- destruct (eq_block b b0); auto.
+  f_equal. rewrite Ptrofs.add_commut. rewrite Ptrofs.sub_add_r. auto with ptrofs. 
 Qed.
 
 Theorem mul_commut: forall x y, mul x y = mul y x.
@@ -967,16 +1069,15 @@ Qed.
 Theorem mul_add_distr_l:
   forall x y z, mul (add x y) z = add (mul x z) (mul y z).
 Proof.
-  destruct x; destruct y; destruct z; simpl; auto.
-  decEq. apply Int.mul_add_distr_l.
+  unfold mul, add; intros; destruct Archi.ptr64 eqn:SF, x, y, z; simpl; auto;
+  rewrite Int.mul_add_distr_l; auto.
 Qed.
-
 
 Theorem mul_add_distr_r:
   forall x y z, mul x (add y z) = add (mul x y) (mul x z).
 Proof.
-  destruct x; destruct y; destruct z; simpl; auto.
-  decEq. apply Int.mul_add_distr_r.
+  unfold mul, add; intros; destruct Archi.ptr64 eqn:SF, x, y, z; simpl; auto;
+  rewrite Int.mul_add_distr_r; auto.
 Qed.
 
 Theorem mul_pow2:
@@ -1165,6 +1266,144 @@ Proof.
   intros; destruct x; simpl; auto. decEq. apply Int.rolm_zero.
 Qed.
 
+Theorem addl_commut: forall x y, addl x y = addl y x.
+Proof.
+  destruct x; destruct y; simpl; auto.
+  decEq. apply Int64.add_commut.
+Qed.
+
+Theorem addl_assoc: forall x y z, addl (addl x y) z = addl x (addl y z).
+Proof.
+  unfold addl; intros; destruct Archi.ptr64 eqn:SF, x, y, z; simpl; auto.
+- rewrite Int64.add_assoc; auto.
+- rewrite ! Ptrofs.add_assoc. f_equal. f_equal.
+  rewrite Ptrofs.add_commut. auto with ptrofs.
+- rewrite ! Ptrofs.add_assoc. f_equal. f_equal.
+  apply Ptrofs.add_commut.
+- rewrite ! Ptrofs.add_assoc. f_equal. f_equal.
+  symmetry. auto with ptrofs.
+- rewrite Int64.add_assoc; auto.
+Qed.
+
+Theorem addl_permut: forall x y z, addl x (addl y z) = addl y (addl x z).
+Proof.
+  intros. rewrite (addl_commut y z). rewrite <- addl_assoc. apply addl_commut.
+Qed.
+
+Theorem addl_permut_4:
+  forall x y z t, addl (addl x y) (addl z t) = addl (addl x z) (addl y t).
+Proof.
+  intros. rewrite addl_permut. rewrite addl_assoc.
+  rewrite addl_permut. symmetry. apply addl_assoc.
+Qed.
+
+Theorem negl_addl_distr: forall x y, negl(addl x y) = addl (negl x) (negl y).
+Proof.
+  unfold negl, addl; intros; destruct Archi.ptr64 eqn:SF; destruct x; destruct y; simpl; auto;
+  decEq; apply Int64.neg_add_distr.
+Qed.
+
+Theorem subl_addl_opp: forall x y, subl x (Vlong y) = addl x (Vlong (Int64.neg y)).
+Proof.
+  unfold subl, addl; intros; destruct Archi.ptr64 eqn:SF, x; auto.
+- rewrite Int64.sub_add_opp; auto.
+- rewrite Ptrofs.sub_add_opp. f_equal. f_equal. symmetry. auto with ptrofs.
+- rewrite Int64.sub_add_opp; auto.
+Qed.
+
+Theorem subl_opp_addl: forall x y, subl x (Vlong (Int64.neg y)) = addl x (Vlong y).
+Proof.
+  intros. rewrite subl_addl_opp. rewrite Int64.neg_involutive. auto.
+Qed.
+
+Theorem subl_addl_l:
+  forall v1 v2 i, subl (addl v1 (Vlong i)) v2 = addl (subl v1 v2) (Vlong i).
+Proof.
+  unfold subl, addl; intros; destruct Archi.ptr64 eqn:SF, v1, v2; auto.
+- rewrite Int64.sub_add_l; auto.
+- rewrite Ptrofs.sub_add_l; auto.
+- destruct (eq_block b b0); auto.
+  simpl. f_equal. rewrite Ptrofs.sub_add_l. auto with ptrofs.
+- rewrite Int64.sub_add_l; auto.
+Qed.
+
+Theorem subl_addl_r:
+  forall v1 v2 i, subl v1 (addl v2 (Vlong i)) = addl (subl v1 v2) (Vlong (Int64.neg i)).
+Proof.
+  unfold subl, addl; intros; destruct Archi.ptr64 eqn:SF, v1, v2; auto.
+- rewrite Int64.add_commut. rewrite Int64.sub_add_r. auto.
+- f_equal. replace (Ptrofs.of_int64 (Int64.add i1 i)) with (Ptrofs.add (Ptrofs.of_int64 i) (Ptrofs.of_int64 i1)).
+  rewrite Ptrofs.sub_add_r. f_equal.
+  symmetry. auto with ptrofs.
+  symmetry. rewrite Int64.add_commut. auto with ptrofs.
+- destruct (eq_block b b0); auto.
+  simpl; f_equal. rewrite Ptrofs.add_commut. rewrite Ptrofs.sub_add_r. auto with ptrofs. 
+- rewrite Int64.add_commut. rewrite Int64.sub_add_r. auto.
+Qed.
+
+Theorem mull_commut: forall x y, mull x y = mull y x.
+Proof.
+  destruct x; destruct y; simpl; auto. decEq. apply Int64.mul_commut.
+Qed.
+
+Theorem mull_assoc: forall x y z, mull (mull x y) z = mull x (mull y z).
+Proof.
+  destruct x; destruct y; destruct z; simpl; auto.
+  decEq. apply Int64.mul_assoc.
+Qed.
+
+Theorem mull_addl_distr_l:
+  forall x y z, mull (addl x y) z = addl (mull x z) (mull y z).
+Proof.
+  unfold mull, addl; intros; destruct Archi.ptr64 eqn:SF; destruct x; destruct y; destruct z; simpl; auto;
+  decEq; apply Int64.mul_add_distr_l.
+Qed.
+
+Theorem mull_addl_distr_r:
+  forall x y z, mull x (addl y z) = addl (mull x y) (mull x z).
+Proof.
+  unfold mull, addl; intros; destruct Archi.ptr64 eqn:SF; destruct x; destruct y; destruct z; simpl; auto;
+  decEq; apply Int64.mul_add_distr_r.
+Qed.
+
+Theorem andl_commut: forall x y, andl x y = andl y x.
+Proof.
+  destruct x; destruct y; simpl; auto. decEq. apply Int64.and_commut.
+Qed.
+
+Theorem andl_assoc: forall x y z, andl (andl x y) z = andl x (andl y z).
+Proof.
+  destruct x; destruct y; destruct z; simpl; auto.
+  decEq. apply Int64.and_assoc.
+Qed.
+
+Theorem orl_commut: forall x y, orl x y = orl y x.
+Proof.
+  destruct x; destruct y; simpl; auto. decEq. apply Int64.or_commut.
+Qed.
+
+Theorem orl_assoc: forall x y z, orl (orl x y) z = orl x (orl y z).
+Proof.
+  destruct x; destruct y; destruct z; simpl; auto.
+  decEq. apply Int64.or_assoc.
+Qed.
+
+Theorem xorl_commut: forall x y, xorl x y = xorl y x.
+Proof.
+  destruct x; destruct y; simpl; auto. decEq. apply Int64.xor_commut.
+Qed.
+
+Theorem xorl_assoc: forall x y z, xorl (xorl x y) z = xorl x (xorl y z).
+Proof.
+  destruct x; destruct y; destruct z; simpl; auto.
+  decEq. apply Int64.xor_assoc.
+Qed.
+
+Theorem notl_xorl: forall x, notl x = xorl x (Vlong Int64.mone).
+Proof.
+  destruct x; simpl; auto.
+Qed.
+
 Theorem negate_cmp_bool:
   forall c x y, cmp_bool (negate_comparison c) x y = option_map negb (cmp_bool c x y).
 Proof.
@@ -1177,17 +1416,44 @@ Theorem negate_cmpu_bool:
 Proof.
   assert (forall c,
     cmp_different_blocks (negate_comparison c) = option_map negb (cmp_different_blocks c)).
-  destruct c; auto.
-  destruct x; destruct y; simpl; auto.
-  rewrite Int.negate_cmpu. auto.
-  destruct (Int.eq i Int.zero && (valid_ptr b (Int.unsigned i0) || valid_ptr b (Int.unsigned i0 - 1))); auto.
-  destruct (Int.eq i0 Int.zero && (valid_ptr b (Int.unsigned i) || valid_ptr b (Int.unsigned i - 1))); auto.
-  destruct (eq_block b b0).
-  destruct ((valid_ptr b (Int.unsigned i) || valid_ptr b (Int.unsigned i - 1)) &&
-            (valid_ptr b0 (Int.unsigned i0) || valid_ptr b0 (Int.unsigned i0 - 1))).
-  rewrite Int.negate_cmpu. auto.
+  { destruct c; auto. }
+  unfold cmpu_bool; intros; destruct Archi.ptr64 eqn:SF, x, y; auto.
+- rewrite Int.negate_cmpu. auto.
+- rewrite Int.negate_cmpu. auto.
+- destruct (Int.eq i Int.zero && (valid_ptr b (Ptrofs.unsigned i0) || valid_ptr b (Ptrofs.unsigned i0 - 1))); auto.
+- destruct (Int.eq i0 Int.zero && (valid_ptr b (Ptrofs.unsigned i) || valid_ptr b (Ptrofs.unsigned i - 1))); auto.
+- destruct (eq_block b b0).
+  destruct ((valid_ptr b (Ptrofs.unsigned i) || valid_ptr b (Ptrofs.unsigned i - 1)) &&
+            (valid_ptr b0 (Ptrofs.unsigned i0) || valid_ptr b0 (Ptrofs.unsigned i0 - 1))).
+  rewrite Ptrofs.negate_cmpu. auto.
   auto.
-  destruct (valid_ptr b (Int.unsigned i) && valid_ptr b0 (Int.unsigned i0)); auto.
+  destruct (valid_ptr b (Ptrofs.unsigned i) && valid_ptr b0 (Ptrofs.unsigned i0)); auto.
+Qed.
+
+Theorem negate_cmpl_bool:
+  forall c x y, cmpl_bool (negate_comparison c) x y = option_map negb (cmpl_bool c x y).
+Proof.
+  destruct x; destruct y; simpl; auto. rewrite Int64.negate_cmp. auto.
+Qed.
+
+Theorem negate_cmplu_bool:
+  forall valid_ptr c x y,
+  cmplu_bool valid_ptr (negate_comparison c) x y = option_map negb (cmplu_bool valid_ptr c x y).
+Proof.
+  assert (forall c,
+    cmp_different_blocks (negate_comparison c) = option_map negb (cmp_different_blocks c)).
+  { destruct c; auto. }
+  unfold cmplu_bool; intros; destruct Archi.ptr64 eqn:SF, x, y; auto.
+- rewrite Int64.negate_cmpu. auto.
+- simpl. destruct (Int64.eq i Int64.zero && (valid_ptr b (Ptrofs.unsigned i0) || valid_ptr b (Ptrofs.unsigned i0 - 1))); auto.
+- simpl. destruct (Int64.eq i0 Int64.zero && (valid_ptr b (Ptrofs.unsigned i) || valid_ptr b (Ptrofs.unsigned i - 1))); auto.
+- simpl. destruct (eq_block b b0).
+  destruct ((valid_ptr b (Ptrofs.unsigned i) || valid_ptr b (Ptrofs.unsigned i - 1)) &&
+            (valid_ptr b0 (Ptrofs.unsigned i0) || valid_ptr b0 (Ptrofs.unsigned i0 - 1))).
+  rewrite Ptrofs.negate_cmpu. auto.
+  auto.
+  destruct (valid_ptr b (Ptrofs.unsigned i) && valid_ptr b0 (Ptrofs.unsigned i0)); auto.
+- rewrite Int64.negate_cmpu. auto.
 Qed.
 
 Lemma not_of_optbool:
@@ -1223,21 +1489,47 @@ Theorem swap_cmpu_bool:
   cmpu_bool valid_ptr (swap_comparison c) x y =
     cmpu_bool valid_ptr c y x.
 Proof.
-  assert (forall c, cmp_different_blocks (swap_comparison c) = cmp_different_blocks c).
-    destruct c; auto.
-  destruct x; destruct y; simpl; auto.
-  rewrite Int.swap_cmpu. auto.
-  destruct (Int.eq i Int.zero && (valid_ptr b (Int.unsigned i0) || valid_ptr b (Int.unsigned i0 - 1))); auto.
-  destruct (Int.eq i0 Int.zero && (valid_ptr b (Int.unsigned i) || valid_ptr b (Int.unsigned i - 1))); auto.
-  destruct (eq_block b b0); subst.
+  assert (E: forall c, cmp_different_blocks (swap_comparison c) = cmp_different_blocks c).
+  { destruct c; auto. }
+  intros; unfold cmpu_bool. rewrite ! E. destruct Archi.ptr64 eqn:SF, x, y; auto.  
+- rewrite Int.swap_cmpu. auto.
+- rewrite Int.swap_cmpu. auto.
+- destruct (eq_block b b0); subst.
   rewrite dec_eq_true.
-  destruct (valid_ptr b0 (Int.unsigned i) || valid_ptr b0 (Int.unsigned i - 1));
-  destruct (valid_ptr b0 (Int.unsigned i0) || valid_ptr b0 (Int.unsigned i0 - 1));
+  destruct (valid_ptr b0 (Ptrofs.unsigned i) || valid_ptr b0 (Ptrofs.unsigned i - 1));
+  destruct (valid_ptr b0 (Ptrofs.unsigned i0) || valid_ptr b0 (Ptrofs.unsigned i0 - 1));
   simpl; auto.
-  rewrite Int.swap_cmpu. auto.
+  rewrite Ptrofs.swap_cmpu. auto.
   rewrite dec_eq_false by auto.
-  destruct (valid_ptr b (Int.unsigned i));
-    destruct (valid_ptr b0 (Int.unsigned i0)); simpl; auto.
+  destruct (valid_ptr b (Ptrofs.unsigned i));
+    destruct (valid_ptr b0 (Ptrofs.unsigned i0)); simpl; auto.
+Qed.
+
+Theorem swap_cmpl_bool:
+  forall c x y,
+  cmpl_bool (swap_comparison c) x y = cmpl_bool c y x.
+Proof.
+  destruct x; destruct y; simpl; auto. rewrite Int64.swap_cmp. auto.
+Qed.
+
+Theorem swap_cmplu_bool:
+  forall valid_ptr c x y,
+  cmplu_bool valid_ptr (swap_comparison c) x y = cmplu_bool valid_ptr c y x.
+Proof.
+  assert (E: forall c, cmp_different_blocks (swap_comparison c) = cmp_different_blocks c).
+  { destruct c; auto. }
+  intros; unfold cmplu_bool. rewrite ! E. destruct Archi.ptr64 eqn:SF, x, y; auto.  
+- rewrite Int64.swap_cmpu. auto.
+- destruct (eq_block b b0); subst.
+  rewrite dec_eq_true.
+  destruct (valid_ptr b0 (Ptrofs.unsigned i) || valid_ptr b0 (Ptrofs.unsigned i - 1));
+  destruct (valid_ptr b0 (Ptrofs.unsigned i0) || valid_ptr b0 (Ptrofs.unsigned i0 - 1));
+  simpl; auto.
+  rewrite Ptrofs.swap_cmpu. auto.
+  rewrite dec_eq_false by auto.
+  destruct (valid_ptr b (Ptrofs.unsigned i));
+    destruct (valid_ptr b0 (Ptrofs.unsigned i0)); simpl; auto.
+- rewrite Int64.swap_cmpu. auto.
 Qed.
 
 Theorem negate_cmpf_eq:
@@ -1426,6 +1718,13 @@ Proof.
   intros. inv H. inv H0. auto. destruct v1'; simpl; auto. simpl; auto.
 Qed.
 
+Lemma addl_lessdef:
+  forall v1 v1' v2 v2',
+  lessdef v1 v1' -> lessdef v2 v2' -> lessdef (addl v1 v2) (addl v1' v2').
+Proof.
+  intros. inv H. inv H0. auto. destruct v1'; simpl; auto. simpl; auto.
+Qed.
+
 Lemma cmpu_bool_lessdef:
   forall valid_ptr valid_ptr' c v1 v1' v2 v2' b,
   (forall b ofs, valid_ptr b ofs = true -> valid_ptr' b ofs = true) ->
@@ -1434,23 +1733,60 @@ Lemma cmpu_bool_lessdef:
   cmpu_bool valid_ptr' c v1' v2' = Some b.
 Proof.
   intros.
-  assert (A: forall b ofs, valid_ptr b ofs || valid_ptr b (ofs - 1) = true ->
-                           valid_ptr' b ofs || valid_ptr' b (ofs - 1) = true).
-  { intros until ofs. rewrite ! orb_true_iff. intuition. }
-  destruct v1; simpl in H2; try discriminate;
-  destruct v2; simpl in H2; try discriminate;
-  inv H0; inv H1; simpl; auto.
-  destruct (Int.eq i Int.zero && (valid_ptr b0 (Int.unsigned i0) || valid_ptr b0 (Int.unsigned i0 - 1))) eqn:E; try discriminate.
-  InvBooleans. rewrite H0, A by auto. auto.
-  destruct (Int.eq i0 Int.zero && (valid_ptr b0 (Int.unsigned i) || valid_ptr b0 (Int.unsigned i - 1))) eqn:E; try discriminate.
-  InvBooleans. rewrite H0, A by auto. auto.
-  destruct (eq_block b0 b1).
-  destruct (valid_ptr b0 (Int.unsigned i) || valid_ptr b0 (Int.unsigned i - 1)) eqn:?; try discriminate.
-  destruct (valid_ptr b1 (Int.unsigned i0) || valid_ptr b1 (Int.unsigned i0 - 1)) eqn:?; try discriminate.
-  erewrite ! A by eauto. auto.
-  destruct (valid_ptr b0 (Int.unsigned i)) eqn:?; try discriminate.
-  destruct (valid_ptr b1 (Int.unsigned i0)) eqn:?; try discriminate.
-  erewrite ! H by eauto. auto.
+  assert (X: forall b ofs,
+             valid_ptr b ofs || valid_ptr b (ofs - 1) = true ->
+             valid_ptr' b ofs || valid_ptr' b (ofs - 1) = true).
+  { intros. apply orb_true_intro. destruct (orb_prop _ _ H3).
+    rewrite (H b0 ofs); auto.
+    rewrite (H b0 (ofs - 1)); auto. }
+  inv H0; [ | discriminate].
+  inv H1; [ | destruct v1'; discriminate ].
+  unfold cmpu_bool in *. remember Archi.ptr64 as ptr64.
+  destruct v1'; auto; destruct v2'; auto; destruct ptr64; auto.
+- destruct (Int.eq i Int.zero); auto.
+  destruct (valid_ptr b0 (Ptrofs.unsigned i0) || valid_ptr b0 (Ptrofs.unsigned i0 - 1)) eqn:A; inv H2.
+  rewrite X; auto.
+- destruct (Int.eq i0 Int.zero); auto.
+  destruct (valid_ptr b0 (Ptrofs.unsigned i) || valid_ptr b0 (Ptrofs.unsigned i - 1)) eqn:A; inv H2.
+  rewrite X; auto.
+- destruct (eq_block b0 b1).
++ destruct (valid_ptr b0 (Ptrofs.unsigned i) || valid_ptr b0 (Ptrofs.unsigned i - 1)) eqn:A; inv H2.
+  destruct (valid_ptr b1 (Ptrofs.unsigned i0) || valid_ptr b1 (Ptrofs.unsigned i0 - 1)) eqn:B; inv H1.
+  rewrite ! X; auto.
++ destruct (valid_ptr b0 (Ptrofs.unsigned i) && valid_ptr b1 (Ptrofs.unsigned i0)) eqn:A; inv H2.
+  InvBooleans. rewrite ! H; auto.
+Qed.
+
+Lemma cmplu_bool_lessdef:
+  forall valid_ptr valid_ptr' c v1 v1' v2 v2' b,
+  (forall b ofs, valid_ptr b ofs = true -> valid_ptr' b ofs = true) ->
+  lessdef v1 v1' -> lessdef v2 v2' ->
+  cmplu_bool valid_ptr c v1 v2 = Some b ->
+  cmplu_bool valid_ptr' c v1' v2' = Some b.
+Proof.
+  intros.
+  assert (X: forall b ofs,
+             valid_ptr b ofs || valid_ptr b (ofs - 1) = true ->
+             valid_ptr' b ofs || valid_ptr' b (ofs - 1) = true).
+  { intros. apply orb_true_intro. destruct (orb_prop _ _ H3).
+    rewrite (H b0 ofs); auto.
+    rewrite (H b0 (ofs - 1)); auto. }
+  inv H0; [ | discriminate].
+  inv H1; [ | destruct v1'; discriminate ].
+  unfold cmplu_bool in *. remember Archi.ptr64 as ptr64.
+  destruct v1'; auto; destruct v2'; auto; destruct ptr64; auto.
+- destruct (Int64.eq i Int64.zero); auto.
+  destruct (valid_ptr b0 (Ptrofs.unsigned i0) || valid_ptr b0 (Ptrofs.unsigned i0 - 1)) eqn:A; inv H2.
+  rewrite X; auto.
+- destruct (Int64.eq i0 Int64.zero); auto.
+  destruct (valid_ptr b0 (Ptrofs.unsigned i) || valid_ptr b0 (Ptrofs.unsigned i - 1)) eqn:A; inv H2.
+  rewrite X; auto.
+- destruct (eq_block b0 b1).
++ destruct (valid_ptr b0 (Ptrofs.unsigned i) || valid_ptr b0 (Ptrofs.unsigned i - 1)) eqn:A; inv H2.
+  destruct (valid_ptr b1 (Ptrofs.unsigned i0) || valid_ptr b1 (Ptrofs.unsigned i0 - 1)) eqn:B; inv H1.
+  rewrite ! X; auto.
++ destruct (valid_ptr b0 (Ptrofs.unsigned i) && valid_ptr b1 (Ptrofs.unsigned i0)) eqn:A; inv H2.
+  InvBooleans. rewrite ! H; auto.
 Qed.
 
 Lemma of_optbool_lessdef:
@@ -1478,6 +1814,18 @@ Lemma hiword_lessdef:
   forall v v', lessdef v v' -> lessdef (hiword v) (hiword v').
 Proof.
   intros. inv H; auto.
+Qed.
+
+Lemma offset_ptr_zero:
+  forall v, lessdef (offset_ptr v Ptrofs.zero) v.
+Proof.
+  intros. destruct v; simpl; auto. rewrite Ptrofs.add_zero; auto.
+Qed.
+
+Lemma offset_ptr_assoc:
+  forall v d1 d2, offset_ptr (offset_ptr v d1) d2 = offset_ptr v (Ptrofs.add d1 d2).
+Proof.
+  intros. destruct v; simpl; auto. f_equal. apply Ptrofs.add_assoc. 
 Qed.
 
 (** * Values and memory injections *)
@@ -1509,7 +1857,7 @@ Inductive inject (mi: meminj): val -> val -> Prop :=
   | inject_ptr:
       forall b1 ofs1 b2 ofs2 delta,
       mi b1 = Some (b2, delta) ->
-      ofs2 = Int.add ofs1 (Int.repr delta) ->
+      ofs2 = Ptrofs.add ofs1 (Ptrofs.repr delta) ->
       inject mi (Vptr b1 ofs1) (Vptr b2 ofs2)
   | val_inject_undef: forall v,
       inject mi Vundef v.
@@ -1525,6 +1873,14 @@ Inductive inject_list (mi: meminj): list val -> list val-> Prop:=
 
 Hint Resolve inject_list_nil inject_list_cons.
 
+Lemma inject_ptrofs:
+  forall mi i, inject mi (Vptrofs i) (Vptrofs i).
+Proof.
+  unfold Vptrofs; intros. destruct Archi.ptr64; auto. 
+Qed.
+
+Hint Resolve inject_ptrofs.
+
 Section VAL_INJ_OPS.
 
 Variable f: meminj.
@@ -1534,7 +1890,7 @@ Lemma load_result_inject:
   inject f v1 v2 ->
   inject f (Val.load_result chunk v1) (Val.load_result chunk v2).
 Proof.
-  intros. inv H; destruct chunk; simpl; econstructor; eauto.
+  intros. inv H; destruct chunk; simpl; try constructor; destruct Archi.ptr64; econstructor; eauto. 
 Qed.
 
 Remark add_inject:
@@ -1543,9 +1899,13 @@ Remark add_inject:
   inject f v2 v2' ->
   inject f (Val.add v1 v2) (Val.add v1' v2').
 Proof.
-  intros. inv H; inv H0; simpl; econstructor; eauto.
-  repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
+  intros. unfold Val.add. destruct Archi.ptr64 eqn:SF.
+- inv H; inv H0; constructor. 
+- inv H; inv H0; simpl; auto.
++ econstructor; eauto. 
+  rewrite ! Ptrofs.add_assoc. decEq. apply Ptrofs.add_commut.
++ econstructor; eauto. 
+  rewrite ! Ptrofs.add_assoc. decEq. apply Ptrofs.add_commut.
 Qed.
 
 Remark sub_inject:
@@ -1554,10 +1914,52 @@ Remark sub_inject:
   inject f v2 v2' ->
   inject f (Val.sub v1 v2) (Val.sub v1' v2').
 Proof.
-  intros. inv H; inv H0; simpl; auto.
-  econstructor; eauto. rewrite Int.sub_add_l. auto.
-  destruct (eq_block b1 b0); auto. subst. rewrite H1 in H. inv H. rewrite dec_eq_true.
-  rewrite Int.sub_shifted. auto.
+  intros. unfold Val.sub. destruct Archi.ptr64 eqn:SF.
+- inv H; inv H0; constructor.
+- inv H; inv H0; simpl; auto.
++ econstructor; eauto. 
+  rewrite Ptrofs.sub_add_l. auto.
++ destruct (eq_block b1 b0); auto.
+  subst. rewrite H1 in H. inv H. rewrite dec_eq_true.
+  rewrite Ptrofs.sub_shifted. auto.
+Qed.
+
+Remark addl_inject:
+  forall v1 v1' v2 v2',
+  inject f v1 v1' ->
+  inject f v2 v2' ->
+  inject f (Val.addl v1 v2) (Val.addl v1' v2').
+Proof.
+  intros. unfold Val.addl. destruct Archi.ptr64 eqn:SF.
+- inv H; inv H0; simpl; auto.
++ econstructor; eauto. 
+  rewrite ! Ptrofs.add_assoc. decEq. apply Ptrofs.add_commut.
++ econstructor; eauto. 
+  rewrite ! Ptrofs.add_assoc. decEq. apply Ptrofs.add_commut.
+- inv H; inv H0; constructor. 
+Qed.
+
+Remark subl_inject:
+  forall v1 v1' v2 v2',
+  inject f v1 v1' ->
+  inject f v2 v2' ->
+  inject f (Val.subl v1 v2) (Val.subl v1' v2').
+Proof.
+  intros. unfold Val.subl. destruct Archi.ptr64 eqn:SF.
+- inv H; inv H0; simpl; auto.
++ econstructor; eauto. 
+  rewrite Ptrofs.sub_add_l. auto.
++ destruct (eq_block b1 b0); auto.
+  subst. rewrite H1 in H. inv H. rewrite dec_eq_true.
+  rewrite Ptrofs.sub_shifted. auto.
+- inv H; inv H0; constructor.
+Qed.
+
+Lemma offset_ptr_inject:
+  forall v v' ofs, inject f v v' -> inject f (offset_ptr v ofs) (offset_ptr v' ofs).
+Proof.
+  intros. inv H; simpl; econstructor; eauto.
+  rewrite ! Ptrofs.add_assoc. f_equal. apply Ptrofs.add_commut.
 Qed.
 
 Lemma cmp_bool_inject:
@@ -1578,30 +1980,30 @@ Let weak_valid_ptr2 b ofs := valid_ptr2 b ofs || valid_ptr2 b (ofs - 1).
 Hypothesis valid_ptr_inj:
   forall b1 ofs b2 delta,
   f b1 = Some(b2, delta) ->
-  valid_ptr1 b1 (Int.unsigned ofs) = true ->
-  valid_ptr2 b2 (Int.unsigned (Int.add ofs (Int.repr delta))) = true.
+  valid_ptr1 b1 (Ptrofs.unsigned ofs) = true ->
+  valid_ptr2 b2 (Ptrofs.unsigned (Ptrofs.add ofs (Ptrofs.repr delta))) = true.
 
 Hypothesis weak_valid_ptr_inj:
   forall b1 ofs b2 delta,
   f b1 = Some(b2, delta) ->
-  weak_valid_ptr1 b1 (Int.unsigned ofs) = true ->
-  weak_valid_ptr2 b2 (Int.unsigned (Int.add ofs (Int.repr delta))) = true.
+  weak_valid_ptr1 b1 (Ptrofs.unsigned ofs) = true ->
+  weak_valid_ptr2 b2 (Ptrofs.unsigned (Ptrofs.add ofs (Ptrofs.repr delta))) = true.
 
 Hypothesis weak_valid_ptr_no_overflow:
   forall b1 ofs b2 delta,
   f b1 = Some(b2, delta) ->
-  weak_valid_ptr1 b1 (Int.unsigned ofs) = true ->
-  0 <= Int.unsigned ofs + Int.unsigned (Int.repr delta) <= Int.max_unsigned.
+  weak_valid_ptr1 b1 (Ptrofs.unsigned ofs) = true ->
+  0 <= Ptrofs.unsigned ofs + Ptrofs.unsigned (Ptrofs.repr delta) <= Ptrofs.max_unsigned.
 
 Hypothesis valid_different_ptrs_inj:
   forall b1 ofs1 b2 ofs2 b1' delta1 b2' delta2,
   b1 <> b2 ->
-  valid_ptr1 b1 (Int.unsigned ofs1) = true ->
-  valid_ptr1 b2 (Int.unsigned ofs2) = true ->
+  valid_ptr1 b1 (Ptrofs.unsigned ofs1) = true ->
+  valid_ptr1 b2 (Ptrofs.unsigned ofs2) = true ->
   f b1 = Some (b1', delta1) ->
   f b2 = Some (b2', delta2) ->
   b1' <> b2' \/
-  Int.unsigned (Int.add ofs1 (Int.repr delta1)) <> Int.unsigned (Int.add ofs2 (Int.repr delta2)).
+  Ptrofs.unsigned (Ptrofs.add ofs1 (Ptrofs.repr delta1)) <> Ptrofs.unsigned (Ptrofs.add ofs2 (Ptrofs.repr delta2)).
 
 Lemma cmpu_bool_inject:
   forall c v1 v2 v1' v2' b,
@@ -1610,38 +2012,84 @@ Lemma cmpu_bool_inject:
   Val.cmpu_bool valid_ptr1 c v1 v2 = Some b ->
   Val.cmpu_bool valid_ptr2 c v1' v2' = Some b.
 Proof.
-  Local Opaque Int.add.
-  intros. inv H; simpl in H1; try discriminate; inv H0; simpl in H1; try discriminate; simpl; auto.
-- fold (weak_valid_ptr1 b1 (Int.unsigned ofs1)) in H1.
-  fold (weak_valid_ptr2 b2 (Int.unsigned (Int.add ofs1 (Int.repr delta)))).
+  Local Opaque Int.add Ptrofs.add.
+  intros.
+  unfold cmpu_bool in *; destruct Archi.ptr64; 
+  inv H; simpl in H1; try discriminate; inv H0; simpl in H1; try discriminate; simpl; auto.
+- fold (weak_valid_ptr1 b1 (Ptrofs.unsigned ofs1)) in H1.
+  fold (weak_valid_ptr2 b2 (Ptrofs.unsigned (Ptrofs.add ofs1 (Ptrofs.repr delta)))).
   destruct (Int.eq i Int.zero); auto.
-  destruct (weak_valid_ptr1 b1 (Int.unsigned ofs1)) eqn:E; try discriminate.
+  destruct (weak_valid_ptr1 b1 (Ptrofs.unsigned ofs1)) eqn:E; try discriminate.
   erewrite weak_valid_ptr_inj by eauto. auto.
-- fold (weak_valid_ptr1 b1 (Int.unsigned ofs1)) in H1.
-  fold (weak_valid_ptr2 b2 (Int.unsigned (Int.add ofs1 (Int.repr delta)))).
+- fold (weak_valid_ptr1 b1 (Ptrofs.unsigned ofs1)) in H1.
+  fold (weak_valid_ptr2 b2 (Ptrofs.unsigned (Ptrofs.add ofs1 (Ptrofs.repr delta)))).
   destruct (Int.eq i Int.zero); auto.
-  destruct (weak_valid_ptr1 b1 (Int.unsigned ofs1)) eqn:E; try discriminate.
+  destruct (weak_valid_ptr1 b1 (Ptrofs.unsigned ofs1)) eqn:E; try discriminate.
   erewrite weak_valid_ptr_inj by eauto. auto.
-- fold (weak_valid_ptr1 b1 (Int.unsigned ofs1)) in H1.
-  fold (weak_valid_ptr1 b0 (Int.unsigned ofs0)) in H1.
-  fold (weak_valid_ptr2 b2 (Int.unsigned (Int.add ofs1 (Int.repr delta)))).
-  fold (weak_valid_ptr2 b3 (Int.unsigned (Int.add ofs0 (Int.repr delta0)))).
+- fold (weak_valid_ptr1 b1 (Ptrofs.unsigned ofs1)) in H1.
+  fold (weak_valid_ptr1 b0 (Ptrofs.unsigned ofs0)) in H1.
+  fold (weak_valid_ptr2 b2 (Ptrofs.unsigned (Ptrofs.add ofs1 (Ptrofs.repr delta)))).
+  fold (weak_valid_ptr2 b3 (Ptrofs.unsigned (Ptrofs.add ofs0 (Ptrofs.repr delta0)))).
   destruct (eq_block b1 b0); subst.
   rewrite H in H2. inv H2. rewrite dec_eq_true.
-  destruct (weak_valid_ptr1 b0 (Int.unsigned ofs1)) eqn:?; try discriminate.
-  destruct (weak_valid_ptr1 b0 (Int.unsigned ofs0)) eqn:?; try discriminate.
+  destruct (weak_valid_ptr1 b0 (Ptrofs.unsigned ofs1)) eqn:?; try discriminate.
+  destruct (weak_valid_ptr1 b0 (Ptrofs.unsigned ofs0)) eqn:?; try discriminate.
   erewrite !weak_valid_ptr_inj by eauto. simpl.
-  rewrite <-H1. simpl. decEq. apply Int.translate_cmpu; eauto.
-  destruct (valid_ptr1 b1 (Int.unsigned ofs1)) eqn:?; try discriminate.
-  destruct (valid_ptr1 b0 (Int.unsigned ofs0)) eqn:?; try discriminate.
+  rewrite <-H1. simpl. decEq. apply Ptrofs.translate_cmpu; eauto.
+  destruct (valid_ptr1 b1 (Ptrofs.unsigned ofs1)) eqn:?; try discriminate.
+  destruct (valid_ptr1 b0 (Ptrofs.unsigned ofs0)) eqn:?; try discriminate.
   destruct (eq_block b2 b3); subst.
   assert (valid_ptr_implies: forall b ofs, valid_ptr1 b ofs = true -> weak_valid_ptr1 b ofs = true).
     intros. unfold weak_valid_ptr1. rewrite H0; auto.
   erewrite !weak_valid_ptr_inj by eauto using valid_ptr_implies. simpl.
   exploit valid_different_ptrs_inj; eauto. intros [?|?]; [congruence |].
   destruct c; simpl in H1; inv H1.
-  simpl; decEq. rewrite Int.eq_false; auto. congruence.
-  simpl; decEq. rewrite Int.eq_false; auto. congruence.
+  simpl; decEq. rewrite Ptrofs.eq_false; auto. congruence.
+  simpl; decEq. rewrite Ptrofs.eq_false; auto. congruence.
+  now erewrite !valid_ptr_inj by eauto.
+Qed.
+
+Lemma cmplu_bool_inject:
+  forall c v1 v2 v1' v2' b,
+  inject f v1 v1' ->
+  inject f v2 v2' ->
+  Val.cmplu_bool valid_ptr1 c v1 v2 = Some b ->
+  Val.cmplu_bool valid_ptr2 c v1' v2' = Some b.
+Proof.
+  Local Opaque Int64.add Ptrofs.add.
+  intros.
+  unfold cmplu_bool in *; destruct Archi.ptr64;
+  inv H; simpl in H1; try discriminate; inv H0; simpl in H1; try discriminate; simpl; auto.
+- fold (weak_valid_ptr1 b1 (Ptrofs.unsigned ofs1)) in H1.
+  fold (weak_valid_ptr2 b2 (Ptrofs.unsigned (Ptrofs.add ofs1 (Ptrofs.repr delta)))).
+  destruct (Int64.eq i Int64.zero); auto.
+  destruct (weak_valid_ptr1 b1 (Ptrofs.unsigned ofs1)) eqn:E; try discriminate.
+  erewrite weak_valid_ptr_inj by eauto. auto.
+- fold (weak_valid_ptr1 b1 (Ptrofs.unsigned ofs1)) in H1.
+  fold (weak_valid_ptr2 b2 (Ptrofs.unsigned (Ptrofs.add ofs1 (Ptrofs.repr delta)))).
+  destruct (Int64.eq i Int64.zero); auto.
+  destruct (weak_valid_ptr1 b1 (Ptrofs.unsigned ofs1)) eqn:E; try discriminate.
+  erewrite weak_valid_ptr_inj by eauto. auto.
+- fold (weak_valid_ptr1 b1 (Ptrofs.unsigned ofs1)) in H1.
+  fold (weak_valid_ptr1 b0 (Ptrofs.unsigned ofs0)) in H1.
+  fold (weak_valid_ptr2 b2 (Ptrofs.unsigned (Ptrofs.add ofs1 (Ptrofs.repr delta)))).
+  fold (weak_valid_ptr2 b3 (Ptrofs.unsigned (Ptrofs.add ofs0 (Ptrofs.repr delta0)))).
+  destruct (eq_block b1 b0); subst.
+  rewrite H in H2. inv H2. rewrite dec_eq_true.
+  destruct (weak_valid_ptr1 b0 (Ptrofs.unsigned ofs1)) eqn:?; try discriminate.
+  destruct (weak_valid_ptr1 b0 (Ptrofs.unsigned ofs0)) eqn:?; try discriminate.
+  erewrite !weak_valid_ptr_inj by eauto. simpl.
+  rewrite <-H1. simpl. decEq. apply Ptrofs.translate_cmpu; eauto.
+  destruct (valid_ptr1 b1 (Ptrofs.unsigned ofs1)) eqn:?; try discriminate.
+  destruct (valid_ptr1 b0 (Ptrofs.unsigned ofs0)) eqn:?; try discriminate.
+  destruct (eq_block b2 b3); subst.
+  assert (valid_ptr_implies: forall b ofs, valid_ptr1 b ofs = true -> weak_valid_ptr1 b ofs = true).
+    intros. unfold weak_valid_ptr1. rewrite H0; auto.
+  erewrite !weak_valid_ptr_inj by eauto using valid_ptr_implies. simpl.
+  exploit valid_different_ptrs_inj; eauto. intros [?|?]; [congruence |].
+  destruct c; simpl in H1; inv H1.
+  simpl; decEq. rewrite Ptrofs.eq_false; auto. congruence.
+  simpl; decEq. rewrite Ptrofs.eq_false; auto. congruence.
   now erewrite !valid_ptr_inj by eauto.
 Qed.
 
@@ -1710,8 +2158,8 @@ Lemma val_inject_lessdef:
   forall v1 v2, Val.lessdef v1 v2 <-> Val.inject (fun b => Some(b, 0)) v1 v2.
 Proof.
   intros; split; intros.
-  inv H; auto. destruct v2; econstructor; eauto. rewrite Int.add_zero; auto.
-  inv H; auto. inv H0. rewrite Int.add_zero; auto.
+  inv H; auto. destruct v2; econstructor; eauto. rewrite Ptrofs.add_zero; auto.
+  inv H; auto. inv H0. rewrite Ptrofs.add_zero; auto.
 Qed.
 
 Lemma val_inject_list_lessdef:
@@ -1732,8 +2180,8 @@ Lemma val_inject_id:
 Proof.
   intros; split; intros.
   inv H; auto.
-  unfold inject_id in H0. inv H0. rewrite Int.add_zero. constructor.
-  inv H. destruct v2; econstructor. unfold inject_id; reflexivity. rewrite Int.add_zero; auto.
+  unfold inject_id in H0. inv H0. rewrite Ptrofs.add_zero. constructor.
+  inv H. destruct v2; econstructor. unfold inject_id; reflexivity. rewrite Ptrofs.add_zero; auto.
   constructor.
 Qed.
 
@@ -1757,5 +2205,5 @@ Lemma val_inject_compose:
 Proof.
   intros. inv H; auto; inv H0; auto. econstructor.
   unfold compose_meminj; rewrite H1; rewrite H3; eauto.
-  rewrite Int.add_assoc. decEq. unfold Int.add. apply Int.eqm_samerepr. auto with ints.
+  rewrite Ptrofs.add_assoc. decEq. unfold Ptrofs.add. apply Ptrofs.eqm_samerepr. auto with ints.
 Qed.

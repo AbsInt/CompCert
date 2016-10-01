@@ -36,7 +36,7 @@ let byteswapped_fields : (ident * string, unit) Hashtbl.t
 
 let rec can_byte_swap env ty =
   match unroll env ty with
-  | TInt(ik, _) -> (sizeof_ikind ik <= 4, sizeof_ikind ik > 1)
+  | TInt(ik, _) -> (sizeof_ikind ik <= !config.sizeof_ptr (*FIXME*), sizeof_ikind ik > 1)
   | TEnum(_, _) -> (true, sizeof_ikind enum_ikind > 1)
   | TPtr(_, _) -> (true, true)          (* tolerance? *)
   | TArray(ty_elt, _, _) -> can_byte_swap env ty_elt
@@ -155,7 +155,7 @@ let use_reversed = ref false
 let bswap_read loc env lval =
   let ty = lval.etyp in
   let (bsize, aty) = accessor_type loc env ty in
-  assert (bsize = 16 || bsize = 32);
+  assert (bsize = 16 || bsize = 32 || (bsize = 64 && !config.sizeof_ptr = 8));
   try
     if !use_reversed then begin
       let (id, fty) =

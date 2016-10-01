@@ -693,7 +693,7 @@ Inductive tr_function: program -> function -> function -> Prop :=
       f'.(fn_sig) = f.(fn_sig) ->
       f'.(fn_params) = sregs ctx f.(fn_params) ->
       f'.(fn_entrypoint) = spc ctx f.(fn_entrypoint) ->
-      0 <= fn_stacksize f' < Int.max_unsigned ->
+      0 <= fn_stacksize f' < Ptrofs.max_unsigned ->
       tr_function p f f'.
 
 Lemma tr_function_linkorder:
@@ -713,7 +713,7 @@ Proof.
   intros. unfold transf_function in H.
   set (fenv := funenv_program cunit) in *.
   destruct (expand_function fenv f initstate) as [ctx s i] eqn:?.
-  destruct (zlt (st_stksize s) Int.max_unsigned); inv H.
+  destruct (zlt (st_stksize s) Ptrofs.max_unsigned); inv H.
   monadInv Heqr. set (ctx := initcontext x x0 (max_reg_function f) (fn_stacksize f)) in *.
 Opaque initstate.
   destruct INCR3. inversion EQ1. inversion EQ.

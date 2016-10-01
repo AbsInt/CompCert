@@ -13,22 +13,10 @@
 (** Correctness of instruction selection for integer division *)
 
 Require Import String.
-Require Import Coqlib.
-Require Import Maps.
-Require Import AST.
-Require Import Errors.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Globalenvs.
-Require Import Events.
-Require Import Cminor.
-Require Import Op.
-Require Import CminorSel.
-Require Import SelectOp.
-Require Import SelectOpproof.
-Require Import SelectLong.
+Require Import Coqlib Maps.
+Require Import AST Errors Integers Floats.
+Require Import Values Memory Globalenvs Events Cminor Op CminorSel.
+Require Import SelectOp SelectOpproof SplitLong.
 
 Open Local Scope cminorsel_scope.
 Open Local Scope string_scope.
@@ -66,19 +54,19 @@ Definition helper_declared {F V: Type} (p: AST.program (AST.fundef F) V) (id: id
   (prog_defmap p)!id = Some (Gfun (External (EF_runtime name sg))).
 
 Definition helper_functions_declared {F V: Type} (p: AST.program (AST.fundef F) V) (hf: helper_functions) : Prop :=
-     helper_declared p hf.(i64_dtos) "__i64_dtos" sig_f_l
-  /\ helper_declared p hf.(i64_dtou) "__i64_dtou" sig_f_l
-  /\ helper_declared p hf.(i64_stod) "__i64_stod" sig_l_f
-  /\ helper_declared p hf.(i64_utod) "__i64_utod" sig_l_f
-  /\ helper_declared p hf.(i64_stof) "__i64_stof" sig_l_s
-  /\ helper_declared p hf.(i64_utof) "__i64_utof" sig_l_s
-  /\ helper_declared p hf.(i64_sdiv) "__i64_sdiv" sig_ll_l
-  /\ helper_declared p hf.(i64_udiv) "__i64_udiv" sig_ll_l
-  /\ helper_declared p hf.(i64_smod) "__i64_smod" sig_ll_l
-  /\ helper_declared p hf.(i64_umod) "__i64_umod" sig_ll_l
-  /\ helper_declared p hf.(i64_shl) "__i64_shl" sig_li_l
-  /\ helper_declared p hf.(i64_shr) "__i64_shr" sig_li_l
-  /\ helper_declared p hf.(i64_sar) "__i64_sar" sig_li_l.
+     helper_declared p i64_dtos "__i64_dtos" sig_f_l
+  /\ helper_declared p i64_dtou "__i64_dtou" sig_f_l
+  /\ helper_declared p i64_stod "__i64_stod" sig_l_f
+  /\ helper_declared p i64_utod "__i64_utod" sig_l_f
+  /\ helper_declared p i64_stof "__i64_stof" sig_l_s
+  /\ helper_declared p i64_utof "__i64_utof" sig_l_s
+  /\ helper_declared p i64_sdiv "__i64_sdiv" sig_ll_l
+  /\ helper_declared p i64_udiv "__i64_udiv" sig_ll_l
+  /\ helper_declared p i64_smod "__i64_smod" sig_ll_l
+  /\ helper_declared p i64_umod "__i64_umod" sig_ll_l
+  /\ helper_declared p i64_shl "__i64_shl" sig_li_l
+  /\ helper_declared p i64_shr "__i64_shr" sig_li_l
+  /\ helper_declared p i64_sar "__i64_sar" sig_li_l.
 
 (** * Correctness of the instruction selection functions for 64-bit operators *)
 
@@ -414,7 +402,7 @@ Theorem eval_longoffloat:
   forall le a x y,
   eval_expr ge sp e m le a x ->
   Val.longoffloat x = Some y ->
-  exists v, eval_expr ge sp e m le (longoffloat hf a) v /\ Val.lessdef y v.
+  exists v, eval_expr ge sp e m le (longoffloat a) v /\ Val.lessdef y v.
 Proof.
   intros; unfold longoffloat. econstructor; split.
   eapply eval_helper_1; eauto. DeclHelper. UseHelper. auto.
@@ -424,7 +412,7 @@ Theorem eval_longuoffloat:
   forall le a x y,
   eval_expr ge sp e m le a x ->
   Val.longuoffloat x = Some y ->
-  exists v, eval_expr ge sp e m le (longuoffloat hf a) v /\ Val.lessdef y v.
+  exists v, eval_expr ge sp e m le (longuoffloat a) v /\ Val.lessdef y v.
 Proof.
   intros; unfold longuoffloat. econstructor; split.
   eapply eval_helper_1; eauto. DeclHelper. UseHelper. auto.
@@ -434,7 +422,7 @@ Theorem eval_floatoflong:
   forall le a x y,
   eval_expr ge sp e m le a x ->
   Val.floatoflong x = Some y ->
-  exists v, eval_expr ge sp e m le (floatoflong hf a) v /\ Val.lessdef y v.
+  exists v, eval_expr ge sp e m le (floatoflong a) v /\ Val.lessdef y v.
 Proof.
   intros; unfold floatoflong. econstructor; split.
   eapply eval_helper_1; eauto. DeclHelper. UseHelper. auto.
@@ -444,7 +432,7 @@ Theorem eval_floatoflongu:
   forall le a x y,
   eval_expr ge sp e m le a x ->
   Val.floatoflongu x = Some y ->
-  exists v, eval_expr ge sp e m le (floatoflongu hf a) v /\ Val.lessdef y v.
+  exists v, eval_expr ge sp e m le (floatoflongu a) v /\ Val.lessdef y v.
 Proof.
   intros; unfold floatoflongu. econstructor; split.
   eapply eval_helper_1; eauto. DeclHelper. UseHelper. auto.
@@ -454,7 +442,7 @@ Theorem eval_longofsingle:
   forall le a x y,
   eval_expr ge sp e m le a x ->
   Val.longofsingle x = Some y ->
-  exists v, eval_expr ge sp e m le (longofsingle hf a) v /\ Val.lessdef y v.
+  exists v, eval_expr ge sp e m le (longofsingle a) v /\ Val.lessdef y v.
 Proof.
   intros; unfold longofsingle.
   destruct x; simpl in H0; inv H0. destruct (Float32.to_long f) as [n|] eqn:EQ; simpl in H2; inv H2.
@@ -468,7 +456,7 @@ Theorem eval_longuofsingle:
   forall le a x y,
   eval_expr ge sp e m le a x ->
   Val.longuofsingle x = Some y ->
-  exists v, eval_expr ge sp e m le (longuofsingle hf a) v /\ Val.lessdef y v.
+  exists v, eval_expr ge sp e m le (longuofsingle a) v /\ Val.lessdef y v.
 Proof.
   intros; unfold longuofsingle.
   destruct x; simpl in H0; inv H0. destruct (Float32.to_longu f) as [n|] eqn:EQ; simpl in H2; inv H2.
@@ -482,7 +470,7 @@ Theorem eval_singleoflong:
   forall le a x y,
   eval_expr ge sp e m le a x ->
   Val.singleoflong x = Some y ->
-  exists v, eval_expr ge sp e m le (singleoflong hf a) v /\ Val.lessdef y v.
+  exists v, eval_expr ge sp e m le (singleoflong a) v /\ Val.lessdef y v.
 Proof.
   intros; unfold singleoflong. econstructor; split.
   eapply eval_helper_1; eauto. DeclHelper. UseHelper. auto.
@@ -492,7 +480,7 @@ Theorem eval_singleoflongu:
   forall le a x y,
   eval_expr ge sp e m le a x ->
   Val.singleoflongu x = Some y ->
-  exists v, eval_expr ge sp e m le (singleoflongu hf a) v /\ Val.lessdef y v.
+  exists v, eval_expr ge sp e m le (singleoflongu a) v /\ Val.lessdef y v.
 Proof.
   intros; unfold singleoflongu. econstructor; split.
   eapply eval_helper_1; eauto. DeclHelper. UseHelper. auto.
@@ -592,7 +580,7 @@ Qed.
 
 Lemma eval_shllimm:
   forall n,
-  unary_constructor_sound (fun e => shllimm hf e n) (fun v => Val.shll v (Vint n)).
+  unary_constructor_sound (fun e => shllimm e n) (fun v => Val.shll v (Vint n)).
 Proof.
   unfold shllimm; red; intros.
   apply eval_shift_imm; intros.
@@ -625,7 +613,7 @@ Proof.
     econstructor; split. eapply eval_helper_2; eauto. EvalOp. DeclHelper. UseHelper. auto.
 Qed.
 
-Theorem eval_shll: binary_constructor_sound (shll hf) Val.shll.
+Theorem eval_shll: binary_constructor_sound shll Val.shll.
 Proof.
   unfold shll; red; intros.
   destruct (is_intconst b) as [n|] eqn:IC.
@@ -638,7 +626,7 @@ Qed.
 
 Lemma eval_shrluimm:
   forall n,
-  unary_constructor_sound (fun e => shrluimm hf e n) (fun v => Val.shrlu v (Vint n)).
+  unary_constructor_sound (fun e => shrluimm e n) (fun v => Val.shrlu v (Vint n)).
 Proof.
   unfold shrluimm; red; intros. apply eval_shift_imm; intros.
   + (* n = 0 *)
@@ -670,7 +658,7 @@ Proof.
     econstructor; split. eapply eval_helper_2; eauto. EvalOp. DeclHelper. UseHelper. auto.
 Qed.
 
-Theorem eval_shrlu: binary_constructor_sound (shrlu hf) Val.shrlu.
+Theorem eval_shrlu: binary_constructor_sound shrlu Val.shrlu.
 Proof.
   unfold shrlu; red; intros.
   destruct (is_intconst b) as [n|] eqn:IC.
@@ -683,7 +671,7 @@ Qed.
 
 Lemma eval_shrlimm:
   forall n,
-  unary_constructor_sound (fun e => shrlimm hf e n) (fun v => Val.shrl v (Vint n)).
+  unary_constructor_sound (fun e => shrlimm e n) (fun v => Val.shrl v (Vint n)).
 Proof.
   unfold shrlimm; red; intros. apply eval_shift_imm; intros.
   + (* n = 0 *)
@@ -719,7 +707,7 @@ Proof.
     econstructor; split. eapply eval_helper_2; eauto. EvalOp. DeclHelper. UseHelper. auto.
 Qed.
 
-Theorem eval_shrl: binary_constructor_sound (shrl hf) Val.shrl.
+Theorem eval_shrl: binary_constructor_sound shrl Val.shrl.
 Proof.
   unfold shrl; red; intros.
   destruct (is_intconst b) as [n|] eqn:IC.
@@ -730,9 +718,9 @@ Proof.
   econstructor; split. eapply eval_helper_2; eauto. DeclHelper. UseHelper. auto.
 Qed.
 
-Theorem eval_addl: binary_constructor_sound addl Val.addl.
+Theorem eval_addl: Archi.ptr64 = false -> binary_constructor_sound addl Val.addl.
 Proof.
-  unfold addl; red; intros.
+  unfold addl; red; intros. 
   set (default := Ebuiltin (EF_builtin "__builtin_addl" sig_ll_l) (a ::: b ::: Enil)).
   assert (DEFAULT:
     exists v, eval_expr ge sp e m le default v /\ Val.lessdef (Val.addl x y) v).
@@ -746,14 +734,14 @@ Proof.
   econstructor; split. apply eval_longconst. simpl; auto.
 - predSpec Int64.eq Int64.eq_spec p Int64.zero; auto.
   subst p. exploit (is_longconst_sound le a); eauto. intros EQ; subst x.
-  exists y; split; auto. simpl. destruct y; auto. rewrite Int64.add_zero_l; auto.
+  exists y; split; auto. unfold Val.addl; rewrite H; destruct y; auto. rewrite Int64.add_zero_l; auto.
 - predSpec Int64.eq Int64.eq_spec q Int64.zero; auto.
   subst q. exploit (is_longconst_sound le b); eauto. intros EQ; subst y.
-  exists x; split; auto. destruct x; simpl; auto. rewrite Int64.add_zero; auto.
+  exists x; split; auto. unfold Val.addl; rewrite H; destruct x; simpl; auto. rewrite Int64.add_zero; auto.
 - auto.
 Qed.
 
-Theorem eval_subl: binary_constructor_sound subl Val.subl.
+Theorem eval_subl: Archi.ptr64 = false -> binary_constructor_sound subl Val.subl.
 Proof.
   unfold subl; red; intros.
   set (default := Ebuiltin (EF_builtin "__builtin_subl" sig_ll_l) (a ::: b ::: Enil)).
@@ -773,7 +761,7 @@ Proof.
   destruct y; simpl; auto.
 - predSpec Int64.eq Int64.eq_spec q Int64.zero; auto.
   subst q. exploit (is_longconst_sound le b); eauto. intros EQ; subst y.
-  exists x; split; auto. destruct x; simpl; auto. rewrite Int64.sub_zero_l; auto.
+  exists x; split; auto. unfold Val.subl; rewrite H; destruct x; simpl; auto. rewrite Int64.sub_zero_l; auto.
 - auto.
 Qed.
 
@@ -799,7 +787,7 @@ Proof.
 Qed.
 
 Lemma eval_mullimm:
-  forall n, unary_constructor_sound (fun a => mullimm hf a n) (fun v => Val.mull v (Vlong n)).
+  forall n, unary_constructor_sound (fun a => mullimm a n) (fun v => Val.mull v (Vlong n)).
 Proof.
   unfold mullimm; red; intros.
   predSpec Int64.eq Int64.eq_spec n Int64.zero.
@@ -808,28 +796,17 @@ Proof.
   predSpec Int64.eq Int64.eq_spec n Int64.one.
   subst n. exists x; split; auto.
   destruct x; simpl; auto. rewrite Int64.mul_one. auto.
-  destruct (Int64.is_power2 n) as [l|] eqn:P2.
-  exploit eval_shllimm. eauto. instantiate (1 := Int.repr (Int64.unsigned l)).
-  intros [v [A B]].
+  destruct (Int64.is_power2' n) as [l|] eqn:P2.
+  exploit eval_shllimm. eauto. instantiate (1 := l). intros [v [A B]].
   exists v; split; auto.
   destruct x; simpl; auto.
-  erewrite Int64.mul_pow2 by eauto.
-  assert (EQ: Int.unsigned (Int.repr (Int64.unsigned l)) = Int64.unsigned l).
-  { apply Int.unsigned_repr.
-    exploit Int64.is_power2_rng; eauto.
-    assert (Int64.zwordsize < Int.max_unsigned) by (compute; auto).
-    omega.
-  }
-  simpl in B.
-  replace (Int.ltu (Int.repr (Int64.unsigned l)) Int64.iwordsize')
-     with (Int64.ltu l Int64.iwordsize) in B.
-  erewrite Int64.is_power2_range in B by eauto.
-  unfold Int64.shl' in B. rewrite EQ in B. auto.
-  unfold Int64.ltu, Int.ltu. rewrite EQ. auto.
+  erewrite Int64.mul_pow2' by eauto.
+  simpl in B. erewrite Int64.is_power2'_range in B by eauto. 
+  exact B.
   apply eval_mull_base; auto. apply eval_longconst.
 Qed.
 
-Theorem eval_mull: binary_constructor_sound (mull hf) Val.mull.
+Theorem eval_mull: binary_constructor_sound mull Val.mull.
 Proof.
   unfold mull; red; intros.
   destruct (is_longconst a) as [p|] eqn:LC1;
@@ -870,7 +847,7 @@ Theorem eval_divl:
   eval_expr ge sp e m le a x ->
   eval_expr ge sp e m le b y ->
   Val.divls x y = Some z ->
-  exists v, eval_expr ge sp e m le (divl hf a b) v /\ Val.lessdef z v.
+  exists v, eval_expr ge sp e m le (divl a b) v /\ Val.lessdef z v.
 Proof.
   intros. eapply eval_binop_long; eauto.
   intros; subst; simpl in H1.
@@ -885,7 +862,7 @@ Theorem eval_modl:
   eval_expr ge sp e m le a x ->
   eval_expr ge sp e m le b y ->
   Val.modls x y = Some z ->
-  exists v, eval_expr ge sp e m le (modl hf a b) v /\ Val.lessdef z v.
+  exists v, eval_expr ge sp e m le (modl a b) v /\ Val.lessdef z v.
 Proof.
   intros. eapply eval_binop_long; eauto.
   intros; subst; simpl in H1.
@@ -900,10 +877,10 @@ Theorem eval_divlu:
   eval_expr ge sp e m le a x ->
   eval_expr ge sp e m le b y ->
   Val.divlu x y = Some z ->
-  exists v, eval_expr ge sp e m le (divlu hf a b) v /\ Val.lessdef z v.
+  exists v, eval_expr ge sp e m le (divlu a b) v /\ Val.lessdef z v.
 Proof.
   intros. unfold divlu.
-  set (default := Eexternal hf.(i64_udiv) sig_ll_l (a ::: b ::: Enil)).
+  set (default := Eexternal i64_udiv sig_ll_l (a ::: b ::: Enil)).
   assert (DEFAULT:
     exists v, eval_expr ge sp e m le default v /\ Val.lessdef z v).
   {
@@ -916,25 +893,15 @@ Proof.
   econstructor; split. apply eval_longconst.
   simpl in H1. destruct (Int64.eq q Int64.zero); inv H1. auto.
 - auto.
-- destruct (Int64.is_power2 q) as [l|] eqn:P2; auto.
+- destruct (Int64.is_power2' q) as [l|] eqn:P2; auto.
   exploit (is_longconst_sound le b); eauto. intros EQ; subst y.
-  replace z with (Val.shrlu x (Vint (Int.repr (Int64.unsigned l)))).
+  replace z with (Val.shrlu x (Vint l)).
   apply eval_shrluimm. auto.
   destruct x; simpl in H1; try discriminate.
   destruct (Int64.eq q Int64.zero); inv H1.
-  simpl.
-  assert (EQ: Int.unsigned (Int.repr (Int64.unsigned l)) = Int64.unsigned l).
-  { apply Int.unsigned_repr.
-    exploit Int64.is_power2_rng; eauto.
-    assert (Int64.zwordsize < Int.max_unsigned) by (compute; auto).
-    omega.
-  }
-  replace (Int.ltu (Int.repr (Int64.unsigned l)) Int64.iwordsize')
-     with (Int64.ltu l Int64.iwordsize).
-  erewrite Int64.is_power2_range by eauto.
-  erewrite Int64.divu_pow2 by eauto.
-  unfold Int64.shru', Int64.shru. rewrite EQ. auto.
-  unfold Int64.ltu, Int.ltu. rewrite EQ. auto.
+  simpl. erewrite Int64.is_power2'_range by eauto.
+  erewrite Int64.divu_pow2' by eauto.
+  auto.
 - auto.
 Qed.
 
@@ -943,10 +910,10 @@ Theorem eval_modlu:
   eval_expr ge sp e m le a x ->
   eval_expr ge sp e m le b y ->
   Val.modlu x y = Some z ->
-  exists v, eval_expr ge sp e m le (modlu hf a b) v /\ Val.lessdef z v.
+  exists v, eval_expr ge sp e m le (modlu a b) v /\ Val.lessdef z v.
 Proof.
   intros. unfold modlu.
-  set (default := Eexternal hf.(i64_umod) sig_ll_l (a ::: b ::: Enil)).
+  set (default := Eexternal i64_umod sig_ll_l (a ::: b ::: Enil)).
   assert (DEFAULT:
     exists v, eval_expr ge sp e m le default v /\ Val.lessdef z v).
   {
@@ -1058,11 +1025,12 @@ Theorem eval_cmplu:
   forall c le a x b y v,
   eval_expr ge sp e m le a x ->
   eval_expr ge sp e m le b y ->
-  Val.cmplu c x y = Some v ->
+  Val.cmplu (Mem.valid_pointer m) c x y = Some v ->
+  Archi.ptr64 = false ->
   eval_expr ge sp e m le (cmplu c a b) v.
 Proof.
-  intros. unfold Val.cmplu in H1.
-  destruct x; simpl in H1; try discriminate. destruct y; inv H1.
+  intros. unfold Val.cmplu, Val.cmplu_bool in H1. rewrite H2 in H1. simpl in H1.
+  destruct x; simpl in H1; try discriminate H1; destruct y; inv H1.
   rename i into x. rename i0 into y.
   destruct c; simpl.
 - (* Ceq *)

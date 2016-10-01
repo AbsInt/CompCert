@@ -462,14 +462,14 @@ Qed.
 
 Lemma kill_loads_after_store_holds:
   forall valu ge sp rs m n addr args a chunk v m' bc approx ae am,
-  numbering_holds valu ge (Vptr sp Int.zero) rs m n ->
-  eval_addressing ge (Vptr sp Int.zero) addr rs##args = Some a ->
+  numbering_holds valu ge (Vptr sp Ptrofs.zero) rs m n ->
+  eval_addressing ge (Vptr sp Ptrofs.zero) addr rs##args = Some a ->
   Mem.storev chunk m a v = Some m' ->
   genv_match bc ge ->
   bc sp = BCstack ->
   ematch bc rs ae ->
   approx = VA.State ae am ->
-  numbering_holds valu ge (Vptr sp Int.zero) rs m'
+  numbering_holds valu ge (Vptr sp Ptrofs.zero) rs m'
                            (kill_loads_after_store approx n chunk addr args).
 Proof.
   intros. apply kill_equations_hold with m; auto.
@@ -493,11 +493,15 @@ Lemma store_normalized_range_sound:
   vmatch bc v (store_normalized_range chunk) ->
   Val.lessdef (Val.load_result chunk v) v.
 Proof.
-  intros. destruct chunk; simpl in *; destruct v; auto.
+  intros. unfold Val.load_result; remember Archi.ptr64 as ptr64.
+  destruct chunk; simpl in *; destruct v; auto.
 - inv H. rewrite is_sgn_sign_ext in H4 by omega. rewrite H4; auto.
 - inv H. rewrite is_uns_zero_ext in H4 by omega. rewrite H4; auto.
 - inv H. rewrite is_sgn_sign_ext in H4 by omega. rewrite H4; auto.
 - inv H. rewrite is_uns_zero_ext in H4 by omega. rewrite H4; auto.
+- destruct ptr64; auto.
+- destruct ptr64; auto.
+- destruct ptr64; auto.
 Qed.
 
 Lemma add_store_result_hold:
@@ -533,15 +537,15 @@ Qed.
 
 Lemma kill_loads_after_storebytes_holds:
   forall valu ge sp rs m n dst b ofs bytes m' bc approx ae am sz,
-  numbering_holds valu ge (Vptr sp Int.zero) rs m n ->
+  numbering_holds valu ge (Vptr sp Ptrofs.zero) rs m n ->
   pmatch bc b ofs dst ->
-  Mem.storebytes m b (Int.unsigned ofs) bytes = Some m' ->
+  Mem.storebytes m b (Ptrofs.unsigned ofs) bytes = Some m' ->
   genv_match bc ge ->
   bc sp = BCstack ->
   ematch bc rs ae ->
   approx = VA.State ae am ->
   length bytes = nat_of_Z sz -> sz >= 0 ->
-  numbering_holds valu ge (Vptr sp Int.zero) rs m'
+  numbering_holds valu ge (Vptr sp Ptrofs.zero) rs m'
                            (kill_loads_after_storebytes approx n dst sz).
 Proof.
   intros. apply kill_equations_hold with m; auto.
@@ -619,10 +623,11 @@ Lemma shift_memcpy_eq_wf:
 Proof with (try discriminate).
   unfold shift_memcpy_eq; intros.
   destruct e. destruct r... destruct a...
-  destruct (zle src (Int.unsigned i) &&
-        zle (Int.unsigned i + size_chunk m) (src + sz) &&
-        zeq (delta mod align_chunk m) 0 && zle 0 (Int.unsigned i + delta) &&
-        zle (Int.unsigned i + delta) Int.max_unsigned)...
+  try (rename i into ofs).
+  destruct (zle src (Ptrofs.unsigned ofs) &&
+        zle (Ptrofs.unsigned ofs + size_chunk m) (src + sz) &&
+        zeq (delta mod align_chunk m) 0 && zle 0 (Ptrofs.unsigned ofs + delta) &&
+        zle (Ptrofs.unsigned ofs + delta) Ptrofs.max_unsigned)...
   inv H. destruct H0. split. auto. red; simpl; tauto.
 Qed.
 
@@ -631,35 +636,40 @@ Lemma shift_memcpy_eq_holds:
   shift_memcpy_eq src sz (dst - src) e = Some e' ->
   Mem.loadbytes m sp src sz = Some bytes ->
   Mem.storebytes m sp dst bytes = Some m' ->
-  equation_holds valu ge (Vptr sp Int.zero) m e ->
-  equation_holds valu ge (Vptr sp Int.zero) m' e'.
+  equation_holds valu ge (Vptr sp Ptrofs.zero) m e ->
+  equation_holds valu ge (Vptr sp Ptrofs.zero) m' e'.
 Proof with (try discriminate).
   intros. set (delta := dst - src) in *. unfold shift_memcpy_eq in H.
   destruct e as [l strict rhs] eqn:E.
   destruct rhs as [op vl | chunk addr vl]...
   destruct addr...
-  set (i1 := Int.unsigned i) in *. set (j := i1 + delta) in *.
+  try (rename i into ofs).
+  set (i1 := Ptrofs.unsigned ofs) in *. set (j := i1 + delta) in *.
   destruct (zle src i1)...
   destruct (zle (i1 + size_chunk chunk) (src + sz))...
   destruct (zeq (delta mod align_chunk chunk) 0)...
   destruct (zle 0 j)...
-  destruct (zle j Int.max_unsigned)...
+  destruct (zle j Ptrofs.max_unsigned)...
   simpl in H; inv H.
   assert (LD: forall v,
-    Mem.loadv chunk m (Vptr sp i) = Some v ->
-    Mem.loadv chunk m' (Vptr sp (Int.repr j)) = Some v).
+    Mem.loadv chunk m (Vptr sp ofs) = Some v ->
+    Mem.loadv chunk m' (Vptr sp (Ptrofs.repr j)) = Some v).
   {
-    simpl; intros. rewrite Int.unsigned_repr by omega.
+    simpl; intros. rewrite Ptrofs.unsigned_repr by omega.
     unfold j, delta. eapply load_memcpy; eauto.
     apply Zmod_divide; auto. generalize (align_chunk_pos chunk); omega.
   }
   inv H2.
-+ inv H3. destruct vl... simpl in H6. rewrite Int.add_zero_l in H6. inv H6.
-  apply eq_holds_strict. econstructor. simpl. rewrite Int.add_zero_l. eauto.
++ inv H3. exploit eval_addressing_Ainstack_inv; eauto. intros [E1 E2].
+  simpl in E2; rewrite Ptrofs.add_zero_l in E2. subst a.    
+  apply eq_holds_strict. econstructor. rewrite eval_addressing_Ainstack.
+  simpl. rewrite Ptrofs.add_zero_l. eauto.
   apply LD; auto.
-+ inv H4. destruct vl... simpl in H7. rewrite Int.add_zero_l in H7. inv H7.
++ inv H4. exploit eval_addressing_Ainstack_inv; eauto. intros [E1 E2].
+  simpl in E2; rewrite Ptrofs.add_zero_l in E2. subst a.    
   apply eq_holds_lessdef with v; auto.
-  econstructor. simpl. rewrite Int.add_zero_l. eauto. apply LD; auto.
+  econstructor. rewrite eval_addressing_Ainstack. simpl. rewrite Ptrofs.add_zero_l. eauto.
+  apply LD; auto.
 Qed.
 
 Lemma add_memcpy_eqs_charact:
@@ -677,15 +687,15 @@ Qed.
 
 Lemma add_memcpy_holds:
   forall m bsrc osrc sz bytes bdst odst m' valu ge sp rs n1 n2 bc asrc adst,
-  Mem.loadbytes m bsrc (Int.unsigned osrc) sz = Some bytes ->
-  Mem.storebytes m bdst (Int.unsigned odst) bytes = Some m' ->
-  numbering_holds valu ge (Vptr sp Int.zero) rs m n1 ->
-  numbering_holds valu ge (Vptr sp Int.zero) rs m' n2 ->
+  Mem.loadbytes m bsrc (Ptrofs.unsigned osrc) sz = Some bytes ->
+  Mem.storebytes m bdst (Ptrofs.unsigned odst) bytes = Some m' ->
+  numbering_holds valu ge (Vptr sp Ptrofs.zero) rs m n1 ->
+  numbering_holds valu ge (Vptr sp Ptrofs.zero) rs m' n2 ->
   pmatch bc bsrc osrc asrc ->
   pmatch bc bdst odst adst ->
   bc sp = BCstack ->
   Ple (num_next n1) (num_next n2) ->
-  numbering_holds valu ge (Vptr sp Int.zero) rs m' (add_memcpy n1 n2 asrc adst sz).
+  numbering_holds valu ge (Vptr sp Ptrofs.zero) rs m' (add_memcpy n1 n2 asrc adst sz).
 Proof.
   intros. unfold add_memcpy.
   destruct asrc; auto; destruct adst; auto.

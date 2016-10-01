@@ -84,16 +84,16 @@ Section SIMPLE_EXPRS.
 Variable e: env.
 Variable m: mem.
 
-Inductive eval_simple_lvalue: expr -> block -> int -> Prop :=
+Inductive eval_simple_lvalue: expr -> block -> ptrofs -> Prop :=
   | esl_loc: forall b ofs ty,
       eval_simple_lvalue (Eloc b ofs ty) b ofs
   | esl_var_local: forall x ty b,
       e!x = Some(b, ty) ->
-      eval_simple_lvalue (Evar x ty) b Int.zero
+      eval_simple_lvalue (Evar x ty) b Ptrofs.zero
   | esl_var_global: forall x ty b,
       e!x = None ->
       Genv.find_symbol ge x = Some b ->
-      eval_simple_lvalue (Evar x ty) b Int.zero
+      eval_simple_lvalue (Evar x ty) b Ptrofs.zero
   | esl_deref: forall r ty b ofs,
       eval_simple_rvalue r (Vptr b ofs) ->
       eval_simple_lvalue (Ederef r ty) b ofs
@@ -102,7 +102,7 @@ Inductive eval_simple_lvalue: expr -> block -> int -> Prop :=
       typeof r = Tstruct id a ->
       ge.(genv_cenv)!id = Some co ->
       field_offset ge f (co_members co) = OK delta ->
-      eval_simple_lvalue (Efield r f ty) b (Int.add ofs (Int.repr delta))
+      eval_simple_lvalue (Efield r f ty) b (Ptrofs.add ofs (Ptrofs.repr delta))
   | esl_field_union: forall r f ty b ofs id co a,
       eval_simple_rvalue r (Vptr b ofs) ->
       typeof r = Tunion id a ->
@@ -133,9 +133,9 @@ with eval_simple_rvalue: expr -> val -> Prop :=
       sem_cast v1 (typeof r1) ty m = Some v ->
       eval_simple_rvalue (Ecast r1 ty) v
   | esr_sizeof: forall ty1 ty,
-      eval_simple_rvalue (Esizeof ty1 ty) (Vint (Int.repr (sizeof ge ty1)))
+      eval_simple_rvalue (Esizeof ty1 ty) (Vptrofs (Ptrofs.repr (sizeof ge ty1)))
   | esr_alignof: forall ty1 ty,
-      eval_simple_rvalue (Ealignof ty1 ty) (Vint (Int.repr (alignof ge ty1))).
+      eval_simple_rvalue (Ealignof ty1 ty) (Vptrofs (Ptrofs.repr (alignof ge ty1))).
 
 Inductive eval_simple_list: exprlist -> typelist -> list val -> Prop :=
   | esrl_nil:
@@ -813,13 +813,13 @@ Ltac StepR REC C' a :=
   exists v; constructor.
 (* var *)
   exploit safe_inv; eauto; simpl. intros [b A].
-  exists b; exists Int.zero.
+  exists b; exists Ptrofs.zero.
   intuition. apply esl_var_local; auto. apply esl_var_global; auto.
 (* field *)
   StepR IHa (fun x => C(Efield x f0 ty)) a.
   exploit safe_inv. eexact SAFE0. eauto. simpl.
   intros [b [ofs [EQ TY]]]. subst v. destruct (typeof a) eqn:?; try contradiction.
-  destruct TY as (co & delta & CE & OFS). exists b; exists (Int.add ofs (Int.repr delta)); econstructor; eauto.
+  destruct TY as (co & delta & CE & OFS). exists b; exists (Ptrofs.add ofs (Ptrofs.repr delta)); econstructor; eauto.
   destruct TY as (co & CE).  exists b; exists ofs; econstructor; eauto.
 (* valof *)
   destruct (andb_prop _ _ S) as [S1 S2]. clear S. rewrite negb_true_iff in S2.

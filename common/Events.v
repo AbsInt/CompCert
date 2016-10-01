@@ -59,12 +59,12 @@ Inductive eventval: Type :=
   | EVlong: int64 -> eventval
   | EVfloat: float -> eventval
   | EVsingle: float32 -> eventval
-  | EVptr_global: ident -> int -> eventval.
+  | EVptr_global: ident -> ptrofs -> eventval.
 
 Inductive event: Type :=
   | Event_syscall: string -> list eventval -> eventval -> event
-  | Event_vload: memory_chunk -> ident -> int -> eventval -> event
-  | Event_vstore: memory_chunk -> ident -> int -> eventval -> event
+  | Event_vload: memory_chunk -> ident -> ptrofs -> eventval -> event
+  | Event_vstore: memory_chunk -> ident -> ptrofs -> eventval -> event
   | Event_annot: string -> list eventval -> event.
 
 (** The dynamic semantics for programs collect traces of events.
@@ -278,7 +278,7 @@ Inductive eventval_match: eventval -> typ -> val -> Prop :=
   | ev_match_ptr: forall id b ofs,
       Senv.public_symbol ge id = true ->
       Senv.find_symbol ge id = Some b ->
-      eventval_match (EVptr_global id ofs) Tint (Vptr b ofs).
+      eventval_match (EVptr_global id ofs) Tptr (Vptr b ofs).
 
 Inductive eventval_list_match: list eventval -> list typ -> list val -> Prop :=
   | evl_match_nil:
@@ -295,7 +295,7 @@ Lemma eventval_match_type:
   forall ev ty v,
   eventval_match ev ty v -> Val.has_type v ty.
 Proof.
-  intros. inv H; simpl; auto.
+  intros. inv H; simpl; auto. unfold Tptr; destruct Archi.ptr64; auto.
 Qed.
 
 Lemma eventval_list_match_length:
@@ -359,7 +359,7 @@ Definition eventval_type (ev: eventval) : typ :=
   | EVlong _ => Tlong
   | EVfloat _ => Tfloat
   | EVsingle _ => Tsingle
-  | EVptr_global id ofs => Tint
+  | EVptr_global id ofs => Tptr
   end.
 
 Lemma eventval_match_receptive:
@@ -368,15 +368,23 @@ Lemma eventval_match_receptive:
   eventval_valid ev1 -> eventval_valid ev2 -> eventval_type ev1 = eventval_type ev2 ->
   exists v2, eventval_match ev2 ty v2.
 Proof.
-  intros. inv H; destruct ev2; simpl in H2; try discriminate.
+  intros. unfold eventval_type, Tptr in H2. remember Archi.ptr64 as ptr64.
+  inversion H; subst ev1 ty v1; clear H; destruct ev2; simpl in H2; inv H2.
 - exists (Vint i0); constructor.
 - simpl in H1; exploit Senv.public_symbol_exists; eauto. intros [b FS].
-  exists (Vptr b i1); constructor; auto.
+  exists (Vptr b i1); rewrite H3. constructor; auto.
 - exists (Vlong i0); constructor.
+- simpl in H1; exploit Senv.public_symbol_exists; eauto. intros [b FS].
+  exists (Vptr b i1); rewrite H3; constructor; auto.
 - exists (Vfloat f0); constructor.
+- destruct Archi.ptr64; discriminate.
 - exists (Vsingle f0); constructor; auto.
-- exists (Vint i); constructor.
-- simpl in H1. exploit Senv.public_symbol_exists. eexact H1. intros [b' FS].
+- destruct Archi.ptr64; discriminate.
+- exists (Vint i); unfold Tptr; rewrite H5; constructor.
+- exists (Vlong i); unfold Tptr; rewrite H5; constructor.
+- destruct Archi.ptr64; discriminate.
+- destruct Archi.ptr64; discriminate.
+- exploit Senv.public_symbol_exists. eexact H1. intros [b' FS].
   exists (Vptr b' i0); constructor; auto.
 Qed.
 
@@ -458,7 +466,7 @@ Lemma eventval_match_inject:
 Proof.
   intros. inv H; inv H0; try constructor; auto.
   destruct symb_inj as (A & B & C & D). exploit C; eauto. intros [b3 [EQ FS]]. rewrite H4 in EQ; inv EQ.
-  rewrite Int.add_zero. constructor; auto. rewrite A; auto.
+  rewrite Ptrofs.add_zero. constructor; auto. rewrite A; auto.
 Qed.
 
 Lemma eventval_match_inject_2:
@@ -469,7 +477,7 @@ Proof.
   intros. inv H; try (econstructor; split; eauto; constructor; fail).
   destruct symb_inj as (A & B & C & D). exploit C; eauto. intros [b2 [EQ FS]].
   exists (Vptr b2 ofs); split. econstructor; eauto.
-  econstructor; eauto. rewrite Int.add_zero; auto.
+  econstructor; eauto. rewrite Ptrofs.add_zero; auto.
 Qed.
 
 Lemma eventval_list_match_inject:
@@ -546,7 +554,7 @@ Fixpoint output_trace (t: trace) : Prop :=
 (** * Semantics of volatile memory accesses *)
 
 Inductive volatile_load (ge: Senv.t):
-                   memory_chunk -> mem -> block -> int -> trace -> val -> Prop :=
+                   memory_chunk -> mem -> block -> ptrofs -> trace -> val -> Prop :=
   | volatile_load_vol: forall chunk m b ofs id ev v,
       Senv.block_is_volatile ge b = true ->
       Senv.find_symbol ge id = Some b ->
@@ -556,11 +564,11 @@ Inductive volatile_load (ge: Senv.t):
                       (Val.load_result chunk v)
   | volatile_load_nonvol: forall chunk m b ofs v,
       Senv.block_is_volatile ge b = false ->
-      Mem.load chunk m b (Int.unsigned ofs) = Some v ->
+      Mem.load chunk m b (Ptrofs.unsigned ofs) = Some v ->
       volatile_load ge chunk m b ofs E0 v.
 
 Inductive volatile_store (ge: Senv.t):
-                  memory_chunk -> mem -> block -> int -> val -> trace -> mem -> Prop :=
+                  memory_chunk -> mem -> block -> ptrofs -> val -> trace -> mem -> Prop :=
   | volatile_store_vol: forall chunk m b ofs id ev v,
       Senv.block_is_volatile ge b = true ->
       Senv.find_symbol ge id = Some b ->
@@ -570,7 +578,7 @@ Inductive volatile_store (ge: Senv.t):
                       m
   | volatile_store_nonvol: forall chunk m b ofs v m',
       Senv.block_is_volatile ge b = false ->
-      Mem.store chunk m b (Int.unsigned ofs) v = Some m' ->
+      Mem.store chunk m b (Ptrofs.unsigned ofs) v = Some m' ->
       volatile_store ge chunk m b ofs v E0 m'.
 
 (** * Semantics of external functions *)
@@ -737,7 +745,7 @@ Proof.
 - (* volatile load *)
   inv VI. exploit B; eauto. intros [U V]. subst delta.
   exploit eventval_match_inject_2; eauto. intros (v2 & X & Y).
-  rewrite Int.add_zero. exists (Val.load_result chunk v2); split.
+  rewrite Ptrofs.add_zero. exists (Val.load_result chunk v2); split.
   constructor; auto.
   erewrite D; eauto.
   apply Val.load_result_inject. auto.
@@ -762,7 +770,7 @@ Qed.
 Lemma volatile_load_ok:
   forall chunk,
   extcall_properties (volatile_load_sem chunk)
-                     (mksignature (Tint :: nil) (Some (type_of_chunk chunk)) cc_default).
+                     (mksignature (Tptr :: nil) (Some (type_of_chunk chunk)) cc_default).
 Proof.
   intros; constructor; intros.
 (* well typed *)
@@ -880,7 +888,7 @@ Proof.
   inv VS.
 - (* volatile store *)
   inv AI. exploit Q; eauto. intros [A B]. subst delta.
-  rewrite Int.add_zero. exists m1'; split.
+  rewrite Ptrofs.add_zero. exists m1'; split.
   constructor; auto. erewrite S; eauto.
   eapply eventval_match_inject; eauto. apply Val.load_result_inject. auto.
   intuition auto with mem.
@@ -894,7 +902,7 @@ Proof.
   unfold loc_unmapped; intros. inv AI; congruence.
 + eapply Mem.store_unchanged_on; eauto.
   unfold loc_out_of_reach; intros. red; intros. simpl in A.
-  assert (EQ: Int.unsigned (Int.add ofs (Int.repr delta)) = Int.unsigned ofs + delta)
+  assert (EQ: Ptrofs.unsigned (Ptrofs.add ofs (Ptrofs.repr delta)) = Ptrofs.unsigned ofs + delta)
   by (eapply Mem.address_inject; eauto with mem).
   rewrite EQ in *.
   eelim H3; eauto.
@@ -913,7 +921,7 @@ Qed.
 Lemma volatile_store_ok:
   forall chunk,
   extcall_properties (volatile_store_sem chunk)
-                     (mksignature (Tint :: type_of_chunk chunk :: nil) None cc_default).
+                     (mksignature (Tptr :: type_of_chunk chunk :: nil) None cc_default).
 Proof.
   intros; constructor; intros.
 (* well typed *)
@@ -951,19 +959,19 @@ Qed.
 
 Inductive extcall_malloc_sem (ge: Senv.t):
               list val -> mem -> trace -> val -> mem -> Prop :=
-  | extcall_malloc_sem_intro: forall n m m' b m'',
-      Mem.alloc m (-4) (Int.unsigned n) = (m', b) ->
-      Mem.store Mint32 m' b (-4) (Vint n) = Some m'' ->
-      extcall_malloc_sem ge (Vint n :: nil) m E0 (Vptr b Int.zero) m''.
+  | extcall_malloc_sem_intro: forall sz m m' b m'',
+      Mem.alloc m (- size_chunk Mptr) (Ptrofs.unsigned sz) = (m', b) ->
+      Mem.store Mptr m' b (- size_chunk Mptr) (Vptrofs sz) = Some m'' ->
+      extcall_malloc_sem ge (Vptrofs sz :: nil) m E0 (Vptr b Ptrofs.zero) m''.
 
 Lemma extcall_malloc_ok:
   extcall_properties extcall_malloc_sem
-                     (mksignature (Tint :: nil) (Some Tint) cc_default).
+                     (mksignature (Tptr :: nil) (Some Tptr) cc_default).
 Proof.
   assert (UNCHANGED:
-    forall (P: block -> Z -> Prop) m n m' b m'',
-    Mem.alloc m (-4) (Int.unsigned n) = (m', b) ->
-    Mem.store Mint32 m' b (-4) (Vint n) = Some m'' ->
+    forall (P: block -> Z -> Prop) m lo hi v m' b m'',
+    Mem.alloc m lo hi = (m', b) ->
+    Mem.store Mptr m' b lo v = Some m'' ->
     Mem.unchanged_on P m m'').
   {
     intros.
@@ -975,7 +983,7 @@ Proof.
   }
   constructor; intros.
 (* well typed *)
-- inv H. unfold proj_sig_res; simpl. auto.
+- inv H. unfold proj_sig_res, Tptr; simpl. destruct Archi.ptr64; auto.
 (* symbols preserved *)
 - inv H0; econstructor; eauto.
 (* valid block *)
@@ -987,23 +995,28 @@ Proof.
 (* readonly *)
 - inv H. eapply UNCHANGED; eauto.
 (* mem extends *)
-- inv H. inv H1. inv H5. inv H7.
+- inv H. inv H1. inv H7.
+  assert (SZ: v2 = Vptrofs sz).
+  { unfold Vptrofs in *. destruct Archi.ptr64; inv H5; auto. } 
+  subst v2.
   exploit Mem.alloc_extends; eauto. apply Zle_refl. apply Zle_refl.
   intros [m3' [A B]].
-  exploit Mem.store_within_extends. eexact B. eauto.
-  instantiate (1 := Vint n). auto.
+  exploit Mem.store_within_extends. eexact B. eauto. eauto.
   intros [m2' [C D]].
-  exists (Vptr b Int.zero); exists m2'; intuition.
+  exists (Vptr b Ptrofs.zero); exists m2'; intuition.
   econstructor; eauto.
   eapply UNCHANGED; eauto.
 (* mem injects *)
-- inv H0. inv H2. inv H6. inv H8.
+- inv H0. inv H2. inv H8.
+  assert (SZ: v' = Vptrofs sz).
+  { unfold Vptrofs in *. destruct Archi.ptr64; inv H6; auto. } 
+  subst v'.
   exploit Mem.alloc_parallel_inject; eauto. apply Zle_refl. apply Zle_refl.
   intros [f' [m3' [b' [ALLOC [A [B [C D]]]]]]].
   exploit Mem.store_mapped_inject. eexact A. eauto. eauto.
-  instantiate (1 := Vint n). auto.
-  intros [m2' [E G]].
-  exists f'; exists (Vptr b' Int.zero); exists m2'; intuition.
+  instantiate (1 := Vptrofs sz). unfold Vptrofs; destruct Archi.ptr64; constructor.
+  rewrite Zplus_0_r. intros [m2' [E G]].
+  exists f'; exists (Vptr b' Ptrofs.zero); exists m2'; intuition auto.
   econstructor; eauto.
   econstructor. eauto. auto.
   eapply UNCHANGED; eauto.
@@ -1017,7 +1030,14 @@ Proof.
 - assert (t1 = t2). inv H; inv H0; auto. subst t2.
   exists vres1; exists m1; auto.
 (* determ *)
-- inv H; inv H0. split. constructor. intuition congruence.
+- inv H. simple inversion H0.
+  assert (EQ2: sz0 = sz).
+  { unfold Vptrofs in H4; destruct Archi.ptr64 eqn:SF.
+    rewrite <- (Ptrofs.of_int64_to_int64 SF sz0), <- (Ptrofs.of_int64_to_int64 SF sz). congruence.
+    rewrite <- (Ptrofs.of_int_to_int SF sz0), <- (Ptrofs.of_int_to_int SF sz). congruence.
+  }
+  subst. 
+  split. constructor. intuition congruence.
 Qed.
 
 (** ** Semantics of dynamic memory deallocation (free) *)
@@ -1025,14 +1045,14 @@ Qed.
 Inductive extcall_free_sem (ge: Senv.t):
               list val -> mem -> trace -> val -> mem -> Prop :=
   | extcall_free_sem_intro: forall b lo sz m m',
-      Mem.load Mint32 m b (Int.unsigned lo - 4) = Some (Vint sz) ->
-      Int.unsigned sz > 0 ->
-      Mem.free m b (Int.unsigned lo - 4) (Int.unsigned lo + Int.unsigned sz) = Some m' ->
+      Mem.load Mptr m b (Ptrofs.unsigned lo - size_chunk Mptr) = Some (Vptrofs sz) ->
+      Ptrofs.unsigned sz > 0 ->
+      Mem.free m b (Ptrofs.unsigned lo - size_chunk Mptr) (Ptrofs.unsigned lo + Ptrofs.unsigned sz) = Some m' ->
       extcall_free_sem ge (Vptr b lo :: nil) m E0 Vundef m'.
 
 Lemma extcall_free_ok:
   extcall_properties extcall_free_sem
-                     (mksignature (Tint :: nil) None cc_default).
+                     (mksignature (Tptr :: nil) None cc_default).
 Proof.
   constructor; intros.
 (* well typed *)
@@ -1050,7 +1070,10 @@ Proof.
   eapply Mem.free_range_perm; eauto.
 (* mem extends *)
 - inv H. inv H1. inv H8. inv H6.
-  exploit Mem.load_extends; eauto. intros [vsz [A B]]. inv B.
+  exploit Mem.load_extends; eauto. intros [v' [A B]].
+  assert (v' = Vptrofs sz).
+  { unfold Vptrofs in *; destruct Archi.ptr64; inv B; auto. }
+  subst v'.
   exploit Mem.free_parallel_extends; eauto. intros [m2' [C D]].
   exists Vundef; exists m2'; intuition.
   econstructor; eauto.
@@ -1062,26 +1085,30 @@ Proof.
   tauto.
 (* mem inject *)
 - inv H0. inv H2. inv H7. inv H9.
-  exploit Mem.load_inject; eauto. intros [vsz [A B]]. inv B.
-  assert (Mem.range_perm m1 b (Int.unsigned lo - 4) (Int.unsigned lo + Int.unsigned sz) Cur Freeable).
+  exploit Mem.load_inject; eauto. intros [v' [A B]].
+  assert (v' = Vptrofs sz).
+  { unfold Vptrofs in *; destruct Archi.ptr64; inv B; auto. }
+  subst v'.
+  assert (P: Mem.range_perm m1 b (Ptrofs.unsigned lo - size_chunk Mptr) (Ptrofs.unsigned lo + Ptrofs.unsigned sz) Cur Freeable).
     eapply Mem.free_range_perm; eauto.
   exploit Mem.address_inject; eauto.
     apply Mem.perm_implies with Freeable; auto with mem.
-    apply H0. instantiate (1 := lo). omega.
+    apply P. instantiate (1 := lo). 
+    generalize (size_chunk_pos Mptr); omega.
   intro EQ.
   exploit Mem.free_parallel_inject; eauto. intros (m2' & C & D).
   exists f, Vundef, m2'; split.
   apply extcall_free_sem_intro with (sz := sz) (m' := m2').
     rewrite EQ. rewrite <- A. f_equal. omega.
-    auto.
+    auto. auto.
     rewrite ! EQ. rewrite <- C. f_equal; omega.
   split. auto.
   split. auto.
   split. eapply Mem.free_unchanged_on; eauto. unfold loc_unmapped. intros; congruence.
   split. eapply Mem.free_unchanged_on; eauto. unfold loc_out_of_reach.
-    intros. red; intros. eelim H7; eauto.
+    intros. red; intros. eelim H2; eauto.
     apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
-    apply H0. omega.
+    apply P. omega.
   split. auto.
   red; intros. congruence.
 (* trace length *)
@@ -1090,7 +1117,15 @@ Proof.
 - assert (t1 = t2). inv H; inv H0; auto. subst t2.
   exists vres1; exists m1; auto.
 (* determ *)
-- inv H; inv H0. split. constructor. intuition congruence.
+- inv H; inv H0.
+  assert (EQ1: Vptrofs sz0 = Vptrofs sz) by congruence.
+  assert (EQ2: sz0 = sz).
+  { unfold Vptrofs in EQ1; destruct Archi.ptr64 eqn:SF.
+    rewrite <- (Ptrofs.of_int64_to_int64 SF sz0), <- (Ptrofs.of_int64_to_int64 SF sz). congruence.
+    rewrite <- (Ptrofs.of_int_to_int SF sz0), <- (Ptrofs.of_int_to_int SF sz). congruence.
+  }
+  subst sz0.
+  split. constructor. intuition congruence.
 Qed.
 
 (** ** Semantics of [memcpy] operations. *)
@@ -1099,19 +1134,19 @@ Inductive extcall_memcpy_sem (sz al: Z) (ge: Senv.t):
                         list val -> mem -> trace -> val -> mem -> Prop :=
   | extcall_memcpy_sem_intro: forall bdst odst bsrc osrc m bytes m',
       al = 1 \/ al = 2 \/ al = 4 \/ al = 8 -> sz >= 0 -> (al | sz) ->
-      (sz > 0 -> (al | Int.unsigned osrc)) ->
-      (sz > 0 -> (al | Int.unsigned odst)) ->
-      bsrc <> bdst \/ Int.unsigned osrc = Int.unsigned odst
-                   \/ Int.unsigned osrc + sz <= Int.unsigned odst
-                   \/ Int.unsigned odst + sz <= Int.unsigned osrc ->
-      Mem.loadbytes m bsrc (Int.unsigned osrc) sz = Some bytes ->
-      Mem.storebytes m bdst (Int.unsigned odst) bytes = Some m' ->
+      (sz > 0 -> (al | Ptrofs.unsigned osrc)) ->
+      (sz > 0 -> (al | Ptrofs.unsigned odst)) ->
+      bsrc <> bdst \/ Ptrofs.unsigned osrc = Ptrofs.unsigned odst
+                   \/ Ptrofs.unsigned osrc + sz <= Ptrofs.unsigned odst
+                   \/ Ptrofs.unsigned odst + sz <= Ptrofs.unsigned osrc ->
+      Mem.loadbytes m bsrc (Ptrofs.unsigned osrc) sz = Some bytes ->
+      Mem.storebytes m bdst (Ptrofs.unsigned odst) bytes = Some m' ->
       extcall_memcpy_sem sz al ge (Vptr bdst odst :: Vptr bsrc osrc :: nil) m E0 Vundef m'.
 
 Lemma extcall_memcpy_ok:
   forall sz al,
   extcall_properties (extcall_memcpy_sem sz al)
-                     (mksignature (Tint :: Tint :: nil) None cc_default).
+                     (mksignature (Tptr :: Tptr :: nil) None cc_default).
 Proof.
   intros. constructor.
 - (* return type *)
@@ -1147,9 +1182,9 @@ Proof.
   destruct (zeq sz 0).
 + (* special case sz = 0 *)
   assert (bytes = nil).
-  { exploit (Mem.loadbytes_empty m1 bsrc (Int.unsigned osrc) sz). omega. congruence. }
+  { exploit (Mem.loadbytes_empty m1 bsrc (Ptrofs.unsigned osrc) sz). omega. congruence. }
   subst.
-  destruct (Mem.range_perm_storebytes m1' b0 (Int.unsigned (Int.add odst (Int.repr delta0))) nil)
+  destruct (Mem.range_perm_storebytes m1' b0 (Ptrofs.unsigned (Ptrofs.add odst (Ptrofs.repr delta0))) nil)
   as [m2' SB].
   simpl. red; intros; omegaContradiction.
   exists f, Vundef, m2'.
@@ -1168,15 +1203,15 @@ Proof.
   red; intros; congruence.
 + (* general case sz > 0 *)
   exploit Mem.loadbytes_length; eauto. intros LEN.
-  assert (RPSRC: Mem.range_perm m1 bsrc (Int.unsigned osrc) (Int.unsigned osrc + sz) Cur Nonempty).
+  assert (RPSRC: Mem.range_perm m1 bsrc (Ptrofs.unsigned osrc) (Ptrofs.unsigned osrc + sz) Cur Nonempty).
     eapply Mem.range_perm_implies. eapply Mem.loadbytes_range_perm; eauto. auto with mem.
-  assert (RPDST: Mem.range_perm m1 bdst (Int.unsigned odst) (Int.unsigned odst + sz) Cur Nonempty).
+  assert (RPDST: Mem.range_perm m1 bdst (Ptrofs.unsigned odst) (Ptrofs.unsigned odst + sz) Cur Nonempty).
     replace sz with (Z_of_nat (length bytes)).
     eapply Mem.range_perm_implies. eapply Mem.storebytes_range_perm; eauto. auto with mem.
     rewrite LEN. apply nat_of_Z_eq. omega.
-  assert (PSRC: Mem.perm m1 bsrc (Int.unsigned osrc) Cur Nonempty).
+  assert (PSRC: Mem.perm m1 bsrc (Ptrofs.unsigned osrc) Cur Nonempty).
     apply RPSRC. omega.
-  assert (PDST: Mem.perm m1 bdst (Int.unsigned odst) Cur Nonempty).
+  assert (PDST: Mem.perm m1 bdst (Ptrofs.unsigned odst) Cur Nonempty).
     apply RPDST. omega.
   exploit Mem.address_inject.  eauto. eexact PSRC. eauto. intros EQ1.
   exploit Mem.address_inject.  eauto. eexact PDST. eauto. intros EQ2.
@@ -1509,10 +1544,10 @@ Inductive eval_builtin_arg: builtin_arg A -> val -> Prop :=
   | eval_BA_single: forall n,
       eval_builtin_arg (BA_single n) (Vsingle n)
   | eval_BA_loadstack: forall chunk ofs v,
-      Mem.loadv chunk m (Val.add sp (Vint ofs)) = Some v ->
+      Mem.loadv chunk m (Val.offset_ptr sp ofs) = Some v ->
       eval_builtin_arg (BA_loadstack chunk ofs) v
   | eval_BA_addrstack: forall ofs,
-      eval_builtin_arg (BA_addrstack ofs) (Val.add sp (Vint ofs))
+      eval_builtin_arg (BA_addrstack ofs) (Val.offset_ptr sp ofs)
   | eval_BA_loadglobal: forall chunk id ofs v,
       Mem.loadv chunk m (Senv.symbol_address ge id ofs) = Some v ->
       eval_builtin_arg (BA_loadglobal chunk id ofs) v

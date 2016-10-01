@@ -192,16 +192,16 @@ Definition sregs (ctx: context) (rl: list reg) := List.map (sreg ctx) rl.
 Definition sros (ctx: context) (ros: reg + ident) := sum_left_map (sreg ctx) ros.
 
 Definition sop (ctx: context) (op: operation) :=
-  shift_stack_operation (Int.repr ctx.(dstk)) op.
+  shift_stack_operation ctx.(dstk) op.
 
 Definition saddr (ctx: context) (addr: addressing) :=
-  shift_stack_addressing (Int.repr ctx.(dstk)) addr.
+  shift_stack_addressing ctx.(dstk) addr.
 
 Fixpoint sbuiltinarg (ctx: context) (a: builtin_arg reg) : builtin_arg reg :=
   match a with
   | BA x => BA (sreg ctx x)
-  | BA_loadstack chunk ofs => BA_loadstack chunk (Int.add ofs (Int.repr ctx.(dstk)))
-  | BA_addrstack ofs => BA_addrstack (Int.add ofs (Int.repr ctx.(dstk)))
+  | BA_loadstack chunk ofs => BA_loadstack chunk (Ptrofs.add ofs (Ptrofs.repr ctx.(dstk)))
+  | BA_addrstack ofs => BA_addrstack (Ptrofs.add ofs (Ptrofs.repr ctx.(dstk)))
   | BA_splitlong hi lo => BA_splitlong (sbuiltinarg ctx hi) (sbuiltinarg ctx lo)
   | _ => a
   end.
@@ -437,13 +437,13 @@ Definition expand_function (fenv: funenv) (f: function): mon context :=
 Local Open Scope string_scope.
 
 (** Inlining can increase the size of the function's stack block.  We must
-  make sure that the new size does not exceed [Int.max_unsigned], otherwise
+  make sure that the new size does not exceed [Ptrofs.max_unsigned], otherwise
   address computations within the stack would overflow and produce incorrect
   results. *)
 
 Definition transf_function (fenv: funenv) (f: function) : Errors.res function :=
   let '(R ctx s _) := expand_function fenv f initstate in
-  if zlt s.(st_stksize) Int.max_unsigned then
+  if zlt s.(st_stksize) Ptrofs.max_unsigned then
     OK (mkfunction f.(fn_sig)
                    (sregs ctx f.(fn_params))
                    s.(st_stksize)
