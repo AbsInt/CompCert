@@ -230,6 +230,45 @@ Proof.
   unfold compare_ints. Simplifs.
 Qed.
 
+(** Smart constructor for [shrxl] *)
+
+Lemma mk_shrxlimm_correct:
+  forall n k c (rs1: regset) v m,
+  mk_shrxlimm n k = OK c ->
+  Val.shrxl (rs1#RAX) (Vint n) = Some v ->
+  exists rs2,
+     exec_straight ge fn c rs1 m k rs2 m
+  /\ rs2#RAX = v
+  /\ forall r, data_preg r = true -> r <> RAX -> r <> RDX -> rs2#r = rs1#r.
+Proof.
+  unfold mk_shrxlimm; intros. exploit Val.shrxl_shrl_2; eauto. intros EQ.
+  destruct (Int.eq n Int.zero); inv H.
+- econstructor; split. apply exec_straight_one. simpl; reflexivity. auto.
+  split. Simplifs. intros; Simplifs.
+- set (v1 := Val.shrl (rs1 RAX) (Vint (Int.repr 63))) in *.
+  set (v2 := Val.shrlu v1 (Vint (Int.sub (Int.repr 64) n))) in *.
+  set (v3 := Val.addl (rs1 RAX) v2) in *.
+  set (v4 := Val.shrl v3 (Vint n)) in *.
+  set (rs2 := nextinstr_nf (rs1#RDX <- v1)).
+  set (rs3 := nextinstr_nf (rs2#RDX <- v2)).
+  set (rs4 := nextinstr (rs3#RAX <- v3)).
+  set (rs5 := nextinstr_nf (rs4#RAX <- v4)).
+  assert (X: forall v1 v2,
+             Val.addl v1 (Val.addl v2 (Vlong Int64.zero)) = Val.addl v1 v2).
+  { intros. destruct v0; simpl; auto; destruct v5; simpl; auto.
+    rewrite Int64.add_zero; auto.
+    destruct Archi.ptr64; auto. rewrite Ptrofs.add_zero; auto.
+    destruct Archi.ptr64; auto. rewrite Int64.add_zero; auto.
+    destruct Archi.ptr64; auto. }
+  exists rs5; split.
+  eapply exec_straight_trans with (rs2 := rs3).
+  eapply exec_straight_two with (rs2 := rs2); reflexivity.
+  eapply exec_straight_two with (rs2 := rs4).
+  simpl. rewrite X. reflexivity. reflexivity. reflexivity. reflexivity.
+  split. unfold rs5; Simplifs.
+  intros. unfold rs5; Simplifs. unfold rs4; Simplifs. unfold rs3; Simplifs. unfold rs2; Simplifs.
+Qed.
+
 (** Smart constructor for integer conversions *)
 
 Lemma mk_intconv_correct:
@@ -1321,6 +1360,8 @@ Transparent destroyed_by_op.
   rewrite D. reflexivity. auto. auto.
   split. change (Vlong r = v). congruence.
   simpl; intros. destruct H2. unfold rs1; Simplifs.
+(* shrxlimm *)
+  apply SAME. eapply mk_shrxlimm_correct; eauto.
 (* leal *)
   exploit transl_addressing_mode_64_correct; eauto. intros EA.
   generalize (normalize_addrmode_64_correct x rs). destruct (normalize_addrmode_64 x) as [am' [delta|]]; intros EV.

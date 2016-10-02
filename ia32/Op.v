@@ -135,6 +135,7 @@ Inductive operation : Type :=
   | Oshllimm (n: int)        (**r [rd = r1 << n] *)
   | Oshrl                    (**r [rd = r1 >> r2] (signed) *)
   | Oshrlimm (n: int)        (**r [rd = r1 >> n] (signed) *)
+  | Oshrxlimm (n: int)       (**r [rd = r1 / 2^n] (signed) *)
   | Oshrlu                   (**r [rd = r1 >> r2] (unsigned) *)
   | Oshrluimm (n: int)       (**r [rd = r1 >> n] (unsigned) *)
   | Ororlimm (n: int)        (**r rotate right immediate *)
@@ -353,6 +354,7 @@ Definition eval_operation
   | Oshllimm n, v1::nil => Some (Val.shll v1 (Vint n))
   | Oshrl, v1::v2::nil => Some (Val.shrl v1 v2)
   | Oshrlimm n, v1::nil => Some (Val.shrl v1 (Vint n))
+  | Oshrxlimm n, v1::nil => Val.shrxl v1 (Vint n)
   | Oshrlu, v1::v2::nil => Some (Val.shrlu v1 v2)
   | Oshrluimm n, v1::nil => Some (Val.shrlu v1 (Vint n))
   | Ororlimm n, v1::nil => Some (Val.rorl v1 (Vint n))
@@ -521,6 +523,7 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Oshllimm _ => (Tlong :: nil, Tlong)
   | Oshrl => (Tlong :: Tint :: nil, Tlong)
   | Oshrlimm _ => (Tlong :: nil, Tlong)
+  | Oshrxlimm _ => (Tlong :: nil, Tlong)
   | Oshrlu => (Tlong :: Tint :: nil, Tlong)
   | Oshrluimm _ => (Tlong :: nil, Tlong)
   | Ororlimm _ => (Tlong :: nil, Tlong)
@@ -680,6 +683,7 @@ Proof with (try exact I).
   destruct v0; simpl... destruct (Int.ltu n Int64.iwordsize')...
   destruct v0; destruct v1; simpl... destruct (Int.ltu i0 Int64.iwordsize')...
   destruct v0; simpl... destruct (Int.ltu n Int64.iwordsize')...
+  destruct v0; inv H0. destruct (Int.ltu n (Int.repr 63)); inv H2...
   destruct v0; destruct v1; simpl... destruct (Int.ltu i0 Int64.iwordsize')...
   destruct v0; simpl... destruct (Int.ltu n Int64.iwordsize')...
   destruct v0...
@@ -1225,6 +1229,7 @@ Proof.
   inv H4; simpl; auto. destruct (Int.ltu n Int64.iwordsize'); auto.
   inv H4; inv H2; simpl; auto. destruct (Int.ltu i0 Int64.iwordsize'); auto.
   inv H4; simpl; auto. destruct (Int.ltu n Int64.iwordsize'); auto.
+  inv H4; simpl in H1; try discriminate. simpl. destruct (Int.ltu n (Int.repr 63)); inv H1. TrivialExists. 
   inv H4; inv H2; simpl; auto. destruct (Int.ltu i0 Int64.iwordsize'); auto.
   inv H4; simpl; auto. destruct (Int.ltu n Int64.iwordsize'); auto.
   inv H4; simpl; auto.

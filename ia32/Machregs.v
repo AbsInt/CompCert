@@ -137,6 +137,7 @@ Definition destroyed_by_op (op: operation): list mreg :=
   | Odivlu => AX :: DX :: nil
   | Omodl => AX :: DX :: nil
   | Omodlu => AX :: DX :: nil
+  | Oshrxlimm _ => DX :: nil
   | Ocmp _ => AX :: CX :: nil
   | _ => nil
   end.
@@ -217,6 +218,7 @@ Definition mregs_for_operation (op: operation): list (option mreg) * option mreg
   | Oshll => (None :: Some CX :: nil, None)
   | Oshrl => (None :: Some CX :: nil, None)
   | Oshrlu => (None :: Some CX :: nil, None)
+  | Oshrxlimm _ => (Some AX :: nil, Some AX)
   | _ => (nil, None)
   end.
 
@@ -313,6 +315,7 @@ Definition two_address_op (op: operation) : bool :=
   | Oshllimm _ => true
   | Oshrl => true
   | Oshrlimm _ => true
+  | Oshrxlimm _ => false
   | Oshrlu => true
   | Oshrluimm _ => true
   | Ororlimm _ => true

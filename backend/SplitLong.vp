@@ -255,38 +255,17 @@ Definition mull (e1 e2: expr) :=
   | _, _ => mull_base e1 e2
   end.
 
-Definition binop_long (id: ident) (sem: int64 -> int64 -> int64) (e1 e2: expr) :=
-  match is_longconst e1, is_longconst e2 with
-  | Some n1, Some n2 => longconst (sem n1 n2)
-  | _, _ => Eexternal id sig_ll_l (e1 ::: e2 ::: Enil)
-  end.
+Definition shrxlimm (e: expr) (n: int) :=
+  if Int.eq n Int.zero then e else
+    Elet e (shrlimm (addl (Eletvar O)
+                          (shrluimm (shrlimm (Eletvar O) (Int.repr 63))
+                                    (Int.sub (Int.repr 64) n)))
+                    n).
 
-Definition divl e1 e2 := binop_long i64_sdiv Int64.divs e1 e2.
-Definition modl e1 e2 := binop_long i64_smod Int64.mods e1 e2.
-
-Definition divlu (e1 e2: expr) :=
-  let default := Eexternal i64_udiv sig_ll_l (e1 ::: e2 ::: Enil) in
-  match is_longconst e1, is_longconst e2 with
-  | Some n1, Some n2 => longconst (Int64.divu n1 n2)
-  | _, Some n2 =>
-      match Int64.is_power2' n2 with
-      | Some l => shrluimm e1 l
-      | None   => default
-      end
-  | _, _ => default
-  end.
-
-Definition modlu (e1 e2: expr) :=
-  let default := Eexternal i64_umod sig_ll_l (e1 ::: e2 ::: Enil) in
-  match is_longconst e1, is_longconst e2 with
-  | Some n1, Some n2 => longconst (Int64.modu n1 n2)
-  | _, Some n2 =>
-      match Int64.is_power2 n2 with
-      | Some l => andl e1 (longconst (Int64.sub n2 Int64.one))
-      | None   => default
-      end
-  | _, _ => default
-  end.
+Definition divlu_base (e1 e2: expr) := Eexternal i64_udiv sig_ll_l (e1 ::: e2 ::: Enil).
+Definition modlu_base (e1 e2: expr) := Eexternal i64_umod sig_ll_l (e1 ::: e2 ::: Enil).
+Definition divls_base (e1 e2: expr) := Eexternal i64_sdiv sig_ll_l (e1 ::: e2 ::: Enil).
+Definition modls_base (e1 e2: expr) := Eexternal i64_smod sig_ll_l (e1 ::: e2 ::: Enil).
 
 Definition cmpl_eq_zero (e: expr) :=
   splitlong e (fun h l => comp Ceq (or h l) (Eop (Ointconst Int.zero) Enil)).

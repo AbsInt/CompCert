@@ -713,6 +713,15 @@ Definition shrlu (v1 v2: val): val :=
   | _, _ => Vundef
   end.
 
+Definition shrxl (v1 v2: val): option val :=
+  match v1, v2 with
+  | Vlong n1, Vint n2 =>
+     if Int.ltu n2 (Int.repr 63)
+     then Some(Vlong(Int64.shrx' n1 n2))
+     else None
+  | _, _ => None
+  end.
+
 Definition roll (v1 v2: val): val :=
   match v1, v2 with
   | Vlong n1, Vint n2 => Vlong(Int64.rol n1 (Int64.repr (Int.unsigned n2)))
@@ -1240,6 +1249,32 @@ Proof.
   rewrite Int.shrx_shr; auto. destruct (Int.lt i Int.zero); simpl; rewrite H0; auto.
 Qed.
 
+Theorem shrx_shr_2:
+  forall n x z,
+  shrx x (Vint n) = Some z ->
+  z = (if Int.eq n Int.zero then x else
+         shr (add x (shru (shr x (Vint (Int.repr 31)))
+                    (Vint (Int.sub (Int.repr 32) n))))
+             (Vint n)).
+Proof.
+  intros. destruct x; simpl in H; try discriminate.
+  destruct (Int.ltu n (Int.repr 31)) eqn:LT; inv H.
+  exploit Int.ltu_inv; eauto. change (Int.unsigned (Int.repr 31)) with 31; intros LT'.
+  predSpec Int.eq Int.eq_spec n Int.zero.
+- subst n. unfold Int.shrx. rewrite Int.shl_zero. unfold Int.divs. change (Int.signed Int.one) with 1.
+  rewrite Z.quot_1_r. rewrite Int.repr_signed; auto.
+- simpl. change (Int.ltu (Int.repr 31) Int.iwordsize) with true. simpl.
+  replace (Int.ltu (Int.sub (Int.repr 32) n) Int.iwordsize) with true. simpl.
+  replace (Int.ltu n Int.iwordsize) with true.
+  f_equal; apply Int.shrx_shr_2; assumption.
+  symmetry; apply zlt_true. change (Int.unsigned n < 32); omega.
+  symmetry; apply zlt_true. unfold Int.sub. change (Int.unsigned (Int.repr 32)) with 32.
+  assert (Int.unsigned n <> 0). { red; intros; elim H. rewrite <- (Int.repr_unsigned n), H0. auto. }
+  rewrite Int.unsigned_repr. 
+  change (Int.unsigned Int.iwordsize) with 32; omega.
+  assert (32 < Int.max_unsigned) by reflexivity. omega.
+Qed.
+
 Theorem or_rolm:
   forall x n m1 m2,
   or (rolm x n m1) (rolm x n m2) = rolm x n (Int.or m1 m2).
@@ -1402,6 +1437,71 @@ Qed.
 Theorem notl_xorl: forall x, notl x = xorl x (Vlong Int64.mone).
 Proof.
   destruct x; simpl; auto.
+Qed.
+
+Theorem divls_pow2:
+  forall x n logn y,
+  Int64.is_power2' n = Some logn -> Int.ltu logn (Int.repr 63) = true ->
+  divls x (Vlong n) = Some y ->
+  shrxl x (Vint logn) = Some y.
+Proof.
+  intros; destruct x; simpl in H1; inv H1.
+  destruct (Int64.eq n Int64.zero
+         || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq n Int64.mone); inv H3.
+  simpl. rewrite H0. decEq. decEq.
+  generalize (Int64.is_power2'_correct _ _ H); intro.
+  unfold Int64.shrx'. rewrite Int64.shl'_mul_two_p. rewrite <- H1. 
+  rewrite Int64.mul_commut. rewrite Int64.mul_one.
+  rewrite Int64.repr_unsigned. auto.
+Qed.
+
+Theorem divlu_pow2:
+  forall x n logn y,
+  Int64.is_power2' n = Some logn ->
+  divlu x (Vlong n) = Some y ->
+  shrlu x (Vint logn) = y.
+Proof.
+  intros; destruct x; simpl in H0; inv H0.
+  destruct (Int64.eq n Int64.zero); inv H2.
+  simpl.
+  rewrite (Int64.is_power2'_range _ _ H).
+  decEq. symmetry. apply Int64.divu_pow2'. auto.
+Qed.
+
+Theorem modlu_pow2:
+  forall x n logn y,
+  Int64.is_power2 n = Some logn ->
+  modlu x (Vlong n) = Some y ->
+  andl x (Vlong (Int64.sub n Int64.one)) = y.
+Proof.
+  intros; destruct x; simpl in H0; inv H0.
+  destruct (Int64.eq n Int64.zero); inv H2.
+  simpl. decEq. symmetry. eapply Int64.modu_and; eauto.
+Qed.
+
+Theorem shrxl_shrl_2:
+  forall n x z,
+  shrxl x (Vint n) = Some z ->
+  z = (if Int.eq n Int.zero then x else
+         shrl (addl x (shrlu (shrl x (Vint (Int.repr 63)))
+                      (Vint (Int.sub (Int.repr 64) n))))
+              (Vint n)).
+Proof.
+  intros. destruct x; simpl in H; try discriminate.
+  destruct (Int.ltu n (Int.repr 63)) eqn:LT; inv H.
+  exploit Int.ltu_inv; eauto. change (Int.unsigned (Int.repr 63)) with 63; intros LT'.
+  predSpec Int.eq Int.eq_spec n Int.zero.
+- subst n. rewrite Int64.shrx'_zero. auto.
+- simpl. change (Int.ltu (Int.repr 63) Int64.iwordsize') with true. simpl.
+  replace (Int.ltu (Int.sub (Int.repr 64) n) Int64.iwordsize') with true. simpl.
+  replace (Int.ltu n Int64.iwordsize') with true.
+  f_equal; apply Int64.shrx'_shr_2; assumption.
+  symmetry; apply zlt_true. change (Int.unsigned n < 64); omega.
+  symmetry; apply zlt_true. unfold Int.sub. change (Int.unsigned (Int.repr 64)) with 64.
+  assert (Int.unsigned n <> 0). { red; intros; elim H. rewrite <- (Int.repr_unsigned n), H0. auto. }
+  rewrite Int.unsigned_repr. 
+  change (Int.unsigned Int64.iwordsize') with 64; omega.
+  assert (64 < Int.max_unsigned) by reflexivity. omega.
 Qed.
 
 Theorem negate_cmp_bool:

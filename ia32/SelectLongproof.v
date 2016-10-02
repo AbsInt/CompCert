@@ -66,24 +66,24 @@ Proof.
   EvalOp.
 Qed. 
 
-Lemma is_longconst_sound:
+Lemma is_longconst_sound_1:
   forall a n, is_longconst a = Some n -> a = Eop (Olongconst n) Enil.
 Proof with (try discriminate).
   unfold is_longconst; intros. destruct a... destruct o... destruct e0... congruence.
 Qed.
 
-Lemma is_longconst_inv:
+Lemma is_longconst_sound:
   forall v a n le,
   is_longconst a = Some n -> eval_expr ge sp e m le a v -> v = Vlong n.
 Proof.
-  intros. rewrite (is_longconst_sound _ _ H) in H0. InvEval. auto.
+  intros. rewrite (is_longconst_sound_1 _ _ H) in H0. InvEval. auto.
 Qed.
 
 Theorem eval_intoflong: unary_constructor_sound intoflong Val.loword.
 Proof.
   unfold intoflong; destruct Archi.splitlong. apply SplitLongproof.eval_intoflong.
   red; intros. destruct (is_longconst a) as [n|] eqn:C.
-- TrivialExists. simpl. erewrite (is_longconst_inv x) by eauto. auto.  
+- TrivialExists. simpl. erewrite (is_longconst_sound x) by eauto. auto.  
 - TrivialExists. 
 Qed. 
 
@@ -235,16 +235,30 @@ Admitted.
 Theorem eval_mull: binary_constructor_sound mull Val.mull.
 Admitted.
 
-Theorem eval_divl: partial_binary_constructor_sound divl Val.divls.
+Theorem eval_shrxlimm:
+  forall le a n x z,
+  eval_expr ge sp e m le a x ->
+  Val.shrxl x (Vint n) = Some z ->
+  exists v, eval_expr ge sp e m le (shrxlimm a n) v /\ Val.lessdef z v.
+Proof.
+  unfold shrxlimm; intros. destruct Archi.splitlong eqn:SL.
++ eapply SplitLongproof.eval_shrxlimm; eauto. apply Archi.splitlong_ptr32; auto.
++ predSpec Int.eq Int.eq_spec n Int.zero.
+- subst n. destruct x; simpl in H0; inv H0. econstructor; split; eauto.
+  change (Int.ltu Int.zero (Int.repr 63)) with true. simpl. rewrite Int64.shrx'_zero; auto.
+- TrivialExists.
+Qed.
+
+Theorem eval_divls_base: partial_binary_constructor_sound divls_base Val.divls.
 Admitted.
 
-Theorem eval_modl: partial_binary_constructor_sound modl Val.modls.
+Theorem eval_modls_base: partial_binary_constructor_sound modls_base Val.modls.
 Admitted.
   
-Theorem eval_divlu: partial_binary_constructor_sound divlu Val.divlu.
+Theorem eval_divlu_base: partial_binary_constructor_sound divlu_base Val.divlu.
 Admitted.
 
-Theorem eval_modlu: partial_binary_constructor_sound modlu Val.modlu.
+Theorem eval_modlu_base: partial_binary_constructor_sound modlu_base Val.modlu.
 Admitted.
 
 Theorem eval_cmplu:
@@ -259,8 +273,8 @@ Proof.
   unfold Val.cmplu in H1.
   destruct (Val.cmplu_bool (Mem.valid_pointer m) c x y) as [vb|] eqn:C; simpl in H1; inv H1.
   destruct (is_longconst a) as [n1|] eqn:LC1; destruct (is_longconst b) as [n2|] eqn:LC2;
-  try (assert (x = Vlong n1) by (eapply is_longconst_inv; eauto));
-  try (assert (y = Vlong n2) by (eapply is_longconst_inv; eauto));
+  try (assert (x = Vlong n1) by (eapply is_longconst_sound; eauto));
+  try (assert (y = Vlong n2) by (eapply is_longconst_sound; eauto));
   subst.
 - simpl in C; inv C. EvalOp. destruct (Int64.cmpu c n1 n2); reflexivity.
 - EvalOp. simpl. rewrite Val.swap_cmplu_bool. rewrite C; auto.
@@ -280,8 +294,8 @@ Proof.
   unfold Val.cmpl in H1.
   destruct (Val.cmpl_bool c x y) as [vb|] eqn:C; simpl in H1; inv H1.
   destruct (is_longconst a) as [n1|] eqn:LC1; destruct (is_longconst b) as [n2|] eqn:LC2;
-  try (assert (x = Vlong n1) by (eapply is_longconst_inv; eauto));
-  try (assert (y = Vlong n2) by (eapply is_longconst_inv; eauto));
+  try (assert (x = Vlong n1) by (eapply is_longconst_sound; eauto));
+  try (assert (y = Vlong n2) by (eapply is_longconst_sound; eauto));
   subst.
 - simpl in C; inv C. EvalOp. destruct (Int64.cmp c n1 n2); reflexivity.
 - EvalOp. simpl. rewrite Val.swap_cmpl_bool. rewrite C; auto.

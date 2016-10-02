@@ -134,6 +134,7 @@ let print_operation reg pp = function
   | Oshllimm n, [r1] -> fprintf pp "%a <<l %ld" reg r1 (camlint_of_coqint n)
   | Oshrl, [r1;r2] -> fprintf pp "%a >>ls %a" reg r1 reg r2
   | Oshrlimm n, [r1] -> fprintf pp "%a >>ls %ld" reg r1 (camlint_of_coqint n)
+  | Oshrxlimm n, [r1] -> fprintf pp "%a >>lx %ld" reg r1 (camlint_of_coqint n)
   | Oshrlu, [r1;r2] -> fprintf pp "%a >>lu %a" reg r1 reg r2
   | Oshrluimm n, [r1] -> fprintf pp "%a >>lu %ld" reg r1 (camlint_of_coqint n)
   | Ororlimm n, [r1] -> fprintf pp "%a rorl %ld" reg r1 (camlint_of_coqint n)

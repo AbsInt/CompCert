@@ -1938,6 +1938,22 @@ Proof.
   inv H; inv H0; auto with va. simpl. rewrite E. constructor.
 Qed.
 
+Definition shrxl (v w: aval) :=
+  match v, w with
+  | L i, I j => if Int.ltu j (Int.repr 63) then L(Int64.shrx' i j) else ntop
+  | _, _ => ntop1 v
+  end.
+
+Lemma shrxl_sound:
+  forall v w u x y, vmatch v x -> vmatch w y -> Val.shrxl v w = Some u -> vmatch u (shrxl x y).
+Proof.
+  intros.
+  destruct v; destruct w; try discriminate; simpl in H1.
+  destruct (Int.ltu i0 (Int.repr 63)) eqn:LTU; inv H1.
+  unfold shrxl; inv H; auto with va; inv H0; auto with va.
+  rewrite LTU; auto with va.
+Qed.
+
 (** Floating-point arithmetic operations *)
 
 Definition negf := unop_float Float.neg.
@@ -4544,7 +4560,7 @@ Hint Resolve cnot_sound symbol_address_sound
        shll_sound shrl_sound shrlu_sound
        andl_sound orl_sound xorl_sound notl_sound roll_sound rorl_sound
        negl_sound addl_sound subl_sound mull_sound
-       divls_sound divlu_sound modls_sound modlu_sound
+       divls_sound divlu_sound modls_sound modlu_sound shrxl_sound
        negf_sound absf_sound
        addf_sound subf_sound mulf_sound divf_sound
        negfs_sound absfs_sound

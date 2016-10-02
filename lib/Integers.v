@@ -4014,6 +4014,8 @@ Definition shru' (x: int) (y: Int.int): int :=
   repr (Z.shiftr (unsigned x) (Int.unsigned y)).
 Definition shr' (x: int) (y: Int.int): int :=
   repr (Z.shiftr (signed x) (Int.unsigned y)).
+Definition shrx' (x: int) (y: Int.int): int :=
+  divs x (shl' one y).
 
 Lemma bits_shl':
   forall x y i,
@@ -4074,6 +4076,41 @@ Theorem shl'_mul:
 Proof.
   intros. rewrite shl'_one_two_p. apply shl'_mul_two_p.
 Qed.
+
+Theorem shrx'_zero:
+  forall x, shrx' x Int.zero = x.
+Proof.
+  intros. unfold shrx'. rewrite shl'_one_two_p. unfold divs.
+  change (signed (repr (two_p (Int.unsigned Int.zero)))) with 1. 
+  rewrite Z.quot_1_r. apply repr_signed.
+Qed. 
+
+Theorem shrx'_shr_2:
+  forall x y,
+  Int.ltu y (Int.repr 63) = true ->
+  shrx' x y = shr' (add x (shru' (shr' x (Int.repr 63)) (Int.sub (Int.repr 64) y))) y.
+Proof.
+  intros.
+  set (z := repr (Int.unsigned y)).
+  apply Int.ltu_inv in H. change (Int.unsigned (Int.repr 63)) with 63 in H.
+  assert (N1: 63 < max_unsigned) by reflexivity.
+  assert (N2: 63 < Int.max_unsigned) by reflexivity.
+  assert (A: unsigned z = Int.unsigned y).
+  { unfold z; apply unsigned_repr; omega. }
+  assert (B: unsigned (sub (repr 64) z) = Int.unsigned (Int.sub (Int.repr 64) y)).
+  { unfold z. unfold sub, Int.sub.
+    change (unsigned (repr 64)) with 64.  
+    change (Int.unsigned (Int.repr 64)) with 64.
+    rewrite (unsigned_repr (Int.unsigned y)) by omega.
+    rewrite unsigned_repr, Int.unsigned_repr by omega.
+    auto. }
+  unfold shrx', shr', shru', shl'.
+  rewrite <- A.
+  change (Int.unsigned (Int.repr 63)) with (unsigned (repr 63)).
+  rewrite <- B.
+  apply shrx_shr_2.
+  unfold ltu. apply zlt_true. change (unsigned z < 63). rewrite A; omega.
+Qed.    
 
 (** Powers of two with exponents given as 32-bit ints *)
 

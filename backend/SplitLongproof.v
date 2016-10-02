@@ -823,118 +823,79 @@ Proof.
 - apply eval_mull_base; auto.
 Qed.
 
-Lemma eval_binop_long:
-  forall id name sem le a b x y z,
-  (forall p q, x = Vlong p -> y = Vlong q -> z = Vlong (sem p q)) ->
-  helper_declared prog id name sig_ll_l ->
-  external_implements name sig_ll_l (x::y::nil) z ->
+Theorem eval_shrxlimm:
+  forall le a n x z,
+  Archi.ptr64 = false ->
   eval_expr ge sp e m le a x ->
-  eval_expr ge sp e m le b y ->
-  exists v, eval_expr ge sp e m le (binop_long id sem a b) v /\ Val.lessdef z v.
+  Val.shrxl x (Vint n) = Some z ->
+  exists v, eval_expr ge sp e m le (shrxlimm a n) v /\ Val.lessdef z v.
 Proof.
-  intros. unfold binop_long.
-  destruct (is_longconst a) as [p|] eqn:LC1.
-  destruct (is_longconst b) as [q|] eqn:LC2.
-  exploit is_longconst_sound. eexact LC1. eauto. intros EQ; subst x.
-  exploit is_longconst_sound. eexact LC2. eauto. intros EQ; subst y.
-  econstructor; split. EvalOp. erewrite H by eauto. rewrite Int64.ofwords_recompose. auto.
-  econstructor; split. eapply eval_helper_2; eauto. auto.
-  econstructor; split. eapply eval_helper_2; eauto. auto.
-Qed.
-
-Theorem eval_divl:
-  forall le a b x y z,
-  eval_expr ge sp e m le a x ->
-  eval_expr ge sp e m le b y ->
-  Val.divls x y = Some z ->
-  exists v, eval_expr ge sp e m le (divl a b) v /\ Val.lessdef z v.
-Proof.
-  intros. eapply eval_binop_long; eauto.
-  intros; subst; simpl in H1.
-  destruct (Int64.eq q Int64.zero
-         || Int64.eq p (Int64.repr Int64.min_signed) && Int64.eq q Int64.mone); inv H1.
+  intros.
+  apply Val.shrxl_shrl_2 in H1. unfold shrxlimm.
+  destruct (Int.eq n Int.zero).
+- subst z; exists x; auto.
+- set (le' := x :: le).
+  edestruct (eval_shrlimm (Int.repr 63) le' (Eletvar O)) as (v1 & A1 & B1).
+  constructor. reflexivity.
+  edestruct (eval_shrluimm (Int.sub (Int.repr 64) n) le') as (v2 & A2 & B2).
+  eexact A1.
+  edestruct (eval_addl H le' (Eletvar 0)) as (v3 & A3 & B3).
+  constructor. reflexivity. eexact A2.
+  edestruct (eval_shrlimm n le') as (v4 & A4 & B4). eexact A3.
+  exists v4; split.
+  econstructor; eauto.
+  assert (X: forall v1 v2 n, Val.lessdef v1 v2 -> Val.lessdef (Val.shrl v1 (Vint n)) (Val.shrl v2 (Vint n))).
+  { intros. inv H2; auto. }
+  assert (Y: forall v1 v2 n, Val.lessdef v1 v2 -> Val.lessdef (Val.shrlu v1 (Vint n)) (Val.shrlu v2 (Vint n))).
+  { intros. inv H2; auto. }
+  subst z. eapply Val.lessdef_trans; [|eexact B4]. apply X.
+  eapply Val.lessdef_trans; [|eexact B3]. apply Val.addl_lessdef; auto.
+  eapply Val.lessdef_trans; [|eexact B2]. apply Y.
   auto.
-  DeclHelper. UseHelper.
 Qed.
 
-Theorem eval_modl:
-  forall le a b x y z,
-  eval_expr ge sp e m le a x ->
-  eval_expr ge sp e m le b y ->
-  Val.modls x y = Some z ->
-  exists v, eval_expr ge sp e m le (modl a b) v /\ Val.lessdef z v.
-Proof.
-  intros. eapply eval_binop_long; eauto.
-  intros; subst; simpl in H1.
-  destruct (Int64.eq q Int64.zero
-         || Int64.eq p (Int64.repr Int64.min_signed) && Int64.eq q Int64.mone); inv H1.
-  auto.
-  DeclHelper. UseHelper.
-Qed.
-
-Theorem eval_divlu:
+Theorem eval_divlu_base:
   forall le a b x y z,
   eval_expr ge sp e m le a x ->
   eval_expr ge sp e m le b y ->
   Val.divlu x y = Some z ->
-  exists v, eval_expr ge sp e m le (divlu a b) v /\ Val.lessdef z v.
+  exists v, eval_expr ge sp e m le (divlu_base a b) v /\ Val.lessdef z v.
 Proof.
-  intros. unfold divlu.
-  set (default := Eexternal i64_udiv sig_ll_l (a ::: b ::: Enil)).
-  assert (DEFAULT:
-    exists v, eval_expr ge sp e m le default v /\ Val.lessdef z v).
-  {
-    econstructor; split. eapply eval_helper_2; eauto. DeclHelper. UseHelper. auto.
-  }
-  destruct (is_longconst a) as [p|] eqn:LC1;
-  destruct (is_longconst b) as [q|] eqn:LC2.
-- exploit (is_longconst_sound le a); eauto. intros EQ; subst x.
-  exploit (is_longconst_sound le b); eauto. intros EQ; subst y.
-  econstructor; split. apply eval_longconst.
-  simpl in H1. destruct (Int64.eq q Int64.zero); inv H1. auto.
-- auto.
-- destruct (Int64.is_power2' q) as [l|] eqn:P2; auto.
-  exploit (is_longconst_sound le b); eauto. intros EQ; subst y.
-  replace z with (Val.shrlu x (Vint l)).
-  apply eval_shrluimm. auto.
-  destruct x; simpl in H1; try discriminate.
-  destruct (Int64.eq q Int64.zero); inv H1.
-  simpl. erewrite Int64.is_power2'_range by eauto.
-  erewrite Int64.divu_pow2' by eauto.
-  auto.
-- auto.
+  intros; unfold divlu_base.
+  econstructor; split. eapply eval_helper_2; eauto. DeclHelper. UseHelper. auto.
 Qed.
 
-Theorem eval_modlu:
+Theorem eval_modlu_base:
   forall le a b x y z,
   eval_expr ge sp e m le a x ->
   eval_expr ge sp e m le b y ->
   Val.modlu x y = Some z ->
-  exists v, eval_expr ge sp e m le (modlu a b) v /\ Val.lessdef z v.
+  exists v, eval_expr ge sp e m le (modlu_base a b) v /\ Val.lessdef z v.
 Proof.
-  intros. unfold modlu.
-  set (default := Eexternal i64_umod sig_ll_l (a ::: b ::: Enil)).
-  assert (DEFAULT:
-    exists v, eval_expr ge sp e m le default v /\ Val.lessdef z v).
-  {
-    econstructor; split. eapply eval_helper_2; eauto. DeclHelper. UseHelper. auto.
-  }
-  destruct (is_longconst a) as [p|] eqn:LC1;
-  destruct (is_longconst b) as [q|] eqn:LC2.
-- exploit (is_longconst_sound le a); eauto. intros EQ; subst x.
-  exploit (is_longconst_sound le b); eauto. intros EQ; subst y.
-  econstructor; split. apply eval_longconst.
-  simpl in H1. destruct (Int64.eq q Int64.zero); inv H1. auto.
-- auto.
-- destruct (Int64.is_power2 q) as [l|] eqn:P2; auto.
-  exploit (is_longconst_sound le b); eauto. intros EQ; subst y.
-  replace z with (Val.andl x (Vlong (Int64.sub q Int64.one))).
-  apply eval_andl. auto. apply eval_longconst.
-  destruct x; simpl in H1; try discriminate.
-  destruct (Int64.eq q Int64.zero); inv H1.
-  simpl.
-  erewrite Int64.modu_and by eauto. auto.
-- auto.
+  intros; unfold modlu_base.
+  econstructor; split. eapply eval_helper_2; eauto. DeclHelper. UseHelper. auto.
+Qed.
+
+Theorem eval_divsu_base:
+  forall le a b x y z,
+  eval_expr ge sp e m le a x ->
+  eval_expr ge sp e m le b y ->
+  Val.divls x y = Some z ->
+  exists v, eval_expr ge sp e m le (divls_base a b) v /\ Val.lessdef z v.
+Proof.
+  intros; unfold divls_base.
+  econstructor; split. eapply eval_helper_2; eauto. DeclHelper. UseHelper. auto.
+Qed.
+
+Theorem eval_modls_base:
+  forall le a b x y z,
+  eval_expr ge sp e m le a x ->
+  eval_expr ge sp e m le b y ->
+  Val.modls x y = Some z ->
+  exists v, eval_expr ge sp e m le (modls_base a b) v /\ Val.lessdef z v.
+Proof.
+  intros; unfold modls_base.
+  econstructor; split. eapply eval_helper_2; eauto. DeclHelper. UseHelper. auto.
 Qed.
 
 Remark decompose_cmpl_eq_zero:

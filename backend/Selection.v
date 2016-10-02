@@ -27,7 +27,7 @@ Require Import Coqlib Maps.
 Require Import AST Errors Integers Globalenvs Switch.
 Require Cminor.
 Require Import Op CminorSel.
-Require Import SelectOp SelectDiv SplitLong SelectLong.
+Require Import SelectOp SplitLong SelectLong SelectDiv.
 Require Machregs.
 
 Local Open Scope cminorsel_scope.
@@ -138,9 +138,9 @@ Definition sel_binop (op: Cminor.binary_operation) (arg1 arg2: expr) : expr :=
   | Cminor.Oaddl => addl arg1 arg2
   | Cminor.Osubl => subl arg1 arg2
   | Cminor.Omull => mull arg1 arg2
-  | Cminor.Odivl => divl arg1 arg2
+  | Cminor.Odivl => divls arg1 arg2
   | Cminor.Odivlu => divlu arg1 arg2
-  | Cminor.Omodl => modl arg1 arg2
+  | Cminor.Omodl => modls arg1 arg2
   | Cminor.Omodlu => modlu arg1 arg2
   | Cminor.Oandl => andl arg1 arg2
   | Cminor.Oorl => orl arg1 arg2

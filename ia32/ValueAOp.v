@@ -132,6 +132,7 @@ Definition eval_static_operation (op: operation) (vl: list aval): aval :=
   | Oshllimm n, v1::nil => shll v1 (I n)
   | Oshrl, v1::v2::nil => shrl v1 v2
   | Oshrlimm n, v1::nil => shrl v1 (I n)
+  | Oshrxlimm n, v1::nil => shrxl v1 (I n)
   | Oshrlu, v1::v2::nil => shrlu v1 v2
   | Oshrluimm n, v1::nil => shrlu v1 (I n)
   | Ororlimm n, v1::nil => rorl v1 (I n)

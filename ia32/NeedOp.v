@@ -110,6 +110,7 @@ Definition needs_of_operation (op: operation) (nv: nval): list nval :=
   | Oshllimm _ => op1 (default nv)
   | Oshrl => op2 (default nv)
   | Oshrlimm _ => op1 (default nv)
+  | Oshrxlimm n => op1 (default nv)
   | Oshrlu => op2 (default nv)
   | Oshrluimm _ => op1 (default nv)
   | Ororlimm _ => op1 (default nv)

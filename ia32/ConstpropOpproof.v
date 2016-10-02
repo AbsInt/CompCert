@@ -578,6 +578,20 @@ Proof.
   econstructor; split; eauto. auto.
 Qed.
 
+Lemma make_divlimm_correct:
+  forall n r1 r2 v,
+  Val.divls e#r1 e#r2 = Some v ->
+  e#r2 = Vlong n ->
+  let (op, args) := make_divlimm n r1 r2 in
+  exists w, eval_operation ge (Vptr sp Ptrofs.zero) op e##args m = Some w /\ Val.lessdef v w.
+Proof.
+  intros; unfold make_divlimm.
+  destruct (Int64.is_power2' n) eqn:?. destruct (Int.ltu i (Int.repr 63)) eqn:?.
+  rewrite H0 in H. econstructor; split. simpl; eauto. eapply Val.divls_pow2; eauto. auto.
+  exists v; auto.
+  exists v; auto.
+Qed.
+
 Lemma make_divluimm_correct:
   forall n r1 r2 v,
   Val.divlu e#r1 e#r2 = Some v ->
@@ -821,6 +835,9 @@ Proof.
 (* mull *)
   rewrite Val.mull_commut in H0. InvApproxRegs; SimplVM; inv H0. apply make_mullimm_correct; auto.
   InvApproxRegs; SimplVM; inv H0. apply make_mullimm_correct; auto.
+(* divl *)
+  assert (e#r2 = Vlong n2). clear H0. InvApproxRegs; SimplVM; auto.
+  apply make_divlimm_correct; auto.
 (* divlu *)
   assert (e#r2 = Vlong n2). clear H0. InvApproxRegs; SimplVM; auto.
   apply make_divluimm_correct; auto.

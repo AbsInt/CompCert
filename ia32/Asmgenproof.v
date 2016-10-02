@@ -132,6 +132,13 @@ Proof.
 Qed.
 Hint Resolve mk_shrximm_label: labels.
 
+Remark mk_shrxlimm_label:
+  forall n k c, mk_shrxlimm n k = OK c -> tail_nolabel k c.
+Proof.
+  intros. monadInv H. destruct (Int.eq n Int.zero); TailNoLabel.
+Qed.
+Hint Resolve mk_shrxlimm_label: labels.
+
 Remark mk_intconv_label:
   forall f r1 r2 k c, mk_intconv f r1 r2 k = OK c ->
   (forall r r', nolabel (f r r')) ->

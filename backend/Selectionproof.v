@@ -305,9 +305,9 @@ Proof.
   eapply eval_addl; eauto.
   eapply eval_subl; eauto.
   eapply eval_mull; eauto.
-  eapply eval_divl; eauto.
+  eapply eval_divls; eauto.
   eapply eval_divlu; eauto.
-  eapply eval_modl; eauto.
+  eapply eval_modls; eauto.
   eapply eval_modlu; eauto.
   eapply eval_andl; eauto.
   eapply eval_orl; eauto.

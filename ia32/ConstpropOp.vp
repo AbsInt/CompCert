@@ -311,6 +311,14 @@ Definition make_xorlimm (n: int64) (r: reg) :=
   else if Int64.eq n Int64.mone then (Onotl, r :: nil)
   else (Oxorlimm n, r :: nil).
 
+Definition make_divlimm n (r1 r2: reg) :=
+  match Int64.is_power2' n with
+  | Some l => if Int.ltu l (Int.repr 63)
+              then (Oshrxlimm l, r1 :: nil)
+              else (Odivl, r1 :: r2 :: nil)
+  | None   => (Odivl, r1 :: r2 :: nil)
+  end.
+
 Definition make_divluimm n (r1 r2: reg) :=
   match Int64.is_power2' n with
   | Some l => (Oshrluimm l, r1 :: nil)
@@ -371,6 +379,7 @@ Nondetfunction op_strength_reduction
   | Osubl, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_addlimm (Int64.neg n2) r1
   | Omull, r1 :: r2 :: nil, L n1 :: v2 :: nil => make_mullimm n1 r2
   | Omull, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_mullimm n2 r1
+  | Odivl, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_divlimm n2 r1 r2
   | Odivlu, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_divluimm n2 r1 r2
   | Omodlu, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_modluimm n2 r1 r2
   | Oandl, r1 :: r2 :: nil, L n1 :: v2 :: nil => make_andlimm n1 r2 v2

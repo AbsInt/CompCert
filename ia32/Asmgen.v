@@ -53,6 +53,13 @@ Definition mk_shrximm (n: int) (k: code) : res code :=
       Pcmov Cond_l RAX RCX ::
       Psarl_ri RAX n :: k).
 
+Definition mk_shrxlimm (n: int) (k: code) : res code :=
+  OK (if Int.eq n Int.zero then Pmov_rr RAX RAX :: k else
+      Pcqto ::
+      Pshrq_ri RDX (Int.sub (Int.repr 64) n) ::
+      Pleaq RAX (Addrmode (Some RAX) (Some(RDX, 1)) (inl _ 0)) ::
+      Psarq_ri RAX n :: k).
+
 Definition low_ireg (r: ireg) : bool :=
   match r with RAX | RBX | RCX | RDX => true | _ => false end.
 
@@ -501,6 +508,10 @@ Definition transl_op
   | Oshrlimm n, a1 :: nil =>
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Psarq_ri r n :: k)
+  | Oshrxlimm n, a1 :: nil =>
+      assertion (mreg_eq a1 AX);
+      assertion (mreg_eq res AX);
+      mk_shrxlimm n k
   | Oshrlu, a1 :: a2 :: nil =>
       assertion (mreg_eq a1 res);
       assertion (mreg_eq a2 CX);

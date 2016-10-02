@@ -286,45 +286,18 @@ Nondetfunction mull (e1: expr) (e2: expr) :=
   | _, _ => Eop Omull (e1:::e2:::Enil)
   end.
 
-Definition divl (e1: expr) (e2: expr) :=
-  if Archi.splitlong then SplitLong.divl e1 e2 else
-  match is_longconst e1, is_longconst e2 with
-  | Some n1, Some n2 => longconst (Int64.divs n1 n2)
-  | _, _ => Eop Odivl (e1:::e2:::Enil)
-  end.
+Definition shrxlimm (e: expr) (n: int) :=
+  if Archi.splitlong then SplitLong.shrxlimm e n else
+  if Int.eq n Int.zero then e else Eop (Oshrxlimm n) (e ::: Enil).
 
-Definition modl (e1: expr) (e2: expr) :=
-  if Archi.splitlong then SplitLong.modl e1 e2 else
-  match is_longconst e1, is_longconst e2 with
-  | Some n1, Some n2 => longconst (Int64.mods n1 n2)
-  | _, _ => Eop Omodl (e1:::e2:::Enil)
-  end.
-
-Definition divlu (e1 e2: expr) :=
-  if Archi.splitlong then SplitLong.divlu e1 e2 else
-  let default := Eop Odivlu (e1:::e2:::Enil) in
-  match is_longconst e1, is_longconst e2 with
-  | Some n1, Some n2 => longconst (Int64.divu n1 n2)
-  | _, Some n2 =>
-      match Int64.is_power2 n2 with
-      | Some l => shrluimm e1 (Int.repr (Int64.unsigned l))
-      | None   => default
-      end
-  | _, _ => default
-  end.
-
-Definition modlu (e1 e2: expr) :=
-  if Archi.splitlong then SplitLong.modlu e1 e2 else
-  let default := Eop Omodlu (e1:::e2:::Enil) in
-  match is_longconst e1, is_longconst e2 with
-  | Some n1, Some n2 => longconst (Int64.modu n1 n2)
-  | _, Some n2 =>
-      match Int64.is_power2 n2 with
-      | Some l => andl e1 (longconst (Int64.sub n2 Int64.one))
-      | None   => default
-      end
-  | _, _ => default
-  end.
+Definition divlu_base (e1: expr) (e2: expr) :=
+  if Archi.splitlong then SplitLong.divlu_base e1 e2 else Eop Odivlu (e1:::e2:::Enil).
+Definition modlu_base (e1: expr) (e2: expr) :=
+  if Archi.splitlong then SplitLong.modlu_base e1 e2 else Eop Omodu (e1:::e2:::Enil).
+Definition divls_base (e1: expr) (e2: expr) :=
+  if Archi.splitlong then SplitLong.divls_base e1 e2 else Eop Odivl (e1:::e2:::Enil).
+Definition modls_base (e1: expr) (e2: expr) :=
+  if Archi.splitlong then SplitLong.modls_base e1 e2 else Eop Omodl (e1:::e2:::Enil).
 
 Definition cmplu (c: comparison) (e1 e2: expr) :=
   if Archi.splitlong then SplitLong.cmplu c e1 e2 else

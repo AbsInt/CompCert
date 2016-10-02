@@ -15,7 +15,7 @@
 Require Import Zquot Coqlib.
 Require Import AST Integers Floats Values Memory Globalenvs Events.
 Require Import Cminor Op CminorSel.
-Require Import SelectOp SelectOpproof SelectDiv.
+Require Import SelectOp SelectOpproof SplitLong SplitLongproof SelectLong SelectLongproof SelectDiv.
 
 Open Local Scope cminorsel_scope.
 
@@ -321,7 +321,10 @@ Qed.
 
 Section CMCONSTRS.
 
-Variable ge: genv.
+Variable prog: program.
+Variable hf: helper_functions.
+Hypothesis HELPERS: helper_functions_declared prog hf.
+Let ge := Genv.globalenv prog.
 Variable sp: val.
 Variable e: env.
 Variable m: mem.
@@ -541,6 +544,118 @@ Proof.
   unfold mods; intros until b. destruct (mods_match b); intros.
 - inv H0. inv H5. simpl in H7. inv H7. eapply eval_modsimm; eauto.
 - eapply eval_mods_base; eauto.
+Qed.
+
+Lemma eval_modl_from_divl:
+  forall le a n x y,
+  eval_expr ge sp e m le a (Vlong y) ->
+  nth_error le O = Some (Vlong x) ->
+  eval_expr ge sp e m le (modl_from_divl a n) (Vlong (Int64.sub x (Int64.mul y n))).
+Proof.
+  unfold modl_from_divl; intros.
+  exploit eval_mullimm; eauto. instantiate (1 := n). intros (v1 & A1 & B1).
+  exploit (eval_subl prog sp e m le (Eletvar O)). constructor; eauto. eexact A1.
+  intros (v2 & A2 & B2).
+  simpl in B1; inv B1. simpl in B2; inv B2. exact A2.
+Qed.
+
+Theorem eval_divlu:
+  forall le a b x y z,
+  eval_expr ge sp e m le a x ->
+  eval_expr ge sp e m le b y ->
+  Val.divlu x y = Some z ->
+  exists v, eval_expr ge sp e m le (divlu a b) v /\ Val.lessdef z v.
+Proof.
+  unfold divlu; intros.
+  destruct (is_longconst b) as [n2|] eqn:N2.
+- assert (y = Vlong n2) by (eapply is_longconst_sound; eauto). subst y.
+  destruct (is_longconst a) as [n1|] eqn:N1.
++ assert (x = Vlong n1) by (eapply is_longconst_sound; eauto). subst x.
+  simpl in H1. destruct (Int64.eq n2 Int64.zero); inv H1.
+  econstructor; split. apply eval_longconst. constructor.
++ destruct (Int64.is_power2' n2) as [l|] eqn:POW.
+* exploit Val.divlu_pow2; eauto. intros EQ; subst z. apply eval_shrluimm; auto.
+* eapply eval_divlu_base; eauto.     
+- eapply eval_divlu_base; eauto.
+Qed.
+
+Theorem eval_modlu:
+  forall le a b x y z,
+  eval_expr ge sp e m le a x ->
+  eval_expr ge sp e m le b y ->
+  Val.modlu x y = Some z ->
+  exists v, eval_expr ge sp e m le (modlu a b) v /\ Val.lessdef z v.
+Proof.
+  unfold modlu; intros.
+  destruct (is_longconst b) as [n2|] eqn:N2.
+- assert (y = Vlong n2) by (eapply is_longconst_sound; eauto). subst y.
+  destruct (is_longconst a) as [n1|] eqn:N1.
++ assert (x = Vlong n1) by (eapply is_longconst_sound; eauto). subst x.
+  simpl in H1. destruct (Int64.eq n2 Int64.zero); inv H1.
+  econstructor; split. apply eval_longconst. constructor.
++ destruct (Int64.is_power2 n2) as [l|] eqn:POW.
+* exploit Val.modlu_pow2; eauto. intros EQ; subst z. eapply eval_andl; eauto. apply eval_longconst.
+* eapply eval_modlu_base; eauto.     
+- eapply eval_modlu_base; eauto.
+Qed.
+
+Theorem eval_divls:
+  forall le a b x y z,
+  eval_expr ge sp e m le a x ->
+  eval_expr ge sp e m le b y ->
+  Val.divls x y = Some z ->
+  exists v, eval_expr ge sp e m le (divls a b) v /\ Val.lessdef z v.
+Proof.
+  unfold divls; intros.
+  destruct (is_longconst b) as [n2|] eqn:N2.
+- assert (y = Vlong n2) by (eapply is_longconst_sound; eauto). subst y.
+  destruct (is_longconst a) as [n1|] eqn:N1.
++ assert (x = Vlong n1) by (eapply is_longconst_sound; eauto). subst x.
+  simpl in H1. 
+  destruct (Int64.eq n2 Int64.zero
+         || Int64.eq n1 (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone); inv H1.
+  econstructor; split. apply eval_longconst. constructor.
++ destruct (Int64.is_power2' n2) as [l|] eqn:POW.
+* destruct (Int.ltu l (Int.repr 63)) eqn:LT.
+** exploit Val.divls_pow2; eauto. intros EQ. eapply eval_shrxlimm; eauto.
+** eapply eval_divls_base; eauto.  
+* eapply eval_divls_base; eauto.     
+- eapply eval_divls_base; eauto.
+Qed.
+
+Theorem eval_modls:
+  forall le a b x y z,
+  eval_expr ge sp e m le a x ->
+  eval_expr ge sp e m le b y ->
+  Val.modls x y = Some z ->
+  exists v, eval_expr ge sp e m le (modls a b) v /\ Val.lessdef z v.
+Proof.
+  unfold modls; intros.
+  destruct (is_longconst b) as [n2|] eqn:N2.
+- assert (y = Vlong n2) by (eapply is_longconst_sound; eauto). subst y.
+  destruct (is_longconst a) as [n1|] eqn:N1.
++ assert (x = Vlong n1) by (eapply is_longconst_sound; eauto). subst x.
+  simpl in H1. 
+  destruct (Int64.eq n2 Int64.zero
+         || Int64.eq n1 (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone); inv H1.
+  econstructor; split. apply eval_longconst. constructor.
++ destruct (Int64.is_power2' n2) as [l|] eqn:POW.
+* destruct (Int.ltu l (Int.repr 63)) eqn:LT.
+**destruct x; simpl in H1; try discriminate.
+  destruct (Int64.eq n2 Int64.zero
+         || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone) eqn:D; inv H1.
+  assert (Val.divls (Vlong i) (Vlong n2) = Some (Vlong (Int64.divs i n2))).
+  { simpl; rewrite D; auto. }
+  exploit Val.divls_pow2; eauto. intros EQ.
+  set (le' := Vlong i :: le).
+  assert (A: eval_expr ge sp e m le' (Eletvar O) (Vlong i)) by (constructor; auto).
+  exploit eval_shrxlimm; eauto. intros (v1 & A1 & B1). inv B1.
+  econstructor; split.
+  econstructor. eauto. eapply eval_modl_from_divl. eexact A1. reflexivity.      
+  rewrite Int64.mods_divs. auto.
+**eapply eval_modls_base; eauto.
+* eapply eval_modls_base; eauto.     
+- eapply eval_modls_base; eauto.
 Qed.
 
 (** * Floating-point division *)
