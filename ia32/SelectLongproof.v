@@ -130,40 +130,185 @@ Proof.
 Qed.
 
 Theorem eval_andl: binary_constructor_sound andl Val.andl.
-Admitted.
+Proof.
+  unfold andl; destruct Archi.splitlong. apply SplitLongproof.eval_andl. 
+  red; intros. destruct (andl_match a b).
+- InvEval. rewrite Val.andl_commut. apply eval_andlimm; auto.
+- InvEval. apply eval_andlimm; auto.
+- TrivialExists.
+Qed.
 
 Theorem eval_orlimm: forall n, unary_constructor_sound (orlimm n) (fun v => Val.orl v (Vlong n)).
-Admitted.
+Proof.
+  unfold orlimm; intros; red; intros. 
+  predSpec Int64.eq Int64.eq_spec n Int64.zero.
+  exists x; split; auto. subst. destruct x; simpl; auto. rewrite Int64.or_zero; auto.
+  predSpec Int64.eq Int64.eq_spec n Int64.mone.
+  econstructor; split. apply eval_longconst. subst. destruct x; simpl; auto. rewrite Int64.or_mone; auto.
+  destruct (orlimm_match a); InvEval; subst.
+- econstructor; split. apply eval_longconst. simpl. rewrite Int64.or_commut; auto.
+- TrivialExists. simpl. rewrite Val.orl_assoc. rewrite Int64.or_commut; auto.
+- TrivialExists.
+Qed.
 
 Theorem eval_orl: binary_constructor_sound orl Val.orl.
-Admitted.
+Proof.
+  unfold orl; destruct Archi.splitlong. apply SplitLongproof.eval_orl. 
+  red; intros.
+  assert (DEFAULT: exists v, eval_expr ge sp e m le (Eop Oorl (a:::b:::Enil)) v /\ Val.lessdef (Val.orl x y) v) by TrivialExists.
+  assert (ROR: forall v n1 n2,
+    Int.add n1 n2 = Int64.iwordsize' ->
+    Val.lessdef (Val.orl (Val.shll v (Vint n1)) (Val.shrlu v (Vint n2)))
+                (Val.rorl v (Vint n2))).
+  { intros. destruct v; simpl; auto.
+    destruct (Int.ltu n1 Int64.iwordsize') eqn:N1; auto.
+    destruct (Int.ltu n2 Int64.iwordsize') eqn:N2; auto.
+    simpl. rewrite <- Int64.or_ror'; auto. }
+  destruct (orl_match a b).
+- InvEval. rewrite Val.orl_commut. apply eval_orlimm; auto.
+- InvEval. apply eval_orlimm; auto.
+- predSpec Int.eq Int.eq_spec (Int.add n1 n2) Int64.iwordsize'; auto.
+  destruct (same_expr_pure t1 t2) eqn:?; auto.
+  InvEval. exploit eval_same_expr; eauto. intros [EQ1 EQ2]; subst.
+  exists (Val.rorl v0 (Vint n2)); split. EvalOp. apply ROR; auto.
+- predSpec Int.eq Int.eq_spec (Int.add n1 n2) Int64.iwordsize'; auto.
+  destruct (same_expr_pure t1 t2) eqn:?; auto.
+  InvEval. exploit eval_same_expr; eauto. intros [EQ1 EQ2]; subst.
+  exists (Val.rorl v1 (Vint n2)); split. EvalOp. rewrite Val.orl_commut. apply ROR; auto.
+- apply DEFAULT.
+Qed.
 
 Theorem eval_xorlimm: forall n, unary_constructor_sound (xorlimm n) (fun v => Val.xorl v (Vlong n)).
-Admitted.
+Proof.
+  unfold xorlimm; intros; red; intros. 
+  predSpec Int64.eq Int64.eq_spec n Int64.zero.
+  exists x; split; auto. subst. destruct x; simpl; auto. rewrite Int64.xor_zero; auto.
+  predSpec Int64.eq Int64.eq_spec n Int64.mone.
+  replace (Val.xorl x (Vlong n)) with (Val.notl x). apply eval_notl; auto.
+  subst n. destruct x; simpl; auto.  
+  destruct (xorlimm_match a); InvEval; subst.
+- econstructor; split. apply eval_longconst. simpl. rewrite Int64.xor_commut; auto.
+- TrivialExists. simpl. rewrite Val.xorl_assoc. rewrite Int64.xor_commut; auto.
+- TrivialExists. simpl. destruct v1; simpl; auto. unfold Int64.not.
+  rewrite Int64.xor_assoc. do 3 f_equal. apply Int64.xor_commut.       
+- TrivialExists.
+Qed.
 
 Theorem eval_xorl: binary_constructor_sound xorl Val.xorl.
-Admitted.
+Proof.
+  unfold xorl; destruct Archi.splitlong. apply SplitLongproof.eval_xorl. 
+  red; intros. destruct (xorl_match a b).
+- InvEval. rewrite Val.xorl_commut. apply eval_xorlimm; auto.
+- InvEval. apply eval_xorlimm; auto.
+- TrivialExists.
+Qed.
 
 Theorem eval_shllimm: forall n, unary_constructor_sound (fun e => shllimm e n) (fun v => Val.shll v (Vint n)).
-Admitted.
+Proof.
+  intros; unfold shllimm. destruct Archi.splitlong eqn:SL. apply SplitLongproof.eval_shllimm; auto.
+  red; intros.
+  predSpec Int.eq Int.eq_spec n Int.zero.
+  exists x; split; auto. subst n; destruct x; simpl; auto.
+  destruct (Int.ltu Int.zero Int64.iwordsize'); auto.
+  change (Int64.shl' i Int.zero) with (Int64.shl i Int64.zero). rewrite Int64.shl_zero; auto.
+  destruct (Int.ltu n Int64.iwordsize') eqn:LT; simpl.
+  assert (DEFAULT: exists v, eval_expr ge sp e m le (Eop (Oshllimm n) (a:::Enil)) v
+                         /\  Val.lessdef (Val.shll x (Vint n)) v) by TrivialExists.
+  destruct (shllimm_match a); InvEval.
+- TrivialExists. simpl; rewrite LT; auto.
+- destruct (Int.ltu (Int.add n n1) Int64.iwordsize') eqn:LT'; auto.
+  subst. econstructor; split. EvalOp. simpl; eauto.
+  destruct v1; simpl; auto. rewrite LT'.
+  destruct (Int.ltu n1 Int64.iwordsize') eqn:LT1; auto.
+  simpl; rewrite LT. rewrite Int.add_commut, Int64.shl'_shl'; auto. rewrite Int.add_commut; auto.
+- destruct (shift_is_scale n); auto.
+  TrivialExists. simpl. subst x. destruct v1; simpl; auto.
+  rewrite LT. rewrite ! Int64.repr_unsigned. rewrite Int64.shl'_one_two_p.
+  rewrite ! Int64.shl'_mul_two_p.  rewrite Int64.mul_add_distr_l. auto.
+  destruct Archi.ptr64; reflexivity.
+- destruct (shift_is_scale n); auto.
+  TrivialExists. simpl. destruct x; simpl; auto.
+  rewrite LT. rewrite ! Int64.repr_unsigned. rewrite Int64.shl'_one_two_p.
+  rewrite ! Int64.shl'_mul_two_p. rewrite Int64.add_zero. auto.
+- TrivialExists. constructor; eauto. constructor. EvalOp. simpl; eauto. constructor. auto.
+Qed.
 
 Theorem eval_shrluimm: forall n, unary_constructor_sound (fun e => shrluimm e n) (fun v => Val.shrlu v (Vint n)).
-Admitted.
+Proof.
+  intros; unfold shrluimm. destruct Archi.splitlong eqn:SL. apply SplitLongproof.eval_shrluimm; auto.
+  red; intros.
+  predSpec Int.eq Int.eq_spec n Int.zero.
+  exists x; split; auto. subst n; destruct x; simpl; auto.
+  destruct (Int.ltu Int.zero Int64.iwordsize'); auto.
+  change (Int64.shru' i Int.zero) with (Int64.shru i Int64.zero). rewrite Int64.shru_zero; auto.
+  destruct (Int.ltu n Int64.iwordsize') eqn:LT; simpl.
+  assert (DEFAULT: exists v, eval_expr ge sp e m le (Eop (Oshrluimm n) (a:::Enil)) v
+                         /\  Val.lessdef (Val.shrlu x (Vint n)) v) by TrivialExists.
+  destruct (shrluimm_match a); InvEval.
+- TrivialExists. simpl; rewrite LT; auto.
+- destruct (Int.ltu (Int.add n n1) Int64.iwordsize') eqn:LT'; auto.
+  subst. econstructor; split. EvalOp. simpl; eauto.
+  destruct v1; simpl; auto. rewrite LT'.
+  destruct (Int.ltu n1 Int64.iwordsize') eqn:LT1; auto.
+  simpl; rewrite LT. rewrite Int.add_commut, Int64.shru'_shru'; auto. rewrite Int.add_commut; auto.
+- apply DEFAULT.
+- TrivialExists. constructor; eauto. constructor. EvalOp. simpl; eauto. constructor. auto.
+Qed.
 
 Theorem eval_shrlimm: forall n, unary_constructor_sound (fun e => shrlimm e n) (fun v => Val.shrl v (Vint n)).
-Admitted.
+Proof.
+  intros; unfold shrlimm. destruct Archi.splitlong eqn:SL. apply SplitLongproof.eval_shrlimm; auto.
+  red; intros.
+  predSpec Int.eq Int.eq_spec n Int.zero.
+  exists x; split; auto. subst n; destruct x; simpl; auto.
+  destruct (Int.ltu Int.zero Int64.iwordsize'); auto.
+  change (Int64.shr' i Int.zero) with (Int64.shr i Int64.zero). rewrite Int64.shr_zero; auto.
+  destruct (Int.ltu n Int64.iwordsize') eqn:LT; simpl.
+  assert (DEFAULT: exists v, eval_expr ge sp e m le (Eop (Oshrlimm n) (a:::Enil)) v
+                         /\  Val.lessdef (Val.shrl x (Vint n)) v) by TrivialExists.
+  destruct (shrlimm_match a); InvEval.
+- TrivialExists. simpl; rewrite LT; auto.
+- destruct (Int.ltu (Int.add n n1) Int64.iwordsize') eqn:LT'; auto.
+  subst. econstructor; split. EvalOp. simpl; eauto.
+  destruct v1; simpl; auto. rewrite LT'.
+  destruct (Int.ltu n1 Int64.iwordsize') eqn:LT1; auto.
+  simpl; rewrite LT. rewrite Int.add_commut, Int64.shr'_shr'; auto. rewrite Int.add_commut; auto.
+- apply DEFAULT.
+- TrivialExists. constructor; eauto. constructor. EvalOp. simpl; eauto. constructor. auto.
+Qed.
 
 Theorem eval_shll: binary_constructor_sound shll Val.shll.
-Admitted.
+Proof.
+  unfold shll. destruct Archi.splitlong eqn:SL. apply SplitLongproof.eval_shll; auto.
+  red; intros. destruct (is_intconst b) as [n2|] eqn:C.
+- exploit is_intconst_sound; eauto. intros EQ; subst y. apply eval_shllimm; auto.
+- TrivialExists.
+Qed.
 
 Theorem eval_shrlu: binary_constructor_sound shrlu Val.shrlu.
-Admitted.
+Proof.
+  unfold shrlu. destruct Archi.splitlong eqn:SL. apply SplitLongproof.eval_shrlu; auto.
+  red; intros. destruct (is_intconst b) as [n2|] eqn:C.
+- exploit is_intconst_sound; eauto. intros EQ; subst y. apply eval_shrluimm; auto.
+- TrivialExists.
+Qed.
 
 Theorem eval_shrl: binary_constructor_sound shrl Val.shrl.
-Admitted.
+Proof.
+  unfold shrl. destruct Archi.splitlong eqn:SL. apply SplitLongproof.eval_shrl; auto.
+  red; intros. destruct (is_intconst b) as [n2|] eqn:C.
+- exploit is_intconst_sound; eauto. intros EQ; subst y. apply eval_shrlimm; auto.
+- TrivialExists.
+Qed.
 
 Theorem eval_negl: unary_constructor_sound negl Val.negl.
-Admitted.
+Proof.
+  unfold negl. destruct Archi.splitlong eqn:SL. apply SplitLongproof.eval_negl; auto.
+  red; intros. destruct (is_longconst a) as [n|] eqn:C.
+- exploit is_longconst_sound; eauto. intros EQ; subst x. 
+  econstructor; split. apply eval_longconst. auto.
+- TrivialExists.
+Qed.    
 
 Theorem eval_addlimm: forall n, unary_constructor_sound (addlimm n) (fun v => Val.addl v (Vlong n)).
 Proof.
@@ -227,13 +372,60 @@ Proof.
 Qed.
 
 Theorem eval_mullimm_base: forall n, unary_constructor_sound (mullimm_base n) (fun v => Val.mull v (Vlong n)).
-Admitted.
+Proof.
+  intros; unfold mullimm_base. red; intros. 
+  generalize (Int64.one_bits'_decomp n); intros D.
+  destruct (Int64.one_bits' n) as [ | i [ | j [ | ? ? ]]] eqn:B.
+- TrivialExists.
+- replace (Val.mull x (Vlong n)) with (Val.shll x (Vint i)).
+  apply eval_shllimm; auto.
+  simpl in D. rewrite D, Int64.add_zero. destruct x; simpl; auto.
+  rewrite (Int64.one_bits'_range n) by (rewrite B; auto with coqlib).
+  rewrite Int64.shl'_mul; auto.
+- set (le' := x :: le).
+  assert (A0: eval_expr ge sp e m le' (Eletvar O) x) by (constructor; reflexivity).
+  exploit (eval_shllimm i). eexact A0. intros (v1 & A1 & B1).
+  exploit (eval_shllimm j). eexact A0. intros (v2 & A2 & B2).
+  exploit (eval_addl). eexact A1. eexact A2. intros (v3 & A3 & B3).
+  exists v3; split. econstructor; eauto.
+  rewrite D. simpl. rewrite Int64.add_zero. destruct x; auto.
+  simpl in *.
+  rewrite (Int64.one_bits'_range n) in B1 by (rewrite B; auto with coqlib).
+  rewrite (Int64.one_bits'_range n) in B2 by (rewrite B; auto with coqlib).
+  inv B1; inv B2. simpl in B3; inv B3.
+  rewrite Int64.mul_add_distr_r. rewrite <- ! Int64.shl'_mul. auto.
+- TrivialExists.
+Qed.
 
 Theorem eval_mullimm: forall n, unary_constructor_sound (mullimm n) (fun v => Val.mull v (Vlong n)).
-Admitted.
+Proof.
+  unfold mullimm. intros; red; intros.
+  predSpec Int64.eq Int64.eq_spec n Int64.zero.
+  exists (Vlong Int64.zero); split. apply eval_longconst.
+  destruct x; simpl; auto. subst n; rewrite Int64.mul_zero; auto.
+  predSpec Int64.eq Int64.eq_spec n Int64.one.
+  exists x; split; auto.
+  destruct x; simpl; auto. subst n; rewrite Int64.mul_one; auto.
+  destruct (mullimm_match a); InvEval.
+- econstructor; split. apply eval_longconst. rewrite Int64.mul_commut; auto.
+- exploit (eval_mullimm_base n); eauto. intros (v2 & A2 & B2).
+  exploit (eval_addlimm (Int64.mul n (Int64.repr n2))). eexact A2. intros (v3 & A3 & B3).
+  exists v3; split; auto. subst x.
+  destruct v1; simpl; auto.
+  simpl in B2; inv B2. simpl in B3; inv B3. rewrite Int64.mul_add_distr_l.
+  rewrite (Int64.mul_commut n). auto.
+  destruct Archi.ptr64; auto.
+- apply eval_mullimm_base; auto.
+Qed.     
 
 Theorem eval_mull: binary_constructor_sound mull Val.mull.
-Admitted.
+Proof.
+  unfold mull. destruct Archi.splitlong eqn:SL. apply SplitLongproof.eval_mull; auto.
+  red; intros; destruct (mull_match a b); InvEval.
+- rewrite Val.mull_commut. apply eval_mullimm; auto.
+- apply eval_mullimm; auto.
+- TrivialExists.
+Qed.
 
 Theorem eval_shrxlimm:
   forall le a n x z,
@@ -250,16 +442,32 @@ Proof.
 Qed.
 
 Theorem eval_divls_base: partial_binary_constructor_sound divls_base Val.divls.
-Admitted.
+Proof. 
+  unfold divls_base; red; intros. destruct Archi.splitlong eqn:SL.
+  eapply SplitLongproof.eval_divls_base; eauto.
+  TrivialExists.
+Qed.
 
 Theorem eval_modls_base: partial_binary_constructor_sound modls_base Val.modls.
-Admitted.
+Proof. 
+  unfold modls_base; red; intros. destruct Archi.splitlong eqn:SL.
+  eapply SplitLongproof.eval_modls_base; eauto.
+  TrivialExists.
+Qed.
   
 Theorem eval_divlu_base: partial_binary_constructor_sound divlu_base Val.divlu.
-Admitted.
+Proof. 
+  unfold divlu_base; red; intros. destruct Archi.splitlong eqn:SL.
+  eapply SplitLongproof.eval_divlu_base; eauto.
+  TrivialExists.
+Qed.
 
 Theorem eval_modlu_base: partial_binary_constructor_sound modlu_base Val.modlu.
-Admitted.
+Proof. 
+  unfold modlu_base; red; intros. destruct Archi.splitlong eqn:SL.
+  eapply SplitLongproof.eval_modlu_base; eauto.
+  TrivialExists.
+Qed.
 
 Theorem eval_cmplu:
   forall c le a x b y v,
@@ -304,15 +512,31 @@ Proof.
 Qed.
 
 Theorem eval_longoffloat: partial_unary_constructor_sound longoffloat Val.longoffloat.
-Admitted.  
+Proof.
+  unfold longoffloat; red; intros. destruct Archi.splitlong eqn:SL.
+  eapply SplitLongproof.eval_longoffloat; eauto.
+  TrivialExists.
+Qed. 
 
 Theorem eval_floatoflong: partial_unary_constructor_sound floatoflong Val.floatoflong.
-Admitted.  
+Proof.
+  unfold floatoflong; red; intros. destruct Archi.splitlong eqn:SL.
+  eapply SplitLongproof.eval_floatoflong; eauto.
+  TrivialExists.
+Qed. 
 
 Theorem eval_longofsingle: partial_unary_constructor_sound longofsingle Val.longofsingle.
-Admitted.  
+Proof.
+  unfold longofsingle; red; intros. destruct Archi.splitlong eqn:SL.
+  eapply SplitLongproof.eval_longofsingle; eauto.
+  TrivialExists.
+Qed. 
 
 Theorem eval_singleoflong: partial_unary_constructor_sound singleoflong Val.singleoflong.
-Admitted.  
+Proof.
+  unfold singleoflong; red; intros. destruct Archi.splitlong eqn:SL.
+  eapply SplitLongproof.eval_singleoflong; eauto.
+  TrivialExists.
+Qed. 
 
 End CMCONSTR.

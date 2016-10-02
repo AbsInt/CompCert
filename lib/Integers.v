@@ -4110,7 +4110,114 @@ Proof.
   rewrite <- B.
   apply shrx_shr_2.
   unfold ltu. apply zlt_true. change (unsigned z < 63). rewrite A; omega.
-Qed.    
+Qed.
+
+Remark int_ltu_2_inv:
+  forall y z,
+  Int.ltu y iwordsize' = true ->
+  Int.ltu z iwordsize' = true ->
+  Int.unsigned (Int.add y z) <= Int.unsigned iwordsize' ->
+  let y' := repr (Int.unsigned y) in
+  let z' := repr (Int.unsigned z) in
+     Int.unsigned y = unsigned y'
+  /\ Int.unsigned z = unsigned z'
+  /\ ltu y' iwordsize = true
+  /\ ltu z' iwordsize = true
+  /\ Int.unsigned (Int.add y z) = unsigned (add y' z')
+  /\ add y' z' = repr (Int.unsigned (Int.add y z)).
+Proof.
+  intros. apply Int.ltu_inv in H. apply Int.ltu_inv in H0.
+  change (Int.unsigned iwordsize') with 64 in *.
+  assert (128 < max_unsigned) by reflexivity.
+  assert (128 < Int.max_unsigned) by reflexivity.
+  assert (Y: unsigned y' = Int.unsigned y) by (apply unsigned_repr; omega).
+  assert (Z: unsigned z' = Int.unsigned z) by (apply unsigned_repr; omega).
+  assert (P: Int.unsigned (Int.add y z) = unsigned (add y' z')).
+  { unfold Int.add. rewrite Int.unsigned_repr by omega.
+    unfold add. rewrite unsigned_repr by omega. congruence. }
+  intuition auto.
+  apply zlt_true. rewrite Y; auto.
+  apply zlt_true. rewrite Z; auto.
+  rewrite P. rewrite repr_unsigned. auto.
+Qed.
+
+Theorem or_ror':
+  forall x y z,
+  Int.ltu y iwordsize' = true ->
+  Int.ltu z iwordsize' = true ->
+  Int.add y z = iwordsize' ->
+  ror x (repr (Int.unsigned z)) = or (shl' x y) (shru' x z).
+Proof.
+  intros. destruct (int_ltu_2_inv y z) as (A & B & C & D & E & F); auto. rewrite H1; omega.
+  replace (shl' x y) with (shl x (repr (Int.unsigned y))).
+  replace (shru' x z) with (shru x (repr (Int.unsigned z))).
+  apply or_ror; auto. rewrite F, H1. reflexivity.
+  unfold shru, shru'; rewrite <- B; auto. 
+  unfold shl, shl'; rewrite <- A; auto.
+Qed.
+
+Theorem shl'_shl':
+  forall x y z,
+  Int.ltu y iwordsize' = true ->
+  Int.ltu z iwordsize' = true ->
+  Int.ltu (Int.add y z) iwordsize' = true ->
+  shl' (shl' x y) z = shl' x (Int.add y z).
+Proof.
+  intros. apply Int.ltu_inv in H1.
+  destruct (int_ltu_2_inv y z) as (A & B & C & D & E & F); auto. omega.
+  set (y' := repr (Int.unsigned y)) in *.
+  set (z' := repr (Int.unsigned z)) in *.
+  replace (shl' x y) with (shl x y').
+  replace (shl' (shl x y') z) with (shl (shl x y') z').
+  replace (shl' x (Int.add y z)) with (shl x (add y' z')).
+  apply shl_shl; auto. apply zlt_true. rewrite <- E. 
+  change (unsigned iwordsize) with zwordsize. tauto.
+  unfold shl, shl'. rewrite E; auto.
+  unfold shl at 1, shl'. rewrite <- B; auto.
+  unfold shl, shl'; rewrite <- A; auto.
+Qed.
+
+Theorem shru'_shru':
+  forall x y z,
+  Int.ltu y iwordsize' = true ->
+  Int.ltu z iwordsize' = true ->
+  Int.ltu (Int.add y z) iwordsize' = true ->
+  shru' (shru' x y) z = shru' x (Int.add y z).
+Proof.
+  intros. apply Int.ltu_inv in H1.
+  destruct (int_ltu_2_inv y z) as (A & B & C & D & E & F); auto. omega.
+  set (y' := repr (Int.unsigned y)) in *.
+  set (z' := repr (Int.unsigned z)) in *.
+  replace (shru' x y) with (shru x y').
+  replace (shru' (shru x y') z) with (shru (shru x y') z').
+  replace (shru' x (Int.add y z)) with (shru x (add y' z')).
+  apply shru_shru; auto. apply zlt_true. rewrite <- E. 
+  change (unsigned iwordsize) with zwordsize. tauto.
+  unfold shru, shru'. rewrite E; auto.
+  unfold shru at 1, shru'. rewrite <- B; auto.
+  unfold shru, shru'; rewrite <- A; auto.
+Qed.
+
+Theorem shr'_shr':
+  forall x y z,
+  Int.ltu y iwordsize' = true ->
+  Int.ltu z iwordsize' = true ->
+  Int.ltu (Int.add y z) iwordsize' = true ->
+  shr' (shr' x y) z = shr' x (Int.add y z).
+Proof.
+  intros. apply Int.ltu_inv in H1.
+  destruct (int_ltu_2_inv y z) as (A & B & C & D & E & F); auto. omega.
+  set (y' := repr (Int.unsigned y)) in *.
+  set (z' := repr (Int.unsigned z)) in *.
+  replace (shr' x y) with (shr x y').
+  replace (shr' (shr x y') z) with (shr (shr x y') z').
+  replace (shr' x (Int.add y z)) with (shr x (add y' z')).
+  apply shr_shr; auto. apply zlt_true. rewrite <- E. 
+  change (unsigned iwordsize) with zwordsize. tauto.
+  unfold shr, shr'. rewrite E; auto.
+  unfold shr at 1, shr'. rewrite <- B; auto.
+  unfold shr, shr'; rewrite <- A; auto.
+Qed.
 
 (** Powers of two with exponents given as 32-bit ints *)
 

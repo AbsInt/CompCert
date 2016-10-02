@@ -103,7 +103,7 @@ Nondetfunction orl (e1: expr) (e2: expr) :=
       else Eop Oorl (e1:::e2:::Enil)
   | Eop (Oshrluimm n2) (t2:::Enil), Eop (Oshllimm n1) (t1:::Enil) =>
       if Int.eq (Int.add n1 n2) Int64.iwordsize' && same_expr_pure t1 t2
-      then Eop (Ororimm n2) (t1:::Enil)
+      then Eop (Ororlimm n2) (t1:::Enil)
       else Eop Oorl (e1:::e2:::Enil)
   | _, _ =>
       Eop Oorl (e1:::e2:::Enil)
@@ -259,12 +259,11 @@ Nondetfunction subl (e1: expr) (e2: expr) :=
   end.
 
 Definition mullimm_base (n1: int64) (e2: expr) :=
-  match Int64.one_bits n1 with
+  match Int64.one_bits' n1 with
   | i :: nil =>
-      shllimm e2 (Int.repr (Int64.unsigned i))
+      shllimm e2 i
   | i :: j :: nil =>
-      Elet e2 (addl (shllimm (Eletvar 0) (Int.repr (Int64.unsigned i)))
-                    (shllimm (Eletvar 0) (Int.repr (Int64.unsigned j))))
+      Elet e2 (addl (shllimm (Eletvar 0) i) (shllimm (Eletvar 0) j))
   | _ =>
       Eop (Omullimm n1) (e2:::Enil)
   end.
@@ -293,7 +292,7 @@ Definition shrxlimm (e: expr) (n: int) :=
 Definition divlu_base (e1: expr) (e2: expr) :=
   if Archi.splitlong then SplitLong.divlu_base e1 e2 else Eop Odivlu (e1:::e2:::Enil).
 Definition modlu_base (e1: expr) (e2: expr) :=
-  if Archi.splitlong then SplitLong.modlu_base e1 e2 else Eop Omodu (e1:::e2:::Enil).
+  if Archi.splitlong then SplitLong.modlu_base e1 e2 else Eop Omodlu (e1:::e2:::Enil).
 Definition divls_base (e1: expr) (e2: expr) :=
   if Archi.splitlong then SplitLong.divls_base e1 e2 else Eop Odivl (e1:::e2:::Enil).
 Definition modls_base (e1: expr) (e2: expr) :=

@@ -876,7 +876,7 @@ Proof.
   econstructor; split. eapply eval_helper_2; eauto. DeclHelper. UseHelper. auto.
 Qed.
 
-Theorem eval_divsu_base:
+Theorem eval_divls_base:
   forall le a b x y z,
   eval_expr ge sp e m le a x ->
   eval_expr ge sp e m le b y ->
