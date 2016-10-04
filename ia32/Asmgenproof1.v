@@ -142,7 +142,7 @@ Proof.
             || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone) eqn:OK;
   try (intuition discriminate).
   intros _.
-  InvBooleans. 
+  InvBooleans.
   exists (Int.shr i (Int.repr 31)), i, i0, (Int.divs i i0), (Int.mods i i0); intuition auto.
   rewrite Int.shr_lt_zero. apply Int.divmods2_divs_mods.
   red; intros; subst i0; rewrite Int.eq_true in H; discriminate.
@@ -182,7 +182,7 @@ Proof.
             || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq i0 Int64.mone) eqn:OK;
   try (intuition discriminate).
   intros _.
-  InvBooleans. 
+  InvBooleans.
   exists (Int64.shr i (Int64.repr 63)), i, i0, (Int64.divs i i0), (Int64.mods i i0); intuition auto.
   rewrite Int64.shr_lt_zero. apply Int64.divmods2_divs_mods.
   red; intros; subst i0; rewrite Int64.eq_true in H; discriminate.
@@ -314,7 +314,7 @@ Proof.
   unfold mk_storebyte; intros.
   destruct (Archi.ptr64 || low_ireg r) eqn:E.
 (* low reg *)
-  monadInv H. econstructor; split. apply exec_straight_one. 
+  monadInv H. econstructor; split. apply exec_straight_one.
   simpl. unfold exec_store. rewrite H0. eauto. auto.
   intros; Simplifs.
 (* high reg *)
@@ -333,7 +333,7 @@ Proof.
   replace (Val.add (eval_addrmode32 ge addr rs1) (Vint Int.zero))
      with (eval_addrmode ge addr rs1).
   rewrite H0. eauto.
-  unfold eval_addrmode in *; rewrite H1 in *. 
+  unfold eval_addrmode in *; rewrite H1 in *.
   destruct (eval_addrmode32 ge addr rs1); simpl in H0; try discriminate.
   simpl. rewrite H1. rewrite Ptrofs.add_zero; auto.
   auto. auto. auto.
@@ -358,10 +358,10 @@ Remark eval_addrmode_indexed:
   match rs#base with Vptr _ _ => True | _ => False end ->
   eval_addrmode ge (Addrmode (Some base) None (inl _ (Ptrofs.unsigned ofs))) rs = Val.offset_ptr rs#base ofs.
 Proof.
-  intros. destruct (rs#base) eqn:BASE; try contradiction. 
+  intros. destruct (rs#base) eqn:BASE; try contradiction.
   intros; unfold eval_addrmode; destruct Archi.ptr64 eqn:SF; simpl; rewrite BASE; simpl; rewrite SF; simpl.
-- do 2 f_equal. rewrite Int64.add_zero_l. rewrite <- (Ptrofs.repr_unsigned ofs) at 2. auto with ptrofs.
-- do 2 f_equal. rewrite Int.add_zero_l. rewrite <- (Ptrofs.repr_unsigned ofs) at 2. auto with ptrofs.
+- apply f_equal. apply f_equal. rewrite Int64.add_zero_l. rewrite <- (Ptrofs.repr_unsigned ofs) at 2. auto with ptrofs.
+-  apply f_equal. apply f_equal. rewrite Int.add_zero_l. rewrite <- (Ptrofs.repr_unsigned ofs) at 2. auto with ptrofs.
 Qed.
 
 Ltac loadind_correct_solve :=
@@ -420,7 +420,7 @@ Lemma transl_addressing_mode_32_correct:
 Proof.
   assert (A: forall id ofs, Archi.ptr64 = false ->
           Val.add (Vint Int.zero) (Genv.symbol_address ge id ofs) = Genv.symbol_address ge id ofs).
-  { intros. unfold Val.add; rewrite H. unfold Genv.symbol_address. 
+  { intros. unfold Val.add; rewrite H. unfold Genv.symbol_address.
     destruct (Genv.find_symbol ge id); auto. rewrite Ptrofs.add_zero; auto. }
   assert (C: forall v i,
     Val.lessdef (Val.mul v (Vint (Int.repr i)))
@@ -440,7 +440,7 @@ Proof.
 - destruct Archi.ptr64 eqn:SF; inv H2. erewrite ireg_of_eq by eauto.
   rewrite Val.add_permut. rewrite Val.add_commut. apply Val.add_lessdef; auto. rewrite A; auto.
 - destruct Archi.ptr64 eqn:SF; inv H2. simpl.
-  destruct (rs RSP); simpl; auto; rewrite SF. 
+  destruct (rs RSP); simpl; auto; rewrite SF.
   rewrite Int.add_zero_l. apply Val.lessdef_same; f_equal; f_equal.
   symmetry. transitivity (Ptrofs.repr (Ptrofs.signed i)). auto with ptrofs. auto with ints.
 Qed.
@@ -453,7 +453,7 @@ Lemma transl_addressing_mode_64_correct:
 Proof.
   assert (A: forall id ofs, Archi.ptr64 = true ->
           Val.addl (Vlong Int64.zero) (Genv.symbol_address ge id ofs) = Genv.symbol_address ge id ofs).
-  { intros. unfold Val.addl; rewrite H. unfold Genv.symbol_address. 
+  { intros. unfold Val.addl; rewrite H. unfold Genv.symbol_address.
     destruct (Genv.find_symbol ge id); auto. rewrite Ptrofs.add_zero; auto. }
   assert (C: forall v i,
     Val.lessdef (Val.mull v (Vlong (Int64.repr i)))
@@ -469,7 +469,7 @@ Proof.
 - apply Val.addl_lessdef; auto. apply Val.addl_lessdef; auto.
 - destruct Archi.ptr64 eqn:SF; inv H2. rewrite ! A by auto. auto.
 - destruct Archi.ptr64 eqn:SF; inv H2. simpl.
-  destruct (rs RSP); simpl; auto; rewrite SF. 
+  destruct (rs RSP); simpl; auto; rewrite SF.
   rewrite Int64.add_zero_l. apply Val.lessdef_same; f_equal; f_equal.
   symmetry. transitivity (Ptrofs.repr (Ptrofs.signed i)). auto with ptrofs. auto with ints.
 Qed.
@@ -480,7 +480,7 @@ Lemma transl_addressing_mode_correct:
   eval_addressing ge (rs RSP) addr (List.map rs (List.map preg_of args)) = Some v ->
   Val.lessdef v (eval_addrmode ge am rs).
 Proof.
-  unfold eval_addressing, eval_addrmode; intros. destruct Archi.ptr64. 
+  unfold eval_addressing, eval_addrmode; intros. destruct Archi.ptr64.
   eapply transl_addressing_mode_64_correct; eauto.
   eapply transl_addressing_mode_32_correct; eauto.
 Qed.
@@ -492,16 +492,16 @@ Proof.
 Qed.
 
 Lemma normalize_addrmode_64_correct:
-  forall am rs, 
+  forall am rs,
   eval_addrmode64 ge am rs =
   match normalize_addrmode_64 am with
   | (am', None) => eval_addrmode64 ge am' rs
   | (am', Some delta) => Val.addl (eval_addrmode64 ge am' rs) (Vlong delta)
   end.
 Proof.
-  intros; destruct am as [base ofs [n|r]]; simpl; auto. 
+  intros; destruct am as [base ofs [n|r]]; simpl; auto.
   destruct (zeq (Int.signed (Int.repr n)) n); simpl; auto.
-  rewrite ! Val.addl_assoc. do 2 f_equal. simpl. rewrite Int64.add_zero_l; auto.
+  rewrite ! Val.addl_assoc. apply f_equal. apply f_equal. simpl. rewrite Int64.add_zero_l; auto.
 Qed.
 
 (** Processor conditions and comparisons *)
@@ -657,7 +657,7 @@ Proof.
   intros. generalize (compare_longs_spec rs v1 v2 m).
   set (rs' := nextinstr (compare_longs v1 v2 rs m)).
   intros [A [B [C [D E]]]].
-  unfold eval_testcond. rewrite A; rewrite B. 
+  unfold eval_testcond. rewrite A; rewrite B.
   destruct v1; destruct v2; simpl in H; inv H.
 - (* int int *)
   destruct c; simpl; auto.
@@ -1365,11 +1365,11 @@ Transparent destroyed_by_op.
 (* leal *)
   exploit transl_addressing_mode_64_correct; eauto. intros EA.
   generalize (normalize_addrmode_64_correct x rs). destruct (normalize_addrmode_64 x) as [am' [delta|]]; intros EV.
-  econstructor; split. eapply exec_straight_two. 
-  simpl. reflexivity.  simpl. reflexivity. auto. auto. 
+  econstructor; split. eapply exec_straight_two.
+  simpl. reflexivity.  simpl. reflexivity. auto. auto.
   split. rewrite nextinstr_nf_inv by auto. rewrite Pregmap.gss. rewrite nextinstr_inv by auto with asmgen.
   rewrite Pregmap.gss. rewrite <- EV; auto.
-  intros; Simplifs. 
+  intros; Simplifs.
   TranslOp. rewrite nextinstr_inv; auto with asmgen. rewrite Pregmap.gss; auto. rewrite <- EV; auto.
 (* intoffloat *)
   apply SAME. TranslOp. rewrite H0; auto.
@@ -1475,5 +1475,3 @@ Proof.
 Qed.
 
 End CONSTRUCTORS.
-
-
