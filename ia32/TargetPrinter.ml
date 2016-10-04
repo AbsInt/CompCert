@@ -69,6 +69,12 @@ let preg oc = function
 
 let z oc n = output_string oc (Z.to_string n)
 
+(* 32/64 bit dependencies *)
+
+let size_pointer = if Archi.ptr64 then 8 else 4
+let data_pointer = if Archi.ptr64 then ".quad" else ".long"
+
+
 (* The comment deliminiter *)
 let comment = "#"
 
@@ -125,7 +131,9 @@ module ELF_System : SYSTEM =
       fprintf oc "	.align	%d\n" n
 
     let print_mov_rs oc rd id =
-      fprintf oc "	movq    %a@GOTPCREL(%%rip), %a\n" symbol id ireg64 rd
+      if Archi.ptr64
+      then fprintf oc "	movq    %a@GOTPCREL(%%rip), %a\n" symbol id ireg64 rd
+      else fprintf oc "	movl	$%a, %a\n" symbol id ireg32 rd
 
     let print_fun_info = elf_print_fun_info
 
@@ -186,14 +194,32 @@ module MacOS_System : SYSTEM =
     let print_align oc n =
       fprintf oc "	.align	%d\n" (log2 n)
 
+    let indirect_symbols : StringSet.t ref = ref StringSet.empty
+
     let print_mov_rs oc rd id =
-      fprintf oc "	movq    %a@GOTPCREL(%%rip), %a\n" symbol id ireg64 rd
+      if Archi.ptr64 then begin
+        fprintf oc "	movq    %a@GOTPCREL(%%rip), %a\n" symbol id ireg64 rd
+      end else begin
+        let id = extern_atom id in
+        indirect_symbols := StringSet.add id !indirect_symbols;
+        fprintf oc "	movl	L%a$non_lazy_ptr, %a\n" raw_symbol id ireg rd
+      end
 
     let print_fun_info _ _ = ()
 
     let print_var_info _ _ = ()
 
-    let print_epilogue oc = ()
+    let print_epilogue oc =
+      if not Archi.ptr64 then begin
+        fprintf oc "	.section __IMPORT,__pointers,non_lazy_symbol_pointers\n";
+        StringSet.iter
+          (fun s ->
+            fprintf oc "L%a$non_lazy_ptr:\n" raw_symbol s;
+            fprintf oc "	.indirect_symbol %a\n" raw_symbol s;
+            fprintf oc "	.long	0\n")
+          !indirect_symbols;
+        indirect_symbols := StringSet.empty
+      end
 
     let print_comm_decl oc name sz al =
       fprintf oc "	.comm	%a, %s, %d\n"
@@ -594,14 +620,24 @@ module Target(System: SYSTEM):TARGET =
           fprintf oc "%a:\n" label l'
       | Pjmptbl(r, tbl) ->
           let l = new_label() in
-          fprintf oc "	jmp	*%a(, %a, 8)\n" label l ireg64 r;
+          fprintf oc "	jmp	*%a(, %a, %d)\n" label l ireg r size_pointer;
           jumptables := (l, tbl) :: !jumptables
       | Pcall_s(f, sg) ->
-          fprintf oc "	call	%a\n" symbol f
+          fprintf oc "	call	%a\n" symbol f;
+          if (not Archi.ptr64) && sg.sig_cc.cc_structret then
+            fprintf oc "	pushl	%%eax\n"
       | Pcall_r(r, sg) ->
-          fprintf oc "	call	*%a\n" ireg r
+          fprintf oc "	call	*%a\n" ireg r;
+          if (not Archi.ptr64) && sg.sig_cc.cc_structret then
+            fprintf oc "	pushl	%%eax\n"
       | Pret ->
-          fprintf oc "	ret\n"
+          if (not Archi.ptr64)
+          && (!current_function_sig).sig_cc.cc_structret then begin
+            fprintf oc "	movl	0(%%esp), %%eax\n";
+            fprintf oc "	ret	$4\n"
+          end else begin
+            fprintf oc "	ret\n"
+          end
       (* Instructions produced by Asmexpand *)
       | Padcl_ri (res,n) ->
 	 fprintf oc "  	adcl	$%ld, %a\n" (camlint_of_coqint n) ireg32 res;
@@ -708,11 +744,12 @@ module Target(System: SYSTEM):TARGET =
       let print_jumptable oc (lbl, tbl) =
         fprintf oc "%a:" label lbl;
         List.iter
-          (fun l -> fprintf oc "	.quad	%a\n" label (transl_label l))
+          (fun l -> fprintf oc "	%s	%a\n"
+                               data_pointer label (transl_label l))
           tbl in
       if !jumptables <> [] then begin
         section oc jmptbl;
-        print_align oc 8;
+        print_align oc size_pointer;
         List.iter (print_jumptable oc) !jumptables;
         jumptables := []
       end
@@ -738,7 +775,7 @@ module Target(System: SYSTEM):TARGET =
           if Z.gt n Z.zero then
             fprintf oc "	.space	%a\n" z n
       | Init_addrof(symb, ofs) ->
-          fprintf oc "	.quad	%a\n" symbol_offset (symb, ofs)
+          fprintf oc "	%s	%a\n" data_pointer symbol_offset (symb, ofs)
 
     let print_align = print_align
 
