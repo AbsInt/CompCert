@@ -34,12 +34,23 @@
 
 /* Helper functions for 64-bit integer arithmetic. Reference C implementation */
 
-extern unsigned long long __i64_shl(unsigned long long x, int amount);
-extern unsigned long long __i64_shr(unsigned long long x, int amount);
-extern signed long long __i64_sar(signed long long x, int amount);
+#include "i64.h"
 
-extern unsigned long long __i64_udivmod(unsigned long long n,
-                                        unsigned long long d,
-                                        unsigned long long * rp);
-extern unsigned long long __i64_umulh(unsigned long long u,
-                                      unsigned long long v);
+typedef signed long long s64;
+typedef unsigned long long u64;
+
+/* Signed multiply high */
+
+/* Hacker's Delight section 8.3:
+ * - compute high 64 bits of the unsigned product X * Y
+ * - subtract X if Y < 0
+ * - subtract Y if X < 0 
+ */
+
+s64 __i64_smulh(s64 x, s64 y)
+{
+  s64 t = (s64) __i64_umulh(x, y);
+  if (y < 0) t = t - x;
+  if (x < 0) t = t - y;
+  return t;
+}

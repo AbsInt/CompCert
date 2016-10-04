@@ -38,7 +38,9 @@ Class helper_functions := mk_helper_functions {
   i64_umod: ident;                      (**r unsigned remainder *)
   i64_shl: ident;                       (**r shift left *)
   i64_shr: ident;                       (**r shift right unsigned *)
-  i64_sar: ident                        (**r shift right signed *)
+  i64_sar: ident;                       (**r shift right signed *)
+  i64_umulh: ident;                     (**r unsigned multiply high *)
+  i64_smulh: ident;                     (**r signed multiply high *)
 }.
 
 Definition sig_l_l := mksignature (Tlong :: nil) (Some Tlong) cc_default.
@@ -254,6 +256,11 @@ Definition mull (e1 e2: expr) :=
   | _, Some n2 => mullimm e1 n2
   | _, _ => mull_base e1 e2
   end.
+
+Definition mullhu (e1: expr) (n2: int64) :=
+  Eexternal i64_umulh sig_ll_l (e1 ::: longconst n2 ::: Enil).
+Definition mullhs (e1: expr) (n2: int64) :=
+  Eexternal i64_smulh sig_ll_l (e1 ::: longconst n2 ::: Enil).
 
 Definition shrxlimm (e: expr) (n: int) :=
   if Int.eq n Int.zero then e else

@@ -1312,6 +1312,10 @@ Transparent destroyed_by_op.
 (* lea *)
   exploit transl_addressing_mode_32_correct; eauto. intros EA.
   TranslOp. rewrite nextinstr_inv; auto with asmgen. rewrite Pregmap.gss. rewrite normalize_addrmode_32_correct; auto.
+(* mullhs *)
+  apply SAME. TranslOp. destruct H1. Simplifs.
+(* mullhu *)
+  apply SAME. TranslOp. destruct H1. Simplifs.
 (* divl *)
   apply SAME.
   exploit (divls_modls_exists (rs RAX) (rs RCX)). left; congruence.

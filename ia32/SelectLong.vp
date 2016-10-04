@@ -285,6 +285,14 @@ Nondetfunction mull (e1: expr) (e2: expr) :=
   | _, _ => Eop Omull (e1:::e2:::Enil)
   end.
 
+Definition mullhu (e1: expr) (n2: int64) :=
+  if Archi.splitlong then SplitLong.mullhu e1 n2 else
+  Eop Omullhu (e1 ::: longconst n2 ::: Enil).
+
+Definition mullhs (e1: expr) (n2: int64) :=
+  if Archi.splitlong then SplitLong.mullhs e1 n2 else
+  Eop Omullhs (e1 ::: longconst n2 ::: Enil).
+
 Definition shrxlimm (e: expr) (n: int) :=
   if Archi.splitlong then SplitLong.shrxlimm e n else
   if Int.eq n Int.zero then e else Eop (Oshrxlimm n) (e ::: Enil).

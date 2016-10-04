@@ -1866,6 +1866,18 @@ Lemma mull_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mull v w) (mull x y).
 Proof (binop_long_sound Int64.mul).
 
+Definition mullhs := binop_long Int64.mulhs.
+
+Lemma mullhs_sound:
+  forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mullhs v w) (mullhs x y).
+Proof (binop_long_sound Int64.mulhs).
+
+Definition mullhu := binop_long Int64.mulhu.
+
+Lemma mullhu_sound:
+  forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mullhu v w) (mullhu x y).
+Proof (binop_long_sound Int64.mulhu).
+
 Definition divls (v w: aval) :=
   match w, v with
   | L i2, L i1 =>
@@ -4559,7 +4571,8 @@ Hint Resolve cnot_sound symbol_address_sound
        divs_sound divu_sound mods_sound modu_sound shrx_sound
        shll_sound shrl_sound shrlu_sound
        andl_sound orl_sound xorl_sound notl_sound roll_sound rorl_sound
-       negl_sound addl_sound subl_sound mull_sound
+       negl_sound addl_sound subl_sound
+       mull_sound mullhs_sound mullhu_sound
        divls_sound divlu_sound modls_sound modlu_sound shrxl_sound
        negf_sound absf_sound
        addf_sound subf_sound mulf_sound divf_sound

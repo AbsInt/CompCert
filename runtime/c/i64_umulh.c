@@ -2,9 +2,9 @@
  *
  *               The Compcert verified compiler
  *
- *           Xavier Leroy, INRIA Paris-Rocquencourt
+ *           Xavier Leroy, INRIA Paris
  *
- * Copyright (c) 2013 Institut National de Recherche en Informatique et
+ * Copyright (c) 2016 Institut National de Recherche en Informatique et
  *  en Automatique.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,12 +34,33 @@
 
 /* Helper functions for 64-bit integer arithmetic. Reference C implementation */
 
-extern unsigned long long __i64_shl(unsigned long long x, int amount);
-extern unsigned long long __i64_shr(unsigned long long x, int amount);
-extern signed long long __i64_sar(signed long long x, int amount);
+#include "i64.h"
 
-extern unsigned long long __i64_udivmod(unsigned long long n,
-                                        unsigned long long d,
-                                        unsigned long long * rp);
-extern unsigned long long __i64_umulh(unsigned long long u,
-                                      unsigned long long v);
+typedef unsigned long long u64;
+typedef unsigned int u32;
+
+/* Unsigned multiply high */
+
+/* Hacker's Delight, algorithm 8.1, specialized to two 32-bit words */
+
+u64 __i64_umulh(u64 u, u64 v)
+{
+  u32 u0 = u, u1 = u >> 32;
+  u32 v0 = v, v1 = v >> 32;
+  u32 w1, w2, w3, k;
+  u64 t;
+
+  t = (u64) u0 * (u64) v0;
+  k = t >> 32;
+
+  t = (u64) u1 * (u64) v0 + k;
+  w1 = t;
+  w2 = t >> 32;
+
+  t = (u64) u0 * (u64) v1 + w1;
+  k = t >> 32;
+
+  t = (u64) u1 * (u64) v1 + w2 + k;
+
+  return t;
+}

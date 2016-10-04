@@ -251,6 +251,14 @@ let builtins_generic = {
     "__i64_sar",
         (TInt(ILongLong, []),
          [TInt(ILongLong, []); TInt(IInt, [])],
+         false);
+    "__i64_smulh",
+        (TInt(ILongLong, []),
+         [TInt(ILongLong, []); TInt(ILongLong, [])],
+         false);
+    "__i64_umulh",
+        (TInt(IULongLong, []),
+         [TInt(IULongLong, []); TInt(IULongLong, [])],
          false)
   ]
 }

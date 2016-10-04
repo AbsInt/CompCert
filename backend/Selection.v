@@ -389,10 +389,13 @@ Definition get_helpers (defmap: PTree.t globdef) : res helper_functions :=
   do i64_shl <- lookup_helper globs "__i64_shl" sig_li_l ;
   do i64_shr <- lookup_helper globs "__i64_shr" sig_li_l ;
   do i64_sar <- lookup_helper globs "__i64_sar" sig_li_l ;
+  do i64_umulh <- lookup_helper globs "__i64_umulh" sig_ll_l ;
+  do i64_smulh <- lookup_helper globs "__i64_smulh" sig_ll_l ;
   OK (mk_helper_functions
      i64_dtos i64_dtou i64_stod i64_utod i64_stof i64_utof
      i64_sdiv i64_udiv i64_smod i64_umod
-     i64_shl i64_shr i64_sar).
+     i64_shl i64_shr i64_sar
+     i64_umulh i64_smulh).
 
 (** Conversion of programs. *)
 

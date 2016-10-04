@@ -206,14 +206,23 @@ Context {hf: helper_functions}.
 Definition modl_from_divl (equo: expr) (n: int64) :=
   subl (Eletvar O) (mullimm n equo).
 
+Definition divlu_mull (p: Z) (m: Z) :=
+  shrluimm (mullhu (Eletvar O) (Int64.repr m)) (Int.repr p).
+
 Definition divlu (e1 e2: expr) :=
   match is_longconst e2, is_longconst e1 with
   | Some n2, Some n1 => longconst (Int64.divu n1 n2)
   | Some n2, _ =>
       match Int64.is_power2' n2 with
       | Some l => shrluimm e1 l
-      | None   => divlu_base e1 e2
-      end (* TODO: multiply-high *)
+      | None   => if optim_for_size tt then
+                    divlu_base e1 e2
+                  else
+                    match divlu_mul_params (Int64.unsigned n2) with
+                    | None => divlu_base e1 e2
+                    | Some(p, m) => Elet e1 (divlu_mull p m)
+                    end
+      end
   | _, _ => divlu_base e1 e2
   end.
 
@@ -223,19 +232,41 @@ Definition modlu (e1 e2: expr) :=
   | Some n2, _ =>
       match Int64.is_power2 n2 with
       | Some l => andl e1 (longconst (Int64.sub n2 Int64.one))
-      | None   => modlu_base e1 e2
+      | None   => if optim_for_size tt then
+                    modlu_base e1 e2
+                  else
+                    match divlu_mul_params (Int64.unsigned n2) with
+                    | None => modlu_base e1 e2
+                    | Some(p, m) => Elet e1 (modl_from_divl (divlu_mull p m) n2)
+                    end
       end
   | _, _ => modlu_base e1 e2
   end.
+
+Definition divls_mull (p: Z) (m: Z) :=
+  let e2 := 
+    mullhs (Eletvar O) (Int64.repr m) in
+  let e3 :=
+    if zlt m Int64.half_modulus then e2 else addl e2 (Eletvar O) in
+  addl (shrlimm e3 (Int.repr p))
+       (shrluimm (Eletvar O) (Int.repr (Int64.zwordsize - 1))).
 
 Definition divls (e1 e2: expr) :=
   match is_longconst e2, is_longconst e1 with
   | Some n2, Some n1 => longconst (Int64.divs n1 n2)
   | Some n2, _ =>
       match Int64.is_power2' n2 with
-      | Some l => if Int.ltu l (Int.repr 63) then shrxlimm e1 l else divls_base e1 e2
-      | None   => divls_base e1 e2
-      end (* TODO: multiply-high *)
+      | Some l => if Int.ltu l (Int.repr 63)
+                  then shrxlimm e1 l
+                  else divls_base e1 e2
+      | None   => if optim_for_size tt then
+                    divls_base e1 e2
+                  else
+                    match divls_mul_params (Int64.signed n2) with
+                    | None => divls_base e1 e2
+                    | Some(p, m) => Elet e1 (divls_mull p m)
+                    end
+      end
   | _, _ => divls_base e1 e2
   end.
 
@@ -247,7 +278,13 @@ Definition modls (e1 e2: expr) :=
       | Some l => if Int.ltu l (Int.repr 63)
                   then Elet e1 (modl_from_divl (shrxlimm (Eletvar O) l) n2)
                   else modls_base e1 e2
-      | None   => modls_base e1 e2
+      | None   => if optim_for_size tt then
+                    modls_base e1 e2
+                  else
+                    match divls_mul_params (Int64.signed n2) with
+                    | None => modls_base e1 e2
+                    | Some(p, m) => Elet e1 (modl_from_divl (divls_mull p m) n2)
+                    end
       end
   | _, _ => modls_base e1 e2
   end.

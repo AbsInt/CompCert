@@ -48,7 +48,9 @@ Axiom i64_helpers_correct :
  /\ (forall x y z, Val.modlu x y = Some z -> external_implements "__i64_umod" sig_ll_l (x::y::nil) z)
  /\ (forall x y, external_implements "__i64_shl" sig_li_l (x::y::nil) (Val.shll x y))
  /\ (forall x y, external_implements "__i64_shr" sig_li_l (x::y::nil) (Val.shrlu x y))
- /\ (forall x y, external_implements "__i64_sar" sig_li_l (x::y::nil) (Val.shrl x y)).
+ /\ (forall x y, external_implements "__i64_sar" sig_li_l (x::y::nil) (Val.shrl x y))
+ /\ (forall x y, external_implements "__i64_umulh" sig_ll_l (x::y::nil) (Val.mullhu x y))
+ /\ (forall x y, external_implements "__i64_smulh" sig_ll_l (x::y::nil) (Val.mullhs x y)).
 
 Definition helper_declared {F V: Type} (p: AST.program (AST.fundef F) V) (id: ident) (name: string) (sg: signature) : Prop :=
   (prog_defmap p)!id = Some (Gfun (External (EF_runtime name sg))).
@@ -66,7 +68,9 @@ Definition helper_functions_declared {F V: Type} (p: AST.program (AST.fundef F) 
   /\ helper_declared p i64_umod "__i64_umod" sig_ll_l
   /\ helper_declared p i64_shl "__i64_shl" sig_li_l
   /\ helper_declared p i64_shr "__i64_shr" sig_li_l
-  /\ helper_declared p i64_sar "__i64_sar" sig_li_l.
+  /\ helper_declared p i64_sar "__i64_sar" sig_li_l
+  /\ helper_declared p i64_umulh "__i64_umulh" sig_ll_l
+  /\ helper_declared p i64_smulh "__i64_smulh" sig_ll_l.
 
 (** * Correctness of the instruction selection functions for 64-bit operators *)
 
@@ -821,6 +825,20 @@ Proof.
 - exploit (is_longconst_sound le b); eauto. intros EQ; subst y.
   eapply eval_mullimm; eauto.
 - apply eval_mull_base; auto.
+Qed.
+
+Theorem eval_mullhu: 
+  forall n, unary_constructor_sound (fun a => mullhu a n) (fun v => Val.mullhu v (Vlong n)).
+Proof.
+  unfold mullhu; intros; red; intros. econstructor; split; eauto. 
+  eapply eval_helper_2; eauto. apply eval_longconst. DeclHelper; eauto. UseHelper. 
+Qed.
+
+Theorem eval_mullhs: 
+  forall n, unary_constructor_sound (fun a => mullhs a n) (fun v => Val.mullhs v (Vlong n)).
+Proof.
+  unfold mullhs; intros; red; intros. econstructor; split; eauto. 
+  eapply eval_helper_2; eauto. apply eval_longconst. DeclHelper; eauto. UseHelper. 
 Qed.
 
 Theorem eval_shrxlimm:

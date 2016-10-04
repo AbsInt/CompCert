@@ -428,6 +428,20 @@ Proof.
 - TrivialExists.
 Qed.
 
+Theorem eval_mullhu: 
+  forall n, unary_constructor_sound (fun a => mullhu a n) (fun v => Val.mullhu v (Vlong n)).
+Proof.
+  unfold mullhu; intros. destruct Archi.splitlong eqn:SL. apply SplitLongproof.eval_mullhu; auto.
+  red; intros. TrivialExists. constructor. eauto. constructor. apply eval_longconst. constructor. auto.
+Qed.
+
+Theorem eval_mullhs: 
+  forall n, unary_constructor_sound (fun a => mullhs a n) (fun v => Val.mullhs v (Vlong n)).
+Proof.
+  unfold mullhs; intros. destruct Archi.splitlong eqn:SL. apply SplitLongproof.eval_mullhs; auto.
+  red; intros. TrivialExists. constructor. eauto. constructor. apply eval_longconst. constructor. auto.
+Qed.
+
 Theorem eval_shrxlimm:
   forall le a n x z,
   eval_expr ge sp e m le a x ->

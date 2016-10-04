@@ -120,6 +120,8 @@ Inductive operation : Type :=
   | Osubl                    (**r [rd = r1 - r2] *)
   | Omull                    (**r [rd = r1 * r2] *)
   | Omullimm (n: int64)      (**r [rd = r1 * n] *)
+  | Omullhs                  (**r [rd = high part of r1 * r2, signed] *)
+  | Omullhu                  (**r [rd = high part of r1 * r2, unsigned] *)
   | Odivl                    (**r [rd = r1 / r2] (signed) *)
   | Odivlu                   (**r [rd = r1 / r2] (unsigned) *)
   | Omodl                    (**r [rd = r1 % r2] (signed) *)
@@ -339,6 +341,8 @@ Definition eval_operation
   | Osubl, v1::v2::nil => Some (Val.subl v1 v2)
   | Omull, v1::v2::nil => Some (Val.mull v1 v2)
   | Omullimm n, v1::nil => Some (Val.mull v1 (Vlong n))
+  | Omullhs, v1::v2::nil => Some (Val.mullhs v1 v2)
+  | Omullhu, v1::v2::nil => Some (Val.mullhu v1 v2)
   | Odivl, v1::v2::nil => Val.divls v1 v2
   | Odivlu, v1::v2::nil => Val.divlu v1 v2
   | Omodl, v1::v2::nil => Val.modls v1 v2
@@ -508,6 +512,8 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Osubl => (Tlong :: Tlong :: nil, Tlong)
   | Omull => (Tlong :: Tlong :: nil, Tlong)
   | Omullimm _ => (Tlong :: nil, Tlong)
+  | Omullhs => (Tlong :: Tlong :: nil, Tlong)
+  | Omullhu => (Tlong :: Tlong :: nil, Tlong)
   | Odivl => (Tlong :: Tlong :: nil, Tlong)
   | Odivlu => (Tlong :: Tlong :: nil, Tlong)
   | Omodl => (Tlong :: Tlong :: nil, Tlong)
@@ -666,6 +672,8 @@ Proof with (try exact I).
     unfold Val.has_type; destruct Archi.ptr64; simpl; auto. destruct (eq_block b b0); auto.
   destruct v0; destruct v1...
   destruct v0...
+  destruct v0; destruct v1...
+  destruct v0; destruct v1...
   destruct v0; destruct v1; simpl in *; inv H0.
     destruct (Int64.eq i0 Int64.zero || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq i0 Int64.mone); inv H2...
   destruct v0; destruct v1; simpl in *; inv H0. destruct (Int64.eq i0 Int64.zero); inv H2...
@@ -1210,6 +1218,8 @@ Proof.
   apply Val.subl_inject; auto.
   inv H4; inv H2; simpl; auto.
   inv H4; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; inv H2; simpl; auto.
   inv H4; inv H3; simpl in H1; inv H1. simpl.
     destruct (Int64.eq i0 Int64.zero || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq i0 Int64.mone); inv H2. TrivialExists.
   inv H4; inv H3; simpl in H1; inv H1. simpl.

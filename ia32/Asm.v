@@ -164,9 +164,9 @@ Inductive instruction: Type :=
   | Pimull_ri (rd: ireg) (n: int)
   | Pimulq_ri (rd: ireg) (n: int64)
   | Pimull_r (r1: ireg)
-(*  | Pimulq_r (r1: ireg) *)
+  | Pimulq_r (r1: ireg)
   | Pmull_r (r1: ireg)
-(*  | Pmulq_r (r1: ireg) *)
+  | Pmulq_r (r1: ireg)
   | Pcltd
   | Pcqto
   | Pdivl (r1: ireg)
@@ -718,9 +718,15 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pimull_r r1 =>
       Next (nextinstr_nf (rs#RAX <- (Val.mul rs#RAX rs#r1)
                             #RDX <- (Val.mulhs rs#RAX rs#r1))) m
+  | Pimulq_r r1 =>
+      Next (nextinstr_nf (rs#RAX <- (Val.mull rs#RAX rs#r1)
+                            #RDX <- (Val.mullhs rs#RAX rs#r1))) m
   | Pmull_r r1 =>
       Next (nextinstr_nf (rs#RAX <- (Val.mul rs#RAX rs#r1)
                             #RDX <- (Val.mulhu rs#RAX rs#r1))) m
+  | Pmulq_r r1 =>
+      Next (nextinstr_nf (rs#RAX <- (Val.mull rs#RAX rs#r1)
+                            #RDX <- (Val.mullhu rs#RAX rs#r1))) m
   | Pcltd =>
       Next (nextinstr_nf (rs#RDX <- (Val.shr rs#RAX (Vint (Int.repr 31))))) m
   | Pcqto =>

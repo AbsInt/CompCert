@@ -438,8 +438,12 @@ module Target(System: SYSTEM):TARGET =
           fprintf oc "	imulq	%a, %a\n" intconst64 n ireg64 rd
       | Pimull_r(r1) ->
           fprintf oc "	imull	%a\n" ireg32 r1
+      | Pimulq_r(r1) ->
+          fprintf oc "	imulq	%a\n" ireg64 r1
       | Pmull_r(r1) ->
           fprintf oc "	mull	%a\n" ireg32 r1
+      | Pmulq_r(r1) ->
+          fprintf oc "	mulq	%a\n" ireg64 r1
       | Pcltd ->
           fprintf oc "	cltd\n"
       | Pcqto ->

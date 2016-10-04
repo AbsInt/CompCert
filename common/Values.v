@@ -622,6 +622,18 @@ Definition mull' (v1 v2: val): val :=
   | _, _ => Vundef
   end.
 
+Definition mullhs (v1 v2: val): val :=
+  match v1, v2 with
+  | Vlong n1, Vlong n2 => Vlong(Int64.mulhs n1 n2)
+  | _, _ => Vundef
+  end.
+
+Definition mullhu (v1 v2: val): val :=
+  match v1, v2 with
+  | Vlong n1, Vlong n2 => Vlong(Int64.mulhu n1 n2)
+  | _, _ => Vundef
+  end.
+
 Definition divls (v1 v2: val): option val :=
   match v1, v2 with
   | Vlong n1, Vlong n2 =>
