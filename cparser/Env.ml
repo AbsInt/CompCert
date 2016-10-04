@@ -189,14 +189,31 @@ let find_struct_member env (id, m) =
     let ci = find_struct env id in
     find_member ci.ci_members m
   with Not_found ->
-    raise(Error(No_member(id.name, "struct", m)))
+    raise(Error(No_member(id.name, "struct", m.name)))
+
+let find_member_name env ci m =
+  [List.find (fun f -> f.fld_name.name = m) ci]
+
+let find_struct_member_by_name env (id, m) =
+  try
+    let ci = find_struct env id in
+    find_member_name env ci.ci_members m
+  with Not_found ->
+    raise (Error(No_member(id.name, "struct", m)))
 
 let find_union_member env (id, m) =
   try
     let ci = find_union env id in
     find_member ci.ci_members m
   with Not_found ->
-    raise(Error(No_member(id.name, "union", m)))
+    raise(Error(No_member(id.name, "union", m.name)))
+
+let find_union_member_by_name env (id, m) =
+  try
+    let ci = find_union env id in
+    find_member_name env ci.ci_members m
+  with Not_found ->
+    raise (Error(No_member(id.name, "struct", m)))
 
 let find_typedef env id =
   try
@@ -273,7 +290,7 @@ let error_message = function
       sprintf "unbound typedef '%s'" name
   | No_member(compname, compkind, memname) ->
       sprintf "no member named '%s' in '%s %s'"
-        memname compkind (composite_tag_name compname) 
+        memname compkind (composite_tag_name compname)
 
 let _ =
   Printexc.register_printer

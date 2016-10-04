@@ -249,10 +249,10 @@ let rec exp pp (prec, a) =
       fprintf pp "%a++" exp (prec', a1)
   | EUnop(Opostdecr, a1) ->
       fprintf pp "%a--" exp (prec', a1)
-  | EUnop(Odot s, a1) ->
-      fprintf pp "%a.%s" exp (prec', a1)s
-  | EUnop(Oarrow s, a1) ->
-      fprintf pp "%a->%s" exp (prec', a1)s
+  | EUnop(Odot id, a1) ->
+      fprintf pp "%a.%s" exp (prec', a1) id.name
+  | EUnop(Oarrow id, a1) ->
+      fprintf pp "%a->%s" exp (prec', a1) id.name
   | EBinop(Oadd, a1, a2, _) ->
       fprintf pp "%a@ + %a" exp (prec1, a1) exp (prec2, a2)
   | EBinop(Osub, a1, a2, _) ->
@@ -353,7 +353,7 @@ and init pp = function
       List.iter (fun (fld, i) -> fprintf pp "%a,@ " init i) il;
       fprintf pp "}@]"
   | Init_union(id, fld, i) ->
-      fprintf pp "@[<hov 2>{.%s =@ %a}@]" fld.fld_name init i
+      fprintf pp "@[<hov 2>{.%s =@ %a}@]" fld.fld_name.name init i
 
 let simple_decl pp (id, ty) =
   dcl pp ty (fun pp -> fprintf pp " %a" ident id)
@@ -511,7 +511,7 @@ let fundef pp f =
   fprintf pp "@;<0 -2>}@]@ @ "
 
 let field pp f =
-  simple_decl pp ({name = f.fld_name; stamp = 0}, f.fld_typ);
+  simple_decl pp (f.fld_name, f.fld_typ);
   match f.fld_bitfield with
   | None -> ()
   | Some n -> fprintf pp " : %d" n

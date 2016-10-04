@@ -110,7 +110,7 @@ val composite_info_decl:
 val composite_info_def:
   Env.t -> struct_or_union -> attributes -> field list -> Env.composite_info
 val struct_layout:
-  Env.t -> field list -> (string * int) list
+  Env.t -> field list -> (C.ident * int) list
 
 (* Type classification functions *)
 
@@ -206,9 +206,9 @@ val fundef_typ: fundef -> typ
 val int_representable: int64 -> int -> bool -> bool
   (* Is the given int64 representable with the given number of bits and
      signedness? *)
-val field_of_dot_access: Env.t -> typ -> string -> field
+val field_of_dot_access: Env.t -> typ -> C.ident -> field
   (* Return the field info for a [x.field] access *)
-val field_of_arrow_access: Env.t -> typ -> string -> field
+val field_of_arrow_access: Env.t -> typ -> C.ident -> field
   (* Return the field info for a [x->field] access *)
 
 (* Constructors *)

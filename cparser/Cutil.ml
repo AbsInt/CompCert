@@ -1051,7 +1051,7 @@ let rec default_init env ty =
       let rec default_init_fields = function
       | [] -> []
       | f1 :: fl ->
-          if f1.fld_name = ""
+          if f1.fld_name.C.name = ""
           then default_init_fields fl
           else (f1, default_init env f1.fld_typ) :: default_init_fields fl in
       let ci = Env.find_struct env id in
