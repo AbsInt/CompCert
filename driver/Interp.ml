@@ -304,7 +304,7 @@ let format_value m flags length conv arg =
       format_int64 (flags ^ conv) (camlint64_of_coqint i)
   | ('d'|'i'|'u'|'o'|'x'|'X'), ("ll"|"j"), _ ->
       "<long long argument expected"
-  | ('f'|'e'|'E'|'g'|'G'|'a'), "l", Vfloat f ->
+  | ('f'|'e'|'E'|'g'|'G'|'a'), (""|"l"), Vfloat f ->
       format_float (flags ^ conv) (camlfloat_of_coqfloat f)
   | ('f'|'e'|'E'|'g'|'G'|'a'), "", _ ->
       "<float argument expected"
