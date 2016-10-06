@@ -119,7 +119,9 @@ Fixpoint constval (ce: composite_env) (a: expr) : res val :=
           do co <- lookup_composite ce id;
           do delta <- field_offset ce f (co_members co);
           do v <- constval ce l;
-          OK (Val.offset_ptr v (Ptrofs.repr delta))
+          OK (if Archi.ptr64
+              then Val.addl v (Vlong (Int64.repr delta))
+              else Val.add v (Vint (Int.repr delta)))
       | Tunion id _ =>
           constval ce l
       | _ =>

@@ -446,9 +446,10 @@ Proof.
   (* field struct *)
   rewrite H0 in CV. monadInv CV. unfold lookup_composite in EQ; rewrite H1 in EQ; monadInv EQ.
   exploit constval_rvalue; eauto. intro MV. inv MV.
-  simpl. replace x0 with delta by congruence. econstructor; eauto.
-  rewrite ! Ptrofs.add_assoc. f_equal. apply Ptrofs.add_commut.
-  simpl. auto.
+  replace x0 with delta by congruence. rewrite Ptrofs.add_assoc. rewrite (Ptrofs.add_commut (Ptrofs.repr delta0)).
+  simpl; destruct Archi.ptr64 eqn:SF;
+  econstructor; eauto; rewrite ! Ptrofs.add_assoc; f_equal; f_equal; symmetry; auto with ptrofs.
+  destruct Archi.ptr64; auto.
   (* field union *)
   rewrite H0 in CV. eauto.
 Qed.
