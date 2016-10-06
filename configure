@@ -21,6 +21,7 @@ has_runtime_lib=true
 has_standard_headers=true
 clightgen=false
 responsefile="gnu"
+merlin=false
 
 usage='Usage: ./configure [options] target
 
@@ -65,6 +66,7 @@ Options:
   -no-runtime-lib      Do not compile nor install the runtime support library
   -no-standard-headers Do not install nor use the standard .h headers
   -clightgen           Also compile the clightgen tool
+  -merlin              Generate .merlin file
 '
 
 
@@ -89,6 +91,8 @@ while : ; do
         has_standard_headers=false;;
     -clightgen)
         clightgen=true;;
+    -merlin)
+        merlin=true;;
     *)
         if test -n "$target"; then echo "$usage" 1>&2; exit 2; fi
         target="$1";;
@@ -435,6 +439,32 @@ if $missingtools; then
   exit 2
 fi
 
+if $merlin; then
+    cat > .merlin <<EOF
+S lib
+S common
+S $arch
+S backend
+S cfrontend
+S driver
+S debug
+S exportclight
+S cparser
+S extraction
+
+B lib
+B common
+B $arch
+B backend
+B cfrontend
+B driver
+B debug
+B exportclight
+B cparser
+B extraction
+
+EOF
+fi
 
 #
 # Generate Makefile.config
@@ -449,6 +479,11 @@ LIBDIR=$libdir
 SHAREDIR=$sharedir
 OCAML_OPT_COMP=$ocaml_opt_comp
 EOF
+if $merlin; then
+    cat >> Makefile.config <<EOF
+COMPFLAGS=-bin-annot
+EOF
+fi
 
 if test "$target" != "manual"; then
 cat >> Makefile.config <<EOF
