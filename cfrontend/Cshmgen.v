@@ -240,26 +240,31 @@ Definition make_binarith (iop iopu fop sop lop lopu: binary_operation)
   | bin_default => Error (msg "Cshmgen.make_binarith")
   end.
 
+Definition make_add_ptr_int (ce: composite_env) (ty: type) (si: signedness) (e1 e2: expr) :=
+  do sz <- sizeof ce ty;
+  if Archi.ptr64 then
+    let n := make_longconst (Int64.repr sz) in
+    OK (Ebinop Oaddl e1 (Ebinop Omull n (make_longofint e2 si)))
+  else
+    let n := make_intconst (Int.repr sz) in
+    OK (Ebinop Oadd e1 (Ebinop Omul n e2)).
+
+Definition make_add_ptr_long (ce: composite_env) (ty: type) (e1 e2: expr) :=
+  do sz <- sizeof ce ty;
+  if Archi.ptr64 then
+    let n := make_longconst (Int64.repr sz) in
+    OK (Ebinop Oaddl e1 (Ebinop Omull n e2))
+  else
+    let n := make_intconst (Int.repr sz) in
+    OK (Ebinop Oadd e1 (Ebinop Omul n (Eunop Ointoflong e2))).
+
 Definition make_add (ce: composite_env) (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_add ty1 ty2 with
-  | add_case_pi ty si =>
-      do sz <- sizeof ce ty;
-      if Archi.ptr64 then
-        let n := make_longconst (Int64.repr sz) in
-        OK (Ebinop Oaddl e1 (Ebinop Omull n (make_longofint e2 si)))
-      else
-        let n := make_intconst (Int.repr sz) in
-        OK (Ebinop Oadd e1 (Ebinop Omul n e2))
-  | add_case_pl ty =>
-      do sz <- sizeof ce ty;
-      if Archi.ptr64 then
-        let n := make_longconst (Int64.repr sz) in
-        OK (Ebinop Oaddl e1 (Ebinop Omull n e2))
-      else
-        let n := make_intconst (Int.repr sz) in
-        OK (Ebinop Oadd e1 (Ebinop Omul n (Eunop Ointoflong e2)))
-  | add_default =>
-      make_binarith Oadd Oadd Oaddf Oaddfs Oaddl Oaddl e1 ty1 e2 ty2
+  | add_case_pi ty si => make_add_ptr_int ce ty si e1 e2
+  | add_case_pl ty => make_add_ptr_long ce ty e1 e2
+  | add_case_ip si ty => make_add_ptr_int ce ty si e2 e1
+  | add_case_lp ty => make_add_ptr_long ce ty e2 e1
+  | add_default => make_binarith Oadd Oadd Oaddf Oaddfs Oaddl Oaddl e1 ty1 e2 ty2
   end.
 
 Definition make_sub (ce: composite_env) (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=

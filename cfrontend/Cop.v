@@ -627,20 +627,16 @@ Definition sem_binarith
 Inductive classify_add_cases : Type :=
   | add_case_pi (ty: type) (si: signedness)     (**r pointer, int *)
   | add_case_pl (ty: type)     (**r pointer, long *)
-(*
   | add_case_ip (si: signedness) (ty: type)     (**r int, pointer *)
   | add_case_lp (ty: type)     (**r long, pointer *)
-*)
   | add_default.               (**r numerical type, numerical type *)
 
 Definition classify_add (ty1: type) (ty2: type) :=
   match typeconv ty1, typeconv ty2 with
   | Tpointer ty _, Tint _ si _ => add_case_pi ty si
   | Tpointer ty _, Tlong _ _ => add_case_pl ty
-(*
   | Tint _ si _, Tpointer ty _ => add_case_ip si ty
   | Tlong _ _, Tpointer ty _ => add_case_lp ty
-*)
   | _, _ => add_default
   end.
 
@@ -650,32 +646,42 @@ Definition ptrofs_of_int (si: signedness) (n: int) : ptrofs :=
   | Unsigned => Ptrofs.of_intu n
   end.
 
+Definition sem_add_ptr_int (cenv: composite_env) (ty: type) (si: signedness) (v1 v2: val): option val :=
+  match v1, v2 with
+  | Vptr b1 ofs1, Vint n2 =>
+      let n2 := ptrofs_of_int si n2 in
+      Some (Vptr b1 (Ptrofs.add ofs1 (Ptrofs.mul (Ptrofs.repr (sizeof cenv ty)) n2)))
+  | Vint n1, Vint n2 =>
+      if Archi.ptr64 then None else Some (Vint (Int.add n1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
+  | Vlong n1, Vint n2 =>
+      let n2 := cast_int_long si n2 in
+      if Archi.ptr64 then Some (Vlong (Int64.add n1 (Int64.mul (Int64.repr (sizeof cenv ty)) n2))) else None
+  | _,  _ => None
+  end.
+
+Definition sem_add_ptr_long (cenv: composite_env) (ty: type) (v1 v2: val): option val :=
+  match v1, v2 with
+  | Vptr b1 ofs1, Vlong n2 =>
+      let n2 := Ptrofs.of_int64 n2 in
+      Some (Vptr b1 (Ptrofs.add ofs1 (Ptrofs.mul (Ptrofs.repr (sizeof cenv ty)) n2)))
+  | Vint n1, Vlong n2 =>
+      let n2 := Int.repr (Int64.unsigned n2) in
+      if Archi.ptr64 then None else Some (Vint (Int.add n1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
+  | Vlong n1, Vlong n2 =>
+      if Archi.ptr64 then Some (Vlong (Int64.add n1 (Int64.mul (Int64.repr (sizeof cenv ty)) n2))) else None
+  | _,  _ => None
+  end.
+
 Definition sem_add (cenv: composite_env) (v1:val) (t1:type) (v2: val) (t2:type) (m: mem): option val :=
   match classify_add t1 t2 with
   | add_case_pi ty si =>             (**r pointer plus integer *)
-      match v1, v2 with
-      | Vptr b1 ofs1, Vint n2 =>
-        let n2 := ptrofs_of_int si n2 in
-        Some (Vptr b1 (Ptrofs.add ofs1 (Ptrofs.mul (Ptrofs.repr (sizeof cenv ty)) n2)))
-      | Vint n1, Vint n2 =>
-        if Archi.ptr64 then None else Some (Vint (Int.add n1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
-      | Vlong n1, Vint n2 =>
-        let n2 := cast_int_long si n2 in
-        if Archi.ptr64 then Some (Vlong (Int64.add n1 (Int64.mul (Int64.repr (sizeof cenv ty)) n2))) else None
-      | _,  _ => None
-      end
-  | add_case_pl ty =>                 (**r pointer plus long *)
-      match v1, v2 with
-      | Vptr b1 ofs1, Vlong n2 =>
-        let n2 := Ptrofs.of_int64 n2 in
-        Some (Vptr b1 (Ptrofs.add ofs1 (Ptrofs.mul (Ptrofs.repr (sizeof cenv ty)) n2)))
-      | Vint n1, Vlong n2 =>
-        let n2 := Int.repr (Int64.unsigned n2) in
-        if Archi.ptr64 then None else Some (Vint (Int.add n1 (Int.mul (Int.repr (sizeof cenv ty)) n2)))
-      | Vlong n1, Vlong n2 =>
-        if Archi.ptr64 then Some (Vlong (Int64.add n1 (Int64.mul (Int64.repr (sizeof cenv ty)) n2))) else None
-      | _,  _ => None
-      end
+      sem_add_ptr_int cenv ty si v1 v2
+  | add_case_pl ty =>                (**r pointer plus long *)
+      sem_add_ptr_long cenv ty v1 v2
+  | add_case_ip si ty =>             (**r integer plus pointer *)
+      sem_add_ptr_int cenv ty si v2 v1
+  | add_case_lp ty =>                (**r long plus pointer *)
+      sem_add_ptr_long cenv ty v2 v1
   | add_default =>
       sem_binarith
         (fun sg n1 n2 => Some(Vint(Int.add n1 n2)))
@@ -1285,11 +1291,19 @@ Lemma sem_binary_operation_inj:
 Proof.
   unfold sem_binary_operation; intros; destruct op.
 - (* add *)
-  unfold sem_add in *; destruct (classify_add ty1 ty2).
-  + inv H0; inv H1; TrivialInject.
-    econstructor. eauto. repeat rewrite Ptrofs.add_assoc. decEq. apply Ptrofs.add_commut.
-  + inv H0; inv H1; TrivialInject.
-    econstructor. eauto. repeat rewrite Ptrofs.add_assoc. decEq. apply Ptrofs.add_commut.
+  assert (A: forall cenv ty si v1' v2' tv1' tv2',
+             Val.inject f v1' tv1' -> Val.inject f v2' tv2' ->
+             sem_add_ptr_int cenv ty si v1' v2' = Some v ->
+             exists tv, sem_add_ptr_int cenv ty si tv1' tv2' = Some tv /\ Val.inject f v tv).
+  { intros. unfold sem_add_ptr_int in *; inv H2; inv H3; TrivialInject.
+    econstructor. eauto. repeat rewrite Ptrofs.add_assoc. decEq. apply Ptrofs.add_commut. }
+  assert (B: forall cenv ty v1' v2' tv1' tv2',
+             Val.inject f v1' tv1' -> Val.inject f v2' tv2' ->
+             sem_add_ptr_long cenv ty v1' v2' = Some v ->
+             exists tv, sem_add_ptr_long cenv ty tv1' tv2' = Some tv /\ Val.inject f v tv).
+  { intros. unfold sem_add_ptr_long in *; inv H2; inv H3; TrivialInject.
+    econstructor. eauto. repeat rewrite Ptrofs.add_assoc. decEq. apply Ptrofs.add_commut. }
+  unfold sem_add in *; destruct (classify_add ty1 ty2); eauto.
   + eapply sem_binarith_inject; eauto; intros; exact I.
 - (* sub *)
   unfold sem_sub in *; destruct (classify_sub ty1 ty2).

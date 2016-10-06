@@ -113,19 +113,13 @@ Definition type_binop (op: binary_operation) (ty1 ty2: type) : res type :=
   match op with
   | Oadd =>
       match classify_add ty1 ty2 with
-      | add_case_pi ty _ (*| add_case_ip ty*)
-      | add_case_pl ty (*| add_case_lp ty*) => OK (Tpointer ty noattr)
+      | add_case_pi ty _ | add_case_ip _ ty
+      | add_case_pl ty   | add_case_lp ty => OK (Tpointer ty noattr)
       | add_default => binarith_type ty1 ty2 "operator +"
       end
   | Osub =>
       match classify_sub ty1 ty2 with
       | sub_case_pi ty _ | sub_case_pl ty => OK (Tpointer ty noattr)
-(*
-      | sub_case_pp ty1 ty2 =>
-          if type_eq (remove_attributes ty1) (remove_attributes ty2)
-          then OK (Tint I32 Signed noattr)
-          else Error (msg "operator - : incompatible pointer types")
-*)
       | sub_case_pp ty => OK ptrdiff_t
       | sub_default => binarith_type ty1 ty2 "operator infix -"
       end
@@ -1504,7 +1498,7 @@ Proof.
   intros until m; intros TY SEM WT1 WT2.
   destruct op; simpl in TY; simpl in SEM.
 - (* add *)
-  unfold sem_add in SEM; DestructCases; auto with ty.
+  unfold sem_add, sem_add_ptr_int, sem_add_ptr_long in SEM; DestructCases; auto with ty.
   eapply pres_sem_binarith; eauto; intros; exact I.
 - (* sub *)
   unfold sem_sub in SEM; DestructCases; auto with ty.

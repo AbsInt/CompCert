@@ -619,66 +619,50 @@ End MAKE_BIN.
 
 Hint Extern 2 (@eq (option val) _ _) => (simpl; reflexivity) : cshm.
 
-(*
-Lemma eqm_ptrofs_of_int:
-  forall si i,
-  Ptrofs.eqm (Ptrofs.unsigned (ptrofs_of_int si i))
-             (match si with Signed => Int.signed i | Unsigned => Int.unsigned i end).
-Proof.
-  intros. unfold ptrofs_of_int. destruct si; apply Ptrofs.eqm_sym; apply Ptrofs.eqm_unsigned_repr.
-Qed.
-
-Lemma ptrofs_mul_32:
-  forall si n i,
-  Archi.ptr64 = false ->
-  Ptrofs.of_int (Int.mul (Int.repr n) i) = Ptrofs.mul (Ptrofs.repr n) (ptrofs_of_int si i).
-Proof.
-  intros. apply Ptrofs.eqm_samerepr.
-  eapply Ptrofs.eqm_trans; [ | apply Ptrofs.eqm_mult ].
-  apply -> Val.ptrofs_eqm_32; auto. apply Int.eqm_sym; apply Int.eqm_unsigned_repr.
-  apply Ptrofs.eqm_unsigned_repr_r. apply -> Val.ptrofs_eqm_32; auto. apply Int.eqm_sym; apply Int.eqm_unsigned_repr.
-  apply Ptrofs.eqm_sym. eapply Ptrofs.eqm_trans. apply eqm_ptrofs_of_int.
-  apply -> Val.ptrofs_eqm_32; auto. destruct si. apply Int.eqm_signed_unsigned. apply Int.eqm_refl.
-Qed.
-
-Lemma ptrofs_mul_32_64:
-  forall n i,
-  Archi.ptr64 = false ->
-  Ptrofs.of_int (Int.mul (Int.repr n) (Int64.loword i)) = Ptrofs.mul (Ptrofs.repr n) (Ptrofs.of_int64 i).
-Proof.
-  intros. apply Ptrofs.eqm_samerepr.
-  eapply Ptrofs.eqm_trans; [ | apply Ptrofs.eqm_mult ].
-  apply -> Val.ptrofs_eqm_32; auto. apply Int.eqm_sym; apply Int.eqm_unsigned_repr.
-  apply Ptrofs.eqm_unsigned_repr_r. apply -> Val.ptrofs_eqm_32; auto. apply Int.eqm_sym; apply Int.eqm_unsigned_repr.
-  unfold Ptrofs.of_int64. apply Ptrofs.eqm_unsigned_repr_r.
-  unfold Int64.loword. apply -> Val.ptrofs_eqm_32; auto. apply Int.eqm_sym; apply Int.eqm_unsigned_repr.
-Qed.
-*)
-
 Lemma make_add_correct: binary_constructor_correct (make_add cunit.(prog_comp_env)) (sem_add prog.(prog_comp_env)).
 Proof.
+  assert (A: forall ty si a b c e le m va vb v,
+             make_add_ptr_int cunit.(prog_comp_env) ty si a b = OK c ->
+             eval_expr ge e le m a va -> eval_expr ge e le m b vb ->
+             sem_add_ptr_int (prog_comp_env prog) ty si va vb = Some v ->
+             eval_expr ge e le m c v).
+  { unfold make_add_ptr_int, sem_add_ptr_int; intros until v; intros MAKE EV1 EV2 SEM; monadInv MAKE.
+    destruct Archi.ptr64 eqn:SF; inv EQ0; rewrite (transl_sizeof _ _ _ _ LINK EQ).
+  - destruct va; InvEval; destruct vb; inv SEM.
+  + eauto with cshm.
+  + econstructor; eauto with cshm.
+    simpl. rewrite SF. f_equal. f_equal. f_equal.
+    assert (Ptrofs.agree64 (ptrofs_of_int si i0) (cast_int_long si i0)).
+    { destruct si; simpl; apply Ptrofs.agree64_repr; auto. }
+    auto with ptrofs.
+  - destruct va; InvEval; destruct vb; inv SEM.
+  + eauto with cshm.
+  + econstructor; eauto with cshm.
+    simpl. rewrite SF. f_equal. f_equal. f_equal.
+    assert (Ptrofs.agree32 (ptrofs_of_int si i0) i0) by (destruct si; simpl; auto with ptrofs).
+    auto with ptrofs.
+  }
+  assert (B: forall ty a b c e le m va vb v,
+             make_add_ptr_long cunit.(prog_comp_env) ty a b = OK c ->
+             eval_expr ge e le m a va -> eval_expr ge e le m b vb ->
+             sem_add_ptr_long (prog_comp_env prog) ty va vb = Some v ->
+             eval_expr ge e le m c v).
+  { unfold make_add_ptr_long, sem_add_ptr_long; intros until v; intros MAKE EV1 EV2 SEM; monadInv MAKE.
+    destruct Archi.ptr64 eqn:SF; inv EQ0; rewrite (transl_sizeof _ _ _ _ LINK EQ).
+  - destruct va; InvEval; destruct vb; inv SEM.
+  + eauto with cshm.
+  + econstructor; eauto with cshm.
+    simpl. rewrite SF. f_equal. f_equal. f_equal. auto with ptrofs.
+  - destruct va; InvEval; destruct vb; inv SEM.
+  + eauto with cshm.
+  + econstructor; eauto with cshm.
+    simpl. rewrite SF. f_equal. f_equal. f_equal.
+    assert (Ptrofs.agree32 (Ptrofs.of_int64 i0) (Int64.loword i0)) by (apply Ptrofs.agree32_repr; auto).
+    auto with ptrofs.
+  }
   red; unfold make_add, sem_add;
   intros until m; intros SEM MAKE EV1 EV2;
-  destruct (classify_add tya tyb); try (monadInv MAKE).
-- destruct Archi.ptr64 eqn:SF; inv EQ0; rewrite (transl_sizeof _ _ _ _ LINK EQ).
-+ destruct va; InvEval; destruct vb; inv SEM; eauto with cshm.
-  econstructor; eauto with cshm.
-  simpl. rewrite SF. apply f_equal.  apply f_equal.  apply f_equal.
-  assert (Ptrofs.agree64 (ptrofs_of_int si i0) (cast_int_long si i0)).
-  { destruct si; simpl; apply Ptrofs.agree64_repr; auto. }
-  auto with ptrofs.
-+ destruct va; InvEval; destruct vb; inv SEM; eauto with cshm.
-  econstructor; eauto with cshm. simpl. rewrite SF. apply f_equal. apply f_equal. apply f_equal.
-  assert (Ptrofs.agree32 (ptrofs_of_int si i0) i0) by (destruct si; simpl; auto with ptrofs).
-  auto with ptrofs.
-- destruct Archi.ptr64 eqn:SF; inv EQ0; rewrite (transl_sizeof _ _ _ _ LINK EQ).
-+ destruct va; InvEval; destruct vb; inv SEM; eauto with cshm.
-  econstructor; eauto with cshm.
-  simpl. rewrite SF. apply f_equal. apply f_equal. apply f_equal. auto with ptrofs.
-+ destruct va; InvEval; destruct vb; inv SEM; eauto with cshm.
-  econstructor; eauto with cshm. simpl. rewrite SF. apply f_equal. apply f_equal. apply f_equal.
-  assert (Ptrofs.agree32 (Ptrofs.of_int64 i0) (Int64.loword i0)) by (apply Ptrofs.agree32_repr; auto).
-  auto with ptrofs.
+  destruct (classify_add tya tyb); eauto.
 - eapply make_binarith_correct; eauto; intros; auto.
 Qed.
 
