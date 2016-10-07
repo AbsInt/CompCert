@@ -824,14 +824,13 @@ and elab_struct_or_union_info keep_ty kind loc env members attrs =
   let m = List.flatten m in
   ignore (List.fold_left (fun acc fld ->
     let n = fld.fld_name.name in
-    if n <> "" then begin
-      if List.exists ((=) n) acc then
-        error loc "duplicate member '%s'" n;
-      n::acc
-    end else begin
-      if Cutil.is_composite_type env fld.fld_typ then
+    if n = "" then begin
+      if Cutil.is_composite_type env fld.fld_typ  then
         warning loc Celeven_extension  "anonymous structs/unions are a C11 extension";
-      acc end) [] m);
+    end else if Env.exist_member env' acc n then
+      error loc "duplicate member '%s'" n;
+    fld::acc
+    ) [] m);
   (* Check for incomplete types *)
   let rec check_incomplete = function
   | [] -> ()

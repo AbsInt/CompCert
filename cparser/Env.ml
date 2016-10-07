@@ -191,8 +191,40 @@ let find_struct_member env (id, m) =
   with Not_found ->
     raise(Error(No_member(id.name, "struct", m.name)))
 
+let is_tag = function
+  | TStruct _
+  | TUnion _ -> true
+  | _ -> false
+
+let tag_id = function
+  | TStruct (id,_)
+  | TUnion (id,_) -> id
+  | _ -> assert false (* should be checked before *)
+
 let find_member_name env ci m =
-  [List.find (fun f -> f.fld_name.name = m) ci]
+  let rec member acc = function
+    | [] -> raise Not_found
+    | f::rest -> if f.fld_name.name = m then
+        f::acc
+      else if f.fld_name.name = "" && is_tag f.fld_typ then
+        try
+          tag acc f
+        with Not_found ->
+          member acc rest
+      else
+        member acc rest
+  and tag acc fld =
+    let id = tag_id fld.fld_typ in
+    let ci = IdentMap.find id env.env_tag in
+    member (fld::acc) ci.ci_members
+  in
+  member [] ci
+
+let exist_member env ci m =
+  try
+    ignore (find_member_name env ci m);
+    true
+  with Not_found -> false
 
 let find_struct_member_by_name env (id, m) =
   try

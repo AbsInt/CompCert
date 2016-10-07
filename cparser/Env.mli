@@ -65,6 +65,7 @@ val find_struct_member : t -> C.ident * C.ident -> C.field
 val find_struct_member_by_name : t -> C.ident * string -> C.field list
 val find_union_member : t -> C.ident * C.ident -> C.field
 val find_union_member_by_name : t -> C.ident * string -> C.field list
+val exist_member : t -> C.field list -> string -> bool
 val find_typedef : t -> C.ident -> typedef_info
 val find_enum : t -> C.ident -> enum_info
 
