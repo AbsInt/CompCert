@@ -157,7 +157,7 @@ Definition destroyed_by_cond (cond: condition): list mreg :=
   nil.
 
 Definition destroyed_by_jumptable: list mreg :=
-  nil.
+  AX :: DX :: nil.
 
 Fixpoint destroyed_by_clobber (cl: list string): list mreg :=
   match cl with

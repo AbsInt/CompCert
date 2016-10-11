@@ -71,9 +71,7 @@ let z oc n = output_string oc (Z.to_string n)
 
 (* 32/64 bit dependencies *)
 
-let size_pointer = if Archi.ptr64 then 8 else 4
 let data_pointer = if Archi.ptr64 then ".quad" else ".long"
-
 
 (* The comment deliminiter *)
 let comment = "#"
@@ -292,7 +290,7 @@ module Target(System: SYSTEM):TARGET =
     let section oc sec =
       fprintf oc "	%s\n" (name_of_section sec)
 
-(* Emit a align directive *)
+(* For "abs" and "neg" FP operations *)
 
     let need_masks = ref false
 
@@ -301,15 +299,13 @@ module Target(System: SYSTEM):TARGET =
     let print_file_line oc file line =
       print_file_line oc comment file line
 
-(* Built-in functions *)
+(* In 64-bit mode use RIP-relative addressing to designate labels *)
 
-(* Built-ins.  They come in two flavors:
-   - annotation statements: take their arguments in registers or stack
-   locations; generate no code;
-   - inlined by the compiler: take their arguments in arbitrary
-   registers; preserve all registers except RCX, RDX, XMM6 and XMM7. *)
+    let rip_rel =
+      if Archi.ptr64 then "(%rip)" else ""
 
-(* Hack for large 64-bit immediates *)
+(* Large 64-bit immediates (bigger than a 32-bit signed integer) are
+   not supported by the processor.  Turn them into memory operands. *)
 
     let intconst64 oc n =
       let n1 = camlint64_of_coqint n in
@@ -323,6 +319,8 @@ module Target(System: SYSTEM):TARGET =
         float64_literals := (lbl, n1) :: !float64_literals;
         fprintf oc "%a(%%rip)" label lbl
       end
+
+
 
 (* Printing of instructions *)
 
@@ -366,7 +364,9 @@ module Target(System: SYSTEM):TARGET =
       | Pmovsd_fi(rd, n) ->
           let b = camlint64_of_coqint (Floats.Float.to_bits n) in
           let lbl = new_label() in
-          fprintf oc "	movsd	%a, %a %s %.18g\n" label lbl freg rd comment (camlfloat_of_coqfloat n);
+          fprintf oc "	movsd	%a%s, %a %s %.18g\n"
+                     label lbl rip_rel
+                     freg rd comment (camlfloat_of_coqfloat n);
           float64_literals := (lbl, b) :: !float64_literals
       | Pmovsd_fm(rd, a) | Pmovsd_fm_a(rd, a) ->
           fprintf oc "	movsd	%a, %a\n" addressing a freg rd
@@ -375,7 +375,9 @@ module Target(System: SYSTEM):TARGET =
       | Pmovss_fi(rd, n) ->
           let b = camlint_of_coqint (Floats.Float32.to_bits n) in
           let lbl = new_label() in
-          fprintf oc "	movss	%a, %a %s %.18g\n" label lbl freg rd comment (camlfloat_of_coqfloat32 n);
+          fprintf oc "	movss	%a%s, %a %s %.18g\n"
+                     label lbl rip_rel
+                     freg rd comment (camlfloat_of_coqfloat32 n);
           float32_literals := (lbl, b) :: !float32_literals
       | Pmovss_fm(rd, a) ->
           fprintf oc "	movss	%a, %a\n" addressing a freg rd
@@ -576,10 +578,12 @@ module Target(System: SYSTEM):TARGET =
           fprintf oc "	divsd	%a, %a\n" freg r1 freg rd
       | Pnegd (rd) ->
           need_masks := true;
-          fprintf oc "	xorpd	%a, %a\n" raw_symbol "__negd_mask" freg rd
+          fprintf oc "	xorpd	%a%s, %a\n"
+                     raw_symbol "__negd_mask" rip_rel freg rd
       | Pabsd (rd) ->
           need_masks := true;
-          fprintf oc "	andpd	%a, %a\n" raw_symbol "__absd_mask" freg rd
+          fprintf oc "	andpd	%a%s, %a\n"
+                     raw_symbol "__absd_mask" rip_rel freg rd
       | Pcomisd_ff(r1, r2) ->
           fprintf oc "	comisd	%a, %a\n" freg r2 freg r1
       | Pxorpd_f (rd) ->
@@ -594,10 +598,12 @@ module Target(System: SYSTEM):TARGET =
           fprintf oc "	divss	%a, %a\n" freg r1 freg rd
       | Pnegs (rd) ->
           need_masks := true;
-          fprintf oc "	xorpd	%a, %a\n" raw_symbol "__negs_mask" freg rd
+          fprintf oc "	xorpd	%a%s, %a\n"
+                     raw_symbol "__negs_mask" rip_rel freg rd
       | Pabss (rd) ->
           need_masks := true;
-          fprintf oc "	andpd	%a, %a\n" raw_symbol "__abss_mask" freg rd
+          fprintf oc "	andpd	%a%s, %a\n"
+                     raw_symbol "__abss_mask" rip_rel freg rd
       | Pcomiss_ff(r1, r2) ->
           fprintf oc "	comiss	%a, %a\n" freg r2 freg r1
       | Pxorps_f (rd) ->
@@ -620,8 +626,17 @@ module Target(System: SYSTEM):TARGET =
           fprintf oc "%a:\n" label l'
       | Pjmptbl(r, tbl) ->
           let l = new_label() in
-          fprintf oc "	jmp	*%a(, %a, %d)\n" label l ireg r size_pointer;
-          jumptables := (l, tbl) :: !jumptables
+          jumptables := (l, tbl) :: !jumptables;
+          if Archi.ptr64 then begin
+            let (tmp1, tmp2) =
+              if r = RAX then (RDX, RAX) else (RAX, RDX) in
+            fprintf oc "	leaq	%a(%%rip), %a\n" label l ireg tmp1;
+            fprintf oc "	movslq	(%a, %a, 4), %a\n" ireg tmp1 ireg r ireg tmp2;
+            fprintf oc "	addq	%a, %a\n" ireg tmp2 ireg tmp1;
+            fprintf oc "	jmp	*%a\n" ireg tmp1
+          end else begin
+            fprintf oc "	jmp	*%a(, %a, 4)\n" label l ireg r
+          end
       | Pcall_s(f, sg) ->
           fprintf oc "	call	%a\n" symbol f;
           if (not Archi.ptr64) && sg.sig_cc.cc_structret then
@@ -741,16 +756,20 @@ module Target(System: SYSTEM):TARGET =
       fprintf oc "%a:	.long	0x%lx\n" label lbl n
 
     let print_jumptable oc jmptbl =
-      let print_jumptable oc (lbl, tbl) =
+      let print_jumptable (lbl, tbl) =
+        let print_entry l =
+          if Archi.ptr64 then
+            fprintf oc "	.long	%a - %a\n" label (transl_label l) label lbl
+          else
+            fprintf oc "	.long	%a\n" label (transl_label l)
+        in
         fprintf oc "%a:" label lbl;
-        List.iter
-          (fun l -> fprintf oc "	%s	%a\n"
-                               data_pointer label (transl_label l))
-          tbl in
+        List.iter print_entry tbl
+      in
       if !jumptables <> [] then begin
         section oc jmptbl;
-        print_align oc size_pointer;
-        List.iter (print_jumptable oc) !jumptables;
+        print_align oc 4;
+        List.iter print_jumptable !jumptables;
         jumptables := []
       end
 

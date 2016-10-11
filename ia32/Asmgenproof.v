@@ -779,16 +779,18 @@ Opaque loadind.
   inv AT. monadInv H6.
   exploit functions_transl; eauto. intro FN.
   generalize (transf_function_no_overflow _ _ H5); intro NOOV.
-  exploit find_label_goto_label; eauto.
+  set (rs1 := rs0 #RAX <- Vundef #RDX <- Vundef).
+  exploit (find_label_goto_label f tf lbl rs1); eauto. 
   intros [tc' [rs' [A [B C]]]].
   exploit ireg_val; eauto. rewrite H. intros LD; inv LD.
   left; econstructor; split.
   apply plus_one. econstructor; eauto.
   eapply find_instr_tail; eauto.
-  simpl. rewrite <- H9. unfold Mach.label in H0; unfold label; rewrite H0. eauto.
+  simpl. rewrite <- H9.  unfold Mach.label in H0; unfold label; rewrite H0. eexact A.
   econstructor; eauto.
 Transparent destroyed_by_jumptable.
-  simpl. eapply agree_exten; eauto. intros. rewrite C; auto with asmgen.
+  apply agree_undef_regs with rs0; auto. 
+  simpl; intros. destruct H8. rewrite C by auto with asmgen. unfold rs1; Simplifs.
   congruence.
 
 - (* Mreturn *)

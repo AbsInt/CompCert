@@ -913,7 +913,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       | Vint n =>
           match list_nth_z tbl (Int.unsigned n) with
           | None => Stuck
-          | Some lbl => goto_label f lbl rs m
+          | Some lbl => goto_label f lbl (rs #RAX <- Vundef #RDX <- Vundef) m
           end
       | _ => Stuck
       end

@@ -340,6 +340,22 @@ if test "$arch" = "ia32" -a "$model" = "64"; then
         struct_return="ref"           # to check!
         system="linux"
         ;;
+    macosx)
+        # kernel major versions count upwards from 4 for OSX 10.0 to 15 for OSX 10.11
+        kernel_major=`uname -r | cut -d "." -f 1`
+
+        abi="macosx"
+        casm="${toolprefix}gcc"
+        casm_options="-arch x86_64 -c"
+        cc="${toolprefix}gcc -arch x86_64"
+        clinker="${toolprefix}gcc"
+        cprepro="${toolprefix}gcc"
+        cprepro_options="-std=c99 -arch x86_64 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' -E"
+        libmath=""
+        struct_passing="ref-callee"   # wrong!
+        struct_return="ref"           # to check!
+        system="macosx"
+        ;;
     *)
         echo "Error: invalid eabi/system '$target' for architecture X86_64." 1>&2
         echo "$usage" 1>&2

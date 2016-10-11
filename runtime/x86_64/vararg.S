@@ -117,7 +117,7 @@ FUNCTION(__compcert_va_float64)
 ENDFUNCTION(__compcert_va_float64)
 
 FUNCTION(__compcert_va_composite)
-        jmp     __compcert_va_int64     // by-ref convention, FIXME
+        jmp     GLOB(__compcert_va_int64)     // by-ref convention, FIXME
 ENDFUNCTION(__compcert_va_composite)	
 	
 // Save integer and FP registers at beginning of vararg function
