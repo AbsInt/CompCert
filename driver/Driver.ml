@@ -337,7 +337,7 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>)\n\
 \  -dltl          Save LTL after register allocation in <file>.ltl\n\
 \  -dmach         Save generated Mach code in <file>.mach\n\
 \  -dasm          Save generated assembly in <file>.s\n\
-\  -dall          Save all generated intermidate files in <file>.<ext>\n\
+\  -dall          Save all generated intermediate files in <file>.<ext>\n\
 \  -sdump         Save info for post-linking validation in <file>.json\n\
 \  -doptions      Save the compiler configurations in <file>.opt.json\n\
 General options:\n\
