@@ -299,7 +299,7 @@ if test "$arch" = "ia32" -a "$model" != "64"; then
         cc="${toolprefix}gcc -arch i386"
         clinker="${toolprefix}gcc"
         cprepro="${toolprefix}gcc"
-        cprepro_options="-std=c99 -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' -E"
+        cprepro_options="-std=c99 -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' -E"
         libmath=""
         struct_passing="ints"
         struct_return="int1248"
