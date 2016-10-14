@@ -1,0 +1,534 @@
+.TH CCOMP 1
+.SH NAME
+ccomp \- the CompCert C compiler
+.
+.SH SYNOPSIS
+\fBccomp\fP [\fIoptions\fP] \fIfile ...\fP
+.
+.SH DESCRIPTION
+\fBCompCert C\fP is a compiler for the C programming language.
+Its intended use is the compilation of life-critical and mission-critical software written in C and meeting high levels of assurance.
+It accepts most of the ISO C 99 language, with some exceptions and a few extensions.
+It produces machine code for the PowerPC, ARM, and IA32 (x86 32-bits) architectures.
+.PP
+What sets CompCert C apart from any other production compiler, is that it is formally verified, using machine-assisted mathematical proofs, to be exempt from miscompilation issues.
+In other words, the executable code it produces is proved to behave exactly as specified by the semantics of the source C program.
+This level of confidence in the correctness of the compilation process is unprecedented and contributes to meeting the highest levels of software assurance.
+In particular, using the CompCert C compiler is a natural complement to applying formal verification techniques (static analysis, program proof, model checking) at the source code level: the correctness proof of CompCert C guarantees that all safety properties verified on the source code automatically hold as well for the generated executable.
+.
+.SH
+RECOGNIZED SOURCE FILES
+.
+.TP
+.B .c
+C source file.
+.
+.TP
+.BR .i ", " .p
+C source file that should not be preprocessed.
+.
+.TP
+.B .cm
+Cminor source file.
+.
+.TP
+.B .s
+Assembly file.
+.
+.TP
+.B .S
+Assembly file that must be preprocessed.
+.
+.TP
+.B .o
+Object file.
+.
+.TP
+.B .a
+Library file.
+.
+.SH OPTIONS
+.SS Processing Options
+.INDENT 0.0
+.
+.TP
+.B \-c
+Compile to object file only (no linking), result in <file>.o.
+.
+.TP
+.B \-E
+Preprocess only, send result to standard output.
+.
+.TP
+.B \-S
+Compile to assembler only, save result in <file>.s.
+.
+.TP
+.B \-o <file>
+Generate output to <file>.
+.
+.SS Preprocessing Options
+.INDENT 0.0
+.
+.TP
+.B \-I<dir>
+Add <dir> to search path for include files.
+.
+.TP
+.B \-include <file>
+Process <file> as if \fB#include "<file>"\fP appears at the first line of the primary source file.
+.
+.TP
+.B \-D<symbol>=<value>
+Define a preprocessor symbol.
+.
+.TP
+.B \-U<symbol>
+Undefine a preprocessor symbol.
+.
+.TP
+.B \-Wp,<args>
+Pass comma separated arguments in <args> to the preprocessor.
+.
+.TP
+.B \-Xpreprocessor <arg>
+Pass argument <arg> to the preprocessor.
+.
+.TP
+.BR \-C ", " \-CC ", " \-idirafter ", " \-imacros ", " \-iquote ", " \-isystem ", " \-M ", " \-MF ", " \-MG ", " \-MM ", " \-MP ", " \-MQ ", " \-MT  ", " \-nostdinc ", " \-P
+For GNU backends these options are recognized by CompCert and passed through to the preprocessor.
+.
+.SS
+Optimization Options
+.INDENT 0.0
+.
+.TP
+.B \-O
+Optimize the compiled code.
+Enabled by default.
+.
+.TP
+.B \-O0
+Turn off most optimizations.
+Synonymous to \fB\-fno\-const\-prop\fP \fB\-fno\-cse\fP \fB\-fno\-redundancy\fP \fB\-fno\-tailcalls\fP.
+.
+.TP
+.BR \-O1 ", " \-O2 ", " \-O3
+Synonymous for \fB\-O\fP.
+.
+.TP
+.B \-Os
+Optimize for code size in preference to code speed.
+.
+.TP
+.BR \-fconst\-prop ", " \-fno\-const\-prop
+Turn on/off global constant propagation.
+Enabled by default.
+.
+.TP
+.BR \-fcse ", " \-fno\-cse
+Turn on/off common subexpression elimination.
+Enabled by default.
+.
+.TP
+.BR \-fredundancy ", " \-fno\-redundancy
+Turn on/off redundancy elimination.
+Enabled by default.
+.
+.TP
+.BR \-ftailcalls ", " \-fno\-tailcalls
+Turn on/off optimization of function calls in tail position.
+Enabled by default.
+.
+.TP
+.B \-ffloat\-const\-prop <n>
+Control constant propagation of floats (<n>=0: none, <n>=1: limited, <n>=2: full).
+Default is full.
+.
+.SS
+Code Generation Options
+.INDENT 0.0
+.
+.TP
+.B \-falign\-functions <n>
+Set alignment of function entry points to <n> bytes.
+The default alignment is 16 bytes for IA-32 targets and 4 bytes for ARM and PowerPC.
+.
+.TP
+.BR \-ffpu ", " \-fno\-fpu
+Turn on/off use of FP registers for some integer operations.
+Enabled by default.
+.
+.SS
+Code Generation Options (PowerPC with Diab Backend)
+.INDENT 0.0
+.
+.TP
+.B \-falign\-branch\-targets <n>
+Set alignment of branch targets to <n> bytes.
+The default alignment is 0 bytes which deactivates alignment of branch targets.
+.
+.TP
+.B \-falign\-cond\-branches <n>
+Set alignment of conditional branches to <n> bytes.
+The default alignment is 0 bytes which deactivates alignment of conditional branch targets.
+.
+.TP
+.B \-fsmall\-const <n>
+Set maximal size for allocation in small data constant to <n> bytes.
+The default is 8 bytes.
+.
+.TP
+.B \-fsmall\-data <n>
+Set maximal size for allocation in small data area to <n> bytes.
+The default is 8 bytes.
+.
+.SS
+Code Generation Options (ARM Targets)
+.INDENT 0.0
+.
+.TP
+.B \-mthumb
+Generate code using the Thumb 2 instruction encoding.
+This is the default if CompCert is configured for the ARMv7R profile.
+.
+.TP
+.B \-marm
+Generate code using the ARM instruction encoding.
+This is the default if CompCert is configured for a profile other than ARMv7R.
+.
+.SS
+Assembling Options
+.INDENT 0.0
+.
+.TP
+.B \-Wa,<args>
+Pass comma separated arguments in <args> to the assembler.
+.
+.TP
+.B \-Xassembler <arg>
+Pass argument <arg> to the assembler.
+.
+.SS
+Debugging Options
+.INDENT 0.0
+.
+.TP
+.B \-g
+Generate debugging information.
+.
+.TP
+.B \-gdepth <n>
+Control generation of debugging information (<n>=0: none, <n>=1: only-globals, <n>=2: globals and locals without locations, <n>=3: full).
+The default level is 3 for full debugging information.
+.
+.SS
+Debugging Options (GNU Backend)
+.INDENT 0.0
+.
+.TP
+.B \-gdwarf-<n>
+For GNU backends select debug information in DWARF format version 2 or 3.
+The default format is DWARF v2.
+.
+.SS
+Linking Options
+.INDENT 0.0
+.
+.TP
+.B \-l<library>
+Link library <library>.
+.
+.TP
+.B \-L<dir>
+Add <dir> to search path for libraries.
+.
+.TP
+.B \-Wl,<args>
+Pass comma separated arguments in <args> to the linker.
+.
+.TP
+.B \-WUl,<args>
+Pass comma separated arguments in <args> to the driver program used for linking.
+.
+.TP
+.B \-Xlinker <arg>
+Pass argument <arg> to the linker.
+.
+.TP
+.B \-s
+Remove all symbol table and relocation information from the executable.
+.
+.TP
+.B \-static
+Prevent linking with the shared libraries.
+.
+.TP
+.B \-T <file>
+Use <file> as linker command file.
+.
+.TP
+.B \-u <symbol>
+Pretend the symbol <symbol> is undefined to force linking of library modules to define it.
+.
+.TP
+.BR \-nodefaultlibs ", " \-nostartfiles ", " \-nostdlib
+For GNU backends these options are recognized by CompCert and passed through to the linker.
+.
+.SS
+Language Support Options
+.INDENT 0.0
+.
+.TP
+.BR \-fbitfields ", " \-fno\-bitfields
+Turn on/off support for emulation bit fields in structs.
+Disabled by default.
+.
+.TP
+.BR \-flongdouble ", " \-fno\-longdouble
+Turn on/off support for emulation of \fBlong double\fP as \fBdouble\fP.
+Disabled by default.
+.
+.TP
+.BR \-fpacked\-structs ", " \-fno\-packed\-structs
+Turn on/off support for emulation of packed structs.
+Disabled by default.
+.
+.TP
+.BR \-fstruct\-passing ", " \-fno\-struct\-passing\fR
+Turn on/off support for passing structs and unions by value as function results or function arguments.
+Disabled by default.
+.
+.TP
+.BR \-funprototyped ", " \-fno\-unprototyped
+Turn on/off support calls to old-style functions without prototypes.
+Enabled by default.
+.
+.TP
+.BR \-fvararg\-calls ", " \-fno\-vararg\-calls
+Turn on/off support for calls to variable-argument functions.
+Enabled by default.
+.
+.TP
+.BR \-finline-asm ", " \-fno\-inline-asm
+Turn on/off support for inline \fBasm\fP statements.
+Disabled by default.
+.
+.TP
+.B \-fall
+Activate all language support options above.
+.
+.TP
+.B \-fnone
+Deactivate all language support options above.
+.
+.SS
+Diagnostic Options
+.INDENT 0.0
+.
+.TP
+.B \-Wall
+Enable all warnings.
+.
+.TP
+.B \-W<warning>
+Enable the specific warning <warning>.
+CompCert supports the following warning classes:
+.sp
+\fIc11\-extensions\fP:
+Feature specific to C11.
+Enabled by default.
+.sp
+\fIcompare\-distinct\-pointer\-types\fP:
+Comparison of different pointer types.
+Enabled by default.
+.sp
+\fIcompcert\-conformance\fP:
+Features that are not part of the CompCert C core language, e.g. K&R style functions.
+Disabled by default.
+.sp
+\fIconstant\-conversion\fP:
+Dangerous conversion of constants, e.g. literals that are too large for the given type.
+Enabled by default.
+.sp
+\fIgnu\-empty\-struct\fP:
+GNU extension for empty structs.
+Enabled by default.
+.sp
+\fIimplicit\-function\-declaration\fP:
+Deprecated implicit function declarations.
+Enabled by default.
+.sp
+\fIimplicit\-int\fP:
+Type of parameter or return type is implicitly assumed to be int.
+Enabled by default.
+.sp
+\fIint\-conversion\fP:
+Conversion between pointer and integer.
+Enabled by default.
+.sp
+\fIinvalid\-noreturn\fP:
+Functions declared as noreturn that actually contain a return statement.
+Enabled by default.
+.sp
+\fIliteral\-range\fP:
+Floating point literals with out-of-range magnitudes or values that convert to NaN.
+Enabled by default.
+.sp
+\fImain\-return\-type\fP:
+Wrong return type for main.
+Enabled by default.
+.sp
+\fIpointer\-type\-mismatch\fP:
+Use of incompatible pointer types in conditional expressions.
+Enabled by default.
+.sp
+\fIreturn\-type\fP:
+Void-return statement in non-void function.
+Enabled by default.
+.sp
+\fIunknown\-attributes\fP:
+Use of unsupported or unknown attributes.
+Enabled by default.
+.sp
+\fIunknown\-pragmas\fP:
+Use of unsupported or unknown pragmas.
+Disabled by default.
+.sp
+\fIvarargs\fP:
+Promotable vararg arguments.
+Enabled by default.
+.sp
+\fIzero\-length\-array\fP:
+GNU extension for zero length arrays.
+Disabled by default.
+.
+.TP
+.B \-Wno-<warning>
+Disable the specific warning <warning>.
+.
+.TP
+.B \-Werror
+Treat all warnings of CompCert as errors.
+.
+.TP
+.B \-Werror=<warning>
+Treat the specific warning <warning> as an error.
+.
+.TP
+.B \-Wno-error=<warning>
+Prevent the specific warning <warning> from being treated as error even if \fB\-Werror\fP is specified.
+.
+.TP
+.B \-Wfatal-errors
+Treat all errors of CompCert as fatal errors, so that the compilation is aborted immediately.
+.
+.TP
+.B \-fdiagnostics-color
+Turn on colored diagnostics. Default for TTY output devices.
+.
+.TP
+.B \-fno-diagnostics-color
+Turn of colored diagnostics.
+.
+.SS
+Tracing Options
+.INDENT 0.0
+.
+.TP
+.B \-dprepro
+Save C file after preprocessing in <file>.i
+.
+.TP
+.B \-dparse
+Save C file after parsing and elaboration in <file>.parsed.c.
+.
+.TP
+.B \-dc
+Save generated CompCert C in <file>.compcert.c.
+.
+.TP
+.B \-dclight
+Save generated Clight in <file>.light.c.
+.
+.TP
+.B \-dcminor
+Save generated Cminor in <file>.cm.
+.
+.TP
+.B \-drtl
+Save RTL at various optimization points in <file>.rtl.<n>.
+.
+.TP
+.B \-dltl
+Save LTL after register allocation in <file>.ltl.
+.
+.TP
+.B \-dmach
+Save generated Mach code in <file>.mach.
+.
+.TP
+.B \-dasm
+Save generated assembly in <file>.s.
+.
+.TP
+.B \-dall
+Save all generated intermediate files in <file>.<ext>.
+.
+.TP
+.B \-doptions
+Save the compiler configuration in <file>.opt.json.
+.
+.TP
+.B \-sdump
+Save abstract syntax tree of generated assembly for post-linking validation tool in <file>.json.
+.
+.SS
+Miscellaneous Options
+.INDENT 0.0
+.
+.TP
+.B \-stdlib <dir>
+Set the path of the CompCert run-time library to <dir>.
+.
+.TP
+.B \-v
+Print external commands before invoking them.
+.
+.TP
+.B \-timings
+Print information about the time spent in various compiler passes.
+.
+.TP
+.B \-version
+Print the CompCert version information and exit.
+.
+.TP
+.B @<file>
+Read command line options from <file>.
+.
+.SS
+Interpreter Mode
+.INDENT 0.0
+.
+.TP
+.B \-interp
+Execute the given .c files using the reference interpreter.
+.
+.TP
+.B \-quiet
+Suppress diagnostic messages for the interpreter.
+.
+.TP
+.B \-trace
+Have the interpreter produce a detailed trace of reductions.
+.
+.TP
+.B \-random
+Randomize execution order.
+.
+.TP
+.B \-all
+Simulate all possible execution orders.
+.SH BUGS
+To report bugs, please visit <https://github.com/AbsInt/CompCert/issues>.

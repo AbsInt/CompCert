@@ -230,6 +230,8 @@ install:
 	install -m 0755 ./ccomp $(BINDIR)
 	install -d $(SHAREDIR)
 	install -m 0644 ./compcert.ini $(SHAREDIR)
+	install -d $(MANDIR)/man1
+	install -m 0644 ./doc/ccomp.1 $(MANDIR)/man1
 	$(MAKE) -C runtime install
 ifeq ($(CLIGHTGEN),true)
 	install -m 0755 ./clightgen $(BINDIR)

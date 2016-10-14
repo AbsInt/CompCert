@@ -476,6 +476,7 @@ cat > Makefile.config <<EOF
 PREFIX=$prefix
 BINDIR=$bindir
 LIBDIR=$libdir
+MANDIR=$sharedir/man
 SHAREDIR=$sharedir
 OCAML_OPT_COMP=$ocaml_opt_comp
 EOF
