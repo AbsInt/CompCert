@@ -64,7 +64,6 @@ let print_clflags oc =
   p_jmember oc "small_data" p_jint !option_small_data;
   p_jmember oc "small_data" p_jint !option_small_const;
   p_jmember oc "timings" p_jbool !option_timings;
-  p_jmember oc "rename_static" p_jbool !option_rename_static;
   fprintf oc "\n}"
 
 let print_struct_passing_style oc = function

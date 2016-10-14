@@ -24,7 +24,7 @@ let transform_program t p name =
   (run_pass Unblock.program 'b'
   (run_pass Bitfields.program 'f'
   p)))) in
-  (Rename.program p1 (Filename.chop_suffix name ".c"))
+  (Rename.program p1)
 
 let parse_transformations s =
   let t = ref CharSet.empty in

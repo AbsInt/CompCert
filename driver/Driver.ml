@@ -255,8 +255,6 @@ let version_string =
   else
     "The CompCert C verified compiler, version "^ Version.version ^ "\n"
 
-let gnu_system = Configuration.system <> "diab"
-
 let gnu_debugging_help =
 "  -gdwarf-       Generate debug information in DWARF v2 or DWARF v3\n"
 
@@ -266,8 +264,7 @@ let debugging_help =
 \  -gdepth <n>    Control generation of debugging information\n\
 \                 (<n>=0: none, <n>=1: only-globals, <n>=2: globals + locals\n\
 \                 without locations, <n>=3: full;)\n"
-^ (if gnu_system then gnu_debugging_help else "")^
-"  -frename-static Rename static functions and declarations\n"
+^ (if gnu_system then gnu_debugging_help else "")
 
 let target_help = if Configuration.arch = "arm" then
 "Target processor options:\n\
@@ -408,8 +405,7 @@ let cmdline_actions =
     [ Exact "-gdwarf-2", Unit (dwarf_version 2);
       Exact "-gdwarf-3", Unit (dwarf_version 3);]
   else []) @
- [ Exact "-frename-static", Set option_rename_static;
-   Exact "-gdepth", Integer (fun n -> if n = 0 || n <0 then begin
+ [ Exact "-gdepth", Integer (fun n -> if n = 0 || n <0 then begin
      option_g := false
    end else begin
      option_g := true;

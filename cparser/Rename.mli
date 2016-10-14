@@ -13,4 +13,4 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-val program : C.program -> string -> C.program
+val program : C.program -> C.program
