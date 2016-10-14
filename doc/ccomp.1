@@ -218,9 +218,8 @@ Debugging Options
 Generate debugging information.
 .
 .TP
-.B \-gdepth <n>
-Control generation of debugging information (<n>=0: none, <n>=1: only-globals, <n>=2: globals and locals without locations, <n>=3: full).
-The default level is 3 for full debugging information.
+.BR \-g0 ", " \-g1 ", " \-g2 ", " \-g3
+Control generation of debugging information (0: none, 1: only globals, 2: globals and locals without locations, 3: full debug information). The default level is 3 for full debug information.
 .
 .SS
 Debugging Options (GNU Backend)
@@ -229,7 +228,7 @@ Debugging Options (GNU Backend)
 .TP
 .B \-gdwarf-<n>
 For GNU backends select debug information in DWARF format version 2 or 3.
-The default format is DWARF v2.
+The default format is DWARF v3.
 .
 .SS
 Linking Options
