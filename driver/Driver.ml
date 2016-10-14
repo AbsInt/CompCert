@@ -255,17 +255,6 @@ let version_string =
   else
     "The CompCert C verified compiler, version "^ Version.version ^ "\n"
 
-let gnu_debugging_help =
-"  -gdwarf-       Generate debug information in DWARF v2 or DWARF v3\n"
-
-let debugging_help =
-"Debugging options:\n\
-\  -g             Generate debugging information\n\
-\  -gdepth <n>    Control generation of debugging information\n\
-\                 (<n>=0: none, <n>=1: only-globals, <n>=2: globals + locals\n\
-\                 without locations, <n>=3: full;)\n"
-^ (if gnu_system then gnu_debugging_help else "")
-
 let target_help = if Configuration.arch = "arm" then
 "Target processor options:\n\
 \  -mthumb        Use Thumb2 instruction encoding\n\
@@ -302,7 +291,7 @@ Processing options:\n\
 \  -finline-asm   Support inline 'asm' statements [off]\n\
 \  -fall          Activate all language support options above\n\
 \  -fnone         Turn off all language support options above\n" ^
- debugging_help ^
+ DebugInit.debugging_help ^
 "Optimization options: (use -fno-<opt> to turn off -f<opt>)\n\
 \  -O             Optimize the compiled code [on by default]\n\
 \  -O0            Do not optimize the compiled code\n\
@@ -377,9 +366,6 @@ let num_input_files = ref 0
 let cmdline_actions =
   let f_opt name ref =
     [Exact("-f" ^ name), Set ref; Exact("-fno-" ^ name), Unset ref] in
-  let dwarf_version version () =
-    option_g:=true;
-    option_gdwarf := version in
   [
 (* Getting help *)
   Exact "-help", Unit print_usage_and_exit;
@@ -398,20 +384,11 @@ let cmdline_actions =
     @ prepro_actions @
 (* Language support options -- more below *)
  [ Exact "-fall", Unit (set_all language_support_options);
-  Exact "-fnone", Unit (unset_all language_support_options);
-(* Debugging options *)
-  Exact "-g", Unit (dwarf_version 3);] @
-  (if gnu_system then
-    [ Exact "-gdwarf-2", Unit (dwarf_version 2);
-      Exact "-gdwarf-3", Unit (dwarf_version 3);]
-  else []) @
- [ Exact "-gdepth", Integer (fun n -> if n = 0 || n <0 then begin
-     option_g := false
-   end else begin
-     option_g := true;
-     option_gdepth := if n > 3 then 3 else n
-   end);
+  Exact "-fnone", Unit (unset_all language_support_options);]
+   (* Debugging options *)
+    @ DebugInit.debugging_actions @
 (* Code generation options -- more below *)
+ [
   Exact "-O0", Unit (unset_all optimization_options);
   Exact "-O", Unit (set_all optimization_options);
   _Regexp "-O[123]$", Unit (set_all optimization_options);

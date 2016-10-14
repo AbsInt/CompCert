@@ -10,7 +10,10 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+open Clflags
+open Commandline
 open Debug
+open Driveraux
 
 let default_debug =
   {
@@ -48,7 +51,6 @@ let init_debug () =
   implem :=
   if Configuration.system = "diab" then
     let gen = (fun a b -> Some (Dwarfgen.gen_diab_debug_info a b)) in
-    Clflags.option_gdwarf := 2; (* Dwarf 2 is the only supported target *)
     {default_debug with generate_debug_info = gen;
      add_diab_info = DebugInformation.add_diab_info;
      add_fun_addr = DebugInformation.diab_add_fun_addr;}
@@ -60,7 +62,39 @@ let init_none () =
   implem := default_implem
 
 let init () =
-  if !Clflags.option_g then
+  if !option_g then
     init_debug ()
   else
     init_none ()
+
+let gnu_debugging_help =
+"  -gdwarf-       Generate debug information in DWARF v2 or DWARF v3\n"
+
+let debugging_help =
+"Debugging options:\n\
+\  -g             Generate debugging information\n\
+\  -g<n>          Control generation of debugging information\n\
+\                 (<n>=0: none, <n>=1: only-globals, <n>=2: globals + locals \n\
+\                 without locations, <n>=3: full;)\n"
+^ (if gnu_system then gnu_debugging_help else "")
+
+let gnu_debugging_actions =
+  let version version () =
+    option_g:=true;
+    option_gdwarf:=version
+  in
+  [Exact "-gdwarf-2", Unit (version 2);
+   Exact "-gdwarf-3", Unit (version 3);]
+
+let debugging_actions =
+  let depth depth () =
+    option_g:=true;
+    option_gdepth := depth
+  in
+  [Exact "-g", Unit (depth 3);
+   Exact "-g0", Unset option_g;
+   Exact "-g1", Unit (depth 1);
+   Exact "-g2", Unit (depth 2);
+   Exact "-g3", Unit (depth 3);]
+  @
+  (if gnu_system then gnu_debugging_actions else [])
