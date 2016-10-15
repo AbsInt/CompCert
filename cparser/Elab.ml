@@ -1155,7 +1155,16 @@ module I = struct
         end else
           None
     | _, _ ->
-        None
+      None
+
+  let has_member env name = function
+    | TStruct (id,_) ->
+      let ci = Env.find_struct env id in
+      Env.exist_member env ci.ci_members name
+    | TUnion (id,_) ->
+      let ci = Env.find_union env id in
+      Env.exist_member env ci.ci_members name
+    | _ -> false
 
   (* Move to the member named [name] of the current point, which must be
      a struct or a union. *)
@@ -1168,6 +1177,9 @@ module I = struct
           | (fld, i as f_i) :: after ->
               if fld.fld_name.name = name then
                 Some(Zstruct(z, id, before, fld, after), i)
+              else if fld.fld_name.name = "" && has_member env name fld.fld_typ then
+                let zi = (Zstruct(z, id, before, fld, after), i) in
+                member env zi name
               else
                 find (f_i :: before) after
         in find [] flds
@@ -1180,6 +1192,9 @@ module I = struct
             | fld1 :: rem ->
                 if fld1.fld_name.name = name then
                   Some(Zunion(z, id, fld1), default_init env fld1.fld_typ)
+                else if fld.fld_name.name = "" && has_member env name fld.fld_typ then
+                  let zi = (Zunion(z, id, fld1),default_init env fld1.fld_typ) in
+                  member env zi name
                 else
                   find rem
            in find (Env.find_union env id).ci_members
