@@ -9,7 +9,7 @@ ccomp \- the CompCert C compiler
 \fBCompCert C\fP is a compiler for the C programming language.
 Its intended use is the compilation of life-critical and mission-critical software written in C and meeting high levels of assurance.
 It accepts most of the ISO C 99 language, with some exceptions and a few extensions.
-It produces machine code for the PowerPC, ARM, and IA32 (x86 32-bits) architectures.
+It produces machine code for the PowerPC, ARM, and IA-32 architectures.
 .PP
 What sets CompCert C apart from any other production compiler, is that it is formally verified, using machine-assisted mathematical proofs, to be exempt from miscompilation issues.
 In other words, the executable code it produces is proved to behave exactly as specified by the semantics of the source C program.
@@ -143,7 +143,7 @@ Enabled by default.
 .TP
 .B \-ffloat\-const\-prop <n>
 Control constant propagation of floats (<n>=0: none, <n>=1: limited, <n>=2: full).
-Default is full.
+Default is full constant propagation.
 .
 .SS
 Code Generation Options
@@ -166,12 +166,12 @@ Code Generation Options (PowerPC with Diab Backend)
 .TP
 .B \-falign\-branch\-targets <n>
 Set alignment of branch targets to <n> bytes.
-The default alignment is 0 bytes which deactivates alignment of branch targets.
+The default alignment is 0 bytes, which deactivates alignment of branch targets.
 .
 .TP
 .B \-falign\-cond\-branches <n>
 Set alignment of conditional branches to <n> bytes.
-The default alignment is 0 bytes which deactivates alignment of conditional branch targets.
+The default alignment is 0 bytes, which deactivates alignment of conditional branch targets.
 .
 .TP
 .B \-fsmall\-const <n>
