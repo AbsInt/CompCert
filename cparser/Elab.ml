@@ -1461,20 +1461,19 @@ let elab_expr vararg loc env a =
              end
          | _ ->
              error "member reference type %a is not a pointer" (print_typ env) b1.etyp in
-      let fld,tl = match fld with
-      | hd::tl -> hd,tl
-      | _ -> assert false (* Can not happen *) in
-      let rec aux =  function
-        | [] -> b1
+       let rec aux =  function
+        | [] -> assert false
+        | [fld] ->
+          { edesc = EUnop(Oarrow fld.fld_name, b1);
+              etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
+                (type_of_member env fld) }
         | fld::rest ->
             let b1 = aux rest in
             { edesc = EUnop(Odot fld.fld_name, b1);
               etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
                 (type_of_member env fld) } in
-      let b1 = aux tl in
-      { edesc = EUnop(Oarrow fld.fld_name, b1);
-        etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
-          (type_of_member env fld) },env
+      aux fld,env
+
 
 (* Hack to treat vararg.h functions the GCC way.  Helps with testing.
     va_start(ap,n)
