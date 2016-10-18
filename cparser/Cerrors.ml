@@ -200,7 +200,7 @@ let classify_warning w =
     SuppressedMsg,None
 
 let cprintf fmt c =
-  if  Unix.isatty Unix.stderr && !color_diagnostics then
+  if !color_diagnostics then
     fprintf fmt c
   else
     ifprintf fmt c
