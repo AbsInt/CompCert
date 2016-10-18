@@ -21,7 +21,10 @@ open Commandline
 let error_fatal = ref false
 let color_diagnostics =
   let term = try Sys.getenv "TERM" with Not_found -> "" in
-  ref (Unix.isatty Unix.stderr && term <> "dumb" && term <>"")
+  let activate = try
+      (Unix.isatty Unix.stderr && term <> "dumb" && term <>"")
+    with _ -> false in
+  ref activate
 
 let num_errors = ref 0
 let num_warnings = ref 0
