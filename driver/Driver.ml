@@ -331,6 +331,8 @@ General options:\n\
 \  -v             Print external commands before invoking them\n\
 \  -timings       Show the time spent in various compiler passes\n\
 \  -version       Print the version string and exit\n\
+\  -target <value> Generate code for the given target\n\
+\  -conf <file>   Read configuration from file\n\
 \  @<file>        Read command line options from <file>\n" ^
   Cerrors.warning_help ^
 "Interpreter mode:\n\
