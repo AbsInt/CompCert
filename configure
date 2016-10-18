@@ -404,8 +404,9 @@ echo "Testing Menhir... " | tr -d '\n'
 menhir_ver=`menhir --version 2>/dev/null | sed -n -e 's/^.*version \([0-9]*\).*$/\1/p'`
 case "$menhir_ver" in
   20[0-9][0-9][0-9][0-9][0-9][0-9])
-        if test "$menhir_ver" -ge $MENHIR_REQUIRED; then
+      if test "$menhir_ver" -ge $MENHIR_REQUIRED; then
           echo "version $menhir_ver -- good!"
+          menhir_includes="-I `menhir --suggest-menhirLib`"
         else
           echo "version $menhir_ver -- UNSUPPORTED"
           echo "Error: CompCert requires Menhir version $MENHIR_REQUIRED or later."
@@ -478,6 +479,7 @@ BINDIR=$bindir
 LIBDIR=$libdir
 SHAREDIR=$sharedir
 OCAML_OPT_COMP=$ocaml_opt_comp
+MENHIR_INCLUDES=$menhir_includes
 EOF
 if $merlin; then
     cat >> Makefile.config <<EOF
