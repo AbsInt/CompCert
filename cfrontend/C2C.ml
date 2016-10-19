@@ -357,12 +357,15 @@ let make_builtin_memcpy args =
       let sz1 =
         match Initializers.constval !comp_env sz with
         | Errors.OK(Vint n) -> n
-        | _ -> error "argument 3 of '__builtin_memcpy_aligned' must be a constant"; Integers.Int.zero in
+        | _ -> error "size argument of '__builtin_memcpy_aligned' must be a constant"; Integers.Int.zero in
       let al1 =
         match Initializers.constval !comp_env al with
         | Errors.OK(Vint n) -> n
-        | _ -> error "argument 4 of '__builtin_memcpy_aligned' must be a constant"; Integers.Int.one in
-      (* to check: sz1 > 0, al1 divides sz1, al1 = 1|2|4|8 *)
+        | _ -> error "alignment argument of '__builtin_memcpy_aligned' must be a constant"; Integers.Int.one in
+      if Integers.Int.is_power2 al1 = None
+        then error "alignment argument of '__builtin_memcpy_aligned' must be a power of 2";
+      if Integers.Int.modu sz1 al1 <> Integers.Int.zero
+        then error "alignment argument of '__builtin_memcpy_aligned' must be a divisor of the size";
       (* Issue #28: must decay array types to pointer types *)
       Ebuiltin(EF_memcpy(sz1, al1),
                Tcons(typeconv(typeof dst),
