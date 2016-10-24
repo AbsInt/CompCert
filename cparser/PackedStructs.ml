@@ -182,7 +182,7 @@ let bswap_write loc env lhs rhs =
   let ty = lhs.etyp in
   let (bsize, aty) =
     accessor_type loc env ty in
-  assert (bsize = 16 || bsize = 32);
+  assert (bsize = 16 || bsize = 32 || (bsize = 64 && !config.sizeof_ptr = 8));
   try
     if !use_reversed then begin
       let (id, fty) =
