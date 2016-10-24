@@ -3,7 +3,7 @@
 
 int main()
 {
-  printf("%d\n", sizeof("abcd"));
-  printf("%d\n", sizeof(L"abcd") / sizeof(wchar_t));
+  printf("%d\n", (int) sizeof("abcd"));
+  printf("%d\n", (int) (sizeof(L"abcd") / sizeof(wchar_t)));
   return 0;
 }

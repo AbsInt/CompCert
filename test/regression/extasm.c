@@ -5,7 +5,9 @@ int clobbers(int x, int z)
 {
   int y;
   asm("TEST0 out:%0 in:%1" : "=r"(y) : "r"(x) : "cc"
-#if defined(__i386__)
+#if defined(__x86_64__)
+      , "rax", "rdx", "rbx"
+#elif defined(__i386__)
       , "eax", "edx", "ebx"
 #elif defined(__arm__)
       , "r0", "r1", "r4"
@@ -15,6 +17,12 @@ int clobbers(int x, int z)
 );
   return y + z;
 }
+
+#if defined(__x86_64__)
+#define SIXTYFOUR
+#else
+#undef SIXTYFOUR
+#endif
 
 int main()
 {
@@ -44,10 +52,12 @@ int main()
   asm("FAIL1 in:%0" : : "i"(x));
 #endif
   /* 64-bit output */
+#ifndef SIXTYFOUR
   asm("TEST10 out: high %R0,lo %Q0" : "=r" (z));
   /* 64-bit input */
   asm("TEST11 out:%0 in:%1,high %R2,lo %Q2,%3" 
       : "=r"(x) : "r"(y), "r"(z), "r"(f));
+#endif
 #ifdef FAILURES
   asm("FAIL2 out:%0" : "=r"(z));
   asm("FAIL3 in:%0" : : "r"(z));

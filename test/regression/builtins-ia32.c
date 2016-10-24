@@ -8,6 +8,7 @@ int main(int argc, char ** argv)
   unsigned int y = 0xDEADBEEF;
   unsigned long long xx = 0x1234567812345678ULL;
   unsigned long long yy = 0x1234567800000000ULL;
+  unsigned long long zz = 0x123456789ABCDEF0ULL;
   unsigned z;
   double a = 3.14159;
   double b = 2.718;
@@ -16,6 +17,7 @@ int main(int argc, char ** argv)
 
   printf("bswap(%x) = %x\n", x, __builtin_bswap(x));
   printf("bswap16(%x) = %x\n", s, __builtin_bswap16(s));
+  printf("bswap64(%llx) = %llx\n", zz, __builtin_bswap64(zz));
   printf("clz(%x) = %d\n", x, __builtin_clz(x));
   printf("clzll(%llx) = %d\n", (unsigned long long) x, __builtin_clzll(x));
   printf("clzll(%llx) = %d\n", xx, __builtin_clzll(xx));
