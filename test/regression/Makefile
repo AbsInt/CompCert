@@ -69,22 +69,13 @@ clean:
 	rm -f *.parsed.c *.compcert.c *.light.c *.s *.o *.sdump *~ 
 
 test:
+	@echo "----------- Compiled tests -------------"
 	@for i in $(TESTS) $(TESTS_COMP); do \
-	   if ./$$i.compcert | cmp -s - Results/$$i; \
-           then echo "$$i: passed"; \
-           else echo "$$i: FAILED"; exit 2; \
-	   fi; \
+	   ./Runtest $$i ./$$i.compcert; \
          done
+	@echo "----------- Interpreted tests -------------"
 	@for i in $(TESTS); do \
-           if $(CCOMP) -fall -interp -quiet $$i.c > _cinterp.log; then \
-             if cmp -s _cinterp.log Results/$$i; \
-             then echo "$$i: interpreter passed"; \
-             else echo "$$i: interpreter FAILED"; \
-             fi; \
-           else \
-             echo "$$i: interpreter undefined behavior"; \
-           fi; \
-           rm -f _cinterp.log; \
+           ./Runtest $$i $(CCOMP) -fall -interp -quiet $$i.c; \
          done
 	@for i in $(TESTS_DIFF); do \
            if $(CCOMP) -fall -interp -quiet $$i.c > _cinterp.log; then \
