@@ -320,6 +320,11 @@ let expand_builtin_inline name args res =
      if a1 <> res then
        emit (Pmov_rr (res,a1));
      emit (Pbswap64 res)
+  | "__builtin_bswap64", [BA_splitlong(BA(IR ah), BA(IR al))],
+                         BR_splitlong(BR(IR rh), BR(IR rl)) ->
+     assert (ah = RAX && al = RDX && rh = RDX && rl = RAX);
+     emit (Pbswap32 RAX);
+     emit (Pbswap32 RDX)
   | "__builtin_bswap16", [BA(IR a1)], BR(IR res) ->
      if a1 <> res then
        emit (Pmov_rr (res,a1));
@@ -539,7 +544,7 @@ let expand_instruction instr =
      end
   | _ -> emit instr
 
-let int_reg_to_dwarf = function
+let int_reg_to_dwarf_32 = function
   | RAX -> 0
   | RBX -> 3
   | RCX -> 1
@@ -548,9 +553,30 @@ let int_reg_to_dwarf = function
   | RDI -> 7
   | RBP -> 5
   | RSP -> 4
-  | _ -> assert false (* TODO *)
+  | _ -> assert false
 
-let float_reg_to_dwarf = function
+let int_reg_to_dwarf_64 = function
+  | RAX -> 0
+  | RDX -> 1
+  | RCX -> 2
+  | RBX -> 3
+  | RSI -> 4
+  | RDI -> 5
+  | RBP -> 6
+  | RSP -> 7
+  | R8 -> 8
+  | R9 -> 9
+  | R10 -> 10
+  | R11 -> 11
+  | R12 -> 12
+  | R13 -> 13
+  | R14 -> 14
+  | R15 -> 15
+
+let int_reg_to_dwarf =
+  if Archi.ptr64 then int_reg_to_dwarf_64 else int_reg_to_dwarf_32
+
+let float_reg_to_dwarf_32 = function
   | XMM0 -> 21
   | XMM1 -> 22
   | XMM2 -> 23
@@ -559,7 +585,28 @@ let float_reg_to_dwarf = function
   | XMM5 -> 26
   | XMM6 -> 27
   | XMM7 -> 28
-  | _ -> assert false (* TODO *)
+  | _ -> assert false
+
+let float_reg_to_dwarf_64 = function
+  | XMM0 -> 17
+  | XMM1 -> 18
+  | XMM2 -> 19
+  | XMM3 -> 20
+  | XMM4 -> 21
+  | XMM5 -> 22
+  | XMM6 -> 23
+  | XMM7 -> 24
+  | XMM8 -> 25
+  | XMM9 -> 26
+  | XMM10 -> 27
+  | XMM11 -> 28
+  | XMM12 -> 29
+  | XMM13 -> 30
+  | XMM14 -> 31
+  | XMM15 -> 32
+
+let float_reg_to_dwarf =
+  if Archi.ptr64 then float_reg_to_dwarf_64 else float_reg_to_dwarf_32
 
 let preg_to_dwarf = function
    | IR r -> int_reg_to_dwarf r
