@@ -470,9 +470,10 @@ module Dwarfgenaux (Target: TARGET) =
       let scope = {
         lexical_block_range = r;
       } in
+      let acc = (acc >>= dwr) in
       let vars,acc = mmap_opt (local_to_entry  f_id) acc sc.scope_variables in
       let entry = new_entry id (DW_TAG_lexical_block scope) in
-      add_children entry vars,(acc >>= dwr)
+      add_children entry vars,acc
 
     and local_to_entry f_id acc id =
       match get_local_variable id with
