@@ -112,8 +112,11 @@ Definition is_longconst_zero (e: expr) :=
 
 Definition intoflong (e: expr) := lowlong e.
 
-Definition longofint (e: expr) :=
-  Elet e (makelong (shrimm (Eletvar O) (Int.repr 31)) (Eletvar O)).
+Nondetfunction longofint (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => longconst (Int64.repr (Int.signed n))
+  | _ => Elet e (makelong (shrimm (Eletvar O) (Int.repr 31)) (Eletvar O))
+  end.
 
 Definition longofintu (e: expr) :=
   makelong (Eop (Ointconst Int.zero) Enil) e.
