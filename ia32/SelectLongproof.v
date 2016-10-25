@@ -66,17 +66,15 @@ Proof.
   EvalOp.
 Qed.
 
-Lemma is_longconst_sound_1:
-  forall a n, is_longconst a = Some n -> a = Eop (Olongconst n) Enil.
-Proof with (try discriminate).
-  unfold is_longconst; intros. destruct a... destruct o... destruct e0... congruence.
-Qed.
-
 Lemma is_longconst_sound:
   forall v a n le,
   is_longconst a = Some n -> eval_expr ge sp e m le a v -> v = Vlong n.
-Proof.
-  intros. rewrite (is_longconst_sound_1 _ _ H) in H0. InvEval. auto.
+Proof with (try discriminate).
+  intros. unfold is_longconst in *. destruct Archi.splitlong.
+  eapply SplitLongproof.is_longconst_sound; eauto.
+  assert (a = Eop (Olongconst n) Enil).
+  { destruct a... destruct o... destruct e0... congruence. }
+  subst a. InvEval. auto.
 Qed.
 
 Theorem eval_intoflong: unary_constructor_sound intoflong Val.loword.
@@ -401,6 +399,8 @@ Qed.
 Theorem eval_mullimm: forall n, unary_constructor_sound (mullimm n) (fun v => Val.mull v (Vlong n)).
 Proof.
   unfold mullimm. intros; red; intros.
+  destruct Archi.splitlong eqn:SL.
+  eapply SplitLongproof.eval_mullimm; eauto.  
   predSpec Int64.eq Int64.eq_spec n Int64.zero.
   exists (Vlong Int64.zero); split. apply eval_longconst.
   destruct x; simpl; auto. subst n; rewrite Int64.mul_zero; auto.

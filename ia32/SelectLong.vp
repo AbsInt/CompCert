@@ -29,6 +29,7 @@ Definition longconst (n: int64) : expr :=
   if Archi.splitlong then SplitLong.longconst n else Eop (Olongconst n) Enil.
 
 Definition is_longconst (e: expr) :=
+  if Archi.splitlong then SplitLong.is_longconst e else
   match e with
   | Eop (Olongconst n) Enil => Some n
   | _ => None
@@ -269,7 +270,8 @@ Definition mullimm_base (n1: int64) (e2: expr) :=
   end.
 
 Nondetfunction mullimm (n1: int64) (e2: expr) :=
-  if Int64.eq n1 Int64.zero then longconst Int64.zero
+  if Archi.splitlong then SplitLong.mullimm n1 e2
+  else if Int64.eq n1 Int64.zero then longconst Int64.zero
   else if Int64.eq n1 Int64.one then e2
   else match e2 with
   | Eop (Olongconst n2) Enil => longconst (Int64.mul n1 n2)
