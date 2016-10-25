@@ -791,7 +791,7 @@ Proof.
 Qed.
 
 Lemma eval_mullimm:
-  forall n, unary_constructor_sound (fun a => mullimm a n) (fun v => Val.mull v (Vlong n)).
+  forall n, unary_constructor_sound (mullimm n) (fun v => Val.mull v (Vlong n)).
 Proof.
   unfold mullimm; red; intros.
   predSpec Int64.eq Int64.eq_spec n Int64.zero.

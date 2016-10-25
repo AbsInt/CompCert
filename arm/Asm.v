@@ -199,10 +199,10 @@ Inductive instruction : Type :=
   | Pfsts: freg -> ireg -> int -> instruction       (**r float32 store *)
 
   (* Pseudo-instructions *)
-  | Pallocframe: Z -> int -> instruction      (**r allocate new stack frame *)
-  | Pfreeframe: Z -> int -> instruction       (**r deallocate stack frame and restore previous frame *)
+  | Pallocframe: Z -> ptrofs -> instruction      (**r allocate new stack frame *)
+  | Pfreeframe: Z -> ptrofs -> instruction       (**r deallocate stack frame and restore previous frame *)
   | Plabel: label -> instruction                   (**r define a code label *)
-  | Ploadsymbol: ireg -> ident -> int -> instruction (**r load the address of a symbol *)
+  | Ploadsymbol: ireg -> ident -> ptrofs -> instruction (**r load the address of a symbol *)
   | Pmovite: testcond -> ireg -> shift_op -> shift_op -> instruction (**r integer conditional move *)
   | Pbtbl: ireg -> list label -> instruction       (**r N-way branch through a jump table *)
   | Pbuiltin: external_function -> list (builtin_arg preg) -> builtin_res preg -> instruction (**r built-in function (pseudo) *)
@@ -376,7 +376,7 @@ Inductive outcome: Type :=
   instruction ([nextinstr]) or branching to a label ([goto_label]). *)
 
 Definition nextinstr (rs: regset) :=
-  rs#PC <- (Val.add rs#PC Vone).
+  rs#PC <- (Val.offset_ptr rs#PC Ptrofs.one).
 
 Definition nextinstr_nf (rs: regset) :=
   nextinstr (undef_flags rs).
@@ -386,7 +386,7 @@ Definition goto_label (f: function) (lbl: label) (rs: regset) (m: mem) :=
   | None => Stuck
   | Some pos =>
       match rs#PC with
-      | Vptr b ofs => Next (rs#PC <- (Vptr b (Int.repr pos))) m
+      | Vptr b ofs => Next (rs#PC <- (Vptr b (Ptrofs.repr pos))) m
       | _ => Stuck
     end
   end.
@@ -564,11 +564,11 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       | None => Stuck
       end
   | Pbsymb id sg =>
-      Next (rs#PC <- (Genv.symbol_address ge id Int.zero)) m
+      Next (rs#PC <- (Genv.symbol_address ge id Ptrofs.zero)) m
   | Pbreg r sg =>
       Next (rs#PC <- (rs#r)) m
   | Pblsymb id sg =>
-      Next (rs#IR14 <- (Val.add rs#PC Vone) #PC <- (Genv.symbol_address ge id Int.zero)) m
+      Next (rs#IR14 <- (Val.add rs#PC Vone) #PC <- (Genv.symbol_address ge id Ptrofs.zero)) m
   | Pblreg r sg =>
       Next (rs#IR14 <- (Val.add rs#PC Vone) #PC <- (rs#r)) m
   | Pbic r1 r2 so =>
@@ -716,13 +716,13 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   (* Pseudo-instructions *)
   | Pallocframe sz pos =>
       let (m1, stk) := Mem.alloc m 0 sz in
-      let sp := (Vptr stk Int.zero) in
-      match Mem.storev Mint32 m1 (Val.add sp (Vint pos)) rs#IR13 with
+      let sp := (Vptr stk Ptrofs.zero) in
+      match Mem.storev Mint32 m1 (Val.offset_ptr sp pos) rs#IR13 with
       | None => Stuck
       | Some m2 => Next (nextinstr (rs #IR12 <- (rs#IR13) #IR13 <- sp)) m2
       end
   | Pfreeframe sz pos =>
-      match Mem.loadv Mint32 m (Val.add rs#IR13 (Vint pos)) with
+      match Mem.loadv Mint32 m (Val.offset_ptr rs#IR13 pos) with
       | None => Stuck
       | Some v =>
           match rs#IR13 with
@@ -810,7 +810,7 @@ Inductive extcall_arg (rs: regset) (m: mem): loc -> val -> Prop :=
   | extcall_arg_stack: forall ofs ty bofs v,
       bofs = Stacklayout.fe_ofs_arg + 4 * ofs ->
       Mem.loadv (chunk_of_type ty) m
-                (Val.add (rs (IR IR13)) (Vint (Int.repr bofs))) = Some v ->
+                (Val.offset_ptr (rs (IR IR13)) (Ptrofs.repr bofs)) = Some v ->
       extcall_arg rs m (S Outgoing ofs ty) v.
 
 Inductive extcall_arg_pair (rs: regset) (m: mem): rpair loc -> val -> Prop :=
@@ -839,14 +839,14 @@ Inductive step: state -> trace -> state -> Prop :=
       forall b ofs f i rs m rs' m',
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
-      find_instr (Int.unsigned ofs) (fn_code f) = Some i ->
+      find_instr (Ptrofs.unsigned ofs) (fn_code f) = Some i ->
       exec_instr f i rs m = Next rs' m' ->
       step (State rs m) E0 (State rs' m')
   | exec_step_builtin:
       forall b ofs f ef args res rs m vargs t vres rs' m',
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
-      find_instr (Int.unsigned ofs) f.(fn_code) = Some (Pbuiltin ef args res) ->
+      find_instr (Ptrofs.unsigned ofs) f.(fn_code) = Some (Pbuiltin ef args res) ->
       eval_builtin_args ge rs (rs SP) m args vargs ->
       external_call ef ge vargs m t vres m' ->
       rs' = nextinstr
@@ -855,7 +855,7 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State rs m) t (State rs' m')
   | exec_step_external:
       forall b ef args res rs m t rs' m',
-      rs PC = Vptr b Int.zero ->
+      rs PC = Vptr b Ptrofs.zero ->
       Genv.find_funct_ptr ge b = Some (External ef) ->
       external_call ef ge args m t res m' ->
       extcall_arguments rs m (ef_sig ef) args ->
@@ -871,7 +871,7 @@ Inductive initial_state (p: program): state -> Prop :=
       let ge := Genv.globalenv p in
       let rs0 :=
         (Pregmap.init Vundef)
-        # PC <- (Genv.symbol_address ge p.(prog_main) Int.zero)
+        # PC <- (Genv.symbol_address ge p.(prog_main) Ptrofs.zero)
         # IR14 <- Vzero
         # IR13 <- Vzero in
       Genv.init_mem p = Some m0 ->

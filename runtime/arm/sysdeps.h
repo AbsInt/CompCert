@@ -70,6 +70,7 @@ f:
 #define THUMB_S(x) x
 #endif
 
+#define ADC THUMB_S(adc)
 #define ADD THUMB_S(add)
 #define AND THUMB_S(and)
 #define ASR THUMB_S(asr)

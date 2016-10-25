@@ -26,6 +26,7 @@ Require Import CminorSel.
 Require Import SelectOp.
 
 Open Local Scope cminorsel_scope.
+Local Transparent Archi.ptr64.
 
 (** * Useful lemmas and tactics *)
 
@@ -123,7 +124,7 @@ Qed.
 
 Theorem eval_addrstack:
   forall le ofs,
-  exists v, eval_expr ge sp e m le (addrstack ofs) v /\ Val.lessdef (Val.add sp (Vint ofs)) v.
+  exists v, eval_expr ge sp e m le (addrstack ofs) v /\ Val.lessdef (Val.offset_ptr sp ofs) v.
 Proof.
   intros. unfold addrstack. econstructor; split.
   EvalOp. simpl; eauto.
@@ -147,11 +148,11 @@ Proof.
   red; unfold addimm; intros until x.
   predSpec Int.eq Int.eq_spec n Int.zero.
   subst n. intros. exists x; split; auto.
-  destruct x; simpl; auto. rewrite Int.add_zero. auto. rewrite Int.add_zero. auto.
+  destruct x; simpl; auto. rewrite Int.add_zero. auto. rewrite Ptrofs.add_zero. auto.
   case (addimm_match a); intros; InvEval; simpl; TrivialExists; simpl.
   rewrite Int.add_commut. auto.
-  unfold Genv.symbol_address. destruct (Genv.find_symbol ge s); simpl; auto. rewrite Int.add_commut; auto.
-  rewrite Val.add_assoc. rewrite Int.add_commut. auto.
+  unfold Genv.symbol_address. destruct (Genv.find_symbol ge s); simpl; auto. rewrite Ptrofs.add_commut; auto.
+  destruct sp; simpl; auto. rewrite Ptrofs.add_assoc. do 3 f_equal. apply Ptrofs.add_commut.
   subst x. rewrite Val.add_assoc. rewrite Int.add_commut. auto.
 Qed.
 
@@ -856,12 +857,12 @@ Proof.
   destruct (can_use_Aindexed2shift chunk); simpl.
   exists (v1 :: v0 :: nil); split. eauto with evalexpr. congruence.
   exists (Vptr b ofs :: nil); split. constructor. EvalOp. simpl. congruence. constructor.
-  simpl. rewrite Int.add_zero; auto.
+  simpl. rewrite Ptrofs.add_zero; auto.
   destruct (can_use_Aindexed2 chunk); simpl.
   exists (v1 :: v0 :: nil); split. eauto with evalexpr. congruence.
   exists (Vptr b ofs :: nil); split. constructor. EvalOp. simpl. congruence. constructor.
-  simpl. rewrite Int.add_zero; auto.
-  exists (v :: nil); split. eauto with evalexpr. subst. simpl. rewrite Int.add_zero; auto.
+  simpl. rewrite Ptrofs.add_zero; auto.
+  exists (v :: nil); split. eauto with evalexpr. subst. simpl. rewrite Ptrofs.add_zero; auto.
 Qed.
 
 Theorem eval_builtin_arg:
@@ -876,7 +877,7 @@ Proof.
 - simpl in H5. inv H5. constructor.
 - subst v. constructor; auto.
 - inv H. InvEval. simpl in H6; inv H6. constructor; auto.
-- inv H. InvEval. simpl in H6. rewrite <- Genv.shift_symbol_address in H6.
+- inv H. InvEval. simpl in H6. rewrite <- Genv.shift_symbol_address_32 in H6 by auto.
   inv H6. constructor; auto.
 - constructor; auto.
 Qed.

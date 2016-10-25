@@ -241,7 +241,7 @@ Definition mull_base (e1 e2: expr) :=
              (mul (lift h1) (lift l2)))
         (Eop Olowlong (Eletvar O ::: Enil)))).
 
-Definition mullimm (e: expr) (n: int64) :=
+Definition mullimm (n: int64) (e: expr) :=
   if Int64.eq n Int64.zero then longconst Int64.zero else
   if Int64.eq n Int64.one then e else
   match Int64.is_power2' n with
@@ -252,8 +252,8 @@ Definition mullimm (e: expr) (n: int64) :=
 Definition mull (e1 e2: expr) :=
   match is_longconst e1, is_longconst e2 with
   | Some n1, Some n2 => longconst (Int64.mul n1 n2)
-  | Some n1, _ => mullimm e2 n1
-  | _, Some n2 => mullimm e1 n2
+  | Some n1, _ => mullimm n1 e2
+  | _, Some n2 => mullimm n2 e1
   | _, _ => mull_base e1 e2
   end.
 

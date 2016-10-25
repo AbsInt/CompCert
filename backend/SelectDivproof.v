@@ -713,7 +713,8 @@ Lemma eval_modl_from_divl:
 Proof.
   unfold modl_from_divl; intros.
   exploit eval_mullimm; eauto. instantiate (1 := n). intros (v1 & A1 & B1).
-  exploit (eval_subl prog sp e m le (Eletvar O)). constructor; eauto. eexact A1.
+  assert (A0: eval_expr ge sp e m le (Eletvar O) (Vlong x)) by (constructor; auto).
+  exploit eval_subl; auto. eexact A0. eexact A1.
   intros (v2 & A2 & B2).
   simpl in B1; inv B1. simpl in B2; inv B2. exact A2.
 Qed.
@@ -798,7 +799,7 @@ Proof.
   assert (A0: eval_expr ge sp e m le (Eletvar O) (Vlong x)).
   { constructor; auto. }
   exploit eval_mullhs. eauto. eexact A0. instantiate (1 := Int64.repr M).  intros (v1 & A1 & B1).
-  exploit eval_addl. eexact A1. eexact A0. intros (v2 & A2 & B2).
+  exploit eval_addl; auto. eexact A1. eexact A0. intros (v2 & A2 & B2).
   exploit eval_shrluimm. eauto. eexact A0. instantiate (1 := Int.repr 63). intros (v3 & A3 & B3).
   set (a4 := if zlt M Int64.half_modulus
              then mullhs (Eletvar 0) (Int64.repr M)
@@ -807,7 +808,7 @@ Proof.
   assert (A4: eval_expr ge sp e m le a4 v4). 
   { unfold a4, v4; destruct (zlt M Int64.half_modulus); auto. }
   exploit eval_shrlimm. eauto. eexact A4. instantiate (1 := Int.repr p). intros (v5 & A5 & B5).
-  exploit eval_addl. eexact A5. eexact A3. intros (v6 & A6 & B6).
+  exploit eval_addl; auto. eexact A5. eexact A3. intros (v6 & A6 & B6).
   assert (RANGE: forall x, 0 <= x < 64 -> Int.ltu (Int.repr x) Int64.iwordsize' = true).
   { intros. unfold Int.ltu. rewrite Int.unsigned_repr. rewrite zlt_true by tauto. auto.
     assert (64 < Int.max_unsigned) by (compute; auto). omega. }
