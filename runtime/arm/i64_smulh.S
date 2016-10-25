@@ -61,16 +61,16 @@ FUNCTION(__i64_smulh)
         ADC   r6, r6, r5
 @@@ subtract X if Y < 0
         cmp   Reg1HI, #0
-	itt lt
-        subs.lt r7, r7, Reg0LO
-        sbcs.lt r6, r6, Reg0HI
+        bge   1f
+        subs  r7, r7, Reg0LO
+        sbcs  r6, r6, Reg0HI
 @@@ subtract Y if X < 0
-        cmp   Reg0HI, #0
-	itt lt
-        subs.lt r7, r7, Reg1LO
-        sbcs.lt r6, r6, Reg1HI
+1:      cmp   Reg0HI, #0
+        bge 2f
+        subs  r7, r7, Reg1LO
+        sbcs  r6, r6, Reg1HI
 @@@ return result in Reg0 pair
-        mov   Reg0LO, r7
+2:      mov   Reg0LO, r7
         mov   Reg0HI, r6
         pop   {r4, r5, r6, r7}
         bx    lr
