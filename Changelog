@@ -1,3 +1,25 @@
+Working version
+===============
+
+Major improvements:
+
+- Added support for 64-bit target platforms, including pointers that
+  are 64-bit wide, and the ability to use 64-bit integer registers and
+  arithmetic operations.  This support does not replace but comes in
+  addition to CompCert's original support for 32-bit target platforms,
+  with 32-bit pointers and emulation of 64-bit integer arithmetic
+  using pairs of 32-bit integers.  In terms of C data models, CompCert
+  used to be restricted to the ILP32LL64 model; now it also supports
+  I32LP64 and IL32LLP64.
+
+- The x86 port of CompCert was extended to produce x86-64 bit code in
+  addition to the original x86-32 bit (IA32) code.  (This is the first
+  instantiation of the new support for 64-bit targets described
+  above.) Support for x86-64 is currently available for Linux and MacOS X.
+  (Run the configure script with 'x86_64-linux' or 'x86_64-macosx'.)
+
+
+
 Release 2.7.1, 2016-07-18
 =========================
 
@@ -7,9 +29,9 @@ Bug fixing:
 - Fixed a compile-time assertion failure involving builtins
   taking a 64-bit integer parameter and given an unsigned 32-bit integer
   argument.
-- Updates to the Cminor parser.	
+- Updates to the Cminor parser.
 
-	
+
 Release 2.7, 2016-06-29
 =======================
 

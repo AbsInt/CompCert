@@ -36,12 +36,15 @@ Supported targets:
   armeb-linux          (ARM, EABI, big endian)
   armeb-eabihf         (ARM, EABI using hardware FP registers, big endian)
   armeb-hardfloat      (ARM, EABI using hardware FP registers, big endian)
-  ia32-linux           (x86 32 bits, Linux)
-  ia32-bsd             (x86 32 bits, BSD)
-  ia32-macosx          (x86 32 bits, MacOS X)
-  ia32-cygwin          (x86 32 bits, Cygwin environment under Windows)
+  x86_32-linux         (x86 32 bits, Linux)
+  x86_32-bsd           (x86 32 bits, BSD)
+  x86_32-macosx        (x86 32 bits, MacOS X)
+  x86_32-cygwin        (x86 32 bits, Cygwin environment under Windows)
   x86_64-linux         (x86 64 bits, Linux)
+  x86_64-macosx        (x86 64 bits, MacOS X)
   manual               (edit configuration file by hand)
+
+For x86 targets, the "x86_32-" prefix can also be written "ia32-".
 
 For PowerPC targets, the "ppc-" prefix can be refined into:
   ppc64-               PowerPC 64 bits
@@ -314,7 +317,7 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
         fi
         ;;
     *)
-        echo "Error: invalid eabi/system '$target' for architecture IA32." 1>&2
+        echo "Error: invalid eabi/system '$target' for architecture IA32/X86_32." 1>&2
         echo "$usage" 1>&2
         exit 2;;
   esac
