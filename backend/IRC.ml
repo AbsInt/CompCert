@@ -238,9 +238,16 @@ type graph = {
    by giving it a negative spill cost. *)
 
 let class_of_type = function
-  | Tint | Tany32 -> 0
-  | Tfloat | Tsingle | Tany64 -> 1
-  | Tlong -> assert false
+  | Tint | Tlong -> 0
+  | Tfloat | Tsingle -> 1
+  | Tany32 | Tany64 -> assert false
+
+let class_of_reg r =
+  if Conventions1.is_float_reg r then 1 else 0
+
+let class_of_loc = function
+  | R r -> class_of_reg r
+  | S(_, _, ty) -> class_of_type ty
 
 let no_spill_class = 2
 
@@ -319,7 +326,7 @@ let newNodeOfLoc g l =
   let ty = Loc.coq_type l in
   g.nextIdent <- g.nextIdent + 1;
   { ident = g.nextIdent; typ = ty;
-    var = L l; regclass = class_of_type ty;
+    var = L l; regclass = class_of_loc l;
     accesses = 0; spillcost = 0.0;
     adjlist = []; degree = 0; movelist = []; extra_adj = []; extra_pref = [];
     alias = None;
@@ -828,20 +835,26 @@ let compare_slots s1 s2 =
   | S(_, ofs1, _), S(_, ofs2, _) -> Z.compare ofs1 ofs2
   | _, _ -> assert false
 
+let align a b = (a + b - 1) land (-b)   (* assuming b is a power of 2 *)
+
 let find_slot conflicts typ =
+  let sz = Z.to_int (Locations.typesize typ) in
+  let al = Z.to_int (Locations.typealign typ) in
   let rec find curr = function
   | [] ->
-      S(Local, curr, typ)
+      S(Local, Z.of_uint curr, typ)
   | S(Local, ofs, typ') :: l ->
-      if Z.le (Z.add curr (Locations.typesize typ)) ofs then
-        S(Local, curr, typ)
+      let ofs = Z.to_int ofs in
+      if curr + sz <= ofs then
+        S(Local, Z.of_uint curr, typ)
       else begin
-        let ofs' = Z.add ofs (Locations.typesize typ') in
-        find (if Z.le ofs' curr then curr else ofs') l
+        let sz'  = Z.to_int (Locations.typesize typ') in
+        let ofs' = align (ofs + sz') al in
+        find (if ofs' <= curr then curr else ofs') l
       end
   | _ :: l ->
       find curr l
-  in find Z.zero (List.stable_sort compare_slots conflicts)
+  in find 0 (List.stable_sort compare_slots conflicts)
 
 (* Record locations assigned to interfering nodes *)
 
@@ -891,10 +904,10 @@ let location_of_var g v =
         | None -> assert false
         | Some l -> l
       with Not_found ->
-        match ty with
-        | Tint -> R dummy_int_reg
-        | Tfloat | Tsingle -> R dummy_float_reg
-        | Tlong | Tany32 | Tany64 -> assert false
+        match class_of_type ty with
+        | 0 -> R dummy_int_reg
+        | 1 -> R dummy_float_reg
+        | _ -> assert false
 
 (* The exported interface *)
 

@@ -48,10 +48,10 @@ Open Local Scope cminorsel_scope.
 
 (** ** Constants **)
 
-Definition addrsymbol (id: ident) (ofs: int) :=
+Definition addrsymbol (id: ident) (ofs: ptrofs) :=
   Eop (Oaddrsymbol id ofs) Enil.
 
-Definition addrstack (ofs: int) :=
+Definition addrstack (ofs: ptrofs) :=
   Eop (Oaddrstack ofs) Enil.
 
 (** ** Integer logical negation *)
@@ -72,8 +72,8 @@ Nondetfunction addimm (n: int) (e: expr) :=
   if Int.eq n Int.zero then e else
   match e with
   | Eop (Ointconst m) Enil       => Eop (Ointconst(Int.add n m)) Enil
-  | Eop (Oaddrsymbol s m) Enil   => Eop (Oaddrsymbol s (Int.add n m)) Enil
-  | Eop (Oaddrstack m) Enil      => Eop (Oaddrstack (Int.add n m)) Enil
+  | Eop (Oaddrsymbol s m) Enil   => Eop (Oaddrsymbol s (Ptrofs.add (Ptrofs.of_int n) m)) Enil
+  | Eop (Oaddrstack m) Enil      => Eop (Oaddrstack (Ptrofs.add (Ptrofs.of_int n) m)) Enil
   | Eop (Oaddimm m) (t ::: Enil) => Eop (Oaddimm(Int.add n m)) (t ::: Enil)
   | _                            => Eop (Oaddimm n) (e ::: Enil)
   end.
@@ -501,6 +501,6 @@ Nondetfunction builtin_arg (e: expr) :=
   | Eop Omakelong (h ::: l ::: Enil) => BA_splitlong (BA h) (BA l)
   | Eload chunk (Ainstack ofs) Enil => BA_loadstack chunk ofs
   | Eload chunk (Aindexed ofs1) (Eop (Oaddrsymbol id ofs) Enil ::: Enil) =>
-       BA_loadglobal chunk id (Int.add ofs ofs1)
+       BA_loadglobal chunk id (Ptrofs.add ofs (Ptrofs.of_int ofs1))
   | _ => BA e
   end.

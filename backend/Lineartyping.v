@@ -164,7 +164,7 @@ Proof.
   intros. generalize (loc_result_pair sg) (loc_result_type sg).
   destruct (loc_result sg); simpl Locmap.setpair.
 - intros. apply wt_setreg; auto. eapply Val.has_subtype; eauto.
-- intros (A & B & C & D) E. 
+- intros (A & B & C & D & E) F. 
   apply wt_setreg. eapply Val.has_subtype; eauto. destruct v; exact I.
   apply wt_setreg. eapply Val.has_subtype; eauto. destruct v; exact I.
   auto.
@@ -267,6 +267,7 @@ Qed.
 Theorem step_type_preservation:
   forall S1 t S2, step ge S1 t S2 -> wt_state S1 -> wt_state S2.
 Proof.
+Local Opaque mreg_type.
   induction 1; intros WTS; inv WTS.
 - (* getstack *)
   simpl in *; InvBooleans.

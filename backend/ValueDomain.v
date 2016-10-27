@@ -116,21 +116,21 @@ Qed.
 (** * Abstracting pointers *)
 
 Inductive aptr : Type :=
-  | Pbot                        (**r bottom (empty set of pointers) *)
-  | Gl (id: ident) (ofs: int)   (**r pointer into the block for global variable [id] at offset [ofs] *)
-  | Glo (id: ident)             (**r pointer anywhere into the block for global [id] *)
-  | Glob                        (**r pointer into any global variable *)
-  | Stk (ofs: int)              (**r pointer into the current stack frame at offset [ofs] *)
-  | Stack                       (**r pointer anywhere into the current stack frame *)
-  | Nonstack                    (**r pointer anywhere but into the current stack frame *)
-  | Ptop.                       (**r any valid pointer *)
+  | Pbot                         (**r bottom (empty set of pointers) *)
+  | Gl (id: ident) (ofs: ptrofs) (**r pointer into the block for global variable [id] at offset [ofs] *)
+  | Glo (id: ident)              (**r pointer anywhere into the block for global [id] *)
+  | Glob                         (**r pointer into any global variable *)
+  | Stk (ofs: ptrofs)            (**r pointer into the current stack frame at offset [ofs] *)
+  | Stack                        (**r pointer anywhere into the current stack frame *)
+  | Nonstack                     (**r pointer anywhere but into the current stack frame *)
+  | Ptop.                        (**r any valid pointer *)
 
 Definition eq_aptr: forall (p1 p2: aptr), {p1=p2} + {p1<>p2}.
 Proof.
-  intros. generalize ident_eq, Int.eq_dec; intros. decide equality.
+  intros. generalize ident_eq, Ptrofs.eq_dec; intros. decide equality.
 Defined.
 
-Inductive pmatch (b: block) (ofs: int): aptr -> Prop :=
+Inductive pmatch (b: block) (ofs: ptrofs): aptr -> Prop :=
   | pmatch_gl: forall id,
       bc b = BCglob id ->
       pmatch b ofs (Gl id ofs)
@@ -191,7 +191,7 @@ Definition plub (p q: aptr) : aptr :=
   | Pbot, _ => q
   | _, Pbot => p
   | Gl id1 ofs1, Gl id2 ofs2 =>
-      if ident_eq id1 id2 then if Int.eq_dec ofs1 ofs2 then p else Glo id1 else Glob
+      if ident_eq id1 id2 then if Ptrofs.eq_dec ofs1 ofs2 then p else Glo id1 else Glob
   | Gl id1 ofs1, Glo id2 =>
       if ident_eq id1 id2 then q else Glob
   | Glo id1, Gl id2 ofs2 =>
@@ -205,7 +205,7 @@ Definition plub (p q: aptr) : aptr :=
   | Nonstack, (Gl _ _ | Glo _ | Glob) =>
       Nonstack
   | Stk ofs1, Stk ofs2 =>
-      if Int.eq_dec ofs1 ofs2 then p else Stack
+      if Ptrofs.eq_dec ofs1 ofs2 then p else Stack
   | (Stk _ | Stack), Stack =>
       Stack
   | Stack, Stk _ =>
@@ -219,7 +219,7 @@ Proof.
   intros; unfold plub; destruct p; destruct q; auto.
   destruct (ident_eq id id0). subst id0.
   rewrite dec_eq_true.
-  destruct (Int.eq_dec ofs ofs0). subst ofs0. rewrite dec_eq_true. auto.
+  destruct (Ptrofs.eq_dec ofs ofs0). subst ofs0. rewrite dec_eq_true. auto.
   rewrite dec_eq_false by auto. auto.
   rewrite dec_eq_false by auto. auto.
   destruct (ident_eq id id0). subst id0.
@@ -231,7 +231,7 @@ Proof.
   destruct (ident_eq id id0). subst id0.
   rewrite dec_eq_true; auto.
   rewrite dec_eq_false; auto.
-  destruct (Int.eq_dec ofs ofs0). subst ofs0. rewrite dec_eq_true; auto.
+  destruct (Ptrofs.eq_dec ofs ofs0). subst ofs0. rewrite dec_eq_true; auto.
   rewrite dec_eq_false; auto.
 Qed.
 
@@ -240,12 +240,12 @@ Lemma pge_lub_l:
 Proof.
   unfold plub; destruct p, q; auto with va.
 - destruct (ident_eq id id0).
-  destruct (Int.eq_dec ofs ofs0); subst; constructor.
+  destruct (Ptrofs.eq_dec ofs ofs0); subst; constructor.
   constructor.
 - destruct (ident_eq id id0); subst; constructor.
 - destruct (ident_eq id id0); subst; constructor.
 - destruct (ident_eq id id0); subst; constructor.
-- destruct (Int.eq_dec ofs ofs0); subst; constructor.
+- destruct (Ptrofs.eq_dec ofs ofs0); subst; constructor.
 Qed.
 
 Lemma pge_lub_r:
@@ -274,27 +274,27 @@ Proof.
 - unfold plub; destruct q; repeat rewrite dec_eq_true; constructor.
 - rewrite dec_eq_true; constructor.
 - rewrite dec_eq_true; constructor.
-- rewrite dec_eq_true. destruct (Int.eq_dec ofs ofs0); constructor.
-- destruct (ident_eq id id0). destruct (Int.eq_dec ofs ofs0); constructor. constructor.
+- rewrite dec_eq_true. destruct (Ptrofs.eq_dec ofs ofs0); constructor.
+- destruct (ident_eq id id0). destruct (Ptrofs.eq_dec ofs ofs0); constructor. constructor.
 - destruct (ident_eq id id0); constructor.
 - destruct (ident_eq id id0); constructor.
 - destruct (ident_eq id id0); constructor.
-- destruct (ident_eq id id0). destruct (Int.eq_dec ofs ofs0); constructor. constructor.
+- destruct (ident_eq id id0). destruct (Ptrofs.eq_dec ofs ofs0); constructor. constructor.
 - destruct (ident_eq id id0); constructor.
 - destruct (ident_eq id id0); constructor.
 - destruct (ident_eq id id0); constructor.
-- destruct (Int.eq_dec ofs ofs0); constructor.
+- destruct (Ptrofs.eq_dec ofs ofs0); constructor.
 Qed.
 
 Definition pincl (p q: aptr) : bool :=
   match p, q with
   | Pbot, _ => true
-  | Gl id1 ofs1, Gl id2 ofs2 => peq id1 id2 && Int.eq_dec ofs1 ofs2
+  | Gl id1 ofs1, Gl id2 ofs2 => peq id1 id2 && Ptrofs.eq_dec ofs1 ofs2
   | Gl id1 ofs1, Glo id2 => peq id1 id2
   | Glo id1, Glo id2 => peq id1 id2
   | (Gl _ _ | Glo _ | Glob), Glob => true
   | (Gl _ _ | Glo _ | Glob | Nonstack), Nonstack => true
-  | Stk ofs1, Stk ofs2 => Int.eq_dec ofs1 ofs2
+  | Stk ofs1, Stk ofs2 => Ptrofs.eq_dec ofs1 ofs2
   | Stk ofs1, Stack => true
   | Stack, Stack => true
   | _, Ptop => true
@@ -322,32 +322,32 @@ Proof.
   intros. eapply pmatch_ge; eauto. apply pincl_ge; auto.
 Qed.
 
-Definition padd (p: aptr) (n: int) : aptr :=
+Definition padd (p: aptr) (n: ptrofs) : aptr :=
   match p with
-  | Gl id ofs => Gl id (Int.add ofs n)
-  | Stk ofs => Stk (Int.add ofs n)
+  | Gl id ofs => Gl id (Ptrofs.add ofs n)
+  | Stk ofs => Stk (Ptrofs.add ofs n)
   | _ => p
   end.
 
 Lemma padd_sound:
   forall b ofs p delta,
   pmatch b ofs p ->
-  pmatch b (Int.add ofs delta) (padd p delta).
+  pmatch b (Ptrofs.add ofs delta) (padd p delta).
 Proof.
   intros. inv H; simpl padd; eauto with va.
 Qed.
 
-Definition psub (p: aptr) (n: int) : aptr :=
+Definition psub (p: aptr) (n: ptrofs) : aptr :=
   match p with
-  | Gl id ofs => Gl id (Int.sub ofs n)
-  | Stk ofs => Stk (Int.sub ofs n)
+  | Gl id ofs => Gl id (Ptrofs.sub ofs n)
+  | Stk ofs => Stk (Ptrofs.sub ofs n)
   | _ => p
   end.
 
 Lemma psub_sound:
   forall b ofs p delta,
   pmatch b ofs p ->
-  pmatch b (Int.sub ofs delta) (psub p delta).
+  pmatch b (Ptrofs.sub ofs delta) (psub p delta).
 Proof.
   intros. inv H; simpl psub; eauto with va.
 Qed.
@@ -365,29 +365,6 @@ Lemma poffset_sound:
   pmatch b ofs2 (poffset p).
 Proof.
   intros. inv H; simpl poffset; eauto with va.
-Qed.
-
-Definition psub2 (p q: aptr) : option int :=
-  match p, q with
-  | Gl id1 ofs1, Gl id2 ofs2 =>
-      if peq id1 id2 then Some (Int.sub ofs1 ofs2) else None
-  | Stk ofs1, Stk ofs2 =>
-      Some (Int.sub ofs1 ofs2)
-  | _, _ =>
-      None
-  end.
-
-Lemma psub2_sound:
-  forall b1 ofs1 p1 b2 ofs2 p2 delta,
-  psub2 p1 p2 = Some delta ->
-  pmatch b1 ofs1 p1 ->
-  pmatch b2 ofs2 p2 ->
-  b1 = b2 /\ delta = Int.sub ofs1 ofs2.
-Proof.
-  intros. destruct p1; try discriminate; destruct p2; try discriminate; simpl in H.
-- destruct (peq id id0); inv H. inv H0; inv H1.
-  split. eapply bc_glob; eauto. reflexivity.
-- inv H; inv H0; inv H1. split. eapply bc_stack; eauto. reflexivity.
 Qed.
 
 Definition cmp_different_blocks (c: comparison) : abool :=
@@ -413,7 +390,7 @@ Definition pcmp (c: comparison) (p1 p2: aptr) : abool :=
   match p1, p2 with
   | Pbot, _ | _, Pbot => Bnone
   | Gl id1 ofs1, Gl id2 ofs2 =>
-      if peq id1 id2 then Maybe (Int.cmpu c ofs1 ofs2)
+      if peq id1 id2 then Maybe (Ptrofs.cmpu c ofs1 ofs2)
       else cmp_different_blocks c
   | Gl id1 ofs1, Glo id2 =>
       if peq id1 id2 then Btop else cmp_different_blocks c
@@ -421,7 +398,7 @@ Definition pcmp (c: comparison) (p1 p2: aptr) : abool :=
       if peq id1 id2 then Btop else cmp_different_blocks c
   | Glo id1, Glo id2 =>
       if peq id1 id2 then Btop else cmp_different_blocks c
-  | Stk ofs1, Stk ofs2 => Maybe (Int.cmpu c ofs1 ofs2)
+  | Stk ofs1, Stk ofs2 => Maybe (Ptrofs.cmpu c ofs1 ofs2)
   | (Gl _ _ | Glo _ | Glob | Nonstack), (Stk _ | Stack) => cmp_different_blocks c
   | (Stk _ | Stack), (Gl _ _ | Glo _ | Glob | Nonstack) => cmp_different_blocks c
   | _, _ => Btop
@@ -438,17 +415,59 @@ Proof.
                    (cmp_different_blocks c)).
   {
     intros. simpl. rewrite dec_eq_false by assumption.
-    destruct (valid b1 (Int.unsigned ofs1) && valid b2 (Int.unsigned ofs2)); simpl.
+    destruct Archi.ptr64.
+    apply cmp_different_blocks_none.
+    destruct (valid b1 (Ptrofs.unsigned ofs1) && valid b2 (Ptrofs.unsigned ofs2)); simpl.
     apply cmp_different_blocks_sound.
     apply cmp_different_blocks_none.
   }
   assert (SAME: b1 = b2 ->
             cmatch (Val.cmpu_bool valid c (Vptr b1 ofs1) (Vptr b2 ofs2))
-                   (Maybe (Int.cmpu c ofs1 ofs2))).
+                   (Maybe (Ptrofs.cmpu c ofs1 ofs2))).
   {
-    intros. subst b2. simpl. rewrite dec_eq_true.
-    destruct ((valid b1 (Int.unsigned ofs1) || valid b1 (Int.unsigned ofs1 - 1)) &&
-         (valid b1 (Int.unsigned ofs2) || valid b1 (Int.unsigned ofs2 - 1))); simpl.
+    intros. subst b2. simpl. destruct Archi.ptr64. 
+    constructor.
+    rewrite dec_eq_true.
+    destruct ((valid b1 (Ptrofs.unsigned ofs1) || valid b1 (Ptrofs.unsigned ofs1 - 1)) &&
+         (valid b1 (Ptrofs.unsigned ofs2) || valid b1 (Ptrofs.unsigned ofs2 - 1))); simpl.
+    constructor.
+    constructor.
+  }
+  unfold pcmp; inv H; inv H0; (apply cmatch_top || (apply DIFF; congruence) || idtac).
+  - destruct (peq id id0). subst id0. apply SAME. eapply bc_glob; eauto.
+    auto with va.
+  - destruct (peq id id0); auto with va.
+  - destruct (peq id id0); auto with va.
+  - destruct (peq id id0); auto with va.
+  - apply SAME. eapply bc_stack; eauto.
+Qed.
+
+Lemma pcmp_sound_64:
+  forall valid c b1 ofs1 p1 b2 ofs2 p2,
+  pmatch b1 ofs1 p1 -> pmatch b2 ofs2 p2 ->
+  cmatch (Val.cmplu_bool valid c (Vptr b1 ofs1) (Vptr b2 ofs2)) (pcmp c p1 p2).
+Proof.
+  intros.
+  assert (DIFF: b1 <> b2 ->
+            cmatch (Val.cmplu_bool valid c (Vptr b1 ofs1) (Vptr b2 ofs2))
+                   (cmp_different_blocks c)).
+  {
+    intros. simpl. rewrite dec_eq_false by assumption.
+    destruct Archi.ptr64; simpl.
+    destruct (valid b1 (Ptrofs.unsigned ofs1) && valid b2 (Ptrofs.unsigned ofs2)); simpl.
+    apply cmp_different_blocks_sound.
+    apply cmp_different_blocks_none.
+    apply cmp_different_blocks_none.
+  }
+  assert (SAME: b1 = b2 ->
+            cmatch (Val.cmplu_bool valid c (Vptr b1 ofs1) (Vptr b2 ofs2))
+                   (Maybe (Ptrofs.cmpu c ofs1 ofs2))).
+  {
+    intros. subst b2. simpl. destruct Archi.ptr64.
+    rewrite dec_eq_true.
+    destruct ((valid b1 (Ptrofs.unsigned ofs1) || valid b1 (Ptrofs.unsigned ofs1 - 1)) &&
+         (valid b1 (Ptrofs.unsigned ofs2) || valid b1 (Ptrofs.unsigned ofs2 - 1))); simpl.
+    constructor.
     constructor.
     constructor.
   }
@@ -475,15 +494,15 @@ Definition pdisjoint (p1: aptr) (sz1: Z) (p2: aptr) (sz2: Z) : bool :=
   | _, Pbot => true
   | Gl id1 ofs1, Gl id2 ofs2 =>
       if peq id1 id2
-      then zle (Int.unsigned ofs1 + sz1) (Int.unsigned ofs2)
-           || zle (Int.unsigned ofs2 + sz2) (Int.unsigned ofs1)
+      then zle (Ptrofs.unsigned ofs1 + sz1) (Ptrofs.unsigned ofs2)
+           || zle (Ptrofs.unsigned ofs2 + sz2) (Ptrofs.unsigned ofs1)
       else true
   | Gl id1 ofs1, Glo id2 => negb(peq id1 id2)
   | Glo id1, Gl id2 ofs2 => negb(peq id1 id2)
   | Glo id1, Glo id2 => negb(peq id1 id2)
   | Stk ofs1, Stk ofs2 =>
-      zle (Int.unsigned ofs1 + sz1) (Int.unsigned ofs2)
-      || zle (Int.unsigned ofs2 + sz2) (Int.unsigned ofs1)
+      zle (Ptrofs.unsigned ofs1 + sz1) (Ptrofs.unsigned ofs2)
+      || zle (Ptrofs.unsigned ofs2 + sz2) (Ptrofs.unsigned ofs1)
   | (Gl _ _ | Glo _ | Glob | Nonstack), (Stk _ | Stack) => true
   | (Stk _ | Stack), (Gl _ _ | Glo _ | Glob | Nonstack) => true
   | _, _ => false
@@ -493,7 +512,7 @@ Lemma pdisjoint_sound:
   forall sz1 b1 ofs1 p1 sz2 b2 ofs2 p2,
   pdisjoint p1 sz1 p2 sz2 = true ->
   pmatch b1 ofs1 p1 -> pmatch b2 ofs2 p2 ->
-  b1 <> b2 \/ Int.unsigned ofs1 + sz1 <= Int.unsigned ofs2 \/ Int.unsigned ofs2 + sz2 <= Int.unsigned ofs1.
+  b1 <> b2 \/ Ptrofs.unsigned ofs1 + sz1 <= Ptrofs.unsigned ofs2 \/ Ptrofs.unsigned ofs2 + sz2 <= Ptrofs.unsigned ofs1.
 Proof.
   intros. inv H0; inv H1; simpl in H; try discriminate; try (left; congruence).
 - destruct (peq id id0). subst id0. destruct (orb_true_elim _ _ H); InvBooleans; auto.
@@ -1154,6 +1173,28 @@ Proof.
   intros. unfold binop_int; inv H; auto with va; inv H0; auto with va.
 Qed.
 
+Definition unop_long (sem: int64 -> int64) (x: aval) :=
+  match x with L n => L (sem n) | _ => ntop1 x end.
+
+Lemma unop_long_sound:
+  forall sem v x,
+  vmatch v x ->
+  vmatch (match v with Vlong i => Vlong(sem i) | _ => Vundef end) (unop_long sem x).
+Proof.
+  intros. unfold unop_long; inv H; auto with va.
+Qed.
+
+Definition binop_long (sem: int64 -> int64 -> int64) (x y: aval) :=
+  match x, y with L n, L m => L (sem n m) | _, _ => ntop2 x y end.
+
+Lemma binop_long_sound:
+  forall sem v x w y,
+  vmatch v x -> vmatch w y ->
+  vmatch (match v, w with Vlong i, Vlong j => Vlong(sem i j) | _, _ => Vundef end) (binop_long sem x y).
+Proof.
+  intros. unfold binop_long; inv H; auto with va; inv H0; auto with va.
+Qed.
+
 Definition unop_float (sem: float -> float) (x: aval) :=
   match x with F n => F (sem n) | _ => ntop1 x end.
 
@@ -1502,9 +1543,9 @@ Proof (unop_int_sound Int.neg).
 Definition add (x y: aval) :=
   match x, y with
   | I i, I j => I (Int.add i j)
-  | Ptr p, I i | I i, Ptr p => Ptr (padd p i)
+  | Ptr p, I i | I i, Ptr p => Ptr (if Archi.ptr64 then poffset p else padd p (Ptrofs.of_int i))
   | Ptr p, _   | _, Ptr p   => Ptr (poffset p)
-  | Ifptr p, I i | I i, Ifptr p => Ifptr (padd p i)
+  | Ifptr p, I i | I i, Ifptr p => Ifptr (if Archi.ptr64 then poffset p else padd p (Ptrofs.of_int i))
   | Ifptr p, Ifptr q => Ifptr (plub (poffset p) (poffset q))
   | Ifptr p, _ | _, Ifptr p => Ifptr (poffset p)
   | _, _ => ntop2 x y
@@ -1513,7 +1554,9 @@ Definition add (x y: aval) :=
 Lemma add_sound:
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.add v w) (add x y).
 Proof.
-  intros. unfold Val.add, add; inv H; inv H0; constructor;
+  intros. unfold Val.add, add. destruct Archi.ptr64.
+- inv H; inv H0; constructor.
+- inv H; inv H0; constructor;
   ((apply padd_sound; assumption) || (eapply poffset_sound; eassumption) || idtac).
   apply pmatch_lub_r. eapply poffset_sound; eauto.
   apply pmatch_lub_l. eapply poffset_sound; eauto.
@@ -1522,13 +1565,9 @@ Qed.
 Definition sub (v w: aval) :=
   match v, w with
   | I i1, I i2 => I (Int.sub i1 i2)
-  | Ptr p, I i => Ptr (psub p i)
-(* problem with undefs *)
-(*
-  | Ptr p1, Ptr p2 => match psub2 p1 p2 with Some n => I n | _ => itop end
-*)
+  | Ptr p, I i => if Archi.ptr64 then Ifptr (poffset p) else Ptr (psub p (Ptrofs.of_int i))
   | Ptr p, _   => Ifptr (poffset p)
-  | Ifptr p, I i => Ifptr (psub p i)
+  | Ifptr p, I i => if Archi.ptr64 then Ifptr (plub (poffset p) (provenance w)) else Ifptr (psub p (Ptrofs.of_int i))
   | Ifptr p, _ => Ifptr (plub (poffset p) (provenance w))
   | _, _ => ntop2 v w
   end.
@@ -1536,9 +1575,9 @@ Definition sub (v w: aval) :=
 Lemma sub_sound:
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.sub v w) (sub x y).
 Proof.
-  intros. inv H; subst; inv H0; subst; simpl;
-  try (destruct (eq_block b b0));
-  eauto using psub_sound, poffset_sound, pmatch_lub_l with va.
+  intros. unfold Val.sub, sub. destruct Archi.ptr64.
+- inv H; inv H0; eauto with va.
+- inv H; inv H0; try (destruct (eq_block b b0)); eauto using psub_sound, poffset_sound, pmatch_lub_l with va.
 Qed.
 
 Definition mul := binop_int Int.mul.
@@ -1659,6 +1698,274 @@ Proof.
   rewrite LTU; auto with va.
 Qed.
 
+(** 64-bit integer operations *)
+
+Definition shift_long (sem: int64 -> int -> int64) (v w: aval) :=
+  match w with
+  | I amount =>
+      if Int.ltu amount Int64.iwordsize' then
+        match v with
+        | L i => L (sem i amount)
+        | _ => ntop1 v
+        end
+      else ntop1 v
+  | _ => ntop1 v
+  end.
+
+Lemma shift_long_sound:
+  forall sem v w x y,
+  vmatch v x -> vmatch w y ->
+  vmatch (match v, w with
+          | Vlong i, Vint j => if Int.ltu j Int64.iwordsize'
+                               then Vlong (sem i j) else Vundef
+          | _, _ => Vundef end)
+         (shift_long sem x y).
+Proof.
+  intros.
+  assert (DEFAULT:
+    vmatch (match v, w with
+            | Vlong i, Vint j => if Int.ltu j Int64.iwordsize'
+                                 then Vlong (sem i j) else Vundef
+            | _, _ => Vundef end)
+           (ntop1 x)).
+  { destruct v; try constructor; destruct w; try constructor.
+    destruct (Int.ltu i0 Int64.iwordsize'); constructor. }
+  unfold shift_long. destruct y; auto.
+  destruct (Int.ltu n Int64.iwordsize') eqn:LT; auto.
+  destruct x; auto. 
+  inv H; inv H0. rewrite LT. constructor.
+Qed.
+
+Definition shll := shift_long Int64.shl'.
+
+Lemma shll_sound:
+  forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.shll v w) (shll x y).
+Proof (shift_long_sound Int64.shl').
+
+Definition shrl := shift_long Int64.shr'.
+
+Lemma shrl_sound:
+  forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.shrl v w) (shrl x y).
+Proof (shift_long_sound Int64.shr').
+
+Definition shrlu := shift_long Int64.shru'.
+
+Lemma shrlu_sound:
+  forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.shrlu v w) (shrlu x y).
+Proof (shift_long_sound Int64.shru').
+
+Definition andl := binop_long Int64.and.
+
+Lemma andl_sound:
+  forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.andl v w) (andl x y).
+Proof (binop_long_sound Int64.and).
+
+Definition orl := binop_long Int64.or.
+
+Lemma orl_sound:
+  forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.orl v w) (orl x y).
+Proof (binop_long_sound Int64.or).
+
+Definition xorl := binop_long Int64.xor.
+
+Lemma xorl_sound:
+  forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.xorl v w) (xorl x y).
+Proof (binop_long_sound Int64.xor).
+
+Definition notl := unop_long Int64.not.
+
+Lemma notl_sound:
+  forall v x, vmatch v x -> vmatch (Val.notl v) (notl x).
+Proof (unop_long_sound Int64.not).
+
+Definition rotate_long (sem: int64 -> int64 -> int64) (v w: aval) :=
+  match v, w with
+  | L i, I amount => L (sem i (Int64.repr (Int.unsigned amount)))
+  | _, _ => ntop1 v
+  end.
+
+Lemma rotate_long_sound:
+  forall sem v w x y,
+  vmatch v x -> vmatch w y ->
+  vmatch (match v, w with
+          | Vlong i, Vint j => Vlong (sem i (Int64.repr (Int.unsigned j)))
+          | _, _ => Vundef end)
+         (rotate_long sem x y).
+Proof.
+  intros.
+  assert (DEFAULT:
+    vmatch (match v, w with
+            | Vlong i, Vint j => Vlong (sem i (Int64.repr (Int.unsigned j)))
+            | _, _ => Vundef end)
+           (ntop1 x)).
+  { destruct v; try constructor. destruct w; constructor. }
+  unfold rotate_long. destruct x; auto. destruct y; auto. inv H; inv H0. constructor.
+Qed.
+
+Definition roll := rotate_long Int64.rol.
+
+Lemma roll_sound:
+  forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.roll v w) (roll x y).
+Proof (rotate_long_sound Int64.rol).
+
+Definition rorl := rotate_long Int64.ror.
+
+Lemma rorl_sound:
+  forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.rorl v w) (rorl x y).
+Proof (rotate_long_sound Int64.ror).
+
+Definition negl := unop_long Int64.neg.
+
+Lemma negl_sound:
+  forall v x, vmatch v x -> vmatch (Val.negl v) (negl x).
+Proof (unop_long_sound Int64.neg).
+
+Definition addl (x y: aval) :=
+  match x, y with
+  | L i, L j => L (Int64.add i j)
+  | Ptr p, L i | L i, Ptr p => Ptr (if Archi.ptr64 then padd p (Ptrofs.of_int64 i) else poffset p)
+  | Ptr p, _   | _, Ptr p   => Ptr (poffset p)
+  | Ifptr p, L i | L i, Ifptr p => Ifptr (if Archi.ptr64 then padd p (Ptrofs.of_int64 i) else poffset p)
+  | Ifptr p, Ifptr q => Ifptr (plub (poffset p) (poffset q))
+  | Ifptr p, _ | _, Ifptr p => Ifptr (poffset p)
+  | _, _ => ntop2 x y
+  end.
+
+Lemma addl_sound:
+  forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.addl v w) (addl x y).
+Proof.
+  intros. unfold Val.addl, addl. destruct Archi.ptr64.
+- inv H; inv H0; constructor;
+  ((apply padd_sound; assumption) || (eapply poffset_sound; eassumption) || idtac).
+  apply pmatch_lub_r. eapply poffset_sound; eauto.
+  apply pmatch_lub_l. eapply poffset_sound; eauto.
+- inv H; inv H0; constructor.
+Qed.
+
+Definition subl (v w: aval) :=
+  match v, w with
+  | L i1, L i2 => L (Int64.sub i1 i2)
+  | Ptr p, L i => if Archi.ptr64 then Ptr (psub p (Ptrofs.of_int64 i)) else Ifptr (poffset p)
+  | Ptr p, _   => Ifptr (poffset p)
+  | Ifptr p, L i => if Archi.ptr64 then Ifptr (psub p (Ptrofs.of_int64 i)) else Ifptr (plub (poffset p) (provenance w))
+  | Ifptr p, _ => Ifptr (plub (poffset p) (provenance w))
+  | _, _ => ntop2 v w
+  end.
+
+Lemma subl_sound:
+  forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.subl v w) (subl x y).
+Proof.
+  intros. unfold Val.subl, subl. destruct Archi.ptr64.
+- inv H; inv H0; try (destruct (eq_block b b0)); eauto using psub_sound, poffset_sound, pmatch_lub_l with va.
+- inv H; inv H0; eauto with va.
+Qed.
+
+Definition mull := binop_long Int64.mul.
+
+Lemma mull_sound:
+  forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mull v w) (mull x y).
+Proof (binop_long_sound Int64.mul).
+
+Definition mullhs := binop_long Int64.mulhs.
+
+Lemma mullhs_sound:
+  forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mullhs v w) (mullhs x y).
+Proof (binop_long_sound Int64.mulhs).
+
+Definition mullhu := binop_long Int64.mulhu.
+
+Lemma mullhu_sound:
+  forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mullhu v w) (mullhu x y).
+Proof (binop_long_sound Int64.mulhu).
+
+Definition divls (v w: aval) :=
+  match w, v with
+  | L i2, L i1 =>
+      if Int64.eq i2 Int64.zero
+      || Int64.eq i1 (Int64.repr Int64.min_signed) && Int64.eq i2 Int64.mone
+      then if va_strict tt then Vbot else ntop
+      else L (Int64.divs i1 i2)
+  | _, _ => ntop2 v w
+  end.
+
+Lemma divls_sound:
+  forall v w u x y, vmatch v x -> vmatch w y -> Val.divls v w = Some u -> vmatch u (divls x y).
+Proof.
+  intros. destruct v; destruct w; try discriminate; simpl in H1.
+  destruct (Int64.eq i0 Int64.zero
+         || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq i0 Int64.mone) eqn:E; inv H1.
+  inv H; inv H0; auto with va. simpl. rewrite E. constructor.
+Qed.
+
+Definition divlu (v w: aval) :=
+  match w, v with
+  | L i2, L i1 =>
+      if Int64.eq i2 Int64.zero
+       then if va_strict tt then Vbot else ntop
+      else L (Int64.divu i1 i2)
+  | _, _ => ntop2 v w
+  end.
+
+Lemma divlu_sound:
+  forall v w u x y, vmatch v x -> vmatch w y -> Val.divlu v w = Some u -> vmatch u (divlu x y).
+Proof.
+  intros. destruct v; destruct w; try discriminate; simpl in H1.
+  destruct (Int64.eq i0 Int64.zero) eqn:E; inv H1.
+  inv H; inv H0; auto with va. simpl. rewrite E. constructor.
+Qed.
+
+Definition modls (v w: aval) :=
+  match w, v with
+  | L i2, L i1 =>
+      if Int64.eq i2 Int64.zero
+      || Int64.eq i1 (Int64.repr Int64.min_signed) && Int64.eq i2 Int64.mone
+      then if va_strict tt then Vbot else ntop
+      else L (Int64.mods i1 i2)
+  | _, _ => ntop2 v w
+  end.
+
+Lemma modls_sound:
+  forall v w u x y, vmatch v x -> vmatch w y -> Val.modls v w = Some u -> vmatch u (modls x y).
+Proof.
+  intros. destruct v; destruct w; try discriminate; simpl in H1.
+  destruct (Int64.eq i0 Int64.zero
+         || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq i0 Int64.mone) eqn:E; inv H1.
+  inv H; inv H0; auto with va. simpl. rewrite E. constructor.
+Qed.
+
+Definition modlu (v w: aval) :=
+  match w, v with
+  | L i2, L i1 =>
+      if Int64.eq i2 Int64.zero
+      then if va_strict tt then Vbot else ntop
+      else L (Int64.modu i1 i2)
+  | _, _ => ntop2 v w
+  end.
+
+Lemma modlu_sound:
+  forall v w u x y, vmatch v x -> vmatch w y -> Val.modlu v w = Some u -> vmatch u (modlu x y).
+Proof.
+  intros. destruct v; destruct w; try discriminate; simpl in H1.
+  destruct (Int64.eq i0 Int64.zero) eqn:E; inv H1.
+  inv H; inv H0; auto with va. simpl. rewrite E. constructor.
+Qed.
+
+Definition shrxl (v w: aval) :=
+  match v, w with
+  | L i, I j => if Int.ltu j (Int.repr 63) then L(Int64.shrx' i j) else ntop
+  | _, _ => ntop1 v
+  end.
+
+Lemma shrxl_sound:
+  forall v w u x y, vmatch v x -> vmatch w y -> Val.shrxl v w = Some u -> vmatch u (shrxl x y).
+Proof.
+  intros.
+  destruct v; destruct w; try discriminate; simpl in H1.
+  destruct (Int.ltu i0 (Int.repr 63)) eqn:LTU; inv H1.
+  unfold shrxl; inv H; auto with va; inv H0; auto with va.
+  rewrite LTU; auto with va.
+Qed.
+
 (** Floating-point arithmetic operations *)
 
 Definition negf := unop_float Float.neg.
@@ -1776,6 +2083,30 @@ Proof.
 - destruct (zlt n nbits); auto with va.
 - apply vmatch_sgn. apply is_sign_ext_sgn; auto with va.
   apply Z.min_case; auto with va.
+Qed.
+
+Definition longofint (v: aval) := 
+  match v with
+  | I i => L (Int64.repr (Int.signed i))
+  | _ => ntop1 v
+  end.
+
+Lemma longofint_sound:
+  forall v x, vmatch v x -> vmatch (Val.longofint v) (longofint x).
+Proof.
+  unfold Val.longofint, longofint; intros; inv H; auto with va.
+Qed.
+
+Definition longofintu (v: aval) := 
+  match v with
+  | I i => L (Int64.repr (Int.unsigned i))
+  | _ => ntop1 v
+  end.
+
+Lemma longofintu_sound:
+  forall v x, vmatch v x -> vmatch (Val.longofintu v) (longofintu x).
+Proof.
+  unfold Val.longofintu, longofintu; intros; inv H; auto with va.
 Qed.
 
 Definition singleoffloat (v: aval) :=
@@ -1929,6 +2260,130 @@ Lemma singleofintu_sound:
   forall v x w, vmatch v x -> Val.singleofintu v = Some w -> vmatch w (singleofintu x).
 Proof.
   unfold Val.singleofintu; intros. destruct v; inv H0.
+  inv H; simpl; auto with va.
+Qed.
+
+Definition longoffloat (x: aval) :=
+  match x with
+  | F f =>
+      match Float.to_long f with
+      | Some i => L i
+      | None => if va_strict tt then Vbot else ntop
+      end
+  | _ => ntop1 x
+  end.
+
+Lemma longoffloat_sound:
+  forall v x w, vmatch v x -> Val.longoffloat v = Some w -> vmatch w (longoffloat x).
+Proof.
+  unfold Val.longoffloat; intros. destruct v; try discriminate.
+  destruct (Float.to_long f) as [i|] eqn:E; simpl in H0; inv H0.
+  inv H; simpl; auto with va. rewrite E; constructor.
+Qed.
+
+Definition longuoffloat (x: aval) :=
+  match x with
+  | F f =>
+      match Float.to_longu f with
+      | Some i => L i
+      | None => if va_strict tt then Vbot else ntop
+      end
+  | _ => ntop1 x
+  end.
+
+Lemma longuoffloat_sound:
+  forall v x w, vmatch v x -> Val.longuoffloat v = Some w -> vmatch w (longuoffloat x).
+Proof.
+  unfold Val.longuoffloat; intros. destruct v; try discriminate.
+  destruct (Float.to_longu f) as [i|] eqn:E; simpl in H0; inv H0.
+  inv H; simpl; auto with va. rewrite E; constructor.
+Qed.
+
+Definition floatoflong (x: aval) :=
+  match x with
+  | L i => F(Float.of_long i)
+  | _   => ntop1 x
+  end.
+
+Lemma floatoflong_sound:
+  forall v x w, vmatch v x -> Val.floatoflong v = Some w -> vmatch w (floatoflong x).
+Proof.
+  unfold Val.floatoflong; intros. destruct v; inv H0.
+  inv H; simpl; auto with va.
+Qed.
+
+Definition floatoflongu (x: aval) :=
+  match x with
+  | L i => F(Float.of_longu i)
+  | _   => ntop1 x
+  end.
+
+Lemma floatoflongu_sound:
+  forall v x w, vmatch v x -> Val.floatoflongu v = Some w -> vmatch w (floatoflongu x).
+Proof.
+  unfold Val.floatoflongu; intros. destruct v; inv H0.
+  inv H; simpl; auto with va.
+Qed.
+
+Definition longofsingle (x: aval) :=
+  match x with
+  | FS f =>
+      match Float32.to_long f with
+      | Some i => L i
+      | None => if va_strict tt then Vbot else ntop
+      end
+  | _ => ntop1 x
+  end.
+
+Lemma longofsingle_sound:
+  forall v x w, vmatch v x -> Val.longofsingle v = Some w -> vmatch w (longofsingle x).
+Proof.
+  unfold Val.longofsingle; intros. destruct v; try discriminate.
+  destruct (Float32.to_long f) as [i|] eqn:E; simpl in H0; inv H0.
+  inv H; simpl; auto with va. rewrite E; constructor.
+Qed.
+
+Definition longuofsingle (x: aval) :=
+  match x with
+  | FS f =>
+      match Float32.to_longu f with
+      | Some i => L i
+      | None => if va_strict tt then Vbot else ntop
+      end
+  | _ => ntop1 x
+  end.
+
+Lemma longuofsingle_sound:
+  forall v x w, vmatch v x -> Val.longuofsingle v = Some w -> vmatch w (longuofsingle x).
+Proof.
+  unfold Val.longuofsingle; intros. destruct v; try discriminate.
+  destruct (Float32.to_longu f) as [i|] eqn:E; simpl in H0; inv H0.
+  inv H; simpl; auto with va. rewrite E; constructor.
+Qed.
+
+Definition singleoflong (x: aval) :=
+  match x with
+  | L i => FS(Float32.of_long i)
+  | _   => ntop1 x
+  end.
+
+Lemma singleoflong_sound:
+  forall v x w, vmatch v x -> Val.singleoflong v = Some w -> vmatch w (singleoflong x).
+Proof.
+  unfold Val.singleoflong; intros. destruct v; inv H0.
+  inv H; simpl; auto with va.
+Qed.
+
+Definition singleoflongu (x: aval) :=
+  match x with
+  | L i => FS(Float32.of_longu i)
+  | _   => ntop1 x
+  end.
+
+Lemma singleoflongu_sound:
+  forall v x w, vmatch v x -> Val.singleoflongu v = Some w -> vmatch w (singleoflongu x).
+Proof.
+  unfold Val.singleoflongu; intros. destruct v; inv H0.
   inv H; simpl; auto with va.
 Qed.
 
@@ -2166,13 +2621,17 @@ Proof.
   assert (IP: forall i b ofs,
     cmatch (Val.cmpu_bool valid c (Vint i) (Vptr b ofs)) (cmp_different_blocks c)).
   {
-    intros. simpl. destruct (Int.eq i Int.zero && (valid b (Int.unsigned ofs) || valid b (Int.unsigned ofs - 1))).
+    intros. simpl. destruct Archi.ptr64. 
+    apply cmp_different_blocks_none.
+    destruct (Int.eq i Int.zero && (valid b (Ptrofs.unsigned ofs) || valid b (Ptrofs.unsigned ofs - 1))).
     apply cmp_different_blocks_sound. apply cmp_different_blocks_none.
   }
   assert (PI: forall i b ofs,
     cmatch (Val.cmpu_bool valid c (Vptr b ofs) (Vint i)) (cmp_different_blocks c)).
   {
-    intros. simpl. destruct (Int.eq i Int.zero && (valid b (Int.unsigned ofs) || valid b (Int.unsigned ofs - 1))).
+    intros. simpl. destruct Archi.ptr64. 
+    apply cmp_different_blocks_none.
+    destruct (Int.eq i Int.zero && (valid b (Ptrofs.unsigned ofs) || valid b (Ptrofs.unsigned ofs - 1))).
     apply cmp_different_blocks_sound. apply cmp_different_blocks_none.
   }
   unfold cmpu_bool; inversion H; subst; inversion H0; subst;
@@ -2196,6 +2655,58 @@ Proof.
   intros.
   unfold cmp_bool; inversion H; subst; inversion H0; subst;
   auto using cmatch_top, cmp_intv_sound, cmp_intv_sound_2, cmp_intv_None.
+- constructor.
+Qed.
+
+Definition cmplu_bool (c: comparison) (v w: aval) : abool :=
+  match v, w with
+  | L i1, L i2 => Just (Int64.cmpu c i1 i2)
+  | Ptr _, L _ => cmp_different_blocks c
+  | L _, Ptr _ => cmp_different_blocks c
+  | Ptr p1, Ptr p2 => pcmp c p1 p2
+  | Ptr p1, Ifptr p2 => club (pcmp c p1 p2) (cmp_different_blocks c)
+  | Ifptr p1, Ptr p2 => club (pcmp c p1 p2) (cmp_different_blocks c)
+  | _, _ => Btop
+  end.
+
+Lemma cmplu_bool_sound:
+  forall valid c v w x y, vmatch v x -> vmatch w y -> cmatch (Val.cmplu_bool valid c v w) (cmplu_bool c x y).
+Proof.
+  intros.
+  assert (IP: forall i b ofs,
+    cmatch (Val.cmplu_bool valid c (Vlong i) (Vptr b ofs)) (cmp_different_blocks c)).
+  {
+    intros. simpl. destruct Archi.ptr64; simpl.
+    destruct (Int64.eq i Int64.zero && (valid b (Ptrofs.unsigned ofs) || valid b (Ptrofs.unsigned ofs - 1))).
+    apply cmp_different_blocks_sound. apply cmp_different_blocks_none.
+    apply cmp_different_blocks_none.
+  }
+  assert (PI: forall i b ofs,
+    cmatch (Val.cmplu_bool valid c (Vptr b ofs) (Vlong i)) (cmp_different_blocks c)).
+  {
+    intros. simpl. destruct Archi.ptr64; simpl.
+    destruct (Int64.eq i Int64.zero && (valid b (Ptrofs.unsigned ofs) || valid b (Ptrofs.unsigned ofs - 1))).
+    apply cmp_different_blocks_sound. apply cmp_different_blocks_none.
+    apply cmp_different_blocks_none.
+  }
+  unfold cmplu_bool; inversion H; subst; inversion H0; subst;
+  auto using cmatch_top, cmp_different_blocks_none, pcmp_none,
+             cmatch_lub_l, cmatch_lub_r, pcmp_sound_64.
+- constructor.
+Qed.
+
+Definition cmpl_bool (c: comparison) (v w: aval) : abool :=
+  match v, w with
+  | L i1, L i2 => Just (Int64.cmp c i1 i2)
+  | _, _ => Btop
+  end.
+
+Lemma cmpl_bool_sound:
+  forall c v w x y, vmatch v x -> vmatch w y -> cmatch (Val.cmpl_bool c v w) (cmpl_bool c x y).
+Proof.
+  intros.
+  unfold cmpl_bool; inversion H; subst; inversion H0; subst;
+  auto using cmatch_top.
 - constructor.
 Qed.
 
@@ -2298,12 +2809,15 @@ Definition vnormalize (chunk: memory_chunk) (v: aval) :=
   | Mint16unsigned, I i => I (Int.zero_ext 16 i)
   | Mint16unsigned, Uns p n => Uns (provenance v) (Z.min n 16)
   | Mint16unsigned, _ => Uns (provenance v) 16
-  | Mint32, (I _ | Uns _ _ | Sgn _ _ | Ptr _ | Ifptr _) => v
-  | Mint64, L _ => v
-  | Mint64, (Ptr p | Ifptr p | Uns p _ | Sgn p _) => Ifptr (if va_strict tt then Pbot else p)
+  | Mint32, (I _ | Uns _ _ | Sgn _ _ | Ifptr _) => v
+  | Mint32, Ptr p => if Archi.ptr64 then Ifptr p else v
+  | Mint64, (L _ | Ifptr _) => v
+  | Mint64, (Uns p _ | Sgn p _) => Ifptr p
+  | Mint64, Ptr p => if Archi.ptr64 then v else Ifptr p
   | Mfloat32, FS f => v
   | Mfloat64, F f => v
-  | Many32, (I _ | Uns _ _ | Sgn _ _ | Ptr _ | Ifptr _ | FS _) => v
+  | Many32, (I _ | Uns _ _ | Sgn _ _ | FS _ | Ifptr _) => v
+  | Many32, Ptr p => if Archi.ptr64 then Ifptr p else v
   | Many64, _ => v
   | _, _ => Ifptr (provenance v)
   end.
@@ -2311,7 +2825,8 @@ Definition vnormalize (chunk: memory_chunk) (v: aval) :=
 Lemma vnormalize_sound:
   forall chunk v x, vmatch v x -> vmatch (Val.load_result chunk v) (vnormalize chunk x).
 Proof.
-  unfold Val.load_result, vnormalize; induction 1; destruct chunk; auto with va.
+  unfold Val.load_result, vnormalize; generalize Archi.ptr64; intros ptr64;
+  induction 1; destruct chunk; auto with va.
 - destruct (zlt n 8); constructor; auto with va.
   apply is_sign_ext_uns; auto.
   apply is_sign_ext_sgn; auto with va.
@@ -2326,10 +2841,19 @@ Proof.
 - constructor. omega. apply is_zero_ext_uns; auto with va.
 - constructor. xomega. apply is_sign_ext_sgn; auto with va. apply Z.min_case; auto with va.
 - constructor. omega. apply is_zero_ext_uns; auto with va.
+- destruct ptr64; auto with va.
+- destruct ptr64; auto with va.
+- destruct ptr64; auto with va.
+- destruct ptr64; auto with va.
+- destruct ptr64; auto with va.
+- destruct ptr64; auto with va.
 - constructor. omega. apply is_sign_ext_sgn; auto with va.
 - constructor. omega. apply is_zero_ext_uns; auto with va.
 - constructor. omega. apply is_sign_ext_sgn; auto with va.
 - constructor. omega. apply is_zero_ext_uns; auto with va.
+- destruct ptr64; auto with va.
+- destruct ptr64; auto with va.
+- destruct ptr64; auto with va.
 Qed.
 
 Lemma vnormalize_cast:
@@ -2351,13 +2875,13 @@ Proof.
 - (* int32 *)
   auto.
 - (* int64 *)
-  destruct v; try contradiction; constructor.
+  auto.
 - (* float32 *)
   destruct v; try contradiction; constructor.
 - (* float64 *)
   destruct v; try contradiction; constructor.
 - (* any32 *)
-  auto.
+  destruct Archi.ptr64; auto.
 - (* any64 *)
   auto.
 Qed.
@@ -2379,7 +2903,7 @@ Lemma vnormalize_monotone:
   forall chunk x y,
   vge x y -> vge (vnormalize chunk x) (vnormalize chunk y).
 Proof with (auto using provenance_monotone with va).
-  intros chunk x y V; inversion V; subst; destruct chunk; simpl...
+  intros chunk x y V; unfold vnormalize; generalize Archi.ptr64; intro ptr64; inversion V; subst; destruct chunk eqn:C; simpl...
 - destruct (zlt n 8); constructor...
   apply is_sign_ext_uns...
   apply is_sign_ext_sgn...
@@ -2393,19 +2917,19 @@ Proof with (auto using provenance_monotone with va).
   destruct (zlt n2 8)...
 - destruct (zlt n1 16). rewrite zlt_true by omega...
   destruct (zlt n2 16)...
-- destruct (va_strict tt)...
 - constructor... apply is_sign_ext_sgn... apply Z.min_case...
 - constructor... apply is_zero_ext_uns...
 - constructor... apply is_sign_ext_sgn... apply Z.min_case...
 - constructor... apply is_zero_ext_uns...
 - unfold provenance; destruct (va_strict tt)...
-- destruct (va_strict tt)...
 - destruct (zlt n2 8); constructor...
 - destruct (zlt n2 16); constructor...
-- destruct (va_strict tt)...
-- destruct (va_strict tt)...
-- destruct (va_strict tt)...
-- destruct (va_strict tt)...
+- destruct ptr64...
+- destruct ptr64...
+- destruct ptr64... 
+- destruct ptr64...
+- destruct ptr64...
+- destruct ptr64...
 - constructor... apply is_sign_ext_sgn...
 - constructor... apply is_zero_ext_uns...
 - constructor... apply is_sign_ext_sgn...
@@ -2420,8 +2944,6 @@ Proof with (auto using provenance_monotone with va).
 - unfold provenance; destruct (va_strict tt)...
 - destruct (zlt n 8)...
 - destruct (zlt n 16)...
-- destruct (va_strict tt)...
-- destruct (va_strict tt)...
 Qed.
 
 (** Abstracting memory blocks *)
@@ -2648,7 +3170,7 @@ Lemma store_provenance:
   forall chunk m b ofs v m' b' ofs' b'' ofs'' q i,
   Mem.store chunk m b ofs v = Some m' ->
   Mem.loadbytes m' b' ofs' 1 = Some (Fragment (Vptr b'' ofs'') q i :: nil) ->
-  v = Vptr b'' ofs'' /\ (chunk = Mint32 \/ chunk = Many32 \/ chunk = Many64)
+  v = Vptr b'' ofs'' /\ (chunk = Mint32 \/ chunk = Many32 \/ chunk = Mint64 \/ chunk = Many64)
   \/ Mem.loadbytes m b' ofs' 1 = Some (Fragment (Vptr b'' ofs'') q i :: nil).
 Proof.
   intros. exploit storebytes_provenance; eauto. eapply Mem.store_storebytes; eauto.
@@ -2704,7 +3226,8 @@ Proof.
   generalize (decode_val_shape chunk byte1' bytes'). rewrite <- Q.
   intros DEC; inv DEC; try contradiction.
   assert (v = Vptr bx ofsx).
-  { destruct H5 as [E|[E|E]]; rewrite E in H4; destruct v; simpl in H4; congruence. }
+  { destruct H5 as [E|[E|[E|E]]]; rewrite E in H4; destruct v; simpl in H4;
+    try congruence; destruct Archi.ptr64; congruence. }
   exploit In_loadbytes; eauto. eauto with coqlib.
   intros (ofs' & X & Y). subst v.
   exploit storebytes_provenance; eauto. intros [Z | Z].
@@ -3177,10 +3700,10 @@ Definition load (chunk: memory_chunk) (rm: romem) (m: amem) (p: aptr) : aval :=
   | Pbot => if va_strict tt then Vbot else Vtop
   | Gl id ofs =>
       match rm!id with
-      | Some ab => ablock_load chunk ab (Int.unsigned ofs)
+      | Some ab => ablock_load chunk ab (Ptrofs.unsigned ofs)
       | None =>
           match m.(am_glob)!id with
-          | Some ab => ablock_load chunk ab (Int.unsigned ofs)
+          | Some ab => ablock_load chunk ab (Ptrofs.unsigned ofs)
           | None => vnormalize chunk (Ifptr m.(am_nonstack))
           end
       end
@@ -3193,7 +3716,7 @@ Definition load (chunk: memory_chunk) (rm: romem) (m: amem) (p: aptr) : aval :=
           | None => vnormalize chunk (Ifptr m.(am_nonstack))
           end
       end
-  | Stk ofs => ablock_load chunk m.(am_stack) (Int.unsigned ofs)
+  | Stk ofs => ablock_load chunk m.(am_stack) (Ptrofs.unsigned ofs)
   | Stack => ablock_load_anywhere chunk m.(am_stack)
   | Glob | Nonstack => vnormalize chunk (Ifptr m.(am_nonstack))
   | Ptop => vnormalize chunk (Ifptr m.(am_top))
@@ -3205,7 +3728,7 @@ Definition loadv (chunk: memory_chunk) (rm: romem) (m: amem) (addr: aval) : aval
 Definition store (chunk: memory_chunk) (m: amem) (p: aptr) (av: aval) : amem :=
   {| am_stack :=
        match p with
-       | Stk ofs      => ablock_store chunk m.(am_stack) (Int.unsigned ofs) av
+       | Stk ofs      => ablock_store chunk m.(am_stack) (Ptrofs.unsigned ofs) av
        | Stack | Ptop => ablock_store_anywhere chunk m.(am_stack) av
        | _ => m.(am_stack)
        end;
@@ -3213,7 +3736,7 @@ Definition store (chunk: memory_chunk) (m: amem) (p: aptr) (av: aval) : amem :=
        match p with
        | Gl id ofs =>
            let ab := match m.(am_glob)!id with Some ab => ab | None => ablock_init m.(am_nonstack) end in
-           PTree.set id (ablock_store chunk ab (Int.unsigned ofs) av) m.(am_glob)
+           PTree.set id (ablock_store chunk ab (Ptrofs.unsigned ofs) av) m.(am_glob)
        | Glo id =>
            let ab := match m.(am_glob)!id with Some ab => ab | None => ablock_init m.(am_nonstack) end in
            PTree.set id (ablock_store_anywhere chunk ab av) m.(am_glob)
@@ -3251,7 +3774,7 @@ Definition loadbytes (m: amem) (rm: romem) (p: aptr) : aptr :=
 Definition storebytes (m: amem) (dst: aptr) (sz: Z) (p: aptr) : amem :=
   {| am_stack :=
        match dst with
-       | Stk ofs      => ablock_storebytes m.(am_stack) p (Int.unsigned ofs) sz
+       | Stk ofs      => ablock_storebytes m.(am_stack) p (Ptrofs.unsigned ofs) sz
        | Stack | Ptop => ablock_storebytes_anywhere m.(am_stack) p
        | _ => m.(am_stack)
        end;
@@ -3259,7 +3782,7 @@ Definition storebytes (m: amem) (dst: aptr) (sz: Z) (p: aptr) : amem :=
        match dst with
        | Gl id ofs =>
            let ab := match m.(am_glob)!id with Some ab => ab | None => ablock_init m.(am_nonstack) end in
-           PTree.set id (ablock_storebytes ab p (Int.unsigned ofs) sz) m.(am_glob)
+           PTree.set id (ablock_storebytes ab p (Ptrofs.unsigned ofs) sz) m.(am_glob)
        | Glo id =>
            let ab := match m.(am_glob)!id with Some ab => ab | None => ablock_init m.(am_nonstack) end in
            PTree.set id (ablock_storebytes_anywhere ab p) m.(am_glob)
@@ -3276,7 +3799,7 @@ Definition storebytes (m: amem) (dst: aptr) (sz: Z) (p: aptr) : amem :=
 
 Theorem load_sound:
   forall chunk m b ofs v rm am p,
-  Mem.load chunk m b (Int.unsigned ofs) = Some v ->
+  Mem.load chunk m b (Ptrofs.unsigned ofs) = Some v ->
   romatch m rm ->
   mmatch m am ->
   pmatch b ofs p ->
@@ -3321,7 +3844,7 @@ Qed.
 
 Theorem store_sound:
   forall chunk m b ofs v m' am p av,
-  Mem.store chunk m b (Int.unsigned ofs) v = Some m' ->
+  Mem.store chunk m b (Ptrofs.unsigned ofs) v = Some m' ->
   mmatch m am ->
   pmatch b ofs p ->
   vmatch v av ->
@@ -3399,7 +3922,7 @@ Qed.
 
 Theorem loadbytes_sound:
   forall m b ofs sz bytes am rm p,
-  Mem.loadbytes m b (Int.unsigned ofs) sz = Some bytes ->
+  Mem.loadbytes m b (Ptrofs.unsigned ofs) sz = Some bytes ->
   romatch m rm ->
   mmatch m am ->
   pmatch b ofs p ->
@@ -3432,7 +3955,7 @@ Qed.
 
 Theorem storebytes_sound:
   forall m b ofs bytes m' am p sz q,
-  Mem.storebytes m b (Int.unsigned ofs) bytes = Some m' ->
+  Mem.storebytes m b (Ptrofs.unsigned ofs) bytes = Some m' ->
   mmatch m am ->
   pmatch b ofs p ->
   length bytes = nat_of_Z sz ->
@@ -3716,8 +4239,8 @@ Lemma vmatch_inj:
   forall bc v x, vmatch bc v x -> Val.inject (inj_of_bc bc) v v.
 Proof.
   induction 1; econstructor.
-  eapply pmatch_inj; eauto. rewrite Int.add_zero; auto.
-  eapply pmatch_inj; eauto. rewrite Int.add_zero; auto.
+  eapply pmatch_inj; eauto. rewrite Ptrofs.add_zero; auto.
+  eapply pmatch_inj; eauto. rewrite Ptrofs.add_zero; auto.
 Qed.
 
 Lemma vmatch_list_inj:
@@ -3752,7 +4275,7 @@ Proof.
   { exploit mmatch_top; eauto. intros [P Q].
     eapply pmatch_top'. eapply Q; eauto. }
   inv PM; auto.
-  rewrite Int.add_zero; auto.
+  rewrite Ptrofs.add_zero; auto.
 - (* free blocks *)
   intros. unfold inj_of_bc. erewrite bc_below_invalid; eauto.
 - (* mapped blocks *)
@@ -3765,7 +4288,7 @@ Proof.
   auto.
 - (* overflow *)
   intros. exploit inj_of_bc_inv; eauto. intros (A & B & C); subst.
-  rewrite Zplus_0_r. split. omega. apply Int.unsigned_range_2.
+  rewrite Zplus_0_r. split. omega. apply Ptrofs.unsigned_range_2.
 - (* perm inv *)
   intros. exploit inj_of_bc_inv; eauto. intros (A & B & C); subst.
   rewrite Zplus_0_r in H2. auto.
@@ -4046,13 +4569,22 @@ Hint Resolve cnot_sound symbol_address_sound
        neg_sound add_sound sub_sound
        mul_sound mulhs_sound mulhu_sound
        divs_sound divu_sound mods_sound modu_sound shrx_sound
+       shll_sound shrl_sound shrlu_sound
+       andl_sound orl_sound xorl_sound notl_sound roll_sound rorl_sound
+       negl_sound addl_sound subl_sound
+       mull_sound mullhs_sound mullhu_sound
+       divls_sound divlu_sound modls_sound modlu_sound shrxl_sound
        negf_sound absf_sound
        addf_sound subf_sound mulf_sound divf_sound
        negfs_sound absfs_sound
        addfs_sound subfs_sound mulfs_sound divfs_sound
-       zero_ext_sound sign_ext_sound singleoffloat_sound floatofsingle_sound
+       zero_ext_sound sign_ext_sound longofint_sound longofintu_sound
+       singleoffloat_sound floatofsingle_sound
        intoffloat_sound intuoffloat_sound floatofint_sound floatofintu_sound
        intofsingle_sound intuofsingle_sound singleofint_sound singleofintu_sound
+       longoffloat_sound longuoffloat_sound floatoflong_sound floatoflongu_sound
+       longofsingle_sound longuofsingle_sound singleoflong_sound singleoflongu_sound
        longofwords_sound loword_sound hiword_sound
-       cmpu_bool_sound cmp_bool_sound cmpf_bool_sound cmpfs_bool_sound
+       cmpu_bool_sound cmp_bool_sound cmplu_bool_sound cmpl_bool_sound
+       cmpf_bool_sound cmpfs_bool_sound
        maskzero_sound : va.

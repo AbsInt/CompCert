@@ -107,7 +107,7 @@ Proof.
     simpl. inv LD. apply functions_translated; auto. rewrite <- H0 in FF; discriminate.
   }
   destruct (areg ae r); auto. destruct p; auto.
-  predSpec Int.eq Int.eq_spec ofs Int.zero; intros; auto.
+  predSpec Ptrofs.eq Ptrofs.eq_spec ofs Ptrofs.zero; intros; auto.
   subst ofs. exploit vmatch_ptr_gl; eauto. intros LD'. inv LD'; try discriminate.
   rewrite H1 in FF. unfold Genv.symbol_address in FF.
   simpl. rewrite symbols_preserved.
@@ -127,26 +127,12 @@ Lemma const_for_result_correct:
   vmatch bc v a ->
   bc sp = BCstack ->
   genv_match bc ge ->
-  exists v', eval_operation tge (Vptr sp Int.zero) op nil m = Some v' /\ Val.lessdef v v'.
+  exists v', eval_operation tge (Vptr sp Ptrofs.zero) op nil m = Some v' /\ Val.lessdef v v'.
 Proof.
-  unfold const_for_result; intros.
-  destruct a; try discriminate.
-- (* integer *)
-  inv H. inv H0. exists (Vint n); auto.
-- (* float *)
-  destruct (Compopts.generate_float_constants tt); inv H. inv H0. exists (Vfloat f); auto.
-- (* single *)
-  destruct (Compopts.generate_float_constants tt); inv H. inv H0. exists (Vsingle f); auto.
-- (* pointer *)
-  destruct p; try discriminate.
-  + (* global *)
-    inv H. exists (Genv.symbol_address ge id ofs); split.
-    unfold Genv.symbol_address. rewrite <- symbols_preserved. reflexivity.
-    eapply vmatch_ptr_gl; eauto.
-  + (* stack *)
-    inv H. exists (Vptr sp ofs); split.
-    simpl; rewrite Int.add_zero_l; auto.
-    eapply vmatch_ptr_stk; eauto.
+  intros. exploit ConstpropOpproof.const_for_result_correct; eauto. intros (v' & A & B).
+  exists v'; split.
+  rewrite <- A; apply eval_operation_preserved. exact symbols_preserved. 
+  auto.
 Qed.
 
 Inductive match_pc (f: function) (rs: regset) (m: mem): nat -> node -> node -> Prop :=
@@ -399,12 +385,12 @@ Proof.
   assert(OP:
      let (op', args') := op_strength_reduction op args (aregs ae args) in
      exists v',
-        eval_operation ge (Vptr sp0 Int.zero) op' rs ## args' m = Some v' /\
+        eval_operation ge (Vptr sp0 Ptrofs.zero) op' rs ## args' m = Some v' /\
         Val.lessdef v v').
   { eapply op_strength_reduction_correct with (ae := ae); eauto with va. }
   destruct (op_strength_reduction op args (aregs ae args)) as [op' args'].
   destruct OP as [v' [EV' LD']].
-  assert (EV'': exists v'', eval_operation ge (Vptr sp0 Int.zero) op' rs'##args' m' = Some v'' /\ Val.lessdef v' v'').
+  assert (EV'': exists v'', eval_operation ge (Vptr sp0 Ptrofs.zero) op' rs'##args' m' = Some v'' /\ Val.lessdef v' v'').
   { eapply eval_operation_lessdef; eauto. eapply regs_lessdef_regs; eauto. }
   destruct EV'' as [v'' [EV'' LD'']].
   left; econstructor; econstructor; split.
@@ -431,14 +417,14 @@ Proof.
   assert (ADDR:
      let (addr', args') := addr_strength_reduction addr args (aregs ae args) in
      exists a',
-        eval_addressing ge (Vptr sp0 Int.zero) addr' rs ## args' = Some a' /\
+        eval_addressing ge (Vptr sp0 Ptrofs.zero) addr' rs ## args' = Some a' /\
         Val.lessdef a a').
   { eapply addr_strength_reduction_correct with (ae := ae); eauto with va. }
   destruct (addr_strength_reduction addr args (aregs ae args)) as [addr' args'].
   destruct ADDR as (a' & P & Q).
   exploit eval_addressing_lessdef. eapply regs_lessdef_regs; eauto. eexact P.
   intros (a'' & U & V).
-  assert (W: eval_addressing tge (Vptr sp0 Int.zero) addr' rs'##args' = Some a'').
+  assert (W: eval_addressing tge (Vptr sp0 Ptrofs.zero) addr' rs'##args' = Some a'').
   { rewrite <- U. apply eval_addressing_preserved. exact symbols_preserved. }
   exploit Mem.loadv_extends. eauto. eauto. apply Val.lessdef_trans with a'; eauto.
   intros (v' & X & Y).
@@ -451,14 +437,14 @@ Proof.
   assert (ADDR:
      let (addr', args') := addr_strength_reduction addr args (aregs ae args) in
      exists a',
-        eval_addressing ge (Vptr sp0 Int.zero) addr' rs ## args' = Some a' /\
+        eval_addressing ge (Vptr sp0 Ptrofs.zero) addr' rs ## args' = Some a' /\
         Val.lessdef a a').
   { eapply addr_strength_reduction_correct with (ae := ae); eauto with va. }
   destruct (addr_strength_reduction addr args (aregs ae args)) as [addr' args'].
   destruct ADDR as (a' & P & Q).
   exploit eval_addressing_lessdef. eapply regs_lessdef_regs; eauto. eexact P.
   intros (a'' & U & V).
-  assert (W: eval_addressing tge (Vptr sp0 Int.zero) addr' rs'##args' = Some a'').
+  assert (W: eval_addressing tge (Vptr sp0 Ptrofs.zero) addr' rs'##args' = Some a'').
   { rewrite <- U. apply eval_addressing_preserved. exact symbols_preserved. }
   exploit Mem.storev_extends. eauto. eauto. apply Val.lessdef_trans with a'; eauto. apply REGS.
   intros (m2' & X & Y).
@@ -510,7 +496,7 @@ Opaque builtin_strength_reduction.
   generalize (cond_strength_reduction_correct bc ae rs m EM cond args (aregs ae args) (refl_equal _)).
   destruct (cond_strength_reduction cond args (aregs ae args)) as [cond' args'].
   intros EV1 TCODE.
-  left; exists O; exists (State s' (transf_function (romem_for cu) f) (Vptr sp0 Int.zero) (if b then ifso else ifnot) rs' m'); split.
+  left; exists O; exists (State s' (transf_function (romem_for cu) f) (Vptr sp0 Ptrofs.zero) (if b then ifso else ifnot) rs' m'); split.
   destruct (resolve_branch ac) eqn: RB.
   assert (b0 = b) by (eapply resolve_branch_sound; eauto). subst b0.
   destruct b; eapply exec_Inop; eauto.
@@ -534,7 +520,7 @@ Opaque builtin_strength_reduction.
     rewrite H1. auto. }
   assert (rs'#arg = Vint n).
   { generalize (REGS arg). rewrite H0. intros LD; inv LD; auto. }
-  left; exists O; exists (State s' (transf_function (romem_for cu) f) (Vptr sp0 Int.zero) pc' rs' m'); split.
+  left; exists O; exists (State s' (transf_function (romem_for cu) f) (Vptr sp0 Ptrofs.zero) pc' rs' m'); split.
   destruct A. eapply exec_Ijumptable; eauto. eapply exec_Inop; eauto.
   eapply match_states_succ; eauto.
 

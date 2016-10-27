@@ -49,6 +49,9 @@ Definition make_floatconst (f: float) :=  Econst (Ofloatconst f).
 
 Definition make_singleconst (f: float32) :=  Econst (Osingleconst f).
 
+Definition make_ptrofsconst (n: Z) :=
+  if Archi.ptr64 then make_longconst (Int64.repr n) else make_intconst (Int.repr n).
+
 Definition make_singleoffloat (e: expr) := Eunop Osingleoffloat e.
 Definition make_floatofsingle (e: expr) := Eunop Ofloatofsingle e.
 
@@ -106,7 +109,7 @@ Definition make_longofsingle (e: expr) (sg: signedness) :=
   | Unsigned => Eunop Olonguofsingle e
   end.
 
-Definition make_cmp_ne_zero (e: expr) :=
+Definition make_cmpu_ne_zero (e: expr) :=
   match e with
   | Ebinop (Ocmp c) e1 e2 => e
   | Ebinop (Ocmpu c) e1 e2 => e
@@ -114,7 +117,7 @@ Definition make_cmp_ne_zero (e: expr) :=
   | Ebinop (Ocmpfs c) e1 e2 => e
   | Ebinop (Ocmpl c) e1 e2 => e
   | Ebinop (Ocmplu c) e1 e2 => e
-  | _ => Ebinop (Ocmp Cne) e (make_intconst Int.zero)
+  | _ => Ebinop (Ocmpu Cne) e (make_intconst Int.zero)
   end.
 
 (** Variants of [sizeof] and [alignof] that check that the given type is complete. *)
@@ -139,12 +142,12 @@ Definition make_cast_int (e: expr) (sz: intsize) (si: signedness) :=
   | I16, Signed => Eunop Ocast16signed e
   | I16, Unsigned => Eunop Ocast16unsigned e
   | I32, _ => e
-  | IBool, _ => make_cmp_ne_zero e
+  | IBool, _ => make_cmpu_ne_zero e
   end.
 
 Definition make_cast (from to: type) (e: expr) :=
   match classify_cast from to with
-  | cast_case_neutral => OK e
+  | cast_case_pointer => OK e
   | cast_case_i2i sz2 si2 => OK (make_cast_int e sz2 si2)
   | cast_case_f2f => OK e
   | cast_case_s2s => OK e
@@ -161,10 +164,10 @@ Definition make_cast (from to: type) (e: expr) :=
   | cast_case_l2s si1 => OK (make_singleoflong e si1)
   | cast_case_f2l si2 => OK (make_longoffloat e si2)
   | cast_case_s2l si2 => OK (make_longofsingle e si2)
+  | cast_case_i2bool => OK (make_cmpu_ne_zero e)
   | cast_case_f2bool => OK (Ebinop (Ocmpf Cne) e (make_floatconst Float.zero))
   | cast_case_s2bool => OK (Ebinop (Ocmpfs Cne) e (make_singleconst Float32.zero))
-  | cast_case_l2bool => OK (Ebinop (Ocmpl Cne) e (make_longconst Int64.zero))
-  | cast_case_p2bool => OK (Ebinop (Ocmpu Cne) e (make_intconst Int.zero))
+  | cast_case_l2bool => OK (Ebinop (Ocmplu Cne) e (make_longconst Int64.zero))
   | cast_case_struct id1 id2 => OK e
   | cast_case_union id1 id2 => OK e
   | cast_case_void => OK e
@@ -176,11 +179,10 @@ Definition make_cast (from to: type) (e: expr) :=
 
 Definition make_boolean (e: expr) (ty: type) :=
   match classify_bool ty with
-  | bool_case_i => make_cmp_ne_zero e
+  | bool_case_i => make_cmpu_ne_zero e
   | bool_case_f => Ebinop (Ocmpf Cne) e (make_floatconst Float.zero)
   | bool_case_s => Ebinop (Ocmpfs Cne) e (make_singleconst Float32.zero)
-  | bool_case_p => Ebinop (Ocmpu Cne) e (make_intconst Int.zero)
-  | bool_case_l => Ebinop (Ocmpl Cne) e (make_longconst Int64.zero)
+  | bool_case_l => Ebinop (Ocmplu Cne) e (make_longconst Int64.zero)
   | bool_default => e   (**r should not happen *)
   end.
 
@@ -188,12 +190,11 @@ Definition make_boolean (e: expr) (ty: type) :=
 
 Definition make_notbool (e: expr) (ty: type) :=
   match classify_bool ty with
-  | bool_case_i => OK (Ebinop (Ocmp Ceq) e (make_intconst Int.zero))
+  | bool_case_i => OK (Ebinop (Ocmpu Ceq) e (make_intconst Int.zero))
   | bool_case_f => OK (Ebinop (Ocmpf Ceq) e (make_floatconst Float.zero))
   | bool_case_s => OK (Ebinop (Ocmpfs Ceq) e (make_singleconst Float32.zero))
-  | bool_case_p => OK (Ebinop (Ocmpu Ceq) e (make_intconst Int.zero))
-  | bool_case_l => OK (Ebinop (Ocmpl Ceq) e (make_longconst Int64.zero))
-  | _ => Error (msg "Cshmgen.make_notbool")
+  | bool_case_l => OK (Ebinop (Ocmplu Ceq) e (make_longconst Int64.zero))
+  | bool_default => Error (msg "Cshmgen.make_notbool")
   end.
 
 Definition make_neg (e: expr) (ty: type) :=
@@ -202,7 +203,7 @@ Definition make_neg (e: expr) (ty: type) :=
   | neg_case_f => OK (Eunop Onegf e)
   | neg_case_s => OK (Eunop Onegfs e)
   | neg_case_l _ => OK (Eunop Onegl e)
-  | _ => Error (msg "Cshmgen.make_neg")
+  | neg_default => Error (msg "Cshmgen.make_neg")
   end.
 
 Definition make_absfloat (e: expr) (ty: type) :=
@@ -211,14 +212,14 @@ Definition make_absfloat (e: expr) (ty: type) :=
   | neg_case_f => OK (Eunop Oabsf e)
   | neg_case_s => OK (Eunop Oabsf (make_floatofsingle e))
   | neg_case_l sg => OK (Eunop Oabsf (make_floatoflong e sg))
-  | _ => Error (msg "Cshmgen.make_absfloat")
+  | neg_default => Error (msg "Cshmgen.make_absfloat")
   end.
 
 Definition make_notint (e: expr) (ty: type) :=
   match classify_notint ty with
   | notint_case_i _ => OK (Eunop Onotint e)
   | notint_case_l _ => OK (Eunop Onotl e)
-  | _ => Error (msg "Cshmgen.make_notint")
+  | notint_default => Error (msg "Cshmgen.make_notint")
   end.
 
 (** Binary operators *)
@@ -239,42 +240,59 @@ Definition make_binarith (iop iopu fop sop lop lopu: binary_operation)
   | bin_default => Error (msg "Cshmgen.make_binarith")
   end.
 
+Definition make_add_ptr_int (ce: composite_env) (ty: type) (si: signedness) (e1 e2: expr) :=
+  do sz <- sizeof ce ty;
+  if Archi.ptr64 then
+    let n := make_longconst (Int64.repr sz) in
+    OK (Ebinop Oaddl e1 (Ebinop Omull n (make_longofint e2 si)))
+  else
+    let n := make_intconst (Int.repr sz) in
+    OK (Ebinop Oadd e1 (Ebinop Omul n e2)).
+
+Definition make_add_ptr_long (ce: composite_env) (ty: type) (e1 e2: expr) :=
+  do sz <- sizeof ce ty;
+  if Archi.ptr64 then
+    let n := make_longconst (Int64.repr sz) in
+    OK (Ebinop Oaddl e1 (Ebinop Omull n e2))
+  else
+    let n := make_intconst (Int.repr sz) in
+    OK (Ebinop Oadd e1 (Ebinop Omul n (Eunop Ointoflong e2))).
+
 Definition make_add (ce: composite_env) (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_add ty1 ty2 with
-  | add_case_pi ty =>
-      do sz <- sizeof ce ty;
-      let n := make_intconst (Int.repr sz) in
-      OK (Ebinop Oadd e1 (Ebinop Omul n e2))
-  | add_case_ip ty =>
-      do sz <- sizeof ce ty;
-      let n := make_intconst (Int.repr sz) in
-      OK (Ebinop Oadd e2 (Ebinop Omul n e1))
-  | add_case_pl ty =>
-      do sz <- sizeof ce ty;
-      let n := make_intconst (Int.repr sz) in
-      OK (Ebinop Oadd e1 (Ebinop Omul n (Eunop Ointoflong e2)))
-  | add_case_lp ty =>
-      do sz <- sizeof ce ty;
-      let n := make_intconst (Int.repr sz) in
-      OK (Ebinop Oadd e2 (Ebinop Omul n (Eunop Ointoflong e1)))
-  | add_default =>
-      make_binarith Oadd Oadd Oaddf Oaddfs Oaddl Oaddl e1 ty1 e2 ty2
+  | add_case_pi ty si => make_add_ptr_int ce ty si e1 e2
+  | add_case_pl ty => make_add_ptr_long ce ty e1 e2
+  | add_case_ip si ty => make_add_ptr_int ce ty si e2 e1
+  | add_case_lp ty => make_add_ptr_long ce ty e2 e1
+  | add_default => make_binarith Oadd Oadd Oaddf Oaddfs Oaddl Oaddl e1 ty1 e2 ty2
   end.
 
 Definition make_sub (ce: composite_env) (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_sub ty1 ty2 with
-  | sub_case_pi ty =>
+  | sub_case_pi ty si =>
       do sz <- sizeof ce ty;
-      let n := make_intconst (Int.repr sz) in
-      OK (Ebinop Osub e1 (Ebinop Omul n e2))
+      if Archi.ptr64 then
+        let n := make_longconst (Int64.repr sz) in
+        OK (Ebinop Osubl e1 (Ebinop Omull n (make_longofint e2 si)))
+      else
+        let n := make_intconst (Int.repr sz) in
+        OK (Ebinop Osub e1 (Ebinop Omul n e2))
   | sub_case_pp ty =>
       do sz <- sizeof ce ty;
-      let n := make_intconst (Int.repr sz) in
-      OK (Ebinop Odiv (Ebinop Osub e1 e2) n)
+      if Archi.ptr64 then
+        let n := make_longconst (Int64.repr sz) in
+        OK (Ebinop Odivl (Ebinop Osubl e1 e2) n)
+      else
+        let n := make_intconst (Int.repr sz) in
+        OK (Ebinop Odiv (Ebinop Osub e1 e2) n)
   | sub_case_pl ty =>
       do sz <- sizeof ce ty;
-      let n := make_intconst (Int.repr sz) in
-      OK (Ebinop Osub e1 (Ebinop Omul n (Eunop Ointoflong e2)))
+      if Archi.ptr64 then
+        let n := make_longconst (Int64.repr sz) in
+        OK (Ebinop Osubl e1 (Ebinop Omull n e2))
+      else
+        let n := make_intconst (Int.repr sz) in
+        OK (Ebinop Osub e1 (Ebinop Omul n (Eunop Ointoflong e2)))
   | sub_default =>
       make_binarith Osub Osub Osubf Osubfs Osubl Osubl e1 ty1 e2 ty2
   end.
@@ -333,11 +351,20 @@ Definition make_shr (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   | shift_default => Error (msg "Cshmgen.make_shr")
   end.
 
+Definition make_cmp_ptr (c: comparison) (e1 e2: expr) :=
+  Ebinop (if Archi.ptr64 then Ocmplu c else Ocmpu c) e1 e2.
+
 Definition make_cmp (c: comparison) (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_cmp ty1 ty2 with
-  | cmp_case_pp => OK (Ebinop (Ocmpu c) e1 e2)
-  | cmp_case_pl => OK (Ebinop (Ocmpu c) e1 (Eunop Ointoflong e2))
-  | cmp_case_lp => OK (Ebinop (Ocmpu c) (Eunop Ointoflong e1) e2)
+  | cmp_case_pp => OK (make_cmp_ptr c e1 e2)
+  | cmp_case_pi si =>
+      OK (make_cmp_ptr c e1 (if Archi.ptr64 then make_longofint e2 si else e2))
+  | cmp_case_ip si =>
+      OK (make_cmp_ptr c (if Archi.ptr64 then make_longofint e1 si else e1) e2)
+  | cmp_case_pl =>
+      OK (make_cmp_ptr c e1 (if Archi.ptr64 then e2 else Eunop Ointoflong e2))
+  | cmp_case_lp =>
+      OK (make_cmp_ptr c (if Archi.ptr64 then e1 else Eunop Ointoflong e1) e2)
   | cmp_default =>
       make_binarith
         (Ocmp c) (Ocmpu c) (Ocmpf c) (Ocmpfs c) (Ocmpl c) (Ocmplu c)
@@ -421,7 +448,9 @@ Definition make_field_access (ce: composite_env) (ty: type) (f: ident) (a: expr)
           Error (MSG "Undefined struct " :: CTX id :: nil)
       | Some co =>
           do ofs <- field_offset ce f (co_members co);
-          OK (Ebinop Oadd a (make_intconst (Int.repr ofs)))
+          OK (if Archi.ptr64
+              then Ebinop Oaddl a (make_longconst (Int64.repr ofs))
+              else Ebinop Oadd a (make_intconst (Int.repr ofs)))
       end
   | Tunion id _ =>
       OK a
@@ -469,9 +498,9 @@ Fixpoint transl_expr (ce: composite_env) (a: Clight.expr) {struct a} : res expr 
       do addr <- make_field_access ce (typeof b) i tb;
       make_load addr ty
   | Clight.Esizeof ty' ty =>
-      do sz <- sizeof ce ty'; OK(make_intconst (Int.repr sz))
+      do sz <- sizeof ce ty'; OK(make_ptrofsconst sz)
   | Clight.Ealignof ty' ty =>
-      do al <- alignof ce ty'; OK(make_intconst (Int.repr al))
+      do al <- alignof ce ty'; OK(make_ptrofsconst al)
   end
 
 (** [transl_lvalue a] returns the Csharpminor code that evaluates

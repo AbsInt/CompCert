@@ -366,14 +366,14 @@ let (>>=) opt f = match opt with None -> None | Some arg -> f arg
 (* Like eventval_of_val, but accepts static globals as well *)
 
 let convert_external_arg ge v t =
-  match v, t with
-  | Vint i, AST.Tint -> Some (EVint i)
-  | Vfloat f, AST.Tfloat -> Some (EVfloat f)
-  | Vsingle f, AST.Tsingle -> Some (EVsingle f)
-  | Vlong n, AST.Tlong -> Some (EVlong n)
-  | Vptr(b, ofs), AST.Tint ->
+  match v with
+  | Vint i -> Some (EVint i)
+  | Vfloat f -> Some (EVfloat f)
+  | Vsingle f -> Some (EVsingle f)
+  | Vlong n -> Some (EVlong n)
+  | Vptr(b, ofs) ->
       Senv.invert_symbol ge b >>= fun id -> Some (EVptr_global(id, ofs))
-  | _, _ -> None
+  | _ -> None
 
 let rec convert_external_args ge vl tl =
   match vl, tl with

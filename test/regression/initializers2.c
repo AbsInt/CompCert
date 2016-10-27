@@ -43,7 +43,7 @@ int main()
          a2[0], a2[1], a2[2], a2[3], a2[4]);
   printf("a3 = { %d, %d, %d, %d, %d } (size = %d)\n", 
          a3[0], a3[1], a3[2], a3[3], a3[4],
-         sizeof(a3) / sizeof(int));
+         (int)(sizeof(a3) / sizeof(int)));
 
   printf("s1 = { %d, %.2f, %s }\n",
          s1.a, s1.b, s1.c);

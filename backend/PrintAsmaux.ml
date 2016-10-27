@@ -138,6 +138,9 @@ let cfi_section =
 let coqint oc n =
   fprintf oc "%ld" (camlint_of_coqint n)
 
+let coqint64 oc n =
+  fprintf oc "%Ld" (camlint64_of_coqint n)
+
 (** Programmer-supplied annotations (__builtin_annot). *)
 
 let re_annot_param = Str.regexp "%%\\|%[1-9][0-9]*"

@@ -310,14 +310,14 @@ Inductive match_stackframes: list stackframe -> list stackframe -> Prop :=
       match_stackframes stk stk' ->
       regs_lessdef rs rs' ->
       match_stackframes
-        (Stackframe res f (Vptr sp Int.zero) pc rs :: stk)
-        (Stackframe res (transf_function f) (Vptr sp Int.zero) pc rs' :: stk')
+        (Stackframe res f (Vptr sp Ptrofs.zero) pc rs :: stk)
+        (Stackframe res (transf_function f) (Vptr sp Ptrofs.zero) pc rs' :: stk')
   | match_stackframes_tail: forall stk stk' res sp pc rs f,
       match_stackframes stk stk' ->
       is_return_spec f pc res ->
       f.(fn_stacksize) = 0 ->
       match_stackframes
-        (Stackframe res f (Vptr sp Int.zero) pc rs :: stk)
+        (Stackframe res f (Vptr sp Ptrofs.zero) pc rs :: stk)
         stk'.
 
 (** Here is the invariant relating two states.  The first three
@@ -331,8 +331,8 @@ Inductive match_states: state -> state -> Prop :=
              (STACKS: match_stackframes s s')
              (RLD: regs_lessdef rs rs')
              (MLD: Mem.extends m m'),
-      match_states (State s f (Vptr sp Int.zero) pc rs m)
-                   (State s' (transf_function f) (Vptr sp Int.zero) pc rs' m')
+      match_states (State s f (Vptr sp Ptrofs.zero) pc rs m)
+                   (State s' (transf_function f) (Vptr sp Ptrofs.zero) pc rs' m')
   | match_states_call:
       forall s f args m s' args' m',
       match_stackframes s s' ->
@@ -354,7 +354,7 @@ Inductive match_states: state -> state -> Prop :=
       is_return_spec f pc r ->
       f.(fn_stacksize) = 0 ->
       Val.lessdef (rs#r) v' ->
-      match_states (State s f (Vptr sp Int.zero) pc rs m)
+      match_states (State s f (Vptr sp Ptrofs.zero) pc rs m)
                    (Returnstate s' v' m').
 
 (** The last case of [match_states] corresponds to the execution
@@ -417,7 +417,7 @@ Proof.
   assert (Val.lessdef_list (rs##args) (rs'##args)). apply regs_lessdef_regs; auto.
   exploit eval_operation_lessdef; eauto.
   intros [v' [EVAL' VLD]].
-  left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) pc' (rs'#res <- v') m'); split.
+  left. exists (State s' (transf_function f) (Vptr sp0 Ptrofs.zero) pc' (rs'#res <- v') m'); split.
   eapply exec_Iop; eauto.  rewrite <- EVAL'.
   apply eval_operation_preserved. exact symbols_preserved.
   econstructor; eauto. apply set_reg_lessdef; auto.
@@ -433,7 +433,7 @@ Proof.
   intros [a' [ADDR' ALD]].
   exploit Mem.loadv_extends; eauto.
   intros [v' [LOAD' VLD]].
-  left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) pc' (rs'#dst <- v') m'); split.
+  left. exists (State s' (transf_function f) (Vptr sp0 Ptrofs.zero) pc' (rs'#dst <- v') m'); split.
   eapply exec_Iload with (a := a'). eauto.  rewrite <- ADDR'.
   apply eval_addressing_preserved. exact symbols_preserved. eauto.
   econstructor; eauto. apply set_reg_lessdef; auto.
@@ -445,7 +445,7 @@ Proof.
   intros [a' [ADDR' ALD]].
   exploit Mem.storev_extends. 2: eexact H1. eauto. eauto. apply RLD.
   intros [m'1 [STORE' MLD']].
-  left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) pc' rs' m'1); split.
+  left. exists (State s' (transf_function f) (Vptr sp0 Ptrofs.zero) pc' rs' m'1); split.
   eapply exec_Istore with (a := a'). eauto.  rewrite <- ADDR'.
   apply eval_addressing_preserved. exact symbols_preserved. eauto.
   destruct a; simpl in H1; try discriminate.
@@ -465,7 +465,7 @@ Proof.
   eapply Mem.free_right_extends; eauto.
   rewrite stacksize_preserved. rewrite H7. intros. omegaContradiction.
 + (* call that remains a call *)
-  left. exists (Callstate (Stackframe res (transf_function f) (Vptr sp0 Int.zero) pc' rs' :: s')
+  left. exists (Callstate (Stackframe res (transf_function f) (Vptr sp0 Ptrofs.zero) pc' rs' :: s')
                           (transf_fundef fd) (rs'##args) m'); split.
   eapply exec_Icall; eauto. apply sig_preserved.
   constructor. constructor; auto. apply regs_lessdef_regs; auto. auto.
@@ -485,7 +485,7 @@ Proof.
   intros (vargs' & P & Q).
   exploit external_call_mem_extends; eauto.
   intros [v' [m'1 [A [B [C D]]]]].
-  left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) pc' (regmap_setres res v' rs') m'1); split.
+  left. exists (State s' (transf_function f) (Vptr sp0 Ptrofs.zero) pc' (regmap_setres res v' rs') m'1); split.
   eapply exec_Ibuiltin; eauto.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.
@@ -493,14 +493,14 @@ Proof.
 
 - (* cond *)
   TransfInstr.
-  left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) (if b then ifso else ifnot) rs' m'); split.
+  left. exists (State s' (transf_function f) (Vptr sp0 Ptrofs.zero) (if b then ifso else ifnot) rs' m'); split.
   eapply exec_Icond; eauto.
   apply eval_condition_lessdef with (rs##args) m; auto. apply regs_lessdef_regs; auto.
   constructor; auto.
 
 - (* jumptable *)
   TransfInstr.
-  left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) pc' rs' m'); split.
+  left. exists (State s' (transf_function f) (Vptr sp0 Ptrofs.zero) pc' rs' m'); split.
   eapply exec_Ijumptable; eauto.
   generalize (RLD arg). rewrite H0. intro. inv H2. auto.
   constructor; auto.

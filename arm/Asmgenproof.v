@@ -18,6 +18,8 @@ Require Import Values Memory Events Globalenvs Smallstep.
 Require Import Op Locations Mach Conventions Asm.
 Require Import Asmgen Asmgenproof0 Asmgenproof1.
 
+Local Transparent Archi.ptr64.
+
 Definition match_prog (p: Mach.program) (tp: Asm.program) :=
   match_program (fun _ f tf => transf_fundef f = OK tf) eq p tp.
 
@@ -64,9 +66,9 @@ Qed.
 
 Lemma transf_function_no_overflow:
   forall f tf,
-  transf_function f = OK tf -> list_length_z (fn_code tf) <= Int.max_unsigned.
+  transf_function f = OK tf -> list_length_z (fn_code tf) <= Ptrofs.max_unsigned.
 Proof.
-  intros. monadInv H. destruct (zlt Int.max_unsigned (list_length_z (fn_code x))); inv EQ0. omega.
+  intros. monadInv H. destruct (zlt Ptrofs.max_unsigned (list_length_z (fn_code x))); inv EQ0. omega.
 Qed.
 
 Lemma exec_straight_exec:
@@ -335,7 +337,7 @@ Lemma transl_find_label:
   | Some c => exists tc, find_label lbl (fn_code tf) = Some tc /\ transl_code f c false = OK tc
   end.
 Proof.
-  intros. monadInv H. destruct (zlt Int.max_unsigned (list_length_z (fn_code x))); inv EQ0.
+  intros. monadInv H. destruct (zlt Ptrofs.max_unsigned (list_length_z (fn_code x))); inv EQ0.
   monadInv EQ. simpl.
   eapply transl_code_label; eauto.
 Qed.
@@ -360,10 +362,10 @@ Proof.
   intros [tc [A B]].
   exploit label_pos_code_tail; eauto. instantiate (1 := 0).
   intros [pos' [P [Q R]]].
-  exists tc; exists (rs#PC <- (Vptr b (Int.repr pos'))).
+  exists tc; exists (rs#PC <- (Vptr b (Ptrofs.repr pos'))).
   split. unfold goto_label. rewrite P. rewrite H1. auto.
   split. rewrite Pregmap.gss. constructor; auto.
-  rewrite Int.unsigned_repr. replace (pos' - 0) with pos' in Q.
+  rewrite Ptrofs.unsigned_repr. replace (pos' - 0) with pos' in Q.
   auto. omega.
   generalize (transf_function_no_overflow _ _ H0). omega.
   intros. apply Pregmap.gso; auto.
@@ -379,7 +381,7 @@ Proof.
 - intros. exploit transl_instr_label; eauto.
   destruct i; try (intros [A B]; apply A). intros. subst c0. repeat constructor.
 - intros. monadInv H0.
-  destruct (zlt Int.max_unsigned (list_length_z (fn_code x))); inv EQ0. monadInv EQ.
+  destruct (zlt Ptrofs.max_unsigned (list_length_z (fn_code x))); inv EQ0. monadInv EQ.
   exists x; exists true; split; auto. repeat constructor.
 - exact transf_function_no_overflow.
 Qed.
@@ -418,7 +420,7 @@ Inductive match_states: Mach.state -> Asm.state -> Prop :=
         (STACKS: match_stack ge s)
         (MEXT: Mem.extends m m')
         (AG: agree ms (parent_sp s) rs)
-        (ATPC: rs PC = Vptr fb Int.zero)
+        (ATPC: rs PC = Vptr fb Ptrofs.zero)
         (ATLR: rs RA = parent_ra s),
       match_states (Mach.Callstate s fb ms m)
                    (Asm.State rs m')
@@ -624,13 +626,13 @@ Opaque loadind.
     eapply transf_function_no_overflow; eauto.
   destruct ros as [rf|fid]; simpl in H; monadInv H5.
 + (* Indirect call *)
-  assert (rs rf = Vptr f' Int.zero).
+  assert (rs rf = Vptr f' Ptrofs.zero).
     destruct (rs rf); try discriminate.
-    revert H; predSpec Int.eq Int.eq_spec i Int.zero; intros; congruence.
-  assert (rs0 x0 = Vptr f' Int.zero).
+    revert H; predSpec Ptrofs.eq Ptrofs.eq_spec i Ptrofs.zero; intros; congruence.
+  assert (rs0 x0 = Vptr f' Ptrofs.zero).
     exploit ireg_val; eauto. rewrite H5; intros LD; inv LD; auto.
   generalize (code_tail_next_int _ _ _ _ NOOV H6). intro CT1.
-  assert (TCA: transl_code_at_pc ge (Vptr fb (Int.add ofs Int.one)) fb f c false tf x).
+  assert (TCA: transl_code_at_pc ge (Vptr fb (Ptrofs.add ofs Ptrofs.one)) fb f c false tf x).
     econstructor; eauto.
   exploit return_address_offset_correct; eauto. intros; subst ra.
   left; econstructor; split.
@@ -644,7 +646,7 @@ Opaque loadind.
   Simpl. rewrite <- H2. auto.
 + (* Direct call *)
   generalize (code_tail_next_int _ _ _ _ NOOV H6). intro CT1.
-  assert (TCA: transl_code_at_pc ge (Vptr fb (Int.add ofs Int.one)) fb f c false tf x).
+  assert (TCA: transl_code_at_pc ge (Vptr fb (Ptrofs.add ofs Ptrofs.one)) fb f c false tf x).
     econstructor; eauto.
   exploit return_address_offset_correct; eauto. intros; subst ra.
   left; econstructor; split.
@@ -660,7 +662,7 @@ Opaque loadind.
 - (* Mtailcall *)
   assert (f0 = f) by congruence.  subst f0.
   inversion AT; subst.
-  assert (NOOV: list_length_z (fn_code tf) <= Int.max_unsigned).
+  assert (NOOV: list_length_z (fn_code tf) <= Ptrofs.max_unsigned).
     eapply transf_function_no_overflow; eauto.
   exploit Mem.loadv_extends. eauto. eexact H1. auto.
   unfold chunk_of_type. rewrite (sp_val _ _ _ AG). intros [parent' [A B]].
@@ -682,16 +684,16 @@ Opaque loadind.
     exploit loadind_int_correct. eexact C. intros [rs1 [P [Q R]]].
     econstructor; split.
     eapply exec_straight_trans. eexact P. apply exec_straight_one.
-    simpl. rewrite R; auto with asmgen. unfold chunk_of_type in A. rewrite A.
+    simpl. rewrite R; auto with asmgen. unfold chunk_of_type in A; simpl in A. rewrite A.
     rewrite <- (sp_val _ _ _ AG). rewrite E. eauto. auto.
     split. Simpl. split. Simpl. intros. Simpl.
   }
   destruct ros as [rf|fid]; simpl in H; monadInv H7.
 + (* Indirect call *)
-  assert (rs rf = Vptr f' Int.zero).
+  assert (rs rf = Vptr f' Ptrofs.zero).
     destruct (rs rf); try discriminate.
-    revert H; predSpec Int.eq Int.eq_spec i Int.zero; intros; congruence.
-  assert (rs0 x0 = Vptr f' Int.zero).
+    revert H; predSpec Ptrofs.eq Ptrofs.eq_spec i Ptrofs.zero; intros; congruence.
+  assert (rs0 x0 = Vptr f' Ptrofs.zero).
     exploit ireg_val; eauto. rewrite H7; intros LD; inv LD; auto.
   destruct (X (Pbreg x0 sig :: x)) as [rs2 [P [Q [R S]]]].
   exploit exec_straight_steps_2. eexact P. eauto. eauto. eapply functions_transl; eauto. eauto.
@@ -850,7 +852,7 @@ Opaque loadind.
 - (* internal function *)
   exploit functions_translated; eauto. intros [tf [A B]]. monadInv B.
   generalize EQ; intros EQ'. monadInv EQ'.
-  destruct (zlt Int.max_unsigned (list_length_z (fn_code x0))); inversion EQ1. clear EQ1.
+  destruct (zlt Ptrofs.max_unsigned (list_length_z (fn_code x0))); inversion EQ1. clear EQ1.
   monadInv EQ0.
   unfold store_stack in *.
   exploit Mem.alloc_extends. eauto. eauto. apply Zle_refl. apply Zle_refl.
@@ -860,24 +862,27 @@ Opaque loadind.
   exploit Mem.storev_extends. eexact G. eexact H2. eauto. eauto.
   intros [m3' [P Q]].
   (* Execution of function prologue *)
-  set (rs2 := nextinstr (rs0#IR12 <- (parent_sp s) #IR13 <- (Vptr stk Int.zero))).
+  set (rs2 := nextinstr (rs0#IR12 <- (parent_sp s) #IR13 <- (Vptr stk Ptrofs.zero))).
   set (rs3 := nextinstr rs2).
   assert (EXEC_PROLOGUE:
             exec_straight tge x
               (fn_code x) rs0 m'
               x1 rs3 m3').
-  rewrite <- H5 at 2; unfold fn_code.
+  replace (fn_code x)
+  with (Pallocframe (fn_stacksize f) (fn_link_ofs f) :: Pstr IR14 IR13 (SOimm (Ptrofs.to_int (fn_retaddr_ofs f))) :: x1)
+  by (rewrite <- H5; auto).
   apply exec_straight_two with rs2 m2'.
   unfold exec_instr. rewrite C. fold sp.
-  rewrite <- (sp_val _ _ _ AG). unfold chunk_of_type in F. rewrite F. auto.
+  rewrite <- (sp_val _ _ _ AG). unfold Tptr, chunk_of_type, Archi.ptr64 in F. rewrite F. auto.
   simpl. auto.
   simpl. unfold exec_store. change (rs2 IR14) with (rs0 IR14).
-  rewrite Int.add_zero_l. simpl. unfold chunk_of_type in P. simpl in P.
-  rewrite Int.add_zero_l in P. rewrite ATLR. rewrite P. auto. auto. auto.
+  rewrite Ptrofs.add_zero_l. simpl. unfold Tptr, chunk_of_type, Archi.ptr64 in P. simpl in P.
+  rewrite Ptrofs.add_zero_l in P. rewrite ATLR. rewrite Ptrofs.of_int_to_int by auto.
+  rewrite P. auto. auto. auto.
   left; exists (State rs3 m3'); split.
   eapply exec_straight_steps_1; eauto. omega. constructor.
   econstructor; eauto.
-  change (rs3 PC) with (Val.add (Val.add (rs0 PC) Vone) Vone).
+  change (rs3 PC) with (Val.offset_ptr (Val.offset_ptr (rs0 PC) Ptrofs.one) Ptrofs.one).
   rewrite ATPC. simpl. constructor; eauto.
   subst x. eapply code_tail_next_int. omega.
   eapply code_tail_next_int. omega. constructor.
@@ -915,12 +920,12 @@ Proof.
   econstructor; split.
   econstructor.
   eapply (Genv.init_mem_transf_partial TRANSF); eauto.
-  replace (Genv.symbol_address (Genv.globalenv tprog) (prog_main tprog) Int.zero)
-     with (Vptr fb Int.zero).
+  replace (Genv.symbol_address (Genv.globalenv tprog) (prog_main tprog) Ptrofs.zero)
+     with (Vptr fb Ptrofs.zero).
   econstructor; eauto.
   constructor.
   apply Mem.extends_refl.
-  split. auto. simpl. unfold Vzero; congruence. intros. rewrite Regmap.gi. auto.
+  split. auto. simpl. unfold Vnullptr; simpl; congruence. intros. rewrite Regmap.gi. auto.
   unfold Genv.symbol_address.
   rewrite (match_program_main TRANSF).
   rewrite symbols_preserved.

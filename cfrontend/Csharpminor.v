@@ -321,7 +321,7 @@ Inductive eval_expr: expr -> val -> Prop :=
       eval_expr (Evar id) v
   | eval_Eaddrof: forall id b,
       eval_var_addr e id b ->
-      eval_expr (Eaddrof id) (Vptr b Int.zero)
+      eval_expr (Eaddrof id) (Vptr b Ptrofs.zero)
   | eval_Econst: forall cst v,
       eval_constant cst = Some v ->
       eval_expr (Econst cst) v

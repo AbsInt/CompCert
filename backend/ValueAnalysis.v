@@ -187,7 +187,7 @@ Definition store_init_data (ab: ablock) (p: Z) (id: init_data) : ablock :=
                         (if propagate_float_constants tt then FS n else ntop)
   | Init_float64 n => ablock_store Mfloat64 ab p
                         (if propagate_float_constants tt then F n else ntop)
-  | Init_addrof symb ofs => ablock_store Mint32 ab p (Ptr (Gl symb ofs))
+  | Init_addrof symb ofs => ablock_store Mptr ab p (Ptr (Gl symb ofs))
   | Init_space n => ab
   end.
 
@@ -329,13 +329,13 @@ Lemma abuiltin_arg_sound:
   genv_match bc ge ->
   bc sp = BCstack ->
   forall a v,
-  eval_builtin_arg ge (fun r => rs#r) (Vptr sp Int.zero) m a v ->
+  eval_builtin_arg ge (fun r => rs#r) (Vptr sp Ptrofs.zero) m a v ->
   vmatch bc v (abuiltin_arg ae am rm a).
 Proof.
   intros until am; intros EM RM MM GM SP.
   induction 1; simpl; eauto with va.
-- eapply loadv_sound; eauto. simpl. rewrite Int.add_zero_l. auto with va.
-- simpl. rewrite Int.add_zero_l. auto with va.
+- eapply loadv_sound; eauto. simpl. rewrite Ptrofs.add_zero_l. auto with va.
+- simpl. rewrite Ptrofs.add_zero_l. auto with va.
 - eapply loadv_sound; eauto. apply symbol_address_sound; auto.
 - apply symbol_address_sound; auto.
 Qed.
@@ -348,7 +348,7 @@ Lemma abuiltin_args_sound:
   genv_match bc ge ->
   bc sp = BCstack ->
   forall al vl,
-  eval_builtin_args ge (fun r => rs#r) (Vptr sp Int.zero) m al vl ->
+  eval_builtin_args ge (fun r => rs#r) (Vptr sp Ptrofs.zero) m al vl ->
   list_forall2 (vmatch bc) vl (map (abuiltin_arg ae am rm) al).
 Proof.
   intros until am; intros EM RM MM GM SP.
@@ -1050,7 +1050,7 @@ Inductive sound_stack: block_classification -> list stackframe -> mem -> block -
         (GE: genv_match bc' ge)
         (AN: VA.ge (analyze rm f)!!pc (VA.State (AE.set res Vtop ae) mafter_public_call))
         (EM: ematch bc' e ae),
-      sound_stack bc (Stackframe res f (Vptr sp Int.zero) pc e :: stk) m bound
+      sound_stack bc (Stackframe res f (Vptr sp Ptrofs.zero) pc e :: stk) m bound
   | sound_stack_private_call:
      forall (bc: block_classification) res f sp pc e stk m bound bc' bound' ae am
         (STK: sound_stack bc' stk m sp)
@@ -1063,7 +1063,7 @@ Inductive sound_stack: block_classification -> list stackframe -> mem -> block -
         (AN: VA.ge (analyze rm f)!!pc (VA.State (AE.set res (Ifptr Nonstack) ae) (mafter_private_call am)))
         (EM: ematch bc' e ae)
         (CONTENTS: bmatch bc' m sp am.(am_stack)),
-      sound_stack bc (Stackframe res f (Vptr sp Int.zero) pc e :: stk) m bound.
+      sound_stack bc (Stackframe res f (Vptr sp Ptrofs.zero) pc e :: stk) m bound.
 
 Inductive sound_state_base: state -> Prop :=
   | sound_regular_state:
@@ -1075,7 +1075,7 @@ Inductive sound_state_base: state -> Prop :=
         (MM: mmatch bc m am)
         (GE: genv_match bc ge)
         (SP: bc sp = BCstack),
-      sound_state_base (State s f (Vptr sp Int.zero) pc e m)
+      sound_state_base (State s f (Vptr sp Ptrofs.zero) pc e m)
   | sound_call_state:
       forall s fd args m bc
         (STK: sound_stack bc s m (Mem.nextblock m))
@@ -1143,7 +1143,7 @@ Qed.
 
 Lemma sound_stack_storebytes:
   forall m b ofs bytes m' bc aaddr stk bound,
-  Mem.storebytes m b (Int.unsigned ofs) bytes = Some m' ->
+  Mem.storebytes m b (Ptrofs.unsigned ofs) bytes = Some m' ->
   vmatch bc (Vptr b ofs) aaddr ->
   sound_stack bc stk m bound ->
   sound_stack bc stk m' bound.
@@ -1209,7 +1209,7 @@ Lemma sound_succ_state:
   genv_match bc ge ->
   bc sp = BCstack ->
   sound_stack bc s m' sp ->
-  sound_state_base (State s f (Vptr sp Int.zero) pc' e' m').
+  sound_state_base (State s f (Vptr sp Ptrofs.zero) pc' e' m').
 Proof.
   intros. exploit analyze_succ; eauto. intros (ae'' & am'' & AN & EM & MM).
   econstructor; eauto.
@@ -1296,7 +1296,7 @@ Proof.
   assert (DEFAULT:
             transfer f rm pc ae am = transfer_builtin_default ae am rm args res ->
             sound_state_base
-               (State s f (Vptr sp0 Int.zero) pc' (regmap_setres res vres rs) m')).
+               (State s f (Vptr sp0 Ptrofs.zero) pc' (regmap_setres res vres rs) m')).
   { unfold transfer_builtin_default, analyze_call; intros TR'.
   set (aargs := map (abuiltin_arg ae am rm) args) in *.
   assert (ARGS: list_forall2 (vmatch bc) vargs aargs) by (eapply abuiltin_args_sound; eauto).
@@ -1603,9 +1603,13 @@ Lemma store_init_data_sound:
   bmatch bc m' b (store_init_data ab p id).
 Proof.
   intros. destruct id; try (eapply ablock_store_sound; eauto; constructor).
+- (* float32 *)
   simpl. destruct (propagate_float_constants tt); eapply ablock_store_sound; eauto; constructor.
+- (* float64 *)
   simpl. destruct (propagate_float_constants tt); eapply ablock_store_sound; eauto; constructor.
+- (* space *)
   simpl in H. inv H. auto.
+- (* addrof *)
   simpl in H. destruct (Genv.find_symbol ge i) as [b'|] eqn:FS; try discriminate.
   eapply ablock_store_sound; eauto. constructor. constructor. apply GMATCH; auto.
 Qed.
@@ -1882,7 +1886,7 @@ Definition avalue (a: VA.t) (r: reg) : aval :=
 
 Lemma avalue_sound:
   forall cunit prog s f sp pc e m r,
-  sound_state prog (State s f (Vptr sp Int.zero) pc e m) ->
+  sound_state prog (State s f (Vptr sp Ptrofs.zero) pc e m) ->
   linkorder cunit prog ->
   exists bc,
      vmatch bc e#r (avalue (analyze (romem_for cunit) f)!!pc r)
@@ -1900,7 +1904,7 @@ Definition aaddr (a: VA.t) (r: reg) : aptr :=
 
 Lemma aaddr_sound:
   forall cunit prog s f sp pc e m r b ofs,
-  sound_state prog (State s f (Vptr sp Int.zero) pc e m) ->
+  sound_state prog (State s f (Vptr sp Ptrofs.zero) pc e m) ->
   linkorder cunit prog ->
   e#r = Vptr b ofs ->
   exists bc,
@@ -1920,9 +1924,9 @@ Definition aaddressing (a: VA.t) (addr: addressing) (args: list reg) : aptr :=
 
 Lemma aaddressing_sound:
   forall cunit prog s f sp pc e m addr args b ofs,
-  sound_state prog (State s f (Vptr sp Int.zero) pc e m) ->
+  sound_state prog (State s f (Vptr sp Ptrofs.zero) pc e m) ->
   linkorder cunit prog ->
-  eval_addressing (Genv.globalenv prog) (Vptr sp Int.zero) addr e##args = Some (Vptr b ofs) ->
+  eval_addressing (Genv.globalenv prog) (Vptr sp Ptrofs.zero) addr e##args = Some (Vptr b ofs) ->
   exists bc,
      pmatch bc b ofs (aaddressing (analyze (romem_for cunit) f)!!pc addr args)
   /\ genv_match bc (Genv.globalenv prog)
@@ -1955,7 +1959,7 @@ Lemma aaddr_arg_sound_1:
   mmatch bc m am ->
   genv_match bc ge ->
   bc sp = BCstack ->
-  eval_builtin_arg ge (fun r : positive => rs # r) (Vptr sp Int.zero) m a (Vptr b ofs) ->
+  eval_builtin_arg ge (fun r : positive => rs # r) (Vptr sp Ptrofs.zero) m a (Vptr b ofs) ->
   pmatch bc b ofs (aaddr_arg (VA.State ae am) a).
 Proof.
   intros.
@@ -1966,9 +1970,9 @@ Qed.
 
 Lemma aaddr_arg_sound:
   forall cunit prog s f sp pc e m a b ofs,
-  sound_state prog (State s f (Vptr sp Int.zero) pc e m) ->
+  sound_state prog (State s f (Vptr sp Ptrofs.zero) pc e m) ->
   linkorder cunit prog ->
-  eval_builtin_arg (Genv.globalenv prog) (fun r => e#r) (Vptr sp Int.zero) m a (Vptr b ofs) ->
+  eval_builtin_arg (Genv.globalenv prog) (fun r => e#r) (Vptr sp Ptrofs.zero) m a (Vptr b ofs) ->
   exists bc,
      pmatch bc b ofs (aaddr_arg (analyze (romem_for cunit) f)!!pc a)
   /\ genv_match bc (Genv.globalenv prog)

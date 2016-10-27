@@ -136,7 +136,7 @@ Definition kill_at_call (s: avail) : avail :=
 
 Definition eq_arg (a1 a2: builtin_arg loc) : {a1=a2} + {a1<>a2}.
 Proof.
-  generalize Loc.eq ident_eq Int.eq_dec Int64.eq_dec Float.eq_dec Float32.eq_dec chunk_eq;
+  generalize Loc.eq ident_eq Int.eq_dec Int64.eq_dec Ptrofs.eq_dec Float.eq_dec Float32.eq_dec chunk_eq;
   decide equality.
 Defined.
 Global Opaque eq_arg.

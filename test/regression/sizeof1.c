@@ -34,10 +34,10 @@ char b2[sizeof(struct bits2)];  /* should be 8 */
 int main()
 {
   printf("sizeof(struct s) = %d, sizeof(tbl) = %d\n",
-         sizeof(struct s), sizeof(tbl));
+         (int) sizeof(struct s), (int) sizeof(tbl));
   printf("sizeof(struct bits1) = %d, sizeof(b1) = %d\n",
-         sizeof(struct bits1), sizeof(b1));
+         (int) sizeof(struct bits1), (int) sizeof(b1));
   printf("sizeof(struct bits2) = %d, sizeof(b2) = %d\n",
-         sizeof(struct bits2), sizeof(b2));
+         (int) sizeof(struct bits2), (int) sizeof(b2));
   return 0;
 }

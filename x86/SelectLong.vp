@@ -1,0 +1,347 @@
+(* *********************************************************************)
+(*                                                                     *)
+(*              The Compcert verified compiler                         *)
+(*                                                                     *)
+(*                 Xavier Leroy, INRIA Paris                           *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique.  All rights reserved.  This file is distributed       *)
+(*  under the terms of the INRIA Non-Commercial License Agreement.     *)
+(*                                                                     *)
+(* *********************************************************************)
+
+(** Instruction selection for 64-bit integer operations *)
+
+Require Import Coqlib.
+Require Import Compopts.
+Require Import AST Integers Floats.
+Require Import Op CminorSel.
+Require Import SelectOp SplitLong.
+
+Local Open Scope cminorsel_scope.
+Local Open Scope string_scope.
+
+Section SELECT.
+
+Context {hf: helper_functions}.
+
+Definition longconst (n: int64) : expr :=
+  if Archi.splitlong then SplitLong.longconst n else Eop (Olongconst n) Enil.
+
+Definition is_longconst (e: expr) :=
+  if Archi.splitlong then SplitLong.is_longconst e else
+  match e with
+  | Eop (Olongconst n) Enil => Some n
+  | _ => None
+  end.
+
+Definition intoflong (e: expr) :=
+  if Archi.splitlong then SplitLong.intoflong e else
+  match is_longconst e with
+  | Some n => Eop (Ointconst (Int.repr (Int64.unsigned n))) Enil
+  | None =>  Eop Olowlong (e ::: Enil)
+  end.
+
+Definition longofint (e: expr) :=
+  if Archi.splitlong then SplitLong.longofint e else
+  match is_intconst e with
+  | Some n => longconst (Int64.repr (Int.signed n))
+  | None =>  Eop Ocast32signed (e ::: Enil)
+  end.
+
+Definition longofintu (e: expr) :=
+  if Archi.splitlong then SplitLong.longofintu e else
+  match is_intconst e with
+  | Some n => longconst (Int64.repr (Int.unsigned n))
+  | None =>  Eop Ocast32unsigned (e ::: Enil)
+  end.
+
+Nondetfunction notl (e: expr) :=
+  if Archi.splitlong then SplitLong.notl e else
+  match e with
+  | Eop (Olongconst n) Enil => longconst (Int64.not n)
+  | Eop Onotl (t1:::Enil) => t1
+  | _ => Eop Onotl (e:::Enil)
+  end.
+
+Nondetfunction andlimm (n1: int64) (e2: expr) := 
+  if Int64.eq n1 Int64.zero then longconst Int64.zero else
+  if Int64.eq n1 Int64.mone then e2 else
+  match e2 with
+  | Eop (Olongconst n2) Enil =>
+      longconst (Int64.and n1 n2)
+  | Eop (Oandlimm n2) (t2:::Enil) =>
+      Eop (Oandlimm (Int64.and n1 n2)) (t2:::Enil)
+  | _ =>
+      Eop (Oandlimm n1) (e2:::Enil)
+  end.
+
+Nondetfunction andl (e1: expr) (e2: expr) :=
+  if Archi.splitlong then SplitLong.andl e1 e2 else
+  match e1, e2 with
+  | Eop (Olongconst n1) Enil, t2 => andlimm n1 t2
+  | t1, Eop (Olongconst n2) Enil => andlimm n2 t1
+  | _, _ => Eop Oandl (e1:::e2:::Enil)
+  end.
+
+Nondetfunction orlimm (n1: int64) (e2: expr) :=
+  if Int64.eq n1 Int64.zero then e2 else
+  if Int64.eq n1 Int64.mone then longconst Int64.mone else
+  match e2 with
+  | Eop (Olongconst n2) Enil => longconst (Int64.or n1 n2)
+  | Eop (Oorlimm n2) (t2:::Enil) => Eop (Oorlimm (Int64.or n1 n2)) (t2:::Enil)
+  | _ => Eop (Oorlimm n1) (e2:::Enil)
+  end.
+
+Nondetfunction orl (e1: expr) (e2: expr) :=
+  if Archi.splitlong then SplitLong.orl e1 e2 else
+  match e1, e2 with
+  | Eop (Olongconst n1) Enil, t2 => orlimm n1 t2
+  | t1, Eop (Olongconst n2) Enil => orlimm n2 t1
+  | Eop (Oshllimm n1) (t1:::Enil), Eop (Oshrluimm n2) (t2:::Enil) =>
+      if Int.eq (Int.add n1 n2) Int64.iwordsize' && same_expr_pure t1 t2
+      then Eop (Ororlimm n2) (t1:::Enil)
+      else Eop Oorl (e1:::e2:::Enil)
+  | Eop (Oshrluimm n2) (t2:::Enil), Eop (Oshllimm n1) (t1:::Enil) =>
+      if Int.eq (Int.add n1 n2) Int64.iwordsize' && same_expr_pure t1 t2
+      then Eop (Ororlimm n2) (t1:::Enil)
+      else Eop Oorl (e1:::e2:::Enil)
+  | _, _ =>
+      Eop Oorl (e1:::e2:::Enil)
+  end.
+
+Nondetfunction xorlimm (n1: int64) (e2: expr) :=
+  if Int64.eq n1 Int64.zero then e2 else
+  if Int64.eq n1 Int64.mone then notl e2 else
+  match e2 with
+  | Eop (Olongconst n2) Enil => longconst (Int64.xor n1 n2)
+  | Eop (Oxorlimm n2) (t2:::Enil) => Eop (Oxorlimm (Int64.xor n1 n2)) (t2:::Enil)
+  | Eop Onotl (t2:::Enil) => Eop (Oxorlimm (Int64.not n1)) (t2:::Enil)
+  | _ => Eop (Oxorlimm n1) (e2:::Enil)
+  end.
+
+Nondetfunction xorl (e1: expr) (e2: expr) :=
+  if Archi.splitlong then SplitLong.xorl e1 e2 else
+  match e1, e2 with
+  | Eop (Olongconst n1) Enil, t2 => xorlimm n1 t2
+  | t1, Eop (Olongconst n2) Enil => xorlimm n2 t1
+  | _, _ => Eop Oxorl (e1:::e2:::Enil)
+  end.
+
+Nondetfunction shllimm (e1: expr) (n: int) :=
+  if Archi.splitlong then SplitLong.shllimm e1 n else
+  if Int.eq n Int.zero then e1 else
+  if negb (Int.ltu n Int64.iwordsize') then
+    Eop Oshll (e1:::Eop (Ointconst n) Enil:::Enil)
+  else
+    match e1 with
+    | Eop (Olongconst n1) Enil =>
+        Eop (Olongconst(Int64.shl' n1 n)) Enil
+    | Eop (Oshllimm n1) (t1:::Enil) =>
+        if Int.ltu (Int.add n n1) Int64.iwordsize'
+        then Eop (Oshllimm (Int.add n n1)) (t1:::Enil)
+        else Eop (Oshllimm n) (e1:::Enil)
+    | Eop (Oleal (Aindexed n1)) (t1:::Enil) =>
+        if shift_is_scale n
+        then Eop (Oleal (Ascaled (Int64.unsigned (Int64.shl' Int64.one n))
+                                 (Int64.unsigned (Int64.shl' (Int64.repr n1) n)))) (t1:::Enil)
+        else Eop (Oshllimm n) (e1:::Enil)
+    | _ =>
+        if shift_is_scale n
+        then Eop (Oleal (Ascaled (Int64.unsigned (Int64.shl' Int64.one n)) 0)) (e1:::Enil)
+        else Eop (Oshllimm n) (e1:::Enil)
+    end.
+
+Nondetfunction shrluimm (e1: expr) (n: int) :=
+  if Archi.splitlong then SplitLong.shrluimm e1 n else
+  if Int.eq n Int.zero then e1 else
+  if negb (Int.ltu n Int64.iwordsize') then
+    Eop Oshrlu (e1:::Eop (Ointconst n) Enil:::Enil)
+  else
+    match e1 with
+    | Eop (Olongconst n1) Enil =>
+        Eop (Olongconst(Int64.shru' n1 n)) Enil
+    | Eop (Oshrluimm n1) (t1:::Enil) =>
+        if Int.ltu (Int.add n n1) Int64.iwordsize'
+        then Eop (Oshrluimm (Int.add n n1)) (t1:::Enil)
+        else Eop (Oshrluimm n) (e1:::Enil)
+    | _ =>
+        Eop (Oshrluimm n) (e1:::Enil)
+    end.
+
+Nondetfunction shrlimm (e1: expr) (n: int) :=
+  if Archi.splitlong then SplitLong.shrlimm e1 n else
+  if Int.eq n Int.zero then e1 else
+  if negb (Int.ltu n Int64.iwordsize') then
+    Eop Oshrl (e1:::Eop (Ointconst n) Enil:::Enil)
+  else
+  match e1 with
+  | Eop (Olongconst n1) Enil =>
+      Eop (Olongconst(Int64.shr' n1 n)) Enil
+  | Eop (Oshrlimm n1) (t1:::Enil) =>
+      if Int.ltu (Int.add n n1) Int64.iwordsize'
+      then Eop (Oshrlimm (Int.add n n1)) (t1:::Enil)
+      else Eop (Oshrlimm n) (e1:::Enil)
+  | _ =>
+      Eop (Oshrlimm n) (e1:::Enil)
+  end.
+
+Definition shll (e1: expr) (e2: expr) :=
+  if Archi.splitlong then SplitLong.shll e1 e2 else
+  match is_intconst e2 with
+  | Some n2 => shllimm e1 n2
+  | None => Eop Oshll (e1:::e2:::Enil)
+  end.
+
+Definition shrl (e1: expr) (e2: expr) :=
+  if Archi.splitlong then SplitLong.shrl e1 e2 else
+  match is_intconst e2 with
+  | Some n2 => shrlimm e1 n2
+  | None => Eop Oshrl (e1:::e2:::Enil)
+  end.
+
+Definition shrlu (e1: expr) (e2: expr) :=
+  if Archi.splitlong then SplitLong.shrlu e1 e2 else
+  match is_intconst e2 with
+  | Some n2 => shrluimm e1 n2
+  | _ => Eop Oshrlu (e1:::e2:::Enil)
+  end.
+
+Nondetfunction addlimm (n: int64) (e: expr) :=
+  if Int64.eq n Int64.zero then e else
+  match e with
+  | Eop (Olongconst m) Enil => longconst (Int64.add n m)
+  | Eop (Oleal addr) args   => Eop (Oleal (offset_addressing_total addr (Int64.signed n))) args
+  | _                       => Eop (Oleal (Aindexed (Int64.signed n))) (e ::: Enil)
+  end.
+
+Nondetfunction addl (e1: expr) (e2: expr) :=
+  if Archi.splitlong then SplitLong.addl e1 e2 else
+  match e1, e2 with
+  | Eop (Olongconst n1) Enil, t2 => addlimm n1 t2
+  | t1, Eop (Olongconst n2) Enil => addlimm n2 t1
+  | Eop (Oleal (Aindexed n1)) (t1:::Enil), Eop (Oleal (Aindexed n2)) (t2:::Enil) =>
+      Eop (Oleal (Aindexed2 (n1 + n2))) (t1:::t2:::Enil)
+  | Eop (Oleal (Aindexed n1)) (t1:::Enil), Eop (Oleal (Ascaled sc n2)) (t2:::Enil) =>
+      Eop (Oleal (Aindexed2scaled sc (n1 + n2))) (t1:::t2:::Enil)
+  | Eop (Oleal (Ascaled sc n1)) (t1:::Enil), Eop (Oleal (Aindexed n2)) (t2:::Enil) =>
+      Eop (Oleal (Aindexed2scaled sc (n1 + n2))) (t2:::t1:::Enil)
+  | Eop (Oleal (Ascaled sc n)) (t1:::Enil), t2 =>
+      Eop (Oleal (Aindexed2scaled sc n)) (t2:::t1:::Enil)
+  | t1, Eop (Oleal (Ascaled sc n)) (t2:::Enil) =>
+      Eop (Oleal (Aindexed2scaled sc n)) (t1:::t2:::Enil)
+  | Eop (Oleal (Aindexed n)) (t1:::Enil), t2 =>
+      Eop (Oleal (Aindexed2 n)) (t1:::t2:::Enil)
+  | t1, Eop (Oleal (Aindexed n)) (t2:::Enil) =>
+      Eop (Oleal (Aindexed2 n)) (t1:::t2:::Enil)
+  | _, _ =>
+      Eop (Oleal (Aindexed2 0)) (e1:::e2:::Enil)
+  end.
+
+Definition negl (e: expr) :=
+  if Archi.splitlong then SplitLong.negl e else
+  match is_longconst e with
+  | Some n => longconst (Int64.neg n)
+  | None =>  Eop Onegl (e ::: Enil)
+  end.
+
+Nondetfunction subl (e1: expr) (e2: expr) :=
+  if Archi.splitlong then SplitLong.subl e1 e2 else
+  match e1, e2 with
+  | t1, Eop (Olongconst n2) Enil => addlimm (Int64.neg n2) t1
+  | Eop (Oleal (Aindexed n1)) (t1:::Enil), Eop (Oleal (Aindexed n2)) (t2:::Enil) =>
+      addlimm (Int64.repr (n1 - n2)) (Eop Osubl (t1:::t2:::Enil))
+  | Eop (Oleal (Aindexed n1)) (t1:::Enil), t2 =>
+      addlimm (Int64.repr n1) (Eop Osubl (t1:::t2:::Enil))
+  | t1, Eop (Oleal (Aindexed n2)) (t2:::Enil) =>
+      addlimm (Int64.repr (- n2)) (Eop Osubl (t1:::t2:::Enil))
+  | _, _ =>
+      Eop Osubl (e1:::e2:::Enil)
+  end.
+
+Definition mullimm_base (n1: int64) (e2: expr) :=
+  match Int64.one_bits' n1 with
+  | i :: nil =>
+      shllimm e2 i
+  | i :: j :: nil =>
+      Elet e2 (addl (shllimm (Eletvar 0) i) (shllimm (Eletvar 0) j))
+  | _ =>
+      Eop (Omullimm n1) (e2:::Enil)
+  end.
+
+Nondetfunction mullimm (n1: int64) (e2: expr) :=
+  if Archi.splitlong then SplitLong.mullimm n1 e2
+  else if Int64.eq n1 Int64.zero then longconst Int64.zero
+  else if Int64.eq n1 Int64.one then e2
+  else match e2 with
+  | Eop (Olongconst n2) Enil => longconst (Int64.mul n1 n2)
+  | Eop (Oleal (Aindexed n2)) (t2:::Enil) => addlimm (Int64.mul n1 (Int64.repr n2)) (mullimm_base n1 t2)
+  | _ => mullimm_base n1 e2
+  end.
+
+Nondetfunction mull (e1: expr) (e2: expr) :=
+  if Archi.splitlong then SplitLong.mull e1 e2 else
+  match e1, e2 with
+  | Eop (Olongconst n1) Enil, t2 => mullimm n1 t2
+  | t1, Eop (Olongconst n2) Enil => mullimm n2 t1
+  | _, _ => Eop Omull (e1:::e2:::Enil)
+  end.
+
+Definition mullhu (e1: expr) (n2: int64) :=
+  if Archi.splitlong then SplitLong.mullhu e1 n2 else
+  Eop Omullhu (e1 ::: longconst n2 ::: Enil).
+
+Definition mullhs (e1: expr) (n2: int64) :=
+  if Archi.splitlong then SplitLong.mullhs e1 n2 else
+  Eop Omullhs (e1 ::: longconst n2 ::: Enil).
+
+Definition shrxlimm (e: expr) (n: int) :=
+  if Archi.splitlong then SplitLong.shrxlimm e n else
+  if Int.eq n Int.zero then e else Eop (Oshrxlimm n) (e ::: Enil).
+
+Definition divlu_base (e1: expr) (e2: expr) :=
+  if Archi.splitlong then SplitLong.divlu_base e1 e2 else Eop Odivlu (e1:::e2:::Enil).
+Definition modlu_base (e1: expr) (e2: expr) :=
+  if Archi.splitlong then SplitLong.modlu_base e1 e2 else Eop Omodlu (e1:::e2:::Enil).
+Definition divls_base (e1: expr) (e2: expr) :=
+  if Archi.splitlong then SplitLong.divls_base e1 e2 else Eop Odivl (e1:::e2:::Enil).
+Definition modls_base (e1: expr) (e2: expr) :=
+  if Archi.splitlong then SplitLong.modls_base e1 e2 else Eop Omodl (e1:::e2:::Enil).
+
+Definition cmplu (c: comparison) (e1 e2: expr) :=
+  if Archi.splitlong then SplitLong.cmplu c e1 e2 else
+  match is_longconst e1, is_longconst e2 with
+  | Some n1, Some n2 =>
+      Eop (Ointconst (if Int64.cmpu c n1 n2 then Int.one else Int.zero)) Enil
+  | Some n1, None => Eop (Ocmp (Ccompluimm (swap_comparison c) n1)) (e2:::Enil)
+  | None, Some n2 => Eop (Ocmp (Ccompluimm c n2)) (e1:::Enil)
+  | None, None => Eop (Ocmp (Ccomplu c)) (e1:::e2:::Enil)
+  end.
+
+Definition cmpl (c: comparison) (e1 e2: expr) :=
+  if Archi.splitlong then SplitLong.cmpl c e1 e2 else
+  match is_longconst e1, is_longconst e2 with
+  | Some n1, Some n2 =>
+      Eop (Ointconst (if Int64.cmp c n1 n2 then Int.one else Int.zero)) Enil
+  | Some n1, None => Eop (Ocmp (Ccomplimm (swap_comparison c) n1)) (e2:::Enil)
+  | None, Some n2 => Eop (Ocmp (Ccomplimm c n2)) (e1:::Enil)
+  | None, None => Eop (Ocmp (Ccompl c)) (e1:::e2:::Enil)
+  end.
+
+Definition longoffloat (e: expr) :=
+  if Archi.splitlong then SplitLong.longoffloat e else 
+  Eop Olongoffloat (e:::Enil).
+
+Definition floatoflong (e: expr) := 
+  if Archi.splitlong then SplitLong.floatoflong e else 
+  Eop Ofloatoflong (e:::Enil).
+
+Definition longofsingle (e: expr) := 
+  if Archi.splitlong then SplitLong.longofsingle e else 
+  Eop Olongofsingle (e:::Enil).
+
+Definition singleoflong (e: expr) := 
+  if Archi.splitlong then SplitLong.singleoflong e else 
+  Eop Osingleoflong (e:::Enil).
+
+End SELECT.

@@ -35,6 +35,7 @@ Require Import Globalenvs.
 Require Import Events.
 
 Set Implicit Arguments.
+Local Transparent Archi.ptr64.
 
 Record shift_amount: Type :=
   { s_amount: int;
@@ -74,8 +75,8 @@ Inductive operation : Type :=
   | Ointconst: int -> operation         (**r [rd] is set to the given integer constant *)
   | Ofloatconst: float -> operation     (**r [rd] is set to the given 64-bit float constant *)
   | Osingleconst: float32 -> operation  (**r [rd] is set to the given 32-bit float constant *)
-  | Oaddrsymbol: ident -> int -> operation (**r [rd] is set to the the address of the symbol plus the offset *)
-  | Oaddrstack: int -> operation        (**r [rd] is set to the stack pointer plus the given offset *)
+  | Oaddrsymbol: ident -> ptrofs -> operation (**r [rd] is set to the the address of the symbol plus the offset *)
+  | Oaddrstack: ptrofs -> operation        (**r [rd] is set to the stack pointer plus the given offset *)
 (*c Integer arithmetic: *)
   | Ocast8signed: operation             (**r [rd] is 8-bit sign extension of [r1] *)
   | Ocast16signed: operation            (**r [rd] is 16-bit sign extension of [r1] *)
@@ -148,7 +149,7 @@ Inductive addressing: Type :=
   | Aindexed: int -> addressing         (**r Address is [r1 + offset] *)
   | Aindexed2: addressing               (**r Address is [r1 + r2] *)
   | Aindexed2shift: shift -> addressing (**r Address is [r1 + shifted r2] *)
-  | Ainstack: int -> addressing.        (**r Address is [stack_pointer + offset] *)
+  | Ainstack: ptrofs -> addressing.        (**r Address is [stack_pointer + offset] *)
 
 (** Comparison functions (used in module [CSE]). *)
 
@@ -173,10 +174,8 @@ Defined.
 
 Definition eq_operation (x y: operation): {x=y} + {x<>y}.
 Proof.
-  generalize Int.eq_dec; intro.
-  generalize Float.eq_dec; intro.
-  generalize Float32.eq_dec; intro.
-  assert (forall (x y: ident), {x=y}+{x<>y}). exact peq.
+  generalize Int.eq_dec Ptrofs.eq_dec ident_eq; intros.
+  generalize Float.eq_dec Float32.eq_dec; intros.
   generalize eq_shift; intro.
   generalize eq_condition; intro.
   decide equality.
@@ -184,7 +183,7 @@ Defined.
 
 Definition eq_addressing (x y: addressing) : {x=y} + {x<>y}.
 Proof.
-  generalize Int.eq_dec; intro.
+  generalize Int.eq_dec Ptrofs.eq_dec; intro.
   generalize eq_shift; intro.
   decide equality.
 Defined.
@@ -235,7 +234,7 @@ Definition eval_operation
   | Ofloatconst n, nil => Some (Vfloat n)
   | Osingleconst n, nil => Some (Vsingle n)
   | Oaddrsymbol s ofs, nil => Some (Genv.symbol_address genv s ofs)
-  | Oaddrstack ofs, nil => Some (Val.add sp (Vint ofs))
+  | Oaddrstack ofs, nil => Some (Val.offset_ptr sp ofs)
   | Ocast8signed, v1::nil => Some (Val.sign_ext 8 v1)
   | Ocast16signed, v1::nil => Some (Val.sign_ext 16 v1)
   | Oadd, v1 :: v2 :: nil => Some (Val.add v1 v2)
@@ -305,9 +304,23 @@ Definition eval_addressing
   | Aindexed n, v1 :: nil => Some (Val.add v1 (Vint n))
   | Aindexed2, v1 :: v2 :: nil => Some (Val.add v1 v2)
   | Aindexed2shift s, v1 :: v2 :: nil => Some (Val.add v1 (eval_shift s v2))
-  | Ainstack ofs, nil => Some (Val.add sp (Vint ofs))
+  | Ainstack ofs, nil => Some (Val.offset_ptr sp ofs)
   | _, _ => None
   end.
+
+Remark eval_addressing_Ainstack:
+  forall (F V: Type) (genv: Genv.t F V) sp ofs,
+  eval_addressing genv sp (Ainstack ofs) nil = Some (Val.offset_ptr sp ofs).
+Proof.
+  intros. reflexivity.
+Qed.
+
+Remark eval_addressing_Ainstack_inv:
+  forall (F V: Type) (genv: Genv.t F V) sp ofs vl v,
+  eval_addressing genv sp (Ainstack ofs) vl = Some v -> vl = nil /\ v = Val.offset_ptr sp ofs.
+Proof.
+  unfold eval_addressing; intros; destruct vl; inv H; auto.
+Qed.
 
 Ltac FuncInv :=
   match goal with
@@ -430,7 +443,7 @@ Lemma type_of_operation_sound:
   op <> Omove ->
   eval_operation genv sp op vl m = Some v ->
   Val.has_type v (snd (type_of_operation op)).
-Proof with (try exact I).
+Proof with (try exact I; try reflexivity).
   assert (S: forall s v, Val.has_type (eval_shift s v) Tint).
     intros. unfold eval_shift. destruct s; destruct v; simpl; auto; rewrite s_range; exact I.
   intros.
@@ -588,15 +601,15 @@ Qed.
 
 (** Shifting stack-relative references.  This is used in [Stacking]. *)
 
-Definition shift_stack_addressing (delta: int) (addr: addressing) :=
+Definition shift_stack_addressing (delta: Z) (addr: addressing) :=
   match addr with
-  | Ainstack ofs => Ainstack (Int.add delta ofs)
+  | Ainstack ofs => Ainstack (Ptrofs.add (Ptrofs.repr delta) ofs)
   | _ => addr
   end.
 
-Definition shift_stack_operation (delta: int) (op: operation) :=
+Definition shift_stack_operation (delta: Z) (op: operation) :=
   match op with
-  | Oaddrstack ofs => Oaddrstack (Int.add delta ofs)
+  | Oaddrstack ofs => Oaddrstack (Ptrofs.add (Ptrofs.repr delta) ofs)
   | _ => op
   end.
 
@@ -614,79 +627,43 @@ Qed.
 
 Lemma eval_shift_stack_addressing:
   forall F V (ge: Genv.t F V) sp addr vl delta,
-  eval_addressing ge sp (shift_stack_addressing delta addr) vl =
-  eval_addressing ge (Val.add sp (Vint delta)) addr vl.
+  eval_addressing ge (Vptr sp Ptrofs.zero) (shift_stack_addressing delta addr) vl =
+  eval_addressing ge (Vptr sp (Ptrofs.repr delta)) addr vl.
 Proof.
   intros. destruct addr; simpl; auto.
-  rewrite Val.add_assoc. simpl. auto.
+  rewrite Ptrofs.add_zero_l; auto.
 Qed.
 
 Lemma eval_shift_stack_operation:
   forall F V (ge: Genv.t F V) sp op vl m delta,
-  eval_operation ge sp (shift_stack_operation delta op) vl m =
-  eval_operation ge (Val.add sp (Vint delta)) op vl m.
+  eval_operation ge (Vptr sp Ptrofs.zero) (shift_stack_operation delta op) vl m =
+  eval_operation ge (Vptr sp (Ptrofs.repr delta)) op vl m.
 Proof.
   intros. destruct op; simpl; auto.
-  rewrite Val.add_assoc. simpl. auto.
+  rewrite Ptrofs.add_zero_l; auto.
 Qed.
 
 (** Offset an addressing mode [addr] by a quantity [delta], so that
   it designates the pointer [delta] bytes past the pointer designated
   by [addr].  May be undefined, in which case [None] is returned. *)
 
-Definition offset_addressing (addr: addressing) (delta: int) : option addressing :=
+Definition offset_addressing (addr: addressing) (delta: Z) : option addressing :=
   match addr with
-  | Aindexed n => Some(Aindexed (Int.add n delta))
+  | Aindexed n => Some(Aindexed (Int.add n (Int.repr delta)))
   | Aindexed2 => None
   | Aindexed2shift s => None
-  | Ainstack n => Some(Ainstack (Int.add n delta))
+  | Ainstack n => Some(Ainstack (Ptrofs.add n (Ptrofs.repr delta)))
   end.
 
 Lemma eval_offset_addressing:
   forall (F V: Type) (ge: Genv.t F V) sp addr args delta addr' v,
   offset_addressing addr delta = Some addr' ->
   eval_addressing ge sp addr args = Some v ->
-  eval_addressing ge sp addr' args = Some(Val.add v (Vint delta)).
+  eval_addressing ge sp addr' args = Some(Val.add v (Vint (Int.repr delta))).
 Proof.
   intros. destruct addr; simpl in H; inv H; simpl in *; FuncInv; subst.
   rewrite Val.add_assoc; auto.
-  rewrite Val.add_assoc. auto.
-Qed.
-
-(** Transformation of addressing modes with two operands or more
-  into an equivalent arithmetic operation.  This is used in the [Reload]
-  pass when a store instruction cannot be reloaded directly because
-  it runs out of temporary registers. *)
-
-(** For the ARM, there are only two binary addressing mode: [Aindexed2]
-  and [Aindexed2shift].  The corresponding operations are [Oadd]
-  and [Oaddshift]. *)
-
-Definition op_for_binary_addressing (addr: addressing) : operation :=
-  match addr with
-  | Aindexed2 => Oadd
-  | Aindexed2shift s => Oaddshift s
-  | _ => Ointconst Int.zero (* never happens *)
-  end.
-
-Lemma eval_op_for_binary_addressing:
-  forall (F V: Type) (ge: Genv.t F V) sp addr args v m,
-  (length args >= 2)%nat ->
-  eval_addressing ge sp addr args = Some v ->
-  eval_operation ge sp (op_for_binary_addressing addr) args m = Some v.
-Proof.
-  intros.
-  unfold eval_addressing in H0; destruct addr; FuncInv; simpl in H; try omegaContradiction; simpl.
-  congruence.
-  congruence.
-Qed.
-
-Lemma type_op_for_binary_addressing:
-  forall addr,
-  (length (type_of_addressing addr) >= 2)%nat ->
-  type_of_operation (op_for_binary_addressing addr) = (type_of_addressing addr, Tint).
-Proof.
-  intros. destruct addr; simpl in H; reflexivity || omegaContradiction.
+  destruct sp; simpl; auto. rewrite Ptrofs.add_assoc. do 4 f_equal. symmetry; auto with ptrofs.
 Qed.
 
 (** Two-address operations.  There are none in the ARM architecture. *)
@@ -781,30 +758,30 @@ Variable m2: mem.
 Hypothesis valid_pointer_inj:
   forall b1 ofs b2 delta,
   f b1 = Some(b2, delta) ->
-  Mem.valid_pointer m1 b1 (Int.unsigned ofs) = true ->
-  Mem.valid_pointer m2 b2 (Int.unsigned (Int.add ofs (Int.repr delta))) = true.
+  Mem.valid_pointer m1 b1 (Ptrofs.unsigned ofs) = true ->
+  Mem.valid_pointer m2 b2 (Ptrofs.unsigned (Ptrofs.add ofs (Ptrofs.repr delta))) = true.
 
 Hypothesis weak_valid_pointer_inj:
   forall b1 ofs b2 delta,
   f b1 = Some(b2, delta) ->
-  Mem.weak_valid_pointer m1 b1 (Int.unsigned ofs) = true ->
-  Mem.weak_valid_pointer m2 b2 (Int.unsigned (Int.add ofs (Int.repr delta))) = true.
+  Mem.weak_valid_pointer m1 b1 (Ptrofs.unsigned ofs) = true ->
+  Mem.weak_valid_pointer m2 b2 (Ptrofs.unsigned (Ptrofs.add ofs (Ptrofs.repr delta))) = true.
 
 Hypothesis weak_valid_pointer_no_overflow:
   forall b1 ofs b2 delta,
   f b1 = Some(b2, delta) ->
-  Mem.weak_valid_pointer m1 b1 (Int.unsigned ofs) = true ->
-  0 <= Int.unsigned ofs + Int.unsigned (Int.repr delta) <= Int.max_unsigned.
+  Mem.weak_valid_pointer m1 b1 (Ptrofs.unsigned ofs) = true ->
+  0 <= Ptrofs.unsigned ofs + Ptrofs.unsigned (Ptrofs.repr delta) <= Ptrofs.max_unsigned.
 
 Hypothesis valid_different_pointers_inj:
   forall b1 ofs1 b2 ofs2 b1' delta1 b2' delta2,
   b1 <> b2 ->
-  Mem.valid_pointer m1 b1 (Int.unsigned ofs1) = true ->
-  Mem.valid_pointer m1 b2 (Int.unsigned ofs2) = true ->
+  Mem.valid_pointer m1 b1 (Ptrofs.unsigned ofs1) = true ->
+  Mem.valid_pointer m1 b2 (Ptrofs.unsigned ofs2) = true ->
   f b1 = Some (b1', delta1) ->
   f b2 = Some (b2', delta2) ->
   b1' <> b2' \/
-  Int.unsigned (Int.add ofs1 (Int.repr delta1)) <> Int.unsigned (Int.add ofs2 (Int.repr delta2)).
+  Ptrofs.unsigned (Ptrofs.add ofs1 (Ptrofs.repr delta1)) <> Ptrofs.unsigned (Ptrofs.add ofs2 (Ptrofs.repr delta2)).
 
 Ltac InvInject :=
   match goal with
@@ -871,20 +848,20 @@ Lemma eval_operation_inj:
 Proof.
   intros until v1; intros GL; intros. destruct op; simpl in H1; simpl; FuncInv; InvInject; TrivialExists.
   apply GL; simpl; auto.
-  apply Values.Val.add_inject; auto.
+  apply Val.offset_ptr_inject; auto.
   inv H4; simpl; auto.
   inv H4; simpl; auto.
-  apply Values.Val.add_inject; auto.
-  apply Values.Val.add_inject; auto. apply eval_shift_inj; auto.
-  apply Values.Val.add_inject; auto.
+  apply Val.add_inject; auto.
+  apply Val.add_inject; auto. apply eval_shift_inj; auto.
+  apply Val.add_inject; auto.
 
-  apply Values.Val.sub_inject; auto.
-  apply Values.Val.sub_inject; auto. apply eval_shift_inj; auto.
-  apply Values.Val.sub_inject; auto. apply eval_shift_inj; auto.
-  apply (@Values.Val.sub_inject f (Vint i) (Vint i) v v'); auto.
+  apply Val.sub_inject; auto.
+  apply Val.sub_inject; auto. apply eval_shift_inj; auto.
+  apply Val.sub_inject; auto. apply eval_shift_inj; auto.
+  apply (@Val.sub_inject f (Vint i) (Vint i) v v'); auto.
 
   inv H4; inv H2; simpl; auto.
-  apply Values.Val.add_inject; auto. inv H4; inv H2; simpl; auto.
+  apply Val.add_inject; auto. inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.
   inv H4; inv H3; simpl in H1; inv H1. simpl.
@@ -965,10 +942,10 @@ Lemma eval_addressing_inj:
   exists v2, eval_addressing ge2 sp2 addr vl2 = Some v2 /\ Val.inject f v1 v2.
 Proof.
   intros. destruct addr; simpl in H2; simpl; FuncInv; InvInject; TrivialExists.
-  apply Values.Val.add_inject; auto.
-  apply Values.Val.add_inject; auto.
-  apply Values.Val.add_inject; auto. apply eval_shift_inj; auto.
-  apply Values.Val.add_inject; auto.
+  apply Val.add_inject; auto.
+  apply Val.add_inject; auto.
+  apply Val.add_inject; auto. apply eval_shift_inj; auto.
+  apply Val.offset_ptr_inject; auto.
 Qed.
 
 End EVAL_COMPAT.
@@ -984,40 +961,40 @@ Remark valid_pointer_extends:
   forall m1 m2, Mem.extends m1 m2 ->
   forall b1 ofs b2 delta,
   Some(b1, 0) = Some(b2, delta) ->
-  Mem.valid_pointer m1 b1 (Int.unsigned ofs) = true ->
-  Mem.valid_pointer m2 b2 (Int.unsigned (Int.add ofs (Int.repr delta))) = true.
+  Mem.valid_pointer m1 b1 (Ptrofs.unsigned ofs) = true ->
+  Mem.valid_pointer m2 b2 (Ptrofs.unsigned (Ptrofs.add ofs (Ptrofs.repr delta))) = true.
 Proof.
-  intros. inv H0. rewrite Int.add_zero. eapply Mem.valid_pointer_extends; eauto.
+  intros. inv H0. rewrite Ptrofs.add_zero. eapply Mem.valid_pointer_extends; eauto.
 Qed.
 
 Remark weak_valid_pointer_extends:
   forall m1 m2, Mem.extends m1 m2 ->
   forall b1 ofs b2 delta,
   Some(b1, 0) = Some(b2, delta) ->
-  Mem.weak_valid_pointer m1 b1 (Int.unsigned ofs) = true ->
-  Mem.weak_valid_pointer m2 b2 (Int.unsigned (Int.add ofs (Int.repr delta))) = true.
+  Mem.weak_valid_pointer m1 b1 (Ptrofs.unsigned ofs) = true ->
+  Mem.weak_valid_pointer m2 b2 (Ptrofs.unsigned (Ptrofs.add ofs (Ptrofs.repr delta))) = true.
 Proof.
-  intros. inv H0. rewrite Int.add_zero. eapply Mem.weak_valid_pointer_extends; eauto.
+  intros. inv H0. rewrite Ptrofs.add_zero. eapply Mem.weak_valid_pointer_extends; eauto.
 Qed.
 
 Remark weak_valid_pointer_no_overflow_extends:
   forall m1 b1 ofs b2 delta,
   Some(b1, 0) = Some(b2, delta) ->
-  Mem.weak_valid_pointer m1 b1 (Int.unsigned ofs) = true ->
-  0 <= Int.unsigned ofs + Int.unsigned (Int.repr delta) <= Int.max_unsigned.
+  Mem.weak_valid_pointer m1 b1 (Ptrofs.unsigned ofs) = true ->
+  0 <= Ptrofs.unsigned ofs + Ptrofs.unsigned (Ptrofs.repr delta) <= Ptrofs.max_unsigned.
 Proof.
-  intros. inv H. rewrite Zplus_0_r. apply Int.unsigned_range_2.
+  intros. inv H. rewrite Zplus_0_r. apply Ptrofs.unsigned_range_2.
 Qed.
 
 Remark valid_different_pointers_extends:
   forall m1 b1 ofs1 b2 ofs2 b1' delta1 b2' delta2,
   b1 <> b2 ->
-  Mem.valid_pointer m1 b1 (Int.unsigned ofs1) = true ->
-  Mem.valid_pointer m1 b2 (Int.unsigned ofs2) = true ->
+  Mem.valid_pointer m1 b1 (Ptrofs.unsigned ofs1) = true ->
+  Mem.valid_pointer m1 b2 (Ptrofs.unsigned ofs2) = true ->
   Some(b1, 0) = Some (b1', delta1) ->
   Some(b2, 0) = Some (b2', delta2) ->
   b1' <> b2' \/
-  Int.unsigned(Int.add ofs1 (Int.repr delta1)) <> Int.unsigned(Int.add ofs2 (Int.repr delta2)).
+  Ptrofs.unsigned(Ptrofs.add ofs1 (Ptrofs.repr delta1)) <> Ptrofs.unsigned(Ptrofs.add ofs2 (Ptrofs.repr delta2)).
 Proof.
   intros. inv H2; inv H3. auto.
 Qed.
@@ -1096,7 +1073,7 @@ Remark symbol_address_inject:
 Proof.
   intros. unfold Genv.symbol_address. destruct (Genv.find_symbol genv id) eqn:?; auto.
   exploit (proj1 globals); eauto. intros.
-  econstructor; eauto. rewrite Int.add_zero; auto.
+  econstructor; eauto. rewrite Ptrofs.add_zero; auto.
 Qed.
 
 Lemma eval_condition_inject:
@@ -1116,34 +1093,36 @@ Qed.
 Lemma eval_addressing_inject:
   forall addr vl1 vl2 v1,
   Val.inject_list f vl1 vl2 ->
-  eval_addressing genv (Vptr sp1 Int.zero) addr vl1 = Some v1 ->
+  eval_addressing genv (Vptr sp1 Ptrofs.zero) addr vl1 = Some v1 ->
   exists v2,
-     eval_addressing genv (Vptr sp2 Int.zero) (shift_stack_addressing (Int.repr delta) addr) vl2 = Some v2
+     eval_addressing genv (Vptr sp2 Ptrofs.zero) (shift_stack_addressing delta addr) vl2 = Some v2
   /\ Val.inject f v1 v2.
 Proof.
   intros.
-  rewrite eval_shift_stack_addressing. simpl.
-  eapply eval_addressing_inj with (sp1 := Vptr sp1 Int.zero); eauto.
-  intros; apply symbol_address_inject.
+  rewrite eval_shift_stack_addressing.
+  eapply eval_addressing_inj with (sp1 := Vptr sp1 Ptrofs.zero); eauto.
+  intros. apply symbol_address_inject.
+  econstructor; eauto. rewrite Ptrofs.add_zero_l; auto. 
 Qed.
 
 Lemma eval_operation_inject:
   forall op vl1 vl2 v1 m1 m2,
   Val.inject_list f vl1 vl2 ->
   Mem.inject f m1 m2 ->
-  eval_operation genv (Vptr sp1 Int.zero) op vl1 m1 = Some v1 ->
+  eval_operation genv (Vptr sp1 Ptrofs.zero) op vl1 m1 = Some v1 ->
   exists v2,
-     eval_operation genv (Vptr sp2 Int.zero) (shift_stack_operation (Int.repr delta) op) vl2 m2 = Some v2
+     eval_operation genv (Vptr sp2 Ptrofs.zero) (shift_stack_operation delta op) vl2 m2 = Some v2
   /\ Val.inject f v1 v2.
 Proof.
   intros.
   rewrite eval_shift_stack_operation. simpl.
-  eapply eval_operation_inj with (sp1 := Vptr sp1 Int.zero) (m1 := m1); eauto.
+  eapply eval_operation_inj with (sp1 := Vptr sp1 Ptrofs.zero) (m1 := m1); eauto.
   intros; eapply Mem.valid_pointer_inject_val; eauto.
   intros; eapply Mem.weak_valid_pointer_inject_val; eauto.
   intros; eapply Mem.weak_valid_pointer_inject_no_overflow; eauto.
   intros; eapply Mem.different_pointers_inject; eauto.
   intros; apply symbol_address_inject.
+  econstructor; eauto. rewrite Ptrofs.add_zero_l; auto. 
 Qed.
 
 End EVAL_INJECT.

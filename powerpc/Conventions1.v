@@ -61,6 +61,17 @@ Definition destroyed_at_call :=
 Definition dummy_int_reg := R3.     (**r Used in [Coloring]. *)
 Definition dummy_float_reg := F0.   (**r Used in [Coloring]. *)
 
+Definition is_float_reg (r: mreg): bool :=
+  match r with
+  | R3  | R4  | R5  | R6  | R7  | R8  | R9  | R10  | R11 | R12
+  | R14 | R15 | R16 | R17 | R18 | R19 | R20 | R21 | R22 | R23 | R24
+  | R25 | R26 | R27 | R28 | R29 | R30 | R31 => false
+  | F0  | F1  | F2  | F3  | F4  | F5  | F6  | F7
+  | F8  | F9  | F10 | F11 | F12 | F13
+  | F14 | F15 | F16 | F17 | F18 | F19 | F20 | F21 | F22 | F23
+  | F24 | F25 | F26 | F27 | F28 | F29 | F30 | F31 => true
+  end.
+
 (** * Function calling conventions *)
 
 (** The functions in this section determine the locations (machine registers
@@ -118,11 +129,22 @@ Lemma loc_result_pair:
   forall sg,
   match loc_result sg with
   | One _ => True
-  | Twolong r1 r2 => r1 <> r2 /\ sg.(sig_res) = Some Tlong /\ subtype Tint (mreg_type r1) = true /\ subtype Tint (mreg_type r2) = true
+  | Twolong r1 r2 =>
+        r1 <> r2 /\ sg.(sig_res) = Some Tlong
+     /\ subtype Tint (mreg_type r1) = true /\ subtype Tint (mreg_type r2) = true
+     /\ Archi.splitlong = true 
   end.
 Proof.
   intros; unfold loc_result; destruct (sig_res sg) as [[]|]; auto.
-  simpl; destruct Archi.ppc64; intuition congruence. 
+  simpl; intuition congruence. 
+Qed.
+
+(** The location of the result depends only on the result part of the signature *)
+
+Lemma loc_result_exten:
+  forall s1 s2, s1.(sig_res) = s2.(sig_res) -> loc_result s1 = loc_result s2.
+Proof.
+  intros. unfold loc_result. rewrite H; auto.
 Qed.
 
 (** ** Location of function arguments *)

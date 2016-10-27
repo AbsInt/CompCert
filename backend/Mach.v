@@ -52,9 +52,9 @@ Require Stacklayout.
 Definition label := positive.
 
 Inductive instruction: Type :=
-  | Mgetstack: int -> typ -> mreg -> instruction
-  | Msetstack: mreg -> int -> typ -> instruction
-  | Mgetparam: int -> typ -> mreg -> instruction
+  | Mgetstack: ptrofs -> typ -> mreg -> instruction
+  | Msetstack: mreg -> ptrofs -> typ -> instruction
+  | Mgetparam: ptrofs -> typ -> mreg -> instruction
   | Mop: operation -> list mreg -> mreg -> instruction
   | Mload: memory_chunk -> addressing -> list mreg -> mreg -> instruction
   | Mstore: memory_chunk -> addressing -> list mreg -> mreg -> instruction
@@ -73,8 +73,8 @@ Record function: Type := mkfunction
   { fn_sig: signature;
     fn_code: code;
     fn_stacksize: Z;
-    fn_link_ofs: int;
-    fn_retaddr_ofs: int }.
+    fn_link_ofs: ptrofs;
+    fn_retaddr_ofs: ptrofs }.
 
 Definition fundef := AST.fundef function.
 
@@ -118,11 +118,11 @@ value of the return address that the Asm code generated later will
 store in the reserved location.
 *)
 
-Definition load_stack (m: mem) (sp: val) (ty: typ) (ofs: int) :=
-  Mem.loadv (chunk_of_type ty) m (Val.add sp (Vint ofs)).
+Definition load_stack (m: mem) (sp: val) (ty: typ) (ofs: ptrofs) :=
+  Mem.loadv (chunk_of_type ty) m (Val.offset_ptr sp ofs).
 
-Definition store_stack (m: mem) (sp: val) (ty: typ) (ofs: int) (v: val) :=
-  Mem.storev (chunk_of_type ty) m (Val.add sp (Vint ofs)) v.
+Definition store_stack (m: mem) (sp: val) (ty: typ) (ofs: ptrofs) (v: val) :=
+  Mem.storev (chunk_of_type ty) m (Val.offset_ptr sp ofs) v.
 
 Module RegEq.
   Definition t := mreg.
@@ -198,7 +198,7 @@ Qed.
 
 Section RELSEM.
 
-Variable return_address_offset: function -> code -> int -> Prop.
+Variable return_address_offset: function -> code -> ptrofs -> Prop.
 
 Variable ge: genv.
 
@@ -207,7 +207,7 @@ Definition find_function_ptr
   match ros with
   | inl r =>
       match rs r with
-      | Vptr b ofs => if Int.eq ofs Int.zero then Some b else None
+      | Vptr b ofs => if Ptrofs.eq ofs Ptrofs.zero then Some b else None
       | _ => None
       end
   | inr symb =>
@@ -220,7 +220,7 @@ Inductive extcall_arg (rs: regset) (m: mem) (sp: val): loc -> val -> Prop :=
   | extcall_arg_reg: forall r,
       extcall_arg rs m sp (R r) (rs r)
   | extcall_arg_stack: forall ofs ty v,
-      load_stack m sp ty (Int.repr (Stacklayout.fe_ofs_arg + 4 * ofs)) = Some v ->
+      load_stack m sp ty (Ptrofs.repr (Stacklayout.fe_ofs_arg + 4 * ofs)) = Some v ->
       extcall_arg rs m sp (S Outgoing ofs ty) v.
 
 Inductive extcall_arg_pair (rs: regset) (m: mem) (sp: val): rpair loc -> val -> Prop :=
@@ -271,13 +271,13 @@ Inductive state: Type :=
 
 Definition parent_sp (s: list stackframe) : val :=
   match s with
-  | nil => Vzero
+  | nil => Vnullptr
   | Stackframe f sp ra c :: s' => sp
   end.
 
 Definition parent_ra (s: list stackframe) : val :=
   match s with
-  | nil => Vzero
+  | nil => Vnullptr
   | Stackframe f sp ra c :: s' => ra
   end.
 
@@ -300,7 +300,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | exec_Mgetparam:
       forall s fb f sp ofs ty dst c rs m v rs',
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
-      load_stack m sp Tint f.(fn_link_ofs) = Some (parent_sp s) ->
+      load_stack m sp Tptr f.(fn_link_ofs) = Some (parent_sp s) ->
       load_stack m (parent_sp s) ty ofs = Some v ->
       rs' = (rs # temp_for_parent_frame <- Vundef # dst <- v) ->
       step (State s fb sp (Mgetparam ofs ty dst :: c) rs m)
@@ -337,8 +337,8 @@ Inductive step: state -> trace -> state -> Prop :=
       forall s fb stk soff sig ros c rs m f f' m',
       find_function_ptr ge ros rs = Some f' ->
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
-      load_stack m (Vptr stk soff) Tint f.(fn_link_ofs) = Some (parent_sp s) ->
-      load_stack m (Vptr stk soff) Tint f.(fn_retaddr_ofs) = Some (parent_ra s) ->
+      load_stack m (Vptr stk soff) Tptr f.(fn_link_ofs) = Some (parent_sp s) ->
+      load_stack m (Vptr stk soff) Tptr f.(fn_retaddr_ofs) = Some (parent_ra s) ->
       Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
       step (State s fb (Vptr stk soff) (Mtailcall sig ros :: c) rs m)
         E0 (Callstate s f' rs m')
@@ -381,8 +381,8 @@ Inductive step: state -> trace -> state -> Prop :=
   | exec_Mreturn:
       forall s fb stk soff c rs m f m',
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
-      load_stack m (Vptr stk soff) Tint f.(fn_link_ofs) = Some (parent_sp s) ->
-      load_stack m (Vptr stk soff) Tint f.(fn_retaddr_ofs) = Some (parent_ra s) ->
+      load_stack m (Vptr stk soff) Tptr f.(fn_link_ofs) = Some (parent_sp s) ->
+      load_stack m (Vptr stk soff) Tptr f.(fn_retaddr_ofs) = Some (parent_ra s) ->
       Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
       step (State s fb (Vptr stk soff) (Mreturn :: c) rs m)
         E0 (Returnstate s rs m')
@@ -390,9 +390,9 @@ Inductive step: state -> trace -> state -> Prop :=
       forall s fb rs m f m1 m2 m3 stk rs',
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       Mem.alloc m 0 f.(fn_stacksize) = (m1, stk) ->
-      let sp := Vptr stk Int.zero in
-      store_stack m1 sp Tint f.(fn_link_ofs) (parent_sp s) = Some m2 ->
-      store_stack m2 sp Tint f.(fn_retaddr_ofs) (parent_ra s) = Some m3 ->
+      let sp := Vptr stk Ptrofs.zero in
+      store_stack m1 sp Tptr f.(fn_link_ofs) (parent_sp s) = Some m2 ->
+      store_stack m2 sp Tptr f.(fn_retaddr_ofs) (parent_ra s) = Some m3 ->
       rs' = undef_regs destroyed_at_function_entry rs ->
       step (Callstate s fb rs m)
         E0 (State s fb sp f.(fn_code) rs' m3)
@@ -424,5 +424,5 @@ Inductive final_state: state -> int -> Prop :=
       rs r = Vint retcode ->
       final_state (Returnstate nil rs m) retcode.
 
-Definition semantics (rao: function -> code -> int -> Prop) (p: program) :=
+Definition semantics (rao: function -> code -> ptrofs -> Prop) (p: program) :=
   Semantics (step rao) (initial_state p) final_state (Genv.globalenv p).

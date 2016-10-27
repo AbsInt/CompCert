@@ -26,6 +26,12 @@ Local Open Scope error_monad_scope.
 Definition strict := false.
 Opaque strict.
 
+Definition size_t : type :=
+  if Archi.ptr64 then Tlong Unsigned noattr else Tint I32 Unsigned noattr.
+
+Definition ptrdiff_t : type :=
+  if Archi.ptr64 then Tlong Signed noattr else Tint I32 Signed noattr.
+
 (** * Operations over types *)
 
 (** The type of a member of a composite (struct or union).
@@ -107,20 +113,14 @@ Definition type_binop (op: binary_operation) (ty1 ty2: type) : res type :=
   match op with
   | Oadd =>
       match classify_add ty1 ty2 with
-      | add_case_pi ty | add_case_ip ty
-      | add_case_pl ty | add_case_lp ty => OK (Tpointer ty noattr)
+      | add_case_pi ty _ | add_case_ip _ ty
+      | add_case_pl ty   | add_case_lp ty => OK (Tpointer ty noattr)
       | add_default => binarith_type ty1 ty2 "operator +"
       end
   | Osub =>
       match classify_sub ty1 ty2 with
-      | sub_case_pi ty | sub_case_pl ty => OK (Tpointer ty noattr)
-(*
-      | sub_case_pp ty1 ty2 =>
-          if type_eq (remove_attributes ty1) (remove_attributes ty2)
-          then OK (Tint I32 Signed noattr)
-          else Error (msg "operator - : incompatible pointer types")
-*)
-      | sub_case_pp ty => OK (Tint I32 Signed noattr)
+      | sub_case_pi ty _ | sub_case_pl ty => OK (Tpointer ty noattr)
+      | sub_case_pp ty => OK ptrdiff_t
       | sub_default => binarith_type ty1 ty2 "operator infix -"
       end
   | Omul => binarith_type ty1 ty2 "operator infix *"
@@ -281,9 +281,13 @@ Inductive wt_val : val -> type -> Prop :=
       wt_int n sz sg ->
       wt_val (Vint n) (Tint sz sg a)
   | wt_val_ptr_int: forall b ofs sg a,
+      Archi.ptr64 = false ->
       wt_val (Vptr b ofs) (Tint I32 sg a)
   | wt_val_long: forall n sg a,
       wt_val (Vlong n) (Tlong sg a)
+  | wt_val_ptr_long: forall b ofs sg a,
+      Archi.ptr64 = true ->
+      wt_val (Vptr b ofs) (Tlong sg a)
   | wt_val_float: forall f a,
       wt_val (Vfloat f) (Tfloat F64 a)
   | wt_val_single: forall f a,
@@ -291,7 +295,11 @@ Inductive wt_val : val -> type -> Prop :=
   | wt_val_pointer: forall b ofs ty a,
       wt_val (Vptr b ofs) (Tpointer ty a)
   | wt_val_int_pointer: forall n ty a,
+      Archi.ptr64 = false ->
       wt_val (Vint n) (Tpointer ty a)
+  | wt_val_long_pointer: forall n ty a,
+      Archi.ptr64 = true ->
+      wt_val (Vlong n) (Tpointer ty a)
   | wt_val_array: forall b ofs ty sz a,
       wt_val (Vptr b ofs) (Tarray ty sz a)
   | wt_val_function: forall b ofs tyargs tyres cc,
@@ -359,9 +367,9 @@ Inductive wt_rvalue : expr -> Prop :=
       wt_cast (typeof r2) ty -> wt_cast (typeof r3) ty ->
       wt_rvalue (Econdition r1 r2 r3 ty)
   | wt_Esizeof: forall ty,
-      wt_rvalue (Esizeof ty (Tint I32 Unsigned noattr))
+      wt_rvalue (Esizeof ty size_t)
   | wt_Ealignof: forall ty,
-      wt_rvalue (Ealignof ty (Tint I32 Unsigned noattr))
+      wt_rvalue (Ealignof ty size_t)
   | wt_Eassign: forall l r,
       wt_lvalue l -> wt_rvalue r -> wt_cast (typeof r) (typeof l) ->
       wt_rvalue (Eassign l r (typeof l))
@@ -522,11 +530,10 @@ Hint Extern 1 (wt_int _ _ _) => reflexivity: ty.
 
 Ltac DestructCases :=
   match goal with
-  | [H: match match ?x with _ => _ end with _ => _ end = Some _ |- _ ] => destruct x; DestructCases
-  | [H: match match ?x with _ => _ end with _ => _ end = OK _ |- _ ] => destruct x; DestructCases
-  | [H: match ?x with _ => _ end = OK _ |- _ ] => destruct x; DestructCases
-  | [H: match ?x with _ => _ end = Some _ |- _ ] => destruct x; DestructCases
-  | [H: match ?x with _ => _ end = OK _ |- _ ] => destruct x; DestructCases
+  | [H: match match ?x with _ => _ end with _ => _ end = Some _ |- _ ] => destruct x eqn:?; DestructCases
+  | [H: match match ?x with _ => _ end with _ => _ end = OK _ |- _ ] => destruct x eqn:?; DestructCases
+  | [H: match ?x with _ => _ end = OK _ |- _ ] => destruct x eqn:?; DestructCases
+  | [H: match ?x with _ => _ end = Some _ |- _ ] => destruct x eqn:?; DestructCases
   | [H: Some _ = Some _ |- _ ] => inv H; DestructCases
   | [H: None = Some _ |- _ ] => discriminate
   | [H: OK _ = OK _ |- _ ] => inv H; DestructCases
@@ -628,10 +635,13 @@ Definition econst_int (n: int) (sg: signedness) : expr :=
   (Eval (Vint n) (Tint I32 sg noattr)).
 
 Definition econst_ptr_int (n: int) (ty: type) : expr :=
-  (Eval (Vint n) (Tpointer ty noattr)).
+  (Eval (if Archi.ptr64 then Vlong (Int64.repr (Int.unsigned n)) else Vint n) (Tpointer ty noattr)).
 
 Definition econst_long (n: int64) (sg: signedness) : expr :=
   (Eval (Vlong n) (Tlong sg noattr)).
+
+Definition econst_ptr_long (n: int64) (ty: type) : expr :=
+  (Eval (if Archi.ptr64 then Vlong n else Vint (Int64.loword n)) (Tpointer ty noattr)).
 
 Definition econst_float (n: float) : expr :=
   (Eval (Vfloat n) (Tfloat F64 noattr)).
@@ -684,10 +694,10 @@ Definition econdition' (r1 r2 r3: expr) (ty: type) : res expr :=
   OK (Econdition r1 r2 r3 ty).
 
 Definition esizeof (ty: type) : expr :=
-  Esizeof ty (Tint I32 Unsigned noattr).
+  Esizeof ty size_t.
 
 Definition ealignof (ty: type) : expr :=
-  Ealignof ty (Tint I32 Unsigned noattr).
+  Ealignof ty size_t.
 
 Definition eassign (l r: expr) : res expr :=
   do x1 <- check_lval l; do x2 <- check_rval r;
@@ -954,7 +964,9 @@ Lemma binarith_type_cast:
   binarith_type t1 t2 m = OK t -> wt_cast t1 t /\ wt_cast t2 t.
 Proof.
   unfold wt_cast, binarith_type, classify_binarith; intros; DestructCases;
-  simpl; split; try congruence. destruct f; congruence.
+  simpl; split; try congruence;
+  try (destruct Archi.ptr64; congruence).
+  destruct f0; congruence.
 Qed.
 
 Lemma typeconv_cast:
@@ -969,6 +981,16 @@ Proof.
   destruct i; auto.
 Qed.
 
+Lemma wt_cast_int:
+  forall i1 s1 a1 i2 s2 a2, wt_cast (Tint i1 s1 a1) (Tint i2 s2 a2).
+Proof.
+  intros; red; simpl.
+  destruct Archi.ptr64; [ | destruct (Ctypes.intsize_eq i2 I32)].
+- destruct i2; congruence.
+- subst i2; congruence.
+- destruct i2; congruence.
+Qed.
+ 
 Lemma type_combine_cast:
   forall t1 t2 t,
   type_combine t1 t2 = OK t ->
@@ -980,9 +1002,9 @@ Proof.
   unfold wt_cast; destruct t1; try discriminate; destruct t2; simpl in H; inv H.
 - simpl; split; congruence.
 - destruct (intsize_eq i i0 && signedness_eq s s0); inv H3.
-  simpl; destruct i; split; congruence.
+  split; apply wt_cast_int.
 - destruct (signedness_eq s s0); inv H3.
-  simpl; split; congruence.
+  simpl; split; try congruence; destruct Archi.ptr64; congruence.
 - destruct (floatsize_eq f f0); inv H3.
   simpl; destruct f0; split; congruence.
 - monadInv H3. simpl; split; congruence.
@@ -1006,11 +1028,14 @@ Proof.
   destruct (typeconv t1) eqn:T1; try discriminate;
   destruct (typeconv t2) eqn:T2; inv H; eauto using D, binarith_type_cast.
 - split; apply typeconv_cast; unfold wt_cast.
-  rewrite T1; simpl; congruence. rewrite T2; simpl; congruence.
+  rewrite T1; simpl; try congruence; destruct Archi.ptr64; congruence. 
+  rewrite T2; simpl; try congruence; destruct Archi.ptr64; congruence. 
 - split; apply typeconv_cast; unfold wt_cast.
-  rewrite T1; simpl; congruence. rewrite T2; simpl; congruence.
+  rewrite T1; simpl; try congruence; destruct Archi.ptr64; congruence. 
+  rewrite T2; simpl; try congruence; destruct Archi.ptr64; congruence. 
 - split; apply typeconv_cast; unfold wt_cast.
-  rewrite T1; simpl; congruence. rewrite T2; simpl; congruence.
+  rewrite T1; simpl; try congruence; destruct Archi.ptr64; congruence. 
+  rewrite T2; simpl; try congruence; destruct Archi.ptr64; congruence. 
 Qed.
 
 Section SOUNDNESS_CONSTRUCTORS.
@@ -1063,13 +1088,19 @@ Qed.
 Lemma econst_ptr_int_sound:
   forall n ty, wt_expr ce e (econst_ptr_int n ty).
 Proof.
-  unfold econst_ptr_int; auto with ty.
+  unfold econst_ptr_int; intros. destruct Archi.ptr64 eqn:SF; auto with ty.
 Qed.
 
 Lemma econst_long_sound:
   forall n sg, wt_expr ce e (econst_long n sg).
 Proof.
   unfold econst_long; auto with ty.
+Qed.
+
+Lemma econst_ptr_long_sound:
+  forall n ty, wt_expr ce e (econst_ptr_long n ty).
+Proof.
+  unfold econst_ptr_long; intros. destruct Archi.ptr64 eqn:SF; auto with ty.
 Qed.
 
 Lemma econst_float_sound:
@@ -1354,28 +1385,17 @@ Proof.
 - destruct (Int.eq n Int.zero); auto.
 Qed.
 
-Hint Resolve pres_cast_int_int: ty.
+Lemma wt_val_casted:
+  forall v ty, val_casted v ty -> wt_val v ty.
+Proof.
+  induction 1; constructor; auto. 
+- rewrite <- H; apply pres_cast_int_int.
+Qed.
 
 Lemma pres_sem_cast:
   forall m v2 ty2 v1 ty1, wt_val v1 ty1 -> sem_cast v1 ty1 ty2 m = Some v2 -> wt_val v2 ty2.
 Proof.
-  unfold sem_cast, classify_cast; induction 1; simpl; intros; DestructCases; auto with ty.
-- constructor. apply (pres_cast_int_int I8 s).
-- constructor. apply (pres_cast_int_int I16 s).
-- destruct (Int.eq n Int.zero); auto with ty.
-- constructor. apply (pres_cast_int_int I8 s).
-- constructor. apply (pres_cast_int_int I16 s).
-- destruct (Int64.eq n Int64.zero); auto with ty.
-- constructor. apply (pres_cast_int_int I8 s).
-- constructor. apply (pres_cast_int_int I16 s).
-- destruct (Float.cmp Ceq f Float.zero); auto with ty.
-- constructor. apply (pres_cast_int_int I8 s).
-- constructor. apply (pres_cast_int_int I16 s).
-- destruct (Float32.cmp Ceq f Float32.zero); auto with ty.
-- constructor. reflexivity.
-- destruct (Int.eq n Int.zero); auto with ty.
-- constructor. reflexivity.
-- constructor. reflexivity.
+  intros. apply wt_val_casted. eapply cast_val_is_casted; eauto.
 Qed.
 
 Lemma pres_sem_binarith:
@@ -1459,6 +1479,8 @@ Proof with (try discriminate).
 - inv H; eauto.
 - DestructCases; eauto.
 - DestructCases; eauto.
+- DestructCases; eauto.
+- DestructCases; eauto.
 - unfold sem_binarith in H0.
   set (ty' := Cop.binarith_type (classify_binarith ty1 ty2)) in *.
   destruct (sem_cast v1 ty1 ty') as [v1'|]...
@@ -1476,10 +1498,11 @@ Proof.
   intros until m; intros TY SEM WT1 WT2.
   destruct op; simpl in TY; simpl in SEM.
 - (* add *)
-  unfold sem_add in SEM; DestructCases; auto with ty.
+  unfold sem_add, sem_add_ptr_int, sem_add_ptr_long in SEM; DestructCases; auto with ty.
   eapply pres_sem_binarith; eauto; intros; exact I.
 - (* sub *)
   unfold sem_sub in SEM; DestructCases; auto with ty.
+  unfold ptrdiff_t, Vptrofs. destruct Archi.ptr64; auto with ty.
   eapply pres_sem_binarith; eauto; intros; exact I.
 - (* mul *)
   unfold sem_mul in SEM. eapply pres_sem_binarith; eauto; intros; exact I.
@@ -1522,13 +1545,12 @@ Proof.
   intros until v; intros TY SEM WT1.
   destruct op; simpl in TY; simpl in SEM.
 - (* notbool *)
-  unfold sem_notbool in SEM; DestructCases.
-  destruct (Int.eq i Int.zero); constructor; auto with ty.
-  destruct (Float.cmp Ceq f Float.zero); constructor; auto with ty.
-  destruct (Float32.cmp Ceq f Float32.zero); constructor; auto with ty.
-  destruct (Int.eq i Int.zero); constructor; auto with ty.
-  constructor. constructor.
-  destruct (Int64.eq i Int64.zero); constructor; auto with ty.
+  unfold sem_notbool in SEM.
+  assert (A: ty = Tint I32 Signed noattr) by (destruct (classify_bool ty1); inv TY; auto).
+  assert (B: exists b, v = Val.of_bool b).
+  { destruct (bool_val v1 ty1 m); inv SEM. exists (negb b); auto. }
+  destruct B as [b B].
+  rewrite A, B. destruct b; constructor; auto with ty.
 - (* notint *)
   unfold sem_notint in SEM; DestructCases; auto with ty.
 - (* neg *)
@@ -1542,16 +1564,18 @@ Lemma wt_load_result:
   access_mode ty = By_value chunk ->
   wt_val (Val.load_result chunk v) ty.
 Proof.
-  intros until v; intros AC. destruct ty; simpl in AC; try discriminate.
-  destruct i; [destruct s|destruct s|idtac|idtac]; inv AC; simpl; destruct v; auto with ty.
-  constructor; red. apply Int.sign_ext_idem; omega.
-  constructor; red. apply Int.zero_ext_idem; omega.
-  constructor; red. apply Int.sign_ext_idem; omega.
-  constructor; red. apply Int.zero_ext_idem; omega.
-  constructor; red. apply Int.zero_ext_idem; omega.
-  inv AC; simpl; destruct v; auto with ty.
-  destruct f; inv AC; simpl; destruct v; auto with ty.
-  inv AC; simpl; destruct v; auto with ty.
+  unfold access_mode, Val.load_result. remember Archi.ptr64 as ptr64. 
+  intros until v; intros AC. destruct ty; simpl in AC; try discriminate AC.
+- destruct i; [destruct s|destruct s|idtac|idtac]; inv AC; simpl.
+  destruct v; auto with ty. constructor; red. apply Int.sign_ext_idem; omega.
+  destruct v; auto with ty. constructor; red. apply Int.zero_ext_idem; omega.
+  destruct v; auto with ty. constructor; red. apply Int.sign_ext_idem; omega.
+  destruct v; auto with ty. constructor; red. apply Int.zero_ext_idem; omega.
+  destruct Archi.ptr64 eqn:SF; destruct v; auto with ty.
+  destruct v; auto with ty. constructor; red. apply Int.zero_ext_idem; omega.
+- inv AC. destruct Archi.ptr64 eqn:SF; destruct v; auto with ty.
+- destruct f; inv AC; destruct v; auto with ty.
+- inv AC. unfold Mptr. destruct Archi.ptr64 eqn:SF; destruct v; auto with ty.
 Qed.
 
 Lemma wt_decode_val:
@@ -1560,19 +1584,26 @@ Lemma wt_decode_val:
   wt_val (decode_val chunk vl) ty.
 Proof.
   intros until vl; intros ACC.
-  destruct ty; simpl in ACC; try discriminate.
-- destruct i; [destruct s|destruct s|idtac|idtac]; inv ACC; unfold decode_val;
+  assert (LR: forall v, wt_val (Val.load_result chunk v) ty) by (eauto using wt_load_result).
+  destruct ty; simpl in ACC; try discriminate. 
+- destruct i; [destruct s|destruct s|idtac|idtac]; inv ACC; unfold decode_val.
   destruct (proj_bytes vl); auto with ty.
   constructor; red. apply Int.sign_ext_idem; omega.
+  destruct (proj_bytes vl); auto with ty.
   constructor; red. apply Int.zero_ext_idem; omega.
+  destruct (proj_bytes vl); auto with ty.
   constructor; red. apply Int.sign_ext_idem; omega.
+  destruct (proj_bytes vl); auto with ty.
   constructor; red. apply Int.zero_ext_idem; omega.
-  apply wt_load_result. auto.
+  destruct (proj_bytes vl). auto with ty. destruct Archi.ptr64 eqn:SF; auto with ty. 
+  destruct (proj_bytes vl); auto with ty.
   constructor; red. apply Int.zero_ext_idem; omega.
-- inv ACC. unfold decode_val. destruct (proj_bytes vl); auto with ty.
+- inv ACC. unfold decode_val. destruct (proj_bytes vl). auto with ty.
+  destruct Archi.ptr64 eqn:SF; auto with ty. 
 - destruct f; inv ACC; unfold decode_val; destruct (proj_bytes vl); auto with ty.
-- inv ACC. unfold decode_val. destruct (proj_bytes vl); auto with ty.
-  apply wt_load_result. auto.
+- inv ACC. unfold decode_val. destruct (proj_bytes vl).
+  unfold Mptr in *. destruct Archi.ptr64 eqn:SF; auto with ty.
+  unfold Mptr in *. destruct Archi.ptr64 eqn:SF; auto with ty.
 Qed.
 
 Lemma wt_deref_loc:
@@ -1604,15 +1635,19 @@ Qed.
 Lemma wt_bool_cast:
   forall ty, wt_bool ty -> wt_cast ty type_bool.
 Proof.
-  unfold wt_bool, wt_cast; unfold classify_bool; intros. destruct ty; simpl in *; try congruence. destruct f; congruence.
+  unfold wt_bool, wt_cast; unfold classify_bool; intros.
+  destruct ty; simpl in *; try congruence;
+  try (destruct Archi.ptr64; congruence).
+  destruct f; congruence.
 Qed.
 
 Lemma wt_cast_self:
   forall t1 t2, wt_cast t1 t2 -> wt_cast t2 t2.
 Proof.
   unfold wt_cast; intros. destruct t2; simpl in *; try congruence.
-  destruct i; congruence.
-  destruct f; congruence.
+- apply (wt_cast_int i s a i s a).
+- destruct Archi.ptr64; congruence.
+- destruct f; congruence.
 Qed.
 
 Lemma binarith_type_int32s:
@@ -1672,8 +1707,8 @@ Proof.
 - (* seqor false *) subst. constructor. auto. apply wt_bool_cast; auto.
   red; intros. inv H0; auto with ty.
 - (* condition *) constructor. destruct b; auto. destruct b; auto. red; auto.
-- (* sizeof *) constructor; auto with ty.
-- (* alignof *) constructor; auto with ty.
+- (* sizeof *)  unfold size_t, Vptrofs; destruct Archi.ptr64; constructor; auto with ty.
+- (* alignof *)  unfold size_t, Vptrofs; destruct Archi.ptr64; constructor; auto with ty.
 - (* assign *) inversion H5. constructor. eapply pres_sem_cast; eauto.
 - (* assignop *) subst tyres l r. constructor. auto.
   constructor. constructor. eapply wt_deref_loc; eauto.
@@ -2105,7 +2140,7 @@ Proof.
   intros. inv H. econstructor. constructor.
   apply Genv.find_funct_ptr_prop with (p := prog) (b := b); auto.
   intros. inv WTPROG. destruct f0; simpl; auto. apply H4 with id; auto.
-  instantiate (1 := (Vptr b Int.zero)). rewrite Genv.find_funct_find_funct_ptr. auto.
+  instantiate (1 := (Vptr b Ptrofs.zero)). rewrite Genv.find_funct_find_funct_ptr. auto.
 Qed.
 
 End PRESERVATION.

@@ -12,21 +12,9 @@
 
 (** Compile-time evaluation of initializers for global C variables. *)
 
-Require Import Coqlib.
-Require Import Errors.
-Require Import Maps.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import AST.
-Require Import Memory.
-Require Import Globalenvs.
-Require Import Events.
-Require Import Smallstep.
-Require Import Ctypes.
-Require Import Cop.
-Require Import Csyntax.
-Require Import Csem.
+Require Import Coqlib Maps.
+Require Import Errors Integers Floats Values AST Memory Globalenvs Events Smallstep.
+Require Import Ctypes Cop Csyntax Csem.
 Require Import Initializers.
 
 Open Scope error_monad_scope.
@@ -77,23 +65,23 @@ Section SIMPLE_EXPRS.
 Variable e: env.
 Variable m: mem.
 
-Inductive eval_simple_lvalue: expr -> block -> int -> Prop :=
+Inductive eval_simple_lvalue: expr -> block -> ptrofs -> Prop :=
   | esl_loc: forall b ofs ty,
       eval_simple_lvalue (Eloc b ofs ty) b ofs
   | esl_var_local: forall x ty b,
       e!x = Some(b, ty) ->
-      eval_simple_lvalue (Evar x ty) b Int.zero
+      eval_simple_lvalue (Evar x ty) b Ptrofs.zero
   | esl_var_global: forall x ty b,
       e!x = None ->
       Genv.find_symbol ge x = Some b ->
-      eval_simple_lvalue (Evar x ty) b Int.zero
+      eval_simple_lvalue (Evar x ty) b Ptrofs.zero
   | esl_deref: forall r ty b ofs,
       eval_simple_rvalue r (Vptr b ofs) ->
       eval_simple_lvalue (Ederef r ty) b ofs
   | esl_field_struct: forall r f ty b ofs id co a delta,
       eval_simple_rvalue r (Vptr b ofs) ->
       typeof r = Tstruct id a -> ge.(genv_cenv)!id = Some co -> field_offset ge f (co_members co) = OK delta ->
-      eval_simple_lvalue (Efield r f ty) b (Int.add ofs (Int.repr delta))
+      eval_simple_lvalue (Efield r f ty) b (Ptrofs.add ofs (Ptrofs.repr delta))
   | esl_field_union: forall r f ty b ofs id a,
       eval_simple_rvalue r (Vptr b ofs) ->
       typeof r = Tunion id a ->
@@ -123,9 +111,9 @@ with eval_simple_rvalue: expr -> val -> Prop :=
       sem_cast v1 (typeof r1) ty m = Some v ->
       eval_simple_rvalue (Ecast r1 ty) v
   | esr_sizeof: forall ty1 ty,
-      eval_simple_rvalue (Esizeof ty1 ty) (Vint (Int.repr (sizeof ge ty1)))
+      eval_simple_rvalue (Esizeof ty1 ty) (Vptrofs (Ptrofs.repr (sizeof ge ty1)))
   | esr_alignof: forall ty1 ty,
-      eval_simple_rvalue (Ealignof ty1 ty) (Vint (Int.repr (alignof ge ty1)))
+      eval_simple_rvalue (Ealignof ty1 ty) (Vptrofs (Ptrofs.repr (alignof ge ty1)))
   | esr_seqand_true: forall r1 r2 ty v1 v2 v3,
       eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) m = Some true ->
       eval_simple_rvalue r2 v2 ->
@@ -418,9 +406,9 @@ Proof.
   (* cast *)
   eapply sem_cast_match; eauto.
   (* sizeof *)
-  constructor.
+  auto.
   (* alignof *)
-  constructor.
+  auto.
   (* seqand *)
   destruct (bool_val x (typeof r1) Mem.empty) as [b|] eqn:E; inv EQ2.
   exploit bool_val_match. eexact E. eauto. instantiate (1 := m). intros E'.
@@ -458,9 +446,10 @@ Proof.
   (* field struct *)
   rewrite H0 in CV. monadInv CV. unfold lookup_composite in EQ; rewrite H1 in EQ; monadInv EQ.
   exploit constval_rvalue; eauto. intro MV. inv MV.
-  simpl. replace x0 with delta by congruence. econstructor; eauto.
-  rewrite ! Int.add_assoc. f_equal. apply Int.add_commut.
-  simpl. auto.
+  replace x0 with delta by congruence. rewrite Ptrofs.add_assoc. rewrite (Ptrofs.add_commut (Ptrofs.repr delta0)).
+  simpl; destruct Archi.ptr64 eqn:SF;
+  econstructor; eauto; rewrite ! Ptrofs.add_assoc; f_equal; f_equal; symmetry; auto with ptrofs.
+  destruct Archi.ptr64; auto.
   (* field union *)
   rewrite H0 in CV. eauto.
 Qed.
@@ -617,30 +606,36 @@ Proof.
   exploit sem_cast_match; eauto. intros D.
   unfold Genv.store_init_data.
   inv D.
-  (* int *)
-  destruct ty; try discriminate.
-  destruct i0; inv EQ2.
+- (* int *)
+  remember Archi.ptr64 as ptr64.  destruct ty; try discriminate EQ2.
++ destruct i0; inv EQ2.
   destruct s; simpl in H2; inv H2. rewrite <- Mem.store_signed_unsigned_8; auto. auto.
   destruct s; simpl in H2; inv H2. rewrite <- Mem.store_signed_unsigned_16; auto. auto.
   simpl in H2; inv H2. assumption.
   simpl in H2; inv H2. assumption.
-  inv EQ2. simpl in H2; inv H2. assumption.
-  (* long *)
-  destruct ty; inv EQ2. simpl in H2; inv H2. assumption.
-  (* float *)
++ destruct ptr64; inv EQ2. simpl in H2; unfold Mptr in H2; rewrite <- Heqptr64 in H2; inv H2. assumption.
+- (* Long *)
+  remember Archi.ptr64 as ptr64. destruct ty; inv EQ2.
++ simpl in H2; inv H2. assumption.
++ simpl in H2; unfold Mptr in H2; destruct Archi.ptr64; inv H4. 
+  inv H2; assumption.
+- (* float *)
   destruct ty; try discriminate.
   destruct f1; inv EQ2; simpl in H2; inv H2; assumption.
-  (* single *)
+- (* single *)
   destruct ty; try discriminate.
   destruct f1; inv EQ2; simpl in H2; inv H2; assumption.
-  (* pointer *)
+- (* pointer *)
   unfold inj in H.
-  assert (data = Init_addrof b1 ofs1 /\ chunk = Mint32).
-    destruct ty; inv EQ2; inv H2.
-    destruct i; inv H5. intuition congruence. auto.
+  assert (data = Init_addrof b1 ofs1 /\ chunk = Mptr).
+  { remember Archi.ptr64 as ptr64.
+    destruct ty; inversion EQ2.
+    destruct i; inv H5. unfold Mptr. destruct Archi.ptr64; inv H6; inv H2; auto.
+    subst ptr64. unfold Mptr. destruct Archi.ptr64; inv H5; inv H2; auto.
+    inv H2. auto. }
   destruct H4; subst. destruct (Genv.find_symbol ge b1); inv H.
-  rewrite Int.add_zero in H3. auto.
-  (* undef *)
+  rewrite Ptrofs.add_zero in H3. auto.
+- (* undef *)
   discriminate.
 Qed.
 
@@ -651,19 +646,24 @@ Lemma transl_init_single_size:
   transl_init_single ge ty a = OK data ->
   init_data_size data = sizeof ge ty.
 Proof.
-  intros. monadInv H. destruct x0.
+  intros. monadInv H. remember Archi.ptr64 as ptr64. destruct x0.
 - monadInv EQ2.
 - destruct ty; try discriminate.
   destruct i0; inv EQ2; auto.
-  inv EQ2; auto.
-- destruct ty; inv EQ2; auto.
+  destruct ptr64; inv EQ2. 
+Local Transparent sizeof.
+  unfold sizeof. rewrite <- Heqptr64; auto.
+- destruct ty; inv EQ2; auto. 
+  unfold sizeof. destruct Archi.ptr64; inv H0; auto.
 - destruct ty; try discriminate.
   destruct f0; inv EQ2; auto.
 - destruct ty; try discriminate.
   destruct f0; inv EQ2; auto.
 - destruct ty; try discriminate.
   destruct i0; inv EQ2; auto.
-  inv EQ2; auto.
+  destruct Archi.ptr64 eqn:SF; inv H0. simpl. rewrite SF; auto.
+  destruct ptr64; inv EQ2. simpl. rewrite <- Heqptr64; auto.
+  inv EQ2. unfold init_data_size, sizeof. auto.
 Qed.
 
 Notation idlsize := init_data_list_size.
@@ -710,6 +710,7 @@ with tr_init_struct_size:
   sizeof_struct ge pos fl <= sizeof ge ty ->
   idlsize data + pos = sizeof ge ty.
 Proof.
+Local Opaque sizeof.
 - destruct 1; simpl.
 + erewrite transl_init_single_size by eauto. omega.
 + Local Transparent sizeof. simpl. eapply tr_init_array_size; eauto. 

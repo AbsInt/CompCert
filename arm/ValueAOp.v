@@ -183,18 +183,18 @@ Ltac InvHyps :=
 
 Theorem eval_static_addressing_sound:
   forall addr vargs vres aargs,
-  eval_addressing ge (Vptr sp Int.zero) addr vargs = Some vres ->
+  eval_addressing ge (Vptr sp Ptrofs.zero) addr vargs = Some vres ->
   list_forall2 (vmatch bc) vargs aargs ->
   vmatch bc vres (eval_static_addressing addr aargs).
 Proof.
   unfold eval_addressing, eval_static_addressing; intros;
   destruct addr; InvHyps; eauto with va.
-  rewrite Int.add_zero_l; auto with va.
+  rewrite Ptrofs.add_zero_l; auto with va.
 Qed.
 
 Theorem eval_static_operation_sound:
   forall op vargs m vres aargs,
-  eval_operation ge (Vptr sp Int.zero) op vargs m = Some vres ->
+  eval_operation ge (Vptr sp Ptrofs.zero) op vargs m = Some vres ->
   list_forall2 (vmatch bc) vargs aargs ->
   vmatch bc vres (eval_static_operation op aargs).
 Proof.
@@ -202,7 +202,7 @@ Proof.
   destruct op; InvHyps; eauto with va.
   destruct (propagate_float_constants tt); constructor.
   destruct (propagate_float_constants tt); constructor.
-  rewrite Int.add_zero_l; eauto with va.
+  rewrite Ptrofs.add_zero_l; eauto with va.
   fold (Val.sub (Vint i) a1). auto with va.
   apply of_optbool_sound. eapply eval_static_condition_sound; eauto.
 Qed.

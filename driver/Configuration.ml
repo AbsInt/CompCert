@@ -117,7 +117,7 @@ let linker =
 
 let arch =
   match get_config_string "arch" with
-  | "powerpc"|"arm"|"ia32" as a -> a
+  | "powerpc"|"arm"|"ia32"|"x86_64"|"x86" as a -> a
   | v -> bad_config "arch" [v]
 let model = get_config_string "model"
 let abi = get_config_string "abi"

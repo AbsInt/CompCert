@@ -41,3 +41,5 @@ extern signed long long __i64_sar(signed long long x, int amount);
 extern unsigned long long __i64_udivmod(unsigned long long n,
                                         unsigned long long d,
                                         unsigned long long * rp);
+extern unsigned long long __i64_umulh(unsigned long long u,
+                                      unsigned long long v);

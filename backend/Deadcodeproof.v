@@ -489,8 +489,8 @@ Inductive match_stackframes: stackframe -> stackframe -> Prop :=
               Val.lessdef v tv ->
               eagree (e#res <- v) (te#res<- tv)
                      (fst (transfer f (vanalyze cu f) pc an!!pc))),
-      match_stackframes (Stackframe res f (Vptr sp Int.zero) pc e)
-                        (Stackframe res tf (Vptr sp Int.zero) pc te).
+      match_stackframes (Stackframe res f (Vptr sp Ptrofs.zero) pc e)
+                        (Stackframe res tf (Vptr sp Ptrofs.zero) pc te).
 
 Inductive match_states: state -> state -> Prop :=
   | match_regular_states:
@@ -501,8 +501,8 @@ Inductive match_states: state -> state -> Prop :=
         (ANL: analyze (vanalyze cu f) f = Some an)
         (ENV: eagree e te (fst (transfer f (vanalyze cu f) pc an!!pc)))
         (MEM: magree m tm (nlive ge sp (snd (transfer f (vanalyze cu f) pc an!!pc)))),
-      match_states (State s f (Vptr sp Int.zero) pc e m)
-                   (State ts tf (Vptr sp Int.zero) pc te tm)
+      match_states (State s f (Vptr sp Ptrofs.zero) pc e m)
+                   (State ts tf (Vptr sp Ptrofs.zero) pc te tm)
   | match_call_states:
       forall s f args m ts tf targs tm cu
         (STACKS: list_forall2 match_stackframes s ts)
@@ -544,8 +544,8 @@ Lemma match_succ_states:
     (ANPC: an!!pc = (ne, nm))
     (ENV: eagree e te ne)
     (MEM: magree m tm (nlive ge sp nm)),
-  match_states (State s f (Vptr sp Int.zero) pc' e m)
-               (State ts tf (Vptr sp Int.zero) pc' te tm).
+  match_states (State s f (Vptr sp Ptrofs.zero) pc' e m)
+               (State ts tf (Vptr sp Ptrofs.zero) pc' te tm).
 Proof.
   intros. exploit analyze_successors; eauto. rewrite ANPC; simpl. intros [A B].
   econstructor; eauto.
@@ -567,7 +567,7 @@ Qed.
 
 Lemma transfer_builtin_arg_sound:
   forall bc e e' sp m m' a v,
-  eval_builtin_arg ge (fun r => e#r) (Vptr sp Int.zero) m a v ->
+  eval_builtin_arg ge (fun r => e#r) (Vptr sp Ptrofs.zero) m a v ->
   forall nv ne1 nm1 ne2 nm2,
   transfer_builtin_arg nv (ne1, nm1) a = (ne2, nm2) ->
   eagree e e' ne2 ->
@@ -575,7 +575,7 @@ Lemma transfer_builtin_arg_sound:
   genv_match bc ge ->
   bc sp = BCstack ->
   exists v',
-     eval_builtin_arg ge (fun r => e'#r) (Vptr sp Int.zero) m' a  v'
+     eval_builtin_arg ge (fun r => e'#r) (Vptr sp Ptrofs.zero) m' a  v'
   /\ vagree v v' nv
   /\ eagree e e' ne1
   /\ magree m m' (nlive ge sp nm1).
@@ -587,11 +587,11 @@ Proof.
 - exists (Vfloat n); intuition auto. constructor. apply vagree_same.
 - exists (Vsingle n); intuition auto. constructor. apply vagree_same.
 - simpl in H. exploit magree_load; eauto.
-  intros. eapply nlive_add; eauto with va. rewrite Int.add_zero_l in H0; auto.
+  intros. eapply nlive_add; eauto with va. rewrite Ptrofs.add_zero_l in H0; auto.
   intros (v' & A & B).
   exists v'; intuition auto. constructor; auto. apply vagree_lessdef; auto.
   eapply magree_monotone; eauto. intros; eapply incl_nmem_add; eauto.
-- exists (Vptr sp (Int.add Int.zero ofs)); intuition auto with na. constructor.
+- exists (Vptr sp (Ptrofs.add Ptrofs.zero ofs)); intuition auto with na. constructor.
 - unfold Senv.symbol_address in H; simpl in H.
   destruct (Genv.find_symbol ge id) as [b|] eqn:FS; simpl in H; try discriminate.
   exploit magree_load; eauto.
@@ -613,7 +613,7 @@ Qed.
 
 Lemma transfer_builtin_args_sound:
   forall e sp m e' m' bc al vl,
-  eval_builtin_args ge (fun r => e#r) (Vptr sp Int.zero) m al vl ->
+  eval_builtin_args ge (fun r => e#r) (Vptr sp Ptrofs.zero) m al vl ->
   forall ne1 nm1 ne2 nm2,
   transfer_builtin_args (ne1, nm1) al = (ne2, nm2) ->
   eagree e e' ne2 ->
@@ -621,7 +621,7 @@ Lemma transfer_builtin_args_sound:
   genv_match bc ge ->
   bc sp = BCstack ->
   exists vl',
-     eval_builtin_args ge (fun r => e'#r) (Vptr sp Int.zero) m' al vl'
+     eval_builtin_args ge (fun r => e'#r) (Vptr sp Ptrofs.zero) m' al vl'
   /\ Val.lessdef_list vl vl'
   /\ eagree e e' ne1
   /\ magree m m' (nlive ge sp nm1).
@@ -639,8 +639,8 @@ Lemma can_eval_builtin_arg:
   forall sp e m e' m' P,
   magree m m' P ->
   forall a v,
-  eval_builtin_arg ge (fun r => e#r) (Vptr sp Int.zero) m a v ->
-  exists v', eval_builtin_arg tge (fun r => e'#r) (Vptr sp Int.zero) m' a v'.
+  eval_builtin_arg ge (fun r => e#r) (Vptr sp Ptrofs.zero) m a v ->
+  exists v', eval_builtin_arg tge (fun r => e'#r) (Vptr sp Ptrofs.zero) m' a v'.
 Proof.
   intros until P; intros MA.
   assert (LD: forall chunk addr v,
@@ -663,8 +663,8 @@ Lemma can_eval_builtin_args:
   forall sp e m e' m' P,
   magree m m' P ->
   forall al vl,
-  eval_builtin_args ge (fun r => e#r) (Vptr sp Int.zero) m al vl ->
-  exists vl', eval_builtin_args tge (fun r => e'#r) (Vptr sp Int.zero) m' al vl'.
+  eval_builtin_args ge (fun r => e#r) (Vptr sp Ptrofs.zero) m al vl ->
+  exists vl', eval_builtin_args tge (fun r => e'#r) (Vptr sp Ptrofs.zero) m' al vl'.
 Proof.
   induction 2.
 - exists (@nil val); constructor.

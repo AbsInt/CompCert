@@ -13,14 +13,22 @@
 (** Strength reduction for operators and conditions.
     This is the machine-dependent part of [Constprop]. *)
 
-Require Import Coqlib.
-Require Import Compopts.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Op.
-Require Import Registers.
+Require Import Coqlib Compopts.
+Require Import AST Integers Floats.
+Require Import Op Registers.
 Require Import ValueDomain.
+
+(** * Converting known values to constants *)
+
+Definition const_for_result (a: aval) : option operation :=
+  match a with
+  | I n => Some(Ointconst n)
+  | F n => if Compopts.generate_float_constants tt then Some(Ofloatconst n) else None
+  | FS n => if Compopts.generate_float_constants tt then Some(Osingleconst n) else None
+  | Ptr(Gl id ofs) => Some (Oaddrsymbol id ofs)
+  | Ptr(Stk ofs) => Some(Oaddrstack ofs)
+  | _ => None
+  end.
 
 (** * Operator strength reduction *)
 
@@ -187,13 +195,13 @@ Nondetfunction addr_strength_reduction
                 (addr: addressing) (args: list reg) (vl: list aval) :=
   match addr, args, vl with
   | Aindexed2, r1 :: r2 :: nil, Ptr(Gl symb n1) :: I n2 :: nil =>
-      (Aglobal symb (Int.add n1 n2), nil)
+      (Aglobal symb (Ptrofs.add n1 (Ptrofs.of_int n2)), nil)
   | Aindexed2, r1 :: r2 :: nil, I n1 :: Ptr(Gl symb n2) :: nil =>
-      (Aglobal symb (Int.add n1 n2), nil)
+      (Aglobal symb (Ptrofs.add (Ptrofs.of_int n1) n2), nil)
   | Aindexed2, r1 :: r2 :: nil, Ptr(Stk n1) :: I n2 :: nil =>
-      (Ainstack (Int.add n1 n2), nil)
+      (Ainstack (Ptrofs.add n1 (Ptrofs.of_int n2)), nil)
   | Aindexed2, r1 :: r2 :: nil, I n1 :: Ptr(Stk n2) :: nil =>
-      (Ainstack (Int.add n1 n2), nil)
+      (Ainstack (Ptrofs.add (Ptrofs.of_int n1) n2), nil)
   | Aindexed2, r1 :: r2 :: nil, Ptr(Gl symb n1) :: v2 :: nil =>
       (Abased symb n1, r2 :: nil)
   | Aindexed2, r1 :: r2 :: nil, v1 :: Ptr(Gl symb n2) :: nil =>
@@ -203,11 +211,11 @@ Nondetfunction addr_strength_reduction
   | Aindexed2, r1 :: r2 :: nil, v1 :: I n2 :: nil =>
       (Aindexed n2, r1 :: nil)
   | Abased symb ofs, r1 :: nil, I n1 :: nil =>
-      (Aglobal symb (Int.add ofs n1), nil)
+      (Aglobal symb (Ptrofs.add ofs (Ptrofs.of_int n1)), nil)
   | Aindexed n, r1 :: nil, Ptr(Gl symb n1) :: nil =>
-      (Aglobal symb (Int.add n1 n), nil)
+      (Aglobal symb (Ptrofs.add n1 (Ptrofs.of_int n)), nil)
   | Aindexed n, r1 :: nil, Ptr(Stk n1) :: nil =>
-      (Ainstack (Int.add n1 n), nil)
+      (Ainstack (Ptrofs.add n1 (Ptrofs.of_int n)), nil)
   | _, _, _ =>
       (addr, args)
   end.

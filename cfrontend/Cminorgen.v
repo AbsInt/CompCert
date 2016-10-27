@@ -47,8 +47,8 @@ Definition compilenv := PTree.t Z.
 
 Definition var_addr (cenv: compilenv) (id: ident): expr :=
   match PTree.get id cenv with
-  | Some ofs => Econst (Oaddrstack (Int.repr ofs))
-  | None     => Econst (Oaddrsymbol id Int.zero)
+  | Some ofs => Econst (Oaddrstack (Ptrofs.repr ofs))
+  | None     => Econst (Oaddrsymbol id Ptrofs.zero)
   end.
 
 (** * Translation of expressions and statements. *)
@@ -269,7 +269,7 @@ Definition transl_funbody
 
 Definition transl_function (f: Csharpminor.function): res function :=
   let (cenv, stacksize) := build_compilenv f in
-  if zle stacksize Int.max_unsigned
+  if zle stacksize Ptrofs.max_unsigned
   then transl_funbody cenv stacksize f
   else Error(msg "Cminorgen: too many local variables, stack size exceeded").
 

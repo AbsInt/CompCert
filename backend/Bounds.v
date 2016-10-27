@@ -444,6 +444,7 @@ Definition size_callee_save_area (b: bounds) (ofs: Z) : Z :=
 Lemma size_callee_save_area_rec_incr:
   forall l ofs, ofs <= size_callee_save_area_rec l ofs.
 Proof.
+Local Opaque mreg_type.
   induction l as [ | r l]; intros; simpl.
 - omega.
 - eapply Zle_trans. 2: apply IHl. 
@@ -472,45 +473,3 @@ Record frame_env : Type := mk_frame_env {
   fe_stack_data: Z;
   fe_used_callee_save: list mreg
 }.
-
-(*
-Record frame_env_properties (b: bounds) (fe: frame_env) (fe_ofs_arg: Z) := mk_frame_env_properties {
-  (** Separation property *)
-  fe_separated:
-    Intv.pairwise_disjoint (
-       (fe.(fe_ofs_link), fe.(fe_ofs_link) + 4)
-    :: (fe.(fe_ofs_retaddr), fe.(fe_ofs_retaddr) + 4)
-    :: (fe.(fe_ofs_local), fe.(fe_ofs_local) + 4 * b.(bound_local))
-    :: (fe_ofs_arg, fe_ofs_arg + 4 * b.(bound_outgoing))
-    :: (fe.(fe_ofs_callee_save), size_callee_save_area b fe.(fe_ofs_callee_save))
-    :: (fe.(fe_stack_data), fe.(fe_stack_data) + b.(bound_stack_data))
-    :: nil);
-  (** Inclusion properties *)
-  fe_incl_link:
-    Intv.incl (fe.(fe_ofs_link), fe.(fe_ofs_link) + 4) (0, fe.(fe_size));
-  fe_incl_retaddr:
-    Intv.incl (fe.(fe_ofs_retaddr), fe.(fe_ofs_retaddr) + 4) (0, fe.(fe_size));
-  fe_incl_local:
-    Intv.incl (fe.(fe_ofs_local), fe.(fe_ofs_local) + 4 * b.(bound_local)) (0, fe.(fe_size));
-  fe_incl_outgoing:
-    Intv.incl (fe_ofs_arg, fe_ofs_arg + 4 * b.(bound_outgoing)) (0, fe.(fe_size));
-  fe_incl_callee_save:
-    Intv.incl (fe.(fe_ofs_callee_save), size_callee_save_area b fe.(fe_ofs_callee_save)) (0, fe.(fe_size));
-  fe_incl_stack_data:
-    Intv.incl (fe.(fe_stack_data), fe.(fe_stack_data) + b.(bound_stack_data)) (0, fe.(fe_size));
-  (** Alignment properties *)
-  fe_align_link:
-    (4 | fe.(fe_ofs_link));
-  fe_align_retaddr:
-    (4 | fe.(fe_ofs_retaddr));
-  fe_align_local:
-    (8 | fe.(fe_ofs_local));
-  fe_align_stack_data:
-    (8 | fe.(fe_stack_data));
-  fe_align_size:
-    (4 | fe.(fe_size));
-  (** Callee-save registers *)
-  fe_used_callee_save_eq:
-    fe.(fe_used_callee_save) = b.(used_callee_save)
-}.
-*)

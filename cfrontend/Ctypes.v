@@ -78,15 +78,19 @@ with typelist : Type :=
   | Tnil: typelist
   | Tcons: type -> typelist -> typelist.
 
+Lemma intsize_eq: forall (s1 s2: intsize), {s1=s2} + {s1<>s2}.
+Proof.
+  decide equality.
+Defined.
+
 Lemma type_eq: forall (ty1 ty2: type), {ty1=ty2} + {ty1<>ty2}
 with typelist_eq: forall (tyl1 tyl2: typelist), {tyl1=tyl2} + {tyl1<>tyl2}.
 Proof.
-  assert (forall (x y: intsize), {x=y} + {x<>y}) by decide equality.
   assert (forall (x y: signedness), {x=y} + {x<>y}) by decide equality.
   assert (forall (x y: floatsize), {x=y} + {x<>y}) by decide equality.
   assert (forall (x y: attr), {x=y} + {x<>y}).
   { decide equality. decide equality. apply N.eq_dec. apply bool_dec. }
-  generalize ident_eq zeq bool_dec ident_eq; intros.
+  generalize ident_eq zeq bool_dec ident_eq intsize_eq; intros.
   decide equality.
   decide equality.
   decide equality.
@@ -272,7 +276,7 @@ Fixpoint alignof (env: composite_env) (t: type) : Z :=
       | Tlong _ _ => Archi.align_int64
       | Tfloat F32 _ => 4
       | Tfloat F64 _ => Archi.align_float64
-      | Tpointer _ _ => 4
+      | Tpointer _ _ => if Archi.ptr64 then 8 else 4
       | Tarray t' _ _ => alignof env t'
       | Tfunction _ _ _ => 1
       | Tstruct id _ | Tunion id _ =>
@@ -299,11 +303,11 @@ Proof.
     exists 1%nat; auto.
     exists 2%nat; auto.
     exists 0%nat; auto.
-    (exists 2%nat; reflexivity) || (exists 3%nat; reflexivity).
+    unfold Archi.align_int64. destruct Archi.ptr64; ((exists 2%nat; reflexivity) || (exists 3%nat; reflexivity)).
   destruct f.
     exists 2%nat; auto.
-    (exists 2%nat; reflexivity) || (exists 3%nat; reflexivity).
-  exists 2%nat; auto.
+    unfold Archi.align_float64. destruct Archi.ptr64; ((exists 2%nat; reflexivity) || (exists 3%nat; reflexivity)).
+  exists (if Archi.ptr64 then 3%nat else 2%nat); destruct Archi.ptr64; auto.
   apply IHt.
   exists 0%nat; auto.
   destruct (env!i). apply co_alignof_two_p. exists 0%nat; auto.
@@ -335,7 +339,7 @@ Fixpoint sizeof (env: composite_env) (t: type) : Z :=
   | Tlong _ _ => 8
   | Tfloat F32 _ => 4
   | Tfloat F64 _ => 8
-  | Tpointer _ _ => 4
+  | Tpointer _ _ => if Archi.ptr64 then 8 else 4
   | Tarray t' n _ => sizeof env t' * Z.max 0 n
   | Tfunction _ _ _ => 1
   | Tstruct id _ | Tunion id _ =>
@@ -348,6 +352,7 @@ Proof.
   induction t; simpl; try omega.
   destruct i; omega.
   destruct f; omega.
+  destruct Archi.ptr64; omega.
   change 0 with (0 * Z.max 0 z) at 2. apply Zmult_ge_compat_r. auto. xomega.
   destruct (env!i). apply co_sizeof_pos. omega.
   destruct (env!i). apply co_sizeof_pos. omega.
@@ -370,8 +375,8 @@ Proof.
   induction t; intros [A B]; unfold alignof, align_attr; rewrite A; simpl.
 - apply Zdivide_refl.
 - destruct i; apply Zdivide_refl.
-- exists (8 / Archi.align_int64); reflexivity.
-- destruct f. apply Zdivide_refl. exists (8 / Archi.align_float64); reflexivity.
+- exists (8 / Archi.align_int64). unfold Archi.align_int64; destruct Archi.ptr64; reflexivity.
+- destruct f. apply Zdivide_refl. exists (8 / Archi.align_float64). unfold Archi.align_float64; destruct Archi.ptr64; reflexivity.
 - apply Zdivide_refl.
 - apply Z.divide_mul_l; auto.
 - apply Zdivide_refl.
@@ -576,7 +581,7 @@ Definition access_mode (ty: type) : mode :=
   | Tfloat F32 _ => By_value Mfloat32
   | Tfloat F64 _ => By_value Mfloat64
   | Tvoid => By_nothing
-  | Tpointer _ _ => By_value Mint32
+  | Tpointer _ _ => By_value Mptr
   | Tarray _ _ _ => By_reference
   | Tfunction _ _ _ => By_reference
   | Tstruct _ _ => By_copy
@@ -609,7 +614,7 @@ Fixpoint alignof_blockcopy (env: composite_env) (t: type) : Z :=
   | Tlong _ _ => 8
   | Tfloat F32 _ => 4
   | Tfloat F64 _ => 8
-  | Tpointer _ _ => 4
+  | Tpointer _ _ => if Archi.ptr64 then 8 else 4
   | Tarray t' _ _ => alignof_blockcopy env t'
   | Tfunction _ _ _ => 1
   | Tstruct id _ | Tunion id _ =>
@@ -633,9 +638,14 @@ Proof.
     rewrite two_power_nat_two_p. rewrite ! inj_S.
     change 8 with (two_p 3). apply two_p_monotone. omega.
   }
-  induction ty; simpl; auto.
+  induction ty; simpl.
+  auto.
   destruct i; auto.
+  auto.
   destruct f; auto.
+  destruct Archi.ptr64; auto.
+  apply IHty.
+  auto.
   destruct (env!i); auto.
   destruct (env!i); auto.
 Qed.
@@ -714,20 +724,16 @@ Fixpoint type_of_params (params: list (ident * type)) : typelist :=
 
 Definition typ_of_type (t: type) : AST.typ :=
   match t with
-  | Tfloat F32 _ => AST.Tsingle
-  | Tfloat _ _ => AST.Tfloat
+  | Tvoid => AST.Tint
+  | Tint _ _ _ => AST.Tint
   | Tlong _ _ => AST.Tlong
-  | _ => AST.Tint
+  | Tfloat F32 _ => AST.Tsingle
+  | Tfloat F64 _ => AST.Tfloat
+  | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _ | Tstruct _ _ | Tunion _ _ => AST.Tptr
   end.
 
 Definition opttyp_of_type (t: type) : option AST.typ :=
-  match t with
-  | Tvoid => None
-  | Tfloat F32 _ => Some AST.Tsingle
-  | Tfloat _ _ => Some AST.Tfloat
-  | Tlong _ _ => Some AST.Tlong
-  | _ => Some AST.Tint
-  end.
+  if type_eq t Tvoid then None else Some (typ_of_type t).
 
 Fixpoint typlist_of_typelist (tl: typelist) : list AST.typ :=
   match tl with

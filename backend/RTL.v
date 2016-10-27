@@ -16,17 +16,9 @@
   intermediate language after Cminor and CminorSel.
 *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import AST.
-Require Import Integers.
-Require Import Values.
-Require Import Events.
-Require Import Memory.
-Require Import Globalenvs.
-Require Import Smallstep.
-Require Import Op.
-Require Import Registers.
+Require Import Coqlib Maps.
+Require Import AST Integers Values Events Memory Globalenvs Smallstep.
+Require Import Op Registers.
 
 (** * Abstract syntax *)
 
@@ -246,7 +238,7 @@ Inductive step: state -> trace -> state -> Prop :=
       find_function ros rs = Some fd ->
       funsig fd = sig ->
       Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
-      step (State s f (Vptr stk Int.zero) pc rs m)
+      step (State s f (Vptr stk Ptrofs.zero) pc rs m)
         E0 (Callstate s fd rs##args m')
   | exec_Ibuiltin:
       forall s f sp pc rs m ef args res pc' vargs t vres m',
@@ -273,7 +265,7 @@ Inductive step: state -> trace -> state -> Prop :=
       forall s f stk pc rs m or m',
       (fn_code f)!pc = Some(Ireturn or) ->
       Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
-      step (State s f (Vptr stk Int.zero) pc rs m)
+      step (State s f (Vptr stk Ptrofs.zero) pc rs m)
         E0 (Returnstate s (regmap_optget or Vundef rs) m')
   | exec_function_internal:
       forall s f args m m' stk,
@@ -281,7 +273,7 @@ Inductive step: state -> trace -> state -> Prop :=
       step (Callstate s (Internal f) args m)
         E0 (State s
                   f
-                  (Vptr stk Int.zero)
+                  (Vptr stk Ptrofs.zero)
                   f.(fn_entrypoint)
                   (init_regs args f.(fn_params))
                   m')

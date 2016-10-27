@@ -319,7 +319,7 @@ Qed.
 
 Program Definition range (b: block) (lo hi: Z) : massert := {|
   m_pred := fun m =>
-       0 <= lo /\ hi <= Int.modulus
+       0 <= lo /\ hi <= Ptrofs.modulus
     /\ (forall i k p, lo <= i < hi -> Mem.perm m b i k p);
   m_footprint := fun b' ofs' => b' = b /\ lo <= ofs' < hi
 |}.
@@ -333,7 +333,7 @@ Qed.
 Lemma alloc_rule:
   forall m lo hi b m' P,
   Mem.alloc m lo hi = (m', b) ->
-  0 <= lo -> hi <= Int.modulus ->
+  0 <= lo -> hi <= Ptrofs.modulus ->
   m |= P ->
   m' |= range b lo hi ** P.
 Proof.
@@ -413,7 +413,7 @@ Qed.
 
 Program Definition contains (chunk: memory_chunk) (b: block) (ofs: Z) (spec: val -> Prop) : massert := {|
   m_pred := fun m =>
-       0 <= ofs <= Int.max_unsigned
+       0 <= ofs <= Ptrofs.max_unsigned
     /\ Mem.valid_access m chunk b ofs Freeable
     /\ exists v, Mem.load chunk m b ofs = Some v /\ spec v;
   m_footprint := fun b' ofs' => b' = b /\ ofs <= ofs' < ofs + size_chunk chunk
@@ -431,7 +431,7 @@ Qed.
 Lemma contains_no_overflow:
   forall spec m chunk b ofs,
   m |= contains chunk b ofs spec ->
-  0 <= ofs <= Int.max_unsigned.
+  0 <= ofs <= Ptrofs.max_unsigned.
 Proof.
   intros. simpl in H. tauto.
 Qed.
@@ -448,10 +448,10 @@ Qed.
 Lemma loadv_rule:
   forall spec m chunk b ofs,
   m |= contains chunk b ofs spec ->
-  exists v, Mem.loadv chunk m (Vptr b (Int.repr ofs)) = Some v /\ spec v.
+  exists v, Mem.loadv chunk m (Vptr b (Ptrofs.repr ofs)) = Some v /\ spec v.
 Proof.
   intros. exploit load_rule; eauto. intros (v & A & B). exists v; split; auto.
-  simpl. rewrite Int.unsigned_repr; auto. eapply contains_no_overflow; eauto.
+  simpl. rewrite Ptrofs.unsigned_repr; auto. eapply contains_no_overflow; eauto.
 Qed.
 
 Lemma store_rule:
@@ -477,10 +477,10 @@ Lemma storev_rule:
   m |= contains chunk b ofs spec1 ** P ->
   spec (Val.load_result chunk v) ->
   exists m',
-  Mem.storev chunk m (Vptr b (Int.repr ofs)) v = Some m' /\ m' |= contains chunk b ofs spec ** P.
+  Mem.storev chunk m (Vptr b (Ptrofs.repr ofs)) v = Some m' /\ m' |= contains chunk b ofs spec ** P.
 Proof.
   intros. exploit store_rule; eauto. intros (m' & A & B). exists m'; split; auto.
-  simpl. rewrite Int.unsigned_repr; auto. eapply contains_no_overflow. eapply sep_pick1; eauto.
+  simpl. rewrite Ptrofs.unsigned_repr; auto. eapply contains_no_overflow. eapply sep_pick1; eauto.
 Qed.
 
 Lemma range_contains:
@@ -493,7 +493,7 @@ Proof.
   split; [|split].
 - assert (Mem.valid_access m chunk b ofs Freeable).
   { split; auto. red; auto. }
-  split. generalize (size_chunk_pos chunk). unfold Int.max_unsigned. omega.
+  split. generalize (size_chunk_pos chunk). unfold Ptrofs.max_unsigned. omega.
   split. auto.
 + destruct (Mem.valid_access_load m chunk b ofs) as [v LOAD].
   eauto with mem.
@@ -530,7 +530,7 @@ Lemma storev_rule':
   forall chunk m b ofs v (spec1: val -> Prop) P,
   m |= contains chunk b ofs spec1 ** P ->
   exists m',
-  Mem.storev chunk m (Vptr b (Int.repr ofs)) v = Some m' /\ m' |= hasvalue chunk b ofs (Val.load_result chunk v) ** P.
+  Mem.storev chunk m (Vptr b (Ptrofs.repr ofs)) v = Some m' /\ m' |= hasvalue chunk b ofs (Val.load_result chunk v) ** P.
 Proof.
   intros. eapply storev_rule; eauto.
 Qed.
@@ -656,9 +656,9 @@ Proof.
   intros. destruct H as (A & B & C). simpl in A.
   exploit Mem.storev_mapped_inject; eauto. intros (m2' & STORE & INJ).
   inv H1; simpl in STORE; try discriminate.
-  assert (VALID: Mem.valid_access m1 chunk b1 (Int.unsigned ofs1) Writable)
+  assert (VALID: Mem.valid_access m1 chunk b1 (Ptrofs.unsigned ofs1) Writable)
     by eauto with mem.
-  assert (EQ: Int.unsigned (Int.add ofs1 (Int.repr delta)) = Int.unsigned ofs1 + delta).
+  assert (EQ: Ptrofs.unsigned (Ptrofs.add ofs1 (Ptrofs.repr delta)) = Ptrofs.unsigned ofs1 + delta).
   { eapply Mem.address_inject'; eauto with mem. }
   exists m2'; split; auto.
   split; [|split].
@@ -681,7 +681,7 @@ Lemma alloc_parallel_rule:
   (8 | delta) ->
   lo = delta ->
   hi = delta + Zmax 0 sz1 ->
-  0 <= sz2 <= Int.max_unsigned ->
+  0 <= sz2 <= Ptrofs.max_unsigned ->
   0 <= delta -> hi <= sz2 ->
   exists j',
      m2' |= range b2 0 lo ** range b2 hi sz2 ** minjection j' m1' ** P
@@ -709,7 +709,7 @@ Proof.
   exists j'; split; auto.
   rewrite <- ! sep_assoc.
   split; [|split].
-+ simpl. intuition auto; try (unfold Int.max_unsigned in *; omega).
++ simpl. intuition auto; try (unfold Ptrofs.max_unsigned in *; omega).
 * apply Mem.perm_implies with Freeable; auto with mem.
   eapply Mem.perm_alloc_2; eauto. omega. 
 * apply Mem.perm_implies with Freeable; auto with mem.
@@ -891,7 +891,7 @@ Lemma alloc_parallel_rule_2:
   (8 | delta) ->
   lo = delta ->
   hi = delta + Zmax 0 sz1 ->
-  0 <= sz2 <= Int.max_unsigned ->
+  0 <= sz2 <= Ptrofs.max_unsigned ->
   0 <= delta -> hi <= sz2 ->
   exists j',
      m2' |= range b2 0 lo ** range b2 hi sz2 ** minjection j' m1' ** globalenv_inject ge j' ** P

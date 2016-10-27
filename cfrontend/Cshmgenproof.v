@@ -37,7 +37,7 @@ Lemma transf_program_match:
   forall p tp, transl_program p = OK tp -> match_prog p tp.
 Proof.
   unfold transl_program; intros.
-  eapply match_transform_partial_program2. 
+  eapply match_transform_partial_program2.
   eexact H.
 - intros. destruct f; simpl in H0.
 + monadInv H0. constructor; auto.
@@ -109,7 +109,7 @@ Lemma transl_alignof_blockcopy:
 Proof.
   intros. destruct H.
   unfold sizeof in H0. destruct (complete_type (prog_comp_env cunit) t) eqn:C; inv H0.
-  split. 
+  split.
 - symmetry. apply Ctypes.sizeof_stable; auto.
 - revert C. induction t; simpl; auto;
   destruct (prog_comp_env cunit)!i as [co|] eqn:X; try discriminate; erewrite H1 by eauto; auto.
@@ -119,10 +119,10 @@ Lemma field_offset_stable:
   forall (cunit prog: Clight.program) id co f,
   linkorder cunit prog ->
   cunit.(prog_comp_env)!id = Some co ->
-  prog.(prog_comp_env)!id = Some co /\ 
+  prog.(prog_comp_env)!id = Some co /\
   field_offset prog.(prog_comp_env) f (co_members co) = field_offset cunit.(prog_comp_env) f (co_members co).
 Proof.
-  intros. 
+  intros.
   assert (C: composite_consistent cunit.(prog_comp_env) co).
   { apply build_composite_env_consistent with cunit.(prog_types) id; auto.
     apply prog_comp_env_eq. }
@@ -134,7 +134,7 @@ Proof.
   rewrite ! (alignof_stable _ _ A) by auto.
   rewrite ! (sizeof_stable _ _ A) by auto.
   destruct (ident_eq f f1); eauto.
-Qed. 
+Qed.
 
 (** * Properties of the translation functions *)
 
@@ -245,6 +245,19 @@ Proof.
   intros. unfold make_floatconst. econstructor. reflexivity.
 Qed.
 
+Lemma make_ptrofsconst_correct:
+  forall n e le m,
+  eval_expr ge e le m (make_ptrofsconst n) (Vptrofs (Ptrofs.repr n)).
+Proof.
+  intros. unfold Vptrofs, make_ptrofsconst. destruct Archi.ptr64 eqn:SF.
+- replace (Ptrofs.to_int64 (Ptrofs.repr n)) with (Int64.repr n).
+  apply make_longconst_correct.
+  symmetry; auto with ptrofs.
+- replace (Ptrofs.to_int (Ptrofs.repr n)) with (Int.repr n).
+  apply make_intconst_correct.
+  symmetry; auto with ptrofs.
+Qed.
+
 Lemma make_singleoffloat_correct:
   forall a n e le m,
   eval_expr ge e le m a (Vfloat n) ->
@@ -276,38 +289,62 @@ Hint Resolve make_intconst_correct make_floatconst_correct make_longconst_correc
 Hint Constructors eval_expr eval_exprlist: cshm.
 Hint Extern 2 (@eq trace _ _) => traceEq: cshm.
 
-Lemma make_cmp_ne_zero_correct:
+Lemma make_cmpu_ne_zero_correct:
   forall e le m a n,
   eval_expr ge e le m a (Vint n) ->
-  eval_expr ge e le m (make_cmp_ne_zero a) (Vint (if Int.eq n Int.zero then Int.zero else Int.one)).
+  eval_expr ge e le m (make_cmpu_ne_zero a) (Vint (if Int.eq n Int.zero then Int.zero else Int.one)).
 Proof.
   intros.
-  assert (DEFAULT: eval_expr ge e le m (Ebinop (Ocmp Cne) a (make_intconst Int.zero))
+  assert (DEFAULT: eval_expr ge e le m (Ebinop (Ocmpu Cne) a (make_intconst Int.zero))
                                        (Vint (if Int.eq n Int.zero then Int.zero else Int.one))).
-    econstructor; eauto with cshm. simpl. unfold Val.cmp, Val.cmp_bool.
-    unfold Int.cmp. destruct (Int.eq n Int.zero); auto.
+  { econstructor; eauto with cshm. simpl. unfold Val.cmpu, Val.cmpu_bool.
+    unfold Int.cmpu. destruct (Int.eq n Int.zero); auto. }
   assert (CMP: forall ob,
                Val.of_optbool ob = Vint n ->
                n = (if Int.eq n Int.zero then Int.zero else Int.one)).
-    intros. destruct ob; simpl in H0; inv H0. destruct b; inv H2.
+  { intros. destruct ob; simpl in H0; inv H0. destruct b; inv H2.
     rewrite Int.eq_false. auto. apply Int.one_not_zero.
-    rewrite Int.eq_true. auto.
+    rewrite Int.eq_true. auto. }
   destruct a; simpl; auto. destruct b; auto.
-  inv H. econstructor; eauto. rewrite H6. decEq. decEq.
-  simpl in H6. inv H6. unfold Val.cmp in H0. eauto.
-  inv H. econstructor; eauto. rewrite H6. decEq. decEq.
-  simpl in H6. inv H6. unfold Val.cmp in H0. eauto.
-  inv H. econstructor; eauto. rewrite H6. decEq. decEq.
-  simpl in H6. inv H6. unfold Val.cmp in H0. eauto.
-  inv H. econstructor; eauto. rewrite H6. decEq. decEq.
-  simpl in H6. unfold Val.cmpfs in H6.
-  destruct (Val.cmpfs_bool c v1 v2) as [[]|]; inv H6; reflexivity.
-  inv H. econstructor; eauto. rewrite H6. decEq. decEq.
+- inv H. econstructor; eauto. rewrite H6. decEq. decEq.
+  simpl in H6. inv H6. eauto.
+- inv H. econstructor; eauto. rewrite H6. decEq. decEq.
+  simpl in H6. inv H6. eauto.
+- inv H. econstructor; eauto. rewrite H6. decEq. decEq.
+  simpl in H6. inv H6. eauto.
+- inv H. econstructor; eauto. rewrite H6. decEq. decEq.
+  simpl in H6. inv H6. eauto.
+- inv H. econstructor; eauto. rewrite H6. decEq. decEq.
   simpl in H6. unfold Val.cmpl in H6.
   destruct (Val.cmpl_bool c v1 v2) as [[]|]; inv H6; reflexivity.
-  inv H. econstructor; eauto. rewrite H6. decEq. decEq.
+- inv H. econstructor; eauto. rewrite H6. decEq. decEq.
   simpl in H6. unfold Val.cmplu in H6.
-  destruct (Val.cmplu_bool c v1 v2) as [[]|]; inv H6; reflexivity.
+  destruct (Val.cmplu_bool (Mem.valid_pointer m) c v1 v2) as [[]|]; inv H6; reflexivity.
+Qed.
+
+Lemma make_cmpu_ne_zero_correct_ptr:
+  forall e le m a b i,
+  eval_expr ge e le m a (Vptr b i) ->
+  Archi.ptr64 = false ->
+  Mem.weak_valid_pointer m b (Ptrofs.unsigned i) = true ->
+  eval_expr ge e le m (make_cmpu_ne_zero a) Vone.
+Proof.
+  intros.
+  assert (DEFAULT: eval_expr ge e le m (Ebinop (Ocmpu Cne) a (make_intconst Int.zero)) Vone).
+  { econstructor; eauto with cshm. simpl. unfold Val.cmpu, Val.cmpu_bool.
+    unfold Mem.weak_valid_pointer in H1. rewrite H0, H1.
+    rewrite Int.eq_true; auto. }
+  assert (OF_OPTBOOL: forall ob, Some (Val.of_optbool ob) <> Some (Vptr b i)).
+  { intros. destruct ob as [[]|]; discriminate. }
+  assert (OF_BOOL: forall ob, option_map Val.of_bool ob <> Some (Vptr b i)).
+  { intros. destruct ob as [[]|]; discriminate. }
+  destruct a; simpl; auto. destruct b0; auto.
+- inv H; eelim OF_OPTBOOL; eauto.
+- inv H; eelim OF_OPTBOOL; eauto.
+- inv H; eelim OF_OPTBOOL; eauto.
+- inv H; eelim OF_OPTBOOL; eauto.
+- inv H; eelim OF_BOOL; eauto.
+- inv H; eelim OF_BOOL; eauto.
 Qed.
 
 Lemma make_cast_int_correct:
@@ -320,10 +357,27 @@ Proof.
   destruct si; eauto with cshm.
   destruct si; eauto with cshm.
   auto.
-  apply make_cmp_ne_zero_correct; auto.
+  apply make_cmpu_ne_zero_correct; auto.
 Qed.
 
-Hint Resolve make_cast_int_correct: cshm.
+Lemma make_longofint_correct:
+  forall e le m a n si,
+  eval_expr ge e le m a (Vint n) ->
+  eval_expr ge e le m (make_longofint a si) (Vlong (cast_int_long si n)).
+Proof.
+  intros. unfold make_longofint, cast_int_long. destruct si; eauto with cshm.
+Qed.
+
+Hint Resolve make_cast_int_correct make_longofint_correct: cshm.
+
+Ltac InvEval :=
+  match goal with
+  | [ H: None = Some _ |- _ ] => discriminate
+  | [ H: Some _ = Some _ |- _ ] => inv H; InvEval
+  | [ H: match ?x with Some _ => _ | None => _ end = Some _ |- _ ] => destruct x eqn:?; InvEval
+  | [ H: match ?x with true => _ | false => _ end = Some _ |- _ ] => destruct x eqn:?; InvEval
+  | _ => idtac
+  end.
 
 Lemma make_cast_correct:
   forall e le m a b v ty1 ty2 v',
@@ -333,59 +387,51 @@ Lemma make_cast_correct:
   eval_expr ge e le m b v'.
 Proof.
   intros. unfold make_cast, sem_cast in *;
-  destruct (classify_cast ty1 ty2); inv H; destruct v; inv H1; eauto with cshm.
-  (* single -> int *)
+  destruct (classify_cast ty1 ty2); inv H; destruct v; InvEval; eauto with cshm.
+- (* single -> int *)
   unfold make_singleofint, cast_int_float. destruct si1; eauto with cshm.
-  (* float -> int *)
-  destruct (cast_float_int si2 f) as [i|] eqn:E; inv H2.
+- (* float -> int *)
   apply make_cast_int_correct.
-  unfold cast_float_int in E. unfold make_intoffloat.
-  destruct si2; econstructor; eauto; simpl; rewrite E; auto.
-  (* single -> int *)
-  destruct (cast_single_int si2 f) as [i|] eqn:E; inv H2.
+  unfold cast_float_int in Heqo. unfold make_intoffloat.
+  destruct si2; econstructor; eauto; simpl; rewrite Heqo; auto.
+- (* single -> int *)
   apply make_cast_int_correct.
-  unfold cast_single_int in E. unfold make_intofsingle.
-  destruct si2; econstructor; eauto with cshm; simpl; rewrite E; auto.
-  (* long -> int *)
-  unfold make_longofint, cast_int_long. destruct si1; eauto with cshm.
-  (* long -> float *)
+  unfold cast_single_int in Heqo. unfold make_intofsingle.
+  destruct si2; econstructor; eauto with cshm; simpl; rewrite Heqo; auto.
+- (* long -> float *)
   unfold make_floatoflong, cast_long_float. destruct si1; eauto with cshm.
-  (* long -> single *)
+- (* long -> single *)
   unfold make_singleoflong, cast_long_single. destruct si1; eauto with cshm.
-  (* float -> long *)
-  destruct (cast_float_long si2 f) as [i|] eqn:E; inv H2.
-  unfold cast_float_long in E. unfold make_longoffloat.
-  destruct si2; econstructor; eauto; simpl; rewrite E; auto.
-  (* single -> long *)
-  destruct (cast_single_long si2 f) as [i|] eqn:E; inv H2.
-  unfold cast_single_long in E. unfold make_longofsingle.
-  destruct si2; econstructor; eauto with cshm; simpl; rewrite E; auto.
-  (* float -> bool *)
+- (* float -> long *)
+  unfold cast_float_long in Heqo. unfold make_longoffloat.
+  destruct si2; econstructor; eauto; simpl; rewrite Heqo; auto.
+- (* single -> long *)
+  unfold cast_single_long in Heqo. unfold make_longofsingle.
+  destruct si2; econstructor; eauto with cshm; simpl; rewrite Heqo; auto.
+- (* int -> bool *)
+  apply make_cmpu_ne_zero_correct; auto.
+- (* pointer (32 bits) -> bool *)
+  eapply make_cmpu_ne_zero_correct_ptr; eauto.
+- (* long -> bool *)
+  econstructor; eauto with cshm.
+  simpl. unfold Val.cmplu, Val.cmplu_bool, Int64.cmpu.
+  destruct (Int64.eq i Int64.zero); auto.
+- (* pointer (64 bits) -> bool *)
+  econstructor; eauto with cshm.
+  simpl. unfold Val.cmplu, Val.cmplu_bool. unfold Mem.weak_valid_pointer in Heqb1.
+  rewrite Heqb0, Heqb1. rewrite Int64.eq_true. reflexivity.
+- (* float -> bool *)
   econstructor; eauto with cshm.
   simpl. unfold Val.cmpf, Val.cmpf_bool. rewrite Float.cmp_ne_eq.
   destruct (Float.cmp Ceq f Float.zero); auto.
-  (* single -> bool *)
+- (* single -> bool *)
   econstructor; eauto with cshm.
   simpl. unfold Val.cmpfs, Val.cmpfs_bool. rewrite Float32.cmp_ne_eq.
   destruct (Float32.cmp Ceq f Float32.zero); auto.
-  (* long -> bool *)
-  econstructor; eauto with cshm.
-  simpl. unfold Val.cmpl, Val.cmpl_bool, Int64.cmp.
-  destruct (Int64.eq i Int64.zero); auto.
-  (* int -> bool *)
-  econstructor; eauto with cshm.
-  simpl. unfold Val.cmpu, Val.cmpu_bool, Int.cmpu.
-  destruct (Int.eq i Int.zero); auto.
-  (* pointer -> bool *)
-  destruct (Mem.weak_valid_pointer m b (Int.unsigned i)) eqn:VALID; inv H2.
-  econstructor; eauto with cshm.
-  simpl. unfold Val.cmpu. simpl. rewrite Int.eq_true.
-  unfold Mem.weak_valid_pointer in VALID; rewrite VALID. 
-  auto.
-  (* struct *)
-  destruct (ident_eq id1 id2); inv H2; auto.
-  (* union *)
-  destruct (ident_eq id1 id2); inv H2; auto.
+- (* struct *)
+  destruct (ident_eq id1 id2); inv H1; auto.
+- (* union *)
+  destruct (ident_eq id1 id2); inv H1; auto.
 Qed.
 
 Lemma make_boolean_correct:
@@ -397,29 +443,28 @@ Lemma make_boolean_correct:
     /\ Val.bool_of_val vb b.
 Proof.
   intros. unfold make_boolean. unfold bool_val in H0.
-  destruct (classify_bool ty); destruct v; inv H0.
-(* int *)
-  econstructor; split. apply make_cmp_ne_zero_correct with (n := i); auto.
+  destruct (classify_bool ty); destruct v; InvEval.
+- (* int *)
+  econstructor; split. apply make_cmpu_ne_zero_correct with (n := i); auto.
   destruct (Int.eq i Int.zero); simpl; constructor.
-(* float *)
+- (* ptr 32 bits *)
+  exists Vone; split. eapply make_cmpu_ne_zero_correct_ptr; eauto. constructor.
+- (* long *)
+  econstructor; split. econstructor; eauto with cshm. simpl. unfold Val.cmplu. simpl. eauto.
+  destruct (Int64.eq i Int64.zero); simpl; constructor.
+- (* ptr 64 bits *)
+  exists Vone; split.
+  econstructor; eauto with cshm. simpl. unfold Val.cmplu, Val.cmplu_bool.
+  unfold Mem.weak_valid_pointer in Heqb0. rewrite Heqb0, Heqb1, Int64.eq_true. reflexivity.
+  constructor.
+- (* float *)
   econstructor; split. econstructor; eauto with cshm. simpl. eauto.
   unfold Val.cmpf, Val.cmpf_bool. simpl. rewrite <- Float.cmp_ne_eq.
   destruct (Float.cmp Cne f Float.zero); constructor.
-(* single *)
+- (* single *)
   econstructor; split. econstructor; eauto with cshm. simpl. eauto.
   unfold Val.cmpfs, Val.cmpfs_bool. simpl. rewrite <- Float32.cmp_ne_eq.
   destruct (Float32.cmp Cne f Float32.zero); constructor.
-(* pointer *)
-  econstructor; split. econstructor; eauto with cshm. simpl. eauto.
-  unfold Val.cmpu, Val.cmpu_bool. simpl.
-  destruct (Int.eq i Int.zero); simpl; constructor.
-  econstructor; split. econstructor; eauto with cshm. simpl. eauto.
-  destruct (Mem.weak_valid_pointer m b0 (Int.unsigned i)) eqn:V; inv H2.
-  unfold Val.cmpu, Val.cmpu_bool. simpl.
-  unfold Mem.weak_valid_pointer in V; rewrite V. constructor.
-(* long *)
-  econstructor; split. econstructor; eauto with cshm. simpl. unfold Val.cmpl. simpl. eauto.
-  destruct (Int64.eq i Int64.zero); simpl; constructor.
 Qed.
 
 Lemma make_neg_correct:
@@ -454,11 +499,24 @@ Lemma make_notbool_correct:
   eval_expr ge e le m a va ->
   eval_expr ge e le m c v.
 Proof.
-  unfold sem_notbool, make_notbool; intros until m; intros SEM MAKE EV1;
-  destruct (classify_bool tya); inv MAKE; destruct va; inv SEM; eauto with cshm.
-  destruct (Mem.weak_valid_pointer m b (Int.unsigned i)) eqn:V; inv H0.
+  unfold sem_notbool, bool_val, make_notbool; intros until m; intros SEM MAKE EV1.
+  destruct (classify_bool tya); inv MAKE; destruct va; simpl in SEM; InvEval.
+- econstructor; eauto with cshm. simpl. unfold Val.cmpu, Val.cmpu_bool, Int.cmpu.
+  destruct (Int.eq i Int.zero); auto.
+- destruct Archi.ptr64 eqn:SF; inv SEM.
+  destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i)) eqn:V; simpl in H0; inv H0.
   econstructor; eauto with cshm. simpl. unfold Val.cmpu, Val.cmpu_bool.
-  unfold Mem.weak_valid_pointer in V; rewrite V. auto.
+  unfold Mem.weak_valid_pointer in V. rewrite SF, V, Int.eq_true. auto.
+- econstructor; eauto with cshm. simpl. unfold Val.cmplu, Val.cmplu_bool, Int64.cmpu.
+  destruct (Int64.eq i Int64.zero); auto.
+- destruct Archi.ptr64 eqn:SF; inv SEM.
+  destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i)) eqn:V; simpl in H0; inv H0.
+  econstructor; eauto with cshm. simpl. unfold Val.cmplu, Val.cmplu_bool.
+  unfold Mem.weak_valid_pointer in V. rewrite SF, V, Int64.eq_true. auto.
+- econstructor; eauto with cshm. simpl. unfold Val.cmpf, Val.cmpf_bool.
+  destruct (Float.cmp Ceq f Float.zero); auto.
+- econstructor; eauto with cshm. simpl. unfold Val.cmpfs, Val.cmpfs_bool.
+  destruct (Float32.cmp Ceq f Float32.zero); auto.
 Qed.
 
 Lemma make_notint_correct:
@@ -563,17 +621,48 @@ Hint Extern 2 (@eq (option val) _ _) => (simpl; reflexivity) : cshm.
 
 Lemma make_add_correct: binary_constructor_correct (make_add cunit.(prog_comp_env)) (sem_add prog.(prog_comp_env)).
 Proof.
+  assert (A: forall ty si a b c e le m va vb v,
+             make_add_ptr_int cunit.(prog_comp_env) ty si a b = OK c ->
+             eval_expr ge e le m a va -> eval_expr ge e le m b vb ->
+             sem_add_ptr_int (prog_comp_env prog) ty si va vb = Some v ->
+             eval_expr ge e le m c v).
+  { unfold make_add_ptr_int, sem_add_ptr_int; intros until v; intros MAKE EV1 EV2 SEM; monadInv MAKE.
+    destruct Archi.ptr64 eqn:SF; inv EQ0; rewrite (transl_sizeof _ _ _ _ LINK EQ).
+  - destruct va; InvEval; destruct vb; inv SEM.
+  + eauto with cshm.
+  + econstructor; eauto with cshm.
+    simpl. rewrite SF. f_equal. f_equal. f_equal.
+    assert (Ptrofs.agree64 (ptrofs_of_int si i0) (cast_int_long si i0)).
+    { destruct si; simpl; apply Ptrofs.agree64_repr; auto. }
+    auto with ptrofs.
+  - destruct va; InvEval; destruct vb; inv SEM.
+  + eauto with cshm.
+  + econstructor; eauto with cshm.
+    simpl. rewrite SF. f_equal. f_equal. f_equal.
+    assert (Ptrofs.agree32 (ptrofs_of_int si i0) i0) by (destruct si; simpl; auto with ptrofs).
+    auto with ptrofs.
+  }
+  assert (B: forall ty a b c e le m va vb v,
+             make_add_ptr_long cunit.(prog_comp_env) ty a b = OK c ->
+             eval_expr ge e le m a va -> eval_expr ge e le m b vb ->
+             sem_add_ptr_long (prog_comp_env prog) ty va vb = Some v ->
+             eval_expr ge e le m c v).
+  { unfold make_add_ptr_long, sem_add_ptr_long; intros until v; intros MAKE EV1 EV2 SEM; monadInv MAKE.
+    destruct Archi.ptr64 eqn:SF; inv EQ0; rewrite (transl_sizeof _ _ _ _ LINK EQ).
+  - destruct va; InvEval; destruct vb; inv SEM.
+  + eauto with cshm.
+  + econstructor; eauto with cshm.
+    simpl. rewrite SF. f_equal. f_equal. f_equal. auto with ptrofs.
+  - destruct va; InvEval; destruct vb; inv SEM.
+  + eauto with cshm.
+  + econstructor; eauto with cshm.
+    simpl. rewrite SF. f_equal. f_equal. f_equal.
+    assert (Ptrofs.agree32 (Ptrofs.of_int64 i0) (Int64.loword i0)) by (apply Ptrofs.agree32_repr; auto).
+    auto with ptrofs.
+  }
   red; unfold make_add, sem_add;
   intros until m; intros SEM MAKE EV1 EV2;
-  destruct (classify_add tya tyb); try (monadInv MAKE).
-- rewrite (transl_sizeof _ _ _ _ LINK EQ).
-  destruct va; try discriminate; destruct vb; inv SEM; eauto with cshm.
-- rewrite (transl_sizeof _ _ _ _ LINK EQ).
-  destruct va; try discriminate; destruct vb; inv SEM; eauto with cshm.
-- rewrite (transl_sizeof _ _ _ _ LINK EQ).
-  destruct va; try discriminate; destruct vb; inv SEM; eauto with cshm.
-- rewrite (transl_sizeof _ _ _ _ LINK EQ).
-  destruct va; try discriminate; destruct vb; inv SEM; eauto with cshm.
+  destruct (classify_add tya tyb); eauto.
 - eapply make_binarith_correct; eauto; intros; auto.
 Qed.
 
@@ -582,25 +671,61 @@ Proof.
   red; unfold make_sub, sem_sub;
   intros until m; intros SEM MAKE EV1 EV2;
   destruct (classify_sub tya tyb); try (monadInv MAKE).
-- rewrite (transl_sizeof _ _ _ _ LINK EQ).
-  destruct va; try discriminate; destruct vb; inv SEM; eauto with cshm.
-- rewrite (transl_sizeof _ _ _ _ LINK EQ).
-  destruct va; try discriminate; destruct vb; inv SEM.
-  destruct (eq_block b0 b1); try discriminate.
-  set (sz := Ctypes.sizeof (prog_comp_env prog) ty) in *.
-  destruct (zlt 0 sz); try discriminate.
-  destruct (zle sz Int.max_signed); simpl in H0; inv H0.
+- destruct Archi.ptr64 eqn:SF; inv EQ0; rewrite (transl_sizeof _ _ _ _ LINK EQ).
++ destruct va; InvEval; destruct vb; inv SEM; eauto with cshm.
   econstructor; eauto with cshm.
-  rewrite dec_eq_true; simpl.
-  assert (E: Int.signed (Int.repr sz) = sz).
-  { apply Int.signed_repr. generalize Int.min_signed_neg; omega. }
+  simpl. rewrite SF. apply f_equal. apply f_equal. apply f_equal.
+  assert (Ptrofs.agree64 (ptrofs_of_int si i0) (cast_int_long si i0)).
+  { destruct si; simpl; apply Ptrofs.agree64_repr; auto. }
+  auto with ptrofs.
++ destruct va; InvEval; destruct vb; inv SEM; eauto with cshm.
+  econstructor; eauto with cshm. simpl. rewrite SF. apply f_equal. apply f_equal. apply f_equal.
+  assert (Ptrofs.agree32 (ptrofs_of_int si i0) i0) by (destruct si; simpl; auto with ptrofs).
+  auto with ptrofs.
+- rewrite (transl_sizeof _ _ _ _ LINK EQ) in EQ0. clear EQ.
+  set (sz := Ctypes.sizeof (prog_comp_env prog) ty) in *.
+  destruct va; InvEval; destruct vb; InvEval.
+  destruct (eq_block b0 b1); try discriminate.
+  destruct (zlt 0 sz); try discriminate.
+  destruct (zle sz Ptrofs.max_signed); simpl in SEM; inv SEM.
+  assert (E1: Ptrofs.signed (Ptrofs.repr sz) = sz).
+  { apply Ptrofs.signed_repr. generalize Ptrofs.min_signed_neg; omega. }
+  destruct Archi.ptr64 eqn:SF; inversion EQ0; clear EQ0; subst c.
++ assert (E: Int64.signed (Int64.repr sz) = sz).
+  { apply Int64.signed_repr.
+    replace Int64.max_signed with Ptrofs.max_signed.
+    generalize Int64.min_signed_neg; omega.
+    unfold Ptrofs.max_signed, Ptrofs.half_modulus; rewrite Ptrofs.modulus_eq64 by auto. reflexivity. }
+  econstructor; eauto with cshm.
+  rewrite SF, dec_eq_true. simpl.
+  predSpec Int64.eq Int64.eq_spec (Int64.repr sz) Int64.zero.
+  rewrite H in E; rewrite Int64.signed_zero in E; omegaContradiction.
+  predSpec Int64.eq Int64.eq_spec (Int64.repr sz) Int64.mone.
+  rewrite H0 in E; rewrite Int64.signed_mone in E; omegaContradiction.
+  rewrite andb_false_r; simpl. unfold Vptrofs; rewrite SF. apply f_equal.
+  apply f_equal. symmetry. auto with ptrofs.
++ assert (E: Int.signed (Int.repr sz) = sz).
+  { apply Int.signed_repr.
+    replace Int.max_signed with Ptrofs.max_signed.
+    generalize Int.min_signed_neg; omega.
+    unfold Ptrofs.max_signed, Ptrofs.half_modulus, Ptrofs.modulus, Ptrofs.wordsize, Wordsize_Ptrofs.wordsize. rewrite SF. reflexivity.
+  }
+  econstructor; eauto with cshm. rewrite SF, dec_eq_true. simpl.
   predSpec Int.eq Int.eq_spec (Int.repr sz) Int.zero.
   rewrite H in E; rewrite Int.signed_zero in E; omegaContradiction.
   predSpec Int.eq Int.eq_spec (Int.repr sz) Int.mone.
   rewrite H0 in E; rewrite Int.signed_mone in E; omegaContradiction.
-  rewrite andb_false_r; auto.
-- rewrite (transl_sizeof _ _ _ _ LINK EQ).
-  destruct va; try discriminate; destruct vb; inv SEM; eauto with cshm.
+  rewrite andb_false_r; simpl. unfold Vptrofs; rewrite SF. apply f_equal. apply f_equal.
+  symmetry. auto with ptrofs.
+- destruct Archi.ptr64 eqn:SF; inv EQ0; rewrite (transl_sizeof _ _ _ _ LINK EQ).
++ destruct va; InvEval; destruct vb; inv SEM; eauto with cshm.
+  econstructor; eauto with cshm.
+  simpl. rewrite SF. apply f_equal. apply f_equal. apply f_equal.
+  auto with ptrofs.
++ destruct va; InvEval; destruct vb; inv SEM; eauto with cshm.
+  econstructor; eauto with cshm. simpl. rewrite SF. apply f_equal. apply f_equal. apply f_equal.
+  assert (Ptrofs.agree32 (Ptrofs.of_int64 i0) (Int64.loword i0)) by (apply Ptrofs.agree32_repr; auto).
+  auto with ptrofs.
 - eapply make_binarith_correct; eauto; intros; auto.
 Qed.
 
@@ -716,25 +841,61 @@ Proof.
   unfold Int64.shru', Int64.shru; rewrite small_shift_amount_3; auto.
 Qed.
 
+Lemma make_cmp_ptr_correct:
+  forall cmp e le m a va b vb v,
+  cmp_ptr m cmp va vb = Some v ->
+  eval_expr ge e le m a va ->
+  eval_expr ge e le m b vb ->
+  eval_expr ge e le m (make_cmp_ptr cmp a b) v.
+Proof.
+  unfold cmp_ptr, make_cmp_ptr; intros.
+  destruct Archi.ptr64.
+- econstructor; eauto.
+- econstructor; eauto. simpl. unfold Val.cmpu.
+  destruct (Val.cmpu_bool (Mem.valid_pointer m) cmp va vb) as [bo|]; inv H. auto.
+Qed.
+
+Remark make_ptrofs_of_int_correct:
+  forall e le m a i si,
+  eval_expr ge e le m a (Vint i) ->
+  eval_expr ge e le m (if Archi.ptr64 then make_longofint a si else a) (Vptrofs (ptrofs_of_int si i)).
+Proof.
+  intros. unfold Vptrofs, ptrofs_of_int. destruct Archi.ptr64 eqn:SF.
+- unfold make_longofint. destruct si.
++ replace (Ptrofs.to_int64 (Ptrofs.of_ints i)) with (Int64.repr (Int.signed i)).
+  eauto with cshm.
+  apply Int64.eqm_samerepr. rewrite Ptrofs.eqm64 by auto. apply Ptrofs.eqm_unsigned_repr.
++ replace (Ptrofs.to_int64 (Ptrofs.of_intu i)) with (Int64.repr (Int.unsigned i)).
+  eauto with cshm.
+  apply Int64.eqm_samerepr. rewrite Ptrofs.eqm64 by auto. apply Ptrofs.eqm_unsigned_repr.
+- destruct si.
++ replace (Ptrofs.to_int (Ptrofs.of_ints i)) with i. auto.
+  symmetry. auto with ptrofs.
++ replace (Ptrofs.to_int (Ptrofs.of_intu i)) with i. auto.
+  symmetry. auto with ptrofs.
+Qed.
+
+Remark make_ptrofs_of_int64_correct:
+  forall e le m a i,
+  eval_expr ge e le m a (Vlong i) ->
+  eval_expr ge e le m (if Archi.ptr64 then a else Eunop Ointoflong a) (Vptrofs (Ptrofs.of_int64 i)).
+Proof.
+  intros. unfold Vptrofs. destruct Archi.ptr64 eqn:SF.
+- replace (Ptrofs.to_int64 (Ptrofs.of_int64 i)) with i. auto.
+  symmetry. auto with ptrofs.
+- econstructor; eauto. simpl. apply f_equal. apply f_equal.
+  apply Int.eqm_samerepr. rewrite Ptrofs.eqm32 by auto. apply Ptrofs.eqm_unsigned_repr.
+Qed.
+
 Lemma make_cmp_correct: forall cmp, binary_constructor_correct (make_cmp cmp) (sem_cmp cmp).
 Proof.
   red; unfold sem_cmp, make_cmp; intros until m; intros SEM MAKE EV1 EV2;
   destruct (classify_cmp tya tyb).
-- inv MAKE. destruct (Val.cmpu_bool (Mem.valid_pointer m) cmp va vb) as [bv|] eqn:E;
-  simpl in SEM; inv SEM.
-  econstructor; eauto. simpl. unfold Val.cmpu. rewrite E. auto.
-- inv MAKE. destruct vb; try discriminate.
-  set (vb := Vint (Int.repr (Int64.unsigned i))) in *.
-  destruct (Val.cmpu_bool (Mem.valid_pointer m) cmp va vb) as [bv|] eqn:E;
-  simpl in SEM; inv SEM.
-  econstructor; eauto with cshm. simpl. change (Vint (Int64.loword i)) with vb.
-  unfold Val.cmpu. rewrite E. auto.
-- inv MAKE. destruct va; try discriminate.
-  set (va := Vint (Int.repr (Int64.unsigned i))) in *.
-  destruct (Val.cmpu_bool (Mem.valid_pointer m) cmp va vb) as [bv|] eqn:E;
-  simpl in SEM; inv SEM.
-  econstructor; eauto with cshm. simpl. change (Vint (Int64.loword i)) with va.
-  unfold Val.cmpu. rewrite E. auto.
+- inv MAKE. eapply make_cmp_ptr_correct; eauto.
+- inv MAKE. destruct vb; InvEval; eauto using make_cmp_ptr_correct, make_ptrofs_of_int_correct.
+- inv MAKE. destruct va; InvEval; eauto using make_cmp_ptr_correct, make_ptrofs_of_int_correct.
+- inv MAKE. destruct vb; InvEval; eauto using make_cmp_ptr_correct, make_ptrofs_of_int64_correct.
+- inv MAKE. destruct va; InvEval; eauto using make_cmp_ptr_correct, make_ptrofs_of_int64_correct.
 - eapply make_binarith_correct; eauto; intros; auto.
 Qed.
 
@@ -806,7 +967,7 @@ Lemma make_memcpy_correct:
   step ge (State f s k e le m) E0 (State f Sskip k e le m').
 Proof.
   intros. inv H1; try congruence.
-  monadInv H3. 
+  monadInv H3.
   exploit transl_alignof_blockcopy. eexact LINK. eauto. intros [A B]. rewrite A, B.
   change le with (set_optvar None Vundef le) at 2.
   econstructor.
@@ -954,8 +1115,8 @@ Lemma match_env_alloc_variables:
 Proof.
   induction 2; simpl; intros.
 - inv H0. exists te1; split. constructor. auto.
-- monadInv H2. monadInv EQ. simpl in *. 
-  exploit transl_sizeof. eexact H. eauto. intros SZ; rewrite SZ. 
+- monadInv H2. monadInv EQ. simpl in *.
+  exploit transl_sizeof. eexact H. eauto. intros SZ; rewrite SZ.
   exploit (IHalloc_variables x0 (PTree.set id (b1, Ctypes.sizeof ge ty) te1)).
   auto.
   constructor.
@@ -1042,49 +1203,53 @@ Lemma transl_expr_lvalue_correct:
    Csharpminor.eval_expr tge te le m ta (Vptr b ofs)).
 Proof.
   apply eval_expr_lvalue_ind; intros; try (monadInv TR).
-(* const int *)
+- (* const int *)
   apply make_intconst_correct.
-(* const float *)
+- (* const float *)
   apply make_floatconst_correct.
-(* const single *)
+- (* const single *)
   apply make_singleconst_correct.
-(* const long *)
+- (* const long *)
   apply make_longconst_correct.
-(* temp var *)
+- (* temp var *)
   constructor; auto.
-(* addrof *)
+- (* addrof *)
   simpl in TR. auto.
-(* unop *)
+- (* unop *)
   eapply transl_unop_correct; eauto.
-(* binop *)
+- (* binop *)
   eapply transl_binop_correct; eauto.
-(* cast *)
+- (* cast *)
   eapply make_cast_correct; eauto.
-(* sizeof *)
-  rewrite (transl_sizeof _ _ _ _ LINK EQ). apply make_intconst_correct.
-(* alignof *)
-  rewrite (transl_alignof _ _ _ _ LINK EQ). apply make_intconst_correct.
-(* rvalue out of lvalue *)
+- (* sizeof *)
+  rewrite (transl_sizeof _ _ _ _ LINK EQ). apply make_ptrofsconst_correct.
+- (* alignof *)
+  rewrite (transl_alignof _ _ _ _ LINK EQ). apply make_ptrofsconst_correct.
+- (* rvalue out of lvalue *)
   exploit transl_expr_lvalue; eauto. intros [tb [TRLVAL MKLOAD]].
   eapply make_load_correct; eauto.
-(* var local *)
+- (* var local *)
   exploit (me_local _ _ MENV); eauto. intros EQ.
   econstructor. eapply eval_var_addr_local. eauto.
-(* var global *)
+- (* var global *)
   econstructor. eapply eval_var_addr_global.
   eapply match_env_globals; eauto.
   rewrite symbols_preserved. auto.
-(* deref *)
+- (* deref *)
   simpl in TR. eauto.
-(* field struct *)
-  unfold make_field_access in EQ0. rewrite H1 in EQ0. 
+- (* field struct *)
+  unfold make_field_access in EQ0. rewrite H1 in EQ0.
   destruct (prog_comp_env cunit)!id as [co'|] eqn:CO; monadInv EQ0.
   exploit field_offset_stable. eexact LINK. eauto. instantiate (1 := i). intros [A B].
-  rewrite <- B in EQ1. 
-  eapply eval_Ebinop; eauto.
-  apply make_intconst_correct.
-  simpl. unfold ge in *; simpl in *. congruence.
-(* field union *)
+  rewrite <- B in EQ1.
+  assert (x0 = delta) by (unfold ge in *; simpl in *; congruence).
+  subst x0.
+  destruct Archi.ptr64 eqn:SF.
++ eapply eval_Ebinop; eauto using make_longconst_correct.
+  simpl. rewrite SF. apply f_equal. apply f_equal. apply f_equal. auto with ptrofs.
++ eapply eval_Ebinop; eauto using make_intconst_correct.
+  simpl. rewrite SF. apply f_equal. apply f_equal. apply f_equal. auto with ptrofs.
+- (* field union *)
   unfold make_field_access in EQ0; rewrite H1 in EQ0; monadInv EQ0.
   auto.
 Qed.
@@ -1389,7 +1554,7 @@ Proof.
   rewrite H in CF. simpl in CF. inv CF.
   econstructor; split.
   apply plus_one. econstructor; eauto.
-  eapply transl_expr_correct with (cunit := cu); eauto. 
+  eapply transl_expr_correct with (cunit := cu); eauto.
   eapply transl_arglist_correct with (cunit := cu); eauto.
   erewrite typlist_of_arglist_eq by eauto.
   eapply transl_fundef_sig1; eauto.
@@ -1558,7 +1723,7 @@ Proof.
   econstructor; eauto. constructor.
 
 - (* internal function *)
-  inv H. inv TR. monadInv H5. 
+  inv H. inv TR. monadInv H5.
   exploit match_cont_is_call_cont; eauto. intros [A B].
   exploit match_env_alloc_variables; eauto.
   apply match_env_empty.
@@ -1568,7 +1733,7 @@ Proof.
   simpl. erewrite transl_vars_names by eauto. assumption.
   simpl. assumption.
   simpl. assumption.
-  simpl; eauto. 
+  simpl; eauto.
   simpl. rewrite create_undef_temps_match. eapply bind_parameter_temps_match; eauto.
   simpl. econstructor; eauto.
   unfold transl_function. rewrite EQ; simpl. rewrite EQ1; simpl. auto.
@@ -1628,7 +1793,7 @@ End CORRECTNESS.
 Instance TransfCshmgenLink : TransfLink match_prog.
 Proof.
   red; intros. destruct (link_linkorder _ _ _ H) as (LO1 & LO2).
-  generalize H. 
+  generalize H.
 Local Transparent Ctypes.Linker_program.
   simpl; unfold link_program.
   destruct (link (program_of_program p1) (program_of_program p2)) as [pp|] eqn:LP; try discriminate.
@@ -1638,15 +1803,15 @@ Local Transparent Ctypes.Linker_program.
            (prog_comp_env_eq p2) EQ) as (env & P & Q).
   intros E.
   eapply Linking.link_match_program; eauto.
-- intros. 
+- intros.
 Local Transparent Linker_fundef Linking.Linker_fundef.
-  inv H3; inv H4; simpl in H2. 
+  inv H3; inv H4; simpl in H2.
 + discriminate.
 + destruct ef; inv H2. econstructor; split. simpl; eauto. left; constructor; auto.
 + destruct ef; inv H2. econstructor; split. simpl; eauto. right; constructor; auto.
 + destruct (external_function_eq ef ef0 && typelist_eq args args0 &&
          type_eq res res0 && calling_convention_eq cc cc0) eqn:E'; inv H2.
-  InvBooleans. subst ef0. econstructor; split. 
+  InvBooleans. subst ef0. econstructor; split.
   simpl; rewrite dec_eq_true; eauto.
   left; constructor. congruence.
 - intros. exists tt. auto.

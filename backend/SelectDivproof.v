@@ -12,21 +12,10 @@
 
 (** Correctness of instruction selection for integer division *)
 
-Require Import Coqlib.
-Require Import Zquot.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Globalenvs.
-Require Import Events.
-Require Import Cminor.
-Require Import Op.
-Require Import CminorSel.
-Require Import SelectOp.
-Require Import SelectOpproof.
-Require Import SelectDiv.
+Require Import Zquot Coqlib.
+Require Import AST Integers Floats Values Memory Globalenvs Events.
+Require Import Cminor Op CminorSel.
+Require Import SelectOp SelectOpproof SplitLong SplitLongproof SelectLong SelectLongproof SelectDiv.
 
 Open Local Scope cminorsel_scope.
 
@@ -191,18 +180,19 @@ Lemma divs_mul_params_sound:
   Int.min_signed <= n <= Int.max_signed ->
   Z.quot n d = Zdiv (m * n) (two_p (32 + p)) + (if zlt n 0 then 1 else 0).
 Proof with (try discriminate).
-  unfold divs_mul_params; intros d m' p' EQ.
+  unfold divs_mul_params; intros d m' p'.
   destruct (find_div_mul_params Int.wordsize
                (Int.half_modulus - Int.half_modulus mod d - 1) d 32)
   as [[p m] | ]...
+  generalize (p - 32). intro p1.  
   destruct (zlt 0 d)...
-  destruct (zlt (two_p (32 + p)) (m * d))...
-  destruct (zle (m * d) (two_p (32 + p) + two_p (p + 1)))...
+  destruct (zlt (two_p (32 + p1)) (m * d))...
+  destruct (zle (m * d) (two_p (32 + p1) + two_p (p1 + 1)))...
   destruct (zle 0 m)...
   destruct (zlt m Int.modulus)...
-  destruct (zle 0 p)...
-  destruct (zlt p 32)...
-  simpl in EQ. inv EQ.
+  destruct (zle 0 p1)...
+  destruct (zlt p1 32)...
+  intros EQ; inv EQ. 
   split. auto. split. auto. intros.
   replace (32 + p') with (31 + (p' + 1)) by omega.
   apply Zquot_mul; try omega.
@@ -219,18 +209,19 @@ Lemma divu_mul_params_sound:
   0 <= n < Int.modulus ->
   Zdiv n d = Zdiv (m * n) (two_p (32 + p)).
 Proof with (try discriminate).
-  unfold divu_mul_params; intros d m' p' EQ.
+  unfold divu_mul_params; intros d m' p'.
   destruct (find_div_mul_params Int.wordsize
                (Int.modulus - Int.modulus mod d - 1) d 32)
   as [[p m] | ]...
+  generalize (p - 32); intro p1.
   destruct (zlt 0 d)...
-  destruct (zle (two_p (32 + p)) (m * d))...
-  destruct (zle (m * d) (two_p (32 + p) + two_p p))...
+  destruct (zle (two_p (32 + p1)) (m * d))...
+  destruct (zle (m * d) (two_p (32 + p1) + two_p p1))...
   destruct (zle 0 m)...
   destruct (zlt m Int.modulus)...
-  destruct (zle 0 p)...
-  destruct (zlt p 32)...
-  simpl in EQ. inv EQ.
+  destruct (zle 0 p1)...
+  destruct (zlt p1 32)...
+  intros EQ; inv EQ.
   split. auto. split. auto. intros.
   apply Zdiv_mul_pos; try omega. assumption.
 Qed.
@@ -326,11 +317,173 @@ Proof.
   assert (32 < Int.max_unsigned) by (compute; auto). omega.
 Qed.
 
+(** Same, for 64-bit integers *)
+
+Lemma divls_mul_params_sound:
+  forall d m p,
+  divls_mul_params d = Some(p, m) ->
+  0 <= m < Int64.modulus /\ 0 <= p < 64 /\
+  forall n,
+  Int64.min_signed <= n <= Int64.max_signed ->
+  Z.quot n d = Zdiv (m * n) (two_p (64 + p)) + (if zlt n 0 then 1 else 0).
+Proof with (try discriminate).
+  unfold divls_mul_params; intros d m' p'.
+  destruct (find_div_mul_params Int64.wordsize
+               (Int64.half_modulus - Int64.half_modulus mod d - 1) d 64)
+  as [[p m] | ]...
+  generalize (p - 64). intro p1.  
+  destruct (zlt 0 d)...
+  destruct (zlt (two_p (64 + p1)) (m * d))...
+  destruct (zle (m * d) (two_p (64 + p1) + two_p (p1 + 1)))...
+  destruct (zle 0 m)...
+  destruct (zlt m Int64.modulus)...
+  destruct (zle 0 p1)...
+  destruct (zlt p1 64)...
+  intros EQ; inv EQ. 
+  split. auto. split. auto. intros.
+  replace (64 + p') with (63 + (p' + 1)) by omega.
+  apply Zquot_mul; try omega.
+  replace (63 + (p' + 1)) with (64 + p') by omega. omega.
+  change (Int64.min_signed <= n < Int64.half_modulus).
+  unfold Int64.max_signed in H. omega.
+Qed.
+
+Lemma divlu_mul_params_sound:
+  forall d m p,
+  divlu_mul_params d = Some(p, m) ->
+  0 <= m < Int64.modulus /\ 0 <= p < 64 /\
+  forall n,
+  0 <= n < Int64.modulus ->
+  Zdiv n d = Zdiv (m * n) (two_p (64 + p)).
+Proof with (try discriminate).
+  unfold divlu_mul_params; intros d m' p'.
+  destruct (find_div_mul_params Int64.wordsize
+               (Int64.modulus - Int64.modulus mod d - 1) d 64)
+  as [[p m] | ]...
+  generalize (p - 64); intro p1.
+  destruct (zlt 0 d)...
+  destruct (zle (two_p (64 + p1)) (m * d))...
+  destruct (zle (m * d) (two_p (64 + p1) + two_p p1))...
+  destruct (zle 0 m)...
+  destruct (zlt m Int64.modulus)...
+  destruct (zle 0 p1)...
+  destruct (zlt p1 64)...
+  intros EQ; inv EQ.
+  split. auto. split. auto. intros.
+  apply Zdiv_mul_pos; try omega. assumption.
+Qed.
+
+Remark int64_shr'_div_two_p:
+  forall x y, Int64.shr' x y = Int64.repr (Int64.signed x / two_p (Int.unsigned y)).
+Proof.
+  intros; unfold Int64.shr'. rewrite Int64.Zshiftr_div_two_p; auto. generalize (Int.unsigned_range y); omega.
+Qed.
+
+Lemma divls_mul_shift_gen:
+  forall x y m p,
+  divls_mul_params (Int64.signed y) = Some(p, m) ->
+  0 <= m < Int64.modulus /\ 0 <= p < 64 /\
+  Int64.divs x y = Int64.add (Int64.shr' (Int64.repr ((Int64.signed x * m) / Int64.modulus)) (Int.repr p))
+                             (Int64.shru x (Int64.repr 63)).
+Proof.
+  intros. set (n := Int64.signed x). set (d := Int64.signed y) in *.
+  exploit divls_mul_params_sound; eauto. intros (A & B & C).
+  split. auto. split. auto.
+  unfold Int64.divs. fold n; fold d. rewrite C by (apply Int64.signed_range).
+  rewrite two_p_is_exp by omega. rewrite <- Zdiv_Zdiv.
+  rewrite Int64.shru_lt_zero. unfold Int64.add. apply Int64.eqm_samerepr. apply Int64.eqm_add.
+  rewrite int64_shr'_div_two_p. apply Int64.eqm_unsigned_repr_r. apply Int64.eqm_refl2.
+  rewrite Int.unsigned_repr. f_equal.
+  rewrite Int64.signed_repr. rewrite Int64.modulus_power. f_equal. ring.
+  cut (Int64.min_signed <= n * m / Int64.modulus < Int64.half_modulus).
+  unfold Int64.max_signed; omega.
+  apply Zdiv_interval_1. generalize Int64.min_signed_neg; omega. apply Int64.half_modulus_pos.
+  apply Int64.modulus_pos.
+  split. apply Zle_trans with (Int64.min_signed * m). apply Zmult_le_compat_l_neg. omega. generalize Int64.min_signed_neg; omega.
+  apply Zmult_le_compat_r. unfold n; generalize (Int64.signed_range x); tauto. tauto.
+  apply Zle_lt_trans with (Int64.half_modulus * m).
+  apply Zmult_le_compat_r. generalize (Int64.signed_range x); unfold n, Int64.max_signed; omega. tauto.
+  apply Zmult_lt_compat_l. generalize Int64.half_modulus_pos; omega. tauto.
+  assert (64 < Int.max_unsigned) by (compute; auto). omega.
+  unfold Int64.lt; fold n. rewrite Int64.signed_zero. destruct (zlt n 0); apply Int64.eqm_unsigned_repr.
+  apply two_p_gt_ZERO. omega.
+  apply two_p_gt_ZERO. omega.
+Qed.
+
+Theorem divls_mul_shift_1:
+  forall x y m p,
+  divls_mul_params (Int64.signed y) = Some(p, m) ->
+  m < Int64.half_modulus ->
+  0 <= p < 64 /\
+  Int64.divs x y = Int64.add (Int64.shr' (Int64.mulhs x (Int64.repr m)) (Int.repr p))
+                             (Int64.shru' x (Int.repr 63)).
+Proof.
+  intros. exploit divls_mul_shift_gen; eauto. instantiate (1 := x).
+  intros (A & B & C). split. auto. rewrite C.
+  unfold Int64.mulhs. rewrite Int64.signed_repr. auto.
+  generalize Int64.min_signed_neg; unfold Int64.max_signed; omega.
+Qed.
+
+Theorem divls_mul_shift_2:
+  forall x y m p,
+  divls_mul_params (Int64.signed y) = Some(p, m) ->
+  m >= Int64.half_modulus ->
+  0 <= p < 64 /\
+  Int64.divs x y = Int64.add (Int64.shr' (Int64.add (Int64.mulhs x (Int64.repr m)) x) (Int.repr p))
+                             (Int64.shru' x (Int.repr 63)).
+Proof.
+  intros. exploit divls_mul_shift_gen; eauto. instantiate (1 := x).
+  intros (A & B & C). split. auto. rewrite C. f_equal. f_equal.
+  rewrite Int64.add_signed. unfold Int64.mulhs. set (n := Int64.signed x).
+  transitivity (Int64.repr (n * (m - Int64.modulus) / Int64.modulus + n)).
+  f_equal.
+  replace (n * (m - Int64.modulus)) with (n * m +  (-n) * Int64.modulus) by ring.
+  rewrite Z_div_plus. ring. apply Int64.modulus_pos.
+  apply Int64.eqm_samerepr. apply Int64.eqm_add; auto with ints.
+  apply Int64.eqm_sym. eapply Int64.eqm_trans. apply Int64.eqm_signed_unsigned.
+  apply Int64.eqm_unsigned_repr_l. apply Int64.eqm_refl2. f_equal. f_equal.
+  rewrite Int64.signed_repr_eq. rewrite Zmod_small by assumption.
+  apply zlt_false. omega.
+Qed.
+
+Remark int64_shru'_div_two_p:
+  forall x y, Int64.shru' x y = Int64.repr (Int64.unsigned x / two_p (Int.unsigned y)).
+Proof.
+  intros; unfold Int64.shru'. rewrite Int64.Zshiftr_div_two_p; auto. generalize (Int.unsigned_range y); omega.
+Qed.
+
+Theorem divlu_mul_shift:
+  forall x y m p,
+  divlu_mul_params (Int64.unsigned y) = Some(p, m) ->
+  0 <= p < 64 /\
+  Int64.divu x y = Int64.shru' (Int64.mulhu x (Int64.repr m)) (Int.repr p).
+Proof.
+  intros. exploit divlu_mul_params_sound; eauto. intros (A & B & C).
+  split. auto.
+  rewrite int64_shru'_div_two_p. rewrite Int.unsigned_repr.
+  unfold Int64.divu, Int64.mulhu. f_equal. rewrite C by apply Int64.unsigned_range.
+  rewrite two_p_is_exp by omega. rewrite <- Zdiv_Zdiv by (apply two_p_gt_ZERO; omega).
+  f_equal. rewrite (Int64.unsigned_repr m).
+  rewrite Int64.unsigned_repr. f_equal. ring.
+  cut (0 <= Int64.unsigned x * m / Int64.modulus < Int64.modulus).
+  unfold Int64.max_unsigned; omega.
+  apply Zdiv_interval_1. omega. compute; auto. compute; auto.
+  split. simpl. apply Z.mul_nonneg_nonneg. generalize (Int64.unsigned_range x); omega. omega.
+  apply Zle_lt_trans with (Int64.modulus * m).
+  apply Zmult_le_compat_r. generalize (Int64.unsigned_range x); omega. omega.
+  apply Zmult_lt_compat_l. compute; auto. omega.
+  unfold Int64.max_unsigned; omega.
+  assert (64 < Int.max_unsigned) by (compute; auto). omega.
+Qed.
+
 (** * Correctness of the smart constructors for division and modulus *)
 
 Section CMCONSTRS.
 
-Variable ge: genv.
+Variable prog: program.
+Variable hf: helper_functions.
+Hypothesis HELPERS: helper_functions_declared prog hf.
+Let ge := Genv.globalenv prog.
 Variable sp: val.
 Variable e: env.
 Variable m: mem.
@@ -550,6 +703,202 @@ Proof.
   unfold mods; intros until b. destruct (mods_match b); intros.
 - inv H0. inv H5. simpl in H7. inv H7. eapply eval_modsimm; eauto.
 - eapply eval_mods_base; eauto.
+Qed.
+
+Lemma eval_modl_from_divl:
+  forall le a n x y,
+  eval_expr ge sp e m le a (Vlong y) ->
+  nth_error le O = Some (Vlong x) ->
+  eval_expr ge sp e m le (modl_from_divl a n) (Vlong (Int64.sub x (Int64.mul y n))).
+Proof.
+  unfold modl_from_divl; intros.
+  exploit eval_mullimm; eauto. instantiate (1 := n). intros (v1 & A1 & B1).
+  assert (A0: eval_expr ge sp e m le (Eletvar O) (Vlong x)) by (constructor; auto).
+  exploit eval_subl; auto. eexact A0. eexact A1.
+  intros (v2 & A2 & B2).
+  simpl in B1; inv B1. simpl in B2; inv B2. exact A2.
+Qed.
+
+Lemma eval_divlu_mull:
+  forall le x y p M,
+  divlu_mul_params (Int64.unsigned y) = Some(p, M) ->
+  nth_error le O = Some (Vlong x) ->
+  eval_expr ge sp e m le (divlu_mull p M) (Vlong (Int64.divu x y)).
+Proof.
+  intros. unfold divlu_mull. exploit (divlu_mul_shift x); eauto. intros [A B].
+  assert (A0: eval_expr ge sp e m le (Eletvar O) (Vlong x)) by (constructor; auto).
+  exploit eval_mullhu. eauto. eexact A0. instantiate (1 := Int64.repr M). intros (v1 & A1 & B1).
+  exploit eval_shrluimm. eauto. eexact A1. instantiate (1 := Int.repr p). intros (v2 & A2 & B2).
+  simpl in B1; inv B1. simpl in B2. replace (Int.ltu (Int.repr p) Int64.iwordsize') with true in B2. inv B2.
+  rewrite B. assumption.
+  unfold Int.ltu. rewrite Int.unsigned_repr. rewrite zlt_true; auto. tauto.
+  assert (64 < Int.max_unsigned) by (compute; auto). omega.
+Qed.
+
+Theorem eval_divlu:
+  forall le a b x y z,
+  eval_expr ge sp e m le a x ->
+  eval_expr ge sp e m le b y ->
+  Val.divlu x y = Some z ->
+  exists v, eval_expr ge sp e m le (divlu a b) v /\ Val.lessdef z v.
+Proof.
+  unfold divlu; intros.
+  destruct (is_longconst b) as [n2|] eqn:N2.
+- assert (y = Vlong n2) by (eapply is_longconst_sound; eauto). subst y.
+  destruct (is_longconst a) as [n1|] eqn:N1.
++ assert (x = Vlong n1) by (eapply is_longconst_sound; eauto). subst x.
+  simpl in H1. destruct (Int64.eq n2 Int64.zero); inv H1.
+  econstructor; split. apply eval_longconst. constructor.
++ destruct (Int64.is_power2' n2) as [l|] eqn:POW.
+* exploit Val.divlu_pow2; eauto. intros EQ; subst z. apply eval_shrluimm; auto.
+* destruct (Compopts.optim_for_size tt). eapply eval_divlu_base; eauto.
+  destruct (divlu_mul_params (Int64.unsigned n2)) as [[p M]|] eqn:PARAMS. 
+** destruct x; simpl in H1; try discriminate.
+   destruct (Int64.eq n2 Int64.zero); inv H1.
+   econstructor; split; eauto. econstructor. eauto. eapply eval_divlu_mull; eauto.  
+** eapply eval_divlu_base; eauto.     
+- eapply eval_divlu_base; eauto.
+Qed.
+
+Theorem eval_modlu:
+  forall le a b x y z,
+  eval_expr ge sp e m le a x ->
+  eval_expr ge sp e m le b y ->
+  Val.modlu x y = Some z ->
+  exists v, eval_expr ge sp e m le (modlu a b) v /\ Val.lessdef z v.
+Proof.
+  unfold modlu; intros.
+  destruct (is_longconst b) as [n2|] eqn:N2.
+- assert (y = Vlong n2) by (eapply is_longconst_sound; eauto). subst y.
+  destruct (is_longconst a) as [n1|] eqn:N1.
++ assert (x = Vlong n1) by (eapply is_longconst_sound; eauto). subst x.
+  simpl in H1. destruct (Int64.eq n2 Int64.zero); inv H1.
+  econstructor; split. apply eval_longconst. constructor.
++ destruct (Int64.is_power2 n2) as [l|] eqn:POW.
+* exploit Val.modlu_pow2; eauto. intros EQ; subst z. eapply eval_andl; eauto. apply eval_longconst.
+* destruct (Compopts.optim_for_size tt). eapply eval_modlu_base; eauto.
+  destruct (divlu_mul_params (Int64.unsigned n2)) as [[p M]|] eqn:PARAMS. 
+** destruct x; simpl in H1; try discriminate.
+   destruct (Int64.eq n2 Int64.zero) eqn:Z; inv H1.
+   rewrite Int64.modu_divu. 
+    econstructor; split; eauto. econstructor. eauto.
+    eapply eval_modl_from_divl; eauto.  
+    eapply eval_divlu_mull; eauto.
+    red; intros; subst n2; discriminate Z.  
+** eapply eval_modlu_base; eauto.     
+- eapply eval_modlu_base; eauto.
+Qed.
+
+Lemma eval_divls_mull:
+  forall le x y p M,
+  divls_mul_params (Int64.signed y) = Some(p, M) ->
+  nth_error le O = Some (Vlong x) ->
+  eval_expr ge sp e m le (divls_mull p M) (Vlong (Int64.divs x y)).
+Proof.
+  intros. unfold divls_mull.
+  assert (A0: eval_expr ge sp e m le (Eletvar O) (Vlong x)).
+  { constructor; auto. }
+  exploit eval_mullhs. eauto. eexact A0. instantiate (1 := Int64.repr M).  intros (v1 & A1 & B1).
+  exploit eval_addl; auto. eexact A1. eexact A0. intros (v2 & A2 & B2).
+  exploit eval_shrluimm. eauto. eexact A0. instantiate (1 := Int.repr 63). intros (v3 & A3 & B3).
+  set (a4 := if zlt M Int64.half_modulus
+             then mullhs (Eletvar 0) (Int64.repr M)
+             else addl (mullhs (Eletvar 0) (Int64.repr M)) (Eletvar 0)).
+  set (v4 := if zlt M Int64.half_modulus then v1 else v2).
+  assert (A4: eval_expr ge sp e m le a4 v4). 
+  { unfold a4, v4; destruct (zlt M Int64.half_modulus); auto. }
+  exploit eval_shrlimm. eauto. eexact A4. instantiate (1 := Int.repr p). intros (v5 & A5 & B5).
+  exploit eval_addl; auto. eexact A5. eexact A3. intros (v6 & A6 & B6).
+  assert (RANGE: forall x, 0 <= x < 64 -> Int.ltu (Int.repr x) Int64.iwordsize' = true).
+  { intros. unfold Int.ltu. rewrite Int.unsigned_repr. rewrite zlt_true by tauto. auto.
+    assert (64 < Int.max_unsigned) by (compute; auto). omega. }
+  simpl in B1; inv B1.
+  simpl in B2; inv B2.
+  simpl in B3; rewrite RANGE in B3 by omega; inv B3.
+  destruct (zlt M Int64.half_modulus).
+- exploit (divls_mul_shift_1 x); eauto. intros [A B].
+  simpl in B5; rewrite RANGE in B5 by auto; inv B5.
+  simpl in B6; inv B6. 
+  rewrite B; exact A6.
+- exploit (divls_mul_shift_2 x); eauto. intros [A B].
+  simpl in B5; rewrite RANGE in B5 by auto; inv B5.
+  simpl in B6; inv B6. 
+  rewrite B; exact A6.
+Qed.
+
+Theorem eval_divls:
+  forall le a b x y z,
+  eval_expr ge sp e m le a x ->
+  eval_expr ge sp e m le b y ->
+  Val.divls x y = Some z ->
+  exists v, eval_expr ge sp e m le (divls a b) v /\ Val.lessdef z v.
+Proof.
+  unfold divls; intros.
+  destruct (is_longconst b) as [n2|] eqn:N2.
+- assert (y = Vlong n2) by (eapply is_longconst_sound; eauto). subst y.
+  destruct (is_longconst a) as [n1|] eqn:N1.
++ assert (x = Vlong n1) by (eapply is_longconst_sound; eauto). subst x.
+  simpl in H1. 
+  destruct (Int64.eq n2 Int64.zero
+         || Int64.eq n1 (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone); inv H1.
+  econstructor; split. apply eval_longconst. constructor.
++ destruct (Int64.is_power2' n2) as [l|] eqn:POW.
+* destruct (Int.ltu l (Int.repr 63)) eqn:LT.
+** exploit Val.divls_pow2; eauto. intros EQ. eapply eval_shrxlimm; eauto.
+** eapply eval_divls_base; eauto.
+* destruct (Compopts.optim_for_size tt). eapply eval_divls_base; eauto.
+  destruct (divls_mul_params (Int64.signed n2)) as [[p M]|] eqn:PARAMS. 
+** destruct x; simpl in H1; try discriminate.
+   destruct (Int64.eq n2 Int64.zero
+             || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone); inv H1.
+   econstructor; split; eauto. econstructor. eauto.
+   eapply eval_divls_mull; eauto.
+** eapply eval_divls_base; eauto.
+- eapply eval_divls_base; eauto.
+Qed.
+
+Theorem eval_modls:
+  forall le a b x y z,
+  eval_expr ge sp e m le a x ->
+  eval_expr ge sp e m le b y ->
+  Val.modls x y = Some z ->
+  exists v, eval_expr ge sp e m le (modls a b) v /\ Val.lessdef z v.
+Proof.
+  unfold modls; intros.
+  destruct (is_longconst b) as [n2|] eqn:N2.
+- assert (y = Vlong n2) by (eapply is_longconst_sound; eauto). subst y.
+  destruct (is_longconst a) as [n1|] eqn:N1.
++ assert (x = Vlong n1) by (eapply is_longconst_sound; eauto). subst x.
+  simpl in H1. 
+  destruct (Int64.eq n2 Int64.zero
+         || Int64.eq n1 (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone); inv H1.
+  econstructor; split. apply eval_longconst. constructor.
++ destruct (Int64.is_power2' n2) as [l|] eqn:POW.
+* destruct (Int.ltu l (Int.repr 63)) eqn:LT.
+**destruct x; simpl in H1; try discriminate.
+  destruct (Int64.eq n2 Int64.zero
+         || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone) eqn:D; inv H1.
+  assert (Val.divls (Vlong i) (Vlong n2) = Some (Vlong (Int64.divs i n2))).
+  { simpl; rewrite D; auto. }
+  exploit Val.divls_pow2; eauto. intros EQ.
+  set (le' := Vlong i :: le).
+  assert (A: eval_expr ge sp e m le' (Eletvar O) (Vlong i)) by (constructor; auto).
+  exploit eval_shrxlimm; eauto. intros (v1 & A1 & B1). inv B1.
+  econstructor; split.
+  econstructor. eauto. eapply eval_modl_from_divl. eexact A1. reflexivity.      
+  rewrite Int64.mods_divs. auto.
+**eapply eval_modls_base; eauto.
+* destruct (Compopts.optim_for_size tt). eapply eval_modls_base; eauto.
+  destruct (divls_mul_params (Int64.signed n2)) as [[p M]|] eqn:PARAMS. 
+** destruct x; simpl in H1; try discriminate.
+   destruct (Int64.eq n2 Int64.zero
+             || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone); inv H1.
+   econstructor; split; eauto. econstructor. eauto.
+   rewrite Int64.mods_divs. 
+   eapply eval_modl_from_divl; auto.
+   eapply eval_divls_mull; eauto.
+** eapply eval_modls_base; eauto.     
+- eapply eval_modls_base; eauto.
 Qed.
 
 (** * Floating-point division *)

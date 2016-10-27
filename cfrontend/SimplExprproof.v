@@ -736,9 +736,15 @@ Remark sem_cast_deterministic:
   v1 = v2.
 Proof.
   unfold sem_cast; intros. destruct (classify_cast ty ty'); try congruence.
-  destruct v; try congruence.
-  destruct (Mem.weak_valid_pointer m1 b (Int.unsigned i)); inv H.
-  destruct (Mem.weak_valid_pointer m2 b (Int.unsigned i)); inv H0.
+- destruct v; try congruence.
+  destruct Archi.ptr64; try discriminate.
+  destruct (Mem.weak_valid_pointer m1 b (Ptrofs.unsigned i)); inv H.
+  destruct (Mem.weak_valid_pointer m2 b (Ptrofs.unsigned i)); inv H0.
+  auto.
+- destruct v; try congruence. 
+  destruct (negb Archi.ptr64); try discriminate.
+  destruct (Mem.weak_valid_pointer m1 b (Ptrofs.unsigned i)); inv H.
+  destruct (Mem.weak_valid_pointer m2 b (Ptrofs.unsigned i)); inv H0.
   auto.
 Qed.
 
@@ -756,9 +762,13 @@ Qed.
 Lemma static_bool_val_sound:
   forall v t m b, bool_val v t Mem.empty = Some b -> bool_val v t m = Some b.
 Proof.
-  intros until b; unfold bool_val. destruct (classify_bool t); destruct v; auto.
-  intros E. unfold Mem.weak_valid_pointer, Mem.valid_pointer, proj_sumbool in E.
-  rewrite ! pred_dec_false in E by (apply Mem.perm_empty). discriminate.
+  assert (A: forall b ofs, Mem.weak_valid_pointer Mem.empty b ofs = false).
+  { unfold Mem.weak_valid_pointer, Mem.valid_pointer, proj_sumbool; intros.
+    rewrite ! pred_dec_false by (apply Mem.perm_empty). auto. }  
+  intros until b; unfold bool_val.
+  destruct (classify_bool t); destruct v; destruct Archi.ptr64 eqn:SF; auto.
+- rewrite A; congruence.
+- simpl; rewrite A; congruence.
 Qed.
 
 Lemma step_makeif:

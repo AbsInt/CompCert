@@ -37,11 +37,15 @@ Supported targets:
   armeb-linux          (ARM, EABI, big endian)
   armeb-eabihf         (ARM, EABI using hardware FP registers, big endian)
   armeb-hardfloat      (ARM, EABI using hardware FP registers, big endian)
-  ia32-linux           (x86 32 bits, Linux)
-  ia32-bsd             (x86 32 bits, BSD)
-  ia32-macosx          (x86 32 bits, MacOS X)
-  ia32-cygwin          (x86 32 bits, Cygwin environment under Windows)
+  x86_32-linux         (x86 32 bits, Linux)
+  x86_32-bsd           (x86 32 bits, BSD)
+  x86_32-macosx        (x86 32 bits, MacOS X)
+  x86_32-cygwin        (x86 32 bits, Cygwin environment under Windows)
+  x86_64-linux         (x86 64 bits, Linux)
+  x86_64-macosx        (x86 64 bits, MacOS X)
   manual               (edit configuration file by hand)
+
+For x86 targets, the "x86_32-" prefix can also be written "ia32-".
 
 For PowerPC targets, the "ppc-" prefix can be refined into:
   ppc64-               PowerPC 64 bits
@@ -106,29 +110,31 @@ done
 #
 case "$target" in
   arm-*|armv7a-*)
-      arch="arm"; model="armv7a"; endianness="little";;
+      arch="arm"; model="armv7a"; endianness="little"; bitsize=32;;
   armv6-*)
-      arch="arm"; model="armv6"; endianness="little";;
+      arch="arm"; model="armv6"; endianness="little"; bitsize=32;;
   armv7r-*)
-      arch="arm"; model="armv7r"; endianness="little";;
+      arch="arm"; model="armv7r"; endianness="little"; bitsize=32;;
   armv7m-*)
-      arch="arm"; model="armv7m"; endianness="little";;
+      arch="arm"; model="armv7m"; endianness="little"; bitsize=32;;
   armeb-*|armebv7a-*)
-      arch="arm"; model="armv7a"; endianness="big";;
+      arch="arm"; model="armv7a"; endianness="big"; bitsize=32;;
   armebv6-*)
-      arch="arm"; model="armv6"; endianness="big";;
+      arch="arm"; model="armv6"; endianness="big"; bitsize=32;;
   armebv7r-*)
-      arch="arm"; model="armv7r"; endianness="big";;
+      arch="arm"; model="armv7r"; endianness="big"; bitsize=32;;
   armebv7m-*)
-      arch="arm"; model="armv7m"; endianness="big";;
-  ia32-*)
-      arch="ia32"; model="sse2"; endianness="little";;
+      arch="arm"; model="armv7m"; endianness="big"; bitsize=32;;
+  x86_32-*|ia32-*)
+      arch="x86"; model="32sse2"; endianness="little"; bitsize=32;;
+  x86_64-*)
+      arch="x86"; model="64"; endianness="little"; bitsize=64;;
   powerpc-*|ppc-*)
-      arch="powerpc"; model="ppc32"; endianness="big";;
+      arch="powerpc"; model="ppc32"; endianness="big"; bitsize=32;;
   powerpc64-*|ppc64-*)
-      arch="powerpc"; model="ppc64"; endianness="big";;
+      arch="powerpc"; model="ppc64"; endianness="big"; bitsize=32;;
   e5500-*)
-      arch="powerpc"; model="e5500"; endianness="big";;
+      arch="powerpc"; model="e5500"; endianness="big"; bitsize=32;;
   manual)
       ;;
   "")
@@ -243,9 +249,9 @@ fi
 
 
 #
-# IA32 Target Configuration
+# x86 (32 bits) Target Configuration
 #
-if test "$arch" = "ia32"; then
+if test "$arch" = "x86" -a "$bitsize" = "32"; then
 
   case "$target" in
     bsd)
@@ -300,7 +306,7 @@ if test "$arch" = "ia32"; then
         cc="${toolprefix}gcc -arch i386"
         clinker="${toolprefix}gcc"
         cprepro="${toolprefix}gcc"
-        cprepro_options="-std=c99 -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' -E"
+        cprepro_options="-std=c99 -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' -E"
         libmath=""
         struct_passing="ints"
         struct_return="int1248"
@@ -315,7 +321,50 @@ if test "$arch" = "ia32"; then
         fi
         ;;
     *)
-        echo "Error: invalid eabi/system '$target' for architecture IA32." 1>&2
+        echo "Error: invalid eabi/system '$target' for architecture IA32/X86_32." 1>&2
+        echo "$usage" 1>&2
+        exit 2;;
+  esac
+fi
+
+#
+# IA32 (64 bits) Target Configuration
+#
+if test "$arch" = "x86" -a "$bitsize" = "64"; then
+
+  case "$target" in
+    linux)
+        abi="standard"
+        casm="${toolprefix}gcc"
+        casm_options="-m64 -c"
+        cc="${toolprefix}gcc -m64"
+        clinker="${toolprefix}gcc"
+        clinker_options="-m64"
+        cprepro="${toolprefix}gcc"
+        cprepro_options="-std=c99 -m64 -U__GNUC__ -E"
+        libmath="-lm"
+        struct_passing="ref-callee"   # wrong!
+        struct_return="ref"           # to check!
+        system="linux"
+        ;;
+    macosx)
+        # kernel major versions count upwards from 4 for OSX 10.0 to 15 for OSX 10.11
+        kernel_major=`uname -r | cut -d "." -f 1`
+
+        abi="macosx"
+        casm="${toolprefix}gcc"
+        casm_options="-arch x86_64 -c"
+        cc="${toolprefix}gcc -arch x86_64"
+        clinker="${toolprefix}gcc"
+        cprepro="${toolprefix}gcc"
+        cprepro_options="-std=c99 -arch x86_64 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' -E"
+        libmath=""
+        struct_passing="ref-callee"   # wrong!
+        struct_return="ref"           # to check!
+        system="macosx"
+        ;;
+    *)
+        echo "Error: invalid eabi/system '$target' for architecture X86_64." 1>&2
         echo "$usage" 1>&2
         exit 2;;
   esac
@@ -493,6 +542,7 @@ cat >> Makefile.config <<EOF
 ABI=$abi
 ARCH=$arch
 ASM_SUPPORTS_CFI=$asm_supports_cfi
+BITSIZE=$bitsize
 CASM=$casm
 CASM_OPTIONS=$casm_options
 CASMRUNTIME=$casmruntime
@@ -518,7 +568,7 @@ cat >> Makefile.config <<'EOF'
 # Target architecture
 # ARCH=powerpc
 # ARCH=arm
-# ARCH=ia32
+# ARCH=x86
 ARCH=
 
 # Hardware variant
@@ -529,19 +579,25 @@ ARCH=
 # MODEL=armv7a      # for ARM
 # MODEL=armv7r      # for ARM
 # MODEL=armv7m      # for ARM
-# MODEL=sse2        # for IA32
+# MODEL=32sse2      # for x86 in 32-bit mode
+# MODEL=64          # for x86 in 64-bit mode
 MODEL=
 
 # Target ABI
 # ABI=eabi          # for PowerPC / Linux and other SVR4 or EABI platforms
 # ABI=eabi          # for ARM
 # ABI=hardfloat     # for ARM
-# ABI=standard      # for IA32
+# ABI=standard      # for x86
 ABI=
+
+# Target bit width
+# BITSIZE=64        # for x86 in 64-bit mode
+# BITSIZE=32        # otherwise
+BITSIZE=
 
 # Target endianness
 # ENDIANNESS=big     # for ARM or PowerPC
-# ENDIANNESS=little  # for ARM or IA32
+# ENDIANNESS=little  # for ARM or x86
 ENDIANNESS=
 
 # Default calling conventions for passing structs and unions by value
@@ -566,7 +622,7 @@ STRUCT_RETURN=ref
 # Possible choices for ARM:
 # SYSTEM=linux
 #
-# Possible choices for IA32:
+# Possible choices for x86:
 # SYSTEM=linux
 # SYSTEM=bsd
 # SYSTEM=macosx
@@ -610,6 +666,10 @@ RESPONSEFILE="none"
 EOF
 fi
 
+#
+# Clean up target-dependent files to force their recompilation
+#
+rm -f .depend $arch/Archi.vo ${arch}_${bitsize}/Archi.vo runtime/*.o
 
 #
 # Summarize Configuration
@@ -647,8 +707,6 @@ CompCert configuration:
     Standard headers provided..... $has_standard_headers
     Standard headers installed in. $libdirexp/include
     Build command to use.......... $make
-
-If anything above looks wrong, please edit file ./Makefile.config to correct.
 
 EOF
 fi

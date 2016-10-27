@@ -362,7 +362,7 @@ Definition transl_op
       OK (Ploadsymbol r s ofs :: k)
   | Oaddrstack n, nil =>
       do r <- ireg_of res;
-      OK (addimm r IR13 n k)
+      OK (addimm r IR13 (Ptrofs.to_int n) k)
   | Ocast8signed, a1 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1;
       OK (if thumb tt then
@@ -565,10 +565,11 @@ Definition indexed_memory_access
   then mk_instr base n :: k
   else addimm IR14 base (Int.sub n n1) (mk_instr IR14 n1 :: k).
 
-Definition loadind_int (base: ireg) (ofs: int) (dst: ireg) (k: code) :=
-  indexed_memory_access (fun base n => Pldr dst base (SOimm n)) mk_immed_mem_word base ofs k.
+Definition loadind_int (base: ireg) (ofs: ptrofs) (dst: ireg) (k: code) :=
+  indexed_memory_access (fun base n => Pldr dst base (SOimm n)) mk_immed_mem_word base (Ptrofs.to_int ofs) k.
 
-Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
+Definition loadind (base: ireg) (ofs: ptrofs) (ty: typ) (dst: mreg) (k: code) :=
+  let ofs := Ptrofs.to_int ofs in
   match ty, preg_of dst with
   | Tint, IR r =>
       OK (indexed_memory_access (fun base n => Pldr r base (SOimm n)) mk_immed_mem_word base ofs k)
@@ -584,7 +585,8 @@ Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
       Error (msg "Asmgen.loadind")
   end.
 
-Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
+Definition storeind (src: mreg) (base: ireg) (ofs: ptrofs) (ty: typ) (k: code) :=
+  let ofs := Ptrofs.to_int ofs in
   match ty, preg_of src with
   | Tint, IR r =>
       OK (indexed_memory_access (fun base n => Pstr r base (SOimm n)) mk_immed_mem_word base ofs k)
@@ -628,7 +630,7 @@ Definition transl_memory_access
           Error (msg "Asmgen.Aindexed2shift")
       end
   | Ainstack n, nil =>
-      OK (indexed_memory_access mk_instr_imm mk_immed IR13 n k)
+      OK (indexed_memory_access mk_instr_imm mk_immed IR13 (Ptrofs.to_int n) k)
   | _, _ =>
       Error(msg "Asmgen.transl_memory_access")
   end.
@@ -788,11 +790,11 @@ Definition transl_function (f: Mach.function) :=
   do c <- transl_code f f.(Mach.fn_code) true;
   OK (mkfunction f.(Mach.fn_sig)
         (Pallocframe f.(fn_stacksize) f.(fn_link_ofs) ::
-         Pstr IR14 IR13 (SOimm f.(fn_retaddr_ofs)) :: c)).
+         Pstr IR14 IR13 (SOimm (Ptrofs.to_int f.(fn_retaddr_ofs))) :: c)).
 
 Definition transf_function (f: Mach.function) : res Asm.function :=
   do tf <- transl_function f;
-  if zlt Int.max_unsigned (list_length_z tf.(fn_code))
+  if zlt Ptrofs.max_unsigned (list_length_z tf.(fn_code))
   then Error (msg "code size exceeded")
   else OK tf.
 

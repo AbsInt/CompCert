@@ -63,7 +63,7 @@ Variable ge: genv.
   returned, and [t] the trace of observables (nonempty if this is
   a volatile access). *)
 
-Inductive deref_loc (ty: type) (m: mem) (b: block) (ofs: int) : trace -> val -> Prop :=
+Inductive deref_loc (ty: type) (m: mem) (b: block) (ofs: ptrofs) : trace -> val -> Prop :=
   | deref_loc_value: forall chunk v,
       access_mode ty = By_value chunk ->
       type_is_volatile ty = false ->
@@ -87,7 +87,7 @@ Inductive deref_loc (ty: type) (m: mem) (b: block) (ofs: int) : trace -> val -> 
   [m'] is the updated memory state and [t] the trace of observables
   (nonempty if this is a volatile store). *)
 
-Inductive assign_loc (ty: type) (m: mem) (b: block) (ofs: int):
+Inductive assign_loc (ty: type) (m: mem) (b: block) (ofs: ptrofs):
                                             val -> trace -> mem -> Prop :=
   | assign_loc_value: forall v chunk m',
       access_mode ty = By_value chunk ->
@@ -100,13 +100,13 @@ Inductive assign_loc (ty: type) (m: mem) (b: block) (ofs: int):
       assign_loc ty m b ofs v t m'
   | assign_loc_copy: forall b' ofs' bytes m',
       access_mode ty = By_copy ->
-      (alignof_blockcopy ge ty | Int.unsigned ofs') ->
-      (alignof_blockcopy ge ty | Int.unsigned ofs) ->
-      b' <> b \/ Int.unsigned ofs' = Int.unsigned ofs
-              \/ Int.unsigned ofs' + sizeof ge ty <= Int.unsigned ofs
-              \/ Int.unsigned ofs + sizeof ge ty <= Int.unsigned ofs' ->
-      Mem.loadbytes m b' (Int.unsigned ofs') (sizeof ge ty) = Some bytes ->
-      Mem.storebytes m b (Int.unsigned ofs) bytes = Some m' ->
+      (alignof_blockcopy ge ty | Ptrofs.unsigned ofs') ->
+      (alignof_blockcopy ge ty | Ptrofs.unsigned ofs) ->
+      b' <> b \/ Ptrofs.unsigned ofs' = Ptrofs.unsigned ofs
+              \/ Ptrofs.unsigned ofs' + sizeof ge ty <= Ptrofs.unsigned ofs
+              \/ Ptrofs.unsigned ofs + sizeof ge ty <= Ptrofs.unsigned ofs' ->
+      Mem.loadbytes m b' (Ptrofs.unsigned ofs') (sizeof ge ty) = Some bytes ->
+      Mem.storebytes m b (Ptrofs.unsigned ofs) bytes = Some m' ->
       assign_loc ty m b ofs (Vptr b' ofs') E0 m'.
 
 (** Allocation of function-local variables.
@@ -142,7 +142,7 @@ Inductive bind_parameters (e: env):
   | bind_parameters_cons:
       forall m id ty params v1 vl b m1 m2,
       PTree.get id e = Some(b, ty) ->
-      assign_loc ty m b Int.zero v1 E0 m1 ->
+      assign_loc ty m b Ptrofs.zero v1 E0 m1 ->
       bind_parameters e m1 params vl m2 ->
       bind_parameters e m ((id, ty) :: params) (v1 :: vl) m2.
 
@@ -211,12 +211,12 @@ Inductive lred: expr -> mem -> expr -> mem -> Prop :=
   | red_var_local: forall x ty m b,
       e!x = Some(b, ty) ->
       lred (Evar x ty) m
-           (Eloc b Int.zero ty) m
+           (Eloc b Ptrofs.zero ty) m
   | red_var_global: forall x ty m b,
       e!x = None ->
       Genv.find_symbol ge x = Some b ->
       lred (Evar x ty) m
-           (Eloc b Int.zero ty) m
+           (Eloc b Ptrofs.zero ty) m
   | red_deref: forall b ofs ty1 ty m,
       lred (Ederef (Eval (Vptr b ofs) ty1) ty) m
            (Eloc b ofs ty) m
@@ -224,7 +224,7 @@ Inductive lred: expr -> mem -> expr -> mem -> Prop :=
       ge.(genv_cenv)!id = Some co ->
       field_offset ge f (co_members co) = OK delta ->
       lred (Efield (Eval (Vptr b ofs) (Tstruct id a)) f ty) m
-           (Eloc b (Int.add ofs (Int.repr delta)) ty) m
+           (Eloc b (Ptrofs.add ofs (Ptrofs.repr delta)) ty) m
   | red_field_union: forall b ofs id co a f ty m,
       ge.(genv_cenv)!id = Some co ->
       lred (Efield (Eval (Vptr b ofs) (Tunion id a)) f ty) m
@@ -274,10 +274,10 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
         E0 (Eparen (if b then r1 else r2) ty ty) m
   | red_sizeof: forall ty1 ty m,
       rred (Esizeof ty1 ty) m
-        E0 (Eval (Vint (Int.repr (sizeof ge ty1))) ty) m
+        E0 (Eval (Vptrofs (Ptrofs.repr (sizeof ge ty1))) ty) m
   | red_alignof: forall ty1 ty m,
       rred (Ealignof ty1 ty) m
-        E0 (Eval (Vint (Int.repr (alignof ge ty1))) ty) m
+        E0 (Eval (Vptrofs (Ptrofs.repr (alignof ge ty1))) ty) m
   | red_assign: forall b ofs ty1 v2 ty2 m v t m',
       sem_cast v2 ty2 ty1 m = Some v ->
       assign_loc ty1 m b ofs v t m' ->

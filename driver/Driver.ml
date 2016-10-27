@@ -511,9 +511,12 @@ let _ =
       | "arm"     -> if Configuration.is_big_endian
                      then Machine.arm_bigendian
                      else Machine.arm_littleendian
-      | "ia32"    -> if Configuration.abi = "macosx"
-                     then Machine.x86_32_macosx
-                     else Machine.x86_32
+      | "x86"     -> if Configuration.model = "64" then
+                       Machine.x86_64
+                     else
+                       if Configuration.abi = "macosx"
+                       then Machine.x86_32_macosx
+                       else Machine.x86_32
       | _         -> assert false
       end;
     Builtins.set C2C.builtins;

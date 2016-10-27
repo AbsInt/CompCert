@@ -1,0 +1,49 @@
+#!/bin/sh
+
+# The name of the test
+name="$1"
+shift
+
+# The temp file for output
+out="test$$.log"
+rm -f $out
+trap "rm -f $out" 0 INT QUIT
+
+# The architecture and the bitsize
+arch=`sed -n -e 's/^ARCH=//p' ../../Makefile.config`
+bits=`sed -n -e 's/^BITSIZE=//p' ../../Makefile.config`
+
+# The reference output
+if test -f "Results/$name-$arch-$bits"; then
+  ref="Results/$name-$arch-$bits"
+elif test -f "Results/$name-$arch"; then
+  ref="Results/$name-$arch"
+elif test -f "Results/$name-$bits"; then
+  ref="Results/$name-$bits"
+elif test -f "Results/$name"; then
+  ref="Results/$name"
+else
+  ref=""
+fi
+
+# Administer the test
+if $* > $out
+then
+  if test -n "$ref"; then
+    if cmp -s "$out" "$ref"; then
+      echo "$name: passed"
+      exit 0
+    else
+      echo "$name: WRONG OUTPUT (diff follows)"
+      diff -u "$ref" "$out"
+      exit 2
+    fi
+  else
+    echo "$name: passed"
+    exit 0
+  fi
+else
+  echo "$name: EXECUTION FAILED (status $?)"
+  exit 2
+fi
+
