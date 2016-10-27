@@ -14,8 +14,6 @@ Require Import Coqlib Compopts.
 Require Import AST Integers Floats Values Memory Globalenvs.
 Require Import Op RTL ValueDomain.
 
-Local Transparent Archi.ptr64.
-
 (** Value analysis for x86_64 operators *)
 
 Definition eval_static_condition (cond: condition) (vl: list aval): abool :=

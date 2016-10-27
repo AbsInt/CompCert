@@ -9,19 +9,13 @@ out="test$$.log"
 rm -f $out
 trap "rm -f $out" 0 INT QUIT
 
-# The architecture and the model
+# The architecture and the bitsize
 arch=`sed -n -e 's/^ARCH=//p' ../../Makefile.config`
-model=`sed -n -e 's/^MODEL=//p' ../../Makefile.config`
-
-# Its bit size
-case "$arch,$model" in
-  ia32,64) bits=64;;
-        *) bits=32;;
-esac
+bits=`sed -n -e 's/^BITSIZE=//p' ../../Makefile.config`
 
 # The reference output
-if test -f "Results/$name-$arch-$model"; then
-  ref="Results/$name-$arch-$model"
+if test -f "Results/$name-$arch-$bits"; then
+  ref="Results/$name-$arch-$bits"
 elif test -f "Results/$name-$arch"; then
   ref="Results/$name-$arch"
 elif test -f "Results/$name-$bits"; then

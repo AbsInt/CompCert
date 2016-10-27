@@ -15,11 +15,17 @@
 
 include Makefile.config
 
-DIRS=lib common $(ARCH) backend cfrontend driver debug\
+ifeq ($(wildcard $(ARCH)_$(BITSIZE)),)
+ARCHDIRS=$(ARCH)
+else
+ARCHDIRS=$(ARCH)_$(BITSIZE) $(ARCH)
+endif
+
+DIRS=lib common $(ARCHDIRS) backend cfrontend driver debug\
   flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight \
   cparser cparser/validator
 
-RECDIRS=lib common $(ARCH) backend cfrontend driver flocq exportclight cparser
+RECDIRS=lib common $(ARCHDIRS) backend cfrontend driver flocq exportclight cparser
 
 COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) compcert.$(d))
 
@@ -119,7 +125,15 @@ DRIVER=Compopts.v Compiler.v Complements.v
 FILES=$(VLIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(DRIVER) $(FLOCQ) \
   $(PARSERVALIDATOR) $(PARSER)
 
+# Generated source files
+
+GENERATED=\
+  $(ARCH)/ConstpropOp.v $(ARCH)/SelectOp.v $(ARCH)/SelectLong.v \
+  backend/SelectDiv.v backend/SplitLong.v \
+  cparser/Parser.v
+
 all:
+	@test -f .depend || $(MAKE) depend
 	$(MAKE) proof
 	$(MAKE) extraction
 	$(MAKE) ccomp
@@ -221,10 +235,11 @@ driver/Version.ml: VERSION
 cparser/Parser.v: cparser/Parser.vy
 	$(MENHIR) --coq cparser/Parser.vy
 
-depend: $(FILES) exportclight/Clightdefs.v
-	$(COQDEP) $^ \
-        | sed -e 's|$(ARCH)/|$$(ARCH)/|g' \
-        > .depend
+depend: $(GENERATED) depend1
+
+depend1: $(FILES) exportclight/Clightdefs.v
+	@echo "Analyzing Coq dependencies"
+	@$(COQDEP) $^ > .depend
 
 install:
 	install -d $(BINDIR)
@@ -244,7 +259,7 @@ clean:
 	rm -f compcert.ini
 	rm -f extraction/STAMP extraction/*.ml extraction/*.mli .depend.extr
 	rm -f tools/ndfun tools/modorder tools/*.cm? tools/*.o
-	rm -f $(ARCH)/ConstpropOp.v $(ARCH)/SelectOp.v backend/SelectDiv.v backend/SelectLong.v
+	rm -f $(GENERATED) .depend
 	$(MAKE) -f Makefile.extr clean
 	$(MAKE) -C runtime clean
 	$(MAKE) -C test clean
@@ -267,6 +282,6 @@ check-proof: $(FILES)
 print-includes:
 	@echo $(COQINCLUDES)
 
-include .depend
+-include .depend
 
 FORCE:

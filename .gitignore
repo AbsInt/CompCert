@@ -24,20 +24,18 @@ tools/ndfun
 tools/modorder
 Makefile.config
 # Generated files
+.depend
 .depend.extr
 compcert.ini
-ia32/ConstpropOp.v
-ia32/SelectOp.v
-ia32/SelectLong.v
+x86/ConstpropOp.v
+x86/SelectOp.v
+x86/SelectLong.v
 powerpc/ConstpropOp.v
 powerpc/SelectOp.v
 powerpc/SelectLong.v
 arm/ConstpropOp.v
 arm/SelectOp.v
 arm/SelectLong.v
-x86_64/ConstpropOp.v
-x86_64/SelectOp.v
-x86_64/SelectLong.v
 backend/SelectDiv.v
 backend/SplitLong.v
 backend/CMlexer.ml

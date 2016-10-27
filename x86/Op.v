@@ -414,11 +414,11 @@ Qed.
 Ltac FuncInv :=
   match goal with
   | H: (match ?x with nil => _ | _ :: _ => _ end = Some _) |- _ =>
-      destruct x; simpl in H; try discriminate H; FuncInv
+      destruct x; simpl in H; FuncInv
   | H: (match ?v with Vundef => _ | Vint _ => _ | Vfloat _ => _ | Vptr _ _ => _ end = Some _) |- _ =>
-      destruct v; simpl in H; try discriminate H; FuncInv
+      destruct v; simpl in H; FuncInv
   | H: (if Archi.ptr64 then _ else _) = Some _ |- _ =>
-      destruct Archi.ptr64 eqn:?; try discriminate H; FuncInv
+      destruct Archi.ptr64 eqn:?; FuncInv
   | H: (Some _ = Some _) |- _ =>
       injection H; intros; clear H; FuncInv
   | H: (None = Some _) |- _ =>
@@ -614,7 +614,7 @@ Lemma type_of_operation_sound:
   op <> Omove ->
   eval_operation genv sp op vl m = Some v ->
   Val.has_type v (snd (type_of_operation op)).
-Proof with (try exact I).
+Proof with (try exact I; try reflexivity).
   intros.
   destruct op; simpl in H0; FuncInv; subst; simpl.
   congruence.
@@ -623,15 +623,12 @@ Proof with (try exact I).
   exact I.
   exact I.
   unfold Genv.symbol_address; destruct (Genv.find_symbol genv id)...
-    unfold Val.has_type, Tptr; destruct Archi.ptr64; auto.
   destruct v0...
   destruct v0...
   destruct v0...
   destruct v0...
   destruct v0...
-  destruct v0; destruct v1; simpl...
-    unfold Val.has_type; destruct Archi.ptr64; auto.
-    unfold Val.has_type; destruct Archi.ptr64; auto. destruct (eq_block b b0); auto.
+  unfold Val.sub, Val.has_type; destruct Archi.ptr64, v0, v1... destruct (eq_block b b0)...
   destruct v0; destruct v1...
   destruct v0...
   destruct v0; destruct v1...
@@ -666,10 +663,8 @@ Proof with (try exact I).
   destruct v0...
   destruct v0...
   destruct v0...
-  destruct v0; simpl... unfold Val.has_type; destruct Archi.ptr64; auto. 
-  destruct v0; destruct v1; simpl...
-    unfold Val.has_type; destruct Archi.ptr64; auto.
-    unfold Val.has_type; destruct Archi.ptr64; simpl; auto. destruct (eq_block b b0); auto.
+  unfold Val.addl, Val.has_type; destruct Archi.ptr64, v0...
+  unfold Val.subl, Val.has_type; destruct Archi.ptr64, v0, v1... destruct (eq_block b b0)...
   destruct v0; destruct v1...
   destruct v0...
   destruct v0; destruct v1...
@@ -820,9 +815,10 @@ Lemma eval_shift_stack_addressing32:
   eval_addressing32 ge (Vptr sp Ptrofs.zero) (shift_stack_addressing delta addr) vl =
   eval_addressing32 ge (Vptr sp (Ptrofs.repr delta)) addr vl.
 Proof.
-  intros. destruct addr; simpl; auto.
-  destruct vl; auto. destruct Archi.ptr64 eqn:SF; auto.
-  do 2 f_equal. rewrite Ptrofs.add_zero_l. apply Ptrofs.add_commut.
+  intros. 
+  assert (A: forall i, Ptrofs.add Ptrofs.zero (Ptrofs.add i (Ptrofs.repr delta)) = Ptrofs.add (Ptrofs.repr delta) i).
+  { intros. rewrite Ptrofs.add_zero_l. apply Ptrofs.add_commut. }
+  destruct addr; simpl; rewrite ?A; reflexivity.
 Qed.
 
 Lemma eval_shift_stack_addressing64:
@@ -830,9 +826,10 @@ Lemma eval_shift_stack_addressing64:
   eval_addressing64 ge (Vptr sp Ptrofs.zero) (shift_stack_addressing delta addr) vl =
   eval_addressing64 ge (Vptr sp (Ptrofs.repr delta)) addr vl.
 Proof.
-  intros. destruct addr; simpl; auto.
-  destruct vl; auto. destruct Archi.ptr64 eqn:SF; auto.
-  do 2 f_equal. rewrite Ptrofs.add_zero_l. apply Ptrofs.add_commut.
+  intros. 
+  assert (A: forall i, Ptrofs.add Ptrofs.zero (Ptrofs.add i (Ptrofs.repr delta)) = Ptrofs.add (Ptrofs.repr delta) i).
+  { intros. rewrite Ptrofs.add_zero_l. apply Ptrofs.add_commut. }
+  destruct addr; simpl; rewrite ?A; reflexivity.
 Qed.
 
 Lemma eval_shift_stack_addressing:
@@ -1023,10 +1020,8 @@ Lemma eval_operation_preserved:
   eval_operation ge2 sp op vl m = eval_operation ge1 sp op vl m.
 Proof.
   intros.
-  unfold eval_operation; destruct op; auto.
+  unfold eval_operation; destruct op; auto using eval_addressing32_preserved, eval_addressing64_preserved.
   unfold Genv.symbol_address. rewrite agree_on_symbols. auto.
-  apply eval_addressing32_preserved.
-  apply eval_addressing64_preserved.
 Qed.
 
 End GENV_TRANSF.

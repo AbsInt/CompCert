@@ -14,18 +14,18 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Architecture-dependent parameters for IA32 *)
+(** Architecture-dependent parameters for x86 in 32-bit mode *)
 
 Require Import ZArith.
 Require Import Fappli_IEEE.
 Require Import Fappli_IEEE_bits.
 
-Parameter ptr64: bool.
+Definition ptr64 := false.
 
 Definition big_endian := false.
 
-Definition align_int64 := if ptr64 then 8%Z else 4%Z.
-Definition align_float64 := if ptr64 then 8%Z else 4%Z.
+Definition align_int64 := 4%Z.
+Definition align_float64 := 4%Z.
 
 Definition splitlong := negb ptr64.
 

@@ -221,10 +221,9 @@ Proof.
   destruct (Int.ltu n1 Int64.iwordsize') eqn:LT1; auto.
   simpl; rewrite LT. rewrite Int.add_commut, Int64.shl'_shl'; auto. rewrite Int.add_commut; auto.
 - destruct (shift_is_scale n); auto.
-  TrivialExists. simpl. subst x. destruct v1; simpl; auto.
+  TrivialExists. simpl. destruct v1; simpl; auto.
   rewrite LT. rewrite ! Int64.repr_unsigned. rewrite Int64.shl'_one_two_p.
   rewrite ! Int64.shl'_mul_two_p.  rewrite Int64.mul_add_distr_l. auto.
-  destruct Archi.ptr64; reflexivity.
 - destruct (shift_is_scale n); auto.
   TrivialExists. simpl. destruct x; simpl; auto.
   rewrite LT. rewrite ! Int64.repr_unsigned. rewrite Int64.shl'_one_two_p.
@@ -314,9 +313,7 @@ Proof.
   unfold addlimm; intros; red; intros.
   predSpec Int64.eq Int64.eq_spec n Int64.zero.
   subst. exists x; split; auto.
-  destruct x; simpl; auto.
-  rewrite Int64.add_zero; auto.
-  destruct Archi.ptr64; auto. rewrite Ptrofs.add_zero; auto.
+  destruct x; simpl; rewrite ?Int64.add_zero, ?Ptrofs.add_zero; auto.
   destruct (addlimm_match a); InvEval.
 - econstructor; split. apply eval_longconst. rewrite Int64.add_commut; auto.
 - inv H. simpl in H6. TrivialExists. simpl.
@@ -345,10 +342,12 @@ Proof.
 - subst. TrivialExists.
 - subst. TrivialExists. simpl. rewrite ! Val.addl_assoc. rewrite (Val.addl_commut y). auto.
 - subst. TrivialExists. simpl. rewrite ! Val.addl_assoc. auto.
-- TrivialExists. simpl. destruct x; destruct y; simpl; auto.
-    rewrite Int64.add_zero; auto.
-    destruct Archi.ptr64 eqn:SF; simpl; auto. rewrite SF. rewrite Ptrofs.add_assoc, Ptrofs.add_zero. auto.
-    destruct Archi.ptr64 eqn:SF; simpl; auto. rewrite SF. rewrite Ptrofs.add_assoc, Ptrofs.add_zero. auto.
+- TrivialExists. simpl.
+  unfold Val.addl. destruct Archi.ptr64, x, y; auto.
+  + rewrite Int64.add_zero; auto.
+  + rewrite Ptrofs.add_assoc, Ptrofs.add_zero. auto.
+  + rewrite Ptrofs.add_assoc, Ptrofs.add_zero. auto.
+  + rewrite Int64.add_zero; auto.
 Qed.
 
 Theorem eval_subl: binary_constructor_sound subl Val.subl.
@@ -411,11 +410,10 @@ Proof.
 - econstructor; split. apply eval_longconst. rewrite Int64.mul_commut; auto.
 - exploit (eval_mullimm_base n); eauto. intros (v2 & A2 & B2).
   exploit (eval_addlimm (Int64.mul n (Int64.repr n2))). eexact A2. intros (v3 & A3 & B3).
-  exists v3; split; auto. subst x.
+  exists v3; split; auto.
   destruct v1; simpl; auto.
   simpl in B2; inv B2. simpl in B3; inv B3. rewrite Int64.mul_add_distr_l.
   rewrite (Int64.mul_commut n). auto.
-  destruct Archi.ptr64; auto.
 - apply eval_mullimm_base; auto.
 Qed.
 
@@ -449,7 +447,7 @@ Theorem eval_shrxlimm:
   exists v, eval_expr ge sp e m le (shrxlimm a n) v /\ Val.lessdef z v.
 Proof.
   unfold shrxlimm; intros. destruct Archi.splitlong eqn:SL.
-+ eapply SplitLongproof.eval_shrxlimm; eauto. apply Archi.splitlong_ptr32; auto.
++ eapply SplitLongproof.eval_shrxlimm; eauto using Archi.splitlong_ptr32.
 + predSpec Int.eq Int.eq_spec n Int.zero.
 - subst n. destruct x; simpl in H0; inv H0. econstructor; split; eauto.
   change (Int.ltu Int.zero (Int.repr 63)) with true. simpl. rewrite Int64.shrx'_zero; auto.
@@ -492,7 +490,7 @@ Theorem eval_cmplu:
   eval_expr ge sp e m le (cmplu c a b) v.
 Proof.
   unfold cmplu; intros. destruct Archi.splitlong eqn:SL.
-  eapply SplitLongproof.eval_cmplu; eauto. apply Archi.splitlong_ptr32; auto.
+  eapply SplitLongproof.eval_cmplu; eauto using Archi.splitlong_ptr32.
   unfold Val.cmplu in H1.
   destruct (Val.cmplu_bool (Mem.valid_pointer m) c x y) as [vb|] eqn:C; simpl in H1; inv H1.
   destruct (is_longconst a) as [n1|] eqn:LC1; destruct (is_longconst b) as [n2|] eqn:LC2;

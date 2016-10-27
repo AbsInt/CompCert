@@ -94,12 +94,12 @@ Lemma const_for_result_correct:
   vmatch bc v a ->
   exists v', eval_operation ge (Vptr sp Ptrofs.zero) op nil m = Some v' /\ Val.lessdef v v'.
 Proof.
-  unfold const_for_result; intros.
+  unfold const_for_result. generalize Archi.ptr64; intros ptr64; intros.
   destruct a; inv H; SimplVM.
 - (* integer *)
   exists (Vint n); auto.
 - (* long *)
-  destruct Archi.ptr64; inv H2. exists (Vlong n); auto.
+  destruct ptr64; inv H2. exists (Vlong n); auto.
 - (* float *)
   destruct (Compopts.generate_float_constants tt); inv H2. exists (Vfloat f); auto.
 - (* single *)
@@ -110,12 +110,14 @@ Proof.
     destruct (symbol_is_external id).
   * revert H2; predSpec Ptrofs.eq Ptrofs.eq_spec ofs Ptrofs.zero; intros EQ; inv EQ.
     exists (Genv.symbol_address ge id Ptrofs.zero); auto.
-  * inv H2. exists (Genv.symbol_address ge id ofs); split; auto.
-    rewrite eval_Olea_ptr. apply eval_addressing_Aglobal.  
+  * inv H2. exists (Genv.symbol_address ge id ofs); split.
+    rewrite eval_Olea_ptr. apply eval_addressing_Aglobal.
+    auto.  
   + (* stack *)
-    inv H2. exists (Vptr sp ofs); split; auto.
+    inv H2. exists (Vptr sp ofs); split.
     rewrite eval_Olea_ptr. rewrite eval_addressing_Ainstack.  
-    simpl. rewrite Ptrofs.add_zero_l; auto.  
+    simpl. rewrite Ptrofs.add_zero_l; auto.
+    auto.  
 Qed.
 
 Lemma cond_strength_reduction_correct:
@@ -177,7 +179,7 @@ Proof.
   { intros. rewrite <- A. apply Genv.shift_symbol_address_32; auto. }
 Local Opaque Val.add.
   destruct (addr_strength_reduction_32_match addr args vl); 
-  simpl in *; InvApproxRegs; SimplVM; try (inv EA); rewrite ? SF.
+  simpl in *; InvApproxRegs; SimplVM; FuncInv; subst; rewrite ?SF.
 - econstructor; split; eauto. rewrite B. apply Val.add_lessdef; auto.
 - econstructor; split; eauto. rewrite Ptrofs.add_zero_l.
 Local Transparent Val.add.
@@ -207,9 +209,9 @@ Local Transparent Val.add.
   rewrite ! Val.add_assoc. apply Val.add_lessdef; auto.
 - econstructor; split; eauto. rewrite B. rewrite ! Val.add_assoc.
   rewrite (Val.add_commut (Vint (Int.repr ofs))). apply Val.add_lessdef; auto.
-- rewrite SF in H1; inv H1. econstructor; split; eauto.
+- econstructor; split; eauto.
   rewrite Genv.shift_symbol_address_32 by auto. auto.
-- rewrite SF in H1; inv H1. econstructor; split; eauto.
+- econstructor; split; eauto.
   rewrite Genv.shift_symbol_address_32 by auto. auto.
 - apply addr_strength_reduction_32_generic_correct; auto.
 Qed.
@@ -255,7 +257,7 @@ Proof.
   { intros. rewrite <- A. apply Genv.shift_symbol_address_64; auto. }
 Local Opaque Val.addl.
   destruct (addr_strength_reduction_64_match addr args vl); 
-  simpl in *; InvApproxRegs; SimplVM; try (inv EA); rewrite ? SF.
+  simpl in *; InvApproxRegs; SimplVM; FuncInv; subst; rewrite ?SF.
 - econstructor; split; eauto. rewrite B. apply Val.addl_lessdef; auto.
 - econstructor; split; eauto. rewrite Ptrofs.add_zero_l.
 Local Transparent Val.addl.
@@ -348,7 +350,7 @@ Proof.
   intros. unfold make_addimm.
   predSpec Int.eq Int.eq_spec n Int.zero; intros.
   subst. exists (e#r); split; auto.
-  destruct (e#r); simpl; auto. rewrite Int.add_zero; auto. destruct Archi.ptr64; auto. rewrite Ptrofs.add_zero; auto. 
+  destruct (e#r); simpl; auto; rewrite ?Int.add_zero, ?Ptrofs.add_zero; auto. 
   exists (Val.add e#r (Vint n)); split; auto. simpl. rewrite Int.repr_signed; auto. 
 Qed.
 
@@ -511,7 +513,7 @@ Proof.
   intros. unfold make_addlimm.
   predSpec Int64.eq Int64.eq_spec n Int64.zero; intros.
   subst. exists (e#r); split; auto.
-  destruct (e#r); simpl; auto. rewrite Int64.add_zero; auto. destruct Archi.ptr64; auto. rewrite Ptrofs.add_zero; auto. 
+  destruct (e#r); simpl; auto; rewrite ? Int64.add_zero, ? Ptrofs.add_zero; auto.
   exists (Val.addl e#r (Vlong n)); split; auto. simpl. rewrite Int64.repr_signed; auto. 
 Qed.
 
@@ -828,10 +830,10 @@ Proof.
   InvApproxRegs; SimplVM; inv H0.
   replace (Val.subl e#r1 (Vlong n2)) with (Val.addl e#r1 (Vlong (Int64.neg n2))).
   apply make_addlimm_correct; auto.
-  destruct (e#r1); simpl; auto.
+  unfold Val.addl, Val.subl. destruct Archi.ptr64 eqn:SF, e#r1; auto. 
   rewrite Int64.sub_add_opp; auto.
-  destruct Archi.ptr64 eqn:SF; auto.
   rewrite Ptrofs.sub_add_opp. do 2 f_equal. auto with ptrofs.
+  rewrite Int64.sub_add_opp; auto.
 (* mull *)
   rewrite Val.mull_commut in H0. InvApproxRegs; SimplVM; inv H0. apply make_mullimm_correct; auto.
   InvApproxRegs; SimplVM; inv H0. apply make_mullimm_correct; auto.

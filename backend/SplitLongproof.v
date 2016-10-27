@@ -176,7 +176,7 @@ Lemma eval_splitlong:
 Proof.
   intros until sem; intros EXEC UNDEF.
   unfold splitlong. case (splitlong_match a); intros.
-- InvEval. subst v.
+- InvEval; subst.
   exploit EXEC. eexact H2. eexact H3. intros [v' [A B]].
   exists v'; split. auto.
   destruct v1; simpl in *; try (rewrite UNDEF; auto).
@@ -224,7 +224,7 @@ Lemma eval_splitlong2:
 Proof.
   intros until sem; intros EXEC UNDEF.
   unfold splitlong2. case (splitlong2_match a b); intros.
-- InvEval. subst va vb.
+- InvEval; subst.
   exploit (EXEC le h1 l1 h2 l2); eauto. intros [v [A B]].
   exists v; split; auto.
   destruct v1; simpl in *; try (rewrite UNDEF; auto).
@@ -232,7 +232,7 @@ Proof.
   destruct v2; simpl in *; try (rewrite UNDEF; auto).
   destruct v3; try (rewrite UNDEF; auto).
   erewrite B; eauto.
-- InvEval. subst va.
+- InvEval; subst.
   exploit (EXEC (vb :: le) (lift h1) (lift l1)
                 (Eop Ohighlong (Eletvar 0 ::: Enil)) (Eop Olowlong (Eletvar 0 ::: Enil))).
   EvalOp. EvalOp. EvalOp. EvalOp.
@@ -243,7 +243,7 @@ Proof.
   destruct v0; try (rewrite UNDEF; auto).
   destruct vb; try (rewrite UNDEF; auto).
   erewrite B; simpl; eauto. rewrite Int64.ofwords_recompose. auto.
-- InvEval. subst vb.
+- InvEval; subst.
   exploit (EXEC (va :: le)
                 (Eop Ohighlong (Eletvar 0 ::: Enil)) (Eop Olowlong (Eletvar 0 ::: Enil))
                 (lift h2) (lift l2)).
@@ -322,7 +322,7 @@ Qed.
 Lemma eval_lowlong: unary_constructor_sound lowlong Val.loword.
 Proof.
   unfold lowlong; red. intros until x. destruct (lowlong_match a); intros.
-  InvEval. subst x. exists v0; split; auto.
+  InvEval; subst. exists v0; split; auto.
   destruct v1; simpl; auto. destruct v0; simpl; auto.
   rewrite Int64.lo_ofwords. auto.
   exists (Val.loword x); split; auto. EvalOp.
@@ -331,7 +331,7 @@ Qed.
 Lemma eval_highlong: unary_constructor_sound highlong Val.hiword.
 Proof.
   unfold highlong; red. intros until x. destruct (highlong_match a); intros.
-  InvEval. subst x. exists v1; split; auto.
+  InvEval; subst. exists v1; split; auto.
   destruct v1; simpl; auto. destruct v0; simpl; auto.
   rewrite Int64.hi_ofwords. auto.
   exists (Val.hiword x); split; auto. EvalOp.

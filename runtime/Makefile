@@ -2,9 +2,11 @@ include ../Makefile.config
 
 CFLAGS=-O1 -g -Wall
 
-ifeq ($(ARCH),ia32)
+ifeq ($(ARCH),x86)
 ifeq ($(MODEL),64)
 ARCH=x86_64
+else
+ARCH=x86_32
 endif
 endif
 

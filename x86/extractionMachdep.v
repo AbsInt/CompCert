@@ -12,12 +12,7 @@
 
 (* Additional extraction directives specific to the x86-64 port *)
 
-Require Archi SelectOp ConstpropOp.
-
-(* Archi *)
-
-Extract Constant Archi.ptr64 =>
-  "Configuration.model = ""64"" ".
+Require SelectOp ConstpropOp.
 
 (* SelectOp *)
 

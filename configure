@@ -103,31 +103,31 @@ done
 #
 case "$target" in
   arm-*|armv7a-*)
-      arch="arm"; model="armv7a"; endianness="little";;
+      arch="arm"; model="armv7a"; endianness="little"; bitsize=32;;
   armv6-*)
-      arch="arm"; model="armv6"; endianness="little";;
+      arch="arm"; model="armv6"; endianness="little"; bitsize=32;;
   armv7r-*)
-      arch="arm"; model="armv7r"; endianness="little";;
+      arch="arm"; model="armv7r"; endianness="little"; bitsize=32;;
   armv7m-*)
-      arch="arm"; model="armv7m"; endianness="little";;
+      arch="arm"; model="armv7m"; endianness="little"; bitsize=32;;
   armeb-*|armebv7a-*)
-      arch="arm"; model="armv7a"; endianness="big";;
+      arch="arm"; model="armv7a"; endianness="big"; bitsize=32;;
   armebv6-*)
-      arch="arm"; model="armv6"; endianness="big";;
+      arch="arm"; model="armv6"; endianness="big"; bitsize=32;;
   armebv7r-*)
-      arch="arm"; model="armv7r"; endianness="big";;
+      arch="arm"; model="armv7r"; endianness="big"; bitsize=32;;
   armebv7m-*)
-      arch="arm"; model="armv7m"; endianness="big";;
-  ia32-*)
-      arch="ia32"; model="32sse2"; endianness="little";;
+      arch="arm"; model="armv7m"; endianness="big"; bitsize=32;;
+  x86_32-*|ia32-*)
+      arch="x86"; model="32sse2"; endianness="little"; bitsize=32;;
   x86_64-*)
-      arch="ia32"; model="64"; endianness="little";;
+      arch="x86"; model="64"; endianness="little"; bitsize=64;;
   powerpc-*|ppc-*)
-      arch="powerpc"; model="ppc32"; endianness="big";;
+      arch="powerpc"; model="ppc32"; endianness="big"; bitsize=32;;
   powerpc64-*|ppc64-*)
-      arch="powerpc"; model="ppc64"; endianness="big";;
+      arch="powerpc"; model="ppc64"; endianness="big"; bitsize=32;;
   e5500-*)
-      arch="powerpc"; model="e5500"; endianness="big";;
+      arch="powerpc"; model="e5500"; endianness="big"; bitsize=32;;
   manual)
       ;;
   "")
@@ -242,9 +242,9 @@ fi
 
 
 #
-# IA32 (32 bits) Target Configuration
+# x86 (32 bits) Target Configuration
 #
-if test "$arch" = "ia32" -a "$model" != "64"; then
+if test "$arch" = "x86" -a "$bitsize" = "32"; then
 
   case "$target" in
     bsd)
@@ -323,7 +323,7 @@ fi
 #
 # IA32 (64 bits) Target Configuration
 #
-if test "$arch" = "ia32" -a "$model" = "64"; then
+if test "$arch" = "x86" -a "$bitsize" = "64"; then
 
   case "$target" in
     linux)
@@ -501,6 +501,7 @@ cat >> Makefile.config <<EOF
 ABI=$abi
 ARCH=$arch
 ASM_SUPPORTS_CFI=$asm_supports_cfi
+BITSIZE=$bitsize
 CASM=$casm
 CASM_OPTIONS=$casm_options
 CASMRUNTIME=$casmruntime
@@ -526,7 +527,7 @@ cat >> Makefile.config <<'EOF'
 # Target architecture
 # ARCH=powerpc
 # ARCH=arm
-# ARCH=ia32
+# ARCH=x86
 ARCH=
 
 # Hardware variant
@@ -537,20 +538,25 @@ ARCH=
 # MODEL=armv7a      # for ARM
 # MODEL=armv7r      # for ARM
 # MODEL=armv7m      # for ARM
-# MODEL=32sse2      # for IA32 in 32-bit mode
-# MODEL=64          # for IA32 in 64-bit mode
+# MODEL=32sse2      # for x86 in 32-bit mode
+# MODEL=64          # for x86 in 64-bit mode
 MODEL=
 
 # Target ABI
 # ABI=eabi          # for PowerPC / Linux and other SVR4 or EABI platforms
 # ABI=eabi          # for ARM
 # ABI=hardfloat     # for ARM
-# ABI=standard      # for IA32
+# ABI=standard      # for x86
 ABI=
+
+# Target bit width
+# BITSIZE=64        # for x86 in 64-bit mode
+# BITSIZE=32        # otherwise
+BITSIZE=
 
 # Target endianness
 # ENDIANNESS=big     # for ARM or PowerPC
-# ENDIANNESS=little  # for ARM or IA32
+# ENDIANNESS=little  # for ARM or x86
 ENDIANNESS=
 
 # Default calling conventions for passing structs and unions by value
@@ -575,7 +581,7 @@ STRUCT_RETURN=ref
 # Possible choices for ARM:
 # SYSTEM=linux
 #
-# Possible choices for IA32:
+# Possible choices for x86:
 # SYSTEM=linux
 # SYSTEM=bsd
 # SYSTEM=macosx
@@ -619,6 +625,10 @@ RESPONSEFILE="none"
 EOF
 fi
 
+#
+# Clean up target-dependent files to force their recompilation
+#
+rm -f .depend $arch/Archi.vo ${arch}_${bitsize}/Archi.vo runtime/*.o
 
 #
 # Summarize Configuration
@@ -656,8 +666,6 @@ CompCert configuration:
     Standard headers provided..... $has_standard_headers
     Standard headers installed in. $libdirexp/include
     Build command to use.......... $make
-
-If anything above looks wrong, please edit file ./Makefile.config to correct.
 
 EOF
 fi

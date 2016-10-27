@@ -18,7 +18,6 @@ Require Import Op Locations Conventions Mach Asm.
 Require Import Asmgen Asmgenproof0.
 
 Open Local Scope error_monad_scope.
-Local Transparent Archi.ptr64.
 
 (** * Correspondence between Mach registers and x86 registers *)
 
@@ -255,11 +254,11 @@ Proof.
   set (rs5 := nextinstr_nf (rs4#RAX <- v4)).
   assert (X: forall v1 v2,
              Val.addl v1 (Val.addl v2 (Vlong Int64.zero)) = Val.addl v1 v2).
-  { intros. destruct v0; simpl; auto; destruct v5; simpl; auto.
+  { intros. unfold Val.addl; destruct Archi.ptr64 eqn:SF, v0; auto; destruct v5; auto. 
     rewrite Int64.add_zero; auto.
-    destruct Archi.ptr64; auto. rewrite Ptrofs.add_zero; auto.
-    destruct Archi.ptr64; auto. rewrite Int64.add_zero; auto.
-    destruct Archi.ptr64; auto. }
+    rewrite Ptrofs.add_zero; auto.
+    rewrite Int64.add_zero; auto.
+    rewrite Int64.add_zero; auto. }
   exists rs5; split.
   eapply exec_straight_trans with (rs2 := rs3).
   eapply exec_straight_two with (rs2 := rs2); reflexivity.
@@ -334,7 +333,7 @@ Proof.
      with (eval_addrmode ge addr rs1).
   rewrite H0. eauto.
   unfold eval_addrmode in *; rewrite H1 in *.
-  destruct (eval_addrmode32 ge addr rs1); simpl in H0; try discriminate.
+  destruct (eval_addrmode32 ge addr rs1); simpl in H0; try discriminate H0.
   simpl. rewrite H1. rewrite Ptrofs.add_zero; auto.
   auto. auto. auto.
   intros. destruct H4. Simplifs. unfold rs3; Simplifs. unfold rs2; Simplifs.
@@ -428,19 +427,17 @@ Proof.
   { intros. destruct (zeq i 1); subst; auto.
     destruct v; simpl; auto. rewrite Int.mul_one; auto. }
   unfold transl_addressing; intros.
-  destruct addr; repeat (destruct args; try discriminate); simpl in H0; inv H0;
+  destruct addr; repeat (destruct args; try discriminate H); simpl in H0; FuncInv;
   monadInv H; try (erewrite ! ireg_of_eq by eauto); unfold eval_addrmode32.
 - simpl; rewrite Int.add_zero_l; auto.
 - rewrite Val.add_assoc. apply Val.add_lessdef; auto.
 - rewrite Val.add_permut. apply Val.add_lessdef; auto. simpl; rewrite Int.add_zero_l; auto.
 - apply Val.add_lessdef; auto. apply Val.add_lessdef; auto.
-- destruct Archi.ptr64 eqn:SF; inv H2. rewrite ! A by auto. auto.
-- destruct Archi.ptr64 eqn:SF; inv H2. erewrite ireg_of_eq by eauto.
-  rewrite Val.add_commut. rewrite A by auto. auto.
-- destruct Archi.ptr64 eqn:SF; inv H2. erewrite ireg_of_eq by eauto.
-  rewrite Val.add_permut. rewrite Val.add_commut. apply Val.add_lessdef; auto. rewrite A; auto.
-- destruct Archi.ptr64 eqn:SF; inv H2. simpl.
-  destruct (rs RSP); simpl; auto; rewrite SF.
+- rewrite ! A by auto. auto.
+- rewrite Val.add_commut. rewrite A by auto. auto.
+- rewrite Val.add_permut. rewrite Val.add_commut. apply Val.add_lessdef; auto. rewrite A; auto.
+- simpl. unfold Val.add; rewrite Heqb.
+  destruct (rs RSP); simpl; auto.
   rewrite Int.add_zero_l. apply Val.lessdef_same; f_equal; f_equal.
   symmetry. transitivity (Ptrofs.repr (Ptrofs.signed i)). auto with ptrofs. auto with ints.
 Qed.
@@ -461,15 +458,14 @@ Proof.
   { intros. destruct (zeq i 1); subst; auto.
     destruct v; simpl; auto. rewrite Int64.mul_one; auto. }
   unfold transl_addressing; intros.
-  destruct addr; repeat (destruct args; try discriminate); simpl in H0; inv H0;
+  destruct addr; repeat (destruct args; try discriminate H); simpl in H0; FuncInv;
   monadInv H; try (erewrite ! ireg_of_eq by eauto); unfold eval_addrmode64.
 - simpl; rewrite Int64.add_zero_l; auto.
 - rewrite Val.addl_assoc. apply Val.addl_lessdef; auto.
 - rewrite Val.addl_permut. apply Val.addl_lessdef; auto. simpl; rewrite Int64.add_zero_l; auto.
 - apply Val.addl_lessdef; auto. apply Val.addl_lessdef; auto.
-- destruct Archi.ptr64 eqn:SF; inv H2. rewrite ! A by auto. auto.
-- destruct Archi.ptr64 eqn:SF; inv H2. simpl.
-  destruct (rs RSP); simpl; auto; rewrite SF.
+- rewrite ! A by auto. auto.
+- unfold Val.addl; rewrite Heqb. destruct (rs RSP); auto. simpl.
   rewrite Int64.add_zero_l. apply Val.lessdef_same; f_equal; f_equal.
   symmetry. transitivity (Ptrofs.repr (Ptrofs.signed i)). auto with ptrofs. auto with ints.
 Qed.
@@ -555,7 +551,7 @@ Proof.
   set (rs' := nextinstr (compare_ints v1 v2 rs m)).
   intros [A [B [C [D E]]]].
   unfold eval_testcond. rewrite A; rewrite B. unfold Val.cmpu, Val.cmp.
-  destruct v1; destruct v2; simpl in H; inv H.
+  destruct v1; destruct v2; simpl in H; FuncInv; subst.
 - (* int int *)
   destruct c; simpl; auto.
   destruct (Int.eq i i0); reflexivity.
@@ -565,22 +561,22 @@ Proof.
   rewrite (Int.ltu_not i i0). destruct (Int.ltu i i0); destruct (Int.eq i i0); reflexivity.
   destruct (Int.ltu i i0); reflexivity.
 - (* int ptr *)
-  unfold Val.cmpu_bool; destruct Archi.ptr64; try discriminate.
+  unfold Val.cmpu_bool; rewrite Heqb1.
   destruct (Int.eq i Int.zero &&
-    (Mem.valid_pointer m b0 (Ptrofs.unsigned i0) || Mem.valid_pointer m b0 (Ptrofs.unsigned i0 - 1))); try discriminate.
-  destruct c; simpl in *; inv H1; reflexivity.
+    (Mem.valid_pointer m b0 (Ptrofs.unsigned i0) || Mem.valid_pointer m b0 (Ptrofs.unsigned i0 - 1))); try discriminate H.
+  destruct c; simpl in *; inv H; reflexivity.
 - (* ptr int *)
-  unfold Val.cmpu_bool; destruct Archi.ptr64; try discriminate.
+  unfold Val.cmpu_bool; rewrite Heqb1.
   destruct (Int.eq i0 Int.zero &&
-    (Mem.valid_pointer m b0 (Ptrofs.unsigned i) || Mem.valid_pointer m b0 (Ptrofs.unsigned i - 1))); try discriminate.
-  destruct c; simpl in *; inv H1; reflexivity.
+    (Mem.valid_pointer m b0 (Ptrofs.unsigned i) || Mem.valid_pointer m b0 (Ptrofs.unsigned i - 1))); try discriminate H.
+  destruct c; simpl in *; inv H; reflexivity.
 - (* ptr ptr *)
-  unfold Val.cmpu_bool; destruct Archi.ptr64; try discriminate.
+  unfold Val.cmpu_bool; rewrite Heqb2.
   fold (Mem.weak_valid_pointer m b0 (Ptrofs.unsigned i)) in *.
   fold (Mem.weak_valid_pointer m b1 (Ptrofs.unsigned i0)) in *.
   destruct (eq_block b0 b1).
   destruct (Mem.weak_valid_pointer m b0 (Ptrofs.unsigned i) &&
-            Mem.weak_valid_pointer m b1 (Ptrofs.unsigned i0)); inv H1.
+            Mem.weak_valid_pointer m b1 (Ptrofs.unsigned i0)); inv H.
   destruct c; simpl; auto.
   destruct (Ptrofs.eq i i0); auto.
   destruct (Ptrofs.eq i i0); auto.
@@ -589,8 +585,8 @@ Proof.
   rewrite (Ptrofs.ltu_not i i0). destruct (Ptrofs.ltu i i0); destruct (Ptrofs.eq i i0); reflexivity.
   destruct (Ptrofs.ltu i i0); reflexivity.
   destruct (Mem.valid_pointer m b0 (Ptrofs.unsigned i) &&
-            Mem.valid_pointer m b1 (Ptrofs.unsigned i0)); try discriminate.
-  destruct c; simpl in *; inv H1; reflexivity.
+            Mem.valid_pointer m b1 (Ptrofs.unsigned i0)); try discriminate H.
+  destruct c; simpl in *; inv H; reflexivity.
 Qed.
 
 Lemma compare_longs_spec:
@@ -658,7 +654,7 @@ Proof.
   set (rs' := nextinstr (compare_longs v1 v2 rs m)).
   intros [A [B [C [D E]]]].
   unfold eval_testcond. rewrite A; rewrite B.
-  destruct v1; destruct v2; simpl in H; inv H.
+  destruct v1; destruct v2; simpl in H; FuncInv; subst.
 - (* int int *)
   destruct c; simpl; auto.
   destruct (Int64.eq i i0); reflexivity.
@@ -670,20 +666,20 @@ Proof.
 - (* int ptr *)
   unfold Val.cmplu; simpl; destruct Archi.ptr64; try discriminate.
   destruct (Int64.eq i Int64.zero &&
-    (Mem.valid_pointer m b0 (Ptrofs.unsigned i0) || Mem.valid_pointer m b0 (Ptrofs.unsigned i0 - 1))) eqn:?; try discriminate.
-  destruct c; simpl in *; inv H1; auto.
+    (Mem.valid_pointer m b0 (Ptrofs.unsigned i0) || Mem.valid_pointer m b0 (Ptrofs.unsigned i0 - 1))) eqn:?; try discriminate H.
+  destruct c; simpl in *; inv H; auto.
 - (* ptr int *)
   unfold Val.cmplu; simpl; destruct Archi.ptr64; try discriminate.
   destruct (Int64.eq i0 Int64.zero &&
-    (Mem.valid_pointer m b0 (Ptrofs.unsigned i) || Mem.valid_pointer m b0 (Ptrofs.unsigned i - 1))) eqn:?; try discriminate.
-  destruct c; simpl in *; inv H1; auto.
+    (Mem.valid_pointer m b0 (Ptrofs.unsigned i) || Mem.valid_pointer m b0 (Ptrofs.unsigned i - 1))) eqn:?; try discriminate H.
+  destruct c; simpl in *; inv H; auto.
 - (* ptr ptr *)
-  unfold Val.cmplu; simpl; destruct Archi.ptr64; try discriminate.
+  unfold Val.cmplu; simpl; destruct Archi.ptr64; try discriminate H.
   fold (Mem.weak_valid_pointer m b0 (Ptrofs.unsigned i)) in *.
   fold (Mem.weak_valid_pointer m b1 (Ptrofs.unsigned i0)) in *.
   destruct (eq_block b0 b1).
   destruct (Mem.weak_valid_pointer m b0 (Ptrofs.unsigned i) &&
-            Mem.weak_valid_pointer m b1 (Ptrofs.unsigned i0)); inv H1.
+            Mem.weak_valid_pointer m b1 (Ptrofs.unsigned i0)); inv H.
   destruct c; simpl; auto.
   destruct (Ptrofs.eq i i0); auto.
   destruct (Ptrofs.eq i i0); auto.
@@ -692,8 +688,8 @@ Proof.
   rewrite (Ptrofs.ltu_not i i0). destruct (Ptrofs.ltu i i0); destruct (Ptrofs.eq i i0); reflexivity.
   destruct (Ptrofs.ltu i i0); reflexivity.
   destruct (Mem.valid_pointer m b0 (Ptrofs.unsigned i) &&
-            Mem.valid_pointer m b1 (Ptrofs.unsigned i0)); try discriminate.
-  destruct c; simpl in *; inv H1; reflexivity.
+            Mem.valid_pointer m b1 (Ptrofs.unsigned i0)); try discriminate H.
+  destruct c; simpl in *; inv H; reflexivity.
 Qed.
 
 Lemma compare_floats_spec:
