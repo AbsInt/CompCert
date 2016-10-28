@@ -21,7 +21,7 @@ CompCert is not free software.  This non-commercial release can only
 be used for evaluation, research, educational and personal purposes.
 A commercial version of CompCert, without this restriction and with
 professional support, can be purchased from
-[AbsInt](http://www.absint.com).  See the file `LICENSE` for more
+[AbsInt](https://www.absint.com).  See the file `LICENSE` for more
 information.
 
 ## Copyright
