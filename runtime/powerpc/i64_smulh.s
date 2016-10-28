@@ -62,7 +62,8 @@ __i64_smulh:
         addc    r8, r8, r0
         mulhwu  r0, r3, r5        # r0 = high half of XH.YH
         adde    r7, r7, r0
-# Test signs
+# Here r7:r8 contains the high 64 bits of the unsigned product.
+# Now, test signs and subtract if needed
         srawi   r0, r3, 31        # r0 = -1 if X < 0, r0 = 0 if X >= 0
         srawi   r9, r5, 31        # r9 = -1 if Y < 0, r9 = 0 if Y >= 0
         and     r3, r3, r9        # set X = 0 if Y >= 0
