@@ -9,7 +9,7 @@ ccomp \- the CompCert C compiler
 \fBCompCert C\fP is a compiler for the C programming language.
 Its intended use is the compilation of life-critical and mission-critical software written in C and meeting high levels of assurance.
 It accepts most of the ISO C 99 language, with some exceptions and a few extensions.
-It produces machine code for the PowerPC, ARM, and IA-32 architectures.
+It produces machine code for the PowerPC (32bit), ARM (32bit), and x86 (32bit and 64bit) architectures.
 .PP
 What sets CompCert C apart from any other production compiler, is that it is formally verified, using machine-assisted mathematical proofs, to be exempt from miscompilation issues.
 In other words, the executable code it produces is proved to behave exactly as specified by the semantics of the source C program.
@@ -152,7 +152,7 @@ Code Generation Options
 .TP
 .B \-falign\-functions <n>
 Set alignment of function entry points to <n> bytes.
-The default alignment is 16 bytes for IA-32 targets and 4 bytes for ARM and PowerPC.
+The default alignment is 16 bytes for x86 targets and 4 bytes for ARM and PowerPC.
 .
 .TP
 .BR \-ffpu ", " \-fno\-fpu
