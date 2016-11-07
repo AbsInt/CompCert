@@ -372,9 +372,9 @@ let make_builtin_memcpy args =
         | Errors.OK(Vint n) -> n
         | Errors.OK(Vlong n) -> n
         | _ -> error "alignment argument of '__builtin_memcpy_aligned' must be a constant"; Integers.Int.one in
-      if Integers.Int.is_power2 al1 = None then
+      if Integers.Int64.is_power2 al1 = None then
         error "alignment argument of '__builtin_memcpy_aligned' must be a power of 2";
-      if Integers.Int.modu sz1 al1 <> Integers.Int.zero then
+      if Integers.Int64.modu sz1 al1 <> Integers.Int.zero then
         error "alignment argument of '__builtin_memcpy_aligned' must be a divisor of the size";
       (* Issue #28: must decay array types to pointer types *)
       Ebuiltin(EF_memcpy(sz1, al1),
