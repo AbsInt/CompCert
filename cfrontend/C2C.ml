@@ -365,10 +365,12 @@ let make_builtin_memcpy args =
       let sz1 =
         match Initializers.constval !comp_env sz with
         | Errors.OK(Vint n) -> n
+        | Errors.OK(Vlong n) -> n
         | _ -> error "size argument of '__builtin_memcpy_aligned' must be a constant"; Integers.Int.zero in
       let al1 =
         match Initializers.constval !comp_env al with
         | Errors.OK(Vint n) -> n
+        | Errors.OK(Vlong n) -> n
         | _ -> error "alignment argument of '__builtin_memcpy_aligned' must be a constant"; Integers.Int.one in
       if Integers.Int.is_power2 al1 = None then
         error "alignment argument of '__builtin_memcpy_aligned' must be a power of 2";
