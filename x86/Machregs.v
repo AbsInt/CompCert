@@ -196,7 +196,7 @@ Definition destroyed_by_setstack (ty: typ): list mreg :=
   end.
 
 Definition destroyed_at_indirect_call: list mreg :=
-  nil.
+  AX :: nil.
 
 Definition temp_for_parent_frame: mreg :=
   AX.
