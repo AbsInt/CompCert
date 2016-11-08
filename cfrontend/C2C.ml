@@ -415,9 +415,15 @@ let make_builtin_va_arg_by_ref helper ty arg =
 
 let make_builtin_va_arg env ty e =
   match ty with
-  | Ctypes.Tint _ | Tpointer _ ->
+  | Ctypes.Tint _ ->
       make_builtin_va_arg_by_val
         "__compcert_va_int32" ty (Tint(I32, Unsigned, noattr)) e
+  | Tpointer _ when Archi.ptr64 = false ->
+      make_builtin_va_arg_by_val
+        "__compcert_va_int32" ty (Tint(I32, Unsigned, noattr)) e
+  | Tpointer _ when Archi.ptr64 = true ->
+      make_builtin_va_arg_by_val
+        "__compcert_va_int64" ty (Tlong(Unsigned, noattr)) e
   | Tlong _ ->
       make_builtin_va_arg_by_val
         "__compcert_va_int64" ty (Tlong(Unsigned, noattr)) e
