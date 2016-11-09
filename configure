@@ -514,8 +514,11 @@ B cparser
 B extraction
 
 EOF
+    if test "$arch" = "x86"; then
+        echo "S ${arch}_${bitsize}" >> .merlin
+        echo "B ${arch}_${bitsize}" >> .merlin
+    fi
 fi
-
 #
 # Generate Makefile.config
 #
