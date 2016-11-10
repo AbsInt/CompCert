@@ -45,6 +45,7 @@ module type TARGET =
       val default_falignment: int
       val new_label: unit -> int
       val label: out_channel -> int -> unit
+      val address: string
     end
 
 (* On-the-fly label renaming *)

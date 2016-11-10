@@ -302,4 +302,5 @@ module type DWARF_TARGET =
     val section: out_channel -> section_name -> unit
     val symbol: out_channel -> atom -> unit
     val comment: string
+    val address: string
   end

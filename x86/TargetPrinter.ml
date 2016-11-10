@@ -870,6 +870,8 @@ module Target(System: SYSTEM):TARGET =
 
     let new_label = new_label
 
+    let address = if Archi.ptr64 then ".quad" else ".long"
+
 end
 
 let sel_target () =

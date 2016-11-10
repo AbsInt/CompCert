@@ -870,6 +870,8 @@ module Target (Opt: PRINTER_OPTIONS) : TARGET =
     let label = elf_label
 
     let new_label = new_label
+
+    let address = if Archi.ptr64 then ".quad" else ".4byte"
   end
 
 let sel_target () =

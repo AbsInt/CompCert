@@ -357,9 +357,9 @@ module DwarfPrinter(Target: DWARF_TARGET):
     let print_loc oc c loc =
       match loc with
       | LocSymbol s ->
-          print_sleb128 oc c 5;
+          print_sleb128 oc c (1 + !Machine.config.Machine.sizeof_ptr);
           print_byte oc "" dw_op_addr;
-          fprintf oc "	.4byte		%a\n" symbol s
+          fprintf oc "	%s		%a\n" address symbol s
       | LocSimple e ->
           print_sleb128 oc c (size_of_loc_expr e);
           print_loc_expr oc e
@@ -371,9 +371,9 @@ module DwarfPrinter(Target: DWARF_TARGET):
 
     let print_list_loc oc = function
       | LocSymbol s ->
-          print_2byte oc "" 5;
+          print_2byte oc "" (1 + !Machine.config.Machine.sizeof_ptr);
           print_byte oc "" dw_op_addr;
-          fprintf oc "	.4byte		%a\n" symbol s
+          fprintf oc "	%s		%a\n" address symbol s
       | LocSimple e ->
           print_2byte oc "" (size_of_loc_expr e);
           print_loc_expr oc e
@@ -391,7 +391,10 @@ module DwarfPrinter(Target: DWARF_TARGET):
       | _ -> ()
 
     let print_addr oc c a =
-      fprintf oc "	.4byte		%a%a\n" label a print_comment c
+      fprintf oc "	%s		%a%a\n" address label a print_comment c
+
+    let print_data4_addr oc c a =
+      fprintf oc "	.4byte	%a%a\n" label a print_comment c
 
     let print_array_type oc at =
       print_ref oc "DW_AT_type" at.array_type
@@ -432,7 +435,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_uleb128 oc "DW_AT_language" 1;
       print_string oc "DW_AT_name" tag.compile_unit_name;
       print_string oc "DW_AT_producer" tag.compile_unit_prod_name;
-      print_addr oc "DW_AT_stmt_list" !debug_stmt_list
+      print_data4_addr oc "DW_AT_stmt_list" !debug_stmt_list
 
     let print_const_type oc ct =
       print_ref oc "DW_AT_type" ct.const_type
@@ -573,7 +576,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       fprintf oc "	.4byte		%a-%a%a\n" label debug_end label debug_length_start print_comment "Length of Unit";
       print_label oc debug_length_start;
       fprintf oc "	.2byte		0x%d%a\n" !Clflags.option_gdwarf print_comment "DWARF version number"; (* Dwarf version *)
-      print_addr oc "Offset Into Abbrev. Section" !abbrev_start_addr; (* Offset into the abbreviation *)
+      print_data4_addr oc "Offset Into Abbrev. Section" !abbrev_start_addr; (* Offset into the abbreviation *)
       print_byte oc "Address Size (in bytes)" !Machine.config.Machine.sizeof_ptr; (* Sizeof pointer type *)
       print_entry oc entry;
       print_sleb128 oc "" 0;
@@ -582,20 +585,20 @@ module DwarfPrinter(Target: DWARF_TARGET):
     let print_location_entry oc c_low l =
       print_label oc (loc_to_label l.loc_id);
       List.iter (fun (b,e,loc) ->
-        fprintf oc "	.4byte		%a-%a\n" label b label c_low;
-        fprintf oc "	.4byte		%a-%a\n" label e label c_low;
+        fprintf oc "	%s		%a-%a\n" address label b label c_low;
+        fprintf oc "	%s		%a-%a\n" address label e label c_low;
         print_list_loc oc loc) l.loc;
-      fprintf oc "	.4byte	0\n";
-      fprintf oc "	.4byte	0\n"
+      fprintf oc "	%s	0\n" address;
+      fprintf oc "	%s	0\n" address
 
     let print_location_entry_abs oc l =
       print_label oc (loc_to_label l.loc_id);
       List.iter (fun (b,e,loc) ->
-        fprintf oc "	.4byte		%a\n" label b;
-        fprintf oc "	.4byte		%a\n" label e;
+        fprintf oc "	%s		%a\n" address label b;
+        fprintf oc "	%s		%a\n" address label e;
         print_list_loc oc loc) l.loc;
-      fprintf oc "	.4byte	0\n";
-      fprintf oc "	.4byte	0\n"
+      fprintf oc "	%s	0\n" address;
+      fprintf oc "	%s	0\n" address
 
 
     let print_location_list oc (c_low,l) =
@@ -628,10 +631,10 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_label oc !debug_ranges_addr;
       List.iter (fun l ->
         List.iter (fun (b,e) ->
-          fprintf oc "	.4byte		%a\n" label b;
-          fprintf oc "	.4byte		%a\n" label e) l;
-        fprintf oc "	.4byte	0\n";
-        fprintf oc "	.4byte	0\n") r
+          fprintf oc "	%s		%a\n" address label b;
+          fprintf oc "	%s		%a\n" address label e) l;
+        fprintf oc "	%s	0\n" address;
+        fprintf oc "	%s	0\n" address) r
 
     let print_gnu_entries oc cp (lpc,loc) s r =
       compute_abbrev cp;

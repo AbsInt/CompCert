@@ -41,6 +41,7 @@ module type SYSTEM =
       val print_epilogue: out_channel -> unit
       val section: out_channel -> section_name -> unit
       val debug_section: out_channel -> section_name -> unit
+      val address: string
     end
 
 let symbol = elf_symbol
@@ -170,6 +171,8 @@ module Linux_System : SYSTEM =
         end
 
     let debug_section _ _ = ()
+
+    let address = if Archi.ptr64 then ".quad" else ".4byte"
   end
 
 module Diab_System : SYSTEM =
@@ -300,6 +303,8 @@ module Diab_System : SYSTEM =
         label
       and end_line () =   fprintf oc "	.d2_line_end\n" in
       Debug.compute_diab_file_enum end_label entry_label end_line
+
+    let address = assert (not Archi.ptr64); ".4byte"
 
   end
 
@@ -867,6 +872,8 @@ module Target (System : SYSTEM):TARGET =
     let default_falignment = 4
 
     let new_label = new_label
+
+    let address = address
 
     let section oc sec =
       section oc sec;
