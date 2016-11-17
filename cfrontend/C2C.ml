@@ -578,10 +578,11 @@ let string_of_type ty =
   Format.pp_print_flush fb ();
   Buffer.contents b
 
-let is_longlong env ty =
+let is_int64 env ty =
   match Cutil.unroll env ty with
-  | C.TInt((C.ILongLong|C.IULongLong), _) -> true
-  | _ -> false
+  | C.TInt(k, _) -> Cutil.sizeof_ikind k = 8
+  | C.TEnum(_, _) -> false
+  | _ -> assert false
 
 (** Floating point constants *)
 
@@ -1022,7 +1023,7 @@ let rec convertStmt env s =
         end;
       let te = convertExpr env e in
       swrap (Ctyping.sswitch te
-               (convertSwitch env (is_longlong env e.etyp) cases))
+               (convertSwitch env (is_int64 env e.etyp) cases))
   | C.Slabeled(C.Slabel lbl, s1) ->
       Slabel(intern_string lbl, convertStmt env s1)
   | C.Slabeled(C.Scase _, _) ->
