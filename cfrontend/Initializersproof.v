@@ -601,35 +601,35 @@ Theorem transl_init_single_steps:
   Mem.store chunk m' b ofs v = Some m'' ->
   Genv.store_init_data ge m b ofs data = Some m''.
 Proof.
-  intros. monadInv H.
+  intros. monadInv H. monadInv EQ. 
   exploit constval_steps; eauto. intros [A [B C]]. subst m' ty1.
   exploit sem_cast_match; eauto. intros D.
   unfold Genv.store_init_data.
   inv D.
 - (* int *)
-  remember Archi.ptr64 as ptr64.  destruct ty; try discriminate EQ2.
-+ destruct i0; inv EQ2.
+  remember Archi.ptr64 as ptr64.  destruct ty; try discriminate EQ0.
++ destruct i0; inv EQ0.
   destruct s; simpl in H2; inv H2. rewrite <- Mem.store_signed_unsigned_8; auto. auto.
   destruct s; simpl in H2; inv H2. rewrite <- Mem.store_signed_unsigned_16; auto. auto.
   simpl in H2; inv H2. assumption.
   simpl in H2; inv H2. assumption.
-+ destruct ptr64; inv EQ2. simpl in H2; unfold Mptr in H2; rewrite <- Heqptr64 in H2; inv H2. assumption.
++ destruct ptr64; inv EQ0. simpl in H2; unfold Mptr in H2; rewrite <- Heqptr64 in H2; inv H2. assumption.
 - (* Long *)
-  remember Archi.ptr64 as ptr64. destruct ty; inv EQ2.
+  remember Archi.ptr64 as ptr64. destruct ty; inv EQ0.
 + simpl in H2; inv H2. assumption.
 + simpl in H2; unfold Mptr in H2; destruct Archi.ptr64; inv H4. 
   inv H2; assumption.
 - (* float *)
   destruct ty; try discriminate.
-  destruct f1; inv EQ2; simpl in H2; inv H2; assumption.
+  destruct f1; inv EQ0; simpl in H2; inv H2; assumption.
 - (* single *)
   destruct ty; try discriminate.
-  destruct f1; inv EQ2; simpl in H2; inv H2; assumption.
+  destruct f1; inv EQ0; simpl in H2; inv H2; assumption.
 - (* pointer *)
   unfold inj in H.
   assert (data = Init_addrof b1 ofs1 /\ chunk = Mptr).
   { remember Archi.ptr64 as ptr64.
-    destruct ty; inversion EQ2.
+    destruct ty; inversion EQ0.
     destruct i; inv H5. unfold Mptr. destruct Archi.ptr64; inv H6; inv H2; auto.
     subst ptr64. unfold Mptr. destruct Archi.ptr64; inv H5; inv H2; auto.
     inv H2. auto. }
@@ -646,24 +646,24 @@ Lemma transl_init_single_size:
   transl_init_single ge ty a = OK data ->
   init_data_size data = sizeof ge ty.
 Proof.
-  intros. monadInv H. remember Archi.ptr64 as ptr64. destruct x0.
-- monadInv EQ2.
+  intros. monadInv H. monadInv EQ. remember Archi.ptr64 as ptr64. destruct x.
+- monadInv EQ0.
 - destruct ty; try discriminate.
-  destruct i0; inv EQ2; auto.
-  destruct ptr64; inv EQ2. 
+  destruct i0; inv EQ0; auto.
+  destruct ptr64; inv EQ0. 
 Local Transparent sizeof.
   unfold sizeof. rewrite <- Heqptr64; auto.
-- destruct ty; inv EQ2; auto. 
+- destruct ty; inv EQ0; auto. 
   unfold sizeof. destruct Archi.ptr64; inv H0; auto.
 - destruct ty; try discriminate.
-  destruct f0; inv EQ2; auto.
+  destruct f0; inv EQ0; auto.
 - destruct ty; try discriminate.
-  destruct f0; inv EQ2; auto.
+  destruct f0; inv EQ0; auto.
 - destruct ty; try discriminate.
-  destruct i0; inv EQ2; auto.
+  destruct i0; inv EQ0; auto.
   destruct Archi.ptr64 eqn:SF; inv H0. simpl. rewrite SF; auto.
-  destruct ptr64; inv EQ2. simpl. rewrite <- Heqptr64; auto.
-  inv EQ2. unfold init_data_size, sizeof. auto.
+  destruct ptr64; inv EQ0. simpl. rewrite <- Heqptr64; auto.
+  inv EQ0. unfold init_data_size, sizeof. auto.
 Qed.
 
 Notation idlsize := init_data_list_size.

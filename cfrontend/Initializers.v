@@ -133,6 +133,11 @@ Fixpoint constval (ce: composite_env) (a: expr) : res val :=
     Error(msg "not a compile-time constant")
   end.
 
+(** [constval_cast ce a ty] evaluates [a] then converts its value to type [ty]. *)
+
+Definition constval_cast (ce: composite_env) (a: expr) (ty: type): res val :=
+  do v <- constval ce a; do_cast v (typeof a) ty.
+
 (** * Translation of initializers *)
 
 Inductive initializer :=
@@ -148,9 +153,8 @@ with initializer_list :=
   of type [ty].  Return the corresponding initialization datum. *)
 
 Definition transl_init_single (ce: composite_env) (ty: type) (a: expr) : res init_data :=
-  do v1 <- constval ce a;
-  do v2 <- do_cast v1 (typeof a) ty;
-  match v2, ty with
+  do v <- constval_cast ce a ty;
+  match v, ty with
   | Vint n, Tint (I8|IBool) sg _ => OK(Init_int8 n)
   | Vint n, Tint I16 sg _ => OK(Init_int16 n)
   | Vint n, Tint I32 sg _ => OK(Init_int32 n)
