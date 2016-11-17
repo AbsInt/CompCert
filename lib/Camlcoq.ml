@@ -170,6 +170,8 @@ module Z = struct
   let add = Z.add
   let sub = Z.sub
   let mul = Z.mul
+  let div = Z.div
+  let modulo = Z.modulo
   let eq x y = (Z.compare x y = Eq)
   let lt x y = (Z.compare x y = Lt)
   let gt x y = (Z.compare x y = Gt)
@@ -247,9 +249,13 @@ module Z = struct
 
   let to_string = dec
 
+  let is_power2 x =
+    gt x zero && eq (Z.coq_land x (pred x)) zero
+
   let (+) = add
   let (-) = sub
   let ( * ) = mul
+  let ( / ) = div
   let (=) = eq
   let (<) = lt
   let (<=) = le

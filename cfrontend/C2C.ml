@@ -143,8 +143,8 @@ let builtins_generic = {
          (TVoid [],
            [TPtr(TVoid [], []);
             TPtr(TVoid [AConst], []);
-            TInt(IUInt, []);
-            TInt(IUInt, [])],
+            TInt(IULong, []);
+            TInt(IULong, [])],
           false);
     (* Annotations *)
     "__builtin_annot",
@@ -359,22 +359,26 @@ let globals_for_strings globs =
 
 (** ** Handling of inlined memcpy functions *)
 
+let constant_size_t a =
+  match Initializers.constval_cast !comp_env a Ctyping.size_t with
+  | Errors.OK(Vint n) -> Some(Integers.Int.unsigned n)
+  | Errors.OK(Vlong n) -> Some(Integers.Int64.unsigned n)
+  | _ -> None
+
 let make_builtin_memcpy args =
   match args with
   | Econs(dst, Econs(src, Econs(sz, Econs(al, Enil)))) ->
       let sz1 =
-        match Initializers.constval !comp_env sz with
-        | Errors.OK(Vint n) -> n
-        | Errors.OK(Vlong n) -> n
-        | _ -> error "size argument of '__builtin_memcpy_aligned' must be a constant"; Integers.Int.zero in
+        match constant_size_t sz with
+        | Some n -> n
+        | None -> error "size argument of '__builtin_memcpy_aligned' must be a constant"; Z.zero in
       let al1 =
-        match Initializers.constval !comp_env al with
-        | Errors.OK(Vint n) -> n
-        | Errors.OK(Vlong n) -> n
-        | _ -> error "alignment argument of '__builtin_memcpy_aligned' must be a constant"; Integers.Int.one in
-      if Integers.Int64.is_power2 al1 = None then
+        match constant_size_t al with
+        | Some n -> n
+        | None -> error "alignment argument of '__builtin_memcpy_aligned' must be a constant"; Z.one in
+      if not (Z.is_power2 al1) then
         error "alignment argument of '__builtin_memcpy_aligned' must be a power of 2";
-      if Integers.Int64.modu sz1 al1 <> Integers.Int.zero then
+      if not (Z.eq (Z.modulo sz1 al1) Z.zero) then
         error "alignment argument of '__builtin_memcpy_aligned' must be a divisor of the size";
       (* Issue #28: must decay array types to pointer types *)
       Ebuiltin(EF_memcpy(sz1, al1),
