@@ -822,15 +822,29 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
 and elab_struct_or_union_info keep_ty kind loc env members attrs =
   let (m, env') = mmap (elab_field_group keep_ty) env members in
   let m = List.flatten m in
-  ignore (List.fold_left (fun acc fld ->
-    let n = fld.fld_name.name in
-    if n = "" then begin
-      if Cutil.is_composite_type env fld.fld_typ  then
-        warning loc Celeven_extension  "anonymous structs/unions are a C11 extension";
-    end else if Env.exist_member env' acc n then
-      error loc "duplicate member '%s'" n;
-    fld::acc
-    ) [] m);
+  let rec duplicate acc = function
+    | [] -> ()
+    | fld::rest ->
+      let n = fld.fld_name.name in
+      if n = "" then begin
+        let warn () =
+          warning loc Celeven_extension  "anonymous structs/unions are a C11 extension" in
+        let rest = match unroll env fld.fld_typ with
+          | TStruct (id,_) ->
+            warn ();
+            let str = Env.find_struct env' id in
+            str.ci_members@rest
+          | TUnion (id,_) ->
+            warn ();
+            let union = Env.find_union env' id in
+            union.ci_members@rest
+          | _ -> rest in
+        duplicate acc rest
+      end else begin
+        if Env.exist_member env' acc n then
+          error loc "duplicate member '%s'" n;
+        duplicate (fld::acc) rest end in
+  duplicate [] m;
   (* Check for incomplete types *)
   let rec check_incomplete = function
   | [] -> ()
