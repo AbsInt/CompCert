@@ -29,7 +29,7 @@ open Transform
 (* The set of struct fields that are byte-swapped.
    A field is identified by a pair (struct name, field name). *)
 
-let byteswapped_fields : (ident * string, unit) Hashtbl.t
+let byteswapped_fields : (ident * ident, unit) Hashtbl.t
                        = Hashtbl.create 57
 
 (* What are the types that can be byte-swapped? *)

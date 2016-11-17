@@ -1037,6 +1037,11 @@ let formatloc pp (filename, lineno) =
 (* Generate the default initializer for the given type *)
 exception No_default_init
 
+let is_tag = function
+  | TStruct _
+  | TUnion _ -> true
+  | _ -> false
+
 let rec default_init env ty =
   match unroll env ty with
   | TInt _ | TEnum _ ->
@@ -1051,7 +1056,7 @@ let rec default_init env ty =
       let rec default_init_fields = function
       | [] -> []
       | f1 :: fl ->
-          if f1.fld_name = ""
+          if f1.fld_name.C.name = "" && not (is_tag f1.fld_typ)
           then default_init_fields fl
           else (f1, default_init env f1.fld_typ) :: default_init_fields fl in
       let ci = Env.find_struct env id in

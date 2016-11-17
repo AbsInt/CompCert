@@ -812,6 +812,7 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
                 error loc "bit-field '%s' width not an integer constant" id;
                 None
           end in
+    let id = Env.fresh_ident id in
     { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize' }
   in
   (List.map2 elab_bitfield fieldlist names, env')
@@ -821,16 +822,29 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
 and elab_struct_or_union_info keep_ty kind loc env members attrs =
   let (m, env') = mmap (elab_field_group keep_ty) env members in
   let m = List.flatten m in
-  ignore (List.fold_left (fun acc fld ->
-    let n = fld.fld_name in
-    if n <> "" then begin
-      if List.exists ((=) n) acc then
-        error loc "duplicate member '%s'" n;
-      n::acc
-    end else begin
-      if Cutil.is_composite_type env fld.fld_typ then
-        warning loc Celeven_extension  "anonymous structs/unions are a C11 extension";
-      acc end) [] m);
+  let rec duplicate acc = function
+    | [] -> ()
+    | fld::rest ->
+      let n = fld.fld_name.name in
+      if n = "" then begin
+        let warn () =
+          warning loc Celeven_extension  "anonymous structs/unions are a C11 extension" in
+        let rest = match unroll env fld.fld_typ with
+          | TStruct (id,_) ->
+            warn ();
+            let str = Env.find_struct env' id in
+            str.ci_members@rest
+          | TUnion (id,_) ->
+            warn ();
+            let union = Env.find_union env' id in
+            union.ci_members@rest
+          | _ -> rest in
+        duplicate acc rest
+      end else begin
+        if Env.exist_member env' acc n then
+          error loc "duplicate member '%s'" n;
+        duplicate (fld::acc) rest end in
+  duplicate [] m;
   (* Check for incomplete types *)
   let rec check_incomplete = function
   | [] -> ()
@@ -839,7 +853,7 @@ and elab_struct_or_union_info keep_ty kind loc env members attrs =
   | fld :: rem ->
       if wrap incomplete_type loc env' fld.fld_typ then
         (* Must be fatal otherwise we get problems constructing the init *)
-        fatal_error loc "member '%s' has incomplete type" fld.fld_name;
+        fatal_error loc "member '%s' has incomplete type" fld.fld_name.name;
       check_incomplete rem in
   check_incomplete m;
   (* Warn for empty structs or unions *)
@@ -1075,9 +1089,9 @@ module I = struct
     | Zarray(z, ty, sz, dfl, before, idx, after) ->
         sprintf "%s[%Ld]" (zipname z) idx
     | Zstruct(z, id, before, fld, after) ->
-        sprintf "%s.%s" (zipname z) fld.fld_name
+        sprintf "%s.%s" (zipname z) fld.fld_name.name
     | Zunion(z, id, fld) ->
-        sprintf "%s.%s" (zipname z) fld.fld_name
+        sprintf "%s.%s" (zipname z) fld.fld_name.name
 
   let name (z, i) = zipname z
 
@@ -1155,7 +1169,16 @@ module I = struct
         end else
           None
     | _, _ ->
-        None
+      None
+
+  let has_member env name = function
+    | TStruct (id,_) ->
+      let ci = Env.find_struct env id in
+      Env.exist_member env ci.ci_members name
+    | TUnion (id,_) ->
+      let ci = Env.find_union env id in
+      Env.exist_member env ci.ci_members name
+    | _ -> false
 
   (* Move to the member named [name] of the current point, which must be
      a struct or a union. *)
@@ -1166,20 +1189,26 @@ module I = struct
         let rec find before = function
           | [] -> None
           | (fld, i as f_i) :: after ->
-              if fld.fld_name = name then
+              if fld.fld_name.name = name then
                 Some(Zstruct(z, id, before, fld, after), i)
+              else if fld.fld_name.name = "" && has_member env name fld.fld_typ then
+                let zi = (Zstruct(z, id, before, fld, after), i) in
+                member env zi name
               else
                 find (f_i :: before) after
         in find [] flds
     | TUnion(id, _), Init_union(id', fld, i) ->
-        if fld.fld_name = name then
+        if fld.fld_name.name = name then
           Some(Zunion(z, id, fld), i)
         else begin
           let rec find = function
             | [] -> None
             | fld1 :: rem ->
-                if fld1.fld_name = name then
+                if fld1.fld_name.name = name then
                   Some(Zunion(z, id, fld1), default_init env fld1.fld_typ)
+                else if fld.fld_name.name = "" && has_member env name fld.fld_typ then
+                  let zi = (Zunion(z, id, fld1),default_init env fld1.fld_typ) in
+                  member env zi name
                 else
                   find rem
            in find (Env.find_union env id).ci_members
@@ -1416,34 +1445,49 @@ let elab_expr vararg loc env a =
       let (fld, attrs) =
         match unroll env b1.etyp with
         | TStruct(id, attrs) ->
-            (wrap Env.find_struct_member loc env (id, fieldname), attrs)
+            (wrap Env.find_struct_member_by_name loc env (id, fieldname), attrs)
         | TUnion(id, attrs) ->
-            (wrap Env.find_union_member loc env (id, fieldname), attrs)
+            (wrap Env.find_union_member_by_name loc env (id, fieldname), attrs)
         | _ ->
             error "request for member '%s' in something not a structure or union" fieldname in
       (* A field of a const/volatile struct or union is itself const/volatile *)
-      { edesc = EUnop(Odot fieldname, b1);
-        etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
-                                   (type_of_member env fld) },env
+      let rec aux = function
+        | [] -> b1
+        | fld::rest ->
+            let b1 = aux rest in
+            { edesc = EUnop(Odot fld.fld_name, b1);
+              etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
+                (type_of_member env fld) } in
+      aux fld,env
 
   | MEMBEROFPTR(a1, fieldname) ->
       let b1,env = elab env a1 in
       let (fld, attrs) =
-        match unroll env b1.etyp with
-        | TPtr(t, _) | TArray(t,_,_) ->
-            begin match unroll env t with
-            | TStruct(id, attrs) ->
-                (wrap Env.find_struct_member loc env (id, fieldname), attrs)
-            | TUnion(id, attrs) ->
-                (wrap Env.find_union_member loc env (id, fieldname), attrs)
-            | _ ->
-                error "request for member '%s' in something not a structure or union" fieldname
-            end
-        | _ ->
-            error "member reference type %a is not a pointer" (print_typ env) b1.etyp in
-      { edesc = EUnop(Oarrow fieldname, b1);
-        etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
-                                   (type_of_member env fld) },env
+         match unroll env b1.etyp with
+         | TPtr(t, _) | TArray(t,_,_) ->
+             begin match unroll env t with
+             | TStruct(id, attrs) ->
+                 (wrap Env.find_struct_member_by_name loc env (id, fieldname), attrs)
+             | TUnion(id, attrs) ->
+                 (wrap Env.find_union_member_by_name loc env (id, fieldname), attrs)
+             | _ ->
+                 error "request for member '%s' in something not a structure or union" fieldname
+             end
+         | _ ->
+             error "member reference type %a is not a pointer" (print_typ env) b1.etyp in
+       let rec aux =  function
+        | [] -> assert false
+        | [fld] ->
+          { edesc = EUnop(Oarrow fld.fld_name, b1);
+              etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
+                (type_of_member env fld) }
+        | fld::rest ->
+            let b1 = aux rest in
+            { edesc = EUnop(Odot fld.fld_name, b1);
+              etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
+                (type_of_member env fld) } in
+      aux fld,env
+
 
 (* Hack to treat vararg.h functions the GCC way.  Helps with testing.
     va_start(ap,n)
@@ -1623,11 +1667,11 @@ let elab_expr vararg loc env a =
       | EUnop(Odot f, b2) ->
           let fld = wrap2 field_of_dot_access loc env b2.etyp f in
           if fld.fld_bitfield <> None then
-            err "address of bit-field '%s' requested" f
+            err "address of bit-field '%s' requested" f.name
       | EUnop(Oarrow f, b2) ->
           let fld = wrap2 field_of_arrow_access loc env b2.etyp f in
           if fld.fld_bitfield <> None then
-            err "address of bit-field '%s' requested" f
+            err "address of bit-field '%s' requested" f.name
       | _ -> ()
       end;
       { edesc = EUnop(Oaddrof, b1); etyp = TPtr(b1.etyp, []) },env

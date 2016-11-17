@@ -103,8 +103,8 @@ type unary_operator =
   | Opredecr    (* "--" prefix *)
   | Opostincr   (* "++" postfix *)
   | Opostdecr   (* "--" postfix *)
-  | Odot of string (* ".field" *)
-  | Oarrow of string (* "->field" *)
+  | Odot of ident (* ".field" *)
+  | Oarrow of ident (* "->field" *)
 
 type binary_operator =
   | Oadd        (* binary "+" *)
@@ -156,7 +156,7 @@ type typ =
 (** Struct or union field *)
 
 type field = {
-    fld_name: string;
+    fld_name: ident;
     fld_typ: typ;
     fld_bitfield: int option
 }

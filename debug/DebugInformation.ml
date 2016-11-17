@@ -391,10 +391,10 @@ let insert_global_declaration env dec =
   | Gcompositedef (sou,id,at,fi) ->
       ignore (insert_type (gen_comp_typ sou id at));
       let id = find_type (gen_comp_typ sou id []) in
-      let fi = List.filter (fun f -> f.fld_name <> "") fi in (* Fields without names need no info *)
+      let fi = List.filter (fun f -> f.fld_name.C.name <> "") fi in (* Fields without names need no info *)
       let fields = List.map (fun f ->
         {
-         cfd_name = f.fld_name;
+         cfd_name = f.fld_name.C.name;
          cfd_typ = insert_type f.fld_typ;
          cfd_bit_size = f.fld_bitfield;
          cfd_bit_offset = None;

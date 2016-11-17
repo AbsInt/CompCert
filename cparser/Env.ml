@@ -181,6 +181,7 @@ let find_union env id =
   with Not_found ->
     raise(Error(Unbound_tag(id.name, "union")))
 
+
 let find_member ci m =
   List.find (fun f -> f.fld_name = m) ci
 
@@ -189,14 +190,63 @@ let find_struct_member env (id, m) =
     let ci = find_struct env id in
     find_member ci.ci_members m
   with Not_found ->
-    raise(Error(No_member(id.name, "struct", m)))
+    raise(Error(No_member(id.name, "struct", m.name)))
+
+let is_tag = function
+  | TStruct _
+  | TUnion _ -> true
+  | _ -> false
+
+let tag_id = function
+  | TStruct (id,_)
+  | TUnion (id,_) -> id
+  | _ -> assert false (* should be checked before *)
+
+let find_member_name env ci m =
+  let rec member acc = function
+    | [] -> raise Not_found
+    | f::rest -> if f.fld_name.name = m then
+        f::acc
+      else if f.fld_name.name = "" && is_tag f.fld_typ then
+        try
+          tag acc f
+        with Not_found ->
+          member acc rest
+      else
+        member acc rest
+  and tag acc fld =
+    let id = tag_id fld.fld_typ in
+    let ci = IdentMap.find id env.env_tag in
+    member (fld::acc) ci.ci_members
+  in
+  member [] ci
+
+let exist_member env ci m =
+  try
+    ignore (find_member_name env ci m);
+    true
+  with Not_found -> false
+
+let find_struct_member_by_name env (id, m) =
+  try
+    let ci = find_struct env id in
+    find_member_name env ci.ci_members m
+  with Not_found ->
+    raise (Error(No_member(id.name, "struct", m)))
 
 let find_union_member env (id, m) =
   try
     let ci = find_union env id in
     find_member ci.ci_members m
   with Not_found ->
-    raise(Error(No_member(id.name, "union", m)))
+    raise(Error(No_member(id.name, "union", m.name)))
+
+let find_union_member_by_name env (id, m) =
+  try
+    let ci = find_union env id in
+    find_member_name env ci.ci_members m
+  with Not_found ->
+    raise (Error(No_member(id.name, "struct", m)))
 
 let find_typedef env id =
   try
@@ -273,7 +323,7 @@ let error_message = function
       sprintf "unbound typedef '%s'" name
   | No_member(compname, compkind, memname) ->
       sprintf "no member named '%s' in '%s %s'"
-        memname compkind (composite_tag_name compname) 
+        memname compkind (composite_tag_name compname)
 
 let _ =
   Printexc.register_printer

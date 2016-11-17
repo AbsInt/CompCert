@@ -554,13 +554,13 @@ let rec convertTypArgs env tl el =
 let convertField env f =
   if f.fld_bitfield <> None then
     unsupported "bit field in struct or union (consider adding option -fbitfields)";
-  (intern_string f.fld_name, convertTyp env f.fld_typ)
+  (intern_string f.fld_name.name, convertTyp env f.fld_typ)
 
 let convertCompositedef env su id attr members =
   let t = match su with
   | C.Struct ->
       let layout = Cutil.struct_layout env members in
-      List.iter (fun (a,b) -> Debug.set_member_offset id a b) layout;
+      List.iter (fun (a,b) -> Debug.set_member_offset id a.name b) layout;
       TStruct (id,attr)
   | C.Union -> TUnion (id,attr) in
   Debug.set_composite_size id su (Cutil.sizeof env t);
@@ -878,12 +878,12 @@ and convertLvalue env e =
   | C.EUnop(C.Oderef, e1) ->
       ewrap (Ctyping.ederef (convertExpr env e1))
   | C.EUnop(C.Odot id, e1) ->
-      ewrap (Ctyping.efield !comp_env (convertExpr env e1) (intern_string id))
+      ewrap (Ctyping.efield !comp_env (convertExpr env e1) (intern_string id.name))
   | C.EUnop(C.Oarrow id, e1) ->
       let e1' = convertExpr env e1 in
       let e2' = ewrap (Ctyping.ederef e1') in
       let e3' = ewrap (Ctyping.evalof e2') in
-      ewrap (Ctyping.efield !comp_env e3' (intern_string id))
+      ewrap (Ctyping.efield !comp_env e3' (intern_string id.name))
   | C.EBinop(C.Oindex, e1, e2, _) ->
       let e1' = convertExpr env e1 and e2' = convertExpr env e2 in
       let e3' = ewrap (Ctyping.ebinop Oadd e1' e2') in
@@ -1145,7 +1145,7 @@ let rec convertInit env init =
   | C.Init_struct(_, flds) ->
       Initializers.Init_struct (convertInitList env (List.rev_map snd flds) Init_nil)
   | C.Init_union(_, fld, i) ->
-      Initializers.Init_union (intern_string fld.fld_name, convertInit env i)
+      Initializers.Init_union (intern_string fld.fld_name.name, convertInit env i)
 
 and convertInitList env il accu =
   match il with

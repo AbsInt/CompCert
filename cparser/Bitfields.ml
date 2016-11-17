@@ -26,7 +26,7 @@ open Transform
 (* Info associated to each bitfield *)
 
 type bitfield_info =
-  { bf_carrier: string; (* name of underlying regular field *)
+  { bf_carrier: C.ident; (* name of underlying regular field *)
     bf_carrier_typ: typ; (* type of underlying regular field *)
     bf_pos: int;        (* start bit *)
     bf_size: int;       (* size in bit *)
@@ -44,7 +44,7 @@ type bitfield_info =
 (* Mapping (struct identifier, bitfield name) -> bitfield info *)
 
 let bitfield_table =
-      (Hashtbl.create 57: (ident * string, bitfield_info) Hashtbl.t)
+      (Hashtbl.create 57: (ident * ident, bitfield_info) Hashtbl.t)
 
 let is_bitfield structid fieldname =
   try Some (Hashtbl.find bitfield_table (structid, fieldname))
@@ -67,7 +67,7 @@ let is_signed_enum_bitfield env sid fld eid n =
   else if List.for_all (fun (_, v, _) -> int_representable v n true) info.Env.ei_members
   then true
   else begin
-    Cerrors.warning Cutil.no_loc Cerrors.Unnamed "not all values of type 'enum %s' can be represented in bit-field '%s' of struct '%s' (%d bits are not enough)" eid.name fld sid.C.name n;
+    Cerrors.warning Cutil.no_loc Cerrors.Unnamed "not all values of type 'enum %s' can be represented in bit-field '%s' of struct '%s' (%d bits are not enough)" eid.name fld.C.name sid.C.name n;
     false
   end
 
@@ -117,18 +117,18 @@ let rec transf_struct_members env id count = function
           transf_struct_members env id count ml'
         else begin
           (* Create integer field of sufficient size for this bitfield group *)
-          let carrier = sprintf "__bf%d" count in
+          let carrier = Env.fresh_ident (sprintf "__bf%d" count) in
           let carrier_ikind = unsigned_ikind_for_carrier nbits in
           let carrier_typ = TInt(carrier_ikind, []) in
           (* Enter each field with its bit position, size, signedness *)
           List.iter
             (fun (name, pos, sz, signed, signed2, is_bool) ->
-              if name <> "" then begin
+              if name.C.name <> "" then begin
                 let pos' =
                   if !config.bitfields_msb_first
                   then sizeof_ikind carrier_ikind * 8 - pos - sz
                   else pos in
-                Debug.set_bitfield_offset id name pos carrier (sizeof_ikind carrier_ikind);
+                Debug.set_bitfield_offset id name.C.name pos carrier.C.name (sizeof_ikind carrier_ikind);
                 Hashtbl.add bitfield_table
                   (id, name)
                   {bf_carrier = carrier; bf_carrier_typ = carrier_typ;
@@ -148,7 +148,7 @@ let rec transf_union_members env id count = function
       (match m.fld_bitfield with
       | None ->  m::transf_union_members env id count ms
       | Some nbits ->
-          let carrier = sprintf "__bf%d" count in
+          let carrier = Env.fresh_ident (sprintf "__bf%d" count) in
           let carrier_ikind = unsigned_ikind_for_carrier nbits in
           let carrier_typ = TInt(carrier_ikind, []) in
           let signed =

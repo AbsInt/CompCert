@@ -106,9 +106,14 @@ and param env (id, ty) =
     let (id', env') = rename env id in ((id', typ env' ty), env')
 
 let field env f =
-  { fld_name = f.fld_name;
-    fld_typ = typ env f.fld_typ;
-    fld_bitfield = f.fld_bitfield }
+  let (id',env') = if f.fld_name.name = "" then
+      rename env f.fld_name
+    else
+      f.fld_name,env
+  in
+  { fld_name = id';
+    fld_typ = typ env' f.fld_typ;
+    fld_bitfield = f.fld_bitfield },env'
 
 let constant env = function
   | CEnum(id, v) -> CEnum(ident env id, v)
@@ -117,12 +122,17 @@ let constant env = function
 let rec exp env e =
   { edesc = exp_desc env e.edesc; etyp = typ env e.etyp }
 
+and uop env = function
+  | Odot id when id.name = "" ->  Odot (ident env id)
+  | Oarrow id when id.name = ""  -> Oarrow (ident env id)
+  | op -> op
+
 and exp_desc env = function
   | EConst cst -> EConst(constant env cst)
   | ESizeof ty -> ESizeof(typ env ty)
   | EAlignof ty -> EAlignof(typ env ty)
   | EVar id -> EVar(ident env id)
-  | EUnop(op, a) -> EUnop(op, exp env a)
+  | EUnop(op, a) -> EUnop(uop env op, exp env a)
   | EBinop(op, a, b, ty) -> EBinop(op, exp env a, exp env b, typ env ty)
   | EConditional(a, b, c) -> EConditional(exp env a, exp env b, exp env c)
   | ECast(ty, a) -> ECast(typ env ty, exp env a)
@@ -134,9 +144,9 @@ and init env = function
   | Init_array il -> Init_array (List.rev (List.rev_map (init env) il))
   | Init_struct(id, il) ->
       Init_struct(ident env id,
-                  List.map (fun (f, i) -> (field env f, init env i)) il)
+                  List.map (fun (f, i) -> (fst (field env f), init env i)) il)
   | Init_union(id, f, i) ->
-      Init_union(ident env id, field env f, init env i)
+      Init_union(ident env id, fst (field env f), init env i)
 
 let optexp env = function
   | None -> None
@@ -224,8 +234,9 @@ and globdecl_desc env = function
       let (id', env') = rename env id in
       (Gcompositedecl(kind, id', attr), env')
   | Gcompositedef(kind, id, attr, members) ->
-      (Gcompositedef(kind, ident env id, attr, List.map (field env) members),
-       env)
+    let members',env' = mmap field env members in
+      (Gcompositedef(kind, ident env id, attr,members'),
+       env')
   | Gtypedef(id, ty) ->
       let (id', env') = rename env id in
       (Gtypedef(id', typ env' ty), env')
