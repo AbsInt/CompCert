@@ -128,6 +128,8 @@ val is_composite_type : Env.t -> typ -> bool
   (* Is type a struct or union? *)
 val is_function_type : Env.t -> typ -> bool
   (* Is type a function type? (not pointer to function) *)
+val is_anonymous_composite : typ -> bool
+ (* Is type an anonymous composite? *)
 val pointer_arithmetic_ok : Env.t -> typ -> bool
   (* Is the type [*ty] appropriate for pointer arithmetic?
      [ty] must not be void, nor a function type, nor an incomplete type. *)

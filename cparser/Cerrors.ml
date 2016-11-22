@@ -224,19 +224,19 @@ let pp_key key fmt =
   fprintf fmt "%s%t@." key rsc
 
 let pp_loc fmt (filename,lineno) =
-  if filename <> "" then
-    fprintf fmt "%t%s:%d:%t" bc filename lineno rsc
+  if filename <> "" && lineno <> -10 && filename <> "cabs loc unknown" then
+    fprintf fmt "%t%s:%d:%t " bc filename lineno rsc
 
 let error key loc fmt =
   incr num_errors;
   kfprintf (pp_key key)
-    err_formatter ("%a %terror:%t %t" ^^ fmt) pp_loc loc rc rsc bc
+    err_formatter ("%a%terror:%t %t" ^^ fmt) pp_loc loc rc rsc bc
 
 let fatal_error key loc fmt =
   incr num_errors;
   kfprintf
     (fun fmt -> pp_key key fmt;raise Abort)
-    err_formatter ("%a %terror:%t %t" ^^ fmt) pp_loc loc rc rsc bc
+    err_formatter ("%a%terror:%t %t" ^^ fmt) pp_loc loc rc rsc bc
 
 let warning loc ty fmt =
   let kind,key = classify_warning ty in
@@ -248,7 +248,7 @@ let warning loc ty fmt =
   | WarningMsg ->
       incr num_warnings;
       kfprintf (pp_key key)
-        err_formatter ("%a %twarning:%t %t" ^^ fmt) pp_loc loc mc rsc bc
+        err_formatter ("%a%twarning:%t %t" ^^ fmt) pp_loc loc mc rsc bc
   | SuppressedMsg -> ifprintf err_formatter fmt
 
 let error loc fmt =

@@ -683,6 +683,11 @@ let is_function_type env t =
   | TFun _ -> true
   | _ -> false
 
+let is_anonymous_composite = function
+  | TStruct (id,_)
+  | TUnion (id,_) -> id.C.name = ""
+  | _ -> false
+
 (* Find the info for a field access *)
 
 let field_of_dot_access env t m =

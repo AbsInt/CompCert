@@ -759,7 +759,7 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
 
   let fieldlist = List.map (
     function
-      | (None, x) -> (Name ("", JUSTBASE, [], cabslu), x)
+      | (None, x) -> (Name ("", JUSTBASE, [], loc), x)
       | (Some n, x) -> (n, x))
     fieldlist
   in
@@ -812,6 +812,8 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
                 error loc "bit-field '%s' width not an integer constant" id;
                 None
           end in
+    if id = "" && not (Cutil.is_anonymous_composite ty) && optbitsize = None then
+      warning loc Missing_declarations "declaration does not declare anything";
     { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize' }
   in
   (List.map2 elab_bitfield fieldlist names, env')
