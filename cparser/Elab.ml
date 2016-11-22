@@ -748,8 +748,11 @@ and elab_init_name_group keep_ty loc env (spec, namelist) =
     let a = elab_attributes env attr in
     if inl && not (is_function_type env ty) then
       error loc "'inline' can only appear on functions";
-    if noret && not (is_function_type env ty) then
-      error loc "'_Noreturn' can only appear on functions";
+    if noret then begin
+      warning loc Celeven_extension "_Noreturn functions are a C11 extension";
+      if not (is_function_type env ty) then
+        error loc "'_Noreturn' can only appear on functions";
+    end;
     ((id, add_attributes_type a ty, init), env1) in
   (mmap elab_one_name env' namelist, sto, tydef)
 
@@ -2249,8 +2252,11 @@ let elab_fundef env spec name defs body loc =
       { sdesc = Sblock (List.map mkdecl extra_decls @ [body2]);
         sloc = no_loc }
     end in
-  if noret && contains_return body1 then
-    warning loc Invalid_noreturn "function '%s' declared 'noreturn' should not return" s;
+  if noret then begin
+    warning loc Celeven_extension "_Noreturn functions are a C11 extension";
+    if contains_return body1 then
+      warning loc Invalid_noreturn "function '%s' declared 'noreturn' should not return" s;
+  end;
   (* Build and emit function definition *)
   let fn =
     { fd_storage = sto1;
