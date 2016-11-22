@@ -1171,25 +1171,32 @@ Proof.
   rewrite <- SP in MS0.
   eapply match_stacks_invariant; eauto.
     intros. destruct (eq_block b1 stk).
-    subst b1. rewrite D in H8; inv H8. subst b2. eelim Plt_strict; eauto.
-    rewrite E in H8; auto.
-    intros. exploit Mem.perm_alloc_inv. eexact H. eauto.
-    destruct (eq_block b1 stk); intros; auto.
-    subst b1. rewrite D in H8; inv H8. subst b2. eelim Plt_strict; eauto.
-    intros. eapply Mem.perm_alloc_1; eauto.
-    intros. exploit Mem.perm_alloc_inv. eexact A. eauto.
-    rewrite dec_eq_false; auto.
-  auto. auto. auto. eauto. auto.
-  rewrite H5. apply agree_regs_init_regs. eauto. auto. inv H1; auto. congruence. auto.
-  eapply Mem.valid_new_block; eauto.
-  red; intros. split.
-  eapply Mem.perm_alloc_2; eauto. inv H1; xomega.
-  intros; red; intros. exploit Mem.perm_alloc_inv. eexact H. eauto.
-  destruct (eq_block b stk); intros.
-  subst. rewrite D in H9; inv H9. inv H1; xomega.
-  rewrite E in H9; auto. eelim Mem.fresh_block_alloc. eexact A. eapply Mem.mi_mappedblocks; eauto.
-  auto.
-  intros. exploit Mem.perm_alloc_inv; eauto. rewrite dec_eq_true. omega.
+    + subst b1. rewrite D in H8; inv H8. eelim Plt_strict; eauto.
+    + rewrite E in H8; auto.
+    + intros. exploit Mem.perm_alloc_inv. eexact H. eauto.
+      destruct (eq_block b1 stk); intros; auto.
+      subst b1. rewrite D in H8; inv H8. eelim Plt_strict; eauto.
+    + intros. eapply Mem.perm_alloc_1; eauto.
+    + intros. exploit Mem.perm_alloc_inv. eexact A. eauto.
+      rewrite dec_eq_false; auto.
+    + auto.
+    + auto.
+    + auto.
+      eauto.
+    + auto.
+    + rewrite H5. apply agree_regs_init_regs. eauto. auto. inv H1; auto.
+    + congruence.
+    + auto.
+    + eapply Mem.valid_new_block; eauto.
+    + red; intros. split.
+      eapply Mem.perm_alloc_2; eauto. inv H1; xomega.
+      intros; red; intros. exploit Mem.perm_alloc_inv. eexact H. eauto.
+      destruct (eq_block b stk); intros.
+      subst. rewrite D in H9; inv H9. inv H1; xomega.
+      rewrite E in H9; auto. eelim Mem.fresh_block_alloc. eexact A.
+      eapply Mem.mi_mappedblocks; eauto.
+    + auto.
+    + intros. exploit Mem.perm_alloc_inv; eauto. rewrite dec_eq_true. omega.
 
 - (* internal function, inlined *)
   inversion FB; subst.

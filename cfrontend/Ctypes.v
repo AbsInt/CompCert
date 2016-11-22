@@ -1064,7 +1064,7 @@ Proof.
     destruct (complete_members env m) eqn:C; simplify_eq EQ. clear EQ; intros EQ.
     rewrite PTree.gsspec. intros [A|A]; auto.
     destruct (peq id id0); auto.
-    inv A. rewrite <- H1; auto.
+    inv A. rewrite <- H0; auto.
   }
   intros. exploit REC; eauto. rewrite PTree.gempty. intuition congruence.
 Qed.
@@ -1519,7 +1519,7 @@ Local Transparent Linker_program.
   - intros. exploit link_match_fundef; eauto. intros (tf & A & B). exists tf; auto.
   - intros.
     Local Transparent Linker_types.
-    simpl in *. destruct (type_eq v1 v2); inv H4. subst v tv2. exists tv1; rewrite dec_eq_true; auto.
+    simpl in *. destruct (type_eq v1 v2); inv H4. intros. exists v; rewrite dec_eq_true; auto.
   - eauto.
   - eauto.
   - eauto.

@@ -415,10 +415,9 @@ Theorem is_finite_Bopp :
   forall opp_nan x,
   is_finite (Bopp opp_nan x) = is_finite x.
 Proof.
-intros opp_nan [| | |] ; try easy.
-intros s pl.
-simpl.
-now case opp_nan.
+  intros opp_nan [| | |] ; try easy.
+  simpl.
+  now case opp_nan.
 Qed.
 
 (** Absolute value *)
@@ -446,7 +445,6 @@ Theorem is_finite_Babs :
   is_finite (Babs abs_nan x) = is_finite x.
 Proof.
   intros abs_nan [| | |] ; try easy.
-  intros s pl.
   simpl.
   now case abs_nan.
 Qed.
