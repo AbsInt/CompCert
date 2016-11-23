@@ -303,6 +303,7 @@ Processing options:\n\
 \                   (<n>=0: none, <n>=1: limited, <n>=2: full; default is full)\n\
 \  -fcse          Perform common subexpression elimination [on]\n\
 \  -fredundancy   Perform redundancy elimination [on]\n\
+\  -fepeg         Perform equality saturation based optimization \n\
 Code generation options: (use -fno-<opt> to turn off -f<opt>)\n\
 \  -ffpu          Use FP registers for some integer operations [on]\n\
 \  -fsmall-data <n>  Set maximal size <n> for allocation in small data area\n\
@@ -466,6 +467,7 @@ let cmdline_actions =
   @ f_opt "const-prop" option_fconstprop
   @ f_opt "cse" option_fcse
   @ f_opt "redundancy" option_fredundancy
+  @ f_opt "epeg" option_epeg
 (* Code generation options *)
   @ f_opt "fpu" option_ffpu
   @ f_opt "sse" option_ffpu (* backward compatibility *)

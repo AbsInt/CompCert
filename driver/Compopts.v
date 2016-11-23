@@ -39,6 +39,9 @@ Parameter optim_CSE: unit -> bool.
 (** Flag -fredundancy.  For dead code elimination. *)
 Parameter optim_redundancy: unit -> bool.
 
+(** Flag -fepeg. For epeg based optimization. *)
+Parameter optim_epeg: unit -> bool.
+
 (** Flag -fthumb.  For the ARM back-end. *)
 Parameter thumb: unit -> bool.
 
