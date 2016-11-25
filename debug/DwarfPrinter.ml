@@ -337,21 +337,21 @@ module DwarfPrinter(Target: DWARF_TARGET):
 
     let print_loc_expr oc = function
       | DW_OP_bregx (a,b) ->
-          print_byte oc "" dw_op_bregx;
-          print_uleb128 oc "" a;
-          fprintf oc "	.sleb128	%ld\n" b;
+          print_byte oc "DW_OP_bregx" dw_op_bregx;
+          print_uleb128 oc "Register number" a;
+          print_sleb128 oc "Offset" (Int32.to_int b);
       | DW_OP_plus_uconst i ->
-          print_byte oc "" dw_op_plus_uconst;
-          print_uleb128 oc "" i
+          print_byte oc "DW_OP_plus_uconst" dw_op_plus_uconst;
+          print_uleb128 oc "Constant" i
       | DW_OP_piece i ->
-          print_byte oc "" dw_op_piece;
-          print_uleb128 oc "" i
+          print_byte oc "DW_op_piece" dw_op_piece;
+          print_uleb128 oc "Piece" i
       | DW_OP_reg i ->
           if i < 32 then
-            print_byte oc "" (dw_op_reg0 + i)
+            print_byte oc "DW_op_reg" (dw_op_reg0 + i)
           else begin
-            print_byte oc "" dw_op_regx;
-            print_uleb128 oc "" i
+            print_byte oc "DW_op_regx" dw_op_regx;
+            print_uleb128 oc "Register number" i
           end
 
     let print_loc oc c loc =

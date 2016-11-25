@@ -618,7 +618,7 @@ let expand_function id fn =
   try
     set_current_function fn;
     if !Clflags.option_g then
-      expand_debug id 4 preg_to_dwarf expand_instruction fn.fn_code
+      expand_debug id (int_reg_to_dwarf RSP) preg_to_dwarf expand_instruction fn.fn_code
     else
       List.iter expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())
