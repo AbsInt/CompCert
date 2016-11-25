@@ -65,13 +65,13 @@ type dwarf_accu =
      ranges: int * dw_ranges
    }
 
-let (=<<) acc t =
+let up_typs acc t =
   {acc with typs = IntSet.add t acc.typs;}
 
-let (<=<) acc loc =
+let up_locs acc loc =
   {acc with locs = loc@acc.locs;}
 
-let (>>=) acc r =
+let up_ranges acc r =
   {acc with ranges = r;}
 
 let empty_accu =
@@ -351,7 +351,7 @@ module Dwarfgenaux (Target: TARGET) =
         variable_type = v.gvar_type;
         variable_location = loc;
       } in
-      let acc = acc =<< v.gvar_type in
+      let acc = up_typs acc v.gvar_type in
       new_entry id (DW_TAG_variable var),acc
 
     let gen_splitlong op_hi op_lo =
@@ -421,7 +421,7 @@ module Dwarfgenaux (Target: TARGET) =
         formal_parameter_variable_parameter = None;
         formal_parameter_location = loc;
       } in
-      let acc = (acc =<< p.formal_parameter_type) <=< loc_list in
+      let acc = up_locs (up_typs acc p.formal_parameter_type) loc_list in
       new_entry (next_id ()) (DW_TAG_formal_parameter p),acc
 
     let scope_range f_id id (o,dwr) =
@@ -462,7 +462,7 @@ module Dwarfgenaux (Target: TARGET) =
             variable_type = v.lvar_type;
             variable_location = loc;
           } in
-          let acc = (acc =<< v.lvar_type) <=< loc_list in
+          let acc = up_locs (up_typs acc v.lvar_type)  loc_list in
           Some (new_entry id (DW_TAG_variable var)),acc
 
     and scope_to_entry f_id acc sc id =
@@ -470,7 +470,7 @@ module Dwarfgenaux (Target: TARGET) =
       let scope = {
         lexical_block_range = r;
       } in
-      let acc = (acc >>= dwr) in
+      let acc = up_ranges acc dwr in
       let vars,acc = mmap_opt (local_to_entry  f_id) acc sc.scope_variables in
       let entry = new_entry id (DW_TAG_lexical_block scope) in
       add_children entry vars,acc
@@ -503,7 +503,7 @@ module Dwarfgenaux (Target: TARGET) =
         subprogram_range = r;
       } in
       let f_id = get_opt_val f.fun_atom in
-      let acc = match f.fun_return_type with Some s -> acc =<< s | None -> acc in
+      let acc = match f.fun_return_type with Some s -> up_typs acc s | None -> acc in
       let f_entry =  new_entry id (DW_TAG_subprogram f_tag) in
       let children,acc =
         if !Clflags.option_gdepth > 1 then
@@ -591,6 +591,7 @@ let gnu_string_entry s =
 
 
 let gen_gnu_debug_info sec_name var_section : debug_entries =
+  Hashtbl.clear string_table;
   let r,dwr,low_pc =
     try if !Clflags.option_gdwarf > 3 then
         let pcs  = fold_section_start (fun s low acc ->
@@ -604,7 +605,7 @@ let gen_gnu_debug_info sec_name var_section : debug_entries =
         and h = section_end ".text" in
         Pc_pair(l,h),(0,[]),Some l
     with Not_found ->  Empty,(0,[]),None in
-  let accu = empty_accu >>= dwr in
+  let accu = up_ranges empty_accu dwr in
   let module Gen = Dwarfgenaux (struct
     let file_loc = gnu_file_loc
     let string_entry = gnu_string_entry

@@ -663,7 +663,10 @@ module DwarfPrinter(Target: DWARF_TARGET):
 
 
     (* Print the debug info and abbrev section *)
-    let print_debug oc = function
+    let print_debug oc debug =
+      Hashtbl.clear abbrev_mapping;
+      Hashtbl.clear loc_labels;
+      match debug with
       | Diab entries -> print_diab_entries oc entries
       | Gnu (cp,loc,s,r) -> print_gnu_entries oc cp loc s r
 
