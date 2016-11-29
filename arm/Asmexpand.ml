@@ -438,11 +438,16 @@ let int_reg_to_dwarf = function
    | IR8 -> 8  | IR9 -> 9  | IR10 -> 10 | IR11 -> 11
    | IR12 -> 12 | IR13 -> 13 | IR14 -> 14
 
-let float_reg_to_dwarf = function
-   | FR0 -> 64  | FR1 -> 65  | FR2 -> 66  | FR3 -> 67
-   | FR4 -> 68  | FR5 -> 69  | FR6 -> 70  | FR7 -> 71
-   | FR8 -> 72  | FR9 -> 73  | FR10 -> 74 | FR11 -> 75
-   | FR12 -> 76 | FR13 -> 77 | FR14 -> 78 | FR15 -> 79
+let float_reg_to_dwarf reg =
+ let reg =  match reg with
+   | FR0 -> 0  | FR1 -> 1  | FR2 -> 2  | FR3 -> 3
+   | FR4 -> 4  | FR5 -> 5  | FR6 -> 6  | FR7 -> 7
+   | FR8 -> 8  | FR9 -> 9  | FR10 -> 10 | FR11 -> 11
+   | FR12 -> 12 | FR13 -> 13 | FR14 -> 14 | FR15 -> 15 in
+   if Configuration.model >= "armv7" then
+     256 + reg
+   else
+     64 + reg
 
 let preg_to_dwarf = function
    | IR r -> int_reg_to_dwarf r
