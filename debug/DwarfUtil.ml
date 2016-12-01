@@ -156,4 +156,4 @@ let size_of_loc_expr = function
   | DW_OP_bregx (a,b) -> 1 + (sizeof_uleb128 a)  + (sizeof_sleb128 (Int32.to_int b))
   | DW_OP_plus_uconst a
   | DW_OP_piece a -> 1 + (sizeof_uleb128 a)
-  | DW_OP_reg i -> if i < 32 then 1 else  2
+  | DW_OP_reg i -> if i < 32 then 1 else  1 + (sizeof_uleb128 i)
