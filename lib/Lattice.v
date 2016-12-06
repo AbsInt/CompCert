@@ -56,7 +56,7 @@ End SEMILATTICE.
 
 Module Type SEMILATTICE_WITH_TOP.
 
-  Include Type SEMILATTICE.
+  Include SEMILATTICE.
   Parameter top: t.
   Axiom ge_top: forall x, ge top x.
 

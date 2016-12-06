@@ -18,8 +18,8 @@ Require Import AST Errors Integers Floats.
 Require Import Values Memory Globalenvs Events Cminor Op CminorSel.
 Require Import SelectOp SelectOpproof SplitLong.
 
-Open Local Scope cminorsel_scope.
-Open Local Scope string_scope.
+Local Open Scope cminorsel_scope.
+Local Open Scope string_scope.
 
 (** * Axiomatization of the helper functions *)
 

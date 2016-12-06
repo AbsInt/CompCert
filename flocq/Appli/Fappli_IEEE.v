@@ -46,7 +46,7 @@ End AnyRadix.
 
 Section Binary.
 
-Implicit Arguments exist [[A] [P]].
+Arguments exist {A} {P}.
 
 (** [prec] is the number of bits of the mantissa including the implicit one;
     [emax] is the exponent of the infinities.

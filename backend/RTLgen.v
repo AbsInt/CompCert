@@ -107,8 +107,8 @@ Inductive res (A: Type) (s: state): Type :=
   | Error: Errors.errmsg -> res A s
   | OK: A -> forall (s': state), state_incr s s' -> res A s.
 
-Implicit Arguments OK [A s].
-Implicit Arguments Error [A s].
+Arguments OK [A s].
+Arguments Error [A s].
 
 Definition mon (A: Type) : Type := forall (s: state), res A s.
 
