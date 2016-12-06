@@ -270,7 +270,7 @@ let check_errors () =
 let error_option w =
   let key = string_of_warning w in
   [Exact ("-W"^key), Unit (activate_warning w);
-   Exact ("-Wno"^key), Unit (deactivate_warning w);
+   Exact ("-Wno-"^key), Unit (deactivate_warning w);
    Exact ("-Werror="^key), Unit ( warning_as_error w);
    Exact ("-Wno-error="^key), Unit ( warning_not_as_error w)]
 
