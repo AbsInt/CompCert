@@ -57,7 +57,7 @@ type bound_value =
 
 type string_const =
   | Simple_string of string
-  | Offset_string of reference
+  | Offset_string of reference * string
 
 type file_loc =
   | Diab_file_loc of constant * constant

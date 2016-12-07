@@ -308,7 +308,9 @@ module DwarfPrinter(Target: DWARF_TARGET):
     let print_string oc c = function
       | Simple_string s ->
           fprintf oc "	.asciz		\"%s\"%a\n" s print_comment c
-      | Offset_string o ->  print_loc_ref oc c o
+      | Offset_string (o,s) ->
+        let c = sprintf "%s %s" c s in
+        print_loc_ref oc c o
 
     let print_uleb128 oc c d =
       fprintf oc "	.uleb128	%d%a\n" d print_comment c

@@ -583,11 +583,11 @@ let gnu_string_entry s =
     Simple_string s
   else
     try
-      Offset_string (Hashtbl.find string_table s)
+      Offset_string ((Hashtbl.find string_table s),s)
     with Not_found ->
       let id = next_id () in
       Hashtbl.add string_table s id;
-      Offset_string id
+      Offset_string (id,s)
 
 
 let gen_gnu_debug_info sec_name var_section : debug_entries =
