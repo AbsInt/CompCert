@@ -691,10 +691,11 @@ let is_anonymous_composite = function
 (* Find the info for a field access *)
 
 let field_of_dot_access env t m =
-  match unroll env t with
-  | TStruct(id, _) -> Env.find_struct_member env (id, m)
-  | TUnion(id, _) -> Env.find_union_member env (id, m)
-  | _ -> assert false
+ let m = match unroll env t with
+   | TStruct(id, _) -> Env.find_struct_member env (id, m)
+   | TUnion(id, _) -> Env.find_union_member env (id, m)
+   | _ -> assert false in
+ List.hd (List.rev m)
 
 let field_of_arrow_access env t m =
   match unroll env t with

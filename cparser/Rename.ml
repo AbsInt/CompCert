@@ -108,7 +108,8 @@ and param env (id, ty) =
 let field env f =
   { fld_name = f.fld_name;
     fld_typ = typ env f.fld_typ;
-    fld_bitfield = f.fld_bitfield }
+    fld_bitfield = f.fld_bitfield;
+    fld_anonymous = f.fld_anonymous;  }
 
 let constant env = function
   | CEnum(id, v) -> CEnum(ident env id, v)

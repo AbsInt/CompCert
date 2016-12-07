@@ -760,15 +760,17 @@ and elab_init_name_group keep_ty loc env (spec, namelist) =
 
 and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
 
-  let fieldlist = List.map (
-    function
-      | (None, x) -> (Name ("", JUSTBASE, [], loc), x)
-      | (Some n, x) -> (n, x))
-    fieldlist
+  let fieldlist,_ = mmap (fun c id ->
+    match id with
+    | (None, x) ->
+      let name = Printf.sprintf "<anon>__%d" c in
+      (Name (name, JUSTBASE, [], loc), x,true),c+1
+    | (Some n, x) -> (n, x,false),c)
+      0 fieldlist
   in
 
   let ((names, env'), sto) =
-    elab_name_group keep_ty loc env  (spec, List.map fst fieldlist) in
+    elab_name_group keep_ty loc env  (spec, List.map (fun (a,_,_) -> a) fieldlist) in
 
   if sto <> Storage_default then
     error loc "non-default storage in struct or union";
@@ -779,7 +781,7 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
       (* This should actually never be triggered, empty structs are captured earlier *)
       warning loc Missing_declarations "declaration does not declare anything";
 
-  let elab_bitfield (Name (_, _, _, loc), optbitsize) (id, ty) =
+  let elab_bitfield (Name (_, _, _, loc), optbitsize,nameless) (id, ty) =
     let optbitsize' =
       match optbitsize with
       | None -> None
@@ -815,9 +817,10 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
                 error loc "bit-field '%s' width not an integer constant" id;
                 None
           end in
-    if id = "" && not (Cutil.is_anonymous_composite ty) && optbitsize = None then
+    let anon_composite = Cutil.is_anonymous_composite ty in
+    if nameless && not anon_composite && optbitsize = None  then
       warning loc Missing_declarations "declaration does not declare anything";
-    { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize' }
+    { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize'; fld_anonymous = nameless && anon_composite}
   in
   (List.map2 elab_bitfield fieldlist names, env')
 
@@ -826,16 +829,28 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
 and elab_struct_or_union_info keep_ty kind loc env members attrs =
   let (m, env') = mmap (elab_field_group keep_ty) env members in
   let m = List.flatten m in
-  ignore (List.fold_left (fun acc fld ->
-    let n = fld.fld_name in
-    if n <> "" then begin
-      if List.exists ((=) n) acc then
-        error loc "duplicate member '%s'" n;
-      n::acc
-    end else begin
-      if Cutil.is_composite_type env fld.fld_typ then
-        warning loc Celeven_extension  "anonymous structs/unions are a C11 extension";
-      acc end) [] m);
+  let rec duplicate acc = function
+    | [] -> ()
+    | fld::rest ->
+       if fld.fld_anonymous then begin
+         let warn () =
+           warning loc Celeven_extension  "anonymous structs/unions are a C11 extension" in
+         let rest = match unroll env fld.fld_typ with
+           | TStruct (id,_) ->
+             warn ();
+             let str = Env.find_struct env' id in
+             str.ci_members@rest
+           | TUnion (id,_) ->
+             warn ();
+             let union = Env.find_union env' id in
+             union.ci_members@rest
+           | _ -> rest in
+         duplicate acc rest
+       end else begin
+         if List.exists ((=) fld.fld_name) acc then
+           error loc "duplicate member '%s'" fld.fld_name;
+         duplicate (fld.fld_name::acc) rest end in
+  duplicate [] m;
   (* Check for incomplete types *)
   let rec check_incomplete = function
   | [] -> ()
@@ -1427,9 +1442,14 @@ let elab_expr vararg loc env a =
         | _ ->
             error "request for member '%s' in something not a structure or union" fieldname in
       (* A field of a const/volatile struct or union is itself const/volatile *)
-      { edesc = EUnop(Odot fieldname, b1);
-        etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
-                                   (type_of_member env fld) },env
+      let rec aux = function
+         | [] -> b1
+         | fld::rest ->
+             let b1 = aux rest in
+             { edesc = EUnop(Odot fld.fld_name, b1);
+               etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
+                 (type_of_member env fld) } in
+       aux fld,env
 
   | MEMBEROFPTR(a1, fieldname) ->
       let b1,env = elab env a1 in
@@ -1446,9 +1466,18 @@ let elab_expr vararg loc env a =
             end
         | _ ->
             error "member reference type %a is not a pointer" (print_typ env) b1.etyp in
-      { edesc = EUnop(Oarrow fieldname, b1);
-        etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
-                                   (type_of_member env fld) },env
+       let rec aux =  function
+         | [] -> assert false
+         | [fld] ->
+           { edesc = EUnop(Oarrow fld.fld_name, b1);
+               etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
+                (type_of_member env fld) }
+         | fld::rest ->
+             let b1 = aux rest in
+             { edesc = EUnop(Odot fld.fld_name, b1);
+               etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
+                (type_of_member env fld) } in
+            aux fld,env
 
 (* Hack to treat vararg.h functions the GCC way.  Helps with testing.
     va_start(ap,n)

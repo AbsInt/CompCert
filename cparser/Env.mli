@@ -60,9 +60,8 @@ val ident_is_bound : t -> string -> bool
 val find_ident : t -> C.ident -> ident_info
 val find_struct : t -> C.ident -> composite_info
 val find_union : t -> C.ident -> composite_info
-val find_member : C.field list -> string -> C.field
-val find_struct_member : t -> C.ident * string -> C.field
-val find_union_member : t -> C.ident * string -> C.field
+val find_struct_member : t -> C.ident * string -> C.field list
+val find_union_member : t -> C.ident * string -> C.field list
 val find_typedef : t -> C.ident -> typedef_info
 val find_enum : t -> C.ident -> enum_info
 

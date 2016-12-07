@@ -158,7 +158,8 @@ type typ =
 type field = {
     fld_name: string;
     fld_typ: typ;
-    fld_bitfield: int option
+    fld_bitfield: int option;
+    fld_anonymous: bool;
 }
 
 type struct_or_union =
