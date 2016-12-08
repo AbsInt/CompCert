@@ -19,14 +19,15 @@ open Clflags
 open Driveraux
 open Frontend
 
-(* Location of the compatibility library *)
+(* From C source to Clight *)
 
-let stdlib_path = ref Configuration.stdlib_path
-
-(* From CompCert C AST to Clight *)
-
-let compile_c_ast sourcename csyntax ofile =
-  let clight =
+let compile_c_file sourcename ifile ofile =
+  dparse_destination := if !option_dparse then
+      Some (output_filename sourcename ".c" ".parsed.c")
+    else
+      None;
+  let csyntax = parse_c_file sourcename ifile in
+    let clight =
     match SimplExpr.transl_program csyntax with
     | Errors.OK p ->
         begin match SimplLocals.transf_program p with
@@ -48,10 +49,6 @@ let compile_c_ast sourcename csyntax ofile =
   ExportClight.print_program (Format.formatter_of_out_channel oc) clight;
   close_out oc
 
-(* From C source to Clight *)
-
-let compile_c_file sourcename ifile ofile =
-  compile_c_ast sourcename (parse_c_file sourcename ifile) ofile
 
 (* Processing of a .c file *)
 
@@ -60,7 +57,7 @@ let process_c_file sourcename =
   if !option_E then begin
     preprocess sourcename "-"
   end else begin
-    let preproname = Filename.temp_file "compcert" ".i" in
+    let preproname = temp_file ".i" in
     preprocess sourcename preproname;
     compile_c_file sourcename preproname (prefixname ^ ".v")
   end

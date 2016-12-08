@@ -11,6 +11,10 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+val dparse_destination: string option ref
+
+val dcompcertc_destination: string option ref
+
 val preprocess: string -> string -> unit
   (** From C to preprocessed C *)
 

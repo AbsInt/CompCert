@@ -42,7 +42,9 @@ let compile_c_file sourcename ifile ofile =
   (* Prepare to dump Clight, RTL, etc, if requested *)
   let set_dest dst opt ext =
     dst := if !opt then Some (output_filename sourcename ".c" ext)
-                   else None in
+      else None in
+  set_dest dparse_destination option_dparse ".parsed.c";
+  set_dest dcompcertc_destination option_dcmedium ".compcert.c";
   set_dest PrintClight.destination option_dclight ".light.c";
   set_dest PrintCminor.destination option_dcminor ".cm";
   set_dest PrintRTL.destination option_drtl ".rtl";
@@ -77,7 +79,7 @@ let compile_cminor_file ifile ofile =
   (* Prepare to dump RTL, Mach, etc, if requested *)
   let set_dest dst opt ext =
     dst := if !opt then Some (output_filename ifile ".cm" ext)
-                   else None in
+      else None in
   set_dest PrintRTL.destination option_drtl ".rtl";
   set_dest Regalloc.destination_alloctrace option_dalloctrace ".alloctrace";
   set_dest PrintLTL.destination option_dltl ".ltl";
