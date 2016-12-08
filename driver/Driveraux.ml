@@ -21,6 +21,12 @@ let gnu_system = Configuration.system <> "diab"
 let safe_remove file =
   try Sys.remove file with Sys_error _ -> ()
 
+(* Generate a temporary file wiht the given suffix that is removed on exit *)
+let temp_file suffix =
+  let file = Filename.temp_file "compcert" suffix in
+  at_exit (fun () -> safe_remove file);
+  file
+
 (* Invocation of external tools *)
 
 let rec waitpid_no_intr pid =
