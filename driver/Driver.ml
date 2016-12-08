@@ -36,9 +36,9 @@ let dump_jasm asm sourcename destfile =
   close_out oc
 
 
-(* From CompCert C AST to asm *)
+(* From C source to asm *)
 
-let compile_c_ast sourcename csyntax ofile =
+let compile_c_file sourcename ifile ofile =
   (* Prepare to dump Clight, RTL, etc, if requested *)
   let set_dest dst opt ext =
     dst := if !opt then Some (output_filename sourcename ".c" ext)
@@ -49,6 +49,7 @@ let compile_c_ast sourcename csyntax ofile =
   set_dest Regalloc.destination_alloctrace option_dalloctrace ".alloctrace";
   set_dest PrintLTL.destination option_dltl ".ltl";
   set_dest PrintMach.destination option_dmach ".mach";
+  let csyntax = parse_c_file sourcename ifile in
   (* Convert to Asm *)
   let asm =
     match Compiler.apply_partial
@@ -57,8 +58,8 @@ let compile_c_ast sourcename csyntax ofile =
     | Errors.OK asm ->
         asm
     | Errors.Error msg ->
-        eprintf "%s: %a" sourcename print_error msg;
-        exit 2 in
+      print_error sourcename msg
+  in
   (* Dump Asm in binary and JSON format *)
   if !option_sdump then begin
     let sf = output_filename sourcename ".c" !sdump_suffix in
@@ -69,12 +70,6 @@ let compile_c_ast sourcename csyntax ofile =
   let oc = open_out ofile in
   PrintAsm.print_program oc asm;
   close_out oc
-
-(* From C source to asm *)
-
-let compile_c_file sourcename ifile ofile =
-  let ast = parse_c_file sourcename ifile in
-  compile_c_ast sourcename ast ofile
 
 (* From Cminor to asm *)
 
@@ -112,9 +107,8 @@ let compile_cminor_file ifile ofile =
                Asmexpand.expand_program with
     | Errors.OK asm ->
         asm
-    | Errors.Error msg ->
-        eprintf "%s: %a" ifile print_error msg;
-        exit 2 in
+    | Errors.Error msg -> print_error ifile msg
+  in
   (* Print Asm in text form *)
   let oc = open_out ofile in
   PrintAsm.print_program oc asm;
