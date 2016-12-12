@@ -1179,7 +1179,19 @@ module I = struct
         end else
           None
     | _, _ ->
-        None
+      None
+
+  let has_member env name ty =
+    let mem f id =
+      try
+        ignore(f env (id,name)); true
+      with _ -> false in
+    match ty with
+    | TStruct (id,_) ->
+      mem Env.find_struct_member id
+    | TUnion (id,_) ->
+      mem Env.find_union_member id
+    | _ -> false
 
   (* Move to the member named [name] of the current point, which must be
      a struct or a union. *)
@@ -1192,6 +1204,9 @@ module I = struct
           | (fld, i as f_i) :: after ->
               if fld.fld_name = name then
                 Some(Zstruct(z, id, before, fld, after), i)
+              else if fld.fld_anonymous && has_member env name fld.fld_typ then
+                let zi = (Zstruct(z, id, before, fld, after), i) in
+                member env zi name
               else
                 find (f_i :: before) after
         in find [] flds
@@ -1204,6 +1219,9 @@ module I = struct
             | fld1 :: rem ->
                 if fld1.fld_name = name then
                   Some(Zunion(z, id, fld1), default_init env fld1.fld_typ)
+                else if fld.fld_anonymous && has_member env name fld.fld_typ then
+                  let zi = (Zunion(z, id, fld1),default_init env fld1.fld_typ) in
+                  member env zi name
                 else
                   find rem
            in find (Env.find_union env id).ci_members
