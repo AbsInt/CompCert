@@ -760,17 +760,15 @@ and elab_init_name_group keep_ty loc env (spec, namelist) =
 
 and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
 
-  let fieldlist,_ = mmap (fun c id ->
-    match id with
+  let fieldlist = List.map (function
     | (None, x) ->
-      let name = Printf.sprintf "<anon>__%d" c in
-      (Name (name, JUSTBASE, [], loc), x,true),c+1
-    | (Some n, x) -> (n, x,false),c)
-      0 fieldlist
+      (Name ("", JUSTBASE, [], loc), x)
+    | (Some n, x) -> (n, x))
+      fieldlist
   in
 
   let ((names, env'), sto) =
-    elab_name_group keep_ty loc env  (spec, List.map (fun (a,_,_) -> a) fieldlist) in
+    elab_name_group keep_ty loc env  (spec, List.map fst fieldlist) in
 
   if sto <> Storage_default then
     error loc "non-default storage in struct or union";
@@ -781,7 +779,7 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
       (* This should actually never be triggered, empty structs are captured earlier *)
       warning loc Missing_declarations "declaration does not declare anything";
 
-  let elab_bitfield (Name (_, _, _, loc), optbitsize,nameless) (id, ty) =
+  let elab_bitfield (Name (_, _, _, loc), optbitsize) (id, ty) =
     let optbitsize' =
       match optbitsize with
       | None -> None
@@ -818,9 +816,9 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
                 None
           end in
     let anon_composite = Cutil.is_anonymous_composite ty in
-    if nameless && not anon_composite && optbitsize = None  then
+    if id = "" && not anon_composite && optbitsize = None  then
       warning loc Missing_declarations "declaration does not declare anything";
-    { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize'; fld_anonymous = nameless && anon_composite}
+    { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize'; fld_anonymous = id = "" && anon_composite}
   in
   (List.map2 elab_bitfield fieldlist names, env')
 
@@ -829,6 +827,12 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
 and elab_struct_or_union_info keep_ty kind loc env members attrs =
   let (m, env') = mmap (elab_field_group keep_ty) env members in
   let m = List.flatten m in
+  let m,_ = mmap (fun c fld  ->
+      if fld.fld_anonymous then
+        let name = Printf.sprintf "<anon>_%d" c in
+        {fld with fld_name = name},c+1
+      else
+        fld,c) 0 m in
   let rec duplicate acc = function
     | [] -> ()
     | fld::rest ->
@@ -1442,14 +1446,14 @@ let elab_expr vararg loc env a =
         | _ ->
             error "request for member '%s' in something not a structure or union" fieldname in
       (* A field of a const/volatile struct or union is itself const/volatile *)
-      let rec aux = function
+      let rec access = function
          | [] -> b1
          | fld::rest ->
-             let b1 = aux rest in
+             let b1 = access rest in
              { edesc = EUnop(Odot fld.fld_name, b1);
                etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
                  (type_of_member env fld) } in
-       aux fld,env
+       access fld,env
 
   | MEMBEROFPTR(a1, fieldname) ->
       let b1,env = elab env a1 in
@@ -1466,18 +1470,18 @@ let elab_expr vararg loc env a =
             end
         | _ ->
             error "member reference type %a is not a pointer" (print_typ env) b1.etyp in
-       let rec aux =  function
+       let rec access =  function
          | [] -> assert false
          | [fld] ->
            { edesc = EUnop(Oarrow fld.fld_name, b1);
                etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
                 (type_of_member env fld) }
          | fld::rest ->
-             let b1 = aux rest in
+             let b1 = access rest in
              { edesc = EUnop(Odot fld.fld_name, b1);
                etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
                 (type_of_member env fld) } in
-            aux fld,env
+            access fld,env
 
 (* Hack to treat vararg.h functions the GCC way.  Helps with testing.
     va_start(ap,n)
