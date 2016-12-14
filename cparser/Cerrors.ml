@@ -71,6 +71,7 @@ type warning_type =
   | Literal_range
   | Unknown_pragmas
   | CompCert_conformance
+  | Inline_asm_sdump
 
 let active_warnings: warning_type list ref = ref [
   Unnamed;
@@ -89,6 +90,7 @@ let active_warnings: warning_type list ref = ref [
   Invalid_noreturn;
   Return_type;
   Literal_range;
+  Inline_asm_sdump;
 ]
 
 let error_warnings: warning_type list ref = ref []
@@ -113,6 +115,7 @@ let string_of_warning = function
   | Literal_range -> "literal-range"
   | Unknown_pragmas -> "unknown-pragmas"
   | CompCert_conformance -> "compcert-conformance"
+  | Inline_asm_sdump -> "inline-asm-sdump"
 
 let activate_warning w () =
   if not (List.mem w !active_warnings) then
@@ -151,6 +154,7 @@ let wall () =
     Literal_range;
     Unknown_pragmas;
     CompCert_conformance;
+    Inline_asm_sdump;
   ]
 
 let werror () =
@@ -173,6 +177,7 @@ let werror () =
     Return_type;
     Literal_range;
     Unknown_pragmas;
+    Inline_asm_sdump;
   ]
 
 
@@ -294,6 +299,7 @@ let warning_options =
   error_option Literal_range @
   error_option Unknown_pragmas @
   error_option CompCert_conformance @
+  error_option Inline_asm_sdump @
   [Exact ("-Wfatal-errors"), Set error_fatal;
    Exact ("-fdiagnostics-color"), Ignore; (* Either output supports it or no color *)
    Exact ("-fno-diagnostics-color"), Unset color_diagnostics;

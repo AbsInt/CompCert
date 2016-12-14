@@ -264,7 +264,12 @@ let p_instruction oc ic =
   | Pxori (ir1,ir2,c) ->instruction "Pxori" [Ireg ir1; Ireg ir2; Constant c]
   | Pxoris (ir1,ir2,c) -> instruction "Pxoris" [Ireg ir1; Ireg ir2; Constant c]
   | Plabel l -> instruction "Plabel" [ALabel l]
-  | Pbuiltin _ -> ()
+  | Pbuiltin (ef,_,_) ->
+    begin match ef with
+      | EF_inline_asm _ ->
+        Cerrors.warning ("",-10) Cerrors.Inline_asm_sdump "inline assembler is not supported in sdump"
+      | _ -> ()
+    end
   | Pcfi_adjust _  (* Only debug relevant *)
   | Pcfi_rel_offset _ ->  () (* Only debug relevant *) in
   List.iter instruction ic
