@@ -766,12 +766,12 @@ struct
     | _ -> 12
 
 
-  let rec print_instructions oc instrs =
+  let rec print_instructions oc no_fall instrs =
     match instrs with
     | [] -> ()
     | i :: il ->
       let d = distance_to_emit_constants() - estimate_size i in
-      if d < 256 && no_fallthrough i then
+      if d < 256 && no_fall then
         emit_constants oc
       else if d < 16 then begin
         let lbl = new_label() in
@@ -781,7 +781,7 @@ struct
       end;
       let n = print_instruction oc i in
       currpos := !currpos + n * 4;
-      print_instructions oc il
+      print_instructions oc (no_fallthrough i) il
 
   let get_section_names name =
     let (text, lit) =
@@ -822,7 +822,7 @@ struct
   let print_instructions oc fn =
     current_function_sig := fn.fn_sig;
     ignore (fixup_arguments oc Incoming fn.fn_sig);
-    print_instructions oc fn.fn_code;
+    print_instructions oc false fn.fn_code;
     if !literals_in_code then emit_constants oc
 
   let emit_constants oc lit =
