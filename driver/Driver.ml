@@ -537,5 +537,6 @@ let _ =
     if (not nolink) && linker_args <> [] then begin
       linker (output_filename_default "a.out") linker_args
     end;
+    Cerrors.check_errors ()
   with Sys_error msg ->
     eprintf "I/O error: %s.\n" msg; exit 2
