@@ -348,6 +348,13 @@ let print_usage_and_exit () =
 let print_version_and_exit () =
   printf "%s" version_string; exit 0
 
+let enforce_buildnr nr =
+  let build = int_of_string Version.buildnr in
+  if nr != build then begin
+    eprintf "Mismatching builds: This is CompCert build %d, but QSK requires build %d.\n\
+Please use matching builds of QSK and CompCert.\n" build nr; exit 2
+  end
+
 let language_support_options = [
   option_fbitfields; option_flongdouble;
   option_fstruct_passing; option_fvararg_calls; option_funprototyped;
@@ -374,9 +381,14 @@ let cmdline_actions =
   Exact "--help", Unit print_usage_and_exit;
 (* Getting version info *)
   Exact "-version", Unit print_version_and_exit;
-  Exact "--version", Unit print_version_and_exit;
+  Exact "--version", Unit print_version_and_exit;] @
+(* Enforcing CompCert build numbers for QSKs *)
+  (if Version.buildnr <> "" then
+    [ Exact "-qsk-enforce-build", Integer enforce_buildnr;
+      Exact "--qsk-enforce-build", Integer enforce_buildnr; ]
+   else []) @
 (* Processing options *)
-  Exact "-c", Set option_c;
+ [ Exact "-c", Set option_c;
   Exact "-E", Set option_E;
   Exact "-S", Set option_S;
   Exact "-o", String(fun s -> option_o := Some s);
