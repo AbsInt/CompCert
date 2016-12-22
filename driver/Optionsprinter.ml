@@ -127,8 +127,7 @@ let print_machine oc  =
   p_jmember oc "supports_unaligned_accesses" p_jbool !config.supports_unaligned_accesses;
   fprintf oc "\n}"
 
-let print file stdlib =
-  let oc = open_out file in
+let print oc stdlib =
   fprintf oc "{";
   p_jmember oc "Version" p_jstring Version.version;
   p_jmember oc "Buildnr" p_jstring Version.buildnr;
@@ -137,5 +136,4 @@ let print file stdlib =
   fprintf oc "%a:%t" p_jstring "Clflags" print_clflags;
   p_jmember oc "Configurations" print_configurations stdlib;
   fprintf oc "%a:%t" p_jstring "Machine" print_machine;
-  fprintf oc "}";
-  close_out oc
+  fprintf oc "}"

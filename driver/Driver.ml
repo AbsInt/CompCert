@@ -29,12 +29,22 @@ let sdump_folder = ref ""
 
 let jdump_magic_number = "CompCertJDUMP" ^ Version.version
 
-let dump_jasm asm sourcename destfile =
-  let oc = open_out_bin destfile in
-  fprintf oc "{\n\"Version\":\"%s\",\n\"System\":\"%s\"\n,\"Compilation Unit\":\"%s\",\n\"Asm Ast\":%a}"
-    jdump_magic_number Configuration.system sourcename AsmToJSON.p_program asm;
-  close_out oc
+let dump_jasm asm sourcename suffix =
+  if !option_sdump then begin
+    let sf = output_filename sourcename ".c" !sdump_suffix in
+    let destfile = Filename.concat !sdump_folder sf in
+    let oc = open_out_bin destfile in
+    fprintf oc "{\n\"Version\":\"%s\",\n\"System\":\"%s\"\n,\"Compilation Unit\":\"%s\",\n\"Asm Ast\":%a}"
+      jdump_magic_number Configuration.system sourcename AsmToJSON.p_program asm;
+    close_out oc
+  end
 
+let print_options sourcename suffix =
+  if !dump_options then begin
+    let oc = open_out_bin (output_filename sourcename suffix ".opt.json") in
+    Optionsprinter.print oc !stdlib_path;
+    close_out oc;
+  end
 
 (* From C source to asm *)
 
@@ -63,11 +73,7 @@ let compile_c_file sourcename ifile ofile =
       print_error sourcename msg
   in
   (* Dump Asm in binary and JSON format *)
-  if !option_sdump then begin
-    let sf = output_filename sourcename ".c" !sdump_suffix in
-    let csf = Filename.concat !sdump_folder sf in
-    dump_jasm asm sourcename csf
-  end;
+  dump_jasm asm sourcename ".c";
   (* Print Asm in text form *)
   let oc = open_out ofile in
   PrintAsm.print_program oc asm;
@@ -149,8 +155,7 @@ let process_c_file sourcename =
         assemble asmname objname;
         objname
       end in
-    if !dump_options then
-      Optionsprinter.print (output_filename sourcename ".c" ".opt.json") !stdlib_path;
+    print_options sourcename ".c";
     name
   end
 
@@ -165,8 +170,7 @@ let process_i_file sourcename =
   end else if !option_S then begin
     compile_c_file sourcename sourcename
       (output_filename ~final:true sourcename ".c" ".s");
-    if !dump_options then
-      Optionsprinter.print (output_filename sourcename ".c" ".opt.json") !stdlib_path;
+    print_options sourcename ".c";
     ""
   end else begin
 (* Generate a temporary file wiht the given suffix that is removed on exit *)
@@ -177,8 +181,7 @@ let process_i_file sourcename =
     compile_c_file sourcename sourcename asmname;
     let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
     assemble asmname objname;
-    if !dump_options then
-      Optionsprinter.print (output_filename sourcename ".c" ".opt.json") !stdlib_path;
+    print_options sourcename ".c";
     objname
   end
 
@@ -198,8 +201,7 @@ let process_cminor_file sourcename =
     compile_cminor_file sourcename asmname;
     let objname = output_filename ~final: !option_c sourcename ".cm" ".o" in
     assemble asmname objname;
-    if !dump_options then
-      Optionsprinter.print (output_filename sourcename ".cm" ".opt.json") !stdlib_path;
+    print_options sourcename ".cm";
     objname
   end
 
