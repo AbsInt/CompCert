@@ -1184,7 +1184,7 @@ module I = struct
     let mem f id =
       try
         ignore(f env (id,name)); true
-      with _ -> false in
+      with Env.Error _ -> false in
     match ty with
     | TStruct (id,_) ->
       mem Env.find_struct_member id
