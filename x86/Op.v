@@ -23,7 +23,7 @@
   For a processor-independent set of operations, see the abstract
   syntax and dynamic semantics of the Cminor language.
 *)
-
+Require Import BoolEqual.
 Require Import Coqlib.
 Require Import AST.
 Require Import Integers.
@@ -184,14 +184,14 @@ Proof.
   decide equality.
 Defined.
 
-Definition eq_operation (x y: operation): {x=y} + {x<>y}.
+Definition beq_operation: forall (x y: operation), bool.
 Proof.
-  generalize Int.eq_dec Int64.eq_dec Float.eq_dec Float32.eq_dec; intros.
-  decide equality.
-  apply ident_eq.
-  apply eq_addressing.
-  apply eq_addressing.
-  apply eq_condition.
+  generalize Int.eq_dec Int64.eq_dec Float.eq_dec Float32.eq_dec ident_eq eq_addressing eq_condition; boolean_equality.
+Defined.
+
+Definition eq_operation: forall (x y: operation), {x=y} + {x<>y}.
+Proof.
+  decidable_equality_from beq_operation.
 Defined.
 
 Global Opaque eq_condition eq_addressing eq_operation.
