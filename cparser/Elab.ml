@@ -760,11 +760,10 @@ and elab_init_name_group keep_ty loc env (spec, namelist) =
 
 and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
 
-  let fieldlist = List.map (function
-    | (None, x) ->
-      (Name ("", JUSTBASE, [], loc), x)
-    | (Some n, x) -> (n, x))
-      fieldlist
+  let fieldlist = List.map
+    (function (None, x) -> (Name ("", JUSTBASE, [], loc), x)
+            | (Some n, x) -> (n, x))
+    fieldlist
   in
 
   let ((names, env'), sto) =
