@@ -181,20 +181,42 @@ let find_union env id =
   with Not_found ->
     raise(Error(Unbound_tag(id.name, "union")))
 
-let find_member ci m =
-  List.find (fun f -> f.fld_name = m) ci
+
+let tag_id = function
+  | TStruct (id,_)
+  | TUnion (id,_) -> id
+  | _ -> assert false (* should be checked before *)
+
+let find_member env ci m =
+  let rec member acc = function
+    | [] -> raise Not_found
+    | f::rest -> if f.fld_name = m then
+        f::acc
+      else if f.fld_anonymous then
+        try
+          tag acc f
+         with Not_found ->
+           member acc rest
+       else
+         member acc rest
+   and tag acc fld =
+     let id = tag_id fld.fld_typ in
+     let ci = IdentMap.find id env.env_tag in
+     member (fld::acc) ci.ci_members
+   in
+   member [] ci
 
 let find_struct_member env (id, m) =
   try
     let ci = find_struct env id in
-    find_member ci.ci_members m
+    find_member env ci.ci_members m
   with Not_found ->
     raise(Error(No_member(id.name, "struct", m)))
 
 let find_union_member env (id, m) =
   try
     let ci = find_union env id in
-    find_member ci.ci_members m
+    find_member env ci.ci_members m
   with Not_found ->
     raise(Error(No_member(id.name, "union", m)))
 

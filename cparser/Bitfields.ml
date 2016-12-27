@@ -137,7 +137,7 @@ let rec transf_struct_members env id count = function
                    bf_bool = is_bool}
               end)
             bitfields;
-          { fld_name = carrier; fld_typ = carrier_typ; fld_bitfield = None}
+          { fld_name = carrier; fld_typ = carrier_typ; fld_bitfield = None; fld_anonymous = false;}
           :: transf_struct_members env id (count + 1) ml'
         end
       end
@@ -174,7 +174,7 @@ let rec transf_union_members env id count = function
              bf_pos = pos'; bf_size = nbits;
              bf_signed = signed; bf_signed_res = signed2;
              bf_bool = is_bool};
-          { fld_name = carrier; fld_typ = carrier_typ; fld_bitfield = None}
+          { fld_name = carrier; fld_typ = carrier_typ; fld_bitfield = None; fld_anonymous = false;}
           :: transf_struct_members env id (count + 1) ms)
 
 let transf_composite env su id attr ml =
@@ -334,7 +334,7 @@ let rec transf_struct_init id fld_init_list =
           let (el, rem') =
             pack_bitfield_init id bf.bf_carrier fld_init_list in
           ({fld_name = bf.bf_carrier; fld_typ = bf.bf_carrier_typ;
-            fld_bitfield = None},
+            fld_bitfield = None; fld_anonymous = false},
            Init_single {edesc = ECast(bf.bf_carrier_typ, or_expr_list el);
                         etyp = bf.bf_carrier_typ})
           :: transf_struct_init id rem'

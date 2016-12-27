@@ -760,10 +760,9 @@ and elab_init_name_group keep_ty loc env (spec, namelist) =
 
 and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
 
-  let fieldlist = List.map (
-    function
-      | (None, x) -> (Name ("", JUSTBASE, [], loc), x)
-      | (Some n, x) -> (n, x))
+  let fieldlist = List.map
+    (function (None, x) -> (Name ("", JUSTBASE, [], loc), x)
+            | (Some n, x) -> (n, x))
     fieldlist
   in
 
@@ -815,9 +814,10 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
                 error loc "bit-field '%s' width not an integer constant" id;
                 None
           end in
-    if id = "" && not (Cutil.is_anonymous_composite ty) && optbitsize = None then
+    let anon_composite = Cutil.is_anonymous_composite ty in
+    if id = "" && not anon_composite && optbitsize = None  then
       warning loc Missing_declarations "declaration does not declare anything";
-    { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize' }
+    { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize'; fld_anonymous = id = "" && anon_composite}
   in
   (List.map2 elab_bitfield fieldlist names, env')
 
@@ -826,16 +826,34 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
 and elab_struct_or_union_info keep_ty kind loc env members attrs =
   let (m, env') = mmap (elab_field_group keep_ty) env members in
   let m = List.flatten m in
-  ignore (List.fold_left (fun acc fld ->
-    let n = fld.fld_name in
-    if n <> "" then begin
-      if List.exists ((=) n) acc then
-        error loc "duplicate member '%s'" n;
-      n::acc
-    end else begin
-      if Cutil.is_composite_type env fld.fld_typ then
-        warning loc Celeven_extension  "anonymous structs/unions are a C11 extension";
-      acc end) [] m);
+  let m,_ = mmap (fun c fld  ->
+      if fld.fld_anonymous then
+        let name = Printf.sprintf "<anon>_%d" c in
+        {fld with fld_name = name},c+1
+      else
+        fld,c) 0 m in
+  let rec duplicate acc = function
+    | [] -> ()
+    | fld::rest ->
+       if fld.fld_anonymous then begin
+         let warn () =
+           warning loc Celeven_extension  "anonymous structs/unions are a C11 extension" in
+         let rest = match unroll env fld.fld_typ with
+           | TStruct (id,_) ->
+             warn ();
+             let str = Env.find_struct env' id in
+             str.ci_members@rest
+           | TUnion (id,_) ->
+             warn ();
+             let union = Env.find_union env' id in
+             union.ci_members@rest
+           | _ -> rest in
+         duplicate acc rest
+       end else begin
+         if List.exists ((=) fld.fld_name) acc then
+           error loc "duplicate member '%s'" fld.fld_name;
+         duplicate (fld.fld_name::acc) rest end in
+  duplicate [] m;
   (* Check for incomplete types *)
   let rec check_incomplete = function
   | [] -> ()
@@ -1160,7 +1178,19 @@ module I = struct
         end else
           None
     | _, _ ->
-        None
+      None
+
+  let has_member env name ty =
+    let mem f id =
+      try
+        ignore(f env (id,name)); true
+      with Env.Error _ -> false in
+    match ty with
+    | TStruct (id,_) ->
+      mem Env.find_struct_member id
+    | TUnion (id,_) ->
+      mem Env.find_union_member id
+    | _ -> false
 
   (* Move to the member named [name] of the current point, which must be
      a struct or a union. *)
@@ -1173,6 +1203,9 @@ module I = struct
           | (fld, i as f_i) :: after ->
               if fld.fld_name = name then
                 Some(Zstruct(z, id, before, fld, after), i)
+              else if fld.fld_anonymous && has_member env name fld.fld_typ then
+                let zi = (Zstruct(z, id, before, fld, after), i) in
+                member env zi name
               else
                 find (f_i :: before) after
         in find [] flds
@@ -1185,6 +1218,9 @@ module I = struct
             | fld1 :: rem ->
                 if fld1.fld_name = name then
                   Some(Zunion(z, id, fld1), default_init env fld1.fld_typ)
+                else if fld.fld_anonymous && has_member env name fld.fld_typ then
+                  let zi = (Zunion(z, id, fld1),default_init env fld1.fld_typ) in
+                  member env zi name
                 else
                   find rem
            in find (Env.find_union env id).ci_members
@@ -1427,9 +1463,14 @@ let elab_expr vararg loc env a =
         | _ ->
             error "request for member '%s' in something not a structure or union" fieldname in
       (* A field of a const/volatile struct or union is itself const/volatile *)
-      { edesc = EUnop(Odot fieldname, b1);
-        etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
-                                   (type_of_member env fld) },env
+      let rec access = function
+         | [] -> b1
+         | fld::rest ->
+             let b1 = access rest in
+             { edesc = EUnop(Odot fld.fld_name, b1);
+               etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
+                 (type_of_member env fld) } in
+       access fld,env
 
   | MEMBEROFPTR(a1, fieldname) ->
       let b1,env = elab env a1 in
@@ -1446,9 +1487,18 @@ let elab_expr vararg loc env a =
             end
         | _ ->
             error "member reference type %a is not a pointer" (print_typ env) b1.etyp in
-      { edesc = EUnop(Oarrow fieldname, b1);
-        etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
-                                   (type_of_member env fld) },env
+       let rec access =  function
+         | [] -> assert false
+         | [fld] ->
+           { edesc = EUnop(Oarrow fld.fld_name, b1);
+               etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
+                (type_of_member env fld) }
+         | fld::rest ->
+             let b1 = access rest in
+             { edesc = EUnop(Odot fld.fld_name, b1);
+               etyp = add_attributes_type (List.filter attr_inherited_by_members attrs)
+                (type_of_member env fld) } in
+            access fld,env
 
 (* Hack to treat vararg.h functions the GCC way.  Helps with testing.
     va_start(ap,n)
