@@ -63,3 +63,5 @@ doc/coq2html
 doc/coq2html.ml
 doc/html
 doc/html/
+# MacOS metadata
+.DS_Store
