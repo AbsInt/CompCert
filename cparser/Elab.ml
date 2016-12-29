@@ -849,10 +849,12 @@ and elab_struct_or_union_info keep_ty kind loc env members attrs =
              union.ci_members@rest
            | _ -> rest in
          duplicate acc rest
-       end else begin
+       end else if fld.fld_name <> "" then begin
          if List.exists ((=) fld.fld_name) acc then
            error loc "duplicate member '%s'" fld.fld_name;
-         duplicate (fld.fld_name::acc) rest end in
+         duplicate (fld.fld_name::acc) rest
+       end else
+         duplicate acc rest in
   duplicate [] m;
   (* Check for incomplete types *)
   let rec check_incomplete = function
