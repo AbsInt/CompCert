@@ -39,7 +39,7 @@ let preprocess ifile ofile =
   ] in
   let exc = command ?stdout:output cmd in
   if exc <> 0 then begin
-    if ofile <> "-" then safe_remove ofile;
+    if ofile <> "-" then File.safe_remove ofile;
     command_error "preprocessor" exc;
     eprintf "Error during preprocessing.\n";
     exit 2

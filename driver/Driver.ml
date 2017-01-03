@@ -15,6 +15,7 @@ open Commandline
 open Clflags
 open Timing
 open Driveraux
+open File
 open Frontend
 open Assembler
 open Linker

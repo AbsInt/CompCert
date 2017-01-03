@@ -16,6 +16,7 @@
 open Printf
 open Commandline
 open Clflags
+open File
 open Driveraux
 open Frontend
 

@@ -17,16 +17,6 @@ open Clflags
 (* Is this a gnu based tool chain *)
 let gnu_system = Configuration.system <> "diab"
 
-(* Safe removal of files *)
-let safe_remove file =
-  try Sys.remove file with Sys_error _ -> ()
-
-(* Generate a temporary file with the given suffix that is removed on exit *)
-let temp_file suffix =
-  let file = Filename.temp_file "compcert" suffix in
-  at_exit (fun () -> safe_remove file);
-  file
-
 (* Invocation of external tools *)
 
 let rec waitpid_no_intr pid =
@@ -71,7 +61,8 @@ let command ?stdout args =
     | Configuration.Unsupported -> assert false
     | Configuration.Gnu -> Responsefile.gnu_quote,"@"
     | Configuration.Diab -> Responsefile.diab_quote,"-@" in
-    let file,oc = Filename.open_temp_file "compcert" "" in
+    let file = File.temp_file "" in
+    let oc = open_out_bin file in
     let cmd,args = match args with
     | cmd::args -> cmd,args
     | [] -> assert false (* Should never happen *) in
@@ -79,7 +70,6 @@ let command ?stdout args =
     close_out oc;
     let arg = prefix^file in
     let ret = command stdout [cmd;arg] in
-    safe_remove file;
     ret
   else
     command stdout args
@@ -87,32 +77,6 @@ let command ?stdout args =
 let command_error n exc =
   eprintf "Error: %s command failed with exit code %d (use -v to see invocation)\n" n exc
 
-
-(* Determine names for output files.  We use -o option if specified
-   and if this is the final destination file (not a dump file).
-   Otherwise, we generate a file in the current directory. *)
-
-let output_filename ?(final = false) source_file source_suffix output_suffix =
-  match !option_o with
-  | Some file when final -> file
-  | _ ->
-    Filename.basename (Filename.chop_suffix source_file source_suffix)
-    ^ output_suffix
-
-(* A variant of [output_filename] where the default output name is fixed *)
-
-let output_filename_default default_file =
-  match !option_o with
-  | Some file -> file
-  | None -> default_file
-
-(* All input files should exist *)
-
-let ensure_inputfile_exists name =
-  if not (Sys.file_exists name) then begin
-    eprintf "error: no such file or directory: '%s'\n" name;
-    exit 2
-  end
 (* Printing of error messages *)
 
 let print_error file msg =
