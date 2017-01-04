@@ -30,8 +30,7 @@ let command stdout args =
     let fd_out =
       match stdout with
       | None -> Unix.stdout
-      | Some f ->
-          Unix.openfile f [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC] 0o666 in
+      | Some f -> File.out_descr_of_outfile f in
     let pid =
       Unix.create_process argv.(0) argv Unix.stdin fd_out Unix.stderr in
     let (_, status) =
@@ -49,30 +48,29 @@ let command stdout args =
 let command ?stdout args =
   if !option_v then begin
     eprintf "+ %s" (String.concat " " args);
-    begin match stdout with
-    | None -> ()
-    | Some f -> eprintf " > %s" f
-    end;
+     begin match stdout with
+       | None -> ()
+     | Some f-> eprintf " > %s" (File.get_outfile_name f)
+     end;
     prerr_endline ""
   end;
   let resp = Sys.win32 && Configuration.response_file_style <> Configuration.Unsupported in
-  if resp && List.fold_left (fun len arg -> len + String.length arg + 1) 0 args > 7000 then
-    let quote,prefix = match Configuration.response_file_style with
-    | Configuration.Unsupported -> assert false
-    | Configuration.Gnu -> Responsefile.gnu_quote,"@"
-    | Configuration.Diab -> Responsefile.diab_quote,"-@" in
-    let file = File.temp_file "" in
-    let oc = open_out_bin file in
-    let cmd,args = match args with
-    | cmd::args -> cmd,args
-    | [] -> assert false (* Should never happen *) in
-    List.iter (fun a -> Printf.fprintf oc "%s " (quote a)) args;
-    close_out oc;
-    let arg = prefix^file in
-    let ret = command stdout [cmd;arg] in
-    ret
+  let args = if resp && List.fold_left (fun len arg -> len + String.length arg + 1) 0 args > 7000 then
+      let quote,prefix = match Configuration.response_file_style with
+        | Configuration.Unsupported -> assert false
+        | Configuration.Gnu -> Responsefile.gnu_quote,"@"
+        | Configuration.Diab -> Responsefile.diab_quote,"-@" in
+      let file = File.temp_file "" in
+      let oc = open_out_bin file in
+      let cmd,args = match args with
+        | cmd::args -> cmd,args
+        | [] -> assert false (* Should never happen *) in
+      List.iter (fun a -> Printf.fprintf oc "%s " (quote a)) args;
+      close_out oc;
+      [cmd;prefix^file]
   else
-    command stdout args
+    args in
+  command stdout args
 
 let command_error n exc =
   eprintf "Error: %s command failed with exit code %d (use -v to see invocation)\n" n exc
@@ -95,17 +93,23 @@ let explode_comma_option s =
   | _ :: tl -> tl
 
 (* Record actions to be performed after parsing the command line *)
+type action =
+  | File_action of ((File.input_file -> string) * File.input_file)
+  | Linker_action of string
 
-let actions : ((string -> string) * string) list ref = ref []
+let actions : action list ref = ref []
 
 let push_action fn arg =
-  actions := (fn, arg) :: !actions
+  actions := File_action(fn, arg) :: !actions
 
 let push_linker_arg arg =
-  push_action (fun s -> s) arg
+  actions := Linker_action arg :: !actions
 
 let perform_actions () =
   let rec perform = function
   | [] -> []
-  | (fn, arg) :: rem -> let res = fn arg in res :: perform rem
+  | act :: rem -> let res = action act in res :: perform rem
+  and action = function
+    | File_action (f,s) -> f s
+    | Linker_action s -> s
   in perform (List.rev !actions)

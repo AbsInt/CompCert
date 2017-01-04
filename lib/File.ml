@@ -15,6 +15,30 @@
 open Printf
 open Clflags
 
+
+type input_file =
+  {
+    name : string;
+    suffix: string;
+  }
+
+let new_input_file file suffix =
+  if not (Sys.file_exists file) then begin
+    eprintf "error: no such file or directory: '%s'\n" file;
+    exit 2
+  end;
+  {
+    name = file;
+    suffix = suffix;
+  }
+
+let input_name file = file.name
+
+let open_input_file file =
+  open_in_bin file.name
+
+
+
 (* Safe removal of files *)
 let safe_remove file =
   try Sys.remove file with Sys_error _ -> ()
@@ -25,15 +49,15 @@ let temp_file suffix =
   at_exit (fun () -> safe_remove file);
   file
 
+
 (* Determine names for output files.  We use -o option if specified
    and if this is the final destination file (not a dump file).
    Otherwise, we generate a file in the current directory. *)
-
-let output_filename ?(final = false) source_file source_suffix output_suffix =
+let output_filename ?(final = false) source_file output_suffix =
   match !option_o with
   | Some file when final -> file
   | _ ->
-    Filename.basename (Filename.chop_suffix source_file source_suffix)
+    Filename.basename (Filename.chop_suffix source_file.name source_file.suffix)
     ^ output_suffix
 
 (* A variant of [output_filename] where the default output name is fixed *)
@@ -50,3 +74,39 @@ let ensure_inputfile_exists name =
     eprintf "error: no such file or directory: '%s'\n" name;
     exit 2
   end
+
+type process_outfile =
+  | Pipe of Unix.file_descr * Unix.file_descr
+  | Tmpfile of string
+  | File of string
+
+
+let pipe_process_outfile () =
+  let ic,oc = Unix.pipe () in
+  Pipe (ic,oc)
+
+let tmpfile_process_outfile suffix =
+  Tmpfile (temp_file suffix)
+
+let file_process_outfile ?(final = false) source_file output_suffix =
+  File (output_filename ~final:final source_file output_suffix)
+
+let in_channel_of_outfile = function
+  | Pipe (ic,_) -> Unix.in_channel_of_descr ic
+  | Tmpfile s
+  | File s -> open_in_bin s
+
+let out_descr_of_outfile = function
+  | Pipe (_,oc) -> oc
+  | Tmpfile f
+  | File f ->  Unix.openfile f [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC] 0o666
+
+let safe_remove_outfile = function
+  | Pipe _ -> ()
+  | Tmpfile f
+  | File f -> safe_remove f
+
+let get_outfile_name = function
+  | Pipe _ -> "-"
+  | Tmpfile f
+  | File f -> f

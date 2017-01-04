@@ -26,8 +26,6 @@ let dcompcertc_destination = ref None
 (* From C to preprocessed C *)
 
 let preprocess ifile ofile =
-  let output =
-    if ofile = "-" then None else Some ofile in
   let cmd = List.concat [
     Configuration.prepro;
     ["-D__COMPCERT__"];
@@ -37,9 +35,12 @@ let preprocess ifile ofile =
     List.rev !prepro_options;
     [ifile]
   ] in
-  let exc = command ?stdout:output cmd in
+  let exc = command ?stdout:ofile cmd in
   if exc <> 0 then begin
-    if ofile <> "-" then File.safe_remove ofile;
+    begin match ofile with
+      | None -> ()
+      | Some f ->  File.safe_remove_outfile f
+    end;
     command_error "preprocessor" exc;
     eprintf "Error during preprocessing.\n";
     exit 2

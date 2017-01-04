@@ -30,29 +30,29 @@ let sdump_folder = ref ""
 
 let jdump_magic_number = "CompCertJDUMP" ^ Version.version
 
-let dump_jasm asm sourcename suffix =
+let dump_jasm asm source_file =
   if !option_sdump then begin
-    let sf = output_filename sourcename ".c" !sdump_suffix in
+    let sf = output_filename source_file !sdump_suffix in
     let destfile = Filename.concat !sdump_folder sf in
     let oc = open_out_bin destfile in
     fprintf oc "{\n\"Version\":\"%s\",\n\"System\":\"%s\"\n,\"Compilation Unit\":\"%s\",\n\"Asm Ast\":%a}"
-      jdump_magic_number Configuration.system sourcename AsmToJSON.p_program asm;
+      jdump_magic_number Configuration.system (File.input_name source_file) AsmToJSON.p_program asm;
     close_out oc
   end
 
-let print_options sourcename suffix =
+let print_options source_file =
   if !dump_options then begin
-    let oc = open_out_bin (output_filename sourcename suffix ".opt.json") in
+    let oc = open_out_bin (output_filename source_file ".opt.json") in
     Optionsprinter.print oc !stdlib_path;
     close_out oc;
   end
 
 (* From C source to asm *)
 
-let compile_c_file sourcename ifile ofile =
+let compile_c_file  ifile ic ofile =
   (* Prepare to dump Clight, RTL, etc, if requested *)
   let set_dest dst opt ext =
-    dst := if !opt then Some (output_filename sourcename ".c" ext)
+    dst := if !opt then Some (output_filename ifile ext)
       else None in
   set_dest dparse_destination option_dparse ".parsed.c";
   set_dest dcompcertc_destination option_dcmedium ".compcert.c";
@@ -62,7 +62,7 @@ let compile_c_file sourcename ifile ofile =
   set_dest Regalloc.destination_alloctrace option_dalloctrace ".alloctrace";
   set_dest PrintLTL.destination option_dltl ".ltl";
   set_dest PrintMach.destination option_dmach ".mach";
-  let csyntax = parse_c_file sourcename ifile in
+  let csyntax = parse_c_file (File.input_name ifile) ic in
   (* Convert to Asm *)
   let asm =
     match Compiler.apply_partial
@@ -71,10 +71,10 @@ let compile_c_file sourcename ifile ofile =
     | Errors.OK asm ->
         asm
     | Errors.Error msg ->
-      print_error sourcename msg
+      print_error (File.input_name ifile) msg
   in
   (* Dump Asm in binary and JSON format *)
-  dump_jasm asm sourcename ".c";
+  dump_jasm asm ifile;
   (* Print Asm in text form *)
   let oc = open_out ofile in
   PrintAsm.print_program oc asm;
@@ -85,29 +85,29 @@ let compile_c_file sourcename ifile ofile =
 let compile_cminor_file ifile ofile =
   (* Prepare to dump RTL, Mach, etc, if requested *)
   let set_dest dst opt ext =
-    dst := if !opt then Some (output_filename ifile ".cm" ext)
+    dst := if !opt then Some (output_filename ifile ext)
       else None in
   set_dest PrintRTL.destination option_drtl ".rtl";
   set_dest Regalloc.destination_alloctrace option_dalloctrace ".alloctrace";
   set_dest PrintLTL.destination option_dltl ".ltl";
   set_dest PrintMach.destination option_dmach ".mach";
   Sections.initialize();
-  let ic = open_in ifile in
+  let ic = File.open_input_file ifile in
   let lb = Lexing.from_channel ic in
   (* Parse cminor *)
   let cm =
     try CMtypecheck.type_program (CMparser.prog CMlexer.token lb)
     with Parsing.Parse_error ->
            eprintf "File %s, character %d: Syntax error\n"
-                   ifile (Lexing.lexeme_start lb);
+                   (File.input_name ifile) (Lexing.lexeme_start lb);
            exit 2
        | CMlexer.Error msg ->
            eprintf "File %s, character %d: %s\n"
-                   ifile (Lexing.lexeme_start lb) msg;
+                   (File.input_name ifile) (Lexing.lexeme_start lb) msg;
            exit 2
        | CMtypecheck.Error msg ->
            eprintf "File %s, type-checking error:\n%s"
-                   ifile msg;
+                   (File.input_name ifile) msg;
            exit 2 in
   (* Convert to Asm *)
   let asm =
@@ -116,7 +116,7 @@ let compile_cminor_file ifile ofile =
                Asmexpand.expand_program with
     | Errors.OK asm ->
         asm
-    | Errors.Error msg -> print_error ifile msg
+    | Errors.Error msg -> print_error (File.input_name ifile) msg
   in
   (* Print Asm in text form *)
   let oc = open_out ofile in
@@ -125,117 +125,112 @@ let compile_cminor_file ifile ofile =
 
 (* Processing of a .c file *)
 
-let process_c_file sourcename =
-  ensure_inputfile_exists sourcename;
+let process_c_file source_file =
   if !option_E then begin
-    preprocess sourcename (output_filename_default "-");
+    preprocess (File.input_name source_file) None;
     ""
   end else begin
     let preproname = if !option_dprepro then
-      output_filename sourcename ".c" ".i"
-    else
-      temp_file ".i" in
-    preprocess sourcename preproname;
+      File.file_process_outfile  source_file ".i"
+      else if !option_pipe then
+        File.pipe_process_outfile ()
+      else
+        File.tmpfile_process_outfile ".i" in
+    preprocess (File.input_name source_file) (Some preproname);
     let name =
       if !option_interp then begin
         Machine.config := Machine.compcert_interpreter !Machine.config;
-        let csyntax = parse_c_file sourcename preproname in
+        let csyntax = parse_c_file (File.input_name source_file) (File.in_channel_of_outfile preproname) in
        Interp.execute csyntax;
         ""
       end else if !option_S then begin
-        compile_c_file sourcename preproname
-          (output_filename ~final:true sourcename ".c" ".s");
+        compile_c_file source_file (File.in_channel_of_outfile preproname)
+          (output_filename ~final:true source_file ".s");
         ""
       end else begin
         let asmname =
           if !option_dasm
-          then output_filename sourcename ".c" ".s"
+          then output_filename source_file ".s"
           else temp_file ".s" in
-        compile_c_file sourcename preproname asmname;
-        let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
+        compile_c_file source_file (File.in_channel_of_outfile preproname) asmname;
+        let objname = output_filename ~final:!option_c source_file ".o" in
         assemble asmname objname;
         objname
       end in
-    print_options sourcename ".c";
+    print_options source_file;
     name
   end
 
 (* Processing of a .i / .p file (preprocessed C) *)
 
-let process_i_file sourcename =
-  ensure_inputfile_exists sourcename;
+let process_i_file source_file =
   if !option_interp then begin
-    let csyntax = parse_c_file sourcename sourcename in
+    let csyntax = parse_c_file (File.input_name source_file) (File.open_input_file source_file) in
     Interp.execute csyntax;
     ""
   end else if !option_S then begin
-    compile_c_file sourcename sourcename
-      (output_filename ~final:true sourcename ".c" ".s");
-    print_options sourcename ".c";
-    ""
+    compile_c_file source_file  (File.open_input_file source_file)
+      (output_filename ~final:true source_file ".s");
+    print_options source_file;""
   end else begin
 (* Generate a temporary file wiht the given suffix that is removed on exit *)
     let asmname =
       if !option_dasm
-      then output_filename sourcename ".c" ".s"
+      then output_filename source_file ".s"
       else temp_file ".s" in
-    compile_c_file sourcename sourcename asmname;
-    let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
+    compile_c_file source_file  (File.open_input_file source_file)  asmname;
+    let objname = output_filename ~final: !option_c source_file ".o" in
     assemble asmname objname;
-    print_options sourcename ".c";
+    print_options source_file;
     objname
   end
 
 (* Processing of a .cm file *)
 
-let process_cminor_file sourcename =
-  ensure_inputfile_exists sourcename;
+let process_cminor_file source_file =
   if !option_S then begin
-    compile_cminor_file sourcename
-                        (output_filename ~final:true sourcename ".cm" ".s");
+    compile_cminor_file source_file
+                        (output_filename ~final:true source_file ".s");
     ""
   end else begin
     let asmname =
       if !option_dasm
-      then output_filename sourcename ".cm" ".s"
+      then output_filename source_file ".s"
       else temp_file ".s" in
-    compile_cminor_file sourcename asmname;
-    let objname = output_filename ~final: !option_c sourcename ".cm" ".o" in
+    compile_cminor_file source_file asmname;
+    let objname = output_filename ~final:!option_c source_file ".o" in
     assemble asmname objname;
-    print_options sourcename ".cm";
+    print_options source_file;
     objname
   end
 
 (* Processing of .S and .s files *)
 
-let process_s_file sourcename =
-  ensure_inputfile_exists sourcename;
-  let objname = output_filename ~final: !option_c sourcename ".s" ".o" in
-  assemble sourcename objname;
+let process_s_file source_file =
+  let objname = output_filename ~final: !option_c source_file ".o" in
+  assemble (File.input_name source_file) objname;
   objname
 
-let process_S_file sourcename =
-  ensure_inputfile_exists sourcename;
+let process_S_file source_file =
   if !option_E then begin
-    preprocess sourcename (output_filename_default "-");
+    preprocess (File.input_name source_file) None;
     ""
   end else begin
-    let preproname = temp_file ".s" in
-    preprocess sourcename preproname;
-    let objname = output_filename ~final: !option_c sourcename ".S" ".o" in
-    assemble preproname objname;
+    let preproname = File.tmpfile_process_outfile ".s" in
+    preprocess (File.input_name source_file) (Some preproname);
+    let objname = output_filename ~final: !option_c source_file ".o" in
+    assemble (File.get_outfile_name preproname) objname;
     objname
   end
 
 (* Processing of .h files *)
 
-let process_h_file sourcename =
+let process_h_file source_file =
   if !option_E then begin
-    ensure_inputfile_exists sourcename;
-    preprocess sourcename (output_filename_default "-");
+    preprocess (File.input_name source_file) None;
     ""
   end else begin
-    eprintf "Error: input file %s ignored (not in -E mode)\n" sourcename;
+    eprintf "Error: input file %s ignored (not in -E mode)\n" (File.input_name source_file);
     exit 2
   end
 
@@ -323,6 +318,7 @@ General options:\n\
 \  -version       Print the version string and exit\n\
 \  -target <value> Generate code for the given target\n\
 \  -conf <file>   Read configuration from file\n\
+\  -pipe          Use pipes between commands, when possible\n\
 \  @<file>        Read command line options from <file>\n" ^
   Cerrors.warning_help ^
 "Interpreter mode:\n\
@@ -443,7 +439,8 @@ let cmdline_actions =
 (* General options *)
   Exact "-v", Set option_v;
   Exact "-stdlib", String(fun s -> stdlib_path := s);
-  Exact "-timings", Set option_timings;] @
+  Exact "-timings", Set option_timings;
+  Exact "-pipe", Set option_pipe;] @
 (* Diagnostic options *)
   Cerrors.warning_options @
 (* Interpreter mode *)
@@ -477,17 +474,17 @@ let cmdline_actions =
       eprintf "Unknown option `%s'\n" s; exit 2);
 (* File arguments *)
   Suffix ".c", Self (fun s ->
-      push_action process_c_file s; incr num_source_files; incr num_input_files);
+      push_action process_c_file (File.new_input_file s ".c"); incr num_source_files; incr num_input_files);
   Suffix ".i", Self (fun s ->
-      push_action process_i_file s; incr num_source_files; incr num_input_files);
+      push_action process_i_file (File.new_input_file s ".i"); incr num_source_files; incr num_input_files);
   Suffix ".p", Self (fun s ->
-      push_action process_i_file s; incr num_source_files; incr num_input_files);
+      push_action process_i_file (File.new_input_file s ".p"); incr num_source_files; incr num_input_files);
   Suffix ".cm", Self (fun s ->
-      push_action process_cminor_file s; incr num_source_files; incr num_input_files);
+      push_action process_cminor_file (File.new_input_file s ".cm"); incr num_source_files; incr num_input_files);
   Suffix ".s", Self (fun s ->
-      push_action process_s_file s; incr num_source_files; incr num_input_files);
+      push_action process_s_file (File.new_input_file s ".s"); incr num_source_files; incr num_input_files);
   Suffix ".S", Self (fun s ->
-      push_action process_S_file s; incr num_source_files; incr num_input_files);
+      push_action process_S_file (File.new_input_file s ".S"); incr num_source_files; incr num_input_files);
   Suffix ".o", Self (fun s -> push_linker_arg s; incr num_input_files);
   Suffix ".a", Self (fun s -> push_linker_arg s; incr num_input_files);
   (* GCC compatibility: .o.ext files and .so files are also object files *)
@@ -495,7 +492,7 @@ let cmdline_actions =
   Suffix ".so", Self (fun s -> push_linker_arg s; incr num_input_files);
   (* GCC compatibility: .h files can be preprocessed with -E *)
   Suffix ".h", Self (fun s ->
-      push_action process_h_file s; incr num_source_files; incr num_input_files);
+      push_action process_h_file (File.new_input_file s ".h"); incr num_source_files; incr num_input_files);
   ]
 
 let _ =

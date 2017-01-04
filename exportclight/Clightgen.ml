@@ -22,25 +22,25 @@ open Frontend
 
 (* From C source to Clight *)
 
-let compile_c_file sourcename ifile ofile =
+let compile_c_file ifile ic ofile =
   dparse_destination := if !option_dparse then
-      Some (output_filename sourcename ".c" ".parsed.c")
+      Some (output_filename ifile ".parsed.c")
     else
       None;
-  let csyntax = parse_c_file sourcename ifile in
+  let csyntax = parse_c_file (File.input_name ifile) ic in
     let clight =
     match SimplExpr.transl_program csyntax with
     | Errors.OK p ->
         begin match SimplLocals.transf_program p with
         | Errors.OK p' -> p'
         | Errors.Error msg ->
-            print_error sourcename msg
+            print_error (File.input_name ifile) msg
         end
     | Errors.Error msg ->
-        print_error sourcename msg in
+        print_error (File.input_name ifile) msg in
   (* Dump Clight in C syntax if requested *)
   if !option_dclight then begin
-    let ofile = Filename.chop_suffix sourcename ".c" ^ ".light.c" in
+    let ofile = File.output_filename ifile ".light.c" in
     let oc = open_out ofile in
     PrintClight.print_program (Format.formatter_of_out_channel oc) clight;
     close_out oc
@@ -53,14 +53,13 @@ let compile_c_file sourcename ifile ofile =
 
 (* Processing of a .c file *)
 
-let process_c_file sourcename =
-  let prefixname = Filename.chop_suffix sourcename ".c" in
+let process_c_file source_file =
   if !option_E then begin
-    preprocess sourcename "-"
+    preprocess (File.input_name source_file) None
   end else begin
-    let preproname = temp_file ".i" in
-    preprocess sourcename preproname;
-    compile_c_file sourcename preproname (prefixname ^ ".v")
+    let preproname = File.tmpfile_process_outfile  ".i" in
+    preprocess (File.input_name source_file) (Some preproname);
+    compile_c_file source_file (File.in_channel_of_outfile preproname) (File.output_filename source_file ".v")
   end
 
 let version_string =
@@ -149,7 +148,7 @@ let cmdline_actions =
   Prefix "-", Self (fun s ->
       eprintf "Unknown option `%s'\n" s; exit 2);
 (* File arguments *)
-  Suffix ".c", Self (fun s -> process_c_file s);
+  Suffix ".c", Self (fun s -> process_c_file (File.new_input_file s ".c"));
   ]
 
 let _ =

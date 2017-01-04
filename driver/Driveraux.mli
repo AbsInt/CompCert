@@ -12,7 +12,7 @@
 (* *********************************************************************)
 
 
-val command: ?stdout:string -> string list -> int
+val command: ?stdout:File.process_outfile -> string list -> int
     (** Execute the command with the given arguments and an optional file for
         the stdout. Returns the exit code. *)
 
@@ -28,7 +28,7 @@ val gnu_system: bool
 val explode_comma_option: string -> string list
    (** Split option at commas *)
 
-val push_action: (string -> string) -> string -> unit
+val push_action: (File.input_file -> string) -> File.input_file -> unit
   (** Add an action to be performed after parsing the command line *)
 
 val push_linker_arg: string -> unit

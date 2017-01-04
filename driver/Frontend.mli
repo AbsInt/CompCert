@@ -15,10 +15,10 @@ val dparse_destination: string option ref
 
 val dcompcertc_destination: string option ref
 
-val preprocess: string -> string -> unit
+val preprocess: string -> File.process_outfile option -> unit
   (** From C to preprocessed C *)
 
-val parse_c_file: string -> string -> Csyntax.coq_function Ctypes.program
+val parse_c_file: string -> in_channel -> Csyntax.coq_function Ctypes.program
   (** From preprocessed C to Csyntax *)
 
 val prepro_actions: (Commandline.pattern * Commandline.action) list
