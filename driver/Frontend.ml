@@ -39,7 +39,7 @@ let preprocess ifile ofile =
   if exc <> 0 then begin
     begin match ofile with
       | None -> ()
-      | Some f ->  File.safe_remove_outfile f
+      | Some f ->  File.safe_remove_process_file f
     end;
     command_error "preprocessor" exc;
     eprintf "Error during preprocessing.\n";
@@ -99,6 +99,11 @@ let gnu_prepro_opt_e s =
   prepro_options := s :: !prepro_options;
   option_E := true
 
+(* Add pipe if tools support it *)
+let add_pipe () =
+  if gnu_system then
+    gnu_prepro_opt "-pipe"
+
 let gnu_prepro_actions = [
   Exact "-M", Self gnu_prepro_opt_e;
   Exact "-MM", Self gnu_prepro_opt_e;
@@ -140,7 +145,7 @@ let gnu_prepro_help =
 \  -MF <file>     Specifies file <file> as output file for -M or -MM\n\
 \  -MG            Assumes missing header files are generated for -M\n\
 \  -MP            Add a phony target for each dependency other than\n\
-\                 the main file\n\
+\                the main file\n\
 \  -MT <target>   Change the target of the rule emitted by dependency\n\
 \                 generation\n\
 \  -MQ <target>   Like -MT but quotes <target>\n\

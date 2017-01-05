@@ -75,38 +75,38 @@ let ensure_inputfile_exists name =
     exit 2
   end
 
-type process_outfile =
+type process_file =
   | Pipe of Unix.file_descr * Unix.file_descr
   | Tmpfile of string
   | File of string
 
 
-let pipe_process_outfile () =
+let pipe_process_file () =
   let ic,oc = Unix.pipe () in
   Pipe (ic,oc)
 
-let tmpfile_process_outfile suffix =
+let tmpfile_process_file suffix =
   Tmpfile (temp_file suffix)
 
-let file_process_outfile ?(final = false) source_file output_suffix =
+let file_process_file ?(final = false) source_file output_suffix =
   File (output_filename ~final:final source_file output_suffix)
 
-let in_channel_of_outfile = function
+let in_channel_of_process_file = function
   | Pipe (ic,_) -> Unix.in_channel_of_descr ic
   | Tmpfile s
   | File s -> open_in_bin s
 
-let out_descr_of_outfile = function
+let out_descr_of_process_file = function
   | Pipe (_,oc) -> oc
   | Tmpfile f
   | File f ->  Unix.openfile f [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC] 0o666
 
-let safe_remove_outfile = function
+let safe_remove_process_file = function
   | Pipe _ -> ()
   | Tmpfile f
   | File f -> safe_remove f
 
-let get_outfile_name = function
-  | Pipe _ -> "-"
+let process_file_name = function
+  | Pipe _ -> "pipe"
   | Tmpfile f
   | File f -> f

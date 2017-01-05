@@ -131,20 +131,20 @@ let process_c_file source_file =
     ""
   end else begin
     let preproname = if !option_dprepro then
-      File.file_process_outfile  source_file ".i"
+      File.file_process_file  source_file ".i"
       else if !option_pipe then
-        File.pipe_process_outfile ()
+        File.pipe_process_file ()
       else
-        File.tmpfile_process_outfile ".i" in
+        File.tmpfile_process_file ".i" in
     preprocess (File.input_name source_file) (Some preproname);
     let name =
       if !option_interp then begin
         Machine.config := Machine.compcert_interpreter !Machine.config;
-        let csyntax = parse_c_file (File.input_name source_file) (File.in_channel_of_outfile preproname) in
+        let csyntax = parse_c_file (File.input_name source_file) (File.in_channel_of_process_file preproname) in
        Interp.execute csyntax;
         ""
       end else if !option_S then begin
-        compile_c_file source_file (File.in_channel_of_outfile preproname)
+        compile_c_file source_file (File.in_channel_of_process_file preproname)
           (output_filename ~final:true source_file ".s");
         ""
       end else begin
@@ -152,7 +152,7 @@ let process_c_file source_file =
           if !option_dasm
           then output_filename source_file ".s"
           else temp_file ".s" in
-        compile_c_file source_file (File.in_channel_of_outfile preproname) asmname;
+        compile_c_file source_file (File.in_channel_of_process_file preproname) asmname;
         let objname = output_filename ~final:!option_c source_file ".o" in
         assemble asmname objname;
         objname
@@ -216,10 +216,10 @@ let process_S_file source_file =
     preprocess (File.input_name source_file) None;
     ""
   end else begin
-    let preproname = File.tmpfile_process_outfile ".s" in
+    let preproname = File.tmpfile_process_file ".s" in
     preprocess (File.input_name source_file) (Some preproname);
     let objname = output_filename ~final: !option_c source_file ".o" in
-    assemble (File.get_outfile_name preproname) objname;
+    assemble (File.process_file_name preproname) objname;
     objname
   end
 
@@ -440,7 +440,7 @@ let cmdline_actions =
   Exact "-v", Set option_v;
   Exact "-stdlib", String(fun s -> stdlib_path := s);
   Exact "-timings", Set option_timings;
-  Exact "-pipe", Set option_pipe;] @
+  Exact "-pipe", Unit (fun () -> option_pipe := true; Frontend.add_pipe ());] @
 (* Diagnostic options *)
   Cerrors.warning_options @
 (* Interpreter mode *)

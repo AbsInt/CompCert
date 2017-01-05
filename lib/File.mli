@@ -40,26 +40,26 @@ val output_filename: ?final:bool -> input_file -> string -> string
        and if this is the final destination file (not a dump file).
        Otherwise, we generate a file in the current directory. *)
 
-type process_outfile
-   (** Type for the output of the external processes *)
+type process_file
+   (** Type for the IO of external processes *)
 
-val pipe_process_outfile : unit -> process_outfile
-   (** Generate a new pipe as output for an external process *)
+val pipe_process_file : unit -> process_file
+   (** Generate a new pipe for an external process IO *)
 
-val tmpfile_process_outfile : string -> process_outfile
-   (** Generate a new temporary file for external process output *)
+val tmpfile_process_file : string -> process_file
+   (** Generate a new temporary file for external process IO *)
 
-val file_process_outfile : ?final:bool -> input_file -> string -> process_outfile
-  (** Generate a new out file for external process output *)
+val file_process_file : ?final:bool -> input_file -> string -> process_file
+  (** Generate a new out file for external process IO *)
 
-val in_channel_of_outfile : process_outfile -> in_channel
-  (** Get an in_channel from the process_outfile *)
+val in_channel_of_process_file : process_file -> in_channel
+  (** Get an in_channel from the process_file *)
 
-val out_descr_of_outfile : process_outfile -> Unix.file_descr
-  (** Get the out file descriptor from the prorcess_outfile *)
+val out_descr_of_process_file : process_file -> Unix.file_descr
+  (** Get the writeable file descriptor from the process_file *)
 
-val safe_remove_outfile : process_outfile -> unit
-  (** Remove the process_outfile *)
+val safe_remove_process_file : process_file -> unit
+  (** Remove the process_file *)
 
-val get_outfile_name : process_outfile -> string
-  (** Get the name of the underlying file (returns - for pipes) *)
+val process_file_name : process_file -> string
+  (** Get the name of the underlying file (returns pipe for pipes) *)

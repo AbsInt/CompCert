@@ -30,7 +30,7 @@ let command stdout args =
     let fd_out =
       match stdout with
       | None -> Unix.stdout
-      | Some f -> File.out_descr_of_outfile f in
+      | Some f -> File.out_descr_of_process_file f in
     let pid =
       Unix.create_process argv.(0) argv Unix.stdin fd_out Unix.stderr in
     let (_, status) =
@@ -50,7 +50,7 @@ let command ?stdout args =
     eprintf "+ %s" (String.concat " " args);
      begin match stdout with
        | None -> ()
-     | Some f-> eprintf " > %s" (File.get_outfile_name f)
+     | Some f-> eprintf " > %s" (File.process_file_name f)
      end;
     prerr_endline ""
   end;
