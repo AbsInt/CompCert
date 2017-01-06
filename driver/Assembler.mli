@@ -11,7 +11,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-val assemble: File.input_file -> File.process_file -> string
+val assemble: File.process_file -> string -> unit
   (** From asm to object file *)
 
 val assembler_actions: (Commandline.pattern * Commandline.action) list

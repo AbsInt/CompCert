@@ -128,6 +128,29 @@ let compile_cminor_file ifile ofile oc =
   PrintAsm.print_program oc asm;
   close_out oc
 
+let assemble source_file asm_file =
+  if !option_S then
+    ""
+  else
+    let objname = File.output_filename  ~final:!option_c source_file ".o"  in
+    assemble asm_file objname;
+    print_options source_file;
+    objname
+
+(* From preprocessed c to object file or interpreter *)
+let compile_prepro_file source_file prepro_file =
+  if !option_interp then begin
+    Machine.config := Machine.compcert_interpreter !Machine.config;
+    let csyntax = parse_c_file (File.input_name source_file) (File.in_channel_of_process_file prepro_file) in
+    Interp.execute csyntax;
+    ""
+  end else begin
+    let asm_file = assembler_file source_file in
+    let oc = (File.out_channel_of_process_file asm_file) in
+    compile_c_file source_file  prepro_file oc ;
+    assemble source_file asm_file
+  end
+
 (* Processing of a .c file *)
 
 let process_c_file source_file =
@@ -140,43 +163,13 @@ let process_c_file source_file =
       else
         File.temp_process_file ".i" in
     preprocess (File.input_name source_file) (Some prepro_file);
-    if !option_interp then begin
-      Machine.config := Machine.compcert_interpreter !Machine.config;
-      let csyntax = parse_c_file (File.input_name source_file) (File.in_channel_of_process_file prepro_file) in
-      Interp.execute csyntax;
-      ""
-    end else begin
-      let asm_file = assembler_file source_file in
-      let oc = (File.out_channel_of_process_file asm_file) in
-      compile_c_file source_file  prepro_file oc ;
-      if !option_S then
-        ""
-      else
-        let objname =  assemble source_file asm_file in
-        print_options source_file;
-        objname
-    end
+    compile_prepro_file source_file prepro_file
   end
 
 (* Processing of a .i / .p file (preprocessed C) *)
 
 let process_i_file source_file =
-  if !option_interp then begin
-    Machine.config := Machine.compcert_interpreter !Machine.config;
-    let csyntax = parse_c_file (File.input_name source_file) (File.open_input_file source_file) in
-    Interp.execute csyntax;
-    ""
-  end else begin
-    let asm_file = assembler_file source_file in
-    let oc = (File.out_channel_of_process_file asm_file) in
-    compile_c_file source_file  (File.process_file_of_input_file source_file) oc ;
-    if !option_S then
-      ""
-    else
-      let objname = assemble source_file asm_file in
-      print_options source_file;
-      objname
-  end
+  compile_prepro_file source_file (File.process_file_of_input_file source_file)
 
 (* Processing of a .cm file *)
 
@@ -184,18 +177,12 @@ let process_cminor_file source_file =
   let asm_file = assembler_file source_file in
   let oc = (File.out_channel_of_process_file asm_file) in
   compile_cminor_file source_file (File.process_file_name asm_file) oc;
-  if !option_S then
-    ""
-  else
-    let objname = assemble source_file asm_file in
-    print_options source_file;
-    objname
+  assemble source_file asm_file
 
 (* Processing of .S and .s files *)
 
 let process_s_file source_file =
-  let objname =  assemble source_file (File.process_file_of_input_file source_file) in
-  objname
+  assemble source_file (File.process_file_of_input_file source_file)
 
 let process_S_file source_file =
   if !option_E then begin
@@ -204,8 +191,7 @@ let process_S_file source_file =
   end else begin
     let asm_file = assembler_file source_file in
     preprocess (File.input_name source_file) (Some asm_file);
-    let objname = assemble source_file asm_file in
-    objname
+    assemble source_file asm_file
   end
 
 (* Processing of .h files *)
