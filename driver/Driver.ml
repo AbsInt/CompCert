@@ -84,7 +84,7 @@ let assembler_file source_file =
   if !option_dasm || !option_S then
     File.file_process_file ~final:!option_S source_file ".s"
   else
-    File.temp_process_file ".s" (!option_pipe && gnu_system)
+    File.temp_process_file ~supports_pipe:Configuration.asm_supports_pipe ".s"
 
 (* From Cminor to asm *)
 
@@ -138,7 +138,7 @@ let process_c_file source_file =
     let prepro_file = if !option_dprepro then
       File.file_process_file  source_file ".i"
       else
-        File.temp_process_file ".i" !option_pipe in
+        File.temp_process_file ".i" in
     preprocess (File.input_name source_file) (Some prepro_file);
     if !option_interp then begin
       Machine.config := Machine.compcert_interpreter !Machine.config;

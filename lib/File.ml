@@ -81,8 +81,8 @@ type process_file =
   | File of string
 
 
-let temp_process_file suffix pipe =
-  if pipe then
+let temp_process_file ?(supports_pipe=true) suffix =
+  if !option_pipe && supports_pipe then
     let ic,oc = Unix.pipe () in
     Pipe (ic,oc)
   else

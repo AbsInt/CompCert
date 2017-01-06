@@ -115,39 +115,29 @@ let asm =
 let linker =
   tool_absolute_path (get_config_list "linker")@(opt_config_list "linker_options")
 
+let get_bool_config key =
+  match get_config_string key with
+  | "true" -> true
+  | "false" -> false
+  | v -> bad_config key [v]
+
 let arch =
   match get_config_string "arch" with
   | "powerpc"|"arm"|"x86" as a -> a
   | v -> bad_config "arch" [v]
 let model = get_config_string "model"
 let abi = get_config_string "abi"
-let is_big_endian =
-  match get_config_string "endianness" with
-  | "big" -> true
-  | "little" -> false
-  | v -> bad_config "endianness" [v]
+let is_big_endian = get_bool_config "endianness"
 let system = get_config_string "system"
-let has_runtime_lib =
-  match get_config_string "has_runtime_lib" with
-  | "true" -> true
-  | "false" -> false
-  | v -> bad_config "has_runtime_lib" [v]
-let has_standard_headers =
-  match get_config_string "has_standard_headers" with
-  | "true" -> true
-  | "false" -> false
-  | v -> bad_config "has_standard_headers" [v]
+let has_runtime_lib = get_bool_config "has_runtime_lib"
+let has_standard_headers = get_bool_config "has_standard_headers"
 let stdlib_path =
   if has_runtime_lib then
     let path = get_config_string "stdlib_path" in
     absolute_path ini_dir path
   else
     ""
-let asm_supports_cfi =
-  match get_config_string "asm_supports_cfi" with
-  | "true" -> true
-  | "false" -> false
-  | v -> bad_config "asm_supports_cfi" [v]
+let asm_supports_cfi = get_bool_config "asm_supports_cfi"
 
 
 type struct_passing_style =
@@ -188,3 +178,5 @@ let response_file_style =
   | "gnu" -> Gnu
   | "diab" -> Diab
   | v -> bad_config "response_file_style" [v]
+
+let asm_supports_pipe = get_bool_config "asm_supports_pipe"

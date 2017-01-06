@@ -57,7 +57,7 @@ let process_c_file source_file =
   if !option_E then begin
     preprocess (File.input_name source_file) None
   end else begin
-    let preproname = File.temp_process_file  ".i" !option_pipe in
+    let preproname = File.temp_process_file  ".i" in
     preprocess (File.input_name source_file) (Some preproname);
     compile_c_file source_file (File.in_channel_of_process_file preproname) (File.output_filename source_file ".v")
   end

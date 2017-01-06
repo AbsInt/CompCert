@@ -43,7 +43,7 @@ val output_filename: ?final:bool -> input_file -> string -> string
 type process_file
    (** Type for the IO of external processes *)
 
-val temp_process_file : string -> bool -> process_file
+val temp_process_file : ?supports_pipe:bool -> string -> process_file
    (** Generate a new temporary file or pipe for external process IO *)
 
 val file_process_file : ?final:bool -> input_file -> string -> process_file
