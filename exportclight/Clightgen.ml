@@ -57,7 +57,7 @@ let process_c_file source_file =
   if !option_E then begin
     preprocess (File.input_name source_file) None
   end else begin
-    let preproname = File.tmpfile_process_file  ".i" in
+    let preproname = File.temp_process_file  ".i" !option_pipe in
     preprocess (File.input_name source_file) (Some preproname);
     compile_c_file source_file (File.in_channel_of_process_file preproname) (File.output_filename source_file ".v")
   end
@@ -132,6 +132,7 @@ let cmdline_actions =
 (* General options *)
   Exact "-v", Set option_v;
   Exact "-stdlib", String(fun s -> stdlib_path := s);
+  Exact "-pipe", Unit (fun () -> option_pipe:=true; Frontend.add_pipe ());
   ]
 (* -f options: come in -f and -fno- variants *)
 (* Language support options *)

@@ -17,19 +17,26 @@ open Driveraux
 
 (* From asm to object file *)
 
-let assemble ifile ofile =
+let assemble source_file ifile =
+  let ofile = File.output_filename  ~final:!option_c source_file ".o"
+  and ifile_name,stdin = File.input_of_process_file ifile in
   let cmd = List.concat [
     Configuration.asm;
     ["-o"; ofile];
     List.rev !assembler_options;
-    [ifile]
-  ] in
-  let exc = command cmd in
+    [ifile_name]
+    ] in
+  let exc = command ?stdin:stdin cmd in
   if exc <> 0 then begin
     File.safe_remove ofile;
     command_error "assembler" exc;
     exit 2
-  end
+  end;
+  ofile
+
+let add_pipe () =
+  if gnu_system then
+     assembler_options :=  "-pipe"::"-xassembler" :: !assembler_options
 
 let assembler_actions =
  [ Prefix "-Wa,", Self (fun s -> if gnu_system then

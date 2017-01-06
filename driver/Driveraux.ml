@@ -23,7 +23,7 @@ let rec waitpid_no_intr pid =
   try Unix.waitpid [] pid
   with Unix.Unix_error (Unix.EINTR, _, _) -> waitpid_no_intr pid
 
-let command stdout args =
+let command stdout stdin args =
   let argv = Array.of_list args in
   assert (Array.length argv > 0);
   try
@@ -31,11 +31,16 @@ let command stdout args =
       match stdout with
       | None -> Unix.stdout
       | Some f -> File.out_descr_of_process_file f in
+    let fd_in =
+      match stdin with
+      | None -> Unix.stdin
+      | Some f -> f in
     let pid =
-      Unix.create_process argv.(0) argv Unix.stdin fd_out Unix.stderr in
+      Unix.create_process argv.(0) argv fd_in fd_out Unix.stderr in
     let (_, status) =
       waitpid_no_intr pid in
     if stdout <> None then Unix.close fd_out;
+    if stdin <> None then Unix.close fd_in;
     match status with
     | Unix.WEXITED rc -> rc
     | Unix.WSIGNALED n | Unix.WSTOPPED n ->
@@ -45,12 +50,12 @@ let command stdout args =
             argv.(0) fn (Unix.error_message err) param;
     -1
 
-let command ?stdout args =
+let command ?stdout ?stdin args =
   if !option_v then begin
     eprintf "+ %s" (String.concat " " args);
      begin match stdout with
        | None -> ()
-     | Some f-> eprintf " > %s" (File.process_file_name f)
+       | Some f-> eprintf " > %s" (File.process_file_name f)
      end;
     prerr_endline ""
   end;
@@ -70,7 +75,7 @@ let command ?stdout args =
       [cmd;prefix^file]
   else
     args in
-  command stdout args
+  command stdout stdin args
 
 let command_error n exc =
   eprintf "Error: %s command failed with exit code %d (use -v to see invocation)\n" n exc

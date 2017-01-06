@@ -11,7 +11,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-val assemble: string -> string -> unit
+val assemble: File.input_file -> File.process_file -> string
   (** From asm to object file *)
 
 val assembler_actions: (Commandline.pattern * Commandline.action) list
@@ -19,3 +19,6 @@ val assembler_actions: (Commandline.pattern * Commandline.action) list
 
 val assembler_help: string
   (** Commandline help description *)
+
+val add_pipe: unit -> unit
+  (** Add pipe option for the assembler *)
