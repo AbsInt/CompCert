@@ -20,9 +20,6 @@ val temp_file: string -> string
 val output_filename_default: string -> string
    (** Return either the file specified by -o or the given file name *)
 
-val ensure_inputfile_exists: string -> unit
-   (** Test whether the given input file exists *)
-
 type input_file
    (** Type for input files *)
 

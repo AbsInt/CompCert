@@ -22,6 +22,7 @@ type input_file =
     suffix: string;
   }
 
+(* Create a new input file and ensure it's existence *)
 let new_input_file file suffix =
   if not (Sys.file_exists file) then begin
     eprintf "error: no such file or directory: '%s'\n" file;
@@ -32,12 +33,12 @@ let new_input_file file suffix =
     suffix = suffix;
   }
 
+(* Get the name of the input file *)
 let input_name file = file.name
 
+(* Get the input channel from the input file *)
 let open_input_file file =
   open_in_bin file.name
-
-
 
 (* Safe removal of files *)
 let safe_remove file =
@@ -66,14 +67,6 @@ let output_filename_default default_file =
   match !option_o with
   | Some file -> file
   | None -> default_file
-
-(* All input files should exist *)
-
-let ensure_inputfile_exists name =
-  if not (Sys.file_exists name) then begin
-    eprintf "error: no such file or directory: '%s'\n" name;
-    exit 2
-  end
 
 type process_file =
   | Pipe of Unix.file_descr * Unix.file_descr
