@@ -40,8 +40,11 @@ val output_filename: ?final:bool -> input_file -> string -> string
 type process_file
    (** Type for the IO of external processes *)
 
-val temp_process_file : ?supports_pipe:bool -> string -> process_file
-   (** Generate a new temporary file or pipe for external process IO *)
+val temp_process_file : string -> process_file
+  (** Generate a new temporary file or pipe for external process IO *)
+
+val pipe_process_file: unit -> process_file
+  (** Generate a new pipe process_file *)
 
 val file_process_file : ?final:bool -> input_file -> string -> process_file
   (** Generate a new out file for external process IO *)
@@ -53,7 +56,10 @@ val in_channel_of_process_file : process_file -> in_channel
   (** Get an in_channel from the process_file *)
 
 val input_of_process_file : process_file -> string * Unix.file_descr option
-  (** Get input for external process *)
+   (** Get input for external process *)
+
+val in_descr_of_process_pipe: process_file -> string * Unix.file_descr
+   (** Get input for external process *)
 
 val out_channel_of_process_file : process_file -> out_channel
   (** Get an out_channel from the process_file *)
@@ -69,3 +75,6 @@ val process_file_name : process_file -> string
 
 val process_file_default : unit -> process_file option
   (** Generate a process_file if option -o is given *)
+
+val close_files: process_file -> unit
+  (** Close the process_file files if needed *)

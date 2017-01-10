@@ -23,11 +23,66 @@ let rec waitpid_no_intr pid =
   try Unix.waitpid [] pid
   with Unix.Unix_error (Unix.EINTR, _, _) -> waitpid_no_intr pid
 
-let command stdout stdin args =
-  let argv = Array.of_list args in
+
+let response_file args =
+  let resp = Sys.win32 && Configuration.response_file_style <> Configuration.Unsupported in
+  if resp && List.fold_left (fun len arg -> len + String.length arg + 1) 0 args > 7000 then
+    let quote,prefix = match Configuration.response_file_style with
+      | Configuration.Unsupported -> assert false
+      | Configuration.Gnu -> Responsefile.gnu_quote,"@"
+      | Configuration.Diab -> Responsefile.diab_quote,"-@" in
+    let file = File.temp_file "" in
+    let oc = open_out_bin file in
+    let cmd,args = match args with
+      | cmd::args -> cmd,args
+      | [] -> assert false (* Should never happen *) in
+    List.iter (fun a -> Printf.fprintf oc "%s " (quote a)) args;
+    close_out oc;
+    [|cmd;prefix^file|]
+  else
+    Array.of_list args
+
+let verbose args stdout =
+  if !option_v then begin
+    eprintf "+ %s" (String.concat " " args);
+    begin match stdout with
+      | None -> ()
+      | Some f-> eprintf " > %s" (File.process_file_name f)
+    end;
+    prerr_endline "" end
+
+let print_error proc err fn param =
+  eprintf "Error executing '%s': %s: %s %s"
+    proc fn (Unix.error_message err) param;
+  prerr_endline ""
+
+type process_info = (int * string)
+
+let create_process fd_in fd_out args =
+  let argv = response_file args in
   assert (Array.length argv > 0);
   try
-    let fd_out =
+    let pid = Unix.create_process argv.(0) argv fd_in fd_out Unix.stderr in
+    Some (pid,argv.(0))
+  with Unix.Unix_error(err, fn, param) ->
+    print_error argv.(0) err fn param;
+    None
+
+let waitpid (pid,proc) =
+  try
+    let (_, status) =
+      waitpid_no_intr pid in
+    match status with
+    | Unix.WEXITED rc ->
+      rc
+    | Unix.WSIGNALED n | Unix.WSTOPPED n ->
+      eprintf "Command '%s' killed on a signal.\n" proc; -1
+  with Unix.Unix_error (err,fn,param) ->
+    print_error proc err fn param;
+    -1
+
+let command ?stdout ?stdin args =
+  let fd_out =
       match stdout with
       | None -> Unix.stdout
       | Some f -> File.out_descr_of_process_file f in
@@ -35,54 +90,23 @@ let command stdout stdin args =
       match stdin with
       | None -> Unix.stdin
       | Some f -> f in
-    let pid =
-      Unix.create_process argv.(0) argv fd_in fd_out Unix.stderr in
-    let (_, status) =
-      waitpid_no_intr pid in
+  verbose args stdout;
+  let pid = create_process fd_in fd_out args in
+  match pid with
+  | None -> -1
+  | Some pid ->
+    let exit = waitpid pid in
     if stdout <> None then Unix.close fd_out;
     if stdin <> None then Unix.close fd_in;
-    match status with
-    | Unix.WEXITED rc -> rc
-    | Unix.WSIGNALED n | Unix.WSTOPPED n ->
-        eprintf "Command '%s' killed on a signal.\n" argv.(0); -1
-  with Unix.Unix_error(err, fn, param) ->
-    eprintf "Error executing '%s': %s: %s %s\n"
-            argv.(0) fn (Unix.error_message err) param;
-    -1
+    exit
 
-let command ?stdout ?stdin args =
-  if !option_v then begin
-    eprintf "+ %s" (String.concat " " args);
-     begin match stdout with
-       | None -> ()
-       | Some f-> eprintf " > %s" (File.process_file_name f)
-     end;
-    prerr_endline ""
-  end;
-  let resp = Sys.win32 && Configuration.response_file_style <> Configuration.Unsupported in
-  let args = if resp && List.fold_left (fun len arg -> len + String.length arg + 1) 0 args > 7000 then
-      let quote,prefix = match Configuration.response_file_style with
-        | Configuration.Unsupported -> assert false
-        | Configuration.Gnu -> Responsefile.gnu_quote,"@"
-        | Configuration.Diab -> Responsefile.diab_quote,"-@" in
-      let file = File.temp_file "" in
-      let oc = open_out_bin file in
-      let cmd,args = match args with
-        | cmd::args -> cmd,args
-        | [] -> assert false (* Should never happen *) in
-      List.iter (fun a -> Printf.fprintf oc "%s " (quote a)) args;
-      close_out oc;
-      [cmd;prefix^file]
-  else
-    args in
-  command stdout stdin args
 
 let command_error n exc =
   eprintf "Error: %s command failed with exit code %d (use -v to see invocation)\n" n exc
 
 (* Printing of error messages *)
 
-let print_error file msg =
+let print_errorcodes file msg =
   let print_one_error oc = function
   | Errors.MSG s -> output_string oc (Camlcoq.camlstring_of_coqstring s)
   | Errors.CTX i -> output_string oc (Camlcoq.extern_atom i)

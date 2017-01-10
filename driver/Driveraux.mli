@@ -19,7 +19,7 @@ val command: ?stdout:File.process_file -> ?stdin:Unix.file_descr -> string list 
 val command_error: string -> int -> unit
    (** Generate an error message for the given command and exit code *)
 
-val print_error: string -> Errors.errcode list -> 'a
+val print_errorcodes: string -> Errors.errcode list -> 'a
    (** Printing of error messages *)
 
 val gnu_system: bool
@@ -36,3 +36,12 @@ val push_linker_arg: string -> unit
 
 val perform_actions: unit -> string list
   (** Perform actions *)
+
+type process_info
+  (** Internal type for the create_process and waitpid wrappers *)
+
+val create_process: Unix.file_descr-> Unix.file_descr -> string list -> process_info option
+  (** Wrapper around create process *)
+
+val waitpid: process_info -> int
+  (** Wrapper around waitpid *)

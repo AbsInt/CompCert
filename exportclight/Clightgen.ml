@@ -34,10 +34,10 @@ let compile_c_file ifile ic ofile =
         begin match SimplLocals.transf_program p with
         | Errors.OK p' -> p'
         | Errors.Error msg ->
-            print_error (File.input_name ifile) msg
+            print_errorcodes (File.input_name ifile) msg
         end
     | Errors.Error msg ->
-        print_error (File.input_name ifile) msg in
+        print_errorcodes (File.input_name ifile) msg in
   (* Dump Clight in C syntax if requested *)
   if !option_dclight then begin
     let ofile = File.output_filename ifile ".light.c" in

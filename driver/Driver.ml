@@ -49,7 +49,7 @@ let print_options source_file =
 
 (* From C source to asm *)
 
-let compile_c_file  ifile prepro oc =
+let compile_c_file  ifile prepro =
   let ic = File.in_channel_of_process_file prepro in
   (* Prepare to dump Clight, RTL, etc, if requested *)
   let set_dest dst opt ext =
@@ -65,30 +65,32 @@ let compile_c_file  ifile prepro oc =
   set_dest PrintMach.destination option_dmach ".mach";
   let csyntax = parse_c_file (File.input_name ifile) ic in
   (* Convert to Asm *)
-  let asm =
-    match Compiler.apply_partial
-               (Compiler.transf_c_program csyntax)
-               Asmexpand.expand_program with
-    | Errors.OK asm ->
-        asm
-    | Errors.Error msg ->
-      print_error (File.input_name ifile) msg
-  in
-  (* Dump Asm in binary and JSON format *)
-  dump_jasm asm ifile;
-  (* Print Asm in text form *)
-  PrintAsm.print_program oc asm;
-  close_out oc
+  match Compiler.apply_partial
+          (Compiler.transf_c_program csyntax)
+          Asmexpand.expand_program with
+  | Errors.OK asm ->
+    asm
+  | Errors.Error msg ->
+    print_errorcodes (File.input_name ifile) msg
 
-let assembler_file source_file =
-  if !option_dasm || !option_S then
-    File.file_process_file ~final:!option_S source_file ".s"
-  else
-    File.temp_process_file ~supports_pipe:Configuration.asm_supports_pipe ".s"
+let assemble_ast asm source_file =
+  if !option_S then begin
+    let oc = open_out_bin (File.output_filename ~final:true source_file ".s") in
+    PrintAsm.print_program oc asm;
+    ""
+  end else begin
+    let objname,ofile,pid = Assembler.open_assembler_out source_file in
+    let oc = File.out_channel_of_process_file ofile in
+    PrintAsm.print_program oc asm;
+    close_out oc;
+    Assembler.close_assembler_out ofile pid objname;
+    print_options source_file;
+    objname
+  end
 
 (* From Cminor to asm *)
 
-let compile_cminor_file ifile ofile oc =
+let compile_cminor_file ifile =
   (* Prepare to dump RTL, Mach, etc, if requested *)
   let set_dest dst opt ext =
     dst := if !opt then Some (output_filename ifile ext)
@@ -116,26 +118,12 @@ let compile_cminor_file ifile ofile oc =
                    (File.input_name ifile) msg;
            exit 2 in
   (* Convert to Asm *)
-  let asm =
-    match Compiler.apply_partial
-               (Compiler.transf_cminor_program cm)
-               Asmexpand.expand_program with
-    | Errors.OK asm ->
-        asm
-    | Errors.Error msg -> print_error (File.input_name ifile) msg
-  in
-  (* Print Asm in text form *)
-  PrintAsm.print_program oc asm;
-  close_out oc
-
-let assemble source_file asm_file =
-  if !option_S then
-    ""
-  else
-    let objname = File.output_filename  ~final:!option_c source_file ".o"  in
-    assemble asm_file objname;
-    print_options source_file;
-    objname
+  match Compiler.apply_partial
+          (Compiler.transf_cminor_program cm)
+          Asmexpand.expand_program with
+  | Errors.OK asm ->
+    asm
+  | Errors.Error msg -> print_errorcodes (File.input_name ifile) msg
 
 (* From preprocessed c to object file or interpreter *)
 let compile_prepro_file source_file prepro_file =
@@ -145,11 +133,9 @@ let compile_prepro_file source_file prepro_file =
     Interp.execute csyntax;
     ""
   end else begin
-    let asm_file = assembler_file source_file in
-    let oc = (File.out_channel_of_process_file asm_file) in
-    compile_c_file source_file  prepro_file oc ;
-    assemble source_file asm_file
-  end
+    let asm = compile_c_file source_file  prepro_file in
+    assemble_ast asm source_file
+ end
 
 (* Processing of a .c file *)
 
@@ -160,6 +146,8 @@ let process_c_file source_file =
   end else begin
     let prepro_file = if !option_dprepro then
       File.file_process_file  source_file ".i"
+      else if !option_pipe then
+        File.pipe_process_file ()
       else
         File.temp_process_file ".i" in
     preprocess (File.input_name source_file) (Some prepro_file);
@@ -174,24 +162,30 @@ let process_i_file source_file =
 (* Processing of a .cm file *)
 
 let process_cminor_file source_file =
-  let asm_file = assembler_file source_file in
-  let oc = (File.out_channel_of_process_file asm_file) in
-  compile_cminor_file source_file (File.process_file_name asm_file) oc;
-  assemble source_file asm_file
+  let asm = compile_cminor_file source_file in
+  assemble_ast asm source_file
 
 (* Processing of .S and .s files *)
+let assemble_file source_file asm_file =
+  if !option_S then
+    ""
+  else
+    let objname = File.output_filename  ~final:!option_c source_file ".o"  in
+    assemble asm_file objname;
+    print_options source_file;
+    objname
 
 let process_s_file source_file =
-  assemble source_file (File.process_file_of_input_file source_file)
+  assemble_file source_file (File.process_file_of_input_file source_file)
 
 let process_S_file source_file =
   if !option_E then begin
     preprocess (File.input_name source_file) (File.process_file_default ());
     ""
   end else begin
-    let asm_file = assembler_file source_file in
+    let asm_file = File.temp_process_file ".s" in
     preprocess (File.input_name source_file) (Some asm_file);
-    assemble source_file asm_file
+    assemble_file source_file asm_file
   end
 
 (* Processing of .h files *)

@@ -50,7 +50,6 @@ let temp_file suffix =
   at_exit (fun () -> safe_remove file);
   file
 
-
 (* Determine names for output files.  We use -o option if specified
    and if this is the final destination file (not a dump file).
    Otherwise, we generate a file in the current directory. *)
@@ -74,12 +73,12 @@ type process_file =
   | File of string
 
 
-let temp_process_file ?(supports_pipe=true) suffix =
-  if !option_pipe && supports_pipe then
-    let ic,oc = Unix.pipe () in
-    Pipe (ic,oc)
-  else
-    Tmpfile (temp_file suffix)
+let temp_process_file suffix =
+  Tmpfile (temp_file suffix)
+
+let pipe_process_file () =
+  let ic,oc = Unix.pipe () in
+  Pipe (ic,oc)
 
 let file_process_file ?(final = false) source_file output_suffix =
   File (output_filename ~final:final source_file output_suffix)
@@ -91,6 +90,10 @@ let in_channel_of_process_file = function
   | Pipe (ic,_) -> Unix.in_channel_of_descr ic
   | Tmpfile f
   | File f -> open_in_bin f
+
+let in_descr_of_process_pipe = function
+  | Pipe (ic,_) -> "-",ic
+  | _ -> assert false
 
 let input_of_process_file = function
   | Pipe (ic,_) -> "-",Some ic
@@ -121,3 +124,7 @@ let process_file_default () =
   match !option_o with
   | Some file -> Some (File file)
   | None -> None
+
+let close_files = function
+  | Pipe (ic,oc) -> Unix.close ic; Unix.close oc
+  | _ -> ()
