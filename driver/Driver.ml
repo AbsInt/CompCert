@@ -79,6 +79,7 @@ let assemble_ast asm source_file =
     PrintAsm.print_program oc asm;
     ""
   end else begin
+    dump_jasm asm source_file;
     let objname,ofile,pid = Assembler.open_assembler_out source_file in
     let oc = File.out_channel_of_process_file ofile in
     PrintAsm.print_program oc asm;
