@@ -112,14 +112,14 @@ let command ?stdout args =
     eprintf "+ %s" (String.concat " " args);
     begin match stdout with
     | None -> ()
-    | Some f -> eprintf " > %s" (File.process_file_name f)
+    | Some f -> eprintf " > %s" f
     end;
     prerr_endline ""
   end;
   let fd_out =
     match stdout with
     | None -> Unix.stdout
-    | Some f -> File.out_descr_of_process_file f in
+    | Some f -> Unix.openfile f [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC] 0o666 in
   try
     let pid = create_process Unix.stdin fd_out args in
     let rc = waitpid pid in

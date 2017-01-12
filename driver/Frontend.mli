@@ -15,7 +15,7 @@ val dparse_destination: string option ref
 
 val dcompcertc_destination: string option ref
 
-val preprocess: string -> File.process_file option -> unit
+val preprocess: File.input_file -> string -> unit
   (** From C to preprocessed C *)
 
 val parse_c_file: string -> in_channel -> Csyntax.coq_function Ctypes.program

@@ -31,18 +31,17 @@ let cmd ifile =
      then ["-I" ^ Filename.concat !Clflags.stdlib_path "include" ]
      else []);
     List.rev !prepro_options;
-    [ifile]
+    [File.input_name ifile]
   ]
 
 (* From C to preprocessed C *)
 let preprocess ifile ofile =
+  let output =
+    if ofile = "-" then None else Some ofile in
   let cmd = cmd ifile in
-  let exc = command ?stdout:ofile cmd in
+  let exc = command ?stdout:output cmd in
   if exc <> 0 then begin
-    begin match ofile with
-      | None -> ()
-      | Some f ->  File.safe_remove_process_file f
-    end;
+    if ofile <> "-" then File.safe_remove ofile;
     command_error "preprocessor" exc;
     eprintf "Error during preprocessing.\n";
     exit 2
@@ -52,8 +51,7 @@ type prepro_handle =
   | File
   | Process of Driveraux.process_info
 
-let open_prepro_in source_file =
-  let ifile = File.input_name source_file in
+let open_prepro_in ifile =
   if !option_pipe then
     let cmd = cmd ifile in
     let pid = open_process_in cmd in
@@ -62,11 +60,11 @@ let open_prepro_in source_file =
     | Some (pid,ic) -> ic,Process pid
   else
     let ofile = if !option_dprepro then
-        File.file_process_file source_file ".i"
+        File.output_filename ifile ".i"
       else
-        File.temp_process_file ".i" in
-    preprocess ifile (Some ofile);
-    File.in_channel_of_process_file ofile,File
+        File.temp_file ".i" in
+    preprocess ifile ofile;
+    open_in_bin ofile,File
 
 let close_prepro_in ic handle =
   match handle with

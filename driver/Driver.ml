@@ -140,7 +140,7 @@ let compile_prepro_file source_file (ic,prepro)=
 
 let process_c_file source_file =
   if !option_E then begin
-    preprocess (File.input_name source_file) (File.process_file_default ());
+    preprocess source_file (File.output_filename_default "-");
     ""
   end else begin
     let ic,prepro = open_prepro_in source_file in
@@ -173,19 +173,19 @@ let process_s_file source_file =
 
 let process_S_file source_file =
   if !option_E then begin
-    preprocess (File.input_name source_file) (File.process_file_default ());
+    preprocess source_file "-";
     ""
   end else begin
-    let asm_file = File.temp_process_file ".s" in
-    preprocess (File.input_name source_file) (Some asm_file);
-    assemble_file source_file (File.process_file_name asm_file)
+    let asm_file = File.temp_file ".s" in
+    preprocess source_file asm_file;
+    assemble_file source_file  asm_file
   end
 
 (* Processing of .h files *)
 
 let process_h_file source_file =
   if !option_E then begin
-    preprocess (File.input_name source_file) (File.process_file_default ());
+    preprocess source_file (File.output_filename_default "-");
     ""
   end else begin
     eprintf "Error: input file %s ignored (not in -E mode)\n" (File.input_name source_file);

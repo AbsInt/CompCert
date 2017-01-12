@@ -12,7 +12,7 @@
 (* *********************************************************************)
 
 
-val command: ?stdout:File.process_file -> string list -> int
+val command: ?stdout:string -> string list -> int
     (** Execute the command with the given arguments and an optional file for
         the stdout. Returns the exit code. *)
 

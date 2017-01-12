@@ -22,13 +22,14 @@ open Frontend
 
 (* From C source to Clight *)
 
-let compile_c_file ifile ic ofile =
+let compile_c_file ifile (ic,prepro) ofile =
   dparse_destination := if !option_dparse then
       Some (output_filename ifile ".parsed.c")
     else
       None;
   let csyntax = parse_c_file (File.input_name ifile) ic in
-    let clight =
+  close_prepro_in ic prepro;
+  let clight =
     match SimplExpr.transl_program csyntax with
     | Errors.OK p ->
         begin match SimplLocals.transf_program p with
@@ -55,11 +56,10 @@ let compile_c_file ifile ic ofile =
 
 let process_c_file source_file =
   if !option_E then begin
-    preprocess (File.input_name source_file) None
+    preprocess source_file (File.output_filename_default "-")
   end else begin
-    let preproname = File.temp_process_file  ".i" in
-    preprocess (File.input_name source_file) (Some preproname);
-    compile_c_file source_file (File.in_channel_of_process_file preproname) (File.output_filename source_file ".v")
+    let ic,prepro = open_prepro_in source_file in
+    compile_c_file source_file (ic,prepro) (File.output_filename source_file ".v")
   end
 
 let version_string =
