@@ -184,3 +184,5 @@ let response_file_style =
   | v -> bad_config "response_file_style" [v]
 
 let asm_supports_pipe = get_bool_config "asm_supports_pipe"
+
+let gnu_toolchain = system <> "diab"

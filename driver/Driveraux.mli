@@ -22,9 +22,6 @@ val command_error: string -> int -> unit
 val print_errorcodes: string -> Errors.errcode list -> 'a
    (** Printing of error messages *)
 
-val gnu_system: bool
-   (** Are the target tools gnu tools? *)
-
 val explode_comma_option: string -> string list
    (** Split option at commas *)
 

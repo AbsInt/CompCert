@@ -13,7 +13,6 @@
 open Clflags
 open Commandline
 open Debug
-open Driveraux
 
 let default_debug =
   {
@@ -49,14 +48,14 @@ let default_debug =
 
 let init_debug () =
   implem :=
-  if Configuration.system = "diab" then
+  if Configuration.gnu_toolchain then
+    {default_debug with generate_debug_info = (fun a b -> Some (Dwarfgen.gen_gnu_debug_info a b));
+     add_fun_addr = DebugInformation.gnu_add_fun_addr}
+  else
     let gen = (fun a b -> Some (Dwarfgen.gen_diab_debug_info a b)) in
     {default_debug with generate_debug_info = gen;
      add_diab_info = DebugInformation.add_diab_info;
      add_fun_addr = DebugInformation.diab_add_fun_addr;}
-  else
-    {default_debug with generate_debug_info = (fun a b -> Some (Dwarfgen.gen_gnu_debug_info a b));
-     add_fun_addr = DebugInformation.gnu_add_fun_addr}
 
 let init_none () =
   implem := default_implem
@@ -76,7 +75,7 @@ let debugging_help =
 \  -g<n>          Control generation of debugging information\n\
 \                 (<n>=0: none, <n>=1: only-globals, <n>=2: globals + locals \n\
 \                 without locations, <n>=3: full;)\n"
-^ (if gnu_system then gnu_debugging_help else "")
+^ (if Configuration.gnu_toolchain then gnu_debugging_help else "")
 
 let gnu_debugging_actions =
   let version version () =
@@ -97,4 +96,4 @@ let debugging_actions =
    Exact "-g2", Unit (depth 2);
    Exact "-g3", Unit (depth 3);]
   @
-  (if gnu_system then gnu_debugging_actions else [])
+  (if Configuration.gnu_toolchain then gnu_debugging_actions else [])

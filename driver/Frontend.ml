@@ -101,7 +101,7 @@ let gnu_prepro_opt_e s =
 
 (* Add pipe if tools support it *)
 let add_pipe () =
-  if gnu_system then
+  if Configuration.gnu_toolchain then
     gnu_prepro_opt "-pipe"
 
 let gnu_prepro_actions = [
@@ -136,7 +136,7 @@ let prepro_actions = [
   Exact "-Xpreprocessor", String (fun s ->
     prepro_options := s :: !prepro_options);
   Exact "-include", String (fun s -> prepro_options := s :: "-include" :: !prepro_options);]
-  @ (if gnu_system then gnu_prepro_actions else [])
+  @ (if Configuration.gnu_toolchain then gnu_prepro_actions else [])
 
 let gnu_prepro_help =
 "\  -M            Ouput a rule suitable for make describing the\n\
@@ -172,4 +172,4 @@ let prepro_help = "Preprocessing options:\n\
 \  -U<symb>       Undefine preprocessor symbol\n\
 \  -Wp,<opt>      Pass option <opt> to the preprocessor\n\
 \  -Xpreprocessor <opt> Pass option <opt> to the preprocessor\n"
-  ^ (if gnu_system then gnu_prepro_help else "")
+  ^ (if Configuration.gnu_toolchain then gnu_prepro_help else "")

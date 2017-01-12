@@ -14,8 +14,6 @@
 open Printf
 open Clflags
 
-(* Is this a gnu based tool chain *)
-let gnu_system = Configuration.system <> "diab"
 
 (* Invocation of external tools *)
 
