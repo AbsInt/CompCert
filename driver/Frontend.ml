@@ -52,11 +52,14 @@ type prepro_handle =
   | Process of Driveraux.process_info
 
 let open_prepro_in ifile =
-  if !option_pipe then
+  if !option_pipe && not !option_dprepro then
     let cmd = cmd ifile in
     let pid = open_process_in cmd in
     match pid with
-    | None -> failwith "TODO error handling"
+    | None ->
+      command_error "preprocessor" (-1);
+      eprintf "Error during preprocessing.\n";
+      exit 2
     | Some (pid,ic) -> ic,Process pid
   else
     let ofile = if !option_dprepro then

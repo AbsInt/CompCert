@@ -69,7 +69,7 @@ let create_process fd_in fd_out args =
 
 let open_process_out args =
   if !option_v then begin
-    eprintf "+ %s | ccomp" (String.concat " " args);
+    eprintf "+ %s" (String.concat " " args);
     prerr_endline ""
   end;
   try
@@ -89,7 +89,7 @@ let close_process_out proc oc =
 
 let open_process_in args =
   if !option_v then begin
-    eprintf "+ ccomp | %s" (String.concat " " args);
+    eprintf "+ %s" (String.concat " " args);
     prerr_endline ""
   end;
   try

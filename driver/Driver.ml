@@ -49,7 +49,7 @@ let print_options source_file =
 
 (* From C source to asm *)
 
-let compile_c_file  ifile (ic,prepo) =
+let compile_c_file  ifile (ic,prepro) =
   (* Prepare to dump Clight, RTL, etc, if requested *)
   let set_dest dst opt ext =
     dst := if !opt then Some (output_filename ifile ext)
@@ -63,6 +63,7 @@ let compile_c_file  ifile (ic,prepo) =
   set_dest PrintLTL.destination option_dltl ".ltl";
   set_dest PrintMach.destination option_dmach ".mach";
   let csyntax = parse_c_file (File.input_name ifile) ic in
+  close_prepro_in ic prepro;
   (* Convert to Asm *)
   match Compiler.apply_partial
           (Compiler.transf_c_program csyntax)
@@ -72,13 +73,13 @@ let compile_c_file  ifile (ic,prepo) =
   | Errors.Error msg ->
     print_errorcodes (File.input_name ifile) msg
 
-let assemble_ast asm source_file =
+let assemble_ast ?(sdump =true) asm source_file =
   if !option_S then begin
     let oc = open_out_bin (File.output_filename ~final:true source_file ".s") in
     PrintAsm.print_program oc asm;
     ""
   end else begin
-    dump_jasm asm source_file;
+    if sdump then dump_jasm asm source_file;
     let oc,handle = Assembler.open_assembler_out source_file in
     PrintAsm.print_program oc asm;
     let objname = Assembler.close_assembler_out oc handle in
@@ -156,7 +157,7 @@ let process_i_file source_file =
 
 let process_cminor_file source_file =
   let asm = compile_cminor_file source_file in
-  assemble_ast asm source_file
+  assemble_ast ~sdump:false asm source_file
 
 (* Processing of .S and .s files *)
 let assemble_file source_file asm_file =

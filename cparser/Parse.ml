@@ -45,7 +45,6 @@ let read_file ic =
       Buffer.add_channel buf ic 16384;
     done
   with End_of_file -> () end;
-  close_in ic;
   Buffer.contents buf
 
 let preprocessed_file transfs name ic =

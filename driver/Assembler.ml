@@ -45,7 +45,7 @@ type assembler_handle =
 
 let open_assembler_out source_file =
   let ofile = File.output_filename ~final:!option_c source_file ".o"  in
-  if !option_pipe && Configuration.asm_supports_pipe then
+  if !option_pipe && Configuration.asm_supports_pipe && not !option_dasm then
     let cmd = cmd "-" ofile in
     let pid = open_process_out cmd in
     match pid with
