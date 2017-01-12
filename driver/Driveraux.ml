@@ -42,31 +42,12 @@ let response_file args =
   else
     Array.of_list args
 
-let verbose args stdout =
-  if !option_v then begin
-    eprintf "+ %s" (String.concat " " args);
-    begin match stdout with
-      | None -> ()
-      | Some f-> eprintf " > %s" (File.process_file_name f)
-    end;
-    prerr_endline "" end
-
 let print_error proc err fn param =
   eprintf "Error executing '%s': %s: %s %s"
     proc fn (Unix.error_message err) param;
   prerr_endline ""
 
 type process_info = (int * string)
-
-let create_process fd_in fd_out args =
-  let argv = response_file args in
-  assert (Array.length argv > 0);
-  try
-    let pid = Unix.create_process argv.(0) argv fd_in fd_out Unix.stderr in
-    Some (pid,argv.(0))
-  with Unix.Unix_error(err, fn, param) ->
-    print_error argv.(0) err fn param;
-    None
 
 let waitpid (pid,proc) =
   try
@@ -81,25 +62,72 @@ let waitpid (pid,proc) =
     print_error proc err fn param;
     -1
 
-let command ?stdout ?stdin args =
-  let fd_out =
-      match stdout with
-      | None -> Unix.stdout
-      | Some f -> File.out_descr_of_process_file f in
-    let fd_in =
-      match stdin with
-      | None -> Unix.stdin
-      | Some f -> f in
-  verbose args stdout;
-  let pid = create_process fd_in fd_out args in
-  match pid with
-  | None -> -1
-  | Some pid ->
-    let exit = waitpid pid in
-    if stdout <> None then Unix.close fd_out;
-    if stdin <> None then Unix.close fd_in;
-    exit
+let create_process fd_in fd_out args =
+  let argv = response_file args in
+  assert (Array.length argv > 0);
+  let pid = Unix.create_process argv.(0) argv fd_in fd_out Unix.stderr in
+  (pid,argv.(0))
 
+
+let open_process_out args =
+  if !option_v then begin
+    eprintf "+ %s | ccomp" (String.concat " " args);
+    prerr_endline ""
+  end;
+  try
+    let fd_in,fd_out = Unix.pipe () in
+    Unix.set_close_on_exec fd_out;
+    let proc = create_process fd_in Unix.stdout args in
+    Some (proc,Unix.out_channel_of_descr fd_out)
+  with Unix.Unix_error (err,fn,param) ->
+    print_error (List.hd args) err fn param;
+    None
+
+let close_process_out proc oc =
+  close_out_noerr oc;
+  let rc = waitpid proc in
+  rc
+
+let open_process_in args =
+  if !option_v then begin
+    eprintf "+ ccomp | %s" (String.concat "" args);
+    prerr_endline ""
+  end;
+  try
+    let fd_in,fd_out = Unix.pipe () in
+    Unix.set_close_on_exec fd_in;
+    let proc = create_process Unix.stdin fd_out args in
+    Some (proc,Unix.in_channel_of_descr fd_in)
+  with Unix.Unix_error (err,fn,param) ->
+    print_error (List.hd args) err fn param;
+    None
+
+let close_process_in proc ic =
+  close_in_noerr ic;
+  let rc = waitpid proc in
+  rc
+
+let command ?stdout args =
+  if !option_v then begin
+    eprintf "+ %s" (String.concat " " args);
+    begin match stdout with
+    | None -> ()
+    | Some f -> eprintf " > %s" (File.process_file_name f)
+    end;
+    prerr_endline ""
+  end;
+  let fd_out =
+    match stdout with
+    | None -> Unix.stdout
+    | Some f -> File.out_descr_of_process_file f in
+  try
+    let pid = create_process Unix.stdin fd_out args in
+    let rc = waitpid pid in
+    if stdout <> None then Unix.close fd_out;
+    rc
+  with Unix.Unix_error (err,fn,param) ->
+    print_error (List.hd args) err fn param;
+    -1
 
 let command_error n exc =
   eprintf "Error: %s command failed with exit code %d (use -v to see invocation)\n" n exc

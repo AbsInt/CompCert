@@ -80,11 +80,9 @@ let assemble_ast asm source_file =
     ""
   end else begin
     dump_jasm asm source_file;
-    let objname,ofile,pid = Assembler.open_assembler_out source_file in
-    let oc = File.out_channel_of_process_file ofile in
+    let oc,handle = Assembler.open_assembler_out source_file in
     PrintAsm.print_program oc asm;
-    close_out oc;
-    Assembler.close_assembler_out ofile pid objname;
+    let objname = Assembler.close_assembler_out oc handle in
     print_options source_file;
     objname
   end
@@ -147,7 +145,7 @@ let process_c_file source_file =
   end else begin
     let prepro_file = if !option_dprepro then
       File.file_process_file  source_file ".i"
-      else if !option_pipe then
+      else if false then
         File.pipe_process_file ()
       else
         File.temp_process_file ".i" in
@@ -177,7 +175,7 @@ let assemble_file source_file asm_file =
     objname
 
 let process_s_file source_file =
-  assemble_file source_file (File.process_file_of_input_file source_file)
+  assemble_file source_file (File.input_name source_file)
 
 let process_S_file source_file =
   if !option_E then begin
@@ -186,7 +184,7 @@ let process_S_file source_file =
   end else begin
     let asm_file = File.temp_process_file ".s" in
     preprocess (File.input_name source_file) (Some asm_file);
-    assemble_file source_file asm_file
+    assemble_file source_file (File.process_file_name asm_file)
   end
 
 (* Processing of .h files *)

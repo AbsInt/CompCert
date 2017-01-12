@@ -11,12 +11,17 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-val assemble: File.process_file -> string -> unit
-   (** From asm to object file *)
+val assemble: string -> string -> unit
+  (** From asm to object file *)
 
-val open_assembler_out : File.input_file -> string * File.process_file * Driveraux.process_info option
+type assembler_handle
+  (** Internal assembler handle type *)
 
-val close_assembler_out : File.process_file -> Driveraux.process_info option -> string -> unit
+val open_assembler_out : File.input_file -> out_channel * assembler_handle
+  (** Open either a file or the assembler for assembling *)
+
+val close_assembler_out :  out_channel -> assembler_handle -> string
+  (** Either wait for the assembler to finish or close the file and call it *)
 
 val assembler_actions: (Commandline.pattern * Commandline.action) list
   (** Commandline optins affecting the assembler *)

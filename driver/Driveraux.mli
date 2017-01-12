@@ -12,7 +12,7 @@
 (* *********************************************************************)
 
 
-val command: ?stdout:File.process_file -> ?stdin:Unix.file_descr -> string list -> int
+val command: ?stdout:File.process_file -> string list -> int
     (** Execute the command with the given arguments and an optional file for
         the stdout. Returns the exit code. *)
 
@@ -40,8 +40,17 @@ val perform_actions: unit -> string list
 type process_info
   (** Internal type for the create_process and waitpid wrappers *)
 
-val create_process: Unix.file_descr-> Unix.file_descr -> string list -> process_info option
-  (** Wrapper around create process *)
-
 val waitpid: process_info -> int
   (** Wrapper around waitpid *)
+
+val open_process_out : string list -> (process_info * out_channel) option
+  (** Wrapper for a create_process based open_process_out implementation *)
+
+val close_process_out : process_info -> out_channel -> int
+  (** Corresponding close_process for open_process *)
+
+val open_process_in : string list -> (process_info * in_channel) option
+  (** Wrapper for a create_process based open_process_in implementation *)
+
+val close_process_in : process_info -> in_channel -> int
+  (** Corresponding close_process for open_process *)

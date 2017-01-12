@@ -17,57 +17,59 @@ open Driveraux
 
 (* From asm to object file *)
 
-let assemble ifile ofile =
-  let ifile_name,stdin = File.input_of_process_file ifile in
-  let cmd = List.concat [
+let cmd ifile ofile =
+  List.concat [
     Configuration.asm;
     ["-o"; ofile];
     List.rev !assembler_options;
-    [ifile_name]
-    ] in
-  let exc = command ?stdin:stdin cmd in
+    [ifile]
+  ]
+
+let assembler_error ofile exc =
+  File.safe_remove ofile;
+  command_error "assembler" exc;
+  exit 2
+
+let assemble ifile ofile =
+  let cmd = cmd ifile ofile in
+  let exc = command  cmd in
   if exc <> 0 then begin
     File.safe_remove ofile;
     command_error "assembler" exc;
     exit 2
   end
 
+type assembler_handle =
+  | File of string * string
+  | Process of string * Driveraux.process_info
+
 let open_assembler_out source_file =
   let ofile = File.output_filename ~final:!option_c source_file ".o"  in
-  let ifile,pid =
-    if !option_dasm then
-      File.file_process_file source_file ".s",None
-    else if !option_pipe && Configuration.asm_supports_pipe then
-      let process_file = File.pipe_process_file () in
-      let ifile,stdin = File.in_descr_of_process_pipe process_file in
-      let cmd = List.concat [
-          Configuration.asm;
-          ["-o"; ofile];
-          List.rev !assembler_options;
-          [ifile]
-        ] in
-      Unix.set_close_on_exec (File.out_descr_of_process_file process_file);
-      let pid = create_process stdin Unix.stdout cmd in
-      if pid = None then begin
-        File.safe_remove ofile;
-        command_error "assembler" (-1);
-        exit 2
-      end;
-      process_file,pid
-    else
-      File.temp_process_file ".s",None in
-  ofile,ifile,pid
+  if !option_pipe && Configuration.asm_supports_pipe then
+    let cmd = cmd "-" ofile in
+    let pid = open_process_out cmd in
+    match pid with
+    | None -> assembler_error ofile (-1)
+    | Some (pid,oc) -> oc,(Process (ofile,pid))
+  else
+    let ifile = if !option_dasm then
+        File.output_filename source_file ".s"
+      else
+        File.temp_file ".s" in
+    open_out_bin(ifile),File (ifile,ofile)
 
-let close_assembler_out file pid ofile =
-  match pid with
-  | Some pid ->
-    let exc = Driveraux.waitpid pid in
+let close_assembler_out oc handle =
+  match handle with
+  | File (ifile,ofile) ->
+    close_out oc;
+    assemble ifile ofile;ofile
+  | Process (ofile,pid) ->
+    let exc = Driveraux.close_process_out pid oc in
     if exc <> 0 then begin
       File.safe_remove ofile;
       command_error "assembler" exc;
-      exit 2 end
-  | None ->
-    assemble file ofile
+      exit 2 end;
+    ofile
 
 let add_pipe () =
   if gnu_system then
