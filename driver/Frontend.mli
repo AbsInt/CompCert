@@ -29,3 +29,12 @@ val prepro_help: string
 
 val add_pipe: unit -> unit
   (** Add pipe option for the preprocessor *)
+
+type prepro_handle
+  (** Internal preprocessor handle type *)
+
+val open_prepro_in : File.input_file -> in_channel * prepro_handle
+
+val close_prepro_in: in_channel -> prepro_handle -> unit
+
+val open_preprocessed_file : File.input_file -> in_channel * prepro_handle

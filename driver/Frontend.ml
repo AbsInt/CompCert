@@ -23,10 +23,8 @@ let dparse_destination = ref None
 
 let dcompcertc_destination = ref None
 
-(* From C to preprocessed C *)
-
-let preprocess ifile ofile =
-  let cmd = List.concat [
+let cmd ifile =
+  List.concat [
     Configuration.prepro;
     ["-D__COMPCERT__"];
     (if !Clflags.use_standard_headers
@@ -34,7 +32,11 @@ let preprocess ifile ofile =
      else []);
     List.rev !prepro_options;
     [ifile]
-  ] in
+  ]
+
+(* From C to preprocessed C *)
+let preprocess ifile ofile =
+  let cmd = cmd ifile in
   let exc = command ?stdout:ofile cmd in
   if exc <> 0 then begin
     begin match ofile with
@@ -45,6 +47,40 @@ let preprocess ifile ofile =
     eprintf "Error during preprocessing.\n";
     exit 2
   end
+
+type prepro_handle =
+  | File
+  | Process of Driveraux.process_info
+
+let open_prepro_in source_file =
+  let ifile = File.input_name source_file in
+  if !option_pipe then
+    let cmd = cmd ifile in
+    let pid = open_process_in cmd in
+    match pid with
+    | None -> failwith "TODO error handling"
+    | Some (pid,ic) -> ic,Process pid
+  else
+    let ofile = if !option_dprepro then
+        File.file_process_file source_file ".i"
+      else
+        File.temp_process_file ".i" in
+    preprocess ifile (Some ofile);
+    File.in_channel_of_process_file ofile,File
+
+let close_prepro_in ic handle =
+  match handle with
+  | File -> close_in ic
+  | Process pid ->
+    let exc = Driveraux.close_process_in pid ic in
+    if exc <> 0 then begin
+      command_error "preprocessor" exc;
+      eprintf "Error during preprocessing.\n";
+      exit 2
+    end
+
+let open_preprocessed_file source_file =
+  open_in_bin (File.input_name source_file),File
 
 (* From preprocessed C to Csyntax *)
 

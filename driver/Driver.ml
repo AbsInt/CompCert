@@ -49,8 +49,7 @@ let print_options source_file =
 
 (* From C source to asm *)
 
-let compile_c_file  ifile prepro =
-  let ic = File.in_channel_of_process_file prepro in
+let compile_c_file  ifile (ic,prepo) =
   (* Prepare to dump Clight, RTL, etc, if requested *)
   let set_dest dst opt ext =
     dst := if !opt then Some (output_filename ifile ext)
@@ -125,14 +124,15 @@ let compile_cminor_file ifile =
   | Errors.Error msg -> print_errorcodes (File.input_name ifile) msg
 
 (* From preprocessed c to object file or interpreter *)
-let compile_prepro_file source_file prepro_file =
+let compile_prepro_file source_file (ic,prepro)=
   if !option_interp then begin
     Machine.config := Machine.compcert_interpreter !Machine.config;
-    let csyntax = parse_c_file (File.input_name source_file) (File.in_channel_of_process_file prepro_file) in
+    let csyntax = parse_c_file (File.input_name source_file) ic in
+    close_prepro_in ic prepro;
     Interp.execute csyntax;
     ""
   end else begin
-    let asm = compile_c_file source_file  prepro_file in
+    let asm = compile_c_file source_file (ic,prepro) in
     assemble_ast asm source_file
  end
 
@@ -143,20 +143,14 @@ let process_c_file source_file =
     preprocess (File.input_name source_file) (File.process_file_default ());
     ""
   end else begin
-    let prepro_file = if !option_dprepro then
-      File.file_process_file  source_file ".i"
-      else if false then
-        File.pipe_process_file ()
-      else
-        File.temp_process_file ".i" in
-    preprocess (File.input_name source_file) (Some prepro_file);
-    compile_prepro_file source_file prepro_file
+    let ic,prepro = open_prepro_in source_file in
+    compile_prepro_file source_file (ic,prepro)
   end
 
 (* Processing of a .i / .p file (preprocessed C) *)
 
 let process_i_file source_file =
-  compile_prepro_file source_file (File.process_file_of_input_file source_file)
+  compile_prepro_file source_file (open_preprocessed_file source_file)
 
 (* Processing of a .cm file *)
 

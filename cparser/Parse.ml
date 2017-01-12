@@ -39,10 +39,10 @@ let parse_transformations s =
   !t
 
 let read_file ic =
-  let buf = Buffer.create 100 in
+  let buf = Buffer.create 16384 in
   begin try
     while true do
-      Buffer.add_channel buf ic 100;
+      Buffer.add_channel buf ic 16384;
     done
   with End_of_file -> () end;
   close_in ic;

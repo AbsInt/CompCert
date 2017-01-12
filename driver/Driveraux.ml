@@ -76,6 +76,7 @@ let open_process_out args =
     let fd_in,fd_out = Unix.pipe () in
     Unix.set_close_on_exec fd_out;
     let proc = create_process fd_in Unix.stdout args in
+    Unix.close fd_in;
     Some (proc,Unix.out_channel_of_descr fd_out)
   with Unix.Unix_error (err,fn,param) ->
     print_error (List.hd args) err fn param;
@@ -88,21 +89,22 @@ let close_process_out proc oc =
 
 let open_process_in args =
   if !option_v then begin
-    eprintf "+ ccomp | %s" (String.concat "" args);
+    eprintf "+ ccomp | %s" (String.concat " " args);
     prerr_endline ""
   end;
   try
     let fd_in,fd_out = Unix.pipe () in
     Unix.set_close_on_exec fd_in;
     let proc = create_process Unix.stdin fd_out args in
+    Unix.close fd_out;
     Some (proc,Unix.in_channel_of_descr fd_in)
   with Unix.Unix_error (err,fn,param) ->
     print_error (List.hd args) err fn param;
     None
 
 let close_process_in proc ic =
-  close_in_noerr ic;
   let rc = waitpid proc in
+  close_in_noerr ic;
   rc
 
 let command ?stdout args =
