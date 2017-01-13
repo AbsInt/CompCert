@@ -62,8 +62,7 @@ let compile_c_file  ifile (ic,prepro) =
   set_dest Regalloc.destination_alloctrace option_dalloctrace ".alloctrace";
   set_dest PrintLTL.destination option_dltl ".ltl";
   set_dest PrintMach.destination option_dmach ".mach";
-  let csyntax = parse_c_file (File.input_name ifile) ic in
-  close_prepro_in ic prepro;
+  let csyntax = parse_c_file (File.input_name ifile) (ic,prepro) in
   (* Convert to Asm *)
   match Compiler.apply_partial
           (Compiler.transf_c_program csyntax)
@@ -128,8 +127,7 @@ let compile_cminor_file ifile =
 let compile_prepro_file source_file (ic,prepro)=
   if !option_interp then begin
     Machine.config := Machine.compcert_interpreter !Machine.config;
-    let csyntax = parse_c_file (File.input_name source_file) ic in
-    close_prepro_in ic prepro;
+    let csyntax = parse_c_file (File.input_name source_file) (ic,prepro) in
     Interp.execute csyntax;
     ""
   end else begin

@@ -85,7 +85,25 @@ let open_preprocessed_file source_file =
 
 (* From preprocessed C to Csyntax *)
 
-let parse_c_file sourcename ifile =
+let read_file ic handle =
+  match handle with
+  | Process _ ->
+    let buf = Buffer.create 16384 in
+    begin try
+        while true do
+          Buffer.add_channel buf ic 16384;
+        done
+      with End_of_file -> () end;
+    close_prepro_in ic handle;
+    Buffer.contents buf
+  | File ->
+    let n = in_channel_length ic in
+    let text = really_input_string ic n in
+    close_in ic;
+    text
+
+
+let parse_c_file sourcename (ic,handle) =
   Debug.init_compile_unit sourcename;
   Sections.initialize();
   (* Simplification options *)
@@ -95,9 +113,10 @@ let parse_c_file sourcename ifile =
   ^ (if !option_fbitfields then "f" else "")
   ^ (if !option_fpacked_structs then "p" else "")
   in
+  let text = read_file ic handle in
   (* Parsing and production of a simplified C AST *)
   let ast =
-    match Parse.preprocessed_file simplifs sourcename ifile with
+    match Parse.preprocessed_file simplifs sourcename text with
     | None -> exit 2
     | Some p -> p in
   (* Save C AST if requested *)

@@ -27,8 +27,7 @@ let compile_c_file ifile (ic,prepro) ofile =
       Some (output_filename ifile ".parsed.c")
     else
       None;
-  let csyntax = parse_c_file (File.input_name ifile) ic in
-  close_prepro_in ic prepro;
+  let csyntax = parse_c_file (File.input_name ifile) (ic,prepro) in
   let clight =
     match SimplExpr.transl_program csyntax with
     | Errors.OK p ->
