@@ -172,7 +172,7 @@ let process_s_file source_file =
 
 let process_S_file source_file =
   if !option_E then begin
-    preprocess source_file "-";
+    preprocess source_file (File.output_filename_default "-");
     ""
   end else begin
     let asm_file = File.temp_file ".s" in
