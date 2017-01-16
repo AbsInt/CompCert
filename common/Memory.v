@@ -38,6 +38,7 @@ Require Import Floats.
 Require Import Values.
 Require Export Memdata.
 Require Export Memtype.
+Require Intv.
 
 (* To avoid useless definitions of inductors in extracted code. *)
 Local Unset Elimination Schemes.
@@ -96,7 +97,7 @@ Proof.
   intros; red; intros. subst b'. contradiction.
 Qed.
 
-Hint Local Resolve valid_not_valid_diff: mem.
+Local Hint Resolve valid_not_valid_diff: mem.
 
 (** Permissions *)
 
@@ -111,7 +112,7 @@ Proof.
   eapply perm_order_trans; eauto.
 Qed.
 
-Hint Local Resolve perm_implies: mem.
+Local Hint Resolve perm_implies: mem.
 
 Theorem perm_cur_max:
   forall m b ofs p, perm m b ofs Cur p -> perm m b ofs Max p.
@@ -138,7 +139,7 @@ Proof.
   intros. destruct k; auto. apply perm_cur_max. auto.
 Qed.
 
-Hint Local Resolve perm_cur perm_max: mem.
+Local Hint Resolve perm_cur perm_max: mem.
 
 Theorem perm_valid_block:
   forall m b ofs k p, perm m b ofs k p -> valid_block m b.
@@ -152,7 +153,7 @@ Proof.
   contradiction.
 Qed.
 
-Hint Local Resolve perm_valid_block: mem.
+Local Hint Resolve perm_valid_block: mem.
 
 Remark perm_order_dec:
   forall p1 p2, {perm_order p1 p2} + {~perm_order p1 p2}.
@@ -199,7 +200,7 @@ Proof.
   unfold range_perm; intros; eauto with mem.
 Qed.
 
-Hint Local Resolve range_perm_implies range_perm_cur range_perm_max: mem.
+Local Hint Resolve range_perm_implies range_perm_cur range_perm_max: mem.
 
 Lemma range_perm_dec:
   forall m b lo hi k p, {range_perm m b lo hi k p} + {~ range_perm m b lo hi k p}.
@@ -244,7 +245,7 @@ Proof.
   eapply valid_access_implies; eauto. constructor.
 Qed.
 
-Hint Local Resolve valid_access_implies: mem.
+Local Hint Resolve valid_access_implies: mem.
 
 Theorem valid_access_valid_block:
   forall m chunk b ofs,
@@ -257,7 +258,7 @@ Proof.
   eauto with mem.
 Qed.
 
-Hint Local Resolve valid_access_valid_block: mem.
+Local Hint Resolve valid_access_valid_block: mem.
 
 Lemma valid_access_perm:
   forall m chunk b ofs k p,
@@ -671,7 +672,7 @@ Proof.
   congruence.
 Qed.
 
-Hint Local Resolve load_valid_access valid_access_load: mem.
+Local Hint Resolve load_valid_access valid_access_load: mem.
 
 Theorem load_type:
   forall m chunk b ofs v,
@@ -939,7 +940,7 @@ Proof.
   contradiction.
 Defined.
 
-Hint Local Resolve valid_access_store: mem.
+Local Hint Resolve valid_access_store: mem.
 
 Section STORE.
 Variable chunk: memory_chunk.
@@ -1500,7 +1501,7 @@ Qed.
 Theorem loadbytes_storebytes_same:
   loadbytes m2 b ofs (Z_of_nat (length bytes)) = Some bytes.
 Proof.
-  intros. assert (STORE2:=STORE). unfold storebytes in STORE2. unfold loadbytes. 
+  intros. assert (STORE2:=STORE). unfold storebytes in STORE2. unfold loadbytes.
   destruct (range_perm_dec m1 b ofs (ofs + Z_of_nat (length bytes)) Cur Writable);
   try discriminate.
   rewrite pred_dec_true.
@@ -2912,7 +2913,7 @@ Proof.
   rewrite (nextblock_store _ _ _ _ _ _ H0). auto.
   eapply store_outside_inj; eauto.
   unfold inject_id; intros. inv H2. eapply H1; eauto. omega.
-  intros. eauto using perm_store_2. 
+  intros. eauto using perm_store_2.
 Qed.
 
 Theorem storev_extends:
@@ -2964,7 +2965,7 @@ Proof.
   rewrite (nextblock_storebytes _ _ _ _ _ H0). auto.
   eapply storebytes_outside_inj; eauto.
   unfold inject_id; intros. inv H2. eapply H1; eauto. omega.
-  intros. eauto using perm_storebytes_2. 
+  intros. eauto using perm_storebytes_2.
 Qed.
 
 Theorem alloc_extends:
@@ -2999,7 +3000,7 @@ Proof.
   intros. eapply perm_alloc_inv in H; eauto.
   generalize (perm_alloc_inv _ _ _ _ _ H0 b0 ofs Max Nonempty); intros PERM.
   destruct (eq_block b0 b).
-  subst b0. 
+  subst b0.
   assert (EITHER: lo1 <= ofs < hi1 \/ ~(lo1 <= ofs < hi1)) by omega.
   destruct EITHER.
   left. apply perm_implies with Freeable; auto with mem. eapply perm_alloc_2; eauto.
@@ -3016,7 +3017,7 @@ Proof.
   intros. inv H. constructor.
   rewrite (nextblock_free _ _ _ _ _ H0). auto.
   eapply free_left_inj; eauto.
-  intros. exploit mext_perm_inv0; eauto. intros [A|A]. 
+  intros. exploit mext_perm_inv0; eauto. intros [A|A].
   eapply perm_free_inv in A; eauto. destruct A as [[A B]|A]; auto.
   subst b0. right; eapply perm_free_2; eauto.
   intuition eauto using perm_free_3.
@@ -3033,7 +3034,7 @@ Proof.
   rewrite (nextblock_free _ _ _ _ _ H0). auto.
   eapply free_right_inj; eauto.
   unfold inject_id; intros. inv H. eapply H1; eauto. omega.
-  intros. eauto using perm_free_3. 
+  intros. eauto using perm_free_3.
 Qed.
 
 Theorem free_parallel_extends:
@@ -3360,8 +3361,6 @@ Proof.
   apply perm_cur_max. apply (H1 (Int.unsigned ofs2)). omega.
 Qed.
 
-Require Intv.
-
 Theorem disjoint_or_equal_inject:
   forall f m m' b1 b1' delta1 b2 b2' delta2 ofs1 ofs2 sz,
   inject f m m' ->
@@ -3482,7 +3481,7 @@ Proof.
   intros. eapply mi_representable; try eassumption.
   destruct H4; eauto with mem.
 (* perm inv *)
-  intros. exploit mi_perm_inv0; eauto using perm_store_2. 
+  intros. exploit mi_perm_inv0; eauto using perm_store_2.
   intuition eauto using perm_store_1, perm_store_2.
 Qed.
 
@@ -3507,7 +3506,7 @@ Proof.
   intros. eapply mi_representable; try eassumption.
   destruct H3; eauto with mem.
 (* perm inv *)
-  intros. exploit mi_perm_inv0; eauto using perm_store_2. 
+  intros. exploit mi_perm_inv0; eauto using perm_store_2.
   intuition eauto using perm_store_1, perm_store_2.
 Qed.
 
@@ -3578,7 +3577,7 @@ Proof.
   intros. eapply mi_representable0; eauto.
   destruct H4; eauto using perm_storebytes_2.
 (* perm inv *)
-  intros. exploit mi_perm_inv0; eauto using perm_storebytes_2. 
+  intros. exploit mi_perm_inv0; eauto using perm_storebytes_2.
   intuition eauto using perm_storebytes_1, perm_storebytes_2.
 Qed.
 
@@ -3652,7 +3651,7 @@ Proof.
   intros. eapply mi_representable0; eauto.
   destruct H3; eauto using perm_storebytes_2.
 (* perm inv *)
-  intros. exploit mi_perm_inv0; eauto using perm_storebytes_2. 
+  intros. exploit mi_perm_inv0; eauto using perm_storebytes_2.
   intuition eauto using perm_storebytes_1, perm_storebytes_2.
 Qed.
 
@@ -3678,7 +3677,7 @@ Proof.
   auto.
 (* perm inv *)
   intros. eapply perm_alloc_inv in H2; eauto. destruct (eq_block b0 b2).
-  subst b0. eelim fresh_block_alloc; eauto. 
+  subst b0. eelim fresh_block_alloc; eauto.
   eapply mi_perm_inv0; eauto.
 Qed.
 
@@ -3725,7 +3724,7 @@ Proof.
   destruct H4; eauto using perm_alloc_4.
 (* perm inv *)
   intros. unfold f' in H3; destruct (eq_block b0 b1); try discriminate.
-  exploit mi_perm_inv0; eauto. 
+  exploit mi_perm_inv0; eauto.
   intuition eauto using perm_alloc_1, perm_alloc_4.
 (* incr *)
   split. auto.
@@ -3876,7 +3875,7 @@ Proof.
 (* perm inv *)
   intros. exploit mi_perm_inv0; eauto. intuition eauto using perm_free_3.
   eapply perm_free_inv in H4; eauto. destruct H4 as [[A B] | A]; auto.
-  subst b1. right; eapply perm_free_2; eauto. 
+  subst b1. right; eapply perm_free_2; eauto.
 Qed.
 
 Lemma free_list_left_inject:
@@ -4064,7 +4063,7 @@ Proof.
   destruct H0; eauto using perm_inj.
   rewrite H. omega.
 (* perm inv *)
-  intros. 
+  intros.
   destruct (f b1) as [[b' delta'] |] eqn:?; try discriminate.
   destruct (f' b') as [[b'' delta''] |] eqn:?; try discriminate.
   inversion H; clear H; subst b'' delta.
@@ -4147,7 +4146,7 @@ Proof.
   eapply mem_inj_compose; eauto.
   apply extensionality; intros. unfold compose_meminj, inject_id. auto.
   (* perm inv *)
-  exploit mext_perm_inv1; eauto. intros [A|A]. 
+  exploit mext_perm_inv1; eauto. intros [A|A].
   eapply mext_perm_inv0; eauto.
   right; red; intros; elim A. eapply perm_extends; eauto.
 Qed.
@@ -4289,7 +4288,7 @@ Lemma perm_unchanged_on:
   unchanged_on m m' -> P b ofs ->
   perm m b ofs k p -> perm m' b ofs k p.
 Proof.
-  intros. destruct H. apply unchanged_on_perm0; auto. eapply perm_valid_block; eauto. 
+  intros. destruct H. apply unchanged_on_perm0; auto. eapply perm_valid_block; eauto.
 Qed.
 
 Lemma perm_unchanged_on_2:
@@ -4308,7 +4307,7 @@ Proof.
 - intros. transitivity (perm m2 b ofs k p); apply unchanged_on_perm; auto.
   eapply valid_block_unchanged_on; eauto.
 - intros. transitivity (ZMap.get ofs (mem_contents m2)#b); apply unchanged_on_contents; auto.
-  eapply perm_unchanged_on; eauto. 
+  eapply perm_unchanged_on; eauto.
 Qed.
 
 Lemma loadbytes_unchanged_on_1:
@@ -4446,13 +4445,13 @@ Proof.
 - rewrite (nextblock_drop _ _ _ _ _ _ H). apply Ple_refl.
 - split; intros. eapply perm_drop_3; eauto.
   destruct (eq_block b0 b); auto.
-  subst b0. 
+  subst b0.
   assert (~ (lo <= ofs < hi)). { red; intros; eelim H0; eauto. }
   right; omega.
-  eapply perm_drop_4; eauto. 
-- unfold drop_perm in H. 
+  eapply perm_drop_4; eauto.
+- unfold drop_perm in H.
   destruct (range_perm_dec m b lo hi Cur Freeable); inv H; simpl. auto.
-Qed. 
+Qed.
 
 End UNCHANGED_ON.
 
@@ -4464,9 +4463,9 @@ Lemma unchanged_on_implies:
 Proof.
   intros. destruct H. constructor; intros.
 - auto.
-- apply unchanged_on_perm0; auto. 
-- apply unchanged_on_contents0; auto. 
-  apply H0; auto. eapply perm_valid_block; eauto. 
+- apply unchanged_on_perm0; auto.
+- apply unchanged_on_contents0; auto.
+  apply H0; auto. eapply perm_valid_block; eauto.
 Qed.
 
 End Mem.

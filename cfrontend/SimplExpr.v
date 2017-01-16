@@ -25,7 +25,7 @@ Require Import Cop.
 Require Import Csyntax.
 Require Import Clight.
 
-Open Local Scope string_scope.
+Local Open Scope string_scope.
 
 (** State and error monad for generating fresh identifiers. *)
 
@@ -38,20 +38,20 @@ Inductive result (A: Type) (g: generator) : Type :=
   | Err: Errors.errmsg -> result A g
   | Res: A -> forall (g': generator), Ple (gen_next g) (gen_next g') -> result A g.
 
-Implicit Arguments Err [A g].
-Implicit Arguments Res [A g].
+Arguments Err [A g] _.
+Arguments Res [A g] _ _ _.
 
 Definition mon (A: Type) := forall (g: generator), result A g.
 
 Definition ret (A: Type) (x: A) : mon A :=
   fun g => Res x g (Ple_refl (gen_next g)).
 
-Implicit Arguments ret [A].
+Arguments ret [A] _ _.
 
 Definition error (A: Type) (msg: Errors.errmsg) : mon A :=
   fun g => Err msg.
 
-Implicit Arguments error [A].
+Arguments error [A] _ _.
 
 Definition bind (A B: Type) (x: mon A) (f: A -> mon B) : mon B :=
   fun g =>
@@ -64,12 +64,12 @@ Definition bind (A B: Type) (x: mon A) (f: A -> mon B) : mon B :=
       end
     end.
 
-Implicit Arguments bind [A B].
+Arguments bind [A B] _ _ _.
 
 Definition bind2 (A B C: Type) (x: mon (A * B)) (f: A -> B -> mon C) : mon C :=
   bind x (fun p => f (fst p) (snd p)).
 
-Implicit Arguments bind2 [A B C].
+Arguments bind2 [A B C] _ _ _.
 
 Notation "'do' X <- A ; B" := (bind A (fun X => B))
    (at level 200, X ident, A at level 100, B at level 200)

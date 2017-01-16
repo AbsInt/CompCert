@@ -239,7 +239,7 @@ Lemma add_globals_app:
   forall gl2 gl1 ge,
   add_globals ge (gl1 ++ gl2) = add_globals (add_globals ge gl1) gl2.
 Proof.
-  intros. apply fold_left_app. 
+  intros. apply fold_left_app.
 Qed.
 
 Program Definition empty_genv (pub: list ident): t :=
@@ -389,17 +389,17 @@ Proof.
   { induction l as [ | [id1 g1] l]; intros; simpl.
   - auto.
   - apply IHl. unfold P, add_global, find_symbol, find_def; simpl.
-    rewrite ! PTree.gsspec. destruct (peq id id1). 
+    rewrite ! PTree.gsspec. destruct (peq id id1).
     + subst id1. split; intros.
       inv H0. exists (genv_next ge); split; auto. apply PTree.gss.
       destruct H0 as (b & A & B). inv A. rewrite PTree.gss in B. auto.
     + red in H; rewrite H. split.
-      intros (b & A & B). exists b; split; auto. rewrite PTree.gso; auto. 
-      apply Plt_ne. eapply genv_symb_range; eauto. 
-      intros (b & A & B). rewrite PTree.gso in B. exists b; auto. 
-      apply Plt_ne. eapply genv_symb_range; eauto. 
+      intros (b & A & B). exists b; split; auto. rewrite PTree.gso; auto.
+      apply Plt_ne. eapply genv_symb_range; eauto.
+      intros (b & A & B). rewrite PTree.gso in B. exists b; auto.
+      apply Plt_ne. eapply genv_symb_range; eauto.
   }
-  apply REC. unfold P, find_symbol, find_def; simpl. 
+  apply REC. unfold P, find_symbol, find_def; simpl.
   rewrite ! PTree.gempty. split.
   congruence.
   intros (b & A & B); congruence.
@@ -730,12 +730,12 @@ Remark store_init_data_perm:
   store_init_data m b p i = Some m' ->
   (Mem.perm m b' q k prm <-> Mem.perm m' b' q k prm).
 Proof.
-  intros. 
+  intros.
   assert (forall chunk v,
           Mem.store chunk m b p v = Some m' ->
           (Mem.perm m b' q k prm <-> Mem.perm m' b' q k prm)).
     intros; split; eauto with mem.
-  destruct i; simpl in H; eauto. 
+  destruct i; simpl in H; eauto.
   inv H; tauto.
   destruct (find_symbol ge i); try discriminate. eauto.
 Qed.
@@ -748,7 +748,7 @@ Proof.
   induction idl as [ | i1 idl]; simpl; intros.
 - inv H; tauto.
 - destruct (store_init_data m b p i1) as [m1|] eqn:S1; try discriminate.
-  transitivity (Mem.perm m1 b' q k prm). 
+  transitivity (Mem.perm m1 b' q k prm).
   eapply store_init_data_perm; eauto.
   eapply IHidl; eauto.
 Qed.
@@ -809,8 +809,8 @@ Proof.
   intros until n. functional induction (store_zeros m b p n); intros.
 - inv H; apply Mem.unchanged_on_refl.
 - apply Mem.unchanged_on_trans with m'.
-+ eapply Mem.store_unchanged_on; eauto. simpl. intros. apply H0. omega. 
-+ apply IHo; auto. intros; apply H0; omega. 
++ eapply Mem.store_unchanged_on; eauto. simpl. intros. apply H0. omega.
++ apply IHo; auto. intros; apply H0; omega.
 - discriminate.
 Qed.
 
@@ -824,7 +824,7 @@ Proof.
   try (eapply Mem.store_unchanged_on; eauto; fail).
   inv H; apply Mem.unchanged_on_refl.
   destruct (find_symbol ge i); try congruence.
-  eapply Mem.store_unchanged_on; eauto. 
+  eapply Mem.store_unchanged_on; eauto.
 Qed.
 
 Remark store_init_data_list_unchanged:
@@ -837,7 +837,7 @@ Proof.
 - inv H. apply Mem.unchanged_on_refl.
 - destruct (store_init_data m b p a) as [m1|] eqn:?; try congruence.
   apply Mem.unchanged_on_trans with m1.
-  eapply store_init_data_unchanged; eauto. intros; apply H0; tauto. 
+  eapply store_init_data_unchanged; eauto. intros; apply H0; tauto.
   eapply IHil; eauto. intros; apply H0. generalize (init_data_size_pos a); omega.
 Qed.
 
@@ -864,7 +864,7 @@ Proof.
       with ((Byte Byte.zero :: nil) ++ list_repeat n0 (Byte Byte.zero)).
     apply Mem.loadbytes_concat.
     eapply Mem.loadbytes_unchanged_on with (P := fun b1 ofs1 => ofs1 = p).
-    eapply store_zeros_unchanged; eauto. intros; omega. 
+    eapply store_zeros_unchanged; eauto. intros; omega.
     intros; omega.
     change (Byte Byte.zero :: nil) with (encode_val Mint8unsigned Vzero).
     change 1 with (size_chunk Mint8unsigned).
@@ -899,8 +899,8 @@ Proof.
   intros; destruct i; simpl in H; try apply (Mem.loadbytes_store_same _ _ _ _ _ _ H).
 - inv H. simpl.
   assert (EQ: Z.of_nat (Z.to_nat z) = Z.max z 0).
-  { destruct (zle 0 z). rewrite Z2Nat.id; xomega. destruct z; try discriminate. simpl. xomega. } 
-  rewrite <- EQ. apply H0. omega. simpl. omega. 
+  { destruct (zle 0 z). rewrite Z2Nat.id; xomega. destruct z; try discriminate. simpl. xomega. }
+  rewrite <- EQ. apply H0. omega. simpl. omega.
 - simpl; destruct (find_symbol ge i) as [b'|]; try discriminate.
   apply (Mem.loadbytes_store_same _ _ _ _ _ _ H).
 Qed.
@@ -926,14 +926,14 @@ Proof.
   eapply store_init_data_list_unchanged; eauto.
   intros; omega.
   intros; omega.
-  eapply store_init_data_loadbytes; eauto. 
+  eapply store_init_data_loadbytes; eauto.
   red; intros; apply H0. omega. omega.
   apply IHil with m1; auto.
-  red; intros. 
+  red; intros.
   eapply Mem.loadbytes_unchanged_on with (P := fun b1 ofs1 => p + init_data_size i1 <= ofs1).
-  eapply store_init_data_unchanged; eauto. 
+  eapply store_init_data_unchanged; eauto.
   intros; omega.
-  intros; omega. 
+  intros; omega.
   apply H0. omega. omega.
   auto. auto.
 Qed.
@@ -960,9 +960,9 @@ Remark read_as_zero_unchanged:
   (forall i, ofs <= i < ofs + len -> P b i) ->
   read_as_zero m' b ofs len.
 Proof.
-  intros; red; intros. eapply Mem.load_unchanged_on; eauto. 
-  intros; apply H1. omega. 
-Qed. 
+  intros; red; intros. eapply Mem.load_unchanged_on; eauto.
+  intros; apply H1. omega.
+Qed.
 
 Lemma store_zeros_read_as_zero:
   forall m b p n m',
@@ -1028,7 +1028,7 @@ Proof.
   exploit IHil; eauto.
   set (P := fun (b': block) ofs' => p + init_data_size a <= ofs').
   apply read_as_zero_unchanged with (m := m) (P := P).
-  red; intros; apply H0; auto. generalize (init_data_size_pos a); omega. omega. 
+  red; intros; apply H0; auto. generalize (init_data_size_pos a); omega. omega.
   eapply store_init_data_unchanged with (P := P); eauto.
   intros; unfold P. omega.
   intros; unfold P. omega.
@@ -1043,7 +1043,7 @@ Proof.
   set (P := fun (b': block) ofs' => ofs' < p + init_data_size (Init_space z)).
   inv Heqo. apply read_as_zero_unchanged with (m := m1) (P := P).
   red; intros. apply H0; auto. simpl. generalize (init_data_list_size_pos il); xomega.
-  eapply store_init_data_list_unchanged; eauto. 
+  eapply store_init_data_list_unchanged; eauto.
   intros; unfold P. omega.
   intros; unfold P. simpl; xomega.
   destruct (find_symbol ge i); try congruence. exists b0; split; auto.
@@ -1062,7 +1062,7 @@ Proof.
   apply Mem.unchanged_on_implies with Q.
   apply Mem.unchanged_on_trans with m1.
   eapply Mem.alloc_unchanged_on; eauto.
-  eapply Mem.drop_perm_unchanged_on; eauto. 
+  eapply Mem.drop_perm_unchanged_on; eauto.
   intros; red. apply Mem.valid_not_valid_diff with m; eauto with mem.
 - (* variable *)
   set (init := gvar_init v) in *.
@@ -1077,8 +1077,8 @@ Proof.
   apply Mem.unchanged_on_trans with m2.
   eapply store_zeros_unchanged; eauto.
   apply Mem.unchanged_on_trans with m3.
-  eapply store_init_data_list_unchanged; eauto. 
-  eapply Mem.drop_perm_unchanged_on; eauto. 
+  eapply store_init_data_list_unchanged; eauto.
+  eapply Mem.drop_perm_unchanged_on; eauto.
   intros; red. apply Mem.valid_not_valid_diff with m; eauto with mem.
 Qed.
 
@@ -1091,7 +1091,7 @@ Proof.
 - inv H. apply Mem.unchanged_on_refl.
 - destruct (alloc_global m a) as [m''|] eqn:?; try discriminate.
   destruct a as [id g].
-  apply Mem.unchanged_on_trans with m''. 
+  apply Mem.unchanged_on_trans with m''.
   eapply alloc_global_unchanged; eauto.
   apply IHgl; auto.
 Qed.
@@ -1140,7 +1140,7 @@ Proof.
   exploit Mem.alloc_result; eauto. intros RES.
   rewrite H, <- RES. split.
   eapply Mem.perm_drop_1; eauto. omega.
-  intros. 
+  intros.
   assert (0 <= ofs < 1). { eapply Mem.perm_alloc_3; eauto. eapply Mem.perm_drop_4; eauto. }
   exploit Mem.perm_drop_2; eauto. intros ORD.
   split. omega. inv ORD; auto.
@@ -1154,35 +1154,35 @@ Proof.
   split. red; intros. eapply Mem.perm_drop_1; eauto.
   split. intros.
   assert (0 <= ofs < sz).
-  { eapply Mem.perm_alloc_3; eauto. 
+  { eapply Mem.perm_alloc_3; eauto.
     erewrite store_zeros_perm by eauto.
-    erewrite store_init_data_list_perm by eauto. 
+    erewrite store_init_data_list_perm by eauto.
     eapply Mem.perm_drop_4; eauto. }
   split; auto.
   eapply Mem.perm_drop_2; eauto.
   split. intros NOTVOL. apply load_store_init_data_invariant with m3.
-  intros. eapply Mem.load_drop; eauto. right; right; right. 
+  intros. eapply Mem.load_drop; eauto. right; right; right.
   unfold perm_globvar. rewrite NOTVOL. destruct (gvar_readonly v); auto with mem.
-  eapply store_init_data_list_charact; eauto. 
+  eapply store_init_data_list_charact; eauto.
   eapply store_zeros_read_as_zero; eauto.
-  intros NOTVOL. 
-  transitivity (Mem.loadbytes m3 b 0 sz). 
+  intros NOTVOL.
+  transitivity (Mem.loadbytes m3 b 0 sz).
   eapply Mem.loadbytes_drop; eauto. right; right; right.
   unfold perm_globvar. rewrite NOTVOL. destruct (gvar_readonly v); auto with mem.
   eapply store_init_data_list_loadbytes; eauto.
   eapply store_zeros_loadbytes; eauto.
 + assert (U: Mem.unchanged_on (fun _ _ => True) m m') by (eapply alloc_global_unchanged; eauto).
   assert (VALID: Mem.valid_block m b).
-  { red. rewrite <- H. eapply genv_defs_range; eauto. } 
+  { red. rewrite <- H. eapply genv_defs_range; eauto. }
   exploit H1; eauto.
   destruct gd0 as [f|v].
 * intros [A B]; split; intros.
   eapply Mem.perm_unchanged_on; eauto. exact I.
   eapply B. eapply Mem.perm_unchanged_on_2; eauto. exact I.
-* intros (A & B & C & D). split; [| split; [| split]]. 
+* intros (A & B & C & D). split; [| split; [| split]].
   red; intros. eapply Mem.perm_unchanged_on; eauto. exact I.
   intros. eapply B. eapply Mem.perm_unchanged_on_2; eauto. exact I.
-  intros. apply load_store_init_data_invariant with m; auto. 
+  intros. apply load_store_init_data_invariant with m; auto.
   intros. eapply Mem.load_unchanged_on_1; eauto. intros; exact I.
   intros. eapply Mem.loadbytes_unchanged_on; eauto. intros; exact I.
 - simpl. congruence.
@@ -1256,7 +1256,7 @@ Lemma init_mem_characterization_gen:
   init_mem p = Some m ->
   globals_initialized (globalenv p) (globalenv p) m.
 Proof.
-  intros. apply alloc_globals_initialized with Mem.empty. 
+  intros. apply alloc_globals_initialized with Mem.empty.
   auto.
   rewrite Mem.nextblock_empty. auto.
   red; intros. unfold find_def in H0; simpl in H0; rewrite PTree.gempty in H0; discriminate.
@@ -1480,14 +1480,14 @@ Theorem init_mem_inversion:
   init_data_list_aligned 0 v.(gvar_init)
   /\ forall i o, In (Init_addrof i o) v.(gvar_init) -> exists b, find_symbol (globalenv p) i = Some b.
 Proof.
-  intros until v. unfold init_mem. set (ge := globalenv p). 
-  revert m. generalize Mem.empty. generalize (prog_defs p). 
+  intros until v. unfold init_mem. set (ge := globalenv p).
+  revert m. generalize Mem.empty. generalize (prog_defs p).
   induction l as [ | idg1 defs ]; simpl; intros m m'; intros.
 - contradiction.
 - destruct (alloc_global ge m idg1) as [m''|] eqn:A; try discriminate.
   destruct H0.
-+ subst idg1; simpl in A. 
-  set (il := gvar_init v) in *. set (sz := init_data_list_size il) in *. 
++ subst idg1; simpl in A.
+  set (il := gvar_init v) in *. set (sz := init_data_list_size il) in *.
   destruct (Mem.alloc m 0 sz) as [m1 b].
   destruct (store_zeros m1 b 0 sz) as [m2|]; try discriminate.
   destruct (store_init_data_list ge m2 b 0 il) as [m3|] eqn:B; try discriminate.
@@ -1508,7 +1508,7 @@ Proof.
 - exists m; auto.
 - apply IHo. red; intros. eapply Mem.perm_store_1; eauto. apply PERM. omega.
 - destruct (Mem.valid_access_store m Mint8unsigned b p Vzero) as (m' & STORE).
-  split. red; intros. apply Mem.perm_cur. apply PERM. simpl in H. omega. 
+  split. red; intros. apply Mem.perm_cur. apply PERM. simpl in H. omega.
   simpl. apply Z.divide_1_l.
   congruence.
 Qed.
@@ -1520,17 +1520,17 @@ Lemma store_init_data_exists:
   (forall id ofs, i = Init_addrof id ofs -> exists b, find_symbol ge id = Some b) ->
   exists m', store_init_data ge m b p i = Some m'.
 Proof.
-  intros. 
+  intros.
   assert (DFL: forall chunk v,
           init_data_size i = size_chunk chunk ->
           init_data_alignment i = align_chunk chunk ->
           exists m', Mem.store chunk m b p v = Some m').
   { intros. destruct (Mem.valid_access_store m chunk b p v) as (m' & STORE).
-    split. rewrite <- H2; auto. rewrite <- H3; auto. 
+    split. rewrite <- H2; auto. rewrite <- H3; auto.
     exists m'; auto. }
   destruct i; eauto.
   simpl. exists m; auto.
-  simpl. exploit H1; eauto. intros (b1 & FS). rewrite FS. eauto. 
+  simpl. exploit H1; eauto. intros (b1 & FS). rewrite FS. eauto.
 Qed.
 
 Lemma store_init_data_list_exists:
@@ -1542,11 +1542,11 @@ Lemma store_init_data_list_exists:
 Proof.
   induction il as [ | i1 il ]; simpl; intros.
 - exists m; auto.
-- destruct H0. 
+- destruct H0.
   destruct (@store_init_data_exists m b p i1) as (m1 & S1); eauto.
   red; intros. apply H. generalize (init_data_list_size_pos il); omega.
-  rewrite S1. 
-  apply IHil; eauto. 
+  rewrite S1.
+  apply IHil; eauto.
   red; intros. erewrite <- store_init_data_perm by eauto. apply H. generalize (init_data_size_pos i1); omega.
 Qed.
 
@@ -1563,7 +1563,7 @@ Proof.
   intros m [id [f|v]]; intros; simpl.
 - destruct (Mem.alloc m 0 1) as [m1 b] eqn:ALLOC.
   destruct (Mem.range_perm_drop_2 m1 b 0 1 Nonempty) as [m2 DROP].
-  red; intros; eapply Mem.perm_alloc_2; eauto. 
+  red; intros; eapply Mem.perm_alloc_2; eauto.
   exists m2; auto.
 - destruct H as [P Q].
   set (sz := init_data_list_size (gvar_init v)).
@@ -1592,14 +1592,14 @@ Theorem init_mem_exists:
      /\ forall i o, In (Init_addrof i o) v.(gvar_init) -> exists b, find_symbol (globalenv p) i = Some b) ->
   exists m, init_mem p = Some m.
 Proof.
-  intros. set (ge := globalenv p) in *. 
+  intros. set (ge := globalenv p) in *.
   unfold init_mem. revert H. generalize (prog_defs p) Mem.empty.
   induction l as [ | idg l]; simpl; intros.
 - exists m; auto.
 - destruct (@alloc_global_exists ge m idg) as [m1 A1].
   destruct idg as [id [f|v]]; eauto.
-  fold ge. rewrite A1. eapply IHl; eauto. 
-Qed. 
+  fold ge. rewrite A1. eapply IHl; eauto.
+Qed.
 
 End GENV.
 
@@ -1626,8 +1626,8 @@ Lemma add_global_match:
 Proof.
   intros. destruct H. constructor; simpl; intros.
 - congruence.
-- rewrite mge_next0, ! PTree.gsspec. destruct (peq id0 id); auto. 
-- rewrite mge_next0, ! PTree.gsspec. destruct (peq b (genv_next ge1)). 
+- rewrite mge_next0, ! PTree.gsspec. destruct (peq id0 id); auto.
+- rewrite mge_next0, ! PTree.gsspec. destruct (peq b (genv_next ge1)).
   constructor; auto.
   auto.
 Qed.
@@ -1659,7 +1659,7 @@ Hypothesis progmatch: match_program_gen match_fundef match_varinfo ctx p tp.
 Lemma globalenvs_match:
   match_genvs (match_globdef match_fundef match_varinfo ctx) (globalenv p) (globalenv tp).
 Proof.
-  intros. apply add_globals_match. apply progmatch. 
+  intros. apply add_globals_match. apply progmatch.
   constructor; simpl; intros; auto. rewrite ! PTree.gempty. constructor.
 Qed.
 
@@ -1675,7 +1675,7 @@ Theorem find_def_match:
   find_def (globalenv tp) b = Some tg /\ match_globdef match_fundef match_varinfo ctx g tg.
 Proof.
   intros. generalize (find_def_match_2 b). rewrite H; intros R; inv R.
-  exists y; auto. 
+  exists y; auto.
 Qed.
 
 Theorem find_funct_ptr_match:
@@ -1684,8 +1684,8 @@ Theorem find_funct_ptr_match:
   exists cunit tf,
   find_funct_ptr (globalenv tp) b = Some tf /\ match_fundef cunit f tf /\ linkorder cunit ctx.
 Proof.
-  intros. rewrite find_funct_ptr_iff in *. apply find_def_match in H. 
-  destruct H as (tg & P & Q). inv Q. 
+  intros. rewrite find_funct_ptr_iff in *. apply find_def_match in H.
+  destruct H as (tg & P & Q). inv Q.
   exists ctx', f2; intuition auto. apply find_funct_ptr_iff; auto.
 Qed.
 
@@ -1707,8 +1707,8 @@ Theorem find_var_info_match:
   exists tv,
   find_var_info (globalenv tp) b = Some tv /\ match_globvar match_varinfo v tv.
 Proof.
-  intros. rewrite find_var_info_iff in *. apply find_def_match in H. 
-  destruct H as (tg & P & Q). inv Q. 
+  intros. rewrite find_var_info_iff in *. apply find_def_match in H.
+  destruct H as (tg & P & Q). inv Q.
   exists v2; split; auto. apply find_var_info_iff; auto.
 Qed.
 
@@ -1724,10 +1724,10 @@ Theorem senv_match:
 Proof.
   red; simpl. repeat split.
 - apply find_symbol_match.
-- intros. unfold public_symbol. rewrite find_symbol_match. 
-  rewrite ! globalenv_public. 
+- intros. unfold public_symbol. rewrite find_symbol_match.
+  rewrite ! globalenv_public.
   destruct progmatch as (P & Q & R). rewrite R. auto.
-- intros. unfold block_is_volatile. 
+- intros. unfold block_is_volatile.
   destruct globalenvs_match as [P Q R]. specialize (R b).
   unfold find_var_info, find_def.
   inv R; auto.
@@ -1761,7 +1761,7 @@ Proof.
   { destruct a1 as [id1 g1]; destruct b1 as [id2 g2]; destruct H; simpl in *.
     subst id2. inv H2.
   - auto.
-  - inv H; simpl in *. 
+  - inv H; simpl in *.
     set (sz := init_data_list_size init) in *.
     destruct (Mem.alloc m 0 sz) as [m2 b] eqn:?.
     destruct (store_zeros m2 b 0 sz) as [m3|] eqn:?; try discriminate.
@@ -1794,7 +1794,7 @@ Theorem find_funct_ptr_transf_partial:
   exists tf,
   find_funct_ptr (globalenv tp) b = Some tf /\ transf f = OK tf.
 Proof.
-  intros. exploit (find_funct_ptr_match progmatch); eauto. 
+  intros. exploit (find_funct_ptr_match progmatch); eauto.
   intros (cu & tf & P & Q & R); exists tf; auto.
 Qed.
 
@@ -1804,7 +1804,7 @@ Theorem find_funct_transf_partial:
   exists tf,
   find_funct (globalenv tp) v = Some tf /\ transf f = OK tf.
 Proof.
-  intros. exploit (find_funct_match progmatch); eauto. 
+  intros. exploit (find_funct_match progmatch); eauto.
   intros (cu & tf & P & Q & R); exists tf; auto.
 Qed.
 
@@ -1812,7 +1812,7 @@ Theorem find_symbol_transf_partial:
   forall (s : ident),
   find_symbol (globalenv tp) s = find_symbol (globalenv p) s.
 Proof.
-  intros. eapply (find_symbol_match progmatch). 
+  intros. eapply (find_symbol_match progmatch).
 Qed.
 
 Theorem senv_transf_partial:
@@ -1842,7 +1842,7 @@ Theorem find_funct_ptr_transf:
   find_funct_ptr (globalenv p) b = Some f ->
   find_funct_ptr (globalenv tp) b = Some (transf f).
 Proof.
-  intros. exploit (find_funct_ptr_match progmatch); eauto. 
+  intros. exploit (find_funct_ptr_match progmatch); eauto.
   intros (cu & tf & P & Q & R). congruence.
 Qed.
 
@@ -1851,7 +1851,7 @@ Theorem find_funct_transf:
   find_funct (globalenv p) v = Some f ->
   find_funct (globalenv tp) v = Some (transf f).
 Proof.
-  intros. exploit (find_funct_match progmatch); eauto. 
+  intros. exploit (find_funct_match progmatch); eauto.
   intros (cu & tf & P & Q & R). congruence.
 Qed.
 

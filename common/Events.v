@@ -968,7 +968,7 @@ Proof.
   {
     intros.
     apply Mem.unchanged_on_implies with (fun b1 ofs1 => b1 <> b).
-    apply Mem.unchanged_on_trans with m'. 
+    apply Mem.unchanged_on_trans with m'.
     eapply Mem.alloc_unchanged_on; eauto.
     eapply Mem.store_unchanged_on; eauto.
     intros. eapply Mem.valid_not_valid_diff; eauto with mem.

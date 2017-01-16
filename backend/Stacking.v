@@ -169,7 +169,7 @@ Definition transl_code
 Definition transl_body (f: Linear.function) (fe: frame_env) :=
   save_callee_save fe (transl_code fe f.(Linear.fn_code)).
 
-Open Local Scope string_scope.
+Local Open Scope string_scope.
 
 Definition transf_function (f: Linear.function) : res Mach.function :=
   let fe := make_env (function_bounds f) in

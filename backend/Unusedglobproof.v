@@ -1015,7 +1015,7 @@ Proof.
   { rewrite STK, TSTK.
     apply match_stacks_incr with j; auto.
     intros. destruct (eq_block b1 stk).
-    subst b1. rewrite F in H1; inv H1. subst b2. split; apply Ple_refl.
+    subst b1. rewrite F in H1; inv H1. subst. split; try apply Ple_refl.
     rewrite G in H1 by auto. congruence. }
   econstructor; split.
   eapply exec_function_internal; eauto.

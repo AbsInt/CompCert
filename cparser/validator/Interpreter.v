@@ -26,8 +26,8 @@ Inductive result (A:Type) :=
   | Err: result A
   | OK: A -> result A.
 
-Implicit Arguments Err [A].
-Implicit Arguments OK [A].
+Arguments Err [A].
+Arguments OK [A] _.
 
 Definition bind {A B: Type} (f: result A) (g: A -> result B): result B :=
   match f with

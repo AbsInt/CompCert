@@ -1200,7 +1200,7 @@ Proof.
   subst; exists b1; auto.
   exploit IHlist_forall2; eauto. intros (x2 & U & V); exists x2; auto.
 Qed.
-  
+
 Lemma list_forall2_in_right:
   forall x2 l1 l2,
   list_forall2 l1 l2 -> In x2 l2 -> exists x1, In x1 l1 /\ P x1 x2.
@@ -1209,7 +1209,7 @@ Proof.
   subst; exists a1; auto.
   exploit IHlist_forall2; eauto. intros (x1 & U & V); exists x1; auto.
 Qed.
-  
+
 End FORALL2.
 
 Lemma list_forall2_imply:
@@ -1280,7 +1280,7 @@ Qed.
 Definition proj_sumbool (P Q: Prop) (a: {P} + {Q}) : bool :=
   if a then true else false.
 
-Implicit Arguments proj_sumbool [P Q].
+Arguments proj_sumbool [P Q] _.
 
 Coercion proj_sumbool: sumbool >-> bool.
 

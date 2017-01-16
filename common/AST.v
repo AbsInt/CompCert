@@ -105,7 +105,7 @@ Definition cc_default :=
 
 Definition calling_convention_eq (x y: calling_convention) : {x=y} + {x<>y}.
 Proof.
-  decide equality; apply bool_dec. 
+  decide equality; apply bool_dec.
 Defined.
 Global Opaque calling_convention_eq.
 
@@ -246,8 +246,8 @@ Inductive globdef (F V: Type) : Type :=
   | Gfun (f: F)
   | Gvar (v: globvar V).
 
-Implicit Arguments Gfun [F V].
-Implicit Arguments Gvar [F V].
+Arguments Gfun [F V] _.
+Arguments Gvar [F V] _.
 
 Record program (F V: Type) : Type := mkprogram {
   prog_defs: list (ident * globdef F V);
@@ -287,7 +287,7 @@ Lemma prog_defmap_unique:
   ~In id (map fst defs2) ->
   (prog_defmap p)!id = Some g.
 Proof.
-  unfold prog_defmap; intros. rewrite H. apply PTree_Properties.of_list_unique; auto. 
+  unfold prog_defmap; intros. rewrite H. apply PTree_Properties.of_list_unique; auto.
 Qed.
 
 Lemma prog_defmap_norepet:
@@ -394,7 +394,7 @@ Proof.
               OK (List.map (transform_program_globdef transf_fun) l)).
   { induction l as [ | [id g] l]; simpl.
   - auto.
-  - destruct g; simpl; rewrite IHl; simpl. auto. destruct v; auto. 
+  - destruct g; simpl; rewrite IHl; simpl. auto. destruct v; auto.
   }
   rewrite EQ; simpl. auto.
 Qed.
@@ -516,7 +516,7 @@ Inductive fundef (F: Type): Type :=
   | Internal: F -> fundef F
   | External: external_function -> fundef F.
 
-Implicit Arguments External [F].
+Arguments External [F] _.
 
 Section TRANSF_FUNDEF.
 
@@ -549,7 +549,7 @@ End TRANSF_PARTIAL_FUNDEF.
 Set Contextual Implicit.
 
 (** In some intermediate languages (LTL, Mach), 64-bit integers can be
-  split into two 32-bit halves and held in a pair of registers.  
+  split into two 32-bit halves and held in a pair of registers.
   Syntactically, this is captured by the type [rpair] below. *)
 
 Inductive rpair (A: Type) : Type :=
@@ -575,7 +575,7 @@ Definition regs_of_rpair (A: Type) (p: rpair A): list A :=
   end.
 
 Fixpoint regs_of_rpairs (A: Type) (l: list (rpair A)): list A :=
-  match l with 
+  match l with
   | nil => nil
   | p :: l => regs_of_rpair p ++ regs_of_rpairs l
   end.
@@ -589,8 +589,8 @@ Qed.
 Lemma in_regs_of_rpairs_inv:
   forall (A: Type) (x: A) l, In x (regs_of_rpairs l) -> exists p, In p l /\ In x (regs_of_rpair p).
 Proof.
-  induction l; simpl; intros. contradiction. 
-  rewrite in_app_iff in H; destruct H. 
+  induction l; simpl; intros. contradiction.
+  rewrite in_app_iff in H; destruct H.
   exists a; auto.
   apply IHl in H. firstorder auto.
 Qed.

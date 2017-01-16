@@ -28,7 +28,7 @@ Require Import Asmgen.
 Require Import Asmgenproof0.
 Require Import Conventions.
 
-Open Local Scope error_monad_scope.
+Local Open Scope error_monad_scope.
 
 (** * Correspondence between Mach registers and IA32 registers *)
 

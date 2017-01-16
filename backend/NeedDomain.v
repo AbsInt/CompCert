@@ -1253,7 +1253,15 @@ Proof.
   split; simpl; auto; intros.
   rewrite PTree.gsspec in H6. destruct (peq id0 id).
 + inv H6. destruct H3. congruence. destruct gl!id as [iv0|] eqn:NG.
+  match goal with
+  | [ x := context[ISet.add] |- ~ISet.In _ _ ] => subst x (* coq 8.6 *)
+  | _ => subst  (* coq 8.5 *)
+  end.
   rewrite ISet.In_add. intros [P|P]. omega. eelim GL; eauto.
+  match goal with
+  | [ x := context[ISet.interval] |- ~ISet.In _ _ ] => subst x  (* coq 8.6 *)
+  | _ => subst  (* coq 8.5 *)
+  end.
   rewrite ISet.In_interval. omega.
 + eauto.
 - (* Stk ofs *)

@@ -705,20 +705,14 @@ Qed.
 
 (** * The simulation diagram *)
 
-Theorem step_simulation:
-  forall S1 t S2, step ge S1 t S2 ->
-  forall S1', match_states S1 S1' -> sound_state prog S1 ->
-  exists S2', step tge S1' t S2' /\ match_states S2 S2'.
-Proof.
-
 Ltac TransfInstr :=
   match goal with
   | [INSTR: (fn_code _)!_ = Some _,
      FUN: transf_function _ _ = OK _,
      ANL: analyze _ _ = Some _ |- _ ] =>
        generalize (transf_function_at _ _ _ _ _ _ FUN ANL INSTR);
-       intro TI;
-       unfold transf_instr in TI
+       let TI := fresh "TI" in
+       intro TI; unfold transf_instr in TI
   end.
 
 Ltac UseTransfer :=
@@ -730,6 +724,12 @@ Ltac UseTransfer :=
        rewrite INSTR in *;
        simpl in *
   end.
+
+Theorem step_simulation:
+  forall S1 t S2, step ge S1 t S2 ->
+  forall S1', match_states S1 S1' -> sound_state prog S1 ->
+  exists S2', step tge S1' t S2' /\ match_states S2 S2'.
+Proof.
 
   induction 1; intros S1' MS SS; inv MS.
 
@@ -978,7 +978,8 @@ Ltac UseTransfer :=
   eapply match_succ_states; eauto. simpl; auto.
   destruct res; auto. apply eagree_set_undef; auto.
   eapply magree_storebytes_left; eauto.
-  exploit aaddr_arg_sound; eauto. 
+  clear H3. (* hello coq 8.6 *)
+  exploit aaddr_arg_sound; eauto.
   intros (bc & A & B & C).
   intros. eapply nlive_contains; eauto.
   erewrite Mem.loadbytes_length in H0 by eauto.
@@ -1026,7 +1027,8 @@ Ltac UseTransfer :=
   exploit transfer_builtin_args_sound; eauto. intros (tvl & A & B & C & D).
   exploit external_call_mem_extends; eauto 2 with na.
   eapply magree_extends; eauto. intros. apply nlive_all.
-  intros (v' & tm' & P & Q & R & S & T).
+  try intros (v' & tm' & P & Q & R & S & T).
+  try intros (v' & tm' & P & Q & R & S). (* hello coq 8.6 *)
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
   apply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
@@ -1077,7 +1079,8 @@ Ltac UseTransfer :=
 
 - (* external function *)
   exploit external_call_mem_extends; eauto.
-  intros (res' & tm' & A & B & C & D & E).
+  try intros (res' & tm' & A & B & C & D & E).
+  try intros (res' & tm' & A & B & C & D).
   simpl in FUN. inv FUN.
   econstructor; split.
   econstructor; eauto.

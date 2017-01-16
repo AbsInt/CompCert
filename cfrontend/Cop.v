@@ -1104,7 +1104,7 @@ Proof.
 - destruct (cast_float_long si2 f0); inv H1; TrivialInject.
 - destruct (cast_single_long si2 f0); inv H1; TrivialInject.
 - destruct (Mem.weak_valid_pointer m b1 (Int.unsigned ofs1)) eqn:VALID; inv H2.
-  erewrite weak_valid_pointer_inj by eauto. TrivialInject. 
+  erewrite weak_valid_pointer_inj by eauto. TrivialInject.
 - destruct (ident_eq id1 id2); inv H2; TrivialInject. econstructor; eauto.
 - destruct (ident_eq id1 id2); inv H2; TrivialInject. econstructor; eauto.
 - econstructor; eauto.

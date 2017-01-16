@@ -28,7 +28,7 @@ Require Import SelectOp.
 Require Import SelectOpproof.
 Require Import SelectDiv.
 
-Open Local Scope cminorsel_scope.
+Local Open Scope cminorsel_scope.
 
 (** * Main approximation theorems *)
 

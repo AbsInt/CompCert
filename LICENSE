@@ -1,6 +1,6 @@
 All files in this distribution are part of the CompCert verified compiler.
 
-The CompCert verified compiler is Copyright by Institut National de 
+The CompCert verified compiler is Copyright by Institut National de
 Recherche en Informatique et en Automatique (INRIA) and
 AbsInt Angewandte Informatik GmbH.
 
@@ -9,12 +9,12 @@ INRIA Non-Commercial License Agreement given below or under the terms
 of a Software Usage Agreement of AbsInt Angewandte Informatik GmbH.
 The latter is a separate contract document.
 
-The INRIA Non-Commercial License Agreement is a non-free license that 
-grants you the right to use the CompCert verified compiler for 
-educational, research or evaluation purposes only, but prohibits 
+The INRIA Non-Commercial License Agreement is a non-free license that
+grants you the right to use the CompCert verified compiler for
+educational, research or evaluation purposes only, but prohibits
 any commercial use.
 
-For commercial use you need a Software Usage Agreement from 
+For commercial use you need a Software Usage Agreement from
 AbsInt Angewandte Informatik GmbH.
 
 The following files in this distribution are dual-licensed both under
@@ -34,7 +34,7 @@ option) any later version:
   cfrontend/Csyntax.v
   cfrontend/Ctypes.v
   cfrontend/Ctyping.v
-  
+
   backend/Cminor.v
   backend/CMlexer.mli
   backend/CMlexer.mll

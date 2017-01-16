@@ -853,8 +853,8 @@ Proof.
 intros n Zn.
 rewrite <- (Zdigits_abs n).
 assert (Hn: (0 < Zabs n)%Z).
-destruct n ; try easy.
-now elim Zn.
+destruct n ; try now easy.
+try (now elim Zn). (* for compatibility between 8.6 and 8.5 *)
 destruct (Zabs n) as [|p|p] ; try easy ; clear.
 simpl.
 generalize 1%Z (radix_val beta) (refl_equal Lt : (0 < 1)%Z).

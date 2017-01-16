@@ -1171,11 +1171,11 @@ Proof.
   rewrite <- SP in MS0.
   eapply match_stacks_invariant; eauto.
     intros. destruct (eq_block b1 stk).
-    subst b1. rewrite D in H8; inv H8. subst b2. eelim Plt_strict; eauto.
+    subst b1. rewrite D in H8; inv H8. subst. eelim Plt_strict; eauto.
     rewrite E in H8; auto.
     intros. exploit Mem.perm_alloc_inv. eexact H. eauto.
     destruct (eq_block b1 stk); intros; auto.
-    subst b1. rewrite D in H8; inv H8. subst b2. eelim Plt_strict; eauto.
+    subst b1. rewrite D in H8; inv H8. subst. eelim Plt_strict; eauto.
     intros. eapply Mem.perm_alloc_1; eauto.
     intros. exploit Mem.perm_alloc_inv. eexact A. eauto.
     rewrite dec_eq_false; auto.

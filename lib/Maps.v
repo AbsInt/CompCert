@@ -190,8 +190,8 @@ Module PTree <: TREE.
     | Leaf : tree A
     | Node : tree A -> option A -> tree A -> tree A.
 
-  Implicit Arguments Leaf [A].
-  Implicit Arguments Node [A].
+  Arguments Leaf [A].
+  Arguments Node [A] _ _ _.
   Scheme tree_ind := Induction for tree Sort Prop.
 
   Definition t := tree.
@@ -819,8 +819,8 @@ Module PTree <: TREE.
       (fun i_x i_y => fst i_x = fst i_y /\ R (snd i_x) (snd i_y))
       (elements m) (elements n).
   Proof.
-    intros. apply elements_canonical_order'. 
-    intros. destruct (get i m) as [x|] eqn:GM. 
+    intros. apply elements_canonical_order'.
+    intros. destruct (get i m) as [x|] eqn:GM.
     exploit H; eauto. intros (y & P & Q). rewrite P; constructor; auto.
     destruct (get i n) as [y|] eqn:GN.
     exploit H0; eauto. intros (x & P & Q). congruence.
@@ -1265,7 +1265,7 @@ Module ITree(X: INDEXED_TYPE).
      | _, _ => False
     end.
   Proof.
-    unfold beq, get. intros. rewrite PTree.beq_correct in H. apply H. 
+    unfold beq, get. intros. rewrite PTree.beq_correct in H. apply H.
   Qed.
 
   Definition combine: forall (A B C: Type), (option A -> option B -> option C) -> t A -> t B -> t C := PTree.combine.
@@ -1636,8 +1636,8 @@ Proof.
   { induction l as [ | [k1 v1] l]; simpl; intros.
   - tauto.
   - apply IHl in H. unfold f in H. simpl in H. rewrite T.gsspec in H.
-    destruct H; auto. 
-    destruct (T.elt_eq k k1). inv H. auto. auto. 
+    destruct H; auto.
+    destruct (T.elt_eq k k1). inv H. auto. auto.
   }
   intros. apply REC in H. rewrite T.gempty in H. intuition congruence.
 Qed.
@@ -1650,7 +1650,7 @@ Proof.
             exists v, T.get k (fold_left f l m) = Some v).
   { induction l as [ | [k1 v1] l]; simpl; intros.
   - tauto.
-  - apply IHl. unfold f; rewrite T.gsspec. simpl. destruct (T.elt_eq k k1). 
+  - apply IHl. unfold f; rewrite T.gsspec. simpl. destruct (T.elt_eq k k1).
     right; econstructor; eauto.
     intuition congruence.
   }
@@ -1669,7 +1669,7 @@ Lemma of_list_unique:
   forall k v l1 l2,
   ~In k (map fst l2) -> T.get k (of_list (l1 ++ (k, v) :: l2)) = Some v.
 Proof.
-  intros. unfold of_list. rewrite fold_left_app. simpl. 
+  intros. unfold of_list. rewrite fold_left_app. simpl.
   rewrite of_list_unchanged by auto. unfold f; apply T.gss.
 Qed.
 
@@ -1683,8 +1683,8 @@ Proof.
   { induction l as [ | [k1 v1] l]; simpl; intros.
     contradiction.
     inv H. destruct H0.
-    inv H. rewrite of_list_unchanged by auto. apply T.gss. 
-    apply IHl; auto. 
+    inv H. rewrite of_list_unchanged by auto. apply T.gss.
+    apply IHl; auto.
   }
   intros; apply REC; auto.
 Qed.

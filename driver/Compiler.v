@@ -80,7 +80,7 @@ Parameter print_RTL: Z -> RTL.program -> unit.
 Parameter print_LTL: LTL.program -> unit.
 Parameter print_Mach: Mach.program -> unit.
 
-Open Local Scope string_scope.
+Local Open Scope string_scope.
 
 (** * Composing the translation passes *)
 

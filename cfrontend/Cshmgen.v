@@ -24,8 +24,8 @@ Require Import Coqlib Maps Errors Integers Floats.
 Require Import AST Linking.
 Require Import Ctypes Cop Clight Cminor Csharpminor.
 
-Open Local Scope string_scope.
-Open Local Scope error_monad_scope.
+Local Open Scope string_scope.
+Local Open Scope error_monad_scope.
 
 (** * Csharpminor constructors *)
 
