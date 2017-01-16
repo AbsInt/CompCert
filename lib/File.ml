@@ -15,7 +15,7 @@
 open Printf
 open Clflags
 
-
+(* Type for input file *)
 type input_file =
   {
     name : string;

@@ -23,6 +23,7 @@ let dparse_destination = ref None
 
 let dcompcertc_destination = ref None
 
+(* Construct the command line from the given input file *)
 let cmd ifile =
   List.concat [
     Configuration.prepro;
@@ -34,7 +35,7 @@ let cmd ifile =
     [File.input_name ifile]
   ]
 
-(* From C to preprocessed C *)
+(* From a C file to preprocessed C file *)
 let preprocess ifile ofile =
   let output =
     if ofile = "-" then None else Some ofile in
@@ -47,9 +48,10 @@ let preprocess ifile ofile =
     exit 2
   end
 
+(* Internal preprocessor handle type *)
 type prepro_handle =
-  | File
-  | Process of Driveraux.process_info
+  | File (* The preprocessor is finished and has written an output file *)
+  | Process of Driveraux.process_info (* Pid, etc of the preproecssor *)
 
 let open_prepro_in ifile =
   if !option_pipe && not !option_dprepro then
@@ -66,7 +68,7 @@ let open_prepro_in ifile =
         File.output_filename ifile ".i"
       else
         File.temp_file ".i" in
-    preprocess ifile ofile;
+    preprocess ifile ofile; (* Call the preprocessor to create the output file *)
     open_in_bin ofile,File
 
 let close_prepro_in ic handle =
@@ -74,12 +76,13 @@ let close_prepro_in ic handle =
   | File -> close_in ic
   | Process pid ->
     let exc = Driveraux.close_process_in pid ic in
-    if exc <> 0 then begin
+    if exc <> 0 then begin (* Command failed *)
       command_error "preprocessor" exc;
       eprintf "Error during preprocessing.\n";
       exit 2
     end
 
+(* Open a preprocessed file *)
 let open_preprocessed_file source_file =
   open_in_bin (File.input_name source_file),File
 
@@ -88,6 +91,7 @@ let open_preprocessed_file source_file =
 let read_file ic handle =
   match handle with
   | Process _ ->
+    (* Read chunks from the input channel of the underlying process *)
     let buf = Buffer.create 16384 in
     begin try
         while true do
@@ -97,6 +101,12 @@ let read_file ic handle =
     close_prepro_in ic handle;
     Buffer.contents buf
   | File ->
+    (* Reading the whole file at once may seem costly, but seems to be
+     the simplest / most robust way of accessing the text underlying
+     a range of positions. This is used when printing an error message.
+     Plus, I note that reading the whole file into memory leads to a
+     speed increase: "make -C test" speeds up by 3 seconds out of 40
+     on my machine. *)
     let n = in_channel_length ic in
     let text = really_input_string ic n in
     close_in ic;

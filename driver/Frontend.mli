@@ -12,8 +12,10 @@
 (* *********************************************************************)
 
 val dparse_destination: string option ref
+  (** Destination file for parsed c file dump *)
 
 val dcompcertc_destination: string option ref
+  (** Destination file for CompCert C file dump *)
 
 type prepro_handle
   (** Internal preprocessor handle type *)
@@ -34,7 +36,10 @@ val add_pipe: unit -> unit
   (** Add pipe option for the preprocessor *)
 
 val open_prepro_in : File.input_file -> in_channel * prepro_handle
+  (** Run or start the preprocessor and get an in_channel for its output *)
 
 val close_prepro_in: in_channel -> prepro_handle -> unit
+  (** Close the in_channel of the preprocessor optionally wait until it is finished *)
 
 val open_preprocessed_file : File.input_file -> in_channel * prepro_handle
+  (** Open a preproceesed file *)
