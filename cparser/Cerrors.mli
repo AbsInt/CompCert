@@ -72,3 +72,6 @@ val warning_options : (Commandline.pattern * Commandline.action) list
 (** List of all options for diagnostics *)
 
 val raise_on_errors : unit -> unit
+
+val crash: exn -> unit
+(** Report the backtrace of the last exception and exit *)

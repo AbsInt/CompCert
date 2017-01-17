@@ -321,3 +321,19 @@ let warning_help = "Diagnostic options:\n\
 let raise_on_errors () =
   if !num_errors > 0 then
     raise Abort
+
+let crash exn =
+   if Version.buildnr <> "" && Version.tag <> "" then begin
+     eprintf "%tThis is CompCert, Release:%s, Build:%s, Tag:%s%t\n"
+       bc Version.version Version.buildnr Version.tag rsc;
+     eprintf "Backtrace (please include this in your support request):\n%s"
+       (Printexc.get_backtrace ());
+     eprintf "%tUncaught exception:%s.\n\
+\    Please report this problem to our support.\n\
+\    Error occurred in Build: %s, Tag: %s.\n%t"
+       rc (Printexc.to_string exn) Version.buildnr Version.tag rsc;
+     exit 2
+   end else begin
+     Printexc.print_backtrace stderr;
+     exit 2
+   end

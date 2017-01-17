@@ -552,3 +552,5 @@ let _ =
    if  Cerrors.check_errors () then exit 2
   with Sys_error msg ->
     eprintf "I/O error: %s.\n" msg; exit 2
+     | e ->
+       Cerrors.crash e
