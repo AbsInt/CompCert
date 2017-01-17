@@ -325,7 +325,7 @@ let raise_on_errors () =
 let crash exn =
   if Version.buildnr <> "" && Version.tag <> "" then begin
     let backtrace = Printexc.get_backtrace () in
-    eprintf "%tThis is CompCert, Release:%s, Build:%s, Tag:%s%t\n"
+    eprintf "%tThis is CompCert, %s, Build:%s, Tag:%s%t\n"
       bc Version.version Version.buildnr Version.tag rsc;
     eprintf "Backtrace (please include this in your support request):\n%s"
       backtrace;
