@@ -329,7 +329,7 @@ let crash exn =
       bc Version.version Version.buildnr Version.tag rsc;
     eprintf "Backtrace (please include this in your support request):\n%s"
       backtrace;
-    eprintf "%tUncaught exception:%s.\n\
+    eprintf "%tUncaught exception: %s.\n\
 \    Please report this problem to our support.\n\
 \    Error occurred in Build: %s, Tag: %s.\n%t"
       rc (Printexc.to_string exn) Version.buildnr Version.tag rsc;
