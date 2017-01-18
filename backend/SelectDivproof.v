@@ -17,7 +17,7 @@ Require Import AST Integers Floats Values Memory Globalenvs Events.
 Require Import Cminor Op CminorSel.
 Require Import SelectOp SelectOpproof SplitLong SplitLongproof SelectLong SelectLongproof SelectDiv.
 
-Open Local Scope cminorsel_scope.
+Local Open Scope cminorsel_scope.
 
 (** * Main approximation theorems *)
 

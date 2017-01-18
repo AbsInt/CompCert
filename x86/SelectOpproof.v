@@ -1,5 +1,5 @@
 (* *********************************************************************)
-(*                                                                     *)
+(*                                                                    *)
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
 (*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
@@ -24,7 +24,7 @@ Require Import Op.
 Require Import CminorSel.
 Require Import SelectOp.
 
-Open Local Scope cminorsel_scope.
+Local Open Scope cminorsel_scope.
 
 (** * Useful lemmas and tactics *)
 

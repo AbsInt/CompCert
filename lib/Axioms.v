@@ -39,10 +39,8 @@ Proof @FunctionalExtensionality.functional_extensionality.
   is an alias for [functional_extensionality]. *)
 
 Lemma extensionality:
-  forall (A B: Type) (f g : A -> B),  (forall x, f x = g x) -> f = g.
+  forall {A B: Type} (f g : A -> B),  (forall x, f x = g x) -> f = g.
 Proof @functional_extensionality.
-
-Implicit Arguments extensionality.
 
 (** * Proof irrelevance *)
 
@@ -50,4 +48,4 @@ Implicit Arguments extensionality.
 
 Axiom proof_irr: ClassicalFacts.proof_irrelevance.
 
-Implicit Arguments proof_irr.
+Arguments proof_irr [A].

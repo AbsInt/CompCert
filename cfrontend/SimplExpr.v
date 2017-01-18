@@ -38,8 +38,8 @@ Inductive result (A: Type) (g: generator) : Type :=
   | Err: Errors.errmsg -> result A g
   | Res: A -> forall (g': generator), Ple (gen_next g) (gen_next g') -> result A g.
 
-Implicit Arguments Err [A g].
-Implicit Arguments Res [A g].
+Arguments Err [A g].
+Arguments Res [A g].
 
 Definition mon (A: Type) := forall (g: generator), result A g.
 

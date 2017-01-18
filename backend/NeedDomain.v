@@ -1254,10 +1254,10 @@ Proof.
   assert (Genv.find_symbol ge id = Some b) by (eapply H; eauto).
   split; simpl; auto; intros.
   rewrite PTree.gsspec in H6. destruct (peq id0 id).
-+ inv H6. destruct H3. congruence. destruct gl!id as [iv0|] eqn:NG.
-  rewrite ISet.In_add. intros [P|P]. omega. eelim GL; eauto.
-  rewrite ISet.In_interval. omega.
-+ eauto.
+  + inv H6. destruct H3. congruence. destruct gl!id as [iv0|] eqn:NG.
+    subst iv'; rewrite ISet.In_add. intros [P|P]. omega. eelim GL; eauto.
+    subst iv'; rewrite ISet.In_interval. omega.
+  + eauto.
 - (* Stk ofs *)
   split; simpl; auto; intros. destruct H3.
   elim H3. subst b'. eapply bc_stack; eauto.
