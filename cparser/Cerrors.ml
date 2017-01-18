@@ -19,6 +19,10 @@ open Format
 open Commandline
 
 let error_fatal = ref false
+
+(* Test if color diagnostics are available by testing if stderr is a tty
+   and if the environment varibale TERM is set
+*)
 let color_diagnostics =
   let term = try Sys.getenv "TERM" with Not_found -> "" in
   let activate = try
@@ -73,6 +77,7 @@ type warning_type =
   | CompCert_conformance
   | Inline_asm_sdump
 
+(* List of active warnings *)
 let active_warnings: warning_type list ref = ref [
   Unnamed;
   Unknown_attribute;
@@ -93,8 +98,10 @@ let active_warnings: warning_type list ref = ref [
   Inline_asm_sdump;
 ]
 
+(* List of errors treated as warning *)
 let error_warnings: warning_type list ref = ref []
 
+(* Conversion from warning type to string *)
 let string_of_warning = function
   | Unnamed -> ""
   | Unknown_attribute -> "unknown-attributes"
@@ -117,22 +124,27 @@ let string_of_warning = function
   | CompCert_conformance -> "compcert-conformance"
   | Inline_asm_sdump -> "inline-asm-sdump"
 
+(* Activate the given warning *)
 let activate_warning w () =
   if not (List.mem w !active_warnings) then
     active_warnings:=w::!active_warnings
 
+(* Deactivate the given warning*)
 let deactivate_warning w  () =
   active_warnings:=List.filter ((<>) w) !active_warnings;
   error_warnings:= List.filter ((<>) w) !error_warnings
 
+(* Activate error for warning *)
 let warning_as_error w ()=
   activate_warning w ();
   if not (List.mem w !error_warnings) then
     error_warnings := w::!error_warnings
 
+(* Deactivate error for warning *)
 let warning_not_as_error w () =
   error_warnings:= List.filter ((<>) w) !error_warnings
 
+(* Activate all warnings *)
 let wall () =
   active_warnings:=[
     Unnamed;
@@ -157,6 +169,7 @@ let wall () =
     Inline_asm_sdump;
   ]
 
+(* Make all warnings an error *)
 let werror () =
   error_warnings:=[
     Unnamed;
@@ -177,19 +190,22 @@ let werror () =
     Return_type;
     Literal_range;
     Unknown_pragmas;
+    CompCert_conformance;
     Inline_asm_sdump;
   ]
 
-
+(* Generate the warning key for the message *)
 let key_of_warning w =
   match w with
   | Unnamed -> None
   | _ -> Some ("-W"^(string_of_warning w))
 
+(* Add -Werror to the printed keys *)
 let key_add_werror = function
   | None -> Some ("-Werror")
   | Some s -> Some ("-Werror,"^s)
 
+(* Lookup how to print the warning *)
 let classify_warning w =
   let key = key_of_warning w in
   if List.mem w !active_warnings then
@@ -204,33 +220,42 @@ let classify_warning w =
   else
     SuppressedMsg,None
 
+(* Print color codes if color_diagnostics are enabled *)
 let cprintf fmt c =
   if !color_diagnostics then
     fprintf fmt c
   else
     ifprintf fmt c
 
+(* Reset color codes *)
 let rsc fmt =
   cprintf fmt "\x1b[0m"
 
+(* BOLD *)
 let bc fmt =
   cprintf fmt "\x1b[1m"
 
+(* RED *)
 let rc fmt =
   cprintf fmt "\x1b[31;1m"
 
+(* MAGENTA *)
 let mc fmt  =
   cprintf fmt "\x1b[35;1m"
 
+(* Print key (if available) and flush the formatter *)
 let pp_key key fmt =
   let key = match key with
   | None -> ""
   | Some s -> " ["^s^"]" in
   fprintf fmt "%s%t@." key rsc
 
+(* Print the location or ccomp for the case of unknown loc *)
 let pp_loc fmt (filename,lineno) =
   if filename <> "" && lineno <> -10 && filename <> "cabs loc unknown" then
     fprintf fmt "%t%s:%d:%t " bc filename lineno rsc
+  else
+    fprintf fmt "%tccomp:%t " bc rsc
 
 let error key loc fmt =
   incr num_errors;
