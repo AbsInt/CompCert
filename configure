@@ -160,7 +160,7 @@ clinker_options=""
 cprepro_options=""
 struct_passing=""
 struct_return=""
-
+asm_supports_pipe=true
 
 #
 # ARM Target Configuration
@@ -230,6 +230,7 @@ if test "$arch" = "powerpc"; then
         struct_passing="ref-caller"
         system="diab"
         responsefile="diab"
+        asm_supports_pipe=false
         ;;
     *)
         abi="eabi"
@@ -560,6 +561,7 @@ STRUCT_PASSING=$struct_passing
 STRUCT_RETURN=$struct_return
 SYSTEM=$system
 RESPONSEFILE=$responsefile
+ASM_SUPPORTS_PIPE=$asm_supports_pipe
 EOF
 else
 cat >> Makefile.config <<'EOF'
@@ -661,7 +663,12 @@ CLIGHTGEN=false
 
 # Whether the other tools support responsefiles in gnu syntax
 RESPONSEFILE="none"
+#RESPONSEFILE="diab"
+#RESPONSEFILE="gnu"
 
+#Whether the other the asembler supports reading from stdin
+ASM_SUPPORTS_PIPE=false
+#ASM_SUPPORTS_PIPE=true
 EOF
 fi
 
@@ -705,6 +712,8 @@ CompCert configuration:
     Library files installed in.... $libdirexp
     Standard headers provided..... $has_standard_headers
     Standard headers installed in. $libdirexp/include
+    Response file style........... $responsefile
+    Assembler supports pipe....... $asm_supports_pipe
     Build command to use.......... $make
 
 EOF

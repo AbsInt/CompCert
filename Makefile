@@ -208,23 +208,24 @@ latexdoc:
 
 compcert.ini: Makefile.config
 	(echo "stdlib_path=$(LIBDIR)"; \
-         echo "prepro=$(CPREPRO)"; \
-         echo "linker=$(CLINKER)"; \
-         echo "asm=$(CASM)"; \
+	 echo "prepro=$(CPREPRO)"; \
+	 echo "linker=$(CLINKER)"; \
+	 echo "asm=$(CASM)"; \
 	 echo "prepro_options=$(CPREPRO_OPTIONS)";\
 	 echo "asm_options=$(CASM_OPTIONS)";\
 	 echo "linker_options=$(CLINKER_OPTIONS)";\
-         echo "arch=$(ARCH)"; \
-         echo "model=$(MODEL)"; \
-         echo "abi=$(ABI)"; \
-         echo "endianness=$(ENDIANNESS)"; \
-         echo "system=$(SYSTEM)"; \
-         echo "has_runtime_lib=$(HAS_RUNTIME_LIB)"; \
-         echo "has_standard_headers=$(HAS_STANDARD_HEADERS)"; \
-         echo "asm_supports_cfi=$(ASM_SUPPORTS_CFI)"; \
-         echo "struct_passing_style=$(STRUCT_PASSING)"; \
-         echo "struct_return_style=$(STRUCT_RETURN)"; \
-	 echo "response_file_style=$(RESPONSEFILE)";) \
+	 echo "arch=$(ARCH)"; \
+	 echo "model=$(MODEL)"; \
+	 echo "abi=$(ABI)"; \
+	 echo "endianness=$(ENDIANNESS)"; \
+	 echo "system=$(SYSTEM)"; \
+	 echo "has_runtime_lib=$(HAS_RUNTIME_LIB)"; \
+	 echo "has_standard_headers=$(HAS_STANDARD_HEADERS)"; \
+	 echo "asm_supports_cfi=$(ASM_SUPPORTS_CFI)"; \
+	 echo "struct_passing_style=$(STRUCT_PASSING)"; \
+	 echo "struct_return_style=$(STRUCT_RETURN)"; \
+	 echo "response_file_style=$(RESPONSEFILE)"; \
+	 echo "asm_supports_pipe=$(ASM_SUPPORTS_PIPE)";) \
         > compcert.ini
 
 driver/Version.ml: VERSION

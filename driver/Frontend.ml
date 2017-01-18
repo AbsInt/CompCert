@@ -18,32 +18,102 @@ open Printf
 
 (* Common frontend functions between clightgen and ccomp *)
 
+(* Dump file for C Ast and CompCert C *)
+let dparse_destination = ref None
 
-(* From C to preprocessed C *)
+let dcompcertc_destination = ref None
 
-let preprocess ifile ofile =
-  let output =
-    if ofile = "-" then None else Some ofile in
-  let cmd = List.concat [
+(* Construct the command line from the given input file *)
+let cmd ifile =
+  List.concat [
     Configuration.prepro;
     ["-D__COMPCERT__"];
     (if !Clflags.use_standard_headers
      then ["-I" ^ Filename.concat !Clflags.stdlib_path "include" ]
      else []);
     List.rev !prepro_options;
-    [ifile]
-  ] in
+    [File.input_name ifile]
+  ]
+
+(* From a C file to preprocessed C file *)
+let preprocess ifile ofile =
+  let output =
+    if ofile = "-" then None else Some ofile in
+  let cmd = cmd ifile in
   let exc = command ?stdout:output cmd in
   if exc <> 0 then begin
-    if ofile <> "-" then safe_remove ofile;
+    if ofile <> "-" then File.safe_remove ofile;
     command_error "preprocessor" exc;
     eprintf "Error during preprocessing.\n";
     exit 2
   end
 
+(* Internal preprocessor handle type *)
+type prepro_handle =
+  | File (* The preprocessor is finished and has written an output file *)
+  | Process of Driveraux.process_info (* Pid, etc of the preproecssor *)
+
+let open_prepro_in ifile =
+  if !option_pipe && not !option_dprepro then
+    let cmd = cmd ifile in
+    let pid = open_process_in cmd in
+    match pid with
+    | None ->
+      command_error "preprocessor" (-1);
+      eprintf "Error during preprocessing.\n";
+      exit 2
+    | Some (pid,ic) -> ic,Process pid
+  else
+    let ofile = if !option_dprepro then
+        File.output_filename ifile ".i"
+      else
+        File.temp_file ".i" in
+    preprocess ifile ofile; (* Call the preprocessor to create the output file *)
+    open_in_bin ofile,File
+
+let close_prepro_in ic handle =
+  match handle with
+  | File -> close_in ic
+  | Process pid ->
+    let exc = Driveraux.close_process_in pid ic in
+    if exc <> 0 then begin (* Command failed *)
+      command_error "preprocessor" exc;
+      eprintf "Error during preprocessing.\n";
+      exit 2
+    end
+
+(* Open a preprocessed file *)
+let open_preprocessed_file source_file =
+  open_in_bin (File.input_name source_file),File
+
 (* From preprocessed C to Csyntax *)
 
-let parse_c_file sourcename ifile =
+let read_file ic handle =
+  match handle with
+  | Process _ ->
+    (* Read chunks from the input channel of the underlying process *)
+    let buf = Buffer.create 16384 in
+    begin try
+        while true do
+          Buffer.add_channel buf ic 16384;
+        done
+      with End_of_file -> () end;
+    close_prepro_in ic handle;
+    Buffer.contents buf
+  | File ->
+    (* Reading the whole file at once may seem costly, but seems to be
+     the simplest / most robust way of accessing the text underlying
+     a range of positions. This is used when printing an error message.
+     Plus, I note that reading the whole file into memory leads to a
+     speed increase: "make -C test" speeds up by 3 seconds out of 40
+     on my machine. *)
+    let n = in_channel_length ic in
+    let text = really_input_string ic n in
+    close_in ic;
+    text
+
+
+let parse_c_file sourcename (ic,handle) =
   Debug.init_compile_unit sourcename;
   Sections.initialize();
   (* Simplification options *)
@@ -53,18 +123,19 @@ let parse_c_file sourcename ifile =
   ^ (if !option_fbitfields then "f" else "")
   ^ (if !option_fpacked_structs then "p" else "")
   in
+  let text = read_file ic handle in
   (* Parsing and production of a simplified C AST *)
   let ast =
-    match Parse.preprocessed_file simplifs sourcename ifile with
+    match Parse.preprocessed_file simplifs sourcename text with
     | None -> exit 2
     | Some p -> p in
   (* Save C AST if requested *)
-  if !option_dparse then begin
-    let ofile = output_filename sourcename ".c" ".parsed.c" in
+  begin match !dparse_destination with
+  | None -> ()
+  | Some ofile ->
     let oc = open_out ofile in
     Cprint.program (Format.formatter_of_out_channel oc) ast;
-    close_out oc
-  end;
+    close_out oc end;
   (* Conversion to Csyntax *)
   let csyntax =
     match Timing.time "CompCert C generation" C2C.convertProgram ast with
@@ -72,11 +143,12 @@ let parse_c_file sourcename ifile =
     | Some p -> p in
   flush stderr;
   (* Save CompCert C AST if requested *)
-  if !option_dcmedium then begin
-    let ofile = output_filename sourcename ".c" ".compcert.c" in
-    let oc = open_out ofile in
-    PrintCsyntax.print_program (Format.formatter_of_out_channel oc) csyntax;
-    close_out oc
+  begin match !dcompcertc_destination with
+    | None -> ()
+    | Some ofile ->
+      let oc = open_out ofile in
+      PrintCsyntax.print_program (Format.formatter_of_out_channel oc) csyntax;
+      close_out oc
   end;
   csyntax
 
@@ -92,6 +164,11 @@ let gnu_prepro_opt s =
 let gnu_prepro_opt_e s =
   prepro_options := s :: !prepro_options;
   option_E := true
+
+(* Add pipe if tools support it *)
+let add_pipe () =
+  if Configuration.gnu_toolchain then
+    gnu_prepro_opt "-pipe"
 
 let gnu_prepro_actions = [
   Exact "-M", Self gnu_prepro_opt_e;
@@ -125,7 +202,7 @@ let prepro_actions = [
   Exact "-Xpreprocessor", String (fun s ->
     prepro_options := s :: !prepro_options);
   Exact "-include", String (fun s -> prepro_options := s :: "-include" :: !prepro_options);]
-  @ (if gnu_system then gnu_prepro_actions else [])
+  @ (if Configuration.gnu_toolchain then gnu_prepro_actions else [])
 
 let gnu_prepro_help =
 "\  -M            Ouput a rule suitable for make describing the\n\
@@ -134,7 +211,7 @@ let gnu_prepro_help =
 \  -MF <file>     Specifies file <file> as output file for -M or -MM\n\
 \  -MG            Assumes missing header files are generated for -M\n\
 \  -MP            Add a phony target for each dependency other than\n\
-\                 the main file\n\
+\                the main file\n\
 \  -MT <target>   Change the target of the rule emitted by dependency\n\
 \                 generation\n\
 \  -MQ <target>   Like -MT but quotes <target>\n\
@@ -161,4 +238,4 @@ let prepro_help = "Preprocessing options:\n\
 \  -U<symb>       Undefine preprocessor symbol\n\
 \  -Wp,<opt>      Pass option <opt> to the preprocessor\n\
 \  -Xpreprocessor <opt> Pass option <opt> to the preprocessor\n"
-  ^ (if gnu_system then gnu_prepro_help else "")
+  ^ (if Configuration.gnu_toolchain then gnu_prepro_help else "")

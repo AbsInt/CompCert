@@ -14,12 +14,6 @@
 open Printf
 open Clflags
 
-(* Is this a gnu based tool chain *)
-let gnu_system = Configuration.system <> "diab"
-
-(* Safe removal of files *)
-let safe_remove file =
-  try Sys.remove file with Sys_error _ -> ()
 
 (* Invocation of external tools *)
 
@@ -27,28 +21,91 @@ let rec waitpid_no_intr pid =
   try Unix.waitpid [] pid
   with Unix.Unix_error (Unix.EINTR, _, _) -> waitpid_no_intr pid
 
-let command stdout args =
-  let argv = Array.of_list args in
-  assert (Array.length argv > 0);
+
+let response_file args =
+  let resp = Sys.win32 && Configuration.response_file_style <> Configuration.Unsupported in
+  if resp && List.fold_left (fun len arg -> len + String.length arg + 1) 0 args > 7000 then
+    let quote,prefix = match Configuration.response_file_style with
+      | Configuration.Unsupported -> assert false
+      | Configuration.Gnu -> Responsefile.gnu_quote,"@"
+      | Configuration.Diab -> Responsefile.diab_quote,"-@" in
+    let file = File.temp_file "" in
+    let oc = open_out_bin file in
+    let cmd,args = match args with
+      | cmd::args -> cmd,args
+      | [] -> assert false (* Should never happen *) in
+    List.iter (fun a -> Printf.fprintf oc "%s " (quote a)) args;
+    close_out oc;
+    [|cmd;prefix^file|]
+  else
+    Array.of_list args
+
+let print_error proc err fn param =
+  eprintf "Error executing '%s': %s: %s %s"
+    proc fn (Unix.error_message err) param;
+  prerr_endline ""
+
+type process_info = (int * string)
+
+let waitpid (pid,proc) =
   try
-    let fd_out =
-      match stdout with
-      | None -> Unix.stdout
-      | Some f ->
-          Unix.openfile f [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC] 0o666 in
-    let pid =
-      Unix.create_process argv.(0) argv Unix.stdin fd_out Unix.stderr in
     let (_, status) =
       waitpid_no_intr pid in
-    if stdout <> None then Unix.close fd_out;
     match status with
-    | Unix.WEXITED rc -> rc
+    | Unix.WEXITED rc ->
+      rc
     | Unix.WSIGNALED n | Unix.WSTOPPED n ->
-        eprintf "Command '%s' killed on a signal.\n" argv.(0); -1
-  with Unix.Unix_error(err, fn, param) ->
-    eprintf "Error executing '%s': %s: %s %s\n"
-            argv.(0) fn (Unix.error_message err) param;
+      eprintf "Command '%s' killed on a signal.\n" proc; -1
+  with Unix.Unix_error (err,fn,param) ->
+    print_error proc err fn param;
     -1
+
+let create_process fd_in fd_out args =
+  let argv = response_file args in
+  assert (Array.length argv > 0);
+  let pid = Unix.create_process argv.(0) argv fd_in fd_out Unix.stderr in
+  (pid,argv.(0))
+
+
+let open_process_out args =
+  if !option_v then begin
+    eprintf "+ %s" (String.concat " " args);
+    prerr_endline ""
+  end;
+  try
+    let fd_in,fd_out = Unix.pipe () in
+    Unix.set_close_on_exec fd_out;
+    let proc = create_process fd_in Unix.stdout args in
+    Unix.close fd_in;
+    Some (proc,Unix.out_channel_of_descr fd_out)
+  with Unix.Unix_error (err,fn,param) ->
+    print_error (List.hd args) err fn param;
+    None
+
+let close_process_out proc oc =
+  close_out_noerr oc;
+  let rc = waitpid proc in
+  rc
+
+let open_process_in args =
+  if !option_v then begin
+    eprintf "+ %s" (String.concat " " args);
+    prerr_endline ""
+  end;
+  try
+    let fd_in,fd_out = Unix.pipe () in
+    Unix.set_close_on_exec fd_in;
+    let proc = create_process Unix.stdin fd_out args in
+    Unix.close fd_out;
+    Some (proc,Unix.in_channel_of_descr fd_in)
+  with Unix.Unix_error (err,fn,param) ->
+    print_error (List.hd args) err fn param;
+    None
+
+let close_process_in proc ic =
+  let rc = waitpid proc in
+  close_in_noerr ic;
+  rc
 
 let command ?stdout args =
   if !option_v then begin
@@ -59,64 +116,32 @@ let command ?stdout args =
     end;
     prerr_endline ""
   end;
-  let resp = Sys.win32 && Configuration.response_file_style <> Configuration.Unsupported in
-  if resp && List.fold_left (fun len arg -> len + String.length arg + 1) 0 args > 7000 then
-    let quote,prefix = match Configuration.response_file_style with
-    | Configuration.Unsupported -> assert false
-    | Configuration.Gnu -> Responsefile.gnu_quote,"@"
-    | Configuration.Diab -> Responsefile.diab_quote,"-@" in
-    let file,oc = Filename.open_temp_file "compcert" "" in
-    let cmd,args = match args with
-    | cmd::args -> cmd,args
-    | [] -> assert false (* Should never happen *) in
-    List.iter (fun a -> Printf.fprintf oc "%s " (quote a)) args;
-    close_out oc;
-    let arg = prefix^file in
-    let ret = command stdout [cmd;arg] in
-    safe_remove file;
-    ret
-  else
-    command stdout args
+  let fd_out =
+    match stdout with
+    | None -> Unix.stdout
+    | Some f -> Unix.openfile f [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC] 0o666 in
+  try
+    let pid = create_process Unix.stdin fd_out args in
+    let rc = waitpid pid in
+    if stdout <> None then Unix.close fd_out;
+    rc
+  with Unix.Unix_error (err,fn,param) ->
+    print_error (List.hd args) err fn param;
+    -1
 
 let command_error n exc =
   eprintf "Error: %s command failed with exit code %d (use -v to see invocation)\n" n exc
 
-
-(* Determine names for output files.  We use -o option if specified
-   and if this is the final destination file (not a dump file).
-   Otherwise, we generate a file in the current directory. *)
-
-let output_filename ?(final = false) source_file source_suffix output_suffix =
-  match !option_o with
-  | Some file when final -> file
-  | _ ->
-    Filename.basename (Filename.chop_suffix source_file source_suffix)
-    ^ output_suffix
-
-(* A variant of [output_filename] where the default output name is fixed *)
-
-let output_filename_default default_file =
-  match !option_o with
-  | Some file -> file
-  | None -> default_file
-
-(* All input files should exist *)
-
-let ensure_inputfile_exists name =
-  if not (Sys.file_exists name) then begin
-    eprintf "error: no such file or directory: '%s'\n" name;
-    exit 2
-  end
 (* Printing of error messages *)
 
-let print_error oc msg =
-  let print_one_error = function
+let print_errorcodes file msg =
+  let print_one_error oc = function
   | Errors.MSG s -> output_string oc (Camlcoq.camlstring_of_coqstring s)
   | Errors.CTX i -> output_string oc (Camlcoq.extern_atom i)
   | Errors.POS i -> fprintf oc "%ld" (Camlcoq.P.to_int32 i)
   in
-    List.iter print_one_error msg;
-    output_char oc '\n'
+  eprintf "%s: %a\n" file (fun oc msg -> List.iter (print_one_error oc) msg) msg;
+  exit 2
 
 (* Command-line parsing *)
 let explode_comma_option s =
@@ -125,17 +150,23 @@ let explode_comma_option s =
   | _ :: tl -> tl
 
 (* Record actions to be performed after parsing the command line *)
+type action =
+  | File_action of ((File.input_file -> string) * File.input_file)
+  | Linker_action of string
 
-let actions : ((string -> string) * string) list ref = ref []
+let actions : action list ref = ref []
 
 let push_action fn arg =
-  actions := (fn, arg) :: !actions
+  actions := File_action(fn, arg) :: !actions
 
 let push_linker_arg arg =
-  push_action (fun s -> s) arg
+  actions := Linker_action arg :: !actions
 
 let perform_actions () =
   let rec perform = function
   | [] -> []
-  | (fn, arg) :: rem -> let res = fn arg in res :: perform rem
+  | act :: rem -> let res = action act in res :: perform rem
+  and action = function
+    | File_action (f,s) -> f s
+    | Linker_action s -> s
   in perform (List.rev !actions)

@@ -19,30 +19,13 @@ val command: ?stdout:string -> string list -> int
 val command_error: string -> int -> unit
    (** Generate an error message for the given command and exit code *)
 
-val safe_remove: string -> unit
-   (** Remove the given file if it exists *)
-
-val output_filename: ?final:bool -> string -> string -> string -> string
-   (** Determine names for output files.  We use -o option if specified
-       and if this is the final destination file (not a dump file).
-       Otherwise, we generate a file in the current directory. *)
-
-val output_filename_default: string -> string
-   (** Return either the file specified by -o or the given file name *)
-
-val ensure_inputfile_exists: string -> unit
-   (** Test whether the given input file exists *)
-
-val print_error:out_channel -> Errors.errcode list -> unit
+val print_errorcodes: string -> Errors.errcode list -> 'a
    (** Printing of error messages *)
-
-val gnu_system: bool
-   (** Are the target tools gnu tools? *)
 
 val explode_comma_option: string -> string list
    (** Split option at commas *)
 
-val push_action: (string -> string) -> string -> unit
+val push_action: (File.input_file -> string) -> File.input_file -> unit
   (** Add an action to be performed after parsing the command line *)
 
 val push_linker_arg: string -> unit
@@ -50,3 +33,21 @@ val push_linker_arg: string -> unit
 
 val perform_actions: unit -> string list
   (** Perform actions *)
+
+type process_info
+  (** Internal type for the create_process and waitpid wrappers *)
+
+val waitpid: process_info -> int
+  (** Wrapper around waitpid *)
+
+val open_process_out : string list -> (process_info * out_channel) option
+  (** Wrapper for a create_process based open_process_out implementation *)
+
+val close_process_out : process_info -> out_channel -> int
+  (** Corresponding close_process for open_process *)
+
+val open_process_in : string list -> (process_info * in_channel) option
+  (** Wrapper for a create_process based open_process_in implementation *)
+
+val close_process_in : process_info -> in_channel -> int
+  (** Corresponding close_process for open_process *)

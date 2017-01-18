@@ -38,14 +38,7 @@ let parse_transformations s =
     s;
   !t
 
-let read_file sourcefile =
-  let ic = open_in_bin sourcefile in
-  let n = in_channel_length ic in
-  let text = really_input_string ic n in
-  close_in ic;
-  text
-
-let preprocessed_file transfs name sourcefile =
+let preprocessed_file transfs name text =
   Cerrors.reset();
   (* Reading the whole file at once may seem costly, but seems to be
      the simplest / most robust way of accessing the text underlying
@@ -53,7 +46,6 @@ let preprocessed_file transfs name sourcefile =
      Plus, I note that reading the whole file into memory leads to a
      speed increase: "make -C test" speeds up by 3 seconds out of 40
      on my machine. *)
-  let text = read_file sourcefile in
   let p =
     try
       let t = parse_transformations transfs in

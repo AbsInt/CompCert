@@ -46,7 +46,7 @@ let linker_help =
 "Linking options:\n\
 \  -l<lib>        Link library <lib>\n\
 \  -L<dir>        Add <dir> to search path for libraries\n" ^
- (if gnu_system then gnu_linker_help else "") ^
+ (if Configuration.gnu_toolchain then gnu_linker_help else "") ^
 "  -s             Remove all symbol table and relocation information from the\n\
 \                 executable\n\
 \  -static        Prevent linking with the shared libraries\n\
@@ -60,14 +60,14 @@ let linker_help =
 let linker_actions =
   [ Prefix "-l", Self push_linker_arg;
     Prefix "-L", Self push_linker_arg; ] @
-  (if gnu_system then
+  (if Configuration.gnu_toolchain then
     [ Exact "-nostartfiles", Self push_linker_arg;
       Exact "-nodefaultlibs", Self push_linker_arg;
       Exact "-nostdlib", Self push_linker_arg;]
   else []) @
   [ Exact "-s", Self push_linker_arg;
     Exact "-static", Self push_linker_arg;
-    Exact "-T", String (fun s -> if gnu_system then begin
+    Exact "-T", String (fun s -> if Configuration.gnu_toolchain then begin
       push_linker_arg ("-T");
       push_linker_arg(s)
     end else

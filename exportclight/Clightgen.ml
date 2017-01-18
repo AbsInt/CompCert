@@ -16,31 +16,31 @@
 open Printf
 open Commandline
 open Clflags
+open File
 open Driveraux
 open Frontend
 
-(* Location of the compatibility library *)
+(* From C source to Clight *)
 
-let stdlib_path = ref Configuration.stdlib_path
-
-(* From CompCert C AST to Clight *)
-
-let compile_c_ast sourcename csyntax ofile =
+let compile_c_file ifile (ic,prepro) ofile =
+  dparse_destination := if !option_dparse then
+      Some (output_filename ifile ".parsed.c")
+    else
+      None;
+  let csyntax = parse_c_file (File.input_name ifile) (ic,prepro) in
   let clight =
     match SimplExpr.transl_program csyntax with
     | Errors.OK p ->
         begin match SimplLocals.transf_program p with
         | Errors.OK p' -> p'
         | Errors.Error msg ->
-            print_error stderr msg;
-            exit 2
+            print_errorcodes (File.input_name ifile) msg
         end
     | Errors.Error msg ->
-        print_error stderr msg;
-        exit 2 in
+        print_errorcodes (File.input_name ifile) msg in
   (* Dump Clight in C syntax if requested *)
   if !option_dclight then begin
-    let ofile = Filename.chop_suffix sourcename ".c" ^ ".light.c" in
+    let ofile = File.output_filename ifile ".light.c" in
     let oc = open_out ofile in
     PrintClight.print_program (Format.formatter_of_out_channel oc) clight;
     close_out oc
@@ -50,21 +50,15 @@ let compile_c_ast sourcename csyntax ofile =
   ExportClight.print_program (Format.formatter_of_out_channel oc) clight;
   close_out oc
 
-(* From C source to Clight *)
-
-let compile_c_file sourcename ifile ofile =
-  compile_c_ast sourcename (parse_c_file sourcename ifile) ofile
 
 (* Processing of a .c file *)
 
-let process_c_file sourcename =
-  let prefixname = Filename.chop_suffix sourcename ".c" in
+let process_c_file source_file =
   if !option_E then begin
-    preprocess sourcename "-"
+    preprocess source_file (File.output_filename_default "-")
   end else begin
-    let preproname = Filename.temp_file "compcert" ".i" in
-    preprocess sourcename preproname;
-    compile_c_file sourcename preproname (prefixname ^ ".v")
+    let ic,prepro = open_prepro_in source_file in
+    compile_c_file source_file (ic,prepro) (File.output_filename source_file ".v")
   end
 
 let version_string =
@@ -137,6 +131,7 @@ let cmdline_actions =
 (* General options *)
   Exact "-v", Set option_v;
   Exact "-stdlib", String(fun s -> stdlib_path := s);
+  Exact "-pipe", Unit (fun () -> option_pipe:=true; Frontend.add_pipe ());
   ]
 (* -f options: come in -f and -fno- variants *)
 (* Language support options *)
@@ -153,7 +148,7 @@ let cmdline_actions =
   Prefix "-", Self (fun s ->
       eprintf "Unknown option `%s'\n" s; exit 2);
 (* File arguments *)
-  Suffix ".c", Self (fun s -> process_c_file s);
+  Suffix ".c", Self (fun s -> process_c_file (File.new_input_file s ".c"));
   ]
 
 let _ =

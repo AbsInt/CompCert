@@ -62,3 +62,4 @@ let option_small_const = ref (!option_small_data)
 let option_timings = ref false
 let stdlib_path = ref Configuration.stdlib_path
 let use_standard_headers =  ref Configuration.has_standard_headers
+let option_pipe = ref false

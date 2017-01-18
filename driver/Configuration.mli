@@ -74,3 +74,9 @@ type response_file_style =
 
 val response_file_style: response_file_style
   (** Style of supported responsefiles *)
+
+val asm_supports_pipe: bool
+  (** True if the assembler supports reading from stdin *)
+
+val gnu_toolchain: bool
+  (** Does the targeted system use the gnu toolchain *)

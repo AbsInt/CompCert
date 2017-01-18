@@ -19,4 +19,4 @@ val preprocessed_file: string -> string -> string -> C.program option
 
 (* first arg: desired transformations
    second arg: source file name before preprocessing
-   third arg: file after preprocessing *)
+   third arg: content of the file *)
