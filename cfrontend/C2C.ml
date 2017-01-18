@@ -13,8 +13,6 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-open Printf
-
 open C
 open Env
 open Builtins
@@ -114,8 +112,8 @@ let currentLocation = ref Cutil.no_loc
 
 let updateLoc l = currentLocation := l
 
-let error msg =
-  Cerrors.error !currentLocation "%s" msg
+let error fmt =
+  Cerrors.error !currentLocation fmt
 
 let unsupported msg =
   Cerrors.error !currentLocation "unsupported feature: %s"  msg
@@ -660,7 +658,7 @@ let ezero = Eval(Vint(coqint_of_camlint 0l), type_int32s)
 let ewrap = function
   | Errors.OK e -> e
   | Errors.Error msg ->
-      error ("retyping error: " ^  string_of_errmsg msg); ezero
+      error "retyping error: %s" (string_of_errmsg msg); ezero
 
 let rec convertExpr env e =
   match e.edesc with
@@ -982,7 +980,7 @@ let rec contains_case s =
 let swrap = function
   | Errors.OK s -> s
   | Errors.Error msg ->
-      error ("retyping error: " ^  string_of_errmsg msg); Csyntax.Sskip
+      error "retyping error: %s" (string_of_errmsg msg); Csyntax.Sskip
 
 let rec convertStmt env s =
   updateLoc s.sloc;
@@ -1158,8 +1156,8 @@ let convertInitializer env ty i =
   with
   | Errors.OK init -> init
   | Errors.Error msg ->
-      error (sprintf "initializer element is not a compile-time constant (%s)"
-                     (string_of_errmsg msg)); []
+      error "initializer element is not a compile-time constant (%s)"
+                     (string_of_errmsg msg); []
 
 (** Global variable *)
 
@@ -1179,10 +1177,10 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
   let (section, access) =
     Sections.for_variable env id' ty (optinit <> None) in
   if Z.gt sz (Z.of_uint64 0xFFFF_FFFFL) then
-    error (sprintf "'%s' is too big (%s bytes)"
-                   id.name (Z.to_string sz));
+    error "'%s' is too big (%s bytes)"
+                   id.name (Z.to_string sz);
   if sto <> C.Storage_extern && Cutil.incomplete_type env ty then
-    error (sprintf "'%s' has incomplete type" id.name);
+    error "'%s' has incomplete type" id.name;
   Hashtbl.add decl_atom id'
     { a_storage = sto;
       a_alignment = Some (Z.to_int al);
@@ -1277,13 +1275,13 @@ let cleanupGlobals p =
     match g.gdesc with
     | C.Gfundef fd ->
         if IdentSet.mem fd.fd_name !strong then
-          error ("multiple definitions of " ^ fd.fd_name.name);
+          error "multiple definitions of %s" fd.fd_name.name;
         strong := IdentSet.add fd.fd_name !strong
     | C.Gdecl(Storage_extern, id, ty, init) ->
         extern := IdentSet.add id !extern
     | C.Gdecl(sto, id, ty, Some i) ->
         if IdentSet.mem id !strong then
-          error ("multiple definitions of " ^ id.name);
+          error "multiple definitions of %s" id.name;
         strong := IdentSet.add id !strong
     | C.Gdecl(sto, id, ty, None) ->
         weak := IdentSet.add id !weak
@@ -1334,8 +1332,8 @@ let convertProgram p =
     let typs = convertCompositedefs env [] p in
     match build_composite_env typs with
     | Errors.Error msg ->
-        error (sprintf "incorrect struct or union definition: %s"
-                       (string_of_errmsg msg));
+        error "incorrect struct or union definition: %s"
+                       (string_of_errmsg msg);
         None
     | Errors.OK ce ->
         comp_env := ce;
@@ -1350,4 +1348,4 @@ let convertProgram p =
             prog_comp_env = ce } in
         if Cerrors.check_errors () then None else Some p'
   with Env.Error msg ->
-    error (Env.error_message msg); None
+    error "%s" (Env.error_message msg); None

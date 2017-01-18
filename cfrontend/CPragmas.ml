@@ -15,7 +15,6 @@
 
 (* Handling of pragmas *)
 
-open Printf
 open Camlcoq
 
 (* #pragma section *)
@@ -43,9 +42,9 @@ let re_c_ident = Str.regexp "[A-Za-z_][A-Za-z_0-9]*$"
 let process_use_section_pragma classname id =
   if id = "," || id = ";" then () else begin
     if not (Str.string_match re_c_ident id 0) then
-      C2C.error (sprintf "bad identifier `%s' in #pragma use_section" id);
+      C2C.error "bad identifier `%s' in #pragma use_section" id;
     if not (Sections.use_section_for (intern_string id) classname) then
-      C2C.error (sprintf "unknown section name `%s'" classname)
+      C2C.error "unknown section name `%s'" classname
   end
 
 (* #pragma reserve_register *)
