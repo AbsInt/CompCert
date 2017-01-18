@@ -71,11 +71,12 @@ let gnu_debugging_help =
 "  -gdwarf-       Generate debug information in DWARF v2 or DWARF v3\n"
 
 let debugging_help =
-"Debugging options:\n\
-\  -g             Generate debugging information\n\
-\  -g<n>          Control generation of debugging information\n\
-\                 (<n>=0: none, <n>=1: only-globals, <n>=2: globals + locals \n\
-\                 without locations, <n>=3: full;)\n"
+{|Debugging options:
+  -g             Generate debugging information
+  -g<n>          Control generation of debugging information
+                 (<n>=0: none, <n>=1: only-globals, <n>=2: globals + locals
+                 without locations, <n>=3: full;)
+|}
 ^ (if gnu_system then gnu_debugging_help else "")
 
 let gnu_debugging_actions =

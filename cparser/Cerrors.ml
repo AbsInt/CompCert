@@ -331,17 +331,18 @@ let warning_options =
    Exact ("-Werror"), Unit werror;
    Exact ("-Wall"), Unit wall;]
 
-let warning_help = "Diagnostic options:\n\
-\  -Wall              Enable all warnings\n\
-\  -W<warning>        Enable the specific <warning>\n\
-\  -Wno-<warning>     Disable the specific <warning>\n\
-\  -Werror            Make all warnings into errors\n\
-\  -Werror=<warning>  Turn <warning> into an error\n\
-\  -Wno-error=<warning> Turn <warning> into a warning even if -Werror is\n\
-                        specified\n\
-\  -Wfatal-errors     Turn all errors into fatal errors aborting the compilation\n\
-\  -fdiagnostics-color Turn on colored diagnostics\n\
-\  -fno-diagnostics-color Turn of colored diagnostics\n"
+let warning_help = {|Diagnostic options:
+  -Wall              Enable all warnings
+  -W<warning>        Enable the specific <warning>
+  -Wno-<warning>     Disable the specific <warning>
+  -Werror            Make all warnings into errors
+  -Werror=<warning>  Turn <warning> into an error
+  -Wno-error=<warning> Turn <warning> into a warning even if -Werror is
+                       specified
+  -Wfatal-errors     Turn all errors into fatal errors aborting the compilation
+  -fdiagnostics-color Turn on colored diagnostics
+  -fno-diagnostics-color Turn of colored diagnostics
+|}
 
 let raise_on_errors () =
   if !num_errors > 0 then

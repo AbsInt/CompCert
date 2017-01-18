@@ -256,91 +256,96 @@ let version_string =
     "The CompCert C verified compiler, version "^ Version.version ^ "\n"
 
 let target_help = if Configuration.arch = "arm" then
-"Target processor options:\n\
-\  -mthumb        Use Thumb2 instruction encoding\n\
-\  -marm          Use classic ARM instruction encoding\n"
+{|Target processor options:
+  -mthumb        Use Thumb2 instruction encoding
+  -marm          Use classic ARM instruction encoding
+|}
 else
   ""
 
 let usage_string =
   version_string ^
-  "Usage: ccomp [options] <source files>\n\
-Recognized source files:\n\
-\  .c             C source file\n\
-\  .i or .p       C source file that should not be preprocessed\n\
-\  .cm            Cminor source file\n\
-\  .s             Assembly file\n\
-\  .S             Assembly file that must be preprocessed\n\
-\  .o             Object file\n\
-\  .a             Library file\n\
-Processing options:\n\
-\  -c             Compile to object file only (no linking), result in <file>.o\n\
-\  -E             Preprocess only, send result to standard output\n\
-\  -S             Compile to assembler only, save result in <file>.s\n\
-\  -o <file>      Generate output in <file>\n" ^
+  {|Usage: ccomp [options] <source files>
+Recognized source files:
+  .c             C source file
+  .i or .p       C source file that should not be preprocessed
+  .cm            Cminor source file
+  .s             Assembly file
+  .S             Assembly file that must be preprocessed
+  .o             Object file
+  .a             Library file
+Processing options:
+  -c             Compile to object file only (no linking), result in <file>.o
+  -E             Preprocess only, send result to standard output
+  -S             Compile to assembler only, save result in <file>.s
+  -o <file>      Generate output in <file>
+|} ^
   prepro_help ^
-"Language support options (use -fno-<opt> to turn off -f<opt>) :\n\
-\  -fbitfields    Emulate bit fields in structs [off]\n\
-\  -flongdouble   Treat 'long double' as 'double' [off]\n\
-\  -fstruct-passing  Support passing structs and unions by value as function\n\
-\                    results or function arguments [off]\n\
-\  -fstruct-return   Like -fstruct-passing (deprecated)\n\
-\  -fvararg-calls Support calls to variable-argument functions [on]\n\
-\  -funprototyped Support calls to old-style functions without prototypes [on]\n\
-\  -fpacked-structs  Emulate packed structs [off]\n\
-\  -finline-asm   Support inline 'asm' statements [off]\n\
-\  -fall          Activate all language support options above\n\
-\  -fnone         Turn off all language support options above\n" ^
+{|Language support options (use -fno-<opt> to turn off -f<opt>) :
+  -fbitfields    Emulate bit fields in structs [off]
+  -flongdouble   Treat 'long double' as 'double' [off]
+  -fstruct-passing  Support passing structs and unions by value as function
+                    results or function arguments [off]
+  -fstruct-return   Like -fstruct-passing (deprecated)
+  -fvararg-calls Support calls to variable-argument functions [on]
+  -funprototyped Support calls to old-style functions without prototypes [on]
+  -fpacked-structs  Emulate packed structs [off]
+  -finline-asm   Support inline 'asm' statements [off]
+  -fall          Activate all language support options above
+  -fnone         Turn off all language support options above
+|}^
  DebugInit.debugging_help ^
-"Optimization options: (use -fno-<opt> to turn off -f<opt>)\n\
-\  -O             Optimize the compiled code [on by default]\n\
-\  -O0            Do not optimize the compiled code\n\
-\  -O1 -O2 -O3    Synonymous for -O\n\
-\  -Os            Optimize for code size in preference to code speed\n\
-\  -ftailcalls    Optimize function calls in tail position [on]\n\
-\  -fconst-prop   Perform global constant propagation  [on]\n\
-\  -ffloat-const-prop <n>  Control constant propagation of floats\n\
-\                   (<n>=0: none, <n>=1: limited, <n>=2: full; default is full)\n\
-\  -fcse          Perform common subexpression elimination [on]\n\
-\  -fredundancy   Perform redundancy elimination [on]\n\
-Code generation options: (use -fno-<opt> to turn off -f<opt>)\n\
-\  -ffpu          Use FP registers for some integer operations [on]\n\
-\  -fsmall-data <n>  Set maximal size <n> for allocation in small data area\n\
-\  -fsmall-const <n>  Set maximal size <n> for allocation in small constant area\n\
-\  -falign-functions <n>  Set alignment (in bytes) of function entry points\n\
-\  -falign-branch-targets <n>  Set alignment (in bytes) of branch targets\n\
-\  -falign-cond-branches <n>  Set alignment (in bytes) of conditional branches\n" ^
+{|Optimization options: (use -fno-<opt> to turn off -f<opt>)
+  -O             Optimize the compiled code [on by default]
+  -O0            Do not optimize the compiled code
+  -O1 -O2 -O3    Synonymous for -O
+  -Os            Optimize for code size in preference to code speed
+  -ftailcalls    Optimize function calls in tail position [on]
+  -fconst-prop   Perform global constant propagation  [on]
+  -ffloat-const-prop <n>  Control constant propagation of floats
+                   (<n>=0: none, <n>=1: limited, <n>=2: full; default is full)
+  -fcse          Perform common subexpression elimination [on]
+  -fredundancy   Perform redundancy elimination [on]
+Code generation options: (use -fno-<opt> to turn off -f<opt>)
+  -ffpu          Use FP registers for some integer operations [on]
+  -fsmall-data <n>  Set maximal size <n> for allocation in small data area
+  -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
+  -falign-functions <n>  Set alignment (in bytes) of function entry points
+  -falign-branch-targets <n>  Set alignment (in bytes) of branch targets
+  -falign-cond-branches <n>  Set alignment (in bytes) of conditional branches|} ^
  target_help ^
  assembler_help ^
  linker_help ^
-"Tracing options:\n\
-\  -dprepro       Save C file after preprocessing in <file>.i\n\
-\  -dparse        Save C file after parsing and elaboration in <file>.parsed.c\n\
-\  -dc            Save generated Compcert C in <file>.compcert.c\n\
-\  -dclight       Save generated Clight in <file>.light.c\n\
-\  -dcminor       Save generated Cminor in <file>.cm\n\
-\  -drtl          Save RTL at various optimization points in <file>.rtl.<n>\n\
-\  -dltl          Save LTL after register allocation in <file>.ltl\n\
-\  -dmach         Save generated Mach code in <file>.mach\n\
-\  -dasm          Save generated assembly in <file>.s\n\
-\  -dall          Save all generated intermediate files in <file>.<ext>\n\
-\  -sdump         Save info for post-linking validation in <file>.json\n\
-\  -doptions      Save the compiler configurations in <file>.opt.json\n\
-General options:\n\
-\  -stdlib <dir>  Set the path of the Compcert run-time library\n\
-\  -v             Print external commands before invoking them\n\
-\  -timings       Show the time spent in various compiler passes\n\
-\  -version       Print the version string and exit\n\
-\  -target <value> Generate code for the given target\n\
-\  -conf <file>   Read configuration from file\n\
-\  @<file>        Read command line options from <file>\n" ^
+{|Tracing options:
+  -dprepro       Save C file after preprocessing in <file>.i
+  -dparse        Save C file after parsing and elaboration in <file>.parsed.c
+  -dc            Save generated Compcert C in <file>.compcert.c
+  -dclight       Save generated Clight in <file>.light.c
+  -dcminor       Save generated Cminor in <file>.cm
+  -drtl          Save RTL at various optimization points in <file>.rtl.<n>
+  -dltl          Save LTL after register allocation in <file>.ltl
+  -dmach         Save generated Mach code in <file>.mach
+  -dasm          Save generated assembly in <file>.s
+  -dall          Save all generated intermediate files in <file>.<ext>
+  -sdump         Save info for post-linking validation in <file>.json
+  -doptions      Save the compiler configurations in <file>.opt.json
+General options:
+  -stdlib <dir>  Set the path of the Compcert run-time library
+  -v             Print external commands before invoking them
+  -timings       Show the time spent in various compiler passes
+  -version       Print the version string and exit
+  -target <value> Generate code for the given target
+  -conf <file>   Read configuration from file
+  @<file>        Read command line options from <file>
+|} ^
   Cerrors.warning_help ^
-"Interpreter mode:\n\
-\  -interp        Execute given .c files using the reference interpreter\n\
-\  -quiet         Suppress diagnostic messages for the interpreter\n\
-\  -trace         Have the interpreter produce a detailed trace of reductions\n\
-\  -random        Randomize execution order\n\
-\  -all           Simulate all possible execution orders\n"
+  {|Interpreter mode:
+  -interp        Execute given .c files using the reference interpreter
+  -quiet         Suppress diagnostic messages for the interpreter
+  -trace         Have the interpreter produce a detailed trace of reductions
+  -random        Randomize execution order
+  -all           Simulate all possible execution orders
+|}
 
 let print_usage_and_exit () =
   printf "%s" usage_string; exit 0

@@ -42,6 +42,7 @@ let assembler_actions =
     assembler_options := s::!assembler_options );]
 
 let assembler_help =
-"Assembling options:\n\
-\  -Wa,<opt>      Pass option <opt> to the assembler\n\
-\  -Xassembler <opt> Pass <opt> as an option to the assembler\n"
+{|Assembling options:
+  -Wa,<opt>      Pass option <opt> to the assembler
+  -Xassembler <opt> Pass <opt> as an option to the assembler
+|}

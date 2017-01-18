@@ -128,37 +128,39 @@ let prepro_actions = [
   @ (if gnu_system then gnu_prepro_actions else [])
 
 let gnu_prepro_help =
-"\  -M            Ouput a rule suitable for make describing the\n\
-\                 dependencies of the main source file\n\
-\  -MM            Like -M but do not mention system header files\n\
-\  -MF <file>     Specifies file <file> as output file for -M or -MM\n\
-\  -MG            Assumes missing header files are generated for -M\n\
-\  -MP            Add a phony target for each dependency other than\n\
-\                 the main file\n\
-\  -MT <target>   Change the target of the rule emitted by dependency\n\
-\                 generation\n\
-\  -MQ <target>   Like -MT but quotes <target>\n\
-\  -nostdinc      Do not search the standard system directories for\n\
-\                 header files\n\
-\  -imacros <file> Like -include but throws output produced by\n\
-\                  preprocessing of <file> away\n\
-\  -idirafter <dir> Search <dir> for header files after all directories\n\
-\                   specified with -I and the standard system directories\n\
-\  -isystem <dir>  Search <dir> for header files after all directories\n\
-\                  specified by -I but before the standard system directories\n\
-\  -iquote <dir>   Like -isystem but only for headers included with\n\
-\                  quotes\n\
-\  -P              Do not generate linemarkers\n\
-\  -C              Do not discard comments\n\
-\  -CC             Do not discard comments, including during macro\n\
-\                  expansion\n"
+{|  -M            Ouput a rule suitable for make describing the
+                 dependencies of the main source file
+  -MM            Like -M but do not mention system header files
+  -MF <file>     Specifies file <file> as output file for -M or -MM
+  -MG            Assumes missing header files are generated for -M
+  -MP            Add a phony target for each dependency other than
+                 the main file
+  -MT <target>   Change the target of the rule emitted by dependency
+                 generation
+  -MQ <target>   Like -MT but quotes <target>
+  -nostdinc      Do not search the standard system directories for
+                 header files
+  -imacros <file> Like -include but throws output produced by
+                  preprocessing of <file> away
+  -idirafter <dir> Search <dir> for header files after all directories
+                   specified with -I and the standard system directories
+  -isystem <dir>  Search <dir> for header files after all directories
+                  specified by -I but before the standard system directories
+  -iquote <dir>   Like -isystem but only for headers included with
+                  quotes
+  -P              Do not generate linemarkers
+  -C              Do not discard comments
+  -CC             Do not discard comments, including during macro
+                  expansion
+|}
 
-let prepro_help = "Preprocessing options:\n\
-\  -I<dir>        Add <dir> to search path for #include files\n\
-\  -include <file> Process <file> as if #include \"<file>\" appears at the first\n\
-\                  line of the primary source file.\n\
-\  -D<symb>=<val> Define preprocessor symbol\n\
-\  -U<symb>       Undefine preprocessor symbol\n\
-\  -Wp,<opt>      Pass option <opt> to the preprocessor\n\
-\  -Xpreprocessor <opt> Pass option <opt> to the preprocessor\n"
+let prepro_help = {|Preprocessing options:
+  -I<dir>        Add <dir> to search path for #include files
+  -include <file> Process <file> as if #include "<file>" appears at the first
+                  line of the primary source file.
+  -D<symb>=<val> Define preprocessor symbol
+  -U<symb>       Undefine preprocessor symbol
+  -Wp,<opt>      Pass option <opt> to the preprocessor
+  -Xpreprocessor <opt> Pass option <opt> to the preprocessor
+|}
   ^ (if gnu_system then gnu_prepro_help else "")

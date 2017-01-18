@@ -35,27 +35,30 @@ let linker exe_name files =
 
 
 let gnu_linker_help =
-"  -nostartfiles  Do not use the standard system startup files when\n\
-\                 linking\n\
-\  -nodefaultlibs Do not use the standard system libraries when\n\
-\                 linking\n\
-\  -nostdlib      Do not use the standard system startup files or\n\
-\                 libraries when linking\n"
+{|  -nostartfiles  Do not use the standard system startup files when
+                 linking
+  -nodefaultlibs Do not use the standard system libraries when
+                 linking
+  -nostdlib      Do not use the standard system startup files or
+                 libraries when linking
+|}
 
 let linker_help =
-"Linking options:\n\
-\  -l<lib>        Link library <lib>\n\
-\  -L<dir>        Add <dir> to search path for libraries\n" ^
+{|Linking options:
+  -l<lib>        Link library <lib>
+  -L<dir>        Add <dir> to search path for libraries
+|} ^
  (if gnu_system then gnu_linker_help else "") ^
-"  -s             Remove all symbol table and relocation information from the\n\
-\                 executable\n\
-\  -static        Prevent linking with the shared libraries\n\
-\  -T <file>      Use <file> as linker command file\n\
-\  -Wl,<opt>      Pass option <opt> to the linker\n\
-\  -WUl,<opt>     Pass option <opt> to the gcc or dcc used for linking\n\
-\  -Xlinker <opt> Pass <opt> as an option to the linker\n\
-\  -u <symb>      Pretend the symbol <symb> is undefined to force linking of\n\
-\                 library modules to define it.\n"
+{|  -s             Remove all symbol table and relocation information from the
+                 executable
+  -static        Prevent linking with the shared libraries
+  -T <file>      Use <file> as linker command file
+  -Wl,<opt>      Pass option <opt> to the linker
+  -WUl,<opt>     Pass option <opt> to the gcc or dcc used for linking
+  -Xlinker <opt> Pass <opt> as an option to the linker
+  -u <symb>      Pretend the symbol <symb> is undefined to force linking of
+                 library modules to define it.
+|}
 
 let linker_actions =
   [ Prefix "-l", Self push_linker_arg;
