@@ -361,6 +361,8 @@ let crash exn =
       rc (Printexc.to_string exn) Version.buildnr Version.tag rsc;
     exit 2
   end else begin
-    Printexc.print_backtrace stderr;
+    let backtrace = Printexc.get_backtrace ()
+    and exc = Printexc.to_string exn in
+    eprintf "Fatal error: uncaught exception %s\n%s" exc backtrace;
     exit 2
   end
