@@ -1644,11 +1644,12 @@ let elab_expr vararg loc env a =
 
   | BUILTIN_OFFSETOF ((spec,dcl), mem) ->
     let (ty,env) = elab_type loc env spec dcl in
+    if  Cutil.incomplete_type env ty then
+      error "offsetof of incomplete type %a" (print_typ env) ty;
     let offset =
       match unroll env ty with
-      | TStruct(id, attrs) ->
-        if  Cutil.incomplete_type env ty then
-          error "offsetof of incomplete type %a" (print_typ env) ty;
+      | TStruct(id,_)
+      | TUnion (id,_)->
         let fld = (wrap Env.find_struct_member loc env (id,mem)) in
         if List.exists (fun fld -> fld.fld_bitfield <> None) fld then
           error "cannot compute the offset of bitfield '%s" mem;
