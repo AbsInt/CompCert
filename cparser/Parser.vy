@@ -37,7 +37,7 @@ Require Import List.
   STRUCT UNION ENUM UNDERSCORE_BOOL PACKED ALIGNAS ATTRIBUTE ASM
 
 %token<cabsloc> CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK
-  RETURN BUILTIN_VA_ARG
+  RETURN BUILTIN_VA_ARG BUILTIN_OFFSETOF
 
 %token EOF
 
@@ -145,6 +145,8 @@ postfix_expression:
     { (CAST typ (COMPOUND_INIT (rev' init)), loc) }
 | loc = LPAREN typ = type_name RPAREN LBRACE init = initializer_list COMMA RBRACE
     { (CAST typ (COMPOUND_INIT (rev' init)), loc) }
+| loc = BUILTIN_OFFSETOF LPAREN typ = type_name COMMA mem = OTHER_NAME RPAREN
+    { (BUILTIN_OFFSETOF typ (fst mem), loc) }
 
 (* Semantic value is in reverse order. *)
 argument_expression_list:

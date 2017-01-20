@@ -1642,6 +1642,22 @@ let elab_expr vararg loc env a =
         error "invalid application of 'alignof' to an incomplete type %a" (print_typ env) ty;
       { edesc = EAlignof ty; etyp =  TInt(size_t_ikind(), []) },env'
 
+  | BUILTIN_OFFSETOF ((spec,dcl), mem) ->
+    let (ty,env) = elab_type loc env spec dcl in
+    let offset =
+      match unroll env ty with
+      | TStruct(id, attrs) ->
+        if  Cutil.incomplete_type env ty then
+          error "offsetof of incomplete type %a" (print_typ env) ty;
+        let fld = (wrap Env.find_struct_member loc env (id,mem)) in
+        if List.exists (fun fld -> fld.fld_bitfield <> None) fld then
+          error "cannot compute the offset of bitfield '%s" mem;
+        Cutil.offsetof env ty fld
+      | _ ->
+        error "request offsetof for member '%s' in something not a structure" mem in
+    let offsetof_const = EConst (CInt(Int64.of_int offset,size_t_ikind (),"")) in
+    { edesc = offsetof_const; etyp = TInt(size_t_ikind(), []) },env
+
   | UNARY(PLUS, a1) ->
       let b1,env = elab env a1 in
       if not (is_arith_type env b1.etyp) then
