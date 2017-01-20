@@ -535,40 +535,25 @@ let sizeof_struct env members =
 
 (* Compute the offset of a struct member *)
 let offsetof env ty fields =
-  let align_field ofs ty =
-    let a =  match alignof env ty with
-      | Some a -> a
-      | None -> assert false in
-    align ofs a in
-  let rec offsetof_rec ofs field rest = function
-    | [] -> ofs
-    | m :: rem as ml ->
-      if m.fld_name = field.fld_name then begin
-        match rest with
-        | [] -> align_field ofs field.fld_typ
-        | _ -> lookup_field ofs field.fld_typ rest
-      end else if m.fld_bitfield = None then begin
-        match alignof env m.fld_typ, sizeof env m.fld_typ with
-        | Some a, Some s -> offsetof_rec (align ofs a + s) field rest rem
-        | _, _ -> assert false (* should never happen *)
-      end else begin
-        let (s, a, ml') = pack_bitfields ml in
-        let ofs = align ofs a + s in
-        offsetof_rec ofs field rest ml'
-      end
-  and lookup_field ofs ty = function
-    | [] -> align_field ofs ty
-    | fld::rest ->
-      begin match unroll env ty with
-        | TStruct (id,_) ->
-          let str = Env.find_struct env id in
-          offsetof_rec ofs fld rest str.ci_members
-        | TUnion (id,_) ->
-          lookup_field ofs fld.fld_typ rest
-        | _ -> assert false
-      end
+  let rec sub acc name = function
+    | [] -> List.rev acc
+    | m::rem -> if m.fld_name = name then
+        List.rev acc
+      else
+        sub (m::acc) name rem in
+  let offset (ofs,ty) field =
+    match unroll env ty with
+    | TStruct (id,_) ->
+      let str = Env.find_struct env id in
+      let pre = sub [] field.fld_name str.ci_members in
+      begin match sizeof_struct env pre ,alignof env field.fld_typ with
+      | Some s, Some a ->
+        (ofs + align s a),field.fld_typ
+      | _ -> assert false end
+    | _ -> ofs,field.fld_typ
   in
-  lookup_field 0  ty (List.rev fields)
+  let fields = List.rev fields in
+  fst (List.fold_left offset (0,ty) fields)
 
 (* Simplified version to compute offsets on structs without bitfields *)
 let struct_layout env members =
