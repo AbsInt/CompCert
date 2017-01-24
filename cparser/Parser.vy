@@ -145,8 +145,8 @@ postfix_expression:
     { (CAST typ (COMPOUND_INIT (rev' init)), loc) }
 | loc = LPAREN typ = type_name RPAREN LBRACE init = initializer_list COMMA RBRACE
     { (CAST typ (COMPOUND_INIT (rev' init)), loc) }
-| loc = BUILTIN_OFFSETOF LPAREN typ = type_name COMMA mem = OTHER_NAME RPAREN
-    { (BUILTIN_OFFSETOF typ (fst mem), loc) }
+| loc = BUILTIN_OFFSETOF LPAREN typ = type_name COMMA mem = designator_list RPAREN
+    { (BUILTIN_OFFSETOF typ (rev mem), loc) }
 
 (* Semantic value is in reverse order. *)
 argument_expression_list:

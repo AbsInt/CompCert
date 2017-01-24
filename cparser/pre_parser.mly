@@ -254,7 +254,7 @@ postfix_expression:
 | postfix_expression LBRACK expression RBRACK
 | postfix_expression LPAREN argument_expression_list? RPAREN
 | BUILTIN_VA_ARG LPAREN assignment_expression COMMA type_name RPAREN
-| BUILTIN_OFFSETOF LPAREN type_name COMMA other_identifier RPAREN
+| BUILTIN_OFFSETOF LPAREN type_name COMMA designator_list RPAREN
 | postfix_expression DOT other_identifier
 | postfix_expression PTR other_identifier
 | postfix_expression INC

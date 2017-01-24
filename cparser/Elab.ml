@@ -1646,14 +1646,39 @@ let elab_expr vararg loc env a =
     let (ty,env) = elab_type loc env spec dcl in
     if  Cutil.incomplete_type env ty then
       error "offsetof of incomplete type %a" (print_typ env) ty;
-      let fld = match unroll env ty with
-        | TStruct(id,_) ->(wrap Env.find_struct_member loc env (id,mem))
-        | TUnion (id,_)->(wrap Env.find_union_member loc env (id,mem))
-        | _ ->
-          error "request offsetof for member '%s' in something not a structure" mem in
-      if List.exists (fun fld -> fld.fld_bitfield <> None) fld then
-        error "cannot compute the offset of bitfield '%s" mem;
-    let offset = Cutil.offsetof env ty fld in
+    let members env ty mem =
+      match ty with
+      | TStruct (id,_) -> wrap Env.find_struct_member loc env (id,mem)
+      | TUnion (id,_) -> wrap Env.find_union_member loc env (id,mem)
+      | _ -> error "request for member '%s' in something not a structure or union" mem in
+    let rec offset_of_list acc env ty = function
+      | [] -> acc,ty
+      | fld::rest -> let off = Cutil.offsetof env ty fld in
+        offset_of_list (acc+off) env fld.fld_typ rest in
+    let offset_of_member (env,off_accu,ty) mem =
+      match mem,unroll env ty with
+      | INFIELD_INIT mem,ty ->
+        let flds = members env ty mem in
+        let flds = List.rev flds in
+        let off,ty = offset_of_list 0 env ty flds in
+        env,off_accu + off,ty
+      | ATINDEX_INIT e,TArray (sub_ty,b,_) ->
+        let e,env = elab env e in
+        let e =
+          begin match Ceval.integer_expr env e,b with
+          | None,_ ->
+            error  "array element designator for is not an integer constant expression"
+          | Some n,Some b -> if n >= b then
+              error "array index %Ld exceeds array bounds" n;
+            n
+          | Some n,None -> assert false
+          end in
+        let size = match sizeof env sub_ty with
+          | None -> assert false (* We expect only complete types *)
+          | Some s -> s in
+        env,off_accu + size * (Int64.to_int e),sub_ty
+      | ATINDEX_INIT _,_ -> error "subscripted value is not an array" in
+    let env,offset,_ = List.fold_left offset_of_member (env,0,ty) mem in
     let offsetof_const = EConst (CInt(Int64.of_int offset,size_t_ikind (),"")) in
     { edesc = offsetof_const; etyp = TInt(size_t_ikind(), []) },env
 

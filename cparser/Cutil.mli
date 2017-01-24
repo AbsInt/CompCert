@@ -112,7 +112,7 @@ val composite_info_def:
 val struct_layout:
   Env.t -> field list -> (string * int) list
 val offsetof:
-  Env.t -> typ -> field list -> int
+  Env.t -> typ -> field -> int
 (* Compute the offset of a struct member *)
 
 (* Type classification functions *)

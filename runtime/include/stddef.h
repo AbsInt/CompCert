@@ -114,7 +114,7 @@ typedef signed int wchar_t;
 #endif
 
 #if defined(_STDDEF_H) && !defined(offsetof)
-#define offsetof(ty,member) (__builtin_offsetof(ty,member))
+#define offsetof(ty,member) (__builtin_offsetof(ty,.member))
 #endif
 
 #endif
