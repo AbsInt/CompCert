@@ -159,7 +159,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
           add_attr_some e.member_bit_offset (add_abbr_entry (0xc,"DW_AT_bit_offset",DW_FORM_data1));
           add_attr_some e.member_bit_size (add_abbr_entry (0xd,"DW_AT_bit_size",DW_FORM_data1));
           add_attr_some e.member_declaration add_declaration;
-          add_name buf e.member_name;
+          add_name_opt buf e.member_name;
           add_type buf;
           (match e.member_data_member_location with
           | None -> ()
@@ -472,7 +472,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_opt_value oc "DW_AT_bit_offset" mb.member_bit_offset print_byte;
       print_opt_value oc "DW_AT_bit_size" mb.member_bit_size print_byte;
       print_opt_value oc  "DW_AT_declaration" mb.member_declaration print_flag;
-      print_string oc "DW_AT_name" mb.member_name;
+      print_opt_value oc "DW_AT_name" mb.member_name print_string;
       print_ref oc "DW_AT_type" mb.member_type;
       print_opt_value oc "DW_AT_data_member_location" mb.member_data_member_location print_data_location
 

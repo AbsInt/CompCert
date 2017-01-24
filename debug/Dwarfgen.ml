@@ -232,7 +232,7 @@ module Dwarfgenaux (Target: TARGET) =
         | None -> None
         | Some s -> Some (DataLocBlock (DW_OP_plus_uconst s)));
         member_declaration = None;
-        member_name = string_entry mem.cfd_name;
+        member_name = if mem.cfd_anon then None else Some (string_entry mem.cfd_name);
         member_type = mem.cfd_typ;
       } in
       new_entry (next_id ()) (DW_TAG_member mem)

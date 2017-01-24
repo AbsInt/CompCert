@@ -395,6 +395,7 @@ let insert_global_declaration env dec =
       let fields = List.map (fun f ->
         {
          cfd_name = f.fld_name;
+         cfd_anon = f.fld_anonymous;
          cfd_typ = insert_type f.fld_typ;
          cfd_bit_size = f.fld_bitfield;
          cfd_bit_offset = None;

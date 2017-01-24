@@ -19,6 +19,7 @@ open Camlcoq
 type composite_field =
     {
      cfd_name:        string;
+     cfd_anon:        bool;
      cfd_typ:         int;
      cfd_bit_size:    int option;
      cfd_bit_offset:  int option;
