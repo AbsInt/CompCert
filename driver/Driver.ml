@@ -74,8 +74,12 @@ let compile_c_file  ifile (ic,prepro) =
 
 let assemble_ast ?(sdump =true) asm source_file =
   if !option_S then begin
-    let oc = open_out_bin (File.output_filename ~final:true source_file ".s") in
+    let oc,close = match !option_o with
+      | Some file when file = "-" -> stdout,(fun _ -> ())
+      | _-> let file_name = (File.output_filename ~final:true source_file ".s") in
+        open_out_bin file_name,close_out in
     PrintAsm.print_program oc asm;
+    close oc;
     ""
   end else begin
     if sdump then dump_jasm asm source_file;
