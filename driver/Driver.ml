@@ -271,6 +271,7 @@ Recognized source files:
   .i or .p       C source file that should not be preprocessed
   .cm            Cminor source file
   .s             Assembly file
+  .sx            Assembly file that must be preprocessed
   .S             Assembly file that must be preprocessed
   .o             Object file
   .a             Library file
@@ -502,6 +503,8 @@ let cmdline_actions =
   Suffix ".s", Self (fun s ->
       push_action process_s_file s; incr num_source_files; incr num_input_files);
   Suffix ".S", Self (fun s ->
+      push_action process_S_file s; incr num_source_files; incr num_input_files);
+  Suffix ".sx", Self (fun s ->
       push_action process_S_file s; incr num_source_files; incr num_input_files);
   Suffix ".o", Self (fun s -> push_linker_arg s; incr num_input_files);
   Suffix ".a", Self (fun s -> push_linker_arg s; incr num_input_files);
