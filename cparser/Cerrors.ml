@@ -21,6 +21,10 @@ open Commandline
 (* Should errors be treated as fatal *)
 let error_fatal = ref false
 
+(* Maximum number of errors, 0 means unlimited *)
+let max_error = ref 0
+
+
 (* Test if color diagnostics are available by testing if stderr is a tty
    and if the environment varibale TERM is set
 *)
@@ -33,6 +37,11 @@ let color_diagnostics =
 
 let num_errors = ref 0
 let num_warnings = ref 0
+
+
+let error_limit_reached  () =
+  let max_err = !max_error in
+  max_err <> 0 && !num_errors >= max_err - 1
 
 let reset () = num_errors := 0; num_warnings := 0
 
@@ -286,7 +295,7 @@ let warning loc ty fmt =
   | SuppressedMsg -> ifprintf err_formatter fmt
 
 let error loc fmt =
-  if !error_fatal then
+  if !error_fatal || error_limit_reached ()then
     fatal_error None loc fmt
   else
     error None loc fmt
@@ -305,7 +314,7 @@ let error_option w =
   let key = string_of_warning w in
   [Exact ("-W"^key), Unit (activate_warning w);
    Exact ("-Wno-"^key), Unit (deactivate_warning w);
-   Exact ("-Werror="^key), Unit ( warning_as_error w);
+   Exact ("-Werror="^key), Unit (warning_as_error w);
    Exact ("-Wno-error="^key), Unit ( warning_not_as_error w)]
 
 let warning_options =
@@ -334,7 +343,8 @@ let warning_options =
    Exact ("-fno-diagnostics-color"), Unset color_diagnostics;
    Exact ("-Werror"), Unit werror;
    Exact ("-Wall"), Unit wall;
-   Exact ("-w"), Unit wnothing;]
+   Exact ("-w"), Unit wnothing;
+   longopt_int ("-fmax-errors") ((:=) max_error);]
 
 let warning_help = {|Diagnostic options:
   -Wall              Enable all warnings
@@ -346,6 +356,7 @@ let warning_help = {|Diagnostic options:
                        specified
   -Wfatal-errors     Turn all errors into fatal errors aborting the compilation
   -fdiagnostics-color Turn on colored diagnostics
+  -fmax-errors=<n>   Maximum number of errors to report
   -fno-diagnostics-color Turn of colored diagnostics
 |}
 

@@ -115,3 +115,20 @@ let parse_cmdline spec =
   with Responsefile.Error s ->
     eprintf "%s" s;
     exit 2
+
+let long_int_action key s =
+  let ls = String.length s
+  and lkey = String.length key in
+  assert (ls > lkey);
+  let s = String.sub s (lkey + 1) (ls - lkey - 1) in
+  try
+    int_of_string s
+  with Failure _ ->
+    eprintf "Argument to option `%s' must be an integer\n" key;
+    exit 2
+
+let longopt_int key f =
+  let act s =
+    let n = long_int_action key s in
+    f n in
+  Prefix (key ^ "="),Self act

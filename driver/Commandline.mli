@@ -40,3 +40,8 @@ val parse_cmdline: (pattern * action) list -> unit
 
 (* Note on precedence: [Exact] patterns are tried first, then the other
    patterns are tried in the order in which they appear in the list. *)
+
+val longopt_int: string -> (int -> unit) -> pattern * action
+(** [longopt_int key fn] generates a pattern and an action for
+    options of the form [key=<n>] and calls [fn] with the integer argument
+*)
