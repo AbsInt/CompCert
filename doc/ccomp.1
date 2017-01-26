@@ -16,8 +16,7 @@ In other words, the executable code it produces is proved to behave exactly as s
 This level of confidence in the correctness of the compilation process is unprecedented and contributes to meeting the highest levels of software assurance.
 In particular, using the CompCert C compiler is a natural complement to applying formal verification techniques (static analysis, program proof, model checking) at the source code level: the correctness proof of CompCert C guarantees that all safety properties verified on the source code automatically hold as well for the generated executable.
 .
-.SH
-RECOGNIZED SOURCE FILES
+.SH RECOGNIZED SOURCE FILES
 .
 .TP
 .B .c
@@ -537,5 +536,14 @@ Randomize execution order.
 .TP
 .B \-all
 Simulate all possible execution orders.
+.
+.SH ENVIRONMENT
+.
+.TP
+.B COMPCERT_CONFIG
+If this environment variable is present, it denotes the path to the CompCert configuration file to be used.
+The variable takes precedence over default search paths or the \fB\-target\fP option, but has a lower priority than the \fB\-conf\fP option.
+.
 .SH BUGS
+.
 To report bugs, please visit <https://github.com/AbsInt/CompCert/issues>.
