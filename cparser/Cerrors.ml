@@ -18,6 +18,7 @@
 open Format
 open Commandline
 
+(* Should errors be treated as fatal *)
 let error_fatal = ref false
 
 (* Test if color diagnostics are available by testing if stderr is a tty
@@ -168,6 +169,9 @@ let wall () =
     CompCert_conformance;
     Inline_asm_sdump;
   ]
+
+let wnothing () =
+  active_warnings :=[]
 
 (* Make all warnings an error *)
 let werror () =
@@ -329,7 +333,8 @@ let warning_options =
    Exact ("-fdiagnostics-color"), Ignore; (* Either output supports it or no color *)
    Exact ("-fno-diagnostics-color"), Unset color_diagnostics;
    Exact ("-Werror"), Unit werror;
-   Exact ("-Wall"), Unit wall;]
+   Exact ("-Wall"), Unit wall;
+   Exact ("-w"), Unit wnothing;]
 
 let warning_help = {|Diagnostic options:
   -Wall              Enable all warnings
