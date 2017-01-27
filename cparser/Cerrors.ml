@@ -24,6 +24,8 @@ let error_fatal = ref false
 (* Maximum number of errors, 0 means unlimited *)
 let max_error = ref 0
 
+(* Whether [-Woption] should be printed *)
+let diagnostics_show_option = ref true
 
 (* Test if color diagnostics are available by testing if stderr is a tty
    and if the environment varibale TERM is set
@@ -211,12 +213,19 @@ let werror () =
 let key_of_warning w =
   match w with
   | Unnamed -> None
-  | _ -> Some ("-W"^(string_of_warning w))
+  | _ -> if !diagnostics_show_option then
+      Some ("-W"^(string_of_warning w))
+    else
+      None
 
 (* Add -Werror to the printed keys *)
-let key_add_werror = function
-  | None -> Some ("-Werror")
-  | Some s -> Some ("-Werror,"^s)
+let key_add_werror w =
+  if !diagnostics_show_option then
+    None
+  else
+    match w with
+    | None -> Some ("-Werror")
+    | Some s -> Some ("-Werror,"^s)
 
 (* Lookup how to print the warning *)
 let classify_warning w =
@@ -344,7 +353,9 @@ let warning_options =
    Exact ("-Werror"), Unit werror;
    Exact ("-Wall"), Unit wall;
    Exact ("-w"), Unit wnothing;
-   longopt_int ("-fmax-errors") ((:=) max_error);]
+   longopt_int ("-fmax-errors") ((:=) max_error);
+   Exact("-fno-diagnostics-show-option"),Unset diagnostics_show_option;
+   Exact("-fdiagnostics-show-option"),Set diagnostics_show_option;]
 
 let warning_help = {|Diagnostic options:
   -Wall              Enable all warnings
@@ -356,8 +367,11 @@ let warning_help = {|Diagnostic options:
                        specified
   -Wfatal-errors     Turn all errors into fatal errors aborting the compilation
   -fdiagnostics-color Turn on colored diagnostics
-  -fmax-errors=<n>   Maximum number of errors to report
   -fno-diagnostics-color Turn of colored diagnostics
+  -fmax-errors=<n>   Maximum number of errors to report
+  -fdiagnostics-show-option Print the option name with mappable diagnostics
+  -fno-diagnostics-show-option Turn of printing of options with mappable
+                               diagnostics
 |}
 
 let raise_on_errors () =
