@@ -271,8 +271,7 @@ Recognized source files:
   .i or .p       C source file that should not be preprocessed
   .cm            Cminor source file
   .s             Assembly file
-  .sx            Assembly file that must be preprocessed
-  .S             Assembly file that must be preprocessed
+  .S or .sx      Assembly file that must be preprocessed
   .o             Object file
   .a             Library file
 Processing options:
@@ -313,7 +312,8 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>)
   -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
   -falign-functions <n>  Set alignment (in bytes) of function entry points
   -falign-branch-targets <n>  Set alignment (in bytes) of branch targets
-  -falign-cond-branches <n>  Set alignment (in bytes) of conditional branches|} ^
+  -falign-cond-branches <n>  Set alignment (in bytes) of conditional branches
+|} ^
  target_help ^
  assembler_help ^
  linker_help ^
