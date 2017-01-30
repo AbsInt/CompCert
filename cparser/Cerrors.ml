@@ -221,11 +221,11 @@ let key_of_warning w =
 (* Add -Werror to the printed keys *)
 let key_add_werror w =
   if !diagnostics_show_option then
-    None
-  else
     match w with
     | None -> Some ("-Werror")
     | Some s -> Some ("-Werror,"^s)
+  else
+    None
 
 (* Lookup how to print the warning *)
 let classify_warning w =
