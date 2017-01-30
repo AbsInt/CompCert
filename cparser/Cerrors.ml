@@ -272,10 +272,31 @@ let pp_key key fmt =
   | Some s -> " ["^s^"]" in
   fprintf fmt "%s%t@." key rsc
 
+(* Different loc output formats *)
+type loc_format =
+  | Default
+  | MSVC
+  | Vi
+
+let diagnostics_format : loc_format ref = ref Default
+
+(* Parse the option string *)
+let parse_loc_format s =
+  let s = String.sub s 21 ((String.length s) - 21) in
+  let loc_fmt = match s with
+  | "ccomp" -> Default
+  | "msvc" -> MSVC
+  | "vi" -> Vi
+  | s -> Printf.eprintf "Invalid value '%s' in '-fdiagnostics-format=%s'\n" s s; exit 2 in
+  diagnostics_format := loc_fmt
+
 (* Print the location or ccomp for the case of unknown loc *)
 let pp_loc fmt (filename,lineno) =
   if filename <> "" && lineno <> -10 && filename <> "cabs loc unknown" then
-    fprintf fmt "%t%s:%d:%t " bc filename lineno rsc
+    match !diagnostics_format with
+    | Default -> fprintf fmt "%t%s:%d:%t " bc filename lineno rsc
+    | MSVC -> fprintf fmt "%t%s(%d):%t " bc filename lineno rsc
+    | Vi -> fprintf fmt "%t%s +%d:%t " bc filename lineno rsc
   else
     fprintf fmt "%tccomp:%t " bc rsc
 
@@ -355,7 +376,9 @@ let warning_options =
    Exact ("-w"), Unit wnothing;
    longopt_int ("-fmax-errors") ((:=) max_error);
    Exact("-fno-diagnostics-show-option"),Unset diagnostics_show_option;
-   Exact("-fdiagnostics-show-option"),Set diagnostics_show_option;]
+   Exact("-fdiagnostics-show-option"),Set diagnostics_show_option;
+   _Regexp("-fdiagnostics-format=\\(ccomp\\|msvc\\|vi\\)"),Self parse_loc_format;
+  ]
 
 let warning_help = {|Diagnostic options:
   -Wall              Enable all warnings
