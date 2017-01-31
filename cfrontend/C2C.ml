@@ -1098,7 +1098,7 @@ let convertFundef loc env fd =
   Hashtbl.add decl_atom id'
     { a_storage = fd.fd_storage;
       a_alignment = None;
-      a_sections = Sections.for_function env id' fd.fd_ret;
+      a_sections = Sections.for_function env id' fd.fd_attrib;
       a_access = Sections.Access_default;
       a_inline = fd.fd_inline && not fd.fd_vararg;  (* PR#15 *)
       a_loc = loc };

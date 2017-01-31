@@ -24,7 +24,7 @@ __attribute((__section__("myconst"))) const int e = 12;
 const char filler4 = 1;
 __attribute((__section__("myconst"))) const int f = 34;
 
-__attribute((__section__("mycode"))) int myfunc(int x) { return x + 1; }
+__attribute((__section__("mycode"))) int * myfunc(int * x) { return x + 1; }
 
 /* Alignment with typedefs and structs */
 

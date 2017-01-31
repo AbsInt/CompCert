@@ -477,6 +477,13 @@ let typespec_rank = function (* Don't change this *)
 
 let typespec_order t1 t2 = compare (typespec_rank t1) (typespec_rank t2)
 
+(* Auxiliary for type declarator elaboration.  Remove the non-type-related
+   attributes from the given type and return those attributes separately. *)
+
+let get_nontype_attrs env ty =
+  let (ta, nta) = List.partition attr_is_type_related (attributes_of_type env ty) in
+  (change_attributes_type env (fun _ -> ta) ty, nta)
+
 (* Is a specifier an anonymous struct/union in the sense of ISO C2011? *)
 
 let is_anonymous_composite spec =
@@ -528,14 +535,14 @@ let rec elab_specifier keep_ty ?(only = false) loc env specifier =
 
   let simple ty = (!sto, !inline, !noreturn ,!typedef, add_attributes_type !attr ty, env) in
 
-  (* As done in CIL, partition !attr into type-related attributes,
+  (* As done in CIL, partition !attr into struct-related attributes,
      which are returned, and other attributes, which are left in !attr.
-     The returned type-related attributes are applied to the
+     The returned struct-related attributes are applied to the
      struct/union/enum being defined.
-     The leftover non-type-related attributes will be applied
+     The leftover non-struct-related attributes will be applied
      to the variable being defined. *)
-  let get_type_attrs () =
-    let (ta, nta) = List.partition attr_is_type_related !attr in
+  let get_struct_attrs () =
+    let (ta, nta) = List.partition attr_is_struct_related !attr in
     attr := nta;
     ta in
 
@@ -594,21 +601,21 @@ let rec elab_specifier keep_ty ?(only = false) loc env specifier =
 
     | [Cabs.Tstruct_union(STRUCT, id, optmembers, a)] ->
         let a' =
-          add_attributes (get_type_attrs()) (elab_attributes env a) in
+          add_attributes (get_struct_attrs()) (elab_attributes env a) in
         let (id', env') =
           elab_struct_or_union keep_ty only Struct loc id optmembers a' env in
         (!sto, !inline, !noreturn, !typedef, TStruct(id', !attr), env')
 
     | [Cabs.Tstruct_union(UNION, id, optmembers, a)] ->
         let a' =
-          add_attributes (get_type_attrs()) (elab_attributes env a) in
+          add_attributes (get_struct_attrs()) (elab_attributes env a) in
         let (id', env') =
           elab_struct_or_union keep_ty only Union loc id optmembers a' env in
         (!sto, !inline, !noreturn, !typedef, TUnion(id', !attr), env')
 
     | [Cabs.Tenum(id, optmembers, a)] ->
         let a' =
-          add_attributes (get_type_attrs()) (elab_attributes env a) in
+          add_attributes (get_struct_attrs()) (elab_attributes env a) in
         let (id', env') =
           elab_enum only loc id optmembers a' env in
         (!sto, !inline, !noreturn, !typedef, TEnum(id', !attr), env')
@@ -641,7 +648,8 @@ and elab_type_declarator keep_ty loc env ty kr_ok = function
   | Cabs.JUSTBASE ->
       ((ty, None), env)
   | Cabs.ARRAY(d, cv_specs, sz) ->
-      let a = elab_cvspecs env cv_specs in
+      let (ty, a) = get_nontype_attrs env ty in
+      let a = add_attributes a (elab_cvspecs env cv_specs) in
       let sz' =
         match sz with
         | None ->
@@ -659,22 +667,25 @@ and elab_type_declarator keep_ty loc env ty kr_ok = function
                 Some 1L in (* produces better error messages later *)
        elab_type_declarator  keep_ty  loc env (TArray(ty, sz', a)) kr_ok  d
   | Cabs.PTR(cv_specs, d) ->
-      let a = elab_cvspecs env cv_specs in
+      let (ty, a) = get_nontype_attrs env ty in
+      let a = add_attributes a (elab_cvspecs env cv_specs) in
       elab_type_declarator keep_ty  loc env (TPtr(ty, a)) kr_ok d
   | Cabs.PROTO(d, (params, vararg)) ->
       elab_return_type loc env ty;
+      let (ty, a) = get_nontype_attrs env ty in
       let params',env' = elab_parameters keep_ty env params in
       let env = if  keep_ty then Env.add_types env env' else env in
-      elab_type_declarator  keep_ty  loc env (TFun(ty, Some params', vararg, [])) kr_ok d
+      elab_type_declarator  keep_ty  loc env (TFun(ty, Some params', vararg, a)) kr_ok d
   | Cabs.PROTO_OLD(d, params) ->
       elab_return_type loc env ty;
+      let (ty, a) = get_nontype_attrs env ty in
       match params with
       | [] ->
-        elab_type_declarator  keep_ty loc env (TFun(ty, None, false, [])) kr_ok d
+        elab_type_declarator  keep_ty loc env (TFun(ty, None, false, a)) kr_ok d
       | _ ->
         if not kr_ok || d <> Cabs.JUSTBASE then
           fatal_error loc "illegal old-style K&R function definition";
-        ((TFun(ty, None, false, []), Some params), env)
+        ((TFun(ty, None, false, a), Some params), env)
 
 (* Elaboration of parameters in a prototype *)
 

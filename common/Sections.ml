@@ -189,8 +189,7 @@ let for_variable env id ty init =
 
 (* Determine sections for a function definition *)
 
-let for_function env id ty_res =
-  let attr = Cutil.attributes_of_type env ty_res in
+let for_function env id attr =
   let si_code =
     try
       (* 1- Section explicitly associated with #use_section *)

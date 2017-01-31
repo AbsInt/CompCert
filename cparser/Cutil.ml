@@ -92,6 +92,12 @@ let attr_is_standard = function
 (* Is an attribute type-related (true) or variable-related (false)? *)
 
 let attr_is_type_related = function
+  | AConst | AVolatile | ARestrict | AAlignas _ -> true
+  | Attr(_, _) -> false
+
+(* Is an attribute related to structs, unions and enum (true) or not (false)? *)
+
+let attr_is_struct_related = function
   | Attr(("packed" | "__packed__"), _) -> true
   | _ -> false
 

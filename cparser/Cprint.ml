@@ -156,10 +156,8 @@ let rec dcl ?(pp_indication=true) pp ty n =
         dcl pp ty
           (fun pp -> fprintf pp " %a" ident id) in
       let n' pp =
-        begin match a with
-        | [] -> n pp
-        | _  -> fprintf pp " (%a%t)" attributes a n
-        end;
+        attributes pp a;
+        n pp;
         fprintf pp "(";
         if pp_indication then fprintf pp "@[<hov 0>";
         begin match args with

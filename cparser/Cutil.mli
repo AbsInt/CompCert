@@ -54,6 +54,8 @@ val change_attributes_type : Env.t -> (attributes -> attributes) -> typ -> typ
   (* Apply the given function to the top-level attributes of the given type *)
 val attr_is_type_related: attribute -> bool
   (* Is an attribute type-related (true) or variable-related (false)? *)
+val attr_is_struct_related: attribute -> bool
+  (* Is an attribute related to structs, unions and enum (true) or not (false)? *)
 val attr_inherited_by_members: attribute -> bool
   (* Is an attribute of a composite inherited by members of the composite? *)
 val strip_attributes_type: typ -> attribute list -> typ
