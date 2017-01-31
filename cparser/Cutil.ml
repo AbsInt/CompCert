@@ -545,7 +545,7 @@ let offsetof env ty field =
     | TStruct (id,_) ->
       let str = Env.find_struct env id in
       let pre = sub [] field.fld_name str.ci_members in
-      begin match sizeof_struct env pre ,alignof env field.fld_typ with
+      begin match sizeof_struct env pre, alignof env field.fld_typ with
       | Some s, Some a ->
         align s a
       | _ -> assert false end
