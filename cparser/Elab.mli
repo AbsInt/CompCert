@@ -14,3 +14,12 @@
 (* *********************************************************************)
 
 val elab_file : Cabs.definition list -> C.program
+  (* This is the main entry point.  It transforms a list of toplevel
+     definitions as produced by the parser into a program in C abstract
+     syntax. *)
+
+val elab_int_constant : Cabs.cabsloc -> string -> int64 * C.ikind
+val elab_float_constant : Cabs.floatInfo -> C.float_cst * C.fkind
+val elab_char_constant : Cabs.cabsloc -> bool -> int64 list -> int64 * C.ikind
+  (* These auxiliary functions are exported so that they can be reused
+     in other projects that deal with C-style source languages. *)
