@@ -1676,8 +1676,10 @@ let elab_expr vararg loc env a =
         env,off_accu + size * (Int64.to_int e),sub_ty
       | ATINDEX_INIT _,_ -> error "subscripted value is not an array" in
     let env,offset,_ = List.fold_left offset_of_member (env,0,ty) mem in
-    let offsetof_const = EConst (CInt(Int64.of_int offset,size_t_ikind (),"")) in
-    { edesc = offsetof_const; etyp = TInt(size_t_ikind(), []) },env
+    let size_t = size_t_ikind () in
+    let offset = Ceval.normalize_int (Int64.of_int offset) size_t in
+    let offsetof_const = EConst (CInt(offset,size_t,"")) in
+    { edesc = offsetof_const; etyp = TInt(size_t, []) },env
 
   | UNARY(PLUS, a1) ->
       let b1,env = elab env a1 in
