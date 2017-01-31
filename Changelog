@@ -1,5 +1,5 @@
-Working version
-===============
+Release 3.0, 2017-02-xx
+=======================
 
 Major improvements:
 
@@ -18,6 +18,43 @@ Major improvements:
   above.) Support for x86-64 is currently available for Linux and MacOS X.
   (Run the configure script with 'x86_64-linux' or 'x86_64-macosx'.)
 
+Language features:
+
+- Support for anonymous structures and unions as members of
+  structures or unions.  (ISO C11, section 6.7.2.1, para 13 and 19.)
+- New built-in functions for ARM and PowerPC:
+  __builtin_ctz, __builtin_ctzl, __builtin_ctzll
+  (count trailing zeros, 32 and 64 bits).
+
+Usability:
+
+- Added options -Wxxx and -Wno-xxx (for various values of "xxx")
+  to control which warnings are emitted.
+- Support response files where additional command-line arguments can
+  be passed (syntax: @file).
+- Improved wording of warning and error messages.
+
+Code generation:
+
+- Support for ARM target processors in big-endian mode.
+- Optimize 64-bit integer division by constants.
+
+Bug fixing:
+
+- Issue #155: on ARM, assembly errors caused by large jump tables for
+  "switch" statements and overflow in accessing constant pools.
+- Issue #151: large inductive definition causes a fatal error in
+  32-bit versions of Coq.
+- Issue #143: handle "%lf" printf() format in the reference interpreter
+- Issue #138: struct declarations in K&R function parameters were ignored.
+- Issues #110, #111, #113, #114, #115, #119, #120, #121, #122, #123, #124,
+  #125, #126, #127, #128, #129, #130, #133, #138, #144: various cases
+  of internal errors and failed assertions that should have been
+  proper errors instead.
+- For __builtin_memcpy_aligned, size and alignment arguments of 64-bit
+  integer type were causing a fatal error on a 32-bit target.
+- ARM and x86 ports: wrong register allocation for some calls to
+  function pointers. 
 
 
 Release 2.7.1, 2016-07-18
