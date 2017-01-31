@@ -220,8 +220,6 @@ let find_union_member env (id, m) =
   with Not_found ->
     raise(Error(No_member(id.name, "union", m)))
 
-
-
 let find_typedef env id =
   try
     IdentMap.find id env.env_typedef
