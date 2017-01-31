@@ -114,6 +114,9 @@ val struct_layout:
 val offsetof:
   Env.t -> typ -> field -> int
 (* Compute the offset of a struct member *)
+val cautious_mul: int64 -> int -> int option
+(* Overflow-avoiding multiplication of an int64 and an int, with
+   result in type int. *)
 
 (* Type classification functions *)
 

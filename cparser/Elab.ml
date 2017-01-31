@@ -1664,16 +1664,16 @@ let elab_expr vararg loc env a =
         env,off_accu + off,ty
       | ATINDEX_INIT e,TArray (sub_ty,_,_) ->
         let e,env = elab env e in
-        let e =
-          begin match Ceval.integer_expr env e with
-          | None ->
-            error  "array element designator for is not an integer constant expression"
-          | Some n-> n
-          end in
+        let e = match Ceval.integer_expr env e with
+          | None -> error  "array element designator for is not an integer constant expression"
+          | Some n-> n in
         let size = match sizeof env sub_ty with
           | None -> assert false (* We expect only complete types *)
           | Some s -> s in
-        env,off_accu + size * (Int64.to_int e),sub_ty
+        let off_accu = match cautious_mul e size with
+          | None -> error "'offsetof' overflows"
+          | Some s -> off_accu + s in
+        env,off_accu,sub_ty
       | ATINDEX_INIT _,_ -> error "subscripted value is not an array" in
     let env,offset,_ = List.fold_left offset_of_member (env,0,ty) mem in
     let size_t = size_t_ikind () in
