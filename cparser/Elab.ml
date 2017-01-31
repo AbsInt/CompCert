@@ -1662,16 +1662,13 @@ let elab_expr vararg loc env a =
         let flds = List.rev flds in
         let off,ty = offset_of_list 0 env ty flds in
         env,off_accu + off,ty
-      | ATINDEX_INIT e,TArray (sub_ty,b,_) ->
+      | ATINDEX_INIT e,TArray (sub_ty,_,_) ->
         let e,env = elab env e in
         let e =
-          begin match Ceval.integer_expr env e,b with
-          | None,_ ->
+          begin match Ceval.integer_expr env e with
+          | None ->
             error  "array element designator for is not an integer constant expression"
-          | Some n,Some b -> if n >= b then
-              error "array index %Ld exceeds array bounds" n;
-            n
-          | Some n,None -> assert false
+          | Some n-> n
           end in
         let size = match sizeof env sub_ty with
           | None -> assert false (* We expect only complete types *)
