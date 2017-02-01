@@ -17,9 +17,22 @@
 
 include Makefile.config
 
+#
+# Variables from Makefile.config:
+# -OCAML_OPT_COMP: can we use the native version
+# -COMPFLAGS: compile options
+# -LINK_OPT: additional linker flags for the native binary
+#
+
 # Menhir configuration.
 
 include Makefile.menhir
+
+#
+# Variables from Makefile.menhir:
+# -MENHIR_INCLUDES: additional menhir include paths
+# -MENHIR_LIBS: additional menhir libraries
+#
 
 # The pre-parser's error message database is compiled as follows.
 
@@ -80,7 +93,7 @@ CCOMP_OBJS:=$(shell $(MODORDER) driver/Driver.cmx)
 
 ccomp: $(CCOMP_OBJS)
 	@echo "Linking $@"
-	@$(OCAMLOPT) -o $@ $(LIBS) $+
+	@$(OCAMLOPT) -o $@ $(LIBS) $(LINK_OPT) $+
 
 ccomp.byte: $(CCOMP_OBJS:.cmx=.cmo)
 	@echo "Linking $@"
@@ -90,7 +103,7 @@ CLIGHTGEN_OBJS:=$(shell $(MODORDER) exportclight/Clightgen.cmx)
 
 clightgen: $(CLIGHTGEN_OBJS)
 	@echo "Linking $@"
-	@$(OCAMLOPT) -o $@ $(LIBS) $+
+	@$(OCAMLOPT) -o $@ $(LIBS) $(LINK_OPT) $+
 
 clightgen.byte: $(CLIGHTGEN_OBJS:.cmx=.cmo)
 	@echo "Linking $@"
