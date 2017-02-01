@@ -36,6 +36,7 @@ let () =
       ("__attribute", fun loc -> ATTRIBUTE loc);
       ("__attribute__", fun loc -> ATTRIBUTE loc);
       ("__builtin_va_arg", fun loc -> BUILTIN_VA_ARG loc);
+      ("__builtin_offsetof", fun loc -> BUILTIN_OFFSETOF loc);
       ("__const", fun loc -> CONST loc);
       ("__const__", fun loc -> CONST loc);
       ("__inline", fun loc -> INLINE loc);
@@ -510,6 +511,7 @@ and singleline_comment = parse
       | UNDERSCORE_BOOL loc -> loop UNDERSCORE_BOOL't loc
       | BREAK loc -> loop BREAK't loc
       | BUILTIN_VA_ARG loc -> loop BUILTIN_VA_ARG't loc
+      | BUILTIN_OFFSETOF loc -> loop BUILTIN_OFFSETOF't loc
       | CASE loc -> loop CASE't loc
       | CHAR loc -> loop CHAR't loc
       | COLON loc -> loop COLON't loc

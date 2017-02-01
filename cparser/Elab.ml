@@ -1642,6 +1642,45 @@ let elab_expr vararg loc env a =
         error "invalid application of 'alignof' to an incomplete type %a" (print_typ env) ty;
       { edesc = EAlignof ty; etyp =  TInt(size_t_ikind(), []) },env'
 
+  | BUILTIN_OFFSETOF ((spec,dcl), mem) ->
+    let (ty,env) = elab_type loc env spec dcl in
+    if  Cutil.incomplete_type env ty then
+      error "offsetof of incomplete type %a" (print_typ env) ty;
+    let members env ty mem =
+      match ty with
+      | TStruct (id,_) -> wrap Env.find_struct_member loc env (id,mem)
+      | TUnion (id,_) -> wrap Env.find_union_member loc env (id,mem)
+      | _ -> error "request for member '%s' in something not a structure or union" mem in
+    let rec offset_of_list acc env ty = function
+      | [] -> acc,ty
+      | fld::rest -> let off = Cutil.offsetof env ty fld in
+        offset_of_list (acc+off) env fld.fld_typ rest in
+    let offset_of_member (env,off_accu,ty) mem =
+      match mem,unroll env ty with
+      | INFIELD_INIT mem,ty ->
+        let flds = members env ty mem in
+        let flds = List.rev flds in
+        let off,ty = offset_of_list 0 env ty flds in
+        env,off_accu + off,ty
+      | ATINDEX_INIT e,TArray (sub_ty,_,_) ->
+        let e,env = elab env e in
+        let e = match Ceval.integer_expr env e with
+          | None -> error  "array element designator for is not an integer constant expression"
+          | Some n-> n in
+        let size = match sizeof env sub_ty with
+          | None -> assert false (* We expect only complete types *)
+          | Some s -> s in
+        let off_accu = match cautious_mul e size with
+          | None -> error "'offsetof' overflows"
+          | Some s -> off_accu + s in
+        env,off_accu,sub_ty
+      | ATINDEX_INIT _,_ -> error "subscripted value is not an array" in
+    let env,offset,_ = List.fold_left offset_of_member (env,0,ty) mem in
+    let size_t = size_t_ikind () in
+    let offset = Ceval.normalize_int (Int64.of_int offset) size_t in
+    let offsetof_const = EConst (CInt(offset,size_t,"")) in
+    { edesc = offsetof_const; etyp = TInt(size_t, []) },env
+
   | UNARY(PLUS, a1) ->
       let b1,env = elab env a1 in
       if not (is_arith_type env b1.etyp) then

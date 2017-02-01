@@ -57,7 +57,7 @@
   AUTO REGISTER INLINE NORETURN CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE
   UNDERSCORE_BOOL CONST VOLATILE VOID STRUCT UNION ENUM CASE DEFAULT IF ELSE
   SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN BUILTIN_VA_ARG ALIGNOF
-  ATTRIBUTE ALIGNAS PACKED ASM
+  ATTRIBUTE ALIGNAS PACKED ASM BUILTIN_OFFSETOF
 
 %token EOF
 
@@ -254,6 +254,7 @@ postfix_expression:
 | postfix_expression LBRACK expression RBRACK
 | postfix_expression LPAREN argument_expression_list? RPAREN
 | BUILTIN_VA_ARG LPAREN assignment_expression COMMA type_name RPAREN
+| BUILTIN_OFFSETOF LPAREN type_name COMMA designator_list RPAREN
 | postfix_expression DOT other_identifier
 | postfix_expression PTR other_identifier
 | postfix_expression INC

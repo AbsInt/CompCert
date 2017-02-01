@@ -533,6 +533,25 @@ let sizeof_struct env members =
       end
   in sizeof_rec 0 members
 
+(* Compute the offset of a struct member *)
+let offsetof env ty field =
+  let rec sub acc name = function
+    | [] -> List.rev acc
+    | m::rem -> if m.fld_name = name then
+        List.rev acc
+      else
+        sub (m::acc) name rem in
+  match unroll env ty with
+    | TStruct (id,_) ->
+      let str = Env.find_struct env id in
+      let pre = sub [] field.fld_name str.ci_members in
+      begin match sizeof_struct env pre, alignof env field.fld_typ with
+      | Some s, Some a ->
+        align s a
+      | _ -> assert false end
+    | TUnion _ -> 0
+    | _ -> assert false
+
 (* Simplified version to compute offsets on structs without bitfields *)
 let struct_layout env members =
   let rec struct_layout_rec mem ofs = function
