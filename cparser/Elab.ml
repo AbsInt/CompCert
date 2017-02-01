@@ -481,8 +481,10 @@ let typespec_order t1 t2 = compare (typespec_rank t1) (typespec_rank t2)
    attributes from the given type and return those attributes separately. *)
 
 let get_nontype_attrs env ty =
-  let (ta, nta) = List.partition attr_is_type_related (attributes_of_type env ty) in
-  (change_attributes_type env (fun _ -> ta) ty, nta)
+  let nta =
+    List.filter (fun a -> not (attr_is_type_related a))
+                (attributes_of_type env ty) in
+  (remove_attributes_type env nta ty, nta)
 
 (* Is a specifier an anonymous struct/union in the sense of ISO C2011? *)
 
