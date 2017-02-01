@@ -142,13 +142,14 @@ let rec dcl ?(pp_indication=true) pp ty n =
       dcl pp t n'
   | TArray(t, sz, a) ->
       let n' pp =
+        n pp;
         begin match a with
-        | [] -> n pp
-        | _  -> fprintf pp " (%a%t)" attributes a n
+        | [] -> fprintf pp "["
+        | _  -> fprintf pp "[%a " attributes a
         end;
         begin match sz with
-        | None -> fprintf pp "[]"
-        | Some i -> fprintf pp "[%Ld]" i
+        | None -> fprintf pp "]"
+        | Some i -> fprintf pp "%Ld]" i
         end in
       dcl pp t n'
   | TFun(tres, args, vararg, a) ->
