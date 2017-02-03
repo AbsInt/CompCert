@@ -42,7 +42,7 @@ let warning loc =
 let print_typ env fmt ty =
   match ty with
   | TNamed _  ->
-      Format.fprintf fmt "'%a' (aka '%a')" Cprint.typ_raw ty Cprint.typ_raw (Cutil.unroll env ty)
+      Format.fprintf fmt "'%a' (aka '%a')" Cprint.typ_raw ty Cprint.typ_raw (unroll env ty)
   | _ -> Format.fprintf fmt "'%a'" Cprint.typ_raw ty
 
 (* Error reporting for Env functions *)
@@ -477,13 +477,6 @@ let typespec_rank = function (* Don't change this *)
 
 let typespec_order t1 t2 = compare (typespec_rank t1) (typespec_rank t2)
 
-(* Is a specifier an anonymous struct/union in the sense of ISO C2011? *)
-
-let is_anonymous_composite spec =
-  List.exists
-    (function SpecType(Tstruct_union(_, None, Some _, _)) -> true
-            | _ -> false)
-    spec
 
 (* Elaboration of a type specifier.  Returns 5-tuple:
      (storage class, "inline" flag, "typedef" flag, elaborated type, new env)
@@ -772,9 +765,6 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
   if sto <> Storage_default then
     error loc "non-default storage in struct or union";
   if fieldlist = [] then
-    if is_anonymous_composite spec then
-       warning loc Celeven_extension  "anonymous structs/unions are a C11 extension"
-    else
       (* This should actually never be triggered, empty structs are captured earlier *)
       warning loc Missing_declarations "declaration does not declare anything";
 
@@ -814,7 +804,7 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
                 error loc "bit-field '%s' width not an integer constant" id;
                 None
           end in
-    let anon_composite = Cutil.is_anonymous_composite ty in
+    let anon_composite = is_anonymous_composite ty in
     if id = "" && not anon_composite && optbitsize = None  then
       warning loc Missing_declarations "declaration does not declare anything";
     { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize'; fld_anonymous = id = "" && anon_composite}
@@ -1644,7 +1634,7 @@ let elab_expr vararg loc env a =
 
   | BUILTIN_OFFSETOF ((spec,dcl), mem) ->
     let (ty,env) = elab_type loc env spec dcl in
-    if  Cutil.incomplete_type env ty then
+    if  incomplete_type env ty then
       error "offsetof of incomplete type %a" (print_typ env) ty;
     let members env ty mem =
       match ty with
@@ -1653,7 +1643,7 @@ let elab_expr vararg loc env a =
       | _ -> error "request for member '%s' in something not a structure or union" mem in
     let rec offset_of_list acc env ty = function
       | [] -> acc,ty
-      | fld::rest -> let off = Cutil.offsetof env ty fld in
+      | fld::rest -> let off = offsetof env ty fld in
         offset_of_list (acc+off) env fld.fld_typ rest in
     let offset_of_member (env,off_accu,ty) mem =
       match mem,unroll env ty with
