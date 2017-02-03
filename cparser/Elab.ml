@@ -18,8 +18,7 @@
 (* Numbered references are to sections of the ISO C99 standard *)
 
 open Machine
-open !Cabs
-open Cabshelper
+open Cabs
 open !C
 open Cerrors
 open Cutil
@@ -2189,7 +2188,7 @@ let elab_KR_function_parameters env params defs loc =
       end;
       paramsenv
   | d -> (* Should never be produced by the parser *)
-      fatal_error (get_definitionloc d)
+      fatal_error (Cabshelper.get_definitionloc d)
                       "Illegal declaration of function parameter" in
   let kr_params_defs,paramsenv =
     let params,paramsenv = mmap elab_param_def env defs in
@@ -2257,7 +2256,7 @@ let elab_fundef env spec name defs body loc =
     fatal_error loc "invalid 'register' storage-class on function";
   begin match kr_params, defs with
   | None, d::_ ->
-    error (get_definitionloc d)
+    error (Cabshelper.get_definitionloc d)
       "old-style parameter declarations in prototyped function definition"
   | _ -> ()
   end;
@@ -2508,7 +2507,7 @@ let rec elab_stmt env ctx s =
             (a1, env, None)
         | Some (FC_DECL def) ->
             let (dcl, env') = elab_definition true (Env.new_scope env) def in
-            let loc = elab_loc (get_definitionloc def) in
+            let loc = elab_loc (Cabshelper.get_definitionloc def) in
             (sskip, env',
              Some(List.map (fun d -> {sdesc = Sdecl d; sloc = loc}) dcl)) in
       let a2',env =
@@ -2598,7 +2597,7 @@ let rec elab_stmt env ctx s =
 
 (* Unsupported *)
   | DEFINITION def ->
-      error (get_definitionloc def) "ill-placed definition";
+      error (Cabshelper.get_definitionloc def) "ill-placed definition";
       sskip,env
 
 and elab_block loc env ctx b =
@@ -2611,7 +2610,7 @@ and elab_block_body env ctx sl =
       [],env
   | DEFINITION def :: sl1 ->
       let (dcl, env') = elab_definition true env def in
-      let loc = elab_loc (get_definitionloc def) in
+      let loc = elab_loc (Cabshelper.get_definitionloc def) in
       let dcl = List.map (fun ((sto,id,ty,_) as d) ->
         Debug.insert_local_declaration sto id ty loc;
         {sdesc = Sdecl d; sloc = loc}) dcl in

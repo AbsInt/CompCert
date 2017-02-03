@@ -124,7 +124,7 @@ Extract Constant Cabs.cabsloc =>
    byteno: int;
    ident : int;
  }".
-Extract Constant Cabs.string => "String.t".
+Extract Inlined Constant Cabs.string => "String.t".
 Extract Constant Cabs.char_code => "int64".
 
 (* Int31 *)
