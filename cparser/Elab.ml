@@ -17,14 +17,12 @@
 
 (* Numbered references are to sections of the ISO C99 standard *)
 
-open Format
 open Machine
 open !Cabs
 open Cabshelper
 open !C
 open Cerrors
 open Cutil
-open Env
 
 (** * Utility functions *)
 
@@ -155,11 +153,11 @@ let enter_or_refine_ident local loc env s sto ty =
   if redef Env.lookup_typedef env s then
     error loc "redefinition of '%s' as different kind of symbol" s;
   begin match previous_def Env.lookup_ident env s with
-  | Some(id, II_ident(old_sto, old_ty))
+  | Some(id, Env.II_ident(old_sto, old_ty))
     when local && Env.in_current_scope env id
                && not (sto = Storage_extern && old_sto = Storage_extern) ->
       error loc "redefinition of '%s'" s
-  | Some(id, II_enum _) when Env.in_current_scope env id ->
+  | Some(id, Env.II_enum _) when Env.in_current_scope env id ->
       error loc "redefinition of '%s' as different kind of symbol" s;
   | _ ->
      ()
@@ -174,7 +172,7 @@ let enter_or_refine_ident local loc env s sto ty =
      prior declarations of this variable with internal or external linkage.
      The variable has linkage. *)
     match previous_def Env.lookup_ident !top_environment s with
-    | Some(id, II_ident(old_sto, old_ty)) ->
+    | Some(id, Env.II_ident(old_sto, old_ty)) ->
         let (new_sto, new_ty) =
           combine_toplevel_definitions loc env s old_sto old_ty sto ty in
         (id, new_sto, Env.add_ident env id new_sto new_ty, new_ty, true)
@@ -389,8 +387,8 @@ let elab_attr_arg loc env a =
   | VARIABLE s ->
       begin try
         match Env.lookup_ident env s with
-        | (id, II_ident(sto, ty)) ->  AIdent s
-        | (id, II_enum v) -> AInt v
+        | (id, Env.II_ident(sto, ty)) ->  AIdent s
+        | (id, Env.II_enum v) -> AInt v
       with Env.Error _ ->
         AIdent s
       end
@@ -818,7 +816,7 @@ and elab_struct_or_union_info keep_ty kind loc env members attrs =
   let m = List.flatten m in
   let m,_ = mmap (fun c fld  ->
       if fld.fld_anonymous then
-        let name = Printf.sprintf "<anon>_%d" c in
+        let name = Format.sprintf "<anon>_%d" c in
         {fld with fld_name = name},c+1
       else
         fld,c) 0 m in
@@ -826,17 +824,15 @@ and elab_struct_or_union_info keep_ty kind loc env members attrs =
     | [] -> ()
     | fld::rest ->
        if fld.fld_anonymous then begin
-         let warn () =
-           warning loc Celeven_extension  "anonymous structs/unions are a C11 extension" in
          let rest = match unroll env fld.fld_typ with
            | TStruct (id,_) ->
-             warn ();
+             warning loc Celeven_extension "anonymous structs/unions are a C11 extension";
              let str = Env.find_struct env' id in
-             str.ci_members@rest
+             str.Env.ci_members@rest
            | TUnion (id,_) ->
-             warn ();
+             warning loc Celeven_extension "anonymous structs/unions are a C11 extension";
              let union = Env.find_union env' id in
-             union.ci_members@rest
+             union.Env.ci_members@rest
            | _ -> rest in
          duplicate acc rest
        end else if fld.fld_name <> "" then begin
@@ -884,21 +880,21 @@ and elab_struct_or_union keep_ty only kind loc tag optmembers attrs env =
          and the composite was bound in another scope,
          create a new incomplete composite instead via the case
          "_, None" below. *)
-      if ci.ci_kind <> kind then
+      if ci.Env.ci_kind <> kind then
         fatal_error loc "use of '%s' with tag type that does not match previous declaration" tag;
       warn_attrs();
       (tag', env)
-  | Some(tag', ({ci_sizeof = None} as ci)), Some members
+  | Some(tag', ({Env.ci_sizeof = None} as ci)), Some members
     when Env.in_current_scope env tag' ->
-      if ci.ci_kind <> kind then
+      if ci.Env.ci_kind <> kind then
         error loc "use of '%s' with tag type that does not match previous declaration" tag;
       (* finishing the definition of an incomplete struct or union *)
       let (ci', env') = elab_struct_or_union_info keep_ty kind loc env members attrs in
       (* Emit a global definition for it *)
-      emit_elab env' loc (Gcompositedef(kind, tag', attrs, ci'.ci_members));
+      emit_elab env' loc (Gcompositedef(kind, tag', attrs, ci'.Env.ci_members));
       (* Replace infos but keep same ident *)
       (tag', Env.add_composite env' tag' ci')
-  | Some(tag', {ci_sizeof = Some _}), Some _
+  | Some(tag', {Env.ci_sizeof = Some _}), Some _
     when Env.in_current_scope env tag' ->
       error loc "redefinition of struct or union '%s'" tag;
       (tag', env)
@@ -923,7 +919,7 @@ and elab_struct_or_union keep_ty only kind loc tag optmembers attrs env =
       let (ci2, env'') =
         elab_struct_or_union_info keep_ty kind loc env' members attrs in
       (* emit a definition *)
-      emit_elab env'' loc (Gcompositedef(kind, tag', attrs, ci2.ci_members));
+      emit_elab env'' loc (Gcompositedef(kind, tag', attrs, ci2.Env.ci_members));
       (* Replace infos but keep same ident *)
       (tag', Env.add_composite env'' tag' ci2)
 
@@ -972,7 +968,7 @@ and elab_enum only loc tag optmembers attrs env =
           let (dcl2, env2) = elab_members env1 nextval1 tl in
           (dcl1 :: dcl2, env2) in
       let (dcls, env') = elab_members env 0L members in
-      let info = { ei_members = dcls; ei_attr = attrs } in
+      let info = { Env.ei_members = dcls; ei_attr = attrs } in
       let (tag', env'') = Env.enter_enum env' tag info in
       emit_elab env' loc (Genumdef(tag', attrs, dcls));
       (tag', env'')
@@ -1088,11 +1084,11 @@ module I = struct
   let rec zipname = function
     | Ztop(name, ty) -> name
     | Zarray(z, ty, sz, dfl, before, idx, after) ->
-        sprintf "%s[%Ld]" (zipname z) idx
+        Format.sprintf "%s[%Ld]" (zipname z) idx
     | Zstruct(z, id, before, fld, after) ->
-        sprintf "%s.%s" (zipname z) fld.fld_name
+        Format.sprintf "%s.%s" (zipname z) fld.fld_name
     | Zunion(z, id, fld) ->
-        sprintf "%s.%s" (zipname z) fld.fld_name
+        Format.sprintf "%s.%s" (zipname z) fld.fld_name
 
   let name (z, i) = zipname z
 
@@ -1136,7 +1132,7 @@ module I = struct
     | TStruct(id, _), Init_struct(id', (fld1, i1) :: flds) ->
         Some(Zstruct(z, id, [], fld1, flds), i1)
     | TUnion(id, _), Init_union(id', fld, i) ->
-        begin match (Env.find_union env id).ci_members with
+        begin match (Env.find_union env id).Env.ci_members with
         | [] -> None
         | fld1 :: _ ->
             Some(Zunion(z, id, fld1),
@@ -1215,7 +1211,7 @@ module I = struct
                   member env zi name
                 else
                   find rem
-           in find (Env.find_union env id).ci_members
+           in find (Env.find_union env id).Env.ci_members
          end
     | (TStruct _ | TUnion _), Init_single a ->
         member env (z, default_init env ty) name
@@ -1422,9 +1418,9 @@ let elab_expr vararg loc env a =
 
   | VARIABLE s ->
       begin match wrap Env.lookup_ident loc env s with
-      | (id, II_ident(sto, ty)) ->
+      | (id, Env.II_ident(sto, ty)) ->
           { edesc = EVar id; etyp = ty },env
-      | (id, II_enum v) ->
+      | (id, Env.II_enum v) ->
           { edesc = EConst(CEnum(id, v)); etyp = TInt(enum_ikind, []) },env
       end
 
@@ -1512,7 +1508,7 @@ let elab_expr vararg loc env a =
   | BUILTIN_VA_ARG (a2, a3) ->
       let ident =
         match wrap Env.lookup_ident loc env "__builtin_va_arg" with
-          | (id, II_ident(sto, ty)) -> { edesc = EVar id; etyp = ty }
+          | (id, Env.II_ident(sto, ty)) -> { edesc = EVar id; etyp = ty }
           | _ -> assert false
       in
       let b2,env = elab env a2 in
@@ -2090,7 +2086,7 @@ let enter_typedefs loc env sto dl =
     match previous_def Env.lookup_typedef env s with
     | Some (s',ty') ->
         if equal_types env ty ty' then begin
-          warning loc Cerrors.Celeven_extension "redefinition of typedef '%s' is C11 extension" s;
+          warning loc Celeven_extension "redefinition of typedef '%s' is C11 extension" s;
           env
         end else begin
           error loc "typedef redefinition with different types (%a vs %a)"
@@ -2242,7 +2238,7 @@ let elab_KR_function_parameters env params defs loc =
 
 let inherit_vararg env s sto ty =
   match previous_def Env.lookup_ident env s with
-  | Some(id, II_ident(_, old_ty))
+  | Some(id, Env.II_ident(_, old_ty))
     when sto = Storage_extern || Env.in_current_scope env id ->
     begin
       match old_ty, ty with
@@ -2276,7 +2272,7 @@ let elab_fundef env spec name defs body loc =
     | ty, None ->
         (ty, [],env1)
     | TFun(ty_ret, None, false, attr), Some params ->
-        warning loc Cerrors.CompCert_conformance "non-prototype, pre-standard function definition, converting to prototype form";
+        warning loc CompCert_conformance "non-prototype, pre-standard function definition, converting to prototype form";
         let (params', extra_decls,env) =
           elab_KR_function_parameters env params defs loc in
         (TFun(ty_ret, Some params', inherit_vararg env s sto ty, attr), extra_decls,env)
