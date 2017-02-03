@@ -478,12 +478,17 @@ let typespec_rank = function (* Don't change this *)
 let typespec_order t1 t2 = compare (typespec_rank t1) (typespec_rank t2)
 
 (* Auxiliary for type declarator elaboration.  Remove the non-type-related
-   attributes from the given type and return those attributes separately. *)
+   attributes from the given type and return those attributes separately.
+   If the type is a function type, keep function-related attributes
+   attached to the type. *)
 
 let get_nontype_attrs env ty =
-  let nta =
-    List.filter (fun a -> not (attr_is_type_related a))
-                (attributes_of_type env ty) in
+  let to_be_removed a =
+    match class_of_attribute a with
+    | Attr_type -> false
+    | Attr_function -> not (is_function_type env ty)
+    | _ -> true in
+  let nta = List.filter to_be_removed (attributes_of_type env ty) in
   (remove_attributes_type env nta ty, nta)
 
 (* Is a specifier an anonymous struct/union in the sense of ISO C2011? *)
@@ -544,7 +549,8 @@ let rec elab_specifier keep_ty ?(only = false) loc env specifier =
      The leftover non-struct-related attributes will be applied
      to the variable being defined. *)
   let get_struct_attrs () =
-    let (ta, nta) = List.partition attr_is_struct_related !attr in
+    let (ta, nta) =
+      List.partition (fun a -> class_of_attribute a = Attr_struct) !attr in
     attr := nta;
     ta in
 

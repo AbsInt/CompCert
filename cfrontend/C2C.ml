@@ -267,6 +267,19 @@ let builtins =
   { typedefs = builtins_generic.typedefs @ CBuiltins.builtins.typedefs;
     functions = builtins_generic.functions @ CBuiltins.builtins.functions }
 
+(** ** The known attributes *)
+
+let attributes = [
+  (* type-related *)
+  ("aligned", Cutil.Attr_type);
+  (* struct-related *)
+  ("packed", Cutil.Attr_struct);
+  (* function-related (currently none) *)
+  (* name-related *)
+  ("section", Cutil.Attr_name)
+]
+  
+
 (** ** Functions used to handle string literals *)
 
 let stringNum = ref 0   (* number of next global for string literals *)

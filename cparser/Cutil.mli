@@ -52,16 +52,31 @@ val erase_attributes_type : Env.t -> typ -> typ
   (* Erase the attributes of the given type. *)
 val change_attributes_type : Env.t -> (attributes -> attributes) -> typ -> typ
   (* Apply the given function to the top-level attributes of the given type *)
-val attr_is_type_related: attribute -> bool
-  (* Is an attribute type-related (true) or variable-related (false)? *)
-val attr_is_struct_related: attribute -> bool
-  (* Is an attribute related to structs, unions and enum (true) or not (false)? *)
+
+type attribute_class =
+  | Attr_name           (* Attribute applies to the names being declared  *)
+  | Attr_type           (* Attribute applies to types *)
+  | Attr_struct         (* Attribute applies to struct, union and enum *)
+  | Attr_function       (* Attribute applies to function types and decls *)
+  | Attr_unknown        (* Not a declared attribute *)
+
+val declare_attribute: string -> attribute_class -> unit
+val declare_attributes: (string * attribute_class) list -> unit
+  (* Register the given custom attribute names with the given classes. *)
+val class_of_attribute: attribute -> attribute_class
+  (* Return the class of the given attribute.  Standard attributes
+     have class [Attr_type].  Custom attributes have the class that
+     was given to them using [declare_attribute], or [Attr_unknown]
+     if not declared. *)
 val attr_inherited_by_members: attribute -> bool
   (* Is an attribute of a composite inherited by members of the composite? *)
+
+
 val strip_attributes_type: typ -> attribute list -> typ
   (* Remove all attributes from the given type that are not contained in the list *)
 val strip_last_attribute: typ -> attribute option * typ
   (* Remove the last top level attribute and return it *)
+
 
 (* Type compatibility *)
 

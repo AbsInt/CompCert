@@ -540,6 +540,7 @@ let _ =
       | _         -> assert false
       end;
     Builtins.set C2C.builtins;
+    Cutil.declare_attributes C2C.attributes;
     CPragmas.initialize();
     parse_cmdline cmdline_actions;
     DebugInit.init (); (* Initialize the debug functions *)

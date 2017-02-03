@@ -37,6 +37,15 @@ module IdentMap = Map.Make(Ident)
 
 (* Operations on attributes *)
 
+(* Normalize the name of an attribute, removing starting and trailing '__' *)
+
+let re_normalize_attrname = Str.regexp "^__\\(.*\\)__$"
+
+let normalize_attrname a =
+  if Str.string_match re_normalize_attrname a 0
+  then Str.matched_group 1 a
+  else a
+
 (* Lists of attributes are kept sorted in increasing order *)
 
 let rec add_attributes (al1: attributes) (al2: attributes) =
@@ -83,23 +92,34 @@ let rec remove_custom_attributes (names: string list)  (al: attributes) =
   | a :: tl ->
       a :: remove_custom_attributes names tl
 
+(* Classification of attributes *)
+
+type attribute_class =
+  | Attr_name           (* Attribute applies to the names being declared  *)
+  | Attr_type           (* Attribute applies to types *)
+  | Attr_struct         (* Attribute applies to struct, union and enum *)
+  | Attr_function       (* Attribute applies to function types and decls *)
+  | Attr_unknown        (* Unknown attribute *)
+      
+let attr_class : (string, attribute_class) Hashtbl.t = Hashtbl.create 32
+
+let declare_attribute name cls =
+  Hashtbl.replace attr_class (normalize_attrname name) cls
+
+let declare_attributes l =
+  List.iter (fun (n,c) -> declare_attribute n c) l
+
+let class_of_attribute = function
+  | AConst | AVolatile | ARestrict | AAlignas _ -> Attr_type
+  | Attr(name, args) ->
+      try Hashtbl.find attr_class (normalize_attrname name)
+      with Not_found -> Attr_unknown
+
 (* Is an attribute a ISO C standard attribute? *)
 
 let attr_is_standard = function
   | AConst | AVolatile | ARestrict -> true
   | AAlignas _ | Attr _ -> false
-
-(* Is an attribute type-related (true) or variable-related (false)? *)
-
-let attr_is_type_related = function
-  | AConst | AVolatile | ARestrict | AAlignas _ -> true
-  | Attr(_, _) -> false
-
-(* Is an attribute related to structs, unions and enum (true) or not (false)? *)
-
-let attr_is_struct_related = function
-  | Attr(("packed" | "__packed__"), _) -> true
-  | _ -> false
 
 (* Is an attribute applicable to a whole array (true) or only to
    array elements (false)? *)
