@@ -19,7 +19,7 @@
 
 open Machine
 open Cabs
-open !C
+open C
 open Cerrors
 open Cutil
 
@@ -1698,7 +1698,7 @@ let elab_expr vararg loc env a =
       | EVar id ->
           begin match wrap Env.find_ident loc env id with
           | Env.II_ident(Storage_register, _) ->
-              err "address of register variable '%s' requested" id.name
+              err "address of register variable '%s' requested" id.C.name
           | _ -> ()
           end
       | EUnop(Odot f, b2) ->
