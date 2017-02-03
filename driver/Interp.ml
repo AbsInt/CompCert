@@ -12,7 +12,7 @@
 
 (* Interpreting CompCert C sources *)
 
-open !Format
+open Format
 open Camlcoq
 open AST
 open Integers
@@ -20,8 +20,8 @@ open Values
 open Memory
 open Globalenvs
 open Events
-open !Ctypes
-open !Csyntax
+open Ctypes
+open Csyntax
 open Csem
 
 (* Configuration *)
@@ -389,7 +389,7 @@ let do_external_function id sg ge w args m =
       extract_string m b ofs >>= fun fmt ->
       let fmt' = do_printf m fmt args' in
       let len = coqint_of_camlint (Int32.of_int (String.length fmt')) in
-      print_string fmt';
+      Format.print_string fmt';
       flush stdout;
       convert_external_args ge args sg.sig_args >>= fun eargs ->
       Some(((w, [Event_syscall(id, eargs, EVint len)]), Vint len), m)
@@ -598,8 +598,8 @@ let change_main_function p old_main old_main_ty =
       fn_params = []; fn_vars = []; fn_body = body } in
   let new_main_id = intern_string "___main" in
   { prog_main = new_main_id;
-    Ctypes.prog_defs = (new_main_id, Gfun(Internal new_main_fn)) :: p.Ctypes.prog_defs;
-    prog_public = p.prog_public;
+    Ctypes.prog_defs = (new_main_id, Gfun(Ctypes.Internal new_main_fn)) :: p.Ctypes.prog_defs;
+    Ctypes.prog_public = p.Ctypes.prog_public;
     prog_types = p.prog_types;
     prog_comp_env = p.prog_comp_env }
 
@@ -609,17 +609,17 @@ let rec find_main_function name = function
   | (id, Gvar v) :: gdl -> find_main_function name gdl
 
 let fixup_main p =
-  match find_main_function p.Ctypes.prog_main p.prog_defs with
+  match find_main_function p.Ctypes.prog_main p.Ctypes.prog_defs with
   | None ->
       fprintf err_formatter "ERROR: no main() function@.";
       None
   | Some main_fd ->
       match type_of_fundef main_fd with
-      | Tfunction(Tnil, Tint(I32, Signed, _), _) ->
+      | Tfunction(Tnil, Ctypes.Tint(I32, Signed, _), _) ->
           Some p
-      | Tfunction(Tcons(Tint _, Tcons(Tpointer(Tpointer(Tint(I8,_,_),_),_), Tnil)),
-                  Tint _, _) as ty ->
-          Some (change_main_function p p.prog_main ty)
+      | Tfunction(Tcons(Ctypes.Tint _, Tcons(Tpointer(Tpointer(Ctypes.Tint(I8,_,_),_),_), Tnil)),
+                  Ctypes.Tint _, _) as ty ->
+          Some (change_main_function p p.Ctypes.prog_main ty)
       | _ ->
           fprintf err_formatter "ERROR: wrong type for main() function@.";
           None
