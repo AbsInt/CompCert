@@ -1,0 +1,39 @@
+dist: trusty
+sudo: required
+language: ocaml
+cache:
+  apt: true
+  directories:
+  - $HOME/.opam
+addons:
+  apt:
+    sources:
+    - avsm
+    packages:
+    - opam
+    - aspcud
+env:
+  global:
+  - NJOBS=2
+  # system is == 4.02.3
+  - COMPILER="system"
+  # Main test targets
+  matrix:
+  - TEST_TARGET="x86_32-linux"
+  - TEST_TARGET="x86_64-linux"
+
+install:
+- "[ -e .opam ] || opam init -j ${NJOBS} --compiler=${COMPILER} -n -y"
+- eval $(opam config env)
+- opam config var root
+- opam install -j ${NJOBS} -y menhir coq=8.5.3 ${EXTRA_OPAM}
+- opam list
+
+script:
+- echo 'Configuring Compcert...' && echo -en 'travis_fold:start:compcert.config\\r'
+- ./configure ${TEST_TARGET} ${EXTRA_CONF}
+- echo -en 'travis_fold:end:compcert.config\\r'
+
+- echo 'Building Compcert...' && echo -en 'travis_fold:start:compcert.build\\r'
+- make -j ${NJOBS}
+- echo -en 'travis_fold:end:compcert.build\\r'
