@@ -10,9 +10,8 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-open AST
 open BinNums
-open !C
+open C
 open Camlcoq
 open DebugTypes
 open Sections
@@ -79,11 +78,11 @@ val open_scope: atom -> int -> positive -> unit
 
 val close_scope: atom -> int -> positive -> unit
 
-val start_live_range: (atom * atom) -> positive -> (int * int builtin_arg) -> unit
+val start_live_range: (atom * atom) -> positive -> (int * int AST.builtin_arg) -> unit
 
 val end_live_range: (atom * atom) -> positive -> unit
 
-val stack_variable: (atom * atom) -> int * int builtin_arg -> unit
+val stack_variable: (atom * atom) -> int * int AST.builtin_arg -> unit
 
 val add_label: atom -> positive -> int -> unit
 
