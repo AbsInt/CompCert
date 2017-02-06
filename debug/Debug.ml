@@ -10,9 +10,8 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-open AST
 open BinNums
-open !C
+open C
 open Camlcoq
 open DwarfTypes
 open Sections
@@ -38,9 +37,9 @@ type implem =
       add_lvar_scope: int -> ident -> int -> unit;
       open_scope: atom -> int -> positive -> unit;
       close_scope: atom -> int -> positive -> unit;
-      start_live_range: (atom * atom) -> positive -> int * int builtin_arg -> unit;
+      start_live_range: (atom * atom) -> positive -> int * int AST.builtin_arg -> unit;
       end_live_range: (atom * atom) -> positive -> unit;
-      stack_variable: (atom * atom) -> int * int builtin_arg -> unit;
+      stack_variable: (atom * atom) -> int * int AST.builtin_arg -> unit;
       add_label: atom -> positive -> int -> unit;
       atom_parameter: ident -> ident -> atom -> unit;
       compute_diab_file_enum: (section_name -> int) -> (string-> int) -> (unit -> unit) -> unit;

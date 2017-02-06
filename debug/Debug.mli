@@ -10,8 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-open AST
-open !C
+open C
 open Camlcoq
 open DwarfTypes
 open BinNums
@@ -37,9 +36,9 @@ type implem =
      add_lvar_scope: int -> ident -> int -> unit;
      open_scope: atom -> int -> positive -> unit;
      close_scope: atom -> int -> positive -> unit;
-     start_live_range: (atom * atom) -> positive -> int * int builtin_arg -> unit;
+     start_live_range: (atom * atom) -> positive -> int * int AST.builtin_arg -> unit;
      end_live_range: (atom * atom) -> positive -> unit;
-     stack_variable: (atom * atom) -> int * int builtin_arg -> unit;
+     stack_variable: (atom * atom) -> int * int AST.builtin_arg -> unit;
      add_label: atom -> positive -> int -> unit;
      atom_parameter: ident -> ident -> atom -> unit;
      compute_diab_file_enum: (section_name -> int) -> (string-> int) -> (unit -> unit) -> unit;
@@ -70,9 +69,9 @@ val enter_function_scope: int -> int -> unit
 val add_lvar_scope: int -> ident -> int -> unit
 val open_scope: atom -> int -> positive -> unit
 val close_scope: atom -> int -> positive -> unit
-val start_live_range: (atom * atom) -> positive -> (int * int builtin_arg) -> unit
+val start_live_range: (atom * atom) -> positive -> (int * int AST.builtin_arg) -> unit
 val end_live_range: (atom * atom) -> positive -> unit
-val stack_variable: (atom * atom) -> int * int builtin_arg -> unit
+val stack_variable: (atom * atom) -> int * int AST.builtin_arg -> unit
 val add_label: atom -> positive -> int -> unit
 val generate_debug_info: (atom -> string) -> string -> debug_entries option
 val atom_parameter: ident -> ident -> atom -> unit
