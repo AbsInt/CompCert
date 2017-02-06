@@ -14,7 +14,6 @@
 
 open Printf
 open Fileinfo
-open !Datatypes
 open Maps
 open Camlcoq
 open Sections
