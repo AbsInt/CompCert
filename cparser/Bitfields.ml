@@ -17,9 +17,8 @@
 
 (* Assumes: nothing. *)
 
-open Printf
 open Machine
-open !C
+open C
 open Cutil
 open Transform
 
@@ -67,7 +66,9 @@ let is_signed_enum_bitfield env sid fld eid n =
   else if List.for_all (fun (_, v, _) -> int_representable v n true) info.Env.ei_members
   then true
   else begin
-    Cerrors.warning Cutil.no_loc Cerrors.Unnamed "not all values of type 'enum %s' can be represented in bit-field '%s' of struct '%s' (%d bits are not enough)" eid.name fld sid.C.name n;
+    Cerrors.warning Cutil.no_loc Cerrors.Unnamed
+      "not all values of type 'enum %s' can be represented in bit-field '%s' of struct '%s' (%d bits are not enough)"
+      eid.C.name fld sid.C.name n;
     false
   end
 
@@ -117,7 +118,7 @@ let rec transf_struct_members env id count = function
           transf_struct_members env id count ml'
         else begin
           (* Create integer field of sufficient size for this bitfield group *)
-          let carrier = sprintf "__bf%d" count in
+          let carrier = Printf.sprintf "__bf%d" count in
           let carrier_ikind = unsigned_ikind_for_carrier nbits in
           let carrier_typ = TInt(carrier_ikind, []) in
           (* Enter each field with its bit position, size, signedness *)
@@ -148,7 +149,7 @@ let rec transf_union_members env id count = function
       (match m.fld_bitfield with
       | None ->  m::transf_union_members env id count ms
       | Some nbits ->
-          let carrier = sprintf "__bf%d" count in
+          let carrier = Printf.sprintf "__bf%d" count in
           let carrier_ikind = unsigned_ikind_for_carrier nbits in
           let carrier_typ = TInt(carrier_ikind, []) in
           let signed =
@@ -200,7 +201,7 @@ let insertion_mask bf =
       (Int64.pred (Int64.shift_left 1L bf.bf_size))
       bf.bf_pos in
   (* Give the mask an hexadecimal string representation, nicer to read *)
-  {edesc = EConst(CInt(m, IUInt, sprintf "0x%LXU" m)); etyp = TInt(IUInt, [])}
+  intconst ~hex:true m IUInt
 
 let eshift env op a b =
   let ty = unary_conversion env a.etyp in
@@ -282,9 +283,7 @@ let bitfield_initializer bf i =
       let m = Int64.pred (Int64.shift_left 1L bf.bf_size) in
       let e_cast =
         if bf.bf_bool then ecast (TInt(IBool,[])) e else e in
-      let e_mask =
-        {edesc = EConst(CInt(m, IUInt, sprintf "0x%LXU" m));
-         etyp = TInt(IUInt, [])} in
+      let e_mask = intconst ~hex:true m IUInt in
       let e_and =
         {edesc = EBinop(Oand, e_cast, e_mask, TInt(IUInt,[]));
          etyp = TInt(IUInt,[])} in
