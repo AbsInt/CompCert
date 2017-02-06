@@ -17,7 +17,7 @@
    including function calls in expressions, matches, while statements, etc. */
 
 %{
-open !Datatypes
+open Datatypes
 open Camlcoq
 open BinNums
 open Integers
