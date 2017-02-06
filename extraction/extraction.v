@@ -40,6 +40,10 @@ Require Import ExtrOcamlString.
 (* Coqlib *)
 Extract Inlined Constant Coqlib.proj_sumbool => "(fun x -> x)".
 
+(* Datatypes *)
+Extract Inlined Constant Datatypes.fst => "fst".
+Extract Inlined Constant Datatypes.snd => "snd".
+
 (* Decidable *)
 
 Extraction Inline DecidableClass.Decidable_witness DecidableClass.decide
