@@ -981,8 +981,12 @@ let int_pointer_conversion env tfrom tto =
 
 (* Construct an integer constant *)
 
-let intconst v ik =
-  { edesc = EConst(CInt(v, ik, "")); etyp = TInt(ik, []) }
+let intconst ?hex v ik =
+  let ist = match hex with
+    | Some hex  when hex ->
+        Printf.sprintf "0x%LXU" v
+    | _ -> "" in
+  { edesc = EConst(CInt(v, ik, ist)); etyp = TInt(ik, []) }
 
 (* Construct the 0 float constant of double type *)
 

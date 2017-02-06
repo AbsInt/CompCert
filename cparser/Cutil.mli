@@ -221,8 +221,8 @@ val field_of_arrow_access: Env.t -> typ -> string -> field
 
 (* Constructors *)
 
-val intconst : int64 -> ikind -> exp
-  (* Build expression for given integer constant. *)
+val intconst : ?hex:bool -> int64 -> ikind -> exp
+  (* Build expression for given integer constant with optional hex string. *)
 val floatconst0 : exp
   (* Build expression for (double)0. *)
 val nullconst : exp
