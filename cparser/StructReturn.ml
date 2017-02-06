@@ -19,7 +19,7 @@
 
 open Machine
 open Configuration
-open !C
+open C
 open Cutil
 open Transform
 
@@ -252,7 +252,7 @@ and transf_funargs env = function
       | Param_ref_caller ->
           (id, TPtr(t', [])) :: args'
       | Param_flattened(n, sz, al) ->
-          list_map_n (fun _ -> (Env.fresh_ident id.name, uint)) n
+          list_map_n (fun _ -> (Env.fresh_ident id.C.name, uint)) n
           @ args'
 
 (* Expressions: transform calls + rewrite the types *)
@@ -324,7 +324,7 @@ and transf_call env ctx opt_lhs fn args ty =
     | None -> e
     | Some lhs -> eassign lhs e in
   match fn with
-  | {edesc = EVar {name = "__builtin_va_arg"}} ->
+  | {edesc = EVar {C.name = "__builtin_va_arg"}} ->
       (* Do not transform the call in this case *)
       opt_eassign {edesc = ECall(fn, args'); etyp = ty}
   | _ ->
@@ -525,8 +525,8 @@ let rec transf_funparams loc env params =
            actions,
            IdentMap.add x estarx subst)
       | Param_flattened(n, sz, al) ->
-          let y = new_temp ~name:x.name (ty_buffer n) in
-          let yparts = list_map_n (fun _ -> Env.fresh_ident x.name) n in
+          let y = new_temp ~name:x.C.name (ty_buffer n) in
+          let yparts = list_map_n (fun _ -> Env.fresh_ident x.C.name) n in
           let assign_part e p act =
             sseq loc (sassign loc e {edesc = EVar p; etyp = uint}) act in
           (List.map (fun p -> (p, uint)) yparts @ params',
