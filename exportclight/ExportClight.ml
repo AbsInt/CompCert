@@ -18,9 +18,9 @@
 open Format
 open Camlcoq
 open AST
-open !Ctypes
-open !Cop
-open !Clight
+open Ctypes
+open Cop
+open Clight
 
 (* Options, lists, pairs *)
 
@@ -154,7 +154,7 @@ let rec typ p t =
 
 and rtyp p = function
   | Tvoid -> fprintf p "tvoid"
-  | Tint(sz, sg, _) ->
+  | Ctypes.Tint(sz, sg, _) ->
       fprintf p "%s" (
         match sz, sg with
         | I8, Signed -> "tschar"
@@ -164,12 +164,12 @@ and rtyp p = function
         | I32, Signed -> "tint"
         | I32, Unsigned -> "tuint"
         | IBool, _ -> "tbool")
-  | Tlong(sg, _) ->
+  | Ctypes.Tlong(sg, _) ->
       fprintf p "%s" (
         match sg with
         | Signed -> "tlong"
         | Unsigned -> "tulong")
-  | Tfloat(sz, _) ->
+  | Ctypes.Tfloat(sz, _) ->
       fprintf p "%s" (
         match sz with
         | F32 -> "tfloat"
@@ -279,7 +279,7 @@ let name_binop = function
   | Oshl -> "Oshl"
   | Oshr -> "Oshr"
   | Oeq -> "Oeq"
-  | One -> "One"
+  | Cop.One -> "One"
   | Olt -> "Olt"
   | Ogt -> "Ogt"
   | Ole -> "Ole"
@@ -541,14 +541,14 @@ let print_program p prog =
   fprintf p "@[<v 0>";
   fprintf p "%s" prologue;
   define_idents p;
-  List.iter (print_globdef p) prog.prog_defs;
+  List.iter (print_globdef p) prog.Ctypes.prog_defs;
   fprintf p "Definition composites : list composite_definition :=@ ";
   print_list print_composite_definition p prog.prog_types;
   fprintf p ".@ @ ";
   fprintf p "Definition prog : Clight.program := {|@ ";
-  fprintf p "prog_defs :=@ %a;@ " (print_list print_ident_globdef) prog.prog_defs;
-  fprintf p "prog_public :=@ %a;@ " (print_list ident) prog.prog_public;
-  fprintf p "prog_main := %a;@ " ident prog.prog_main;
+  fprintf p "prog_defs :=@ %a;@ " (print_list print_ident_globdef) prog.Ctypes.prog_defs;
+  fprintf p "prog_public :=@ %a;@ " (print_list ident) prog.Ctypes.prog_public;
+  fprintf p "prog_main := %a;@ " ident prog.Ctypes.prog_main;
   fprintf p "prog_types := composites;@ ";
   fprintf p "prog_comp_env := make_composite_env composites;@ ";
   fprintf p "prog_comp_env_eq := refl_equal _@ ";
