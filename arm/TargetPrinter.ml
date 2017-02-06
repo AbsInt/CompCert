@@ -13,7 +13,6 @@
 (* Printing ARM assembly code in asm syntax *)
 
 open Printf
-open !Datatypes
 open Camlcoq
 open Sections
 open AST
