@@ -474,6 +474,19 @@ let typespec_rank = function (* Don't change this *)
 
 let typespec_order t1 t2 = compare (typespec_rank t1) (typespec_rank t2)
 
+(* Auxiliary for type declarator elaboration.  Remove the non-type-related
+   attributes from the given type and return those attributes separately.
+   If the type is a function type, keep function-related attributes
+   attached to the type. *)
+
+let get_nontype_attrs env ty =
+  let to_be_removed a =
+    match class_of_attribute a with
+    | Attr_type -> false
+    | Attr_function -> not (is_function_type env ty)
+    | _ -> true in
+  let nta = List.filter to_be_removed (attributes_of_type env ty) in
+  (remove_attributes_type env nta ty, nta)
 
 (* Elaboration of a type specifier.  Returns 5-tuple:
      (storage class, "inline" flag, "typedef" flag, elaborated type, new env)
@@ -518,14 +531,15 @@ let rec elab_specifier keep_ty ?(only = false) loc env specifier =
 
   let simple ty = (!sto, !inline, !noreturn ,!typedef, add_attributes_type !attr ty, env) in
 
-  (* As done in CIL, partition !attr into type-related attributes,
+  (* As done in CIL, partition !attr into struct-related attributes,
      which are returned, and other attributes, which are left in !attr.
-     The returned type-related attributes are applied to the
+     The returned struct-related attributes are applied to the
      struct/union/enum being defined.
-     The leftover non-type-related attributes will be applied
+     The leftover non-struct-related attributes will be applied
      to the variable being defined. *)
-  let get_type_attrs () =
-    let (ta, nta) = List.partition attr_is_type_related !attr in
+  let get_struct_attrs () =
+    let (ta, nta) =
+      List.partition (fun a -> class_of_attribute a = Attr_struct) !attr in
     attr := nta;
     ta in
 
@@ -584,21 +598,21 @@ let rec elab_specifier keep_ty ?(only = false) loc env specifier =
 
     | [Cabs.Tstruct_union(STRUCT, id, optmembers, a)] ->
         let a' =
-          add_attributes (get_type_attrs()) (elab_attributes env a) in
+          add_attributes (get_struct_attrs()) (elab_attributes env a) in
         let (id', env') =
           elab_struct_or_union keep_ty only Struct loc id optmembers a' env in
         (!sto, !inline, !noreturn, !typedef, TStruct(id', !attr), env')
 
     | [Cabs.Tstruct_union(UNION, id, optmembers, a)] ->
         let a' =
-          add_attributes (get_type_attrs()) (elab_attributes env a) in
+          add_attributes (get_struct_attrs()) (elab_attributes env a) in
         let (id', env') =
           elab_struct_or_union keep_ty only Union loc id optmembers a' env in
         (!sto, !inline, !noreturn, !typedef, TUnion(id', !attr), env')
 
     | [Cabs.Tenum(id, optmembers, a)] ->
         let a' =
-          add_attributes (get_type_attrs()) (elab_attributes env a) in
+          add_attributes (get_struct_attrs()) (elab_attributes env a) in
         let (id', env') =
           elab_enum only loc id optmembers a' env in
         (!sto, !inline, !noreturn, !typedef, TEnum(id', !attr), env')
@@ -631,7 +645,8 @@ and elab_type_declarator keep_ty loc env ty kr_ok = function
   | Cabs.JUSTBASE ->
       ((ty, None), env)
   | Cabs.ARRAY(d, cv_specs, sz) ->
-      let a = elab_cvspecs env cv_specs in
+      let (ty, a) = get_nontype_attrs env ty in
+      let a = add_attributes a (elab_cvspecs env cv_specs) in
       let sz' =
         match sz with
         | None ->
@@ -649,22 +664,25 @@ and elab_type_declarator keep_ty loc env ty kr_ok = function
                 Some 1L in (* produces better error messages later *)
        elab_type_declarator  keep_ty  loc env (TArray(ty, sz', a)) kr_ok  d
   | Cabs.PTR(cv_specs, d) ->
-      let a = elab_cvspecs env cv_specs in
+      let (ty, a) = get_nontype_attrs env ty in
+      let a = add_attributes a (elab_cvspecs env cv_specs) in
       elab_type_declarator keep_ty  loc env (TPtr(ty, a)) kr_ok d
   | Cabs.PROTO(d, (params, vararg)) ->
       elab_return_type loc env ty;
+      let (ty, a) = get_nontype_attrs env ty in
       let params',env' = elab_parameters keep_ty env params in
       let env = if  keep_ty then Env.add_types env env' else env in
-      elab_type_declarator  keep_ty  loc env (TFun(ty, Some params', vararg, [])) kr_ok d
+      elab_type_declarator  keep_ty  loc env (TFun(ty, Some params', vararg, a)) kr_ok d
   | Cabs.PROTO_OLD(d, params) ->
       elab_return_type loc env ty;
+      let (ty, a) = get_nontype_attrs env ty in
       match params with
       | [] ->
-        elab_type_declarator  keep_ty loc env (TFun(ty, None, false, [])) kr_ok d
+        elab_type_declarator  keep_ty loc env (TFun(ty, None, false, a)) kr_ok d
       | _ ->
         if not kr_ok || d <> Cabs.JUSTBASE then
           fatal_error loc "illegal old-style K&R function definition";
-        ((TFun(ty, None, false, []), Some params), env)
+        ((TFun(ty, None, false, a), Some params), env)
 
 (* Elaboration of parameters in a prototype *)
 
@@ -738,12 +756,14 @@ and elab_init_name_group keep_ty loc env (spec, namelist) =
     let a = elab_attributes env attr in
     if inl && not (is_function_type env ty) then
       error loc "'inline' can only appear on functions";
-    if noret then begin
-      warning loc Celeven_extension "_Noreturn functions are a C11 extension";
-      if not (is_function_type env ty) then
-        error loc "'_Noreturn' can only appear on functions";
-    end;
-    ((id, add_attributes_type a ty, init), env1) in
+    let a' =
+      if noret then begin
+        warning loc Celeven_extension "_Noreturn functions are a C11 extension";
+        if not (is_function_type env ty) then
+          error loc "'_Noreturn' can only appear on functions";
+        add_attributes [Attr("noreturn",[])] a
+      end else a in
+    ((id, add_attributes_type a' ty, init), env1) in
   (mmap elab_one_name env' namelist, sto, tydef)
 
 (* Elaboration of a field group *)
@@ -2328,17 +2348,19 @@ let elab_fundef env spec name defs body loc =
       { sdesc = Sblock (List.map mkdecl extra_decls @ [body2]);
         sloc = no_loc }
     end in
-  if noret then begin
+  (* Handling of _Noreturn and of attribute("noreturn") *)
+  if noret then
     warning loc Celeven_extension "_Noreturn functions are a C11 extension";
-    if contains_return body1 then
-      warning loc Invalid_noreturn "function '%s' declared 'noreturn' should not return" s;
-  end;
+  if (noret || find_custom_attributes ["noreturn"; "__noreturn__"] attr <> [])
+  && contains_return body1 then
+    warning loc Invalid_noreturn "function '%s' declared 'noreturn' should not return" s;
   (* Build and emit function definition *)
   let fn =
     { fd_storage = sto1;
       fd_inline = inline;
       fd_name = fun_id;
-      fd_attrib = attr;
+      fd_attrib = if noret then add_attributes [Attr("noreturn",[])] attr
+                           else attr;
       fd_ret = ty_ret;
       fd_params = params;
       fd_vararg = vararg;

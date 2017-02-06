@@ -13,7 +13,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(* GCC built-ins *)
+(* GCC built-ins and attributes *)
 
 open C
 open Cutil
@@ -221,3 +221,25 @@ let builtins = {
   "__builtin_va_copy",  (voidType, [ voidPtrType; voidPtrType ], false)
 ]
 }
+
+let attributes = [ (* a subset of those of GCC 5 *)
+  (* type-related *)
+  ("aligned", Attr_type); ("may_alias", Attr_type); ("visibility", Attr_type);
+  (* struct-related *)
+  ("packed", Attr_struct); ("designated_init", Attr_struct);
+  (* function-related *)
+  ("cdecl", Attr_function); ("stdcall", Attr_function);
+  ("fastcall", Attr_function); ("thiscall", Attr_function);
+  ("const", Attr_function); ("noreturn", Attr_name);
+  (* name-related *)
+  ("cleanup", Attr_name); ("common", Attr_name); ("nocommon", Attr_name);
+  ("deprecated", Attr_name); ("section", Attr_name);
+  ("shared", Attr_name); ("tls_model", Attr_name); ("unused", Attr_name);
+  ("used", Attr_name); ("weak", Attr_name);
+  ("dllimport", Attr_name); ("dllexport", Attr_name);
+  ("alway_inline", Attr_name); ("gnu_inline", Attr_name);
+  ("artificial", Attr_name); ("flatten", Attr_name);
+  ("error", Attr_name); ("warning", Attr_name);
+  ("constructor", Attr_name); ("destructor", Attr_name);
+  ("externally_visible", Attr_name); ("interrupt", Attr_name)
+]
