@@ -471,7 +471,7 @@ let rec dce_block blk after =
 
 let dead_code_elimination f liveness =
   { f with fn_code =
-      PTree.map (fun pc blk -> Datatypes.snd(dce_block blk (PMap.get pc liveness)))
+      PTree.map (fun pc blk -> snd(dce_block blk (PMap.get pc liveness)))
                  f.fn_code }
 
 
@@ -1171,16 +1171,15 @@ and success f alloc =
   end;
   f'
 
-open !Errors
 
 let regalloc f =
   init_trace();
   reset_temps();
   let f1 = Splitting.rename_function f in
   match RTLtyping.type_function f1 with
-  | Error msg ->
-      Errors.Error(MSG (coqstring_of_camlstring "RTL code after splitting is ill-typed:") :: msg)
-  | OK tyenv ->
+  | Errors.Error msg ->
+      Errors.Error(Errors.MSG (coqstring_of_camlstring "RTL code after splitting is ill-typed:") :: msg)
+  | Errors.OK tyenv ->
       let f2 = function_of_RTL_function f1 tyenv in
       let liveness = liveness_analysis f2 in
       let f3 = dead_code_elimination f2 liveness in
@@ -1189,12 +1188,12 @@ let regalloc f =
         PrintXTL.print_function !pp f3
       end;
       try
-        OK(first_round f3 liveness)
+        Errors.OK(first_round f3 liveness)
       with
       | Timeout ->
-          Error(msg (coqstring_of_camlstring "Spilling fails to converge"))
+          Errors.Error(Errors.msg (coqstring_of_camlstring "Spilling fails to converge"))
       | Type_error_at pc ->
-          Error [MSG(coqstring_of_camlstring "Ill-typed XTL code at PC ");
-                 POS pc]
+          Errors.Error [Errors.MSG(coqstring_of_camlstring "Ill-typed XTL code at PC ");
+                 Errors.POS pc]
       | Bad_LTL ->
-          Error(msg (coqstring_of_camlstring "Bad LTL after spilling"))
+          Errors.Error(Errors.msg (coqstring_of_camlstring "Bad LTL after spilling"))
