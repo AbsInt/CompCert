@@ -17,7 +17,6 @@ open Camlcoq
 open Datatypes
 open Maps
 open AST
-open !Locations
 open LTL
 open PrintAST
 open PrintOp
@@ -34,17 +33,17 @@ let rec mregs pp = function
 
 let slot pp (sl, ofs, ty) =
   match sl with
-  | Local ->
+  | Locations.Local ->
       fprintf pp "local(%ld,%s)" (camlint_of_coqint ofs) (name_of_type ty)
-  | Incoming ->
+  | Locations.Incoming ->
       fprintf pp "incoming(%ld,%s)" (camlint_of_coqint ofs) (name_of_type ty)
-  | Outgoing ->
+  | Locations.Outgoing ->
       fprintf pp "outgoing(%ld,%s)" (camlint_of_coqint ofs) (name_of_type ty)
 
 let loc pp l =
   match l with
-  | R r -> mreg pp r
-  | S(sl, ofs, ty) -> slot pp (sl, ofs, ty)
+  | Locations.R r -> mreg pp r
+  | Locations.S(sl, ofs, ty) -> slot pp (sl, ofs, ty)
 
 let rec locs pp = function
   | [] -> ()
