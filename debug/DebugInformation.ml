@@ -14,6 +14,7 @@ open BinNums
 open C
 open Camlcoq
 open Cutil
+open Debug
 open DebugTypes
 open Sections
 
@@ -660,3 +661,35 @@ let init name =
   Hashtbl.reset label_translation;
   all_files := StringSet.singleton name;
   printed_vars := StringSet.empty
+
+let default_debug =
+  {
+   init = init;
+   atom_global = atom_global;
+   set_composite_size = set_composite_size;
+   set_member_offset = set_member_offset;
+   set_bitfield_offset = set_bitfield_offset;
+   insert_global_declaration = insert_global_declaration;
+   add_fun_addr = (fun _ _ _ -> ());
+   generate_debug_info = (fun _ _  -> None);
+   all_files_iter = all_files_iter;
+   insert_local_declaration = insert_local_declaration;
+   atom_local_variable = atom_local_variable;
+   enter_scope = enter_scope;
+   enter_function_scope = enter_function_scope;
+   add_lvar_scope = add_lvar_scope;
+   open_scope = open_scope;
+   close_scope = close_scope;
+   start_live_range = start_live_range;
+   end_live_range = end_live_range;
+   stack_variable = stack_variable;
+   add_label = add_label;
+   atom_parameter = atom_parameter;
+   compute_diab_file_enum = compute_diab_file_enum;
+   compute_gnu_file_enum = compute_gnu_file_enum;
+   exists_section = exists_section;
+   remove_unused = remove_unused;
+   remove_unused_function = remove_unused_function;
+   variable_printed = variable_printed;
+   add_diab_info = (fun _ _ _ _ -> ());
+ }
