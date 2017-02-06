@@ -274,7 +274,8 @@ let attributes = [
   ("aligned", Cutil.Attr_type);
   (* struct-related *)
   ("packed", Cutil.Attr_struct);
-  (* function-related (currently none) *)
+  (* function-related *)
+  ("noreturn", Cutil.Attr_function);
   (* name-related *)
   ("section", Cutil.Attr_name)
 ]

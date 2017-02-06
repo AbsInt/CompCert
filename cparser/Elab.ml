@@ -767,12 +767,14 @@ and elab_init_name_group keep_ty loc env (spec, namelist) =
     let a = elab_attributes env attr in
     if inl && not (is_function_type env ty) then
       error loc "'inline' can only appear on functions";
-    if noret then begin
-      warning loc Celeven_extension "_Noreturn functions are a C11 extension";
-      if not (is_function_type env ty) then
-        error loc "'_Noreturn' can only appear on functions";
-    end;
-    ((id, add_attributes_type a ty, init), env1) in
+    let a' =
+      if noret then begin
+        warning loc Celeven_extension "_Noreturn functions are a C11 extension";
+        if not (is_function_type env ty) then
+          error loc "'_Noreturn' can only appear on functions";
+        add_attributes [Attr("noreturn",[])] a
+      end else a in
+    ((id, add_attributes_type a' ty, init), env1) in
   (mmap elab_one_name env' namelist, sto, tydef)
 
 (* Elaboration of a field group *)
@@ -2323,17 +2325,19 @@ let elab_fundef env spec name defs body loc =
       { sdesc = Sblock (List.map mkdecl extra_decls @ [body2]);
         sloc = no_loc }
     end in
-  if noret then begin
+  (* Handling of _Noreturn and of attribute("noreturn") *)
+  if noret then
     warning loc Celeven_extension "_Noreturn functions are a C11 extension";
-    if contains_return body1 then
-      warning loc Invalid_noreturn "function '%s' declared 'noreturn' should not return" s;
-  end;
+  if (noret || find_custom_attributes ["noreturn"; "__noreturn__"] attr <> [])
+  && contains_return body1 then
+    warning loc Invalid_noreturn "function '%s' declared 'noreturn' should not return" s;
   (* Build and emit function definition *)
   let fn =
     { fd_storage = sto1;
       fd_inline = inline;
       fd_name = fun_id;
-      fd_attrib = attr;
+      fd_attrib = if noret then add_attributes [Attr("noreturn",[])] attr
+                           else attr;
       fd_ret = ty_ret;
       fd_params = params;
       fd_vararg = vararg;
