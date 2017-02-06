@@ -13,7 +13,6 @@
 
 open AST
 open Camlcoq
-open !Datatypes
 open DwarfPrinter
 open PrintAsmaux
 open Printf
