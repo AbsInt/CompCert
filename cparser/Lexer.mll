@@ -17,7 +17,6 @@
 open Lexing
 open Pre_parser
 open Pre_parser_aux
-open !Cabshelper
 
 module SSet = Set.Make(String)
 
