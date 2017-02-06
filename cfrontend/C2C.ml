@@ -14,17 +14,10 @@
 (* *********************************************************************)
 
 open C
-open Env
-open Builtins
 
 open Camlcoq
-open AST
-open Values
-open !Ctypes
-open !Cop
-open !Csyntax
-open !Initializers
-open Floats
+open Ctypes
+open Csyntax
 
 (** ** Extracting information about global variables from their atom *)
 
@@ -131,8 +124,8 @@ let string_of_errmsg msg =
 (** ** The builtin environment *)
 
 let builtins_generic = {
-  typedefs = [];
-  functions = [
+  Builtins.typedefs = [];
+  Builtins.functions = [
     (* Floating-point absolute value *)
     "__builtin_fabs",
       (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
@@ -264,8 +257,8 @@ let builtins_generic = {
 (* Add processor-dependent builtins *)
 
 let builtins =
-  { typedefs = builtins_generic.typedefs @ CBuiltins.builtins.typedefs;
-    functions = builtins_generic.functions @ CBuiltins.builtins.functions }
+  Builtins.({ typedefs = builtins_generic.typedefs @ CBuiltins.builtins.typedefs;
+    functions = builtins_generic.Builtins.functions @ CBuiltins.builtins.functions })
 
 (** ** Functions used to handle string literals *)
 
@@ -300,8 +293,8 @@ let global_for_string s id =
     init := AST.Init_int8(Z.of_uint(Char.code c)) :: !init in
   add_char '\000';
   for i = String.length s - 1 downto 0 do add_char s.[i] done;
-  (id, Gvar {gvar_info = typeStringLiteral s; gvar_init = !init;
-             gvar_readonly = true; gvar_volatile = false})
+  (id, AST.Gvar { AST.gvar_info = typeStringLiteral s;  AST.gvar_init = !init;
+              AST.gvar_readonly = true;  AST.gvar_volatile = false})
 
 let name_for_wide_string_literal s =
   try
@@ -341,7 +334,7 @@ let global_for_wide_string s id =
     init := init_of_char(Z.of_uint64 c) :: !init in
   List.iter add_char s;
   add_char 0L;
-  (id, Gvar {gvar_info = typeWideStringLiteral s; gvar_init = List.rev !init;
+   AST.(id,  Gvar { gvar_info = typeWideStringLiteral s;  gvar_init = List.rev !init;
              gvar_readonly = true; gvar_volatile = false})
 
 let globals_for_strings globs =
@@ -359,8 +352,8 @@ let globals_for_strings globs =
 
 let constant_size_t a =
   match Initializers.constval_cast !comp_env a Ctyping.size_t with
-  | Errors.OK(Vint n) -> Some(Integers.Int.unsigned n)
-  | Errors.OK(Vlong n) -> Some(Integers.Int64.unsigned n)
+  | Errors.OK(Values.Vint n) -> Some(Integers.Int.unsigned n)
+  | Errors.OK(Values.Vlong n) -> Some(Integers.Int64.unsigned n)
   | _ -> None
 
 let make_builtin_memcpy args =
@@ -379,7 +372,7 @@ let make_builtin_memcpy args =
       if not (Z.eq (Z.modulo sz1 al1) Z.zero) then
         error "alignment argument of '__builtin_memcpy_aligned' must be a divisor of the size";
       (* Issue #28: must decay array types to pointer types *)
-      Ebuiltin(EF_memcpy(sz1, al1),
+      Ebuiltin( AST.EF_memcpy(sz1, al1),
                Tcons(typeconv(typeof dst),
                      Tcons(typeconv(typeof src), Tnil)),
                Econs(dst, Econs(src, Enil)), Tvoid)
@@ -396,7 +389,7 @@ let va_list_ptr e =
 
 let make_builtin_va_arg_by_val helper ty ty_ret arg =
   let ty_fun =
-    Tfunction(Tcons(Tpointer(Tvoid, noattr), Tnil), ty_ret, cc_default) in
+    Tfunction(Tcons(Tpointer(Tvoid, noattr), Tnil), ty_ret,  AST.cc_default) in
   Ecast
     (Ecall(Evalof(Evar(intern_string helper, ty_fun), ty_fun),
            Econs(va_list_ptr arg, Enil),
@@ -406,7 +399,7 @@ let make_builtin_va_arg_by_val helper ty ty_ret arg =
 let make_builtin_va_arg_by_ref helper ty arg =
   let ty_fun =
     Tfunction(Tcons(Tpointer(Tvoid, noattr), Tcons(Ctyping.size_t, Tnil)),
-              Tpointer(Tvoid, noattr), cc_default) in
+              Tpointer(Tvoid, noattr),  AST.cc_default) in
   let ty_ptr =
     Tpointer(ty, noattr) in
   let call =
@@ -437,7 +430,7 @@ let make_builtin_va_arg env ty e =
         "__compcert_va_composite" ty e
   | _ ->
       unsupported "va_arg at this type";
-      Eval(Vint(coqint_of_camlint 0l), type_int32s)
+      Eval(Values.Vint(coqint_of_camlint 0l), type_int32s)
 
 (** ** Translation functions *)
 
@@ -458,13 +451,13 @@ let convertAttr a =
 let convertCallconv va unproto attr =
   let sr =
     Cutil.find_custom_attributes ["structreturn"; "__structreturn"] attr in
-  { cc_vararg = va; cc_unproto = unproto; cc_structret = sr <> [] }
+  {  AST.cc_vararg = va; cc_unproto = unproto; cc_structret = sr <> [] }
 
 (** Types *)
 
 let convertIkind k a : coq_type =
     match k with
-  | C.IBool -> Tint (IBool, Unsigned, a)
+  | C.IBool -> Tint (Ctypes.IBool, Unsigned, a)
   | C.IChar -> Tint (I8, (if Machine.((!config).char_signed)
                           then Signed else Unsigned), a)
   | C.ISChar -> Tint (I8, Signed, a)
@@ -530,7 +523,7 @@ let rec convertTyp env t =
   | C.TNamed _ ->
       convertTyp env (Cutil.unroll env t)
   | C.TStruct(id, a) ->
-      Tstruct(intern_string id.name, convertAttr a)
+      Ctypes.Tstruct(intern_string id.name, convertAttr a)
   | C.TUnion(id, a) ->
       Tunion(intern_string id.name, convertAttr a)
   | C.TEnum(id, a) ->
@@ -563,7 +556,7 @@ let convertCompositedef env su id attr members =
   | C.Union -> TUnion (id,attr) in
   Debug.set_composite_size id su (Cutil.sizeof env t);
   Composite(intern_string id.name,
-            begin match su with C.Struct -> Struct | C.Union -> Union end,
+            begin match su with C.Struct -> Ctypes.Struct | C.Union -> Ctypes.Union end,
             List.map (convertField env) members,
             convertAttr attr)
 
@@ -623,9 +616,9 @@ let convertFloat f kind =
     | Z.Z0 ->
       begin match kind with
       | FFloat ->
-	  Ctyping.econst_single (Float.to_single Float.zero)
+	  Ctyping.econst_single (Floats.Float.to_single Floats.Float.zero)
       | FDouble | FLongDouble ->
-	  Ctyping.econst_float Float.zero
+	  Ctyping.econst_float Floats.Float.zero
       end
     | Z.Zpos mant ->
 
@@ -640,11 +633,11 @@ let convertFloat f kind =
 
       begin match kind with
       | FFloat ->
-	  let f = Float32.from_parsed base mant exp in
+	  let f = Floats.Float32.from_parsed base mant exp in
           checkFloatOverflow f "float";
           Ctyping.econst_single f
       | FDouble | FLongDouble ->
-	  let f = Float.from_parsed base mant exp in
+	  let f = Floats.Float.from_parsed base mant exp in
           checkFloatOverflow f "double";
           Ctyping.econst_float f
       end
@@ -653,7 +646,7 @@ let convertFloat f kind =
 
 (** Expressions *)
 
-let ezero = Eval(Vint(coqint_of_camlint 0l), type_int32s)
+let ezero = Eval(Values.Vint(coqint_of_camlint 0l), type_int32s)
 
 let ewrap = function
   | Errors.OK e -> e
@@ -691,13 +684,13 @@ let rec convertExpr env e =
       Ctyping.ealignof (convertTyp env ty1)
 
   | C.EUnop(C.Ominus, e1) ->
-      ewrap (Ctyping.eunop Oneg (convertExpr env e1))
+      ewrap (Ctyping.eunop Cop.Oneg (convertExpr env e1))
   | C.EUnop(C.Oplus, e1) ->
       convertExpr env e1
   | C.EUnop(C.Olognot, e1) ->
-      ewrap (Ctyping.eunop Onotbool (convertExpr env e1))
+      ewrap (Ctyping.eunop Cop.Onotbool (convertExpr env e1))
   | C.EUnop(C.Onot, e1) ->
-      ewrap (Ctyping.eunop Onotint (convertExpr env e1))
+      ewrap (Ctyping.eunop Cop.Onotint (convertExpr env e1))
   | C.EUnop(C.Oaddrof, e1) ->
       ewrap (Ctyping.eaddrof (convertLvalue env e1))
   | C.EUnop(C.Opreincr, e1) ->
@@ -791,7 +784,7 @@ let rec convertExpr env e =
         | [] -> assert false (* catched earlier *) in
       let targs2 = convertTypArgs env [] args2 in
       Ebuiltin(
-        EF_debug(P.of_int64 kind, intern_string text,
+         AST.EF_debug(P.of_int64 kind, intern_string text,
                  typlist_of_typelist targs2),
         targs2, convertExprList env args2, convertTyp env e.etyp)
 
@@ -800,7 +793,7 @@ let rec convertExpr env e =
       | {edesc = C.EConst(CStr txt)} :: args1 ->
           let targs1 = convertTypArgs env [] args1 in
           Ebuiltin(
-            EF_annot(coqstring_of_camlstring txt, typlist_of_typelist targs1),
+             AST.EF_annot(coqstring_of_camlstring txt, typlist_of_typelist targs1),
             targs1, convertExprList env args1, convertTyp env e.etyp)
       | _ ->
           error "argument 1 of '__builtin_annot' must be a string literal";
@@ -812,7 +805,7 @@ let rec convertExpr env e =
       | [ {edesc = C.EConst(CStr txt)}; arg ] ->
           let targ = convertTyp env
                          (Cutil.default_argument_conversion env arg.etyp) in
-          Ebuiltin(EF_annot_val(coqstring_of_camlstring txt, typ_of_type targ),
+          Ebuiltin(AST.EF_annot_val(coqstring_of_camlstring txt, typ_of_type targ),
                    Tcons(targ, Tnil), convertExprList env [arg],
                    convertTyp env e.etyp)
       | _ ->
@@ -824,7 +817,7 @@ let rec convertExpr env e =
       make_builtin_memcpy (convertExprList env args)
 
   | C.ECall({edesc = C.EVar {name = "__builtin_fabs"}}, [arg]) ->
-      ewrap (Ctyping.eunop Oabsfloat (convertExpr env arg))
+      ewrap (Ctyping.eunop Cop.Oabsfloat (convertExpr env arg))
 
   | C.ECall({edesc = C.EVar {name = "__builtin_va_start"}} as fn, [arg]) ->
       Ecall(convertExpr env fn,
@@ -840,7 +833,7 @@ let rec convertExpr env e =
   | C.ECall({edesc = C.EVar {name = "__builtin_va_copy"}}, [arg1; arg2]) ->
       let dst = convertExpr env arg1 in
       let src = convertExpr env arg2 in
-      Ebuiltin(EF_memcpy(Z.of_uint CBuiltins.size_va_list, Z.of_uint 4),
+      Ebuiltin( AST.EF_memcpy(Z.of_uint CBuiltins.size_va_list, Z.of_uint 4),
                Tcons(Tpointer(Tvoid, noattr),
                  Tcons(Tpointer(Tvoid, noattr), Tnil)),
                Econs(va_list_ptr dst, Econs(va_list_ptr src, Enil)),
@@ -852,8 +845,8 @@ let rec convertExpr env e =
       and tres = convertTyp env e.etyp in
       let sg =
         signature_of_type targs tres
-           {cc_vararg = true; cc_unproto = false; cc_structret = false} in
-      Ebuiltin(EF_external(coqstring_of_camlstring "printf", sg),
+           { AST.cc_vararg = true; cc_unproto = false; cc_structret = false} in
+      Ebuiltin( AST.EF_external(coqstring_of_camlstring "printf", sg),
                targs, convertExprList env args, tres)
 
   | C.ECall(fn, args) ->
@@ -884,7 +877,7 @@ and convertLvalue env e =
       ewrap (Ctyping.efield !comp_env e3' (intern_string id))
   | C.EBinop(C.Oindex, e1, e2, _) ->
       let e1' = convertExpr env e1 and e2' = convertExpr env e2 in
-      let e3' = ewrap (Ctyping.ebinop Oadd e1' e2') in
+      let e3' = ewrap (Ctyping.ebinop Cop.Oadd e1' e2') in
       ewrap (Ctyping.ederef e3')
   | _ ->
       error "illegal lvalue"; ezero
@@ -907,8 +900,8 @@ let convertAsm loc env txt outputs inputs clobber =
   let e =
     let tinputs = convertTypArgs env [] inputs' in
     let toutput = convertTyp env ty_res in
-    Ebuiltin(EF_inline_asm(coqstring_of_camlstring txt',
-                           signature_of_type tinputs toutput cc_default,
+    Ebuiltin( AST.EF_inline_asm(coqstring_of_camlstring txt',
+                           signature_of_type tinputs toutput  AST.cc_default,
                            clobber'),
              tinputs,
              convertExprList env inputs',
@@ -1008,9 +1001,9 @@ let rec convertStmt env s =
                   (convertStmt env s1) te
                   (convertStmt env s2) (convertStmt env s3))
   | C.Sbreak ->
-      Sbreak
+      Csyntax.Sbreak
   | C.Scontinue ->
-      Scontinue
+      Csyntax.Scontinue
   | C.Sswitch(e, s1) ->
       let (init, cases) = groupSwitch (flattenSwitch s1) in
       let rec init_debug s =
@@ -1027,25 +1020,25 @@ let rec convertStmt env s =
       swrap (Ctyping.sswitch te
                (convertSwitch env (is_int64 env e.etyp) cases))
   | C.Slabeled(C.Slabel lbl, s1) ->
-      Slabel(intern_string lbl, convertStmt env s1)
+      Csyntax.Slabel(intern_string lbl, convertStmt env s1)
   | C.Slabeled(C.Scase _, _) ->
-      unsupported "'case' statement not in 'switch' statement"; Sskip
+      unsupported "'case' statement not in 'switch' statement"; Csyntax.Sskip
   | C.Slabeled(C.Sdefault, _) ->
-      unsupported "'default' statement not in 'switch' statement"; Sskip
+      unsupported "'default' statement not in 'switch' statement"; Csyntax.Sskip
   | C.Sgoto lbl ->
-      Sgoto(intern_string lbl)
+      Csyntax.Sgoto(intern_string lbl)
   | C.Sreturn None ->
-      Sreturn None
+      Csyntax.Sreturn None
   | C.Sreturn(Some e) ->
-      Sreturn(Some(convertExpr env e))
+      Csyntax.Sreturn(Some(convertExpr env e))
   | C.Sblock _ ->
-      unsupported "nested blocks"; Sskip
+      unsupported "nested blocks"; Csyntax.Sskip
   | C.Sdecl _ ->
-      unsupported "inner declarations"; Sskip
+      unsupported "inner declarations"; Csyntax.Sskip
   | C.Sasm(attrs, txt, outputs, inputs, clobber) ->
       if not !Clflags.option_finline_asm then
         unsupported "inline 'asm' statement (consider adding option [-finline-asm])";
-      Sdo (convertAsm s.sloc env txt outputs inputs clobber)
+      Csyntax.Sdo (convertAsm s.sloc env txt outputs inputs clobber)
 
 and convertSwitch env is_64 = function
   | [] ->
@@ -1102,7 +1095,7 @@ let convertFundef loc env fd =
       a_access = Sections.Access_default;
       a_inline = fd.fd_inline && not fd.fd_vararg;  (* PR#15 *)
       a_loc = loc };
-  (id', Gfun(Ctypes.Internal
+  (id',  AST.Gfun(Ctypes.Internal
           {fn_return = ret;
            fn_callconv = convertCallconv fd.fd_vararg false fd.fd_attrib;
            fn_params = params;
@@ -1123,14 +1116,14 @@ let convertFundecl env (sto, id, ty, optinit) =
   let id'' = coqstring_of_camlstring id.name in
   let sg = signature_of_type args res cconv in
   let ef =
-    if id.name = "malloc" then EF_malloc else
-    if id.name = "free" then EF_free else
-    if Str.string_match re_runtime id.name 0 then EF_runtime(id'', sg) else
+    if id.name = "malloc" then AST.EF_malloc else
+    if id.name = "free" then AST.EF_free else
+    if Str.string_match re_runtime id.name 0 then  AST.EF_runtime(id'', sg) else
     if Str.string_match re_builtin id.name 0
-    && List.mem_assoc id.name builtins.functions
-    then EF_builtin(id'', sg)
-    else EF_external(id'', sg) in
-  (id', Gfun(Ctypes.External(ef, args, res, cconv)))
+    && List.mem_assoc id.name builtins.Builtins.functions
+    then AST.EF_builtin(id'', sg)
+    else AST.EF_external(id'', sg) in
+  (id',  AST.Gfun(Ctypes.External(ef, args, res, cconv)))
 
 (** Initializers *)
 
@@ -1139,16 +1132,16 @@ let rec convertInit env init =
   | C.Init_single e ->
       Initializers.Init_single (convertExpr env e)
   | C.Init_array il ->
-      Initializers.Init_array (convertInitList env (List.rev il) Init_nil)
+      Initializers.Init_array (convertInitList env (List.rev il) Initializers.Init_nil)
   | C.Init_struct(_, flds) ->
-      Initializers.Init_struct (convertInitList env (List.rev_map snd flds) Init_nil)
+      Initializers.Init_struct (convertInitList env (List.rev_map snd flds) Initializers.Init_nil)
   | C.Init_union(_, fld, i) ->
       Initializers.Init_union (intern_string fld.fld_name, convertInit env i)
 
 and convertInitList env il accu =
   match il with
   | [] -> accu
-  | i :: il' -> convertInitList env il' (Init_cons(convertInit env i, accu))
+  | i :: il' -> convertInitList env il' (Initializers.Init_cons(convertInit env i, accu))
 
 let convertInitializer env ty i =
   match Initializers.transl_init
@@ -1171,7 +1164,7 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
   let init' =
     match optinit with
     | None ->
-        if sto = C.Storage_extern then [] else [Init_space sz]
+        if sto = C.Storage_extern then [] else [AST.Init_space sz]
     | Some i ->
         convertInitializer env ty i in
   let (section, access) =
@@ -1190,7 +1183,7 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
       a_loc = loc };
   let volatile = List.mem C.AVolatile attr in
   let readonly = List.mem C.AConst attr && not volatile in
-  (id', Gvar {gvar_info = ty'; gvar_init = init';
+  (id',  AST.Gvar { AST.gvar_info = ty'; gvar_init = init';
               gvar_readonly = readonly; gvar_volatile = volatile})
 
 (** Convert a list of global declarations.
@@ -1255,7 +1248,7 @@ let rec translEnv env = function
         | C.Gtypedef(id, ty) ->
             Env.add_typedef env id ty
         | C.Genumdef(id, attr, members) ->
-            Env.add_enum env id {ei_members = members; ei_attr = attr}
+            Env.add_enum env id {Env.ei_members = members; ei_attr = attr}
         | _ ->
             env in
       translEnv env' gl
