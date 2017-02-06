@@ -13,7 +13,6 @@
 (* Printing x86-64 assembly code in asm syntax *)
 
 open Printf
-open !Datatypes
 open Camlcoq
 open Sections
 open AST
@@ -244,9 +243,9 @@ module Target(System: SYSTEM):TARGET =
 
     let addressing_gen ireg oc (Addrmode(base, shift, cst)) =
       begin match cst with
-      | Coq_inl n ->
+      | Datatypes.Coq_inl n ->
           fprintf oc "%s" (Z.to_string n)
-      | Coq_inr(id, ofs) ->
+      | Datatypes.Coq_inr(id, ofs) ->
           if Archi.ptr64 then begin
             (* RIP-relative addressing *)
             let ofs' = Z.to_int64 ofs in
