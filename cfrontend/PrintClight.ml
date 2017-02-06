@@ -17,16 +17,15 @@
 
 open Format
 open Camlcoq
-open AST
 open PrintAST
-open !Ctypes
+open Ctypes
 open Cop
 open PrintCsyntax
-open !Clight
+open Clight
 
 (* Naming temporaries *)
 
-let temp_name (id: ident) = "$" ^ Z.to_string (Z.Zpos id)
+let temp_name (id: AST.ident) = "$" ^ Z.to_string (Z.Zpos id)
 
 (* Declarator (identifier + type) -- reuse from PrintCsyntax *)
 
@@ -254,7 +253,7 @@ let print_function p id f =
 
 let print_fundef p id fd =
   match fd with
-  | Ctypes.External((EF_external _ | EF_runtime _), args, res, cconv) ->
+  | Ctypes.External((AST.EF_external _ | AST.EF_runtime _), args, res, cconv) ->
       fprintf p "extern %s;@ @ "
                 (name_cdecl (extern_atom id) (Tfunction(args, res, cconv)))
   | Ctypes.External(_, _, _, _) ->
@@ -264,8 +263,8 @@ let print_fundef p id fd =
 
 let print_globdef p (id, gd) =
   match gd with
-  | Gfun f -> print_fundef p id f
-  | Gvar v -> print_globvar p id v  (* from PrintCsyntax *)
+  | AST.Gfun f -> print_fundef p id f
+  | AST.Gvar v -> print_globvar p id v  (* from PrintCsyntax *)
 
 let print_program p prog =
   fprintf p "@[<v 0>";
