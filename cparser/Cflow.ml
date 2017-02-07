@@ -14,7 +14,8 @@
 (* *********************************************************************)
 
 (* A simple control flow analysis for C statements.
-   Main purpose: emit warnings for _Noreturn functions. *)
+   Main purpose: emit warnings for non-void functions that fall through,
+   and for _Noreturn functions that can return. *)
 
 open C
 open Cutil
@@ -148,7 +149,7 @@ let case (s: flow) : flow = fun i ->
   s { i with inormal = i.inormal || i.iswitch }
 
 let switch (s: flow) : flow = fun i ->
-  s { i with inormal = false; iswitch = true }
+  s { i with inormal = false; iswitch = i.inormal }
   
 (* This is the flow for an infinite loop with body [s].  
    There is no fallthrough exit, but all other exits from [s] are preserved. *)
