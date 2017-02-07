@@ -2329,18 +2329,30 @@ let elab_fundef env spec name defs body loc =
                   (Gdecl(Storage_static, func_id, func_ty, Some func_init));
   (* Elaborate function body *)
   let body1 = !elab_funbody_f ty_ret vararg env3 body in
-  (* Special treatment of the "main" function *)
+  (* Analyse it for returns *)
+  let (can_return, can_fallthrough) = Cflow.function_returns env3 body1 in
+  (* Special treatment of the "main" function. *)
   let body2 =
     if s = "main" then begin
       match unroll env ty_ret with
       | TInt(IInt, []) ->
-          (* Add implicit "return 0;" at end of function body *)
-          sseq no_loc body1
-            {sdesc = Sreturn(Some(intconst 0L IInt)); sloc = no_loc}
+          (* Add implicit "return 0;" at end of function body, unless
+             this control point is unreachable, e.g. function already
+             returns in all cases. *)
+          if can_fallthrough then
+            sseq no_loc body1
+              {sdesc = Sreturn(Some(intconst 0L IInt)); sloc = no_loc}
+          else body1
       | _ ->
           warning loc Main_return_type "return type of 'main' should be 'int'";
           body1
-    end else body1 in
+    end else begin
+      (* For non-"main" functions, warn if the body can fall through
+         and the return type is not "void". *)
+      if can_fallthrough && not (is_void_type env ty_ret) then
+        warning loc Return_type "control reaches end of non-void function";
+      body1
+    end in
   (* Add the extra declarations if any *)
   let body3 =
     if extra_decls = [] then body2 else begin
@@ -2352,7 +2364,7 @@ let elab_fundef env spec name defs body loc =
   if noret then
     warning loc Celeven_extension "_Noreturn functions are a C11 extension";
   if (noret || find_custom_attributes ["noreturn"; "__noreturn__"] attr <> [])
-  && contains_return body1 then
+  && can_return then
     warning loc Invalid_noreturn "function '%s' declared 'noreturn' should not return" s;
   (* Build and emit function definition *)
   let fn =

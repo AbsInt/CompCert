@@ -285,8 +285,3 @@ val subst_expr: exp IdentMap.t -> exp -> exp
 val subst_init: exp IdentMap.t -> init -> init
 val subst_decl: exp IdentMap.t -> decl -> decl
 val subst_stmt: exp IdentMap.t -> stmt -> stmt
-
-(* Statement properties *)
-
-val contains_return: stmt -> bool
- (* Does the stmt contain a return. *)
