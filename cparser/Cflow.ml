@@ -94,14 +94,16 @@ let catch_break (s: flow) : flow = fun i is ->
   let o = s i is in
   if can _Break o then add _Fallthrough (remove _Break o) else o
 
-(* For goto-labeled statements we assume they can always be entered normally. *)
+(* For goto-labeled statements we assume they can always be entered by
+   a goto. *)
 
 let label (s: flow) : flow = fun i is -> s true is
 
-(* For "case" and "default" labeled statements, we assume they can be entered
-   normally as soon as the nearest enclosing "switch" can be entered normally. *)
+(* For "case" and "default" labeled statements, we assume they can be
+   entered normally as soon as the nearest enclosing "switch" can be
+   entered normally. *)
    
-let case (s: flow) : flow = fun i is -> s is is
+let case (s: flow) : flow = fun i is -> s (i || is) is
 
 let switch (s: flow) : flow = fun i is -> s false i
 
