@@ -195,13 +195,17 @@ let right_shift_count bf =
     (Int64.of_int (8 * !config.sizeof_int - bf.bf_size))
     IInt
 
+let uintconst_hex v =
+  { edesc = EConst(CInt(v, IUInt, Printf.sprintf "0x%LXU" v));
+    etyp = TInt(IUInt, []) }
+
 let insertion_mask bf =
   let m =
     Int64.shift_left
       (Int64.pred (Int64.shift_left 1L bf.bf_size))
       bf.bf_pos in
   (* Give the mask an hexadecimal string representation, nicer to read *)
-  intconst ~hex:true m IUInt
+  uintconst_hex m
 
 let eshift env op a b =
   let ty = unary_conversion env a.etyp in
@@ -283,7 +287,7 @@ let bitfield_initializer bf i =
       let m = Int64.pred (Int64.shift_left 1L bf.bf_size) in
       let e_cast =
         if bf.bf_bool then ecast (TInt(IBool,[])) e else e in
-      let e_mask = intconst ~hex:true m IUInt in
+      let e_mask = uintconst_hex m in
       let e_and =
         {edesc = EBinop(Oand, e_cast, e_mask, TInt(IUInt,[]));
          etyp = TInt(IUInt,[])} in
