@@ -30,9 +30,16 @@ Usability:
 
 - Added options -Wxxx and -Wno-xxx (for various values of "xxx")
   to control which warnings are emitted.
+- Added options -Werror=xxx and -Wno-error=xxx (for various values of "xxx")
+  to control which warnings are treated as errors.
 - Support response files where additional command-line arguments can
   be passed (syntax: @file).
 - Improved wording of warning and error messages.
+- Improved handling of attributes, distinguishing attributes that apply
+  to types from attributes that apply to names.  For example, in
+    __attribute((aligned(8),section("foo"))) int * p;
+  the "aligned" attribute is attached to type "int", while
+  the "section" attribute is attached to name "p".
 
 Code generation:
 
