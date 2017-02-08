@@ -25,7 +25,7 @@ let transform_program t p name =
   (run_pass Bitfields.program 'f'
      p)))) in
   let p2 = Rename.program p1 in
-  Checks.program p2;
+  Checks.unknown_attrs_program p2;
   p2
 
 let parse_transformations s =

@@ -63,7 +63,7 @@ let rec unknown_attrs_stmt env s =
   | Sdecl d -> unknown_attrs_decl env s.sloc d
 
 let unknown_attrs_program p =
-  let rec transf_globdecls env = function
+  let rec unknown_attrs_globdecls env = function
     | [] -> ()
     | g :: gl ->
       let env' =
@@ -91,8 +91,5 @@ let unknown_attrs_program p =
         | Gpragma s ->
           env
       in
-        transf_globdecls env' gl
-  in transf_globdecls (Builtins.environment()) p
-
-let program p =
-  unknown_attrs_program p
+        unknown_attrs_globdecls env' gl
+  in unknown_attrs_globdecls (Builtins.environment()) p

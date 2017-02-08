@@ -13,4 +13,4 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-val program: C.program -> unit
+val unknown_attrs_program: C.program -> unit
