@@ -35,6 +35,9 @@ let unknown_attrs_typ env loc ty =
   let attr = attributes_of_type env ty in
   unknown_attrs loc attr
 
+let unknown_attrs_decl env loc (sto, id, ty, init) =
+  unknown_attrs_typ env loc ty
+
 let rec unknown_attrs_stmt env s =
   match s.sdesc with
   | Sskip
@@ -57,7 +60,7 @@ let rec unknown_attrs_stmt env s =
   | Sdowhile (s,_)
   | Sswitch (_,s) -> unknown_attrs_stmt env s
   | Sblock sl -> List.iter (unknown_attrs_stmt env) sl
-  | Sdecl (sto,id,ty,init) -> unknown_attrs_typ env s.sloc ty
+  | Sdecl d -> unknown_attrs_decl env s.sloc d
 
 let unknown_attrs_program p =
   let rec transf_globdecls env = function
@@ -65,12 +68,13 @@ let unknown_attrs_program p =
     | g :: gl ->
       let env' =
         match g.gdesc with
-        | Gdecl (sto, id, ty, init) ->
-          unknown_attrs_typ env g.gloc ty;
+        | Gdecl ((sto, id, ty, init) as d) ->
+          unknown_attrs_decl env g.gloc d;
           Env.add_ident env id sto ty
         | Gfundef f ->
           unknown_attrs g.gloc f.fd_attrib;
           unknown_attrs_stmt env f.fd_body;
+          List.iter (unknown_attrs_decl env g.gloc) f.fd_locals;
           Env.add_ident env f.fd_name f.fd_storage (fundef_typ f)
         | Gcompositedecl(su, id, attr) ->
           Env.add_composite env id (composite_info_decl su attr)
