@@ -14,6 +14,7 @@
 (* *********************************************************************)
 
 open C
+open Cerrors
 open Cutil
 
 let attribute_string = function
@@ -27,7 +28,7 @@ let unknown_attrs loc attrs =
   let unknown attr =
     let attr_class = class_of_attribute attr in
     if attr_class = Attr_unknown then
-      Cerrors.warning loc Cerrors.Unknown_attribute
+      warning loc Unknown_attribute
         "unknown attribute '%s' ignored" (attribute_string attr) in
   List.iter unknown attrs
 
@@ -93,3 +94,78 @@ let unknown_attrs_program p =
       in
         unknown_attrs_globdecls env' gl
   in unknown_attrs_globdecls (Builtins.environment()) p
+
+let rec vars_used_expr env e =
+  match e.edesc with
+  | EConst _
+  | ESizeof _
+  | EAlignof _ -> env
+  | EVar id -> IdentSet.add id env
+  | ECast (_,e)
+  | EUnop (_,e) -> vars_used_expr env e
+  | EBinop (_,e1,e2,_) ->
+    let env = vars_used_expr env e1 in
+    vars_used_expr env e2
+  | EConditional (e1,e2,e3) ->
+    let env = vars_used_expr env e1 in
+    let env = vars_used_expr env e2 in
+    vars_used_expr env e3
+  | ECompound (_,init) -> vars_used_init env init
+  | ECall (e,p) ->
+    let env = vars_used_expr env e in
+    List.fold_left vars_used_expr env p
+
+and vars_used_init env = function
+  | Init_single e -> vars_used_expr env e
+  | Init_array al -> List.fold_left vars_used_init env al
+  | Init_struct (_,sl) -> List.fold_left (fun env (_,i) -> vars_used_init env i) env sl
+  | Init_union (_,_,ui) -> vars_used_init env ui
+
+let rec vars_used_stmt ((dec_env,used_env) as acc) s =
+  match s.sdesc with
+  | Sbreak
+  | Scontinue
+  | Sgoto _
+  | Sreturn None
+  | Sskip -> acc
+  | Sreturn (Some e)
+  | Sdo e -> dec_env,(vars_used_expr used_env e)
+  | Sseq (s1,s2) ->
+    let acc = vars_used_stmt acc s1 in
+    vars_used_stmt acc s2
+  | Sif (e,s1,s2) ->
+    let used_env = vars_used_expr used_env e in
+    let acc = vars_used_stmt (dec_env,used_env) s1 in
+    vars_used_stmt acc s2
+  | Sfor (s1,e,s2,s3) ->
+    let used_env = vars_used_expr used_env e in
+    let acc = vars_used_stmt (dec_env,used_env) s1 in
+    let acc = vars_used_stmt acc s2 in
+    vars_used_stmt acc s3
+  | Sswitch (e,s)
+  | Swhile (e,s)
+  | Sdowhile (s,e) ->
+    let used_env = vars_used_expr used_env e in
+    vars_used_stmt (dec_env,used_env) s
+  | Sblock sl -> List.fold_left vars_used_stmt acc sl
+  | Sdecl (sto,id,ty,init) ->
+    let dec_env = IdentMap.add id s.sloc dec_env
+    and used_env = match init with
+      | Some init ->vars_used_init used_env init
+      | None -> used_env in
+    dec_env,used_env
+  | Slabeled (lbl,s) -> vars_used_stmt acc s
+  | Sasm (attr,str,op,op2,constr) ->
+    let vars_asm_op env (_,_,e) =
+      vars_used_expr env e in
+    let used_env = List.fold_left vars_asm_op used_env op in
+    let used_env = List.fold_left vars_asm_op used_env op2 in
+    dec_env,used_env
+
+let unused_variables p =
+  List.iter (fun g -> match g.gdesc with
+      | Gfundef fd ->
+        let dec_env,used_env = vars_used_stmt (IdentMap.empty,IdentSet.empty) fd.fd_body in
+        IdentMap.iter (fun id loc -> if not (IdentSet.mem id used_env) then
+                          warning loc Unused_variable "unused variable '%s'" id.name) dec_env
+      | _ -> ()) p

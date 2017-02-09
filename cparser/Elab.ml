@@ -2663,4 +2663,6 @@ let _ = elab_funbody_f := elab_funbody
 let elab_file prog =
   reset();
   ignore (elab_definitions false (Builtins.environment()) prog);
-  elaborated_program()
+  let p = elaborated_program () in
+  Checks.unused_variables p;
+  p
