@@ -46,6 +46,7 @@ type warning_type =
   | CompCert_conformance           (** features that are not part of the CompCert C core language *)
   | Inline_asm_sdump               (** inline assembler used in combination of sdump *)
   | Unused_variable                (** unused local variables *)
+  | Unused_parameter               (** unused function parameter *)
 
 val warning  : (string * int) -> warning_type -> ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
 (** [warning (f,c) w fmt arg1 ... argN] formats the arguments [arg1] to [argN] as warining according to

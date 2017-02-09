@@ -167,5 +167,7 @@ let unused_variables p =
       | Gfundef fd ->
         let dec_env,used_env = vars_used_stmt (IdentMap.empty,IdentSet.empty) fd.fd_body in
         IdentMap.iter (fun id loc -> if not (IdentSet.mem id used_env) then
-                          warning loc Unused_variable "unused variable '%s'" id.name) dec_env
+                          warning loc Unused_variable "unused variable '%s'" id.name) dec_env;
+        List.iter (fun (id,_) -> if not (IdentSet.mem id used_env) then
+                      warning g.gloc Unused_parameter "unused parameter '%s'" id.name) fd.fd_params
       | _ -> ()) p
