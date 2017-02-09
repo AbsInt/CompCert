@@ -88,6 +88,7 @@ type warning_type =
   | Unknown_pragmas
   | CompCert_conformance
   | Inline_asm_sdump
+  | Unused_variable
 
 (* List of active warnings *)
 let active_warnings: warning_type list ref = ref [
@@ -135,6 +136,7 @@ let string_of_warning = function
   | Unknown_pragmas -> "unknown-pragmas"
   | CompCert_conformance -> "compcert-conformance"
   | Inline_asm_sdump -> "inline-asm-sdump"
+  | Unused_variable -> "unused-variable"
 
 (* Activate the given warning *)
 let activate_warning w () =
@@ -179,6 +181,7 @@ let wall () =
     Unknown_pragmas;
     CompCert_conformance;
     Inline_asm_sdump;
+    Unused_variable
   ]
 
 let wnothing () =
@@ -207,6 +210,7 @@ let werror () =
     Unknown_pragmas;
     CompCert_conformance;
     Inline_asm_sdump;
+    Unused_variable;
   ]
 
 (* Generate the warning key for the message *)
@@ -368,6 +372,7 @@ let warning_options =
   error_option Unknown_pragmas @
   error_option CompCert_conformance @
   error_option Inline_asm_sdump @
+  error_option Unused_variable @
   [Exact ("-Wfatal-errors"), Set error_fatal;
    Exact ("-fdiagnostics-color"), Ignore; (* Either output supports it or no color *)
    Exact ("-fno-diagnostics-color"), Unset color_diagnostics;
