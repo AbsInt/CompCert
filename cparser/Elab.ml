@@ -835,7 +835,7 @@ and elab_struct_or_union_info keep_ty kind loc env members attrs =
   let m = List.flatten m in
   let m,_ = mmap (fun c fld  ->
       if fld.fld_anonymous then
-        let name = Format.sprintf "<anon>_%d" c in
+        let name = Printf.sprintf "<anon>_%d" c in
         {fld with fld_name = name},c+1
       else
         fld,c) 0 m in
@@ -1103,11 +1103,11 @@ module I = struct
   let rec zipname = function
     | Ztop(name, ty) -> name
     | Zarray(z, ty, sz, dfl, before, idx, after) ->
-        Format.sprintf "%s[%Ld]" (zipname z) idx
+        Printf.sprintf "%s[%Ld]" (zipname z) idx
     | Zstruct(z, id, before, fld, after) ->
-        Format.sprintf "%s.%s" (zipname z) fld.fld_name
+        Printf.sprintf "%s.%s" (zipname z) fld.fld_name
     | Zunion(z, id, fld) ->
-        Format.sprintf "%s.%s" (zipname z) fld.fld_name
+        Printf.sprintf "%s.%s" (zipname z) fld.fld_name
 
   let name (z, i) = zipname z
 
