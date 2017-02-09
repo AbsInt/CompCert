@@ -16,6 +16,8 @@
 open C
 
 open Camlcoq
+open Floats
+open Values
 open Ctypes
 open Csyntax
 
@@ -366,8 +368,8 @@ let globals_for_strings globs =
 
 let constant_size_t a =
   match Initializers.constval_cast !comp_env a Ctyping.size_t with
-  | Errors.OK(Values.Vint n) -> Some(Integers.Int.unsigned n)
-  | Errors.OK(Values.Vlong n) -> Some(Integers.Int64.unsigned n)
+  | Errors.OK(Vint n) -> Some(Integers.Int.unsigned n)
+  | Errors.OK(Vlong n) -> Some(Integers.Int64.unsigned n)
   | _ -> None
 
 let make_builtin_memcpy args =
@@ -444,7 +446,7 @@ let make_builtin_va_arg env ty e =
         "__compcert_va_composite" ty e
   | _ ->
       unsupported "va_arg at this type";
-      Eval(Values.Vint(coqint_of_camlint 0l), type_int32s)
+      Eval(Vint(coqint_of_camlint 0l), type_int32s)
 
 (** ** Translation functions *)
 
@@ -630,9 +632,9 @@ let convertFloat f kind =
     | Z.Z0 ->
       begin match kind with
       | FFloat ->
-	  Ctyping.econst_single (Floats.Float.to_single Floats.Float.zero)
+	  Ctyping.econst_single (Float.to_single Float.zero)
       | FDouble | FLongDouble ->
-	  Ctyping.econst_float Floats.Float.zero
+	  Ctyping.econst_float Float.zero
       end
     | Z.Zpos mant ->
 
@@ -647,11 +649,11 @@ let convertFloat f kind =
 
       begin match kind with
       | FFloat ->
-	  let f = Floats.Float32.from_parsed base mant exp in
+	  let f = Float32.from_parsed base mant exp in
           checkFloatOverflow f "float";
           Ctyping.econst_single f
       | FDouble | FLongDouble ->
-	  let f = Floats.Float.from_parsed base mant exp in
+	  let f = Float.from_parsed base mant exp in
           checkFloatOverflow f "double";
           Ctyping.econst_float f
       end
@@ -660,7 +662,7 @@ let convertFloat f kind =
 
 (** Expressions *)
 
-let ezero = Eval(Values.Vint(coqint_of_camlint 0l), type_int32s)
+let ezero = Eval(Vint(coqint_of_camlint 0l), type_int32s)
 
 let ewrap = function
   | Errors.OK e -> e
