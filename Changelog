@@ -1,4 +1,4 @@
-Release 3.0, 2017-02-xx
+Release 3.0, 2017-02-10
 =======================
 
 Major improvements:
@@ -17,6 +17,7 @@ Major improvements:
   instantiation of the new support for 64-bit targets described
   above.) Support for x86-64 is currently available for Linux and MacOS X.
   (Run the configure script with 'x86_64-linux' or 'x86_64-macosx'.)
+  This is an early port: several ABI incompatibilities remain.
 
 Language features:
 
