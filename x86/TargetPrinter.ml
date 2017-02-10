@@ -168,7 +168,7 @@ module MacOS_System : SYSTEM =
           if i then ".const" else "COMM"
       | Section_string -> ".const"
       | Section_literal -> ".literal8"
-      | Section_jumptable -> ".const"
+      | Section_jumptable -> ".text"  (* needed in 64 bits, not a problem in 32 bits *)
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\", %s, %s"
             (if wr then "__DATA" else "__TEXT") s
