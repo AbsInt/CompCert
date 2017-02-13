@@ -36,9 +36,6 @@ val ensure_inputfile_exists: string -> unit
 val print_error:out_channel -> Errors.errcode list -> unit
    (** Printing of error messages *)
 
-val gnu_system: bool
-   (** Are the target tools gnu tools? *)
-
 val explode_comma_option: string -> string list
    (** Split option at commas *)
 

@@ -32,11 +32,11 @@ let assemble ifile ofile =
   end
 
 let assembler_actions =
- [ Prefix "-Wa,", Self (fun s -> if gnu_system then
+ [ Prefix "-Wa,", Self (fun s -> if Configuration.gnu_toolchain then
     assembler_options := s :: !assembler_options
   else
     assembler_options := List.rev_append (explode_comma_option s) !assembler_options);
-  Exact "-Xassembler", String (fun s -> if gnu_system then
+  Exact "-Xassembler", String (fun s -> if Configuration.gnu_toolchain then
     assembler_options := s::"-Xassembler":: !assembler_options
   else
     assembler_options := s::!assembler_options );]

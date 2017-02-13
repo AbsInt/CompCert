@@ -14,9 +14,6 @@
 open Printf
 open Clflags
 
-(* Is this a gnu based tool chain *)
-let gnu_system = Configuration.system <> "diab"
-
 (* Safe removal of files *)
 let safe_remove file =
   try Sys.remove file with Sys_error _ -> ()
