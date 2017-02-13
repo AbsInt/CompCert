@@ -18,6 +18,10 @@ open Printf
 
 (* Common frontend functions between clightgen and ccomp *)
 
+(* Dump file for C Ast and CompCert C *)
+let dparse_destination = ref None
+
+let dcompcertc_destination = ref None
 
 (* From C to preprocessed C *)
 
@@ -59,12 +63,12 @@ let parse_c_file sourcename ifile =
     | None -> exit 2
     | Some p -> p in
   (* Save C AST if requested *)
-  if !option_dparse then begin
-    let ofile = output_filename sourcename ".c" ".parsed.c" in
+  begin match !dparse_destination with
+  | None -> ()
+  | Some ofile ->
     let oc = open_out ofile in
     Cprint.program (Format.formatter_of_out_channel oc) ast;
-    close_out oc
-  end;
+    close_out oc end;
   (* Conversion to Csyntax *)
   let csyntax =
     match Timing.time "CompCert C generation" C2C.convertProgram ast with
@@ -72,11 +76,12 @@ let parse_c_file sourcename ifile =
     | Some p -> p in
   flush stderr;
   (* Save CompCert C AST if requested *)
-  if !option_dcmedium then begin
-    let ofile = output_filename sourcename ".c" ".compcert.c" in
-    let oc = open_out ofile in
-    PrintCsyntax.print_program (Format.formatter_of_out_channel oc) csyntax;
-    close_out oc
+  begin match !dcompcertc_destination with
+    | None -> ()
+    | Some ofile ->
+      let oc = open_out ofile in
+      PrintCsyntax.print_program (Format.formatter_of_out_channel oc) csyntax;
+      close_out oc
   end;
   csyntax
 

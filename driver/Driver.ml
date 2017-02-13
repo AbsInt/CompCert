@@ -43,6 +43,8 @@ let compile_c_ast sourcename csyntax ofile =
   let set_dest dst opt ext =
     dst := if !opt then Some (output_filename sourcename ".c" ext)
                    else None in
+  set_dest dparse_destination option_dparse ".parsed.c";
+  set_dest dcompcertc_destination option_dcmedium ".compcert.c";
   set_dest PrintClight.destination option_dclight ".light.c";
   set_dest PrintCminor.destination option_dcminor ".cm";
   set_dest PrintRTL.destination option_drtl ".rtl";
