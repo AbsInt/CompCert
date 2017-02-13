@@ -26,7 +26,7 @@ let assemble ifile ofile =
   ] in
   let exc = command cmd in
   if exc <> 0 then begin
-    safe_remove ofile;
+    File.safe_remove ofile;
     command_error "assembler" exc;
     exit 2
   end
