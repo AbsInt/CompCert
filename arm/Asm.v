@@ -84,8 +84,8 @@ Module Pregmap := EMap(PregEq).
 
 (** Conventional names for stack pointer ([SP]) and return address ([RA]) *)
 
-Notation "'SP'" := IR13 (only parsing).
-Notation "'RA'" := IR14 (only parsing).
+Notation "'SP'" := IR13 (only parsing) : asm.
+Notation "'RA'" := IR14 (only parsing) : asm.
 
 (** The instruction set.  Most instructions correspond exactly to
   actual instructions of the ARM processor. See the ARM
@@ -294,8 +294,10 @@ Definition program := AST.program fundef unit.
 Definition regset := Pregmap.t val.
 Definition genv := Genv.t fundef unit.
 
-Notation "a # b" := (a b) (at level 1, only parsing).
-Notation "a # b <- c" := (Pregmap.set b c a) (at level 1, b at next level).
+Notation "a # b" := (a b) (at level 1, only parsing) : asm.
+Notation "a # b <- c" := (Pregmap.set b c a) (at level 1, b at next level) : asm.
+
+Open Scope asm.
 
 (** Undefining some registers *)
 

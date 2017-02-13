@@ -87,8 +87,8 @@ Module Pregmap := EMap(PregEq).
 
 (** Conventional names for stack pointer ([SP]) and return address ([RA]) *)
 
-Notation "'SP'" := GPR1 (only parsing).
-Notation "'RA'" := LR (only parsing).
+Notation "'SP'" := GPR1 (only parsing) : asm.
+Notation "'RA'" := LR (only parsing) : asm.
 
 (** Symbolic constants.  Immediate operands to an arithmetic instruction
   or an indexed memory access can be either integer literals,
@@ -385,8 +385,10 @@ Definition program := AST.program fundef unit.
 Definition regset := Pregmap.t val.
 Definition genv := Genv.t fundef unit.
 
-Notation "a # b" := (a b) (at level 1, only parsing).
-Notation "a # b <- c" := (Pregmap.set b c a) (at level 1, b at next level).
+Notation "a # b" := (a b) (at level 1, only parsing) : asm.
+Notation "a # b <- c" := (Pregmap.set b c a) (at level 1, b at next level) : asm.
+
+Open Scope asm.
 
 (** Undefining some registers *)
 

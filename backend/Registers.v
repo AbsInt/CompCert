@@ -61,9 +61,11 @@ Definition regmap_setres
   | _ => rs
   end.
 
-Notation "a # b" := (Regmap.get b a) (at level 1).
-Notation "a ## b" := (List.map (fun r => Regmap.get r a) b) (at level 1).
-Notation "a # b <- c" := (Regmap.set b c a) (at level 1, b at next level).
+Notation "a # b" := (Regmap.get b a) (at level 1) : rtl.
+Notation "a ## b" := (List.map (fun r => Regmap.get r a) b) (at level 1) : rtl.
+Notation "a # b <- c" := (Regmap.set b c a) (at level 1, b at next level) : rtl.
+
+Open Scope rtl.
 
 (** Pointwise "less defined than" relation between register maps. *)
 
