@@ -852,8 +852,10 @@ Opaque loadind.
 - (* internal function *)
   exploit functions_translated; eauto. intros [tf [A B]]. monadInv B.
   generalize EQ; intros EQ'. monadInv EQ'.
-  destruct (zlt Ptrofs.max_unsigned (list_length_z (fn_code x0))); inversion EQ1. clear EQ1.
+  destruct (zlt Ptrofs.max_unsigned (list_length_z (fn_code x0))); inversion EQ1. clear EQ1. subst x0.
   monadInv EQ0.
+  set (tfbody := Pallocframe (fn_stacksize f) (fn_link_ofs f) :: Pstr IR14 IR13 (SOimm (Ptrofs.to_int (fn_retaddr_ofs f))) :: x0) in *.
+  set (tf := {| fn_sig := Mach.fn_sig f; fn_code := tfbody |}) in *.
   unfold store_stack in *.
   exploit Mem.alloc_extends. eauto. eauto. apply Zle_refl. apply Zle_refl.
   intros [m1' [C D]].
@@ -865,12 +867,10 @@ Opaque loadind.
   set (rs2 := nextinstr (rs0#IR12 <- (parent_sp s) #IR13 <- (Vptr stk Ptrofs.zero))).
   set (rs3 := nextinstr rs2).
   assert (EXEC_PROLOGUE:
-            exec_straight tge x
-              (fn_code x) rs0 m'
-              x1 rs3 m3').
-  replace (fn_code x)
-  with (Pallocframe (fn_stacksize f) (fn_link_ofs f) :: Pstr IR14 IR13 (SOimm (Ptrofs.to_int (fn_retaddr_ofs f))) :: x1)
-  by (rewrite <- H5; auto).
+            exec_straight tge tf
+              (fn_code tf) rs0 m'
+              x0 rs3 m3').
+  change (fn_code tf) with tfbody; unfold tfbody.
   apply exec_straight_two with rs2 m2'.
   unfold exec_instr. rewrite C. fold sp.
   rewrite <- (sp_val _ _ _ AG). unfold Tptr, chunk_of_type, Archi.ptr64 in F. rewrite F. auto.
@@ -884,7 +884,7 @@ Opaque loadind.
   econstructor; eauto.
   change (rs3 PC) with (Val.offset_ptr (Val.offset_ptr (rs0 PC) Ptrofs.one) Ptrofs.one).
   rewrite ATPC. simpl. constructor; eauto.
-  subst x. eapply code_tail_next_int. omega.
+  eapply code_tail_next_int. omega.
   eapply code_tail_next_int. omega. constructor.
   unfold rs3, rs2.
   apply agree_nextinstr. apply agree_nextinstr.

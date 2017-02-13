@@ -876,7 +876,7 @@ Local Transparent destroyed_by_jumptable.
 - (* internal function *)
   exploit functions_translated; eauto. intros [tf [A B]]. monadInv B.
   generalize EQ; intros EQ'. monadInv EQ'.
-  destruct (zlt Ptrofs.max_unsigned (list_length_z x0.(fn_code))); inversion EQ1. clear EQ1.
+  destruct (zlt Ptrofs.max_unsigned (list_length_z x0.(fn_code))); inversion EQ1. clear EQ1. subst x0.
   unfold store_stack in *.
   exploit Mem.alloc_extends. eauto. eauto. apply Zle_refl. apply Zle_refl.
   intros [m1' [C D]].
@@ -887,15 +887,23 @@ Local Transparent destroyed_by_jumptable.
   intros [m3' [P Q]].
   (* Execution of function prologue *)
   monadInv EQ0. rewrite transl_code'_transl_code in EQ1.
+  set (tfbody := Pallocframe (fn_stacksize f) (fn_link_ofs f)
+                      (fn_retaddr_ofs f)
+                    :: Pmflr GPR0
+                       :: Pstw GPR0 (Cint (Ptrofs.to_int (fn_retaddr_ofs f)))
+                            GPR1
+                          :: Pcfi_rel_offset
+                               (Ptrofs.to_int (fn_retaddr_ofs f)) :: x0) in *.
+  set (tf := {| fn_sig := Mach.fn_sig f; fn_code := tfbody |}) in *.
   set (rs2 := nextinstr (rs0#GPR1 <- sp #GPR0 <- Vundef)).
   set (rs3 := nextinstr (rs2#GPR0 <- (rs0#LR))).
   set (rs4 := nextinstr rs3).
   set (rs5 := nextinstr rs4).
   assert (EXEC_PROLOGUE:
-            exec_straight tge x
-              x.(fn_code) rs0 m'
-              x1 rs5 m3').
-  rewrite <- H5 at 2. simpl.
+            exec_straight tge tf
+              tf.(fn_code) rs0 m'
+              x0 rs5 m3').
+  change (fn_code tf) with tfbody; unfold tfbody.
   apply exec_straight_step with rs2 m2'.
   unfold exec_instr. rewrite C. fold sp.
   rewrite <- (sp_val _ _ _ AG). rewrite F. auto. auto.
@@ -911,7 +919,6 @@ Local Transparent destroyed_by_jumptable.
   econstructor; eauto.
   change (rs5 PC) with (Val.offset_ptr (Val.offset_ptr (Val.offset_ptr (Val.offset_ptr (rs0 PC) Ptrofs.one) Ptrofs.one) Ptrofs.one) Ptrofs.one).
   rewrite ATPC. simpl. constructor; eauto.
-  subst x; simpl in g. unfold fn_code.
   eapply code_tail_next_int. omega.
   eapply code_tail_next_int. omega.
   eapply code_tail_next_int. omega.
