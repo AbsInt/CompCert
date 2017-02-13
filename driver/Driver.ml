@@ -55,8 +55,8 @@ let compile_c_ast sourcename csyntax ofile =
     | Errors.OK asm ->
         asm
     | Errors.Error msg ->
-        eprintf "%s: %a" sourcename print_error msg;
-        exit 2 in
+      print_errorcodes sourcename msg
+  in
   (* Dump Asm in binary and JSON format *)
   if !option_sdump then begin
     let sf = output_filename sourcename ".c" !sdump_suffix in
@@ -80,39 +80,32 @@ let compile_c_file sourcename ifile ofile =
 let process_c_file sourcename =
   ensure_inputfile_exists sourcename;
   if !option_E then begin
-    preprocess sourcename (output_filename_default "-");
+    preprocess sourcename (File.output_filename_default "-");
     ""
   end else begin
     let preproname = if !option_dprepro then
       output_filename sourcename ".c" ".i"
     else
-      Filename.temp_file "compcert" ".i" in
+      File.temp_file ".i" in
     preprocess sourcename preproname;
     let name =
       if !option_interp then begin
         Machine.config := Machine.compcert_interpreter !Machine.config;
         let csyntax = parse_c_file sourcename preproname in
-        if not !option_dprepro then
-          safe_remove preproname;
        Interp.execute csyntax;
         ""
       end else if !option_S then begin
         compile_c_file sourcename preproname
           (output_filename ~final:true sourcename ".c" ".s");
-        if not !option_dprepro then
-          safe_remove preproname;
         ""
       end else begin
         let asmname =
           if !option_dasm
           then output_filename sourcename ".c" ".s"
-          else Filename.temp_file "compcert" ".s" in
+          else File.temp_file ".s" in
         compile_c_file sourcename preproname asmname;
-        if not !option_dprepro then
-          safe_remove preproname;
         let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
         assemble asmname objname;
-        if not !option_dasm then safe_remove asmname;
         objname
       end in
     name
@@ -134,14 +127,12 @@ let process_i_file sourcename =
     let asmname =
       if !option_dasm
       then output_filename sourcename ".c" ".s"
-      else Filename.temp_file "compcert" ".s" in
+      else File.temp_file ".s" in
     compile_c_file sourcename sourcename asmname;
     let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
     assemble asmname objname;
-    if not !option_dasm then safe_remove asmname;
     objname
   end
-
 
 (* Processing of .S and .s files *)
 
@@ -154,14 +145,13 @@ let process_s_file sourcename =
 let process_S_file sourcename =
   ensure_inputfile_exists sourcename;
   if !option_E then begin
-    preprocess sourcename (output_filename_default "-");
+    preprocess sourcename (File.output_filename_default "-");
     ""
   end else begin
-    let preproname = Filename.temp_file "compcert" ".s" in
+    let preproname = File.temp_file ".s" in
     preprocess sourcename preproname;
     let objname = output_filename ~final: !option_c sourcename ".S" ".o" in
     assemble preproname objname;
-    safe_remove preproname;
     objname
   end
 
@@ -170,7 +160,7 @@ let process_S_file sourcename =
 let process_h_file sourcename =
   if !option_E then begin
     ensure_inputfile_exists sourcename;
-    preprocess sourcename (output_filename_default "-");
+    preprocess sourcename (File.output_filename_default "-");
     ""
   end else begin
     eprintf "Error: input file %s ignored (not in -E mode)\n" sourcename;
@@ -478,7 +468,7 @@ let _ =
       end;
     let linker_args = time "Total compilation time" perform_actions () in
     if (not nolink) && linker_args <> [] then begin
-      linker (output_filename_default "a.out") linker_args
+      linker (File.output_filename_default "a.out") linker_args
     end;
    if  Cerrors.check_errors () then exit 2
   with Sys_error msg ->

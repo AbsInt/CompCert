@@ -90,13 +90,6 @@ let output_filename ?(final = false) source_file source_suffix output_suffix =
     Filename.basename (Filename.chop_suffix source_file source_suffix)
     ^ output_suffix
 
-(* A variant of [output_filename] where the default output name is fixed *)
-
-let output_filename_default default_file =
-  match !option_o with
-  | Some file -> file
-  | None -> default_file
-
 (* All input files should exist *)
 
 let ensure_inputfile_exists name =
@@ -106,14 +99,14 @@ let ensure_inputfile_exists name =
   end
 (* Printing of error messages *)
 
-let print_error oc msg =
-  let print_one_error = function
+let print_errorcodes file msg =
+  let print_one_error oc = function
   | Errors.MSG s -> output_string oc (Camlcoq.camlstring_of_coqstring s)
   | Errors.CTX i -> output_string oc (Camlcoq.extern_atom i)
   | Errors.POS i -> fprintf oc "%ld" (Camlcoq.P.to_int32 i)
   in
-    List.iter print_one_error msg;
-    output_char oc '\n'
+  eprintf "%s: %a\n" file (fun oc msg -> List.iter (print_one_error oc) msg) msg;
+  exit 2
 
 (* Command-line parsing *)
 let explode_comma_option s =
@@ -122,17 +115,23 @@ let explode_comma_option s =
   | _ :: tl -> tl
 
 (* Record actions to be performed after parsing the command line *)
+type action =
+  | File_action of ((string -> string) * string)
+  | Linker_action of string
 
-let actions : ((string -> string) * string) list ref = ref []
+let actions : action list ref = ref []
 
 let push_action fn arg =
-  actions := (fn, arg) :: !actions
+  actions := File_action(fn, arg) :: !actions
 
 let push_linker_arg arg =
-  push_action (fun s -> s) arg
+  actions := Linker_action arg :: !actions
 
 let perform_actions () =
   let rec perform = function
   | [] -> []
-  | (fn, arg) :: rem -> let res = fn arg in res :: perform rem
+  | act :: rem -> let res = action act in res :: perform rem
+  and action = function
+    | File_action (f,s) -> f s
+    | Linker_action s -> s
   in perform (List.rev !actions)
