@@ -646,8 +646,9 @@ case Zlt_bool_spec ; intros Hk.
 (* *)
 unfold truncate_aux.
 rewrite Fx at 1.
-unshelve refine (let H := _ in conj _ H).
+assert (H: (e + k)%Z = canonic_exp beta fexp x).
 unfold k. ring.
+refine (conj _ H).
 rewrite <- H.
 apply F2R_eq_compat.
 replace (scaled_mantissa beta fexp x) with (Z2R (Zfloor (scaled_mantissa beta fexp x))).

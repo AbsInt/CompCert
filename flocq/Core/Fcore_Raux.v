@@ -1673,7 +1673,7 @@ Qed.
 (** Another well-used function for having the logarithm of a real number x to the base #&beta;# *)
 Record ln_beta_prop x := {
   ln_beta_val :> Z ;
-   _ : (x <> 0)%R -> (bpow (ln_beta_val - 1)%Z <= Rabs x < bpow ln_beta_val)%R
+  _ : (x <> 0)%R -> (bpow (ln_beta_val - 1)%Z <= Rabs x < bpow ln_beta_val)%R
 }.
 
 Definition ln_beta :

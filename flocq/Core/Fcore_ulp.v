@@ -35,6 +35,7 @@ Variable fexp : Z -> Z.
 (** Definition and basic properties about the minimal exponent, when it exists *)
 
 Lemma Z_le_dec_aux: forall x y : Z, (x <= y)%Z \/ ~ (x <= y)%Z.
+Proof.
 intros.
 destruct (Z_le_dec x y).
 now left.
@@ -158,8 +159,7 @@ rewrite ulp_neq_0.
 unfold F2R; simpl.
 apply Rmult_le_compat_r.
 apply bpow_ge_0.
-replace 1%R with (Z2R (Zsucc 0)) by reflexivity.
-apply Z2R_le.
+apply (Z2R_le (Zsucc 0)).
 apply Zlt_le_succ.
 apply F2R_gt_0_reg with beta (canonic_exp beta fexp x).
 now rewrite <- Fx.
@@ -206,6 +206,7 @@ Qed.
 
 Theorem ulp_bpow :
   forall e, ulp (bpow e) = bpow (fexp (e + 1)).
+Proof.
 intros e.
 rewrite ulp_neq_0.
 apply f_equal.

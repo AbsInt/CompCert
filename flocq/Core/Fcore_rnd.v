@@ -275,15 +275,13 @@ Theorem Only_DN_or_UP :
   F f -> (fd <= f <= fu)%R ->
   f = fd \/ f = fu.
 Proof.
-intros F x fd fu f Hd Hu Hf ([Hdf|Hdf], Hfu).
-2 : now left.
-destruct Hfu.
-2 : now right.
-destruct (Rle_or_lt x f).
-elim Rlt_not_le with (1 := H).
+intros F x fd fu f Hd Hu Hf [Hdf Hfu].
+destruct (Rle_or_lt x f) ; [right|left].
+apply Rle_antisym with (1 := Hfu).
 now apply Hu.
-elim Rlt_not_le with (1 := Hdf).
-apply Hd ; auto with real.
+apply Rlt_le in H.
+apply Rle_antisym with (2 := Hdf).
+now apply Hd.
 Qed.
 
 Theorem Rnd_ZR_abs :

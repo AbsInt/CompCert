@@ -136,9 +136,9 @@ Proof.
 intros e He.
 apply generic_format_bpow.
 destruct (Zle_lt_or_eq _ _ He).
-now apply valid_exp.
+now apply valid_exp_.
 rewrite <- H.
-apply valid_exp_.
+apply valid_exp.
 rewrite H.
 apply Zle_refl.
 Qed.
@@ -604,107 +604,6 @@ Qed.
 Definition round x :=
   F2R (Float beta (rnd (scaled_mantissa x)) (canonic_exp x)).
 
-Theorem round_le_pos :
-  forall x y, (0 < x)%R -> (x <= y)%R -> (round x <= round y)%R.
-Proof.
-intros x y Hx Hxy.
-unfold round, scaled_mantissa, canonic_exp.
-destruct (ln_beta beta x) as (ex, Hex). simpl.
-destruct (ln_beta beta y) as (ey, Hey). simpl.
-specialize (Hex (Rgt_not_eq _ _ Hx)).
-specialize (Hey (Rgt_not_eq _ _ (Rlt_le_trans _ _ _ Hx Hxy))).
-rewrite Rabs_pos_eq in Hex.
-2: now apply Rlt_le.
-rewrite Rabs_pos_eq in Hey.
-2: apply Rle_trans with (2:=Hxy); now apply Rlt_le.
-assert (He: (ex <= ey)%Z).
-cut (ex - 1 < ey)%Z. omega.
-apply (lt_bpow beta).
-apply Rle_lt_trans with (1 := proj1 Hex).
-apply Rle_lt_trans with (1 := Hxy).
-apply Hey.
-destruct (Zle_or_lt ey (fexp ey)) as [Hy1|Hy1].
-rewrite (proj2 (proj2 (valid_exp ey) Hy1) ex).
-apply F2R_le_compat.
-apply Zrnd_le.
-apply Rmult_le_compat_r.
-apply bpow_ge_0.
-exact Hxy.
-now apply Zle_trans with ey.
-destruct (Zle_lt_or_eq _ _ He) as [He'|He'].
-destruct (Zle_or_lt ey (fexp ex)) as [Hx2|Hx2].
-rewrite (proj2 (proj2 (valid_exp ex) (Zle_trans _ _ _ He Hx2)) ey Hx2).
-apply F2R_le_compat.
-apply Zrnd_le.
-apply Rmult_le_compat_r.
-apply bpow_ge_0.
-exact Hxy.
-apply Rle_trans with (F2R (Float beta (rnd (bpow (ey - 1) * bpow (- fexp ey))) (fexp ey))).
-rewrite <- bpow_plus.
-rewrite <- (Z2R_Zpower beta (ey - 1 + -fexp ey)). 2: omega.
-rewrite Zrnd_Z2R.
-destruct (Zle_or_lt ex (fexp ex)) as [Hx1|Hx1].
-apply Rle_trans with (F2R (Float beta 1 (fexp ex))).
-apply F2R_le_compat.
-rewrite <- (Zrnd_Z2R 1).
-apply Zrnd_le.
-apply Rlt_le.
-exact (proj2 (mantissa_small_pos _ _ Hex Hx1)).
-unfold F2R. simpl.
-rewrite Z2R_Zpower. 2: omega.
-rewrite <- bpow_plus, Rmult_1_l.
-apply bpow_le.
-omega.
-apply Rle_trans with (F2R (Float beta (rnd (bpow ex * bpow (- fexp ex))) (fexp ex))).
-apply F2R_le_compat.
-apply Zrnd_le.
-apply Rmult_le_compat_r.
-apply bpow_ge_0.
-apply Rlt_le.
-apply Hex.
-rewrite <- bpow_plus.
-rewrite <- Z2R_Zpower. 2: omega.
-rewrite Zrnd_Z2R.
-unfold F2R. simpl.
-rewrite 2!Z2R_Zpower ; try omega.
-rewrite <- 2!bpow_plus.
-apply bpow_le.
-omega.
-apply F2R_le_compat.
-apply Zrnd_le.
-apply Rmult_le_compat_r.
-apply bpow_ge_0.
-apply Hey.
-rewrite He'.
-apply F2R_le_compat.
-apply Zrnd_le.
-apply Rmult_le_compat_r.
-apply bpow_ge_0.
-exact Hxy.
-Qed.
-
-Theorem round_generic :
-  forall x,
-  generic_format x ->
-  round x = x.
-Proof.
-intros x Hx.
-unfold round.
-rewrite scaled_mantissa_generic with (1 := Hx).
-rewrite Zrnd_Z2R.
-now apply sym_eq.
-Qed.
-
-Theorem round_0 :
-  round 0 = R0.
-Proof.
-unfold round, scaled_mantissa.
-rewrite Rmult_0_l.
-fold (Z2R 0).
-rewrite Zrnd_Z2R.
-apply F2R_0.
-Qed.
-
 Theorem round_bounded_large_pos :
   forall x ex,
   (fexp ex < ex)%Z ->
@@ -792,6 +691,74 @@ refine (let H := _ in conj (proj1 H) (Rlt_le _ _ (proj2 H))).
 now apply mantissa_small_pos.
 Qed.
 
+Theorem round_le_pos :
+  forall x y, (0 < x)%R -> (x <= y)%R -> (round x <= round y)%R.
+Proof.
+intros x y Hx Hxy.
+destruct (ln_beta beta x) as [ex Hex].
+destruct (ln_beta beta y) as [ey Hey].
+specialize (Hex (Rgt_not_eq _ _ Hx)).
+specialize (Hey (Rgt_not_eq _ _ (Rlt_le_trans _ _ _ Hx Hxy))).
+rewrite Rabs_pos_eq in Hex.
+2: now apply Rlt_le.
+rewrite Rabs_pos_eq in Hey.
+2: apply Rle_trans with (2:=Hxy); now apply Rlt_le.
+assert (He: (ex <= ey)%Z).
+  apply bpow_lt_bpow with beta.
+  apply Rle_lt_trans with (1 := proj1 Hex).
+  now apply Rle_lt_trans with y.
+assert (Heq: fexp ex = fexp ey -> (round x <= round y)%R).
+  intros H.
+  unfold round, scaled_mantissa, canonic_exp.
+  rewrite ln_beta_unique_pos with (1 := Hex).
+  rewrite ln_beta_unique_pos with (1 := Hey).
+  rewrite H.
+  apply F2R_le_compat.
+  apply Zrnd_le.
+  apply Rmult_le_compat_r with (2 := Hxy).
+  apply bpow_ge_0.
+destruct (Zle_or_lt ey (fexp ey)) as [Hy1|Hy1].
+  apply Heq.
+  apply valid_exp with (1 := Hy1).
+  now apply Zle_trans with ey.
+destruct (Zle_lt_or_eq _ _ He) as [He'|He'].
+2: now apply Heq, f_equal.
+apply Rle_trans with (bpow (ey - 1)).
+2: now apply round_bounded_large_pos.
+destruct (Zle_or_lt ex (fexp ex)) as [Hx1|Hx1].
+  destruct (round_bounded_small_pos _ _ Hx1 Hex) as [-> | ->].
+  apply bpow_ge_0.
+  apply bpow_le.
+  apply valid_exp, proj2 in Hx1.
+  specialize (Hx1 ey).
+  omega.
+apply Rle_trans with (bpow ex).
+now apply round_bounded_large_pos.
+apply bpow_le.
+now apply Z.lt_le_pred.
+Qed.
+
+Theorem round_generic :
+  forall x,
+  generic_format x ->
+  round x = x.
+Proof.
+intros x Hx.
+unfold round.
+rewrite scaled_mantissa_generic with (1 := Hx).
+rewrite Zrnd_Z2R.
+now apply sym_eq.
+Qed.
+
+Theorem round_0 :
+  round 0 = R0.
+Proof.
+unfold round, scaled_mantissa.
+rewrite Rmult_0_l.
+fold (Z2R 0).
+rewrite Zrnd_Z2R.
+apply F2R_0.
+Qed.
 
 Theorem exp_small_round_0_pos :
   forall x ex,
@@ -806,9 +773,6 @@ apply Rlt_le_trans with (bpow (ex-1)).
 apply bpow_gt_0.
 apply  (round_bounded_large_pos); assumption.
 Qed.
-
-
-
 
 Theorem generic_format_round_pos :
   forall x,
@@ -832,14 +796,11 @@ destruct (Rle_or_lt (bpow ex) (round x)) as [Hr|Hr].
 rewrite <- (Rle_antisym _ _ Hr Hr2).
 apply generic_format_bpow.
 now apply valid_exp.
-assert (Hr' := conj Hr1 Hr).
-unfold generic_format, scaled_mantissa.
-rewrite (canonic_exp_fexp_pos _ _ Hr').
-unfold round, scaled_mantissa.
+apply generic_format_F2R.
+intros _.
+rewrite (canonic_exp_fexp_pos (F2R _) _ (conj Hr1 Hr)).
 rewrite (canonic_exp_fexp_pos _ _ Hex).
-unfold F2R at 3. simpl.
-rewrite Rmult_assoc, <- bpow_plus, Zplus_opp_r, Rmult_1_r.
-now rewrite Ztrunc_Z2R.
+now apply Zeq_le.
 Qed.
 
 End Fcore_generic_round_pos.
