@@ -29,7 +29,7 @@ RECDIRS=lib common $(ARCHDIRS) backend cfrontend driver flocq exportclight cpars
 
 COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) compcert.$(d))
 
-COQC="$(COQBIN)coqc" -q $(COQINCLUDES)
+COQC="$(COQBIN)coqc" -q $(COQINCLUDES) $(COQCOPTS)
 COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
 COQDOC="$(COQBIN)coqdoc"
 COQEXEC="$(COQBIN)coqtop" $(COQINCLUDES) -batch -load-vernac-source
@@ -146,6 +146,9 @@ endif
 
 
 proof: $(FILES:.v=.vo)
+
+# Turn off some warnings for compiling Flocq
+flocq/%.vo: COQCOPTS+=-w -deprecated-implicit-arguments
 
 extraction: extraction/STAMP
 
