@@ -1255,8 +1255,8 @@ Proof.
   split; simpl; auto; intros.
   rewrite PTree.gsspec in H6. destruct (peq id0 id).
 + inv H6. destruct H3. congruence. destruct gl!id as [iv0|] eqn:NG.
-  rewrite ISet.In_add. intros [P|P]. omega. eelim GL; eauto.
-  rewrite ISet.In_interval. omega.
+  unfold iv'; rewrite ISet.In_add. intros [P|P]. omega. eelim GL; eauto.
+  unfold iv'; rewrite ISet.In_interval. omega.
 + eauto.
 - (* Stk ofs *)
   split; simpl; auto; intros. destruct H3.

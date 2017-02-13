@@ -1,3 +1,4 @@
+Unset Bracketing Last Introduction Pattern.
 (**
 This file is part of the Flocq formalization of floating-point
 arithmetic in Coq: http://flocq.gforge.inria.fr/
