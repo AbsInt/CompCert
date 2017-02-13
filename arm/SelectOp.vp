@@ -44,7 +44,7 @@ Require Import Floats.
 Require Import Op.
 Require Import CminorSel.
 
-Open Local Scope cminorsel_scope.
+Local Open Scope cminorsel_scope.
 
 (** ** Constants **)
 

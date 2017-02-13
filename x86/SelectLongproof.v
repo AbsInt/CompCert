@@ -19,8 +19,8 @@ Require Import Cminor Op CminorSel.
 Require Import SelectOp SelectOpproof SplitLong SplitLongproof.
 Require Import SelectLong.
 
-Open Local Scope cminorsel_scope.
-Open Local Scope string_scope.
+Local Open Scope cminorsel_scope.
+Local Open Scope string_scope.
 
 (** * Correctness of the instruction selection functions for 64-bit operators *)
 

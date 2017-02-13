@@ -41,7 +41,7 @@ Require Import Compopts.
 Require Import AST Integers Floats.
 Require Import Op CminorSel.
 
-Open Local Scope cminorsel_scope.
+Local Open Scope cminorsel_scope.
 
 (** ** Constants **)
 

@@ -96,7 +96,7 @@ Proof.
   intros; red; intros. subst b'. contradiction.
 Qed.
 
-Hint Local Resolve valid_not_valid_diff: mem.
+Local Hint Resolve valid_not_valid_diff: mem.
 
 (** Permissions *)
 
@@ -111,7 +111,7 @@ Proof.
   eapply perm_order_trans; eauto.
 Qed.
 
-Hint Local Resolve perm_implies: mem.
+Local Hint Resolve perm_implies: mem.
 
 Theorem perm_cur_max:
   forall m b ofs p, perm m b ofs Cur p -> perm m b ofs Max p.
@@ -138,7 +138,7 @@ Proof.
   intros. destruct k; auto. apply perm_cur_max. auto.
 Qed.
 
-Hint Local Resolve perm_cur perm_max: mem.
+Local Hint Resolve perm_cur perm_max: mem.
 
 Theorem perm_valid_block:
   forall m b ofs k p, perm m b ofs k p -> valid_block m b.
@@ -152,7 +152,7 @@ Proof.
   contradiction.
 Qed.
 
-Hint Local Resolve perm_valid_block: mem.
+Local Hint Resolve perm_valid_block: mem.
 
 Remark perm_order_dec:
   forall p1 p2, {perm_order p1 p2} + {~perm_order p1 p2}.
@@ -199,7 +199,7 @@ Proof.
   unfold range_perm; intros; eauto with mem.
 Qed.
 
-Hint Local Resolve range_perm_implies range_perm_cur range_perm_max: mem.
+Local Hint Resolve range_perm_implies range_perm_cur range_perm_max: mem.
 
 Lemma range_perm_dec:
   forall m b lo hi k p, {range_perm m b lo hi k p} + {~ range_perm m b lo hi k p}.
@@ -244,7 +244,7 @@ Proof.
   eapply valid_access_implies; eauto. constructor.
 Qed.
 
-Hint Local Resolve valid_access_implies: mem.
+Local Hint Resolve valid_access_implies: mem.
 
 Theorem valid_access_valid_block:
   forall m chunk b ofs,
@@ -257,7 +257,7 @@ Proof.
   eauto with mem.
 Qed.
 
-Hint Local Resolve valid_access_valid_block: mem.
+Local Hint Resolve valid_access_valid_block: mem.
 
 Lemma valid_access_perm:
   forall m chunk b ofs k p,
@@ -671,7 +671,7 @@ Proof.
   congruence.
 Qed.
 
-Hint Local Resolve load_valid_access valid_access_load: mem.
+Local Hint Resolve load_valid_access valid_access_load: mem.
 
 Theorem load_type:
   forall m chunk b ofs v,
@@ -957,7 +957,7 @@ Proof.
   contradiction.
 Defined.
 
-Hint Local Resolve valid_access_store: mem.
+Local Hint Resolve valid_access_store: mem.
 
 Section STORE.
 Variable chunk: memory_chunk.
@@ -3377,8 +3377,6 @@ Proof.
   apply perm_cur_max. apply (H5 (Ptrofs.unsigned ofs1)). omega.
   apply perm_cur_max. apply (H1 (Ptrofs.unsigned ofs2)). omega.
 Qed.
-
-Require Intv.
 
 Theorem disjoint_or_equal_inject:
   forall f m m' b1 b1' delta1 b2 b2' delta2 ofs1 ofs2 sz,

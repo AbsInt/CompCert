@@ -17,7 +17,7 @@ Require Import Compopts.
 Require Import AST Integers Floats.
 Require Import Op CminorSel SelectOp SplitLong SelectLong.
 
-Open Local Scope cminorsel_scope.
+Local Open Scope cminorsel_scope.
 
 (** We try to turn divisions by a constant into a multiplication by
   a pseudo-inverse of the divisor.  The approach is described in

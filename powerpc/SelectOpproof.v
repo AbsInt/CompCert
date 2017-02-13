@@ -26,7 +26,7 @@ Require Import Op.
 Require Import CminorSel.
 Require Import SelectOp.
 
-Open Local Scope cminorsel_scope.
+Local Open Scope cminorsel_scope.
 Local Transparent Archi.ptr64.
 
 (** * Useful lemmas and tactics *)

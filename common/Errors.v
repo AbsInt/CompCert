@@ -104,7 +104,7 @@ Notation "'assertion' A ; B" := (if A then B else assertion_failed)
 
 (** This is the familiar monadic map iterator. *)
 
-Open Local Scope error_monad_scope.
+Local Open Scope error_monad_scope.
 
 Fixpoint mmap (A B: Type) (f: A -> res B) (l: list A) {struct l} : res (list B) :=
   match l with

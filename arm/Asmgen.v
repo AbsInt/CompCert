@@ -23,8 +23,8 @@ Require Import Mach.
 Require Import Asm.
 Require Import Compopts.
 
-Open Local Scope string_scope.
-Open Local Scope error_monad_scope.
+Local Open Scope string_scope.
+Local Open Scope error_monad_scope.
 
 (** Extracting integer or float registers. *)
 
