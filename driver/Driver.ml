@@ -439,7 +439,7 @@ let cmdline_actions =
     option_drtl := true;
     option_dalloctrace := true;
     option_dmach := true;
-    option_dasm := true;);
+    option_dasm := true);
   Exact "-sdump", Set option_sdump;
   Exact "-sdump-suffix", String (fun s -> option_sdump := true; sdump_suffix:= s);
   Exact "-sdump-folder", String (fun s -> sdump_folder := s);
