@@ -19,8 +19,6 @@ open Frontend
 open Assembler
 open Linker
 
-let dump_options = ref false
-
 (* Optional sdump suffix *)
 let sdump_suffix = ref ".json"
 let sdump_folder = ref ""
@@ -160,8 +158,6 @@ let process_c_file sourcename =
         if not !option_dasm then safe_remove asmname;
         objname
       end in
-    if !dump_options then
-      Optionsprinter.print (output_filename sourcename ".c" ".opt.json") !stdlib_path;
     name
   end
 
@@ -176,8 +172,6 @@ let process_i_file sourcename =
   end else if !option_S then begin
     compile_c_file sourcename sourcename
       (output_filename ~final:true sourcename ".c" ".s");
-    if !dump_options then
-      Optionsprinter.print (output_filename sourcename ".c" ".opt.json") !stdlib_path;
     ""
   end else begin
     let asmname =
@@ -188,8 +182,6 @@ let process_i_file sourcename =
     let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
     assemble asmname objname;
     if not !option_dasm then safe_remove asmname;
-    if !dump_options then
-      Optionsprinter.print (output_filename sourcename ".c" ".opt.json") !stdlib_path;
     objname
   end
 
@@ -210,8 +202,6 @@ let process_cminor_file sourcename =
     let objname = output_filename ~final: !option_c sourcename ".cm" ".o" in
     assemble asmname objname;
     if not !option_dasm then safe_remove asmname;
-    if !dump_options then
-      Optionsprinter.print (output_filename sourcename ".cm" ".opt.json") !stdlib_path;
     objname
   end
 
@@ -329,7 +319,6 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>)
   -dasm          Save generated assembly in <file>.s
   -dall          Save all generated intermediate files in <file>.<ext>
   -sdump         Save info for post-linking validation in <file>.json
-  -doptions      Save the compiler configurations in <file>.opt.json
 General options:
   -stdlib <dir>  Set the path of the Compcert run-time library
   -v             Print external commands before invoking them
@@ -450,12 +439,10 @@ let cmdline_actions =
     option_drtl := true;
     option_dalloctrace := true;
     option_dmach := true;
-    option_dasm := true;
-    dump_options:=true);
+    option_dasm := true;);
   Exact "-sdump", Set option_sdump;
   Exact "-sdump-suffix", String (fun s -> option_sdump := true; sdump_suffix:= s);
   Exact "-sdump-folder", String (fun s -> sdump_folder := s);
-  Exact "-doptions", Set dump_options;
 (* General options *)
   Exact "-v", Set option_v;
   Exact "-stdlib", String(fun s -> stdlib_path := s);
