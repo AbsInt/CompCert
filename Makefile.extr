@@ -54,8 +54,6 @@ extraction/%.cmx: WARNINGS +=-w -20-27-32..34-39-41-44..45
 extraction/%.cmo: WARNINGS +=-w -20-27-32..34-39-41-44..45
 cparser/pre_parser.cmx: WARNINGS += -w -41
 cparser/pre_parser.cmo: WARNINGS += -w -41
-backend/CMparser.cmx: WARNINGS += -w -41
-backend/CMparser.cmo: WARNINGS += -w -41
 
 COMPFLAGS+=-g $(INCLUDES) $(MENHIR_INCLUDES) $(WARNINGS)
 
@@ -74,10 +72,9 @@ OCAMLDEP=ocamldep$(DOTOPT) -slash $(INCLUDES)
 OCAMLLEX=ocamllex -q
 MODORDER=tools/modorder .depend.extr
 
-PARSERS=backend/CMparser.mly cparser/pre_parser.mly
-LEXERS=backend/CMlexer.mll cparser/Lexer.mll \
-       lib/Tokenize.mll lib/Readconfig.mll \
-       lib/Responsefile.mll
+PARSERS=cparser/pre_parser.mly
+LEXERS=cparser/Lexer.mll lib/Tokenize.mll \
+	     lib/Readconfig.mll lib/Responsefile.mll
 
 LIBS=str.cmxa unix.cmxa $(MENHIR_LIBS)
 LIBS_BYTE=$(patsubst %.cmxa,%.cma,$(patsubst %.cmx,%.cmo,$(LIBS)))
@@ -132,7 +129,6 @@ clean:
 	rm -f $(EXECUTABLES)
 	rm -f $(GENERATED)
 	for d in $(DIRS); do rm -f $$d/*.cm[iotx] $$d/*cmti $$d/*.o; done
-	rm -f backend/CMparser.automaton
 	$(MAKE) -C cparser clean
 
 # Generation of .depend.extr
