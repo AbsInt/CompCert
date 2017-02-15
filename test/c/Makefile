@@ -56,17 +56,6 @@ bench:
 	   echo -n "$$i: "; $(TIME) ./$$i.compcert; \
          done
 
-cminor_roundtrip:
-	@for i in $(PROGS); do \
-	   $(CCOMP) -dcminor -S $$i.c; \
-	   cp $$i.cm $$i.1.cm; \
-           $(CCOMP) -dcminor -S $$i.cm; \
-           if cmp -s $$i.1.cm $$i.cm; \
-           then echo "$$i: round trip passed"; rm -f $$i.1.cm $$i.cm; \
-           else echo "$$i: round trip FAILED"; diff -u $$i.1.cm $$i.cm; \
-           fi; \
-         done
-
 clean:
 	rm -f *.compcert *.gcc
 	rm -f *.compcert.c *.light.c *.parsed.c *.s *.o *.sdump *~ 

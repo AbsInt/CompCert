@@ -1,3 +1,6 @@
+- Removed the compilation of '.cm' files written in Cminor concrete syntax.
+
+
 Release 3.0.1, 2017-02-14
 =========================
 
