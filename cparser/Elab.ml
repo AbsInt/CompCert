@@ -2675,4 +2675,5 @@ let elab_file prog =
   ignore (elab_definitions false (Builtins.environment()) prog);
   let p = elaborated_program () in
   Checks.unused_variables p;
+  Checks.unknown_attrs_program p;
   p

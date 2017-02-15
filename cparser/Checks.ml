@@ -78,6 +78,7 @@ let unknown_attrs_program p =
           List.iter (unknown_attrs_decl env g.gloc) f.fd_locals;
           Env.add_ident env f.fd_name f.fd_storage (fundef_typ f)
         | Gcompositedecl(su, id, attr) ->
+          unknown_attrs g.gloc attr;
           Env.add_composite env id (composite_info_decl su attr)
         | Gcompositedef(su, id, attr, fl) ->
           unknown_attrs g.gloc attr;
@@ -121,53 +122,77 @@ and vars_used_init env = function
   | Init_struct (_,sl) -> List.fold_left (fun env (_,i) -> vars_used_init env i) env sl
   | Init_union (_,_,ui) -> vars_used_init env ui
 
-let rec vars_used_stmt ((dec_env,used_env) as acc) s =
+let rec vars_used_stmt env s =
   match s.sdesc with
   | Sbreak
   | Scontinue
   | Sgoto _
   | Sreturn None
-  | Sskip -> acc
+  | Sskip -> env
   | Sreturn (Some e)
-  | Sdo e -> dec_env,(vars_used_expr used_env e)
+  | Sdo e -> (vars_used_expr env e)
   | Sseq (s1,s2) ->
-    let acc = vars_used_stmt acc s1 in
-    vars_used_stmt acc s2
+    let env = vars_used_stmt env s1 in
+    vars_used_stmt env s2
   | Sif (e,s1,s2) ->
-    let used_env = vars_used_expr used_env e in
-    let acc = vars_used_stmt (dec_env,used_env) s1 in
-    vars_used_stmt acc s2
+    let env = vars_used_expr env e in
+    let env = vars_used_stmt env s1 in
+    vars_used_stmt env s2
   | Sfor (s1,e,s2,s3) ->
-    let used_env = vars_used_expr used_env e in
-    let acc = vars_used_stmt (dec_env,used_env) s1 in
-    let acc = vars_used_stmt acc s2 in
-    vars_used_stmt acc s3
+    let env = vars_used_expr env e in
+    let env = vars_used_stmt env s1 in
+    let env = vars_used_stmt env s2 in
+    vars_used_stmt env s3
   | Sswitch (e,s)
   | Swhile (e,s)
   | Sdowhile (s,e) ->
-    let used_env = vars_used_expr used_env e in
-    vars_used_stmt (dec_env,used_env) s
-  | Sblock sl -> List.fold_left vars_used_stmt acc sl
+    let env = vars_used_expr env e in
+    vars_used_stmt env s
+  | Sblock sl -> List.fold_left vars_used_stmt env sl
   | Sdecl (sto,id,ty,init) ->
-    let dec_env = IdentMap.add id s.sloc dec_env
-    and used_env = match init with
-      | Some init ->vars_used_init used_env init
-      | None -> used_env in
-    dec_env,used_env
-  | Slabeled (lbl,s) -> vars_used_stmt acc s
+    let env = match init with
+      | Some init ->vars_used_init env init
+      | None -> env in
+    env
+  | Slabeled (lbl,s) -> vars_used_stmt env s
   | Sasm (attr,str,op,op2,constr) ->
     let vars_asm_op env (_,_,e) =
       vars_used_expr env e in
-    let used_env = List.fold_left vars_asm_op used_env op in
-    let used_env = List.fold_left vars_asm_op used_env op2 in
-    dec_env,used_env
+    let env = List.fold_left vars_asm_op env op in
+    let env = List.fold_left vars_asm_op env op2 in
+    env
+
+let rec unused_variables_stmt env s =
+  match s.sdesc with
+  | Sbreak
+  | Scontinue
+  | Sgoto _
+  | Sreturn _
+  | Sskip
+  | Sasm _
+  | Sdo _ -> ()
+  | Sseq (s1,s2)
+  | Sif (_,s1,s2) ->
+    unused_variables_stmt env s1;
+    unused_variables_stmt env s2
+  | Sfor (s1,e,s2,s3) ->
+    unused_variables_stmt env s1;
+    unused_variables_stmt env s2;
+    unused_variables_stmt env s3
+  | Slabeled (_,s)
+  | Sswitch (_,s)
+  | Swhile (_,s)
+  | Sdowhile (s,_) ->
+    unused_variables_stmt env s
+  | Sblock sl -> List.iter (unused_variables_stmt env) sl
+  | Sdecl (sto,id,ty,init) -> if not (IdentSet.mem id env) then
+      warning s.sloc Unused_variable "unused variable '%s'" id.name
 
 let unused_variables p =
   List.iter (fun g -> match g.gdesc with
       | Gfundef fd ->
-        let dec_env,used_env = vars_used_stmt (IdentMap.empty,IdentSet.empty) fd.fd_body in
-        IdentMap.iter (fun id loc -> if not (IdentSet.mem id used_env) then
-                          warning loc Unused_variable "unused variable '%s'" id.name) dec_env;
-        List.iter (fun (id,_) -> if not (IdentSet.mem id used_env) then
+        let env = vars_used_stmt IdentSet.empty fd.fd_body in
+        unused_variables_stmt env fd.fd_body;
+        List.iter (fun (id,_) -> if not (IdentSet.mem id env) then
                       warning g.gloc Unused_parameter "unused parameter '%s'" id.name) fd.fd_params
       | _ -> ()) p
