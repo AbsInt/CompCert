@@ -24,9 +24,7 @@ let transform_program t p name =
   (run_pass Unblock.program 'b'
   (run_pass Bitfields.program 'f'
      p)))) in
-  let p2 = Rename.program p1 in
-  Checks.unknown_attrs_program p2;
-  p2
+  Rename.program p1
 
 let parse_transformations s =
   let t = ref CharSet.empty in
