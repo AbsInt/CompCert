@@ -74,49 +74,6 @@ let compile_c_file sourcename ifile ofile =
   let ast = parse_c_file sourcename ifile in
   compile_c_ast sourcename ast ofile
 
-(* From Cminor to asm *)
-
-let compile_cminor_file ifile ofile =
-  (* Prepare to dump RTL, Mach, etc, if requested *)
-  let set_dest dst opt ext =
-    dst := if !opt then Some (output_filename ifile ".cm" ext)
-                   else None in
-  set_dest PrintRTL.destination option_drtl ".rtl";
-  set_dest Regalloc.destination_alloctrace option_dalloctrace ".alloctrace";
-  set_dest PrintLTL.destination option_dltl ".ltl";
-  set_dest PrintMach.destination option_dmach ".mach";
-  Sections.initialize();
-  let ic = open_in ifile in
-  let lb = Lexing.from_channel ic in
-  (* Parse cminor *)
-  let cm =
-    try CMtypecheck.type_program (CMparser.prog CMlexer.token lb)
-    with Parsing.Parse_error ->
-           eprintf "File %s, character %d: Syntax error\n"
-                   ifile (Lexing.lexeme_start lb);
-           exit 2
-       | CMlexer.Error msg ->
-           eprintf "File %s, character %d: %s\n"
-                   ifile (Lexing.lexeme_start lb) msg;
-           exit 2
-       | CMtypecheck.Error msg ->
-           eprintf "File %s, type-checking error:\n%s"
-                   ifile msg;
-           exit 2 in
-  (* Convert to Asm *)
-  let asm =
-    match Compiler.apply_partial
-               (Compiler.transf_cminor_program cm)
-               Asmexpand.expand_program with
-    | Errors.OK asm ->
-        asm
-    | Errors.Error msg ->
-        eprintf "%s: %a" ifile print_error msg;
-        exit 2 in
-  (* Print Asm in text form *)
-  let oc = open_out ofile in
-  PrintAsm.print_program oc asm;
-  close_out oc
 
 (* Processing of a .c file *)
 
@@ -185,25 +142,6 @@ let process_i_file sourcename =
     objname
   end
 
-(* Processing of a .cm file *)
-
-let process_cminor_file sourcename =
-  ensure_inputfile_exists sourcename;
-  if !option_S then begin
-    compile_cminor_file sourcename
-                        (output_filename ~final:true sourcename ".cm" ".s");
-    ""
-  end else begin
-    let asmname =
-      if !option_dasm
-      then output_filename sourcename ".cm" ".s"
-      else Filename.temp_file "compcert" ".s" in
-    compile_cminor_file sourcename asmname;
-    let objname = output_filename ~final: !option_c sourcename ".cm" ".o" in
-    assemble asmname objname;
-    if not !option_dasm then safe_remove asmname;
-    objname
-  end
 
 (* Processing of .S and .s files *)
 
@@ -259,7 +197,6 @@ let usage_string =
 Recognized source files:
   .c             C source file
   .i or .p       C source file that should not be preprocessed
-  .cm            Cminor source file
   .s             Assembly file
   .S or .sx      Assembly file that must be preprocessed
   .o             Object file
@@ -485,8 +422,6 @@ let cmdline_actions =
       push_action process_i_file s; incr num_source_files; incr num_input_files);
   Suffix ".p", Self (fun s ->
       push_action process_i_file s; incr num_source_files; incr num_input_files);
-  Suffix ".cm", Self (fun s ->
-      push_action process_cminor_file s; incr num_source_files; incr num_input_files);
   Suffix ".s", Self (fun s ->
       push_action process_s_file s; incr num_source_files; incr num_input_files);
   Suffix ".S", Self (fun s ->

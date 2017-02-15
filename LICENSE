@@ -36,11 +36,6 @@ option) any later version:
   cfrontend/Ctyping.v
   
   backend/Cminor.v
-  backend/CMlexer.mli
-  backend/CMlexer.mll
-  backend/CMparser.mly
-  backend/CMtypecheck.ml
-  backend/CMtypecheck.mli
 
   arm/Archi.v
   ia32/Archi.v
