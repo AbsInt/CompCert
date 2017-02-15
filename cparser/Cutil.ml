@@ -1179,24 +1179,3 @@ let rec subst_stmt phi s =
                List.map subst_asm_operand inputs,
                clob)
   }
-
-let contains_return s =
-  let rec aux s =
-    match s.sdesc with
-    | Sskip
-    | Sbreak
-    | Scontinue
-    | Sdo _
-    | Sdecl _
-    | Sasm _
-    | Sgoto _ -> false
-    | Sif(_, s1, s2)
-    | Sseq(s1, s2) -> aux s1 || aux s2
-    | Sswitch (_, s)
-    | Slabeled (_, s)
-    | Swhile (_, s)
-    | Sdowhile(s, _ ) -> aux s
-    | Sfor(s1, _ , s2, s3) ->  aux s1 || aux s2 || aux s3
-    | Sreturn _ -> true
-    | Sblock sl -> List.fold_left (fun acc s -> acc || aux s) false sl in
-  aux s
