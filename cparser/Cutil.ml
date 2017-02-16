@@ -954,6 +954,10 @@ let is_debug_stmt s =
       is_debug_call e
   | _ -> false
 
+let is_call_to_fun e s =
+  match e.edesc with
+  | EVar id -> id.C.name = s
+  | _ -> false
 
 (* Assignment compatibility check over attributes.
    Standard attributes ("const", "volatile", "restrict") can safely
