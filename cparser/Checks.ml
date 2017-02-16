@@ -16,6 +16,7 @@
 open C
 open Cerrors
 open Cutil
+open Env
 
 let attribute_string = function
   | AConst -> "const"
@@ -63,38 +64,70 @@ let rec unknown_attrs_stmt env s =
   | Sblock sl -> List.iter (unknown_attrs_stmt env) sl
   | Sdecl d -> unknown_attrs_decl env s.sloc d
 
-let unknown_attrs_program p =
-  let rec unknown_attrs_globdecls env = function
+let traverse_program
+    ?(decl = fun env loc d -> ())
+    ?(fundef = fun env loc fd -> ())
+    ?(compositedecl = fun env loc su id attr -> ())
+    ?(compositedef = fun env loc su id attr fl -> ())
+    ?(typedef = fun env loc id ty -> ())
+    ?(enum = fun env loc id attr members -> ())
+    ?(pragma = fun env loc s -> ())
+    p =
+  let rec traverse env = function
     | [] -> ()
     | g :: gl ->
-      let env' =
+      let env =
         match g.gdesc with
         | Gdecl ((sto, id, ty, init) as d) ->
-          unknown_attrs_decl env g.gloc d;
-          Env.add_ident env id sto ty
+          decl env g.gloc d;
+          add_ident env id sto ty
         | Gfundef f ->
-          unknown_attrs g.gloc f.fd_attrib;
-          unknown_attrs_stmt env f.fd_body;
-          List.iter (unknown_attrs_decl env g.gloc) f.fd_locals;
-          Env.add_ident env f.fd_name f.fd_storage (fundef_typ f)
-        | Gcompositedecl(su, id, attr) ->
-          unknown_attrs g.gloc attr;
-          Env.add_composite env id (composite_info_decl su attr)
-        | Gcompositedef(su, id, attr, fl) ->
-          unknown_attrs g.gloc attr;
-          List.iter (fun fld ->  unknown_attrs_typ env g.gloc fld.fld_typ) fl;
-          Env.add_composite env id (composite_info_def env su attr fl)
-        | Gtypedef(id, ty) ->
-          unknown_attrs_typ env g.gloc ty;
-          Env.add_typedef env id ty
-        | Genumdef(id, attr, members) ->
-          unknown_attrs g.gloc attr;
-          Env.add_enum env id {Env.ei_members =  members; ei_attr = attr}
+          fundef env g.gloc f;
+          add_ident env f.fd_name f.fd_storage (fundef_typ f)
+        | Gcompositedecl (su,id,attr) ->
+          compositedecl env g.gloc su id attr;
+          add_composite env id (composite_info_decl su attr)
+        | Gcompositedef (su,id,attr,fl) ->
+          compositedef env g.gloc su id attr fl;
+          add_composite env id (composite_info_def env su attr fl)
+        | Gtypedef (id,ty) ->
+          typedef env g.gloc id ty;
+          add_typedef env id ty
+        | Genumdef (id,attr,members) ->
+          enum env g.gloc id attr members;
+          add_enum env id {ei_members = members; ei_attr = attr}
         | Gpragma s ->
-          env
-      in
-        unknown_attrs_globdecls env' gl
-  in unknown_attrs_globdecls (Builtins.environment()) p
+          pragma env g.gloc s;
+          env in
+      traverse env gl in
+  traverse (Builtins.environment ()) p
+
+let unknown_attrs_program p =
+  let decl env loc d =
+    unknown_attrs_decl env loc d
+  and fundef env loc f =
+     unknown_attrs loc f.fd_attrib;
+     unknown_attrs_stmt env f.fd_body;
+     List.iter (unknown_attrs_decl env loc) f.fd_locals;
+  and compositedecl env loc su id attr =
+    unknown_attrs loc attr
+  and compositedef env loc su id attr fl =
+    unknown_attrs loc attr;
+    List.iter (fun fld ->  unknown_attrs_typ env loc fld.fld_typ) fl
+  and typedef env loc id ty =
+    unknown_attrs_typ env loc ty
+  and enum env loc id attr members =
+    unknown_attrs loc attr
+  in
+  traverse_program
+    ~decl:decl
+    ~fundef:fundef
+    ~compositedecl:compositedecl
+    ~compositedef:compositedef
+    ~typedef:typedef
+    ~enum:enum
+    p
+
 
 let rec vars_used_expr env e =
   match e.edesc with
@@ -162,7 +195,13 @@ let rec vars_used_stmt env s =
     let env = List.fold_left vars_asm_op env op2 in
     env
 
-let rec unused_variables_stmt env s =
+let unused_variable env used loc (id,ty) =
+  let attr = attributes_of_type env ty in
+  let unused_attr = find_custom_attributes ["unused";"__unused__"] attr <> [] in
+  if not ((IdentSet.mem id used) || unused_attr) then
+    warning loc Unused_variable "unused variable '%s'" id.name
+
+let rec unused_variables_stmt env used s =
   match s.sdesc with
   | Sbreak
   | Scontinue
@@ -173,26 +212,26 @@ let rec unused_variables_stmt env s =
   | Sdo _ -> ()
   | Sseq (s1,s2)
   | Sif (_,s1,s2) ->
-    unused_variables_stmt env s1;
-    unused_variables_stmt env s2
+    unused_variables_stmt env used s1;
+    unused_variables_stmt env used s2
   | Sfor (s1,e,s2,s3) ->
-    unused_variables_stmt env s1;
-    unused_variables_stmt env s2;
-    unused_variables_stmt env s3
+    unused_variables_stmt env used s1;
+    unused_variables_stmt env used s2;
+    unused_variables_stmt env used s3
   | Slabeled (_,s)
   | Sswitch (_,s)
   | Swhile (_,s)
   | Sdowhile (s,_) ->
-    unused_variables_stmt env s
-  | Sblock sl -> List.iter (unused_variables_stmt env) sl
-  | Sdecl (sto,id,ty,init) -> if not (IdentSet.mem id env) then
-      warning s.sloc Unused_variable "unused variable '%s'" id.name
+    unused_variables_stmt env used s
+  | Sblock sl -> List.iter (unused_variables_stmt env used) sl
+  | Sdecl (sto,id,ty,init) ->
+    unused_variable env used s.sloc (id,ty)
 
 let unused_variables p =
-  List.iter (fun g -> match g.gdesc with
-      | Gfundef fd ->
-        let env = vars_used_stmt IdentSet.empty fd.fd_body in
-        unused_variables_stmt env fd.fd_body;
-        List.iter (fun (id,_) -> if not (IdentSet.mem id env) then
-                      warning g.gloc Unused_parameter "unused parameter '%s'" id.name) fd.fd_params
-      | _ -> ()) p
+  let fundef env loc fd =
+    let used = vars_used_stmt IdentSet.empty fd.fd_body in
+    unused_variables_stmt env used fd.fd_body;
+    List.iter (unused_variable env used loc) fd.fd_params in
+  traverse_program
+    ~fundef:fundef
+    p
