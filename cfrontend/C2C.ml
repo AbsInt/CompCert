@@ -272,7 +272,8 @@ let attributes = [
   (* function-related *)
   ("noreturn", Cutil.Attr_function);
   (* name-related *)
-  ("section", Cutil.Attr_name)
+  ("section", Cutil.Attr_name);
+  ("unused", Cutil.Attr_name)
 ]
   
 
