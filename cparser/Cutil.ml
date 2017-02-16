@@ -435,6 +435,13 @@ let alignof_fkind = function
 
 let enum_ikind = IInt
 
+let wrap_alignof f env name =
+  try
+    let ci = f env name in
+    ci.ci_alignof
+  with Env.Error _ -> None
+
+
 let rec alignof env t =
   let a = alignas_attribute (attributes_of_type env t) in
   if a > 0 then Some a else
@@ -447,9 +454,9 @@ let rec alignof env t =
   | TFun(_, _, _, _) -> !config.alignof_fun
   | TNamed(_, _) -> alignof env (unroll env t)
   | TStruct(name, _) ->
-      let ci = Env.find_struct env name in ci.ci_alignof
+      wrap_alignof Env.find_struct env name
   | TUnion(name, _) ->
-      let ci = Env.find_union env name in ci.ci_alignof
+      wrap_alignof Env.find_union env name
   | TEnum(_, _) -> Some(alignof_ikind enum_ikind)
 
 (* Compute the natural alignment of a struct or union. *)
@@ -494,6 +501,12 @@ let cautious_mul (a: int64) (b: int) =
   then Some(Int64.to_int a * b)
   else None
 
+let wrap_sizeof f env name =
+  try
+    let ci = f env name in
+    ci.ci_sizeof
+  with Env.Error _ -> None
+
 (* Return size of type, in bytes, or [None] if the type is incomplete *)
 
 let rec sizeof env t =
@@ -514,9 +527,9 @@ let rec sizeof env t =
   | TFun(_, _, _, _) -> !config.sizeof_fun
   | TNamed(_, _) -> sizeof env (unroll env t)
   | TStruct(name, _) ->
-      let ci = Env.find_struct env name in ci.ci_sizeof
+    wrap_sizeof Env.find_struct env name
   | TUnion(name, _) ->
-      let ci = Env.find_union env name in ci.ci_sizeof
+    wrap_sizeof Env.find_union env name
   | TEnum(_, _) -> Some(sizeof_ikind enum_ikind)
 
 (* Compute the size of a union.
