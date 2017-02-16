@@ -117,6 +117,7 @@ let resolve_test env e =
   match Ceval.integer_expr env e with
   | None -> None
   | Some n -> Some (n <> 0L)
+  | exception Env.Error _ -> None (* Any error due to local types should be ignored *)
 
 let if_ env e (s1: flow) (s2: flow) : flow =
   match resolve_test env e with
