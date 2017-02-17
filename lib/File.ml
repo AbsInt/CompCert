@@ -22,11 +22,21 @@ type input_file =
     suffix: string;
   }
 
+let access file =
+  try
+    Unix.access file [Unix.R_OK];
+    true
+  with Unix.Unix_error _ ->
+    false
+
 (* Create a new input file and ensure it's existence *)
 let new_input_file file suffix =
   if not (Sys.file_exists file) then begin
     eprintf "error: no such file or directory: '%s'\n" file;
     exit 2
+  end else if not (access file) then begin
+      eprintf "ccomp: fatal error: %s:  Permission denied\n" file;
+      exit 2;
   end;
   {
     name = file;
