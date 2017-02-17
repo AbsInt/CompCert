@@ -24,7 +24,7 @@ module StringSet = Set.Make(String)
 
 (* Functions declared noreturn by the standard *)
 let std_noreturn_functions =
-   ["longjmp";"exit";"abort";"_Exit";"quick_exit";"thrd_exit"]
+   ["longjmp";"exit";"_exit";"abort";"_Exit";"quick_exit";"thrd_exit"]
 
 (* Statements are abstracted as "flow transformers":
    functions from possible inputs to possible outcomes.
