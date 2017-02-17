@@ -173,6 +173,33 @@ let loop (s: flow) : flow = fun i ->
         the fallthrough exit. *)
      { o with onormal = false }
 
+(* Detect the presence of a 'default' case reachable from an enclosing
+   'switch' *)
+
+let rec contains_default s =
+  match s.sdesc with
+  | Sskip -> false
+  | Sdo _ -> false
+  | Sseq(s1, s2) -> contains_default s1 || contains_default s2
+  | Sif(e, s1, s2) -> contains_default s1 || contains_default s2
+  | Swhile(e, s) -> contains_default s
+  | Sdowhile(s, e) -> contains_default s
+  | Sfor(s1, e, s2, s3) ->
+      contains_default s1 || contains_default s2 || contains_default s3
+  | Sbreak -> false
+  | Scontinue -> false
+  | Sswitch(e, s) -> false
+     (* the default that could appear inside the switch
+        cannot be reached by the enclosing switch *)
+  | Slabeled(Sdefault, s) -> true
+  | Slabeled(_, s) -> contains_default s
+  | Sgoto lbl -> false
+  | Sreturn opte -> false
+  | Sblock sl -> List.exists contains_default sl
+  | Sdecl dcl -> false
+  | Sasm _ -> false
+
+
 (* This is the main analysis function.  Given a C statement [s] it returns
    a flow that overapproximates the behavior of [s]. *)
 
@@ -214,7 +241,9 @@ let rec outcomes env s : flow =
   | Scontinue ->
       continue
   | Sswitch(e, s) ->
-      catch_break (switch (outcomes env s))
+      let fl = catch_break (switch (outcomes env s)) in
+      if contains_default s then fl else either normal fl
+      (* if there is no 'default' case, the switch can fall through *)
   | Slabeled(Slabel lbl, s) ->
       label lbl (outcomes env s)
   | Slabeled((Scase _ | Sdefault), s) ->
