@@ -2336,13 +2336,11 @@ let elab_fundef env spec name defs body loc =
     if s = "main" then begin
       match unroll env ty_ret with
       | TInt(IInt, []) ->
-          (* Add implicit "return 0;" at end of function body, unless
-             this control point is unreachable, e.g. function already
-             returns in all cases. *)
-          if can_fallthrough then
-            sseq no_loc body1
-              {sdesc = Sreturn(Some(intconst 0L IInt)); sloc = no_loc}
-          else body1
+          (* Add implicit "return 0;" at end of function body.
+             If we trusted the return analysis, we would do this only if
+             this control point is reachable, i.e if can_fallthrough is true. *)
+          sseq no_loc body1
+               {sdesc = Sreturn(Some(intconst 0L IInt)); sloc = no_loc}
       | _ ->
           warning loc Main_return_type "return type of 'main' should be 'int'";
           body1
