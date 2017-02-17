@@ -22,6 +22,10 @@ open Cutil
 
 module StringSet = Set.Make(String)
 
+(* Functions declared noreturn by the standard *)
+let std_noreturn_functions =
+   ["longjmp";"exit";"_exit";"abort";"_Exit";"quick_exit";"thrd_exit"]
+
 (* Statements are abstracted as "flow transformers":
    functions from possible inputs to possible outcomes.
    Possible inputs are:
@@ -177,9 +181,10 @@ let rec outcomes env s : flow =
   | Sskip ->
       normal
   | Sdo {edesc = ECall(fn, args)} ->
-      if find_custom_attributes ["noreturn"; "__noreturn__"]
-                                (attributes_of_type env fn.etyp) = []
-      then normal else noflow
+    let returns = find_custom_attributes ["noreturn"; "__noreturn__"]
+        (attributes_of_type env fn.etyp) = [] in
+    let std_noreturn = List.exists (is_call_to_fun fn) std_noreturn_functions in
+    if returns && not std_noreturn then normal else noflow
   | Sdo e ->
       normal
   | Sseq(s1, s2) ->
