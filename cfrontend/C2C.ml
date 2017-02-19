@@ -271,6 +271,7 @@ let attributes = [
   ("packed", Cutil.Attr_struct);
   (* function-related *)
   ("noreturn", Cutil.Attr_function);
+  ("noinline",Cutil.Attr_function);
   (* name-related *)
   ("section", Cutil.Attr_name);
   ("unused", Cutil.Attr_name)

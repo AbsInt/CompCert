@@ -2365,6 +2365,7 @@ let elab_fundef env spec name defs body loc =
   && can_return then
     warning loc Invalid_noreturn "function '%s' declared 'noreturn' should not return" s;
   (* Build and emit function definition *)
+  let inline = inline && find_custom_attributes ["noinline";"__noinline__"] attr = [] in
   let fn =
     { fd_storage = sto1;
       fd_inline = inline;
