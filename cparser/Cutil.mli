@@ -237,6 +237,8 @@ val field_of_dot_access: Env.t -> typ -> string -> field
   (* Return the field info for a [x.field] access *)
 val field_of_arrow_access: Env.t -> typ -> string -> field
   (* Return the field info for a [x->field] access *)
+val valid_array_size: Env.t -> typ -> int64 -> bool
+  (* Test whether the array size fits in half of the address space *)
 
 (* Constructors *)
 

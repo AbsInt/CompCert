@@ -658,6 +658,7 @@ and elab_type_declarator keep_ty loc env ty kr_ok = function
                 if n < 0L then error loc "size of array is negative";
                 if n = 0L then warning loc Zero_length_array
                     "zero size arrays are an extension";
+                if not (Cutil.valid_array_size env ty n) then error loc "size of array is too large";
                 Some n
             | None ->
                 error loc "size of array is not a compile-time constant";
