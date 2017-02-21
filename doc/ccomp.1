@@ -422,6 +422,10 @@ Enabled by default.
 Disable the specific warning <warning>.
 .
 .TP
+.B \-w
+Suppress all warnings.
+.
+.TP
 .B \-Werror
 Treat all warnings of CompCert as errors.
 .
@@ -438,12 +442,20 @@ Prevent the specific warning <warning> from being treated as error even if \fB\-
 Treat all errors of CompCert as fatal errors, so that the compilation is aborted immediately.
 .
 .TP
-.B \-fdiagnostics-color
-Turn on colored diagnostics. Default for TTY output devices.
+.B \-fmax\-errors=<n>
+Print at most <n> error messages before bailing out.  Defaults to <n>=0 which means unlimited error messages.
 .
 .TP
-.B \-fno-diagnostics-color
-Turn off colored diagnostics.
+.B \-fdiagnostics\-format=<format>
+Select format for location information in messages.  Possible formats are \fBccomp\fP (default), \fBmsvc\fP or \fBvi\fP.
+.
+.TP
+.BR \-fdiagnostics\-color ", " \-fno\-diagnostics\-color
+Turn on/off colored diagnostics.  Enabled by default for TTY output devices.
+.
+.TP
+.BR \-fdiagnostics\-show-option ", " \-fno\-diagnostics\-show\-option
+Turn on/off printing of option name with mappable diagnostics.  Enabled by default.
 .
 .SS
 Tracing Options
