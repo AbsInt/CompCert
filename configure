@@ -22,6 +22,7 @@ has_standard_headers=true
 clightgen=false
 responsefile="gnu"
 merlin=false
+coqproject=false
 
 usage='Usage: ./configure [options] target
 
@@ -71,6 +72,7 @@ Options:
   -no-standard-headers Do not install nor use the standard .h headers
   -clightgen           Also compile the clightgen tool
   -merlin              Generate .merlin file
+  -coqproject          Generate a _CoqProject file for Proof General
 '
 
 
@@ -97,6 +99,8 @@ while : ; do
         clightgen=true;;
     -merlin)
         merlin=true;;
+    -coqproject)
+        coqproject=true;;
     *)
         if test -n "$target"; then echo "$usage" 1>&2; exit 2; fi
         target="$1";;
@@ -515,6 +519,24 @@ B extraction
 
 EOF
 fi
+
+if $coqproject; then
+    echo "-R lib compcert.lib \
+-R common compcert.common \
+-R ${arch} compcert.${arch} \
+-R backend compcert.backend \
+-R cfrontend compcert.cfrontend \
+-R driver compcert.driver \
+-R flocq compcert.flocq \
+-R exportclight compcert.exportclight \
+-R cparser compcert.cparser" > _CoqProject
+    case $arch in
+        x86)
+            echo "-R x86_${bitsize} compcert.x86_${bitsize}" >> _CoqProject
+            ;;
+    esac
+fi
+
 #
 # Generate Makefile.config
 #
