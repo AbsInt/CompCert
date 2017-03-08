@@ -374,6 +374,7 @@ let cmdline_actions =
     option_dclight := true;
     option_dcminor := true;
     option_drtl := true;
+    option_dltl := true;
     option_dalloctrace := true;
     option_dmach := true;
     option_dasm := true);
