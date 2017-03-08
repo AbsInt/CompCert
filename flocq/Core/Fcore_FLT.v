@@ -187,7 +187,7 @@ Qed.
 
 (** Links between FLT and FIX (underflow) *)
 Theorem canonic_exp_FLT_FIX :
-  forall x, x <> R0 ->
+  forall x, x <> 0%R ->
   (Rabs x < bpow (emin + prec))%R ->
   canonic_exp beta FLT_exp x = canonic_exp beta (FIX_exp emin) x.
 Proof.

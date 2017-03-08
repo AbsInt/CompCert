@@ -403,7 +403,7 @@ Definition Z2R n :=
   match n with
   | Zpos p => P2R p
   | Zneg p => Ropp (P2R p)
-  | Z0 => R0
+  | Z0 => 0%R
   end.
 
 Theorem P2R_INR :
@@ -432,10 +432,13 @@ Theorem Z2R_IZR :
   forall n, Z2R n = IZR n.
 Proof.
 intro.
-case n ; intros ; simpl.
+case n ; intros ; unfold Z2R.
 apply refl_equal.
+rewrite <- positive_nat_Z, <- INR_IZR_INZ.
 apply P2R_INR.
+change (IZR (Zneg p)) with (Ropp (IZR (Zpos p))).
 apply Ropp_eq_compat.
+rewrite <- positive_nat_Z, <- INR_IZR_INZ.
 apply P2R_INR.
 Qed.
 
@@ -1193,7 +1196,7 @@ unfold Ztrunc.
 case Rlt_bool_spec ; intro H.
 apply refl_equal.
 rewrite (Rle_antisym _ _ Hx H).
-fold (Z2R 0).
+change 0%R with (Z2R 0).
 rewrite Zceil_Z2R.
 apply Zfloor_Z2R.
 Qed.
@@ -1304,7 +1307,7 @@ unfold Zaway.
 case Rlt_bool_spec ; intro H.
 apply refl_equal.
 rewrite (Rle_antisym _ _ Hx H).
-fold (Z2R 0).
+change 0%R with (Z2R 0).
 rewrite Zfloor_Z2R.
 apply Zceil_Z2R.
 Qed.
@@ -1456,7 +1459,7 @@ Definition bpow e :=
   match e with
   | Zpos p => Z2R (Zpower_pos r p)
   | Zneg p => Rinv (Z2R (Zpower_pos r p))
-  | Z0 => R1
+  | Z0 => 1%R
   end.
 
 Theorem Z2R_Zpower_pos :
@@ -1532,13 +1535,13 @@ Qed.
 Theorem bpow_opp :
   forall e : Z, (bpow (-e) = /bpow e)%R.
 Proof.
-intros e; destruct e.
-simpl; now rewrite Rinv_1.
-now replace (-Zpos p)%Z with (Zneg p) by reflexivity.
-replace (-Zneg p)%Z with (Zpos p) by reflexivity.
+intros [|p|p].
+apply eq_sym, Rinv_1.
+now change (-Zpos p)%Z with (Zneg p).
+change (-Zneg p)%Z with (Zpos p).
 simpl; rewrite Rinv_involutive; trivial.
-generalize (bpow_gt_0 (Zpos p)).
-simpl; auto with real.
+apply Rgt_not_eq.
+apply (bpow_gt_0 (Zpos p)).
 Qed.
 
 Theorem Z2R_Zpower_nat :
@@ -1872,7 +1875,7 @@ apply bpow_ge_0.
 Qed.
 
 Theorem ln_beta_mult_bpow :
-  forall x e, x <> R0 ->
+  forall x e, x <> 0%R ->
   (ln_beta (x * bpow e) = ln_beta x + e :>Z)%Z.
 Proof.
 intros x e Zx.
@@ -1895,7 +1898,7 @@ Qed.
 
 Theorem ln_beta_le_bpow :
   forall x e,
-  x <> R0 ->
+  x <> 0%R ->
   (Rabs x < bpow e)%R ->
   (ln_beta x <= e)%Z.
 Proof.
@@ -2044,20 +2047,19 @@ destruct Hex as (Hex0,Hex1); [now apply Rgt_not_eq|].
 assert (Haxy : (Rabs (x + y) < bpow (ex + 1))%R).
 { rewrite bpow_plus1.
   apply Rlt_le_trans with (2 * bpow ex)%R.
-  - apply Rle_lt_trans with (2 * Rabs x)%R.
-    + rewrite Rabs_right.
-      { apply Rle_trans with (x + x)%R; [now apply Rplus_le_compat_l|].
-        rewrite Rabs_right.
-        { rewrite Rmult_plus_distr_r.
-          rewrite Rmult_1_l.
-          now apply Rle_refl. }
-        now apply Rgt_ge. }
-      apply Rgt_ge.
-      rewrite <- (Rplus_0_l 0).
-      now apply Rplus_gt_compat.
-    + now apply Rmult_lt_compat_l; intuition.
-  - apply Rmult_le_compat_r; [now apply bpow_ge_0|].
-    now change 2%R with (Z2R 2); apply Z2R_le. }
+  - rewrite Rabs_pos_eq.
+    apply Rle_lt_trans with (2 * Rabs x)%R.
+    + rewrite Rabs_pos_eq.
+      replace (2 * x)%R with (x + x)%R by ring.
+      now apply Rplus_le_compat_l.
+      now apply Rlt_le.
+    + apply Rmult_lt_compat_l with (2 := Hex1).
+      exact Rlt_0_2.
+    + rewrite <- (Rplus_0_l 0).
+      now apply Rlt_le, Rplus_lt_compat.
+  - apply Rmult_le_compat_r.
+    now apply bpow_ge_0.
+    now apply (Z2R_le 2). }
 assert (Haxy2 : (bpow (ex - 1) <= Rabs (x + y))%R).
 { apply (Rle_trans _ _ _ Hex0).
   rewrite Rabs_right; [|now apply Rgt_ge].

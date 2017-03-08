@@ -746,7 +746,7 @@ Proof.
   + apply Rlt_le_trans with 0%R; auto. rewrite <- Ropp_0. apply Ropp_lt_contravar. apply Rlt_0_1.
   + replace 1%R with (Z2R (Zfloor x) + 1)%R. apply Zfloor_ub. rewrite H. simpl. apply Rplus_0_l.
 - rewrite Ztrunc_ceil in H by (apply Rlt_le; auto). split.
-  + apply Ropp_lt_cancel. rewrite Ropp_involutive.
+  + apply (Ropp_lt_cancel (-(1))). rewrite Ropp_involutive.
     replace 1%R with (Z2R (Zfloor (-x)) + 1)%R. apply Zfloor_ub.
     unfold Zceil in H. replace (Zfloor (-x)) with 0 by omega. simpl. apply Rplus_0_l.
   + apply Rlt_le_trans with 0%R; auto. apply Rle_0_1.
@@ -1234,10 +1234,7 @@ Proof.
     { unfold eps. rewrite <- bpow_plus. replace (emin - 1 + -emin) with (-1) by omega. auto. }
     rewrite P. unfold Znearest.
     assert (F: Zfloor (/ 2)%R = 0).
-    { apply Zfloor_imp.
-      split. apply Rlt_le. apply Rinv_0_lt_compat. apply (Z2R_lt 0 2). omega.
-      change (Z2R (0 + 1)) with 1%R. rewrite <- Rinv_1 at 3. apply Rinv_1_lt_contravar. apply Rle_refl. apply (Z2R_lt 1 2). omega.
-    }
+    { apply Zfloor_imp. simpl. lra. }
     rewrite F. change (Z2R 0) with 0%R. rewrite Rminus_0_r. rewrite Rcompare_Eq by auto.
     simpl. unfold F2R; simpl. apply Rmult_0_l.
   }
