@@ -252,7 +252,7 @@ apply Rmult_1_r.
 Qed.
 
 Theorem scaled_mantissa_0 :
-  scaled_mantissa 0 = R0.
+  scaled_mantissa 0 = 0%R.
 Proof.
 apply Rmult_0_l.
 Qed.
@@ -667,7 +667,7 @@ Theorem round_bounded_small_pos :
   forall x ex,
   (ex <= fexp ex)%Z ->
   (bpow (ex - 1) <= x < bpow ex)%R ->
-  round x = R0 \/ round x = bpow (fexp ex).
+  round x = 0%R \/ round x = bpow (fexp ex).
 Proof.
 intros x ex He Hx.
 unfold round, scaled_mantissa.
@@ -751,19 +751,19 @@ now apply sym_eq.
 Qed.
 
 Theorem round_0 :
-  round 0 = R0.
+  round 0 = 0%R.
 Proof.
 unfold round, scaled_mantissa.
 rewrite Rmult_0_l.
-fold (Z2R 0).
+change 0%R with (Z2R 0).
 rewrite Zrnd_Z2R.
 apply F2R_0.
 Qed.
 
 Theorem exp_small_round_0_pos :
   forall x ex,
- (bpow (ex - 1) <= x < bpow ex)%R ->
-   round x =R0 -> (ex <= fexp ex)%Z .
+  (bpow (ex - 1) <= x < bpow ex)%R ->
+  round x = 0%R -> (ex <= fexp ex)%Z .
 Proof.
 intros x ex H H1.
 case (Zle_or_lt ex (fexp ex)); trivial; intros V.
@@ -771,7 +771,7 @@ contradict H1.
 apply Rgt_not_eq.
 apply Rlt_le_trans with (bpow (ex-1)).
 apply bpow_gt_0.
-apply  (round_bounded_large_pos); assumption.
+apply (round_bounded_large_pos); assumption.
 Qed.
 
 Theorem generic_format_round_pos :
@@ -931,7 +931,7 @@ rewrite <- Ropp_0.
 now apply Ropp_lt_contravar.
 now apply Ropp_le_contravar.
 (* . 0 <= y *)
-apply Rle_trans with R0.
+apply Rle_trans with 0%R.
 apply F2R_le_0_compat. simpl.
 rewrite <- (Zrnd_Z2R rnd 0).
 apply Zrnd_le...
@@ -1020,7 +1020,7 @@ Qed.
 Theorem exp_small_round_0 :
   forall rnd {Hr : Valid_rnd rnd} x ex,
   (bpow (ex - 1) <= Rabs x < bpow ex)%R ->
-   round rnd x =R0 -> (ex <= fexp ex)%Z .
+   round rnd x = 0%R -> (ex <= fexp ex)%Z .
 Proof.
 intros rnd Hr x ex H1 H2.
 generalize Rabs_R0.
@@ -1177,7 +1177,7 @@ rewrite <- (Rmult_0_l (bpow (- canonic_exp x))).
 apply Rmult_le_compat_r with (2 := Hx).
 apply bpow_ge_0.
 rewrite <- H.
-change R0 with (Z2R 0).
+change 0%R with (Z2R 0).
 now rewrite Zfloor_Z2R, Zceil_Z2R.
 Qed.
 
@@ -1212,7 +1212,7 @@ rewrite <- (Rmult_0_l (bpow (- canonic_exp x))).
 apply Rmult_le_compat_r with (2 := Hx).
 apply bpow_ge_0.
 rewrite <- H.
-change R0 with (Z2R 0).
+change 0%R with (Z2R 0).
 now rewrite Zfloor_Z2R, Zceil_Z2R.
 Qed.
 
@@ -1296,7 +1296,7 @@ Theorem round_DN_small_pos :
   forall x ex,
   (bpow (ex - 1) <= x < bpow ex)%R ->
   (ex <= fexp ex)%Z ->
-  round Zfloor x = R0.
+  round Zfloor x = 0%R.
 Proof.
 intros x ex Hx He.
 rewrite <- (F2R_0 beta (canonic_exp x)).
@@ -1552,7 +1552,7 @@ Qed.
 
 Lemma canonic_exp_le_bpow :
   forall (x : R) (e : Z),
-  x <> R0 ->
+  x <> 0%R ->
   (Rabs x < bpow e)%R ->
   (canonic_exp x <= fexp e)%Z.
 Proof.
@@ -1578,7 +1578,7 @@ Context { valid_rnd : Valid_rnd rnd }.
 
 Theorem ln_beta_round_ge :
   forall x,
-  round rnd x <> R0 ->
+  round rnd x <> 0%R ->
   (ln_beta beta x <= ln_beta beta (round rnd x))%Z.
 Proof with auto with typeclass_instances.
 intros x.
@@ -1597,7 +1597,7 @@ Qed.
 
 Theorem canonic_exp_round_ge :
   forall x,
-  round rnd x <> R0 ->
+  round rnd x <> 0%R ->
   (canonic_exp x <= canonic_exp (round rnd x))%Z.
 Proof with auto with typeclass_instances.
 intros x Zr.
@@ -1807,7 +1807,7 @@ rewrite Zceil_floor_neq.
 rewrite Z2R_plus.
 simpl.
 apply Ropp_lt_cancel.
-apply Rplus_lt_reg_l with R1.
+apply Rplus_lt_reg_l with 1%R.
 replace (1 + -/2)%R with (/2)%R by field.
 now replace (1 + - (Z2R (Zfloor x) + 1 - x))%R with (x - Z2R (Zfloor x))%R by ring.
 apply Rlt_not_eq.
@@ -1866,7 +1866,7 @@ rewrite Z2R_abs, Z2R_minus.
 replace (Z2R (Znearest x) - Z2R n)%R with (- (x - Z2R (Znearest x)) + (x - Z2R n))%R by ring.
 apply Rle_lt_trans with (1 := Rabs_triang _ _).
 simpl.
-replace R1 with (/2 + /2)%R by field.
+replace 1%R with (/2 + /2)%R by field.
 apply Rplus_le_lt_compat with (2 := Hd).
 rewrite Rabs_Ropp.
 apply Znearest_N.

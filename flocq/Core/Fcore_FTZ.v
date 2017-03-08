@@ -217,7 +217,7 @@ Variable rnd : R -> Z.
 Context { valid_rnd : Valid_rnd rnd }.
 
 Definition Zrnd_FTZ x :=
-  if Rle_bool R1 (Rabs x) then rnd x else Z0.
+  if Rle_bool 1 (Rabs x) then rnd x else Z0.
 
 Global Instance valid_rnd_FTZ : Valid_rnd Zrnd_FTZ.
 Proof with auto with typeclass_instances.
@@ -270,7 +270,7 @@ Proof.
 intros x Hx.
 unfold round, scaled_mantissa, canonic_exp.
 destruct (ln_beta beta x) as (ex, He). simpl.
-assert (Hx0: x <> R0).
+assert (Hx0: x <> 0%R).
 intros Hx0.
 apply Rle_not_lt with (1 := Hx).
 rewrite Hx0, Rabs_R0.
@@ -286,7 +286,7 @@ rewrite Rle_bool_true.
 apply refl_equal.
 rewrite Rabs_mult.
 rewrite (Rabs_pos_eq (bpow (- FLX_exp prec ex))).
-change R1 with (bpow 0).
+change 1%R with (bpow 0).
 rewrite <- (Zplus_opp_r (FLX_exp prec ex)).
 rewrite bpow_plus.
 apply Rmult_le_compat_r.
@@ -320,7 +320,7 @@ rewrite Rle_bool_false.
 apply F2R_0.
 rewrite Rabs_mult.
 rewrite (Rabs_pos_eq (bpow (- FTZ_exp ex))).
-change R1 with (bpow 0).
+change 1%R with (bpow 0).
 rewrite <- (Zplus_opp_r (FTZ_exp ex)).
 rewrite bpow_plus.
 apply Rmult_lt_compat_r.

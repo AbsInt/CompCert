@@ -133,7 +133,7 @@ assert (Hy0: (0 <= y)%R).
 apply Rplus_le_reg_r with y.
 apply Rle_trans with x.
 now rewrite Rplus_0_l.
-now rewrite Rmult_plus_distr_r, Rmult_1_l in Hxy2.
+now replace (y + y)%R with (2 * y)%R by ring.
 rewrite Rabs_pos_eq with (1 := Hy0).
 rewrite Rabs_pos_eq.
 unfold Rmin.

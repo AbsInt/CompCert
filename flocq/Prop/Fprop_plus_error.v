@@ -157,7 +157,7 @@ Lemma round_plus_eq_zero_aux :
   (canonic_exp beta fexp x <= canonic_exp beta fexp y)%Z ->
   format x -> format y ->
   (0 <= x + y)%R ->
-  round beta fexp rnd (x + y) = R0 ->
+  round beta fexp rnd (x + y) = 0%R ->
   (x + y = 0)%R.
 Proof with auto with typeclass_instances.
 intros x y He Hx Hy Hp Hxy.
@@ -202,11 +202,11 @@ Context { valid_rnd : Valid_rnd rnd }.
 Theorem round_plus_eq_zero :
   forall x y,
   format x -> format y ->
-  round beta fexp rnd (x + y) = R0 ->
+  round beta fexp rnd (x + y) = 0%R ->
   (x + y = 0)%R.
 Proof with auto with typeclass_instances.
 intros x y Hx Hy.
-destruct (Rle_or_lt R0 (x + y)) as [H1|H1].
+destruct (Rle_or_lt 0 (x + y)) as [H1|H1].
 (* . *)
 revert H1.
 destruct (Zle_or_lt (canonic_exp beta fexp x) (canonic_exp beta fexp y)) as [H2|H2].
