@@ -307,7 +307,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
 
     let print_string oc c = function
       | Simple_string s ->
-          fprintf oc "	.asciz		\"%s\"%a\n" s print_comment c
+          fprintf oc "	.asciz		%S%a\n" s print_comment c
       | Offset_string (o,s) ->
         let c = sprintf "%s %s" c s in
         print_loc_ref oc c o
@@ -661,7 +661,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
         let s = List.sort (fun (a,_) (b,_) -> Pervasives.compare a b) s in
         List.iter (fun (id,s) ->
           print_label oc (loc_to_label id);
-          fprintf oc "	.asciz		\"%s\"\n" s) s)
+          fprintf oc "	.asciz		%S\n" s) s)
 
 
     (* Print the debug info and abbrev section *)
