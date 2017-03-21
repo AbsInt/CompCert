@@ -436,7 +436,10 @@ Fixpoint transl_stmt (s: Csyntax.statement) : mon statement :=
       do ts1 <- transl_stmt s1;
       do ts2 <- transl_stmt s2;
       do (s', a) <- transl_expression e;
-      ret (Ssequence s' (Sifthenelse a ts1 ts2))
+      if is_Sskip s1 && is_Sskip s2 then
+        ret (Ssequence s' Sskip)
+      else
+        ret (Ssequence s' (Sifthenelse a ts1 ts2))
   | Csyntax.Swhile e s1 =>
       do s' <- transl_if e Sskip Sbreak;
       do ts1 <- transl_stmt s1;
