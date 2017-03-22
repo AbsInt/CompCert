@@ -212,13 +212,14 @@ let debug_scope ctx =
   debug_annot 6L (empty_string :: List.rev_map integer_const ctx)
 
 (* Add line number debug annotation if the line number changes.
-   Add scope debug annotation regardless. *)
+   Labels are ignored since the code before the label can become
+   unreachable. Add scope debug annotation regardless. *)
 
 
-let add_lineno ?(case=false) ctx prev_loc this_loc s =
+let add_lineno ?(label=false) ctx prev_loc this_loc s =
   if !Clflags.option_g then
     sseq no_loc (debug_scope ctx)
-      (if this_loc <> prev_loc && this_loc <> no_loc && not case
+      (if this_loc <> prev_loc && this_loc <> no_loc && not label
        then sseq no_loc (debug_lineno this_loc) s
        else s)
   else s
@@ -253,10 +254,6 @@ let process_decl loc env ctx (sto, id, ty, optinit) k =
       let init' = expand_init true env init in
       let l = local_initializer env { edesc = EVar id; etyp = ty' } init' [] in
       add_inits_stmt loc l k
-
-let is_case = function
-  | Slabel _ -> false
-  | _ -> true
 
 (* Simplification of blocks within a statement *)
 
@@ -295,9 +292,8 @@ let rec unblock_stmt env ctx ploc s =
         {s with sdesc = Sswitch(expand_expr true env e,
                                 unblock_stmt env ctx s.sloc s1)}
   | Slabeled(lbl, s1) ->
-    let loc,case = if is_case lbl then ploc,true else s.sloc,false in
-      add_lineno ~case:case ctx ploc s.sloc
-        {s with sdesc = Slabeled(lbl, unblock_stmt env ctx loc s1)}
+    add_lineno ~label:true ctx ploc s.sloc
+        {s with sdesc = Slabeled(lbl, unblock_stmt env ctx ploc s1)}
   | Sgoto lbl ->
       add_lineno ctx ploc s.sloc s
   | Sreturn None ->
