@@ -1167,7 +1167,7 @@ and success f alloc =
   let f' = transl_function f alloc in
   if !option_dalloctrace then begin
     fprintf !pp "-------------- Candidate allocation\n\n";
-    PrintLTL.print_function !pp P.one f'
+    PrintLTL.print_function !pp (intern_string "f") f'
   end;
   f'
 
