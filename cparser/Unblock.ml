@@ -292,8 +292,12 @@ let rec unblock_stmt env ctx ploc s =
         {s with sdesc = Sswitch(expand_expr true env e,
                                 unblock_stmt env ctx s.sloc s1)}
   | Slabeled(lbl, s1) ->
-    add_lineno ~label:true ctx ploc s.sloc
-        {s with sdesc = Slabeled(lbl, unblock_stmt env ctx ploc s1)}
+    let loc,label = if s.sloc <> s1.sloc then
+        s.sloc,false (* Label and code are on different lines *)
+      else
+        ploc,true in
+    add_lineno ~label:label ctx ploc s.sloc
+        {s with sdesc = Slabeled(lbl, unblock_stmt env ctx loc s1)}
   | Sgoto lbl ->
       add_lineno ctx ploc s.sloc s
   | Sreturn None ->
