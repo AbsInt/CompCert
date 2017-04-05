@@ -59,13 +59,13 @@ Proof.
   intros.
   apply PTree_Properties.fold_rec with (P := fun c uf => branch_map_correct c uf).
 
-(* extensionality *)
+- (* extensionality *)
   intros. red; intros. rewrite <- H. apply H0.
 
-(* base case *)
+- (* base case *)
   red; intros; simpl. rewrite PTree.gempty. apply U.repr_empty.
 
-(* inductive case *)
+- (* inductive case *)
   intros m uf pc bb; intros. destruct uf as [u f].
   assert (PC: U.repr u pc = pc).
     generalize (H1 pc). rewrite H. auto.
@@ -74,24 +74,24 @@ Proof.
     unfold record_goto'; simpl. destruct bb; auto. destruct i; auto. right. exists s; exists bb; auto.
   destruct H2 as [B | [s [bb' [EQ B]]]].
 
-(* u and f are unchanged *)
++ (* u and f are unchanged *)
   rewrite B.
   red. intro pc'. simpl. rewrite PTree.gsspec. destruct (peq pc' pc). subst pc'.
   destruct bb; auto. destruct i; auto.
   apply H1.
 
-(* b is Lbranch s, u becomes union u pc s, f becomes measure_edge u pc s f *)
++ (* b is Lbranch s, u becomes union u pc s, f becomes measure_edge u pc s f *)
   rewrite B.
   red. intro pc'. simpl. rewrite PTree.gsspec. destruct (peq pc' pc). subst pc'. rewrite EQ.
 
-(* The new instruction *)
+* (* The new instruction *)
   rewrite (U.repr_union_2 u pc s); auto. rewrite U.repr_union_3.
   unfold measure_edge. destruct (peq (U.repr u s) pc). auto. right. split. auto.
   rewrite PC. rewrite peq_true. omega.
 
-(* An old instruction *)
+* (* An old instruction *)
   assert (U.repr u pc' = pc' -> U.repr (U.union u pc s) pc' = pc').
-    intro. rewrite <- H2 at 2. apply U.repr_union_1. congruence.
+  { intro. rewrite <- H2 at 2. apply U.repr_union_1. congruence. }
   generalize (H1 pc'). simpl. destruct (m!pc'); auto. destruct b; auto. destruct i; auto.
   intros [P | [P Q]]. left; auto. right.
   split. apply U.sameclass_union_2. auto.
@@ -275,14 +275,14 @@ Lemma tunnel_step_correct:
 Proof.
   induction 1; intros; try inv MS.
 
-  (* entering a block *)
+- (* entering a block *)
   assert (DEFAULT: branch_target f pc = pc ->
     (exists st2' : state,
      step tge (State ts (tunnel_function f) sp (branch_target f pc) rs m) E0 st2'
      /\ match_states (Block s f sp bb rs m) st2')).
-  intros. rewrite H0. econstructor; split.
-  econstructor. simpl. rewrite PTree.gmap1. rewrite H. simpl. eauto.
-  econstructor; eauto.
+  { intros. rewrite H0. econstructor; split.
+    econstructor. simpl. rewrite PTree.gmap1. rewrite H. simpl. eauto.
+    econstructor; eauto. }
 
   generalize (record_gotos_correct f pc). rewrite H.
   destruct bb; auto. destruct i; auto.
@@ -291,32 +291,32 @@ Proof.
   split. auto.
   rewrite B. econstructor; eauto.
 
-  (* Lop *)
+- (* Lop *)
   left; simpl; econstructor; split.
   eapply exec_Lop with (v := v); eauto.
   rewrite <- H. apply eval_operation_preserved. exact symbols_preserved.
   econstructor; eauto.
-  (* Lload *)
+- (* Lload *)
   left; simpl; econstructor; split.
   eapply exec_Lload with (a := a).
   rewrite <- H. apply eval_addressing_preserved. exact symbols_preserved.
   eauto. eauto.
   econstructor; eauto.
-  (* Lgetstack *)
+- (* Lgetstack *)
   left; simpl; econstructor; split.
   econstructor; eauto.
   econstructor; eauto.
-  (* Lsetstack *)
+- (* Lsetstack *)
   left; simpl; econstructor; split.
   econstructor; eauto.
   econstructor; eauto.
-  (* Lstore *)
+- (* Lstore *)
   left; simpl; econstructor; split.
   eapply exec_Lstore with (a := a).
   rewrite <- H. apply eval_addressing_preserved. exact symbols_preserved.
   eauto. eauto.
   econstructor; eauto.
-  (* Lcall *)
+- (* Lcall *)
   left; simpl; econstructor; split.
   eapply exec_Lcall with (fd := tunnel_fundef fd); eauto.
   apply find_function_translated; auto.
@@ -324,7 +324,7 @@ Proof.
   econstructor; eauto.
   constructor; auto.
   constructor; auto.
-  (* Ltailcall *)
+- (* Ltailcall *)
   left; simpl; econstructor; split.
   eapply exec_Ltailcall with (fd := tunnel_fundef fd); eauto.
   erewrite match_parent_locset; eauto.
@@ -332,44 +332,51 @@ Proof.
   apply sig_preserved.
   erewrite <- match_parent_locset; eauto.
   econstructor; eauto.
-  (* Lbuiltin *)
+- (* Lbuiltin *)
   left; simpl; econstructor; split.
   eapply exec_Lbuiltin; eauto.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
   eapply external_call_symbols_preserved. apply senv_preserved. eauto.
   econstructor; eauto.
 
-  (* Lbranch (preserved) *)
+- (* Lbranch (preserved) *)
   left; simpl; econstructor; split.
   eapply exec_Lbranch; eauto.
   fold (branch_target f pc). econstructor; eauto.
-  (* Lbranch (eliminated) *)
+- (* Lbranch (eliminated) *)
   right; split. simpl. omega. split. auto. constructor; auto.
 
-  (* Lcond *)
-  left; simpl; econstructor; split.
+- (* Lcond *)
+  simpl tunneled_block.
+  set (s1 := U.repr (record_gotos f) pc1). set (s2 := U.repr (record_gotos f) pc2).
+  destruct (peq s1 s2).
++ left; econstructor; split.
+  eapply exec_Lbranch. 
+  destruct b. constructor; auto. rewrite e. constructor; auto.
++ left; econstructor; split.
   eapply exec_Lcond; eauto.
   destruct b; econstructor; eauto.
-  (* Ljumptable *)
+
+- (* Ljumptable *)
   left; simpl; econstructor; split.
   eapply exec_Ljumptable.
   eauto. rewrite list_nth_z_map. change U.elt with node. rewrite H0. reflexivity. eauto.
   econstructor; eauto.
-  (* Lreturn *)
+- (* Lreturn *)
   left; simpl; econstructor; split.
   eapply exec_Lreturn; eauto.
   erewrite <- match_parent_locset; eauto.
   constructor; auto.
-  (* internal function *)
+- (* internal function *)
   left; simpl; econstructor; split.
   eapply exec_function_internal; eauto.
   simpl. econstructor; eauto.
-  (* external function *)
+- (* external function *)
   left; simpl; econstructor; split.
   eapply exec_function_external; eauto.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   simpl. econstructor; eauto.
-  (* return *)
+- (* return *)
   inv H3. inv H1.
   left; econstructor; split.
   eapply exec_return; eauto.

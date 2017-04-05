@@ -78,7 +78,11 @@ Definition record_gotos (f: LTL.function) : U.t :=
 Definition tunnel_instr (uf: U.t) (i: instruction) : instruction :=
   match i with
   | Lbranch s => Lbranch (U.repr uf s)
-  | Lcond cond args s1 s2 => Lcond cond args (U.repr uf s1) (U.repr uf s2)
+  | Lcond cond args s1 s2 =>
+      let s1' := U.repr uf s1 in let s2' := U.repr uf s2 in
+      if peq s1' s2'
+      then Lbranch s1'
+      else Lcond cond args s1' s2'
   | Ljumptable arg tbl => Ljumptable arg (List.map (U.repr uf) tbl)
   | _ => i
   end.
@@ -99,4 +103,3 @@ Definition tunnel_fundef (f: LTL.fundef) : LTL.fundef :=
 
 Definition tunnel_program (p: LTL.program) : LTL.program :=
   transform_program tunnel_fundef p.
-
