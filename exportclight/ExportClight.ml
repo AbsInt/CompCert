@@ -364,10 +364,16 @@ let rec stmt p = function
 
 and lblstmts p = function
   | LSnil ->
-      ()
+      (fprintf p "LSnil")
   | LScons(lbl, s, ls) ->
-      fprintf p "@[<hv 2>(LScase %a@ %a@ %a)@]"
-              (print_option coqint) lbl stmt s lblstmts ls
+      fprintf p "@[<hv 2>(LScons %a@ %a@ %a)@]"
+              (print_option coqZ) lbl stmt s lblstmts ls
+
+and coqZ p n =
+  let n = camlint_of_coqint n in
+  if n >= 0l
+  then fprintf p "%ld" n
+  else fprintf p "(%ld)" n
 
 let print_function p (id, f) =
   fprintf p "Definition f_%s := {|@ " (extern_atom id);
