@@ -110,6 +110,49 @@ Proof.
   intros. rewrite Val.add_assoc. rewrite low_high_half. apply add_zero_symbol_address.
 Qed.
 
+(** * Useful properties of registers *)
+
+(** [important_preg] extends [data_preg] by tracking the LR register as well.
+    It is used to state that a code sequence modifies no data registers
+    and does not modify LR either. *)
+
+Definition important_preg (r: preg) : bool :=
+  match r with
+  | IR GPR0 => false
+  | PC => false    | CTR => false
+  | CR0_0 => false | CR0_1 => false | CR0_2 => false | CR0_3 => false
+  | CARRY => false
+  | _ => true
+  end.
+
+Lemma important_diff:
+  forall r r',
+  important_preg r = true -> important_preg r' = false -> r <> r'.
+Proof.
+  congruence.
+Qed.
+Hint Resolve important_diff: asmgen.
+
+Lemma important_data_preg_1:
+  forall r, data_preg r = true -> important_preg r = true.    
+Proof.
+  destruct r; simpl; auto; discriminate.
+Qed.
+
+Lemma important_data_preg_2:
+  forall r, important_preg r = false -> data_preg r = false.
+Proof.
+  intros. destruct (data_preg r) eqn:E; auto. apply important_data_preg_1 in E. congruence.
+Qed.  
+
+Hint Resolve important_data_preg_1 important_data_preg_2: asmgen.
+
+Lemma nextinstr_inv2:
+  forall r rs, important_preg r = true -> (nextinstr rs)#r = rs#r.
+Proof.
+  intros. apply nextinstr_inv. red; intro; subst; discriminate.
+Qed.
+
 (** Useful properties of the GPR0 registers. *)
 
 Lemma gpr_or_zero_not_zero:
@@ -138,11 +181,27 @@ Proof.
 Qed.
 Hint Resolve ireg_of_not_GPR0': asmgen.
 
+(** Useful properties of the LR register *)
+
+Lemma preg_of_not_LR:
+  forall r, LR <> preg_of r.
+Proof.
+  intros. auto using sym_not_equal with asmgen.
+Qed.
+
+Lemma preg_notin_LR:
+  forall rl, preg_notin LR rl.
+Proof.
+  intros. rewrite preg_notin_charact. intros. apply preg_of_not_LR. 
+Qed.
+
+Hint Resolve preg_of_not_LR preg_notin_LR: asmgen.
+      
 (** Useful simplification tactic *)
 
 Ltac Simplif :=
   ((rewrite nextinstr_inv by eauto with asmgen)
-  || (rewrite nextinstr_inv1 by eauto with asmgen)
+  || (rewrite nextinstr_inv2 by eauto with asmgen)
   || (rewrite Pregmap.gss)
   || (rewrite nextinstr_pc)
   || (rewrite Pregmap.gso by eauto with asmgen)); auto with asmgen.
@@ -291,7 +350,7 @@ Lemma andimm_base_correct:
      exec_straight ge fn (andimm_base r1 r2 n k) rs m  k rs' m
   /\ rs'#r1 = v
   /\ rs'#CR0_2 = Val.cmp Ceq v Vzero
-  /\ forall r', data_preg r' = true -> r' <> r1 -> rs'#r' = rs#r'.
+  /\ forall r', important_preg r' = true -> r' <> r1 -> rs'#r' = rs#r'.
 Proof.
   intros. unfold andimm_base.
   case (Int.eq (high_u n) Int.zero).
@@ -336,7 +395,7 @@ Lemma andimm_correct:
   exists rs',
      exec_straight ge fn (andimm r1 r2 n k) rs m  k rs' m
   /\ rs'#r1 = Val.and rs#r2 (Vint n)
-  /\ forall r', data_preg r' = true -> r' <> r1 -> rs'#r' = rs#r'.
+  /\ forall r', important_preg r' = true -> r' <> r1 -> rs'#r' = rs#r'.
 Proof.
   intros. unfold andimm. destruct (is_rlw_mask n).
   (* turned into rlw *)
@@ -416,7 +475,7 @@ Lemma rolm_correct:
   exists rs',
      exec_straight ge fn (rolm r1 r2 amount mask k) rs m  k rs' m
   /\ rs'#r1 = Val.rolm rs#r2 amount mask
-  /\ forall r', data_preg r' = true -> r' <> r1 -> rs'#r' = rs#r'.
+  /\ forall r', important_preg r' = true -> r' <> r1 -> rs'#r' = rs#r'.
 Proof.
   intros. unfold rolm. destruct (is_rlw_mask mask).
   (* rlwinm *)
@@ -610,7 +669,7 @@ Lemma transl_cond_correct_1:
        (if snd (crbit_for_cond cond)
         then Val.of_optbool (eval_condition cond (map rs (map preg_of args)) m)
         else Val.notbool (Val.of_optbool (eval_condition cond (map rs (map preg_of args)) m)))
-  /\ forall r, data_preg r = true -> rs'#r = rs#r.
+  /\ forall r, important_preg r = true -> rs'#r = rs#r.
 Proof.
   intros.
 Opaque Int.eq.
@@ -708,7 +767,7 @@ Lemma transl_cond_correct_2:
        (if snd (crbit_for_cond cond)
         then Val.of_bool b
         else Val.notbool (Val.of_bool b))
-  /\ forall r, data_preg r = true -> rs'#r = rs#r.
+  /\ forall r, important_preg r = true -> rs'#r = rs#r.
 Proof.
   intros.
   replace (Val.of_bool b)
@@ -735,7 +794,7 @@ Proof.
   exploit transl_cond_correct_2. eauto.
     eapply eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto.
   intros [rs' [A [B C]]].
-  exists rs'; split. eauto. split. auto. apply agree_exten with rs; auto.
+  exists rs'; split. eauto. split. auto. apply agree_exten with rs; auto with asmgen.
 Qed.
 
 (** Translation of condition operators *)
@@ -792,7 +851,7 @@ Lemma transl_cond_op_correct:
   exists rs',
      exec_straight ge fn c rs m k rs' m
   /\ rs'#(preg_of r) = Val.of_optbool (eval_condition cond (map rs (map preg_of args)) m)
-  /\ forall r', data_preg r' = true -> r' <> preg_of r -> rs'#r' = rs#r'.
+  /\ forall r', important_preg r' = true -> r' <> preg_of r -> rs'#r' = rs#r'.
 Proof.
   intros until args. unfold transl_cond_op.
   destruct (classify_condition cond args); intros; monadInv H; simpl;
@@ -857,7 +916,7 @@ Lemma transl_op_correct_aux:
   exists rs',
      exec_straight ge fn c rs m k rs' m
   /\ Val.lessdef v rs'#(preg_of res)
-  /\ forall r, data_preg r = true -> r <> preg_of res -> preg_notin r (destroyed_by_op op) -> rs' r = rs r.
+  /\ forall r, important_preg r = true -> r <> preg_of res -> preg_notin r (destroyed_by_op op) -> rs' r = rs r.
 Proof.
   assert (SAME: forall v1 v2, v1 = v2 -> Val.lessdef v2 v1). { intros; subst; auto. }
 Opaque Int.eq.
@@ -1000,14 +1059,14 @@ Lemma transl_op_correct:
   exists rs',
      exec_straight ge fn c rs m' k rs' m'
   /\ agree (Regmap.set res v (Mach.undef_regs (destroyed_by_op op) ms)) sp rs'
-  /\ forall r, data_preg r = true -> r <> preg_of res -> preg_notin r (destroyed_by_op op) -> rs' r = rs r.
+  /\ forall r, important_preg r = true -> r <> preg_of res -> preg_notin r (destroyed_by_op op) -> rs' r = rs r.
 Proof.
   intros.
   exploit eval_operation_lessdef. eapply preg_vals; eauto. eauto. eauto.
   intros [v' [A B]].  rewrite (sp_val _ _ _ H0) in A.
   exploit transl_op_correct_aux; eauto. intros [rs' [P [Q R]]].
   exists rs'; split. eexact P.
-  split. apply agree_set_undef_mreg with rs; auto. eapply Val.lessdef_trans; eauto.
+  split. apply agree_set_undef_mreg with rs; auto with asmgen. eapply Val.lessdef_trans; eauto.
   auto.
 Qed.
 

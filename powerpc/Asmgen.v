@@ -672,10 +672,14 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
       do r <- ireg_of arg;
       OK (Pbtbl r tbl :: k)
   | Mreturn =>
-      OK (Plwz GPR0 (Cint (Ptrofs.to_int f.(fn_retaddr_ofs))) GPR1 ::
-          Pmtlr GPR0 ::
-          Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) ::
-          Pblr :: k)
+      if is_leaf_function f then
+        OK (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) ::
+            Pblr :: k)
+      else
+        OK (Plwz GPR0 (Cint (Ptrofs.to_int f.(fn_retaddr_ofs))) GPR1 ::
+            Pmtlr GPR0 ::
+            Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) ::
+            Pblr :: k)
   end.
 
 (** Translation of a code sequence *)

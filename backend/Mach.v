@@ -189,11 +189,17 @@ Fixpoint find_label (lbl: label) (c: code) {struct c} : option code :=
   | i1 :: il => if is_label lbl i1 then Some il else find_label lbl il
   end.
 
-Lemma find_label_incl:
-  forall lbl c c', find_label lbl c = Some c' -> incl c' c.
+Lemma find_label_tail:
+  forall lbl c c', find_label lbl c = Some c' -> is_tail c' c.
 Proof.
   induction c; simpl; intros. discriminate.
   destruct (is_label lbl a). inv H. auto with coqlib. eauto with coqlib.
+Qed.
+
+Lemma find_label_incl:
+  forall lbl c c', find_label lbl c = Some c' -> incl c' c.
+Proof.
+  intros; red; intros. eapply is_tail_incl; eauto. eapply find_label_tail; eauto.
 Qed.
 
 Section RELSEM.
@@ -426,3 +432,70 @@ Inductive final_state: state -> int -> Prop :=
 
 Definition semantics (rao: function -> code -> ptrofs -> Prop) (p: program) :=
   Semantics (step rao) (initial_state p) final_state (Genv.globalenv p).
+
+(** * Leaf functions *)
+
+(** A leaf function is a function that contains no [Mcall] instruction. *)
+
+Definition is_leaf_function (f: function) : bool :=
+  List.forallb
+    (fun i => match i with Mcall _ _ => false | _ => true end)
+    f.(fn_code).  
+
+(** Semantic characterization of leaf functions: 
+    functions in the call stack are never leaf functions. *)
+
+Section WF_STATES.
+
+Variable rao: function -> code -> ptrofs -> Prop.
+
+Variable ge: genv.
+
+Inductive wf_frame: stackframe -> Prop :=
+  | wf_stackframe_intro: forall fb sp ra c f
+        (CODE: Genv.find_funct_ptr ge fb = Some (Internal f))
+        (LEAF: is_leaf_function f = false)
+        (TAIL: is_tail c f.(fn_code)),
+      wf_frame (Stackframe fb sp ra c).
+
+Inductive wf_state: state -> Prop :=
+  | wf_normal_state: forall s fb sp c rs m f
+        (STACK: Forall wf_frame s)
+        (CODE: Genv.find_funct_ptr ge fb = Some (Internal f))
+        (TAIL: is_tail c f.(fn_code)),
+      wf_state (State s fb sp c rs m)
+  | wf_call_state: forall s fb rs m
+        (STACK: Forall wf_frame s),
+      wf_state (Callstate s fb rs m)
+  | wf_return_state: forall s rs m
+        (STACK: Forall wf_frame s),
+      wf_state (Returnstate s rs m).
+
+Lemma wf_step:
+  forall S1 t S2, step rao ge S1 t S2 -> wf_state S1 -> wf_state S2.
+Proof.
+  induction 1; intros WF; inv WF; try (econstructor; now eauto with coqlib).
+- (* call *)
+  assert (f0 = f) by congruence. subst f0.
+  constructor.
+  constructor; auto. econstructor; eauto with coqlib.
+  destruct (is_leaf_function f) eqn:E; auto.
+  unfold is_leaf_function in E; rewrite forallb_forall in E. 
+  symmetry. apply (E (Mcall sig ros)). eapply is_tail_in; eauto.
+- (* goto *)
+  assert (f0 = f) by congruence. subst f0. econstructor; eauto using find_label_tail.  
+- (* cond *)
+  assert (f0 = f) by congruence. subst f0. econstructor; eauto using find_label_tail.  
+- (* jumptable *)
+  assert (f0 = f) by congruence. subst f0. econstructor; eauto using find_label_tail.  
+- (* return *)
+  inv STACK. inv H1. econstructor; eauto.
+Qed.
+
+End WF_STATES.
+
+Lemma wf_initial:
+  forall p S, initial_state p S -> wf_state (Genv.globalenv p) S.
+Proof.
+  intros. inv H. fold ge. constructor. constructor.
+Qed.
