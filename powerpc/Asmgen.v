@@ -621,6 +621,18 @@ Definition transl_store (chunk: memory_chunk) (addr: addressing)
       Error (msg "Asmgen.transl_store")
   end.
 
+(** Function epilogue: reload return address into register LR and
+    free the stack frame.  No need to reload the return address if
+    this is a tail function. *)
+
+Definition transl_epilogue (f: Mach.function) (k: code) :=
+  if is_leaf_function f then
+    Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: k
+  else
+    Plwz GPR0 (Cint (Ptrofs.to_int f.(fn_retaddr_ofs))) GPR1 ::
+    Pmtlr GPR0 ::
+    Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: k.
+
 (** Translation of a Mach instruction. *)
 
 Definition transl_instr (f: Mach.function) (i: Mach.instruction)
@@ -649,15 +661,9 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
   | Mtailcall sig (inl r) =>
       do r1 <- ireg_of r;
       OK (Pmtctr r1 ::
-          Plwz GPR0 (Cint (Ptrofs.to_int f.(fn_retaddr_ofs))) GPR1 ::
-          Pmtlr GPR0 ::
-          Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) ::
-          Pbctr sig :: k)
+          transl_epilogue f (Pbctr sig :: k))
   | Mtailcall sig (inr symb) =>
-      OK (Plwz GPR0 (Cint (Ptrofs.to_int f.(fn_retaddr_ofs))) GPR1 ::
-          Pmtlr GPR0 ::
-          Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) ::
-          Pbs symb sig :: k)
+      OK (transl_epilogue f (Pbs symb sig :: k))
   | Mbuiltin ef args res =>
       OK (Pbuiltin ef (List.map (map_builtin_arg preg_of) args) (map_builtin_res preg_of res) :: k)
   | Mlabel lbl =>
@@ -672,14 +678,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
       do r <- ireg_of arg;
       OK (Pbtbl r tbl :: k)
   | Mreturn =>
-      if is_leaf_function f then
-        OK (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) ::
-            Pblr :: k)
-      else
-        OK (Plwz GPR0 (Cint (Ptrofs.to_int f.(fn_retaddr_ofs))) GPR1 ::
-            Pmtlr GPR0 ::
-            Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) ::
-            Pblr :: k)
+      OK (transl_epilogue f (Pblr :: k))
   end.
 
 (** Translation of a code sequence *)

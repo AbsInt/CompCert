@@ -255,6 +255,12 @@ Proof.
   destruct (Int.eq (high_s (Ptrofs.to_int i)) Int.zero); TailNoLabel.
 Qed.
 
+Remark transl_epilogue_label:
+  forall f k, tail_nolabel k (transl_epilogue f k).
+Proof.
+  intros; unfold transl_epilogue; destruct (is_leaf_function f); TailNoLabel.
+Qed.
+
 Lemma transl_instr_label:
   forall f i ep k c,
   transl_instr f i ep k = OK c ->
@@ -269,9 +275,10 @@ Proof.
   destruct m; monadInv H; (eapply tail_nolabel_trans; [eapply transl_memory_access_label; TailNoLabel|TailNoLabel]).
   destruct m; monadInv H; eapply transl_memory_access_label; TailNoLabel.
   destruct s0; monadInv H; TailNoLabel.
-  destruct s0; monadInv H; TailNoLabel.
+  destruct s0; monadInv H; TailNoLabel; (eapply tail_nolabel_trans; [apply transl_epilogue_label | TailNoLabel]). 
   eapply tail_nolabel_trans. eapply transl_cond_label; eauto.
   destruct (snd (crbit_for_cond c0)); TailNoLabel.
+  eapply tail_nolabel_trans; [apply transl_epilogue_label | TailNoLabel]. 
 Qed.
 
 Lemma transl_instr_label':
@@ -657,11 +664,7 @@ Opaque loadind.
   assert (f0 = f) by congruence.  subst f0.
   inversion AT; subst.
   assert (NOOV: list_length_z tf.(fn_code) <= Ptrofs.max_unsigned).
-    eapply transf_function_no_overflow; eauto.  exploit Mem.loadv_extends. eauto. eexact H1. auto. simpl. intros [parent' [A B]].
-  exploit Mem.loadv_extends. eauto. eexact H2. auto. simpl. intros [ra' [C D]].
-  exploit lessdef_parent_sp; eauto. intros. subst parent'. clear B.
-  exploit lessdef_parent_ra; eauto. intros. subst ra'. clear D.
-  exploit Mem.free_parallel_extends; eauto. intros [m2' [E F]].
+    eapply transf_function_no_overflow; eauto.
   destruct ros as [rf|fid]; simpl in H; monadInv H7.
 + (* Indirect call *)
   assert (rs rf = Vptr f' Ptrofs.zero).
@@ -669,83 +672,41 @@ Opaque loadind.
     revert H; predSpec Ptrofs.eq Ptrofs.eq_spec i Ptrofs.zero; intros; congruence.
   assert (rs0 x0 = Vptr f' Ptrofs.zero).
     exploit ireg_val; eauto. rewrite H7; intros LD; inv LD; auto.
-  set (rs2 := nextinstr (rs0#CTR <- (Vptr f' Ptrofs.zero))).
-  set (rs3 := nextinstr (rs2#GPR0 <- (parent_ra s))).
-  set (rs4 := nextinstr (rs3#LR <- (parent_ra s))).
-  set (rs5 := nextinstr (rs4#GPR1 <- (parent_sp s))).
-  set (rs6 := rs5#PC <- (rs5 CTR)).
-  assert (exec_straight tge tf
-            (Pmtctr x0 :: Plwz GPR0 (Cint (Ptrofs.to_int (fn_retaddr_ofs f))) GPR1 :: Pmtlr GPR0
-              :: Pfreeframe (fn_stacksize f) (fn_link_ofs f) :: Pbctr sig :: x)
+  set (rs1 := nextinstr (rs0#CTR <- (Vptr f' Ptrofs.zero))).
+  assert (AG1: agree rs (Vptr stk soff) rs1). { apply agree_nextinstr. apply agree_set_other; auto. }
+  exploit transl_epilogue_correct; eauto. 
+  intros (rs2 & m2' & A & B & C & D & E & F). 
+  assert (A': exec_straight tge tf
+            (Pmtctr x0 :: transl_epilogue f (Pbctr sig :: x))
             rs0 m'0
-            (Pbctr sig :: x) rs5 m2').
-  apply exec_straight_step with rs2 m'0.
-  simpl. rewrite H9. auto. auto.
-  apply exec_straight_step with rs3 m'0.
-  simpl. unfold load1. rewrite gpr_or_zero_not_zero. unfold const_low.
-  change (rs2 GPR1) with (rs0 GPR1). rewrite <- (sp_val _ _ _ AG).
-  erewrite loadv_offset_ptr by eexact C. auto. congruence. auto.
-  apply exec_straight_step with rs4 m'0.
-  simpl. reflexivity. reflexivity.
-  apply exec_straight_one.
-  simpl. change (rs4 GPR1) with (rs0 GPR1). rewrite <- (sp_val _ _ _ AG).
-  simpl. rewrite A.
-  rewrite E. reflexivity. reflexivity.
-  left; exists (State rs6 m2'); split.
+            (Pbctr sig :: x) rs2 m2').
+  { apply exec_straight_step with rs1 m'0. simpl. rewrite H9. reflexivity. reflexivity. eexact A. }
+  clear A.
+  exploit exec_straight_steps_2; eauto using functions_transl. 
+  intros (ofs' & U & V).
+  set (rs3 := rs2#PC <- (rs2 CTR)).
+  left; exists (State rs3 m2'); split.
   (* execution *)
   eapply plus_right'. eapply exec_straight_exec; eauto.
-  econstructor.
-  change (rs5 PC) with (Val.offset_ptr (Val.offset_ptr (Val.offset_ptr (Val.offset_ptr (rs0 PC) Ptrofs.one) Ptrofs.one) Ptrofs.one) Ptrofs.one).
-  rewrite <- H4; simpl. eauto.
-  eapply functions_transl; eauto.
-  eapply find_instr_tail.
-  repeat (eapply code_tail_next_int; auto). eauto.
-  simpl. reflexivity. traceEq.
+  econstructor; eauto using functions_transl, find_instr_tail.
+  traceEq.
   (* match states *)
-  econstructor; eauto.
-Hint Resolve agree_nextinstr agree_set_other: asmgen.
-  assert (AG4: agree rs (Vptr stk soff) rs4).
-    unfold rs4, rs3, rs2; auto 10 with asmgen.
-  assert (AG5: agree rs (parent_sp s) rs5).
-    unfold rs5. apply agree_nextinstr. eapply agree_change_sp. eauto.
-    eapply parent_sp_def; eauto.
-  unfold rs6, rs5; auto 10 with asmgen.
+  econstructor; eauto. apply agree_set_other; auto. 
+  unfold rs3; Simpl. rewrite F by congruence. reflexivity.
 + (* Direct call *)
-  set (rs2 := nextinstr (rs0#GPR0 <- (parent_ra s))).
-  set (rs3 := nextinstr (rs2#LR <- (parent_ra s))).
-  set (rs4 := nextinstr (rs3#GPR1 <- (parent_sp s))).
-  set (rs5 := rs4#PC <- (Vptr f' Ptrofs.zero)).
-  assert (exec_straight tge tf
-            (Plwz GPR0 (Cint (Ptrofs.to_int (fn_retaddr_ofs f))) GPR1 :: Pmtlr GPR0
-             :: Pfreeframe (fn_stacksize f) (fn_link_ofs f) :: Pbs fid sig :: x)
-            rs0 m'0
-            (Pbs fid sig :: x) rs4 m2').
-  apply exec_straight_step with rs2 m'0.
-  simpl. unfold load1. rewrite gpr_or_zero_not_zero. unfold const_low.
-  rewrite <- (sp_val _ _ _ AG).  erewrite loadv_offset_ptr by eexact C. auto. congruence. auto.
-  apply exec_straight_step with rs3 m'0.
-  simpl. reflexivity. reflexivity.
-  apply exec_straight_one.
-  simpl. change (rs3 GPR1) with (rs0 GPR1). rewrite <- (sp_val _ _ _ AG). simpl. rewrite A.
-  rewrite E. reflexivity. reflexivity.
-  left; exists (State rs5 m2'); split.
+  exploit transl_epilogue_correct; eauto. 
+  intros (rs2 & m2' & A & B & C & D & E & F). 
+  exploit exec_straight_steps_2; eauto using functions_transl. 
+  intros (ofs' & U & V).
+  set (rs3 := rs2#PC <- (Vptr f' Ptrofs.zero)).
+  left; exists (State rs3 m2'); split.
   (* execution *)
   eapply plus_right'. eapply exec_straight_exec; eauto.
-  econstructor.
-  change (rs4 PC) with (Val.offset_ptr (Val.offset_ptr (Val.offset_ptr (rs0 PC) Ptrofs.one) Ptrofs.one) Ptrofs.one).
-  rewrite <- H4; simpl. eauto.
-  eapply functions_transl; eauto.
-  eapply find_instr_tail.
-  repeat (eapply code_tail_next_int; auto). eauto.
-  simpl. unfold Genv.symbol_address. rewrite symbols_preserved. rewrite H. auto. traceEq.
+  econstructor; eauto using functions_transl, find_instr_tail.
+  simpl. unfold Genv.symbol_address. rewrite symbols_preserved, H. reflexivity.
+  traceEq.
   (* match states *)
-  econstructor; eauto.
-  assert (AG3: agree rs (Vptr stk soff) rs3).
-    unfold rs3, rs2; auto 10 with asmgen.
-  assert (AG4: agree rs (parent_sp s) rs4).
-    unfold rs4. apply agree_nextinstr. eapply agree_change_sp. eauto.
-    eapply parent_sp_def; eauto.
-  unfold rs5; auto 10 with asmgen.
+  econstructor; eauto. apply agree_set_other; auto. 
 
 - (* Mbuiltin *)
   inv AT. monadInv H4.
@@ -850,79 +811,20 @@ Local Transparent destroyed_by_jumptable.
   inversion AT; subst.
   assert (NOOV: list_length_z tf.(fn_code) <= Ptrofs.max_unsigned).
     eapply transf_function_no_overflow; eauto.
-  rewrite (sp_val _ _ _ AG) in *. unfold load_stack in *.
-  exploit Mem.loadv_extends. eauto. eexact H0. auto. simpl. intros [parent' [A B]].
-  exploit lessdef_parent_sp; eauto. intros. subst parent'. clear B.
-  exploit Mem.loadv_extends. eauto. eexact H1. auto. simpl. intros [ra' [C D]].
-  exploit lessdef_parent_ra; eauto. intros. subst ra'. clear D.
-  exploit Mem.free_parallel_extends; eauto. intros [m2' [E F]].
-  monadInv H6. destruct (is_leaf_function f) eqn:ISLEAF; monadInv EQ0.
-+ (* leaf function *)
-  set (rs2 := nextinstr (rs0#GPR1 <- (parent_sp s))).
+  monadInv H6.
+  exploit transl_epilogue_correct; eauto. 
+  intros (rs2 & m2' & A & B & C & D & E & F).
+  exploit exec_straight_steps_2; eauto using functions_transl. 
+  intros (ofs' & U & V).
   set (rs3 := rs2#PC <- (parent_ra s)).
-  assert (exec_straight tge tf
-           (Pfreeframe (fn_stacksize f) (fn_link_ofs f) :: Pblr :: x) rs0 m'0
-           (Pblr :: x) rs2 m2').
-  simpl. apply exec_straight_one. 
-  simpl. rewrite A.
-  rewrite <- (sp_val _ _ _ AG). rewrite E. auto.
-  auto.
   left; exists (State rs3 m2'); split.
   (* execution *)
-  apply plus_right' with E0 (State rs2 m2') E0.
-  eapply exec_straight_exec; eauto.
-  econstructor.
-  change (rs2 PC) with (Val.offset_ptr (rs0 PC) Ptrofs.one).
-  rewrite <- H3. simpl. eauto.
-  eapply functions_transl; eauto.
-  eapply find_instr_tail.
-  eapply code_tail_next_int; eauto.
-  simpl. change (rs2 LR) with (rs0 LR). rewrite LEAF by auto. reflexivity. 
+  eapply plus_right'. eapply exec_straight_exec; eauto.
+  econstructor; eauto using functions_transl, find_instr_tail.
+  simpl. rewrite D; reflexivity. 
   traceEq.
   (* match states *)
-  econstructor; eauto.
-  assert (AG2: agree rs (parent_sp s) rs2).
-    unfold rs2. apply agree_nextinstr. eapply agree_change_sp; eauto.
-    eapply parent_sp_def; eauto.
-  unfold rs3; auto with asmgen.
-+ (* non-leaf function *)
-  set (rs2 := nextinstr (rs0#GPR0 <- (parent_ra s))).
-  set (rs3 := nextinstr (rs2#LR <- (parent_ra s))).
-  set (rs4 := nextinstr (rs3#GPR1 <- (parent_sp s))).
-  set (rs5 := rs4#PC <- (parent_ra s)).
-  assert (exec_straight tge tf
-           (Plwz GPR0 (Cint (Ptrofs.to_int (fn_retaddr_ofs f))) GPR1
-           :: Pmtlr GPR0
-           :: Pfreeframe (fn_stacksize f) (fn_link_ofs f) :: Pblr :: x) rs0 m'0
-           (Pblr :: x) rs4 m2').
-  simpl. apply exec_straight_three with rs2 m'0 rs3 m'0.
-  simpl. unfold load1. rewrite gpr_or_zero_not_zero. unfold const_low.
-  erewrite loadv_offset_ptr by eexact C. auto. congruence.
-  simpl. auto.
-  simpl. change (rs3 GPR1) with (rs0 GPR1). rewrite A.
-  rewrite <- (sp_val _ _ _ AG). rewrite E. auto.
-  auto. auto. auto.
-  left; exists (State rs5 m2'); split.
-  (* execution *)
-  apply plus_right' with E0 (State rs4 m2') E0.
-  eapply exec_straight_exec; eauto.
-  econstructor.
-  change (rs4 PC) with (Val.offset_ptr (Val.offset_ptr (Val.offset_ptr (rs0 PC) Ptrofs.one) Ptrofs.one) Ptrofs.one).
-  rewrite <- H3. simpl. eauto.
-  eapply functions_transl; eauto.
-  eapply find_instr_tail.
-  eapply code_tail_next_int; auto.
-  eapply code_tail_next_int; auto.
-  eapply code_tail_next_int; eauto.
-  reflexivity. traceEq.
-  (* match states *)
-  econstructor; eauto.
-  assert (AG3: agree rs (Vptr stk soff) rs3).
-    unfold rs3, rs2; auto 10 with asmgen.
-  assert (AG4: agree rs (parent_sp s) rs4).
-    unfold rs4. apply agree_nextinstr. eapply agree_change_sp; eauto.
-    eapply parent_sp_def; eauto.
-  unfold rs5; auto with asmgen.
+  econstructor; eauto. apply agree_set_other; auto. 
 
 - (* internal function *)
   exploit functions_translated; eauto. intros [tf [A B]]. monadInv B.

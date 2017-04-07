@@ -1329,5 +1329,61 @@ Local Transparent destroyed_by_store.
   eapply BASE; eauto; erewrite freg_of_eq by eauto; auto.
 Qed.
 
+(** Translation of function epilogues *)
+
+Lemma transl_epilogue_correct:
+  forall ge0 f m stk soff cs m' ms rs k tm,
+  load_stack m (Vptr stk soff) Tptr f.(fn_link_ofs) = Some (parent_sp cs) ->
+  load_stack m (Vptr stk soff) Tptr f.(fn_retaddr_ofs) = Some (parent_ra cs) ->
+  Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
+  agree ms (Vptr stk soff) rs ->
+  (is_leaf_function f = true -> rs#LR = parent_ra cs) ->
+  Mem.extends m tm ->
+  match_stack ge0 cs ->
+  exists rs', exists tm',
+     exec_straight ge fn (transl_epilogue f k) rs tm k rs' tm'
+  /\ agree ms (parent_sp cs) rs'
+  /\ Mem.extends m' tm'
+  /\ rs'#LR = parent_ra cs
+  /\ rs'#SP = parent_sp cs
+  /\ (forall r, r <> PC -> r <> LR -> r <> SP -> r <> GPR0 -> rs'#r = rs#r).
+Proof.
+  intros until tm; intros LP LRA FREE AG LEAF MEXT MCS.
+  exploit Mem.loadv_extends. eauto. eexact LP. auto. simpl. intros (parent' & LP' & LDP').
+  exploit Mem.loadv_extends. eauto. eexact LRA. auto. simpl. intros (ra' & LRA' & LDRA').
+  exploit lessdef_parent_sp; eauto. intros EQ; subst parent'; clear LDP'.
+  exploit lessdef_parent_ra; eauto. intros EQ; subst ra'; clear LDRA'.
+  exploit Mem.free_parallel_extends; eauto. intros (tm' & FREE' & MEXT').
+  unfold transl_epilogue. destruct (is_leaf_function f).
+- (* leaf function *)
+  econstructor; exists tm'.
+  split. apply exec_straight_one. simpl. rewrite <- (sp_val _ _ _ AG). simpl. 
+  rewrite LP'. rewrite FREE'. reflexivity. reflexivity.
+  split. apply agree_nextinstr. eapply agree_change_sp; eauto. eapply parent_sp_def; eauto.
+  split. auto.
+  split. Simpl. 
+  split. Simpl.
+  intros; Simpl.
+- (* regular function *)
+  set (rs1 := nextinstr (rs#GPR0 <- (parent_ra cs))).
+  set (rs2 := nextinstr (rs1#LR  <- (parent_ra cs))).
+  set (rs3 := nextinstr (rs2#GPR1 <- (parent_sp cs))).
+  exists rs3; exists tm'.
+  split. apply exec_straight_three with rs1 tm rs2 tm; auto.
+    simpl. unfold load1. rewrite gpr_or_zero_not_zero by congruence. 
+    unfold const_low. rewrite <- (sp_val _ _ _ AG).
+    erewrite loadv_offset_ptr by eexact LRA'. reflexivity.
+    simpl. change (rs2#GPR1) with (rs#GPR1). rewrite <- (sp_val _ _ _ AG). simpl. 
+    rewrite LP'. rewrite FREE'. reflexivity.
+  split. unfold rs3. apply agree_nextinstr. apply agree_change_sp with (Vptr stk soff). 
+    apply agree_nextinstr. apply agree_set_other; auto. 
+    apply agree_nextinstr. apply agree_set_other; auto. 
+    eapply parent_sp_def; eauto.
+  split. auto.
+  split. reflexivity.
+  split. reflexivity.
+  intros. unfold rs3, rs2, rs1; Simpl. 
+Qed.
+
 End CONSTRUCTORS.
 
