@@ -300,7 +300,7 @@ let p_int_opt oc = function
 
 
 let p_fundef oc (name,f) =
-  if not (is_inline_function name) then begin
+  if not (atom_is_iso_inline_definition name) then begin
     let alignment = atom_alignof name
     and inline = atom_is_inline name
     and static = atom_is_static name
