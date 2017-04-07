@@ -300,27 +300,29 @@ let p_int_opt oc = function
 
 
 let p_fundef oc (name,f) =
-  let alignment = atom_alignof name
-  and inline = atom_is_inline name
-  and static = atom_is_static name
-  and c_section,l_section,j_section = match (atom_sections name) with [a;b;c] -> a,b,c | _ -> assert false in
-  output_string oc "{";
-  p_jmember oc "Fun Name" p_atom name;
-  p_sep oc;
-  p_jmember oc "Fun Storage Class" p_storage static;
-  p_sep oc;
-  p_jmember oc "Fun Alignment" p_int_opt alignment;
-  p_sep oc;
-  p_jmember oc "Fun Section Code" p_section c_section;
-  p_sep oc;
-  p_jmember oc "Fun Section Literals" p_section l_section;
-  p_sep oc;
-  p_jmember oc "Fun Section Jumptable" p_section j_section;
-  p_sep oc;
-  p_jmember oc "Fun Inline" p_jbool inline;
-  p_sep oc;
-  p_jmember oc "Fun Code" (fun oc a -> fprintf oc "[%a]" p_instruction a) f.fn_code;
-  output_string oc "}\n"
+  if not (is_inline_function name) then begin
+    let alignment = atom_alignof name
+    and inline = atom_is_inline name
+    and static = atom_is_static name
+    and c_section,l_section,j_section = match (atom_sections name) with [a;b;c] -> a,b,c | _ -> assert false in
+    output_string oc "{";
+    p_jmember oc "Fun Name" p_atom name;
+    p_sep oc;
+    p_jmember oc "Fun Storage Class" p_storage static;
+    p_sep oc;
+    p_jmember oc "Fun Alignment" p_int_opt alignment;
+    p_sep oc;
+    p_jmember oc "Fun Section Code" p_section c_section;
+    p_sep oc;
+    p_jmember oc "Fun Section Literals" p_section l_section;
+    p_sep oc;
+    p_jmember oc "Fun Section Jumptable" p_section j_section;
+    p_sep oc;
+    p_jmember oc "Fun Inline" p_jbool inline;
+    p_sep oc;
+    p_jmember oc "Fun Code" (fun oc a -> fprintf oc "[%a]" p_instruction a) f.fn_code;
+    output_string oc "}\n"
+  end
 
 let p_init_data oc = function
   | Init_int8 ic -> p_jsingle_object oc "Init_int8" p_int ic

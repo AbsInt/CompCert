@@ -40,14 +40,7 @@ let decl_atom : (AST.ident, atom_info) Hashtbl.t = Hashtbl.create 103
 
 let atom_is_static a =
   try
-    let i = Hashtbl.find decl_atom a in
-    (* inline functions can remain in generated code, but should not
-       be global, unless explicitly marked "extern" *)
-    match i.a_storage with
-    | C.Storage_default -> i.a_inline
-    | C.Storage_extern -> false
-    | C.Storage_static -> true
-    | C.Storage_register -> false (* should not happen *)
+    (Hashtbl.find decl_atom a).a_storage = C.Storage_static
   with Not_found ->
     false
 
@@ -84,6 +77,20 @@ let atom_is_rel_data a ofs =
 let atom_is_inline a =
   try
     (Hashtbl.find decl_atom a).a_inline
+  with Not_found ->
+    false
+
+(** Iso C99 defines inline definitions of functions as functions
+    with inline specifier and without extern. These functions do
+    not provide an external definition. In the case of non static
+    functions this means that no code should be generated for these
+    functions. *)
+let atom_is_iso_inline_definition a =
+  try
+    let i = Hashtbl.find decl_atom a in
+    match i.a_storage with
+    | C.Storage_default -> i.a_inline
+    | _ -> false
   with Not_found ->
     false
 
