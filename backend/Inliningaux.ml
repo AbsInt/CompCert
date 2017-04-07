@@ -13,4 +13,4 @@
 (* To be considered: heuristics based on size of function? *)
 
 let should_inline (id: AST.ident) (f: RTL.coq_function) =
-  C2C.atom_is_inline id
+  !Clflags.option_finline && C2C.atom_is_inline id
