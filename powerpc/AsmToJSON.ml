@@ -300,29 +300,28 @@ let p_int_opt oc = function
 
 
 let p_fundef oc (name,f) =
-  if not (atom_is_iso_inline_definition name) then begin
-    let alignment = atom_alignof name
-    and inline = atom_is_inline name
-    and static = atom_is_static name
-    and c_section,l_section,j_section = match (atom_sections name) with [a;b;c] -> a,b,c | _ -> assert false in
-    output_string oc "{";
-    p_jmember oc "Fun Name" p_atom name;
-    p_sep oc;
-    p_jmember oc "Fun Storage Class" p_storage static;
-    p_sep oc;
-    p_jmember oc "Fun Alignment" p_int_opt alignment;
-    p_sep oc;
-    p_jmember oc "Fun Section Code" p_section c_section;
-    p_sep oc;
-    p_jmember oc "Fun Section Literals" p_section l_section;
-    p_sep oc;
-    p_jmember oc "Fun Section Jumptable" p_section j_section;
-    p_sep oc;
-    p_jmember oc "Fun Inline" p_jbool inline;
-    p_sep oc;
-    p_jmember oc "Fun Code" (fun oc a -> fprintf oc "[%a]" p_instruction a) f.fn_code;
-    output_string oc "}\n"
-  end
+  let alignment = atom_alignof name
+  and inline = atom_is_inline name
+  and static = atom_is_static name
+  and c_section,l_section,j_section = match (atom_sections name) with [a;b;c] -> a,b,c | _ -> assert false in
+  output_string oc "{";
+  p_jmember oc "Fun Name" p_atom name;
+  p_sep oc;
+  p_jmember oc "Fun Storage Class" p_storage static;
+  p_sep oc;
+  p_jmember oc "Fun Alignment" p_int_opt alignment;
+  p_sep oc;
+  p_jmember oc "Fun Section Code" p_section c_section;
+  p_sep oc;
+  p_jmember oc "Fun Section Literals" p_section l_section;
+  p_sep oc;
+  p_jmember oc "Fun Section Jumptable" p_section j_section;
+  p_sep oc;
+  p_jmember oc "Fun Inline" p_jbool inline;
+  p_sep oc;
+  p_jmember oc "Fun Code" (fun oc a -> fprintf oc "[%a]" p_instruction a) f.fn_code;
+  output_string oc "}\n"
+
 
 let p_init_data oc = function
   | Init_int8 ic -> p_jsingle_object oc "Init_int8" p_int ic
@@ -364,7 +363,11 @@ let p_vardef oc (name,v) =
 let p_program oc prog =
   let prog_vars,prog_funs = List.fold_left (fun (vars,funs) (ident,def) ->
     match def with
-    | Gfun (Internal f) -> vars,(ident,f)::funs
+    | Gfun (Internal f) ->
+      if not (atom_is_iso_inline_definition ident) then
+        vars,(ident,f)::funs
+      else
+        vars,funs
     | Gvar v -> (ident,v)::vars,funs
     | _ -> vars,funs) ([],[]) prog.prog_defs in
   fprintf oc "{\"Global Variables\":%a,\n\"Functions\":%a}"
