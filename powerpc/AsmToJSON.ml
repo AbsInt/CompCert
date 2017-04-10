@@ -108,7 +108,7 @@ let p_instruction oc ic =
   | Paddic  (ir1,ir2,c) -> instruction "Paddic" [Ireg ir1; Ireg ir2; Constant c]
   | Paddis  (ir1,ir2,c) -> instruction "Paddis" [Ireg ir1; Ireg ir2; Constant c]
   | Paddze (ir1,ir2) -> instruction "Paddze" [Ireg ir1; Ireg ir2]
-  | Pallocframe _ -> () (* Should not occur *)
+  | Pallocframe _ -> assert false (* Should not occur *)
   | Pand_ (ir1,ir2,ir3) -> instruction "Pand_" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pandc (ir1,ir2,ir3) -> instruction "Pandc" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pandi_ (ir1,ir2,c) -> instruction "Pandi_" [Ireg ir1; Ireg ir2; Constant c]
@@ -151,24 +151,24 @@ let p_instruction oc ic =
   | Pfadd (fr1,fr2,fr3) -> instruction "Pfadd" [Freg fr1; Freg fr2; Freg fr3]
   | Pfadds (fr1,fr2,fr3) -> instruction "Pfadds" [Freg fr1; Freg fr2; Freg fr3]
   | Pfcmpu (fr1,fr2) -> instruction "Pfcmpu" [Freg fr1; Freg fr2]
-  | Pfcfi (ir,fr) -> () (* Should not occur *)
+  | Pfcfi (ir,fr) -> assert false (* Should not occur *)
   | Pfcfid (fr1,fr2) -> instruction "Pfcfid" [Freg fr1; Freg fr2]
   | Pfcfiu _ (* Should not occur *)
   | Pfcti _ (* Should not occur *)
-  | Pfctiu _ -> () (* Should not occur *)
+  | Pfctiu _ -> assert false (* Should not occur *)
   | Pfctidz (fr1,fr2) -> instruction "Pfctidz" [Freg fr1; Freg fr2]
   | Pfctiw (fr1,fr2) -> instruction "Pfctiw" [Freg fr1; Freg fr2]
   | Pfctiwz (fr1,fr2) -> instruction "Pfctiwz" [Freg fr1; Freg fr2]
   | Pfdiv (fr1,fr2,fr3) -> instruction "Pfdiv" [Freg fr1; Freg fr2; Freg fr3]
   | Pfdivs (fr1,fr2,fr3) -> instruction "Pfdivs" [Freg fr1; Freg fr2; Freg fr3]
-  | Pfmake (fr,ir1,ir2) -> ()(* Should not occur *)
+  | Pfmake (fr,ir1,ir2) -> assert false (* Should not occur *)
   | Pfmr (fr1,fr2) -> instruction "Pfmr" [Freg fr1; Freg fr2]
   | Pfmul (fr1,fr2,fr3) -> instruction "Pfmul" [Freg fr1; Freg fr2; Freg fr3]
   | Pfmuls(fr1,fr2,fr3) -> instruction "Pfmuls" [Freg fr1; Freg fr2; Freg fr3]
   | Pfneg (fr1,fr2)
   | Pfnegs (fr1,fr2) -> instruction "Pfneg" [Freg fr1; Freg fr2]
   | Pfrsp (fr1,fr2) -> instruction "Pfrsp" [Freg fr1; Freg fr2]
-  | Pfxdp (fr1,fr2) -> () (* Should not occur *)
+  | Pfxdp (fr1,fr2) -> assert false (* Should not occur *)
   | Pfsub (fr1,fr2,fr3) -> instruction "Pfsub" [Freg fr1; Freg fr2; Freg fr3]
   | Pfsubs (fr1,fr2,fr3) ->  instruction "Pfsubs" [Freg fr1; Freg fr2; Freg fr3]
   | Pfmadd (fr1,fr2,fr3,fr4) -> instruction "Pfmadd" [Freg fr1; Freg fr2; Freg fr3; Freg fr4]
@@ -208,7 +208,7 @@ let p_instruction oc ic =
   | Plwbrx (ir1,ir2,ir3) -> instruction "Plwbrx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pmbar c -> instruction "Pmbar" [Constant (Cint c)]
   | Pmfcr ir -> instruction "Pmfcr" [Ireg ir]
-  | Pmfcrbit (ir,crb) -> () (* Should not occur *)
+  | Pmfcrbit (ir,crb) -> assert false (* Should not occur *)
   | Pmflr ir -> instruction "Pmflr" [Ireg ir]
   | Pmr (ir1,ir2) -> instruction "Pmr" [Ireg ir1; Ireg ir2]
   | Pmtctr ir -> instruction "Pmtctr" [Ireg ir]
