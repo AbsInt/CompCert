@@ -1,5 +1,8 @@
 - Removed the compilation of '.cm' files written in Cminor concrete syntax.
 
+Bug fixing:
+- Issue #179: clightgen produces wrong output for "switch" statements.
+
 
 Release 3.0.1, 2017-02-14
 =========================
