@@ -38,7 +38,7 @@
 
 /* Conversion from signed int64 to float64 */
 
-double __i64_stod(signed long long x)
+double i64_stod(signed long long x)
 {
   unsigned xl = x;
   signed xh = x >> 32;

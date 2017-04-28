@@ -91,8 +91,8 @@ let elf_symbol oc symb =
 
 let elf_symbol_offset oc (symb, ofs) =
   elf_symbol oc symb;
-  let ofs = camlint_of_coqint ofs in
-  if ofs <> 0l then fprintf oc " + %ld" ofs
+  let ofs = camlint64_of_ptrofs ofs in
+  if ofs <> 0L then fprintf oc " + %Ld" ofs
 
 (* Functions for fun and var info *)
 let elf_print_fun_info oc name =
@@ -141,6 +141,9 @@ let coqint oc n =
 
 let coqint64 oc n =
   fprintf oc "%Ld" (camlint64_of_coqint n)
+
+let ptrofs oc n =
+  fprintf oc "%Ld" (camlint64_of_ptrofs n)
 
 (** Programmer-supplied annotations (__builtin_annot). *)
 

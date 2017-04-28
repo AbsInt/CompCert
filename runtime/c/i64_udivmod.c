@@ -37,13 +37,13 @@
 #include <stddef.h>
 #include "i64.h"
 
-static unsigned __i64_udiv6432(unsigned u1, unsigned u0,
+static unsigned i64_udiv6432(unsigned u1, unsigned u0,
                                unsigned v, unsigned *r);
-static int __i64_nlz(unsigned x);
+static int i64_nlz(unsigned x);
 
 /* Unsigned division and remainder */
 
-unsigned long long __i64_udivmod(unsigned long long n,
+unsigned long long i64_udivmod(unsigned long long n,
                                  unsigned long long d,
                                  unsigned long long * rp)
 {
@@ -62,7 +62,7 @@ unsigned long long __i64_udivmod(unsigned long long n,
       unsigned dl = d; 
       unsigned qh = nh / dl;
       unsigned rl;
-      unsigned ql = __i64_udiv6432(nh % dl, nl, dl, &rl);
+      unsigned ql = i64_udiv6432(nh % dl, nl, dl, &rl);
       *rp = (unsigned long long) rl; /* high word of remainder is 0 */
       return ((unsigned long long) qh) << 32 | ql;
     }
@@ -70,11 +70,11 @@ unsigned long long __i64_udivmod(unsigned long long n,
     /* General case 64 / 64 */
     unsigned dl = d;
     /* Scale N and D down, giving N' and D' such that 2^31 <= D' < 2^32 */
-    int s = 32 - __i64_nlz(dh);  /* shift amount, between 1 and 32 */
-    unsigned long long np = __i64_shr(n, s);
-    unsigned dp = (unsigned) __i64_shr(d, s);
+    int s = 32 - i64_nlz(dh);  /* shift amount, between 1 and 32 */
+    unsigned long long np = i64_shr(n, s);
+    unsigned dp = (unsigned) i64_shr(d, s);
     /* Divide N' by D' to get an approximate quotient Q */
-    unsigned q = __i64_udiv6432(np >> 32, np, dp, NULL);
+    unsigned q = i64_udiv6432(np >> 32, np, dp, NULL);
   again: ;
     /* Tentative quotient Q is either correct or one too high */
     /* Compute Q * D, checking for overflow */
@@ -99,7 +99,7 @@ unsigned long long __i64_udivmod(unsigned long long n,
 /* Unsigned division and remainder for 64 bits divided by 32 bits. */
 /* This is algorithm "divlu" from _Hacker's Delight_, fig 9.3 */
 
-static unsigned __i64_udiv6432(unsigned u1, unsigned u0,
+static unsigned i64_udiv6432(unsigned u1, unsigned u0,
                                unsigned v, unsigned *r)
 {
   const unsigned b = 65536; // Number base (16 bits).
@@ -114,7 +114,7 @@ static unsigned __i64_udiv6432(unsigned u1, unsigned u0,
     if (r != NULL) *r = 0xFFFFFFFFU; // set rem to an impossible value,
     return 0xFFFFFFFFU;              // and return largest possible quotient.
   }
-  s = __i64_nlz(v);          // 0 <= s <= 31.
+  s = i64_nlz(v);          // 0 <= s <= 31.
   v = v << s;                // Normalize divisor.
   vn1 = v >> 16;             // Break divisor up into
   vn0 = v & 0xFFFF;          // two 16-bit digits.
@@ -145,7 +145,7 @@ again2:
 
 /* Number of leading zeroes */
 
-static int __i64_nlz(unsigned x)
+static int i64_nlz(unsigned x)
 {
   if (x == 0) return 32;
   int n = 0;

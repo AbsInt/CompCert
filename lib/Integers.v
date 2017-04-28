@@ -796,6 +796,12 @@ Proof.
   unfold signed. rewrite unsigned_zero. apply zlt_true. generalize half_modulus_pos; omega.
 Qed.
 
+Theorem signed_one: zwordsize > 1 -> signed one = 1.
+Proof.
+  intros. unfold signed. rewrite unsigned_one. apply zlt_true. 
+  change 1 with (two_p 0). rewrite half_modulus_power. apply two_p_monotone_strict. omega. 
+Qed.
+
 Theorem signed_mone: signed mone = -1.
 Proof.
   unfold signed. rewrite unsigned_mone.
@@ -1843,6 +1849,15 @@ Proof.
     rewrite <- bits_xor; auto. rewrite H. apply bits_zero.
   destruct (testbit x i); destruct (testbit y i); reflexivity || discriminate.
 Qed.
+
+Theorem xor_is_zero: forall x y, eq (xor x y) zero = eq x y.
+Proof.
+  intros. predSpec eq eq_spec (xor x y) zero.
+- apply xor_zero_equal in H. subst y. rewrite eq_true; auto. 
+- predSpec eq eq_spec x y.
++ elim H; subst y; apply xor_idem. 
++ auto.
+Qed. 
 
 Theorem and_xor_distrib:
   forall x y z,
@@ -2932,6 +2947,13 @@ Proof.
        rewrite <- Z_div_mod_eq. ring. auto. ring.
   - apply Zquot_Zdiv_pos; omega.
 Qed.
+
+Theorem shrx_zero:
+  forall x, zwordsize > 1 -> shrx x zero = x.
+Proof.
+  intros. unfold shrx. rewrite shl_zero. unfold divs. rewrite signed_one by auto.
+  rewrite Z.quot_1_r. apply repr_signed.
+Qed. 
 
 Theorem shrx_shr:
   forall x y,
@@ -4080,9 +4102,7 @@ Qed.
 Theorem shrx'_zero:
   forall x, shrx' x Int.zero = x.
 Proof.
-  intros. unfold shrx'. rewrite shl'_one_two_p. unfold divs.
-  change (signed (repr (two_p (Int.unsigned Int.zero)))) with 1. 
-  rewrite Z.quot_1_r. apply repr_signed.
+  intros. change (shrx' x Int.zero) with (shrx x zero). apply shrx_zero. compute; auto. 
 Qed. 
 
 Theorem shrx'_shr_2:

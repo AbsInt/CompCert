@@ -71,15 +71,15 @@ clean:
 test:
 	@echo "----------- Compiled tests -------------"
 	@for i in $(TESTS) $(TESTS_COMP); do \
-	   ./Runtest $$i ./$$i.compcert; \
+	   SIMU='$(SIMU)' ./Runtest $$i ./$$i.compcert; \
          done
 	@echo "----------- Interpreted tests -------------"
 	@for i in $(TESTS); do \
-           ./Runtest $$i $(CCOMP) -fall -interp -quiet $$i.c; \
+           SIMU='' ./Runtest $$i $(CCOMP) -fall -interp -quiet $$i.c; \
          done
 	@for i in $(TESTS_DIFF); do \
            if $(CCOMP) -fall -interp -quiet $$i.c > _cinterp.log; then \
-             if ./$$i.compcert | cmp -s _cinterp.log -; \
+             if $(SIMU) ./$$i.compcert | cmp -s _cinterp.log -; \
              then echo "$$i: compiler and interpreter agree"; \
              else echo "$$i: compiler and interpreter DISAGREE"; \
              fi; \

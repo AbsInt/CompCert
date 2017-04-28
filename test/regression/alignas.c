@@ -7,6 +7,13 @@
 #define _Alignof(x) __alignof__(x)
 #endif
 
+#ifdef _Alignas
+#undef _Alignas
+#endif
+#ifdef _Alignof
+#undef _Alignof
+#endif
+
 /* Base type */
 int _Alignas(16) a;
 char filler1;

@@ -38,14 +38,14 @@
 
 /* Signed remainder */
 
-signed long long __i64_smod(signed long long n, signed long long d)
+signed long long i64_smod(signed long long n, signed long long d)
 {
   unsigned long long un, ud, ur;
   int nh = n >> 32, dh = d >> 32;
   /* Take absolute values of n and d */
   un = nh < 0 ? -n : n;
   ud = dh < 0 ? -d : d;
-  (void) __i64_udivmod(un, ud, &ur);
+  (void) i64_udivmod(un, ud, &ur);
   /* Apply sign to remainder */
   return nh < 0 ? -ur : ur;
 }

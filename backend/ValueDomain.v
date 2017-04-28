@@ -1966,6 +1966,22 @@ Proof.
   rewrite LTU; auto with va.
 Qed.
 
+(** Pointer operations *)
+
+Definition offset_ptr (v: aval) (n: ptrofs) :=
+  match v with
+  | Ptr p => Ptr (padd p n)
+  | Ifptr p => Ifptr (padd p n)
+  | _ => ntop1 v
+  end.
+
+Lemma offset_ptr_sound:
+  forall v x n, vmatch v x -> vmatch (Val.offset_ptr v n) (offset_ptr x n).
+Proof.
+  intros. unfold Val.offset_ptr, offset_ptr.
+  inv H; constructor; apply padd_sound; assumption.
+Qed.
+
 (** Floating-point arithmetic operations *)
 
 Definition negf := unop_float Float.neg.
@@ -4574,6 +4590,7 @@ Hint Resolve cnot_sound symbol_address_sound
        negl_sound addl_sound subl_sound
        mull_sound mullhs_sound mullhu_sound
        divls_sound divlu_sound modls_sound modlu_sound shrxl_sound
+       offset_ptr_sound
        negf_sound absf_sound
        addf_sound subf_sound mulf_sound divf_sound
        negfs_sound absfs_sound

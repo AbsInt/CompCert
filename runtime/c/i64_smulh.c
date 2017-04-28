@@ -47,9 +47,9 @@ typedef unsigned long long u64;
  * - subtract Y if X < 0 
  */
 
-s64 __i64_smulh(s64 x, s64 y)
+s64 i64_smulh(s64 x, s64 y)
 {
-  s64 t = (s64) __i64_umulh(x, y);
+  s64 t = (s64) i64_umulh(x, y);
   if (y < 0) t = t - x;
   if (x < 0) t = t - y;
   return t;

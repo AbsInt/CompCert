@@ -38,7 +38,7 @@
 
 /* Conversion from unsigned int64 to float32 */
 
-float __i64_utof(unsigned long long x)
+float i64_utof(unsigned long long x)
 {
   if (x >= 1ULL << 53) {
     /* x is large enough that double rounding can occur.

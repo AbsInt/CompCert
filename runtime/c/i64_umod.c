@@ -38,9 +38,9 @@
 
 /* Unsigned remainder */
 
-unsigned long long __i64_umod(unsigned long long n, unsigned long long d)
+unsigned long long i64_umod(unsigned long long n, unsigned long long d)
 {
   unsigned long long r;
-  (void) __i64_udivmod(n, d, &r);
+  (void) i64_udivmod(n, d, &r);
   return r;
 }

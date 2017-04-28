@@ -38,7 +38,7 @@
 
 /* Conversion float64 -> signed int64 */
 
-long long __i64_dtos(double d)
+long long i64_dtos(double d)
 {
   /* Extract bits of d's representation */
   union { double d; unsigned long long i; } buf;
@@ -63,9 +63,9 @@ long long __i64_dtos(double d)
     (buf.i & ~0xFFF0000000000000LL) | 0x0010000000000000LL;
   /* Shift it appropriately */
   if (e >= 0)
-    m = __i64_shl(m, e);
+    m = i64_shl(m, e);
   else
-    m = __i64_shr(m, -e);
+    m = i64_shr(m, -e);
   /* Apply sign to result */
   if ((int) h < 0)
     return -m;

@@ -38,14 +38,14 @@
 
 /* Signed division */
 
-signed long long __i64_sdiv(signed long long n, signed long long d)
+signed long long i64_sdiv(signed long long n, signed long long d)
 {
   unsigned long long un, ud, uq, ur;
   int nh = n >> 32, dh = d >> 32;
   /* Take absolute values of n and d */
   un = nh < 0 ? -n : n;
   ud = dh < 0 ? -d : d;
-  uq = __i64_udivmod(un, ud, &ur);
+  uq = i64_udivmod(un, ud, &ur);
   /* Apply sign to quotient */
   return (nh ^ dh) < 0 ? -uq : uq;
 }

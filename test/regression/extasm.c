@@ -18,7 +18,7 @@ int clobbers(int x, int z)
   return y + z;
 }
 
-#if defined(__x86_64__)
+#if defined(__x86_64__) || __riscv_xlen == 64
 #define SIXTYFOUR
 #else
 #undef SIXTYFOUR

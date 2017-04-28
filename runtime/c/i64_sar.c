@@ -38,7 +38,7 @@
 
 /* Shift right signed */
 
-signed long long __i64_sar(signed long long x, int amount)
+signed long long i64_sar(signed long long x, int amount)
 {
   unsigned xl = x;
   int xh = x >> 32;

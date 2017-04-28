@@ -23,7 +23,7 @@ depend:
 	gcc -MM *.c > .depend
 
 test:
-	./render < kal.gml
+	$(SIMU) ./render < kal.gml
 	@if cmp kal.ppm Results/kal.ppm; \
         then echo "raytracer: passed"; \
         else echo "raytracer: FAILED"; exit 2; \

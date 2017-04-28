@@ -35,9 +35,9 @@ test:
 	@echo "Test data: $(TESTFILE)"
 	@for i in $(EXE); do \
           echo "$$i: compression..."; \
-          ./$$i -c -i $(TESTFILE) -o $(TESTCOMPR); \
+          $(SIMU) ./$$i -c -i $(TESTFILE) -o $(TESTCOMPR); \
           echo "$$i: decompression..."; \
-          ./$$i -d -i $(TESTCOMPR) -o $(TESTEXPND); \
+          $(SIMU) ./$$i -d -i $(TESTCOMPR) -o $(TESTEXPND); \
           if cmp $(TESTFILE) $(TESTEXPND); \
           then echo "$$i: passed"; \
           else echo "$$i: FAILED"; exit 2; \

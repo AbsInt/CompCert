@@ -461,6 +461,9 @@ let _ =
                        if Configuration.abi = "macosx"
                        then Machine.x86_32_macosx
                        else Machine.x86_32
+      | "riscV"   -> if Configuration.model = "64"
+                     then Machine.rv64
+                     else Machine.rv32
       | _         -> assert false
       end;
     Builtins.set C2C.builtins;

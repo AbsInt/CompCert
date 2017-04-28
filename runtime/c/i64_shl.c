@@ -38,7 +38,7 @@
 
 /* Shift left */
 
-unsigned long long __i64_shl(unsigned long long x, int amount)
+unsigned long long i64_shl(unsigned long long x, int amount)
 {
   unsigned xl = x, xh = x >> 32;
   amount = amount & 63;

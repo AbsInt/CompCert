@@ -131,6 +131,10 @@ case "$target" in
       arch="powerpc"; model="ppc64"; endianness="big"; bitsize=32;;
   e5500-*)
       arch="powerpc"; model="e5500"; endianness="big"; bitsize=32;;
+  rv32-*)
+      arch="riscV"; model="32"; endianness="little"; bitsize=32;;
+  rv64-*)
+      arch="riscV"; model="64"; endianness="little"; bitsize=64;;
   manual)
       ;;
   "")
@@ -364,6 +368,29 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         echo "$usage" 1>&2
         exit 2;;
   esac
+fi
+
+#
+# RISC-V Target Configuration
+#
+if test "$arch" = "riscV"; then
+  if test "$model" = "64"; then
+    model_options="-march=rv64imafd -mabi=lp64d"
+  else
+    model_options="-march=rv32imafd -mabi=ilp32d"
+  fi
+  abi="standard"
+  casm="${toolprefix}gcc"
+  casm_options="$model_options -c"
+  cc="${toolprefix}gcc $model_options"
+  clinker="${toolprefix}gcc"
+  clinker_options="$model_options"
+  cprepro="${toolprefix}gcc"
+  cprepro_options="$model_options -std=c99 -U__GNUC__ -E"
+  libmath="-lm"
+  struct_passing="ref-callee"   # wrong!
+  struct_return="ref"           # to check!
+  system="linux"
 fi
 
 #

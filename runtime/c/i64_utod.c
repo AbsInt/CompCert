@@ -38,7 +38,7 @@
 
 /* Conversion from unsigned int64 to float64 */
 
-double __i64_utod(unsigned long long x)
+double i64_utod(unsigned long long x)
 {
   unsigned xl = x, xh = x >> 32;
   return (double) xl + 0x1.0p32 * (double) xh;

@@ -22,7 +22,7 @@ clean:
 	rm -f *.o *.s *.parsed.c *.light.c *.sdump
 
 test:
-	./spass small_problem.dfg | grep 'Proof found'
+	$(SIMU) ./spass small_problem.dfg | grep 'Proof found'
 
 TIME=xtime -o /dev/null     # Xavier's hack
 #TIME=time >/dev/null       # Otherwise

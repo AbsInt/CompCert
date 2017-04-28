@@ -488,6 +488,14 @@ Variable sp: val.
 Variable e: env.
 Variable m: mem.
 
+Lemma is_intconst_sound:
+  forall v a n le,
+  is_intconst a = Some n -> eval_expr ge sp e m le a v -> v = Vint n.
+Proof with (try discriminate).
+  intros. unfold is_intconst in *.
+  destruct a... destruct o... inv H. inv H0. destruct vl; inv H5. auto.
+Qed.
+
 Lemma eval_divu_mul:
   forall le x y p M,
   divu_mul_params (Int.unsigned y) = Some(p, M) ->
@@ -495,12 +503,10 @@ Lemma eval_divu_mul:
   eval_expr ge sp e m le (divu_mul p M) (Vint (Int.divu x y)).
 Proof.
   intros. unfold divu_mul. exploit (divu_mul_shift x); eauto. intros [A B].
-  assert (eval_expr ge sp e m le
-           (Eop Omulhu (Eletvar 0 ::: Eop (Ointconst (Int.repr M)) Enil ::: Enil))
-           (Vint (Int.mulhu x (Int.repr M)))).
-  { EvalOp. econstructor. econstructor; eauto. econstructor. EvalOp. simpl; reflexivity. constructor.
-    auto. }
-  exploit eval_shruimm. eexact H1. instantiate (1 := Int.repr p).
+  assert (C: eval_expr ge sp e m le (Eletvar 0) (Vint x)) by (apply eval_Eletvar; eauto).
+  assert (D: eval_expr ge sp e m le (Eop (Ointconst (Int.repr M)) Enil) (Vint (Int.repr M))) by EvalOp.
+  exploit eval_mulhu. eexact C. eexact D. intros (v & E & F). simpl in F. inv F. 
+  exploit eval_shruimm. eexact E. instantiate (1 := Int.repr p).
   intros [v [P Q]]. simpl in Q.
   replace (Int.ltu (Int.repr p) Int.iwordsize) with true in Q.
   inv Q. rewrite B. auto.
@@ -537,8 +543,15 @@ Theorem eval_divu:
   Val.divu x y = Some z ->
   exists v, eval_expr ge sp e m le (divu a b) v /\ Val.lessdef z v.
 Proof.
-  unfold divu; intros until b. destruct (divu_match b); intros.
-- inv H0. inv H5. simpl in H7. inv H7. eapply eval_divuimm; eauto.
+  unfold divu; intros.
+  destruct (is_intconst b) as [n2|] eqn:B.
+- exploit is_intconst_sound; eauto. intros EB; clear B.
+  destruct (is_intconst a) as [n1|] eqn:A.
++ exploit is_intconst_sound; eauto. intros EA; clear A.
+  destruct (Int.eq n2 Int.zero) eqn:Z. eapply eval_divu_base; eauto. 
+  subst. simpl in H1. rewrite Z in H1; inv H1.
+  TrivialExists.
++ subst. eapply eval_divuimm; eauto.
 - eapply eval_divu_base; eauto.
 Qed.
 
@@ -585,8 +598,15 @@ Theorem eval_modu:
   Val.modu x y = Some z ->
   exists v, eval_expr ge sp e m le (modu a b) v /\ Val.lessdef z v.
 Proof.
-  unfold modu; intros until b. destruct (modu_match b); intros.
-- inv H0. inv H5. simpl in H7. inv H7. eapply eval_moduimm; eauto.
+  unfold modu; intros.
+  destruct (is_intconst b) as [n2|] eqn:B.
+- exploit is_intconst_sound; eauto. intros EB; clear B.
+  destruct (is_intconst a) as [n1|] eqn:A.
++ exploit is_intconst_sound; eauto. intros EA; clear A.
+  destruct (Int.eq n2 Int.zero) eqn:Z. eapply eval_modu_base; eauto. 
+  subst. simpl in H1. rewrite Z in H1; inv H1.
+  TrivialExists.
++ subst. eapply eval_moduimm; eauto.
 - eapply eval_modu_base; eauto.
 Qed.
 
@@ -597,14 +617,10 @@ Lemma eval_divs_mul:
   eval_expr ge sp e m le (divs_mul p M) (Vint (Int.divs x y)).
 Proof.
   intros. unfold divs_mul.
-  assert (V: eval_expr ge sp e m le (Eletvar O) (Vint x)).
-  { constructor; auto. }
-  assert (X: eval_expr ge sp e m le
-           (Eop Omulhs (Eletvar 0 ::: Eop (Ointconst (Int.repr M)) Enil ::: Enil))
-           (Vint (Int.mulhs x (Int.repr M)))).
-  { EvalOp. econstructor. eauto. econstructor. EvalOp. simpl; reflexivity. constructor.
-    auto. }
-  exploit eval_shruimm. eexact V. instantiate (1 := Int.repr (Int.zwordsize - 1)).
+  assert (C: eval_expr ge sp e m le (Eletvar 0) (Vint x)) by (apply eval_Eletvar; eauto).
+  assert (D: eval_expr ge sp e m le (Eop (Ointconst (Int.repr M)) Enil) (Vint (Int.repr M))) by EvalOp.
+  exploit eval_mulhs. eexact C. eexact D. intros (v & X & F). simpl in F; inv F.
+  exploit eval_shruimm. eexact C. instantiate (1 := Int.repr (Int.zwordsize - 1)).
   intros [v1 [Y LD]]. simpl in LD.
   change (Int.ltu (Int.repr 31) Int.iwordsize) with true in LD.
   simpl in LD. inv LD.
@@ -619,7 +635,7 @@ Proof.
   simpl in LD. inv LD.
   rewrite B. exact W.
 - exploit (divs_mul_shift_2 x); eauto. intros [A B].
-  exploit eval_add. eexact X. eexact V. intros [v1 [Z LD]].
+  exploit eval_add. eexact X. eexact C. intros [v1 [Z LD]].
   simpl in LD. inv LD.
   exploit eval_shrimm. eexact Z. instantiate (1 := Int.repr p). intros [v1 [U LD]].
   simpl in LD. rewrite RANGE in LD by auto. inv LD.
@@ -657,8 +673,16 @@ Theorem eval_divs:
   Val.divs x y = Some z ->
   exists v, eval_expr ge sp e m le (divs a b) v /\ Val.lessdef z v.
 Proof.
-  unfold divs; intros until b. destruct (divs_match b); intros.
-- inv H0. inv H5. simpl in H7. inv H7. eapply eval_divsimm; eauto.
+  unfold divs; intros.
+  destruct (is_intconst b) as [n2|] eqn:B.
+- exploit is_intconst_sound; eauto. intros EB; clear B.
+  destruct (is_intconst a) as [n1|] eqn:A.
++ exploit is_intconst_sound; eauto. intros EA; clear A.
+  destruct (Int.eq n2 Int.zero) eqn:Z. eapply eval_divs_base; eauto.
+  subst. simpl in H1. 
+  destruct (Int.eq n2 Int.zero || Int.eq n1 (Int.repr Int.min_signed) && Int.eq n2 Int.mone); inv H1.
+  TrivialExists.
++ subst. eapply eval_divsimm; eauto.
 - eapply eval_divs_base; eauto.
 Qed.
 
@@ -700,8 +724,16 @@ Theorem eval_mods:
   Val.mods x y = Some z ->
   exists v, eval_expr ge sp e m le (mods a b) v /\ Val.lessdef z v.
 Proof.
-  unfold mods; intros until b. destruct (mods_match b); intros.
-- inv H0. inv H5. simpl in H7. inv H7. eapply eval_modsimm; eauto.
+  unfold mods; intros.
+  destruct (is_intconst b) as [n2|] eqn:B.
+- exploit is_intconst_sound; eauto. intros EB; clear B.
+  destruct (is_intconst a) as [n1|] eqn:A.
++ exploit is_intconst_sound; eauto. intros EA; clear A.
+  destruct (Int.eq n2 Int.zero) eqn:Z. eapply eval_mods_base; eauto.
+  subst. simpl in H1. 
+  destruct (Int.eq n2 Int.zero || Int.eq n1 (Int.repr Int.min_signed) && Int.eq n2 Int.mone); inv H1.
+  TrivialExists.
++ subst. eapply eval_modsimm; eauto.
 - eapply eval_mods_base; eauto.
 Qed.
 

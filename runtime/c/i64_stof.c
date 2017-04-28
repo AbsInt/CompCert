@@ -38,7 +38,7 @@
 
 /* Conversion from signed int64 to float32 */
 
-float __i64_stof(signed long long x)
+float i64_stof(signed long long x)
 {
   if (x < -(1LL << 53) || x >= (1LL << 53)) {
     /* x is large enough that double rounding can occur.

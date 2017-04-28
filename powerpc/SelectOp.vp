@@ -234,6 +234,9 @@ Nondetfunction mul (e1: expr) (e2: expr) :=
   | _, _ => Eop Omul (e1:::e2:::Enil)
   end.
 
+Definition mulhs (e1: expr) (e2: expr) := Eop Omulhs (e1 ::: e2 ::: Enil).
+Definition mulhu (e1: expr) (e2: expr) := Eop Omulhu (e1 ::: e2 ::: Enil).
+
 (** ** Bitwise and, or, xor *)
 
 Nondetfunction andimm (n1: int) (e2: expr) := 

@@ -4,7 +4,7 @@ all:
 	for i in $(DIRS); do $(MAKE) -C $$i all; done
 
 test:
-	set -e; for i in $(DIRS); do $(MAKE) -C $$i test; done
+	set -e; for i in $(DIRS); do $(MAKE) SIMU='$(SIMU)' -C $$i test; done
 
 bench:
 	for i in $(DIRS); do $(MAKE) -C $$i bench; done

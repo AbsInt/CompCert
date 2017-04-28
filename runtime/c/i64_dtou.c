@@ -38,7 +38,7 @@
 
 /* Conversion float64 -> unsigned int64 */
 
-unsigned long long __i64_dtou(double d)
+unsigned long long i64_dtou(double d)
 {
   /* Extract bits of d's representation */
   union { double d; unsigned long long i; } buf;
@@ -62,8 +62,8 @@ unsigned long long __i64_dtou(double d)
     (buf.i & ~0xFFF0000000000000LL) | 0x0010000000000000LL;
   /* Shift it appropriately */
   if (e >= 0)
-    return __i64_shl(m, e);
+    return i64_shl(m, e);
   else
-    return __i64_shr(m, -e);
+    return i64_shr(m, -e);
 
 }

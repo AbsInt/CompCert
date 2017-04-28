@@ -43,7 +43,7 @@ typedef unsigned int u32;
 
 /* Hacker's Delight, algorithm 8.1, specialized to two 32-bit words */
 
-u64 __i64_umulh(u64 u, u64 v)
+u64 i64_umulh(u64 u, u64 v)
 {
   u32 u0 = u, u1 = u >> 32;
   u32 v0 = v, v1 = v >> 32;

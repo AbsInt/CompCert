@@ -38,8 +38,8 @@
 
 /* Unsigned division */
 
-unsigned long long __i64_udiv(unsigned long long n, unsigned long long d)
+unsigned long long i64_udiv(unsigned long long n, unsigned long long d)
 {
   unsigned long long r;
-  return __i64_udivmod(n, d, &r);
+  return i64_udivmod(n, d, &r);
 }

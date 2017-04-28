@@ -180,6 +180,11 @@ let arm_bigendian =
   { arm_littleendian with bigendian = true;
                           bitfields_msb_first = true }
 
+let rv32 =
+  { ilp32ll64 with name = "rv32" }
+let rv64 =
+  { i32lpll64 with name = "rv64" }
+
 (* Add GCC extensions re: sizeof and alignof *)
 
 let gcc_extensions c =

@@ -1,3 +1,5 @@
+- New port targeting the RISC-V architecture, in 32- and 64-bit modes.
+
 - Removed the compilation of '.cm' files written in Cminor concrete syntax.
 
 Bug fixing:

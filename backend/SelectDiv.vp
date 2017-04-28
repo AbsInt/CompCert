@@ -19,6 +19,12 @@ Require Import Op CminorSel SelectOp SplitLong SelectLong.
 
 Local Open Scope cminorsel_scope.
 
+Definition is_intconst (e: expr) : option int :=
+  match e with
+  | Eop (Ointconst n) _ => Some n
+  | _ => None
+  end.
+
 (** We try to turn divisions by a constant into a multiplication by
   a pseudo-inverse of the divisor.  The approach is described in
 - Torbjörn Granlund, Peter L. Montgomery: "Division by Invariant
@@ -101,7 +107,7 @@ Definition divlu_mul_params (d: Z) : option (Z * Z) :=
   end.
 
 Definition divu_mul (p: Z) (m: Z) :=
-  shruimm (Eop Omulhu (Eletvar O ::: Eop (Ointconst (Int.repr m)) Enil ::: Enil))
+  shruimm (mulhu (Eletvar O) (Eop (Ointconst (Int.repr m)) Enil))
           (Int.repr p).
 
 Definition divuimm (e1: expr) (n2: int) :=
@@ -117,10 +123,14 @@ Definition divuimm (e1: expr) (n2: int) :=
         end
   end.
 
-Nondetfunction divu (e1: expr) (e2: expr) := 
-  match e2 with
-  | Eop (Ointconst n2) Enil => divuimm e1 n2
-  | _ => divu_base e1 e2
+Definition divu (e1: expr) (e2: expr) := 
+  match is_intconst e2, is_intconst e1 with
+  | Some n2, Some n1 =>
+      if Int.eq n2 Int.zero
+      then divu_base e1 e2
+      else Eop (Ointconst (Int.divu n1 n2)) Enil
+  | Some n2, _ => divuimm e1 n2
+  | _, _ => divu_base e1 e2
   end.
 
 Definition mod_from_div (equo: expr) (n: int) :=
@@ -139,15 +149,19 @@ Definition moduimm (e1: expr) (n2: int) :=
         end
   end.
 
-Nondetfunction modu (e1: expr) (e2: expr) := 
-  match e2 with
-  | Eop (Ointconst n2) Enil => moduimm e1 n2
-  | _ => modu_base e1 e2
+Definition modu (e1: expr) (e2: expr) := 
+  match is_intconst e2, is_intconst e1 with
+  | Some n2, Some n1 =>
+      if Int.eq n2 Int.zero
+      then modu_base e1 e2
+      else Eop (Ointconst (Int.modu n1 n2)) Enil
+  | Some n2, _ => moduimm e1 n2
+  | _, _ => modu_base e1 e2
   end.
 
 Definition divs_mul (p: Z) (m: Z) :=
   let e2 :=
-    Eop Omulhs (Eletvar O ::: Eop (Ointconst (Int.repr m)) Enil ::: Enil) in
+    mulhs (Eletvar O) (Eop (Ointconst (Int.repr m)) Enil) in
   let e3 :=
     if zlt m Int.half_modulus then e2 else add e2 (Eletvar O) in
   add (shrimm e3 (Int.repr p))
@@ -169,10 +183,14 @@ Definition divsimm (e1: expr) (n2: int) :=
         end
   end.
 
-Nondetfunction divs (e1: expr) (e2: expr) := 
-  match e2 with
-  | Eop (Ointconst n2) Enil => divsimm e1 n2
-  | _ => divs_base e1 e2
+Definition divs (e1: expr) (e2: expr) := 
+  match is_intconst e2, is_intconst e1 with
+  | Some n2, Some n1 =>
+      if Int.eq n2 Int.zero
+      then divs_base e1 e2
+      else Eop (Ointconst (Int.divs n1 n2)) Enil
+  | Some n2, _ => divsimm e1 n2
+  | _, _ => divs_base e1 e2
   end.
 
 Definition modsimm (e1: expr) (n2: int) :=
@@ -191,10 +209,14 @@ Definition modsimm (e1: expr) (n2: int) :=
         end
   end.
 
-Nondetfunction mods (e1: expr) (e2: expr) := 
-  match e2 with
-  | Eop (Ointconst n2) Enil => modsimm e1 n2
-  | _ => mods_base e1 e2
+Definition mods (e1: expr) (e2: expr) := 
+  match is_intconst e2, is_intconst e1 with
+  | Some n2, Some n1 =>
+      if Int.eq n2 Int.zero
+      then mods_base e1 e2
+      else Eop (Ointconst (Int.mods n1 n2)) Enil
+  | Some n2, _ => modsimm e1 n2
+  | _, _ => mods_base e1 e2
   end.
 
 (** 64-bit integer divisions *)

@@ -32,7 +32,7 @@ all_gcc: $(PROGS:%=%.gcc)
 
 test:
 	@for i in $(PROGS); do \
-	   if ./$$i.compcert | cmp -s - Results/$$i; \
+	   if $(SIMU) ./$$i.compcert | cmp -s - Results/$$i; \
            then echo "$$i: passed"; \
            else echo "$$i: FAILED"; exit 2; \
 	   fi; \

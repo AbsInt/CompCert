@@ -27,7 +27,7 @@ else
 fi
 
 # Administer the test
-if $* > $out
+if $SIMU $* > $out
 then
   if test -n "$ref"; then
     if cmp -s "$out" "$ref"; then
