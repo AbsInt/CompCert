@@ -75,7 +75,7 @@ FUNCTION(__compcert_va_float64)
 	lptr	t5, 0(a0)	# t5 = pointer to next argument
 	addi	t5, t5, 15	# 8-align and advance by 8
 	and	t5, t5, -8
-	sw	t5, 0(a0)	# update ap
+	sptr	t5, 0(a0)	# update ap
 	fld	fa0, -8(t5)	# return it in fa0
 	jr	ra
 ENDFUNCTION(__compcert_va_float64)
