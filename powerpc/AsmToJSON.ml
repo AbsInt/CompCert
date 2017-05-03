@@ -162,7 +162,7 @@ let p_instruction oc ic =
   | Pextsh (ir1,ir2) -> instruction "Pextsh" [Ireg ir1; Ireg ir2]
   | Pextsw (ir1,ir2) -> instruction "Pextsw" [Ireg ir1; Ireg ir2]
   | Pextzw (ir1,ir2) -> assert false (* Should not occur *)
-  | Pfreeframe (c,i) -> () (* Should not occur *)
+  | Pfreeframe (c,i) -> assert false (* Should not occur *)
   | Pfabs (fr1,fr2)
   | Pfabss (fr1,fr2) -> instruction "Pfabs" [Freg fr1; Freg fr2]
   | Pfadd (fr1,fr2,fr3) -> instruction "Pfadd" [Freg fr1; Freg fr2; Freg fr3]
