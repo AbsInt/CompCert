@@ -554,14 +554,20 @@ let expand_builtin_inline name args res =
       else
         raise (Error "__builtin_get_spr64 is only supported for PPC64 targets")
   | "__builtin_get_spr64", _, _ ->
-      raise (Error "the argument of __builtin_get_spr64 must be a constant")
+      if Archi.ppc64 then
+        raise (Error "the argument of __builtin_get_spr64 must be a constant")
+      else
+        raise (Error "__builtin_get_spr64 is only supported for PPC64 targets")
   | "__builtin_set_spr64", [BA_int n; BA(IR a)], _ ->
       if Archi.ppc64 then
         emit (Pmtspr(n, a))
       else
         raise (Error "__builtin_set_spr64 is only supported for PPC64 targets")
   | "__builtin_set_spr64", _, _ ->
-      raise (Error "the first argument of __builtin_set_spr64 must be a constant")
+      if Archi.ppc64 then
+        raise (Error "the first argument of __builtin_set_spr64 must be a constant")
+      else
+        raise (Error "__builtin_set_spr64 is only supported for PPC64 targets")
   (* Move registers *)
   | "__builtin_mr", [BA_int dst; BA_int src], _ ->
       (match int_to_int_reg (Z.to_int dst), int_to_int_reg (Z.to_int src) with
