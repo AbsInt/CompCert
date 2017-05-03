@@ -60,6 +60,8 @@ Definition destroyed_at_call :=
 Definition dummy_int_reg := R0.     (**r Used in [Coloring]. *)
 Definition dummy_float_reg := F0.   (**r Used in [Coloring]. *)
 
+Definition callee_save_type := mreg_type.
+  
 Definition is_float_reg (r: mreg): bool :=
   match r with
   | R0  | R1  | R2  | R3
@@ -136,7 +138,10 @@ Lemma loc_result_pair:
   forall sg,
   match loc_result sg with
   | One _ => True
-  | Twolong r1 r2 => r1 <> r2 /\ sg.(sig_res) = Some Tlong /\ subtype Tint (mreg_type r1) = true /\ subtype Tint (mreg_type r2) = true /\ Archi.splitlong = true
+  | Twolong r1 r2 =>
+        r1 <> r2 /\ sg.(sig_res) = Some Tlong
+     /\ subtype Tint (mreg_type r1) = true /\ subtype Tint (mreg_type r2) = true
+     /\ Archi.ptr64 = false
   end.
 Proof.
   intros; unfold loc_result; destruct (sig_res sg) as [[]|]; destruct Archi.big_endian; auto.

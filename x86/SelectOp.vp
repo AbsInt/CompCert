@@ -369,14 +369,14 @@ Nondetfunction compimm (default: comparison -> int -> condition)
         Eop (Ocmp (negate_condition c)) el
       else if Int.eq_dec n2 Int.one then
         Eop (Ocmp c) el
-      else 
+      else
         Eop (Ointconst Int.zero) Enil
   | Cne, Eop (Ocmp c) el =>
       if Int.eq_dec n2 Int.zero then
         Eop (Ocmp c) el
       else if Int.eq_dec n2 Int.one then
         Eop (Ocmp (negate_condition c)) el
-      else 
+      else
         Eop (Ointconst Int.one) Enil
   | Ceq, Eop (Oandimm n1) (t1 ::: Enil) =>
       if Int.eq_dec n2 Int.zero then
@@ -420,7 +420,7 @@ Definition compfs (c: comparison) (e1: expr) (e2: expr) :=
 
 (** ** Integer conversions *)
 
-Nondetfunction cast8unsigned (e: expr) := 
+Nondetfunction cast8unsigned (e: expr) :=
   match e with
   | Eop (Ointconst n) Enil =>
       Eop (Ointconst (Int.zero_ext 8 n)) Enil
@@ -438,7 +438,7 @@ Nondetfunction cast8signed (e: expr) :=
       Eop Ocast8signed (e ::: Enil)
   end.
 
-Nondetfunction cast16unsigned (e: expr) := 
+Nondetfunction cast16unsigned (e: expr) :=
   match e with
   | Eop (Ointconst n) Enil =>
       Eop (Ointconst (Int.zero_ext 16 n)) Enil

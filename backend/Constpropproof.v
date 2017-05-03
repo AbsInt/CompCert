@@ -55,7 +55,7 @@ Lemma functions_translated:
   Genv.find_funct ge v = Some f ->
   exists cunit, Genv.find_funct tge v = Some (transf_fundef (romem_for cunit) f) /\ linkorder cunit prog.
 Proof.
-  intros. exploit (Genv.find_funct_match TRANSL); eauto. 
+  intros. exploit (Genv.find_funct_match TRANSL); eauto.
   intros (cu & tf & A & B & C). subst tf. exists cu; auto.
 Qed.
 
@@ -64,7 +64,7 @@ Lemma function_ptr_translated:
   Genv.find_funct_ptr ge b = Some f ->
   exists cunit, Genv.find_funct_ptr tge b = Some (transf_fundef (romem_for cunit) f) /\ linkorder cunit prog.
 Proof.
-  intros. exploit (Genv.find_funct_ptr_match TRANSL); eauto. 
+  intros. exploit (Genv.find_funct_ptr_match TRANSL); eauto.
   intros (cu & tf & A & B & C). subst tf. exists cu; auto.
 Qed.
 
@@ -92,7 +92,7 @@ Lemma transf_ros_correct:
   ematch bc rs ae ->
   find_function ge ros rs = Some f ->
   regs_lessdef rs rs' ->
-  exists cunit, 
+  exists cunit,
      find_function tge (transf_ros ae ros) rs' = Some (transf_fundef (romem_for cunit) f)
   /\ linkorder cunit prog.
 Proof.
@@ -100,7 +100,7 @@ Proof.
 - (* function pointer *)
   generalize (EM r); fold (areg ae r); intro VM. generalize (RLD r); intro LD.
   assert (DEFAULT:
-    exists cunit, 
+    exists cunit,
        find_function tge (inl _ r) rs' = Some (transf_fundef (romem_for cunit) f)
     /\ linkorder cunit prog).
   {
@@ -131,7 +131,7 @@ Lemma const_for_result_correct:
 Proof.
   intros. exploit ConstpropOpproof.const_for_result_correct; eauto. intros (v' & A & B).
   exists v'; split.
-  rewrite <- A; apply eval_operation_preserved. exact symbols_preserved. 
+  rewrite <- A; apply eval_operation_preserved. exact symbols_preserved.
   auto.
 Qed.
 
@@ -163,10 +163,10 @@ Proof.
   try apply match_pc_base.
   eapply match_pc_cond; eauto. intros b' DYNAMIC.
   assert (b = b').
-  { eapply resolve_branch_sound; eauto. 
-    rewrite <- DYNAMIC. apply eval_static_condition_sound with bc. 
+  { eapply resolve_branch_sound; eauto.
+    rewrite <- DYNAMIC. apply eval_static_condition_sound with bc.
     apply aregs_sound; auto. }
-  subst b'. apply IHn. 
+  subst b'. apply IHn.
 Qed.
 
 Lemma match_successor:
@@ -326,7 +326,7 @@ Lemma match_states_succ:
   match_states O (State s f sp pc rs m)
                  (State s' (transf_function (romem_for cu) f) sp pc rs' m').
 Proof.
-  intros. apply match_states_intro; auto. constructor. 
+  intros. apply match_states_intro; auto. constructor.
 Qed.
 
 Lemma transf_instr_at:
@@ -506,7 +506,7 @@ Opaque builtin_strength_reduction.
 
 - (* Icond, skipped over *)
   rewrite H1 in H; inv H.
-  right; exists n; split. omega. split. auto. 
+  right; exists n; split. omega. split. auto.
   econstructor; eauto.
 
 - (* Ijumptable *)

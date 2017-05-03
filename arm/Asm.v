@@ -900,7 +900,7 @@ Proof.
   { intros. inv H; inv H0; congruence. }
   assert (B: forall p v1 v2,
              extcall_arg_pair rs m p v1 -> extcall_arg_pair rs m p v2 -> v1 = v2).
-  { intros. inv H; inv H0. 
+  { intros. inv H; inv H0.
     eapply A; eauto.
     f_equal; eapply A; eauto. }
   assert (C: forall ll vl1, list_forall2 (extcall_arg_pair rs m) ll vl1 ->

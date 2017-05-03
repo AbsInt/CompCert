@@ -17,7 +17,7 @@
 
 (** The [decide equality] tactic can generate a term of type
 [forall (x y: A), {x=y} + {x<>y}] if [A] is an inductive type.
-This term is a decidable equality function.  
+This term is a decidable equality function.
 
 Similarly, this module defines a [boolean_equality] tactic that generates
 a term of type [A -> A -> bool].  This term is a Boolean-valued equality
@@ -33,7 +33,7 @@ a decidable equality of type [forall (x y: A), {x=y} + {x<>y}].
 
 The advantage of the present tactics over the standard [decide equality]
 tactic is that the former produce smaller transparent definitions than
-the latter.  
+the latter.
 
 For a type [A] that has N constructors, [decide equality] produces a
 single term of size O(N^3), which must be kept transparent so that
@@ -91,7 +91,7 @@ Ltac bool_eq :=
   end.
 
 Lemma proj_sumbool_is_true:
-  forall (A: Type) (f: forall (x y: A), {x=y} + {x<>y}) (x: A), 
+  forall (A: Type) (f: forall (x y: A), {x=y} + {x<>y}) (x: A),
   proj_sumbool (f x x) = true.
 Proof.
   intros. unfold proj_sumbool. destruct (f x x). auto. elim n; auto.
@@ -119,7 +119,7 @@ Lemma proj_sumbool_true:
   forall (A: Type) (x y: A) (a: {x=y} + {x<>y}),
   proj_sumbool a = true -> x = y.
 Proof.
-  intros. destruct a. auto. discriminate.   
+  intros. destruct a. auto. discriminate.
 Qed.
 
 Ltac bool_eq_sound_case :=

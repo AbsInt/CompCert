@@ -96,7 +96,7 @@ Lemma eval_helper:
 Proof.
   intros.
   red in H0. apply Genv.find_def_symbol in H0. destruct H0 as (b & P & Q).
-  rewrite <- Genv.find_funct_ptr_iff in Q. 
+  rewrite <- Genv.find_funct_ptr_iff in Q.
   econstructor; eauto.
 Qed.
 
@@ -363,7 +363,7 @@ Qed.
 Theorem eval_longofint: unary_constructor_sound longofint Val.longofint.
 Proof.
   red; intros. unfold longofint. destruct (longofint_match a).
-- InvEval. econstructor; split. apply eval_longconst. auto.   
+- InvEval. econstructor; split. apply eval_longconst. auto.
 - exploit (eval_shrimm ge sp e m (Int.repr 31) (x :: le) (Eletvar 0)). EvalOp.
   intros [v1 [A B]].
   econstructor; split. EvalOp.
@@ -725,7 +725,7 @@ Qed.
 
 Theorem eval_addl: Archi.ptr64 = false -> binary_constructor_sound addl Val.addl.
 Proof.
-  unfold addl; red; intros. 
+  unfold addl; red; intros.
   set (default := Ebuiltin (EF_builtin "__builtin_addl" sig_ll_l) (a ::: b ::: Enil)).
   assert (DEFAULT:
     exists v, eval_expr ge sp e m le default v /\ Val.lessdef (Val.addl x y) v).
@@ -806,7 +806,7 @@ Proof.
   exists v; split; auto.
   destruct x; simpl; auto.
   erewrite Int64.mul_pow2' by eauto.
-  simpl in B. erewrite Int64.is_power2'_range in B by eauto. 
+  simpl in B. erewrite Int64.is_power2'_range in B by eauto.
   exact B.
   apply eval_mull_base; auto. apply eval_longconst.
 Qed.
@@ -828,18 +828,18 @@ Proof.
 - apply eval_mull_base; auto.
 Qed.
 
-Theorem eval_mullhu: 
+Theorem eval_mullhu:
   forall n, unary_constructor_sound (fun a => mullhu a n) (fun v => Val.mullhu v (Vlong n)).
 Proof.
-  unfold mullhu; intros; red; intros. econstructor; split; eauto. 
-  eapply eval_helper_2; eauto. apply eval_longconst. DeclHelper; eauto. UseHelper. 
+  unfold mullhu; intros; red; intros. econstructor; split; eauto.
+  eapply eval_helper_2; eauto. apply eval_longconst. DeclHelper; eauto. UseHelper.
 Qed.
 
-Theorem eval_mullhs: 
+Theorem eval_mullhs:
   forall n, unary_constructor_sound (fun a => mullhs a n) (fun v => Val.mullhs v (Vlong n)).
 Proof.
-  unfold mullhs; intros; red; intros. econstructor; split; eauto. 
-  eapply eval_helper_2; eauto. apply eval_longconst. DeclHelper; eauto. UseHelper. 
+  unfold mullhs; intros; red; intros. econstructor; split; eauto.
+  eapply eval_helper_2; eauto. apply eval_longconst. DeclHelper; eauto. UseHelper.
 Qed.
 
 Theorem eval_shrxlimm:

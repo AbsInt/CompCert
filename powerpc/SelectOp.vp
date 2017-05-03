@@ -239,7 +239,7 @@ Definition mulhu (e1: expr) (e2: expr) := Eop Omulhu (e1 ::: e2 ::: Enil).
 
 (** ** Bitwise and, or, xor *)
 
-Nondetfunction andimm (n1: int) (e2: expr) := 
+Nondetfunction andimm (n1: int) (e2: expr) :=
   if Int.eq n1 Int.zero then Eop (Ointconst Int.zero) Enil else
   if Int.eq n1 Int.mone then e2 else
   match e2 with
@@ -249,7 +249,7 @@ Nondetfunction andimm (n1: int) (e2: expr) :=
       let n := Int.and n1 n2 in
       if Int.eq (Int.shru (Int.shl n amount) amount) n
       && Int.ltu amount Int.iwordsize
-      then rolm t2 (Int.sub Int.iwordsize amount) 
+      then rolm t2 (Int.sub Int.iwordsize amount)
                    (Int.and (Int.shru Int.mone amount) n)
       else Eop (Oandimm n) (Eop (Oshrimm amount) (t2:::Enil) ::: Enil)
   | Eop (Oandimm n2) (t2:::Enil) =>
@@ -259,7 +259,7 @@ Nondetfunction andimm (n1: int) (e2: expr) :=
   | Eop (Oshrimm amount) (t2:::Enil) =>
       if Int.eq (Int.shru (Int.shl n1 amount) amount) n1
       && Int.ltu amount Int.iwordsize
-      then rolm t2 (Int.sub Int.iwordsize amount) 
+      then rolm t2 (Int.sub Int.iwordsize amount)
                    (Int.and (Int.shru Int.mone amount) n1)
       else Eop (Oandimm n1) (e2:::Enil)
   | _ =>
@@ -396,14 +396,14 @@ Nondetfunction compimm (default: comparison -> int -> condition)
         Eop (Ocmp (negate_condition c)) el
       else if Int.eq_dec n2 Int.one then
         Eop (Ocmp c) el
-      else 
+      else
         Eop (Ointconst Int.zero) Enil
   | Cne, Eop (Ocmp c) el =>
       if Int.eq_dec n2 Int.zero then
         Eop (Ocmp c) el
       else if Int.eq_dec n2 Int.one then
         Eop (Ocmp (negate_condition c)) el
-      else 
+      else
         Eop (Ointconst Int.one) Enil
   | Ceq, Eop (Oandimm n1) (t1 ::: Enil) =>
       if Int.eq_dec n2 Int.zero then
@@ -483,7 +483,8 @@ Nondetfunction floatofintu (e: expr) :=
   | Eop (Ointconst n) Enil =>
       Eop (Ofloatconst (Float.of_intu n)) Enil
   | _ =>
-      if Archi.ppc64 then Eop Ofloatofintu (e ::: Enil) else
+      if Archi.ppc64 then
+        Eop Ofloatofintu (e ::: Enil)  else
         subf (Eop Ofloatofwords (Eop (Ointconst Float.ox4330_0000) Enil ::: e ::: Enil))
              (Eop (Ofloatconst (Float.from_words Float.ox4330_0000 Int.zero)) Enil)
   end.
@@ -493,7 +494,8 @@ Nondetfunction floatofint (e: expr) :=
   | Eop (Ointconst n) Enil =>
       Eop (Ofloatconst (Float.of_int n)) Enil
   | _ =>
-      if Archi.ppc64 then Eop Ofloatofint (e ::: Enil) else
+      if Archi.ppc64 then
+        Eop Ofloatofint (e ::: Enil) else
         subf (Eop Ofloatofwords (Eop (Ointconst Float.ox4330_0000) Enil
                                  ::: addimm Float.ox8000_0000 e ::: Enil))
              (Eop (Ofloatconst (Float.from_words Float.ox4330_0000 Float.ox8000_0000)) Enil)
@@ -517,7 +519,7 @@ Definition floatofsingle (e: expr) := Eop Ofloatofsingle (e ::: Enil).
 (** ** Recognition of addressing modes for load and store operations *)
 
 Definition can_use_Aindexed2 (chunk: memory_chunk): bool :=
-  match chunk with Mint64 => false | _ => true end.
+  match chunk with Mint64 => Archi.ppc64 | _ => true end.
 
 Nondetfunction addressing (chunk: memory_chunk) (e: expr) :=
   match e with
@@ -539,6 +541,7 @@ Nondetfunction builtin_arg (e: expr) :=
   | Eop (Ointconst n) Enil => BA_int n
   | Eop (Oaddrsymbol id ofs) Enil => BA_addrglobal id ofs
   | Eop (Oaddrstack ofs) Enil => BA_addrstack ofs
+  | Eop (Olongconst n) Enil => BA_long n
   | Eop Omakelong (Eop (Ointconst h) Enil ::: Eop (Ointconst l) Enil ::: Enil) =>
         BA_long (Int64.ofwords h l)
   | Eop Omakelong (h ::: l ::: Enil) => BA_splitlong (BA h) (BA l)

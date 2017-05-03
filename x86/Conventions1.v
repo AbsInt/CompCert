@@ -63,6 +63,8 @@ Definition destroyed_at_call :=
 Definition dummy_int_reg := AX.     (**r Used in [Regalloc]. *)
 Definition dummy_float_reg := X0.   (**r Used in [Regalloc]. *)
 
+Definition callee_save_type := mreg_type.
+  
 Definition is_float_reg (r: mreg) :=
   match r with
   | AX | BX | CX | DX | SI | DI | BP
@@ -146,11 +148,11 @@ Lemma loc_result_pair:
   | One _ => True
   | Twolong r1 r2 =>
        r1 <> r2 /\ sg.(sig_res) = Some Tlong
-    /\ subtype Tint (mreg_type r1) = true /\ subtype Tint (mreg_type r2) = true 
-    /\ Archi.splitlong = true
+    /\ subtype Tint (mreg_type r1) = true /\ subtype Tint (mreg_type r2) = true
+    /\ Archi.ptr64 = false
   end.
 Proof.
-  intros. change Archi.splitlong with (negb Archi.ptr64).
+  intros. 
   unfold loc_result, loc_result_32, loc_result_64, mreg_type;
   destruct Archi.ptr64; destruct (sig_res sg) as [[]|]; auto.
   split; auto. congruence.
@@ -162,7 +164,7 @@ Lemma loc_result_exten:
   forall s1 s2, s1.(sig_res) = s2.(sig_res) -> loc_result s1 = loc_result s2.
 Proof.
   intros. unfold loc_result, loc_result_32, loc_result_64.
-  destruct Archi.ptr64; rewrite H; auto.  
+  destruct Archi.ptr64; rewrite H; auto.
 Qed.
 
 (** ** Location of function arguments *)
@@ -310,7 +312,7 @@ Opaque list_nth_z.
   { intros. destruct (list_nth_z int_param_regs ir) as [r|] eqn:E; destruct H1.
     subst. left. eapply list_nth_z_in; eauto.
     eapply IHtyl; eauto.
-    subst. split. omega. assumption. 
+    subst. split. omega. assumption.
     eapply Y; eauto. omega. }
   assert (B: forall ty, In p
       match list_nth_z float_param_regs fr with
@@ -321,7 +323,7 @@ Opaque list_nth_z.
   { intros. destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H1.
     subst. right. eapply list_nth_z_in; eauto.
     eapply IHtyl; eauto.
-    subst. split. omega. assumption. 
+    subst. split. omega. assumption.
     eapply Y; eauto. omega. }
   destruct a; eauto.
 Qed.
@@ -337,15 +339,15 @@ Proof.
   assert (X: forall l, loc_argument_64_charact 0 l -> loc_argument_acceptable l).
   { unfold loc_argument_64_charact, loc_argument_acceptable.
     destruct l as [r | [] ofs ty]; auto.  intros [C|C]; auto.
-    intros [C D]. split; auto. apply Zdivide_trans with 2; auto. 
+    intros [C D]. split; auto. apply Zdivide_trans with 2; auto.
     exists (2 / typealign ty); destruct ty; reflexivity.
   }
-  exploit loc_arguments_64_charact; eauto using Zdivide_0. 
+  exploit loc_arguments_64_charact; eauto using Zdivide_0.
   unfold forall_rpair; destruct p; intuition auto.
 - (* 32 bits *)
   assert (X: forall l, loc_argument_32_charact 0 l -> loc_argument_acceptable l).
   { destruct l as [r | [] ofs ty]; simpl; intuition auto. rewrite H2; apply Z.divide_1_l. }
-  exploit loc_arguments_32_charact; eauto. 
+  exploit loc_arguments_32_charact; eauto.
   unfold forall_rpair; destruct p; intuition auto.
 Qed.
 
@@ -373,14 +375,14 @@ Proof.
     | Some _ => size_arguments_64 tyl (ir + 1) fr ofs0
     | None => size_arguments_64 tyl ir fr (ofs0 + 2)
     end).
-  { destruct (list_nth_z int_param_regs ir); eauto. 
+  { destruct (list_nth_z int_param_regs ir); eauto.
     apply Zle_trans with (ofs0 + 2); auto. omega. }
   assert (B: ofs0 <=
     match list_nth_z float_param_regs fr with
     | Some _ => size_arguments_64 tyl ir (fr + 1) ofs0
     | None => size_arguments_64 tyl ir fr (ofs0 + 2)
     end).
-  { destruct (list_nth_z float_param_regs fr); eauto. 
+  { destruct (list_nth_z float_param_regs fr); eauto.
     apply Zle_trans with (ofs0 + 2); auto. omega. }
   destruct a; auto.
 Qed.
@@ -420,7 +422,7 @@ Proof.
   contradiction.
   assert (T: forall ty0, typesize ty0 <= 2).
   { destruct ty0; simpl; omega. }
-  assert (A: forall ty0, 
+  assert (A: forall ty0,
              In (S Outgoing ofs ty) (regs_of_rpairs
               match list_nth_z int_param_regs ir with
               | Some ireg =>
@@ -435,9 +437,9 @@ Proof.
   { intros. destruct (list_nth_z int_param_regs ir); simpl in H0; destruct H0.
   - discriminate.
   - eapply IHtyl; eauto.
-  - inv H0. apply Zle_trans with (ofs + 2). specialize (T ty). omega. apply size_arguments_64_above.  
+  - inv H0. apply Zle_trans with (ofs + 2). specialize (T ty). omega. apply size_arguments_64_above.
   - eapply IHtyl; eauto. }
-  assert (B: forall ty0, 
+  assert (B: forall ty0,
              In (S Outgoing ofs ty) (regs_of_rpairs
               match list_nth_z float_param_regs fr with
               | Some ireg =>
@@ -452,7 +454,7 @@ Proof.
   { intros. destruct (list_nth_z float_param_regs fr); simpl in H0; destruct H0.
   - discriminate.
   - eapply IHtyl; eauto.
-  - inv H0. apply Zle_trans with (ofs + 2). specialize (T ty). omega. apply size_arguments_64_above.  
+  - inv H0. apply Zle_trans with (ofs + 2). specialize (T ty). omega. apply size_arguments_64_above.
   - eapply IHtyl; eauto. }
   destruct a; eauto.
 Qed.

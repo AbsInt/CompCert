@@ -43,13 +43,18 @@ let _m1 = coqint_of_camlint (-1l)
 let _m4 = coqint_of_camlint (-4l)
 let _m8 = coqint_of_camlint (-8l)
 
+let _0L = Integers.Int64.zero
+let _32L = coqint_of_camlint64 32L
+let _64L = coqint_of_camlint64 64L
+let _m1L = coqint_of_camlint64 (-1L)
+let upper32 = coqint_of_camlint64 0xFFFF_FFFF_0000_0000L
+let lower32 = coqint_of_camlint64 0x0000_0000_FFFF_FFFFL
+
 let emit_loadimm r n =
   List.iter emit (Asmgen.loadimm r n [])
 
 let emit_addimm rd rs n =
   List.iter emit (Asmgen.addimm rd rs n [])
-
-
 
 (* Handling of annotations *)
 
@@ -71,6 +76,8 @@ let expand_annot_val txt targ args res =
    (not so much on G5, but clearly so on Power7).
    So, use 64-bit accesses only if alignment >= 4.
    Note that lfd and stfd cannot trap on ill-formed floats. *)
+
+
 
 let offset_in_range ofs =
   Int.eq (Asmgen.high_s ofs) _0
@@ -184,6 +191,8 @@ let rec expand_builtin_vload_common chunk base offset res =
       emit (Plfs(res, offset, base))
   | (Mfloat64 | Many64), BR(FR res) ->
       emit (Plfd(res, offset, base))
+  | (Mint64 | Many64), BR(IR res) ->
+      emit (Pld(res, offset, base))
   | Mint64, BR_splitlong(BR(IR hi), BR(IR lo)) ->
       begin match offset_constant offset _4 with
       | Some offset' ->
@@ -243,6 +252,8 @@ let expand_builtin_vstore_common chunk base offset src =
       emit (Pstfs(src, offset, base))
   | (Mfloat64 | Many64), BA(FR src) ->
       emit (Pstfd(src, offset, base))
+  | (Mint64 | Many64), BA(IR src) ->
+      emit (Pstd(src, offset, base))
   | Mint64, BA_splitlong(BA(IR hi), BA(IR lo)) ->
       begin match offset_constant offset _4 with
       | Some offset' ->
@@ -361,6 +372,8 @@ let expand_builtin_inline name args res =
       emit (Pmulhwu(res, a1, a2))
   | ("__builtin_clz" | "__builtin_clzl"), [BA(IR a1)], BR(IR res) ->
       emit (Pcntlzw(res, a1))
+  | "__builtin_clzll", [BA(IR a1)], BR(IR res) ->
+      emit (Pcntlzd(res, a1))
   | "__builtin_clzll", [BA_splitlong(BA(IR ah), BA(IR al))], BR(IR res) ->
       let lbl = new_label () in
       emit (Pcntlzw(GPR0, al));
@@ -376,6 +389,11 @@ let expand_builtin_inline name args res =
       emit (Pandc(res, GPR0, a1));        (* res := tmp & ~(x) *)
       emit (Pcntlzw(res, res));           (* res := #leading zeros *)
       emit (Psubfic(res, res, Cint _32))  (* res := 32 - #leading zeros *)
+  | "__builtin_ctzll", [BA(IR a1)], BR(IR res) ->
+      emit (Paddi64(GPR0, a1, _m1L));     (* tmp := x-1 *)
+      emit (Pandc(res, GPR0, a1));        (* res := tmp & ~(x) *)
+      emit (Pcntlzd(res, res));           (* res := #leading zeros *)
+      emit (Psubfic64(res, res, _64L))    (* res := 64 - #leading zeros *)
   | "__builtin_ctzll", [BA_splitlong(BA(IR ah), BA(IR al))], BR(IR res) ->
       let lbl1 = new_label () in
       let lbl2 = new_label () in
@@ -530,22 +548,17 @@ let expand_builtin_inline name args res =
   | "__builtin_set_spr", _, _ ->
       raise (Error "the first argument of __builtin_set_spr must be a constant")
   (* Special registers in 32bit hybrid mode *)
-  | "__builtin_get_spr64", [BA_int n], BR_splitlong(BR(IR rh), BR(IR rl)) ->
-      if Archi.ppc64 then begin
-        emit (Pmfspr(rl, n));
-        emit (Prldicl(rh, rl, _32, _32));
-        emit (Prldicl(rl, rl, _0, _32))
-      end else
+  | "__builtin_get_spr64", [BA_int n], BR(IR r) ->
+      if Archi.ppc64 then
+        emit (Pmfspr(r, n))
+      else
         raise (Error "__builtin_get_spr64 is only supported for PPC64 targets")
   | "__builtin_get_spr64", _, _ ->
       raise (Error "the argument of __builtin_get_spr64 must be a constant")
-  | "__builtin_set_spr64", [BA_int n; BA_splitlong(BA(IR ah), BA(IR al))], _ ->
-      if Archi.ppc64 then begin
-        emit (Prldicr(GPR10, ah, _32, _31));
-        emit (Prldicl(al, al, _0, _32));
-        emit (Por(GPR10, GPR10, al));
-        emit (Pmtspr(n, GPR10))
-      end else
+  | "__builtin_set_spr64", [BA_int n; BA(IR a)], _ ->
+      if Archi.ppc64 then
+        emit (Pmtspr(n, a))
+      else
         raise (Error "__builtin_set_spr64 is only supported for PPC64 targets")
   | "__builtin_set_spr64", _, _ ->
       raise (Error "the first argument of __builtin_set_spr64 must be a constant")
@@ -692,6 +705,8 @@ let expand_instruction instr =
   | Pbctr sg | Pbctrl sg | Pbl(_, sg) | Pbs(_, sg) ->
       set_cr6 sg;
       emit instr
+  | Pextzw(r1, r2) ->
+      emit (Prldinm(r1, r2, _0L, lower32))
   | Pfreeframe(sz, ofs) ->
       let variadic = is_current_function_variadic () in
       let sz = camlint_of_coqint sz in
@@ -704,6 +719,14 @@ let expand_instruction instr =
       assert (Archi.ppc64);
       emit (Pextsw(GPR0, r2));
       emit (Pstdu(GPR0, Cint _m8, GPR1));
+      emit (Pcfi_adjust _8);
+      emit (Plfd(r1, Cint _0, GPR1));
+      emit (Pfcfid(r1, r1));
+      emit (Paddi(GPR1, GPR1, Cint _8));
+      emit (Pcfi_adjust _m8)
+  | Pfcfl(r1, r2) ->
+      assert (Archi.ppc64);
+      emit (Pstdu(r2, Cint _m8, GPR1));
       emit (Pcfi_adjust _8);
       emit (Plfd(r1, Cint _0, GPR1));
       emit (Pfcfid(r1, r1));
@@ -733,6 +756,14 @@ let expand_instruction instr =
       emit (Plwz(r1, Cint _4, GPR1));
       emit (Paddi(GPR1, GPR1, Cint _8));
       emit (Pcfi_adjust _m8)
+  | Pfctid(r1, r2) ->
+      assert (Archi.ppc64);
+      emit (Pfctidz(FPR13, r2));
+      emit (Pstfdu(FPR13, Cint _m8, GPR1));
+      emit (Pcfi_adjust _8);
+      emit (Pld(r1, Cint _0, GPR1));
+      emit (Paddi(GPR1, GPR1, Cint _8));
+      emit (Pcfi_adjust _m8)
   | Pfmake(rd, r1, r2) ->
       emit (Pstwu(r1, Cint _m8, GPR1));
       emit (Pcfi_adjust _8);
@@ -742,6 +773,20 @@ let expand_instruction instr =
       emit (Pcfi_adjust _m8);
   | Pfxdp(r1, r2) ->
       if r1 <> r2 then emit(Pfmr(r1, r2))
+  | Plmake(r1, rhi, rlo) ->
+      if r1 = rlo then
+        emit (Prldimi(r1, rhi, _32L, upper32))
+      else if r1 = rhi then begin
+        emit (Prldinm(r1, rhi, _32L, upper32));
+        emit (Prldimi(r1, rlo, _0L, lower32))
+      end else begin
+        emit (Pmr(r1, rlo));
+        emit (Prldimi(r1, rhi, _32L, upper32))
+      end
+  | Pllo r1 ->
+      ()   (* no computational content *)
+  | Plhi(r1, r2) ->
+      emit (Prldinm(r1, r2, _32L, lower32))
   | Pmfcrbit(r1, bit) ->
       emit (Pmfcr r1);
       emit (Prlwinm(r1, r1, Z.of_uint (1 + num_crbit bit), _1))

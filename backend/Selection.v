@@ -339,7 +339,7 @@ Definition sel_fundef (dm: PTree.t globdef) (hf: helper_functions) (f: Cminor.fu
 (** We build a partial mapping from global identifiers to their definitions,
   restricting ourselves to the globals we are interested in, namely
   the external function declarations that are marked as runtime library
-  helpers. 
+  helpers.
   This ensures that the mapping remains small and that [lookup_helper]
   below is efficient. *)
 
@@ -350,7 +350,7 @@ Definition globdef_of_interest (gd: globdef) : bool :=
   end.
 
 Definition record_globdefs (defmap: PTree.t globdef) : PTree.t globdef :=
-  PTree.fold 
+  PTree.fold
     (fun m id gd => if globdef_of_interest gd then PTree.set id gd m else m)
     defmap (PTree.empty globdef).
 

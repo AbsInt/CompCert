@@ -976,7 +976,7 @@ Proof.
   {
     intros.
     apply Mem.unchanged_on_implies with (fun b1 ofs1 => b1 <> b).
-    apply Mem.unchanged_on_trans with m'. 
+    apply Mem.unchanged_on_trans with m'.
     eapply Mem.alloc_unchanged_on; eauto.
     eapply Mem.store_unchanged_on; eauto.
     intros. eapply Mem.valid_not_valid_diff; eauto with mem.
@@ -997,7 +997,7 @@ Proof.
 (* mem extends *)
 - inv H. inv H1. inv H7.
   assert (SZ: v2 = Vptrofs sz).
-  { unfold Vptrofs in *. destruct Archi.ptr64; inv H5; auto. } 
+  { unfold Vptrofs in *. destruct Archi.ptr64; inv H5; auto. }
   subst v2.
   exploit Mem.alloc_extends; eauto. apply Zle_refl. apply Zle_refl.
   intros [m3' [A B]].
@@ -1009,7 +1009,7 @@ Proof.
 (* mem injects *)
 - inv H0. inv H2. inv H8.
   assert (SZ: v' = Vptrofs sz).
-  { unfold Vptrofs in *. destruct Archi.ptr64; inv H6; auto. } 
+  { unfold Vptrofs in *. destruct Archi.ptr64; inv H6; auto. }
   subst v'.
   exploit Mem.alloc_parallel_inject; eauto. apply Zle_refl. apply Zle_refl.
   intros [f' [m3' [b' [ALLOC [A [B [C D]]]]]]].
@@ -1036,7 +1036,7 @@ Proof.
     rewrite <- (Ptrofs.of_int64_to_int64 SF sz0), <- (Ptrofs.of_int64_to_int64 SF sz). congruence.
     rewrite <- (Ptrofs.of_int_to_int SF sz0), <- (Ptrofs.of_int_to_int SF sz). congruence.
   }
-  subst. 
+  subst.
   split. constructor. intuition congruence.
 Qed.
 
@@ -1093,7 +1093,7 @@ Proof.
     eapply Mem.free_range_perm; eauto.
   exploit Mem.address_inject; eauto.
     apply Mem.perm_implies with Freeable; auto with mem.
-    apply P. instantiate (1 := lo). 
+    apply P. instantiate (1 := lo).
     generalize (size_chunk_pos Mptr); omega.
   intro EQ.
   exploit Mem.free_parallel_inject; eauto. intros (m2' & C & D).

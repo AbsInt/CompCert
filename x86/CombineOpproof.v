@@ -125,7 +125,7 @@ Theorem combine_addr_32_sound:
 Proof.
   intros. functional inversion H; subst.
   (* indexed - lea *)
-  UseGetSound. simpl. unfold offset_addressing in H7. destruct (addressing_valid (offset_addressing_total a n)); inv H7. 
+  UseGetSound. simpl. unfold offset_addressing in H7. destruct (addressing_valid (offset_addressing_total a n)); inv H7.
   eapply eval_offset_addressing_total_32; eauto.
 Qed.
 
@@ -136,7 +136,7 @@ Theorem combine_addr_64_sound:
 Proof.
   intros. functional inversion H; subst.
   (* indexed - leal *)
-  UseGetSound. simpl. unfold offset_addressing in H7. destruct (addressing_valid (offset_addressing_total a n)); inv H7. 
+  UseGetSound. simpl. unfold offset_addressing in H7. destruct (addressing_valid (offset_addressing_total a n)); inv H7.
   eapply eval_offset_addressing_total_64; eauto.
 Qed.
 

@@ -16,7 +16,6 @@
 (** This module defines the type of values that is used in the dynamic
   semantics of all our intermediate languages. *)
 
-Require Archi.
 Require Import Coqlib.
 Require Import AST.
 Require Import Integers.
@@ -668,6 +667,12 @@ Definition modlu (v1 v2: val): option val :=
   | _, _ => None
   end.
 
+Definition addl_carry (v1 v2 cin: val): val :=
+  match v1, v2, cin with
+  | Vlong n1, Vlong n2, Vlong c => Vlong(Int64.add_carry n1 n2 c)
+  | _, _, _ => Vundef
+  end.
+
 Definition subl_overflow (v1 v2: val) : val :=
   match v1, v2 with
   | Vlong n1, Vlong n2 => Vint (Int.repr (Int64.unsigned (Int64.sub_overflow n1 n2 Int64.zero)))
@@ -734,6 +739,15 @@ Definition shrxl (v1 v2: val): option val :=
   | _, _ => None
   end.
 
+Definition shrl_carry (v1 v2: val): val :=
+  match v1, v2 with
+  | Vlong n1, Vint n2 =>
+     if Int.ltu n2 Int64.iwordsize'
+     then Vlong(Int64.shr_carry' n1 n2)
+     else Vundef
+  | _, _ => Vundef
+  end.
+
 Definition roll (v1 v2: val): val :=
   match v1, v2 with
   | Vlong n1, Vint n2 => Vlong(Int64.rol n1 (Int64.repr (Int.unsigned n2)))
@@ -746,9 +760,9 @@ Definition rorl (v1 v2: val): val :=
   | _, _ => Vundef
   end.
 
-Definition rolml (v: val) (amount mask: int64): val :=
+Definition rolml (v: val) (amount: int) (mask: int64): val :=
   match v with
-  | Vlong n => Vlong(Int64.rolm n amount mask)
+  | Vlong n => Vlong(Int64.rolm n (Int64.repr (Int.unsigned amount)) mask)
   | _ => Vundef
   end.
 
@@ -1073,7 +1087,7 @@ Proof.
   symmetry. auto with ptrofs.
   symmetry. rewrite Int.add_commut. auto with ptrofs.
 - destruct (eq_block b b0); auto.
-  f_equal. rewrite Ptrofs.add_commut. rewrite Ptrofs.sub_add_r. auto with ptrofs. 
+  f_equal. rewrite Ptrofs.add_commut. rewrite Ptrofs.sub_add_r. auto with ptrofs.
 Qed.
 
 Theorem mul_commut: forall x y, mul x y = mul y x.
@@ -1131,6 +1145,28 @@ Proof.
   exists (Vint (Int.divu i i0)); split; auto.
   simpl. rewrite Int.modu_divu. auto.
   generalize (Int.eq_spec i0 Int.zero). rewrite Heqb; auto.
+Qed.
+
+Theorem modls_divls:
+  forall x y z,
+  modls x y = Some z -> exists v, divls x y = Some v /\ z = subl x (mull v y).
+Proof.
+  intros. destruct x; destruct y; simpl in *; try discriminate.
+  destruct (Int64.eq i0 Int64.zero
+        || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq i0 Int64.mone); inv H.
+  exists (Vlong (Int64.divs i i0)); split; auto.
+  simpl. rewrite Int64.mods_divs. auto.
+Qed.
+
+Theorem modlu_divlu:
+  forall x y z,
+  modlu x y = Some z -> exists v, divlu x y = Some v /\ z = subl x (mull v y).
+Proof.
+  intros. destruct x; destruct y; simpl in *; try discriminate.
+  destruct (Int64.eq i0 Int64.zero) eqn:?; inv H.
+  exists (Vlong (Int64.divu i i0)); split; auto.
+  simpl. rewrite Int64.modu_divu. auto.
+  generalize (Int64.eq_spec i0 Int64.zero). rewrite Heqb; auto.
 Qed.
 
 Theorem divs_pow2:
@@ -1282,7 +1318,7 @@ Proof.
   symmetry; apply zlt_true. change (Int.unsigned n < 32); omega.
   symmetry; apply zlt_true. unfold Int.sub. change (Int.unsigned (Int.repr 32)) with 32.
   assert (Int.unsigned n <> 0). { red; intros; elim H. rewrite <- (Int.repr_unsigned n), H0. auto. }
-  rewrite Int.unsigned_repr. 
+  rewrite Int.unsigned_repr.
   change (Int.unsigned Int.iwordsize) with 32; omega.
   assert (32 < Int.max_unsigned) by reflexivity. omega.
 Qed.
@@ -1384,7 +1420,7 @@ Proof.
   symmetry. auto with ptrofs.
   symmetry. rewrite Int64.add_commut. auto with ptrofs.
 - destruct (eq_block b b0); auto.
-  simpl; f_equal. rewrite Ptrofs.add_commut. rewrite Ptrofs.sub_add_r. auto with ptrofs. 
+  simpl; f_equal. rewrite Ptrofs.add_commut. rewrite Ptrofs.sub_add_r. auto with ptrofs.
 - rewrite Int64.add_commut. rewrite Int64.sub_add_r. auto.
 Qed.
 
@@ -1462,7 +1498,7 @@ Proof.
          || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq n Int64.mone); inv H3.
   simpl. rewrite H0. decEq. decEq.
   generalize (Int64.is_power2'_correct _ _ H); intro.
-  unfold Int64.shrx'. rewrite Int64.shl'_mul_two_p. rewrite <- H1. 
+  unfold Int64.shrx'. rewrite Int64.shl'_mul_two_p. rewrite <- H1.
   rewrite Int64.mul_commut. rewrite Int64.mul_one.
   rewrite Int64.repr_unsigned. auto.
 Qed.
@@ -1491,6 +1527,19 @@ Proof.
   simpl. decEq. symmetry. eapply Int64.modu_and; eauto.
 Qed.
 
+Theorem shrxl_carry:
+  forall x y z,
+  shrxl x y = Some z ->
+  addl (shrl x y) (shrl_carry x y) = z.
+Proof.
+  intros. destruct x; destruct y; simpl in H; inv H.
+  destruct (Int.ltu i0 (Int.repr 63)) eqn:?; inv H1.
+  exploit Int.ltu_inv; eauto. change (Int.unsigned (Int.repr 63)) with 63. intros.
+  assert (Int.ltu i0 Int64.iwordsize' = true).
+    unfold Int.ltu. apply zlt_true. change (Int.unsigned Int64.iwordsize') with 64. omega.
+  simpl. rewrite H0. simpl. decEq. rewrite Int64.shrx'_carry; auto.
+Qed.
+
 Theorem shrxl_shrl_2:
   forall n x z,
   shrxl x (Vint n) = Some z ->
@@ -1511,7 +1560,7 @@ Proof.
   symmetry; apply zlt_true. change (Int.unsigned n < 64); omega.
   symmetry; apply zlt_true. unfold Int.sub. change (Int.unsigned (Int.repr 64)) with 64.
   assert (Int.unsigned n <> 0). { red; intros; elim H. rewrite <- (Int.repr_unsigned n), H0. auto. }
-  rewrite Int.unsigned_repr. 
+  rewrite Int.unsigned_repr.
   change (Int.unsigned Int64.iwordsize') with 64; omega.
   assert (64 < Int.max_unsigned) by reflexivity. omega.
 Qed.
@@ -1603,7 +1652,7 @@ Theorem swap_cmpu_bool:
 Proof.
   assert (E: forall c, cmp_different_blocks (swap_comparison c) = cmp_different_blocks c).
   { destruct c; auto. }
-  intros; unfold cmpu_bool. rewrite ! E. destruct Archi.ptr64 eqn:SF, x, y; auto.  
+  intros; unfold cmpu_bool. rewrite ! E. destruct Archi.ptr64 eqn:SF, x, y; auto.
 - rewrite Int.swap_cmpu. auto.
 - rewrite Int.swap_cmpu. auto.
 - destruct (eq_block b b0); subst.
@@ -1630,7 +1679,7 @@ Theorem swap_cmplu_bool:
 Proof.
   assert (E: forall c, cmp_different_blocks (swap_comparison c) = cmp_different_blocks c).
   { destruct c; auto. }
-  intros; unfold cmplu_bool. rewrite ! E. destruct Archi.ptr64 eqn:SF, x, y; auto.  
+  intros; unfold cmplu_bool. rewrite ! E. destruct Archi.ptr64 eqn:SF, x, y; auto.
 - rewrite Int64.swap_cmpu. auto.
 - destruct (eq_block b b0); subst.
   rewrite dec_eq_true.
@@ -1937,7 +1986,7 @@ Qed.
 Lemma offset_ptr_assoc:
   forall v d1 d2, offset_ptr (offset_ptr v d1) d2 = offset_ptr v (Ptrofs.add d1 d2).
 Proof.
-  intros. destruct v; simpl; auto. f_equal. apply Ptrofs.add_assoc. 
+  intros. destruct v; simpl; auto. f_equal. apply Ptrofs.add_assoc.
 Qed.
 
 (** * Values and memory injections *)
@@ -1988,7 +2037,7 @@ Hint Resolve inject_list_nil inject_list_cons.
 Lemma inject_ptrofs:
   forall mi i, inject mi (Vptrofs i) (Vptrofs i).
 Proof.
-  unfold Vptrofs; intros. destruct Archi.ptr64; auto. 
+  unfold Vptrofs; intros. destruct Archi.ptr64; auto.
 Qed.
 
 Hint Resolve inject_ptrofs.
@@ -2002,7 +2051,7 @@ Lemma load_result_inject:
   inject f v1 v2 ->
   inject f (Val.load_result chunk v1) (Val.load_result chunk v2).
 Proof.
-  intros. inv H; destruct chunk; simpl; try constructor; destruct Archi.ptr64; econstructor; eauto. 
+  intros. inv H; destruct chunk; simpl; try constructor; destruct Archi.ptr64; econstructor; eauto.
 Qed.
 
 Remark add_inject:
@@ -2012,11 +2061,11 @@ Remark add_inject:
   inject f (Val.add v1 v2) (Val.add v1' v2').
 Proof.
   intros. unfold Val.add. destruct Archi.ptr64 eqn:SF.
-- inv H; inv H0; constructor. 
+- inv H; inv H0; constructor.
 - inv H; inv H0; simpl; auto.
-+ econstructor; eauto. 
++ econstructor; eauto.
   rewrite ! Ptrofs.add_assoc. decEq. apply Ptrofs.add_commut.
-+ econstructor; eauto. 
++ econstructor; eauto.
   rewrite ! Ptrofs.add_assoc. decEq. apply Ptrofs.add_commut.
 Qed.
 
@@ -2029,7 +2078,7 @@ Proof.
   intros. unfold Val.sub. destruct Archi.ptr64 eqn:SF.
 - inv H; inv H0; constructor.
 - inv H; inv H0; simpl; auto.
-+ econstructor; eauto. 
++ econstructor; eauto.
   rewrite Ptrofs.sub_add_l. auto.
 + destruct (eq_block b1 b0); auto.
   subst. rewrite H1 in H. inv H. rewrite dec_eq_true.
@@ -2044,11 +2093,11 @@ Remark addl_inject:
 Proof.
   intros. unfold Val.addl. destruct Archi.ptr64 eqn:SF.
 - inv H; inv H0; simpl; auto.
-+ econstructor; eauto. 
++ econstructor; eauto.
   rewrite ! Ptrofs.add_assoc. decEq. apply Ptrofs.add_commut.
-+ econstructor; eauto. 
++ econstructor; eauto.
   rewrite ! Ptrofs.add_assoc. decEq. apply Ptrofs.add_commut.
-- inv H; inv H0; constructor. 
+- inv H; inv H0; constructor.
 Qed.
 
 Remark subl_inject:
@@ -2059,7 +2108,7 @@ Remark subl_inject:
 Proof.
   intros. unfold Val.subl. destruct Archi.ptr64 eqn:SF.
 - inv H; inv H0; simpl; auto.
-+ econstructor; eauto. 
++ econstructor; eauto.
   rewrite Ptrofs.sub_add_l. auto.
 + destruct (eq_block b1 b0); auto.
   subst. rewrite H1 in H. inv H. rewrite dec_eq_true.
@@ -2126,7 +2175,7 @@ Lemma cmpu_bool_inject:
 Proof.
   Local Opaque Int.add Ptrofs.add.
   intros.
-  unfold cmpu_bool in *; destruct Archi.ptr64; 
+  unfold cmpu_bool in *; destruct Archi.ptr64;
   inv H; simpl in H1; try discriminate; inv H0; simpl in H1; try discriminate; simpl; auto.
 - fold (weak_valid_ptr1 b1 (Ptrofs.unsigned ofs1)) in H1.
   fold (weak_valid_ptr2 b2 (Ptrofs.unsigned (Ptrofs.add ofs1 (Ptrofs.repr delta)))).

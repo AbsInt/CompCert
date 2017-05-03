@@ -85,7 +85,7 @@ Lemma eval_Olea_ptr:
   forall a el,
   eval_operation ge (Vptr sp Ptrofs.zero) (Olea_ptr a) el m = eval_addressing ge (Vptr sp Ptrofs.zero) a el.
 Proof.
-  unfold Olea_ptr, eval_addressing; intros. destruct Archi.ptr64; auto. 
+  unfold Olea_ptr, eval_addressing; intros. destruct Archi.ptr64; auto.
 Qed.
 
 Lemma const_for_result_correct:
@@ -112,12 +112,12 @@ Proof.
     exists (Genv.symbol_address ge id Ptrofs.zero); auto.
   * inv H2. exists (Genv.symbol_address ge id ofs); split.
     rewrite eval_Olea_ptr. apply eval_addressing_Aglobal.
-    auto.  
+    auto.
   + (* stack *)
     inv H2. exists (Vptr sp ofs); split.
-    rewrite eval_Olea_ptr. rewrite eval_addressing_Ainstack.  
+    rewrite eval_Olea_ptr. rewrite eval_addressing_Ainstack.
     simpl. rewrite Ptrofs.add_zero_l; auto.
-    auto.  
+    auto.
 Qed.
 
 Lemma cond_strength_reduction_correct:
@@ -152,8 +152,8 @@ Local Opaque Val.add.
   assert (B: forall x y z, Int.repr (Int.signed x * y + z) = Int.add (Int.mul x (Int.repr y)) (Int.repr z)).
   { intros; apply Int.eqm_samerepr; apply Int.eqm_add; auto with ints.
     unfold Int.mul; auto using Int.eqm_signed_unsigned with ints. }
-  intros until res; intros VL EA. 
-  unfold addr_strength_reduction_32_generic; destruct (addr_strength_reduction_32_generic_match addr args vl); 
+  intros until res; intros VL EA.
+  unfold addr_strength_reduction_32_generic; destruct (addr_strength_reduction_32_generic_match addr args vl);
   simpl in *; InvApproxRegs; SimplVM; try (inv EA).
 - econstructor; split; eauto. rewrite A, Val.add_assoc, Val.add_permut. auto.
 - econstructor; split; eauto. rewrite A, Val.add_assoc. auto.
@@ -178,19 +178,19 @@ Proof.
              Val.add (Genv.symbol_address ge symb ofs) (Vint (Int.repr n))).
   { intros. rewrite <- A. apply Genv.shift_symbol_address_32; auto. }
 Local Opaque Val.add.
-  destruct (addr_strength_reduction_32_match addr args vl); 
+  destruct (addr_strength_reduction_32_match addr args vl);
   simpl in *; InvApproxRegs; SimplVM; FuncInv; subst; rewrite ?SF.
 - econstructor; split; eauto. rewrite B. apply Val.add_lessdef; auto.
 - econstructor; split; eauto. rewrite Ptrofs.add_zero_l.
 Local Transparent Val.add.
   inv H0; auto. rewrite H2. simpl; rewrite SF, A. auto.
-- econstructor; split; eauto. 
-  unfold Ptrofs.add at 2. rewrite B. 
+- econstructor; split; eauto.
+  unfold Ptrofs.add at 2. rewrite B.
   fold (Ptrofs.add n1 (Ptrofs.of_int n2)).
   rewrite Genv.shift_symbol_address_32 by auto.
   rewrite ! Val.add_assoc. apply Val.add_lessdef; auto.
 - econstructor; split; eauto.
-  unfold Ptrofs.add at 2. rewrite B. 
+  unfold Ptrofs.add at 2. rewrite B.
   fold (Ptrofs.add n2 (Ptrofs.of_int n1)).
   rewrite Genv.shift_symbol_address_32 by auto.
   rewrite ! Val.add_assoc. rewrite Val.add_permut. apply Val.add_lessdef; auto.
@@ -203,7 +203,7 @@ Local Transparent Val.add.
   apply Val.lessdef_same; do 3 f_equal. auto with ptrofs.
 - econstructor; split; eauto. rewrite B. rewrite ! Val.add_assoc. rewrite (Val.add_commut (Vint (Int.repr ofs))).
   apply Val.add_lessdef; auto.
-- econstructor; split; eauto. rewrite B. rewrite (Val.add_commut e#r1). rewrite ! Val.add_assoc. 
+- econstructor; split; eauto. rewrite B. rewrite (Val.add_commut e#r1). rewrite ! Val.add_assoc.
   rewrite (Val.add_commut (Vint (Int.repr ofs))). apply Val.add_lessdef; auto.
 - econstructor; split; eauto. rewrite B. rewrite Genv.shift_symbol_address_32 by auto.
   rewrite ! Val.add_assoc. apply Val.add_lessdef; auto.
@@ -229,8 +229,8 @@ Local Opaque Val.addl.
   assert (B: forall x y z, Int64.repr (Int64.signed x * y + z) = Int64.add (Int64.mul x (Int64.repr y)) (Int64.repr z)).
   { intros; apply Int64.eqm_samerepr; apply Int64.eqm_add; auto with ints.
     unfold Int64.mul; auto using Int64.eqm_signed_unsigned with ints. }
-  intros until res; intros VL EA. 
-  unfold addr_strength_reduction_64_generic; destruct (addr_strength_reduction_64_generic_match addr args vl); 
+  intros until res; intros VL EA.
+  unfold addr_strength_reduction_64_generic; destruct (addr_strength_reduction_64_generic_match addr args vl);
   simpl in *; InvApproxRegs; SimplVM; try (inv EA).
 - econstructor; split; eauto. rewrite A, Val.addl_assoc, Val.addl_permut. auto.
 - econstructor; split; eauto. rewrite A, Val.addl_assoc. auto.
@@ -256,19 +256,19 @@ Proof.
              Val.addl (Genv.symbol_address ge symb ofs) (Vlong (Int64.repr n))).
   { intros. rewrite <- A. apply Genv.shift_symbol_address_64; auto. }
 Local Opaque Val.addl.
-  destruct (addr_strength_reduction_64_match addr args vl); 
+  destruct (addr_strength_reduction_64_match addr args vl);
   simpl in *; InvApproxRegs; SimplVM; FuncInv; subst; rewrite ?SF.
 - econstructor; split; eauto. rewrite B. apply Val.addl_lessdef; auto.
 - econstructor; split; eauto. rewrite Ptrofs.add_zero_l.
 Local Transparent Val.addl.
   inv H0; auto. rewrite H2. simpl; rewrite SF, A. auto.
-- econstructor; split; eauto. 
-  unfold Ptrofs.add at 2. rewrite B. 
+- econstructor; split; eauto.
+  unfold Ptrofs.add at 2. rewrite B.
   fold (Ptrofs.add n1 (Ptrofs.of_int64 n2)).
   rewrite Genv.shift_symbol_address_64 by auto.
   rewrite ! Val.addl_assoc. apply Val.addl_lessdef; auto.
 - econstructor; split; eauto.
-  unfold Ptrofs.add at 2. rewrite B. 
+  unfold Ptrofs.add at 2. rewrite B.
   fold (Ptrofs.add n2 (Ptrofs.of_int64 n1)).
   rewrite Genv.shift_symbol_address_64 by auto.
   rewrite ! Val.addl_assoc. rewrite Val.addl_permut. apply Val.addl_lessdef; auto.
@@ -350,8 +350,8 @@ Proof.
   intros. unfold make_addimm.
   predSpec Int.eq Int.eq_spec n Int.zero; intros.
   subst. exists (e#r); split; auto.
-  destruct (e#r); simpl; auto; rewrite ?Int.add_zero, ?Ptrofs.add_zero; auto. 
-  exists (Val.add e#r (Vint n)); split; auto. simpl. rewrite Int.repr_signed; auto. 
+  destruct (e#r); simpl; auto; rewrite ?Int.add_zero, ?Ptrofs.add_zero; auto.
+  exists (Val.add e#r (Vint n)); split; auto. simpl. rewrite Int.repr_signed; auto.
 Qed.
 
 Lemma make_shlimm_correct:
@@ -514,7 +514,7 @@ Proof.
   predSpec Int64.eq Int64.eq_spec n Int64.zero; intros.
   subst. exists (e#r); split; auto.
   destruct (e#r); simpl; auto; rewrite ? Int64.add_zero, ? Ptrofs.add_zero; auto.
-  exists (Val.addl e#r (Vlong n)); split; auto. simpl. rewrite Int64.repr_signed; auto. 
+  exists (Val.addl e#r (Vlong n)); split; auto. simpl. rewrite Int64.repr_signed; auto.
 Qed.
 
 Lemma make_shllimm_correct:
@@ -606,8 +606,8 @@ Proof.
   econstructor; split. simpl; eauto.
   rewrite H0 in H. destruct (e#r1); inv H. destruct (Int64.eq n Int64.zero); inv H2.
   simpl.
-  erewrite Int64.is_power2'_range by eauto.    
-  erewrite Int64.divu_pow2' by eauto.  auto. 
+  erewrite Int64.is_power2'_range by eauto.
+  erewrite Int64.divu_pow2' by eauto.  auto.
   exists v; auto.
 Qed.
 
@@ -621,7 +621,7 @@ Proof.
   intros; unfold make_modluimm.
   destruct (Int64.is_power2 n) eqn:?.
   exists v; split; auto. simpl. decEq.
-  rewrite H0 in H. destruct (e#r1); inv H. destruct (Int64.eq n Int64.zero); inv H2. 
+  rewrite H0 in H. destruct (e#r1); inv H. destruct (Int64.eq n Int64.zero); inv H2.
   simpl. erewrite Int64.modu_and by eauto. auto.
   exists v; auto.
 Qed.
@@ -830,7 +830,7 @@ Proof.
   InvApproxRegs; SimplVM; inv H0.
   replace (Val.subl e#r1 (Vlong n2)) with (Val.addl e#r1 (Vlong (Int64.neg n2))).
   apply make_addlimm_correct; auto.
-  unfold Val.addl, Val.subl. destruct Archi.ptr64 eqn:SF, e#r1; auto. 
+  unfold Val.addl, Val.subl. destruct Archi.ptr64 eqn:SF, e#r1; auto.
   rewrite Int64.sub_add_opp; auto.
   rewrite Ptrofs.sub_add_opp. do 2 f_equal. auto with ptrofs.
   rewrite Int64.sub_add_opp; auto.

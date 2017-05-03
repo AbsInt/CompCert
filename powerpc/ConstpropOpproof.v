@@ -106,7 +106,7 @@ Proof.
   + (* global *)
     inv H2. exists (Genv.symbol_address ge id ofs); auto.
   + (* stack *)
-    inv H2. exists (Vptr sp ofs); split; auto. simpl. rewrite Ptrofs.add_zero_l; auto.  
+    inv H2. exists (Vptr sp ofs); split; auto. simpl. rewrite Ptrofs.add_zero_l; auto.
 Qed.
 
 Lemma cond_strength_reduction_correct:
@@ -478,7 +478,7 @@ Remark shift_symbol_address:
   Genv.symbol_address ge id (Ptrofs.add ofs (Ptrofs.of_int delta)) = Val.add (Genv.symbol_address ge id ofs) (Vint delta).
 Proof.
   intros. unfold Genv.symbol_address. destruct (Genv.find_symbol ge id); auto.
-Qed.   
+Qed.
 
 Lemma addr_strength_reduction_correct:
   forall addr args vl res,
@@ -491,7 +491,7 @@ Proof.
   destruct (addr_strength_reduction_match addr args vl); simpl;
   intros VL EA; InvApproxRegs; SimplVM; try (inv EA).
 - rewrite shift_symbol_address. econstructor; split; eauto. apply Val.add_lessdef; auto.
-- econstructor; split; eauto. 
+- econstructor; split; eauto.
   change (Val.lessdef (Val.add (Vint n1) rs#r2) (Genv.symbol_address ge symb (Ptrofs.add (Ptrofs.of_int n1) n2))).
   rewrite Ptrofs.add_commut. rewrite shift_symbol_address. rewrite Val.add_commut.
   apply Val.add_lessdef; auto.

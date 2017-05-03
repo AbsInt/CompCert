@@ -39,7 +39,7 @@ Definition const_for_result (a: aval) : option operation :=
 
 Section STRENGTH_REDUCTION.
 
-Nondetfunction cond_strength_reduction 
+Nondetfunction cond_strength_reduction
               (cond: condition) (args: list reg) (vl: list aval) :=
   match cond, args, vl with
   | Ccomp c, r1 :: r2 :: nil, I n1 :: v2 :: nil =>
@@ -50,7 +50,7 @@ Nondetfunction cond_strength_reduction
       (Ccompuimm (swap_comparison c) n1, r2 :: nil)
   | Ccompu c, r1 :: r2 :: nil, v1 :: I n2 :: nil =>
       (Ccompuimm c n2, r1 :: nil)
-  | _, _, _ => 
+  | _, _, _ =>
       (cond, args)
   end.
 
@@ -158,7 +158,7 @@ Definition make_cast8signed (r: reg) (a: aval) :=
 Definition make_cast16signed (r: reg) (a: aval) :=
   if vincl a (Sgn Ptop 16) then (Omove, r :: nil) else (Ocast16signed, r :: nil).
 
-Nondetfunction op_strength_reduction 
+Nondetfunction op_strength_reduction
               (op: operation) (args: list reg) (vl: list aval) :=
   match op, args, vl with
   | Ocast8signed, r1 :: nil, v1 :: nil => make_cast8signed r1 v1

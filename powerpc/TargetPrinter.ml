@@ -359,6 +359,26 @@ module Target (System : SYSTEM):TARGET =
       assert (!count = 2 || (!count = 0 && !last));
       (!mb, !me-1)
 
+    (* Encoding 64-bit masks for rldic PPC64 instructions *)
+
+    let rolm64_mask n =
+      let rec leftmost_one pos mask =
+        assert (pos < 64);
+        let mask' = Int64.shift_right_logical mask 1 in
+        if Int64.logand n mask = 0L
+        then leftmost_one (pos + 1) mask'
+        else (pos, rightmost_one (pos + 1) mask')
+      and rightmost_one pos mask =
+        if pos >= 64 then
+          63
+        else if Int64.logand n mask > 0L then
+          rightmost_one (pos + 1) (Int64.shift_right_logical mask 1)
+        else if Int64.logand n (Int64.pred mask) = 0L then
+          pos - 1
+        else
+          assert false
+      in leftmost_one 0 0x8000_0000_0000_0000L
+
     (* Determine if the displacement of a conditional branch fits the short form *)
 
     let short_cond_branch tbl pc lbl_dest =
@@ -370,7 +390,7 @@ module Target (System : SYSTEM):TARGET =
     (* Printing of instructions *)
 
     let print_instruction oc tbl pc fallthrough = function
-      | Padd(r1, r2, r3) ->
+      | Padd(r1, r2, r3) | Padd64(r1, r2, r3) ->
           fprintf oc "	add	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Paddc(r1, r2, r3) ->
           fprintf oc "	addc	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
@@ -378,22 +398,30 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	adde	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Paddi(r1, r2, c) ->
           fprintf oc "	addi	%a, %a, %a\n" ireg r1 ireg_or_zero r2 constant c
+      | Paddi64(r1, r2, n) ->
+          fprintf oc "	addi	%a, %a, %Ld\n" ireg r1 ireg_or_zero r2 (camlint64_of_coqint n)
       | Paddic(r1, r2, c) ->
           fprintf oc "	addic	%a, %a, %a\n" ireg r1 ireg_or_zero r2 constant c
       | Paddis(r1, r2, c) ->
           fprintf oc "	addis	%a, %a, %a\n" ireg r1 ireg_or_zero r2 constant c
-      | Paddze(r1, r2) ->
+      | Paddis64(r1, r2, n) ->
+          fprintf oc "	addis	%a, %a, %Ld\n" ireg r1 ireg_or_zero r2 (camlint64_of_coqint n)
+      | Paddze(r1, r2) | Paddze64(r1, r2) ->
           fprintf oc "	addze	%a, %a\n" ireg r1 ireg r2
       | Pallocframe(sz, ofs, _) ->
           assert false
-      | Pand_(r1, r2, r3) ->
+      | Pand_(r1, r2, r3) | Pand_64(r1, r2, r3) ->
           fprintf oc "	and.	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pandc(r1, r2, r3) ->
           fprintf oc "	andc	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pandi_(r1, r2, c) ->
           fprintf oc "	andi.	%a, %a, %a\n" ireg r1 ireg r2 constant c
+      | Pandi_64(r1, r2, n) ->
+          fprintf oc "	andi.	%a, %a, %Ld\n" ireg r1 ireg r2 (camlint64_of_coqint n)
       | Pandis_(r1, r2, c) ->
           fprintf oc "	andis.	%a, %a, %a\n" ireg r1 ireg r2 constant c
+      | Pandis_64(r1, r2, n) ->
+          fprintf oc "	andis.	%a, %a, %Ld\n" ireg r1 ireg r2 (camlint64_of_coqint n)
       | Pb lbl ->
           fprintf oc "	b	%a\n" label (transl_label lbl)
       | Pbctr sg ->
@@ -445,14 +473,24 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "%s end pseudoinstr btbl\n" comment
       | Pcmpb (r1, r2, r3) ->
           fprintf oc "	cmpb	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+      | Pcmpld(r1, r2) ->
+          fprintf oc "	cmpld	%a, %a, %a\n" creg 0 ireg r1 ireg r2
+      | Pcmpldi(r1, n) ->
+          fprintf oc "	cmpldi	%a, %a, %Ld\n" creg 0 ireg r1 (camlint64_of_coqint n)
       | Pcmplw(r1, r2) ->
           fprintf oc "	cmplw	%a, %a, %a\n" creg 0 ireg r1 ireg r2
       | Pcmplwi(r1, c) ->
           fprintf oc "	cmplwi	%a, %a, %a\n" creg 0 ireg r1 constant c
+      | Pcmpd(r1, r2) ->
+          fprintf oc "	cmpd	%a, %a, %a\n" creg 0 ireg r1 ireg r2
+      | Pcmpdi(r1, n) ->
+          fprintf oc "	cmpdi	%a, %a, %Ld\n" creg 0 ireg r1 (camlint64_of_coqint n)
       | Pcmpw(r1, r2) ->
           fprintf oc "	cmpw	%a, %a, %a\n" creg 0 ireg r1 ireg r2
       | Pcmpwi(r1, c) ->
           fprintf oc "	cmpwi	%a, %a, %a\n" creg 0 ireg r1 constant c
+      | Pcntlzd(r1, r2) ->
+          fprintf oc "	cntlzd	%a, %a\n" ireg r1 ireg r2
       | Pcntlzw(r1, r2) ->
           fprintf oc "	cntlzw	%a, %a\n" ireg r1 ireg r2
       | Pcreqv(c1, c2, c3) ->
@@ -477,6 +515,10 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	divw	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pdivwu(r1, r2, r3) ->
           fprintf oc "	divwu	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+      | Pdivd(r1, r2, r3) ->
+          fprintf oc "	divd	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+      | Pdivdu(r1, r2, r3) ->
+          fprintf oc "	divdu	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Peieio ->
           fprintf oc "	eieio\n"
       | Peqv(r1, r2, r3) ->
@@ -487,6 +529,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	extsh	%a, %a\n" ireg r1 ireg r2
       | Pextsw(r1, r2) ->
           fprintf oc "	extsw	%a, %a\n" ireg r1 ireg r2
+      | Pextzw(r1, r2) ->
+          assert false
       | Pfreeframe(sz, ofs) ->
           assert false
       | Pfabs(r1, r2) | Pfabss(r1, r2) ->
@@ -499,11 +543,15 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	fcmpu	%a, %a, %a\n" creg 0 freg r1 freg r2
       | Pfcfi(r1, r2) ->
           assert false
+      | Pfcfl(r1, r2) ->
+          assert false
       | Pfcfid(r1, r2) ->
           fprintf oc "	fcfid	%a, %a\n" freg r1 freg r2
       | Pfcfiu(r1, r2) ->
           assert false
       | Pfcti(r1, r2) ->
+          assert false
+      | Pfctid(r1, r2) ->
           assert false
       | Pfctidz(r1, r2) ->
           fprintf oc "	fctidz	%a, %a\n" freg r1 freg r2
@@ -565,6 +613,10 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	lbz	%a, %a(%a)\n" ireg r1 constant c ireg r2
       | Plbzx(r1, r2, r3) ->
           fprintf oc "	lbzx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+      | Pld(r1, c, r2) | Pld_a(r1, c, r2) ->
+          fprintf oc "	ld	%a, %a(%a)\n" ireg r1 constant c ireg r2
+      | Pldx(r1, r2, r3) | Pldx_a(r1, r2, r3) ->
+          fprintf oc "	ldx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Plfd(r1, c, r2)  | Plfd_a(r1, c, r2) ->
           fprintf oc "	lfd	%a, %a(%a)\n" freg r1 constant c ireg r2
       | Plfdx(r1, r2, r3) | Plfdx_a(r1, r2, r3) ->
@@ -583,6 +635,17 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	lhz	%a, %a(%a)\n" ireg r1 constant c ireg r2
       | Plhzx(r1, r2, r3) ->
           fprintf oc "	lhzx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+      | Pldi(r1, c) ->
+          let lbl = new_label() in
+          fprintf oc "	addis	%a, 0, %a\n" ireg GPR12 label_high lbl;
+          fprintf oc "	ld	%a, %a(%a) %s %Ld\n" ireg r1 label_low lbl ireg GPR12 comment (camlint64_of_coqint c);
+          int64_literals := (lbl, camlint64_of_coqint c) :: !int64_literals;
+      | Plmake(_, _, _) ->
+          assert false
+      | Pllo _ ->
+          assert false
+      | Plhi(_, _) ->
+          assert false
       | Plfi(r1, c) ->
           let lbl = new_label() in
           fprintf oc "	addis	%a, 0, %a\n" ireg GPR12 label_high lbl;
@@ -621,6 +684,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	mfspr	%a, %ld\n" ireg rd (camlint_of_coqint spr)
       | Pmtspr(spr, rs) ->
           fprintf oc "	mtspr	%ld, %a\n" (camlint_of_coqint spr) ireg rs
+      | Pmulld(r1, r2, r3) ->
+          fprintf oc "	mulld	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pmulli(r1, r2, c) ->
           fprintf oc "	mulli	%a, %a, %a\n" ireg r1 ireg r2 constant c
       | Pmullw(r1, r2, r3) ->
@@ -629,24 +694,51 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	mulhw	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pmulhwu(r1, r2, r3) ->
           fprintf oc "	mulhwu	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+      | Pmulhd (r1,r2,r3) ->
+          fprintf oc "	mulhd	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+      | Pmulhdu (r1,r2,r3) ->
+          fprintf oc "	mulhdu	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pnand(r1, r2, r3) ->
           fprintf oc "	nand	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
-      | Pnor(r1, r2, r3) ->
+      | Pnor(r1, r2, r3) | Pnor64(r1, r2, r3) ->
           fprintf oc "	nor	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
-      | Por(r1, r2, r3) ->
+      | Por(r1, r2, r3) | Por64(r1, r2, r3) ->
           fprintf oc "	or	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Porc(r1, r2, r3) ->
           fprintf oc "	orc	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pori(r1, r2, c) ->
           fprintf oc "	ori	%a, %a, %a\n" ireg r1 ireg r2 constant c
+      | Pori64(r1, r2, n) ->
+          fprintf oc "	ori	%a, %a, %Ld\n" ireg r1 ireg r2 (camlint64_of_coqint n)
       | Poris(r1, r2, c) ->
           fprintf oc "	oris	%a, %a, %a\n" ireg r1 ireg r2 constant c
+      | Poris64(r1, r2, n) ->
+          fprintf oc "	oris	%a, %a, %Ld\n" ireg r1 ireg r2 (camlint64_of_coqint n)
       | Prldicl(r1, r2, c1, c2) ->
           fprintf oc "	rldicl	%a, %a, %ld, %ld\n"
             ireg r1 ireg r2 (camlint_of_coqint c1) (camlint_of_coqint c2)
-      | Prldicr(r1, r2, c1, c2) ->
-          fprintf oc "	rldicr	%a, %a, %ld, %ld\n"
-            ireg r1 ireg r2 (camlint_of_coqint c1) (camlint_of_coqint c2)
+      | Prldinm(r1, r2, c1, c2) ->
+          let amount = camlint64_of_coqint c1 in
+          let mask = camlint64_of_coqint c2 in
+          let (first, last) = rolm64_mask mask in
+          if last = 63 then
+            fprintf oc "	rldicl	%a, %a, %Ld, %d %s 0x%Lx\n"
+              ireg r1 ireg r2 amount first comment mask
+          else if first = 0 then
+            fprintf oc "	rldicr	%a, %a, %Ld, %d %s 0x%Lx\n"
+              ireg r1 ireg r2 amount last comment mask
+          else if last = 63 - Int64.to_int amount then
+            fprintf oc "	rldic	%a, %a, %Ld, %d %s 0x%Lx\n"
+              ireg r1 ireg r2 amount first comment mask
+          else
+            assert false
+      | Prldimi(r1, r2, c1, c2) ->
+          let amount = camlint64_of_coqint c1 in
+          let mask = camlint64_of_coqint c2 in
+          let (first, last) = rolm64_mask mask in
+          assert (last = 63 - Int64.to_int amount);
+          fprintf oc "	rldimi	%a, %a, %Ld, %d %s 0x%Lx\n"
+            ireg r1 ireg r2 amount first comment mask
       | Prlwinm(r1, r2, c1, c2) ->
           let (mb, me) = rolm_mask (camlint_of_coqint c2) in
           fprintf oc "	rlwinm	%a, %a, %ld, %d, %d %s 0x%lx\n"
@@ -657,18 +749,30 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	rlwimi	%a, %a, %ld, %d, %d %s 0x%lx\n"
             ireg r1 ireg r2 (camlint_of_coqint c1) mb me
             comment (camlint_of_coqint c2)
+      | Psld(r1, r2, r3) ->
+          fprintf oc "	sld	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pslw(r1, r2, r3) ->
           fprintf oc "	slw	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+      | Psrad(r1, r2, r3) ->
+          fprintf oc "	srad	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+      | Psradi(r1, r2, c) ->
+          fprintf oc "	sradi	%a, %a, %ld\n" ireg r1 ireg r2 (camlint_of_coqint c)
       | Psraw(r1, r2, r3) ->
           fprintf oc "	sraw	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Psrawi(r1, r2, c) ->
           fprintf oc "	srawi	%a, %a, %ld\n" ireg r1 ireg r2 (camlint_of_coqint c)
+      | Psrd(r1, r2, r3) ->
+          fprintf oc "	srd	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Psrw(r1, r2, r3) ->
           fprintf oc "	srw	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pstb(r1, c, r2) ->
           fprintf oc "	stb	%a, %a(%a)\n" ireg r1 constant c ireg r2
       | Pstbx(r1, r2, r3) ->
           fprintf oc "	stbx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+      | Pstd(r1, c, r2) | Pstd_a(r1, c, r2) ->
+          fprintf oc "	std	%a, %a(%a)\n" ireg r1 constant c ireg r2
+      | Pstdx(r1, r2, r3) | Pstdx_a(r1, r2, r3) ->
+          fprintf oc "	stdx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pstdu(r1, c, r2) ->
           fprintf oc "	stdu	%a, %a(%a)\n" ireg r1 constant c ireg r2
       | Pstfd(r1, c, r2) | Pstfd_a(r1, c, r2) ->
@@ -699,7 +803,7 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	stwbrx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pstwcx_(r1, r2, r3) ->
           fprintf oc "	stwcx.	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
-      | Psubfc(r1, r2, r3) ->
+      | Psubfc(r1, r2, r3) | Psubfc64(r1, r2, r3) ->
           fprintf oc "	subfc	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Psubfe(r1, r2, r3) ->
           fprintf oc "	subfe	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
@@ -707,16 +811,22 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	subfze	%a, %a\n" ireg r1 ireg r2
       | Psubfic(r1, r2, c) ->
           fprintf oc "	subfic	%a, %a, %a\n" ireg r1 ireg r2 constant c
+      | Psubfic64(r1, r2, n) ->
+          fprintf oc "	subfic	%a, %a, %Ld\n" ireg r1 ireg r2 (camlint64_of_coqint n)
       | Psync ->
           fprintf oc "	sync\n"
       | Ptrap ->
           fprintf oc "	trap\n"
-      | Pxor(r1, r2, r3) ->
+      | Pxor(r1, r2, r3) | Pxor64(r1, r2, r3) ->
           fprintf oc "	xor	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pxori(r1, r2, c) ->
           fprintf oc "	xori	%a, %a, %a\n" ireg r1 ireg r2 constant c
+      | Pxori64(r1, r2, n) ->
+          fprintf oc "	xori	%a, %a, %Ld\n" ireg r1 ireg r2 (camlint64_of_coqint n)
       | Pxoris(r1, r2, c) ->
           fprintf oc "	xoris	%a, %a, %a\n" ireg r1 ireg r2 constant c
+      | Pxoris64(r1, r2, n) ->
+          fprintf oc "	xoris	%a, %a, %Ld\n" ireg r1 ireg r2 (camlint64_of_coqint n)
       | Plabel lbl ->
           if (not fallthrough) && !Clflags.option_falignbranchtargets > 0 then
             fprintf oc "	.balign	%d\n" !Clflags.option_falignbranchtargets;
@@ -826,12 +936,16 @@ module Target (System : SYSTEM):TARGET =
     let print_fun_info = elf_print_fun_info
 
     let emit_constants oc lit =
-      if !float64_literals <> [] || !float32_literals <> [] then begin
+      if !float64_literals <> [] || !float32_literals <> []
+                                 || !int64_literals <> [] then begin
         section oc lit;
         fprintf oc "	.balign 8\n";
+        List.iter (print_literal64 oc) !int64_literals;
+        int64_literals := [];
         List.iter (print_literal64 oc) !float64_literals;
+        float64_literals := [];
         List.iter (print_literal32 oc) !float32_literals;
-        float64_literals := []; float32_literals := []
+        float32_literals := []
       end
 
     let print_optional_fun_info _ = ()

@@ -164,7 +164,7 @@ Proof.
   intros. generalize (loc_result_pair sg) (loc_result_type sg).
   destruct (loc_result sg); simpl Locmap.setpair.
 - intros. apply wt_setreg; auto. eapply Val.has_subtype; eauto.
-- intros (A & B & C & D & E) F. 
+- intros A B. decompose [and] A.
   apply wt_setreg. eapply Val.has_subtype; eauto. destruct v; exact I.
   apply wt_setreg. eapply Val.has_subtype; eauto. destruct v; exact I.
   auto.

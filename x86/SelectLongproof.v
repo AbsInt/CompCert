@@ -399,7 +399,7 @@ Theorem eval_mullimm: forall n, unary_constructor_sound (mullimm n) (fun v => Va
 Proof.
   unfold mullimm. intros; red; intros.
   destruct Archi.splitlong eqn:SL.
-  eapply SplitLongproof.eval_mullimm; eauto.  
+  eapply SplitLongproof.eval_mullimm; eauto.
   predSpec Int64.eq Int64.eq_spec n Int64.zero.
   exists (Vlong Int64.zero); split. apply eval_longconst.
   destruct x; simpl; auto. subst n; rewrite Int64.mul_zero; auto.
@@ -426,14 +426,14 @@ Proof.
 - TrivialExists.
 Qed.
 
-Theorem eval_mullhu: 
+Theorem eval_mullhu:
   forall n, unary_constructor_sound (fun a => mullhu a n) (fun v => Val.mullhu v (Vlong n)).
 Proof.
   unfold mullhu; intros. destruct Archi.splitlong eqn:SL. apply SplitLongproof.eval_mullhu; auto.
   red; intros. TrivialExists. constructor. eauto. constructor. apply eval_longconst. constructor. auto.
 Qed.
 
-Theorem eval_mullhs: 
+Theorem eval_mullhs:
   forall n, unary_constructor_sound (fun a => mullhs a n) (fun v => Val.mullhs v (Vlong n)).
 Proof.
   unfold mullhs; intros. destruct Archi.splitlong eqn:SL. apply SplitLongproof.eval_mullhs; auto.

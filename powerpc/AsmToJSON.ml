@@ -78,6 +78,7 @@ type instruction_arg =
   | Ireg of ireg
   | Freg of freg
   | Constant of constant
+  | Long of Integers.Int.int
   | Crbit of crbit
   | ALabel of positive
   | Float32 of Floats.float32
@@ -88,6 +89,7 @@ let p_arg oc = function
   | Ireg ir -> p_ireg oc ir
   | Freg fr -> p_freg oc fr
   | Constant c -> p_constant oc c
+  | Long i ->  p_jsingle_object oc "Integer" p_int64 i
   | Crbit cr -> p_crbit oc cr
   | ALabel lbl -> p_label oc lbl
   | Float32 f -> p_float32_constant oc f
@@ -101,18 +103,25 @@ let p_instruction oc ic =
   let sep oc = if !first then first := false else output_string oc ", " in
   let instruction n args = fprintf oc "\n%t{%a,%a}" sep inst_name n p_args args in
   let instruction = function
-  | Padd (ir1,ir2,ir3) -> instruction "Padd" [Ireg ir1; Ireg ir2; Ireg ir3]
+  | Padd (ir1,ir2,ir3)
+  | Padd64 (ir1,ir2,ir3) -> instruction "Padd" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Paddc (ir1,ir2,ir3) -> instruction "Paddc" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Padde (ir1,ir2,ir3) -> instruction "Padde" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Paddi (ir1,ir2,c) -> instruction "Paddi" [Ireg ir1; Ireg ir2; Constant c]
+  | Paddi64 (ir1,ir2,n) -> instruction "Paddi" [Ireg ir1; Ireg ir2; Constant (Cint n)] (* FIXME, ugly, immediates are int64 but always fit into 16bits *)
   | Paddic  (ir1,ir2,c) -> instruction "Paddic" [Ireg ir1; Ireg ir2; Constant c]
   | Paddis  (ir1,ir2,c) -> instruction "Paddis" [Ireg ir1; Ireg ir2; Constant c]
-  | Paddze (ir1,ir2) -> instruction "Paddze" [Ireg ir1; Ireg ir2]
+  | Paddis64 (ir1,ir2,n) -> instruction "Paddis" [Ireg ir1; Ireg ir2; Constant (Cint n)]
+  | Paddze (ir1,ir2)
+  | Paddze64 (ir1,ir2) -> instruction "Paddze" [Ireg ir1; Ireg ir2]
   | Pallocframe _ -> assert false (* Should not occur *)
-  | Pand_ (ir1,ir2,ir3) -> instruction "Pand_" [Ireg ir1; Ireg ir2; Ireg ir3]
+  | Pand_ (ir1,ir2,ir3)
+  | Pand_64 (ir1,ir2,ir3) -> instruction "Pand_" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pandc (ir1,ir2,ir3) -> instruction "Pandc" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pandi_ (ir1,ir2,c) -> instruction "Pandi_" [Ireg ir1; Ireg ir2; Constant c]
+  | Pandi_64 (ir1,ir2,n) -> instruction "Pandi_" [Ireg ir1; Ireg ir2; Constant (Cint n)]
   | Pandis_ (ir1,ir2,c) -> instruction "Pandis_" [Ireg ir1; Ireg ir2; Constant c]
+  | Pandis_64 (ir1,ir2,n) -> instruction "Pandis_" [Ireg ir1; Ireg ir2; Constant (Cint n)]
   | Pb l -> instruction "Pb" [ALabel l]
   | Pbctr s -> instruction "Pbctr" []
   | Pbctrl s -> instruction "Pbctrl" []
@@ -124,10 +133,15 @@ let p_instruction oc ic =
   | Pbt (cr,l) ->  instruction "Pbt" [Crbit cr; ALabel l]
   | Pbtbl (i,lb) -> instruction "Pbtbl" ((Ireg i)::(List.map (fun a -> ALabel a) lb))
   | Pcmpb (ir1,ir2,ir3) -> instruction "Pcmpb" [Ireg ir1; Ireg ir2; Ireg ir3]
+  | Pcmpld (ir1,ir2) -> instruction "Pcmpld" [Ireg ir1; Ireg ir2]
+  | Pcmpldi (ir,n) -> instruction "Pcmpldi" [Ireg ir; Constant (Cint n)]
   | Pcmplw (ir1,ir2) -> instruction "Pcmplw" [Ireg ir1; Ireg ir2]
   | Pcmplwi (ir,c) -> instruction "Pcmplwi" [Ireg ir; Constant c]
+  | Pcmpd (ir1,ir2) -> instruction "Pcmpd" [Ireg ir1; Ireg ir2]
+  | Pcmpdi (ir,n) -> instruction "Pcmpdi" [Ireg ir; Constant (Cint n)]
   | Pcmpw (ir1,ir2) -> instruction "Pcmpw" [Ireg ir1; Ireg ir2]
   | Pcmpwi (ir,c) -> instruction "Pcmpwi" [Ireg ir; Constant c]
+  | Pcntlzd (ir1,ir2) -> instruction "Pcntlzd" [Ireg ir1; Ireg ir2]
   | Pcntlzw (ir1,ir2) -> instruction "Pcntlzw" [Ireg ir1; Ireg ir2]
   | Pcreqv (cr1,cr2,cr3) -> instruction "Pcreqv" [Crbit cr1; Crbit cr2; Crbit cr3]
   | Pcror (cr1,cr2,cr3) -> instruction "Pcror" [Crbit cr1; Crbit cr2; Crbit cr3]
@@ -139,23 +153,28 @@ let p_instruction oc ic =
   | Pdcbtls (n,ir1,ir2) ->  instruction "Pdcbtls" [Constant (Cint n); Ireg ir1; Ireg ir2]
   | Pdcbz (ir1,ir2) -> instruction "Pdcbz" [Ireg ir1; Ireg ir2]
   | Pdivw (ir1,ir2,ir3) -> instruction "Pdivw" [Ireg ir1; Ireg ir2; Ireg ir3]
+  | Pdivd (ir1,ir2,ir3) -> instruction "Pdivd" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pdivwu (ir1,ir2,ir3) -> instruction "Pdivwu" [Ireg ir1; Ireg ir2; Ireg ir3]
+  | Pdivdu (ir1,ir2,ir3) -> instruction "Pdivdu" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Peieio -> instruction "Peieio" []
   | Peqv (ir1,ir2,ir3) -> instruction "Peqv" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pextsb (ir1,ir2) -> instruction "Pextsb" [Ireg ir1; Ireg ir2]
   | Pextsh (ir1,ir2) -> instruction "Pextsh" [Ireg ir1; Ireg ir2]
   | Pextsw (ir1,ir2) -> instruction "Pextsw" [Ireg ir1; Ireg ir2]
-  | Pfreeframe (c,i) -> assert false (* Should not occur *)
+  | Pextzw (ir1,ir2) -> assert false (* Should not occur *)
+  | Pfreeframe (c,i) -> () (* Should not occur *)
   | Pfabs (fr1,fr2)
   | Pfabss (fr1,fr2) -> instruction "Pfabs" [Freg fr1; Freg fr2]
   | Pfadd (fr1,fr2,fr3) -> instruction "Pfadd" [Freg fr1; Freg fr2; Freg fr3]
   | Pfadds (fr1,fr2,fr3) -> instruction "Pfadds" [Freg fr1; Freg fr2; Freg fr3]
   | Pfcmpu (fr1,fr2) -> instruction "Pfcmpu" [Freg fr1; Freg fr2]
-  | Pfcfi (ir,fr) -> assert false (* Should not occur *)
+  | Pfcfi (ir,fr)
+  | Pfcfl (ir,fr) -> assert false (* Should not occur *)
   | Pfcfid (fr1,fr2) -> instruction "Pfcfid" [Freg fr1; Freg fr2]
   | Pfcfiu _ (* Should not occur *)
   | Pfcti _ (* Should not occur *)
-  | Pfctiu _ -> assert false (* Should not occur *)
+  | Pfctiu _ (* Should not occur *)
+  | Pfctid _ -> assert false (* Should not occur *)
   | Pfctidz (fr1,fr2) -> instruction "Pfctidz" [Freg fr1; Freg fr2]
   | Pfctiw (fr1,fr2) -> instruction "Pfctiw" [Freg fr1; Freg fr2]
   | Pfctiwz (fr1,fr2) -> instruction "Pfctiwz" [Freg fr1; Freg fr2]
@@ -186,6 +205,10 @@ let p_instruction oc ic =
   | Plwsync -> instruction "Plwsync" []
   | Plbz (ir1,c,ir2) -> instruction "Plbz" [Ireg ir1; Constant c; Ireg ir2]
   | Plbzx (ir1,ir2,ir3) -> instruction "Plbzx" [Ireg ir1; Ireg ir2; Ireg ir3]
+  | Pld (ir1,c,ir2)
+  | Pld_a (ir1,c,ir2) -> instruction "Pld" [Ireg ir1; Constant c; Ireg ir2]
+  | Pldx (ir1,ir2,ir3)
+  | Pldx_a (ir1,ir2,ir3) -> instruction "Pldx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Plfd (fr,c,ir)
   | Plfd_a (fr,c,ir) -> instruction "Plfd" [Freg fr; Constant c; Ireg ir]
   | Plfdx (fr,ir1,ir2)
@@ -197,6 +220,10 @@ let p_instruction oc ic =
   | Plhbrx (ir1,ir2,ir3) -> instruction "Plhbrx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Plhz (ir1,c,ir2) -> instruction "Plhz" [Ireg ir1; Constant c; Ireg ir2]
   | Plhzx (ir1,ir2,ir3) -> instruction "Plhzx" [Ireg ir1; Ireg ir2; Ireg ir3]
+  | Pldi (ir,c) -> instruction "Pldi" [Ireg ir; Long c] (* FIXME Cint is too small, we need Clong *)
+  | Plmake _ (* Should not occur *)
+  | Pllo _ (* Should not occur *)
+  | Plhi _ -> assert false (* Should not occur *)
   | Plfi (fr,fc) -> instruction "Plfi" [Freg fr; Float64 fc]
   | Plfis (fr,fc) -> instruction "Plfis" [Freg fr; Float32 fc]
   | Plwz (ir1,c,ir2)
@@ -215,26 +242,42 @@ let p_instruction oc ic =
   | Pmtlr ir -> instruction "Pmtlr" [Ireg ir]
   | Pmfspr(ir, n) -> instruction "Pmfspr" [Ireg ir; Constant (Cint n)]
   | Pmtspr(n, ir) -> instruction "Pmtspr" [Constant (Cint n); Ireg ir]
+  | Pmulhd (ir1,ir2,ir3) -> instruction "Pmulhd" [Ireg ir1; Ireg ir2; Ireg ir3]
+  | Pmulhdu (ir1,ir2,ir3) -> instruction "Pmulhdu" [Ireg ir1; Ireg ir2; Ireg ir3]
+  | Pmulld (ir1,ir2,ir3) -> instruction "Pmulld" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pmulli (ir1,ir2,c) -> instruction "Pmulli" [Ireg ir1; Ireg ir2; Constant c]
   | Pmullw (ir1,ir2,ir3) -> instruction "Pmullw" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pmulhw (ir1,ir2,ir3) -> instruction "Pmulhw" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pmulhwu (ir1,ir2,ir3) -> instruction "Pmulhwu" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pnand (ir1,ir2,ir3) -> instruction "Pnand" [Ireg ir1; Ireg ir2; Ireg ir3]
-  | Pnor (ir1,ir2,ir3) -> instruction "Pnor" [Ireg ir1; Ireg ir2; Ireg ir3]
-  | Por (ir1,ir2,ir3) -> instruction "Por" [Ireg ir1; Ireg ir2; Ireg ir3]
+  | Pnor (ir1,ir2,ir3)
+  | Pnor64 (ir1,ir2,ir3) -> instruction "Pnor" [Ireg ir1; Ireg ir2; Ireg ir3]
+  | Por (ir1,ir2,ir3)
+  | Por64 (ir1,ir2,ir3) -> instruction "Por" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Porc (ir1,ir2,ir3) -> instruction "Porc" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pori (ir1,ir2,c) -> instruction "Pori" [Ireg ir1; Ireg ir2; Constant c]
+  | Pori64 (ir1,ir2,n) -> instruction "Pori" [Ireg ir1; Ireg ir2; Constant (Cint n)]
   | Poris (ir1,ir2,c) -> instruction "Poris" [Ireg ir1; Ireg ir2; Constant c]
+  | Poris64 (ir1,ir2,n) -> instruction "Poris" [Ireg ir1; Ireg ir2; Constant (Cint n)]
   | Prldicl (ir1,ir2,ic1,ic2) -> instruction "Prldicl" [Ireg ir1; Ireg ir2; Constant (Cint ic1); Constant (Cint ic2)]
-  | Prldicr (ir1,ir2,ic1,ic2) -> instruction "Prldicr" [Ireg ir1; Ireg ir2; Constant (Cint ic1); Constant (Cint ic2)]
+  | Prldinm (ir1,ir2,ic1,ic2) -> instruction "Prldinm" [Ireg ir1; Ireg ir2; Constant (Cint ic1); Constant (Cint ic2)]
+  | Prldimi  (ir1,ir2,ic1,ic2) ->instruction "Prldimi" [Ireg ir1; Ireg ir2; Constant (Cint ic1); Constant (Cint ic2)]
   | Prlwinm (ir1,ir2,ic1,ic2) -> instruction "Prlwinm" [Ireg ir1; Ireg ir2; Constant (Cint ic1); Constant (Cint ic2)]
   | Prlwimi  (ir1,ir2,ic1,ic2) ->instruction "Prlwimi" [Ireg ir1; Ireg ir2; Constant (Cint ic1); Constant (Cint ic2)]
+  | Psld (ir1,ir2,ir3) -> instruction "Psld" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pslw (ir1,ir2,ir3) -> instruction "Pslw" [Ireg ir1; Ireg ir2; Ireg ir3]
+  | Psrad (ir1,ir2,ir3) -> instruction "Psrad" [Ireg ir1; Ireg ir2; Ireg ir3]
+  | Psradi  (ir1,ir2,ic) -> instruction "Psradi" [Ireg ir1; Ireg ir2; Constant (Cint ic)]
   | Psraw (ir1,ir2,ir3) -> instruction "Psraw" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Psrawi  (ir1,ir2,ic) -> instruction "Psrawi" [Ireg ir1; Ireg ir2; Constant (Cint ic)]
+  | Psrd (ir1,ir2,ir3) -> instruction "Psrd" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Psrw (ir1,ir2,ir3) -> instruction "Psrw" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pstb (ir1,c,ir2) -> instruction "Pstb" [Ireg ir1; Constant c; Ireg ir2]
   | Pstbx (ir1,ir2,ir3) -> instruction "Pstbx" [Ireg ir1; Ireg ir2; Ireg ir3]
+  | Pstd (ir1,c,ir2)
+  | Pstd_a (ir1,c,ir2) -> instruction "Pstd" [Ireg ir1; Constant c; Ireg ir2]
+  | Pstdx (ir1,ir2,ir3)
+  | Pstdx_a (ir1,ir2,ir3) -> instruction "Pstdx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pstdu (ir1,c,ir2) -> instruction "Pstdu" [Ireg ir1; Constant c; Ireg ir2]
   | Pstfd (fr,c,ir)
   | Pstfd_a (fr,c,ir) -> instruction "Pstfd" [Freg fr; Constant c; Ireg ir]
@@ -254,15 +297,20 @@ let p_instruction oc ic =
   | Pstwux (ir1,ir2,ir3) -> instruction "Pstwux" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pstwbrx (ir1,ir2,ir3) -> instruction "Pstwbrx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pstwcx_ (ir1,ir2,ir3) -> instruction "Pstwcx_" [Ireg ir1; Ireg ir2; Ireg ir3]
-  | Psubfc (ir1,ir2,ir3) -> instruction "Psubfc" [Ireg ir1; Ireg ir2; Ireg ir3]
+  | Psubfc (ir1,ir2,ir3)
+  | Psubfc64 (ir1,ir2,ir3) -> instruction "Psubfc" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Psubfe (ir1,ir2,ir3) -> instruction "Psubfe" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Psubfze (ir1,ir2) -> instruction "Psubfze" [Ireg ir1; Ireg ir2]
   | Psubfic (ir1,ir2,c) -> instruction "Psubfic" [Ireg ir1; Ireg ir2; Constant c]
+  | Psubfic64 (ir1,ir2,n) -> instruction "Psubfic" [Ireg ir1; Ireg ir2; Constant (Cint n)]
   | Psync -> instruction "Psync" []
   | Ptrap -> instruction "Ptrap" []
-  | Pxor (ir1,ir2,ir3) -> instruction "Pxor" [Ireg ir1; Ireg ir2; Ireg ir3]
-  | Pxori (ir1,ir2,c) ->instruction "Pxori" [Ireg ir1; Ireg ir2; Constant c]
+  | Pxor (ir1,ir2,ir3)
+  | Pxor64 (ir1,ir2,ir3) -> instruction "Pxor" [Ireg ir1; Ireg ir2; Ireg ir3]
+  | Pxori (ir1,ir2,c) -> instruction "Pxori" [Ireg ir1; Ireg ir2; Constant c]
+  | Pxori64 (ir1,ir2,n) -> instruction "Pxori" [Ireg ir1; Ireg ir2; Constant (Cint n)]
   | Pxoris (ir1,ir2,c) -> instruction "Pxoris" [Ireg ir1; Ireg ir2; Constant c]
+  | Pxoris64 (ir1,ir2,n) -> instruction "Pxoris" [Ireg ir1; Ireg ir2; Constant (Cint n)]
   | Plabel l -> instruction "Plabel" [ALabel l]
   | Pbuiltin (ef,_,_) ->
     begin match ef with
@@ -271,7 +319,7 @@ let p_instruction oc ic =
       | _ -> ()
     end
   | Pcfi_adjust _  (* Only debug relevant *)
-  | Pcfi_rel_offset _ ->  () (* Only debug relevant *) in
+  | Pcfi_rel_offset _ -> () in (* Only debug relevant *)
   List.iter instruction ic
 
 let p_storage oc static =

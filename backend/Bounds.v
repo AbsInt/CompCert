@@ -190,7 +190,7 @@ Remark fold_left_ensures:
   (forall a, P (f a b0)) ->
   forall l a, In b0 l -> P (fold_left f l a).
 Proof.
-  induction l; simpl; intros. contradiction. 
+  induction l; simpl; intros. contradiction.
   destruct H1. subst a. apply fold_left_preserves; auto. apply IHl; auto.
 Qed.
 
@@ -199,7 +199,7 @@ Definition only_callee_saves (u: RegSet.t) : Prop :=
 
 Lemma record_reg_only: forall u r, only_callee_saves u -> only_callee_saves (record_reg u r).
 Proof.
-  unfold only_callee_saves, record_reg; intros. 
+  unfold only_callee_saves, record_reg; intros.
   destruct (is_callee_save r) eqn:CS; auto.
   destruct (mreg_eq r r0). congruence. apply H; eapply RegSet.add_3; eauto.
 Qed.
@@ -214,11 +214,11 @@ Proof.
   intros. destruct i; simpl; auto using record_reg_only, record_regs_only.
 Qed.
 
-Lemma record_regs_of_function_only: 
+Lemma record_regs_of_function_only:
   only_callee_saves record_regs_of_function.
 Proof.
   intros. unfold record_regs_of_function.
-  apply fold_left_preserves. apply record_regs_of_instr_only. 
+  apply fold_left_preserves. apply record_regs_of_instr_only.
   red; intros. eelim RegSet.empty_1; eauto.
 Qed.
 
@@ -248,7 +248,7 @@ Next Obligation.
   apply record_regs_of_function_only. apply RegSet.elements_2.
   apply InA_alt. exists r; auto.
 Qed.
-  
+
 (** We now show the correctness of the inferred bounds. *)
 
 Lemma record_reg_incr: forall u r r', RegSet.In r' u -> RegSet.In r' (record_reg u r).
@@ -268,7 +268,7 @@ Qed.
 
 Lemma record_regs_ok: forall r rl u, In r rl -> is_callee_save r = true -> RegSet.In r (record_regs u rl).
 Proof.
-  intros. unfold record_regs. eapply fold_left_ensures; eauto using record_reg_incr, record_reg_ok. 
+  intros. unfold record_regs. eapply fold_left_ensures; eauto using record_reg_incr, record_reg_ok.
 Qed.
 
 Lemma record_regs_of_instr_incr: forall r' u i, RegSet.In r' u -> RegSet.In r' (record_regs_of_instr u i).
@@ -291,7 +291,7 @@ Proof.
   destruct H; auto using record_regs_incr, record_regs_ok.
 Qed.
 
-Lemma record_regs_of_function_ok: 
+Lemma record_regs_of_function_ok:
   forall r i, In i f.(fn_code) -> defined_by_instr r i -> is_callee_save r = true -> RegSet.In r record_regs_of_function.
 Proof.
   intros. unfold record_regs_of_function.
@@ -373,9 +373,9 @@ Lemma mreg_is_within_bounds:
   forall r, defined_by_instr r i ->
   mreg_within_bounds function_bounds r.
 Proof.
-  intros. unfold mreg_within_bounds. intros. 
+  intros. unfold mreg_within_bounds. intros.
   exploit record_regs_of_function_ok; eauto. intros.
-  apply RegSet.elements_1 in H2. rewrite InA_alt in H2. destruct H2 as (r' & A & B). 
+  apply RegSet.elements_1 in H2. rewrite InA_alt in H2. destruct H2 as (r' & A & B).
   subst r'; auto.
 Qed.
 
@@ -447,9 +447,9 @@ Proof.
 Local Opaque mreg_type.
   induction l as [ | r l]; intros; simpl.
 - omega.
-- eapply Zle_trans. 2: apply IHl. 
+- eapply Zle_trans. 2: apply IHl.
   generalize (AST.typesize_pos (mreg_type r)); intros.
-  apply Zle_trans with (align ofs (AST.typesize (mreg_type r))). 
+  apply Zle_trans with (align ofs (AST.typesize (mreg_type r))).
   apply align_le; auto.
   omega.
 Qed.

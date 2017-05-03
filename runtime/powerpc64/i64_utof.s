@@ -32,21 +32,33 @@
 #
 # *********************************************************************
 
-# Helper functions for 64-bit integer arithmetic.  PowerPC 64 version.
+# Helper functions for 64-bit integer arithmetic.  PowerPC version.
 
         .text
 
-### Signed division	
-	
+### Conversion from unsigned long to single float	
+
         .balign 16
-        .globl __i64_sdiv
-__i64_sdiv:
-        rldimi r4, r3, 32, 0   # reassemble (r3,r4) as a 64-bit integer in r4
-        rldimi r6, r5, 32, 0   # reassemble (r5,r6) as a 64-bit integer in r6
-	divd r4, r4, r6
-        srdi r3, r4, 32        # split r4 into (r3,r4)
-	blr
-        .type __i64_sdiv, @function
-        .size __i64_sdiv, .-__i64_sdiv
+        .globl __i64_utof
+__i64_utof:
+	mflr r9
+   # Check whether X < 2^53	
+        andis. r0, r3, 0xFFE0       # test bits 53...63 of X
+        beq 1f
+   # X is large enough that double rounding can occur.
+   # Avoid it by nudging X away from the points where double rounding
+   # occurs (the "round to odd" technique)
+        rlwinm r0, r4, 0, 21, 31 # extract bits 0 to 11 of X
+        addi r0, r0, 0x7FF      # r0 = (X & 0x7FF) + 0x7FF
+   # bit 12 of r0 is 0 if all low 12 bits of X are 0, 1 otherwise
+   # bits 13-31 of r0 are 0
+        or r4, r4, r0           # correct bit number 12 of X
+        rlwinm r4, r4, 0, 0, 20 # set to 0 bits 0 to 11 of X
+   # Convert to double, then round to single	
+1:      bl __i64_utod
+        mtlr r9
+        frsp f1, f1
+        blr
+        .type __i64_utof, @function
+        .size __i64_utof, .-__i64_utof
 	
-        

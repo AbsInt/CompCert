@@ -136,17 +136,24 @@ Definition label := positive.
 
 Inductive instruction : Type :=
   | Padd: ireg -> ireg -> ireg -> instruction                 (**r integer addition *)
+  | Padd64: ireg -> ireg -> ireg -> instruction               (**r integer addition (PPC64) *)
   | Paddc: ireg -> ireg -> ireg -> instruction                (**r integer addition and set carry *)
   | Padde: ireg -> ireg -> ireg -> instruction                (**r integer addition with carry *)
   | Paddi: ireg -> ireg -> constant -> instruction            (**r add immediate *)
+  | Paddi64: ireg -> ireg -> int64 -> instruction             (**r add immediate (PPC64) *)
   | Paddic: ireg -> ireg -> constant -> instruction           (**r add immediate and set carry *)
   | Paddis: ireg -> ireg -> constant -> instruction           (**r add immediate high *)
+  | Paddis64: ireg -> ireg -> int64 -> instruction            (**r add immediate high (PPC64) *)
   | Paddze: ireg -> ireg -> instruction                       (**r add carry *)
-  | Pallocframe: Z -> ptrofs -> ptrofs -> instruction               (**r allocate new stack frame (pseudo) *)
+  | Paddze64: ireg -> ireg -> instruction                     (**r add carry (PPC64) *)
+  | Pallocframe: Z -> ptrofs -> ptrofs -> instruction         (**r allocate new stack frame (pseudo) *)
   | Pand_: ireg -> ireg -> ireg -> instruction                (**r bitwise and *)
+  | Pand_64: ireg -> ireg -> ireg -> instruction              (**r bitwise and (PPC64) *)
   | Pandc: ireg -> ireg -> ireg -> instruction                (**r bitwise and-complement *)
   | Pandi_: ireg -> ireg -> constant -> instruction           (**r and immediate and set conditions *)
+  | Pandi_64: ireg -> ireg -> int64 -> instruction            (**r and immediate and set conditions (PPC64) *)
   | Pandis_: ireg -> ireg -> constant -> instruction          (**r and immediate high and set conditions *)
+  | Pandis_64: ireg -> ireg -> int64 -> instruction           (**r and immediate high and set conditions (PPC64) *)
   | Pb: label -> instruction                                  (**r unconditional branch *)
   | Pbctr: signature -> instruction                           (**r branch to contents of register CTR *)
   | Pbctrl: signature -> instruction                          (**r branch to contents of CTR and link *)
@@ -158,10 +165,15 @@ Inductive instruction : Type :=
   | Pbt: crbit -> label -> instruction                        (**r branch if true *)
   | Pbtbl: ireg -> list label -> instruction                  (**r N-way branch through a jump table (pseudo) *)
   | Pcmpb: ireg -> ireg -> ireg -> instruction                (**r compare bytes *)
+  | Pcmpld: ireg -> ireg -> instruction                       (**r unsigned integer comparison (PPC64) *)
+  | Pcmpldi: ireg -> int64 -> instruction                     (**r same, with immediate argument (PPC64) *)
   | Pcmplw: ireg -> ireg -> instruction                       (**r unsigned integer comparison *)
   | Pcmplwi: ireg -> constant -> instruction                  (**r same, with immediate argument *)
+  | Pcmpd: ireg -> ireg -> instruction                        (**r signed integer comparison (PPC64) *)
+  | Pcmpdi: ireg -> int64 -> instruction                      (**r same, with immediate argument (PPC64) *)
   | Pcmpw: ireg -> ireg -> instruction                        (**r signed integer comparison *)
   | Pcmpwi: ireg -> constant -> instruction                   (**r same, with immediate argument *)
+  | Pcntlzd: ireg -> ireg -> instruction                      (**r count leading zeros (PPC64) *)
   | Pcntlzw: ireg -> ireg -> instruction                      (**r count leading zeros *)
   | Pcreqv: crbit -> crbit -> crbit -> instruction            (**r not-xor between condition bits *)
   | Pcror: crbit -> crbit -> crbit -> instruction             (**r or between condition bits *)
@@ -173,23 +185,28 @@ Inductive instruction : Type :=
   | Pdcbtls: int -> ireg -> ireg -> instruction               (**r data cache block touch and lock *)
   | Pdcbz: ireg -> ireg -> instruction                        (**r data cache block zero *)
   | Pdivw: ireg -> ireg -> ireg -> instruction                (**r signed division *)
+  | Pdivd: ireg -> ireg -> ireg -> instruction                (**r signed division (PPC64) *)
   | Pdivwu: ireg -> ireg -> ireg -> instruction               (**r unsigned division *)
+  | Pdivdu: ireg -> ireg -> ireg -> instruction               (**r unsigned division (PPC64) *)
   | Peieio: instruction                                       (**r EIEIO barrier *)
   | Peqv: ireg -> ireg -> ireg -> instruction                 (**r bitwise not-xor *)
   | Pextsb: ireg -> ireg -> instruction                       (**r 8-bit sign extension *)
   | Pextsh: ireg -> ireg -> instruction                       (**r 16-bit sign extension *)
   | Pextsw: ireg -> ireg -> instruction                       (**r 64-bit sign extension (PPC64) *)
-  | Pfreeframe: Z -> ptrofs -> instruction                       (**r deallocate stack frame and restore previous frame (pseudo) *)
+  | Pextzw: ireg -> ireg -> instruction                       (**r 64-bit zero extension (pseudo, PPC64) *)
+  | Pfreeframe: Z -> ptrofs -> instruction                    (**r deallocate stack frame and restore previous frame (pseudo) *)
   | Pfabs: freg -> freg -> instruction                        (**r float absolute value *)
   | Pfabss: freg -> freg -> instruction                       (**r float absolute value *)
   | Pfadd: freg -> freg -> freg -> instruction                (**r float addition *)
   | Pfadds: freg -> freg -> freg -> instruction               (**r float addition *)
   | Pfcmpu: freg -> freg -> instruction                       (**r float comparison *)
   | Pfcfi: freg -> ireg -> instruction                        (**r signed-int-to-float conversion (pseudo, PPC64) *)
+  | Pfcfl: freg -> ireg -> instruction                        (**r signed-long-to-float conversion (pseudo, PPC64) *)
   | Pfcfiu: freg -> ireg -> instruction                       (**r unsigned-int-to-float conversion (pseudo, PPC64) *)
   | Pfcfid: freg -> freg -> instruction                       (**r signed-long-to-float conversion (PPC64) *)
   | Pfcti: ireg -> freg -> instruction                        (**r float-to-signed-int conversion, round towards 0 (pseudo) *)
   | Pfctiu: ireg -> freg -> instruction                       (**r float-to-unsigned-int conversion, round towards 0 (pseudo, PPC64) *)
+  | Pfctid: ireg -> freg -> instruction                       (**r float-to-signed-int conversion, round towards 0 (pseudo, PPC64) *)
   | Pfctidz: freg -> freg -> instruction                      (**r float-to-signed-long conversion, round towards 0 (PPC64) *)
   | Pfctiw: freg -> freg -> instruction                       (**r float-to-signed-int conversion, round by default *)
   | Pfctiwz: freg -> freg -> instruction                      (**r float-to-signed-int conversion, round towards 0 *)
@@ -219,6 +236,10 @@ Inductive instruction : Type :=
   | Picbtls: int -> ireg -> ireg -> instruction               (**r instruction cache block touch and lock set *)
   | Plbz: ireg -> constant -> ireg -> instruction             (**r load 8-bit unsigned int *)
   | Plbzx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
+  | Pld: ireg -> constant -> ireg -> instruction              (**r load 64-bit int (PPC64) *)
+  | Pldx: ireg -> ireg -> ireg -> instruction                 (**r same, with 2 index regs *)
+  | Pld_a: ireg -> constant -> ireg -> instruction            (**r load 64-bit quantity to int reg (PPC64) *)
+  | Pldx_a: ireg -> ireg -> ireg -> instruction               (**r same, with 2 index regs *)
   | Plfd: freg -> constant -> ireg -> instruction             (**r load 64-bit float *)
   | Plfdx: freg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
   | Plfd_a: freg -> constant -> ireg -> instruction           (**r load 64-bit quantity to float reg *)
@@ -230,6 +251,10 @@ Inductive instruction : Type :=
   | Plhbrx: ireg -> ireg -> ireg -> instruction               (**r load 16-bit int and reverse endianness *)
   | Plhz: ireg -> constant -> ireg -> instruction             (**r load 16-bit unsigned int *)
   | Plhzx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
+  | Pldi: ireg -> int64 -> instruction                        (**r load 64-bit int constant (PPC64) *)
+  | Plmake: ireg -> ireg -> ireg -> instruction               (**r build an int64 from 2 ints (pseudo, PPC64) *)
+  | Pllo: ireg -> instruction                                 (**r extract low 32 bits of an int64 (pseudo, PPC64) *)
+  | Plhi: ireg -> ireg -> instruction                         (**r extract high 32 bits of an int64 (pseudo, PPC64) *)
   | Plfi: freg -> float -> instruction                        (**r load float constant *)
   | Plfis: freg -> float32 -> instruction                     (**r load float constant *)
   | Plwz: ireg -> constant -> ireg -> instruction             (**r load 32-bit int *)
@@ -250,25 +275,41 @@ Inductive instruction : Type :=
   | Pmtspr: int -> ireg -> instruction                        (**r move to special register *)
   | Pmulli: ireg -> ireg -> constant -> instruction           (**r integer multiply immediate *)
   | Pmullw: ireg -> ireg -> ireg -> instruction               (**r integer multiply *)
+  | Pmulld: ireg -> ireg -> ireg -> instruction               (**r integer multiply (PPC64) *)
   | Pmulhw: ireg -> ireg -> ireg -> instruction               (**r multiply high signed *)
   | Pmulhwu: ireg -> ireg -> ireg -> instruction              (**r multiply high signed *)
+  | Pmulhd: ireg -> ireg -> ireg -> instruction               (**r multiply high double word signed (PPC64) *)
+  | Pmulhdu: ireg -> ireg -> ireg -> instruction              (**r multiply high double word unsigned (PPC64) *)
   | Pnand: ireg -> ireg -> ireg -> instruction                (**r bitwise not-and *)
   | Pnor: ireg -> ireg -> ireg -> instruction                 (**r bitwise not-or *)
+  | Pnor64: ireg -> ireg -> ireg -> instruction               (**r bitwise not-or (PPC64) *)
   | Por: ireg -> ireg -> ireg -> instruction                  (**r bitwise or *)
+  | Por64: ireg -> ireg -> ireg -> instruction                (**r bitwise or (PPC64) *)
   | Porc: ireg -> ireg -> ireg -> instruction                 (**r bitwise or-complement *)
   | Pori: ireg -> ireg -> constant -> instruction             (**r or with immediate *)
+  | Pori64: ireg -> ireg -> int64 -> instruction              (**r or with immediate (PPC64) *)
   | Poris: ireg -> ireg -> constant -> instruction            (**r or with immediate high *)
+  | Poris64: ireg -> ireg -> int64 -> instruction             (**r or with immediate high (PPC64) *)
   | Prldicl: ireg -> ireg -> int -> int -> instruction        (**r rotate and mask left (PPC64) *)
-  | Prldicr: ireg -> ireg -> int -> int -> instruction        (**r rotate and mask right (PPC64) *)
+  | Prldinm: ireg -> ireg -> int -> int64 -> instruction      (**r rotate and mask (PPC64) *)
+  | Prldimi: ireg -> ireg -> int -> int64 -> instruction      (**r rotate and insert (PPC64) *)
   | Prlwinm: ireg -> ireg -> int -> int -> instruction        (**r rotate and mask *)
   | Prlwimi: ireg -> ireg -> int -> int -> instruction        (**r rotate and insert *)
+  | Psld: ireg -> ireg -> ireg -> instruction                 (**r shift left 64 bits (PPC64) *)
   | Pslw: ireg -> ireg -> ireg -> instruction                 (**r shift left *)
+  | Psrad: ireg -> ireg -> ireg -> instruction                (**r shift right signed 64 bits (PPC64) *)
+  | Psradi: ireg -> ireg -> int -> instruction                (**r shift right signed immediate 64 bits (PPC64) *)
   | Psraw: ireg -> ireg -> ireg -> instruction                (**r shift right signed *)
   | Psrawi: ireg -> ireg -> int -> instruction                (**r shift right signed immediate *)
+  | Psrd: ireg -> ireg -> ireg -> instruction                 (**r shift right unsigned 64 bits (PPC64) *)
   | Psrw: ireg -> ireg -> ireg -> instruction                 (**r shift right unsigned *)
   | Pstb: ireg -> constant -> ireg -> instruction             (**r store 8-bit int *)
   | Pstbx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
+  | Pstd: ireg -> constant -> ireg -> instruction             (**r store 64-bit integer (PPC64) *)
+  | Pstdx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs (PPC64) *)
   | Pstdu: ireg -> constant -> ireg -> instruction            (**r store 64-bit integer with update (PPC64) *)
+  | Pstd_a: ireg -> constant -> ireg -> instruction           (**r store 64-bit quantity from int reg (PPC64) *)
+  | Pstdx_a: ireg -> ireg -> ireg -> instruction              (**r same, with 2 index regs (PPC64) *)
   | Pstfd: freg -> constant -> ireg -> instruction            (**r store 64-bit float *)
   | Pstfdu: freg -> constant -> ireg -> instruction           (**r store 64-bit float with update *)
   | Pstfdx: freg -> ireg -> ireg -> instruction               (**r same, with 2 index regs *)
@@ -288,15 +329,20 @@ Inductive instruction : Type :=
   | Pstwbrx: ireg -> ireg -> ireg -> instruction              (**r store 32-bit int with reverse endianness *)
   | Pstwcx_: ireg -> ireg -> ireg -> instruction              (**r store conditional *)
   | Psubfc: ireg -> ireg -> ireg -> instruction               (**r reversed integer subtraction *)
+  | Psubfc64: ireg -> ireg -> ireg -> instruction             (**r reversed integer subtraction (PPC64) *)
   | Psubfe: ireg -> ireg -> ireg -> instruction               (**r reversed integer subtraction with carry *)
   | Psubfze: ireg -> ireg -> instruction                      (**r integer opposite with carry *)
   | Psubfic: ireg -> ireg -> constant -> instruction          (**r integer subtraction from immediate *)
+  | Psubfic64: ireg -> ireg -> int64 -> instruction           (**r integer subtraction from immediate (PPC64) *)
   | Psync: instruction                                        (**r SYNC barrier *)
   | Plwsync: instruction                                      (**r LWSYNC barrier *)
   | Ptrap: instruction                                        (**r unconditional trap *)
   | Pxor: ireg -> ireg -> ireg -> instruction                 (**r bitwise xor *)
+  | Pxor64: ireg -> ireg -> ireg -> instruction               (**r bitwise xor (PPC64) *)
   | Pxori: ireg -> ireg -> constant -> instruction            (**r bitwise xor with immediate *)
+  | Pxori64: ireg -> ireg -> int64 -> instruction             (**r bitwise xor with immediate (PPC64) *)
   | Pxoris: ireg -> ireg -> constant -> instruction           (**r bitwise xor with immediate high *)
+  | Pxoris64: ireg -> ireg -> int64 -> instruction            (**r bitwise xor with immediate high (PPC64) *)
   | Plabel: label -> instruction                              (**r define a code label *)
   | Pbuiltin: external_function -> list (builtin_arg preg) -> builtin_res preg -> instruction (**r built-in function (pseudo) *)
   | Pcfi_adjust: int -> instruction                           (**r .cfi_adjust debug directive *)
@@ -452,7 +498,10 @@ Fixpoint label_pos (lbl: label) (pos: Z) (c: code) {struct c} : option Z :=
   when that register is used in argument position. *)
 
 Definition gpr_or_zero (rs: regset) (r: ireg) :=
-  if ireg_eq r GPR0 then Vzero else rs#r.
+  if ireg_eq r GPR0 then Vint Int.zero else rs#r.
+
+Definition gpr_or_zero_l (rs: regset) (r: ireg) :=
+  if ireg_eq r GPR0 then Vlong Int64.zero else rs#r.
 
 Variable ge: genv.
 
@@ -597,6 +646,18 @@ Definition compare_uint (rs: regset) (m: mem) (v1 v2: val) :=
     #CR0_2 <- (Val.cmpu (Mem.valid_pointer m) Ceq v1 v2)
     #CR0_3 <- Vundef.
 
+Definition compare_slong (rs: regset) (v1 v2: val) :=
+  rs#CR0_0 <- (Val.of_optbool (Val.cmpl_bool Clt v1 v2))
+    #CR0_1 <- (Val.of_optbool (Val.cmpl_bool Cgt v1 v2))
+    #CR0_2 <- (Val.of_optbool (Val.cmpl_bool Ceq v1 v2))
+    #CR0_3 <- Vundef.
+
+Definition compare_ulong (rs: regset) (m: mem) (v1 v2: val) :=
+  rs#CR0_0 <- (Val.of_optbool (Val.cmplu_bool (Mem.valid_pointer m) Clt v1 v2))
+    #CR0_1 <- (Val.of_optbool (Val.cmplu_bool (Mem.valid_pointer m) Cgt v1 v2))
+    #CR0_2 <- (Val.of_optbool (Val.cmplu_bool (Mem.valid_pointer m) Ceq v1 v2))
+    #CR0_3 <- Vundef.
+
 Definition compare_float (rs: regset) (v1 v2: val) :=
   rs#CR0_0 <- (Val.cmpf Clt v1 v2)
     #CR0_1 <- (Val.cmpf Cgt v1 v2)
@@ -619,6 +680,8 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   match i with
   | Padd rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.add rs#r1 rs#r2))) m
+  | Padd64 rd r1 r2 =>
+      Next (nextinstr (rs#rd <- (Val.addl rs#r1 rs#r2))) m
   | Paddc rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.add rs#r1 rs#r2)
                         #CARRY <- (Val.add_carry rs#r1 rs#r2 Vzero))) m
@@ -627,14 +690,21 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
                         #CARRY <- (Val.add_carry rs#r1 rs#r2 rs#CARRY))) m
   | Paddi rd r1 cst =>
       Next (nextinstr (rs#rd <- (Val.add (gpr_or_zero rs r1) (const_low cst)))) m
+  | Paddi64 rd r1 cst =>
+      Next (nextinstr (rs#rd <- (Val.addl (gpr_or_zero_l rs r1) (Vlong cst)))) m
   | Paddic rd r1 cst =>
       Next (nextinstr (rs#rd <- (Val.add (gpr_or_zero rs r1) (const_low cst))
                        #CARRY <- (Val.add_carry (gpr_or_zero rs r1) (const_low cst) Vzero))) m
   | Paddis rd r1 cst =>
       Next (nextinstr (rs#rd <- (Val.add (gpr_or_zero rs r1) (const_high cst)))) m
+  | Paddis64 rd r1 cst =>
+      Next (nextinstr (rs#rd <- (Val.addl (gpr_or_zero_l rs r1) (Vlong (Int64.shl cst (Int64.repr 16)))))) m
   | Paddze rd r1 =>
       Next (nextinstr (rs#rd <- (Val.add rs#r1 rs#CARRY)
                        #CARRY <- (Val.add_carry rs#r1 Vzero rs#CARRY))) m
+  | Paddze64 rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.addl rs#r1 rs#CARRY)
+                       #CARRY <- (Val.addl_carry rs#r1 (Vlong Int64.zero) rs#CARRY))) m
   | Pallocframe sz ofs _ =>
       let (m1, stk) := Mem.alloc m 0 sz in
       let sp := Vptr stk Ptrofs.zero in
@@ -645,14 +715,23 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pand_ rd r1 r2 =>
       let v := Val.and rs#r1 rs#r2 in
       Next (nextinstr (compare_sint (rs#rd <- v) v Vzero)) m
+  | Pand_64 rd r1 r2 =>
+      let v := Val.andl rs#r1 rs#r2 in
+      Next (nextinstr (compare_slong (rs#rd <- v) v (Vlong Int64.zero))) m
   | Pandc rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.and rs#r1 (Val.notint rs#r2)))) m
   | Pandi_ rd r1 cst =>
       let v := Val.and rs#r1 (const_low cst) in
       Next (nextinstr (compare_sint (rs#rd <- v) v Vzero)) m
+  | Pandi_64 rd r1 cst =>
+      let v := Val.andl rs#r1 (Vlong cst) in
+      Next (nextinstr (compare_slong (rs#rd <- v) v (Vlong Int64.zero))) m
   | Pandis_ rd r1 cst =>
       let v := Val.and rs#r1 (const_high cst) in
       Next (nextinstr (compare_sint (rs#rd <- v) v Vzero)) m
+  | Pandis_64 rd r1 cst =>
+      let v := Val.andl rs#r1 (Vlong (Int64.shl cst (Int64.repr 16))) in
+      Next (nextinstr (compare_slong (rs#rd <- v) v (Vlong Int64.zero))) m
   | Pb lbl =>
       goto_label f lbl rs m
   | Pbctr sg =>
@@ -684,10 +763,18 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
           end
       | _ => Stuck
       end
+  | Pcmpld r1 r2 =>
+      Next (nextinstr (compare_ulong rs m rs#r1 rs#r2)) m
+  | Pcmpldi r1 cst =>
+      Next (nextinstr (compare_ulong rs m rs#r1 (Vlong cst))) m
   | Pcmplw r1 r2 =>
       Next (nextinstr (compare_uint rs m rs#r1 rs#r2)) m
   | Pcmplwi r1 cst =>
       Next (nextinstr (compare_uint rs m rs#r1 (const_low cst))) m
+  | Pcmpd r1 r2 =>
+      Next (nextinstr (compare_slong rs rs#r1 rs#r2)) m
+  | Pcmpdi r1 cst =>
+      Next (nextinstr (compare_slong rs rs#r1 (Vlong cst))) m
   | Pcmpw r1 r2 =>
       Next (nextinstr (compare_sint rs rs#r1 rs#r2)) m
   | Pcmpwi r1 cst =>
@@ -696,14 +783,22 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (rs#(reg_of_crbit bd) <- (Val.or rs#(reg_of_crbit b1) rs#(reg_of_crbit b2)))) m
   | Pdivw rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.maketotal (Val.divs rs#r1 rs#r2)))) m
+  | Pdivd rd r1 r2 =>
+      Next (nextinstr (rs#rd <- (Val.maketotal (Val.divls rs#r1 rs#r2)))) m
   | Pdivwu rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.maketotal (Val.divu rs#r1 rs#r2)))) m
+  | Pdivdu rd r1 r2 =>
+      Next (nextinstr (rs#rd <- (Val.maketotal (Val.divlu rs#r1 rs#r2)))) m
   | Peqv rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.notint (Val.xor rs#r1 rs#r2)))) m
   | Pextsb rd r1 =>
       Next (nextinstr (rs#rd <- (Val.sign_ext 8 rs#r1))) m
   | Pextsh rd r1 =>
       Next (nextinstr (rs#rd <- (Val.sign_ext 16 rs#r1))) m
+  | Pextsw rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.longofint rs#r1))) m
+  | Pextzw rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.longofintu rs#r1))) m
   | Pfreeframe sz ofs =>
       match Mem.loadv Mint32 m (Val.offset_ptr rs#GPR1 ofs) with
       | None => Stuck
@@ -729,12 +824,16 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (compare_float rs rs#r1 rs#r2)) m
   | Pfcfi rd r1 =>
       Next (nextinstr (rs#rd <- (Val.maketotal (Val.floatofint rs#r1)))) m
+  | Pfcfl rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.maketotal (Val.floatoflong rs#r1)))) m
   | Pfcfiu rd r1 =>
       Next (nextinstr (rs#rd <- (Val.maketotal (Val.floatofintu rs#r1)))) m
   | Pfcti rd r1 =>
       Next (nextinstr (rs#FPR13 <- Vundef #rd <- (Val.maketotal (Val.intoffloat rs#r1)))) m
   | Pfctiu rd r1 =>
       Next (nextinstr (rs#FPR13 <- Vundef #rd <- (Val.maketotal (Val.intuoffloat rs#r1)))) m
+  | Pfctid rd r1 =>
+      Next (nextinstr (rs#FPR13 <- Vundef #rd <- (Val.maketotal (Val.longoffloat rs#r1)))) m
   | Pfdiv rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.divf rs#r1 rs#r2))) m
   | Pfdivs rd r1 r2 =>
@@ -763,12 +862,20 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       load1 Mint8unsigned rd cst r1 rs m
   | Plbzx rd r1 r2 =>
       load2 Mint8unsigned rd r1 r2 rs m
+  | Pld rd cst r1 =>
+      load1 Mint64 rd cst r1 rs m
+  | Pldx rd r1 r2 =>
+      load2 Mint64 rd r1 r2 rs m
+  | Pld_a rd cst r1 =>
+      load1 Many64 rd cst r1 rs m
+  | Pldx_a rd r1 r2 =>
+      load2 Many64 rd r1 r2 rs m
   | Plfd rd cst r1 =>
       load1 Mfloat64 rd cst r1 rs m
-  | Plfdx rd r1 r2 =>
-      load2 Mfloat64 rd r1 r2 rs m
   | Plfd_a rd cst r1 =>
       load1 Many64 rd cst r1 rs m
+  | Plfdx rd r1 r2 =>
+      load2 Mfloat64 rd r1 r2 rs m
   | Plfdx_a rd r1 r2 =>
       load2 Many64 rd r1 r2 rs m
   | Plfs rd cst r1 =>
@@ -783,6 +890,14 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       load1 Mint16unsigned rd cst r1 rs m
   | Plhzx rd r1 r2 =>
       load2 Mint16unsigned rd r1 r2 rs m
+  | Pldi rd i =>
+       Next (nextinstr (rs #GPR12 <- Vundef #rd <- (Vlong i))) m
+  | Plmake rd r1 r2 =>
+      Next (nextinstr (rs#rd <- (Val.longofwords rs#r1 rs#r2))) m
+  | Pllo rd =>
+      Next (nextinstr (rs#rd <- (Val.loword rs#rd))) m
+  | Plhi rd r1 =>
+      Next (nextinstr (rs#rd <- (Val.hiword rs#r1))) m
   | Plfi rd f =>
       Next (nextinstr (rs #GPR12 <- Vundef #rd <- (Vfloat f))) m
   | Plfis rd f =>
@@ -809,39 +924,71 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (rs#rd <- (Val.mul rs#r1 (const_low cst)))) m
   | Pmullw rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.mul rs#r1 rs#r2))) m
+  | Pmulld rd r1 r2 =>
+      Next (nextinstr (rs#rd <- (Val.mull rs#r1 rs#r2))) m
   | Pmulhw rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.mulhs rs#r1 rs#r2))) m
   | Pmulhwu rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.mulhu rs#r1 rs#r2))) m
+  | Pmulhd rd r1 r2 =>
+      Next (nextinstr (rs#rd <- (Val.mullhs rs#r1 rs#r2))) m
+  | Pmulhdu rd r1 r2 =>
+      Next (nextinstr (rs#rd <- (Val.mullhu rs#r1 rs#r2))) m
   | Pnand rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.notint (Val.and rs#r1 rs#r2)))) m
   | Pnor rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.notint (Val.or rs#r1 rs#r2)))) m
+  | Pnor64 rd r1 r2 =>
+      Next (nextinstr (rs#rd <- (Val.notl (Val.orl rs#r1 rs#r2)))) m
   | Por rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.or rs#r1 rs#r2))) m
+  | Por64 rd r1 r2 =>
+      Next (nextinstr (rs#rd <- (Val.orl rs#r1 rs#r2))) m
   | Porc rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.or rs#r1 (Val.notint rs#r2)))) m
   | Pori rd r1 cst =>
       Next (nextinstr (rs#rd <- (Val.or rs#r1 (const_low cst)))) m
+  | Pori64 rd r1 cst =>
+      Next (nextinstr (rs#rd <- (Val.orl rs#r1 (Vlong cst)))) m
   | Poris rd r1 cst =>
       Next (nextinstr (rs#rd <- (Val.or rs#r1 (const_high cst)))) m
+  | Poris64 rd r1 cst =>
+      Next (nextinstr (rs#rd <- (Val.orl rs#r1 (Vlong (Int64.shl cst (Int64.repr 16)))))) m
+  | Prldinm rd r1 amount mask =>
+      Next (nextinstr (rs#rd <- (Val.rolml rs#r1 amount mask))) m
   | Prlwinm rd r1 amount mask =>
       Next (nextinstr (rs#rd <- (Val.rolm rs#r1 amount mask))) m
   | Prlwimi rd r1 amount mask =>
       Next (nextinstr (rs#rd <- (Val.or (Val.and rs#rd (Vint (Int.not mask)))
                                      (Val.rolm rs#r1 amount mask)))) m
+  | Psld rd r1 r2 =>
+      Next (nextinstr (rs#rd <- (Val.shll rs#r1 rs#r2))) m
   | Pslw rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.shl rs#r1 rs#r2))) m
+  | Psrad rd r1 r2 =>
+      Next (nextinstr (rs#rd <- (Val.shrl rs#r1 rs#r2) #CARRY <- (Val.shrl_carry rs#r1 rs#r2))) m
+  | Psradi rd r1 n =>
+      Next (nextinstr (rs#rd <- (Val.shrl rs#r1 (Vint n)) #CARRY <- (Val.shrl_carry rs#r1 (Vint n)))) m
   | Psraw rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.shr rs#r1 rs#r2) #CARRY <- (Val.shr_carry rs#r1 rs#r2))) m
   | Psrawi rd r1 n =>
       Next (nextinstr (rs#rd <- (Val.shr rs#r1 (Vint n)) #CARRY <- (Val.shr_carry rs#r1 (Vint n)))) m
+  | Psrd rd r1 r2 =>
+      Next (nextinstr (rs#rd <- (Val.shrlu rs#r1 rs#r2))) m
   | Psrw rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.shru rs#r1 rs#r2))) m
   | Pstb rd cst r1 =>
       store1 Mint8unsigned rd cst r1 rs m
   | Pstbx rd r1 r2 =>
       store2 Mint8unsigned rd r1 r2 rs m
+  | Pstd rd cst r1 =>
+      store1 Mint64 rd cst r1 rs m
+  | Pstdx rd r1 r2 =>
+      store2 Mint64 rd r1 r2 rs m
+  | Pstd_a rd cst r1 =>
+      store1 Many64 rd cst r1 rs m
+  | Pstdx_a rd r1 r2 =>
+      store2 Many64 rd r1 r2 rs m
   | Pstfd rd cst r1 =>
       store1 Mfloat64 rd cst r1 rs m
   | Pstfdx rd r1 r2 =>
@@ -869,18 +1016,28 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Psubfc rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.sub rs#r2 rs#r1)
                        #CARRY <- (Val.add_carry rs#r2 (Val.notint rs#r1) Vone))) m
+  | Psubfc64 rd r1 r2 =>
+      Next (nextinstr (rs#rd <- (Val.subl rs#r2 rs#r1) #CARRY <- Vundef)) m
   | Psubfe rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.add (Val.add rs#r2 (Val.notint rs#r1)) rs#CARRY)
                        #CARRY <- (Val.add_carry rs#r2 (Val.notint rs#r1) rs#CARRY))) m
   | Psubfic rd r1 cst =>
       Next (nextinstr (rs#rd <- (Val.sub (const_low cst) rs#r1)
                        #CARRY <- (Val.add_carry (const_low cst) (Val.notint rs#r1) Vone))) m
+  | Psubfic64 rd r1 cst =>
+      Next (nextinstr (rs#rd <- (Val.subl (Vlong cst) rs#r1) #CARRY <- Vundef)) m
   | Pxor rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.xor rs#r1 rs#r2))) m
+  | Pxor64 rd r1 r2 =>
+      Next (nextinstr (rs#rd <- (Val.xorl rs#r1 rs#r2))) m
   | Pxori rd r1 cst =>
       Next (nextinstr (rs#rd <- (Val.xor rs#r1 (const_low cst)))) m
+  | Pxori64 rd r1 cst =>
+      Next (nextinstr (rs#rd <- (Val.xorl rs#r1 (Vlong cst)))) m
   | Pxoris rd r1 cst =>
       Next (nextinstr (rs#rd <- (Val.xor rs#r1 (const_high cst)))) m
+  | Pxoris64 rd r1 cst =>
+      Next (nextinstr (rs#rd <- (Val.xorl rs#r1 (Vlong (Int64.shl cst (Int64.repr 16)))))) m
   | Plabel lbl =>
       Next (nextinstr rs) m
   | Pcfi_rel_offset ofs =>
@@ -891,6 +1048,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       directly by [Asmgen], so we do not model them. *)
   | Pbdnz _
   | Pcmpb _ _ _
+  | Pcntlzd _ _
   | Pcntlzw _ _
   | Pcreqv _ _ _
   | Pcrxor _ _ _
@@ -900,7 +1058,6 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pdcbtst _ _ _
   | Pdcbtls _ _ _
   | Pdcbz _ _
-  | Pextsw _ _
   | Peieio
   | Pfcfid _ _
   | Pfctidz _ _
@@ -928,7 +1085,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pmfspr _ _
   | Pmtspr _ _
   | Prldicl _ _ _ _
-  | Prldicr _ _ _ _
+  | Prldimi _ _ _ _
   | Pstdu _ _ _
   | Pstwbrx _ _ _
   | Pstwcx_ _ _ _
@@ -1067,7 +1224,7 @@ Proof.
   { intros. inv H; inv H0; congruence. }
   assert (B: forall p v1 v2,
              extcall_arg_pair rs m p v1 -> extcall_arg_pair rs m p v2 -> v1 = v2).
-  { intros. inv H; inv H0. 
+  { intros. inv H; inv H0.
     eapply A; eauto.
     f_equal; eapply A; eauto. }
   assert (C: forall ll vl1, list_forall2 (extcall_arg_pair rs m) ll vl1 ->
@@ -1107,7 +1264,7 @@ Ltac Equalities :=
 (* initial states *)
   inv H; inv H0. f_equal. congruence.
 (* final no step *)
-  inv H. red; intros; red; intros. inv H; rewrite H0 in *; discriminate. 
+  inv H. red; intros; red; intros. inv H; rewrite H0 in *; discriminate.
 (* final states *)
   inv H; inv H0. congruence.
 Qed.

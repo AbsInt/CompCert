@@ -18,6 +18,7 @@ Require Import Decidableplus.
 Require Import AST.
 Require Import Events.
 Require Import Locations.
+Require Archi.
 
 (** * Classification of machine registers *)
 
@@ -41,6 +42,38 @@ Definition is_callee_save (r: mreg): bool :=
   | F24 | F25 | F26 | F27 | F28 | F29 | F30 | F31 => true
   end.
 
+Definition destroyed_at_call :=
+  List.filter (fun r => negb (is_callee_save r)) all_mregs.
+
+(** The following definitions are used by the register allocator. *)
+
+(** When a PPC64 processor is used with the PPC32 ABI, the high 32 bits
+  of integer callee-save registers may not be preserved.  So,
+  declare all integer registers as having size 32 bits for the purpose
+  of determining which variables can go in callee-save registers. *)
+  
+Definition callee_save_type (r: mreg): typ :=
+  match r with
+  | R3  | R4  | R5  | R6  | R7  | R8  | R9  | R10  | R11 | R12
+  | R14 | R15 | R16 | R17 | R18 | R19 | R20 | R21 | R22 | R23 | R24
+  | R25 | R26 | R27 | R28 | R29 | R30 | R31 => Tany32
+  | F0  | F1  | F2  | F3  | F4  | F5  | F6  | F7
+  | F8  | F9  | F10 | F11 | F12 | F13 | F14 | F15
+  | F16 | F17 | F18 | F19 | F20 | F21 | F22 | F23
+  | F24 | F25 | F26 | F27 | F28 | F29 | F30 | F31 => Tany64
+  end.
+
+Definition is_float_reg (r: mreg): bool :=
+  match r with
+  | R3  | R4  | R5  | R6  | R7  | R8  | R9  | R10  | R11 | R12
+  | R14 | R15 | R16 | R17 | R18 | R19 | R20 | R21 | R22 | R23 | R24
+  | R25 | R26 | R27 | R28 | R29 | R30 | R31 => false
+  | F0  | F1  | F2  | F3  | F4  | F5  | F6  | F7
+  | F8  | F9  | F10 | F11 | F12 | F13
+  | F14 | F15 | F16 | F17 | F18 | F19 | F20 | F21 | F22 | F23
+  | F24 | F25 | F26 | F27 | F28 | F29 | F30 | F31 => true
+  end.
+
 Definition int_caller_save_regs :=
   R3 :: R4 :: R5 :: R6 :: R7 :: R8 :: R9 :: R10 :: R11 :: R12 :: nil.
 
@@ -55,22 +88,8 @@ Definition float_callee_save_regs :=
   F31 :: F30 :: F29 :: F28 :: F27 :: F26 :: F25 :: F24 :: F23 ::
   F22 :: F21 :: F20 :: F19 :: F18 :: F17 :: F16 :: F15 :: F14 :: nil.
 
-Definition destroyed_at_call :=
-  List.filter (fun r => negb (is_callee_save r)) all_mregs.
-
 Definition dummy_int_reg := R3.     (**r Used in [Coloring]. *)
 Definition dummy_float_reg := F0.   (**r Used in [Coloring]. *)
-
-Definition is_float_reg (r: mreg): bool :=
-  match r with
-  | R3  | R4  | R5  | R6  | R7  | R8  | R9  | R10  | R11 | R12
-  | R14 | R15 | R16 | R17 | R18 | R19 | R20 | R21 | R22 | R23 | R24
-  | R25 | R26 | R27 | R28 | R29 | R30 | R31 => false
-  | F0  | F1  | F2  | F3  | F4  | F5  | F6  | F7
-  | F8  | F9  | F10 | F11 | F12 | F13
-  | F14 | F15 | F16 | F17 | F18 | F19 | F20 | F21 | F22 | F23
-  | F24 | F25 | F26 | F27 | F28 | F29 | F30 | F31 => true
-  end.
 
 (** * Function calling conventions *)
 
@@ -97,7 +116,7 @@ Definition is_float_reg (r: mreg): bool :=
   registers [R3] or [F1] or [R3, R4], depending on the type of the returned value.
   We treat a function without result as a function with one integer result. *)
 
-Definition loc_result (s: signature) : rpair mreg :=
+Definition loc_result_32 (s: signature) : rpair mreg :=
   match s.(sig_res) with
   | None => One R3
   | Some (Tint | Tany32) => One R3
@@ -105,12 +124,24 @@ Definition loc_result (s: signature) : rpair mreg :=
   | Some Tlong => Twolong R3 R4
   end.
 
+Definition loc_result_64 (s: signature) : rpair mreg :=
+  match s.(sig_res) with
+  | None => One R3
+  | Some (Tint | Tlong | Tany32 | Tany64) => One R3
+  | Some (Tfloat | Tsingle) => One F1
+  end.
+
+Definition loc_result :=
+  if Archi.ptr64 then loc_result_64 else loc_result_32.
+
+(** The result registers have types compatible with that given in the signature. *)
+
 Lemma loc_result_type:
   forall sig,
   subtype (proj_sig_res sig) (typ_rpair mreg_type (loc_result sig)) = true.
 Proof.
-  intros. unfold proj_sig_res, loc_result.
-  destruct (sig_res sig) as [[]|]; simpl; destruct Archi.ppc64; auto.
+  intros. unfold proj_sig_res, loc_result, loc_result_32, loc_result_64, mreg_type.
+  destruct Archi.ptr64 eqn:?; destruct (sig_res sig) as [[]|]; destruct Archi.ppc64; simpl; auto.
 Qed.
 
 (** The result locations are caller-save registers *)
@@ -119,8 +150,8 @@ Lemma loc_result_caller_save:
   forall (s: signature),
   forall_rpair (fun r => is_callee_save r = false) (loc_result s).
 Proof.
-  intros.
-  unfold loc_result. destruct (sig_res s) as [[]|]; simpl; auto.
+  intros. unfold loc_result, loc_result_32, loc_result_64, is_callee_save;
+  destruct Archi.ptr64; destruct (sig_res s) as [[]|]; simpl; auto.
 Qed.
 
 (** If the result is in a pair of registers, those registers are distinct and have type [Tint] at least. *)
@@ -132,11 +163,13 @@ Lemma loc_result_pair:
   | Twolong r1 r2 =>
         r1 <> r2 /\ sg.(sig_res) = Some Tlong
      /\ subtype Tint (mreg_type r1) = true /\ subtype Tint (mreg_type r2) = true
-     /\ Archi.splitlong = true 
+     /\ Archi.ptr64 = false
   end.
 Proof.
-  intros; unfold loc_result; destruct (sig_res sg) as [[]|]; auto.
-  simpl; intuition congruence. 
+  intros; unfold loc_result, loc_result_32, loc_result_64, mreg_type;
+  destruct Archi.ptr64; destruct (sig_res sg) as [[]|]; destruct Archi.ppc64; simpl; auto.
+  split; auto. congruence.
+  split; auto. congruence.
 Qed.
 
 (** The location of the result depends only on the result part of the signature *)
@@ -144,7 +177,8 @@ Qed.
 Lemma loc_result_exten:
   forall s1 s2, s1.(sig_res) = s2.(sig_res) -> loc_result s1 = loc_result s2.
 Proof.
-  intros. unfold loc_result. rewrite H; auto.
+  intros. unfold loc_result, loc_result_32, loc_result_64.
+  destruct Archi.ptr64; rewrite H; auto.
 Qed.
 
 (** ** Location of function arguments *)
@@ -191,7 +225,10 @@ Fixpoint loc_arguments_rec
           Twolong (R r1) (R r2) :: loc_arguments_rec tys (ir + 2) fr ofs
       | _, _ =>
           let ofs := align ofs 2 in
-          Twolong (S Outgoing ofs Tint) (S Outgoing (ofs + 1) Tint) :: loc_arguments_rec tys ir fr (ofs + 2)
+          (if Archi.ptr64
+           then One (S Outgoing ofs Tlong)
+           else Twolong (S Outgoing ofs Tint) (S Outgoing (ofs + 1) Tint)) ::
+          loc_arguments_rec tys ir fr (ofs + 2)
       end
   end.
 
@@ -279,10 +316,12 @@ Opaque list_nth_z.
   destruct H. subst; split; left; eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
   destruct H.
-  subst. split; (split; [omega|apply Z.divide_1_l]).
+  subst. destruct Archi.ptr64; [split|split;split]; try omega.
+  apply align_divides; omega. apply Z.divide_1_l. apply Z.divide_1_l.
   eapply Y; eauto. omega.
   destruct H.
-  subst. split; (split; [omega|apply Z.divide_1_l]).
+  subst. destruct Archi.ptr64; [split|split;split]; try omega.
+  apply align_divides; omega. apply Z.divide_1_l. apply Z.divide_1_l.
   eapply Y; eauto. omega.
 - (* single *)
   assert (ofs <= align ofs 2) by (apply align_le; omega).
@@ -386,12 +425,15 @@ Proof.
   set (ir' := align ir 2) in *.
   assert (DFL:
     In (S Outgoing ofs ty) (regs_of_rpairs
-                             (Twolong (S Outgoing (align ofs0 2) Tint)
-                                      (S Outgoing (align ofs0 2 + 1) Tint)
+                             ((if Archi.ptr64
+                               then One (S Outgoing (align ofs0 2) Tlong)
+                               else Twolong (S Outgoing (align ofs0 2) Tint)
+                                            (S Outgoing (align ofs0 2 + 1) Tint))
                           :: loc_arguments_rec tyl ir' fr (align ofs0 2 + 2))) ->
     ofs + typesize ty <= size_arguments_rec tyl ir' fr (align ofs0 2 + 2)).
-  { intros IN. destruct IN. inv H1.
-    transitivity (align ofs0 2 + 2). simpl; omega. apply size_arguments_rec_above. 
+  { destruct Archi.ptr64; intros IN.
+  - destruct IN. inv H1. apply size_arguments_rec_above. auto.
+  - destruct IN. inv H1. transitivity (align ofs0 2 + 2). simpl; omega. apply size_arguments_rec_above.
     destruct H1. inv H1. transitivity (align ofs0 2 + 2). simpl; omega. apply size_arguments_rec_above.
     auto. }
   destruct (list_nth_z int_param_regs ir'); auto.

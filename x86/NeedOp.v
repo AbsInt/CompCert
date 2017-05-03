@@ -225,7 +225,7 @@ Proof.
 - eapply needs_of_addressing_32_sound; eauto.
 - change (eval_addressing64 ge (Vptr sp Ptrofs.zero) a args')
     with (eval_operation ge (Vptr sp Ptrofs.zero) (Oleal a) args' m').
-  eapply default_needs_of_operation_sound; eauto. 
+  eapply default_needs_of_operation_sound; eauto.
   destruct a; simpl in H0; auto.
 - destruct (eval_condition cond args m) as [b|] eqn:EC; simpl in H2.
   erewrite needs_of_condition_sound by eauto.

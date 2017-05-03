@@ -661,12 +661,12 @@ Proof with (try discriminate).
   }
   inv H2.
 + inv H3. exploit eval_addressing_Ainstack_inv; eauto. intros [E1 E2].
-  simpl in E2; rewrite Ptrofs.add_zero_l in E2. subst a.    
+  simpl in E2; rewrite Ptrofs.add_zero_l in E2. subst a.
   apply eq_holds_strict. econstructor. rewrite eval_addressing_Ainstack.
   simpl. rewrite Ptrofs.add_zero_l. eauto.
   apply LD; auto.
 + inv H4. exploit eval_addressing_Ainstack_inv; eauto. intros [E1 E2].
-  simpl in E2; rewrite Ptrofs.add_zero_l in E2. subst a.    
+  simpl in E2; rewrite Ptrofs.add_zero_l in E2. subst a.
   apply eq_holds_lessdef with v; auto.
   econstructor. rewrite eval_addressing_Ainstack. simpl. rewrite Ptrofs.add_zero_l. eauto.
   apply LD; auto.

@@ -34,6 +34,10 @@ Definition eval_static_condition (cond: condition) (vl: list aval): abool :=
   | Cnotcompf c, v1 :: v2 :: nil => cnot (cmpf_bool c v1 v2)
   | Cmaskzero n, v1 :: nil => maskzero v1 n
   | Cmasknotzero n, v1 :: nil => cnot (maskzero v1 n)
+  | Ccompl c, v1 :: v2 :: nil => cmpl_bool c v1 v2
+  | Ccomplu c, v1 :: v2 :: nil => cmplu_bool c v1 v2
+  | Ccomplimm c n, v1 :: nil => cmpl_bool c v1 (L n)
+  | Ccompluimm c n, v1 :: nil => cmplu_bool c v1 (L n)
   | _, _ => Bnone
   end.
 
@@ -87,6 +91,33 @@ Definition eval_static_operation (op: operation) (vl: list aval): aval :=
   | Oshru, v1::v2::nil => shru v1 v2
   | Orolm amount mask, v1::nil => rolm v1 amount mask
   | Oroli amount mask, v1::v2::nil => or (and v1 (I (Int.not mask))) (rolm v2 amount mask)
+  | Olongconst n, nil => L n
+  | Ocast32signed, v1::nil => longofint v1
+  | Ocast32unsigned, v1::nil => longofintu v1
+  | Oaddl, v1::v2::nil => addl v1 v2
+  | Oaddlimm n, v1::nil => addl v1 (L n)
+  | Osubl, v1::v2::nil => subl v1 v2
+  | Onegl, v1::nil => negl v1
+  | Omull, v1::v2::nil => mull v1 v2
+  | Omullhs, v1::v2::nil => mullhs v1 v2
+  | Omullhu, v1::v2::nil => mullhu v1 v2
+  | Odivl, v1::v2::nil => divls v1 v2
+  | Odivlu, v1::v2::nil => divlu v1 v2
+  | Oandl, v1::v2::nil => andl v1 v2
+  | Oandlimm n, v1::nil => andl v1 (L n)
+  | Oorl, v1::v2::nil => orl v1 v2
+  | Oorlimm n, v1::nil => orl v1 (L n)
+  | Oxorl, v1::v2::nil => xorl v1 v2
+  | Oxorlimm n, v1::nil => xorl v1 (L n)
+  | Onotl, v1::nil => notl v1
+  | Oshll, v1::v2::nil => shll v1 v2
+  | Oshrl, v1::v2::nil => shrl v1 v2
+  | Oshrlimm n, v1::nil => shrl v1 (I n)
+  | Oshrxlimm n, v1::nil => shrxl v1 (I n)
+  | Oshrlu, v1::v2::nil => shrlu v1 v2
+  | Orolml amount mask, v1::nil => rolml v1 amount mask
+  | Olongoffloat, v1::nil => longoffloat v1
+  | Ofloatoflong, v1::nil => floatoflong v1
   | Onegf, v1::nil => negf v1
   | Oabsf, v1::nil => absf v1
   | Oaddf, v1::v2::nil => addf v1 v2
@@ -177,9 +208,9 @@ Proof.
   destruct (propagate_float_constants tt); constructor.
   rewrite Ptrofs.add_zero_l; eauto with va.
   fold (Val.sub (Vint i) a1). auto with va.
+  apply rolml_sound; auto.
   apply floatofwords_sound; auto.
   apply of_optbool_sound. eapply eval_static_condition_sound; eauto.
 Qed.
 
 End SOUNDNESS.
-

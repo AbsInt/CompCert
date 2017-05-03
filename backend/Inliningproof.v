@@ -400,7 +400,7 @@ Proof.
   simpl in H0. unfold ge, fundef in H0. rewrite A in H0.
   rewrite <- Genv.find_funct_ptr_iff in B.
   congruence.
-Qed. 
+Qed.
 
 (** Translation of builtin arguments. *)
 

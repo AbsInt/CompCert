@@ -605,6 +605,17 @@ let add_interfs_destroyed g live mregs =
     (fun mr -> VSet.iter (IRC.add_interf g (L (R mr))) live)
     mregs
 
+let add_interfs_caller_save g live =
+  VSet.iter
+    (fun v ->
+       let tv = typeof v in
+       List.iter
+         (fun mr ->
+            if not (is_callee_save mr && subtype tv (callee_save_type mr))
+            then IRC.add_interf g (L (R mr)) v)
+         all_mregs)
+    live
+
 let add_interfs_live g live v =
   VSet.iter (fun v' -> IRC.add_interf g v v') live
 
@@ -622,7 +633,14 @@ let add_interfs_instr g instr live =
   match instr with
   | Xmove(src, dst) | Xspill(src, dst) | Xreload(src, dst) ->
       IRC.add_pref g src dst;
-      add_interfs_move g src dst live
+      add_interfs_move g src dst live;
+      (* Reloads from incoming slots can occur when some 64-bit
+         parameters are split and passed as two 32-bit stack locations. *)
+      begin match src with
+      | L(Locations.S(Incoming, _, _)) -> 
+          add_interfs_def g (vmreg temp_for_parent_frame) live
+      | _ -> ()
+      end
   | Xparmove(srcs, dsts, itmp, ftmp) ->
       List.iter2 (IRC.add_pref g) srcs dsts;
       (* Interferences with live across *)
@@ -636,20 +654,10 @@ let add_interfs_instr g instr live =
       add_interfs_list g ftmp srcs; add_interfs_list g ftmp dsts;
       (* Take into account destroyed reg when accessing Incoming param *)
       if List.exists (function (L(Locations.S(Incoming, _, _))) -> true | _ -> false) srcs
-      then add_interfs_list g (vmreg temp_for_parent_frame) dsts;
-      (* Take into account destroyed reg when initializing Outgoing
-         arguments of type Tsingle *)
-      if List.exists
-           (function (L(Locations.S(Outgoing, _, Tsingle))) -> true | _ -> false) dsts
-      then
-        List.iter
-          (fun mr ->
-            add_interfs_list g (vmreg mr) srcs;
-            IRC.add_interf g (vmreg mr) ftmp)
-          (destroyed_by_setstack Tsingle)
-  | Xop(Ofloatofsingle, arg1::_, res) when Configuration.arch = "powerpc" ->
-      add_interfs_def g res live;
-      IRC.add_pref g arg1 res
+      then begin
+         add_interfs_list g (vmreg temp_for_parent_frame) dsts;
+         add_interfs_live g across (vmreg temp_for_parent_frame)
+      end
   | Xop(op, args, res) ->
       begin match is_two_address op args with
       | None ->
@@ -672,7 +680,7 @@ let add_interfs_instr g instr live =
       begin match vos with
       | Coq_inl v ->  List.iter (fun r -> IRC.add_interf g (vmreg r) v) destroyed_at_indirect_call
       | _ -> () end;
-      add_interfs_destroyed g (vset_removelist res live) destroyed_at_call
+      add_interfs_caller_save g (vset_removelist res live)
   | Xtailcall(sg, Coq_inl v, args) ->
       List.iter (fun r -> IRC.add_interf g (vmreg r) v) (int_callee_save_regs @ destroyed_at_indirect_call)
   | Xtailcall(sg, Coq_inr id, args) ->

@@ -61,7 +61,7 @@ Inductive unary_operation : Type :=
   | Ointofsingle: unary_operation          (**r signed integer to float32 *)
   | Ointuofsingle: unary_operation         (**r unsigned integer to float32 *)
   | Osingleofint: unary_operation          (**r float32 to signed integer *)
-  | Osingleofintu: unary_operation        (**r float32 to unsigned integer *)
+  | Osingleofintu: unary_operation         (**r float32 to unsigned integer *)
   | Onegl: unary_operation                 (**r long integer opposite *)
   | Onotl: unary_operation                 (**r long bitwise complement *)
   | Ointoflong: unary_operation            (**r long to int *)

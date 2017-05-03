@@ -35,7 +35,6 @@ Require Import Globalenvs.
 Require Import Events.
 
 Set Implicit Arguments.
-Local Transparent Archi.ptr64.
 
 (** Conditions (boolean-valued operators). *)
 
@@ -43,11 +42,16 @@ Inductive condition : Type :=
   | Ccomp: comparison -> condition      (**r signed integer comparison *)
   | Ccompu: comparison -> condition     (**r unsigned integer comparison *)
   | Ccompimm: comparison -> int -> condition (**r signed integer comparison with a constant *)
-  | Ccompuimm: comparison -> int -> condition  (**r unsigned integer comparison with a constant *)
+  | Ccompuimm: comparison -> int -> condition (**r unsigned integer comparison with a constant *)
   | Ccompf: comparison -> condition     (**r floating-point comparison *)
   | Cnotcompf: comparison -> condition  (**r negation of a floating-point comparison *)
   | Cmaskzero: int -> condition         (**r test [(arg & constant) == 0] *)
-  | Cmasknotzero: int -> condition.     (**r test [(arg & constant) != 0] *)
+  | Cmasknotzero: int -> condition      (**r test [(arg & constant) != 0] *)
+(*c PPC64 specific conditions: *)
+  | Ccompl: comparison -> condition     (**r signed int64 comparison *)
+  | Ccomplu: comparison -> condition    (**r unsigned int64 comparison *)
+  | Ccomplimm: comparison -> int64 -> condition (**r signed int64 comparison with a constant *)
+  | Ccompluimm: comparison -> int64 -> condition. (**r unsigned int64 comparison with a constant *)
 
 (** Arithmetic and logical operations.  In the descriptions, [rd] is the
   result of the operation and [r1], [r2], etc, are the arguments. *)
@@ -58,7 +62,7 @@ Inductive operation : Type :=
   | Ofloatconst: float -> operation     (**r [rd] is set to the given float constant *)
   | Osingleconst: float32 -> operation  (**r [rd] is set to the given float constant *)
   | Oaddrsymbol: ident -> ptrofs -> operation (**r [rd] is set to the the address of the symbol plus the offset *)
-  | Oaddrstack: ptrofs -> operation        (**r [rd] is set to the stack pointer plus the given offset *)
+  | Oaddrstack: ptrofs -> operation     (**r [rd] is set to the stack pointer plus the given offset *)
 (*c Integer arithmetic: *)
   | Ocast8signed: operation             (**r [rd] is 8-bit sign extension of [r1] *)
   | Ocast16signed: operation            (**r [rd] is 16-bit sign extension of [r1] *)
@@ -92,6 +96,34 @@ Inductive operation : Type :=
   | Oshru: operation                    (**r [rd = r1 >> r2] (unsigned) *)
   | Orolm: int -> int -> operation      (**r rotate left and mask *)
   | Oroli: int -> int -> operation      (**r rotate left and insert *)
+(*c PPC64 64-bit integer arithmetic: *)
+  | Olongconst: int64 -> operation      (**r [rd] is set to the given int64 constant *)
+  | Ocast32signed: operation            (**r [rd] is 64-bit sign extension of [r1] *)
+  | Ocast32unsigned: operation          (**r [rd] is 64-bit zero extension of [r1] *)
+  | Oaddl: operation                    (**r [rd = r1 + r2] *)
+  | Oaddlimm: int64 -> operation        (**r [rd = r1 + n] *)
+  | Osubl: operation                    (**r [rd = r1 - r2] *)
+  | Onegl: operation                    (**r [rd = - r1] *)
+  | Omull: operation                    (**r [rd = r1 * r2] *)
+  | Omullhs: operation                   (**r [rd = high part of r1 * r2, signed] *)
+  | Omullhu: operation                  (**r [rd = high part of r1 * r2, unsigned] *)
+  | Odivl: operation                    (**r [rd = r1 / r2] (signed) *)
+  | Odivlu: operation                   (**r [rd = r1 / r2] (unsigned) *)
+  | Oandl: operation                    (**r [rd = r1 & r2] *)
+  | Oandlimm: int64 -> operation        (**r [rd = r1 & n] *)
+  | Oorl: operation                     (**r [rd = r1 | r2] *)
+  | Oorlimm: int64 -> operation         (**r [rd = r1 | n] *)
+  | Oxorl: operation                    (**r [rd = r1 ^ r2] *)
+  | Oxorlimm: int64 -> operation        (**r [rd = r1 ^ n] *)
+  | Onotl: operation                    (**r [rd = ~r1] *)
+  | Oshll: operation                    (**r [rd = r1 << r2] *)
+  | Oshrl: operation                    (**r [rd = r1 >> r2] (signed) *)
+  | Oshrlimm: int -> operation          (**r [rd = r1 >> n] (signed) *)
+  | Oshrxlimm: int -> operation         (**r [rd = r1 / 2^n] (signed) *)
+  | Oshrlu: operation                   (**r [rd = r1 >> r2] (unsigned) *)
+  | Orolml: int -> int64 -> operation   (**r rotate left and mask *)
+  | Olongoffloat: operation             (**r [rd = signed_int64_of_float(r1)] *)
+  | Ofloatoflong: operation             (**r [rd = float_of_signed_int64(r1)] *)
 (*c Floating-point arithmetic: *)
   | Onegf: operation                    (**r [rd = - r1] *)
   | Oabsf: operation                    (**r [rd = abs(r1)] *)
@@ -120,27 +152,28 @@ Inductive operation : Type :=
 (*c Boolean tests: *)
   | Ocmp: condition -> operation.       (**r [rd = 1] if condition holds, [rd = 0] otherwise. *)
 
+
 (** Addressing modes.  [r1], [r2], etc, are the arguments to the
   addressing. *)
 
 Inductive addressing: Type :=
-  | Aindexed: int -> addressing         (**r Address is [r1 + offset] *)
-  | Aindexed2: addressing               (**r Address is [r1 + r2] *)
+  | Aindexed: int -> addressing            (**r Address is [r1 + offset] *)
+  | Aindexed2: addressing                  (**r Address is [r1 + r2] *)
   | Aglobal: ident -> ptrofs -> addressing (**r Address is [symbol + offset] *)
-  | Abased: ident -> ptrofs -> addressing (**r Address is [symbol + offset + r1] *)
+  | Abased: ident -> ptrofs -> addressing  (**r Address is [symbol + offset + r1] *)
   | Ainstack: ptrofs -> addressing.        (**r Address is [stack_pointer + offset] *)
 
 (** Comparison functions (used in module [CSE]). *)
 
 Definition eq_condition (x y: condition) : {x=y} + {x<>y}.
 Proof.
-  generalize Int.eq_dec; intro.
+  generalize Int.eq_dec Int64.eq_dec; intro.
   assert (forall (x y: comparison), {x=y}+{x<>y}). decide equality.
   decide equality.
 Defined.
 
 Definition beq_operation: forall (x y: operation), bool.
-  generalize Int.eq_dec Ptrofs.eq_dec ident_eq Float.eq_dec Float32.eq_dec  eq_condition; boolean_equality.
+  generalize Int.eq_dec Int64.eq_dec Ptrofs.eq_dec ident_eq Float.eq_dec Float32.eq_dec  eq_condition; boolean_equality.
 Defined.
 
 Definition eq_operation (x y: operation): {x=y} + {x<>y}.
@@ -150,7 +183,7 @@ Defined.
 
 Definition eq_addressing (x y: addressing) : {x=y} + {x<>y}.
 Proof.
-  generalize Int.eq_dec Ptrofs.eq_dec ident_eq; intro.
+  generalize Int.eq_dec Int64.eq_dec Ptrofs.eq_dec ident_eq; intro.
   decide equality.
 Defined.
 
@@ -173,6 +206,10 @@ Definition eval_condition (cond: condition) (vl: list val) (m: mem): option bool
   | Cnotcompf c, v1 :: v2 :: nil => option_map negb (Val.cmpf_bool c v1 v2)
   | Cmaskzero n, v1 :: nil => Val.maskzero_bool v1 n
   | Cmasknotzero n, v1 :: nil => option_map negb (Val.maskzero_bool v1 n)
+  | Ccompl c, v1 :: v2 :: nil => Val.cmpl_bool c v1 v2
+  | Ccomplu c, v1 :: v2 :: nil => Val.cmplu_bool (Mem.valid_pointer m) c v1 v2
+  | Ccomplimm c n, v1 :: nil => Val.cmpl_bool c v1 (Vlong n)
+  | Ccompluimm c n, v1 :: nil => Val.cmplu_bool (Mem.valid_pointer m) c v1 (Vlong n)
   | _, _ => None
   end.
 
@@ -219,6 +256,33 @@ Definition eval_operation
   | Orolm amount mask, v1::nil => Some (Val.rolm v1 amount mask)
   | Oroli amount mask, v1::v2::nil =>
       Some(Val.or (Val.and v1 (Vint (Int.not mask))) (Val.rolm v2 amount mask))
+  | Olongconst n, nil => Some (Vlong n)
+  | Ocast32signed, v1::nil => Some (Val.longofint v1)
+  | Ocast32unsigned, v1::nil => Some (Val.longofintu v1)
+  | Oaddl, v1::v2::nil => Some (Val.addl v1 v2)
+  | Oaddlimm n, v1::nil => Some (Val.addl v1 (Vlong n))
+  | Osubl, v1::v2::nil => Some (Val.subl v1 v2)
+  | Onegl, v1::nil => Some (Val.negl v1)
+  | Omull, v1::v2::nil => Some (Val.mull v1 v2)
+  | Omullhs, v1::v2::nil => Some (Val.mullhs v1 v2)
+  | Omullhu, v1::v2::nil => Some (Val.mullhu v1 v2)
+  | Odivl, v1::v2::nil => Val.divls v1 v2
+  | Odivlu, v1::v2::nil => Val.divlu v1 v2
+  | Oandl, v1::v2::nil => Some(Val.andl v1 v2)
+  | Oandlimm n, v1::nil => Some (Val.andl v1 (Vlong n))
+  | Oorl, v1::v2::nil => Some(Val.orl v1 v2)
+  | Oorlimm n, v1::nil => Some (Val.orl v1 (Vlong n))
+  | Oxorl, v1::v2::nil => Some(Val.xorl v1 v2)
+  | Oxorlimm n, v1::nil => Some (Val.xorl v1 (Vlong n))
+  | Onotl, v1::nil => Some(Val.notl v1)
+  | Oshll, v1::v2::nil => Some (Val.shll v1 v2)
+  | Oshrl, v1::v2::nil => Some (Val.shrl v1 v2)
+  | Oshrlimm n, v1::nil => Some (Val.shrl v1 (Vint n))
+  | Oshrxlimm n, v1::nil => Val.shrxl v1 (Vint n)
+  | Oshrlu, v1::v2::nil => Some (Val.shrlu v1 v2)
+  | Orolml amount mask, v1::nil => Some (Val.rolml v1 amount mask)
+  | Olongoffloat, v1::nil => Val.longoffloat v1
+  | Ofloatoflong, v1::nil => Val.floatoflong v1
   | Onegf, v1::nil => Some(Val.negf v1)
   | Oabsf, v1::nil => Some(Val.absf v1)
   | Oaddf, v1::v2::nil => Some(Val.addf v1 v2)
@@ -295,6 +359,10 @@ Definition type_of_condition (c: condition) : list typ :=
   | Cnotcompf _ => Tfloat :: Tfloat :: nil
   | Cmaskzero _ => Tint :: nil
   | Cmasknotzero _ => Tint :: nil
+  | Ccompl _ => Tlong :: Tlong :: nil
+  | Ccomplu _ => Tlong :: Tlong :: nil
+  | Ccomplimm _ _ => Tlong :: nil
+  | Ccompluimm _ _ => Tlong :: nil
   end.
 
 Definition type_of_operation (op: operation) : list typ * typ :=
@@ -337,6 +405,33 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Oshru => (Tint :: Tint :: nil, Tint)
   | Orolm _ _ => (Tint :: nil, Tint)
   | Oroli _ _ => (Tint :: Tint :: nil, Tint)
+  | Olongconst _ => (nil, Tlong)
+  | Ocast32signed => (Tint :: nil, Tlong)
+  | Ocast32unsigned => (Tint :: nil, Tlong)
+  | Oaddl => (Tlong :: Tlong :: nil, Tlong)
+  | Oaddlimm _ => (Tlong :: nil, Tlong)
+  | Osubl => (Tlong :: Tlong :: nil, Tlong)
+  | Onegl => (Tlong :: nil, Tlong)
+  | Omull => (Tlong :: Tlong :: nil, Tlong)
+  | Omullhs => (Tlong :: Tlong :: nil, Tlong)
+  | Omullhu => (Tlong :: Tlong :: nil, Tlong)
+  | Odivl => (Tlong :: Tlong :: nil, Tlong)
+  | Odivlu => (Tlong :: Tlong :: nil, Tlong)
+  | Oandl => (Tlong :: Tlong :: nil, Tlong)
+  | Oandlimm _ => (Tlong :: nil, Tlong)
+  | Oorl => (Tlong :: Tlong :: nil, Tlong)
+  | Oorlimm _ => (Tlong :: nil, Tlong)
+  | Oxorl => (Tlong :: Tlong :: nil, Tlong)
+  | Oxorlimm _ => (Tlong :: nil, Tlong)
+  | Onotl => (Tlong :: nil, Tlong)
+  | Oshll => (Tlong :: Tint :: nil, Tlong)
+  | Oshrl => (Tlong :: Tint :: nil, Tlong)
+  | Oshrlimm _ => (Tlong :: nil, Tlong)
+  | Oshrxlimm _ => (Tlong :: nil, Tlong)
+  | Oshrlu => (Tlong :: Tint :: nil, Tlong)
+  | Orolml _ _ => (Tlong :: nil, Tlong)
+  | Olongoffloat => (Tfloat :: nil, Tlong)
+  | Ofloatoflong => (Tlong :: nil, Tfloat)
   | Onegf => (Tfloat :: nil, Tfloat)
   | Oabsf => (Tfloat :: nil, Tfloat)
   | Oaddf => (Tfloat :: Tfloat :: nil, Tfloat)
@@ -428,6 +523,35 @@ Proof with (try exact I; try reflexivity).
   destruct v0; destruct v1; simpl... destruct (Int.ltu i0 Int.iwordsize)...
   destruct v0...
   destruct v0; destruct v1...
+  exact I.
+  destruct v0...
+  destruct v0...
+  destruct v0; destruct v1...
+  destruct v0...
+  destruct v0; destruct v1...
+  destruct v0...
+  destruct v0; destruct v1...
+  destruct v0; destruct v1...
+  destruct v0; destruct v1...
+  destruct v0; destruct v1; simpl in *; inv H0.
+    destruct (Int64.eq i0 Int64.zero
+         || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq i0 Int64.mone); inv H2...
+  destruct v0; destruct v1; simpl in *; inv H0. destruct (Int64.eq i0 Int64.zero); inv H2...
+  destruct v0; destruct v1...
+  destruct v0...
+  destruct v0; destruct v1...
+  destruct v0...
+  destruct v0; destruct v1...
+  destruct v0...
+  destruct v0...
+  destruct v0; destruct v1; simpl... destruct (Int.ltu i0 Int64.iwordsize')...
+  destruct v0; destruct v1; simpl... destruct (Int.ltu i0 Int64.iwordsize')...
+  destruct v0; simpl... destruct (Int.ltu i Int64.iwordsize')...
+  destruct v0; simpl in *; inv H0. destruct (Int.ltu i (Int.repr 63)); inv H2...
+  destruct v0; destruct v1; simpl... destruct (Int.ltu i0 Int64.iwordsize')...
+  destruct v0...
+  destruct v0; simpl in H0; inv H0. destruct (Float.to_long f); inv H2...
+  destruct v0; simpl in H0; inv H0...
   destruct v0...
   destruct v0...
   destruct v0; destruct v1...
@@ -491,6 +615,10 @@ Definition negate_condition (cond: condition): condition :=
   | Cnotcompf c => Ccompf c
   | Cmaskzero n => Cmasknotzero n
   | Cmasknotzero n => Cmaskzero n
+  | Ccompl c => Ccompl(negate_comparison c)
+  | Ccomplu c => Ccomplu(negate_comparison c)
+  | Ccomplimm c n => Ccomplimm (negate_comparison c) n
+  | Ccompluimm c n => Ccompluimm (negate_comparison c) n
   end.
 
 Lemma eval_negate_condition:
@@ -506,6 +634,10 @@ Proof.
   repeat (destruct vl; auto). destruct (Val.cmpf_bool c v v0); auto. destruct b; auto.
   repeat (destruct vl; auto).
   repeat (destruct vl; auto). destruct (Val.maskzero_bool v i) as [[]|]; auto.
+  repeat (destruct vl; auto). apply Val.negate_cmpl_bool.
+  repeat (destruct vl; auto). apply Val.negate_cmplu_bool.
+  repeat (destruct vl; auto). apply Val.negate_cmpl_bool.
+  repeat (destruct vl; auto). apply Val.negate_cmplu_bool.
 Qed.
 
 (** Shifting stack-relative references.  This is used in [Stacking]. *)
@@ -571,7 +703,7 @@ Lemma eval_offset_addressing:
   eval_addressing ge sp addr args = Some v ->
   eval_addressing ge sp addr' args = Some(Val.add v (Vint (Int.repr delta))).
 Proof.
-  intros. 
+  intros.
   assert (D: Ptrofs.repr delta = Ptrofs.of_int (Int.repr delta)) by (symmetry; auto with ptrofs).
   destruct addr; simpl in H; inv H; simpl in *; FuncInv; subst.
 - rewrite Val.add_assoc; auto.
@@ -599,6 +731,8 @@ Definition op_depends_on_memory (op: operation) : bool :=
   match op with
   | Ocmp (Ccompu _) => true
   | Ocmp (Ccompuimm _ _) => true
+  | Ocmp (Ccomplu _) => Archi.ppc64
+  | Ocmp (Ccompluimm _ _) => Archi.ppc64
   | _ => false
   end.
 
@@ -736,6 +870,10 @@ Proof.
   inv H3; inv H2; simpl in H0; inv H0; auto.
   inv H3; try discriminate; auto.
   inv H3; try discriminate; auto.
+  inv H3; inv H2; simpl in H0; inv H0; auto.
+  inv H3; inv H2; simpl in H0; inv H0; auto.
+  inv H3; try discriminate; auto.
+  inv H3; try discriminate; auto.
 Qed.
 
 Ltac TrivialExists :=
@@ -773,7 +911,7 @@ Proof.
     destruct (Int.eq i0 Int.zero
          || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone); inv H2. TrivialExists.
   inv H4; inv H3; simpl in H1; inv H1. simpl.
-    destruct (Int.eq i0 Int.zero); inv H2. TrivialExists.
+  destruct (Int.eq i0 Int.zero); inv H2. TrivialExists.
   inv H4; inv H2; simpl; auto.
   inv H4; simpl; auto.
   inv H4; inv H2; simpl; auto.
@@ -793,6 +931,36 @@ Proof.
   inv H4; inv H2; simpl; auto. destruct (Int.ltu i0 Int.iwordsize); auto.
   inv H4; simpl; auto.
   inv H4; inv H2; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; inv H3; simpl in H1; inv H1. simpl.
+    destruct (Int64.eq i0 Int64.zero
+         || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq i0 Int64.mone); inv H2. TrivialExists.
+  inv H4; inv H3; simpl in H1; inv H1. simpl.
+    destruct (Int64.eq i0 Int64.zero); inv H2. TrivialExists.
+  inv H4; inv H2; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; inv H2; simpl; auto. destruct (Int.ltu i0 Int64.iwordsize'); auto.
+  inv H4; inv H2; simpl; auto. destruct (Int.ltu i0 Int64.iwordsize'); auto.
+  inv H4; simpl; auto. destruct (Int.ltu i Int64.iwordsize'); auto.
+  inv H4; simpl in *; inv H1. destruct (Int.ltu i (Int.repr 63)); inv H2. econstructor; eauto.
+  inv H4; inv H2; simpl; auto. destruct (Int.ltu i0 Int64.iwordsize'); auto.
+  inv H4; simpl; auto.
+  inv H4; simpl in H1; inv H1. simpl. destruct (Float.to_long f0); simpl in H2; inv H2.
+  exists (Vlong i); auto.
+  inv H4; simpl in H1; inv H1; simpl. TrivialExists.
   inv H4; simpl; auto.
   inv H4; simpl; auto.
   inv H4; inv H2; simpl; auto.
@@ -993,7 +1161,7 @@ Proof.
   rewrite eval_shift_stack_addressing.
   eapply eval_addressing_inj with (sp1 := Vptr sp1 Ptrofs.zero); eauto.
   intros. apply symbol_address_inject.
-  econstructor; eauto. rewrite Ptrofs.add_zero_l; auto. 
+  econstructor; eauto. rewrite Ptrofs.add_zero_l; auto.
 Qed.
 
 Lemma eval_operation_inject:
@@ -1013,7 +1181,7 @@ Proof.
   intros; eapply Mem.weak_valid_pointer_inject_no_overflow; eauto.
   intros; eapply Mem.different_pointers_inject; eauto.
   intros. apply symbol_address_inject.
-  econstructor; eauto. rewrite Ptrofs.add_zero_l; auto. 
+  econstructor; eauto. rewrite Ptrofs.add_zero_l; auto.
 Qed.
 
 End EVAL_INJECT.
@@ -1042,14 +1210,14 @@ End EVAL_INJECT.
 *)
 
 Inductive rlw_state: Type :=
-  | RLW_S0 : rlw_state
-  | RLW_S1 : rlw_state
-  | RLW_S2 : rlw_state
-  | RLW_S3 : rlw_state
-  | RLW_S4 : rlw_state
-  | RLW_S5 : rlw_state
-  | RLW_S6 : rlw_state
-  | RLW_Sbad : rlw_state.
+  | RLW_S0
+  | RLW_S1
+  | RLW_S2
+  | RLW_S3
+  | RLW_S4
+  | RLW_S5
+  | RLW_S6
+  | RLW_Sbad.
 
 Definition rlw_transition (s: rlw_state) (b: bool) : rlw_state :=
   match s, b with
@@ -1082,13 +1250,71 @@ Definition rlw_accepting (s: rlw_state) : bool :=
   | RLW_Sbad => false
   end.
 
-Fixpoint is_rlw_mask_rec (n: nat) (s: rlw_state) (x: Z) {struct n} : bool :=
+Fixpoint is_mask_rec {A: Type} (trans: A -> bool -> A) (accept: A -> bool)
+                     (n: nat) (s: A) (x: Z) {struct n} : bool :=
   match n with
   | O =>
-      rlw_accepting s
+      accept s
   | S m =>
-      is_rlw_mask_rec m (rlw_transition s (Z.odd x)) (Z.div2 x)
+      is_mask_rec trans accept m (trans s (Z.odd x)) (Z.div2 x)
   end.
 
 Definition is_rlw_mask (x: int) : bool :=
-  is_rlw_mask_rec Int.wordsize RLW_S0 (Int.unsigned x).
+  is_mask_rec rlw_transition rlw_accepting Int.wordsize RLW_S0 (Int.unsigned x).
+
+(** For the 64-bit [rldicl] and [rldicr] instructions, the acceptable
+  masks are [1111100000] and [0000011111], that is, some ones in the
+  high bits and some zeroes in the low bits, or conversely.  All ones
+  is OK, but not all zeroes.  The corresponding automata are:
+<<
+      0          1
+     / \        / \
+     \ /        \ /          (accepting: [1])
+     [0] --1--> [1]
+
+
+                 1          0
+                / \        / \
+                \ /        \ /      (accepting: [1], [2])
+     [0] --1--> [1] --0--> [2]
+>>
+*)
+
+Inductive rll_state: Type := RLL_S0 | RLL_S1 | RLL_Sbad.
+
+Definition rll_transition (s: rll_state) (b: bool) : rll_state :=
+  match s, b with
+  | RLL_S0, false => RLL_S0
+  | RLL_S0, true => RLL_S1
+  | RLL_S1, true => RLL_S1
+  | _, _ => RLL_Sbad
+  end.
+
+Definition rll_accepting (s: rll_state) : bool :=
+  match s with
+  | RLL_S1 => true
+  | _ => false
+  end.
+
+Inductive rlr_state: Type := RLR_S0 | RLR_S1 | RLR_S2 | RLR_Sbad.
+
+Definition rlr_transition (s: rlr_state) (b: bool) : rlr_state :=
+  match s, b with
+  | RLR_S0, true => RLR_S1
+  | RLR_S1, false => RLR_S2
+  | RLR_S1, true => RLR_S1
+  | RLR_S2, false => RLR_S2
+  | _, _ => RLR_Sbad
+  end.
+
+Definition rlr_accepting (s: rlr_state) : bool :=
+  match s with
+  | RLR_S1 | RLR_S2 => true
+  | _ => false
+  end.
+
+Definition is_rldl_mask (x: int64) : bool :=    (*r 0s in the high bits, 1s in the low bits *)
+  is_mask_rec rll_transition rll_accepting Int64.wordsize RLL_S0 (Int64.unsigned x).
+
+Definition is_rldr_mask (x: int64) : bool :=    (*r 1s in the high bits, 0s in the low bits *)
+  is_mask_rec rlr_transition rlr_accepting Int64.wordsize RLR_S0 (Int64.unsigned x).

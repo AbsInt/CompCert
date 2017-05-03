@@ -160,7 +160,7 @@ Remark shift_symbol_address:
   Genv.symbol_address ge id (Ptrofs.add ofs (Ptrofs.of_int delta)) = Val.add (Genv.symbol_address ge id ofs) (Vint delta).
 Proof.
   intros. unfold Genv.symbol_address. destruct (Genv.find_symbol ge id); auto.
-Qed.   
+Qed.
 
 Theorem eval_addimm:
   forall n, unary_constructor_sound (addimm n) (fun x => Val.add x (Vint n)).
@@ -172,7 +172,7 @@ Proof.
   case (addimm_match a); intros; InvEval; simpl; TrivialExists; simpl.
   rewrite Int.add_commut. auto.
   unfold Genv.symbol_address. destruct (Genv.find_symbol ge s); simpl; auto. rewrite Ptrofs.add_commut; auto.
-  destruct sp; simpl; auto. rewrite Ptrofs.add_assoc. do 3 f_equal. apply Ptrofs.add_commut.   
+  destruct sp; simpl; auto. rewrite Ptrofs.add_assoc. do 3 f_equal. apply Ptrofs.add_commut.
   subst. rewrite Val.add_assoc. rewrite Int.add_commut. auto.
   subst. rewrite Ptrofs.add_commut. rewrite shift_symbol_address. rewrite ! Val.add_assoc. f_equal. f_equal. apply Val.add_commut.
 Qed.
@@ -207,7 +207,7 @@ Proof.
   repeat rewrite Val.add_assoc. decEq. apply Val.add_commut.
 - subst. TrivialExists.
     econstructor. EvalOp. simpl. reflexivity. econstructor. eauto. constructor.
-    simpl. rewrite Val.add_permut, Val.add_commut. do 2 f_equal.  
+    simpl. rewrite Val.add_permut, Val.add_commut. do 2 f_equal.
     destruct sp; simpl; auto. rewrite Ptrofs.add_assoc; auto.
 - replace (Val.add x y) with
     (Val.add (Genv.symbol_address ge s (Ptrofs.add ofs (Ptrofs.of_int n))) (Val.add v1 v0)).
@@ -847,6 +847,7 @@ Proof.
   intros; unfold intoffloat. TrivialExists.
 Qed.
 
+
 Theorem eval_intuoffloat:
   forall le a x y,
   eval_expr ge sp e m le a x ->
@@ -1032,6 +1033,7 @@ Proof.
 - constructor.
 - constructor.
 - constructor.
+- constructor.
 - simpl in H5. inv H5. constructor.
 - subst v. constructor; auto.
 - inv H. InvEval. simpl in H6; inv H6. constructor; auto.
@@ -1040,4 +1042,3 @@ Proof.
 Qed.
 
 End CMCONSTR.
-

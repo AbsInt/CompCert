@@ -254,7 +254,7 @@ Proof.
   set (rs5 := nextinstr_nf (rs4#RAX <- v4)).
   assert (X: forall v1 v2,
              Val.addl v1 (Val.addl v2 (Vlong Int64.zero)) = Val.addl v1 v2).
-  { intros. unfold Val.addl; destruct Archi.ptr64 eqn:SF, v0; auto; destruct v5; auto. 
+  { intros. unfold Val.addl; destruct Archi.ptr64 eqn:SF, v0; auto; destruct v5; auto.
     rewrite Int64.add_zero; auto.
     rewrite Ptrofs.add_zero; auto.
     rewrite Int64.add_zero; auto.

@@ -393,14 +393,14 @@ Remark eval_addressing_Aglobal:
   forall (F V: Type) (genv: Genv.t F V) sp id ofs,
   eval_addressing genv sp (Aglobal id ofs) nil = Some (Genv.symbol_address genv id ofs).
 Proof.
-  intros. unfold eval_addressing, eval_addressing32, eval_addressing64; destruct Archi.ptr64; auto. 
+  intros. unfold eval_addressing, eval_addressing32, eval_addressing64; destruct Archi.ptr64; auto.
 Qed.
 
 Remark eval_addressing_Ainstack:
   forall (F V: Type) (genv: Genv.t F V) sp ofs,
   eval_addressing genv sp (Ainstack ofs) nil = Some (Val.offset_ptr sp ofs).
 Proof.
-  intros. unfold eval_addressing, eval_addressing32, eval_addressing64; destruct Archi.ptr64; auto. 
+  intros. unfold eval_addressing, eval_addressing32, eval_addressing64; destruct Archi.ptr64; auto.
 Qed.
 
 Remark eval_addressing_Ainstack_inv:
@@ -605,7 +605,7 @@ Corollary type_of_addressing_sound:
   eval_addressing genv sp addr vl = Some v ->
   Val.has_type v Tptr.
 Proof.
-  unfold eval_addressing, Tptr; intros. 
+  unfold eval_addressing, Tptr; intros.
   destruct Archi.ptr64; eauto using type_of_addressing64_sound, type_of_addressing32_sound.
 Qed.
 
@@ -815,7 +815,7 @@ Lemma eval_shift_stack_addressing32:
   eval_addressing32 ge (Vptr sp Ptrofs.zero) (shift_stack_addressing delta addr) vl =
   eval_addressing32 ge (Vptr sp (Ptrofs.repr delta)) addr vl.
 Proof.
-  intros. 
+  intros.
   assert (A: forall i, Ptrofs.add Ptrofs.zero (Ptrofs.add i (Ptrofs.repr delta)) = Ptrofs.add (Ptrofs.repr delta) i).
   { intros. rewrite Ptrofs.add_zero_l. apply Ptrofs.add_commut. }
   destruct addr; simpl; rewrite ?A; reflexivity.
@@ -826,7 +826,7 @@ Lemma eval_shift_stack_addressing64:
   eval_addressing64 ge (Vptr sp Ptrofs.zero) (shift_stack_addressing delta addr) vl =
   eval_addressing64 ge (Vptr sp (Ptrofs.repr delta)) addr vl.
 Proof.
-  intros. 
+  intros.
   assert (A: forall i, Ptrofs.add Ptrofs.zero (Ptrofs.add i (Ptrofs.repr delta)) = Ptrofs.add (Ptrofs.repr delta) i).
   { intros. rewrite Ptrofs.add_zero_l. apply Ptrofs.add_commut. }
   destruct addr; simpl; rewrite ?A; reflexivity.
@@ -837,7 +837,7 @@ Lemma eval_shift_stack_addressing:
   eval_addressing ge (Vptr sp Ptrofs.zero) (shift_stack_addressing delta addr) vl =
   eval_addressing ge (Vptr sp (Ptrofs.repr delta)) addr vl.
 Proof.
-  intros. unfold eval_addressing. 
+  intros. unfold eval_addressing.
   destruct Archi.ptr64; auto using eval_shift_stack_addressing32, eval_shift_stack_addressing64.
 Qed.
 
@@ -1234,7 +1234,7 @@ Proof.
   inv H4; simpl; auto. destruct (Int.ltu n Int64.iwordsize'); auto.
   inv H4; inv H2; simpl; auto. destruct (Int.ltu i0 Int64.iwordsize'); auto.
   inv H4; simpl; auto. destruct (Int.ltu n Int64.iwordsize'); auto.
-  inv H4; simpl in H1; try discriminate. simpl. destruct (Int.ltu n (Int.repr 63)); inv H1. TrivialExists. 
+  inv H4; simpl in H1; try discriminate. simpl. destruct (Int.ltu n (Int.repr 63)); inv H1. TrivialExists.
   inv H4; inv H2; simpl; auto. destruct (Int.ltu i0 Int64.iwordsize'); auto.
   inv H4; simpl; auto. destruct (Int.ltu n Int64.iwordsize'); auto.
   inv H4; simpl; auto.
@@ -1426,7 +1426,7 @@ Proof.
   rewrite eval_shift_stack_addressing.
   eapply eval_addressing_inj with (sp1 := Vptr sp1 Ptrofs.zero); eauto.
   intros. apply symbol_address_inject.
-  econstructor; eauto. rewrite Ptrofs.add_zero_l; auto. 
+  econstructor; eauto. rewrite Ptrofs.add_zero_l; auto.
 Qed.
 
 Lemma eval_operation_inject:
@@ -1446,7 +1446,7 @@ Proof.
   intros; eapply Mem.weak_valid_pointer_inject_no_overflow; eauto.
   intros; eapply Mem.different_pointers_inject; eauto.
   intros. apply symbol_address_inject.
-  econstructor; eauto. rewrite Ptrofs.add_zero_l; auto. 
+  econstructor; eauto. rewrite Ptrofs.add_zero_l; auto.
 Qed.
 
 End EVAL_INJECT.

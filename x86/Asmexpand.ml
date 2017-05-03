@@ -29,7 +29,7 @@ let _1 = Integers.Int.one
 let _2 = coqint_of_camlint 2l
 let _4 = coqint_of_camlint 4l
 let _8 = coqint_of_camlint 8l
-  
+
 let _0z = Z.zero
 let _1z = Z.one
 let _2z = Z.of_sint 2
@@ -49,7 +49,7 @@ let _Plea (r, addr) =
 let align n a =
   if n >= 0 then (n + a - 1) land (-a) else n land (-a)
 
-let sp_adjustment_32 sz =  
+let sp_adjustment_32 sz =
   let sz = Z.to_int sz in
   (* Preserve proper alignment of the stack *)
   let sz = align sz (stack_alignment ()) in
@@ -72,7 +72,7 @@ let sp_adjustment_64 sz =
     (* The top 8 bytes have already been allocated by the "call" instruction. *)
     (sz - 8, -1)
   end
-  
+
 (* Built-ins.  They come in two flavors:
    - annotation statements: take their arguments in registers or stack
    locations; generate no code;
@@ -500,7 +500,7 @@ let expand_instruction instr =
        emit (Pleaq (RAX, addr1));
        emit (Pmovq_mr (addr2, RAX));
        current_function_stacksize := Int64.of_int fullsz
-     end else begin     
+     end else begin
        let sz = sp_adjustment_32 sz in
        (* Allocate frame *)
        let sz' = Z.of_uint sz in
@@ -512,7 +512,7 @@ let expand_instruction instr =
        emit (Pleal (RAX,addr1));
        emit (Pmovl_mr (addr2,RAX));
        PrintAsmaux.current_function_stacksize := Int32.of_int sz
-     end  
+     end
   | Pfreeframe(sz, ofs_ra, ofs_link) ->
      if Archi.ptr64 then begin
        let (sz, _) = sp_adjustment_64 sz in

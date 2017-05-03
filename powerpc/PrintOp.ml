@@ -110,6 +110,32 @@ let print_operation reg pp = function
   | Olowlong, [r1] -> fprintf pp "lowlong(%a)" reg r1
   | Ohighlong, [r1] -> fprintf pp "highlong(%a)" reg r1
   | Ocmp c, args -> print_condition reg pp (c, args)
+  | Olongconst n, [] -> fprintf pp "%LdL" (camlint64_of_coqint n)
+  | Ocast32signed, [r1] -> fprintf pp "int32signed(%a)" reg r1
+  | Ocast32unsigned, [r1] -> fprintf pp "int32unsigned(%a)" reg r1
+  | Oaddl, [r1;r2] -> fprintf pp "%a +l %a" reg r1 reg r2
+  | Oaddlimm n, [r1] -> fprintf pp "%a +l %Ld" reg r1 (camlint64_of_coqint n)
+  | Osubl, [r1;r2] -> fprintf pp "%a -l %a" reg r1 reg r2
+  | Onegl, [r1] -> fprintf pp "-l %a" reg r1
+  | Omull, [r1;r2] -> fprintf pp "%a *l %a" reg r1 reg r2
+  | Odivl, [r1;r2] -> fprintf pp "%a /ls %a" reg r1 reg r2
+  | Odivlu, [r1;r2] -> fprintf pp "%a /lu %a" reg r1 reg r2
+  | Oandl, [r1;r2] -> fprintf pp "%a &l %a" reg r1 reg r2
+  | Oandlimm n, [r1] -> fprintf pp "%a &l %Ld" reg r1 (camlint64_of_coqint n)
+  | Oorl, [r1;r2] -> fprintf pp "%a |l %a" reg r1 reg r2
+  | Oorlimm n, [r1] -> fprintf pp "%a |l %Ld" reg r1 (camlint64_of_coqint n)
+  | Oxorl, [r1;r2] -> fprintf pp "%a ^l %a" reg r1 reg r2
+  | Oxorlimm n, [r1] -> fprintf pp "%a ^l %Ld" reg r1 (camlint64_of_coqint n)
+  | Onotl, [r1] -> fprintf pp "~l %a" reg r1
+  | Oshll, [r1;r2] -> fprintf pp "%a <<l %a" reg r1 reg r2
+  | Oshrl, [r1;r2] -> fprintf pp "%a >>ls %a" reg r1 reg r2
+  | Oshrlimm n, [r1] -> fprintf pp "%a >>ls %ld" reg r1 (camlint_of_coqint n)
+  | Oshrlu, [r1;r2] -> fprintf pp "%a >>lu %a" reg r1 reg r2
+  | Orolml(n,m), [r1] ->
+      fprintf pp "(%a rol %Ld) &l 0x%Lx"
+              reg r1 (camlint64_of_coqint n) (camlint64_of_coqint m)
+  | Olongoffloat, [r1] -> fprintf pp "longoffloat(%a)" reg r1
+  | Ofloatoflong, [r1] -> fprintf pp "floatoflong(%a)" reg r1
   | _ -> fprintf pp "<bad operator>"
 
 let print_addressing reg pp = function

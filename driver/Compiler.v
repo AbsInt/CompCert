@@ -292,7 +292,7 @@ Proof.
   set (p18 := CleanupLabels.transf_program p17) in *.
   destruct (partial_if debug Debugvar.transf_program p18) as [p19|e] eqn:P19; simpl in T; try discriminate.
   destruct (Stacking.transf_program p19) as [p20|e] eqn:P20; simpl in T; try discriminate.
-  unfold match_prog; simpl. 
+  unfold match_prog; simpl.
   exists p1; split. apply SimplExprproof.transf_program_match; auto.
   exists p2; split. apply SimplLocalsproof.match_transf_program; auto.
   exists p3; split. apply Cshmgenproof.transf_program_match; auto.
@@ -313,14 +313,14 @@ Proof.
   exists p18; split. apply CleanupLabelsproof.transf_program_match; auto.
   exists p19; split. eapply partial_if_match; eauto. apply Debugvarproof.transf_program_match.
   exists p20; split. apply Stackingproof.transf_program_match; auto.
-  exists tp; split. apply Asmgenproof.transf_program_match; auto. 
+  exists tp; split. apply Asmgenproof.transf_program_match; auto.
   reflexivity.
 Qed.
 
 (** * Semantic preservation *)
 
 (** We now prove that the whole CompCert compiler (as characterized by the
-  [match_prog] relation) preserves semantics by constructing 
+  [match_prog] relation) preserves semantics by constructing
   the following simulations:
 - Forward simulations from [Cstrategy] to [Asm]
   (composition of the forward simulations for each pass).
@@ -359,7 +359,7 @@ Proof.
   intros p tp M. unfold match_prog, pass_match in M; simpl in M.
 Ltac DestructM :=
   match goal with
-    [ H: exists p, _ /\ _ |- _ ] => 
+    [ H: exists p, _ /\ _ |- _ ] =>
       let p := fresh "p" in let M := fresh "M" in let MM := fresh "MM" in
       destruct H as (p & M & MM); clear H
   end.
@@ -467,11 +467,11 @@ Theorem separate_transf_c_program_correct:
   forall c_units asm_units c_program,
   nlist_forall2 (fun cu tcu => transf_c_program cu = OK tcu) c_units asm_units ->
   link_list c_units = Some c_program ->
-  exists asm_program, 
+  exists asm_program,
       link_list asm_units = Some asm_program
    /\ backward_simulation (Csem.semantics c_program) (Asm.semantics asm_program).
 Proof.
-  intros. 
+  intros.
   assert (nlist_forall2 match_prog c_units asm_units).
   { eapply nlist_forall2_imply. eauto. simpl; intros. apply transf_c_program_match; auto. }
   assert (exists asm_program, link_list asm_units = Some asm_program /\ match_prog c_program asm_program).

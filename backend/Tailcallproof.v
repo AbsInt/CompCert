@@ -577,7 +577,7 @@ Proof.
   econstructor; eauto. apply (Genv.init_mem_transf TRANSL). auto.
   replace (prog_main tprog) with (prog_main prog).
   rewrite symbols_preserved. eauto.
-  symmetry; eapply match_program_main; eauto. 
+  symmetry; eapply match_program_main; eauto.
   rewrite <- H3. apply sig_preserved.
   constructor. constructor. constructor. apply Mem.extends_refl.
 Qed.
@@ -597,7 +597,7 @@ Theorem transf_program_correct:
   forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
   eapply forward_simulation_opt with (measure := measure); eauto.
-  apply senv_preserved. 
+  apply senv_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
   exact transf_step_correct.

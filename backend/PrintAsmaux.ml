@@ -72,6 +72,7 @@ let elf_label oc lbl =
 
 let float64_literals : (int * int64) list ref = ref []
 let float32_literals : (int * int32) list ref = ref []
+let int64_literals : (int * int64) list ref = ref []
 let jumptables : (int * label list) list ref = ref []
 
 let reset_constants () =

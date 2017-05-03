@@ -184,7 +184,7 @@ Proof with (try discriminate).
   destruct (find_div_mul_params Int.wordsize
                (Int.half_modulus - Int.half_modulus mod d - 1) d 32)
   as [[p m] | ]...
-  generalize (p - 32). intro p1.  
+  generalize (p - 32). intro p1.
   destruct (zlt 0 d)...
   destruct (zlt (two_p (32 + p1)) (m * d))...
   destruct (zle (m * d) (two_p (32 + p1) + two_p (p1 + 1)))...
@@ -192,7 +192,7 @@ Proof with (try discriminate).
   destruct (zlt m Int.modulus)...
   destruct (zle 0 p1)...
   destruct (zlt p1 32)...
-  intros EQ; inv EQ. 
+  intros EQ; inv EQ.
   split. auto. split. auto. intros.
   replace (32 + p') with (31 + (p' + 1)) by omega.
   apply Zquot_mul; try omega.
@@ -331,7 +331,7 @@ Proof with (try discriminate).
   destruct (find_div_mul_params Int64.wordsize
                (Int64.half_modulus - Int64.half_modulus mod d - 1) d 64)
   as [[p m] | ]...
-  generalize (p - 64). intro p1.  
+  generalize (p - 64). intro p1.
   destruct (zlt 0 d)...
   destruct (zlt (two_p (64 + p1)) (m * d))...
   destruct (zle (m * d) (two_p (64 + p1) + two_p (p1 + 1)))...
@@ -339,7 +339,7 @@ Proof with (try discriminate).
   destruct (zlt m Int64.modulus)...
   destruct (zle 0 p1)...
   destruct (zlt p1 64)...
-  intros EQ; inv EQ. 
+  intros EQ; inv EQ.
   split. auto. split. auto. intros.
   replace (64 + p') with (63 + (p' + 1)) by omega.
   apply Zquot_mul; try omega.
@@ -746,7 +746,7 @@ Proof.
   unfold modl_from_divl; intros.
   exploit eval_mullimm; eauto. instantiate (1 := n). intros (v1 & A1 & B1).
   assert (A0: eval_expr ge sp e m le (Eletvar O) (Vlong x)) by (constructor; auto).
-  exploit eval_subl; auto. eexact A0. eexact A1.
+  exploit eval_subl ; auto ; try apply HELPERS. exact A0. exact A1.
   intros (v2 & A2 & B2).
   simpl in B1; inv B1. simpl in B2; inv B2. exact A2.
 Qed.
@@ -784,11 +784,11 @@ Proof.
 + destruct (Int64.is_power2' n2) as [l|] eqn:POW.
 * exploit Val.divlu_pow2; eauto. intros EQ; subst z. apply eval_shrluimm; auto.
 * destruct (Compopts.optim_for_size tt). eapply eval_divlu_base; eauto.
-  destruct (divlu_mul_params (Int64.unsigned n2)) as [[p M]|] eqn:PARAMS. 
+  destruct (divlu_mul_params (Int64.unsigned n2)) as [[p M]|] eqn:PARAMS.
 ** destruct x; simpl in H1; try discriminate.
    destruct (Int64.eq n2 Int64.zero); inv H1.
-   econstructor; split; eauto. econstructor. eauto. eapply eval_divlu_mull; eauto.  
-** eapply eval_divlu_base; eauto.     
+   econstructor; split; eauto. econstructor. eauto. eapply eval_divlu_mull; eauto.
+** eapply eval_divlu_base; eauto.
 - eapply eval_divlu_base; eauto.
 Qed.
 
@@ -809,15 +809,15 @@ Proof.
 + destruct (Int64.is_power2 n2) as [l|] eqn:POW.
 * exploit Val.modlu_pow2; eauto. intros EQ; subst z. eapply eval_andl; eauto. apply eval_longconst.
 * destruct (Compopts.optim_for_size tt). eapply eval_modlu_base; eauto.
-  destruct (divlu_mul_params (Int64.unsigned n2)) as [[p M]|] eqn:PARAMS. 
+  destruct (divlu_mul_params (Int64.unsigned n2)) as [[p M]|] eqn:PARAMS.
 ** destruct x; simpl in H1; try discriminate.
    destruct (Int64.eq n2 Int64.zero) eqn:Z; inv H1.
-   rewrite Int64.modu_divu. 
+   rewrite Int64.modu_divu.
     econstructor; split; eauto. econstructor. eauto.
-    eapply eval_modl_from_divl; eauto.  
+    eapply eval_modl_from_divl; eauto.
     eapply eval_divlu_mull; eauto.
-    red; intros; subst n2; discriminate Z.  
-** eapply eval_modlu_base; eauto.     
+    red; intros; subst n2; discriminate Z.
+** eapply eval_modlu_base; eauto.
 - eapply eval_modlu_base; eauto.
 Qed.
 
@@ -831,16 +831,16 @@ Proof.
   assert (A0: eval_expr ge sp e m le (Eletvar O) (Vlong x)).
   { constructor; auto. }
   exploit eval_mullhs. eauto. eexact A0. instantiate (1 := Int64.repr M).  intros (v1 & A1 & B1).
-  exploit eval_addl; auto. eexact A1. eexact A0. intros (v2 & A2 & B2).
+  exploit eval_addl; auto; try apply HELPERS. eexact A1. eexact A0. intros (v2 & A2 & B2).
   exploit eval_shrluimm. eauto. eexact A0. instantiate (1 := Int.repr 63). intros (v3 & A3 & B3).
   set (a4 := if zlt M Int64.half_modulus
              then mullhs (Eletvar 0) (Int64.repr M)
              else addl (mullhs (Eletvar 0) (Int64.repr M)) (Eletvar 0)).
   set (v4 := if zlt M Int64.half_modulus then v1 else v2).
-  assert (A4: eval_expr ge sp e m le a4 v4). 
+  assert (A4: eval_expr ge sp e m le a4 v4).
   { unfold a4, v4; destruct (zlt M Int64.half_modulus); auto. }
   exploit eval_shrlimm. eauto. eexact A4. instantiate (1 := Int.repr p). intros (v5 & A5 & B5).
-  exploit eval_addl; auto. eexact A5. eexact A3. intros (v6 & A6 & B6).
+  exploit eval_addl; auto; try apply HELPERS. eexact A5. eexact A3. intros (v6 & A6 & B6).
   assert (RANGE: forall x, 0 <= x < 64 -> Int.ltu (Int.repr x) Int64.iwordsize' = true).
   { intros. unfold Int.ltu. rewrite Int.unsigned_repr. rewrite zlt_true by tauto. auto.
     assert (64 < Int.max_unsigned) by (compute; auto). omega. }
@@ -850,11 +850,11 @@ Proof.
   destruct (zlt M Int64.half_modulus).
 - exploit (divls_mul_shift_1 x); eauto. intros [A B].
   simpl in B5; rewrite RANGE in B5 by auto; inv B5.
-  simpl in B6; inv B6. 
+  simpl in B6; inv B6.
   rewrite B; exact A6.
 - exploit (divls_mul_shift_2 x); eauto. intros [A B].
   simpl in B5; rewrite RANGE in B5 by auto; inv B5.
-  simpl in B6; inv B6. 
+  simpl in B6; inv B6.
   rewrite B; exact A6.
 Qed.
 
@@ -870,7 +870,7 @@ Proof.
 - assert (y = Vlong n2) by (eapply is_longconst_sound; eauto). subst y.
   destruct (is_longconst a) as [n1|] eqn:N1.
 + assert (x = Vlong n1) by (eapply is_longconst_sound; eauto). subst x.
-  simpl in H1. 
+  simpl in H1.
   destruct (Int64.eq n2 Int64.zero
          || Int64.eq n1 (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone); inv H1.
   econstructor; split. apply eval_longconst. constructor.
@@ -879,7 +879,7 @@ Proof.
 ** exploit Val.divls_pow2; eauto. intros EQ. eapply eval_shrxlimm; eauto.
 ** eapply eval_divls_base; eauto.
 * destruct (Compopts.optim_for_size tt). eapply eval_divls_base; eauto.
-  destruct (divls_mul_params (Int64.signed n2)) as [[p M]|] eqn:PARAMS. 
+  destruct (divls_mul_params (Int64.signed n2)) as [[p M]|] eqn:PARAMS.
 ** destruct x; simpl in H1; try discriminate.
    destruct (Int64.eq n2 Int64.zero
              || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone); inv H1.
@@ -901,7 +901,7 @@ Proof.
 - assert (y = Vlong n2) by (eapply is_longconst_sound; eauto). subst y.
   destruct (is_longconst a) as [n1|] eqn:N1.
 + assert (x = Vlong n1) by (eapply is_longconst_sound; eauto). subst x.
-  simpl in H1. 
+  simpl in H1.
   destruct (Int64.eq n2 Int64.zero
          || Int64.eq n1 (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone); inv H1.
   econstructor; split. apply eval_longconst. constructor.
@@ -917,19 +917,19 @@ Proof.
   assert (A: eval_expr ge sp e m le' (Eletvar O) (Vlong i)) by (constructor; auto).
   exploit eval_shrxlimm; eauto. intros (v1 & A1 & B1). inv B1.
   econstructor; split.
-  econstructor. eauto. eapply eval_modl_from_divl. eexact A1. reflexivity.      
+  econstructor. eauto. eapply eval_modl_from_divl. eexact A1. reflexivity.
   rewrite Int64.mods_divs. auto.
 **eapply eval_modls_base; eauto.
 * destruct (Compopts.optim_for_size tt). eapply eval_modls_base; eauto.
-  destruct (divls_mul_params (Int64.signed n2)) as [[p M]|] eqn:PARAMS. 
+  destruct (divls_mul_params (Int64.signed n2)) as [[p M]|] eqn:PARAMS.
 ** destruct x; simpl in H1; try discriminate.
    destruct (Int64.eq n2 Int64.zero
              || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone); inv H1.
    econstructor; split; eauto. econstructor. eauto.
-   rewrite Int64.mods_divs. 
+   rewrite Int64.mods_divs.
    eapply eval_modl_from_divl; auto.
    eapply eval_divls_mull; eauto.
-** eapply eval_modls_base; eauto.     
+** eapply eval_modls_base; eauto.
 - eapply eval_modls_base; eauto.
 Qed.
 

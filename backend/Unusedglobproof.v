@@ -315,11 +315,11 @@ Corollary used_globals_valid:
   valid_used_set p u.
 Proof.
   intros. constructor.
-- intros. eapply used_globals_sound; eauto. 
+- intros. eapply used_globals_sound; eauto.
 - eapply used_globals_incl; eauto. apply seen_main_initial_workset.
 - intros. eapply used_globals_incl; eauto. apply seen_public_initial_workset; auto.
 - intros. apply ISF.for_all_iff in H0.
-+ red in H0. apply H0 in H1. unfold global_defined in H1. 
++ red in H0. apply H0 in H1. unfold global_defined in H1.
   destruct pm!id as [g|] eqn:E.
 * left. change id with (fst (id,g)). apply in_map. apply in_prog_defmap; auto.
 * InvBooleans; auto.
@@ -394,7 +394,7 @@ Lemma filter_globdefs_map:
 Proof.
   intros. unfold PTree_Properties.of_list. fold prog_map. unfold PTree.elt. fold add_def.
   destruct (IS.mem id u) eqn:MEM.
-- erewrite filter_globdefs_map_2. rewrite List.rev_involutive. reflexivity. 
+- erewrite filter_globdefs_map_2. rewrite List.rev_involutive. reflexivity.
   auto. auto.
 - apply filter_globdefs_map_1. auto. apply PTree.gempty.
 Qed.
@@ -419,7 +419,7 @@ Proof.
 - constructor.
 - destruct (IS.mem id1 u) eqn:MEM; auto.
   rewrite filter_globdefs_nil, map_app. simpl.
-  apply list_norepet_append; auto. 
+  apply list_norepet_append; auto.
   constructor. simpl; tauto. constructor.
   red; simpl; intros. destruct H0; try tauto. subst y.
   apply filter_globdefs_domain in H. rewrite ISF.remove_iff in H. intuition.
@@ -433,11 +433,11 @@ Proof.
   unfold transform_program; intros p tp TR. set (pm := prog_defmap p) in *.
   destruct (used_globals p pm) as [u|] eqn:U; try discriminate.
   destruct (IS.for_all (global_defined p pm) u) eqn:DEF; inv TR.
-  exists u; split. 
+  exists u; split.
   apply used_globals_valid; auto.
   constructor; simpl; auto.
   intros. unfold prog_defmap; simpl. apply filter_globdefs_map.
-  apply filter_globdefs_unique_names. 
+  apply filter_globdefs_unique_names.
 Qed.
 
 (** * Semantic preservation *)
@@ -480,7 +480,7 @@ Lemma transform_find_symbol_1:
   forall id b,
   Genv.find_symbol ge id = Some b -> kept id -> exists b', Genv.find_symbol tge id = Some b'.
 Proof.
-  intros. 
+  intros.
   assert (A: exists g, (prog_defmap p)!id = Some g).
   { apply prog_defmap_dom. eapply Genv.find_symbol_inversion; eauto. }
   destruct A as (g & P).
@@ -493,13 +493,13 @@ Lemma transform_find_symbol_2:
   forall id b,
   Genv.find_symbol tge id = Some b -> kept id /\ exists b', Genv.find_symbol ge id = Some b'.
 Proof.
-  intros. 
+  intros.
   assert (A: exists g, (prog_defmap tp)!id = Some g).
   { apply prog_defmap_dom. eapply Genv.find_symbol_inversion; eauto. }
   destruct A as (g & P).
-  erewrite match_prog_def in P by eauto. 
+  erewrite match_prog_def in P by eauto.
   destruct (IS.mem id used) eqn:U; try discriminate.
-  split. apply IS.mem_2; auto. 
+  split. apply IS.mem_2; auto.
   apply Genv.find_symbol_exists with g.
   apply in_prog_defmap. auto.
 Qed.
@@ -564,7 +564,7 @@ Proof.
   auto.
 - exploit transform_find_symbol_1; eauto. intros (b' & F). exists b'; split; auto.
   eapply init_meminj_eq; eauto.
-- exploit transform_find_symbol_2; eauto. intros (K & b & F). 
+- exploit transform_find_symbol_2; eauto. intros (K & b & F).
   exists b; split; auto. eapply init_meminj_eq; eauto.
 - exploit init_meminj_invert; eauto. intros (A & id & B & C).
   assert (kept id) by (eapply transform_find_symbol_2; eauto).
@@ -573,7 +573,7 @@ Proof.
   assert ((prog_defmap tp)!id = Some gd).
   { erewrite match_prog_def by eauto. rewrite IS.mem_1 by auto. auto. }
   rewrite Genv.find_def_symbol in H3. destruct H3 as (b1 & P & Q).
-  fold tge in P. replace b' with b1 by congruence. split; auto. split; auto. 
+  fold tge in P. replace b' with b1 by congruence. split; auto. split; auto.
   intros. eapply kept_closed; eauto.
 - exploit init_meminj_invert; eauto. intros (A & id & B & C).
   assert ((prog_defmap tp)!id = Some gd).
@@ -616,7 +616,7 @@ Proof.
     rewrite <- Genv.find_var_info_iff in A. rewrite A; auto.
     destruct (Genv.find_var_info tge b2) as [gv|] eqn:V2; auto.
     rewrite Genv.find_var_info_iff in V2.
-    exploit defs_rev_inject; eauto. intros (A & B). 
+    exploit defs_rev_inject; eauto. intros (A & B).
     rewrite <- Genv.find_var_info_iff in A. congruence.
 Qed.
 
@@ -805,15 +805,15 @@ Proof.
 - exploit Genv.find_funct_inv; eauto. intros (b & R). rewrite R in H0.
   rewrite Genv.find_funct_find_funct_ptr in H0.
   specialize (H1 r). rewrite R in H1. inv H1.
-  rewrite Genv.find_funct_ptr_iff in H0.  
+  rewrite Genv.find_funct_ptr_iff in H0.
   exploit defs_inject; eauto. intros (A & B & C).
-  rewrite <- Genv.find_funct_ptr_iff in A. 
+  rewrite <- Genv.find_funct_ptr_iff in A.
   rewrite B; auto.
 - destruct (Genv.find_symbol ge id) as [b|] eqn:FS; try discriminate.
   exploit symbols_inject_2; eauto. intros (tb & P & Q). rewrite P.
-  rewrite Genv.find_funct_ptr_iff in H0.  
+  rewrite Genv.find_funct_ptr_iff in H0.
   exploit defs_inject; eauto. intros (A & B & C).
-  rewrite <- Genv.find_funct_ptr_iff in A. 
+  rewrite <- Genv.find_funct_ptr_iff in A.
   auto.
 Qed.
 
@@ -1057,7 +1057,7 @@ Proof.
   { induction l as [ | [id1 g1] l]; simpl; intros.
   - auto.
   - apply IHl. unfold Genv.add_global, P; simpl. intros LT. apply Plt_succ_inv in LT. destruct LT.
-  + rewrite PTree.gso. apply H; auto. apply Plt_ne; auto. 
+  + rewrite PTree.gso. apply H; auto. apply Plt_ne; auto.
   + rewrite H0. rewrite PTree.gss. exists g1; auto. }
   apply H. red; simpl; intros. exfalso; xomega.
 Qed.
@@ -1074,14 +1074,14 @@ Lemma init_meminj_invert_strong:
   /\ Genv.find_def tge b' = Some gd
   /\ (forall i, ref_def gd i -> kept i).
 Proof.
-  intros. exploit init_meminj_invert; eauto. intros (A & id & B & C). 
+  intros. exploit init_meminj_invert; eauto. intros (A & id & B & C).
   assert (exists gd, (prog_defmap p)!id = Some gd).
   { apply prog_defmap_dom. eapply Genv.find_symbol_inversion; eauto. }
   destruct H0 as [gd DM]. rewrite Genv.find_def_symbol in DM.
   destruct DM as (b'' & P & Q). fold ge in P. rewrite P in B; inv B.
   fold ge in Q. exploit defs_inject. apply init_meminj_preserves_globals.
-  eauto. eauto. intros (X & _ & Y). 
-  split. auto. exists id, gd; auto. 
+  eauto. eauto. intros (X & _ & Y).
+  split. auto. exists id, gd; auto.
 Qed.
 
 Section INIT_MEM.
@@ -1098,11 +1098,11 @@ Proof.
   induction il as [ | i1 il]; simpl; intros.
 - constructor.
 - apply list_forall2_app.
-+ destruct i1; simpl; try (apply inj_bytes_inject). 
++ destruct i1; simpl; try (apply inj_bytes_inject).
   induction (Z.to_nat z); simpl; constructor. constructor. auto.
   destruct (Genv.find_symbol ge i) as [b|] eqn:FS.
   assert (kept i). { apply H. red. exists i0; auto with coqlib. }
-  exploit symbols_inject_2. apply init_meminj_preserves_globals. eauto. eauto. 
+  exploit symbols_inject_2. apply init_meminj_preserves_globals. eauto. eauto.
   intros (b' & A & B). rewrite A. apply inj_value_inject.
   econstructor; eauto. symmetry; apply Ptrofs.add_zero.
   destruct (Genv.find_symbol tge i) as [b'|] eqn:FS'.
@@ -1123,7 +1123,7 @@ Proof.
 - inv H. rewrite inj_S in H1. destruct (zeq i p0).
 + congruence.
 + apply IHn with (p0 + 1); auto. omega. omega.
-Qed. 
+Qed.
 
 Lemma init_mem_inj_1:
   Mem.mem_inj init_meminj m tm.
@@ -1138,9 +1138,9 @@ Proof.
   apply Mem.perm_cur. auto.
 + intros (P2 & Q2 & R2 & S2) (P1 & Q1 & R1 & S1).
   apply Q1 in H0. destruct H0. subst.
-  apply Mem.perm_cur. eapply Mem.perm_implies; eauto. 
+  apply Mem.perm_cur. eapply Mem.perm_implies; eauto.
   apply P2. omega.
-- exploit init_meminj_invert; eauto. intros (A & id & B & C). 
+- exploit init_meminj_invert; eauto. intros (A & id & B & C).
   subst delta. apply Zdivide_0.
 - exploit init_meminj_invert_strong; eauto. intros (A & id & gd & B & C & D & E & F).
   exploit (Genv.init_mem_characterization_gen p); eauto.
@@ -1157,9 +1157,9 @@ Local Transparent Mem.loadbytes.
   generalize (S2 NO). unfold Mem.loadbytes. destruct Mem.range_perm_dec; intros E2; inv E2.
   rewrite Zplus_0_r.
   apply Mem_getN_forall2 with (p := 0) (n := nat_of_Z (init_data_list_size (gvar_init v))).
-  rewrite H3, H4. apply bytes_of_init_inject. auto. 
-  omega. 
-  rewrite nat_of_Z_eq by (apply init_data_list_size_pos). omega. 
+  rewrite H3, H4. apply bytes_of_init_inject. auto.
+  omega.
+  rewrite nat_of_Z_eq by (apply init_data_list_size_pos). omega.
 Qed.
 
 Lemma init_mem_inj_2:
@@ -1168,9 +1168,9 @@ Proof.
   constructor; intros.
 - apply init_mem_inj_1.
 - destruct (init_meminj b) as [[b' delta]|] eqn:INJ; auto.
-  elim H. exploit init_meminj_invert; eauto. intros (A & id & B & C). 
+  elim H. exploit init_meminj_invert; eauto. intros (A & id & B & C).
   eapply Genv.find_symbol_not_fresh; eauto.
-- exploit init_meminj_invert; eauto. intros (A & id & B & C). 
+- exploit init_meminj_invert; eauto. intros (A & id & B & C).
   eapply Genv.find_symbol_not_fresh; eauto.
 - red; intros.
   exploit init_meminj_invert. eexact H0. intros (A1 & id1 & B1 & C1).
@@ -1187,7 +1187,7 @@ Proof.
   left; apply Mem.perm_cur; auto.
 + intros (P2 & Q2 & R2 & S2) (P1 & Q1 & R1 & S1).
   apply Q2 in H0. destruct H0. subst.
-  left. apply Mem.perm_cur. eapply Mem.perm_implies; eauto. 
+  left. apply Mem.perm_cur. eapply Mem.perm_implies; eauto.
   apply P1. omega.
 Qed.
 
@@ -1198,7 +1198,7 @@ Lemma init_mem_exists:
   exists tm, Genv.init_mem tp = Some tm.
 Proof.
   intros. apply Genv.init_mem_exists.
-  intros. 
+  intros.
   assert (P: (prog_defmap tp)!id = Some (Gvar v)).
   { eapply prog_defmap_norepet; eauto. eapply match_prog_unique; eauto. }
   rewrite (match_prog_def _ _ _ TRANSF) in P. destruct (IS.mem id used) eqn:U; try discriminate.
@@ -1206,7 +1206,7 @@ Proof.
   split. auto.
   intros. exploit FV; eauto. intros (b & FS).
   apply transform_find_symbol_1 with b; auto.
-  apply kept_closed with id (Gvar v). 
+  apply kept_closed with id (Gvar v).
   apply IS.mem_2; auto. auto. red. red. exists o; auto.
 Qed.
 
@@ -1218,9 +1218,9 @@ Proof.
   intros.
   exploit init_mem_exists; eauto. intros [tm INIT].
   exists init_meminj, tm.
-  split. auto. 
-  split. eapply init_mem_inj_2; eauto. 
-  apply init_meminj_preserves_globals. 
+  split. auto.
+  split. eapply init_mem_inj_2; eauto.
+  apply init_meminj_preserves_globals.
 Qed.
 
 Lemma transf_initial_states:
@@ -1228,7 +1228,7 @@ Lemma transf_initial_states:
 Proof.
   intros. inv H. exploit init_mem_inject; eauto. intros (j & tm & A & B & C).
   exploit symbols_inject_2. eauto. eapply kept_main. eexact H1. intros (tb & P & Q).
-  rewrite Genv.find_funct_ptr_iff in H2. 
+  rewrite Genv.find_funct_ptr_iff in H2.
   exploit defs_inject. eauto. eexact Q. exact H2.
   intros (R & S & T).
   rewrite <- Genv.find_funct_ptr_iff in R.
@@ -1286,15 +1286,15 @@ Local Transparent Linker_def Linker_fundef Linker_varinit Linker_vardef Linker_u
   destruct (link_varinit init1 init2) as [init|] eqn:LI...
   destruct (eqb ro1 ro2) eqn:RO...
   destruct (eqb vo1 vo2) eqn:VO...
-  simpl. 
+  simpl.
   destruct info1, info2.
   assert (EITHER: init = init1 \/ init = init2).
-  { revert LI. unfold link_varinit. 
+  { revert LI. unfold link_varinit.
     destruct (classify_init init1), (classify_init init2); intro EQ; inv EQ; auto.
     destruct (zeq sz (Z.max sz0 0 + 0)); inv H0; auto.
     destruct (zeq sz (init_data_list_size il)); inv H0; auto.
     destruct (zeq sz (init_data_list_size il)); inv H0; auto. }
-  apply eqb_prop in RO. apply eqb_prop in VO. 
+  apply eqb_prop in RO. apply eqb_prop in VO.
   intro EQ; inv EQ. destruct EITHER; subst init; auto.
 Qed.
 
@@ -1339,7 +1339,7 @@ Proof.
 + (* common definition *)
   exploit Y; eauto. intros (PUB1 & PUB2 & _).
   exploit link_def_either; eauto. intros [EQ|EQ]; subst gd.
-* left. eapply used_closed. eexact V1. eapply used_public. eexact V1. eauto. eauto. auto. 
+* left. eapply used_closed. eexact V1. eapply used_public. eexact V1. eauto. eauto. auto.
 * right. eapply used_closed. eexact V2. eapply used_public. eexact V2. eauto. eauto. auto.
 + (* left definition *)
   inv H0. destruct (ISP.In_dec id used1).
@@ -1358,7 +1358,7 @@ Proof.
 + (* no definition *)
   auto.
 - simpl. rewrite ISF.union_iff; left; eapply used_main; eauto.
-- simpl. intros id. rewrite in_app_iff, ISF.union_iff. 
+- simpl. intros id. rewrite in_app_iff, ISF.union_iff.
   intros [A|A]; [left|right]; eapply used_public; eauto.
 - intros. rewrite ISF.union_iff in H.
   destruct (ident_eq id (prog_main p1)).
@@ -1387,16 +1387,16 @@ Theorem link_match_program:
 Proof.
   intros. destruct H0 as (used1 & A1 & B1). destruct H1 as (used2 & A2 & B2).
   destruct (link_prog_inv _ _ _ H) as (U & V & W).
-  econstructor; split. 
+  econstructor; split.
 - apply link_prog_succeeds.
 + rewrite (match_prog_main _ _ _ B1), (match_prog_main _ _ _ B2). auto.
-+ intros. 
++ intros.
   rewrite (match_prog_def _ _ _ B1) in H0.
   rewrite (match_prog_def _ _ _ B2) in H1.
   destruct (IS.mem id used1) eqn:U1; try discriminate.
   destruct (IS.mem id used2) eqn:U2; try discriminate.
   edestruct V as (X & Y & gd & Z); eauto.
-  split. rewrite (match_prog_public _ _ _ B1); auto. 
+  split. rewrite (match_prog_public _ _ _ B1); auto.
   split. rewrite (match_prog_public _ _ _ B2); auto.
   congruence.
 - exists (IS.union used1 used2); split.
@@ -1411,7 +1411,7 @@ Proof.
   destruct (prog_defmap p1)!id as [gd1|] eqn:GD1;
   destruct (prog_defmap p2)!id as [gd2|] eqn:GD2.
 - (* both defined *)
-  exploit V; eauto. intros (PUB1 & PUB2 & _). 
+  exploit V; eauto. intros (PUB1 & PUB2 & _).
   assert (EQ1: IS.mem id used1 = true) by (apply IS.mem_1; eapply used_public; eauto).
   assert (EQ2: IS.mem id used2 = true) by (apply IS.mem_1; eapply used_public; eauto).
   rewrite EQ1, EQ2; auto.
@@ -1428,7 +1428,7 @@ Proof.
 - (* none defined *)
   destruct (IS.mem id used1), (IS.mem id used2); auto.
 }
-* intros. apply PTree.elements_keys_norepet. 
+* intros. apply PTree.elements_keys_norepet.
 Qed.
 
 Instance TransfSelectionLink : TransfLink match_prog := link_match_program.

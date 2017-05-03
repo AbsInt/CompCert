@@ -1062,7 +1062,7 @@ Lemma encode_val_int64:
      encode_val Mint32 (if Archi.big_endian then Val.hiword v else Val.loword v)
   ++ encode_val Mint32 (if Archi.big_endian then Val.loword v else Val.hiword v).
 Proof.
-  intros. unfold encode_val. rewrite H. 
+  intros. unfold encode_val. rewrite H.
   destruct v; destruct Archi.big_endian eqn:BI; try reflexivity;
   unfold Val.loword, Val.hiword, encode_val.
   unfold inj_bytes. rewrite <- map_app. f_equal.

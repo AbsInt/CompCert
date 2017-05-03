@@ -116,7 +116,7 @@ Proof.
   + (* global *)
     inv H2. exists (Genv.symbol_address ge id ofs); auto.
   + (* stack *)
-    inv H2. exists (Vptr sp ofs); split; auto. simpl. rewrite Ptrofs.add_zero_l; auto.  
+    inv H2. exists (Vptr sp ofs); split; auto. simpl. rewrite Ptrofs.add_zero_l; auto.
 Qed.
 
 Lemma eval_static_shift_correct:

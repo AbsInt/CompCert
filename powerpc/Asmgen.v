@@ -120,6 +120,56 @@ Definition rolm (r1 r2: ireg) (amount mask: int) (k: code) :=
   else
     Prlwinm r1 r2 amount Int.mone :: andimm_base r1 r1 mask k.
 
+(** Smart constructors for 64-bit integer constants *)
+
+Definition low64_u (n: int64) := Int64.zero_ext 16 n.
+Definition low64_s (n: int64) := Int64.sign_ext 16 n.
+
+Definition loadimm64 (r: ireg) (n: int64) (k: code) :=
+  let lo_u := low64_u n in
+  let lo_s := low64_s n in
+  let hi_s := Int64.sign_ext 16 (Int64.shr n (Int64.repr 16)) in
+  if Int64.eq n lo_s then
+    Paddi64 r GPR0 n :: k
+  else if Int64.eq n (Int64.or (Int64.shl hi_s (Int64.repr 16)) lo_u) then
+    Paddis64 r GPR0 hi_s :: Pori64 r r lo_u :: k
+  else
+    Pldi r n :: k.
+
+Definition opimm64 (insn2: ireg -> ireg -> ireg -> instruction)
+                   (insn1: ireg -> ireg -> int64 -> instruction)
+                   (r1 r2: ireg) (n: int64) (ok: bool) (k: code) :=
+  if ok then
+    insn1 r1 r2 n :: k
+  else if ireg_eq r2 GPR12 then
+    Pmr GPR0 GPR12 :: loadimm64 GPR12 n (insn2 r1 GPR0 GPR12 :: k)
+  else
+    loadimm64 GPR0 n (insn2 r1 r2 GPR0 :: k).
+
+Definition addimm64 (r1 r2: ireg) (n: int64) (k : code) :=
+  opimm64 Padd64 Paddi64 r1 r2 n (Int64.eq n (low64_s n)) k.
+
+Definition orimm64 (r1 r2: ireg) (n: int64) (k : code) :=
+  opimm64 Por64 Pori64 r1 r2 n (Int64.eq n (low64_u n)) k.
+
+Definition xorimm64 (r1 r2: ireg) (n: int64) (k : code) :=
+  opimm64 Pxor64 Pxori64 r1 r2 n (Int64.eq n (low64_u n)) k.
+
+Definition andimm64_base (r1 r2: ireg) (n: int64) (k : code) :=
+  opimm64 Pand_64 Pandi_64 r1 r2 n (Int64.eq n (low64_u n)) k.
+
+Definition andimm64 (r1 r2: ireg) (n: int64) (k : code) :=
+  if is_rldl_mask n || is_rldr_mask n then
+    Prldinm r1 r2 Int.zero n :: k
+  else
+    andimm64_base r1 r2 n k.
+
+Definition rolm64 (r1 r2: ireg) (amount: int) (mask: int64) (k: code) :=
+  if is_rldl_mask mask || is_rldr_mask mask || is_rldl_mask (Int64.shru' mask amount) then
+    Prldinm r1 r2 amount mask :: k
+  else
+    Prldinm r1 r2 amount Int64.mone :: andimm64_base r1 r1 mask k.
+
 (** Accessing slots in the stack frame.  *)
 
 Definition accessind {A: Type}
@@ -136,7 +186,9 @@ Definition loadind (base: ireg) (ofs: ptrofs) (ty: typ) (dst: mreg) (k: code) :=
   | Tint, IR r => OK(accessind Plwz Plwzx base ofs r k)
   | Tany32, IR r => OK(accessind Plwz_a Plwzx_a base ofs r k)
   | Tsingle, FR r => OK(accessind Plfs Plfsx base ofs r k)
+  | Tlong, IR r => OK(accessind Pld Pldx base ofs r k)
   | Tfloat, FR r => OK(accessind Plfd Plfdx base ofs r k)
+  | Tany64, IR r => OK(accessind Pld_a Pldx_a base ofs r k)
   | Tany64, FR r => OK(accessind Plfd_a Plfdx_a base ofs r k)
   | _, _ => Error (msg "Asmgen.loadind")
   end.
@@ -146,7 +198,9 @@ Definition storeind (src: mreg) (base: ireg) (ofs: ptrofs) (ty: typ) (k: code) :
   | Tint, IR r => OK(accessind Pstw Pstwx base ofs r k)
   | Tany32, IR r => OK(accessind Pstw_a Pstwx_a base ofs r k)
   | Tsingle, FR r => OK(accessind Pstfs Pstfsx base ofs r k)
+  | Tlong, IR r => OK(accessind Pstd Pstdx base ofs r k)
   | Tfloat, FR r => OK(accessind Pstfd Pstfdx base ofs r k)
+  | Tany64, IR r => OK(accessind Pstd_a Pstdx_a base ofs r k)
   | Tany64, FR r => OK(accessind Pstfd_a Pstfdx_a base ofs r k)
   | _, _ => Error (msg "Asmgen.storeind")
   end.
@@ -199,6 +253,26 @@ Definition transl_cond
       do r1 <- ireg_of a1; OK (andimm_base GPR0 r1 n k)
   | Cmasknotzero n, a1 :: nil =>
       do r1 <- ireg_of a1; OK (andimm_base GPR0 r1 n k)
+  | Ccompl c, a1 :: a2 :: nil =>
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; OK (Pcmpd r1 r2 :: k)
+  | Ccomplu c, a1 :: a2 :: nil =>
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; OK (Pcmpld r1 r2 :: k)
+  | Ccomplimm c n, a1 :: nil =>
+      do r1 <- ireg_of a1;
+      if Int64.eq n (low64_s n) then
+        OK (Pcmpdi r1 n :: k)
+      else if ireg_eq r1 GPR12 then
+        OK (Pmr GPR0 GPR12 :: loadimm64 GPR12 n (Pcmpd GPR0 GPR12 :: k))
+      else
+        OK (loadimm64 GPR0 n (Pcmpd r1 GPR0 :: k))
+  | Ccompluimm c n, a1 :: nil =>
+      do r1 <- ireg_of a1;
+      if Int64.eq n (low64_u n) then
+        OK (Pcmpldi r1 n :: k)
+      else if ireg_eq r1 GPR12 then
+        OK (Pmr GPR0 GPR12 :: loadimm64 GPR12 n (Pcmpld GPR0 GPR12 :: k))
+      else
+        OK (loadimm64 GPR0 n (Pcmpld r1 GPR0 :: k))
   | _, _ =>
       Error(msg "Asmgen.transl_cond")
   end.
@@ -238,6 +312,10 @@ Definition crbit_for_cond (cond: condition) :=
   | Cnotcompf cmp => let p := crbit_for_fcmp cmp in (fst p, negb (snd p))
   | Cmaskzero n => (CRbit_2, true)
   | Cmasknotzero n => (CRbit_2, false)
+  | Ccompl cmp => crbit_for_icmp cmp
+  | Ccomplu cmp => crbit_for_icmp cmp
+  | Ccomplimm cmp n => crbit_for_icmp cmp
+  | Ccompluimm cmp n => crbit_for_icmp cmp
   end.
 
 (** Recognition of comparisons [>= 0] and [< 0]. *)
@@ -509,8 +587,96 @@ Definition transl_op
   | Ofloatofwords, a1 :: a2 :: nil =>
       do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- freg_of res;
       OK (Pfmake r r1 r2 :: k)
+  | Omakelong, a1 :: a2 :: nil =>
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- ireg_of res; OK (Plmake r r1 r2 :: k)
+  | Olowlong, a1 :: nil =>
+      assertion (mreg_eq a1 res);
+      do r <- ireg_of res; OK (Pllo r :: k)
+  | Ohighlong, a1 :: nil =>
+      do r1 <- ireg_of a1; do r <- ireg_of res; OK (Plhi r r1 :: k)
   | Ocmp cmp, _ =>
       transl_cond_op cmp args res k
+(*c PPC64 operations *)
+  | Olongconst n, nil =>
+      do r <- ireg_of res; OK (loadimm64 r n k)
+  | Ocast32signed, a1 :: nil =>
+      do r1 <- ireg_of a1; do r <- ireg_of res;
+      OK (Pextsw r r1 :: k)
+  | Ocast32unsigned, a1 :: nil =>
+      do r1 <- ireg_of a1; do r <- ireg_of res;
+      OK (Pextzw r r1 :: k)
+  | Oaddl, a1 :: a2 :: nil =>
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- ireg_of res;
+      OK (Padd64 r r1 r2 :: k)
+  | Oaddlimm n, a1 :: nil =>
+      do r1 <- ireg_of a1; do r <- ireg_of res;
+      OK (addimm64 r r1 n k)
+  | Osubl, a1 :: a2 :: nil =>
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- ireg_of res;
+      OK (Psubfc64 r r2 r1 :: k)
+  | Onegl, a1 :: nil =>
+      do r1 <- ireg_of a1; do r <- ireg_of res;
+      OK (Psubfic64 r r1 Int64.zero :: k)
+  | Omull, a1 :: a2 :: nil =>
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- ireg_of res;
+      OK (Pmulld r r1 r2 :: k)
+  | Omullhs, a1 :: a2 :: nil =>
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- ireg_of res;
+        OK (Pmulhd r r1 r2 :: k)
+  | Omullhu, a1 :: a2 :: nil =>
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- ireg_of res;
+        OK (Pmulhdu r r1 r2 :: k)
+  | Odivl, a1 :: a2 :: nil =>
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- ireg_of res;
+      OK (Pdivd r r1 r2 :: k)
+  | Odivlu, a1 :: a2 :: nil =>
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- ireg_of res;
+      OK (Pdivdu r r1 r2 :: k)
+  | Oandl,  a1 :: a2 :: nil =>
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- ireg_of res;
+      OK (Pand_64 r r1 r2 :: k)
+  | Oandlimm n, a1 :: nil =>
+      do r1 <- ireg_of a1; do r <- ireg_of res;
+      OK (andimm64 r r1 n k)
+  | Oorl,  a1 :: a2 :: nil =>
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- ireg_of res;
+      OK (Por64 r r1 r2 :: k)
+  | Oorlimm n, a1 :: nil =>
+      do r1 <- ireg_of a1; do r <- ireg_of res;
+      OK (orimm64 r r1 n k)
+  | Oxorl,  a1 :: a2 :: nil =>
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- ireg_of res;
+      OK (Pxor64 r r1 r2 :: k)
+  | Oxorlimm n, a1 :: nil =>
+      do r1 <- ireg_of a1; do r <- ireg_of res;
+      OK (xorimm64 r r1 n k)
+  | Onotl, a1 :: nil =>
+      do r1 <- ireg_of a1; do r <- ireg_of res;
+      OK (Pnor64 r r1 r1 :: k)
+  | Oshll, a1 :: a2 :: nil =>
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- ireg_of res;
+      OK (Psld r r1 r2 :: k)
+  | Oshrl, a1 :: a2 :: nil =>
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- ireg_of res;
+      OK (Psrad r r1 r2 :: k)
+  | Oshrlimm n, a1 :: nil =>
+      do r1 <- ireg_of a1; do r <- ireg_of res;
+      OK (Psradi r r1 n :: k)
+  | Oshrlu, a1 :: a2 :: nil =>
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- ireg_of res;
+      OK (Psrd r r1 r2 :: k)
+  | Orolml amount mask, a1 :: nil =>
+      do r1 <- ireg_of a1; do r <- ireg_of res;
+      OK (rolm64 r r1 amount mask k)
+  | Oshrxlimm n, a1 :: nil =>
+      do r1 <- ireg_of a1; do r <- ireg_of res;
+      OK (Psradi r r1 n :: Paddze64 r r :: k)
+  | Olongoffloat, a1 :: nil =>
+      do r1 <- freg_of a1; do r <- ireg_of res;
+      OK (Pfctid r r1 :: k)
+  | Ofloatoflong, a1 :: nil =>
+      do r1 <- ireg_of a1; do r <- freg_of res;
+      OK (Pfcfl r r1 :: k)
   | _, _ =>
       Error(msg "Asmgen.transl_op")
   end.
@@ -588,6 +754,9 @@ Definition transl_load (chunk: memory_chunk) (addr: addressing)
   | Mint32 =>
       do r <- ireg_of dst;
       transl_memory_access (Plwz r) (Plwzx r) addr args GPR12 k
+  | Mint64 =>
+      do r <- ireg_of dst;
+      transl_memory_access (Pld r) (Pldx r) addr args GPR12 k
   | Mfloat32 =>
       do r <- freg_of dst;
       transl_memory_access (Plfs r) (Plfsx r) addr args GPR12 k
@@ -611,6 +780,9 @@ Definition transl_store (chunk: memory_chunk) (addr: addressing)
   | Mint32  =>
       do r <- ireg_of src;
       transl_memory_access (Pstw r) (Pstwx r) addr args temp k
+  | Mint64  =>
+      do r <- ireg_of src;
+      transl_memory_access (Pstd r) (Pstdx r) addr args temp k
   | Mfloat32 =>
       do r <- freg_of src;
       transl_memory_access (Pstfs r) (Pstfsx r) addr args temp k

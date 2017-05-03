@@ -179,6 +179,14 @@ Proof.
 Qed.
 Hint Resolve rolm_label: labels.
 
+Remark loadimm64_label:
+  forall r n k, tail_nolabel k (loadimm64 r n k).
+Proof.
+  unfold loadimm64; intros.
+  destruct Int64.eq. TailNoLabel. destruct Int64.eq; TailNoLabel.
+Qed.
+Hint Resolve loadimm64_label: labels.
+
 Remark loadind_label:
   forall base ofs ty dst k c,
   loadind base ofs ty dst k = OK c -> tail_nolabel k c.
@@ -232,12 +240,27 @@ Remark transl_op_label:
 Proof.
 Opaque Int.eq.
   unfold transl_op; intros; destruct op; TailNoLabel.
-  destruct (preg_of r); try discriminate; destruct (preg_of m); inv H; TailNoLabel.
-  destruct (symbol_is_small_data i i0). TailNoLabel. destruct (symbol_is_rel_data i i0); TailNoLabel.
-  destruct (symbol_is_small_data i i0). TailNoLabel. destruct (symbol_is_rel_data i i0); TailNoLabel.
-  destruct (Int.eq (high_s i) Int.zero); TailNoLabel; eapply tail_nolabel_trans; TailNoLabel.
-  destruct (Int.eq (high_s i) Int.zero); TailNoLabel; eapply tail_nolabel_trans; TailNoLabel.
-  eapply transl_cond_op_label; eauto.
+- destruct (preg_of r); try discriminate; destruct (preg_of m); inv H; TailNoLabel.
+- destruct (symbol_is_small_data i i0). TailNoLabel. destruct (symbol_is_rel_data i i0); TailNoLabel.
+- destruct (symbol_is_small_data i i0). TailNoLabel. destruct (symbol_is_rel_data i i0); TailNoLabel.
+- destruct (Int.eq (high_s i) Int.zero); TailNoLabel; eapply tail_nolabel_trans; TailNoLabel.
+- destruct (Int.eq (high_s i) Int.zero); TailNoLabel; eapply tail_nolabel_trans; TailNoLabel.
+- unfold addimm64, opimm64. destruct Int64.eq. TailNoLabel.
+  destruct ireg_eq; [apply tail_nolabel_cons; unfold nolabel;auto|]; eapply tail_nolabel_trans; TailNoLabel.
+- unfold andimm64, andimm64_base, opimm64.
+  destruct (is_rldl_mask i || is_rldr_mask i). TailNoLabel.
+  destruct Int64.eq. TailNoLabel.
+  destruct ireg_eq; [apply tail_nolabel_cons; unfold nolabel;auto|]; eapply tail_nolabel_trans; TailNoLabel.
+- unfold orimm64, opimm64. destruct Int64.eq. TailNoLabel.
+  destruct ireg_eq; [apply tail_nolabel_cons; unfold nolabel;auto|]; eapply tail_nolabel_trans; TailNoLabel.
+- unfold xorimm64, opimm64. destruct Int64.eq. TailNoLabel.
+  destruct ireg_eq; [apply tail_nolabel_cons; unfold nolabel;auto|]; eapply tail_nolabel_trans; TailNoLabel.
+- unfold rolm64, andimm64_base, opimm64.
+  destruct (is_rldl_mask i0 || is_rldr_mask i0 || is_rldl_mask (Int64.shru' i0 i)). TailNoLabel.
+  apply tail_nolabel_cons; unfold nolabel; auto.
+  destruct Int64.eq. TailNoLabel.
+  destruct ireg_eq; [apply tail_nolabel_cons; unfold nolabel;auto|]; eapply tail_nolabel_trans; TailNoLabel.
+- eapply transl_cond_op_label; eauto.
 Qed.
 
 Remark transl_memory_access_label:
@@ -760,12 +783,12 @@ Opaque loadind.
   destruct (snd (crbit_for_cond cond)).
   (* Pbt, taken *)
   econstructor; econstructor; econstructor; split. eexact A.
-  split. eapply agree_exten; eauto with asmgen.
+  split. eapply agree_undef_regs; eauto with asmgen.
   split. simpl. rewrite B. reflexivity.
   auto with asmgen.
   (* Pbf, taken *)
   econstructor; econstructor; econstructor; split. eexact A.
-  split. eapply agree_exten; eauto with asmgen.
+  split. eapply agree_undef_regs; eauto with asmgen.
   split. simpl. rewrite B. reflexivity.
   auto with asmgen.
 
@@ -779,7 +802,7 @@ Opaque loadind.
   destruct (snd (crbit_for_cond cond)).
   apply exec_straight_one. simpl. rewrite B. reflexivity. auto.
   apply exec_straight_one. simpl. rewrite B. reflexivity. auto.
-  split. eapply agree_exten; eauto with asmgen.
+  split. eapply agree_undef_regs; eauto with asmgen.
   intros; Simpl.
   split. simpl. congruence.
   Simpl. 
@@ -865,7 +888,7 @@ Local Transparent destroyed_by_jumptable.
   apply exec_straight_two with rs4 m3'.
   simpl. unfold store1. rewrite gpr_or_zero_not_zero.
   change (rs3 GPR1) with sp. change (rs3 GPR0) with (rs0 LR).
-  simpl const_low. rewrite ATLR. erewrite storev_offset_ptr by eexact P. auto. congruence.   
+  simpl const_low. rewrite ATLR. erewrite storev_offset_ptr by eexact P. auto. congruence.
   auto. auto. auto.
   left; exists (State rs5 m3'); split.
   eapply exec_straight_steps_1; eauto. omega. constructor.

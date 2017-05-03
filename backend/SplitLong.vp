@@ -130,7 +130,7 @@ Definition negl (e: expr) :=
 Definition notl (e: expr) :=
   splitlong e (fun h l => makelong (notint h) (notint l)).
 
-Definition longoffloat (arg: expr) := 
+Definition longoffloat (arg: expr) :=
   Eexternal i64_dtos sig_f_l (arg ::: Enil).
 Definition longuoffloat (arg: expr) :=
   Eexternal i64_dtou sig_f_l (arg ::: Enil).
@@ -138,7 +138,7 @@ Definition floatoflong (arg: expr) :=
   Eexternal i64_stod sig_l_f (arg ::: Enil).
 Definition floatoflongu (arg: expr) :=
   Eexternal i64_utod sig_l_f (arg ::: Enil).
-Definition longofsingle (arg: expr) := 
+Definition longofsingle (arg: expr) :=
   longoffloat (floatofsingle arg).
 Definition longuofsingle (arg: expr) :=
   longuoffloat (floatofsingle arg).

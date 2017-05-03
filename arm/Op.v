@@ -1102,7 +1102,7 @@ Proof.
   rewrite eval_shift_stack_addressing.
   eapply eval_addressing_inj with (sp1 := Vptr sp1 Ptrofs.zero); eauto.
   intros. apply symbol_address_inject.
-  econstructor; eauto. rewrite Ptrofs.add_zero_l; auto. 
+  econstructor; eauto. rewrite Ptrofs.add_zero_l; auto.
 Qed.
 
 Lemma eval_operation_inject:
@@ -1122,7 +1122,7 @@ Proof.
   intros; eapply Mem.weak_valid_pointer_inject_no_overflow; eauto.
   intros; eapply Mem.different_pointers_inject; eauto.
   intros; apply symbol_address_inject.
-  econstructor; eauto. rewrite Ptrofs.add_zero_l; auto. 
+  econstructor; eauto. rewrite Ptrofs.add_zero_l; auto.
 Qed.
 
 End EVAL_INJECT.

@@ -93,7 +93,7 @@ Local Opaque Z.add Z.mul sepconj range.
   apply range_drop_right with 8. omega.
   apply range_split. omega.
   apply range_split_2. fold ol; omega. omega.
-  apply range_split. omega. 
+  apply range_split. omega.
   apply range_split. omega.
   apply range_drop_right with ostkdata. omega.
   eapply sep_drop2. eexact H.

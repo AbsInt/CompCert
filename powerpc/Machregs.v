@@ -86,7 +86,7 @@ Definition mreg_type (r: mreg): typ :=
   match r with
   | R3  | R4  | R5  | R6  | R7  | R8  | R9  | R10  | R11 | R12
   | R14 | R15 | R16 | R17 | R18 | R19 | R20 | R21 | R22 | R23 | R24
-  | R25 | R26 | R27 | R28 | R29 | R30 | R31 => Tany32
+  | R25 | R26 | R27 | R28 | R29 | R30 | R31 => if Archi.ppc64 then Tany64 else Tany32
   | F0  | F1  | F2  | F3  | F4  | F5  | F6  | F7
   | F8  | F9  | F10 | F11 | F12 | F13 | F14 | F15
   | F16 | F17 | F18 | F19 | F20 | F21 | F22 | F23
@@ -159,11 +159,25 @@ Definition register_by_name (s: string) : option mreg :=
 
 (** ** Destroyed registers, preferred registers *)
 
+Definition destroyed_by_cond (cond: condition): list mreg :=
+  match cond with
+  | Ccomplimm _ _ | Ccompluimm _ _ => R12 :: nil
+  | _ => nil
+  end.
+
 Definition destroyed_by_op (op: operation): list mreg :=
   match op with
   | Ofloatconst _ => R12 :: nil
   | Osingleconst _ => R12 :: nil
+  | Olongconst _ => R12 :: nil
   | Ointoffloat | Ointuoffloat => F13 :: nil
+  | Olongoffloat => F13 :: nil
+  | Oaddlimm _ => R12 :: nil
+  | Oandlimm _ => R12 :: nil
+  | Oorlimm _ => R12 :: nil
+  | Oxorlimm _ => R12 :: nil
+  | Orolml _ _ => R12 :: nil
+  | Ocmp c => destroyed_by_cond c
   | _ => nil
   end.
 
@@ -172,9 +186,6 @@ Definition destroyed_by_load (chunk: memory_chunk) (addr: addressing): list mreg
 
 Definition destroyed_by_store (chunk: memory_chunk) (addr: addressing): list mreg :=
   R11 :: R12 :: nil.
-
-Definition destroyed_by_cond (cond: condition): list mreg :=
-  nil.
 
 Definition destroyed_by_jumptable: list mreg :=
   R12 :: nil.
@@ -239,11 +250,13 @@ Global Opaque
 
 (** Two-address operations.  Return [true] if the first argument and
   the result must be in the same location *and* are unconstrained
-  by [mregs_for_operation]. There is only one: rotate-mask-insert. *)
+  by [mregs_for_operation]. *)
 
 Definition two_address_op (op: operation) : bool :=
   match op with
   | Oroli _ _ => true
+  | Olowlong => true
+  | Ofloatofsingle => true
   | _ => false
   end.
 

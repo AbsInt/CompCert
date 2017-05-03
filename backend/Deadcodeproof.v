@@ -1101,7 +1101,7 @@ Proof.
   exists (Callstate nil tf nil m0); split.
   econstructor; eauto.
   eapply (Genv.init_mem_match TRANSF); eauto.
-  replace (prog_main tprog) with (prog_main prog). 
+  replace (prog_main tprog) with (prog_main prog).
   rewrite symbols_preserved. eauto.
   symmetry; eapply match_program_main; eauto.
   rewrite <- H3. eapply sig_function_translated; eauto.

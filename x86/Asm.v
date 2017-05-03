@@ -209,7 +209,7 @@ Inductive instruction: Type :=
   | Pcmpl_ri (r1: ireg) (n: int)
   | Pcmpq_ri (r1: ireg) (n: int64)
   | Ptestl_rr (r1 r2: ireg)
-  | Ptestq_rr (r1 r2: ireg) 
+  | Ptestq_rr (r1 r2: ireg)
   | Ptestl_ri (r1: ireg) (n: int)
   | Ptestq_ri (r1: ireg) (n: int64)
   | Pcmov (c: testcond) (rd: ireg) (r1: ireg)
@@ -792,7 +792,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pxorl_rr rd r1 =>
       Next (nextinstr_nf (rs#rd <- (Val.xor rs#rd rs#r1))) m
   | Pxorq_rr rd r1 =>
-      Next (nextinstr_nf (rs#rd <- (Val.xorl rs#rd rs#r1))) m 
+      Next (nextinstr_nf (rs#rd <- (Val.xorl rs#rd rs#r1))) m
   | Pxorl_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Val.xor rs#rd (Vint n)))) m
   | Pxorq_ri rd n =>
@@ -1145,7 +1145,7 @@ Proof.
   { intros. inv H; inv H0; congruence. }
   assert (B: forall p v1 v2,
              extcall_arg_pair rs m p v1 -> extcall_arg_pair rs m p v2 -> v1 = v2).
-  { intros. inv H; inv H0. 
+  { intros. inv H; inv H0.
     eapply A; eauto.
     f_equal; eapply A; eauto. }
   assert (C: forall ll vl1, list_forall2 (extcall_arg_pair rs m) ll vl1 ->

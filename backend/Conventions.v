@@ -33,7 +33,7 @@ Proof.
   exploit H; eauto. destruct p; simpl in *; intuition congruence.
   apply IHpl; auto.
 Qed.
-  
+
 (** ** Location of function parameters *)
 
 (** A function finds the values of its parameter in the same locations
@@ -65,7 +65,7 @@ Proof.
   inv A. auto.
   unfold loc_parameters. generalize (loc_arguments sg). induction l as [ | p l]; simpl; intros.
   auto.
-  rewrite map_app. f_equal; auto. destruct p; auto. 
+  rewrite map_app. f_equal; auto. destruct p; auto.
 Qed.
 
 (** * Tail calls *)
@@ -90,8 +90,8 @@ Definition tailcall_is_possible (sg: signature) : bool :=
 Lemma tailcall_is_possible_correct:
   forall s, tailcall_is_possible s = true -> tailcall_possible s.
 Proof.
-  unfold tailcall_is_possible; intros. rewrite forallb_forall in H. 
-  red; intros. apply H in H0. destruct l; [auto|discriminate]. 
+  unfold tailcall_is_possible; intros. rewrite forallb_forall in H.
+  red; intros. apply H in H0. destruct l; [auto|discriminate].
 Qed.
 
 Lemma zero_size_arguments_tailcall_possible:

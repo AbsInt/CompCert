@@ -338,7 +338,7 @@ Proof.
 - exploit extcall_arg_match; eauto. intros (v' & A & B). exists v'; split; auto. constructor; auto.
 - exploit extcall_arg_match. eauto. eauto. eexact H2. intros (v1 & A1 & B1).
   exploit extcall_arg_match. eauto. eauto. eexact H3. intros (v2 & A2 & B2).
-  exists (Val.longofwords v1 v2); split. constructor; auto. apply Val.longofwords_lessdef; auto. 
+  exists (Val.longofwords v1 v2); split. constructor; auto. apply Val.longofwords_lessdef; auto.
 Qed.
 
 Lemma extcall_args_match:
@@ -871,13 +871,13 @@ Inductive match_stack: list Mach.stackframe -> Prop :=
 
 Lemma parent_sp_def: forall s, match_stack s -> parent_sp s <> Vundef.
 Proof.
-  induction 1; simpl. 
+  induction 1; simpl.
   unfold Vnullptr; destruct Archi.ptr64; congruence.
   auto.
 Qed.
 
 Lemma parent_ra_def: forall s, match_stack s -> parent_ra s <> Vundef.
-Proof. 
+Proof.
   induction 1; simpl.
   unfold Vnullptr; destruct Archi.ptr64; congruence.
   inv H0. congruence.

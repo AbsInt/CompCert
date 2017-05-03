@@ -80,7 +80,7 @@ Theorem transf_cstrategy_program_preservation:
 Proof.
   assert (WBT: forall p, well_behaved_traces (Cstrategy.semantics p)).
     intros. eapply ssr_well_behaved. apply Cstrategy.semantics_strongly_receptive.
-  intros. 
+  intros.
   assert (MATCH: match_prog p tp) by (apply transf_c_program_match; auto).
   intuition auto.
   eapply forward_simulation_behavior_improves; eauto.

@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Static analysis and strength reduction for operators 
+(** Static analysis and strength reduction for operators
   and conditions.  This is the machine-dependent part of [Constprop]. *)
 
 Require Import Coqlib.
@@ -51,7 +51,7 @@ Definition eval_static_shift (s: shift) (n: int) : int :=
   | Sror x => Int.ror n x
   end.
 
-Nondetfunction cond_strength_reduction 
+Nondetfunction cond_strength_reduction
               (cond: condition) (args: list reg) (vl: list aval) :=
   match cond, args, vl with
   | Ccomp c, r1 :: r2 :: nil, I n1 :: v2 :: nil =>
@@ -98,7 +98,7 @@ Nondetfunction cond_strength_reduction
       if Float32.eq_dec n2 Float32.zero
       then (Cnotcompfszero c, r1 :: nil)
       else (cond, args)
-  | _, _, _ => 
+  | _, _, _ =>
       (cond, args)
   end.
 
@@ -206,7 +206,7 @@ Definition make_cast8signed (r: reg) (a: aval) :=
 Definition make_cast16signed (r: reg) (a: aval) :=
   if vincl a (Sgn Ptop 16) then (Omove, r :: nil) else (Ocast16signed, r :: nil).
 
-Nondetfunction op_strength_reduction 
+Nondetfunction op_strength_reduction
               (op: operation) (args: list reg) (vl: list aval) :=
   match op, args, vl with
   | Ocast8signed, r1 :: nil, v1 :: nil => make_cast8signed r1 v1

@@ -123,7 +123,7 @@ Definition divuimm (e1: expr) (n2: int) :=
         end
   end.
 
-Definition divu (e1: expr) (e2: expr) := 
+Definition divu (e1: expr) (e2: expr) :=
   match is_intconst e2, is_intconst e1 with
   | Some n2, Some n1 =>
       if Int.eq n2 Int.zero
@@ -149,7 +149,7 @@ Definition moduimm (e1: expr) (n2: int) :=
         end
   end.
 
-Definition modu (e1: expr) (e2: expr) := 
+Definition modu (e1: expr) (e2: expr) :=
   match is_intconst e2, is_intconst e1 with
   | Some n2, Some n1 =>
       if Int.eq n2 Int.zero
@@ -169,7 +169,7 @@ Definition divs_mul (p: Z) (m: Z) :=
 
 Definition divsimm (e1: expr) (n2: int) :=
   match Int.is_power2 n2 with
-  | Some l => 
+  | Some l =>
       if Int.ltu l (Int.repr 31)
       then shrximm e1 l
       else divs_base e1 (Eop (Ointconst n2) Enil)
@@ -183,7 +183,7 @@ Definition divsimm (e1: expr) (n2: int) :=
         end
   end.
 
-Definition divs (e1: expr) (e2: expr) := 
+Definition divs (e1: expr) (e2: expr) :=
   match is_intconst e2, is_intconst e1 with
   | Some n2, Some n1 =>
       if Int.eq n2 Int.zero
@@ -209,7 +209,7 @@ Definition modsimm (e1: expr) (n2: int) :=
         end
   end.
 
-Definition mods (e1: expr) (e2: expr) := 
+Definition mods (e1: expr) (e2: expr) :=
   match is_intconst e2, is_intconst e1 with
   | Some n2, Some n1 =>
       if Int.eq n2 Int.zero
@@ -266,7 +266,7 @@ Definition modlu (e1 e2: expr) :=
   end.
 
 Definition divls_mull (p: Z) (m: Z) :=
-  let e2 := 
+  let e2 :=
     mullhs (Eletvar O) (Int64.repr m) in
   let e3 :=
     if zlt m Int64.half_modulus then e2 else addl e2 (Eletvar O) in

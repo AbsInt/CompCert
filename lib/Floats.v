@@ -820,6 +820,75 @@ Proof.
 - omega.
 Qed.
 
+(** Conversions to/from 32-bit integers can be implemented by going through 64-bit integers. *)
+
+Remark ZofB_range_widen:
+  forall (f: float) n min1 max1 min2 max2,
+  ZofB_range _ _ f min1 max1 = Some n ->
+  min2 <= min1 -> max1 <= max2 ->
+  ZofB_range _ _ f min2 max2 = Some n.
+Proof.
+  intros. exploit ZofB_range_inversion; eauto. intros (A & B & C).
+  unfold ZofB_range; rewrite C.
+  replace (min2 <=? n) with true. replace (n <=? max2) with true. auto.
+  symmetry; apply Z.leb_le; omega.
+  symmetry; apply Z.leb_le; omega.
+Qed.
+
+Theorem to_int_to_long:
+  forall f n, to_int f = Some n -> to_long f = Some (Int64.repr (Int.signed n)).
+Proof.
+  unfold to_int, to_long; intros.
+  destruct (ZofB_range 53 1024 f Int.min_signed Int.max_signed) as [z|] eqn:Z; inv H.
+  exploit ZofB_range_inversion; eauto. intros (A & B & C).
+  replace (ZofB_range 53 1024 f Int64.min_signed Int64.max_signed) with (Some z).
+  simpl. rewrite Int.signed_repr; auto.
+  symmetry; eapply ZofB_range_widen; eauto. compute; congruence. compute; congruence.
+Qed.
+
+Theorem to_intu_to_longu:
+  forall f n, to_intu f = Some n -> to_longu f = Some (Int64.repr (Int.unsigned n)).
+Proof.
+  unfold to_intu, to_longu; intros.
+  destruct (ZofB_range 53 1024 f 0 Int.max_unsigned) as [z|] eqn:Z; inv H.
+  exploit ZofB_range_inversion; eauto. intros (A & B & C).
+  replace (ZofB_range 53 1024 f 0 Int64.max_unsigned) with (Some z).
+  simpl. rewrite Int.unsigned_repr; auto.
+  symmetry; eapply ZofB_range_widen; eauto. omega. compute; congruence.
+Qed.
+
+Theorem to_intu_to_long:
+  forall f n, to_intu f = Some n -> to_long f = Some (Int64.repr (Int.unsigned n)).
+Proof.
+  unfold to_intu, to_long; intros.
+  destruct (ZofB_range 53 1024 f 0 Int.max_unsigned) as [z|] eqn:Z; inv H.
+  exploit ZofB_range_inversion; eauto. intros (A & B & C).
+  replace (ZofB_range 53 1024 f Int64.min_signed Int64.max_signed) with (Some z).
+  simpl. rewrite Int.unsigned_repr; auto.
+  symmetry; eapply ZofB_range_widen; eauto. compute; congruence. compute; congruence.
+Qed.
+
+Theorem of_int_of_long:
+  forall n, of_int n = of_long (Int64.repr (Int.signed n)).
+Proof.
+  unfold of_int, of_long. intros. f_equal. rewrite Int64.signed_repr. auto.
+  generalize (Int.signed_range n). compute_this Int64.min_signed. compute_this Int64.max_signed. smart_omega.
+Qed.
+
+Theorem of_intu_of_longu:
+  forall n, of_intu n = of_longu (Int64.repr (Int.unsigned n)).
+Proof.
+  unfold of_intu, of_longu. intros. f_equal. rewrite Int64.unsigned_repr. auto.
+  generalize (Int.unsigned_range n). smart_omega.
+Qed.
+
+Theorem of_intu_of_long:
+  forall n, of_intu n = of_long (Int64.repr (Int.unsigned n)).
+Proof.
+  unfold of_intu, of_long. intros. f_equal. rewrite Int64.signed_repr. auto.
+  generalize (Int.unsigned_range n). compute_this Int64.min_signed; compute_this Int64.max_signed; smart_omega.
+Qed.
+
 End Float.
 
 (** * Single-precision FP numbers *)

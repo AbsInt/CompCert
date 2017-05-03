@@ -24,7 +24,7 @@ Extract Constant Asm.ireg_eq => "fun (x: ireg) (y: ireg) -> x = y".
 Extract Constant Asm.freg_eq => "fun (x: freg) (y: freg) -> x = y".
 Extract Constant Asm.preg_eq => "fun (x: preg) (y: preg) -> x = y".
 
-(* Choice of PPC variant *)
+(* Choice of PPC splitlong *)
 Extract Constant Archi.ppc64 =>
   "begin match Configuration.model with
    | ""ppc64"" -> true

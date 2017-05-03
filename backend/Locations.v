@@ -403,7 +403,7 @@ Module Locmap.
     (forall l, In l (regs_of_rpair p) -> ls2 l = ls1 l) ->
     getpair p ls2 = getpair p ls1.
   Proof.
-    intros. destruct p; simpl. 
+    intros. destruct p; simpl.
     apply H; simpl; auto.
     f_equal; apply H; simpl; auto.
   Qed.
@@ -412,7 +412,7 @@ Module Locmap.
     forall p v m l,
     forall_rpair (fun r => Loc.diff l (R r)) p -> setpair p v m l = m l.
   Proof.
-    intros; destruct p; simpl in *. 
+    intros; destruct p; simpl in *.
   - apply gso. apply Loc.diff_sym; auto.
   - destruct H. rewrite ! gso by (apply Loc.diff_sym; auto). auto.
   Qed.

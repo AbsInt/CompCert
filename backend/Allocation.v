@@ -39,7 +39,12 @@ Require Import Op Registers RTL Locations Conventions RTLtyping LTL.
   maching between an RTL instruction and an LTL basic block.
 *)
 
-Definition move := (loc * loc)%type.
+Inductive move: Type :=
+  | MV (src dst: loc)
+  | MVmakelong (src1 src2 dst: mreg)
+  | MVlowlong (src dst: mreg)
+  | MVhighlong (src dst: mreg).
+
 Definition moves := list move.
 
 Inductive block_shape: Type :=
@@ -110,19 +115,46 @@ Definition classify_operation {A: Type} (op: operation) (args: list A) : operati
   end.
 
 (** Extract the move instructions at the beginning of block [b].
-  Return the list of moves and the suffix of [b] after the moves. *)
+  Return the list of moves and the suffix of [b] after the moves.
+  Two versions are provided: [extract_moves], which extracts only
+  "true" moves, and [extract_moves_ext], which also extracts
+  the [makelong], [lowlong] and [highlong] operations over 64-bit integers.
+*)
 
 Fixpoint extract_moves (accu: moves) (b: bblock) {struct b} : moves * bblock :=
   match b with
   | Lgetstack sl ofs ty dst :: b' =>
-      extract_moves ((S sl ofs ty, R dst) :: accu) b'
+      extract_moves (MV (S sl ofs ty) (R dst) :: accu) b'
   | Lsetstack src sl ofs ty :: b' =>
-      extract_moves ((R src, S sl ofs ty) :: accu) b'
+      extract_moves (MV (R src) (S sl ofs ty) :: accu) b'
   | Lop op args res :: b' =>
       match is_move_operation op args with
       | Some arg =>
-          extract_moves ((R arg, R res) :: accu) b'
+          extract_moves (MV (R arg) (R res) :: accu) b'
       | None =>
+          (List.rev accu, b)
+      end
+  | _ =>
+      (List.rev accu, b)
+  end.
+
+Fixpoint extract_moves_ext (accu: moves) (b: bblock) {struct b} : moves * bblock :=
+  match b with
+  | Lgetstack sl ofs ty dst :: b' =>
+      extract_moves_ext (MV (S sl ofs ty) (R dst) :: accu) b'
+  | Lsetstack src sl ofs ty :: b' =>
+      extract_moves_ext (MV (R src) (S sl ofs ty) :: accu) b'
+  | Lop op args res :: b' =>
+      match classify_operation op args with
+      | operation_Omove arg =>
+          extract_moves_ext (MV (R arg) (R res) :: accu) b'
+      | operation_Omakelong arg1 arg2 =>
+          extract_moves_ext (MVmakelong arg1 arg2 res :: accu) b'
+      | operation_Olowlong arg =>
+          extract_moves_ext (MVlowlong arg res :: accu) b'
+      | operation_Ohighlong arg =>
+          extract_moves_ext (MVhighlong arg res :: accu) b'
+      | operation_other _ _ =>
           (List.rev accu, b)
       end
   | _ =>
@@ -251,17 +283,17 @@ Definition pair_instr_block
       | _ => None
       end
   | Icall sg ros args res s =>
-      let (mv1, b1) := extract_moves nil b in
+      let (mv1, b1) := extract_moves_ext nil b in
       match b1 with
       | Lcall sg' ros' :: b2 =>
-          let (mv2, b3) := extract_moves nil b2 in
+          let (mv2, b3) := extract_moves_ext nil b2 in
           assertion (signature_eq sg sg');
           assertion (check_succ s b3);
           Some(BScall sg ros args res mv1 ros' mv2 s)
       | _ => None
       end
   | Itailcall sg ros args =>
-      let (mv1, b1) := extract_moves nil b in
+      let (mv1, b1) := extract_moves_ext nil b in
       match b1 with
       | Ltailcall sg' ros' :: b2 =>
           assertion (signature_eq sg sg');
@@ -297,7 +329,7 @@ Definition pair_instr_block
       | _ => None
       end
   | Ireturn arg =>
-      let (mv1, b1) := extract_moves nil b in
+      let (mv1, b1) := extract_moves_ext nil b in
       match b1 with
       | Lreturn :: b2 => Some(BSreturn arg mv1)
       | _ => None
@@ -319,7 +351,7 @@ Definition pair_codes (f1: RTL.function) (f2: LTL.function) : PTree.t block_shap
 
 Definition pair_entrypoints (f1: RTL.function) (f2: LTL.function) : option moves :=
   do b <- (LTL.fn_code f2)!(LTL.fn_entrypoint f2);
-  let (mv, b1) := extract_moves nil b in
+  let (mv, b1) := extract_moves_ext nil b in
   assertion (check_succ (RTL.fn_entrypoint f1) b1);
   Some mv.
 
@@ -602,6 +634,55 @@ Definition subst_loc (l1 l2: loc) (e: eqs) : option eqs :=
      (EqSet2.elements_between (select_loc_l l1) (select_loc_h l1) (eqs2 e))
      (Some e).
 
+(** [subst_loc_part l1 l2 k e] simulates the effect of assigning
+  [l2] to the [k] part of [l1] on [e].
+  All equations of the form [r = l1 [k]] are replaced by [r = l2 [Full]].
+  Return [None] if [e] contains an equation of the form [r = l] with [l]
+  partially overlapping [l1], or an equation of the form [r = l1] with
+  a kind different from [k1].
+*)
+
+Definition subst_loc_part (l1: loc) (l2: loc) (k: equation_kind) (e: eqs) : option eqs :=
+  EqSet2.fold
+    (fun q opte =>
+      match opte with
+      | None => None
+      | Some e =>
+          if Loc.eq l1 (eloc q) then
+            if IndexedEqKind.eq (ekind q) k
+            then Some (add_equation (Eq Full (ereg q) l2) (remove_equation q e))
+            else None
+          else
+            None
+      end)
+     (EqSet2.elements_between (select_loc_l l1) (select_loc_h l1) (eqs2 e))
+     (Some e).
+
+(** [subst_loc_pair l1 l2 l2'] simulates the effect of assigning
+  [makelong l2 l2'] to [l1].  All equations of the form [r = l1 [Full]]
+  are replaced by the two equations [r = l2 [High], r = l2' [Low]].
+  Return [None] if [e] contains an equation of the form [r = l] with [l]
+  partially overlapping [l1], or an equation of the form [r = l1] with
+  a kind different from [Full]. *)
+
+Definition subst_loc_pair (l1 l2 l2': loc) (e: eqs) : option eqs :=
+  EqSet2.fold
+    (fun q opte =>
+      match opte with
+      | None => None
+      | Some e =>
+          if Loc.eq l1 (eloc q) then
+            if IndexedEqKind.eq (ekind q) Full
+            then Some (add_equation (Eq High (ereg q) l2)
+                        (add_equation (Eq Low (ereg q) l2')
+                           (remove_equation q e)))
+            else None
+          else
+            None
+      end)
+     (EqSet2.elements_between (select_loc_l l1) (select_loc_h l1) (eqs2 e))
+     (Some e).
+
 (** [loc_type_compat env l e] checks that for all equations [r = l] in [e],
   the type [env r] of [r] is compatible with the type of [l]. *)
 
@@ -614,6 +695,14 @@ Definition sel_type (k: equation_kind) (ty: typ) : typ :=
 Definition loc_type_compat (env: regenv) (l: loc) (e: eqs) : bool :=
   EqSet2.for_all_between
     (fun q => subtype (sel_type (ekind q) (env (ereg q))) (Loc.type l))
+    (select_loc_l l) (select_loc_h l) (eqs2 e).
+
+(** [long_type_compat env l e] checks that for all equations [r = l] in [e].
+  then type [env r] of [r] is compatible with the type [Tlong]. *)
+
+Definition long_type_compat (env: regenv) (l: loc) (e: eqs) : bool :=
+  EqSet2.for_all_between
+    (fun q => subtype (env (ereg q)) Tlong)
     (select_loc_l l) (select_loc_h l) (eqs2 e).
 
 (** [add_equations [r1...rN] [m1...mN] e] adds to [e] the [N] equations
@@ -637,9 +726,8 @@ Function add_equations_args (rl: list reg) (tyl: list typ) (ll: list (rpair loc)
   | r1 :: rl, ty :: tyl, One l1 :: ll =>
       add_equations_args rl tyl ll (add_equation (Eq Full r1 l1) e)
   | r1 :: rl, Tlong :: tyl, Twolong l1 l2 :: ll =>
-      if Archi.splitlong then
-        add_equations_args rl tyl ll (add_equation (Eq Low r1 l2) (add_equation (Eq High r1 l1) e))
-      else None
+      if Archi.ptr64 then None else
+      add_equations_args rl tyl ll (add_equation (Eq Low r1 l2) (add_equation (Eq High r1 l1) e))
   | _, _, _ => None
   end.
 
@@ -651,9 +739,8 @@ Function add_equations_res (r: reg) (oty: option typ) (p: rpair mreg) (e: eqs) :
   | One mr, _ =>
       Some (add_equation (Eq Full r (R mr)) e)
   | Twolong mr1 mr2, Some Tlong =>
-      if Archi.splitlong then
-        Some (add_equation (Eq Low r (R mr2)) (add_equation (Eq High r (R mr1)) e))
-      else None
+      if Archi.ptr64 then None else
+      Some (add_equation (Eq Low r (R mr2)) (add_equation (Eq High r (R mr1)) e))
   | _, _ =>
       None
   end.
@@ -857,11 +944,24 @@ Definition well_typed_move (env: regenv) (dst: loc) (e: eqs) : bool :=
 Fixpoint track_moves (env: regenv) (mv: moves) (e: eqs) : option eqs :=
   match mv with
   | nil => Some e
-  | (src, dst) :: mv =>
+  | MV src dst :: mv =>
       do e1 <- track_moves env mv e;
       assertion (can_undef_except dst (destroyed_by_move src dst)) e1;
       assertion (well_typed_move env dst e1);
       subst_loc dst src e1
+  | MVmakelong src1 src2 dst :: mv =>
+      assertion (negb Archi.ptr64);
+      do e1 <- track_moves env mv e;
+      assertion (long_type_compat env (R dst) e1);
+      subst_loc_pair (R dst) (R src1) (R src2) e1
+  | MVlowlong src dst :: mv =>
+      assertion (negb Archi.ptr64);
+      do e1 <- track_moves env mv e;
+      subst_loc_part (R dst) (R src) Low e1
+  | MVhighlong src dst :: mv =>
+      assertion (negb Archi.ptr64);
+      do e1 <- track_moves env mv e;
+      subst_loc_part (R dst) (R src) High e1
   end.
 
 (** [transfer_use_def args res args' res' undefs e] returns the set

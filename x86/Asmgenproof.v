@@ -780,7 +780,7 @@ Opaque loadind.
   exploit functions_transl; eauto. intro FN.
   generalize (transf_function_no_overflow _ _ H5); intro NOOV.
   set (rs1 := rs0 #RAX <- Vundef #RDX <- Vundef).
-  exploit (find_label_goto_label f tf lbl rs1); eauto. 
+  exploit (find_label_goto_label f tf lbl rs1); eauto.
   intros [tc' [rs' [A [B C]]]].
   exploit ireg_val; eauto. rewrite H. intros LD; inv LD.
   left; econstructor; split.
@@ -789,7 +789,7 @@ Opaque loadind.
   simpl. rewrite <- H9.  unfold Mach.label in H0; unfold label; rewrite H0. eexact A.
   econstructor; eauto.
 Transparent destroyed_by_jumptable.
-  apply agree_undef_regs with rs0; auto. 
+  apply agree_undef_regs with rs0; auto.
   simpl; intros. destruct H8. rewrite C by auto with asmgen. unfold rs1; Simplifs.
   congruence.
 
@@ -834,7 +834,7 @@ Transparent destroyed_by_jumptable.
   left; econstructor; split.
   apply plus_one. econstructor; eauto.
   simpl. rewrite Ptrofs.unsigned_zero. simpl. eauto.
-  simpl. rewrite C. simpl in F, P. 
+  simpl. rewrite C. simpl in F, P.
   replace (chunk_of_type Tptr) with Mptr in F, P by (unfold Tptr, Mptr; destruct Archi.ptr64; auto).
   rewrite (sp_val _ _ _ AG) in F. rewrite F.
   rewrite ATLR. rewrite P. eauto.
@@ -883,7 +883,7 @@ Proof.
   econstructor; eauto.
   constructor.
   apply Mem.extends_refl.
-  split. reflexivity. simpl. 
+  split. reflexivity. simpl.
   unfold Vnullptr; destruct Archi.ptr64; congruence.
   intros. rewrite Regmap.gi. auto.
   unfold Genv.symbol_address.

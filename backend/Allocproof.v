@@ -34,10 +34,13 @@ Qed.
 
 Definition expand_move (m: move) : instruction :=
   match m with
-  | (R src, R dst) => Lop Omove (src::nil) dst
-  | (S sl ofs ty, R dst) => Lgetstack sl ofs ty dst
-  | (R src, S sl ofs ty) => Lsetstack src sl ofs ty
-  | (S _ _ _, S _ _ _) => Lreturn    (**r should never happen *)
+  | MV (R src) (R dst) => Lop Omove (src::nil) dst
+  | MV (S sl ofs ty) (R dst) => Lgetstack sl ofs ty dst
+  | MV (R src) (S sl ofs ty) => Lsetstack src sl ofs ty
+  | MV (S _ _ _) (S _ _ _) => Lreturn    (**r should never happen *)
+  | MVmakelong src1 src2 dst => Lop Omakelong (src1::src2::nil) dst
+  | MVlowlong src dst => Lop Olowlong (src::nil) dst
+  | MVhighlong src dst => Lop Ohighlong (src::nil) dst
   end.
 
 Definition expand_moves (mv: moves) (k: bblock) : bblock :=
@@ -45,7 +48,7 @@ Definition expand_moves (mv: moves) (k: bblock) : bblock :=
 
 Definition wf_move (m: move) : Prop :=
   match m with
-  | (S _ _ _, S _ _ _) => False
+  | MV (S _ _ _) (S _ _ _) => False
   | _ => True
   end.
 
@@ -64,17 +67,20 @@ Inductive expand_block_shape: block_shape -> RTL.instruction -> LTL.bblock -> Pr
                          (Iop Omove (src :: nil) dst s)
                          (expand_moves mv (Lbranch s :: k))
   | ebs_makelong: forall src1 src2 dst mv s k,
-      wf_moves mv -> Archi.splitlong = true ->
+      wf_moves mv ->
+      Archi.splitlong = true ->
       expand_block_shape (BSmakelong src1 src2 dst mv s)
                          (Iop Omakelong (src1 :: src2 :: nil) dst s)
                          (expand_moves mv (Lbranch s :: k))
   | ebs_lowlong: forall src dst mv s k,
-      wf_moves mv -> Archi.splitlong = true ->
+      wf_moves mv ->
+      Archi.splitlong = true ->
       expand_block_shape (BSlowlong src dst mv s)
                          (Iop Olowlong (src :: nil) dst s)
                          (expand_moves mv (Lbranch s :: k))
   | ebs_highlong: forall src dst mv s k,
-      wf_moves mv -> Archi.splitlong = true ->
+      wf_moves mv ->
+      Archi.splitlong = true ->
       expand_block_shape (BShighlong src dst mv s)
                          (Iop Ohighlong (src :: nil) dst s)
                          (expand_moves mv (Lbranch s :: k))
@@ -97,7 +103,8 @@ Inductive expand_block_shape: block_shape -> RTL.instruction -> LTL.bblock -> Pr
                            (Lload chunk addr args' dst' :: expand_moves mv2 (Lbranch s :: k)))
   | ebs_load2: forall addr addr2 args dst mv1 args1' dst1' mv2 args2' dst2' mv3 s k,
       wf_moves mv1 -> wf_moves mv2 -> wf_moves mv3 ->
-      Archi.splitlong = true -> offset_addressing addr 4 = Some addr2 ->
+      Archi.splitlong = true ->
+      offset_addressing addr 4 = Some addr2 ->
       expand_block_shape (BSload2 addr addr2 args dst mv1 args1' dst1' mv2 args2' dst2' mv3 s)
                          (Iload Mint64 addr args dst s)
                          (expand_moves mv1
@@ -107,7 +114,7 @@ Inductive expand_block_shape: block_shape -> RTL.instruction -> LTL.bblock -> Pr
                               expand_moves mv3 (Lbranch s :: k))))
   | ebs_load2_1: forall addr args dst mv1 args' dst' mv2 s k,
       wf_moves mv1 -> wf_moves mv2 ->
-      Archi.splitlong = true -> 
+      Archi.splitlong = true ->
       expand_block_shape (BSload2_1 addr args dst mv1 args' dst' mv2 s)
                          (Iload Mint64 addr args dst s)
                          (expand_moves mv1
@@ -115,7 +122,8 @@ Inductive expand_block_shape: block_shape -> RTL.instruction -> LTL.bblock -> Pr
                             expand_moves mv2 (Lbranch s :: k)))
   | ebs_load2_2: forall addr addr2 args dst mv1 args' dst' mv2 s k,
       wf_moves mv1 -> wf_moves mv2 ->
-      Archi.splitlong = true -> offset_addressing addr 4 = Some addr2 ->
+      Archi.splitlong = true ->
+      offset_addressing addr 4 = Some addr2 ->
       expand_block_shape (BSload2_2 addr addr2 args dst mv1 args' dst' mv2 s)
                          (Iload Mint64 addr args dst s)
                          (expand_moves mv1
@@ -134,7 +142,8 @@ Inductive expand_block_shape: block_shape -> RTL.instruction -> LTL.bblock -> Pr
                            (Lstore chunk addr args' src' :: Lbranch s :: k))
   | ebs_store2: forall addr addr2 args src mv1 args1' src1' mv2 args2' src2' s k,
       wf_moves mv1 -> wf_moves mv2 ->
-      Archi.splitlong = true -> offset_addressing addr 4 = Some addr2 ->
+      Archi.splitlong = true ->
+      offset_addressing addr 4 = Some addr2 ->
       expand_block_shape (BSstore2 addr addr2 args src mv1 args1' src1' mv2 args2' src2' s)
                          (Istore Mint64 addr args src s)
                          (expand_moves mv1
@@ -184,7 +193,7 @@ Ltac MonadInv :=
   | [ H: match negb (proj_sumbool ?x) with true => _ | false => None end = Some _ |- _ ] =>
         destruct x; [discriminate|simpl in H; MonadInv]
   | [ H: match negb ?x with true => _ | false => None end = Some _ |- _ ] =>
-        destruct x; [discriminate|simpl in H; MonadInv]
+        destruct x as [] eqn:? ; [discriminate|simpl in H; MonadInv]
   | [ H: match ?x with true => _ | false => None end = Some _ |- _ ] =>
         destruct x as [] eqn:? ; [MonadInv|discriminate]
   | [ H: match ?x with (_, _) => _ end = Some _ |- _ ] =>
@@ -233,7 +242,45 @@ Proof.
   + (* reg-stack move *)
     exploit IHb; eauto. constructor; auto. exact I. rewrite expand_moves_cons; auto.
   }
-  intros. exploit IND; eauto. constructor. 
+  intros. exploit IND; eauto. constructor.
+Qed.
+
+Lemma extract_moves_ext_sound:
+  forall b mv b',
+  extract_moves_ext nil b = (mv, b') ->
+  wf_moves mv /\ b = expand_moves mv b'.
+Proof.
+  assert (BASE:
+      forall accu b,
+      wf_moves accu ->
+      wf_moves (List.rev accu) /\ expand_moves (List.rev accu) b = expand_moves (List.rev accu) b).
+   { intros; split; auto. unfold wf_moves in *; rewrite Forall_forall in *.
+     intros. apply H. rewrite <- in_rev in H0; auto. }
+
+  assert (IND: forall b accu mv b',
+          extract_moves_ext accu b = (mv, b') ->
+          wf_moves accu ->
+          wf_moves mv /\ expand_moves (List.rev accu) b = expand_moves mv b').
+  { induction b; simpl; intros.
+  - inv H. auto.
+  - destruct a; try (inv H; apply BASE; auto; fail).
+  + destruct (classify_operation op args).
+  * (* reg-reg move *)
+    exploit IHb; eauto. constructor; auto. exact I. rewrite expand_moves_cons; auto.
+  * (* makelong *)
+    exploit IHb; eauto. constructor; auto. exact I. rewrite expand_moves_cons; auto.
+  * (* lowlong *)
+    exploit IHb; eauto. constructor; auto. exact I. rewrite expand_moves_cons; auto.
+  * (* highlong *)
+    exploit IHb; eauto. constructor; auto. exact I. rewrite expand_moves_cons; auto.
+  * (* default *)
+    inv H; apply BASE; auto.
+  + (* stack-reg move *)
+    exploit IHb; eauto. constructor; auto. exact I. rewrite expand_moves_cons; auto.
+  + (* reg-stack move *)
+    exploit IHb; eauto. constructor; auto. exact I. rewrite expand_moves_cons; auto.
+  }
+  intros. exploit IND; eauto. constructor.
 Qed.
 
 Lemma check_succ_sound:
@@ -248,6 +295,8 @@ Ltac UseParsingLemmas :=
   match goal with
   | [ H: extract_moves nil _ = (_, _) |- _ ] =>
       destruct (extract_moves_sound _ _ _ H); clear H; subst; UseParsingLemmas
+  | [ H: extract_moves_ext nil _ = (_, _) |- _ ] =>
+      destruct (extract_moves_ext_sound _ _ _ H); clear H; subst; UseParsingLemmas
   | [ H: check_succ _ _ = true |- _ ] =>
       try (discriminate H);
       destruct (check_succ_sound _ _ H); clear H; subst; UseParsingLemmas
@@ -261,7 +310,7 @@ Proof.
   assert (OP: forall op args res s b bsh,
     pair_Iop_block op args res s b = Some bsh -> expand_block_shape bsh (Iop op args res s) b).
   {
-    unfold pair_Iop_block; intros. MonadInv. destruct b0. 
+    unfold pair_Iop_block; intros. MonadInv. destruct b0.
     MonadInv; UseParsingLemmas.
     destruct i; MonadInv; UseParsingLemmas.
     eapply ebs_op; eauto.
@@ -290,8 +339,8 @@ Proof.
   destruct (chunk_eq m Mint64 && Archi.splitlong) eqn:A; MonadInv; UseParsingLemmas.
   destruct b as [ | [] b]; MonadInv; UseParsingLemmas.
   InvBooleans. subst m. eapply ebs_load2; eauto.
-  InvBooleans. subst m. 
-  destruct (eq_addressing a addr). 
+  InvBooleans. subst m.
+  destruct (eq_addressing a addr).
   inv H; inv H2. eapply ebs_load2_1; eauto.
   destruct (option_eq eq_addressing (offset_addressing a 4) (Some addr)).
   inv H; inv H2. eapply ebs_load2_2; eauto.
@@ -418,20 +467,28 @@ Proof.
   intros until e'. functional induction (add_equations_args rl tyl ll e); intros.
 - inv H; auto.
 - eapply add_equation_satisf; eauto.
+- discriminate.
 - eapply add_equation_satisf. eapply add_equation_satisf. eauto.
-- congruence.
 - congruence.
 Qed.
 
-Lemma val_longofwords_eq:
+Lemma val_longofwords_eq_1:
   forall v,
-  Val.has_type v Tlong -> Archi.splitlong = true ->
+  Val.has_type v Tlong -> Archi.ptr64 = false ->
   Val.longofwords (Val.hiword v) (Val.loword v) = v.
 Proof.
   intros. red in H. destruct v; try contradiction.
 - reflexivity.
 - simpl. rewrite Int64.ofwords_recompose. auto.
-- rewrite Archi.splitlong_ptr32 in H by auto. congruence.
+- congruence.
+Qed.
+
+Lemma val_longofwords_eq_2:
+  forall v,
+  Val.has_type v Tlong -> Archi.splitlong = true ->
+  Val.longofwords (Val.hiword v) (Val.loword v) = v.
+Proof.
+  intros. apply Archi.splitlong_ptr32 in H0. apply val_longofwords_eq_1; assumption.
 Qed.
 
 Lemma add_equations_args_lessdef:
@@ -445,13 +502,13 @@ Proof.
 - inv H; auto.
 - destruct H1. constructor; auto.
   eapply add_equation_lessdef with (q := Eq Full r1 l1). eapply add_equations_args_satisf; eauto.
+- discriminate.
 - destruct H1. constructor; auto.
-  rewrite <- (val_longofwords_eq (rs#r1)) by auto. apply Val.longofwords_lessdef.
+  rewrite <- (val_longofwords_eq_1 (rs#r1)) by auto. apply Val.longofwords_lessdef.
   eapply add_equation_lessdef with (q := Eq High r1 l1).
   eapply add_equation_satisf. eapply add_equations_args_satisf; eauto.
   eapply add_equation_lessdef with (q := Eq Low r1 l2).
   eapply add_equations_args_satisf; eauto.
-- discriminate.
 - discriminate.
 Qed.
 
@@ -676,7 +733,7 @@ Lemma parallel_assignment_satisf_2:
 Proof.
   intros. functional inversion H.
 - (* One location *)
-  subst. simpl in H2. InvBooleans. simpl. 
+  subst. simpl in H2. InvBooleans. simpl.
   apply parallel_assignment_satisf with Full; auto.
   unfold reg_loc_unconstrained. rewrite H1, H4. auto.
 - (* Two 32-bit halves *)
@@ -686,10 +743,10 @@ Proof.
   simpl in H2. InvBooleans. simpl.
   red; intros.
   destruct (OrderedEquation.eq_dec q (Eq Low res (R mr2))).
-  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gss. 
+  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gss.
   apply Val.loword_lessdef; auto.
   destruct (OrderedEquation.eq_dec q (Eq High res (R mr1))).
-  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gso by auto. rewrite Locmap.gss. 
+  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gso by auto. rewrite Locmap.gss.
   apply Val.hiword_lessdef; auto.
   assert (EqSet.In q e'). unfold e', remove_equation; simpl; ESD.fsetdec.
   rewrite Regmap.gso. rewrite ! Locmap.gso. auto.
@@ -737,7 +794,7 @@ Proof.
   {
     apply ESP.fold_rec; unfold Q; intros.
     - auto.
-    - simpl. red in H2. rewrite H2 in H4. ESD.fsetdec. 
+    - simpl. red in H2. rewrite H2 in H4. ESD.fsetdec.
   }
   destruct (ESP.In_dec q elt).
   left. split. apply IN_ELT. auto. apply H. auto.
@@ -878,7 +935,7 @@ Lemma partial_fold_ind:
       f x a' = Some a'' -> P s' a' -> P s'' a'') ->
   P s final.
 Proof.
-  intros. 
+  intros.
   set (g := fun q opte => match opte with Some e => f q e | None => None end) in *.
   set (Q := fun s1 opte => match opte with None => True | Some e => P s1 e end).
   change (Q s (Some final)).
@@ -909,7 +966,7 @@ Proof.
     simpl. rewrite ESF.add_iff, ESF.remove_iff.
     apply H1 in H4; destruct H4.
     subst x; rewrite e; auto.
-    apply H3 in H2; destruct H2. split. congruence. 
+    apply H3 in H2; destruct H2. split. congruence.
     destruct (OrderedEquation.eq_dec x {| ekind := ekind q; ereg := ereg q; eloc := l2 |}); auto.
     subst x; auto.
   }
@@ -999,6 +1056,171 @@ Proof.
   rewrite Locmap.gso; auto.
 Qed.
 
+Lemma in_subst_loc_part:
+  forall l1 l2 k q (e e': eqs),
+  EqSet.In q e ->
+  subst_loc_part l1 l2 k e = Some e' ->
+  (eloc q = l1 /\ ekind q = k /\ EqSet.In (Eq Full (ereg q) l2) e') \/ (Loc.diff l1 (eloc q) /\ EqSet.In q e').
+Proof.
+  unfold subst_loc_part; intros l1 l2 k q e0 e0' IN SUBST.
+  set (elt := EqSet2.elements_between (select_loc_l l1) (select_loc_h l1) (eqs2 e0)) in *.
+  set (f := fun q0 e =>
+             if Loc.eq l1 (eloc q0) then
+             if IndexedEqKind.eq (ekind q0) k then
+                Some (add_equation
+                     {| ekind := Full; ereg := ereg q0; eloc := l2 |}
+                     (remove_equation q0 e))
+             else None else None).
+  set (P := fun e1 e2 => EqSet2.In q e1 -> eloc q = l1 /\ ekind q = k /\ EqSet.In (Eq Full (ereg q) l2) e2).
+  assert (A: P elt e0').
+  { eapply partial_fold_ind with (f := f) (s := elt) (final := e0'). eexact SUBST.
+  - unfold P; intros. ESD2.fsetdec.
+  - unfold P, f; intros. destruct (Loc.eq l1 (eloc x)); try discriminate.
+    destruct (IndexedEqKind.eq (ekind x) k); inversion H2; subst a''; clear H2.
+    simpl. rewrite ESF.add_iff, ESF.remove_iff.
+    apply H1 in H4; destruct H4.
+    subst x; rewrite e, <- e1; auto.
+    apply H3 in H2; destruct H2 as (X & Y & Z). split; auto. split; auto.
+    destruct (OrderedEquation.eq_dec x {| ekind := Full; ereg := ereg q; eloc := l2 |}); auto.
+    subst x; auto.
+  }
+  set (Q := fun e1 e2 => ~EqSet2.In q e1 -> EqSet.In q e2).
+  assert (B: Q elt e0').
+  { eapply partial_fold_ind with (f := f) (s := elt) (final := e0'). eexact SUBST.
+  - unfold Q; intros. auto.
+  - unfold Q, f; intros. destruct (Loc.eq l1 (eloc x)); try congruence.
+    destruct (IndexedEqKind.eq (ekind x) k); inversion H2; subst a''; clear H2.
+    simpl. rewrite ESF.add_iff, ESF.remove_iff.
+    red in H1. rewrite H1 in H4. intuition auto. }
+  destruct (ESP2.In_dec q elt).
+  left. apply A; auto.
+  right. split; auto.
+  rewrite <- select_loc_charact.
+  destruct (select_loc_l l1 q) eqn: LL; auto.
+  destruct (select_loc_h l1 q) eqn: LH; auto.
+  elim n. eapply EqSet2.elements_between_iff.
+  exact (select_loc_l_monotone l1).
+  exact (select_loc_h_monotone l1).
+  split. apply eqs_same; auto. auto.
+Qed.
+
+Lemma subst_loc_part_satisf_lowlong:
+  forall src dst rs ls e e',
+  subst_loc_part (R dst) (R src) Low e = Some e' ->
+  satisf rs ls e' ->
+  satisf rs (Locmap.set (R dst) (Val.loword (ls (R src))) ls) e.
+Proof.
+  intros; red; intros.
+  exploit in_subst_loc_part; eauto. intros [[A [B C]] | [A B]].
+  rewrite A, B. apply H0 in C. rewrite Locmap.gss. apply Val.loword_lessdef. exact C.
+  rewrite Locmap.gso; auto.
+Qed.
+
+Lemma subst_loc_part_satisf_highlong:
+  forall src dst rs ls e e',
+  subst_loc_part (R dst) (R src) High e = Some e' ->
+  satisf rs ls e' ->
+  satisf rs (Locmap.set (R dst) (Val.hiword (ls (R src))) ls) e.
+Proof.
+  intros; red; intros.
+  exploit in_subst_loc_part; eauto. intros [[A [B C]] | [A B]].
+  rewrite A, B. apply H0 in C. rewrite Locmap.gss. apply Val.hiword_lessdef. exact C.
+  rewrite Locmap.gso; auto.
+Qed.
+
+Lemma in_subst_loc_pair:
+  forall l1 l2 l2' q (e e': eqs),
+  EqSet.In q e ->
+  subst_loc_pair l1 l2  l2' e = Some e' ->
+  (eloc q = l1 /\ ekind q = Full /\ EqSet.In (Eq High (ereg q) l2) e' /\ EqSet.In (Eq Low (ereg q) l2') e')
+  \/ (Loc.diff l1 (eloc q) /\ EqSet.In q e').
+Proof.
+  unfold subst_loc_pair; intros l1 l2 l2' q e0 e0' IN SUBST.
+  set (elt := EqSet2.elements_between (select_loc_l l1) (select_loc_h l1) (eqs2 e0)) in *.
+  set (f := fun q0 e =>
+             if Loc.eq l1 (eloc q0) then
+             if IndexedEqKind.eq (ekind q0) Full then
+                Some (add_equation {| ekind := High; ereg := ereg q0; eloc := l2 |}
+                     (add_equation {| ekind := Low; ereg := ereg q0; eloc := l2' |}
+                     (remove_equation q0 e)))
+             else None else None).
+  set (P := fun e1 e2 => EqSet2.In q e1 -> eloc q = l1 /\ ekind q = Full
+                                        /\ EqSet.In (Eq High (ereg q) l2) e2
+                                        /\ EqSet.In (Eq Low (ereg q) l2') e2).
+  assert (A: P elt e0').
+  { eapply partial_fold_ind with (f := f) (s := elt) (final := e0'). eexact SUBST.
+  - unfold P; intros. ESD2.fsetdec.
+  - unfold P, f; intros. destruct (Loc.eq l1 (eloc x)); try discriminate.
+    destruct (IndexedEqKind.eq (ekind x) Full); inversion H2; subst a''; clear H2.
+    simpl. rewrite ! ESF.add_iff, ! ESF.remove_iff.
+    apply H1 in H4; destruct H4.
+    subst x. rewrite e, e1. intuition auto.
+    apply H3 in H2; destruct H2 as (U & V & W & X).
+    destruct (OrderedEquation.eq_dec x {| ekind := High; ereg := ereg q; eloc := l2 |}).
+    subst x. intuition auto.
+    destruct (OrderedEquation.eq_dec x {| ekind := Low; ereg := ereg q; eloc := l2' |}).
+    subst x. intuition auto.
+    intuition auto. }
+  set (Q := fun e1 e2 => ~EqSet2.In q e1 -> EqSet.In q e2).
+  assert (B: Q elt e0').
+  { eapply partial_fold_ind with (f := f) (s := elt) (final := e0'). eexact SUBST.
+  - unfold Q; intros. auto.
+  - unfold Q, f; intros. destruct (Loc.eq l1 (eloc x)); try congruence.
+    destruct (IndexedEqKind.eq (ekind x) Full); inversion H2; subst a''; clear H2.
+    simpl. rewrite ! ESF.add_iff, ! ESF.remove_iff.
+    red in H1. rewrite H1 in H4. intuition auto. }
+  destruct (ESP2.In_dec q elt).
+  left. apply A; auto.
+  right. split; auto.
+  rewrite <- select_loc_charact.
+  destruct (select_loc_l l1 q) eqn: LL; auto.
+  destruct (select_loc_h l1 q) eqn: LH; auto.
+  elim n. eapply EqSet2.elements_between_iff.
+  exact (select_loc_l_monotone l1).
+  exact (select_loc_h_monotone l1).
+  split. apply eqs_same; auto. auto.
+Qed.
+
+Lemma long_type_compat_charact:
+  forall env l e q,
+  long_type_compat env l e = true ->
+  EqSet.In q e ->
+  subtype (env (ereg q)) Tlong = true \/ Loc.diff l (eloc q).
+Proof.
+  unfold long_type_compat; intros.
+  rewrite EqSet2.for_all_between_iff in H.
+  destruct (select_loc_l l q) eqn: LL.
+  destruct (select_loc_h l q) eqn: LH.
+  left; apply H; auto. apply eqs_same; auto.
+  right. apply select_loc_charact. auto.
+  right. apply select_loc_charact. auto.
+  intros; subst; auto.
+  exact (select_loc_l_monotone l).
+  exact (select_loc_h_monotone l).
+Qed.
+
+Lemma subst_loc_pair_satisf_makelong:
+  forall env src1 src2 dst rs ls e e',
+  subst_loc_pair (R dst) (R src1) (R src2) e = Some e' ->
+  long_type_compat env (R dst) e = true ->
+  wt_regset env rs ->
+  satisf rs ls e' ->
+  Archi.ptr64 = false ->
+  satisf rs (Locmap.set (R dst) (Val.longofwords (ls (R src1)) (ls (R src2))) ls) e.
+Proof.
+  intros; red; intros.
+  exploit in_subst_loc_pair; eauto. intros [[A [B [C D]]] | [A B]].
+- rewrite A, B. apply H2 in C. apply H2 in D.
+  assert (subtype (env (ereg q)) Tlong = true).
+  { exploit long_type_compat_charact; eauto. intros [P|P]; auto.
+    eelim Loc.diff_not_eq; eauto. }
+  rewrite Locmap.gss. simpl. rewrite <- (val_longofwords_eq_1 rs#(ereg q)).
+  apply Val.longofwords_lessdef. exact C. exact D.
+  eapply Val.has_subtype; eauto.
+  assumption.
+- rewrite Locmap.gso; auto.
+Qed.
+
 Lemma can_undef_sound:
   forall e ml q,
   can_undef ml e = true -> EqSet.In q e -> Loc.notin (eloc q) (map R ml).
@@ -1086,7 +1308,7 @@ Lemma add_equations_res_lessdef:
 Proof.
   intros. functional inversion H; simpl.
 - subst. eapply add_equation_lessdef with (q := Eq Full r (R mr)); eauto.
-- subst. rewrite <- (val_longofwords_eq rs#r) by auto. 
+- subst. rewrite <- (val_longofwords_eq_1 rs#r) by auto.
   apply Val.longofwords_lessdef.
   eapply add_equation_lessdef with (q := Eq High r (R mr1)).
   eapply add_equation_satisf. eauto.
@@ -1109,7 +1331,7 @@ Lemma return_regs_agree_callee_save:
 Proof.
   intros; red; intros. unfold return_regs. red in H.
   destruct l.
-  rewrite H; auto. 
+  rewrite H; auto.
   destruct sl; auto || congruence.
 Qed.
 
@@ -1163,7 +1385,7 @@ Proof.
   exploit no_caller_saves_sound; eauto. intros.
   red in H5. rewrite <- H5; auto.
 - (* Two 32-bit halves *)
-  subst. rewrite <- H9 in *. simpl in *. 
+  subst. rewrite <- H9 in *. simpl in *.
   set (e' := remove_equation {| ekind := Low; ereg := res; eloc := R mr2 |}
           (remove_equation {| ekind := High; ereg := res; eloc := R mr1 |} e)) in *.
   InvBooleans.
@@ -1260,7 +1482,7 @@ Qed.
 Lemma return_regs_arg_values:
   forall sg ls1 ls2,
   tailcall_is_possible sg = true ->
-  map (fun p => Locmap.getpair p (return_regs ls1 ls2)) (loc_arguments sg) 
+  map (fun p => Locmap.getpair p (return_regs ls1 ls2)) (loc_arguments sg)
   = map (fun p => Locmap.getpair p ls2) (loc_arguments sg).
 Proof.
   intros.
@@ -1268,7 +1490,7 @@ Proof.
   apply list_map_exten; intros.
   apply Locmap.getpair_exten; intros.
   assert (In l (regs_of_rpairs (loc_arguments sg))) by (eapply in_regs_of_rpairs; eauto).
-  exploit loc_arguments_acceptable_2; eauto. exploit H; eauto. 
+  exploit loc_arguments_acceptable_2; eauto. exploit H; eauto.
   destruct l; simpl; intros; try contradiction. rewrite H4; auto.
 Qed.
 
@@ -1291,7 +1513,7 @@ Lemma loadv_int64_split:
   /\ Val.lessdef (Val.hiword v) v1
   /\ Val.lessdef (Val.loword v) v2.
 Proof.
-  intros. apply Archi.splitlong_ptr32 in H0. 
+  intros. apply Archi.splitlong_ptr32 in H0.
   exploit Mem.loadv_int64_split; eauto. intros (v1 & v2 & A & B & C).
   exists v1, v2. split; auto. split; auto.
   inv C; auto. destruct v1, v2; simpl; auto.
@@ -1324,9 +1546,8 @@ Proof.
   exploit add_equation_lessdef. eauto. simpl; intros LD1.
   exploit add_equation_lessdef. eapply add_equation_satisf. eauto. simpl; intros LD2.
   exists (Val.longofwords (ls x0) (ls x1)); split; auto with barg.
-  rewrite <- (val_longofwords_eq rs#x). apply Val.longofwords_lessdef; auto.
+  rewrite <- (val_longofwords_eq_2 rs#x); auto. apply Val.longofwords_lessdef; auto.
   rewrite <- e0; apply WT.
-  assumption.
 - econstructor; eauto with barg.
 - econstructor; eauto with barg.
 - econstructor; eauto with barg.
@@ -1534,7 +1755,7 @@ Proof.
   monadInv Heqr.
   destruct (check_entrypoints_aux f tf env x) as [y|] eqn:?; try discriminate.
   unfold check_entrypoints_aux, pair_entrypoints in Heqo0. MonadInv.
-  exploit extract_moves_sound; eauto. intros [A B]. subst b.
+  exploit extract_moves_ext_sound; eauto. intros [A B]. subst b.
   exploit check_succ_sound; eauto. intros [k EQ1]. subst b0.
   econstructor; eauto. eapply type_function_correct; eauto. congruence.
 Qed.
@@ -1639,7 +1860,8 @@ Opaque destroyed_by_op.
 - unfold expand_moves; simpl. inv H. exists ls; split. apply star_refl. auto.
   (* step *)
 - assert (wf_moves mv) by (inv H0; auto).
-  destruct a as (src, dst); unfold expand_moves; simpl; MonadInv.
+  destruct a; unfold expand_moves; simpl; MonadInv.
++ (* loc-loc move *)
   destruct src as [rsrc | ssrc]; destruct dst as [rdst | sdst].
 * (* reg-reg *)
   exploit IHmv; eauto. eapply subst_loc_undef_satisf; eauto.
@@ -1655,6 +1877,18 @@ Opaque destroyed_by_op.
   econstructor. auto. auto.
 * (* stack->stack *)
   inv H0. simpl in H6. contradiction.
++ (* makelong *)
+  exploit IHmv; eauto. eapply subst_loc_pair_satisf_makelong; eauto.
+  intros [ls' [A B]]. exists ls'; split; auto. eapply star_left; eauto.
+  econstructor. simpl; eauto. reflexivity. traceEq.
++ (* lowlong *)
+  exploit IHmv; eauto. eapply subst_loc_part_satisf_lowlong; eauto.
+  intros [ls' [A B]]. exists ls'; split; auto. eapply star_left; eauto.
+  econstructor. simpl; eauto. reflexivity. traceEq.
++ (* highlong *)
+  exploit IHmv; eauto. eapply subst_loc_part_satisf_highlong; eauto.
+  intros [ls' [A B]]. exists ls'; split; auto. eapply star_left; eauto.
+  econstructor. simpl; eauto. reflexivity. traceEq.
 Qed.
 
 (** The simulation relation *)
@@ -1749,7 +1983,7 @@ Proof.
   assert (B: In (env r) (type_of_addressing addr)).
   { rewrite <- H5. apply in_map; auto. }
   assert (C: env r = Tint).
-  { apply A in B. rewrite B. unfold Tptr. rewrite Archi.splitlong_ptr32 by auto. auto. }    
+  { apply A in B. rewrite B. unfold Tptr. rewrite Archi.splitlong_ptr32 by auto. auto. }
   red; intros; subst r. rewrite C in H8; discriminate.
 Qed.
 
@@ -2195,7 +2429,7 @@ Proof.
   with (Locmap.getpair (map_rpair R (loc_result (RTL.fn_sig f))) ls1).
   eapply add_equations_res_lessdef; eauto.
   rewrite H13. apply WTRS.
-  generalize (loc_result_caller_save (RTL.fn_sig f)). 
+  generalize (loc_result_caller_save (RTL.fn_sig f)).
   destruct (loc_result (RTL.fn_sig f)); simpl.
   intros A; rewrite A; auto.
   intros [A B]; rewrite A, B; auto.
@@ -2228,15 +2462,15 @@ Proof.
   econstructor; split.
   apply plus_one. econstructor; eauto.
   eapply external_call_symbols_preserved with (ge1 := ge); eauto. apply senv_preserved.
-  econstructor; eauto. 
+  econstructor; eauto.
   simpl. destruct (loc_result (ef_sig ef)) eqn:RES; simpl.
   rewrite Locmap.gss; auto.
-  generalize (loc_result_pair (ef_sig ef)); rewrite RES; intros (A & B & C & D & E). 
+  generalize (loc_result_pair (ef_sig ef)); rewrite RES; intros (A & B & C & D & E).
   exploit external_call_well_typed; eauto. unfold proj_sig_res; rewrite B. intros WTRES'.
-  rewrite Locmap.gss. rewrite Locmap.gso by (red; auto). rewrite Locmap.gss. 
-  rewrite val_longofwords_eq by auto. auto.
+  rewrite Locmap.gss. rewrite Locmap.gso by (red; auto). rewrite Locmap.gss.
+  rewrite val_longofwords_eq_1 by auto. auto.
   red; intros. rewrite (AG l H0).
-  symmetry; apply Locmap.gpo. 
+  symmetry; apply Locmap.gpo.
   assert (X: forall r, is_callee_save r = false -> Loc.diff l (R r)).
   { intros. destruct l; simpl in *. congruence. auto. }
   generalize (loc_result_caller_save (ef_sig ef)). destruct (loc_result (ef_sig ef)); simpl; intuition auto.
@@ -2276,18 +2510,18 @@ Lemma final_states_simulation:
   forall st1 st2 r,
   match_states st1 st2 -> RTL.final_state st1 r -> LTL.final_state st2 r.
 Proof.
-  intros. inv H0. inv H. inv STACKS. 
+  intros. inv H0. inv H. inv STACKS.
   econstructor. rewrite <- (loc_result_exten sg). inv RES; auto.
-  rewrite H; auto.  
+  rewrite H; auto.
 Qed.
- 
+
 Lemma wt_prog: wt_program prog.
 Proof.
-  red; intros. 
-  exploit list_forall2_in_left. eexact (proj1 TRANSF). eauto. 
+  red; intros.
+  exploit list_forall2_in_left. eexact (proj1 TRANSF). eauto.
   intros ([i' gd] & A & B & C). simpl in *; subst i'.
   inv C. destruct f; simpl in *.
-- monadInv H2.  
+- monadInv H2.
   unfold transf_function in EQ.
   destruct (type_function f) as [env|] eqn:TF; try discriminate.
   econstructor. eapply type_function_correct; eauto.

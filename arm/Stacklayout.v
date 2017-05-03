@@ -86,16 +86,16 @@ Local Opaque Z.add Z.mul sepconj range.
      retaddr
      back link *)
   rewrite sep_swap12.
-  rewrite sep_swap45. 
+  rewrite sep_swap45.
   rewrite sep_swap34.
   rewrite sep_swap45.
 (* Apply range_split and range_split2 repeatedly *)
   unfold fe_ofs_arg.
   apply range_split_2. fold ol; omega. omega.
-  apply range_split. omega. 
+  apply range_split. omega.
   apply range_split_2. fold ora; omega. omega.
   apply range_split. omega.
-  apply range_drop_right with ostkdata. omega. 
+  apply range_drop_right with ostkdata. omega.
   eapply sep_drop2. eexact H.
 Qed.
 

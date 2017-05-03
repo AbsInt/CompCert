@@ -31,7 +31,7 @@ Definition splitlong := negb ptr64.
 
 Lemma splitlong_ptr32: splitlong = true -> ptr64 = false.
 Proof.
-  unfold splitlong. destruct ptr64; simpl; congruence. 
+  unfold splitlong. destruct ptr64; simpl; congruence.
 Qed.
 
 Program Definition default_pl_64 : bool * nan_pl 53 :=

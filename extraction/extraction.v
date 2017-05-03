@@ -170,7 +170,7 @@ Separate Extraction
    Ctyping.typecheck_program
    Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
    Ctypes.make_program
-   Conventions1.is_float_reg
+   Conventions1.callee_save_type Conventions1.is_float_reg
    Conventions1.int_caller_save_regs Conventions1.float_caller_save_regs
    Conventions1.int_callee_save_regs Conventions1.float_callee_save_regs
    Conventions1.dummy_int_reg Conventions1.dummy_float_reg
