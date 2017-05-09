@@ -916,8 +916,7 @@ and elab_struct_or_union keep_ty only kind loc tag optmembers attrs env =
       (tag', Env.add_composite env' tag' ci')
   | Some(tag', {Env.ci_sizeof = Some _}), Some _
     when Env.in_current_scope env tag' ->
-      error loc "redefinition of struct or union '%s'" tag;
-      (tag', env)
+      fatal_error loc "redefinition of struct or union '%s'" tag
   | _, None ->
       (* declaration of an incomplete struct or union *)
       if tag = "" then
