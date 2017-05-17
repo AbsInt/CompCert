@@ -196,24 +196,29 @@ Defined.
 
 Global Opaque eq_condition eq_addressing eq_operation.
 
-(** In addressing modes, offsets are 32-bit signed integers, even in 64-bit mode.
-    The following function checks that an addressing mode is valid, i.e. that
-    the offsets are in range. *)
+(** In addressing modes, offsets are 32-bit signed integers, even in
+    64-bit mode.  The following function checks that an addressing
+    mode is valid, i.e. that the offsets are in range.
+    The check always succeeds in 32-bit mode because offsets are
+    always 32-bit integers and are normalized as 32-bit signed integers
+    during code generation (see [Asmgen.normalize_addrmode_32]). *)
 
 Definition offset_in_range (n: Z) : bool := zle Int.min_signed n && zle n Int.max_signed.
 
 Definition addressing_valid (a: addressing) : bool :=
-  match a with
-  | Aindexed n => offset_in_range n
-  | Aindexed2 n => offset_in_range n
-  | Ascaled sc ofs => offset_in_range ofs
-  | Aindexed2scaled sc ofs => offset_in_range ofs
-  | Aglobal s ofs => true
-  | Abased s ofs => true
-  | Abasedscaled sc s ofs => true
-  | Ainstack ofs => offset_in_range (Ptrofs.signed ofs)
-  end.
-
+  if Archi.ptr64 then
+    match a with
+    | Aindexed n => offset_in_range n
+    | Aindexed2 n => offset_in_range n
+    | Ascaled sc ofs => offset_in_range ofs
+    | Aindexed2scaled sc ofs => offset_in_range ofs
+    | Aglobal s ofs => true
+    | Abased s ofs => true
+    | Abasedscaled sc s ofs => true
+    | Ainstack ofs => offset_in_range (Ptrofs.signed ofs)
+    end
+  else true.
+  
 (** * Evaluation functions *)
 
 (** Evaluation of conditions, operators and addressing modes applied

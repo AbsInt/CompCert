@@ -192,9 +192,11 @@ Nondetfunction addr_strength_reduction_64
 
 Definition addr_strength_reduction
                 (addr: addressing) (args: list reg) (vl: list aval) :=
-  if Archi.ptr64
-  then addr_strength_reduction_64 addr args vl
-  else addr_strength_reduction_32 addr args vl.
+  if Archi.ptr64 then
+    let addr_args' := addr_strength_reduction_64 addr args vl in
+    if addressing_valid (fst addr_args') then addr_args' else (addr, args)
+  else
+    addr_strength_reduction_32 addr args vl.
 
 Definition make_addimm (n: int) (r: reg) :=
   if Int.eq n Int.zero
