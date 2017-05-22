@@ -97,6 +97,42 @@ Proof.
   intros. inv H; auto.
 Qed.
 
+(** Properties of smart constructors. *)
+
+Lemma eval_Ederef':
+  forall ge e le m a t l ofs,
+  eval_expr ge e le m a (Vptr l ofs) ->
+  eval_lvalue ge e le m (Ederef' a t) l ofs.
+Proof.
+  intros. unfold Ederef'; destruct a; auto using eval_Ederef.
+  destruct (type_eq t (typeof a)); auto using eval_Ederef.
+  inv H.
+- auto. 
+- inv H0.
+Qed.
+
+Lemma typeof_Ederef':
+  forall a t, typeof (Ederef' a t) = t.
+Proof.
+  unfold Ederef'; intros; destruct a; auto. destruct (type_eq t (typeof a)); auto. 
+Qed.
+
+Lemma eval_Eaddrof':
+  forall ge e le m a t l ofs,
+  eval_lvalue ge e le m a l ofs ->
+  eval_expr ge e le m (Eaddrof' a t) (Vptr l ofs).
+Proof.
+  intros. unfold Eaddrof'; destruct a; auto using eval_Eaddrof.
+  destruct (type_eq t (typeof a)); auto using eval_Eaddrof.
+  inv H; auto.
+Qed.
+
+Lemma typeof_Eaddrof':
+  forall a t, typeof (Eaddrof' a t) = t.
+Proof.
+  unfold Eaddrof'; intros; destruct a; auto. destruct (type_eq t (typeof a)); auto. 
+Qed.
+
 (** Translation of simple expressions. *)
 
 Lemma tr_simple_nil:
@@ -214,8 +250,9 @@ Opaque makeif.
 (* addrof *)
   exploit H0; eauto. intros [A [B C]].
   subst sl1; simpl.
-  assert (eval_expr tge e le m (Eaddrof a1 ty) (Vptr b ofs)). econstructor; eauto.
-  destruct dst; auto. simpl; econstructor; eauto.
+  assert (eval_expr tge e le m (Eaddrof' a1 ty) (Vptr b ofs)) by (apply eval_Eaddrof'; auto).
+  assert (typeof (Eaddrof' a1 ty) = ty) by (apply typeof_Eaddrof').
+  destruct dst; auto. simpl; econstructor; eauto.  
 (* unop *)
   exploit H0; eauto. intros [A [B C]].
   subst sl1; simpl.
@@ -251,7 +288,7 @@ Opaque makeif.
     rewrite symbols_preserved; auto.
 (* deref *)
   exploit H0; eauto. intros [A [B C]]. subst sl1.
-  split; auto. split; auto. constructor; auto.
+  split; auto. split. rewrite typeof_Ederef'; auto. apply eval_Ederef'; auto. 
 (* field struct *)
   rewrite <- comp_env_preserved in *.
   exploit H0; eauto. intros [A [B C]]. subst sl1.

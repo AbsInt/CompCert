@@ -55,7 +55,7 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
   | tr_deref: forall le dst e1 ty sl1 a1 tmp,
       tr_expr le For_val e1 sl1 a1 tmp ->
       tr_expr le dst (Csyntax.Ederef e1 ty)
-              (sl1 ++ final dst (Ederef a1 ty)) (Ederef a1 ty) tmp
+              (sl1 ++ final dst (Ederef' a1 ty)) (Ederef' a1 ty) tmp
   | tr_field: forall le dst e1 f ty sl1 a1 tmp,
       tr_expr le For_val e1 sl1 a1 tmp ->
       tr_expr le dst (Csyntax.Efield e1 f ty)
@@ -94,8 +94,8 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
   | tr_addrof: forall le dst e1 ty tmp sl1 a1,
       tr_expr le For_val e1 sl1 a1 tmp ->
       tr_expr le dst (Csyntax.Eaddrof e1 ty)
-                   (sl1 ++ final dst (Eaddrof a1 ty))
-                   (Eaddrof a1 ty) tmp
+                   (sl1 ++ final dst (Eaddrof' a1 ty))
+                   (Eaddrof' a1 ty) tmp
   | tr_unop: forall le dst op e1 ty tmp sl1 a1,
       tr_expr le For_val e1 sl1 a1 tmp ->
       tr_expr le dst (Csyntax.Eunop op e1 ty)
