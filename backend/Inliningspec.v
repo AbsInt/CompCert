@@ -72,7 +72,7 @@ Qed.
 
 Lemma shiftpos_eq: forall x y, Zpos (shiftpos x y) = (Zpos x + Zpos y) - 1.
 Proof.
-  intros. unfold shiftpos. zify.  rewrite Pos2Z.inj_sub. auto.
+  intros. unfold shiftpos. zify.  try rewrite Pos2Z.inj_sub. auto.
   zify. omega.
 Qed.
 
