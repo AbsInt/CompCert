@@ -249,7 +249,7 @@ erewrite <- IHn, <- Zabs_nat_Zsucc in H |- *; eauto; try omega.
 rewrite phi_incr, Zmod_small; intuition; try omega.
 apply inj_lt in H.
 pose proof Zle_le_succ.
-do 2 rewrite inj_Zabs_nat, Zabs_eq in H; eauto.
+do 2 rewrite inj_Zabs_nat, Zabs_eq in H; now eauto.
 Qed.
 
 (** Previous class instances for [option A] **)
