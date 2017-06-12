@@ -23,6 +23,10 @@ open Frontend
 
 let stdlib_path = ref Configuration.stdlib_path
 
+(* clightgen-specific options *)
+
+let option_normalize = ref false
+
 (* From CompCert C AST to Clight *)
 
 let compile_c_ast sourcename csyntax ofile =
@@ -30,7 +34,10 @@ let compile_c_ast sourcename csyntax ofile =
     match SimplExpr.transl_program csyntax with
     | Errors.OK p ->
         begin match SimplLocals.transf_program p with
-        | Errors.OK p' -> p'
+        | Errors.OK p' ->
+            if !option_normalize
+            then Clightnorm.norm_program p'
+            else p'
         | Errors.Error msg ->
             print_error stderr msg;
             exit 2
@@ -79,6 +86,7 @@ let usage_string =
 Recognized source files:\n\
 \  .c             C source file\n\
 Processing options:\n\
+\  -normalize     Normalize the generated Clight code w.r.t. loads in expressions\n\
 \  -E             Preprocess only, send result to standard output\n"^
 prepro_help ^
 "Language support options (use -fno-<opt> to turn off -f<opt>) :\n\
@@ -124,7 +132,8 @@ let cmdline_actions =
   Exact "-version", Unit print_version_and_exit;
   Exact "--version", Unit print_version_and_exit;
 (* Processing options *)
-  Exact "-E", Set option_E;]
+  Exact "-E", Set option_E;
+  Exact "-normalize", Set option_normalize]
 (* Preprocessing options *)
   @ prepro_actions @
 (* Language support options -- more below *)
