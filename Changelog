@@ -4,6 +4,7 @@
 - Add options -finline / -fno-inline to control function inlining.
 - Avoid generating useless conditional branches for empty if/else statements.
 - Removed the compilation of '.cm' files written in Cminor concrete syntax.
+- clightgen: add option "-normalize" to avoid memory loads deep inside expressions
 
 Bug fixing:
 - Issue #179: clightgen produces wrong output for "switch" statements.
