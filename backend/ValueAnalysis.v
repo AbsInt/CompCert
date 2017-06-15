@@ -59,6 +59,10 @@ Fixpoint abuiltin_arg (ae: aenv) (am: amem) (rm: romem) (ba: builtin_arg reg) : 
   | BA_loadglobal chunk id ofs => loadv chunk rm am (Ptr (Gl id ofs))
   | BA_addrglobal id ofs => Ptr (Gl id ofs)
   | BA_splitlong hi lo => longofwords (abuiltin_arg ae am rm hi) (abuiltin_arg ae am rm lo)
+  | BA_addptr ba1 ba2 =>
+      let v1 := abuiltin_arg ae am rm ba1 in
+      let v2 := abuiltin_arg ae am rm ba2 in
+      if Archi.ptr64 then addl v1 v2 else add v1 v2
   end.
 
 Definition set_builtin_res (br: builtin_res reg) (av: aval) (ae: aenv) : aenv :=
@@ -338,6 +342,7 @@ Proof.
 - simpl. rewrite Ptrofs.add_zero_l. auto with va.
 - eapply loadv_sound; eauto. apply symbol_address_sound; auto.
 - apply symbol_address_sound; auto.
+- destruct Archi.ptr64; auto with va.
 Qed.
 
 Lemma abuiltin_args_sound:

@@ -516,14 +516,23 @@ Nondetfunction addressing (chunk: memory_chunk) (e: expr) :=
 
 (** ** Arguments of builtins *)
 
+Nondetfunction builtin_arg_addr (addr: Op.addressing) (el: exprlist) :=
+  match addr, el with
+  | Aindexed n, e1 ::: Enil =>
+      BA_addptr (BA e1) (if Archi.ptr64 then BA_long (Int64.repr n) else BA_int (Int.repr n))
+  | Aglobal id ofs, Enil => BA_addrglobal id ofs
+  | Ainstack ofs, Enil => BA_addrstack ofs
+  | _, _ => BA (Eop (Olea_ptr addr) el)
+  end.
+
 Nondetfunction builtin_arg (e: expr) :=
   match e with
   | Eop (Ointconst n) Enil => BA_int n
   | Eop (Olongconst n) Enil => BA_long n
-  | Eop (Olea (Aglobal id ofs)) Enil => if Archi.ptr64 then BA e else BA_addrglobal id ofs
-  | Eop (Olea (Ainstack ofs)) Enil => if Archi.ptr64 then BA e else BA_addrstack ofs
-  | Eop (Oleal (Aglobal id ofs)) Enil => if Archi.ptr64 then BA_addrglobal id ofs else BA e
-  | Eop (Oleal (Ainstack ofs)) Enil => if Archi.ptr64 then BA_addrstack ofs else BA e
+  | Eop (Olea addr) el =>
+      if Archi.ptr64 then BA e else builtin_arg_addr addr el
+  | Eop (Oleal addr) el =>
+      if Archi.ptr64 then builtin_arg_addr addr el else BA e
   | Eop Omakelong (Eop (Ointconst h) Enil ::: Eop (Ointconst l) Enil ::: Enil) =>
         BA_long (Int64.ofwords h l)
   | Eop Omakelong (h ::: l ::: Enil) => BA_splitlong (BA h) (BA l)

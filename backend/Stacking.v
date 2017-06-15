@@ -97,6 +97,8 @@ Fixpoint transl_builtin_arg (fe: frame_env) (a: builtin_arg loc) : builtin_arg m
   | BA_addrglobal id ofs => BA_addrglobal id ofs
   | BA_splitlong hi lo =>
       BA_splitlong (transl_builtin_arg fe hi) (transl_builtin_arg fe lo)
+  | BA_addptr a1 a2 =>
+      BA_addptr (transl_builtin_arg fe a1) (transl_builtin_arg fe a2)
   end.
 
 (** Translation of a Linear instruction.  Prepends the corresponding

@@ -178,6 +178,10 @@ let rec print_annot print_preg sp_reg_name oc = function
       fprintf oc "(%a * 0x100000000 + %a)"
         (print_annot print_preg sp_reg_name) hi
         (print_annot print_preg sp_reg_name) lo
+  | BA_addptr(a1, a2) ->
+      fprintf oc "(%a + %a)"
+        (print_annot print_preg sp_reg_name) a1
+        (print_annot print_preg sp_reg_name) a2
 
 let print_annot_text print_preg sp_reg_name oc txt args =
   let print_fragment = function

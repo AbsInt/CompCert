@@ -82,7 +82,8 @@ let translate_annot sp preg_to_dwarf annot =
     | BA_single _
     | BA_loadglobal _
     | BA_addrglobal _
-    | BA_loadstack _ -> None
+    | BA_loadstack _
+    | BA_addptr _ -> None
     | BA_addrstack ofs -> Some (sp,BA_addrstack ofs)
     | BA_splitlong (hi,lo) ->
         begin

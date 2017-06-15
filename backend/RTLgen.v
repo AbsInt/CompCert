@@ -396,6 +396,10 @@ Fixpoint convert_builtin_arg {A: Type} (a: builtin_arg expr) (rl: list A) : buil
       let (hi', rl1) := convert_builtin_arg hi rl in
       let (lo', rl2) := convert_builtin_arg lo rl1 in
       (BA_splitlong hi' lo', rl2)
+  | BA_addptr a1 a2 =>
+      let (a1', rl1) := convert_builtin_arg a1 rl in
+      let (a2', rl2) := convert_builtin_arg a2 rl1 in
+      (BA_addptr a1' a2', rl2)
   end.
 
 Fixpoint convert_builtin_args {A: Type} (al: list (builtin_arg expr)) (rl: list A) : list (builtin_arg A) :=

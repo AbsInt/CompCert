@@ -1010,10 +1010,18 @@ Lemma invert_eval_builtin_arg:
   /\ Events.eval_builtin_arg ge (fun v => v) sp m (fst (convert_builtin_arg a vl)) v
   /\ (forall vl', convert_builtin_arg a (vl ++ vl') = (fst (convert_builtin_arg a vl), vl')).
 Proof.
-  induction 1; simpl; econstructor; intuition eauto with evalexpr barg.
-  constructor.
-  constructor.
-  repeat constructor.
+  induction 1; simpl; try (econstructor; intuition eauto with evalexpr barg; fail).
+- econstructor; split; eauto with evalexpr. split. constructor. auto. 
+- econstructor; split; eauto with evalexpr. split. constructor. auto. 
+- econstructor; split; eauto with evalexpr. split. repeat constructor. auto. 
+- destruct IHeval_builtin_arg1 as (vl1 & A1 & B1 & C1).
+  destruct IHeval_builtin_arg2 as (vl2 & A2 & B2 & C2).
+  destruct (convert_builtin_arg a1 vl1) as [a1' rl1] eqn:E1; simpl in *.
+  destruct (convert_builtin_arg a2 vl2) as [a2' rl2] eqn:E2; simpl in *.
+  exists (vl1 ++ vl2); split.
+  apply eval_exprlist_append; auto.
+  split. rewrite C1, E2. constructor; auto. 
+  intros. rewrite app_ass, !C1, C2, E2. auto.
 Qed.
 
 Lemma invert_eval_builtin_args:
@@ -1057,6 +1065,17 @@ Proof.
   rewrite CV2, CV4; simpl. intros (v2' & A2 & B2 & C2).
   exists (Val.longofwords v1' v2'); split. constructor; auto.
   split; auto. apply Val.longofwords_lessdef; auto.
+- destruct (convert_builtin_arg a1 vl) as [a1' vl1] eqn:CV1; simpl in *.
+  destruct (convert_builtin_arg a2 vl1) as [a2' vl2] eqn:CV2; simpl in *.
+  destruct (convert_builtin_arg a1 rl) as [a1'' rl1] eqn:CV3; simpl in *.
+  destruct (convert_builtin_arg a2 rl1) as [a2'' rl2] eqn:CV4; simpl in *.
+  inv EV.
+  exploit IHa1; eauto. rewrite CV1; simpl; eauto.
+  rewrite CV1, CV3; simpl. intros (v1' & A1 & B1 & C1).
+  exploit IHa2. eexact C1. rewrite CV2; simpl; eauto.
+  rewrite CV2, CV4; simpl. intros (v2' & A2 & B2 & C2).
+  econstructor; split. constructor; eauto.
+  split; auto. destruct Archi.ptr64; auto using Val.add_lessdef, Val.addl_lessdef.
 Qed.
 
 Lemma transl_eval_builtin_args:

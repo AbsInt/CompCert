@@ -436,9 +436,13 @@ Proof.
   unfold Senv.symbol_address; simpl; unfold Genv.symbol_address.
   rewrite symbols_preserved. destruct (Genv.find_symbol ge id) as [b|] eqn:FS; auto.
   inv MG. econstructor. eauto. rewrite Ptrofs.add_zero; auto.
-- destruct IHeval_builtin_arg1 as (v1 & A1 & B1).
-  destruct IHeval_builtin_arg2 as (v2 & A2 & B2).
+- destruct IHeval_builtin_arg1 as (v1' & A1 & B1).
+  destruct IHeval_builtin_arg2 as (v2' & A2 & B2).
   econstructor; split. eauto with barg. apply Val.longofwords_inject; auto.
+- destruct IHeval_builtin_arg1 as (v1' & A1 & B1).
+  destruct IHeval_builtin_arg2 as (v2' & A2 & B2).
+  econstructor; split. eauto with barg.
+  destruct Archi.ptr64; auto using Val.add_inject, Val.addl_inject.
 Qed.
 
 Lemma tr_builtin_args:

@@ -627,7 +627,8 @@ Inductive builtin_arg (A: Type) : Type :=
   | BA_addrstack (ofs: ptrofs)
   | BA_loadglobal (chunk: memory_chunk) (id: ident) (ofs: ptrofs)
   | BA_addrglobal (id: ident) (ofs: ptrofs)
-  | BA_splitlong (hi lo: builtin_arg A).
+  | BA_splitlong (hi lo: builtin_arg A)
+  | BA_addptr (a1 a2: builtin_arg A).
 
 Inductive builtin_res (A: Type) : Type :=
   | BR (x: A)
@@ -639,6 +640,7 @@ Fixpoint globals_of_builtin_arg (A: Type) (a: builtin_arg A) : list ident :=
   | BA_loadglobal chunk id ofs => id :: nil
   | BA_addrglobal id ofs => id :: nil
   | BA_splitlong hi lo => globals_of_builtin_arg hi ++ globals_of_builtin_arg lo
+  | BA_addptr a1 a2 => globals_of_builtin_arg a1 ++ globals_of_builtin_arg a2
   | _ => nil
   end.
 
@@ -649,6 +651,7 @@ Fixpoint params_of_builtin_arg (A: Type) (a: builtin_arg A) : list A :=
   match a with
   | BA x => x :: nil
   | BA_splitlong hi lo => params_of_builtin_arg hi ++ params_of_builtin_arg lo
+  | BA_addptr a1 a2 => params_of_builtin_arg a1 ++ params_of_builtin_arg a2
   | _ => nil
   end.
 
@@ -675,6 +678,8 @@ Fixpoint map_builtin_arg (A B: Type) (f: A -> B) (a: builtin_arg A) : builtin_ar
   | BA_addrglobal id ofs => BA_addrglobal id ofs
   | BA_splitlong hi lo =>
       BA_splitlong (map_builtin_arg f hi) (map_builtin_arg f lo)
+  | BA_addptr a1 a2 =>
+      BA_addptr (map_builtin_arg f a1) (map_builtin_arg f a2)
   end.
 
 Fixpoint map_builtin_res (A B: Type) (f: A -> B) (a: builtin_res A) : builtin_res B :=
@@ -691,17 +696,5 @@ Inductive builtin_arg_constraint : Type :=
   | OK_default
   | OK_const
   | OK_addrstack
-  | OK_addrglobal
-  | OK_addrany
+  | OK_addressing
   | OK_all.
-
-Definition builtin_arg_ok
-       (A: Type) (ba: builtin_arg A) (c: builtin_arg_constraint) :=
-  match ba, c with
-  | (BA _ | BA_splitlong (BA _) (BA _)), _ => true
-  | (BA_int _ | BA_long _ | BA_float _ | BA_single _), OK_const => true
-  | BA_addrstack _, (OK_addrstack | OK_addrany) => true
-  | BA_addrglobal _ _, (OK_addrglobal | OK_addrany) => true
-  | _, OK_all => true
-  | _, _ => false
-  end.

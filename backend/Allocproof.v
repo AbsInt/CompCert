@@ -1560,6 +1560,11 @@ Proof.
   intros (v1 & A & B).
   exploit IHeval_builtin_arg2; eauto. intros (v2 & C & D).
   exists (Val.longofwords v1 v2); split; auto with barg. apply Val.longofwords_lessdef; auto.
+- exploit IHeval_builtin_arg1; eauto. eapply add_equations_builtin_arg_satisf; eauto.
+  intros (v1' & A & B).
+  exploit IHeval_builtin_arg2; eauto. intros (v2' & C & D).
+  econstructor; split. eauto with barg.
+  destruct Archi.ptr64; auto using Val.add_lessdef, Val.addl_lessdef.
 Qed.
 
 Lemma add_equations_builtin_args_satisf:

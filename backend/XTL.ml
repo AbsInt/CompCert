@@ -133,6 +133,7 @@ let rec type_builtin_arg a ty =
   match a with
   | BA v -> set_var_type v ty
   | BA_splitlong(a1, a2) -> type_builtin_arg a1 Tint; type_builtin_arg a2 Tint
+  | BA_addptr(a1, a2) -> type_builtin_arg a1 coq_Tptr; type_builtin_arg a2 coq_Tptr
   | _ -> ()
 
 let rec type_builtin_args al tyl =

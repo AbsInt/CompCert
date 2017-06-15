@@ -203,6 +203,7 @@ Fixpoint sbuiltinarg (ctx: context) (a: builtin_arg reg) : builtin_arg reg :=
   | BA_loadstack chunk ofs => BA_loadstack chunk (Ptrofs.add ofs (Ptrofs.repr ctx.(dstk)))
   | BA_addrstack ofs => BA_addrstack (Ptrofs.add ofs (Ptrofs.repr ctx.(dstk)))
   | BA_splitlong hi lo => BA_splitlong (sbuiltinarg ctx hi) (sbuiltinarg ctx lo)
+  | BA_addptr a1 a2 => BA_addptr (sbuiltinarg ctx a1) (sbuiltinarg ctx a2)
   | _ => a
   end.
 

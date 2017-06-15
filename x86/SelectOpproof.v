@@ -947,6 +947,22 @@ Proof.
 - apply D; auto.
 Qed.
 
+Theorem eval_builtin_arg_addr:
+  forall addr al vl v,
+  eval_exprlist ge sp e m nil al vl ->
+  Op.eval_addressing ge sp addr vl = Some v ->
+  CminorSel.eval_builtin_arg ge sp e m (builtin_arg_addr addr al) v.
+Proof.
+  intros until v. unfold builtin_arg_addr; case (builtin_arg_addr_match addr al); intros; InvEval.
+- set (v2 := if Archi.ptr64 then Vlong (Int64.repr n) else Vint (Int.repr n)).
+  assert (EQ: v = if Archi.ptr64 then Val.addl v1 v2 else Val.add v1 v2).
+  { unfold Op.eval_addressing in H0; unfold v2; destruct Archi.ptr64; simpl in H0; inv H0; auto. }
+  rewrite EQ. constructor. constructor; auto. unfold v2; destruct Archi.ptr64; constructor.
+- rewrite eval_addressing_Aglobal in H0. inv H0. constructor.
+- rewrite eval_addressing_Ainstack in H0. inv H0. constructor.
+- constructor. econstructor. eauto. rewrite eval_Olea_ptr. auto. 
+Qed. 
+
 Theorem eval_builtin_arg:
   forall a v,
   eval_expr ge sp e m nil a v ->
@@ -955,10 +971,12 @@ Proof.
   intros until v. unfold builtin_arg; case (builtin_arg_match a); intros; InvEval.
 - constructor.
 - constructor.
-- constructor.
-- constructor.
-- constructor.
-- constructor.
+- destruct Archi.ptr64 eqn:SF. 
++ constructor; auto.
++ inv H. eapply eval_builtin_arg_addr. eauto. unfold Op.eval_addressing; rewrite SF; assumption.
+- destruct Archi.ptr64 eqn:SF. 
++ inv H. eapply eval_builtin_arg_addr. eauto. unfold Op.eval_addressing; rewrite SF; assumption.
++ constructor; auto.
 - simpl in H5. inv H5. constructor.
 - constructor; auto.
 - inv H. InvEval. rewrite eval_addressing_Aglobal in H6. inv H6. constructor; auto.

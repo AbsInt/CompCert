@@ -68,6 +68,8 @@ Fixpoint transfer_builtin_arg (nv: nval) (na: NA.t) (a: builtin_arg reg) : NA.t 
   | BA_loadglobal chunk id ofs => (ne, nmem_add nm (Gl id ofs) (size_chunk chunk))
   | BA_splitlong hi lo =>
       transfer_builtin_arg All (transfer_builtin_arg All na hi) lo
+  | BA_addptr hi lo =>
+      transfer_builtin_arg All (transfer_builtin_arg All na hi) lo
   end.
 
 Definition transfer_builtin_args (na: NA.t) (al: list (builtin_arg reg)) : NA.t :=

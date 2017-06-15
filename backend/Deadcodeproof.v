@@ -609,6 +609,12 @@ Proof.
   constructor; auto.
   apply vagree_lessdef.
   apply Val.longofwords_lessdef; apply lessdef_vagree; auto.
+- destruct (transfer_builtin_arg All (ne1, nm1) a1) as [ne' nm'] eqn:TR.
+  exploit IHeval_builtin_arg2; eauto. intros (v2' & A & B & C & D).
+  exploit IHeval_builtin_arg1; eauto. intros (v1' & P & Q & R & S).
+  econstructor; intuition auto.
+  econstructor; eauto.
+  destruct Archi.ptr64; auto using Val.add_lessdef, Val.addl_lessdef, vagree_lessdef, lessdef_vagree.
 Qed.
 
 Lemma transfer_builtin_args_sound:
@@ -657,6 +663,9 @@ Proof.
 - destruct IHeval_builtin_arg1 as (v1' & A1).
   destruct IHeval_builtin_arg2 as (v2' & A2).
   exists (Val.longofwords v1' v2'); constructor; auto.
+- destruct IHeval_builtin_arg1 as (v1' & A1).
+  destruct IHeval_builtin_arg2 as (v2' & A2).
+  econstructor; econstructor; eauto.
 Qed.
 
 Lemma can_eval_builtin_args:

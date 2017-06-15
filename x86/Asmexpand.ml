@@ -108,6 +108,8 @@ let addressing_of_builtin_arg = function
   | BA (IR r) -> linear_addr r Z.zero
   | BA_addrstack ofs -> linear_addr RSP (Integers.Ptrofs.unsigned ofs)
   | BA_addrglobal(id, ofs) -> global_addr id ofs
+  | BA_addptr(BA (IR r), BA_int n) -> linear_addr r (Integers.Int.signed n)
+  | BA_addptr(BA (IR r), BA_long n) -> linear_addr r (Integers.Int64.signed n)
   | _ -> assert false
 
 (* Handling of memcpy *)

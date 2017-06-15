@@ -808,6 +808,9 @@ Fixpoint add_equations_builtin_arg
   | BA_splitlong hi lo, BA_splitlong hi' lo' =>
       do e1 <- add_equations_builtin_arg env hi hi' e;
       add_equations_builtin_arg env lo lo' e1
+  | BA_addptr a1 a2, BA_addptr a1' a2' =>
+      do e1 <- add_equations_builtin_arg env a1 a1' e;
+      add_equations_builtin_arg env a2 a2' e1
   | _, _ =>
       None
   end.
