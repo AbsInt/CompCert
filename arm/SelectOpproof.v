@@ -889,6 +889,7 @@ Proof.
 - inv H. InvEval. simpl in H6; inv H6. constructor; auto.
 - inv H. InvEval. simpl in H6. rewrite <- Genv.shift_symbol_address_32 in H6 by auto.
   inv H6. constructor; auto.
+- inv H. repeat constructor; auto.
 - constructor; auto.
 Qed.
 

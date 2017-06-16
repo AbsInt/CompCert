@@ -165,6 +165,56 @@ let expand_builtin_memcpy sz al args =
 
 (* Handling of volatile reads and writes *)
 
+let expand_volatile_access
+       (mk1: ireg -> constant -> unit)
+       (mk2: ireg -> ireg -> unit)
+       addr temp =
+  match addr with
+  | BA(IR r) ->
+      mk1 r (Cint _0)
+  | BA_addrstack ofs ->
+      if offset_in_range ofs then
+        mk1 GPR1 (Cint ofs)
+      else begin
+        emit (Paddis(temp, GPR1, Cint (Asmgen.high_s ofs)));
+        mk1 temp (Cint (Asmgen.low_s ofs))
+      end
+  | BA_addrglobal(id, ofs) ->
+      if symbol_is_small_data id ofs then
+        mk1 GPR0 (Csymbol_sda(id, ofs))
+      else if symbol_is_rel_data id ofs then begin
+        emit (Paddis(temp, GPR0, Csymbol_rel_high(id, ofs)));
+        emit (Paddi(temp, temp, Csymbol_rel_low(id, ofs)));
+        mk1 temp (Cint _0)
+      end else begin
+        emit (Paddis(temp, GPR0, Csymbol_high(id, ofs)));
+        mk1 temp (Csymbol_low(id, ofs))
+      end
+  | BA_addptr(BA(IR r), BA_int n) ->
+      if offset_in_range n then
+        mk1 r (Cint n)
+      else begin
+        emit (Paddis(temp, r, Cint (Asmgen.high_s n)));
+        mk1 temp (Cint (Asmgen.low_s n))
+      end
+  | BA_addptr(BA_addrglobal(id, ofs), BA(IR r)) ->
+      if symbol_is_small_data id ofs then begin
+        emit (Paddi(GPR0, GPR0, Csymbol_sda(id, ofs)));
+        mk2 r GPR0
+      end else if symbol_is_rel_data id ofs then begin
+        emit (Pmr(GPR0, r));
+        emit (Paddis(temp, GPR0, Csymbol_rel_high(id, ofs)));
+        emit (Paddi(temp, temp, Csymbol_rel_low(id, ofs)));
+        mk2 temp GPR0
+      end else begin
+        emit (Paddis(temp, r, Csymbol_high(id, ofs)));
+        mk1 temp (Csymbol_low(id, ofs))
+      end
+  | BA_addptr(BA(IR r1), BA(IR r2)) ->
+      mk2 r1 r2
+  | _ ->
+      assert false
+
 let offset_constant cst delta =
   match cst with
   | Cint n ->
@@ -174,65 +224,76 @@ let offset_constant cst delta =
       Some (Csymbol_sda(id, Int.add ofs delta))
   | _ -> None
 
-let rec expand_builtin_vload_common chunk base offset res =
+let expand_load_int64 hi lo base ofs_hi ofs_lo =
+  if hi <> base then begin
+    emit (Plwz(hi, ofs_hi, base));
+    emit (Plwz(lo, ofs_lo, base))
+  end else begin
+    emit (Plwz(lo, ofs_lo, base));
+    emit (Plwz(hi, ofs_hi, base))
+  end
+
+let expand_builtin_vload_1 chunk addr res =
   match chunk, res with
   | Mint8unsigned, BR(IR res) ->
-      emit (Plbz(res, offset, base))
+      expand_volatile_access
+        (fun r c -> emit (Plbz(res, c, r)))
+        (fun r1 r2 -> emit (Plbzx(res, r1, r2)))
+        addr GPR11
   | Mint8signed, BR(IR res) ->
-      emit (Plbz(res, offset, base));
-      emit (Pextsb(res, res))
+      expand_volatile_access
+        (fun r c -> emit (Plbz(res, c, r)); emit (Pextsb(res, res)))
+        (fun r1 r2 -> emit (Plbzx(res, r1, r2)); emit (Pextsb(res, res)))
+        addr GPR11
   | Mint16unsigned, BR(IR res) ->
-      emit (Plhz(res, offset, base))
+      expand_volatile_access
+        (fun r c -> emit (Plhz(res, c, r)))
+        (fun r1 r2 -> emit (Plhzx(res, r1, r2)))
+        addr GPR11
   | Mint16signed, BR(IR res) ->
-      emit (Plha(res, offset, base))
+      expand_volatile_access
+        (fun r c -> emit (Plha(res, c, r)))
+        (fun r1 r2 -> emit (Plhax(res, r1, r2)))
+        addr GPR11
   | (Mint32 | Many32), BR(IR res) ->
-      emit (Plwz(res, offset, base))
+      expand_volatile_access
+        (fun r c -> emit (Plwz(res, c, r)))
+        (fun r1 r2 -> emit (Plwzx(res, r1, r2)))
+        addr GPR11
   | Mfloat32, BR(FR res) ->
-      emit (Plfs(res, offset, base))
+      expand_volatile_access
+        (fun r c -> emit (Plfs(res, c, r)))
+        (fun r1 r2 -> emit (Plfsx(res, r1, r2)))
+        addr GPR11
   | (Mfloat64 | Many64), BR(FR res) ->
-      emit (Plfd(res, offset, base))
+      expand_volatile_access
+        (fun r c -> emit (Plfd(res, c, r)))
+        (fun r1 r2 -> emit (Plfdx(res, r1, r2)))
+        addr GPR11
   | (Mint64 | Many64), BR(IR res) ->
-      emit (Pld(res, offset, base))
+      expand_volatile_access
+        (fun r c -> emit (Pld(res, c, r)))
+        (fun r1 r2 -> emit (Pldx(res, r1, r2)))
+        addr GPR11
   | Mint64, BR_splitlong(BR(IR hi), BR(IR lo)) ->
-      begin match offset_constant offset _4 with
-      | Some offset' ->
-          if hi <> base then begin
-            emit (Plwz(hi, offset, base));
-            emit (Plwz(lo, offset', base))
-          end else begin
-            emit (Plwz(lo, offset', base));
-            emit (Plwz(hi, offset, base))
-          end
-      | None ->
-          emit (Paddi(GPR11, base, offset));
-          expand_builtin_vload_common chunk GPR11 (Cint _0) res
-      end
+      expand_volatile_access
+        (fun r c ->
+           match offset_constant c _4 with
+           | Some c' -> expand_load_int64 hi lo r c c'
+           | None ->
+               emit (Paddi(GPR11, r, c));
+               expand_load_int64 hi lo GPR11 (Cint _0) (Cint _4))
+        (fun r1 r2 ->
+           emit (Padd(GPR11, r1, r2));
+           expand_load_int64 hi lo GPR11 (Cint _0) (Cint _4))
+        addr GPR11
   | _, _ ->
       assert false
 
 let expand_builtin_vload chunk args res =
   match args with
-  | [BA(IR addr)] ->
-      expand_builtin_vload_common chunk addr (Cint _0) res
-  | [BA_addrstack ofs] ->
-      if offset_in_range ofs then
-        expand_builtin_vload_common chunk GPR1 (Cint ofs) res
-      else begin
-        emit_addimm GPR11 GPR1 ofs;
-        expand_builtin_vload_common chunk GPR11 (Cint _0) res
-      end
-  | [BA_addrglobal(id, ofs)] ->
-      if symbol_is_small_data id ofs then
-        expand_builtin_vload_common chunk GPR0 (Csymbol_sda(id, ofs)) res
-      else if symbol_is_rel_data id ofs then begin
-        emit (Paddis(GPR11, GPR0, Csymbol_rel_high(id, ofs)));
-        expand_builtin_vload_common chunk GPR11 (Csymbol_rel_low(id, ofs)) res
-      end else begin
-        emit (Paddis(GPR11, GPR0, Csymbol_high(id, ofs)));
-        expand_builtin_vload_common chunk GPR11 (Csymbol_low(id, ofs)) res
-      end
-  | _ ->
-      assert false
+  | [addr] -> expand_builtin_vload_1 chunk addr res
+  | _ -> assert false
 
 let temp_for_vstore src =
   let rl = AST.params_of_builtin_arg src in
@@ -240,60 +301,62 @@ let temp_for_vstore src =
   else if not (List.mem (IR GPR12) rl) then GPR12
   else GPR10
 
-let expand_builtin_vstore_common chunk base offset src =
+let expand_store_int64 hi lo base ofs_hi ofs_lo =
+  emit (Pstw(hi, ofs_hi, base));
+  emit (Pstw(lo, ofs_lo, base))
+
+let expand_builtin_vstore_1 chunk addr src =
+  let temp = temp_for_vstore src in
   match chunk, src with
   | (Mint8signed | Mint8unsigned), BA(IR src) ->
-      emit (Pstb(src, offset, base))
+      expand_volatile_access
+        (fun r c -> emit (Pstb(src, c, r)))
+        (fun r1 r2 -> emit (Pstbx(src, r1, r2)))
+        addr temp
   | (Mint16signed | Mint16unsigned), BA(IR src) ->
-      emit (Psth(src, offset, base))
+      expand_volatile_access
+        (fun r c -> emit (Psth(src, c, r)))
+        (fun r1 r2 -> emit (Psthx(src, r1, r2)))
+        addr temp
   | (Mint32 | Many32), BA(IR src) ->
-      emit (Pstw(src, offset, base))
+      expand_volatile_access
+        (fun r c -> emit (Pstw(src, c, r)))
+        (fun r1 r2 -> emit (Pstwx(src, r1, r2)))
+        addr temp
   | Mfloat32, BA(FR src) ->
-      emit (Pstfs(src, offset, base))
+      expand_volatile_access
+        (fun r c -> emit (Pstfs(src, c, r)))
+        (fun r1 r2 -> emit (Pstfsx(src, r1, r2)))
+        addr temp
   | (Mfloat64 | Many64), BA(FR src) ->
-      emit (Pstfd(src, offset, base))
+      expand_volatile_access
+        (fun r c -> emit (Pstfd(src, c, r)))
+        (fun r1 r2 -> emit (Pstfdx(src, r1, r2)))
+        addr temp
   | (Mint64 | Many64), BA(IR src) ->
-      emit (Pstd(src, offset, base))
+      expand_volatile_access
+        (fun r c -> emit (Pstd(src, c, r)))
+        (fun r1 r2 -> emit (Pstdx(src, r1, r2)))
+        addr temp
   | Mint64, BA_splitlong(BA(IR hi), BA(IR lo)) ->
-      begin match offset_constant offset _4 with
-      | Some offset' ->
-          emit (Pstw(hi, offset, base));
-          emit (Pstw(lo, offset', base))
-      | None ->
-          let tmp = temp_for_vstore src in
-          emit (Paddi(tmp, base, offset));
-          emit (Pstw(hi, Cint _0, tmp));
-          emit (Pstw(lo, Cint _4, tmp))
-      end
+      expand_volatile_access
+        (fun r c ->
+           match offset_constant c _4 with
+           | Some c' -> expand_store_int64 hi lo r c c'
+           | None ->
+               emit (Paddi(temp, r, c));
+               expand_store_int64 hi lo temp (Cint _0) (Cint _4))
+        (fun r1 r2 ->
+           emit (Padd(temp, r1, r2));
+           expand_load_int64 hi lo temp (Cint _0) (Cint _4))
+        addr temp
   | _, _ ->
       assert false
 
 let expand_builtin_vstore chunk args =
   match args with
-  | [BA(IR addr); src] ->
-      expand_builtin_vstore_common chunk addr (Cint _0) src
-  | [BA_addrstack ofs; src] ->
-      if offset_in_range ofs then
-        expand_builtin_vstore_common chunk GPR1 (Cint ofs) src
-      else begin
-        let tmp = temp_for_vstore src in
-        emit_addimm tmp GPR1 ofs;
-        expand_builtin_vstore_common chunk tmp (Cint _0) src
-      end
-  | [BA_addrglobal(id, ofs); src] ->
-      if symbol_is_small_data id ofs then
-        expand_builtin_vstore_common chunk GPR0 (Csymbol_sda(id, ofs)) src
-      else if symbol_is_rel_data id ofs then begin
-        let tmp = temp_for_vstore src in
-        emit (Paddis(tmp, GPR0, Csymbol_rel_high(id, ofs)));
-        expand_builtin_vstore_common chunk tmp (Csymbol_rel_low(id, ofs)) src
-      end else begin
-        let tmp = temp_for_vstore src in
-        emit (Paddis(tmp, GPR0, Csymbol_high(id, ofs)));
-        expand_builtin_vstore_common chunk tmp (Csymbol_low(id, ofs)) src
-      end
-  | _ ->
-      assert false
+  | [addr; src] -> expand_builtin_vstore_1 chunk addr src
+  | _ -> assert false
 
 (* Handling of varargs *)
 let linkregister_offset = ref  _0

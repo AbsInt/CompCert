@@ -1318,3 +1318,26 @@ Definition is_rldl_mask (x: int64) : bool :=    (*r 0s in the high bits, 1s in t
 
 Definition is_rldr_mask (x: int64) : bool :=    (*r 1s in the high bits, 0s in the low bits *)
   is_mask_rec rlr_transition rlr_accepting Int64.wordsize RLR_S0 (Int64.unsigned x).
+
+(** * Handling of builtin arguments *)
+
+Definition builtin_arg_ok_1
+       (A: Type) (ba: builtin_arg A) (c: builtin_arg_constraint) :=
+  match c, ba with
+  | OK_all, _ => true
+  | OK_const, (BA_int _ | BA_long _ | BA_float _ | BA_single _) => true
+  | OK_addrstack, BA_addrstack _ => true
+  | OK_addressing, BA_addrstack _ => true
+  | OK_addressing, BA_addrglobal _ _ => true
+  | OK_addressing, BA_addptr (BA _) (BA_int _) => true
+  | OK_addressing, BA_addptr (BA_addrglobal _ _) (BA _) => true
+  | OK_addressing, BA_addptr (BA _) (BA _) => true
+  | _, _ => false
+  end.
+
+Definition builtin_arg_ok
+       (A: Type) (ba: builtin_arg A) (c: builtin_arg_constraint) :=
+  match ba with
+  | (BA _ | BA_splitlong (BA _) (BA _)) => true
+  | _ => builtin_arg_ok_1 ba c
+  end.  

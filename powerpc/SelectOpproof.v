@@ -1038,6 +1038,9 @@ Proof.
 - subst v. constructor; auto.
 - inv H. InvEval. simpl in H6; inv H6. constructor; auto.
 - inv H. InvEval. simpl in H6. inv H6. constructor; auto.
+- inv H. repeat constructor; auto.
+- inv H. repeat constructor; auto.
+- inv H. repeat constructor; auto.  
 - constructor; auto.
 Qed.
 

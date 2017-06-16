@@ -98,6 +98,8 @@ Fixpoint builtin_arg_reduction (ae: AE.t) (a: builtin_arg reg) :=
       | BA_int nhi, BA_int nlo => BA_long (Int64.ofwords nhi nlo)
       | hi', lo' => BA_splitlong hi' lo'
       end
+  | BA_addptr a1 a2 =>
+      BA_addptr (builtin_arg_reduction ae a1) (builtin_arg_reduction ae a2)
   | _ => a
   end.
 

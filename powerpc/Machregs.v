@@ -276,8 +276,8 @@ Definition builtin_constraints (ef: external_function) :
       else if string_dec id "__builtin_mbar" then OK_const :: nil
       else if string_dec id "__builtin_mr" then OK_const :: OK_const :: nil
       else nil
-  | EF_vload _ => OK_addrany :: nil
-  | EF_vstore _ => OK_addrany :: OK_default :: nil
+  | EF_vload _ => OK_addressing :: nil
+  | EF_vstore _ => OK_addressing :: OK_default :: nil
   | EF_memcpy _ _ => OK_addrstack :: OK_addrstack :: nil
   | EF_annot txt targs => map (fun _ => OK_all) targs
   | EF_debug kind txt targs => map (fun _ => OK_all) targs

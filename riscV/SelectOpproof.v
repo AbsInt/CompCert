@@ -902,13 +902,23 @@ Theorem eval_builtin_arg:
   eval_expr ge sp e m nil a v ->
   CminorSel.eval_builtin_arg ge sp e m (builtin_arg a) v.
 Proof.
-  intros until v. unfold builtin_arg; case (builtin_arg_match a); intros; InvEval.
-- constructor.
-- constructor.
-- constructor.
-- simpl in H5. inv H5. constructor.
-- subst v. constructor; auto.
+  intros until v. unfold builtin_arg; case (builtin_arg_match a); intros.
+- InvEval. constructor.
+- InvEval. constructor.
+- InvEval. constructor.
+- InvEval. simpl in H5. inv H5. constructor.
+- InvEval. subst v. constructor; auto.
 - inv H. InvEval. simpl in H6; inv H6. constructor; auto.
+- destruct Archi.ptr64 eqn:SF.
++ constructor; auto.
++ InvEval. replace v with (if Archi.ptr64 then Val.addl v1 (Vint n) else Val.add v1 (Vint n)).
+  repeat constructor; auto.
+  rewrite SF; auto.
+- destruct Archi.ptr64 eqn:SF.
++ InvEval. replace v with (if Archi.ptr64 then Val.addl v1 (Vlong n) else Val.add v1 (Vlong n)).
+  repeat constructor; auto.
+  rewrite SF; auto.
++ constructor; auto.
 - constructor; auto.
 Qed.
 

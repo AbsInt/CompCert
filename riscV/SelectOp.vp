@@ -442,5 +442,9 @@ Nondetfunction builtin_arg (e: expr) :=
         BA_long (Int64.ofwords h l)
   | Eop Omakelong (h ::: l ::: Enil) => BA_splitlong (BA h) (BA l)
   | Eload chunk (Ainstack ofs) Enil => BA_loadstack chunk ofs
+  | Eop (Oaddimm n) (e1:::Enil) =>
+      if Archi.ptr64 then BA e else BA_addptr (BA e1) (BA_int n)
+  | Eop (Oaddlimm n) (e1:::Enil) =>
+      if Archi.ptr64 then BA_addptr (BA e1) (BA_long n) else BA e
   | _ => BA e
   end.

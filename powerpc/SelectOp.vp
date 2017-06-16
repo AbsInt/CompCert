@@ -547,5 +547,8 @@ Nondetfunction builtin_arg (e: expr) :=
   | Eop Omakelong (h ::: l ::: Enil) => BA_splitlong (BA h) (BA l)
   | Eload chunk (Aglobal id ofs) Enil => BA_loadglobal chunk id ofs
   | Eload chunk (Ainstack ofs) Enil => BA_loadstack chunk ofs
+  | Eop (Oaddimm n) (e1:::Enil) => BA_addptr (BA e1) (BA_int n)
+  | Eop (Oaddsymbol id ofs) (e1:::Enil) => BA_addptr (BA_addrglobal id ofs) (BA e1)
+  | Eop Oadd (e1:::e2:::Enil) => BA_addptr (BA e1) (BA e2)
   | _ => BA e
   end.

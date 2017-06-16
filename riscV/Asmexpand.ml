@@ -251,6 +251,13 @@ let expand_builtin_vload chunk args res =
         expand_addptrofs X31 X2 ofs; (* X31 <- sp + ofs *)
         expand_builtin_vload_common chunk X31 _0 res
       end
+  | [BA_addptr(BA(IR addr), (BA_int ofs | BA_long ofs))] ->
+      if offset_in_range (Z.add ofs (Memdata.size_chunk chunk)) then
+        expand_builtin_vload_common chunk addr ofs res
+      else begin
+        expand_addptrofs X31 addr ofs; (* X31 <- addr + ofs *)
+        expand_builtin_vload_common chunk X31 _0 res
+      end
   | _ ->
       assert false
 
@@ -284,6 +291,13 @@ let expand_builtin_vstore chunk args =
         expand_builtin_vstore_common chunk X2 ofs src
       else begin
         expand_addptrofs X31 X2 ofs; (* X31 <- sp + ofs *)
+        expand_builtin_vstore_common chunk X31 _0 src
+      end
+  | [BA_addptr(BA(IR addr), (BA_int ofs | BA_long ofs)); src] ->
+      if offset_in_range (Z.add ofs (Memdata.size_chunk chunk)) then
+        expand_builtin_vstore_common chunk addr ofs src
+      else begin
+        expand_addptrofs X31 addr ofs; (* X31 <- addr + ofs *)
         expand_builtin_vstore_common chunk X31 _0 src
       end
   | _ ->

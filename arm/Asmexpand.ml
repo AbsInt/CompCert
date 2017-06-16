@@ -215,6 +215,13 @@ let expand_builtin_vload chunk args res =
   | [BA_addrglobal(id, ofs)] ->
       emit (Ploadsymbol (IR14,id,ofs));
       expand_builtin_vload_common chunk IR14 _0 res
+  | [BA_addptr(BA(IR addr), BA_int ofs)] ->
+      if offset_in_range (Int.add ofs (Memdata.size_chunk chunk)) then
+        expand_builtin_vload_common chunk addr ofs res
+      else begin
+        expand_addimm IR14 addr ofs;
+        expand_builtin_vload_common chunk IR14 _0 res
+      end
   | _ ->
       assert false
 
@@ -252,6 +259,13 @@ let expand_builtin_vstore chunk args =
   | [BA_addrglobal(id, ofs); src] ->
       emit (Ploadsymbol (IR14,id,ofs));
       expand_builtin_vstore_common chunk IR14 _0 src
+  | [BA_addptr(BA(IR addr), BA_int ofs); src] ->
+      if offset_in_range (Int.add ofs (Memdata.size_chunk chunk)) then
+        expand_builtin_vstore_common chunk addr ofs src
+      else begin
+        expand_addimm IR14 addr ofs;
+        expand_builtin_vstore_common chunk IR14 _0 src
+      end
   | _ ->
       assert false
 

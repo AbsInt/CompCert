@@ -505,5 +505,6 @@ Nondetfunction builtin_arg (e: expr) :=
   | Eload chunk (Ainstack ofs) Enil => BA_loadstack chunk ofs
   | Eload chunk (Aindexed ofs1) (Eop (Oaddrsymbol id ofs) Enil ::: Enil) =>
        BA_loadglobal chunk id (Ptrofs.add ofs (Ptrofs.of_int ofs1))
+  | Eop (Oaddimm n) (e1:::Enil) => BA_addptr (BA e1) (BA_int n)
   | _ => BA e
   end.

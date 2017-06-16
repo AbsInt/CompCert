@@ -1127,3 +1127,22 @@ Qed.
 
 End EVAL_INJECT.
 
+(** * Handling of builtin arguments *)
+
+Definition builtin_arg_ok_1
+       (A: Type) (ba: builtin_arg A) (c: builtin_arg_constraint) :=
+  match c, ba with
+  | OK_all, _ => true
+  | OK_const, (BA_int _ | BA_long _ | BA_float _ | BA_single _) => true
+  | OK_addrstack, BA_addrstack _ => true
+  | OK_addressing, BA_addrstack _ => true
+  | OK_addressing, BA_addptr (BA _) (BA_int _) => true
+  | _, _ => false
+  end.
+
+Definition builtin_arg_ok
+       (A: Type) (ba: builtin_arg A) (c: builtin_arg_constraint) :=
+  match ba with
+  | (BA _ | BA_splitlong (BA _) (BA _)) => true
+  | _ => builtin_arg_ok_1 ba c
+  end.  
