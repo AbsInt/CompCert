@@ -1,0 +1,187 @@
+/* A simple stop-and-copy garbage collector */
+
+var "alloc_ptr"[4]
+var "fromspace_start_ptr"[4]
+var "fromspace_end_ptr"[4]
+var "tospace_start_ptr"[4]
+var "tospace_end_ptr"[4]
+
+/* Format of blocks:
+      - header word: 30 bits size + 2 bits kind
+          kind = 0   block contains raw data (no pointers)
+          kind = 1   block contains pointer data
+          kind = 2   block is closure (all pointers except first word)
+          kind = 3   block was forwarded
+      - [size] words of data
+
+   Blocks are stored in one big global array and addressed by pointers
+   within this block.  The pointer goes to the first word of data.
+*/
+
+#define KIND_RAWDATA 0
+#define KIND_PTRDATA 1
+#define KIND_CLOSURE 2
+#define KIND_FORWARDED 3
+#define Kind_header(h) ((h) & 3)
+#define Size_header(h) ((h) & 0xFFFFFFFC)
+
+/* Copy one block.  The reference to that block is passed by reference
+   at address [location], and will be updated. */
+
+"copy_block"(copy_ptr, location): int -> int -> int
+{
+  var optr, header, kind, size, src, dst;
+
+  optr = int32[location];
+  if (optr == 0) return copy_ptr;
+  header = int32[optr - 4];
+  kind = Kind_header(header);
+  if (kind == KIND_FORWARDED) {
+    /* Already copied.  Reference of copy is stored in the
+       first field of original. */
+    int32[location] = int32[optr];
+  } else {
+    /* Copy contents of original block (including header) */
+    size = Size_header(header) + 4;
+    src = optr - 4;
+    dst = copy_ptr;
+    {{ loop {
+      int32[dst] = int32[src];
+      src = src + 4;
+      dst = dst + 4;
+      size = size - 4;
+      if (size == 0) exit;
+    } }}
+    copy_ptr = copy_ptr + 4;
+    /* Mark original as forwarded */
+    int32[optr - 4] = header | KIND_FORWARDED;
+    int32[optr] = copy_ptr;
+    /* Update location to point to copy */
+    int32[location] = copy_ptr;
+    /* Finish allocating space for copy */
+    copy_ptr = copy_ptr + Size_header(header);
+  }
+  return copy_ptr;
+}
+
+/* Finish the copying */
+
+"copy_all"(scan_ptr, copy_ptr): int -> int -> int
+{
+  var header, kind, size;
+
+  {{ loop {
+    if (scan_ptr >= copy_ptr) exit;
+    header = int32[scan_ptr];
+    scan_ptr = scan_ptr + 4;
+    kind = Kind_header(header);
+    size = Size_header(header);
+    if (kind == KIND_RAWDATA) {
+      /* Nothing to do for a RAWDATA block */
+      scan_ptr = scan_ptr + size;
+    } else {
+      /* Apply [copy_block] to all fields if PTRDATA, all fields except
+         first if CLOSURE. */
+      if (kind == KIND_CLOSURE) { scan_ptr = scan_ptr + 4; size = size - 4; }
+      {{ loop {
+        if (size == 0) exit;
+        copy_ptr = "copy_block"(copy_ptr, scan_ptr) : int -> int -> int;
+        scan_ptr = scan_ptr + 4;
+        size = size - 4;
+      } }}
+    }
+  } }}
+  return copy_ptr;
+}
+
+/* Copy the roots.  The roots are given as a linked list of blocks:
+       offset 0: pointer to next root block (or NULL)
+       offset 4: number of roots N
+       offset 8 and following words: the roots
+*/
+
+"copy_roots"(copy_ptr, root): int -> int -> int
+{
+  var n, p;
+
+  {{ loop {
+    if (root == 0) exit;
+    n = int32[root + 4];
+    p = root + 8;
+    {{ loop {
+      if (n == 0) exit;
+      copy_ptr = "copy_block"(copy_ptr, p) : int -> int -> int;
+      p = p + 4;
+      n = n - 1;
+    } }}
+    root = int32[root];
+  } }}
+  return copy_ptr;
+}
+
+/* Garbage collection */
+
+extern "gc_alarm" : int -> void
+
+"garbage_collection"(root): int -> void
+{
+  var heap_base, copy_ptr, tmp;
+
+  copy_ptr = int32["tospace_start_ptr"];
+  copy_ptr = "copy_roots"(copy_ptr, root) : int -> int -> int;
+  copy_ptr = "copy_all"(int32["tospace_start_ptr"], copy_ptr) : int -> int -> int;
+  /* Swap fromspace and tospace */
+  tmp = int32["tospace_start_ptr"];
+  int32["tospace_start_ptr"] = int32["fromspace_start_ptr"];
+  int32["fromspace_start_ptr"] = tmp;
+  tmp = int32["tospace_end_ptr"];
+  int32["tospace_end_ptr"] = int32["fromspace_end_ptr"];
+  int32["fromspace_end_ptr"] = tmp;
+  /* Reinitialise allocation pointer */
+  int32["alloc_ptr"] = copy_ptr;
+  "gc_alarm"(copy_ptr - int32["fromspace_start_ptr"]) : int -> void;
+}
+
+/* Allocation */
+
+extern "abort" : void
+
+"alloc_block"(root, kind, size): int -> int -> int -> int
+{
+  var p, np;
+
+  loop {
+    p = int32["alloc_ptr"];
+    np = p + size + 4;
+    if (np <= int32["fromspace_end_ptr"]) {
+      int32["alloc_ptr"] = np;
+      int32[p] = size | kind;
+      return p + 4;
+    }
+    "garbage_collection"(root) : int -> void;
+    if (int32["alloc_ptr"] + size + 4 > int32["fromspace_end_ptr"]) { 
+      "abort"() : void;
+    }
+  }
+}
+
+/* Initialize a heap of size [hsize] bytes */
+
+extern "malloc" : int -> int
+
+"init_heap"(hsize) : int -> int
+{
+  var from, to;
+
+  from = "malloc"(hsize) : int -> int;
+  if (from == 0) return -1;
+  to = "malloc"(hsize) : int -> int;
+  if (to == 0) return -1;
+  int32["fromspace_start_ptr"] = from;
+  int32["fromspace_end_ptr"] = from + hsize;
+  int32["tospace_start_ptr"] = to;
+  int32["tospace_end_ptr"] = to + hsize;
+  int32["alloc_ptr"] = from;
+  return 0;
+}
+

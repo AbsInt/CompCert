@@ -1,0 +1,13 @@
+An int: 42
+A long long: 123456789012345
+A string: Hello world
+A double: 3.141592654
+A small struct: x12
+A bigger struct: (123,456,789)
+A mixture: x & Hello, world! & y2 & 42 & 123456789012345 & 3.141592654 & 2.718281746
+Twice: -1 1.23
+Twice: -1 1.23
+With va_copy: -1 1.23
+With va_copy: -1 1.23
+With extra args: x & Hello, world! & 42 & 123456789012345 & 3.141592654 & 2.718281746
+va_list compatibility: x & Hello, world! & 42 & 123456789012345 & 3.141592654 & 2.718281746

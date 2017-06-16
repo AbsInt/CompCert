@@ -1,0 +1,381 @@
+/* AES cipher.  To be preprocessed with cpp -P. */
+
+#if defined(__ppc__) || defined(__PPC__)
+#define ARCH_BIG_ENDIAN
+#elif defined(__i386__) || defined(__x86_64__) || defined(__ARMEL__)
+#undef ARCH_BIG_ENDIAN
+#else
+#error "unknown endianness"
+#endif
+
+#ifdef ARCH_BIG_ENDIAN
+#define GETU32(pt) int32[pt]
+#define PUTU32(ct,st) int32[ct] = st
+#else
+#error "this test is not available yet in little-endian"
+#endif
+
+#define rk(n) int32[rk_ + (n) * 4]
+#define Te0(n) int32["Te0" + (n) * 4]
+#define Te1(n) int32["Te1" + (n) * 4]
+#define Te2(n) int32["Te2" + (n) * 4]
+#define Te3(n) int32["Te3" + (n) * 4]
+#define Te4(n) int32["Te4" + (n) * 4]
+#define Td0(n) int32["Td0" + (n) * 4]
+#define Td1(n) int32["Td1" + (n) * 4]
+#define Td2(n) int32["Td2" + (n) * 4]
+#define Td3(n) int32["Td3" + (n) * 4]
+#define Td4(n) int32["Td4" + (n) * 4]
+#define rcon(n) int32["rcon" + (n) * 4]
+
+/**
+ * Expand the cipher key into the encryption key schedule.
+ *
+ * @return	the number of rounds for the given cipher key size.
+ */
+"rijndaelKeySetupEnc"(rk_, cipherKey, keyBits) : int -> int -> int -> int
+{
+  var i, temp;
+  i = 0;
+
+  rk(0) = GETU32(cipherKey     );
+  rk(1) = GETU32(cipherKey +  4);
+  rk(2) = GETU32(cipherKey +  8);
+  rk(3) = GETU32(cipherKey + 12);
+  if (keyBits == 128) {
+    {{ loop {
+      temp  = rk(3);
+      rk(4) = rk(0) ^
+        (Te4((temp >>u 16) & 0xff) & 0xff000000) ^
+        (Te4((temp >>u  8) & 0xff) & 0x00ff0000) ^
+        (Te4((temp      ) & 0xff) & 0x0000ff00) ^
+        (Te4((temp >>u 24)       ) & 0x000000ff) ^
+        rcon(i);
+      rk(5) = rk(1) ^ rk(4);
+      rk(6) = rk(2) ^ rk(5);
+      rk(7) = rk(3) ^ rk(6);
+      i = i + 1;
+      if (i == 10) {
+        return 10;
+      }
+      rk_ = rk_ + 4 * 4;
+    } }}
+  }
+  rk(4) = GETU32(cipherKey + 16);
+  rk(5) = GETU32(cipherKey + 20);
+  if (keyBits == 192) {
+    {{ loop {
+      temp = rk( 5);
+      rk( 6) = rk( 0) ^
+        (Te4((temp >>u 16) & 0xff) & 0xff000000) ^
+        (Te4((temp >>u  8) & 0xff) & 0x00ff0000) ^
+        (Te4((temp      ) & 0xff) & 0x0000ff00) ^
+        (Te4((temp >>u 24)       ) & 0x000000ff) ^
+        rcon(i);
+      rk( 7) = rk( 1) ^ rk( 6);
+      rk( 8) = rk( 2) ^ rk( 7);
+      rk( 9) = rk( 3) ^ rk( 8);
+      i = i + 1;
+      if (i == 8) {
+        return 12;
+      }
+      rk(10) = rk( 4) ^ rk( 9);
+      rk(11) = rk( 5) ^ rk(10);
+      rk_ = rk_ + 6 * 4;
+    } }}
+  }
+  rk(6) = GETU32(cipherKey + 24);
+  rk(7) = GETU32(cipherKey + 28);
+  if (keyBits == 256) {
+    {{ loop {
+      temp = rk( 7);
+      rk( 8) = rk( 0) ^
+        (Te4((temp >>u 16) & 0xff) & 0xff000000) ^
+        (Te4((temp >>u  8) & 0xff) & 0x00ff0000) ^
+        (Te4((temp      ) & 0xff) & 0x0000ff00) ^
+        (Te4((temp >>u 24)       ) & 0x000000ff) ^
+        rcon(i);
+      rk( 9) = rk( 1) ^ rk( 8);
+      rk(10) = rk( 2) ^ rk( 9);
+      rk(11) = rk( 3) ^ rk(10);
+      i = i + 1;
+      if (i == 7) {
+        return 14;
+      }
+      temp = rk(11);
+      rk(12) = rk( 4) ^
+        (Te4((temp >>u 24)       ) & 0xff000000) ^
+        (Te4((temp >>u 16) & 0xff) & 0x00ff0000) ^
+        (Te4((temp >>u  8) & 0xff) & 0x0000ff00) ^
+        (Te4((temp      ) & 0xff) & 0x000000ff);
+      rk(13) = rk( 5) ^ rk(12);
+      rk(14) = rk( 6) ^ rk(13);
+      rk(15) = rk( 7) ^ rk(14);
+      
+      rk_ = rk_ + 8 * 4;
+    } }}
+  }
+  return 0;
+}
+
+/**
+ * Expand the cipher key into the decryption key schedule.
+ *
+ * @return	the number of rounds for the given cipher key size.
+ */
+"rijndaelKeySetupDec"(rk_, cipherKey, keyBits) : int -> int -> int -> int
+{
+  var Nr, i, j, temp;
+
+  /* expand the cipher key: */
+  Nr = "rijndaelKeySetupEnc"(rk_, cipherKey, keyBits) : int -> int -> int -> int;
+  /* invert the order of the round keys: */
+  i = 0; j = 4 * Nr;
+  {{ loop {
+    if (! (i < j)) exit;
+    temp = rk(i    ); rk(i    ) = rk(j    ); rk(j    ) = temp;
+    temp = rk(i + 1); rk(i + 1) = rk(j + 1); rk(j + 1) = temp;
+    temp = rk(i + 2); rk(i + 2) = rk(j + 2); rk(j + 2) = temp;
+    temp = rk(i + 3); rk(i + 3) = rk(j + 3); rk(j + 3) = temp;
+    i = i + 4;
+    j = j - 4;
+  } }}
+  /* apply the inverse MixColumn transform to all round keys but the first and the last: */
+  i = 1;
+  {{ loop {
+    if (! (i < Nr)) exit;
+    rk_ = rk_ + 4 * 4;
+    rk(0) =
+      Td0(Te4((rk(0) >>u 24)       ) & 0xff) ^
+      Td1(Te4((rk(0) >>u 16) & 0xff) & 0xff) ^
+      Td2(Te4((rk(0) >>u  8) & 0xff) & 0xff) ^
+      Td3(Te4((rk(0)      ) & 0xff) & 0xff);
+    rk(1) =
+      Td0(Te4((rk(1) >>u 24)       ) & 0xff) ^
+      Td1(Te4((rk(1) >>u 16) & 0xff) & 0xff) ^
+      Td2(Te4((rk(1) >>u  8) & 0xff) & 0xff) ^
+      Td3(Te4((rk(1)      ) & 0xff) & 0xff);
+    rk(2) =
+      Td0(Te4((rk(2) >>u 24)       ) & 0xff) ^
+      Td1(Te4((rk(2) >>u 16) & 0xff) & 0xff) ^
+      Td2(Te4((rk(2) >>u  8) & 0xff) & 0xff) ^
+      Td3(Te4((rk(2)      ) & 0xff) & 0xff);
+    rk(3) =
+      Td0(Te4((rk(3) >>u 24)       ) & 0xff) ^
+      Td1(Te4((rk(3) >>u 16) & 0xff) & 0xff) ^
+      Td2(Te4((rk(3) >>u  8) & 0xff) & 0xff) ^
+      Td3(Te4((rk(3)      ) & 0xff) & 0xff);
+    i = i + 1;
+  } }}
+  return Nr;
+}
+
+"rijndaelEncrypt"(rk_, Nr, pt, ct): int -> int -> int -> int -> void
+{
+  var s0, s1, s2, s3, t0, t1, t2, t3, r;
+
+    /*
+     * map byte array block to cipher state
+     * and add initial round key:
+     */
+  s0 = GETU32(pt     ) ^ rk(0);
+  s1 = GETU32(pt +  4) ^ rk(1);
+  s2 = GETU32(pt +  8) ^ rk(2);
+  s3 = GETU32(pt + 12) ^ rk(3);
+  /*
+   * Nr - 1 full rounds:
+   */
+  r = Nr >>u 1;
+  {{ loop {
+    t0 =
+      Te0((s0 >>u 24)       ) ^
+      Te1((s1 >>u 16) & 0xff) ^
+      Te2((s2 >>u  8) & 0xff) ^
+      Te3((s3      ) & 0xff) ^
+      rk(4);
+    t1 =
+      Te0((s1 >>u 24)       ) ^
+      Te1((s2 >>u 16) & 0xff) ^
+      Te2((s3 >>u  8) & 0xff) ^
+      Te3((s0      ) & 0xff) ^
+      rk(5);
+    t2 =
+      Te0((s2 >>u 24)       ) ^
+      Te1((s3 >>u 16) & 0xff) ^
+      Te2((s0 >>u  8) & 0xff) ^
+      Te3((s1      ) & 0xff) ^
+      rk(6);
+    t3 =
+      Te0((s3 >>u 24)       ) ^
+      Te1((s0 >>u 16) & 0xff) ^
+      Te2((s1 >>u  8) & 0xff) ^
+      Te3((s2      ) & 0xff) ^
+      rk(7);
+
+    rk_ = rk_ + 8 * 4;
+    r = r - 1;
+    if (r == 0) exit;
+
+    s0 =
+      Te0((t0 >>u 24)       ) ^
+      Te1((t1 >>u 16) & 0xff) ^
+      Te2((t2 >>u  8) & 0xff) ^
+      Te3((t3      ) & 0xff) ^
+      rk(0);
+    s1 =
+      Te0((t1 >>u 24)       ) ^
+      Te1((t2 >>u 16) & 0xff) ^
+      Te2((t3 >>u  8) & 0xff) ^
+      Te3((t0      ) & 0xff) ^
+      rk(1);
+    s2 =
+      Te0((t2 >>u 24)       ) ^
+      Te1((t3 >>u 16) & 0xff) ^
+      Te2((t0 >>u  8) & 0xff) ^
+      Te3((t1      ) & 0xff) ^
+      rk(2);
+    s3 =
+      Te0((t3 >>u 24)       ) ^
+      Te1((t0 >>u 16) & 0xff) ^
+      Te2((t1 >>u  8) & 0xff) ^
+      Te3((t2      ) & 0xff) ^
+      rk(3);
+  } }}
+  /*
+   * apply last round and
+   * map cipher state to byte array block:
+   */
+  s0 =
+    (Te4((t0 >>u 24)       ) & 0xff000000) ^
+    (Te4((t1 >>u 16) & 0xff) & 0x00ff0000) ^
+    (Te4((t2 >>u  8) & 0xff) & 0x0000ff00) ^
+    (Te4((t3      ) & 0xff) & 0x000000ff) ^
+    rk(0);
+  PUTU32(ct     , s0);
+  s1 =
+    (Te4((t1 >>u 24)       ) & 0xff000000) ^
+    (Te4((t2 >>u 16) & 0xff) & 0x00ff0000) ^
+    (Te4((t3 >>u  8) & 0xff) & 0x0000ff00) ^
+    (Te4((t0      ) & 0xff) & 0x000000ff) ^
+    rk(1);
+  PUTU32(ct +  4, s1);
+  s2 =
+    (Te4((t2 >>u 24)       ) & 0xff000000) ^
+    (Te4((t3 >>u 16) & 0xff) & 0x00ff0000) ^
+    (Te4((t0 >>u  8) & 0xff) & 0x0000ff00) ^
+    (Te4((t1      ) & 0xff) & 0x000000ff) ^
+    rk(2);
+  PUTU32(ct +  8, s2);
+  s3 =
+    (Te4((t3 >>u 24)       ) & 0xff000000) ^
+    (Te4((t0 >>u 16) & 0xff) & 0x00ff0000) ^
+    (Te4((t1 >>u  8) & 0xff) & 0x0000ff00) ^
+    (Te4((t2      ) & 0xff) & 0x000000ff) ^
+    rk(3);
+  PUTU32(ct + 12, s3);
+}
+
+"rijndaelDecrypt"(rk_, Nr, ct, pt) : int -> int -> int -> int -> void
+{
+  var s0, s1, s2, s3, t0, t1, t2, t3, r;
+
+  /*
+   * map byte array block to cipher state
+   * and add initial round key:
+   */
+  s0 = GETU32(ct     ) ^ rk(0);
+  s1 = GETU32(ct +  4) ^ rk(1);
+  s2 = GETU32(ct +  8) ^ rk(2);
+  s3 = GETU32(ct + 12) ^ rk(3);
+  /*
+   * Nr - 1 full rounds:
+   */
+  r = Nr >>u 1;
+  {{ loop {
+    t0 =
+      Td0((s0 >>u 24)       ) ^
+      Td1((s3 >>u 16) & 0xff) ^
+      Td2((s2 >>u  8) & 0xff) ^
+      Td3((s1      ) & 0xff) ^
+      rk(4);
+    t1 =
+      Td0((s1 >>u 24)       ) ^
+      Td1((s0 >>u 16) & 0xff) ^
+      Td2((s3 >>u  8) & 0xff) ^
+      Td3((s2      ) & 0xff) ^
+      rk(5);
+    t2 =
+      Td0((s2 >>u 24)       ) ^
+      Td1((s1 >>u 16) & 0xff) ^
+      Td2((s0 >>u  8) & 0xff) ^
+      Td3((s3      ) & 0xff) ^
+      rk(6);
+    t3 =
+      Td0((s3 >>u 24)       ) ^
+      Td1((s2 >>u 16) & 0xff) ^
+      Td2((s1 >>u  8) & 0xff) ^
+      Td3((s0      ) & 0xff) ^
+      rk(7);
+    
+    rk_ = rk_ + 8 * 4;
+    r = r - 1;
+    if (r == 0) exit;
+
+    s0 =
+      Td0((t0 >>u 24)       ) ^
+      Td1((t3 >>u 16) & 0xff) ^
+      Td2((t2 >>u  8) & 0xff) ^
+      Td3((t1      ) & 0xff) ^
+      rk(0);
+    s1 =
+      Td0((t1 >>u 24)       ) ^
+      Td1((t0 >>u 16) & 0xff) ^
+      Td2((t3 >>u  8) & 0xff) ^
+      Td3((t2      ) & 0xff) ^
+      rk(1);
+    s2 =
+      Td0((t2 >>u 24)       ) ^
+      Td1((t1 >>u 16) & 0xff) ^
+      Td2((t0 >>u  8) & 0xff) ^
+      Td3((t3      ) & 0xff) ^
+      rk(2);
+    s3 =
+      Td0((t3 >>u 24)       ) ^
+      Td1((t2 >>u 16) & 0xff) ^
+      Td2((t1 >>u  8) & 0xff) ^
+      Td3((t0      ) & 0xff) ^
+      rk(3);
+  } }}
+  /*
+   * apply last round and
+   * map cipher state to byte array block:
+   */
+  s0 =
+    (Td4((t0 >>u 24)       ) & 0xff000000) ^
+    (Td4((t3 >>u 16) & 0xff) & 0x00ff0000) ^
+    (Td4((t2 >>u  8) & 0xff) & 0x0000ff00) ^
+    (Td4((t1      ) & 0xff) & 0x000000ff) ^
+    rk(0);
+  PUTU32(pt     , s0);
+  s1 =
+    (Td4((t1 >>u 24)       ) & 0xff000000) ^
+    (Td4((t0 >>u 16) & 0xff) & 0x00ff0000) ^
+    (Td4((t3 >>u  8) & 0xff) & 0x0000ff00) ^
+    (Td4((t2      ) & 0xff) & 0x000000ff) ^
+    rk(1);
+  PUTU32(pt +  4, s1);
+  s2 =
+    (Td4((t2 >>u 24)       ) & 0xff000000) ^
+    (Td4((t1 >>u 16) & 0xff) & 0x00ff0000) ^
+    (Td4((t0 >>u  8) & 0xff) & 0x0000ff00) ^
+    (Td4((t3      ) & 0xff) & 0x000000ff) ^
+    rk(2);
+  PUTU32(pt +  8, s2);
+  s3 =
+    (Td4((t3 >>u 24)       ) & 0xff000000) ^
+    (Td4((t2 >>u 16) & 0xff) & 0x00ff0000) ^
+    (Td4((t1 >>u  8) & 0xff) & 0x0000ff00) ^
+    (Td4((t0      ) & 0xff) & 0x000000ff) ^
+    rk(3);
+  PUTU32(pt + 12, s3);
+}

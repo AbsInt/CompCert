@@ -1,0 +1,298 @@
+/* A simple mark-and-sweep garbage collector */
+
+var "heap_start"[4]
+var "heap_end"[4]
+var "freelist_head"[4]
+
+#define GRAY_CACHE_SIZE 65536
+var "gray_cache"[GRAY_CACHE_SIZE]
+var "gray_cache_ptr"[4]
+var "gray_cache_overflow"[4]
+
+/* Format of blocks:
+      - header word: 28 bits size + 2 bits mark + 2 bits kind
+          kind = 0   block contains raw data (no pointers)
+          kind = 1   block contains pointer data
+          kind = 2   block is closure (all pointers except first word)
+          mark = 0   block is white (never reached)
+          mark = 1   block is gray  (reached but contents not scanned)
+          mark = 3   block is black (reached and contents were scanned)
+      - [size] words of data
+
+   Blocks are stored in one big global array and addressed by pointers
+   within this block.  The pointer goes to the first word of data.
+*/
+
+#define KIND_RAWDATA 0
+#define KIND_PTRDATA 1
+#define KIND_CLOSURE 2
+
+#define COLOR_WHITE 0
+#define COLOR_GRAY 4
+#define COLOR_BLACK 0xC
+
+#define Kind_header(h) ((h) & 3)
+#define Color_header(h) ((h) & 0xC)
+#define Size_header(h) (((h) >>u 2) & 0xFFFFFFFC)
+
+/* Free-list allocation, first-fit */
+
+"freelist_alloc"(req_size) : int -> int
+{
+  var p, b, header, size, newsize;
+
+  p = "freelist_head";
+  {{ {{ loop {
+      b = int32[p];               /* b is current free block */
+      if (b == 0) exit 1;         /* free list exhausted */
+      header = int32[b - 4];
+      size = Size_header(header);
+      if (size >= req_size) exit;
+      p = b;                      /* move to next block */
+    } }}
+    /* Found a free block large enough */
+    if (size == req_size) {
+      /* there is nothing left of the free block, remove it
+         from free list */
+      int32[p] = int32[b];
+      return b;
+    }
+    else if (size == req_size + 4) {
+      /* one word remains free, which is too small to put
+         on free list.  Do as above, but mark remaining word
+         so that it can be coalesced later. */
+      int32[p] = int32[b];
+      int32[b + req_size] = 0;    /* header with size == 0 color = white */
+      return b;
+    } else {
+      /* cut free block in two:
+         - first part remains free --> just reduce its size
+         - second part is returned as the free block */
+      newsize = size - (req_size + 4);
+      int32[b - 4] = newsize << 2;
+      return b + newsize + 4;
+    }
+  }}
+  return 0;                     /* free list exhausted */
+}
+
+/* Allocation */
+
+extern "abort" : void
+extern "gc_alarm" : int -> void
+
+"alloc_block"(root, kind, size): int -> int -> int -> int
+{
+  var r;
+
+  r = "freelist_alloc"(size) : int -> int;
+  if (r == 0) {
+    "gc_mark"(root) : int -> void;
+    "gc_sweep"() : void;
+    "gc_alarm"(-1) : int -> void;
+    r = "freelist_alloc"(size) : int -> int;
+    if (r == 0) { "abort"() : void; }
+  }
+  int32[r - 4] = (size << 2) | kind;
+  return r;
+}
+
+#if 0
+
+/* Marking phase with recursive traversal. */
+
+"gc_mark"(root) : int -> void
+{
+  var numroots, p;
+
+  {{ loop {
+    if (root == 0) exit;
+    numroots = int32[root + 4];
+    p = root + 8;
+    {{ loop {
+      if (numroots == 0) exit;
+      "mark_block"(int32[p]) : int -> void;
+      p = p + 4;
+      numroots = numroots - 1;
+    } }}
+    root = int32[root];
+  } }}
+}
+
+"mark_block"(b) : int -> void
+{
+  var header, kind, size;
+
+  if (b == 0) return;
+  header = int32[b - 4];
+  if (Color_header(header) != COLOR_WHITE) return;
+  int32[b - 4] = header | COLOR_BLACK;
+  kind = Kind_header(header);
+  if (kind == KIND_RAWDATA) return;
+  size = Size_header(header);
+  if (kind == KIND_CLOSURE) { b = b + 4; size = size - 4; }
+  {{ loop {
+    if (size == 0) exit;
+    "mark_block"(int32[b]) : int -> void;
+    b = b + 4;
+    size = size - 4;
+  } }}
+}
+
+#else
+
+/* Marking phase with 3-color marking. */
+
+"mark_block"(b): int -> void
+{
+  var header, cache;
+
+  if (b == 0) return;
+  header = int32[b - 4];
+  if (Color_header(header) != COLOR_WHITE) return;
+  if (Kind_header(header) == KIND_RAWDATA) {
+    /* Set it to black now, as there are no pointers within */
+    int32[b - 4] = header | COLOR_BLACK;
+  } else {
+    int32[b - 4] = header | COLOR_GRAY;
+    /* Is there room in the gray_cache? */
+    cache = int32["gray_cache_ptr"];
+    if (cache == "gray_cache" + GRAY_CACHE_SIZE) {
+      int32["gray_cache_overflow"] = 1;
+    } else {
+      int32[cache] = b;
+      int32["gray_cache_ptr"] = cache + 4;
+    }
+  }
+}
+
+"find_first_gray_block"(): int
+{
+  var p, lastp, header;
+
+  p = int32["heap_start"];
+  lastp = int32["heap_end"];
+  loop {
+    if (p >= lastp) return 0;
+    header = int32[p];
+    if (Color_header(header) == COLOR_GRAY) return p + 4;
+    p = p + 4 + Size_header(header);
+  }
+}
+
+"gc_mark"(root) : int -> void
+{
+  var numroots, p, cache, b, header, firstfield, n;
+
+  int32["gray_cache_ptr"] = "gray_cache";
+  int32["gray_cache_overflow"] = 0;
+
+  {{ loop {
+    if (root == 0) exit;
+    numroots = int32[root + 4];
+    p = root + 8;
+    {{ loop {
+      if (numroots == 0) exit;
+      "mark_block"(int32[p]) : int -> void;
+      p = p + 4;
+      numroots = numroots - 1;
+    } }}
+    root = int32[root];
+  } }}
+
+  {{ loop {
+    /* Find next gray object to work on */
+    cache = int32["gray_cache_ptr"];
+    if (cache > "gray_cache") {
+      cache = cache - 4;
+      b = int32[cache];
+      int32["gray_cache_ptr"] = cache;
+    } else {
+      if (int32["gray_cache_overflow"] == 0) exit;
+      b = "find_first_gray_block"() : int;
+      if (b == 0) exit;
+    }
+    /* b is a gray object of kind PTRDATA or CLOSURE */
+    header = int32[b - 4];
+    int32[b - 4] = header | COLOR_BLACK;
+    /* Call mark_block on all (pointer) fields of b.
+       Process fields from last to first since this results
+       in better gray_cache utilization in case of right-oriented
+       data structures such as lists */
+    firstfield = (Kind_header(header) == KIND_CLOSURE) << 2;
+    n = Size_header(header);
+    {{ loop {
+      if (n == firstfield) exit;
+      n = n - 4;
+      "mark_block"(int32[b + n]) : int -> void;
+    } }}
+  } }}
+}
+
+#endif
+
+/* Sweeping phase. */
+
+"gc_sweep"() : void
+{
+  var scan_ptr, scan_end, last_free_block, end_last_free_block,
+    header, size;
+
+  last_free_block = "freelist_head";
+  end_last_free_block = 0;
+  scan_ptr = int32["heap_start"];
+  scan_end = int32["heap_end"];
+  {{ loop {
+    if (scan_ptr >= scan_end) exit;
+    header = int32[scan_ptr];
+    size = Size_header(header);
+    if (Color_header(header) == COLOR_WHITE) {
+      /* reclaim this block */
+      if (scan_ptr == end_last_free_block) {
+        /* coalesce it with last free block */
+        int32[last_free_block - 4] = 
+          int32[last_free_block - 4] + ((size + 4) << 2);
+        end_last_free_block = end_last_free_block + size + 4;
+      } else {
+        /* insert new free block in free list */
+        int32[scan_ptr] = header & ~0xF;  /* clear mark and kind bits */
+        int32[last_free_block] = scan_ptr + 4;
+        last_free_block = scan_ptr + 4;
+        end_last_free_block = last_free_block + size;
+      }
+    } else {
+      /* clear mark on this block */
+      int32[scan_ptr] = header & ~COLOR_BLACK;
+    }
+    scan_ptr = scan_ptr + 4 + size;
+  } }}
+  int32[last_free_block] = 0; /* terminate free list */
+}
+
+/* Initialize a heap of size [hsize] bytes */
+
+extern "malloc" : int -> int
+
+"init_heap"(hsize) : int -> int
+{
+  var hbase, i;
+
+  hbase = "malloc"(hsize) : int -> int;
+  if (hbase == 0) return -1;
+  int32["heap_start"] = hbase;
+  int32["heap_end"] = hbase + hsize;
+  int32[hbase] = (hsize - 4) << 2;
+  int32[hbase + 4] = 0;
+  int32["freelist_head"] = hbase + 4;
+#ifdef DEBUG
+  /* Fill heap with garbage (for debugging) */
+  i = 8;
+  {{ loop {
+    if (i >= hsize) exit;
+    int32[hbase + i] = 0xDEADBEEF;
+    i = i + 4;
+  } }}
+#endif
+  return 0;
+}
+

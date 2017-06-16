@@ -1,0 +1,29 @@
+/* List manipulations */
+
+extern "malloc" : int -> int
+
+"buildlist"(n): int -> int
+{
+  var b;
+
+  if (n < 0) return 0;
+  b = "malloc"(8) : int -> int;
+  int32[b] = n;
+  int32[b+4] = "buildlist"(n - 1) : int -> int;
+  return b;
+}
+
+"reverselist"(l): int -> int
+{
+  var r, r2;
+  r = 0;
+  loop {
+    if (l == 0) return r;
+    r2 = "malloc"(8) : int -> int;
+    int32[r2] = int32[l];
+    int32[r2+4] = r;
+    r = r2;
+    l = int32[l+4];
+  }
+}
+

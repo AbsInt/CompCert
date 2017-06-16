@@ -1,0 +1,215 @@
+(* *********************************************************************)
+(*                                                                     *)
+(*              The Compcert verified compiler                         *)
+(*                                                                     *)
+(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique.  All rights reserved.  This file is distributed       *)
+(*  under the terms of the INRIA Non-Commercial License Agreement.     *)
+(*                                                                     *)
+(* *********************************************************************)
+
+(** Strength reduction for operators and conditions.
+    This is the machine-dependent part of [Constprop]. *)
+
+Require Import Coqlib.
+Require Import Compopts.
+Require Import AST.
+Require Import Integers.
+Require Import Floats.
+Require Import Op.
+Require Import Registers.
+Require Import ValueDomain.
+
+(** * Operator strength reduction *)
+
+(** We now define auxiliary functions for strength reduction of
+  operators and addressing modes: replacing an operator with a cheaper
+  one if some of its arguments are statically known.  These are again
+  large pattern-matchings expressed in indirect style. *)
+
+Section STRENGTH_REDUCTION.
+
+Nondetfunction cond_strength_reduction 
+              (cond: condition) (args: list reg) (vl: list aval) :=
+  match cond, args, vl with
+  | Ccomp c, r1 :: r2 :: nil, I n1 :: v2 :: nil =>
+      (Ccompimm (swap_comparison c) n1, r2 :: nil)
+  | Ccomp c, r1 :: r2 :: nil, v1 :: I n2 :: nil =>
+      (Ccompimm c n2, r1 :: nil)
+  | Ccompu c, r1 :: r2 :: nil, I n1 :: v2 :: nil =>
+      (Ccompuimm (swap_comparison c) n1, r2 :: nil)
+  | Ccompu c, r1 :: r2 :: nil, v1 :: I n2 :: nil =>
+      (Ccompuimm c n2, r1 :: nil)
+  | _, _, _ => 
+      (cond, args)
+  end.
+
+Definition make_cmp_base (c: condition) (args: list reg) (vl: list aval) :=
+  let (c', args') := cond_strength_reduction c args vl in (Ocmp c', args').
+
+Nondetfunction make_cmp (c: condition) (args: list reg) (vl: list aval) :=
+  match c, args, vl with
+  | Ccompimm Ceq n, r1 :: nil, v1 :: nil =>
+      if Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1) then (Omove, r1 :: nil)
+      else if Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1) then (Oxorimm Int.one, r1 :: nil)
+      else make_cmp_base c args vl
+  | Ccompimm Cne n, r1 :: nil, v1 :: nil =>
+      if Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1) then (Omove, r1 :: nil)
+      else if Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1) then (Oxorimm Int.one, r1 :: nil)
+      else make_cmp_base c args vl
+  | _, _, _ =>
+      make_cmp_base c args vl
+  end.
+
+Definition make_addimm (n: int) (r: reg) :=
+  if Int.eq n Int.zero
+  then (Omove, r :: nil)
+  else (Oaddimm n, r :: nil).
+
+Definition make_shlimm (n: int) (r1 r2: reg) :=
+  if Int.eq n Int.zero then
+    (Omove, r1 :: nil)
+  else if Int.ltu n Int.iwordsize then
+    (Orolm n (Int.shl Int.mone n), r1 :: nil)
+  else
+    (Oshl, r1 :: r2 :: nil).
+
+Definition make_shrimm (n: int) (r1 r2: reg) :=
+  if Int.eq n Int.zero then
+    (Omove, r1 :: nil)
+  else if Int.ltu n Int.iwordsize then
+    (Oshrimm n, r1 :: nil)
+  else
+    (Oshr, r1 :: r2 :: nil).
+
+Definition make_shruimm (n: int) (r1 r2: reg) :=
+  if Int.eq n Int.zero then
+    (Omove, r1 :: nil)
+  else if Int.ltu n Int.iwordsize then
+    (Orolm (Int.sub Int.iwordsize n) (Int.shru Int.mone n), r1 :: nil)
+  else
+    (Oshru, r1 :: r2 :: nil).
+
+Definition make_mulimm (n: int) (r1 r2: reg) :=
+  if Int.eq n Int.zero then
+    (Ointconst Int.zero, nil)
+  else if Int.eq n Int.one then
+    (Omove, r1 :: nil)
+  else
+    match Int.is_power2 n with
+    | Some l => (Orolm l (Int.shl Int.mone l), r1 :: nil)
+    | None => (Omulimm n, r1 :: nil)
+    end.
+
+Definition make_divimm (n: int) (r1 r2: reg) :=
+  match Int.is_power2 n with
+  | Some l => if Int.ltu l (Int.repr 31)
+              then (Oshrximm l, r1 :: nil)
+              else (Odiv, r1 :: r2 :: nil)
+  | None   => (Odiv, r1 :: r2 :: nil)
+  end.
+
+Definition make_divuimm (n: int) (r1 r2: reg) :=
+  match Int.is_power2 n with
+  | Some l => (Orolm (Int.sub Int.iwordsize l) (Int.shru Int.mone l), r1 :: nil)
+  | None   => (Odivu, r1 :: r2 :: nil)
+  end.
+
+Definition make_andimm (n: int) (r: reg) (a: aval) :=
+  if Int.eq n Int.zero then (Ointconst Int.zero, nil)
+  else if Int.eq n Int.mone then (Omove, r :: nil)
+  else if match a with Uns _ m => Int.eq (Int.zero_ext m (Int.not n)) Int.zero
+                     | _ => false end
+  then (Omove, r :: nil)
+  else (Oandimm n, r :: nil).
+
+Definition make_orimm (n: int) (r: reg) :=
+  if Int.eq n Int.zero then (Omove, r :: nil)
+  else if Int.eq n Int.mone then (Ointconst Int.mone, nil)
+  else (Oorimm n, r :: nil).
+
+Definition make_xorimm (n: int) (r: reg) :=
+  if Int.eq n Int.zero then (Omove, r :: nil)
+  else if Int.eq n Int.mone then (Onot, r :: nil)
+  else (Oxorimm n, r :: nil).
+
+Definition make_mulfimm (n: float) (r r1 r2: reg) :=
+  if Float.eq_dec n (Float.of_int (Int.repr 2))
+  then (Oaddf, r :: r :: nil)
+  else (Omulf, r1 :: r2 :: nil).
+
+Definition make_mulfsimm (n: float32) (r r1 r2: reg) :=
+  if Float32.eq_dec n (Float32.of_int (Int.repr 2))
+  then (Oaddfs, r :: r :: nil)
+  else (Omulfs, r1 :: r2 :: nil).
+
+Definition make_cast8signed (r: reg) (a: aval) :=
+  if vincl a (Sgn Ptop 8) then (Omove, r :: nil) else (Ocast8signed, r :: nil).
+Definition make_cast16signed (r: reg) (a: aval) :=
+  if vincl a (Sgn Ptop 16) then (Omove, r :: nil) else (Ocast16signed, r :: nil).
+
+Nondetfunction op_strength_reduction 
+              (op: operation) (args: list reg) (vl: list aval) :=
+  match op, args, vl with
+  | Ocast8signed, r1 :: nil, v1 :: nil => make_cast8signed r1 v1
+  | Ocast16signed, r1 :: nil, v1 :: nil => make_cast16signed r1 v1
+  | Oadd, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_addimm n1 r2
+  | Oadd, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_addimm n2 r1
+  | Oadd, r1 :: r2 :: nil, Ptr(Gl s n1) :: v2 :: nil => (Oaddsymbol s n1, r2 :: nil)
+  | Oadd, r1 :: r2 :: nil, v1 :: Ptr(Gl s n1) :: nil => (Oaddsymbol s n1, r1 :: nil)
+  | Osub, r1 :: r2 :: nil, I n1 :: v2 :: nil => (Osubimm n1, r2 :: nil)
+  | Osub, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_addimm (Int.neg n2) r1
+  | Omul, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_mulimm n1 r2 r1
+  | Omul, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_mulimm n2 r1 r2
+  | Odiv, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_divimm n2 r1 r2
+  | Odivu, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_divuimm n2 r1 r2
+  | Oand, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_andimm n1 r2 v2
+  | Oand, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_andimm n2 r1 v1
+  | Oandimm n, r1 :: nil, v1 :: nil => make_andimm n r1 v1
+  | Oor, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_orimm n1 r2
+  | Oor, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_orimm n2 r1
+  | Oxor, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_xorimm n1 r2
+  | Oxor, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_xorimm n2 r1
+  | Oshl, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shlimm n2 r1 r2
+  | Oshr, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shrimm n2 r1 r2
+  | Oshru, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shruimm n2 r1 r2
+  | Ocmp c, args, vl => make_cmp c args vl
+  | Omulf, r1 :: r2 :: nil, v1 :: F n2 :: nil => make_mulfimm n2 r1 r1 r2
+  | Omulf, r1 :: r2 :: nil, F n1 :: v2 :: nil => make_mulfimm n1 r2 r1 r2
+  | Omulfs, r1 :: r2 :: nil, v1 :: FS n2 :: nil => make_mulfsimm n2 r1 r1 r2
+  | Omulfs, r1 :: r2 :: nil, FS n1 :: v2 :: nil => make_mulfsimm n1 r2 r1 r2
+  | _, _, _ => (op, args)
+  end.
+
+Nondetfunction addr_strength_reduction
+                (addr: addressing) (args: list reg) (vl: list aval) :=
+  match addr, args, vl with
+  | Aindexed2, r1 :: r2 :: nil, Ptr(Gl symb n1) :: I n2 :: nil =>
+      (Aglobal symb (Int.add n1 n2), nil)
+  | Aindexed2, r1 :: r2 :: nil, I n1 :: Ptr(Gl symb n2) :: nil =>
+      (Aglobal symb (Int.add n1 n2), nil)
+  | Aindexed2, r1 :: r2 :: nil, Ptr(Stk n1) :: I n2 :: nil =>
+      (Ainstack (Int.add n1 n2), nil)
+  | Aindexed2, r1 :: r2 :: nil, I n1 :: Ptr(Stk n2) :: nil =>
+      (Ainstack (Int.add n1 n2), nil)
+  | Aindexed2, r1 :: r2 :: nil, Ptr(Gl symb n1) :: v2 :: nil =>
+      (Abased symb n1, r2 :: nil)
+  | Aindexed2, r1 :: r2 :: nil, v1 :: Ptr(Gl symb n2) :: nil =>
+      (Abased symb n2, r1 :: nil)
+  | Aindexed2, r1 :: r2 :: nil, I n1 :: v2 :: nil =>
+      (Aindexed n1, r2 :: nil)
+  | Aindexed2, r1 :: r2 :: nil, v1 :: I n2 :: nil =>
+      (Aindexed n2, r1 :: nil)
+  | Abased symb ofs, r1 :: nil, I n1 :: nil =>
+      (Aglobal symb (Int.add ofs n1), nil)
+  | Aindexed n, r1 :: nil, Ptr(Gl symb n1) :: nil =>
+      (Aglobal symb (Int.add n1 n), nil)
+  | Aindexed n, r1 :: nil, Ptr(Stk n1) :: nil =>
+      (Ainstack (Int.add n1 n), nil)
+  | _, _, _ =>
+      (addr, args)
+  end.
+
+End STRENGTH_REDUCTION.

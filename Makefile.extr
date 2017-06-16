@@ -1,0 +1,129 @@
+#######################################################################
+#                                                                     #
+#              The Compcert verified compiler                         #
+#                                                                     #
+#          Xavier Leroy, INRIA Paris-Rocquencourt                     #
+#                                                                     #
+#  Copyright Institut National de Recherche en Informatique et en     #
+#  Automatique.  All rights reserved.  This file is distributed       #
+#  under the terms of the GNU General Public License as published by  #
+#  the Free Software Foundation, either version 2 of the License, or  #
+#  (at your option) any later version.  This file is also distributed #
+#  under the terms of the INRIA Non-Commercial License Agreement.     #
+#                                                                     #
+#######################################################################
+
+# Second-stage Makefile, after Coq extraction
+
+include Makefile.config
+
+# Menhir configuration.
+
+include Makefile.menhir
+
+# The pre-parser's error message database is compiled as follows.
+
+cparser/pre_parser_messages.ml:
+	$(MAKE) -C cparser correct
+
+# Directories containing plain Caml code
+
+DIRS=extraction \
+  lib common $(ARCH) backend cfrontend cparser driver \
+  exportclight debug
+
+INCLUDES=$(patsubst %,-I %, $(DIRS))
+
+# Control of warnings:
+
+WARNINGS=-w +a-4-9-27 -strict-sequence -safe-string -warn-error +a #Deprication returns with ocaml 4.03
+extraction/%.cmx: WARNINGS +=-w -20-27-32..34-39-41-44..45
+extraction/%.cmo: WARNINGS +=-w -20-27-32..34-39-41-44..45
+cparser/pre_parser.cmx: WARNINGS += -w -41
+cparser/pre_parser.cmo: WARNINGS += -w -41
+backend/CMparser.cmx: WARNINGS += -w -41
+backend/CMparser.cmo: WARNINGS += -w -41
+
+COMPFLAGS+=-g $(INCLUDES) $(MENHIR_INCLUDES) $(WARNINGS)
+
+# Using .opt compilers if available
+
+ifeq ($(OCAML_OPT_COMP),true)
+DOTOPT=.opt
+else
+DOTOPT=
+endif
+
+OCAMLC=ocamlc$(DOTOPT) $(COMPFLAGS)
+OCAMLOPT=ocamlopt$(DOTOPT) $(COMPFLAGS)
+OCAMLDEP=ocamldep$(DOTOPT) -slash $(INCLUDES)
+
+OCAMLLEX=ocamllex -q
+MODORDER=tools/modorder .depend.extr
+
+PARSERS=backend/CMparser.mly cparser/pre_parser.mly
+LEXERS=backend/CMlexer.mll cparser/Lexer.mll \
+       lib/Tokenize.mll lib/Readconfig.mll
+
+LIBS=str.cmxa unix.cmxa $(MENHIR_LIBS)
+LIBS_BYTE=$(patsubst %.cmxa,%.cma,$(patsubst %.cmx,%.cmo,$(LIBS)))
+
+EXECUTABLES=ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte
+GENERATED=$(PARSERS:.mly=.mli) $(PARSERS:.mly=.ml) $(LEXERS:.mll=.ml) cparser/pre_parser_messages.ml
+
+# Beginning of part that assumes .depend.extr already exists
+
+ifeq ($(wildcard .depend.extr),.depend.extr)
+
+CCOMP_OBJS:=$(shell $(MODORDER) driver/Driver.cmx)
+
+ccomp: $(CCOMP_OBJS)
+	@echo "Linking $@"
+	@$(OCAMLOPT) -o $@ $(LIBS) $+
+
+ccomp.byte: $(CCOMP_OBJS:.cmx=.cmo)
+	@echo "Linking $@"
+	@$(OCAMLC) -o $@ $(LIBS_BYTE) $+
+
+CLIGHTGEN_OBJS:=$(shell $(MODORDER) exportclight/Clightgen.cmx)
+
+clightgen: $(CLIGHTGEN_OBJS)
+	@echo "Linking $@"
+	@$(OCAMLOPT) -o $@ $(LIBS) $+
+
+clightgen.byte: $(CLIGHTGEN_OBJS:.cmx=.cmo)
+	@echo "Linking $@"
+	@$(OCAMLC) -o $@ $(LIBS_BYTE) $+
+
+include .depend.extr
+
+endif
+
+# End of part that assumes .depend.extr already exists
+
+%.cmi: %.mli
+	@echo "OCAMLC   $<"
+	@$(OCAMLC) -c $<
+%.cmo: %.ml
+	@echo "OCAMLC   $<"
+	@$(OCAMLC) -c $<
+%.cmx: %.ml
+	@echo "OCAMLOPT $<"
+	@$(OCAMLOPT) -c $<
+
+%.ml: %.mll
+	$(OCAMLLEX) $<
+
+clean:
+	rm -f $(EXECUTABLES)
+	rm -f $(GENERATED)
+	for d in $(DIRS); do rm -f $$d/*.cm[iotx] $$d/*cmti $$d/*.o; done
+	rm -f backend/CMparser.automaton
+	$(MAKE) -C cparser clean
+
+# Generation of .depend.extr
+
+depend: $(GENERATED)
+	@echo "Analyzing OCaml dependencies"
+	@$(OCAMLDEP) $(foreach d,$(DIRS),$(wildcard $(d)/*.ml)) $(GENERATED) >.depend.extr || { rm -f .depend.extr; exit 2; }
+	@$(OCAMLDEP) $(foreach d,$(DIRS),$(wildcard $(d)/*.mli)) $(GENERATED) >>.depend.extr || { rm -f .depend.extr; exit 2; }

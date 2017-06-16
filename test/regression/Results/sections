@@ -1,0 +1,75 @@
+---- Absolute addressing
+signed char 1: OK
+signed char 2: OK
+signed char 3: OK
+unsigned char 1: OK
+unsigned char 2: OK
+unsigned char 3: OK
+signed short 1: OK
+signed short 2: OK
+signed short 3: OK
+unsigned short 1: OK
+unsigned short 2: OK
+unsigned short 3: OK
+int 1: OK
+int 2: OK
+int 3: OK
+float 1: OK
+float 2: OK
+float 3: OK
+double 1: OK
+double 2: OK
+double 3: OK
+long long 1: OK
+long long 2: OK
+long long 3: OK
+---- Small data area
+signed char 1: OK
+signed char 2: OK
+signed char 3: OK
+unsigned char 1: OK
+unsigned char 2: OK
+unsigned char 3: OK
+signed short 1: OK
+signed short 2: OK
+signed short 3: OK
+unsigned short 1: OK
+unsigned short 2: OK
+unsigned short 3: OK
+int 1: OK
+int 2: OK
+int 3: OK
+float 1: OK
+float 2: OK
+float 3: OK
+double 1: OK
+double 2: OK
+double 3: OK
+long long 1: OK
+long long 2: OK
+long long 3: OK
+---- Relative addressing
+signed char 1: OK
+signed char 2: OK
+signed char 3: OK
+unsigned char 1: OK
+unsigned char 2: OK
+unsigned char 3: OK
+signed short 1: OK
+signed short 2: OK
+signed short 3: OK
+unsigned short 1: OK
+unsigned short 2: OK
+unsigned short 3: OK
+int 1: OK
+int 2: OK
+int 3: OK
+float 1: OK
+float 2: OK
+float 3: OK
+double 1: OK
+double 2: OK
+double 3: OK
+long long 1: OK
+long long 2: OK
+long long 3: OK

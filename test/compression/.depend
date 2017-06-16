@@ -1,0 +1,15 @@
+arcode.o: arcode.c arcode.h bitfile.h
+arcode.light.o: arcode.light.c
+armain.o: armain.c optlist.h arcode.h
+bitfile.o: bitfile.c bitfile.h
+bitfile.light.o: bitfile.light.c
+lzdecode.o: lzdecode.c lzlocal.h bitfile.h
+lzencode.o: lzencode.c lzlocal.h bitfile.h
+lzhash.o: lzhash.c lzlocal.h
+lzssmain.o: lzssmain.c lzss.h optlist.h
+lzvars.o: lzvars.c lzlocal.h
+lzwdecode.o: lzwdecode.c lzw.h bitfile.h
+lzwencode.o: lzwencode.c lzw.h bitfile.h
+lzwmain.o: lzwmain.c optlist.h lzw.h
+optlist.o: optlist.c optlist.h
+optlist.light.o: optlist.light.c

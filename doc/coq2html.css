@@ -1,0 +1,97 @@
+/* Classes:
+     h1.title     the title of the page
+     div.coq      encloses all generated body
+     div.doc      contents of (** *) comments
+     div.footer   footer
+     div.togglescript   "Proof." line
+     div.proofscript  contents of proof script
+     span.docright contents of (**r *) comments
+     span.bracket contents of [ ] within comments
+     span.comment contents of (* *) comments
+     span.kwd     Coq keyword
+     span.tactic  Coq tactic
+     span.id      any other identifier
+*/
+
+body {
+  color: black;
+  background: white;
+}
+
+h1.title {
+  font-size: 2em;
+  text-align: center
+}
+
+h1 {
+  font-size: 1.5em;
+}
+h2 {
+  font-size: 1.17em;
+}
+h3 {
+  font-size: 1em;
+}
+
+h1, h2, h3 {
+  font-family: sans-serif;
+  margin-left: -5%;
+}
+
+div.coq {
+  margin-left: 15%;
+  margin-right: 5%;
+  font-family: monospace;
+}
+
+div.doc {
+  margin-left: -5%;
+  margin-top: 0.2em;
+  margin-bottom: 0.5em;
+  font-family: serif;
+}
+
+div.toggleproof {
+  font-size: 0.8em;
+  text-decoration: underline;
+}
+
+div.toggleproof:hover {
+  cursor: pointer;
+}
+
+div.proofscript {
+  font-size: 0.8em;
+}
+
+div.footer {
+  margin-top: 1em;
+  margin-bottom: 1em;
+  font-size: 0.8em;
+  font-style: italic;
+}  
+
+span.docright {
+  position: absolute;
+  left: 60%;
+  width: 40%;
+  font-family: serif;
+}
+
+span.bracket {
+  font-family: monospace;
+  color: #008000;
+}
+
+span.kwd {
+  color:  #cf1d1d;
+}
+
+span.comment {
+  color:  #008000;
+}
+
+a:visited {color : #416DFF; text-decoration : none; }
+a:link {color : #416DFF; text-decoration : none; }
+a:hover {text-decoration : none; }
+a:active {text-decoration : none; }

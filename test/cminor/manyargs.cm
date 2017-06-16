@@ -1,0 +1,53 @@
+"f" (i1, i2, i3, i4, i5,
+     i6, i7, i8, i9, i10,
+     f1, f2, f3, f4, f5,
+     f6, f7, f8, f9, f10,
+     f11, f12, f13, f14, f15):
+  int -> int -> int -> int -> int ->
+  int -> int -> int -> int -> int ->
+  float -> float -> float -> float -> float ->
+  float -> float -> float -> float -> float ->
+  float -> float -> float -> float -> float -> void
+{
+  "print_int"(i1): int -> void;
+  "print_int"(i2): int -> void;
+  "print_int"(i3): int -> void;
+  "print_int"(i4): int -> void;
+  "print_int"(i5): int -> void;
+  "print_int"(i6): int -> void;
+  "print_int"(i7): int -> void;
+  "print_int"(i8): int -> void;
+  "print_int"(i9): int -> void;
+  "print_int"(i10): int -> void;
+  "print_float"(f1): float -> void;
+  "print_float"(f2): float -> void;
+  "print_float"(f3): float -> void;
+  "print_float"(f4): float -> void;
+  "print_float"(f5): float -> void;
+  "print_float"(f6): float -> void;
+  "print_float"(f7): float -> void;
+  "print_float"(f8): float -> void;
+  "print_float"(f9): float -> void;
+  "print_float"(f10): float -> void;
+  "print_float"(f11): float -> void;
+  "print_float"(f12): float -> void;
+  "print_float"(f13): float -> void;
+  "print_float"(f14): float -> void;
+  "print_float"(f15): float -> void;
+}
+
+"g" (i1, i2, i3, i4, i5,
+     f1, f2, f3, f4, f5):
+  int -> int -> int -> int -> int ->
+  float -> float -> float -> float -> float -> void
+{
+  "f"(i1,i2,i3,i4,i5, i1,i2,i3,i4,i5, 
+      f1,f2,f3,f4,f5, f1,f2,f3,f4,f5, f1,f2,f3,f4,f5):
+  int -> int -> int -> int -> int ->
+  int -> int -> int -> int -> int ->
+  float -> float -> float -> float -> float ->
+  float -> float -> float -> float -> float ->
+  float -> float -> float -> float -> float -> void;
+
+}
+

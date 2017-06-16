@@ -1,0 +1,32 @@
+"quicksort"(lo, hi, a): int -> int -> int -> void
+{
+  var i, j, pivot, temp;
+
+  if (! (lo < hi)) return;
+  i = lo;
+  j = hi;
+  pivot = int32[a + hi * 4];
+  {{ loop {
+    if (! (i < j)) exit;
+    {{ loop {
+      if (i >= hi) exit;
+      if (int32[a + i * 4] > pivot) exit;
+      i = i + 1;
+    } }}
+    {{ loop {
+      if (j <= lo) exit;
+      if (int32[a + j * 4] < pivot) exit;
+      j = j - 1;
+    } }}
+    if (i < j) {
+      temp = int32[a + i * 4];
+      int32[a + i * 4] = int32[a + j * 4];
+      int32[a + j * 4] = temp;
+    }
+  } }}
+  temp = int32[a + i * 4];
+  int32[a + i * 4] = int32[a + hi * 4];
+  int32[a + hi * 4] = temp;
+  "quicksort"(lo, i - 1, a) : int -> int -> int -> void;
+  "quicksort"(i + 1, hi, a) : int -> int -> int -> void;
+}

@@ -1,0 +1,34 @@
+a:visited {color : #416DFF; text-decoration : none; }
+a:link {color : #416DFF; text-decoration : none; font-weight : bold}
+a:hover {color : Red; text-decoration : underline; }
+a:active {color : Red; text-decoration : underline; }
+.keyword { font-weight : bold ; color : Red }
+.keywordsign { color : #C04600 }
+.superscript { font-size : 4 }
+.subscript { font-size : 4 }
+.comment { color : Green }
+.constructor { color : Blue }
+.string { color : Maroon }
+.warning { color : Red ; font-weight : bold }
+.info { margin-left : 3em; margin-right : 3em }
+#.title1 { font-size : 20pt ; background-color : #416DFF }
+#.title2 { font-size : 20pt ; background-color : #418DFF }
+#.title3 { font-size : 20pt ; background-color : #41ADFF }
+#.title4 { font-size : 20pt ; background-color : #41CDFF }
+#.title5 { font-size : 20pt ; background-color : #41EDFF }
+#.title6 { font-size : 20pt ; background-color : #41FFFF }
+body { 
+  color: black; background: white;
+  margin-left: 10%; margin-right: 5%;
+}
+tr { background-color : White }
+# .doc { background-color :#aaeeff  }
+# .doc { background-color :#66ff66  }
+.doc { margin-left: -5%; }
+.docright { margin-left: 40%; }
+div.doc code { color : #008000; font-weight: bold }
+h1.libtitle { text-align: center; }
+h1 { margin-left: -5%; }
+h2 { margin-left: -5%; }
+h3,h4,h5,h6 { margin-left: -3%; }
+hr { margin-left: -10%; margin-right:-10%; }

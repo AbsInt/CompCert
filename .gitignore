@@ -1,0 +1,60 @@
+# Object files, in general
+*.vo
+*.glob
+*.o
+*.a
+*.cmi
+*.cmo
+*.cmx
+*.cma
+*.cmxa
+.*.aux
+*.cmti
+*.cmt
+*.merlin
+# Emacs saves
+*~
+# Executables and configuration
+ccomp
+ccomp.byte
+ccomp.prof
+clightgen
+clightgen.byte
+tools/ndfun
+tools/modorder
+Makefile.config
+# Generated files
+.depend.extr
+compcert.ini
+ia32/ConstpropOp.v
+ia32/SelectOp.v
+powerpc/ConstpropOp.v
+powerpc/SelectOp.v
+arm/ConstpropOp.v
+arm/SelectOp.v
+backend/SelectDiv.v
+backend/SelectLong.v
+backend/CMlexer.ml
+backend/CMparser.ml
+backend/CMparser.mli
+cparser/Parser.v
+cparser/Lexer.ml
+cparser/pre_parser.ml
+cparser/pre_parser.mli
+cparser/pre_parser_messages.ml
+cparser/pre_parser.automaton
+cparser/pre_parser.messages
+cparser/handcrafted.messages.bak
+cparser/handcrafted.messages.raw
+cparser/deLexer
+cparser/tests/generated/*.c
+cparser/tests/generated/*.err
+backend/CMparser.automaton
+lib/Readconfig.ml
+lib/Tokenize.ml
+driver/Version.ml
+# Documentation
+doc/coq2html
+doc/coq2html.ml
+doc/html
+doc/html/

@@ -1,0 +1,19 @@
+"intoffloat" (r, x): int -> int -> void
+{
+  int32[r] = intoffloat(float64[x]);
+}
+
+"intuoffloat" (r, x): int -> int -> void
+{
+  int32[r] = intuoffloat(float64[x]);
+}
+
+"floatofint" (r, x): int -> int -> void
+{
+  float64[r] = floatofint(int32[x]);
+}
+
+"floatofintu" (r, x): int -> int -> void
+{
+  float64[r] = floatofintu(int32[x]);
+}

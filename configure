@@ -1,0 +1,516 @@
+#!/bin/sh
+
+#######################################################################
+#                                                                     #
+#              The Compcert verified compiler                         #
+#                                                                     #
+#          Xavier Leroy, INRIA Paris-Rocquencourt                     #
+#                                                                     #
+#  Copyright Institut National de Recherche en Informatique et en     #
+#  Automatique.  All rights reserved.  This file is distributed       #
+#  under the terms of the INRIA Non-Commercial License Agreement.     #
+#                                                                     #
+#######################################################################
+
+prefix=/usr/local
+bindir='$(PREFIX)/bin'
+libdir='$(PREFIX)/lib/compcert'
+toolprefix=''
+target=''
+has_runtime_lib=true
+has_standard_headers=true
+clightgen=false
+
+usage='Usage: ./configure [options] target
+
+Supported targets:
+  ppc-eabi         (PowerPC, EABI with GNU/Unix tools)
+  ppc-eabi-diab    (PowerPC, EABI with Diab tools)
+  ppc-linux        (PowerPC, Linux)
+  arm-eabi         (ARM, EABI)
+  arm-linux        (ARM, EABI)
+  arm-eabihf       (ARM, EABI using hardware FP registers)
+  arm-hardfloat    (ARM, EABI using hardware FP registers)
+  ia32-linux       (x86 32 bits, Linux)
+  ia32-bsd         (x86 32 bits, BSD)
+  ia32-macosx      (x86 32 bits, MacOS X)
+  ia32-cygwin      (x86 32 bits, Cygwin environment under Windows)
+  manual           (edit configuration file by hand)
+
+For PowerPC targets, the "ppc-" prefix can be refined into:
+  ppc64-           PowerPC 64 bits
+  e5500-           Freescale e5500 core (PowerPC 64 bits + EREF extensions)
+
+For ARM targets, the "arm-" prefix can be refined into:
+  armv6-           ARMv6   + VFPv2
+  armv7a-          ARMv7-A + VFPv3-d16   (default)
+  armv7r-          ARMv7-R + VFPv3-d16
+  armv7m-          ARMv7-M + VFPv3-d16
+
+Options:
+  -prefix <dir>    Install in <dir>/bin and <dir>/lib/compcert
+  -bindir <dir>    Install binaries in <dir>
+  -libdir <dir>    Install libraries in <dir>
+  -toolprefix <pref>  Prefix names of tools ("gcc", etc) with <pref>
+  -no-runtime-lib  Do not compile nor install the runtime support library
+  -no-standard-headers Do not install nor use the standard .h headers
+  -clightgen       Also compile the clightgen tool
+'
+
+# Parse command-line arguments
+
+while : ; do
+  case "$1" in
+    "") break;;
+    -prefix|--prefix)
+        prefix="$2"; shift;;
+    -bindir|--bindir)
+        bindir="$2"; shift;;
+    -libdir|--libdir)
+        libdir="$2"; shift;;
+    -toolprefix|--toolprefix)
+        toolprefix="$2"; shift;;
+    -no-runtime-lib)
+        has_runtime_lib=false;;
+    -no-standard-headers)
+        has_standard_headers=false;;
+    -clightgen)
+        clightgen=true;;
+    *)
+        if test -n "$target"; then echo "$usage" 1>&2; exit 2; fi
+        target="$1";;
+  esac
+  shift
+done
+
+# Per-target configuration
+
+casmruntime=""
+asm_supports_cfi=""
+struct_passing=""
+struct_return=""
+casm_options=""
+cprepro_options=""
+clinker_options=""
+
+case "$target" in
+  powerpc-*|ppc-*|powerpc64-*|ppc64-*|e5500-*)
+    arch="powerpc"
+    case "$target" in
+      powerpc64-*|ppc64-*) model="ppc64";;
+      e5500-*) model="e5500";;
+      *) model="ppc32";;
+    esac
+    abi="eabi"
+    struct_passing="ref-caller"
+    case "$target" in
+      *-linux) struct_return="ref";;
+      *)  struct_return="int1-8";;
+    esac
+    case "$target" in
+      *-eabi-diab)
+        system="diab"
+        cc="${toolprefix}dcc"
+        cprepro="${toolprefix}dcc"
+        cprepro_options="-E -D__GNUC__"
+        casm="${toolprefix}das"
+        casm_options="-Xalign-value"
+        asm_supports_cfi=false
+        clinker="${toolprefix}dcc"
+        libmath="-lm"
+        ;;
+      *)
+        system="linux"
+        cc="${toolprefix}gcc"
+        cprepro="${toolprefix}gcc"
+        cprepro_options="-std=c99 -U__GNUC__ -E"
+        casm="${toolprefix}gcc"
+        casm_options="-c"
+        casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
+        clinker="${toolprefix}gcc"
+        libmath="-lm"
+    esac;;
+  arm*-*)
+    arch="arm"
+    case "$target" in
+      armv6-*) model="armv6";;
+      arm-*|armv7a-*) model="armv7a";;
+      armv7r-*) model="armv7r";;
+      armv7m-*) model="armv7m";;
+      *)
+        echo "Unknown target '$target'." 1>&2
+        echo "$usage" 1>&2
+        exit 2;;
+    esac
+    case "$target" in
+      *-eabi|*-linux) abi="eabi";;
+      *-eabihf|*-hf|*-hardfloat) abi="hardfloat";;
+      *)
+        echo "Unknown target '$target'." 1>&2
+        echo "$usage" 1>&2
+        exit 2;;
+    esac
+    struct_passing="ints"
+    struct_return="int1-4"
+    system="linux"
+    cc="${toolprefix}gcc"
+    cprepro="${toolprefix}gcc"
+    cprepro_options="-std=c99 -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
+    casm="${toolprefix}gcc"
+    casm_options="-c"
+    clinker="${toolprefix}gcc"
+    libmath="-lm";;
+  ia32-linux)
+    arch="ia32"
+    model="sse2"
+    abi="standard"
+    struct_passing="ints"
+    struct_return="ref"
+    system="linux"
+    cc="${toolprefix}gcc -m32"
+    cprepro="${toolprefix}gcc"
+    cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
+    casm="${toolprefix}gcc"
+    casm_options="-m32 -c"
+    clinker="${toolprefix}gcc"
+    clinker_options="-m32"
+    libmath="-lm";;
+  ia32-bsd)
+    arch="ia32"
+    model="sse2"
+    abi="standard"
+    struct_passing="ints"
+    struct_return="int1248"    # to check!
+    system="bsd"
+    cc="${toolprefix}gcc -m32"
+    cprepro="${toolprefix}gcc"
+    cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
+    casm="${toolprefix}gcc"
+    casm_options="-m32 -c"
+    clinker="${toolprefix}gcc"
+    clinker_options="-m32"
+    libmath="-lm";;
+  ia32-macosx)
+    # kernel major versions count upwards from 4 for OSX 10.0 to 15 for OSX 10.11
+    kernel_major=`uname -r | cut -d "." -f 1`
+    arch="ia32"
+    model="sse2"
+    abi="macosx"
+    struct_passing="ints"
+    struct_return="int1248"
+    system="macosx"
+    cc="${toolprefix}gcc -arch i386"
+    cprepro="${toolprefix}gcc"
+    cprepro_options="-std=c99 -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' -E"
+    casm="${toolprefix}gcc"
+    casm_options="-arch i386 -c"
+    clinker="${toolprefix}gcc"
+    if [[ $kernel_major -gt 11 ]]
+    then
+      # OSX >= 10.8
+      clinker_options="-arch i386 -Wl,-no_pie"
+    else
+      # OSX <= 10.7
+      clinker_options="-arch i386"
+    fi
+    libmath="";;
+  ia32-cygwin)
+    arch="ia32"
+    model="sse2"
+    abi="standard"
+    struct_passing="ints"
+    struct_return="ref"
+    system="cygwin"
+    cc="${toolprefix}gcc -m32"
+    cprepro="${toolprefix}gcc"
+    cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
+    casm="${toolprefix}gcc"
+    casm_options="-m32 -c"
+    clinker="${toolprefix}gcc"
+    clinker_options="-m32"
+    libmath="-lm";;
+  manual)
+    ;;
+  "")
+    echo "No target specified." 1>&2
+    echo "$usage" 1>&2
+    exit 2;;
+  *)
+    echo "Unknown target '$target'." 1>&2
+    echo "$usage" 1>&2
+    exit 2;;
+esac
+
+if test -z "$casmruntime"; then casmruntime="$casm $casm_options"; fi
+
+# Test assembler support for CFI directives
+
+if test "$target" != "manual" && test -z "$asm_supports_cfi"; then
+  echo "Testing assembler support for CFI directives... " | tr -d '\n'
+  f=/tmp/compcert-configure-$$.s
+  rm -f $f
+  cat >> $f <<EOF
+testfun:
+	.file 1 "testfun.c"
+	.loc 1 1
+	.cfi_startproc
+	.cfi_adjust_cfa_offset 16
+	.cfi_endproc
+EOF
+  if $casm $casm_options -o /dev/null $f 2>/dev/null
+  then echo "yes"; asm_supports_cfi=true
+  else echo "no";  asm_supports_cfi=false
+  fi
+  rm -f $f
+fi
+
+# Testing availability of required tools
+
+missingtools=false
+
+echo "Testing Coq... " | tr -d '\n'
+coq_ver=$(${COQBIN}coqc -v 2>/dev/null | sed -n -e 's/The Coq Proof Assistant, version \([^ ]*\).*$/\1/p')
+case "$coq_ver" in
+  8.5pl2|8.5pl3|8.6)
+        echo "version $coq_ver -- good!";;
+  ?.*)
+        echo "version $coq_ver -- UNSUPPORTED"
+        echo "Error: CompCert requires Coq version 8.5pl2."
+        missingtools=true;;
+  *)
+        echo "NOT FOUND"
+        echo "Error: make sure Coq version 8.5pl2 is installed."
+        missingtools=true;;
+esac
+
+echo "Testing OCaml... " | tr -d '\n'
+ocaml_ver=`ocamlopt -version 2>/dev/null`
+case "$ocaml_ver" in
+  4.00.*|4.01.*)
+        echo "version $ocaml_ver -- UNSUPPORTED"
+        echo "Error: CompCert requires OCaml version 4.02 or later."
+        missingtools=true;;
+  4.0*)
+        echo "version $ocaml_ver -- good!";;
+  ?.*)
+        echo "version $ocaml_ver -- UNSUPPORTED"
+        echo "Error: CompCert requires OCaml version 4.02 or later."
+        missingtools=true;;
+  *)
+        echo "NOT FOUND"
+        echo "Error: make sure OCaml version 4.02 or later is installed."
+        missingtools=true;;
+esac
+
+echo "Testing OCaml .opt compilers... " | tr -d '\n'
+ocaml_opt_ver=`ocamlopt.opt -version 2>/dev/null`
+if test "$ocaml_opt_ver" = "$ocaml_ver"; then
+  echo "yes"
+  ocaml_opt_comp=true
+else
+  echo "no, will do without"
+  ocaml_opt_comp=false
+fi
+
+MENHIR_REQUIRED=20161201
+echo "Testing Menhir... " | tr -d '\n'
+menhir_ver=`menhir --version 2>/dev/null | sed -n -e 's/^.*version \([0-9]*\).*$/\1/p'`
+case "$menhir_ver" in
+  20[0-9][0-9][0-9][0-9][0-9][0-9])
+        if test "$menhir_ver" -ge $MENHIR_REQUIRED; then
+          echo "version $menhir_ver -- good!"
+        else
+          echo "version $menhir_ver -- UNSUPPORTED"
+          echo "Error: CompCert requires Menhir version $MENHIR_REQUIRED or later."
+          missingtools=true
+        fi;;
+  *)
+        echo "NOT FOUND"
+        echo "Error: make sure Menhir version $MENHIR_REQUIRED or later is installed."
+        missingtools=true;;
+esac
+
+echo "Testing GNU make... " | tr -d '\n'
+make=''
+for mk in make gmake gnumake; do
+  make_ver=`$mk -v 2>/dev/null | head -1 | sed -n -e 's/^GNU Make //p'`
+  case "$make_ver" in
+    3.8*|3.9*|[4-9].*)
+        echo "version $make_ver (command '$mk') -- good!"
+        make="$mk"
+        break;;
+  esac
+done
+if test -z "$make"; then
+  echo "NOT FOUND"
+  echo "Error: make sure GNU Make version 3.80 or later is installed."
+  missingtools=true
+fi
+
+if $missingtools; then
+  echo "One or several required tools are missing or too old.  Aborting."
+  exit 2
+fi
+
+# Generate Makefile.config
+
+sharedir="$(dirname "$bindir")"/share
+
+rm -f Makefile.config
+cat > Makefile.config <<EOF
+PREFIX=$prefix
+BINDIR=$bindir
+LIBDIR=$libdir
+SHAREDIR=$sharedir
+OCAML_OPT_COMP=$ocaml_opt_comp
+EOF
+
+if test "$target" != "manual"; then
+cat >> Makefile.config <<EOF
+ARCH=$arch
+MODEL=$model
+ABI=$abi
+STRUCT_PASSING=$struct_passing
+STRUCT_RETURN=$struct_return
+SYSTEM=$system
+CC=$cc
+CPREPRO=$cprepro
+CPREPRO_OPTIONS=$cprepro_options
+CASM=$casm
+CASM_OPTIONS=$casm_options
+CASMRUNTIME=$casmruntime
+CLINKER=$clinker
+CLINKER_OPTIONS=$clinker_options
+LIBMATH=$libmath
+HAS_RUNTIME_LIB=$has_runtime_lib
+HAS_STANDARD_HEADERS=$has_standard_headers
+ASM_SUPPORTS_CFI=$asm_supports_cfi
+CLIGHTGEN=$clightgen
+EOF
+else
+cat >> Makefile.config <<'EOF'
+
+# Target architecture
+# ARCH=powerpc
+# ARCH=arm
+# ARCH=ia32
+ARCH=
+
+# Hardware variant
+# MODEL=ppc32     # for plain PowerPC
+# MODEL=ppc64     # for PowerPC with 64-bit instructions
+# MODEL=e5500     # for Freescale e5500 PowerPC variant
+# MODEL=armv6     # for ARM
+# MODEL=armv7a    # for ARM
+# MODEL=armv7r    # for ARM
+# MODEL=armv7m    # for ARM
+# MODEL=sse2      # for IA32
+MODEL=
+
+# Target ABI
+# ABI=eabi     # for PowerPC / Linux and other SVR4 or EABI platforms
+# ABI=eabi     # for ARM
+# ABI=hardfloat # for ARM
+# ABI=standard # for IA32
+ABI=
+
+# Default calling conventions for passing structs and unions by value
+# See options -fstruct-passing=<style> and -fstruct-return=<style>
+# in the CompCert user's manual
+STRUCT_PASSING=ref_callee
+# STRUCT_PASSING=ref_caller
+# STRUCT_PASSING=ints
+STRUCT_RETURN=ref
+# STRUCT_RETURN=int1248
+# STRUCT_RETURN=int1-4
+# STRUCT_RETURN=int1-8
+
+# Target operating system and development environment
+# Possible choices for PowerPC:
+# SYSTEM=linux
+# SYSTEM=diab
+# Possible choices for ARM:
+# SYSTEM=linux
+# Possible choices for IA32:
+# SYSTEM=linux
+# SYSTEM=bsd
+# SYSTEM=macosx
+# SYSTEM=cygwin
+SYSTEM=
+
+# C compiler for compiling runtime library files and some tests
+CC=gcc
+
+# Preprocessor for .c files
+CPREPRO=gcc -U__GNUC__ -E
+
+# Assembler for assembling .s files
+CASM=gcc -c
+
+# Assembler for assembling runtime library files
+CASMRUNTIME=gcc -c
+
+# Linker
+CLINKER=gcc
+
+# Math library.  Set to empty under MacOS X
+LIBMATH=-lm
+
+# Turn on/off the installation and use of the runtime support library
+HAS_RUNTIME_LIB=true
+
+# Turn on/off the installation and use of the standard header files
+HAS_STANDARD_HEADERS=true
+
+# Whether the assembler $(CASM) supports .cfi debug directives
+ASM_SUPPORTS_CFI=false
+#ASM_SUPPORTS_CFI=true
+
+# Turn on/off compilation of clightgen
+CLIGHTGEN=false
+
+EOF
+
+fi
+
+# Summarize configuration
+
+if test "$target" = "manual"; then
+cat <<EOF
+
+Please finish the configuration by editing file ./Makefile.config.
+
+EOF
+
+else
+
+bindirexp=`echo "$bindir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
+libdirexp=`echo "$libdir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
+
+cat <<EOF
+
+CompCert configuration:
+    Target architecture........... $arch
+    Hardware model................ $model
+    Application binary interface.. $abi
+    Composite passing conventions. arguments: $struct_passing, return values: $struct_return
+    OS and development env........ $system
+    C compiler.................... $cc
+    C preprocessor................ $cprepro
+    Assembler..................... $casm
+    Assembler supports CFI........ $asm_supports_cfi
+    Assembler for runtime lib..... $casmruntime
+    Linker........................ $clinker
+    Math library.................. $libmath
+    Binaries installed in......... $bindirexp
+    Runtime library provided...... $has_runtime_lib
+    Library files installed in.... $libdirexp
+    Standard headers provided..... $has_standard_headers
+    Standard headers installed in. $libdirexp/include
+    Build command to use.......... $make
+
+If anything above looks wrong, please edit file ./Makefile.config to correct.
+
+EOF
+
+fi

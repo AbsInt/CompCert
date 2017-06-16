@@ -1,0 +1,130 @@
+analyze.o: analyze.c analyze.h search.h clause.h sharing.h term.h \
+  symbol.h list.h memory.h misc.h stringsx.h stack.h st.h foldfg.h \
+  flags.h unify.h context.h subst.h order.h sort.h hash.h subsumption.h \
+  component.h vector.h graph.h
+clause.o: clause.c clause.h sharing.h term.h symbol.h list.h memory.h \
+  misc.h stringsx.h stack.h st.h foldfg.h flags.h unify.h context.h \
+  subst.h order.h
+clock.o: clock.c clock.h misc.h
+closure.o: closure.c closure.h clause.h sharing.h term.h symbol.h list.h \
+  memory.h misc.h stringsx.h stack.h st.h foldfg.h flags.h unify.h \
+  context.h subst.h order.h table.h partition.h ras.h
+cnf.o: cnf.c cnf.h hasharray.h list.h memory.h misc.h renaming.h foldfg.h \
+  flags.h unify.h term.h symbol.h stringsx.h stack.h context.h subst.h \
+  vector.h resolution.h st.h subsumption.h component.h clause.h sharing.h \
+  order.h condensing.h search.h sort.h hash.h rules-inf.h rules-split.h \
+  rules-sort.h rules-ur.h defs.h rules-red.h doc-proof.h proofcheck.h \
+  options.h dfg.h tableau.h clock.h closure.h table.h partition.h ras.h
+component.o: component.c term.h symbol.h list.h memory.h misc.h \
+  stringsx.h stack.h component.h
+condensing.o: condensing.c subsumption.h misc.h unify.h term.h symbol.h \
+  list.h memory.h stringsx.h stack.h context.h subst.h component.h \
+  vector.h clause.h sharing.h st.h foldfg.h flags.h order.h condensing.h
+context.o: context.c context.h term.h symbol.h list.h memory.h misc.h \
+  stringsx.h stack.h
+defs.o: defs.c cnf.h hasharray.h list.h memory.h misc.h renaming.h \
+  foldfg.h flags.h unify.h term.h symbol.h stringsx.h stack.h context.h \
+  subst.h vector.h resolution.h st.h subsumption.h component.h clause.h \
+  sharing.h order.h condensing.h search.h sort.h hash.h defs.h
+dfgparser.o: dfgparser.c dfg.h list.h memory.h misc.h flags.h clause.h \
+  sharing.h term.h symbol.h stringsx.h stack.h st.h foldfg.h unify.h \
+  context.h subst.h order.h
+dfgscanner.o: dfgscanner.c misc.h memory.h symbol.h list.h stringsx.h \
+  term.h stack.h dfg.h flags.h clause.h sharing.h st.h foldfg.h unify.h \
+  context.h subst.h order.h dfgparser.h
+doc-proof.o: doc-proof.c doc-proof.h clause.h sharing.h term.h symbol.h \
+  list.h memory.h misc.h stringsx.h stack.h st.h foldfg.h flags.h unify.h \
+  context.h subst.h order.h search.h sort.h hash.h subsumption.h \
+  component.h vector.h proofcheck.h options.h dfg.h tableau.h
+flags.o: flags.c flags.h memory.h misc.h stringsx.h
+foldfg.o: foldfg.c foldfg.h flags.h memory.h misc.h unify.h term.h \
+  symbol.h list.h stringsx.h stack.h context.h subst.h
+graph.o: graph.c graph.h list.h memory.h misc.h
+hash.o: hash.c hash.h list.h memory.h misc.h
+hasharray.o: hasharray.c hasharray.h list.h memory.h misc.h
+iaparser.o: iaparser.c flags.h memory.h misc.h ia.h list.h symbol.h \
+  stringsx.h term.h stack.h foldfg.h unify.h context.h subst.h clause.h \
+  sharing.h st.h order.h
+iascanner.o: iascanner.c misc.h memory.h symbol.h list.h stringsx.h \
+  term.h stack.h ia.h flags.h iaparser.h
+kbo.o: kbo.c kbo.h term.h symbol.h list.h memory.h misc.h stringsx.h \
+  stack.h context.h foldfg.h flags.h unify.h subst.h order.h
+list.o: list.c list.h memory.h misc.h
+memory.o: memory.c memory.h misc.h
+misc.o: misc.c misc.h
+options.o: options.c options.h flags.h memory.h misc.h list.h stringsx.h
+order.o: order.c flags.h memory.h misc.h order.h term.h symbol.h list.h \
+  stringsx.h stack.h context.h kbo.h foldfg.h unify.h subst.h rpos.h
+partition.o: partition.c partition.h memory.h misc.h
+proofcheck.o: proofcheck.c proofcheck.h options.h flags.h memory.h misc.h \
+  list.h vector.h dfg.h clause.h sharing.h term.h symbol.h stringsx.h \
+  stack.h st.h foldfg.h unify.h context.h subst.h order.h tableau.h \
+  search.h sort.h hash.h subsumption.h component.h
+renaming.o: renaming.c renaming.h misc.h foldfg.h flags.h memory.h \
+  unify.h term.h symbol.h list.h stringsx.h stack.h context.h subst.h \
+  vector.h
+resolution.o: resolution.c resolution.h misc.h unify.h term.h symbol.h \
+  list.h memory.h stringsx.h stack.h context.h subst.h foldfg.h flags.h \
+  st.h subsumption.h component.h vector.h clause.h sharing.h order.h \
+  condensing.h
+rpos.o: rpos.c rpos.h misc.h term.h symbol.h list.h memory.h stringsx.h \
+  stack.h order.h context.h flags.h
+rules-inf.o: rules-inf.c rules-inf.h search.h clause.h sharing.h term.h \
+  symbol.h list.h memory.h misc.h stringsx.h stack.h st.h foldfg.h \
+  flags.h unify.h context.h subst.h order.h sort.h hash.h subsumption.h \
+  component.h vector.h rules-split.h rules-sort.h rules-ur.h defs.h
+rules-red.o: rules-red.c rules-red.h sort.h clause.h sharing.h term.h \
+  symbol.h list.h memory.h misc.h stringsx.h stack.h st.h foldfg.h \
+  flags.h unify.h context.h subst.h order.h hash.h subsumption.h \
+  component.h vector.h condensing.h search.h rules-split.h rules-inf.h \
+  rules-sort.h rules-ur.h defs.h doc-proof.h proofcheck.h options.h dfg.h \
+  tableau.h clock.h closure.h table.h partition.h ras.h
+rules-sort.o: rules-sort.c rules-sort.h sort.h clause.h sharing.h term.h \
+  symbol.h list.h memory.h misc.h stringsx.h stack.h st.h foldfg.h \
+  flags.h unify.h context.h subst.h order.h hash.h subsumption.h \
+  component.h vector.h
+rules-split.o: rules-split.c rules-split.h clause.h sharing.h term.h \
+  symbol.h list.h memory.h misc.h stringsx.h stack.h st.h foldfg.h \
+  flags.h unify.h context.h subst.h order.h search.h sort.h hash.h \
+  subsumption.h component.h vector.h
+rules-ur.o: rules-ur.c rules-ur.h clause.h sharing.h term.h symbol.h \
+  list.h memory.h misc.h stringsx.h stack.h st.h foldfg.h flags.h unify.h \
+  context.h subst.h order.h
+search.o: search.c search.h clause.h sharing.h term.h symbol.h list.h \
+  memory.h misc.h stringsx.h stack.h st.h foldfg.h flags.h unify.h \
+  context.h subst.h order.h sort.h hash.h subsumption.h component.h \
+  vector.h defs.h
+sharing.o: sharing.c sharing.h term.h symbol.h list.h memory.h misc.h \
+  stringsx.h stack.h st.h foldfg.h flags.h unify.h context.h subst.h
+sort.o: sort.c sort.h clause.h sharing.h term.h symbol.h list.h memory.h \
+  misc.h stringsx.h stack.h st.h foldfg.h flags.h unify.h context.h \
+  subst.h order.h hash.h subsumption.h component.h vector.h
+st.o: st.c st.h foldfg.h flags.h memory.h misc.h unify.h term.h symbol.h \
+  list.h stringsx.h stack.h context.h subst.h
+stack.o: stack.c stack.h misc.h
+strings.o: strings.c stringsx.h memory.h misc.h list.h
+subst.o: subst.c subst.h term.h symbol.h list.h memory.h misc.h \
+  stringsx.h stack.h unify.h context.h
+subsumption.o: subsumption.c subsumption.h misc.h unify.h term.h symbol.h \
+  list.h memory.h stringsx.h stack.h context.h subst.h component.h \
+  vector.h clause.h sharing.h st.h foldfg.h flags.h order.h
+symbol.o: symbol.c symbol.h list.h memory.h misc.h stringsx.h
+table.o: table.c table.h term.h symbol.h list.h memory.h misc.h \
+  stringsx.h stack.h partition.h
+tableau.o: tableau.c tableau.h list.h memory.h misc.h clause.h sharing.h \
+  term.h symbol.h stringsx.h stack.h st.h foldfg.h flags.h unify.h \
+  context.h subst.h order.h
+term.o: term.c term.h symbol.h list.h memory.h misc.h stringsx.h stack.h
+terminator.o: terminator.c terminator.h misc.h symbol.h list.h memory.h \
+  stringsx.h clause.h sharing.h term.h stack.h st.h foldfg.h flags.h \
+  unify.h context.h subst.h order.h
+top.o: top.c dfg.h list.h memory.h misc.h flags.h clause.h sharing.h \
+  term.h symbol.h stringsx.h stack.h st.h foldfg.h unify.h context.h \
+  subst.h order.h defs.h search.h sort.h hash.h subsumption.h component.h \
+  vector.h ia.h rules-inf.h rules-split.h rules-sort.h rules-ur.h \
+  terminator.h rules-red.h condensing.h doc-proof.h proofcheck.h \
+  options.h tableau.h clock.h closure.h table.h partition.h ras.h \
+  analyze.h graph.h cnf.h hasharray.h renaming.h resolution.h
+unify.o: unify.c unify.h term.h symbol.h list.h memory.h misc.h \
+  stringsx.h stack.h context.h subst.h
+vector.o: vector.c vector.h misc.h

@@ -1,0 +1,169 @@
+#define PI 3.14159265358979323846
+#define J2000 2451545.0
+#define JCENTURY 36525.0
+#define JMILLENIA 365250.0
+#define TWOPI (2.0 *f PI)
+#define A2R (PI /f 648000.0)
+#define R2H (12.0 /f PI)
+#define R2D (180.0 /f PI)
+#define GAUSSK 0.01720209895
+#define TEST_LOOPS 20
+#define TEST_LENGTH 36525
+#define sineps 0.3977771559319137
+#define coseps 0.9174820620691818
+
+/* Access to tables */
+#define amas(n) float64["amas" + (n) * 8]
+#define a(x,y) float64["a" + ((x) * 24 + (y) * 8)]
+#define dlm(x,y) float64["dlm" + ((x) * 24 + (y) * 8)]
+#define e(x,y) float64["e" + ((x) * 24 + (y) * 8)]
+#define pi(x,y) float64["pi" + ((x) * 24 + (y) * 8)]
+#define dinc(x,y) float64["dinc" + ((x) * 24 + (y) * 8)]
+#define omega(x,y) float64["omega" + ((x) * 24 + (y) * 8)]
+#define kp(x,y) float64["kp" + ((x) * 72 + (y) * 8)]
+#define ca(x,y) float64["ca" + ((x) * 72 + (y) * 8)]
+#define sa(x,y) float64["sa" + ((x) * 72 + (y) * 8)]
+#define kq(x,y) float64["kq" + ((x) * 80 + (y) * 8)]
+#define cl(x,y) float64["cl" + ((x) * 80 + (y) * 8)]
+#define sl(x,y) float64["sl" + ((x) * 80 + (y) * 8)]
+
+/* Function calls */
+
+extern "cos": float -> float
+extern "sin": float -> float
+extern "atan2": float -> float -> float
+extern "asin": float -> float
+extern "sqrt": float -> float
+extern "fmod": float -> float -> float
+
+#define cos(x) ("cos"(x): float -> float)
+#define sin(x) ("sin"(x): float -> float)
+#define atan2(x,y) ("atan2"(x,y): float -> float -> float)
+#define asin(x) ("asin"(x): float -> float)
+#define sqrt(x) ("sqrt"(x): float -> float)
+#define fmod(x,y) ("fmod"(x,y): float -> float -> float)
+#define anpm(x) ("anpm"(x) : float -> float)
+
+"anpm"(a): float -> float
+{
+  var w, t;
+  w = fmod(a,TWOPI);
+  if (absf(w) >=f PI) {
+    if (a <f 0.0) { t = -f TWOPI; } else { t = TWOPI; }
+    w = w -f t;
+  }
+  return w;
+}
+
+"planetpv" (epoch_, np, pv_): int -> int -> int -> void
+{
+#define epoch(x) float64[epoch_ + (x) * 8]
+#define pv(x,y) float64[pv_ + (x) * 24 + (y) * 8]
+
+  var i, j, k;
+  var t, da, dl, de, dp, di;
+  var doh, dmu, arga, argl, am;
+  var ae, dae, ae2, at, r, v;
+  var si2, xq, xp, tl, xsw;
+  var xcw, xm2, xf, ci2, xms, xmc;
+  var xpxq2, x, y, z;
+
+  t = ((epoch(0) -f J2000) +f epoch(1)) /f JMILLENIA;
+
+    da  = a(np,0) +f (a(np,1) +f a(np,2) *f t ) *f t;
+    dl  = (3600.0 *f dlm(np,0) +f (dlm(np,1) +f dlm(np,2) *f t ) *f t ) *f A2R;
+    de  = e(np,0) +f (e(np,1) +f e(np,2) *f t ) *f t;
+    dp  = anpm((3600.0 *f pi(np,0) +f (pi(np,1) +f pi(np,2) *f t ) *f t ) *f A2R );
+    di  = (3600.0 *f dinc(np,0) +f (dinc(np,1) +f dinc(np,2) *f t ) *f t ) *f A2R;
+    doh = anpm((3600.0 *f omega(np,0) +f (omega(np,1) +f omega(np,2) *f t ) *f t ) *f A2R );
+    
+    dmu = 0.35953620 *f t;
+    
+    k = 0;
+    {{ loop {
+        if (! (k < 8)) exit;
+        arga = kp(np,k) *f dmu;
+        argl = kq(np,k) *f dmu;
+        da   = da +f (ca(np,k) *f cos(arga) +f sa(np,k) *f sin(arga)) *f 0.0000001;
+        dl   = dl +f (cl(np,k) *f cos(argl) +f sl(np,k) *f sin(argl)) *f 0.0000001;
+        k = k + 1;
+    } }}
+
+    arga = kp(np,8) *f dmu;
+    da   = da +f t *f (ca(np,8) *f cos(arga) +f sa(np,8) *f sin(arga)) *f 0.0000001;
+
+    k = 8;
+    {{ loop {
+        if (! (k <= 9)) exit;
+        argl = kq(np,k) *f dmu;
+        dl   = dl +f t *f ( cl(np,k) *f cos(argl) +f sl(np,k) *f sin(argl) ) *f 0.0000001;
+        k = k + 1;
+    } }}
+
+    dl = "fmod"(dl,TWOPI) : float -> float -> float;
+
+    am = dl -f dp;
+    ae = am +f de *f sin(am);
+    k  = 0;
+
+    {{ loop {
+        dae = (am -f ae +f de *f sin(ae)) /f (1.0 -f de *f cos(ae));
+        ae  = ae +f dae;
+        k   = k + 1;
+    
+        if (k >= 10) exit;
+        if (absf(dae) <f 1e-12) exit;
+    } }}
+
+    ae2 = ae /f 2.0;
+    at  = 2.0 *f atan2(sqrt((1.0 +f de) /f (1.0 -f de)) *f sin(ae2), cos(ae2));
+
+    r = da *f (1.0 -f de *f cos(ae));
+    v = GAUSSK *f sqrt((1.0 +f 1.0 /f amas(np) ) /f (da *f da *f da));
+
+    si2   = sin(di /f 2.0);
+    xq    = si2 *f cos(doh);
+    xp    = si2 *f sin(doh);
+    tl    = at +f dp;
+    xsw   = sin(tl);
+    xcw   = cos(tl);
+    xm2   = 2.0 *f (xp *f xcw -f xq *f xsw );
+    xf    = da /f sqrt(1.0 -f de *f de);
+    ci2   = cos(di /f 2.0);
+    xms   = (de *f sin(dp) +f xsw) *f xf;
+    xmc   = (de *f cos(dp) +f xcw) *f xf;
+    xpxq2 = 2.0 *f xp *f xq;
+
+    x = r *f (xcw -f xm2 *f xp);
+    y = r *f (xsw +f xm2 *f xq);
+    z = r *f (-f xm2 *f ci2);
+
+    pv(0,0) = x;
+    pv(0,1) = y *f coseps -f z *f sineps;
+    pv(0,2) = y *f sineps +f z *f coseps;
+
+    x = v *f ((-f 1.0 +f 2.0 *f xp *f xp) *f xms +f xpxq2 *f xmc);
+    y = v *f (( 1.0 -f 2.0 *f xq *f xq ) *f xmc -f xpxq2 *f xms);
+    z = v *f (2.0 *f ci2 *f (xp *f xms +f xq *f xmc));
+
+    pv(1,0) = x;
+    pv(1,1) = y *f coseps -f z *f sineps;
+    pv(1,2) = y *f sineps +f z *f coseps;
+
+#undef epoch
+#undef pv
+}
+
+"radecdist"(state_, rdd_): int -> int -> void
+{
+#define state(x,y) float64[state_ + (x) * 24 + (y) * 8]
+#define rdd(x) float64[rdd_ + (x) * 8]
+
+    rdd(2) = sqrt(state(0,0) *f state(0,0) +f state(0,1) *f state(0,1) +f state(0,2) *f state(0,2));
+    rdd(0) = atan2(state(0,1), state(0,0)) *f R2H;
+    if (rdd(0) <f 0.0) rdd(0) = rdd(0) +f 24.0;
+    rdd(1) = asin(state(0,2) /f rdd(2)) *f R2D;
+
+#undef state
+#undef rdd
+}

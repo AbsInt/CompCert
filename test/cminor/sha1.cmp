@@ -1,0 +1,200 @@
+/* SHA-1 cryptographic hash function */
+/* Ref: Handbook of Applied Cryptography, section 9.4.2, algorithm 9.53 */
+
+/* To be preprocessed by cpp -P */
+
+extern "memcpy" : int -> int -> int -> void
+extern "memset" : int -> int -> int -> void
+
+#if defined(__ppc__) || defined(__PPC__)
+#define ARCH_BIG_ENDIAN
+#elif defined(__i386__) || defined(__x86_64__) || defined(__ARMEL__)
+#undef ARCH_BIG_ENDIAN
+#else
+#error "unknown endianness"
+#endif
+
+#define rol1(x) (((x) << 1) | ((x) >>u 31))
+#define rol5(x) (((x) << 5) | ((x) >>u 27))
+#define rol30(x) (((x) << 30) | ((x) >>u 2))
+
+"SHA1_copy_and_swap"(src, dst, numwords) : int -> int -> int -> void
+{
+#ifdef ARCH_BIG_ENDIAN
+  "memcpy"(dst, src, numwords * 4) : int -> int -> int -> void;
+#else
+  var s, d, a, b;
+  s = src;
+  d = dst;
+  {{ loop {
+    if (numwords <= 0) exit;
+    a = int8u[s];
+    b = int8u[s + 1];
+    int8u[d] = int8u[s + 3];
+    int8u[d + 1] = int8u[s + 2];
+    int8u[d + 2] = b;
+    int8u[d + 3] = a;
+    s = s + 4;
+    d = d + 4;
+    numwords = numwords - 1;
+  } }}
+#endif
+}
+
+#define F(x,y,z) ( z ^ (x & (y ^ z) ) )
+#define G(x,y,z) ( (x & y) | (z & (x | y) ) )
+#define H(x,y,z) ( x ^ y ^ z )
+
+#define Y1 0x5A827999
+#define Y2 0x6ED9EBA1
+#define Y3 0x8F1BBCDC
+#define Y4 0xCA62C1D6
+
+#define context_state(ctx,n) int32[ctx + n * 4]
+#define context_length(ctx) ctx + 20
+#define context_length_hi(ctx) int32[ctx + 20]
+#define context_length_lo(ctx) int32[ctx + 24]
+#define context_numbytes(ctx) int32[ctx + 28]
+#define context_buffer(ctx) (ctx + 32)
+#define context_size 96
+
+"SHA1_transform"(ctx) : int -> void
+{
+  stack 320;
+  var i, p, a, b, c, d, e, t;
+
+  /* Convert buffer data to 16 big-endian integers */
+  "SHA1_copy_and_swap"(context_buffer(ctx), &0, 16) : int -> int -> int -> void;
+  /* Expand into 80 integers */
+  i = 16;
+  {{ loop {
+    if (! (i < 80)) exit;
+    p = &0 + i * 4;
+    t = int32[p - 12] ^ int32[p - 32] ^ int32[p - 56] ^ int32[p - 64];
+    int32[p] = rol1(t);
+    i = i + 1;
+  } }}
+
+  /* Initialize working variables */
+  a = context_state(ctx, 0);
+  b = context_state(ctx, 1);
+  c = context_state(ctx, 2);
+  d = context_state(ctx, 3);
+  e = context_state(ctx, 4);
+
+  /* Perform rounds */
+  i = 0;
+  {{ loop {
+    if (! (i < 20)) exit;
+    t = F(b, c, d) + Y1 + rol5(a) + e + int32[&0 + i * 4];
+    e = d; d = c; c = rol30(b); b = a; a = t;
+    i = i + 1;
+  } }}
+  {{ loop {
+    if (! (i < 40)) exit;
+    t = H(b, c, d) + Y2 + rol5(a) + e + int32[&0 + i * 4];
+    e = d; d = c; c = rol30(b); b = a; a = t;
+    i = i + 1;
+  } }}
+  {{ loop {
+    if (! (i < 60)) exit;
+    t = G(b, c, d) + Y3 + rol5(a) + e + int32[&0 + i * 4];
+    e = d; d = c; c = rol30(b); b = a; a = t;
+    i = i + 1;
+  } }}
+  {{ loop {
+    if (! (i < 80)) exit;
+    t = H(b, c, d) + Y4 + rol5(a) + e + int32[&0 + i * 4];
+    e = d; d = c; c = rol30(b); b = a; a = t;
+    i = i + 1;
+  } }}
+
+  /* Update chaining values */
+  context_state(ctx, 0) = context_state(ctx, 0) + a;
+  context_state(ctx, 1) = context_state(ctx, 1) + b;
+  context_state(ctx, 2) = context_state(ctx, 2) + c;
+  context_state(ctx, 3) = context_state(ctx, 3) + d;
+  context_state(ctx, 4) = context_state(ctx, 4) + e;
+}
+
+"SHA1_init"(ctx) : int -> void
+{
+  context_state(ctx, 0) = 0x67452301;
+  context_state(ctx, 1) = 0xEFCDAB89;
+  context_state(ctx, 2) = 0x98BADCFE;
+  context_state(ctx, 3) = 0x10325476;
+  context_state(ctx, 4) = 0xC3D2E1F0;
+  context_numbytes(ctx) = 0;
+  context_length_lo(ctx) = 0;
+  context_length_hi(ctx) = 0;
+}
+
+"SHA1_add_data"(ctx, data, len) : int -> int -> int -> void
+{
+  var t, t2;
+
+  /* Update length */
+  t = context_length_lo(ctx);
+  t2 = t + (len << 3);
+  context_length_lo(ctx) = t2;
+  if (t2 <u t)
+    context_length_hi(ctx) = context_length_hi(ctx) + 1;
+  context_length_hi(ctx) = context_length_hi(ctx) + (len >>u 29);
+
+  /* If data was left in buffer, pad it with fresh data and munge block */
+  if (context_numbytes(ctx) != 0) {
+    t = 64 - context_numbytes(ctx);
+    if (len <u t) {
+      "memcpy"(context_buffer(ctx) + context_numbytes(ctx), data, len)
+        : int -> int -> int -> void;
+      context_numbytes(ctx) = context_numbytes(ctx) + len;
+      return;
+    }
+    "memcpy"(context_buffer(ctx) + context_numbytes(ctx), data, t)
+        : int -> int -> int -> void;
+    "SHA1_transform"(ctx) : int -> void;
+    data = data + t;
+    len = len - t;
+  }
+  /* Munge data in 64-byte chunks */
+  {{ loop {
+    if (! (len >=u 64)) exit;
+    "memcpy"(context_buffer(ctx), data, 64)
+        : int -> int -> int -> void;
+    "SHA1_transform"(ctx) : int -> void;
+    data = data + 64;
+    len = len - 64;
+  } }}
+  /* Save remaining data */
+  "memcpy"(context_buffer(ctx), data, len)
+        : int -> int -> int -> void;
+  context_numbytes(ctx) = len;
+}
+
+"SHA1_finish"(ctx, output) : int -> int -> void
+{
+  var i;
+  i = context_numbytes(ctx);
+  /* Set first char of padding to 0x80. There is always room. */
+  int8u[context_buffer(ctx) + i] = 0x80;
+  i = i + 1;
+  /* If we do not have room for the length (8 bytes), pad to 64 bytes
+     with zeroes and munge the data block */
+  if (i > 56) {
+    "memset"(context_buffer(ctx) + i, 0, 64 - i)
+        : int -> int -> int -> void;
+    "SHA1_transform"(ctx) : int -> void;
+    i = 0;
+  }
+  /* Pad to byte 56 with zeroes */
+  "memset"(context_buffer(ctx) + i, 0, 56 - i)
+        : int -> int -> int -> void;
+  /* Add length in big-endian */
+  "SHA1_copy_and_swap"(context_length(ctx), context_buffer(ctx) + 56, 2)
+        : int -> int -> int -> void;
+  /* Munge the final block */
+  "SHA1_transform"(ctx) : int -> void;
+  /* Final hash value is in ctx->state modulo big-endian conversion */
+  "SHA1_copy_and_swap"(ctx, output, 5)
+        : int -> int -> int -> void;
+}

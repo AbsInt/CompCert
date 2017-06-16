@@ -1,0 +1,62 @@
+body {
+  color: black;
+  background: white;
+  margin-left: 15%;
+  margin-right: 5%;
+}
+
+#main  a.idref:visited {color : #416DFF; text-decoration : none; }
+#main  a.idref:link {color : #416DFF; text-decoration : none; }
+#main  a.idref:hover {text-decoration : none; }
+#main  a.idref:active {text-decoration : none; }
+
+#main  a.modref:visited {color : #416DFF; text-decoration : none; }
+#main  a.modref:link {color : #416DFF; text-decoration : none; }
+#main  a.modref:hover {text-decoration : none; }
+#main  a.modref:active {text-decoration : none; }
+
+#main .keyword { color : #cf1d1d }
+
+#main .doc {
+   margin-left: -5%;
+}
+
+#main span.docright {
+  position: absolute;
+  left: 60%;
+  width: 40%
+}
+
+h1.libtitle {
+  font-size: 2em;
+  margin-left: -15%;
+  margin-right: -5%;
+  text-align: center
+}
+
+h1 {
+  font-size: 1.5em;
+}
+h2 {
+  font-size: 1.17em;
+}
+
+h1, h2 {
+  font-family: sans-serif;
+}
+
+.doc code {
+  color: #008000;
+}
+
+/* Pied de page */
+
+hr { margin-left: -15%; margin-right:-5%; }
+
+#footer { font-size: 0.83em;
+          font-family: sans-serif; }
+
+#footer a:visited { color: blue; }
+#footer a:link { text-decoration: none; 
+                 color: #888888; }
+

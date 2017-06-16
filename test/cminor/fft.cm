@@ -1,0 +1,152 @@
+/********************************************************/
+/*     A Duhamel-Hollman split-radix dif fft            */
+/*     Ref: Electronics Letters, Jan. 5, 1984           */
+/*     Complex input and output data in arrays x and y  */
+/*     Length is n.                                     */
+/********************************************************/
+
+extern "cos" : float -> float
+extern "sin" : float -> float
+
+"dfft"(x, y, np): int /*float ptr*/ -> int /*float ptr*/ -> int -> int
+{
+  var px, py, /*float ptr*/
+      i, j, k, m, n, i0, i1, i2, i3, is, id, n1, n2, n4, a, e, a3, /*int*/
+      cc1, ss1, cc3, ss3, r1, r2, s1, s2, s3, xt, tpi /*float*/;
+
+  px = x - 8; 
+  py = y - 8;
+  i = 2; 
+  m = 1; 
+  
+  {{ loop {
+    if (! (i < np)) exit;
+    i = i+i; 
+    m = m+1; 
+  } }}
+  
+  n = i; 
+  
+  if (n != np) 
+  {
+    i = np + 1;
+    {{ loop {
+      if (! (i <= n)) exit;
+      float64[px + i*8] = 0.0; 
+      float64[py + i*8] = 0.0; 
+      i = i + 1;
+    } }}
+  }
+
+  n2 = n+n;
+  tpi = 2.0 *f 3.14159265358979323846;
+  k = 1;
+  {{ loop {
+    if (! (k <= m - 1)) exit;
+    n2 = n2 / 2; 
+    n4 = n2 / 4; 
+    e  = tpi /f floatofint(n2);
+    a  = 0.0;
+
+    j = 1;
+    {{ loop {
+      if (! (j <= n4)) exit;
+      cc1 = "cos"(a) : float -> float; 
+      ss1 = "sin"(a) : float -> float;
+      a3 = 3.0 *f a; 
+      cc3 = "cos"(a3) : float -> float; 
+      ss3 = "sin"(a3) : float -> float; 
+      a = e *f floatofint(j);
+      is = j; 
+      id = 2 * n2;
+	  
+	  {{ loop {
+            if (! ( is < n )) exit;
+            i0 = is;
+            {{ loop {
+              /* DEBUG "trace"(); */
+              if (! (i0 <= n - 1)) exit;
+              i1 = i0 + n4; /*DEBUG "print_int"(i1); */
+              i2 = i1 + n4; /*DEBUG "print_int"(i2); */
+              i3 = i2 + n4; /*DEBUG "print_int"(i3); */
+              r1 = float64[px+i0*8] -f float64[px+i2*8];
+              /* DEBUG "print_float"(r1); */
+	      float64[px+i0*8] = float64[px+i0*8] +f float64[px+i2*8];
+              r2 = float64[px+i1*8] -f float64[px+i3*8];
+              /* DEBUG "print_float"(r2); */
+	      float64[px+i1*8] = float64[px+i1*8] +f float64[px+i3*8];
+              s1 = float64[py+i0*8] -f float64[py+i2*8];
+              /* DEBUG "print_float"(s1); */
+	      float64[py+i0*8] = float64[py+i0*8] +f float64[py+i2*8];
+	      s2 = float64[py+i1*8] -f float64[py+i3*8];
+              /* DEBUG "print_float"(s2); */
+	      float64[py+i1*8] = float64[py+i1*8] +f float64[py+i3*8];
+              s3 = r1 -f s2; r1 = r1 +f s2; 
+              s2 = r2 -f s1; r2 = r2 +f s1;
+              float64[px+i2*8] = (r1 *f cc1) -f (s2 *f ss1); 
+              float64[py+i2*8] = (-f s2 *f cc1) -f (r1 *f ss1);
+              float64[px+i3*8] = (s3 *f cc3) +f (r2 *f ss3);
+              float64[py+i3*8] = (r2 *f cc3) -f (s3 *f ss3);
+              i0 = i0 + id;
+            } }}
+            is = 2 * id - n2 + j; 
+            id = 4 * id;
+	  } }}
+      j = j + 1;
+    } }}
+    k = k + 1;
+  } }}
+
+/************************************/
+/*  Last stage, length=2 butterfly  */
+/************************************/
+  is = 1; 
+  id = 4;
+  
+  {{ loop {
+    if (! ( is < n)) exit;
+    i0 = is;
+    {{ loop {
+      if (! (i0 <= n)) exit;
+      i1 = i0 + 1; 
+      r1 = float64[px+i0*8];
+      float64[px+i0*8] = r1 +f float64[px+i1*8];
+      float64[px+i1*8] = r1 -f float64[px+i1*8];
+      r1 = float64[py+i0*8];
+      float64[py+i0*8] = r1 +f float64[py+i1*8];
+      float64[py+i1*8] = r1 -f float64[py+i1*8];
+      i0 = i0 + id;
+    } }}
+    is = 2*id - 1; 
+    id = 4 * id; 
+  } }}
+
+/*************************/
+/*  Bit reverse counter  */
+/*************************/
+  j = 1; 
+  n1 = n - 1;
+  
+  i = 1;
+  {{ loop {
+    if (! (i <= n1)) exit;
+    if (i < j) {
+      xt = float64[px+j*8];
+      float64[px+j*8] = float64[px+i*8]; 
+      float64[px+i*8] = xt;
+      xt = float64[py+j*8]; 
+      float64[py+j*8] = float64[py+i*8];
+      float64[py+i*8] = xt;
+    }
+    k = n / 2; 
+    {{ loop {
+      if (! (k < j)) exit;
+      j = j - k; 
+      k = k / 2; 
+    } }}
+    j = j + k;
+    i = i + 1;
+  } }}
+
+  return(n);
+}

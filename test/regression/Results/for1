@@ -1,0 +1,15 @@
+loop1: 0
+loop1: 1
+loop1: 2
+loop2: 0
+loop2: 1
+loop2: 2
+old i = 3
+loop3: 0 1
+loop3: 1 3
+loop3: 2 5
+old i = 3
+loop4: 0 4
+loop4: 1 3
+loop4: 2 2
+old i = 3
