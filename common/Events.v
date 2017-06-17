@@ -61,11 +61,18 @@ Inductive eventval: Type :=
   | EVsingle: float32 -> eventval
   | EVptr_global: ident -> int -> eventval.
 
+ 
+Notation access_map := (Maps.PMap.t (Z -> option permission)).
+Notation delta_map := (Maps.PTree.t (Z -> option (option permission))).
+
 Inductive event: Type :=
   | Event_syscall: string -> list eventval -> eventval -> event
   | Event_vload: memory_chunk -> ident -> int -> eventval -> event
   | Event_vstore: memory_chunk -> ident -> int -> eventval -> event
-  | Event_annot: string -> list eventval -> event.
+  | Event_annot: string -> list eventval -> event
+  | Event_acq: val -> delta_map -> event
+  | Event_rel: val -> delta_map -> event
+  | Event_fork: val -> access_map -> event.
 
 (** The dynamic semantics for programs collect traces of events.
   Traces are of two kinds: finite (type [trace]) or infinite (type [traceinf]). *)
@@ -535,6 +542,7 @@ Definition output_event (ev: event) : Prop :=
   | Event_vload _ _ _ _ => False
   | Event_vstore _ _ _ _ => True
   | Event_annot _ _ => True
+  | _ => False
   end.
 
 Fixpoint output_trace (t: trace) : Prop :=
@@ -607,6 +615,33 @@ Definition inject_separated (f f': meminj) (m1 m2: mem): Prop :=
   f b1 = None -> f' b1 = Some(b2, delta) ->
   ~Mem.valid_block m1 b1 /\ ~Mem.valid_block m2 b2.
 
+Parameter inject_delta_map: meminj -> delta_map -> delta_map -> Prop. 
+Parameter inject_access_map: meminj -> access_map -> access_map -> Prop. 
+Inductive inject_event: meminj -> event -> event -> Prop :=
+  | INJ_syscall: forall f s t v, inject_event f (Event_syscall s t v) (Event_syscall s t v)
+  | INJ_vload : forall f mc id n v, inject_event f (Event_vload mc id n v) (Event_vload mc id n v)
+  | INJ_vstore : forall f mc id n v, inject_event f (Event_vstore mc id n v) (Event_vstore mc id n v)
+  | INJ_annot : forall f st t, inject_event f (Event_annot st t) (Event_annot st t)
+  | INJ_acq : forall f v dm v' dm',
+      Val.inject f v v -> 
+      inject_delta_map f dm dm' ->
+      inject_event f (Event_acq v dm) (Event_acq v' dm')
+  | INJ_rel : forall f v dm v' dm',
+      Val.inject f v v -> 
+      inject_delta_map f dm dm' ->
+      inject_event f (Event_rel v dm) (Event_rel v' dm')
+  | INJ_fork : forall f v am v' am',
+      Val.inject f v v -> 
+      inject_access_map f am am' ->
+      inject_event f (Event_fork v am) (Event_fork v' am').
+
+Inductive inject_trace: meminj -> trace -> trace -> Prop :=
+| injt_nil : forall f, inject_trace f nil nil
+| injt_cons: forall f e t e' t',
+    inject_event f e e' ->
+    inject_trace f t t' ->
+    inject_trace f (cons e t) (cons e' t').
+
 Record extcall_properties (sem: extcall_sem) (sg: signature) : Prop :=
   mk_extcall_properties {
 
@@ -665,14 +700,15 @@ Record extcall_properties (sem: extcall_sem) (sg: signature) : Prop :=
     sem ge1 vargs m1 t vres m2 ->
     Mem.inject f m1 m1' ->
     Val.inject_list f vargs vargs' ->
-    exists f', exists vres', exists m2',
-       sem ge2 vargs' m1' t vres' m2'
+    exists f', exists vres', exists m2', exists t',
+            sem ge2 vargs' m1' t' vres' m2'
     /\ Val.inject f' vres vres'
     /\ Mem.inject f' m2 m2'
     /\ Mem.unchanged_on (loc_unmapped f) m1 m2
     /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'
     /\ inject_incr f f'
-    /\ inject_separated f f' m1 m1';
+    /\ inject_separated f f' m1 m1'
+    /\ inject_trace f t t';
 
 (** External calls produce at most one event. *)
   ec_trace_length:
@@ -783,8 +819,9 @@ Proof.
 (* mem injects *)
 - inv H0. inv H2. inv H7. inversion H5; subst.
   exploit volatile_load_inject; eauto. intros [v' [A B]].
-  exists f; exists v'; exists m1'; intuition. constructor; auto.
+  exists f; exists v'; exists m1'; exists t; intuition. constructor; auto.
   red; intros. congruence.
+  inversion H3; repeat constructor.
 (* trace length *)
 - inv H; inv H0; simpl; omega.
 (* receptive *)
@@ -933,7 +970,8 @@ Proof.
 (* mem inject *)
 - inv H0. inv H2. inv H7. inv H8. inversion H5; subst.
   exploit volatile_store_inject; eauto. intros [m2' [A [B [C D]]]].
-  exists f; exists Vundef; exists m2'; intuition. constructor; auto. red; intros; congruence.
+  exists f; exists Vundef; exists m2'; exists t; intuition. constructor; auto. red; intros; congruence.
+  inversion A; repeat constructor.
 (* trace length *)
 - inv H; inv H0; simpl; omega.
 (* receptive *)
@@ -1003,7 +1041,7 @@ Proof.
   exploit Mem.store_mapped_inject. eexact A. eauto. eauto.
   instantiate (1 := Vint n). auto.
   intros [m2' [E G]].
-  exists f'; exists (Vptr b' Int.zero); exists m2'; intuition.
+  exists f'; exists (Vptr b' Int.zero); exists m2'; exists E0; intuition.
   econstructor; eauto.
   econstructor. eauto. auto.
   eapply UNCHANGED; eauto.
@@ -1011,6 +1049,7 @@ Proof.
   red; intros. destruct (eq_block b1 b).
   subst b1. rewrite C in H2. inv H2. eauto with mem.
   rewrite D in H2 by auto. congruence.
+  constructor.
 (* trace length *)
 - inv H; simpl; omega.
 (* receptive *)
@@ -1070,7 +1109,7 @@ Proof.
     apply H0. instantiate (1 := lo). omega.
   intro EQ.
   exploit Mem.free_parallel_inject; eauto. intros (m2' & C & D).
-  exists f, Vundef, m2'; split.
+  exists f, Vundef, m2',E0; split.
   apply extcall_free_sem_intro with (sz := sz) (m' := m2').
     rewrite EQ. rewrite <- A. f_equal. omega.
     auto.
@@ -1083,7 +1122,8 @@ Proof.
     apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
     apply H0. omega.
   split. auto.
-  red; intros. congruence.
+  split. red; intros. congruence.
+  constructor.
 (* trace length *)
 - inv H; simpl; omega.
 (* receptive *)
@@ -1152,7 +1192,7 @@ Proof.
   destruct (Mem.range_perm_storebytes m1' b0 (Int.unsigned (Int.add odst (Int.repr delta0))) nil)
   as [m2' SB].
   simpl. red; intros; omegaContradiction.
-  exists f, Vundef, m2'.
+  exists f, Vundef, m2', E0.
   split. econstructor; eauto.
   intros; omegaContradiction.
   intros; omegaContradiction.
@@ -1165,7 +1205,9 @@ Proof.
   split. eapply Mem.storebytes_unchanged_on; eauto.
   simpl; intros; omegaContradiction.
   split. apply inject_incr_refl.
+  split.
   red; intros; congruence.
+  constructor.
 + (* general case sz > 0 *)
   exploit Mem.loadbytes_length; eauto. intros LEN.
   assert (RPSRC: Mem.range_perm m1 bsrc (Int.unsigned osrc) (Int.unsigned osrc + sz) Cur Nonempty).
@@ -1182,7 +1224,7 @@ Proof.
   exploit Mem.address_inject.  eauto. eexact PDST. eauto. intros EQ2.
   exploit Mem.loadbytes_inject; eauto. intros [bytes2 [A B]].
   exploit Mem.storebytes_mapped_inject; eauto. intros [m2' [C D]].
-  exists f; exists Vundef; exists m2'.
+  exists f; exists Vundef; exists m2'; exists E0.
   split. econstructor; try rewrite EQ1; try rewrite EQ2; eauto.
   intros; eapply Mem.aligned_area_inject with (m := m1); eauto.
   intros; eapply Mem.aligned_area_inject with (m := m1); eauto.
@@ -1200,7 +1242,8 @@ Proof.
   erewrite list_forall2_length; eauto.
   omega.
   split. apply inject_incr_refl.
-  red; intros; congruence.
+  split. red; intros; congruence.
+  constructor.
 - (* trace length *)
   intros; inv H. simpl; omega.
 - (* receptive *)
@@ -1243,10 +1286,11 @@ Proof.
   eapply eventval_list_match_lessdef; eauto.
 (* mem injects *)
 - inv H0.
-  exists f; exists Vundef; exists m1'; intuition.
+  exists f; exists Vundef; exists m1'; exists (Event_annot text args :: E0); intuition.
   econstructor; eauto.
   eapply eventval_list_match_inject; eauto.
   red; intros; congruence.
+  repeat constructor.
 (* trace length *)
 - inv H; simpl; omega.
 (* receptive *)
@@ -1288,10 +1332,11 @@ Proof.
   eapply eventval_match_lessdef; eauto.
 (* mem inject *)
 - inv H0. inv H2. inv H7.
-  exists f; exists v'; exists m1'; intuition.
+  exists f; exists v'; exists m1'; exists (Event_annot text (arg :: nil) :: E0); intuition.
   econstructor; eauto.
   eapply eventval_match_inject; eauto.
   red; intros; congruence.
+  repeat constructor.
 (* trace length *)
 - inv H; simpl; omega.
 (* receptive *)
@@ -1330,9 +1375,10 @@ Proof.
   econstructor; eauto.
 (* mem injects *)
 - inv H0.
-  exists f; exists Vundef; exists m1'; intuition.
+  exists f; exists Vundef; exists m1'; exists E0; intuition.
   econstructor; eauto.
   red; intros; congruence.
+  constructor.
 (* trace length *)
 - inv H; simpl; omega.
 (* receptive *)
@@ -1446,16 +1492,18 @@ Lemma external_call_mem_inject:
   external_call ef ge vargs m1 t vres m2 ->
   Mem.inject f m1 m1' ->
   Val.inject_list f vargs vargs' ->
-  exists f', exists vres', exists m2',
-     external_call ef ge vargs' m1' t vres' m2'
+  exists f', exists vres', exists m2', exists t',
+     external_call ef ge vargs' m1' t' vres' m2'
     /\ Val.inject f' vres vres'
     /\ Mem.inject f' m2 m2'
     /\ Mem.unchanged_on (loc_unmapped f) m1 m2
     /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'
     /\ inject_incr f f'
-    /\ inject_separated f f' m1 m1'.
+    /\ inject_separated f f' m1 m1'
+    /\ inject_trace f t t'.
 Proof.
-  intros. destruct H as (A & B & C). eapply external_call_mem_inject_gen with (ge1 := ge); eauto.
+  intros. destruct H as (A & B & C).
+  eapply external_call_mem_inject_gen with (ge1 := ge); eauto.
   repeat split; intros.
   + simpl in H3. exploit A; eauto. intros EQ; rewrite EQ in H; inv H. auto.
   + simpl in H3. exploit A; eauto. intros EQ; rewrite EQ in H; inv H. auto.
