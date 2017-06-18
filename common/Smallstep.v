@@ -1502,10 +1502,11 @@ Qed.
 Lemma f2b_simulation_step:
   forall s2 t s2', Step L2 s2 t s2' ->
   forall i s1 f, f2b_match_states i f s1 s2 -> safe L1 s1 ->
-  exists i', exists s1' f',
-    (Plus L1 s1 t s1' \/ (Star L1 s1 t s1' /\ f2b_order i' i))
-     /\ f2b_match_states i' f' s1' s2'.
+  exists i', exists s1' f' t',
+    (Plus L1 s1 t' s1' \/ (Star L1 s1 t' s1' /\ f2b_order i' i))
+     /\ f2b_match_states i' f' s1' s2' /\ inject_incr f f' /\ inject_trace f' t t'.
 Proof.
+(*
   intros s2 t s2' STEP2 i s1 f MATCH SAFE.
   inv MATCH.
 - (* 1. At matching states *)
@@ -1514,15 +1515,18 @@ Proof.
   exploit (sd_final_nostep L2_determinate); eauto. contradiction.
 + (* 1.2  L1 can make 0 or several steps; L2 can make 1 or several matching steps. *)
   inv H2.
-  exploit f2b_determinacy_inv. eexact H5. eexact STEP2.
+  exploit f2b_determinacy_inv. eexact H6. eexact STEP2.
   intros [[EQ1 [EQ2 EQ3]] | [NOT1 [NOT2 MT]]].
 * (* 1.2.1  L2 makes a silent transition *)
   destruct (silent_or_not_silent t2).
   (* 1.2.1.1  L1 makes a silent transition too: perform transition now and go to "after" state *)
-  subst. simpl in *. destruct (star_starN H6) as [n STEPS2].
-  exists (F2BI_after n); exists s1''; eexists. split.
+  subst. simpl in *. destruct (star_starN H7) as [n STEPS2].
+  exists (F2BI_after n); exists s1'' ; eexists; exists E0. split.
   left. eapply plus_right; eauto.
+  simpl. inversion H3; auto.
+  split.
   eapply f2b_match_after'; eauto.
+  split; auto.
   (* 1.2.1.2 L1 makes a non-silent transition: keep it for later and go to "before" state *)
   subst. simpl in *. destruct (star_starN H6) as [n STEPS2].
   exists (F2BI_before n); exists s1'; eexists; split.
@@ -1584,7 +1588,9 @@ Proof.
   right; split. apply star_refl. constructor; omega.
   eapply f2b_match_after'; eauto.
   congruence.
-Qed.
+Qed.*)
+  
+  Admitted. (*NEED TO CHANGE THE MATCH RELATION*)
 
 End FORWARD_TO_BACKWARD.
 
@@ -1595,7 +1601,7 @@ Lemma forward_to_backward_simulation:
   forward_simulation L1 L2 -> receptive L1 -> determinate L2 ->
   backward_simulation L1 L2.
 Proof.
-  intros L1 L2 FS L1_receptive L2_determinate.
+(*  intros L1 L2 FS L1_receptive L2_determinate.
   destruct FS as [index order match_states FS].
   apply Backward_simulation with f2b_order (f2b_match_states L1 L2 match_states); constructor.
 - (* well founded *)
@@ -1624,11 +1630,14 @@ Proof.
   inv H1. right; econstructor; econstructor; eauto.
 - (* simulation *)
   intros. destruct (f2b_simulation_step FS L1_receptive L2_determinate _ _ H H0 H1)
-  as [i' [s1' [f' A]]]. exists i', f', s1'; trivial. 
+  as [i' [s1' [f' [t' [A [B C]]]]]]. exists i', f', s1'; trivial. 
   (*eapply f2b_simulation_step; eauto.*)
 - (* symbols preserved *)
   exact (fsim_public_preserved FS).
-Qed.
+
+Qed. *)
+Admitted. (*Need to change backwards simulation *)
+
 
 (** * Transforming a semantics into a single-event, equivalent semantics *)
 
@@ -1706,6 +1715,7 @@ Lemma ffs_simulation:
      (Plus L2 s2 t s2' \/ (Star L2 s2 t s2') /\ order i' i)
   /\ ffs_match i' f' s1' s2'.
 Proof.
+  (*
   induction 1; intros.
 - (* silent step *)
   inv H0.
@@ -1729,7 +1739,8 @@ Proof.
   destruct t.
   exists i; exists s2', f; split. left. eapply plus_star_trans; eauto. constructor; auto.
   exists i; exists s2x, f; split. auto. econstructor; eauto.
-Qed.
+Qed.*)
+Admitted. (*This factorization is weird. Need to revise it.*)
 
 End FACTOR_FORWARD_SIMULATION.
 
