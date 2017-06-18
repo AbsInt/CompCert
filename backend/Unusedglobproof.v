@@ -781,16 +781,18 @@ Lemma external_call_inject:
   external_call ef ge vargs m1 t vres m2 ->
   Mem.inject f m1 m1' ->
   Val.inject_list f vargs vargs' ->
-  exists f', exists vres', exists m2',
-    external_call ef tge vargs' m1' t vres' m2'
+  exists f', exists vres', exists m2', exists t',
+    external_call ef tge vargs' m1' t' vres' m2'
     /\ Val.inject f' vres vres'
     /\ Mem.inject f' m2 m2'
     /\ Mem.unchanged_on (loc_unmapped f) m1 m2
     /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'
     /\ inject_incr f f'
-    /\ inject_separated f f' m1 m1'.
+    /\ inject_separated f f' m1 m1'
+    /\ inject_trace f t t'.
 Proof.
-  intros. eapply external_call_mem_inject_gen; eauto.
+  intros.
+  eapply external_call_mem_inject_gen; eauto.
   apply globals_symbols_inject; auto.
 Qed.
 
@@ -970,7 +972,7 @@ Proof.
   intros (vargs' & P & Q).
   exploit external_call_inject; eauto.
   eapply match_stacks_preserves_globals; eauto.
-  intros (j' & tv & tm' & A & B & C & D & E & F & G).
+  intros (j' & tv & tm' & t' & A & B & C & D & E & F & G & INJT).
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
   eapply match_states_regular with (j := j'); eauto.
