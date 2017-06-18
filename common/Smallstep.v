@@ -1345,10 +1345,11 @@ Inductive f2b_transitions: state L1 * mem -> state L2 * mem -> Prop :=
       final_state L1 s1' r ->
       final_state L2 s2 r ->
       f2b_transitions s1 s2
-  | f2b_trans_step: forall s1 s2 s1' t s1'' s2' i' i'' f' f'',
+  | f2b_trans_step: forall s1 s2 s1' t t' s1'' s2' i' i'' f' f'',
       Star L1 s1 E0 s1' ->
       Step L1 s1' t s1'' ->
-      Plus L2 s2 t s2' ->
+      Plus L2 s2 t' s2' ->
+      inject_trace f'' t t' ->
       match_states i' f' s1' s2 ->
       match_states i'' f'' s1'' s2' ->
       f2b_transitions s1 s2.
@@ -1365,27 +1366,30 @@ Proof.
   apply star_refl. destruct s1 as [s1 m1]. destruct s2 as [s2 m2].
   exploit fsim_match_final_states. apply FS. apply MATCH. simpl; apply FINAL. intros X; apply X.
 - (* L1 can make one step *)
-  exploit (fsim_simulation FS); eauto. intros [i' [s2' [f2' [A MATCH']]]].
-  assert (B: Plus L2 s2 t s2' \/ (s2' = s2 /\ t = E0 /\ order i' i)).
-    intuition auto.
-    destruct (star_inv H0); intuition auto.
-  clear A. destruct B as [PLUS2 | [EQ1 [EQ2 ORDER]]].
-+ eapply f2b_trans_step; eauto. apply star_refl.
-+ subst. exploit REC; eauto. eapply star_safe; eauto. apply star_one; auto.
-  intros TRANS; inv TRANS.
-* eapply f2b_trans_final; eauto. eapply star_left; eauto.
-* eapply f2b_trans_step; eauto. eapply star_left; eauto.
+  exploit (fsim_simulation FS); eauto. intros [i' [s2' [f2' [t' [A [MATCH' [B C]]]]]]].
+  assert (D: Plus L2 s2 t' s2' \/ (s2' = s2 /\ t = E0 /\ order i' i)).
+  intuition auto.
+  destruct (star_inv H0); intuition auto.
+  subst; inversion C; intuition.
+    clear A. destruct D as [PLUS2 | [EQ1 [EQ2 ORDER]]].
+  + eapply f2b_trans_step; eauto. apply star_refl.
+  + subst. exploit REC; eauto. eapply star_safe; eauto. apply star_one; auto.
+    intros TRANS; inv TRANS.
+    * eapply f2b_trans_final; eauto. eapply star_left; eauto.
+    * eapply f2b_trans_step; eauto. eapply star_left; eauto.
 Qed.
 
 Lemma fsim_simulation_not_E0:
   forall s1 t s1', Step L1 s1 t s1' -> t <> E0 ->
   forall i s2 f, match_states i f s1 s2 ->
-  exists i', exists s2' f', Plus L2 s2 t s2' /\ match_states i' f' s1' s2'.
+  exists i', exists s2' f' t', Plus L2 s2 t' s2' /\ match_states i' f' s1' s2' /\ inject_incr f f' /\ inject_trace f' t t'.
 Proof.
-  intros. exploit (fsim_simulation FS); eauto. intros [i' [s2' [f2 [A B]]]].
-  exists i'; exists s2', f2; split; auto.
+  intros. exploit (fsim_simulation FS); eauto. intros [i' [s2' [f2 [t' [A [B [C D]]]]]]].
+  exists i'; exists s2', f2, t'; split; auto.
   destruct A. auto. destruct H2. exploit star_inv; eauto. intros [[EQ1 EQ2] | P]; auto.
-  congruence.
+  subst.
+  inversion D; subst.
+  unfold E0 in *; congruence.
 Qed.
 
 (** Exploiting determinacy *)
