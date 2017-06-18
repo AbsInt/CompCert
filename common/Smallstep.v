@@ -1029,9 +1029,11 @@ Record bsim_properties (L1 L2: semantics) (index: Type)
     bsim_simulation:
       forall s2 t s2', Step L2 s2 t s2' ->
       forall i s1 f, match_states i f s1 s2 -> safe L1 s1 ->
-      exists i', exists f', exists s1',
-         (Plus L1 s1 t s1' \/ (Star L1 s1 t s1' /\ order i' i))
-      /\ match_states i' f' s1' s2';
+      exists i', exists f', exists s1', exists t',
+         (Plus L1 s1 t' s1' \/ (Star L1 s1 t' s1' /\ order i' i))
+         /\ match_states i' f' s1' s2' /\
+         Values.inject_incr f f' /\
+         inject_trace f' t t';
     bsim_public_preserved:
       forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
   }.
@@ -1052,15 +1054,19 @@ Lemma bsim_simulation':
   forall L1 L2 index order match_states, bsim_properties L1 L2 index order match_states ->
   forall i s2 t s2', Step L2 s2 t s2' ->
   forall f s1, match_states i f s1 s2 -> safe L1 s1 -> 
-  (exists i', exists s1', exists f',Plus L1 s1 t s1' /\ match_states i' f' s1' s2')
+          (exists i', exists s1', exists f', exists t',Plus L1 s1 t' s1' /\ match_states i' f' s1' s2'
+          /\ Values.inject_incr f f' /\ inject_trace f' t t')
   \/ (exists i', exists f', order i' i /\ t = E0 /\ match_states i' f' s1 s2').
 Proof.
   intros. exploit bsim_simulation; eauto.
-  intros [i' [f' [s1' [A B]]]]. intuition.
-  left; exists i'; exists s1', f'; auto.
-  inv H4.
+  intros [i' [f' [s1' [t' [A [B C]]]]]]. intuition.
+  left; exists i'; exists s1', f', t'; auto.
+  
+  inv H6.
+  inversion H4.
   right; exists i', f'; auto.
-  left; exists i'; exists s1', f'; split; auto. econstructor; eauto.
+  
+  left; exists i'; exists s1', f', (t1 ** t2); split; auto. econstructor; eauto.
 Qed.
 
 (** ** Backward simulation diagrams. *)
@@ -1099,7 +1105,9 @@ Section BACKWARD_SIMULATION_PLUS.
 Hypothesis simulation:
   forall s2 t s2', Step L2 s2 t s2' ->
   forall s1 f, match_states f s1 s2 -> safe L1 s1 ->
-  exists s1' f', Plus L1 s1 t s1' /\ match_states f' s1' s2'.
+  exists s1' f' t', Plus L1 s1 t' s1' /\ match_states f' s1' s2' /\
+         Values.inject_incr f f' /\
+         inject_trace f' t t'.
 
 Lemma backward_simulation_plus: backward_simulation L1 L2.
 Proof.
@@ -1110,8 +1118,9 @@ Proof.
 - red; intros; constructor; intros. contradiction.
 - intros. exists tt; eauto.
 - intros. exists s1; split. apply star_refl. eapply match_final_states; eauto.
-- intros. exploit simulation; eauto. intros [s1' [f' [A B]]].
-  exists tt; exists f'; exists s1'; auto.
+- intros. exploit simulation; eauto. intros [s1' [f' [t' [A [B C]]]]].
+  exists tt; exists f'; exists s1'; exists t'; auto.
+  
 Qed.
 
 End BACKWARD_SIMULATION_PLUS.
@@ -1133,9 +1142,11 @@ Proof.
 - (* base case *)
   intros. exists i; exists s1, f; split; auto. apply star_refl.
 - (* inductive case *)
-  intros. exploit bsim_simulation; eauto. intros [i' [f' [s1' [A B]]]].
+  intros. exploit bsim_simulation; eauto. intros [i' [f' [s1' [t' [A [B [C D]]]]]]].
+  inv D.
   assert (Star L1 s0 E0 s1'). intuition. apply plus_star; auto.
-  exploit H0. eauto. eapply star_safe; eauto. intros [i'' [s1'' [f'' [C D]]]].
+  exploit H0. eauto. inv A; auto; eapply star_safe; eauto.
+  intros [i'' [s1'' [f'' [E F]]]].
   exists i''; exists s1'', f''; split; auto. eapply star_trans; eauto.
 Qed.
 
@@ -1156,13 +1167,13 @@ Lemma bsim_E0_plus:
 Proof.
   induction 1 using plus_ind2; intros; subst t.
 - (* base case *)
-  exploit bsim_simulation'; eauto. intros [[i' [s1' [f' [A B]]]] | [i' [f' [A [B C]]]]].
-+ left; exists i', f'; exists s1'; auto.
+  exploit bsim_simulation'; eauto. intros [[i' [s1' [f' [t' [A [B [C D]]]]]]] | [i' [f' [A [B C]]]]].
++ inv D. left; exists i', f'; exists s1'; auto.
 + right; exists i', f'; intuition.
 - (* inductive case *)
   exploit Eapp_E0_inv; eauto. intros [EQ1 EQ2]; subst.
-  exploit bsim_simulation'; eauto. intros [[i' [s1' [f' [A B]]]] | [i' [f' [A [B C]]]]].
-+ exploit bsim_E0_star. apply plus_star; eauto. eauto. eapply star_safe; eauto. apply plus_star; auto.
+  exploit bsim_simulation'; eauto. intros [[i' [s1' [f' [t' [A [B [C D]]]]]]] | [i' [f' [A [B C]]]]].
++ inv D. exploit bsim_E0_star. apply plus_star; eauto. eauto. eapply star_safe; eauto. apply plus_star; auto.
   intros [i'' [s1'' [f'' [P Q]]]].
   left; exists i'', f''; exists s1''; intuition. eapply plus_star_trans; eauto.
 + exploit IHplus; eauto. intros [P | [i'' [f'' [P Q]]]].
@@ -1219,47 +1230,61 @@ Qed.
 Lemma bb_simulation_base:
   forall s3 t s3', Step L3 s3 t s3' ->
   forall i1 s1 i2 s2 f1 f2, match_states i1 f1 s1 s2 -> match_states' i2 f2 s2 s3 -> safe L1 s1 ->
-  exists i', exists s1', exists f',
-    (Plus L1 s1 t s1' \/ (Star L1 s1 t s1' /\ bb_order i' (i1, i2)))
-    /\ bb_match_states i' f' s1' s3'.
+  exists i', exists s1', exists f', exists t',
+    (Plus L1 s1 t' s1' \/ (Star L1 s1 t' s1' /\ bb_order i' (i1, i2)))
+    /\ bb_match_states i' f' s1' s3' /\
+    inject_incr (compose_meminj f1 f2) f' /\
+    inject_trace f' t t'.
 Proof.
   intros.
   exploit (bsim_simulation' S23); eauto. eapply bsim_safe; eauto.
-  intros [ [i2' [s2' [f2' [PLUS2 MATCH2]]]] | [i2' [f2' [ORD2 [EQ MATCH2]]]]].
+  intros [ [i2' [s2' [f2' [t' [PLUS2 [MATCH2 [? ?]]]]]]] | [i2' [f2' [ORD2 [EQ MATCH2]]]]].
 - (* 1 L2 makes one or several transitions *)
   assert (EITHER: t = E0 \/ (length t = 1)%nat).
   { exploit L3_single_events; eauto.
     destruct t; auto. destruct t; auto. simpl. intros. omegaContradiction. }
   destruct EITHER.
 + (* 1.1 these are silent transitions *)
-  subst t. exploit (bsim_E0_plus S12); eauto.
+  subst t. inv H4. exploit (bsim_E0_plus S12); eauto.
   intros [ [i1' [f1' [s1' [PLUS1 MATCH1]]]] | [i1' [f1' [ORD1 MATCH1]]]].
 * (* 1.1.1 L1 makes one or several transitions *)
-  exists (i1', i2'); exists s1', (compose_meminj f1' f2'); split. auto. eapply bb_match_at; eauto.
-* (* 1.1.2 L1 makes no transitions *)
-  exists (i1', i2'); exists s1, (compose_meminj f1' f2'); split.
-  right; split. apply star_refl. left; auto.
+  exists (i1', i2'); exists s1', (compose_meminj f1' f2'), E0; split. auto. split.
   eapply bb_match_at; eauto.
+  admit.
+* (* 1.1.2 L1 makes no transitions *)
+  exists (i1', i2'); exists s1, (compose_meminj f1' f2'), E0; split.
+  right; split. apply star_refl. left; auto. split.
+  eapply bb_match_at; eauto.
+  admit.
 + (* 1.2 non-silent transitions *)
-  exploit star_non_E0_split. apply plus_star; eauto. auto.
+  exploit star_non_E0_split. apply plus_star; eauto.
+  do 2 match goal with
+  | [ H: inject_trace _ _ _  |- _ ] => inv H; auto 
+  end. inv H5.
+  inv H4; auto; simpl in *. inv H5; auto; inversion H5.
   intros [s2x [s2y [P [Q R]]]].
   exploit (bsim_E0_star S12). eexact P. eauto. auto. intros [i1' [s1x [g1 [X Y]]]].
   exploit (bsim_simulation' S12). eexact Q. eauto. eapply star_safe; eauto.
-  intros [[i1'' [s1y [g1'' [U V]]]] | [i1'' [g1'' [U [V W]]]]]; try (subst t; discriminate).
-  exists (i1'', i2'); exists s1y. exists (compose_meminj g1'' f2'). split.
-  left. eapply star_plus_trans; eauto. eapply bb_match_later; eauto.
+  intros [[i1'' [s1y [g1'' [t'' [U [V [? ?]]]]]]] | [i1'' [g1'' [U [V W]]]]]; try (subst t; discriminate); try discriminate.
+  exists (i1'', i2'); exists s1y. exists (compose_meminj g1'' f2'), t''. split.
+  left. eapply star_plus_trans; eauto. split.
+  eapply bb_match_later; eauto.
+  admit.
 - (* 2. L2 makes no transitions *)
-  subst. exists (i1, i2'); exists s1, (compose_meminj f1 f2'); split.
-  right; split. apply star_refl. right; auto.
+  subst. exists (i1, i2'); exists s1, (compose_meminj f1 f2'), E0; split.
+  right; split. apply star_refl. right; auto. split.
   eapply bb_match_at; eauto.
-Qed.
+  admit.
+Admitted.
 
 Lemma bb_simulation:
   forall s3 t s3', Step L3 s3 t s3' ->
   forall i s1 f, bb_match_states i f s1 s3 -> safe L1 s1 ->
-  exists i', exists s1', exists f',
-    (Plus L1 s1 t s1' \/ (Star L1 s1 t s1' /\ bb_order i' i))
-    /\ bb_match_states i' f' s1' s3'.
+  exists i', exists s1', exists f' t',
+    (Plus L1 s1 t' s1' \/ (Star L1 s1 t' s1' /\ bb_order i' i))
+    /\ bb_match_states i' f' s1' s3' /\
+    inject_incr f f' /\
+    inject_trace f' t t'.
 Proof.
   intros. inv H0.
   exploit star_inv; eauto. intros [[EQ1 EQ2] | PLUS].
@@ -1271,18 +1296,19 @@ Proof.
 + (* 2.1 one or several silent transitions *)
   exploit bb_simulation_base. eauto. auto. eexact B. eauto.
     eapply star_safe; eauto. eapply plus_star; eauto.
-  intros [i'' [s1'' [f'' [C D]]]].
-  exists i''; exists s1'', f''; split; auto.
+  intros [i'' [s1'' [f'' [ t'' [C [D [E F]]]]]]].
+  exists i''; exists s1'', f'', t''; repeat split; auto.
   left. eapply plus_star_trans; eauto.
   destruct C as [P | [P Q]]. apply plus_star; eauto. eauto.
   traceEq.
+  admit.
 + (* 2.2 no silent transition *)
   exploit bb_simulation_base. eauto. auto. eexact B. eauto. auto.
-  intros [i'' [s1'' [f'' [C D]]]].
-  exists i''; exists s1'', f''; split; auto.
+  intros [i'' [s1'' [f'' [t'' [C [D [E F]]]]]]].
+  exists i''; exists s1'', f'', t''; split; auto.
   intuition. right; intuition.
   inv H6. left. eapply t_trans; eauto. left; auto.
-Qed.
+Admitted.
 
 End COMPOSE_BACKWARD_SIMULATIONS.
 
@@ -1324,7 +1350,7 @@ Proof.
 - (* simulation *)
   intros s3 t s3'; intros.
   destruct (@bb_simulation L1 L2 _ L3single _ _ _ props _ _ _ props' _ _ _ H _ _ _ H0 H1)
-  as [i' [s1' [f' A]]]. exists i', f', s1'; assumption.
+  as [i' [s1' [f' [t' [A [B [C D]]]]]]]. exists i', f', s1', t'; repeat (split; auto). 
 - (* symbols *)
   intros. transitivity (Senv.public_symbol (symbolenv L2) id); eapply bsim_public_preserved; eauto.
 Qed.
@@ -1749,6 +1775,7 @@ Theorem factor_forward_simulation:
   forward_simulation L1 L2 -> single_events L2 ->
   forward_simulation (atomic L1) L2.
 Proof.
+(*
   intros L1 L2 FS L2single.
   destruct FS as [index order match_states sim].
   apply Forward_simulation with order (ffs_match L1 L2 match_states); constructor.
@@ -1771,10 +1798,10 @@ Proof.
 - (* simulation *)
   (*eapply ffs_simulation; eauto.*)
   intros.
-  destruct (ffs_simulation sim L2single H H0) as [i' [s2' [f' A]]].
-  exists i', s2', f'; trivial.
+  destruct (ffs_simulation sim L2single H H0) as [i' [s2' [f' [ A]]]].
+  exists i', s2', f', t'; trivial.
 - (* symbols preserved *)
-  simpl. exact (fsim_public_preserved sim).
+  simpl. exact (fsim_public_preserved sim).*)
 Admitted.
 
 (** Likewise, a backward simulation from a single-event semantics [L1] to a semantics [L2]
@@ -1863,35 +1890,47 @@ Lemma fbs_simulation:
   forall (s2 :state (atomic L2) * mem) (t : trace) (s2' : state (atomic L2) * mem), 
   Step (atomic L2) s2 t s2' ->
     forall i f s1, fbs_match i f s1 s2 -> safe L1 s1 ->
-    exists i' f', exists s1',
-       (Plus L1 s1 t s1' \/ (Star L1 s1 t s1' /\ order i' i))
-       /\ fbs_match i' f' s1' s2'.
+    exists i' f', exists s1', exists t',
+       (Plus L1 s1 t' s1' \/ (Star L1 s1 t' s1' /\ order i' i))
+       /\ fbs_match i' f' s1' s2'
+/\ inject_incr f f' /\ inject_trace f' t t'.
 Proof.
+  
+  (*
+
   induction 1; intros.
 - (* silent step *)
   inv H0.
   exploit (bsim_simulation sim); eauto. eapply star_safe; eauto.
-  intros [i' [f' [s1'' [A B]]]].
-  exists i', f'; exists s1''; split.
-  destruct A as [P | [P Q]]. left. eapply star_plus_trans; eauto. right; split; auto. eapply star_trans; eauto.
+  intros [i' [f' [s1'' [ t''[A [B [C D]]]]]]].
+  exists i', f'; exists s1'', t''; repeat split.
+  inversion D; auto.
+
+  destruct A as [P | [P Q]]. left. eapply star_plus_trans; eauto.
+  right; split; auto. eapply star_trans; eauto.
   econstructor. apply star_refl. auto. auto.
+  auto. auto.
 - (* start step *)
   inv H0.
   exploit (bsim_simulation sim); eauto. eapply star_safe; eauto.
-  intros [i' [f' [s1'' [A B]]]].
-  assert (C: Star L1 s1 (ev :: t) s1'').
-    eapply star_trans. eauto. destruct A as [P | [P Q]]. apply plus_star; eauto. eauto. auto.
+  intros [i' [f' [s1'' [ t'' [A [B [C D]]]]]]].
+  inv D.
+  assert (E: Star L1 s1 (e':: t') s1'').
+  eapply star_trans. eauto. destruct A as [P | [P Q]]. apply plus_star; eauto. eauto.
+  auto.
   exploit star_non_E0_split'; eauto. simpl. intros [s1x [P Q]].
-  exists i', f'; exists s1x; split.
+  exists i', f'; exists s1x, (e'::E0); split.
   left; auto.
+  split. 
   econstructor; eauto.
   exploit L2wb; eauto.
 - (* continue step *)
   inv H0. unfold E0 in (*H8*)H10; destruct (*H8*)H10; try congruence.
   exploit star_non_E0_split'; eauto. simpl. intros [s1x [P Q]].
   exists i, f; exists s1x; split. left; auto. econstructor; eauto. simpl in H0; tauto.
-Qed.
 
+Qed.*)
+Admitted. (*This won't work... *)
 Lemma fbs_progress:
   forall i f (s1 : state L1 * mem) (s2 : (trace * state L2) * mem),
   fbs_match i f s1 s2 -> safe L1 s1 ->
