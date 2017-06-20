@@ -79,17 +79,30 @@ type instruction_arg =
   | Freg of freg
   | Constant of constant
   | Long of Integers.Int.int
+  | Id
   | Crbit of crbit
   | ALabel of positive
   | Float32 of Floats.float32
   | Float64 of Floats.float
   | Atom of positive
 
+let id = ref 0
+
+let next_id () =
+  let tmp = !id in
+  incr id;
+  tmp
+
+let reset_id () =
+  id := 0
+
 let p_arg oc = function
   | Ireg ir -> p_ireg oc ir
   | Freg fr -> p_freg oc fr
   | Constant c -> p_constant oc c
   | Long i ->  p_jsingle_object oc "Integer" p_int64 i
+  | Id -> let i = next_id () in
+    p_jsingle_object oc "Integer" (fun oc i -> fprintf oc "%d" i) i
   | Crbit cr -> p_crbit oc cr
   | ALabel lbl -> p_label oc lbl
   | Float32 f -> p_float32_constant oc f
@@ -315,6 +328,7 @@ let p_instruction oc ic =
   | Pbuiltin (ef,_,_) ->
     begin match ef with
       | EF_inline_asm _ ->
+        instruction "Pinlineasm" [Id];
         Cerrors.warning ("",-10) Cerrors.Inline_asm_sdump "inline assembler is not supported in sdump"
       | _ -> ()
     end
@@ -409,6 +423,7 @@ let p_vardef oc (name,v) =
   output_string oc "}\n"
 
 let p_program oc prog =
+  reset_id ();
   let prog_vars,prog_funs = List.fold_left (fun (vars,funs) (ident,def) ->
     match def with
     | Gfun (Internal f) ->
