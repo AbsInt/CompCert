@@ -1123,9 +1123,9 @@ Qed.
 Theorem transf_program_correct:
   forward_simulation (Cminor.semantics prog) (CminorSel.semantics tprog).
 Proof.
-  apply forward_simulation_opt with (match_states := match_states) (measure := measure).
+  eapply forward_simulation_opt. 
   apply senv_preserved. 
-  apply sel_initial_states; auto.
+  eapply sel_initial_states; auto.
   apply sel_final_states; auto.
   apply sel_step_correct; auto.
 Qed.

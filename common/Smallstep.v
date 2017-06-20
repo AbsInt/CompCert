@@ -608,7 +608,23 @@ Hypothesis simulation:
 
 Lemma forward_simulation_star_wf: forward_simulation L1 L2.
 Proof.
-  apply Forward_simulation with order (fun idx s1 s2 => idx = s1 /\ match_states s1 s2);
+  apply Forward_simulation with order (fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
+  constructor.
+- auto.
+- intros. exploit match_initial_states; eauto. intros [s2 [A B]].
+    exists s1; exists s2; auto.
+- intros. destruct H. eapply match_final_states; eauto.
+- intros. destruct H0. subst i. exploit simulation; eauto. intros [s2' [A B]].
+  exists s1'; exists s2'; intuition auto.
+- auto.
+Qed.
+
+Notation match_states':=
+  (fun (idx s1 : state L1) (s2 : state L2) => idx = s1 /\ match_states s1 s2).
+
+Lemma forward_simulation_star_wf':
+   fsim_properties L1 L2 _ order match_states'.
+Proof.
   constructor.
 - auto.
 - intros. exploit match_initial_states; eauto. intros [s2 [A B]].
@@ -644,6 +660,17 @@ Proof.
   exists s2; split. right; split. rewrite B. apply star_refl. auto. auto.
 Qed.
 
+Lemma forward_simulation_star':
+  fsim_properties L1 L2 _ (ltof _ measure)
+(fun (idx s1 : state L1) (s2 : state L2) => idx = s1 /\ match_states s1 s2).
+Proof.
+  apply forward_simulation_star_wf'.
+  apply well_founded_ltof.
+  intros. exploit simulation; eauto. intros [[s2' [A B]] | [A [B C]]].
+  exists s2'; auto.
+  exists s2; split. right; split. rewrite B. apply star_refl. auto. auto.
+Qed.
+
 End SIMULATION_STAR.
 
 (** Simulation when one transition in the first program corresponds
@@ -659,6 +686,14 @@ Hypothesis simulation:
 Lemma forward_simulation_plus: forward_simulation L1 L2.
 Proof.
   apply forward_simulation_star with (measure := fun _ => O).
+  intros. exploit simulation; eauto.
+Qed.
+
+Lemma forward_simulation_plus':
+  fsim_properties L1 L2 _ (ltof _ ( fun _ => O))
+(fun (idx s1 : state L1) (s2 : state L2) => idx = s1 /\ match_states s1 s2).
+Proof.
+  apply forward_simulation_star' with (measure := fun _ => O).
   intros. exploit simulation; eauto.
 Qed.
 
@@ -702,6 +737,16 @@ Hypothesis simulation:
 Lemma forward_simulation_opt: forward_simulation L1 L2.
 Proof.
   apply forward_simulation_star with measure.
+  intros. exploit simulation; eauto. intros [[s2' [A B]] | [A [B C]]].
+  left; exists s2'; split; auto. apply plus_one; auto.
+  right; auto.
+Qed.
+
+Lemma forward_simulation_opt':
+  fsim_properties L1 L2 _ (ltof _ measure)
+(fun (idx s1 : state L1) (s2 : state L2) => idx = s1 /\ match_states s1 s2).
+Proof.
+  apply forward_simulation_star'.
   intros. exploit simulation; eauto. intros [[s2' [A B]] | [A [B C]]].
   left; exists s2'; split; auto. apply plus_one; auto.
   right; auto.

@@ -14,7 +14,7 @@
 
 Require Import Coqlib Errors Maps Integers Floats.
 Require Import AST Linking.
-Require Import Values Events Memory Globalenvs Smallstep.
+Require Import Values Events Memory Globalenvs Smallstep ExposedSmallstep2.
 Require Import Ctypes Cop Clight Cminor Csharpminor.
 Require Import Cshmgen.
 
@@ -1619,6 +1619,32 @@ Proof.
   eexact transl_initial_states.
   eexact transl_final_states.
   eexact transl_step.
+Qed.
+
+Theorem transl_program_correct':
+  fsim_properties (Clight.semantics2 prog) (Csharpminor.semantics tprog)
+                  _ (ltof _ ( fun _ => O))
+(fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
+Proof.
+  eapply forward_simulation_plus'.
+  apply senv_preserved.
+  eexact transl_initial_states.
+  eexact transl_final_states.
+  eexact transl_step.
+Qed.
+
+Theorem transl_program_correct'':
+  @fsim_properties_ext
+    (Clight.semantics2 prog) (Csharpminor.semantics tprog)
+    Clight.Clight_get_mem Csharpminor.Csharpminor_get_mem
+                  _ (ltof _ ( fun _ => O))
+(fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
+Proof.
+  eapply EqEx_sim'.
+  eapply sim_eqSim'.
+  - simpl; intros ? ? ? [? ?].
+    inversion H0; reflexivity.
+  - apply transl_program_correct'.
 Qed.
 
 End CORRECTNESS.

@@ -493,6 +493,13 @@ Inductive state: Type :=
       (k: cont)
       (m: mem) : state.
 
+Definition Clight_get_mem (s:state):=
+  match s with
+  | State _ _ _ _ _ m => m
+  | Callstate _ _ _ m => m
+  | Returnstate _ _ m => m
+  end.
+
 (** Find the statement and manufacture the continuation
   corresponding to a label *)
 

@@ -187,6 +187,13 @@ Inductive state : Type :=
              (m: mem),                (**r memory state *)
       state.
 
+Definition RTL_get_mem (s:state):=
+  match s with
+  | State _ _ _ _ _ m => m
+  | Callstate _ _ _ m => m
+  | Returnstate _ _ m => m
+  end.
+
 Section RELSEM.
 
 Variable ge: genv.

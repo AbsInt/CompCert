@@ -143,6 +143,13 @@ Inductive state: Type :=
              (m: mem),                (**r memory state *)
       state.
 
+Definition Linear_get_mem (s:state):=
+  match s with
+  | State _ _ _ _ _ m => m
+  | Callstate _ _ _ m => m
+  | Returnstate _ _ m => m
+  end.
+
 (** [parent_locset cs] returns the mapping of values for locations
   of the caller function. *)
 Definition parent_locset (stack: list stackframe) : locset :=

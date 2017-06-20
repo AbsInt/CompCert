@@ -165,7 +165,15 @@ Inductive state: Type :=
       forall (v: val)                   (**r Return value *)
              (k: cont)                  (**r what to do next *)
              (m: mem),                  (**r memory state *)
-      state.
+        state.
+
+
+Definition Csharpminor_get_mem (s:state):=
+  match s with
+  | State _ _ _ _ _ m => m
+  | Callstate _ _ _ m => m
+  | Returnstate _ _ m => m
+  end.
 
 (** Pop continuation until a call or stop *)
 
