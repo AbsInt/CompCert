@@ -15,17 +15,17 @@
 
 (** Abstract syntax and semantics for the Cminor language. *)
 
-Require Import compcert.lib.Coqlib.
-Require Import compcert.lib.Maps.
-Require Import compcert.common.AST.
-Require Import compcert.lib.Integers.
-Require Import compcert.lib.Floats.
-Require Import compcert.common.Events.
-Require Import compcert.common.Values.
-Require Import compcert.common.Memory.
-Require Import compcert.common.Globalenvs.
-Require Import compcert.common.Smallstep.
-Require Import compcert.common.Switch.
+Require Import Coqlib.
+Require Import Maps.
+Require Import AST.
+Require Import Integers.
+Require Import Floats.
+Require Import Events.
+Require Import Values.
+Require Import Memory.
+Require Import Globalenvs.
+Require Import Smallstep.
+Require Import Switch.
 
 (** * Abstract syntax *)
 
@@ -240,32 +240,15 @@ Inductive state: Type :=
       forall (v: val)                   (**r Return value *)
              (k: cont)                  (**r what to do next *)
              (m: mem),                  (**r memory state *)
-      state.
+        state.
 
-Definition Cminor_get_mem (s:state):=
+Definition get_mem (s:state):=
   match s with
   | State _ _ _ _ _ m => m
   | Callstate _ _ _ m => m
   | Returnstate _ _ m => m
   end.
 
-(*NEW*)Inductive cstate: Type :=
-  | CState:                      (**r Execution within a function *)
-      forall (f: function)              (**r currently executing function  *)
-             (s: stmt)                  (**r statement under consideration *)
-             (k: cont)                  (**r its continuation -- what to do next *)
-             (sp: val)                  (**r current stack pointer *)
-             (e: env),                  (**r current local environment *)
-      cstate
-  | CCallstate:                  (**r Invocation of a function *)
-      forall (f: fundef)                (**r function to invoke *)
-             (args: list val)           (**r arguments provided by caller *)
-             (k: cont),                 (**r what to do next  *)
-      cstate
-  | CReturnstate:                (**r Return from a function *)
-      forall (v: val)                   (**r Return value *)
-             (k: cont),                 (**r what to do next *)
-      cstate.
 
 Section RELSEM.
 
@@ -589,78 +572,34 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.find_funct_ptr ge b = Some f ->
       funsig f = signature_main ->
       initial_state p (Callstate f nil Kstop m0).
-(*NEW*)Inductive initial_cstate (p: program): (cstate * mem) -> Prop :=
-  | initial_cstate_intro: forall b f m0,
-      let ge := Genv.globalenv p in
-      Genv.init_mem p = Some m0 ->
-      Genv.find_symbol ge p.(prog_main) = Some b ->
-      Genv.find_funct_ptr ge b = Some f ->
-      funsig f = signature_main ->
-      initial_cstate p (CCallstate f nil Kstop, m0).
 
 (** A final state is a [Returnstate] with an empty continuation. *)
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall r m,
       final_state (Returnstate (Vint r) Kstop m) r.
-(*NEW*)Inductive final_cstate: (cstate * mem) -> int -> Prop :=
-  | final_cstate_intro: forall r m,
-      final_cstate (CReturnstate (Vint r) Kstop, m) r.
 
 (** The corresponding small-step semantics. *)
-(*NEW*)Definition Cstate2state (st:cstate) (m:mem): state:=
-match st with
-  CState f s k sp e => State f s k sp e m
-| CCallstate f args k => Callstate f args k m
-| CReturnstate v k => Returnstate v k m
-end. 
-(*NEW*)Definition CstateOfstate (st:state): cstate:=
-match st with
-  State f s k sp e m => CState f s k sp e 
-| Callstate f args k m => CCallstate f args k
-| Returnstate v k m => CReturnstate v k
-end. 
-(*NEW*)Definition MemOfstate (st:state): mem:=
-match st with
-  State f s k sp e m => m
-| Callstate f args k m => m
-| Returnstate v k m => m
-end. 
-
-(*NEW*) Definition exposed_step (g:Genv.t fundef unit) (s1:cstate * mem) (t:trace) (s2: cstate * mem): Prop:=
-match s1, s2 with (c1, m1), (c2, m2) =>
-step g (Cstate2state c1 m1) t (Cstate2state c2 m2)
-end.
 
 Definition semantics (p: program) :=
-  Semantics exposed_step (initial_cstate p) final_cstate (Genv.globalenv p).
+  Semantics step (initial_state p) final_state (Genv.globalenv p).
 
 (** This semantics is receptive to changes in events. *)
-
-(*NEW*) Lemma state_bij s: Cstate2state (CstateOfstate s) (MemOfstate s) = s.
-Proof. destruct s; simpl; trivial. Qed.
 
 Lemma semantics_receptive:
   forall (p: program), receptive (semantics p).
 Proof.
-  intros. constructor; simpl; intros. destruct s as [s m]. destruct s1 as [s1 m1]. simpl in H. 
+  intros. constructor; simpl; intros.
 (* receptiveness *)
-  assert (t2 = E0 -> exists s2, step (Genv.globalenv p) (Cstate2state s m) t2 s2).
-  { intros. subst. inv H0. exists (Cstate2state s1 m1); auto. }
-  assert (HH: exists s2: state, step  (Genv.globalenv p) (Cstate2state s m) t2 s2).
-  { inversion H; subst; auto;
-    try solve [ rewrite <- H3, <- H5 in *; inv H0; eexists; eassumption];
-    try solve [ rewrite <- H3, <- H2 in *; inv H0; eexists; eassumption].
-    - rewrite <- H3, <- H2 in *. 
-      exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]].
-      exists (State f Sskip k sp (set_optvar optid vres2 e) m2). econstructor; eauto.
-    - rewrite <- H3, <- H2 in *. 
-      exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]].
-      exists (Returnstate vres2 k m2). econstructor; eauto. }
-  destruct HH as [s2 ST2].
-  exists (CstateOfstate s2, MemOfstate s2). simpl; rewrite state_bij; trivial.
+  assert (t1 = E0 -> exists s2, step (Genv.globalenv p) s t2 s2).
+    intros. subst. inv H0. exists s1; auto.
+  inversion H; subst; auto.
+  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]].
+  exists (State f Sskip k sp (set_optvar optid vres2 e) m2). econstructor; eauto.
+  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]].
+  exists (Returnstate vres2 k m2). econstructor; eauto.
 (* trace length *)
-  red; intros. destruct s as [s m]. destruct s' as [s' m']. inv H; simpl; try omega; eapply external_call_trace_length; eauto.
+  red; intros; inv H; simpl; try omega; eapply external_call_trace_length; eauto.
 Qed.
 
 (** * Alternate operational semantics (big-step) *)
@@ -1223,53 +1162,20 @@ Proof.
   traceEq.
 Qed.
 
-(*NEW*) Lemma states_bij c m c' m': Cstate2state c m = Cstate2state c' m' ->
-  c=c' /\ m=m'.
-Proof. destruct c; destruct c'; simpl; intros; inv H; split; trivial. Qed.
-
-(*NEW*) Lemma forever_plus_exposed fd args k m T:
-  forever_plus step ge (Callstate fd args k m) T ->
-  forever_plus exposed_step ge (CCallstate fd args k, m) T.
-Admitted. (*needs coinductive reasoning*)
-
-Lemma star_exposed: forall c m t c' m',
-   star step ge (Cstate2state c m) t (Cstate2state c' m') ->
-  Star (semantics prog) (c,m) t (c',m').
-Proof. intros.
-remember (Cstate2state c m) as st. remember (Cstate2state c' m') as st'.
-generalize dependent m'. generalize dependent c'.
-generalize dependent m. generalize dependent c.
-induction H; simpl; intros; subst.
-+ apply states_bij in Heqst'. destruct Heqst'; subst.
-  apply star_refl.
-+ assert (exposed_step ge (c, m) t1 (CstateOfstate s2, MemOfstate s2)).
-  { simpl. rewrite state_bij; trivial. }
-  eapply star_step. apply H1. apply IHstar; trivial. rewrite state_bij; trivial.
-  trivial.
-Qed. 
-
 Theorem bigstep_semantics_sound:
   bigstep_sound (bigstep_semantics prog) (semantics prog).
 Proof.
   constructor; intros.
-+ (* termination *)
+(* termination *)
   inv H. econstructor; econstructor.
   split. econstructor; eauto.
-  split. 
-  - assert (HH:star step ge (Callstate f nil Kstop m0) t (Returnstate (Vint r) Kstop m)). 
-    { eapply eval_funcall_steps; eauto. red; auto. }
-    assert (Star (semantics prog) (CCallstate f nil Kstop, m0) t ((CReturnstate (Vint r) Kstop), m)).
-    { apply star_exposed; trivial. }
-    eassumption.
-  - red; auto.
+  split. apply eval_funcall_steps. eauto. red; auto.
   econstructor.
-+ (* divergence *)
+(* divergence *)
   inv H. econstructor.
   split. econstructor; eauto.
   eapply forever_plus_forever.
-  apply forever_plus_exposed.
   eapply evalinf_funcall_forever; eauto.
 Qed.
 
 End BIGSTEP_TO_TRANSITION.
-

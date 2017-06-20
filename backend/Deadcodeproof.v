@@ -14,7 +14,7 @@
 
 Require Import Coqlib Maps Errors Integers Floats Lattice Kildall.
 Require Import AST Linking.
-Require Import Values Memory Globalenvs Events Smallstep.
+Require Import Values Memory Globalenvs Events Smallstep ExposedSmallstep2.
 Require Import Registers Op RTL.
 Require Import ValueDomain ValueAnalysis NeedDomain NeedOp Deadcode.
 
@@ -1134,5 +1134,36 @@ Proof.
   fold ge; fold tge. exploit step_simulation; eauto. intros [st2' [A B]].
   exists st2'; auto.
 Qed.
+
+
+Theorem transl_program_correct':
+  @fsim_properties  (RTL.semantics prog) (RTL.semantics tprog)
+                  (Smallstep.state (RTL.semantics prog)) (ltof _ (fun _ => 0)%nat)
+                  ( fun idx s1 s2 => idx = s1 /\ (sound_state prog s1 /\ match_states s1 s2)).
+Proof.
+  eapply forward_simulation_step'. 
+- apply senv_preserved.
+- simpl; intros. exploit transf_initial_states; eauto. intros [st2 [A B]].
+  exists st2; intuition. eapply sound_initial; eauto.
+- simpl; intros. destruct H. eapply transf_final_states; eauto.
+- simpl; intros. destruct H0.
+  assert (sound_state prog s1') by (eapply sound_step; eauto).
+  fold ge; fold tge. exploit step_simulation; eauto. intros [st2' [A B]].
+  exists st2'; auto.
+Qed.
+
+(*
+Theorem transl_program_correct'':
+  @fsim_properties_ext
+    (RTL.semantics prog) (RTL.semantics tprog)
+    RTL.get_mem RTL.get_mem
+                  (Smallstep.state (RTL.semantics prog)) (ltof _ (fun _ => 0)%nat)
+                  ( fun idx s1 s2 => idx = s1 /\ (sound_state prog s1 /\ match_states s1 s2)).
+Proof.
+  eapply sim_extSim.
+  - simpl; intros ? ? ? [? ?]; subst.
+    destruct H0 as [? H0]; inversion H0; auto.
+  - apply transl_program_correct'.
+Qed. *)
 
 End PRESERVATION.

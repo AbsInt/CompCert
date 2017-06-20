@@ -154,7 +154,7 @@ Inductive state : Type :=
              (m: mem),                (**r memory state *)
       state.
 
-Definition LTL_get_mem (s:state):=
+Definition get_mem (s:state):=
   match s with
   | State _ _ _ _ _ m => m
   | Block _ _ _ _ _ m => m

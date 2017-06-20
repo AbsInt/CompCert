@@ -23,6 +23,7 @@ Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
+Require Import ExposedSmallstep2.
 Require Import Switch.
 Require Import Cminor.
 Require Import Op.
@@ -1123,11 +1124,35 @@ Qed.
 Theorem transf_program_correct:
   forward_simulation (Cminor.semantics prog) (CminorSel.semantics tprog).
 Proof.
-  eapply forward_simulation_opt. 
+  apply forward_simulation_opt with (match_states := match_states) (measure := measure).
   apply senv_preserved. 
-  eapply sel_initial_states; auto.
+  apply sel_initial_states; auto.
   apply sel_final_states; auto.
   apply sel_step_correct; auto.
+Qed.
+
+Theorem transf_program_correct':
+  fsim_properties (Cminor.semantics prog) (CminorSel.semantics tprog)
+                  _ (ltof _ measure)
+(fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
+Proof.
+  apply forward_simulation_opt' with (match_states := match_states) (measure := measure).
+  apply senv_preserved. 
+  apply sel_initial_states; auto.
+  apply sel_final_states; auto.
+  apply sel_step_correct; auto.
+Qed.
+
+Theorem transf_program_correct'':
+  @fsim_properties_ext (Cminor.semantics prog) (CminorSel.semantics tprog)
+                      (Cminor.get_mem) (CminorSel.get_mem)
+                  _ (ltof _ measure)
+(fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
+Proof.
+  eapply sim_extSim.
+  - simpl; intros ? ? ? [? ?]; subst.
+    inversion H0; eauto.
+  - apply transf_program_correct'.
 Qed.
 
 End PRESERVATION.

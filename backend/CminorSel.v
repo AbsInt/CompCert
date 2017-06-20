@@ -149,7 +149,7 @@ Inductive state: Type :=
              (m: mem),                  (**r memory state *)
       state.
 
-Definition CminorSel_get_mem (s:state):=
+Definition get_mem (s:state):=
   match s with
   | State _ _ _ _ _ m => m
   | Callstate _ _ _ m => m

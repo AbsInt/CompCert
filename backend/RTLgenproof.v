@@ -13,7 +13,7 @@
 (** Correctness proof for RTL generation. *)
 
 Require Import Coqlib Maps AST Linking.
-Require Import Integers Values Memory Events Smallstep Globalenvs.
+Require Import Integers Values Memory Events Smallstep ExposedSmallstep2 Globalenvs.
 Require Import Switch Registers Cminor Op CminorSel RTL.
 Require Import RTLgen RTLgenspec.
 
@@ -1571,6 +1571,32 @@ Proof.
   eexact transl_final_states.
   apply lt_state_wf.
   exact transl_step_correct.
+Qed.
+
+Theorem transl_program_correct':
+  fsim_properties (CminorSel.semantics prog) (RTL.semantics tprog)
+                  _ (lt_state)
+(fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
+Proof.
+  eapply forward_simulation_star_wf'.
+  apply senv_preserved.
+  eexact transl_initial_states.
+  eexact transl_final_states.
+  apply lt_state_wf.
+  exact transl_step_correct.
+Qed.
+
+Theorem transl_program_correct'':
+  @fsim_properties_ext
+    (CminorSel.semantics prog) (RTL.semantics tprog)
+    CminorSel.get_mem RTL.get_mem
+                  _ (lt_state)
+(fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
+Proof.
+  eapply sim_extSim.
+  - simpl; intros ? ? ? [? ?]; subst.
+    inversion H0; simpl; auto.
+  - apply transl_program_correct'.
 Qed.
 
 End CORRECTNESS.

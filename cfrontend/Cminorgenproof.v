@@ -17,7 +17,7 @@ Require Import FSets FSetAVL Orders Mergesort.
 Require Import Coqlib Maps Ordered Errors Integers Floats.
 Require Intv.
 Require Import AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep.
+Require Import Values Memory Events Globalenvs Smallstep ExposedSmallstep2.
 Require Import Csharpminor Switch Cminor Cminorgen.
 
 Local Open Scope error_monad_scope.

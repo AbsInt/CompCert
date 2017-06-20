@@ -1636,12 +1636,11 @@ Qed.
 Theorem transl_program_correct'':
   @fsim_properties_ext
     (Clight.semantics2 prog) (Csharpminor.semantics tprog)
-    Clight.Clight_get_mem Csharpminor.Csharpminor_get_mem
+    Clight.get_mem Csharpminor.get_mem
                   _ (ltof _ ( fun _ => O))
 (fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
 Proof.
-  eapply EqEx_sim'.
-  eapply sim_eqSim'.
+  eapply EqEx_sim'; eapply sim_eqSim'.
   - simpl; intros ? ? ? [? ?].
     inversion H0; reflexivity.
   - apply transl_program_correct'.

@@ -716,6 +716,14 @@ Proof.
   exists s2'; split; auto. apply plus_one; auto.
 Qed.
 
+Lemma forward_simulation_step': fsim_properties L1 L2 _ (ltof _ ( fun _ => O))
+(fun (idx s1 : state L1) (s2 : state L2) => idx = s1 /\ match_states s1 s2).
+Proof.
+  apply forward_simulation_plus'.
+  intros. exploit simulation; eauto. intros [s2' [A B]].
+  exists s2'; split; auto. apply plus_one; auto.
+Qed.
+
 End SIMULATION_STEP.
 
 (** Simulation when one transition in the first program

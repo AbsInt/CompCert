@@ -15,7 +15,7 @@
 Require Import FSets.
 Require Import Coqlib Ordered Integers.
 Require Import AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep.
+Require Import Values Memory Events Globalenvs Smallstep ExposedSmallstep2.
 Require Import Op Locations Linear.
 Require Import CleanupLabels.
 
@@ -352,6 +352,31 @@ Proof.
   eexact transf_initial_states.
   eexact transf_final_states.
   eexact transf_step_correct.
+Qed.
+
+Theorem transl_program_correct':
+  @fsim_properties  (Linear.semantics prog) (Linear.semantics tprog)
+                    _ (ltof _ measure)
+                    ( fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
+Proof.
+  eapply forward_simulation_opt'.
+  apply senv_preserved.
+  eexact transf_initial_states.
+  eexact transf_final_states.
+  eexact transf_step_correct.
+Qed.
+
+Theorem transl_program_correct'':
+  @fsim_properties_ext
+    (Linear.semantics prog) (Linear.semantics tprog)
+    Linear.get_mem Linear.get_mem
+                  _ (ltof _ measure)
+                  ( fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
+Proof.
+  eapply EqEx_sim'; eapply sim_eqSim'.
+  - simpl; intros ? ? ? [? ?]; subst.
+    destruct H0; auto.
+  - apply transl_program_correct'.
 Qed.
 
 End CLEANUP.
