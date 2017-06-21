@@ -1155,6 +1155,14 @@ Proof.
   - apply transf_program_correct'.
 Qed.
 
+Theorem exposed_transl_program_correct:
+  @forward_extension
+    (Cminor.semantics prog) (CminorSel.semantics tprog)
+                      (Cminor.get_mem) (CminorSel.get_mem).
+Proof.
+  econstructor. eapply transf_program_correct''.
+Qed.
+
 End PRESERVATION.
 
 (** ** Commutation with linking *)

@@ -759,4 +759,13 @@ Proof.
     destruct H0; auto.
   - apply transl_program_correct'.
 Qed.
+
+Theorem exposed_transl_program_correct:
+  @forward_extension 
+    (LTL.semantics prog) (Linear.semantics tprog)
+    LTL.get_mem Linear.get_mem.
+Proof.
+  econstructor. eapply transl_program_correct''.
+Qed.
+
 End LINEARIZATION.

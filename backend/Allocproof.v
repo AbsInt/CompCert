@@ -2337,5 +2337,11 @@ Proof.
   - apply transl_program_correct'.
 Qed.
 
+Theorem exposed_transl_program_correct:
+  @forward_extension (RTL.semantics prog) (LTL.semantics tprog)
+                        RTL.get_mem LTL.get_mem.
+Proof.
+  econstructor. eapply transl_program_correct''.
+Qed.
 
 End PRESERVATION.

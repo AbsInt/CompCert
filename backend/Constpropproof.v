@@ -599,7 +599,7 @@ Qed.
 Theorem transf_program_correct:
   forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
-  apply Forward_simulation with lt (fun n s1 s2 => match_states n s1 s2); constructor.
+  apply Forward_simulation with lt (fun n s1 s2 => sound_state prog s1 /\ match_states n s1 s2); constructor.
 - apply lt_wf.
 - simpl; intros. exploit transf_initial_states; eauto. intros (n & st2 & A & B).
   exists n, st2; intuition. eapply sound_initial; eauto.
@@ -646,6 +646,13 @@ Proof.
   - simpl; intros ? ? ? [? ?]; subst.
     inversion H0; auto.
   - apply transl_program_correct'.
+Qed.
+
+Theorem exposed_transl_program_correct:
+  @forward_extension (RTL.semantics prog) (RTL.semantics tprog)
+                        RTL.get_mem RTL.get_mem.
+Proof.
+  econstructor. eapply transl_program_correct''.
 Qed.
 
 End PRESERVATION.

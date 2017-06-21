@@ -14,7 +14,7 @@
 
 Require Import Coqlib Errors.
 Require Import Integers Floats AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep.
+Require Import Values Memory Events Globalenvs Smallstep ExposedSmallstep2.
 Require Import Op Locations Mach Conventions Asm.
 Require Import Asmgen Asmgenproof0 Asmgenproof1.
 
@@ -892,6 +892,37 @@ Proof.
   eexact transf_initial_states.
   eexact transf_final_states.
   exact step_simulation.
+Qed.
+
+Theorem transf_program_correct':
+  fsim_properties (Mach.semantics return_address_offset prog) (Asm.semantics tprog)
+                  _ (ltof _ measure)
+                  (fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
+Proof.
+  eapply forward_simulation_star'.
+  apply senv_preserved.
+  eexact transf_initial_states.
+  eexact transf_final_states.
+  exact step_simulation.
+Qed.
+
+Theorem transf_program_correct'':
+  @fsim_properties_ext (Mach.semantics return_address_offset prog) (Asm.semantics tprog)
+                       Mach.get_mem Asm.get_mem
+                  _ (ltof _ measure)
+                  (fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
+Proof.
+  eapply sim_extSim.
+  - intros. destruct H as [? H']; inv H'; auto.
+  - apply transf_program_correct'.
+Qed.
+
+Theorem exposed_transf_program_correct:
+  @forward_extension 
+    (Mach.semantics return_address_offset prog) (Asm.semantics tprog)
+                       Mach.get_mem Asm.get_mem.
+Proof.
+  econstructor. eapply transf_program_correct''.
 Qed.
 
 End PRESERVATION.

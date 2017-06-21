@@ -817,14 +817,15 @@ Lemma match_callstack_alloc_variables_rec:
     (Frame (cenv_remove cenv vars) tf e1 le te sp lo (Mem.nextblock m1) :: cs)
     (Mem.nextblock m1) (Mem.nextblock tm) ->
   Mem.inject f1 m1 tm ->
+  injection_full f1 m1 ->
   exists f2,
     match_callstack f2 m2 tm
       (Frame cenv tf e2 le te sp lo (Mem.nextblock m2) :: cs)
       (Mem.nextblock m2) (Mem.nextblock tm)
-  /\ Mem.inject f2 m2 tm /\ inject_incr f1 f2.
+  /\ Mem.inject f2 m2 tm /\ inject_incr f1 f2 /\ injection_full f2 m2.
 Proof.
   intros until cs; intros VALID REPRES STKSIZE STKPERMS.
-  induction 1; intros f1 NOREPET COMPAT SEP1 SEP2 UNBOUND MCS MINJ.
+  induction 1; intros f1 NOREPET COMPAT SEP1 SEP2 UNBOUND MCS MINJ FULL.
   (* base case *)
   simpl in MCS. exists f1; auto.
   (* inductive case *)
@@ -832,8 +833,9 @@ Proof.
 (* exploit Mem.alloc_result; eauto. intros RES.
   exploit Mem.nextblock_alloc; eauto. intros NB.*)
   exploit (COMPAT id sz). auto with coqlib. intros [ofs [CENV [ALIGNED [LOB HIB]]]].
-  exploit Mem.alloc_left_mapped_inject.
+  exploit alloc_left_mapped_inject'.
     eexact MINJ.
+    eexact FULL.
     eexact H.
     eexact VALID.
     instantiate (1 := ofs). zify. omega.
@@ -841,7 +843,7 @@ Proof.
     intros. apply STKPERMS. zify. omega.
     replace (sz - 0) with sz by omega. auto.
     intros. eapply SEP2. eauto with coqlib. eexact CENV. eauto. eauto. omega.
-  intros [f2 [A [B [C D]]]].
+  intros [f2 [A [B [C [D E]]]]].
   exploit (IHalloc_variables f2); eauto.
     red; intros. eapply COMPAT. auto with coqlib.
     red; intros. eapply SEP1; eauto with coqlib.
@@ -857,7 +859,7 @@ Proof.
     eapply match_callstack_alloc_left; eauto.
     rewrite cenv_remove_gso; auto.
     apply UNBOUND with sz; auto with coqlib.
-    intros [f3 [MATCH [INJECT INCR]]].
+    intros [f3 [MATCH [INJECT [INCR FULL']]]].
     exists f3. repeat (split; auto).
     eapply inject_incr_trans; eauto.
 Qed.
@@ -872,12 +874,14 @@ Lemma match_callstack_alloc_variables:
   cenv_separated cenv vars ->
   (forall id ofs, cenv!id = Some ofs -> In id (map fst vars)) ->
   Mem.inject f1 m1 tm1 ->
+  injection_full f1 m1 ->
   match_callstack f1 m1 tm1 cs (Mem.nextblock m1) (Mem.nextblock tm1) ->
   match_temps f1 le te ->
   exists f2,
     match_callstack f2 m2 tm2 (Frame cenv fn e le te sp (Mem.nextblock m1) (Mem.nextblock m2) :: cs)
                     (Mem.nextblock m2) (Mem.nextblock tm2)
-  /\ Mem.inject f2 m2 tm2 /\ inject_incr f1 f2.
+  /\ Mem.inject f2 m2 tm2 /\ inject_incr f1 f2 /\ 
+  injection_full f2 m2.
 Proof.
   intros.
   eapply match_callstack_alloc_variables_rec; eauto.
@@ -1247,12 +1251,14 @@ Theorem match_callstack_function_entry:
   Mem.alloc tm 0 tf.(fn_stackspace) = (tm', sp) ->
   match_callstack f m tm cs (Mem.nextblock m) (Mem.nextblock tm) ->
   Mem.inject f m tm ->
+  injection_full f m ->
   let te := set_locals (Csharpminor.fn_temps fn) (set_params targs (Csharpminor.fn_params fn)) in
   exists f',
      match_callstack f' m' tm'
                      (Frame cenv tf e le te sp (Mem.nextblock m) (Mem.nextblock m') :: cs)
                      (Mem.nextblock m') (Mem.nextblock tm')
-  /\ Mem.inject f' m' tm' /\ inject_incr f f'.
+  /\ Mem.inject f' m' tm' /\ inject_incr f f' /\ 
+  injection_full f' m'.
 Proof.
   intros.
   exploit build_compilenv_sound; eauto. intros [C1 C2].
@@ -1615,6 +1621,7 @@ Inductive match_states: meminj -> Csharpminor.state -> Cminor.state -> Prop :=
       (TR: transl_fundef fd = OK tfd)
       (MINJ: Mem.inject f m tm)
       (MCS: match_callstack f m tm cs (Mem.nextblock m) (Mem.nextblock tm))
+      (FULL: injection_full f m)
       (MK: match_cont k tk cenv nil cs)
       (ISCC: Csharpminor.is_call_cont k)
       (ARGSINJ: Val.inject_list f args targs),
@@ -2045,7 +2052,7 @@ Proof.
   exploit match_callstack_match_globalenvs; eauto. intros [hi' MG].
   exploit external_call_mem_inject; eauto.
   eapply inj_preserves_globals; eauto.
-  intros [f' [vres' [tm' [t' [EC [VINJ [MINJ' [UNMAPPED [OUTOFREACH [INCR [SEPARATED INJT]]]]]]]]]]].
+  intros [f' [vres' [tm' [t' [EC [VINJ [MINJ' [UNMAPPED [OUTOFREACH [INCR [SEPARATED [INJT FULL']]]]]]]]]]]].
   left; econstructor; exists f', t'; split.
   apply plus_one. econstructor. eauto.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.
@@ -2060,6 +2067,7 @@ Proof.
   eapply external_call_nextblock; eauto.
   eapply external_call_nextblock; eauto. 
   econstructor; eauto.
+  auto.
   Opaque PTree.set.
   unfold set_optvar. destruct optid; simpl.
   eapply match_callstack_set_temp; eauto.
@@ -2157,7 +2165,9 @@ Proof.
   exploit match_callstack_freelist; eauto. intros [tm' [A [B C]]].
   do 3 econstructor; split.
   apply plus_one. eapply step_return_0. eauto.
-  split. econstructor; eauto. eapply match_call_cont; eauto.
+  split. econstructor; eauto.
+  eapply free_list_full; eauto.
+  eapply match_call_cont; eauto.
   split; auto; constructor.
   
 (* return some *)
@@ -2166,7 +2176,9 @@ Proof.
   exploit match_callstack_freelist; eauto. intros [tm' [A [B C]]].
   do 3 econstructor; split.
   apply plus_one. eapply step_return_1. eauto. eauto.
-  split. econstructor; eauto. eapply match_call_cont; eauto.
+  split. econstructor; eauto.
+  eapply free_list_full; eauto.
+  eapply match_call_cont; eauto.
   split; auto; constructor.
   
 (* label *)
@@ -2198,10 +2210,13 @@ Proof.
                         x0) in *.
   caseEq (Mem.alloc tm 0 (fn_stackspace tf)). intros tm' sp ALLOC'.
   exploit match_callstack_function_entry; eauto. simpl; eauto. simpl; auto.
-  intros [f2 [MCS2 [MINJ2 INCR]]].
+  intros [f2 [MCS2 [MINJ2 [INCR FULL2]]]].
   left; do 3 econstructor; split.
   apply plus_one. constructor; simpl; eauto.
-  split. econstructor. eexact TRBODY. eauto. eexact MINJ2. eexact MCS2.
+  split. econstructor. eexact TRBODY. eauto.
+  eexact MINJ2.
+  eexact FULL2.
+  eexact MCS2.
   inv MK; simpl in ISCC; contradiction || econstructor; eauto.
   split; auto. constructor.
   
@@ -2210,7 +2225,7 @@ Proof.
   exploit match_callstack_match_globalenvs; eauto. intros [hi MG].
   exploit external_call_mem_inject; eauto.
   eapply inj_preserves_globals; eauto.
-  intros [f' [vres' [tm' [t' [EC [VINJ [MINJ' [UNMAPPED [OUTOFREACH [INCR [SEPARATED INCR']]]]]]]]]]].
+  intros [f' [vres' [tm' [t' [EC [VINJ [MINJ' [UNMAPPED [OUTOFREACH [INCR [SEPARATED [INJTRACE FULL']]]]]]]]]]]].
   left; do 3 econstructor; split.
   apply plus_one. econstructor.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.
@@ -2265,6 +2280,15 @@ Proof.
   auto.
   eapply Genv.initmem_inject; eauto.
   apply mcs_nil with (Mem.nextblock m0). apply match_globalenvs_init; auto. xomega. xomega.
+  Lemma fla_inj_full: forall m0,
+      injection_full (Mem.flat_inj (Mem.nextblock m0)) m0.
+  Proof.
+    intros m b.
+    unfold Mem.valid_block, Mem.flat_inj. 
+    destruct (plt b (Mem.nextblock m)); auto.
+    intros ? HH; inv HH.
+  Qed.
+  apply fla_inj_full.      
   constructor. red; auto.
   constructor.
 Qed.
@@ -2280,42 +2304,36 @@ Theorem transl_program_correct'':
   @fsim_properties_inj
     (Csharpminor.semantics prog) (Cminor.semantics tprog)
     Csharpminor.get_mem Cminor.get_mem
-    unit (ltof _ (fun _ => 0)%nat)
-    (fun _ => match_states).
+    _ (ltof _ measure)
+    (fun idx f s1 s2 => idx = s1 /\ match_states f s1 s2).
 Proof.
   constructor.
   - apply well_founded_ltof.
-  - intros. inv H; auto.
+  - intros. destruct H as [? H']; inv H'; auto.
+  - intros. destruct H as [? H']; inv H'; auto.
   - intros.
-    
-  eapply EqEx_sim'; eapply sim_eqSim'.
-  - simpl; intros ? ? ? [? ?]; subst.
-    destruct H0; auto.
-  - apply transl_program_correct'.
+    exploit transl_initial_states; eauto.
+    intros (R & f & INIT & MATCH).
+    exists s1, f, R. split; eauto.
+  - intros. destruct H.
+    eapply transl_final_states; eauto.
+  - intros. inv H0.
+    exploit transl_step_correct; eauto.
+    intros [[s2' [f' [t' [STEP [MATCH [INCR TRACEINJ]]]]]]| [f' [A [B [MATCH INCR]]]]].
+    + exists s1', s2', f', t'; intuition.
+    + exists s1', s2, f', E0; intuition.
+      right. split. constructor. auto.
+      subst t; constructor.
+  - apply senv_preserved.
 Qed.
 
-Theorem transl_program_correct':
-  @fsim_properties  (semantics prog) (semantics tprog)
-                    _ (ltof _ (fun _ => 0)%nat)
-                    ( fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
+Theorem exposed_transl_program_correct:
+  @forward_injection
+    (Csharpminor.semantics prog) (Cminor.semantics tprog)
+    Csharpminor.get_mem Cminor.get_mem.
 Proof.
-  eapply forward_simulation_plus'.
-  apply senv_preserved.
-  eexact transf_initial_states.
-  eexact transf_final_states.
-  eexact transf_step_correct.
+  econstructor. eapply transl_program_correct''.
 Qed.
-
-
-(*Theorem transl_program_correct:
-  forward_simulation (Csharpminor.semantics prog) (Cminor.semantics tprog).
-Proof.
-  eapply forward_simulation_star; eauto.
-  apply senv_preserved.
-  eexact transl_initial_states.
-  eexact transl_final_states.
-  eexact transl_step_correct.
-Qed.*)
 
 End TRANSLATION.
 

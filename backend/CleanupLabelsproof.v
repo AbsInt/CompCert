@@ -379,5 +379,14 @@ Proof.
   - apply transl_program_correct'.
 Qed.
 
+Theorem exposed_transl_program_correct:
+  @forward_extension 
+    (Linear.semantics prog) (Linear.semantics tprog)
+    Linear.get_mem Linear.get_mem.
+Proof.
+  econstructor. eapply transl_program_correct''.
+Qed.
+
+
 End CLEANUP.
 

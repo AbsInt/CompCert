@@ -1646,6 +1646,14 @@ Proof.
   - apply transl_program_correct'.
 Qed.
 
+Theorem exposed_transl_program_correct:
+  @forward_extension
+    (Clight.semantics2 prog) (Csharpminor.semantics tprog)
+    Clight.get_mem Csharpminor.get_mem.
+Proof.
+  econstructor. eapply transl_program_correct''.
+Qed.
+
 End CORRECTNESS.
 
 (** ** Commutation with linking *)
