@@ -45,3 +45,6 @@ val longopt_int: string -> (int -> unit) -> pattern * action
 (** [longopt_int key fn] generates a pattern and an action for
     options of the form [key=<n>] and calls [fn] with the integer argument
 *)
+
+val argv: string array ref
+(** [argv] contains the complete command line after @-file expandsion *)

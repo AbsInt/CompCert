@@ -29,8 +29,15 @@ let jdump_magic_number = "CompCertJDUMP" ^ Version.version
 
 let dump_jasm asm sourcename destfile =
   let oc = open_out_bin destfile in
-  fprintf oc "{\n\"Version\":\"%s\",\n\"System\":\"%s\"\n,\"Compilation Unit\":\"%s\",\n\"Asm Ast\":%a}"
-    jdump_magic_number Configuration.system sourcename AsmToJSON.p_program asm;
+  let print_args oc =
+    output_string oc Sys.executable_name;
+    for i = 1 to (Array.length  !argv - 1) do
+      fprintf oc " %s" (Responsefile.gnu_quote  !argv.(i))
+    done in
+  let dump_compile_info oc =
+    fprintf oc "{\n\"directory\":\"%s\",\n\"command\":\"%t\",\n\"file\":\"%s\"\n}" (Sys.getcwd ()) print_args sourcename in
+  fprintf oc "{\n\"Version\":\"%s\",\n\"System\":\"%s\"\n,\"Compile Info\" : %t,\n\"Compilation Unit\":\"%s\",\n\"Asm Ast\":%a}"
+    jdump_magic_number Configuration.system dump_compile_info sourcename AsmToJSON.p_program asm;
   close_out oc
 
 
