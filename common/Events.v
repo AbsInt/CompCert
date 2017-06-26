@@ -70,9 +70,9 @@ Inductive event: Type :=
   | Event_vload: memory_chunk -> ident -> int -> eventval -> event
   | Event_vstore: memory_chunk -> ident -> int -> eventval -> event
   | Event_annot: string -> list eventval -> event
-  | Event_acq: val -> delta_map -> event
+  | Event_acq: val -> mem -> event
   | Event_rel: val -> delta_map -> event
-  | Event_fork: val -> access_map -> event.
+  | Event_spawn: val -> delta_map -> delta_map -> event.
 
 (** The dynamic semantics for programs collect traces of events.
   Traces are of two kinds: finite (type [trace]) or infinite (type [traceinf]). *)
@@ -623,17 +623,18 @@ Inductive inject_event: meminj -> event -> event -> Prop :=
   | INJ_vstore : forall f mc id n v, inject_event f (Event_vstore mc id n v) (Event_vstore mc id n v)
   | INJ_annot : forall f st t, inject_event f (Event_annot st t) (Event_annot st t)
   | INJ_acq : forall f v dm v' dm',
-      Val.inject f v v -> 
-      inject_delta_map f dm dm' ->
+      Val.inject f v v ->
+      Mem.inject f dm dm' ->
       inject_event f (Event_acq v dm) (Event_acq v' dm')
   | INJ_rel : forall f v dm v' dm',
       Val.inject f v v -> 
       inject_delta_map f dm dm' ->
       inject_event f (Event_rel v dm) (Event_rel v' dm')
-  | INJ_fork : forall f v am v' am',
+  | INJ_spawn : forall f v dm1 dm2 v' dm1' dm2',
       Val.inject f v v -> 
-      inject_access_map f am am' ->
-      inject_event f (Event_fork v am) (Event_fork v' am').
+      inject_delta_map f dm1 dm1' ->
+      inject_delta_map f dm2 dm2' ->
+      inject_event f (Event_spawn v dm1 dm2) (Event_spawn v' dm1' dm2').
 
 Inductive inject_trace: meminj -> trace -> trace -> Prop :=
 | injt_nil : forall f, inject_trace f nil nil
