@@ -792,7 +792,8 @@ Lemma external_call_inject:
     /\ inject_trace f t t'.
 Proof.
   intros.
-  eapply external_call_mem_inject_gen; eauto.
+  Broken proof.
+  eapply external_call_mem_inject_gen'; eauto.
   apply globals_symbols_inject; auto.
 Qed.
 

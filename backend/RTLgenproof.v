@@ -13,7 +13,7 @@
 (** Correctness proof for RTL generation. *)
 
 Require Import Coqlib Maps AST Linking.
-Require Import Integers Values Memory Events Smallstep ExposedSmallstep2 Globalenvs.
+Require Import Integers Values Memory Events Smallstep ExposedSmallstep Globalenvs.
 Require Import Switch Registers Cminor Op CminorSel RTL.
 Require Import RTLgen RTLgenspec.
 
@@ -1562,7 +1562,7 @@ Proof.
   intros. inv H0. inv H. inv MS. inv LD. constructor.
 Qed.
 
-Theorem transf_program_correct:
+Theorem transf_program_correct'':
   forward_simulation (CminorSel.semantics prog) (RTL.semantics tprog).
 Proof.
   eapply forward_simulation_star_wf with (order := lt_state).
@@ -1573,7 +1573,7 @@ Proof.
   exact transl_step_correct.
 Qed.
 
-Theorem transl_program_correct':
+Theorem transf_program_correct':
   fsim_properties (CminorSel.semantics prog) (RTL.semantics tprog)
                   _ (lt_state)
 (fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
@@ -1586,25 +1586,14 @@ Proof.
   exact transl_step_correct.
 Qed.
 
-Theorem transl_program_correct'':
+Theorem transf_program_correct:
   @fsim_properties_ext
-    (CminorSel.semantics prog) (RTL.semantics tprog)
-    CminorSel.get_mem RTL.get_mem
-                  _ (lt_state)
-(fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
-Proof.
-  eapply sim_extSim.
-  - simpl; intros ? ? ? [? ?]; subst.
-    inversion H0; simpl; auto.
-  - apply transl_program_correct'.
-Qed.
-
-Theorem exposed_transl_program_correct:
-  @forward_extension
     (CminorSel.semantics prog) (RTL.semantics tprog)
     CminorSel.get_mem RTL.get_mem.
 Proof.
-  econstructor. eapply transl_program_correct''.
+  eapply sim_extSim; try apply transf_program_correct'.
+  simpl; intros ? ? ? [? ?]; subst.
+  inversion H0; simpl; auto.
 Qed.
 
 End CORRECTNESS.

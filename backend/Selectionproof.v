@@ -23,7 +23,7 @@ Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
-Require Import ExposedSmallstep2.
+Require Import ExposedSmallstep.
 Require Import Switch.
 Require Import Cminor.
 Require Import Op.
@@ -1121,7 +1121,7 @@ Proof.
   inv MC. inv LD. constructor.
 Qed.
 
-Theorem transf_program_correct:
+Theorem transf_program_correct'':
   forward_simulation (Cminor.semantics prog) (CminorSel.semantics tprog).
 Proof.
   apply forward_simulation_opt with (match_states := match_states) (measure := measure).
@@ -1143,26 +1143,13 @@ Proof.
   apply sel_step_correct; auto.
 Qed.
 
-Theorem transf_program_correct'':
+Theorem transf_program_correct:
   @fsim_properties_ext (Cminor.semantics prog) (CminorSel.semantics tprog)
-                      (Cminor.get_mem) (CminorSel.get_mem)
-                  _ (ltof _ measure)
-(fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
-Proof.
-  eapply sim_extSim.
-  - simpl; intros ? ? ? [? ?]; subst.
-    inversion H0; eauto.
-  - apply transf_program_correct'.
-Qed.
-
-Theorem exposed_transl_program_correct:
-  @forward_extension
-    (Cminor.semantics prog) (CminorSel.semantics tprog)
                       (Cminor.get_mem) (CminorSel.get_mem).
 Proof.
-  econstructor. eapply transf_program_correct''.
+  eapply sim_extSim; try eapply transf_program_correct'.
+  simpl; intros ? ? ? [? ?]; subst; inversion H0; eauto.
 Qed.
-
 End PRESERVATION.
 
 (** ** Commutation with linking *)

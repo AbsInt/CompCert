@@ -366,7 +366,7 @@ Qed.
 Theorem simpl_clight_semantic_preservation:
   forall p tp,
   simpl_match_prog p tp ->
-  forward_injection (Clight.semantics2 p) (Asm.semantics tp) Clight.get_mem Asm.get_mem.
+  fsim_injection (Clight.semantics2 p) (Asm.semantics tp) Clight.get_mem Asm.get_mem.
 Proof.
   intros p tp M. unfold simpl_match_prog, pass_match in M; simpl in M.
 Ltac DestructM' :=

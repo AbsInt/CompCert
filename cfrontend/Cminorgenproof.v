@@ -17,7 +17,7 @@ Require Import FSets FSetAVL Orders Mergesort.
 Require Import Coqlib Maps Ordered Errors Integers Floats.
 Require Intv.
 Require Import AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep ExposedSmallstep2.
+Require Import Values Memory Events Globalenvs Smallstep ExposedSmallstep.
 Require Import Csharpminor Switch Cminor Cminorgen.
 
 Local Open Scope error_monad_scope.
@@ -2300,14 +2300,17 @@ Proof.
   intros. inv H0. inv H. inv MK. inv RESINJ. constructor.
 Qed.
 
-Theorem transl_program_correct'':
+Theorem transl_program_correct:
   @fsim_properties_inj
     (Csharpminor.semantics prog) (Cminor.semantics tprog)
     Csharpminor.get_mem Cminor.get_mem
+    (*
     _ (ltof _ measure)
-    (fun idx f s1 s2 => idx = s1 /\ match_states f s1 s2).
+    (fun idx f s1 s2 => idx = s1 /\ match_states f s1 s2) *).
 Proof.
-  constructor.
+  eapply Build_fsim_properties_inj with
+      (Injorder:=(ltof _ measure))
+      (Injmatch_states:=(fun idx f s1 s2 => idx = s1 /\ match_states f s1 s2)).
   - apply well_founded_ltof.
   - intros. destruct H as [? H']; inv H'; auto.
   - intros. destruct H as [? H']; inv H'; auto.
@@ -2325,14 +2328,6 @@ Proof.
       right. split. constructor. auto.
       subst t; constructor.
   - apply senv_preserved.
-Qed.
-
-Theorem exposed_transl_program_correct:
-  @forward_injection
-    (Csharpminor.semantics prog) (Cminor.semantics tprog)
-    Csharpminor.get_mem Cminor.get_mem.
-Proof.
-  econstructor. eapply transl_program_correct''.
 Qed.
 
 End TRANSLATION.

@@ -13,7 +13,7 @@
 (** Recognition of tail calls: correctness proof *)
 
 Require Import Coqlib Maps Integers AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep ExposedSmallstep2.
+Require Import Values Memory Events Globalenvs Smallstep ExposedSmallstep.
 Require Import Op Registers RTL Conventions Tailcall.
 
 (** * Syntactic properties of the code transformation *)
@@ -593,7 +593,7 @@ Qed.
 (** The preservation of the observable behavior of the program then
   follows. *)
 
-Theorem transf_program_correct:
+Theorem transf_program_correct'':
   forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
   eapply forward_simulation_opt with (measure := measure); eauto.
@@ -604,7 +604,7 @@ Proof.
 Qed.
 
 
-Theorem transl_program_correct':
+Theorem transf_program_correct':
   fsim_properties  (RTL.semantics prog) (RTL.semantics tprog)
                   _ (ltof _ measure)
 (fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
@@ -616,23 +616,12 @@ Proof.
   exact transf_step_correct.
 Qed.
 
-Theorem transl_program_correct'':
+Theorem transf_program_correct:
   @fsim_properties_ext  (RTL.semantics prog) (RTL.semantics tprog)
-                       RTL.get_mem RTL.get_mem
-                  _ (ltof _ measure)
-(fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
-Proof.
-  eapply sim_extSim.
-  - simpl; intros ? ? ? [? ?]; subst.
-    inversion H0; simpl; auto.
-  - apply transl_program_correct'.
-Qed.
-
-Theorem exposed_transl_program_correct:
-  @forward_extension (RTL.semantics prog) (RTL.semantics tprog)
                        RTL.get_mem RTL.get_mem.
 Proof.
-  econstructor. eapply transl_program_correct''.
+  eapply sim_extSim; try eapply transf_program_correct'.
+  simpl; intros ? ? ? [? ?]; subst; inversion H0; simpl; auto.
 Qed.
 
 End PRESERVATION.

@@ -14,7 +14,7 @@
 
 Require Import Coqlib Maps Errors Integers Floats Lattice Kildall.
 Require Import AST Linking.
-Require Import Values Memory Globalenvs Events Smallstep ExposedSmallstep2.
+Require Import Values Memory Globalenvs Events Smallstep ExposedSmallstep.
 Require Import Registers Op RTL.
 Require Import ValueDomain ValueAnalysis NeedDomain NeedOp Deadcode.
 

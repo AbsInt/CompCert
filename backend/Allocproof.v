@@ -16,7 +16,7 @@
 Require Import FSets.
 Require Import Coqlib Ordered Maps Errors Integers Floats.
 Require Import AST Linking Lattice Kildall.
-Require Import Values Memory Globalenvs Events Smallstep ExposedSmallstep2.
+Require Import Values Memory Globalenvs Events Smallstep ExposedSmallstep.
 Require Archi.
 Require Import Op Registers RTL Locations Conventions RTLtyping LTL.
 Require Import Allocation.
@@ -2289,7 +2289,7 @@ Proof.
 - constructor.
 Qed.
 
-Theorem transf_program_correct:
+Theorem transf_program_correct'':
   forward_simulation (RTL.semantics prog) (LTL.semantics tprog).
 Proof.
   set (ms := fun s s' => wt_state s /\ match_states s s').
@@ -2306,7 +2306,7 @@ Proof.
   auto.
 Qed.
 
-Theorem transl_program_correct':
+Theorem transf_program_correct':
   @fsim_properties  (RTL.semantics prog) (LTL.semantics tprog)
                   (Smallstep.state (RTL.semantics prog)) (ltof _ (fun _ => 0)%nat)
                   ( fun idx s1 s2 => idx = s1 /\ ( wt_state s1 /\ match_states s1 s2)).
@@ -2324,24 +2324,14 @@ Proof.
   auto.
 Qed.
 
-Theorem transl_program_correct'':
+Theorem transf_program_correct:
   @fsim_properties_ext
     (RTL.semantics prog) (LTL.semantics tprog)
-    RTL.get_mem LTL.get_mem
-    (Smallstep.state (RTL.semantics prog)) (ltof _ (fun _ => 0)%nat)
-    ( fun idx s1 s2 => idx = s1 /\ ( wt_state s1 /\ match_states s1 s2)).
+    RTL.get_mem LTL.get_mem.
 Proof.
-  eapply sim_extSim.
-  - simpl; intros ? ? ? [? ?]; subst.
-    destruct H0 as [? H0]; inversion H0; auto.
-  - apply transl_program_correct'.
-Qed.
-
-Theorem exposed_transl_program_correct:
-  @forward_extension (RTL.semantics prog) (LTL.semantics tprog)
-                        RTL.get_mem LTL.get_mem.
-Proof.
-  econstructor. eapply transl_program_correct''.
+  eapply sim_extSim; try eapply transf_program_correct'.
+  simpl. intros ? ? ? [? ?]; subst.
+  destruct H0 as [? H0]; inversion H0; auto.
 Qed.
 
 End PRESERVATION.

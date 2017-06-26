@@ -14,7 +14,7 @@
 
 Require Import Coqlib Maps Integers Floats Lattice Kildall.
 Require Import AST Linking.
-Require Import Values Events Memory Globalenvs Smallstep ExposedSmallstep2.
+Require Import Values Events Memory Globalenvs Smallstep ExposedSmallstep.
 Require Compopts Machregs.
 Require Import Op Registers RTL.
 Require Import Liveness ValueDomain ValueAOp ValueAnalysis.
@@ -596,7 +596,7 @@ Qed.
 (** The preservation of the observable behavior of the program then
   follows. *)
 
-Theorem transf_program_correct:
+Theorem transf_program_correct'':
   forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
   apply Forward_simulation with lt (fun n s1 s2 => sound_state prog s1 /\ match_states n s1 s2); constructor.
@@ -614,7 +614,7 @@ Proof.
 - apply senv_preserved.
 Qed.
 
-Theorem transl_program_correct':
+Theorem transf_program_correct':
   fsim_properties  (RTL.semantics prog) (RTL.semantics tprog)
                   _ lt
 (fun n s1 s2 => sound_state prog s1 /\ match_states n s1 s2).
@@ -635,24 +635,13 @@ Proof.
 - apply senv_preserved.
 Qed.
 
-Theorem transl_program_correct'':
+Theorem transf_program_correct:
   @fsim_properties_ext
     (RTL.semantics prog) (RTL.semantics tprog)
-    RTL.get_mem RTL.get_mem
-    _ lt
-    (fun n s1 s2 => sound_state prog s1 /\ match_states n s1 s2).
+    RTL.get_mem RTL.get_mem.
 Proof.
-  eapply sim_extSim.
-  - simpl; intros ? ? ? [? ?]; subst.
-    inversion H0; auto.
-  - apply transl_program_correct'.
-Qed.
-
-Theorem exposed_transl_program_correct:
-  @forward_extension (RTL.semantics prog) (RTL.semantics tprog)
-                        RTL.get_mem RTL.get_mem.
-Proof.
-  econstructor. eapply transl_program_correct''.
+  eapply sim_extSim; try eapply transf_program_correct'.
+  simpl; intros ? ? ? [? ?]; subst; inversion H0; auto.
 Qed.
 
 End PRESERVATION.

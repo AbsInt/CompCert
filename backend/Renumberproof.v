@@ -14,7 +14,7 @@
 
 Require Import Coqlib Maps Postorder.
 Require Import AST Linking.
-Require Import Values Memory Globalenvs Events Smallstep ExposedSmallstep2.
+Require Import Values Memory Globalenvs Events Smallstep ExposedSmallstep.
 Require Import Op Registers RTL Renumber.
 
 Definition match_prog (p tp: RTL.program) :=
@@ -249,7 +249,7 @@ Proof.
   intros. inv H0. inv H. inv STACKS. constructor.
 Qed.
 
-Theorem transf_program_correct:
+Theorem transf_program_correct'':
   forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
   eapply forward_simulation_step.
@@ -259,7 +259,7 @@ Proof.
   exact step_simulation.
 Qed.
 
-Theorem transl_program_correct':
+Theorem transf_program_correct':
   fsim_properties  (RTL.semantics prog) (RTL.semantics tprog)
                   _ (ltof _ ( fun _ => O))
 (fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
@@ -271,23 +271,13 @@ Proof.
   exact step_simulation.
 Qed.
 
-Theorem transl_program_correct'':
+Theorem transf_program_correct:
   @fsim_properties_ext  (RTL.semantics prog) (RTL.semantics tprog)
-                        RTL.get_mem RTL.get_mem
-                        _ (ltof _ ( fun _ => O))
-(fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
-Proof.
-  eapply EqEx_sim'; eapply sim_eqSim'.
-  - simpl; intros ? ? ? [? ?].
-    inversion H0; reflexivity.
-  - apply transl_program_correct'.
-Qed.
-
-Theorem exposed_transl_program_correct:
-  @forward_extension (RTL.semantics prog) (RTL.semantics tprog)
                         RTL.get_mem RTL.get_mem.
 Proof.
-  econstructor. eapply transl_program_correct''.
+  eapply EqEx_sim'; eapply sim_eqSim'; try eapply transf_program_correct'.
+  simpl; intros ? ? ? [? ?].
+  inversion H0; reflexivity.
 Qed.
 
 End PRESERVATION.
