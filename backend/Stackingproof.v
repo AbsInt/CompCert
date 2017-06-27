@@ -1972,10 +1972,8 @@ Proof.
   apply agree_locs_undef_locs. auto. apply destroyed_by_store_caller_save.
   auto. eauto with coqlib.
   eapply frame_undef_regs; eauto.
-  exploit Mem.storev_mapped_inject. apply MINJ. apply H0. apply B. apply AGREGS.
-  intros [n2 [ST INJ2]]. rewrite ST in C; inv C; trivial.
-  red; intros. apply FULL. destruct a; try discriminate; simpl in H0.
-  eapply Mem.store_valid_block_2; eauto. 
+  apply SEP. 
+  destruct a; try discriminate. eapply store_full; eauto. 
 
 - (* Lcall *)
   exploit find_function_translated; eauto.
@@ -2011,7 +2009,7 @@ Proof.
   apply match_stacks_change_sig with (Linear.fn_sig f); auto.
   apply zero_size_arguments_tailcall_possible. eapply wt_state_tailcall; eauto.
   apply SEP.
-  red; intros. apply FULL. eapply Mem.valid_block_free_2; eauto. 
+  eapply free_full; eauto. 
 
 - (* Lbuiltin *)
   destruct BOUND as [BND1 BND2].
@@ -2102,7 +2100,7 @@ Proof.
   econstructor; eauto.
   rewrite sep_swap; exact G.
   apply G.
-  red; intros. apply FULL. eapply Mem.valid_block_free_2; eauto. 
+  eapply free_full; eauto.
  
 - (* internal function *)
   revert TRANSL. unfold transf_fundef, transf_partial_fundef.
@@ -2126,10 +2124,7 @@ Proof.
   eapply match_stacks_change_meminj; eauto.
   rewrite sep_swap in SEP. rewrite sep_swap. eapply stack_contents_change_meminj; eauto.
   apply SEP.
-  red; intros b Hb. destruct (Mem.valid_block_alloc_inv _ _ _ _ _ H _ Hb).
-  ** subst. rewrite J; congruence.
-  ** apply FULL in H0. remember (j1 b) as d; destruct d; [| congruence].
-     symmetry in Heqd; destruct p. apply K in Heqd; congruence.
+  eapply alloc_full; eauto.
 
 - (* external function *)
   simpl in TRANSL. inversion TRANSL; subst tf.

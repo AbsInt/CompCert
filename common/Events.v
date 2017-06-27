@@ -692,6 +692,18 @@ Lemma nextblock_full: forall f m m',
       eapply IHls in H2; eauto.
       eapply free_full; eauto.
   Qed.
+  Lemma alloc_full m lo hi m' b (ALLOC: Mem.alloc m lo hi = (m',b))
+    j1 (FULL : injection_full j1 m) j' sp' z
+    (J : j' b = Some (sp', z)) (K : inject_incr j1 j'):
+     injection_full j' m'.
+  Proof. 
+    red; intros bb Hbb.
+    destruct (Mem.valid_block_alloc_inv _ _ _ _ _ ALLOC _ Hbb).
+    * subst. rewrite J; congruence.
+    * apply FULL in H. remember (j1 bb) as d; destruct d; [| congruence].
+       symmetry in Heqd; destruct p. apply K in Heqd; congruence.
+  Qed.
+
   
 
 Record extcall_properties (sem: extcall_sem) (sg: signature) : Prop :=
