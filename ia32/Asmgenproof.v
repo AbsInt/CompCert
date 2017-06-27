@@ -14,7 +14,7 @@
 
 Require Import Coqlib Errors.
 Require Import Integers Floats AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep ExposedSmallstep2.
+Require Import Values Memory Events Globalenvs Smallstep ExposedSmallstep.
 Require Import Op Locations Mach Conventions Asm.
 Require Import Asmgen Asmgenproof0 Asmgenproof1.
 
@@ -884,7 +884,7 @@ Proof.
   generalize (preg_val _ _ _ AX AG). rewrite H2. intros LD; inv LD. auto.
 Qed.
 
-Theorem transf_program_correct:
+Theorem transf_program_correct'':
   forward_simulation (Mach.semantics return_address_offset prog) (Asm.semantics tprog).
 Proof.
   eapply forward_simulation_star with (measure := measure).
@@ -906,23 +906,15 @@ Proof.
   exact step_simulation.
 Qed.
 
-Theorem transf_program_correct'':
+Theorem transf_program_correct:
   @fsim_properties_ext (Mach.semantics return_address_offset prog) (Asm.semantics tprog)
                        Mach.get_mem Asm.get_mem
+                       (*
                   _ (ltof _ measure)
-                  (fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
+                  (fun idx s1 s2 => idx = s1 /\ match_states s1 s2) *).
 Proof.
-  eapply sim_extSim.
-  - intros. destruct H as [? H']; inv H'; auto.
-  - apply transf_program_correct'.
-Qed.
-
-Theorem exposed_transf_program_correct:
-  @forward_extension 
-    (Mach.semantics return_address_offset prog) (Asm.semantics tprog)
-                       Mach.get_mem Asm.get_mem.
-Proof.
-  econstructor. eapply transf_program_correct''.
+  eapply sim_extSim; try apply transf_program_correct'.
+  intros. destruct H as [? H']; inv H'; auto.
 Qed.
 
 End PRESERVATION.

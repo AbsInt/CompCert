@@ -68,8 +68,7 @@ Require Tunnelingproof.
 Require Linearizeproof.
 Require CleanupLabelsproof.
 Require Debugvarproof.
-Require Stackingproof_temp.
-(*Require Stackingproof.*)
+Require Stackingproof.
 Require Asmgenproof.
 (** Command-line flags. *)
 Require Import Compopts.
@@ -238,7 +237,7 @@ Definition Simpl_CompCert's_passes :=
   ::: mkpass Linearizeproof.match_prog
   ::: mkpass CleanupLabelsproof.match_prog
   ::: mkpass (match_if Compopts.debug Debugvarproof.match_prog)
-  ::: mkpass Stackingproof_temp.match_prog
+  ::: mkpass Stackingproof.match_prog
   ::: mkpass Asmgenproof.match_prog
   ::: pass_nil _.
 
@@ -293,7 +292,7 @@ Proof.
   exists p14; split. apply Linearizeproof.transf_program_match; auto.
   exists p15; split. apply CleanupLabelsproof.transf_program_match; auto.
   exists p16; split. eapply partial_if_match; eauto. apply Debugvarproof.transf_program_match.
-  exists p17; split. apply Stackingproof_temp.transf_program_match; auto.
+  exists p17; split. apply Stackingproof.transf_program_match; auto.
   exists tp; split. apply Asmgenproof.transf_program_match; auto. 
   reflexivity.
 Qed.
@@ -439,34 +438,14 @@ Proof.
     eapply partial_if_match; eauto. apply Debugvarproof.transf_program_match.  
     exact Debugvarproof.transf_program_correct.
     eapply injection_extension_composition.
-    Axiom Stackingproof_exposed_transl_program_correct:
-      forall prog return_address_offset tprog,
-      forall (return_address_offset_exists:
-           forall f sg ros c,
-             is_tail (Mach.Mcall sg ros :: c) (Mach.fn_code f) ->
-             exists ofs, return_address_offset f c ofs),
-        Stackingproof_temp.match_prog prog tprog->
-        fsim_properties_inj (Linear.semantics prog)
-                          (Mach.semantics return_address_offset tprog)
-                          Linear.get_mem Mach.get_mem.
-    eapply Stackingproof_exposed_transl_program_correct with (return_address_offset:= Asmgenproof0.return_address_offset).
+    eapply Stackingproof.transl_program_correct.
     exact Asmgenproof.return_address_exists.
-    apply Stackingproof_temp.transf_program_match; eauto.
-    eapply Asmgenproof.transf_program_correct; eassumption.
+    apply Stackingproof.transf_program_match; eauto.
+    eapply Asmgenproof.transf_program_correct.
+    apply Asmgenproof.transf_program_match; auto.
+Qed.
 
-    eapply Asmgenproof.exposed_transf_program_correct; eassumption.
-  eapply Renumberproof.transf_program_correct;
-    apply Renumberproof.transf_program_match; eassumption.
-  
-
-  eapply injection_extension_composition.
-    
-    eapply Stackingproof_exposed_transl_program_correct with (return_address_offset:= Asmgenproof0.return_address_offset).
-    exact Asmgenproof.return_address_exists.
-    eassumption.
-    eapply Asmgenproof.exposed_transf_program_correct; eassumption.
-  
-  
+(*
 Theorem simpl_clight_semantic_preservation:
   forall p tp,
   simpl_match_prog p tp ->
@@ -530,6 +509,7 @@ Ltac DestructM' :=
     eapply Asmgenproof.exposed_transf_program_correct; eassumption.
   
 Qed.
+ *)
 
 
 (** * Correctness of the CompCert compiler *)
@@ -544,6 +524,7 @@ Qed.
   exists a backward simulation of the dynamic semantics of [p]
   by the dynamic semantics of [tp]. *)
 
+(*
 Theorem transf_clight_program_correct:
   forall p tp,
   simpl_transf_clight_program p = OK tp  ->
@@ -552,3 +533,4 @@ Proof.
   intros. apply simpl_clight_semantic_preservation.
   apply transf_clight_program_match; auto.
 Qed.
+*)
