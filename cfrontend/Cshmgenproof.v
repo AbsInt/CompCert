@@ -18,7 +18,7 @@ Require Import Values Events Memory Globalenvs Smallstep ExposedSmallstep.
 Require Import Ctypes Cop Clight Cminor Csharpminor.
 Require Import Cshmgen.
 
-(** * Relational specification of the transformation *)
+(** * Relational specification of the transformation *) 
 
 Inductive match_fundef (p: Clight.program) : Clight.fundef -> Csharpminor.fundef -> Prop :=
   | match_fundef_internal: forall f tf,
@@ -1633,7 +1633,7 @@ Proof.
   eexact transl_step.
 Qed.
 
-Theorem transl_program_correct:
+Theorem transf_program_correct:
   @fsim_properties_ext
     (Clight.semantics2 prog) (Csharpminor.semantics tprog)
     Clight.get_mem Csharpminor.get_mem.

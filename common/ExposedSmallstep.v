@@ -383,7 +383,7 @@ Section Composition.
   Variable get_mem2: state L2 -> mem.
   Variable get_mem3: state L3 -> mem.
 
-  Lemma injection_extension_composition':
+  Lemma injection_extension_composition:
     @fsim_properties_inj L1 L2 get_mem1 get_mem2 ->
     @fsim_properties_ext L2 L3 get_mem2 get_mem3 ->
     @fsim_properties_inj L1 L3 get_mem1 get_mem3.
@@ -447,7 +447,7 @@ Section Composition.
     eapply injection_extension_composition'; eauto.
   Qed. *)
   
-    Lemma extension_injection_composition':
+    Lemma extension_injection_composition:
     @fsim_properties_ext L1 L2 get_mem1 get_mem2 ->
     @fsim_properties_inj L2 L3 get_mem2 get_mem3 ->
     @fsim_properties_inj L1 L3 get_mem1 get_mem3.
@@ -541,7 +541,7 @@ Section Composition.
   Admitted.
 
   
-  Lemma injection_injection_composition':
+  Lemma injection_injection_composition:
     @fsim_properties_inj L1 L2 get_mem1 get_mem2->
     @fsim_properties_inj L2 L3 get_mem2 get_mem3 ->
     @fsim_properties_inj L1 L3 get_mem1 get_mem3.

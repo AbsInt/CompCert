@@ -15,7 +15,7 @@
 (** Libraries. *)
 Require Import String.
 Require Import Coqlib Errors.
-Require Import AST Linking Smallstep ExposedSmallstep2.
+Require Import AST Linking Smallstep ExposedSmallstep.
 (** Languages (syntax and semantics). *)
 Require Ctypes Csyntax Csem Cstrategy Cexec.
 Require Clight.
@@ -297,6 +297,7 @@ Proof.
   exists tp; split. apply Asmgenproof.transf_program_match; auto. 
   reflexivity.
 Qed.
+          
 
 (** * Semantic preservation *)
 
@@ -323,13 +324,13 @@ Proof.
 Qed.
 
 Remark forward_injection_identity:
-  forall sem get_mem, forward_injection sem sem get_mem get_mem.
+  forall sem get_mem, fsim_properties_inj sem sem get_mem get_mem.
 Proof.
   intros. econstructor.
 Admitted.
 
 Remark forward_extension_identity:
-  forall sem get_mem, forward_extension sem sem get_mem get_mem.
+  forall sem get_mem, fsim_properties_ext sem sem get_mem get_mem.
 Proof.
   intros. econstructor.
 Admitted.
@@ -346,8 +347,8 @@ Qed.
 Lemma exposed_match_if_injection:
   forall (A: Type) (sem: A -> semantics)(get_mem: forall p, state (sem p) -> Memory.Mem.mem ) (flag: unit -> bool) (transf: A -> A -> Prop) (prog tprog: A),
   match_if flag transf prog tprog ->
-  (forall p tp, transf p tp -> forward_injection (sem p) (sem tp) (get_mem p) (get_mem tp)) ->
-  forward_injection (sem prog) (sem tprog) (get_mem prog) (get_mem tprog).
+  (forall p tp, transf p tp -> fsim_properties_inj (sem p) (sem tp) (get_mem p) (get_mem tp)) ->
+  fsim_properties_inj (sem prog) (sem tprog) (get_mem prog) (get_mem tprog).
 Proof.
   intros. unfold match_if in *. destruct (flag tt). eauto. subst.
   apply forward_injection_identity.
@@ -356,8 +357,8 @@ Qed.
 Lemma exposed_match_if_extension:
   forall (A: Type) (sem: A -> semantics)(get_mem: forall p, state (sem p) -> Memory.Mem.mem ) (flag: unit -> bool) (transf: A -> A -> Prop) (prog tprog: A),
   match_if flag transf prog tprog ->
-  (forall p tp, transf p tp -> forward_extension (sem p) (sem tp) (get_mem p) (get_mem tp)) ->
-  forward_extension (sem prog) (sem tprog) (get_mem prog) (get_mem tprog).
+  (forall p tp, transf p tp -> fsim_properties_ext (sem p) (sem tp) (get_mem p) (get_mem tp)) ->
+  fsim_properties_ext (sem prog) (sem tprog) (get_mem prog) (get_mem tprog).
 Proof.
   intros. unfold match_if in *. destruct (flag tt). eauto. subst.
   apply forward_extension_identity.
@@ -365,14 +366,117 @@ Qed.
 
 Theorem simpl_clight_semantic_preservation:
   forall p tp,
+  simpl_transf_clight_program p = OK tp ->
+  fsim_properties_inj (Clight.semantics2 p) (Asm.semantics tp) Clight.get_mem Asm.get_mem.
+Proof.
+  intros p tp T.
+  unfold simpl_transf_clight_program, time in T.
+  rewrite ! compose_print_identity in T. simpl in T.
+  destruct (Cshmgen.transl_program p) as [p3|e] eqn:P3; simpl in T; try discriminate.
+  destruct (Cminorgen.transl_program p3) as [p4|e] eqn:P4; simpl in T; try discriminate.
+  unfold simpl_transf_cminor_program, time in T. rewrite ! compose_print_identity in T. simpl in T.
+  destruct (Selection.sel_program p4) as [p5|e] eqn:P5; simpl in T; try discriminate.
+  destruct (RTLgen.transl_program p5) as [p6|e] eqn:P6; simpl in T; try discriminate.
+  unfold simpl_transf_rtl_program, time in T. rewrite ! compose_print_identity in T. simpl in T.
+  set (p7 := total_if optim_tailcalls Tailcall.transf_program p6) in *.
+  set (p8 := Renumber.transf_program p7) in *.
+  set (p9 := total_if optim_constprop Constprop.transf_program p8) in *.
+  set (p10 := total_if optim_constprop Renumber.transf_program p9) in *.
+  destruct (partial_if optim_CSE CSE.transf_program p10) as [p11|e] eqn:P11; simpl in T; try discriminate.
+  destruct (Allocation.transf_program p11) as [p12|e] eqn:P12; simpl in T; try discriminate.
+  set (p13 := Tunneling.tunnel_program p12) in *.
+  destruct (Linearize.transf_program p13) as [p14|e] eqn:P14; simpl in T; try discriminate.
+  set (p15 := CleanupLabels.transf_program p14) in *.
+  destruct (partial_if debug Debugvar.transf_program p15) as [p16|e] eqn:P16; simpl in T; try discriminate.
+  destruct (Stacking.transf_program p16) as [p17|e] eqn:P17; simpl in T; try discriminate.
+  unfold simpl_match_prog; simpl. 
+
+  eapply extension_injection_composition.
+  eapply Cshmgenproof.transf_program_correct;
+    apply Cshmgenproof.transf_program_match; eassumption.
+  eapply injection_injection_composition.
+  eapply Cminorgenproof.transl_program_correct;
+    apply Cminorgenproof.transf_program_match; eassumption.
+  eapply extension_injection_composition.
+  eapply Selectionproof.transf_program_correct;
+    apply Selectionproof.transf_program_match; eassumption.
+  eapply extension_injection_composition.
+  eapply RTLgenproof.transf_program_correct;
+    apply RTLgenproof.transf_program_match; eassumption.
+  eapply extension_injection_composition with (L2:=RTL.semantics p7).
+    eapply (exposed_match_if_extension _ RTL.semantics ( fun _ => RTL.get_mem)); eauto.
+    apply total_if_match; apply Tailcallproof.transf_program_match.
+    eexact Tailcallproof.transf_program_correct.
+  eapply extension_injection_composition.
+  eapply Renumberproof.transf_program_correct;
+    apply Renumberproof.transf_program_match; eassumption.
+  eapply extension_injection_composition.
+    eapply (exposed_match_if_extension _ RTL.semantics ( fun _ => RTL.get_mem)); eauto.
+    apply total_if_match; apply Constpropproof.transf_program_match.
+    eexact Constpropproof.transf_program_correct.
+  eapply extension_injection_composition.
+    eapply (exposed_match_if_extension _ RTL.semantics ( fun _ => RTL.get_mem)); eauto.
+    apply total_if_match; apply Renumberproof.transf_program_match.
+    eexact Renumberproof.transf_program_correct.
+  eapply extension_injection_composition.
+    eapply (exposed_match_if_extension _ RTL.semantics ( fun _ => RTL.get_mem)); eauto.
+    eapply partial_if_match; eauto. apply CSEproof.transf_program_match.
+    eexact CSEproof.transf_program_correct.
+  eapply extension_injection_composition.
+  eapply Allocproof.transf_program_correct;
+    apply Allocproof.transf_program_match; eassumption.
+  eapply extension_injection_composition.
+  eapply Tunnelingproof.transf_program_correct;
+    apply Tunnelingproof.transf_program_match; eassumption.
+  eapply extension_injection_composition.
+  eapply Linearizeproof.transf_program_correct;
+    apply Linearizeproof.transf_program_match; eassumption.
+  eapply extension_injection_composition.
+  eapply CleanupLabelsproof.transf_program_correct;
+    apply CleanupLabelsproof.transf_program_match; eassumption.
+  eapply extension_injection_composition.
+  eapply (exposed_match_if_extension _ Linear.semantics ( fun _ => Linear.get_mem)); eauto.
+    eapply partial_if_match; eauto. apply Debugvarproof.transf_program_match.  
+    exact Debugvarproof.transf_program_correct.
+    eapply injection_extension_composition.
+    Axiom Stackingproof_exposed_transl_program_correct:
+      forall prog return_address_offset tprog,
+      forall (return_address_offset_exists:
+           forall f sg ros c,
+             is_tail (Mach.Mcall sg ros :: c) (Mach.fn_code f) ->
+             exists ofs, return_address_offset f c ofs),
+        Stackingproof_temp.match_prog prog tprog->
+        fsim_properties_inj (Linear.semantics prog)
+                          (Mach.semantics return_address_offset tprog)
+                          Linear.get_mem Mach.get_mem.
+    eapply Stackingproof_exposed_transl_program_correct with (return_address_offset:= Asmgenproof0.return_address_offset).
+    exact Asmgenproof.return_address_exists.
+    apply Stackingproof_temp.transf_program_match; eauto.
+    eapply Asmgenproof.transf_program_correct; eassumption.
+
+    eapply Asmgenproof.exposed_transf_program_correct; eassumption.
+  eapply Renumberproof.transf_program_correct;
+    apply Renumberproof.transf_program_match; eassumption.
+  
+
+  eapply injection_extension_composition.
+    
+    eapply Stackingproof_exposed_transl_program_correct with (return_address_offset:= Asmgenproof0.return_address_offset).
+    exact Asmgenproof.return_address_exists.
+    eassumption.
+    eapply Asmgenproof.exposed_transf_program_correct; eassumption.
+  
+  
+Theorem simpl_clight_semantic_preservation:
+  forall p tp,
   simpl_match_prog p tp ->
-  fsim_injection (Clight.semantics2 p) (Asm.semantics tp) Clight.get_mem Asm.get_mem.
+  fsim_properties_inj (Clight.semantics2 p) (Asm.semantics tp) Clight.get_mem Asm.get_mem.
 Proof.
   intros p tp M. unfold simpl_match_prog, pass_match in M; simpl in M.
 Ltac DestructM' :=
   match goal with
-    [ H: exists p, _ /\ _ |- _ ] => 
-      let p := fresh "p" in let M := fresh "M" in let MM := fresh "MM" in
+    [ H: exists p, _ /\ _ |- _ ] =>
+    let p := fresh "p" in let M := fresh "M" in let MM := fresh "MM" in
       destruct H as (p & M & MM); clear H
   end.
   repeat DestructM'. subst tp.
