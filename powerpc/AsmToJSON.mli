@@ -10,4 +10,4 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-val p_program: out_channel -> (Asm.coq_function AST.fundef, 'a) AST.program -> unit
+val pp_program: Format.formatter -> (Asm.coq_function AST.fundef, 'a) AST.program -> unit

@@ -14,5 +14,5 @@
 
 (* Dummy function *)
 
-let p_program oc prog =
-  ()
+let pp_program pp prog =
+  Format.fprintf pp "null"

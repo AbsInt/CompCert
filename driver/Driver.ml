@@ -18,6 +18,7 @@ open Driveraux
 open Frontend
 open Assembler
 open Linker
+open Json
 
 (* Optional sdump suffix *)
 let sdump_suffix = ref ".json"
@@ -29,15 +30,29 @@ let jdump_magic_number = "CompCertJDUMP" ^ Version.version
 
 let dump_jasm asm sourcename destfile =
   let oc = open_out_bin destfile in
-  let print_args oc =
-    output_string oc Sys.executable_name;
+  let pp = Format.formatter_of_out_channel oc in
+  let get_args () =
+    let buf = Buffer.create 100 in
+    Buffer.add_string buf Sys.executable_name;
     for i = 1 to (Array.length  !argv - 1) do
-      fprintf oc " %s" (Responsefile.gnu_quote  !argv.(i))
-    done in
-  let dump_compile_info oc =
-    fprintf oc "{\n\"directory\":\"%s\",\n\"command\":\"%t\",\n\"file\":\"%s\"\n}" (Sys.getcwd ()) print_args sourcename in
-  fprintf oc "{\n\"Version\":\"%s\",\n\"System\":\"%s\"\n,\"Compile Info\" : %t,\n\"Compilation Unit\":\"%s\",\n\"Asm Ast\":%a}"
-    jdump_magic_number Configuration.system dump_compile_info sourcename AsmToJSON.p_program asm;
+      Buffer.add_string buf " ";
+      Buffer.add_string buf (Responsefile.gnu_quote  !argv.(i));
+    done;
+    Buffer.contents buf in
+  let dump_compile_info pp () =
+    pp_jobject_start pp;
+    pp_jmember ~first:true pp "directory" pp_jstring (Sys.getcwd ());
+    pp_jmember pp "command" pp_jstring (get_args ());
+    pp_jmember pp "file" pp_jstring sourcename;
+    pp_jobject_end pp in
+  pp_jobject_start pp;
+  pp_jmember ~first:true pp "Version" pp_jstring jdump_magic_number;
+  pp_jmember pp "System" pp_jstring Configuration.system;
+  pp_jmember pp "Compile Info" dump_compile_info ();
+  pp_jmember pp "Compilation Unit" pp_jstring sourcename;
+  pp_jmember pp "Asm Ast" AsmToJSON.pp_program asm;
+  pp_jobject_end pp;
+  Format.pp_print_flush pp ();
   close_out oc
 
 

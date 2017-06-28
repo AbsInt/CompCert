@@ -10,41 +10,51 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-open Printf
+open Format
 
 (* Simple functions for JSON printing *)
 
 (* Print a string as json string *)
-let p_jstring oc s =
+let pp_jstring oc s =
   fprintf oc "\"%s\"" s
 
-(* Print a list as json array *)
-let p_jarray elem oc l =
-  match l with
-  | [] -> fprintf oc "[]"
-  | hd::tail ->
-      output_string oc "["; elem oc hd;
-      List.iter (fprintf oc ",%a" elem) tail;
-      output_string oc "]"
-
 (* Print a bool as json bool *)
-let p_jbool oc = fprintf oc "%B"
+let pp_jbool oc = fprintf oc "%B"
 
 (* Print an int as json int *)
-let p_jint oc = fprintf oc "%d"
+let pp_jint oc = fprintf oc "%d"
 
 (* Print an int32 as json int *)
-let p_jint32 oc = fprintf oc "%ld"
-
-(* Print a member *)
-let p_jmember oc name p_mem mem =
-  fprintf oc "\n%a:%a" p_jstring name p_mem mem
-
-(* Print singleton object *)
-let p_jsingle_object oc name p_mem mem =
-  fprintf oc "{%a:%a}" p_jstring name p_mem mem
+let pp_jint32 oc = fprintf oc "%ld"
 
 (* Print optional value *)
-let p_jopt p_elem oc = function
+let pp_jopt pp_elem oc = function
   | None -> output_string oc "null"
-  | Some i -> p_elem oc i
+  | Some i -> pp_elem oc i
+
+let pp_jobject_start pp =
+  fprintf pp "@[<v 1>{"
+
+let pp_jobject_end pp =
+  fprintf pp "@;<0 -1>}@]"
+
+(* Print a member *)
+let pp_jmember ?(first=false) pp name pp_mem mem =
+  let sep = if first then "" else "," in
+  fprintf pp "%s@ \"%s\": %a" sep name pp_mem mem
+
+(* Print singleton object *)
+let pp_jsingle_object pp name pp_mem mem =
+  pp_jobject_start pp;
+  pp_jmember ~first:true pp name pp_mem mem;
+  pp_jobject_end pp
+
+(* Print a list as json array *)
+let pp_jarray elem pp l =
+  match l with
+  | []  ->  fprintf pp "[]";
+  | hd::tail ->
+    fprintf pp "@[<v 1>[";
+    fprintf pp "%a" elem hd;
+    List.iter (fun l -> fprintf pp ",@ %a" elem l) tail;
+  fprintf pp "@;<0 -1>]@]"
