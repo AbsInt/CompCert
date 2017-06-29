@@ -345,16 +345,29 @@ let pp_instructions pp ic =
 let pp_storage pp static =
     pp_jstring pp (if static then "Static" else "Extern")
 
-let pp_section pp = function
-  | Section_text -> fprintf pp "{\"Section Name\":\"Text\"}"
-  | Section_data init -> fprintf pp "{\"Section Name\":\"Data\",\"Init\":%B}" init
-  | Section_small_data init -> fprintf pp "{\"Section Name\":\"Small Data\",\"Init\":%B}" init
-  | Section_const init -> fprintf pp "{\"Section Name\":\"Const\",\"Init\":%B}" init
-  | Section_small_const init -> fprintf pp "{\"Section Name\":\"Small Const\",\"Init\":%B}" init
-  | Section_string -> fprintf pp "{\"Section Name\":\"String\"}"
-  | Section_literal -> fprintf pp "{\"Section Name\":\"Literal\"}"
-  | Section_jumptable -> fprintf pp "{\"Section Name\":\"Jumptable\"}"
-  | Section_user (s,w,e) -> fprintf pp "{\"Section Name\":\"%s\",\"Writable\":%B,\"Executable\":%B}" s w e
+let pp_section pp sec =
+  let pp_simple name =
+    pp_jsingle_object pp "Section Name" pp_jstring name
+  and pp_complex name init =
+    pp_jobject_start pp;
+    pp_jmember ~first:true pp "Section Name" pp_jstring name;
+    pp_jmember pp "Init" pp_jbool init;
+    pp_jobject_end pp in
+  match sec with
+  | Section_text -> pp_simple "Text"
+  | Section_data init -> pp_complex "Data" init
+  | Section_small_data init -> pp_complex "Small Data" init
+  | Section_const init -> pp_complex "Const" init
+  | Section_small_const init -> pp_complex "Small Const" init
+  | Section_string -> pp_simple "String"
+  | Section_literal -> pp_simple "Literal"
+  | Section_jumptable -> pp_simple "Jumptable"
+  | Section_user (s,w,e) ->
+    pp_jobject_start pp;
+    pp_jmember ~first:true pp "Section Name" pp_jstring s;
+    pp_jmember pp "Writable" pp_jbool w;
+    pp_jmember pp "Writable" pp_jbool e;
+    pp_jobject_end pp
   | Section_debug_info _
   | Section_debug_abbrev
   | Section_debug_line _
