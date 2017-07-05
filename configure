@@ -153,6 +153,7 @@ target=${target#[a-zA-Z0-9]*-}
 
 
 # Per-target configuration
+clinker_needs_no_pie=true
 asm_supports_cfi=""
 casm_options=""
 casmruntime=""
@@ -223,6 +224,7 @@ if test "$arch" = "powerpc"; then
         casm="${toolprefix}das"
         casm_options="-Xalign-value"
         cc="${toolprefix}dcc"
+        clinker_needs_no_pie=false
         clinker="${toolprefix}dcc"
         cprepro="${toolprefix}dcc"
         cprepro_options="-E -D__GNUC__"
@@ -305,6 +307,7 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
         casm_options="-arch i386 -c"
         cc="${toolprefix}gcc -arch i386"
         clinker="${toolprefix}gcc"
+        clinker_needs_no_pie=false
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' -E"
         libmath=""
@@ -356,6 +359,7 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         casm_options="-arch x86_64 -c"
         cc="${toolprefix}gcc -arch x86_64"
         clinker="${toolprefix}gcc"
+        clinker_needs_no_pie=false
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -arch x86_64 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' -E"
         libmath=""
@@ -419,6 +423,31 @@ EOF
   else echo "no";  asm_supports_cfi=false
   fi
   rm -f $f
+fi
+
+
+#
+# Test Availability of Option '-no-pie'
+#
+if ($clinker_needs_no_pie) then
+  echo "Testing linker support for '-no-pie' option... " | tr -d '\n'
+  fx=/tmp/compcert-configure-$$.elf
+  rm -f $fx
+  f=/tmp/compcert-configure-$$.c
+  rm -f $f
+  cat >> $f <<EOF
+int main (void)
+{
+   return 0;
+}
+EOF
+  $cc -no-pie -o $fx $f >/dev/null 2>&1
+  status=$?
+  if [ $status -eq 0 ]
+  then echo "yes"; clinker_options="${clinker_options} -no-pie"
+  else echo "no"; clinker_needs_no_pie=false
+  fi
+  rm -f $f $fx
 fi
 
 
@@ -736,6 +765,7 @@ CompCert configuration:
     Assembler supports CFI........ $asm_supports_cfi
     Assembler for runtime lib..... $casmruntime
     Linker........................ $clinker
+    Linker needs '-no-pie'........ $clinker_needs_no_pie
     Math library.................. $libmath
     Binaries installed in......... $bindirexp
     Runtime library provided...... $has_runtime_lib
