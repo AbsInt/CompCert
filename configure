@@ -21,6 +21,7 @@ has_runtime_lib=true
 has_standard_headers=true
 clightgen=false
 responsefile="gnu"
+ignore_coq_version=false
 
 usage='Usage: ./configure [options] target
 
@@ -69,6 +70,7 @@ Options:
   -no-runtime-lib      Do not compile nor install the runtime support library
   -no-standard-headers Do not install nor use the standard .h headers
   -clightgen           Also compile the clightgen tool
+  -ignore-coq-version  Accept touse experimental or unsupported versions of Coq
 '
 
 
@@ -93,6 +95,8 @@ while : ; do
         has_standard_headers=false;;
     -clightgen)
         clightgen=true;;
+    -ignore-coq-version|--ignore-coq-version)
+        ignore_coq_version=true;;
     *)
         if test -n "$target"; then echo "$usage" 1>&2; exit 2; fi
         target="$1";;
@@ -434,8 +438,12 @@ case "$coq_ver" in
         echo "version $coq_ver -- good!";;
   ?.*)
         echo "version $coq_ver -- UNSUPPORTED"
-        echo "Error: CompCert requires Coq version 8.6."
-        missingtools=true;;
+        if $ignore_coq_version; then
+            echo "Warning: this version of Coq is unsupported, proceed at your own risks."
+        else
+            echo "Error: CompCert requires Coq version 8.6."
+            missingtools=true
+        fi;;
   *)
         echo "NOT FOUND"
         echo "Error: make sure Coq version 8.6 is installed."
