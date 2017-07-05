@@ -209,6 +209,18 @@ Proof.
   econstructor; split; eauto. simpl. congruence.
 Qed.
 
+Lemma make_shruimm_aux_correct:
+  forall n r1,
+  Int.ltu n Int.iwordsize = true ->
+  let (op, args) := make_shruimm_aux n r1 in
+  exists v, eval_operation ge (Vptr sp Ptrofs.zero) op rs##args m = Some v /\ Val.lessdef (Val.shru rs#r1 (Vint n)) v.
+Proof.
+  intros; unfold make_shruimm_aux.
+  predSpec Int.eq Int.eq_spec n Int.zero; intros. subst.
+  exists (rs#r1); split; auto. destruct (rs#r1); simpl; auto. rewrite Int.shru_zero. auto.
+  rewrite Val.shru_rolm; auto. econstructor; split; eauto. auto.
+Qed.
+
 Lemma make_shruimm_correct:
   forall n r1 r2,
   rs#r2 = Vint n ->
@@ -216,10 +228,8 @@ Lemma make_shruimm_correct:
   exists v, eval_operation ge (Vptr sp Ptrofs.zero) op rs##args m = Some v /\ Val.lessdef (Val.shru rs#r1 (Vint n)) v.
 Proof.
   intros; unfold make_shruimm.
-  predSpec Int.eq Int.eq_spec n Int.zero; intros. subst.
-  exists (rs#r1); split; auto. destruct (rs#r1); simpl; auto. rewrite Int.shru_zero. auto.
   destruct (Int.ltu n Int.iwordsize) eqn:?; intros.
-  rewrite Val.shru_rolm; auto. econstructor; split; eauto. auto.
+  apply make_shruimm_aux_correct; auto.
   econstructor; split; eauto. simpl. congruence.
 Qed.
 
@@ -265,12 +275,13 @@ Lemma make_divuimm_correct:
 Proof.
   intros; unfold make_divuimm.
   destruct (Int.is_power2 n) eqn:?.
-  econstructor; split. simpl; eauto.
   exploit Int.is_power2_range; eauto. intros RANGE.
-  rewrite <- Val.shru_rolm; auto. rewrite H0 in H.
-  destruct (rs#r1); simpl in *; inv H.
+  replace v with (Val.shru rs#r1 (Vint i)). 
+  apply make_shruimm_aux_correct; auto.
+  rewrite H0 in H.
+  destruct (rs#r1); simpl in *; inv H. rewrite RANGE.
   destruct (Int.eq n Int.zero); inv H2.
-  rewrite RANGE. rewrite (Int.divu_pow2 i0 _ _ Heqo). auto.
+  f_equal; symmetry; apply Int.divu_pow2; auto.
   exists v; auto.
 Qed.
 

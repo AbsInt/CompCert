@@ -10,8 +10,10 @@ Bug fixing:
 - Issue #179: clightgen produces wrong output for "switch" statements.
 - Do not generate code for functions with "inline" specifier that are
   neither static nor extern, as per ISO C99.
-- Some line number information was missing for some goto labels and switch cases.
-
+- Some line number information was missing for some goto labels and
+  switch cases.
+- Issue #P16: illegal PowerPC asm generated for unsigned division after
+  constant propagation.
 
 Release 3.0.1, 2017-02-14
 =========================

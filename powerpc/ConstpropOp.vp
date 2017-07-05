@@ -92,11 +92,15 @@ Definition make_shrimm (n: int) (r1 r2: reg) :=
   else
     (Oshr, r1 :: r2 :: nil).
 
-Definition make_shruimm (n: int) (r1 r2: reg) :=
+Definition make_shruimm_aux (n: int) (r1: reg) :=
   if Int.eq n Int.zero then
     (Omove, r1 :: nil)
-  else if Int.ltu n Int.iwordsize then
-    (Orolm (Int.sub Int.iwordsize n) (Int.shru Int.mone n), r1 :: nil)
+  else
+    (Orolm (Int.sub Int.iwordsize n) (Int.shru Int.mone n), r1 :: nil).
+
+Definition make_shruimm (n: int) (r1 r2: reg) :=
+  if Int.ltu n Int.iwordsize then
+    make_shruimm_aux n r1
   else
     (Oshru, r1 :: r2 :: nil).
 
@@ -121,7 +125,7 @@ Definition make_divimm (n: int) (r1 r2: reg) :=
 
 Definition make_divuimm (n: int) (r1 r2: reg) :=
   match Int.is_power2 n with
-  | Some l => (Orolm (Int.sub Int.iwordsize l) (Int.shru Int.mone l), r1 :: nil)
+  | Some l => make_shruimm_aux l r1
   | None   => (Odivu, r1 :: r2 :: nil)
   end.
 
