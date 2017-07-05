@@ -70,7 +70,7 @@ Options:
   -no-runtime-lib      Do not compile nor install the runtime support library
   -no-standard-headers Do not install nor use the standard .h headers
   -clightgen           Also compile the clightgen tool
-  -ignore-coq-version  Accept touse experimental or unsupported versions of Coq
+  -ignore-coq-version  Accept to use experimental or unsupported versions of Coq
 '
 
 
