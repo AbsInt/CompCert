@@ -465,7 +465,7 @@ coq_ver=$(${COQBIN}coqc -v 2>/dev/null | sed -n -e 's/The Coq Proof Assistant, v
 case "$coq_ver" in
   8.6)
         echo "version $coq_ver -- good!";;
-  ?.*)
+  ?*)
         echo "version $coq_ver -- UNSUPPORTED"
         if $ignore_coq_version; then
             echo "Warning: this version of Coq is unsupported, proceed at your own risks."
@@ -473,7 +473,7 @@ case "$coq_ver" in
             echo "Error: CompCert requires Coq version 8.6."
             missingtools=true
         fi;;
-  *)
+  "")
         echo "NOT FOUND"
         echo "Error: make sure Coq version 8.6 is installed."
         missingtools=true;;
