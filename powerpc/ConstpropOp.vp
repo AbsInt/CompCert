@@ -50,6 +50,14 @@ Nondetfunction cond_strength_reduction
       (Ccompuimm (swap_comparison c) n1, r2 :: nil)
   | Ccompu c, r1 :: r2 :: nil, v1 :: I n2 :: nil =>
       (Ccompuimm c n2, r1 :: nil)
+  | Ccompl c, r1 :: r2 :: nil, L n1 :: v2 :: nil =>
+      (Ccomplimm (swap_comparison c) n1, r2 :: nil)
+  | Ccompl c, r1 :: r2 :: nil, v1 :: L n2 :: nil =>
+      (Ccomplimm c n2, r1 :: nil)
+  | Ccomplu c, r1 :: r2 :: nil, L n1 :: v2 :: nil =>
+      (Ccompluimm (swap_comparison c) n1, r2 :: nil)
+  | Ccomplu c, r1 :: r2 :: nil, v1 :: L n2 :: nil =>
+      (Ccompluimm c n2, r1 :: nil)
   | _, _, _ =>
       (cond, args)
   end.
@@ -147,6 +155,77 @@ Definition make_xorimm (n: int) (r: reg) :=
   else if Int.eq n Int.mone then (Onot, r :: nil)
   else (Oxorimm n, r :: nil).
 
+Definition make_shllimm (n: int) (r1 r2: reg) :=
+  if Int.eq n Int.zero then (Omove, r1 :: nil)
+  else if Int.ltu n Int64.iwordsize' then
+    let n' := Int64.repr (Int.unsigned n) in
+    (Orolml n (Int64.shl Int64.mone n'), r1::nil)
+  else (Oshll, r1 :: r2 :: nil).
+
+Definition make_shrlimm (n: int) (r1 r2: reg) :=
+  if Int.eq n Int.zero then (Omove, r1 :: nil)
+  else (Oshrl, r1 :: r2 :: nil).
+
+Definition make_shrluimm_aux (n: int) (r1: reg) :=
+  if Int.eq n Int.zero then
+    (Omove, r1 :: nil)
+  else
+    let n' := Int64.repr (Int.unsigned n) in
+    (Orolml (Int.sub Int64.iwordsize' n) (Int64.shru Int64.mone n'), r1 :: nil).
+
+Definition make_shrluimm (n: int) (r1 r2: reg) :=
+  if Int.ltu n Int64.iwordsize' then
+    make_shrluimm_aux n r1
+  else
+    (Oshrlu, r1 :: r2 :: nil).
+
+Definition make_addlimm (n: int64) (r: reg) :=
+  if Int64.eq n Int64.zero
+  then (Omove, r :: nil)
+  else (Oaddlimm n, r :: nil).
+
+Definition make_mullimm (n: int64) (r1 r2: reg) :=
+  if Int64.eq n Int64.zero then
+    (Olongconst Int64.zero, nil)
+  else if Int64.eq n Int64.one then
+    (Omove, r1 :: nil)
+  else
+    match Int64.is_power2' n with
+    | Some l =>
+       let l' := Int64.repr (Int.unsigned l) in
+       (Orolml l (Int64.shl Int64.mone l'), r1 :: nil)
+    | None => (Omull, r1 :: r2 :: nil)
+    end.
+
+Definition make_andlimm (n: int64) (r: reg) (a: aval) :=
+  if Int64.eq n Int64.zero then (Olongconst Int64.zero, nil)
+  else if Int64.eq n Int64.mone then (Omove, r :: nil)
+  else (Oandlimm n, r :: nil).
+
+Definition make_orlimm (n: int64) (r: reg) :=
+  if Int64.eq n Int64.zero then (Omove, r :: nil)
+  else if Int64.eq n Int64.mone then (Olongconst Int64.mone, nil)
+  else (Oorlimm n, r :: nil).
+
+Definition make_xorlimm (n: int64) (r: reg) :=
+  if Int64.eq n Int64.zero then (Omove, r :: nil)
+  else if Int64.eq n Int64.mone then (Onotl, r :: nil)
+  else (Oxorlimm n, r :: nil).
+
+Definition make_divlimm n (r1 r2: reg) :=
+  match Int64.is_power2' n with
+  | Some l => if Int.ltu l (Int.repr 63)
+              then (Oshrxlimm l, r1 :: nil)
+              else (Odivl, r1 :: r2 :: nil)
+  | None   => (Odivl, r1 :: r2 :: nil)
+  end.
+
+Definition make_divluimm n (r1 r2: reg) :=
+  match Int64.is_power2' n with
+  | Some l => make_shrluimm_aux l r1
+  | None   => (Odivlu, r1 :: r2 :: nil)
+  end.
+
 Definition make_mulfimm (n: float) (r r1 r2: reg) :=
   if Float.eq_dec n (Float.of_int (Int.repr 2))
   then (Oaddf, r :: r :: nil)
@@ -187,6 +266,23 @@ Nondetfunction op_strength_reduction
   | Oshl, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shlimm n2 r1 r2
   | Oshr, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shrimm n2 r1 r2
   | Oshru, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shruimm n2 r1 r2
+  | Oaddl, r1 :: r2 :: nil, L n1 :: v2 :: nil => make_addlimm n1 r2
+  | Oaddl, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_addlimm n2 r1
+  | Osubl, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_addlimm (Int64.neg n2) r1
+  | Omull, r1 :: r2 :: nil, L n1 :: v2 :: nil => make_mullimm n1 r2 r1
+  | Omull, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_mullimm n2 r1 r2
+  | Odivl, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_divlimm n2 r1 r2
+  | Odivlu, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_divluimm n2 r1 r2
+  | Oandl, r1 :: r2 :: nil, L n1 :: v2 :: nil => make_andlimm n1 r2 v2
+  | Oandl, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_andlimm n2 r1 v1
+  | Oandlimm n, r1 :: nil, v1 :: nil => make_andlimm n r1 v1
+  | Oorl, r1 :: r2 :: nil, L n1 :: v2 :: nil => make_orlimm n1 r2
+  | Oorl, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_orlimm n2 r1
+  | Oxorl, r1 :: r2 :: nil, L n1 :: v2 :: nil => make_xorlimm n1 r2
+  | Oxorl, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_xorlimm n2 r1
+  | Oshll, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shllimm n2 r1 r2
+  | Oshrl, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shrlimm n2 r1 r2
+  | Oshrlu, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shrluimm n2 r1 r2
   | Ocmp c, args, vl => make_cmp c args vl
   | Omulf, r1 :: r2 :: nil, v1 :: F n2 :: nil => make_mulfimm n2 r1 r1 r2
   | Omulf, r1 :: r2 :: nil, F n1 :: v2 :: nil => make_mulfimm n1 r2 r1 r2

@@ -1259,6 +1259,16 @@ Proof.
   rewrite H. decEq. apply Int.shl_rolm. exact H.
 Qed.
 
+Theorem shll_rolml:
+  forall x n,
+  Int.ltu n Int64.iwordsize' = true ->
+  shll x (Vint n) = rolml x n (Int64.shl Int64.mone (Int64.repr (Int.unsigned n))).
+Proof.
+  intros. destruct x; auto. simpl. rewrite H. rewrite <- Int64.shl_rolm. unfold Int64.shl.
+  rewrite Int64.int_unsigned_repr. constructor. unfold Int64.ltu. rewrite Int64.int_unsigned_repr.
+  apply H.
+Qed.
+
 Theorem shru_rolm:
   forall x n,
   Int.ltu n Int.iwordsize = true ->
@@ -1266,6 +1276,17 @@ Theorem shru_rolm:
 Proof.
   intros; destruct x; simpl; auto.
   rewrite H. decEq. apply Int.shru_rolm. exact H.
+Qed.
+
+Theorem shrlu_rolml:
+  forall x n,
+    Int.ltu n Int64.iwordsize' = true ->
+    shrlu x (Vint n) = rolml x (Int.sub Int64.iwordsize' n) (Int64.shru Int64.mone (Int64.repr (Int.unsigned n))).
+Proof.
+  intros. destruct x; auto. simpl. rewrite H.
+  rewrite Int64.int_sub_ltu by apply H. rewrite Int64.repr_unsigned. rewrite <- Int64.shru_rolm. unfold Int64.shru'.  unfold Int64.shru.
+  rewrite Int64.unsigned_repr. reflexivity. apply Int64.int_unsigned_range.
+  unfold Int64.ltu. rewrite Int64.int_unsigned_repr. auto.
 Qed.
 
 Theorem shrx_carry:

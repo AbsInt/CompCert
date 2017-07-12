@@ -68,6 +68,10 @@ Ltac SimplVM :=
       let E := fresh in
       assert (E: v = Vint n) by (inversion H; auto);
       rewrite E in *; clear H; SimplVM
+  | [ H: vmatch _ ?v (L ?n) |- _ ] =>
+      let E := fresh in
+      assert (E: v = Vlong n) by (inversion H; auto);
+      rewrite E in *; clear H; SimplVM
   | [ H: vmatch _ ?v (F ?n) |- _ ] =>
       let E := fresh in
       assert (E: v = Vfloat n) by (inversion H; auto);
@@ -120,6 +124,10 @@ Proof.
 - apply Val.swap_cmp_bool.
 - auto.
 - apply Val.swap_cmpu_bool.
+- auto.
+- apply Val.swap_cmpl_bool.
+- auto.
+- apply Val.swap_cmplu_bool.
 - auto.
 - auto.
 Qed.
@@ -337,6 +345,149 @@ Proof.
   econstructor; split; eauto. auto.
 Qed.
 
+Lemma make_addlimm_correct:
+  forall n r,
+  let (op, args) := make_addlimm n r in
+  exists v, eval_operation ge (Vptr sp Ptrofs.zero) op rs##args m = Some v /\ Val.lessdef (Val.addl rs#r (Vlong n)) v.
+Proof.
+  intros. unfold make_addlimm.
+  predSpec Int64.eq Int64.eq_spec n Int64.zero; intros.
+  subst. exists (rs#r); split; auto.
+  destruct (rs#r); simpl; auto. rewrite Int64.add_zero.  auto.
+  exists (Val.addl rs#r (Vlong n)); split; auto.
+Qed.
+
+Lemma make_mullimm_correct:
+  forall n r1 r2,
+  rs#r2 = Vlong n ->
+  let (op, args) := make_mullimm n r1 r2 in
+  exists v, eval_operation ge (Vptr sp Ptrofs.zero) op rs##args m = Some v /\ Val.lessdef (Val.mull rs#r1 (Vlong n)) v.
+Proof.
+  intros; unfold make_mullimm.
+  predSpec Int64.eq Int64.eq_spec n Int64.zero; intros. subst.
+  exists (Vlong Int64.zero); split; auto. destruct (rs#r1); simpl; auto. rewrite Int64.mul_zero; auto.
+  predSpec Int64.eq Int64.eq_spec n Int64.one; intros. subst.
+  exists (rs#r1); split; auto. destruct (rs#r1); simpl; auto. rewrite Int64.mul_one; auto.
+  destruct (Int64.is_power2' n) eqn:?; intros.
+  assert (Int.ltu i Int64.iwordsize' = true) by (erewrite  Int64.is_power2'_range; eauto).
+  exists (Val.shll rs#r1 (Vint i)); split; auto.
+  rewrite Val.shll_rolml by apply H2. auto.
+  destruct (rs#r1); auto. simpl. rewrite H2.
+  erewrite Int64.mul_pow2'; auto.
+  econstructor ; split; auto. simpl. congruence.
+Qed.
+
+Lemma make_shllimm_correct:
+  forall n r1 r2,
+  rs#r2 = Vint n ->
+  let (op, args) := make_shllimm n r1 r2 in
+  exists v, eval_operation ge (Vptr sp Ptrofs.zero) op rs##args m = Some v /\ Val.lessdef (Val.shll rs#r1 (Vint n)) v.
+Proof.
+  intros; unfold make_shllimm.
+  predSpec Int.eq Int.eq_spec n Int.zero; intros. subst.
+  exists (rs#r1); split; auto. destruct (rs#r1); simpl; auto.
+  unfold Int64.shl'. rewrite Z.shiftl_0_r, Int64.repr_unsigned. auto.
+  destruct (Int.ltu n Int64.iwordsize') eqn:LT; simpl.
+  rewrite Val.shll_rolml by apply LT. eauto.
+  econstructor; split. simpl. eauto. rewrite H; auto.
+Qed.
+
+Lemma make_shrlimm_correct:
+  forall n r1 r2,
+  rs#r2 = Vint n ->
+  let (op, args) := make_shrlimm n r1 r2 in
+  exists v, eval_operation ge (Vptr sp Ptrofs.zero) op rs##args m = Some v /\ Val.lessdef (Val.shrl rs#r1 (Vint n)) v.
+Proof.
+  intros; unfold make_shrlimm.
+  predSpec Int.eq Int.eq_spec n Int.zero; intros. subst.
+  exists (rs#r1); split; auto. destruct (rs#r1); simpl; auto.
+  unfold Int64.shr'. rewrite Z.shiftr_0_r, Int64.repr_signed. auto.
+  econstructor; split. simpl. eauto. rewrite H; auto.
+Qed.
+
+Lemma make_shrluimm_aux_correct:
+  forall n r1,
+  Int.ltu n Int64.iwordsize' = true ->
+  let (op, args) := make_shrluimm_aux n r1 in
+  exists v, eval_operation ge (Vptr sp Ptrofs.zero) op rs##args m = Some v /\ Val.lessdef (Val.shrlu rs#r1 (Vint n)) v.
+Proof.
+  intros; unfold make_shrluimm_aux.
+  predSpec Int.eq Int.eq_spec n Int.zero; intros. subst.
+  - exists (rs#r1); split; auto. destruct (rs#r1); simpl; auto.
+  unfold Int64.shru'. rewrite Z.shiftr_0_r, Int64.repr_unsigned. auto.
+ - rewrite Val.shrlu_rolml by apply H; auto. econstructor; split; eauto. auto.
+Qed.
+
+Lemma make_shrluimm_correct:
+  forall n r1 r2,
+  rs#r2 = Vint n ->
+  let (op, args) := make_shrluimm n r1 r2 in
+  exists v, eval_operation ge (Vptr sp Ptrofs.zero) op rs##args m = Some v /\ Val.lessdef (Val.shrlu rs#r1 (Vint n)) v.
+Proof.
+  intros; unfold make_shrluimm.
+  destruct (Int.ltu n Int64.iwordsize') eqn:LT; simpl.
+  apply make_shrluimm_aux_correct; auto.
+  rewrite H.  eauto.
+Qed.
+
+Lemma make_andlimm_correct:
+  forall n r x,
+  let (op, args) := make_andlimm n r x in
+  exists v, eval_operation ge (Vptr sp Ptrofs.zero) op rs##args m = Some v /\ Val.lessdef (Val.andl rs#r (Vlong n)) v.
+Proof.
+  intros; unfold make_andlimm.
+  predSpec Int64.eq Int64.eq_spec n Int64.zero; intros.
+  subst n. exists (Vlong Int64.zero); split; auto. destruct (rs#r); simpl; auto. rewrite Int64.and_zero; auto.
+  predSpec Int64.eq Int64.eq_spec n Int64.mone; intros.
+  subst n. exists (rs#r); split; auto. destruct (rs#r); simpl; auto. rewrite Int64.and_mone; auto.
+  econstructor; split; eauto. auto.
+Qed.
+
+Lemma make_orlimm_correct:
+  forall n r,
+  let (op, args) := make_orlimm n r in
+  exists v, eval_operation ge (Vptr sp Ptrofs.zero) op rs##args m = Some v /\ Val.lessdef (Val.orl rs#r (Vlong n)) v.
+Proof.
+  intros; unfold make_orlimm.
+  predSpec Int64.eq Int64.eq_spec n Int64.zero; intros.
+  subst n. exists (rs#r); split; auto. destruct (rs#r); simpl; auto. rewrite Int64.or_zero; auto.
+  predSpec Int64.eq Int64.eq_spec n Int64.mone; intros.
+  subst n. exists (Vlong Int64.mone); split; auto. destruct (rs#r); simpl; auto. rewrite Int64.or_mone; auto.
+  econstructor; split; eauto. auto.
+Qed.
+
+Lemma make_xorlimm_correct:
+  forall n r,
+  let (op, args) := make_xorlimm n r in
+  exists v, eval_operation ge (Vptr sp Ptrofs.zero) op rs##args m = Some v /\ Val.lessdef (Val.xorl rs#r (Vlong n)) v.
+Proof.
+  intros; unfold make_xorlimm.
+  predSpec Int64.eq Int64.eq_spec n Int64.zero; intros.
+  subst n. exists (rs#r); split; auto. destruct (rs#r); simpl; auto. rewrite Int64.xor_zero; auto.
+  predSpec Int64.eq Int64.eq_spec n Int64.mone; intros.
+  subst n. exists (Val.notl rs#r); split; auto.
+  econstructor; split; eauto. auto.
+Qed.
+
+Lemma make_divluimm_correct:
+  forall n r1 r2 v,
+  Val.divlu rs#r1 rs#r2 = Some v ->
+  rs#r2 = Vlong n ->
+  let (op, args) := make_divluimm n r1 r2 in
+  exists w, eval_operation ge (Vptr sp Ptrofs.zero) op rs##args m = Some w /\ Val.lessdef v w.
+Proof.
+  intros; unfold make_divluimm.
+  destruct (Int64.is_power2' n) eqn:?.
+  exploit Int64.is_power2'_range; eauto. intros RANGE.
+  replace v with (Val.shrlu rs#r1 (Vint i)).
+  apply make_shrluimm_aux_correct; auto.
+  rewrite H0 in H.
+  destruct (rs#r1); simpl in *; inv H. rewrite RANGE.
+  destruct (Int64.eq n Int64.zero); inv H2.
+  rewrite (Int64.divu_pow2' i0 n i) by auto. auto.
+  exists v; auto.
+Qed.
+
 Lemma make_mulfimm_correct:
   forall n r1 r2,
   rs#r2 = Vfloat n ->
@@ -348,6 +499,20 @@ Proof.
   simpl. econstructor; split. eauto. rewrite H; subst n.
   destruct (rs#r1); simpl; auto. rewrite Float.mul2_add; auto.
   simpl. econstructor; split; eauto.
+Qed.
+
+Lemma make_divlimm_correct:
+  forall n r1 r2 v,
+  Val.divls rs#r1 rs#r2 = Some v ->
+  rs#r2 = Vlong n ->
+  let (op, args) := make_divlimm n r1 r2 in
+  exists w, eval_operation ge (Vptr sp Ptrofs.zero) op rs##args m = Some w /\ Val.lessdef v w.
+Proof.
+  intros; unfold make_divlimm.
+  destruct (Int64.is_power2' n) eqn:?. destruct (Int.ltu i (Int.repr 63)) eqn:?.
+  rewrite H0 in H. econstructor; split. simpl; eauto. eapply Val.divls_pow2; eauto. auto.
+  exists v; auto.
+  exists v; auto.
 Qed.
 
 Lemma make_mulfimm_correct_2:
@@ -470,6 +635,47 @@ Proof.
   InvApproxRegs; SimplVM; inv H0. apply make_shrimm_correct; auto.
 (* shru *)
   InvApproxRegs; SimplVM; inv H0. apply make_shruimm_correct; auto.
+(* addl *)
+  InvApproxRegs; SimplVM; inv H0.
+  change (let (op', args') := make_addlimm n1 r2 in
+          exists w : val,
+          eval_operation ge (Vptr sp Ptrofs.zero) op' rs ## args' m = Some w /\
+          Val.lessdef (Val.addl (Vlong n1) rs#r2) w).
+  rewrite Val.addl_commut. apply make_addlimm_correct.
+  InvApproxRegs; SimplVM; inv H0. apply make_addlimm_correct.
+(* subl *)
+  InvApproxRegs; SimplVM; inv H0.
+  replace (Val.subl rs#r1 (Vlong n2)) with (Val.addl rs#r1 (Vlong (Int64.neg n2))).
+  apply make_addlimm_correct; auto.
+  unfold Val.addl, Val.subl. destruct Archi.ptr64 eqn:SF, rs#r1; auto.
+  rewrite Int64.sub_add_opp; auto.
+  rewrite Ptrofs.sub_add_opp. do 2 f_equal. auto with ptrofs.
+  rewrite Int64.sub_add_opp; auto.
+(* mull *)
+  InvApproxRegs; SimplVM; inv H0. fold (Val.mull (Vlong n1) rs#r2). rewrite Val.mull_commut. apply make_mullimm_correct; auto.
+  InvApproxRegs; SimplVM; inv H0. apply make_mullimm_correct; auto.
+(* divl *)
+  assert (rs#r2 = Vlong n2). clear H0. InvApproxRegs; SimplVM; auto.
+  apply make_divlimm_correct; auto.
+(* divlu *)
+  assert (rs#r2 = Vlong n2). clear H0. InvApproxRegs; SimplVM; auto.
+  apply make_divluimm_correct; auto.
+(* andl *)
+  InvApproxRegs; SimplVM; inv H0. fold (Val.andl (Vlong n1) rs#r2). rewrite Val.andl_commut. apply make_andlimm_correct; auto.
+  InvApproxRegs; SimplVM; inv H0. apply make_andlimm_correct; auto.
+  inv H; inv H0. apply make_andlimm_correct; auto.
+(* orlimm *)
+  InvApproxRegs; SimplVM; inv H0. fold (Val.orl (Vlong n1) rs#r2). rewrite Val.orl_commut. apply make_orlimm_correct; auto.
+  InvApproxRegs; SimplVM; inv H0. apply make_orlimm_correct; auto.
+(* xorlimm *)
+  InvApproxRegs; SimplVM; inv H0. fold (Val.xorl (Vlong n1) rs#r2). rewrite Val.xorl_commut. apply make_xorlimm_correct; auto.
+  InvApproxRegs; SimplVM; inv H0. apply make_xorlimm_correct; auto.
+(* shll *)
+  InvApproxRegs; SimplVM; inv H0. apply make_shllimm_correct; auto.
+(* shrl *)
+  InvApproxRegs; SimplVM; inv H0. apply make_shrlimm_correct; auto.
+(* shrlu *)
+  InvApproxRegs; SimplVM; inv H0. apply make_shrluimm_correct; auto.
 (* cmp *)
   inv H0. apply make_cmp_correct; auto.
 (* mulf *)

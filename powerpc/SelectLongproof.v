@@ -240,18 +240,12 @@ Theorem eval_shllimm: forall n, unary_constructor_sound (fun e => shllimm e n) (
 Proof.
   intros; unfold shllimm. destruct Archi.splitlong eqn:SL. apply SplitLongproof.eval_shllimm; auto.
   red; intros.
-  assert (ROLM: forall n1 v,
-             Int.ltu n1 Int64.iwordsize' = true ->
-             Val.shll v (Vint n1) = Val.rolml v n1 (Int64.shl Int64.mone (Int64.repr (Int.unsigned n1)))).
-  { intros. destruct v; auto. simpl. rewrite H0. rewrite <- Int64.shl_rolm. unfold Int64.shl.
-    rewrite Int64.int_unsigned_repr. constructor. unfold Int64.ltu. rewrite Int64.int_unsigned_repr.
-    apply H0. }
   predSpec Int.eq Int.eq_spec n Int.zero.
   exists x; split; auto. subst n; destruct x; simpl; auto.
   destruct (Int.ltu Int.zero Int64.iwordsize'); auto.
   change (Int64.shl' i Int.zero) with (Int64.shl i Int64.zero). rewrite Int64.shl_zero; auto.
   destruct (Int.ltu n Int64.iwordsize') eqn:LT; simpl.
-- rewrite ROLM by apply LT. apply eval_rolml. auto.
+- rewrite Val.shll_rolml by apply LT. apply eval_rolml. auto.
 - TrivialExists. constructor; eauto.  constructor. EvalOp. simpl; eauto. constructor.
   constructor.
 Qed.
@@ -260,18 +254,10 @@ Theorem eval_shrluimm: forall n, unary_constructor_sound (fun e => shrluimm e n)
 Proof.
   unfold shrluimm; destruct Archi.splitlong. apply SplitLongproof.eval_shrluimm. auto.
   red; intros.
-  assert (ROLM: forall n1 v,
-             Int.ltu n1 Int64.iwordsize' = true ->
-             Val.shrlu v (Vint n1) = Val.rolml v (Int.sub Int64.iwordsize' n1) (Int64.shru Int64.mone (Int64.repr (Int.unsigned n1)))).
-  { intros. destruct v; auto. simpl. rewrite H0.
-    rewrite Int64.int_sub_ltu by apply H0. rewrite Int64.repr_unsigned. rewrite <- Int64.shru_rolm. unfold Int64.shru'.  unfold Int64.shru.
-    rewrite Int64.unsigned_repr. reflexivity. apply Int64.int_unsigned_range.
-    unfold Int64.ltu. rewrite Int64.int_unsigned_repr. auto.
-  }
   predSpec Int.eq Int.eq_spec n Int.zero.
   exists x. split. apply H. destruct x; simpl; auto. rewrite H0. rewrite Int64.shru'_zero. constructor.
   destruct (Int.ltu n Int64.iwordsize') eqn:LT; simpl.
-- rewrite ROLM by apply LT. apply eval_rolml. auto.
+- rewrite Val.shrlu_rolml by apply LT. apply eval_rolml. auto.
 - TrivialExists. constructor; eauto.  constructor. EvalOp. simpl; eauto. constructor.
   constructor.
 Qed.
