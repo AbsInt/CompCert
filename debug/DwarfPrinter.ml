@@ -27,11 +27,23 @@ module DwarfPrinter(Target: DWARF_TARGET):
 
     open Target
 
-    let print_comment oc s =
-      if s <> "" then
-        fprintf oc "	%s %s" comment s
+    (* Do we need verbose debug information? *)
+    let include_comment = !Clflags.option_S || !Clflags.option_dasm
 
-    let string_of_comment s = sprintf "	%s %s" comment s
+    (* Print comments needed for verbose debug mode *)
+    let print_comment =
+      if include_comment then
+        (fun  oc s ->
+           if s <> "" then
+             fprintf oc "	%s %s" comment s)
+      else
+        (fun _ _ -> ())
+
+    let string_of_comment =
+      if include_comment then
+        (fun s -> String.concat " " ["";comment;s])
+      else
+        (fun _ -> "")
 
     (* Byte value to string *)
     let string_of_byte value ct =
