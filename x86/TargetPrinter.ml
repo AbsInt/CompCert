@@ -66,6 +66,11 @@ let preg oc = function
   | FR r -> freg oc r
   | _    -> assert false
 
+let preg_annot = function
+  | IR r -> if Archi.ptr64 then int64_reg_name r else int32_reg_name r
+  | FR r -> float_reg_name r
+  | _ -> assert false
+
 let z oc n = output_string oc (Z.to_string n)
 
 (* 32/64 bit dependencies *)
@@ -736,10 +741,10 @@ module Target(System: SYSTEM):TARGET =
       | Pbuiltin(ef, args, res) ->
           begin match ef with
           | EF_annot(txt, targs) ->
-              fprintf oc "%s annotation: " comment;
-              print_annot_text preg "%esp" oc (camlstring_of_coqstring txt) args
+              fprintf oc "%s annotation: %s\n" comment
+              (annot_text preg_annot "%esp" (camlstring_of_coqstring txt) args)
           | EF_debug(kind, txt, targs) ->
-              print_debug_info comment print_file_line preg "%esp" oc
+              print_debug_info comment print_file_line preg_annot "%esp" oc
                                (P.to_int kind) (extern_atom txt) args
           | EF_inline_asm(txt, sg, clob) ->
               fprintf oc "%s begin inline assembly\n\t" comment;

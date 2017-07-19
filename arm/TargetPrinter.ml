@@ -81,6 +81,11 @@ struct
     | FR r -> freg oc r
     | _    -> assert false
 
+  let preg_annot = function
+    | IR r -> int_reg_name r
+    | FR r -> float_reg_name r
+    | _ -> assert false
+
   let condition_name = function
     | TCeq -> "eq"
     | TCne -> "ne"
@@ -730,11 +735,11 @@ struct
     | Pbuiltin(ef, args, res) ->
       begin match ef with
         | EF_annot(txt, targs) ->
-          fprintf oc "%s annotation: " comment;
-          print_annot_text preg "sp" oc (camlstring_of_coqstring txt) args;
+          fprintf oc "%s annotation: %s\n" comment
+          (annot_text preg_annot "sp" (camlstring_of_coqstring txt) args);
           0
         | EF_debug(kind, txt, targs) ->
-          print_debug_info comment print_file_line preg "sp" oc
+          print_debug_info comment print_file_line preg_annot "sp" oc
             (P.to_int kind) (extern_atom txt) args;
           0
         | EF_inline_asm(txt, sg, clob) ->

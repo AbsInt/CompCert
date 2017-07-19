@@ -335,9 +335,9 @@ module Target (System : SYSTEM):TARGET =
 
     (* For printing annotations, use the full register names [rN] and [fN]
        to avoid ambiguity with constants. *)
-    let preg_annot oc = function
-      | IR r -> fprintf oc "r%s" (int_reg_name r)
-      | FR r -> fprintf oc "f%s" (float_reg_name r)
+    let preg_annot = function
+      | IR r -> sprintf "r%s" (int_reg_name r)
+      | FR r -> sprintf "f%s" (float_reg_name r)
       | _    -> assert false
 
     (* Encoding masks for rlwinm instructions *)
@@ -834,8 +834,8 @@ module Target (System : SYSTEM):TARGET =
       | Pbuiltin(ef, args, res) ->
           begin match ef with
           | EF_annot(txt, targs) ->
-              fprintf oc "%s annotation: " comment;
-              print_annot_text preg_annot "r1" oc (camlstring_of_coqstring txt) args
+              fprintf oc "%s annotation: %s\n" comment
+              (annot_text preg_annot "r1" (camlstring_of_coqstring txt) args)
           | EF_debug(kind, txt, targs) ->
               print_debug_info comment print_file_line preg_annot "r1" oc
                                (P.to_int kind) (extern_atom txt) args
