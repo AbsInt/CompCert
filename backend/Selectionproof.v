@@ -12,6 +12,7 @@
 
 (** Correctness of instruction selection *)
 
+Require Import FunInd.
 Require Import Coqlib Maps.
 Require Import AST Linking Errors Integers Values Memory Events Globalenvs Smallstep.
 Require Import Switch Cminor Op CminorSel.

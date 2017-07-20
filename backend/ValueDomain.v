@@ -10,6 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+Require Import FunInd.
 Require Import Zwf Coqlib Maps Integers Floats Lattice.
 Require Import Compopts AST.
 Require Import Values Memory Globalenvs Events.

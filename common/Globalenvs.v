@@ -33,7 +33,7 @@
   place during program linking and program loading in a real operating
   system. *)
 
-Require Recdef.
+Require Import Recdef.
 Require Import Zwf.
 Require Import Axioms Coqlib Errors Maps AST Linking.
 Require Import Integers Floats Values Memory.
