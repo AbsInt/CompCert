@@ -28,9 +28,13 @@ let pp_reg pp t n =
 let pp_ireg pp reg =
   pp_reg pp "r" (TargetPrinter.int_reg_name reg)
 
-
 let pp_freg pp reg =
   pp_reg pp "f" (TargetPrinter.float_reg_name reg)
+
+let preg_annot = function
+  | IR r -> sprintf "r%s" (TargetPrinter.int_reg_name r)
+  | FR r -> sprintf "f%s" (TargetPrinter.float_reg_name r)
+  | _    -> assert false
 
 let pp_atom pp a = pp_jstring pp (extern_atom a)
 
@@ -82,6 +86,7 @@ type instruction_arg =
   | Float32 of Floats.float32
   | Float64 of Floats.float
   | Atom of positive
+  | String of string
 
 let id = ref 0
 
@@ -105,12 +110,14 @@ let pp_arg pp = function
   | Float32 f -> pp_float32_constant pp f
   | Float64 f  -> pp_float64_constant pp f
   | Atom a -> pp_atom_constant pp a
+  | String s -> pp_jsingle_object pp "String" pp_jstring s
 
 let pp_instructions pp ic =
   let ic = List.filter (fun s -> match s with
       | Pbuiltin (ef,_,_) ->
         begin match ef with
-          | EF_inline_asm _ -> true
+          | EF_inline_asm _
+          | EF_annot _ -> true
           | _ -> false
         end
       | Pcfi_adjust _  (* Only debug relevant *)
@@ -331,11 +338,21 @@ let pp_instructions pp ic =
   | Pxoris (ir1,ir2,c) -> instruction pp "Pxoris" [Ireg ir1; Ireg ir2; Constant c]
   | Pxoris64 (ir1,ir2,n) -> instruction pp "Pxoris" [Ireg ir1; Ireg ir2; Constant (Cint n)]
   | Plabel l -> instruction pp "Plabel" [ALabel l]
-  | Pbuiltin (ef,_,_) ->
+  | Pbuiltin (ef,args,_) ->
     begin match ef with
       | EF_inline_asm _ ->
         instruction pp "Pinlineasm" [Id];
         Cerrors.warning ("",-10) Cerrors.Inline_asm_sdump "inline assembler is not supported in sdump"
+      | EF_annot (txt,targs) ->
+        let annot_string = PrintAsmaux.annot_text preg_annot "r1" (camlstring_of_coqstring txt) args in
+        let len = String.length annot_string in
+        let buf = Buffer.create len in
+        String.iter (fun c -> begin match c with
+            | '\\' | '"' -> Buffer.add_char buf '\\'
+            | _ -> () end;
+            Buffer.add_char buf c) annot_string;
+        let annot_string = Buffer.contents buf in
+        instruction pp "Pannot" [String annot_string]
       | _ -> assert false
     end
   | Pcfi_adjust _  (* Only debug relevant *)
