@@ -1754,6 +1754,7 @@ Proof.
   unfold transf_function; intros.
   destruct (type_function f) as [env|] eqn:TY; try discriminate.
   destruct (regalloc f); try discriminate.
+  destruct (LTLtyping.wt_function f0); try discriminate.
   destruct (check_function f f0 env) as [] eqn:?; inv H.
   unfold check_function in Heqr.
   destruct (analyze f env (pair_codes f tf)) as [an|] eqn:?; try discriminate.

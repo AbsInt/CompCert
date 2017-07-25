@@ -16,7 +16,7 @@ Require Import FSets FSetAVLplus.
 Require Import Coqlib Ordered Maps Errors Integers Floats.
 Require Import AST Lattice Kildall Memdata.
 Require Archi.
-Require Import Op Registers RTL Locations Conventions RTLtyping LTL.
+Require Import Op Registers RTL Locations Conventions RTLtyping LTL LTLtyping.
 
 (** The validation algorithm used here is described in
   "Validating register allocation and spilling",
@@ -1359,7 +1359,11 @@ Definition transf_function (f: RTL.function) : res LTL.function :=
   | OK env =>
       match regalloc f with
       | Error m => Error m
-      | OK tf => do x <- check_function f tf env; OK tf
+      | OK tf =>
+          if wt_function tf then
+            do x <- check_function f tf env; OK tf
+          else
+            Error (msg "Ill-typed LTL code")
       end
   end.
 
