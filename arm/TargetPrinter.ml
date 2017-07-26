@@ -767,6 +767,9 @@ struct
         2 in
       (len + add) * 4
     | Pbuiltin (EF_inline_asm _,_,_) -> 1024 (* Better be safe than sorry  *)
+    | Pbreg _
+    | Pblsymb _
+    | Pblreg _ -> 72 (* 4 for branch, 4 for fixup result 4 * 16 for fixup args *)
     | _ -> 12
 
 
