@@ -157,10 +157,10 @@ target=${target#[a-zA-Z0-9]*-}
 
 
 # Per-target configuration
-clinker_needs_no_pie=true
 asm_supports_cfi=""
 casm_options=""
 casmruntime=""
+clinker_needs_no_pie=true
 clinker_options=""
 cprepro_options=""
 struct_passing=""
@@ -378,6 +378,7 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
   esac
 fi
 
+
 #
 # RISC-V Target Configuration
 #
@@ -401,20 +402,39 @@ if test "$arch" = "riscV"; then
   system="linux"
 fi
 
+
 #
 # Finalize Target Configuration
 #
 if test -z "$casmruntime"; then casmruntime="$casm $casm_options"; fi
 
 
+# Invoke a C compiler, e.g. to check for availability of command-line options
+testcompiler () {
+    tmpsrc="${TMPDIR:-/tmp}/compcert-configure-$$.c"
+    rm -f "$tmpsrc"
+    tmpout="${TMPDIR:-/tmp}/compcert-configure-$$.out"
+    rm -f "$tmpout"
+    cat >> "$tmpsrc" <<EOF
+int main (void)
+{
+   return 0;
+}
+EOF
+    "$@" -o "$tmpout" "$tmpsrc" >/dev/null 2>/dev/null
+    retcode=$?
+    rm -f "$tmpsrc" "$tmpout"
+    return $retcode
+}
+
 #
 # Test Assembler Support for CFI Directives
 #
 if test "$target" != "manual" && test -z "$asm_supports_cfi"; then
   echo "Testing assembler support for CFI directives... " | tr -d '\n'
-  f=/tmp/compcert-configure-$$.s
-  rm -f $f
-  cat >> $f <<EOF
+  tmpsrc="${TMPDIR:-/tmp}/compcert-configure-$$.s"
+  rm -f "$tmpsrc"
+  cat >> "$tmpsrc" <<EOF
 testfun:
   .file 1 "testfun.c"
   .loc 1 1
@@ -422,11 +442,11 @@ testfun:
   .cfi_adjust_cfa_offset 16
   .cfi_endproc
 EOF
-  if $casm $casm_options -o /dev/null $f 2>/dev/null
+  if $casm $casm_options -o /dev/null "$tmpsrc" 2>/dev/null
   then echo "yes"; asm_supports_cfi=true
   else echo "no";  asm_supports_cfi=false
   fi
-  rm -f $f
+  rm -f "$tmpsrc"
 fi
 
 
@@ -435,23 +455,10 @@ fi
 #
 if ($clinker_needs_no_pie) then
   echo "Testing linker support for '-no-pie' option... " | tr -d '\n'
-  fx=/tmp/compcert-configure-$$.elf
-  rm -f $fx
-  f=/tmp/compcert-configure-$$.c
-  rm -f $f
-  cat >> $f <<EOF
-int main (void)
-{
-   return 0;
-}
-EOF
-  $cc -no-pie -o $fx $f >/dev/null 2>&1
-  status=$?
-  if [ $status -eq 0 ]
+  if testcompiler ${cc} -no-pie;
   then echo "yes"; clinker_options="${clinker_options} -no-pie"
   else echo "no"; clinker_needs_no_pie=false
   fi
-  rm -f $f $fx
 fi
 
 
