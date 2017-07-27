@@ -1,12 +1,28 @@
+Major improvements:
+
 - New port targeting the RISC-V architecture, in 32- and 64-bit modes.
-- Always generate .merlin and _CoqProject files.
-- PowerPC back-end: leaf functions optimization.
-- Add options -finline / -fno-inline to control function inlining.
+
+- Improved support for PowerPC 64 processors: use 64-bit registers and
+  instructions for 64-bit integer arithmetic.  Pointers remain 32 bits
+  and the 32-bit ABI is still used.
+
+Code generation and optimization:
+
+- Optimize leaf functions in the PowerPC back-end.
+  (Avoid reloading the return address from the stack.)
 - Avoid generating useless conditional branches for empty if/else statements.
+- Earlier elimination of redundant `&*expr` and `*&expr` addressings.
+
+Usability:
+
+- Add options -finline / -fno-inline to control function inlining.
 - Removed the compilation of '.cm' files written in Cminor concrete syntax.
-- clightgen: add option "-normalize" to avoid memory loads deep inside expressions
+- More precise warnings about missing function returns.
+- clightgen: add option "-normalize" to avoid memory loads deep inside
+  expressions.
 
 Bug fixing:
+
 - Issue #179: clightgen produces wrong output for "switch" statements.
 - Do not generate code for functions with "inline" specifier that are
   neither static nor extern, as per ISO C99.
@@ -14,6 +30,15 @@ Bug fixing:
   switch cases.
 - Issue #P16: illegal PowerPC asm generated for unsigned division after
   constant propagation.
+- Issue #P18: ARM PC-relative addressing of constant pool overflows
+  owing to underestimation of code size.
+- Pass -no-pie flag to the x86 linker when -pie is the default.
+
+Coq and Caml development:
+
+- Improve compatibility with Coq working version.
+- Always generate .merlin and _CoqProject files.
+
 
 Release 3.0.1, 2017-02-14
 =========================
