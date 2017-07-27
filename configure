@@ -432,9 +432,9 @@ EOF
 #
 if test "$target" != "manual" && test -z "$asm_supports_cfi"; then
   echo "Testing assembler support for CFI directives... " | tr -d '\n'
-  f=/tmp/compcert-configure-$$.s
-  rm -f $f
-  cat >> $f <<EOF
+  tmpsrc="${TMPDIR:-/tmp}/compcert-configure-$$.s"
+  rm -f "$tmpsrc"
+  cat >> "$tmpsrc" <<EOF
 testfun:
   .file 1 "testfun.c"
   .loc 1 1
@@ -442,11 +442,11 @@ testfun:
   .cfi_adjust_cfa_offset 16
   .cfi_endproc
 EOF
-  if $casm $casm_options -o /dev/null $f 2>/dev/null
+  if $casm $casm_options -o /dev/null "$tmpsrc" 2>/dev/null
   then echo "yes"; asm_supports_cfi=true
   else echo "no";  asm_supports_cfi=false
   fi
-  rm -f $f
+  rm -f "$tmpsrc"
 fi
 
 
