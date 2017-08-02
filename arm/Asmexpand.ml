@@ -421,7 +421,7 @@ let expand_instruction instr =
      let ofs' = camlint_of_coqint ofs in
      if ofs' >= 4096l && sz' >= ofs' then begin
        expand_subimm IR13 IR13 (coqint_of_camlint (Int32.sub sz' (Int32.add ofs' 4l)));
-       emit (Ppush [IR13]);
+       emit (Ppush [IR12]);
        expand_subimm IR13 IR13 ofs;
        emit (Pcfi_adjust sz);
      end else begin
