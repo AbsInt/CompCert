@@ -199,15 +199,17 @@ Inductive instruction : Type :=
   | Pfsts: freg -> ireg -> int -> instruction       (**r float32 store *)
 
   (* Pseudo-instructions *)
-  | Pallocframe: Z -> ptrofs -> instruction      (**r allocate new stack frame *)
-  | Pfreeframe: Z -> ptrofs -> instruction       (**r deallocate stack frame and restore previous frame *)
-  | Plabel: label -> instruction                   (**r define a code label *)
+  | Pallocframe: Z -> ptrofs -> instruction         (**r allocate new stack frame *)
+  | Pfreeframe: Z -> ptrofs -> instruction          (**r deallocate stack frame and restore previous frame *)
+  | Psavelr: ptrofs -> instruction                  (**r store link register in allocated stack frame *)
+  | Plabel: label -> instruction                    (**r define a code label *)
   | Ploadsymbol: ireg -> ident -> ptrofs -> instruction (**r load the address of a symbol *)
   | Pmovite: testcond -> ireg -> shift_op -> shift_op -> instruction (**r integer conditional move *)
   | Pbtbl: ireg -> list label -> instruction       (**r N-way branch through a jump table *)
   | Pbuiltin: external_function -> list (builtin_arg preg) -> builtin_res preg -> instruction (**r built-in function (pseudo) *)
   | Padc: ireg -> ireg -> shift_op -> instruction     (**r add with carry *)
   | Pcfi_adjust: int -> instruction                   (**r .cfi_adjust debug directive *)
+  | Pcfi_rel_offset: int -> instruction               (**r .cfi_rel_offset debug directive *)
   | Pclz: ireg -> ireg -> instruction                 (**r count leading zeros. *)
   | Pfsqrt: freg -> freg -> instruction               (**r floating-point square root. *)
   | Prev: ireg -> ireg -> instruction                 (**r reverse bytes and reverse bits. *)
@@ -268,6 +270,18 @@ lbl:    .word   symbol
 >>
   Again, our memory model cannot comprehend that this operation
   frees (logically) the current stack frame.
+- [Psavelr pos]: this pseudo-instruction stores the link register in the
+  stackframe at the specified position. It handles out-of-range offsets,
+  i.e. the generated code for in-range offsets is:
+<<
+        str     lr, [sp, #pos]
+>>
+  and for out-of-range offsets:
+<<
+        add     sp, sp, #pos   (* code to expand the immediate *)
+        str     lr, [sp]
+        sub     sp, sp, #pos   (* code to expand the immediate *)
+>>
 - [Pbtbl reg table]: this is a N-way branch, implemented via a jump table
   as follows:
 <<
@@ -736,6 +750,8 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
           | _ => Stuck
           end
       end
+  | Psavelr pos =>
+      exec_store Mint32 (Val.offset_ptr rs#IR13 pos) IR14 rs m
   | Plabel lbl =>
       Next (nextinstr rs) m
   | Ploadsymbol r1 lbl ofs =>
@@ -763,6 +779,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Ppush _
   | Padc _ _ _
   | Pcfi_adjust _
+  | Pcfi_rel_offset _
   | Pclz _ _
   | Prev _ _
   | Prev16 _ _

@@ -790,7 +790,7 @@ Definition transl_function (f: Mach.function) :=
   do c <- transl_code f f.(Mach.fn_code) true;
   OK (mkfunction f.(Mach.fn_sig)
         (Pallocframe f.(fn_stacksize) f.(fn_link_ofs) ::
-         Pstr IR14 IR13 (SOimm (Ptrofs.to_int f.(fn_retaddr_ofs))) :: c)).
+         Psavelr f.(fn_retaddr_ofs) :: c)).
 
 Definition transf_function (f: Mach.function) : res Asm.function :=
   do tf <- transl_function f;

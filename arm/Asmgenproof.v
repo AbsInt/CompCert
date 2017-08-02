@@ -854,7 +854,7 @@ Opaque loadind.
   generalize EQ; intros EQ'. monadInv EQ'.
   destruct (zlt Ptrofs.max_unsigned (list_length_z (fn_code x0))); inversion EQ1. clear EQ1. subst x0.
   monadInv EQ0.
-  set (tfbody := Pallocframe (fn_stacksize f) (fn_link_ofs f) :: Pstr IR14 IR13 (SOimm (Ptrofs.to_int (fn_retaddr_ofs f))) :: x0) in *.
+  set (tfbody := Pallocframe (fn_stacksize f) (fn_link_ofs f) :: Psavelr (fn_retaddr_ofs f) :: x0) in *.
   set (tf := {| fn_sig := Mach.fn_sig f; fn_code := tfbody |}) in *.
   unfold store_stack in *.
   exploit Mem.alloc_extends. eauto. eauto. apply Zle_refl. apply Zle_refl.
@@ -877,7 +877,7 @@ Opaque loadind.
   simpl. auto.
   simpl. unfold exec_store. change (rs2 IR14) with (rs0 IR14).
   rewrite Ptrofs.add_zero_l. simpl. unfold Tptr, chunk_of_type, Archi.ptr64 in P. simpl in P.
-  rewrite Ptrofs.add_zero_l in P. rewrite ATLR. rewrite Ptrofs.of_int_to_int by auto.
+  rewrite Ptrofs.add_zero_l in P. rewrite ATLR.
   rewrite P. auto. auto. auto.
   left; exists (State rs3 m3'); split.
   eapply exec_straight_steps_1; eauto. omega. constructor.

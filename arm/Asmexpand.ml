@@ -46,18 +46,22 @@ let expand_movimm dst n =
        (fun n -> emit (Porr (dst,dst, SOimm n))) tl
 
 let expand_subimm dst src n =
-  match Asmgen.decompose_int n with
-  | [] -> assert false
-  | hd::tl ->
-     emit (Psub(dst,src,SOimm hd));
-     List.iter (fun n -> emit (Psub (dst,dst,SOimm n))) tl
+  if dst <> src || n <> _0 then begin
+    match Asmgen.decompose_int n with
+    | [] -> assert false
+    | hd::tl ->
+       emit (Psub(dst,src,SOimm hd));
+       List.iter (fun n -> emit (Psub (dst,dst,SOimm n))) tl
+  end
 
 let expand_addimm dst src n =
-  match Asmgen.decompose_int n with
-  | [] -> assert false
-  | hd::tl ->
-     emit (Padd (dst,src,SOimm hd));
-     List.iter (fun n -> emit (Padd (dst,dst,SOimm n))) tl
+  if dst <> src || n <> _0 then begin
+    match Asmgen.decompose_int n with
+    | [] -> assert false
+    | hd::tl ->
+       emit (Padd (dst,src,SOimm hd));
+       List.iter (fun n -> emit (Padd (dst,dst,SOimm n))) tl
+  end
 
 let expand_int64_arith conflict rl fn =
   if conflict then
@@ -410,12 +414,22 @@ let expand_instruction instr =
   | Pallocframe (sz, ofs) ->
      emit (Pmov (IR12,SOreg IR13));
      if (is_current_function_variadic ()) then begin
-	 emit (Ppush [IR0;IR1;IR2;IR3]);
-	 emit (Pcfi_adjust _16);
-       end;
-     expand_subimm IR13 IR13 sz;
-     emit (Pcfi_adjust sz);
-     emit (Pstr (IR12,IR13,SOimm ofs));
+       emit (Ppush [IR0;IR1;IR2;IR3]);
+       emit (Pcfi_adjust _16);
+     end;
+     let sz' = camlint_of_coqint sz in
+     let ofs' = camlint_of_coqint ofs in
+     if ofs' >= 4096l && sz' >= ofs' then begin
+       expand_subimm IR13 IR13 (coqint_of_camlint (Int32.sub sz' (Int32.add ofs' 4l)));
+       emit (Ppush [IR13]);
+       expand_subimm IR13 IR13 ofs;
+       emit (Pcfi_adjust sz);
+     end else begin
+        assert (ofs' < 4096l);
+        expand_subimm IR13 IR13 sz;
+        emit (Pcfi_adjust sz);
+        emit (Pstr (IR12,IR13,SOimm ofs));
+     end;
      PrintAsmaux.current_function_stacksize := camlint_of_coqint sz
   | Pfreeframe (sz, ofs) ->
      let sz =
@@ -424,7 +438,21 @@ let expand_instruction instr =
        else sz in
      if Asmgen.is_immed_arith sz
      then emit (Padd (IR13,IR13,SOimm sz))
-     else emit (Pldr (IR13,IR13,SOimm ofs))
+     else begin
+       if camlint_of_coqint ofs >= 4096l then begin
+         expand_addimm IR13 IR13 ofs;
+         emit (Pldr (IR13,IR13,SOimm _0))
+       end else
+         emit (Pldr (IR13,IR13,SOimm ofs));
+     end
+  | Psavelr ofs ->
+     if camlint_of_coqint ofs >= 4096l then begin
+       expand_addimm IR13 IR13 ofs;
+       emit (Pstr (IR14,IR13,SOimm _0));
+       expand_subimm IR13 IR13 ofs
+     end else
+       emit (Pstr (IR14,IR13,SOimm ofs));
+     emit (Pcfi_rel_offset ofs)
   | Pbuiltin (ef,args,res) ->
      begin match ef with
 	   | EF_builtin (name,sg) ->

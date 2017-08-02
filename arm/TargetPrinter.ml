@@ -539,23 +539,13 @@ struct
     | Psbc (r1,r2,sa) ->
       fprintf oc "	sbc	%a, %a, %a\n" ireg r1 ireg r2 shift_op sa; 1
     | Pstr(r1, r2, sa) | Pstr_a(r1, r2, sa) ->
-      fprintf oc "	str	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa;
-      begin match r1, r2, sa with
-        | IR14, IR13, SOimm n -> cfi_rel_offset oc "lr" (camlint_of_coqint n)
-        | _ -> ()
-      end;
-      1
+      fprintf oc "	str	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
     | Pstrb(r1, r2, sa) ->
       fprintf oc "	strb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
     | Pstrh(r1, r2, sa) ->
       fprintf oc "	strh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
     | Pstr_p(r1, r2, sa) ->
-      fprintf oc "	str	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa;
-      begin match r1, r2, sa with
-        | IR14, IR13, SOimm n -> cfi_rel_offset oc "lr" (camlint_of_coqint n)
-        | _ -> ()
-      end;
-      1
+      fprintf oc "	str	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa; 1
     | Pstrb_p(r1, r2, sa) ->
       fprintf oc "	strb	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa; 1
     | Pstrh_p(r1, r2, sa) ->
@@ -703,6 +693,8 @@ struct
       assert false
     | Pfreeframe(sz, ofs) ->
       assert false
+    | Psavelr(ofs) ->
+      assert false
     | Plabel lbl ->
       fprintf oc "%a:\n" print_label lbl; 0
     | Ploadsymbol(r1, id, ofs) ->
@@ -751,6 +743,7 @@ struct
           assert false
       end
     | Pcfi_adjust sz -> cfi_adjust oc (camlint_of_coqint sz); 0
+    | Pcfi_rel_offset ofs -> cfi_rel_offset oc "lr" (camlint_of_coqint ofs); 0
 
   let no_fallthrough = function
     | Pb _ -> true
