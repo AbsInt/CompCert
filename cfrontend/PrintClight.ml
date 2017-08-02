@@ -79,9 +79,9 @@ let rec expr p (prec, e) =
   | Econst_int(n, _) ->
       fprintf p "%ld" (camlint_of_coqint n)
   | Econst_float(f, _) ->
-      fprintf p "%.15F" (camlfloat_of_coqfloat f)
+     fprintf p "%.18g" (camlfloat_of_coqfloat f)
   | Econst_single(f, _) ->
-      fprintf p "%.15Ff" (camlfloat_of_coqfloat32 f)
+     fprintf p "%.18g" (camlfloat_of_coqfloat32 f)
   | Econst_long(n, Tlong(Unsigned, _)) ->
       fprintf p "%LuLLU" (camlint64_of_coqint n)
   | Econst_long(n, _) ->
@@ -116,22 +116,28 @@ let rec print_expr_list p (first, rl) =
 
 (* Statements *)
 
+(* Receiver of call *)
+let print_rec p e =
+  match e with
+  | Eaddrof(_,_) | Evar _ | Etempvar _ -> print_expr p e (* Could we directly write e' ? *)
+  |  _          -> fprintf p "(%a)" print_expr e
+
 let rec print_stmt p s =
   match s with
   | Sskip ->
-      fprintf p "/*skip*/;"
+      fprintf p "(void)0 /*skip*/;"
   | Sassign(e1, e2) ->
       fprintf p "@[<hv 2>%a =@ %a;@]" print_expr e1 print_expr e2
   | Sset(id, e2) ->
       fprintf p "@[<hv 2>%s =@ %a;@]" (temp_name id) print_expr e2
   | Scall(None, e1, el) ->
       fprintf p "@[<hv 2>%a@,(@[<hov 0>%a@]);@]"
-                print_expr e1
+                print_rec e1
                 print_expr_list (true, el)
   | Scall(Some id, e1, el) ->
       fprintf p "@[<hv 2>%s =@ %a@,(@[<hov 0>%a@]);@]"
                 (temp_name id)
-                print_expr e1
+                print_rec e1
                 print_expr_list (true, el)
   | Sbuiltin(None, ef, tyargs, el) ->
       fprintf p "@[<hv 2>builtin %s@,(@[<hov 0>%a@]);@]"
@@ -206,7 +212,7 @@ and print_case_label p = function
 and print_stmt_for p s =
   match s with
   | Sskip ->
-      fprintf p "/*nothing*/"
+      fprintf p "(void)0 /*nothing*/"
   | Sassign(e1, e2) ->
       fprintf p "%a = %a" print_expr e1 print_expr e2
   | Sset(id, e2) ->
@@ -215,12 +221,12 @@ and print_stmt_for p s =
       fprintf p "%a, %a" print_stmt_for s1 print_stmt_for s2
   | Scall(None, e1, el) ->
       fprintf p "@[<hv 2>%a@,(@[<hov 0>%a@])@]"
-                print_expr e1
+                print_rec e1
                 print_expr_list (true, el)
   | Scall(Some id, e1, el) ->
       fprintf p "@[<hv 2>%s =@ %a@,(@[<hov 0>%a@])@]"
                 (temp_name id)
-                print_expr e1
+                print_rec e1
                 print_expr_list (true, el)
   | Sbuiltin(None, ef, tyargs, el) ->
       fprintf p "@[<hv 2>builtin %s@,(@[<hov 0>%a@]);@]"
@@ -253,7 +259,7 @@ let print_function p id f =
 
 let print_fundef p id fd =
   match fd with
-  | Ctypes.External((AST.EF_external _ | AST.EF_runtime _), args, res, cconv) ->
+  | Ctypes.External((AST.EF_external _ | AST.EF_runtime _ | AST.EF_malloc | AST.EF_free), args, res, cconv) ->
       fprintf p "extern %s;@ @ "
                 (name_cdecl (extern_atom id) (Tfunction(args, res, cconv)))
   | Ctypes.External(_, _, _, _) ->
@@ -266,19 +272,35 @@ let print_globdef p (id, gd) =
   | AST.Gfun f -> print_fundef p id f
   | AST.Gvar v -> print_globvar p id v  (* from PrintCsyntax *)
 
+let collect_internal_fct defs =
+  let add_decl (id,gd) l =
+    match gd with
+    | AST.Gfun (Internal f) -> (id,f)::l
+    |  _ -> l in
+  List.fold_right add_decl defs []
+
+let print_fundecl p (id,fct) =
+  fprintf p "%s;@ @ " (name_cdecl (extern_atom id) (Clight.type_of_function fct))
+
 let print_program p prog =
   fprintf p "@[<v 0>";
   List.iter (declare_composite p) prog.prog_types;
   List.iter (define_composite p) prog.prog_types;
+  List.iter (print_fundecl p) (collect_internal_fct prog.prog_defs);
   List.iter (print_globdef p) prog.prog_defs;
   fprintf p "@]@."
 
 let destination : string option ref = ref None
 
-let print_if prog =
+let print_if passno prog =
   match !destination with
   | None -> ()
   | Some f ->
-      let oc = open_out f in
-      print_program (formatter_of_out_channel oc) prog;
-      close_out oc
+     let passno = Z.to_string passno in
+     let oc =
+       open_out
+         (if passno = "0"
+         then (f^".c") (* as usual *)
+         else (f ^ "." ^ passno ^".c")) in
+     print_program (formatter_of_out_channel oc) prog;
+     close_out oc
