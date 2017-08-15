@@ -550,13 +550,14 @@ let print_program p prog =
   fprintf p "Definition composites : list composite_definition :=@ ";
   print_list print_composite_definition p prog.prog_types;
   fprintf p ".@ @ ";
-  fprintf p "Definition prog : Clight.program := {|@ ";
-  fprintf p "prog_defs :=@ %a;@ " (print_list print_ident_globdef) prog.Ctypes.prog_defs;
-  fprintf p "prog_public :=@ %a;@ " (print_list ident) prog.Ctypes.prog_public;
-  fprintf p "prog_main := %a;@ " ident prog.Ctypes.prog_main;
-  fprintf p "prog_types := composites;@ ";
-  fprintf p "prog_comp_env := make_composite_env composites;@ ";
-  fprintf p "prog_comp_env_eq := refl_equal _@ ";
-  fprintf p "|}.@ ";
+  fprintf p "Definition global_definitions :=@ ";
+  print_list print_ident_globdef p prog.Ctypes.prog_defs;
+  fprintf p ".@ @ ";
+  fprintf p "Definition public_idents :=@ ";
+  print_list ident p prog.Ctypes.prog_public;
+  fprintf p ".@ @ ";
+  fprintf p "Definition prog : Clight.program := @ ";
+  fprintf p "  mkprogram composites global_definitions public_idents %a Logic.I.@ @ "
+            ident prog.Ctypes.prog_main;
   print_assertions p;
   fprintf p "@]@."

@@ -24,6 +24,7 @@ Usability:
 Bug fixing:
 
 - Issue #179: clightgen produces wrong output for "switch" statements.
+- Issue #196: excessive proof times in .v files produced by clightgen.
 - Do not generate code for functions with "inline" specifier that are
   neither static nor extern, as per ISO C99.
 - Some line number information was missing for some goto labels and

@@ -65,8 +65,27 @@ Definition talignas (n: N) (ty: type) :=
 Definition tvolatile_alignas (n: N) (ty: type) :=
   tattr {| attr_volatile := true; attr_alignas := Some n |} ty.
 
-Definition make_composite_env (comps: list composite_definition): composite_env :=
-  match build_composite_env comps with
-  | OK e => e
-  | Error _ => PTree.empty _
-  end.
+Definition wf_composites (types: list composite_definition) : Prop :=
+  match build_composite_env types with OK _ => True | Error _ => False end.
+
+Definition build_composite_env' (types: list composite_definition)
+                                (WF: wf_composites types)
+                             : { ce | build_composite_env types  = OK ce }.
+Proof.
+  revert WF. unfold wf_composites. case (build_composite_env types); intros.
+- exists c; reflexivity.
+- contradiction.
+Defined.
+
+Definition mkprogram (types: list composite_definition)
+                     (defs: list (ident * globdef fundef type))
+                     (public: list ident)
+                     (main: ident)
+                     (WF: wf_composites types) : Clight.program :=
+  let (ce, EQ) := build_composite_env' types WF in
+  {| prog_defs := defs;
+     prog_public := public;
+     prog_main := main;
+     prog_types := types;
+     prog_comp_env := ce;
+     prog_comp_env_eq := EQ |}.
