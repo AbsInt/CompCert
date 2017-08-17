@@ -773,13 +773,14 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
           end
       | _ => Stuck
       end
+  | Pcfi_rel_offset ofs =>
+      Next (nextinstr rs) m
   | Pbuiltin ef args res => Stuck    (**r treated specially below *)
   (** The following instructions and directives are not generated directly by Asmgen,
       so we do not model them. *)
   | Ppush _
   | Padc _ _ _
   | Pcfi_adjust _
-  | Pcfi_rel_offset _
   | Pclz _ _
   | Prev _ _
   | Prev16 _ _

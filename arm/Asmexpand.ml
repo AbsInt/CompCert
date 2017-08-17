@@ -451,8 +451,7 @@ let expand_instruction instr =
        emit (Pstr (IR14,IR13,SOimm _0));
        expand_subimm IR13 IR13 ofs
      end else
-       emit (Pstr (IR14,IR13,SOimm ofs));
-     emit (Pcfi_rel_offset ofs)
+       emit (Pstr (IR14,IR13,SOimm ofs))
   | Pbuiltin (ef,args,res) ->
      begin match ef with
 	   | EF_builtin (name,sg) ->

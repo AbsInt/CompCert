@@ -854,7 +854,9 @@ Opaque loadind.
   generalize EQ; intros EQ'. monadInv EQ'.
   destruct (zlt Ptrofs.max_unsigned (list_length_z (fn_code x0))); inversion EQ1. clear EQ1. subst x0.
   monadInv EQ0.
-  set (tfbody := Pallocframe (fn_stacksize f) (fn_link_ofs f) :: Psavelr (fn_retaddr_ofs f) :: x0) in *.
+  set (tfbody := Pallocframe (fn_stacksize f) (fn_link_ofs f) ::
+                 Psavelr (fn_retaddr_ofs f) ::
+                 Pcfi_rel_offset (Ptrofs.to_int (fn_retaddr_ofs f)) :: x0) in *.
   set (tf := {| fn_sig := Mach.fn_sig f; fn_code := tfbody |}) in *.
   unfold store_stack in *.
   exploit Mem.alloc_extends. eauto. eauto. apply Zle_refl. apply Zle_refl.
@@ -866,28 +868,30 @@ Opaque loadind.
   (* Execution of function prologue *)
   set (rs2 := nextinstr (rs0#IR12 <- (parent_sp s) #IR13 <- (Vptr stk Ptrofs.zero))).
   set (rs3 := nextinstr rs2).
+  set (rs4 := nextinstr rs3).
   assert (EXEC_PROLOGUE:
             exec_straight tge tf
               (fn_code tf) rs0 m'
-              x0 rs3 m3').
+              x0 rs4 m3').
   change (fn_code tf) with tfbody; unfold tfbody.
-  apply exec_straight_two with rs2 m2'.
+  apply exec_straight_three with rs2 m2' rs3 m3'.
   unfold exec_instr. rewrite C. fold sp.
   rewrite <- (sp_val _ _ _ AG). unfold Tptr, chunk_of_type, Archi.ptr64 in F. rewrite F. auto.
   simpl. auto.
   simpl. unfold exec_store. change (rs2 IR14) with (rs0 IR14).
   rewrite Ptrofs.add_zero_l. simpl. unfold Tptr, chunk_of_type, Archi.ptr64 in P. simpl in P.
   rewrite Ptrofs.add_zero_l in P. rewrite ATLR.
-  rewrite P. auto. auto. auto.
-  left; exists (State rs3 m3'); split.
+  rewrite P. auto. auto. auto. auto. auto.
+  left; exists (State rs4 m3'); split.
   eapply exec_straight_steps_1; eauto. omega. constructor.
   econstructor; eauto.
-  change (rs3 PC) with (Val.offset_ptr (Val.offset_ptr (rs0 PC) Ptrofs.one) Ptrofs.one).
+  change (rs4 PC) with (Val.offset_ptr (Val.offset_ptr (Val.offset_ptr (rs0 PC) Ptrofs.one) Ptrofs.one) Ptrofs.one).
   rewrite ATPC. simpl. constructor; eauto.
   eapply code_tail_next_int. omega.
+  eapply code_tail_next_int. omega.
   eapply code_tail_next_int. omega. constructor.
-  unfold rs3, rs2.
-  apply agree_nextinstr. apply agree_nextinstr.
+  unfold rs4, rs2.
+  apply agree_nextinstr. apply agree_nextinstr. apply agree_nextinstr.
   eapply agree_change_sp.
   apply agree_undef_regs with rs0; eauto.
   intros. Simpl. congruence.
