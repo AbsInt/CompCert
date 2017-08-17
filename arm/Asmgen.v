@@ -602,6 +602,22 @@ Definition storeind (src: mreg) (base: ireg) (ofs: ptrofs) (ty: typ) (k: code) :
       Error (msg "Asmgen.storeind")
   end.
 
+(** This is a variant of [storeind] that is used to save the return address
+  at the beginning of a function.  It uses [R12] instead of [R14] as
+  temporary register. *)
+
+Definition save_lr (ofs: ptrofs) (k: code) :=
+  let n := Ptrofs.to_int ofs in
+  let n1 := mk_immed_mem_word n in
+  if Int.eq n n1
+  then Pstr IR14 IR13 (SOimm n) :: k
+  else addimm IR12 IR13 (Int.sub n n1) (Pstr IR14 IR12 (SOimm n1) :: k).
+
+Definition save_lr_preserves_R12 (ofs: ptrofs) : bool :=
+  let n := Ptrofs.to_int ofs in
+  let n1 := mk_immed_mem_word n in
+  Int.eq n n1.
+
 (** Translation of memory accesses *)
 
 Definition transl_memory_access
@@ -787,11 +803,12 @@ Definition transl_code' (f: Mach.function) (il: list Mach.instruction) (it1p: bo
   around, leading to incorrect executions. *)
 
 Definition transl_function (f: Mach.function) :=
-  do c <- transl_code f f.(Mach.fn_code) true;
+  do c <- transl_code f f.(Mach.fn_code)
+                      (save_lr_preserves_R12 f.(fn_retaddr_ofs));
   OK (mkfunction f.(Mach.fn_sig)
         (Pallocframe f.(fn_stacksize) f.(fn_link_ofs) ::
-         Psavelr f.(fn_retaddr_ofs) ::
-         Pcfi_rel_offset (Ptrofs.to_int f.(fn_retaddr_ofs)):: c)).
+         save_lr f.(fn_retaddr_ofs)
+           (Pcfi_rel_offset (Ptrofs.to_int f.(fn_retaddr_ofs)):: c))).
 
 Definition transf_function (f: Mach.function) : res Asm.function :=
   do tf <- transl_function f;

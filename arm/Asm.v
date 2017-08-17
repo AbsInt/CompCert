@@ -201,7 +201,6 @@ Inductive instruction : Type :=
   (* Pseudo-instructions *)
   | Pallocframe: Z -> ptrofs -> instruction         (**r allocate new stack frame *)
   | Pfreeframe: Z -> ptrofs -> instruction          (**r deallocate stack frame and restore previous frame *)
-  | Psavelr: ptrofs -> instruction                  (**r store link register in allocated stack frame *)
   | Plabel: label -> instruction                    (**r define a code label *)
   | Ploadsymbol: ireg -> ident -> ptrofs -> instruction (**r load the address of a symbol *)
   | Pmovite: testcond -> ireg -> shift_op -> shift_op -> instruction (**r integer conditional move *)
@@ -270,18 +269,6 @@ lbl:    .word   symbol
 >>
   Again, our memory model cannot comprehend that this operation
   frees (logically) the current stack frame.
-- [Psavelr pos]: this pseudo-instruction stores the link register in the
-  stackframe at the specified position. It handles out-of-range offsets,
-  i.e. the generated code for in-range offsets is:
-<<
-        str     lr, [sp, #pos]
->>
-  and for out-of-range offsets:
-<<
-        add     sp, sp, #pos   (* code to expand the immediate *)
-        str     lr, [sp]
-        sub     sp, sp, #pos   (* code to expand the immediate *)
->>
 - [Pbtbl reg table]: this is a N-way branch, implemented via a jump table
   as follows:
 <<
@@ -750,8 +737,6 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
           | _ => Stuck
           end
       end
-  | Psavelr pos =>
-      exec_store Mint32 (Val.offset_ptr rs#IR13 pos) IR14 rs m
   | Plabel lbl =>
       Next (nextinstr rs) m
   | Ploadsymbol r1 lbl ofs =>

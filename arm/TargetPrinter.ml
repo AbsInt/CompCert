@@ -693,8 +693,6 @@ struct
       assert false
     | Pfreeframe(sz, ofs) ->
       assert false
-    | Psavelr(ofs) ->
-      assert false
     | Plabel lbl ->
       fprintf oc "%a:\n" print_label lbl; 0
     | Ploadsymbol(r1, id, ofs) ->

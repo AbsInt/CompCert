@@ -445,13 +445,6 @@ let expand_instruction instr =
        end else
          emit (Pldr (IR13,IR13,SOimm ofs));
      end
-  | Psavelr ofs ->
-     if camlint_of_coqint ofs >= 4096l then begin
-       expand_addimm IR13 IR13 ofs;
-       emit (Pstr (IR14,IR13,SOimm _0));
-       expand_subimm IR13 IR13 ofs
-     end else
-       emit (Pstr (IR14,IR13,SOimm ofs))
   | Pbuiltin (ef,args,res) ->
      begin match ef with
 	   | EF_builtin (name,sg) ->
