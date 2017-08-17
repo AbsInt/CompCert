@@ -285,6 +285,23 @@ Proof.
   exploit preg_of_injective; eauto. congruence.
 Qed.
 
+Lemma agree_undef_regs2:
+  forall ms sp rl rs rs',
+  agree (Mach.undef_regs rl ms) sp rs ->
+  (forall r', data_preg r' = true -> preg_notin r' rl -> rs'#r' = rs#r') ->
+  agree (Mach.undef_regs rl ms) sp rs'.
+Proof.
+  intros. destruct H. split; auto.
+  rewrite <- agree_sp0. apply H0; auto.
+  rewrite preg_notin_charact. intros. apply not_eq_sym. apply preg_of_not_SP.
+  intros. destruct (In_dec mreg_eq r rl).
+  rewrite Mach.undef_regs_same; auto.
+  rewrite H0; auto.
+  apply preg_of_data.
+  rewrite preg_notin_charact. intros; red; intros. elim n.
+  exploit preg_of_injective; eauto. congruence.
+Qed.
+
 Lemma agree_set_undef_mreg:
   forall ms sp rs r v rl rs',
   agree ms sp rs ->
@@ -737,6 +754,18 @@ Ltac TailNoLabel :=
   | [ H: match ?x with nil => _ | _ :: _ => _ end = OK _ |- _ ] => destruct x; TailNoLabel
   | _ => idtac
   end.
+
+Remark tail_nolabel_find_label:
+  forall lbl k c, tail_nolabel k c -> find_label lbl c = find_label lbl k.
+Proof.
+  intros. destruct H. auto.
+Qed.
+
+Remark tail_nolabel_is_tail:
+  forall k c, tail_nolabel k c -> is_tail k c.
+Proof.
+  intros. destruct H. auto.
+Qed.
 
 (** * Execution of straight-line code *)
 
