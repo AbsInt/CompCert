@@ -18,7 +18,7 @@
 (** Instruction selection for 64-bit integer operations *)
 
 Require Import compcert.Coqlib.
-Require Import Compopts.
+Require Import compcert.Compopts.
 Require Import compcert.AST compcert.Integers compcert.Floats.
 Require Import compcert.Op compcert.CminorSel.
 Require Import compcert.SelectOp compcert.SplitLong.

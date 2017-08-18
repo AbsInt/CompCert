@@ -14,7 +14,7 @@
 
 Require Import compcert.Coqlib.
 Require Import compcert.Maps.
-Require Import Compopts.
+Require Import compcert.Compopts.
 Require Import compcert.AST.
 Require Import compcert.Integers.
 Require Import compcert.Floats.

@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Import compcert.Coqlib Compopts.
+Require Import compcert.Coqlib compcert.Compopts.
 Require Import compcert.AST compcert.Integers compcert.Floats compcert.Values compcert.Memory compcert.Globalenvs.
 Require Import compcert.Op compcert.RTL compcert.ValueDomain.
 

@@ -37,7 +37,7 @@
 *)
 
 Require Import compcert.Coqlib.
-Require Import Compopts.
+Require Import compcert.Compopts.
 Require Import compcert.AST compcert.Integers compcert.Floats.
 Require Import compcert.Op compcert.CminorSel.
 

@@ -12,7 +12,7 @@
 
 (** Correctness proof for operator strength reduction. *)
 
-Require Import compcert.Coqlib Compopts.
+Require Import compcert.Coqlib compcert.Compopts.
 Require Import compcert.Integers compcert.Floats compcert.Values compcert.Memory compcert.Globalenvs compcert.Events.
 Require Import compcert.Op compcert.Registers compcert.RTL compcert.ValueDomain.
 Require Import compcert.ConstpropOp.

@@ -13,7 +13,7 @@
 (** Strength reduction for operators and conditions.
     This is the machine-dependent part of [Constprop]. *)
 
-Require Import compcert.Coqlib Compopts.
+Require Import compcert.Coqlib compcert.Compopts.
 Require Import compcert.AST compcert.Integers compcert.Floats.
 Require Import compcert.Op compcert.Registers.
 Require Import compcert.ValueDomain.
