@@ -241,6 +241,15 @@ Proof.
   destruct ty, (preg_of src); inv H; TailNoLabel.
 Qed.
 
+Remark save_lr_label:
+  forall ofs k, tail_nolabel k (save_lr ofs k).
+Proof.
+  unfold save_lr; intros.
+  destruct (Int.eq (Ptrofs.to_int ofs) (mk_immed_mem_word (Ptrofs.to_int ofs))).
+  TailNoLabel.
+  eapply tail_nolabel_trans; TailNoLabel.
+Qed.
+
 Remark transl_cond_label:
   forall cond args k c, transl_cond cond args k = OK c -> tail_nolabel k c.
 Proof.
@@ -338,7 +347,7 @@ Lemma transl_find_label:
   end.
 Proof.
   intros. monadInv H. destruct (zlt Ptrofs.max_unsigned (list_length_z (fn_code x))); inv EQ0.
-  monadInv EQ. simpl.
+  monadInv EQ. simpl. erewrite tail_nolabel_find_label by (apply save_lr_label). simpl.
   eapply transl_code_label; eauto.
 Qed.
 
@@ -382,7 +391,8 @@ Proof.
   destruct i; try (intros [A B]; apply A). intros. subst c0. repeat constructor.
 - intros. monadInv H0.
   destruct (zlt Ptrofs.max_unsigned (list_length_z (fn_code x))); inv EQ0. monadInv EQ.
-  exists x; exists true; split; auto. repeat constructor.
+  exists x; exists (save_lr_preserves_R12 (fn_retaddr_ofs f0)); split; auto.
+  constructor. eapply is_tail_trans. 2: apply tail_nolabel_is_tail; apply save_lr_label. repeat constructor.  
 - exact transf_function_no_overflow.
 Qed.
 
@@ -854,7 +864,10 @@ Opaque loadind.
   generalize EQ; intros EQ'. monadInv EQ'.
   destruct (zlt Ptrofs.max_unsigned (list_length_z (fn_code x0))); inversion EQ1. clear EQ1. subst x0.
   monadInv EQ0.
-  set (tfbody := Pallocframe (fn_stacksize f) (fn_link_ofs f) :: Pstr IR14 IR13 (SOimm (Ptrofs.to_int (fn_retaddr_ofs f))) :: x0) in *.
+  set (ra_ofs := fn_retaddr_ofs f) in *.
+  set (ra_ofs' := Ptrofs.to_int ra_ofs) in *.
+  set (tfbody := Pallocframe (fn_stacksize f) (fn_link_ofs f) ::
+                 save_lr ra_ofs (Pcfi_rel_offset ra_ofs' :: x0)) in *.
   set (tf := {| fn_sig := Mach.fn_sig f; fn_code := tfbody |}) in *.
   unfold store_stack in *.
   exploit Mem.alloc_extends. eauto. eauto. apply Zle_refl. apply Zle_refl.
@@ -865,32 +878,40 @@ Opaque loadind.
   intros [m3' [P Q]].
   (* Execution of function prologue *)
   set (rs2 := nextinstr (rs0#IR12 <- (parent_sp s) #IR13 <- (Vptr stk Ptrofs.zero))).
-  set (rs3 := nextinstr rs2).
+  edestruct (save_lr_correct tge tf ra_ofs (Pcfi_rel_offset ra_ofs' :: x0) rs2) as (rs3 & X & Y & Z).
+    change (rs2 IR13) with sp. change (rs2 IR14) with (rs0 IR14). rewrite ATLR. eexact P.  
+  set (rs4 := nextinstr rs3).
   assert (EXEC_PROLOGUE:
             exec_straight tge tf
               (fn_code tf) rs0 m'
-              x0 rs3 m3').
+              x0 rs4 m3').
+  {
   change (fn_code tf) with tfbody; unfold tfbody.
-  apply exec_straight_two with rs2 m2'.
+  eapply exec_straight_trans with (rs2 := rs2) (m2 := m2').
+  apply exec_straight_one. 
   unfold exec_instr. rewrite C. fold sp.
   rewrite <- (sp_val _ _ _ AG). unfold Tptr, chunk_of_type, Archi.ptr64 in F. rewrite F. auto.
-  simpl. auto.
-  simpl. unfold exec_store. change (rs2 IR14) with (rs0 IR14).
-  rewrite Ptrofs.add_zero_l. simpl. unfold Tptr, chunk_of_type, Archi.ptr64 in P. simpl in P.
-  rewrite Ptrofs.add_zero_l in P. rewrite ATLR. rewrite Ptrofs.of_int_to_int by auto.
-  rewrite P. auto. auto. auto.
-  left; exists (State rs3 m3'); split.
+  auto.
+  eapply exec_straight_trans with (rs2 := rs3) (m2 := m3').
+  eexact X.
+  apply exec_straight_one.
+  simpl; reflexivity. reflexivity.
+  }
+  (* After the function prologue is the code for the function body *)
+  exploit exec_straight_steps_2; eauto using functions_transl. omega. constructor.
+  intros (ofsbody & U & V).
+  (* Conclusions *)
+  left; exists (State rs4 m3'); split.
   eapply exec_straight_steps_1; eauto. omega. constructor.
-  econstructor; eauto.
-  change (rs3 PC) with (Val.offset_ptr (Val.offset_ptr (rs0 PC) Ptrofs.one) Ptrofs.one).
-  rewrite ATPC. simpl. constructor; eauto.
-  eapply code_tail_next_int. omega.
-  eapply code_tail_next_int. omega. constructor.
-  unfold rs3, rs2.
-  apply agree_nextinstr. apply agree_nextinstr.
+  econstructor; eauto. rewrite U. econstructor; eauto. 
+  apply agree_nextinstr.
+  apply agree_undef_regs2 with rs2.
+  apply agree_nextinstr. 
   eapply agree_change_sp.
   apply agree_undef_regs with rs0; eauto.
-  intros. Simpl. congruence.
+  intros; Simpl.
+  congruence.
+  intros; apply Y; eauto with asmgen. 
 
 - (* external function *)
   exploit functions_translated; eauto.
