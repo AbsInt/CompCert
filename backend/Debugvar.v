@@ -13,9 +13,9 @@
 (** Computation of live ranges for local variables that carry
     debugging information. *)
 
-Require Import Axioms Coqlib Maps Iteration Errors.
-Require Import Integers Floats AST.
-Require Import Machregs Locations Conventions Linear.
+Require Import compcert.Axioms compcert.Coqlib compcert.Maps compcert.Iteration compcert.Errors.
+Require Import compcert.Integers compcert.Floats compcert.AST.
+Require Import compcert.Machregs compcert.Locations compcert.Conventions compcert.Linear.
 
 (** A debug info is a [builtin_arg loc] expression that safely evaluates
    in any context. *)

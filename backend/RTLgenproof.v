@@ -12,10 +12,10 @@
 
 (** Correctness proof for RTL generation. *)
 
-Require Import Coqlib Maps AST Linking.
-Require Import Integers Values Memory Events Smallstep Globalenvs.
-Require Import Switch Registers Cminor Op CminorSel RTL.
-Require Import RTLgen RTLgenspec.
+Require Import compcert.Coqlib compcert.Maps compcert.AST compcert.Linking.
+Require Import compcert.Integers compcert.Values compcert.Memory compcert.Events compcert.Smallstep compcert.Globalenvs.
+Require Import compcert.Switch compcert.Registers compcert.Cminor compcert.Op compcert.CminorSel compcert.RTL.
+Require Import compcert.RTLgen compcert.RTLgenspec.
 
 (** * Correspondence between Cminor environments and RTL register sets *)
 
@@ -346,7 +346,7 @@ Qed.
 
 (** * The simulation argument *)
 
-Require Import Errors.
+Require Import compcert.Errors.
 
 Definition match_prog (p: CminorSel.program) (tp: RTL.program) :=
   match_program (fun cu f tf => transl_fundef f = Errors.OK tf) eq p tp.

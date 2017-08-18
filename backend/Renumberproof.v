@@ -12,10 +12,10 @@
 
 (** Postorder renumbering of RTL control-flow graphs. *)
 
-Require Import Coqlib Maps Postorder.
-Require Import AST Linking.
-Require Import Values Memory Globalenvs Events Smallstep.
-Require Import Op Registers RTL Renumber.
+Require Import compcert.Coqlib compcert.Maps compcert.Postorder.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Values compcert.Memory compcert.Globalenvs compcert.Events compcert.Smallstep.
+Require Import compcert.Op compcert.Registers compcert.RTL compcert.Renumber.
 
 Definition match_prog (p tp: RTL.program) :=
   match_program (fun ctx f tf => tf = transf_fundef f) eq p tp.

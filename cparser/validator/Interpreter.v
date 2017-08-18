@@ -16,8 +16,8 @@
 Require Import Streams.
 Require Import List.
 Require Import Syntax.
-Require Automaton.
-Require Import Alphabet.
+Require compcert.validator.Automaton.
+Require Import compcert.validator.Alphabet.
 
 Module Make(Import A:Automaton.T).
 

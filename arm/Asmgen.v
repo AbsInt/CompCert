@@ -12,16 +12,16 @@
 
 (** Translation from Mach to ARM. *)
 
-Require Import Coqlib.
-Require Import Errors.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Op.
-Require Import Locations.
-Require Import Mach.
-Require Import Asm.
-Require Import Compopts.
+Require Import compcert.Coqlib.
+Require Import compcert.Errors.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Floats.
+Require Import compcert.Op.
+Require Import compcert.Locations.
+Require Import compcert.Mach.
+Require Import compcert.Asm.
+Require Import compcert.Compopts.
 
 Local Open Scope string_scope.
 Local Open Scope error_monad_scope.

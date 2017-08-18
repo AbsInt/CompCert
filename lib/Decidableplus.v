@@ -20,7 +20,7 @@
   universal and existential quantification over finite types. *)
 
 Require Export DecidableClass.
-Require Import Coqlib.
+Require Import compcert.Coqlib.
 
 Ltac decide_goal := eapply Decidable_sound; reflexivity.
 

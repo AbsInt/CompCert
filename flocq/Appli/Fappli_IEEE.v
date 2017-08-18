@@ -18,15 +18,15 @@ COPYING file for more details.
 *)
 
 (** * IEEE-754 arithmetic *)
-Require Import Fcore.
-Require Import Fcore_digits.
-Require Import Fcalc_digits.
-Require Import Fcalc_round.
-Require Import Fcalc_bracket.
-Require Import Fcalc_ops.
-Require Import Fcalc_div.
-Require Import Fcalc_sqrt.
-Require Import Fprop_relative.
+Require Import flocq.Core.Fcore.
+Require Import flocq.Core.Fcore_digits.
+Require Import flocq.Calc.Fcalc_digits.
+Require Import flocq.Calc.Fcalc_round.
+Require Import flocq.Calc.Fcalc_bracket.
+Require Import flocq.Calc.Fcalc_ops.
+Require Import flocq.Calc.Fcalc_div.
+Require Import flocq.Calc.Fcalc_sqrt.
+Require Import flocq.Prop.Fprop_relative.
 
 Section AnyRadix.
 

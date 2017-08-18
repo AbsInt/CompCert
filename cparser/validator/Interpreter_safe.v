@@ -17,11 +17,11 @@ Require Import Streams.
 Require Import Equality.
 Require Import List.
 Require Import Syntax.
-Require Import Alphabet.
-Require Grammar.
-Require Automaton.
-Require Validator_safe.
-Require Interpreter.
+Require Import compcert.validator.Alphabet.
+Require compcert.validator.Grammar.
+Require compcert.validator.Automaton.
+Require compcert.validator.Validator_safe.
+Require compcert.validator.Interpreter.
 
 Module Make(Import A:Automaton.T) (Import Inter:Interpreter.T A).
 Module Import Valid := Validator_safe.Make A.

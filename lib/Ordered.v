@@ -18,9 +18,9 @@
   for finite sets and the [FMap] functors for finite maps. *)
 
 Require Import FSets.
-Require Import Coqlib.
-Require Import Maps.
-Require Import Integers.
+Require Import compcert.Coqlib.
+Require Import compcert.Maps.
+Require Import compcert.Integers.
 
 (** The ordered type of positive numbers *)
 

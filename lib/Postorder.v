@@ -18,9 +18,9 @@
 Require Import Wellfounded.
 Require Import Permutation.
 Require Import Mergesort.
-Require Import Coqlib.
-Require Import Maps.
-Require Import Iteration.
+Require Import compcert.Coqlib.
+Require Import compcert.Maps.
+Require Import compcert.Iteration.
 
 (** The graph is presented as a finite map from nodes (of type [positive])
   to the lists of their successors. *)

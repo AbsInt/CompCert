@@ -12,19 +12,19 @@
 
 (** Type-checking Linear code. *)
 
-Require Import Coqlib.
-Require Import AST.
-Require Import Integers.
-Require Import Values.
-Require Import Globalenvs.
-Require Import Memory.
-Require Import Events.
-Require Import Op.
-Require Import Machregs.
-Require Import Locations.
-Require Import Conventions.
-Require Import LTL.
-Require Import Linear.
+Require Import compcert.Coqlib.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Values.
+Require Import compcert.Globalenvs.
+Require Import compcert.Memory.
+Require Import compcert.Events.
+Require Import compcert.Op.
+Require Import compcert.Machregs.
+Require Import compcert.Locations.
+Require Import compcert.Conventions.
+Require Import compcert.LTL.
+Require Import compcert.Linear.
 
 (** The rules are presented as boolean-valued functions so that we
   get an executable type-checker for free. *)

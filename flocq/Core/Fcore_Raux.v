@@ -20,7 +20,7 @@ COPYING file for more details.
 (** * Missing definitions/lemmas *)
 Require Export Reals.
 Require Export ZArith.
-Require Export Fcore_Zaux.
+Require Export flocq.Core.Fcore_Zaux.
 
 Section Rmissing.
 

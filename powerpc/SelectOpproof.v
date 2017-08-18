@@ -12,19 +12,19 @@
 
 (** Correctness of instruction selection for operators *)
 
-Require Import Coqlib.
-Require Import Maps.
+Require Import compcert.Coqlib.
+Require Import compcert.Maps.
 Require Import Compopts.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Globalenvs.
-Require Import Cminor.
-Require Import Op.
-Require Import CminorSel.
-Require Import SelectOp.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Floats.
+Require Import compcert.Values.
+Require Import compcert.Memory.
+Require Import compcert.Globalenvs.
+Require Import compcert.Cminor.
+Require Import compcert.Op.
+Require Import compcert.CminorSel.
+Require Import compcert.SelectOp.
 
 Local Open Scope cminorsel_scope.
 Local Transparent Archi.ptr64.

@@ -12,11 +12,11 @@
 
 (** Elimination of unneeded computations over RTL: correctness proof. *)
 
-Require Import Coqlib Maps Errors Integers Floats Lattice Kildall.
-Require Import AST Linking.
-Require Import Values Memory Globalenvs Events Smallstep.
-Require Import Registers Op RTL.
-Require Import ValueDomain ValueAnalysis NeedDomain NeedOp Deadcode.
+Require Import compcert.Coqlib compcert.Maps compcert.Errors compcert.Integers compcert.Floats compcert.Lattice compcert.Kildall.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Values compcert.Memory compcert.Globalenvs compcert.Events compcert.Smallstep.
+Require Import compcert.Registers compcert.Op compcert.RTL.
+Require Import compcert.ValueDomain compcert.ValueAnalysis compcert.NeedDomain compcert.NeedOp compcert.Deadcode.
 
 Definition match_prog (prog tprog: RTL.program) :=
   match_program (fun cu f tf => transf_fundef (romem_for cu) f = OK tf) eq prog tprog.

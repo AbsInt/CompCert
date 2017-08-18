@@ -12,10 +12,10 @@
 
 (** RTL function inlining: semantic preservation *)
 
-Require Import Coqlib Wfsimpl Maps Errors Integers.
-Require Import AST Linking Values Memory Globalenvs Events Smallstep.
-Require Import Op Registers RTL.
-Require Import Inlining Inliningspec.
+Require Import compcert.Coqlib compcert.Wfsimpl compcert.Maps compcert.Errors compcert.Integers.
+Require Import compcert.AST compcert.Linking compcert.Values compcert.Memory compcert.Globalenvs compcert.Events compcert.Smallstep.
+Require Import compcert.Op compcert.Registers compcert.RTL.
+Require Import compcert.Inlining compcert.Inliningspec.
 
 Definition match_prog (prog tprog: program) :=
   match_program (fun cunit f tf => transf_fundef (funenv_program cunit) f = OK tf) eq prog tprog.

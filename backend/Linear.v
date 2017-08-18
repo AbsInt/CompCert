@@ -16,9 +16,9 @@
     expressed as a graph of basic blocks, but as a linear list of
     instructions with explicit labels and ``goto'' instructions. *)
 
-Require Import Coqlib.
-Require Import AST Integers Values Memory Events Globalenvs Smallstep.
-Require Import Op Locations LTL Conventions.
+Require Import compcert.Coqlib.
+Require Import compcert.AST compcert.Integers compcert.Values compcert.Memory compcert.Events compcert.Globalenvs compcert.Smallstep.
+Require Import compcert.Op compcert.Locations compcert.LTL compcert.Conventions.
 
 (** * Abstract syntax *)
 

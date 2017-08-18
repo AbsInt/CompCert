@@ -13,14 +13,14 @@
 (** The abstract domain for value numbering, used in common
     subexpression elimination. *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import AST.
-Require Import Values.
-Require Import Memory.
-Require Import Op.
-Require Import Registers.
-Require Import RTL.
+Require Import compcert.Coqlib.
+Require Import compcert.Maps.
+Require Import compcert.AST.
+Require Import compcert.Values.
+Require Import compcert.Memory.
+Require Import compcert.Op.
+Require Import compcert.Registers.
+Require Import compcert.RTL.
 
 (** Value numbers are represented by positive integers.  Equations are
   of the form [valnum = rhs] or [valnum >= rhs], where the right-hand

@@ -19,14 +19,14 @@ COPYING file for more details.
 
 (** * Error of the rounded-to-nearest addition is representable. *)
 
-Require Import Fcore_Raux.
-Require Import Fcore_defs.
-Require Import Fcore_float_prop.
-Require Import Fcore_generic_fmt.
-Require Import Fcore_FIX.
-Require Import Fcore_FLX.
-Require Import Fcore_FLT.
-Require Import Fcalc_ops.
+Require Import flocq.Core.Fcore_Raux.
+Require Import flocq.Core.Fcore_defs.
+Require Import flocq.Core.Fcore_float_prop.
+Require Import flocq.Core.Fcore_generic_fmt.
+Require Import flocq.Core.Fcore_FIX.
+Require Import flocq.Core.Fcore_FLX.
+Require Import flocq.Core.Fcore_FLT.
+Require Import flocq.Calc.Fcalc_ops.
 
 
 Section Fprop_plus_error.

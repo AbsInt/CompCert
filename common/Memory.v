@@ -27,17 +27,17 @@
 *)
 
 Require Import Zwf.
-Require Import Axioms.
-Require Import Coqlib.
-Require Intv.
-Require Import Maps.
-Require Archi.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Export Memdata.
-Require Export Memtype.
+Require Import compcert.Axioms.
+Require Import compcert.Coqlib.
+Require compcert.Intv.
+Require Import compcert.Maps.
+Require compcert.Archi.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Floats.
+Require Import compcert.Values.
+Require Export compcert.Memdata.
+Require Export compcert.Memtype.
 
 (* To avoid useless definitions of inductors in extracted code. *)
 Local Unset Elimination Schemes.

@@ -15,10 +15,10 @@
 
 Require Import FSets.
 Require FSetAVL.
-Require Import Coqlib Ordered Errors.
-Require Import AST Linking.
-Require Import Ctypes Cop Clight.
-Require Compopts.
+Require Import compcert.Coqlib compcert.Ordered compcert.Errors.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Ctypes compcert.Cop compcert.Clight.
+Require compcert.Compopts.
 
 Open Scope error_monad_scope.
 Open Scope string_scope.

@@ -15,20 +15,20 @@
 
 (** Dynamic semantics for the Compcert C language *)
 
-Require Import Coqlib.
-Require Import Errors.
-Require Import Maps.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import AST.
-Require Import Memory.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Ctypes.
-Require Import Cop.
-Require Import Csyntax.
-Require Import Smallstep.
+Require Import compcert.Coqlib.
+Require Import compcert.Errors.
+Require Import compcert.Maps.
+Require Import compcert.Integers.
+Require Import compcert.Floats.
+Require Import compcert.Values.
+Require Import compcert.AST.
+Require Import compcert.Memory.
+Require Import compcert.Events.
+Require Import compcert.Globalenvs.
+Require Import compcert.Ctypes.
+Require Import compcert.Cop.
+Require Import compcert.Csyntax.
+Require Import compcert.Smallstep.
 
 (** * Operational semantics *)
 

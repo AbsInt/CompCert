@@ -17,8 +17,8 @@
   the abstract syntax trees of many of the intermediate languages. *)
 
 Require Import String.
-Require Import Coqlib Maps Errors Integers Floats.
-Require Archi.
+Require Import compcert.Coqlib compcert.Maps compcert.Errors compcert.Integers compcert.Floats.
+Require compcert.Archi.
 
 Set Implicit Arguments.
 

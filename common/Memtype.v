@@ -23,12 +23,12 @@
 - [free]: invalidate a memory block.
 *)
 
-Require Import Coqlib.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memdata.
+Require Import compcert.Coqlib.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Floats.
+Require Import compcert.Values.
+Require Import compcert.Memdata.
 
 (** Memory states are accessed by addresses [b, ofs]: pairs of a block
   identifier [b] and a byte offset [ofs] within that block.

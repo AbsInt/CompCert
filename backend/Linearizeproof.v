@@ -13,11 +13,11 @@
 (** Correctness proof for code linearization *)
 
 Require Import FSets.
-Require Import Coqlib Maps Ordered Errors Lattice Kildall Integers.
-Require Import AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep.
-Require Import Op Locations LTL Linear.
-Require Import Linearize.
+Require Import compcert.Coqlib compcert.Maps compcert.Ordered compcert.Errors compcert.Lattice compcert.Kildall compcert.Integers.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Values compcert.Memory compcert.Events compcert.Globalenvs compcert.Smallstep.
+Require Import compcert.Op compcert.Locations compcert.LTL compcert.Linear.
+Require Import compcert.Linearize.
 
 Module NodesetFacts := FSetFacts.Facts(Nodeset).
 

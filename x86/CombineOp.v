@@ -13,9 +13,9 @@
 (** Recognition of combined operations, addressing modes and conditions
   during the [CSE] phase. *)
 
-Require Import Coqlib.
-Require Import AST Integers.
-Require Import Op CSEdomain.
+Require Import compcert.Coqlib.
+Require Import compcert.AST compcert.Integers.
+Require Import compcert.Op compcert.CSEdomain.
 
 Definition valnum := positive.
 

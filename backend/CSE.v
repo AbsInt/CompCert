@@ -13,11 +13,11 @@
 (** Common subexpression elimination over RTL.  This optimization
   proceeds by value numbering over extended basic blocks. *)
 
-Require Import Coqlib Maps Errors Integers Floats Lattice Kildall.
-Require Import AST Linking.
-Require Import Values Memory.
-Require Import Op Registers RTL.
-Require Import ValueDomain ValueAnalysis CSEdomain CombineOp.
+Require Import compcert.Coqlib compcert.Maps compcert.Errors compcert.Integers compcert.Floats compcert.Lattice compcert.Kildall.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Values compcert.Memory.
+Require Import compcert.Op compcert.Registers compcert.RTL.
+Require Import compcert.ValueDomain compcert.ValueAnalysis compcert.CSEdomain compcert.CombineOp.
 
 (** The idea behind value numbering algorithms is to associate
   abstract identifiers (``value numbers'') to the contents of registers

@@ -21,8 +21,8 @@ COPYING file for more details.
       between rnd_NE and double rounding with rnd_odd and then rnd_NE *)
 
 Require Import Reals Psatz.
-Require Import Fcore.
-Require Import Fcalc_ops.
+Require Import flocq.Core.Fcore.
+Require Import flocq.Calc.Fcalc_ops.
 
 Definition Zrnd_odd x :=  match Req_EM_T x (Z2R (Zfloor x))  with
   | left _   => Zfloor x

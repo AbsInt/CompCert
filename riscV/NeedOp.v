@@ -15,11 +15,11 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Import Coqlib.
-Require Import AST Integers Floats.
-Require Import Values Memory Globalenvs.
-Require Import Op RTL.
-Require Import NeedDomain.
+Require Import compcert.Coqlib.
+Require Import compcert.AST compcert.Integers compcert.Floats.
+Require Import compcert.Values compcert.Memory compcert.Globalenvs.
+Require Import compcert.Op compcert.RTL.
+Require Import compcert.NeedDomain.
 
 (** Neededness analysis for RISC-V operators *)
 

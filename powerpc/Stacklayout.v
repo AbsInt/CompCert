@@ -12,9 +12,9 @@
 
 (** Machine- and ABI-dependent layout information for activation records. *)
 
-Require Import Coqlib.
-Require Import Memory Separation.
-Require Import Bounds.
+Require Import compcert.Coqlib.
+Require Import compcert.Memory compcert.Separation.
+Require Import compcert.Bounds.
 
 (** In the PowerPC/EABI application binary interface,
   the general shape of activation records is as follows,

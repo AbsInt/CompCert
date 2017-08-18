@@ -12,12 +12,12 @@
 
 (** Correctness proof for common subexpression elimination. *)
 
-Require Import Coqlib Maps Errors Integers Floats Lattice Kildall.
-Require Import AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep.
-Require Import Op Registers RTL.
-Require Import ValueDomain ValueAOp ValueAnalysis.
-Require Import CSEdomain CombineOp CombineOpproof CSE.
+Require Import compcert.Coqlib compcert.Maps compcert.Errors compcert.Integers compcert.Floats compcert.Lattice compcert.Kildall.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Values compcert.Memory compcert.Events compcert.Globalenvs compcert.Smallstep.
+Require Import compcert.Op compcert.Registers compcert.RTL.
+Require Import compcert.ValueDomain compcert.ValueAOp compcert.ValueAnalysis.
+Require Import compcert.CSEdomain compcert.CombineOp compcert.CombineOpproof compcert.CSE.
 
 Definition match_prog (prog tprog: RTL.program) :=
   match_program (fun cu f tf => transf_fundef (romem_for cu) f = OK tf) eq prog tprog.

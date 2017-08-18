@@ -10,9 +10,9 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Import Coqlib Compopts.
-Require Import AST Integers Floats Values Memory Globalenvs.
-Require Import Op RTL ValueDomain.
+Require Import compcert.Coqlib Compopts.
+Require Import compcert.AST compcert.Integers compcert.Floats compcert.Values compcert.Memory compcert.Globalenvs.
+Require Import compcert.Op compcert.RTL compcert.ValueDomain.
 
 (** Value analysis for x86_64 operators *)
 

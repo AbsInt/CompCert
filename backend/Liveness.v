@@ -12,14 +12,14 @@
 
 (** Liveness analysis over RTL *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import Lattice.
-Require Import AST.
-Require Import Op.
-Require Import Registers.
-Require Import RTL.
-Require Import Kildall.
+Require Import compcert.Coqlib.
+Require Import compcert.Maps.
+Require Import compcert.Lattice.
+Require Import compcert.AST.
+Require Import compcert.Op.
+Require Import compcert.Registers.
+Require Import compcert.RTL.
+Require Import compcert.Kildall.
 
 (** A register [r] is live at a point [p] if there exists a path
   from [p] to some instruction that uses [r] as argument,

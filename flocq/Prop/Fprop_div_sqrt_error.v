@@ -18,9 +18,9 @@ COPYING file for more details.
 *)
 
 (** * Remainder of the division and square root are in the FLX format *)
-Require Import Fcore.
-Require Import Fcalc_ops.
-Require Import Fprop_relative.
+Require Import flocq.Core.Fcore.
+Require Import flocq.Calc.Fcalc_ops.
+Require Import flocq.Prop.Fprop_relative.
 
 Section Fprop_divsqrt_error.
 

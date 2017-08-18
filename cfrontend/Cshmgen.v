@@ -20,9 +20,9 @@
    Csharpminor's simpler control structures.
 *)
 
-Require Import Coqlib Maps Errors Integers Floats.
-Require Import AST Linking.
-Require Import Ctypes Cop Clight Cminor Csharpminor.
+Require Import compcert.Coqlib compcert.Maps compcert.Errors compcert.Integers compcert.Floats.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Ctypes compcert.Cop compcert.Clight compcert.Cminor compcert.Csharpminor.
 
 Local Open Scope string_scope.
 Local Open Scope error_monad_scope.

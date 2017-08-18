@@ -12,11 +12,11 @@
 
 (** Correctness proof for the [Debugvar] pass. *)
 
-Require Import Axioms Coqlib Maps Iteration Errors.
-Require Import Integers Floats AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep.
-Require Import Machregs Locations Conventions Op Linear.
-Require Import Debugvar.
+Require Import compcert.Axioms compcert.Coqlib compcert.Maps compcert.Iteration compcert.Errors.
+Require Import compcert.Integers compcert.Floats compcert.AST compcert.Linking.
+Require Import compcert.Values compcert.Memory compcert.Events compcert.Globalenvs compcert.Smallstep.
+Require Import compcert.Machregs compcert.Locations compcert.Conventions compcert.Op compcert.Linear.
+Require Import compcert.Debugvar.
 
 (** * Relational characterization of the transformation *)
 

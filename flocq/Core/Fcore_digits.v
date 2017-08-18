@@ -19,7 +19,7 @@ COPYING file for more details.
 
 Require Import ZArith.
 Require Import Zquot.
-Require Import Fcore_Zaux.
+Require Import flocq.Core.Fcore_Zaux.
 
 (** Number of bits (radix 2) of a positive integer.
 

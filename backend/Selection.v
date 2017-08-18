@@ -23,12 +23,12 @@
   The source language is Cminor and the target language is CminorSel. *)
 
 Require String.
-Require Import Coqlib Maps.
-Require Import AST Errors Integers Globalenvs Switch.
-Require Cminor.
-Require Import Op CminorSel.
-Require Import SelectOp SplitLong SelectLong SelectDiv.
-Require Machregs.
+Require Import compcert.Coqlib compcert.Maps.
+Require Import compcert.AST compcert.Errors compcert.Integers compcert.Globalenvs compcert.Switch.
+Require compcert.Cminor.
+Require Import compcert.Op compcert.CminorSel.
+Require Import compcert.SelectOp compcert.SplitLong compcert.SelectLong compcert.SelectDiv.
+Require compcert.Machregs.
 
 Local Open Scope cminorsel_scope.
 Local Open Scope error_monad_scope.

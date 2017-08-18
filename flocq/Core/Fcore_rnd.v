@@ -18,8 +18,8 @@ COPYING file for more details.
 *)
 
 (** * Roundings: properties and/or functions *)
-Require Import Fcore_Raux.
-Require Import Fcore_defs.
+Require Import flocq.Core.Fcore_Raux.
+Require Import flocq.Core.Fcore_defs.
 
 Section RND_prop.
 

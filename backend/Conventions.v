@@ -13,10 +13,10 @@
 (** Function calling conventions and other conventions regarding the use of
     machine registers and stack slots. *)
 
-Require Import Coqlib.
-Require Import AST.
-Require Import Locations.
-Require Export Conventions1.
+Require Import compcert.Coqlib.
+Require Import compcert.AST.
+Require Import compcert.Locations.
+Require Export compcert.Conventions1.
 
 (** The processor-dependent and EABI-dependent definitions are in
     [arch/abi/Conventions1.v].  This file adds various processor-independent

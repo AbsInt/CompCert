@@ -36,10 +36,10 @@
   module [Selection] implements the actual instruction selection pass.
 *)
 
-Require Import Coqlib.
+Require Import compcert.Coqlib.
 Require Import Compopts.
-Require Import AST Integers Floats.
-Require Import Op CminorSel.
+Require Import compcert.AST compcert.Integers compcert.Floats.
+Require Import compcert.Op compcert.CminorSel.
 
 Local Open Scope cminorsel_scope.
 

@@ -18,14 +18,14 @@ COPYING file for more details.
 *)
 
 (** * Floating-point format without underflow *)
-Require Import Fcore_Raux.
-Require Import Fcore_defs.
-Require Import Fcore_rnd.
-Require Import Fcore_generic_fmt.
-Require Import Fcore_float_prop.
-Require Import Fcore_FIX.
-Require Import Fcore_ulp.
-Require Import Fcore_rnd_ne.
+Require Import flocq.Core.Fcore_Raux.
+Require Import flocq.Core.Fcore_defs.
+Require Import flocq.Core.Fcore_rnd.
+Require Import flocq.Core.Fcore_generic_fmt.
+Require Import flocq.Core.Fcore_float_prop.
+Require Import flocq.Core.Fcore_FIX.
+Require Import flocq.Core.Fcore_ulp.
+Require Import flocq.Core.Fcore_rnd_ne.
 
 Section RND_FLX.
 

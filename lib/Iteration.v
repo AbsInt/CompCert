@@ -15,9 +15,9 @@
 
 (** Bounded and unbounded iterators *)
 
-Require Import Axioms.
-Require Import Coqlib.
-Require Import Wfsimpl.
+Require Import compcert.Axioms.
+Require Import compcert.Coqlib.
+Require Import compcert.Wfsimpl.
 
 (** This modules defines several Coq encodings of a general "while" loop.
   The loop is presented in functional style as the iteration

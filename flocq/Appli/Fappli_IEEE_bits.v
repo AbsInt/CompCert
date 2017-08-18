@@ -18,10 +18,10 @@ COPYING file for more details.
 *)
 
 (** * IEEE-754 encoding of binary floating-point data *)
-Require Import Fcore.
-Require Import Fcore_digits.
-Require Import Fcalc_digits.
-Require Import Fappli_IEEE.
+Require Import flocq.Core.Fcore.
+Require Import flocq.Core.Fcore_digits.
+Require Import flocq.Calc.Fcalc_digits.
+Require Import flocq.Appli.Fappli_IEEE.
 
 Section Binary_Bits.
 

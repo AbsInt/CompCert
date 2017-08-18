@@ -13,10 +13,10 @@
 (** Semantic preservation for the SimplLocals pass. *)
 
 Require Import FSets.
-Require Import Coqlib Errors Ordered Maps Integers Floats.
-Require Import AST Linking.
-Require Import Values Memory Globalenvs Events Smallstep.
-Require Import Ctypes Cop Clight SimplLocals.
+Require Import compcert.Coqlib compcert.Errors compcert.Ordered compcert.Maps compcert.Integers compcert.Floats.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Values compcert.Memory compcert.Globalenvs compcert.Events compcert.Smallstep.
+Require Import compcert.Ctypes compcert.Cop compcert.Clight compcert.SimplLocals.
 
 Module VSF := FSetFacts.Facts(VSet).
 Module VSP := FSetProperties.Properties(VSet).

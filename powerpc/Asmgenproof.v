@@ -12,11 +12,11 @@
 
 (** Correctness proof for PPC generation: main proof. *)
 
-Require Import Coqlib Errors.
-Require Import Integers Floats AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep.
-Require Import Op Locations Mach Conventions Asm.
-Require Import Asmgen Asmgenproof0 Asmgenproof1.
+Require Import compcert.Coqlib compcert.Errors.
+Require Import compcert.Integers compcert.Floats compcert.AST compcert.Linking.
+Require Import compcert.Values compcert.Memory compcert.Events compcert.Globalenvs compcert.Smallstep.
+Require Import compcert.Op compcert.Locations compcert.Mach compcert.Conventions compcert.Asm.
+Require Import compcert.Asmgen compcert.Asmgenproof0 compcert.Asmgenproof1.
 
 Local Transparent Archi.ptr64.
 

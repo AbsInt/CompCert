@@ -14,64 +14,64 @@
 
 (** Libraries. *)
 Require Import String.
-Require Import Coqlib Errors.
-Require Import AST Linking Smallstep.
+Require Import compcert.Coqlib compcert.Errors.
+Require Import compcert.AST compcert.Linking compcert.Smallstep.
 (** Languages (syntax and semantics). *)
-Require Ctypes Csyntax Csem Cstrategy Cexec.
-Require Clight.
-Require Csharpminor.
-Require Cminor.
-Require CminorSel.
-Require RTL.
-Require LTL.
-Require Linear.
-Require Mach.
-Require Asm.
+Require compcert.Ctypes compcert.Csyntax compcert.Csem compcert.Cstrategy compcert.Cexec.
+Require compcert.Clight.
+Require compcert.Csharpminor.
+Require compcert.Cminor.
+Require compcert.CminorSel.
+Require compcert.RTL.
+Require compcert.LTL.
+Require compcert.Linear.
+Require compcert.Mach.
+Require compcert.Asm.
 (** Translation passes. *)
-Require Initializers.
-Require SimplExpr.
-Require SimplLocals.
-Require Cshmgen.
-Require Cminorgen.
-Require Selection.
-Require RTLgen.
-Require Tailcall.
-Require Inlining.
-Require Renumber.
-Require Constprop.
-Require CSE.
-Require Deadcode.
-Require Unusedglob.
-Require Allocation.
-Require Tunneling.
-Require Linearize.
-Require CleanupLabels.
-Require Debugvar.
-Require Stacking.
-Require Asmgen.
+Require compcert.Initializers.
+Require compcert.SimplExpr.
+Require compcert.SimplLocals.
+Require compcert.Cshmgen.
+Require compcert.Cminorgen.
+Require compcert.Selection.
+Require compcert.RTLgen.
+Require compcert.Tailcall.
+Require compcert.Inlining.
+Require compcert.Renumber.
+Require compcert.Constprop.
+Require compcert.CSE.
+Require compcert.Deadcode.
+Require compcert.Unusedglob.
+Require compcert.Allocation.
+Require compcert.Tunneling.
+Require compcert.Linearize.
+Require compcert.CleanupLabels.
+Require compcert.Debugvar.
+Require compcert.Stacking.
+Require compcert.Asmgen.
 (** Proofs of semantic preservation. *)
-Require SimplExprproof.
-Require SimplLocalsproof.
-Require Cshmgenproof.
-Require Cminorgenproof.
-Require Selectionproof.
-Require RTLgenproof.
-Require Tailcallproof.
-Require Inliningproof.
-Require Renumberproof.
-Require Constpropproof.
-Require CSEproof.
-Require Deadcodeproof.
-Require Unusedglobproof.
-Require Allocproof.
-Require Tunnelingproof.
-Require Linearizeproof.
-Require CleanupLabelsproof.
-Require Debugvarproof.
-Require Stackingproof.
-Require Asmgenproof.
+Require compcert.SimplExprproof.
+Require compcert.SimplLocalsproof.
+Require compcert.Cshmgenproof.
+Require compcert.Cminorgenproof.
+Require compcert.Selectionproof.
+Require compcert.RTLgenproof.
+Require compcert.Tailcallproof.
+Require compcert.Inliningproof.
+Require compcert.Renumberproof.
+Require compcert.Constpropproof.
+Require compcert.CSEproof.
+Require compcert.Deadcodeproof.
+Require compcert.Unusedglobproof.
+Require compcert.Allocproof.
+Require compcert.Tunnelingproof.
+Require compcert.Linearizeproof.
+Require compcert.CleanupLabelsproof.
+Require compcert.Debugvarproof.
+Require compcert.Stackingproof.
+Require compcert.Asmgenproof.
 (** Command-line flags. *)
-Require Import Compopts.
+Require Import compcert.Compopts.
 
 (** Pretty-printers (defined in Caml). *)
 Parameter print_Clight: Clight.program -> unit.

@@ -12,9 +12,9 @@
 
 (** Abstract syntax and semantics for IA32 assembly language *)
 
-Require Import Coqlib Maps.
-Require Import AST Integers Floats Values Memory Events Globalenvs Smallstep.
-Require Import Locations Stacklayout Conventions.
+Require Import compcert.Coqlib compcert.Maps.
+Require Import compcert.AST compcert.Integers compcert.Floats compcert.Values compcert.Memory compcert.Events compcert.Globalenvs compcert.Smallstep.
+Require Import compcert.Locations compcert.Stacklayout compcert.Conventions.
 
 (** * Abstract syntax *)
 

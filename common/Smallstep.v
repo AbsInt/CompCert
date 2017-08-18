@@ -21,10 +21,10 @@
 
 Require Import Relations.
 Require Import Wellfounded.
-Require Import Coqlib.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Integers.
+Require Import compcert.Coqlib.
+Require Import compcert.Events.
+Require Import compcert.Globalenvs.
+Require Import compcert.Integers.
 
 Set Implicit Arguments.
 

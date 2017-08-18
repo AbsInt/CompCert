@@ -15,7 +15,7 @@
 
 (** Definitions and theorems about semi-open integer intervals *)
 
-Require Import Coqlib.
+Require Import compcert.Coqlib.
 Require Import Zwf.
 Require Coq.Program.Wf.
 Require Recdef.

@@ -12,10 +12,10 @@
 
 (** Layout of activation records; translation from Linear to Mach. *)
 
-Require Import Coqlib Errors.
-Require Import Integers AST.
-Require Import Op Locations Linear Mach.
-Require Import Bounds Conventions Stacklayout Lineartyping.
+Require Import compcert.Coqlib compcert.Errors.
+Require Import compcert.Integers compcert.AST.
+Require Import compcert.Op compcert.Locations compcert.Linear compcert.Mach.
+Require Import compcert.Bounds compcert.Conventions compcert.Stacklayout compcert.Lineartyping.
 
 (** * Layout of activation records *)
 

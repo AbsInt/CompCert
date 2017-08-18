@@ -12,11 +12,11 @@
 
 (** Correctness proof for expression simplification. *)
 
-Require Import Coqlib Maps Errors Integers.
-Require Import AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep.
-Require Import Ctypes Cop Csyntax Csem Cstrategy Clight.
-Require Import SimplExpr SimplExprspec.
+Require Import compcert.Coqlib compcert.Maps compcert.Errors compcert.Integers.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Values compcert.Memory compcert.Events compcert.Globalenvs compcert.Smallstep.
+Require Import compcert.Ctypes compcert.Cop compcert.Csyntax compcert.Csem compcert.Cstrategy compcert.Clight.
+Require Import compcert.SimplExpr compcert.SimplExprspec.
 
 (** ** Relational specification of the translation. *)
 

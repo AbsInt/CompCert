@@ -13,8 +13,8 @@
 (** Function calling conventions and other conventions regarding the use of
     machine registers and stack slots. *)
 
-Require Import Coqlib Decidableplus.
-Require Import AST Machregs Locations.
+Require Import compcert.Coqlib compcert.Decidableplus.
+Require Import compcert.AST compcert.Machregs compcert.Locations.
 
 (** * Classification of machine registers *)
 

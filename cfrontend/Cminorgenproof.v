@@ -14,11 +14,11 @@
 
 Require Import Coq.Program.Equality FSets Permutation.
 Require Import FSets FSetAVL Orders Mergesort.
-Require Import Coqlib Maps Ordered Errors Integers Floats.
-Require Intv.
-Require Import AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep.
-Require Import Csharpminor Switch Cminor Cminorgen.
+Require Import compcert.Coqlib compcert.Maps compcert.Ordered compcert.Errors compcert.Integers compcert.Floats.
+Require compcert.Intv.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Values compcert.Memory compcert.Events compcert.Globalenvs compcert.Smallstep.
+Require Import compcert.Csharpminor compcert.Switch compcert.Cminor compcert.Cminorgen.
 
 Local Open Scope error_monad_scope.
 

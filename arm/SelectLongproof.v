@@ -12,11 +12,11 @@
 
 (** Instruction selection for 64-bit integer operations *)
 
-Require Import String Coqlib Maps Integers Floats Errors.
-Require Archi.
-Require Import AST Values Memory Globalenvs Events.
-Require Import Cminor Op CminorSel.
-Require Import SelectOp SelectOpproof SplitLong SplitLongproof.
-Require Import SelectLong.
+Require Import String compcert.Coqlib compcert.Maps compcert.Integers compcert.Floats compcert.Errors.
+Require compcert.Archi.
+Require Import compcert.AST compcert.Values compcert.Memory compcert.Globalenvs compcert.Events.
+Require Import compcert.Cminor compcert.Op compcert.CminorSel.
+Require Import compcert.SelectOp compcert.SelectOpproof compcert.SplitLong compcert.SplitLongproof.
+Require Import compcert.SelectLong.
 
 (** This file is empty because we use the default implementation provided in [SplitLong]. *)

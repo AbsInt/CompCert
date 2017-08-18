@@ -12,20 +12,20 @@
 
 (** Correctness proof for constant propagation (processor-dependent part). *)
 
-Require Import Coqlib.
-Require Import Compopts.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Globalenvs.
-Require Import Events.
-Require Import Op.
-Require Import Registers.
-Require Import RTL.
-Require Import ValueDomain.
-Require Import ConstpropOp.
+Require Import compcert.Coqlib.
+Require Import compcert.Compopts.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Floats.
+Require Import compcert.Values.
+Require Import compcert.Memory.
+Require Import compcert.Globalenvs.
+Require Import compcert.Events.
+Require Import compcert.Op.
+Require Import compcert.Registers.
+Require Import compcert.RTL.
+Require Import compcert.ValueDomain.
+Require Import compcert.ConstpropOp.
 
 Local Transparent Archi.ptr64.
 

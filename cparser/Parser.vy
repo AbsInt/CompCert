@@ -15,7 +15,7 @@
 
 %{
 
-Require Import Cabs.
+Require Import compcert.Cabs.
 Require Import List.
 
 %}

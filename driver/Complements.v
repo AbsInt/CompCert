@@ -13,23 +13,23 @@
 (** Corollaries of the main semantic preservation theorem. *)
 
 Require Import Classical.
-Require Import Coqlib.
-Require Import AST.
-Require Import Integers.
-Require Import Values.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Smallstep.
-Require Import Behaviors.
-Require Import Csyntax.
-Require Import Csem.
-Require Import Cstrategy.
-Require Import Clight.
-Require Import Cminor.
-Require Import RTL.
-Require Import Asm.
-Require Import Compiler.
-Require Import Errors.
+Require Import compcert.Coqlib.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Values.
+Require Import compcert.Events.
+Require Import compcert.Globalenvs.
+Require Import compcert.Smallstep.
+Require Import compcert.Behaviors.
+Require Import compcert.Csyntax.
+Require Import compcert.Csem.
+Require Import compcert.Cstrategy.
+Require Import compcert.Clight.
+Require Import compcert.Cminor.
+Require Import compcert.RTL.
+Require Import compcert.Asm.
+Require Import compcert.Compiler.
+Require Import compcert.Errors.
 
 (** * Preservation of whole-program behaviors *)
 

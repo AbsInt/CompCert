@@ -13,11 +13,11 @@
 (** Correctness proof for clean-up of labels *)
 
 Require Import FSets.
-Require Import Coqlib Ordered Integers.
-Require Import AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep.
-Require Import Op Locations Linear.
-Require Import CleanupLabels.
+Require Import compcert.Coqlib compcert.Ordered compcert.Integers.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Values compcert.Memory compcert.Events compcert.Globalenvs compcert.Smallstep.
+Require Import compcert.Op compcert.Locations compcert.Linear.
+Require Import compcert.CleanupLabels.
 
 Module LabelsetFacts := FSetFacts.Facts(Labelset).
 

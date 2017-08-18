@@ -53,8 +53,8 @@
 *)
 
 Require Import Relations.
-Require Import Axioms.
-Require Import Coqlib.
+Require Import compcert.Axioms.
+Require Import compcert.Coqlib.
 Require Recdef.
 
 Section PARMOV.

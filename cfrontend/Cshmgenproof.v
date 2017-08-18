@@ -12,11 +12,11 @@
 
 (** * Correctness of the translation from Clight to C#minor. *)
 
-Require Import Coqlib Errors Maps Integers Floats.
-Require Import AST Linking.
-Require Import Values Events Memory Globalenvs Smallstep.
-Require Import Ctypes Cop Clight Cminor Csharpminor.
-Require Import Cshmgen.
+Require Import compcert.Coqlib compcert.Errors compcert.Maps compcert.Integers compcert.Floats.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Values compcert.Events compcert.Memory compcert.Globalenvs compcert.Smallstep.
+Require Import compcert.Ctypes compcert.Cop compcert.Clight compcert.Cminor compcert.Csharpminor.
+Require Import compcert.Cshmgen.
 
 (** * Relational specification of the transformation *)
 

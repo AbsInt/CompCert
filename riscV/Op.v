@@ -29,9 +29,9 @@
   syntax and dynamic semantics of the Cminor language.
 *)
 
-Require Import BoolEqual Coqlib.
-Require Import AST Integers Floats.
-Require Import Values Memory Globalenvs Events.
+Require Import compcert.BoolEqual compcert.Coqlib.
+Require Import compcert.AST compcert.Integers compcert.Floats.
+Require Import compcert.Values compcert.Memory compcert.Globalenvs compcert.Events.
 
 Set Implicit Arguments.
 

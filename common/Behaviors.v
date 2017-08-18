@@ -17,11 +17,11 @@
 
 Require Import Classical.
 Require Import ClassicalEpsilon.
-Require Import Coqlib.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Integers.
-Require Import Smallstep.
+Require Import compcert.Coqlib.
+Require Import compcert.Events.
+Require Import compcert.Globalenvs.
+Require Import compcert.Integers.
+Require Import compcert.Smallstep.
 
 Set Implicit Arguments.
 

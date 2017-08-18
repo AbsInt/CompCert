@@ -12,9 +12,9 @@
 
 (** Branch tunneling (optimization of branches to branches). *)
 
-Require Import Coqlib Maps UnionFind.
-Require Import AST.
-Require Import LTL.
+Require Import compcert.Coqlib compcert.Maps compcert.UnionFind.
+Require Import compcert.AST.
+Require Import compcert.LTL.
 
 (** Branch tunneling shortens sequences of branches (with no intervening
   computations) by rewriting the branch and conditional branch instructions

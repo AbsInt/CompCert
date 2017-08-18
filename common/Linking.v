@@ -15,7 +15,7 @@
 
 (** Separate compilation and syntactic linking *)
 
-Require Import Coqlib Maps Errors AST.
+Require Import compcert.Coqlib compcert.Maps compcert.Errors compcert.AST.
 
 (** This file follows "approach A" from the paper
        "Lightweight Verification of Separate Compilation"

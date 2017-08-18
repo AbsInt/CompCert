@@ -12,15 +12,15 @@
 
 (** Translation from Mach to PPC. *)
 
-Require Import Coqlib.
-Require Import Errors.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Op.
-Require Import Locations.
-Require Import Mach.
-Require Import Asm.
+Require Import compcert.Coqlib.
+Require Import compcert.Errors.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Floats.
+Require Import compcert.Op.
+Require Import compcert.Locations.
+Require Import compcert.Mach.
+Require Import compcert.Asm.
 
 Local Open Scope string_scope.
 Local Open Scope error_monad_scope.

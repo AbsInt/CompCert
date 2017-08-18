@@ -13,11 +13,11 @@
 (** Recognition of combined operations, addressing modes and conditions
   during the [CSE] phase. *)
 
-Require Import Coqlib.
-Require Import AST.
-Require Import Integers.
-Require Import Op.
-Require Import CSEdomain.
+Require Import compcert.Coqlib.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Op.
+Require Import compcert.CSEdomain.
 
 Section COMBINE.
 

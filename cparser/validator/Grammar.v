@@ -15,9 +15,9 @@
 
 Require Import List.
 Require Import Syntax.
-Require Import Alphabet.
+Require Import compcert.validator.Alphabet.
 Require Import Orders.
-Require Tuples.
+Require compcert.validator.Tuples.
 
 (** The terminal non-terminal alphabets of the grammar. **)
 Module Type Alphs.

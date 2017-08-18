@@ -13,10 +13,10 @@
 (** Instruction selection for 64-bit integer operations *)
 
 Require String.
-Require Import Coqlib.
-Require Import AST Integers Floats.
-Require Import Op CminorSel.
-Require Import SelectOp.
+Require Import compcert.Coqlib.
+Require Import compcert.AST compcert.Integers compcert.Floats.
+Require Import compcert.Op compcert.CminorSel.
+Require Import compcert.SelectOp.
 
 Local Open Scope cminorsel_scope.
 Local Open Scope string_scope.

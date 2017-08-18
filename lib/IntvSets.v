@@ -15,7 +15,7 @@
 
 (** Finite sets of integer intervals *)
 
-Require Import Coqlib.
+Require Import compcert.Coqlib.
 
 Module ISet.
 

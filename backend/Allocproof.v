@@ -14,12 +14,12 @@
   RTL to LTL). *)
 
 Require Import FSets.
-Require Import Coqlib Ordered Maps Errors Integers Floats.
-Require Import AST Linking Lattice Kildall.
-Require Import Values Memory Globalenvs Events Smallstep.
-Require Archi.
-Require Import Op Registers RTL Locations Conventions RTLtyping LTL.
-Require Import Allocation.
+Require Import compcert.Coqlib compcert.Ordered compcert.Maps compcert.Errors compcert.Integers compcert.Floats.
+Require Import compcert.AST compcert.Linking compcert.Lattice compcert.Kildall.
+Require Import compcert.Values compcert.Memory compcert.Globalenvs compcert.Events compcert.Smallstep.
+Require compcert.Archi.
+Require Import compcert.Op compcert.Registers compcert.RTL compcert.Locations compcert.Conventions compcert.RTLtyping compcert.LTL.
+Require Import compcert.Allocation.
 
 Definition match_prog (p: RTL.program) (tp: LTL.program) :=
   match_program (fun _ f tf => transf_fundef f = OK tf) eq p tp.

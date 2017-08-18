@@ -12,10 +12,10 @@
 
 (** Correctness of instruction selection for integer division *)
 
-Require Import Zquot Coqlib.
-Require Import AST Integers Floats Values Memory Globalenvs Events.
-Require Import Cminor Op CminorSel.
-Require Import SelectOp SelectOpproof SplitLong SplitLongproof SelectLong SelectLongproof SelectDiv.
+Require Import Zquot compcert.Coqlib.
+Require Import compcert.AST compcert.Integers compcert.Floats compcert.Values compcert.Memory compcert.Globalenvs compcert.Events.
+Require Import compcert.Cminor compcert.Op compcert.CminorSel.
+Require Import compcert.SelectOp compcert.SelectOpproof compcert.SplitLong compcert.SplitLongproof compcert.SelectLong compcert.SelectLongproof compcert.SelectDiv.
 
 Local Open Scope cminorsel_scope.
 

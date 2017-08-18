@@ -10,10 +10,10 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Import Zwf Coqlib Maps Integers Floats Lattice.
-Require Import Compopts AST.
-Require Import Values Memory Globalenvs Events.
-Require Import Registers RTL.
+Require Import Zwf compcert.Coqlib compcert.Maps compcert.Integers compcert.Floats compcert.Lattice.
+Require Import compcert.Compopts compcert.AST.
+Require Import compcert.Values compcert.Memory compcert.Globalenvs compcert.Events.
+Require Import compcert.Registers compcert.RTL.
 
 (** The abstract domains for value analysis *)
 

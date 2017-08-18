@@ -12,12 +12,12 @@
 
 (** Animating the CompCert C semantics *)
 
-Require Import Axioms Classical.
-Require Import String Coqlib Decidableplus.
-Require Import Errors Maps Integers Floats.
-Require Import AST Values Memory Events Globalenvs Determinism.
-Require Import Ctypes Cop Csyntax Csem.
-Require Cstrategy.
+Require Import compcert.Axioms Classical.
+Require Import String compcert.Coqlib compcert.Decidableplus.
+Require Import compcert.Errors compcert.Maps compcert.Integers compcert.Floats.
+Require Import compcert.AST compcert.Values compcert.Memory compcert.Events compcert.Globalenvs compcert.Determinism.
+Require Import compcert.Ctypes compcert.Cop compcert.Csyntax compcert.Csem.
+Require compcert.Cstrategy.
 
 Local Open Scope string_scope.
 Local Open Scope list_scope.

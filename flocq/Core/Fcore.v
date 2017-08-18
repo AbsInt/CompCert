@@ -18,13 +18,13 @@ COPYING file for more details.
 *)
 
 (** To ease the import *)
-Require Export Fcore_Raux.
-Require Export Fcore_defs.
-Require Export Fcore_float_prop.
-Require Export Fcore_rnd.
-Require Export Fcore_generic_fmt.
-Require Export Fcore_rnd_ne.
-Require Export Fcore_FIX.
-Require Export Fcore_FLX.
-Require Export Fcore_FLT.
-Require Export Fcore_ulp.
+Require Export flocq.Core.Fcore_Raux.
+Require Export flocq.Core.Fcore_defs.
+Require Export flocq.Core.Fcore_float_prop.
+Require Export flocq.Core.Fcore_rnd.
+Require Export flocq.Core.Fcore_generic_fmt.
+Require Export flocq.Core.Fcore_rnd_ne.
+Require Export flocq.Core.Fcore_FIX.
+Require Export flocq.Core.Fcore_FLX.
+Require Export flocq.Core.Fcore_FLT.
+Require Export flocq.Core.Fcore_ulp.

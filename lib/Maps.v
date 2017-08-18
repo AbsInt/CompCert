@@ -33,7 +33,7 @@
 *)
 
 Require Import Equivalence EquivDec.
-Require Import Coqlib.
+Require Import compcert.Coqlib.
 
 (* To avoid useless definitions of inductors in extracted code. *)
 Local Unset Elimination Schemes.
