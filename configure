@@ -497,8 +497,9 @@ case "$ocaml_ver" in
         missingtools=true;;
   4.02.*|4.03.*|4.04.*)
       echo "version $ocaml_ver -- good!"
-      echo "Some Intel processors of the Skylake and Kaby Lake generations have a hardware bug that this"
-      echo "version of OCaml runs into. To avoid this risk, it is recommended to use OCaml 4.05.";;
+      echo "WARNING: some Intel processors of the Skylake and Kaby Lake generations"
+      echo "have a hardware bug that can be triggered by this version of OCaml."
+      echo "To avoid this risk, it is recommended to use OCaml 4.05.";;
   4.0*)
         echo "version $ocaml_ver -- good!";;
   ?.*)
