@@ -1,3 +1,6 @@
+Release 3.1, 2017-08-18
+=======================
+
 Major improvements:
 
 - New port targeting the RISC-V architecture, in 32- and 64-bit modes.
@@ -12,6 +15,7 @@ Code generation and optimization:
   (Avoid reloading the return address from the stack.)
 - Avoid generating useless conditional branches for empty if/else statements.
 - Earlier elimination of redundant `&*expr` and `*&expr` addressings.
+- Improve utilization of addressing modes for volatile loads and stores.
 
 Usability:
 
@@ -31,12 +35,14 @@ Bug fixing:
   switch cases.
 - Issue #P16: illegal PowerPC asm generated for unsigned division after
   constant propagation.
-- Issue #P18: ARM PC-relative addressing of constant pool overflows
-  owing to underestimation of code size.
+- Issue #P18: ARM addressing overflows caused by 1- underestimation of
+  code size, causing mismanagement of constant pool, and 2- large stack
+  frames where return address and back link are at offsets >= 4Kb.
 - Pass -no-pie flag to the x86 linker when -pie is the default.
 
 Coq and Caml development:
 
+- Support Coq 8.6.1.
 - Improve compatibility with Coq working version.
 - Always generate .merlin and _CoqProject files.
 
