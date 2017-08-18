@@ -616,6 +616,37 @@ Proof.
   intros; Simpl.
 Qed.
 
+(** Saving the link register *)
+
+Lemma save_lr_correct:
+  forall ofs k (rs: regset) m m',
+  Mem.storev Mint32 m (Val.offset_ptr rs#IR13 ofs) (rs#IR14) = Some m' ->
+  exists rs',
+     exec_straight ge fn (save_lr ofs k) rs m k rs' m'
+  /\ (forall r, if_preg r = true -> r <> IR12 -> rs'#r = rs#r)
+  /\ (save_lr_preserves_R12 ofs = true -> rs'#IR12 = rs#IR12).
+Proof.
+  intros; unfold save_lr, save_lr_preserves_R12.
+  set (n := Ptrofs.to_int ofs). set (n1 := mk_immed_mem_word n).
+  assert (EQ: Val.offset_ptr rs#IR13 ofs = Val.add rs#IR13 (Vint n)).
+  { destruct rs#IR13; try discriminate. simpl. f_equal; f_equal. unfold n; symmetry; auto with ptrofs. }
+  destruct (Int.eq n n1).
+- econstructor; split. apply exec_straight_one. simpl; unfold exec_store. rewrite <- EQ, H; reflexivity. auto.
+  split. intros; Simpl. intros; Simpl.
+- destruct (addimm_correct IR12 IR13 (Int.sub n n1) (Pstr IR14 IR12 (SOimm n1) :: k) rs m)
+  as (rs1 & A & B & C).
+  econstructor; split.
+  eapply exec_straight_trans. eexact A. 
+  apply exec_straight_one. simpl; unfold exec_store.
+  rewrite B. rewrite Val.add_assoc. simpl.
+  rewrite Int.sub_add_opp. rewrite Int.add_assoc.
+  rewrite (Int.add_commut (Int.neg n1)).
+  rewrite Int.add_neg_zero. rewrite Int.add_zero. 
+  rewrite <- EQ. rewrite C by eauto with asmgen. rewrite H. reflexivity.
+  auto.
+  split. intros; Simpl. congruence.
+Qed.
+  
 (** Translation of shift immediates *)
 
 Lemma transl_shift_correct:

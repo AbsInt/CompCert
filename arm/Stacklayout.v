@@ -19,11 +19,10 @@ Require Import Bounds.
 (** The general shape of activation records is as follows,
   from bottom (lowest offsets) to top:
 - Space for outgoing arguments to function calls.
-- Local stack slots.
-- Saved values of integer callee-save registers used by the function.
-- Saved values of float callee-save registers used by the function.
-- Saved return address into caller.
 - Pointer to activation record of the caller.
+- Saved return address into caller.
+- Local stack slots.
+- Saved values of callee-save registers used by the function.
 - Space for the stack-allocated data declared in Cminor.
 
 The [frame_env] compilation environment records the positions of
@@ -36,11 +35,11 @@ Definition fe_ofs_arg := 0.
   function. *)
 
 Definition make_env (b: bounds) :=
-  let ol := align (4 * b.(bound_outgoing)) 8 in    (* locals *)
+  let olink := 4 * b.(bound_outgoing) in  (* back link*)
+  let ora := olink + 4 in (* return address *)
+  let ol := align (ora + 4) 8 in    (* locals *)
   let ocs := ol + 4 * b.(bound_local) in (* callee-saves *)
-  let ora := align (size_callee_save_area b ocs) 4 in (* retaddr *)
-  let olink := ora + 4 in (* back link *)
-  let ostkdata := align (olink + 4) 8 in (* stack data *)
+  let ostkdata := align (size_callee_save_area b ocs) 8 in (* retaddr *)
   let sz := align (ostkdata + b.(bound_stack_data)) 8 in
   {| fe_size := sz;
      fe_ofs_link := olink;
@@ -67,33 +66,32 @@ Lemma frame_env_separated:
 Proof.
 Local Opaque Z.add Z.mul sepconj range.
   intros; simpl.
-  set (ol := align (4 * b.(bound_outgoing)) 8);
+  set (olink := 4 * b.(bound_outgoing));
+  set (ora := olink + 4);
+  set (ol := align (ora + 4) 8);
   set (ocs := ol + 4 * b.(bound_local));
-  set (ora := align (size_callee_save_area b ocs) 4);
-  set (olink := ora + 4);
-  set (ostkdata := align (olink + 4) 8).
+  set (ostkdata := align (size_callee_save_area b ocs) 8).
   generalize b.(bound_local_pos) b.(bound_outgoing_pos) b.(bound_stack_data_pos); intros.
-  assert (4 * b.(bound_outgoing) <= ol) by (apply align_le; omega).
+  assert (0 <= olink) by (unfold olink; omega).
+  assert (olink <= ora) by (unfold ora; omega).
+  assert (ora + 4 <= ol) by (apply align_le; omega).
   assert (ol + 4 * b.(bound_local) <= ocs) by (unfold ocs; omega).
   assert (ocs <= size_callee_save_area b ocs) by apply size_callee_save_area_incr.
-  assert (size_callee_save_area b ocs <= ora) by (apply align_le; omega).
-  assert (ora <= olink) by (unfold olink; omega).
-  assert (olink + 4 <= ostkdata) by (apply align_le; omega).
+  assert (size_callee_save_area b ocs <= ostkdata) by (apply align_le; omega).
 (* Reorder as:
      outgoing
-     local
-     callee-save
+     back link
      retaddr
-     back link *)
+     local
+     callee-save *)
   rewrite sep_swap12.
-  rewrite sep_swap45.
+  rewrite sep_swap23.
   rewrite sep_swap34.
-  rewrite sep_swap45.
 (* Apply range_split and range_split2 repeatedly *)
   unfold fe_ofs_arg.
-  apply range_split_2. fold ol; omega. omega.
   apply range_split. omega.
-  apply range_split_2. fold ora; omega. omega.
+  apply range_split. omega.
+  apply range_split_2. fold ol; omega. omega.
   apply range_split. omega.
   apply range_drop_right with ostkdata. omega.
   eapply sep_drop2. eexact H.
@@ -105,18 +103,18 @@ Lemma frame_env_range:
   0 <= fe_stack_data fe /\ fe_stack_data fe + bound_stack_data b <= fe_size fe.
 Proof.
   intros; simpl.
-  set (ol := align (4 * b.(bound_outgoing)) 8);
+  set (olink := 4 * b.(bound_outgoing));
+  set (ora := olink + 4);
+  set (ol := align (ora + 4) 8);
   set (ocs := ol + 4 * b.(bound_local));
-  set (ora := align (size_callee_save_area b ocs) 4);
-  set (olink := ora + 4);
-  set (ostkdata := align (olink + 4) 8).
+  set (ostkdata := align (size_callee_save_area b ocs) 8).
   generalize b.(bound_local_pos) b.(bound_outgoing_pos) b.(bound_stack_data_pos); intros.
-  assert (4 * b.(bound_outgoing) <= ol) by (apply align_le; omega).
+  assert (0 <= olink) by (unfold olink; omega).
+  assert (olink <= ora) by (unfold ora; omega).
+  assert (ora + 4 <= ol) by (apply align_le; omega).
   assert (ol + 4 * b.(bound_local) <= ocs) by (unfold ocs; omega).
   assert (ocs <= size_callee_save_area b ocs) by apply size_callee_save_area_incr.
-  assert (size_callee_save_area b ocs <= ora) by (apply align_le; omega).
-  assert (ora <= olink) by (unfold olink; omega).
-  assert (olink + 4 <= ostkdata) by (apply align_le; omega).
+  assert (size_callee_save_area b ocs <= ostkdata) by (apply align_le; omega).
   split. omega. apply align_le; omega.
 Qed.
 
@@ -130,14 +128,13 @@ Lemma frame_env_aligned:
   /\ (4 | fe_ofs_retaddr fe).
 Proof.
   intros; simpl.
-  set (ol := align (4 * b.(bound_outgoing)) 8);
+  set (olink := 4 * b.(bound_outgoing));
+  set (ora := olink + 4);
+  set (ol := align (ora + 4) 8);
   set (ocs := ol + 4 * b.(bound_local));
-  set (ora := align (size_callee_save_area b ocs) 4);
-  set (olink := ora + 4);
-  set (ostkdata := align (olink + 4) 8).
+  set (ostkdata := align (size_callee_save_area b ocs) 8).
   split. apply Zdivide_0.
   split. apply align_divides; omega.
   split. apply align_divides; omega.
-  split. apply Z.divide_add_r. apply align_divides; omega. apply Z.divide_refl.
-  apply align_divides; omega.
+  unfold ora, olink; auto using Z.divide_mul_l, Z.divide_add_r, Z.divide_refl.
 Qed.
