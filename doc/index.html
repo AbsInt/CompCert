@@ -24,11 +24,11 @@ a:active {color : Red; text-decoration : underline; }
 
 <H1 align="center">The CompCert verified compiler</H1>
 <H2 align="center">Commented Coq development</H2>
-<H3 align="center">Version 3.0, 2017-02-10</H3>
+<H3 align="center">Version 3.1, 2017-08-18</H3>
 
 <H2>Introduction</H2>
 
-<P>CompCert is a compiler that generates PowerPC, ARM and x86 assembly
+<P>CompCert is a compiler that generates PowerPC, ARM, RISC-V and x86 assembly
 code from CompCert C, a large subset of the C programming language.
 The particularity of this compiler is that it is written mostly within
 the specification language of the Coq proof assistant, and its
@@ -40,18 +40,14 @@ within the Coq proof assistant.</P>
 correctness can be found in the following papers (in increasing order of technical details):</P>
 <UL>
 <LI>Xavier Leroy, <A HREF="http://gallium.inria.fr/~xleroy/publi/compcert-CACM.pdf">Formal verification of a realistic compiler</A>.  Communications of the ACM 52(7), July 2009.
-<LI>Sandrine Blazy, Zaynah Dargaye and Xavier Leroy,
-<A HREF="http://gallium.inria.fr/~xleroy/publi/cfront.pdf">Formal
-verification of a C compiler front-end</A>. 
-Proceedings of Formal Methods 2006, LNCS 4085.
 <LI>Xavier Leroy, <A HREF="http://gallium.inria.fr/~xleroy/publi/compcert-backend.pdf">A formally verified compiler back-end</A>. 
 Journal of Automated Reasoning 43(4):363-446, 2009.
 </UL>
 
 <P>This Web site gives a commented listing of the underlying Coq
 specifications and proofs.  Proof scripts are folded by default, but
-can be viewed by clicking on "Proof".  Some modules (written in <I>italics</I> below) differ between the three supported target architectures.  The
-PowerPC versions of these modules are shown below; the ARM and x86
+can be viewed by clicking on "Proof".  Some modules (written in <I>italics</I> below) differ between the four target architectures.  The
+PowerPC versions of these modules are shown below; the ARM, x86 and RISC-V
 versions can be found in the source distribution.
 </P>
 
@@ -62,8 +58,7 @@ written.</P>
 <P>The complete sources for CompCert can be downloaded from
 <A HREF="http://compcert.inria.fr/">the CompCert Web site</A>.</P>
 
-<P>This document and the CompCert sources are
-copyright 2005-2016 Institut
+<P>This document and the CompCert sources are copyright Institut
 National de Recherche en Informatique et en Automatique (INRIA) and
 distributed under the terms of the
 following <A HREF="LICENSE">license</A>.
@@ -98,8 +93,7 @@ common elements of abstract syntaxes.
 <LI> <A HREF="html/Linking.html">Linking</A>: generic framework to define syntactic linking over the CompCert languages.
 <LI> <A HREF="html/Values.html">Values</A>: run-time values.
 <LI> <A HREF="html/Events.html">Events</A>: observable events and traces.
-<LI> <A HREF="html/Memtype.html">Memtype</A>: memory model (interface). <BR>
-See also: <A HREF="html/Memory.html">Memory</A> (implementation of the memory model). <BR>
+<LI> <A HREF="html/Memory.html">Memory</A>: memory model. <BR>
 See also: <A HREF="html/Memdata.html">Memdata</A> (in-memory representation of data).
 <LI> <A HREF="html/Globalenvs.html">Globalenvs</A>: global execution environments.
 <LI> <A HREF="html/Smallstep.html">Smallstep</A>: tools for small-step semantics.
@@ -119,8 +113,8 @@ semantics.
 <A HREF="html/Cstrategy.html">determinized semantics</A> and
 <A HREF="html/Ctyping.html">type system</A>.<BR>
 See also: <A HREF="html/Ctypes.html">type expressions</A> and
-<A HREF="html/Cop.html">operators (syntax and semantics)</A> and
-<A HREF="html/Cexec.html">reference interpreter</A>.
+<A HREF="html/Cop.html">operators (syntax and semantics)</A>.<BR>
+See also: <A HREF="html/Cexec.html">reference interpreter</A>.
 <LI> <A HREF="html/Clight.html">Clight</A>: a simpler version of CompCert C where expressions contain no side-effects.
 <LI> <A HREF="html/Csharpminor.html">Csharpminor</A>: low-level
  structured language.
@@ -317,6 +311,14 @@ code.
 </TR>
 </TABLE>
 
+<H3>All together</H3>
+
+<UL>
+<LI> <A HREF="html/Compiler.html">Compiler</A>: composing the passes together;
+whole-compiler semantic preservation theorems.
+<LI> <A HREF="html/Complements.html">Complements</A>: interesting consequences of the semantic preservation theorems.
+</UL>
+
 <H3>Static analyses</H3>
 
 The following static analyses are performed over the RTL intermediate
@@ -334,20 +336,12 @@ See also: <A HREF="html/NeedOp.html"><I>NeedOp</I></A>: processor-dependent part
 
 <H3>Type systems</H3>
 
-The type system of CompCert C is fully formalized.  For some intermediate languages of the back-end, simpler type systems are used to statically capture well-formedness conditions.
+The <A HREF="html/Ctyping.html">type system of CompCert C</A> is fully formalized.  For some intermediate languages of the back-end, simpler type systems are used to statically capture well-formedness conditions.
 <UL>
 <LI> <A HREF="html/Ctyping.html">RTLtyping</A>: typing for CompCert C + type-checking functions.
 <LI> <A HREF="html/RTLtyping.html">RTLtyping</A>: typing for RTL + type
 reconstruction.
 <LI> <A HREF="html/Lineartyping.html">Lineartyping</A>: typing for Linear.
-</UL>
-
-<H3>All together</H3>
-
-<UL>
-<LI> <A HREF="html/Compiler.html">Compiler</A>: composing the passes together;
-whole-compiler semantic preservation theorems.
-<LI> <A HREF="html/Complements.html">Complements</A>: interesting consequences of the semantic preservation theorems.
 </UL>
 
 <HR>
