@@ -95,6 +95,17 @@ Definition wt_function (f: function) : bool :=
   let bs := map snd (Maps.PTree.elements f.(fn_code)) in
   forallb (wt_bblock f) bs.
 
+Lemma wt_function_wt_bblock:
+  forall f pc b,
+  wt_function f = true ->
+  Maps.PTree.get pc (fn_code f) = Some b ->
+  wt_bblock f b = true.
+Proof.
+  intros. apply Maps.PTree.elements_correct in H0.
+  unfold wt_function, wt_bblock in *. eapply forallb_forall in H; eauto.
+  change b with (snd (pc, b)). apply in_map; auto.
+Qed.
+
 (** Typing the run-time state. *)
 
 Definition wt_locset (ls: locset) : Prop :=
@@ -107,7 +118,7 @@ Proof.
   intros; red; intros.
   unfold Locmap.set.
   destruct (Loc.eq (R r) l).
-  subst l; auto.
+  subst l; rewrite pred_dec_true; auto.
   destruct (Loc.diff_dec (R r) l). auto. red. auto.
 Qed.
 
@@ -198,24 +209,6 @@ Proof.
   destruct v; exact I.
 Qed.
 
-(** In addition to type preservation during evaluation, we also show
-  properties of the environment [ls] at call points and at return points.
-  These properties are used in the proof of the [Stacking] pass.
-  For call points, we have that the current environment [ls] and the
-  one from the top call stack agree on the [Outgoing] locations
-  used for parameter passing. *)
-
-Definition agree_outgoing_arguments (sg: signature) (ls pls: locset) : Prop :=
-  forall ty ofs,
-  In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments sg)) ->
-  ls (S Outgoing ofs ty) = pls (S Outgoing ofs ty).
-
-(** For return points, we have that all [Outgoing] stack locations have
-  been set to [Vundef]. *)
-
-Definition outgoing_undef (ls: locset) : Prop :=
-  forall ty ofs, ls (S Outgoing ofs ty) = Vundef.
-
 (** Soundness of the type system *)
 
 Definition wt_fundef (fd: fundef) :=
@@ -224,6 +217,9 @@ Definition wt_fundef (fd: fundef) :=
   | External ef => True
   end.
 
+Definition wt_program (prog: program): Prop :=
+  forall i fd, In (i, Gfun fd) prog.(prog_defs) -> wt_fundef fd.
+
 Inductive wt_callstack: list stackframe -> Prop :=
   | wt_callstack_nil:
       wt_callstack nil
@@ -231,7 +227,7 @@ Inductive wt_callstack: list stackframe -> Prop :=
         (WTSTK: wt_callstack s)
         (WTF: wt_function f = true)
         (WTB: wt_bblock f b = true)
-        (WTRS: wt_locset rs),
+        (WTLS: wt_locset rs),
       wt_callstack (Stackframe f sp rs b :: s).
 
 Lemma wt_parent_locset:
@@ -246,26 +242,22 @@ Inductive wt_state: state -> Prop :=
   | wt_branch_state: forall s f sp n rs m
         (WTSTK: wt_callstack s )
         (WTF: wt_function f = true)
-        (WTRS: wt_locset rs),
+        (WTLS: wt_locset rs),
       wt_state (State s f sp n rs m)
   | wt_regular_state: forall s f sp b rs m
         (WTSTK: wt_callstack s )
         (WTF: wt_function f = true)
         (WTB: wt_bblock f b = true)
-        (WTRS: wt_locset rs),
+        (WTLS: wt_locset rs),
       wt_state (Block s f sp b rs m)
   | wt_call_state: forall s fd rs m
         (WTSTK: wt_callstack s)
         (WTFD: wt_fundef fd)
-        (WTRS: wt_locset rs)
-        (AGCS: agree_callee_save rs (parent_locset s))
-        (AGARGS: agree_outgoing_arguments (funsig fd) rs (parent_locset s)),
+        (WTLS: wt_locset rs),
       wt_state (Callstate s fd rs m)
   | wt_return_state: forall s rs m
         (WTSTK: wt_callstack s)
-        (WTRS: wt_locset rs)
-        (AGCS: agree_callee_save rs (parent_locset s))
-        (UOUT: outgoing_undef rs),
+        (WTLS: wt_locset rs),
       wt_state (Returnstate s rs m).
 
 (** Preservation of state typing by transitions *)
@@ -275,8 +267,7 @@ Section SOUNDNESS.
 Variable prog: program.
 Let ge := Genv.globalenv prog.
 
-Hypothesis wt_prog:
-  forall i fd, In (i, Gfun fd) prog.(prog_defs) -> wt_fundef fd.
+Hypothesis wt_prog: wt_program prog.
 
 Lemma wt_find_function:
   forall ros rs f, find_function ge ros rs = Some f -> wt_fundef f.
@@ -307,7 +298,7 @@ Local Opaque mreg_type.
   + (* move *)
     InvBooleans. exploit is_move_operation_correct; eauto. intros [EQ1 EQ2]; subst.
     simpl in H. inv H.
-    econstructor; eauto. apply wt_setreg. eapply Val.has_subtype; eauto. apply WTRS.
+    econstructor; eauto. apply wt_setreg. eapply Val.has_subtype; eauto. apply WTLS.
     apply wt_undef_regs; auto.
   + (* other ops *)
     destruct (type_of_operation op) as [ty_args ty_res] eqn:TYOP. InvBooleans.
@@ -326,7 +317,7 @@ Local Opaque mreg_type.
 - (* getstack *)
   simpl in *; InvBooleans.
   econstructor; eauto.
-  eapply wt_setreg; eauto. eapply Val.has_subtype; eauto. apply WTRS.
+  eapply wt_setreg; eauto. eapply Val.has_subtype; eauto. apply WTLS.
   apply wt_undef_regs; auto.
 - (* setstack *)
   simpl in *; InvBooleans.
@@ -340,15 +331,11 @@ Local Opaque mreg_type.
   simpl in *; InvBooleans.
   econstructor; eauto. econstructor; eauto.
   eapply wt_find_function; eauto.
-  red; simpl; auto.
-  red; simpl; auto.
 - (* tailcall *)
   simpl in *; InvBooleans.
   econstructor; eauto.
   eapply wt_find_function; eauto.
   apply wt_return_regs; auto. apply wt_parent_locset; auto.
-  red; simpl; intros. destruct l; simpl in *. rewrite H3; auto. destruct sl; auto; congruence.
-  red; simpl; intros. apply zero_size_arguments_tailcall_possible in H. apply H in H3. contradiction.
 - (* builtin *)
   simpl in *; InvBooleans.
   econstructor; eauto.
@@ -357,27 +344,22 @@ Local Opaque mreg_type.
 - (* branch *)
   simpl in *. econstructor; eauto.
 - (* cond branch *)
-  simpl in *. econstructor; auto.
+  simpl in *. econstructor; auto using wt_undef_regs.
 - (* jumptable *)
   simpl in *. econstructor; auto using wt_undef_regs.
 - (* return *)
   simpl in *. InvBooleans.
   econstructor; eauto.
   apply wt_return_regs; auto. apply wt_parent_locset; auto.
-  red; simpl; intros. destruct l; simpl in *. rewrite H0; auto. destruct sl; auto; congruence.
-  red; simpl; intros. auto.
 - (* internal function *)
   simpl in WTFD.
   econstructor. eauto. eauto. eauto.
   apply wt_undef_regs. apply wt_call_regs. auto.
 - (* external function *)
-  econstructor. auto. apply wt_setpair; auto.
+  econstructor. auto.
+  apply wt_setpair; auto.
   eapply external_call_well_typed; eauto.
   apply wt_undef_caller_save_regs; auto.
-  red; simpl; intros. destruct l; simpl in *.
-  rewrite locmap_get_set_loc_result by auto. simpl. rewrite H; auto.
-  rewrite locmap_get_set_loc_result by auto. simpl. destruct sl; auto; congruence.
-  red; simpl; intros. rewrite locmap_get_set_loc_result by auto. auto.
 - (* return *)
   inv WTSTK. econstructor; eauto.
 Qed.
@@ -388,9 +370,9 @@ Proof.
   induction 1. econstructor. constructor.
   unfold ge0 in H1. exploit Genv.find_funct_ptr_inversion; eauto.
   intros [id IN]. eapply wt_prog; eauto.
+  red; auto.
+  red; auto.
   apply wt_init.
-  red; auto.
-  red; auto.
 Qed.
 
 End SOUNDNESS.
@@ -434,21 +416,5 @@ Lemma wt_callstate_wt_regs:
   wt_state (Callstate s f rs m) ->
   forall r, Val.has_type (rs (R r)) (mreg_type r).
 Proof.
-  intros. inv H. apply WTRS.
-Qed.
-
-Lemma wt_callstate_agree:
-  forall s f rs m,
-  wt_state (Callstate s f rs m) ->
-  agree_callee_save rs (parent_locset s) /\ agree_outgoing_arguments (funsig f) rs (parent_locset s).
-Proof.
-  intros. inv H; auto.
-Qed.
-
-Lemma wt_returnstate_agree:
-  forall s rs m,
-  wt_state (Returnstate s rs m) ->
-  agree_callee_save rs (parent_locset s) /\ outgoing_undef rs.
-Proof.
-  intros. inv H; auto.
+  intros. inv H. apply WTLS.
 Qed.

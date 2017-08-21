@@ -849,6 +849,8 @@ Definition remove_equations_builtin_res
   | BR r, BR r' => Some (remove_equation (Eq Full r (R r')) e)
   | BR r, BR_splitlong rhi rlo =>
       assertion (typ_eq (env r) Tlong);
+      assertion (subtype Tint (mreg_type rhi));
+      assertion (subtype Tint (mreg_type rlo));
       if mreg_eq rhi rlo then None else
         Some (remove_equation (Eq Low r (R rlo))
                 (remove_equation (Eq High r (R rhi)) e))
@@ -932,12 +934,6 @@ Definition destroyed_by_move (src dst: loc) :=
   | _, _ => destroyed_by_op Omove
   end.
 
-Definition well_typed_move (env: regenv) (dst: loc) (e: eqs) : bool :=
-  match dst with
-  | R r => true
-  | S sl ofs ty => loc_type_compat env dst e
-  end.
-
 (** Simulate the effect of a sequence of moves [mv] on a set of
   equations [e].  The set [e] is the equations that must hold
   after the sequence of moves.  Return the set of equations that
@@ -950,7 +946,7 @@ Fixpoint track_moves (env: regenv) (mv: moves) (e: eqs) : option eqs :=
   | MV src dst :: mv =>
       do e1 <- track_moves env mv e;
       assertion (can_undef_except dst (destroyed_by_move src dst)) e1;
-      assertion (well_typed_move env dst e1);
+      assertion (loc_type_compat env dst e1);
       subst_loc dst src e1
   | MVmakelong src1 src2 dst :: mv =>
       assertion (negb Archi.ptr64);

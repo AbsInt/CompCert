@@ -262,7 +262,9 @@ Lemma locmap_set_lessdef:
   locmap_lessdef ls1 ls2 -> Val.lessdef v1 v2 -> locmap_lessdef (Locmap.set l v1 ls1) (Locmap.set l v2 ls2).
 Proof.
   intros; red; intros l'. unfold Locmap.set. destruct (Loc.eq l l').
-- destruct l; auto using Val.load_result_lessdef.
+- destruct l.
+  + destruct H0. destruct (Val.has_type_dec v (mreg_type r)); auto. auto.
+  + auto using Val.load_result_lessdef.
 - destruct (Loc.diff_dec l l'); auto.
 Qed.
 

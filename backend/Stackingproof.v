@@ -602,11 +602,12 @@ Lemma agree_regs_set_reg:
   forall j ls rs r v v',
   agree_regs j ls rs ->
   Val.inject j v v' ->
+  Val.has_type v (mreg_type r) ->
   agree_regs j (Locmap.set (R r) v ls) (Regmap.set r v' rs).
 Proof.
   intros; red; intros.
   unfold Regmap.set. destruct (RegEq.eq r0 r). subst r0.
-  rewrite Locmap.gss; auto.
+  rewrite Locmap.gss, pred_dec_true; auto.
   rewrite Locmap.gso; auto. red. auto.
 Qed.
 
@@ -614,11 +615,12 @@ Lemma agree_regs_set_pair:
   forall j p v v' ls rs,
   agree_regs j ls rs ->
   Val.inject j v v' ->
+  Val.has_type_rpair v p Val.loword Val.hiword mreg_type ->
   agree_regs j (Locmap.setpair p v ls) (set_pair p v' rs).
 Proof.
-  intros. destruct p; simpl.
+  intros. destruct p; try destruct H1; simpl.
 - apply agree_regs_set_reg; auto.
-- apply agree_regs_set_reg. apply agree_regs_set_reg; auto.
+- apply agree_regs_set_reg; auto. apply agree_regs_set_reg; auto.
   apply Val.hiword_inject; auto. apply Val.loword_inject; auto.
 Qed.
 
@@ -626,12 +628,13 @@ Lemma agree_regs_set_res:
   forall j res v v' ls rs,
   agree_regs j ls rs ->
   Val.inject j v v' ->
+  Val.has_type_builtin_res v res Val.loword Val.hiword mreg_type ->
   agree_regs j (Locmap.setres res v ls) (set_res res v' rs).
 Proof.
-  induction res; simpl; intros.
+  destruct res eqn:RES; simpl; intros.
 - apply agree_regs_set_reg; auto.
 - auto.
-- repeat apply agree_regs_set_reg; auto.
+- repeat apply agree_regs_set_reg; try tauto.
   apply Val.hiword_inject; auto.
   apply Val.loword_inject; auto.
 Qed.
@@ -656,6 +659,7 @@ Proof.
   induction rl; simpl; intros.
   auto.
   apply agree_regs_set_reg; auto.
+  simpl; auto.
 Qed.
 
 Lemma agree_regs_undef_caller_save_regs:
@@ -987,7 +991,7 @@ Remark undef_regs_type:
 Proof.
   induction rl; simpl; intros.
 - auto.
-- unfold Locmap.set. destruct (Loc.eq (R a) l). red; auto.
+- unfold Locmap.set. destruct (Loc.eq (R a) l). simpl; auto.
   destruct (Loc.diff_dec (R a) l); auto. red; auto.
 Qed.
 
@@ -1823,6 +1827,8 @@ Proof.
   apply plus_one. apply exec_Mgetstack. exact A.
   econstructor; eauto with coqlib.
   apply agree_regs_set_reg; auto.
+  inversion WTS; subst. simpl in WTC; InvBooleans.
+  apply Val.has_subtype with (ty1 := ty); auto. apply WTRS.
   apply agree_locs_set_reg; auto.
 + (* Lgetstack, incoming *)
   unfold slot_valid in SV. InvBooleans.
@@ -1840,8 +1846,10 @@ Proof.
   rewrite (unfold_transf_function _ _ TRANSL). unfold fn_link_ofs.
   eapply frame_get_parent. eexact SEP.
   econstructor; eauto with coqlib. econstructor; eauto.
-  apply agree_regs_set_reg. apply agree_regs_set_reg. auto. auto.
+  apply agree_regs_set_reg. apply agree_regs_set_reg. auto. auto. simpl; auto.
   erewrite agree_incoming by eauto. exact B.
+  inversion WTS; subst. simpl in WTC; InvBooleans.
+  apply Val.has_subtype with (ty1 := ty); auto. apply WTRS.
   apply agree_locs_set_reg; auto. apply agree_locs_undef_locs; auto.
 + (* Lgetstack, outgoing *)
   exploit frame_get_outgoing; eauto. intros (v & A & B).
@@ -1849,6 +1857,8 @@ Proof.
   apply plus_one. apply exec_Mgetstack. exact A.
   econstructor; eauto with coqlib.
   apply agree_regs_set_reg; auto.
+  inversion WTS; subst. simpl in WTC; InvBooleans.
+  apply Val.has_subtype with (ty1 := ty); auto. apply WTRS.
   apply agree_locs_set_reg; auto.
 
 - (* Lsetstack *)
@@ -1894,6 +1904,16 @@ Proof.
   econstructor; eauto with coqlib.
   apply agree_regs_set_reg; auto.
   rewrite transl_destroyed_by_op.  apply agree_regs_undef_regs; auto.
+  inversion WTS; subst. simpl in WTC; InvBooleans.
+  destruct (is_move_operation op args) eqn:MOVE.
+    apply is_move_operation_correct in MOVE; destruct MOVE. subst.
+    simpl in H; inv H.
+    apply Val.has_subtype with (ty1 := mreg_type m0); auto. apply WTRS.
+    generalize (is_not_move_operation ge _ _ args m H MOVE); intros.
+    assert (subtype (snd (type_of_operation op)) (mreg_type res) = true).
+    { rewrite <- H0. destruct (type_of_operation op); reflexivity. }
+    assert (Val.has_type v (snd (type_of_operation op))) by eauto using type_of_operation_sound.
+    apply Val.has_subtype with (ty1 := snd (type_of_operation op)); auto.
   apply agree_locs_set_reg; auto. apply agree_locs_undef_locs. auto. apply destroyed_by_op_caller_save.
   apply frame_set_reg. apply frame_undef_regs. exact SEP.
 
@@ -1915,6 +1935,10 @@ Proof.
   eexact C. eauto.
   econstructor; eauto with coqlib.
   apply agree_regs_set_reg. rewrite transl_destroyed_by_load. apply agree_regs_undef_regs; auto. auto.
+  inversion WTS; subst. simpl in WTC; InvBooleans.
+  destruct a'; try inversion C. apply Mem.load_type in H4.
+  apply Val.has_subtype with (ty1 := type_of_chunk chunk); auto.
+  destruct D; auto. simpl; auto.
   apply agree_locs_set_reg. apply agree_locs_undef_locs. auto. apply destroyed_by_load_caller_save. auto.
 
 - (* Lstore *)
@@ -1987,7 +2011,16 @@ Proof.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   eapply match_states_intro with (j := j'); eauto with coqlib.
   eapply match_stacks_change_meminj; eauto.
-  apply agree_regs_set_res; auto. apply agree_regs_undef_regs; auto. eapply agree_regs_inject_incr; eauto.
+  eapply agree_regs_set_res; eauto. apply agree_regs_undef_regs; auto. eapply agree_regs_inject_incr; eauto.
+  inversion WTS; subst. simpl in WTC; InvBooleans.
+  unfold wt_builtin_res in H3.
+  unfold Val.has_type_builtin_res.
+  apply external_call_well_typed in H0.
+  destruct res; auto.
+    eapply Val.has_subtype; eauto.
+    InvBooleans; split.
+    eapply Val.has_subtype; eauto. destruct vres; auto; constructor.
+    eapply Val.has_subtype; eauto. destruct vres; auto; constructor.
   apply agree_locs_set_res; auto. apply agree_locs_undef_regs; auto.
   apply frame_set_res. apply frame_undef_regs. apply frame_contents_incr with j; auto.
   rewrite sep_swap2. apply stack_contents_change_meminj with j; auto. rewrite sep_swap2.
@@ -2085,6 +2118,8 @@ Proof.
   apply agree_regs_set_pair. apply agree_regs_undef_caller_save_regs. 
   apply agree_regs_inject_incr with j; auto.
   auto.
+  apply external_call_well_typed in H0.
+  apply loc_result_has_type; auto.
   apply stack_contents_change_meminj with j; auto.
   rewrite sep_comm, sep_assoc; auto.
 

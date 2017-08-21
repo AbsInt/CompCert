@@ -14,7 +14,7 @@
     machine registers and stack slots. *)
 
 Require Import Coqlib Decidableplus.
-Require Import AST Machregs Locations.
+Require Import AST Values Machregs Locations.
 
 (** * Classification of machine registers *)
 
@@ -128,6 +128,17 @@ Lemma loc_result_type:
 Proof.
   intros. unfold proj_sig_res, loc_result, loc_result_32, loc_result_64, mreg_type;
   destruct Archi.ptr64; destruct (sig_res sig) as [[]|]; auto.
+Qed.
+
+Lemma loc_result_has_type:
+  forall res sig,
+  Val.has_type res (proj_sig_res sig) ->
+  Val.has_type_rpair res (loc_result sig) Val.loword Val.hiword mreg_type.
+Proof.
+  intros. unfold Val.has_type_rpair, loc_result, proj_sig_res in *.
+  destruct sig; simpl. destruct sig_res; simpl in H.
+  destruct t, res; simpl; auto; destruct Archi.ptr64 eqn:P; simpl; try rewrite P; auto.
+  destruct res; simpl; auto; destruct Archi.ptr64 eqn:P; simpl; try rewrite P; auto.
 Qed.
 
 (** The result locations are caller-save registers *)

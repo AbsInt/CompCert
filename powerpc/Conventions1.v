@@ -16,6 +16,7 @@
 Require Import Coqlib.
 Require Import Decidableplus.
 Require Import AST.
+Require Import Values.
 Require Import Events.
 Require Import Locations.
 Require Archi.
@@ -143,6 +144,22 @@ Proof.
   intros. unfold proj_sig_res, loc_result, loc_result_32, loc_result_64, mreg_type.
   destruct Archi.ptr64 eqn:?; destruct (sig_res sig) as [[]|]; destruct Archi.ppc64; simpl; auto.
 Qed.
+
+Lemma loc_result_has_type:
+  forall res sig,
+  Val.has_type res (proj_sig_res sig) ->
+  Val.has_type_rpair res (loc_result sig) Val.loword Val.hiword mreg_type.
+Proof.
+  intros. unfold Val.has_type_rpair, loc_result, proj_sig_res in *.
+Local Transparent Archi.ptr64.
+  assert (P: Archi.ptr64 = false) by (unfold Archi.ptr64; auto).
+  destruct sig; simpl. destruct sig_res; simpl in H.
+  destruct t, res; simpl; auto;
+    simpl; try rewrite P; auto;
+    destruct Archi.ppc64 eqn:Q; simpl; try rewrite Q; auto.
+  destruct res; simpl; auto; destruct Archi.ppc64; auto.
+Qed.
+Local Opaque Archi.ptr64.
 
 (** The result locations are caller-save registers *)
 

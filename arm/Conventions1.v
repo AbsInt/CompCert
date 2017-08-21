@@ -16,6 +16,7 @@
 Require Import Coqlib.
 Require Import Decidableplus.
 Require Import AST.
+Require Import Values.
 Require Import Events.
 Require Import Locations.
 Require Archi.
@@ -120,6 +121,17 @@ Lemma loc_result_type:
   subtype (proj_sig_res sig) (typ_rpair mreg_type (loc_result sig)) = true.
 Proof.
   intros. unfold proj_sig_res, loc_result. destruct (sig_res sig) as [[]|]; destruct Archi.big_endian; auto.
+Qed.
+
+Lemma loc_result_has_type:
+  forall res sig,
+  Val.has_type res (proj_sig_res sig) ->
+  Val.has_type_rpair res (loc_result sig) Val.loword Val.hiword mreg_type.
+Proof.
+  intros. unfold Val.has_type_rpair, loc_result, proj_sig_res in *.
+  destruct sig; simpl. destruct sig_res; simpl in H.
+  destruct t, res, Archi.big_endian; simpl; auto.
+  destruct res; simpl; auto.
 Qed.
 
 (** The result locations are caller-save registers *)
