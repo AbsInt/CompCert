@@ -243,7 +243,7 @@ let print_asm_argument print_preg oc modifier = function
 
 let builtin_arg_of_res = function
   | BR r -> BA r
-  | BR_splitlong(BR hi, BR lo) -> BA_splitlong(BA hi, BA lo)
+  | BR_splitlong(hi, lo) -> BA_splitlong(BA hi, BA lo)
   | _ -> assert false
 
 let re_asm_param_1 = Str.regexp "%%\\|%[QR]?[0-9]+"

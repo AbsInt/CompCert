@@ -224,7 +224,7 @@ let expand_builtin_vload_common chunk base ofs res =
      emit (Plw  (res, base, Ofsimm ofs))
   | Mint64, BR(IR res) ->
      emit (Pld  (res, base, Ofsimm ofs))
-  | Mint64, BR_splitlong(BR(IR res1), BR(IR res2)) ->
+  | Mint64, BR_splitlong(IR res1, IR res2) ->
      let ofs' = Ptrofs.add ofs _4 in
      if base <> res2 then begin
          emit (Plw (res2, base, Ofsimm ofs));
@@ -414,7 +414,7 @@ let expand_builtin_inline name args res =
   | "__builtin_bswap64", [BA(IR a1)], BR(IR res) ->
      expand_bswap64 res a1
   | "__builtin_bswap64", [BA_splitlong(BA(IR ah), BA(IR al))],
-                         BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                         BR_splitlong(IR rh, IR rl) ->
      assert (ah = X6 && al = X5 && rh = X5 && rl = X6);
      expand_bswap32 X5 X5;
      expand_bswap32 X6 X6
@@ -437,7 +437,7 @@ let expand_builtin_inline name args res =
       emit (Pfmaxd(res, a1, a2))
   (* 64-bit integer arithmetic for a 32-bit platform *)
   | "__builtin_negl", [BA_splitlong(BA(IR ah), BA(IR al))],
-                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                      BR_splitlong(IR rh, IR rl) ->
      expand_int64_arith (rl = ah) rl
 			(fun rl ->
                          emit (Psltuw (X1, X0, X al));
@@ -446,7 +446,7 @@ let expand_builtin_inline name args res =
 			 emit (Psubw (rh, X rh, X X1)))
   | "__builtin_addl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
-                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                      BR_splitlong(IR rh, IR rl) ->
      expand_int64_arith (rl = bl || rl = ah || rl = bh) rl
 			(fun rl ->
 			 emit (Paddw (rl, X al, X bl));
@@ -455,7 +455,7 @@ let expand_builtin_inline name args res =
 			 emit (Paddw (rh, X rh, X X1)))
   | "__builtin_subl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
-                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                      BR_splitlong(IR rh, IR rl) ->
      expand_int64_arith (rl = ah || rl = bh) rl
 			(fun rl ->
                          emit (Psltuw (X1, X al, X bl));
@@ -463,7 +463,7 @@ let expand_builtin_inline name args res =
 			 emit (Psubw (rh, X ah, X bh));
 			 emit (Psubw (rh, X rh, X X1)))
   | "__builtin_mull", [BA(IR a); BA(IR b)],
-                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                      BR_splitlong(IR rh, IR rl) ->
      expand_int64_arith (rl = a || rl = b) rl
                         (fun rl ->
                           emit (Pmulw (rl, X a, X b));

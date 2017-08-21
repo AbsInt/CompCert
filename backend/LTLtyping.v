@@ -54,11 +54,11 @@ Definition loc_valid (l: loc) : bool :=
   | S _ _ _ => false
   end.
 
-Fixpoint wt_builtin_res (ty: typ) (res: builtin_res mreg) : bool :=
+Definition wt_builtin_res (ty: typ) (res: builtin_res mreg) : bool :=
   match res with
   | BR r => subtype ty (mreg_type r)
   | BR_none => true
-  | BR_splitlong hi lo => wt_builtin_res Tint hi && wt_builtin_res Tint lo
+  | BR_splitlong hi lo => subtype Tint (mreg_type hi) && subtype Tint (mreg_type lo)
   end.
 
 Definition wt_instr (i: instruction) : bool :=
@@ -180,8 +180,11 @@ Proof.
   induction res; simpl; intros.
 - apply wt_setreg; auto. eapply Val.has_subtype; eauto.
 - auto.
-- InvBooleans. eapply IHres2; eauto. destruct v; exact I.
-  eapply IHres1; eauto. destruct v; exact I.
+- InvBooleans.
+  apply wt_setreg; auto. apply Val.has_subtype with (ty1 := Tint); auto.
+  destruct v; exact I.
+  apply wt_setreg; auto. apply Val.has_subtype with (ty1 := Tint); auto.
+  destruct v; exact I.
 Qed.
 
 (** Soundness of the type system *)

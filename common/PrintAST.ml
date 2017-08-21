@@ -80,10 +80,8 @@ let rec print_builtin_args px oc = function
   | a1 :: al ->
       fprintf oc "%a, %a" (print_builtin_arg px) a1 (print_builtin_args px) al
 
-let rec print_builtin_res px oc = function
+let print_builtin_res px oc = function
   | BR x -> px oc x
   | BR_none -> fprintf oc "_"
-  | BR_splitlong(hi, lo) ->
-      fprintf oc "splitlong(%a, %a)"
-                 (print_builtin_res px) hi (print_builtin_res px) lo
+  | BR_splitlong(hi, lo) -> fprintf oc "splitlong(%a, %a)" px hi px lo
 

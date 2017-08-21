@@ -633,7 +633,7 @@ Inductive builtin_arg (A: Type) : Type :=
 Inductive builtin_res (A: Type) : Type :=
   | BR (x: A)
   | BR_none
-  | BR_splitlong (hi lo: builtin_res A).
+  | BR_splitlong (hi lo: A).
 
 Fixpoint globals_of_builtin_arg (A: Type) (a: builtin_arg A) : list ident :=
   match a with
@@ -658,11 +658,11 @@ Fixpoint params_of_builtin_arg (A: Type) (a: builtin_arg A) : list A :=
 Definition params_of_builtin_args (A: Type) (al: list (builtin_arg A)) : list A :=
   List.fold_right (fun a l => params_of_builtin_arg a ++ l) nil al.
 
-Fixpoint params_of_builtin_res (A: Type) (a: builtin_res A) : list A :=
+Definition params_of_builtin_res (A: Type) (a: builtin_res A) : list A :=
   match a with
   | BR x => x :: nil
   | BR_none => nil
-  | BR_splitlong hi lo => params_of_builtin_res hi ++ params_of_builtin_res lo
+  | BR_splitlong hi lo => hi :: lo :: nil
   end.
 
 Fixpoint map_builtin_arg (A B: Type) (f: A -> B) (a: builtin_arg A) : builtin_arg B :=
@@ -682,12 +682,11 @@ Fixpoint map_builtin_arg (A B: Type) (f: A -> B) (a: builtin_arg A) : builtin_ar
       BA_addptr (map_builtin_arg f a1) (map_builtin_arg f a2)
   end.
 
-Fixpoint map_builtin_res (A B: Type) (f: A -> B) (a: builtin_res A) : builtin_res B :=
+Definition map_builtin_res (A B: Type) (f: A -> B) (a: builtin_res A) : builtin_res B :=
   match a with
   | BR x => BR (f x)
   | BR_none => BR_none
-  | BR_splitlong hi lo =>
-      BR_splitlong (map_builtin_res f hi) (map_builtin_res f lo)
+  | BR_splitlong hi lo => BR_splitlong (f hi) (f lo)
   end.
 
 (** Which kinds of builtin arguments are supported by which external function. *)

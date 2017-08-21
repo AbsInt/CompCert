@@ -275,7 +275,7 @@ let expand_builtin_vload_1 chunk addr res =
         (fun r c -> emit (Pld(res, c, r)))
         (fun r1 r2 -> emit (Pldx(res, r1, r2)))
         addr GPR11
-  | Mint64, BR_splitlong(BR(IR hi), BR(IR lo)) ->
+  | Mint64, BR_splitlong(IR hi, IR lo) ->
       expand_volatile_access
         (fun r c ->
            match offset_constant c _4 with
@@ -517,24 +517,24 @@ let expand_builtin_inline name args res =
       emit (Pcfi_adjust _m8)
   (* 64-bit integer arithmetic *)
   | "__builtin_negl", [BA_splitlong(BA(IR ah), BA(IR al))],
-                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                      BR_splitlong(IR rh, IR rl) ->
       expand_int64_arith (rl = ah) rl (fun rl ->
         emit (Psubfic(rl, al, Cint _0));
         emit (Psubfze(rh, ah)))
   | "__builtin_addl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
-                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                      BR_splitlong(IR rh, IR rl) ->
       expand_int64_arith (rl = ah || rl = bh) rl (fun rl ->
         emit (Paddc(rl, al, bl));
         emit (Padde(rh, ah, bh)))
   | "__builtin_subl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
-                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                      BR_splitlong(IR rh, IR rl) ->
       expand_int64_arith (rl = ah || rl = bh) rl (fun rl ->
         emit (Psubfc(rl, bl, al));
         emit (Psubfe(rh, bh, ah)))
   | "__builtin_mull", [BA(IR a); BA(IR b)],
-                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                      BR_splitlong(IR rh, IR rl) ->
       expand_int64_arith (rl = a || rl = b) rl (fun rl ->
         emit (Pmullw(rl, a, b));
         emit (Pmulhwu(rh, a, b)))

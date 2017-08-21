@@ -847,7 +847,7 @@ Definition remove_equations_builtin_res
     (env: regenv) (res: builtin_res reg) (res': builtin_res mreg) (e: eqs) : option eqs :=
   match res, res' with
   | BR r, BR r' => Some (remove_equation (Eq Full r (R r')) e)
-  | BR r, BR_splitlong (BR rhi) (BR rlo) =>
+  | BR r, BR_splitlong rhi rlo =>
       assertion (typ_eq (env r) Tlong);
       if mreg_eq rhi rlo then None else
         Some (remove_equation (Eq Low r (R rlo))
