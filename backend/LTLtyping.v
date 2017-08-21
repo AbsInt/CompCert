@@ -95,6 +95,17 @@ Definition wt_function (f: function) : bool :=
   let bs := map snd (Maps.PTree.elements f.(fn_code)) in
   forallb (wt_bblock f) bs.
 
+Lemma wt_function_wt_bblock:
+  forall f pc b,
+  wt_function f = true ->
+  Maps.PTree.get pc (fn_code f) = Some b ->
+  wt_bblock f b = true.
+Proof.
+  intros. apply Maps.PTree.elements_correct in H0.
+  unfold wt_function, wt_bblock in *. eapply forallb_forall in H; eauto.
+  change b with (snd (pc, b)). apply in_map; auto.
+Qed.
+
 (** Typing the run-time state. *)
 
 Definition wt_locset (ls: locset) : Prop :=
@@ -107,7 +118,7 @@ Proof.
   intros; red; intros.
   unfold Locmap.set.
   destruct (Loc.eq (R r) l).
-  subst l; auto.
+  subst l; rewrite pred_dec_true; auto.
   destruct (Loc.diff_dec (R r) l). auto. red. auto.
 Qed.
 
@@ -195,6 +206,9 @@ Definition wt_fundef (fd: fundef) :=
   | External ef => True
   end.
 
+Definition wt_program (prog: program): Prop :=
+  forall i fd, In (i, Gfun fd) prog.(prog_defs) -> wt_fundef fd.
+
 Inductive wt_callstack: list stackframe -> Prop :=
   | wt_callstack_nil:
       wt_callstack nil
@@ -202,7 +216,7 @@ Inductive wt_callstack: list stackframe -> Prop :=
         (WTSTK: wt_callstack s)
         (WTF: wt_function f = true)
         (WTB: wt_bblock f b = true)
-        (WTRS: wt_locset rs),
+        (WTLS: wt_locset rs),
       wt_callstack (Stackframe f sp rs b :: s).
 
 Lemma wt_parent_locset:
@@ -217,22 +231,22 @@ Inductive wt_state: state -> Prop :=
   | wt_branch_state: forall s f sp n rs m
         (WTSTK: wt_callstack s )
         (WTF: wt_function f = true)
-        (WTRS: wt_locset rs),
+        (WTLS: wt_locset rs),
       wt_state (State s f sp n rs m)
   | wt_regular_state: forall s f sp b rs m
         (WTSTK: wt_callstack s )
         (WTF: wt_function f = true)
         (WTB: wt_bblock f b = true)
-        (WTRS: wt_locset rs),
+        (WTLS: wt_locset rs),
       wt_state (Block s f sp b rs m)
   | wt_call_state: forall s fd rs m
         (WTSTK: wt_callstack s)
         (WTFD: wt_fundef fd)
-        (WTRS: wt_locset rs),
+        (WTLS: wt_locset rs),
       wt_state (Callstate s fd rs m)
   | wt_return_state: forall s rs m
         (WTSTK: wt_callstack s)
-        (WTRS: wt_locset rs),
+        (WTLS: wt_locset rs),
       wt_state (Returnstate s rs m).
 
 (** Preservation of state typing by transitions *)
@@ -242,8 +256,7 @@ Section SOUNDNESS.
 Variable prog: program.
 Let ge := Genv.globalenv prog.
 
-Hypothesis wt_prog:
-  forall i fd, In (i, Gfun fd) prog.(prog_defs) -> wt_fundef fd.
+Hypothesis wt_prog: wt_program prog.
 
 Lemma wt_find_function:
   forall ros rs f, find_function ge ros rs = Some f -> wt_fundef f.
@@ -274,7 +287,7 @@ Local Opaque mreg_type.
   + (* move *)
     InvBooleans. exploit is_move_operation_correct; eauto. intros [EQ1 EQ2]; subst.
     simpl in H. inv H.
-    econstructor; eauto. apply wt_setreg. eapply Val.has_subtype; eauto. apply WTRS.
+    econstructor; eauto. apply wt_setreg. eapply Val.has_subtype; eauto. apply WTLS.
     apply wt_undef_regs; auto.
   + (* other ops *)
     destruct (type_of_operation op) as [ty_args ty_res] eqn:TYOP. InvBooleans.
@@ -293,7 +306,7 @@ Local Opaque mreg_type.
 - (* getstack *)
   simpl in *; InvBooleans.
   econstructor; eauto.
-  eapply wt_setreg; eauto. eapply Val.has_subtype; eauto. apply WTRS.
+  eapply wt_setreg; eauto. eapply Val.has_subtype; eauto. apply WTLS.
   apply wt_undef_regs; auto.
 - (* setstack *)
   simpl in *; InvBooleans.
@@ -388,5 +401,5 @@ Lemma wt_callstate_wt_regs:
   wt_state (Callstate s f rs m) ->
   forall r, Val.has_type (rs (R r)) (mreg_type r).
 Proof.
-  intros. inv H. apply WTRS.
+  intros. inv H. apply WTLS.
 Qed.

@@ -89,6 +89,19 @@ Definition has_type (v: val) (t: typ) : Prop :=
   | _, _ => False
   end.
 
+Definition has_type_rpair {A} (v: val) (p: rpair A) (lof hif: val -> val) (tf: A -> typ) : Prop :=
+  match p with
+  | One r => has_type v (tf r)
+  | Twolong hi lo => has_type (lof v) (tf lo) /\ has_type (hif v) (tf hi)
+  end.
+
+Definition has_type_builtin_res {A} (v: val) (r: builtin_res A) (lof hif: val -> val) (tf: A -> typ) : Prop :=
+  match r with
+  | BR_none => True
+  | BR r => has_type v (tf r)
+  | BR_splitlong hi lo => has_type (lof v) (tf lo) /\ has_type (hif v) (tf hi)
+  end.
+
 Fixpoint has_type_list (vl: list val) (tl: list typ) {struct vl} : Prop :=
   match vl, tl with
   | nil, nil => True
@@ -130,6 +143,35 @@ Proof.
   induction tyl1; intros; destruct tyl2; try discriminate; destruct vl; try contradiction.
   red; auto.
   simpl in *. InvBooleans. destruct H0. split; auto. eapply has_subtype; eauto.
+Qed.
+
+Definition has_type_b (v: val) (t: typ) : bool :=
+  match v, t with
+  | Vundef, _ => true
+  | Vint _, Tint => true
+  | Vlong _, Tlong => true
+  | Vfloat _, Tfloat => true
+  | Vsingle _, Tsingle => true
+  | Vptr _ _, Tint => negb Archi.ptr64
+  | Vptr _ _, Tlong => Archi.ptr64
+  | (Vint _ | Vsingle _), Tany32 => true
+  | Vptr _ _, Tany32 => negb Archi.ptr64
+  | _, Tany64 => true
+  | _, _ => false
+  end.
+
+Program Definition has_type_dec (v: val) (t: typ) : {has_type v t} + {~ has_type v t} :=
+  match has_type_b v t with
+  | true => left _
+  | false => right _
+  end.
+Next Obligation.
+  destruct v, t; simpl in *; auto; congruence.
+Qed.
+Next Obligation.
+  destruct v, t; simpl in *; auto; try congruence.
+  apply eq_sym, negb_false_iff in Heq_anonymous. congruence.
+  apply eq_sym, negb_false_iff in Heq_anonymous. congruence.
 Qed.
 
 (** Truth values.  Non-zero integers are treated as [True].

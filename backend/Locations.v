@@ -331,26 +331,33 @@ Module Locmap.
   Definition set (l: loc) (v: val) (m: t) : t :=
     fun (p: loc) =>
       if Loc.eq l p then
-        match l with R r => v | S sl ofs ty => Val.load_result (chunk_of_type ty) v end
+        match l with
+        | R r => if Val.has_type_dec v (mreg_type r) then v else Vundef
+        | S sl ofs ty => Val.load_result (chunk_of_type ty) v
+        end
       else if Loc.diff_dec l p then
         m p
       else Vundef.
 
   Lemma gss: forall l v m,
     (set l v m) l =
-    match l with R r => v | S sl ofs ty => Val.load_result (chunk_of_type ty) v end.
+    match l with
+    | R r => if Val.has_type_dec v (mreg_type r) then v else Vundef
+    | S sl ofs ty => Val.load_result (chunk_of_type ty) v
+    end.
   Proof.
     intros. unfold set. apply dec_eq_true.
   Qed.
 
-  Lemma gss_reg: forall r v m, (set (R r) v m) (R r) = v.
+  Lemma gss_reg: forall r v m, Val.has_type v (mreg_type r) -> (set (R r) v m) (R r) = v.
   Proof.
-    intros. unfold set. rewrite dec_eq_true. auto.
+    intros. unfold set. rewrite dec_eq_true, pred_dec_true; auto.
   Qed.
 
   Lemma gss_typed: forall l v m, Val.has_type v (Loc.type l) -> (set l v m) l = v.
   Proof.
-    intros. rewrite gss. destruct l. auto. apply Val.load_result_same; auto.
+    intros. rewrite gss. destruct l.
+    rewrite pred_dec_true; auto. apply Val.load_result_same; auto.
   Qed.
 
   Lemma gso: forall l v m p, Loc.diff l p -> (set l v m) p = m p.

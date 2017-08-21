@@ -18,6 +18,7 @@ Require Import Coqlib Ordered Maps Errors Integers Floats.
 Require Import AST Linking Lattice Kildall.
 Require Import Values Memory Globalenvs Events Smallstep.
 Require Archi.
+Require Import LTLtyping.
 Require Import Op Registers RTL Locations Conventions RTLtyping LTL.
 Require Import Allocation.
 
@@ -214,7 +215,8 @@ Proof.
 Qed.
 
 Lemma extract_moves_sound:
-  forall b mv b',
+  forall f b mv b',
+  wt_bblock f b = true ->
   extract_moves nil b = (mv, b') ->
   wf_moves mv /\ b = expand_moves mv b'.
 Proof.
@@ -225,18 +227,19 @@ Proof.
    { intros; split; auto. unfold wf_moves in *; rewrite Forall_forall in *.
      intros. apply H. rewrite <- in_rev in H0; auto. }
 
-  assert (IND: forall b accu mv b',
+  assert (IND: forall f b accu mv b',
+          wt_bblock f b = true ->
           extract_moves accu b = (mv, b') ->
           wf_moves accu ->
           wf_moves mv /\ expand_moves (List.rev accu) b = expand_moves mv b').
   { induction b; simpl; intros.
-  - inv H. auto.
-  - destruct a; try (inv H; apply BASE; auto; fail).
+  - inv H0. auto.
+  - destruct a; try (inv H0; apply BASE; auto; fail); simpl in H; InvBooleans.
   + destruct (is_move_operation op args) as [arg|] eqn:E.
     exploit is_move_operation_correct; eauto. intros [A B]; subst.
     (* reg-reg move *)
     exploit IHb; eauto. constructor; auto. exact I. rewrite expand_moves_cons; auto.
-    inv H; apply BASE; auto.
+    inv H0; apply BASE; auto.
   + (* stack-reg move *)
     exploit IHb; eauto. constructor; auto. exact I. rewrite expand_moves_cons; auto.
   + (* reg-stack move *)
@@ -246,7 +249,8 @@ Proof.
 Qed.
 
 Lemma extract_moves_ext_sound:
-  forall b mv b',
+  forall f b mv b',
+  wt_bblock f b = true ->
   extract_moves_ext nil b = (mv, b') ->
   wf_moves mv /\ b = expand_moves mv b'.
 Proof.
@@ -257,13 +261,14 @@ Proof.
    { intros; split; auto. unfold wf_moves in *; rewrite Forall_forall in *.
      intros. apply H. rewrite <- in_rev in H0; auto. }
 
-  assert (IND: forall b accu mv b',
+  assert (IND: forall f b accu mv b',
+          wt_bblock f b = true ->
           extract_moves_ext accu b = (mv, b') ->
           wf_moves accu ->
           wf_moves mv /\ expand_moves (List.rev accu) b = expand_moves mv b').
   { induction b; simpl; intros.
-  - inv H. auto.
-  - destruct a; try (inv H; apply BASE; auto; fail).
+  - inv H0. auto.
+  - destruct a; try (inv H0; apply BASE; auto; fail); simpl in H; InvBooleans.
   + destruct (classify_operation op args).
   * (* reg-reg move *)
     exploit IHb; eauto. constructor; auto. exact I. rewrite expand_moves_cons; auto.
@@ -274,7 +279,7 @@ Proof.
   * (* highlong *)
     exploit IHb; eauto. constructor; auto. exact I. rewrite expand_moves_cons; auto.
   * (* default *)
-    inv H; apply BASE; auto.
+    inv H0; apply BASE; auto.
   + (* stack-reg move *)
     exploit IHb; eauto. constructor; auto. exact I. rewrite expand_moves_cons; auto.
   + (* reg-stack move *)
@@ -291,12 +296,36 @@ Proof.
   destruct (peq s s0); simpl in H; inv H. exists b; auto.
 Qed.
 
+Lemma wt_bblock_expand_moves_head:
+  forall f m i b,
+  wt_bblock f (expand_moves m (i :: b)) = true -> LTLtyping.wt_instr f i = true.
+Proof.
+  intros. unfold expand_moves, wt_bblock in H.
+  rewrite forallb_app in H; InvBooleans.
+  simpl in H1; InvBooleans. auto.
+Qed.
+
+Lemma wt_bblock_expand_moves_cons:
+  forall f m i b,
+  wt_bblock f (expand_moves m (i :: b)) = true -> wt_bblock f b = true.
+Proof.
+  induction b; intros; auto.
+  simpl. unfold expand_moves, wt_bblock in H.
+  rewrite forallb_app in H; InvBooleans.
+  simpl in H1; InvBooleans. unfold wt_bblock.
+  rewrite H1, H3; auto.
+Qed.
+
 Ltac UseParsingLemmas :=
   match goal with
-  | [ H: extract_moves nil _ = (_, _) |- _ ] =>
-      destruct (extract_moves_sound _ _ _ H); clear H; subst; UseParsingLemmas
-  | [ H: extract_moves_ext nil _ = (_, _) |- _ ] =>
-      destruct (extract_moves_ext_sound _ _ _ H); clear H; subst; UseParsingLemmas
+  | [ H: extract_moves nil ?b = (_, _), WT: wt_bblock _ ?b = true |- _ ] =>
+      destruct (extract_moves_sound _ _ _ _ WT H); clear H; subst; UseParsingLemmas
+  | [ H: extract_moves nil ?b = (_, _), WT: wt_bblock _ (expand_moves _ (_ :: ?b)) = true |- _ ] =>
+      apply wt_bblock_expand_moves_cons in WT; UseParsingLemmas
+  | [ H: extract_moves_ext nil ?b = (_, _), WT: wt_bblock _ ?b = true |- _ ] =>
+      destruct (extract_moves_ext_sound _ _ _ _ WT H); clear H; subst; UseParsingLemmas
+  | [ H: extract_moves_ext nil ?b = (_, _), WT: wt_bblock _ (expand_moves _ (_ :: ?b)) = true |- _ ] =>
+      apply wt_bblock_expand_moves_cons in WT; UseParsingLemmas
   | [ H: check_succ _ _ = true |- _ ] =>
       try (discriminate H);
       destruct (check_succ_sound _ _ H); clear H; subst; UseParsingLemmas
@@ -304,19 +333,21 @@ Ltac UseParsingLemmas :=
   end.
 
 Lemma pair_instr_block_sound:
-  forall i b bsh,
+  forall i f b bsh,
+  wt_bblock f b = true ->
   pair_instr_block i b = Some bsh -> expand_block_shape bsh i b.
 Proof.
-  assert (OP: forall op args res s b bsh,
+  assert (OP: forall op args res s f b bsh,
+    wt_bblock f b = true ->
     pair_Iop_block op args res s b = Some bsh -> expand_block_shape bsh (Iop op args res s) b).
   {
     unfold pair_Iop_block; intros. MonadInv. destruct b0.
     MonadInv; UseParsingLemmas.
     destruct i; MonadInv; UseParsingLemmas.
     eapply ebs_op; eauto.
-    inv H0. eapply ebs_op_dead; eauto. }
+    inv H1. eapply ebs_op_dead; eauto. }
 
-  intros; destruct i; simpl in H; MonadInv; UseParsingLemmas.
+  intros i f b bsh WT; intros; destruct i; simpl in H; MonadInv; UseParsingLemmas.
 - (* nop *)
   econstructor; eauto.
 - (* op *)
@@ -371,11 +402,14 @@ Lemma matching_instr_block:
   forall f1 f2 pc bsh i,
   (pair_codes f1 f2)!pc = Some bsh ->
   (RTL.fn_code f1)!pc = Some i ->
+  LTLtyping.wt_function f2 = true ->
   exists b, (LTL.fn_code f2)!pc = Some b /\ expand_block_shape bsh i b.
 Proof.
   intros. unfold pair_codes in H. rewrite PTree.gcombine in H; auto. rewrite H0 in H.
-  destruct (LTL.fn_code f2)!pc as [b|].
-  exists b; split; auto. apply pair_instr_block_sound; auto.
+  destruct (LTL.fn_code f2)!pc as [b|] eqn:B.
+  exists b; split; auto.
+  eapply wt_function_wt_bblock in H1; eauto.
+  eapply pair_instr_block_sound; eauto.
   discriminate.
 Qed.
 
@@ -685,11 +719,12 @@ Lemma loc_unconstrained_satisf:
   satisf rs ls (remove_equation (Eq k r l) e) ->
   loc_unconstrained (R mr) (remove_equation (Eq k r l) e) = true ->
   Val.lessdef (sel_val k rs#r) v ->
+  Val.has_type v (mreg_type mr) ->
   satisf rs (Locmap.set l v ls) e.
 Proof.
   intros; red; intros.
   destruct (OrderedEquation.eq_dec q (Eq k r l)).
-  subst q; simpl. unfold l; rewrite Locmap.gss. auto.
+  subst q; simpl. unfold l; rewrite Locmap.gss. rewrite pred_dec_true; auto.
   assert (EqSet.In q (remove_equation (Eq k r l) e)).
     simpl. ESD.fsetdec.
   rewrite Locmap.gso. apply H; auto. eapply loc_unconstrained_sound; eauto.
@@ -709,13 +744,14 @@ Lemma parallel_assignment_satisf:
   forall k r mr e rs ls v v',
   let l := R mr in
   Val.lessdef (sel_val k v) v' ->
+  Val.has_type v' (mreg_type mr) ->
   reg_loc_unconstrained r (R mr) (remove_equation (Eq k r l) e) = true ->
   satisf rs ls (remove_equation (Eq k r l) e) ->
   satisf (rs#r <- v) (Locmap.set l v' ls) e.
 Proof.
   intros; red; intros.
   destruct (OrderedEquation.eq_dec q (Eq k r l)).
-  subst q; simpl. unfold l; rewrite Regmap.gss; rewrite Locmap.gss; auto.
+  subst q; simpl. unfold l; rewrite Regmap.gss; rewrite Locmap.gss, pred_dec_true; auto.
   assert (EqSet.In q (remove_equation {| ekind := k; ereg := r; eloc := l |} e)).
     simpl. ESD.fsetdec.
   exploit reg_loc_unconstrained_sound; eauto. intros [A B].
@@ -729,24 +765,25 @@ Lemma parallel_assignment_satisf_2:
   reg_unconstrained res e' = true ->
   forallb (fun l => loc_unconstrained l e') (map R (regs_of_rpair res')) = true ->
   Val.lessdef v v' ->
+  Val.has_type_rpair v' res' Val.loword Val.hiword mreg_type ->
   satisf (rs#res <- v) (Locmap.setpair res' v' ls) e.
 Proof.
   intros. functional inversion H.
 - (* One location *)
   subst. simpl in H2. InvBooleans. simpl.
   apply parallel_assignment_satisf with Full; auto.
-  unfold reg_loc_unconstrained. rewrite H1, H4. auto.
+  unfold reg_loc_unconstrained. rewrite H1, H5. auto.
 - (* Two 32-bit halves *)
-  subst.
+  subst. destruct H4.
   set (e' := remove_equation {| ekind := Low; ereg := res; eloc := R mr2 |}
           (remove_equation {| ekind := High; ereg := res; eloc := R mr1 |} e)) in *.
   simpl in H2. InvBooleans. simpl.
   red; intros.
   destruct (OrderedEquation.eq_dec q (Eq Low res (R mr2))).
-  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gss.
+  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gss, pred_dec_true by auto.
   apply Val.loword_lessdef; auto.
   destruct (OrderedEquation.eq_dec q (Eq High res (R mr1))).
-  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gso by auto. rewrite Locmap.gss.
+  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gso, Locmap.gss, pred_dec_true by auto.
   apply Val.hiword_lessdef; auto.
   assert (EqSet.In q e'). unfold e', remove_equation; simpl; ESD.fsetdec.
   rewrite Regmap.gso. rewrite ! Locmap.gso. auto.
@@ -1007,19 +1044,14 @@ Proof.
   exact (select_loc_h_monotone l).
 Qed.
 
-Lemma well_typed_move_charact:
+Lemma loc_type_compat_well_typed:
   forall env l e k r rs,
-  well_typed_move env l e = true ->
+  loc_type_compat env l e = true ->
   EqSet.In (Eq k r l) e ->
   wt_regset env rs ->
-  match l with
-  | R mr => True
-  | S sl ofs ty => Val.has_type (sel_val k rs#r) ty
-  end.
+  Val.has_type (sel_val k rs#r) (Loc.type l).
 Proof.
-  unfold well_typed_move; intros.
-  destruct l as [mr | sl ofs ty].
-  auto.
+  intros.
   exploit loc_type_compat_charact; eauto. intros [A | A].
   simpl in A. eapply Val.has_subtype; eauto.
   generalize (H1 r). destruct k; simpl; intros.
@@ -1040,8 +1072,9 @@ Qed.
 Lemma subst_loc_satisf:
   forall env src dst rs ls e e',
   subst_loc dst src e = Some e' ->
-  well_typed_move env dst e = true ->
+  loc_type_compat env dst e = true ->
   wt_regset env rs ->
+  Val.has_type (ls src) (Loc.type dst) ->
   satisf rs ls e' ->
   satisf rs (Locmap.set dst (ls src) ls) e.
 Proof.
@@ -1049,10 +1082,10 @@ Proof.
   exploit in_subst_loc; eauto. intros [[A B] | [A B]].
   subst dst. rewrite Locmap.gss.
   destruct q as [k r l]; simpl in *.
-  exploit well_typed_move_charact; eauto.
+  exploit loc_type_compat_well_typed; eauto.
   destruct l as [mr | sl ofs ty]; intros.
-  apply (H2 _ B).
-  apply val_lessdef_normalize; auto. apply (H2 _ B).
+  rewrite pred_dec_true by auto. apply (H3 _ B).
+  apply val_lessdef_normalize; auto. apply (H3 _ B).
   rewrite Locmap.gso; auto.
 Qed.
 
@@ -1107,24 +1140,28 @@ Qed.
 Lemma subst_loc_part_satisf_lowlong:
   forall src dst rs ls e e',
   subst_loc_part (R dst) (R src) Low e = Some e' ->
+  Val.has_type (Val.loword (ls (R src))) (mreg_type dst) ->
   satisf rs ls e' ->
   satisf rs (Locmap.set (R dst) (Val.loword (ls (R src))) ls) e.
 Proof.
   intros; red; intros.
   exploit in_subst_loc_part; eauto. intros [[A [B C]] | [A B]].
-  rewrite A, B. apply H0 in C. rewrite Locmap.gss. apply Val.loword_lessdef. exact C.
+  rewrite A, B. apply H1 in C. rewrite Locmap.gss, pred_dec_true by auto.
+  apply Val.loword_lessdef. exact C.
   rewrite Locmap.gso; auto.
 Qed.
 
 Lemma subst_loc_part_satisf_highlong:
   forall src dst rs ls e e',
   subst_loc_part (R dst) (R src) High e = Some e' ->
+  Val.has_type (Val.hiword (ls (R src))) (mreg_type dst) ->
   satisf rs ls e' ->
   satisf rs (Locmap.set (R dst) (Val.hiword (ls (R src))) ls) e.
 Proof.
   intros; red; intros.
   exploit in_subst_loc_part; eauto. intros [[A [B C]] | [A B]].
-  rewrite A, B. apply H0 in C. rewrite Locmap.gss. apply Val.hiword_lessdef. exact C.
+  rewrite A, B. apply H1 in C. rewrite Locmap.gss, pred_dec_true by auto.
+  apply Val.hiword_lessdef. exact C.
   rewrite Locmap.gso; auto.
 Qed.
 
@@ -1206,6 +1243,7 @@ Lemma subst_loc_pair_satisf_makelong:
   wt_regset env rs ->
   satisf rs ls e' ->
   Archi.ptr64 = false ->
+  Val.has_type (Val.longofwords (ls (R src1)) (ls (R src2))) (mreg_type dst) ->
   satisf rs (Locmap.set (R dst) (Val.longofwords (ls (R src1)) (ls (R src2))) ls) e.
 Proof.
   intros; red; intros.
@@ -1214,7 +1252,7 @@ Proof.
   assert (subtype (env (ereg q)) Tlong = true).
   { exploit long_type_compat_charact; eauto. intros [P|P]; auto.
     eelim Loc.diff_not_eq; eauto. }
-  rewrite Locmap.gss. simpl. rewrite <- (val_longofwords_eq_1 rs#(ereg q)).
+  rewrite Locmap.gss, pred_dec_true by auto. simpl. rewrite <- (val_longofwords_eq_1 rs#(ereg q)).
   apply Val.longofwords_lessdef. exact C. exact D.
   eapply Val.has_subtype; eauto.
   assumption.
@@ -1266,7 +1304,7 @@ Qed.
 Lemma subst_loc_undef_satisf:
   forall env src dst rs ls ml e e',
   subst_loc dst src e = Some e' ->
-  well_typed_move env dst e = true ->
+  loc_type_compat env dst e = true ->
   can_undef_except dst ml e = true ->
   wt_regset env rs ->
   satisf rs ls e' ->
@@ -1276,9 +1314,19 @@ Proof.
   exploit in_subst_loc; eauto. intros [[A B] | [A B]].
   subst dst. rewrite Locmap.gss.
   destruct q as [k r l]; simpl in *.
-  exploit well_typed_move_charact; eauto.
+  exploit loc_type_compat_well_typed; eauto.
   destruct l as [mr | sl ofs ty]; intros.
-  apply (H3 _ B).
+  destruct (Val.eq (sel_val k rs#r) Vundef).
+  rewrite e0 in *; auto.
+  rewrite pred_dec_true. apply (H3 _ B).
+  exploit loc_type_compat_charact; eauto; intros [SUBTYP | DIFF].
+  simpl in SUBTYP.
+  set (qR := {| ekind := k; ereg := r; eloc := R mr |}).
+  generalize (in_subst_loc (R mr) src qR _ _ H4 H); intros [[EQ IN] | [DIFF' IN']].
+  generalize (H3 _ IN); intro LESSDEF. simpl in LESSDEF.
+  destruct k; simpl in *; inversion LESSDEF; congruence.
+  simpl in DIFF'; congruence.
+  simpl in DIFF; congruence.
   apply val_lessdef_normalize; auto. apply (H3 _ B).
   rewrite Locmap.gso; auto. rewrite undef_regs_outside. eauto.
   eapply can_undef_except_sound; eauto. apply Loc.diff_sym; auto.
@@ -1289,7 +1337,7 @@ Lemma transfer_use_def_satisf:
   transfer_use_def args res args' res' und e = Some e' ->
   satisf rs ls e' ->
   Val.lessdef_list rs##args (reglist ls args') /\
-  (forall v v', Val.lessdef v v' ->
+  (forall v v', Val.lessdef v v' -> Val.has_type v' (mreg_type res') ->
     satisf (rs#res <- v) (Locmap.set (R res') v' (undef_regs und ls)) e).
 Proof.
   unfold transfer_use_def; intros. MonadInv.
@@ -1675,6 +1723,7 @@ Lemma parallel_set_builtin_res_satisf:
   forallb (fun mr => loc_unconstrained (R mr) e1) (params_of_builtin_res res') = true ->
   satisf rs ls e1 ->
   Val.lessdef v v' ->
+  Val.has_type_builtin_res v' res' Val.loword Val.hiword mreg_type ->
   satisf (regmap_setres res v rs) (Locmap.setres res' v' ls) e0.
 Proof.
   intros. rewrite forallb_forall in *.
@@ -1683,23 +1732,25 @@ Proof.
   unfold reg_loc_unconstrained. rewrite H0 by auto. rewrite H1 by auto. auto.
 - set (e' := remove_equation {| ekind := High; ereg := x; eloc := R hi |} e0) in *.
   set (e'' := remove_equation {| ekind := Low; ereg := x; eloc := R lo |} e') in *.
-  simpl in *. red; intros.
-  assert (lo <> hi /\ e'' = e1).
-  { destruct (typ_eq (env x) Tlong), (mreg_eq hi lo); try inversion H5. auto. }
-  destruct H4; subst.
+  red; intros.
+  assert (subtype Tint (mreg_type hi) = true /\
+          subtype Tint (mreg_type lo) = true /\
+          lo <> hi /\ e'' = e1).
+  { destruct (typ_eq (env x) Tlong), (mreg_eq hi lo), (mreg_type hi), (mreg_type lo);
+      try inversion H6; auto. }
+  decompose [and] H4. decompose [and] H5; subst.
   destruct (OrderedEquation.eq_dec q (Eq Low x (R lo))).
-  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gss. apply Val.loword_lessdef; auto.
+  subst q; simpl. rewrite Regmap.gss.
+  rewrite Locmap.gss, pred_dec_true; auto. apply Val.loword_lessdef; auto.
   destruct (OrderedEquation.eq_dec q (Eq High x (R hi))).
-  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gso by (red; tauto).
-  rewrite Locmap.gss. apply Val.hiword_lessdef; auto.
-  rewrite Regmap.gso. rewrite ! Locmap.gso. auto. apply H2.
-  repeat apply ESF.remove_neq_iff; auto.
+  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gso by (red; auto).
+  rewrite Locmap.gss, pred_dec_true; auto. apply Val.hiword_lessdef; auto.
+  assert (EqSet.In q e'').
+  { unfold e'', e', remove_equation; simpl; ESD.fsetdec. }
+  rewrite Regmap.gso. rewrite ! Locmap.gso. auto.
   eapply loc_unconstrained_sound; eauto.
-  repeat apply ESF.remove_neq_iff; auto.
   eapply loc_unconstrained_sound; eauto.
-  repeat apply ESF.remove_neq_iff; auto.
   eapply reg_unconstrained_sound; eauto.
-  repeat apply ESF.remove_neq_iff; auto.
 - auto.
 Qed.
 
@@ -1757,13 +1808,14 @@ Proof.
   unfold transf_function; intros.
   destruct (type_function f) as [env|] eqn:TY; try discriminate.
   destruct (regalloc f); try discriminate.
-  destruct (LTLtyping.wt_function f0); try discriminate.
+  destruct (LTLtyping.wt_function f0) eqn:WT; try discriminate.
   destruct (check_function f f0 env) as [] eqn:?; inv H.
   unfold check_function in Heqr.
   destruct (analyze f env (pair_codes f tf)) as [an|] eqn:?; try discriminate.
   monadInv Heqr.
   destruct (check_entrypoints_aux f tf env x) as [y|] eqn:?; try discriminate.
   unfold check_entrypoints_aux, pair_entrypoints in Heqo0. MonadInv.
+  eapply wt_function_wt_bblock in WT; eauto.
   exploit extract_moves_ext_sound; eauto. intros [A B]. subst b.
   exploit check_succ_sound; eauto. intros [k EQ1]. subst b0.
   econstructor; eauto. eapply type_function_correct; eauto. congruence.
@@ -1772,6 +1824,7 @@ Qed.
 Lemma invert_code:
   forall f env tf pc i opte e,
   wt_function f env ->
+  LTLtyping.wt_function tf = true ->
   (RTL.fn_code f)!pc = Some i ->
   transfer f env (pair_codes f tf) pc opte = OK e ->
   exists eafter, exists bsh, exists bb,
@@ -1782,10 +1835,10 @@ Lemma invert_code:
   transfer_aux f env bsh eafter = Some e /\
   wt_instr f env i.
 Proof.
-  intros. destruct opte as [eafter|]; simpl in H1; try discriminate. exists eafter.
+  intros. destruct opte as [eafter|]; simpl in H2; try discriminate. exists eafter.
   destruct (pair_codes f tf)!pc as [bsh|] eqn:?; try discriminate. exists bsh.
   exploit matching_instr_block; eauto. intros [bb [A B]].
-  destruct (transfer_aux f env bsh eafter) as [e1|] eqn:?; inv H1.
+  destruct (transfer_aux f env bsh eafter) as [e1|] eqn:?; inv H2.
   exists bb. exploit wt_instr_at; eauto.
   tauto.
 Qed.
@@ -1858,44 +1911,75 @@ Lemma exec_moves:
   wf_moves mv ->
   satisf rs ls e' ->
   wt_regset env rs ->
+  LTLtyping.wt_locset ls /\ LTLtyping.wt_bblock f (expand_moves mv bb) = true ->
   exists ls',
-    star step tge (Block s f sp (expand_moves mv bb) ls m)
-               E0 (Block s f sp bb ls' m)
+  star step tge (Block s f sp (expand_moves mv bb) ls m)
+             E0 (Block s f sp bb ls' m)
+  /\ LTLtyping.wt_locset ls'
   /\ satisf rs ls' e.
 Proof.
 Opaque destroyed_by_op.
   induction mv; simpl; intros.
   (* base *)
-- unfold expand_moves; simpl. inv H. exists ls; split. apply star_refl. auto.
+- unfold expand_moves; simpl. inv H. exists ls; split. apply star_refl. tauto.
   (* step *)
 - assert (wf_moves mv) by (inv H0; auto).
   destruct a; unfold expand_moves; simpl; MonadInv.
 + (* loc-loc move *)
-  destruct src as [rsrc | ssrc]; destruct dst as [rdst | sdst].
+  destruct H3. destruct src as [rsrc | ssrc]; destruct dst as [rdst | sdst].
 * (* reg-reg *)
   exploit IHmv; eauto. eapply subst_loc_undef_satisf; eauto.
+  InvBooleans. split; eauto. apply wt_setreg.
+  apply Val.has_subtype with (ty1 := mreg_type rsrc); auto. apply H3.
+  apply wt_undef_regs. auto.
   intros [ls' [A B]]. exists ls'; split; auto. eapply star_left; eauto.
   econstructor. simpl. eauto. auto. auto.
 * (* reg->stack *)
   exploit IHmv; eauto. eapply subst_loc_undef_satisf; eauto.
+  InvBooleans. split; eauto. apply wt_setstack, wt_undef_regs. auto.
   intros [ls' [A B]]. exists ls'; split; auto. eapply star_left; eauto.
   econstructor. simpl. eauto. auto.
 * (* stack->reg *)
   simpl in Heqb. exploit IHmv; eauto. eapply subst_loc_undef_satisf; eauto.
+  InvBooleans. split; eauto. apply wt_setreg, wt_undef_regs. auto.
+  apply Val.has_subtype with (ty1 := ty); auto. simpl in H6. InvBooleans; auto.
+  apply H3. auto.
   intros [ls' [A B]]. exists ls'; split; auto. eapply star_left; eauto.
   econstructor. auto. auto.
 * (* stack->stack *)
-  inv H0. simpl in H6. contradiction.
+  inv H0. simpl in H8. contradiction.
 + (* makelong *)
+  assert (HT: Val.has_type (Val.longofwords (ls (R src1)) (ls (R src2))) (mreg_type dst)).
+  {
+    destruct H3; InvBooleans. simpl in H6.
+    destruct (mreg_type dst) eqn:T; simpl; auto; inversion H6.
+    destruct (ls (R src1)), (ls (R src2)); simpl; auto.
+    destruct (ls (R src1)), (ls (R src2)); simpl; auto.
+  }
   exploit IHmv; eauto. eapply subst_loc_pair_satisf_makelong; eauto.
+  destruct H3; InvBooleans. split; eauto using wt_setreg.
   intros [ls' [A B]]. exists ls'; split; auto. eapply star_left; eauto.
   econstructor. simpl; eauto. reflexivity. traceEq.
 + (* lowlong *)
+  assert (HT: Val.has_type (Val.loword (ls (R src))) (mreg_type dst)).
+  {
+    destruct H3. simpl in H5. InvBooleans.
+    destruct (mreg_type dst) eqn:T; simpl; auto; inversion H6;
+      destruct (ls (R src)); simpl; auto.
+  }
   exploit IHmv; eauto. eapply subst_loc_part_satisf_lowlong; eauto.
+  destruct H3; InvBooleans. split; eauto using wt_setreg.
   intros [ls' [A B]]. exists ls'; split; auto. eapply star_left; eauto.
   econstructor. simpl; eauto. reflexivity. traceEq.
 + (* highlong *)
+  assert (HT: Val.has_type (Val.hiword (ls (R src))) (mreg_type dst)).
+  {
+    destruct H3. simpl in H5. InvBooleans.
+    destruct (mreg_type dst) eqn:T; simpl; auto; inversion H6;
+      destruct (ls (R src)); simpl; auto.
+  }
   exploit IHmv; eauto. eapply subst_loc_part_satisf_highlong; eauto.
+  destruct H3; InvBooleans. split; eauto using wt_setreg.
   intros [ls' [A B]]. exists ls'; split; auto. eapply star_left; eauto.
   econstructor. simpl; eauto. reflexivity. traceEq.
 Qed.
@@ -1919,6 +2003,7 @@ Inductive match_stackframes: list RTL.stackframe -> list LTL.stackframe -> signa
            Val.lessdef v (Locmap.getpair (map_rpair R (loc_result sg)) ls1) ->
            Val.has_type v (env res) ->
            agree_callee_save ls ls1 ->
+           wt_locset ls1 ->
            exists ls2,
            star LTL.step tge (Block ts tf sp bb ls1 m)
                           E0 (State ts tf sp pc ls2 m)
@@ -1976,9 +2061,23 @@ Qed.
 
 Ltac UseShape :=
   match goal with
-  | [ WT: wt_function _ _, CODE: (RTL.fn_code _)!_ = Some _, EQ: transfer _ _ _ _ _ = OK _ |- _ ] =>
-      destruct (invert_code _ _ _ _ _ _ _ WT CODE EQ) as (eafter & bsh & bb & AFTER & BSH & TCODE & EBS & TR & WTI);
+  | [ WT: wt_function _ _,
+      WTTF: LTLtyping.wt_function _ = true,
+      CODE: (RTL.fn_code _)!_ = Some _,
+      EQ: transfer _ _ _ _ _ = OK _ |- _ ] =>
+      destruct (invert_code _ _ _ _ _ _ _ WT WTTF CODE EQ) as (eafter & bsh & bb & AFTER & BSH & TCODE & EBS & TR & WTI);
       inv EBS; unfold transfer_aux in TR; MonadInv
+  end.
+
+Ltac WellTypedBlock :=
+  match goal with
+  | [ T: (fn_code ?tf) ! _ = Some _ |- wt_bblock _ _ = true ] =>
+    apply wt_function_wt_bblock in T; auto;
+    unfold wt_bblock, expand_moves in *; WellTypedBlock
+  | [ T: forallb (LTLtyping.wt_instr _) (_ ++ _) = true |- forallb _ _ = true ] =>
+    rewrite forallb_app in T; simpl in T;
+    InvBooleans; eauto; WellTypedBlock
+  | _ => idtac
   end.
 
 Remark addressing_not_long:
@@ -1996,41 +2095,107 @@ Proof.
   red; intros; subst r. rewrite C in H8; discriminate.
 Qed.
 
+Lemma wt_transf_function:
+  forall (f: RTL.function) (tf: LTL.function),
+  transf_function f = OK tf ->
+  LTLtyping.wt_function tf = true.
+Proof.
+  intros. unfold transf_function in H.
+  destruct (type_function f); try congruence.
+  destruct (regalloc f); try congruence.
+  destruct (LTLtyping.wt_function f0) eqn:WT; try congruence.
+  monadInv H; auto.
+Qed.
+
+Lemma wt_transf_fundef:
+  forall (fd: RTL.fundef) (tfd: LTL.fundef),
+  transf_fundef fd = OK tfd ->
+  LTLtyping.wt_fundef tfd.
+Proof.
+  intros.
+  destruct fd, tfd; simpl in *; auto; try congruence.
+  monadInv H. simpl; eauto using wt_transf_function.
+Qed.
+
+Lemma wt_prog: wt_program prog.
+Proof.
+  red; intros.
+  exploit list_forall2_in_left. eexact (proj1 TRANSF). eauto.
+  intros ([i' gd] & A & B & C). simpl in *; subst i'.
+  inv C. destruct f; simpl in *.
+- monadInv H2.
+  unfold transf_function in EQ.
+  destruct (type_function f) as [env|] eqn:TF; try discriminate.
+  econstructor. eapply type_function_correct; eauto.
+- constructor.
+Qed.
+
+Corollary wt_tprog: LTLtyping.wt_program tprog.
+Proof.
+  generalize wt_prog; unfold wt_program; intros.
+  unfold LTLtyping.wt_program; intros.
+  unfold match_prog, match_program, match_program_gen in TRANSF.
+  decompose [and] TRANSF.
+  exploit list_forall2_in_right; eauto.
+  intros ([i' gd] & A & B & C).
+  inversion C. eapply wt_transf_fundef. eauto.
+Qed.
+
+Lemma star_step_type_preservation:
+  forall S1 t S2,
+  LTLtyping.wt_state S1 ->
+  star LTL.step tge S1 t S2 ->
+  LTLtyping.wt_state S2.
+Proof.
+  intros. induction H0; auto.
+  apply IHstar. eapply LTLtyping.step_type_preservation; eauto.
+  eapply wt_tprog.
+Qed.
+
 (** The proof of semantic preservation is a simulation argument of the
     "plus" kind. *)
 
 Lemma step_simulation:
   forall S1 t S2, RTL.step ge S1 t S2 -> wt_state S1 ->
-  forall S1', match_states S1 S1' ->
-  exists S2', plus LTL.step tge S1' t S2' /\ match_states S2 S2'.
+  forall S1', match_states S1 S1' -> LTLtyping.wt_state S1' ->
+  exists S2', plus LTL.step tge S1' t S2' /\ LTLtyping.wt_state S2' /\ match_states S2 S2'.
 Proof.
-  induction 1; intros WT S1' MS; inv MS; try UseShape.
+  induction 1; intros WT S1' MS WT'; inv MS;
+    try assert (WTTF: LTLtyping.wt_function tf = true) by (inversion WT'; auto);
+    inversion WT'; subst;
+    try UseShape.
 
 (* nop *)
-- exploit exec_moves; eauto. intros [ls1 [X Y]].
+- exploit exec_moves; eauto.
+  split; eauto using LTLtyping.wt_function_wt_bblock.
+  intros [ls1 [X [Y Z]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_right. eexact X. econstructor; eauto.
   eauto. traceEq.
   exploit satisf_successors; eauto. simpl; eauto. intros [enext [U V]].
-  econstructor; eauto.
+  split; econstructor; eauto.
 
 (* op move *)
 - generalize (wt_exec_Iop _ _ _ _ _ _ _ _ _ _ _ WTI H0 WTRS). intros WTRS'.
   simpl in H0. inv H0.
-  exploit (exec_moves mv); eauto. intros [ls1 [X Y]].
+  exploit (exec_moves mv); eauto.
+  split; eauto using LTLtyping.wt_function_wt_bblock.
+  intros [ls1 [X [Y Z]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_right. eexact X. econstructor; eauto.
   eauto. traceEq.
   exploit satisf_successors; eauto. simpl; eauto. eapply subst_reg_satisf; eauto.
   intros [enext [U V]].
-  econstructor; eauto.
+  split; econstructor; eauto.
 
 (* op makelong *)
 - generalize (wt_exec_Iop _ _ _ _ _ _ _ _ _ _ _ WTI H0 WTRS). intros WTRS'.
   simpl in H0. inv H0.
-  exploit (exec_moves mv); eauto. intros [ls1 [X Y]].
+  exploit (exec_moves mv); eauto.
+  split; eauto using LTLtyping.wt_function_wt_bblock.
+  intros [ls1 [X [Y Z]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_right. eexact X. econstructor; eauto.
@@ -2038,12 +2203,14 @@ Proof.
   exploit satisf_successors; eauto. simpl; eauto.
   eapply subst_reg_kind_satisf_makelong. eauto. eauto.
   intros [enext [U V]].
-  econstructor; eauto.
+  split; econstructor; eauto.
 
 (* op lowlong *)
 - generalize (wt_exec_Iop _ _ _ _ _ _ _ _ _ _ _ WTI H0 WTRS). intros WTRS'.
   simpl in H0. inv H0.
-  exploit (exec_moves mv); eauto. intros [ls1 [X Y]].
+  exploit (exec_moves mv); eauto.
+  split; eauto using LTLtyping.wt_function_wt_bblock.
+  intros [ls1 [X [Y Z]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_right. eexact X. econstructor; eauto.
@@ -2051,12 +2218,14 @@ Proof.
   exploit satisf_successors; eauto. simpl; eauto.
   eapply subst_reg_kind_satisf_lowlong. eauto. eauto.
   intros [enext [U V]].
-  econstructor; eauto.
+  split; econstructor; eauto.
 
 (* op highlong *)
 - generalize (wt_exec_Iop _ _ _ _ _ _ _ _ _ _ _ WTI H0 WTRS). intros WTRS'.
   simpl in H0. inv H0.
-  exploit (exec_moves mv); eauto. intros [ls1 [X Y]].
+  exploit (exec_moves mv); eauto.
+  split; eauto using LTLtyping.wt_function_wt_bblock.
+  intros [ls1 [X [Y Z]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_right. eexact X. econstructor; eauto.
@@ -2064,14 +2233,31 @@ Proof.
   exploit satisf_successors; eauto. simpl; eauto.
   eapply subst_reg_kind_satisf_highlong. eauto. eauto.
   intros [enext [U V]].
-  econstructor; eauto.
+  split; econstructor; eauto.
 
 (* op regular *)
 - generalize (wt_exec_Iop _ _ _ _ _ _ _ _ _ _ _ WTI H0 WTRS). intros WTRS'.
-  exploit (exec_moves mv1); eauto. intros [ls1 [A1 B1]].
+  exploit (exec_moves mv1); eauto.
+  split; eauto using LTLtyping.wt_function_wt_bblock.
+  intros [ls1 [A1 [B1 C1]]].
   exploit transfer_use_def_satisf; eauto. intros [X Y].
   exploit eval_operation_lessdef; eauto. intros [v' [F G]].
-  exploit (exec_moves mv2); eauto. intros [ls2 [A2 B2]].
+  assert (RES_TYPE: Val.has_type v' (mreg_type res')).
+  {
+    generalize (LTLtyping.wt_function_wt_bblock tf pc _ WTTF TCODE); intro WTBB.
+    apply wt_bblock_expand_moves_head in WTBB.
+    simpl in WTBB.
+    destruct (is_move_operation op args') eqn:MOVE.
+    - apply is_move_operation_correct in MOVE. destruct MOVE; subst. simpl in *.
+      inversion F. eapply Val.has_subtype; eauto. apply B1.
+    - apply Val.has_subtype with (ty1 := snd (type_of_operation op)).
+      destruct (type_of_operation op); simpl; auto.
+      generalize (is_not_move_operation _ _ _ _ _ F MOVE); intros.
+      eapply type_of_operation_sound; eauto.
+  }
+  exploit (exec_moves mv2); eauto.
+  split. apply wt_setreg; auto. apply wt_undef_regs; auto. WellTypedBlock.
+  intros [ls2 [A2 [B2 C2]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_trans. eexact A1.
@@ -2079,11 +2265,14 @@ Proof.
   apply eval_operation_preserved. exact symbols_preserved.
   eauto. eapply star_right. eexact A2. constructor.
   eauto. eauto. eauto. traceEq.
-  exploit satisf_successors; eauto. simpl; eauto. intros [enext [U V]].
-  econstructor; eauto.
+  exploit satisf_successors; eauto. simpl; eauto.
+  intros [enext [U V]].
+  split; econstructor; eauto.
 
 (* op dead *)
-- exploit exec_moves; eauto. intros [ls1 [X Y]].
+- exploit exec_moves; eauto.
+  split; eauto using LTLtyping.wt_function_wt_bblock.
+  intros [ls1 [X [Y Z]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_right. eexact X. econstructor; eauto.
@@ -2091,16 +2280,29 @@ Proof.
   exploit satisf_successors. eauto. eauto. simpl; eauto. eauto.
   eapply reg_unconstrained_satisf; eauto.
   intros [enext [U V]].
-  econstructor; eauto.
+  split; econstructor; eauto.
   eapply wt_exec_Iop; eauto.
 
 (* load regular *)
 - generalize (wt_exec_Iload _ _ _ _ _ _ _ _ _ _ _ WTI H1 WTRS). intros WTRS'.
-  exploit (exec_moves mv1); eauto. intros [ls1 [A1 B1]].
+  exploit (exec_moves mv1); eauto.
+  split; eauto using LTLtyping.wt_function_wt_bblock.
+  intros [ls1 [A1 [B1 C1]]].
   exploit transfer_use_def_satisf; eauto. intros [X Y].
   exploit eval_addressing_lessdef; eauto. intros [a' [F G]].
   exploit Mem.loadv_extends; eauto. intros [v' [P Q]].
-  exploit (exec_moves mv2); eauto. intros [ls2 [A2 B2]].
+  assert (DST_TYPE: Val.has_type v' (mreg_type dst')).
+  {
+    generalize (LTLtyping.wt_function_wt_bblock tf pc _ WTTF TCODE); intro WTBB.
+    apply wt_bblock_expand_moves_head in WTBB.
+    simpl in WTBB.
+    eapply Val.has_subtype; eauto.
+    unfold Mem.loadv in P; destruct a'; try inversion P.
+    eapply Mem.load_type; eauto.
+  }
+  exploit (exec_moves mv2); eauto.
+  split. apply wt_setreg; auto. WellTypedBlock.
+  intros [ls2 [A2 [B2 C2]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_trans. eexact A1.
@@ -2109,18 +2311,28 @@ Proof.
   eapply star_right. eexact A2. constructor.
   eauto. eauto. eauto. traceEq.
   exploit satisf_successors; eauto. simpl; eauto. intros [enext [U V]].
-  econstructor; eauto.
+  split; econstructor; eauto.
 
 (* load pair *)
 - generalize (wt_exec_Iload _ _ _ _ _ _ _ _ _ _ _ WTI H1 WTRS). intros WTRS'.
   exploit loadv_int64_split; eauto. intros (v1 & v2 & LOAD1 & LOAD2 & V1 & V2).
   set (v2' := if Archi.big_endian then v2 else v1) in *.
   set (v1' := if Archi.big_endian then v1 else v2) in *.
-  exploit (exec_moves mv1); eauto. intros [ls1 [A1 B1]].
+  exploit (exec_moves mv1); eauto.
+  split; eauto using LTLtyping.wt_function_wt_bblock.
+  intros [ls1 [A1 [B1 C1]]].
   assert (LD1: Val.lessdef_list rs##args (reglist ls1 args1')).
   { eapply add_equations_lessdef; eauto. }
   exploit eval_addressing_lessdef. eexact LD1. eauto. intros [a1' [F1 G1]].
   exploit Mem.loadv_extends. eauto. eexact LOAD1. eexact G1. intros (v1'' & LOAD1' & LD2).
+  assert (DST_TYPE1: Val.has_type v1'' (mreg_type dst1')).
+  {
+    generalize (LTLtyping.wt_function_wt_bblock tf pc _ WTTF TCODE); intro WTBB.
+    apply wt_bblock_expand_moves_head in WTBB.
+    unfold Mem.loadv in LOAD1'; destruct a1'; inversion LOAD1'.
+    eapply Val.has_subtype; eauto.
+    eapply Mem.load_type; eauto.
+  }
   set (ls2 := Locmap.set (R dst1') v1'' (undef_regs (destroyed_by_load Mint32 addr) ls1)).
   assert (SAT2: satisf (rs#dst <- v) ls2 e2).
   { eapply loc_unconstrained_satisf. eapply can_undef_satisf; eauto.
@@ -2128,8 +2340,11 @@ Proof.
     eapply add_equations_satisf; eauto. assumption.
     rewrite Regmap.gss.
     apply Val.lessdef_trans with v1'; unfold sel_val; unfold kind_first_word; unfold v1'; destruct Archi.big_endian; auto.
+    auto.
   }
-  exploit (exec_moves mv2); eauto. intros [ls3 [A3 B3]].
+  exploit (exec_moves mv2); eauto.
+  split. apply wt_setreg; auto. WellTypedBlock.
+  intros [ls3 [A3 [B3 C3]]].
   assert (LD3: Val.lessdef_list rs##args (reglist ls3 args2')).
   { replace (rs##args) with ((rs#dst<-v)##args).
     eapply add_equations_lessdef; eauto.
@@ -2142,21 +2357,37 @@ Proof.
   assert (LOADX: exists v2'', Mem.loadv Mint32 m' a2' = Some v2'' /\ Val.lessdef v2' v2'').
   { discriminate || (eapply Mem.loadv_extends; [eauto|eexact LOAD2|eexact G2]). }
   destruct LOADX as (v2'' & LOAD2' & LD4).
+  assert (DST_TYPE2: Val.has_type v2'' (mreg_type dst2')).
+  {
+    generalize (LTLtyping.wt_function_wt_bblock tf pc _ WTTF TCODE); intro WTBB.
+    apply wt_bblock_expand_moves_cons in WTBB.
+    apply wt_bblock_expand_moves_head in WTBB.
+    unfold Mem.loadv in LOAD2'; destruct a2'; inversion LOAD2'.
+    eapply Val.has_subtype; eauto.
+    eapply Mem.load_type; eauto.
+  }
   set (ls4 := Locmap.set (R dst2') v2'' (undef_regs (destroyed_by_load Mint32 addr2) ls3)).
   assert (SAT4: satisf (rs#dst <- v) ls4 e0).
   { eapply loc_unconstrained_satisf. eapply can_undef_satisf; eauto.
     eapply add_equations_satisf; eauto. assumption.
     rewrite Regmap.gss.
     apply Val.lessdef_trans with v2'; unfold sel_val; unfold kind_second_word; unfold v2'; destruct Archi.big_endian; auto.
+    auto.
   }
-  exploit (exec_moves mv3); eauto. intros [ls5 [A5 B5]].
+  exploit (exec_moves mv3); eauto.
+  split. apply wt_setreg; auto.
+  apply wt_function_wt_bblock in TCODE; auto.
+  unfold wt_bblock, expand_moves in *. rewrite forallb_app in TCODE.
+  simpl in TCODE. InvBooleans. rewrite forallb_app in H5. simpl in H5. InvBooleans. eauto.
+  intros [ls5 [A5 [B5 C5]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_trans. eexact A1.
   eapply star_left. econstructor.
   instantiate (1 := a1'). rewrite <- F1. apply eval_addressing_preserved. exact symbols_preserved.
   eexact LOAD1'. instantiate (1 := ls2); auto.
-  eapply star_trans. eexact A3.
+  eapply star_trans.
+  eexact A3.
   eapply star_left. econstructor.
   instantiate (1 := a2'). rewrite <- F2. apply eval_addressing_preserved. exact symbols_preserved.
   eexact LOAD2'. instantiate (1 := ls4); auto.
@@ -2164,18 +2395,30 @@ Proof.
   constructor.
   eauto. eauto. eauto. eauto. eauto. traceEq.
   exploit satisf_successors; eauto. simpl; eauto. intros [enext [W Z]].
-  econstructor; eauto.
+  split; econstructor; eauto.
 
 (* load first word of a pair *)
 - generalize (wt_exec_Iload _ _ _ _ _ _ _ _ _ _ _ WTI H1 WTRS). intros WTRS'.
   exploit loadv_int64_split; eauto. intros (v1 & v2 & LOAD1 & LOAD2 & V1 & V2).
   set (v2' := if Archi.big_endian then v2 else v1) in *.
   set (v1' := if Archi.big_endian then v1 else v2) in *.
-  exploit (exec_moves mv1); eauto. intros [ls1 [A1 B1]].
+  exploit (exec_moves mv1); eauto.
+  split. auto. apply wt_function_wt_bblock in TCODE; eauto.
+  intros [ls1 [A1 [B1 C1]]].
   assert (LD1: Val.lessdef_list rs##args (reglist ls1 args')).
   { eapply add_equations_lessdef; eauto. }
   exploit eval_addressing_lessdef. eexact LD1. eauto. intros [a1' [F1 G1]].
   exploit Mem.loadv_extends. eauto. eexact LOAD1. eexact G1. intros (v1'' & LOAD1' & LD2).
+  assert (DST_TYPE: Val.has_type v1'' (mreg_type dst')).
+  {
+    generalize (LTLtyping.wt_function_wt_bblock tf pc _ WTTF TCODE); intro WTBB.
+    apply wt_bblock_expand_moves_head in WTBB. simpl in WTBB.
+    unfold Mem.loadv in LOAD1'; destruct a1'; try inversion LOAD1'.
+    apply Mem.load_type in LOAD1'.
+    destruct (mreg_type dst'); auto; try congruence.
+    apply Val.has_subtype with (ty1 := Tint); auto.
+    apply Val.has_subtype with (ty1 := Tint); auto.
+  }
   set (ls2 := Locmap.set (R dst') v1'' (undef_regs (destroyed_by_load Mint32 addr) ls1)).
   assert (SAT2: satisf (rs#dst <- v) ls2 e0).
   { eapply parallel_assignment_satisf; eauto.
@@ -2183,7 +2426,9 @@ Proof.
     unfold sel_val; unfold kind_first_word; unfold v1'; destruct Archi.big_endian; auto.
     eapply can_undef_satisf. eauto. eapply add_equations_satisf; eauto.
   }
-  exploit (exec_moves mv2); eauto. intros [ls3 [A3 B3]].
+  exploit (exec_moves mv2); eauto.
+  split. apply wt_setreg, wt_undef_regs; auto. WellTypedBlock.
+  intros [ls3 [A3 [B3 C3]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_trans. eexact A1.
@@ -2194,14 +2439,16 @@ Proof.
   constructor.
   eauto. eauto. eauto. traceEq.
   exploit satisf_successors; eauto. simpl; eauto. intros [enext [W Z]].
-  econstructor; eauto.
+  split; econstructor; eauto.
 
 (* load second word of a pair *)
 - generalize (wt_exec_Iload _ _ _ _ _ _ _ _ _ _ _ WTI H1 WTRS). intros WTRS'.
   exploit loadv_int64_split; eauto. intros (v1 & v2 & LOAD1 & LOAD2 & V1 & V2).
   set (v2' := if Archi.big_endian then v2 else v1) in *.
   set (v1' := if Archi.big_endian then v1 else v2) in *.
-  exploit (exec_moves mv1); eauto. intros [ls1 [A1 B1]].
+  exploit (exec_moves mv1); eauto.
+  split. auto. apply wt_function_wt_bblock in TCODE; eauto.
+  intros [ls1 [A1 [B1 C1]]].
   assert (LD1: Val.lessdef_list rs##args (reglist ls1 args')).
   { eapply add_equations_lessdef; eauto. }
   exploit eval_addressing_lessdef. eexact LD1.
@@ -2210,13 +2457,25 @@ Proof.
   assert (LOADX: exists v2'', Mem.loadv Mint32 m' a1' = Some v2'' /\ Val.lessdef v2' v2'').
   { discriminate || (eapply Mem.loadv_extends; [eauto|eexact LOAD2|eexact G1]). }
   destruct LOADX as (v2'' & LOAD2' & LD2).
+  assert (DST_TYPE: Val.has_type v2'' (mreg_type dst')).
+  {
+    generalize (LTLtyping.wt_function_wt_bblock tf pc _ WTTF TCODE); intro WTBB.
+    apply wt_bblock_expand_moves_head in WTBB. simpl in WTBB.
+    unfold Mem.loadv in LOAD2'; destruct a1'; try inversion LOAD2'.
+    apply Mem.load_type in LOAD2'.
+    destruct (mreg_type dst'); auto; try congruence.
+    apply Val.has_subtype with (ty1 := Tint); auto.
+    apply Val.has_subtype with (ty1 := Tint); auto.
+  }
   set (ls2 := Locmap.set (R dst') v2'' (undef_regs (destroyed_by_load Mint32 addr2) ls1)).
   assert (SAT2: satisf (rs#dst <- v) ls2 e0).
   { eapply parallel_assignment_satisf; eauto.
     apply Val.lessdef_trans with v2'; unfold sel_val; unfold kind_second_word; unfold v2'; destruct Archi.big_endian; auto.
     eapply can_undef_satisf. eauto. eapply add_equations_satisf; eauto.
   }
-  exploit (exec_moves mv2); eauto. intros [ls3 [A3 B3]].
+  exploit (exec_moves mv2); eauto.
+  split. apply wt_setreg, wt_undef_regs; auto. WellTypedBlock.
+  intros [ls3 [A3 [B3 C3]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_trans. eexact A1.
@@ -2227,10 +2486,12 @@ Proof.
   constructor.
   eauto. eauto. eauto. traceEq.
   exploit satisf_successors; eauto. simpl; eauto. intros [enext [W Z]].
-  econstructor; eauto.
+  split; econstructor; eauto.
 
 (* load dead *)
-- exploit exec_moves; eauto. intros [ls1 [X Y]].
+- exploit exec_moves; eauto.
+  split; auto. apply wt_function_wt_bblock in TCODE; eauto.
+  intros [ls1 [X [Y Z]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_right. eexact X. econstructor; eauto.
@@ -2238,11 +2499,14 @@ Proof.
   exploit satisf_successors. eauto. eauto. simpl; eauto. eauto.
   eapply reg_unconstrained_satisf; eauto.
   intros [enext [U V]].
-  econstructor; eauto.
+  split; econstructor; eauto.
   eapply wt_exec_Iload; eauto.
 
 (* store *)
-- exploit exec_moves; eauto. intros [ls1 [X Y]].
+- exploit exec_moves; eauto.
+  split; auto.
+  eapply wt_function_wt_bblock; eauto.
+  intros [ls1 [X [Y Z]]].
   exploit add_equations_lessdef; eauto. intros LD. simpl in LD. inv LD.
   exploit eval_addressing_lessdef; eauto. intros [a' [F G]].
   exploit Mem.storev_extends; eauto. intros [m'' [P Q]].
@@ -2254,7 +2518,7 @@ Proof.
   constructor. eauto. eauto. traceEq.
   exploit satisf_successors; eauto. simpl; eauto.
   eapply can_undef_satisf; eauto. eapply add_equations_satisf; eauto. intros [enext [U V]].
-  econstructor; eauto.
+  split; econstructor; eauto.
 
 (* store 2 *)
 - assert (SF: Archi.ptr64 = false) by (apply Archi.splitlong_ptr32; auto).
@@ -2266,7 +2530,10 @@ Proof.
      with (sel_val kind_second_word rs#src)
        by (unfold kind_second_word; destruct Archi.big_endian; reflexivity).
   intros [m1 [STORE1 STORE2]].
-  exploit (exec_moves mv1); eauto. intros [ls1 [X Y]].
+  exploit (exec_moves mv1); eauto.
+  split; auto.
+  eapply wt_function_wt_bblock; eauto.
+  intros [ls1 [X [Z Y]]].
   exploit add_equations_lessdef. eexact Heqo1. eexact Y. intros LD1.
   exploit add_equation_lessdef. eapply add_equations_satisf. eexact Heqo1. eexact Y.
   simpl. intros LD2.
@@ -2279,7 +2546,9 @@ Proof.
     rewrite <- F1. apply eval_addressing_preserved. exact symbols_preserved.
   exploit Mem.storev_extends. eauto. eexact STORE1. eexact G1. eauto.
   intros [m1' [STORE1' EXT1]].
-  exploit (exec_moves mv2); eauto. intros [ls3 [U V]].
+  exploit (exec_moves mv2); eauto.
+  split; auto. WellTypedBlock.
+  intros [ls3 [U [W V]]].
   exploit add_equations_lessdef. eexact Heqo. eexact V. intros LD3.
   exploit add_equation_lessdef. eapply add_equations_satisf. eexact Heqo. eexact V.
   simpl. intros LD4.
@@ -2305,13 +2574,16 @@ Proof.
   eapply can_undef_satisf. eauto.
   eapply add_equation_satisf. eapply add_equations_satisf; eauto.
   intros [enext [P Q]].
-  econstructor; eauto.
+  split; econstructor; eauto.
 
 (* call *)
 - set (sg := RTL.funsig fd) in *.
   set (args' := loc_arguments sg) in *.
   set (res' := loc_result sg) in *.
-  exploit (exec_moves mv1); eauto. intros [ls1 [A1 B1]].
+  exploit (exec_moves mv1); eauto.
+  split; auto.
+  eapply wt_function_wt_bblock; eauto.
+  intros [ls1 [A1 [B1 C1]]].
   exploit find_function_translated. eauto. eauto. eapply add_equations_args_satisf; eauto.
   intros [tfd [E F]].
   assert (SIG: funsig tfd = sg). eapply sig_function_translated; eauto.
@@ -2320,6 +2592,8 @@ Proof.
   eapply star_right. eexact A1. econstructor; eauto.
   eauto. traceEq.
   exploit analyze_successors; eauto. simpl. left; eauto. intros [enext [U V]].
+  split. apply wt_call_state; auto. constructor; auto. WellTypedBlock.
+  eauto using wt_transf_fundef.
   econstructor; eauto.
   econstructor; eauto.
   inv WTI. congruence.
@@ -2329,7 +2603,8 @@ Proof.
   eapply add_equations_args_satisf; eauto.
   congruence.
   apply wt_regset_assign; auto.
-  intros [ls2 [A2 B2]].
+  split; auto. WellTypedBlock.
+  intros [ls2 [A2 [B2 C2]]].
   exists ls2; split.
   eapply star_right. eexact A2. constructor. traceEq.
   apply satisf_incr with eafter; auto.
@@ -2342,7 +2617,10 @@ Proof.
 - set (sg := RTL.funsig fd) in *.
   set (args' := loc_arguments sg) in *.
   exploit Mem.free_parallel_extends; eauto. intros [m'' [P Q]].
-  exploit (exec_moves mv); eauto. intros [ls1 [A1 B1]].
+  exploit (exec_moves mv); eauto.
+  split; auto.
+  eapply wt_function_wt_bblock; eauto.
+  intros [ls1 [A1 [B1 C1]]].
   exploit find_function_translated. eauto. eauto. eapply add_equations_args_satisf; eauto.
   intros [tfd [E F]].
   assert (SIG: funsig tfd = sg). eapply sig_function_translated; eauto.
@@ -2353,6 +2631,9 @@ Proof.
   replace (fn_stacksize tf) with (RTL.fn_stacksize f); eauto.
   destruct (transf_function_inv _ _ FUN); auto.
   eauto. traceEq.
+  split.
+  constructor. auto. eapply wt_transf_fundef; eauto.
+  auto using wt_return_regs, wt_parent_locset.
   econstructor; eauto.
   eapply match_stackframes_change_sig; eauto. rewrite SIG. rewrite e0. decEq.
   destruct (transf_function_inv _ _ FUN); auto.
@@ -2362,15 +2643,35 @@ Proof.
   rewrite SIG. inv WTI. rewrite <- H6. apply wt_regset_list; auto.
 
 (* builtin *)
-- exploit (exec_moves mv1); eauto. intros [ls1 [A1 B1]].
+- exploit (exec_moves mv1); eauto.
+  split; auto.
+  eapply wt_function_wt_bblock; eauto.
+  intros [ls1 [A1 [B1 C1]]].
   exploit add_equations_builtin_eval; eauto.
   intros (C & vargs' & vres' & m'' & D & E & F & G).
   assert (WTRS': wt_regset env (regmap_setres res vres rs)) by (eapply wt_exec_Ibuiltin; eauto).
+  assert (WTBR: wt_builtin_res (proj_sig_res (ef_sig ef)) res' = true).
+  {
+    apply wt_function_wt_bblock in TCODE; auto.
+    unfold wt_bblock, expand_moves in *. rewrite forallb_app in TCODE.
+    simpl in TCODE. InvBooleans. auto.
+  }
+  exploit external_call_well_typed; eauto; intros.
   set (ls2 := Locmap.setres res' vres' (undef_regs (destroyed_by_builtin ef) ls1)).
   assert (satisf (regmap_setres res vres rs) ls2 e0).
   { eapply parallel_set_builtin_res_satisf; eauto.
-    eapply can_undef_satisf; eauto. }
-  exploit (exec_moves mv2); eauto. intros [ls3 [A3 B3]].
+    eapply can_undef_satisf; eauto.
+    unfold Val.has_type_builtin_res; unfold wt_builtin_res in WTBR.
+    destruct res'; try eapply Val.has_subtype; eauto.
+    InvBooleans. split.
+    eapply Val.has_subtype; eauto. destruct vres'; simpl; eauto.
+    eapply Val.has_subtype; eauto. destruct vres'; simpl; eauto.
+  }
+  exploit (exec_moves mv2); eauto.
+  split; auto.
+  apply wt_setres with (ty := proj_sig_res (ef_sig ef)); auto.
+  apply wt_undef_regs; auto. WellTypedBlock.
+  intros [ls3 [A3 [B3 C3]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_trans. eexact A1.
@@ -2383,10 +2684,13 @@ Proof.
   reflexivity. reflexivity. reflexivity. traceEq.
   exploit satisf_successors; eauto. simpl; eauto.
   intros [enext [U V]].
-  econstructor; eauto.
+  split; econstructor; eauto.
 
 (* cond *)
-- exploit (exec_moves mv); eauto. intros [ls1 [A1 B1]].
+- exploit (exec_moves mv); eauto.
+  split; auto.
+  eapply wt_function_wt_bblock; eauto.
+  intros [ls1 [A1 [B1 C1]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_right. eexact A1.
@@ -2396,10 +2700,13 @@ Proof.
   instantiate (1 := if b then ifso else ifnot). simpl. destruct b; auto.
   eapply can_undef_satisf. eauto. eapply add_equations_satisf; eauto.
   intros [enext [U V]].
-  econstructor; eauto.
+  split; econstructor; eauto.
 
 (* jumptable *)
-- exploit (exec_moves mv); eauto. intros [ls1 [A1 B1]].
+- exploit (exec_moves mv); eauto.
+  split; auto.
+  eapply wt_function_wt_bblock; eauto.
+  intros [ls1 [A1 [B1 C1]]].
   assert (Val.lessdef (Vint n) (ls1 (R arg'))).
     rewrite <- H0. eapply add_equation_lessdef with (q := Eq Full arg (R arg')); eauto.
   inv H2.
@@ -2411,28 +2718,38 @@ Proof.
   instantiate (1 := pc'). simpl. eapply list_nth_z_in; eauto.
   eapply can_undef_satisf. eauto. eapply add_equation_satisf; eauto.
   intros [enext [U V]].
-  econstructor; eauto.
+  split; econstructor; eauto.
 
 (* return *)
 - destruct (transf_function_inv _ _ FUN).
   exploit Mem.free_parallel_extends; eauto. rewrite H10. intros [m'' [P Q]].
   inv WTI; MonadInv.
 + (* without an argument *)
-  exploit (exec_moves mv); eauto. intros [ls1 [A1 B1]].
+  exploit (exec_moves mv); eauto.
+  split; auto.
+  eapply wt_function_wt_bblock; eauto.
+  intros [ls1 [A1 [B1 C1]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_right. eexact A1.
   econstructor. eauto. eauto. traceEq.
-  simpl. econstructor; eauto.
+  simpl. split. econstructor; eauto.
+  auto using wt_return_regs, wt_parent_locset.
+  econstructor; eauto.
   apply return_regs_agree_callee_save.
   constructor.
 + (* with an argument *)
-  exploit (exec_moves mv); eauto. intros [ls1 [A1 B1]].
+  exploit (exec_moves mv); eauto.
+  split; auto.
+  eapply wt_function_wt_bblock; eauto.
+  intros [ls1 [A1 [B1 C1]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_right. eexact A1.
   econstructor. eauto. eauto. traceEq.
-  simpl. econstructor; eauto. rewrite <- H11.
+  simpl. split. econstructor; eauto.
+  auto using wt_return_regs, wt_parent_locset.
+  econstructor; eauto. rewrite <- H11.
   replace (Locmap.getpair (map_rpair R (loc_result (RTL.fn_sig f)))
                           (return_regs (parent_locset ts) ls1))
   with (Locmap.getpair (map_rpair R (loc_result (RTL.fn_sig f))) ls1).
@@ -2456,14 +2773,16 @@ Proof.
     eapply can_undef_satisf; eauto. eapply compat_entry_satisf; eauto.
     rewrite call_regs_param_values. eexact ARGS.
     exact WTRS.
-  intros [ls1 [A B]].
+  split. apply wt_undef_regs, wt_call_regs. auto.
+  eapply wt_function_wt_bblock; eauto.
+  intros [ls1 [A [B C]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_left. econstructor; eauto.
   eapply star_right. eexact A.
   econstructor; eauto.
   eauto. eauto. traceEq.
-  econstructor; eauto.
+  split; econstructor; eauto.
 
 (* external function *)
 - exploit external_call_mem_extends; eauto. intros [v' [m'' [F [G [J K]]]]].
@@ -2471,13 +2790,29 @@ Proof.
   econstructor; split.
   apply plus_one. econstructor; eauto.
   eapply external_call_symbols_preserved with (ge1 := ge); eauto. apply senv_preserved.
+  exploit external_call_well_typed; eauto; intro WTRES.
+  split. econstructor; eauto.
+  apply wt_setpair; auto.
+
   econstructor; eauto.
   simpl. destruct (loc_result (ef_sig ef)) eqn:RES; simpl.
   rewrite Locmap.gss; auto.
+  generalize (loc_result_type (ef_sig ef)); intro SUBTYP.
+  rewrite RES in SUBTYP; simpl in SUBTYP.
+  exploit Val.has_subtype; eauto; intros.
+  rewrite pred_dec_true; auto.
+
   generalize (loc_result_pair (ef_sig ef)); rewrite RES; intros (A & B & C & D & E).
   exploit external_call_well_typed; eauto. unfold proj_sig_res; rewrite B. intros WTRES'.
   rewrite Locmap.gss. rewrite Locmap.gso by (red; auto). rewrite Locmap.gss.
+
+  generalize (loc_result_type (ef_sig ef)); intro SUBTYP.
+  rewrite RES in SUBTYP; simpl in SUBTYP.
+  rewrite !pred_dec_true.
   rewrite val_longofwords_eq_1 by auto. auto.
+  eapply Val.has_subtype; eauto. destruct v'; simpl; auto.
+  eapply Val.has_subtype; eauto. destruct v'; simpl; auto.
+
   red; intros. rewrite (AG l H0).
   symmetry; apply Locmap.gpo.
   assert (X: forall r, is_callee_save r = false -> Loc.diff l (R r)).
@@ -2490,6 +2825,9 @@ Proof.
   exploit STEPS; eauto. rewrite WTRES0; auto. intros [ls2 [A B]].
   econstructor; split.
   eapply plus_left. constructor. eexact A. traceEq.
+  split.
+  apply star_step_type_preservation in A; eauto.
+  inversion WTSTK. econstructor; eauto.
   econstructor; eauto.
   apply wt_regset_assign; auto. rewrite WTRES0; auto.
 Qed.
@@ -2524,30 +2862,19 @@ Proof.
   rewrite H; auto.
 Qed.
 
-Lemma wt_prog: wt_program prog.
-Proof.
-  red; intros.
-  exploit list_forall2_in_left. eexact (proj1 TRANSF). eauto.
-  intros ([i' gd] & A & B & C). simpl in *; subst i'.
-  inv C. destruct f; simpl in *.
-- monadInv H2.
-  unfold transf_function in EQ.
-  destruct (type_function f) as [env|] eqn:TF; try discriminate.
-  econstructor. eapply type_function_correct; eauto.
-- constructor.
-Qed.
-
 Theorem transf_program_correct:
   forward_simulation (RTL.semantics prog) (LTL.semantics tprog).
 Proof.
-  set (ms := fun s s' => wt_state s /\ match_states s s').
+  set (ms := fun s s' => wt_state s /\ LTLtyping.wt_state s' /\ match_states s s').
   eapply forward_simulation_plus with (match_states := ms).
 - apply senv_preserved.
 - intros. exploit initial_states_simulation; eauto. intros [st2 [A B]].
   exists st2; split; auto. split; auto.
   apply wt_initial_state with (p := prog); auto. exact wt_prog.
-- intros. destruct H. eapply final_states_simulation; eauto.
-- intros. destruct H0.
+  split; auto.
+  apply LTLtyping.wt_initial_state with (prog := tprog); auto. exact wt_tprog.
+- intros. destruct H as [H1 [H2 H3]]. eapply final_states_simulation; eauto.
+- intros. destruct H0 as [H1 [H2 H3]].
   exploit step_simulation; eauto. intros [s2' [A B]].
   exists s2'; split. exact A. split.
   eapply subject_reduction; eauto. eexact wt_prog. eexact H.
