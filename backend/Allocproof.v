@@ -1673,22 +1673,25 @@ Proof.
   destruct res, res'; simpl in *; inv H.
 - apply parallel_assignment_satisf with (k := Full); auto.
   unfold reg_loc_unconstrained. rewrite H0 by auto. rewrite H1 by auto. auto.
-- destruct res'1; try discriminate. destruct res'2; try discriminate.
-  rename x0 into hi; rename x1 into lo. MonadInv. destruct (mreg_eq hi lo); inv H5.
-  set (e' := remove_equation {| ekind := High; ereg := x; eloc := R hi |} e0) in *.
+- set (e' := remove_equation {| ekind := High; ereg := x; eloc := R hi |} e0) in *.
   set (e'' := remove_equation {| ekind := Low; ereg := x; eloc := R lo |} e') in *.
   simpl in *. red; intros.
+  assert (lo <> hi /\ e'' = e1).
+  { destruct (typ_eq (env x) Tlong), (mreg_eq hi lo); try inversion H5. auto. }
+  destruct H4; subst.
   destruct (OrderedEquation.eq_dec q (Eq Low x (R lo))).
   subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gss. apply Val.loword_lessdef; auto.
   destruct (OrderedEquation.eq_dec q (Eq High x (R hi))).
-  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gso by (red; auto).
+  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gso by (red; tauto).
   rewrite Locmap.gss. apply Val.hiword_lessdef; auto.
-  assert (EqSet.In q e'').
-  { unfold e'', e', remove_equation; simpl; ESD.fsetdec. }
-  rewrite Regmap.gso. rewrite ! Locmap.gso. auto.
+  rewrite Regmap.gso. rewrite ! Locmap.gso. auto. apply H2.
+  repeat apply ESF.remove_neq_iff; auto.
   eapply loc_unconstrained_sound; eauto.
+  repeat apply ESF.remove_neq_iff; auto.
   eapply loc_unconstrained_sound; eauto.
+  repeat apply ESF.remove_neq_iff; auto.
   eapply reg_unconstrained_sound; eauto.
+  repeat apply ESF.remove_neq_iff; auto.
 - auto.
 Qed.
 

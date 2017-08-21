@@ -417,12 +417,12 @@ Module Locmap.
   - destruct H. rewrite ! gso by (apply Loc.diff_sym; auto). auto.
   Qed.
 
-  Fixpoint setres (res: builtin_res mreg) (v: val) (m: t) : t :=
+  Definition setres (res: builtin_res mreg) (v: val) (m: t) : t :=
     match res with
     | BR r => set (R r) v m
     | BR_none => m
     | BR_splitlong hi lo =>
-        setres lo (Val.loword v) (setres hi (Val.hiword v) m)
+        set (R lo) (Val.loword v) (set (R hi) (Val.hiword v) m)
     end.
 
 End Locmap.

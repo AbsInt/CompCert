@@ -631,7 +631,7 @@ Proof.
   induction res; simpl; intros.
 - apply agree_regs_set_reg; auto.
 - auto.
-- apply IHres2. apply IHres1. auto.
+- repeat apply agree_regs_set_reg; auto.
   apply Val.hiword_inject; auto.
   apply Val.loword_inject; auto.
 Qed.
@@ -742,7 +742,7 @@ Proof.
   induction res; simpl; intros.
 - eapply agree_locs_set_reg; eauto.
 - auto.
-- apply IHres2; auto using in_or_app.
+- repeat eapply agree_locs_set_reg; eauto.
 Qed.
 
 Lemma agree_locs_undef_regs:

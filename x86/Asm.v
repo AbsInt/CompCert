@@ -333,11 +333,11 @@ Definition set_pair (p: rpair preg) (v: val) (rs: regset) : regset :=
 
 (** Assigning the result of a builtin *)
 
-Fixpoint set_res (res: builtin_res preg) (v: val) (rs: regset) : regset :=
+Definition set_res (res: builtin_res preg) (v: val) (rs: regset) : regset :=
   match res with
   | BR r => rs#r <- v
   | BR_none => rs
-  | BR_splitlong hi lo => set_res lo (Val.loword v) (set_res hi (Val.hiword v) rs)
+  | BR_splitlong hi lo => rs #hi <- (Val.hiword v) #lo <- (Val.loword v)
   end.
 
 Section RELSEM.

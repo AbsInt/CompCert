@@ -433,9 +433,12 @@ Proof.
 - eapply agree_set_mreg; eauto. rewrite Pregmap.gss. auto.
   intros. apply Pregmap.gso; auto.
 - auto.
-- apply IHres2. apply IHres1. auto.
-  apply Val.hiword_lessdef; auto.
-  apply Val.loword_lessdef; auto.
+- apply agree_set_mreg with (rs := rs # (preg_of hi) <- (Val.hiword v')).
+  apply agree_set_mreg with (rs := rs).
+  auto. rewrite Pregmap.gss; auto using Val.hiword_lessdef.
+  intros. apply Pregmap.gso; auto.
+  rewrite Pregmap.gss. auto using Val.loword_lessdef.
+  intros. apply Pregmap.gso; auto.
 Qed.
 
 Lemma set_res_other:
@@ -446,7 +449,9 @@ Proof.
   induction res; simpl; intros.
 - apply Pregmap.gso. red; intros; subst r. rewrite preg_of_data in H; discriminate.
 - auto.
-- rewrite IHres2, IHres1; auto.
+- rewrite !Pregmap.gso; auto.
+  red; intros; subst r. rewrite preg_of_data in H; discriminate.
+  red; intros; subst r. rewrite preg_of_data in H; discriminate.
 Qed.
 
 (** * Correspondence between Mach code and Asm code *)
