@@ -705,15 +705,12 @@ struct
         (neg_condition_name cond) ireg r1 shift_op ifnot; 2
     | Pbtbl(r, tbl) ->
       if !Clflags.option_mthumb then begin
-        let lbl = new_label() in
-        fprintf oc "	adr	r14, .L%d\n" lbl;
-        fprintf oc "	add	r14, r14, %a, lsl #2\n" ireg r;
-        fprintf oc "	mov	pc, r14\n";
-        fprintf oc ".L%d:\n" lbl;
+        fprintf oc "	lsl	r14, %a, #2\n" ireg r;
+        fprintf oc "	add	pc, r14\n";
         List.iter
           (fun l -> fprintf oc "	b.w	%a\n" print_label l)
           tbl;
-        3 + List.length tbl
+        2 + List.length tbl
       end else begin
         fprintf oc "	add	pc, pc, %a, lsl #2\n" ireg r;
         fprintf oc "	nop\n";
