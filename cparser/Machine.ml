@@ -57,7 +57,7 @@ let ilp32ll64 = {
   sizeof_longlong = 8;
   sizeof_float = 4;
   sizeof_double = 8;
-  sizeof_longdouble = 16;
+  sizeof_longdouble = 8;
   sizeof_void = None;
   sizeof_fun = None;
   sizeof_wchar = 4;
@@ -71,7 +71,7 @@ let ilp32ll64 = {
   alignof_longlong = 8;
   alignof_float = 4;
   alignof_double = 8;
-  alignof_longdouble = 16;
+  alignof_longdouble = 8;
   alignof_void = None;
   alignof_fun = None;
   bigendian = false;
@@ -89,7 +89,7 @@ let i32lpll64 = {
   sizeof_longlong = 8;
   sizeof_float = 4;
   sizeof_double = 8;
-  sizeof_longdouble = 16;
+  sizeof_longdouble = 8;
   sizeof_void = None;
   sizeof_fun = None;
   sizeof_wchar = 4;
@@ -103,7 +103,7 @@ let i32lpll64 = {
   alignof_longlong = 8;
   alignof_float = 4;
   alignof_double = 8;
-  alignof_longdouble = 16;
+  alignof_longdouble = 8;
   alignof_void = None;
   alignof_fun = None;
   bigendian = false;
@@ -121,7 +121,7 @@ let il32pll64 = {
   sizeof_longlong = 8;
   sizeof_float = 4;
   sizeof_double = 8;
-  sizeof_longdouble = 16;
+  sizeof_longdouble = 8;
   sizeof_void = None;
   sizeof_fun = None;
   sizeof_wchar = 4;
@@ -135,7 +135,7 @@ let il32pll64 = {
   alignof_longlong = 8;
   alignof_float = 4;
   alignof_double = 8;
-  alignof_longdouble = 16;
+  alignof_longdouble = 8;
   alignof_void = None;
   alignof_fun = None;
   bigendian = false;
@@ -149,11 +149,11 @@ let x86_32 =
   { ilp32ll64 with name = "x86_32";
                    char_signed = true;
                    alignof_longlong = 4; alignof_double = 4;
-                   sizeof_longdouble = 12; alignof_longdouble = 4;
+                   alignof_longdouble = 4;
                    supports_unaligned_accesses = true }
 
 let x86_32_macosx =
-  { x86_32 with sizeof_longdouble = 16; alignof_longdouble = 16 }
+  x86_32
 
 let x86_64 =
   { i32lpll64 with name = "x86_64"; char_signed = true }
@@ -194,8 +194,7 @@ let gcc_extensions c =
 (* Normalize configuration for use with the CompCert reference interpreter *)
 
 let compcert_interpreter c =
-  { c with sizeof_longdouble = 8; alignof_longdouble = 8;
-           supports_unaligned_accesses = false }
+  { c with supports_unaligned_accesses = false }
 
 (* Undefined configuration *)
 

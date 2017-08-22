@@ -1,3 +1,6 @@
+- Issue #P25: make sure sizeof(long double) = sizeof(double) in all contexts.
+
+
 Release 3.1, 2017-08-18
 =======================
 
