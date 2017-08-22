@@ -706,7 +706,8 @@ struct
     | Pbtbl(r, tbl) ->
       if !Clflags.option_mthumb then begin
         fprintf oc "	lsl	r14, %a, #2\n" ireg r;
-        fprintf oc "	add	pc, r14\n";
+        fprintf oc "	add	pc, r14\n";   (* 16-bit encoding *)
+        fprintf oc "	nop\n";               (* 16-bit encoding *)
         List.iter
           (fun l -> fprintf oc "	b.w	%a\n" print_label l)
           tbl;
