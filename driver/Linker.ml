@@ -35,9 +35,7 @@ let linker exe_name files =
 
 
 let gnu_linker_help =
-{|  -nostartfiles  Do not use the standard system startup files when
-                 linking
-  -nodefaultlibs Do not use the standard system libraries when
+{|  -nodefaultlibs Do not use the standard system libraries when
                  linking
   -nostdlib      Do not use the standard system startup files or
                  libraries when linking
@@ -47,6 +45,8 @@ let linker_help =
 {|Linking options:
   -l<lib>        Link library <lib>
   -L<dir>        Add <dir> to search path for libraries
+  -nostartfiles  Do not use the standard system startup files when
+                 linking
 |} ^
  (if Configuration.gnu_toolchain then gnu_linker_help else "") ^
 {|  -s             Remove all symbol table and relocation information from the
@@ -62,10 +62,15 @@ let linker_help =
 
 let linker_actions =
   [ Prefix "-l", Self push_linker_arg;
-    Prefix "-L", Self push_linker_arg; ] @
+    Prefix "-L", Self push_linker_arg;
+    Exact "-nostartfiles", Self (fun s  ->
+        if Configuration.gnu_toolchain then
+          push_linker_arg s
+        else
+          push_linker_arg "-Ws")
+  ] @
   (if Configuration.gnu_toolchain then
-    [ Exact "-nostartfiles", Self push_linker_arg;
-      Exact "-nodefaultlibs", Self push_linker_arg;
+    [ Exact "-nodefaultlibs", Self push_linker_arg;
       Exact "-nostdlib", Self push_linker_arg;]
   else []) @
   [ Exact "-s", Self push_linker_arg;
