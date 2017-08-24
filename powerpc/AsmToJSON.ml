@@ -383,7 +383,7 @@ let pp_section pp sec =
     pp_jobject_start pp;
     pp_jmember ~first:true pp "Section Name" pp_jstring s;
     pp_jmember pp "Writable" pp_jbool w;
-    pp_jmember pp "Writable" pp_jbool e;
+    pp_jmember pp "Executable" pp_jbool e;
     pp_jobject_end pp
   | Section_debug_info _
   | Section_debug_abbrev
