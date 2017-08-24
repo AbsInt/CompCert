@@ -255,6 +255,7 @@ Processing options:
                    (<n>=0: none, <n>=1: limited, <n>=2: full; default is full)
   -fcse          Perform common subexpression elimination [on]
   -fredundancy   Perform redundancy elimination [on]
+  -finline       Perform inlining of functions [on]
 Code generation options: (use -fno-<opt> to turn off -f<opt>)
   -ffpu          Use FP registers for some integer operations [on]
   -fsmall-data <n>  Set maximal size <n> for allocation in small data area
