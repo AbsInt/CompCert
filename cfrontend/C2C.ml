@@ -200,63 +200,63 @@ let builtins_generic = {
           [TPtr(TVoid [], []); TInt(IULong, [])],
           false);
   (* Helper functions for int64 arithmetic *)
-    "__i64_dtos",
+    "__compcert_i64_dtos",
         (TInt(ILongLong, []),
          [TFloat(FDouble, [])],
          false);
-    "__i64_dtou",
+    "__compcert_i64_dtou",
         (TInt(IULongLong, []),
          [TFloat(FDouble, [])],
          false);
-    "__i64_stod",
+    "__compcert_i64_stod",
         (TFloat(FDouble, []),
          [TInt(ILongLong, [])],
          false);
-    "__i64_utod",
+    "__compcert_i64_utod",
         (TFloat(FDouble, []),
          [TInt(IULongLong, [])],
          false);
-    "__i64_stof",
+    "__compcert_i64_stof",
         (TFloat(FFloat, []),
          [TInt(ILongLong, [])],
          false);
-    "__i64_utof",
+    "__compcert_i64_utof",
         (TFloat(FFloat, []),
          [TInt(IULongLong, [])],
          false);
-    "__i64_sdiv",
+    "__compcert_i64_sdiv",
         (TInt(ILongLong, []),
          [TInt(ILongLong, []); TInt(ILongLong, [])],
          false);
-    "__i64_udiv",
+    "__compcert_i64_udiv",
         (TInt(IULongLong, []),
          [TInt(IULongLong, []); TInt(IULongLong, [])],
          false);
-    "__i64_smod",
+    "__compcert_i64_smod",
         (TInt(ILongLong, []),
          [TInt(ILongLong, []); TInt(ILongLong, [])],
          false);
-    "__i64_umod",
+    "__compcert_i64_umod",
         (TInt(IULongLong, []),
          [TInt(IULongLong, []); TInt(IULongLong, [])],
          false);
-    "__i64_shl",
+    "__compcert_i64_shl",
         (TInt(ILongLong, []),
          [TInt(ILongLong, []); TInt(IInt, [])],
          false);
-    "__i64_shr",
+    "__compcert_i64_shr",
         (TInt(IULongLong, []),
          [TInt(IULongLong, []); TInt(IInt, [])],
          false);
-    "__i64_sar",
+    "__compcert_i64_sar",
         (TInt(ILongLong, []),
          [TInt(ILongLong, []); TInt(IInt, [])],
          false);
-    "__i64_smulh",
+    "__compcert_i64_smulh",
         (TInt(ILongLong, []),
          [TInt(ILongLong, []); TInt(ILongLong, [])],
          false);
-    "__i64_umulh",
+    "__compcert_i64_umulh",
         (TInt(IULongLong, []),
          [TInt(IULongLong, []); TInt(IULongLong, [])],
          false)
@@ -1130,7 +1130,7 @@ let convertFundef loc env fd =
 (** External function declaration *)
 
 let re_builtin = Str.regexp "__builtin_"
-let re_runtime = Str.regexp "__i64_"
+let re_runtime = Str.regexp "__compcert_i64_"
 
 let convertFundecl env (sto, id, ty, optinit) =
   let (args, res, cconv) =

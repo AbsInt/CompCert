@@ -39,8 +39,8 @@
 ### Conversion from unsigned long to double float	
 
         .balign 16
-        .globl __i64_utod
-__i64_utod:
+        .globl __compcert_i64_utod
+__compcert_i64_utod:
 	rldicl r3, r3, 0, 32    # clear top 32 bits
 	rldicl r4, r4, 0, 32    # clear top 32 bits
 	lis r5, 0x4f80          # 0x4f80_0000 = 2^32 in binary32 format
@@ -55,8 +55,8 @@ __i64_utod:
         fmadd f1, f1, f3, f2    # compute hi * 2^32 + lo
         addi r1, r1, 32
         blr
-        .type __i64_utod, @function
-        .size __i64_utod, .-__i64_utod
+        .type __compcert_i64_utod, @function
+        .size __compcert_i64_utod, .-__compcert_i64_utod
 	
 # Alternate implementation using round-to-odd:
 #       rldimi r4, r3, 32, 0   # reassemble (r3,r4) as a 64-bit integer in r4

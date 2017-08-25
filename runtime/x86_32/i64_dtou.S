@@ -38,7 +38,7 @@
 
 // Conversion float -> unsigned long
 
-FUNCTION(__i64_dtou)
+FUNCTION(__compcert_i64_dtou)
         subl $4, %esp
   // Compare argument with 2^63
         fldl 8(%esp)
@@ -84,5 +84,5 @@ FUNCTION(__i64_dtou)
         .p2align 2
 LC1:    .long 0x5f000000        // 2^63 in single precision
 
-ENDFUNCTION(__i64_dtou)
+ENDFUNCTION(__compcert_i64_dtou)
         

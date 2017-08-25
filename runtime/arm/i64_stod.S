@@ -38,8 +38,8 @@
 
 @@@ Conversion from signed 64-bit integer to double float
 
-FUNCTION(__i64_stod)
-__i64_stod:
+FUNCTION(__compcert_i64_stod)
+__compcert_i64_stod:
         vmov    s0, Reg0LO
         vcvt.f64.u32 d0, s0         @ convert low half to double (unsigned)
         vmov    s2, Reg0HI
@@ -50,7 +50,7 @@ __i64_stod:
         vmov    Reg0LO, Reg0HI, d0  @ return result in register pair r0:r1
 #endif
         bx lr
-ENDFUNCTION(__i64_stod)
+ENDFUNCTION(__compcert_i64_stod)
 
         .balign 8
 .LC1:   .quad 0x41f0000000000000 @ 2^32 in double precision

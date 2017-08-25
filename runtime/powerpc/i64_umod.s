@@ -39,9 +39,9 @@
 ### Unsigned modulus
 
         .balign 16
-        .globl __i64_umod
-__i64_umod:
-        b __i64_udivmod
-        .type __i64_umod, @function
-        .size __i64_umod, .-__i64_umod
+        .globl __compcert_i64_umod
+__compcert_i64_umod:
+        b __compcert_i64_udivmod
+        .type __compcert_i64_umod, @function
+        .size __compcert_i64_umod, .-__compcert_i64_umod
 

@@ -38,7 +38,7 @@
 
 // Conversion unsigned long -> single-precision float
 
-FUNCTION(__i64_utof)
+FUNCTION(__compcert_i64_utof)
         testq   %rdi, %rdi
         js      1f
         pxor    %xmm0, %xmm0            // if < 2^63,
@@ -53,4 +53,4 @@ FUNCTION(__i64_utof)
         cvtsi2ssq %rax, %xmm0           // convert as if signed
         addss   %xmm0, %xmm0            // multiply result by 2.0
         ret
-ENDFUNCTION(__i64_utof)       
+ENDFUNCTION(__compcert_i64_utof)       

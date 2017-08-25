@@ -39,8 +39,8 @@
 ### Conversion from double float to unsigned long	
 
         .balign 16
-        .globl __i64_dtou
-__i64_dtou:
+        .globl __compcert_i64_dtou
+__compcert_i64_dtou:
         stfdu f1, -16(r1)       # extract LO (r4) and HI (r3) halves of double
         lwz r3, 0(r1)
         lwz r4, 4(r1)
@@ -86,7 +86,7 @@ __i64_dtou:
 2:      li r3, -1               # result is MAX_UINT
         li r4, -1
         blr
-        .type __i64_dtou, @function
-        .size __i64_dtou, .-__i64_dtou
+        .type __compcert_i64_dtou, @function
+        .size __compcert_i64_dtou, .-__compcert_i64_dtou
 
         

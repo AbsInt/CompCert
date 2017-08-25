@@ -42,7 +42,7 @@
 @ On exit:   Q = (r4, r5) quotient     R = (r0, r1) remainder
 @ Locals:    M = (r6, r7) mask         TMP = r8 temporary
 
-FUNCTION(__i64_udivmod)
+FUNCTION(__compcert_i64_udivmod)
         orrs r8, Reg1LO, Reg1HI         @ is D == 0?
         it eq
         bxeq lr                         @ if so, return with unspecified results
@@ -76,4 +76,4 @@ FUNCTION(__i64_udivmod)
         orrs r8, Reg3LO, Reg3HI         @ repeat while (M != 0) ...
         bne 2b
         bx lr
-ENDFUNCTION(__i64_udivmod)
+ENDFUNCTION(__compcert_i64_udivmod)

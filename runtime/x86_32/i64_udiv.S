@@ -38,15 +38,15 @@
 
 // Unsigned division
 
-FUNCTION(__i64_udiv)
+FUNCTION(__compcert_i64_udiv)
         pushl %ebp
         pushl %esi
         pushl %edi
-        call GLOB(__i64_udivmod)
+        call GLOB(__compcert_i64_udivmod)
         movl %esi, %eax
         movl %edi, %edx
         popl %edi
         popl %esi
         popl %ebp
         ret
-ENDFUNCTION(__i64_udiv)
+ENDFUNCTION(__compcert_i64_udiv)

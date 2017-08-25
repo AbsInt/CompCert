@@ -38,11 +38,11 @@
 
 @@@ Unsigned division
 
-FUNCTION(__i64_udiv)
+FUNCTION(__compcert_i64_udiv)
         push {r4, r5, r6, r7, r8, lr}
-        bl __i64_udivmod
+        bl __compcert_i64_udivmod
         MOV Reg0LO, Reg2LO
         MOV Reg0HI, Reg2HI
         pop {r4, r5, r6, r7, r8, lr}
         bx lr
-ENDFUNCTION(__i64_udiv)
+ENDFUNCTION(__compcert_i64_udiv)

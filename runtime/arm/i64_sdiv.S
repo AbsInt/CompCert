@@ -38,7 +38,7 @@
 
 @@@ Signed division
 
-FUNCTION(__i64_sdiv)
+FUNCTION(__compcert_i64_sdiv)
         push {r4, r5, r6, r7, r8, r10, lr}
         ASR r4, Reg0HI, #31      @ r4 = sign of N
         ASR r5, Reg1HI, #31      @ r5 = sign of D
@@ -51,11 +51,11 @@ FUNCTION(__i64_sdiv)
         EOR Reg1HI, Reg1HI, r5
         subs Reg1LO, Reg1LO, r5
         sbc Reg1HI, Reg1HI, r5
-        bl __i64_udivmod         @ do unsigned division
+        bl __compcert_i64_udivmod         @ do unsigned division
         EOR Reg0LO, Reg2LO, r10  @ apply expected sign
         EOR Reg0HI, Reg2HI, r10
         subs Reg0LO, Reg0LO, r10
         sbc Reg0HI, Reg0HI, r10
         pop {r4, r5, r6, r7, r8, r10, lr}
         bx lr
-ENDFUNCTION(__i64_sdiv)
+ENDFUNCTION(__compcert_i64_sdiv)

@@ -38,7 +38,7 @@
 
 @@@ Conversion from double float to signed 64-bit integer
 
-FUNCTION(__i64_dtos)
+FUNCTION(__compcert_i64_dtos)
 #ifndef ABI_eabi
         vmov Reg0LO, Reg0HI, d0
 #endif
@@ -97,4 +97,4 @@ FUNCTION(__i64_dtos)
 6:      MOV Reg0LO, #0           @ result is 0x80....00 (MIN_SINT)
         MOV Reg0HI, #0x80000000
         bx lr
-ENDFUNCTION(__i64_dtos)
+ENDFUNCTION(__compcert_i64_dtos)

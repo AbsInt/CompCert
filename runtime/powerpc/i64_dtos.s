@@ -39,8 +39,8 @@
 ### Conversion from double float to signed long	
 
         .balign 16
-        .globl __i64_dtos
-__i64_dtos:
+        .globl __compcert_i64_dtos
+__compcert_i64_dtos:
         stfdu f1, -16(r1)       # extract LO (r4) and HI (r3) halves of double
         lwz r3, 0(r1)
         lwz r4, 4(r1)
@@ -95,6 +95,6 @@ __i64_dtos:
 5:      lis r3, 0x8000          # result is MIN_SINT = 0x8000_0000
         li r4, 0
         blr
-        .type __i64_dtos, @function
-        .size __i64_dtos, .-__i64_dtos
+        .type __compcert_i64_dtos, @function
+        .size __compcert_i64_dtos, .-__compcert_i64_dtos
         

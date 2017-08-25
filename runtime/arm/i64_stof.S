@@ -38,7 +38,7 @@
 
 @@@ Conversion from signed 64-bit integer to single float
 
-FUNCTION(__i64_stof)
+FUNCTION(__compcert_i64_stof)
     @ Check whether -2^53 <= X < 2^53
         ASR r2, Reg0HI, #21
         ASR r3, Reg0HI, #31     @ (r2,r3) = X >> 53
@@ -71,7 +71,7 @@ FUNCTION(__i64_stof)
         vmov r0, s0
 #endif
         bx lr
-ENDFUNCTION(__i64_stof)
+ENDFUNCTION(__compcert_i64_stof)
 
         .balign 8
 .LC1:   .quad 0x41f0000000000000 @ 2^32 in double precision

@@ -43,7 +43,7 @@
 @ - subtract X if Y < 0
 @ - subtract Y if X < 0
 
-FUNCTION(__i64_smulh)
+FUNCTION(__compcert_i64_smulh)
         push  {r4, r5, r6, r7}
 @@@ r7:r6 accumulate bits 95-32 of the full product	
         umull r4, r6, Reg0LO, Reg1LO   @ r6 = high half of XL.YL product
@@ -74,4 +74,4 @@ FUNCTION(__i64_smulh)
         mov   Reg0HI, r6
         pop   {r4, r5, r6, r7}
         bx    lr
-ENDFUNCTION(__i64_smulh)
+ENDFUNCTION(__compcert_i64_smulh)

@@ -38,7 +38,7 @@
 
 @@@ Conversion from unsigned 64-bit integer to single float
 
-FUNCTION(__i64_utof)
+FUNCTION(__compcert_i64_utof)
     @ Check whether X < 2^53
         lsrs r2, Reg0HI, #21    @ test if X >> 53 == 0
         beq 1f
@@ -67,7 +67,7 @@ FUNCTION(__i64_utof)
         vmov r0, s0
 #endif
         bx lr
-ENDFUNCTION(__i64_utof)
+ENDFUNCTION(__compcert_i64_utof)
 
         .balign 8
 .LC1:   .quad 0x41f0000000000000 @ 2^32 in double precision

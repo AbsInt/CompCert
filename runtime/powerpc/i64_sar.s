@@ -39,8 +39,8 @@
 # Shift right signed	
 	
         .balign 16
-        .globl __i64_sar
-__i64_sar:
+        .globl __compcert_i64_sar
+__compcert_i64_sar:
         andi. r5, r5, 63        # take amount modulo 64
         cmpwi r5, 32
         bge 1f                  # amount < 32?
@@ -54,7 +54,7 @@ __i64_sar:
         sraw r4, r3, r6         # RL = XH >>s (amount - 32)
         srawi r3, r3, 31        # RL = sign extension of XH
         blr
-        .type __i64_sar, @function
-        .size __i64_sar, .-__i64_sar
+        .type __compcert_i64_sar, @function
+        .size __compcert_i64_sar, .-__compcert_i64_sar
 
         

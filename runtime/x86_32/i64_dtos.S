@@ -38,7 +38,7 @@
 	
 // Conversion float -> signed long
 
-FUNCTION(__i64_dtos)
+FUNCTION(__compcert_i64_dtos)
         subl $4, %esp
   // Change rounding mode to "round towards zero"
         fnstcw 0(%esp)
@@ -56,5 +56,5 @@ FUNCTION(__i64_dtos)
         movl 12(%esp), %edx
         addl $4, %esp
         ret
-ENDFUNCTION(__i64_dtos)
+ENDFUNCTION(__compcert_i64_dtos)
 

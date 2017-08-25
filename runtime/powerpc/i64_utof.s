@@ -39,8 +39,8 @@
 ### Conversion from unsigned long to single float	
 
         .balign 16
-        .globl __i64_utof
-__i64_utof:
+        .globl __compcert_i64_utof
+__compcert_i64_utof:
 	mflr r9
    # Check whether X < 2^53	
         andis. r0, r3, 0xFFE0       # test bits 53...63 of X
@@ -55,10 +55,10 @@ __i64_utof:
         or r4, r4, r0           # correct bit number 12 of X
         rlwinm r4, r4, 0, 0, 20 # set to 0 bits 0 to 11 of X
    # Convert to double, then round to single	
-1:      bl __i64_utod
+1:      bl __compcert_i64_utod
         mtlr r9
         frsp f1, f1
         blr
-        .type __i64_utof, @function
-        .size __i64_utof, .-__i64_utof
+        .type __compcert_i64_utof, @function
+        .size __compcert_i64_utof, .-__compcert_i64_utof
 	

@@ -39,8 +39,8 @@
 ## Signed remainder	
 	
         .balign 16
-        .globl __i64_smod
-__i64_smod:
+        .globl __compcert_i64_smod
+__compcert_i64_smod:
 	mflr r0
         stw r0, 4(r1)           # save return address in caller's frame
 	mtctr r3                # save sign of result in CTR (sign of N)
@@ -54,7 +54,7 @@ __i64_smod:
         xor r5, r5, r0
         subfc r6, r0, r6
         subfe r5, r0, r5
-        bl __i64_udivmod        # do unsigned division
+        bl __compcert_i64_udivmod        # do unsigned division
         lwz r0, 4(r1)
         mtlr r0                 # restore return address
         mfctr r0
@@ -64,7 +64,7 @@ __i64_smod:
         subfc r4, r0, r4
         subfe r3, r0, r3
         blr
-        .type __i64_smod, @function
-        .size __i64_smod, .-__i64_smod
+        .type __compcert_i64_smod, @function
+        .size __compcert_i64_smod, .-__compcert_i64_smod
 
         

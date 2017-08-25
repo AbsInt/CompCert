@@ -38,7 +38,7 @@
 
 // Conversion float -> unsigned long
 
-FUNCTION(__i64_dtou)
+FUNCTION(__compcert_i64_dtou)
         ucomisd .LC1(%rip), %xmm0
         jnb 1f
         cvttsd2siq %xmm0, %rax
@@ -52,5 +52,5 @@ FUNCTION(__i64_dtou)
 .LC1:   .quad 0x43e0000000000000       // 2^63 in double precision
 .LC2:   .quad 0x8000000000000000       // 2^63 as an integer
 
-ENDFUNCTION(__i64_dtou)
+ENDFUNCTION(__compcert_i64_dtou)
         

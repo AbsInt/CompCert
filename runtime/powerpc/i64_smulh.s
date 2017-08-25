@@ -44,8 +44,8 @@
 # - subtract Y if X < 0
 
         .balign 16
-        .globl __i64_smulh
-__i64_smulh:
+        .globl __compcert_i64_smulh
+__compcert_i64_smulh:
 # r7:r8:r9 accumulate bits 127:32 of the full unsigned product
         mulhwu  r9, r4, r6        # r9 = high half of XL.YL
         mullw   r0, r4, r5        # r0 = low half of XL.YH
@@ -75,6 +75,6 @@ __i64_smulh:
         subfc   r4, r6, r8        # subtract Y
         subfe   r3, r5, r7
         blr
-        .type __i64_smulh, @function
-        .size __i64_smulh, .-__i64_smulh
+        .type __compcert_i64_smulh, @function
+        .size __compcert_i64_smulh, .-__compcert_i64_smulh
 

@@ -39,8 +39,8 @@
 ### Conversion from double float to unsigned long	
 
         .balign 16
-        .globl __i64_dtou
-__i64_dtou:
+        .globl __compcert_i64_dtou
+__compcert_i64_dtou:
         lis r0, 0x5f00          # 0x5f00_0000 = 2^63 in binary32 format
         stwu r0, -16(r1)
         lfs f2, 0(r1)           # f2 = 2^63
@@ -60,7 +60,7 @@ __i64_dtou:
         addis r3, r3, 0x8000    # shift result up by 2^63
         addi r1, r1, 16
         blr
-        .type __i64_dtou, @function
-        .size __i64_dtou, .-__i64_dtou
+        .type __compcert_i64_dtou, @function
+        .size __compcert_i64_dtou, .-__compcert_i64_dtou
 
         

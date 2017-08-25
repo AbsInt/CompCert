@@ -38,7 +38,7 @@
 
 // Signed remainder
 
-FUNCTION(__i64_smod)
+FUNCTION(__compcert_i64_smod)
         pushl %ebp
         pushl %esi
         pushl %edi
@@ -57,7 +57,7 @@ FUNCTION(__i64_smod)
         adcl $0, %esi
         negl %esi
         movl %esi, 28(%esp)
-2:      call GLOB(__i64_udivmod)
+2:      call GLOB(__compcert_i64_udivmod)
         testl %ebp, %ebp               // apply sign to result
         jge 3f
         negl %eax
@@ -67,4 +67,4 @@ FUNCTION(__i64_smod)
         popl %esi
         popl %ebp
         ret
-ENDFUNCTION(__i64_smod)
+ENDFUNCTION(__compcert_i64_smod)

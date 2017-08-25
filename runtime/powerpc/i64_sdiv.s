@@ -39,8 +39,8 @@
 ### Signed division	
 	
         .balign 16
-        .globl __i64_sdiv
-__i64_sdiv:
+        .globl __compcert_i64_sdiv
+__compcert_i64_sdiv:
 	mflr r0
         stw r0, 4(r1)           # save return address in caller's frame
         xor r0, r3, r5          # compute sign of result (top bit)
@@ -55,7 +55,7 @@ __i64_sdiv:
         xor r5, r5, r0
         subfc r6, r0, r6
         subfe r5, r0, r5
-        bl __i64_udivmod        # do unsigned division
+        bl __compcert_i64_udivmod        # do unsigned division
         lwz r0, 4(r1)
         mtlr r0                 # restore return address
         mfctr r0
@@ -65,7 +65,7 @@ __i64_sdiv:
         subfc r4, r0, r6
         subfe r3, r0, r5
         blr
-        .type __i64_sdiv, @function
-        .size __i64_sdiv, .-__i64_sdiv
+        .type __compcert_i64_sdiv, @function
+        .size __compcert_i64_sdiv, .-__compcert_i64_sdiv
 	
         

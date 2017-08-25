@@ -45,9 +45,9 @@
 # Output: quotient Q in (r5,r6),  remainder R in (r3,r4)
 # Destroys: all integer caller-save registers
 	
-	.globl  __i64_udivmod
+	.globl  __compcert_i64_udivmod
 	.balign 16
-__i64_udivmod:
+__compcert_i64_udivmod:
         cmplwi  r5, 0           # DH == 0 ?
 	stwu    r1, -32(r1)
         mflr    r0
@@ -73,7 +73,7 @@ __i64_udivmod:
         srw     r6, r6, r8
         or      r5, r6, r0
   # Divide N' by D' to get an approximate quotient Q
-        bl      __i64_udiv6432  # r3 = quotient, r4 = remainder
+        bl      __compcert_i64_udiv6432  # r3 = quotient, r4 = remainder
         mr      r6, r3          # low half of quotient Q
         li      r5, 0           # high half of quotient is 0
   # Tentative quotient is either correct or one too high
@@ -112,7 +112,7 @@ __i64_udivmod:
         mullw   r0, r31, r6
         subf    r3, r0, r3      # NH is remainder of this division
         mr      r5, r6
-        bl      __i64_udiv6432  # divide NH : NL by DL
+        bl      __compcert_i64_udiv6432  # divide NH : NL by DL
         mr      r5, r31         # high word of quotient
         mr      r6, r3          # low word of quotient
                                 # r4 contains low word of remainder
@@ -133,8 +133,8 @@ __i64_udivmod:
         addi    r1, r1, 32
         blr
         
-        .type __i64_udivmod, @function
-        .size __i64_udivmod, .-__i64_udivmod
+        .type __compcert_i64_udivmod, @function
+        .size __compcert_i64_udivmod, .-__compcert_i64_udivmod
 
 # Auxiliary division function: 64 bit integer divided by 32 bit integer	
 # Not exported
@@ -144,7 +144,7 @@ __i64_udivmod:
 # Assumes: high word of N is less than D	
         
 	.balign 16
-__i64_udiv6432: 
+__compcert_i64_udiv6432: 
 # Algorithm 9.3 from Hacker's Delight, section 9.4	
 # Initially: u1 in r3, u0 in r4, v in r5
 #   s = __builtin_clz(v);
@@ -230,5 +230,5 @@ __i64_udiv6432:
         add     r3, r0, r3
         blr
 
-	.type	__i64_udiv6432, @function
-	.size	__i64_udiv6432,.-__i64_udiv6432
+	.type	__compcert_i64_udiv6432, @function
+	.size	__compcert_i64_udiv6432,.-__compcert_i64_udiv6432

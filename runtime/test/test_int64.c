@@ -41,21 +41,21 @@
 typedef unsigned long long u64;
 typedef signed long long s64;
 
-extern u64 __i64_udiv(u64 x, u64 y);
-extern u64 __i64_umod(u64 x, u64 y);
-extern s64 __i64_sdiv(s64 x, s64 y);
-extern s64 __i64_smod(s64 x, s64 y);
+extern u64 __compcert_i64_udiv(u64 x, u64 y);
+extern u64 __compcert_i64_umod(u64 x, u64 y);
+extern s64 __compcert_i64_sdiv(s64 x, s64 y);
+extern s64 __compcert_i64_smod(s64 x, s64 y);
 
-extern u64 __i64_shl(u64 x, unsigned amount);
-extern u64 __i64_shr(u64 x, unsigned amount);
-extern s64 __i64_sar(s64 x, unsigned amount);
+extern u64 __compcert_i64_shl(u64 x, unsigned amount);
+extern u64 __compcert_i64_shr(u64 x, unsigned amount);
+extern s64 __compcert_i64_sar(s64 x, unsigned amount);
 
-extern double __i64_utod(u64 x);
-extern double __i64_stod(s64 x);
-extern float __i64_utof(u64 x);
-extern float __i64_stof(s64 x);
-extern u64 __i64_dtou(double d);
-extern s64 __i64_dtos(double d);
+extern double __compcert_i64_utod(u64 x);
+extern double __compcert_i64_stod(s64 x);
+extern float __compcert_i64_utof(u64 x);
+extern float __compcert_i64_stof(s64 x);
+extern u64 __compcert_i64_dtou(double d);
+extern s64 __compcert_i64_dtos(double d);
 
 static u64 rnd64(void)
 {
@@ -76,11 +76,11 @@ static void test1(u64 x, u64 y)
 
   if (y != 0) {
 
-  z = __i64_udiv(x, y);
+  z = __compcert_i64_udiv(x, y);
   if (z != x / y) 
     error++, printf("%llu /u %llu = %llu, expected %llu\n", x, y, z, x / y);
 
-  z = __i64_umod(x, y);
+  z = __compcert_i64_umod(x, y);
   if (z != x % y) 
     error++, printf("%llu %%u %llu = %llu, expected %llu\n", x, y, z, x % y);
 
@@ -88,11 +88,11 @@ static void test1(u64 x, u64 y)
 
   if (y != 0 && !(x == 0x800000000000LLU && y == -1)) {
 
-  t = __i64_sdiv(x, y);
+  t = __compcert_i64_sdiv(x, y);
   if (t != (s64) x / (s64) y) 
     error++, printf("%lld /s %lld = %lld, expected %lld\n", x, y, t, (s64) x / (s64) y);
 
-  t = __i64_smod(x, y);
+  t = __compcert_i64_smod(x, y);
   if (t != (s64) x % (s64) y) 
     error++, printf("%lld %%s %lld = %lld, expected %lld\n", x, y, t, (s64) x % (s64) y);
 
@@ -104,11 +104,11 @@ static void test1(u64 x, u64 y)
 
   if (uy != 0) {
 
-  z = __i64_udiv(x, uy);
+  z = __compcert_i64_udiv(x, uy);
   if (z != x / uy) 
     error++, printf("%llu /u %llu = %llu, expected %llu\n", x, uy, z, x / uy);
 
-  z = __i64_umod(x, uy);
+  z = __compcert_i64_umod(x, uy);
   if (z != x % uy) 
     error++, printf("%llu %%u %llu = %llu, expected %llu\n", x, uy, z, x % uy);
 
@@ -116,11 +116,11 @@ static void test1(u64 x, u64 y)
 
   if (sy != 0 && !(x == 0x800000000000LLU && sy == -1)) {
 
-  t = __i64_sdiv(x, sy);
+  t = __compcert_i64_sdiv(x, sy);
   if (t != (s64) x / sy) 
     error++, printf("%lld /s %lld = %lld, expected %lld\n", x, sy, t, (s64) x / sy);
 
-  t = __i64_smod(x, sy);
+  t = __compcert_i64_smod(x, sy);
   if (t != (s64) x % sy) 
     error++, printf("%lld %%s %lld = %lld, expected %lld\n", x, sy, t, (s64) x % sy);
 
@@ -128,59 +128,59 @@ static void test1(u64 x, u64 y)
 
   i = y & 63;
 
-  z = __i64_shl(x, i);
+  z = __compcert_i64_shl(x, i);
   if (z != x << i) 
     error++, printf("%016llx << %d = %016llx, expected %016llx\n", x, i, z, x << i);
 
-  z = __i64_shr(x, i);
+  z = __compcert_i64_shr(x, i);
   if (z != x >> i) 
     error++, printf("%016llx >>u %d = %016llx, expected %016llx\n", x, i, z, x >> i);
 
-  t = __i64_sar(x, i);
+  t = __compcert_i64_sar(x, i);
   if (t != (s64) x >> i) 
     error++, printf("%016llx >>s %d = %016llx, expected %016llx\n", x, i, t, (s64) x >> i);
 
-  f = __i64_utod(x);
+  f = __compcert_i64_utod(x);
   g = (double) x;
   if (f != g)
     error++, printf("(double) %llu (u) = %a, expected %a\n", x, f, g);
 
-  f = __i64_stod(x);
+  f = __compcert_i64_stod(x);
   g = (double) (s64) x;
   if (f != g)
     error++, printf("(double) %lld (s) = %a, expected %a\n", x, f, g);
 
-  u = __i64_utof(x);
+  u = __compcert_i64_utof(x);
   v = (float) x;
   if (u != v)
     error++, printf("(float) %llu (u) = %a, expected %a\n", x, u, v);
 
-  u = __i64_stof(x);
+  u = __compcert_i64_stof(x);
   v = (float) (s64) x;
   if (u != v)
     error++, printf("(float) %lld (s) = %a, expected %a\n", x, u, v);
 
   f = (double) x;
   if (f >= 0 && f < 0x1p+64) {
-    z = __i64_dtou(f);
+    z = __compcert_i64_dtou(f);
     if (z != (u64) f)
       error++, printf("(u64) %a = %llu, expected %llu\n", f, z, (u64) f);
   }
 
   f = (double) (s64) x;
   if (f >= -0x1p+63 && f < 0x1p+63) {
-    t = __i64_dtos(f);
+    t = __compcert_i64_dtos(f);
     if (t != (s64) f)
       error++, printf("(s64) %a = %lld, expected %lld\n", f, z, (s64) f);
   }
 
   f = ((double) x) * 0.0001;
-  z = __i64_dtou(f);
+  z = __compcert_i64_dtou(f);
   if (z != (u64) f)
     error++, printf("(u64) %a = %llu, expected %llu\n", f, z, (u64) f);
 
   f = ((double) (s64) x) * 0.0001;
-  t = __i64_dtos(f);
+  t = __compcert_i64_dtos(f);
   if (t != (s64) f)
     error++, printf("(s64) %a = %lld, expected %lld\n", f, z, (s64) f);
 }

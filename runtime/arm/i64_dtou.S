@@ -38,7 +38,7 @@
 
 @@@ Conversion from double float to unsigned 64-bit integer
 
-FUNCTION(__i64_dtou)
+FUNCTION(__compcert_i64_dtou)
 #ifndef ABI_eabi
         vmov Reg0LO, Reg0HI, d0
 #endif
@@ -88,4 +88,4 @@ FUNCTION(__i64_dtou)
 2:      mvn Reg0LO, #0          @ result is 0xFF....FF (MAX_UINT)
         MOV Reg0HI, Reg0LO
         bx lr
-ENDFUNCTION(__i64_dtou)
+ENDFUNCTION(__compcert_i64_dtou)

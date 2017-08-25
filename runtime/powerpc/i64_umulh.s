@@ -41,8 +41,8 @@
 # X * Y = 2^64 XH.YH + 2^32 (XH.YL + XL.YH) + XL.YL
 
         .balign 16
-        .globl __i64_umulh
-__i64_umulh:
+        .globl __compcert_i64_umulh
+__compcert_i64_umulh:
 # r7:r8:r9 accumulate bits 127:32 of the full product
         mulhwu  r9, r4, r6        # r9 = high half of XL.YL
         mullw   r0, r4, r5        # r0 = low half of XL.YH
@@ -60,6 +60,6 @@ __i64_umulh:
         mulhwu  r0, r3, r5        # r0 = high half of XH.YH
         adde    r3, r7, r0
         blr
-        .type __i64_umulh, @function
-        .size __i64_umulh, .-__i64_umulh
+        .type __compcert_i64_umulh, @function
+        .size __compcert_i64_umulh, .-__compcert_i64_umulh
 

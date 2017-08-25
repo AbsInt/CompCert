@@ -39,8 +39,8 @@
 ### Conversion from signed long to single float	
 
         .balign 16
-        .globl __i64_stof
-__i64_stof:
+        .globl __compcert_i64_stof
+__compcert_i64_stof:
         rldimi r4, r3, 32, 0   # reassemble (r3,r4) as a 64-bit integer in r4
    # Check whether -2^53 <= X < 2^53	
         sradi r5, r4, 53
@@ -63,6 +63,6 @@ __i64_stof:
 	frsp f1, f1
         addi r1, r1, 16
         blr
-        .type __i64_stof, @function
-        .size __i64_stof, .-__i64_stof
+        .type __compcert_i64_stof, @function
+        .size __compcert_i64_stof, .-__compcert_i64_stof
 	

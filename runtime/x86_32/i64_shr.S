@@ -40,7 +40,7 @@
 
 // Note: IA32 shift instructions treat their amount (in %cl) modulo 32
 
-FUNCTION(__i64_shr)
+FUNCTION(__compcert_i64_shr)
         movl 12(%esp), %ecx             // ecx = shift amount, treated mod 64
         testb $32, %cl
         jne 1f
@@ -55,5 +55,5 @@ FUNCTION(__i64_shr)
         shrl %cl, %eax                  // eax = XH >> (amount - 32)
         xorl %edx, %edx                 // edx = 0
         ret
-ENDFUNCTION(__i64_shr)
+ENDFUNCTION(__compcert_i64_shr)
 

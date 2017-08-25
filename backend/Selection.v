@@ -376,21 +376,21 @@ Local Open Scope string_scope.
 
 Definition get_helpers (defmap: PTree.t globdef) : res helper_functions :=
   let globs := record_globdefs defmap in
-  do i64_dtos <- lookup_helper globs "__i64_dtos" sig_f_l ;
-  do i64_dtou <- lookup_helper globs "__i64_dtou" sig_f_l ;
-  do i64_stod <- lookup_helper globs "__i64_stod" sig_l_f ;
-  do i64_utod <- lookup_helper globs "__i64_utod" sig_l_f ;
-  do i64_stof <- lookup_helper globs "__i64_stof" sig_l_s ;
-  do i64_utof <- lookup_helper globs "__i64_utof" sig_l_s ;
-  do i64_sdiv <- lookup_helper globs "__i64_sdiv" sig_ll_l ;
-  do i64_udiv <- lookup_helper globs "__i64_udiv" sig_ll_l ;
-  do i64_smod <- lookup_helper globs "__i64_smod" sig_ll_l ;
-  do i64_umod <- lookup_helper globs "__i64_umod" sig_ll_l ;
-  do i64_shl <- lookup_helper globs "__i64_shl" sig_li_l ;
-  do i64_shr <- lookup_helper globs "__i64_shr" sig_li_l ;
-  do i64_sar <- lookup_helper globs "__i64_sar" sig_li_l ;
-  do i64_umulh <- lookup_helper globs "__i64_umulh" sig_ll_l ;
-  do i64_smulh <- lookup_helper globs "__i64_smulh" sig_ll_l ;
+  do i64_dtos <- lookup_helper globs "__compcert_i64_dtos" sig_f_l ;
+  do i64_dtou <- lookup_helper globs "__compcert_i64_dtou" sig_f_l ;
+  do i64_stod <- lookup_helper globs "__compcert_i64_stod" sig_l_f ;
+  do i64_utod <- lookup_helper globs "__compcert_i64_utod" sig_l_f ;
+  do i64_stof <- lookup_helper globs "__compcert_i64_stof" sig_l_s ;
+  do i64_utof <- lookup_helper globs "__compcert_i64_utof" sig_l_s ;
+  do i64_sdiv <- lookup_helper globs "__compcert_i64_sdiv" sig_ll_l ;
+  do i64_udiv <- lookup_helper globs "__compcert_i64_udiv" sig_ll_l ;
+  do i64_smod <- lookup_helper globs "__compcert_i64_smod" sig_ll_l ;
+  do i64_umod <- lookup_helper globs "__compcert_i64_umod" sig_ll_l ;
+  do i64_shl <- lookup_helper globs "__compcert_i64_shl" sig_li_l ;
+  do i64_shr <- lookup_helper globs "__compcert_i64_shr" sig_li_l ;
+  do i64_sar <- lookup_helper globs "__compcert_i64_sar" sig_li_l ;
+  do i64_umulh <- lookup_helper globs "__compcert_i64_umulh" sig_ll_l ;
+  do i64_smulh <- lookup_helper globs "__compcert_i64_smulh" sig_ll_l ;
   OK (mk_helper_functions
      i64_dtos i64_dtou i64_stod i64_utod i64_stof i64_utof
      i64_sdiv i64_udiv i64_smod i64_umod

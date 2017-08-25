@@ -39,8 +39,8 @@
 ### Conversion from unsigned long to double float	
 
         .balign 16
-        .globl __i64_utod
-__i64_utod:
+        .globl __compcert_i64_utod
+__compcert_i64_utod:
         addi r1, r1, -16
         lis r5, 0x4330
         li r6, 0
@@ -61,6 +61,6 @@ __i64_utod:
         fadd f1, f1, f2         # add both to get result
         addi r1, r1, 16
         blr
-        .type __i64_utod, @function
-        .size __i64_utod, .-__i64_utod
+        .type __compcert_i64_utod, @function
+        .size __compcert_i64_utod, .-__compcert_i64_utod
 	

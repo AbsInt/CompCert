@@ -38,9 +38,9 @@
 
 @@@ Unsigned remainder
 	
-FUNCTION(__i64_umod)
+FUNCTION(__compcert_i64_umod)
         push {r4, r5, r6, r7, r8, lr}
-        bl __i64_udivmod         @ remainder is already in r0,r1
+        bl __compcert_i64_udivmod         @ remainder is already in r0,r1
         pop {r4, r5, r6, r7, r8, lr}
         bx lr
-ENDFUNCTION(__i64_umod)	
+ENDFUNCTION(__compcert_i64_umod)	

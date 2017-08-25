@@ -38,7 +38,7 @@
 
 // Conversion unsigned long -> single-precision float
 
-FUNCTION(__i64_utof)
+FUNCTION(__compcert_i64_utof)
         fildll 4(%esp)                  // convert as if signed
         cmpl $0, 8(%esp)                // is argument >= 2^63?
         jns 1f
@@ -52,4 +52,4 @@ FUNCTION(__i64_utof)
         .p2align 2
 LC1:    .long 0x5f800000                // 2^64 in single precision
 
-ENDFUNCTION(__i64_utof)       
+ENDFUNCTION(__compcert_i64_utof)       

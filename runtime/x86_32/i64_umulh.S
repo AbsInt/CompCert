@@ -45,7 +45,7 @@
 
 // X * Y = 2^64 XH.YH + 2^32 (XH.YL + XL.YH) + XL.YL
 
-FUNCTION(__i64_umulh)
+FUNCTION(__compcert_i64_umulh)
         pushl %esi
         pushl %edi
 	movl XL, %eax
@@ -70,5 +70,5 @@ FUNCTION(__i64_umulh)
 	popl %edi
 	popl %esi
         ret
-ENDFUNCTION(__i64_umulh)
+ENDFUNCTION(__compcert_i64_umulh)
 

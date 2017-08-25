@@ -38,7 +38,7 @@
 
 @@@ Shift right signed
 
-FUNCTION(__i64_sar)
+FUNCTION(__compcert_i64_sar)
         AND r2, r2, #63         @ normalize amount to 0...63
         rsbs r3, r2, #32        @ r3 = 32 - amount
         ble 1f                  @ branch if <= 0, namely if amount >= 32
@@ -52,6 +52,6 @@ FUNCTION(__i64_sar)
         ASR Reg0LO, Reg0HI, r2
         ASR Reg0HI, Reg0HI, #31
         bx lr
-ENDFUNCTION(__i64_sar)
+ENDFUNCTION(__compcert_i64_sar)
 
 

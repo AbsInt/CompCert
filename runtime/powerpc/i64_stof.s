@@ -39,8 +39,8 @@
 ### Conversion from signed long to single float	
 
         .balign 16
-        .globl __i64_stof
-__i64_stof:
+        .globl __compcert_i64_stof
+__compcert_i64_stof:
 	mflr r9
    # Check whether -2^53 <= X < 2^53	
         srawi r5, r3, 31
@@ -59,10 +59,10 @@ __i64_stof:
         or r4, r4, r0           # correct bit number 12 of X
         rlwinm r4, r4, 0, 0, 20 # set to 0 bits 0 to 11 of X
    # Convert to double, then round to single	
-1:      bl __i64_stod
+1:      bl __compcert_i64_stod
         mtlr r9
         frsp f1, f1
         blr
-        .type __i64_stof, @function
-        .size __i64_stof, .-__i64_stof
+        .type __compcert_i64_stof, @function
+        .size __compcert_i64_stof, .-__compcert_i64_stof
 	

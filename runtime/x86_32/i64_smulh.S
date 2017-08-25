@@ -48,7 +48,7 @@
 // - subtract X if Y < 0
 // - subtract Y if X < 0
 
-FUNCTION(__i64_smulh)
+FUNCTION(__compcert_i64_smulh)
         pushl %esi
         pushl %edi
 	movl XL, %eax
@@ -91,4 +91,4 @@ FUNCTION(__i64_smulh)
         popl %edi
         popl %esi
         ret
-ENDFUNCTION(__i64_smulh)
+ENDFUNCTION(__compcert_i64_smulh)

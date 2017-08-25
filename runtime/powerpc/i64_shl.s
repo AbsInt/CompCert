@@ -39,8 +39,8 @@
 # Shift left
 	
         .balign 16
-        .globl __i64_shl
-__i64_shl:
+        .globl __compcert_i64_shl
+__compcert_i64_shl:
 # On PowerPC, shift instructions with amount mod 64 >= 32 return 0
 # hi = (hi << amount) | (lo >> (32 - amount)) | (lo << (amount - 32))
 # lo = lo << amount
@@ -59,6 +59,6 @@ __i64_shl:
         or r3, r3, r0
         slw r4, r4, r5
         blr
-        .type __i64_shl, @function
-        .size __i64_shl, .-__i64_shl
+        .type __compcert_i64_shl, @function
+        .size __compcert_i64_shl, .-__compcert_i64_shl
         

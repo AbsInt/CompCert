@@ -45,7 +45,7 @@
 //          eax:edx is remainder R
 // ebp is preserved
 
-FUNCTION(__i64_udivmod)
+FUNCTION(__compcert_i64_udivmod)
         cmpl $0, 32(%esp)        // single-word divisor? (DH = 0)
         jne 1f
   // Special case 64 bits divided by 32 bits
@@ -101,4 +101,4 @@ FUNCTION(__i64_udivmod)
 5:      decl %esi                // adjust Q down by 1
         jmp 3b                   // and redo check & computation of remainder
 
-ENDFUNCTION(__i64_udivmod)
+ENDFUNCTION(__compcert_i64_udivmod)

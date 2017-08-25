@@ -38,7 +38,7 @@
 
 // Signed division
 
-FUNCTION(__i64_sdiv)
+FUNCTION(__compcert_i64_sdiv)
         pushl %ebp
         pushl %esi
         pushl %edi
@@ -58,7 +58,7 @@ FUNCTION(__i64_sdiv)
         adcl $0, %esi
         negl %esi
         movl %esi, 28(%esp)
-2:      call GLOB(__i64_udivmod)
+2:      call GLOB(__compcert_i64_udivmod)
         testl %ebp, %ebp             // apply sign to result
         jge 3f
         negl %esi
@@ -70,5 +70,5 @@ FUNCTION(__i64_sdiv)
         popl %esi
         popl %ebp
         ret
-ENDFUNCTION(__i64_sdiv)
+ENDFUNCTION(__compcert_i64_sdiv)
 

@@ -40,7 +40,7 @@
 
 @ X * Y = 2^64 XH.YH + 2^32 (XH.YL + XL.YH) + XL.YL
 
-FUNCTION(__i64_umulh)
+FUNCTION(__compcert_i64_umulh)
         push  {r4, r5, r6, r7}
 @@@ r7:r6 accumulate bits 95-32 of the full product	
         umull r4, r6, Reg0LO, Reg1LO   @ r6 = high half of XL.YL product
@@ -58,4 +58,4 @@ FUNCTION(__i64_umulh)
         ADC   Reg0HI, r6, r5
         pop   {r4, r5, r6, r7}
         bx    lr
-ENDFUNCTION(__i64_umulh)
+ENDFUNCTION(__compcert_i64_umulh)

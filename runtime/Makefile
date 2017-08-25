@@ -55,13 +55,13 @@ $(LIB): $(OBJS)
 	$(CASMRUNTIME) -DMODEL_$(MODEL) -DABI_$(ABI) -DENDIANNESS_$(ENDIANNESS) -DSYS_$(SYSTEM) -o $@ $^
 
 # If no asm implementation available, compile the portable C implementation
-# with CompCert.  Since CompCert rejects the "__i64_" identifiers, the C
+# with CompCert.  Since CompCert rejects the "__compcert_i64_" identifiers, the C
 # implementation uses "i64_" identifiers, and we rename them in the
 # generated assembly
 
 %.o: c/%.c c/i64.h ../ccomp
 	../ccomp -O2 -S -o $*.s -I./c c/$*.c
-	sed -i -e 's/i64_/__i64_/g' $*.s
+	sed -i -e 's/i64_/__compcert_i64_/g' $*.s
 	$(CASMRUNTIME) -o $*.o $*.s
 	@rm -f $*.s
 

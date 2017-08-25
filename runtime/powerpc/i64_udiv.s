@@ -39,16 +39,16 @@
 ### Unsigned division	
 
         .balign 16
-        .globl __i64_udiv
-__i64_udiv:
+        .globl __compcert_i64_udiv
+__compcert_i64_udiv:
 	mflr r0
         stw r0, 4(r1)           # save return address in caller's frame
-        bl __i64_udivmod        # unsigned divide
+        bl __compcert_i64_udivmod        # unsigned divide
         lwz r0, 4(r1)
         mtlr r0                 # restore return address
         mr r3, r5               # result = quotient
         mr r4, r6
         blr
-        .type __i64_udiv, @function
-        .size __i64_udiv, .-__i64_udiv
+        .type __compcert_i64_udiv, @function
+        .size __compcert_i64_udiv, .-__compcert_i64_udiv
 

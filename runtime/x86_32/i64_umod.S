@@ -38,14 +38,14 @@
 
 // Unsigned remainder
 
-FUNCTION(__i64_umod)
+FUNCTION(__compcert_i64_umod)
         pushl %ebp
         pushl %esi
         pushl %edi
-        call GLOB(__i64_udivmod)
+        call GLOB(__compcert_i64_udivmod)
         popl %edi
         popl %esi
         popl %ebp
         ret
-ENDFUNCTION(__i64_umod)
+ENDFUNCTION(__compcert_i64_umod)
 

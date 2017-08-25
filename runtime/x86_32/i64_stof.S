@@ -38,12 +38,12 @@
 
 // Conversion signed long -> single-precision float
 
-FUNCTION(__i64_stof)
+FUNCTION(__compcert_i64_stof)
         fildll 4(%esp)
   // The TOS is in extended precision and therefore exact.
   // Force rounding to single precision
         fstps  4(%esp)
         flds   4(%esp)
         ret
-ENDFUNCTION(__i64_stof)
+ENDFUNCTION(__compcert_i64_stof)
 

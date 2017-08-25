@@ -57,7 +57,7 @@
 @    RH = 0 | 0 | (XL << (N-32))
 @    RL = 0
 
-FUNCTION(__i64_shl)
+FUNCTION(__compcert_i64_shl)
         AND r2, r2, #63         @ normalize amount to 0...63
         RSB r3, r2, #32         @ r3 = 32 - amount
         LSL Reg0HI, Reg0HI, r2
@@ -68,4 +68,4 @@ FUNCTION(__i64_shl)
         ORR Reg0HI, Reg0HI, r3
         LSL Reg0LO, Reg0LO, r2
         bx lr
-ENDFUNCTION(__i64_shl)
+ENDFUNCTION(__compcert_i64_shl)

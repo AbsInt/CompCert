@@ -37,8 +37,8 @@
 ### Conversion from signed long to double float	
 
         .balign 16
-        .globl __i64_stod
-__i64_stod:
+        .globl __compcert_i64_stod
+__compcert_i64_stod:
         addi r1, r1, -16
         lis r5, 0x4330
         li r6, 0
@@ -62,6 +62,6 @@ __i64_stod:
         fadd f1, f1, f2         # add both to get result
         addi r1, r1, 16
         blr
-        .type __i64_stod, @function
-        .size __i64_stod, .-__i64_stod
+        .type __compcert_i64_stod, @function
+        .size __compcert_i64_stod, .-__compcert_i64_stod
 
