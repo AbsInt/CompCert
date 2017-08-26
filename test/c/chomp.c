@@ -339,11 +339,7 @@ int main(void)
 
 
   ncol = 7;
-#ifdef SMALL_PROBLEM_SIZE
   nrow = 7;
-#else
-  nrow = 8;
-#endif
   tree = make_play(1); /* create entire tree structure, not just the */
   player = 0;          /* needed part for first move */
   current = make_data(nrow,ncol); /* start play at full board */

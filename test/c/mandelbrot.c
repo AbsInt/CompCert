@@ -22,7 +22,7 @@ int main (int argc, char **argv)
     double Zr, Zi, Cr, Ci, Tr, Ti;
 
     if (argc < 2) {
-      w = h = 3000;
+      w = h = 1000;
     } else {
       w = h = atoi(argv[1]);
     }

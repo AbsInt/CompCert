@@ -26,7 +26,7 @@ static unsigned int nsieve(int m) {
     return count;
 }
 
-#define NITER 10
+#define NITER 2
 
 int main(int argc, char * argv[]) {
     int m = argc < 2 ? 9 : atoi(argv[1]);

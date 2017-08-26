@@ -344,7 +344,7 @@ int main(int argc,char *argv[])
   double eps,eps2;
   double *D,*E,*beta,*S;
 
-  rep = 50;
+  rep = 1;
   n = 500;
   eps = 2.2204460492503131E-16;
 

@@ -27,7 +27,7 @@ int cmpint(const void * i, const void * j)
   return 1;
 }
 
-#define NITER 100
+#define NITER 10
 
 int main(int argc, char ** argv)
 {

@@ -30,7 +30,7 @@ nsieve(unsigned int m)
 	return (count);
 }
 
-#define NITER 10
+#define NITER 2
 
 static void
 test(unsigned int n)

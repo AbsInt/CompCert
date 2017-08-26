@@ -140,7 +140,7 @@ void setup_bodies(void)
 
 int main(int argc, char ** argv)
 {
-  int n = argc < 2 ? 20000000 : atoi(argv[1]);
+  int n = argc < 2 ? 1000000 : atoi(argv[1]);
   int i;
 
   setup_bodies();

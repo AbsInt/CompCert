@@ -21,9 +21,11 @@ static int permutation[256] = { 151,160,137,91,90,15,
    138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180
    };
 
-static double fade(double t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+static inline double fade(double t)
+{ return t * t * t * (t * (t * 6 - 15) + 10); }
 
-static double lerp(double t, double a, double b) { return a + t * (b - a); }
+static inline double lerp(double t, double a, double b)
+{ return a + t * (b - a); }
 
 static double grad(int hash, double x, double y, double z) {
   int h = hash & 15;                      // CONVERT LO 4 BITS OF HASH CODE
@@ -41,7 +43,7 @@ static double noise(double x, double y, double z) {
   z -= floor(z);
   double u = fade(x),                                // COMPUTE FADE CURVES
          v = fade(y),                                // FOR EACH OF X,Y,Z.
-        w = fade(z);
+         w = fade(z);
   int A = p[X  ]+Y, AA = p[A]+Z, AB = p[A+1]+Z,      // HASH COORDINATES OF
       B = p[X+1]+Y, BA = p[B]+Z, BB = p[B+1]+Z;      // THE 8 CUBE CORNERS,
 
@@ -65,9 +67,9 @@ int main(int argc, char ** argv) {
   init();
   
   double x, y, z, sum = 0.0;
-  for (x = -11352.57; x < 23561.57; x += .1235)
-    for (y = -346.1235; y < 124.124; y += 1.4325)
-      for (z = -156.235; y < 23.2345; y += 2.45)
+  for (x = -5.0; x < 5.0; x += 0.1)
+    for (y = -5.0; y < 5.0; y += 0.1)
+      for (z = -5.0; z < 5.0; z += 0.1)
         sum += noise(x, y, z);
   
   printf("%.4e\n", sum);

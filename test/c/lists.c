@@ -59,7 +59,7 @@ int main(int argc, char ** argv)
   struct list * l;
 
   if (argc >= 2) n = atoi(argv[1]); else n = 1000;
-  if (argc >= 3) niter = atoi(argv[1]); else niter = 200000;
+  if (argc >= 3) niter = atoi(argv[1]); else niter = 20000;
   l = buildlist(n);
   if (checklist(n, reverselist(l))) {
     printf("OK\n");

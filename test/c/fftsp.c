@@ -145,7 +145,7 @@ int dfft(float x[], float y[], int np)
 
 /* Test harness */
 
-#define NRUNS 3000
+#define NRUNS 300
 
 int main(int argc, char ** argv)
 {

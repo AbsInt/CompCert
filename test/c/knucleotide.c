@@ -281,7 +281,7 @@ write_count (char *searchFor, char *buffer, long buflen)
   ht_destroy (ht);
 }
 
-#define NRUNS 500
+#define NRUNS 50
 
 int
 main ()
