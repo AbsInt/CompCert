@@ -216,7 +216,7 @@ Definition one_arg (regs: list mreg) (rn: Z) (ofs: Z) (ty: typ)
       One(R r) :: rec (rn + 1) ofs
   | None   =>
       let ofs := align ofs (typealign ty) in
-      One(S Outgoing ofs ty) :: rec rn (ofs + (if Archi.ptr64 then 2 else 1))
+      One(S Outgoing ofs ty) :: rec rn (ofs + (if Archi.ptr64 then 2 else typesize ty))
   end.
 
 Definition two_args (regs: list mreg) (rn: Z) (ofs: Z)
@@ -310,6 +310,8 @@ Proof.
     omega. }
   assert (SK: (if Archi.ptr64 then 2 else 1) > 0).
   { destruct Archi.ptr64; omega. }
+  assert (SKK: forall ty, (if Archi.ptr64 then 2 else typesize ty) > 0).
+  { intros. destruct Archi.ptr64. omega. apply typesize_pos.  }
   assert (A: forall regs rn ofs ty f,
              OKREGS regs -> OKF f -> ofs >= 0 -> OK (one_arg regs rn ofs ty f)).
   { intros until f; intros OR OF OO; red; unfold one_arg; intros.
@@ -317,7 +319,8 @@ Proof.
   - subst p; simpl. apply OR. eapply list_nth_z_in; eauto. 
   - eapply OF; eauto. 
   - subst p; simpl. auto using align_divides, typealign_pos.
-  - eapply OF; [idtac|eauto]. generalize (AL ofs ty OO); omega.
+  - eapply OF; [idtac|eauto].
+    generalize (AL ofs ty OO) (SKK ty); omega.
   }
   assert (B: forall regs rn ofs f,
              OKREGS regs -> OKF f -> ofs >= 0 -> OK (two_args regs rn ofs f)).
