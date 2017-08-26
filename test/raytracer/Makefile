@@ -1,7 +1,7 @@
 include ../../Makefile.config
 
 CC=../../ccomp 
-CFLAGS=-stdlib ../../runtime -dparse -dclight -dasm -fstruct-return
+CFLAGS=$(CCOMPOPTS) -stdlib ../../runtime -dparse -dclight -dasm -fstruct-return
 LIBS=$(LIBMATH)
 TIME=xtime
 
