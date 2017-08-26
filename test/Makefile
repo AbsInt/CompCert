@@ -1,7 +1,7 @@
 DIRS=c compression raytracer spass regression
 
 all:
-	for i in $(DIRS); do $(MAKE) CCOMPOPTS='$(CCOMPOPTS)' -C $$i all; done
+	set -e; for i in $(DIRS); do $(MAKE) CCOMPOPTS='$(CCOMPOPTS)' -C $$i all; done
 
 test:
 	set -e; for i in $(DIRS); do $(MAKE) SIMU='$(SIMU)' -C $$i test; done
