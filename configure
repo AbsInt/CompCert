@@ -588,18 +588,18 @@ B extraction
 
 EOF
 
-echo "-R lib compcert.lib \
--R common compcert.common \
--R ${arch} compcert.${arch} \
--R backend compcert.backend \
--R cfrontend compcert.cfrontend \
--R driver compcert.driver \
--R flocq compcert.flocq \
--R exportclight compcert.exportclight \
--R cparser compcert.cparser" > _CoqProject
+echo "-Q lib compcert \
+-Q common compcert \
+-Q ${arch} compcert \
+-Q backend compcert \
+-Q cfrontend compcert \
+-Q driver compcert \
+-Q flocq flocq \
+-Q exportclight compcert \
+-Q cparser compcert" > _CoqProject
 case $arch in
     x86)
-        echo "-R x86_${bitsize} compcert.x86_${bitsize}" >> _CoqProject
+        echo "-Q x86_${bitsize} compcert" >> _CoqProject
         ;;
 esac
 

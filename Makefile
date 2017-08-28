@@ -25,9 +25,9 @@ DIRS=lib common $(ARCHDIRS) backend cfrontend driver debug\
   flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight \
   cparser cparser/validator
 
-RECDIRS=lib common $(ARCHDIRS) backend cfrontend driver flocq exportclight cparser
+RECDIRS=lib common $(ARCHDIRS) backend cfrontend driver exportclight cparser
 
-COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) compcert.$(d))
+COQINCLUDES=$(foreach d, $(RECDIRS), -Q $(d) compcert) -Q flocq flocq
 
 COQC="$(COQBIN)coqc" -q $(COQINCLUDES) $(COQCOPTS)
 COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
@@ -236,7 +236,7 @@ driver/Version.ml: VERSION
 	>driver/Version.ml
 
 cparser/Parser.v: cparser/Parser.vy
-	$(MENHIR) --coq cparser/Parser.vy
+	$(MENHIR) --coq cparser/Parser.vy --coq-dirpath compcert.validator
 
 depend: $(GENERATED) depend1
 

@@ -18,10 +18,10 @@ COPYING file for more details.
 *)
 
 (** * What is a real number belonging to a format, and many properties. *)
-Require Import Fcore_Raux.
-Require Import Fcore_defs.
-Require Import Fcore_rnd.
-Require Import Fcore_float_prop.
+Require Import flocq.Core.Fcore_Raux.
+Require Import flocq.Core.Fcore_defs.
+Require Import flocq.Core.Fcore_rnd.
+Require Import flocq.Core.Fcore_float_prop.
 
 Section Generic.
 

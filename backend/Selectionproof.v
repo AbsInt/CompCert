@@ -12,11 +12,11 @@
 
 (** Correctness of instruction selection *)
 
-Require Import Coqlib Maps.
-Require Import AST Linking Errors Integers Values Memory Events Globalenvs Smallstep.
-Require Import Switch Cminor Op CminorSel.
-Require Import SelectOp SelectDiv SplitLong SelectLong Selection.
-Require Import SelectOpproof SelectDivproof SplitLongproof SelectLongproof.
+Require Import compcert.Coqlib compcert.Maps.
+Require Import compcert.AST compcert.Linking compcert.Errors compcert.Integers compcert.Values compcert.Memory compcert.Events compcert.Globalenvs compcert.Smallstep.
+Require Import compcert.Switch compcert.Cminor compcert.Op compcert.CminorSel.
+Require Import compcert.SelectOp compcert.SelectDiv compcert.SplitLong compcert.SelectLong compcert.Selection.
+Require Import compcert.SelectOpproof compcert.SelectDivproof compcert.SplitLongproof compcert.SelectLongproof.
 
 Local Open Scope cminorsel_scope.
 Local Open Scope error_monad_scope.

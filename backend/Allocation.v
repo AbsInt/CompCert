@@ -12,11 +12,11 @@
 
 (** Register allocation by external oracle and a posteriori validation. *)
 
-Require Import FSets FSetAVLplus.
-Require Import Coqlib Ordered Maps Errors Integers Floats.
-Require Import AST Lattice Kildall Memdata.
-Require Archi.
-Require Import Op Registers RTL Locations Conventions RTLtyping LTL.
+Require Import FSets compcert.FSetAVLplus.
+Require Import compcert.Coqlib compcert.Ordered compcert.Maps compcert.Errors compcert.Integers compcert.Floats.
+Require Import compcert.AST compcert.Lattice compcert.Kildall compcert.Memdata.
+Require compcert.Archi.
+Require Import compcert.Op compcert.Registers compcert.RTL compcert.Locations compcert.Conventions compcert.RTLtyping compcert.LTL.
 
 (** The validation algorithm used here is described in
   "Validating register allocation and spilling",

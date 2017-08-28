@@ -13,11 +13,11 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Grammar.
-Require Automaton.
-Require Interpreter_safe.
-Require Interpreter_correct.
-Require Interpreter_complete.
+Require compcert.validator.Grammar.
+Require compcert.validator.Automaton.
+Require compcert.validator.Interpreter_safe.
+Require compcert.validator.Interpreter_correct.
+Require compcert.validator.Interpreter_complete.
 Require Import Syntax.
 
 Module Make(Export Aut:Automaton.T).

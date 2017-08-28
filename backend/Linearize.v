@@ -13,8 +13,8 @@
 (** Linearization of the control-flow graph: translation from LTL to Linear *)
 
 Require Import FSets FSetAVL.
-Require Import Coqlib Maps Ordered Errors Lattice Kildall.
-Require Import AST Op Locations LTL Linear.
+Require Import compcert.Coqlib compcert.Maps compcert.Ordered compcert.Errors compcert.Lattice compcert.Kildall.
+Require Import compcert.AST compcert.Op compcert.Locations compcert.LTL compcert.Linear.
 
 Open Scope error_monad_scope.
 

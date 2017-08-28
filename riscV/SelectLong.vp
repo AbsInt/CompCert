@@ -17,11 +17,11 @@
 
 (** Instruction selection for 64-bit integer operations *)
 
-Require Import Coqlib.
-Require Import Compopts.
-Require Import AST Integers Floats.
-Require Import Op CminorSel.
-Require Import SelectOp SplitLong.
+Require Import compcert.Coqlib.
+Require Import compcert.Compopts.
+Require Import compcert.AST compcert.Integers compcert.Floats.
+Require Import compcert.Op compcert.CminorSel.
+Require Import compcert.SelectOp compcert.SplitLong.
 
 Local Open Scope cminorsel_scope.
 Local Open Scope string_scope.

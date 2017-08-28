@@ -12,9 +12,9 @@
 
 (** Compile-time evaluation of initializers for global C variables. *)
 
-Require Import Coqlib Maps Errors.
-Require Import Integers Floats Values AST Memory Globalenvs.
-Require Import Ctypes Cop Csyntax.
+Require Import compcert.Coqlib compcert.Maps compcert.Errors.
+Require Import compcert.Integers compcert.Floats compcert.Values compcert.AST compcert.Memory compcert.Globalenvs.
+Require Import compcert.Ctypes compcert.Cop compcert.Csyntax.
 
 Open Scope error_monad_scope.
 

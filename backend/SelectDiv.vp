@@ -12,10 +12,10 @@
 
 (** Instruction selection for division and modulus *)
 
-Require Import Coqlib.
-Require Import Compopts.
-Require Import AST Integers Floats.
-Require Import Op CminorSel SelectOp SplitLong SelectLong.
+Require Import compcert.Coqlib.
+Require Import compcert.Compopts.
+Require Import compcert.AST compcert.Integers compcert.Floats.
+Require Import compcert.Op compcert.CminorSel compcert.SelectOp compcert.SplitLong compcert.SelectLong.
 
 Local Open Scope cminorsel_scope.
 

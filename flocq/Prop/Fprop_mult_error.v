@@ -18,8 +18,8 @@ COPYING file for more details.
 *)
 
 (** * Error of the multiplication is in the FLX/FLT format *)
-Require Import Fcore.
-Require Import Fcalc_ops.
+Require Import flocq.Core.Fcore.
+Require Import flocq.Calc.Fcalc_ops.
 
 Section Fprop_mult_error.
 

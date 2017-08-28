@@ -12,19 +12,19 @@
 
 (** Abstract syntax and semantics for PowerPC assembly language *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Smallstep.
-Require Import Locations.
-Require Import Stacklayout.
-Require Import Conventions.
+Require Import compcert.Coqlib.
+Require Import compcert.Maps.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Floats.
+Require Import compcert.Values.
+Require Import compcert.Memory.
+Require Import compcert.Events.
+Require Import compcert.Globalenvs.
+Require Import compcert.Smallstep.
+Require Import compcert.Locations.
+Require Import compcert.Stacklayout.
+Require Import compcert.Conventions.
 
 (** * Abstract syntax *)
 

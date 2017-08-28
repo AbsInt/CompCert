@@ -12,20 +12,20 @@
 
 (** Typing rules and a type inference algorithm for RTL. *)
 
-Require Import Coqlib.
-Require Import Errors.
-Require Import Unityping.
-Require Import Maps.
-Require Import AST.
-Require Import Op.
-Require Import Registers.
-Require Import Globalenvs.
-Require Import Values.
-Require Import Integers.
-Require Import Memory.
-Require Import Events.
-Require Import RTL.
-Require Import Conventions.
+Require Import compcert.Coqlib.
+Require Import compcert.Errors.
+Require Import compcert.Unityping.
+Require Import compcert.Maps.
+Require Import compcert.AST.
+Require Import compcert.Op.
+Require Import compcert.Registers.
+Require Import compcert.Globalenvs.
+Require Import compcert.Values.
+Require Import compcert.Integers.
+Require Import compcert.Memory.
+Require Import compcert.Events.
+Require Import compcert.RTL.
+Require Import compcert.Conventions.
 
 (** * The type system *)
 

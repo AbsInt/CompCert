@@ -14,12 +14,12 @@
   the results of register allocation (file [Allocation]). *)
 
 Require Import OrderedType.
-Require Import Coqlib.
-Require Import Maps.
-Require Import Ordered.
-Require Import AST.
-Require Import Values.
-Require Export Machregs.
+Require Import compcert.Coqlib.
+Require Import compcert.Maps.
+Require Import compcert.Ordered.
+Require Import compcert.AST.
+Require Import compcert.Values.
+Require Export compcert.Machregs.
 
 (** * Representation of locations *)
 

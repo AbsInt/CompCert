@@ -15,9 +15,9 @@
 
 (** Type expressions for the Compcert C and Clight languages *)
 
-Require Import Axioms Coqlib Maps Errors.
-Require Import AST Linking.
-Require Archi.
+Require Import compcert.Axioms compcert.Coqlib compcert.Maps compcert.Errors.
+Require Import compcert.AST compcert.Linking.
+Require compcert.Archi.
 
 (** * Syntax of types *)
 

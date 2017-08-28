@@ -21,9 +21,9 @@
     (If an element is already in a heap, inserting it again does nothing.)
 *)
 
-Require Import Coqlib.
+Require Import compcert.Coqlib.
 Require Import FSets.
-Require Import Ordered.
+Require Import compcert.Ordered.
 
 (* To avoid useless definitions of inductors in extracted code. *)
 Local Unset Elimination Schemes.

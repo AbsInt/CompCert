@@ -14,12 +14,12 @@
   performed at RTL level.  It proceeds by a standard dataflow analysis
   and the corresponding code rewriting. *)
 
-Require Import Coqlib Maps Integers Floats Lattice Kildall.
-Require Import AST Linking.
-Require Compopts Machregs.
-Require Import Op Registers RTL.
-Require Import Liveness ValueDomain ValueAOp ValueAnalysis.
-Require Import ConstpropOp.
+Require Import compcert.Coqlib compcert.Maps compcert.Integers compcert.Floats compcert.Lattice compcert.Kildall.
+Require Import compcert.AST compcert.Linking.
+Require compcert.Compopts compcert.Machregs.
+Require Import compcert.Op compcert.Registers compcert.RTL.
+Require Import compcert.Liveness compcert.ValueDomain compcert.ValueAOp compcert.ValueAnalysis.
+Require Import compcert.ConstpropOp.
 
 (** The code transformation builds on the results of the static analysis
   of values from module [ValueAnalysis].  It proceeds instruction by

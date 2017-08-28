@@ -19,10 +19,10 @@ COPYING file for more details.
 
 (** * Helper function for computing the rounded value of a real number. *)
 
-Require Import Fcore.
-Require Import Fcore_digits.
-Require Import Fcalc_bracket.
-Require Import Fcalc_digits.
+Require Import flocq.Core.Fcore.
+Require Import flocq.Core.Fcore_digits.
+Require Import flocq.Calc.Fcalc_bracket.
+Require Import flocq.Calc.Fcalc_digits.
 
 Section Fcalc_round.
 

@@ -17,19 +17,19 @@
 
 (** Abstract syntax and semantics for RISC-V assembly language. *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Smallstep.
-Require Import Locations.
-Require Stacklayout.
-Require Import Conventions.
+Require Import compcert.Coqlib.
+Require Import compcert.Maps.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Floats.
+Require Import compcert.Values.
+Require Import compcert.Memory.
+Require Import compcert.Events.
+Require Import compcert.Globalenvs.
+Require Import compcert.Smallstep.
+Require Import compcert.Locations.
+Require compcert.Stacklayout.
+Require Import compcert.Conventions.
 
 (** * Abstract syntax *)
 
@@ -963,7 +963,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pbuiltin ef args res =>
       Stuck (**r treated specially below *)
 
-  (** The following instructions and directives are not generated directly by Asmgen,
+  (** The following instructions and directives are not generated directly by compcert.Asmgen.
       so we do not model them. *)
   | Pfence
 
@@ -989,7 +989,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   end.
 
 (** Translation of the LTL/Linear/Mach view of machine registers to
-  the RISC-V view.  Note that no LTL register maps to [X31].  This
+  the RISC-V view.  Note that no compcert.LTL register maps to [X31].  This
   register is reserved as temporary, to be used by the generated RV32G
   code.  *)
 

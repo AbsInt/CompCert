@@ -12,7 +12,7 @@
 
 (** Recognition of tail calls. *)
 
-Require Import Coqlib Maps AST Registers Op RTL Conventions.
+Require Import compcert.Coqlib compcert.Maps compcert.AST compcert.Registers compcert.Op compcert.RTL compcert.Conventions.
 
 (** An [Icall] instruction that stores its result in register [rreg]
   can be turned into a tail call if:

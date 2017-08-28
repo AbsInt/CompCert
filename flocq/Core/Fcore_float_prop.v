@@ -18,8 +18,8 @@ COPYING file for more details.
 *)
 
 (** * Basic properties of floating-point formats: lemmas about mantissa, exponent... *)
-Require Import Fcore_Raux.
-Require Import Fcore_defs.
+Require Import flocq.Core.Fcore_Raux.
+Require Import flocq.Core.Fcore_defs.
 
 Section Float_prop.
 

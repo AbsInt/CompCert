@@ -18,9 +18,9 @@ COPYING file for more details.
 *)
 
 (** Basic operations on floats: alignment, addition, multiplication *)
-Require Import Fcore_Raux.
-Require Import Fcore_defs.
-Require Import Fcore_float_prop.
+Require Import flocq.Core.Fcore_Raux.
+Require Import flocq.Core.Fcore_defs.
+Require Import flocq.Core.Fcore_float_prop.
 
 Section Float_ops.
 

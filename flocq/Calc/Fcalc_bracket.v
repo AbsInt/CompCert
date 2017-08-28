@@ -19,9 +19,9 @@ COPYING file for more details.
 
 (** * Locations: where a real number is positioned with respect to its rounded-down value in an arbitrary format. *)
 
-Require Import Fcore_Raux.
-Require Import Fcore_defs.
-Require Import Fcore_float_prop.
+Require Import flocq.Core.Fcore_Raux.
+Require Import flocq.Core.Fcore_defs.
+Require Import flocq.Core.Fcore_float_prop.
 
 Section Fcalc_bracket.
 

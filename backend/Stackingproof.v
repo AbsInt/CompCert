@@ -14,12 +14,12 @@
 
 (** This file proves semantic preservation for the [Stacking] pass. *)
 
-Require Import Coqlib Errors.
-Require Import Integers AST Linking.
-Require Import Values Memory Separation Events Globalenvs Smallstep.
-Require Import LTL Op Locations Linear Mach.
-Require Import Bounds Conventions Stacklayout Lineartyping.
-Require Import Stacking.
+Require Import compcert.Coqlib compcert.Errors.
+Require Import compcert.Integers compcert.AST compcert.Linking.
+Require Import compcert.Values compcert.Memory compcert.Separation compcert.Events compcert.Globalenvs compcert.Smallstep.
+Require Import compcert.LTL compcert.Op compcert.Locations compcert.Linear compcert.Mach.
+Require Import compcert.Bounds compcert.Conventions compcert.Stacklayout compcert.Lineartyping.
+Require Import compcert.Stacking.
 
 Local Open Scope sep_scope.
 

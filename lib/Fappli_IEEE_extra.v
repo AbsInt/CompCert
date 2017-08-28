@@ -20,15 +20,15 @@
 Require Import Psatz.
 Require Import Bool.
 Require Import Eqdep_dec.
-Require Import Fcore.
-Require Import Fcore_digits.
-Require Import Fcalc_digits.
-Require Import Fcalc_ops.
-Require Import Fcalc_round.
-Require Import Fcalc_bracket.
-Require Import Fprop_Sterbenz.
-Require Import Fappli_IEEE.
-Require Import Fappli_rnd_odd.
+Require Import flocq.Core.Fcore.
+Require Import flocq.Core.Fcore_digits.
+Require Import flocq.Calc.Fcalc_digits.
+Require Import flocq.Calc.Fcalc_ops.
+Require Import flocq.Calc.Fcalc_round.
+Require Import flocq.Calc.Fcalc_bracket.
+Require Import flocq.Prop.Fprop_Sterbenz.
+Require Import flocq.Appli.Fappli_IEEE.
+Require Import flocq.Appli.Fappli_rnd_odd.
 
 Local Open Scope Z_scope.
 

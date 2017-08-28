@@ -16,9 +16,9 @@
   intermediate language after Cminor and CminorSel.
 *)
 
-Require Import Coqlib Maps.
-Require Import AST Integers Values Events Memory Globalenvs Smallstep.
-Require Import Op Registers.
+Require Import compcert.Coqlib compcert.Maps.
+Require Import compcert.AST compcert.Integers compcert.Values compcert.Events compcert.Memory compcert.Globalenvs compcert.Smallstep.
+Require Import compcert.Op compcert.Registers.
 
 (** * Abstract syntax *)
 

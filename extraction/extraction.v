@@ -10,27 +10,27 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Coqlib.
-Require Wfsimpl.
-Require DecidableClass Decidableplus.
-Require AST.
-Require Iteration.
-Require Floats.
-Require SelectLong.
-Require Selection.
-Require RTLgen.
-Require Inlining.
-Require ValueDomain.
-Require Tailcall.
-Require Allocation.
-Require Bounds.
-Require Ctypes.
-Require Csyntax.
-Require Ctyping.
-Require Clight.
-Require Compiler.
-Require Parser.
-Require Initializers.
+Require compcert.Coqlib.
+Require compcert.Wfsimpl.
+Require DecidableClass compcert.Decidableplus.
+Require compcert.AST.
+Require compcert.Iteration.
+Require compcert.Floats.
+Require compcert.SelectLong.
+Require compcert.Selection.
+Require compcert.RTLgen.
+Require compcert.Inlining.
+Require compcert.ValueDomain.
+Require compcert.Tailcall.
+Require compcert.Allocation.
+Require compcert.Bounds.
+Require compcert.Ctypes.
+Require compcert.Csyntax.
+Require compcert.Ctyping.
+Require compcert.Clight.
+Require compcert.Compiler.
+Require compcert.Parser.
+Require compcert.Initializers.
 Require Int31.
 
 (* Standard lib *)

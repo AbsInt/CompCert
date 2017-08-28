@@ -19,7 +19,7 @@
 
 Require Import FSetInterface.
 Require FSetAVL.
-Require Import Coqlib.
+Require Import compcert.Coqlib.
 
 Module Make(X: OrderedType).
 

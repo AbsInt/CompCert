@@ -16,8 +16,8 @@
 
 (** Constructions of semi-lattices. *)
 
-Require Import Coqlib.
-Require Import Maps.
+Require Import compcert.Coqlib.
+Require Import compcert.Maps.
 Require Import FSets.
 
 (* To avoid useless definitions of inductors in extracted code. *)

@@ -13,9 +13,9 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Grammar.
+Require compcert.validator.Grammar.
 Require Import Orders.
-Require Export Alphabet.
+Require Export compcert.validator.Alphabet.
 Require Export List.
 Require Export Syntax.
 

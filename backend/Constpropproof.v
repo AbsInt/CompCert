@@ -12,13 +12,13 @@
 
 (** Correctness proof for constant propagation. *)
 
-Require Import Coqlib Maps Integers Floats Lattice Kildall.
-Require Import AST Linking.
-Require Import Values Events Memory Globalenvs Smallstep.
-Require Compopts Machregs.
-Require Import Op Registers RTL.
-Require Import Liveness ValueDomain ValueAOp ValueAnalysis.
-Require Import ConstpropOp ConstpropOpproof Constprop.
+Require Import compcert.Coqlib compcert.Maps compcert.Integers compcert.Floats compcert.Lattice compcert.Kildall.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Values compcert.Events compcert.Memory compcert.Globalenvs compcert.Smallstep.
+Require compcert.Compopts compcert.Machregs.
+Require Import compcert.Op compcert.Registers compcert.RTL.
+Require Import compcert.Liveness compcert.ValueDomain compcert.ValueAOp compcert.ValueAnalysis.
+Require Import compcert.ConstpropOp compcert.ConstpropOpproof compcert.Constprop.
 
 Definition match_prog (prog tprog: program) :=
   match_program (fun cu f tf => tf = transf_fundef (romem_for cu) f) eq prog tprog.

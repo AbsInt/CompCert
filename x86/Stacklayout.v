@@ -12,9 +12,9 @@
 
 (** Machine- and ABI-dependent layout information for activation records. *)
 
-Require Import Coqlib.
-Require Import AST Memory Separation.
-Require Import Bounds.
+Require Import compcert.Coqlib.
+Require Import compcert.AST compcert.Memory compcert.Separation.
+Require Import compcert.Bounds.
 
 Local Open Scope sep_scope.
 

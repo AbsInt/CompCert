@@ -16,10 +16,10 @@
 (** Typing rules and type-checking for the Compcert C language *)
 
 Require Import String.
-Require Import Coqlib Maps Integers Floats Errors.
-Require Import AST Linking.
-Require Import Values Memory Globalenvs Events.
-Require Import Ctypes Cop Csyntax Csem.
+Require Import compcert.Coqlib compcert.Maps compcert.Integers compcert.Floats compcert.Errors.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Values compcert.Memory compcert.Globalenvs compcert.Events.
+Require Import compcert.Ctypes compcert.Cop compcert.Csyntax compcert.Csem.
 
 Local Open Scope error_monad_scope.
 

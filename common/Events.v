@@ -16,14 +16,14 @@
 (** Observable events, execution traces, and semantics of external calls. *)
 
 Require Import String.
-Require Import Coqlib.
-Require Intv.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Globalenvs.
+Require Import compcert.Coqlib.
+Require compcert.Intv.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Floats.
+Require Import compcert.Values.
+Require Import compcert.Memory.
+Require Import compcert.Globalenvs.
 
 (** * Events and traces *)
 

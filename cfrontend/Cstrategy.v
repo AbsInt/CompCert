@@ -15,22 +15,22 @@
 
 (** A deterministic evaluation strategy for C. *)
 
-Require Import Axioms.
-Require Import Coqlib.
-Require Import Errors.
-Require Import Maps.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import AST.
-Require Import Memory.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Smallstep.
-Require Import Ctypes.
-Require Import Cop.
-Require Import Csyntax.
-Require Import Csem.
+Require Import compcert.Axioms.
+Require Import compcert.Coqlib.
+Require Import compcert.Errors.
+Require Import compcert.Maps.
+Require Import compcert.Integers.
+Require Import compcert.Floats.
+Require Import compcert.Values.
+Require Import compcert.AST.
+Require Import compcert.Memory.
+Require Import compcert.Events.
+Require Import compcert.Globalenvs.
+Require Import compcert.Smallstep.
+Require Import compcert.Ctypes.
+Require Import compcert.Cop.
+Require Import compcert.Csyntax.
+Require Import compcert.Csem.
 
 Section STRATEGY.
 

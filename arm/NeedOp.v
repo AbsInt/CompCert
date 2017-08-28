@@ -10,16 +10,16 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Import Coqlib.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Globalenvs.
-Require Import Op.
-Require Import NeedDomain.
-Require Import RTL.
+Require Import compcert.Coqlib.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Floats.
+Require Import compcert.Values.
+Require Import compcert.Memory.
+Require Import compcert.Globalenvs.
+Require Import compcert.Op.
+Require Import compcert.NeedDomain.
+Require Import compcert.RTL.
 
 (** Neededness analysis for ARM operators *)
 

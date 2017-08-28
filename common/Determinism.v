@@ -17,13 +17,13 @@
   and deterministic semantics *)
 
 Require Import String.
-Require Import Coqlib.
-Require Import AST.
-Require Import Integers.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Smallstep.
-Require Import Behaviors.
+Require Import compcert.Coqlib.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Events.
+Require Import compcert.Globalenvs.
+Require Import compcert.Smallstep.
+Require Import compcert.Behaviors.
 
 (** * Deterministic worlds *)
 

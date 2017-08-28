@@ -12,9 +12,9 @@
 
 (** Recognition of tail calls: correctness proof *)
 
-Require Import Coqlib Maps Integers AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep.
-Require Import Op Registers RTL Conventions Tailcall.
+Require Import compcert.Coqlib compcert.Maps compcert.Integers compcert.AST compcert.Linking.
+Require Import compcert.Values compcert.Memory compcert.Events compcert.Globalenvs compcert.Smallstep.
+Require Import compcert.Op compcert.Registers compcert.RTL compcert.Conventions compcert.Tailcall.
 
 (** * Syntactic properties of the code transformation *)
 

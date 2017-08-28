@@ -12,9 +12,9 @@
 
 (** Elimination of unreferenced static definitions *)
 
-Require Import FSets Coqlib Maps Ordered Iteration Errors.
-Require Import AST Linking.
-Require Import Op Registers RTL.
+Require Import FSets compcert.Coqlib compcert.Maps compcert.Ordered compcert.Iteration compcert.Errors.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Op compcert.Registers compcert.RTL.
 
 Local Open Scope string_scope.
 

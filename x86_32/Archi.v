@@ -17,8 +17,8 @@
 (** Architecture-dependent parameters for x86 in 32-bit mode *)
 
 Require Import ZArith.
-Require Import Fappli_IEEE.
-Require Import Fappli_IEEE_bits.
+Require Import flocq.Appli.Fappli_IEEE.
+Require Import flocq.Appli.Fappli_IEEE_bits.
 
 Definition ptr64 := false.
 

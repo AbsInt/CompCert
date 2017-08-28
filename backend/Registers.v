@@ -17,12 +17,12 @@
   intermediate language.  We also define finite sets and finite maps
   over pseudo-registers. *)
 
-Require Import Coqlib.
-Require Import AST.
-Require Import Maps.
-Require Import Ordered.
+Require Import compcert.Coqlib.
+Require Import compcert.AST.
+Require Import compcert.Maps.
+Require Import compcert.Ordered.
 Require FSetAVL.
-Require Import Values.
+Require Import compcert.Values.
 
 Definition reg: Type := positive.
 

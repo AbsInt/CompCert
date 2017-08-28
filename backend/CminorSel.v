@@ -12,17 +12,17 @@
 
 (** The Cminor language after instruction selection. *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import AST.
-Require Import Integers.
-Require Import Events.
-Require Import Values.
-Require Import Memory.
-Require Import Cminor.
-Require Import Op.
-Require Import Globalenvs.
-Require Import Smallstep.
+Require Import compcert.Coqlib.
+Require Import compcert.Maps.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Events.
+Require Import compcert.Values.
+Require Import compcert.Memory.
+Require Import compcert.Cminor.
+Require Import compcert.Op.
+Require Import compcert.Globalenvs.
+Require Import compcert.Smallstep.
 
 (** * Abstract syntax *)
 

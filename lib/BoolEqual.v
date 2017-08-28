@@ -54,7 +54,7 @@ The present tactics also have some restrictions:
 - They probably do not work for mutually-defined inductive types.
 *)
 
-Require Import Coqlib.
+Require Import compcert.Coqlib.
 
 Module BE.
 

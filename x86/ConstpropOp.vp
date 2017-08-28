@@ -13,10 +13,10 @@
 (** Strength reduction for operators and conditions.
     This is the machine-dependent part of [Constprop]. *)
 
-Require Import Coqlib Compopts.
-Require Import AST Integers Floats.
-Require Import Op Registers.
-Require Import ValueDomain.
+Require Import compcert.Coqlib compcert.Compopts.
+Require Import compcert.AST compcert.Integers compcert.Floats.
+Require Import compcert.Op compcert.Registers.
+Require Import compcert.ValueDomain.
 
 (** * Converting known values to constants *)
 

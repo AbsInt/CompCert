@@ -15,10 +15,10 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Import Coqlib Errors Maps.
-Require Import AST Integers Floats Values Memory Globalenvs.
-Require Import Op Locations Mach Conventions.
-Require Import Asm Asmgen Asmgenproof0.
+Require Import compcert.Coqlib compcert.Errors compcert.Maps.
+Require Import compcert.AST compcert.Integers compcert.Floats compcert.Values compcert.Memory compcert.Globalenvs.
+Require Import compcert.Op compcert.Locations compcert.Mach compcert.Conventions.
+Require Import compcert.Asm compcert.Asmgen compcert.Asmgenproof0.
 
 (** Decomposition of integer constants. *)
 

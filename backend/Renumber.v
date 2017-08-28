@@ -12,10 +12,10 @@
 
 (** Postorder renumbering of RTL control-flow graphs. *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import Postorder.
-Require Import RTL.
+Require Import compcert.Coqlib.
+Require Import compcert.Maps.
+Require Import compcert.Postorder.
+Require Import compcert.RTL.
 
 (** CompCert's dataflow analyses (module [Kildall]) are more precise
   and run faster when the sequence [1, 2, 3, ...]  is a postorder

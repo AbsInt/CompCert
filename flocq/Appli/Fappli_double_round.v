@@ -1,10 +1,10 @@
 (** * Conditions for innocuous double rounding. *)
 
-Require Import Fcore_Raux.
-Require Import Fcore_defs.
-Require Import Fcore_generic_fmt.
-Require Import Fcalc_ops.
-Require Import Fcore_ulp.
+Require Import flocq.Core.Fcore_Raux.
+Require Import flocq.Core.Fcore_defs.
+Require Import flocq.Core.Fcore_generic_fmt.
+Require Import flocq.Calc.Fcalc_ops.
+Require Import flocq.Core.Fcore_ulp.
 
 Require Import Psatz.
 
@@ -659,7 +659,7 @@ Qed.
 
 Section Double_round_mult_FLX.
 
-Require Import Fcore_FLX.
+Require Import flocq.Core.Fcore_FLX.
 
 Variable prec : Z.
 Variable prec' : Z.
@@ -685,8 +685,8 @@ End Double_round_mult_FLX.
 
 Section Double_round_mult_FLT.
 
-Require Import Fcore_FLX.
-Require Import Fcore_FLT.
+Require Import flocq.Core.Fcore_FLX.
+Require Import flocq.Core.Fcore_FLT.
 
 Variable emin prec : Z.
 Variable emin' prec' : Z.
@@ -718,7 +718,7 @@ End Double_round_mult_FLT.
 
 Section Double_round_mult_FTZ.
 
-Require Import Fcore_FTZ.
+Require Import flocq.Core.Fcore_FTZ.
 
 Variable emin prec : Z.
 Variable emin' prec' : Z.
@@ -1611,7 +1611,7 @@ Qed.
 
 Section Double_round_plus_FLX.
 
-Require Import Fcore_FLX.
+Require Import flocq.Core.Fcore_FLX.
 
 Variable prec : Z.
 Variable prec' : Z.
@@ -1667,8 +1667,8 @@ End Double_round_plus_FLX.
 
 Section Double_round_plus_FLT.
 
-Require Import Fcore_FLX.
-Require Import Fcore_FLT.
+Require Import flocq.Core.Fcore_FLX.
+Require Import flocq.Core.Fcore_FLT.
 
 Variable emin prec : Z.
 Variable emin' prec' : Z.
@@ -1739,8 +1739,8 @@ End Double_round_plus_FLT.
 
 Section Double_round_plus_FTZ.
 
-Require Import Fcore_FLX.
-Require Import Fcore_FTZ.
+Require Import flocq.Core.Fcore_FLX.
+Require Import flocq.Core.Fcore_FTZ.
 
 Variable emin prec : Z.
 Variable emin' prec' : Z.
@@ -2325,7 +2325,7 @@ Qed.
 
 Section Double_round_plus_beta_ge_3_FLX.
 
-Require Import Fcore_FLX.
+Require Import flocq.Core.Fcore_FLX.
 
 Variable prec : Z.
 Variable prec' : Z.
@@ -2385,8 +2385,8 @@ End Double_round_plus_beta_ge_3_FLX.
 
 Section Double_round_plus_beta_ge_3_FLT.
 
-Require Import Fcore_FLX.
-Require Import Fcore_FLT.
+Require Import flocq.Core.Fcore_FLX.
+Require Import flocq.Core.Fcore_FLT.
 
 Variable emin prec : Z.
 Variable emin' prec' : Z.
@@ -2461,8 +2461,8 @@ End Double_round_plus_beta_ge_3_FLT.
 
 Section Double_round_plus_beta_ge_3_FTZ.
 
-Require Import Fcore_FLX.
-Require Import Fcore_FTZ.
+Require Import flocq.Core.Fcore_FLX.
+Require Import flocq.Core.Fcore_FTZ.
 
 Variable emin prec : Z.
 Variable emin' prec' : Z.
@@ -2880,7 +2880,7 @@ Qed.
 
 Section Double_round_sqrt_FLX.
 
-Require Import Fcore_FLX.
+Require Import flocq.Core.Fcore_FLX.
 
 Variable prec : Z.
 Variable prec' : Z.
@@ -2917,8 +2917,8 @@ End Double_round_sqrt_FLX.
 
 Section Double_round_sqrt_FLT.
 
-Require Import Fcore_FLX.
-Require Import Fcore_FLT.
+Require Import flocq.Core.Fcore_FLX.
+Require Import flocq.Core.Fcore_FLT.
 
 Variable emin prec : Z.
 Variable emin' prec' : Z.
@@ -2972,8 +2972,8 @@ End Double_round_sqrt_FLT.
 
 Section Double_round_sqrt_FTZ.
 
-Require Import Fcore_FLX.
-Require Import Fcore_FTZ.
+Require Import flocq.Core.Fcore_FLX.
+Require Import flocq.Core.Fcore_FTZ.
 
 Variable emin prec : Z.
 Variable emin' prec' : Z.
@@ -3318,7 +3318,7 @@ Qed.
 
 Section Double_round_sqrt_beta_ge_4_FLX.
 
-Require Import Fcore_FLX.
+Require Import flocq.Core.Fcore_FLX.
 
 Variable prec : Z.
 Variable prec' : Z.
@@ -3357,8 +3357,8 @@ End Double_round_sqrt_beta_ge_4_FLX.
 
 Section Double_round_sqrt_beta_ge_4_FLT.
 
-Require Import Fcore_FLX.
-Require Import Fcore_FLT.
+Require Import flocq.Core.Fcore_FLX.
+Require Import flocq.Core.Fcore_FLT.
 
 Variable emin prec : Z.
 Variable emin' prec' : Z.
@@ -3414,8 +3414,8 @@ End Double_round_sqrt_beta_ge_4_FLT.
 
 Section Double_round_sqrt_beta_ge_4_FTZ.
 
-Require Import Fcore_FLX.
-Require Import Fcore_FTZ.
+Require Import flocq.Core.Fcore_FLX.
+Require Import flocq.Core.Fcore_FTZ.
 
 Variable emin prec : Z.
 Variable emin' prec' : Z.
@@ -4401,7 +4401,7 @@ Qed.
 
 Section Double_round_div_FLX.
 
-Require Import Fcore_FLX.
+Require Import flocq.Core.Fcore_FLX.
 
 Variable prec : Z.
 Variable prec' : Z.
@@ -4445,8 +4445,8 @@ End Double_round_div_FLX.
 
 Section Double_round_div_FLT.
 
-Require Import Fcore_FLX.
-Require Import Fcore_FLT.
+Require Import flocq.Core.Fcore_FLX.
+Require Import flocq.Core.Fcore_FLT.
 
 Variable emin prec : Z.
 Variable emin' prec' : Z.
@@ -4515,8 +4515,8 @@ End Double_round_div_FLT.
 
 Section Double_round_div_FTZ.
 
-Require Import Fcore_FLX.
-Require Import Fcore_FTZ.
+Require Import flocq.Core.Fcore_FLX.
+Require Import flocq.Core.Fcore_FTZ.
 
 Variable emin prec : Z.
 Variable emin' prec' : Z.

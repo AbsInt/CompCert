@@ -12,10 +12,10 @@
 
 (** Correctness proof for x86-64 generation: auxiliary results. *)
 
-Require Import Coqlib.
-Require Import AST Errors Integers Floats Values Memory Globalenvs.
-Require Import Op Locations Conventions Mach Asm.
-Require Import Asmgen Asmgenproof0.
+Require Import compcert.Coqlib.
+Require Import compcert.AST compcert.Errors compcert.Integers compcert.Floats compcert.Values compcert.Memory compcert.Globalenvs.
+Require Import compcert.Op compcert.Locations compcert.Conventions compcert.Mach compcert.Asm.
+Require Import compcert.Asmgen compcert.Asmgenproof0.
 
 Local Open Scope error_monad_scope.
 

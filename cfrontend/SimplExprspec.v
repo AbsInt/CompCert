@@ -12,9 +12,9 @@
 
 (** Relational specification of expression simplification. *)
 
-Require Import Coqlib Maps Errors Integers Floats.
-Require Import AST Linking Memory.
-Require Import Ctypes Cop Csyntax Clight SimplExpr.
+Require Import compcert.Coqlib compcert.Maps compcert.Errors compcert.Integers compcert.Floats.
+Require Import compcert.AST compcert.Linking compcert.Memory.
+Require Import compcert.Ctypes compcert.Cop compcert.Csyntax compcert.Clight compcert.SimplExpr.
 
 Section SPEC.
 

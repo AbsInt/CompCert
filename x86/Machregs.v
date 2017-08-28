@@ -11,12 +11,12 @@
 (* *********************************************************************)
 
 Require Import String.
-Require Import Coqlib.
-Require Import Decidableplus.
-Require Import Maps.
-Require Import AST.
-Require Import Integers.
-Require Import Op.
+Require Import compcert.Coqlib.
+Require Import compcert.Decidableplus.
+Require Import compcert.Maps.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Op.
 
 (** ** Machine registers *)
 

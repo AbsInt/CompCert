@@ -13,12 +13,12 @@
 (** Function calling conventions and other conventions regarding the use of
     machine registers and stack slots. *)
 
-Require Import Coqlib.
-Require Import Decidableplus.
-Require Import AST.
-Require Import Events.
-Require Import Locations.
-Require Archi.
+Require Import compcert.Coqlib.
+Require Import compcert.Decidableplus.
+Require Import compcert.AST.
+Require Import compcert.Events.
+Require Import compcert.Locations.
+Require compcert.Archi.
 
 (** * Classification of machine registers *)
 

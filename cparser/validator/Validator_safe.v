@@ -13,8 +13,8 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Automaton.
-Require Import Alphabet.
+Require compcert.validator.Automaton.
+Require Import compcert.validator.Alphabet.
 Require Import List.
 Require Import Syntax.
 

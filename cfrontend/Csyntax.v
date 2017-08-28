@@ -15,9 +15,9 @@
 
 (** Abstract syntax for the Compcert C language *)
 
-Require Import Coqlib Maps Integers Floats Errors.
-Require Import AST Linking Values.
-Require Import Ctypes Cop.
+Require Import compcert.Coqlib compcert.Maps compcert.Integers compcert.Floats compcert.Errors.
+Require Import compcert.AST compcert.Linking compcert.Values.
+Require Import compcert.Ctypes compcert.Cop.
 
 (** ** Expressions *)
 

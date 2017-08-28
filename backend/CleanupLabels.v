@@ -21,8 +21,8 @@
   branched to. *)
 
 Require Import FSets FSetAVL.
-Require Import Coqlib Ordered.
-Require Import Linear.
+Require Import compcert.Coqlib compcert.Ordered.
+Require Import compcert.Linear.
 
 Module Labelset := FSetAVL.Make(OrderedPositive).
 

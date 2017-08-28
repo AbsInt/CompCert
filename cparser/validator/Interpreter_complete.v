@@ -18,12 +18,12 @@ Require Import ProofIrrelevance.
 Require Import Equality.
 Require Import List.
 Require Import Syntax.
-Require Import Alphabet.
+Require Import compcert.validator.Alphabet.
 Require Import Arith.
-Require Grammar.
-Require Automaton.
-Require Interpreter.
-Require Validator_complete.
+Require compcert.validator.Grammar.
+Require compcert.validator.Automaton.
+Require compcert.validator.Interpreter.
+Require compcert.validator.Validator_complete.
 
 Module Make(Import A:Automaton.T) (Import Inter:Interpreter.T A).
 Module Import Valid := Validator_complete.Make A.

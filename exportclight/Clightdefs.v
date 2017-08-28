@@ -18,14 +18,14 @@
 Require Export String.
 Require Export List.
 Require Export ZArith.
-Require Export Integers.
-Require Export Floats.
-Require Export AST.
-Require Export Ctypes.
-Require Export Cop.
-Require Export Clight.
-Require Import Maps.
-Require Import Errors.
+Require Export compcert.Integers.
+Require Export compcert.Floats.
+Require Export compcert.AST.
+Require Export compcert.Ctypes.
+Require Export compcert.Cop.
+Require Export compcert.Clight.
+Require Import compcert.Maps.
+Require Import compcert.Errors.
 
 Definition tvoid := Tvoid.
 Definition tschar := Tint I8 Signed noattr.

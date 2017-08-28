@@ -12,10 +12,10 @@
 
 (** Elimination of unneeded computations over RTL. *)
 
-Require Import Coqlib Maps Errors Integers Floats Lattice Kildall.
-Require Import AST Linking.
-Require Import Memory Registers Op RTL.
-Require Import ValueDomain ValueAnalysis NeedDomain NeedOp.
+Require Import compcert.Coqlib compcert.Maps compcert.Errors compcert.Integers compcert.Floats compcert.Lattice compcert.Kildall.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Memory compcert.Registers compcert.Op compcert.RTL.
+Require Import compcert.ValueDomain compcert.ValueAnalysis compcert.NeedDomain compcert.NeedOp.
 
 (** * Part 1: the static analysis *)
 

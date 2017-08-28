@@ -12,11 +12,11 @@
 
 (** Correctness proof for the branch tunneling optimization. *)
 
-Require Import Coqlib Maps UnionFind.
-Require Import AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep.
-Require Import Op Locations LTL.
-Require Import Tunneling.
+Require Import compcert.Coqlib compcert.Maps compcert.UnionFind.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Values compcert.Memory compcert.Events compcert.Globalenvs compcert.Smallstep.
+Require Import compcert.Op compcert.Locations compcert.LTL.
+Require Import compcert.Tunneling.
 
 Definition match_prog (p tp: program) :=
   match_program (fun ctx f tf => tf = tunnel_fundef f) eq p tp.

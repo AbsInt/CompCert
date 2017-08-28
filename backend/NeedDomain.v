@@ -12,21 +12,21 @@
 
 (** Abstract domain for neededness analysis *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import IntvSets.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Globalenvs.
-Require Import Events.
-Require Import Lattice.
-Require Import Registers.
-Require Import ValueDomain.
-Require Import Op.
-Require Import RTL.
+Require Import compcert.Coqlib.
+Require Import compcert.Maps.
+Require Import compcert.IntvSets.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Floats.
+Require Import compcert.Values.
+Require Import compcert.Memory.
+Require Import compcert.Globalenvs.
+Require Import compcert.Events.
+Require Import compcert.Lattice.
+Require Import compcert.Registers.
+Require Import compcert.ValueDomain.
+Require Import compcert.Op.
+Require Import compcert.RTL.
 
 (** * Neededness for values *)
 

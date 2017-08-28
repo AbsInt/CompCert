@@ -13,10 +13,10 @@
 (** Correctness of instruction selection for integer division *)
 
 Require Import String.
-Require Import Coqlib Maps.
-Require Import AST Errors Integers Floats.
-Require Import Values Memory Globalenvs Events Cminor Op CminorSel.
-Require Import SelectOp SelectOpproof SplitLong.
+Require Import compcert.Coqlib compcert.Maps.
+Require Import compcert.AST compcert.Errors compcert.Integers compcert.Floats.
+Require Import compcert.Values compcert.Memory compcert.Globalenvs compcert.Events compcert.Cminor compcert.Op compcert.CminorSel.
+Require Import compcert.SelectOp compcert.SelectOpproof compcert.SplitLong.
 
 Local Open Scope cminorsel_scope.
 Local Open Scope string_scope.

@@ -13,9 +13,9 @@
 (** Translation from Csharpminor to Cminor. *)
 
 Require Import FSets FSetAVL Orders Mergesort.
-Require Import Coqlib Maps Ordered Errors Integers Floats.
-Require Import AST Linking.
-Require Import Csharpminor Cminor.
+Require Import compcert.Coqlib compcert.Maps compcert.Ordered compcert.Errors compcert.Integers compcert.Floats.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Csharpminor compcert.Cminor.
 
 Local Open Scope string_scope.
 Local Open Scope error_monad_scope.

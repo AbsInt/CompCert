@@ -15,9 +15,9 @@
   LTL (``Location Transfer Language'') is the target language
   for register allocation and the source language for linearization. *)
 
-Require Import Coqlib Maps.
-Require Import AST Integers Values Events Memory Globalenvs Smallstep.
-Require Import Op Locations Conventions.
+Require Import compcert.Coqlib compcert.Maps.
+Require Import compcert.AST compcert.Integers compcert.Values compcert.Events compcert.Memory compcert.Globalenvs compcert.Smallstep.
+Require Import compcert.Op compcert.Locations compcert.Conventions.
 
 (** * Abstract syntax *)
 

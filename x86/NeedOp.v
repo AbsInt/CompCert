@@ -12,9 +12,9 @@
 
 (** Neededness analysis for x86_64 operators *)
 
-Require Import Coqlib.
-Require Import AST Integers Floats Values Memory Globalenvs.
-Require Import Op NeedDomain RTL.
+Require Import compcert.Coqlib.
+Require Import compcert.AST compcert.Integers compcert.Floats compcert.Values compcert.Memory compcert.Globalenvs.
+Require Import compcert.Op compcert.NeedDomain compcert.RTL.
 
 Definition op1 (nv: nval) := nv :: nil.
 Definition op2 (nv: nval) := nv :: nv :: nil.

@@ -12,16 +12,16 @@
 
 (** Translation from CminorSel to RTL. *)
 
-Require Import Coqlib.
-Require Errors.
-Require Import Maps.
-Require Import AST.
-Require Import Integers.
-Require Import Switch.
-Require Import Op.
-Require Import Registers.
-Require Import CminorSel.
-Require Import RTL.
+Require Import compcert.Coqlib.
+Require compcert.Errors.
+Require Import compcert.Maps.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Switch.
+Require Import compcert.Op.
+Require Import compcert.Registers.
+Require Import compcert.CminorSel.
+Require Import compcert.RTL.
 
 Local Open Scope string_scope.
 

@@ -12,11 +12,11 @@
 
 (** Elimination of unreferenced static definitions *)
 
-Require Import FSets Coqlib Maps Ordered Iteration Errors.
-Require Import AST Linking.
-Require Import Integers Values Memory Globalenvs Events Smallstep.
-Require Import Op Registers RTL.
-Require Import Unusedglob.
+Require Import FSets compcert.Coqlib compcert.Maps compcert.Ordered compcert.Iteration compcert.Errors.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Integers compcert.Values compcert.Memory compcert.Globalenvs compcert.Events compcert.Smallstep.
+Require Import compcert.Op compcert.Registers compcert.RTL.
+Require Import compcert.Unusedglob.
 
 Module ISF := FSetFacts.Facts(IS).
 Module ISP := FSetProperties.Properties(IS).

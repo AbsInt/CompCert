@@ -16,12 +16,12 @@
 
 (** In-memory representation of values. *)
 
-Require Import Coqlib.
-Require Archi.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
+Require Import compcert.Coqlib.
+Require compcert.Archi.
+Require Import compcert.AST.
+Require Import compcert.Integers.
+Require Import compcert.Floats.
+Require Import compcert.Values.
 
 (** * Properties of memory chunks *)
 

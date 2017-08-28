@@ -12,10 +12,10 @@
 
 (** Solvers for dataflow inequations. *)
 
-Require Import Coqlib.
-Require Import Iteration.
-Require Import Maps.
-Require Import Lattice.
+Require Import compcert.Coqlib.
+Require Import compcert.Iteration.
+Require Import compcert.Maps.
+Require Import compcert.Lattice.
 
 (* To avoid useless definitions of inductors in extracted code. *)
 Local Unset Elimination Schemes.
@@ -1536,7 +1536,7 @@ End BBlock_solver.
   greatest node in the working list.  For backward analysis,
   we will similarly pick the smallest node in the working list. *)
 
-Require Import Heaps.
+Require Import compcert.Heaps.
 
 Module NodeSetForward <: NODE_SET.
   Definition t := PHeap.t.

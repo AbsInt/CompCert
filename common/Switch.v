@@ -17,10 +17,10 @@
     to comparison trees. *)
 
 Require Import EqNat.
-Require Import Coqlib.
-Require Import Maps.
-Require Import Integers.
-Require Import Values.
+Require Import compcert.Coqlib.
+Require Import compcert.Maps.
+Require Import compcert.Integers.
+Require Import compcert.Values.
 
 (** A multi-way branch is composed of a list of (key, action) pairs,
   plus a default action.  *)

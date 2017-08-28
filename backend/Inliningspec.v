@@ -12,10 +12,10 @@
 
 (** RTL function inlining: relational specification *)
 
-Require Import Coqlib Wfsimpl Maps Errors Integers.
-Require Import AST Linking.
-Require Import Op Registers RTL.
-Require Import Inlining.
+Require Import compcert.Coqlib compcert.Wfsimpl compcert.Maps compcert.Errors compcert.Integers.
+Require Import compcert.AST compcert.Linking.
+Require Import compcert.Op compcert.Registers compcert.RTL.
+Require Import compcert.Inlining.
 
 (** ** Soundness of function environments. *)
 

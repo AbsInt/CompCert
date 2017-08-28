@@ -17,8 +17,8 @@
 (** Architecture-dependent parameters for RISC-V *)
 
 Require Import ZArith.
-Require Import Fappli_IEEE.
-Require Import Fappli_IEEE_bits.
+Require Import flocq.Appli.Fappli_IEEE.
+Require Import flocq.Appli.Fappli_IEEE_bits.
 
 Parameter ptr64 : bool.
 

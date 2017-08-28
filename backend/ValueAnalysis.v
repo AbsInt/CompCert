@@ -10,11 +10,11 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Import Coqlib Maps Integers Floats Lattice Kildall.
-Require Import Compopts AST Linking.
-Require Import Values Memory Globalenvs Events.
-Require Import Registers Op RTL.
-Require Import ValueDomain ValueAOp Liveness.
+Require Import compcert.Coqlib compcert.Maps compcert.Integers compcert.Floats compcert.Lattice compcert.Kildall.
+Require Import compcert.Compopts compcert.AST compcert.Linking.
+Require Import compcert.Values compcert.Memory compcert.Globalenvs compcert.Events.
+Require Import compcert.Registers compcert.Op compcert.RTL.
+Require Import compcert.ValueDomain compcert.ValueAOp compcert.Liveness.
 
 (** * The dataflow analysis *)
 
@@ -1851,7 +1851,7 @@ Qed.
 
 End INITIAL.
 
-Require Import Axioms.
+Require Import compcert.Axioms.
 
 Theorem sound_initial:
   forall prog st, initial_state prog st -> sound_state prog st.

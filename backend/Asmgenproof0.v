@@ -12,22 +12,22 @@
 
 (** Correctness proof for Asm generation: machine-independent framework *)
 
-Require Import Coqlib.
-Require Intv.
-Require Import AST.
-Require Import Errors.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Globalenvs.
-Require Import Events.
-Require Import Smallstep.
-Require Import Locations.
-Require Import Mach.
-Require Import Asm.
-Require Import Asmgen.
-Require Import Conventions.
+Require Import compcert.Coqlib.
+Require compcert.Intv.
+Require Import compcert.AST.
+Require Import compcert.Errors.
+Require Import compcert.Integers.
+Require Import compcert.Floats.
+Require Import compcert.Values.
+Require Import compcert.Memory.
+Require Import compcert.Globalenvs.
+Require Import compcert.Events.
+Require Import compcert.Smallstep.
+Require Import compcert.Locations.
+Require Import compcert.Mach.
+Require Import compcert.Asm.
+Require Import compcert.Asmgen.
+Require Import compcert.Conventions.
 
 (** * Processor registers and register states *)
 

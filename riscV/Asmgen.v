@@ -17,10 +17,10 @@
 
 (** Translation from Mach to RISC-V assembly language *)
 
-Require Archi.
-Require Import Coqlib Errors.
-Require Import AST Integers Floats Memdata.
-Require Import Op Locations Mach Asm.
+Require compcert.Archi.
+Require Import compcert.Coqlib compcert.Errors.
+Require Import compcert.AST compcert.Integers compcert.Floats compcert.Memdata.
+Require Import compcert.Op compcert.Locations compcert.Mach compcert.Asm.
 
 Local Open Scope string_scope.
 Local Open Scope error_monad_scope.
