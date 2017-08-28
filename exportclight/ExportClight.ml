@@ -478,12 +478,11 @@ let print_assertions p =
 
 (* The prologue *)
 
-let prologue = "\n\
-Require Import Clightdefs.\n\
-\
+let prologue = "\
+From Coq Require Import String List ZArith.\n\
+From compcert Require Import Coqlib Integers Floats AST Ctypes Cop Clight Clightdefs.\n\
 Local Open Scope Z_scope.\n\
-\
-"
+\n"
 
 (* Naming the compiler-generated temporaries occurring in the program *)
 
