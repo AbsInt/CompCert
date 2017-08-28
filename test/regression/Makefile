@@ -2,7 +2,7 @@ include ../../Makefile.config
 
 CCOMP=../../ccomp
 CCOMPFLAGS=$(CCOMPOPTS) -stdlib ../../runtime -dparse -dc -dclight -dasm -fall
-
+INTERPFLAGS=-stdlib ../../runtime -interp -quiet -fall
 LIBS=$(LIBMATH)
 
 # Can run, both in compiled mode and in interpreter mode,
@@ -15,7 +15,6 @@ TESTS=int32 int64 floats floats-basics \
   sizeof1 sizeof2 binops bool for1 switch switch2 compound \
   decl1 interop1 bitfields9 ptrs3 \
   parsing krfun
-
 # Can run, but only in compiled mode, and have reference output in Results
 
 TESTS_COMP=attribs1 bitfields1 bitfields2 bitfields3 bitfields4 \
@@ -75,7 +74,7 @@ test:
          done
 	@echo "----------- Interpreted tests -------------"
 	@for i in $(TESTS); do \
-           SIMU='' ./Runtest $$i $(CCOMP) -fall -interp -quiet $$i.c; \
+           SIMU='' ./Runtest $$i $(CCOMP) $(INTERPFLAGS) $$i.c; \
          done
 	@for i in $(TESTS_DIFF); do \
            if $(CCOMP) -fall -interp -quiet $$i.c > _cinterp.log; then \
