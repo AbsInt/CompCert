@@ -18,7 +18,7 @@ Require Import Coqlib Errors.
 Require Import Integers AST Linking.
 Require Import Values Memory Separation Events Globalenvs Smallstep.
 Require Import LTL Op Locations Linear Mach.
-Require Import Bounds Conventions Stacklayout Lineartyping.
+Require Import Bounds Conventions Conventions1 Stacklayout Lineartyping.
 Require Import Stacking.
 
 Local Open Scope sep_scope.

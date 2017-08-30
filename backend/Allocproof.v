@@ -2064,11 +2064,11 @@ Ltac UseShape :=
 Ltac WellTypedBlock :=
   match goal with
   | [ T: (fn_code ?tf) ! _ = Some _ |- wt_bblock _ _ = true ] =>
-    apply wt_function_wt_bblock in T; auto;
-    unfold wt_bblock, expand_moves in *; WellTypedBlock
+    apply wt_function_wt_bblock in T; try eassumption;
+    unfold wt_bblock, expand_moves in *; try eassumption; WellTypedBlock
   | [ T: forallb (LTLtyping.wt_instr _) (_ ++ _) = true |- forallb _ _ = true ] =>
     rewrite forallb_app in T; simpl in T;
-    InvBooleans; eauto; WellTypedBlock
+    InvBooleans; try eassumption; WellTypedBlock
   | _ => idtac
   end.
 
@@ -2367,10 +2367,7 @@ Proof.
     auto.
   }
   exploit (exec_moves mv3); eauto.
-  split. apply wt_setreg; auto using wt_undef_regs.
-  apply wt_function_wt_bblock in TCODE; auto.
-  unfold wt_bblock, expand_moves in *. rewrite forallb_app in TCODE.
-  simpl in TCODE. InvBooleans. rewrite forallb_app in H5. simpl in H5. InvBooleans. eauto.
+  split. apply wt_setreg; auto using wt_undef_regs. WellTypedBlock.
   intros [ls5 [A5 [B5 C5]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
@@ -2539,7 +2536,7 @@ Proof.
   exploit Mem.storev_extends. eauto. eexact STORE1. eexact G1. eauto.
   intros [m1' [STORE1' EXT1]].
   exploit (exec_moves mv2); eauto.
-  split; unfold ls2; auto using wt_undef_regs. WellTypedBlock.
+  split; try apply wt_undef_regs; auto. WellTypedBlock.
   intros [ls3 [U [W V]]].
   exploit add_equations_lessdef. eexact Heqo. eexact V. intros LD3.
   exploit add_equation_lessdef. eapply add_equations_satisf. eexact Heqo. eexact V.
