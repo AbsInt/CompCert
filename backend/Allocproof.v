@@ -2072,11 +2072,11 @@ Ltac UseShape :=
 Ltac WellTypedBlock :=
   match goal with
   | [ T: (fn_code ?tf) ! _ = Some _ |- wt_bblock _ _ = true ] =>
-    apply wt_function_wt_bblock in T; auto;
-    unfold wt_bblock, expand_moves in *; WellTypedBlock
+    apply wt_function_wt_bblock in T; try eassumption;
+    unfold wt_bblock, expand_moves in *; try eassumption; WellTypedBlock
   | [ T: forallb (LTLtyping.wt_instr _) (_ ++ _) = true |- forallb _ _ = true ] =>
     rewrite forallb_app in T; simpl in T;
-    InvBooleans; eauto; WellTypedBlock
+    InvBooleans; try eassumption; WellTypedBlock
   | _ => idtac
   end.
 
@@ -2301,7 +2301,7 @@ Proof.
     eapply Mem.load_type; eauto.
   }
   exploit (exec_moves mv2); eauto.
-  split. apply wt_setreg; auto. WellTypedBlock.
+  split. apply wt_setreg; auto using wt_undef_regs. WellTypedBlock.
   intros [ls2 [A2 [B2 C2]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
@@ -2343,7 +2343,7 @@ Proof.
     auto.
   }
   exploit (exec_moves mv2); eauto.
-  split. apply wt_setreg; auto. WellTypedBlock.
+  split. apply wt_setreg; auto using wt_undef_regs. WellTypedBlock.
   intros [ls3 [A3 [B3 C3]]].
   assert (LD3: Val.lessdef_list rs##args (reglist ls3 args2')).
   { replace (rs##args) with ((rs#dst<-v)##args).
@@ -2375,10 +2375,7 @@ Proof.
     auto.
   }
   exploit (exec_moves mv3); eauto.
-  split. apply wt_setreg; auto.
-  apply wt_function_wt_bblock in TCODE; auto.
-  unfold wt_bblock, expand_moves in *. rewrite forallb_app in TCODE.
-  simpl in TCODE. InvBooleans. rewrite forallb_app in H5. simpl in H5. InvBooleans. eauto.
+  split. apply wt_setreg; auto using wt_undef_regs. WellTypedBlock.
   intros [ls5 [A5 [B5 C5]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
@@ -2518,7 +2515,7 @@ Proof.
   constructor. eauto. eauto. traceEq.
   exploit satisf_successors; eauto. simpl; eauto.
   eapply can_undef_satisf; eauto. eapply add_equations_satisf; eauto. intros [enext [U V]].
-  split; econstructor; eauto.
+  split; econstructor; eauto using wt_undef_regs.
 
 (* store 2 *)
 - assert (SF: Archi.ptr64 = false) by (apply Archi.splitlong_ptr32; auto).
@@ -2547,7 +2544,7 @@ Proof.
   exploit Mem.storev_extends. eauto. eexact STORE1. eexact G1. eauto.
   intros [m1' [STORE1' EXT1]].
   exploit (exec_moves mv2); eauto.
-  split; auto. WellTypedBlock.
+  split; try apply wt_undef_regs; auto. WellTypedBlock.
   intros [ls3 [U [W V]]].
   exploit add_equations_lessdef. eexact Heqo. eexact V. intros LD3.
   exploit add_equation_lessdef. eapply add_equations_satisf. eexact Heqo. eexact V.
@@ -2574,7 +2571,7 @@ Proof.
   eapply can_undef_satisf. eauto.
   eapply add_equation_satisf. eapply add_equations_satisf; eauto.
   intros [enext [P Q]].
-  split; econstructor; eauto.
+  split; econstructor; eauto using wt_undef_regs.
 
 (* call *)
 - set (sg := RTL.funsig fd) in *.
@@ -2700,7 +2697,7 @@ Proof.
   instantiate (1 := if b then ifso else ifnot). simpl. destruct b; auto.
   eapply can_undef_satisf. eauto. eapply add_equations_satisf; eauto.
   intros [enext [U V]].
-  split; econstructor; eauto.
+  split; econstructor; eauto using wt_undef_regs.
 
 (* jumptable *)
 - exploit (exec_moves mv); eauto.
@@ -2718,7 +2715,7 @@ Proof.
   instantiate (1 := pc'). simpl. eapply list_nth_z_in; eauto.
   eapply can_undef_satisf. eauto. eapply add_equation_satisf; eauto.
   intros [enext [U V]].
-  split; econstructor; eauto.
+  split; econstructor; eauto using wt_undef_regs.
 
 (* return *)
 - destruct (transf_function_inv _ _ FUN).

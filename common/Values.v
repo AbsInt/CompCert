@@ -166,7 +166,7 @@ Program Definition has_type_dec (v: val) (t: typ) : {has_type v t} + {~ has_type
   | false => right _
   end.
 Next Obligation.
-  destruct v, t; simpl in *; auto; congruence.
+  destruct v, t; simpl in *; auto; try congruence; destruct Archi.ptr64; auto.
 Qed.
 Next Obligation.
   destruct v, t; simpl in *; auto; try congruence.

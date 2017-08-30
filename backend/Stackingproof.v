@@ -18,7 +18,7 @@ Require Import Coqlib Errors.
 Require Import Integers AST Linking.
 Require Import Values Memory Separation Events Globalenvs Smallstep.
 Require Import LTL Op Locations Linear Mach.
-Require Import Bounds Conventions Stacklayout Lineartyping.
+Require Import Bounds Conventions Conventions1 Stacklayout Lineartyping.
 Require Import Stacking.
 
 Local Open Scope sep_scope.
@@ -2147,13 +2147,8 @@ Proof.
   eapply match_states_return with (j := j').
   eapply match_stacks_change_meminj; eauto.
   apply agree_regs_set_pair. apply agree_regs_inject_incr with j; auto. auto.
-  inversion WTS; subst.
   apply external_call_well_typed in H0.
-  unfold Val.has_type_rpair, loc_result, proj_sig_res in *.
-  destruct (ef_sig ef) eqn:RES; simpl.
-  destruct sig_res; simpl in *.
-  destruct t0, res, Archi.big_endian; auto.
-  destruct res; auto.
+  apply loc_result_has_type; auto.
   apply agree_callee_save_set_result; auto.
   apply stack_contents_change_meminj with j; auto.
   rewrite sep_comm, sep_assoc; auto.

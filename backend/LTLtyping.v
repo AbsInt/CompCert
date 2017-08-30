@@ -333,9 +333,9 @@ Local Opaque mreg_type.
 - (* branch *)
   simpl in *. econstructor; eauto.
 - (* cond branch *)
-  simpl in *. econstructor; auto.
+  simpl in *. econstructor; auto; apply wt_undef_regs; auto.
 - (* jumptable *)
-  simpl in *. econstructor; auto.
+  simpl in *. econstructor; auto; apply wt_undef_regs; auto.
 - (* return *)
   simpl in *. InvBooleans.
   econstructor; eauto.
