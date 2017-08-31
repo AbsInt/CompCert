@@ -107,7 +107,7 @@ Proof.
   intros; red; intros.
   unfold Locmap.set.
   destruct (Loc.eq (R r) l).
-  subst l; rewrite pred_dec_true; auto.
+  subst l; rewrite Val.load_result_same; auto.
   destruct (Loc.diff_dec (R r) l). auto. red. auto.
 Qed.
 

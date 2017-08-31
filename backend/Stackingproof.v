@@ -607,7 +607,7 @@ Lemma agree_regs_set_reg:
 Proof.
   intros; red; intros.
   unfold Regmap.set. destruct (RegEq.eq r0 r). subst r0.
-  rewrite Locmap.gss, pred_dec_true; auto.
+  rewrite Locmap.gss, Val.load_result_same; auto.
   rewrite Locmap.gso; auto. red. auto.
 Qed.
 
@@ -966,7 +966,8 @@ Remark LTL_undef_regs_same:
   forall r rl ls, In r rl -> LTL.undef_regs rl ls (R r) = Vundef.
 Proof.
   induction rl; simpl; intros. contradiction.
-  unfold Locmap.set. destruct (Loc.eq (R a) (R r)). auto.
+  unfold Locmap.set. destruct (Loc.eq (R a) (R r)).
+  rewrite Val.load_result_same; simpl; auto.
   destruct (Loc.diff_dec (R a) (R r)); auto.
   apply IHrl. intuition congruence.
 Qed.
@@ -991,7 +992,8 @@ Remark undef_regs_type:
 Proof.
   induction rl; simpl; intros.
 - auto.
-- unfold Locmap.set. destruct (Loc.eq (R a) l). simpl; auto.
+- unfold Locmap.set. destruct (Loc.eq (R a) l).
+  rewrite Val.load_result_same; simpl; auto.
   destruct (Loc.diff_dec (R a) l); auto. red; auto.
 Qed.
 

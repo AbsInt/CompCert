@@ -725,7 +725,7 @@ Lemma loc_unconstrained_satisf:
 Proof.
   intros; red; intros.
   destruct (OrderedEquation.eq_dec q (Eq k r l)).
-  subst q; simpl. unfold l; rewrite Locmap.gss. rewrite pred_dec_true; auto.
+  subst q; simpl. unfold l; rewrite Locmap.gss. rewrite Val.load_result_same; auto.
   assert (EqSet.In q (remove_equation (Eq k r l) e)).
     simpl. ESD.fsetdec.
   rewrite Locmap.gso. apply H; auto. eapply loc_unconstrained_sound; eauto.
@@ -752,7 +752,7 @@ Lemma parallel_assignment_satisf:
 Proof.
   intros; red; intros.
   destruct (OrderedEquation.eq_dec q (Eq k r l)).
-  subst q; simpl. unfold l; rewrite Regmap.gss; rewrite Locmap.gss, pred_dec_true; auto.
+  subst q; simpl. unfold l; rewrite Regmap.gss; rewrite Locmap.gss, Val.load_result_same; auto.
   assert (EqSet.In q (remove_equation {| ekind := k; ereg := r; eloc := l |} e)).
     simpl. ESD.fsetdec.
   exploit reg_loc_unconstrained_sound; eauto. intros [A B].
@@ -781,10 +781,10 @@ Proof.
   simpl in H2. InvBooleans. simpl.
   red; intros.
   destruct (OrderedEquation.eq_dec q (Eq Low res (R mr2))).
-  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gss, pred_dec_true by auto.
+  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gss, Val.load_result_same by auto.
   apply Val.loword_lessdef; auto.
   destruct (OrderedEquation.eq_dec q (Eq High res (R mr1))).
-  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gso, Locmap.gss, pred_dec_true by auto.
+  subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gso, Locmap.gss, Val.load_result_same by auto.
   apply Val.hiword_lessdef; auto.
   assert (EqSet.In q e'). unfold e', remove_equation; simpl; ESD.fsetdec.
   rewrite Regmap.gso. rewrite ! Locmap.gso. auto.
@@ -1084,9 +1084,7 @@ Proof.
   subst dst. rewrite Locmap.gss.
   destruct q as [k r l]; simpl in *.
   exploit loc_type_compat_well_typed; eauto.
-  destruct l as [mr | sl ofs ty]; intros.
-  rewrite pred_dec_true by auto. apply (H3 _ B).
-  apply val_lessdef_normalize; auto. apply (H3 _ B).
+  intro. rewrite Val.load_result_same by auto. apply (H3 _ B).
   rewrite Locmap.gso; auto.
 Qed.
 
@@ -1147,7 +1145,7 @@ Lemma subst_loc_part_satisf_lowlong:
 Proof.
   intros; red; intros.
   exploit in_subst_loc_part; eauto. intros [[A [B C]] | [A B]].
-  rewrite A, B. apply H1 in C. rewrite Locmap.gss, pred_dec_true by auto.
+  rewrite A, B. apply H1 in C. rewrite Locmap.gss, Val.load_result_same by auto.
   apply Val.loword_lessdef. exact C.
   rewrite Locmap.gso; auto.
 Qed.
@@ -1161,7 +1159,7 @@ Lemma subst_loc_part_satisf_highlong:
 Proof.
   intros; red; intros.
   exploit in_subst_loc_part; eauto. intros [[A [B C]] | [A B]].
-  rewrite A, B. apply H1 in C. rewrite Locmap.gss, pred_dec_true by auto.
+  rewrite A, B. apply H1 in C. rewrite Locmap.gss, Val.load_result_same by auto.
   apply Val.hiword_lessdef. exact C.
   rewrite Locmap.gso; auto.
 Qed.
@@ -1253,7 +1251,8 @@ Proof.
   assert (subtype (env (ereg q)) Tlong = true).
   { exploit long_type_compat_charact; eauto. intros [P|P]; auto.
     eelim Loc.diff_not_eq; eauto. }
-  rewrite Locmap.gss, pred_dec_true by auto. simpl. rewrite <- (val_longofwords_eq_1 rs#(ereg q)).
+  rewrite Locmap.gss, Val.load_result_same by auto.
+  simpl. rewrite <- (val_longofwords_eq_1 rs#(ereg q)).
   apply Val.longofwords_lessdef. exact C. exact D.
   eapply Val.has_subtype; eauto.
   assumption.
@@ -1315,19 +1314,7 @@ Proof.
   exploit in_subst_loc; eauto. intros [[A B] | [A B]].
   subst dst. rewrite Locmap.gss.
   destruct q as [k r l]; simpl in *.
-  exploit loc_type_compat_well_typed; eauto.
-  destruct l as [mr | sl ofs ty]; intros.
-  destruct (Val.eq (sel_val k rs#r) Vundef).
-  rewrite e0 in *; auto.
-  rewrite pred_dec_true. apply (H3 _ B).
-  exploit loc_type_compat_charact; eauto; intros [SUBTYP | DIFF].
-  simpl in SUBTYP.
-  set (qR := {| ekind := k; ereg := r; eloc := R mr |}).
-  generalize (in_subst_loc (R mr) src qR _ _ H4 H); intros [[EQ IN] | [DIFF' IN']].
-  generalize (H3 _ IN); intro LESSDEF. simpl in LESSDEF.
-  destruct k; simpl in *; inversion LESSDEF; congruence.
-  simpl in DIFF'; congruence.
-  simpl in DIFF; congruence.
+  exploit loc_type_compat_well_typed; eauto. intros.
   apply val_lessdef_normalize; auto. apply (H3 _ B).
   rewrite Locmap.gso; auto. rewrite undef_regs_outside. eauto.
   eapply can_undef_except_sound; eauto. apply Loc.diff_sym; auto.
@@ -1733,10 +1720,10 @@ Proof.
   decompose [and] H4. decompose [and] H5; subst.
   destruct (OrderedEquation.eq_dec q (Eq Low x (R lo))).
   subst q; simpl. rewrite Regmap.gss.
-  rewrite Locmap.gss, pred_dec_true; auto. apply Val.loword_lessdef; auto.
+  rewrite Locmap.gss, Val.load_result_same; auto. apply Val.loword_lessdef; auto.
   destruct (OrderedEquation.eq_dec q (Eq High x (R hi))).
   subst q; simpl. rewrite Regmap.gss. rewrite Locmap.gso by (red; auto).
-  rewrite Locmap.gss, pred_dec_true; auto. apply Val.hiword_lessdef; auto.
+  rewrite Locmap.gss, Val.load_result_same; auto. apply Val.hiword_lessdef; auto.
   assert (EqSet.In q e'').
   { unfold e'', e', remove_equation; simpl; ESD.fsetdec. }
   rewrite Regmap.gso. rewrite ! Locmap.gso. auto.
@@ -2788,13 +2775,13 @@ Proof.
   generalize (loc_result_type (ef_sig ef)); intro SUBTYP.
   rewrite RES in SUBTYP; simpl in SUBTYP.
   exploit Val.has_subtype; eauto; intros.
-  rewrite pred_dec_true; auto.
+  rewrite Val.load_result_same; auto.
   generalize (loc_result_pair (ef_sig ef)); rewrite RES; intros (A & B & C & D & E).
   exploit external_call_well_typed; eauto. unfold proj_sig_res; rewrite B. intros WTRES'.
   rewrite Locmap.gss. rewrite Locmap.gso by (red; auto). rewrite Locmap.gss.
   generalize (loc_result_type (ef_sig ef)); intro SUBTYP.
   rewrite RES in SUBTYP; simpl in SUBTYP.
-  rewrite !pred_dec_true.
+  rewrite !Val.load_result_same.
   rewrite val_longofwords_eq_1 by auto. auto.
   eapply Val.has_subtype; eauto. destruct v'; simpl; auto.
   eapply Val.has_subtype; eauto. destruct v'; simpl; auto.
