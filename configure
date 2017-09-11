@@ -284,7 +284,7 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
         clinker="${toolprefix}gcc"
         clinker_options="-m32"
         cprepro="${toolprefix}gcc"
-        cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
+        cprepro_options="-std=c99 -m32 -U__GNUC__ '-D__attribute__(x)=' -E"
         libmath="-lm"
         struct_passing="ints"
         struct_return="ref"
