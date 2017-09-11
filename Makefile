@@ -207,7 +207,7 @@ latexdoc:
 	@rm -f $*.v
 	@echo "Preprocessing $*.vp"
 	@tools/ndfun $*.vp > $*.v || { rm -f $*.v; exit 2; }
-	@chmod -w $*.v
+	@chmod a-w $*.v
 
 compcert.ini: Makefile.config
 	(echo "stdlib_path=$(LIBDIR)"; \
