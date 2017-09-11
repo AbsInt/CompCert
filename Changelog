@@ -1,6 +1,9 @@
 Code generation and optimization:
 - ARM in Thumb mode: simpler instruction sequence for branch through jump table.
 
+Usability:
+- Resurrected support for the Cygwin x86-32 port, which got lost at release 3.0.
+
 Bug fixing:
 - Issue #P25: make sure sizeof(long double) = sizeof(double) in all contexts.
 

@@ -233,6 +233,61 @@ module MacOS_System : SYSTEM =
 
   end
 
+(* Printer functions for Cygwin *)
+module Cygwin_System : SYSTEM =
+  struct
+
+    let raw_symbol oc s =
+       fprintf oc "_%s" s
+
+    let symbol oc symb =
+      raw_symbol oc (extern_atom symb)
+
+    let label oc lbl =
+       fprintf oc "L%d" lbl
+
+    let name_of_section = function
+      | Section_text -> ".text"
+      | Section_data i | Section_small_data i ->
+          if i then ".data" else "COMM"
+      | Section_const i | Section_small_const i ->
+          if i then ".section	.rdata,\"dr\"" else "COMM"
+      | Section_string -> ".section	.rdata,\"dr\""
+      | Section_literal -> ".section	.rdata,\"dr\""
+      | Section_jumptable -> ".text"
+      | Section_user(s, wr, ex) ->
+          sprintf ".section	\"%s\", \"%s\"\n"
+            s (if ex then "xr" else if wr then "d" else "dr")
+      | Section_debug_info _ -> ".section	.debug_info,\"dr\""
+      | Section_debug_loc ->  ".section	.debug_loc,\"dr\""
+      | Section_debug_line _ -> ".section	.debug_line,\"dr\""
+      | Section_debug_abbrev -> ".section	.debug_abbrev,\"dr\""
+      | Section_debug_ranges -> ".section	.debug_ranges,\"dr\""
+      | Section_debug_str-> assert false (* Should not be used *)
+
+    let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
+
+    let print_align oc n =
+      fprintf oc "	.align	%d\n" n
+
+    let print_mov_rs oc rd id =
+      fprintf oc "	movl	$%a, %a\n" symbol id ireg rd
+
+    let print_fun_info _ _  = ()
+
+    let print_var_info _ _ = ()
+
+    let print_epilogue _ = ()
+
+    let print_comm_decl oc name sz al =
+      fprintf oc "	.comm	%a, %s, %d\n" symbol name (Z.to_string sz) al
+
+    let print_lcomm_decl oc name sz al =
+      fprintf oc "	.local	%a\n" symbol name;
+      print_comm_decl oc name sz al
+
+  end
+
 
 module Target(System: SYSTEM):TARGET =
   struct
@@ -880,8 +935,8 @@ end
 
 let sel_target () =
  let module S = (val (match Configuration.system with
+  | "linux" | "bsd" -> (module ELF_System:SYSTEM)
   | "macosx" -> (module MacOS_System:SYSTEM)
-  | "linux"
-  | "bsd" -> (module ELF_System:SYSTEM)
+  | "cygwin" -> (module Cygwin_System:SYSTEM)
   | _ -> invalid_arg ("System " ^ Configuration.system ^ " not supported")  ):SYSTEM) in
  (module Target(S):TARGET)
