@@ -21,10 +21,10 @@ all_s: $(PROGS:%=%.s)
 
 all_gcc: $(PROGS:%=%.gcc)
 
-%.compcert: %.c $(CCOMP)
+%.compcert: %.c
 	$(CCOMP) $(CCOMPFLAGS) -o $*.compcert $*.c $(LIBS)
 
-%.s: %.c $(CCOMP)
+%.s: %.c
 	$(CCOMP) $(CCOMPFLAGS) -S $*.c
 
 %.gcc: %.c

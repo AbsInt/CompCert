@@ -50,17 +50,17 @@ all: $(TESTS:%=%.compcert) $(TESTS_COMP:%=%.compcert) $(TESTS_DIFF:%=%.compcert)
 
 all_s: $(TESTS:%=%.s) $(TESTS_COMP:%=%.s) $(TESTS_DIFF:%=%.s) $(EXTRAS:%=%.s)
 
-interop1.compcert: interop1.c $(CCOMP)
+interop1.compcert: interop1.c
 	$(CC) -DCC_SIDE -c -o interop1n.o interop1.c
 	$(CCOMP) $(CCOMPFLAGS) -DCOMPCERT_SIDE -o interop1.compcert interop1.c interop1n.o $(LIBS)
 
-interop1.s: interop1.c $(CCOMP)
+interop1.s: interop1.c
 	$(CCOMP) $(CCOMPFLAGS) -S interop1.c
 
-%.compcert: %.c $(CCOMP)
+%.compcert: %.c
 	$(CCOMP) $(CCOMPFLAGS) -o $*.compcert $*.c $(LIBS)
 
-%.s: %.c $(CCOMP)
+%.s: %.c
 	$(CCOMP) $(CCOMPFLAGS) -S $*.c
 
 clean:
