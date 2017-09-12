@@ -80,6 +80,11 @@ let data_pointer = if Archi.ptr64 then ".quad" else ".long"
 (* The comment deliminiter *)
 let comment = "#"
 
+(* Base-2 log of a Caml integer *)
+let rec log2 n =
+  assert (n > 0);
+  if n = 1 then 0 else 1 + log2 (n lsr 1)
+
 (* System dependend printer functions *)
 module type SYSTEM =
     sig
@@ -188,11 +193,6 @@ module MacOS_System : SYSTEM =
 
     let stack_alignment =  16 (* mandatory *)
 
-    (* Base-2 log of a Caml integer *)
-    let rec log2 n =
-      assert (n > 0);
-      if n = 1 then 0 else 1 + log2 (n lsr 1)
-
     let print_align oc n =
       fprintf oc "	.align	%d\n" (log2 n)
 
@@ -256,7 +256,7 @@ module Cygwin_System : SYSTEM =
       | Section_literal -> ".section	.rdata,\"dr\""
       | Section_jumptable -> ".text"
       | Section_user(s, wr, ex) ->
-          sprintf ".section	\"%s\", \"%s\"\n"
+          sprintf ".section	%s, \"%s\"\n"
             s (if ex then "xr" else if wr then "d" else "dr")
       | Section_debug_info _ -> ".section	.debug_info,\"dr\""
       | Section_debug_loc ->  ".section	.debug_loc,\"dr\""
@@ -268,7 +268,7 @@ module Cygwin_System : SYSTEM =
     let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
 
     let print_align oc n =
-      fprintf oc "	.align	%d\n" n
+      fprintf oc "	.balign	%d\n" n
 
     let print_mov_rs oc rd id =
       fprintf oc "	movl	$%a, %a\n" symbol id ireg rd
@@ -280,11 +280,12 @@ module Cygwin_System : SYSTEM =
     let print_epilogue _ = ()
 
     let print_comm_decl oc name sz al =
-      fprintf oc "	.comm	%a, %s, %d\n" symbol name (Z.to_string sz) al
+      fprintf oc "	.comm   %a, %s, %d\n" 
+                 symbol name (Z.to_string sz) (log2 al)
 
     let print_lcomm_decl oc name sz al =
-      fprintf oc "	.local	%a\n" symbol name;
-      print_comm_decl oc name sz al
+      fprintf oc "	.lcomm   %a, %s, %d\n" 
+                 symbol name (Z.to_string sz) (log2 al)
 
   end
 
