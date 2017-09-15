@@ -162,7 +162,7 @@ Definition iterate_op (op1 op2: shift_op -> instruction) (l: list int) (k: code)
 
 (** Smart constructors for integer immediate arguments. *)
 
-Definition loadimm_thumb (r: ireg) (n: int) (k: code) :=
+Definition loadimm_word (r: ireg) (n: int) (k: code) :=
   let hi := Int.shru n (Int.repr 16) in
   if Int.eq hi Int.zero
   then Pmovw r n :: k
@@ -177,12 +177,8 @@ Definition loadimm (r: ireg) (n: int) (k: code) :=
     Pmov r (SOimm n) :: k
   else if Nat.leb l2 1%nat then
     Pmvn r (SOimm (Int.not n)) :: k
-  else if thumb tt then
-    loadimm_thumb r n k
-  else if Nat.leb l1 l2 then
-    iterate_op (Pmov r) (Porr r r) d1 k
   else
-    iterate_op (Pmvn r) (Pbic r r) d2 k.
+    loadimm_word r n k.
 
 Definition addimm (r1 r2: ireg) (n: int) (k: code) :=
   if Int.ltu (Int.repr (-256)) n then
