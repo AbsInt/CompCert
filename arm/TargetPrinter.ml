@@ -854,10 +854,10 @@ struct
     fprintf oc "	.syntax	unified\n";
     fprintf oc "	.arch	%s\n"
       (match Configuration.model with
-       | "armv6" -> "armv6"
-       | "armv7a" -> "armv7-a"
-       | "armv7r" -> "armv7-r"
-       | "armv7m" -> "armv7-m"
+       | "armv6t2" -> "armv6t2"
+       | "armv7a"  -> "armv7-a"
+       | "armv7r"  -> "armv7-r"
+       | "armv7m"  -> "armv7-m"
        | _ -> "armv7");
     fprintf oc "	.fpu	%s\n"
       (if Opt.vfpv3 then "vfpv3-d16" else "vfpv2");

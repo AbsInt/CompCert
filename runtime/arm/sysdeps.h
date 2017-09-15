@@ -84,8 +84,8 @@ f:
 #define SUB THUMB_S(sub)
 
 	.syntax unified
-#if defined(MODEL_armv6)
-        .arch   armv6
+#if defined(MODEL_armv6t2)
+        .arch   armv6t2
 #elif defined(MODEL_armv7a)
         .arch   armv7-a
 #elif defined(MODEL_armv7r)
