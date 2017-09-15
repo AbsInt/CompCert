@@ -170,7 +170,7 @@ Proof.
   set (l2 := length (decompose_int (Int.not n))).
   destruct (Nat.leb l1 1%nat). TailNoLabel.
   destruct (Nat.leb l2 1%nat). TailNoLabel.
-  destruct Archi.move_imm. unfold loadimm_word.
+  destruct Archi.thumb2_support. unfold loadimm_word.
   destruct (Int.eq (Int.shru n (Int.repr 16)) Int.zero); TailNoLabel.
   destruct (Nat.leb l1 l2); auto with labels.
 Qed.
@@ -264,8 +264,8 @@ Proof.
 Opaque Int.eq.
   unfold transl_op; intros; destruct op; TailNoLabel.
   destruct (preg_of r); try discriminate; destruct (preg_of m); inv H; TailNoLabel.
-  destruct (thumb tt); TailNoLabel.
-  destruct (thumb tt); TailNoLabel.
+  destruct Archi.thumb2_support; TailNoLabel.
+  destruct Archi.thumb2_support; TailNoLabel.
   eapply tail_nolabel_trans; TailNoLabel.
   eapply tail_nolabel_trans. eapply transl_cond_label; eauto. TailNoLabel.
 Qed.

@@ -29,6 +29,6 @@ Extract Constant Archi.abi =>
 Extract Constant Archi.big_endian =>
   "Configuration.is_big_endian".
 
-(* Whether to generate [movw] and [movt] instructions. *)
-Extract Constant Archi.move_imm =>
+(* Whether the model is ARMv6T2 or above and hence supports Thumb2. *)
+Extract Constant Archi.thumb2_support =>
   "(Configuration.model = ""armv6t2"" || Configuration.model >= ""armv7"")".

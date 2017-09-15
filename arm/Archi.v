@@ -66,5 +66,6 @@ Global Opaque ptr64 big_endian splitlong
 Inductive abi_kind := Softfloat | Hardfloat.
 Parameter abi: abi_kind.
 
-(** Whether to generate [movw] and [movt] instructions. *)
-Parameter move_imm: bool.
+(** Whether instructions added with Thumb2 are supported. True for ARMv6T2
+  and above. *)
+Parameter thumb2_support: bool.

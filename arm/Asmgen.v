@@ -177,7 +177,7 @@ Definition loadimm (r: ireg) (n: int) (k: code) :=
     Pmov r (SOimm n) :: k
   else if Nat.leb l2 1%nat then
     Pmvn r (SOimm (Int.not n)) :: k
-  else if Archi.move_imm then
+  else if Archi.thumb2_support then
     loadimm_word r n k
   else if Nat.leb l1 l2 then
     iterate_op (Pmov r) (Porr r r) d1 k
@@ -365,14 +365,14 @@ Definition transl_op
       OK (addimm r IR13 (Ptrofs.to_int n) k)
   | Ocast8signed, a1 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1;
-      OK (if thumb tt then
+      OK (if Archi.thumb2_support then
             Psbfx r r1 Int.zero (Int.repr 8) :: k
           else
             Pmov r (SOlsl r1 (Int.repr 24)) ::
             Pmov r (SOasr r (Int.repr 24)) :: k)
   | Ocast16signed, a1 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1;
-      OK (if thumb tt then
+      OK (if Archi.thumb2_support then
             Psbfx r r1 Int.zero (Int.repr 16) :: k
           else
             Pmov r (SOlsl r1 (Int.repr 16)) ::
