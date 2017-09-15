@@ -372,8 +372,10 @@ let cmdline_actions =
   Exact "-conf", Ignore; (* Ignore option since it is already handled *)
   Exact "-target", Ignore;] @ (* Ignore option since it is already handled *)
   (if Configuration.arch = "arm" then
-    [ Exact "-mthumb", Set option_mthumb;
-      Exact "-marm", Unset option_mthumb; ]
+    if Configuration.model = "armv6" then [] (* Thumb needs ARMv6T2 or ARMv7 *)
+    else
+      [ Exact "-mthumb", Set option_mthumb;
+        Exact "-marm", Unset option_mthumb; ]
   else []) @
 (* Assembling options *)
   assembler_actions @

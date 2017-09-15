@@ -344,6 +344,7 @@ Proof.
   econstructor; split. apply exec_straight_one.
   simpl. rewrite Int.not_involutive. reflexivity. auto.
   split; intros; Simpl. }
+  destruct Archi.move_imm.
 { (* movw / movt *)
   unfold loadimm_word. destruct (Int.eq (Int.shru n (Int.repr 16)) Int.zero).
   econstructor; split.
@@ -359,6 +360,21 @@ Proof.
   rewrite andb_true_r, orb_false_r; auto.
   rewrite andb_false_r; simpl. rewrite Int.bits_shru by omega.
   change (Int.unsigned (Int.repr 16)) with 16. rewrite zlt_true by omega. f_equal; omega.
+}
+  destruct (Nat.leb l1 l2).
+{ (* mov - orr* *)
+  replace (Vint n) with (List.fold_left (fun v i => Val.or v (Vint i)) (decompose_int n) Vzero).
+  apply iterate_op_correct.
+  auto.
+  intros; simpl. rewrite Int.or_commut; rewrite Int.or_zero; auto.
+  rewrite decompose_int_or. simpl. rewrite Int.or_commut; rewrite Int.or_zero; auto.
+}
+{ (* mvn - bic* *)
+  replace (Vint n) with (List.fold_left (fun v i => Val.and v (Vint (Int.not i))) (decompose_int (Int.not n)) (Vint Int.mone)).
+  apply iterate_op_correct.
+  auto.
+  intros. simpl. rewrite Int.and_commut; rewrite Int.and_mone; auto.
+  rewrite decompose_int_bic. simpl. rewrite Int.not_involutive. rewrite Int.and_commut. rewrite Int.and_mone; auto.
 }
 Qed.
 

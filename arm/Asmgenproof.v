@@ -165,12 +165,14 @@ Hint Resolve iterate_op_label: labels.
 Remark loadimm_label:
   forall r n k, tail_nolabel k (loadimm r n k).
 Proof.
-  intros. unfold loadimm, loadimm_word.
+  intros. unfold loadimm.
   set (l1 := length (decompose_int n)).
   set (l2 := length (decompose_int (Int.not n))).
   destruct (Nat.leb l1 1%nat). TailNoLabel.
   destruct (Nat.leb l2 1%nat). TailNoLabel.
+  destruct Archi.move_imm. unfold loadimm_word.
   destruct (Int.eq (Int.shru n (Int.repr 16)) Int.zero); TailNoLabel.
+  destruct (Nat.leb l1 l2); auto with labels.
 Qed.
 Hint Resolve loadimm_label: labels.
 

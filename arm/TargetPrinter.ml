@@ -854,6 +854,7 @@ struct
     fprintf oc "	.syntax	unified\n";
     fprintf oc "	.arch	%s\n"
       (match Configuration.model with
+       | "armv6"   -> "armv6"
        | "armv6t2" -> "armv6t2"
        | "armv7a"  -> "armv7-a"
        | "armv7r"  -> "armv7-r"

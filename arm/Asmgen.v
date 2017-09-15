@@ -177,8 +177,12 @@ Definition loadimm (r: ireg) (n: int) (k: code) :=
     Pmov r (SOimm n) :: k
   else if Nat.leb l2 1%nat then
     Pmvn r (SOimm (Int.not n)) :: k
+  else if Archi.move_imm then
+    loadimm_word r n k
+  else if Nat.leb l1 l2 then
+    iterate_op (Pmov r) (Porr r r) d1 k
   else
-    loadimm_word r n k.
+    iterate_op (Pmvn r) (Pbic r r) d2 k.
 
 Definition addimm (r1 r2: ireg) (n: int) (k: code) :=
   if Int.ltu (Int.repr (-256)) n then

@@ -28,3 +28,7 @@ Extract Constant Archi.abi =>
 (* Choice of endianness *)
 Extract Constant Archi.big_endian =>
   "Configuration.is_big_endian".
+
+(* Whether to generate [movw] and [movt] instructions. *)
+Extract Constant Archi.move_imm =>
+  "(Configuration.model = ""armv6t2"" || Configuration.model >= ""armv7"")".
