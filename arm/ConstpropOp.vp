@@ -206,6 +206,30 @@ Definition make_cast8signed (r: reg) (a: aval) :=
 Definition make_cast16signed (r: reg) (a: aval) :=
   if vincl a (Sgn Ptop 16) then (Omove, r :: nil) else (Ocast16signed, r :: nil).
 
+Definition make_mla_mulimm (n1: int) (r1 r2 r3: reg) :=
+  if Int.eq n1 Int.zero then
+    (Omove, r3 :: nil)
+  else if Int.eq n1 Int.one then
+    (Oadd, r2 :: r3 :: nil)
+  else
+    (Omla, r1 :: r2 :: r3 :: nil).
+
+Definition make_mla_addimm (n3: int) (r1 r2 r3: reg) :=
+  if Int.eq n3 Int.zero then
+    (Omul, r1 :: r2 :: nil)
+  else
+    (Omla, r1 :: r2 :: r3 :: nil).
+
+Definition make_mla_bothimm (n1 n3: int) (r1 r2 r3: reg) :=
+  if Int.eq n1 Int.zero then
+    (Ointconst n3, nil)
+  else if Int.eq n1 Int.one then
+    make_addimm n3 r2
+  else if Int.eq n3 Int.zero then
+    make_mulimm n1 r2 r1
+  else
+    (Omla, r1 :: r2 :: r3 :: nil).
+
 Nondetfunction op_strength_reduction
               (op: operation) (args: list reg) (vl: list aval) :=
   match op, args, vl with
@@ -220,6 +244,11 @@ Nondetfunction op_strength_reduction
   | Orsubshift s, r1 :: r2 :: nil, v1 :: I n2 :: nil => (Orsubimm (eval_static_shift s n2), r1 :: nil)
   | Omul, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_mulimm n1 r2 r1
   | Omul, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_mulimm n2 r1 r2
+  | Omla, r1 :: r2 :: r3 :: nil, I n1 :: v2 :: I n3 :: nil => make_mla_bothimm n1 n3 r1 r2 r3
+  | Omla, r1 :: r2 :: r3 :: nil, v1 :: I n2 :: I n3 :: nil => make_mla_bothimm n2 n3 r2 r1 r3
+  | Omla, r1 :: r2 :: r3 :: nil, I n1 :: v2 :: v3 :: nil => make_mla_mulimm n1 r1 r2 r3
+  | Omla, r1 :: r2 :: r3 :: nil, v1 :: I n2 :: v3 :: nil => make_mla_mulimm n2 r2 r1 r3
+  | Omla, r1 :: r2 :: r3 :: nil, v1 :: v2 :: I n3 :: nil => make_mla_addimm n3 r1 r2 r3
   | Odiv, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_divimm n2 r1 r2
   | Odivu, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_divuimm n2 r1 r2
   | Oand, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_andimm n1 r2 v2

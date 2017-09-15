@@ -285,6 +285,69 @@ Proof.
   econstructor; split; eauto. simpl. congruence.
 Qed.
 
+Lemma make_mla_mulimm_correct:
+  forall n1 r1 r2 r3,
+  rs#r1 = Vint n1 ->
+  let (op, args) := make_mla_mulimm n1 r1 r2 r3 in
+  exists v, eval_operation ge (Vptr sp Ptrofs.zero) op rs##args m = Some v /\ Val.lessdef (Val.add (Val.mul (Vint n1) rs#r2) rs#r3) v.
+Proof.
+  intros; unfold make_mla_mulimm.
+  predSpec Int.eq Int.eq_spec n1 Int.zero; intros. subst.
+    exists (rs#r3); split; auto. destruct (rs#r2); simpl; auto.
+    destruct (rs#r3); simpl; auto.
+    rewrite Int.mul_commut, Int.mul_zero, Int.add_zero_l; auto.
+    rewrite Int.mul_commut, Int.mul_zero, Ptrofs.add_zero; auto.
+  predSpec Int.eq Int.eq_spec n1 Int.one; intros. subst.
+    exists (Val.add rs#r2 rs#r3); split; auto. destruct (rs#r2); simpl; auto.
+    destruct (rs#r3); simpl; auto.
+    rewrite Int.mul_commut, Int.mul_one; auto.
+    rewrite Int.mul_commut, Int.mul_one; auto.
+    eexists. simpl; split; eauto.
+    fold (Val.mul (Vint n1) (rs#r2)). rewrite H; auto.
+Qed.
+
+Lemma make_mla_addimm_correct:
+  forall n3 r1 r2 r3,
+  rs#r3 = Vint n3 ->
+  let (op, args) := make_mla_addimm n3 r1 r2 r3 in
+  exists v, eval_operation ge (Vptr sp Ptrofs.zero) op rs##args m = Some v /\ Val.lessdef (Val.add (Val.mul rs#r1 rs#r2) (Vint n3)) v.
+Proof.
+  intros; unfold make_mla_addimm.
+  predSpec Int.eq Int.eq_spec n3 Int.zero; intros. subst.
+    exists (Val.mul rs#r1 rs#r2); split; auto.
+    destruct (rs#r1), (rs#r2); simpl; auto.
+    rewrite Int.add_zero; auto.
+    eexists. simpl; split; eauto. rewrite H; auto.
+Qed.
+
+Lemma make_mla_bothimm_correct:
+  forall n1 n3 r1 r2 r3,
+  rs#r1 = Vint n1 ->
+  rs#r3 = Vint n3 ->
+  let (op, args) := make_mla_bothimm n1 n3 r1 r2 r3 in
+  exists v, eval_operation ge (Vptr sp Ptrofs.zero) op rs##args m = Some v /\ Val.lessdef (Val.add (Val.mul (Vint n1) rs#r2) (Vint n3)) v.
+Proof.
+  intros; unfold make_mla_bothimm.
+  predSpec Int.eq Int.eq_spec n1 Int.zero; intros. subst.
+    exists (Vint n3); split; auto.
+    destruct (rs#r2); simpl; auto.
+    rewrite Int.mul_commut, Int.mul_zero, Int.add_zero_l; auto.
+  predSpec Int.eq Int.eq_spec n1 Int.one; intros. subst.
+    generalize (make_addimm_correct n3 r2); intro ADDIMM.
+    destruct (make_addimm n3 r2) as [op args]. destruct ADDIMM as [v [OP LESSDEF]].
+    exists v; split; auto.
+    destruct (rs#r2); simpl; auto.
+    simpl in LESSDEF. rewrite Int.mul_commut, Int.mul_one; auto.
+  predSpec Int.eq Int.eq_spec n3 Int.zero; intros. subst.
+    generalize (make_mulimm_correct n1 r2 r1 H); eauto; intro MULIMM.
+    destruct (make_mulimm n1 r2 r1) as [op args]. destruct MULIMM as [v [OP LESSDEF]].
+    exists v; split; auto.
+    destruct (rs#r2); simpl; auto.
+    simpl in LESSDEF. rewrite Int.add_zero, Int.mul_commut; auto.
+    eexists. simpl; split; eauto.
+    fold (Val.mul (Vint n1) (rs#r2)). rewrite H, H0; auto.
+Qed.
+
 Lemma make_divimm_correct:
   forall n r1 r2 v,
   Val.divs rs#r1 rs#r2 = Some v ->
@@ -480,6 +543,16 @@ Proof.
   InvApproxRegs; SimplVM. inv H0. fold (Val.mul (Vint n1) rs#r2).
   rewrite Val.mul_commut. apply make_mulimm_correct; auto.
   InvApproxRegs; SimplVM. inv H0. apply make_mulimm_correct; auto.
+(* mla *)
+  InvApproxRegs; SimplVM. inv H0. fold (Val.mul (Vint n1) rs#r2).
+  apply make_mla_bothimm_correct; auto.
+  InvApproxRegs; SimplVM. inv H0.
+  rewrite Val.mul_commut. apply make_mla_bothimm_correct; auto.
+  InvApproxRegs; SimplVM. inv H0. fold (Val.mul (Vint n1) rs#r2).
+  apply make_mla_mulimm_correct; auto.
+  InvApproxRegs; SimplVM. inv H0.
+  rewrite Val.mul_commut. apply make_mla_mulimm_correct; auto.
+  InvApproxRegs; SimplVM. inv H0. apply make_mla_addimm_correct; auto.
 (* divs *)
   assert (rs#r2 = Vint n2). clear H0. InvApproxRegs; SimplVM; auto.
   apply make_divimm_correct; auto.
