@@ -344,9 +344,9 @@ Proof.
   econstructor; split. apply exec_straight_one.
   simpl. rewrite Int.not_involutive. reflexivity. auto.
   split; intros; Simpl. }
-  destruct (thumb tt).
+  destruct Archi.thumb2_support.
 { (* movw / movt *)
-  unfold loadimm_thumb. destruct (Int.eq (Int.shru n (Int.repr 16)) Int.zero).
+  unfold loadimm_word. destruct (Int.eq (Int.shru n (Int.repr 16)) Int.zero).
   econstructor; split.
   apply exec_straight_one. simpl; eauto. auto. split; intros; Simpl.
   econstructor; split.
@@ -1193,7 +1193,7 @@ Proof.
   (* Oaddrstack *)
   contradiction.
   (* Ocast8signed *)
-  destruct (thumb tt).
+  destruct Archi.thumb2_support.
   econstructor; split. apply exec_straight_one; simpl; eauto. intuition Simpl.
   destruct (rs x0); auto; simpl. rewrite Int.shru_zero. reflexivity.
   set (rs1 := nextinstr_nf (rs#x <- (Val.shl rs#x0 (Vint (Int.repr 24))))).
@@ -1206,7 +1206,7 @@ Proof.
   f_equal. symmetry. apply (Int.sign_ext_shr_shl 8). compute; auto.
   intros. unfold rs2, rs1; Simpl.
   (* Ocast16signed *)
-  destruct (thumb tt).
+  destruct Archi.thumb2_support.
   econstructor; split. apply exec_straight_one; simpl; eauto. intuition Simpl.
   destruct (rs x0); auto; simpl. rewrite Int.shru_zero. reflexivity.
   set (rs1 := nextinstr_nf (rs#x <- (Val.shl rs#x0 (Vint (Int.repr 16))))).

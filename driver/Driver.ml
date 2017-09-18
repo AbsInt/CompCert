@@ -205,7 +205,8 @@ let version_string =
   else
     "The CompCert C verified compiler, version "^ Version.version ^ "\n"
 
-let target_help = if Configuration.arch = "arm" then
+let target_help =
+  if Configuration.arch = "arm" && Configuration.model <> "armv6" then
 {|Target processor options:
   -mthumb        Use Thumb2 instruction encoding
   -marm          Use classic ARM instruction encoding
@@ -372,8 +373,11 @@ let cmdline_actions =
   Exact "-conf", Ignore; (* Ignore option since it is already handled *)
   Exact "-target", Ignore;] @ (* Ignore option since it is already handled *)
   (if Configuration.arch = "arm" then
-    [ Exact "-mthumb", Set option_mthumb;
-      Exact "-marm", Unset option_mthumb; ]
+    if Configuration.model = "armv6" then
+      [ Exact "-marm", Ignore ] (* Thumb needs ARMv6T2 or ARMv7 *)
+    else
+      [ Exact "-mthumb", Set option_mthumb;
+        Exact "-marm", Unset option_mthumb; ]
   else []) @
 (* Assembling options *)
   assembler_actions @
