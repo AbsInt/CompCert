@@ -1046,8 +1046,12 @@ Ltac UseTransfer :=
   eapply mextends_agree; eauto.
 
 - (* conditional *)
-  TransfInstr; UseTransfer.
+  TransfInstr; UseTransfer. destruct (peq ifso ifnot).
++ replace (if b then ifso else ifnot) with ifso by (destruct b; congruence).
   econstructor; split.
+  eapply exec_Inop; eauto.
+  eapply match_succ_states; eauto. simpl; auto.
++ econstructor; split.
   eapply exec_Icond; eauto.
   eapply needs_of_condition_sound. eapply ma_perm; eauto. eauto. eauto with na.
   eapply match_succ_states; eauto 2 with na.

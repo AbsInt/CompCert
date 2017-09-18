@@ -143,7 +143,8 @@ Definition transfer (f: function) (approx: PMap.t VA.t)
   | Some(Ibuiltin ef args res s) =>
       transfer_builtin approx!!pc ef args res ne nm
   | Some(Icond cond args s1 s2) =>
-      (add_needs args (needs_of_condition cond) ne, nm)
+      if peq s1 s2 then after else 
+        (add_needs args (needs_of_condition cond) ne, nm)
   | Some(Ijumptable arg tbl) =>
       (add_need_all arg ne, nm)
   | Some(Ireturn optarg) =>
@@ -191,6 +192,8 @@ Definition transf_instr (approx: PMap.t VA.t) (an: PMap.t NA.t)
       if nmem_contains (snd an!!pc) (aaddr_arg approx!!pc dst) sz
       then instr
       else Inop s
+  | Icond cond args s1 s2 =>
+      if peq s1 s2 then Inop s1 else instr
   | _ =>
       instr
   end.
