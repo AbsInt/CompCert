@@ -549,7 +549,7 @@ let diab_gen_compilation_section s defs acc =
   let cp = {
     compile_unit_name = Simple_string !file_name;
     compile_unit_range = Pc_pair (low_pc,high_pc);
-    compile_unit_dir = Simple_string (Filename.quote (Sys.getcwd ()));
+    compile_unit_dir = Simple_string (Sys.getcwd ());
     compile_unit_prod_name = Simple_string prod_name
   } in
   let cp = new_entry (next_id ()) (DW_TAG_compile_unit cp) in
@@ -620,7 +620,7 @@ let gen_gnu_debug_info sec_name var_section : debug_entries =
   let cp = {
     compile_unit_name = gnu_string_entry !file_name;
     compile_unit_range = r;
-    compile_unit_dir = gnu_string_entry (Filename.quote (Sys.getcwd ()));
+    compile_unit_dir = gnu_string_entry (Sys.getcwd ());
     compile_unit_prod_name = gnu_string_entry prod_name;
   } in
   let cp = new_entry (next_id ()) (DW_TAG_compile_unit cp) in
