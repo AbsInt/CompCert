@@ -27,7 +27,7 @@ TESTS_COMP=attribs1 bitfields1 bitfields2 bitfields3 bitfields4 \
 ifeq ($(ARCH),powerpc)
 TESTS_COMP+=packedstruct1
 endif
-ifeq ($(ARCH),ia32)
+ifeq ($(ARCH),x86)
 TESTS_COMP+=packedstruct1
 endif
 
