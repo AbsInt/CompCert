@@ -5097,6 +5097,13 @@ Proof.
   apply Int.eqm_sym; apply Int.eqm_unsigned_repr.
 Qed.
 
+Lemma to_int_of_int:
+  forall n, to_int (of_int n) = n.
+Proof.
+  intros; unfold of_int, to_int. rewrite unsigned_repr. apply Int.repr_unsigned.
+  unfold max_unsigned. rewrite modulus_eq32. destruct (Int.unsigned_range n); omega.
+Qed.
+
 End AGREE32.
 
 Section AGREE64.
@@ -5198,6 +5205,13 @@ Lemma of_int64_to_int64:
 Proof.
   intros; unfold of_int64, to_int64. apply eqm_repr_eq. rewrite <- eqm64.
   apply Int64.eqm_sym; apply Int64.eqm_unsigned_repr.
+Qed.
+
+Lemma to_int64_of_int64:
+  forall n, to_int64 (of_int64 n) = n.
+Proof.
+  intros; unfold of_int64, to_int64. rewrite unsigned_repr. apply Int64.repr_unsigned.
+  unfold max_unsigned. rewrite  modulus_eq64. destruct (Int64.unsigned_range n); omega.
 Qed.
 
 End AGREE64.
