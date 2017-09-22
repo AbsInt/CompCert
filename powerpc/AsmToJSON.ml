@@ -128,7 +128,7 @@ let pp_instructions pp ic =
     pp_jmember ~first:true pp "Instruction Name" pp_jstring n;
     pp_jmember pp "Args" (pp_jarray pp_arg) args;
     pp_jobject_end pp in
-  let instruction pp = function
+  let [@ocaml.warning "+4"] instruction pp = function
   | Padd (ir1,ir2,ir3)
   | Padd64 (ir1,ir2,ir3) -> instruction pp "Padd" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Paddc (ir1,ir2,ir3) -> instruction pp "Paddc" [Ireg ir1; Ireg ir2; Ireg ir3]
@@ -353,7 +353,16 @@ let pp_instructions pp ic =
             Buffer.add_char buf c) annot_string;
         let annot_string = Buffer.contents buf in
         instruction pp "Pannot" [String annot_string]
-      | _ -> assert false
+      | EF_annot_val _
+      | EF_builtin _
+      | EF_debug _
+      | EF_external _
+      | EF_free
+      | EF_malloc
+      | EF_memcpy _
+      | EF_runtime _
+      | EF_vload _
+      | EF_vstore _ -> assert false
     end
   | Pcfi_adjust _  (* Only debug relevant *)
   | Pcfi_rel_offset _ -> assert false in (* Only debug relevant *)
