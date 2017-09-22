@@ -214,7 +214,7 @@ Definition init_data_size (i: init_data) : Z :=
   | Init_float32 _ => 4
   | Init_float64 _ => 8
   | Init_addrof _ _ => if Archi.ptr64 then 8 else 4
-  | Init_space n => Zmax n 0
+  | Init_space n => Z.max n 0
   end.
 
 Fixpoint init_data_list_size (il: list init_data) {struct il} : Z :=

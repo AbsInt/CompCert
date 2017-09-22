@@ -50,7 +50,7 @@ Definition valnum_reg (n: numbering) (r: reg) : numbering * valnum :=
   | Some v => (n, v)
   | None   =>
       let v := n.(num_next) in
-      ( {| num_next := Psucc v;
+      ( {| num_next := Pos.succ v;
            num_eqs  := n.(num_eqs);
            num_reg  := PTree.set r v n.(num_reg);
            num_val  := PMap.set v (r :: nil) n.(num_val) |},
@@ -161,7 +161,7 @@ Definition add_rhs (n: numbering) (rd: reg) (rh: rhs) : numbering :=
          num_reg  := PTree.set rd vres n.(num_reg);
          num_val  := update_reg n rd vres |}
   | None =>
-      {| num_next := Psucc n.(num_next);
+      {| num_next := Pos.succ n.(num_next);
          num_eqs  := Eq n.(num_next) true rh :: n.(num_eqs);
          num_reg  := PTree.set rd n.(num_next) n.(num_reg);
          num_val  := update_reg n rd n.(num_next) |}
@@ -331,7 +331,7 @@ Definition shift_memcpy_eq (src sz delta: Z) (e: equation) :=
       let j := i + delta in
       if zle src i
       && zle (i + size_chunk chunk) (src + sz)
-      && zeq (Zmod delta (align_chunk chunk)) 0
+      && zeq (Z.modulo delta (align_chunk chunk)) 0
       && zle 0 j
       && zle j Ptrofs.max_unsigned
       then Some(Eq l strict (Load chunk (Ainstack (Ptrofs.repr j)) nil))

@@ -370,30 +370,30 @@ Proof.
   induction tyl; simpl; intros.
   omega.
   destruct a.
-  destruct (list_nth_z int_param_regs ir); eauto. apply Zle_trans with (ofs0 + 1); auto; omega.
+  destruct (list_nth_z int_param_regs ir); eauto. apply Z.le_trans with (ofs0 + 1); auto; omega.
   destruct (list_nth_z float_param_regs fr); eauto.
-  apply Zle_trans with (align ofs0 2). apply align_le; omega.
-  apply Zle_trans with (align ofs0 2 + 2); auto; omega.
+  apply Z.le_trans with (align ofs0 2). apply align_le; omega.
+  apply Z.le_trans with (align ofs0 2 + 2); auto; omega.
   set (ir' := align ir 2).
   destruct (list_nth_z int_param_regs ir'); eauto.
   destruct (list_nth_z int_param_regs (ir' + 1)); eauto.
-  apply Zle_trans with (align ofs0 2). apply align_le; omega.
-  apply Zle_trans with (align ofs0 2 + 2); auto; omega.
-  apply Zle_trans with (align ofs0 2). apply align_le; omega.
-  apply Zle_trans with (align ofs0 2 + 2); auto; omega.
+  apply Z.le_trans with (align ofs0 2). apply align_le; omega.
+  apply Z.le_trans with (align ofs0 2 + 2); auto; omega.
+  apply Z.le_trans with (align ofs0 2). apply align_le; omega.
+  apply Z.le_trans with (align ofs0 2 + 2); auto; omega.
   destruct (list_nth_z float_param_regs fr); eauto.
-  apply Zle_trans with (align ofs0 2). apply align_le; omega.
-  apply Zle_trans with (align ofs0 2 + 2); auto; omega.
-  destruct (list_nth_z int_param_regs ir); eauto. apply Zle_trans with (ofs0 + 1); auto; omega.
+  apply Z.le_trans with (align ofs0 2). apply align_le; omega.
+  apply Z.le_trans with (align ofs0 2 + 2); auto; omega.
+  destruct (list_nth_z int_param_regs ir); eauto. apply Z.le_trans with (ofs0 + 1); auto; omega.
   destruct (list_nth_z float_param_regs fr); eauto.
-  apply Zle_trans with (align ofs0 2). apply align_le; omega.
-  apply Zle_trans with (align ofs0 2 + 2); auto; omega.
+  apply Z.le_trans with (align ofs0 2). apply align_le; omega.
+  apply Z.le_trans with (align ofs0 2 + 2); auto; omega.
 Qed.
 
 Lemma size_arguments_above:
   forall s, size_arguments s >= 0.
 Proof.
-  intros; unfold size_arguments. apply Zle_ge.
+  intros; unfold size_arguments. apply Z.le_ge.
   apply size_arguments_rec_above.
 Qed.
 

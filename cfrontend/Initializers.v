@@ -186,7 +186,7 @@ Fixpoint transl_init_rec (ce: composite_env) (ty: type) (i: initializer)
   | Init_single a, _ =>
       do d <- transl_init_single ce ty a; OK (d :: k)
   | Init_array il, Tarray tyelt nelt _ =>
-      transl_init_array ce tyelt il (Zmax 0 nelt) k
+      transl_init_array ce tyelt il (Z.max 0 nelt) k
   | Init_struct il, Tstruct id _ =>
       do co <- lookup_composite ce id;
       match co_su co with

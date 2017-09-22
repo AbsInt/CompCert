@@ -870,7 +870,7 @@ Opaque loadind.
                  save_lr ra_ofs (Pcfi_rel_offset ra_ofs' :: x0)) in *.
   set (tf := {| fn_sig := Mach.fn_sig f; fn_code := tfbody |}) in *.
   unfold store_stack in *.
-  exploit Mem.alloc_extends. eauto. eauto. apply Zle_refl. apply Zle_refl.
+  exploit Mem.alloc_extends. eauto. eauto. apply Z.le_refl. apply Z.le_refl.
   intros [m1' [C D]].
   exploit Mem.storev_extends. eexact D. eexact H1. eauto. eauto.
   intros [m2' [F G]].

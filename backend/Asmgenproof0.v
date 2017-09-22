@@ -103,7 +103,7 @@ Lemma nextinstr_set_preg:
   (nextinstr (rs#(preg_of m) <- v))#PC = Val.offset_ptr rs#PC Ptrofs.one.
 Proof.
   intros. unfold nextinstr. rewrite Pregmap.gss.
-  rewrite Pregmap.gso. auto. apply sym_not_eq. apply preg_of_not_PC.
+  rewrite Pregmap.gso. auto. apply not_eq_sym. apply preg_of_not_PC.
 Qed.
 
 Lemma undef_regs_other:
@@ -211,7 +211,7 @@ Lemma agree_set_mreg:
   agree (Regmap.set r v ms) sp rs'.
 Proof.
   intros. destruct H. split; auto.
-  rewrite H1; auto. apply sym_not_equal. apply preg_of_not_SP.
+  rewrite H1; auto. apply not_eq_sym. apply preg_of_not_SP.
   intros. unfold Regmap.set. destruct (RegEq.eq r0 r). congruence.
   rewrite H1. auto. apply preg_of_data.
   red; intros; elim n. eapply preg_of_injective; eauto.

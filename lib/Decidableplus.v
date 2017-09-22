@@ -86,10 +86,10 @@ Next Obligation.
 Qed.
 
 Program Instance Decidable_eq_nat : forall (x y : nat), Decidable (eq x y) := {
-  Decidable_witness := beq_nat x y
+  Decidable_witness := Nat.eqb x y
 }.
 Next Obligation.
-  apply beq_nat_true_iff.
+  apply Nat.eqb_eq.
 Qed.
 
 Program Instance Decidable_eq_positive : forall (x y : positive), Decidable (eq x y) := {

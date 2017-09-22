@@ -1564,7 +1564,7 @@ Proof.
   subst. rewrite update_s. rewrite weak_update_s. apply H1.
   destruct H. apply no_adherence_src; auto. apply no_adherence_tmp; auto.
   rewrite update_o. rewrite weak_update_d. apply H1. auto.
-  auto. apply sym_not_equal. apply disjoint_not_equal. auto.
+  auto. apply not_eq_sym. apply disjoint_not_equal. auto.
 Qed.
 
 Lemma weak_exec_seq_match:

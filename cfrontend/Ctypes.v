@@ -373,15 +373,15 @@ Lemma sizeof_alignof_compat:
   forall env t, naturally_aligned t -> (alignof env t | sizeof env t).
 Proof.
   induction t; intros [A B]; unfold alignof, align_attr; rewrite A; simpl.
-- apply Zdivide_refl.
-- destruct i; apply Zdivide_refl.
+- apply Z.divide_refl.
+- destruct i; apply Z.divide_refl.
 - exists (8 / Archi.align_int64). unfold Archi.align_int64; destruct Archi.ptr64; reflexivity.
-- destruct f. apply Zdivide_refl. exists (8 / Archi.align_float64). unfold Archi.align_float64; destruct Archi.ptr64; reflexivity.
-- apply Zdivide_refl.
+- destruct f. apply Z.divide_refl. exists (8 / Archi.align_float64). unfold Archi.align_float64; destruct Archi.ptr64; reflexivity.
+- apply Z.divide_refl.
 - apply Z.divide_mul_l; auto.
-- apply Zdivide_refl.
-- destruct (env!i). apply co_sizeof_alignof. apply Zdivide_0.
-- destruct (env!i). apply co_sizeof_alignof. apply Zdivide_0.
+- apply Z.divide_refl.
+- destruct (env!i). apply co_sizeof_alignof. apply Z.divide_0_r.
+- destruct (env!i). apply co_sizeof_alignof. apply Z.divide_0_r.
 Qed.
 
 (** ** Size and alignment for composite definitions *)
@@ -435,9 +435,9 @@ Lemma sizeof_struct_incr:
 Proof.
   induction m as [|[id t]]; simpl; intros.
 - omega.
-- apply Zle_trans with (align cur (alignof env t)).
+- apply Z.le_trans with (align cur (alignof env t)).
   apply align_le. apply alignof_pos.
-  apply Zle_trans with (align cur (alignof env t) + sizeof env t).
+  apply Z.le_trans with (align cur (alignof env t) + sizeof env t).
   generalize (sizeof_pos env t); omega.
   apply IHm.
 Qed.
@@ -488,7 +488,7 @@ Proof.
   inv H. inv H0. split.
   apply align_le. apply alignof_pos. apply sizeof_struct_incr.
   exploit IHfld; eauto. intros [A B]. split; auto.
-  eapply Zle_trans; eauto. apply Zle_trans with (align pos (alignof env t)).
+  eapply Z.le_trans; eauto. apply Z.le_trans with (align pos (alignof env t)).
   apply align_le. apply alignof_pos. generalize (sizeof_pos env t). omega.
 Qed.
 
@@ -627,7 +627,7 @@ Fixpoint alignof_blockcopy (env: composite_env) (t: type) : Z :=
 Lemma alignof_blockcopy_1248:
   forall env ty, let a := alignof_blockcopy env ty in a = 1 \/ a = 2 \/ a = 4 \/ a = 8.
 Proof.
-  assert (X: forall co, let a := Zmin 8 (co_alignof co) in
+  assert (X: forall co, let a := Z.min 8 (co_alignof co) in
              a = 1 \/ a = 2 \/ a = 4 \/ a = 8).
   {
     intros. destruct (co_alignof_two_p co) as [n EQ]. unfold a; rewrite EQ.
@@ -635,7 +635,7 @@ Proof.
     destruct n; auto.
     destruct n; auto.
     right; right; right. apply Z.min_l.
-    rewrite two_power_nat_two_p. rewrite ! inj_S.
+    rewrite two_power_nat_two_p. rewrite ! Nat2Z.inj_succ.
     change 8 with (two_p 3). apply two_p_monotone. omega.
   }
   induction ty; simpl.
@@ -661,28 +661,28 @@ Lemma sizeof_alignof_blockcopy_compat:
 Proof.
   assert (X: forall co, (Z.min 8 (co_alignof co) | co_sizeof co)).
   {
-    intros. apply Zdivide_trans with (co_alignof co). 2: apply co_sizeof_alignof.
+    intros. apply Z.divide_trans with (co_alignof co). 2: apply co_sizeof_alignof.
     destruct (co_alignof_two_p co) as [n EQ]. rewrite EQ.
-    destruct n. apply Zdivide_refl.
-    destruct n. apply Zdivide_refl.
-    destruct n. apply Zdivide_refl.
+    destruct n. apply Z.divide_refl.
+    destruct n. apply Z.divide_refl.
+    destruct n. apply Z.divide_refl.
     apply Z.min_case.
     exists (two_p (Z.of_nat n)).
     change 8 with (two_p 3).
     rewrite <- two_p_is_exp by omega.
-    rewrite two_power_nat_two_p. rewrite !inj_S. f_equal. omega.
-    apply Zdivide_refl.
+    rewrite two_power_nat_two_p. rewrite !Nat2Z.inj_succ. f_equal. omega.
+    apply Z.divide_refl.
   }
   induction ty; simpl.
-  apply Zdivide_refl.
-  apply Zdivide_refl.
-  apply Zdivide_refl.
-  apply Zdivide_refl.
-  apply Zdivide_refl.
+  apply Z.divide_refl.
+  apply Z.divide_refl.
+  apply Z.divide_refl.
+  apply Z.divide_refl.
+  apply Z.divide_refl.
   apply Z.divide_mul_l. auto.
-  apply Zdivide_refl.
-  destruct (env!i). apply X. apply Zdivide_0.
-  destruct (env!i). apply X. apply Zdivide_0.
+  apply Z.divide_refl.
+  destruct (env!i). apply X. apply Z.divide_0_r.
+  destruct (env!i). apply X. apply Z.divide_0_r.
 Qed.
 
 (** Type ranks *)
@@ -707,7 +707,7 @@ Fixpoint rank_type (ce: composite_env) (t: type) : nat :=
 Fixpoint rank_members (ce: composite_env) (m: members) : nat :=
   match m with
   | nil => 0%nat
-  | (id, t) :: m => Peano.max (rank_type ce t) (rank_members ce m)
+  | (id, t) :: m => Init.Nat.max (rank_type ce t) (rank_members ce m)
   end.
 
 (** ** C types and back-end types *)
@@ -818,7 +818,7 @@ Program Definition composite_of_def
             co_sizeof_alignof := _ |}
   end.
 Next Obligation.
-  apply Zle_ge. eapply Zle_trans. eapply sizeof_composite_pos.
+  apply Z.le_ge. eapply Z.le_trans. eapply sizeof_composite_pos.
   apply align_le; apply alignof_composite_pos.
 Defined.
 Next Obligation.

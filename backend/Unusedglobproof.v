@@ -835,7 +835,7 @@ Proof.
 - econstructor; eauto with barg.
 - econstructor; eauto with barg.
 - econstructor; eauto with barg.
-- simpl in H. exploit Mem.load_inject; eauto. rewrite Zplus_0_r.
+- simpl in H. exploit Mem.load_inject; eauto. rewrite Z.add_0_r.
   intros (v' & A & B). exists v'; auto with barg.
 - econstructor; split; eauto with barg. simpl. econstructor; eauto. rewrite Ptrofs.add_zero; auto.
 - assert (Val.inject j (Senv.symbol_address ge id ofs) (Senv.symbol_address tge id ofs)).
@@ -956,7 +956,7 @@ Proof.
   eapply match_stacks_preserves_globals; eauto. eauto.
   destruct ros as [r|id]. eauto. apply KEPT. red. econstructor; econstructor; split; eauto. simpl; auto.
   intros (A & B).
-  exploit Mem.free_parallel_inject; eauto. rewrite ! Zplus_0_r. intros (tm' & C & D).
+  exploit Mem.free_parallel_inject; eauto. rewrite ! Z.add_0_r. intros (tm' & C & D).
   econstructor; split.
   eapply exec_Itailcall; eauto.
   econstructor; eauto.
@@ -999,7 +999,7 @@ Proof.
   econstructor; eauto.
 
 - (* return *)
-  exploit Mem.free_parallel_inject; eauto. rewrite ! Zplus_0_r. intros (tm' & C & D).
+  exploit Mem.free_parallel_inject; eauto. rewrite ! Z.add_0_r. intros (tm' & C & D).
   econstructor; split.
   eapply exec_Ireturn; eauto.
   econstructor; eauto.
@@ -1011,7 +1011,7 @@ Proof.
   destruct or; simpl; auto.
 
 - (* internal function *)
-  exploit Mem.alloc_parallel_inject. eauto. eauto. apply Zle_refl. apply Zle_refl.
+  exploit Mem.alloc_parallel_inject. eauto. eauto. apply Z.le_refl. apply Z.le_refl.
   intros (j' & tm' & tstk & C & D & E & F & G).
   assert (STK: stk = Mem.nextblock m) by (eapply Mem.alloc_result; eauto).
   assert (TSTK: tstk = Mem.nextblock tm) by (eapply Mem.alloc_result; eauto).
@@ -1124,7 +1124,7 @@ Lemma Mem_getN_forall2:
 Proof.
   induction n; simpl Mem.getN; intros.
 - simpl in H1. omegaContradiction.
-- inv H. rewrite inj_S in H1. destruct (zeq i p0).
+- inv H. rewrite Nat2Z.inj_succ in H1. destruct (zeq i p0).
 + congruence.
 + apply IHn with (p0 + 1); auto. omega. omega.
 Qed.
@@ -1145,7 +1145,7 @@ Proof.
   apply Mem.perm_cur. eapply Mem.perm_implies; eauto.
   apply P2. omega.
 - exploit init_meminj_invert; eauto. intros (A & id & B & C).
-  subst delta. apply Zdivide_0.
+  subst delta. apply Z.divide_0_r.
 - exploit init_meminj_invert_strong; eauto. intros (A & id & gd & B & C & D & E & F).
   exploit (Genv.init_mem_characterization_gen p); eauto.
   exploit (Genv.init_mem_characterization_gen tp); eauto.
@@ -1159,7 +1159,7 @@ Proof.
 Local Transparent Mem.loadbytes.
   generalize (S1 NO). unfold Mem.loadbytes. destruct Mem.range_perm_dec; intros E1; inv E1.
   generalize (S2 NO). unfold Mem.loadbytes. destruct Mem.range_perm_dec; intros E2; inv E2.
-  rewrite Zplus_0_r.
+  rewrite Z.add_0_r.
   apply Mem_getN_forall2 with (p := 0) (n := nat_of_Z (init_data_list_size (gvar_init v))).
   rewrite H3, H4. apply bytes_of_init_inject. auto.
   omega.

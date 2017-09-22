@@ -1769,7 +1769,7 @@ Lemma not_stuckred_imm_safe:
 Proof.
   intros. generalize (step_expr_sound a k m). intros [A B].
   destruct (step_expr k a m) as [|[C rd] res] eqn:?.
-  specialize (B (refl_equal _)). destruct k.
+  specialize (B (eq_refl _)). destruct k.
   destruct a; simpl in B; try congruence. constructor.
   destruct a; simpl in B; try congruence. constructor.
   assert (NOTSTUCK: rd <> Stuckred).

@@ -161,7 +161,7 @@ Definition init_state : state :=
 Remark add_instr_wf:
   forall s i pc,
   let n := s.(st_nextnode) in
-  Plt pc (Psucc n) \/ (PTree.set n i s.(st_code))!pc = None.
+  Plt pc (Pos.succ n) \/ (PTree.set n i s.(st_code))!pc = None.
 Proof.
   intros. case (peq pc n); intro.
   subst pc; left; apply Plt_succ.
@@ -175,7 +175,7 @@ Remark add_instr_incr:
   forall s i,
   let n := s.(st_nextnode) in
   state_incr s (mkstate s.(st_nextreg)
-                (Psucc n)
+                (Pos.succ n)
                 (PTree.set n i s.(st_code))
                 (add_instr_wf s i)).
 Proof.
@@ -189,7 +189,7 @@ Definition add_instr (i: instruction) : mon node :=
   fun s =>
     let n := s.(st_nextnode) in
     OK n
-       (mkstate s.(st_nextreg) (Psucc n) (PTree.set n i s.(st_code))
+       (mkstate s.(st_nextreg) (Pos.succ n) (PTree.set n i s.(st_code))
                 (add_instr_wf s i))
        (add_instr_incr s i).
 
@@ -199,7 +199,7 @@ Definition add_instr (i: instruction) : mon node :=
 
 Remark reserve_instr_wf:
   forall s pc,
-  Plt pc (Psucc s.(st_nextnode)) \/ s.(st_code)!pc = None.
+  Plt pc (Pos.succ s.(st_nextnode)) \/ s.(st_code)!pc = None.
 Proof.
   intros. elim (st_wf s pc); intro.
   left; apply Plt_trans_succ; auto.
@@ -210,7 +210,7 @@ Remark reserve_instr_incr:
   forall s,
   let n := s.(st_nextnode) in
   state_incr s (mkstate s.(st_nextreg)
-                (Psucc n)
+                (Pos.succ n)
                 s.(st_code)
                 (reserve_instr_wf s)).
 Proof.
@@ -224,7 +224,7 @@ Definition reserve_instr: mon node :=
   fun (s: state) =>
   let n := s.(st_nextnode) in
   OK n
-     (mkstate s.(st_nextreg) (Psucc n) s.(st_code) (reserve_instr_wf s))
+     (mkstate s.(st_nextreg) (Pos.succ n) s.(st_code) (reserve_instr_wf s))
      (reserve_instr_incr s).
 
 Remark update_instr_wf:
@@ -275,7 +275,7 @@ Definition update_instr (n: node) (i: instruction) : mon unit :=
 
 Remark new_reg_incr:
   forall s,
-  state_incr s (mkstate (Psucc s.(st_nextreg))
+  state_incr s (mkstate (Pos.succ s.(st_nextreg))
                         s.(st_nextnode) s.(st_code) s.(st_wf)).
 Proof.
   constructor; simpl. apply Ple_refl. apply Ple_succ. auto.
@@ -284,7 +284,7 @@ Qed.
 Definition new_reg : mon reg :=
   fun s =>
     OK s.(st_nextreg)
-       (mkstate (Psucc s.(st_nextreg)) s.(st_nextnode) s.(st_code) s.(st_wf))
+       (mkstate (Pos.succ s.(st_nextreg)) s.(st_nextnode) s.(st_code) s.(st_wf))
        (new_reg_incr s).
 
 (** ** Operations on mappings *)
@@ -651,7 +651,7 @@ Definition alloc_label (lbl: Cminor.label) (maps: labelmap * state) : labelmap *
   let (map, s) := maps in
   let n := s.(st_nextnode) in
   (PTree.set lbl n map,
-   mkstate s.(st_nextreg) (Psucc s.(st_nextnode)) s.(st_code) (reserve_instr_wf s)).
+   mkstate s.(st_nextreg) (Pos.succ s.(st_nextnode)) s.(st_code) (reserve_instr_wf s)).
 
 Fixpoint reserve_labels (s: stmt) (ms: labelmap * state)
                         {struct s} : labelmap * state :=

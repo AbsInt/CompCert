@@ -750,7 +750,7 @@ Definition sgn (p: aptr) (n: Z) : aval :=
   if zle n 8 then Sgn p 8 else if zle n 16 then Sgn p 16 else Ifptr p.
 
 Lemma vmatch_uns':
-  forall p i n, is_uns (Zmax 0 n) i -> vmatch (Vint i) (uns p n).
+  forall p i n, is_uns (Z.max 0 n) i -> vmatch (Vint i) (uns p n).
 Proof.
   intros.
   assert (A: forall n', n' >= 0 -> n' >= n -> is_uns n' i) by (eauto with va).
@@ -780,7 +780,7 @@ Proof.
 Qed.
 
 Lemma vmatch_sgn':
-  forall p i n, is_sgn (Zmax 1 n) i -> vmatch (Vint i) (sgn p n).
+  forall p i n, is_sgn (Z.max 1 n) i -> vmatch (Vint i) (sgn p n).
 Proof.
   intros.
   assert (A: forall n', n' >= 1 -> n' >= n -> is_sgn n' i) by (eauto with va).
@@ -3476,7 +3476,7 @@ Lemma ablock_storebytes_contents:
   forall ab p i sz j chunk' av',
   (ablock_storebytes ab p i sz).(ab_contents)##j = Some(ACval chunk' av') ->
   ab.(ab_contents)##j = Some (ACval chunk' av')
-  /\ (j + size_chunk chunk' <= i \/ i + Zmax sz 0 <= j).
+  /\ (j + size_chunk chunk' <= i \/ i + Z.max sz 0 <= j).
 Proof.
   unfold ablock_storebytes; simpl; intros.
   exploit inval_before_contents; eauto. clear H. intros [A B].
@@ -4284,13 +4284,13 @@ Proof.
   intros. constructor. constructor.
 - (* perms *)
   intros. exploit inj_of_bc_inv; eauto. intros (A & B & C); subst.
-  rewrite Zplus_0_r. auto.
+  rewrite Z.add_0_r. auto.
 - (* alignment *)
   intros. exploit inj_of_bc_inv; eauto. intros (A & B & C); subst.
-  apply Zdivide_0.
+  apply Z.divide_0_r.
 - (* contents *)
   intros. exploit inj_of_bc_inv; eauto. intros (A & B & C); subst.
-  rewrite Zplus_0_r.
+  rewrite Z.add_0_r.
   set (mv := ZMap.get ofs (PMap.get b1 (Mem.mem_contents m))).
   assert (Mem.loadbytes m b1 ofs 1 = Some (mv :: nil)).
   {
@@ -4317,10 +4317,10 @@ Proof.
   auto.
 - (* overflow *)
   intros. exploit inj_of_bc_inv; eauto. intros (A & B & C); subst.
-  rewrite Zplus_0_r. split. omega. apply Ptrofs.unsigned_range_2.
+  rewrite Z.add_0_r. split. omega. apply Ptrofs.unsigned_range_2.
 - (* perm inv *)
   intros. exploit inj_of_bc_inv; eauto. intros (A & B & C); subst.
-  rewrite Zplus_0_r in H2. auto.
+  rewrite Z.add_0_r in H2. auto.
 Qed.
 
 Lemma inj_of_bc_preserves_globals:
@@ -4371,9 +4371,9 @@ Module AVal <: SEMILATTICE_WITH_TOP.
 
   Definition t := aval.
   Definition eq (x y: t) := (x = y).
-  Definition eq_refl: forall x, eq x x := (@refl_equal t).
-  Definition eq_sym: forall x y, eq x y -> eq y x := (@sym_equal t).
-  Definition eq_trans: forall x y z, eq x y -> eq y z -> eq x z := (@trans_equal t).
+  Definition eq_refl: forall x, eq x x := (@eq_refl t).
+  Definition eq_sym: forall x y, eq x y -> eq y x := (@eq_sym t).
+  Definition eq_trans: forall x y z, eq x y -> eq y z -> eq x z := (@eq_trans t).
   Definition beq (x y: t) : bool := proj_sumbool (eq_aval x y).
   Lemma beq_correct: forall x y, beq x y = true -> eq x y.
   Proof. unfold beq; intros. InvBooleans. auto. Qed.

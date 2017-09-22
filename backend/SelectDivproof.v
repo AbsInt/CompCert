@@ -36,7 +36,7 @@ Lemma Zdiv_mul_pos:
   two_p (N+l) <= m * d <= two_p (N+l) + two_p l ->
   forall n,
   0 <= n < two_p N ->
-  Zdiv n d = Zdiv (m * n) (two_p (N + l)).
+  Z.div n d = Z.div (m * n) (two_p (N + l)).
 Proof.
   intros m l l_pos [LO HI] n RANGE.
   exploit (Z_div_mod_eq n d). auto.
@@ -54,9 +54,9 @@ Proof.
   assert ((m * n - two_p (N + l) * q) * d = k * n + two_p (N + l) * r).
     unfold k. rewrite EUCL. ring.
   assert (0 <= k * n).
-    apply Zmult_le_0_compat; omega.
+    apply Z.mul_nonneg_nonneg; omega.
   assert (k * n <= two_p (N + l) - two_p l).
-    apply Zle_trans with (two_p l * n).
+    apply Z.le_trans with (two_p l * n).
     apply Zmult_le_compat_r. omega. omega.
     replace (N + l) with (l + N) by omega.
     rewrite two_p_is_exp.
@@ -66,7 +66,7 @@ Proof.
     apply Zmult_le_compat_l. omega. exploit (two_p_gt_ZERO l). omega. omega.
     omega. omega.
   assert (0 <= two_p (N + l) * r).
-    apply Zmult_le_0_compat.
+    apply Z.mul_nonneg_nonneg.
     exploit (two_p_gt_ZERO (N + l)). omega. omega.
     omega.
   assert (two_p (N + l) * r <= two_p (N + l) * d - two_p (N + l)).
@@ -81,7 +81,7 @@ Proof.
   assert (m * n - two_p (N + l) * q < two_p (N + l)).
     apply Zmult_lt_reg_r with d. omega.
     rewrite H2.
-    apply Zle_lt_trans with (two_p (N + l) * d - two_p l).
+    apply Z.le_lt_trans with (two_p (N + l) * d - two_p l).
     omega.
     exploit (two_p_gt_ZERO l). omega. omega.
   symmetry. apply Zdiv_unique with (m * n - two_p (N + l) * q).
@@ -89,7 +89,7 @@ Proof.
 Qed.
 
 Lemma Zdiv_unique_2:
-  forall x y q, y > 0 -> 0 < y * q - x <= y -> Zdiv x y = q - 1.
+  forall x y q, y > 0 -> 0 < y * q - x <= y -> Z.div x y = q - 1.
 Proof.
   intros. apply Zdiv_unique with (x - (q - 1) * y). ring.
   replace ((q - 1) * y) with (y * q - y) by ring. omega.
@@ -101,7 +101,7 @@ Lemma Zdiv_mul_opp:
   two_p (N+l) < m * d <= two_p (N+l) + two_p l ->
   forall n,
   0 < n <= two_p N ->
-  Zdiv n d = - Zdiv (m * (-n)) (two_p (N + l)) - 1.
+  Z.div n d = - Z.div (m * (-n)) (two_p (N + l)) - 1.
 Proof.
   intros m l l_pos [LO HI] n RANGE.
   replace (m * (-n)) with (- (m * n)) by ring.
@@ -114,7 +114,7 @@ Proof.
   assert (0 <= m).
     apply Zmult_le_0_reg_r with d. auto.
     exploit (two_p_gt_ZERO (N + l)). omega. omega.
-  cut (Zdiv (- (m * n)) (two_p (N + l)) = -q - 1).
+  cut (Z.div (- (m * n)) (two_p (N + l)) = -q - 1).
     omega.
   apply Zdiv_unique_2.
   apply two_p_gt_ZERO. omega.
@@ -130,15 +130,15 @@ Proof.
   apply Zmult_lt_reg_r with d. omega.
   replace (0 * d) with 0 by omega.
   rewrite H2.
-  assert (0 < k * n). apply Zmult_lt_0_compat; omega.
+  assert (0 < k * n). apply Z.mul_pos_pos; omega.
   assert (0 <= two_p (N + l) * r).
-    apply Zmult_le_0_compat. exploit (two_p_gt_ZERO (N + l)); omega. omega.
+    apply Z.mul_nonneg_nonneg. exploit (two_p_gt_ZERO (N + l)); omega. omega.
   omega.
   apply Zmult_le_reg_r with d. omega.
   rewrite H2.
   assert (k * n <= two_p (N + l)).
-    rewrite Zplus_comm. rewrite two_p_is_exp; try omega.
-    apply Zle_trans with (two_p l * n). apply Zmult_le_compat_r. omega. omega.
+    rewrite Z.add_comm. rewrite two_p_is_exp; try omega.
+    apply Z.le_trans with (two_p l * n). apply Zmult_le_compat_r. omega. omega.
     apply Zmult_le_compat_l. omega. exploit (two_p_gt_ZERO l). omega. omega.
   assert (two_p (N + l) * r <= two_p (N + l) * d - two_p (N + l)).
     replace (two_p (N + l) * d - two_p (N + l))
@@ -156,7 +156,7 @@ Lemma Zquot_mul:
   two_p (N+l) < m * d <= two_p (N+l) + two_p l ->
   forall n,
   - two_p N <= n < two_p N ->
-  Z.quot n d = Zdiv (m * n) (two_p (N + l)) + (if zlt n 0 then 1 else 0).
+  Z.quot n d = Z.div (m * n) (two_p (N + l)) + (if zlt n 0 then 1 else 0).
 Proof.
   intros. destruct (zlt n 0).
   exploit (Zdiv_mul_opp m l H H0 (-n)). omega.
@@ -164,7 +164,7 @@ Proof.
   replace (Z.quot n d) with (- Z.quot (-n) d).
   rewrite Zquot_Zdiv_pos by omega. omega.
   rewrite Z.quot_opp_l by omega. ring.
-  rewrite Zplus_0_r. rewrite Zquot_Zdiv_pos by omega.
+  rewrite Z.add_0_r. rewrite Zquot_Zdiv_pos by omega.
   apply Zdiv_mul_pos; omega.
 Qed.
 
@@ -178,7 +178,7 @@ Lemma divs_mul_params_sound:
   0 <= m < Int.modulus /\ 0 <= p < 32 /\
   forall n,
   Int.min_signed <= n <= Int.max_signed ->
-  Z.quot n d = Zdiv (m * n) (two_p (32 + p)) + (if zlt n 0 then 1 else 0).
+  Z.quot n d = Z.div (m * n) (two_p (32 + p)) + (if zlt n 0 then 1 else 0).
 Proof with (try discriminate).
   unfold divs_mul_params; intros d m' p'.
   destruct (find_div_mul_params Int.wordsize
@@ -207,7 +207,7 @@ Lemma divu_mul_params_sound:
   0 <= m < Int.modulus /\ 0 <= p < 32 /\
   forall n,
   0 <= n < Int.modulus ->
-  Zdiv n d = Zdiv (m * n) (two_p (32 + p)).
+  Z.div n d = Z.div (m * n) (two_p (32 + p)).
 Proof with (try discriminate).
   unfold divu_mul_params; intros d m' p'.
   destruct (find_div_mul_params Int.wordsize
@@ -246,9 +246,9 @@ Proof.
   unfold Int.max_signed; omega.
   apply Zdiv_interval_1. generalize Int.min_signed_neg; omega. apply Int.half_modulus_pos.
   apply Int.modulus_pos.
-  split. apply Zle_trans with (Int.min_signed * m). apply Zmult_le_compat_l_neg. omega. generalize Int.min_signed_neg; omega.
+  split. apply Z.le_trans with (Int.min_signed * m). apply Zmult_le_compat_l_neg. omega. generalize Int.min_signed_neg; omega.
   apply Zmult_le_compat_r. unfold n; generalize (Int.signed_range x); tauto. tauto.
-  apply Zle_lt_trans with (Int.half_modulus * m).
+  apply Z.le_lt_trans with (Int.half_modulus * m).
   apply Zmult_le_compat_r. generalize (Int.signed_range x); unfold n, Int.max_signed; omega. tauto.
   apply Zmult_lt_compat_l. generalize Int.half_modulus_pos; omega. tauto.
   assert (32 < Int.max_unsigned) by (compute; auto). omega.
@@ -310,7 +310,7 @@ Proof.
   unfold Int.max_unsigned; omega.
   apply Zdiv_interval_1. omega. compute; auto. compute; auto.
   split. simpl. apply Z.mul_nonneg_nonneg. generalize (Int.unsigned_range x); omega. omega.
-  apply Zle_lt_trans with (Int.modulus * m).
+  apply Z.le_lt_trans with (Int.modulus * m).
   apply Zmult_le_compat_r. generalize (Int.unsigned_range x); omega. omega.
   apply Zmult_lt_compat_l. compute; auto. omega.
   unfold Int.max_unsigned; omega.
@@ -325,7 +325,7 @@ Lemma divls_mul_params_sound:
   0 <= m < Int64.modulus /\ 0 <= p < 64 /\
   forall n,
   Int64.min_signed <= n <= Int64.max_signed ->
-  Z.quot n d = Zdiv (m * n) (two_p (64 + p)) + (if zlt n 0 then 1 else 0).
+  Z.quot n d = Z.div (m * n) (two_p (64 + p)) + (if zlt n 0 then 1 else 0).
 Proof with (try discriminate).
   unfold divls_mul_params; intros d m' p'.
   destruct (find_div_mul_params Int64.wordsize
@@ -354,7 +354,7 @@ Lemma divlu_mul_params_sound:
   0 <= m < Int64.modulus /\ 0 <= p < 64 /\
   forall n,
   0 <= n < Int64.modulus ->
-  Zdiv n d = Zdiv (m * n) (two_p (64 + p)).
+  Z.div n d = Z.div (m * n) (two_p (64 + p)).
 Proof with (try discriminate).
   unfold divlu_mul_params; intros d m' p'.
   destruct (find_div_mul_params Int64.wordsize
@@ -399,9 +399,9 @@ Proof.
   unfold Int64.max_signed; omega.
   apply Zdiv_interval_1. generalize Int64.min_signed_neg; omega. apply Int64.half_modulus_pos.
   apply Int64.modulus_pos.
-  split. apply Zle_trans with (Int64.min_signed * m). apply Zmult_le_compat_l_neg. omega. generalize Int64.min_signed_neg; omega.
+  split. apply Z.le_trans with (Int64.min_signed * m). apply Zmult_le_compat_l_neg. omega. generalize Int64.min_signed_neg; omega.
   apply Zmult_le_compat_r. unfold n; generalize (Int64.signed_range x); tauto. tauto.
-  apply Zle_lt_trans with (Int64.half_modulus * m).
+  apply Z.le_lt_trans with (Int64.half_modulus * m).
   apply Zmult_le_compat_r. generalize (Int64.signed_range x); unfold n, Int64.max_signed; omega. tauto.
   apply Zmult_lt_compat_l. generalize Int64.half_modulus_pos; omega. tauto.
   assert (64 < Int.max_unsigned) by (compute; auto). omega.
@@ -469,7 +469,7 @@ Proof.
   unfold Int64.max_unsigned; omega.
   apply Zdiv_interval_1. omega. compute; auto. compute; auto.
   split. simpl. apply Z.mul_nonneg_nonneg. generalize (Int64.unsigned_range x); omega. omega.
-  apply Zle_lt_trans with (Int64.modulus * m).
+  apply Z.le_lt_trans with (Int64.modulus * m).
   apply Zmult_le_compat_r. generalize (Int64.unsigned_range x); omega. omega.
   apply Zmult_lt_compat_l. compute; auto. omega.
   unfold Int64.max_unsigned; omega.

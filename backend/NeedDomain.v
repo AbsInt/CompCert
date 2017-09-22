@@ -329,7 +329,7 @@ Lemma eqmod_iagree:
 Proof.
   intros. set (p := nat_of_Z (Int.size m)).
   generalize (Int.size_range m); intros RANGE.
-  assert (EQ: Int.size m = Z_of_nat p). { symmetry; apply nat_of_Z_eq. omega. }
+  assert (EQ: Int.size m = Z.of_nat p). { symmetry; apply nat_of_Z_eq. omega. }
   rewrite EQ in H; rewrite <- two_power_nat_two_p in H.
   red; intros. rewrite ! Int.testbit_repr by auto.
   destruct (zlt i (Int.size m)).
@@ -347,7 +347,7 @@ Lemma iagree_eqmod:
 Proof.
   intros. set (p := nat_of_Z (Int.size m)).
   generalize (Int.size_range m); intros RANGE.
-  assert (EQ: Int.size m = Z_of_nat p). { symmetry; apply nat_of_Z_eq. omega. }
+  assert (EQ: Int.size m = Z.of_nat p). { symmetry; apply nat_of_Z_eq. omega. }
   rewrite EQ; rewrite <- two_power_nat_two_p.
   apply Int.eqmod_same_bits. intros. apply H. omega.
   unfold complete_mask. rewrite Int.bits_zero_ext by omega.
@@ -829,7 +829,7 @@ Let weak_valid_pointer_no_overflow:
   Mem.weak_valid_pointer m1 b1 (Ptrofs.unsigned ofs) = true ->
   0 <= Ptrofs.unsigned ofs + Ptrofs.unsigned (Ptrofs.repr delta) <= Ptrofs.max_unsigned.
 Proof.
-  unfold inject_id; intros. inv H. rewrite Zplus_0_r. apply Ptrofs.unsigned_range_2.
+  unfold inject_id; intros. inv H. rewrite Z.add_0_r. apply Ptrofs.unsigned_range_2.
 Qed.
 
 Let valid_different_pointers_inj:
@@ -1003,9 +1003,9 @@ Module NVal <: SEMILATTICE.
 
   Definition t := nval.
   Definition eq (x y: t) := (x = y).
-  Definition eq_refl: forall x, eq x x := (@refl_equal t).
-  Definition eq_sym: forall x y, eq x y -> eq y x := (@sym_equal t).
-  Definition eq_trans: forall x y z, eq x y -> eq y z -> eq x z := (@trans_equal t).
+  Definition eq_refl: forall x, eq x x := (@eq_refl t).
+  Definition eq_sym: forall x y, eq x y -> eq y x := (@eq_sym t).
+  Definition eq_trans: forall x y z, eq x y -> eq y z -> eq x z := (@eq_trans t).
   Definition beq (x y: t) : bool := proj_sumbool (eq_nval x y).
   Lemma beq_correct: forall x y, beq x y = true -> eq x y.
   Proof. unfold beq; intros. InvBooleans. auto. Qed.

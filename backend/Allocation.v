@@ -404,11 +404,11 @@ Module OrderedEquation <: OrderedType.
     (OrderedLoc.lt (eloc x) (eloc y) \/ (eloc x = eloc y /\
     OrderedEqKind.lt (ekind x) (ekind y)))).
   Lemma eq_refl : forall x : t, eq x x.
-  Proof (@refl_equal t).
+  Proof (@eq_refl t).
   Lemma eq_sym : forall x y : t, eq x y -> eq y x.
-  Proof (@sym_equal t).
+  Proof (@eq_sym t).
   Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
-  Proof (@trans_equal t).
+  Proof (@eq_trans t).
   Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
   Proof.
     unfold lt; intros.
@@ -466,11 +466,11 @@ Module OrderedEquation' <: OrderedType.
     (Plt (ereg x) (ereg y) \/ (ereg x = ereg y /\
     OrderedEqKind.lt (ekind x) (ekind y)))).
   Lemma eq_refl : forall x : t, eq x x.
-  Proof (@refl_equal t).
+  Proof (@eq_refl t).
   Lemma eq_sym : forall x y : t, eq x y -> eq y x.
-  Proof (@sym_equal t).
+  Proof (@eq_sym t).
   Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
-  Proof (@trans_equal t).
+  Proof (@eq_trans t).
   Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
   Proof.
     unfold lt; intros.

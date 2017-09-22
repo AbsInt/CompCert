@@ -80,7 +80,7 @@ Definition initial_generator (x: unit) : generator :=
 Definition gensym (ty: type): mon ident :=
   fun (g: generator) =>
     Res (gen_next g)
-        (mkgenerator (Psucc (gen_next g)) ((gen_next g, ty) :: gen_trail g))
+        (mkgenerator (Pos.succ (gen_next g)) ((gen_next g, ty) :: gen_trail g))
         (Ple_succ (gen_next g)).
 
 (** Construct a sequence from a list of statements.  To facilitate the

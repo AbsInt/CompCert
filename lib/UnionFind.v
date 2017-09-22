@@ -422,7 +422,7 @@ Definition merge (uf: t) (a b: elt) : t :=
   let b' := repr uf b in
   match M.elt_eq a' b' with
   | left EQ => uf
-  | right NEQ => identify uf a' b (repr_res_none uf a) (sym_not_equal NEQ)
+  | right NEQ => identify uf a' b (repr_res_none uf a) (not_eq_sym NEQ)
   end.
 
 Lemma repr_merge:

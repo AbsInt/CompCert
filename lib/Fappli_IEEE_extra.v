@@ -104,15 +104,15 @@ Proof.
   destruct f1 as [| |? []|], f2 as [| |? []|];
   try destruct b; try destruct b0;
   try solve [left; auto]; try_not_eq.
-  destruct (positive_eq_dec x x0); try_not_eq;
+  destruct (Pos.eq_dec x x0); try_not_eq;
     subst; left; f_equal; f_equal; apply UIP_bool.
-  destruct (positive_eq_dec x x0); try_not_eq;
+  destruct (Pos.eq_dec x x0); try_not_eq;
     subst; left; f_equal; f_equal; apply UIP_bool.
-  destruct (positive_eq_dec m m0); try_not_eq;
-  destruct (Z_eq_dec e e1); try solve [right; intro H; inversion H; congruence];
+  destruct (Pos.eq_dec m m0); try_not_eq;
+  destruct (Z.eq_dec e e1); try solve [right; intro H; inversion H; congruence];
   subst; left; f_equal; apply UIP_bool.
-  destruct (positive_eq_dec m m0); try_not_eq;
-  destruct (Z_eq_dec e e1); try solve [right; intro H; inversion H; congruence];
+  destruct (Pos.eq_dec m m0); try_not_eq;
+  destruct (Z.eq_dec e e1); try solve [right; intro H; inversion H; congruence];
   subst; left; f_equal; apply UIP_bool.
 Defined.
 
@@ -155,7 +155,7 @@ Proof.
   intros; split.
 - red in prec_gt_0_.
   rewrite Z.abs_eq by (apply (Zpower_ge_0 radix2)).
-  apply Zle_trans with (2^(emax-1)).
+  apply Z.le_trans with (2^(emax-1)).
   apply (Zpower_le radix2); omega.
   assert (2^emax = 2^(emax-1)*2).
   { change 2 with (2^1) at 3. rewrite <- (Zpower_plus radix2) by omega.
@@ -233,9 +233,9 @@ Theorem BofZ_correct:
   then
     B2R prec emax (BofZ n) = round radix2 fexp (round_mode mode_NE) (Z2R n) /\
     is_finite _ _ (BofZ n) = true /\
-    Bsign prec emax (BofZ n) = Zlt_bool n 0
+    Bsign prec emax (BofZ n) = Z.ltb n 0
   else
-    B2FF prec emax (BofZ n) = binary_overflow prec emax mode_NE (Zlt_bool n 0).
+    B2FF prec emax (BofZ n) = binary_overflow prec emax mode_NE (Z.ltb n 0).
 Proof.
   intros.
   generalize (binary_normalize_correct prec emax prec_gt_0_ Hmax mode_NE n 0 false).
@@ -246,9 +246,9 @@ Proof.
   + auto.
   + auto.
   + rewrite C. change 0%R with (Z2R 0). rewrite Rcompare_Z2R.
-    unfold Zlt_bool. auto.
+    unfold Z.ltb. auto.
 - intros A; rewrite A. f_equal. change 0%R with (Z2R 0).
-  generalize (Zlt_bool_spec n 0); intros SPEC; inversion SPEC.
+  generalize (Z.ltb_spec n 0); intros SPEC; inversion SPEC.
   apply Rlt_bool_true; apply Z2R_lt; auto.
   apply Rlt_bool_false; apply Z2R_le; auto.
 - unfold F2R; simpl. ring.
@@ -259,7 +259,7 @@ Theorem BofZ_finite:
   Z.abs n <= 2^emax - 2^(emax-prec) ->
   B2R _ _ (BofZ n) = round radix2 fexp (round_mode mode_NE) (Z2R n)
   /\ is_finite _ _ (BofZ n) = true
-  /\ Bsign _ _ (BofZ n) = Zlt_bool n 0%Z.
+  /\ Bsign _ _ (BofZ n) = Z.ltb n 0%Z.
 Proof.
   intros.
   generalize (BofZ_correct n). rewrite Rlt_bool_true. auto.
@@ -282,7 +282,7 @@ Theorem BofZ_exact:
   -2^prec <= n <= 2^prec ->
   B2R _ _ (BofZ n) = Z2R n
   /\ is_finite _ _ (BofZ n) = true
-  /\ Bsign _ _ (BofZ n) = Zlt_bool n 0%Z.
+  /\ Bsign _ _ (BofZ n) = Z.ltb n 0%Z.
 Proof.
   intros. apply BofZ_representable. apply integer_representable_n; auto.
 Qed.
@@ -340,7 +340,7 @@ Proof.
   apply B2R_Bsign_inj; auto.
   rewrite P, U; auto.
   rewrite R, W, C, F.
-  change 0%R with (Z2R 0). rewrite Rcompare_Z2R. unfold Zlt_bool at 3.
+  change 0%R with (Z2R 0). rewrite Rcompare_Z2R. unfold Z.ltb at 3.
   generalize (Zcompare_spec (p + q) 0); intros SPEC; inversion SPEC; auto.
   assert (EITHER: 0 <= p \/ 0 <= q) by omega.
   destruct EITHER; [apply andb_false_intro1 | apply andb_false_intro2];
@@ -370,7 +370,7 @@ Proof.
   apply B2R_Bsign_inj; auto.
   rewrite P, U; auto.
   rewrite R, W, C, F.
-  change 0%R with (Z2R 0). rewrite Rcompare_Z2R. unfold Zlt_bool at 3.
+  change 0%R with (Z2R 0). rewrite Rcompare_Z2R. unfold Z.ltb at 3.
   generalize (Zcompare_spec (p - q) 0); intros SPEC; inversion SPEC; auto.
   assert (EITHER: 0 <= p \/ q < 0) by omega.
   destruct EITHER; [apply andb_false_intro1 | apply andb_false_intro2].
@@ -554,7 +554,7 @@ Lemma Zrnd_odd_int:
 Proof.
   intros.
   assert (0 < 2^p) by (apply (Zpower_gt_0 radix2); omega).
-  assert (n = (n / 2^p) * 2^p + n mod 2^p) by (rewrite Zmult_comm; apply Z.div_mod; omega).
+  assert (n = (n / 2^p) * 2^p + n mod 2^p) by (rewrite Z.mul_comm; apply Z.div_mod; omega).
   assert (0 <= n mod 2^p < 2^p) by (apply Z_mod_lt; omega).
   unfold int_round_odd. set (q := n / 2^p) in *; set (r := n mod 2^p) in *.
   f_equal.
@@ -606,8 +606,8 @@ Lemma int_round_odd_exact:
   (2^p | x) -> int_round_odd x p = x.
 Proof.
   intros. unfold int_round_odd. apply Znumtheory.Zdivide_mod in H0.
-  rewrite H0. simpl. rewrite Zmult_comm. symmetry. apply Z_div_exact_2.
-  apply Zlt_gt. apply (Zpower_gt_0 radix2). auto. auto.
+  rewrite H0. simpl. rewrite Z.mul_comm. symmetry. apply Z_div_exact_2.
+  apply Z.lt_gt. apply (Zpower_gt_0 radix2). auto. auto.
 Qed.
 
 Theorem BofZ_round_odd:
@@ -693,9 +693,9 @@ Qed.
 
 Definition ZofB (f: binary_float): option Z :=
   match f with
-    | B754_finite _ _ s m (Zpos e) _ => Some (cond_Zopp s (Zpos m) * Zpower_pos radix2 e)%Z
+    | B754_finite _ _ s m (Zpos e) _ => Some (cond_Zopp s (Zpos m) * Z.pow_pos radix2 e)%Z
     | B754_finite _ _ s m 0 _ => Some (cond_Zopp s (Zpos m))
-    | B754_finite _ _ s m (Zneg e) _ => Some (cond_Zopp s (Zpos m / Zpower_pos radix2 e))%Z
+    | B754_finite _ _ s m (Zneg e) _ => Some (cond_Zopp s (Zpos m / Z.pow_pos radix2 e))%Z
     | B754_zero _ _ _ => Some 0%Z
     | _ => None
   end.
@@ -715,7 +715,7 @@ Proof.
       intros. destruct b; simpl; auto. apply Ztrunc_opp.
     }
     rewrite EQ. f_equal.
-    generalize (Zpower_pos_gt_0 2 p (refl_equal _)); intros.
+    generalize (Zpower_pos_gt_0 2 p (eq_refl _)); intros.
     rewrite Ztrunc_floor. symmetry. apply Zfloor_div. omega.
     apply Rmult_le_pos. apply (Z2R_le 0). compute; congruence.
     apply Rlt_le. apply Rinv_0_lt_compat. apply (Z2R_lt 0). auto.
@@ -844,14 +844,14 @@ Qed.
 Definition ZofB_range (f: binary_float) (zmin zmax: Z): option Z :=
   match ZofB f with
   | None => None
-  | Some z => if Zle_bool zmin z && Zle_bool z zmax then Some z else None
+  | Some z => if Z.leb zmin z && Z.leb z zmax then Some z else None
   end.
 
 Theorem ZofB_range_correct:
   forall f min max,
   let n := Ztrunc (B2R _ _ f) in
   ZofB_range f min max =
-  if is_finite _ _ f && Zle_bool min n && Zle_bool n max then Some n else None.
+  if is_finite _ _ f && Z.leb min n && Z.leb n max then Some n else None.
 Proof.
   intros. unfold ZofB_range. rewrite ZofB_correct. fold n.
   destruct (is_finite prec emax f); auto.
@@ -910,8 +910,8 @@ Proof.
 - rewrite NAN; auto.
 - rewrite NAN; auto.
 - rewrite NAN; auto.
-- generalize (H (refl_equal _) (refl_equal _)); clear H.
-  generalize (H0 (refl_equal _) (refl_equal _)); clear H0.
+- generalize (H (eq_refl _) (eq_refl _)); clear H.
+  generalize (H0 (eq_refl _) (eq_refl _)); clear H0.
   fold emin. fold fexp.
   set (x := B754_finite prec emax b0 m0 e1 e2). set (rx := B2R _ _ x).
   set (y := B754_finite prec emax b m e e0). set (ry := B2R _ _ y).
@@ -1007,7 +1007,7 @@ Proof.
   assert (REC: forall n, Z.pos (nat_rect _ xH (fun _ => xO) n) = 2 ^ (Z.of_nat n)).
   { induction n. reflexivity.
     simpl nat_rect. transitivity (2 * Z.pos (nat_rect _ xH (fun _ => xO) n)). reflexivity.
-    rewrite inj_S. rewrite IHn. unfold Z.succ. rewrite Zpower_plus by omega.
+    rewrite Nat2Z.inj_succ. rewrite IHn. unfold Z.succ. rewrite Zpower_plus by omega.
     change (2 ^ 1) with 2. ring. }
   red in prec_gt_0_.
   unfold Bexact_inverse_mantissa. rewrite iter_nat_of_Z by omega. rewrite REC.
@@ -1042,7 +1042,7 @@ Qed.
 Program Definition Bexact_inverse (f: binary_float) : option binary_float :=
   match f with
   | B754_finite _ _ s m e B =>
-      if positive_eq_dec m Bexact_inverse_mantissa then
+      if Pos.eq_dec m Bexact_inverse_mantissa then
       let e' := -e - (prec - 1) * 2 in
       if Z_le_dec emin e' then
       if Z_le_dec e' emax then
@@ -1171,7 +1171,7 @@ Proof.
   destruct (Z.log2_spec base) as [D E]; auto.
   destruct (Z.log2_up_spec base) as [F G]. apply radix_gt_1.
   assert (K: 0 <= 2 ^ Z.log2 base) by (apply Z.pow_nonneg; omega).
-  rewrite ! (Zmult_comm n). rewrite ! Z.pow_mul_r by omega.
+  rewrite ! (Z.mul_comm n). rewrite ! Z.pow_mul_r by omega.
   split; apply Z.pow_le_mono_l; omega.
 Qed.
 
@@ -1182,7 +1182,7 @@ Lemma bpow_log_pos:
 Proof.
   intros. rewrite <- ! Z2R_Zpower. apply Z2R_le; apply Zpower_log; auto.
   omega.
-  rewrite Zmult_comm; apply Zmult_gt_0_le_0_compat. omega. apply Z.log2_nonneg.
+  rewrite Z.mul_comm; apply Zmult_gt_0_le_0_compat. omega. apply Z.log2_nonneg.
 Qed.
 
 Lemma bpow_log_neg:
@@ -1291,7 +1291,7 @@ Proof.
   rewrite pos_pow_spec. rewrite <- Z2R_Zpower by (zify; omega). rewrite <- Z2R_mult.
   replace false with (Z.pos m * Z.pos b ^ Z.pos e <? 0).
   exact (BofZ_correct (Z.pos m * Z.pos b ^ Z.pos e)).
-  rewrite Z.ltb_ge. rewrite Zmult_comm. apply Zmult_gt_0_le_0_compat. zify; omega.  apply (Zpower_ge_0 base).
+  rewrite Z.ltb_ge. rewrite Z.mul_comm. apply Zmult_gt_0_le_0_compat. zify; omega.  apply (Zpower_ge_0 base).
 + (* overflow *)
   rewrite Rlt_bool_false. auto. eapply Rle_trans; [idtac|apply Rle_abs].
   apply (round_integer_overflow base). zify; omega. auto.
@@ -1425,7 +1425,7 @@ Proof.
   destruct Rlt_bool.
 - intros (P & Q & R) (D & E & F). apply B2R_Bsign_inj; auto.
   congruence. rewrite F, C, R. change 0%R with (Z2R 0). rewrite Rcompare_Z2R.
-  unfold Zlt_bool. auto.
+  unfold Z.ltb. auto.
 - intros P Q. apply B2FF_inj. rewrite P, Q. rewrite C. f_equal. change 0%R with (Z2R 0).
   generalize (Zlt_bool_spec n 0); intros LT; inversion LT.
   rewrite Rlt_bool_true; auto. apply Z2R_lt; auto.

@@ -505,7 +505,7 @@ Proof.
   eapply exec_Lreturn; eauto.
   constructor; eauto using return_regs_lessdef, match_parent_locset.
 - (* internal function *)
-  exploit Mem.alloc_extends. eauto. eauto. apply Zle_refl. apply Zle_refl. 
+  exploit Mem.alloc_extends. eauto. eauto. apply Z.le_refl. apply Z.le_refl.
   intros (tm' & ALLOC & MEM'). 
   left; simpl; econstructor; split.
   eapply exec_function_internal; eauto.

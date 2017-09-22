@@ -875,7 +875,7 @@ Proof.
     apply smatch_ge with Nonstack. eapply SM. eapply mmatch_top; eauto. apply pge_lub_r.
   + (* below *)
     red; simpl; intros. destruct (eq_block b sp).
-    subst b. apply Plt_le_trans with bound. apply BELOW. congruence. auto.
+    subst b. apply Pos.lt_le_trans with bound. apply BELOW. congruence. auto.
     eapply mmatch_below; eauto.
 - (* genv *)
   eapply genv_match_exten; eauto.
@@ -1008,7 +1008,7 @@ Proof.
   + apply SMTOP; auto.
   + apply SMTOP; auto.
   + red; simpl; intros. destruct (plt b (Mem.nextblock m)).
-    eapply Plt_le_trans. eauto. eapply external_call_nextblock; eauto.
+    eapply Pos.lt_le_trans. eauto. eapply external_call_nextblock; eauto.
     destruct (j' b) as [[bx deltax] | ] eqn:J'.
     eapply Mem.valid_block_inject_1; eauto.
     congruence.

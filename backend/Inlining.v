@@ -113,7 +113,7 @@ Program Definition add_instr (i: instruction): mon node :=
   fun s =>
     let pc := s.(st_nextnode) in
     R pc
-      (mkstate s.(st_nextreg) (Psucc pc) (PTree.set pc i s.(st_code)) s.(st_stksize))
+      (mkstate s.(st_nextreg) (Pos.succ pc) (PTree.set pc i s.(st_code)) s.(st_stksize))
       _.
 Next Obligation.
   intros; constructor; simpl; xomega.
@@ -122,7 +122,7 @@ Qed.
 Program Definition reserve_nodes (numnodes: positive): mon positive :=
   fun s =>
     R s.(st_nextnode)
-      (mkstate s.(st_nextreg) (Pplus s.(st_nextnode) numnodes) s.(st_code) s.(st_stksize))
+      (mkstate s.(st_nextreg) (Pos.add s.(st_nextnode) numnodes) s.(st_code) s.(st_stksize))
       _.
 Next Obligation.
   intros; constructor; simpl; xomega.
@@ -131,7 +131,7 @@ Qed.
 Program Definition reserve_regs (numregs: positive): mon positive :=
   fun s =>
     R s.(st_nextreg)
-      (mkstate (Pplus s.(st_nextreg) numregs) s.(st_nextnode) s.(st_code) s.(st_stksize))
+      (mkstate (Pos.add s.(st_nextreg) numregs) s.(st_nextnode) s.(st_code) s.(st_stksize))
       _.
 Next Obligation.
   intros; constructor; simpl; xomega.
@@ -140,7 +140,7 @@ Qed.
 Program Definition request_stack (sz: Z): mon unit :=
   fun s =>
     R tt
-      (mkstate s.(st_nextreg) s.(st_nextnode) s.(st_code) (Zmax s.(st_stksize) sz))
+      (mkstate s.(st_nextreg) s.(st_nextnode) s.(st_code) (Z.max s.(st_stksize) sz))
       _.
 Next Obligation.
   intros; constructor; simpl; xomega.
@@ -181,7 +181,7 @@ Record context: Type := mkcontext {
 
 (** The following functions "shift" (relocate) PCs, registers, operations, etc. *)
 
-Definition shiftpos (p amount: positive) := Ppred (Pplus p amount).
+Definition shiftpos (p amount: positive) := Pos.pred (Pos.add p amount).
 
 Definition spc (ctx: context) (pc: node) := shiftpos pc ctx.(dpc).
 
@@ -220,7 +220,7 @@ Definition initcontext (dpc dreg nreg: positive) (sz: Z) :=
      dreg := dreg;
      dstk := 0;
      mreg := nreg;
-     mstk := Zmax sz 0;
+     mstk := Z.max sz 0;
      retinfo := None |}.
 
 (** The context used to inline a call to another function. *)
@@ -237,7 +237,7 @@ Definition callcontext (ctx: context)
      dreg := dreg;
      dstk := align (ctx.(dstk) + ctx.(mstk)) (min_alignment sz);
      mreg := nreg;
-     mstk := Zmax sz 0;
+     mstk := Z.max sz 0;
      retinfo := Some (spc ctx retpc, sreg ctx retreg) |}.
 
 (** The context used to inline a tail call to another function. *)
@@ -247,7 +247,7 @@ Definition tailcontext (ctx: context) (dpc dreg nreg: positive) (sz: Z) :=
      dreg := dreg;
      dstk := align ctx.(dstk) (min_alignment sz);
      mreg := nreg;
-     mstk := Zmax sz 0;
+     mstk := Z.max sz 0;
      retinfo := ctx.(retinfo) |}.
 
 (** ** Recursive expansion and copying of a CFG *)

@@ -138,8 +138,8 @@ Proof.
   split. exists (fe_ofs_arg / 8); reflexivity.
   split. apply align_divides; omega.
   split. apply align_divides; omega.
-  split. apply Zdivide_0.
+  split. apply Z.divide_0_r.
   apply Z.divide_add_r.
-    apply Zdivide_trans with 8. exists 2; auto. apply align_divides; omega.
+    apply Z.divide_trans with 8. exists 2; auto. apply align_divides; omega.
     apply Z.divide_factor_l.
 Qed.

@@ -301,7 +301,7 @@ Proof.
   destruct (map_letvars x0). auto. simpl in me_letvars0. inversion me_letvars0.
   intros. rewrite Regmap.gso. apply UNDEF.
   apply reg_fresh_decr with s2; eauto with rtlg.
-  apply sym_not_equal. apply valid_fresh_different with s2; auto.
+  apply not_eq_sym. apply valid_fresh_different with s2; auto.
 Qed.
 
 Lemma match_set_locals:
@@ -1535,7 +1535,7 @@ Proof.
     assert (map_valid init_mapping s0) by apply init_mapping_valid.
     exploit (add_vars_valid (CminorSel.fn_params f)); eauto. intros [A B].
     eapply add_vars_wf; eauto. eapply add_vars_wf; eauto. apply init_mapping_wf.
-  edestruct Mem.alloc_extends as [tm' []]; eauto; try apply Zle_refl.
+  edestruct Mem.alloc_extends as [tm' []]; eauto; try apply Z.le_refl.
   econstructor; split.
   left; apply plus_one. eapply exec_function_internal; simpl; eauto.
   simpl. econstructor; eauto.
