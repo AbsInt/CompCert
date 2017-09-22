@@ -209,7 +209,7 @@ Lemma eval_load:
 Proof.
   intros. generalize H0; destruct v; simpl; intro; try discriminate.
   unfold load.
-  generalize (eval_addressing _ _ _ _ _ chunk _ _ _ _ H (refl_equal _)).
+  generalize (eval_addressing _ _ _ _ _ chunk _ _ _ _ H (eq_refl _)).
   destruct (addressing chunk a). intros [vl [EV EQ]].
   eapply eval_Eload; eauto.
 Qed.
@@ -224,7 +224,7 @@ Lemma eval_store:
 Proof.
   intros. generalize H1; destruct v1; simpl; intro; try discriminate.
   unfold store.
-  generalize (eval_addressing _ _ _ _ _ chunk _ _ _ _ H (refl_equal _)).
+  generalize (eval_addressing _ _ _ _ _ chunk _ _ _ _ H (eq_refl _)).
   destruct (addressing chunk a1). intros [vl [EV EQ]].
   eapply step_store; eauto.
 Qed.
@@ -1036,7 +1036,7 @@ Proof.
 - (* internal function *)
   destruct TF as (hf & HF & TF). specialize (MC cunit hf).
   monadInv TF. generalize EQ; intros TF; monadInv TF.
-  exploit Mem.alloc_extends. eauto. eauto. apply Zle_refl. apply Zle_refl.
+  exploit Mem.alloc_extends. eauto. eauto. apply Z.le_refl. apply Z.le_refl.
   intros [m2' [A B]].
   left; econstructor; split.
   econstructor; simpl; eauto.

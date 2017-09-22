@@ -515,11 +515,11 @@ Axiom store_int16_sign_ext:
 
 Axiom range_perm_storebytes:
   forall m1 b ofs bytes,
-  range_perm m1 b ofs (ofs + Z_of_nat (length bytes)) Cur Writable ->
+  range_perm m1 b ofs (ofs + Z.of_nat (length bytes)) Cur Writable ->
   { m2 : mem | storebytes m1 b ofs bytes = Some m2 }.
 Axiom storebytes_range_perm:
   forall m1 b ofs bytes m2, storebytes m1 b ofs bytes = Some m2 ->
-  range_perm m1 b ofs (ofs + Z_of_nat (length bytes)) Cur Writable.
+  range_perm m1 b ofs (ofs + Z.of_nat (length bytes)) Cur Writable.
 Axiom perm_storebytes_1:
   forall m1 b ofs bytes m2, storebytes m1 b ofs bytes = Some m2 ->
   forall b' ofs' k p, perm m1 b' ofs' k p -> perm m2 b' ofs' k p.
@@ -561,21 +561,21 @@ Axiom store_storebytes:
 
 Axiom loadbytes_storebytes_same:
   forall m1 b ofs bytes m2, storebytes m1 b ofs bytes = Some m2 ->
-  loadbytes m2 b ofs (Z_of_nat (length bytes)) = Some bytes.
+  loadbytes m2 b ofs (Z.of_nat (length bytes)) = Some bytes.
 Axiom loadbytes_storebytes_other:
   forall m1 b ofs bytes m2, storebytes m1 b ofs bytes = Some m2 ->
   forall b' ofs' len,
   len >= 0 ->
   b' <> b
   \/ ofs' + len <= ofs
-  \/ ofs + Z_of_nat (length bytes) <= ofs' ->
+  \/ ofs + Z.of_nat (length bytes) <= ofs' ->
   loadbytes m2 b' ofs' len = loadbytes m1 b' ofs' len.
 Axiom load_storebytes_other:
   forall m1 b ofs bytes m2, storebytes m1 b ofs bytes = Some m2 ->
   forall chunk b' ofs',
   b' <> b
   \/ ofs' + size_chunk chunk <= ofs
-  \/ ofs + Z_of_nat (length bytes) <= ofs' ->
+  \/ ofs + Z.of_nat (length bytes) <= ofs' ->
   load chunk m2 b' ofs' = load chunk m1 b' ofs'.
 
 (** Composing or decomposing [storebytes] operations at adjacent addresses. *)
@@ -583,14 +583,14 @@ Axiom load_storebytes_other:
 Axiom storebytes_concat:
   forall m b ofs bytes1 m1 bytes2 m2,
   storebytes m b ofs bytes1 = Some m1 ->
-  storebytes m1 b (ofs + Z_of_nat(length bytes1)) bytes2 = Some m2 ->
+  storebytes m1 b (ofs + Z.of_nat(length bytes1)) bytes2 = Some m2 ->
   storebytes m b ofs (bytes1 ++ bytes2) = Some m2.
 Axiom storebytes_split:
   forall m b ofs bytes1 bytes2 m2,
   storebytes m b ofs (bytes1 ++ bytes2) = Some m2 ->
   exists m1,
      storebytes m b ofs bytes1 = Some m1
-  /\ storebytes m1 b (ofs + Z_of_nat(length bytes1)) bytes2 = Some m2.
+  /\ storebytes m1 b (ofs + Z.of_nat(length bytes1)) bytes2 = Some m2.
 
 (** ** Properties of [alloc]. *)
 
@@ -605,7 +605,7 @@ Axiom alloc_result:
 
 Axiom nextblock_alloc:
   forall m1 lo hi m2 b, alloc m1 lo hi = (m2, b) ->
-  nextblock m2 = Psucc (nextblock m1).
+  nextblock m2 = Pos.succ (nextblock m1).
 
 Axiom valid_block_alloc:
   forall m1 lo hi m2 b, alloc m1 lo hi = (m2, b) ->
@@ -867,7 +867,7 @@ Axiom storebytes_outside_extends:
   forall m1 m2 b ofs bytes2 m2',
   extends m1 m2 ->
   storebytes m2 b ofs bytes2 = Some m2' ->
-  (forall ofs', perm m1 b ofs' Cur Readable -> ofs <= ofs' < ofs + Z_of_nat (length bytes2) -> False) ->
+  (forall ofs', perm m1 b ofs' Cur Readable -> ofs <= ofs' < ofs + Z.of_nat (length bytes2) -> False) ->
   extends m1 m2'.
 
 Axiom alloc_extends:
@@ -1113,7 +1113,7 @@ Axiom storebytes_outside_inject:
   (forall b' delta ofs',
     f b' = Some(b, delta) ->
     perm m1 b' ofs' Cur Readable ->
-    ofs <= ofs' + delta < ofs + Z_of_nat (length bytes2) -> False) ->
+    ofs <= ofs' + delta < ofs + Z.of_nat (length bytes2) -> False) ->
   storebytes m2 b ofs bytes2 = Some m2' ->
   inject f m1 m2'.
 

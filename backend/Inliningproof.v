@@ -184,7 +184,7 @@ Proof.
   unfold agree_regs; intros. destruct H. split; intros.
   rewrite H0. auto.
   apply shiftpos_above.
-  eapply Plt_le_trans. apply shiftpos_below. xomega.
+  eapply Pos.lt_le_trans. apply shiftpos_below. xomega.
   apply H1; auto.
 Qed.
 
@@ -242,7 +242,7 @@ Proof.
   split. destruct H3 as [[P Q] | [P Q]].
   subst a1. eapply agree_set_reg_undef; eauto.
   eapply agree_set_reg; eauto. rewrite C; auto.  apply context_below_lt; auto.
-  intros. rewrite Regmap.gso. auto. apply sym_not_equal. eapply sreg_below_diff; eauto.
+  intros. rewrite Regmap.gso. auto. apply not_eq_sym. eapply sreg_below_diff; eauto.
   destruct H2; discriminate.
 Qed.
 
@@ -290,10 +290,10 @@ Lemma range_private_alloc_left:
   Mem.alloc m 0 sz = (m1, sp) ->
   F1 sp = Some(sp', base) ->
   (forall b, b <> sp -> F1 b = F b) ->
-  range_private F1 m1 m' sp' (base + Zmax sz 0) hi.
+  range_private F1 m1 m' sp' (base + Z.max sz 0) hi.
 Proof.
   intros; red; intros.
-  exploit (H ofs). generalize (Zmax2 sz 0). omega. intros [A B].
+  exploit (H ofs). generalize (Z.le_max_r sz 0). omega. intros [A B].
   split; auto. intros; red; intros.
   exploit Mem.perm_alloc_inv; eauto.
   destruct (eq_block b sp); intros.
@@ -304,14 +304,14 @@ Qed.
 
 Lemma range_private_free_left:
   forall F m m' sp base sz hi b m1,
-  range_private F m m' sp (base + Zmax sz 0) hi ->
+  range_private F m m' sp (base + Z.max sz 0) hi ->
   Mem.free m b 0 sz = Some m1 ->
   F b = Some(sp, base) ->
   Mem.inject F m m' ->
   range_private F m1 m' sp base hi.
 Proof.
   intros; red; intros.
-  destruct (zlt ofs (base + Zmax sz 0)) as [z|z].
+  destruct (zlt ofs (base + Z.max sz 0)) as [z|z].
   red; split.
   replace ofs with ((ofs - base) + base) by omega.
   eapply Mem.perm_inject; eauto.
@@ -560,8 +560,8 @@ Lemma match_stacks_bound:
 Proof.
   intros. inv H.
   apply match_stacks_nil with bound0. auto. eapply Ple_trans; eauto.
-  eapply match_stacks_cons; eauto. eapply Plt_le_trans; eauto.
-  eapply match_stacks_untailcall; eauto. eapply Plt_le_trans; eauto.
+  eapply match_stacks_cons; eauto. eapply Pos.lt_le_trans; eauto.
+  eapply match_stacks_untailcall; eauto. eapply Pos.lt_le_trans; eauto.
 Qed.
 
 Variable F1: meminj.
@@ -602,7 +602,7 @@ Proof.
   (* nil *)
   apply match_stacks_nil with (bound1 := bound1).
   inv MG. constructor; auto.
-  intros. apply IMAGE with delta. eapply INJ; eauto. eapply Plt_le_trans; eauto.
+  intros. apply IMAGE with delta. eapply INJ; eauto. eapply Pos.lt_le_trans; eauto.
   auto. auto.
   (* cons *)
   apply match_stacks_cons with (fenv := fenv) (ctx := ctx); auto.
@@ -768,8 +768,8 @@ Proof.
     destruct (zle sz 4). omegaContradiction.
     auto.
   destruct chunk; simpl in *; auto.
-  apply Zone_divide.
-  apply Zone_divide.
+  apply Z.divide_1_l.
+  apply Z.divide_1_l.
   apply H2; omega.
   apply H2; omega.
 Qed.
@@ -845,7 +845,7 @@ Proof.
   intros. inv H.
   (* base *)
   eapply match_stacks_inside_base; eauto. congruence.
-  rewrite H1. rewrite DSTK. apply align_unchanged. apply min_alignment_pos. apply Zdivide_0.
+  rewrite H1. rewrite DSTK. apply align_unchanged. apply min_alignment_pos. apply Z.divide_0_r.
   (* inlined *)
   assert (dstk ctx <= dstk ctx'). rewrite H1. apply align_le. apply min_alignment_pos.
   eapply match_stacks_inside_inlined; eauto.
@@ -1164,7 +1164,7 @@ Proof.
   assert (TR: tr_function prog f f').
   { eapply tr_function_linkorder; eauto. }
   inversion TR; subst.
-  exploit Mem.alloc_parallel_inject. eauto. eauto. apply Zle_refl.
+  exploit Mem.alloc_parallel_inject. eauto. eauto. apply Z.le_refl.
     instantiate (1 := fn_stacksize f'). inv H1. xomega.
   intros [F' [m1' [sp' [A [B [C [D E]]]]]]].
   left; econstructor; split.
@@ -1203,7 +1203,7 @@ Proof.
     (* sp' is valid *)
     instantiate (1 := sp'). auto.
     (* offset is representable *)
-    instantiate (1 := dstk ctx). generalize (Zmax2 (fn_stacksize f) 0). omega.
+    instantiate (1 := dstk ctx). generalize (Z.le_max_r (fn_stacksize f) 0). omega.
     (* size of target block is representable *)
     intros. right. exploit SSZ2; eauto with mem. inv FB; omega.
     (* we have full permissions on sp' at and above dstk ctx *)

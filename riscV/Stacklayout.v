@@ -139,7 +139,7 @@ Proof.
   set (ostkdata := align (ol + 4 * b.(bound_local)) 8).
   assert (0 < w) by (unfold w; destruct Archi.ptr64; omega).
   replace (align_chunk Mptr) with w by (rewrite align_chunk_Mptr; auto).
-  split. apply Zdivide_0.
+  split. apply Z.divide_0_r.
   split. apply align_divides; omega.
   split. apply align_divides; omega.
   split. apply align_divides; omega.

@@ -471,11 +471,11 @@ Module OrderedLoc <: OrderedType.
         (ofs1 < ofs2 \/ (ofs1 = ofs2 /\ OrderedTyp.lt ty1 ty2)))
     end.
   Lemma eq_refl : forall x : t, eq x x.
-  Proof (@refl_equal t).
+  Proof (@eq_refl t).
   Lemma eq_sym : forall x y : t, eq x y -> eq y x.
-  Proof (@sym_equal t).
+  Proof (@eq_sym t).
   Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
-  Proof (@trans_equal t).
+  Proof (@eq_trans t).
   Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
   Proof.
     unfold lt; intros.
@@ -542,12 +542,12 @@ Module OrderedLoc <: OrderedType.
     intros.
     destruct l as [mr | sl ofs ty]; destruct l' as [mr' | sl' ofs' ty']; simpl in *; auto.
     - assert (IndexedMreg.index mr <> IndexedMreg.index mr').
-      { destruct H. apply sym_not_equal. apply Plt_ne; auto. apply Plt_ne; auto. }
+      { destruct H. apply not_eq_sym. apply Plt_ne; auto. apply Plt_ne; auto. }
       congruence.
     - assert (RANGE: forall ty, 1 <= typesize ty <= 2).
       { intros; unfold typesize. destruct ty0; omega.  }
       destruct H.
-      + destruct H. left. apply sym_not_equal. apply OrderedSlot.lt_not_eq; auto.
+      + destruct H. left. apply not_eq_sym. apply OrderedSlot.lt_not_eq; auto.
         destruct H. right.
         destruct H0. right. generalize (RANGE ty'); omega.
         destruct H0.

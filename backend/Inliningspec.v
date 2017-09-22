@@ -105,7 +105,7 @@ Proof.
 Qed.
 
 Lemma shiftpos_below:
-  forall x n, Plt (shiftpos x n) (Pplus x n).
+  forall x n, Plt (shiftpos x n) (Pos.add x n).
 Proof.
   intros. unfold Plt; zify. rewrite shiftpos_eq. omega.
 Qed.
@@ -250,7 +250,7 @@ Section INLINING_SPEC.
 Variable fenv: funenv.
 
 Definition context_below (ctx1 ctx2: context): Prop :=
-  Ple (Pplus ctx1.(dreg) ctx1.(mreg)) ctx2.(dreg).
+  Ple (Pos.add ctx1.(dreg) ctx1.(mreg)) ctx2.(dreg).
 
 Definition context_stack_call (ctx1 ctx2: context): Prop :=
   ctx1.(mstk) >= 0 /\ ctx1.(dstk) + ctx1.(mstk) <= ctx2.(dstk).
@@ -331,7 +331,7 @@ with tr_funbody: context -> function -> code -> Prop :=
   | tr_funbody_intro: forall ctx f c,
       (forall r, In r f.(fn_params) -> Ple r ctx.(mreg)) ->
       (forall pc i, f.(fn_code)!pc = Some i -> tr_instr ctx pc i c) ->
-      ctx.(mstk) = Zmax f.(fn_stacksize) 0 ->
+      ctx.(mstk) = Z.max f.(fn_stacksize) 0 ->
       (min_alignment f.(fn_stacksize) | ctx.(dstk)) ->
       ctx.(dstk) >= 0 -> ctx.(dstk) + ctx.(mstk) <= stacksize ->
       tr_funbody ctx f c.
@@ -451,9 +451,9 @@ Hypothesis rec_spec:
   fenv_agree fe' ->
   Ple (ctx.(dpc) + max_pc_function f) s.(st_nextnode) ->
   ctx.(mreg) = max_reg_function f ->
-  Ple (Pplus ctx.(dreg) ctx.(mreg)) s.(st_nextreg) ->
+  Ple (Pos.add ctx.(dreg) ctx.(mreg)) s.(st_nextreg) ->
   ctx.(mstk) >= 0 ->
-  ctx.(mstk) = Zmax (fn_stacksize f) 0 ->
+  ctx.(mstk) = Z.max (fn_stacksize f) 0 ->
   (min_alignment (fn_stacksize f) | ctx.(dstk)) ->
   ctx.(dstk) >= 0 ->
   s'.(st_stksize) <= stacksize ->
@@ -599,7 +599,7 @@ Proof.
     elim H12. change pc with (fst (pc, instr0)). apply List.in_map; auto.
   (* older pc *)
   inv_incr. eapply IHl; eauto.
-  intros. eapply Plt_le_trans. eapply H2. right; eauto. xomega.
+  intros. eapply Pos.lt_le_trans. eapply H2. right; eauto. xomega.
   intros; eapply Ple_trans; eauto.
   intros. apply H7; auto. xomega.
 Qed.
@@ -611,7 +611,7 @@ Lemma expand_cfg_rec_spec:
   ctx.(mreg) = max_reg_function f ->
   Ple (ctx.(dreg) + ctx.(mreg)) s.(st_nextreg) ->
   ctx.(mstk) >= 0 ->
-  ctx.(mstk) = Zmax (fn_stacksize f) 0 ->
+  ctx.(mstk) = Z.max (fn_stacksize f) 0 ->
   (min_alignment (fn_stacksize f) | ctx.(dstk)) ->
   ctx.(dstk) >= 0 ->
   s'.(st_stksize) <= stacksize ->
@@ -629,13 +629,13 @@ Proof.
   intros.
     assert (Ple pc0 (max_pc_function f)).
       eapply max_pc_function_sound. eapply PTree.elements_complete; eauto.
-      eapply Plt_le_trans. apply shiftpos_below. subst s0; simpl; xomega.
+      eapply Pos.lt_le_trans. apply shiftpos_below. subst s0; simpl; xomega.
   subst s0; simpl; auto.
   intros. apply H8; auto. subst s0; simpl in H11; xomega.
   intros. apply H8. apply shiftpos_above.
   assert (Ple pc0 (max_pc_function f)).
     eapply max_pc_function_sound. eapply PTree.elements_complete; eauto.
-  eapply Plt_le_trans. apply shiftpos_below. inversion i; xomega.
+  eapply Pos.lt_le_trans. apply shiftpos_below. inversion i; xomega.
   apply PTree.elements_correct; auto.
   auto. auto. auto.
   inversion INCR0. subst s0; simpl in STKSIZE; xomega.
@@ -664,7 +664,7 @@ Lemma expand_cfg_spec:
   ctx.(mreg) = max_reg_function f ->
   Ple (ctx.(dreg) + ctx.(mreg)) s.(st_nextreg) ->
   ctx.(mstk) >= 0 ->
-  ctx.(mstk) = Zmax (fn_stacksize f) 0 ->
+  ctx.(mstk) = Z.max (fn_stacksize f) 0 ->
   (min_alignment (fn_stacksize f) | ctx.(dstk)) ->
   ctx.(dstk) >= 0 ->
   s'.(st_stksize) <= stacksize ->
@@ -724,7 +724,7 @@ Opaque initstate.
     unfold ctx; rewrite <- H1; rewrite <- H2; rewrite <- H3; simpl. xomega.
     unfold ctx; rewrite <- H0; rewrite <- H1; simpl. xomega.
     simpl. xomega.
-    simpl. apply Zdivide_0.
+    simpl. apply Z.divide_0_r.
     simpl. omega.
   simpl. omega.
   simpl. split; auto. destruct INCR2. destruct INCR1. destruct INCR0. destruct INCR.

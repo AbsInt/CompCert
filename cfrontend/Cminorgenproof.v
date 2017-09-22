@@ -96,7 +96,7 @@ Proof.
   intros m1 FR1 FRL.
   transitivity (Mem.load chunk m1 b ofs).
   eapply IHfbl; eauto. intros. eapply H. eauto with coqlib.
-  eapply Mem.load_free; eauto. left. apply sym_not_equal. eapply H. auto with coqlib.
+  eapply Mem.load_free; eauto. left. apply not_eq_sym. eapply H. auto with coqlib.
 Qed.
 
 Lemma perm_freelist:
@@ -775,7 +775,7 @@ Definition cenv_compat (cenv: compilenv) (vars: list (ident * Z)) (tsz: Z) : Pro
       PTree.get id cenv = Some ofs
    /\ Mem.inj_offset_aligned ofs sz
    /\ 0 <= ofs
-   /\ ofs + Zmax 0 sz <= tsz.
+   /\ ofs + Z.max 0 sz <= tsz.
 
 Definition cenv_separated (cenv: compilenv) (vars: list (ident * Z)) : Prop :=
   forall id1 sz1 ofs1 id2 sz2 ofs2,
@@ -901,7 +901,7 @@ Remark assign_variable_incr:
 Proof.
   simpl; intros. inv H.
   generalize (align_le stksz (block_alignment sz) (block_alignment_pos sz)).
-  assert (0 <= Zmax 0 sz). apply Zmax_bound_l. omega.
+  assert (0 <= Z.max 0 sz). apply Zmax_bound_l. omega.
   omega.
 Qed.
 
@@ -914,7 +914,7 @@ Proof.
 Opaque assign_variable.
   destruct a as [id s]. simpl. intros.
   destruct (assign_variable (cenv, sz) (id, s)) as [cenv1 sz1] eqn:?.
-  apply Zle_trans with sz1. eapply assign_variable_incr; eauto. eauto.
+  apply Z.le_trans with sz1. eapply assign_variable_incr; eauto. eauto.
 Transparent assign_variable.
 Qed.
 
@@ -925,8 +925,8 @@ Proof.
   intros; red; intros.
   apply Zdivides_trans with (block_alignment sz).
   unfold align_chunk.  unfold block_alignment.
-  generalize Zone_divide; intro.
-  generalize Zdivide_refl; intro.
+  generalize Z.divide_1_l; intro.
+  generalize Z.divide_refl; intro.
   assert (2 | 4). exists 2; auto.
   assert (2 | 8). exists 4; auto.
   assert (4 | 8). exists 2; auto.
@@ -942,10 +942,10 @@ Qed.
 
 Remark inj_offset_aligned_block':
   forall stacksize sz,
-  Mem.inj_offset_aligned (align stacksize (block_alignment sz)) (Zmax 0 sz).
+  Mem.inj_offset_aligned (align stacksize (block_alignment sz)) (Z.max 0 sz).
 Proof.
   intros.
-  replace (block_alignment sz) with (block_alignment (Zmax 0 sz)).
+  replace (block_alignment sz) with (block_alignment (Z.max 0 sz)).
   apply inj_offset_aligned_block.
   rewrite Zmax_spec. destruct (zlt sz 0); auto.
   transitivity 1. reflexivity. unfold block_alignment. rewrite zlt_true. auto. omega.

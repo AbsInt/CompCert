@@ -1042,7 +1042,7 @@ Remark weak_valid_pointer_no_overflow_extends:
   Mem.weak_valid_pointer m1 b1 (Ptrofs.unsigned ofs) = true ->
   0 <= Ptrofs.unsigned ofs + Ptrofs.unsigned (Ptrofs.repr delta) <= Ptrofs.max_unsigned.
 Proof.
-  intros. inv H. rewrite Zplus_0_r. apply Ptrofs.unsigned_range_2.
+  intros. inv H. rewrite Z.add_0_r. apply Ptrofs.unsigned_range_2.
 Qed.
 
 Remark valid_different_pointers_extends:

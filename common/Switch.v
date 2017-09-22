@@ -123,8 +123,8 @@ Fixpoint validate_jumptable (cases: ZMap.t nat)
   match tbl with
   | nil => true
   | act :: rem =>
-      beq_nat act (ZMap.get n cases)
-      && validate_jumptable cases rem (Zsucc n)
+      Nat.eqb act (ZMap.get n cases)
+      && validate_jumptable cases rem (Z.succ n)
   end.
 
 Fixpoint validate (default: nat) (cases: table) (t: comptree)
@@ -133,9 +133,9 @@ Fixpoint validate (default: nat) (cases: table) (t: comptree)
   | CTaction act =>
       match cases with
       | nil =>
-          beq_nat act default
+          Nat.eqb act default
       | (key1, act1) :: _ =>
-          zeq key1 lo && zeq lo hi && beq_nat act act1
+          zeq key1 lo && zeq lo hi && Nat.eqb act act1
       end
   | CTifeq pivot act t' =>
       zle 0 pivot && zlt pivot modulus &&
@@ -143,7 +143,7 @@ Fixpoint validate (default: nat) (cases: table) (t: comptree)
       | (None, _) =>
           false
       | (Some act', others) =>
-          beq_nat act act'
+          Nat.eqb act act'
           && validate default others t'
                       (refine_low_bound pivot lo)
                       (refine_high_bound pivot hi)

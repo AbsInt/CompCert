@@ -420,7 +420,7 @@ Proof.
              ofs + typesize ty <= max_outgoing_2 n p).
   { intros. destruct p; simpl in H; intuition; subst; simpl.
   - xomega.
-  - eapply Zle_trans. 2: apply A. xomega.
+  - eapply Z.le_trans. 2: apply A. xomega.
   - xomega. }
   assert (C: forall l n,
              In (S Outgoing ofs ty) (regs_of_rpairs l) ->
@@ -428,7 +428,7 @@ Proof.
   { induction l; simpl; intros.
   - contradiction.
   - rewrite in_app_iff in H. destruct H.
-  + eapply Zle_trans. eapply B; eauto. apply Zge_le. apply fold_max_outgoing_above.
+  + eapply Z.le_trans. eapply B; eauto. apply Z.ge_le. apply fold_max_outgoing_above.
   + apply IHl; auto.
   }
   apply C. 

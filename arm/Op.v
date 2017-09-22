@@ -522,7 +522,7 @@ End SOUNDNESS.
 Program Definition mk_shift_amount (n: int) : shift_amount :=
   {| s_amount := Int.modu n Int.iwordsize; s_range := _ |}.
 Next Obligation.
-  assert (0 <= Zmod (Int.unsigned n) 32 < 32). apply Z_mod_lt. omega.
+  assert (0 <= Z.modulo (Int.unsigned n) 32 < 32). apply Z_mod_lt. omega.
   unfold Int.ltu, Int.modu. change (Int.unsigned Int.iwordsize) with 32.
   rewrite Int.unsigned_repr. apply zlt_true. omega.
   assert (32 < Int.max_unsigned). compute; auto. omega.
@@ -983,7 +983,7 @@ Remark weak_valid_pointer_no_overflow_extends:
   Mem.weak_valid_pointer m1 b1 (Ptrofs.unsigned ofs) = true ->
   0 <= Ptrofs.unsigned ofs + Ptrofs.unsigned (Ptrofs.repr delta) <= Ptrofs.max_unsigned.
 Proof.
-  intros. inv H. rewrite Zplus_0_r. apply Ptrofs.unsigned_range_2.
+  intros. inv H. rewrite Z.add_0_r. apply Ptrofs.unsigned_range_2.
 Qed.
 
 Remark valid_different_pointers_extends:

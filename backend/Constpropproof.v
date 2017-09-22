@@ -493,7 +493,7 @@ Opaque builtin_strength_reduction.
   assert (C: cmatch (eval_condition cond rs ## args m) ac)
   by (eapply eval_static_condition_sound; eauto with va).
   rewrite H0 in C.
-  generalize (cond_strength_reduction_correct bc ae rs m EM cond args (aregs ae args) (refl_equal _)).
+  generalize (cond_strength_reduction_correct bc ae rs m EM cond args (aregs ae args) (eq_refl _)).
   destruct (cond_strength_reduction cond args (aregs ae args)) as [cond' args'].
   intros EV1 TCODE.
   left; exists O; exists (State s' (transf_function (romem_for cu) f) (Vptr sp0 Ptrofs.zero) (if b then ifso else ifnot) rs' m'); split.
@@ -532,7 +532,7 @@ Opaque builtin_strength_reduction.
   destruct or; simpl; auto.
 
 - (* internal function *)
-  exploit Mem.alloc_extends. eauto. eauto. apply Zle_refl. apply Zle_refl.
+  exploit Mem.alloc_extends. eauto. eauto. apply Z.le_refl. apply Z.le_refl.
   intros [m2' [A B]].
   simpl. unfold transf_function.
   left; exists O; econstructor; split.

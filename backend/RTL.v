@@ -437,7 +437,7 @@ Definition instr_defs (i: instruction) : option reg :=
   the CFG of [f] are between 1 and [max_pc_function f] (inclusive). *)
 
 Definition max_pc_function (f: function) :=
-  PTree.fold (fun m pc i => Pmax m pc) f.(fn_code) 1%positive.
+  PTree.fold (fun m pc i => Pos.max m pc) f.(fn_code) 1%positive.
 
 Lemma max_pc_function_sound:
   forall f pc i, f.(fn_code)!pc = Some i -> Ple pc (max_pc_function f).
@@ -461,32 +461,32 @@ Qed.
 Definition max_reg_instr (m: positive) (pc: node) (i: instruction) :=
   match i with
   | Inop s => m
-  | Iop op args res s => fold_left Pmax args (Pmax res m)
-  | Iload chunk addr args dst s => fold_left Pmax args (Pmax dst m)
-  | Istore chunk addr args src s => fold_left Pmax args (Pmax src m)
-  | Icall sig (inl r) args res s => fold_left Pmax args (Pmax r (Pmax res m))
-  | Icall sig (inr id) args res s => fold_left Pmax args (Pmax res m)
-  | Itailcall sig (inl r) args => fold_left Pmax args (Pmax r m)
-  | Itailcall sig (inr id) args => fold_left Pmax args m
+  | Iop op args res s => fold_left Pos.max args (Pos.max res m)
+  | Iload chunk addr args dst s => fold_left Pos.max args (Pos.max dst m)
+  | Istore chunk addr args src s => fold_left Pos.max args (Pos.max src m)
+  | Icall sig (inl r) args res s => fold_left Pos.max args (Pos.max r (Pos.max res m))
+  | Icall sig (inr id) args res s => fold_left Pos.max args (Pos.max res m)
+  | Itailcall sig (inl r) args => fold_left Pos.max args (Pos.max r m)
+  | Itailcall sig (inr id) args => fold_left Pos.max args m
   | Ibuiltin ef args res s =>
-      fold_left Pmax (params_of_builtin_args args)
-        (fold_left Pmax (params_of_builtin_res res) m)
-  | Icond cond args ifso ifnot => fold_left Pmax args m
-  | Ijumptable arg tbl => Pmax arg m
+      fold_left Pos.max (params_of_builtin_args args)
+        (fold_left Pos.max (params_of_builtin_res res) m)
+  | Icond cond args ifso ifnot => fold_left Pos.max args m
+  | Ijumptable arg tbl => Pos.max arg m
   | Ireturn None => m
-  | Ireturn (Some arg) => Pmax arg m
+  | Ireturn (Some arg) => Pos.max arg m
   end.
 
 Definition max_reg_function (f: function) :=
-  Pmax
+  Pos.max
     (PTree.fold max_reg_instr f.(fn_code) 1%positive)
-    (fold_left Pmax f.(fn_params) 1%positive).
+    (fold_left Pos.max f.(fn_params) 1%positive).
 
 Remark max_reg_instr_ge:
   forall m pc i, Ple m (max_reg_instr m pc i).
 Proof.
   intros.
-  assert (X: forall l n, Ple m n -> Ple m (fold_left Pmax l n)).
+  assert (X: forall l n, Ple m n -> Ple m (fold_left Pos.max l n)).
   { induction l; simpl; intros.
     auto.
     apply IHl. xomega. }
@@ -498,7 +498,7 @@ Remark max_reg_instr_def:
   forall m pc i r, instr_defs i = Some r -> Ple r (max_reg_instr m pc i).
 Proof.
   intros.
-  assert (X: forall l n, Ple r n -> Ple r (fold_left Pmax l n)).
+  assert (X: forall l n, Ple r n -> Ple r (fold_left Pos.max l n)).
   { induction l; simpl; intros. xomega. apply IHl. xomega. }
   destruct i; simpl in *; inv H.
 - apply X. xomega.
@@ -511,7 +511,7 @@ Remark max_reg_instr_uses:
   forall m pc i r, In r (instr_uses i) -> Ple r (max_reg_instr m pc i).
 Proof.
   intros.
-  assert (X: forall l n, In r l \/ Ple r n -> Ple r (fold_left Pmax l n)).
+  assert (X: forall l n, In r l \/ Ple r n -> Ple r (fold_left Pos.max l n)).
   { induction l; simpl; intros.
     tauto.
     apply IHl. destruct H0 as [[A|A]|A]. right; subst; xomega. auto. right; xomega. }
@@ -564,11 +564,11 @@ Lemma max_reg_function_params:
   forall f r, In r f.(fn_params) -> Ple r (max_reg_function f).
 Proof.
   intros.
-  assert (X: forall l n, In r l \/ Ple r n -> Ple r (fold_left Pmax l n)).
+  assert (X: forall l n, In r l \/ Ple r n -> Ple r (fold_left Pos.max l n)).
   { induction l; simpl; intros.
     tauto.
     apply IHl. destruct H0 as [[A|A]|A]. right; subst; xomega. auto. right; xomega. }
-  assert (Y: Ple r (fold_left Pmax f.(fn_params) 1%positive)).
+  assert (Y: Ple r (fold_left Pos.max f.(fn_params) 1%positive)).
   { apply X; auto. }
   unfold max_reg_function. xomega.
 Qed.

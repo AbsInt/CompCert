@@ -157,11 +157,11 @@ Proof.
 - intuition congruence.
 - destruct (Pos.compare_spec v v0); simpl in H1.
 + subst v0. destruct H1. inv H1; auto. right; split.
-  apply sym_not_equal. apply Plt_ne. eapply H; eauto.
+  apply not_eq_sym. apply Plt_ne. eapply H; eauto.
   auto.
 + destruct H1. inv H1; auto.
-  destruct H1. inv H1. right; split; auto. apply sym_not_equal. apply Plt_ne. auto.
-  right; split; auto. apply sym_not_equal. apply Plt_ne. apply Plt_trans with v0; eauto.
+  destruct H1. inv H1. right; split; auto. apply not_eq_sym. apply Plt_ne. auto.
+  right; split; auto. apply not_eq_sym. apply Plt_ne. apply Plt_trans with v0; eauto.
 + destruct H1. inv H1. right; split; auto. apply Plt_ne. auto.
   destruct IHwf_avail as [A | [A B]]; auto.
 Qed.
@@ -211,9 +211,9 @@ Proof.
   induction 1; simpl; intros.
 - contradiction.
 - destruct (Pos.compare_spec v v0); simpl in H1.
-+ subst v0. split; auto. apply sym_not_equal; apply Plt_ne; eauto.
-+ destruct H1. inv H1. split; auto. apply sym_not_equal; apply Plt_ne; eauto.
-  split; auto. apply sym_not_equal; apply Plt_ne. apply Plt_trans with v0; eauto.
++ subst v0. split; auto. apply not_eq_sym; apply Plt_ne; eauto.
++ destruct H1. inv H1. split; auto. apply not_eq_sym; apply Plt_ne; eauto.
+  split; auto. apply not_eq_sym; apply Plt_ne. apply Plt_trans with v0; eauto.
 + destruct H1. inv H1. split; auto. apply Plt_ne; auto.
   destruct IHwf_avail as [A B] ; auto.
 Qed.

@@ -226,7 +226,7 @@ Definition assign_variable
   let (id, sz) := id_sz in
   let (cenv, stacksize) := cenv_stacksize in
   let ofs := align stacksize (block_alignment sz) in
-  (PTree.set id ofs cenv, ofs + Zmax 0 sz).
+  (PTree.set id ofs cenv, ofs + Z.max 0 sz).
 
 Definition assign_variables (cenv_stacksize: compilenv * Z) (vars: list (ident * Z)) : compilenv * Z :=
   List.fold_left assign_variable vars cenv_stacksize.

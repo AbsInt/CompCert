@@ -662,9 +662,9 @@ Inductive t' : Type :=
 Definition t : Type := t'.
 
 Definition eq (x y: t) := (x = y).
-Definition eq_refl: forall x, eq x x := (@refl_equal t).
-Definition eq_sym: forall x y, eq x y -> eq y x := (@sym_equal t).
-Definition eq_trans: forall x y z, eq x y -> eq y z -> eq x z := (@trans_equal t).
+Definition eq_refl: forall x, eq x x := (@eq_refl t).
+Definition eq_sym: forall x y, eq x y -> eq y x := (@eq_sym t).
+Definition eq_trans: forall x y z, eq x y -> eq y z -> eq x z := (@eq_trans t).
 
 Definition beq (x y: t) : bool :=
   match x, y with
@@ -746,9 +746,9 @@ Module LBoolean <: SEMILATTICE_WITH_TOP.
 Definition t := bool.
 
 Definition eq (x y: t) := (x = y).
-Definition eq_refl: forall x, eq x x := (@refl_equal t).
-Definition eq_sym: forall x y, eq x y -> eq y x := (@sym_equal t).
-Definition eq_trans: forall x y z, eq x y -> eq y z -> eq x z := (@trans_equal t).
+Definition eq_refl: forall x, eq x x := (@eq_refl t).
+Definition eq_sym: forall x y, eq x y -> eq y x := (@eq_sym t).
+Definition eq_trans: forall x y z, eq x y -> eq y z -> eq x z := (@eq_trans t).
 
 Definition beq : t -> t -> bool := eqb.
 

@@ -69,7 +69,7 @@ Proof.
 - replace ofs with (ofs + 0) by omega. eapply mi_perm; eauto. auto.
 - eauto.
 - exploit mi_memval; eauto. unfold inject_id; eauto.
-  rewrite Zplus_0_r. auto.
+  rewrite Z.add_0_r. auto.
 - auto.
 Qed.
 
@@ -79,9 +79,9 @@ Lemma magree_extends:
   magree m1 m2 P -> Mem.extends m1 m2.
 Proof.
   intros. destruct H0. constructor; auto. constructor; unfold inject_id; intros.
-- inv H0. rewrite Zplus_0_r. eauto.
-- inv H0. apply Zdivide_0.
-- inv H0. rewrite Zplus_0_r. eapply ma_memval0; eauto.
+- inv H0. rewrite Z.add_0_r. eauto.
+- inv H0. apply Z.divide_0_r.
+- inv H0. rewrite Z.add_0_r. eapply ma_memval0; eauto.
 Qed.
 
 Lemma magree_loadbytes:
@@ -97,7 +97,7 @@ Proof.
   {
     induction n; intros; simpl.
     constructor.
-    rewrite inj_S in H. constructor.
+    rewrite Nat2Z.inj_succ in H. constructor.
     apply H. omega.
     apply IHn. intros; apply H; omega.
   }
@@ -131,7 +131,7 @@ Lemma magree_storebytes_parallel:
   magree m1 m2 P ->
   Mem.storebytes m1 b ofs bytes1 = Some m1' ->
   (forall b' i, Q b' i ->
-                b' <> b \/ i < ofs \/ ofs + Z_of_nat (length bytes1) <= i ->
+                b' <> b \/ i < ofs \/ ofs + Z.of_nat (length bytes1) <= i ->
                 P b' i) ->
   list_forall2 memval_lessdef bytes1 bytes2 ->
   exists m2', Mem.storebytes m2 b ofs bytes2 = Some m2' /\ magree m1' m2' Q.
@@ -146,7 +146,7 @@ Proof.
   {
     induction 1; intros; simpl.
   - apply H; auto. simpl. omega.
-  - simpl length in H1; rewrite inj_S in H1.
+  - simpl length in H1; rewrite Nat2Z.inj_succ in H1.
     apply IHlist_forall2; auto.
     intros. rewrite ! ZMap.gsspec. destruct (ZIndexed.eq i p). auto.
     apply H1; auto. unfold ZIndexed.t in *; omega.
@@ -200,7 +200,7 @@ Lemma magree_storebytes_left:
   forall m1 m2 P b ofs bytes1 m1',
   magree m1 m2 P ->
   Mem.storebytes m1 b ofs bytes1 = Some m1' ->
-  (forall i, ofs <= i < ofs + Z_of_nat (length bytes1) -> ~(P b i)) ->
+  (forall i, ofs <= i < ofs + Z.of_nat (length bytes1) -> ~(P b i)) ->
   magree m1' m2 P.
 Proof.
   intros. constructor; intros.
@@ -1081,7 +1081,7 @@ Ltac UseTransfer :=
 - (* internal function *)
   monadInv FUN. generalize EQ. unfold transf_function. fold (vanalyze cu f). intros EQ'.
   destruct (analyze (vanalyze cu f) f) as [an|] eqn:AN; inv EQ'.
-  exploit Mem.alloc_extends; eauto. apply Zle_refl. apply Zle_refl.
+  exploit Mem.alloc_extends; eauto. apply Z.le_refl. apply Z.le_refl.
   intros (tm' & A & B).
   econstructor; split.
   econstructor; simpl; eauto.

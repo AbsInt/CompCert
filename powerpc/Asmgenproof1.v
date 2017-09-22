@@ -39,9 +39,9 @@ Proof.
   intros. unfold high_u, low_u.
   rewrite Int.shl_rolm. rewrite Int.shru_rolm.
   rewrite Int.rolm_rolm.
-  change (Int.modu (Int.add (Int.sub (Int.repr (Z_of_nat Int.wordsize)) (Int.repr 16))
+  change (Int.modu (Int.add (Int.sub (Int.repr (Z.of_nat Int.wordsize)) (Int.repr 16))
                             (Int.repr 16))
-                   (Int.repr (Z_of_nat Int.wordsize)))
+                   (Int.repr (Z.of_nat Int.wordsize)))
     with (Int.zero).
   rewrite Int.rolm_zero. rewrite <- Int.and_or_distrib.
   exact (Int.and_mone n).
@@ -54,9 +54,9 @@ Proof.
   intros. unfold high_u, low_u.
   rewrite Int.shl_rolm. rewrite Int.shru_rolm.
   rewrite Int.rolm_rolm.
-  change (Int.modu (Int.add (Int.sub (Int.repr (Z_of_nat Int.wordsize)) (Int.repr 16))
+  change (Int.modu (Int.add (Int.sub (Int.repr (Z.of_nat Int.wordsize)) (Int.repr 16))
                             (Int.repr 16))
-                   (Int.repr (Z_of_nat Int.wordsize)))
+                   (Int.repr (Z.of_nat Int.wordsize)))
     with (Int.zero).
   rewrite Int.rolm_zero. rewrite <- Int.and_xor_distrib.
   exact (Int.and_mone n).
@@ -198,7 +198,7 @@ Hint Resolve ireg_of_not_GPR0': asmgen.
 Lemma preg_of_not_LR:
   forall r, LR <> preg_of r.
 Proof.
-  intros. auto using sym_not_equal with asmgen.
+  intros. auto using not_eq_sym with asmgen.
 Qed.
 
 Lemma preg_notin_LR:
@@ -1243,7 +1243,7 @@ Opaque Val.add.
   econstructor; split. eapply exec_straight_trans.
   eapply exec_straight_two; simpl; reflexivity.
   eapply exec_straight_two; simpl; reflexivity.
-  split. assert (GPR0 <> x0) by (apply sym_not_equal; eauto with asmgen).
+  split. assert (GPR0 <> x0) by (apply not_eq_sym; eauto with asmgen).
   Simpl. rewrite ! gpr_or_zero_zero. rewrite ! gpr_or_zero_not_zero by eauto with asmgen. Simpl.
   rewrite low_high_half_zero. auto.
   intros; Simpl.

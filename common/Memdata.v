@@ -53,7 +53,7 @@ Definition size_chunk_nat (chunk: memory_chunk) : nat :=
   nat_of_Z(size_chunk chunk).
 
 Lemma size_chunk_conv:
-  forall chunk, size_chunk chunk = Z_of_nat (size_chunk_nat chunk).
+  forall chunk, size_chunk chunk = Z.of_nat (size_chunk_nat chunk).
 Proof.
   intros. destruct chunk; reflexivity.
 Qed.
@@ -111,7 +111,7 @@ Qed.
 Lemma align_size_chunk_divides:
   forall chunk, (align_chunk chunk | size_chunk chunk).
 Proof.
-  intros. destruct chunk; simpl; try apply Zdivide_refl; exists 2; auto.
+  intros. destruct chunk; simpl; try apply Z.divide_refl; exists 2; auto.
 Qed.
 
 Lemma align_le_divides:
@@ -120,7 +120,7 @@ Lemma align_le_divides:
 Proof.
   intros. destruct chunk1; destruct chunk2; simpl in *;
   solve [ omegaContradiction
-        | apply Zdivide_refl
+        | apply Z.divide_refl
         | exists 2; reflexivity
         | exists 4; reflexivity
         | exists 8; reflexivity ].
@@ -209,15 +209,15 @@ Qed.
 
 Lemma int_of_bytes_of_int:
   forall n x,
-  int_of_bytes (bytes_of_int n x) = x mod (two_p (Z_of_nat n * 8)).
+  int_of_bytes (bytes_of_int n x) = x mod (two_p (Z.of_nat n * 8)).
 Proof.
   induction n; intros.
   simpl. rewrite Zmod_1_r. auto.
 Opaque Byte.wordsize.
-  rewrite inj_S. simpl.
-  replace (Zsucc (Z_of_nat n) * 8) with (Z_of_nat n * 8 + 8) by omega.
+  rewrite Nat2Z.inj_succ. simpl.
+  replace (Z.succ (Z.of_nat n) * 8) with (Z.of_nat n * 8 + 8) by omega.
   rewrite two_p_is_exp; try omega.
-  rewrite Zmod_recombine. rewrite IHn. rewrite Zplus_comm.
+  rewrite Zmod_recombine. rewrite IHn. rewrite Z.add_comm.
   change (Byte.unsigned (Byte.repr x)) with (Byte.Z_mod_modulus x).
   rewrite Byte.Z_mod_modulus_eq. reflexivity.
   apply two_p_gt_ZERO. omega. apply two_p_gt_ZERO. omega.
@@ -232,7 +232,7 @@ Proof.
 Qed.
 
 Lemma decode_encode_int:
-  forall n x, decode_int (encode_int n x) = x mod (two_p (Z_of_nat n * 8)).
+  forall n x, decode_int (encode_int n x) = x mod (two_p (Z.of_nat n * 8)).
 Proof.
   unfold decode_int, encode_int; intros. rewrite rev_if_be_involutive.
   apply int_of_bytes_of_int.
@@ -272,19 +272,19 @@ Qed.
 
 Lemma bytes_of_int_mod:
   forall n x y,
-  Int.eqmod (two_p (Z_of_nat n * 8)) x y ->
+  Int.eqmod (two_p (Z.of_nat n * 8)) x y ->
   bytes_of_int n x = bytes_of_int n y.
 Proof.
   induction n.
   intros; simpl; auto.
   intros until y.
-  rewrite inj_S.
-  replace (Zsucc (Z_of_nat n) * 8) with (Z_of_nat n * 8 + 8) by omega.
+  rewrite Nat2Z.inj_succ.
+  replace (Z.succ (Z.of_nat n) * 8) with (Z.of_nat n * 8 + 8) by omega.
   rewrite two_p_is_exp; try omega.
   intro EQM.
   simpl; decEq.
   apply Byte.eqm_samerepr. red.
-  eapply Int.eqmod_divides; eauto. apply Zdivide_factor_l.
+  eapply Int.eqmod_divides; eauto. apply Z.divide_factor_r.
   apply IHn.
   destruct EQM as [k EQ]. exists k. rewrite EQ.
   rewrite <- Z_div_plus_full_l. decEq. change (two_p 8) with 256. ring. omega.
@@ -354,7 +354,7 @@ Fixpoint check_value (n: nat) (v: val) (q: quantity) (vl: list memval)
   match n, vl with
   | O, nil => true
   | S m, Fragment v' q' m' :: vl' =>
-      Val.eq v v' && quantity_eq q q' && beq_nat m m' && check_value m v q vl'
+      Val.eq v v' && quantity_eq q q' && Nat.eqb m m' && check_value m v q vl'
   | _, _ => false
   end.
 
@@ -728,7 +728,7 @@ Proof.
     destruct (size_quantity_nat_pos q) as [sz EQ]. rewrite EQ.
     simpl. unfold proj_sumbool. rewrite dec_eq_true.
     destruct (quantity_eq q q0); auto.
-    destruct (beq_nat sz n) eqn:EQN; auto.
+    destruct (Nat.eqb sz n) eqn:EQN; auto.
     destruct (check_value sz v q mvl) eqn:CHECK; auto.
     simpl. apply beq_nat_true in EQN. subst n q0. constructor. auto.
     destruct H0 as [E|[E|[E|E]]]; subst chunk; destruct q; auto || discriminate.
@@ -943,22 +943,22 @@ Qed.
 
 Lemma int_of_bytes_append:
   forall l2 l1,
-  int_of_bytes (l1 ++ l2) = int_of_bytes l1 + int_of_bytes l2 * two_p (Z_of_nat (length l1) * 8).
+  int_of_bytes (l1 ++ l2) = int_of_bytes l1 + int_of_bytes l2 * two_p (Z.of_nat (length l1) * 8).
 Proof.
   induction l1; simpl int_of_bytes; intros.
   simpl. ring.
-  simpl length. rewrite inj_S.
-  replace (Z.succ (Z.of_nat (length l1)) * 8) with (Z_of_nat (length l1) * 8 + 8) by omega.
+  simpl length. rewrite Nat2Z.inj_succ.
+  replace (Z.succ (Z.of_nat (length l1)) * 8) with (Z.of_nat (length l1) * 8 + 8) by omega.
   rewrite two_p_is_exp. change (two_p 8) with 256. rewrite IHl1. ring.
   omega. omega.
 Qed.
 
 Lemma int_of_bytes_range:
-  forall l, 0 <= int_of_bytes l < two_p (Z_of_nat (length l) * 8).
+  forall l, 0 <= int_of_bytes l < two_p (Z.of_nat (length l) * 8).
 Proof.
   induction l; intros.
   simpl. omega.
-  simpl length. rewrite inj_S.
+  simpl length. rewrite Nat2Z.inj_succ.
   replace (Z.succ (Z.of_nat (length l)) * 8) with (Z.of_nat (length l) * 8 + 8) by omega.
   rewrite two_p_is_exp. change (two_p 8) with 256.
   simpl int_of_bytes. generalize (Byte.unsigned_range a).
@@ -1024,21 +1024,21 @@ Qed.
 
 Lemma bytes_of_int_append:
   forall n2 x2 n1 x1,
-  0 <= x1 < two_p (Z_of_nat n1 * 8) ->
-  bytes_of_int (n1 + n2) (x1 + x2 * two_p (Z_of_nat n1 * 8)) =
+  0 <= x1 < two_p (Z.of_nat n1 * 8) ->
+  bytes_of_int (n1 + n2) (x1 + x2 * two_p (Z.of_nat n1 * 8)) =
   bytes_of_int n1 x1 ++ bytes_of_int n2 x2.
 Proof.
   induction n1; intros.
 - simpl in *. f_equal. omega.
 - assert (E: two_p (Z.of_nat (S n1) * 8) = two_p (Z.of_nat n1 * 8) * 256).
   {
-    rewrite inj_S. change 256 with (two_p 8). rewrite <- two_p_is_exp.
+    rewrite Nat2Z.inj_succ. change 256 with (two_p 8). rewrite <- two_p_is_exp.
     f_equal. omega. omega. omega.
   }
   rewrite E in *. simpl. f_equal.
   apply Byte.eqm_samerepr. exists (x2 * two_p (Z.of_nat n1 * 8)).
   change Byte.modulus with 256. ring.
-  rewrite Zmult_assoc. rewrite Z_div_plus. apply IHn1.
+  rewrite Z.mul_assoc. rewrite Z_div_plus. apply IHn1.
   apply Zdiv_interval_1. omega. apply two_p_gt_ZERO; omega. omega.
   assumption. omega.
 Qed.
@@ -1051,8 +1051,8 @@ Proof.
   intros. transitivity (bytes_of_int (4 + 4) (Int64.unsigned (Int64.ofwords (Int64.hiword i) (Int64.loword i)))).
   f_equal. f_equal. rewrite Int64.ofwords_recompose. auto.
   rewrite Int64.ofwords_add'.
-  change 32 with (Z_of_nat 4 * 8).
-  rewrite Zplus_comm. apply bytes_of_int_append. apply Int.unsigned_range.
+  change 32 with (Z.of_nat 4 * 8).
+  rewrite Z.add_comm. apply bytes_of_int_append. apply Int.unsigned_range.
 Qed.
 
 Lemma encode_val_int64:

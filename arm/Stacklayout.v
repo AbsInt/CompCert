@@ -133,7 +133,7 @@ Proof.
   set (ol := align (ora + 4) 8);
   set (ocs := ol + 4 * b.(bound_local));
   set (ostkdata := align (size_callee_save_area b ocs) 8).
-  split. apply Zdivide_0.
+  split. apply Z.divide_0_r.
   split. apply align_divides; omega.
   split. apply align_divides; omega.
   unfold ora, olink; auto using Z.divide_mul_l, Z.divide_add_r, Z.divide_refl.

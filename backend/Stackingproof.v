@@ -133,7 +133,7 @@ Qed.
 Remark bound_stack_data_stacksize:
   f.(Linear.fn_stacksize) <= b.(bound_stack_data).
 Proof.
-  unfold b, function_bounds, bound_stack_data. apply Zmax1.
+  unfold b, function_bounds, bound_stack_data. apply Z.le_max_l.
 Qed.
 
 (** * Memory assertions used to describe the contents of stack frames *)
@@ -217,7 +217,7 @@ Proof.
 - red; intros. apply Mem.perm_implies with Freeable; auto with mem.
   apply H0. rewrite size_type_chunk, typesize_typesize in H4. omega.
 - rewrite align_type_chunk. apply Z.divide_add_r.
-  apply Zdivide_trans with 8; auto.
+  apply Z.divide_trans with 8; auto.
   exists (8 / (4 * typealign ty)); destruct ty; reflexivity.
   apply Z.mul_divide_mono_l. auto.
 Qed.
@@ -962,7 +962,7 @@ Local Opaque mreg_type.
   assert (SZREC: pos1 + sz <= size_callee_save_area_rec l (pos1 + sz)) by (apply size_callee_save_area_rec_incr).
   assert (POS1: pos <= pos1) by (apply align_le; auto).
   assert (AL1: (align_chunk (chunk_of_type ty) | pos1)).
-  { unfold pos1. apply Zdivide_trans with sz.
+  { unfold pos1. apply Z.divide_trans with sz.
     unfold sz; rewrite <- size_type_chunk. apply align_size_chunk_divides.
     apply align_divides; auto. }
   apply range_drop_left with (mid := pos1) in SEP; [ | omega ].
@@ -1984,7 +1984,7 @@ Proof.
   econstructor; eauto with coqlib.
   apply Val.Vptr_has_type.
   intros; red.
-    apply Zle_trans with (size_arguments (Linear.funsig f')); auto.
+    apply Z.le_trans with (size_arguments (Linear.funsig f')); auto.
     apply loc_arguments_bounded; auto.
   simpl; red; auto.
   simpl. rewrite sep_assoc. exact SEP.

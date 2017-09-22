@@ -604,7 +604,7 @@ Proof.
   destruct (peq id id0). inv A.
   right. exploit Mem.alloc_result; eauto. exploit Mem.nextblock_alloc; eauto.
   generalize (alloc_variables_nextblock _ _ _ _ _ _ H0). intros A B C.
-  subst b. split. apply Ple_refl. eapply Plt_le_trans; eauto. rewrite B. apply Plt_succ.
+  subst b. split. apply Ple_refl. eapply Pos.lt_le_trans; eauto. rewrite B. apply Plt_succ.
   auto.
   right. exploit Mem.nextblock_alloc; eauto. intros B. rewrite B in A. xomega.
 Qed.
@@ -696,7 +696,7 @@ Proof.
 
   (* variable is not lifted out of memory *)
   exploit Mem.alloc_parallel_inject.
-    eauto. eauto. apply Zle_refl. apply Zle_refl.
+    eauto. eauto. apply Z.le_refl. apply Z.le_refl.
   intros [j1 [tm1 [tb1 [A [B [C [D E]]]]]]].
   exploit IHalloc_variables; eauto. instantiate (1 := PTree.set id (tb1, ty) te).
   intros [j' [te' [tm' [J [K [L [M [N [Q [O P]]]]]]]]]].
@@ -778,8 +778,8 @@ Proof.
   apply IHalloc_variables. red; intros. rewrite PTree.gsspec in H2.
   destruct (peq id0 id). inv H2.
   eapply Mem.load_alloc_same'; eauto.
-  omega. rewrite Zplus_0_l. eapply sizeof_by_value; eauto.
-  apply Zdivide_0.
+  omega. rewrite Z.add_0_l. eapply sizeof_by_value; eauto.
+  apply Z.divide_0_r.
   eapply Mem.load_alloc_other; eauto.
 Qed.
 
@@ -1053,7 +1053,7 @@ Proof.
   assert (RPSRC: Mem.range_perm m bsrc (Ptrofs.unsigned osrc) (Ptrofs.unsigned osrc + sizeof tge ty) Cur Nonempty).
     eapply Mem.range_perm_implies. eapply Mem.loadbytes_range_perm; eauto. auto with mem.
   assert (RPDST: Mem.range_perm m bdst (Ptrofs.unsigned odst) (Ptrofs.unsigned odst + sizeof tge ty) Cur Nonempty).
-    replace (sizeof tge ty) with (Z_of_nat (length bytes)).
+    replace (sizeof tge ty) with (Z.of_nat (length bytes)).
     eapply Mem.range_perm_implies. eapply Mem.storebytes_range_perm; eauto. auto with mem.
     rewrite LEN. apply nat_of_Z_eq. omega.
   assert (PSRC: Mem.perm m bsrc (Ptrofs.unsigned osrc) Cur Nonempty).

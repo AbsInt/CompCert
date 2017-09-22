@@ -486,7 +486,7 @@ Inductive tr_init: type -> initializer -> list init_data -> Prop :=
       transl_init_single ge ty a = OK d ->
       tr_init ty (Init_single a) (d :: nil)
   | tr_init_arr: forall tyelt nelt attr il d,
-      tr_init_array tyelt il (Zmax 0 nelt) d ->
+      tr_init_array tyelt il (Z.max 0 nelt) d ->
       tr_init (Tarray tyelt nelt attr) (Init_array il) d
   | tr_init_str: forall id attr il co d,
       lookup_composite ge id = OK co -> co_su co = Struct ->
@@ -723,7 +723,7 @@ Local Opaque sizeof.
 + rewrite idlsize_app, padding_size. 
   exploit tr_init_size; eauto. intros EQ; rewrite EQ. omega.
   simpl. unfold lookup_composite in H. destruct (ge.(genv_cenv)!id) as [co'|] eqn:?; inv H.
-  apply Zle_trans with (sizeof_union ge (co_members co)).
+  apply Z.le_trans with (sizeof_union ge (co_members co)).
   eapply union_field_size; eauto.
   erewrite co_consistent_sizeof by (eapply ce_consistent; eauto).
   unfold sizeof_composite. rewrite H0. apply align_le.
@@ -816,9 +816,9 @@ Lemma store_init_data_list_app:
   Genv.store_init_data_list ge m b ofs (data1 ++ data2) = Some m''.
 Proof.
   induction data1; simpl; intros.
-  inv H. rewrite Zplus_0_r in H0. auto.
+  inv H. rewrite Z.add_0_r in H0. auto.
   destruct (Genv.store_init_data ge m b ofs a); try discriminate.
-  rewrite Zplus_assoc in H0. eauto.
+  rewrite Z.add_assoc in H0. eauto.
 Qed.
 
 Remark store_init_data_list_padding:
@@ -874,7 +874,7 @@ Local Opaque sizeof.
   eapply store_init_data_list_app.
   eauto.
   rewrite (tr_init_size _ _ _ H9).
-  rewrite <- Zplus_assoc. eapply H2. eauto. eauto.
+  rewrite <- Z.add_assoc. eapply H2. eauto. eauto.
   apply align_le. apply alignof_pos.
 Qed.
 

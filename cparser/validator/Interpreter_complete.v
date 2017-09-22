@@ -304,7 +304,7 @@ reflexivity.
 destruct p.
 reflexivity.
 simpl; rewrite build_pt_dot_cost.
-simpl; rewrite <- plus_n_Sm, plus_assoc; reflexivity.
+simpl; rewrite <- plus_n_Sm, Nat.add_assoc; reflexivity.
 Qed.
 
 Lemma build_pt_dot_buffer:
@@ -593,12 +593,12 @@ Lemma parse_fix_complete:
 Proof.
 fix 3.
 destruct n_steps; intros; simpl.
-apply lt_0_Sn.
+apply Nat.lt_0_succ.
 apply step_next_ptd in H.
 pose proof (next_ptd_cost ptd).
 destruct (step init stack0 (ptd_buffer ptd)) as [|[]]; simpl; intuition.
 rewrite H3 in H0; rewrite H0.
-apply le_n_S, le_0_n.
+apply le_n_S, Nat.le_0_l.
 destruct (next_ptd ptd); intuition; subst.
 eapply parse_fix_complete with (n_steps:=n_steps) in H1.
 rewrite H0.
@@ -648,7 +648,7 @@ generalize (start_nt init).
 dependent destruction full_pt0.
 intros.
 rewrite build_pt_dot_cost; simpl.
-rewrite H, plus_0_r; reflexivity.
+rewrite H, Nat.add_0_r; reflexivity.
 Qed.
 
 Lemma init_ptd_buffer:

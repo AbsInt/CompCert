@@ -299,7 +299,7 @@ Proof.
   assert (Y: forall ofs1 ofs2 p, forall_rpair (loc_argument_64_charact ofs2) p -> ofs1 <= ofs2 -> forall_rpair (loc_argument_64_charact ofs1) p).
   { destruct p; simpl; intuition eauto. }
   assert (Z: forall ofs, (2 | ofs) -> (2 | ofs + 2)).
-  { intros. apply Z.divide_add_r; auto. apply Zdivide_refl. }
+  { intros. apply Z.divide_add_r; auto. apply Z.divide_refl. }
 Opaque list_nth_z.
   induction tyl; simpl loc_arguments_64; intros.
   elim H.
@@ -339,10 +339,10 @@ Proof.
   assert (X: forall l, loc_argument_64_charact 0 l -> loc_argument_acceptable l).
   { unfold loc_argument_64_charact, loc_argument_acceptable.
     destruct l as [r | [] ofs ty]; auto.  intros [C|C]; auto.
-    intros [C D]. split; auto. apply Zdivide_trans with 2; auto.
+    intros [C D]. split; auto. apply Z.divide_trans with 2; auto.
     exists (2 / typealign ty); destruct ty; reflexivity.
   }
-  exploit loc_arguments_64_charact; eauto using Zdivide_0.
+  exploit loc_arguments_64_charact; eauto using Z.divide_0_r.
   unfold forall_rpair; destruct p; intuition auto.
 - (* 32 bits *)
   assert (X: forall l, loc_argument_32_charact 0 l -> loc_argument_acceptable l).
@@ -360,7 +360,7 @@ Remark size_arguments_32_above:
 Proof.
   induction tyl; simpl; intros.
   omega.
-  apply Zle_trans with (ofs0 + typesize a); auto.
+  apply Z.le_trans with (ofs0 + typesize a); auto.
   generalize (typesize_pos a); omega.
 Qed.
 
@@ -376,21 +376,21 @@ Proof.
     | None => size_arguments_64 tyl ir fr (ofs0 + 2)
     end).
   { destruct (list_nth_z int_param_regs ir); eauto.
-    apply Zle_trans with (ofs0 + 2); auto. omega. }
+    apply Z.le_trans with (ofs0 + 2); auto. omega. }
   assert (B: ofs0 <=
     match list_nth_z float_param_regs fr with
     | Some _ => size_arguments_64 tyl ir (fr + 1) ofs0
     | None => size_arguments_64 tyl ir fr (ofs0 + 2)
     end).
   { destruct (list_nth_z float_param_regs fr); eauto.
-    apply Zle_trans with (ofs0 + 2); auto. omega. }
+    apply Z.le_trans with (ofs0 + 2); auto. omega. }
   destruct a; auto.
 Qed.
 
 Lemma size_arguments_above:
   forall s, size_arguments s >= 0.
 Proof.
-  intros; unfold size_arguments. apply Zle_ge.
+  intros; unfold size_arguments. apply Z.le_ge.
   destruct Archi.ptr64; [apply size_arguments_64_above|apply size_arguments_32_above].
 Qed.
 
@@ -402,7 +402,7 @@ Proof.
   induction tyl as [ | t l]; simpl; intros x IN.
 - contradiction.
 - rewrite in_app_iff in IN; destruct IN as [IN|IN].
-+ apply Zle_trans with (x + typesize t); [|apply size_arguments_32_above].
++ apply Z.le_trans with (x + typesize t); [|apply size_arguments_32_above].
   Ltac decomp :=
   match goal with
   | [ H: _ \/ _ |- _ ] => destruct H; decomp
@@ -437,7 +437,7 @@ Proof.
   { intros. destruct (list_nth_z int_param_regs ir); simpl in H0; destruct H0.
   - discriminate.
   - eapply IHtyl; eauto.
-  - inv H0. apply Zle_trans with (ofs + 2). specialize (T ty). omega. apply size_arguments_64_above.
+  - inv H0. apply Z.le_trans with (ofs + 2). specialize (T ty). omega. apply size_arguments_64_above.
   - eapply IHtyl; eauto. }
   assert (B: forall ty0,
              In (S Outgoing ofs ty) (regs_of_rpairs
@@ -454,7 +454,7 @@ Proof.
   { intros. destruct (list_nth_z float_param_regs fr); simpl in H0; destruct H0.
   - discriminate.
   - eapply IHtyl; eauto.
-  - inv H0. apply Zle_trans with (ofs + 2). specialize (T ty). omega. apply size_arguments_64_above.
+  - inv H0. apply Z.le_trans with (ofs + 2). specialize (T ty). omega. apply size_arguments_64_above.
   - eapply IHtyl; eauto. }
   destruct a; eauto.
 Qed.

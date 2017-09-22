@@ -1373,7 +1373,7 @@ Proof.
   replace (st1.(aval)!!pc) with res!!pc. fold l.
   destruct (basic_block_map s) eqn:BB.
   rewrite D. simpl. rewrite INV1. apply L.top_ge. auto. tauto.
-  elim (C H0 (refl_equal _)). intros X Y. rewrite Y. apply L.refl_ge.
+  elim (C H0 (eq_refl _)). intros X Y. rewrite Y. apply L.refl_ge.
   elim (U pc); intros E F. rewrite F. reflexivity.
   destruct (In_dec peq pc (successors instr)).
   right. eapply no_self_loop; eauto.

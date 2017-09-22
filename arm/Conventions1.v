@@ -298,7 +298,7 @@ Fixpoint size_arguments_hf (tyl: list typ) (ir fr ofs: Z) {struct tyl} : Z :=
 
 Fixpoint size_arguments_sf (tyl: list typ) (ofs: Z) {struct tyl} : Z :=
   match tyl with
-  | nil => Zmax 0 ofs
+  | nil => Z.max 0 ofs
   | (Tint | Tsingle | Tany32) :: tys => size_arguments_sf tys (ofs + 1)
   | (Tfloat | Tlong | Tany64) :: tys => size_arguments_sf tys (align ofs 2 + 2)
   end.
@@ -369,8 +369,8 @@ Proof.
   destruct (zlt fr 8); destruct H.
   subst. apply freg_param_caller_save.
   eapply IHtyl; eauto.
-  subst. split. apply Zle_ge. apply align_le. omega. auto.
-  eapply Y; eauto. apply Zle_trans with (align ofs 2). apply align_le; omega. omega.
+  subst. split. apply Z.le_ge. apply align_le. omega. auto.
+  eapply Y; eauto. apply Z.le_trans with (align ofs 2). apply align_le; omega. omega.
 - (* long *)
   set (ir' := align ir 2) in *.
   assert (ofs <= align ofs 2) by (apply align_le; omega).
@@ -395,17 +395,17 @@ Proof.
   destruct (zlt fr 8); destruct H.
   subst. apply freg_param_caller_save.
   eapply IHtyl; eauto.
-  subst. split. apply Zle_ge. apply align_le. omega. auto.
-  eapply Y; eauto. apply Zle_trans with (align ofs 2). apply align_le; omega. omega.
+  subst. split. apply Z.le_ge. apply align_le. omega. auto.
+  eapply Y; eauto. apply Z.le_trans with (align ofs 2). apply align_le; omega. omega.
 Qed.
 
 Remark loc_arguments_sf_charact:
   forall tyl ofs p,
-  In p (loc_arguments_sf tyl ofs) -> forall_rpair (loc_argument_charact (Zmax 0 ofs)) p.
+  In p (loc_arguments_sf tyl ofs) -> forall_rpair (loc_argument_charact (Z.max 0 ofs)) p.
 Proof.
-  assert (X: forall ofs1 ofs2 l, loc_argument_charact (Zmax 0 ofs2) l -> ofs1 <= ofs2 -> loc_argument_charact (Zmax 0 ofs1) l).
+  assert (X: forall ofs1 ofs2 l, loc_argument_charact (Z.max 0 ofs2) l -> ofs1 <= ofs2 -> loc_argument_charact (Z.max 0 ofs1) l).
   { destruct l; simpl; intros; auto. destruct sl; auto. intuition xomega. }
-  assert (Y: forall ofs1 ofs2 p, forall_rpair (loc_argument_charact (Zmax 0 ofs2)) p -> ofs1 <= ofs2 -> forall_rpair (loc_argument_charact (Zmax 0 ofs1)) p).
+  assert (Y: forall ofs1 ofs2 p, forall_rpair (loc_argument_charact (Z.max 0 ofs2)) p -> ofs1 <= ofs2 -> forall_rpair (loc_argument_charact (Z.max 0 ofs1)) p).
   { destruct p; simpl; intuition eauto. }
   induction tyl; simpl loc_arguments_sf; intros.
   elim H.
@@ -482,29 +482,29 @@ Proof.
   induction tyl; simpl; intros.
   omega.
   destruct a.
-  destruct (zlt ir 4); eauto. apply Zle_trans with (ofs0 + 1); auto; omega.
+  destruct (zlt ir 4); eauto. apply Z.le_trans with (ofs0 + 1); auto; omega.
   destruct (zlt fr 8); eauto.
-  apply Zle_trans with (align ofs0 2). apply align_le; omega.
-  apply Zle_trans with (align ofs0 2 + 2); auto; omega.
+  apply Z.le_trans with (align ofs0 2). apply align_le; omega.
+  apply Z.le_trans with (align ofs0 2 + 2); auto; omega.
   set (ir' := align ir 2).
   destruct (zlt ir' 4); eauto.
-  apply Zle_trans with (align ofs0 2). apply align_le; omega.
-  apply Zle_trans with (align ofs0 2 + 2); auto; omega.
+  apply Z.le_trans with (align ofs0 2). apply align_le; omega.
+  apply Z.le_trans with (align ofs0 2 + 2); auto; omega.
   destruct (zlt fr 8); eauto.
-  apply Zle_trans with (ofs0 + 1); eauto. omega.
-  destruct (zlt ir 4); eauto. apply Zle_trans with (ofs0 + 1); auto; omega.
+  apply Z.le_trans with (ofs0 + 1); eauto. omega.
+  destruct (zlt ir 4); eauto. apply Z.le_trans with (ofs0 + 1); auto; omega.
   destruct (zlt fr 8); eauto.
-  apply Zle_trans with (align ofs0 2). apply align_le; omega.
-  apply Zle_trans with (align ofs0 2 + 2); auto; omega.
+  apply Z.le_trans with (align ofs0 2). apply align_le; omega.
+  apply Z.le_trans with (align ofs0 2 + 2); auto; omega.
 Qed.
 
 Remark size_arguments_sf_above:
   forall tyl ofs0,
-  Zmax 0 ofs0 <= size_arguments_sf tyl ofs0.
+  Z.max 0 ofs0 <= size_arguments_sf tyl ofs0.
 Proof.
   induction tyl; simpl; intros.
   omega.
-  destruct a; (eapply Zle_trans; [idtac|eauto]).
+  destruct a; (eapply Z.le_trans; [idtac|eauto]).
   xomega.
   assert (ofs0 <= align ofs0 2) by (apply align_le; omega). xomega.
   assert (ofs0 <= align ofs0 2) by (apply align_le; omega). xomega.
@@ -516,9 +516,9 @@ Qed.
 Lemma size_arguments_above:
   forall s, size_arguments s >= 0.
 Proof.
-  intros; unfold size_arguments. apply Zle_ge.
+  intros; unfold size_arguments. apply Z.le_ge.
   assert (0 <= size_arguments_sf (sig_args s) (-4)).
-  { change 0 with (Zmax 0 (-4)). apply size_arguments_sf_above. }
+  { change 0 with (Z.max 0 (-4)). apply size_arguments_sf_above. }
   assert (0 <= size_arguments_hf (sig_args s) 0 0 0).
   { apply size_arguments_hf_above. }
   destruct Archi.abi; [ | destruct (cc_vararg (sig_cc s)) ]; auto.
@@ -549,14 +549,14 @@ Proof.
   destruct H. discriminate. destruct H. discriminate. eauto.
   destruct Archi.big_endian.
   destruct H. inv H.
-  eapply Zle_trans. 2: apply size_arguments_hf_above. simpl; omega.
+  eapply Z.le_trans. 2: apply size_arguments_hf_above. simpl; omega.
   destruct H. inv H.
-  rewrite <- Zplus_assoc. simpl. apply size_arguments_hf_above.
+  rewrite <- Z.add_assoc. simpl. apply size_arguments_hf_above.
   eauto.
   destruct H. inv H.
-  rewrite <- Zplus_assoc. simpl. apply size_arguments_hf_above.
+  rewrite <- Z.add_assoc. simpl. apply size_arguments_hf_above.
   destruct H. inv H.
-  eapply Zle_trans. 2: apply size_arguments_hf_above. simpl; omega.
+  eapply Z.le_trans. 2: apply size_arguments_hf_above. simpl; omega.
   eauto.
 - (* float *)
   destruct (zlt fr 8); destruct H.
@@ -581,7 +581,7 @@ Qed.
 Lemma loc_arguments_sf_bounded:
   forall ofs ty tyl ofs0,
   In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments_sf tyl ofs0)) ->
-  Zmax 0 (ofs + typesize ty) <= size_arguments_sf tyl ofs0.
+  Z.max 0 (ofs + typesize ty) <= size_arguments_sf tyl ofs0.
 Proof.
   induction tyl; simpl; intros.
   elim H.
@@ -598,15 +598,15 @@ Proof.
   destruct H.
   destruct Archi.big_endian.
   destruct (zlt (align ofs0 2) 0); inv H.
-  eapply Zle_trans. 2: apply size_arguments_sf_above. simpl; xomega.
+  eapply Z.le_trans. 2: apply size_arguments_sf_above. simpl; xomega.
   destruct (zlt (align ofs0 2) 0); inv H.
-  rewrite <- Zplus_assoc. simpl. apply size_arguments_sf_above.
+  rewrite <- Z.add_assoc. simpl. apply size_arguments_sf_above.
   destruct H.
   destruct Archi.big_endian.
   destruct (zlt (align ofs0 2) 0); inv H.
-  rewrite <- Zplus_assoc. simpl. apply size_arguments_sf_above.
+  rewrite <- Z.add_assoc. simpl. apply size_arguments_sf_above.
   destruct (zlt (align ofs0 2) 0); inv H.
-  eapply Zle_trans. 2: apply size_arguments_sf_above. simpl; xomega.
+  eapply Z.le_trans. 2: apply size_arguments_sf_above. simpl; xomega.
   eauto.
 - (* float *)
   destruct H.
@@ -630,7 +630,7 @@ Proof.
   unfold loc_arguments, size_arguments; intros.
   assert (In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments_sf (sig_args s) (-4))) ->
           ofs + typesize ty <= size_arguments_sf (sig_args s) (-4)).
-  { intros. eapply Zle_trans. 2: eapply loc_arguments_sf_bounded; eauto. xomega. }
+  { intros. eapply Z.le_trans. 2: eapply loc_arguments_sf_bounded; eauto. xomega. }
   assert (In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments_hf (sig_args s) 0 0 0)) ->
           ofs + typesize ty <= size_arguments_hf (sig_args s) 0 0 0).
   { intros. eapply loc_arguments_hf_bounded; eauto. }

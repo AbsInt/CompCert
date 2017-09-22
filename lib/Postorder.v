@@ -79,7 +79,7 @@ Definition transition (s: state) : PTree.t positive + state :=
       inr _ {| gr := s.(gr);
                wrk := l;
                map := PTree.set x s.(next) s.(map);
-               next := Psucc s.(next) |}
+               next := Pos.succ s.(next) |}
   | (x, y :: succs_x) :: l =>           (**r consider [y], the next unnumbered successor of [x] *)
       match s.(gr)!y with
       | None =>                         (**r [y] is already numbered: discard from worklist *)

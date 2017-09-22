@@ -61,13 +61,13 @@ Qed.
 
 (** nat is comparable. **)
 Program Instance natComparable : Comparable nat :=
-  { compare := nat_compare }.
+  { compare := Nat.compare }.
 Next Obligation.
 symmetry.
-destruct (nat_compare x y)  as [] eqn:?.
-rewrite nat_compare_eq_iff in Heqc.
+destruct (Nat.compare x y)  as [] eqn:?.
+rewrite Nat.compare_eq_iff in Heqc.
 destruct Heqc.
-rewrite nat_compare_eq_iff.
+rewrite Nat.compare_eq_iff.
 trivial.
 rewrite <- nat_compare_lt in *.
 rewrite <- nat_compare_gt in *.
@@ -78,9 +78,9 @@ trivial.
 Qed.
 Next Obligation.
 destruct c.
-rewrite nat_compare_eq_iff in *; destruct H; assumption.
+rewrite Nat.compare_eq_iff in *; destruct H; assumption.
 rewrite <- nat_compare_lt in *.
-apply (lt_trans _ _ _ H H0).
+apply (Nat.lt_trans _ _ _ H H0).
 rewrite <- nat_compare_gt in *.
 apply (gt_trans _ _ _ H H0).
 Qed.
@@ -149,7 +149,7 @@ destruct (compare x y) as [] eqn:?; [left; apply compare_eq; intuition | ..];
   right; intro; destruct H; rewrite compare_refl in Heqc; discriminate.
 Defined.
 
-Instance NComparableUsualEq : ComparableUsualEq natComparable := nat_compare_eq.
+Instance NComparableUsualEq : ComparableUsualEq natComparable := Nat.compare_eq.
 
 (** A pair of ComparableUsualEq is ComparableUsualEq **)
 Instance PairComparableUsualEq
@@ -223,33 +223,33 @@ inversion Heqp. subst. clear Heqp.
 rewrite phi_incr in H.
 pose proof (phi_bounded i0).
 pose proof (phi_bounded (inj x)).
-destruct (Z_lt_le_dec (Zsucc (phi i0)) (2 ^ Z_of_nat size)%Z).
+destruct (Z_lt_le_dec (Z.succ (phi i0)) (2 ^ Z.of_nat size)%Z).
 rewrite Zmod_small in H by omega.
 apply Zlt_succ_le, Zle_lt_or_eq in H.
 destruct H; simpl; auto. left.
 rewrite <- surj_inj_compat, <- phi_inv_phi with (inj x), H, phi_inv_phi; reflexivity.
-replace (Zsucc (phi i0)) with (2 ^ Z_of_nat size)%Z in H by omega.
+replace (Z.succ (phi i0)) with (2 ^ Z.of_nat size)%Z in H by omega.
 rewrite Z_mod_same_full in H.
 exfalso; omega.
 rewrite <- phi_inv_phi with i, <- phi_inv_phi with inj_bound; f_equal.
 pose proof (phi_bounded inj_bound); pose proof (phi_bounded i).
-rewrite <- Zabs_eq with (phi i), <- Zabs_eq with (phi inj_bound) by omega.
+rewrite <- Z.abs_eq with (phi i), <- Z.abs_eq with (phi inj_bound) by omega.
 clear H H0 H1.
-do 2 rewrite <- inj_Zabs_nat.
+do 2 rewrite <- Zabs2Nat.id_abs.
 f_equal.
 revert l i Heqp.
-assert (Zabs_nat (phi inj_bound) < Zabs_nat (2^31)).
+assert (Z.abs_nat (phi inj_bound) < Z.abs_nat (2^31)).
 apply Zabs_nat_lt, phi_bounded.
-induction (Zabs_nat (phi inj_bound)); intros.
+induction (Z.abs_nat (phi inj_bound)); intros.
 inversion Heqp; reflexivity.
 inversion Heqp; clear H1 H2 Heqp.
 match goal with |- _ (_ (_ (snd ?p))) = _ => destruct p end.
 pose proof (phi_bounded i0).
-erewrite <- IHn, <- Zabs_nat_Zsucc in H |- *; eauto; try omega.
+erewrite <- IHn, <- Zabs2Nat.inj_succ in H |- *; eauto; try omega.
 rewrite phi_incr, Zmod_small; intuition; try omega.
 apply inj_lt in H.
-pose proof Zle_le_succ.
-do 2 rewrite inj_Zabs_nat, Zabs_eq in H; now eauto.
+pose proof Z.le_le_succ_r.
+do 2 rewrite Zabs2Nat.id_abs, Z.abs_eq in H; now eauto.
 Qed.
 
 (** Previous class instances for [option A] **)

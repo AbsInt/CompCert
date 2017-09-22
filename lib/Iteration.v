@@ -146,7 +146,7 @@ Definition iter_step (x: positive)
   | right NOTEQ =>
       match step s with
       | inl res => Some res
-      | inr s'  => next (Ppred x) (Ppred_Plt x NOTEQ) s'
+      | inr s'  => next (Pos.pred x) (Ppred_Plt x NOTEQ) s'
       end
   end.
 
@@ -176,7 +176,7 @@ Proof.
   specialize (step_prop a H0).
   destruct (step a) as [b'|a'] eqn:?.
   inv H1. auto.
-  apply H with (Ppred x) a'. apply Ppred_Plt; auto. auto. auto.
+  apply H with (Pos.pred x) a'. apply Ppred_Plt; auto. auto. auto.
 Qed.
 
 Lemma iterate_prop:

@@ -999,7 +999,7 @@ Proof.
   assert (SZ: v2 = Vptrofs sz).
   { unfold Vptrofs in *. destruct Archi.ptr64; inv H5; auto. }
   subst v2.
-  exploit Mem.alloc_extends; eauto. apply Zle_refl. apply Zle_refl.
+  exploit Mem.alloc_extends; eauto. apply Z.le_refl. apply Z.le_refl.
   intros [m3' [A B]].
   exploit Mem.store_within_extends. eexact B. eauto. eauto.
   intros [m2' [C D]].
@@ -1011,11 +1011,11 @@ Proof.
   assert (SZ: v' = Vptrofs sz).
   { unfold Vptrofs in *. destruct Archi.ptr64; inv H6; auto. }
   subst v'.
-  exploit Mem.alloc_parallel_inject; eauto. apply Zle_refl. apply Zle_refl.
+  exploit Mem.alloc_parallel_inject; eauto. apply Z.le_refl. apply Z.le_refl.
   intros [f' [m3' [b' [ALLOC [A [B [C D]]]]]]].
   exploit Mem.store_mapped_inject. eexact A. eauto. eauto.
   instantiate (1 := Vptrofs sz). unfold Vptrofs; destruct Archi.ptr64; constructor.
-  rewrite Zplus_0_r. intros [m2' [E G]].
+  rewrite Z.add_0_r. intros [m2' [E G]].
   exists f'; exists (Vptr b' Ptrofs.zero); exists m2'; intuition auto.
   econstructor; eauto.
   econstructor. eauto. auto.
@@ -1206,7 +1206,7 @@ Proof.
   assert (RPSRC: Mem.range_perm m1 bsrc (Ptrofs.unsigned osrc) (Ptrofs.unsigned osrc + sz) Cur Nonempty).
     eapply Mem.range_perm_implies. eapply Mem.loadbytes_range_perm; eauto. auto with mem.
   assert (RPDST: Mem.range_perm m1 bdst (Ptrofs.unsigned odst) (Ptrofs.unsigned odst + sz) Cur Nonempty).
-    replace sz with (Z_of_nat (length bytes)).
+    replace sz with (Z.of_nat (length bytes)).
     eapply Mem.range_perm_implies. eapply Mem.storebytes_range_perm; eauto. auto with mem.
     rewrite LEN. apply nat_of_Z_eq. omega.
   assert (PSRC: Mem.perm m1 bsrc (Ptrofs.unsigned osrc) Cur Nonempty).

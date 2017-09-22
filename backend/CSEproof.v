@@ -35,8 +35,8 @@ Remark wf_equation_incr:
   wf_equation next1 e -> Ple next1 next2 -> wf_equation next2 e.
 Proof.
   unfold wf_equation; intros; destruct e. destruct H. split.
-  apply Plt_le_trans with next1; auto.
-  red; intros. apply Plt_le_trans with next1; auto. apply H1; auto.
+  apply Pos.lt_le_trans with next1; auto.
+  red; intros. apply Pos.lt_le_trans with next1; auto. apply H1; auto.
 Qed.
 
 (** Extensionality with respect to valuations. *)
@@ -95,7 +95,7 @@ Proof.
 - auto.
 - apply equation_holds_exten. auto.
   eapply wf_equation_incr; eauto with cse.
-- rewrite AGREE. eauto. eapply Plt_le_trans; eauto. eapply wf_num_reg; eauto.
+- rewrite AGREE. eauto. eapply Pos.lt_le_trans; eauto. eapply wf_num_reg; eauto.
 Qed.
 
 End EXTEN.
@@ -523,7 +523,7 @@ Proof.
   exists valu3. constructor; simpl; intros.
 + constructor; simpl; intros; eauto with cse.
   destruct H4; eauto with cse. subst e. split.
-  eapply Plt_le_trans; eauto.
+  eapply Pos.lt_le_trans; eauto.
   red; simpl; intros. auto.
 + destruct H4; eauto with cse. subst eq. apply eq_holds_lessdef with (Val.load_result chunk rs#src).
   apply load_eval_to with a. rewrite <- Q; auto.
@@ -1187,7 +1187,7 @@ Proof.
 - (* internal function *)
   monadInv TFD. unfold transf_function in EQ. fold (analyze cu f) in EQ.
   destruct (analyze cu f) as [approx|] eqn:?; inv EQ.
-  exploit Mem.alloc_extends; eauto. apply Zle_refl. apply Zle_refl.
+  exploit Mem.alloc_extends; eauto. apply Z.le_refl. apply Z.le_refl.
   intros (m'' & A & B).
   econstructor; split.
   eapply exec_function_internal; simpl; eauto.

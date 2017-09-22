@@ -275,7 +275,7 @@ Lemma valid_access_compat:
   valid_access m chunk2 b ofs p.
 Proof.
   intros. inv H1. rewrite H in H2. constructor; auto.
-  eapply Zdivide_trans; eauto. eapply align_le_divides; eauto.
+  eapply Z.divide_trans; eauto. eapply align_le_divides; eauto.
 Qed.
 
 Lemma valid_access_dec:
@@ -311,7 +311,7 @@ Proof.
   intros. rewrite valid_pointer_nonempty_perm.
   split; intros.
   split. simpl; red; intros. replace ofs0 with ofs by omega. auto.
-  simpl. apply Zone_divide.
+  simpl. apply Z.divide_1_l.
   destruct H. apply H. simpl. omega.
 Qed.
 
@@ -367,7 +367,7 @@ Program Definition alloc (m: mem) (lo hi: Z) :=
          (PMap.set m.(nextblock)
                    (fun ofs k => if zle lo ofs && zlt ofs hi then Some Freeable else None)
                    m.(mem_access))
-         (Psucc m.(nextblock))
+         (Pos.succ m.(nextblock))
          _ _ _,
    m.(nextblock)).
 Next Obligation.
@@ -475,12 +475,12 @@ Fixpoint setN (vl: list memval) (p: Z) (c: ZMap.t memval) {struct vl}: ZMap.t me
 
 Remark setN_other:
   forall vl c p q,
-  (forall r, p <= r < p + Z_of_nat (length vl) -> r <> q) ->
+  (forall r, p <= r < p + Z.of_nat (length vl) -> r <> q) ->
   ZMap.get q (setN vl p c) = ZMap.get q c.
 Proof.
   induction vl; intros; simpl.
   auto.
-  simpl length in H. rewrite inj_S in H.
+  simpl length in H. rewrite Nat2Z.inj_succ in H.
   transitivity (ZMap.get q (ZMap.set p a c)).
   apply IHvl. intros. apply H. omega.
   apply ZMap.gso. apply not_eq_sym. apply H. omega.
@@ -488,7 +488,7 @@ Qed.
 
 Remark setN_outside:
   forall vl c p q,
-  q < p \/ q >= p + Z_of_nat (length vl) ->
+  q < p \/ q >= p + Z.of_nat (length vl) ->
   ZMap.get q (setN vl p c) = ZMap.get q c.
 Proof.
   intros. apply setN_other.
@@ -508,16 +508,16 @@ Qed.
 
 Remark getN_exten:
   forall c1 c2 n p,
-  (forall i, p <= i < p + Z_of_nat n -> ZMap.get i c1 = ZMap.get i c2) ->
+  (forall i, p <= i < p + Z.of_nat n -> ZMap.get i c1 = ZMap.get i c2) ->
   getN n p c1 = getN n p c2.
 Proof.
-  induction n; intros. auto. rewrite inj_S in H. simpl. decEq.
+  induction n; intros. auto. rewrite Nat2Z.inj_succ in H. simpl. decEq.
   apply H. omega. apply IHn. intros. apply H. omega.
 Qed.
 
 Remark getN_setN_disjoint:
   forall vl q c n p,
-  Intv.disjoint (p, p + Z_of_nat n) (q, q + Z_of_nat (length vl)) ->
+  Intv.disjoint (p, p + Z.of_nat n) (q, q + Z.of_nat (length vl)) ->
   getN n p (setN vl q c) = getN n p c.
 Proof.
   intros. apply getN_exten. intros. apply setN_other.
@@ -526,7 +526,7 @@ Qed.
 
 Remark getN_setN_outside:
   forall vl q c n p,
-  p + Z_of_nat n <= q \/ q + Z_of_nat (length vl) <= p ->
+  p + Z.of_nat n <= q \/ q + Z.of_nat (length vl) <= p ->
   getN n p (setN vl q c) = getN n p c.
 Proof.
   intros. apply getN_setN_disjoint. apply Intv.disjoint_range. auto.
@@ -575,7 +575,7 @@ Definition storev (chunk: memory_chunk) (m: mem) (addr v: val) : option mem :=
   or [None] if the accessed locations are not writable. *)
 
 Program Definition storebytes (m: mem) (b: block) (ofs: Z) (bytes: list memval) : option mem :=
-  if range_perm_dec m b ofs (ofs + Z_of_nat (length bytes)) Cur Writable then
+  if range_perm_dec m b ofs (ofs + Z.of_nat (length bytes)) Cur Writable then
     Some (mkmem
              (PMap.set b (setN bytes ofs (m.(mem_contents)#b)) m.(mem_contents))
              m.(mem_access)
@@ -797,12 +797,12 @@ Qed.
 
 Lemma getN_concat:
   forall c n1 n2 p,
-  getN (n1 + n2)%nat p c = getN n1 p c ++ getN n2 (p + Z_of_nat n1) c.
+  getN (n1 + n2)%nat p c = getN n1 p c ++ getN n2 (p + Z.of_nat n1) c.
 Proof.
   induction n1; intros.
   simpl. decEq. omega.
-  rewrite inj_S. simpl. decEq.
-  replace (p + Zsucc (Z_of_nat n1)) with ((p + 1) + Z_of_nat n1) by omega.
+  rewrite Nat2Z.inj_succ. simpl. decEq.
+  replace (p + Z.succ (Z.of_nat n1)) with ((p + 1) + Z.of_nat n1) by omega.
   auto.
 Qed.
 
@@ -861,14 +861,14 @@ Proof.
   remember (size_chunk_nat ch) as n; clear Heqn.
   revert ofs H; induction n; intros; simpl; auto.
   f_equal.
-  rewrite inj_S in H.
+  rewrite Nat2Z.inj_succ in H.
   replace ofs with (ofs+0) by omega.
   apply H; omega.
   apply IHn.
   intros.
-  rewrite <- Zplus_assoc.
+  rewrite <- Z.add_assoc.
   apply H.
-  rewrite inj_S. omega.
+  rewrite Nat2Z.inj_succ. omega.
 Qed.
 
 Theorem load_int64_split:
@@ -891,7 +891,7 @@ Proof.
   intros L1.
   change 4 with (size_chunk Mint32) in LB2.
   exploit loadbytes_load. eexact LB2.
-  simpl. apply Zdivide_plus_r. apply Zdivides_trans with 8; auto. exists 2; auto. exists 1; auto.
+  simpl. apply Z.divide_add_r. apply Zdivides_trans with 8; auto. exists 2; auto. exists 1; auto.
   intros L2.
   exists (decode_val Mint32 (if Archi.big_endian then bytes1 else bytes2));
   exists (decode_val Mint32 (if Archi.big_endian then bytes2 else bytes1)).
@@ -1059,7 +1059,7 @@ Proof.
   replace (size_chunk_nat chunk') with (length (encode_val chunk v)).
   rewrite getN_setN_same. apply decode_encode_val_general.
   rewrite encode_val_length. repeat rewrite size_chunk_conv in H.
-  apply inj_eq_rev; auto.
+  apply Nat2Z.inj; auto.
 Qed.
 
 Theorem load_store_similar_2:
@@ -1139,12 +1139,12 @@ Qed.
 
 Lemma setN_in:
   forall vl p q c,
-  p <= q < p + Z_of_nat (length vl) ->
+  p <= q < p + Z.of_nat (length vl) ->
   In (ZMap.get q (setN vl p c)) vl.
 Proof.
   induction vl; intros.
   simpl in H. omegaContradiction.
-  simpl length in H. rewrite inj_S in H. simpl.
+  simpl length in H. rewrite Nat2Z.inj_succ in H. simpl.
   destruct (zeq p q). subst q. rewrite setN_outside. rewrite ZMap.gss.
   auto with coqlib. omega.
   right. apply IHvl. omega.
@@ -1152,12 +1152,12 @@ Qed.
 
 Lemma getN_in:
   forall c q n p,
-  p <= q < p + Z_of_nat n ->
+  p <= q < p + Z.of_nat n ->
   In (ZMap.get q c) (getN n p c).
 Proof.
   induction n; intros.
   simpl in H; omegaContradiction.
-  rewrite inj_S in H. simpl. destruct (zeq p q).
+  rewrite Nat2Z.inj_succ in H. simpl. destruct (zeq p q).
   subst q. auto.
   right. apply IHn. omega.
 Qed.
@@ -1206,7 +1206,7 @@ Proof.
 + left; split. omega. unfold c'. simpl. apply setN_in.
   assert (Z.of_nat (length (mv1 :: mvl)) = size_chunk chunk).
   { rewrite <- ENC; rewrite encode_val_length. rewrite size_chunk_conv; auto. }
-  simpl length in H3. rewrite inj_S in H3. omega.
+  simpl length in H3. rewrite Nat2Z.inj_succ in H3. omega.
 (* If ofs > ofs':  the load reads (at ofs) the first byte from the write.
        ofs'   ofs   ofs'+|chunk'|
                [-------------------]  write
@@ -1214,8 +1214,8 @@ Proof.
 *)
 + right; split. omega. replace mv1 with (ZMap.get ofs c').
   apply getN_in.
-  assert (size_chunk chunk' = Zsucc (Z.of_nat sz')).
-  { rewrite size_chunk_conv. rewrite SIZE'. rewrite inj_S; auto. }
+  assert (size_chunk chunk' = Z.succ (Z.of_nat sz')).
+  { rewrite size_chunk_conv. rewrite SIZE'. rewrite Nat2Z.inj_succ; auto. }
   omega.
   unfold c'. simpl. rewrite setN_outside by omega. apply ZMap.gss.
 Qed.
@@ -1391,11 +1391,11 @@ Qed.
 
 Theorem range_perm_storebytes:
   forall m1 b ofs bytes,
-  range_perm m1 b ofs (ofs + Z_of_nat (length bytes)) Cur Writable ->
+  range_perm m1 b ofs (ofs + Z.of_nat (length bytes)) Cur Writable ->
   { m2 : mem | storebytes m1 b ofs bytes = Some m2 }.
 Proof.
   intros. unfold storebytes.
-  destruct (range_perm_dec m1 b ofs (ofs + Z_of_nat (length bytes)) Cur Writable).
+  destruct (range_perm_dec m1 b ofs (ofs + Z.of_nat (length bytes)) Cur Writable).
   econstructor; reflexivity.
   contradiction.
 Defined.
@@ -1407,7 +1407,7 @@ Theorem storebytes_store:
   store chunk m1 b ofs v = Some m2.
 Proof.
   unfold storebytes, store. intros.
-  destruct (range_perm_dec m1 b ofs (ofs + Z_of_nat (length (encode_val chunk v))) Cur Writable); inv H.
+  destruct (range_perm_dec m1 b ofs (ofs + Z.of_nat (length (encode_val chunk v))) Cur Writable); inv H.
   destruct (valid_access_dec m1 chunk b ofs Writable).
   f_equal. apply mkmem_ext; auto.
   elim n. constructor; auto.
@@ -1421,7 +1421,7 @@ Theorem store_storebytes:
 Proof.
   unfold storebytes, store. intros.
   destruct (valid_access_dec m1 chunk b ofs Writable); inv H.
-  destruct (range_perm_dec m1 b ofs (ofs + Z_of_nat (length (encode_val chunk v))) Cur Writable).
+  destruct (range_perm_dec m1 b ofs (ofs + Z.of_nat (length (encode_val chunk v))) Cur Writable).
   f_equal. apply mkmem_ext; auto.
   destruct v0.  elim n.
   rewrite encode_val_length. rewrite <- size_chunk_conv. auto.
@@ -1438,7 +1438,7 @@ Hypothesis STORE: storebytes m1 b ofs bytes = Some m2.
 Lemma storebytes_access: mem_access m2 = mem_access m1.
 Proof.
   unfold storebytes in STORE.
-  destruct (range_perm_dec m1 b ofs (ofs + Z_of_nat (length bytes)) Cur Writable);
+  destruct (range_perm_dec m1 b ofs (ofs + Z.of_nat (length bytes)) Cur Writable);
   inv STORE.
   auto.
 Qed.
@@ -1447,7 +1447,7 @@ Lemma storebytes_mem_contents:
    mem_contents m2 = PMap.set b (setN bytes ofs m1.(mem_contents)#b) m1.(mem_contents).
 Proof.
   unfold storebytes in STORE.
-  destruct (range_perm_dec m1 b ofs (ofs + Z_of_nat (length bytes)) Cur Writable);
+  destruct (range_perm_dec m1 b ofs (ofs + Z.of_nat (length bytes)) Cur Writable);
   inv STORE.
   auto.
 Qed.
@@ -1487,7 +1487,7 @@ Theorem nextblock_storebytes:
 Proof.
   intros.
   unfold storebytes in STORE.
-  destruct (range_perm_dec m1 b ofs (ofs + Z_of_nat (length bytes)) Cur Writable);
+  destruct (range_perm_dec m1 b ofs (ofs + Z.of_nat (length bytes)) Cur Writable);
   inv STORE.
   auto.
 Qed.
@@ -1507,20 +1507,20 @@ Qed.
 Local Hint Resolve storebytes_valid_block_1 storebytes_valid_block_2: mem.
 
 Theorem storebytes_range_perm:
-  range_perm m1 b ofs (ofs + Z_of_nat (length bytes)) Cur Writable.
+  range_perm m1 b ofs (ofs + Z.of_nat (length bytes)) Cur Writable.
 Proof.
   intros.
   unfold storebytes in STORE.
-  destruct (range_perm_dec m1 b ofs (ofs + Z_of_nat (length bytes)) Cur Writable);
+  destruct (range_perm_dec m1 b ofs (ofs + Z.of_nat (length bytes)) Cur Writable);
   inv STORE.
   auto.
 Qed.
 
 Theorem loadbytes_storebytes_same:
-  loadbytes m2 b ofs (Z_of_nat (length bytes)) = Some bytes.
+  loadbytes m2 b ofs (Z.of_nat (length bytes)) = Some bytes.
 Proof.
   intros. assert (STORE2:=STORE). unfold storebytes in STORE2. unfold loadbytes.
-  destruct (range_perm_dec m1 b ofs (ofs + Z_of_nat (length bytes)) Cur Writable);
+  destruct (range_perm_dec m1 b ofs (ofs + Z.of_nat (length bytes)) Cur Writable);
   try discriminate.
   rewrite pred_dec_true.
   decEq. inv STORE2; simpl. rewrite PMap.gss. rewrite nat_of_Z_of_nat.
@@ -1531,7 +1531,7 @@ Qed.
 Theorem loadbytes_storebytes_disjoint:
   forall b' ofs' len,
   len >= 0 ->
-  b' <> b \/ Intv.disjoint (ofs', ofs' + len) (ofs, ofs + Z_of_nat (length bytes)) ->
+  b' <> b \/ Intv.disjoint (ofs', ofs' + len) (ofs, ofs + Z.of_nat (length bytes)) ->
   loadbytes m2 b' ofs' len = loadbytes m1 b' ofs' len.
 Proof.
   intros. unfold loadbytes.
@@ -1551,7 +1551,7 @@ Theorem loadbytes_storebytes_other:
   len >= 0 ->
   b' <> b
   \/ ofs' + len <= ofs
-  \/ ofs + Z_of_nat (length bytes) <= ofs' ->
+  \/ ofs + Z.of_nat (length bytes) <= ofs' ->
   loadbytes m2 b' ofs' len = loadbytes m1 b' ofs' len.
 Proof.
   intros. apply loadbytes_storebytes_disjoint; auto.
@@ -1562,7 +1562,7 @@ Theorem load_storebytes_other:
   forall chunk b' ofs',
   b' <> b
   \/ ofs' + size_chunk chunk <= ofs
-  \/ ofs + Z_of_nat (length bytes) <= ofs' ->
+  \/ ofs + Z.of_nat (length bytes) <= ofs' ->
   load chunk m2 b' ofs' = load chunk m1 b' ofs'.
 Proof.
   intros. unfold load.
@@ -1581,29 +1581,29 @@ End STOREBYTES.
 
 Lemma setN_concat:
   forall bytes1 bytes2 ofs c,
-  setN (bytes1 ++ bytes2) ofs c = setN bytes2 (ofs + Z_of_nat (length bytes1)) (setN bytes1 ofs c).
+  setN (bytes1 ++ bytes2) ofs c = setN bytes2 (ofs + Z.of_nat (length bytes1)) (setN bytes1 ofs c).
 Proof.
   induction bytes1; intros.
   simpl. decEq. omega.
-  simpl length. rewrite inj_S. simpl. rewrite IHbytes1. decEq. omega.
+  simpl length. rewrite Nat2Z.inj_succ. simpl. rewrite IHbytes1. decEq. omega.
 Qed.
 
 Theorem storebytes_concat:
   forall m b ofs bytes1 m1 bytes2 m2,
   storebytes m b ofs bytes1 = Some m1 ->
-  storebytes m1 b (ofs + Z_of_nat(length bytes1)) bytes2 = Some m2 ->
+  storebytes m1 b (ofs + Z.of_nat(length bytes1)) bytes2 = Some m2 ->
   storebytes m b ofs (bytes1 ++ bytes2) = Some m2.
 Proof.
   intros. generalize H; intro ST1. generalize H0; intro ST2.
   unfold storebytes; unfold storebytes in ST1; unfold storebytes in ST2.
-  destruct (range_perm_dec m b ofs (ofs + Z_of_nat(length bytes1)) Cur Writable); try congruence.
-  destruct (range_perm_dec m1 b (ofs + Z_of_nat(length bytes1)) (ofs + Z_of_nat(length bytes1) + Z_of_nat(length bytes2)) Cur Writable); try congruence.
-  destruct (range_perm_dec m b ofs (ofs + Z_of_nat (length (bytes1 ++ bytes2))) Cur Writable).
+  destruct (range_perm_dec m b ofs (ofs + Z.of_nat(length bytes1)) Cur Writable); try congruence.
+  destruct (range_perm_dec m1 b (ofs + Z.of_nat(length bytes1)) (ofs + Z.of_nat(length bytes1) + Z.of_nat(length bytes2)) Cur Writable); try congruence.
+  destruct (range_perm_dec m b ofs (ofs + Z.of_nat (length (bytes1 ++ bytes2))) Cur Writable).
   inv ST1; inv ST2; simpl. decEq. apply mkmem_ext; auto.
   rewrite PMap.gss.  rewrite setN_concat. symmetry. apply PMap.set2.
   elim n.
-  rewrite app_length. rewrite inj_plus. red; intros.
-  destruct (zlt ofs0 (ofs + Z_of_nat(length bytes1))).
+  rewrite app_length. rewrite Nat2Z.inj_add. red; intros.
+  destruct (zlt ofs0 (ofs + Z.of_nat(length bytes1))).
   apply r. omega.
   eapply perm_storebytes_2; eauto. apply r0. omega.
 Qed.
@@ -1613,15 +1613,15 @@ Theorem storebytes_split:
   storebytes m b ofs (bytes1 ++ bytes2) = Some m2 ->
   exists m1,
      storebytes m b ofs bytes1 = Some m1
-  /\ storebytes m1 b (ofs + Z_of_nat(length bytes1)) bytes2 = Some m2.
+  /\ storebytes m1 b (ofs + Z.of_nat(length bytes1)) bytes2 = Some m2.
 Proof.
   intros.
   destruct (range_perm_storebytes m b ofs bytes1) as [m1 ST1].
   red; intros. exploit storebytes_range_perm; eauto. rewrite app_length.
-  rewrite inj_plus. omega.
-  destruct (range_perm_storebytes m1 b (ofs + Z_of_nat (length bytes1)) bytes2) as [m2' ST2].
+  rewrite Nat2Z.inj_add. omega.
+  destruct (range_perm_storebytes m1 b (ofs + Z.of_nat (length bytes1)) bytes2) as [m2' ST2].
   red; intros. eapply perm_storebytes_1; eauto. exploit storebytes_range_perm.
-  eexact H. instantiate (1 := ofs0). rewrite app_length. rewrite inj_plus. omega.
+  eexact H. instantiate (1 := ofs0). rewrite app_length. rewrite Nat2Z.inj_add. omega.
   auto.
   assert (Some m2 = Some m2').
   rewrite <- H. eapply storebytes_concat; eauto.
@@ -1646,7 +1646,7 @@ Proof.
   apply storebytes_store. exact SB1.
   simpl. apply Zdivides_trans with 8; auto. exists 2; auto.
   apply storebytes_store. exact SB2.
-  simpl. apply Zdivide_plus_r. apply Zdivides_trans with 8; auto. exists 2; auto. exists 1; auto.
+  simpl. apply Z.divide_add_r. apply Zdivides_trans with 8; auto. exists 2; auto. exists 1; auto.
 Qed.
 
 Theorem storev_int64_split:
@@ -1676,7 +1676,7 @@ Variable b: block.
 Hypothesis ALLOC: alloc m1 lo hi = (m2, b).
 
 Theorem nextblock_alloc:
-  nextblock m2 = Psucc (nextblock m1).
+  nextblock m2 = Pos.succ (nextblock m1).
 Proof.
   injection ALLOC; intros. rewrite <- H0; auto.
 Qed.
@@ -1808,7 +1808,7 @@ Proof.
   subst b'. elimtype False. eauto with mem.
   rewrite pred_dec_true; auto.
   injection ALLOC; intros. rewrite <- H2; simpl.
-  rewrite PMap.gso. auto. rewrite H1. apply sym_not_equal; eauto with mem.
+  rewrite PMap.gso. auto. rewrite H1. apply not_eq_sym; eauto with mem.
   rewrite pred_dec_false. auto.
   eauto with mem.
 Qed.
@@ -2301,14 +2301,14 @@ Lemma getN_inj:
   mem_inj f m1 m2 ->
   f b1 = Some(b2, delta) ->
   forall n ofs,
-  range_perm m1 b1 ofs (ofs + Z_of_nat n) Cur Readable ->
+  range_perm m1 b1 ofs (ofs + Z.of_nat n) Cur Readable ->
   list_forall2 (memval_inject f)
                (getN n ofs (m1.(mem_contents)#b1))
                (getN n (ofs + delta) (m2.(mem_contents)#b2)).
 Proof.
   induction n; intros; simpl.
   constructor.
-  rewrite inj_S in H1.
+  rewrite Nat2Z.inj_succ in H1.
   constructor.
   eapply mi_memval; eauto.
   apply H1. omega.
@@ -2487,9 +2487,9 @@ Lemma storebytes_mapped_inj:
     /\ mem_inj f n1 n2.
 Proof.
   intros. inversion H.
-  assert (range_perm m2 b2 (ofs + delta) (ofs + delta + Z_of_nat (length bytes2)) Cur Writable).
-    replace (ofs + delta + Z_of_nat (length bytes2))
-       with ((ofs + Z_of_nat (length bytes1)) + delta).
+  assert (range_perm m2 b2 (ofs + delta) (ofs + delta + Z.of_nat (length bytes2)) Cur Writable).
+    replace (ofs + delta + Z.of_nat (length bytes2))
+       with ((ofs + Z.of_nat (length bytes1)) + delta).
     eapply range_perm_inj; eauto with mem.
     eapply storebytes_range_perm; eauto.
     rewrite (list_forall2_length H3). omega.
@@ -2557,7 +2557,7 @@ Lemma storebytes_outside_inj:
   (forall b' delta ofs',
     f b' = Some(b, delta) ->
     perm m1 b' ofs' Cur Readable ->
-    ofs <= ofs' + delta < ofs + Z_of_nat (length bytes2) -> False) ->
+    ofs <= ofs' + delta < ofs + Z.of_nat (length bytes2) -> False) ->
   storebytes m2 b ofs bytes2 = Some m2' ->
   mem_inj f m1 m2'.
 Proof.
@@ -2572,7 +2572,7 @@ Proof.
   rewrite PMap.gsspec. destruct (peq b2 b). subst b2.
   rewrite setN_outside. auto.
   destruct (zlt (ofs0 + delta) ofs); auto.
-  destruct (zle (ofs + Z_of_nat (length bytes2)) (ofs0 + delta)). omega.
+  destruct (zle (ofs + Z.of_nat (length bytes2)) (ofs0 + delta)). omega.
   byContradiction. eapply H0; eauto. omega.
   eauto with mem.
 Qed.
@@ -2975,7 +2975,7 @@ Theorem storebytes_outside_extends:
   forall m1 m2 b ofs bytes2 m2',
   extends m1 m2 ->
   storebytes m2 b ofs bytes2 = Some m2' ->
-  (forall ofs', perm m1 b ofs' Cur Readable -> ofs <= ofs' < ofs + Z_of_nat (length bytes2) -> False) ->
+  (forall ofs', perm m1 b ofs' Cur Readable -> ofs <= ofs' < ofs + Z.of_nat (length bytes2) -> False) ->
   extends m1 m2'.
 Proof.
   intros. inversion H. constructor.
@@ -3009,7 +3009,7 @@ Proof.
   eapply alloc_left_mapped_inj with (m1 := m1) (m2 := m2') (b2 := b) (delta := 0); eauto.
   eapply alloc_right_inj; eauto.
   eauto with mem.
-  red. intros. apply Zdivide_0.
+  red. intros. apply Z.divide_0_r.
   intros.
   eapply perm_implies with Freeable; auto with mem.
   eapply perm_alloc_2; eauto.
@@ -3419,8 +3419,8 @@ Theorem aligned_area_inject:
 Proof.
   intros.
   assert (P: al > 0) by omega.
-  assert (Q: Zabs al <= Zabs sz). apply Zdivide_bounds; auto. omega.
-  rewrite Zabs_eq in Q; try omega. rewrite Zabs_eq in Q; try omega.
+  assert (Q: Z.abs al <= Z.abs sz). apply Zdivide_bounds; auto. omega.
+  rewrite Z.abs_eq in Q; try omega. rewrite Z.abs_eq in Q; try omega.
   assert (R: exists chunk, al = align_chunk chunk /\ al = size_chunk chunk).
     destruct H0. subst; exists Mint8unsigned; auto.
     destruct H0. subst; exists Mint16unsigned; auto.
@@ -3629,7 +3629,7 @@ Theorem storebytes_outside_inject:
   (forall b' delta ofs',
     f b' = Some(b, delta) ->
     perm m1 b' ofs' Cur Readable ->
-    ofs <= ofs' + delta < ofs + Z_of_nat (length bytes2) -> False) ->
+    ofs <= ofs' + delta < ofs + Z.of_nat (length bytes2) -> False) ->
   storebytes m2 b ofs bytes2 = Some m2' ->
   inject f m1 m2'.
 Proof.
@@ -3863,7 +3863,7 @@ Proof.
   auto.
   intros. apply perm_implies with Freeable; auto with mem.
   eapply perm_alloc_2; eauto. omega.
-  red; intros. apply Zdivide_0.
+  red; intros. apply Z.divide_0_r.
   intros. apply (valid_not_valid_diff m2 b2 b2); eauto with mem.
   intros [f' [A [B [C D]]]].
   exists f'; exists m2'; exists b2; auto.
@@ -4205,7 +4205,7 @@ Proof.
 (* perm inv *)
   unfold flat_inj; intros.
   destruct (plt b1 (nextblock m)); inv H0.
-  rewrite Zplus_0_r in H1; auto.
+  rewrite Z.add_0_r in H1; auto.
 Qed.
 
 Theorem empty_inject_neutral:
@@ -4231,7 +4231,7 @@ Proof.
   intros; red.
   eapply alloc_left_mapped_inj with (m1 := m) (b2 := b) (delta := 0).
   eapply alloc_right_inj; eauto. eauto. eauto with mem.
-  red. intros. apply Zdivide_0.
+  red. intros. apply Z.divide_0_r.
   intros.
   apply perm_implies with Freeable; auto with mem.
   eapply perm_alloc_2; eauto. omega.
@@ -4264,7 +4264,7 @@ Proof.
   unfold inject_neutral; intros.
   exploit drop_mapped_inj; eauto. apply flat_inj_no_overlap.
   unfold flat_inj. apply pred_dec_true; eauto.
-  repeat rewrite Zplus_0_r. intros [m'' [A B]]. congruence.
+  repeat rewrite Z.add_0_r. intros [m'' [A B]]. congruence.
 Qed.
 
 (** * Invariance properties between two memory states *)
@@ -4407,7 +4407,7 @@ Qed.
 Lemma storebytes_unchanged_on:
   forall m b ofs bytes m',
   storebytes m b ofs bytes = Some m' ->
-  (forall i, ofs <= i < ofs + Z_of_nat (length bytes) -> ~ P b i) ->
+  (forall i, ofs <= i < ofs + Z.of_nat (length bytes) -> ~ P b i) ->
   unchanged_on m m'.
 Proof.
   intros; constructor; intros.
@@ -4416,7 +4416,7 @@ Proof.
 - erewrite storebytes_mem_contents; eauto. rewrite PMap.gsspec.
   destruct (peq b0 b); auto. subst b0. apply setN_outside.
   destruct (zlt ofs0 ofs); auto.
-  destruct (zlt ofs0 (ofs + Z_of_nat (length bytes))); auto.
+  destruct (zlt ofs0 (ofs + Z.of_nat (length bytes))); auto.
   elim (H0 ofs0). omega. auto.
 Qed.
 
