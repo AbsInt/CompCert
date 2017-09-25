@@ -11,3 +11,5 @@
 (* *********************************************************************)
 
 val pp_program: Format.formatter -> (Asm.coq_function AST.fundef, 'a) AST.program -> unit
+
+val pp_mnemonics: Format.formatter -> unit

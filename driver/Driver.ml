@@ -311,6 +311,14 @@ let enforce_buildnr nr =
 Please use matching builds of QSK and CompCert.\n" build nr; exit 2
   end
 
+let dump_mnemonics destfile =
+  let oc = open_out_bin destfile in
+  let pp = Format.formatter_of_out_channel oc in
+  AsmToJSON.pp_mnemonics pp;
+  Format.pp_print_flush pp ();
+  close_out oc;
+  exit 0
+
 let language_support_options = [
   option_fbitfields; option_flongdouble;
   option_fstruct_passing; option_fvararg_calls; option_funprototyped;
@@ -338,10 +346,12 @@ let cmdline_actions =
 (* Getting version info *)
   Exact "-version", Unit print_version_and_exit;
   Exact "--version", Unit print_version_and_exit;] @
-(* Enforcing CompCert build numbers for QSKs *)
+(* Enforcing CompCert build numbers for QSKs and mnemonics dump *)
   (if Version.buildnr <> "" then
     [ Exact "-qsk-enforce-build", Integer enforce_buildnr;
-      Exact "--qsk-enforce-build", Integer enforce_buildnr; ]
+      Exact "--qsk-enforce-build", Integer enforce_buildnr;
+      Exact "-dump-mnemonics", String  dump_mnemonics;
+    ]
    else []) @
 (* Processing options *)
  [ Exact "-c", Set option_c;

@@ -16,3 +16,5 @@
 
 let pp_program pp prog =
   Format.fprintf pp "null"
+
+let pp_mnemonics pp = ()
