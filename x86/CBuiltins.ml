@@ -31,14 +31,8 @@ let builtins = {
   ];
   Builtins.functions = [
     (* Integer arithmetic *)
-    "__builtin_bswap",
-      (TInt(IUInt, []), [TInt(IUInt, [])], false);
     "__builtin_bswap64",
       (TInt(IULongLong, []), [TInt(IULongLong, [])], false);
-    "__builtin_bswap32",
-      (TInt(IUInt, []), [TInt(IUInt, [])], false);
-    "__builtin_bswap16",
-      (TInt(IUShort, []), [TInt(IUShort, [])], false);
     "__builtin_clz",
       (TInt(IInt, []), [TInt(IUInt, [])], false);
     "__builtin_clzl",
@@ -52,8 +46,6 @@ let builtins = {
     "__builtin_ctzll",
       (TInt(IInt, []), [TInt(IULongLong, [])], false);
     (* Float arithmetic *)
-    "__builtin_fsqrt",
-      (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
     "__builtin_fmax",
       (TFloat(FDouble, []), [TFloat(FDouble, []); TFloat(FDouble, [])], false);
     "__builtin_fmin",

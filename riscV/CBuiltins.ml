@@ -26,14 +26,8 @@ let builtins = {
     "__builtin_fence",
       (TVoid [], [], false);
     (* Integer arithmetic *)
-    "__builtin_bswap",
-      (TInt(IUInt, []), [TInt(IUInt, [])], false);
     "__builtin_bswap64",
       (TInt(IULongLong, []), [TInt(IULongLong, [])], false);
-    "__builtin_bswap32",
-      (TInt(IUInt, []), [TInt(IUInt, [])], false);
-    "__builtin_bswap16",
-      (TInt(IUShort, []), [TInt(IUShort, [])], false);
     (* Float arithmetic *)
     "__builtin_fmadd",
       (TFloat(FDouble, []),
@@ -51,8 +45,6 @@ let builtins = {
       (TFloat(FDouble, []),
        [TFloat(FDouble, []); TFloat(FDouble, []); TFloat(FDouble, [])],
        false);
-    "__builtin_fsqrt",
-      (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
     "__builtin_fmax",
       (TFloat(FDouble, []), [TFloat(FDouble, []); TFloat(FDouble, [])], false);
     "__builtin_fmin",

@@ -135,9 +135,19 @@ let string_of_errmsg msg =
 let builtins_generic = {
   Builtins.typedefs = [];
   Builtins.functions = [
+    (* Integer arithmetic *)
+    "__builtin_bswap",
+    (TInt(IUInt, []), [TInt(IUInt, [])], false);
+    "__builtin_bswap32",
+      (TInt(IUInt, []), [TInt(IUInt, [])], false);
+    "__builtin_bswap16",
+      (TInt(IUShort, []), [TInt(IUShort, [])], false);
     (* Floating-point absolute value *)
     "__builtin_fabs",
-      (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
+    (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
+    (* Float arithmetic *)
+    "__builtin_fsqrt",
+    (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
     (* Block copy *)
     "__builtin_memcpy_aligned",
          (TVoid [],

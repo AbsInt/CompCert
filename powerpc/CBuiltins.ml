@@ -40,12 +40,6 @@ let builtins = {
       (TInt(IInt, []), [TInt(IULong, [])], false);
     "__builtin_ctzll",
       (TInt(IInt, []), [TInt(IULongLong, [])], false);
-    "__builtin_bswap",
-      (TInt(IUInt, []), [TInt(IUInt, [])], false);
-    "__builtin_bswap32",
-      (TInt(IUInt, []), [TInt(IUInt, [])], false);
-    "__builtin_bswap16",
-      (TInt(IUShort, []), [TInt(IUShort, [])], false);
     "__builtin_cmpb",
       (TInt (IUInt, []),  [TInt(IUInt, []);TInt(IUInt, [])], false);
     (* Float arithmetic *)
@@ -65,8 +59,6 @@ let builtins = {
       (TFloat(FDouble, []),
        [TFloat(FDouble, []); TFloat(FDouble, []); TFloat(FDouble, [])],
        false);
-    "__builtin_fsqrt",
-      (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
     "__builtin_frsqrte",
       (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
     "__builtin_fres",
