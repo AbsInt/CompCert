@@ -28,6 +28,9 @@ let sdump_folder = ref ""
 
 let jdump_magic_number = "CompCertJDUMP" ^ Version.version
 
+let nolink () =
+  !option_c || !option_S || !option_E || !option_interp
+
 let dump_jasm asm sourcename destfile =
   let oc = open_out_bin destfile in
   let pp = Format.formatter_of_out_channel oc in
@@ -55,6 +58,11 @@ let dump_jasm asm sourcename destfile =
   Format.pp_print_flush pp ();
   close_out oc
 
+let object_filename sourcename suff =
+  if nolink () then
+    output_filename ~final: !option_c sourcename suff ".o"
+  else
+    Filename.temp_file "compcert" ".o"
 
 (* From CompCert C AST to asm *)
 
@@ -132,7 +140,7 @@ let process_c_file sourcename =
         compile_c_file sourcename preproname asmname;
         if not !option_dprepro then
           safe_remove preproname;
-        let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
+        let objname = object_filename sourcename ".c" in
         assemble asmname objname;
         if not !option_dasm then safe_remove asmname;
         objname
@@ -158,7 +166,7 @@ let process_i_file sourcename =
       then output_filename sourcename ".c" ".s"
       else Filename.temp_file "compcert" ".s" in
     compile_c_file sourcename sourcename asmname;
-    let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
+    let objname = object_filename sourcename ".c" in
     assemble asmname objname;
     if not !option_dasm then safe_remove asmname;
     objname
@@ -169,7 +177,7 @@ let process_i_file sourcename =
 
 let process_s_file sourcename =
   ensure_inputfile_exists sourcename;
-  let objname = output_filename ~final: !option_c sourcename ".s" ".o" in
+  let objname = object_filename sourcename ".s" in
   assemble sourcename objname;
   objname
 
@@ -181,7 +189,7 @@ let process_S_file sourcename =
   end else begin
     let preproname = Filename.temp_file "compcert" ".s" in
     preprocess sourcename preproname;
-    let objname = output_filename ~final: !option_c sourcename ".S" ".o" in
+    let objname = object_filename sourcename ".S" in
     assemble preproname objname;
     safe_remove preproname;
     objname
@@ -508,8 +516,7 @@ let _ =
     CPragmas.initialize();
     parse_cmdline cmdline_actions;
     DebugInit.init (); (* Initialize the debug functions *)
-    let nolink = !option_c || !option_S || !option_E || !option_interp in
-    if nolink && !option_o <> None && !num_source_files >= 2 then begin
+    if nolink () && !option_o <> None && !num_source_files >= 2 then begin
       eprintf "Ambiguous '-o' option (multiple source files)\n";
       exit 2
     end;
@@ -519,7 +526,7 @@ let _ =
         exit 2
       end;
     let linker_args = time "Total compilation time" perform_actions () in
-    if (not nolink) && linker_args <> [] then begin
+    if not (nolink ()) && linker_args <> [] then begin
       linker (output_filename_default "a.out") linker_args
     end;
    if  Cerrors.check_errors () then exit 2
