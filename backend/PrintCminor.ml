@@ -272,15 +272,15 @@ let rec print_stmt p s =
   | Sexit n ->
       fprintf p "exit %d;" (Nat.to_int n)
   | Sswitch(long, e, cases, dfl) ->
+    let print_case (n,x) =
+      let x = Nat.to_int x in
+      if long then
+        fprintf p "@ case %LdLL: exit %d;" (Z.to_int64 n) x
+      else
+        fprintf p "@ case %ld: exit %d;" (Z.to_int32 n) x in
       fprintf p "@[<v 2>switch%s (%a) {"
         (if long then "l" else "") print_expr e;
-      List.iter
-        (fun (n, x) ->
-           fprintf p "@ case %s%s: exit %d;"
-                     (Z.to_string n)
-                     (if long then "LL" else "")
-                     (Nat.to_int x))
-        cases;
+      List.iter print_case cases;
       fprintf p "@ default: exit %d;\n" (Nat.to_int dfl);
       fprintf p "@;<0 -2>}@]"
   | Sreturn None ->
