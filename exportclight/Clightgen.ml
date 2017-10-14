@@ -39,12 +39,11 @@ let compile_c_ast sourcename csyntax ofile =
             then Clightnorm.norm_program p'
             else p'
         | Errors.Error msg ->
-            print_error stderr msg;
-            exit 2
+          print_errorcodes sourcename msg
         end
     | Errors.Error msg ->
-        print_error stderr msg;
-        exit 2 in
+      print_errorcodes sourcename msg
+  in
   (* Dump Clight in C syntax if requested *)
   if !option_dclight then begin
     let ofile = Filename.chop_suffix sourcename ".c" ^ ".light.c" in
