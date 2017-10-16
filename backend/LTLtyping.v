@@ -120,88 +120,6 @@ Proof.
   apply decode_val_type.
 Qed.
 
-Lemma wt_setreg:
-  forall ls r v,
-  Val.has_type v (mreg_type r) -> wt_locset ls -> wt_locset (Locmap.set (R r) v ls).
-Proof.
-  intros; red; intros.
-  apply well_typed_locset.
-Qed.
-
-Lemma wt_setstack:
-  forall ls sl ofs ty v,
-  wt_locset ls -> wt_locset (Locmap.set (S sl ofs ty) v ls).
-Proof.
-  intros; red; intros.
-  apply well_typed_locset.
-Qed.
-
-Lemma wt_undef_regs:
-  forall rs ls, wt_locset ls -> wt_locset (undef_regs rs ls).
-Proof.
-  induction rs; simpl; intros. auto. apply wt_setreg; auto. red; auto.
-Qed.
-
-Lemma wt_call_regs:
-  forall ls, wt_locset ls -> wt_locset (call_regs ls).
-Proof.
-  intros; red; intros.
-  apply well_typed_locset.
-Qed.
-
-Lemma wt_return_regs:
-  forall caller callee,
-  wt_locset caller -> wt_locset callee -> wt_locset (return_regs caller callee).
-Proof.
-  intros; red; intros.
-  apply well_typed_locset.
-Qed.
-
-Lemma wt_undef_caller_save_regs:
-  forall ls, wt_locset ls -> wt_locset (undef_caller_save_regs ls).
-Proof.
-  intros; red; intros.
-  apply well_typed_locset.
-Qed.
-
-Lemma wt_init:
-  wt_locset (Locmap.init Vundef).
-Proof.
-  red; intros. apply well_typed_locset.
-Qed.
-
-Lemma wt_setpair:
-  forall sg v rs,
-  Val.has_type v (proj_sig_res sg) ->
-  wt_locset rs ->
-  wt_locset (Locmap.setpair (loc_result sg) v rs).
-Proof.
-  intros. generalize (loc_result_pair sg) (loc_result_type sg).
-  destruct (loc_result sg); simpl Locmap.setpair.
-- intros. apply wt_setreg; auto. eapply Val.has_subtype; eauto.
-- intros A B. decompose [and] A.
-  apply wt_setreg. eapply Val.has_subtype; eauto. destruct v; exact I.
-  apply wt_setreg. eapply Val.has_subtype; eauto. destruct v; exact I.
-  auto.
-Qed.
-
-Lemma wt_setres:
-  forall res ty v rs,
-  wt_builtin_res ty res = true ->
-  Val.has_type v ty ->
-  wt_locset rs ->
-  wt_locset (Locmap.setres res v rs).
-Proof.
-  induction res; simpl; intros.
-- apply wt_setreg; auto. eapply Val.has_subtype; eauto.
-- auto.
-- InvBooleans.
-  apply wt_setreg; auto. apply Val.has_subtype with (ty1 := Tint); auto.
-  destruct v; exact I.
-  apply wt_setreg; auto. apply Val.has_subtype with (ty1 := Tint); auto.
-  destruct v; exact I.
-Qed.
-
 (** Soundness of the type system *)
 
 Definition wt_fundef (fd: fundef) :=
@@ -219,38 +137,25 @@ Inductive wt_callstack: list stackframe -> Prop :=
   | wt_callstack_cons: forall f sp rs b s
         (WTSTK: wt_callstack s)
         (WTF: wt_function f = true)
-        (WTB: wt_bblock f b = true)
-        (WTLS: wt_locset rs),
+        (WTB: wt_bblock f b = true),
       wt_callstack (Stackframe f sp rs b :: s).
-
-Lemma wt_parent_locset:
-  forall s, wt_callstack s -> wt_locset (parent_locset s).
-Proof.
-  induction 1; simpl.
-- apply wt_init.
-- auto.
-Qed.
 
 Inductive wt_state: state -> Prop :=
   | wt_branch_state: forall s f sp n rs m
         (WTSTK: wt_callstack s )
-        (WTF: wt_function f = true)
-        (WTLS: wt_locset rs),
+        (WTF: wt_function f = true),
       wt_state (State s f sp n rs m)
   | wt_regular_state: forall s f sp b rs m
         (WTSTK: wt_callstack s )
         (WTF: wt_function f = true)
-        (WTB: wt_bblock f b = true)
-        (WTLS: wt_locset rs),
+        (WTB: wt_bblock f b = true),
       wt_state (Block s f sp b rs m)
   | wt_call_state: forall s fd rs m
         (WTSTK: wt_callstack s)
-        (WTFD: wt_fundef fd)
-        (WTLS: wt_locset rs),
+        (WTFD: wt_fundef fd),
       wt_state (Callstate s fd rs m)
   | wt_return_state: forall s rs m
-        (WTSTK: wt_callstack s)
-        (WTLS: wt_locset rs),
+        (WTSTK: wt_callstack s),
       wt_state (Returnstate s rs m).
 
 (** Preservation of state typing by transitions *)
@@ -291,35 +196,22 @@ Local Opaque mreg_type.
   + (* move *)
     InvBooleans. exploit is_move_operation_correct; eauto. intros [EQ1 EQ2]; subst.
     simpl in H. inv H.
-    econstructor; eauto. apply wt_setreg. eapply Val.has_subtype; eauto. apply WTLS.
-    apply wt_undef_regs; auto.
+    econstructor; eauto.
   + (* other ops *)
     destruct (type_of_operation op) as [ty_args ty_res] eqn:TYOP. InvBooleans.
     econstructor; eauto.
-    apply wt_setreg; auto. eapply Val.has_subtype; eauto.
-    change ty_res with (snd (ty_args, ty_res)). rewrite <- TYOP. eapply type_of_operation_sound; eauto.
-    red; intros; subst op. simpl in ISMOVE.
-    destruct args; try discriminate. destruct args; discriminate.
-    apply wt_undef_regs; auto.
 - (* load *)
   simpl in *; InvBooleans.
   econstructor; eauto.
-  apply wt_setreg. eapply Val.has_subtype; eauto.
-  destruct a; simpl in H0; try discriminate. eapply Mem.load_type; eauto.
-  apply wt_undef_regs; auto.
 - (* getstack *)
   simpl in *; InvBooleans.
   econstructor; eauto.
-  eapply wt_setreg; eauto. eapply Val.has_subtype; eauto. apply WTLS.
-  apply wt_undef_regs; auto.
 - (* setstack *)
   simpl in *; InvBooleans.
   econstructor; eauto.
-  apply wt_setstack. apply wt_undef_regs; auto.
 - (* store *)
   simpl in *; InvBooleans.
   econstructor. eauto. eauto. eauto.
-  apply wt_undef_regs; auto.
 - (* call *)
   simpl in *; InvBooleans.
   econstructor; eauto. econstructor; eauto.
@@ -328,31 +220,23 @@ Local Opaque mreg_type.
   simpl in *; InvBooleans.
   econstructor; eauto.
   eapply wt_find_function; eauto.
-  apply wt_return_regs; auto. apply wt_parent_locset; auto.
 - (* builtin *)
   simpl in *; InvBooleans.
   econstructor; eauto.
-  eapply wt_setres; eauto. eapply external_call_well_typed; eauto.
-  apply wt_undef_regs; auto.
 - (* branch *)
   simpl in *. econstructor; eauto.
 - (* cond branch *)
-  simpl in *. econstructor; auto using wt_undef_regs.
+  simpl in *. econstructor; auto.
 - (* jumptable *)
-  simpl in *. econstructor; auto using wt_undef_regs.
+  simpl in *. econstructor; auto.
 - (* return *)
   simpl in *. InvBooleans.
   econstructor; eauto.
-  apply wt_return_regs; auto. apply wt_parent_locset; auto.
 - (* internal function *)
   simpl in WTFD.
-  econstructor. eauto. eauto. eauto.
-  apply wt_undef_regs. apply wt_call_regs. auto.
+  econstructor. eauto. eauto.
 - (* external function *)
   econstructor. auto.
-  apply wt_setpair; auto.
-  eapply external_call_well_typed; eauto.
-  apply wt_undef_caller_save_regs; auto.
 - (* return *)
   inv WTSTK. econstructor; eauto.
 Qed.
@@ -363,9 +247,6 @@ Proof.
   induction 1. econstructor. constructor.
   unfold ge0 in H1. exploit Genv.find_funct_ptr_inversion; eauto.
   intros [id IN]. eapply wt_prog; eauto.
-  red; auto.
-  red; auto.
-  apply wt_init.
 Qed.
 
 End SOUNDNESS.
@@ -409,5 +290,5 @@ Lemma wt_callstate_wt_regs:
   wt_state (Callstate s f rs m) ->
   forall r, Val.has_type (rs @ (R r)) (mreg_type r).
 Proof.
-  intros. inv H. apply WTLS.
+  intros. apply well_typed_locset.
 Qed.

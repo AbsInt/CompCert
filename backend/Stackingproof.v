@@ -910,8 +910,6 @@ Variable ls: locset.
 Hypothesis ls_temp_undef:
   forall ty r, In r (destroyed_by_setstack ty) -> ls @ (R r) = Vundef.
 
-Hypothesis wt_ls: forall r, Val.has_type (ls @ (R r)) (mreg_type r).
-
 Lemma save_callee_save_rec_correct:
   forall k l pos rs m P,
   (forall r, In r l -> is_callee_save r = true) ->
@@ -948,7 +946,7 @@ Local Opaque mreg_type.
   apply range_contains in SEP; auto.
   exploit (contains_set_stack (fun v' => Val.inject j (ls @ (R r)) v') (rs r)).
   eexact SEP.
-  apply load_result_inject; auto. apply wt_ls.
+  apply load_result_inject; auto. apply well_typed_locset.
   clear SEP; intros (m1 & STORE & SEP).
   set (rs1 := undef_regs (destroyed_by_setstack ty) rs).
   assert (AG1: agree_regs j ls rs1).
@@ -1024,7 +1022,6 @@ Proof.
   intros until P; intros SEP TY AGCS AG; intros ls1 rs1.
   exploit (save_callee_save_rec_correct j cs fb sp ls1).
 - intros. unfold ls1. apply LTL_undef_regs_same. eapply destroyed_by_setstack_function_entry; eauto.
-- intros. unfold ls1. apply undef_regs_type. apply TY.
 - exact b.(used_callee_save_prop).
 - eexact SEP.
 - instantiate (1 := rs1). apply agree_regs_undef_regs. apply agree_regs_call_regs. auto.
@@ -1840,7 +1837,7 @@ Proof.
   econstructor; eauto with coqlib.
   apply agree_regs_set_reg; auto.
   inversion WTS; subst. simpl in WTC; InvBooleans.
-  apply Val.has_subtype with (ty1 := ty); auto. apply WTRS.
+  apply Val.has_subtype with (ty1 := ty); auto. apply well_typed_locset.
   apply agree_locs_set_reg; auto.
 + (* Lgetstack, incoming *)
   unfold slot_valid in SV. InvBooleans.
@@ -1861,7 +1858,7 @@ Proof.
   apply agree_regs_set_reg. apply agree_regs_set_reg. auto. auto. simpl; auto.
   erewrite agree_incoming by eauto. exact B.
   inversion WTS; subst. simpl in WTC; InvBooleans.
-  apply Val.has_subtype with (ty1 := ty); auto. apply WTRS.
+  apply Val.has_subtype with (ty1 := ty); auto. apply well_typed_locset.
   apply agree_locs_set_reg; auto. apply agree_locs_undef_locs; auto.
 + (* Lgetstack, outgoing *)
   exploit frame_get_outgoing; eauto. intros (v & A & B).
@@ -1870,7 +1867,7 @@ Proof.
   econstructor; eauto with coqlib.
   apply agree_regs_set_reg; auto.
   inversion WTS; subst. simpl in WTC; InvBooleans.
-  apply Val.has_subtype with (ty1 := ty); auto. apply WTRS.
+  apply Val.has_subtype with (ty1 := ty); auto. apply well_typed_locset.
   apply agree_locs_set_reg; auto.
 
 - (* Lsetstack *)
@@ -1920,7 +1917,7 @@ Proof.
   destruct (is_move_operation op args) eqn:MOVE.
     apply is_move_operation_correct in MOVE; destruct MOVE. subst.
     simpl in H; inv H.
-    apply Val.has_subtype with (ty1 := mreg_type m0); auto. apply WTRS.
+    apply Val.has_subtype with (ty1 := mreg_type m0); auto. apply well_typed_locset.
     generalize (is_not_move_operation ge _ _ args m H MOVE); intros.
     assert (subtype (snd (type_of_operation op)) (mreg_type res) = true).
     { rewrite <- H0. destruct (type_of_operation op); reflexivity. }
