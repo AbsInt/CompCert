@@ -546,6 +546,13 @@ Proof.
   destruct v1; auto.
 Qed.
 
+Lemma decode_encode_undef:
+  forall chunk1 chunk2,
+  decode_val chunk1 (encode_val chunk2 Vundef) = Vundef.
+Proof.
+  intros. destruct chunk1, chunk2; simpl; auto; unfold decode_val; destruct Archi.ptr64; auto.
+Qed.
+
 Lemma decode_val_type:
   forall chunk cl,
   Val.has_type (decode_val chunk cl) (type_of_chunk chunk).

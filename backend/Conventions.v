@@ -131,7 +131,7 @@ Definition callee_save_loc (l: loc) :=
 Hint Unfold callee_save_loc.
 
 Definition agree_callee_save (ls1 ls2: Locmap.t) : Prop :=
-  forall l, callee_save_loc l -> ls1 l = ls2 l.
+  forall l, callee_save_loc l -> Locmap.get l ls1 = Locmap.get l ls2.
 
 (** * Assigning result locations *)
 
@@ -140,7 +140,7 @@ Definition agree_callee_save (ls1 ls2: Locmap.t) : Prop :=
 Lemma locmap_get_set_loc_result:
   forall sg v rs l,
   match l with R r => is_callee_save r = true | S _ _ _ => True end ->
-  Locmap.setpair (loc_result sg) v rs l = rs l.
+  Locmap.get l (Locmap.setpair (loc_result sg) v rs) = Locmap.get l rs.
 Proof.
   intros. apply Locmap.gpo. 
   assert (X: forall r, is_callee_save r = false -> Loc.diff l (R r)).
@@ -151,7 +151,7 @@ Qed.
 Lemma locmap_get_set_loc_result_callee_save:
   forall sg v rs l,
   callee_save_loc l ->
-  Locmap.setpair (loc_result sg) v rs l = rs l.
+  Locmap.get l (Locmap.setpair (loc_result sg) v rs) = Locmap.get l rs.
 Proof.
   intros. apply locmap_get_set_loc_result. 
   red in H; destruct l; auto.

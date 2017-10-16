@@ -190,7 +190,7 @@ Program Definition contains_locations (j: meminj) (sp: block) (pos bound: Z) (sl
     Mem.range_perm m sp pos (pos + 4 * bound) Cur Freeable /\
     forall ofs ty, 0 <= ofs -> ofs + typesize ty <= bound -> (typealign ty | ofs) ->
     exists v, Mem.load (chunk_of_type ty) m sp (pos + 4 * ofs) = Some v
-           /\ Val.inject j (ls (S sl ofs ty)) v;
+           /\ Val.inject j (ls @ (S sl ofs ty)) v;
   m_footprint := fun b ofs =>
     b = sp /\ pos <= ofs < pos + 4 * bound
 |}.
@@ -228,7 +228,7 @@ Lemma get_location:
   0 <= ofs -> ofs + typesize ty <= bound -> (typealign ty | ofs) ->
   exists v,
      load_stack m (Vptr sp Ptrofs.zero) ty (Ptrofs.repr (pos + 4 * ofs)) = Some v
-  /\ Val.inject j (ls (S sl ofs ty)) v.
+  /\ Val.inject j (ls @ (S sl ofs ty)) v.
 Proof.
   intros. destruct H as (D & E & F & G & H).
   exploit H; eauto. intros (v & U & V). exists v; split; auto.
@@ -254,13 +254,15 @@ Proof.
 - unfold store_stack; simpl. rewrite Ptrofs.add_zero_l, Ptrofs.unsigned_repr; eauto.
   unfold Ptrofs.max_unsigned. generalize (typesize_pos ty). omega.
 - simpl. intuition auto.
-+ unfold Locmap.set.
++ unfold Locmap.get, Locmap.set.
   destruct (Loc.eq (S sl ofs ty) (S sl ofs0 ty0)); [|destruct (Loc.diff_dec (S sl ofs ty) (S sl ofs0 ty0))].
 * (* same location *)
   inv e. rename ofs0 into ofs. rename ty0 into ty.
   exists (Val.load_result (chunk_of_type ty) v'); split.
   eapply Mem.load_store_similar_2; eauto. omega.
-  apply Val.load_result_inject; auto.
+  unfold Locmap.chunk_of_loc; simpl.
+  erewrite <- decode_encode_val_similar; eauto using decode_encode_val_general.
+  auto using decode_val_inject, encode_val_inject.
 * (* different locations *)
   exploit H; eauto. intros (v0 & X & Y). exists v0; split; auto.
   rewrite <- X; eapply Mem.load_store_other; eauto.
@@ -269,7 +271,7 @@ Proof.
   destruct (Mem.valid_access_load m' (chunk_of_type ty0) sp (pos + 4 * ofs0)) as [v'' LOAD].
   apply Mem.valid_access_implies with Writable; auto with mem.
   eapply valid_access_location; eauto.
-  exists v''; auto.
+  exists v''; rewrite decode_encode_undef; auto.
 + apply (m_invar P) with m; auto.
   eapply Mem.store_unchanged_on; eauto.
   intros i; rewrite size_type_chunk, typesize_typesize. intros; red; intros.
@@ -280,7 +282,7 @@ Lemma initial_locations:
   forall j sp pos bound P sl ls m,
   m |= range sp pos (pos + 4 * bound) ** P ->
   (8 | pos) ->
-  (forall ofs ty, ls (S sl ofs ty) = Vundef) ->
+  (forall ofs ty, ls @ (S sl ofs ty) = Vundef) ->
   m |= contains_locations j sp pos bound sl ls ** P.
 Proof.
   intros. destruct H as (A & B & C). destruct A as (D & E & F). split.
@@ -294,7 +296,7 @@ Qed.
 
 Lemma contains_locations_exten:
   forall ls ls' j sp pos bound sl,
-  (forall ofs ty, Val.lessdef (ls' (S sl ofs ty)) (ls (S sl ofs ty))) ->
+  (forall ofs ty, Val.lessdef (ls' @ (S sl ofs ty)) (ls @ (S sl ofs ty))) ->
   massert_imp (contains_locations j sp pos bound sl ls)
               (contains_locations j sp pos bound sl ls').
 Proof.
@@ -326,7 +328,7 @@ Fixpoint contains_callee_saves (j: meminj) (sp: block) (pos: Z) (rl: list mreg) 
       let ty := mreg_type r in
       let sz := AST.typesize ty in
       let pos1 := align pos sz in
-      contains (chunk_of_type ty) sp pos1 (fun v => Val.inject j (ls (R r)) v)
+      contains (chunk_of_type ty) sp pos1 (fun v => Val.inject j (ls @ (R r)) v)
       ** contains_callee_saves j sp (pos1 + sz) rl ls
   end.
 
@@ -344,7 +346,7 @@ Qed.
 
 Lemma contains_callee_saves_exten:
   forall j sp ls ls' rl pos,
-  (forall r, In r rl -> ls' (R r) = ls (R r)) ->
+  (forall r, In r rl -> ls' @ (R r) = ls @ (R r)) ->
   massert_eqv (contains_callee_saves j sp pos rl ls)
               (contains_callee_saves j sp pos rl ls').
 Proof.
@@ -386,7 +388,7 @@ Lemma frame_get_local:
   slot_within_bounds b Local ofs ty -> slot_valid f Local ofs ty = true ->
   exists v,
      load_stack m (Vptr sp Ptrofs.zero) ty (Ptrofs.repr (offset_local fe ofs)) = Some v
-  /\ Val.inject j (ls (S Local ofs ty)) v.
+  /\ Val.inject j (ls @ (S Local ofs ty)) v.
 Proof.
   unfold frame_contents, frame_contents_1; intros. unfold slot_valid in H1; InvBooleans.
   apply mconj_proj1 in H. apply sep_proj1 in H. apply sep_proj1 in H.
@@ -399,7 +401,7 @@ Lemma frame_get_outgoing:
   slot_within_bounds b Outgoing ofs ty -> slot_valid f Outgoing ofs ty = true ->
   exists v,
      load_stack m (Vptr sp Ptrofs.zero) ty (Ptrofs.repr (offset_arg ofs)) = Some v
-  /\ Val.inject j (ls (S Outgoing ofs ty)) v.
+  /\ Val.inject j (ls @ (S Outgoing ofs ty)) v.
 Proof.
   unfold frame_contents, frame_contents_1; intros. unfold slot_valid in H1; InvBooleans.
   apply mconj_proj1 in H. apply sep_proj1 in H. apply sep_pick2 in H.
@@ -482,9 +484,9 @@ Qed.
 
 Lemma frame_contents_exten:
   forall ls ls0 ls' ls0' j sp parent retaddr P m,
-  (forall ofs ty, Val.lessdef (ls' (S Local ofs ty)) (ls (S Local ofs ty))) ->
-  (forall ofs ty, Val.lessdef (ls' (S Outgoing ofs ty)) (ls (S Outgoing ofs ty))) ->
-  (forall r, In r b.(used_callee_save) -> ls0' (R r) = ls0 (R r)) ->
+  (forall ofs ty, Val.lessdef (ls' @ (S Local ofs ty)) (ls @ (S Local ofs ty))) ->
+  (forall ofs ty, Val.lessdef (ls' @ (S Outgoing ofs ty)) (ls @ (S Outgoing ofs ty))) ->
+  (forall r, In r b.(used_callee_save) -> ls0' @ (R r) = ls0 @ (R r)) ->
   m |= frame_contents j sp ls ls0 parent retaddr ** P ->
   m |= frame_contents j sp ls' ls0' parent retaddr ** P.
 Proof.
@@ -556,7 +558,7 @@ Qed.
 (** Agreement with Mach register states *)
 
 Definition agree_regs (j: meminj) (ls: locset) (rs: regset) : Prop :=
-  forall r, Val.inject j (ls (R r)) (rs r).
+  forall r, Val.inject j (ls @ (R r)) (rs r).
 
 (** Agreement over locations *)
 
@@ -565,14 +567,14 @@ Record agree_locs (ls ls0: locset) : Prop :=
 
     (** Unused registers have the same value as in the caller *)
     agree_unused_reg:
-       forall r, ~(mreg_within_bounds b r) -> ls (R r) = ls0 (R r);
+       forall r, ~(mreg_within_bounds b r) -> ls @ (R r) = ls0 @ (R r);
 
     (** Incoming stack slots have the same value as the
         corresponding Outgoing stack slots in the caller *)
     agree_incoming:
        forall ofs ty,
        In (S Incoming ofs ty) (regs_of_rpairs (loc_parameters f.(Linear.fn_sig))) ->
-       ls (S Incoming ofs ty) = ls0 (S Outgoing ofs ty)
+       ls @ (S Incoming ofs ty) = ls0 @ (S Outgoing ofs ty)
 }.
 
 (** ** Properties of [agree_regs]. *)
@@ -581,7 +583,7 @@ Record agree_locs (ls ls0: locset) : Prop :=
 
 Lemma agree_reg:
   forall j ls rs r,
-  agree_regs j ls rs -> Val.inject j (ls (R r)) (rs r).
+  agree_regs j ls rs -> Val.inject j (ls @ (R r)) (rs r).
 Proof.
   intros. auto.
 Qed.
@@ -642,7 +644,7 @@ Qed.
 Lemma agree_regs_exten:
   forall j ls rs ls' rs',
   agree_regs j ls rs ->
-  (forall r, ls' (R r) = Vundef \/ ls' (R r) = ls (R r) /\ rs' r = rs r) ->
+  (forall r, ls' @ (R r) = Vundef \/ ls' @ (R r) = ls @ (R r) /\ rs' r = rs r) ->
   agree_regs j ls' rs'.
 Proof.
   intros; red; intros.
@@ -668,8 +670,10 @@ Lemma agree_regs_undef_caller_save_regs:
   agree_regs j (LTL.undef_caller_save_regs ls) (Mach.undef_caller_save_regs rs).
 Proof.
   intros; red; intros. 
-  unfold LTL.undef_caller_save_regs, Mach.undef_caller_save_regs. 
-  destruct (is_callee_save r); auto. 
+  unfold LTL.undef_caller_save_regs, Mach.undef_caller_save_regs, Locmap.get.
+  destruct (is_callee_save r). 
+  apply H.
+  unfold Locmap.chunk_of_loc. simpl Loc.type. rewrite decode_encode_undef; auto.
 Qed.
 
 (** Preservation under assignment of stack slot *)
@@ -699,7 +703,8 @@ Lemma agree_regs_call_regs:
   agree_regs j (call_regs ls) rs.
 Proof.
   intros.
-  unfold call_regs; intros; red; intros; auto.
+  unfold agree_regs, Locmap.get; intros.
+  simpl; fold (ls @ (R r)); auto.
 Qed.
 
 (** ** Properties of [agree_locs] *)
@@ -903,9 +908,9 @@ Variable sp: block.
 Variable ls: locset.
 
 Hypothesis ls_temp_undef:
-  forall ty r, In r (destroyed_by_setstack ty) -> ls (R r) = Vundef.
+  forall ty r, In r (destroyed_by_setstack ty) -> ls @ (R r) = Vundef.
 
-Hypothesis wt_ls: forall r, Val.has_type (ls (R r)) (mreg_type r).
+Hypothesis wt_ls: forall r, Val.has_type (ls @ (R r)) (mreg_type r).
 
 Lemma save_callee_save_rec_correct:
   forall k l pos rs m P,
@@ -941,7 +946,7 @@ Local Opaque mreg_type.
   apply range_split with (mid := pos1 + sz) in SEP; [ | omega ].
   unfold sz at 1 in SEP. rewrite <- size_type_chunk in SEP.
   apply range_contains in SEP; auto.
-  exploit (contains_set_stack (fun v' => Val.inject j (ls (R r)) v') (rs r)).
+  exploit (contains_set_stack (fun v' => Val.inject j (ls @ (R r)) v') (rs r)).
   eexact SEP.
   apply load_result_inject; auto. apply wt_ls.
   clear SEP; intros (m1 & STORE & SEP).
@@ -963,24 +968,25 @@ Qed.
 End SAVE_CALLEE_SAVE.
 
 Remark LTL_undef_regs_same:
-  forall r rl ls, In r rl -> LTL.undef_regs rl ls (R r) = Vundef.
+  forall r rl ls, In r rl -> (LTL.undef_regs rl ls) @ (R r) = Vundef.
 Proof.
   induction rl; simpl; intros. contradiction.
-  unfold Locmap.set. destruct (Loc.eq (R a) (R r)).
-  rewrite Val.load_result_same; simpl; auto.
+  unfold Locmap.get, Locmap.set. destruct (Loc.eq (R a) (R r)).
+  rewrite decode_encode_undef; auto.
   destruct (Loc.diff_dec (R a) (R r)); auto.
   apply IHrl. intuition congruence.
+  simpl in n0. intuition congruence.
 Qed.
 
 Remark LTL_undef_regs_others:
-  forall r rl ls, ~In r rl -> LTL.undef_regs rl ls (R r) = ls (R r).
+  forall r rl ls, ~In r rl -> (LTL.undef_regs rl ls) @ (R r) = ls @ (R r).
 Proof.
   induction rl; simpl; intros. auto.
   rewrite Locmap.gso. apply IHrl. intuition. red. intuition.
 Qed.
 
 Remark LTL_undef_regs_slot:
-  forall sl ofs ty rl ls, LTL.undef_regs rl ls (S sl ofs ty) = ls (S sl ofs ty).
+  forall sl ofs ty rl ls, (LTL.undef_regs rl ls) @ (S sl ofs ty) = ls @ (S sl ofs ty).
 Proof.
   induction rl; simpl; intros. auto.
   rewrite Locmap.gso. apply IHrl. red; auto.
@@ -988,19 +994,21 @@ Qed.
 
 Remark undef_regs_type:
   forall ty l rl ls,
-  Val.has_type (ls l) ty -> Val.has_type (LTL.undef_regs rl ls l) ty.
+  Val.has_type (ls @ l) ty -> Val.has_type ((LTL.undef_regs rl ls) @ l) ty.
 Proof.
   induction rl; simpl; intros.
 - auto.
-- unfold Locmap.set. destruct (Loc.eq (R a) l).
-  rewrite Val.load_result_same; simpl; auto.
-  destruct (Loc.diff_dec (R a) l); auto. red; auto.
+- unfold Locmap.get, Locmap.set. destruct (Loc.eq (R a) l).
+  rewrite decode_encode_undef; simpl; auto.
+  destruct (Loc.diff_dec (R a) l); auto.
+  fold ((LTL.undef_regs rl ls) @ l); auto.
+  destruct l; simpl in n0; intuition congruence.
 Qed.
 
 Lemma save_callee_save_correct:
   forall j ls ls0 rs sp cs fb k m P,
   m |= range sp fe.(fe_ofs_callee_save) (size_callee_save_area b fe.(fe_ofs_callee_save)) ** P ->
-  (forall r, Val.has_type (ls (R r)) (mreg_type r)) ->
+  (forall r, Val.has_type (ls @ (R r)) (mreg_type r)) ->
   agree_callee_save ls ls0 ->
   agree_regs j ls rs ->
   let ls1 := LTL.undef_regs destroyed_at_function_entry (LTL.call_regs ls) in
@@ -1046,7 +1054,7 @@ Lemma function_prologue_correct:
   agree_regs j ls rs ->
   agree_callee_save ls ls0 ->
   agree_outgoing_arguments (Linear.fn_sig f) ls ls0 ->
-  (forall r, Val.has_type (ls (R r)) (mreg_type r)) ->
+  (forall r, Val.has_type (ls @ (R r)) (mreg_type r)) ->
   ls1 = LTL.undef_regs destroyed_at_function_entry (LTL.call_regs ls) ->
   rs1 = undef_regs destroyed_at_function_entry rs ->
   Mem.alloc m1 0 f.(Linear.fn_stacksize) = (m2, sp) ->
@@ -1115,13 +1123,15 @@ Local Opaque b fe.
   rewrite sep_swap5 in SEP.
   (* Materializing the Local and Outgoing locations *)
   exploit (initial_locations j'). eexact SEP. tauto.
-  instantiate (1 := Local). instantiate (1 := ls1).
-  intros; rewrite LS1. rewrite LTL_undef_regs_slot. reflexivity.
+  instantiate (1 := ls1). instantiate (1 := Local).
+  intros; rewrite LS1. rewrite LTL_undef_regs_slot.
+  unfold Locmap.get, Locmap.chunk_of_loc. apply decode_encode_undef.
   clear SEP; intros SEP.
   rewrite sep_swap in SEP.
   exploit (initial_locations j'). eexact SEP. tauto.
-  instantiate (1 := Outgoing). instantiate (1 := ls1).
-  intros; rewrite LS1. rewrite LTL_undef_regs_slot. reflexivity.
+  instantiate (1 := ls1). instantiate (1 := Outgoing).
+  intros; rewrite LS1. rewrite LTL_undef_regs_slot.
+  unfold Locmap.get, Locmap.chunk_of_loc. apply decode_encode_undef.
   clear SEP; intros SEP.
   rewrite sep_swap in SEP.
   (* Now we frame this *)
@@ -1149,7 +1159,7 @@ Local Opaque b fe.
   split. rewrite LS1. apply agree_locs_undef_locs; [|reflexivity].
     constructor; intros. unfold call_regs. apply AGCS.
     unfold mreg_within_bounds in H; tauto.
-    unfold call_regs. apply AGARGS. apply incoming_slot_in_parameters; auto.
+    unfold Locmap.get, call_regs. apply AGARGS. apply incoming_slot_in_parameters; auto.
   split. exact SEPFINAL.
   split. exact SAME. exact INCR.
 Qed.
@@ -1169,7 +1179,7 @@ Variable ls0: locset.
 Variable m: mem.
 
 Definition agree_unused (ls0: locset) (rs: regset) : Prop :=
-  forall r, ~(mreg_within_bounds b r) -> Val.inject j (ls0 (R r)) (rs r).
+  forall r, ~(mreg_within_bounds b r) -> Val.inject j (ls0 @ (R r)) (rs r).
 
 Lemma restore_callee_save_rec_correct:
   forall l ofs rs k,
@@ -1180,7 +1190,7 @@ Lemma restore_callee_save_rec_correct:
     star step tge
       (State cs fb (Vptr sp Ptrofs.zero) (restore_callee_save_rec l ofs k) rs m)
    E0 (State cs fb (Vptr sp Ptrofs.zero) k rs' m)
-  /\ (forall r, In r l -> Val.inject j (ls0 (R r)) (rs' r))
+  /\ (forall r, In r l -> Val.inject j (ls0 @ (R r)) (rs' r))
   /\ (forall r, ~(In r l) -> rs' r = rs r)
   /\ agree_unused ls0 rs'.
 Proof.
@@ -1226,7 +1236,7 @@ Lemma restore_callee_save_correct:
        (State cs fb (Vptr sp Ptrofs.zero) (restore_callee_save fe k) rs m)
     E0 (State cs fb (Vptr sp Ptrofs.zero) k rs' m)
   /\ (forall r,
-        is_callee_save r = true -> Val.inject j (ls0 (R r)) (rs' r))
+        is_callee_save r = true -> Val.inject j (ls0 @ (R r)) (rs' r))
   /\ (forall r,
         is_callee_save r = false -> rs' r = rs r).
 Proof.
@@ -1295,12 +1305,12 @@ Proof.
   split. assumption.
   split. assumption.
   split. eassumption.
-  split. red; unfold return_regs; intros.
+  split. red; unfold Locmap.get, return_regs; intros.
     destruct (is_callee_save r) eqn:C.
     apply CS; auto.
     rewrite NCS by auto. apply AGR.
-  split. red; unfold return_regs; intros.
-    destruct l. rewrite H; auto. destruct sl; auto; contradiction. 
+  split. red; unfold Locmap.get, return_regs; intros.
+    destruct l. rewrite H; auto. destruct sl; auto; contradiction.
   assumption.
 Qed.
 
@@ -1601,7 +1611,7 @@ Hypothesis SEP: m' |= stack_contents j cs cs'.
 Lemma transl_external_argument:
   forall l,
   In l (regs_of_rpairs (loc_arguments sg)) ->
-  exists v, extcall_arg rs m' (parent_sp cs') l v /\ Val.inject j (ls l) v.
+  exists v, extcall_arg rs m' (parent_sp cs') l v /\ Val.inject j (ls @ l) v.
 Proof.
   intros.
   assert (loc_argument_acceptable l) by (apply loc_arguments_acceptable_2 with sg; auto).
@@ -1682,7 +1692,7 @@ Hypothesis SEP: m' |= frame_contents f j sp' ls ls0 parent retaddr ** minjection
 
 Lemma transl_builtin_arg_correct:
   forall a v,
-  eval_builtin_arg ge ls (Vptr sp Ptrofs.zero) m a v ->
+  eval_builtin_arg ge (Locmap.read ls) (Vptr sp Ptrofs.zero) m a v ->
   (forall l, In l (params_of_builtin_arg a) -> loc_valid f l = true) ->
   (forall sl ofs ty, In (S sl ofs ty) (params_of_builtin_arg a) -> slot_within_bounds b sl ofs ty) ->
   exists v',
@@ -1699,7 +1709,7 @@ Local Opaque fe.
   induction 1; simpl; intros VALID BOUNDS.
 - assert (loc_valid f x = true) by auto.
   destruct x as [r | [] ofs ty]; try discriminate.
-  + exists (rs r); auto with barg.
+  + exists (rs r); unfold Locmap.read; auto with barg.
   + exploit frame_get_local; eauto. intros (v & A & B).
     exists v; split; auto. constructor; auto.
 - econstructor; eauto with barg.
@@ -1728,7 +1738,7 @@ Qed.
 
 Lemma transl_builtin_args_correct:
   forall al vl,
-  eval_builtin_args ge ls (Vptr sp Ptrofs.zero) m al vl ->
+  eval_builtin_args ge (Locmap.read ls) (Vptr sp Ptrofs.zero) m al vl ->
   (forall l, In l (params_of_builtin_args al) -> loc_valid f l = true) ->
   (forall sl ofs ty, In (S sl ofs ty) (params_of_builtin_args al) -> slot_within_bounds b sl ofs ty) ->
   exists vl',
@@ -1873,7 +1883,7 @@ Proof.
   eapply frame_undef_regs with (rl := destroyed_by_setstack ty) in SEP.
   assert (A: exists m'',
               store_stack m' (Vptr sp' Ptrofs.zero) ty (Ptrofs.repr ofs') (rs0 src) = Some m''
-           /\ m'' |= frame_contents f j sp' (Locmap.set (S sl ofs ty) (rs (R src))
+           /\ m'' |= frame_contents f j sp' (Locmap.set (S sl ofs ty) (rs @ (R src))
                                                (LTL.undef_regs (destroyed_by_setstack ty) rs))
                                             (parent_locset s) (parent_sp cs') (parent_ra cs')
                   ** stack_contents j s cs' ** minjection j m ** globalenv_inject ge j).
@@ -2151,7 +2161,7 @@ Proof.
   set (j := Mem.flat_inj (Mem.nextblock m0)).
   eapply match_states_call with (j := j); eauto.
   constructor. red; intros. rewrite H3, loc_arguments_main in H. contradiction.
-  red; simpl; auto.
+  red; intros. unfold Locmap.get, Locmap.init. rewrite decode_encode_undef; auto.
   simpl. rewrite sep_pure. split; auto. split;[|split].
   eapply Genv.initmem_inject; eauto.
   simpl. exists (Mem.nextblock m0); split. apply Ple_refl.

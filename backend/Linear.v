@@ -95,7 +95,7 @@ Variable ge: genv.
 
 Definition find_function (ros: mreg + ident) (rs: locset) : option fundef :=
   match ros with
-  | inl r => Genv.find_funct ge (rs (R r))
+  | inl r => Genv.find_funct ge (rs @ (R r))
   | inr symb =>
       match Genv.find_symbol ge symb with
       | None => None
@@ -145,12 +145,12 @@ Definition parent_locset (stack: list stackframe) : locset :=
 Inductive step: state -> trace -> state -> Prop :=
   | exec_Lgetstack:
       forall s f sp sl ofs ty dst b rs m rs',
-      rs' = Locmap.set (R dst) (rs (S sl ofs ty)) (undef_regs (destroyed_by_getstack sl) rs) ->
+      rs' = Locmap.set (R dst) (rs @ (S sl ofs ty)) (undef_regs (destroyed_by_getstack sl) rs) ->
       step (State s f sp (Lgetstack sl ofs ty dst :: b) rs m)
         E0 (State s f sp b rs' m)
   | exec_Lsetstack:
       forall s f sp src sl ofs ty b rs m rs',
-      rs' = Locmap.set (S sl ofs ty) (rs (R src)) (undef_regs (destroyed_by_setstack ty) rs) ->
+      rs' = Locmap.set (S sl ofs ty) (rs @ (R src)) (undef_regs (destroyed_by_setstack ty) rs) ->
       step (State s f sp (Lsetstack src sl ofs ty :: b) rs m)
         E0 (State s f sp b rs' m)
   | exec_Lop:
@@ -169,7 +169,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | exec_Lstore:
       forall s f sp chunk addr args src b rs m m' a rs',
       eval_addressing ge sp addr (reglist rs args) = Some a ->
-      Mem.storev chunk m a (rs (R src)) = Some m' ->
+      Mem.storev chunk m a (rs @ (R src)) = Some m' ->
       rs' = undef_regs (destroyed_by_store chunk addr) rs ->
       step (State s f sp (Lstore chunk addr args src :: b) rs m)
         E0 (State s f sp b rs' m')
@@ -189,7 +189,7 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (Callstate s f' rs' m')
   | exec_Lbuiltin:
       forall s f sp rs m ef args res b vargs t vres rs' m',
-      eval_builtin_args ge rs sp m args vargs ->
+      eval_builtin_args ge (Locmap.read rs) sp m args vargs ->
       external_call ef ge vargs m t vres m' ->
       rs' = Locmap.setres res vres (undef_regs (destroyed_by_builtin ef) rs) ->
       step (State s f sp (Lbuiltin ef args res :: b) rs m)
@@ -218,7 +218,7 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State s f sp b rs' m)
   | exec_Ljumptable:
       forall s f sp arg tbl b rs m n lbl b' rs',
-      rs (R arg) = Vint n ->
+      rs @ (R arg) = Vint n ->
       list_nth_z tbl (Int.unsigned n) = Some lbl ->
       find_label lbl f.(fn_code) = Some b' ->
       rs' = undef_regs (destroyed_by_jumptable) rs ->

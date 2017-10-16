@@ -67,6 +67,8 @@ Definition funsig (fd: fundef) :=
 Definition genv := Genv.t fundef unit.
 Definition locset := Locmap.t.
 
+Open Scope ltl.
+
 (** Calling conventions are reflected at the level of location sets
   (environments mapping locations to values) by the following two
   functions.
@@ -84,9 +86,9 @@ Definition call_regs (caller: locset) : locset :=
   fun (l: loc) =>
     match l with
     | R r => caller (R r)
-    | S Local ofs ty => Vundef
+    | S Local ofs ty => encode_val (chunk_of_type ty) Vundef
     | S Incoming ofs ty => caller (S Outgoing ofs ty)
-    | S Outgoing ofs ty => Vundef
+    | S Outgoing ofs ty => encode_val (chunk_of_type ty) Vundef
     end.
 
 (** [return_regs caller callee] returns the location set after
@@ -105,7 +107,7 @@ Definition return_regs (caller callee: locset) : locset :=
   fun (l: loc) =>
     match l with
     | R r => if is_callee_save r then caller (R r) else callee (R r)
-    | S Outgoing ofs ty => Vundef
+    | S Outgoing ofs ty => encode_val (chunk_of_type ty) Vundef
     | S sl ofs ty => caller (S sl ofs ty)
     end.
 
@@ -116,8 +118,8 @@ Definition return_regs (caller callee: locset) : locset :=
 Definition undef_caller_save_regs (ls: locset) : locset :=
   fun (l: loc) =>
     match l with
-    | R r => if is_callee_save r then ls (R r) else Vundef
-    | S Outgoing ofs ty => Vundef
+    | R r => if is_callee_save r then ls (R r) else encode_val (chunk_of_type (mreg_type r)) Vundef
+    | S Outgoing ofs ty => encode_val (chunk_of_type ty) Vundef
     | S sl ofs ty => ls (S sl ofs ty)
     end.
 
@@ -166,7 +168,7 @@ Section RELSEM.
 Variable ge: genv.
 
 Definition reglist (rs: locset) (rl: list mreg) : list val :=
-  List.map (fun r => rs (R r)) rl.
+  List.map (fun r => rs @ (R r)) rl.
 
 Fixpoint undef_regs (rl: list mreg) (rs: locset) : locset :=
   match rl with
@@ -182,7 +184,7 @@ Definition destroyed_by_getstack (s: slot): list mreg :=
 
 Definition find_function (ros: mreg + ident) (rs: locset) : option fundef :=
   match ros with
-  | inl r => Genv.find_funct ge (rs (R r))
+  | inl r => Genv.find_funct ge (rs @ (R r))
   | inr symb =>
       match Genv.find_symbol ge symb with
       | None => None
@@ -216,16 +218,16 @@ Inductive step: state -> trace -> state -> Prop :=
       step (Block s f sp (Lload chunk addr args dst :: bb) rs m)
         E0 (Block s f sp bb rs' m)
   | exec_Lgetstack: forall s f sp sl ofs ty dst bb rs m rs',
-      rs' = Locmap.set (R dst) (rs (S sl ofs ty)) (undef_regs (destroyed_by_getstack sl) rs) ->
+      rs' = Locmap.set (R dst) (rs @ (S sl ofs ty)) (undef_regs (destroyed_by_getstack sl) rs) ->
       step (Block s f sp (Lgetstack sl ofs ty dst :: bb) rs m)
         E0 (Block s f sp bb rs' m)
   | exec_Lsetstack: forall s f sp src sl ofs ty bb rs m rs',
-      rs' = Locmap.set (S sl ofs ty) (rs (R src)) (undef_regs (destroyed_by_setstack ty) rs) ->
+      rs' = Locmap.set (S sl ofs ty) (rs @ (R src)) (undef_regs (destroyed_by_setstack ty) rs) ->
       step (Block s f sp (Lsetstack src sl ofs ty :: bb) rs m)
         E0 (Block s f sp bb rs' m)
   | exec_Lstore: forall s f sp chunk addr args src bb rs m a rs' m',
       eval_addressing ge sp addr (reglist rs args) = Some a ->
-      Mem.storev chunk m a (rs (R src)) = Some m' ->
+      Mem.storev chunk m a (rs @ (R src)) = Some m' ->
       rs' = undef_regs (destroyed_by_store chunk addr) rs ->
       step (Block s f sp (Lstore chunk addr args src :: bb) rs m)
         E0 (Block s f sp bb rs' m')
@@ -242,7 +244,7 @@ Inductive step: state -> trace -> state -> Prop :=
       step (Block s f (Vptr sp Ptrofs.zero) (Ltailcall sig ros :: bb) rs m)
         E0 (Callstate s fd rs' m')
   | exec_Lbuiltin: forall s f sp ef args res bb rs m vargs t vres rs' m',
-      eval_builtin_args ge rs sp m args vargs ->
+      eval_builtin_args ge (Locmap.read rs) sp m args vargs ->
       external_call ef ge vargs m t vres m' ->
       rs' = Locmap.setres res vres (undef_regs (destroyed_by_builtin ef) rs) ->
       step (Block s f sp (Lbuiltin ef args res :: bb) rs m)
@@ -257,7 +259,7 @@ Inductive step: state -> trace -> state -> Prop :=
       step (Block s f sp (Lcond cond args pc1 pc2 :: bb) rs m)
         E0 (State s f sp pc rs' m)
   | exec_Ljumptable: forall s f sp arg tbl bb rs m n pc rs',
-      rs (R arg) = Vint n ->
+      rs @ (R arg) = Vint n ->
       list_nth_z tbl (Int.unsigned n) = Some pc ->
       rs' = undef_regs (destroyed_by_jumptable) rs ->
       step (Block s f sp (Ljumptable arg tbl :: bb) rs m)

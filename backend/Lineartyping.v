@@ -98,17 +98,23 @@ Definition wt_function (f: function) : bool :=
 (** Typing the run-time state. *)
 
 Definition wt_locset (ls: locset) : Prop :=
-  forall l, Val.has_type (ls l) (Loc.type l).
+  forall l, Val.has_type (ls @ l) (Loc.type l).
+
+Lemma well_typed_locset:
+  forall ls, wt_locset ls.
+Proof.
+  unfold wt_locset, Locmap.get, Locmap.chunk_of_loc. intros.
+  set (chunk := chunk_of_type (Loc.type l)).
+  rewrite <- type_of_chunk_of_type.
+  apply decode_val_type.
+Qed.
 
 Lemma wt_setreg:
   forall ls r v,
   Val.has_type v (mreg_type r) -> wt_locset ls -> wt_locset (Locmap.set (R r) v ls).
 Proof.
   intros; red; intros.
-  unfold Locmap.set.
-  destruct (Loc.eq (R r) l).
-  subst l; rewrite Val.load_result_same; auto.
-  destruct (Loc.diff_dec (R r) l). auto. red. auto.
+  apply well_typed_locset.
 Qed.
 
 Lemma wt_setstack:
@@ -116,13 +122,7 @@ Lemma wt_setstack:
   wt_locset ls -> wt_locset (Locmap.set (S sl ofs ty) v ls).
 Proof.
   intros; red; intros.
-  unfold Locmap.set.
-  destruct (Loc.eq (S sl ofs ty) l).
-  subst l. simpl.
-  generalize (Val.load_result_type (chunk_of_type ty) v).
-  replace (type_of_chunk (chunk_of_type ty)) with ty. auto.
-  destruct ty; reflexivity.
-  destruct (Loc.diff_dec (S sl ofs ty) l). auto. red. auto.
+  apply well_typed_locset.
 Qed.
 
 Lemma wt_undef_regs:
@@ -134,11 +134,8 @@ Qed.
 Lemma wt_call_regs:
   forall ls, wt_locset ls -> wt_locset (call_regs ls).
 Proof.
-  intros; red; intros. unfold call_regs. destruct l. auto.
-  destruct sl.
-  red; auto.
-  change (Loc.type (S Incoming pos ty)) with (Loc.type (S Outgoing pos ty)). auto.
-  red; auto.
+  intros; red; intros.
+  apply well_typed_locset.
 Qed.
 
 Lemma wt_return_regs:
@@ -146,24 +143,20 @@ Lemma wt_return_regs:
   wt_locset caller -> wt_locset callee -> wt_locset (return_regs caller callee).
 Proof.
   intros; red; intros.
-  unfold return_regs. destruct l.
-- destruct (is_callee_save r); auto.
-- destruct sl; auto; red; auto.
+  apply well_typed_locset.
 Qed.
 
 Lemma wt_undef_caller_save_regs:
   forall ls, wt_locset ls -> wt_locset (undef_caller_save_regs ls).
 Proof.
-  intros; red; intros. unfold undef_caller_save_regs.
-  destruct l.
-  destruct (is_callee_save r); auto; simpl; auto.
-  destruct sl; auto; red; auto. 
+  intros; red; intros.
+  apply well_typed_locset.
 Qed.
 
 Lemma wt_init:
   wt_locset (Locmap.init Vundef).
 Proof.
-  red; intros. unfold Locmap.init. red; auto.
+  red; intros. apply well_typed_locset.
 Qed.
 
 Lemma wt_setpair:
@@ -221,13 +214,13 @@ Qed.
 Definition agree_outgoing_arguments (sg: signature) (ls pls: locset) : Prop :=
   forall ty ofs,
   In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments sg)) ->
-  ls (S Outgoing ofs ty) = pls (S Outgoing ofs ty).
+  ls @ (S Outgoing ofs ty) = pls @ (S Outgoing ofs ty).
 
 (** For return points, we have that all [Outgoing] stack locations have
   been set to [Vundef]. *)
 
 Definition outgoing_undef (ls: locset) : Prop :=
-  forall ty ofs, ls (S Outgoing ofs ty) = Vundef.
+  forall ty ofs, ls @ (S Outgoing ofs ty) = Vundef.
 
 (** Soundness of the type system *)
 
@@ -350,7 +343,7 @@ Local Opaque mreg_type.
   econstructor; eauto.
   eapply wt_find_function; eauto.
   apply wt_return_regs; auto. apply wt_parent_locset; auto.
-  red; simpl; intros. destruct l; simpl in *. rewrite H3; auto. destruct sl; auto; congruence.
+  red; simpl; intros. unfold Locmap.get. destruct l; simpl in *. rewrite H3; auto. destruct sl; auto; congruence.
   red; simpl; intros. apply zero_size_arguments_tailcall_possible in H. apply H in H3. contradiction.
 - (* builtin *)
   simpl in *; InvBooleans.
@@ -374,8 +367,8 @@ Local Opaque mreg_type.
   simpl in *. InvBooleans.
   econstructor; eauto.
   apply wt_return_regs; auto. apply wt_parent_locset; auto.
-  red; simpl; intros. destruct l; simpl in *. rewrite H0; auto. destruct sl; auto; congruence.
-  red; simpl; intros. auto.
+  red; simpl; intros. unfold Locmap.get. destruct l; simpl in *. rewrite H0; auto. destruct sl; auto; congruence.
+  red; simpl; intros. unfold Locmap.get, return_regs. apply decode_encode_undef.
 - (* internal function *)
   simpl in WTFD.
   econstructor. eauto. eauto. eauto.
@@ -385,9 +378,13 @@ Local Opaque mreg_type.
   eapply external_call_well_typed; eauto.
   apply wt_undef_caller_save_regs; auto.
   red; simpl; intros. destruct l; simpl in *.
-  rewrite locmap_get_set_loc_result by auto. simpl. rewrite H; auto. 
-  rewrite locmap_get_set_loc_result by auto. simpl. destruct sl; auto; congruence.
-  red; simpl; intros. rewrite locmap_get_set_loc_result by auto. auto.
+  rewrite locmap_get_set_loc_result by auto. unfold Locmap.get. simpl. rewrite H; auto.
+  apply AGCS. simpl; auto.
+  rewrite locmap_get_set_loc_result by auto. unfold Locmap.get. simpl. destruct sl; auto; try congruence.
+  apply AGCS. simpl; auto.
+  apply AGCS. simpl; auto.
+  red; simpl; intros. rewrite locmap_get_set_loc_result by auto.
+  unfold Locmap.get, undef_caller_save_regs. apply decode_encode_undef.
 - (* return *)
   inv WTSTK. econstructor; eauto.
 Qed.
@@ -442,7 +439,7 @@ Qed.
 Lemma wt_callstate_wt_regs:
   forall s f rs m,
   wt_state (Callstate s f rs m) ->
-  forall r, Val.has_type (rs (R r)) (mreg_type r).
+  forall r, Val.has_type (rs @ (R r)) (mreg_type r).
 Proof.
   intros. inv H. apply WTRS.
 Qed.

@@ -193,6 +193,9 @@ Definition chunk_of_type (ty: typ) :=
 Lemma chunk_of_Tptr: chunk_of_type Tptr = Mptr.
 Proof. unfold Mptr, Tptr; destruct Archi.ptr64; auto. Qed.
 
+Lemma type_of_chunk_of_type: forall ty, type_of_chunk (chunk_of_type ty) = ty.
+Proof. destruct ty; simpl; auto. Qed.
+
 (** Initialization data for global variables. *)
 
 Inductive init_data: Type :=
