@@ -179,7 +179,7 @@ let rec attributes_of_type env t =
   | TUnion(s, a) ->
       let ci = Env.find_union env s in add_attributes ci.ci_attr a
   | TEnum(s, a) ->
-      let ei = Env.find_enum env s in add_attributes ei.ei_attr a
+    let ei = Env.find_enum env s in add_attributes ei.ei_attr a
 
 (* Changing the attributes of a type (at top-level) *)
 (* Same hack as above for array types. *)
@@ -937,10 +937,23 @@ let rec is_lvalue e =
    whose type is not const, neither an array type, nor a function type,
    nor an incomplete type. *)
 
+let rec is_const_type env ty =
+  List.mem AConst (attributes_of_type env ty) ||
+  begin match unroll env ty with
+  | TStruct(s, a) ->
+      let ci = Env.find_struct env s in
+      List.exists (fun m -> is_const_type env m.fld_typ) ci.ci_members
+  | TUnion(s, a) ->
+      let ci = Env.find_union env s in
+      List.exists (fun m -> is_const_type env m.fld_typ) ci.ci_members
+  | _ ->
+      false
+  end
+
 let is_modifiable_lvalue env e =
   is_lvalue e
-  && not (List.mem AConst (attributes_of_type env e.etyp))
   && not (incomplete_type env e.etyp)
+  && not (is_const_type env e.etyp)
   && begin match unroll env e.etyp with
      | TFun _ | TArray _ -> false
      | _ -> true
