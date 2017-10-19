@@ -32,6 +32,7 @@ type section_name =
   | Section_debug_line of string option
   | Section_debug_ranges
   | Section_debug_str
+  | Section_ais_annotation
 
 type access_mode =
   | Access_default

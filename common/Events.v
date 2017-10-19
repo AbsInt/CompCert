@@ -1419,8 +1419,8 @@ Definition external_call (ef: external_function): extcall_sem :=
   | EF_malloc            => extcall_malloc_sem
   | EF_free              => extcall_free_sem
   | EF_memcpy sz al      => extcall_memcpy_sem sz al
-  | EF_annot txt targs   => extcall_annot_sem txt targs
-  | EF_annot_val txt targ => extcall_annot_val_sem txt targ
+  | EF_annot kind txt targs   => extcall_annot_sem txt targs
+  | EF_annot_val kind txt targ => extcall_annot_val_sem txt targ
   | EF_inline_asm txt sg clb => inline_assembly_sem txt sg
   | EF_debug kind txt targs => extcall_debug_sem
   end.

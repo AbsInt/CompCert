@@ -247,7 +247,7 @@ Definition builtin_constraints (ef: external_function) :
   | EF_vload _ => OK_addressing :: nil
   | EF_vstore _ => OK_addressing :: OK_default :: nil
   | EF_memcpy _ _ => OK_addrstack :: OK_addrstack :: nil
-  | EF_annot txt targs => map (fun _ => OK_all) targs
+  | EF_annot kind txt targs => map (fun _ => OK_all) targs
   | EF_debug kind txt targs => map (fun _ => OK_all) targs
   | _ => nil
   end.

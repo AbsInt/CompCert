@@ -367,7 +367,7 @@ let pp_instructions pp ic =
       | EF_inline_asm _ ->
         instruction pp "Pinlineasm" [Id];
         Cerrors.warning ("",-10) Cerrors.Inline_asm_sdump "inline assembler is not supported in sdump"
-      | EF_annot (txt,targs) ->
+      | EF_annot (kind,txt,targs) ->
         let annot_string = PrintAsmaux.annot_text preg_annot "r1" (camlstring_of_coqstring txt) args in
         let len = String.length annot_string in
         let buf = Buffer.create len in
@@ -376,7 +376,11 @@ let pp_instructions pp ic =
             | _ -> () end;
             Buffer.add_char buf c) annot_string;
         let annot_string = Buffer.contents buf in
-        instruction pp "Pannot" [String annot_string]
+        let kind = match P.to_int kind with
+          | 1 -> "normal"
+          | 2 -> "ais"
+          | _ -> assert false in
+        instruction pp "Pannot" [String kind;String annot_string]
       | EF_annot_val _
       | EF_builtin _
       | EF_debug _
@@ -423,7 +427,8 @@ let pp_section pp sec =
   | Section_debug_line _
   | Section_debug_loc
   | Section_debug_ranges
-  | Section_debug_str -> () (* There should be no info in the debug sections *)
+  | Section_debug_str
+  | Section_ais_annotation -> () (* There should be no info in the debug sections *)
 
 let pp_int_opt pp = function
   | None -> fprintf pp "0"

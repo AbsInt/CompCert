@@ -108,6 +108,23 @@ module Printer(Target:TARGET) =
       | Gfun (External ef) ->   ()
       | Gvar v -> print_var oc name v
 
+    let print_ais_annot oc =
+      let annots = List.rev !ais_annot_list in
+      if annots <> [] then begin
+        Target.section oc Section_ais_annotation;
+        let annot_part oc lbl = function
+          |  Str.Delim _  ->
+            fprintf oc "	.byte 7,%d\n" (if Archi.ptr64 then 8 else 4) ;
+            fprintf oc "	%s %a\n" Target.address Target.label lbl
+          | Str.Text a -> fprintf oc "	.ascii %S\n" a in
+        let annot oc (lbl,str) =
+          List.iter (annot_part oc lbl) str;
+          fprintf oc "	.ascii \"\\n\"\n"
+        in
+        List.iter (annot oc) annots
+      end;
+      ais_annot_list := []
+
     module DwarfTarget: DwarfTypes.DWARF_TARGET =
       struct
         let label = Target.label
@@ -128,6 +145,7 @@ let print_program oc p =
   Target.print_prologue oc;
   List.iter (Printer.print_globdef oc) p.prog_defs;
   Target.print_epilogue oc;
+  Printer.print_ais_annot oc;
   if !Clflags.option_g then
     begin
       let atom_to_s s =

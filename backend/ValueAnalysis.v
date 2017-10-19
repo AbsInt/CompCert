@@ -99,9 +99,9 @@ Definition transfer_builtin
       let p := loadbytes am rm (aptr_of_aval asrc) in
       let am' := storebytes am (aptr_of_aval adst) sz p in
       VA.State (set_builtin_res res ntop ae) am'
-  | (EF_annot _ _ | EF_debug _ _ _), _ =>
+  | (EF_annot _ _ _ | EF_debug _ _ _), _ =>
       VA.State (set_builtin_res res ntop ae) am
-  | EF_annot_val _ _, v :: nil =>
+  | EF_annot_val _ _ _, v :: nil =>
       let av := abuiltin_arg ae am rm v in
       VA.State (set_builtin_res res av ae) am
   | _, _ =>

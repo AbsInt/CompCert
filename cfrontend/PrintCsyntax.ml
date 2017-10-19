@@ -253,10 +253,10 @@ let rec expr p (prec, e) =
       fprintf p "__builtin_memcpy_aligned@[<hov 1>(%ld,@ %ld,@ %a)@]"
                 (camlint_of_coqint sz) (camlint_of_coqint al)
                 exprlist (true, args)
-  | Ebuiltin(EF_annot(txt, _), _, args, _) ->
+  | Ebuiltin(EF_annot(_,txt, _), _, args, _) ->
       fprintf p "__builtin_annot@[<hov 1>(%S%a)@]"
                 (camlstring_of_coqstring txt) exprlist (false, args)
-  | Ebuiltin(EF_annot_val(txt, _), _, args, _) ->
+  | Ebuiltin(EF_annot_val(_,txt, _), _, args, _) ->
       fprintf p "__builtin_annot_intval@[<hov 1>(%S%a)@]"
                 (camlstring_of_coqstring txt) exprlist (false, args)
   | Ebuiltin(EF_external(id, sg), _, args, _) ->

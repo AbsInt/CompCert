@@ -184,3 +184,5 @@ let response_file_style =
   | v -> bad_config "response_file_style" [v]
 
 let gnu_toolchain = system <> "diab"
+
+let elf_target = system <> "macosx" && system <> "cygwin"

@@ -994,7 +994,7 @@ Ltac UseTransfer :=
   erewrite Mem.loadbytes_length in H0 by eauto.
   rewrite nat_of_Z_eq in H0 by omega. auto.
 + (* annot *)
-  destruct (transfer_builtin_args (kill_builtin_res res ne, nm) _x1) as (ne1, nm1) eqn:TR.
+  destruct (transfer_builtin_args (kill_builtin_res res ne, nm) _x2) as (ne1, nm1) eqn:TR.
   InvSoundState.
   exploit transfer_builtin_args_sound; eauto. intros (tvl & A & B & C & D).
   inv H1.
@@ -1006,7 +1006,7 @@ Ltac UseTransfer :=
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_set_res; auto.
 + (* annot val *)
-  destruct (transfer_builtin_args (kill_builtin_res res ne, nm) _x1) as (ne1, nm1) eqn:TR.
+  destruct (transfer_builtin_args (kill_builtin_res res ne, nm) _x2) as (ne1, nm1) eqn:TR.
   InvSoundState.
   exploit transfer_builtin_args_sound; eauto. intros (tvl & A & B & C & D).
   inv H1. inv B. inv H6.

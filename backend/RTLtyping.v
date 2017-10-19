@@ -132,7 +132,7 @@ Inductive wt_instr : instruction -> Prop :=
   | wt_Ibuiltin:
       forall ef args res s,
       match ef with
-      | EF_annot _ _ | EF_debug _ _ _ => True
+      | EF_annot _ _ _ | EF_debug _ _ _ => True
       | _ => map type_of_builtin_arg args = (ef_sig ef).(sig_args)
       end ->
       type_of_builtin_res res = proj_sig_res (ef_sig ef) ->
@@ -308,7 +308,7 @@ Definition type_instr (e: S.typenv) (i: instruction) : res S.typenv :=
       do x <- check_successor s;
       do e1 <-
         match ef with
-        | EF_annot _ _ | EF_debug _ _ _ => OK e
+        | EF_annot _ _ _ | EF_debug _ _ _ => OK e
         | _ => type_builtin_args e args sig.(sig_args)
         end;
       type_builtin_res e1 res (proj_sig_res sig)
@@ -702,7 +702,7 @@ Proof.
   exploit type_builtin_res_complete; eauto. instantiate (1 := res). intros [e2 [C D]].
   exploit type_builtin_res_complete. eexact H. instantiate (1 := res). intros [e3 [E F]].
   rewrite check_successor_complete by auto. simpl.
-  exists (match ef with EF_annot _ _ | EF_debug _ _ _ => e3 | _ => e2 end); split.
+  exists (match ef with EF_annot _ _ _ | EF_debug _ _ _ => e3 | _ => e2 end); split.
   rewrite H1 in C, E.
   destruct ef; try (rewrite <- H0; rewrite A); simpl; auto.
   destruct ef; auto.

@@ -81,8 +81,8 @@ let expand_int64_arith conflict rl fn =
 
 (* Handling of annotations *)
 
-let expand_annot_val txt targ args res =
-  emit (Pbuiltin (EF_annot(txt,[targ]), args, BR_none));
+let expand_annot_val kind txt targ args res =
+  emit (Pbuiltin (EF_annot(kind,txt,[targ]), args, BR_none));
   match args, res with
   | [BA(IR src)], BR(IR dst) ->
      if dst <> src then emit (Pmov (dst,SOreg src))
@@ -453,8 +453,8 @@ let expand_instruction instr =
 	      expand_builtin_vload chunk args res
 	   | EF_vstore chunk ->
 	      expand_builtin_vstore chunk args
-	   | EF_annot_val (txt,targ) ->
-	      expand_annot_val txt targ args res
+	   | EF_annot_val (kind,txt,targ) ->
+	      expand_annot_val kind txt targ args res
 	   | EF_memcpy(sz, al) ->
 	      expand_builtin_memcpy (Int32.to_int (camlint_of_coqint sz))
 		(Int32.to_int (camlint_of_coqint al)) args

@@ -250,10 +250,10 @@ let external_function p = function
   | EF_free -> fprintf p "EF_free"
   | EF_memcpy(sz, al) ->
       fprintf p "(EF_memcpy %ld %ld)" (Z.to_int32 sz) (Z.to_int32 al)
-  | EF_annot(text, targs) ->
+  | EF_annot(kind,text, targs) ->
       assertions := (camlstring_of_coqstring text, targs) :: !assertions;
       fprintf p "(EF_annot %a %a)" coqstring text (print_list asttype) targs
-  | EF_annot_val(text, targ) ->
+  | EF_annot_val(kind,text, targ) ->
       assertions := (camlstring_of_coqstring text, [targ]) :: !assertions;
       fprintf p "(EF_annot_val %a %a)" coqstring text asttype targ
   | EF_debug(kind, text, targs) ->

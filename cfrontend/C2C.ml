@@ -132,9 +132,21 @@ let string_of_errmsg msg =
 
 (** ** The builtin environment *)
 
+let ais_annot_functions =
+  if Configuration.elf_target then
+    [(* Ais Annotations, only available for ELF targets *)
+      "__builtin_ais_annot",
+      (TVoid [],
+       [TPtr(TInt(IChar, [AConst]), [])],
+       true);]
+  else
+    []
+
 let builtins_generic = {
   Builtins.typedefs = [];
-  Builtins.functions = [
+  Builtins.functions =
+    ais_annot_functions
+    @[
     (* Integer arithmetic *)
     "__builtin_bswap",
     (TInt(IUInt, []), [TInt(IUInt, [])], false);
@@ -828,7 +840,7 @@ let rec convertExpr env e =
       | {edesc = C.EConst(CStr txt)} :: args1 ->
           let targs1 = convertTypArgs env [] args1 in
           Ebuiltin(
-             AST.EF_annot(coqstring_of_camlstring txt, typlist_of_typelist targs1),
+             AST.EF_annot(P.of_int 1,coqstring_of_camlstring txt, typlist_of_typelist targs1),
             targs1, convertExprList env args1, convertTyp env e.etyp)
       | _ ->
           error "argument 1 of '__builtin_annot' must be a string literal";
@@ -840,7 +852,32 @@ let rec convertExpr env e =
       | [ {edesc = C.EConst(CStr txt)}; arg ] ->
           let targ = convertTyp env
                          (Cutil.default_argument_conversion env arg.etyp) in
-          Ebuiltin(AST.EF_annot_val(coqstring_of_camlstring txt, typ_of_type targ),
+          Ebuiltin(AST.EF_annot_val(P.of_int 1,coqstring_of_camlstring txt, typ_of_type targ),
+                   Tcons(targ, Tnil), convertExprList env [arg],
+                   convertTyp env e.etyp)
+      | _ ->
+          error "argument 1 of '__builtin_annot_intval' must be a string literal";
+          ezero
+      end
+
+  | C.ECall({edesc = C.EVar {name = "__builtin_ais_annot"}}, args) when Configuration.elf_target ->
+      begin match args with
+      | {edesc = C.EConst(CStr txt)} :: args1 ->
+          let targs1 = convertTypArgs env [] args1 in
+          Ebuiltin(
+             AST.EF_annot(P.of_int 2,coqstring_of_camlstring txt, typlist_of_typelist targs1),
+            targs1, convertExprList env args1, convertTyp env e.etyp)
+      | _ ->
+          error "argument 1 of '__builtin_ais_annot' must be a string literal";
+          ezero
+      end
+
+  | C.ECall({edesc = C.EVar {name = "__builtin_ais_annot_intval"}}, args) when Configuration.elf_target ->
+      begin match args with
+      | [ {edesc = C.EConst(CStr txt)}; arg ] ->
+          let targ = convertTyp env
+                         (Cutil.default_argument_conversion env arg.etyp) in
+          Ebuiltin(AST.EF_annot_val(P.of_int 2,coqstring_of_camlstring txt, typ_of_type targ),
                    Tcons(targ, Tnil), convertExprList env [arg],
                    convertTyp env e.etyp)
       | _ ->

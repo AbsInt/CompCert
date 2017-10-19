@@ -512,8 +512,8 @@ Definition do_external (ef: external_function):
   | EF_malloc => do_ef_malloc
   | EF_free => do_ef_free
   | EF_memcpy sz al => do_ef_memcpy sz al
-  | EF_annot text targs => do_ef_annot text targs
-  | EF_annot_val text targ => do_ef_annot_val text targ
+  | EF_annot kind text targs => do_ef_annot text targs
+  | EF_annot_val kind text targ => do_ef_annot_val text targ
   | EF_inline_asm text sg clob => do_inline_assembly text sg ge
   | EF_debug kind text targs => do_ef_debug kind text targs
   end.

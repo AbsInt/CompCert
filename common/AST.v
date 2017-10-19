@@ -451,11 +451,11 @@ Inductive external_function : Type :=
          Produces no observable event. *)
   | EF_memcpy (sz: Z) (al: Z)
      (** Block copy, of [sz] bytes, between addresses that are [al]-aligned. *)
-  | EF_annot (text: string) (targs: list typ)
+  | EF_annot (kind: positive) (text: string) (targs: list typ)
      (** A programmer-supplied annotation.  Takes zero, one or several arguments,
          produces an event carrying the text and the values of these arguments,
          and returns no value. *)
-  | EF_annot_val (text: string) (targ: typ)
+  | EF_annot_val (kind: positive) (text: string) (targ: typ)
      (** Another form of annotation that takes one argument, produces
          an event carrying the text and the value of this argument,
          and returns the value of the argument. *)
@@ -482,8 +482,8 @@ Definition ef_sig (ef: external_function): signature :=
   | EF_malloc => mksignature (Tptr :: nil) (Some Tptr) cc_default
   | EF_free => mksignature (Tptr :: nil) None cc_default
   | EF_memcpy sz al => mksignature (Tptr :: Tptr :: nil) None cc_default
-  | EF_annot text targs => mksignature targs None cc_default
-  | EF_annot_val text targ => mksignature (targ :: nil) (Some targ) cc_default
+  | EF_annot kind text targs => mksignature targs None cc_default
+  | EF_annot_val kind text targ => mksignature (targ :: nil) (Some targ) cc_default
   | EF_inline_asm text sg clob => sg
   | EF_debug kind text targs => mksignature targs None cc_default
   end.
@@ -500,8 +500,8 @@ Definition ef_inline (ef: external_function) : bool :=
   | EF_malloc => false
   | EF_free => false
   | EF_memcpy sz al => true
-  | EF_annot text targs => true
-  | EF_annot_val text targ => true
+  | EF_annot kind text targs => true
+  | EF_annot_val kind Text rg => true
   | EF_inline_asm text sg clob => true
   | EF_debug kind text targs => true
   end.
@@ -510,7 +510,7 @@ Definition ef_inline (ef: external_function) : bool :=
 
 Definition ef_reloads (ef: external_function) : bool :=
   match ef with
-  | EF_annot text targs => false
+  | EF_annot kind text targs => false
   | EF_debug kind text targs => false
   | _ => true
   end.

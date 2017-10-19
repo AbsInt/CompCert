@@ -136,6 +136,7 @@ module Linux_System : SYSTEM =
       | Section_debug_line _ ->  ".section	.debug_line,\"\",@progbits"
       | Section_debug_ranges -> ".section	.debug_ranges,\"\",@progbits"
       | Section_debug_str -> ".section	.debug_str,\"MS\",@progbits,1"
+      | Section_ais_annotation -> sprintf ".section	\"__compcert_ais_annotations\",\"\",@note"
 
 
     let section oc sec =
@@ -234,6 +235,7 @@ module Diab_System : SYSTEM =
           sprintf ".section	.debug_line,,n\n"
       | Section_debug_ranges
       | Section_debug_str -> assert false (* Should not be used *)
+      | Section_ais_annotation -> sprintf ".section	\"__compcert_ais_annotations\",,n"
 
     let section oc sec =
       let name = name_of_section sec in
@@ -832,10 +834,17 @@ module Target (System : SYSTEM):TARGET =
             fprintf oc "	.balign	%d\n" !Clflags.option_falignbranchtargets;
           fprintf oc "%a:\n" label (transl_label lbl)
       | Pbuiltin(ef, args, res) ->
-          begin match ef with
-          | EF_annot(txt, targs) ->
-              fprintf oc "%s annotation: %s\n" comment
-              (annot_text preg_annot "r1" (camlstring_of_coqstring txt) args)
+        begin match ef with
+          | EF_annot(kind,txt, targs) ->
+            let annot =
+              begin match (P.to_int kind) with
+                | 1 -> annot_text preg_annot "sp" (camlstring_of_coqstring txt) args
+                | 2 -> let lbl = new_label () in
+                  fprintf oc "%a: " label lbl;
+                  ais_annot_text lbl preg_annot "r1" (camlstring_of_coqstring txt) args
+                | _ -> assert false
+              end in
+            fprintf oc "%s annotation: %S\n" comment annot
           | EF_debug(kind, txt, targs) ->
               print_debug_info comment print_file_line preg_annot "r1" oc
                                (P.to_int kind) (extern_atom txt) args
@@ -990,7 +999,9 @@ module Target (System : SYSTEM):TARGET =
 
     let section oc sec =
       section oc sec;
-      debug_section oc sec
+      match sec with
+      | Section_ais_annotation -> ()
+      | _ -> debug_section oc sec
   end
 
 let sel_target () =

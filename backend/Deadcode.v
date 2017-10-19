@@ -102,7 +102,7 @@ Function transfer_builtin (app: VA.t) (ef: external_function)
             nmem_add (nmem_remove nm (aaddr_arg app dst) sz) (aaddr_arg app src) sz)
            args
       else (ne, nm)
-  | (EF_annot _ _ | EF_annot_val _ _), _ =>
+  | (EF_annot _ _ _ | EF_annot_val _ _ _), _ =>
       transfer_builtin_args (kill_builtin_res res ne, nm) args
   | EF_debug _ _ _, _ =>
       (kill_builtin_res res ne, nm)

@@ -131,6 +131,7 @@ module ELF_System : SYSTEM =
       | Section_debug_abbrev -> ".section	.debug_abbrev,\"\",@progbits"
       | Section_debug_ranges -> ".section	.debug_ranges,\"\",@progbits"
       | Section_debug_str -> ".section	.debug_str,\"MS\",@progbits,1"
+      | Section_ais_annotation -> sprintf ".section	\"__compcert_ais_annotations\",\"\",@note"
 
     let stack_alignment = 16
 
@@ -189,6 +190,7 @@ module MacOS_System : SYSTEM =
       | Section_debug_str -> ".section	__DWARF,__debug_str,regular,debug"
       | Section_debug_ranges -> ".section	__DWARF,__debug_ranges,regular,debug"
       | Section_debug_abbrev -> ".section	__DWARF,__debug_abbrev,regular,debug"
+      | Section_ais_annotation -> assert false (* Not supported under MacOS *)
 
 
     let stack_alignment =  16 (* mandatory *)
@@ -264,6 +266,7 @@ module Cygwin_System : SYSTEM =
       | Section_debug_abbrev -> ".section	.debug_abbrev,\"dr\""
       | Section_debug_ranges -> ".section	.debug_ranges,\"dr\""
       | Section_debug_str-> assert false (* Should not be used *)
+      | Section_ais_annotation -> assert false (* Not supported for coff binaries *)
 
     let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
 
@@ -796,9 +799,16 @@ module Target(System: SYSTEM):TARGET =
 	 assert false
       | Pbuiltin(ef, args, res) ->
           begin match ef with
-          | EF_annot(txt, targs) ->
-              fprintf oc "%s annotation: %s\n" comment
-              (annot_text preg_annot "%esp" (camlstring_of_coqstring txt) args)
+            | EF_annot(kind,txt, targs) ->
+              let annot =
+                begin match (P.to_int kind) with
+                  | 1 -> annot_text preg_annot "sp" (camlstring_of_coqstring txt) args
+                  | 2 -> let lbl = new_label () in
+                    fprintf oc "%a: " label lbl;
+                    ais_annot_text lbl preg_annot "r1" (camlstring_of_coqstring txt) args
+                  | _ -> assert false
+                end in
+              fprintf oc "%s annotation: %S\n" comment annot
           | EF_debug(kind, txt, targs) ->
               print_debug_info comment print_file_line preg_annot "%esp" oc
                                (P.to_int kind) (extern_atom txt) args

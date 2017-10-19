@@ -77,3 +77,6 @@ val response_file_style: response_file_style
 
 val gnu_toolchain: bool
   (** Does the targeted system use the gnu toolchain *)
+
+val elf_target: bool
+  (** Is the target binary format ELF? *)
