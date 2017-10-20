@@ -7,6 +7,11 @@ Usability:
 Bug fixing:
 - Issue #P25: make sure sizeof(long double) = sizeof(double) in all contexts.
 
+Coq and Caml development:
+- Pull request #191: Support Coq version 8.7.0 in addition to Coq 8.6.1.
+  Coq 8.6 (.0) is no longer supported owing to an incompatibility with 8.7.0.
+  (Sigurd Schneider)
+
 
 Release 3.1, 2017-08-18
 =======================
