@@ -12,6 +12,7 @@
 
 (** Correctness proof for expression simplification. *)
 
+Require Import FunInd.
 Require Import Coqlib Maps Errors Integers.
 Require Import AST Linking.
 Require Import Values Memory Events Globalenvs Smallstep.

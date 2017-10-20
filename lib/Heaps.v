@@ -21,6 +21,7 @@
     (If an element is already in a heap, inserting it again does nothing.)
 *)
 
+Require Import FunInd.
 Require Import Coqlib.
 Require Import FSets.
 Require Import Ordered.

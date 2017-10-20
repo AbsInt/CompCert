@@ -12,6 +12,7 @@
 
 (** Elimination of unneeded computations over RTL: correctness proof. *)
 
+Require Import FunInd.
 Require Import Coqlib Maps Errors Integers Floats Lattice Kildall.
 Require Import AST Linking.
 Require Import Values Memory Globalenvs Events Smallstep.

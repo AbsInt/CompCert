@@ -13,6 +13,7 @@
 (** Recognition of combined operations, addressing modes and conditions
   during the [CSE] phase. *)
 
+Require Import FunInd.
 Require Import Coqlib.
 Require Import AST.
 Require Import Integers.

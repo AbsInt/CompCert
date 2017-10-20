@@ -12,6 +12,7 @@
 
 (** Animating the CompCert C semantics *)
 
+Require Import FunInd.
 Require Import Axioms Classical.
 Require Import String Coqlib Decidableplus.
 Require Import Errors Maps Integers Floats.
