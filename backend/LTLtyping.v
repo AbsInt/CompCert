@@ -115,9 +115,8 @@ Lemma well_typed_locset:
   forall ls, wt_locset ls.
 Proof.
   unfold wt_locset, Locmap.get, Locmap.chunk_of_loc. intros.
-  set (chunk := chunk_of_type (Loc.type l)).
   rewrite <- type_of_chunk_of_type.
-  apply decode_val_type.
+  destruct ls. destruct l; apply decode_val_type.
 Qed.
 
 (** Soundness of the type system *)

@@ -104,9 +104,8 @@ Lemma well_typed_locset:
   forall ls, wt_locset ls.
 Proof.
   unfold wt_locset, Locmap.get, Locmap.chunk_of_loc. intros.
-  set (chunk := chunk_of_type (Loc.type l)).
   rewrite <- type_of_chunk_of_type.
-  apply decode_val_type.
+  destruct ls. destruct l; apply decode_val_type.
 Qed.
 
 Lemma wt_find_label:
@@ -235,7 +234,9 @@ Local Opaque mreg_type.
   simpl in *; InvBooleans.
   econstructor; eauto.
   eapply wt_find_function; eauto.
-  red; simpl; intros. unfold Locmap.get. destruct l; simpl in *. rewrite H3; auto. destruct sl; auto; congruence.
+  red; simpl; intros.
+  rewrite return_regs_correct. unfold Locmap.get.
+  destruct l; simpl in *. rewrite H3; auto. destruct sl; auto; congruence.
   red; simpl; intros. apply zero_size_arguments_tailcall_possible in H. apply H in H3. contradiction.
 - (* builtin *)
   simpl in *; InvBooleans.
@@ -253,21 +254,27 @@ Local Opaque mreg_type.
 - (* return *)
   simpl in *. InvBooleans.
   econstructor; eauto.
-  red; simpl; intros. unfold Locmap.get. destruct l; simpl in *. rewrite H0; auto. destruct sl; auto; congruence.
-  red; simpl; intros. unfold Locmap.get, return_regs. apply decode_encode_undef.
+  red; simpl; intros.
+  rewrite return_regs_correct. unfold Locmap.get.
+  destruct l; simpl in *. rewrite H0; auto. destruct sl; auto; congruence.
+  red; intros.
+  rewrite return_regs_correct. unfold Locmap.get, return_regs_spec. auto.
 - (* internal function *)
   simpl in WTFD.
   econstructor. eauto. eauto. eauto.
 - (* external function *)
   econstructor. auto.
-  red; simpl; intros. destruct l; simpl in *.
-  rewrite locmap_get_set_loc_result by auto. unfold Locmap.get. simpl. rewrite H; auto.
-  apply AGCS. simpl; auto.
-  rewrite locmap_get_set_loc_result by auto. unfold Locmap.get. simpl. destruct sl; auto; try congruence.
-  apply AGCS. simpl; auto.
-  apply AGCS. simpl; auto.
-  red; simpl; intros. rewrite locmap_get_set_loc_result by auto.
-  unfold Locmap.get, undef_caller_save_regs. apply decode_encode_undef.
+  red; simpl; intros. destruct l.
+  rewrite locmap_get_set_loc_result by auto.
+  rewrite undef_caller_save_regs_correct. unfold undef_caller_save_regs_spec. rewrite H; auto.
+  apply AGCS; auto.
+  rewrite locmap_get_set_loc_result by auto.
+  rewrite undef_caller_save_regs_correct. unfold undef_caller_save_regs_spec.
+  destruct sl; try apply AGCS; auto.
+  simpl in H; contradiction.
+  red; intros. rewrite locmap_get_set_loc_result by auto.
+  rewrite undef_caller_save_regs_correct.
+  unfold Locmap.get, undef_caller_save_regs_spec. auto.
 - (* return *)
   inv WTSTK. econstructor; eauto.
 Qed.

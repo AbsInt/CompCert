@@ -80,16 +80,34 @@ Open Scope ltl.
   values as the corresponding outgoing stack slots (used for argument
   passing) in the caller.
 - Local and outgoing stack slots are initialized to undefined values.
+
+  Location sets are not really represented as functions, but we would
+  like them to behave as such. We first give a functional specification
+  of the behavior of [call_regs], then the actual definition. The
+  correspondence is proved below.
 *)
 
-Definition call_regs (caller: locset) : locset :=
+Definition call_regs_spec (caller: loc -> val) : (loc -> val) :=
   fun (l: loc) =>
     match l with
     | R r => caller (R r)
-    | S Local ofs ty => encode_val (chunk_of_type ty) Vundef
+    | S Local ofs ty => Vundef
     | S Incoming ofs ty => caller (S Outgoing ofs ty)
-    | S Outgoing ofs ty => encode_val (chunk_of_type ty) Vundef
+    | S Outgoing ofs ty => Vundef
     end.
+
+Definition call_regs (caller: locset) : locset :=
+  match caller with
+  | (caller_rf, caller_stack) =>
+    (caller_rf,
+     fun l: loc =>
+       match l with
+       | R r => encode_val (Locmap.chunk_of_loc l) Vundef
+       | S Local ofs ty => encode_val (Locmap.chunk_of_loc l) Vundef
+       | S Incoming ofs ty => caller_stack (S Outgoing ofs ty)
+       | S Outgoing ofs ty => encode_val (Locmap.chunk_of_loc l) Vundef
+       end)
+  end.
 
 (** [return_regs caller callee] returns the location set after
   a call instruction, as a function of the location set [caller]
@@ -101,27 +119,52 @@ Definition call_regs (caller: locset) : locset :=
 - Local and Incoming stack slots have the same values as in the caller.
 - Outgoing stack slots are set to Vundef to  reflect the fact that they
   may have been changed by the callee.
+
+  As for [call_regs], we give a functional specification and the real
+  implementation and prove the correspondence below.
 *)
 
-Definition return_regs (caller callee: locset) : locset :=
+Definition return_regs_spec (caller callee: loc -> val) : (loc -> val) :=
   fun (l: loc) =>
     match l with
     | R r => if is_callee_save r then caller (R r) else callee (R r)
-    | S Outgoing ofs ty => encode_val (chunk_of_type ty) Vundef
+    | S Outgoing ofs ty => Vundef
     | S sl ofs ty => caller (S sl ofs ty)
     end.
+
+Definition return_regs (caller callee: locset) : locset :=
+  match caller, callee with
+  | (caller_rf, caller_stack), (callee_rf, _) =>
+    (Regfile.override destroyed_at_call callee_rf caller_rf,
+     fun l =>
+     match l with
+     | S Outgoing ofs ty => encode_val (chunk_of_type ty) Vundef
+     | l => caller_stack l
+     end)
+  end.
 
 (** [undef_caller_save_regs ls] models the effect of calling
     an external function: caller-save registers and outgoing locations
     can change unpredictably, hence we set them to [Vundef]. *)
 
-Definition undef_caller_save_regs (ls: locset) : locset :=
+Definition undef_caller_save_regs_spec (ls: loc -> val) : (loc -> val) :=
   fun (l: loc) =>
     match l with
-    | R r => if is_callee_save r then ls (R r) else encode_val (chunk_of_type (mreg_type r)) Vundef
-    | S Outgoing ofs ty => encode_val (chunk_of_type ty) Vundef
+    | R r => if is_callee_save r then ls (R r) else Vundef
+    | S Outgoing ofs ty => Vundef
     | S sl ofs ty => ls (S sl ofs ty)
     end.
+
+Definition undef_caller_save_regs (ls: locset) : locset :=
+  match ls with
+  | (rf, stack) =>
+    (Regfile.undef_regs destroyed_at_call rf,
+     fun l =>
+     match l with
+     | S Outgoing ofs ty => encode_val (chunk_of_type ty) Vundef
+     | l => stack l
+     end)
+  end.
 
 (** LTL execution states. *)
 
@@ -197,7 +240,7 @@ Definition find_function (ros: mreg + ident) (rs: locset) : option fundef :=
 
 Definition parent_locset (stack: list stackframe) : locset :=
   match stack with
-  | nil => Locmap.init Vundef
+  | nil => Locmap.init
   | Stackframe f sp ls bb :: stack' => ls
   end.
 
@@ -297,7 +340,7 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       funsig f = signature_main ->
-      initial_state p (Callstate nil f (Locmap.init Vundef) m0).
+      initial_state p (Callstate nil f Locmap.init m0).
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m retcode,
@@ -322,3 +365,69 @@ Fixpoint successors_block (b: bblock) : list node :=
   | Lreturn :: _ => nil
   | instr :: b' => successors_block b'
   end.
+
+(** * General properties of auxiliary definitions for LTL *)
+
+Lemma call_regs_correct:
+  forall (l: loc) (caller: locset),
+  (call_regs caller) @ l = call_regs_spec (Locmap.read caller) l.
+Proof.
+  intros. destruct l, caller.
+  - reflexivity.
+  - unfold Locmap.get, call_regs, call_regs_spec.
+    destruct sl; try (rewrite decode_encode_undef; auto).
+    unfold Locmap.chunk_of_loc; reflexivity.
+Qed.
+
+Local Opaque all_mregs.
+
+Lemma in_destroyed_at_call:
+  forall r, In r destroyed_at_call -> is_callee_save r = false.
+Proof.
+  intros. unfold destroyed_at_call in H.
+  apply filter_In in H. apply negb_true_iff. tauto.
+Qed.
+
+Lemma notin_destroyed_at_call:
+  forall r, ~ In r destroyed_at_call -> is_callee_save r = true.
+Proof.
+  intros.
+  apply negb_false_iff. apply not_true_iff_false.
+  contradict H.
+  apply filter_In. split; auto using all_mregs_complete.
+Qed.
+
+Lemma return_regs_correct:
+  forall (l: loc) (caller callee: locset),
+  (return_regs caller callee) @ l = return_regs_spec (Locmap.read caller) (Locmap.read callee) l.
+Proof.
+  intros. destruct l, caller, callee.
+  - unfold Locmap.get, return_regs, return_regs_spec.
+    destruct (In_dec mreg_eq r destroyed_at_call).
+    + rewrite Regfile.override_in; auto.
+      rewrite (in_destroyed_at_call r); auto.
+    + rewrite Regfile.override_notin; auto.
+      rewrite (notin_destroyed_at_call r); auto.
+  - destruct sl; auto. apply decode_encode_undef.
+Qed.
+
+Lemma undef_caller_save_regs_correct:
+  forall (l: loc) (ls: locset),
+  (undef_caller_save_regs ls) @ l = undef_caller_save_regs_spec (Locmap.read ls) l.
+Proof.
+  intros. destruct l, ls.
+  - unfold Locmap.get, undef_caller_save_regs, undef_caller_save_regs_spec.
+    destruct (In_dec mreg_eq r destroyed_at_call).
+    + rewrite Regfile.undef_regs_in; auto.
+      rewrite (in_destroyed_at_call r); auto.
+    + rewrite Regfile.undef_regs_notin; auto.
+      rewrite (notin_destroyed_at_call r); auto.
+  - destruct sl; auto. apply decode_encode_undef.
+Qed.
+
+Lemma LTL_undef_regs_Regfile_undef_regs:
+  forall rl rf stack, undef_regs rl (rf, stack) = (Regfile.undef_regs rl rf, stack).
+Proof.
+  induction rl; intros. auto.
+  simpl. rewrite IHrl; auto.
+Qed.

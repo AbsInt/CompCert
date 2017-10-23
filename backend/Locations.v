@@ -20,7 +20,9 @@ Require Import Ordered.
 Require Import AST.
 Require Import Values.
 Require Import Memdata.
+Require Import Memory.
 Require Export Machregs.
+Require Export Registerfile.
 
 (** * Representation of locations *)
 
@@ -309,14 +311,18 @@ Set Implicit Arguments.
 
 Module Locmap.
 
-  Definition t := loc -> list memval.
+  Definition t := (Regfile.t * (loc -> list memval))%type.
 
   Definition chunk_of_loc (l: loc) : memory_chunk :=
     chunk_of_type (Loc.type l).
 
-  Definition init (x: val) : t := fun (l: loc) => encode_val (chunk_of_loc l) x.
+  Definition init : t := (Regfile.init, fun (l: loc) => encode_val (chunk_of_loc l) Vundef).
 
-  Definition get (l: loc) (m: t) : val := decode_val (chunk_of_loc l) (m l).
+  Definition get (l: loc) (m: t) : val :=
+    match l, m with
+    | R r, (rf, stack) => Regfile.get r rf
+    | S _ _ _, (rf, stack) => decode_val (chunk_of_loc l) (stack l)
+    end.
 
   (* Auxiliary for some places where a function of type [loc -> val] is expected. *)
   Definition read (m: t) : loc -> val := fun (l: loc) => get l m.
@@ -336,18 +342,24 @@ Module Locmap.
       are normalized according to the type of the slot. *)
 
   Definition set (l: loc) (v: val) (m: t) : t :=
-    fun (p: loc) =>
-      if Loc.eq l p then
-        encode_val (chunk_of_loc l) v
-      else if Loc.diff_dec l p then
-        m p
-      else
-        encode_val (chunk_of_loc l) Vundef.
+    match l, m with
+    | R r, (rf, stack) => (Regfile.set r v rf, stack)
+    | S _ _ _, (rf, stack) => (rf,
+      fun (p: loc) =>
+        if Loc.eq l p then
+          encode_val (chunk_of_loc l) v
+        else if Loc.diff_dec l p then
+          stack p
+        else
+          encode_val (chunk_of_loc l) Vundef)
+    end.
 
   Lemma gss: forall l v m,
     get l (set l v m) = Val.load_result (chunk_of_type (Loc.type l)) v.
   Proof.
-    intros. unfold get, set. rewrite dec_eq_true.
+    intros.
+    destruct l, m. apply Regfile.gss.
+    unfold get, set. rewrite dec_eq_true.
     erewrite <- decode_encode_val_similar; eauto.
     eapply decode_encode_val_general.
   Qed.
@@ -364,9 +376,12 @@ Module Locmap.
 
   Lemma gso: forall l v m p, Loc.diff l p -> get p (set l v m) = get p m.
   Proof.
-    intros. unfold get, set. destruct (Loc.eq l p).
+    intros.
+    destruct l, m.
+    destruct p; simpl in H; auto. apply Regfile.gso; auto.
+    unfold get, set. destruct (Loc.eq (S sl pos ty) p).
     subst p. elim (Loc.same_not_diff _ H).
-    destruct (Loc.diff_dec l p).
+    destruct (Loc.diff_dec (S sl pos ty) p).
     auto.
     contradiction.
   Qed.
@@ -388,8 +403,12 @@ Module Locmap.
     assert (P: forall ll l m, get l m = Vundef -> get l (undef ll m) = Vundef).
     { induction ll; simpl; intros. auto. apply IHll.
       destruct (Loc.eq a l). subst; apply gss_typed. simpl; auto.
+      destruct a, l, m; simpl in n.
+      simpl. rewrite Regfile.gso; auto; congruence.
+      rewrite gso; simpl; auto.
+      rewrite gso; simpl; auto.
       unfold get, set. rewrite dec_eq_false; auto.
-      destruct (Loc.diff_dec a l). auto. apply decode_encode_undef. }
+      destruct (Loc.diff_dec (S sl pos ty) (S sl0 pos0 ty0)). auto. apply decode_encode_undef. }
     induction ll; simpl; intros. contradiction.
     destruct H. apply P. subst a. apply gss_typed. exact I.
     auto.
@@ -421,7 +440,7 @@ Module Locmap.
     forall p v m l,
     forall_rpair (fun r => Loc.diff l (R r)) p -> get l (setpair p v m) = get l m.
   Proof.
-    intros; destruct p; simpl in *.
+    intros; destruct p; unfold setpair.
   - apply gso. apply Loc.diff_sym; auto.
   - destruct H. rewrite ! gso by (apply Loc.diff_sym; auto). auto.
   Qed.

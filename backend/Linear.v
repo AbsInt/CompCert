@@ -138,7 +138,7 @@ Inductive state: Type :=
   of the caller function. *)
 Definition parent_locset (stack: list stackframe) : locset :=
   match stack with
-  | nil => Locmap.init Vundef
+  | nil => Locmap.init
   | Stackframe f sp ls c :: stack' => ls
   end.
 
@@ -256,7 +256,7 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       funsig f = signature_main ->
-      initial_state p (Callstate nil f (Locmap.init Vundef) m0).
+      initial_state p (Callstate nil f Locmap.init m0).
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m retcode,

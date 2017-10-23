@@ -100,28 +100,47 @@ Module IndexedMreg <: INDEXED_TYPE.
   Definition eq := mreg_eq.
   Definition index (r: mreg): positive :=
     match r with
-    | R3 => 1  | R4 => 2  | R5 => 3  | R6 => 4
-    | R7 => 5  | R8 => 6  | R9 => 7  | R10 => 8
-    | R11 => 9 | R12 => 10
-    | R14 => 11 | R15 => 12 | R16 => 13
-    | R17 => 14 | R18 => 15 | R19 => 16 | R20 => 17
-    | R21 => 18 | R22 => 19 | R23 => 20 | R24 => 21
-    | R25 => 22 | R26 => 23 | R27 => 24 | R28 => 25
-    | R29 => 26 | R30 => 27 | R31 => 28
-    | F0 => 29
-    | F1 => 30  | F2 => 31  | F3 => 32  | F4 => 33
-    | F5 => 34  | F6 => 35  | F7 => 36  | F8 => 37
-    | F9 => 38  | F10 => 39 | F11 => 40 | F12 => 41
-    | F13 => 42 | F14 => 43 | F15 => 44
-    | F16 => 45 | F17 => 46 | F18 => 47 | F19 => 48
-    | F20 => 49 | F21 => 50 | F22 => 51 | F23 => 52
-    | F24 => 53 | F25 => 54 | F26 => 55 | F27 => 56
-    | F28 => 57 | F29 => 58 | F30 => 59 | F31 => 60
+    | R3  =>  2 | R4  =>  4 | R5 =>  6 | R6 => 8
+    | R7  => 10 | R8  => 12 | R9 => 14 | R10 => 16
+    | R11 => 18 | R12 => 20
+    | R14 => 22 | R15 => 24 | R16 => 26
+    | R17 => 28 | R18 => 30 | R19 => 32 | R20 => 34
+    | R21 => 36 | R22 => 38 | R23 => 40 | R24 => 42
+    | R25 => 44 | R26 => 46 | R27 => 48 | R28 => 50
+    | R29 => 52 | R30 => 54 | R31 => 56
+    | F0  => 58
+    | F1  =>  60 | F2  =>  62 | F3  =>  64 | F4  =>  66
+    | F5  =>  68 | F6  =>  70 | F7  =>  72 | F8  =>  74
+    | F9  =>  76 | F10 =>  78 | F11 =>  80 | F12 =>  82
+    | F13 =>  84 | F14 =>  86 | F15 =>  88
+    | F16 =>  90 | F17 =>  92 | F18 =>  94 | F19 =>  96
+    | F20 =>  98 | F21 => 100 | F22 => 102 | F23 => 104
+    | F24 => 106 | F25 => 108 | F26 => 110 | F27 => 112
+    | F28 => 114 | F29 => 116 | F30 => 118 | F31 => 120
     end.
   Lemma index_inj:
     forall r1 r2, index r1 = index r2 -> r1 = r2.
   Proof.
     decide_goal.
+  Qed.
+
+  Open Scope Z_scope.
+
+  Lemma scaled_index_with_size_aux:
+    forall r1 r2, Zpos (index r1) < Zpos (index r2) -> Zpos (index r1) + 2 <= Zpos (index r2).
+  Proof.
+    decide_goal.
+  Qed.
+
+  Lemma scaled_index_with_size:
+    forall r1 r2,
+    Zpos (index r1) < Zpos (index r2) ->
+    Zpos (index r1) * 4 + AST.typesize (mreg_type r1) <= Zpos (index r2) * 4.
+  Proof.
+    intros.
+    generalize (scaled_index_with_size_aux r1 r2); intro.
+    assert (AST.typesize (mreg_type r1) <= 8) by (destruct (mreg_type r1); simpl; omega).
+    omega.
   Qed.
 End IndexedMreg.
 

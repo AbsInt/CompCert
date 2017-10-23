@@ -369,13 +369,13 @@ Proof.
   econstructor.
   constructor. eexact E1. constructor.
   simpl; constructor.
-  simpl; auto.
+  destruct rs; simpl; auto.
   traceEq.
 - eapply star_step; eauto.
   econstructor.
   constructor.
   simpl; constructor.
-  simpl; auto.
+  destruct rs; simpl; auto.
   traceEq.
 Qed.
 
@@ -533,7 +533,7 @@ Lemma transf_initial_states:
 Proof.
   intros. inversion H.
   exploit function_ptr_translated; eauto. intros [tf [A B]].
-  exists (Callstate nil tf (Locmap.init Vundef) m0); split.
+  exists (Callstate nil tf Locmap.init m0); split.
   econstructor; eauto. eapply (Genv.init_mem_transf_partial TRANSF); eauto.
   rewrite (match_program_main TRANSF), symbols_preserved. auto.
   rewrite <- H3. apply sig_preserved. auto.
