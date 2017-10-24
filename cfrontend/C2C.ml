@@ -863,9 +863,11 @@ let rec convertExpr env e =
   | C.ECall({edesc = C.EVar {name = "__builtin_ais_annot"}}, args) when Configuration.elf_target ->
       begin match args with
       | {edesc = C.EConst(CStr txt)} :: args1 ->
-          let targs1 = convertTypArgs env [] args1 in
+        let file,line = !currentLocation in
+        let loc_string = Printf.sprintf "# file %s, line %d\n" file line in
+        let targs1 = convertTypArgs env [] args1 in
           Ebuiltin(
-             AST.EF_annot(P.of_int 2,coqstring_of_camlstring txt, typlist_of_typelist targs1),
+             AST.EF_annot(P.of_int 2,coqstring_of_camlstring (loc_string ^ txt), typlist_of_typelist targs1),
             targs1, convertExprList env args1, convertTyp env e.etyp)
       | _ ->
           error "argument 1 of '__builtin_ais_annot' must be a string literal";
