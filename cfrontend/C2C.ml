@@ -874,19 +874,6 @@ let rec convertExpr env e =
           ezero
       end
 
-  | C.ECall({edesc = C.EVar {name = "__builtin_ais_annot_intval"}}, args) when Configuration.elf_target ->
-      begin match args with
-      | [ {edesc = C.EConst(CStr txt)}; arg ] ->
-          let targ = convertTyp env
-                         (Cutil.default_argument_conversion env arg.etyp) in
-          Ebuiltin(AST.EF_annot_val(P.of_int 2,coqstring_of_camlstring txt, typ_of_type targ),
-                   Tcons(targ, Tnil), convertExprList env [arg],
-                   convertTyp env e.etyp)
-      | _ ->
-          error "argument 1 of '__builtin_annot_intval' must be a string literal";
-          ezero
-      end
-
  | C.ECall({edesc = C.EVar {name = "__builtin_memcpy_aligned"}}, args) ->
       make_builtin_memcpy (convertExprList env args)
 
