@@ -43,6 +43,8 @@ struct
 
   (* Basic printing functions *)
 
+  let label = elf_label
+
   let print_label oc lbl = elf_label oc (transl_label lbl)
 
   let comment = "@"
@@ -728,8 +730,8 @@ struct
             begin match (P.to_int kind) with
               | 1 -> annot_text preg_annot "sp" (camlstring_of_coqstring txt) args
               | 2 -> let lbl = new_label () in
-                fprintf oc "%a: " elf_label lbl;
-                ais_annot_text lbl preg_annot "r1" (camlstring_of_coqstring txt) args
+                fprintf oc "%a: " label lbl;
+                ais_annot_text lbl preg_annot "sp" (camlstring_of_coqstring txt) args
               | _ -> assert false
             end in
           fprintf oc "%s annotation: %S\n" comment annot;
@@ -883,8 +885,6 @@ struct
     end
 
   let default_falignment = 4
-
-  let label = elf_label
 
   let new_label = new_label
 
