@@ -938,8 +938,6 @@ module Target(System: SYSTEM):TARGET =
 
     let label = label
 
-    let new_label = new_label
-
     let address = if Archi.ptr64 then ".quad" else ".long"
 
 end

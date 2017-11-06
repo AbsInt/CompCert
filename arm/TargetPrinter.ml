@@ -886,8 +886,6 @@ struct
 
   let default_falignment = 4
 
-  let new_label = new_label
-
   let address = if Archi.ptr64 then ".quad" else ".4byte"
 end
 

@@ -993,8 +993,6 @@ module Target (System : SYSTEM):TARGET =
 
     let default_falignment = 4
 
-    let new_label = new_label
-
     let address = address
 
     let section oc sec =

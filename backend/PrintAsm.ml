@@ -23,8 +23,8 @@ module Printer(Target:TARGET) =
   struct
 
     let get_fun_addr name txt =
-      let s = Target.new_label ()
-      and e = Target.new_label () in
+      let s = new_label ()
+      and e = new_label () in
       Debug.add_fun_addr name txt (e,s);
       s,e
 

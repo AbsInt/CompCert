@@ -697,8 +697,6 @@ module Target : TARGET =
 
     let default_falignment = 2
 
-    let new_label = new_label
-
     let cfi_startproc oc = ()
     let cfi_endproc oc = ()
 
