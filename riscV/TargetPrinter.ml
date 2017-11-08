@@ -149,7 +149,7 @@ module Target : TARGET =
                   fprintf oc "%a:	.long	0x%lx\n" label lbl bf)
                literal32_labels
            end;
-         reset_constants ()
+         reset_literals ()
       end
 
 (* Generate code to load the address of id + ofs in register r *)

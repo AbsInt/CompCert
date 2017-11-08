@@ -949,7 +949,7 @@ module Target (System : SYSTEM):TARGET =
         Hashtbl.iter (print_literal64 oc) literal64_labels;
         Hashtbl.iter (print_literal32 oc) literal32_labels;
       end;
-      reset_constants ()
+      reset_literals ()
 
     let print_optional_fun_info _ = ()
 

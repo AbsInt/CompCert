@@ -878,7 +878,7 @@ module Target(System: SYSTEM):TARGET =
          print_align oc 8;
          Hashtbl.iter (print_literal64 oc) literal64_labels;
          Hashtbl.iter (print_literal32 oc) literal32_labels;
-         reset_constants ()
+         reset_literals ()
        end
 
     let cfi_startproc = cfi_startproc

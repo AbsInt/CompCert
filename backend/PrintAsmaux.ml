@@ -86,10 +86,13 @@ let literal64_labels   = (Hashtbl.create 39 : (int64, int) Hashtbl.t)
 let label_literal32 bf = label_constant literal32_labels bf
 let label_literal64 n = label_constant literal64_labels n
 
-let reset_constants () =
-  jumptables := [];
+let reset_literals () =
   Hashtbl.clear literal32_labels;
   Hashtbl.clear literal64_labels
+
+let reset_constants () =
+  jumptables := [];
+  reset_literals ()
 
 let exists_constants () =
   Hashtbl.length literal32_labels > 0 || Hashtbl.length literal64_labels > 0
