@@ -378,8 +378,7 @@ module Target(System: SYSTEM):TARGET =
         fprintf oc "$%ld" n2
       else begin
         (* put the constant in memory and use a PC-relative memory operand *)
-        let lbl = new_label() in
-        float64_literals := (lbl, n1) :: !float64_literals;
+        let lbl = label_literal64 n1 in
         fprintf oc "%a(%%rip)" label lbl
       end
 
@@ -426,22 +425,20 @@ module Target(System: SYSTEM):TARGET =
           fprintf oc "	movapd	%a, %a\n" freg r1 freg rd
       | Pmovsd_fi(rd, n) ->
           let b = camlint64_of_coqint (Floats.Float.to_bits n) in
-          let lbl = new_label() in
+          let lbl = label_literal64 b in
           fprintf oc "	movsd	%a%s, %a %s %.18g\n"
                      label lbl rip_rel
-                     freg rd comment (camlfloat_of_coqfloat n);
-          float64_literals := (lbl, b) :: !float64_literals
+                     freg rd comment (camlfloat_of_coqfloat n)
       | Pmovsd_fm(rd, a) | Pmovsd_fm_a(rd, a) ->
           fprintf oc "	movsd	%a, %a\n" addressing a freg rd
       | Pmovsd_mf(a, r1) | Pmovsd_mf_a(a, r1) ->
           fprintf oc "	movsd	%a, %a\n" freg r1 addressing a
       | Pmovss_fi(rd, n) ->
           let b = camlint_of_coqint (Floats.Float32.to_bits n) in
-          let lbl = new_label() in
+          let lbl = label_literal32 b in
           fprintf oc "	movss	%a%s, %a %s %.18g\n"
                      label lbl rip_rel
-                     freg rd comment (camlfloat_of_coqfloat32 n);
-          float32_literals := (lbl, b) :: !float32_literals
+                     freg rd comment (camlfloat_of_coqfloat32 n)
       | Pmovss_fm(rd, a) ->
           fprintf oc "	movss	%a, %a\n" addressing a freg rd
       | Pmovss_mf(a, r1) ->
@@ -820,9 +817,9 @@ module Target(System: SYSTEM):TARGET =
               assert false
           end
 
-    let print_literal64 oc (lbl, n) =
+    let print_literal64 oc n lbl =
       fprintf oc "%a:	.quad	0x%Lx\n" label lbl n
-    let print_literal32 oc (lbl, n) =
+    let print_literal32 oc n lbl =
       fprintf oc "%a:	.long	0x%lx\n" label lbl n
 
     let print_jumptable oc jmptbl =
@@ -876,13 +873,12 @@ module Target(System: SYSTEM):TARGET =
     let name_of_section = name_of_section
 
     let emit_constants oc lit =
-       if !float64_literals <> [] || !float32_literals <> [] then begin
+       if exists_constants () then begin
          section oc lit;
          print_align oc 8;
-         List.iter (print_literal64 oc) !float64_literals;
-         float64_literals := [];
-         List.iter (print_literal32 oc) !float32_literals;
-         float32_literals := []
+         Hashtbl.iter (print_literal64 oc) literal64_labels;
+         Hashtbl.iter (print_literal32 oc) literal32_labels;
+         reset_constants ()
        end
 
     let cfi_startproc = cfi_startproc

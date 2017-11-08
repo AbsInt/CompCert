@@ -69,15 +69,30 @@ let elf_label oc lbl =
 
 (* List of literals and jumptables used in the code *)
 
-let float64_literals : (int * int64) list ref = ref []
-let float32_literals : (int * int32) list ref = ref []
-let int64_literals : (int * int64) list ref = ref []
 let jumptables : (int * label list) list ref = ref []
 
+
+let label_constant (h: ('a, int) Hashtbl.t) (cst: 'a) =
+  try
+    Hashtbl.find h cst
+  with Not_found ->
+    let lbl = new_label() in
+    Hashtbl.add h cst lbl;
+    lbl
+
+let literal32_labels = (Hashtbl.create 39 : (int32, int) Hashtbl.t)
+let literal64_labels   = (Hashtbl.create 39 : (int64, int) Hashtbl.t)
+
+let label_literal32 bf = label_constant literal32_labels bf
+let label_literal64 n = label_constant literal64_labels n
+
 let reset_constants () =
-  float64_literals := [];
-  float32_literals := [];
-  jumptables := []
+  jumptables := [];
+  Hashtbl.clear literal32_labels;
+  Hashtbl.clear literal64_labels
+
+let exists_constants () =
+  Hashtbl.length literal32_labels > 0 || Hashtbl.length literal64_labels > 0
 
 (* Variables used for the handling of varargs *)
 

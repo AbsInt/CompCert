@@ -638,10 +638,10 @@ module Target (System : SYSTEM):TARGET =
       | Plhzx(r1, r2, r3) ->
           fprintf oc "	lhzx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pldi(r1, c) ->
-          let lbl = new_label() in
+          let c = camlint64_of_coqint c in
+          let lbl = label_literal64 c in
           fprintf oc "	addis	%a, 0, %a\n" ireg GPR12 label_high lbl;
-          fprintf oc "	ld	%a, %a(%a) %s %Ld\n" ireg r1 label_low lbl ireg GPR12 comment (camlint64_of_coqint c);
-          int64_literals := (lbl, camlint64_of_coqint c) :: !int64_literals;
+          fprintf oc "	ld	%a, %a(%a) %s %Ld\n" ireg r1 label_low lbl ireg GPR12 comment c
       | Plmake(_, _, _) ->
           assert false
       | Pllo _ ->
@@ -649,15 +649,13 @@ module Target (System : SYSTEM):TARGET =
       | Plhi(_, _) ->
           assert false
       | Plfi(r1, c) ->
-          let lbl = new_label() in
+          let lbl = label_literal64 (camlint64_of_coqint (Floats.Float.to_bits c)) in
           fprintf oc "	addis	%a, 0, %a\n" ireg GPR12 label_high lbl;
-          fprintf oc "	lfd	%a, %a(%a) %s %.18g\n" freg r1 label_low lbl ireg GPR12 comment (camlfloat_of_coqfloat c);
-          float64_literals := (lbl, camlint64_of_coqint (Floats.Float.to_bits c)) :: !float64_literals;
+          fprintf oc "	lfd	%a, %a(%a) %s %.18g\n" freg r1 label_low lbl ireg GPR12 comment (camlfloat_of_coqfloat c)
       | Plfis(r1, c) ->
-          let lbl = new_label() in
+          let lbl = label_literal32 (camlint_of_coqint (Floats.Float32.to_bits c)) in
           fprintf oc "	addis	%a, 0, %a\n" ireg GPR12 label_high lbl;
-          fprintf oc "	lfs	%a, %a(%a) %s %.18g\n" freg r1 label_low lbl ireg GPR12 comment (camlfloat_of_coqfloat32 c);
-          float32_literals := (lbl, camlint_of_coqint (Floats.Float32.to_bits c)) :: !float32_literals;
+          fprintf oc "	lfs	%a, %a(%a) %s %.18g\n" freg r1 label_low lbl ireg GPR12 comment (camlfloat_of_coqfloat32 c)
       | Plwarx(r1, r2, r3) ->
           fprintf oc "	lwarx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Plwbrx(r1, r2, r3) ->
@@ -904,12 +902,12 @@ module Target (System : SYSTEM):TARGET =
 
     (* Print the code for a function *)
 
-    let print_literal64 oc (lbl, n) =
+    let print_literal64 oc n lbl =
       let nlo = Int64.to_int32 n
       and nhi = Int64.to_int32(Int64.shift_right_logical n 32) in
       fprintf oc "%a:	.long	0x%lx, 0x%lx\n" label lbl nhi nlo
 
-    let print_literal32 oc (lbl, n) =
+    let print_literal32 oc n lbl =
       fprintf oc "%a:	.long	0x%lx\n" label lbl n
 
     let print_init oc = function
@@ -945,17 +943,13 @@ module Target (System : SYSTEM):TARGET =
     let print_fun_info = elf_print_fun_info
 
     let emit_constants oc lit =
-      if !float64_literals <> [] || !float32_literals <> []
-                                 || !int64_literals <> [] then begin
+      if exists_constants () then begin
         section oc lit;
         fprintf oc "	.balign 8\n";
-        List.iter (print_literal64 oc) !int64_literals;
-        int64_literals := [];
-        List.iter (print_literal64 oc) !float64_literals;
-        float64_literals := [];
-        List.iter (print_literal32 oc) !float32_literals;
-        float32_literals := []
-      end
+        Hashtbl.iter (print_literal64 oc) literal64_labels;
+        Hashtbl.iter (print_literal32 oc) literal32_labels;
+      end;
+      reset_constants ()
 
     let print_optional_fun_info _ = ()
 

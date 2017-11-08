@@ -129,51 +129,28 @@ module Target : TARGET =
 
 (* Associate labels to floating-point constants and to symbols. *)
 
-    let label_constant (h: ('a, int) Hashtbl.t) (cst: 'a) =
-      try
-        Hashtbl.find h cst
-      with Not_found ->
-        let lbl = new_label() in
-        Hashtbl.add h cst lbl;
-        lbl
+    let reset_constants () = reset_constants ()
 
-    let float_labels   = (Hashtbl.create 39 : (int64, int) Hashtbl.t)
-    let float32_labels = (Hashtbl.create 39 : (int32, int) Hashtbl.t)
-    let int64_labels   = (Hashtbl.create 39 : (int64, int) Hashtbl.t)
-
-    let label_float bf = label_constant float_labels bf
-    let label_float32 bf = label_constant float32_labels bf
-    let label_int64 n = label_constant int64_labels n
-
-    let reset_constants () =
-      Hashtbl.clear float_labels;
-      Hashtbl.clear float32_labels;
-      Hashtbl.clear int64_labels
-
-    let emit_constants oc =
-      if Hashtbl.length int64_labels > 0 then
-        begin
-          fprintf oc "	.align 3\n";
-          Hashtbl.iter
-            (fun bf lbl -> fprintf oc "%a:	.quad	0x%Lx\n" label lbl bf)
-            int64_labels
-        end;
-      if Hashtbl.length float_labels > 0 then
-        begin
-          fprintf oc "	.align 3\n";
-          Hashtbl.iter
-            (fun bf lbl -> fprintf oc "%a:	.quad	0x%Lx\n" label lbl bf)
-            float_labels
-        end;
-      if Hashtbl.length float32_labels > 0 then
-        begin
-          fprintf oc "	.align	2\n";
-          Hashtbl.iter
-            (fun bf lbl ->
-               fprintf oc "%a:	.long	0x%lx\n" label lbl bf)
-            float32_labels
-        end;
-      reset_constants ()
+    let emit_constants oc lit =
+      if exists_constants () then begin
+         section oc lit;
+         if Hashtbl.length literal64_labels > 0 then
+           begin
+             fprintf oc "	.align 3\n";
+             Hashtbl.iter
+               (fun bf lbl -> fprintf oc "%a:	.quad	0x%Lx\n" label lbl bf)
+               literal64_labels
+           end;
+         if Hashtbl.length literal32_labels > 0 then
+           begin
+             fprintf oc "	.align	2\n";
+             Hashtbl.iter
+               (fun bf lbl ->
+                  fprintf oc "%a:	.long	0x%lx\n" label lbl bf)
+               literal32_labels
+           end;
+         reset_constants ()
+      end
 
 (* Generate code to load the address of id + ofs in register r *)
 
@@ -563,16 +540,16 @@ module Target : TARGET =
          fprintf oc "	lui	%a, %%hi(%a)\n" ireg rd symbol_offset (id, ofs)
       | Ploadli(rd, n) ->
          let d = camlint64_of_coqint n in
-         let lbl = label_int64 d in
+         let lbl = label_literal64 d in
          fprintf oc "	ld	%a, %a %s %Lx\n" ireg rd label lbl comment d
       | Ploadfi(rd, f) ->
          let d   = camlint64_of_coqint(Floats.Float.to_bits f) in
-         let lbl = label_float d in
+         let lbl = label_literal64 d in
          fprintf oc "	fld	%a, %a, x31 %s %.18g\n"
                     freg rd label lbl comment (camlfloat_of_coqfloat f)
       | Ploadsi(rd, f) ->
          let s   = camlint_of_coqint(Floats.Float32.to_bits f) in
-         let lbl = label_float32 s in
+         let lbl = label_literal32 s in
          fprintf oc "	flw	%a, %a, x31 %s %.18g\n"
                     freg rd label lbl comment (camlfloat_of_coqfloat32 f)
       | Pbtbl(r, tbl) ->
@@ -654,9 +631,6 @@ module Target : TARGET =
       current_function_sig := fn.fn_sig;
       List.iter (print_instruction oc) fn.fn_code
 
-    let emit_constants oc lit =
-      section oc lit;
-      emit_constants oc
 
 (* Data *)
 
