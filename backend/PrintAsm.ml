@@ -65,13 +65,52 @@ module Printer(Target:TARGET) =
       if !Clflags.option_g then
         Hashtbl.iter (fun p i -> Debug.add_label name p i) current_function_labels
 
+    let print_init oc init =
+      let symbol_offset oc (symb,ofs) =
+        Target.symbol oc symb;
+        let ofs = camlint64_of_ptrofs ofs in
+        if ofs <> 0L then fprintf oc " + %Ld" ofs in
+      let splitlong b =
+        let b = camlint64_of_coqint b in
+        if Archi.big_endian then
+          (Int64.shift_right_logical b 32),
+          (Int64.logand b 0xFFFFFFFFL)
+        else
+          (Int64.logand b 0xFFFFFFFFL),
+          (Int64.shift_right_logical b 32) in
+      match init with
+      | Init_int8 n ->
+          fprintf oc "	.byte	%ld\n" (camlint_of_coqint n)
+      | Init_int16 n ->
+      fprintf oc "	.short	%ld\n" (camlint_of_coqint n)
+      | Init_int32 n ->
+          fprintf oc "	.long	%ld\n" (camlint_of_coqint n)
+      | Init_int64 n ->
+          let hi,lo = splitlong n in
+          fprintf oc "	.long	0x%Lx, 0x%Lx\n" hi lo
+      | Init_float32 n ->
+          fprintf oc "	.long	0x%lx %s %.18g\n"
+            (camlint_of_coqint (Floats.Float32.to_bits n))
+            Target.comment (camlfloat_of_coqfloat32 n)
+      | Init_float64 n ->
+          let hi,lo = splitlong (Floats.Float.to_bits n) in
+          fprintf oc "	.long	0x%Lx, 0x%Lx %s %.18g\n" hi lo
+            Target.comment (camlfloat_of_coqfloat n)
+      | Init_space n ->
+          if Z.gt n Z.zero then
+            fprintf oc "	.space	%s\n" (Z.to_string n)
+      | Init_addrof(symb, ofs) ->
+          fprintf oc "	.long	%a\n"
+            symbol_offset (symb, ofs)
+
+
     let print_init_data oc name id =
       if Str.string_match PrintCsyntax.re_string_literal (extern_atom name) 0
           && List.for_all (function Init_int8 _ -> true | _ -> false) id
       then
         fprintf oc "	.ascii	\"%s\"\n" (PrintCsyntax.string_of_init id)
       else
-        List.iter (Target.print_init oc) id
+        List.iter (print_init oc) id
 
     let print_var oc name v =
       match v.gvar_init with
