@@ -51,10 +51,7 @@ struct
 
   let symbol = elf_symbol
 
-  let symbol_offset oc (symb, ofs) =
-    symbol oc symb;
-    let ofs = camlint_of_coqint ofs in
-    if ofs <> 0l then fprintf oc " + %ld" ofs
+  let symbol_offset = elf_symbol_offset
 
   let int_reg_name = function
     | IR0 -> "r0" | IR1 -> "r1" | IR2 -> "r2" | IR3 -> "r3"
@@ -838,27 +835,6 @@ struct
     end
 
   (* Data *)
-
-  let print_init oc = function
-    | Init_int8 n ->
-      fprintf oc "	.byte	%ld\n" (camlint_of_coqint n)
-    | Init_int16 n ->
-      fprintf oc "	.short	%ld\n" (camlint_of_coqint n)
-    | Init_int32 n ->
-      fprintf oc "	.word	%ld\n" (camlint_of_coqint n)
-    | Init_int64 n ->
-      fprintf oc "	.quad	%Ld\n" (camlint64_of_coqint n)
-    | Init_float32 n ->
-      fprintf oc "	.word	0x%lx %s %.15g \n" (camlint_of_coqint (Floats.Float32.to_bits n))
-        comment (camlfloat_of_coqfloat32 n)
-    | Init_float64 n ->
-      fprintf oc "	.quad	%Ld %s %.18g\n" (camlint64_of_coqint (Floats.Float.to_bits n))
-        comment (camlfloat_of_coqfloat n)
-    | Init_space n ->
-      if Z.gt n Z.zero then
-        fprintf oc "	.space	%s\n" (Z.to_string n)
-    | Init_addrof(symb, ofs) ->
-      fprintf oc "	.word	%a\n" symbol_offset (symb, ofs)
 
   let print_prologue oc =
     fprintf oc "	.syntax	unified\n";

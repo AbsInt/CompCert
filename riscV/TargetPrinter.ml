@@ -636,27 +636,6 @@ module Target : TARGET =
 
     let address = if Archi.ptr64 then ".quad" else ".long"
 
-    let print_init oc = function
-      | Init_int8 n ->
-          fprintf oc "	.byte	%ld\n" (camlint_of_coqint n)
-      | Init_int16 n ->
-          fprintf oc "	.short	%ld\n" (camlint_of_coqint n)
-      | Init_int32 n ->
-          fprintf oc "	.long	%ld\n" (camlint_of_coqint n)
-      | Init_int64 n ->
-          fprintf oc "	.quad	%Ld\n" (camlint64_of_coqint n)
-      | Init_float32 n ->
-          fprintf oc "	.long   0x%lx %s %.15g \n" (camlint_of_coqint (Floats.Float32.to_bits n))
-            comment (camlfloat_of_coqfloat n)
-      | Init_float64 n ->
-          fprintf oc "	.quad   %Ld %s %.18g\n" (camlint64_of_coqint (Floats.Float.to_bits n))
-            comment (camlfloat_of_coqfloat n)
-      | Init_space n ->
-          if Z.gt n Z.zero then
-            fprintf oc "	.space  %s\n" (Z.to_string n)
-      | Init_addrof(symb, ofs) ->
-          fprintf oc "	%s	%a\n" address symbol_offset (symb, ofs)
-
     let print_prologue oc =
       fprintf oc "	.option %s\n" (if Archi.pic_code() then "pic" else "nopic");
       if !Clflags.option_g then begin

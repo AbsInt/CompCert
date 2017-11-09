@@ -910,36 +910,6 @@ module Target (System : SYSTEM):TARGET =
     let print_literal32 oc n lbl =
       fprintf oc "%a:	.long	0x%lx\n" label lbl n
 
-    let print_init oc = function
-      | Init_int8 n ->
-          fprintf oc "	.byte	%ld\n" (camlint_of_coqint n)
-      | Init_int16 n ->
-      fprintf oc "	.short	%ld\n" (camlint_of_coqint n)
-      | Init_int32 n ->
-          fprintf oc "	.long	%ld\n" (camlint_of_coqint n)
-      | Init_int64 n ->
-          let b = camlint64_of_coqint n in
-          fprintf oc "	.long	0x%Lx, 0x%Lx\n"
-            (Int64.shift_right_logical b 32)
-            (Int64.logand b 0xFFFFFFFFL)
-      | Init_float32 n ->
-          fprintf oc "	.long	0x%lx %s %.18g\n"
-            (camlint_of_coqint (Floats.Float32.to_bits n))
-            comment (camlfloat_of_coqfloat32 n)
-      | Init_float64 n ->
-          let b = camlint64_of_coqint (Floats.Float.to_bits n) in
-          fprintf oc "	.long	0x%Lx, 0x%Lx %s %.18g\n"
-            (Int64.shift_right_logical b 32)
-            (Int64.logand b 0xFFFFFFFFL)
-            comment (camlfloat_of_coqfloat n)
-      | Init_space n ->
-          if Z.gt n Z.zero then
-            fprintf oc "	.space	%s\n" (Z.to_string n)
-      | Init_addrof(symb, ofs) ->
-          fprintf oc "	.long	%a\n"
-            symbol_offset (symb, ofs)
-
-
     let print_fun_info = elf_print_fun_info
 
     let emit_constants oc lit =
