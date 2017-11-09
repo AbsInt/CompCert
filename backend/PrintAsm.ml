@@ -100,8 +100,9 @@ module Printer(Target:TARGET) =
           if Z.gt n Z.zero then
             fprintf oc "	.space	%s\n" (Z.to_string n)
       | Init_addrof(symb, ofs) ->
-          fprintf oc "	.long	%a\n"
-            symbol_offset (symb, ofs)
+        fprintf oc "	%s	%a\n"
+          Target.address
+          symbol_offset (symb, ofs)
 
 
     let print_init_data oc name id =
