@@ -928,8 +928,6 @@ module Target (System : SYSTEM):TARGET =
       | [t;l;j] -> (t, l, j)
       |    _    -> (Section_text, Section_literal, Section_jumptable)
 
-    let reset_constants = reset_constants
-
     let print_var_info = elf_print_var_info
 
     let print_comm_symb oc sz name align =

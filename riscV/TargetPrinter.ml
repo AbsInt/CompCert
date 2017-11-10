@@ -129,8 +129,6 @@ module Target : TARGET =
 
 (* Associate labels to floating-point constants and to symbols. *)
 
-    let reset_constants () = reset_constants ()
-
     let emit_constants oc lit =
       if exists_constants () then begin
          section oc lit;

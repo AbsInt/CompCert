@@ -867,8 +867,6 @@ module Target(System: SYSTEM):TARGET =
       | [t;l;j] -> (t, l, j)
       |    _    -> (Section_text, Section_literal, Section_jumptable)
 
-    let reset_constants = reset_constants
-
     let print_fun_info = print_fun_info
 
     let print_var_info = print_var_info

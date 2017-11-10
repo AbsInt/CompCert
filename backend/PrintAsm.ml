@@ -39,7 +39,6 @@ module Printer(Target:TARGET) =
 
     let print_function oc name fn =
       Hashtbl.clear current_function_labels;
-      Target.reset_constants ();
       let (text, lit, jmptbl) = Target.get_section_names name in
       Target.section oc text;
       let alignment =
