@@ -815,13 +815,13 @@ Definition cmpu_bool (c: comparison) (v1 v2: val): option bool :=
   | _, _ => None
   end.
 
-Definition cmpf_bool (c: comparison) (v1 v2: val): option bool :=
+Definition cmpf_bool (c: fp_comparison) (v1 v2: val): option bool :=
   match v1, v2 with
   | Vfloat f1, Vfloat f2 => Some (Float.cmp c f1 f2)
   | _, _ => None
   end.
 
-Definition cmpfs_bool (c: comparison) (v1 v2: val): option bool :=
+Definition cmpfs_bool (c: fp_comparison) (v1 v2: val): option bool :=
   match v1, v2 with
   | Vsingle f1, Vsingle f2 => Some (Float32.cmp c f1 f2)
   | _, _ => None
@@ -870,10 +870,10 @@ Definition cmp (c: comparison) (v1 v2: val): val :=
 Definition cmpu (c: comparison) (v1 v2: val): val :=
   of_optbool (cmpu_bool c v1 v2).
 
-Definition cmpf (c: comparison) (v1 v2: val): val :=
+Definition cmpf (c: fp_comparison) (v1 v2: val): val :=
   of_optbool (cmpf_bool c v1 v2).
 
-Definition cmpfs (c: comparison) (v1 v2: val): val :=
+Definition cmpfs (c: fp_comparison) (v1 v2: val): val :=
   of_optbool (cmpfs_bool c v1 v2).
 
 Definition cmpl (c: comparison) (v1 v2: val): option val :=
@@ -1672,6 +1672,20 @@ Proof.
 - rewrite Int64.negate_cmpu. auto.
 Qed.
 
+Theorem negate_cmpf_bool:
+  forall c v1 v2, cmpf_bool (negate_fp_comparison c) v1 v2 = option_map negb (cmpf_bool c v1 v2).
+Proof.
+  intros; unfold cmpf; destruct v1; auto; destruct v2; auto.
+  simpl. rewrite Float.cmp_negate. auto.
+Qed. 
+
+Theorem negate_cmpfs_bool:
+  forall c v1 v2, cmpfs_bool (negate_fp_comparison c) v1 v2 = option_map negb (cmpfs_bool c v1 v2).
+Proof.
+  intros; unfold cmpf; destruct v1; auto; destruct v2; auto.
+  simpl. rewrite Float32.cmp_negate. auto.
+Qed. 
+
 Lemma not_of_optbool:
   forall ob, of_optbool (option_map negb ob) = notbool (of_optbool ob).
 Proof.
@@ -1692,6 +1706,18 @@ Theorem negate_cmpu:
 Proof.
   intros. unfold cmpu. rewrite negate_cmpu_bool. apply not_of_optbool.
 Qed.
+
+Theorem negate_cmpf:
+  forall c v1 v2, cmpf (negate_fp_comparison c) v1 v2 = notbool (cmpf c v1 v2).
+Proof.
+  intros; unfold cmpf. rewrite negate_cmpf_bool. apply not_of_optbool.
+Qed. 
+
+Theorem negate_cmpfs:
+  forall c v1 v2, cmpfs (negate_fp_comparison c) v1 v2 = notbool (cmpfs c v1 v2).
+Proof.
+  intros; unfold cmpfs. rewrite negate_cmpfs_bool. apply not_of_optbool.
+Qed. 
 
 Theorem swap_cmp_bool:
   forall c x y,
@@ -1749,33 +1775,31 @@ Proof.
 Qed.
 
 Theorem negate_cmpf_eq:
-  forall v1 v2, notbool (cmpf Cne v1 v2) = cmpf Ceq v1 v2.
+  forall v1 v2, notbool (cmpf FCne v1 v2) = cmpf FCeq v1 v2.
 Proof.
-  destruct v1; destruct v2; auto. unfold cmpf, cmpf_bool.
-  rewrite Float.cmp_ne_eq. destruct (Float.cmp Ceq f f0); auto.
+  intros; symmetry; apply (negate_cmpf FCne).
 Qed.
 
 Theorem negate_cmpf_ne:
-  forall v1 v2, notbool (cmpf Ceq v1 v2) = cmpf Cne v1 v2.
+  forall v1 v2, notbool (cmpf FCeq v1 v2) = cmpf FCne v1 v2.
 Proof.
-  destruct v1; destruct v2; auto. unfold cmpf, cmpf_bool.
-  rewrite Float.cmp_ne_eq. destruct (Float.cmp Ceq f f0); auto.
+  intros; symmetry; apply (negate_cmpf FCeq).
 Qed.
 
 Theorem cmpf_le:
-  forall v1 v2, cmpf Cle v1 v2 = or (cmpf Clt v1 v2) (cmpf Ceq v1 v2).
+  forall v1 v2, cmpf FCle v1 v2 = or (cmpf FClt v1 v2) (cmpf FCeq v1 v2).
 Proof.
   destruct v1; destruct v2; auto. unfold cmpf, cmpf_bool.
   rewrite Float.cmp_le_lt_eq.
-  destruct (Float.cmp Clt f f0); destruct (Float.cmp Ceq f f0); auto.
+  destruct (Float.cmp FClt f f0); destruct (Float.cmp FCeq f f0); auto.
 Qed.
 
 Theorem cmpf_ge:
-  forall v1 v2, cmpf Cge v1 v2 = or (cmpf Cgt v1 v2) (cmpf Ceq v1 v2).
+  forall v1 v2, cmpf FCge v1 v2 = or (cmpf FCgt v1 v2) (cmpf FCeq v1 v2).
 Proof.
   destruct v1; destruct v2; auto. unfold cmpf, cmpf_bool.
   rewrite Float.cmp_ge_gt_eq.
-  destruct (Float.cmp Cgt f f0); destruct (Float.cmp Ceq f f0); auto.
+  destruct (Float.cmp FCgt f f0); destruct (Float.cmp FCeq f f0); auto.
 Qed.
 
 Theorem cmp_ne_0_optbool:

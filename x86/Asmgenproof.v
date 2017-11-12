@@ -205,8 +205,6 @@ Proof.
   destruct (Int64.eq_dec n Int64.zero); TailNoLabel.
   destruct c0; simpl; TailNoLabel.
   destruct c0; simpl; TailNoLabel.
-  destruct c0; simpl; TailNoLabel.
-  destruct c0; simpl; TailNoLabel.
 Qed.
 
 Remark transl_op_label:

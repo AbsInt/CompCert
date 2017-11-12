@@ -14,16 +14,8 @@
 
 open Printf
 open Camlcoq
-open Integers
+open PrintAST
 open Op
-
-let comparison_name = function
-  | Ceq -> "=="
-  | Cne -> "!="
-  | Clt -> "<"
-  | Cle -> "<="
-  | Cgt -> ">"
-  | Cge -> ">="
 
 let print_condition reg pp = function
   | (Ccomp c, [r1;r2]) ->
@@ -35,9 +27,7 @@ let print_condition reg pp = function
   | (Ccompuimm(c, n), [r1]) ->
       fprintf pp "%a %su %ld" reg r1 (comparison_name c) (camlint_of_coqint n)
   | (Ccompf c, [r1;r2]) ->
-      fprintf pp "%a %sf %a" reg r1 (comparison_name c) reg r2
-  | (Cnotcompf c, [r1;r2]) ->
-      fprintf pp "%a not(%sf) %a" reg r1 (comparison_name c) reg r2
+      fprintf pp "%a %sf %a" reg r1 (fp_comparison_name c) reg r2
   | (Cmaskzero n, [r1]) ->
       fprintf pp "%a & 0x%lx == 0" reg r1 (camlint_of_coqint n)
   | (Cmasknotzero n, [r1]) ->

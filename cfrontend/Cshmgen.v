@@ -165,8 +165,8 @@ Definition make_cast (from to: type) (e: expr) :=
   | cast_case_f2l si2 => OK (make_longoffloat e si2)
   | cast_case_s2l si2 => OK (make_longofsingle e si2)
   | cast_case_i2bool => OK (make_cmpu_ne_zero e)
-  | cast_case_f2bool => OK (Ebinop (Ocmpf Cne) e (make_floatconst Float.zero))
-  | cast_case_s2bool => OK (Ebinop (Ocmpfs Cne) e (make_singleconst Float32.zero))
+  | cast_case_f2bool => OK (Ebinop (Ocmpf FCne) e (make_floatconst Float.zero))
+  | cast_case_s2bool => OK (Ebinop (Ocmpfs FCne) e (make_singleconst Float32.zero))
   | cast_case_l2bool => OK (Ebinop (Ocmplu Cne) e (make_longconst Int64.zero))
   | cast_case_struct id1 id2 => OK e
   | cast_case_union id1 id2 => OK e
@@ -180,8 +180,8 @@ Definition make_cast (from to: type) (e: expr) :=
 Definition make_boolean (e: expr) (ty: type) :=
   match classify_bool ty with
   | bool_case_i => make_cmpu_ne_zero e
-  | bool_case_f => Ebinop (Ocmpf Cne) e (make_floatconst Float.zero)
-  | bool_case_s => Ebinop (Ocmpfs Cne) e (make_singleconst Float32.zero)
+  | bool_case_f => Ebinop (Ocmpf FCne) e (make_floatconst Float.zero)
+  | bool_case_s => Ebinop (Ocmpfs FCne) e (make_singleconst Float32.zero)
   | bool_case_l => Ebinop (Ocmplu Cne) e (make_longconst Int64.zero)
   | bool_default => e   (**r should not happen *)
   end.
@@ -191,8 +191,8 @@ Definition make_boolean (e: expr) (ty: type) :=
 Definition make_notbool (e: expr) (ty: type) :=
   match classify_bool ty with
   | bool_case_i => OK (Ebinop (Ocmpu Ceq) e (make_intconst Int.zero))
-  | bool_case_f => OK (Ebinop (Ocmpf Ceq) e (make_floatconst Float.zero))
-  | bool_case_s => OK (Ebinop (Ocmpfs Ceq) e (make_singleconst Float32.zero))
+  | bool_case_f => OK (Ebinop (Ocmpf FCeq) e (make_floatconst Float.zero))
+  | bool_case_s => OK (Ebinop (Ocmpfs FCeq) e (make_singleconst Float32.zero))
   | bool_case_l => OK (Ebinop (Ocmplu Ceq) e (make_longconst Int64.zero))
   | bool_default => Error (msg "Cshmgen.make_notbool")
   end.
@@ -354,7 +354,8 @@ Definition make_shr (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
 Definition make_cmp_ptr (c: comparison) (e1 e2: expr) :=
   Ebinop (if Archi.ptr64 then Ocmplu c else Ocmpu c) e1 e2.
 
-Definition make_cmp (c: comparison) (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
+Definition make_cmp (c: comparison) (fc: fp_comparison)
+                    (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_cmp ty1 ty2 with
   | cmp_case_pp => OK (make_cmp_ptr c e1 e2)
   | cmp_case_pi si =>
@@ -367,7 +368,7 @@ Definition make_cmp (c: comparison) (e1: expr) (ty1: type) (e2: expr) (ty2: type
       OK (make_cmp_ptr c (if Archi.ptr64 then e1 else Eunop Ointoflong e1) e2)
   | cmp_default =>
       make_binarith
-        (Ocmp c) (Ocmpu c) (Ocmpf c) (Ocmpfs c) (Ocmpl c) (Ocmplu c)
+        (Ocmp c) (Ocmpu c) (Ocmpf fc) (Ocmpfs fc) (Ocmpl c) (Ocmplu c)
         e1 ty1 e2 ty2
   end.
 
@@ -430,12 +431,12 @@ Definition transl_binop (ce: composite_env)
   | Cop.Oxor => make_xor a ta b tb
   | Cop.Oshl => make_shl a ta b tb
   | Cop.Oshr => make_shr a ta b tb
-  | Cop.Oeq => make_cmp Ceq a ta b tb
-  | Cop.One => make_cmp Cne a ta b tb
-  | Cop.Olt => make_cmp Clt a ta b tb
-  | Cop.Ogt => make_cmp Cgt a ta b tb
-  | Cop.Ole => make_cmp Cle a ta b tb
-  | Cop.Oge => make_cmp Cge a ta b tb
+  | Cop.Oeq => make_cmp Ceq FCeq a ta b tb
+  | Cop.One => make_cmp Cne FCne a ta b tb
+  | Cop.Olt => make_cmp Clt FClt a ta b tb
+  | Cop.Ogt => make_cmp Cgt FCgt a ta b tb
+  | Cop.Ole => make_cmp Cle FCle a ta b tb
+  | Cop.Oge => make_cmp Cge FCge a ta b tb
   end.
 
 (** ** Translation of field accesses *)

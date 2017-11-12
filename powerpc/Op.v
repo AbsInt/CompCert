@@ -43,8 +43,7 @@ Inductive condition : Type :=
   | Ccompu: comparison -> condition     (**r unsigned integer comparison *)
   | Ccompimm: comparison -> int -> condition (**r signed integer comparison with a constant *)
   | Ccompuimm: comparison -> int -> condition (**r unsigned integer comparison with a constant *)
-  | Ccompf: comparison -> condition     (**r floating-point comparison *)
-  | Cnotcompf: comparison -> condition  (**r negation of a floating-point comparison *)
+  | Ccompf: fp_comparison -> condition  (**r floating-point comparison *)
   | Cmaskzero: int -> condition         (**r test [(arg & constant) == 0] *)
   | Cmasknotzero: int -> condition      (**r test [(arg & constant) != 0] *)
 (*c PPC64 specific conditions: *)
@@ -168,7 +167,8 @@ Inductive addressing: Type :=
 Definition eq_condition (x y: condition) : {x=y} + {x<>y}.
 Proof.
   generalize Int.eq_dec Int64.eq_dec; intro.
-  assert (forall (x y: comparison), {x=y}+{x<>y}). decide equality.
+  assert (forall (x y: comparison), {x=y}+{x<>y}) by decide equality.
+  assert (forall (x y: fp_comparison), {x=y}+{x<>y}) by decide equality.
   decide equality.
 Defined.
 
@@ -203,7 +203,6 @@ Definition eval_condition (cond: condition) (vl: list val) (m: mem): option bool
   | Ccompimm c n, v1 :: nil => Val.cmp_bool c v1 (Vint n)
   | Ccompuimm c n, v1 :: nil => Val.cmpu_bool (Mem.valid_pointer m) c v1 (Vint n)
   | Ccompf c, v1 :: v2 :: nil => Val.cmpf_bool c v1 v2
-  | Cnotcompf c, v1 :: v2 :: nil => option_map negb (Val.cmpf_bool c v1 v2)
   | Cmaskzero n, v1 :: nil => Val.maskzero_bool v1 n
   | Cmasknotzero n, v1 :: nil => option_map negb (Val.maskzero_bool v1 n)
   | Ccompl c, v1 :: v2 :: nil => Val.cmpl_bool c v1 v2
@@ -356,7 +355,6 @@ Definition type_of_condition (c: condition) : list typ :=
   | Ccompimm _ _ => Tint :: nil
   | Ccompuimm _ _ => Tint :: nil
   | Ccompf _ => Tfloat :: Tfloat :: nil
-  | Cnotcompf _ => Tfloat :: Tfloat :: nil
   | Cmaskzero _ => Tint :: nil
   | Cmasknotzero _ => Tint :: nil
   | Ccompl _ => Tlong :: Tlong :: nil
@@ -611,8 +609,7 @@ Definition negate_condition (cond: condition): condition :=
   | Ccompu c => Ccompu(negate_comparison c)
   | Ccompimm c n => Ccompimm (negate_comparison c) n
   | Ccompuimm c n => Ccompuimm (negate_comparison c) n
-  | Ccompf c => Cnotcompf c
-  | Cnotcompf c => Ccompf c
+  | Ccompf c => Ccompf (negate_fp_comparison c)
   | Cmaskzero n => Cmasknotzero n
   | Cmasknotzero n => Cmaskzero n
   | Ccompl c => Ccompl(negate_comparison c)
@@ -630,9 +627,8 @@ Proof.
   repeat (destruct vl; auto). apply Val.negate_cmpu_bool.
   repeat (destruct vl; auto). apply Val.negate_cmp_bool.
   repeat (destruct vl; auto). apply Val.negate_cmpu_bool.
-  repeat (destruct vl; auto).
-  repeat (destruct vl; auto). destruct (Val.cmpf_bool c v v0); auto. destruct b; auto.
-  repeat (destruct vl; auto).
+  repeat (destruct vl; auto). apply Val.negate_cmpf_bool.
+  repeat (destruct vl; auto). 
   repeat (destruct vl; auto). destruct (Val.maskzero_bool v i) as [[]|]; auto.
   repeat (destruct vl; auto). apply Val.negate_cmpl_bool.
   repeat (destruct vl; auto). apply Val.negate_cmplu_bool.
@@ -866,7 +862,6 @@ Proof.
   eauto 3 using Val.cmpu_bool_inject, Mem.valid_pointer_implies.
   inv H3; simpl in H0; inv H0; auto.
   eauto 3 using Val.cmpu_bool_inject, Mem.valid_pointer_implies.
-  inv H3; inv H2; simpl in H0; inv H0; auto.
   inv H3; inv H2; simpl in H0; inv H0; auto.
   inv H3; try discriminate; auto.
   inv H3; try discriminate; auto.

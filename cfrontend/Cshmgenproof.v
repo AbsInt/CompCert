@@ -423,11 +423,11 @@ Proof.
 - (* float -> bool *)
   econstructor; eauto with cshm.
   simpl. unfold Val.cmpf, Val.cmpf_bool. rewrite Float.cmp_ne_eq.
-  destruct (Float.cmp Ceq f Float.zero); auto.
+  destruct (Float.cmp FCeq f Float.zero); auto.
 - (* single -> bool *)
   econstructor; eauto with cshm.
   simpl. unfold Val.cmpfs, Val.cmpfs_bool. rewrite Float32.cmp_ne_eq.
-  destruct (Float32.cmp Ceq f Float32.zero); auto.
+  destruct (Float32.cmp FCeq f Float32.zero); auto.
 - (* struct *)
   destruct (ident_eq id1 id2); inv H1; auto.
 - (* union *)
@@ -460,11 +460,11 @@ Proof.
 - (* float *)
   econstructor; split. econstructor; eauto with cshm. simpl. eauto.
   unfold Val.cmpf, Val.cmpf_bool. simpl. rewrite <- Float.cmp_ne_eq.
-  destruct (Float.cmp Cne f Float.zero); constructor.
+  destruct (Float.cmp FCne f Float.zero); constructor.
 - (* single *)
   econstructor; split. econstructor; eauto with cshm. simpl. eauto.
   unfold Val.cmpfs, Val.cmpfs_bool. simpl. rewrite <- Float32.cmp_ne_eq.
-  destruct (Float32.cmp Cne f Float32.zero); constructor.
+  destruct (Float32.cmp FCne f Float32.zero); constructor.
 Qed.
 
 Lemma make_neg_correct:
@@ -514,9 +514,9 @@ Proof.
   econstructor; eauto with cshm. simpl. unfold Val.cmplu, Val.cmplu_bool.
   unfold Mem.weak_valid_pointer in V. rewrite SF, V, Int64.eq_true. auto.
 - econstructor; eauto with cshm. simpl. unfold Val.cmpf, Val.cmpf_bool.
-  destruct (Float.cmp Ceq f Float.zero); auto.
+  destruct (Float.cmp FCeq f Float.zero); auto.
 - econstructor; eauto with cshm. simpl. unfold Val.cmpfs, Val.cmpfs_bool.
-  destruct (Float32.cmp Ceq f Float32.zero); auto.
+  destruct (Float32.cmp FCeq f Float32.zero); auto.
 Qed.
 
 Lemma make_notint_correct:
@@ -887,7 +887,8 @@ Proof.
   apply Int.eqm_samerepr. rewrite Ptrofs.eqm32 by auto. apply Ptrofs.eqm_unsigned_repr.
 Qed.
 
-Lemma make_cmp_correct: forall cmp, binary_constructor_correct (make_cmp cmp) (sem_cmp cmp).
+Lemma make_cmp_correct: forall cmp fcmp,
+  binary_constructor_correct (make_cmp cmp fcmp) (sem_cmp cmp fcmp).
 Proof.
   red; unfold sem_cmp, make_cmp; intros until m; intros SEM MAKE EV1 EV2;
   destruct (classify_cmp tya tyb).

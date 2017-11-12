@@ -17,7 +17,6 @@
 
 open Format
 open Camlcoq
-open Integers
 open AST
 open PrintAST
 open Cminor
@@ -80,14 +79,6 @@ let name_of_unop = function
   | Osingleoflong -> "singleoflong"
   | Osingleoflongu -> "singleoflongu"
 
-let comparison_name = function
-  | Ceq -> "=="
-  | Cne -> "!="
-  | Clt -> "<"
-  | Cle -> "<="
-  | Cgt -> ">"
-  | Cge -> ">="
-
 let name_of_binop = function
   | Oadd -> "+"
   | Osub -> "-"
@@ -125,8 +116,8 @@ let name_of_binop = function
   | Oshrlu -> ">>lu"
   | Ocmp c -> comparison_name c
   | Ocmpu c -> comparison_name c ^ "u"
-  | Ocmpf c -> comparison_name c ^ "f"
-  | Ocmpfs c -> comparison_name c ^ "s"
+  | Ocmpf c -> fp_comparison_name c ^ "f"
+  | Ocmpfs c -> fp_comparison_name c ^ "s"
   | Ocmpl c -> comparison_name c ^ "l"
   | Ocmplu c -> comparison_name c ^ "lu"
 

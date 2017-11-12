@@ -412,10 +412,10 @@ Nondetfunction compu (c: comparison) (e1: expr) (e2: expr) :=
       Eop (Ocmp (Ccompu c)) (e1 ::: e2 ::: Enil)
   end.
 
-Definition compf (c: comparison) (e1: expr) (e2: expr) :=
+Definition compf (c: fp_comparison) (e1: expr) (e2: expr) :=
   Eop (Ocmp (Ccompf c)) (e1 ::: e2 ::: Enil).
 
-Definition compfs (c: comparison) (e1: expr) (e2: expr) :=
+Definition compfs (c: fp_comparison) (e1: expr) (e2: expr) :=
   Eop (Ocmp (Ccompfs c)) (e1 ::: e2 ::: Enil).
 
 (** ** Integer conversions *)
@@ -472,7 +472,7 @@ Nondetfunction floatofint (e: expr) :=
 Definition intuoffloat (e: expr) :=
   Elet e
     (Elet (Eop (Ofloatconst (Float.of_intu Float.ox8000_0000)) Enil)
-      (Econdition (CEcond (Ccompf Clt) (Eletvar 1 ::: Eletvar 0 ::: Enil))
+      (Econdition (CEcond (Ccompf FClt) (Eletvar 1 ::: Eletvar 0 ::: Enil))
         (intoffloat (Eletvar 1))
         (addimm Float.ox8000_0000 (intoffloat (subf (Eletvar 1) (Eletvar 0))))))%nat.
 

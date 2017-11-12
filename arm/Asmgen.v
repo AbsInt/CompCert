@@ -258,25 +258,13 @@ Definition transl_cond
   | Ccompf cmp, a1 :: a2 :: nil =>
       do r1 <- freg_of a1; do r2 <- freg_of a2;
       OK (Pfcmpd r1 r2 :: k)
-  | Cnotcompf cmp, a1 :: a2 :: nil =>
-      do r1 <- freg_of a1; do r2 <- freg_of a2;
-      OK (Pfcmpd r1 r2 :: k)
   | Ccompfzero cmp, a1 :: nil =>
-      do r1 <- freg_of a1;
-      OK (Pfcmpzd r1 :: k)
-  | Cnotcompfzero cmp, a1 :: nil =>
       do r1 <- freg_of a1;
       OK (Pfcmpzd r1 :: k)
   | Ccompfs cmp, a1 :: a2 :: nil =>
       do r1 <- freg_of a1; do r2 <- freg_of a2;
       OK (Pfcmps r1 r2 :: k)
-  | Cnotcompfs cmp, a1 :: a2 :: nil =>
-      do r1 <- freg_of a1; do r2 <- freg_of a2;
-      OK (Pfcmps r1 r2 :: k)
   | Ccompfszero cmp, a1 :: nil =>
-      do r1 <- freg_of a1;
-      OK (Pfcmpzs r1 :: k)
-  | Cnotcompfszero cmp, a1 :: nil =>
       do r1 <- freg_of a1;
       OK (Pfcmpzs r1 :: k)
   | _, _ =>
@@ -303,24 +291,18 @@ Definition cond_for_unsigned_cmp (cmp: comparison) :=
   | Cge => TChs
   end.
 
-Definition cond_for_float_cmp (cmp: comparison) :=
+Definition cond_for_float_cmp (cmp: fp_comparison) :=
   match cmp with
-  | Ceq => TCeq
-  | Cne => TCne
-  | Clt => TCmi
-  | Cle => TCls
-  | Cgt => TCgt
-  | Cge => TCge
-  end.
-
-Definition cond_for_float_not_cmp (cmp: comparison) :=
-  match cmp with
-  | Ceq => TCne
-  | Cne => TCeq
-  | Clt => TCpl
-  | Cle => TChi
-  | Cgt => TCle
-  | Cge => TClt
+  | FCeq => TCeq
+  | FCne => TCne
+  | FClt => TCmi
+  | FCle => TCls
+  | FCgt => TCgt
+  | FCge => TCge
+  | FCnotlt => TCpl
+  | FCnotle => TChi
+  | FCnotgt => TCle
+  | FCnotge => TClt
   end.
 
 Definition cond_for_cond (cond: condition) :=
@@ -332,13 +314,9 @@ Definition cond_for_cond (cond: condition) :=
   | Ccompimm cmp n => cond_for_signed_cmp cmp
   | Ccompuimm cmp n => cond_for_unsigned_cmp cmp
   | Ccompf cmp => cond_for_float_cmp cmp
-  | Cnotcompf cmp => cond_for_float_not_cmp cmp
   | Ccompfzero cmp => cond_for_float_cmp cmp
-  | Cnotcompfzero cmp => cond_for_float_not_cmp cmp
   | Ccompfs cmp => cond_for_float_cmp cmp
-  | Cnotcompfs cmp => cond_for_float_not_cmp cmp
   | Ccompfszero cmp => cond_for_float_cmp cmp
-  | Cnotcompfszero cmp => cond_for_float_not_cmp cmp
   end.
 
 (** Translation of the arithmetic operation [r <- op(args)].

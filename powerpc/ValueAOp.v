@@ -31,7 +31,6 @@ Definition eval_static_condition (cond: condition) (vl: list aval): abool :=
   | Ccompimm c n, v1 :: nil => cmp_bool c v1 (I n)
   | Ccompuimm c n, v1 :: nil => cmpu_bool c v1 (I n)
   | Ccompf c, v1 :: v2 :: nil => cmpf_bool c v1 v2
-  | Cnotcompf c, v1 :: v2 :: nil => cnot (cmpf_bool c v1 v2)
   | Cmaskzero n, v1 :: nil => maskzero v1 n
   | Cmasknotzero n, v1 :: nil => cnot (maskzero v1 n)
   | Ccompl c, v1 :: v2 :: nil => cmpl_bool c v1 v2

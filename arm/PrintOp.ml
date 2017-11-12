@@ -14,16 +14,8 @@
 
 open Printf
 open Camlcoq
-open Integers
+open PrintAST
 open Op
-
-let comparison_name = function
-  | Ceq -> "=="
-  | Cne -> "!="
-  | Clt -> "<"
-  | Cle -> "<="
-  | Cgt -> ">"
-  | Cge -> ">="
 
 let shift pp = function
   | Slsl a -> fprintf pp "<< %ld" (camlint_of_coqint a)
@@ -45,21 +37,13 @@ let print_condition reg pp = function
   | (Ccompuimm(c, n), [r1]) ->
       fprintf pp "%a %su %ld" reg r1 (comparison_name c) (camlint_of_coqint n)
   | (Ccompf c, [r1;r2]) ->
-      fprintf pp "%a %sf %a" reg r1 (comparison_name c) reg r2
-  | (Cnotcompf c, [r1;r2]) ->
-      fprintf pp "%a not(%sf) %a" reg r1 (comparison_name c) reg r2
+      fprintf pp "%a %sf %a" reg r1 (fp_comparison_name c) reg r2
   | (Ccompfzero c, [r1]) ->
-      fprintf pp "%a %sf 0.0" reg r1 (comparison_name c)
-  | (Cnotcompfzero c, [r1]) ->
-      fprintf pp "%a not(%sf) 0.0" reg r1 (comparison_name c)
+      fprintf pp "%a %sf 0.0" reg r1 (fp_comparison_name c)
   | (Ccompfs c, [r1;r2]) ->
-      fprintf pp "%a %sfs %a" reg r1 (comparison_name c) reg r2
-  | (Cnotcompfs c, [r1;r2]) ->
-      fprintf pp "%a not(%sfs) %a" reg r1 (comparison_name c) reg r2
+      fprintf pp "%a %sfs %a" reg r1 (fp_comparison_name c) reg r2
   | (Ccompfszero c, [r1]) ->
-      fprintf pp "%a %sfs 0.0" reg r1 (comparison_name c)
-  | (Cnotcompfszero c, [r1]) ->
-      fprintf pp "%a not(%sfs) 0.0" reg r1 (comparison_name c)
+      fprintf pp "%a %sfs 0.0" reg r1 (fp_comparison_name c)
   | _ ->
       fprintf pp "<bad condition>"
 

@@ -213,11 +213,11 @@ Definition storeind (src: mreg) (base: ireg) (ofs: ptrofs) (ty: typ) (k: code) :
   synthesized by a [cror] instruction that computes the logical ``or''
   of the corresponding two conditions. *)
 
-Definition floatcomp (cmp: comparison) (r1 r2: freg) (k: code) :=
+Definition floatcomp (cmp: fp_comparison) (r1 r2: freg) (k: code) :=
   Pfcmpu r1 r2 ::
   match cmp with
-  | Cle => Pcror CRbit_3 CRbit_2 CRbit_0 :: k
-  | Cge => Pcror CRbit_3 CRbit_2 CRbit_1 :: k
+  | FCle | FCnotle => Pcror CRbit_3 CRbit_2 CRbit_0 :: k
+  | FCge | FCnotge => Pcror CRbit_3 CRbit_2 CRbit_1 :: k
   | _ => k
   end.
 
@@ -246,8 +246,6 @@ Definition transl_cond
       else
         OK (loadimm GPR0 n (Pcmplw r1 GPR0 :: k))
   | Ccompf cmp, a1 :: a2 :: nil =>
-      do r1 <- freg_of a1; do r2 <- freg_of a2; OK (floatcomp cmp r1 r2 k)
-  | Cnotcompf cmp, a1 :: a2 :: nil =>
       do r1 <- freg_of a1; do r2 <- freg_of a2; OK (floatcomp cmp r1 r2 k)
   | Cmaskzero n, a1 :: nil =>
       do r1 <- ireg_of a1; OK (andimm_base GPR0 r1 n k)
@@ -292,14 +290,18 @@ Definition crbit_for_icmp (cmp: comparison) :=
   | Cge => (CRbit_0, false)
   end.
 
-Definition crbit_for_fcmp (cmp: comparison) :=
+Definition crbit_for_fcmp (cmp: fp_comparison) :=
   match cmp with
-  | Ceq => (CRbit_2, true)
-  | Cne => (CRbit_2, false)
-  | Clt => (CRbit_0, true)
-  | Cle => (CRbit_3, true)
-  | Cgt => (CRbit_1, true)
-  | Cge => (CRbit_3, true)
+  | FCeq => (CRbit_2, true)
+  | FCne => (CRbit_2, false)
+  | FClt => (CRbit_0, true)
+  | FCle => (CRbit_3, true)
+  | FCgt => (CRbit_1, true)
+  | FCge => (CRbit_3, true)
+  | FCnotlt => (CRbit_0, false)
+  | FCnotle => (CRbit_3, false)
+  | FCnotgt => (CRbit_1, false)
+  | FCnotge => (CRbit_3, false)
   end.
 
 Definition crbit_for_cond (cond: condition) :=
@@ -309,7 +311,6 @@ Definition crbit_for_cond (cond: condition) :=
   | Ccompimm cmp n => crbit_for_icmp cmp
   | Ccompuimm cmp n => crbit_for_icmp cmp
   | Ccompf cmp => crbit_for_fcmp cmp
-  | Cnotcompf cmp => let p := crbit_for_fcmp cmp in (fst p, negb (snd p))
   | Cmaskzero n => (CRbit_2, true)
   | Cmasknotzero n => (CRbit_2, false)
   | Ccompl cmp => crbit_for_icmp cmp

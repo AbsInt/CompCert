@@ -842,11 +842,11 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pfdivs d s1 s2 =>
       Next (nextinstr (rs#d <- (Val.divfs rs#s1 rs#s2))) m
   | Pfeqs d s1 s2 =>
-      Next (nextinstr (rs#d <- (Val.cmpfs Ceq rs#s1 rs#s2))) m
+      Next (nextinstr (rs#d <- (Val.cmpfs FCeq rs#s1 rs#s2))) m
   | Pflts d s1 s2 =>
-      Next (nextinstr (rs#d <- (Val.cmpfs Clt rs#s1 rs#s2))) m
+      Next (nextinstr (rs#d <- (Val.cmpfs FClt rs#s1 rs#s2))) m
   | Pfles d s1 s2 =>
-      Next (nextinstr (rs#d <- (Val.cmpfs Cle rs#s1 rs#s2))) m
+      Next (nextinstr (rs#d <- (Val.cmpfs FCle rs#s1 rs#s2))) m
 
   | Pfcvtws d s =>
       Next (nextinstr (rs#d <- (Val.maketotal (Val.intofsingle rs#s)))) m
@@ -890,11 +890,11 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pfdivd d s1 s2 =>
       Next (nextinstr (rs#d <- (Val.divf rs#s1 rs#s2))) m
   | Pfeqd d s1 s2 =>
-      Next (nextinstr (rs#d <- (Val.cmpf Ceq rs#s1 rs#s2))) m
+      Next (nextinstr (rs#d <- (Val.cmpf FCeq rs#s1 rs#s2))) m
   | Pfltd d s1 s2 =>
-      Next (nextinstr (rs#d <- (Val.cmpf Clt rs#s1 rs#s2))) m
+      Next (nextinstr (rs#d <- (Val.cmpf FClt rs#s1 rs#s2))) m
   | Pfled d s1 s2 =>
-      Next (nextinstr (rs#d <- (Val.cmpf Cle rs#s1 rs#s2))) m
+      Next (nextinstr (rs#d <- (Val.cmpf FCle rs#s1 rs#s2))) m
 
   | Pfcvtwd d s =>
       Next (nextinstr (rs#d <- (Val.maketotal (Val.intoffloat rs#s)))) m

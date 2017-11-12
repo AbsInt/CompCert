@@ -799,10 +799,10 @@ Qed.
 Lemma compare_float_spec:
   forall rs f1 f2,
   let rs1 := nextinstr (compare_float rs (Vfloat f1) (Vfloat f2)) in
-     rs1#CN = Val.of_bool (Float.cmp Clt f1 f2)
-  /\ rs1#CZ = Val.of_bool (Float.cmp Ceq f1 f2)
-  /\ rs1#CC = Val.of_bool (negb (Float.cmp Clt f1 f2))
-  /\ rs1#CV = Val.of_bool (negb (Float.cmp Ceq f1 f2 || Float.cmp Clt f1 f2 || Float.cmp Cgt f1 f2)).
+     rs1#CN = Val.of_bool (Float.cmp FClt f1 f2)
+  /\ rs1#CZ = Val.of_bool (Float.cmp FCeq f1 f2)
+  /\ rs1#CC = Val.of_bool (negb (Float.cmp FClt f1 f2))
+  /\ rs1#CV = Val.of_bool (negb (Float.cmp FCeq f1 f2 || Float.cmp FClt f1 f2 || Float.cmp FCgt f1 f2)).
 Proof.
   intros. intuition.
 Qed.
@@ -838,65 +838,48 @@ Proof.
   intros [A [B [C D]]].
   unfold eval_testcond. rewrite A; rewrite B; rewrite C; rewrite D.
   destruct c; simpl.
-(* eq *)
-  destruct (Float.cmp Ceq n1 n2); auto.
-(* ne *)
-  rewrite Float.cmp_ne_eq. destruct (Float.cmp Ceq n1 n2); auto.
-(* lt *)
-  destruct (Float.cmp Clt n1 n2); auto.
-(* le *)
+- (* eq *)
+  destruct (Float.cmp FCeq n1 n2); auto.
+- (* ne *)
+  rewrite Float.cmp_ne_eq. destruct (Float.cmp FCeq n1 n2); auto.
+- (* lt *)
+  destruct (Float.cmp FClt n1 n2); auto.
+- (* le *)
   rewrite Float.cmp_le_lt_eq.
-  destruct (Float.cmp Clt n1 n2); destruct (Float.cmp Ceq n1 n2); auto.
-(* gt *)
-  destruct (Float.cmp Ceq n1 n2) eqn:EQ;
-  destruct (Float.cmp Clt n1 n2) eqn:LT;
-  destruct (Float.cmp Cgt n1 n2) eqn:GT; auto.
+  destruct (Float.cmp FClt n1 n2); destruct (Float.cmp FCeq n1 n2); auto.
+- (* gt *)
+  destruct (Float.cmp FCeq n1 n2) eqn:EQ;
+  destruct (Float.cmp FClt n1 n2) eqn:LT;
+  destruct (Float.cmp FCgt n1 n2) eqn:GT; auto.
   exfalso; eapply Float.cmp_lt_gt_false; eauto.
   exfalso; eapply Float.cmp_gt_eq_false; eauto.
   exfalso; eapply Float.cmp_lt_gt_false; eauto.
-(* ge *)
+- (* ge *)
   rewrite Float.cmp_ge_gt_eq.
-  destruct (Float.cmp Ceq n1 n2) eqn:EQ;
-  destruct (Float.cmp Clt n1 n2) eqn:LT;
-  destruct (Float.cmp Cgt n1 n2) eqn:GT; auto.
+  destruct (Float.cmp FCeq n1 n2) eqn:EQ;
+  destruct (Float.cmp FClt n1 n2) eqn:LT;
+  destruct (Float.cmp FCgt n1 n2) eqn:GT; auto.
   exfalso; eapply Float.cmp_lt_eq_false; eauto.
   exfalso; eapply Float.cmp_lt_eq_false; eauto.
   exfalso; eapply Float.cmp_lt_gt_false; eauto.
-Qed.
-
-Lemma cond_for_float_not_cmp_correct:
-  forall c n1 n2 rs,
-  eval_testcond (cond_for_float_not_cmp c)
-                (nextinstr (compare_float rs (Vfloat n1) (Vfloat n2)))=
-  Some(negb(Float.cmp c n1 n2)).
-Proof.
-  intros.
-  generalize (compare_float_spec rs n1 n2).
-  set (rs' := nextinstr (compare_float rs (Vfloat n1) (Vfloat n2))).
-  intros [A [B [C D]]].
-  unfold eval_testcond. rewrite A; rewrite B; rewrite C; rewrite D.
-  destruct c; simpl.
-(* eq *)
-  destruct (Float.cmp Ceq n1 n2); auto.
-(* ne *)
-  rewrite Float.cmp_ne_eq. destruct (Float.cmp Ceq n1 n2); auto.
-(* lt *)
-  destruct (Float.cmp Clt n1 n2); auto.
-(* le *)
-  rewrite Float.cmp_le_lt_eq.
-  destruct (Float.cmp Clt n1 n2) eqn:LT; destruct (Float.cmp Ceq n1 n2) eqn:EQ; auto.
-(* gt *)
-  destruct (Float.cmp Ceq n1 n2) eqn:EQ;
-  destruct (Float.cmp Clt n1 n2) eqn:LT;
-  destruct (Float.cmp Cgt n1 n2) eqn:GT; auto.
+- (* lt *)
+  rewrite (Float.cmp_negate FClt). destruct (Float.cmp FClt n1 n2); auto.
+- (* le *)
+  rewrite (Float.cmp_negate FCle), Float.cmp_le_lt_eq.
+  destruct (Float.cmp FClt n1 n2) eqn:LT; destruct (Float.cmp FCeq n1 n2) eqn:EQ; auto.
+- (* gt *)
+  rewrite (Float.cmp_negate FCgt). 
+  destruct (Float.cmp FCeq n1 n2) eqn:EQ;
+  destruct (Float.cmp FClt n1 n2) eqn:LT;
+  destruct (Float.cmp FCgt n1 n2) eqn:GT; auto.
   exfalso; eapply Float.cmp_lt_gt_false; eauto.
   exfalso; eapply Float.cmp_gt_eq_false; eauto.
   exfalso; eapply Float.cmp_lt_gt_false; eauto.
-(* ge *)
-  rewrite Float.cmp_ge_gt_eq.
-  destruct (Float.cmp Ceq n1 n2) eqn:EQ;
-  destruct (Float.cmp Clt n1 n2) eqn:LT;
-  destruct (Float.cmp Cgt n1 n2) eqn:GT; auto.
+- (* ge *)
+  rewrite (Float.cmp_negate FCge), Float.cmp_ge_gt_eq.
+  destruct (Float.cmp FCeq n1 n2) eqn:EQ;
+  destruct (Float.cmp FClt n1 n2) eqn:LT;
+  destruct (Float.cmp FCgt n1 n2) eqn:GT; auto.
   exfalso; eapply Float.cmp_lt_eq_false; eauto.
   exfalso; eapply Float.cmp_lt_eq_false; eauto.
   exfalso; eapply Float.cmp_lt_gt_false; eauto.
@@ -905,10 +888,10 @@ Qed.
 Lemma compare_float32_spec:
   forall rs f1 f2,
   let rs1 := nextinstr (compare_float32 rs (Vsingle f1) (Vsingle f2)) in
-     rs1#CN = Val.of_bool (Float32.cmp Clt f1 f2)
-  /\ rs1#CZ = Val.of_bool (Float32.cmp Ceq f1 f2)
-  /\ rs1#CC = Val.of_bool (negb (Float32.cmp Clt f1 f2))
-  /\ rs1#CV = Val.of_bool (negb (Float32.cmp Ceq f1 f2 || Float32.cmp Clt f1 f2 || Float32.cmp Cgt f1 f2)).
+     rs1#CN = Val.of_bool (Float32.cmp FClt f1 f2)
+  /\ rs1#CZ = Val.of_bool (Float32.cmp FCeq f1 f2)
+  /\ rs1#CC = Val.of_bool (negb (Float32.cmp FClt f1 f2))
+  /\ rs1#CV = Val.of_bool (negb (Float32.cmp FCeq f1 f2 || Float32.cmp FClt f1 f2 || Float32.cmp FCgt f1 f2)).
 Proof.
   intros. intuition.
 Qed.
@@ -944,65 +927,48 @@ Proof.
   intros [A [B [C D]]].
   unfold eval_testcond. rewrite A; rewrite B; rewrite C; rewrite D.
   destruct c; simpl.
-(* eq *)
-  destruct (Float32.cmp Ceq n1 n2); auto.
-(* ne *)
-  rewrite Float32.cmp_ne_eq. destruct (Float32.cmp Ceq n1 n2); auto.
-(* lt *)
-  destruct (Float32.cmp Clt n1 n2); auto.
-(* le *)
+- (* eq *)
+  destruct (Float32.cmp FCeq n1 n2); auto.
+- (* ne *)
+  rewrite Float32.cmp_ne_eq. destruct (Float32.cmp FCeq n1 n2); auto.
+- (* lt *)
+  destruct (Float32.cmp FClt n1 n2); auto.
+- (* le *)
   rewrite Float32.cmp_le_lt_eq.
-  destruct (Float32.cmp Clt n1 n2); destruct (Float32.cmp Ceq n1 n2); auto.
-(* gt *)
-  destruct (Float32.cmp Ceq n1 n2) eqn:EQ;
-  destruct (Float32.cmp Clt n1 n2) eqn:LT;
-  destruct (Float32.cmp Cgt n1 n2) eqn:GT; auto.
+  destruct (Float32.cmp FClt n1 n2); destruct (Float32.cmp FCeq n1 n2); auto.
+- (* gt *)
+  destruct (Float32.cmp FCeq n1 n2) eqn:EQ;
+  destruct (Float32.cmp FClt n1 n2) eqn:LT;
+  destruct (Float32.cmp FCgt n1 n2) eqn:GT; auto.
   exfalso; eapply Float32.cmp_lt_gt_false; eauto.
   exfalso; eapply Float32.cmp_gt_eq_false; eauto.
   exfalso; eapply Float32.cmp_lt_gt_false; eauto.
-(* ge *)
+- (* ge *)
   rewrite Float32.cmp_ge_gt_eq.
-  destruct (Float32.cmp Ceq n1 n2) eqn:EQ;
-  destruct (Float32.cmp Clt n1 n2) eqn:LT;
-  destruct (Float32.cmp Cgt n1 n2) eqn:GT; auto.
+  destruct (Float32.cmp FCeq n1 n2) eqn:EQ;
+  destruct (Float32.cmp FClt n1 n2) eqn:LT;
+  destruct (Float32.cmp FCgt n1 n2) eqn:GT; auto.
   exfalso; eapply Float32.cmp_lt_eq_false; eauto.
   exfalso; eapply Float32.cmp_lt_eq_false; eauto.
   exfalso; eapply Float32.cmp_lt_gt_false; eauto.
-Qed.
-
-Lemma cond_for_float32_not_cmp_correct:
-  forall c n1 n2 rs,
-  eval_testcond (cond_for_float_not_cmp c)
-                (nextinstr (compare_float32 rs (Vsingle n1) (Vsingle n2)))=
-  Some(negb(Float32.cmp c n1 n2)).
-Proof.
-  intros.
-  generalize (compare_float32_spec rs n1 n2).
-  set (rs' := nextinstr (compare_float32 rs (Vsingle n1) (Vsingle n2))).
-  intros [A [B [C D]]].
-  unfold eval_testcond. rewrite A; rewrite B; rewrite C; rewrite D.
-  destruct c; simpl.
-(* eq *)
-  destruct (Float32.cmp Ceq n1 n2); auto.
-(* ne *)
-  rewrite Float32.cmp_ne_eq. destruct (Float32.cmp Ceq n1 n2); auto.
-(* lt *)
-  destruct (Float32.cmp Clt n1 n2); auto.
-(* le *)
-  rewrite Float32.cmp_le_lt_eq.
-  destruct (Float32.cmp Clt n1 n2) eqn:LT; destruct (Float32.cmp Ceq n1 n2) eqn:EQ; auto.
-(* gt *)
-  destruct (Float32.cmp Ceq n1 n2) eqn:EQ;
-  destruct (Float32.cmp Clt n1 n2) eqn:LT;
-  destruct (Float32.cmp Cgt n1 n2) eqn:GT; auto.
+- (* lt *)
+  rewrite (Float32.cmp_negate FClt). destruct (Float32.cmp FClt n1 n2); auto.
+- (* le *)
+  rewrite (Float32.cmp_negate FCle), Float32.cmp_le_lt_eq.
+  destruct (Float32.cmp FClt n1 n2) eqn:LT; destruct (Float32.cmp FCeq n1 n2) eqn:EQ; auto.
+- (* gt *)
+  rewrite (Float32.cmp_negate FCgt). 
+  destruct (Float32.cmp FCeq n1 n2) eqn:EQ;
+  destruct (Float32.cmp FClt n1 n2) eqn:LT;
+  destruct (Float32.cmp FCgt n1 n2) eqn:GT; auto.
   exfalso; eapply Float32.cmp_lt_gt_false; eauto.
   exfalso; eapply Float32.cmp_gt_eq_false; eauto.
   exfalso; eapply Float32.cmp_lt_gt_false; eauto.
-(* ge *)
-  rewrite Float32.cmp_ge_gt_eq.
-  destruct (Float32.cmp Ceq n1 n2) eqn:EQ;
-  destruct (Float32.cmp Clt n1 n2) eqn:LT;
-  destruct (Float32.cmp Cgt n1 n2) eqn:GT; auto.
+- (* ge *)
+  rewrite (Float32.cmp_negate FCge), Float32.cmp_ge_gt_eq.
+  destruct (Float32.cmp FCeq n1 n2) eqn:EQ;
+  destruct (Float32.cmp FClt n1 n2) eqn:LT;
+  destruct (Float32.cmp FCgt n1 n2) eqn:GT; auto.
   exfalso; eapply Float32.cmp_lt_eq_false; eauto.
   exfalso; eapply Float32.cmp_lt_eq_false; eauto.
   exfalso; eapply Float32.cmp_lt_gt_false; eauto.
@@ -1029,8 +995,7 @@ Lemma transl_cond_correct:
      exec_straight ge fn c rs m k rs' m
   /\ match eval_condition cond (map rs (map preg_of args)) m with
      | Some b => eval_testcond (cond_for_cond cond) rs' = Some b
-                 /\ eval_testcond (cond_for_cond (negate_condition cond)) rs' = Some (negb b)
-     | None => True
+      | None => True
      end
   /\ forall r, data_preg r = true -> rs'#r = rs r.
 Proof.
@@ -1040,34 +1005,34 @@ Proof.
   econstructor.
   split. apply exec_straight_one. simpl. eauto. auto.
   split. destruct (Val.cmp_bool c0 (rs x) (rs x0)) eqn:CMP; auto.
-  split; apply cond_for_signed_cmp_correct; auto. rewrite Val.negate_cmp_bool, CMP; auto.
+  apply cond_for_signed_cmp_correct; auto.
   apply compare_int_inv.
 - (* Ccompu *)
   econstructor.
   split. apply exec_straight_one. simpl. eauto. auto.
   split. destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs x) (rs x0)) eqn:CMP; auto.
-  split; apply cond_for_unsigned_cmp_correct; auto. rewrite Val.negate_cmpu_bool, CMP; auto.
+  apply cond_for_unsigned_cmp_correct; auto.
   apply compare_int_inv.
 - (* Ccompshift *)
   econstructor.
   split. apply exec_straight_one. simpl. eauto. auto.
   split. rewrite transl_shift_correct.
   destruct (Val.cmp_bool c0 (rs x) (eval_shift s (rs x0))) eqn:CMP; auto.
-  split; apply cond_for_signed_cmp_correct; auto. rewrite Val.negate_cmp_bool, CMP; auto.
+  apply cond_for_signed_cmp_correct; auto.
   apply compare_int_inv.
 - (* Ccompushift *)
   econstructor.
   split. apply exec_straight_one. simpl. eauto. auto.
   split. rewrite transl_shift_correct.
   destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs x) (eval_shift s (rs x0))) eqn:CMP; auto.
-  split; apply cond_for_unsigned_cmp_correct; auto. rewrite Val.negate_cmpu_bool, CMP; auto.
+  apply cond_for_unsigned_cmp_correct; auto.
   apply compare_int_inv.
 - (* Ccompimm *)
   destruct (is_immed_arith i).
   econstructor.
   split. apply exec_straight_one. simpl. eauto. auto.
   split. destruct (Val.cmp_bool c0 (rs x) (Vint i)) eqn:CMP; auto.
-  split; apply cond_for_signed_cmp_correct; auto. rewrite Val.negate_cmp_bool, CMP; auto.
+  apply cond_for_signed_cmp_correct; auto.
   apply compare_int_inv.
   destruct (is_immed_arith (Int.neg i)).
   econstructor.
@@ -1082,14 +1047,14 @@ Proof.
   rewrite Q. rewrite R; eauto with asmgen. auto.
   split. rewrite <- R by (eauto with asmgen).
   destruct (Val.cmp_bool c0 (rs' x) (Vint i)) eqn:CMP; auto.
-  split; apply cond_for_signed_cmp_correct; auto. rewrite Val.negate_cmp_bool, CMP; auto.
+  apply cond_for_signed_cmp_correct; auto.
   intros. rewrite compare_int_inv by auto. auto with asmgen.
 - (* Ccompuimm *)
   destruct (is_immed_arith i).
   econstructor.
   split. apply exec_straight_one. simpl. eauto. auto.
   split. destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs x) (Vint i)) eqn:CMP; auto.
-  split; apply cond_for_unsigned_cmp_correct; auto. rewrite Val.negate_cmpu_bool, CMP; auto.
+  apply cond_for_unsigned_cmp_correct; auto.
   apply compare_int_inv.
   destruct (is_immed_arith (Int.neg i)).
   econstructor.
@@ -1104,76 +1069,39 @@ Proof.
   rewrite Q. rewrite R; eauto with asmgen. auto.
   split. rewrite <- R by (eauto with asmgen).
   destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs' x) (Vint i)) eqn:CMP; auto.
-  split; apply cond_for_unsigned_cmp_correct; auto. rewrite Val.negate_cmpu_bool, CMP; auto.
+  apply cond_for_unsigned_cmp_correct; auto.
   intros. rewrite compare_int_inv by auto. auto with asmgen.
 - (* Ccompf *)
   econstructor.
   split. apply exec_straight_one. simpl. eauto. apply compare_float_nextpc.
-  split. destruct (Val.cmpf_bool c0 (rs x) (rs x0)) eqn:CMP; auto.
+  split. destruct (Val.cmpf_bool f (rs x) (rs x0)) eqn:CMP; auto.
   destruct (rs x); try discriminate. destruct (rs x0); try discriminate.
   simpl in CMP. inv CMP.
-  split. apply cond_for_float_cmp_correct. apply cond_for_float_not_cmp_correct.
-  apply compare_float_inv.
-- (* Cnotcompf *)
-  econstructor.
-  split. apply exec_straight_one. simpl. eauto. apply compare_float_nextpc.
-  split. destruct (Val.cmpf_bool c0 (rs x) (rs x0)) eqn:CMP; auto.
-  destruct (rs x); try discriminate. destruct (rs x0); try discriminate.
-  simpl in CMP. inv CMP.
-Local Opaque compare_float. simpl.
-  split. apply cond_for_float_not_cmp_correct. rewrite negb_involutive. apply cond_for_float_cmp_correct.
-  exact I.
+  apply cond_for_float_cmp_correct.
   apply compare_float_inv.
 - (* Ccompfzero *)
   econstructor.
   split. apply exec_straight_one. simpl. eauto. apply compare_float_nextpc.
-  split. destruct (Val.cmpf_bool c0 (rs x) (Vfloat Float.zero)) eqn:CMP; auto.
+  split. destruct (Val.cmpf_bool f (rs x) (Vfloat Float.zero)) eqn:CMP; auto.
   destruct (rs x); try discriminate.
   simpl in CMP. inv CMP.
-  split. apply cond_for_float_cmp_correct. apply cond_for_float_not_cmp_correct.
-  apply compare_float_inv.
-- (* Cnotcompfzero *)
-  econstructor.
-  split. apply exec_straight_one. simpl. eauto. apply compare_float_nextpc.
-  split. destruct (Val.cmpf_bool c0 (rs x) (Vfloat Float.zero)) eqn:CMP; auto.
-  destruct (rs x); try discriminate. simpl in CMP. inv CMP.
-Local Opaque compare_float. simpl.
-  split. apply cond_for_float_not_cmp_correct. rewrite negb_involutive. apply cond_for_float_cmp_correct.
-  exact I.
+  apply cond_for_float_cmp_correct.
   apply compare_float_inv.
 - (* Ccompfs *)
   econstructor.
   split. apply exec_straight_one. simpl. eauto. apply compare_float32_nextpc.
-  split. destruct (Val.cmpfs_bool c0 (rs x) (rs x0)) eqn:CMP; auto.
+  split. destruct (Val.cmpfs_bool f (rs x) (rs x0)) eqn:CMP; auto.
   destruct (rs x); try discriminate. destruct (rs x0); try discriminate.
   simpl in CMP. inv CMP.
-  split. apply cond_for_float32_cmp_correct. apply cond_for_float32_not_cmp_correct.
-  apply compare_float32_inv.
-- (* Cnotcompfs *)
-  econstructor.
-  split. apply exec_straight_one. simpl. eauto. apply compare_float32_nextpc.
-  split. destruct (Val.cmpfs_bool c0 (rs x) (rs x0)) eqn:CMP; auto.
-  destruct (rs x); try discriminate. destruct (rs x0); try discriminate.
-  simpl in CMP. inv CMP.
-Local Opaque compare_float32. simpl.
-  split. apply cond_for_float32_not_cmp_correct. rewrite negb_involutive. apply cond_for_float32_cmp_correct.
-  exact I.
+  apply cond_for_float32_cmp_correct. 
   apply compare_float32_inv.
 - (* Ccompfszero *)
   econstructor.
   split. apply exec_straight_one. simpl. eauto. apply compare_float32_nextpc.
-  split. destruct (Val.cmpfs_bool c0 (rs x) (Vsingle Float32.zero)) eqn:CMP; auto.
+  split. destruct (Val.cmpfs_bool f (rs x) (Vsingle Float32.zero)) eqn:CMP; auto.
   destruct (rs x); try discriminate.
   simpl in CMP. inv CMP.
-  split. apply cond_for_float32_cmp_correct. apply cond_for_float32_not_cmp_correct.
-  apply compare_float32_inv.
-- (* Cnotcompfzero *)
-  econstructor.
-  split. apply exec_straight_one. simpl. eauto. apply compare_float32_nextpc.
-  split. destruct (Val.cmpfs_bool c0 (rs x) (Vsingle Float32.zero)) eqn:CMP; auto.
-  destruct (rs x); try discriminate. simpl in CMP. inv CMP.
-  simpl. split. apply cond_for_float32_not_cmp_correct. rewrite negb_involutive. apply cond_for_float32_cmp_correct.
-  exact I.
+  apply cond_for_float32_cmp_correct. 
   apply compare_float32_inv.
 Qed.
 
@@ -1367,7 +1295,7 @@ Proof.
   eapply exec_straight_trans. eexact A. apply exec_straight_one. simpl; eauto. auto.
   split; intros; Simpl.
   destruct (eval_condition c0 rs ## (preg_of ## args) m) as [b|]; simpl; auto.
-  destruct B as [B1 B2]; rewrite B1. destruct b; auto.
+  rewrite B; destruct b; auto.
 Qed.
 
 (** Translation of loads and stores. *)

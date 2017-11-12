@@ -451,8 +451,8 @@ Definition compare_longs (x y: val) (rs: regset) (m: mem): regset :=
 Definition compare_floats (vx vy: val) (rs: regset) : regset :=
   match vx, vy with
   | Vfloat x, Vfloat y =>
-      rs #ZF  <- (Val.of_bool (Float.cmp Ceq x y || negb (Float.ordered x y)))
-         #CF  <- (Val.of_bool (negb (Float.cmp Cge x y)))
+      rs #ZF  <- (Val.of_bool (Float.cmp FCeq x y || negb (Float.ordered x y)))
+         #CF  <- (Val.of_bool (negb (Float.cmp FCge x y)))
          #PF  <- (Val.of_bool (negb (Float.ordered x y)))
          #SF  <- Vundef
          #OF  <- Vundef
@@ -463,8 +463,8 @@ Definition compare_floats (vx vy: val) (rs: regset) : regset :=
 Definition compare_floats32 (vx vy: val) (rs: regset) : regset :=
   match vx, vy with
   | Vsingle x, Vsingle y =>
-      rs #ZF  <- (Val.of_bool (Float32.cmp Ceq x y || negb (Float32.ordered x y)))
-         #CF  <- (Val.of_bool (negb (Float32.cmp Cge x y)))
+      rs #ZF  <- (Val.of_bool (Float32.cmp FCeq x y || negb (Float32.ordered x y)))
+         #CF  <- (Val.of_bool (negb (Float32.cmp FCge x y)))
          #PF  <- (Val.of_bool (negb (Float32.ordered x y)))
          #SF  <- Vundef
          #OF  <- Vundef

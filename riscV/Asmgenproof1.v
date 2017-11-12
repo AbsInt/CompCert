@@ -360,6 +360,12 @@ Proof.
   rewrite <- Float.cmp_swap. auto.
 - simpl. f_equal. f_equal. f_equal. destruct (rs r2), (rs r1); auto. unfold Val.cmpf, Val.cmpf_bool.
   rewrite <- Float.cmp_swap. auto.
+- rewrite <- Val.negate_cmpf. auto.
+- rewrite <- Val.negate_cmpf. auto.
+- rewrite <- Val.negate_cmpf. simpl. f_equal. f_equal. f_equal. destruct (rs r2), (rs r1); auto. unfold Val.cmpf, Val.cmpf_bool.
+  rewrite <- Float.cmp_swap. auto.
+- rewrite <- Val.negate_cmpf. simpl. f_equal. f_equal. f_equal. destruct (rs r2), (rs r1); auto. unfold Val.cmpf, Val.cmpf_bool.
+  rewrite <- Float.cmp_swap. auto.
 Qed.
 
 Lemma transl_cond_single_correct:
@@ -369,11 +375,16 @@ Lemma transl_cond_single_correct:
   exec_instr ge fn insn rs m = Next (nextinstr (rs#rd <- v)) m.
 Proof.
   intros. destruct cmp; simpl in H; inv H; auto. 
-- simpl. f_equal. f_equal. f_equal. destruct (rs r2), (rs r1); auto. unfold Val.cmpfs, Val.cmpfs_bool.
-  rewrite Float32.cmp_ne_eq. destruct (Float32.cmp Ceq f0 f); auto.
+- rewrite <- Val.negate_cmpfs. auto.
 - simpl. f_equal. f_equal. f_equal. destruct (rs r2), (rs r1); auto. unfold Val.cmpfs, Val.cmpfs_bool.
   rewrite <- Float32.cmp_swap. auto.
 - simpl. f_equal. f_equal. f_equal. destruct (rs r2), (rs r1); auto. unfold Val.cmpfs, Val.cmpfs_bool.
+  rewrite <- Float32.cmp_swap. auto.
+- rewrite <- Val.negate_cmpfs. auto.
+- rewrite <- Val.negate_cmpfs. auto.
+- rewrite <- Val.negate_cmpfs. simpl. f_equal. f_equal. f_equal. destruct (rs r2), (rs r1); auto. unfold Val.cmpfs, Val.cmpfs_bool.
+  rewrite <- Float32.cmp_swap. auto.
+- rewrite <- Val.negate_cmpfs. simpl. f_equal. f_equal. f_equal. destruct (rs r2), (rs r1); auto. unfold Val.cmpfs, Val.cmpfs_bool.
   rewrite <- Float32.cmp_swap. auto.
 Qed.
 
@@ -481,30 +492,10 @@ Proof.
   split. constructor. apply exec_straight_one. eapply transl_cond_float_correct with (v := v); eauto. auto.
   split. rewrite V; destruct normal, b; reflexivity.
   intros; Simpl.
-- destruct (transl_cond_float c0 X31 x x0) as [insn normal] eqn:TC; inv EQ2.
-  assert (EVAL'': Val.cmpf_bool c0 (rs x) (rs x0) = Some (negb b)).
-  { destruct (Val.cmpf_bool c0 (rs x) (rs x0)) as [[]|]; inv EVAL'; auto. }
-  set (v := if normal then Val.cmpf c0 rs#x rs#x0 else Val.notbool (Val.cmpf c0 rs#x rs#x0)).
-  assert (V: v = Val.of_bool (xorb normal b)).
-  { unfold v, Val.cmpf. rewrite EVAL''. destruct normal, b; reflexivity. }
-  econstructor; econstructor.
-  split. constructor. apply exec_straight_one. eapply transl_cond_float_correct with (v := v); eauto. auto.
-  split. rewrite V; destruct normal, b; reflexivity.
-  intros; Simpl.
 - destruct (transl_cond_single c0 X31 x x0) as [insn normal] eqn:TC; inv EQ2.
   set (v := if normal then Val.cmpfs c0 rs#x rs#x0 else Val.notbool (Val.cmpfs c0 rs#x rs#x0)).
   assert (V: v = Val.of_bool (eqb normal b)).
   { unfold v, Val.cmpfs. rewrite EVAL'. destruct normal, b; reflexivity. }
-  econstructor; econstructor.
-  split. constructor. apply exec_straight_one. eapply transl_cond_single_correct with (v := v); eauto. auto.
-  split. rewrite V; destruct normal, b; reflexivity.
-  intros; Simpl.
-- destruct (transl_cond_single c0 X31 x x0) as [insn normal] eqn:TC; inv EQ2.
-  assert (EVAL'': Val.cmpfs_bool c0 (rs x) (rs x0) = Some (negb b)).
-  { destruct (Val.cmpfs_bool c0 (rs x) (rs x0)) as [[]|]; inv EVAL'; auto. }
-  set (v := if normal then Val.cmpfs c0 rs#x rs#x0 else Val.notbool (Val.cmpfs c0 rs#x rs#x0)).
-  assert (V: v = Val.of_bool (xorb normal b)).
-  { unfold v, Val.cmpfs. rewrite EVAL''. destruct normal, b; reflexivity. }
   econstructor; econstructor.
   split. constructor. apply exec_straight_one. eapply transl_cond_single_correct with (v := v); eauto. auto.
   split. rewrite V; destruct normal, b; reflexivity.
@@ -897,20 +888,6 @@ Proof.
   simpl; reflexivity.
   auto. auto.
   split; intros; Simpl. unfold v, Val.cmpf. destruct (Val.cmpf_bool c0 (rs x) (rs x0)) as [[]|]; auto.
-+ (* notcmpf *)
-  destruct (transl_cond_float c0 rd x x0) as [insn normal] eqn:TR.
-  rewrite Val.notbool_negb_3. fold (Val.cmpf c0 (rs x) (rs x0)).
-  set (v := Val.cmpf c0 (rs x) (rs x0)).
-  destruct normal; inv EQ2.
-* econstructor; split.
-  eapply exec_straight_two.
-  eapply transl_cond_float_correct with (v := v); eauto.
-  simpl; reflexivity.
-  auto. auto.
-  split; intros; Simpl. unfold v, Val.cmpf. destruct (Val.cmpf_bool c0 (rs x) (rs x0)) as [[]|]; auto.
-* econstructor; split.
-  apply exec_straight_one. eapply transl_cond_float_correct with (v := Val.notbool v); eauto. auto.
-  split; intros; Simpl.
 + (* cmpfs *)
   destruct (transl_cond_single c0 rd x x0) as [insn normal] eqn:TR.
   fold (Val.cmpfs c0 (rs x) (rs x0)).
@@ -925,20 +902,6 @@ Proof.
   simpl; reflexivity.
   auto. auto.
   split; intros; Simpl. unfold v, Val.cmpfs. destruct (Val.cmpfs_bool c0 (rs x) (rs x0)) as [[]|]; auto.
-+ (* notcmpfs *)
-  destruct (transl_cond_single c0 rd x x0) as [insn normal] eqn:TR.
-  rewrite Val.notbool_negb_3. fold (Val.cmpfs c0 (rs x) (rs x0)).
-  set (v := Val.cmpfs c0 (rs x) (rs x0)).
-  destruct normal; inv EQ2.
-* econstructor; split.
-  eapply exec_straight_two.
-  eapply transl_cond_single_correct with (v := v); eauto.
-  simpl; reflexivity.
-  auto. auto.
-  split; intros; Simpl. unfold v, Val.cmpfs. destruct (Val.cmpfs_bool c0 (rs x) (rs x0)) as [[]|]; auto.
-* econstructor; split.
-  apply exec_straight_one. eapply transl_cond_single_correct with (v := Val.notbool v); eauto. auto.
-  split; intros; Simpl.
 Qed.
 
 (** Some arithmetic properties. *)

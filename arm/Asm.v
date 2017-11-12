@@ -474,10 +474,10 @@ unord	N=0 Z=0 C=1 V=1
 Definition compare_float (rs: regset) (v1 v2: val) :=
   match v1, v2 with
   | Vfloat f1, Vfloat f2 =>
-      rs#CN <- (Val.of_bool (Float.cmp Clt f1 f2))
-        #CZ <- (Val.of_bool (Float.cmp Ceq f1 f2))
-        #CC <- (Val.of_bool (negb (Float.cmp Clt f1 f2)))
-        #CV <- (Val.of_bool (negb (Float.cmp Ceq f1 f2 || Float.cmp Clt f1 f2 || Float.cmp Cgt f1 f2)))
+      rs#CN <- (Val.of_bool (Float.cmp FClt f1 f2))
+        #CZ <- (Val.of_bool (Float.cmp FCeq f1 f2))
+        #CC <- (Val.of_bool (negb (Float.cmp FClt f1 f2)))
+        #CV <- (Val.of_bool (negb (Float.cmp FCeq f1 f2 || Float.cmp FClt f1 f2 || Float.cmp FCgt f1 f2)))
   | _, _ =>
       rs#CN <- Vundef
         #CZ <- Vundef
@@ -488,10 +488,10 @@ Definition compare_float (rs: regset) (v1 v2: val) :=
 Definition compare_float32 (rs: regset) (v1 v2: val) :=
   match v1, v2 with
   | Vsingle f1, Vsingle f2 =>
-      rs#CN <- (Val.of_bool (Float32.cmp Clt f1 f2))
-        #CZ <- (Val.of_bool (Float32.cmp Ceq f1 f2))
-        #CC <- (Val.of_bool (negb (Float32.cmp Clt f1 f2)))
-        #CV <- (Val.of_bool (negb (Float32.cmp Ceq f1 f2 || Float32.cmp Clt f1 f2 || Float32.cmp Cgt f1 f2)))
+      rs#CN <- (Val.of_bool (Float32.cmp FClt f1 f2))
+        #CZ <- (Val.of_bool (Float32.cmp FCeq f1 f2))
+        #CC <- (Val.of_bool (negb (Float32.cmp FClt f1 f2)))
+        #CV <- (Val.of_bool (negb (Float32.cmp FCeq f1 f2 || Float32.cmp FClt f1 f2 || Float32.cmp FCgt f1 f2)))
   | _, _ =>
       rs#CN <- Vundef
         #CZ <- Vundef

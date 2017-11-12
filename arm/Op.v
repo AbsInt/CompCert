@@ -58,14 +58,10 @@ Inductive condition : Type :=
   | Ccompushift: comparison -> shift -> condition (**r unsigned integer comparison *)
   | Ccompimm: comparison -> int -> condition (**r signed integer comparison with a constant *)
   | Ccompuimm: comparison -> int -> condition (**r unsigned integer comparison with a constant *)
-  | Ccompf: comparison -> condition     (**r 64-bit floating-point comparison *)
-  | Cnotcompf: comparison -> condition (**r negation of a floating-point comparison *)
-  | Ccompfzero: comparison -> condition     (**r floating-point comparison with 0.0 *)
-  | Cnotcompfzero: comparison -> condition  (**r negation of a floating-point comparison with 0.0 *)
-  | Ccompfs: comparison -> condition    (**r 32-bit floating-point comparison *)
-  | Cnotcompfs: comparison -> condition (**r negation of a floating-point comparison *)
-  | Ccompfszero: comparison -> condition     (**r floating-point comparison with 0.0 *)
-  | Cnotcompfszero: comparison -> condition.  (**r negation of a floating-point comparison with 0.0 *)
+  | Ccompf: fp_comparison -> condition       (**r 64-bit floating-point comparison *)
+  | Ccompfzero: fp_comparison -> condition   (**r floating-point comparison with 0.0 *)
+  | Ccompfs: fp_comparison -> condition      (**r 32-bit floating-point comparison *)
+  | Ccompfszero: fp_comparison -> condition. (**r floating-point comparison with 0.0 *)
 
 (** Arithmetic and logical operations.  In the descriptions, [rd] is the
   result of the operation and [r1], [r2], etc, are the arguments. *)
@@ -167,7 +163,8 @@ Defined.
 Definition eq_condition (x y: condition) : {x=y} + {x<>y}.
 Proof.
   generalize Int.eq_dec; intro.
-  assert (forall (x y: comparison), {x=y}+{x<>y}). decide equality.
+  assert (forall (x y: comparison), {x=y}+{x<>y}) by decide equality.
+  assert (forall (x y: fp_comparison), {x=y}+{x<>y}) by decide equality.
   generalize eq_shift; intro.
   decide equality.
 Defined.
@@ -215,13 +212,9 @@ Definition eval_condition (cond: condition) (vl: list val) (m: mem):
   | Ccompimm c n, v1 :: nil => Val.cmp_bool c v1 (Vint n)
   | Ccompuimm c n, v1 :: nil => Val.cmpu_bool (Mem.valid_pointer m) c v1 (Vint n)
   | Ccompf c, v1 :: v2 :: nil => Val.cmpf_bool c v1 v2
-  | Cnotcompf c, v1 :: v2 :: nil => option_map negb (Val.cmpf_bool c v1 v2)
   | Ccompfzero c, v1 :: nil => Val.cmpf_bool c v1 (Vfloat Float.zero)
-  | Cnotcompfzero c, v1 :: nil => option_map negb (Val.cmpf_bool c v1 (Vfloat Float.zero))
   | Ccompfs c, v1 :: v2 :: nil => Val.cmpfs_bool c v1 v2
-  | Cnotcompfs c, v1 :: v2 :: nil => option_map negb (Val.cmpfs_bool c v1 v2)
   | Ccompfszero c, v1 :: nil => Val.cmpfs_bool c v1 (Vsingle Float32.zero)
-  | Cnotcompfszero c, v1 :: nil => option_map negb (Val.cmpfs_bool c v1 (Vsingle Float32.zero))
   | _, _ => None
   end.
 
@@ -343,13 +336,9 @@ Definition type_of_condition (c: condition) : list typ :=
   | Ccompimm _ _ => Tint :: nil
   | Ccompuimm _ _ => Tint :: nil
   | Ccompf _ => Tfloat :: Tfloat :: nil
-  | Cnotcompf _ => Tfloat :: Tfloat :: nil
   | Ccompfzero _ => Tfloat :: nil
-  | Cnotcompfzero _ => Tfloat :: nil
   | Ccompfs _ => Tsingle :: Tsingle :: nil
-  | Cnotcompfs _ => Tsingle :: Tsingle :: nil
   | Ccompfszero _ => Tsingle :: nil
-  | Cnotcompfszero _ => Tsingle :: nil
   end.
 
 Definition type_of_operation (op: operation) : list typ * typ :=
@@ -568,14 +557,10 @@ Definition negate_condition (cond: condition): condition :=
   | Ccompushift c s => Ccompushift (negate_comparison c) s
   | Ccompimm c n => Ccompimm (negate_comparison c) n
   | Ccompuimm c n => Ccompuimm (negate_comparison c) n
-  | Ccompf c => Cnotcompf c
-  | Cnotcompf c => Ccompf c
-  | Ccompfzero c => Cnotcompfzero c
-  | Cnotcompfzero c => Ccompfzero c
-  | Ccompfs c => Cnotcompfs c
-  | Cnotcompfs c => Ccompfs c
-  | Ccompfszero c => Cnotcompfszero c
-  | Cnotcompfszero c => Ccompfszero c
+  | Ccompf c => Ccompf (negate_fp_comparison c)
+  | Ccompfzero c => Ccompfzero (negate_fp_comparison c)
+  | Ccompfs c => Ccompfs (negate_fp_comparison c)
+  | Ccompfszero c => Ccompfszero (negate_fp_comparison c)
   end.
 
 Lemma eval_negate_condition:
@@ -589,14 +574,10 @@ Proof.
   repeat (destruct vl; auto). apply Val.negate_cmpu_bool.
   repeat (destruct vl; auto). apply Val.negate_cmp_bool.
   repeat (destruct vl; auto). apply Val.negate_cmpu_bool.
-  repeat (destruct vl; auto).
-  repeat (destruct vl; auto). destruct (Val.cmpf_bool c v v0); auto. destruct b; auto.
-  repeat (destruct vl; auto).
-  repeat (destruct vl; auto). destruct (Val.cmpf_bool c v (Vfloat Float.zero)); auto. destruct b; auto.
-  repeat (destruct vl; auto).
-  repeat (destruct vl; auto). destruct (Val.cmpfs_bool c v v0); auto. destruct b; auto.
-  repeat (destruct vl; auto).
-  repeat (destruct vl; auto). destruct (Val.cmpfs_bool c v (Vsingle Float32.zero)); auto. destruct b; auto.
+  repeat (destruct vl; auto). apply Val.negate_cmpf_bool.
+  repeat (destruct vl; auto). apply Val.negate_cmpf_bool.
+  repeat (destruct vl; auto). apply Val.negate_cmpfs_bool.
+  repeat (destruct vl; auto). apply Val.negate_cmpfs_bool.
 Qed.
 
 (** Shifting stack-relative references.  This is used in [Stacking]. *)
@@ -820,12 +801,8 @@ Proof.
   eauto 4 using Val.cmp_bool_inject.
   eauto 4 using Val.cmpu_bool_inject, Mem.valid_pointer_implies.
   inv H3; inv H2; simpl in H0; inv H0; auto.
-  inv H3; inv H2; simpl in H0; inv H0; auto.
-  inv H3; simpl in H0; inv H0; auto.
   inv H3; simpl in H0; inv H0; auto.
   inv H3; inv H2; simpl in H0; inv H0; auto.
-  inv H3; inv H2; simpl in H0; inv H0; auto.
-  inv H3; simpl in H0; inv H0; auto.
   inv H3; simpl in H0; inv H0; auto.
 Qed.
 

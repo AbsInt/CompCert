@@ -46,10 +46,8 @@ Inductive condition : Type :=
   | Ccomplu (c: comparison)     (**r unsigned 64-bit integer comparison *)
   | Ccomplimm (c: comparison) (n: int64) (**r signed 64-bit integer comparison with a constant *)
   | Ccompluimm (c: comparison) (n: int64)  (**r unsigned 64-bit integer comparison with a constant *)
-  | Ccompf (c: comparison)      (**r 64-bit floating-point comparison *)
-  | Cnotcompf (c: comparison)   (**r negation of a floating-point comparison *)
-  | Ccompfs (c: comparison)     (**r 32-bit floating-point comparison *)
-  | Cnotcompfs (c: comparison). (**r negation of a floating-point comparison *)
+  | Ccompf (c: fp_comparison)      (**r 64-bit floating-point comparison *)
+  | Ccompfs (c: fp_comparison).    (**r 32-bit floating-point comparison *)
 
 (** Arithmetic and logical operations.  In the descriptions, [rd] is the
   result of the operation and [r1], [r2], etc, are the arguments. *)
@@ -167,7 +165,8 @@ Inductive addressing: Type :=
 Definition eq_condition (x y: condition) : {x=y} + {x<>y}.
 Proof.
   generalize Int.eq_dec Int64.eq_dec; intro.
-  assert (forall (x y: comparison), {x=y}+{x<>y}). decide equality.
+  assert (forall (x y: comparison), {x=y}+{x<>y}) by decide equality.
+  assert (forall (x y: fp_comparison), {x=y}+{x<>y}) by decide equality.
   decide equality.
 Defined.
 
@@ -215,9 +214,7 @@ Definition eval_condition (cond: condition) (vl: list val) (m: mem): option bool
   | Ccomplimm c n, v1 :: nil => Val.cmpl_bool c v1 (Vlong n)
   | Ccompluimm c n, v1 :: nil => Val.cmplu_bool (Mem.valid_pointer m) c v1 (Vlong n)
   | Ccompf c, v1 :: v2 :: nil => Val.cmpf_bool c v1 v2
-  | Cnotcompf c, v1 :: v2 :: nil => option_map negb (Val.cmpf_bool c v1 v2)
   | Ccompfs c, v1 :: v2 :: nil => Val.cmpfs_bool c v1 v2
-  | Cnotcompfs c, v1 :: v2 :: nil => option_map negb (Val.cmpfs_bool c v1 v2)
   | _, _ => None
   end.
 
@@ -374,9 +371,7 @@ Definition type_of_condition (c: condition) : list typ :=
   | Ccomplimm _ _ => Tlong :: nil
   | Ccompluimm _ _ => Tlong :: nil
   | Ccompf _ => Tfloat :: Tfloat :: nil
-  | Cnotcompf _ => Tfloat :: Tfloat :: nil
   | Ccompfs _ => Tsingle :: Tsingle :: nil
-  | Cnotcompfs _ => Tsingle :: Tsingle :: nil
   end.
 
 Definition type_of_operation (op: operation) : list typ * typ :=
@@ -704,10 +699,8 @@ Definition negate_condition (cond: condition): condition :=
   | Ccomplu c => Ccomplu(negate_comparison c)
   | Ccomplimm c n => Ccomplimm (negate_comparison c) n
   | Ccompluimm c n => Ccompluimm (negate_comparison c) n
-  | Ccompf c => Cnotcompf c
-  | Cnotcompf c => Ccompf c
-  | Ccompfs c => Cnotcompfs c
-  | Cnotcompfs c => Ccompfs c
+  | Ccompf c => Ccompf (negate_fp_comparison c)
+  | Ccompfs c => Ccompfs (negate_fp_comparison c)
   end.
 
 Lemma eval_negate_condition:
@@ -723,10 +716,8 @@ Proof.
   repeat (destruct vl; auto). apply Val.negate_cmplu_bool.
   repeat (destruct vl; auto). apply Val.negate_cmpl_bool.
   repeat (destruct vl; auto). apply Val.negate_cmplu_bool.
-  repeat (destruct vl; auto).
-  repeat (destruct vl; auto). destruct (Val.cmpf_bool c v v0) as [[]|]; auto.
-  repeat (destruct vl; auto).
-  repeat (destruct vl; auto). destruct (Val.cmpfs_bool c v v0) as [[]|]; auto.
+  repeat (destruct vl; auto). apply Val.negate_cmpf_bool.
+  repeat (destruct vl; auto). apply Val.negate_cmpfs_bool.
 Qed.
 
 (** Shifting stack-relative references.  This is used in [Stacking]. *)
@@ -955,8 +946,6 @@ Proof.
 - eauto 3 using Val.cmplu_bool_inject, Mem.valid_pointer_implies.
 - inv H3; simpl in H0; inv H0; auto.
 - eauto 3 using Val.cmplu_bool_inject, Mem.valid_pointer_implies.
-- inv H3; inv H2; simpl in H0; inv H0; auto.
-- inv H3; inv H2; simpl in H0; inv H0; auto.
 - inv H3; inv H2; simpl in H0; inv H0; auto.
 - inv H3; inv H2; simpl in H0; inv H0; auto.
 Qed.

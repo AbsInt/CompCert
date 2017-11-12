@@ -376,10 +376,10 @@ Nondetfunction compu (c: comparison) (e1: expr) (e2: expr) :=
       Eop (Ocmp (Ccompu c)) (e1 ::: e2 ::: Enil)
   end.
 
-Definition compf (c: comparison) (e1: expr) (e2: expr) :=
+Definition compf (c: fp_comparison) (e1: expr) (e2: expr) :=
   Eop (Ocmp (Ccompf c)) (e1 ::: e2 ::: Enil).
 
-Definition compfs (c: comparison) (e1: expr) (e2: expr) :=
+Definition compfs (c: fp_comparison) (e1: expr) (e2: expr) :=
   Eop (Ocmp (Ccompfs c)) (e1 ::: e2 ::: Enil).
 
 (** ** Integer conversions *)

@@ -161,7 +161,7 @@ Ltac boolean_equality := BE.bool_eq.
 
 (** Given a function [beq] of type [t -> t -> bool] produced by [boolean_equality],
   the [decidable_equality_from beq] produces a decidable equality with type
-  [forall (x y: t], {x=y}+{x<>y}. *)
+  [forall (x y: t), {x=y}+{x<>y}. *)
 
 Ltac decidable_equality_from beq :=
   apply (BE.dec_eq_from_bool_eq _ beq); [abstract BE.bool_eq_refl|abstract BE.bool_eq_sound].

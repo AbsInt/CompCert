@@ -113,8 +113,8 @@ Inductive binary_operation : Type :=
   | Oshrlu: binary_operation               (**r long right unsigned shift *)
   | Ocmp: comparison -> binary_operation   (**r integer signed comparison *)
   | Ocmpu: comparison -> binary_operation  (**r integer unsigned comparison *)
-  | Ocmpf: comparison -> binary_operation  (**r float64 comparison *)
-  | Ocmpfs: comparison -> binary_operation (**r float32 comparison *)
+  | Ocmpf: fp_comparison -> binary_operation  (**r float64 comparison *)
+  | Ocmpfs: fp_comparison -> binary_operation (**r float32 comparison *)
   | Ocmpl: comparison -> binary_operation  (**r long signed comparison *)
   | Ocmplu: comparison -> binary_operation. (**r long unsigned comparison *)
 

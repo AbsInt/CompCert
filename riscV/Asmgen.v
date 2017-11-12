@@ -183,24 +183,32 @@ Definition transl_cbranch_int64u (cmp: comparison) (r1 r2: ireg0) (lbl: label) :
   | Cge => Pbgeul r1 r2 lbl
   end.
 
-Definition transl_cond_float (cmp: comparison) (rd: ireg) (fs1 fs2: freg) :=
+Definition transl_cond_float (cmp: fp_comparison) (rd: ireg) (fs1 fs2: freg) :=
   match cmp with
-  | Ceq => (Pfeqd rd fs1 fs2, true)
-  | Cne => (Pfeqd rd fs1 fs2, false)
-  | Clt => (Pfltd rd fs1 fs2, true)
-  | Cle => (Pfled rd fs1 fs2, true)
-  | Cgt => (Pfltd rd fs2 fs1, true)
-  | Cge => (Pfled rd fs2 fs1, true)
+  | FCeq => (Pfeqd rd fs1 fs2, true)
+  | FCne => (Pfeqd rd fs1 fs2, false)
+  | FClt => (Pfltd rd fs1 fs2, true)
+  | FCle => (Pfled rd fs1 fs2, true)
+  | FCgt => (Pfltd rd fs2 fs1, true)
+  | FCge => (Pfled rd fs2 fs1, true)
+  | FCnotlt => (Pfltd rd fs1 fs2, false)
+  | FCnotle => (Pfled rd fs1 fs2, false)
+  | FCnotgt => (Pfltd rd fs2 fs1, false)
+  | FCnotge => (Pfled rd fs2 fs1, false)
   end.
   
-Definition transl_cond_single (cmp: comparison) (rd: ireg) (fs1 fs2: freg) :=
+Definition transl_cond_single (cmp: fp_comparison) (rd: ireg) (fs1 fs2: freg) :=
   match cmp with
-  | Ceq => (Pfeqs rd fs1 fs2, true)
-  | Cne => (Pfeqs rd fs1 fs2, false)
-  | Clt => (Pflts rd fs1 fs2, true)
-  | Cle => (Pfles rd fs1 fs2, true)
-  | Cgt => (Pflts rd fs2 fs1, true)
-  | Cge => (Pfles rd fs2 fs1, true)
+  | FCeq => (Pfeqs rd fs1 fs2, true)
+  | FCne => (Pfeqs rd fs1 fs2, false)
+  | FClt => (Pflts rd fs1 fs2, true)
+  | FCle => (Pfles rd fs1 fs2, true)
+  | FCgt => (Pflts rd fs2 fs1, true)
+  | FCge => (Pfles rd fs2 fs1, true)
+  | FCnotlt => (Pflts rd fs1 fs2, false)
+  | FCnotle => (Pfles rd fs1 fs2, false)
+  | FCnotgt => (Pflts rd fs2 fs1, false)
+  | FCnotge => (Pfles rd fs2 fs1, false)
   end.
   
 Definition transl_cbranch
@@ -246,18 +254,10 @@ Definition transl_cbranch
       do r1 <- freg_of f1; do r2 <- freg_of f2;
       let (insn, normal) := transl_cond_float c X31 r1 r2 in
       OK (insn :: (if normal then Pbnew X31 X0 lbl else Pbeqw X31 X0 lbl) :: k)
-  | Cnotcompf c, f1 :: f2 :: nil =>
-      do r1 <- freg_of f1; do r2 <- freg_of f2;
-      let (insn, normal) := transl_cond_float c X31 r1 r2 in
-      OK (insn :: (if normal then Pbeqw X31 X0 lbl else Pbnew X31 X0 lbl) :: k)
   | Ccompfs c, f1 :: f2 :: nil =>
       do r1 <- freg_of f1; do r2 <- freg_of f2;
       let (insn, normal) := transl_cond_single c X31 r1 r2 in
       OK (insn :: (if normal then Pbnew X31 X0 lbl else Pbeqw X31 X0 lbl) :: k)
-  | Cnotcompfs c, f1 :: f2 :: nil =>
-      do r1 <- freg_of f1; do r2 <- freg_of f2;
-      let (insn, normal) := transl_cond_single c X31 r1 r2 in
-      OK (insn :: (if normal then Pbeqw X31 X0 lbl else Pbnew X31 X0 lbl) :: k)
   | _, _ =>
       Error(msg "Asmgen.transl_cond_branch")
   end.
@@ -373,18 +373,10 @@ Definition transl_cond_op
       do r1 <- freg_of f1; do r2 <- freg_of f2;
       let (insn, normal) := transl_cond_float c rd r1 r2 in
       OK (insn :: if normal then k else Pxoriw rd rd Int.one :: k)
-  | Cnotcompf c, f1 :: f2 :: nil =>
-      do r1 <- freg_of f1; do r2 <- freg_of f2;
-      let (insn, normal) := transl_cond_float c rd r1 r2 in
-      OK (insn :: if normal then Pxoriw rd rd Int.one :: k else k)
   | Ccompfs c, f1 :: f2 :: nil =>
       do r1 <- freg_of f1; do r2 <- freg_of f2;
       let (insn, normal) := transl_cond_single c rd r1 r2 in
       OK (insn :: if normal then k else Pxoriw rd rd Int.one :: k)
-  | Cnotcompfs c, f1 :: f2 :: nil =>
-      do r1 <- freg_of f1; do r2 <- freg_of f2;
-      let (insn, normal) := transl_cond_single c rd r1 r2 in
-      OK (insn :: if normal then Pxoriw rd rd Int.one :: k else k)
   | _, _ =>
       Error(msg "Asmgen.transl_cond_op")
   end.

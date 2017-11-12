@@ -18,6 +18,8 @@
 open Printf
 open Camlcoq
 open AST
+open Integers
+open Floats
 
 let name_of_type = function
   | Tint -> "int"
@@ -90,3 +92,22 @@ let rec print_builtin_res px oc = function
       fprintf oc "splitlong(%a, %a)"
                  (print_builtin_res px) hi (print_builtin_res px) lo
 
+let comparison_name = function
+  | Ceq -> "=="
+  | Cne -> "!="
+  | Clt -> "<"
+  | Cle -> "<="
+  | Cgt -> ">"
+  | Cge -> ">="
+
+let fp_comparison_name = function
+  | FCeq -> "=="
+  | FCne -> "!="
+  | FClt -> "<"
+  | FCle -> "<="
+  | FCgt -> ">"
+  | FCge -> ">="
+  | FCnotlt -> "!<"
+  | FCnotle -> "!<="
+  | FCnotgt -> "!>"
+  | FCnotge -> "!>="

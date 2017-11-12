@@ -661,9 +661,9 @@ Definition compare_ulong (rs: regset) (m: mem) (v1 v2: val) :=
     #CR0_3 <- Vundef.
 
 Definition compare_float (rs: regset) (v1 v2: val) :=
-  rs#CR0_0 <- (Val.cmpf Clt v1 v2)
-    #CR0_1 <- (Val.cmpf Cgt v1 v2)
-    #CR0_2 <- (Val.cmpf Ceq v1 v2)
+  rs#CR0_0 <- (Val.cmpf FClt v1 v2)
+    #CR0_1 <- (Val.cmpf FCgt v1 v2)
+    #CR0_2 <- (Val.cmpf FCeq v1 v2)
     #CR0_3 <- Vundef.
 
 (** Execution of a single instruction [i] in initial state

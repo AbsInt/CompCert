@@ -250,9 +250,9 @@ Variable fn: function.
 Lemma compare_float_spec:
   forall rs v1 v2,
   let rs1 := nextinstr (compare_float rs v1 v2) in
-     rs1#CR0_0 = Val.cmpf Clt v1 v2
-  /\ rs1#CR0_1 = Val.cmpf Cgt v1 v2
-  /\ rs1#CR0_2 = Val.cmpf Ceq v1 v2
+     rs1#CR0_0 = Val.cmpf FClt v1 v2
+  /\ rs1#CR0_1 = Val.cmpf FCgt v1 v2
+  /\ rs1#CR0_2 = Val.cmpf FCeq v1 v2
   /\ forall r', r' <> CR0_0 -> r' <> CR0_1 -> r' <> CR0_2 -> r' <> CR0_3 -> r' <> PC -> rs1#r' = rs#r'.
 Proof.
   intros. unfold rs1.
@@ -836,32 +836,30 @@ Proof.
   generalize (compare_float_spec rs rs#r1 rs#r2).
   intros [A [B [C D]]].
   set (rs1 := nextinstr (compare_float rs rs#r1 rs#r2)) in *.
-  assert ((cmp = Ceq \/ cmp = Cne \/ cmp = Clt \/ cmp = Cgt)
-          \/ (cmp = Cle \/ cmp = Cge)).
-    case cmp; tauto.
-  unfold floatcomp.  elim H; intro; clear H.
+  assert (E: (cmp = FCeq \/ cmp = FCne \/ cmp = FClt \/ cmp = FCgt \/ cmp = FCnotlt \/ cmp = FCnotgt)
+          \/ (cmp = FCle \/ cmp = FCge \/ cmp = FCnotle \/ cmp = FCnotge))
+  by (destruct cmp; tauto).
+  unfold floatcomp. destruct E as [E|E].
+- (* one instr *)
   exists rs1.
-  split. destruct H0 as [EQ|[EQ|[EQ|EQ]]]; subst cmp;
-  apply exec_straight_one; reflexivity.
-  split.
-  destruct H0 as [EQ|[EQ|[EQ|EQ]]]; subst cmp; simpl; auto.
-  rewrite Val.negate_cmpf_eq. auto.
+  split. decompose [or] E; subst cmp; apply exec_straight_one; reflexivity.
+  split. decompose [or] E; subst cmp; simpl; auto; rewrite <- Val.negate_cmpf; auto.
   auto.
-  (* two instrs *)
-  exists (nextinstr (rs1#CR0_3 <- (Val.cmpf cmp rs#r1 rs#r2))).
-  split. elim H0; intro; subst cmp.
-  apply exec_straight_two with rs1 m.
-  reflexivity. simpl.
-  rewrite C; rewrite A. rewrite Val.or_commut. rewrite <- Val.cmpf_le.
-  reflexivity. reflexivity. reflexivity.
-  apply exec_straight_two with rs1 m.
-  reflexivity. simpl.
-  rewrite C; rewrite B. rewrite Val.or_commut. rewrite <- Val.cmpf_ge.
-  reflexivity. reflexivity. reflexivity.
-  split. elim H0; intro; subst cmp; simpl.
-  reflexivity.
-  reflexivity.
-  intros. Simpl.
+- (* two instrs *)
+  exists (nextinstr (rs1#CR0_3 <- (if snd (crbit_for_fcmp cmp)
+                                   then Val.cmpf cmp rs#r1 rs#r2
+                                   else Val.notbool (Val.cmpf cmp rs#r1 rs#r2)))).
+  split.
++ apply exec_straight_step with rs1 m. reflexivity. reflexivity.
+  decompose [or] E; subst cmp; apply exec_straight_one; auto; simpl; rewrite ?A, ?B, ?C. 
+* rewrite Val.or_commut, <- Val.cmpf_le. auto.
+* rewrite Val.or_commut, <- Val.cmpf_ge. auto.
+* rewrite Val.or_commut, <- Val.cmpf_le, <- Val.negate_cmpf. auto.
+* rewrite Val.or_commut, <- Val.cmpf_ge, <- Val.negate_cmpf. auto.
++ split.
+* replace (reg_of_crbit (fst (crbit_for_fcmp cmp))) with CR0_3. reflexivity.
+  decompose [or] E; subst cmp; reflexivity.
+* intros; Simpl.
 Qed.
 
 (** Translation of conditions. *)
@@ -894,7 +892,7 @@ Proof.
   intros.
 Opaque Int.eq.
   unfold transl_cond in H; destruct cond; ArgsInv; simpl.
-  (* Ccomp *)
+- (* Ccomp *)
   fold (Val.cmp c0 (rs x) (rs x0)).
   destruct (compare_sint_spec rs (rs x) (rs x0)) as [A [B [C D]]].
   econstructor; split.
@@ -902,7 +900,7 @@ Opaque Int.eq.
   split.
   case c0; simpl; auto; rewrite <- Val.negate_cmp; simpl; auto.
   auto with asmgen.
-  (* Ccompu *)
+- (* Ccompu *)
   fold (Val.cmpu (Mem.valid_pointer m) c0 (rs x) (rs x0)).
   destruct (compare_uint_spec rs m (rs x) (rs x0)) as [A [B [C D]]].
   econstructor; split.
@@ -910,7 +908,7 @@ Opaque Int.eq.
   split.
   case c0; simpl; auto; rewrite <- Val.negate_cmpu; simpl; auto.
   auto with asmgen.
-  (* Ccompimm *)
+- (* Ccompimm *)
   fold (Val.cmp c0 (rs x) (Vint i)).
   destruct (Int.eq (high_s i) Int.zero); inv EQ0.
   destruct (compare_sint_spec rs (rs x) (Vint i)) as [A [B [C D]]].
@@ -929,7 +927,7 @@ Opaque Int.eq.
   split. rewrite SAME.
   case c0; simpl; auto; rewrite <- Val.negate_cmp; simpl; auto.
   intros. rewrite SAME; rewrite D; auto with asmgen.
-  (* Ccompuimm *)
+- (* Ccompuimm *)
   fold (Val.cmpu (Mem.valid_pointer m) c0 (rs x) (Vint i)).
   destruct (Int.eq (high_u i) Int.zero); inv EQ0.
   destruct (compare_uint_spec rs m (rs x) (Vint i)) as [A [B [C D]]].
@@ -948,26 +946,19 @@ Opaque Int.eq.
   split. rewrite SAME.
   case c0; simpl; auto; rewrite <- Val.negate_cmpu; simpl; auto.
   intros. rewrite SAME; rewrite D; auto with asmgen.
-  (* Ccompf *)
-  fold (Val.cmpf c0 (rs x) (rs x0)).
-  destruct (floatcomp_correct c0 x x0 k rs m) as [rs' [EX [RES OTH]]].
+- (* Ccompf *)
+  fold (Val.cmpf f (rs x) (rs x0)).
+  destruct (floatcomp_correct f x x0 k rs m) as [rs' [EX [RES OTH]]].
   exists rs'. split. auto.
   split. apply RES.
   auto with asmgen.
-  (* Cnotcompf *)
-  rewrite Val.notbool_negb_3. rewrite Val.notbool_idem4.
-  fold (Val.cmpf c0 (rs x) (rs x0)).
-  destruct (floatcomp_correct c0 x x0 k rs m) as [rs' [EX [RES OTH]]].
-  exists rs'. split. auto.
-  split. rewrite RES. destruct (snd (crbit_for_fcmp c0)); auto.
-  auto with asmgen.
-  (* Cmaskzero *)
+- (* Cmaskzero *)
   destruct (andimm_base_correct GPR0 x i k rs m) as [rs' [A [B [C D]]]].
   eauto with asmgen.
   exists rs'. split. assumption.
   split. rewrite C. destruct (rs x); auto.
   auto with asmgen.
-  (* Cmasknotzero *)
+- (* Cmasknotzero *)
   destruct (andimm_base_correct GPR0 x i k rs m) as [rs' [A [B [C D]]]].
   eauto with asmgen.
   exists rs'. split. assumption.

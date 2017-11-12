@@ -145,24 +145,12 @@ Proof.
 - destruct (Float.eq_dec n2 Float.zero).
   subst n2. simpl. auto.
   simpl. rewrite H1; auto.
-- destruct (Float.eq_dec n1 Float.zero).
-  subst n1. simpl. destruct (rs#r2); simpl; auto. rewrite Float.cmp_swap. auto.
-  simpl. rewrite H1; auto.
-- destruct (Float.eq_dec n2 Float.zero); simpl; auto.
-  subst n2; auto.
-  rewrite H1; auto.
 - destruct (Float32.eq_dec n1 Float32.zero).
   subst n1. simpl. destruct (rs#r2); simpl; auto. rewrite Float32.cmp_swap. auto.
   simpl. rewrite H1; auto.
 - destruct (Float32.eq_dec n2 Float32.zero).
   subst n2. simpl. auto.
   simpl. rewrite H1; auto.
-- destruct (Float32.eq_dec n1 Float32.zero).
-  subst n1. simpl. destruct (rs#r2); simpl; auto. rewrite Float32.cmp_swap. auto.
-  simpl. rewrite H1; auto.
-- destruct (Float32.eq_dec n2 Float32.zero); simpl; auto.
-  subst n2; auto.
-  rewrite H1; auto.
 - auto.
 Qed.
 

@@ -165,16 +165,16 @@ Definition normalize_addrmode_64 (a: addrmode) :=
 (** Floating-point comparison.  We swap the operands in some cases
    to simplify the handling of the unordered case. *)
 
-Definition floatcomp (cmp: comparison) (r1 r2: freg) : instruction :=
+Definition floatcomp (cmp: fp_comparison) (r1 r2: freg) : instruction :=
   match cmp with
-  | Clt | Cle => Pcomisd_ff r2 r1
-  | Ceq | Cne | Cgt | Cge => Pcomisd_ff r1 r2
+  | FClt | FCle | FCnotlt | FCnotle => Pcomisd_ff r2 r1
+  | FCeq | FCne | FCgt | FCge | FCnotgt | FCnotge => Pcomisd_ff r1 r2
   end.
 
-Definition floatcomp32 (cmp: comparison) (r1 r2: freg) : instruction :=
+Definition floatcomp32 (cmp: fp_comparison) (r1 r2: freg) : instruction :=
   match cmp with
-  | Clt | Cle => Pcomiss_ff r2 r1
-  | Ceq | Cne | Cgt | Cge => Pcomiss_ff r1 r2
+  | FClt | FCle | FCnotlt | FCnotle => Pcomiss_ff r2 r1
+  | FCeq | FCne | FCgt | FCge | FCnotgt | FCnotge => Pcomiss_ff r1 r2
   end.
 
 (** Translation of a condition.  Prepends to [k] the instructions
@@ -204,11 +204,7 @@ Definition transl_cond
       do r1 <- ireg_of a1; OK (Pcmpq_ri r1 n :: k)
   | Ccompf cmp, a1 :: a2 :: nil =>
       do r1 <- freg_of a1; do r2 <- freg_of a2; OK (floatcomp cmp r1 r2 :: k)
-  | Cnotcompf cmp, a1 :: a2 :: nil =>
-      do r1 <- freg_of a1; do r2 <- freg_of a2; OK (floatcomp cmp r1 r2 :: k)
   | Ccompfs cmp, a1 :: a2 :: nil =>
-      do r1 <- freg_of a1; do r2 <- freg_of a2; OK (floatcomp32 cmp r1 r2 :: k)
-  | Cnotcompfs cmp, a1 :: a2 :: nil =>
       do r1 <- freg_of a1; do r2 <- freg_of a2; OK (floatcomp32 cmp r1 r2 :: k)
   | Cmaskzero n, a1 :: nil =>
       do r1 <- ireg_of a1; OK (Ptestl_ri r1 n :: k)
@@ -257,21 +253,16 @@ Definition testcond_for_condition (cond: condition) : extcond :=
   | Ccompluimm c n => Cond_base(testcond_for_unsigned_comparison c)
   | Ccompf c | Ccompfs c =>
       match c with
-      | Ceq => Cond_and Cond_np Cond_e
-      | Cne => Cond_or Cond_p Cond_ne
-      | Clt => Cond_base Cond_a
-      | Cle => Cond_base Cond_ae
-      | Cgt => Cond_base Cond_a
-      | Cge => Cond_base Cond_ae
-      end
-  | Cnotcompf c | Cnotcompfs c =>
-      match c with
-      | Ceq => Cond_or Cond_p Cond_ne
-      | Cne => Cond_and Cond_np Cond_e
-      | Clt => Cond_base Cond_be
-      | Cle => Cond_base Cond_b
-      | Cgt => Cond_base Cond_be
-      | Cge => Cond_base Cond_b
+      | FCeq => Cond_and Cond_np Cond_e
+      | FCne => Cond_or Cond_p Cond_ne
+      | FClt => Cond_base Cond_a
+      | FCle => Cond_base Cond_ae
+      | FCgt => Cond_base Cond_a
+      | FCge => Cond_base Cond_ae
+      | FCnotlt => Cond_base Cond_be
+      | FCnotle => Cond_base Cond_b
+      | FCnotgt => Cond_base Cond_be
+      | FCnotge => Cond_base Cond_b
       end
   | Cmaskzero n => Cond_base Cond_e
   | Cmasknotzero n => Cond_base Cond_ne

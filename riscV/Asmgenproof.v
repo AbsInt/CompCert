@@ -203,12 +203,6 @@ Proof.
 - destruct (transl_cond_float c0 X31 x x0) as [insn normal] eqn:F; inv EQ2.
   apply tail_nolabel_cons. eapply transl_cond_float_nolabel; eauto. 
   destruct normal; TailNoLabel.
-- destruct (transl_cond_float c0 X31 x x0) as [insn normal] eqn:F; inv EQ2.
-  apply tail_nolabel_cons. eapply transl_cond_float_nolabel; eauto. 
-  destruct normal; TailNoLabel.
-- destruct (transl_cond_single c0 X31 x x0) as [insn normal] eqn:F; inv EQ2.
-  apply tail_nolabel_cons. eapply transl_cond_single_nolabel; eauto. 
-  destruct normal; TailNoLabel.
 - destruct (transl_cond_single c0 X31 x x0) as [insn normal] eqn:F; inv EQ2.
   apply tail_nolabel_cons. eapply transl_cond_single_nolabel; eauto. 
   destruct normal; TailNoLabel.
@@ -257,12 +251,6 @@ Proof.
   apply opimm64_label; intros; exact I.
 - destruct (transl_cond_float c0 r x x0) as [insn normal] eqn:F; inv EQ2.
   apply tail_nolabel_cons. eapply transl_cond_float_nolabel; eauto. 
-  destruct normal; TailNoLabel.
-- destruct (transl_cond_float c0 r x x0) as [insn normal] eqn:F; inv EQ2.
-  apply tail_nolabel_cons. eapply transl_cond_float_nolabel; eauto. 
-  destruct normal; TailNoLabel.
-- destruct (transl_cond_single c0 r x x0) as [insn normal] eqn:F; inv EQ2.
-  apply tail_nolabel_cons. eapply transl_cond_single_nolabel; eauto. 
   destruct normal; TailNoLabel.
 - destruct (transl_cond_single c0 r x x0) as [insn normal] eqn:F; inv EQ2.
   apply tail_nolabel_cons. eapply transl_cond_single_nolabel; eauto. 

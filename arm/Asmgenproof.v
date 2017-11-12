@@ -781,19 +781,19 @@ Opaque loadind.
   left; eapply exec_straight_steps_goto; eauto.
   intros. simpl in TR.
   destruct (transl_cond_correct tge tf cond args _ rs0 m' _ TR) as [rs' [A [B C]]].
-  rewrite EC in B. destruct B as [Bpos Bneg].
+  rewrite EC in B.
   econstructor; econstructor; econstructor; split. eexact A.
   split. eapply agree_undef_regs; eauto with asmgen.
-  simpl. rewrite Bpos. reflexivity.
+  simpl. rewrite B. reflexivity.
 
 - (* Mcond false *)
   exploit eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto. intros EC.
   left; eapply exec_straight_steps; eauto. intros. simpl in TR.
   destruct (transl_cond_correct tge tf cond args _ rs0 m' _ TR) as [rs' [A [B C]]].
-  rewrite EC in B. destruct B as [Bpos Bneg].
+  rewrite EC in B.
   econstructor; split.
   eapply exec_straight_trans. eexact A.
-  apply exec_straight_one. simpl. rewrite Bpos. reflexivity. auto.
+  apply exec_straight_one. simpl. rewrite B. reflexivity. auto.
   split. eapply agree_undef_regs; eauto with asmgen.
   intros; Simpl.
   simpl. congruence.

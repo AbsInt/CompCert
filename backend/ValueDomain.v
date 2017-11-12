@@ -2744,7 +2744,7 @@ Proof.
 - constructor.
 Qed.
 
-Definition cmpf_bool (c: comparison) (v w: aval) : abool :=
+Definition cmpf_bool (c: fp_comparison) (v w: aval) : abool :=
   match v, w with
   | F f1, F f2 => Just (Float.cmp c f1 f2)
   | _, _ => Btop
@@ -2756,7 +2756,7 @@ Proof.
   intros. inv H; try constructor; inv H0; constructor.
 Qed.
 
-Definition cmpfs_bool (c: comparison) (v w: aval) : abool :=
+Definition cmpfs_bool (c: fp_comparison) (v w: aval) : abool :=
   match v, w with
   | FS f1, FS f2 => Just (Float32.cmp c f1 f2)
   | _, _ => Btop

@@ -32,20 +32,68 @@ Definition float32 := binary32. (**r the type of IEE754 single-precision FP numb
 
 (** Boolean-valued comparisons *)
 
-Definition cmp_of_comparison (c: comparison) (x: option Datatypes.comparison) : bool :=
+Inductive fp_comparison : Type :=
+  | FCeq               (**r same *)
+  | FCne               (**r different *)
+  | FClt               (**r less than *)
+  | FCle               (**r less than or equal *)
+  | FCgt               (**r greater than *)
+  | FCge               (**r greater than or equal *)
+  | FCnotlt            (**r no less than *)
+  | FCnotle            (**r no less than or equal *)
+  | FCnotgt            (**r no greater than *)
+  | FCnotge.           (**r no greater than or equal *)
+
+Definition negate_fp_comparison (c: fp_comparison): fp_comparison :=
   match c with
-  | Ceq =>
+  | FCeq => FCne
+  | FCne => FCeq
+  | FClt => FCnotlt
+  | FCle => FCnotle
+  | FCgt => FCnotgt
+  | FCge => FCnotge
+  | FCnotlt => FClt
+  | FCnotle => FCle
+  | FCnotgt => FCgt
+  | FCnotge => FCge
+  end.
+
+Definition swap_fp_comparison (c: fp_comparison): fp_comparison :=
+  match c with
+  | FCeq => FCeq
+  | FCne => FCne
+  | FClt => FCgt
+  | FCle => FCge
+  | FCgt => FClt
+  | FCge => FCle
+  | FCnotlt => FCnotgt
+  | FCnotle => FCnotge
+  | FCnotgt => FCnotlt
+  | FCnotge => FCnotle
+  end.
+
+Definition cmp_of_comparison (c: fp_comparison) (x: option Datatypes.comparison) : bool :=
+  match c with
+  | FCeq =>
       match x with Some Eq => true | _ => false end
-  | Cne =>
+  | FCne =>
       match x with Some Eq => false | _ => true end
-  | Clt =>
+  | FClt =>
       match x with Some Lt => true | _ => false end
-  | Cle =>
+  | FCle =>
       match x with Some(Lt|Eq) => true | _ => false end
-  | Cgt =>
+  | FCgt =>
       match x with Some Gt => true | _ => false end
-  | Cge =>
+  | FCge =>
       match x with Some(Gt|Eq) => true | _ => false end
+  | FCnotlt =>
+      match x with Some Lt => false | _ => true end
+  | FCnotle =>
+      match x with Some(Lt|Eq) => false | _ => true end
+  | FCnotgt =>
+      match x with Some Gt => false | _ => true end
+  | FCnotge =>
+      match x with Some(Gt|Eq) => false | _ => true end
   end.
 
 Definition ordered_of_comparison (x: option Datatypes.comparison) : bool :=
@@ -53,44 +101,45 @@ Definition ordered_of_comparison (x: option Datatypes.comparison) : bool :=
 
 Lemma cmp_of_comparison_swap:
   forall c x,
-  cmp_of_comparison (swap_comparison c) x =
+  cmp_of_comparison (swap_fp_comparison c) x =
   cmp_of_comparison c (match x with None => None | Some x => Some (CompOpp x) end).
 Proof.
   intros. destruct c; destruct x as [[]|]; reflexivity.
 Qed.
 
-Lemma cmp_of_comparison_ne_eq:
-  forall x, cmp_of_comparison Cne x = negb (cmp_of_comparison Ceq x).
+Lemma cmp_of_comparison_negate:
+  forall c x,
+  cmp_of_comparison (negate_fp_comparison c) x = negb (cmp_of_comparison c x).
 Proof.
-  intros. destruct x as [[]|]; reflexivity.
+  intros. destruct c; destruct x as [[]|]; reflexivity.
 Qed.
 
 Lemma cmp_of_comparison_lt_eq_false:
-  forall x, cmp_of_comparison Clt x = true -> cmp_of_comparison Ceq x = true -> False.
+  forall x, cmp_of_comparison FClt x = true -> cmp_of_comparison FCeq x = true -> False.
 Proof.
   destruct x as [[]|]; simpl; intros; discriminate.
 Qed.
 
 Lemma cmp_of_comparison_le_lt_eq:
-  forall x, cmp_of_comparison Cle x = cmp_of_comparison Clt x || cmp_of_comparison Ceq x.
+  forall x, cmp_of_comparison FCle x = cmp_of_comparison FClt x || cmp_of_comparison FCeq x.
 Proof.
   destruct x as [[]|]; reflexivity.
 Qed.
 
 Lemma cmp_of_comparison_gt_eq_false:
-  forall x, cmp_of_comparison Cgt x = true -> cmp_of_comparison Ceq x = true -> False.
+  forall x, cmp_of_comparison FCgt x = true -> cmp_of_comparison FCeq x = true -> False.
 Proof.
   destruct x as [[]|]; simpl; intros; discriminate.
 Qed.
 
 Lemma cmp_of_comparison_ge_gt_eq:
-  forall x, cmp_of_comparison Cge x = cmp_of_comparison Cgt x || cmp_of_comparison Ceq x.
+  forall x, cmp_of_comparison FCge x = cmp_of_comparison FCgt x || cmp_of_comparison FCeq x.
 Proof.
   destruct x as [[]|]; reflexivity.
 Qed.
 
 Lemma cmp_of_comparison_lt_gt_false:
-  forall x, cmp_of_comparison Clt x = true -> cmp_of_comparison Cgt x = true -> False.
+  forall x, cmp_of_comparison FClt x = true -> cmp_of_comparison FCgt x = true -> False.
 Proof.
   destruct x as [[]|]; simpl; intros; discriminate.
 Qed.
@@ -222,7 +271,7 @@ Definition div: float -> float -> float :=
   Bdiv 53 1024 __ __ binop_pl mode_NE. (**r division *)
 Definition compare (f1 f2: float) : option Datatypes.comparison := (**r general comparison *)
   Bcompare 53 1024 f1 f2.
-Definition cmp (c:comparison) (f1 f2: float) : bool := (**r Boolean comparison *)
+Definition cmp (c: fp_comparison) (f1 f2: float) : bool := (**r comparison *)
   cmp_of_comparison c (compare f1 f2).
 Definition ordered (f1 f2: float) : bool :=
   ordered_of_comparison (compare f1 f2).
@@ -327,44 +376,50 @@ Qed.
 (** Properties of comparisons. *)
 
 Theorem cmp_swap:
-  forall c x y, cmp (swap_comparison c) x y = cmp c y x.
+  forall c x y, cmp (swap_fp_comparison c) x y = cmp c y x.
 Proof.
   unfold cmp, compare; intros. rewrite (Bcompare_swap _ _ x y).
   apply cmp_of_comparison_swap.
 Qed.
 
-Theorem cmp_ne_eq:
-  forall f1 f2, cmp Cne f1 f2 = negb (cmp Ceq f1 f2).
+Theorem cmp_negate:
+  forall c x y, cmp (negate_fp_comparison c) x y = negb (cmp c x y).
 Proof.
-  intros; apply cmp_of_comparison_ne_eq.
+  unfold cmp; intros. apply cmp_of_comparison_negate.
+Qed.
+
+Theorem cmp_ne_eq:
+  forall f1 f2, cmp FCne f1 f2 = negb (cmp FCeq f1 f2).
+Proof.
+  intros; apply (cmp_of_comparison_negate FCeq).
 Qed.
 
 Theorem cmp_lt_eq_false:
-  forall f1 f2, cmp Clt f1 f2 = true -> cmp Ceq f1 f2 = true -> False.
+  forall f1 f2, cmp FClt f1 f2 = true -> cmp FCeq f1 f2 = true -> False.
 Proof.
   intros f1 f2; apply cmp_of_comparison_lt_eq_false.
 Qed.
 
 Theorem cmp_le_lt_eq:
-  forall f1 f2, cmp Cle f1 f2 = cmp Clt f1 f2 || cmp Ceq f1 f2.
+  forall f1 f2, cmp FCle f1 f2 = cmp FClt f1 f2 || cmp FCeq f1 f2.
 Proof.
   intros f1 f2; apply cmp_of_comparison_le_lt_eq.
 Qed.
 
 Theorem cmp_gt_eq_false:
-  forall x y, cmp Cgt x y = true -> cmp Ceq x y = true -> False.
+  forall x y, cmp FCgt x y = true -> cmp FCeq x y = true -> False.
 Proof.
   intros f1 f2; apply cmp_of_comparison_gt_eq_false.
 Qed.
 
 Theorem cmp_ge_gt_eq:
-  forall f1 f2, cmp Cge f1 f2 = cmp Cgt f1 f2 || cmp Ceq f1 f2.
+  forall f1 f2, cmp FCge f1 f2 = cmp FCgt f1 f2 || cmp FCeq f1 f2.
 Proof.
   intros f1 f2; apply cmp_of_comparison_ge_gt_eq.
 Qed.
 
 Theorem cmp_lt_gt_false:
-  forall f1 f2, cmp Clt f1 f2 = true -> cmp Cgt f1 f2 = true -> False.
+  forall f1 f2, cmp FClt f1 f2 = true -> cmp FCgt f1 f2 = true -> False.
 Proof.
   intros f1 f2; apply cmp_of_comparison_lt_gt_false.
 Qed.
@@ -427,7 +482,7 @@ Qed.
 
 Theorem to_intu_to_int_1:
   forall x n,
-  cmp Clt x (of_intu ox8000_0000) = true ->
+  cmp FClt x (of_intu ox8000_0000) = true ->
   to_intu x = Some n ->
   to_int x = Some n.
 Proof.
@@ -457,7 +512,7 @@ Qed.
 
 Theorem to_intu_to_int_2:
   forall x n,
-  cmp Clt x (of_intu ox8000_0000) = false ->
+  cmp FClt x (of_intu ox8000_0000) = false ->
   to_intu x = Some n ->
   to_int (sub x (of_intu ox8000_0000)) = Some (Int.sub n ox8000_0000).
 Proof.
@@ -958,7 +1013,7 @@ Definition div: float32 -> float32 -> float32 :=
   Bdiv 24 128 __ __ binop_pl mode_NE. (**r division *)
 Definition compare (f1 f2: float32) : option Datatypes.comparison := (**r general comparison *)
   Bcompare 24 128 f1 f2.
-Definition cmp (c:comparison) (f1 f2: float32) : bool := (**r comparison *)
+Definition cmp (c: fp_comparison) (f1 f2: float32) : bool := (**r comparison *)
   cmp_of_comparison c (compare f1 f2).
 Definition ordered (f1 f2: float32) : bool :=
   ordered_of_comparison (compare f1 f2).
@@ -1043,44 +1098,50 @@ Qed.
 (** Properties of comparisons. *)
 
 Theorem cmp_swap:
-  forall c x y, cmp (swap_comparison c) x y = cmp c y x.
+  forall c x y, cmp (swap_fp_comparison c) x y = cmp c y x.
 Proof.
   unfold cmp, compare; intros. rewrite (Bcompare_swap _ _ x y).
   apply cmp_of_comparison_swap.
 Qed.
 
-Theorem cmp_ne_eq:
-  forall f1 f2, cmp Cne f1 f2 = negb (cmp Ceq f1 f2).
+Theorem cmp_negate:
+  forall c x y, cmp (negate_fp_comparison c) x y = negb (cmp c x y).
 Proof.
-  intros; apply cmp_of_comparison_ne_eq.
+  unfold cmp; intros. apply cmp_of_comparison_negate.
+Qed.
+
+Theorem cmp_ne_eq:
+  forall f1 f2, cmp FCne f1 f2 = negb (cmp FCeq f1 f2).
+Proof.
+  intros; apply (cmp_of_comparison_negate FCeq).
 Qed.
 
 Theorem cmp_lt_eq_false:
-  forall f1 f2, cmp Clt f1 f2 = true -> cmp Ceq f1 f2 = true -> False.
+  forall f1 f2, cmp FClt f1 f2 = true -> cmp FCeq f1 f2 = true -> False.
 Proof.
   intros f1 f2; apply cmp_of_comparison_lt_eq_false.
 Qed.
 
 Theorem cmp_le_lt_eq:
-  forall f1 f2, cmp Cle f1 f2 = cmp Clt f1 f2 || cmp Ceq f1 f2.
+  forall f1 f2, cmp FCle f1 f2 = cmp FClt f1 f2 || cmp FCeq f1 f2.
 Proof.
   intros f1 f2; apply cmp_of_comparison_le_lt_eq.
 Qed.
 
 Theorem cmp_gt_eq_false:
-  forall x y, cmp Cgt x y = true -> cmp Ceq x y = true -> False.
+  forall x y, cmp FCgt x y = true -> cmp FCeq x y = true -> False.
 Proof.
   intros f1 f2; apply cmp_of_comparison_gt_eq_false.
 Qed.
 
 Theorem cmp_ge_gt_eq:
-  forall f1 f2, cmp Cge f1 f2 = cmp Cgt f1 f2 || cmp Ceq f1 f2.
+  forall f1 f2, cmp FCge f1 f2 = cmp FCgt f1 f2 || cmp FCeq f1 f2.
 Proof.
   intros f1 f2; apply cmp_of_comparison_ge_gt_eq.
 Qed.
 
 Theorem cmp_lt_gt_false:
-  forall f1 f2, cmp Clt f1 f2 = true -> cmp Cgt f1 f2 = true -> False.
+  forall f1 f2, cmp FClt f1 f2 = true -> cmp FCgt f1 f2 = true -> False.
 Proof.
   intros f1 f2; apply cmp_of_comparison_lt_gt_false.
 Qed.

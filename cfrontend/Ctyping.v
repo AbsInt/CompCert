@@ -1461,9 +1461,9 @@ Proof.
 Qed.
 
 Lemma pres_sem_cmp:
-  forall ty1 ty2 msg ty c v1 v2 m v,
+  forall ty1 ty2 msg ty c fc v1 v2 m v,
   comparison_type ty1 ty2 msg = OK ty ->
-  sem_cmp c v1 ty1 v2 ty2 m = Some v ->
+  sem_cmp c fc v1 ty1 v2 ty2 m = Some v ->
   wt_val v ty.
 Proof with (try discriminate).
   unfold comparison_type, sem_cmp; intros.

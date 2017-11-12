@@ -304,13 +304,13 @@ Definition sem_cast (v: val) (t1 t2: type) (m: mem): option val :=
   | cast_case_f2bool =>
       match v with
       | Vfloat f =>
-          Some(Vint(if Float.cmp Ceq f Float.zero then Int.zero else Int.one))
+          Some(Vint(if Float.cmp FCeq f Float.zero then Int.zero else Int.one))
       | _ => None
       end
   | cast_case_s2bool =>
       match v with
       | Vsingle f =>
-          Some(Vint(if Float32.cmp Ceq f Float32.zero then Int.zero else Int.one))
+          Some(Vint(if Float32.cmp FCeq f Float32.zero then Int.zero else Int.one))
       | _ => None
       end
   | cast_case_l2l =>
@@ -421,12 +421,12 @@ Definition bool_val (v: val) (t: type) (m: mem) : option bool :=
       end
   | bool_case_f =>
       match v with
-      | Vfloat f => Some (negb (Float.cmp Ceq f Float.zero))
+      | Vfloat f => Some (negb (Float.cmp FCeq f Float.zero))
       | _ => None
       end
   | bool_case_s =>
       match v with
-      | Vsingle f => Some (negb (Float32.cmp Ceq f Float32.zero))
+      | Vsingle f => Some (negb (Float32.cmp FCeq f Float32.zero))
       | _ => None
       end
   | bool_default => None
@@ -937,7 +937,7 @@ Definition cmp_ptr (m: mem) (c: comparison) (v1 v2: val): option val :=
     then Val.cmplu_bool (Mem.valid_pointer m) c v1 v2
     else Val.cmpu_bool (Mem.valid_pointer m) c v1 v2).
 
-Definition sem_cmp (c:comparison)
+Definition sem_cmp (c:comparison) (fc: fp_comparison)
                   (v1: val) (t1: type) (v2: val) (t2: type)
                   (m: mem): option val :=
   match classify_cmp t1 t2 with
@@ -990,9 +990,9 @@ Definition sem_cmp (c:comparison)
         (fun sg n1 n2 =>
             Some(Val.of_bool(match sg with Signed => Int64.cmp c n1 n2 | Unsigned => Int64.cmpu c n1 n2 end)))
         (fun n1 n2 =>
-            Some(Val.of_bool(Float.cmp c n1 n2)))
+            Some(Val.of_bool(Float.cmp fc n1 n2)))
         (fun n1 n2 =>
-            Some(Val.of_bool(Float32.cmp c n1 n2)))
+            Some(Val.of_bool(Float32.cmp fc n1 n2)))
         v1 t1 v2 t2 m
   end.
 
@@ -1060,12 +1060,12 @@ Definition sem_binary_operation
   | Oxor  => sem_xor v1 t1 v2 t2 m
   | Oshl => sem_shl v1 t1 v2 t2
   | Oshr  => sem_shr v1 t1 v2 t2
-  | Oeq => sem_cmp Ceq v1 t1 v2 t2 m
-  | One => sem_cmp Cne v1 t1 v2 t2 m
-  | Olt => sem_cmp Clt v1 t1 v2 t2 m
-  | Ogt => sem_cmp Cgt v1 t1 v2 t2 m
-  | Ole => sem_cmp Cle v1 t1 v2 t2 m
-  | Oge => sem_cmp Cge v1 t1 v2 t2 m
+  | Oeq => sem_cmp Ceq FCeq v1 t1 v2 t2 m
+  | One => sem_cmp Cne FCne v1 t1 v2 t2 m
+  | Olt => sem_cmp Clt FClt v1 t1 v2 t2 m
+  | Ogt => sem_cmp Cgt FCgt v1 t1 v2 t2 m
+  | Ole => sem_cmp Cle FCle v1 t1 v2 t2 m
+  | Oge => sem_cmp Cge FCge v1 t1 v2 t2 m
   end.
 
 Definition sem_incrdecr (cenv: composite_env) (id: incr_or_decr) (v: val) (ty: type) (m: mem) :=
@@ -1257,11 +1257,11 @@ Proof.
 Qed.
 
 Remark sem_cmp_inj:
-  forall cmp v1 tv1 ty1 v2 tv2 ty2 v,
-  sem_cmp cmp v1 ty1 v2 ty2 m = Some v ->
+  forall cmp fcmp v1 tv1 ty1 v2 tv2 ty2 v,
+  sem_cmp cmp fcmp v1 ty1 v2 ty2 m = Some v ->
   Val.inject f v1 tv1 ->
   Val.inject f v2 tv2 ->
-  exists tv, sem_cmp cmp tv1 ty1 tv2 ty2 m' = Some tv /\ Val.inject f v tv.
+  exists tv, sem_cmp cmp fcmp tv1 ty1 tv2 ty2 m' = Some tv /\ Val.inject f v tv.
 Proof.
   intros.
   unfold sem_cmp in *; destruct (classify_cmp ty1 ty2).
@@ -1447,9 +1447,9 @@ Lemma cast_bool_bool_val:
   destruct f; auto.
   destruct f; auto.
   destruct f; auto.
-  destruct (Float.cmp Ceq f0 Float.zero); auto.
+  destruct (Float.cmp FCeq f0 Float.zero); auto.
   destruct f; auto.
-  destruct (Float32.cmp Ceq f0 Float32.zero); auto.
+  destruct (Float32.cmp FCeq f0 Float32.zero); auto.
   destruct f; auto. 
   destruct ptr64; auto.
   destruct (Int.eq i Int.zero); auto.
