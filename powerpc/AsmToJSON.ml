@@ -15,11 +15,10 @@
 open Asm
 open AST
 open BinNums
-open C2C
 open Camlcoq
 open Json
 open Format
-open Sections
+open JsonAST
 
 let pp_reg pp t n =
   let s = sprintf "%s%s" t n in
@@ -35,20 +34,6 @@ let preg_annot = function
   | IR r -> sprintf "r%s" (TargetPrinter.int_reg_name r)
   | FR r -> sprintf "f%s" (TargetPrinter.float_reg_name r)
   | _    -> assert false
-
-let pp_atom pp a = pp_jstring pp (extern_atom a)
-
-let pp_atom_constant pp a = pp_jsingle_object pp "Atom" pp_atom a
-
-let pp_int pp i = fprintf pp "%ld" (camlint_of_coqint i)
-let pp_int64 pp i = fprintf pp "%Ld" (camlint64_of_coqint i)
-let pp_float32 pp f = fprintf pp "%ld" (camlint_of_coqint (Floats.Float32.to_bits f))
-let pp_float64 pp f = fprintf pp "%Ld" (camlint64_of_coqint (Floats.Float.to_bits f))
-let pp_z pp z = fprintf pp "%s" (Z.to_string z)
-
-let pp_int_constant pp i = pp_jsingle_object pp "Integer" pp_int i
-let pp_float64_constant pp f = pp_jsingle_object pp "Float" pp_float64 f
-let pp_float32_constant pp f = pp_jsingle_object pp "Float" pp_float32 f
 
 let pp_constant pp c =
   let pp_symbol pp (i,c) =
@@ -88,23 +73,12 @@ type instruction_arg =
   | Atom of positive
   | String of string
 
-let id = ref 0
-
-let next_id () =
-  let tmp = !id in
-  incr id;
-  tmp
-
-let reset_id () =
-  id := 0
-
 let pp_arg pp = function
   | Ireg ir -> pp_ireg pp ir
   | Freg fr -> pp_freg pp fr
   | Constant c -> pp_constant pp c
   | Long i ->  pp_jsingle_object pp "Integer" pp_int64 i
-  | Id -> let i = next_id () in
-    pp_jsingle_object pp "Integer" (fun pp i -> fprintf pp "%d" i) i
+  | Id -> pp_id_const pp ()
   | Crbit cr -> pp_crbit pp cr
   | ALabel lbl -> pp_label pp lbl
   | Float32 f -> pp_float32_constant pp f
@@ -164,7 +138,7 @@ let pp_instructions pp ic =
   | Paddis64 (ir1,ir2,n) -> instruction pp "Paddis" [Ireg ir1; Ireg ir2; Constant (Cint n)]
   | Paddze (ir1,ir2)
   | Paddze64 (ir1,ir2) -> instruction pp "Paddze" [Ireg ir1; Ireg ir2]
-  | Pallocframe _ -> assert false (* Should not ppcur *)
+  | Pallocframe _ -> assert false (* Should not occur *)
   | Pand_ (ir1,ir2,ir3)
   | Pand_64 (ir1,ir2,ir3) -> instruction pp "Pand_" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pandc (ir1,ir2,ir3) -> instruction pp "Pandc" [Ireg ir1; Ireg ir2; Ireg ir3]
@@ -211,33 +185,33 @@ let pp_instructions pp ic =
   | Pextsb (ir1,ir2) -> instruction pp "Pextsb" [Ireg ir1; Ireg ir2]
   | Pextsh (ir1,ir2) -> instruction pp "Pextsh" [Ireg ir1; Ireg ir2]
   | Pextsw (ir1,ir2) -> instruction pp "Pextsw" [Ireg ir1; Ireg ir2]
-  | Pextzw (ir1,ir2) -> assert false (* Should not ppcur *)
-  | Pfreeframe (c,i) -> assert false (* Should not ppcur *)
+  | Pextzw (ir1,ir2) -> assert false (* Should not occur *)
+  | Pfreeframe (c,i) -> assert false (* Should not occur *)
   | Pfabs (fr1,fr2)
   | Pfabss (fr1,fr2) -> instruction pp "Pfabs" [Freg fr1; Freg fr2]
   | Pfadd (fr1,fr2,fr3) -> instruction pp "Pfadd" [Freg fr1; Freg fr2; Freg fr3]
   | Pfadds (fr1,fr2,fr3) -> instruction pp "Pfadds" [Freg fr1; Freg fr2; Freg fr3]
   | Pfcmpu (fr1,fr2) -> instruction pp "Pfcmpu" [Freg fr1; Freg fr2]
   | Pfcfi (ir,fr)
-  | Pfcfl (ir,fr) -> assert false (* Should not ppcur *)
+  | Pfcfl (ir,fr) -> assert false (* Should not occur *)
   | Pfcfid (fr1,fr2) -> instruction pp "Pfcfid" [Freg fr1; Freg fr2]
-  | Pfcfiu _ (* Should not ppcur *)
-  | Pfcti _ (* Should not ppcur *)
-  | Pfctiu _ (* Should not ppcur *)
-  | Pfctid _ -> assert false (* Should not ppcur *)
+  | Pfcfiu _ (* Should not occur *)
+  | Pfcti _ (* Should not occur *)
+  | Pfctiu _ (* Should not occur *)
+  | Pfctid _ -> assert false (* Should not occur *)
   | Pfctidz (fr1,fr2) -> instruction pp "Pfctidz" [Freg fr1; Freg fr2]
   | Pfctiw (fr1,fr2) -> instruction pp "Pfctiw" [Freg fr1; Freg fr2]
   | Pfctiwz (fr1,fr2) -> instruction pp "Pfctiwz" [Freg fr1; Freg fr2]
   | Pfdiv (fr1,fr2,fr3) -> instruction pp "Pfdiv" [Freg fr1; Freg fr2; Freg fr3]
   | Pfdivs (fr1,fr2,fr3) -> instruction pp "Pfdivs" [Freg fr1; Freg fr2; Freg fr3]
-  | Pfmake (fr,ir1,ir2) -> assert false (* Should not ppcur *)
+  | Pfmake (fr,ir1,ir2) -> assert false (* Should not occur *)
   | Pfmr (fr1,fr2) -> instruction pp "Pfmr" [Freg fr1; Freg fr2]
   | Pfmul (fr1,fr2,fr3) -> instruction pp "Pfmul" [Freg fr1; Freg fr2; Freg fr3]
   | Pfmuls(fr1,fr2,fr3) -> instruction pp "Pfmuls" [Freg fr1; Freg fr2; Freg fr3]
   | Pfneg (fr1,fr2)
   | Pfnegs (fr1,fr2) -> instruction pp "Pfneg" [Freg fr1; Freg fr2]
   | Pfrsp (fr1,fr2) -> instruction pp "Pfrsp" [Freg fr1; Freg fr2]
-  | Pfxdp (fr1,fr2) -> assert false (* Should not ppcur *)
+  | Pfxdp (fr1,fr2) -> assert false (* Should not occur *)
   | Pfsub (fr1,fr2,fr3) -> instruction pp "Pfsub" [Freg fr1; Freg fr2; Freg fr3]
   | Pfsubs (fr1,fr2,fr3) ->  instruction pp "Pfsubs" [Freg fr1; Freg fr2; Freg fr3]
   | Pfmadd (fr1,fr2,fr3,fr4) -> instruction pp "Pfmadd" [Freg fr1; Freg fr2; Freg fr3; Freg fr4]
@@ -271,9 +245,9 @@ let pp_instructions pp ic =
   | Plhz (ir1,c,ir2) -> instruction pp "Plhz" [Ireg ir1; Constant c; Ireg ir2]
   | Plhzx (ir1,ir2,ir3) -> instruction pp "Plhzx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pldi (ir,c) -> instruction pp "Pldi" [Ireg ir; Long c] (* FIXME Cint is too small, we need Clong *)
-  | Plmake _ (* Should not ppcur *)
-  | Pllo _ (* Should not ppcur *)
-  | Plhi _ -> assert false (* Should not ppcur *)
+  | Plmake _ (* Should not occur *)
+  | Pllo _ (* Should not occur *)
+  | Plhi _ -> assert false (* Should not occur *)
   | Plfi (fr,fc) -> instruction pp "Plfi" [Freg fr; Float64 fc]
   | Plfis (fr,fc) -> instruction pp "Plfis" [Freg fr; Float32 fc]
   | Plwz (ir1,c,ir2)
@@ -285,7 +259,7 @@ let pp_instructions pp ic =
   | Plwbrx (ir1,ir2,ir3) -> instruction pp "Plwbrx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pmbar c -> instruction pp "Pmbar" [Constant (Cint c)]
   | Pmfcr ir -> instruction pp "Pmfcr" [Ireg ir]
-  | Pmfcrbit (ir,crb) -> assert false (* Should not ppcur *)
+  | Pmfcrbit (ir,crb) -> assert false (* Should not occur *)
   | Pmflr ir -> instruction pp "Pmflr" [Ireg ir]
   | Pmr (ir1,ir2) -> instruction pp "Pmr" [Ireg ir1; Ireg ir2]
   | Pmtctr ir -> instruction pp "Pmtctr" [Ireg ir]
@@ -396,108 +370,9 @@ let pp_instructions pp ic =
   | Pcfi_rel_offset _ -> assert false in (* Only debug relevant *)
   pp_jarray instruction pp ic
 
-let pp_storage pp static =
-    pp_jstring pp (if static then "Static" else "Extern")
-
-let pp_section pp sec =
-  let pp_simple name =
-    pp_jsingle_object pp "Section Name" pp_jstring name
-  and pp_complex name init =
-    pp_jobject_start pp;
-    pp_jmember ~first:true pp "Section Name" pp_jstring name;
-    pp_jmember pp "Init" pp_jbool init;
-    pp_jobject_end pp in
-  match sec with
-  | Section_text -> pp_simple "Text"
-  | Section_data init -> pp_complex "Data" init
-  | Section_small_data init -> pp_complex "Small Data" init
-  | Section_const init -> pp_complex "Const" init
-  | Section_small_const init -> pp_complex "Small Const" init
-  | Section_string -> pp_simple "String"
-  | Section_literal -> pp_simple "Literal"
-  | Section_jumptable -> pp_simple "Jumptable"
-  | Section_user (s,w,e) ->
-    pp_jobject_start pp;
-    pp_jmember ~first:true pp "Section Name" pp_jstring s;
-    pp_jmember pp "Writable" pp_jbool w;
-    pp_jmember pp "Executable" pp_jbool e;
-    pp_jobject_end pp
-  | Section_debug_info _
-  | Section_debug_abbrev
-  | Section_debug_line _
-  | Section_debug_loc
-  | Section_debug_ranges
-  | Section_debug_str
-  | Section_ais_annotation -> () (* There should be no info in the debug sections *)
-
-let pp_int_opt pp = function
-  | None -> fprintf pp "0"
-  | Some i -> fprintf pp "%d" i
-
-
-let pp_fundef pp (name,f) =
-  let alignment = atom_alignof name
-  and inline = atom_is_inline name
-  and static = atom_is_static name
-  and c_section,l_section,j_section = match (atom_sections name) with [a;b;c] -> a,b,c | _ -> assert false in
-  pp_jobject_start pp;
-  pp_jmember ~first:true pp "Fun Name" pp_atom name;
-  pp_jmember pp "Fun Storage Class" pp_storage static;
-  pp_jmember pp "Fun Alignment" pp_int_opt alignment;
-  pp_jmember pp "Fun Section Code" pp_section c_section;
-  pp_jmember pp "Fun Section Literals" pp_section l_section;
-  pp_jmember pp "Fun Section Jumptable" pp_section j_section;
-  pp_jmember pp "Fun Inline" pp_jbool inline;
-  pp_jmember pp "Fun Code" pp_instructions f.fn_code;
-  pp_jobject_end pp
-
-let pp_init_data pp = function
-  | Init_int8 ic -> pp_jsingle_object pp "Init_int8" pp_int ic
-  | Init_int16 ic -> pp_jsingle_object pp "Init_int16" pp_int ic
-  | Init_int32 ic -> pp_jsingle_object pp "Init_int32" pp_int ic
-  | Init_int64 lc -> pp_jsingle_object pp "Init_int64" pp_int64 lc
-  | Init_float32 f -> pp_jsingle_object pp "Init_float32" pp_float32 f
-  | Init_float64 f -> pp_jsingle_object pp "Init_float64" pp_float64 f
-  | Init_space z -> pp_jsingle_object pp "Init_space" pp_z z
-  | Init_addrof (p,i) ->
-      let pp_addr_of pp (p,i) =
-        pp_jobject_start pp;
-        pp_jmember ~first:true pp "Addr" pp_atom p;
-        pp_jmember  pp "Offset" pp_int i;
-        pp_jobject_end pp  in
-      pp_jsingle_object pp "Init_addrof" pp_addr_of (p,i)
-
-let pp_vardef pp (name,v) =
-  let alignment = atom_alignof name
-  and static = atom_is_static name
-  and section = match  (atom_sections name) with [s] -> s | _ -> assert false in(* Should only have one section *)
-  pp_jobject_start pp;
-  pp_jmember ~first:true pp "Var Name" pp_atom name;
-  pp_jmember pp "Var Readonly" pp_jbool v.gvar_readonly;
-  pp_jmember pp "Var Volatile" pp_jbool v.gvar_volatile;
-  pp_jmember pp "Var Storage Class" pp_storage static;
-  pp_jmember pp "Var Alignment" pp_int_opt alignment;
-  pp_jmember pp "Var Section" pp_section section;
-  pp_jmember pp "Var Init" (pp_jarray pp_init_data) v.gvar_init;
-  pp_jobject_end pp
-
 let pp_program pp prog =
   reset_id ();
-  let prog_vars,prog_funs = List.fold_left (fun (vars,funs) (ident,def) ->
-    match def with
-    | Gfun (Internal f) ->
-      if not (atom_is_iso_inline_definition ident) then
-        vars,(ident,f)::funs
-      else
-        vars,funs
-    | Gvar v -> (ident,v)::vars,funs
-    | _ -> vars,funs) ([],[]) prog.prog_defs in
-  pp_jobject_start pp;
-  pp_jmember ~first:true pp "Global Variables" (pp_jarray pp_vardef) prog_vars;
-  pp_jmember pp "Functions" (pp_jarray pp_fundef) prog_funs;
-  pp_jobject_end pp
+  pp_program pp pp_instructions prog
 
 let pp_mnemonics pp =
-  let mnemonic_names = List.sort (String.compare) mnemonic_names in
-  let new_line pp () = pp_print_string pp "\n" in
-  pp_print_list ~pp_sep:new_line pp_print_string pp mnemonic_names
+  pp_mnemonics pp mnemonic_names
