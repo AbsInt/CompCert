@@ -43,6 +43,16 @@ Inductive freg: Type :=
   | FR8: freg  | FR9: freg  | FR10: freg  | FR11: freg
   | FR12: freg  | FR13: freg  | FR14: freg  | FR15: freg.
 
+Inductive sreg: Type :=
+  | SR0: sreg  | SR1: sreg  | SR2: sreg  | SR3: sreg
+  | SR4: sreg  | SR5: sreg  | SR6: sreg  | SR7: sreg
+  | SR8: sreg  | SR9: sreg  | SR10: sreg  | SR11: sreg
+  | SR12: sreg  | SR13: sreg  | SR14: sreg  | SR15: sreg
+  | SR16: sreg  | SR17: sreg  | SR18: sreg  | SR19: sreg
+  | SR20: sreg  | SR21: sreg  | SR22: sreg  | SR23: sreg
+  | SR24: sreg  | SR25: sreg  | SR26: sreg  | SR27: sreg
+  | SR28: sreg  | SR29: sreg  | SR30: sreg  | SR31: sreg.
+
 Lemma ireg_eq: forall (x y: ireg), {x=y} + {x<>y}.
 Proof. decide equality. Defined.
 
@@ -228,8 +238,15 @@ Inductive instruction : Type :=
   | Pldrh_p: ireg -> ireg -> shift_op -> instruction  (**r unsigned int16 load with post increment *)
   | Pstr_p: ireg -> ireg -> shift_op -> instruction   (**r int32 store with post increment *)
   | Pstrb_p: ireg -> ireg -> shift_op -> instruction  (**r unsigned int8 store with post increment *)
-  | Pstrh_p: ireg -> ireg -> shift_op -> instruction. (**r unsigned int16 store with post increment *)
+  | Pstrh_p: ireg -> ireg -> shift_op -> instruction  (**r unsigned int16 store with post increment *)
 
+  (* Instructions for fixup of calling conventions *)
+  | Pfcpy_fs: freg -> sreg -> instruction            (**r single precision float move for incoming arguments *)
+  | Pfcpy_sf: sreg -> freg -> instruction            (**r single precision float move for outgoing arguments *)
+  | Pfcpy_fii: freg -> ireg -> ireg -> instruction    (**r copy integer register pair to double fp-register  *)
+  | Pfcpy_fi: freg -> ireg -> instruction            (**r copy integer register to single fp-register *)
+  | Pfcpy_iif: ireg -> ireg -> freg -> instruction    (**r copy double fp-register to integer register pair *)
+  | Pfcpy_if: ireg -> freg -> instruction.           (**r copy single fp-register to integer register *)
 
 
 (** The pseudo-instructions are the following:
@@ -784,7 +801,13 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pldrh_p _ _ _
   | Pstr_p _ _ _
   | Pstrb_p _ _ _
-  | Pstrh_p _ _ _ =>
+  | Pstrh_p _ _ _
+  | Pfcpy_fs _ _
+  | Pfcpy_sf _ _
+  | Pfcpy_fii _ _ _
+  | Pfcpy_fi _ _
+  | Pfcpy_iif _ _ _
+  | Pfcpy_if _ _ =>
     Stuck
   end.
 

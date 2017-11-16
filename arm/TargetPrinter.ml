@@ -71,9 +71,20 @@ struct
     | FR8 -> "s16"  | FR9 -> "s18"  | FR10 -> "s20"  | FR11 -> "s22"
     | FR12 -> "s24"  | FR13 -> "s26"  | FR14 -> "s28"  | FR15 -> "s30"
 
+  let single_param_reg_name = function
+    | SR0 -> "s0" | SR1 -> "s1" | SR2 -> "s2" | SR3 -> "s3"
+    | SR4 -> "s4" | SR5 -> "s5" | SR6 -> "s6" | SR7 -> "s7"
+    | SR8 -> "s8" | SR9 -> "s9" | SR10 -> "s10" | SR11 -> "s11"
+    | SR12 -> "s12" | SR13 -> "s13" | SR14 -> "s14" | SR15 -> "s15"
+    | SR16 -> "s16" | SR17 -> "s1"  | SR18 -> "s18" | SR19 -> "s19"
+    | SR20 -> "s20" | SR21 -> "s21" | SR22 -> "s22" | SR23 -> "s23"
+    | SR24 -> "s24" | SR25 -> "s25" | SR26 -> "s26" | SR27 -> "s27"
+    | SR28 -> "s28" | SR29 -> "s29" | SR30 -> "s30" | SR31 -> "s31"
+
   let ireg oc r = output_string oc (int_reg_name r)
   let freg oc r = output_string oc (float_reg_name r)
   let freg_single oc r = output_string oc (single_float_reg_name r)
+  let freg_param_single oc r = output_string oc (single_param_reg_name r)
 
   let preg oc = function
     | IR r -> ireg oc r
@@ -278,141 +289,6 @@ struct
     print_file_line oc comment file line
 
 
-  (* Fixing up calling conventions *)
-
-  type direction = Incoming | Outgoing
-
-  module FixupEABI = struct
-
-    let ireg_param = function
-      | 0 -> IR0 | 1 -> IR1 | 2 -> IR2 | 3 -> IR3 | _ -> assert false
-
-    let freg_param = function
-      | 0 -> FR0 | 1 -> FR1 | 2 -> FR2 | 3 -> FR3 | _ -> assert false
-
-    let fixup_double oc dir f i1 i2 =
-      match dir with
-      | Incoming ->     (* f <- (i1, i2)  *)
-        fprintf oc "	vmov	%a, %a, %a\n" freg f ireg i1 ireg i2
-      | Outgoing ->     (* (i1, i2) <- f *)
-        fprintf oc "	vmov	%a, %a, %a\n" ireg i1 ireg i2 freg f
-
-    let fixup_single oc dir f i =
-      match dir with
-      | Incoming ->     (* f <- i *)
-        fprintf oc "	vmov	%a, %a\n" freg_single f ireg i
-      | Outgoing ->     (* i <- f *)
-        fprintf oc "	vmov	%a, %a\n" ireg i freg_single f
-
-    let fixup_conventions oc dir tyl =
-      let rec fixup i tyl =
-        if i >= 4 then 0 else
-          match tyl with
-          | [] -> 0
-          | (Tint | Tany32) :: tyl' ->
-            fixup (i+1) tyl'
-          | Tlong :: tyl' ->
-            fixup (((i + 1) land (-2)) + 2) tyl'
-          | (Tfloat | Tany64) :: tyl' ->
-            let i = (i + 1) land (-2) in
-            if i >= 4 then 0 else begin
-              if Archi.big_endian
-              then fixup_double oc dir (freg_param i) (ireg_param (i+1)) (ireg_param i)
-              else fixup_double oc dir (freg_param i) (ireg_param i) (ireg_param (i+1));
-              1 + fixup (i+2) tyl'
-            end
-          | Tsingle :: tyl' ->
-            fixup_single oc dir (freg_param i) (ireg_param i);
-            1 + fixup (i+1) tyl'
-      in fixup 0 tyl
-
-    let fixup_arguments oc dir sg =
-      fixup_conventions oc dir sg.sig_args
-
-    let fixup_result oc dir sg =
-      fixup_conventions oc dir (proj_sig_res sg :: [])
-
-  end
-
-  module FixupHF = struct
-
-    type fsize = Single | Double
-
-    let rec find_single used pos =
-      if pos >= Array.length used then pos
-      else if used.(pos) then find_single used (pos + 1)
-      else begin used.(pos) <- true; pos end
-
-    let rec find_double used pos =
-      if pos + 1 >= Array.length used then pos
-      else if used.(pos) || used.(pos + 1) then find_double used (pos + 2)
-      else begin used.(pos) <- true; used.(pos + 1) <- true; pos / 2 end
-
-    let rec fixup_actions used fr tyl =
-      match tyl with
-      | [] -> []
-      | (Tint | Tlong | Tany32) :: tyl' -> fixup_actions used fr tyl'
-      | (Tfloat | Tany64) :: tyl' ->
-        if fr >= 8 then [] else begin
-          let dr = find_double used 0 in
-          assert (dr < 8);
-          (fr, Double, dr) :: fixup_actions used (fr + 1) tyl'
-        end
-      | Tsingle :: tyl' ->
-        if fr >= 8 then [] else begin
-          let sr = find_single used 0 in
-          assert (sr < 16);
-          (fr, Single, sr) :: fixup_actions used (fr + 1) tyl'
-        end
-
-    let rec fixup_outgoing oc = function
-      | [] -> 0
-      | (fr, Double, dr) :: act ->
-        if fr = dr then fixup_outgoing oc act else begin
-          fprintf oc "	vmov.f64 d%d, d%d\n" dr fr;
-          1 + fixup_outgoing oc act
-        end
-      | (fr, Single, sr) :: act ->
-        fprintf oc "	vmov.f32 s%d, s%d\n" sr (2*fr);
-        1 + fixup_outgoing oc act
-
-    let rec fixup_incoming oc = function
-      | [] -> 0
-      | (fr, Double, dr) :: act ->
-        let n = fixup_incoming oc act in
-        if fr = dr then n else begin
-          fprintf oc "	vmov.f64 d%d, d%d\n" fr dr;
-          1 + n
-        end
-      | (fr, Single, sr) :: act ->
-        let n = fixup_incoming oc act in
-        if (2*fr) = sr then n else begin
-          fprintf oc "	vmov.f32 s%d, s%d\n" (2*fr) sr;
-          1 + n
-        end
-
-    let fixup_arguments oc dir sg =
-      if sg.sig_cc.cc_vararg then
-        FixupEABI.fixup_arguments oc dir sg
-      else begin
-        let act = fixup_actions (Array.make 16 false) 0 sg.sig_args in
-        match dir with
-        | Outgoing -> fixup_outgoing oc act
-        | Incoming -> fixup_incoming oc act
-      end
-
-    let fixup_result oc dir sg =
-      if sg.sig_cc.cc_vararg then
-        FixupEABI.fixup_result oc dir sg
-      else
-        0
-  end
-
-  let (fixup_arguments, fixup_result) =
-    match Opt.float_abi with
-    | Soft -> (FixupEABI.fixup_arguments, FixupEABI.fixup_result)
-    | Hard -> (FixupHF.fixup_arguments, FixupHF.fixup_result)
-
   (* Printing of instructions *)
 
   let shift_op oc = function
@@ -446,26 +322,13 @@ struct
     | Pbne lbl ->
       fprintf oc "	bne	%a\n" print_label lbl; 1
     | Pbsymb(id, sg) ->
-      let n = fixup_arguments oc Outgoing sg in
-      fprintf oc "	b	%a\n" symbol id;
-      n + 1
+      fprintf oc "	b	%a\n" symbol id; 1
     | Pbreg(r, sg) ->
-      let n =
-        if r = IR14
-        then fixup_result oc Outgoing sg
-        else fixup_arguments oc Outgoing sg in
-      fprintf oc "	bx	%a\n" ireg r;
-      n + 1
+      fprintf oc "	bx	%a\n" ireg r; 1
     | Pblsymb(id, sg) ->
-      let n1 = fixup_arguments oc Outgoing sg in
-      fprintf oc "	bl	%a\n" symbol id;
-      let n2 = fixup_result oc Incoming sg in
-      n1 + 1 + n2
+      fprintf oc "	bl	%a\n" symbol id; 1
     | Pblreg(r, sg) ->
-      let n1 = fixup_arguments oc Outgoing sg in
-      fprintf oc "	blx	%a\n" ireg r;
-      let n2 = fixup_result oc Incoming sg in
-      n1 + 1 + n2
+      fprintf oc "	blx	%a\n" ireg r; 1
     | Pbic(r1, r2, so) ->
       fprintf oc "	bic%t	%a, %a, %a\n"
         thumbS ireg r1 ireg r2 shift_op so; 1
@@ -747,6 +610,20 @@ struct
       end
     | Pcfi_adjust sz -> cfi_adjust oc (camlint_of_coqint sz); 0
     | Pcfi_rel_offset ofs -> cfi_rel_offset oc "lr" (camlint_of_coqint ofs); 0
+    (* Fixup instructions for calling conventions *)
+    | Pfcpy_fs(r1, r2) ->
+      fprintf oc "	vmov.f32	%a, %a\n" freg_single r1 freg_param_single r2; 1
+    | Pfcpy_sf(r1, r2) ->
+      fprintf oc "	vmov.f32	%a, %a\n" freg_param_single r1 freg_single r2; 1
+    | Pfcpy_fii (r1, r2, r3) ->
+      fprintf oc "	vmov	%a, %a, %a\n" freg r1 ireg r2 ireg r3; 1
+    | Pfcpy_fi (r1, r2) ->
+      fprintf oc "	vmov	%a, %a\n" freg_single r1 ireg r2; 1
+    | Pfcpy_iif (r1, r2, r3) ->
+      fprintf oc "	vmov	%a, %a, %a\n" ireg r1 ireg r2 freg r3; 1
+    |  Pfcpy_if (r1, r2) ->
+      fprintf oc "	vmov	%a, %a\n" ireg r1 freg_single r2; 1
+
 
   let no_fallthrough = function
     | Pb _ -> true
@@ -762,10 +639,7 @@ struct
       else
         2 in
       (len + add) * 4
-    | Pbuiltin (EF_inline_asm _,_,_) -> 1024 (* Better be safe than sorry  *)
-    | Pbreg _
-    | Pblsymb _
-    | Pblreg _ -> 72 (* 4 for branch, 4 for fixup result 4 * 16 for fixup args *)
+    | Pbuiltin (EF_inline_asm _,_,_) -> 1024 (* Better be safe than sorry *)
     | _ -> 12
 
 
@@ -824,7 +698,6 @@ struct
 
   let print_instructions oc fn =
     current_function_sig := fn.fn_sig;
-    ignore (fixup_arguments oc Incoming fn.fn_sig);
     print_instructions oc false fn.fn_code;
     if !literals_in_code then emit_constants oc
 
