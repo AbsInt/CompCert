@@ -33,6 +33,71 @@ sig
   val hardware_idiv: bool
 end
 
+
+(* Basic printing functions *)
+
+let int_reg_name = function
+  | IR0 -> "r0" | IR1 -> "r1" | IR2 -> "r2" | IR3 -> "r3"
+  | IR4 -> "r4" | IR5 -> "r5" | IR6 -> "r6" | IR7 -> "r7"
+  | IR8 -> "r8" | IR9 -> "r9" | IR10 -> "r10" | IR11 -> "r11"
+  | IR12 -> "r12" | IR13 -> "sp" | IR14 -> "lr"
+
+let float_reg_name = function
+  | FR0 -> "d0"  | FR1 -> "d1"  | FR2 -> "d2"  | FR3 -> "d3"
+  | FR4 -> "d4"  | FR5 -> "d5"  | FR6 -> "d6"  | FR7 -> "d7"
+  | FR8 -> "d8"  | FR9 -> "d9"  | FR10 -> "d10"  | FR11 -> "d11"
+  | FR12 -> "d12"  | FR13 -> "d13"  | FR14 -> "d14"  | FR15 -> "d15"
+
+let single_float_reg_name = function
+  | FR0 -> "s0"  | FR1 -> "s2"  | FR2 -> "s4"  | FR3 -> "s6"
+  | FR4 -> "s8"  | FR5 -> "s10"  | FR6 -> "s12"  | FR7 -> "s14"
+  | FR8 -> "s16"  | FR9 -> "s18"  | FR10 -> "s20"  | FR11 -> "s22"
+  | FR12 -> "s24"  | FR13 -> "s26"  | FR14 -> "s28"  | FR15 -> "s30"
+
+let single_param_reg_name = function
+    | SR0 -> "s0" | SR1 -> "s1" | SR2 -> "s2" | SR3 -> "s3"
+    | SR4 -> "s4" | SR5 -> "s5" | SR6 -> "s6" | SR7 -> "s7"
+    | SR8 -> "s8" | SR9 -> "s9" | SR10 -> "s10" | SR11 -> "s11"
+    | SR12 -> "s12" | SR13 -> "s13" | SR14 -> "s14" | SR15 -> "s15"
+    | SR16 -> "s16" | SR17 -> "s1"  | SR18 -> "s18" | SR19 -> "s19"
+    | SR20 -> "s20" | SR21 -> "s21" | SR22 -> "s22" | SR23 -> "s23"
+    | SR24 -> "s24" | SR25 -> "s25" | SR26 -> "s26" | SR27 -> "s27"
+    | SR28 -> "s28" | SR29 -> "s29" | SR30 -> "s30" | SR31 -> "s31"
+
+let preg_annot = function
+  | IR r -> int_reg_name r
+  | FR r -> float_reg_name r
+  | _ -> assert false
+
+let condition_name = function
+  | TCeq -> "eq"
+  | TCne -> "ne"
+  | TChs -> "hs"
+  | TClo -> "lo"
+  | TCmi -> "mi"
+  | TCpl -> "pl"
+  | TChi -> "hi"
+  | TCls -> "ls"
+  | TCge -> "ge"
+  | TClt -> "lt"
+  | TCgt -> "gt"
+  | TCle -> "le"
+
+let neg_condition_name = function
+  | TCeq -> "ne"
+  | TCne -> "eq"
+  | TChs -> "lo"
+  | TClo -> "hs"
+  | TCmi -> "pl"
+  | TCpl -> "mi"
+  | TChi -> "ls"
+  | TCls -> "hi"
+  | TCge -> "lt"
+  | TClt -> "ge"
+  | TCgt -> "le"
+  | TCle -> "gt"
+
+
 (* Module containing the printing functions *)
 
 module Target (Opt: PRINTER_OPTIONS) : TARGET =
@@ -53,34 +118,6 @@ struct
 
   let symbol_offset = elf_symbol_offset
 
-  let int_reg_name = function
-    | IR0 -> "r0" | IR1 -> "r1" | IR2 -> "r2" | IR3 -> "r3"
-    | IR4 -> "r4" | IR5 -> "r5" | IR6 -> "r6" | IR7 -> "r7"
-    | IR8 -> "r8" | IR9 -> "r9" | IR10 -> "r10" | IR11 -> "r11"
-    | IR12 -> "r12" | IR13 -> "sp" | IR14 -> "lr"
-
-  let float_reg_name = function
-    | FR0 -> "d0"  | FR1 -> "d1"  | FR2 -> "d2"  | FR3 -> "d3"
-    | FR4 -> "d4"  | FR5 -> "d5"  | FR6 -> "d6"  | FR7 -> "d7"
-    | FR8 -> "d8"  | FR9 -> "d9"  | FR10 -> "d10"  | FR11 -> "d11"
-    | FR12 -> "d12"  | FR13 -> "d13"  | FR14 -> "d14"  | FR15 -> "d15"
-
-  let single_float_reg_name = function
-    | FR0 -> "s0"  | FR1 -> "s2"  | FR2 -> "s4"  | FR3 -> "s6"
-    | FR4 -> "s8"  | FR5 -> "s10"  | FR6 -> "s12"  | FR7 -> "s14"
-    | FR8 -> "s16"  | FR9 -> "s18"  | FR10 -> "s20"  | FR11 -> "s22"
-    | FR12 -> "s24"  | FR13 -> "s26"  | FR14 -> "s28"  | FR15 -> "s30"
-
-  let single_param_reg_name = function
-    | SR0 -> "s0" | SR1 -> "s1" | SR2 -> "s2" | SR3 -> "s3"
-    | SR4 -> "s4" | SR5 -> "s5" | SR6 -> "s6" | SR7 -> "s7"
-    | SR8 -> "s8" | SR9 -> "s9" | SR10 -> "s10" | SR11 -> "s11"
-    | SR12 -> "s12" | SR13 -> "s13" | SR14 -> "s14" | SR15 -> "s15"
-    | SR16 -> "s16" | SR17 -> "s1"  | SR18 -> "s18" | SR19 -> "s19"
-    | SR20 -> "s20" | SR21 -> "s21" | SR22 -> "s22" | SR23 -> "s23"
-    | SR24 -> "s24" | SR25 -> "s25" | SR26 -> "s26" | SR27 -> "s27"
-    | SR28 -> "s28" | SR29 -> "s29" | SR30 -> "s30" | SR31 -> "s31"
-
   let ireg oc r = output_string oc (int_reg_name r)
   let freg oc r = output_string oc (float_reg_name r)
   let freg_single oc r = output_string oc (single_float_reg_name r)
@@ -90,39 +127,6 @@ struct
     | IR r -> ireg oc r
     | FR r -> freg oc r
     | _    -> assert false
-
-  let preg_annot = function
-    | IR r -> int_reg_name r
-    | FR r -> float_reg_name r
-    | _ -> assert false
-
-  let condition_name = function
-    | TCeq -> "eq"
-    | TCne -> "ne"
-    | TChs -> "hs"
-    | TClo -> "lo"
-    | TCmi -> "mi"
-    | TCpl -> "pl"
-    | TChi -> "hi"
-    | TCls -> "ls"
-    | TCge -> "ge"
-    | TClt -> "lt"
-    | TCgt -> "gt"
-    | TCle -> "le"
-
-  let neg_condition_name = function
-    | TCeq -> "ne"
-    | TCne -> "eq"
-    | TChs -> "lo"
-    | TClo -> "hs"
-    | TCmi -> "pl"
-    | TCpl -> "mi"
-    | TChi -> "ls"
-    | TCls -> "hi"
-    | TCge -> "lt"
-    | TClt -> "ge"
-    | TCgt -> "le"
-    | TCle -> "gt"
 
   (* In Thumb2 mode, some arithmetic instructions have shorter encodings
      if they carry the "S" flag (update condition flags):
