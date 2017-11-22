@@ -79,9 +79,9 @@ let rec expr p (prec, e) =
   | Econst_int(n, _) ->
       fprintf p "%ld" (camlint_of_coqint n)
   | Econst_float(f, _) ->
-      fprintf p "%.15F" (camlfloat_of_coqfloat f)
+      fprintf p "%.18g" (camlfloat_of_coqfloat f)
   | Econst_single(f, _) ->
-      fprintf p "%.15Ff" (camlfloat_of_coqfloat32 f)
+      fprintf p "%.18gf" (camlfloat_of_coqfloat32 f)
   | Econst_long(n, Tlong(Unsigned, _)) ->
       fprintf p "%LuLLU" (camlint64_of_coqint n)
   | Econst_long(n, _) ->
@@ -126,12 +126,12 @@ let rec print_stmt p s =
       fprintf p "@[<hv 2>%s =@ %a;@]" (temp_name id) print_expr e2
   | Scall(None, e1, el) ->
       fprintf p "@[<hv 2>%a@,(@[<hov 0>%a@]);@]"
-                print_expr e1
+                expr (15, e1)
                 print_expr_list (true, el)
   | Scall(Some id, e1, el) ->
       fprintf p "@[<hv 2>%s =@ %a@,(@[<hov 0>%a@]);@]"
                 (temp_name id)
-                print_expr e1
+                expr (15, e1)
                 print_expr_list (true, el)
   | Sbuiltin(None, ef, tyargs, el) ->
       fprintf p "@[<hv 2>builtin %s@,(@[<hov 0>%a@]);@]"
@@ -206,21 +206,23 @@ and print_case_label p = function
 and print_stmt_for p s =
   match s with
   | Sskip ->
-      fprintf p "/*nothing*/"
+      fprintf p "(void)0"
   | Sassign(e1, e2) ->
       fprintf p "%a = %a" print_expr e1 print_expr e2
   | Sset(id, e2) ->
       fprintf p "%s = %a" (temp_name id) print_expr e2
+  | Ssequence(Sskip, s2) ->
+      print_stmt_for p s2
   | Ssequence(s1, s2) ->
       fprintf p "%a, %a" print_stmt_for s1 print_stmt_for s2
   | Scall(None, e1, el) ->
       fprintf p "@[<hv 2>%a@,(@[<hov 0>%a@])@]"
-                print_expr e1
+                expr (15, e1)
                 print_expr_list (true, el)
   | Scall(Some id, e1, el) ->
       fprintf p "@[<hv 2>%s =@ %a@,(@[<hov 0>%a@])@]"
                 (temp_name id)
-                print_expr e1
+                expr (15, e1)
                 print_expr_list (true, el)
   | Sbuiltin(None, ef, tyargs, el) ->
       fprintf p "@[<hv 2>builtin %s@,(@[<hov 0>%a@]);@]"
@@ -253,23 +255,37 @@ let print_function p id f =
 
 let print_fundef p id fd =
   match fd with
-  | Ctypes.External((AST.EF_external _ | AST.EF_runtime _), args, res, cconv) ->
-      fprintf p "extern %s;@ @ "
-                (name_cdecl (extern_atom id) (Tfunction(args, res, cconv)))
   | Ctypes.External(_, _, _, _) ->
       ()
   | Internal f ->
       print_function p id f
+
+let print_fundecl p id fd =
+  match fd with
+  | Ctypes.External((AST.EF_external _ | AST.EF_runtime _ | AST.EF_malloc | AST.EF_free), args, res, cconv) ->
+      fprintf p "extern %s;@ "
+                (name_cdecl (extern_atom id) (Tfunction(args, res, cconv)))
+  | Ctypes.External(_, _, _, _) ->
+      ()
+  | Internal f ->
+      fprintf p "%s;@ "
+                (name_cdecl (extern_atom id) (Clight.type_of_function f))
 
 let print_globdef p (id, gd) =
   match gd with
   | AST.Gfun f -> print_fundef p id f
   | AST.Gvar v -> print_globvar p id v  (* from PrintCsyntax *)
 
+let print_globdecl p (id, gd) =
+  match gd with
+  | AST.Gfun f -> print_fundecl p id f
+  | AST.Gvar v -> ()
+
 let print_program p prog =
   fprintf p "@[<v 0>";
   List.iter (declare_composite p) prog.prog_types;
   List.iter (define_composite p) prog.prog_types;
+  List.iter (print_globdecl p) prog.prog_defs;
   List.iter (print_globdef p) prog.prog_defs;
   fprintf p "@]@."
 
