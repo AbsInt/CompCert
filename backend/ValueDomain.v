@@ -2634,11 +2634,9 @@ Qed.
 Definition cmpu_bool (c: comparison) (v w: aval) : abool :=
   match v, w with
   | I i1, I i2 => Just (Int.cmpu c i1 i2)
-  | Ptr _, I _ => cmp_different_blocks c
-  | I _, Ptr _ => cmp_different_blocks c
+  | Ptr _, I i => if Int.eq i Int.zero then cmp_different_blocks c else Btop
+  | I i, Ptr _ => if Int.eq i Int.zero then cmp_different_blocks c else Btop
   | Ptr p1, Ptr p2 => pcmp c p1 p2
-  | Ptr p1, (Ifptr p2 | Uns p2 _ | Sgn p2 _) => club (pcmp c p1 p2) (cmp_different_blocks c)
-  | (Ifptr p1 | Uns p1 _ | Sgn p1 _), Ptr p2 => club (pcmp c p1 p2) (cmp_different_blocks c)
   | _, I i => club (cmp_intv c (uintv v) (Int.unsigned i)) (cmp_different_blocks c)
   | I i, _ => club (cmp_intv (swap_comparison c) (uintv w) (Int.unsigned i)) (cmp_different_blocks c)
   | _, _ => Btop
@@ -2669,6 +2667,10 @@ Proof.
              cmatch_lub_l, cmatch_lub_r, pcmp_sound,
              cmpu_intv_sound, cmpu_intv_sound_2, cmp_intv_None.
 - constructor.
+- destruct (Int.eq i Int.zero); auto using cmatch_top.
+- simpl; destruct (Int.eq i Int.zero); auto using cmatch_top, cmp_different_blocks_none.
+- destruct (Int.eq i Int.zero); auto using cmatch_top.
+- simpl; destruct (Int.eq i Int.zero); auto using cmatch_top, cmp_different_blocks_none.
 Qed.
 
 Definition cmp_bool (c: comparison) (v w: aval) : abool :=
@@ -2691,11 +2693,9 @@ Qed.
 Definition cmplu_bool (c: comparison) (v w: aval) : abool :=
   match v, w with
   | L i1, L i2 => Just (Int64.cmpu c i1 i2)
-  | Ptr _, L _ => cmp_different_blocks c
-  | L _, Ptr _ => cmp_different_blocks c
+  | Ptr _, L i => if Int64.eq i Int64.zero then cmp_different_blocks c else Btop
+  | L i, Ptr _ => if Int64.eq i Int64.zero then cmp_different_blocks c else Btop
   | Ptr p1, Ptr p2 => pcmp c p1 p2
-  | Ptr p1, Ifptr p2 => club (pcmp c p1 p2) (cmp_different_blocks c)
-  | Ifptr p1, Ptr p2 => club (pcmp c p1 p2) (cmp_different_blocks c)
   | _, _ => Btop
   end.
 
@@ -2723,6 +2723,10 @@ Proof.
   auto using cmatch_top, cmp_different_blocks_none, pcmp_none,
              cmatch_lub_l, cmatch_lub_r, pcmp_sound_64.
 - constructor.
+- destruct (Int64.eq i Int64.zero); auto using cmatch_top.
+- simpl; destruct (Int64.eq i Int64.zero); auto using cmatch_top, cmp_different_blocks_none.
+- destruct (Int64.eq i Int64.zero); auto using cmatch_top.
+- simpl; destruct (Int64.eq i Int64.zero); auto using cmatch_top, cmp_different_blocks_none.
 Qed.
 
 Definition cmpl_bool (c: comparison) (v w: aval) : abool :=
