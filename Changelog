@@ -1,5 +1,8 @@
 Code generation and optimization:
 - ARM in Thumb mode: simpler instruction sequence for branch through jump table.
+- Issue #208: make value analysis of comparisons more conservative for
+  dubious comparisons such as "(uintptr_t) &global == 0x1234" which are
+  undefined behavior in CompCert.
 
 Usability:
 - Resurrected support for the Cygwin x86-32 port, which got lost at release 3.0.
