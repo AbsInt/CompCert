@@ -61,8 +61,11 @@ let dump_jasm asm sourcename destfile =
 let object_filename sourcename suff =
   if nolink () then
     output_filename ~final: !option_c sourcename suff ".o"
-  else
-    Filename.temp_file "compcert" ".o"
+  else begin
+    let tmpfile = Filename.temp_file "compcert" ".o" in
+    at_exit (fun () -> safe_remove tmpfile);
+    tmpfile
+  end
 
 (* From CompCert C AST to asm *)
 
