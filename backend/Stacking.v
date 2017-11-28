@@ -39,7 +39,7 @@ Fixpoint save_callee_save_rec (rl: list mreg) (ofs: Z) (k: Mach.code) :=
       let ty := mreg_type r in
       let sz := AST.typesize ty in
       let ofs1 := align ofs sz in
-      Msetstack r (Ptrofs.repr ofs1) ty :: save_callee_save_rec rl (ofs1 + sz) k
+      Msetstack r (Ptrofs.repr ofs1) (quantity_of_typ ty) :: save_callee_save_rec rl (ofs1 + sz) k
   end.
 
 Definition save_callee_save (fe: frame_env) (k: Mach.code) :=
@@ -56,7 +56,7 @@ Fixpoint restore_callee_save_rec (rl: list mreg) (ofs: Z) (k: Mach.code) :=
       let ty := mreg_type r in
       let sz := AST.typesize ty in
       let ofs1 := align ofs sz in
-      Mgetstack (Ptrofs.repr ofs1) ty r :: restore_callee_save_rec rl (ofs1 + sz) k
+      Mgetstack (Ptrofs.repr ofs1) (quantity_of_typ ty) r :: restore_callee_save_rec rl (ofs1 + sz) k
   end.
 
 Definition restore_callee_save (fe: frame_env) (k: Mach.code) :=
@@ -82,8 +82,8 @@ Definition transl_addr (fe: frame_env) (addr: addressing) :=
 Fixpoint transl_builtin_arg (fe: frame_env) (a: builtin_arg loc) : builtin_arg mreg :=
   match a with
   | BA (R r) => BA r
-  | BA (S Local ofs ty) =>
-      BA_loadstack (chunk_of_type ty) (Ptrofs.repr (offset_local fe ofs))
+  | BA (S Local ofs q) =>
+      BA_loadstack (chunk_of_quantity q) (Ptrofs.repr (offset_local fe ofs))
   | BA (S _ _ _) => BA_int Int.zero  (**r never happens *)
   | BA_int n => BA_int n
   | BA_long n => BA_long n
@@ -113,23 +113,23 @@ Fixpoint transl_builtin_arg (fe: frame_env) (a: builtin_arg loc) : builtin_arg m
 Definition transl_instr
     (fe: frame_env) (i: Linear.instruction) (k: Mach.code) : Mach.code :=
   match i with
-  | Lgetstack sl ofs ty r =>
+  | Lgetstack sl ofs q r =>
       match sl with
       | Local =>
-          Mgetstack (Ptrofs.repr (offset_local fe ofs)) ty r :: k
+          Mgetstack (Ptrofs.repr (offset_local fe ofs)) q r :: k
       | Incoming =>
-          Mgetparam (Ptrofs.repr (offset_arg ofs)) ty r :: k
+          Mgetparam (Ptrofs.repr (offset_arg ofs)) q r :: k
       | Outgoing =>
-          Mgetstack (Ptrofs.repr (offset_arg ofs)) ty r :: k
+          Mgetstack (Ptrofs.repr (offset_arg ofs)) q r :: k
       end
-  | Lsetstack r sl ofs ty =>
+  | Lsetstack r sl ofs q =>
       match sl with
       | Local =>
-          Msetstack r (Ptrofs.repr (offset_local fe ofs)) ty :: k
+          Msetstack r (Ptrofs.repr (offset_local fe ofs)) q :: k
       | Incoming =>
           k (* should not happen *)
       | Outgoing =>
-          Msetstack r (Ptrofs.repr (offset_arg ofs)) ty :: k
+          Msetstack r (Ptrofs.repr (offset_arg ofs)) q :: k
       end
   | Lop op args res =>
       Mop (transl_op fe op) args res :: k

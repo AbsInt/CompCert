@@ -86,33 +86,27 @@ Definition mk_storebyte (addr: addrmode) (rs: ireg) (k: code) :=
 
 (** Accessing slots in the stack frame. *)
 
-Definition loadind (base: ireg) (ofs: ptrofs) (ty: typ) (dst: mreg) (k: code) :=
+Definition loadind (base: ireg) (ofs: ptrofs) (q: quantity) (dst: mreg) (k: code) :=
   let a := Addrmode (Some base) None (inl _ (Ptrofs.unsigned ofs)) in
-  match ty, preg_of dst with
-  | Tint, IR r => OK (Pmovl_rm r a :: k)
-  | Tlong, IR r => OK (Pmovq_rm r a :: k)
-  | Tsingle, FR r => OK (Pmovss_fm r a :: k)
-  | Tsingle, ST0  => OK (Pflds_m a :: k)
-  | Tfloat, FR r => OK (Pmovsd_fm r a :: k)
-  | Tfloat, ST0  => OK (Pfldl_m a :: k)
-  | Tany32, IR r => if Archi.ptr64 then Error (msg "Asmgen.loadind1") else OK (Pmov_rm_a r a :: k)
-  | Tany64, IR r => if Archi.ptr64 then OK (Pmov_rm_a r a :: k) else Error (msg "Asmgen.loadind2")
-  | Tany64, FR r => OK (Pmovsd_fm_a r a :: k)
+  match q, preg_of dst with
+  | Q32, IR r => OK (Pmovl_rm_a r a :: k)
+  | Q64, IR r => if Archi.ptr64 then OK (Pmovq_rm_a r a :: k) else Error (msg "Asmgen.loadind2")
+  | Q32, FR r => OK (Pmovss_fm_a r a :: k)
+  | Q32, ST0  => OK (Pflds_m_a a :: k)
+  | Q64, FR r => OK (Pmovsd_fm_a r a :: k)
+  | Q64, ST0  => OK (Pfldl_m_a a :: k)
   | _, _ => Error (msg "Asmgen.loadind")
   end.
 
-Definition storeind (src: mreg) (base: ireg) (ofs: ptrofs) (ty: typ) (k: code) :=
+Definition storeind (src: mreg) (base: ireg) (ofs: ptrofs) (q: quantity) (k: code) :=
   let a := Addrmode (Some base) None (inl _ (Ptrofs.unsigned ofs)) in
-  match ty, preg_of src with
-  | Tint, IR r => OK (Pmovl_mr a r :: k)
-  | Tlong, IR r => OK (Pmovq_mr a r :: k)
-  | Tsingle, FR r => OK (Pmovss_mf a r :: k)
-  | Tsingle, ST0 => OK (Pfstps_m a :: k)
-  | Tfloat, FR r => OK (Pmovsd_mf a r :: k)
-  | Tfloat, ST0 => OK (Pfstpl_m a :: k)
-  | Tany32, IR r => if Archi.ptr64 then Error (msg "Asmgen.storeind1") else OK (Pmov_mr_a a r :: k)
-  | Tany64, IR r => if Archi.ptr64 then OK (Pmov_mr_a a r :: k) else Error (msg "Asmgen.storeind2")
-  | Tany64, FR r => OK (Pmovsd_mf_a a r :: k)
+  match q, preg_of src with
+  | Q32, IR r => OK (Pmovl_mr_a a r :: k)
+  | Q64, IR r => if Archi.ptr64 then OK (Pmovq_mr_a a r :: k) else Error (msg "Asmgen.storeind2")
+  | Q32, FR r => OK (Pmovss_mf_a a r :: k)
+  | Q32, ST0  => OK (Pfstps_m_a a :: k)
+  | Q64, FR r => OK (Pmovsd_mf_a a r :: k)
+  | Q64, ST0  => OK (Pfstpl_m_a a :: k)
   | _, _ => Error (msg "Asmgen.storeind")
   end.
 
@@ -654,16 +648,16 @@ Definition transl_store (chunk: memory_chunk)
 Definition transl_instr (f: Mach.function) (i: Mach.instruction)
                         (ax_is_parent: bool) (k: code) :=
   match i with
-  | Mgetstack ofs ty dst =>
-      loadind RSP ofs ty dst k
-  | Msetstack src ofs ty =>
-      storeind src RSP ofs ty k
-  | Mgetparam ofs ty dst =>
+  | Mgetstack ofs q dst =>
+      loadind RSP ofs q dst k
+  | Msetstack src ofs q =>
+      storeind src RSP ofs q k
+  | Mgetparam ofs q dst =>
       if ax_is_parent then
-        loadind RAX ofs ty dst k
+        loadind RAX ofs q dst k
       else
-        (do k1 <- loadind RAX ofs ty dst k;
-         loadind RSP f.(fn_link_ofs) Tptr AX k1)
+        (do k1 <- loadind RAX ofs q dst k;
+         loadind RSP f.(fn_link_ofs) (quantity_of_typ Tptr) AX k1)
   | Mop op args res =>
       transl_op op args res k
   | Mload chunk addr args dst =>

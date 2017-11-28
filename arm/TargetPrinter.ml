@@ -421,11 +421,11 @@ struct
       fprintf oc "	vcvt.f64.f32 %a, %a\n" freg r1 freg_single r2
     | Pfldd(r1, r2, n) | Pfldd_a(r1, r2, n) ->
       fprintf oc "	vldr	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n
-    | Pflds(r1, r2, n) ->
+    | Pflds(r1, r2, n) | Pflds_a(r1, r2, n) ->
       fprintf oc "	vldr	%a, [%a, #%a]\n" freg_single r1 ireg r2 coqint n
     | Pfstd(r1, r2, n) | Pfstd_a(r1, r2, n) ->
       fprintf oc "	vstr	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n
-    | Pfsts(r1, r2, n) ->
+    | Pfsts(r1, r2, n) | Pfsts_a(r1, r2, n) ->
       fprintf oc "	vstr	%a, [%a, #%a]\n" freg_single r1 ireg r2 coqint n
     (* Pseudo-instructions *)
     | Pallocframe(sz, ofs) ->

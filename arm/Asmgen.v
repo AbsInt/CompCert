@@ -570,37 +570,29 @@ Definition indexed_memory_access
   else addimm IR14 base (Int.sub n n1) (mk_instr IR14 n1 :: k).
 
 Definition loadind_int (base: ireg) (ofs: ptrofs) (dst: ireg) (k: code) :=
-  indexed_memory_access (fun base n => Pldr dst base (SOimm n)) mk_immed_mem_word base (Ptrofs.to_int ofs) k.
+  indexed_memory_access (fun base n => Pldr_a dst base (SOimm n)) mk_immed_mem_word base (Ptrofs.to_int ofs) k.
 
-Definition loadind (base: ireg) (ofs: ptrofs) (ty: typ) (dst: mreg) (k: code) :=
+Definition loadind (base: ireg) (ofs: ptrofs) (q: quantity) (dst: mreg) (k: code) :=
   let ofs := Ptrofs.to_int ofs in
-  match ty, preg_of dst with
-  | Tint, IR r =>
-      OK (indexed_memory_access (fun base n => Pldr r base (SOimm n)) mk_immed_mem_word base ofs k)
-  | Tany32, IR r =>
+  match q, preg_of dst with
+  | Q32, IR r =>
       OK (indexed_memory_access (fun base n => Pldr_a r base (SOimm n)) mk_immed_mem_word base ofs k)
-  | Tsingle, FR r =>
-      OK (indexed_memory_access (Pflds r) mk_immed_mem_float base ofs k)
-  | Tfloat, FR r =>
-      OK (indexed_memory_access (Pfldd r) mk_immed_mem_float base ofs k)
-  | Tany64, FR r =>
+  | Q32, FR r =>
+      OK (indexed_memory_access (Pflds_a r) mk_immed_mem_float base ofs k)
+  | Q64, FR r =>
       OK (indexed_memory_access (Pfldd_a r) mk_immed_mem_float base ofs k)
   | _, _ =>
       Error (msg "Asmgen.loadind")
   end.
 
-Definition storeind (src: mreg) (base: ireg) (ofs: ptrofs) (ty: typ) (k: code) :=
+Definition storeind (src: mreg) (base: ireg) (ofs: ptrofs) (q: quantity) (k: code) :=
   let ofs := Ptrofs.to_int ofs in
-  match ty, preg_of src with
-  | Tint, IR r =>
-      OK (indexed_memory_access (fun base n => Pstr r base (SOimm n)) mk_immed_mem_word base ofs k)
-  | Tany32, IR r =>
+  match q, preg_of src with
+  | Q32, IR r =>
       OK (indexed_memory_access (fun base n => Pstr_a r base (SOimm n)) mk_immed_mem_word base ofs k)
-  | Tsingle, FR r =>
-      OK (indexed_memory_access (Pfsts r) mk_immed_mem_float base ofs k)
-  | Tfloat, FR r =>
-      OK (indexed_memory_access (Pfstd r) mk_immed_mem_float base ofs k)
-  | Tany64, FR r =>
+  | Q32, FR r =>
+      OK (indexed_memory_access (Pfsts_a r) mk_immed_mem_float base ofs k)
+  | Q64, FR r =>
       OK (indexed_memory_access (Pfstd_a r) mk_immed_mem_float base ofs k)
   | _, _ =>
       Error (msg "Asmgen.storeind")
@@ -614,8 +606,8 @@ Definition save_lr (ofs: ptrofs) (k: code) :=
   let n := Ptrofs.to_int ofs in
   let n1 := mk_immed_mem_word n in
   if Int.eq n n1
-  then Pstr IR14 IR13 (SOimm n) :: k
-  else addimm IR12 IR13 (Int.sub n n1) (Pstr IR14 IR12 (SOimm n1) :: k).
+  then Pstr_a IR14 IR13 (SOimm n) :: k
+  else addimm IR12 IR13 (Int.sub n n1) (Pstr_a IR14 IR12 (SOimm n1) :: k).
 
 Definition save_lr_preserves_R12 (ofs: ptrofs) : bool :=
   let n := Ptrofs.to_int ofs in
@@ -722,12 +714,12 @@ Definition transl_store (chunk: memory_chunk) (addr: addressing)
 Definition transl_instr (f: Mach.function) (i: Mach.instruction)
                         (r12_is_parent: bool) (k: code) :=
   match i with
-  | Mgetstack ofs ty dst =>
-      loadind IR13 ofs ty dst k
-  | Msetstack src ofs ty =>
-      storeind src IR13 ofs ty k
-  | Mgetparam ofs ty dst =>
-      do c <- loadind IR12 ofs ty dst k;
+  | Mgetstack ofs q dst =>
+      loadind IR13 ofs q dst k
+  | Msetstack src ofs q =>
+      storeind src IR13 ofs q k
+  | Mgetparam ofs q dst =>
+      do c <- loadind IR12 ofs q dst k;
       OK (if r12_is_parent
           then c
           else loadind_int IR13 f.(fn_link_ofs) IR12 c)
@@ -769,8 +761,8 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
 
 Definition it1_is_parent (before: bool) (i: Mach.instruction) : bool :=
   match i with
-  | Msetstack src ofs ty => before
-  | Mgetparam ofs ty dst => negb (mreg_eq dst R12)
+  | Msetstack src ofs q => before
+  | Mgetparam ofs q dst => negb (mreg_eq dst R12)
   | Mop Omove args res => before && negb (mreg_eq res R12)
   | _ => false
   end.

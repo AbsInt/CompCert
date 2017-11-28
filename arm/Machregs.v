@@ -16,6 +16,7 @@ Require Import Decidableplus.
 Require Import Maps.
 Require Import AST.
 Require Import Op.
+Require Import Memdata.
 
 (** ** Machine registers *)
 
@@ -71,6 +72,11 @@ Definition mreg_type (r: mreg): typ :=
   | F0  | F1  | F2  | F3   | F4 | F5   | F6  | F7
   | F8  | F9  | F10  | F11 | F12  | F13  | F14  | F15 => Tany64
   end.
+
+Lemma mreg_type_cases: forall r, mreg_type r = Tany32 \/ mreg_type r = Tany64.
+Proof.
+  destruct r; simpl; auto.
+Qed.
 
 Open Scope positive_scope.
 
@@ -175,7 +181,7 @@ Definition destroyed_by_builtin (ef: external_function): list mreg :=
   | _ => nil
   end.
 
-Definition destroyed_by_setstack (ty: typ): list mreg := nil.
+Definition destroyed_by_setstack (q: quantity): list mreg := nil.
 
 Definition destroyed_at_function_entry: list mreg :=
   R12 :: nil.

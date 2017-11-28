@@ -626,9 +626,9 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	lfd	%a, %a(%a)\n" freg r1 constant c ireg r2
       | Plfdx(r1, r2, r3) | Plfdx_a(r1, r2, r3) ->
           fprintf oc "	lfdx	%a, %a, %a\n" freg r1 ireg r2 ireg r3
-      | Plfs(r1, c, r2) ->
+      | Plfs(r1, c, r2) | Plfs_a(r1, c, r2) ->
           fprintf oc "	lfs	%a, %a(%a)\n" freg r1 constant c ireg r2
-      | Plfsx(r1, r2, r3) ->
+      | Plfsx(r1, r2, r3) | Plfsx_a(r1, r2, r3) ->
           fprintf oc "	lfsx	%a, %a, %a\n" freg r1 ireg r2 ireg r3
       | Plha(r1, c, r2) ->
           fprintf oc "	lha	%a, %a(%a)\n" ireg r1 constant c ireg r2
@@ -786,9 +786,9 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	stfdu	%a, %a(%a)\n" freg r1 constant c ireg r2
       | Pstfdx(r1, r2, r3) | Pstfdx_a(r1, r2, r3) ->
           fprintf oc "	stfdx	%a, %a, %a\n" freg r1 ireg r2 ireg r3
-      | Pstfs(r1, c, r2) ->
+      | Pstfs(r1, c, r2) | Pstfs_a(r1, c, r2) ->
           fprintf oc "	stfs	%a, %a(%a)\n" freg r1 constant c ireg r2
-      | Pstfsx(r1, r2, r3) ->
+      | Pstfsx(r1, r2, r3) | Pstfsx_a(r1, r2, r3) ->
           fprintf oc "	stfsx	%a, %a, %a\n" freg r1 ireg r2 ireg r3
       | Psth(r1, c, r2) ->
           fprintf oc "	sth	%a, %a(%a)\n" ireg r1 constant c ireg r2

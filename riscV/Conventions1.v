@@ -227,7 +227,7 @@ Definition one_arg (regs: list mreg) (rn: Z) (ofs: Z) (ty: typ)
       One(R r) :: rec (rn + 1) ofs
   | None   =>
       let ofs := align ofs (typealign ty) in
-      One(S Outgoing ofs ty) :: rec rn (ofs + (if Archi.ptr64 then 2 else typesize ty))
+      One(S Outgoing ofs (quantity_of_typ ty)) :: rec rn (ofs + (if Archi.ptr64 then 2 else typesize ty))
   end.
 
 Definition two_args (regs: list mreg) (rn: Z) (ofs: Z)
@@ -238,7 +238,7 @@ Definition two_args (regs: list mreg) (rn: Z) (ofs: Z)
       Twolong (R r2) (R r1) :: rec (rn + 2) ofs
   | _, _ =>
       let ofs := align ofs 2 in
-      Twolong (S Outgoing (ofs + 1) Tint) (S Outgoing ofs Tint) ::
+      Twolong (S Outgoing (ofs + 1) Q32) (S Outgoing ofs Q32) ::
       rec rn (ofs + 2)
   end.
 
@@ -250,7 +250,7 @@ Definition hybrid_arg (regs: list mreg) (rn: Z) (ofs: Z) (ty: typ)
       One (R r) :: rec (rn + 2) ofs
   | None =>
       let ofs := align ofs 2 in
-      One (S Outgoing ofs ty) :: rec rn (ofs + 2)
+      One (S Outgoing ofs (quantity_of_typ ty)) :: rec rn (ofs + 2)
   end.
 
 Fixpoint loc_arguments_rec (va: bool)
@@ -282,7 +282,7 @@ Definition loc_arguments (s: signature) : list (rpair loc) :=
 
 Definition max_outgoing_1 (accu: Z) (l: loc) : Z :=
   match l with
-  | S Outgoing ofs ty => Z.max accu (ofs + typesize ty)
+  | S Outgoing ofs q => Z.max accu (ofs + typesize (typ_of_quantity q))
   | _ => accu
   end.
 
@@ -301,7 +301,7 @@ Definition size_arguments (s: signature) : Z :=
 Definition loc_argument_acceptable (l: loc) : Prop :=
   match l with
   | R r => is_callee_save r = false
-  | S Outgoing ofs ty => ofs >= 0 /\ (typealign ty | ofs)
+  | S Outgoing ofs q => ofs >= 0 /\ (quantity_align q | ofs)
   | _ => False
   end.
 
@@ -329,7 +329,8 @@ Proof.
     destruct (list_nth_z regs rn) as [r|] eqn:NTH; destruct H.
   - subst p; simpl. apply OR. eapply list_nth_z_in; eauto. 
   - eapply OF; eauto. 
-  - subst p; simpl. auto using align_divides, typealign_pos.
+  - subst p; simpl. split; auto.
+    destruct ty; auto using align_divides, typealign_pos. apply Z.divide_1_l.
   - eapply OF; [idtac|eauto].
     generalize (AL ofs ty OO) (SKK ty); omega.
   }
@@ -339,7 +340,7 @@ Proof.
     set (rn' := align rn 2).
     set (ofs' := align ofs 2).
     assert (OO': ofs' >= 0) by (apply (AL ofs Tlong); auto).
-    assert (DFL: OK (Twolong (S Outgoing (ofs' + 1) Tint) (S Outgoing ofs' Tint)
+    assert (DFL: OK (Twolong (S Outgoing (ofs' + 1) Q32) (S Outgoing ofs' Q32)
                      :: f rn' (ofs' + 2))).
     { red; simpl; intros. destruct H.
     - subst p; simpl. 
@@ -360,7 +361,7 @@ Proof.
     destruct (list_nth_z regs rn') as [r|] eqn:NTH; destruct H.
   - subst p; simpl. apply OR. eapply list_nth_z_in; eauto. 
   - eapply OF; eauto. 
-  - subst p; simpl. rewrite OTY. split. apply (AL ofs Tlong OO). apply Z.divide_1_l. 
+  - subst p; simpl. split. apply (AL ofs Tlong OO). apply Z.divide_1_l.
   - eapply OF; [idtac|eauto]. generalize (AL ofs Tlong OO); simpl; omega.
   }
   assert (D: OKREGS int_param_regs).
@@ -419,23 +420,23 @@ Proof.
 Qed.
 
 Lemma loc_arguments_bounded:
-  forall (s: signature) (ofs: Z) (ty: typ),
-  In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments s)) ->
-  ofs + typesize ty <= size_arguments s.
+  forall (s: signature) (ofs: Z) (q: quantity),
+  In (S Outgoing ofs q) (regs_of_rpairs (loc_arguments s)) ->
+  ofs + typesize (typ_of_quantity q) <= size_arguments s.
 Proof.
-  intros until ty.
+  intros until q.
   assert (A: forall n l, n <= max_outgoing_1 n l).
   { intros; unfold max_outgoing_1. destruct l as [_ | []]; xomega. }
   assert (B: forall p n,
-             In (S Outgoing ofs ty) (regs_of_rpair p) ->
-             ofs + typesize ty <= max_outgoing_2 n p).
+             In (S Outgoing ofs q) (regs_of_rpair p) ->
+             ofs + typesize (typ_of_quantity q) <= max_outgoing_2 n p).
   { intros. destruct p; simpl in H; intuition; subst; simpl.
   - xomega.
   - eapply Z.le_trans. 2: apply A. xomega.
   - xomega. }
   assert (C: forall l n,
-             In (S Outgoing ofs ty) (regs_of_rpairs l) ->
-             ofs + typesize ty <= fold_left max_outgoing_2 l n).
+             In (S Outgoing ofs q) (regs_of_rpairs l) ->
+             ofs + typesize (typ_of_quantity q) <= fold_left max_outgoing_2 l n).
   { induction l; simpl; intros.
   - contradiction.
   - rewrite in_app_iff in H. destruct H.

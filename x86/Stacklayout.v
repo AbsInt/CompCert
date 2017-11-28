@@ -128,8 +128,8 @@ Lemma frame_env_aligned:
      (8 | fe_ofs_arg)
   /\ (8 | fe_ofs_local fe)
   /\ (8 | fe_stack_data fe)
-  /\ (align_chunk Mptr | fe_ofs_link fe)
-  /\ (align_chunk Mptr | fe_ofs_retaddr fe).
+  /\ (align_chunk Mptr_any | fe_ofs_link fe)
+  /\ (align_chunk Mptr_any | fe_ofs_retaddr fe).
 Proof.
   intros; simpl.
   set (w := if Archi.ptr64 then 8 else 4).
@@ -139,10 +139,18 @@ Proof.
   set (ostkdata := align (ol + 4 * b.(bound_local)) 8).
   set (oretaddr := align (ostkdata + b.(bound_stack_data)) w).
   assert (0 < w) by (unfold w; destruct Archi.ptr64; omega).
-  replace (align_chunk Mptr) with w by (rewrite align_chunk_Mptr; auto).
   split. apply Z.divide_0_r.
   split. apply align_divides; omega.
   split. apply align_divides; omega.
-  split. apply align_divides; omega.
+  split.
+  unfold olink, w. destruct Archi.ptr64.
+  apply Z.divide_trans with (m := 8).
+  exists 2; auto.
+  apply align_divides; omega.
+  apply align_divides; omega.
+  unfold oretaddr, w. destruct Archi.ptr64.
+  apply Z.divide_trans with (m := 8).
+  exists 2; auto.
+  apply align_divides; omega.
   apply align_divides; omega.
 Qed.

@@ -499,7 +499,7 @@ Proof.
   split. eapply agree_undef_regs; eauto.
   simpl; intros. rewrite Q; auto with asmgen.
 Local Transparent destroyed_by_setstack.
-  destruct ty; simpl; intuition congruence.
+  destruct q; simpl; intuition congruence.
 
 - (* Mgetparam *)
   assert (f0 = f) by congruence; subst f0.
@@ -632,7 +632,8 @@ Opaque loadind.
   left; econstructor; split.
   eapply plus_left. eapply exec_step_internal. eauto.
   eapply functions_transl; eauto. eapply find_instr_tail; eauto.
-  simpl. replace (chunk_of_type Tptr) with Mptr in * by (unfold Tptr, Mptr; destruct Archi.ptr64; auto).
+  simpl.
+  replace (chunk_of_quantity (quantity_of_typ Tptr)) with Mptr_any in * by (unfold Tptr, Mptr_any; destruct Archi.ptr64; auto).
   rewrite C. rewrite A. rewrite <- (sp_val _ _ _ AG). rewrite E. eauto.
   apply star_one. eapply exec_step_internal.
   transitivity (Val.offset_ptr rs0#PC Ptrofs.one). auto. rewrite <- H4. simpl. eauto.
@@ -648,7 +649,8 @@ Opaque loadind.
   left; econstructor; split.
   eapply plus_left. eapply exec_step_internal. eauto.
   eapply functions_transl; eauto. eapply find_instr_tail; eauto.
-  simpl. replace (chunk_of_type Tptr) with Mptr in * by (unfold Tptr, Mptr; destruct Archi.ptr64; auto).
+  simpl.
+  replace (chunk_of_quantity (quantity_of_typ Tptr)) with Mptr_any in * by (unfold Tptr, Mptr_any; destruct Archi.ptr64; auto).
   rewrite C. rewrite A. rewrite <- (sp_val _ _ _ AG). rewrite E. eauto.
   apply star_one. eapply exec_step_internal.
   transitivity (Val.offset_ptr rs0#PC Ptrofs.one). auto. rewrite <- H4. simpl. eauto.
@@ -810,7 +812,9 @@ Transparent destroyed_by_jumptable.
   left; econstructor; split.
   eapply plus_left. eapply exec_step_internal. eauto.
   eapply functions_transl; eauto. eapply find_instr_tail; eauto.
-  simpl. rewrite C. rewrite A. rewrite <- (sp_val _ _ _ AG). rewrite E. eauto.
+  simpl.
+  replace (chunk_of_quantity (quantity_of_typ Tptr)) with Mptr_any in * by (unfold Tptr, Mptr_any; destruct Archi.ptr64; auto).
+  rewrite C. rewrite A. rewrite <- (sp_val _ _ _ AG). rewrite E. eauto.
   apply star_one. eapply exec_step_internal.
   transitivity (Val.offset_ptr rs0#PC Ptrofs.one). auto. rewrite <- H3. simpl. eauto.
   eapply functions_transl; eauto. eapply find_instr_tail; eauto.
@@ -835,7 +839,7 @@ Transparent destroyed_by_jumptable.
   apply plus_one. econstructor; eauto.
   simpl. rewrite Ptrofs.unsigned_zero. simpl. eauto.
   simpl. rewrite C. simpl in F, P.
-  replace (chunk_of_type Tptr) with Mptr in F, P by (unfold Tptr, Mptr; destruct Archi.ptr64; auto).
+  replace (chunk_of_quantity (quantity_of_typ Tptr)) with Mptr_any in * by (unfold Tptr, Mptr_any; destruct Archi.ptr64; auto).
   rewrite (sp_val _ _ _ AG) in F. rewrite F.
   rewrite ATLR. rewrite P. eauto.
   econstructor; eauto.

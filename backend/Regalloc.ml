@@ -33,6 +33,7 @@ open Datatypes
 open Coqlib
 open Maps
 open AST
+open Memdata
 open Kildall
 open Op
 open Machregs
@@ -1062,22 +1063,24 @@ let make_parmove srcs dsts itmp ftmp k =
   let n = Array.length src in
   assert (Array.length dst = n);
   let status = Array.make n To_move in
-  let temp_for cls =
+  let temp_for_cls cls =
     match cls with 0 -> itmp | 1 -> ftmp | _ -> assert false in
+  let temp_for_q q =
+    match q with Q32 -> itmp | Q64 -> ftmp in
   let code = ref [] in
   let add_move s d =
     match s, d with
     | R rs, R rd ->
         code := LTL.Lop(Omove, [rs], rd) :: !code
-    | R rs, Locations.S(sl, ofs, ty) ->
-        code := LTL.Lsetstack(rs, sl, ofs, ty) :: !code
-    | Locations.S(sl, ofs, ty), R rd ->
-        code := LTL.Lgetstack(sl, ofs, ty, rd) :: !code
-    | Locations.S(sls, ofss, tys), Locations.S(sld, ofsd, tyd) ->
-        let tmp = temp_for (class_of_type tys) in
+    | R rs, Locations.S(sl, ofs, q) ->
+        code := LTL.Lsetstack(rs, sl, ofs, q) :: !code
+    | Locations.S(sl, ofs, q), R rd ->
+        code := LTL.Lgetstack(sl, ofs, q, rd) :: !code
+    | Locations.S(sls, ofss, qs), Locations.S(sld, ofsd, qd) ->
+        let tmp = temp_for_q qs in
         (* code will be reversed at the end *)
-        code := LTL.Lsetstack(tmp, sld, ofsd, tyd) ::
-                LTL.Lgetstack(sls, ofss, tys, tmp) :: !code
+        code := LTL.Lsetstack(tmp, sld, ofsd, qd) ::
+                LTL.Lgetstack(sls, ofss, qs, tmp) :: !code
     in
   let rec move_one i =
     if src.(i) <> dst.(i) then begin
@@ -1088,7 +1091,7 @@ let make_parmove srcs dsts itmp ftmp k =
           | To_move ->
               move_one j
           | Being_moved ->
-              let tmp = R (temp_for (class_of_loc src.(j))) in
+              let tmp = R (temp_for_cls (class_of_loc src.(j))) in
               add_move src.(j) tmp;
               src.(j) <- tmp
           | Moved ->

@@ -723,35 +723,29 @@ Definition indexed_memory_access
         Pluiw X31 hi :: Paddw X31 base X31 :: mk_instr X31 (Ofsimm (Ptrofs.of_int lo)) :: k
     end.
 
-Definition loadind (base: ireg) (ofs: ptrofs) (ty: typ) (dst: mreg) (k: code) :=
-  match ty, preg_of dst with
-  | Tint,    IR rd => OK (indexed_memory_access (Plw rd) base ofs k)
-  | Tlong,   IR rd => OK (indexed_memory_access (Pld rd) base ofs k)
-  | Tsingle, FR rd => OK (indexed_memory_access (Pfls rd) base ofs k)
-  | Tfloat,  FR rd => OK (indexed_memory_access (Pfld rd) base ofs k)
-  | Tany32,  IR rd => OK (indexed_memory_access (Plw_a rd) base ofs k)
-  | Tany64,  IR rd => OK (indexed_memory_access (Pld_a rd) base ofs k)
-  | Tany64,  FR rd => OK (indexed_memory_access (Pfld_a rd) base ofs k)
-  | _, _           => Error (msg "Asmgen.loadind")
+Definition loadind (base: ireg) (ofs: ptrofs) (q: quantity) (dst: mreg) (k: code) :=
+  match q, preg_of dst with
+  | Q32, IR rd => OK (indexed_memory_access (Plw_a rd) base ofs k)
+  | Q64, IR rd => OK (indexed_memory_access (Pld_a rd) base ofs k)
+  | Q32, FR rd => OK (indexed_memory_access (Pfls_a rd) base ofs k)
+  | Q64, FR rd => OK (indexed_memory_access (Pfld_a rd) base ofs k)
+  | _, _       => Error (msg "Asmgen.loadind")
   end.
 
-Definition storeind (src: mreg) (base: ireg) (ofs: ptrofs) (ty: typ) (k: code) :=
-  match ty, preg_of src with
-  | Tint,    IR rd => OK (indexed_memory_access (Psw rd) base ofs k)
-  | Tlong,   IR rd => OK (indexed_memory_access (Psd rd) base ofs k)
-  | Tsingle, FR rd => OK (indexed_memory_access (Pfss rd) base ofs k)
-  | Tfloat,  FR rd => OK (indexed_memory_access (Pfsd rd) base ofs k)
-  | Tany32,  IR rd => OK (indexed_memory_access (Psw_a rd) base ofs k)
-  | Tany64,  IR rd => OK (indexed_memory_access (Psd_a rd) base ofs k)
-  | Tany64,  FR rd => OK (indexed_memory_access (Pfsd_a rd) base ofs k)
-  | _, _           => Error (msg "Asmgen.storeind")
+Definition storeind (src: mreg) (base: ireg) (ofs: ptrofs) (q: quantity) (k: code) :=
+  match q, preg_of src with
+  | Q32, IR rd => OK (indexed_memory_access (Psw_a rd) base ofs k)
+  | Q64, IR rd => OK (indexed_memory_access (Psd_a rd) base ofs k)
+  | Q32, FR rd => OK (indexed_memory_access (Pfss_a rd) base ofs k)
+  | Q64, FR rd => OK (indexed_memory_access (Pfsd_a rd) base ofs k)
+  | _, _       => Error (msg "Asmgen.storeind")
   end.
 
 Definition loadind_ptr (base: ireg) (ofs: ptrofs) (dst: ireg) (k: code) :=
-  indexed_memory_access (if Archi.ptr64 then Pld dst else Plw dst) base ofs k.
+  indexed_memory_access (if Archi.ptr64 then Pld_a dst else Plw_a dst) base ofs k.
 
 Definition storeind_ptr (src: ireg) (base: ireg) (ofs: ptrofs) (k: code) :=
-  indexed_memory_access (if Archi.ptr64 then Psd src else Psw src) base ofs k.
+  indexed_memory_access (if Archi.ptr64 then Psd_a src else Psw_a src) base ofs k.
 
 (** Translation of memory accesses: loads, and stores. *)
 

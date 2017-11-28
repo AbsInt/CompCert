@@ -181,28 +181,22 @@ Definition accessind {A: Type}
   then instr1 r (Cint ofs) base :: k
   else loadimm GPR0 ofs (instr2 r base GPR0 :: k).
 
-Definition loadind (base: ireg) (ofs: ptrofs) (ty: typ) (dst: mreg) (k: code) :=
-  match ty, preg_of dst with
-  | Tint, IR r => OK(accessind Plwz Plwzx base ofs r k)
-  | Tany32, IR r => OK(accessind Plwz_a Plwzx_a base ofs r k)
-  | Tsingle, FR r => OK(accessind Plfs Plfsx base ofs r k)
-  | Tlong, IR r => OK(accessind Pld Pldx base ofs r k)
-  | Tfloat, FR r => OK(accessind Plfd Plfdx base ofs r k)
-  | Tany64, IR r => OK(accessind Pld_a Pldx_a base ofs r k)
-  | Tany64, FR r => OK(accessind Plfd_a Plfdx_a base ofs r k)
-  | _, _ => Error (msg "Asmgen.loadind")
+Definition loadind (base: ireg) (ofs: ptrofs) (q: quantity) (dst: mreg) (k: code) :=
+  match q, preg_of dst, Archi.ppc64 with
+  | Q32, IR r, false => OK(accessind Plwz_a Plwzx_a base ofs r k)
+  | Q64, IR r, true  => OK(accessind Pld_a Pldx_a base ofs r k)
+  | Q32, FR r, _     => OK(accessind Plfs_a Plfsx_a base ofs r k)
+  | Q64, FR r, _     => OK(accessind Plfd_a Plfdx_a base ofs r k)
+  | _, _, _ => Error (msg "Asmgen.loadind")
   end.
 
-Definition storeind (src: mreg) (base: ireg) (ofs: ptrofs) (ty: typ) (k: code) :=
-  match ty, preg_of src with
-  | Tint, IR r => OK(accessind Pstw Pstwx base ofs r k)
-  | Tany32, IR r => OK(accessind Pstw_a Pstwx_a base ofs r k)
-  | Tsingle, FR r => OK(accessind Pstfs Pstfsx base ofs r k)
-  | Tlong, IR r => OK(accessind Pstd Pstdx base ofs r k)
-  | Tfloat, FR r => OK(accessind Pstfd Pstfdx base ofs r k)
-  | Tany64, IR r => OK(accessind Pstd_a Pstdx_a base ofs r k)
-  | Tany64, FR r => OK(accessind Pstfd_a Pstfdx_a base ofs r k)
-  | _, _ => Error (msg "Asmgen.storeind")
+Definition storeind (src: mreg) (base: ireg) (ofs: ptrofs) (q: quantity) (k: code) :=
+  match q, preg_of src, Archi.ppc64 with
+  | Q32, IR r, false => OK(accessind Pstw_a Pstwx_a base ofs r k)
+  | Q64, IR r, true  => OK(accessind Pstd_a Pstdx_a base ofs r k)
+  | Q32, FR r, _     => OK(accessind Pstfs_a Pstfsx_a base ofs r k)
+  | Q64, FR r, _     => OK(accessind Pstfd_a Pstfdx_a base ofs r k)
+  | _, _, _ => Error (msg "Asmgen.storeind")
   end.
 
 (** Constructor for a floating-point comparison.  The PowerPC has
@@ -801,7 +795,7 @@ Definition transl_epilogue (f: Mach.function) (k: code) :=
   if is_leaf_function f then
     Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: k
   else
-    Plwz GPR0 (Cint (Ptrofs.to_int f.(fn_retaddr_ofs))) GPR1 ::
+    Plwz_a GPR0 (Cint (Ptrofs.to_int f.(fn_retaddr_ofs))) GPR1 ::
     Pmtlr GPR0 ::
     Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: k.
 
@@ -810,16 +804,16 @@ Definition transl_epilogue (f: Mach.function) (k: code) :=
 Definition transl_instr (f: Mach.function) (i: Mach.instruction)
                         (r11_is_parent: bool) (k: code) :=
   match i with
-  | Mgetstack ofs ty dst =>
-      loadind GPR1 ofs ty dst k
-  | Msetstack src ofs ty =>
-      storeind src GPR1 ofs ty k
-  | Mgetparam ofs ty dst =>
+  | Mgetstack ofs q dst =>
+      loadind GPR1 ofs q dst k
+  | Msetstack src ofs q =>
+      storeind src GPR1 ofs q k
+  | Mgetparam ofs q dst =>
       if r11_is_parent then
-        loadind GPR11 ofs ty dst k
+        loadind GPR11 ofs q dst k
       else
-        (do k1 <- loadind GPR11 ofs ty dst k;
-         loadind GPR1 f.(fn_link_ofs) Tint R11 k1)
+        (do k1 <- loadind GPR11 ofs q dst k;
+         loadind GPR1 f.(fn_link_ofs) Q32 R11 k1)
   | Mop op args res =>
       transl_op op args res k
   | Mload chunk addr args dst =>
@@ -857,8 +851,8 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
 
 Definition it1_is_parent (before: bool) (i: Mach.instruction) : bool :=
   match i with
-  | Msetstack src ofs ty => before
-  | Mgetparam ofs ty dst => negb (mreg_eq dst R11)
+  | Msetstack src ofs q => before
+  | Mgetparam ofs q dst => negb (mreg_eq dst R11)
   | Mop Omove args res => before && negb (mreg_eq res R11)
   | _ => false
   end.
@@ -899,7 +893,7 @@ Definition transl_function (f: Mach.function) :=
   OK (mkfunction f.(Mach.fn_sig)
        (Pallocframe f.(fn_stacksize) f.(fn_link_ofs) f.(fn_retaddr_ofs) ::
         Pmflr GPR0 ::
-        Pstw GPR0 (Cint (Ptrofs.to_int f.(fn_retaddr_ofs))) GPR1 ::
+        Pstw_a GPR0 (Cint (Ptrofs.to_int f.(fn_retaddr_ofs))) GPR1 ::
         Pcfi_rel_offset (Ptrofs.to_int f.(fn_retaddr_ofs)) :: c)).
 
 Definition transf_function (f: Mach.function) : res Asm.function :=

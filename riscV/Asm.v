@@ -260,7 +260,9 @@ Inductive instruction : Type :=
 
   (* 32-bit (single-precision) floating point *)
   | Pfls     (rd: freg) (ra: ireg) (ofs: offset)    (**r load float *)
+  | Pfls_a   (rd: freg) (ra: ireg) (ofs: offset)    (**r load any32 *)
   | Pfss     (rs: freg) (ra: ireg) (ofs: offset)    (**r store float *)
+  | Pfss_a   (rs: freg) (ra: ireg) (ofs: offset)    (**r store any32 *)
 
   | Pfnegs   (rd: freg) (rs: freg)                  (**r negation *)
   | Pfabss   (rd: freg) (rs: freg)                  (**r absolute value *)
@@ -824,8 +826,12 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
 (** 32-bit (single-precision) floating point *)
   | Pfls d a ofs =>
       exec_load Mfloat32 rs m d a ofs
+  | Pfls_a d a ofs =>
+      exec_load Many32 rs m d a ofs
   | Pfss s a ofs =>
       exec_store Mfloat32 rs m s a ofs
+  | Pfss_a s a ofs =>
+      exec_store Many32 rs m s a ofs
 
   | Pfnegs d s =>
       Next (nextinstr (rs#d <- (Val.negfs rs#s))) m
@@ -922,12 +928,12 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pallocframe sz pos =>
       let (m1, stk) := Mem.alloc m 0 sz in
       let sp := (Vptr stk Ptrofs.zero) in
-      match Mem.storev Mptr m1 (Val.offset_ptr sp pos) rs#SP with
+      match Mem.storev Mptr_any m1 (Val.offset_ptr sp pos) rs#SP with
       | None => Stuck
       | Some m2 => Next (nextinstr (rs #X30 <- (rs SP) #SP <- sp #X31 <- Vundef)) m2
       end
   | Pfreeframe sz pos =>
-      match Mem.loadv Mptr m (Val.offset_ptr rs#SP pos) with
+      match Mem.loadv Mptr_any m (Val.offset_ptr rs#SP pos) with
       | None => Stuck
       | Some v =>
           match rs SP with
@@ -1029,11 +1035,11 @@ Definition undef_caller_save_regs (rs: regset) : regset :=
 Inductive extcall_arg (rs: regset) (m: mem): loc -> val -> Prop :=
   | extcall_arg_reg: forall r,
       extcall_arg rs m (R r) (rs (preg_of r))
-  | extcall_arg_stack: forall ofs ty bofs v,
+  | extcall_arg_stack: forall ofs q bofs v,
       bofs = Stacklayout.fe_ofs_arg + 4 * ofs ->
-      Mem.loadv (chunk_of_type ty) m
+      Mem.loadv (chunk_of_quantity q) m
                 (Val.offset_ptr rs#SP (Ptrofs.repr bofs)) = Some v ->
-      extcall_arg rs m (S Outgoing ofs ty) v.
+      extcall_arg rs m (S Outgoing ofs q) v.
 
 Inductive extcall_arg_pair (rs: regset) (m: mem): rpair loc -> val -> Prop :=
   | extcall_arg_one: forall l v,

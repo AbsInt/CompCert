@@ -19,8 +19,8 @@ Require Import Maps.
 Require Import Ordered.
 Require Import AST.
 Require Import Values.
-Require Import Memdata.
 Require Import Memory.
+Require Export Memdata.
 Require Export Machregs.
 Require Export Registerfile.
 
@@ -57,9 +57,9 @@ slots of its caller function.
 
 The type of a slot indicates how it will be accessed later once mapped to
 actual memory locations inside a memory-allocated activation record:
-as 32-bit integers/pointers (type [Tint]) or as 64-bit floats (type [Tfloat]).
+as 32-bit or 64-bit quantities ([Q32] or [Q64]).
 
-The offset of a slot, combined with its type and its kind, identifies
+The offset of a slot, combined with its quantity and its kind, identifies
 uniquely the slot and will determine later where it resides within the
 memory-allocated activation record.  Offsets are always positive.
 *)
@@ -109,6 +109,20 @@ Proof.
   intros. exists (typesize ty / typealign ty); destruct ty; reflexivity.
 Qed.
 
+Definition quantity_align (q: quantity) : Z := 1.
+
+Lemma quantity_align_pos:
+  forall (q: quantity), quantity_align q > 0.
+Proof.
+  destruct q; compute; auto.
+Qed.
+
+Lemma quantity_align_typesize:
+  forall (q: quantity), (quantity_align q | typesize (typ_of_quantity q)).
+Proof.
+  intros. destruct q; simpl. exists 1; eauto. exists 2; eauto.
+Qed.
+
 (** ** Locations *)
 
 (** Locations are just the disjoint union of machine registers and
@@ -116,21 +130,21 @@ Qed.
 
 Inductive loc : Type :=
   | R (r: mreg)
-  | S (sl: slot) (pos: Z) (ty: typ).
+  | S (sl: slot) (pos: Z) (q: quantity).
 
 Module Loc.
 
   Definition type (l: loc) : typ :=
     match l with
     | R r => mreg_type r
-    | S sl pos ty => ty
+    | S sl pos q => typ_of_quantity q
     end.
 
   Lemma eq: forall (p q: loc), {p = q} + {p <> q}.
   Proof.
     decide equality.
     apply mreg_eq.
-    apply typ_eq.
+    apply quantity_eq.
     apply zeq.
     apply slot_eq.
   Defined.
@@ -150,8 +164,8 @@ Module Loc.
     match l1, l2 with
     | R r1, R r2 =>
         r1 <> r2
-    | S s1 d1 t1, S s2 d2 t2 =>
-        s1 <> s2 \/ d1 + typesize t1 <= d2 \/ d2 + typesize t2 <= d1
+    | S s1 d1 q1, S s2 d2 q2 =>
+        s1 <> s2 \/ d1 + typesize (typ_of_quantity q1) <= d2 \/ d2 + typesize (typ_of_quantity q2) <= d1
     | _, _ =>
         True
     end.
@@ -160,7 +174,7 @@ Module Loc.
     forall l, ~(diff l l).
   Proof.
     destruct l; unfold diff; auto.
-    red; intros. destruct H; auto. generalize (typesize_pos ty); omega.
+    red; intros. destruct H; auto. generalize (typesize_pos (typ_of_quantity q)); omega.
   Qed.
 
   Lemma diff_not_eq:
@@ -183,9 +197,9 @@ Module Loc.
   - left; auto.
   - left; auto.
   - destruct (slot_eq sl sl0).
-    destruct (zle (pos + typesize ty) pos0).
+    destruct (zle (pos + typesize (typ_of_quantity q)) pos0).
     left; auto.
-    destruct (zle (pos0 + typesize ty0) pos).
+    destruct (zle (pos0 + typesize (typ_of_quantity q0)) pos).
     left; auto.
     right; red; intros [P | [P | P]]. congruence. omega. omega.
     left; auto.
@@ -379,9 +393,9 @@ Module Locmap.
     intros.
     destruct l, m.
     destruct p; simpl in H; auto. apply Regfile.gso; auto.
-    unfold get, set. destruct (Loc.eq (S sl pos ty) p).
+    unfold get, set. destruct (Loc.eq (S sl pos q) p).
     subst p. elim (Loc.same_not_diff _ H).
-    destruct (Loc.diff_dec (S sl pos ty) p).
+    destruct (Loc.diff_dec (S sl pos q) p).
     auto.
     contradiction.
   Qed.
@@ -408,7 +422,7 @@ Module Locmap.
       rewrite gso; simpl; auto.
       rewrite gso; simpl; auto.
       unfold get, set. rewrite dec_eq_false; auto.
-      destruct (Loc.diff_dec (S sl pos ty) (S sl0 pos0 ty0)). auto. apply decode_encode_undef. }
+      destruct (Loc.diff_dec (S sl pos q) (S sl0 pos0 q0)). auto. apply decode_encode_undef. }
     induction ll; simpl; intros. contradiction.
     destruct H. apply P. subst a. apply gss_typed. exact I.
     auto.
@@ -477,6 +491,20 @@ End IndexedTyp.
 
 Module OrderedTyp := OrderedIndexed(IndexedTyp).
 
+Module IndexedQuantity <: INDEXED_TYPE.
+  Definition t := quantity.
+  Definition index (q: t) :=
+    match q with
+    | Q32 => 1%positive
+    | Q64 => 2%positive
+    end.
+  Lemma index_inj: forall x y, index x = index y -> x = y.
+  Proof. destruct x, y; simpl; congruence. Qed.
+  Definition eq := quantity_eq.
+End IndexedQuantity.
+
+Module OrderedQuantity := OrderedIndexed(IndexedQuantity).
+
 Module IndexedSlot <: INDEXED_TYPE.
   Definition t := slot.
   Definition index (x: t) :=
@@ -496,9 +524,9 @@ Module OrderedLoc <: OrderedType.
     | R r1, R r2 => Plt (IndexedMreg.index r1) (IndexedMreg.index r2)
     | R _, S _ _ _ => True
     | S _ _ _, R _ => False
-    | S sl1 ofs1 ty1, S sl2 ofs2 ty2 =>
+    | S sl1 ofs1 q1, S sl2 ofs2 q2 =>
         OrderedSlot.lt sl1 sl2 \/ (sl1 = sl2 /\
-        (ofs1 < ofs2 \/ (ofs1 = ofs2 /\ OrderedTyp.lt ty1 ty2)))
+        (ofs1 < ofs2 \/ (ofs1 = ofs2 /\ OrderedQuantity.lt q1 q2)))
     end.
   Lemma eq_refl : forall x : t, eq x x.
   Proof (@eq_refl t).
@@ -519,7 +547,7 @@ Module OrderedLoc <: OrderedType.
     destruct H.
     right.  split. auto.
     intuition.
-    right; split. congruence. eapply OrderedTyp.lt_trans; eauto.
+    right; split. congruence. eapply OrderedQuantity.lt_trans; eauto.
   Qed.
   Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
   Proof.
@@ -528,7 +556,7 @@ Module OrderedLoc <: OrderedType.
     eelim Plt_strict; eauto.
     destruct H. eelim OrderedSlot.lt_not_eq; eauto. red; auto.
     destruct H. destruct H0. omega.
-    destruct H0. eelim OrderedTyp.lt_not_eq; eauto. red; auto.
+    destruct H0. eelim OrderedQuantity.lt_not_eq; eauto. red; auto.
   Qed.
   Definition compare : forall x y : t, Compare lt eq x y.
   Proof.
@@ -543,9 +571,9 @@ Module OrderedLoc <: OrderedType.
     + apply LT. red; auto.
     + destruct (OrderedZ.compare pos pos0).
       * apply LT. red. auto.
-      * destruct (OrderedTyp.compare ty ty0).
+      * destruct (OrderedQuantity.compare q q0).
         apply LT. red; auto.
-        apply EQ. red; red in e; red in e0; red in e1. congruence.
+        apply EQ. congruence.
         apply GT. red; auto.
       * apply GT. red. auto.
     + apply GT. red; auto.
@@ -557,44 +585,44 @@ Module OrderedLoc <: OrderedType.
   Definition diff_low_bound (l: loc) : loc :=
     match l with
     | R mr => l
-    | S sl ofs ty => S sl (ofs - 1) Tany64
+    | S sl ofs q => S sl (ofs - 1) Q64
     end.
 
   Definition diff_high_bound (l: loc) : loc :=
     match l with
     | R mr => l
-    | S sl ofs ty => S sl (ofs + typesize ty - 1) Tlong
+    | S sl ofs q => S sl (ofs + typesize (typ_of_quantity q) - 1) Q64
     end.
 
   Lemma outside_interval_diff:
     forall l l', lt l' (diff_low_bound l) \/ lt (diff_high_bound l) l' -> Loc.diff l l'.
   Proof.
     intros.
-    destruct l as [mr | sl ofs ty]; destruct l' as [mr' | sl' ofs' ty']; simpl in *; auto.
+    destruct l as [mr | sl ofs q]; destruct l' as [mr' | sl' ofs' q']; simpl in *; auto.
     - assert (IndexedMreg.index mr <> IndexedMreg.index mr').
       { destruct H. apply not_eq_sym. apply Plt_ne; auto. apply Plt_ne; auto. }
       congruence.
-    - assert (RANGE: forall ty, 1 <= typesize ty <= 2).
-      { intros; unfold typesize. destruct ty0; omega.  }
+    - assert (RANGE: forall q, 1 <= typesize q <= 2).
+      { intros; unfold typesize. destruct q0; omega.  }
       destruct H.
       + destruct H. left. apply not_eq_sym. apply OrderedSlot.lt_not_eq; auto.
         destruct H. right.
-        destruct H0. right. generalize (RANGE ty'); omega.
+        destruct H0. right. generalize (RANGE (typ_of_quantity q')); omega.
         destruct H0.
-        assert (ty' = Tint \/ ty' = Tsingle \/ ty' = Tany32).
-        { unfold OrderedTyp.lt in H1. destruct ty'; auto; compute in H1; congruence. }
-        right. destruct H2 as [E|[E|E]]; subst ty'; simpl typesize; omega.
+        assert (typ_of_quantity q' = Tany32).
+        { unfold OrderedTyp.lt in H1. destruct q'; auto; compute in H1; congruence. }
+        right. rewrite H2; simpl typesize; omega.
       + destruct H. left. apply OrderedSlot.lt_not_eq; auto.
         destruct H. right.
         destruct H0. left; omega.
-        destruct H0. exfalso. destruct ty'; compute in H1; congruence.
+        destruct H0. exfalso. destruct q'; compute in H1; congruence.
   Qed.
 
   Lemma diff_outside_interval:
     forall l l', Loc.diff l l' -> lt l' (diff_low_bound l) \/ lt (diff_high_bound l) l'.
   Proof.
     intros.
-    destruct l as [mr | sl ofs ty]; destruct l' as [mr' | sl' ofs' ty']; simpl in *; auto.
+    destruct l as [mr | sl ofs q]; destruct l' as [mr' | sl' ofs' q']; simpl in *; auto.
     - unfold Plt, Pos.lt. destruct (Pos.compare (IndexedMreg.index mr) (IndexedMreg.index mr')) eqn:C.
       elim H. apply IndexedMreg.index_inj. apply Pos.compare_eq_iff. auto.
       auto.
@@ -604,11 +632,8 @@ Module OrderedLoc <: OrderedType.
       destruct H.
       right; right; split; auto. left; omega.
       left; right; split; auto.
-      assert (EITHER: typesize ty' = 1 /\ OrderedTyp.lt ty' Tany64 \/ typesize ty' = 2).
-      { destruct ty'; compute; auto. }
-      destruct (zlt ofs' (ofs - 1)). left; auto.
-      destruct EITHER as [[P Q] | P].
-      right; split; auto. omega.
+      destruct q'; simpl in H. destruct (zlt ofs' (ofs - 1)).
+      left; auto. right; split. omega. compute; auto.
       left; omega.
   Qed.
 

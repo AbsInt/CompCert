@@ -17,6 +17,7 @@ Require Import Maps.
 Require Import AST.
 Require Import Integers.
 Require Import Op.
+Require Import Memdata.
 
 (** ** Machine registers *)
 
@@ -72,6 +73,11 @@ Definition mreg_type (r: mreg): typ :=
   | X8 | X9 | X10 | X11 | X12 | X13 | X14 | X15 => Tany64
   | FP0 => Tany64
   end.
+
+Lemma mreg_type_cases: forall r, mreg_type r = Tany32 \/ mreg_type r = Tany64.
+Proof.
+  destruct r; simpl; auto.
+Qed.
 
 Local Open Scope positive_scope.
 
@@ -208,11 +214,7 @@ Definition destroyed_at_function_entry: list mreg :=
   (* must include [destroyed_by_setstack ty] *)
   AX :: FP0 :: nil.
 
-Definition destroyed_by_setstack (ty: typ): list mreg :=
-  match ty with
-  | Tfloat | Tsingle => FP0 :: nil
-  | _ => nil
-  end.
+Definition destroyed_by_setstack (q: quantity): list mreg := FP0 :: nil.
 
 Definition destroyed_at_indirect_call: list mreg :=
   AX :: nil.

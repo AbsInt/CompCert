@@ -18,6 +18,7 @@
 open Printf
 open Camlcoq
 open AST
+open Memdata
 
 let name_of_type = function
   | Tint -> "int"
@@ -26,6 +27,10 @@ let name_of_type = function
   | Tsingle -> "single"
   | Tany32 -> "any32"
   | Tany64 -> "any64"
+
+let name_of_quantity = function
+  | Q32 -> "Q32"
+  | Q64 -> "Q64"
 
 let name_of_chunk = function
   | Mint8signed -> "int8s"

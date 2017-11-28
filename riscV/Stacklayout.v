@@ -54,8 +54,8 @@ Lemma frame_env_separated:
   m |= range sp 0 (fe_stack_data fe) ** range sp (fe_stack_data fe + bound_stack_data b) (fe_size fe) ** P ->
   m |= range sp (fe_ofs_local fe) (fe_ofs_local fe + 4 * bound_local b)
        ** range sp fe_ofs_arg (fe_ofs_arg + 4 * bound_outgoing b)
-       ** range sp (fe_ofs_link fe) (fe_ofs_link fe + size_chunk Mptr)
-       ** range sp (fe_ofs_retaddr fe) (fe_ofs_retaddr fe + size_chunk Mptr)
+       ** range sp (fe_ofs_link fe) (fe_ofs_link fe + size_chunk Mptr_any)
+       ** range sp (fe_ofs_retaddr fe) (fe_ofs_retaddr fe + size_chunk Mptr_any)
        ** range sp (fe_ofs_callee_save fe) (size_callee_save_area b (fe_ofs_callee_save fe))
        ** P.
 Proof.
@@ -89,6 +89,7 @@ Local Opaque Z.add Z.mul sepconj range.
   rewrite sep_swap45.
 (* Apply range_split and range_split2 repeatedly *)
   unfold fe_ofs_arg.
+  replace (size_chunk Mptr_any) with w by (unfold Mptr_any; destruct Archi.ptr64; auto).
   apply range_split_2. fold olink; omega. omega.
   apply range_split. omega.
   apply range_split. omega.
@@ -127,8 +128,8 @@ Lemma frame_env_aligned:
      (8 | fe_ofs_arg)
   /\ (8 | fe_ofs_local fe)
   /\ (8 | fe_stack_data fe)
-  /\ (align_chunk Mptr | fe_ofs_link fe)
-  /\ (align_chunk Mptr | fe_ofs_retaddr fe).
+  /\ (align_chunk Mptr_any | fe_ofs_link fe)
+  /\ (align_chunk Mptr_any | fe_ofs_retaddr fe).
 Proof.
   intros; simpl.
   set (w := if Archi.ptr64 then 8 else 4).
@@ -138,10 +139,19 @@ Proof.
   set (ol :=  align (size_callee_save_area b ocs) 8).
   set (ostkdata := align (ol + 4 * b.(bound_local)) 8).
   assert (0 < w) by (unfold w; destruct Archi.ptr64; omega).
-  replace (align_chunk Mptr) with w by (rewrite align_chunk_Mptr; auto).
+  replace (align_chunk Mptr_any) with 4 by (unfold Mptr_any; destruct Archi.ptr64; auto).
   split. apply Z.divide_0_r.
   split. apply align_divides; omega.
   split. apply align_divides; omega.
-  split. apply align_divides; omega.
+  split.
+  unfold olink, w. destruct Archi.ptr64.
+  apply Z.divide_trans with (m := 8).
+  exists 2; auto.
+  apply align_divides; omega.
+  apply align_divides; omega.
+  unfold oretaddr, w. destruct Archi.ptr64.
+  apply Z.divide_trans with (m := 8).
+  exists 2; auto.
+  apply Z.divide_add_r. apply align_divides; omega. apply Z.divide_refl.
   apply Z.divide_add_r. apply align_divides; omega. apply Z.divide_refl.
 Qed.

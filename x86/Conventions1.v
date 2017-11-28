@@ -188,8 +188,8 @@ Fixpoint loc_arguments_32
   | nil => nil
   | ty :: tys =>
       match ty with
-      | Tlong => Twolong (S Outgoing (ofs + 1) Tint) (S Outgoing ofs Tint)
-      | _     => One (S Outgoing ofs ty)
+      | Tlong => Twolong (S Outgoing (ofs + 1) Q32) (S Outgoing ofs Q32)
+      | _     => One (S Outgoing ofs (quantity_of_typ ty))
       end
       :: loc_arguments_32 tys (ofs + typesize ty)
   end.
@@ -212,14 +212,14 @@ Fixpoint loc_arguments_64
   | (Tint | Tlong | Tany32 | Tany64) as ty :: tys =>
       match list_nth_z int_param_regs ir with
       | None =>
-          One (S Outgoing ofs ty) :: loc_arguments_64 tys ir fr (ofs + 2)
+          One (S Outgoing ofs (quantity_of_typ ty)) :: loc_arguments_64 tys ir fr (ofs + 2)
       | Some ireg =>
           One (R ireg) :: loc_arguments_64 tys (ir + 1) fr ofs
       end
   | (Tfloat | Tsingle) as ty :: tys =>
       match list_nth_z float_param_regs fr with
       | None =>
-          One (S Outgoing ofs ty) :: loc_arguments_64 tys ir fr (ofs + 2)
+          One (S Outgoing ofs (quantity_of_typ ty)) :: loc_arguments_64 tys ir fr (ofs + 2)
       | Some freg =>
           One (R freg) :: loc_arguments_64 tys ir (fr + 1) ofs
       end
@@ -269,20 +269,20 @@ Definition size_arguments (s: signature) : Z :=
 Definition loc_argument_acceptable (l: loc) : Prop :=
   match l with
   | R r => is_callee_save r = false
-  | S Outgoing ofs ty => ofs >= 0 /\ (typealign ty | ofs)
+  | S Outgoing ofs q => ofs >= 0 /\ (quantity_align q | ofs)
   | _ => False
   end.
 
 Definition loc_argument_32_charact (ofs: Z) (l: loc) : Prop :=
   match l with
-  | S Outgoing ofs' ty => ofs' >= ofs /\ typealign ty = 1
+  | S Outgoing ofs' q => ofs' >= ofs /\ quantity_align q = 1
   | _ => False
   end.
 
 Definition loc_argument_64_charact (ofs: Z) (l: loc) : Prop :=
   match l with
   | R r => In r int_param_regs \/ In r float_param_regs
-  | S Outgoing ofs' ty => ofs' >= ofs /\ (2 | ofs')
+  | S Outgoing ofs' q => ofs' >= ofs /\ (2 | ofs')
   | _ => False
   end.
 
@@ -295,7 +295,7 @@ Proof.
   induction tyl as [ | ty tyl]; simpl loc_arguments_32; intros.
 - contradiction.
 - destruct H.
-+ destruct ty; subst p; simpl; omega.
++ destruct ty; subst p; simpl; unfold quantity_align; omega.
 + apply IHtyl in H. generalize (typesize_pos ty); intros. destruct p; simpl in *.
 * eapply X; eauto; omega.
 * destruct H; split; eapply X; eauto; omega.
@@ -349,15 +349,15 @@ Proof.
   assert (B: forall r, In r float_param_regs -> is_callee_save r = false) by decide_goal.
   assert (X: forall l, loc_argument_64_charact 0 l -> loc_argument_acceptable l).
   { unfold loc_argument_64_charact, loc_argument_acceptable.
-    destruct l as [r | [] ofs ty]; auto.  intros [C|C]; auto.
+    destruct l as [r | [] ofs q]; auto.  intros [C|C]; auto.
     intros [C D]. split; auto. apply Z.divide_trans with 2; auto.
-    exists (2 / typealign ty); destruct ty; reflexivity.
+    exists (2 / quantity_align q); destruct q; reflexivity.
   }
   exploit loc_arguments_64_charact; eauto using Z.divide_0_r.
   unfold forall_rpair; destruct p; intuition auto.
 - (* 32 bits *)
   assert (X: forall l, loc_argument_32_charact 0 l -> loc_argument_acceptable l).
-  { destruct l as [r | [] ofs ty]; simpl; intuition auto. rewrite H2; apply Z.divide_1_l. }
+  { destruct l as [r | [] ofs q]; simpl; intuition auto. rewrite H2; apply Z.divide_1_l. }
   exploit loc_arguments_32_charact; eauto.
   unfold forall_rpair; destruct p; intuition auto.
 Qed.
@@ -406,9 +406,9 @@ Proof.
 Qed.
 
 Lemma loc_arguments_32_bounded:
-  forall ofs ty tyl ofs0,
-  In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments_32 tyl ofs0)) ->
-  ofs + typesize ty <= size_arguments_32 tyl ofs0.
+  forall ofs q tyl ofs0,
+  In (S Outgoing ofs q) (regs_of_rpairs (loc_arguments_32 tyl ofs0)) ->
+  ofs + typesize (typ_of_quantity q) <= size_arguments_32 tyl ofs0.
 Proof.
   induction tyl as [ | t l]; simpl; intros x IN.
 - contradiction.
@@ -425,22 +425,22 @@ Proof.
 Qed.
 
 Lemma loc_arguments_64_bounded:
-  forall ofs ty tyl ir fr ofs0,
-  In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments_64 tyl ir fr ofs0)) ->
-  ofs + typesize ty <= size_arguments_64 tyl ir fr ofs0.
+  forall ofs q tyl ir fr ofs0,
+  In (S Outgoing ofs q) (regs_of_rpairs (loc_arguments_64 tyl ir fr ofs0)) ->
+  ofs + typesize (typ_of_quantity q) <= size_arguments_64 tyl ir fr ofs0.
 Proof.
   induction tyl; simpl; intros.
   contradiction.
   assert (T: forall ty0, typesize ty0 <= 2).
   { destruct ty0; simpl; omega. }
   assert (A: forall ty0,
-             In (S Outgoing ofs ty) (regs_of_rpairs
+             In (S Outgoing ofs q) (regs_of_rpairs
               match list_nth_z int_param_regs ir with
               | Some ireg =>
                   One (R ireg) :: loc_arguments_64 tyl (ir + 1) fr ofs0
               | None => One (S Outgoing ofs0 ty0) :: loc_arguments_64 tyl ir fr (ofs0 + 2)
               end) ->
-             ofs + typesize ty <=
+             ofs + typesize (typ_of_quantity q) <=
              match list_nth_z int_param_regs ir with
              | Some _ => size_arguments_64 tyl (ir + 1) fr ofs0
              | None => size_arguments_64 tyl ir fr (ofs0 + 2)
@@ -448,16 +448,16 @@ Proof.
   { intros. destruct (list_nth_z int_param_regs ir); simpl in H0; destruct H0.
   - discriminate.
   - eapply IHtyl; eauto.
-  - inv H0. apply Z.le_trans with (ofs + 2). specialize (T ty). omega. apply size_arguments_64_above.
+  - inv H0. apply Z.le_trans with (ofs + 2). specialize (T (typ_of_quantity q)). omega. apply size_arguments_64_above.
   - eapply IHtyl; eauto. }
   assert (B: forall ty0,
-             In (S Outgoing ofs ty) (regs_of_rpairs
+             In (S Outgoing ofs q) (regs_of_rpairs
               match list_nth_z float_param_regs fr with
               | Some ireg =>
                   One (R ireg) :: loc_arguments_64 tyl ir (fr + 1) ofs0
               | None => One (S Outgoing ofs0 ty0) :: loc_arguments_64 tyl ir fr (ofs0 + 2)
               end) ->
-             ofs + typesize ty <=
+             ofs + typesize (typ_of_quantity q) <=
              match list_nth_z float_param_regs fr with
              | Some _ => size_arguments_64 tyl ir (fr + 1) ofs0
              | None => size_arguments_64 tyl ir fr (ofs0 + 2)
@@ -465,15 +465,15 @@ Proof.
   { intros. destruct (list_nth_z float_param_regs fr); simpl in H0; destruct H0.
   - discriminate.
   - eapply IHtyl; eauto.
-  - inv H0. apply Z.le_trans with (ofs + 2). specialize (T ty). omega. apply size_arguments_64_above.
+  - inv H0. apply Z.le_trans with (ofs + 2). specialize (T (typ_of_quantity q)). omega. apply size_arguments_64_above.
   - eapply IHtyl; eauto. }
   destruct a; eauto.
 Qed.
 
 Lemma loc_arguments_bounded:
-  forall (s: signature) (ofs: Z) (ty: typ),
-  In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments s)) ->
-  ofs + typesize ty <= size_arguments s.
+  forall (s: signature) (ofs: Z) (q: quantity),
+  In (S Outgoing ofs q) (regs_of_rpairs (loc_arguments s)) ->
+  ofs + typesize (typ_of_quantity q) <= size_arguments s.
 Proof.
   unfold loc_arguments, size_arguments; intros.
   destruct Archi.ptr64; eauto using loc_arguments_32_bounded, loc_arguments_64_bounded.

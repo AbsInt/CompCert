@@ -158,6 +158,8 @@ Global Opaque chunk_eq.
 
 Definition Mptr : memory_chunk := if Archi.ptr64 then Mint64 else Mint32.
 
+Definition Mptr_any : memory_chunk := if Archi.ptr64 then Many64 else Many32.
+
 (** The type (integer/pointer or float) of a chunk. *)
 
 Definition type_of_chunk (c: memory_chunk) : typ :=

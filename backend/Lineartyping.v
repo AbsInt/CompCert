@@ -33,13 +33,13 @@ Section WT_INSTR.
 
 Variable funct: function.
 
-Definition slot_valid (sl: slot) (ofs: Z) (ty: typ): bool :=
+Definition slot_valid (sl: slot) (ofs: Z) (q: quantity): bool :=
   match sl with
   | Local => zle 0 ofs
   | Outgoing => zle 0 ofs
-  | Incoming => In_dec Loc.eq (S Incoming ofs ty) (regs_of_rpairs (loc_parameters funct.(fn_sig)))
+  | Incoming => In_dec Loc.eq (S Incoming ofs q) (regs_of_rpairs (loc_parameters funct.(fn_sig)))
   end
-  && Zdivide_dec (typealign ty) ofs (typealign_pos ty).
+  && Zdivide_dec (typealign (typ_of_quantity q)) ofs (typealign_pos (typ_of_quantity q)).
 
 Definition slot_writable (sl: slot) : bool :=
   match sl with
@@ -51,7 +51,7 @@ Definition slot_writable (sl: slot) : bool :=
 Definition loc_valid (l: loc) : bool :=
   match l with
   | R r => true
-  | S Local ofs ty => slot_valid Local ofs ty
+  | S Local ofs q => slot_valid Local ofs q
   | S _ _ _ => false
   end.
 
@@ -64,10 +64,10 @@ Definition wt_builtin_res (ty: typ) (res: builtin_res mreg) : bool :=
 
 Definition wt_instr (i: instruction) : bool :=
   match i with
-  | Lgetstack sl ofs ty r =>
-      subtype ty (mreg_type r) && slot_valid sl ofs ty
-  | Lsetstack r sl ofs ty =>
-      slot_valid sl ofs ty && slot_writable sl
+  | Lgetstack sl ofs q r =>
+      subtype (typ_of_quantity q) (mreg_type r) && slot_valid sl ofs q
+  | Lsetstack r sl ofs q =>
+      slot_valid sl ofs q && slot_writable sl
   | Lop op args res =>
       match is_move_operation op args with
       | Some arg =>
@@ -294,17 +294,17 @@ End SOUNDNESS.
 (** Properties of well-typed states that are used in [Stackingproof]. *)
 
 Lemma wt_state_getstack:
-  forall s f sp sl ofs ty rd c rs m,
-  wt_state (State s f sp (Lgetstack sl ofs ty rd :: c) rs m) ->
-  slot_valid f sl ofs ty = true.
+  forall s f sp sl ofs q rd c rs m,
+  wt_state (State s f sp (Lgetstack sl ofs q rd :: c) rs m) ->
+  slot_valid f sl ofs q = true.
 Proof.
   intros. inv H. simpl in WTC; InvBooleans. auto.
 Qed.
 
 Lemma wt_state_setstack:
-  forall s f sp sl ofs ty r c rs m,
-  wt_state (State s f sp (Lsetstack r sl ofs ty :: c) rs m) ->
-  slot_valid f sl ofs ty = true /\ slot_writable sl = true.
+  forall s f sp sl ofs q r c rs m,
+  wt_state (State s f sp (Lsetstack r sl ofs q :: c) rs m) ->
+  slot_valid f sl ofs q = true /\ slot_writable sl = true.
 Proof.
   intros. inv H. simpl in WTC; InvBooleans. intuition.
 Qed.

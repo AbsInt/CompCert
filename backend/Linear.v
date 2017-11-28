@@ -25,8 +25,8 @@ Require Import Op Locations LTL Conventions.
 Definition label := positive.
 
 Inductive instruction: Type :=
-  | Lgetstack: slot -> Z -> typ -> mreg -> instruction
-  | Lsetstack: mreg -> slot -> Z -> typ -> instruction
+  | Lgetstack: slot -> Z -> quantity -> mreg -> instruction
+  | Lsetstack: mreg -> slot -> Z -> quantity -> instruction
   | Lop: operation -> list mreg -> mreg -> instruction
   | Lload: memory_chunk -> addressing -> list mreg -> mreg -> instruction
   | Lstore: memory_chunk -> addressing -> list mreg -> mreg -> instruction
@@ -144,14 +144,14 @@ Definition parent_locset (stack: list stackframe) : locset :=
 
 Inductive step: state -> trace -> state -> Prop :=
   | exec_Lgetstack:
-      forall s f sp sl ofs ty dst b rs m rs',
-      rs' = Locmap.set (R dst) (rs @ (S sl ofs ty)) (undef_regs (destroyed_by_getstack sl) rs) ->
-      step (State s f sp (Lgetstack sl ofs ty dst :: b) rs m)
+      forall s f sp sl ofs q dst b rs m rs',
+      rs' = Locmap.set (R dst) (rs @ (S sl ofs q)) (undef_regs (destroyed_by_getstack sl) rs) ->
+      step (State s f sp (Lgetstack sl ofs q dst :: b) rs m)
         E0 (State s f sp b rs' m)
   | exec_Lsetstack:
-      forall s f sp src sl ofs ty b rs m rs',
-      rs' = Locmap.set (S sl ofs ty) (rs @ (R src)) (undef_regs (destroyed_by_setstack ty) rs) ->
-      step (State s f sp (Lsetstack src sl ofs ty :: b) rs m)
+      forall s f sp src sl ofs q b rs m rs',
+      rs' = Locmap.set (S sl ofs q) (rs @ (R src)) (undef_regs (destroyed_by_setstack q) rs) ->
+      step (State s f sp (Lsetstack src sl ofs q :: b) rs m)
         E0 (State s f sp b rs' m)
   | exec_Lop:
       forall s f sp op args res b rs m v rs',

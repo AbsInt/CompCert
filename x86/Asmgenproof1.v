@@ -372,9 +372,9 @@ Ltac loadind_correct_solve :=
   end.
 
 Lemma loadind_correct:
-  forall (base: ireg) ofs ty dst k (rs: regset) c m v,
-  loadind base ofs ty dst k = OK c ->
-  Mem.loadv (chunk_of_type ty) m (Val.offset_ptr rs#base ofs) = Some v ->
+  forall (base: ireg) ofs q dst k (rs: regset) c m v,
+  loadind base ofs q dst k = OK c ->
+  Mem.loadv (chunk_of_quantity q) m (Val.offset_ptr rs#base ofs) = Some v ->
   exists rs',
      exec_straight ge fn c rs m k rs' m
   /\ rs'#(preg_of dst) = v
@@ -391,12 +391,12 @@ Proof.
 Qed.
 
 Lemma storeind_correct:
-  forall (base: ireg) ofs ty src k (rs: regset) c m m',
-  storeind src base ofs ty k = OK c ->
-  Mem.storev (chunk_of_type ty) m (Val.offset_ptr rs#base ofs) (rs#(preg_of src)) = Some m' ->
+  forall (base: ireg) ofs q src k (rs: regset) c m m',
+  storeind src base ofs q k = OK c ->
+  Mem.storev (chunk_of_quantity q) m (Val.offset_ptr rs#base ofs) (rs#(preg_of src)) = Some m' ->
   exists rs',
      exec_straight ge fn c rs m k rs' m'
-  /\ forall r, data_preg r = true -> preg_notin r (destroyed_by_setstack ty) -> rs'#r = rs#r.
+  /\ forall r, data_preg r = true -> preg_notin r (destroyed_by_setstack q) -> rs'#r = rs#r.
 Proof.
   unfold storeind; intros.
   set (addr := Addrmode (Some base) None (inl (ident * ptrofs) (Ptrofs.unsigned ofs))) in *.

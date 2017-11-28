@@ -22,6 +22,7 @@ Require Import Maps.
 Require Import AST.
 Require Import Integers.
 Require Import Op.
+Require Import Memdata.
 
 (** ** Machine registers *)
 
@@ -97,6 +98,11 @@ Definition mreg_type (r: mreg): typ :=
   | F16 | F17 | F18 | F19 | F20 | F21 | F22 | F23
   | F24 | F25 | F26 | F27 | F28 | F29 | F30 | F31 => Tany64
   end.
+
+Lemma mreg_type_cases: forall r, mreg_type r = Tany32 \/ mreg_type r = Tany64.
+Proof.
+  destruct r; simpl; auto; destruct Archi.ptr64; auto.
+Qed.
 
 Open Scope positive_scope.
 
@@ -216,7 +222,7 @@ Definition destroyed_by_builtin (ef: external_function): list mreg :=
   | _ => nil
   end.
 
-Definition destroyed_by_setstack (ty: typ): list mreg := nil.
+Definition destroyed_by_setstack (q: quantity): list mreg := nil.
 
 Definition destroyed_at_function_entry: list mreg := R30 :: nil.
 

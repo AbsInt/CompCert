@@ -269,7 +269,7 @@ Proof.
 - destruct (mreg_eq r r0).
   + subst. rewrite !Regfile.gss. auto using Val.load_result_lessdef.
   + rewrite !Regfile.gso; auto. exact (H (R r0)).
-- exact (H (S sl pos ty)).
+- exact (H (S sl pos q)).
 Qed.
 
 Lemma locmap_set_reg_lessdef:
@@ -278,7 +278,7 @@ Lemma locmap_set_reg_lessdef:
 Proof.
   intros; red; intros l. unfold Locmap.set. destruct l, ls1, ls2.
 - apply regfile_set_lessdef; auto.
-- exact (H (S sl pos ty)).
+- exact (H (S sl pos q)).
 Qed.
 
 Lemma locmap_set_lessdef:
@@ -294,7 +294,7 @@ Proof.
   rewrite decode_encode_undef; auto.
 - destruct (Loc.diff_dec l l'); auto.
   unfold Locmap.chunk_of_loc; subst; simpl.
-  exact (H (S sl0 pos0 ty0)).
+  exact (H (S sl0 pos0 q0)).
 Qed.
 
 Lemma regfile_set_undef_lessdef:
@@ -306,7 +306,7 @@ Proof.
   + subst; rewrite Regfile.gss; auto.
     destruct (Regfile.chunk_of_mreg r'); simpl; auto.
   + rewrite Regfile.gso; auto. exact (H (R r')).
-- exact (H (S sl pos ty)).
+- exact (H (S sl pos q)).
 Qed.
 
 Lemma locmap_set_undef_lessdef:
@@ -319,7 +319,7 @@ Proof.
   destruct ls1, ls2. exact (H (R r)).
   rewrite <- L, <- L'. destruct (Loc.eq l l').
 - rewrite e, Locmap.gss. subst l'; simpl.
-  destruct (chunk_of_type ty0); simpl; auto.
+  destruct q0; simpl; auto.
 - destruct (Loc.diff_dec l l'); auto.
   rewrite Locmap.gso; auto.
   subst l'. unfold Locmap.set, Locmap.get. destruct ls1, ls2, l.

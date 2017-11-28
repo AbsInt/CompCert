@@ -1188,9 +1188,9 @@ Proof.
 Qed.
 
 Lemma loadind_correct:
-  forall (base: ireg) ofs ty dst k c (rs: regset) m v,
-  loadind base ofs ty dst k = OK c ->
-  Mem.loadv (chunk_of_type ty) m (Val.offset_ptr rs#base ofs) = Some v ->
+  forall (base: ireg) ofs q dst k c (rs: regset) m v,
+  loadind base ofs q dst k = OK c ->
+  Mem.loadv (chunk_of_quantity q) m (Val.offset_ptr rs#base ofs) = Some v ->
   base <> X31 ->
   exists rs',
      exec_straight ge fn c rs m k rs' m
@@ -1202,16 +1202,16 @@ Proof.
                 c = indexed_memory_access mk_instr base ofs k
              /\ forall base' ofs' rs',
                    exec_instr ge fn (mk_instr base' ofs') rs' m =
-                   exec_load ge (chunk_of_type ty) rs' m (preg_of dst) base' ofs').
-  { unfold loadind in TR. destruct ty, (preg_of dst); inv TR; econstructor; split; eauto. }
+                   exec_load ge (chunk_of_quantity q) rs' m (preg_of dst) base' ofs').
+  { unfold loadind in TR. destruct q, (preg_of dst); inv TR; econstructor; split; eauto. }
   destruct A as (mk_instr & B & C). subst c. 
   eapply indexed_load_access_correct; eauto with asmgen. 
 Qed.
 
 Lemma storeind_correct:
-  forall (base: ireg) ofs ty src k c (rs: regset) m m',
-  storeind src base ofs ty k = OK c ->
-  Mem.storev (chunk_of_type ty) m (Val.offset_ptr rs#base ofs) rs#(preg_of src) = Some m' ->
+  forall (base: ireg) ofs q src k c (rs: regset) m m',
+  storeind src base ofs q k = OK c ->
+  Mem.storev (chunk_of_quantity q) m (Val.offset_ptr rs#base ofs) rs#(preg_of src) = Some m' ->
   base <> X31 ->
   exists rs',
      exec_straight ge fn c rs m k rs' m'
@@ -1222,15 +1222,15 @@ Proof.
                 c = indexed_memory_access mk_instr base ofs k
              /\ forall base' ofs' rs',
                    exec_instr ge fn (mk_instr base' ofs') rs' m =
-                   exec_store ge (chunk_of_type ty) rs' m (preg_of src) base' ofs').
-  { unfold storeind in TR. destruct ty, (preg_of src); inv TR; econstructor; split; eauto. }
+                   exec_store ge (chunk_of_quantity q) rs' m (preg_of src) base' ofs').
+  { unfold storeind in TR. destruct q, (preg_of src); inv TR; econstructor; split; eauto. }
   destruct A as (mk_instr & B & C). subst c. 
   eapply indexed_store_access_correct; eauto with asmgen. 
 Qed.
 
 Lemma loadind_ptr_correct:
   forall (base: ireg) ofs (dst: ireg) k (rs: regset) m v,
-  Mem.loadv Mptr m (Val.offset_ptr rs#base ofs) = Some v ->
+  Mem.loadv Mptr_any m (Val.offset_ptr rs#base ofs) = Some v ->
   base <> X31 ->
   exists rs',
      exec_straight ge fn (loadind_ptr base ofs dst k) rs m k rs' m
@@ -1238,19 +1238,19 @@ Lemma loadind_ptr_correct:
   /\ forall r, r <> PC -> r <> X31 -> r <> dst -> rs'#r = rs#r.
 Proof.
   intros. eapply indexed_load_access_correct; eauto with asmgen.
-  intros. unfold Mptr. destruct Archi.ptr64; auto. 
+  intros. unfold Mptr_any. destruct Archi.ptr64; auto.
 Qed.
 
 Lemma storeind_ptr_correct:
   forall (base: ireg) ofs (src: ireg) k (rs: regset) m m',
-  Mem.storev Mptr m (Val.offset_ptr rs#base ofs) rs#src = Some m' ->
+  Mem.storev Mptr_any m (Val.offset_ptr rs#base ofs) rs#src = Some m' ->
   base <> X31 -> src <> X31 ->
   exists rs',
      exec_straight ge fn (storeind_ptr src base ofs k) rs m k rs' m'
   /\ forall r, r <> PC -> r <> X31 -> rs'#r = rs#r.
 Proof.
   intros. eapply indexed_store_access_correct with (r1 := src); eauto with asmgen.
-  intros. unfold Mptr. destruct Archi.ptr64; auto. 
+  intros. unfold Mptr_any. destruct Archi.ptr64; auto.
 Qed.
 
 Lemma transl_memory_access_correct:
@@ -1366,8 +1366,8 @@ Qed.
 
 Lemma make_epilogue_correct:
   forall ge0 f m stk soff cs m' ms rs k tm,
-  load_stack m (Vptr stk soff) Tptr f.(fn_link_ofs) = Some (parent_sp cs) ->
-  load_stack m (Vptr stk soff) Tptr f.(fn_retaddr_ofs) = Some (parent_ra cs) ->
+  load_stack m (Vptr stk soff) (quantity_of_typ Tptr) f.(fn_link_ofs) = Some (parent_sp cs) ->
+  load_stack m (Vptr stk soff) (quantity_of_typ Tptr) f.(fn_retaddr_ofs) = Some (parent_ra cs) ->
   Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
   agree ms (Vptr stk soff) rs ->
   Mem.extends m tm ->
@@ -1387,7 +1387,8 @@ Proof.
   exploit lessdef_parent_ra; eauto. intros EQ; subst ra'; clear LDRA'.
   exploit Mem.free_parallel_extends; eauto. intros (tm' & FREE' & MEXT').
   unfold make_epilogue. 
-  rewrite chunk_of_Tptr in *. 
+  replace (chunk_of_quantity (quantity_of_typ Tptr)) with Mptr_any in * by
+      (unfold Tptr, Mptr_any; destruct Archi.ptr64; reflexivity).
   exploit (loadind_ptr_correct SP (fn_retaddr_ofs f) RA (Pfreeframe (fn_stacksize f) (fn_link_ofs f) :: k) rs tm).
     rewrite <- (sp_val _ _ _ AG). simpl. eexact LRA'. congruence.
   intros (rs1 & A1 & B1 & C1).

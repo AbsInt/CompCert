@@ -522,7 +522,7 @@ Qed.
 
 Lemma loadind_int_correct:
   forall (base: ireg) ofs dst (rs: regset) m v k,
-  Mem.loadv Mint32 m (Val.offset_ptr rs#base ofs) = Some v ->
+  Mem.loadv Many32 m (Val.offset_ptr rs#base ofs) = Some v ->
   exists rs',
      exec_straight ge fn (loadind_int base ofs dst k) rs m k rs' m
   /\ rs'#dst = v
@@ -538,9 +538,9 @@ Proof.
 Qed.
 
 Lemma loadind_correct:
-  forall (base: ireg) ofs ty dst k c (rs: regset) m v,
-  loadind base ofs ty dst k = OK c ->
-  Mem.loadv (chunk_of_type ty) m (Val.offset_ptr rs#base ofs) = Some v ->
+  forall (base: ireg) ofs q dst k c (rs: regset) m v,
+  loadind base ofs q dst k = OK c ->
+  Mem.loadv (chunk_of_quantity q) m (Val.offset_ptr rs#base ofs) = Some v ->
   exists rs',
      exec_straight ge fn c rs m k rs' m
   /\ rs'#(preg_of dst) = v
@@ -549,25 +549,18 @@ Proof.
   unfold loadind; intros.
   assert (Val.offset_ptr (rs base) ofs = Val.add (rs base) (Vint (Ptrofs.to_int ofs))).
   { destruct (rs base); try discriminate. simpl. f_equal; f_equal. symmetry; auto with ptrofs. }
-  destruct ty; destruct (preg_of dst); inv H; simpl in H0.
-- (* int *)
-  apply loadind_int_correct; auto.
-- (* float *)
+  destruct q; destruct (preg_of dst); inv H; simpl in H0.
+- (* any32 to general-purpose register *)
   apply indexed_memory_access_correct; intros.
   econstructor; split.
   apply exec_straight_one. simpl. unfold exec_load. rewrite H, <- H1, H0. eauto. auto.
   split; intros; Simpl.
-- (* single *)
+- (* any32 to single-precision register *)
   apply indexed_memory_access_correct; intros.
   econstructor; split.
   apply exec_straight_one. simpl. unfold exec_load. rewrite H, <- H1, H0. eauto. auto.
   split; intros; Simpl.
-- (* any32 *)
-  apply indexed_memory_access_correct; intros.
-  econstructor; split.
-  apply exec_straight_one. simpl. unfold exec_load. rewrite H, <- H1, H0. eauto. auto.
-  split; intros; Simpl.
-- (* any64 *)
+- (* any64 to double-precision register *)
   apply indexed_memory_access_correct; intros.
   econstructor; split.
   apply exec_straight_one. simpl. unfold exec_load. rewrite H, <- H1, H0. eauto. auto.
@@ -577,9 +570,9 @@ Qed.
 (** Indexed memory stores. *)
 
 Lemma storeind_correct:
-  forall (base: ireg) ofs ty src k c (rs: regset) m m',
-  storeind src base ofs ty k = OK c ->
-  Mem.storev (chunk_of_type ty) m (Val.offset_ptr rs#base ofs) (rs#(preg_of src)) = Some m' ->
+  forall (base: ireg) ofs q src k c (rs: regset) m m',
+  storeind src base ofs q k = OK c ->
+  Mem.storev (chunk_of_quantity q) m (Val.offset_ptr rs#base ofs) (rs#(preg_of src)) = Some m' ->
   exists rs',
      exec_straight ge fn c rs m k rs' m'
   /\ forall r, if_preg r = true -> r <> IR14 -> rs'#r = rs#r.
@@ -588,28 +581,18 @@ Proof.
   assert (DATA: data_preg (preg_of src) = true) by eauto with asmgen.
   assert (Val.offset_ptr (rs base) ofs = Val.add (rs base) (Vint (Ptrofs.to_int ofs))).
   { destruct (rs base); try discriminate. simpl. f_equal; f_equal. symmetry; auto with ptrofs. }
-  destruct ty; destruct (preg_of src); inv H; simpl in H0.
-- (* int *)
+  destruct q; destruct (preg_of src); inv H; simpl in H0.
+- (* any32 from general-purpose register *)
   apply indexed_memory_access_correct; intros.
   econstructor; split.
   apply exec_straight_one. simpl. unfold exec_store. rewrite H, <- H1, H2, H0 by auto with asmgen; eauto. auto.
   intros; Simpl.
-- (* float *)
+- (* any32 from single-precision register *)
   apply indexed_memory_access_correct; intros.
   econstructor; split.
   apply exec_straight_one. simpl. unfold exec_store. rewrite H, <- H1, H2, H0 by auto with asmgen; eauto. auto.
   intros; Simpl.
-- (* single *)
-  apply indexed_memory_access_correct; intros.
-  econstructor; split.
-  apply exec_straight_one. simpl. unfold exec_store. rewrite H, <- H1, H2, H0 by auto with asmgen; eauto. auto.
-  intros; Simpl.
-- (* any32 *)
-  apply indexed_memory_access_correct; intros.
-  econstructor; split.
-  apply exec_straight_one. simpl. unfold exec_store. rewrite H, <- H1, H2, H0 by auto with asmgen; eauto. auto.
-  intros; Simpl.
-- (* any64 *)
+- (* any64 from double-precision register *)
   apply indexed_memory_access_correct; intros.
   econstructor; split.
   apply exec_straight_one. simpl. unfold exec_store. rewrite H, <- H1, H2, H0 by auto with asmgen; eauto. auto.
@@ -620,7 +603,7 @@ Qed.
 
 Lemma save_lr_correct:
   forall ofs k (rs: regset) m m',
-  Mem.storev Mint32 m (Val.offset_ptr rs#IR13 ofs) (rs#IR14) = Some m' ->
+  Mem.storev Many32 m (Val.offset_ptr rs#IR13 ofs) (rs#IR14) = Some m' ->
   exists rs',
      exec_straight ge fn (save_lr ofs k) rs m k rs' m'
   /\ (forall r, if_preg r = true -> r <> IR12 -> rs'#r = rs#r)
@@ -633,7 +616,7 @@ Proof.
   destruct (Int.eq n n1).
 - econstructor; split. apply exec_straight_one. simpl; unfold exec_store. rewrite <- EQ, H; reflexivity. auto.
   split. intros; Simpl. intros; Simpl.
-- destruct (addimm_correct IR12 IR13 (Int.sub n n1) (Pstr IR14 IR12 (SOimm n1) :: k) rs m)
+- destruct (addimm_correct IR12 IR13 (Int.sub n n1) (Pstr_a IR14 IR12 (SOimm n1) :: k) rs m)
   as (rs1 & A & B & C).
   econstructor; split.
   eapply exec_straight_trans. eexact A. 

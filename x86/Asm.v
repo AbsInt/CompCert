@@ -121,11 +121,17 @@ Inductive instruction: Type :=
   | Pmovsd_mf (a: addrmode) (r1: freg)
   | Pmovss_fi (rd: freg) (n: float32)   (**r [movss] (single 32-bit float) *)
   | Pmovss_fm (rd: freg) (a: addrmode)
+  | Pmovss_fm_a (rd: freg) (a: addrmode)
   | Pmovss_mf (a: addrmode) (r1: freg)
+  | Pmovss_mf_a (a: addrmode) (r1: freg)
   | Pfldl_m (a: addrmode)               (**r [fld] double precision *)
+  | Pfldl_m_a (a: addrmode)             (**r [fld] double precision *)
   | Pfstpl_m (a: addrmode)              (**r [fstp] double precision *)
+  | Pfstpl_m_a (a: addrmode)            (**r [fstp] double precision *)
   | Pflds_m (a: addrmode)               (**r [fld] simple precision *)
+  | Pflds_m_a (a: addrmode)             (**r [fld] simple precision *)
   | Pfstps_m (a: addrmode)              (**r [fstp] simple precision *)
+  | Pfstps_m_a (a: addrmode)            (**r [fstp] simple precision *)
   (** Moves with conversion *)
   | Pmovb_mr (a: addrmode) (rs: ireg)   (**r [mov] (8-bit int) *)
   | Pmovw_mr (a: addrmode) (rs: ireg)   (**r [mov] (16-bit int) *)
@@ -242,8 +248,10 @@ Inductive instruction: Type :=
   | Pcall_r (r: ireg) (sg: signature)
   | Pret
   (** Saving and restoring registers *)
-  | Pmov_rm_a (rd: ireg) (a: addrmode)  (**r like [Pmov_rm], using [Many64] chunk *)
-  | Pmov_mr_a (a: addrmode) (rs: ireg)  (**r like [Pmov_mr], using [Many64] chunk *)
+  | Pmovl_rm_a (rd: ireg) (a: addrmode)  (**r like [Pmovl_rm], using [Many32] chunk *)
+  | Pmovq_rm_a (rd: ireg) (a: addrmode)  (**r like [Pmovq_rm], using [Many64] chunk *)
+  | Pmovl_mr_a (a: addrmode) (rs: ireg)  (**r like [Pmovl_mr], using [Many32] chunk *)
+  | Pmovq_mr_a (a: addrmode) (rs: ireg)  (**r like [Pmovq_mr], using [Many64] chunk *)
   | Pmovsd_fm_a (rd: freg) (a: addrmode) (**r like [Pmovsd_fm], using [Many64] chunk *)
   | Pmovsd_mf_a (a: addrmode) (r1: freg) (**r like [Pmovsd_mf], using [Many64] chunk *)
   (** Pseudo-instructions *)
@@ -635,16 +643,28 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (rs#rd <- (Vsingle n))) m
   | Pmovss_fm rd a =>
       exec_load Mfloat32 m a rs rd
+  | Pmovss_fm_a rd a =>
+      exec_load Many32 m a rs rd
   | Pmovss_mf a r1 =>
       exec_store Mfloat32 m a rs r1 nil
+  | Pmovss_mf_a a r1 =>
+      exec_store Many32 m a rs r1 nil
   | Pfldl_m a =>
       exec_load Mfloat64 m a rs ST0
+  | Pfldl_m_a a =>
+      exec_load Many64 m a rs ST0
   | Pfstpl_m a =>
       exec_store Mfloat64 m a rs ST0 (ST0 :: nil)
+  | Pfstpl_m_a a =>
+      exec_store Many64 m a rs ST0 (ST0 :: nil)
   | Pflds_m a =>
       exec_load Mfloat32 m a rs ST0
+  | Pflds_m_a a =>
+      exec_load Many32 m a rs ST0
   | Pfstps_m a =>
       exec_store Mfloat32 m a rs ST0 (ST0 :: nil)
+  | Pfstps_m_a a =>
+      exec_store Many32 m a rs ST0 (ST0 :: nil)
   (** Moves with conversion *)
   | Pmovb_mr a r1 =>
       exec_store Mint8unsigned m a rs r1 nil
@@ -926,10 +946,14 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pret =>
       Next (rs#PC <- (rs#RA)) m
   (** Saving and restoring registers *)
-  | Pmov_rm_a rd a =>
-      exec_load (if Archi.ptr64 then Many64 else Many32) m a rs rd
-  | Pmov_mr_a a r1 =>
-      exec_store (if Archi.ptr64 then Many64 else Many32) m a rs r1 nil
+  | Pmovl_rm_a rd a =>
+      exec_load Many32 m a rs rd
+  | Pmovq_rm_a rd a =>
+      exec_load Many64 m a rs rd
+  | Pmovl_mr_a a r1 =>
+      exec_store Many32 m a rs r1 nil
+  | Pmovq_mr_a a r1 =>
+      exec_store Many64 m a rs r1 nil
   | Pmovsd_fm_a rd a =>
       exec_load Many64 m a rs rd
   | Pmovsd_mf_a a r1 =>
@@ -940,19 +964,19 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pallocframe sz ofs_ra ofs_link =>
       let (m1, stk) := Mem.alloc m 0 sz in
       let sp := Vptr stk Ptrofs.zero in
-      match Mem.storev Mptr m1 (Val.offset_ptr sp ofs_link) rs#RSP with
+      match Mem.storev Mptr_any m1 (Val.offset_ptr sp ofs_link) rs#RSP with
       | None => Stuck
       | Some m2 =>
-          match Mem.storev Mptr m2 (Val.offset_ptr sp ofs_ra) rs#RA with
+          match Mem.storev Mptr_any m2 (Val.offset_ptr sp ofs_ra) rs#RA with
           | None => Stuck
           | Some m3 => Next (nextinstr (rs #RAX <- (rs#RSP) #RSP <- sp)) m3
           end
       end
   | Pfreeframe sz ofs_ra ofs_link =>
-      match Mem.loadv Mptr m (Val.offset_ptr rs#RSP ofs_ra) with
+      match Mem.loadv Mptr_any m (Val.offset_ptr rs#RSP ofs_ra) with
       | None => Stuck
       | Some ra =>
-          match Mem.loadv Mptr m (Val.offset_ptr rs#RSP ofs_link) with
+          match Mem.loadv Mptr_any m (Val.offset_ptr rs#RSP ofs_link) with
           | None => Stuck
           | Some sp =>
               match rs#RSP with
@@ -1063,11 +1087,11 @@ Definition undef_caller_save_regs (rs: regset) : regset :=
 Inductive extcall_arg (rs: regset) (m: mem): loc -> val -> Prop :=
   | extcall_arg_reg: forall r,
       extcall_arg rs m (R r) (rs (preg_of r))
-  | extcall_arg_stack: forall ofs ty bofs v,
+  | extcall_arg_stack: forall ofs q bofs v,
       bofs = Stacklayout.fe_ofs_arg + 4 * ofs ->
-      Mem.loadv (chunk_of_type ty) m
+      Mem.loadv (chunk_of_quantity q) m
                 (Val.offset_ptr (rs (IR RSP)) (Ptrofs.repr bofs)) = Some v ->
-      extcall_arg rs m (S Outgoing ofs ty) v.
+      extcall_arg rs m (S Outgoing ofs q) v.
 
 Inductive extcall_arg_pair (rs: regset) (m: mem): rpair loc -> val -> Prop :=
   | extcall_arg_one: forall l v,

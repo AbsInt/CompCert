@@ -55,23 +55,23 @@ Variable b: bounds.
 Definition mreg_within_bounds (r: mreg) :=
   is_callee_save r = true -> In r (used_callee_save b).
 
-Definition slot_within_bounds (sl: slot) (ofs: Z) (ty: typ) :=
+Definition slot_within_bounds (sl: slot) (ofs: Z) (q: quantity) :=
   match sl with
-  | Local => ofs + typesize ty <= bound_local b
-  | Outgoing => ofs + typesize ty <= bound_outgoing b
+  | Local => ofs + typesize (typ_of_quantity q) <= bound_local b
+  | Outgoing => ofs + typesize (typ_of_quantity q) <= bound_outgoing b
   | Incoming => True
   end.
 
 Definition instr_within_bounds (i: instruction) :=
   match i with
-  | Lgetstack sl ofs ty r => slot_within_bounds sl ofs ty /\ mreg_within_bounds r
-  | Lsetstack r sl ofs ty => slot_within_bounds sl ofs ty
+  | Lgetstack sl ofs q r => slot_within_bounds sl ofs q /\ mreg_within_bounds r
+  | Lsetstack r sl ofs q => slot_within_bounds sl ofs q
   | Lop op args res => mreg_within_bounds res
   | Lload chunk addr args dst => mreg_within_bounds dst
   | Lcall sig ros => size_arguments sig <= bound_outgoing b
   | Lbuiltin ef args res =>
        (forall r, In r (params_of_builtin_res res) \/ In r (destroyed_by_builtin ef) -> mreg_within_bounds r)
-    /\ (forall sl ofs ty, In (S sl ofs ty) (params_of_builtin_args args) -> slot_within_bounds sl ofs ty)
+    /\ (forall sl ofs q, In (S sl ofs q) (params_of_builtin_args args) -> slot_within_bounds sl ofs q)
   | _ => True
   end.
 
@@ -101,8 +101,8 @@ Definition record_regs (u: RegSet.t) (rl: list mreg) : RegSet.t :=
 
 Definition record_regs_of_instr (u: RegSet.t) (i: instruction) : RegSet.t :=
   match i with
-  | Lgetstack sl ofs ty r => record_reg u r
-  | Lsetstack r sl ofs ty => record_reg u r
+  | Lgetstack sl ofs q r => record_reg u r
+  | Lsetstack r sl ofs q => record_reg u r
   | Lop op args res => record_reg u res
   | Lload chunk addr args dst => record_reg u dst
   | Lstore chunk addr args src => u
@@ -120,17 +120,17 @@ Definition record_regs_of_instr (u: RegSet.t) (i: instruction) : RegSet.t :=
 Definition record_regs_of_function : RegSet.t :=
   fold_left record_regs_of_instr f.(fn_code) RegSet.empty.
 
-Fixpoint slots_of_locs (l: list loc) : list (slot * Z * typ) :=
+Fixpoint slots_of_locs (l: list loc) : list (slot * Z * quantity) :=
   match l with
   | nil => nil
-  | S sl ofs ty :: l' => (sl, ofs, ty) :: slots_of_locs l'
+  | S sl ofs q :: l' => (sl, ofs, q) :: slots_of_locs l'
   | R r :: l' => slots_of_locs l'
   end.
 
-Definition slots_of_instr (i: instruction) : list (slot * Z * typ) :=
+Definition slots_of_instr (i: instruction) : list (slot * Z * quantity) :=
   match i with
-  | Lgetstack sl ofs ty r => (sl, ofs, ty) :: nil
-  | Lsetstack r sl ofs ty => (sl, ofs, ty) :: nil
+  | Lgetstack sl ofs q r => (sl, ofs, q) :: nil
+  | Lsetstack r sl ofs q => (sl, ofs, q) :: nil
   | Lbuiltin ef args res => slots_of_locs (params_of_builtin_args args)
   | _ => nil
   end.
@@ -141,17 +141,17 @@ Definition max_over_list {A: Type} (valu: A -> Z) (l: list A) : Z :=
 Definition max_over_instrs (valu: instruction -> Z) : Z :=
   max_over_list valu f.(fn_code).
 
-Definition max_over_slots_of_instr (valu: slot * Z * typ -> Z) (i: instruction) : Z :=
+Definition max_over_slots_of_instr (valu: slot * Z * quantity -> Z) (i: instruction) : Z :=
   max_over_list valu (slots_of_instr i).
 
-Definition max_over_slots_of_funct (valu: slot * Z * typ -> Z) : Z :=
+Definition max_over_slots_of_funct (valu: slot * Z * quantity -> Z) : Z :=
   max_over_instrs (max_over_slots_of_instr valu).
 
-Definition local_slot (s: slot * Z * typ) :=
-  match s with (Local, ofs, ty) => ofs + typesize ty | _ => 0 end.
+Definition local_slot (s: slot * Z * quantity) :=
+  match s with (Local, ofs, q) => ofs + typesize (typ_of_quantity q) | _ => 0 end.
 
-Definition outgoing_slot (s: slot * Z * typ) :=
-  match s with (Outgoing, ofs, ty) => ofs + typesize ty | _ => 0 end.
+Definition outgoing_slot (s: slot * Z * quantity) :=
+  match s with (Outgoing, ofs, q) => ofs + typesize (typ_of_quantity q) | _ => 0 end.
 
 Definition outgoing_space (i: instruction) :=
   match i with Lcall sig _ => size_arguments sig | _ => 0 end.
@@ -168,7 +168,7 @@ Proof.
 Qed.
 
 Lemma max_over_slots_of_funct_pos:
-  forall (valu: slot * Z * typ -> Z), max_over_slots_of_funct valu >= 0.
+  forall (valu: slot * Z * quantity -> Z), max_over_slots_of_funct valu >= 0.
 Proof.
   intros. unfold max_over_slots_of_funct.
   unfold max_over_instrs. apply max_over_list_pos.
@@ -278,7 +278,7 @@ Qed.
 
 Definition defined_by_instr (r': mreg) (i: instruction) :=
   match i with
-  | Lgetstack sl ofs ty r => r' = r
+  | Lgetstack sl ofs q r => r' = r
   | Lop op args res => r' = res
   | Lload chunk addr args dst => r' = dst
   | Lbuiltin ef args res => In r' (params_of_builtin_res res) \/ In r' (destroyed_by_builtin ef)
@@ -324,7 +324,7 @@ Proof.
 Qed.
 
 Lemma max_over_slots_of_funct_bound:
-  forall (valu: slot * Z * typ -> Z) i s,
+  forall (valu: slot * Z * quantity -> Z) i s,
   In i f.(fn_code) -> In s (slots_of_instr i) ->
   valu s <= max_over_slots_of_funct valu.
 Proof.
@@ -335,22 +335,22 @@ Proof.
 Qed.
 
 Lemma local_slot_bound:
-  forall i ofs ty,
-  In i f.(fn_code) -> In (Local, ofs, ty) (slots_of_instr i) ->
-  ofs + typesize ty <= bound_local function_bounds.
+  forall i ofs q,
+  In i f.(fn_code) -> In (Local, ofs, q) (slots_of_instr i) ->
+  ofs + typesize (typ_of_quantity q) <= bound_local function_bounds.
 Proof.
   intros.
   unfold function_bounds, bound_local.
-  change (ofs + typesize ty) with (local_slot (Local, ofs, ty)).
+  change (ofs + typesize (typ_of_quantity q)) with (local_slot (Local, ofs, q)).
   eapply max_over_slots_of_funct_bound; eauto.
 Qed.
 
 Lemma outgoing_slot_bound:
-  forall i ofs ty,
-  In i f.(fn_code) -> In (Outgoing, ofs, ty) (slots_of_instr i) ->
-  ofs + typesize ty <= bound_outgoing function_bounds.
+  forall i ofs q,
+  In i f.(fn_code) -> In (Outgoing, ofs, q) (slots_of_instr i) ->
+  ofs + typesize (typ_of_quantity q) <= bound_outgoing function_bounds.
 Proof.
-  intros. change (ofs + typesize ty) with (outgoing_slot (Outgoing, ofs, ty)).
+  intros. change (ofs + typesize (typ_of_quantity q)) with (outgoing_slot (Outgoing, ofs, q)).
   unfold function_bounds, bound_outgoing.
   apply Zmax_bound_r. eapply max_over_slots_of_funct_bound; eauto.
 Qed.
@@ -381,8 +381,8 @@ Qed.
 
 Lemma slot_is_within_bounds:
   forall i, In i f.(fn_code) ->
-  forall sl ty ofs, In (sl, ofs, ty) (slots_of_instr i) ->
-  slot_within_bounds function_bounds sl ofs ty.
+  forall sl q ofs, In (sl, ofs, q) (slots_of_instr i) ->
+  slot_within_bounds function_bounds sl ofs q.
 Proof.
   intros. unfold slot_within_bounds.
   destruct sl.
@@ -392,7 +392,7 @@ Proof.
 Qed.
 
 Lemma slots_of_locs_charact:
-  forall sl ofs ty l, In (sl, ofs, ty) (slots_of_locs l) <-> In (S sl ofs ty) l.
+  forall sl ofs q l, In (sl, ofs, q) (slots_of_locs l) <-> In (S sl ofs q) l.
 Proof.
   induction l; simpl; intros.
   tauto.

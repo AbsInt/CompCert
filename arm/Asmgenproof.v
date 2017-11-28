@@ -892,7 +892,9 @@ Opaque loadind.
   eapply exec_straight_trans with (rs2 := rs2) (m2 := m2').
   apply exec_straight_one. 
   unfold exec_instr. rewrite C. fold sp.
-  rewrite <- (sp_val _ _ _ AG). unfold Tptr, chunk_of_type, Archi.ptr64 in F. rewrite F. auto.
+  rewrite <- (sp_val _ _ _ AG).
+  unfold Tptr, chunk_of_quantity, Archi.ptr64, quantity_of_typ in F.
+  rewrite F. auto.
   auto.
   eapply exec_straight_trans with (rs2 := rs3) (m2 := m3').
   eexact X.

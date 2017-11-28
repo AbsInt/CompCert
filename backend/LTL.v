@@ -30,8 +30,8 @@ Definition node := positive.
 Inductive instruction: Type :=
   | Lop (op: operation) (args: list mreg) (res: mreg)
   | Lload (chunk: memory_chunk) (addr: addressing) (args: list mreg) (dst: mreg)
-  | Lgetstack (sl: slot) (ofs: Z) (ty: typ) (dst: mreg)
-  | Lsetstack (src: mreg) (sl: slot) (ofs: Z) (ty: typ)
+  | Lgetstack (sl: slot) (ofs: Z) (q: quantity) (dst: mreg)
+  | Lsetstack (src: mreg) (sl: slot) (ofs: Z) (q: quantity)
   | Lstore (chunk: memory_chunk) (addr: addressing) (args: list mreg) (src: mreg)
   | Lcall (sg: signature) (ros: mreg + ident)
   | Ltailcall (sg: signature) (ros: mreg + ident)
@@ -138,7 +138,7 @@ Definition return_regs (caller callee: locset) : locset :=
     (Regfile.override destroyed_at_call callee_rf caller_rf,
      fun l =>
      match l with
-     | S Outgoing ofs ty => encode_val (chunk_of_type ty) Vundef
+     | S Outgoing ofs q => encode_val (chunk_of_quantity q) Vundef
      | l => caller_stack l
      end)
   end.
@@ -161,7 +161,7 @@ Definition undef_caller_save_regs (ls: locset) : locset :=
     (Regfile.undef_regs destroyed_at_call rf,
      fun l =>
      match l with
-     | S Outgoing ofs ty => encode_val (chunk_of_type ty) Vundef
+     | S Outgoing ofs q => encode_val (chunk_of_quantity q) Vundef
      | l => stack l
      end)
   end.
@@ -260,13 +260,13 @@ Inductive step: state -> trace -> state -> Prop :=
       rs' = Locmap.set (R dst) v (undef_regs (destroyed_by_load chunk addr) rs) ->
       step (Block s f sp (Lload chunk addr args dst :: bb) rs m)
         E0 (Block s f sp bb rs' m)
-  | exec_Lgetstack: forall s f sp sl ofs ty dst bb rs m rs',
-      rs' = Locmap.set (R dst) (rs @ (S sl ofs ty)) (undef_regs (destroyed_by_getstack sl) rs) ->
-      step (Block s f sp (Lgetstack sl ofs ty dst :: bb) rs m)
+  | exec_Lgetstack: forall s f sp sl ofs q dst bb rs m rs',
+      rs' = Locmap.set (R dst) (rs @ (S sl ofs q)) (undef_regs (destroyed_by_getstack sl) rs) ->
+      step (Block s f sp (Lgetstack sl ofs q dst :: bb) rs m)
         E0 (Block s f sp bb rs' m)
-  | exec_Lsetstack: forall s f sp src sl ofs ty bb rs m rs',
-      rs' = Locmap.set (S sl ofs ty) (rs @ (R src)) (undef_regs (destroyed_by_setstack ty) rs) ->
-      step (Block s f sp (Lsetstack src sl ofs ty :: bb) rs m)
+  | exec_Lsetstack: forall s f sp src sl ofs q bb rs m rs',
+      rs' = Locmap.set (S sl ofs q) (rs @ (R src)) (undef_regs (destroyed_by_setstack q) rs) ->
+      step (Block s f sp (Lsetstack src sl ofs q :: bb) rs m)
         E0 (Block s f sp bb rs' m)
   | exec_Lstore: forall s f sp chunk addr args src bb rs m a rs' m',
       eval_addressing ge sp addr (reglist rs args) = Some a ->

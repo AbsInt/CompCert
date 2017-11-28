@@ -684,7 +684,7 @@ Opaque loadind.
   simpl; intros. rewrite R; auto with asmgen.
   apply preg_of_not_X30; auto.
 (* GPR11 does not contain parent *)
-  rewrite chunk_of_Tptr in A. 
+  rewrite chunk_of_quantity_of_Tptr in A.
   exploit loadind_ptr_correct. eexact A. congruence. intros [rs1 [P [Q R]]].
   exploit loadind_correct. eexact EQ. instantiate (2 := rs1). rewrite Q. eauto. congruence.
   intros [rs2 [S [T U]]].
@@ -934,7 +934,7 @@ Local Transparent destroyed_by_op.
   set (tf := {| fn_sig := Mach.fn_sig f; fn_code := tfbody |}) in *.
   set (rs2 := nextinstr (rs0#X30 <- (parent_sp s) #SP <- sp #X31 <- Vundef)).
   exploit (storeind_ptr_correct tge tf SP (fn_retaddr_ofs f) RA x0 rs2 m2').
-    rewrite chunk_of_Tptr in P. change (rs2 X1) with (rs0 X1). rewrite ATLR. 
+    rewrite chunk_of_quantity_of_Tptr in P. change (rs2 X1) with (rs0 X1). rewrite ATLR.
     change (rs2 X2) with sp. eexact P. 
     congruence. congruence.
   intros (rs3 & U & V).
@@ -945,7 +945,7 @@ Local Transparent destroyed_by_op.
   { change (fn_code tf) with tfbody; unfold tfbody.
     apply exec_straight_step with rs2 m2'.
     unfold exec_instr. rewrite C. fold sp.
-    rewrite <- (sp_val _ _ _ AG). rewrite chunk_of_Tptr in F. rewrite F. reflexivity.
+    rewrite <- (sp_val _ _ _ AG). rewrite chunk_of_quantity_of_Tptr in F. rewrite F. reflexivity.
     reflexivity. 
     eexact U. }
   exploit exec_straight_steps_2; eauto using functions_transl. omega. constructor.

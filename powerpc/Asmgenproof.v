@@ -866,7 +866,7 @@ Local Transparent destroyed_by_jumptable.
   set (tfbody := Pallocframe (fn_stacksize f) (fn_link_ofs f)
                       (fn_retaddr_ofs f)
                     :: Pmflr GPR0
-                       :: Pstw GPR0 (Cint (Ptrofs.to_int (fn_retaddr_ofs f)))
+                       :: Pstw_a GPR0 (Cint (Ptrofs.to_int (fn_retaddr_ofs f)))
                             GPR1
                           :: Pcfi_rel_offset
                                (Ptrofs.to_int (fn_retaddr_ofs f)) :: x0) in *.
@@ -875,6 +875,7 @@ Local Transparent destroyed_by_jumptable.
   set (rs3 := nextinstr (rs2#GPR0 <- (rs0#LR))).
   set (rs4 := nextinstr rs3).
   set (rs5 := nextinstr rs4).
+  simpl chunk_of_quantity in *.
   assert (EXEC_PROLOGUE:
             exec_straight tge tf
               tf.(fn_code) rs0 m'

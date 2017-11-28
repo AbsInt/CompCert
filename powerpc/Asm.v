@@ -247,6 +247,8 @@ Inductive instruction : Type :=
   | Plfdx_a: freg -> ireg -> ireg -> instruction              (**r same, with 2 index regs *)
   | Plfs: freg -> constant -> ireg -> instruction             (**r load 32-bit float *)
   | Plfsx: freg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
+  | Plfs_a: freg -> constant -> ireg -> instruction           (**r load 32-bit float *)
+  | Plfsx_a: freg -> ireg -> ireg -> instruction              (**r same, with 2 index regs *)
   | Plha: ireg -> constant -> ireg -> instruction             (**r load 16-bit signed int *)
   | Plhax: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
   | Plhbrx: ireg -> ireg -> ireg -> instruction               (**r load 16-bit int and reverse endianness *)
@@ -319,6 +321,8 @@ Inductive instruction : Type :=
   | Pstfdx_a: freg -> ireg -> ireg -> instruction             (**r same, with 2 index regs *)
   | Pstfs: freg -> constant -> ireg -> instruction            (**r store 32-bit float *)
   | Pstfsx: freg -> ireg -> ireg -> instruction               (**r same, with 2 index regs *)
+  | Pstfs_a: freg -> constant -> ireg -> instruction          (**r store 32-bit float *)
+  | Pstfsx_a: freg -> ireg -> ireg -> instruction             (**r same, with 2 index regs *)
   | Psth: ireg -> constant -> ireg -> instruction             (**r store 16-bit int *)
   | Psthx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
   | Psthbrx: ireg -> ireg -> ireg -> instruction              (**r store 16-bit int with reverse endianness *)
@@ -710,7 +714,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pallocframe sz ofs _ =>
       let (m1, stk) := Mem.alloc m 0 sz in
       let sp := Vptr stk Ptrofs.zero in
-      match Mem.storev Mint32 m1 (Val.offset_ptr sp ofs) rs#GPR1 with
+      match Mem.storev Many32 m1 (Val.offset_ptr sp ofs) rs#GPR1 with
       | None => Stuck
       | Some m2 => Next (nextinstr (rs#GPR1 <- sp #GPR0 <- Vundef)) m2
       end
@@ -802,7 +806,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pextzw rd r1 =>
       Next (nextinstr (rs#rd <- (Val.longofintu rs#r1))) m
   | Pfreeframe sz ofs =>
-      match Mem.loadv Mint32 m (Val.offset_ptr rs#GPR1 ofs) with
+      match Mem.loadv Many32 m (Val.offset_ptr rs#GPR1 ofs) with
       | None => Stuck
       | Some v =>
           match rs#GPR1 with
@@ -884,6 +888,10 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       load1 Mfloat32 rd cst r1 rs m
   | Plfsx rd r1 r2 =>
       load2 Mfloat32 rd r1 r2 rs m
+  | Plfs_a rd cst r1 =>
+      load1 Many32 rd cst r1 rs m
+  | Plfsx_a rd r1 r2 =>
+      load2 Many32 rd r1 r2 rs m
   | Plha rd cst r1 =>
       load1 Mint16signed rd cst r1 rs m
   | Plhax rd r1 r2 =>
@@ -1003,6 +1011,10 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       store1 Mfloat32 rd cst r1 rs m
   | Pstfsx rd r1 r2 =>
       store2 Mfloat32 rd r1 r2 rs m
+  | Pstfs_a rd cst r1 =>
+      store1 Many32 rd cst r1 rs m
+  | Pstfsx_a rd r1 r2 =>
+      store2 Many32 rd r1 r2 rs m
   | Psth rd cst r1 =>
       store1 Mint16unsigned rd cst r1 rs m
   | Psthx rd r1 r2 =>
@@ -1146,11 +1158,11 @@ Definition undef_caller_save_regs (rs: regset) : regset :=
 Inductive extcall_arg (rs: regset) (m: mem): loc -> val -> Prop :=
   | extcall_arg_reg: forall r,
       extcall_arg rs m (R r) (rs (preg_of r))
-  | extcall_arg_stack: forall ofs ty bofs v,
+  | extcall_arg_stack: forall ofs q bofs v,
       bofs = Stacklayout.fe_ofs_arg + 4 * ofs ->
-      Mem.loadv (chunk_of_type ty) m
+      Mem.loadv (chunk_of_quantity q) m
                 (Val.offset_ptr (rs (IR GPR1)) (Ptrofs.repr bofs)) = Some v ->
-      extcall_arg rs m (S Outgoing ofs ty) v.
+      extcall_arg rs m (S Outgoing ofs q) v.
 
 Inductive extcall_arg_pair (rs: regset) (m: mem): rpair loc -> val -> Prop :=
   | extcall_arg_one: forall l v,

@@ -742,22 +742,22 @@ Proof.
 Qed.
 
 Lemma loadind_correct:
-  forall (base: ireg) ofs ty dst k (rs: regset) m v c,
-  loadind base ofs ty dst k = OK c ->
-  Mem.loadv (chunk_of_type ty) m (Val.offset_ptr rs#base ofs) = Some v ->
+  forall (base: ireg) ofs q dst k (rs: regset) m v c,
+  loadind base ofs q dst k = OK c ->
+  Mem.loadv (chunk_of_quantity q) m (Val.offset_ptr rs#base ofs) = Some v ->
   base <> GPR0 ->
   exists rs',
      exec_straight ge fn c rs m k rs' m
   /\ rs'#(preg_of dst) = v
   /\ forall r, r <> PC -> r <> preg_of dst -> r <> GPR0 -> rs'#r = rs#r.
 Proof.
-  unfold loadind; intros. destruct ty; try discriminate; destruct (preg_of dst); inv H; simpl in H0.
-  apply accessind_load_correct with (inj := IR) (chunk := Mint32); auto with asmgen.
-  apply accessind_load_correct with (inj := FR) (chunk := Mfloat64); auto with asmgen.
-  apply accessind_load_correct with (inj := IR) (chunk := Mint64); auto with asmgen.
-  apply accessind_load_correct with (inj := FR) (chunk := Mfloat32); auto with asmgen.
+  unfold loadind; intros.
+  destruct q, Archi.ppc64; try discriminate; destruct (preg_of dst); inv H; simpl in H0.
+  apply accessind_load_correct with (inj := FR) (chunk := Many32); auto with asmgen.
   apply accessind_load_correct with (inj := IR) (chunk := Many32); auto with asmgen.
+  apply accessind_load_correct with (inj := FR) (chunk := Many32); auto with asmgen.
   apply accessind_load_correct with (inj := IR) (chunk := Many64); auto with asmgen.
+  apply accessind_load_correct with (inj := FR) (chunk := Many64); auto with asmgen.
   apply accessind_load_correct with (inj := FR) (chunk := Many64); auto with asmgen.
 Qed.
 
@@ -795,9 +795,9 @@ Proof.
 Qed.
 
 Lemma storeind_correct:
-  forall (base: ireg) ofs ty src k (rs: regset) m m' c,
-  storeind src base ofs ty k = OK c ->
-  Mem.storev (chunk_of_type ty) m (Val.offset_ptr rs#base ofs) (rs#(preg_of src)) = Some m' ->
+  forall (base: ireg) ofs q src k (rs: regset) m m' c,
+  storeind src base ofs q k = OK c ->
+  Mem.storev (chunk_of_quantity q) m (Val.offset_ptr rs#base ofs) (rs#(preg_of src)) = Some m' ->
   base <> GPR0 ->
   exists rs',
      exec_straight ge fn c rs m k rs' m'
@@ -805,13 +805,12 @@ Lemma storeind_correct:
 Proof.
   unfold storeind; intros.
   assert (preg_of src <> GPR0) by auto with asmgen.
-  destruct ty; try discriminate; destruct (preg_of src) ; inv H; simpl in H0.
-  apply accessind_store_correct with (inj := IR) (chunk := Mint32); auto with asmgen.
-  apply accessind_store_correct with (inj := FR) (chunk := Mfloat64); auto with asmgen.
-  apply accessind_store_correct with (inj := IR) (chunk := Mint64); auto with asmgen.
-  apply accessind_store_correct with (inj := FR) (chunk := Mfloat32); auto with asmgen.
+  destruct q, Archi.ppc64; try discriminate; destruct (preg_of src) ; inv H; simpl in H0.
+  apply accessind_store_correct with (inj := FR) (chunk := Many32); auto with asmgen.
   apply accessind_store_correct with (inj := IR) (chunk := Many32); auto with asmgen.
+  apply accessind_store_correct with (inj := FR) (chunk := Many32); auto with asmgen.
   apply accessind_store_correct with (inj := IR) (chunk := Many64); auto with asmgen.
+  apply accessind_store_correct with (inj := FR) (chunk := Many64); auto with asmgen.
   apply accessind_store_correct with (inj := FR) (chunk := Many64); auto with asmgen.
 Qed.
 
@@ -1663,8 +1662,8 @@ Qed.
 
 Lemma transl_epilogue_correct:
   forall ge0 f m stk soff cs m' ms rs k tm,
-  load_stack m (Vptr stk soff) Tptr f.(fn_link_ofs) = Some (parent_sp cs) ->
-  load_stack m (Vptr stk soff) Tptr f.(fn_retaddr_ofs) = Some (parent_ra cs) ->
+  load_stack m (Vptr stk soff) (quantity_of_typ Tptr) f.(fn_link_ofs) = Some (parent_sp cs) ->
+  load_stack m (Vptr stk soff) (quantity_of_typ Tptr) f.(fn_retaddr_ofs) = Some (parent_ra cs) ->
   Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
   agree ms (Vptr stk soff) rs ->
   (is_leaf_function f = true -> rs#LR = parent_ra cs) ->

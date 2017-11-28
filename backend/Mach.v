@@ -52,9 +52,9 @@ Require Stacklayout.
 Definition label := positive.
 
 Inductive instruction: Type :=
-  | Mgetstack: ptrofs -> typ -> mreg -> instruction
-  | Msetstack: mreg -> ptrofs -> typ -> instruction
-  | Mgetparam: ptrofs -> typ -> mreg -> instruction
+  | Mgetstack: ptrofs -> quantity -> mreg -> instruction
+  | Msetstack: mreg -> ptrofs -> quantity -> instruction
+  | Mgetparam: ptrofs -> quantity -> mreg -> instruction
   | Mop: operation -> list mreg -> mreg -> instruction
   | Mload: memory_chunk -> addressing -> list mreg -> mreg -> instruction
   | Mstore: memory_chunk -> addressing -> list mreg -> mreg -> instruction
@@ -94,11 +94,11 @@ Definition genv := Genv.t fundef unit.
   on the interpretation of stack slot accesses.  In Mach, these
   accesses are interpreted as memory accesses relative to the
   stack pointer.  More precisely:
-- [Mgetstack ofs ty r] is a memory load at offset [ofs * 4] relative
+- [Mgetstack ofs q r] is a memory load at offset [ofs * 4] relative
   to the stack pointer.
-- [Msetstack r ofs ty] is a memory store at offset [ofs * 4] relative
+- [Msetstack r ofs q] is a memory store at offset [ofs * 4] relative
   to the stack pointer.
-- [Mgetparam ofs ty r] is a memory load at offset [ofs * 4]
+- [Mgetparam ofs q r] is a memory load at offset [ofs * 4]
   relative to the pointer found at offset 0 from the stack pointer.
   The semantics maintain a linked structure of activation records,
   with the current record containing a pointer to the record of the
@@ -118,11 +118,11 @@ value of the return address that the Asm code generated later will
 store in the reserved location.
 *)
 
-Definition load_stack (m: mem) (sp: val) (ty: typ) (ofs: ptrofs) :=
-  Mem.loadv (chunk_of_type ty) m (Val.offset_ptr sp ofs).
+Definition load_stack (m: mem) (sp: val) (q: quantity) (ofs: ptrofs) :=
+  Mem.loadv (chunk_of_quantity q) m (Val.offset_ptr sp ofs).
 
-Definition store_stack (m: mem) (sp: val) (ty: typ) (ofs: ptrofs) (v: val) :=
-  Mem.storev (chunk_of_type ty) m (Val.offset_ptr sp ofs) v.
+Definition store_stack (m: mem) (sp: val) (q: quantity) (ofs: ptrofs) (v: val) :=
+  Mem.storev (chunk_of_quantity q) m (Val.offset_ptr sp ofs) v.
 
 Module RegEq.
   Definition t := mreg.
@@ -228,9 +228,9 @@ Definition find_function_ptr
 Inductive extcall_arg (rs: regset) (m: mem) (sp: val): loc -> val -> Prop :=
   | extcall_arg_reg: forall r,
       extcall_arg rs m sp (R r) (rs r)
-  | extcall_arg_stack: forall ofs ty v,
-      load_stack m sp ty (Ptrofs.repr (Stacklayout.fe_ofs_arg + 4 * ofs)) = Some v ->
-      extcall_arg rs m sp (S Outgoing ofs ty) v.
+  | extcall_arg_stack: forall ofs q v,
+      load_stack m sp q (Ptrofs.repr (Stacklayout.fe_ofs_arg + 4 * ofs)) = Some v ->
+      extcall_arg rs m sp (S Outgoing ofs q) v.
 
 Inductive extcall_arg_pair (rs: regset) (m: mem) (sp: val): rpair loc -> val -> Prop :=
   | extcall_arg_one: forall l v,
@@ -296,23 +296,23 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State s f sp (Mlabel lbl :: c) rs m)
         E0 (State s f sp c rs m)
   | exec_Mgetstack:
-      forall s f sp ofs ty dst c rs m v,
-      load_stack m sp ty ofs = Some v ->
-      step (State s f sp (Mgetstack ofs ty dst :: c) rs m)
+      forall s f sp ofs q dst c rs m v,
+      load_stack m sp q ofs = Some v ->
+      step (State s f sp (Mgetstack ofs q dst :: c) rs m)
         E0 (State s f sp c (rs#dst <- v) m)
   | exec_Msetstack:
-      forall s f sp src ofs ty c rs m m' rs',
-      store_stack m sp ty ofs (rs src) = Some m' ->
-      rs' = undef_regs (destroyed_by_setstack ty) rs ->
-      step (State s f sp (Msetstack src ofs ty :: c) rs m)
+      forall s f sp src ofs q c rs m m' rs',
+      store_stack m sp q ofs (rs src) = Some m' ->
+      rs' = undef_regs (destroyed_by_setstack q) rs ->
+      step (State s f sp (Msetstack src ofs q :: c) rs m)
         E0 (State s f sp c rs' m')
   | exec_Mgetparam:
-      forall s fb f sp ofs ty dst c rs m v rs',
+      forall s fb f sp ofs q dst c rs m v rs',
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
-      load_stack m sp Tptr f.(fn_link_ofs) = Some (parent_sp s) ->
-      load_stack m (parent_sp s) ty ofs = Some v ->
+      load_stack m sp (quantity_of_typ Tptr) f.(fn_link_ofs) = Some (parent_sp s) ->
+      load_stack m (parent_sp s) q ofs = Some v ->
       rs' = (rs # temp_for_parent_frame <- Vundef # dst <- v) ->
-      step (State s fb sp (Mgetparam ofs ty dst :: c) rs m)
+      step (State s fb sp (Mgetparam ofs q dst :: c) rs m)
         E0 (State s fb sp c rs' m)
   | exec_Mop:
       forall s f sp op args res c rs m v rs',
@@ -346,8 +346,8 @@ Inductive step: state -> trace -> state -> Prop :=
       forall s fb stk soff sig ros c rs m f f' m',
       find_function_ptr ge ros rs = Some f' ->
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
-      load_stack m (Vptr stk soff) Tptr f.(fn_link_ofs) = Some (parent_sp s) ->
-      load_stack m (Vptr stk soff) Tptr f.(fn_retaddr_ofs) = Some (parent_ra s) ->
+      load_stack m (Vptr stk soff) (quantity_of_typ Tptr) f.(fn_link_ofs) = Some (parent_sp s) ->
+      load_stack m (Vptr stk soff) (quantity_of_typ Tptr) f.(fn_retaddr_ofs) = Some (parent_ra s) ->
       Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
       step (State s fb (Vptr stk soff) (Mtailcall sig ros :: c) rs m)
         E0 (Callstate s f' rs m')
@@ -390,8 +390,8 @@ Inductive step: state -> trace -> state -> Prop :=
   | exec_Mreturn:
       forall s fb stk soff c rs m f m',
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
-      load_stack m (Vptr stk soff) Tptr f.(fn_link_ofs) = Some (parent_sp s) ->
-      load_stack m (Vptr stk soff) Tptr f.(fn_retaddr_ofs) = Some (parent_ra s) ->
+      load_stack m (Vptr stk soff) (quantity_of_typ Tptr) f.(fn_link_ofs) = Some (parent_sp s) ->
+      load_stack m (Vptr stk soff) (quantity_of_typ Tptr) f.(fn_retaddr_ofs) = Some (parent_ra s) ->
       Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
       step (State s fb (Vptr stk soff) (Mreturn :: c) rs m)
         E0 (Returnstate s rs m')
@@ -400,8 +400,8 @@ Inductive step: state -> trace -> state -> Prop :=
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       Mem.alloc m 0 f.(fn_stacksize) = (m1, stk) ->
       let sp := Vptr stk Ptrofs.zero in
-      store_stack m1 sp Tptr f.(fn_link_ofs) (parent_sp s) = Some m2 ->
-      store_stack m2 sp Tptr f.(fn_retaddr_ofs) (parent_ra s) = Some m3 ->
+      store_stack m1 sp (quantity_of_typ Tptr) f.(fn_link_ofs) (parent_sp s) = Some m2 ->
+      store_stack m2 sp (quantity_of_typ Tptr) f.(fn_retaddr_ofs) (parent_ra s) = Some m3 ->
       rs' = undef_regs destroyed_at_function_entry rs ->
       step (Callstate s fb rs m)
         E0 (State s fb sp f.(fn_code) rs' m3)

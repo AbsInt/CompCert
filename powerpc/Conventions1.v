@@ -223,15 +223,23 @@ Fixpoint loc_arguments_rec
   | (Tint | Tany32) as ty :: tys =>
       match list_nth_z int_param_regs ir with
       | None =>
-          One (S Outgoing ofs ty) :: loc_arguments_rec tys ir fr (ofs + 1)
+          One (S Outgoing ofs Q32) :: loc_arguments_rec tys ir fr (ofs + 1)
       | Some ireg =>
           One (R ireg) :: loc_arguments_rec tys (ir + 1) fr ofs
       end
-  | (Tfloat | Tsingle | Tany64) as ty :: tys =>
+  | Tsingle as ty :: tys =>
       match list_nth_z float_param_regs fr with
       | None =>
           let ofs := align ofs 2 in
-          One (S Outgoing ofs ty) :: loc_arguments_rec tys ir fr (ofs + 2)
+          One (S Outgoing ofs Q32) :: loc_arguments_rec tys ir fr (ofs + 2)
+      | Some freg =>
+          One (R freg) :: loc_arguments_rec tys ir (fr + 1) ofs
+      end
+  | (Tfloat | Tany64) as ty :: tys =>
+      match list_nth_z float_param_regs fr with
+      | None =>
+          let ofs := align ofs 2 in
+          One (S Outgoing ofs Q64) :: loc_arguments_rec tys ir fr (ofs + 2)
       | Some freg =>
           One (R freg) :: loc_arguments_rec tys ir (fr + 1) ofs
       end
@@ -243,8 +251,8 @@ Fixpoint loc_arguments_rec
       | _, _ =>
           let ofs := align ofs 2 in
           (if Archi.ptr64
-           then One (S Outgoing ofs Tlong)
-           else Twolong (S Outgoing ofs Tint) (S Outgoing (ofs + 1) Tint)) ::
+           then One (S Outgoing ofs Q64)
+           else Twolong (S Outgoing ofs Q32) (S Outgoing (ofs + 1) Q32)) ::
           loc_arguments_rec tys ir fr (ofs + 2)
       end
   end.
@@ -288,14 +296,14 @@ Definition size_arguments (s: signature) : Z :=
 Definition loc_argument_acceptable (l: loc) : Prop :=
   match l with
   | R r => is_callee_save r = false
-  | S Outgoing ofs ty => ofs >= 0 /\ (typealign ty | ofs)
+  | S Outgoing ofs q => ofs >= 0 /\ (quantity_align q | ofs)
   | _ => False
   end.
 
 Definition loc_argument_charact (ofs: Z) (l: loc) : Prop :=
   match l with
   | R r => In r int_param_regs \/ In r float_param_regs
-  | S Outgoing ofs' ty => ofs' >= ofs /\ (typealign ty | ofs')
+  | S Outgoing ofs' q => ofs' >= ofs /\ (quantity_align q | ofs')
   | _ => False
   end.
 
@@ -334,11 +342,11 @@ Opaque list_nth_z.
   eapply IHtyl; eauto.
   destruct H.
   subst. destruct Archi.ptr64; [split|split;split]; try omega.
-  apply align_divides; omega. apply Z.divide_1_l. apply Z.divide_1_l.
+  apply Z.divide_1_l. apply Z.divide_1_l. apply Z.divide_1_l.
   eapply Y; eauto. omega.
   destruct H.
   subst. destruct Archi.ptr64; [split|split;split]; try omega.
-  apply align_divides; omega. apply Z.divide_1_l. apply Z.divide_1_l.
+  apply Z.divide_1_l. apply Z.divide_1_l. apply Z.divide_1_l.
   eapply Y; eauto. omega.
 - (* single *)
   assert (ofs <= align ofs 2) by (apply align_le; omega).
@@ -415,18 +423,18 @@ Proof.
 Qed.
 
 Lemma loc_arguments_bounded:
-  forall (s: signature) (ofs: Z) (ty: typ),
-  In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments s)) ->
-  ofs + typesize ty <= size_arguments s.
+  forall (s: signature) (ofs: Z) (q: quantity),
+  In (S Outgoing ofs q) (regs_of_rpairs (loc_arguments s)) ->
+  ofs + typesize (typ_of_quantity q) <= size_arguments s.
 Proof.
   intros.
   assert (forall tyl ir fr ofs0,
-    In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments_rec tyl ir fr ofs0)) ->
-    ofs + typesize ty <= size_arguments_rec tyl ir fr ofs0).
+    In (S Outgoing ofs q) (regs_of_rpairs (loc_arguments_rec tyl ir fr ofs0)) ->
+    ofs + typesize (typ_of_quantity q) <= size_arguments_rec tyl ir fr ofs0).
 {
   induction tyl; simpl; intros.
   elim H0.
-  destruct a.
+  destruct a eqn:A.
 - (* int *)
   destruct (list_nth_z int_param_regs ir); destruct H0.
   congruence.
@@ -441,13 +449,13 @@ Proof.
 - (* long *)
   set (ir' := align ir 2) in *.
   assert (DFL:
-    In (S Outgoing ofs ty) (regs_of_rpairs
+    In (S Outgoing ofs q) (regs_of_rpairs
                              ((if Archi.ptr64
-                               then One (S Outgoing (align ofs0 2) Tlong)
-                               else Twolong (S Outgoing (align ofs0 2) Tint)
-                                            (S Outgoing (align ofs0 2 + 1) Tint))
+                               then One (S Outgoing (align ofs0 2) Q64)
+                               else Twolong (S Outgoing (align ofs0 2) Q32)
+                                            (S Outgoing (align ofs0 2 + 1) Q32))
                           :: loc_arguments_rec tyl ir' fr (align ofs0 2 + 2))) ->
-    ofs + typesize ty <= size_arguments_rec tyl ir' fr (align ofs0 2 + 2)).
+    ofs + typesize (typ_of_quantity q) <= size_arguments_rec tyl ir' fr (align ofs0 2 + 2)).
   { destruct Archi.ptr64; intros IN.
   - destruct IN. inv H1. apply size_arguments_rec_above. auto.
   - destruct IN. inv H1. transitivity (align ofs0 2 + 2). simpl; omega. apply size_arguments_rec_above.

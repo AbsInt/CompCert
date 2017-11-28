@@ -210,9 +210,11 @@ Inductive instruction : Type :=
   | Pfldd: freg -> ireg -> int -> instruction       (**r float64 load *)
   | Pfldd_a: freg -> ireg -> int -> instruction     (**r any64 load to FP reg *)
   | Pflds: freg -> ireg -> int -> instruction       (**r float32 load *)
+  | Pflds_a: freg -> ireg -> int -> instruction     (**r any32 load to FP reg *)
   | Pfstd: freg -> ireg -> int -> instruction       (**r float64 store *)
   | Pfstd_a: freg -> ireg -> int -> instruction     (**r any64 store from FP reg *)
   | Pfsts: freg -> ireg -> int -> instruction       (**r float32 store *)
+  | Pfsts_a: freg -> ireg -> int -> instruction     (**r any32 store from FP reg *)
 
   (* Pseudo-instructions *)
   | Pallocframe: Z -> ptrofs -> instruction         (**r allocate new stack frame *)
@@ -743,22 +745,26 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       exec_load Many64 (Val.add rs#r2 (Vint n)) r1 rs m
   | Pflds r1 r2 n =>
       exec_load Mfloat32 (Val.add rs#r2 (Vint n)) r1 rs m
+  | Pflds_a r1 r2 n =>
+      exec_load Many32 (Val.add rs#r2 (Vint n)) r1 rs m
   | Pfstd r1 r2 n =>
       exec_store Mfloat64 (Val.add rs#r2 (Vint n)) r1 rs m
   | Pfstd_a r1 r2 n =>
       exec_store Many64 (Val.add rs#r2 (Vint n)) r1 rs m
   | Pfsts r1 r2 n =>
       exec_store Mfloat32 (Val.add rs#r2 (Vint n)) r1 rs m
+  | Pfsts_a r1 r2 n =>
+      exec_store Many32 (Val.add rs#r2 (Vint n)) r1 rs m
   (* Pseudo-instructions *)
   | Pallocframe sz pos =>
       let (m1, stk) := Mem.alloc m 0 sz in
       let sp := (Vptr stk Ptrofs.zero) in
-      match Mem.storev Mint32 m1 (Val.offset_ptr sp pos) rs#IR13 with
+      match Mem.storev Many32 m1 (Val.offset_ptr sp pos) rs#IR13 with
       | None => Stuck
       | Some m2 => Next (nextinstr (rs #IR12 <- (rs#IR13) #IR13 <- sp)) m2
       end
   | Pfreeframe sz pos =>
-      match Mem.loadv Mint32 m (Val.offset_ptr rs#IR13 pos) with
+      match Mem.loadv Many32 m (Val.offset_ptr rs#IR13 pos) with
       | None => Stuck
       | Some v =>
           match rs#IR13 with
@@ -868,11 +874,11 @@ Definition undef_caller_save_regs (rs: regset) : regset :=
 Inductive extcall_arg (rs: regset) (m: mem): loc -> val -> Prop :=
   | extcall_arg_reg: forall r,
       extcall_arg rs m (R r) (rs (preg_of r))
-  | extcall_arg_stack: forall ofs ty bofs v,
+  | extcall_arg_stack: forall ofs q bofs v,
       bofs = Stacklayout.fe_ofs_arg + 4 * ofs ->
-      Mem.loadv (chunk_of_type ty) m
+      Mem.loadv (chunk_of_quantity q) m
                 (Val.offset_ptr (rs (IR IR13)) (Ptrofs.repr bofs)) = Some v ->
-      extcall_arg rs m (S Outgoing ofs ty) v.
+      extcall_arg rs m (S Outgoing ofs q) v.
 
 Inductive extcall_arg_pair (rs: regset) (m: mem): rpair loc -> val -> Prop :=
   | extcall_arg_one: forall l v,
