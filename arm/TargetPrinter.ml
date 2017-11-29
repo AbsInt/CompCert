@@ -20,19 +20,12 @@ open Asm
 open PrintAsmaux
 open Fileinfo
 
-(* Type for the ABI versions *)
-type float_abi_type =
-  | Hard
-  | Soft
-
 (* Module type for the options *)
 module type PRINTER_OPTIONS =
 sig
-  val float_abi: float_abi_type
   val vfpv3: bool
   val hardware_idiv: bool
 end
-
 
 (* Basic printing functions *)
 
@@ -746,11 +739,6 @@ let sel_target () =
   let module S : PRINTER_OPTIONS = struct
 
     let vfpv3 = Configuration.model >= "armv7"
-
-    let float_abi = match Configuration.abi with
-      | "eabi"      -> Soft
-      | "hardfloat" -> Hard
-      | _ -> assert false
 
     let hardware_idiv  =
       match  Configuration.model with
