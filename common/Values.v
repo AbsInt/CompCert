@@ -1181,6 +1181,16 @@ Proof.
   simpl. rewrite H0. decEq. decEq. symmetry. apply Int.divs_pow2. auto.
 Qed.
 
+Theorem divs_one:
+  forall s , divs (Vint s) (Vint Int.one) = Some (Vint s).
+Proof.
+   intros.
+   unfold divs. rewrite Int.eq_false; try discriminate.
+   simpl. rewrite (Int.eq_false Int.one Int.mone); try discriminate.
+   rewrite andb_false_intro2; auto. f_equal. f_equal.
+   rewrite Int.divs_one; auto. replace Int.zwordsize with 32; auto. omega.
+Qed.
+
 Theorem divu_pow2:
   forall x n logn y,
   Int.is_power2 n = Some logn ->
@@ -1192,6 +1202,13 @@ Proof.
   simpl.
   rewrite (Int.is_power2_range _ _ H).
   decEq. symmetry. apply Int.divu_pow2. auto.
+Qed.
+
+Theorem divu_one:
+  forall s, divu (Vint s) (Vint Int.one) = Some (Vint s).
+Proof.
+  intros. simpl. rewrite Int.eq_false; try discriminate.
+  f_equal. f_equal. apply Int.divu_one.
 Qed.
 
 Theorem modu_pow2:
@@ -1524,6 +1541,16 @@ Proof.
   rewrite Int64.repr_unsigned. auto.
 Qed.
 
+Theorem divls_one:
+  forall n, divls (Vlong n) (Vlong Int64.one) = Some (Vlong n).
+Proof.
+  intros. unfold divls. rewrite Int64.eq_false; try discriminate.
+  rewrite (Int64.eq_false Int64.one Int64.mone); try discriminate.
+  rewrite andb_false_intro2; auto.
+  simpl. f_equal. f_equal. apply Int64.divs_one.
+  replace Int64.zwordsize with 64; auto. omega.
+Qed.
+
 Theorem divlu_pow2:
   forall x n logn y,
   Int64.is_power2' n = Some logn ->
@@ -1535,6 +1562,13 @@ Proof.
   simpl.
   rewrite (Int64.is_power2'_range _ _ H).
   decEq. symmetry. apply Int64.divu_pow2'. auto.
+Qed.
+
+Theorem divlu_one:
+  forall n, divlu (Vlong n) (Vlong Int64.one) = Some (Vlong n).
+Proof.
+  intros. unfold divlu. rewrite Int64.eq_false; try discriminate.
+  simpl. f_equal. f_equal. apply Int64.divu_one.
 Qed.
 
 Theorem modlu_pow2:

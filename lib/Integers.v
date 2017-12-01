@@ -1178,6 +1178,12 @@ Proof.
   unfold divu; intros. rewrite unsigned_one. rewrite Zdiv_1_r. apply repr_unsigned.
 Qed.
 
+Theorem divs_one:
+  forall x, zwordsize > 1 -> divs x one = x.
+Proof.
+  unfold divs; intros. rewrite signed_one. rewrite Zquot_1_r. apply repr_signed. auto.
+Qed.
+
 Theorem modu_one:
   forall x, modu x one = zero.
 Proof.
