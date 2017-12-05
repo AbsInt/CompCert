@@ -248,18 +248,24 @@ Definition make_xorimm (n: int) (r: reg) :=
   else (Oxorimm n, r :: nil).
 
 Definition make_divimm n (r1 r2: reg) :=
-  match Int.is_power2 n with
-  | Some l => if Int.ltu l (Int.repr 31)
-              then (Oshrximm l, r1 :: nil)
-              else (Odiv, r1 :: r2 :: nil)
-  | None   => (Odiv, r1 :: r2 :: nil)
-  end.
+  if Int.eq n Int.one then
+    (Omove, r1 :: nil)
+  else
+    match Int.is_power2 n with
+    | Some l => if Int.ltu l (Int.repr 31)
+                then (Oshrximm l, r1 :: nil)
+                else (Odiv, r1 :: r2 :: nil)
+    | None   => (Odiv, r1 :: r2 :: nil)
+    end.
 
 Definition make_divuimm n (r1 r2: reg) :=
-  match Int.is_power2 n with
-  | Some l => (Oshruimm l, r1 :: nil)
-  | None   => (Odivu, r1 :: r2 :: nil)
-  end.
+  if Int.eq n Int.one then
+    (Omove, r1 :: nil)
+  else
+    match Int.is_power2 n with
+    | Some l => (Oshruimm l, r1 :: nil)
+    | None   => (Odivu, r1 :: r2 :: nil)
+    end.
 
 Definition make_moduimm n (r1 r2: reg) :=
   match Int.is_power2 n with

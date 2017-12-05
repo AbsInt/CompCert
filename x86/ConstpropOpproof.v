@@ -421,6 +421,10 @@ Lemma make_divimm_correct:
   exists w, eval_operation ge (Vptr sp Ptrofs.zero) op e##args m = Some w /\ Val.lessdef v w.
 Proof.
   intros; unfold make_divimm.
+  predSpec Int.eq Int.eq_spec n Int.one; intros. subst. rewrite H0 in H.
+  destruct (e#r1) eqn:?;
+    try (rewrite Val.divs_one in H; exists (Vint i); split; simpl; try rewrite Heqv0; auto);
+    inv H; auto.
   destruct (Int.is_power2 n) eqn:?.
   destruct (Int.ltu i (Int.repr 31)) eqn:?.
   exists v; split; auto. simpl. eapply Val.divs_pow2; eauto. congruence.
@@ -436,6 +440,10 @@ Lemma make_divuimm_correct:
   exists w, eval_operation ge (Vptr sp Ptrofs.zero) op e##args m = Some w /\ Val.lessdef v w.
 Proof.
   intros; unfold make_divuimm.
+  predSpec Int.eq Int.eq_spec n Int.one; intros. subst. rewrite H0 in H.
+  destruct (e#r1) eqn:?;
+    try (rewrite Val.divu_one in H; exists (Vint i); split; simpl; try rewrite Heqv0; auto);
+    inv H; auto.
   destruct (Int.is_power2 n) eqn:?.
   econstructor; split. simpl; eauto.
   rewrite H0 in H. erewrite Val.divu_pow2 by eauto. auto.
