@@ -27,12 +27,16 @@ Definition funenv : Type := PTree.t function.
 
 Definition size_fenv (fenv: funenv) := PTree_Properties.cardinal fenv.
 
-Parameter should_inline: ident -> function -> bool.
+Parameter inlining_info: Type.  (* abstract type, implemented on the Caml side *)
 
-Definition add_globdef (fenv: funenv) (idg: ident * globdef fundef unit) : funenv :=
+Parameter inlining_analysis: program -> inlining_info.
+
+Parameter should_inline: inlining_info -> ident -> function -> bool.
+
+Definition add_globdef (io: inlining_info) (fenv: funenv) (idg: ident * globdef fundef unit) : funenv :=
   match idg with
   | (id, Gfun (Internal f)) =>
-      if should_inline id f
+      if should_inline io id f
       then PTree.set id f fenv
       else PTree.remove id fenv
   | (id, _) =>
@@ -40,7 +44,8 @@ Definition add_globdef (fenv: funenv) (idg: ident * globdef fundef unit) : funen
   end.
 
 Definition funenv_program (p: program) : funenv :=
-  List.fold_left add_globdef p.(prog_defs) (PTree.empty function).
+  let io := inlining_analysis p in
+  List.fold_left (add_globdef io) p.(prog_defs) (PTree.empty function).
 
 (** State monad *)
 

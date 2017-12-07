@@ -39,19 +39,19 @@ Proof.
     discriminate.
     rewrite PTree.gso; auto.
   }
-  assert (ADD: forall dm fenv idg,
+  assert (ADD: forall io dm fenv idg,
              P dm fenv ->
-             P (PTree.set (fst idg) (snd idg) dm) (add_globdef fenv idg)).
-  { intros dm fenv [id g]; simpl; intros.
+             P (PTree.set (fst idg) (snd idg) dm) (add_globdef io fenv idg)).
+  { intros io dm fenv [id g]; simpl; intros.
     destruct g as [ [f|ef] | v]; auto.
-    destruct (should_inline id f); auto.
+    destruct (should_inline io id f); auto.
     red; intros. rewrite ! PTree.gsspec in *.
     destruct (peq id0 id); auto. inv H0; auto.
   }
-  assert (REC: forall l dm fenv,
+  assert (REC: forall p l dm fenv,
             P dm fenv ->
             P (fold_left (fun x idg => PTree.set (fst idg) (snd idg) x) l dm)
-              (fold_left add_globdef l fenv)).
+              (fold_left (add_globdef p) l fenv)).
   { induction l; simpl; intros.
   - auto.
   - apply IHl. apply ADD; auto.

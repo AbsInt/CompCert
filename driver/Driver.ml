@@ -268,6 +268,8 @@ Processing options:
   -fcse          Perform common subexpression elimination [on]
   -fredundancy   Perform redundancy elimination [on]
   -finline       Perform inlining of functions [on]
+  -finline-functions-called-once Integrate functions only required by their
+                 single caller [on]
 Code generation options: (use -fno-<opt> to turn off -f<opt>)
   -ffpu          Use FP registers for some integer operations [on]
   -fsmall-data <n>  Set maximal size <n> for allocation in small data area
@@ -337,7 +339,7 @@ let language_support_options = [
 ]
 
 let optimization_options = [
-  option_ftailcalls; option_fconstprop; option_fcse; option_fredundancy
+  option_ftailcalls; option_fconstprop; option_fcse; option_fredundancy; option_finline_functions_called_once;
 ]
 
 let set_all opts () = List.iter (fun r -> r := true) opts
@@ -458,6 +460,7 @@ let cmdline_actions =
   @ f_opt "cse" option_fcse
   @ f_opt "redundancy" option_fredundancy
   @ f_opt "inline" option_finline
+  @ f_opt "inline-functions-called-once" option_finline_functions_called_once
 (* Code generation options *)
   @ f_opt "fpu" option_ffpu
   @ f_opt "sse" option_ffpu (* backward compatibility *)

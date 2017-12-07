@@ -76,6 +76,8 @@ Extraction Inline RTLgen.ret RTLgen.error RTLgen.bind RTLgen.bind2.
 
 (* Inlining *)
 Extract Inlined Constant Inlining.should_inline => "Inliningaux.should_inline".
+Extract Inlined Constant Inlining.inlining_info => "Inliningaux.inlining_info".
+Extract Inlined Constant Inlining.inlining_analysis => "Inliningaux.inlining_analysis".
 Extraction Inline Inlining.ret Inlining.bind.
 
 (* Allocation *)
