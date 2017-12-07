@@ -26,13 +26,18 @@ open Csyntax
 (** Record useful information about global variables and functions,
   and associate it with the corresponding atoms. *)
 
+type atom_inline =
+  | No_specifier (* No inline specifier and no noinline attribute *)
+  | Noinline     (* The atom is declared with the noinline attribute *)
+  | Inline       (* The atom is declared inline *)
+
 type atom_info =
   { a_storage: C.storage;              (* storage class *)
     a_alignment: int option;           (* alignment *)
     a_sections: Sections.section_name list; (* in which section to put it *)
       (* 1 section for data, 3 sections (code/lit/jumptbl) for functions *)
     a_access: Sections.access_mode;    (* access mode, e.g. small data area *)
-    a_inline: bool;                    (* function declared inline? *)
+    a_inline: atom_inline;             (* function declared inline? *)
     a_loc: location                    (* source location *)
 }
 
@@ -76,7 +81,13 @@ let atom_is_rel_data a ofs =
 
 let atom_is_inline a =
   try
-    (Hashtbl.find decl_atom a).a_inline
+    (Hashtbl.find decl_atom a).a_inline = Inline
+  with Not_found ->
+    false
+
+let atom_is_noinline a =
+  try
+    (Hashtbl.find decl_atom a).a_inline = Noinline
   with Not_found ->
     false
 
@@ -89,7 +100,7 @@ let atom_is_iso_inline_definition a =
   try
     let i = Hashtbl.find decl_atom a in
     match i.a_storage with
-    | C.Storage_default -> i.a_inline
+    | C.Storage_default -> i.a_inline = Inline
     | _ -> false
   with Not_found ->
     false
@@ -325,7 +336,7 @@ let name_for_string_literal s =
         a_alignment = Some 1;
         a_sections = [Sections.for_stringlit()];
         a_access = Sections.Access_default;
-        a_inline = false;
+        a_inline = No_specifier;
         a_loc = Cutil.no_loc };
     Hashtbl.add stringTable s id;
     id
@@ -355,7 +366,7 @@ let name_for_wide_string_literal s =
         a_alignment = Some Machine.((!config).sizeof_wchar);
         a_sections = [Sections.for_stringlit()];
         a_access = Sections.Access_default;
-        a_inline = false;
+        a_inline = No_specifier;
         a_loc = Cutil.no_loc };
     Hashtbl.add wstringTable s id;
     id
@@ -1148,13 +1159,20 @@ let convertFundef loc env fd =
       fd.fd_locals in
   let body' = convertStmt env fd.fd_body in
   let id' = intern_string fd.fd_name.name in
+  let noinline =  Cutil.find_custom_attributes ["noinline";"__noinline__"] fd.fd_attrib = [] in
+  let inline = if noinline || fd.fd_vararg then (* PR#15 *)
+      Noinline
+    else if fd.fd_inline then
+      Inline
+    else
+      No_specifier in
   Debug.atom_global fd.fd_name id';
   Hashtbl.add decl_atom id'
     { a_storage = fd.fd_storage;
       a_alignment = None;
       a_sections = Sections.for_function env id' fd.fd_attrib;
       a_access = Sections.Access_default;
-      a_inline = fd.fd_inline && not fd.fd_vararg;  (* PR#15 *)
+      a_inline = inline;
       a_loc = loc };
   (id',  AST.Gfun(Ctypes.Internal
           {fn_return = ret;
@@ -1240,7 +1258,7 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
       a_alignment = Some (Z.to_int al);
       a_sections = [section];
       a_access = access;
-      a_inline = false;
+      a_inline = No_specifier;
       a_loc = loc };
   let volatile = List.mem C.AVolatile attr in
   let readonly = List.mem C.AConst attr && not volatile in
