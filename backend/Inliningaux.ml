@@ -77,9 +77,9 @@ let inlining_analysis (p: program) =
     empty_inlining_info
 
 (* Test whether a function is static and called only once *)
-let static_called_once id io =
+let static_called_once fn_sig id io =
   if !Clflags.option_finline_functions_called_once then
-    C2C.atom_is_static id && call_count id io <= 1 && not (address_taken id io)
+    C2C.atom_is_static id && call_count id io <= 1 && not (address_taken id io) && not fn_sig.sig_cc.cc_vararg
   else
     false
 
@@ -87,6 +87,6 @@ let static_called_once id io =
 
 let should_inline (io: inlining_info) (id: ident) (f: coq_function) =
   if !Clflags.option_finline then
-    C2C.atom_is_inline id || static_called_once id io
+    C2C.atom_is_inline id || static_called_once f.fn_sig id io
   else
     false
