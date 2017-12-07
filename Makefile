@@ -282,7 +282,7 @@ check-admitted: $(FILES)
 # compcert.backend.SelectDivproof.divs_mul_shift_2 takes forever to check
 
 check-proof: $(FILES)
-	$(COQCHK) -admit Integers -admit SelectDivproof Complements
+	$(COQCHK) -admit compcert.lib.Integers -admit compcert.backend.SelectDivproof compcert.driver.Complements
 
 print-includes:
 	@echo $(COQINCLUDES)
