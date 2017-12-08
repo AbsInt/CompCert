@@ -86,7 +86,10 @@ let static_called_once id io =
 (* To be considered: heuristics based on size of function? *)
 
 let should_inline (io: inlining_info) (id: ident) (f: coq_function) =
-  if !Clflags.option_finline && not (C2C.atom_is_noinline id) then
-    C2C.atom_is_inline id || static_called_once id io
-  else
+  if !Clflags.option_finline then begin
+    match C2C.atom_inline id with
+    | C2C.Inline -> true
+    | C2C.Noinline -> false
+    | C2C.No_specifier -> static_called_once id io
+  end else
     false

@@ -26,7 +26,7 @@ open Csyntax
 (** Record useful information about global variables and functions,
   and associate it with the corresponding atoms. *)
 
-type atom_inline =
+type inline_status =
   | No_specifier (* No inline specifier and no noinline attribute *)
   | Noinline     (* The atom is declared with the noinline attribute *)
   | Inline       (* The atom is declared inline *)
@@ -37,7 +37,7 @@ type atom_info =
     a_sections: Sections.section_name list; (* in which section to put it *)
       (* 1 section for data, 3 sections (code/lit/jumptbl) for functions *)
     a_access: Sections.access_mode;    (* access mode, e.g. small data area *)
-    a_inline: atom_inline;             (* function declared inline? *)
+    a_inline: inline_status;           (* function declared inline? *)
     a_loc: location                    (* source location *)
 }
 
@@ -79,17 +79,11 @@ let atom_is_rel_data a ofs =
   with Not_found ->
     false
 
-let atom_is_inline a =
+let atom_inline a =
   try
-    (Hashtbl.find decl_atom a).a_inline = Inline
+    (Hashtbl.find decl_atom a).a_inline
   with Not_found ->
-    false
-
-let atom_is_noinline a =
-  try
-    (Hashtbl.find decl_atom a).a_inline = Noinline
-  with Not_found ->
-    false
+    No_specifier
 
 (** Iso C99 defines inline definitions of functions as functions
     with inline specifier and without extern. These functions do
