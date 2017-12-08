@@ -59,7 +59,7 @@ let pp_int_opt pp = function
 
 let pp_fundef pp_inst pp (name,fn) =
   let alignment = atom_alignof name
-  and inline = atom_is_inline name
+  and inline = atom_inline name = Inline
   and static = atom_is_static name
   and c_section,l_section,j_section = match (atom_sections name) with [a;b;c] -> a,b,c | _ -> assert false in
   pp_jobject_start pp;
