@@ -1153,7 +1153,7 @@ let convertFundef loc env fd =
       fd.fd_locals in
   let body' = convertStmt env fd.fd_body in
   let id' = intern_string fd.fd_name.name in
-  let noinline =  Cutil.find_custom_attributes ["noinline";"__noinline__"] fd.fd_attrib = [] in
+  let noinline =  Cutil.find_custom_attributes ["noinline";"__noinline__"] fd.fd_attrib <> [] in
   let inline = if noinline || fd.fd_vararg then (* PR#15 *)
       Noinline
     else if fd.fd_inline then
