@@ -2529,7 +2529,7 @@ let rec elab_stmt env ctx s =
       { sdesc = Sdowhile(s1', a'); sloc = elab_loc loc },env
 
   | FOR(fc, a2, a3, s1, loc) ->
-      let (a1', env', decls') =
+      let (a1', env_decls, decls') =
         match fc with
         | Some (FC_EXP a1) ->
             let a1,env = elab_for_expr ctx.ctx_vararg loc env (Some a1) in
@@ -2542,15 +2542,15 @@ let rec elab_stmt env ctx s =
             let loc = elab_loc (Cabshelper.get_definitionloc def) in
             (sskip, env',
              Some(List.map (fun d -> {sdesc = Sdecl d; sloc = loc}) dcl)) in
-      let a2',env =
+      let a2',env_test =
         match a2 with
-          | None -> intconst 1L IInt,env
-          | Some a2 -> elab_expr ctx.ctx_vararg loc env' a2
+          | None -> intconst 1L IInt,env_decls
+          | Some a2 -> elab_expr ctx.ctx_vararg loc env_decls a2
       in
-      if not (is_scalar_type env' a2'.etyp) then
+      if not (is_scalar_type env_test a2'.etyp) then
         error loc "controlling expression of 'for' does not have scalar type (%a invalid)" (print_typ env) a2'.etyp;
-      let a3',env' = elab_for_expr ctx.ctx_vararg loc env' a3 in
-      let s1',env' = elab_stmt env' (ctx_loop ctx) s1 in
+      let a3',env_for = elab_for_expr ctx.ctx_vararg loc env_test a3 in
+      let s1',env_body = elab_stmt env_for (ctx_loop ctx) s1 in
       let sfor = { sdesc = Sfor(a1', a2', a3', s1'); sloc = elab_loc loc } in
       begin match decls' with
       | None -> sfor,env
