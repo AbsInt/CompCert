@@ -50,6 +50,12 @@ let dump_jasm asm sourcename destfile =
     pp_jobject_end pp in
   pp_jobject_start pp;
   pp_jmember ~first:true pp "Version" pp_jstring jdump_magic_number;
+  let json_arch =
+    match Configuration.arch, !Clflags.option_mthumb with
+    | "arm", false -> "arm-arm"
+    | "arm", true  -> "arm-thumb"
+    | a, _ -> a in
+  pp_jmember pp "Architecture" pp_jstring json_arch;
   pp_jmember pp "System" pp_jstring Configuration.system;
   pp_jmember pp "Compile Info" dump_compile_info ();
   pp_jmember pp "Compilation Unit" pp_jstring sourcename;
