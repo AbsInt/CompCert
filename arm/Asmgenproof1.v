@@ -1069,6 +1069,13 @@ Proof.
   split. destruct (Val.cmp_bool c0 (rs x) (Vint i)) eqn:CMP; auto.
   split; apply cond_for_signed_cmp_correct; auto. rewrite Val.negate_cmp_bool, CMP; auto.
   apply compare_int_inv.
+  destruct (is_immed_arith (Int.neg i)).
+  econstructor.
+  split. apply exec_straight_one. simpl. eauto. auto.
+  split. destruct (Val.cmp_bool c0 (rs x) (Vint i)) eqn:CMP; auto.
+  split; apply cond_for_signed_cmp_correct; rewrite Int.neg_involutive; auto.
+  rewrite Val.negate_cmp_bool, CMP; auto.
+  apply compare_int_inv.
   exploit (loadimm_correct IR14). intros [rs' [P [Q R]]].
   econstructor.
   split. eapply exec_straight_trans. eexact P. apply exec_straight_one. simpl.
@@ -1083,6 +1090,13 @@ Proof.
   split. apply exec_straight_one. simpl. eauto. auto.
   split. destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs x) (Vint i)) eqn:CMP; auto.
   split; apply cond_for_unsigned_cmp_correct; auto. rewrite Val.negate_cmpu_bool, CMP; auto.
+  apply compare_int_inv.
+  destruct (is_immed_arith (Int.neg i)).
+  econstructor.
+  split. apply exec_straight_one. simpl. eauto. auto.
+  split. destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs x) (Vint i)) eqn:CMP; auto.
+  split; apply cond_for_unsigned_cmp_correct; rewrite Int.neg_involutive; auto.
+  rewrite Val.negate_cmpu_bool, CMP; auto.
   apply compare_int_inv.
   exploit (loadimm_correct IR14). intros [rs' [P [Q R]]].
   econstructor.

@@ -255,7 +255,9 @@ Remark transl_cond_label:
 Proof.
   unfold transl_cond; intros; destruct cond; TailNoLabel.
   destruct (is_immed_arith i). TailNoLabel. eapply tail_nolabel_trans; TailNoLabel.
+  destruct (is_immed_arith (Int.neg i)). TailNoLabel. eapply tail_nolabel_trans; TailNoLabel.
   destruct (is_immed_arith i). TailNoLabel. eapply tail_nolabel_trans; TailNoLabel.
+  destruct (is_immed_arith (Int.neg i)). TailNoLabel. eapply tail_nolabel_trans; TailNoLabel.
 Qed.
 
 Remark transl_op_label:

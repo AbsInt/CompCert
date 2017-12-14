@@ -20,7 +20,7 @@ open Camlcoq
 open Json
 
 let mnemonic_names = [ "Padc"; "Padd"; "Padds"; "Pand";"Pannot"; "Pasr"; "Pb"; "Pbc"; "Pbic"; "Pblreg";
-                       "Pblsymb"; "Pbne"; "Pbreg"; "Pbsymb"; "Pbtbl"; "Pclz"; "Pcmp"; "Pconstants";"Pfcpy_iif";
+                       "Pblsymb"; "Pbne"; "Pbreg"; "Pbsymb"; "Pbtbl"; "Pclz"; "Pcmp"; "Pcmn"; "Pconstants"; "Pfcpy_iif";
                        "Pfcpy_fii"; "Pfcpy_fi"; "Pfcpy_sf"; "Pflid_lbl"; "Pflis_lbl"; "Pdmb"; "Pdsb"; "Peor"; "Pfabsd";
                        "Pfabss"; "Pfaddd"; "Pfadds"; "Pfcmpd"; "Pfcmps"; "Pfcmpzd"; "Pfcmpzs";
                        "Pfcpyd"; "Pfcpy_fs"; "Pfcpy_if";"Pfcvtds"; "Pfcvtsd"; "Pfdivd"; "Pfdivs"; "Pfldd";
@@ -207,6 +207,7 @@ let pp_instructions pp ic =
     | Pbtbl(r, tbl) -> instruction pp "Pbtbl" ((Ireg r)::(List.map (fun a -> ALabel a) tbl))
     | Pclz(r1, r2) -> instruction pp "Pclz" [Ireg r1; Ireg r2]
     | Pcmp(r1,so) -> instruction pp "Pcmp" [Ireg r1; Shift so]
+    | Pcmn(r1,so) -> instruction pp "Pcmn" [Ireg r1; Shift so]
     | Pdmb -> instruction pp "Pdmb" []
     | Pdsb -> instruction pp "Pdsb" []
     | Peor(r1, r2, so) -> instruction pp "Peor" [Ireg r1; Ireg r2; Shift so]

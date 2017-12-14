@@ -148,6 +148,7 @@ Inductive instruction : Type :=
   | Pblreg: ireg -> signature -> instruction                   (**r computed branch and link *)
   | Pbic: ireg -> ireg -> shift_op -> instruction (**r bitwise bit-clear *)
   | Pcmp: ireg -> shift_op -> instruction         (**r integer comparison *)
+  | Pcmn: ireg -> shift_op -> instruction         (**r integer comparison with opposite *)
   | Peor: ireg -> ireg -> shift_op -> instruction (**r bitwise exclusive or *)
   | Pldr: ireg -> ireg -> shift_op -> instruction (**r int32 load *)
   | Pldr_a: ireg -> ireg -> shift_op -> instruction (**r any32 load to int register *)
@@ -608,6 +609,8 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr_nf (rs#r1 <- (Val.and rs#r2 (Val.notint (eval_shift_op so rs))))) m
   | Pcmp r1 so =>
       Next (nextinstr (compare_int rs rs#r1 (eval_shift_op so rs) m)) m
+  | Pcmn r1 so =>
+      Next (nextinstr (compare_int rs rs#r1 (Val.neg (eval_shift_op so rs)) m)) m
   | Peor r1 r2 so =>
       Next (nextinstr_nf (rs#r1 <- (Val.xor rs#r2 (eval_shift_op so rs)))) m
   | Pldr r1 r2 sa =>

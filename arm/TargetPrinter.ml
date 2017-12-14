@@ -239,6 +239,8 @@ struct
       fprintf oc "	clz	%a, %a\n" ireg r1 ireg r2
     | Pcmp(r1, so) ->
       fprintf oc "	cmp	%a, %a\n" ireg r1 shift_op so
+    | Pcmn(r1, so) ->
+      fprintf oc "	cmn	%a, %a\n" ireg r1 shift_op so
     | Pdmb ->
       fprintf oc "	dmb\n"
     | Pdsb ->

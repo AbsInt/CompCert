@@ -242,12 +242,16 @@ Definition transl_cond
       do r1 <- ireg_of a1;
       OK (if is_immed_arith n then
             Pcmp r1 (SOimm n) :: k
+          else if is_immed_arith (Int.neg n) then
+            Pcmn r1 (SOimm (Int.neg n)) :: k
           else
             loadimm IR14 n (Pcmp r1 (SOreg IR14) :: k))
   | Ccompuimm c n, a1 :: nil =>
       do r1 <- ireg_of a1;
       OK (if is_immed_arith n then
             Pcmp r1 (SOimm n) :: k
+          else if is_immed_arith (Int.neg n) then
+            Pcmn r1 (SOimm (Int.neg n)) :: k
           else
             loadimm IR14 n (Pcmp r1 (SOreg IR14) :: k))
   | Ccompf cmp, a1 :: a2 :: nil =>
