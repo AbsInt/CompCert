@@ -95,9 +95,6 @@ let neg_condition_name = function
 
 module Target (Opt: PRINTER_OPTIONS) : TARGET =
 struct
-  (* Code generation options. *)
-
-  let literals_in_code = ref true     (* to be turned into a proper option *)
 
   (* Basic printing functions *)
 
@@ -171,115 +168,6 @@ struct
   let section oc sec =
     fprintf oc "	%s\n" (name_of_section sec)
 
-  (* Record current code position and latest position at which to
-     emit float and symbol constants. *)
-
-  let currpos = ref 0
-  let size_constants = ref 0
-  let max_pos_constants = ref max_int
-
-  let distance_to_emit_constants () =
-    if !literals_in_code
-    then !max_pos_constants - (!currpos + !size_constants)
-    else max_int
-
-  (* Associate labels to floating-point constants and to symbols *)
-
-  let float_labels = (Hashtbl.create 39 : (int64, int) Hashtbl.t)
-  let float32_labels = (Hashtbl.create 39 : (int32, int) Hashtbl.t)
-
-  let label_float bf =
-    try
-      Hashtbl.find float_labels bf
-    with Not_found ->
-      let lbl' = new_label() in
-      Hashtbl.add float_labels bf lbl';
-      size_constants := !size_constants + 8;
-      max_pos_constants := min !max_pos_constants (!currpos + 1024);
-      lbl'
-
-  let label_float32 bf =
-    try
-      Hashtbl.find float32_labels bf
-    with Not_found ->
-      let lbl' = new_label() in
-      Hashtbl.add float32_labels bf lbl';
-      size_constants := !size_constants + 4;
-      max_pos_constants := min !max_pos_constants (!currpos + 1024);
-      lbl'
-
-  let symbol_labels =
-    (Hashtbl.create 39 : (ident * Integers.Int.int, int) Hashtbl.t)
-
-  let label_symbol id ofs =
-    try
-      Hashtbl.find symbol_labels (id, ofs)
-    with Not_found ->
-      let lbl' = new_label() in
-      Hashtbl.add symbol_labels (id, ofs) lbl';
-      size_constants := !size_constants + 4;
-      max_pos_constants := min !max_pos_constants (!currpos + 4096);
-      lbl'
-
-  let reset_constants () =
-    Hashtbl.clear float_labels;
-    Hashtbl.clear float32_labels;
-    Hashtbl.clear symbol_labels;
-    size_constants := 0;
-    max_pos_constants := max_int
-
-  let emit_constants oc =
-    fprintf oc "	.balign	4\n";
-    Hashtbl.iter
-      (fun bf lbl ->
-         (* Big or little-endian floats *)
-         let bfhi = Int64.shift_right_logical bf 32
-         and bflo = Int64.logand bf 0xFFFF_FFFFL in
-         if Archi.big_endian
-         then fprintf oc ".L%d:	.word	0x%Lx, 0x%Lx\n" lbl bfhi bflo
-         else fprintf oc ".L%d:	.word	0x%Lx, 0x%Lx\n" lbl bflo bfhi)
-      float_labels;
-    Hashtbl.iter
-      (fun bf lbl ->
-         fprintf oc ".L%d:	.word	0x%lx\n" lbl bf)
-      float32_labels;
-    Hashtbl.iter
-      (fun (id, ofs) lbl ->
-         fprintf oc ".L%d:	.word	%a\n"
-           lbl symbol_offset (id, ofs))
-      symbol_labels;
-    reset_constants ()
-
-  (* Generate code to load the address of id + ofs in register r *)
-
-  let loadsymbol oc r id ofs =
-    let o = camlint_of_coqint ofs in
-    if o >= -32768l && o <= 32767l && !Clflags.option_mthumb then begin
-      fprintf oc "	movw	%a, #:lower16:%a\n"
-        ireg r symbol_offset (id, ofs);
-      fprintf oc "	movt	%a, #:upper16:%a\n"
-        ireg r symbol_offset (id, ofs); 2
-    end else begin
-      let lbl = label_symbol id ofs in
-      fprintf oc "	ldr	%a, .L%d @ %a\n"
-        ireg r lbl symbol_offset (id, ofs); 1
-    end
-
-  (* Recognition of float constants appropriate for VMOV.
-     a normalized binary floating point encoding with 1 sign bit, 4
-     bits of fraction and a 3-bit exponent *)
-
-  let is_immediate_float64 bits =
-    let exp = (Int64.(to_int (shift_right_logical bits 52)) land 0x7FF) - 1023 in
-    let mant = Int64.logand bits 0xF_FFFF_FFFF_FFFFL in
-    exp >= -3 && exp <= 4 && Int64.logand mant 0xF_0000_0000_0000L = mant
-
-  let is_immediate_float32 bits =
-    let exp = (Int32.(to_int (shift_right_logical bits 23)) land 0xFF) - 127 in
-    let mant = Int32.logand bits 0x7F_FFFFl in
-    exp >= -3 && exp <= 4 && Int32.logand mant 0x78_0000l = mant
-
-
   (* Emit .file / .loc debugging directives *)
 
   let print_file_line oc file line =
@@ -287,6 +175,24 @@ struct
 
 
   (* Printing of instructions *)
+
+  let print_literal64 oc n lbl =
+    let bfhi = Int64.shift_right_logical n 32
+    and bflo = Int64.logand n 0xFFFF_FFFFL in
+    if Archi.big_endian
+    then fprintf oc ".L%d:	.word	0x%Lx, 0x%Lx\n" lbl bfhi bflo
+    else fprintf oc ".L%d:	.word	0x%Lx, 0x%Lx\n" lbl bflo bfhi
+
+  let print_constants oc = function
+    | Float32 (lbl,c) ->
+      let c = camlint_of_coqint (Floats.Float32.to_bits c) in
+      fprintf oc "%a:	.word	0x%lx\n"  print_label lbl c
+    | Float64 (lbl,bf) ->
+      let bf = camlint64_of_coqint (Floats.Float.to_bits  bf)
+      and lbl = transl_label lbl in
+      print_literal64 oc bf lbl
+    | Symbol (lbl,id,ofs) ->
+      fprintf oc "%a:	.word	%a\n" print_label lbl symbol_offset (id, ofs)
 
   let shift_op oc = function
     | SOimm n -> fprintf oc "#%a" coqint n
@@ -299,286 +205,254 @@ struct
   let print_instruction oc = function
     (* Core instructions *)
     | Padc (r1,r2,so) ->
-      fprintf oc "	adc	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
+      fprintf oc "	adc	%a, %a, %a\n" ireg r1 ireg r2 shift_op so
     | Padd(r1, r2, so) ->
       fprintf oc "	add%s	%a, %a, %a\n"
         (if !Clflags.option_mthumb && r2 <> IR14 then "s" else "")
-        ireg r1 ireg r2 shift_op so; 1
+        ireg r1 ireg r2 shift_op so
     | Padds (r1,r2,so) ->
-      fprintf oc "	adds	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
+      fprintf oc "	adds	%a, %a, %a\n" ireg r1 ireg r2 shift_op so
     | Pand(r1, r2, so) ->
       fprintf oc "	and%t	%a, %a, %a\n"
-        thumbS ireg r1 ireg r2 shift_op so; 1
+        thumbS ireg r1 ireg r2 shift_op so
     | Pasr(r1, r2, r3) ->
       fprintf oc "	asr%t	%a, %a, %a\n"
-        thumbS ireg r1 ireg r2 ireg r3; 1
+        thumbS ireg r1 ireg r2 ireg r3
     | Pb lbl ->
-      fprintf oc "	b	%a\n" print_label lbl; 1
+      fprintf oc "	b	%a\n" print_label lbl
     | Pbc(bit, lbl) ->
-      fprintf oc "	b%s	%a\n" (condition_name bit) print_label lbl; 1
+      fprintf oc "	b%s	%a\n" (condition_name bit) print_label lbl
     | Pbne lbl ->
-      fprintf oc "	bne	%a\n" print_label lbl; 1
+      fprintf oc "	bne	%a\n" print_label lbl
     | Pbsymb(id, sg) ->
-      fprintf oc "	b	%a\n" symbol id; 1
+      fprintf oc "	b	%a\n" symbol id
     | Pbreg(r, sg) ->
-      fprintf oc "	bx	%a\n" ireg r; 1
+      fprintf oc "	bx	%a\n" ireg r
     | Pblsymb(id, sg) ->
-      fprintf oc "	bl	%a\n" symbol id; 1
+      fprintf oc "	bl	%a\n" symbol id
     | Pblreg(r, sg) ->
-      fprintf oc "	blx	%a\n" ireg r; 1
+      fprintf oc "	blx	%a\n" ireg r
     | Pbic(r1, r2, so) ->
       fprintf oc "	bic%t	%a, %a, %a\n"
-        thumbS ireg r1 ireg r2 shift_op so; 1
+        thumbS ireg r1 ireg r2 shift_op so
     | Pclz (r1,r2) ->
-      fprintf oc "	clz	%a, %a\n" ireg r1 ireg r2; 1
+      fprintf oc "	clz	%a, %a\n" ireg r1 ireg r2
     | Pcmp(r1, so) ->
-      fprintf oc "	cmp	%a, %a\n" ireg r1 shift_op so; 1
+      fprintf oc "	cmp	%a, %a\n" ireg r1 shift_op so
     | Pdmb ->
-      fprintf oc "	dmb\n"; 1
+      fprintf oc "	dmb\n"
     | Pdsb ->
-      fprintf oc "	dsb\n"; 1
+      fprintf oc "	dsb\n"
     |  Peor(r1, r2, so) ->
       fprintf oc "	eor%t	%a, %a, %a\n"
-        thumbS ireg r1 ireg r2 shift_op so; 1
+        thumbS ireg r1 ireg r2 shift_op so
     | Pisb ->
-      fprintf oc "	isb\n"; 1
+      fprintf oc "	isb\n"
     | Pldr(r1, r2, sa) | Pldr_a(r1, r2, sa) ->
-      fprintf oc "	ldr	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
+      fprintf oc "	ldr	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa
     | Pldrb(r1, r2, sa) ->
-      fprintf oc "	ldrb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
+      fprintf oc "	ldrb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa
     | Pldrh(r1, r2, sa) ->
-      fprintf oc "	ldrh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
+      fprintf oc "	ldrh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa
     | Pldr_p(r1, r2, sa)  ->
-      fprintf oc "	ldr	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa; 1
+      fprintf oc "	ldr	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa
     | Pldrb_p(r1, r2, sa) ->
-      fprintf oc "	ldrb	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa; 1
+      fprintf oc "	ldrb	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa
     | Pldrh_p(r1, r2, sa) ->
-      fprintf oc "	ldrh	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa; 1
+      fprintf oc "	ldrh	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa
     | Pldrsb(r1, r2, sa) ->
-      fprintf oc "	ldrsb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
+      fprintf oc "	ldrsb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa
     | Pldrsh(r1, r2, sa) ->
-      fprintf oc "	ldrsh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
+      fprintf oc "	ldrsh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa
     | Plsl(r1, r2, r3) ->
       fprintf oc "	lsl%t	%a, %a, %a\n"
-        thumbS ireg r1 ireg r2 ireg r3; 1
+        thumbS ireg r1 ireg r2 ireg r3
     | Plsr(r1, r2, r3) ->
       fprintf oc "	lsr%t	%a, %a, %a\n"
-        thumbS ireg r1 ireg r2 ireg r3; 1
+        thumbS ireg r1 ireg r2 ireg r3
     | Pmla(r1, r2, r3, r4) ->
-      fprintf oc "	mla	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 ireg r4; 1
+      fprintf oc "	mla	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 ireg r4
     | Pmov(r1, (SOimm _ | SOreg _ as so)) ->
       (* No S flag even in Thumb2 mode *)
-      fprintf oc "	mov	%a, %a\n" ireg r1 shift_op so; 1
+      fprintf oc "	mov	%a, %a\n" ireg r1 shift_op so
     | Pmov(r1, so) ->
-      fprintf oc "	mov%t	%a, %a\n" thumbS ireg r1 shift_op so; 1
+      fprintf oc "	mov%t	%a, %a\n" thumbS ireg r1 shift_op so
     | Pmovw(r1, n) ->
-      fprintf oc "	movw	%a, #%a\n" ireg r1 coqint n; 1
+      fprintf oc "	movw	%a, #%a\n" ireg r1 coqint n
     | Pmovt(r1, n) ->
-      fprintf oc "	movt	%a, #%a\n" ireg r1 coqint n; 1
+      fprintf oc "	movt	%a, #%a\n" ireg r1 coqint n
     | Pmul(r1, r2, r3) ->
-      fprintf oc "	mul	%a, %a, %a\n" ireg r1 ireg r2 ireg r3; 1
+      fprintf oc "	mul	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
     | Pmvn(r1, so) ->
-      fprintf oc "	mvn%t	%a, %a\n" thumbS ireg r1 shift_op so; 1
+      fprintf oc "	mvn%t	%a, %a\n" thumbS ireg r1 shift_op so
     | Porr(r1, r2, so) ->
       fprintf oc "	orr%t	%a, %a, %a\n"
-        thumbS ireg r1 ireg r2 shift_op so; 1
+        thumbS ireg r1 ireg r2 shift_op so
     | Prev (r1,r2) ->
-      fprintf oc "	rev	%a, %a\n" ireg r1 ireg r2; 1
+      fprintf oc "	rev	%a, %a\n" ireg r1 ireg r2
     | Prev16 (r1,r2) ->
-      fprintf oc "	rev16	%a, %a\n" ireg r1 ireg r2; 1
+      fprintf oc "	rev16	%a, %a\n" ireg r1 ireg r2
     | Prsb(r1, r2, so) ->
       fprintf oc "	rsb%t	%a, %a, %a\n"
-        thumbS ireg r1 ireg r2 shift_op so; 1
+        thumbS ireg r1 ireg r2 shift_op so
     | Prsbs(r1, r2, so) ->
       fprintf oc "	rsbs	%a, %a, %a\n"
-        ireg r1 ireg r2 shift_op so; 1
+        ireg r1 ireg r2 shift_op so
     | Prsc (r1,r2,so) ->
-      fprintf oc "	rsc	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
+      fprintf oc "	rsc	%a, %a, %a\n" ireg r1 ireg r2 shift_op so
     | Pfsqrt (f1,f2) ->
-      fprintf oc "	vsqrt.f64 %a, %a\n" freg f1 freg f2; 1
+      fprintf oc "	vsqrt.f64 %a, %a\n" freg f1 freg f2
     | Psbc (r1,r2,sa) ->
-      fprintf oc "	sbc	%a, %a, %a\n" ireg r1 ireg r2 shift_op sa; 1
+      fprintf oc "	sbc	%a, %a, %a\n" ireg r1 ireg r2 shift_op sa
     | Pstr(r1, r2, sa) | Pstr_a(r1, r2, sa) ->
-      fprintf oc "	str	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
+      fprintf oc "	str	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa
     | Pstrb(r1, r2, sa) ->
-      fprintf oc "	strb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
+      fprintf oc "	strb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa
     | Pstrh(r1, r2, sa) ->
-      fprintf oc "	strh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa; 1
+      fprintf oc "	strh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa
     | Pstr_p(r1, r2, sa) ->
-      fprintf oc "	str	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa; 1
+      fprintf oc "	str	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa
     | Pstrb_p(r1, r2, sa) ->
-      fprintf oc "	strb	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa; 1
+      fprintf oc "	strb	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa
     | Pstrh_p(r1, r2, sa) ->
-      fprintf oc "	strh	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa; 1
+      fprintf oc "	strh	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa
     | Psdiv ->
-      if Opt.hardware_idiv then begin
-        fprintf oc "	sdiv	r0, r0, r1\n"; 1
-      end else begin
-        fprintf oc "	bl	__aeabi_idiv\n"; 1
-      end
+      if Opt.hardware_idiv then
+        fprintf oc "	sdiv	r0, r0, r1\n"
+      else
+        fprintf oc "	bl	__aeabi_idiv\n"
     | Psbfx(r1, r2, lsb, sz) ->
-      fprintf oc "	sbfx	%a, %a, #%a, #%a\n" ireg r1 ireg r2 coqint lsb coqint sz; 1
+      fprintf oc "	sbfx	%a, %a, #%a, #%a\n" ireg r1 ireg r2 coqint lsb coqint sz
     | Psmull(r1, r2, r3, r4) ->
-      fprintf oc "	smull	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 ireg r4; 1
+      fprintf oc "	smull	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 ireg r4
     | Psub(r1, r2, so) ->
       fprintf oc "	sub%t	%a, %a, %a\n"
-        thumbS ireg r1 ireg r2 shift_op so; 1
+        thumbS ireg r1 ireg r2 shift_op so
     | Psubs(r1, r2, so) ->
       fprintf oc "	subs	%a, %a, %a\n"
-        ireg r1 ireg r2 shift_op so; 1
+        ireg r1 ireg r2 shift_op so
     | Pudiv ->
-      if Opt.hardware_idiv then begin
-        fprintf oc "	udiv	r0, r0, r1\n"; 1
-      end else begin
-        fprintf oc "	bl	__aeabi_uidiv\n"; 1
-      end
+      if Opt.hardware_idiv then
+        fprintf oc "	udiv	r0, r0, r1\n"
+      else
+         fprintf oc "	bl	__aeabi_uidiv\n"
     | Pumull(r1, r2, r3, r4) ->
-      fprintf oc "	umull	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 ireg r4; 1
+      fprintf oc "	umull	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 ireg r4
     (* Floating-point VFD instructions *)
     | Pfcpyd(r1, r2) ->
-      fprintf oc "	vmov.f64 %a, %a\n" freg r1 freg r2; 1
+      fprintf oc "	vmov.f64 %a, %a\n" freg r1 freg r2
     | Pfabsd(r1, r2) ->
-      fprintf oc "	vabs.f64 %a, %a\n" freg r1 freg r2; 1
+      fprintf oc "	vabs.f64 %a, %a\n" freg r1 freg r2
     | Pfnegd(r1, r2) ->
-      fprintf oc "	vneg.f64 %a, %a\n" freg r1 freg r2; 1
+      fprintf oc "	vneg.f64 %a, %a\n" freg r1 freg r2
     | Pfaddd(r1, r2, r3) ->
-      fprintf oc "	vadd.f64 %a, %a, %a\n" freg r1 freg r2 freg r3; 1
+      fprintf oc "	vadd.f64 %a, %a, %a\n" freg r1 freg r2 freg r3
     | Pfdivd(r1, r2, r3) ->
-      fprintf oc "	vdiv.f64 %a, %a, %a\n" freg r1 freg r2 freg r3; 1
+      fprintf oc "	vdiv.f64 %a, %a, %a\n" freg r1 freg r2 freg r3
     | Pfmuld(r1, r2, r3) ->
-      fprintf oc "	vmul.f64 %a, %a, %a\n" freg r1 freg r2 freg r3; 1
+      fprintf oc "	vmul.f64 %a, %a, %a\n" freg r1 freg r2 freg r3
     | Pfsubd(r1, r2, r3) ->
-      fprintf oc "	vsub.f64 %a, %a, %a\n" freg r1 freg r2 freg r3; 1
+      fprintf oc "	vsub.f64 %a, %a, %a\n" freg r1 freg r2 freg r3
     | Pflid(r1, f) ->
       let f = camlint64_of_coqint(Floats.Float.to_bits f) in
-      if Opt.vfpv3 && is_immediate_float64 f then begin
-        fprintf oc "	vmov.f64 %a, #%.15F\n"
-          freg r1 (Int64.float_of_bits f); 1
-          (* immediate floats have at most 4 bits of fraction, so they
-             should print exactly with OCaml's F decimal format. *)
-      end else if !literals_in_code then begin
-        let lbl = label_float f in
-        fprintf oc "	vldr	%a, .L%d @ %.12g\n"
-          freg r1 lbl (Int64.float_of_bits f); 1
-      end else begin
-        let lbl = label_float f in
-        fprintf oc "	movw	r14, #:lower16:.L%d\n" lbl;
-        fprintf oc "	movt	r14, #:upper16:.L%d\n" lbl;
-        fprintf oc "	vldr	%a, [r14, #0] @ %.12g\n"
-          freg r1 (Int64.float_of_bits f); 3
-      end
+      let lbl = label_literal64 f in
+      fprintf oc "	movw	r14, #:lower16:.L%d\n" lbl;
+      fprintf oc "	movt	r14, #:upper16:.L%d\n" lbl;
+      fprintf oc "	vldr	%a, [r14, #0] @ %.12g\n"
+        freg r1 (Int64.float_of_bits f)
     | Pfcmpd(r1, r2) ->
       fprintf oc "	vcmp.f64 %a, %a\n" freg r1 freg r2;
-      fprintf oc "	vmrs APSR_nzcv, FPSCR\n"; 2
+      fprintf oc "	vmrs APSR_nzcv, FPSCR\n"
     | Pfcmpzd(r1) ->
       fprintf oc "	vcmp.f64 %a, #0\n" freg r1;
-      fprintf oc "	vmrs APSR_nzcv, FPSCR\n"; 2
+      fprintf oc "	vmrs APSR_nzcv, FPSCR\n"
     | Pfsitod(r1, r2) ->
       fprintf oc "	vmov	%a, %a\n" freg_single r1 ireg r2;
-      fprintf oc "	vcvt.f64.s32 %a, %a\n" freg r1 freg_single r1; 2
+      fprintf oc "	vcvt.f64.s32 %a, %a\n" freg r1 freg_single r1
     | Pfuitod(r1, r2) ->
       fprintf oc "	vmov	%a, %a\n" freg_single r1 ireg r2;
-      fprintf oc "	vcvt.f64.u32 %a, %a\n" freg r1 freg_single r1; 2
+      fprintf oc "	vcvt.f64.u32 %a, %a\n" freg r1 freg_single r1
     | Pftosizd(r1, r2) ->
       fprintf oc "	vcvt.s32.f64 %a, %a\n" freg_single FR6 freg r2;
-      fprintf oc "	vmov	%a, %a\n" ireg r1 freg_single FR6; 2
+      fprintf oc "	vmov	%a, %a\n" ireg r1 freg_single FR6
     | Pftouizd(r1, r2) ->
       fprintf oc "	vcvt.u32.f64 %a, %a\n" freg_single FR6 freg r2;
-      fprintf oc "	vmov	%a, %a\n" ireg r1 freg_single FR6; 2
+      fprintf oc "	vmov	%a, %a\n" ireg r1 freg_single FR6
     | Pfabss(r1, r2) ->
-      fprintf oc "	vabs.f32 %a, %a\n" freg_single r1 freg_single r2; 1
+      fprintf oc "	vabs.f32 %a, %a\n" freg_single r1 freg_single r2
     | Pfnegs(r1, r2) ->
-      fprintf oc "	vneg.f32 %a, %a\n" freg_single r1 freg_single r2; 1
+      fprintf oc "	vneg.f32 %a, %a\n" freg_single r1 freg_single r2
     | Pfadds(r1, r2, r3) ->
-      fprintf oc "	vadd.f32 %a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
+      fprintf oc "	vadd.f32 %a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3
     | Pfdivs(r1, r2, r3) ->
-      fprintf oc "	vdiv.f32 %a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
+      fprintf oc "	vdiv.f32 %a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3
     | Pfmuls(r1, r2, r3) ->
-      fprintf oc "	vmul.f32 %a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
+      fprintf oc "	vmul.f32 %a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3
     | Ppush rl ->
       let first = ref true in
       let sep () = if !first then first := false else output_string oc ", " in
-      fprintf oc "	push	{%a}\n"  (fun oc rl -> List.iter (fun ir -> sep (); ireg oc ir) rl) rl; ;1
+      fprintf oc "	push	{%a}\n"  (fun oc rl -> List.iter (fun ir -> sep (); ireg oc ir) rl) rl
     | Pfsubs(r1, r2, r3) ->
-      fprintf oc "	vsub.f32 %a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3; 1
-    | Pflis(r1, f) ->
-      let f = camlint_of_coqint(Floats.Float32.to_bits f) in
-      if Opt.vfpv3 && is_immediate_float32 f then begin
-        fprintf oc "	vmov.f32 %a, #%.15F\n"
-          freg_single r1 (Int32.float_of_bits f); 1
-          (* immediate floats have at most 4 bits of fraction, so they
-             should print exactly with OCaml's F decimal format. *)
-      end else if !literals_in_code then begin
-        let lbl = label_float32 f in
-        fprintf oc "	vldr	%a, .L%d @ %.12g\n"
-          freg_single r1 lbl (Int32.float_of_bits f); 1
-      end else begin
-        fprintf oc "	movw	r14, #%ld\n" (Int32.logand f 0xFFFFl);
-        fprintf oc "	movt	r14, #%ld\n" (Int32.shift_right_logical f 16);
-        fprintf oc "	vmov	%a, r14 @ %.12g\n"
-          freg_single r1 (Int32.float_of_bits f); 3
-      end
+      fprintf oc "	vsub.f32 %a, %a, %a\n" freg_single r1 freg_single r2 freg_single r3
+    | Pflis(r1, f) -> assert false (* Should be eliminated in expand constants *)
     | Pfcmps(r1, r2) ->
       fprintf oc "	vcmp.f32 %a, %a\n" freg_single r1 freg_single r2;
-      fprintf oc "	vmrs APSR_nzcv, FPSCR\n"; 2
+      fprintf oc "	vmrs APSR_nzcv, FPSCR\n"
     | Pfcmpzs(r1) ->
       fprintf oc "	vcmp.f32 %a, #0\n" freg_single r1;
-      fprintf oc "	vmrs APSR_nzcv, FPSCR\n"; 2
+      fprintf oc "	vmrs APSR_nzcv, FPSCR\n"
     | Pfsitos(r1, r2) ->
       fprintf oc "	vmov	%a, %a\n" freg_single r1 ireg r2;
-      fprintf oc "	vcvt.f32.s32 %a, %a\n" freg_single r1 freg_single r1; 2
+      fprintf oc "	vcvt.f32.s32 %a, %a\n" freg_single r1 freg_single r1
     | Pfuitos(r1, r2) ->
       fprintf oc "	vmov	%a, %a\n" freg_single r1 ireg r2;
-      fprintf oc "	vcvt.f32.u32 %a, %a\n" freg_single r1 freg_single r1; 2
+      fprintf oc "	vcvt.f32.u32 %a, %a\n" freg_single r1 freg_single r1
     | Pftosizs(r1, r2) ->
       fprintf oc "	vcvt.s32.f32 %a, %a\n" freg_single FR6 freg_single r2;
-      fprintf oc "	vmov	%a, %a\n" ireg r1 freg_single FR6; 2
+      fprintf oc "	vmov	%a, %a\n" ireg r1 freg_single FR6
     | Pftouizs(r1, r2) ->
       fprintf oc "	vcvt.u32.f32 %a, %a\n" freg_single FR6 freg_single r2;
-      fprintf oc "	vmov	%a, %a\n" ireg r1 freg_single FR6; 2
+      fprintf oc "	vmov	%a, %a\n" ireg r1 freg_single FR6
     | Pfcvtsd(r1, r2) ->
-      fprintf oc "	vcvt.f32.f64 %a, %a\n" freg_single r1 freg r2; 1
+      fprintf oc "	vcvt.f32.f64 %a, %a\n" freg_single r1 freg r2
     | Pfcvtds(r1, r2) ->
-      fprintf oc "	vcvt.f64.f32 %a, %a\n" freg r1 freg_single r2; 1
+      fprintf oc "	vcvt.f64.f32 %a, %a\n" freg r1 freg_single r2
     | Pfldd(r1, r2, n) | Pfldd_a(r1, r2, n) ->
-      fprintf oc "	vldr	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n; 1
+      fprintf oc "	vldr	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n
     | Pflds(r1, r2, n) ->
-      fprintf oc "	vldr	%a, [%a, #%a]\n" freg_single r1 ireg r2 coqint n; 1
+      fprintf oc "	vldr	%a, [%a, #%a]\n" freg_single r1 ireg r2 coqint n
     | Pfstd(r1, r2, n) | Pfstd_a(r1, r2, n) ->
-      fprintf oc "	vstr	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n; 1
+      fprintf oc "	vstr	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n
     | Pfsts(r1, r2, n) ->
-      fprintf oc "	vstr	%a, [%a, #%a]\n" freg_single r1 ireg r2 coqint n; 1
+      fprintf oc "	vstr	%a, [%a, #%a]\n" freg_single r1 ireg r2 coqint n
     (* Pseudo-instructions *)
     | Pallocframe(sz, ofs) ->
       assert false
     | Pfreeframe(sz, ofs) ->
       assert false
     | Plabel lbl ->
-      fprintf oc "%a:\n" print_label lbl; 0
-    | Ploadsymbol(r1, id, ofs) ->
-      loadsymbol oc r1 id ofs
+      fprintf oc "%a:\n" print_label lbl
+    | Ploadsymbol(r1, id, ofs) -> assert false (* Should be eliminated in expand constants *)
     | Pmovite(cond, r1, ifso, ifnot) ->
       fprintf oc "	ite	%s\n" (condition_name cond);
       fprintf oc "	mov%s	%a, %a\n"
         (condition_name cond) ireg r1 shift_op ifso;
       fprintf oc "	mov%s	%a, %a\n"
-        (neg_condition_name cond) ireg r1 shift_op ifnot; 2
+        (neg_condition_name cond) ireg r1 shift_op ifnot
     | Pbtbl(r, tbl) ->
       if !Clflags.option_mthumb then begin
         fprintf oc "	lsl	r14, %a, #2\n" ireg r;
         fprintf oc "	add	pc, r14\n";   (* 16-bit encoding *)
-        fprintf oc "	nop\n";               (* 16-bit encoding *)
+        fprintf oc "	nop\n";            (* 16-bit encoding *)
         List.iter
           (fun l -> fprintf oc "	b.w	%a\n" print_label l)
-          tbl;
-        2 + List.length tbl
+          tbl
       end else begin
         fprintf oc "	add	pc, pc, %a, lsl #2\n" ireg r;
         fprintf oc "	nop\n";
         List.iter
           (fun l -> fprintf oc "	b	%a\n" print_label l)
-          tbl;
-        2 + List.length tbl
+          tbl
       end
     | Pbuiltin(ef, args, res) ->
       begin match ef with
@@ -591,71 +465,57 @@ struct
                 ais_annot_text lbl preg_annot "sp" (camlstring_of_coqstring txt) args
               | _ -> assert false
             end in
-          fprintf oc "%s annotation: %S\n" comment annot;
-          0
+          fprintf oc "%s annotation: %S\n" comment annot
         | EF_debug(kind, txt, targs) ->
           print_debug_info comment print_file_line preg_annot "sp" oc
-            (P.to_int kind) (extern_atom txt) args;
-          0
+            (P.to_int kind) (extern_atom txt) args
         | EF_inline_asm(txt, sg, clob) ->
           fprintf oc "%s begin inline assembly\n\t" comment;
           print_inline_asm preg oc (camlstring_of_coqstring txt) sg args res;
-          fprintf oc "%s end inline assembly\n" comment;
-          256 (* Better be safe than sorry  *)
+          fprintf oc "%s end inline assembly\n" comment
         | _ ->
           assert false
       end
-    | Pcfi_adjust sz -> cfi_adjust oc (camlint_of_coqint sz); 0
-    | Pcfi_rel_offset ofs -> cfi_rel_offset oc "lr" (camlint_of_coqint ofs); 0
+    | Pcfi_adjust sz -> cfi_adjust oc (camlint_of_coqint sz)
+    | Pcfi_rel_offset ofs -> cfi_rel_offset oc "lr" (camlint_of_coqint ofs)
     (* Fixup instructions for calling conventions *)
     | Pfcpy_fs(r1, r2) ->
-      fprintf oc "	vmov.f32	%a, %a\n" freg_single r1 freg_param_single r2; 1
+      fprintf oc "	vmov.f32	%a, %a\n" freg_single r1 freg_param_single r2
     | Pfcpy_sf(r1, r2) ->
-      fprintf oc "	vmov.f32	%a, %a\n" freg_param_single r1 freg_single r2; 1
+      fprintf oc "	vmov.f32	%a, %a\n" freg_param_single r1 freg_single r2
     | Pfcpy_fii (r1, r2, r3) ->
-      fprintf oc "	vmov	%a, %a, %a\n" freg r1 ireg r2 ireg r3; 1
+      fprintf oc "	vmov	%a, %a, %a\n" freg r1 ireg r2 ireg r3
     | Pfcpy_fi (r1, r2) ->
-      fprintf oc "	vmov	%a, %a\n" freg_single r1 ireg r2; 1
+      fprintf oc "	vmov	%a, %a\n" freg_single r1 ireg r2
     | Pfcpy_iif (r1, r2, r3) ->
-      fprintf oc "	vmov	%a, %a, %a\n" ireg r1 ireg r2 freg r3; 1
+      fprintf oc "	vmov	%a, %a, %a\n" ireg r1 ireg r2 freg r3
     |  Pfcpy_if (r1, r2) ->
-      fprintf oc "	vmov	%a, %a\n" ireg r1 freg_single r2; 1
+      fprintf oc "	vmov	%a, %a\n" ireg r1 freg_single r2
+    | Pconstants consts ->
+      fprintf oc "	.balign	4\n";
+      List.iter (print_constants oc) consts
+    | Ploadsymbol_imm (r1,id,ofs) ->
+        fprintf oc "	movw	%a, #:lower16:%a\n"
+        ireg r1 symbol_offset (id, ofs);
+        fprintf oc "	movt	%a, #:upper16:%a\n"
+          ireg r1 symbol_offset (id, ofs)
+    | Pflid_lbl (r1,lbl,f) ->
+      fprintf oc "	vldr	%a, %a\n" freg r1 print_label lbl
+    | Pflis_lbl (r1,lbl,f) ->
+      fprintf oc "	vldr	%a, %a\n"
+        freg_single r1 print_label lbl
+    | Pflid_imm (r1,f) ->
+      let f = camlint64_of_coqint(Floats.Float.to_bits f) in
+      fprintf oc "	vmov.f64 %a, #%.15F\n"
+        freg r1 (Int64.float_of_bits f)
+    | Pflis_imm (r1,f) ->
+      let f = camlint_of_coqint(Floats.Float32.to_bits f) in
+       fprintf oc "	vmov.f32 %a, #%.15F\n"
+         freg_single r1 (Int32.float_of_bits f)
+    | Ploadsymbol_lbl (r1,lbl,id,ofs) ->
+      fprintf oc "	ldr	%a, %a\n"
+        ireg r1 print_label lbl
 
-
-  let no_fallthrough = function
-    | Pb _ -> true
-    | Pbsymb _ -> true
-    | Pbreg _ -> true
-    | _ -> false
-
-  let estimate_size = function
-    | Pbtbl (_,tbl) ->
-      let len = List.length tbl in
-      let add =if !Clflags.option_mthumb then
-        3
-      else
-        2 in
-      (len + add) * 4
-    | Pbuiltin (EF_inline_asm _,_,_) -> 1024 (* Better be safe than sorry *)
-    | _ -> 12
-
-
-  let rec print_instructions oc no_fall instrs =
-    match instrs with
-    | [] -> ()
-    | i :: il ->
-      let d = distance_to_emit_constants() - estimate_size i in
-      if d < 256 && no_fall then
-        emit_constants oc
-      else if d < 16 then begin
-        let lbl = new_label() in
-        fprintf oc "	b	.L%d\n" lbl;
-        emit_constants oc;
-        fprintf oc ".L%d:\n" lbl
-      end;
-      let n = print_instruction oc i in
-      currpos := !currpos + n * 4;
-      print_instructions oc (no_fallthrough i) il
 
   let get_section_names name =
     let (text, lit) =
@@ -695,14 +555,16 @@ struct
 
   let print_instructions oc fn =
     current_function_sig := fn.fn_sig;
-    print_instructions oc false fn.fn_code;
-    if !literals_in_code then emit_constants oc
+    List.iter (print_instruction oc) fn.fn_code
+
 
   let emit_constants oc lit =
-    if not !literals_in_code && !size_constants > 0 then begin
+    if not !Constantexpand.literals_in_code && exists_constants () then begin
       section oc lit;
-      emit_constants oc
-    end
+      fprintf oc "	.balign 4\n";
+      Hashtbl.iter (print_literal64 oc) literal64_labels;
+    end;
+    reset_constants ()
 
   (* Data *)
 

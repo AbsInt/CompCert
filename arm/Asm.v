@@ -130,6 +130,11 @@ Inductive testcond : Type :=
   | TCgt: testcond    (**r signed greater *)
   | TCle: testcond.   (**r signed less than or equal *)
 
+Inductive code_constant: Type :=
+| Float32 : label -> float32 -> code_constant
+| Float64 : label -> float -> code_constant
+| Symbol : label -> ident -> ptrofs -> code_constant.
+
 Inductive instruction : Type :=
   (* Core instructions *)
   | Padd: ireg -> ireg -> shift_op -> instruction (**r integer addition *)
@@ -246,8 +251,16 @@ Inductive instruction : Type :=
   | Pfcpy_fii: freg -> ireg -> ireg -> instruction    (**r copy integer register pair to double fp-register  *)
   | Pfcpy_fi: freg -> ireg -> instruction            (**r copy integer register to single fp-register *)
   | Pfcpy_iif: ireg -> ireg -> freg -> instruction    (**r copy double fp-register to integer register pair *)
-  | Pfcpy_if: ireg -> freg -> instruction.           (**r copy single fp-register to integer register *)
+  | Pfcpy_if: ireg -> freg -> instruction            (**r copy single fp-register to integer register *)
 
+  (* Instructions for the emitting of constants *)
+  | Pconstants: list code_constant -> instruction   (**r constants in code*)
+  | Ploadsymbol_imm: ireg -> ident -> ptrofs -> instruction (**r move symbol address in register *)
+  | Pflid_lbl: freg -> label -> float -> instruction (**r load float64 from label *)
+  | Pflis_lbl: freg -> label -> float32 -> instruction (**r load float32 from label *)
+  | Pflid_imm: freg -> float -> instruction          (**r move float64 into register *)
+  | Pflis_imm: freg -> float32 -> instruction        (**r move float32 into register *)
+  | Ploadsymbol_lbl: ireg -> label -> ident -> ptrofs -> instruction. (**r load symbol address from label *)
 
 (** The pseudo-instructions are the following:
 
@@ -807,7 +820,15 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pfcpy_fii _ _ _
   | Pfcpy_fi _ _
   | Pfcpy_iif _ _ _
-  | Pfcpy_if _ _ =>
+  | Pfcpy_if _ _
+  | Pconstants _
+  | Ploadsymbol_imm _ _ _
+  | Pflid_lbl _ _ _
+  | Pflis_lbl _ _ _
+  | Pflid_imm _ _
+  | Pflis_imm _ _
+  | Ploadsymbol_lbl _ _ _ _
+    =>
     Stuck
   end.
 

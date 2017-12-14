@@ -669,7 +669,9 @@ let expand_function id fn =
       expand_debug id 13 preg_to_dwarf expand_instruction fn.fn_code
     else
       List.iter expand_instruction fn.fn_code;
-    Errors.OK (get_current_function ())
+    let fn = get_current_function () in
+    let fn = Constantexpand.expand_constants fn in
+    Errors.OK fn
   with Error s ->
     Errors.Error (Errors.msg (coqstring_of_camlstring s))
 

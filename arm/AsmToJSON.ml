@@ -20,24 +20,26 @@ open Camlcoq
 open Json
 
 let mnemonic_names = [ "Padc"; "Padd"; "Padds"; "Pand";"Pannot"; "Pasr"; "Pb"; "Pbc"; "Pbic"; "Pblreg";
-                       "Pblsymb"; "Pbne"; "Pbreg"; "Pbsymb"; "Pbtbl"; "Pclz"; "Pcmp"; "Pfcpy_iif";
-                       "Pfcpy_fii"; "Pfcpy_fi"; "Pfcpy_sf"; "Pdmb"; "Pdsb"; "Peor"; "Pfabsd";
+                       "Pblsymb"; "Pbne"; "Pbreg"; "Pbsymb"; "Pbtbl"; "Pclz"; "Pcmp"; "Pconstants";"Pfcpy_iif";
+                       "Pfcpy_fii"; "Pfcpy_fi"; "Pfcpy_sf"; "Pflid_lbl"; "Pflis_lbl"; "Pdmb"; "Pdsb"; "Peor"; "Pfabsd";
                        "Pfabss"; "Pfaddd"; "Pfadds"; "Pfcmpd"; "Pfcmps"; "Pfcmpzd"; "Pfcmpzs";
                        "Pfcpyd"; "Pfcpy_fs"; "Pfcpy_if";"Pfcvtds"; "Pfcvtsd"; "Pfdivd"; "Pfdivs"; "Pfldd";
-                       "Pfldd_a"; "Pflds"; "Pflid"; "Pflis"; "Pfmuld"; "Pfmuls"; "Pfnegd";
+                       "Pfldd_a"; "Pflid"; "Pflds"; "Pflid_imm"; "Pflis_imm"; "Pfmuld"; "Pfmuls"; "Pfnegd";
                        "Pfnegs"; "Pfreeframe"; "Pfsitod"; "Pfsitos"; "Pfsqrt"; "Pfstd"; "Pfstd_a";
                        "Pfsts"; "Pfsubd"; "Pfsubs"; "Pftosizd"; "Pftosizs"; "Pftouizd";
                        "Pftouizs"; "Pfuitod"; "Pfuitos"; "Pinlineasm"; "Pisb"; "Plabel"; "Pldr";
-                       "Pldr_a"; "Pldr_p"; "Pldrb"; "Pldrb_p"; "Pldrh"; "Pldrh_p"; "Pldrsb";
-                       "Pldrsh"; "Ploadsymbol"; "Plsl"; "Plsr"; "Pmla"; "Pmov"; "Pmovite";
-                       "Pmovt"; "Pmovw"; "Pmul"; "Pmvn"; "Porr"; "Ppush"; "Prev"; "Prev16"; "Prsb";
-                       "Prsbs"; "Prsc"; "Psbc"; "Psbfx"; "Psdiv"; "Psmull"; "Pstr"; "Pstr_a";
-                       "Pstr_p"; "Pstrb"; "Pstrb_p"; "Pstrh"; "Pstrh_p"; "Psub"; "Psubs"; "Pudiv";
+                       "Pldr_a"; "Ploadsymbol_lbl"; "Pldr_p"; "Pldrb"; "Pldrb_p"; "Pldrh"; "Pldrh_p"; "Pldrsb";
+                       "Pldrsh"; "Plsl"; "Plsr"; "Pmla"; "Pmov"; "Pmovite";
+                       "Pmovt"; "Pmovw"; "Pmul"; "Pmvn";  "Ploadsymbol_imm"; "Porr";
+                       "Ppush"; "Prev"; "Prev16"; "Prsb"; "Prsbs"; "Prsc"; "Psbc"; "Psbfx"; "Psdiv"; "Psmull";
+                       "Pstr"; "Pstr_a"; "Pstr_p"; "Pstrb"; "Pstrb_p"; "Pstrh"; "Pstrh_p"; "Psub"; "Psubs"; "Pudiv";
                        "Pumull" ]
 
 type instruction_arg =
   | ALabel of positive
   | Atom of positive
+  | Data32 of Integers.Int.int
+  | Data64 of Integers.Int64.int
   | DFreg of freg
   | Float32 of Floats.float32
   | Float64 of Floats.float
@@ -50,6 +52,12 @@ type instruction_arg =
   | String of string
   | Symbol of ident * BinNums.coq_Z
   | Condition of string
+
+let makedata (c : code_constant) : instruction_arg =
+ match c with
+ | Asm.Float32(_, f) -> Data32 (Floats.Float32.to_bits f)
+ | Asm.Float64(_, f) -> Data64 (Floats.Float.to_bits f)
+ | Asm.Symbol(_, id, ofs) -> Symbol(id, ofs)
 
 let pp_reg pp reg =
   pp_jsingle_object pp "Register" pp_jstring reg
@@ -104,6 +112,8 @@ let pp_symbol pp (id, ofs) =
 let pp_arg pp = function
   | ALabel lbl -> pp_label pp lbl
   | Atom a -> pp_atom_constant pp a
+  | Data32 i -> pp_jsingle_object pp "Data32" pp_int i
+  | Data64 i -> pp_jsingle_object pp "Data64" pp_int64 i
   | DFreg fr -> pp_freg pp fr
   | Float32 f -> pp_float32_constant pp f
   | Float64 f  -> pp_float64_constant pp f
@@ -177,6 +187,9 @@ let pp_instructions pp ic =
     (* Call Frame Information, only debug relevant and not exported *)
     | Pcfi_adjust _ -> assert false
     | Pcfi_rel_offset _ -> assert false
+    (* Should be eliminated in constant expansion step *)
+    | Pflis(r1, f) -> assert false
+    | Ploadsymbol(r1, id, ofs) -> assert false
     (* ARM instructions *)
     | Padc(r1, r2, so) -> instruction pp "Padc" [Ireg r1; Ireg r2; Shift so]
     | Padd(r1, r2, so) -> instruction pp "Padd" [Ireg r1; Ireg r2; Shift so]
@@ -213,7 +226,6 @@ let pp_instructions pp ic =
     | Pfldd(r1, r2, n) | Pfldd_a(r1, r2, n) -> instruction pp "Pfldd" [DFreg r1; Ireg r2; Long n]
     | Pflds(r1, r2, n) -> instruction pp "Pflds" [SFreg r1; Ireg r2; Long n]
     | Pflid(r1, f) -> instruction pp "Pflid" [DFreg r1; Float64 f]
-    | Pflis(r1, f) -> instruction pp "Pflis" [SFreg r1; Float32 f]
     | Pfmuld(r1, r2, r3) -> instruction pp "Pfmuld" [DFreg r1; DFreg r2; DFreg r3]
     | Pfmuls(r1, r2, r3) -> instruction pp "Pfmuls" [SFreg r1; SFreg r2; SFreg r3]
     | Pfnegd(r1, r2) -> instruction pp "Pfnegd" [DFreg r1; DFreg r2]
@@ -241,7 +253,6 @@ let pp_instructions pp ic =
     | Pldrh_p(r1, r2, so) -> instruction pp "Pldrh_p" [Ireg r1; Ireg r2; Shift so]
     | Pldrsb(r1, r2, so) -> instruction pp "Pldrsb" [Ireg r1; Ireg r2; Shift so]
     | Pldrsh(r1, r2, so) -> instruction pp "Pldrsh" [Ireg r1; Ireg r2; Shift so]
-    | Ploadsymbol(r1, id, ofs) -> instruction pp "Ploadsymbol" [Ireg r1; Symbol (id, ofs)]
     | Plsl(r1, r2, r3) -> instruction pp "Plsl" [Ireg r1; Ireg r2; Ireg r3]
     | Plsr(r1, r2, r3) -> instruction pp "Plsr" [Ireg r1; Ireg r2; Ireg r3]
     | Pmla(r1, r2, r3, r4) -> instruction pp "Pmla" [Ireg r1; Ireg r2; Ireg r3; Ireg r4]
@@ -279,6 +290,14 @@ let pp_instructions pp ic =
     | Pfcpy_fi(r1, r2) -> instruction pp "Pfcpy_fi" [SFreg r1; Ireg r2]
     | Pfcpy_iif(r1, r2, r3) -> instruction pp "Pfcpy_iif" [Ireg r1; Ireg r2; DFreg r3]
     | Pfcpy_if (r1,r2) -> instruction pp "Pfcpy_if" [Ireg r1; SFreg r2]
+    (* Pseudo instructions from constant expansion step *)
+    | Pconstants consts -> instruction pp "Pconstants" (List.map makedata consts)
+    | Ploadsymbol_imm (r1,id,ofs) -> instruction pp "Ploadsymbol_imm" [Ireg r1; Symbol (id,ofs)]
+    | Pflid_lbl (r1,lbl,f) -> instruction pp "Pflid_lbl" [DFreg r1; ALabel lbl; Float64 f]
+    | Pflis_lbl (r1,lbl,f) -> instruction pp "Pflis_lbl" [SFreg r1; ALabel lbl; Float32 f]
+    | Pflid_imm (r1,f) -> instruction pp "Pflid_imm" [DFreg r1; Float64 f]
+    | Pflis_imm (r1,f) -> instruction pp "Pflis_imm" [SFreg r1; Float32 f]
+    | Ploadsymbol_lbl (r1,lbl,id,ofs) -> instruction pp "Ploadsymbol_lbl" [Ireg r1; ALabel lbl; Symbol (id,ofs)]
   in
     pp_jarray instruction pp ic
 
