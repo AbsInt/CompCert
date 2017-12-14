@@ -32,7 +32,6 @@ let _8 = coqint_of_camlint 8l
 let _16 = coqint_of_camlint 16l
 let _32 = coqint_of_camlint 32l
 let _64 = coqint_of_camlint 64l
-let _m1 = coqint_of_camlint (-1l)
 
 (* Emit instruction sequences that set or offset a register by a constant. *)
 (* No S suffix because they are applied to SP most of the time. *)
@@ -318,7 +317,7 @@ let expand_builtin_inline name args res =
      emit (Pclz (res, ah));
      emit (Padd (res, res, SOreg IR14))
   | ("__builtin_ctz" | "__builtin_ctzl"), [BA(IR a1)], BR(IR res) ->
-     emit (Padd(IR14, a1, SOimm _m1));   (* tmp := x-1 *)
+     emit (Psub(IR14, a1, SOimm _1));    (* tmp := x-1 *)
      emit (Pmvn(res, SOreg a1));         (* res := ~(x) *)
      emit (Pand(res, IR14, SOreg res));  (* res := tmp & ~(x) *)
      emit (Pclz(res, res));              (* res := #leading zeros *)
@@ -330,7 +329,7 @@ let expand_builtin_inline name args res =
      emit (Pcmp (al, SOimm _0));
      emit (Pbne lbl1);
      (* low word is zero, count trailing zeros in high word and increment by 32 *)
-     emit (Padd(IR14, ah, SOimm _m1));
+     emit (Psub(IR14, ah, SOimm _1));
      emit (Pmvn(res, SOreg ah));
      emit (Pand(res, IR14, SOreg res));
      emit (Pclz(res, res));
@@ -338,7 +337,7 @@ let expand_builtin_inline name args res =
      emit (Pb lbl2);
      (* count trailing zeros in low word *)
      emit (Plabel lbl1);
-     emit (Padd(IR14, al, SOimm _m1));
+     emit (Psub(IR14, al, SOimm _1));
      emit (Pmvn(res, SOreg al));
      emit (Pand(res, IR14, SOreg res));
      emit (Pclz(res, res));
