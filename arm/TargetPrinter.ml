@@ -515,8 +515,8 @@ struct
        fprintf oc "	vmov.f32 %a, #%.15F\n"
          freg_single r1 (Int32.float_of_bits f)
     | Ploadsymbol_lbl (r1,lbl,id,ofs) ->
-      fprintf oc "	ldr	%a, %a\n"
-        ireg r1 print_label lbl
+      fprintf oc "	ldr	%a, %a %s %a\n"
+        ireg r1 print_label lbl comment symbol_offset (id, ofs)
 
 
   let get_section_names name =
