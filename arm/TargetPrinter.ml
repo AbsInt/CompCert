@@ -502,10 +502,13 @@ struct
         fprintf oc "	movt	%a, #:upper16:%a\n"
           ireg r1 symbol_offset (id, ofs)
     | Pflid_lbl (r1,lbl,f) ->
-      fprintf oc "	vldr	%a, %a\n" freg r1 print_label lbl
+      let f = camlint64_of_coqint(Floats.Float.to_bits f) in
+      fprintf oc "	vldr	%a, %a %s %.12g\n"
+        freg r1 print_label lbl comment (Int64.float_of_bits f)
     | Pflis_lbl (r1,lbl,f) ->
-      fprintf oc "	vldr	%a, %a\n"
-        freg_single r1 print_label lbl
+      let f = camlint_of_coqint(Floats.Float32.to_bits f) in
+      fprintf oc "	vldr	%a, %a %s %.12g\n"
+        freg_single r1 print_label lbl comment (Int32.float_of_bits f)
     | Pflid_imm (r1,f) ->
       let f = camlint64_of_coqint(Floats.Float.to_bits f) in
       fprintf oc "	vmov.f64 %a, #%.15F\n"
