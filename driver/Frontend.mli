@@ -11,6 +11,12 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+val dparse_destination: string option ref
+  (** Destination file for parsed c file dump *)
+
+val dcompcertc_destination: string option ref
+  (** Destination file for CompCert C file dump *)
+
 val preprocess: string -> string -> unit
   (** From C to preprocessed C *)
 
