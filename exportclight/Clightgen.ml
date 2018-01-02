@@ -82,29 +82,31 @@ let version_string =
 
 let usage_string =
   version_string ^
-"Usage: clightgen [options] <source files>\n\
-Recognized source files:\n\
-\  .c             C source file\n\
-Processing options:\n\
-\  -normalize     Normalize the generated Clight code w.r.t. loads in expressions\n\
-\  -E             Preprocess only, send result to standard output\n"^
+{|Usage: clightgen [options] <source files>
+Recognized source files:
+  .c             C source file
+Processing options:
+  -normalize     Normalize the generated Clight code w.r.t. loads in expressions
+  -E             Preprocess only, send result to standard output
+|} ^
 prepro_help ^
-"Language support options (use -fno-<opt> to turn off -f<opt>) :\n\
-\  -fbitfields    Emulate bit fields in structs [off]\n\
-\  -flongdouble   Treat 'long double' as 'double' [off]\n\
-\  -fstruct-passing  Support passing structs and unions by value as function\n\
-\                    results or function arguments [off]\n\
-\  -fstruct-return   Like -fstruct-passing (deprecated)\n\
-\  -fvararg-calls Emulate calls to variable-argument functions [on]\n\
-\  -fpacked-structs  Emulate packed structs [off]\n\
-\  -fall          Activate all language support options above\n\
-\  -fnone         Turn off all language support options above\n\
-Tracing options:\n\
-\  -dparse        Save C file after parsing and elaboration in <file>.parsed.c\n\
-\  -dc            Save generated Compcert C in <file>.compcert.c\n\
-\  -dclight       Save generated Clight in <file>.light.c\n\
-General options:\n\
-\  -v             Print external commands before invoking them\n"
+{|Language support options (use -fno-<opt> to turn off -f<opt>) :
+  -fbitfields    Emulate bit fields in structs [off]
+  -flongdouble   Treat 'long double' as 'double' [off]
+  -fstruct-passing  Support passing structs and unions by value as function
+                    results or function arguments [off]
+  -fstruct-return   Like -fstruct-passing (deprecated)
+  -fvararg-calls Emulate calls to variable-argument functions [on]
+  -fpacked-structs  Emulate packed structs [off]
+  -fall          Activate all language support options above
+  -fnone         Turn off all language support options above
+Tracing options:
+  -dparse        Save C file after parsing and elaboration in <file>.parsed.c
+  -dc            Save generated Compcert C in <file>.compcert.c
+  -dclight       Save generated Clight in <file>.light.c
+General options:
+  -v             Print external commands before invoking them
+|}
 
 let print_usage_and_exit () =
   printf "%s" usage_string; exit 0
