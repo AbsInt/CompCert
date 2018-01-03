@@ -18,6 +18,11 @@ open Clflags
 let safe_remove file =
   try Sys.remove file with Sys_error _ -> ()
 
+let tmp_file suff =
+  let tmpfile = Filename.temp_file "compcert" suff in
+  at_exit (fun () -> safe_remove tmpfile);
+  tmpfile
+
 (* Invocation of external tools *)
 
 let rec waitpid_no_intr pid =

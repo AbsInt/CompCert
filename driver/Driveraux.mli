@@ -22,6 +22,11 @@ val command_error: string -> int -> unit
 val safe_remove: string -> unit
    (** Remove the given file if it exists *)
 
+val tmp_file: string -> string
+   (** Create a temporary file with the given suffix.
+       The file will be removed when the program exits.
+       Return the absolute path to the file. *)
+
 val output_filename: ?final:bool -> string -> string -> string -> string
    (** Determine names for output files.  We use -o option if specified
        and if this is the final destination file (not a dump file).

@@ -69,7 +69,7 @@ let process_c_file sourcename =
   if !option_E then begin
     preprocess sourcename "-"
   end else begin
-    let preproname = Filename.temp_file "compcert" ".i" in
+    let preproname = Driveraux.tmp_file ".i" in
     preprocess sourcename preproname;
     compile_c_file sourcename preproname (prefixname ^ ".v")
   end

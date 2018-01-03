@@ -67,11 +67,8 @@ let dump_jasm asm sourcename destfile =
 let object_filename sourcename suff =
   if nolink () then
     output_filename ~final: !option_c sourcename suff ".o"
-  else begin
-    let tmpfile = Filename.temp_file "compcert" ".o" in
-    at_exit (fun () -> safe_remove tmpfile);
-    tmpfile
-  end
+  else
+    tmp_file ".o"
 
 (* From CompCert C AST to asm *)
 
@@ -125,33 +122,26 @@ let process_c_file sourcename =
     let preproname = if !option_dprepro then
       output_filename sourcename ".c" ".i"
     else
-      Filename.temp_file "compcert" ".i" in
+      tmp_file ".i" in
     preprocess sourcename preproname;
     let name =
       if !option_interp then begin
         Machine.config := Machine.compcert_interpreter !Machine.config;
         let csyntax = parse_c_file sourcename preproname in
-        if not !option_dprepro then
-          safe_remove preproname;
        Interp.execute csyntax;
         ""
       end else if !option_S then begin
         compile_c_file sourcename preproname
           (output_filename ~final:true sourcename ".c" ".s");
-        if not !option_dprepro then
-          safe_remove preproname;
         ""
       end else begin
         let asmname =
           if !option_dasm
           then output_filename sourcename ".c" ".s"
-          else Filename.temp_file "compcert" ".s" in
+          else tmp_file ".s" in
         compile_c_file sourcename preproname asmname;
-        if not !option_dprepro then
-          safe_remove preproname;
         let objname = object_filename sourcename ".c" in
         assemble asmname objname;
-        if not !option_dasm then safe_remove asmname;
         objname
       end in
     name
@@ -173,11 +163,10 @@ let process_i_file sourcename =
     let asmname =
       if !option_dasm
       then output_filename sourcename ".c" ".s"
-      else Filename.temp_file "compcert" ".s" in
+      else tmp_file ".s" in
     compile_c_file sourcename sourcename asmname;
     let objname = object_filename sourcename ".c" in
     assemble asmname objname;
-    if not !option_dasm then safe_remove asmname;
     objname
   end
 
@@ -196,11 +185,10 @@ let process_S_file sourcename =
     preprocess sourcename (output_filename_default "-");
     ""
   end else begin
-    let preproname = Filename.temp_file "compcert" ".s" in
+    let preproname = tmp_file ".s" in
     preprocess sourcename preproname;
     let objname = object_filename sourcename ".S" in
     assemble preproname objname;
-    safe_remove preproname;
     objname
   end
 
