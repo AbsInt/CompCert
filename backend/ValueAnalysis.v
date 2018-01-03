@@ -1022,17 +1022,6 @@ Proof.
   apply UNCH1; auto. intros; red. unfold inj_of_bc; rewrite H0; auto.
 Qed.
 
-Remark list_forall2_in_l:
-  forall (A B: Type) (P: A -> B -> Prop) x1 l1 l2,
-  list_forall2 P l1 l2 -> In x1 l1 -> exists x2, In x2 l2 /\ P x1 x2.
-Proof.
-  induction 1; simpl; intros.
-- contradiction.
-- destruct H1.
-  + subst. exists b1; auto.
-  + exploit IHlist_forall2; eauto. intros (x2 & U & V). exists x2; auto.
-Qed.
-
 (** ** Semantic invariant *)
 
 Section SOUNDNESS.
@@ -1314,7 +1303,7 @@ Proof.
   exploit hide_stack; eauto. apply pincl_ge; auto.
   intros (bc1 & A & B & C & D & E & F & G).
   exploit external_call_match; eauto.
-  intros. exploit list_forall2_in_l; eauto. intros (av & U & V).
+  intros. exploit list_forall2_in_left; eauto. intros (av & U & V).
   eapply D; eauto with va. apply vpincl_ge. apply H3; auto.
   intros (bc2 & J & K & L & M & N & O & P & Q).
   exploit (return_from_private_call bc bc2); eauto.
@@ -1336,7 +1325,7 @@ Proof.
   exploit anonymize_stack; eauto.
   intros (bc1 & A & B & C & D & E & F & G).
   exploit external_call_match; eauto.
-  intros. exploit list_forall2_in_l; eauto. intros (av & U & V). eapply D; eauto with va.
+  intros. exploit list_forall2_in_left; eauto. intros (av & U & V). eapply D; eauto with va.
   intros (bc2 & J & K & L & M & N & O & P & Q).
   exploit (return_from_public_call bc bc2); eauto.
   eapply mmatch_below; eauto.
