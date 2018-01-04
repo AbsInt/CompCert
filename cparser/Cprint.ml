@@ -555,3 +555,13 @@ let program pp prog =
   fprintf pp "@[<v 0>";
   List.iter (globdecl pp) prog;
   fprintf pp "@]@."
+
+let destination : string option ref = ref None
+
+let print_if prog =
+  match !destination with
+  | None -> ()
+  | Some f ->
+    let oc = open_out f in
+    program (formatter_of_out_channel oc) prog;
+    close_out oc

@@ -33,3 +33,6 @@ val storage : Format.formatter -> C.storage -> unit
 val field : Format.formatter -> C.field -> unit
 val globdecl : Format.formatter -> C.globdecl -> unit
 val program : Format.formatter -> C.program -> unit
+
+val destination : string option ref
+val print_if : C.program -> unit
