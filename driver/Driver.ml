@@ -39,7 +39,7 @@ let dump_jasm asm sourcename destfile =
     Buffer.add_string buf Sys.executable_name;
     for i = 1 to (Array.length  !argv - 1) do
       Buffer.add_string buf " ";
-      Buffer.add_string buf (Responsefile.gnu_quote  !argv.(i));
+      Buffer.add_string buf (Responsefile.gnu_quote !argv.(i));
     done;
     Buffer.contents buf in
   let dump_compile_info pp () =
@@ -72,7 +72,7 @@ let object_filename sourcename suff =
 
 (* From CompCert C AST to asm *)
 
-let compile_c_ast sourcename csyntax ofile =
+let compile_c_file sourcename ifile ofile =
   (* Prepare to dump Clight, RTL, etc, if requested *)
   let set_dest dst opt ext =
     dst := if !opt then Some (output_filename sourcename ".c" ext)
@@ -83,6 +83,8 @@ let compile_c_ast sourcename csyntax ofile =
   set_dest Regalloc.destination_alloctrace option_dalloctrace ".alloctrace";
   set_dest PrintLTL.destination option_dltl ".ltl";
   set_dest PrintMach.destination option_dmach ".mach";
+  (* Parse the ast *)
+  let csyntax = parse_c_file sourcename ifile in
   (* Convert to Asm *)
   let asm =
     match Compiler.apply_partial
@@ -106,10 +108,26 @@ let compile_c_ast sourcename csyntax ofile =
 
 (* From C source to asm *)
 
-let compile_c_file sourcename ifile ofile =
-  let ast = parse_c_file sourcename ifile in
-  compile_c_ast sourcename ast ofile
-
+let compile_i_file sourcename preproname =
+  if !option_interp then begin
+    Machine.config := Machine.compcert_interpreter !Machine.config;
+    let csyntax = parse_c_file sourcename preproname in
+    Interp.execute csyntax;
+        ""
+  end else if !option_S then begin
+    compile_c_file sourcename preproname
+      (output_filename ~final:true sourcename ".c" ".s");
+    ""
+  end else begin
+    let asmname =
+      if !option_dasm
+      then output_filename sourcename ".c" ".s"
+      else tmp_file ".s" in
+    compile_c_file sourcename preproname asmname;
+    let objname = object_filename sourcename ".c" in
+    assemble asmname objname;
+    objname
+  end
 
 (* Processing of a .c file *)
 
@@ -124,52 +142,14 @@ let process_c_file sourcename =
     else
       tmp_file ".i" in
     preprocess sourcename preproname;
-    let name =
-      if !option_interp then begin
-        Machine.config := Machine.compcert_interpreter !Machine.config;
-        let csyntax = parse_c_file sourcename preproname in
-       Interp.execute csyntax;
-        ""
-      end else if !option_S then begin
-        compile_c_file sourcename preproname
-          (output_filename ~final:true sourcename ".c" ".s");
-        ""
-      end else begin
-        let asmname =
-          if !option_dasm
-          then output_filename sourcename ".c" ".s"
-          else tmp_file ".s" in
-        compile_c_file sourcename preproname asmname;
-        let objname = object_filename sourcename ".c" in
-        assemble asmname objname;
-        objname
-      end in
-    name
+    compile_i_file sourcename preproname
   end
 
 (* Processing of a .i / .p file (preprocessed C) *)
 
 let process_i_file sourcename =
   ensure_inputfile_exists sourcename;
-  if !option_interp then begin
-    let csyntax = parse_c_file sourcename sourcename in
-    Interp.execute csyntax;
-    ""
-  end else if !option_S then begin
-    compile_c_file sourcename sourcename
-      (output_filename ~final:true sourcename ".c" ".s");
-    ""
-  end else begin
-    let asmname =
-      if !option_dasm
-      then output_filename sourcename ".c" ".s"
-      else tmp_file ".s" in
-    compile_c_file sourcename sourcename asmname;
-    let objname = object_filename sourcename ".c" in
-    assemble asmname objname;
-    objname
-  end
-
+  compile_i_file sourcename sourcename
 
 (* Processing of .S and .s files *)
 
