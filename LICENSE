@@ -26,26 +26,35 @@ option) any later version:
 
   all files in the common/ directory
 
+  cfrontend/C2C.ml
   cfrontend/Clight.v
   cfrontend/ClightBigstep.v
   cfrontend/Cop.v
+  cfrontend/CPragmas.ml
   cfrontend/Csem.v
   cfrontend/Cstrategy.v
   cfrontend/Csyntax.v
   cfrontend/Ctypes.v
   cfrontend/Ctyping.v
+  cfrontend/PrintClight.ml
+  cfrontend/PrintCsyntax.ml
   
   backend/Cminor.v
-
-  arm/Archi.v
-  ia32/Archi.v
-  powerpc/Archi.v
+  backend/PrintCminor.ml
 
   all files in the cparser/ directory
 
   all files in the exportclight/ directory
 
+  the Archi.v, CBuiltins.ml, and extractionMachdep.v files 
+  in directories arm, powerpc, riscV, x86, x86_32, x86_64
+
+  extraction/extraction.v
+
+  configure
   Makefile
+  Makefile.extr
+  Makefile.menhir
 
 A copy of the GNU General Public License version 2 is included below.
 The choice between the two licenses for the files listed above is left
@@ -56,13 +65,13 @@ Public License.
 
 The files contained in the flocq/ directory and its subdirectories are
 taken from the Flocq project, http://flocq.gforge.inria.fr/
-These files are Copyright 2010-2013 INRIA and distributed under the
+These files are Copyright 2010-2017 INRIA and distributed under the
 terms of the GNU Lesser General Public Licence, either version 3 of
 the licence, or (at your option) any later version.  A copy of the GNU
 Lesser General Public Licence version 3 is included below.
 
 The files contained in the runtime/ directory and its subdirectories
-are Copyright 2013-2014 INRIA and distributed under the terms of the BSD
+are Copyright 2013-2017 INRIA and distributed under the terms of the BSD
 3-clause license, included below.
 
 ----------------------------------------------------------------------
