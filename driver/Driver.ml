@@ -201,6 +201,13 @@ let target_help =
 else
   ""
 
+let toolchain_help =
+  if not Configuration.gnu_toolchain then begin
+{|Toolchain options:
+  -t tof:env     Select target processor for the diab toolchain
+|} end else
+    ""
+
 let usage_string =
   version_string ^
   {|Usage: ccomp [options] <source files>
@@ -255,6 +262,7 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>)
   -falign-cond-branches <n>  Set alignment (in bytes) of conditional branches
 |} ^
  target_help ^
+ toolchain_help ^
  assembler_help ^
  linker_help ^
 {|Tracing options:
@@ -377,7 +385,14 @@ let cmdline_actions =
     else
       [ Exact "-mthumb", Set option_mthumb;
         Exact "-marm", Unset option_mthumb; ]
-  else []) @
+   else []) @
+(* Toolchain options *)
+    (if not Configuration.gnu_toolchain then
+       [Exact "-t", String (fun arg -> push_linker_arg "-t"; push_linker_arg arg;
+                             prepro_options := arg :: "-t" :: !prepro_options;
+                             assembler_options := arg :: "-t" :: !assembler_options;)]
+     else
+       []) @
 (* Assembling options *)
   assembler_actions @
 (* Linking options *)
