@@ -370,9 +370,17 @@ let pp_instructions pp ic =
   | Pcfi_rel_offset _ -> assert false in (* Only debug relevant *)
   pp_jarray instruction pp ic
 
-let pp_program pp prog =
-  reset_id ();
-  pp_program pp pp_instructions prog
+let destination : string option ref = ref None
+let sdump_folder : string ref = ref ""
+
+let print_if prog sourcename =
+  match !destination with
+  | None -> ()
+  | Some f ->
+    let f = Filename.concat !sdump_folder f in
+    let oc = open_out f in
+    pp_ast (formatter_of_out_channel oc) pp_instructions prog sourcename;
+    close_out oc
 
 let pp_mnemonics pp =
   pp_mnemonics pp mnemonic_names

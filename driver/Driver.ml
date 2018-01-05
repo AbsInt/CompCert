@@ -18,51 +18,12 @@ open Driveraux
 open Frontend
 open Assembler
 open Linker
-open Json
 
 (* Optional sdump suffix *)
 let sdump_suffix = ref ".json"
-let sdump_folder = ref ""
-
-(* Dump Asm code in asm format for the validator *)
-
-let jdump_magic_number = "CompCertJDUMP" ^ Version.version
 
 let nolink () =
   !option_c || !option_S || !option_E || !option_interp
-
-let dump_jasm asm sourcename destfile =
-  let oc = open_out_bin destfile in
-  let pp = Format.formatter_of_out_channel oc in
-  let get_args () =
-    let buf = Buffer.create 100 in
-    Buffer.add_string buf Sys.executable_name;
-    for i = 1 to (Array.length  !argv - 1) do
-      Buffer.add_string buf " ";
-      Buffer.add_string buf (Responsefile.gnu_quote !argv.(i));
-    done;
-    Buffer.contents buf in
-  let dump_compile_info pp () =
-    pp_jobject_start pp;
-    pp_jmember ~first:true pp "directory" pp_jstring (Sys.getcwd ());
-    pp_jmember pp "command" pp_jstring (get_args ());
-    pp_jmember pp "file" pp_jstring sourcename;
-    pp_jobject_end pp in
-  pp_jobject_start pp;
-  pp_jmember ~first:true pp "Version" pp_jstring jdump_magic_number;
-  let json_arch =
-    match Configuration.arch, !Clflags.option_mthumb with
-    | "arm", false -> "arm-arm"
-    | "arm", true  -> "arm-thumb"
-    | a, _ -> a in
-  pp_jmember pp "Architecture" pp_jstring json_arch;
-  pp_jmember pp "System" pp_jstring Configuration.system;
-  pp_jmember pp "Compile Info" dump_compile_info ();
-  pp_jmember pp "Compilation Unit" pp_jstring sourcename;
-  pp_jmember pp "Asm Ast" AsmToJSON.pp_program asm;
-  pp_jobject_end pp;
-  Format.pp_print_flush pp ();
-  close_out oc
 
 let object_filename sourcename suff =
   if nolink () then
@@ -85,6 +46,7 @@ let compile_c_file sourcename ifile ofile =
   set_dest Regalloc.destination_alloctrace option_dalloctrace ".alloctrace";
   set_dest PrintLTL.destination option_dltl ".ltl";
   set_dest PrintMach.destination option_dmach ".mach";
+  set_dest AsmToJSON.destination option_sdump !sdump_suffix;
   (* Parse the ast *)
   let csyntax = parse_c_file sourcename ifile in
   (* Convert to Asm *)
@@ -98,11 +60,7 @@ let compile_c_file sourcename ifile ofile =
         eprintf "%s: %a" sourcename print_error msg;
         exit 2 in
   (* Dump Asm in binary and JSON format *)
-  if !option_sdump then begin
-    let sf = output_filename sourcename ".c" !sdump_suffix in
-    let csf = Filename.concat !sdump_folder sf in
-    dump_jasm asm sourcename csf
-  end;
+  AsmToJSON.print_if asm sourcename;
   (* Print Asm in text form *)
   let oc = open_out ofile in
   PrintAsm.print_program oc asm;
@@ -421,7 +379,7 @@ let cmdline_actions =
     option_dasm := true);
   Exact "-sdump", Set option_sdump;
   Exact "-sdump-suffix", String (fun s -> option_sdump := true; sdump_suffix:= s);
-  Exact "-sdump-folder", String (fun s -> sdump_folder := s);
+  Exact "-sdump-folder", String (fun s -> AsmToJSON.sdump_folder := s);
 (* General options *)
   Exact "-v", Set option_v;
   Exact "-stdlib", String(fun s -> stdlib_path := s);

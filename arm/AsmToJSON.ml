@@ -302,9 +302,17 @@ let pp_instructions pp ic =
   in
     pp_jarray instruction pp ic
 
-let pp_program pp prog =
-  reset_id ();
-  JsonAST.pp_program pp pp_instructions prog
+let destination : string option ref = ref None
+let sdump_folder : string ref = ref ""
+
+let print_if prog sourcename =
+  match !destination with
+  | None -> ()
+  | Some f ->
+    let f = Filename.concat !sdump_folder f in
+    let oc = open_out f in
+    JsonAST.pp_ast (Format.formatter_of_out_channel oc) pp_instructions prog sourcename;
+    close_out oc
 
 let pp_mnemonics pp =
   JsonAST.pp_mnemonics pp mnemonic_names

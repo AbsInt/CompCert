@@ -13,7 +13,11 @@
 (* Simple functions to serialize ia32 Asm to JSON *)
 
 (* Dummy function *)
-let pp_program pp prog =
-  Format.fprintf pp "null"
+let destination: string option ref = ref None
+
+let sdump_folder = ref ""
+
+let print_if prog sourcename =
+  ()
 
 let pp_mnemonics pp = ()

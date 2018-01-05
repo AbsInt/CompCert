@@ -13,8 +13,11 @@
 (* Simple functions to serialize RISC-V Asm to JSON *)
 
 (* Dummy function *)
+let destination: string option ref = ref None
 
-let pp_program pp prog =
-  Format.fprintf pp "null"
+let sdump_folder = ref ""
+
+let print_if prog sourcename =
+  ()
 
 let pp_mnemonics pp = ()

@@ -10,6 +10,10 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-val pp_program: Format.formatter -> (Asm.coq_function AST.fundef, 'a) AST.program -> unit
-
 val pp_mnemonics: Format.formatter -> unit
+
+val print_if:  (Asm.coq_function AST.fundef, 'a) AST.program  -> string -> unit
+
+val destination: string option ref
+
+val sdump_folder : string ref

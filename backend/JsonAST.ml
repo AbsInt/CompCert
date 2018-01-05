@@ -122,3 +122,35 @@ let pp_mnemonics pp mnemonic_names =
   let mnemonic_names = List.sort (String.compare) mnemonic_names in
   let new_line pp () = pp_print_string pp "\n" in
   pp_print_list ~pp_sep:new_line pp_print_string pp mnemonic_names
+
+let jdump_magic_number = "CompCertJDUMP" ^ Version.version
+
+let pp_ast pp pp_inst ast sourcename =
+   let get_args () =
+    let buf = Buffer.create 100 in
+    Buffer.add_string buf Sys.executable_name;
+    for i = 1 to (Array.length  !Commandline.argv - 1) do
+      Buffer.add_string buf " ";
+      Buffer.add_string buf (Responsefile.gnu_quote !Commandline.argv.(i));
+    done;
+    Buffer.contents buf in
+    let dump_compile_info pp () =
+      pp_jobject_start pp;
+      pp_jmember ~first:true pp "directory" pp_jstring (Sys.getcwd ());
+      pp_jmember pp "command" pp_jstring (get_args ());
+      pp_jmember pp "file" pp_jstring sourcename;
+      pp_jobject_end pp in
+    pp_jobject_start pp;
+    pp_jmember ~first:true pp "Version" pp_jstring jdump_magic_number;
+    let json_arch =
+      match Configuration.arch, !Clflags.option_mthumb with
+      | "arm", false -> "arm-arm"
+      | "arm", true  -> "arm-thumb"
+      | a, _ -> a in
+    pp_jmember pp "Architecture" pp_jstring json_arch;
+    pp_jmember pp "System" pp_jstring Configuration.system;
+    pp_jmember pp "Compile Info" dump_compile_info ();
+    pp_jmember pp "Compilation Unit" pp_jstring sourcename;
+    pp_jmember pp "Asm Ast" (fun pp prog -> pp_program pp pp_inst prog) ast;
+    pp_jobject_end pp;
+    Format.pp_print_flush pp ()
