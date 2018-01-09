@@ -24,15 +24,15 @@ let mnemonic_names = [ "Padc"; "Padd"; "Padds"; "Pand";"Pannot"; "Pasr"; "Pb"; "
                        "Pfcpy_fii"; "Pfcpy_fi"; "Pfcpy_sf"; "Pflid_lbl"; "Pflis_lbl"; "Pdmb"; "Pdsb"; "Peor"; "Pfabsd";
                        "Pfabss"; "Pfaddd"; "Pfadds"; "Pfcmpd"; "Pfcmps"; "Pfcmpzd"; "Pfcmpzs";
                        "Pfcpyd"; "Pfcpy_fs"; "Pfcpy_if";"Pfcvtds"; "Pfcvtsd"; "Pfdivd"; "Pfdivs"; "Pfldd";
-                       "Pfldd_a"; "Pflid"; "Pflds"; "Pflid_imm"; "Pflis_imm"; "Pfmuld"; "Pfmuls"; "Pfnegd";
-                       "Pfnegs"; "Pfreeframe"; "Pfsitod"; "Pfsitos"; "Pfsqrt"; "Pfstd"; "Pfstd_a";
+                       "Pflid"; "Pflds"; "Pflid_imm"; "Pflis_imm"; "Pfmuld"; "Pfmuls"; "Pfnegd";
+                       "Pfnegs"; "Pfsitod"; "Pfsitos"; "Pfsqrt"; "Pfstd";
                        "Pfsts"; "Pfsubd"; "Pfsubs"; "Pftosizd"; "Pftosizs"; "Pftouizd";
                        "Pftouizs"; "Pfuitod"; "Pfuitos"; "Pinlineasm"; "Pisb"; "Plabel"; "Pldr";
-                       "Pldr_a"; "Ploadsymbol_lbl"; "Pldr_p"; "Pldrb"; "Pldrb_p"; "Pldrh"; "Pldrh_p"; "Pldrsb";
+                       "Ploadsymbol_lbl"; "Pldr_p"; "Pldrb"; "Pldrb_p"; "Pldrh"; "Pldrh_p"; "Pldrsb";
                        "Pldrsh"; "Plsl"; "Plsr"; "Pmla"; "Pmov"; "Pmovite";
                        "Pmovt"; "Pmovw"; "Pmul"; "Pmvn";  "Ploadsymbol_imm"; "Porr";
                        "Ppush"; "Prev"; "Prev16"; "Prsb"; "Prsbs"; "Prsc"; "Psbc"; "Psbfx"; "Psdiv"; "Psmull";
-                       "Pstr"; "Pstr_a"; "Pstr_p"; "Pstrb"; "Pstrb_p"; "Pstrh"; "Pstrh_p"; "Psub"; "Psubs"; "Pudiv";
+                       "Pstr"; "Pstr_p"; "Pstrb"; "Pstrb_p"; "Pstrh"; "Pstrh_p"; "Psub"; "Psubs"; "Pudiv";
                        "Pumull" ]
 
 type instruction_arg =
