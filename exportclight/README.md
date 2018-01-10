@@ -19,8 +19,8 @@ Change to the top-level CompCert directory and issue
 ```
    clightgen [options] <C source files>
 ```
-For each source file "src.c", its Clight abstract syntax is generated
-in "src.v".
+For each source file `src.c`, its Clight abstract syntax is generated
+in `src.v`.
 
 The options recognized are a subset of those of the CompCert compiler ccomp
 (see [user's manual](http://compcert.inria.fr/man/manual003.html) for full documentation):
