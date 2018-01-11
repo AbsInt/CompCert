@@ -25,9 +25,10 @@ professional support, can be purchased from
 information.
 
 ## Copyright
-The CompCert verified compiler is Copyright 2004, 2005, 2006, 2007,
-2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Institut National de
-Recherche en Informatique et en Automatique (INRIA).
+The CompCert verified compiler is Copyright Institut National de
+Recherche en Informatique et en Automatique (INRIA) and 
+AbsInt Angewandte Informatik GmbH.
+
 
 ## Contact
 General discussions on CompCert take place on the
