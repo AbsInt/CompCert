@@ -447,28 +447,7 @@ let _ =
                 Gc.major_heap_increment = 4194304 (* 4M *)
            };
     Printexc.record_backtrace true;
-    Machine.config :=
-      begin match Configuration.arch with
-      | "powerpc" -> if Configuration.system = "linux"
-                     then Machine.ppc_32_bigendian
-                     else Machine.ppc_32_diab_bigendian
-      | "arm"     -> if Configuration.is_big_endian
-                     then Machine.arm_bigendian
-                     else Machine.arm_littleendian
-      | "x86"     -> if Configuration.model = "64" then
-                       Machine.x86_64
-                     else
-                       if Configuration.abi = "macosx"
-                       then Machine.x86_32_macosx
-                       else Machine.x86_32
-      | "riscV"   -> if Configuration.model = "64"
-                     then Machine.rv64
-                     else Machine.rv32
-      | _         -> assert false
-      end;
-    Builtins.set C2C.builtins;
-    Cutil.declare_attributes C2C.attributes;
-    CPragmas.initialize();
+    Frontend.init ();
     parse_cmdline cmdline_actions;
     DebugInit.init (); (* Initialize the debug functions *)
     if nolink () && !option_o <> None && !num_source_files >= 2 then begin

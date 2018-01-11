@@ -70,6 +70,31 @@ let parse_c_file sourcename ifile =
   PrintCsyntax.print_if csyntax;
   csyntax
 
+let init () =
+  Machine.config:=
+    begin match Configuration.arch with
+    | "powerpc" -> if Configuration.gnu_toolchain
+                   then Machine.ppc_32_bigendian
+                   else Machine.ppc_32_diab_bigendian
+    | "arm"     -> if Configuration.is_big_endian
+                   then Machine.arm_bigendian
+                   else Machine.arm_littleendian
+    | "x86"     -> if Configuration.model = "64" then
+                     Machine.x86_64
+                   else
+                     if Configuration.abi = "macosx"
+                     then Machine.x86_32_macosx
+                     else Machine.x86_32
+    | "riscV"   -> if Configuration.model = "64"
+                   then Machine.rv64
+                   else Machine.rv32
+    | _         -> assert false
+  end;
+  Builtins.set C2C.builtins;
+  Cutil.declare_attributes C2C.attributes;
+  CPragmas.initialize()
+
+
 (* Add gnu preprocessor list *)
 let gnu_prepro_opt_key key s =
   prepro_options := s::key::!prepro_options

@@ -22,3 +22,6 @@ val prepro_actions: (Commandline.pattern * Commandline.action) list
 
 val prepro_help: string
   (** Commandline help description *)
+
+val init: unit -> unit
+  (** Initialize the Frontend *)
