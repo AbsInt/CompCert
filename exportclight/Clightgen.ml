@@ -62,17 +62,29 @@ let compile_c_ast sourcename csyntax ofile =
 let compile_c_file sourcename ifile ofile =
   compile_c_ast sourcename (parse_c_file sourcename ifile) ofile
 
+let output_filename sourcename suff =
+  let prefixname = Filename.chop_suffix sourcename suff in
+  output_filename_default (prefixname ^ ".v")
+
 (* Processing of a .c file *)
 
 let process_c_file sourcename =
-  let prefixname = Filename.chop_suffix sourcename ".c" in
+  ensure_inputfile_exists sourcename;
+  let ofile = output_filename sourcename ".c" in
   if !option_E then begin
     preprocess sourcename "-"
   end else begin
     let preproname = Driveraux.tmp_file ".i" in
     preprocess sourcename preproname;
-    compile_c_file sourcename preproname (prefixname ^ ".v")
+    compile_c_file sourcename preproname ofile
   end
+
+(* Processing of a .i file *)
+
+let process_i_file sourcename =
+  ensure_inputfile_exists sourcename;
+  let ofile = output_filename sourcename ".i" in
+  compile_c_file sourcename sourcename ofile
 
 let version_string =
   if Version.buildnr <> "" && Version.tag <> "" then
@@ -88,6 +100,7 @@ Recognized source files:
 Processing options:
   -normalize     Normalize the generated Clight code w.r.t. loads in expressions
   -E             Preprocess only, send result to standard output
+  -o <file>      Generate output in <file>
 |} ^
 prepro_help ^
 {|Language support options (use -fno-<opt> to turn off -f<opt>) :
@@ -123,6 +136,18 @@ let language_support_options = [
 let set_all opts () = List.iter (fun r -> r := true) opts
 let unset_all opts () = List.iter (fun r -> r := false) opts
 
+let actions : ((string -> unit) * string) list ref = ref []
+let push_action fn arg =
+  actions := (fn, arg) :: !actions
+
+let perform_actions () =
+  let rec perform = function
+    | [] -> ()
+    | (fn,arg) :: rem -> fn arg; perform rem
+  in perform (List.rev !actions)
+
+let num_input_files = ref 0
+
 let cmdline_actions =
   let f_opt name ref =
     [Exact("-f" ^ name), Set ref; Exact("-fno-" ^ name), Unset ref] in
@@ -135,7 +160,10 @@ let cmdline_actions =
   Exact "--version", Unit print_version_and_exit;
 (* Processing options *)
   Exact "-E", Set option_E;
-  Exact "-normalize", Set option_normalize]
+  Exact "-normalize", Set option_normalize;
+  Exact "-o", String(fun s -> option_o := Some s);
+  Prefix "-o", Self (fun s -> let s = String.sub s 2 ((String.length s) - 2) in
+                              option_o := Some s);]
 (* Preprocessing options *)
   @ prepro_actions @
 (* Language support options -- more below *)
@@ -164,7 +192,12 @@ let cmdline_actions =
   Prefix "-", Self (fun s ->
       eprintf "Unknown option `%s'\n" s; exit 2);
 (* File arguments *)
-  Suffix ".c", Self (fun s -> process_c_file s);
+  Suffix ".c", Self (fun s ->
+      incr num_input_files; push_action process_c_file s);
+  Suffix ".i", Self (fun s ->
+      incr num_input_files; push_action process_i_file s);
+  Suffix ".p", Self (fun s ->
+      incr num_input_files; push_action process_i_file s);
   ]
 
 let _ =
@@ -193,4 +226,13 @@ let _ =
   Builtins.set C2C.builtins;
   Cutil.declare_attributes C2C.attributes;
   CPragmas.initialize();
-  parse_cmdline cmdline_actions
+  parse_cmdline cmdline_actions;
+  if !option_o <> None && !num_input_files >= 2 then begin
+    eprintf "Ambiguous '-o' option (multiple source files)\n";
+    exit 2
+  end;
+  if !num_input_files = 0 then begin
+    eprintf "clightgen: error: no input file\n";
+    exit 2
+  end;
+  perform_actions ()
