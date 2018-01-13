@@ -12,9 +12,10 @@ TESTS=int32 int64 floats floats-basics \
   expr1 expr6 funptr2 initializers initializers2 initializers3 \
   volatile1 volatile2 volatile3 volatile4 \
   funct3 expr5 struct7 struct8 struct11 struct12 casts1 casts2 char1 \
-  sizeof1 sizeof2 binops bool for1 switch switch2 compound \
+  sizeof1 sizeof2 binops bool for1 for2 switch switch2 compound \
   decl1 interop1 bitfields9 ptrs3 \
   parsing krfun
+
 # Can run, but only in compiled mode, and have reference output in Results
 
 TESTS_COMP=attribs1 bitfields1 bitfields2 bitfields3 bitfields4 \
