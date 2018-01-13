@@ -508,7 +508,7 @@ case "$ocaml_ver" in
       echo "version $ocaml_ver -- good!"
       echo "WARNING: some Intel processors of the Skylake and Kaby Lake generations"
       echo "have a hardware bug that can be triggered by this version of OCaml."
-      echo "To avoid this risk, it is recommended to use OCaml 4.05.";;
+      echo "To avoid this risk, it is recommended to use OCaml 4.05 or later.";;
   4.0*)
         echo "version $ocaml_ver -- good!";;
   ?.*)
