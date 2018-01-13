@@ -1,5 +1,8 @@
+Release 3.2, 2018-01-15
+=======================
+
 Code generation and optimization:
-- Inline static functions that are called only once.  
+- Inline static functions that are called only once.
   Can be turned off by setting the "noinline" attribute on the function.
 - More consistent detection and elimination of divisions by 1.
 - ARM in Thumb mode: simpler instruction sequence for branch through jump table.
@@ -20,7 +23,7 @@ Usability:
 Bug fixing:
 - Issue #P25: make sure sizeof(long double) = sizeof(double) in all contexts.
 - Issue #211: wrong scoping for C99 declarations within a "for" statement.
-	
+
 Coq and Caml development:
 - Pull request #191: Support Coq version 8.7.0 and 8.7.1 in addition
   to Coq 8.6.1.  Coq 8.6 (.0) is no longer supported owing to an
