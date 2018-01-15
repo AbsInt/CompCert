@@ -555,10 +555,10 @@ let print_program p prog =
   fprintf p "Definition composites : list composite_definition :=@ ";
   print_list print_composite_definition p prog.prog_types;
   fprintf p ".@ @ ";
-  fprintf p "Definition global_definitions :=@ ";
+  fprintf p "Definition global_definitions : list (ident * globdef fundef type) :=@ ";
   print_list print_ident_globdef p prog.Ctypes.prog_defs;
   fprintf p ".@ @ ";
-  fprintf p "Definition public_idents :=@ ";
+  fprintf p "Definition public_idents : list ident :=@ ";
   print_list ident p prog.Ctypes.prog_public;
   fprintf p ".@ @ ";
   fprintf p "Definition prog : Clight.program := @ ";
