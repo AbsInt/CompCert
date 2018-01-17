@@ -249,6 +249,21 @@ install:
 	install -m 0644 ./compcert.ini $(SHAREDIR)
 	install -d $(MANDIR)/man1
 	install -m 0644 ./doc/ccomp.1 $(MANDIR)/man1
+	mkdir -p $(LIBDIR)
+	cp -r backend  $(LIBDIR)/
+	cp -r cfrontend  $(LIBDIR)/
+	cp -r cparser  $(LIBDIR)/
+	cp -r common  $(LIBDIR)/
+	cp -r exportclight  $(LIBDIR)/
+	cp -r flocq  $(LIBDIR)/
+	# cp -r x86 $(LIBDIR)/
+	cp -r $(ARCH)_$(BITSIZE) $(LIBDIR)/ || true
+	cp -r $(ARCH) $(LIBDIR)/
+	# cp -r $(ARCH) $(LIBDIR)/
+	# cp -r x86_32 $(LIBDIR)/
+	# cp -r x86_64 $(LIBDIR)/
+	cp -r lib $(LIBDIR)/
+	cp VERSION $(LIBDIR)/
 	$(MAKE) -C runtime install
 ifeq ($(CLIGHTGEN),true)
 	install -m 0755 ./clightgen $(BINDIR)
