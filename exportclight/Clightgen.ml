@@ -97,6 +97,7 @@ let usage_string =
 {|Usage: clightgen [options] <source files>
 Recognized source files:
   .c             C source file
+  .i or .p       C source file that should not be preprocessed
 Processing options:
   -normalize     Normalize the generated Clight code w.r.t. loads in expressions
   -E             Preprocess only, send result to standard output
@@ -110,7 +111,9 @@ prepro_help ^
                     results or function arguments [off]
   -fstruct-return   Like -fstruct-passing (deprecated)
   -fvararg-calls Emulate calls to variable-argument functions [on]
+  -funprototyped Support calls to old-style functions without prototypes [on]
   -fpacked-structs  Emulate packed structs [off]
+  -finline-asm   Support inline 'asm' statements [off]
   -fall          Activate all language support options above
   -fnone         Turn off all language support options above
 Tracing options:
@@ -118,8 +121,14 @@ Tracing options:
   -dc            Save generated Compcert C in <file>.compcert.c
   -dclight       Save generated Clight in <file>.light.c
 General options:
+  -stdlib <dir>  Set the path of the Compcert run-time library
   -v             Print external commands before invoking them
-|}
+  -version       Print the version string and exit
+  -target <value> Generate code for the given target
+  -conf <file>   Read configuration from file
+  @<file>        Read command line options from <file>
+|} ^
+  Cerrors.warning_help
 
 let print_usage_and_exit () =
   printf "%s" usage_string; exit 0
@@ -176,7 +185,12 @@ let cmdline_actions =
 (* General options *)
   Exact "-v", Set option_v;
   Exact "-stdlib", String(fun s -> stdlib_path := s);
+  Exact "-stdlib", String(fun s -> stdlib_path := s);
+  Exact "-conf", Ignore; (* Ignore option since it is already handled *)
+  Exact "-target", Ignore; (* Ignore option since it is already handled *)
   ]
+(* Diagnostic options *)
+  @ Cerrors.warning_options
 (* -f options: come in -f and -fno- variants *)
 (* Language support options *)
   @ f_opt "longdouble" option_flongdouble
