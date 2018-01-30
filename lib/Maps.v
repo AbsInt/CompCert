@@ -178,6 +178,9 @@ Module Type MAP.
   Axiom gmap:
     forall (A B: Type) (f: A -> B) (i: elt) (m: t A),
     get i (map f m) = f(get i m).
+  Axiom set2:
+    forall (A: Type) (i: elt) (x y: A) (m: t A),
+    set i y (set i x m) = set i y m.
 End MAP.
 
 (** * An implementation of trees over type [positive] *)
@@ -1147,6 +1150,8 @@ Module NMap := IMap(NIndexed).
 
 (** * An implementation of maps over any type with decidable equality *)
 
+Require Import Axioms. (* functional extensionality is required for set2 *)
+
 Module Type EQUALITY_TYPE.
   Parameter t: Type.
   Parameter eq: forall (x y: t), {x = y} + {x <> y}.
@@ -1198,6 +1203,13 @@ Module EMap(X: EQUALITY_TYPE) <: MAP.
     get i (map f m) = f(get i m).
   Proof.
     intros. unfold get, map. reflexivity.
+  Qed.
+  Lemma set2:
+    forall (A: Type) (i: elt) (x y: A) (m: t A),
+    set i y (set i x m) = set i y m.
+  Proof.
+    intros. apply functional_extensionality. intros j.
+    unfold set. destruct (X.eq _ _); eauto.
   Qed.
 End EMap.
 
