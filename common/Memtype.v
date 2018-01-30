@@ -175,7 +175,7 @@ Parameter drop_perm: forall (m: mem) (b: block) (lo hi: Z) (p: permission), opti
 
 Parameter nextblock: mem -> block.
 
-Definition valid_block (m: mem) (b: block) := Plt b (nextblock m).
+Definition valid_block (m: mem) (b: block) := Block.lt b (nextblock m).
 
 Axiom valid_not_valid_diff:
   forall m b b', valid_block m b -> ~(valid_block m b') -> b <> b'.
@@ -275,7 +275,7 @@ Axiom valid_pointer_implies:
 
 (** ** Properties of the initial memory state. *)
 
-Axiom nextblock_empty: nextblock empty = 1%positive.
+Axiom nextblock_empty: nextblock empty = Block.init.
 Axiom perm_empty: forall b ofs k p, ~perm empty b ofs k p.
 Axiom valid_access_empty:
   forall chunk b ofs p, ~valid_access empty chunk b ofs p.
@@ -605,7 +605,7 @@ Axiom alloc_result:
 
 Axiom nextblock_alloc:
   forall m1 lo hi m2 b, alloc m1 lo hi = (m2, b) ->
-  nextblock m2 = Pos.succ (nextblock m1).
+  nextblock m2 = Block.succ (nextblock m1).
 
 Axiom valid_block_alloc:
   forall m1 lo hi m2 b, alloc m1 lo hi = (m2, b) ->
@@ -1198,7 +1198,7 @@ Axiom drop_outside_inject:
 (** Memory states that inject into themselves. *)
 
 Definition flat_inj (thr: block) : meminj :=
-  fun (b: block) => if plt b thr then Some(b, 0) else None.
+  fun (b: block) => if Block.lt_dec b thr then Some(b, 0) else None.
 
 Parameter inject_neutral: forall (thr: block) (m: mem), Prop.
 
@@ -1213,14 +1213,14 @@ Axiom alloc_inject_neutral:
   forall thr m lo hi b m',
   alloc m lo hi = (m', b) ->
   inject_neutral thr m ->
-  Plt (nextblock m) thr ->
+  Block.lt (nextblock m) thr ->
   inject_neutral thr m'.
 
 Axiom store_inject_neutral:
   forall chunk m b ofs v m' thr,
   store chunk m b ofs v = Some m' ->
   inject_neutral thr m ->
-  Plt b thr ->
+  Block.lt b thr ->
   Val.inject (flat_inj thr) v v ->
   inject_neutral thr m'.
 
@@ -1228,7 +1228,7 @@ Axiom drop_inject_neutral:
   forall m b lo hi p m' thr,
   drop_perm m b lo hi p = Some m' ->
   inject_neutral thr m ->
-  Plt b thr ->
+  Block.lt b thr ->
   inject_neutral thr m'.
 
 End MEM.
