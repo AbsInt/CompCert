@@ -13,6 +13,7 @@ Module Type BlockType <: EQUALITY_TYPE.
   Parameter succ : t -> t.
 
   Parameter lt : t -> t -> Prop.
+  Parameter le : t -> t -> Prop.
   Parameter lt_dec : forall b1 b2, {lt b1 b2} + {~ lt b1 b2}.
 
   Axiom lt_glob_init : forall i, lt (glob i) init.
@@ -20,6 +21,10 @@ Module Type BlockType <: EQUALITY_TYPE.
   Axiom lt_trans : forall x y z, lt x y -> lt y z -> lt x z.
   Axiom lt_strict : forall b, ~ lt b b.
   Axiom lt_succ_inv: forall x y, lt x (succ y) -> lt x y \/ x = y.
+  Axiom lt_le: forall x y, lt x y -> le x y. (* needed? *)
+  Axiom le_refl: forall b, le b b.
+  Axiom le_trans: forall x y z, le x y -> le y z -> le x z.
+  Axiom lt_le_trans: forall x y z, lt x y -> le y z -> lt x z.
 End BlockType.
 
 Module Type BMapType (M: BlockType).
@@ -81,6 +86,9 @@ Module Block : BlockType.
 
   Definition lt := lt_def.
 
+  Definition le b1 b2 :=
+    lt b1 b2 \/ b1 = b2.
+
   Definition lt_dec b1 b2:
     {lt b1 b2} + {~ lt b1 b2}.
   Proof.
@@ -131,6 +139,34 @@ Module Block : BlockType.
     - destruct (Plt_succ_inv m p) as [H1|H1]; auto.
       left; constructor; auto.
       right; subst; reflexivity.
+  Qed.
+
+  Lemma lt_le x y:
+    lt x y -> le x y.
+  Proof.
+    firstorder.
+  Qed.
+
+  Lemma le_refl b:
+    le b b.
+  Proof.
+    firstorder.
+  Qed.
+
+  Lemma le_trans x y z:
+    le x y -> le y z -> le x z.
+  Proof.
+    unfold le. intros H1 H2.
+    destruct H1; try congruence. left.
+    destruct H2; try congruence. eauto using lt_trans.
+  Qed.
+
+  Lemma lt_le_trans x y z:
+    lt x y -> le y z -> lt x z.
+  Proof.
+    intros Hxy Hyz.
+    destruct Hyz; try congruence.
+    eapply lt_trans; eauto.
   Qed.
 End Block.
 
