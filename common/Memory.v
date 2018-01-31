@@ -67,18 +67,22 @@ Record mem' : Type := mkmem {
   nextblock: block;
   access_max:
     forall b ofs, perm_order'' (mem_access#b ofs Max) (mem_access#b ofs Cur);
+  init_nextblock:
+    Block.le Block.init nextblock;
   nextblock_noaccess:
     forall b ofs k, ~(Block.lt b nextblock) -> mem_access#b ofs k = None;
   contents_default:
     forall b, fst mem_contents#b = Undef
 }.
 
+Local Hint Resolve init_nextblock.
+
 Definition mem := mem'.
 
 Lemma mkmem_ext:
- forall cont1 cont2 acc1 acc2 next1 next2 a1 a2 b1 b2 c1 c2,
+ forall cont1 cont2 acc1 acc2 next1 next2 a1 a2 b1 b2 c1 c2 d1 d2,
   cont1=cont2 -> acc1=acc2 -> next1=next2 ->
-  mkmem cont1 acc1 next1 a1 b1 c1 = mkmem cont2 acc2 next2 a2 b2 c2.
+  mkmem cont1 acc1 next1 a1 b1 c1 d1 = mkmem cont2 acc2 next2 a2 b2 c2 d2.
 Proof.
   intros. subst. f_equal; apply proof_irr.
 Qed.
@@ -344,15 +348,43 @@ Qed.
 Program Definition empty: mem :=
   mkmem (BMap.init (ZMap.init Undef))
         (BMap.init (fun ofs k => None))
-        Block.init _ _ _.
+        Block.init _ _ _ _.
 Next Obligation.
   repeat rewrite BMap.gi. red; auto.
 Qed.
 Next Obligation.
+  apply Block.le_refl.
+Qed.
+Next Obligation.
   rewrite BMap.gi. auto.
 Qed.
 Next Obligation.
   rewrite BMap.gi. auto.
+Qed.
+
+Program Definition alloc_at (m: mem) (b: block) (lo hi: Z): mem :=
+  if Block.lt_dec b m.(nextblock)
+  then mkmem (BMap.set b
+                       (ZMap.init Undef)
+                       m.(mem_contents))
+             (BMap.set b
+                       (fun ofs k => if zle lo ofs && zlt ofs hi then Some Freeable else None)
+                       m.(mem_access))
+             m.(nextblock)
+                 _ _ _ _
+  else m.
+Next Obligation.
+  repeat rewrite BMap.gsspec. destruct (BMap.elt_eq b0 b).
+  subst b. destruct (zle lo ofs && zlt ofs hi); red; auto with mem.
+  apply access_max.
+Qed.
+Next Obligation.
+  rewrite BMap.gsspec. destruct (BMap.elt_eq b0 b).
+  subst b. contradiction.
+  apply nextblock_noaccess. assumption.
+Qed.
+Next Obligation.
+  rewrite BMap.gsspec. destruct (BMap.elt_eq b0 b). auto. apply contents_default.
 Qed.
 
 (** Allocation of a fresh block with the given bounds.  Return an updated
@@ -368,12 +400,16 @@ Program Definition alloc (m: mem) (lo hi: Z) :=
                    (fun ofs k => if zle lo ofs && zlt ofs hi then Some Freeable else None)
                    m.(mem_access))
          (Block.succ m.(nextblock))
-         _ _ _,
+         _ _ _ _,
    m.(nextblock)).
 Next Obligation.
   repeat rewrite BMap.gsspec. destruct (BMap.elt_eq b (nextblock m)).
   subst b. destruct (zle lo ofs && zlt ofs hi); red; auto with mem.
   apply access_max.
+Qed.
+Next Obligation.
+  eapply Block.le_trans. apply init_nextblock.
+  apply Block.lt_le, Block.lt_succ.
 Qed.
 Next Obligation.
   rewrite BMap.gsspec. destruct (BMap.elt_eq b (nextblock m)).
@@ -395,7 +431,7 @@ Program Definition unchecked_free (m: mem) (b: block) (lo hi: Z): mem :=
         (BMap.set b
                 (fun ofs k => if zle lo ofs && zlt ofs hi then None else m.(mem_access)#b ofs k)
                 m.(mem_access))
-        m.(nextblock) _ _ _.
+        m.(nextblock) _ _ _ _.
 Next Obligation.
   repeat rewrite BMap.gsspec. destruct (BMap.elt_eq b0 b).
   destruct (zle lo ofs && zlt ofs hi). red; auto. apply access_max.
@@ -550,7 +586,7 @@ Program Definition store (chunk: memory_chunk) (m: mem) (b: block) (ofs: Z) (v: 
                           m.(mem_contents))
                 m.(mem_access)
                 m.(nextblock)
-                _ _ _)
+                _ _ _ _)
   else
     None.
 Next Obligation. apply access_max. Qed.
@@ -580,7 +616,7 @@ Program Definition storebytes (m: mem) (b: block) (ofs: Z) (bytes: list memval) 
              (BMap.set b (setN bytes ofs (m.(mem_contents)#b)) m.(mem_contents))
              m.(mem_access)
              m.(nextblock)
-             _ _ _)
+             _ _ _ _)
   else
     None.
 Next Obligation. apply access_max. Qed.
@@ -602,7 +638,7 @@ Program Definition drop_perm (m: mem) (b: block) (lo hi: Z) (p: permission): opt
                 (BMap.set b
                         (fun ofs k => if zle lo ofs && zlt ofs hi then Some p else m.(mem_access)#b ofs k)
                         m.(mem_access))
-                m.(nextblock) _ _ _)
+                m.(nextblock) _ _ _ _)
   else None.
 Next Obligation.
   repeat rewrite BMap.gsspec. destruct (BMap.elt_eq b0 b). subst b0.
@@ -1664,6 +1700,73 @@ Proof.
   rewrite addressing_int64_split; auto.
   exploit store_valid_access_3. eexact H2. intros [P Q]. exact Q.
 Qed.
+
+(** ** Properties related to [alloc_at]. *)
+
+Section ALLOCAT.
+
+Variable m1: mem.
+Variable b: block.
+Variables lo hi: Z.
+Variable m2: mem.
+
+Hypothesis ALLOCAT: alloc_at m1 b lo hi = m2.
+
+Theorem nextblock_alloc_at:
+  nextblock m2 = nextblock m1.
+Proof.
+  subst. unfold alloc_at.
+  destruct (Block.lt_dec _ _); reflexivity.
+Qed.
+
+Theorem perm_alloc_at_1:
+  forall b' ofs k p, b' <> b -> perm m1 b' ofs k p -> perm m2 b' ofs k p.
+Proof.
+  unfold perm; intros b' ofs k p Hdiff PERM.
+  unfold alloc_at in ALLOCAT; destruct Block.lt_dec; subst; auto.
+  simpl.
+  rewrite BMap.gso; auto.
+Qed.
+
+Theorem perm_alloc_at_2:
+  valid_block m1 b ->
+  forall ofs k, lo <= ofs < hi -> perm m2 b ofs k Freeable.
+Proof.
+  unfold perm; intros VB ofs k.
+  unfold alloc_at in ALLOCAT.
+  destruct (Block.lt_dec _ _); try contradiction. subst. cbn.
+  intro RNG.
+  rewrite BMap.gss. unfold proj_sumbool. rewrite zle_true.
+  rewrite zlt_true. simpl. auto with mem. omega. omega.
+Qed.
+
+Theorem perm_alloc_at_inv:
+  forall b' ofs k p,
+  perm m2 b' ofs k p ->
+  if eq_block b' b then lo <= ofs < hi else perm m1 b' ofs k p.
+Proof.
+  intros until p; unfold perm. unfold alloc_at in ALLOCAT.
+  destruct (Block.lt_dec _ _).
+  - subst. simpl.
+    rewrite BMap.gsspec. change eq_block with BMap.elt_eq.
+    destruct (BMap.elt_eq b' b); intros.
+    destruct (zle lo ofs); try contradiction. destruct (zlt ofs hi); try contradiction.
+    split; auto.
+    auto.
+  - intro PERM.
+    destruct (eq_block _ _).
+    + subst.
+      apply perm_valid_block in PERM; contradiction.
+    + congruence.
+Qed.
+
+Theorem perm_alloc_at_3:
+  forall ofs k p, perm m2 b ofs k p -> lo <= ofs < hi.
+Proof.
+  intros. exploit perm_alloc_at_inv; eauto. rewrite dec_eq_true; auto.
+Qed.
+
+End ALLOCAT.
 
 (** ** Properties related to [alloc]. *)
 
@@ -4419,6 +4522,26 @@ Proof.
   destruct (zlt ofs0 ofs); auto.
   destruct (zlt ofs0 (ofs + Z.of_nat (length bytes))); auto.
   elim (H0 ofs0). omega. auto.
+Qed.
+
+Lemma alloc_at_unchanged_on:
+  forall m1 b lo hi m2,
+    alloc_at m1 b lo hi = m2 ->
+    (forall ofs, ~ P b ofs) ->
+    unchanged_on m1 m2.
+Proof.
+  unfold alloc_at; intros m1 b lo hi m2 ALLOCAT Pspec.
+  destruct Block.lt_dec; subst.
+  - constructor; simpl.
+    + apply Block.le_refl.
+    + unfold perm; simpl.
+      intros b0 ofs k p PP VB.
+      rewrite BMap.gso. tauto.
+      intro; subst; apply Pspec in PP; eauto.
+    + intros b0 ofs PP PERM.
+      rewrite BMap.gso; auto.
+      intro; subst; apply Pspec in PP; eauto.
+  - apply unchanged_on_refl.
 Qed.
 
 Lemma alloc_unchanged_on:

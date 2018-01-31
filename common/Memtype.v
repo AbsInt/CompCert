@@ -93,6 +93,8 @@ Parameter mem: Type.
 (** [empty] is the initial memory state. *)
 Parameter empty: mem.
 
+Parameter alloc_at: forall (m: mem) (b: block) (lo hi: Z), mem.
+
 (** [alloc m lo hi] allocates a fresh block of size [hi - lo] bytes.
   Valid offsets in this block are between [lo] included and [hi] excluded.
   These offsets are writable in the returned memory state.
@@ -174,6 +176,8 @@ Parameter drop_perm: forall (m: mem) (b: block) (lo hi: Z) (p: permission), opti
   block. *)
 
 Parameter nextblock: mem -> block.
+
+Axiom init_nextblock: forall m, Block.le Block.init (nextblock m).
 
 Definition valid_block (m: mem) (b: block) := Block.lt b (nextblock m).
 
@@ -591,6 +595,21 @@ Axiom storebytes_split:
   exists m1,
      storebytes m b ofs bytes1 = Some m1
   /\ storebytes m1 b (ofs + Z.of_nat(length bytes1)) bytes2 = Some m2.
+
+(** ** Properties of [alloc_at] *)
+
+Axiom nextblock_alloc_at:
+  forall m1 b lo hi m2, alloc_at m1 b lo hi = m2 -> nextblock m2 = nextblock m1.
+
+Axiom perm_alloc_at_1:
+  forall m1 b lo hi m2, alloc_at m1 b lo hi = m2 ->
+  forall b' ofs k p, b' <> b -> perm m1 b' ofs k p -> perm m2 b' ofs k p.
+Axiom perm_alloc_at_2:
+  forall m1 b lo hi m2, alloc_at m1 b lo hi = m2 -> valid_block m1 b ->
+  forall ofs k, lo <= ofs < hi -> perm m2 b ofs k Freeable.
+Axiom perm_alloc_at_3:
+  forall m1 b lo hi m2, alloc_at m1 b lo hi = m2 ->
+  forall ofs k p, perm m2 b ofs k p -> lo <= ofs < hi.
 
 (** ** Properties of [alloc]. *)
 

@@ -27,6 +27,8 @@ Module Type BlockType <: EQUALITY_TYPE.
   Axiom le_trans: forall x y z, le x y -> le y z -> le x z.
   Axiom lt_le_trans: forall x y z, lt x y -> le y z -> lt x z.
 
+  Axiom glob_inj: forall i j, glob i = glob j -> i = j.
+
   Axiom ident_of_glob: forall i, ident_of (glob i) = Some i.
   Axiom ident_of_inv: forall b i, ident_of b = Some i -> b = glob i.
 
@@ -190,6 +192,12 @@ Module Block : BlockType.
     ident_of b = Some i -> b = glob i.
   Proof.
     unfold ident_of. destruct b; inversion 1; reflexivity.
+  Qed.
+
+  Lemma glob_inj i j:
+    glob i = glob j -> i = j.
+  Proof.
+    inversion 1; auto.
   Qed.
 
 End Block.
