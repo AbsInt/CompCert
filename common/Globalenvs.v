@@ -73,62 +73,45 @@ Module Senv.
 
 Record t: Type := mksenv {
   (** Operations *)
-  find_symbol: ident -> option block;
   public_symbol: ident -> bool;
-  invert_symbol: block -> option ident;
   block_is_volatile: block -> bool;
-  nextblock: block;
   (** Properties *)
-  find_symbol_injective:
-    forall id1 id2 b, find_symbol id1 = Some b -> find_symbol id2 = Some b -> id1 = id2;
-  invert_find_symbol:
-    forall id b, invert_symbol b = Some id -> find_symbol id = Some b;
-  find_invert_symbol:
-    forall id b, find_symbol id = Some b -> invert_symbol b = Some id;
-  public_symbol_exists:
-    forall id, public_symbol id = true -> exists b, find_symbol id = Some b;
-  find_symbol_below:
-    forall id b, find_symbol id = Some b -> Plt b nextblock;
+  public_symbol_below:
+    forall id, public_symbol id = true -> Block.lt (Block.glob id) Block.init;
   block_is_volatile_below:
-    forall b, block_is_volatile b = true -> Plt b nextblock
+    forall b, block_is_volatile b = true -> Block.lt b Block.init;
 }.
 
-Definition symbol_address (ge: t) (id: ident) (ofs: ptrofs) : val :=
-  match find_symbol ge id with
-  | Some b => Vptr b ofs
-  | None => Vundef
-  end.
+Definition symbol_address (id: ident) (ofs: ptrofs) : val :=
+  Vptr (Block.glob id) ofs.
 
 Theorem shift_symbol_address:
-  forall ge id ofs delta,
-  symbol_address ge id (Ptrofs.add ofs delta) = Val.offset_ptr (symbol_address ge id ofs) delta.
+  forall id ofs delta,
+  symbol_address id (Ptrofs.add ofs delta) = Val.offset_ptr (symbol_address id ofs) delta.
 Proof.
-  intros. unfold symbol_address, Val.offset_ptr. destruct (find_symbol ge id); auto.
+  reflexivity.
 Qed.
 
 Theorem shift_symbol_address_32:
-  forall ge id ofs n,
+  forall id ofs n,
   Archi.ptr64 = false ->
-  symbol_address ge id (Ptrofs.add ofs (Ptrofs.of_int n)) = Val.add (symbol_address ge id ofs) (Vint n).
+  symbol_address id (Ptrofs.add ofs (Ptrofs.of_int n)) = Val.add (symbol_address id ofs) (Vint n).
 Proof.
-  intros. unfold symbol_address. destruct (find_symbol ge id).
-- unfold Val.add. rewrite H. auto.
-- auto.
+  intros. unfold symbol_address.
+  unfold Val.add. rewrite H. auto.
 Qed.
 
 Theorem shift_symbol_address_64:
-  forall ge id ofs n,
+  forall id ofs n,
   Archi.ptr64 = true ->
-  symbol_address ge id (Ptrofs.add ofs (Ptrofs.of_int64 n)) = Val.addl (symbol_address ge id ofs) (Vlong n).
+  symbol_address id (Ptrofs.add ofs (Ptrofs.of_int64 n)) = Val.addl (symbol_address id ofs) (Vlong n).
 Proof.
-  intros. unfold symbol_address. destruct (find_symbol ge id).
-- unfold Val.addl. rewrite H. auto.
-- auto.
+  intros. unfold symbol_address.
+  unfold Val.addl. rewrite H. auto.
 Qed.
 
 Definition equiv (se1 se2: t) : Prop :=
-     (forall id, find_symbol se2 id = find_symbol se1 id)
-  /\ (forall id, public_symbol se2 id = public_symbol se1 id)
+     (forall id, public_symbol se2 id = public_symbol se1 id)
   /\ (forall b, block_is_volatile se2 b = block_is_volatile se1 b).
 
 End Senv.
@@ -146,44 +129,30 @@ Variable V: Type.  (**r The type of information attached to variables *)
 
 Record t: Type := mkgenv {
   genv_public: list ident;              (**r which symbol names are public *)
-  genv_symb: PTree.t block;             (**r mapping symbol -> block *)
   genv_defs: PTree.t (globdef F V);     (**r mapping block -> definition *)
-  genv_next: block;                     (**r next symbol pointer *)
-  genv_symb_range: forall id b, PTree.get id genv_symb = Some b -> Plt b genv_next;
-  genv_defs_range: forall b g, PTree.get b genv_defs = Some g -> Plt b genv_next;
-  genv_vars_inj: forall id1 id2 b,
-    PTree.get id1 genv_symb = Some b -> PTree.get id2 genv_symb = Some b -> id1 = id2
 }.
 
 (** ** Lookup functions *)
-
-(** [find_symbol ge id] returns the block associated with the given name, if any *)
-
-Definition find_symbol (ge: t) (id: ident) : option block :=
-  PTree.get id ge.(genv_symb).
 
 (** [symbol_address ge id ofs] returns a pointer into the block associated
   with [id], at byte offset [ofs].  [Vundef] is returned if no block is associated
   to [id]. *)
 
-Definition symbol_address (ge: t) (id: ident) (ofs: ptrofs) : val :=
-  match find_symbol ge id with
-  | Some b => Vptr b ofs
-  | None => Vundef
-  end.
+Definition symbol_address (id: ident) (ofs: ptrofs) : val :=
+  Vptr (Block.glob id) ofs.
 
 (** [public_symbol ge id] says whether the name [id] is public and defined. *)
 
 Definition public_symbol (ge: t) (id: ident) : bool :=
-  match find_symbol ge id with
-  | None => false
-  | Some _ => In_dec ident_eq id ge.(genv_public)
-  end.
+  In_dec ident_eq id ge.(genv_public).
 
 (** [find_def ge b] returns the global definition associated with the given address. *)
 
 Definition find_def (ge: t) (b: block) : option (globdef F V) :=
-  PTree.get b ge.(genv_defs).
+  match Block.ident_of b with
+    Some i => PTree.get i ge.(genv_defs)
+  | None => None
+  end.
 
 (** [find_funct_ptr ge b] returns the function description associated with
     the given address. *)
@@ -199,13 +168,6 @@ Definition find_funct (ge: t) (v: val) : option F :=
   | Vptr b ofs => if Ptrofs.eq_dec ofs Ptrofs.zero then find_funct_ptr ge b else None
   | _ => None
   end.
-
-(** [invert_symbol ge b] returns the name associated with the given block, if any *)
-
-Definition invert_symbol (ge: t) (b: block) : option ident :=
-  PTree.fold
-    (fun res id b' => if eq_block b b' then Some id else res)
-    ge.(genv_symb) None.
 
 (** [find_var_info ge b] returns the information attached to the variable
    at address [b]. *)
@@ -224,33 +186,10 @@ Definition block_is_volatile (ge: t) (b: block) : bool :=
 
 (** ** Constructing the global environment *)
 
-Program Definition add_global (ge: t) (idg: ident * globdef F V) : t :=
+Definition add_global (ge: t) (idg: ident * globdef F V) : t :=
   @mkgenv
     ge.(genv_public)
-    (PTree.set idg#1 ge.(genv_next) ge.(genv_symb))
-    (PTree.set ge.(genv_next) idg#2 ge.(genv_defs))
-    (Pos.succ ge.(genv_next))
-    _ _ _.
-Next Obligation.
-  destruct ge; simpl in *.
-  rewrite PTree.gsspec in H. destruct (peq id i). inv H. apply Plt_succ.
-  apply Plt_trans_succ; eauto.
-Qed.
-Next Obligation.
-  destruct ge; simpl in *.
-  rewrite PTree.gsspec in H. destruct (peq b genv_next0).
-  inv H. apply Plt_succ.
-  apply Plt_trans_succ; eauto.
-Qed.
-Next Obligation.
-  destruct ge; simpl in *.
-  rewrite PTree.gsspec in H. rewrite PTree.gsspec in H0.
-  destruct (peq id1 i); destruct (peq id2 i).
-  congruence.
-  inv H. eelim Plt_strict. eapply genv_symb_range0; eauto.
-  inv H0. eelim Plt_strict. eapply genv_symb_range0; eauto.
-  eauto.
-Qed.
+    (PTree.set idg#1 idg#2 ge.(genv_defs)).
 
 Definition add_globals (ge: t) (gl: list (ident * globdef F V)) : t :=
   List.fold_left add_global gl ge.
@@ -262,17 +201,8 @@ Proof.
   intros. apply fold_left_app.
 Qed.
 
-Program Definition empty_genv (pub: list ident): t :=
-  @mkgenv pub (PTree.empty _) (PTree.empty _) 1%positive _ _ _.
-Next Obligation.
-  rewrite PTree.gempty in H. discriminate.
-Qed.
-Next Obligation.
-  rewrite PTree.gempty in H. discriminate.
-Qed.
-Next Obligation.
-  rewrite PTree.gempty in H. discriminate.
-Qed.
+Definition empty_genv (pub: list ident): t :=
+  @mkgenv pub (PTree.empty _).
 
 Definition globalenv (p: program F V) :=
   add_globals (empty_genv p.(prog_public)) p.(prog_defs).
@@ -352,39 +282,35 @@ End GLOBALENV_PRINCIPLES.
 
 (** ** Properties of the operations over global environments *)
 
-Theorem public_symbol_exists:
-  forall ge id, public_symbol ge id = true -> exists b, find_symbol ge id = Some b.
+Theorem public_symbol_below:
+  forall ge id, public_symbol ge id = true -> Block.lt (Block.glob id) Block.init.
 Proof.
-  unfold public_symbol; intros. destruct (find_symbol ge id) as [b|].
-  exists b; auto.
-  discriminate.
+  intros; apply Block.lt_glob_init.
 Qed.
 
 Theorem shift_symbol_address:
-  forall ge id ofs delta,
-  symbol_address ge id (Ptrofs.add ofs delta) = Val.offset_ptr (symbol_address ge id ofs) delta.
+  forall id ofs delta,
+  symbol_address id (Ptrofs.add ofs delta) = Val.offset_ptr (symbol_address id ofs) delta.
 Proof.
-  intros. unfold symbol_address, Val.offset_ptr. destruct (find_symbol ge id); auto.
+  intros. unfold symbol_address, Val.offset_ptr. reflexivity.
 Qed.
 
 Theorem shift_symbol_address_32:
-  forall ge id ofs n,
+  forall id ofs n,
   Archi.ptr64 = false ->
-  symbol_address ge id (Ptrofs.add ofs (Ptrofs.of_int n)) = Val.add (symbol_address ge id ofs) (Vint n).
+  symbol_address id (Ptrofs.add ofs (Ptrofs.of_int n)) = Val.add (symbol_address id ofs) (Vint n).
 Proof.
-  intros. unfold symbol_address. destruct (find_symbol ge id).
-- unfold Val.add. rewrite H. auto.
-- auto.
+  intros. unfold symbol_address.
+  unfold Val.add. rewrite H. auto.
 Qed.
 
 Theorem shift_symbol_address_64:
-  forall ge id ofs n,
+  forall id ofs n,
   Archi.ptr64 = true ->
-  symbol_address ge id (Ptrofs.add ofs (Ptrofs.of_int64 n)) = Val.addl (symbol_address ge id ofs) (Vlong n).
+  symbol_address id (Ptrofs.add ofs (Ptrofs.of_int64 n)) = Val.addl (symbol_address id ofs) (Vlong n).
 Proof.
-  intros. unfold symbol_address. destruct (find_symbol ge id).
-- unfold Val.addl. rewrite H. auto.
-- auto.
+  intros. unfold symbol_address.
+  unfold Val.addl. rewrite H. auto.
 Qed.
 
 Theorem find_funct_inv:
@@ -418,58 +344,26 @@ Qed.
 
 Theorem find_def_symbol:
   forall p id g,
-  (prog_defmap p)!id = Some g <-> exists b, find_symbol (globalenv p) id = Some b /\ find_def (globalenv p) b = Some g.
+  (prog_defmap p)!id = Some g <-> find_def (globalenv p) (Block.glob id) = Some g.
 Proof.
   intros.
-  set (P := fun m ge => m!id = Some g <-> exists b, find_symbol ge id = Some b /\ find_def ge b = Some g).
+  set (P := fun m ge => m!id = Some g <-> find_def ge (Block.glob id) = Some g).
   assert (REC: forall l m ge,
             P m ge ->
             P (fold_left (fun m idg => PTree.set idg#1 idg#2 m) l m)
               (add_globals ge l)).
   { induction l as [ | [id1 g1] l]; intros; simpl.
   - auto.
-  - apply IHl. unfold P, add_global, find_symbol, find_def; simpl.
+  - apply IHl. unfold P, add_global, find_def; simpl.
+    rewrite Block.ident_of_glob.
     rewrite ! PTree.gsspec. destruct (peq id id1).
-    + subst id1. split; intros.
-      inv H0. exists (genv_next ge); split; auto. apply PTree.gss.
-      destruct H0 as (b & A & B). inv A. rewrite PTree.gss in B. auto.
-    + red in H; rewrite H. split.
-      intros (b & A & B). exists b; split; auto. rewrite PTree.gso; auto.
-      apply Plt_ne. eapply genv_symb_range; eauto.
-      intros (b & A & B). rewrite PTree.gso in B. exists b; auto.
-      apply Plt_ne. eapply genv_symb_range; eauto.
+    + subst id1. tauto.
+    + red in H; rewrite H.
+      unfold find_def. rewrite Block.ident_of_glob. tauto.
   }
-  apply REC. unfold P, find_symbol, find_def; simpl.
-  rewrite ! PTree.gempty. split.
-  congruence.
-  intros (b & A & B); congruence.
-Qed.
-
-Theorem find_symbol_exists:
-  forall p id g,
-  In (id, g) (prog_defs p) ->
-  exists b, find_symbol (globalenv p) id = Some b.
-Proof.
-  intros. unfold globalenv. eapply add_globals_ensures; eauto.
-(* preserves *)
-  intros. unfold find_symbol; simpl. rewrite PTree.gsspec. destruct (peq id id0).
-  econstructor; eauto.
-  auto.
-(* ensures *)
-  intros. unfold find_symbol; simpl. rewrite PTree.gss. econstructor; eauto.
-Qed.
-
-Theorem find_symbol_inversion : forall p x b,
-  find_symbol (globalenv p) x = Some b ->
-  In x (prog_defs_names p).
-Proof.
-  intros until b; unfold globalenv. eapply add_globals_preserves.
-(* preserves *)
-  unfold find_symbol; simpl; intros. rewrite PTree.gsspec in H1.
-  destruct (peq x id). subst x. change id with (fst (id, g)). apply List.in_map; auto.
-  auto.
-(* base *)
-  unfold find_symbol; simpl; intros. rewrite PTree.gempty in H. discriminate.
+  apply REC. unfold P, find_def; simpl.
+  rewrite Block.ident_of_glob.
+  rewrite ! PTree.gempty. tauto.
 Qed.
 
 Theorem find_def_inversion:
@@ -480,11 +374,14 @@ Proof.
   intros until g. unfold globalenv. apply add_globals_preserves.
 (* preserves *)
   unfold find_def; simpl; intros.
-  rewrite PTree.gsspec in H1. destruct (peq b (genv_next ge)).
+  destruct (Block.ident_of b) eqn:Hb; try congruence.
+  rewrite PTree.gsspec in H1. destruct (peq i id).
   inv H1. exists id; auto.
   auto.
 (* base *)
-  unfold find_def; simpl; intros. rewrite PTree.gempty in H. discriminate.
+  unfold find_def; simpl; intros.
+  destruct (Block.ident_of b) eqn: Hb; try congruence.
+  rewrite PTree.gempty in H. discriminate.
 Qed.
 
 Corollary find_funct_ptr_inversion:
@@ -523,61 +420,6 @@ Proof.
   intros. exploit find_funct_inversion; eauto. intros [id IN]. eauto.
 Qed.
 
-Theorem global_addresses_distinct:
-  forall ge id1 id2 b1 b2,
-  id1 <> id2 ->
-  find_symbol ge id1 = Some b1 ->
-  find_symbol ge id2 = Some b2 ->
-  b1 <> b2.
-Proof.
-  intros. red; intros; subst. elim H. destruct ge. eauto.
-Qed.
-
-Theorem invert_find_symbol:
-  forall ge id b,
-  invert_symbol ge b = Some id -> find_symbol ge id = Some b.
-Proof.
-  intros until b; unfold find_symbol, invert_symbol.
-  apply PTree_Properties.fold_rec.
-  intros. rewrite H in H0; auto.
-  congruence.
-  intros. destruct (eq_block b v). inv H2. apply PTree.gss.
-  rewrite PTree.gsspec. destruct (peq id k).
-  subst. assert (m!k = Some b) by auto. congruence.
-  auto.
-Qed.
-
-Theorem find_invert_symbol:
-  forall ge id b,
-  find_symbol ge id = Some b -> invert_symbol ge b = Some id.
-Proof.
-  intros until b.
-  assert (find_symbol ge id = Some b -> exists id', invert_symbol ge b = Some id').
-  unfold find_symbol, invert_symbol.
-  apply PTree_Properties.fold_rec.
-  intros. rewrite H in H0; auto.
-  rewrite PTree.gempty; congruence.
-  intros. destruct (eq_block b v). exists k; auto.
-  rewrite PTree.gsspec in H2. destruct (peq id k).
-  inv H2. congruence. auto.
-
-  intros; exploit H; eauto. intros [id' A].
-  assert (id = id'). eapply genv_vars_inj; eauto. apply invert_find_symbol; auto.
-  congruence.
-Qed.
-
-Definition advance_next (gl: list (ident * globdef F V)) (x: positive) :=
-  List.fold_left (fun n g => Pos.succ n) gl x.
-
-Remark genv_next_add_globals:
-  forall gl ge,
-  genv_next (add_globals ge gl) = advance_next gl (genv_next ge).
-Proof.
-  induction gl; simpl; intros.
-  auto.
-  rewrite IHgl. auto.
-Qed.
-
 Remark genv_public_add_globals:
   forall gl ge,
   genv_public (add_globals ge gl) = genv_public ge.
@@ -594,10 +436,12 @@ Proof.
 Qed.
 
 Theorem block_is_volatile_below:
-  forall ge b, block_is_volatile ge b = true ->  Plt b ge.(genv_next).
+  forall ge b, block_is_volatile ge b = true -> Block.lt b Block.init.
 Proof.
   unfold block_is_volatile; intros. destruct (find_var_info ge b) as [gv|] eqn:FV.
-  rewrite find_var_info_iff in FV. eapply genv_defs_range; eauto.
+  rewrite find_var_info_iff in FV.
+  unfold find_def in FV. destruct (Block.ident_of b) eqn:Hb; try discriminate.
+  apply Block.ident_of_inv in Hb; subst. apply Block.lt_glob_init.
   discriminate.
 Qed.
 
@@ -605,16 +449,9 @@ Qed.
 
 Definition to_senv (ge: t) : Senv.t :=
  @Senv.mksenv
-    (find_symbol ge)
     (public_symbol ge)
-    (invert_symbol ge)
     (block_is_volatile ge)
-    ge.(genv_next)
-    ge.(genv_vars_inj)
-    (invert_find_symbol ge)
-    (find_invert_symbol ge)
-    (public_symbol_exists ge)
-    ge.(genv_symb_range)
+    (public_symbol_below ge)
     (block_is_volatile_below ge).
 
 (** * Construction of the initial memory state *)

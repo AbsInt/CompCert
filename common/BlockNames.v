@@ -11,6 +11,7 @@ Module Type BlockType <: EQUALITY_TYPE.
   Parameter glob : ident -> t.  (* block associated to a global identifier *)
   Parameter init : t.           (* initial dynamic block id *)
   Parameter succ : t -> t.
+  Parameter ident_of: t -> option ident.
 
   Parameter lt : t -> t -> Prop.
   Parameter le : t -> t -> Prop.
@@ -25,6 +26,10 @@ Module Type BlockType <: EQUALITY_TYPE.
   Axiom le_refl: forall b, le b b.
   Axiom le_trans: forall x y z, le x y -> le y z -> le x z.
   Axiom lt_le_trans: forall x y z, lt x y -> le y z -> lt x z.
+
+  Axiom ident_of_glob: forall i, ident_of (glob i) = Some i.
+  Axiom ident_of_inv: forall b i, ident_of b = Some i -> b = glob i.
+
 End BlockType.
 
 Module Type BMapType (M: BlockType).
@@ -168,6 +173,25 @@ Module Block : BlockType.
     destruct Hyz; try congruence.
     eapply lt_trans; eauto.
   Qed.
+
+  Definition ident_of b :=
+    match b with
+      glob_def i => Some i
+    | dyn i => None
+    end.
+
+  Lemma ident_of_glob i:
+    ident_of (glob i) = Some i.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Lemma ident_of_inv b i:
+    ident_of b = Some i -> b = glob i.
+  Proof.
+    unfold ident_of. destruct b; inversion 1; reflexivity.
+  Qed.
+
 End Block.
 
 Module BMap : BMapType Block := EMap Block.
