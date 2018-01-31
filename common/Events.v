@@ -275,10 +275,9 @@ Inductive eventval_match: eventval -> typ -> val -> Prop :=
       eventval_match (EVfloat f) Tfloat (Vfloat f)
   | ev_match_single: forall f,
       eventval_match (EVsingle f) Tsingle (Vsingle f)
-  | ev_match_ptr: forall id b ofs,
+  | ev_match_ptr: forall id ofs,
       Senv.public_symbol ge id = true ->
-      Senv.find_symbol ge id = Some b ->
-      eventval_match (EVptr_global id ofs) Tptr (Vptr b ofs).
+      eventval_match (EVptr_global id ofs) Tptr (Vptr (Block.glob id) ofs).
 
 Inductive eventval_list_match: list eventval -> list typ -> list val -> Prop :=
   | evl_match_nil:
@@ -324,14 +323,14 @@ Qed.
 Lemma eventval_match_determ_1:
   forall ev ty v1 v2, eventval_match ev ty v1 -> eventval_match ev ty v2 -> v1 = v2.
 Proof.
-  intros. inv H; inv H0; auto. congruence.
+  intros. inv H; inv H0; auto.
 Qed.
 
 Lemma eventval_match_determ_2:
   forall ev1 ev2 ty v, eventval_match ev1 ty v -> eventval_match ev2 ty v -> ev1 = ev2.
 Proof.
   intros. inv H; inv H0; auto.
-  decEq. eapply Senv.find_symbol_injective; eauto.
+  decEq. eapply Block.glob_inj; eauto.
 Qed.
 
 Lemma eventval_list_match_determ_2:
@@ -371,21 +370,20 @@ Proof.
   intros. unfold eventval_type, Tptr in H2. remember Archi.ptr64 as ptr64.
   inversion H; subst ev1 ty v1; clear H; destruct ev2; simpl in H2; inv H2.
 - exists (Vint i0); constructor.
-- simpl in H1; exploit Senv.public_symbol_exists; eauto. intros [b FS].
-  exists (Vptr b i1); rewrite H3. constructor; auto.
+- simpl in H1.
+  exists (Vptr (Block.glob i0) i1); rewrite H3. constructor; auto.
 - exists (Vlong i0); constructor.
-- simpl in H1; exploit Senv.public_symbol_exists; eauto. intros [b FS].
-  exists (Vptr b i1); rewrite H3; constructor; auto.
+- simpl in H1.
+  exists (Vptr (Block.glob i0) i1); rewrite H3; constructor; auto.
 - exists (Vfloat f0); constructor.
 - destruct Archi.ptr64; discriminate.
 - exists (Vsingle f0); constructor; auto.
 - destruct Archi.ptr64; discriminate.
-- exists (Vint i); unfold Tptr; rewrite H5; constructor.
-- exists (Vlong i); unfold Tptr; rewrite H5; constructor.
+- exists (Vint i); unfold Tptr; rewrite H4; constructor.
+- exists (Vlong i); unfold Tptr; rewrite H4; constructor.
 - destruct Archi.ptr64; discriminate.
 - destruct Archi.ptr64; discriminate.
-- exploit Senv.public_symbol_exists. eexact H1. intros [b' FS].
-  exists (Vptr b' i0); constructor; auto.
+- exists (Vptr (Block.glob i) i0); constructor; auto.
 Qed.
 
 Lemma eventval_match_valid:
@@ -418,16 +416,12 @@ Proof.
   intros. destruct ev; simpl in *; auto. rewrite <- H; auto.
 Qed.
 
-Hypothesis symbols_preserved:
-  forall id, Senv.find_symbol ge2 id = Senv.find_symbol ge1 id.
-
 Lemma eventval_match_preserved:
   forall ev ty v,
   eventval_match ge1 ev ty v -> eventval_match ge2 ev ty v.
 Proof.
   induction 1; constructor; auto.
   rewrite public_preserved; auto.
-  rewrite symbols_preserved; auto.
 Qed.
 
 Lemma eventval_list_match_preserved:
@@ -448,12 +442,11 @@ Variable ge1 ge2: Senv.t.
 
 Definition symbols_inject : Prop :=
    (forall id, Senv.public_symbol ge2 id = Senv.public_symbol ge1 id)
-/\ (forall id b1 b2 delta,
-     f b1 = Some(b2, delta) -> Senv.find_symbol ge1 id = Some b1 ->
-     delta = 0 /\ Senv.find_symbol ge2 id = Some b2)
-/\ (forall id b1,
-     Senv.public_symbol ge1 id = true -> Senv.find_symbol ge1 id = Some b1 ->
-     exists b2, f b1 = Some(b2, 0) /\ Senv.find_symbol ge2 id = Some b2)
+/\ (forall id b delta,
+     f (Block.glob id) = Some(b, delta) -> delta = 0 /\ b = Block.glob id)
+/\ (forall id,
+     Senv.public_symbol ge1 id = true ->
+     f (Block.glob id) = Some (Block.glob id, 0))
 /\ (forall b1 b2 delta,
      f b1 = Some(b2, delta) ->
      Senv.block_is_volatile ge2 b2 = Senv.block_is_volatile ge1 b1).
@@ -465,7 +458,7 @@ Lemma eventval_match_inject:
   eventval_match ge1 ev ty v1 -> Val.inject f v1 v2 -> eventval_match ge2 ev ty v2.
 Proof.
   intros. inv H; inv H0; try constructor; auto.
-  destruct symb_inj as (A & B & C & D). exploit C; eauto. intros [b3 [EQ FS]]. rewrite H4 in EQ; inv EQ.
+  destruct symb_inj as (A & B & C & D). rewrite C in H3 by eauto. inv H3.
   rewrite Ptrofs.add_zero. constructor; auto. rewrite A; auto.
 Qed.
 
@@ -475,8 +468,8 @@ Lemma eventval_match_inject_2:
   exists v2, eventval_match ge2 ev ty v2 /\ Val.inject f v1 v2.
 Proof.
   intros. inv H; try (econstructor; split; eauto; constructor; fail).
-  destruct symb_inj as (A & B & C & D). exploit C; eauto. intros [b2 [EQ FS]].
-  exists (Vptr b2 ofs); split. econstructor; eauto.
+  destruct symb_inj as (A & B & C & D).
+  exists (Vptr (Block.glob id) ofs); split. econstructor; eauto.
   econstructor; eauto. rewrite Ptrofs.add_zero; auto.
 Qed.
 
@@ -555,11 +548,10 @@ Fixpoint output_trace (t: trace) : Prop :=
 
 Inductive volatile_load (ge: Senv.t):
                    memory_chunk -> mem -> block -> ptrofs -> trace -> val -> Prop :=
-  | volatile_load_vol: forall chunk m b ofs id ev v,
-      Senv.block_is_volatile ge b = true ->
-      Senv.find_symbol ge id = Some b ->
+  | volatile_load_vol: forall chunk m ofs id ev v,
+      Senv.block_is_volatile ge (Block.glob id) = true ->
       eventval_match ge ev (type_of_chunk chunk) v ->
-      volatile_load ge chunk m b ofs
+      volatile_load ge chunk m (Block.glob id) ofs
                       (Event_vload chunk id ofs ev :: nil)
                       (Val.load_result chunk v)
   | volatile_load_nonvol: forall chunk m b ofs v,
@@ -569,11 +561,10 @@ Inductive volatile_load (ge: Senv.t):
 
 Inductive volatile_store (ge: Senv.t):
                   memory_chunk -> mem -> block -> ptrofs -> val -> trace -> mem -> Prop :=
-  | volatile_store_vol: forall chunk m b ofs id ev v,
-      Senv.block_is_volatile ge b = true ->
-      Senv.find_symbol ge id = Some b ->
+  | volatile_store_vol: forall chunk m ofs id ev v,
+      Senv.block_is_volatile ge (Block.glob id) = true ->
       eventval_match ge ev (type_of_chunk chunk) (Val.load_result chunk v) ->
-      volatile_store ge chunk m b ofs v
+      volatile_store ge chunk m (Block.glob id) ofs v
                       (Event_vstore chunk id ofs ev :: nil)
                       m
   | volatile_store_nonvol: forall chunk m b ofs v m',
@@ -714,9 +705,8 @@ Lemma volatile_load_preserved:
   volatile_load ge1 chunk m b ofs t v ->
   volatile_load ge2 chunk m b ofs t v.
 Proof.
-  intros. destruct H as (A & B & C). inv H0; constructor; auto.
+  intros. destruct H as (A & C). inv H0; constructor; auto.
   rewrite C; auto.
-  rewrite A; auto.
   eapply eventval_match_preserved; eauto.
   rewrite C; auto.
 Qed.
@@ -743,11 +733,10 @@ Proof.
   intros until m'; intros SI VL VI MI. generalize SI; intros (A & B & C & D).
   inv VL.
 - (* volatile load *)
-  inv VI. exploit B; eauto. intros [U V]. subst delta.
+  inv VI. exploit B; eauto. intros [U V]. subst delta b'.
   exploit eventval_match_inject_2; eauto. intros (v2 & X & Y).
   rewrite Ptrofs.add_zero. exists (Val.load_result chunk v2); split.
-  constructor; auto.
-  erewrite D; eauto.
+  constructor; auto. erewrite D; eauto.
   apply Val.load_result_inject. auto.
 - (* normal load *)
   exploit Mem.loadv_inject; eauto. simpl; eauto. simpl; intros (v2 & X & Y).
@@ -800,7 +789,7 @@ Proof.
   exists v2; exists m1; constructor; auto.
 (* determ *)
 - inv H; inv H0. inv H1; inv H7; try congruence.
-  assert (id = id0) by (eapply Senv.find_symbol_injective; eauto). subst id0.
+  assert (id = id0) by (eapply Block.glob_inj; eauto). subst id0.
   split. constructor.
   eapply eventval_match_valid; eauto.
   eapply eventval_match_valid; eauto.
@@ -825,9 +814,8 @@ Lemma volatile_store_preserved:
   volatile_store ge1 chunk m1 b ofs v t m2 ->
   volatile_store ge2 chunk m1 b ofs v t m2.
 Proof.
-  intros. destruct H as (A & B & C). inv H0; constructor; auto.
+  intros. destruct H as (A & C). inv H0; constructor; auto.
   rewrite C; auto.
-  rewrite A; auto.
   eapply eventval_match_preserved; eauto.
   rewrite C; auto.
 Qed.
@@ -887,7 +875,7 @@ Proof.
   generalize SI; intros (P & Q & R & S).
   inv VS.
 - (* volatile store *)
-  inv AI. exploit Q; eauto. intros [A B]. subst delta.
+  inv AI. exploit Q; eauto. intros [A B]. subst delta b'.
   rewrite Ptrofs.add_zero. exists m1'; split.
   constructor; auto. erewrite S; eauto.
   eapply eventval_match_inject; eauto. apply Val.load_result_inject. auto.
@@ -949,7 +937,7 @@ Proof.
   subst t2; exists vres1; exists m1; auto.
 (* determ *)
 - inv H; inv H0. inv H1; inv H8; try congruence.
-  assert (id = id0) by (eapply Senv.find_symbol_injective; eauto). subst id0.
+  assert (id = id0) by (eapply Block.glob_inj; eauto). subst id0.
   assert (ev = ev0) by (eapply eventval_match_determ_2; eauto). subst ev0.
   split. constructor. auto.
   split. constructor. intuition congruence.
@@ -1263,7 +1251,7 @@ Proof.
 (* well typed *)
 - inv H. simpl. auto.
 (* symbols *)
-- destruct H as (A & B & C). inv H0. econstructor; eauto.
+- destruct H as (A & C). inv H0. econstructor; eauto.
   eapply eventval_list_match_preserved; eauto.
 (* valid blocks *)
 - inv H; auto.
@@ -1308,7 +1296,7 @@ Proof.
 (* well typed *)
 - inv H. unfold proj_sig_res; simpl. eapply eventval_match_type; eauto.
 (* symbols *)
-- destruct H as (A & B & C). inv H0. econstructor; eauto.
+- destruct H as (A & C). inv H0. econstructor; eauto.
   eapply eventval_match_preserved; eauto.
 (* valid blocks *)
 - inv H; auto.
@@ -1460,18 +1448,22 @@ Definition external_call_determ ef := ec_determ (external_call_spec ef).
 Lemma external_call_nextblock:
   forall ef ge vargs m1 t vres m2,
   external_call ef ge vargs m1 t vres m2 ->
-  Ple (Mem.nextblock m1) (Mem.nextblock m2).
+  Block.le (Mem.nextblock m1) (Mem.nextblock m2).
 Proof.
-  intros. destruct (plt (Mem.nextblock m2) (Mem.nextblock m1)).
+  intros. destruct (Block.lt_dec (Mem.nextblock m2) (Mem.nextblock m1)).
   exploit external_call_valid_block; eauto. intros.
-  eelim Plt_strict; eauto.
-  unfold Plt, Ple in *; zify; omega.
+  eelim Block.lt_strict; eauto.
+  apply Block.nlt_le; eauto.
 Qed.
 
 (** Special case of [external_call_mem_inject_gen] (for backward compatibility) *)
 
 Definition meminj_preserves_globals (F V: Type) (ge: Genv.t F V) (f: block -> option (block * Z)) : Prop :=
-     (forall id b, Genv.find_symbol ge id = Some b -> f b = Some(b, 0))
+     (forall id b delta,
+         f (Block.glob id) = Some (b, delta) -> delta = 0 /\ b = Block.glob id)
+  /\ (forall id,
+         Genv.public_symbol ge id = true ->
+         f (Block.glob id) = Some (Block.glob id, 0))
   /\ (forall b gv, Genv.find_var_info ge b = Some gv -> f b = Some(b, 0))
   /\ (forall b1 b2 delta gv, Genv.find_var_info ge b2 = Some gv -> f b1 = Some(b2, delta) -> b2 = b1).
 
@@ -1490,11 +1482,11 @@ Lemma external_call_mem_inject:
     /\ inject_incr f f'
     /\ inject_separated f f' m1 m1'.
 Proof.
-  intros. destruct H as (A & B & C). eapply external_call_mem_inject_gen with (ge1 := ge); eauto.
+  intros. destruct H as (A & X & B & C). eapply external_call_mem_inject_gen with (ge1 := ge); eauto.
   repeat split; intros.
-  + simpl in H3. exploit A; eauto. intros EQ; rewrite EQ in H; inv H. auto.
-  + simpl in H3. exploit A; eauto. intros EQ; rewrite EQ in H; inv H. auto.
-  + simpl in H3. exists b1; split; eauto.
+  + exploit A; eauto. intros (D & E); subst; auto.
+  + exploit A; eauto. intros (D & E); subst; auto.
+  + auto.
   + simpl; unfold Genv.block_is_volatile.
     destruct (Genv.find_var_info ge b1) as [gv1|] eqn:V1.
     * exploit B; eauto. intros EQ; rewrite EQ in H; inv H. rewrite V1; auto.
@@ -1527,7 +1519,6 @@ Qed.
 Section EVAL_BUILTIN_ARG.
 
 Variable A: Type.
-Variable ge: Senv.t.
 Variable e: A -> val.
 Variable sp: val.
 Variable m: mem.
@@ -1549,10 +1540,10 @@ Inductive eval_builtin_arg: builtin_arg A -> val -> Prop :=
   | eval_BA_addrstack: forall ofs,
       eval_builtin_arg (BA_addrstack ofs) (Val.offset_ptr sp ofs)
   | eval_BA_loadglobal: forall chunk id ofs v,
-      Mem.loadv chunk m (Senv.symbol_address ge id ofs) = Some v ->
+      Mem.loadv chunk m (Senv.symbol_address id ofs) = Some v ->
       eval_builtin_arg (BA_loadglobal chunk id ofs) v
   | eval_BA_addrglobal: forall id ofs,
-      eval_builtin_arg (BA_addrglobal id ofs) (Senv.symbol_address ge id ofs)
+      eval_builtin_arg (BA_addrglobal id ofs) (Senv.symbol_address id ofs)
   | eval_BA_splitlong: forall hi lo vhi vlo,
       eval_builtin_arg hi vhi -> eval_builtin_arg lo vlo ->
       eval_builtin_arg (BA_splitlong hi lo) (Val.longofwords vhi vlo)
@@ -1582,42 +1573,11 @@ End EVAL_BUILTIN_ARG.
 
 Hint Constructors eval_builtin_arg: barg.
 
-(** Invariance by change of global environment. *)
-
-Section EVAL_BUILTIN_ARG_PRESERVED.
-
-Variables A F1 V1 F2 V2: Type.
-Variable ge1: Genv.t F1 V1.
-Variable ge2: Genv.t F2 V2.
-Variable e: A -> val.
-Variable sp: val.
-Variable m: mem.
-
-Hypothesis symbols_preserved:
-  forall id, Genv.find_symbol ge2 id = Genv.find_symbol ge1 id.
-
-Lemma eval_builtin_arg_preserved:
-  forall a v, eval_builtin_arg ge1 e sp m a v -> eval_builtin_arg ge2 e sp m a v.
-Proof.
-  assert (EQ: forall id ofs, Senv.symbol_address ge2 id ofs = Senv.symbol_address ge1 id ofs).
-  { unfold Senv.symbol_address; simpl; intros. rewrite symbols_preserved; auto. }
-  induction 1; eauto with barg. rewrite <- EQ in H; eauto with barg. rewrite <- EQ; eauto with barg.
-Qed.
-
-Lemma eval_builtin_args_preserved:
-  forall al vl, eval_builtin_args ge1 e sp m al vl -> eval_builtin_args ge2 e sp m al vl.
-Proof.
-  induction 1; constructor; auto; eapply eval_builtin_arg_preserved; eauto.
-Qed.
-
-End EVAL_BUILTIN_ARG_PRESERVED.
-
 (** Compatibility with the "is less defined than" relation. *)
 
 Section EVAL_BUILTIN_ARG_LESSDEF.
 
 Variable A: Type.
-Variable ge: Senv.t.
 Variables e1 e2: A -> val.
 Variable sp: val.
 Variables m1 m2: mem.
@@ -1626,8 +1586,8 @@ Hypothesis env_lessdef: forall x, Val.lessdef (e1 x) (e2 x).
 Hypothesis mem_extends: Mem.extends m1 m2.
 
 Lemma eval_builtin_arg_lessdef:
-  forall a v1, eval_builtin_arg ge e1 sp m1 a v1 ->
-  exists v2, eval_builtin_arg ge e2 sp m2 a v2 /\ Val.lessdef v1 v2.
+  forall a v1, eval_builtin_arg e1 sp m1 a v1 ->
+  exists v2, eval_builtin_arg e2 sp m2 a v2 /\ Val.lessdef v1 v2.
 Proof.
   induction 1.
 - exists (e2 x); auto with barg.
@@ -1649,8 +1609,8 @@ Proof.
 Qed.
 
 Lemma eval_builtin_args_lessdef:
-  forall al vl1, eval_builtin_args ge e1 sp m1 al vl1 ->
-  exists vl2, eval_builtin_args ge e2 sp m2 al vl2 /\ Val.lessdef_list vl1 vl2.
+  forall al vl1, eval_builtin_args e1 sp m1 al vl1 ->
+  exists vl2, eval_builtin_args e2 sp m2 al vl2 /\ Val.lessdef_list vl1 vl2.
 Proof.
   induction 1.
 - econstructor; split. constructor. auto.

@@ -22,7 +22,8 @@ Module Type BlockType <: EQUALITY_TYPE.
   Axiom lt_trans : forall x y z, lt x y -> lt y z -> lt x z.
   Axiom lt_strict : forall b, ~ lt b b.
   Axiom lt_succ_inv: forall x y, lt x (succ y) -> lt x y \/ x = y.
-  Axiom lt_le: forall x y, lt x y -> le x y. (* needed? *)
+  Axiom lt_le: forall x y, lt x y -> le x y.
+  Axiom nlt_le: forall x y, ~ lt y x -> le x y.
   Axiom le_refl: forall b, le b b.
   Axiom le_trans: forall x y z, le x y -> le y z -> le x z.
   Axiom lt_le_trans: forall x y z, lt x y -> le y z -> lt x z.
@@ -152,6 +153,23 @@ Module Block : BlockType.
     lt x y -> le x y.
   Proof.
     firstorder.
+  Qed.
+
+  Lemma nlt_le x y:
+    ~ lt y x -> le x y.
+  Proof.
+    unfold le.
+    destruct x as [i1|n1], y as [i2|n2].
+    - destruct (peq i1 i2).
+      + right. congruence.
+      + left. constructor.
+        destruct (plt i1 i2); auto. elim H; constructor; xomega.
+    - left. constructor.
+    - intro. elim H. constructor.
+    - destruct (peq n1 n2).
+      + right. congruence.
+      + left. constructor.
+        destruct (plt n1 n2); auto. elim H; constructor; xomega.
   Qed.
 
   Lemma le_refl b:
