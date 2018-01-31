@@ -4276,8 +4276,8 @@ Qed.
 Definition flat_inj (thr: block) : meminj :=
   fun (b: block) => if Block.lt_dec b thr then Some(b, 0) else None.
 
-Definition inject_neutral (thr: block) (m: mem) :=
-  mem_inj (flat_inj thr) m m.
+Definition inject_neutral (m: mem) :=
+  mem_inj (flat_inj Block.init) m m.
 
 Remark flat_inj_no_overlap:
   forall thr m, meminj_no_overlap (flat_inj thr) m.
@@ -4289,85 +4289,120 @@ Proof.
 Qed.
 
 Theorem neutral_inject:
-  forall m, inject_neutral (nextblock m) m -> inject (flat_inj (nextblock m)) m m.
+  forall m, inject_neutral m -> inject (flat_inj Block.init) m m.
 Proof.
   intros. constructor.
 (* meminj *)
   auto.
 (* freeblocks *)
   unfold flat_inj, valid_block; intros.
-  apply pred_dec_false. auto.
+  apply pred_dec_false.
+  intro LT; apply H0. eapply Block.lt_le_trans; eauto.
 (* mappedblocks *)
   unfold flat_inj, valid_block; intros.
-  destruct (Block.lt_dec b (nextblock m)); inversion H0; subst. auto.
+  destruct (Block.lt_dec b Block.init); inversion H0; subst.
+  eapply Block.lt_le_trans; eauto.
 (* no overlap *)
   apply flat_inj_no_overlap.
 (* range *)
   unfold flat_inj; intros.
-  destruct (Block.lt_dec b (nextblock m)); inv H0. generalize (Ptrofs.unsigned_range_2 ofs); omega.
+  destruct (Block.lt_dec b Block.init); inv H0. generalize (Ptrofs.unsigned_range_2 ofs); omega.
 (* perm inv *)
   unfold flat_inj; intros.
-  destruct (Block.lt_dec b1 (nextblock m)); inv H0.
+  destruct (Block.lt_dec b1 Block.init); inv H0.
   rewrite Z.add_0_r in H1; auto.
 Qed.
 
 Theorem empty_inject_neutral:
-  forall thr, inject_neutral thr empty.
+  inject_neutral empty.
 Proof.
-  intros; red; constructor.
+  apply neutral_inject.
+  constructor.
 (* perm *)
-  unfold flat_inj; intros. destruct (Block.lt_dec b1 thr); inv H.
+  unfold flat_inj; intros. destruct (Block.lt_dec b1 Block.init); inv H.
   replace (ofs + 0) with ofs by omega; auto.
 (* align *)
-  unfold flat_inj; intros. destruct (Block.lt_dec b1 thr); inv H. apply Z.divide_0_r.
+  unfold flat_inj; intros. destruct (Block.lt_dec b1 Block.init); inv H. apply Z.divide_0_r.
 (* mem_contents *)
   intros; simpl. rewrite ! BMap.gi. rewrite ! ZMap.gi. constructor.
 Qed.
 
-Theorem alloc_inject_neutral:
-  forall thr m lo hi b m',
-  alloc m lo hi = (m', b) ->
-  inject_neutral thr m ->
-  Block.lt (nextblock m) thr ->
-  inject_neutral thr m'.
+Lemma alloc_at_mem_inj:
+  forall b,
+    Block.lt b Block.init ->
+    forall m1 m2 lo hi,
+      inject (flat_inj Block.init) m1 m2 ->
+      mem_inj (flat_inj Block.init) (alloc_at m1 b lo hi) (alloc_at m2 b lo hi).
 Proof.
-  intros; red.
-  eapply alloc_left_mapped_inj with (m1 := m) (b2 := b) (delta := 0).
-  eapply alloc_right_inj; eauto. eauto. eauto with mem.
-  red. intros. apply Z.divide_0_r.
-  intros.
-  apply perm_implies with Freeable; auto with mem.
-  eapply perm_alloc_2; eauto. omega.
-  unfold flat_inj. apply pred_dec_true.
-  rewrite (alloc_result _ _ _ _ _ H). auto.
+  intros b BLT m1 m2 lo hi INJ.
+  unfold alloc_at.
+  destruct Block.lt_dec. destruct Block.lt_dec.
+  - constructor.
+    + intros b1 b2 delta0 ofs k p FI PERM.
+      unfold perm in *. simpl in *.
+      unfold flat_inj in FI.
+      destruct Block.lt_dec; try congruence. inv FI.
+      rewrite BMap.gsspec in PERM |- *.
+      destruct (BMap.elt_eq b2 b).
+      * rewrite Z.add_0_r; auto.
+      * destruct INJ. eapply mi_perm; eauto. unfold flat_inj; rewrite pred_dec_true; auto.
+    + intros b1 b2 delta chunk ofs p FI RP.
+      unfold flat_inj in FI.
+      destruct Block.lt_dec; try congruence. inv FI.
+      exists 0; omega.
+    + intros b1 ofs b2 delta FI PERM.
+      red in PERM; simpl in *.
+      unfold flat_inj in FI.
+      destruct Block.lt_dec; try congruence. inv FI.
+      rewrite BMap.gsspec in PERM.
+      rewrite ! BMap.gsspec.
+      destruct BMap.elt_eq.
+      * subst. rewrite ! ZMap.gi. constructor.
+      * eapply mi_memval; eauto. destruct INJ; eauto.
+        unfold flat_inj; rewrite pred_dec_true; auto.
+  - exfalso. apply n.
+    eapply Block.lt_le_trans. apply BLT. apply init_nextblock.
+  - exfalso. apply n.
+    eapply Block.lt_le_trans. apply BLT. apply init_nextblock.
+Qed.
+
+Theorem alloc_at_inject_neutral:
+  forall b m lo hi,
+  inject_neutral m ->
+  Block.lt b Block.init ->
+  inject_neutral (alloc_at m b lo hi).
+Proof.
+  intros; eapply alloc_at_mem_inj; auto.
+  apply neutral_inject; auto.
 Qed.
 
 Theorem store_inject_neutral:
-  forall chunk m b ofs v m' thr,
+  forall chunk m b ofs v m',
   store chunk m b ofs v = Some m' ->
-  inject_neutral thr m ->
-  Block.lt b thr ->
-  Val.inject (flat_inj thr) v v ->
-  inject_neutral thr m'.
+  inject_neutral m ->
+  Block.lt b Block.init ->
+  Val.inject (flat_inj Block.init) v v ->
+  inject_neutral m'.
 Proof.
-  intros; red.
-  exploit store_mapped_inj. eauto. eauto. apply flat_inj_no_overlap.
-  unfold flat_inj. apply pred_dec_true; auto. eauto.
-  replace (ofs + 0) with ofs by omega.
-  intros [m'' [A B]]. congruence.
+  intros.
+  edestruct store_mapped_inj as (m2' & STORE & INJ); eauto.
+  apply flat_inj_no_overlap.
+  unfold flat_inj. apply pred_dec_true; auto.
+  replace (ofs + 0) with ofs in * by omega.
+  red. congruence.
 Qed.
 
 Theorem drop_inject_neutral:
-  forall m b lo hi p m' thr,
+  forall m b lo hi p m',
   drop_perm m b lo hi p = Some m' ->
-  inject_neutral thr m ->
-  Block.lt b thr ->
-  inject_neutral thr m'.
+  inject_neutral m ->
+  Block.lt b Block.init ->
+  inject_neutral m'.
 Proof.
-  unfold inject_neutral; intros.
-  exploit drop_mapped_inj; eauto. apply flat_inj_no_overlap.
+  intros.
+  exploit drop_mapped_inj; eauto. inv H0; eauto. apply flat_inj_no_overlap.
   unfold flat_inj. apply pred_dec_true; eauto.
-  repeat rewrite Z.add_0_r. intros [m'' [A B]]. congruence.
+  repeat rewrite Z.add_0_r. intros [m'' [A B]]. red; congruence.
 Qed.
 
 (** * Invariance properties between two memory states *)

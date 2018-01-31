@@ -1219,35 +1219,34 @@ Axiom drop_outside_inject:
 Definition flat_inj (thr: block) : meminj :=
   fun (b: block) => if Block.lt_dec b thr then Some(b, 0) else None.
 
-Parameter inject_neutral: forall (thr: block) (m: mem), Prop.
+Parameter inject_neutral: forall (m: mem), Prop.
 
 Axiom neutral_inject:
-  forall m, inject_neutral (nextblock m) m ->
-  inject (flat_inj (nextblock m)) m m.
+  forall m, inject_neutral m ->
+  inject (flat_inj Block.init) m m.
 
 Axiom empty_inject_neutral:
-  forall thr, inject_neutral thr empty.
+  inject_neutral empty.
 
-Axiom alloc_inject_neutral:
-  forall thr m lo hi b m',
-  alloc m lo hi = (m', b) ->
-  inject_neutral thr m ->
-  Block.lt (nextblock m) thr ->
-  inject_neutral thr m'.
+Axiom alloc_at_inject_neutral:
+  forall b m lo hi,
+  inject_neutral m ->
+  Block.lt b Block.init ->
+  inject_neutral (alloc_at m b lo hi).
 
 Axiom store_inject_neutral:
-  forall chunk m b ofs v m' thr,
+  forall chunk m b ofs v m',
   store chunk m b ofs v = Some m' ->
-  inject_neutral thr m ->
-  Block.lt b thr ->
-  Val.inject (flat_inj thr) v v ->
-  inject_neutral thr m'.
+  inject_neutral m ->
+  Block.lt b Block.init ->
+  Val.inject (flat_inj Block.init) v v ->
+  inject_neutral m'.
 
 Axiom drop_inject_neutral:
-  forall m b lo hi p m' thr,
+  forall m b lo hi p m',
   drop_perm m b lo hi p = Some m' ->
-  inject_neutral thr m ->
-  Block.lt b thr ->
-  inject_neutral thr m'.
+  inject_neutral m ->
+  Block.lt b Block.init ->
+  inject_neutral m'.
 
 End MEM.
