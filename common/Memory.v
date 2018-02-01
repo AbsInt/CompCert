@@ -568,6 +568,14 @@ Proof.
   intros. apply getN_setN_disjoint. apply Intv.disjoint_range. auto.
 Qed.
 
+Lemma getN_undef:
+  forall n o,
+    getN n o (ZMap.init Undef) = list_repeat n Undef.
+Proof.
+  induction n; simpl; intros; eauto.
+  rewrite IHn, ZMap.gi; reflexivity.
+Qed.
+
 Remark setN_default:
   forall vl q c, fst (setN vl q c) = fst c.
 Proof.
@@ -1764,6 +1772,39 @@ Theorem perm_alloc_at_3:
   forall ofs k p, perm m2 b ofs k p -> lo <= ofs < hi.
 Proof.
   intros. exploit perm_alloc_at_inv; eauto. rewrite dec_eq_true; auto.
+Qed.
+
+Lemma load_alloc_at_same:
+  Block.lt b Block.init ->
+  forall chunk ofs v,
+    load chunk m2 b ofs = Some v ->
+    v = Vundef.
+Proof.
+  unfold alloc_at in ALLOCAT.
+  intros VALID chunk ofs v LOAD.
+  destruct Block.lt_dec; subst.
+  - apply load_result in LOAD. simpl in LOAD. subst.
+    rewrite BMap.gss, getN_undef.
+    generalize (size_chunk_nat_pos chunk). intros (n & EQ); rewrite EQ. simpl.
+    apply decode_val_undef.
+  - elim n. eapply Block.lt_le_trans; eauto.
+Qed.
+
+Lemma loadbytes_alloc_at_same:
+  Block.lt b Block.init ->
+  forall n ofs bytes byte,
+    loadbytes m2 b ofs n = Some bytes ->
+    In byte bytes ->
+    byte = Undef.
+Proof.
+  unfold alloc_at in ALLOCAT.
+  intros VALID n ofs bytes byte LOADBYTES.
+  destruct Block.lt_dec; subst.
+  - unfold loadbytes in LOADBYTES. simpl in LOADBYTES.
+    destruct (range_perm_dec) in LOADBYTES; try discriminate. inv LOADBYTES.
+    rewrite BMap.gss. rewrite getN_undef.
+    apply in_list_repeat.
+  - elim n0. eapply Block.lt_le_trans; eauto.
 Qed.
 
 End ALLOCAT.

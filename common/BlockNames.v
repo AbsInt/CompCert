@@ -233,6 +233,13 @@ Proof.
   apply Block.lt_succ.
 Qed.
 
+Lemma Blt_ne x y:
+  Block.lt x y -> x <> y.
+Proof.
+  intros LT EQ; subst; apply Block.lt_strict in LT; auto.
+Qed.
+
+
 Program Instance Decidable_eq_block (x y: Block.t): Decidable (x = y) :=
   {
     Decidable_witness := if Block.eq x y then true else false;
