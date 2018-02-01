@@ -25,6 +25,8 @@ Require Import Coqlib.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Integers.
+(*NEW*) Require Import AST.
+(*NEW*) Require Import Values.
 
 Set Implicit Arguments.
 
@@ -480,7 +482,35 @@ Record semantics : Type := Semantics_gen {
   initial_state: state -> Prop;
   final_state: state -> int -> Prop;
   globalenv: genvtype;
-  symbolenv: Senv.t
+  symbolenv: Senv.t}.
+
+(*NEW*)
+Record expressive_semantics : Type :=
+  Expressive_Semantics_gen {
+      Sem:> semantics;
+  (** A state contains a memory, so we use the following *)
+  (** setters or getters                                 *)
+  get_mem: state Sem -> Memory.mem;
+  set_mem: state Sem -> Memory.mem -> state Sem;
+  set_get_mem: forall s,
+      s = set_mem s (get_mem s);
+  get_set_mem: forall s m,
+      m = get_mem (set_mem s m);
+  (** States before and after external calls are identified *)
+  (** external calls are exactly one step                   *)
+  at_external: genvtype Sem ->
+               state Sem ->
+               option (external_function * list val);
+  after_external: genvtype Sem ->
+                  option val ->
+                  state Sem ->
+                  option (state Sem);
+  external_step_lemma:
+    forall g s1 f_and_args t s2,
+      at_external g s1 = Some f_and_args ->
+      step Sem g s1 t s2 ->
+      exists vr m_after_ext, 
+      after_external g vr (set_mem s1 m_after_ext) = Some s2 
 }.
 
 (** The form used in earlier CompCert versions, for backward compatibility. *)
@@ -489,7 +519,8 @@ Definition Semantics {state funtype vartype: Type}
                      (step: Genv.t funtype vartype -> state -> trace -> state -> Prop)
                      (initial_state: state -> Prop)
                      (final_state: state -> int -> Prop)
-                     (globalenv: Genv.t funtype vartype) :=
+                     (globalenv: Genv.t funtype vartype)
+  :=
   {| state := state;
      genvtype := Genv.t funtype vartype;
      step := step;

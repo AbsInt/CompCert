@@ -61,11 +61,17 @@ Inductive eventval: Type :=
   | EVsingle: float32 -> eventval
   | EVptr_global: ident -> ptrofs -> eventval.
 
+Notation access_map := (Maps.PMap.t (Z -> option permission)).
+Notation delta_map := (Maps.PTree.t (Z -> option (option permission))).
+
 Inductive event: Type :=
   | Event_syscall: string -> list eventval -> eventval -> event
   | Event_vload: memory_chunk -> ident -> ptrofs -> eventval -> event
   | Event_vstore: memory_chunk -> ident -> ptrofs -> eventval -> event
-  | Event_annot: string -> list eventval -> event.
+  | Event_annot: string -> list eventval -> event
+  | Event_acq: val -> mem -> event
+  | Event_rel: val -> delta_map -> event
+  | Event_spawn: val -> delta_map -> delta_map -> event.
 
 (** The dynamic semantics for programs collect traces of events.
   Traces are of two kinds: finite (type [trace]) or infinite (type [traceinf]). *)
@@ -543,6 +549,7 @@ Definition output_event (ev: event) : Prop :=
   | Event_vload _ _ _ _ => False
   | Event_vstore _ _ _ _ => True
   | Event_annot _ _ => True
+  | _ => False
   end.
 
 Fixpoint output_trace (t: trace) : Prop :=
@@ -614,6 +621,97 @@ Definition inject_separated (f f': meminj) (m1 m2: mem): Prop :=
   forall b1 b2 delta,
   f b1 = None -> f' b1 = Some(b2, delta) ->
   ~Mem.valid_block m1 b1 /\ ~Mem.valid_block m2 b2.
+
+
+Parameter inject_delta_map: meminj -> delta_map -> delta_map -> Prop. 
+Parameter inject_access_map: meminj -> access_map -> access_map -> Prop.
+Inductive inject_event: meminj -> event -> event -> Prop :=
+  | INJ_syscall: forall f s t v, inject_event f (Event_syscall s t v) (Event_syscall s t v)
+  | INJ_vload : forall f mc id n v, inject_event f (Event_vload mc id n v) (Event_vload mc id n v)
+  | INJ_vstore : forall f mc id n v, inject_event f (Event_vstore mc id n v) (Event_vstore mc id n v)
+  | INJ_annot : forall f st t, inject_event f (Event_annot st t) (Event_annot st t)
+  | INJ_acq : forall f v dm v' dm',
+      Val.inject f v v ->
+      Mem.inject f dm dm' ->
+      inject_event f (Event_acq v dm) (Event_acq v' dm')
+  | INJ_rel : forall f v dm v' dm',
+      Val.inject f v v -> 
+      inject_delta_map f dm dm' ->
+      inject_event f (Event_rel v dm) (Event_rel v' dm')
+  | INJ_spawn : forall f v dm1 dm2 v' dm1' dm2',
+      Val.inject f v v -> 
+      inject_delta_map f dm1 dm1' ->
+      inject_delta_map f dm2 dm2' ->
+      inject_event f (Event_spawn v dm1 dm2) (Event_spawn v' dm1' dm2').
+
+Inductive inject_trace: meminj -> trace -> trace -> Prop :=
+| injt_nil : forall f, inject_trace f nil nil
+| injt_cons: forall f e t e' t',
+    inject_event f e e' ->
+    inject_trace f t t' ->
+    inject_trace f (cons e t) (cons e' t').
+
+Definition injection_full (f:meminj) (m:mem):=
+  forall b ,
+    Mem.valid_block m b ->
+    ~ f b = None.
+Lemma nextblock_full: forall f m m',
+      injection_full f m ->
+      Mem.nextblock m' = Mem.nextblock m ->
+      injection_full f m'.
+  Proof. intros ? ? ? H ? ? ?; apply H.
+         unfold Mem.valid_block;
+           rewrite <- H0; auto.
+  Qed.
+  Lemma store_full: forall f chunk m b ofs v m',
+      injection_full f m ->
+      Mem.store chunk m b ofs v = Some m' ->
+      injection_full f m'.
+  Proof.
+    intros. eapply nextblock_full; eauto.
+    eapply Mem.nextblock_store; eauto.
+  Qed.
+  Lemma storebytes_full: forall f m b ofs ls m',
+      injection_full f m ->
+      Mem.storebytes m b ofs ls = Some m' ->
+      injection_full f m'.
+  Proof.
+    intros. eapply nextblock_full; eauto.
+    eapply Mem.nextblock_storebytes; eauto.
+  Qed.
+  Lemma free_full: forall f m ls lo hi m',
+      injection_full f m ->
+      Mem.free m ls lo hi = Some m' ->
+      injection_full f m'.
+  Proof.
+    intros. eapply nextblock_full; eauto.
+    eapply Mem.nextblock_free; eauto.
+  Qed.
+  Lemma free_list_full: forall f ls m m',
+      injection_full f m ->
+  Mem.free_list m ls = Some m' ->
+  injection_full f m'.
+  Proof.
+    induction ls.
+    - intros; inv H0; auto.
+    - intros. destruct a as [[b lo] hi];
+        simpl in H0. 
+      destruct (Mem.free m b lo hi) eqn:HH; inv H0.
+      eapply IHls in H2; eauto.
+      eapply free_full; eauto.
+  Qed.
+  Lemma alloc_full m lo hi m' b (ALLOC: Mem.alloc m lo hi = (m',b))
+    j1 (FULL : injection_full j1 m) j' sp' z
+    (J : j' b = Some (sp', z)) (K : inject_incr j1 j'):
+     injection_full j' m'.
+  Proof. 
+    red; intros bb Hbb.
+    destruct (Mem.valid_block_alloc_inv _ _ _ _ _ ALLOC _ Hbb).
+    * subst. rewrite J; congruence.
+    * apply FULL in H. remember (j1 bb) as d; destruct d; [| congruence].
+       symmetry in Heqd; destruct p. apply K in Heqd; congruence.
+  Qed.
+
 
 Record extcall_properties (sem: extcall_sem) (sg: signature) : Prop :=
   mk_extcall_properties {
