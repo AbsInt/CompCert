@@ -353,9 +353,6 @@ Next Obligation.
   repeat rewrite BMap.gi. red; auto.
 Qed.
 Next Obligation.
-  apply Block.le_refl.
-Qed.
-Next Obligation.
   rewrite BMap.gi. auto.
 Qed.
 Next Obligation.

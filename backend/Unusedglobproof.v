@@ -737,7 +737,6 @@ Proof.
 - econstructor; eauto.
   apply IHmatch_stacks.
   intros. exploit H1; eauto. intros [A B]. split; eapply Block.le_trans; eauto.
-  apply Block.lt_le; auto. apply Block.lt_le; auto.
   apply regset_inject_incr with j; auto.
 Qed.
 
@@ -749,7 +748,7 @@ Lemma match_stacks_bound:
 Proof.
   induction 1; intros.
 - constructor; auto. eapply Block.le_trans with bound; eauto. eapply Block.le_trans with tbound; eauto.
-- econstructor; eauto. eapply Block.lt_le_trans; eauto. eapply Block.lt_le_trans; eauto.
+- econstructor; eauto.
 Qed.
 
 Inductive match_states: state -> state -> Prop :=

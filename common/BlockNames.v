@@ -256,3 +256,5 @@ Program Instance Decidable_eq_block (x y: Block.t): Decidable (x = y) :=
 Next Obligation.
   destruct Block.eq; firstorder.
 Qed.
+
+Hint Resolve Block.lt_le_trans Block.le_lt_trans Block.le_trans Block.lt_le Blt_ne Block.le_refl.

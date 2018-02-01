@@ -4066,8 +4066,7 @@ Proof.
 - apply bmatch_ext with m; eauto with va.
 - apply smatch_ext with m; auto with va.
 - apply smatch_ext with m; auto with va.
-- red; intros. exploit mmatch_below0; eauto. intro LT.
-  eapply Block.lt_le_trans; eauto.
+- red; intros. exploit mmatch_below0; eauto.
 Qed.
 
 Lemma mmatch_free:

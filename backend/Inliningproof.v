@@ -560,8 +560,8 @@ Lemma match_stacks_bound:
 Proof.
   intros. inv H.
   apply match_stacks_nil with bound0. auto. eapply Block.le_trans; eauto.
-  eapply match_stacks_cons; eauto. eapply Block.lt_le_trans; eauto.
-  eapply match_stacks_untailcall; eauto. eapply Block.lt_le_trans; eauto.
+  eapply match_stacks_cons; eauto.
+  eapply match_stacks_untailcall; eauto.
 Qed.
 
 Variable F1: meminj.
@@ -602,34 +602,22 @@ Proof.
   (* nil *)
   apply match_stacks_nil with (bound1 := bound1).
   inv MG. constructor; auto.
-  intros. apply IMAGE with delta. eapply INJ; eauto. eapply Block.lt_le_trans; eauto.
-  auto. auto.
+  intros. apply IMAGE with delta. eapply INJ; eauto. eauto.
+  auto.
   (* cons *)
   apply match_stacks_cons with (fenv := fenv) (ctx := ctx); auto.
   eapply match_stacks_inside_invariant; eauto.
-  intros; eapply INJ; eauto. eapply Block.le_lt_trans; eauto.
-  intros; eapply PERM1; eauto. eapply Block.le_lt_trans; eauto.
-  intros; eapply PERM2; eauto. eapply Block.le_lt_trans; eauto.
-  intros; eapply PERM3; eauto. eapply Block.le_lt_trans; eauto.
   eapply agree_regs_incr; eauto.
   eapply range_private_invariant; eauto.
   (* untailcall *)
   apply match_stacks_untailcall with (ctx := ctx); auto.
   eapply match_stacks_inside_invariant; eauto.
-  intros; eapply INJ; eauto; eapply Block.le_lt_trans; eauto.
-  intros; eapply PERM1; eauto; eapply Block.le_lt_trans; eauto.
-  intros; eapply PERM2; eauto; eapply Block.le_lt_trans; eauto.
-  intros; eapply PERM3; eauto; eapply Block.le_lt_trans; eauto.
   eapply range_private_invariant; eauto.
 
   induction 1; intros.
   (* base *)
   eapply match_stacks_inside_base; eauto.
   eapply match_stacks_invariant; eauto.
-  intros; eapply INJ; eauto. eapply Block.lt_le; eauto.
-  intros; eapply PERM1; eauto; eapply Block.lt_le; eauto.
-  intros; eapply PERM2; eauto; eapply Block.lt_le; eauto.
-  intros; eapply PERM3; eauto; eapply Block.lt_le; eauto.
   (* inlined *)
   apply match_stacks_inside_inlined with (fenv := fenv) (ctx' := ctx'); auto.
   apply IHmatch_stacks_inside; auto.
@@ -638,8 +626,6 @@ Proof.
   apply agree_regs_invariant with rs'; auto.
   intros. apply RS. red in BELOW. xomega.
   eapply range_private_invariant; eauto.
-    intros. split. eapply INJ; eauto. apply Block.le_refl. eapply PERM1; eauto. apply Block.le_refl.
-    intros. eapply PERM2; eauto. apply Block.le_refl.
 Qed.
 
 Lemma match_stacks_empty:
@@ -744,7 +730,7 @@ Lemma match_stacks_free_right:
   match_stacks F m m1' stk stk' sp.
 Proof.
   intros. eapply match_stacks_invariant; eauto.
-  intros. eapply Mem.perm_free_1; eauto. left; apply Blt_ne; auto.
+  intros. eapply Mem.perm_free_1; eauto.
   intros. eapply Mem.perm_free_3; eauto.
 Qed.
 
@@ -803,19 +789,16 @@ Proof.
     inv MG. constructor; intros; eauto.
     destruct (F1 b1) as [[b2' delta']|] eqn:?.
     exploit INCR; eauto. intros EQ; rewrite H0 in EQ; inv EQ. eapply IMAGE; eauto.
-    exploit SEP; eauto. intros [A B]. elim B. red. eapply Block.lt_le_trans; eauto. eapply Block.le_trans; eauto.
+    exploit SEP; eauto. intros [A B]. elim B. red. eauto.
   eapply match_stacks_cons; eauto.
-    eapply match_stacks_inside_extcall; eauto. eapply Block.lt_le_trans; eauto.
     eapply agree_regs_incr; eauto.
-    eapply range_private_extcall; eauto. red. eapply Block.lt_le_trans; eauto.
-    intros. apply SSZ2; auto. apply MAXPERM'; auto. red. eapply Block.lt_le_trans; eauto.
+    eapply range_private_extcall; eauto. red. eauto.
+    intros. apply SSZ2; auto. apply MAXPERM'; auto. red. eauto.
   eapply match_stacks_untailcall; eauto.
-    eapply match_stacks_inside_extcall; eauto. eapply Block.lt_le_trans; eauto.
-    eapply range_private_extcall; eauto. red. eapply Block.lt_le_trans; eauto.
-    intros. apply SSZ2; auto. apply MAXPERM'; auto. red. eapply Block.lt_le_trans; eauto.
+    eapply range_private_extcall; eauto. red. eauto.
+    intros. apply SSZ2; auto. apply MAXPERM'; auto. red. eauto.
   induction 1; intros.
   eapply match_stacks_inside_base; eauto.
-    eapply match_stacks_extcall; eauto. eapply Block.lt_le; eauto.
   eapply match_stacks_inside_inlined; eauto.
     eapply agree_regs_incr; eauto.
     eapply range_private_extcall; eauto.
@@ -1043,9 +1026,9 @@ Proof.
   eapply match_stacks_bound with (bound := sp').
   eapply match_stacks_invariant; eauto.
     intros. eapply Mem.perm_free_3; eauto.
-    intros. eapply Mem.perm_free_1; eauto. left; apply Blt_ne; auto.
+    intros. eapply Mem.perm_free_1; eauto.
     intros. eapply Mem.perm_free_3; eauto. 
-  erewrite Mem.nextblock_free; eauto. red in VB. apply Block.lt_le; auto.
+  erewrite Mem.nextblock_free; eauto.
   eapply agree_val_regs; eauto.
   eapply Mem.free_right_inject; eauto. eapply Mem.free_left_inject; eauto.
   (* show that no valid location points into the stack block being freed *)
@@ -1135,9 +1118,9 @@ Proof.
   eapply match_stacks_bound with (bound := sp').
   eapply match_stacks_invariant; eauto.
     intros. eapply Mem.perm_free_3; eauto.
-    intros. eapply Mem.perm_free_1; eauto. left; apply Blt_ne; auto.
+    intros. eapply Mem.perm_free_1; eauto.
     intros. eapply Mem.perm_free_3; eauto.
-  erewrite Mem.nextblock_free; eauto. red in VB. apply Block.lt_le; auto.
+  erewrite Mem.nextblock_free; eauto.
   destruct or; simpl. apply agree_val_reg; auto. auto.
   eapply Mem.free_right_inject; eauto. eapply Mem.free_left_inject; eauto.
   (* show that no valid location points into the stack block being freed *)
@@ -1182,7 +1165,7 @@ Proof.
     subst b1. rewrite D in H8; inv H8. eelim Block.lt_strict; eauto.
     intros. eapply Mem.perm_alloc_1; eauto.
     intros. exploit Mem.perm_alloc_inv. eexact A. eauto.
-    rewrite dec_eq_false; auto. apply Blt_ne; auto.
+    rewrite dec_eq_false; auto.
   auto. auto. auto. eauto. auto.
   rewrite H5. apply agree_regs_init_regs. eauto. auto. inv H1; auto. congruence. auto.
   eapply Mem.valid_new_block; eauto.
@@ -1245,7 +1228,6 @@ Proof.
     eapply match_stacks_extcall with (F1 := F) (F2 := F1) (m1 := m) (m1' := m'0); eauto.
     intros; eapply external_call_max_perm; eauto.
     intros; eapply external_call_max_perm; eauto.
-    apply Block.le_refl.
     eapply external_call_nextblock; eauto.
     auto. auto.
 
@@ -1306,7 +1288,7 @@ Proof.
     eapply Genv.find_symbol_not_fresh; eauto.
     eapply Genv.find_funct_ptr_not_fresh; eauto.
     eapply Genv.find_var_info_not_fresh; eauto.
-    apply Block.le_refl.
+    auto.
   erewrite <- Genv.init_mem_genv_next; eauto.
   eapply Mem.neutral_inject, Genv.initmem_inject; eauto.
 Qed.

@@ -1113,7 +1113,6 @@ Proof.
   }
   rewrite SAME; auto.
   eapply Block.lt_trans; eauto.
-  eapply Blt_ne; eauto.
   auto. auto.
 - assert (Block.lt sp bound') by eauto with va.
   eapply sound_stack_private_call; eauto. apply IHsound_stack; intros.
@@ -1122,12 +1121,9 @@ Proof.
     eapply Block.lt_trans. apply H1.
     eapply Block.lt_le_trans; eauto.
   }
-  rewrite SAME; auto. eapply Block.lt_trans; eauto.
-  apply Blt_ne; auto. auto. auto.
-  apply bmatch_ext with m; auto. intros. apply INV.
-  {
-    eapply Block.lt_le_trans; eauto.
-  }
+  rewrite SAME; eauto.
+  auto. auto.
+  apply bmatch_ext with m; auto. intros. apply INV. eauto.
   auto. auto. auto.
 Qed.
 
@@ -1187,8 +1183,8 @@ Lemma sound_stack_new_bound:
 Proof.
   intros. inv H.
 - constructor.
-- eapply sound_stack_public_call with (bound' := bound'0); eauto. eapply Block.le_trans; eauto.
-- eapply sound_stack_private_call with (bound' := bound'0); eauto. eapply Block.le_trans; eauto.
+- eapply sound_stack_public_call with (bound' := bound'0); eauto.
+- eapply sound_stack_private_call with (bound' := bound'0); eauto.
 Qed.
 
 Lemma sound_stack_exten:
@@ -1270,7 +1266,6 @@ Proof.
   intros (bc' & A & B & C & D & E & F & G).
   apply sound_call_state with bc'; auto.
   * eapply sound_stack_private_call with (bound' := Mem.nextblock m) (bc' := bc); eauto.
-    apply Block.le_refl.
     eapply mmatch_below; eauto.
     eapply mmatch_stack; eauto.
   * intros. exploit list_in_map_inv; eauto. intros (r & P & Q). subst v.
@@ -1283,7 +1278,6 @@ Proof.
   exploit anonymize_stack; eauto. intros (bc' & A & B & C & D & E & F & G).
   apply sound_call_state with bc'; auto.
   * eapply sound_stack_public_call with (bound' := Mem.nextblock m) (bc' := bc); eauto.
-    apply Block.le_refl.
     eapply mmatch_below; eauto.
   * intros. exploit list_in_map_inv; eauto. intros (r & P & Q). subst v.
     apply D with (areg ae r). auto with va.
@@ -1325,12 +1319,12 @@ Proof.
   intros. exploit list_forall2_in_left; eauto. intros (av & U & V).
   eapply D; eauto with va. apply vpincl_ge. apply H3; auto.
   intros (bc2 & J & K & L & M & N & O & P & Q).
-  exploit (return_from_private_call bc bc2); eauto.
+  exploit (return_from_private_call bc bc2 (Mem.nextblock m) sp0 ge rs ae vres m'); eauto.
   eapply mmatch_below; eauto.
   rewrite K; auto.
   intros. rewrite K; auto. rewrite C; auto.
   apply bmatch_inv with m. eapply mmatch_stack; eauto.
-  intros. apply Q; auto.
+  intros; apply Q; auto.
   eapply external_call_nextblock; eauto.
   intros (bc3 & U & V & W & X & Y & Z & AA).
   eapply sound_succ_state with (bc := bc3); eauto. simpl; auto.
@@ -1339,7 +1333,6 @@ Proof.
   apply sound_stack_inv with m. auto.
   intros. apply Q. red. eapply Block.lt_trans; eauto.
   rewrite C; auto.
-  eapply Blt_ne; eauto.
   exact AA.
 * (* public builtin call *)
   exploit anonymize_stack; eauto.
@@ -1347,7 +1340,7 @@ Proof.
   exploit external_call_match; eauto.
   intros. exploit list_forall2_in_left; eauto. intros (av & U & V). eapply D; eauto with va.
   intros (bc2 & J & K & L & M & N & O & P & Q).
-  exploit (return_from_public_call bc bc2); eauto.
+  exploit (return_from_public_call bc bc2 (Mem.nextblock m) sp0 ge rs ae vres m'); eauto.
   eapply mmatch_below; eauto.
   rewrite K; auto.
   intros. rewrite K; auto. rewrite C; auto.
@@ -1359,7 +1352,6 @@ Proof.
   apply sound_stack_inv with m. auto.
   intros. apply Q. red. eapply Block.lt_trans; eauto.
   rewrite C; auto.
-  eapply Blt_ne; eauto.
   exact AA.
   }
   unfold transfer_builtin in TR.
