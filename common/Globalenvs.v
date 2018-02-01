@@ -210,6 +210,19 @@ Definition find_def (ge: t) (b: block) : option (globdef F V) :=
   | None => None
   end.
 
+Theorem genv_defs_range:
+  forall ge id b,
+  find_def ge id = Some b ->
+  Block.lt id Block.init.
+Proof.
+  intros until b.
+  unfold find_def.
+  destruct (Block.ident_of id) eqn:Hb; try discriminate.
+  intros _.
+  apply Block.ident_of_inv in Hb; subst.
+  apply Block.lt_glob_init.
+Qed.
+
 (** [find_funct_ptr ge b] returns the function description associated with
     the given address. *)
 
@@ -1426,13 +1439,28 @@ Proof.
   split; eauto. eapply store_init_data_aligned; eauto.
 Qed.
 
+Lemma store_init_data_list_free_idents:
+  forall b i o il m p m',
+  store_init_data_list ge m b p il = Some m' ->
+  In (Init_addrof i o) il ->
+  exists b', find_symbol ge i = Some b'.
+Proof.
+  induction il as [ | i1 il]; simpl; intros.
+- contradiction.
+- destruct (store_init_data ge m b p i1) as [m1|] eqn:S1; try discriminate.
+  destruct H0.
++ subst i1. simpl in S1. destruct (find_symbol ge i) as [b'|]. exists b'; auto. discriminate.
++ eapply IHil; eauto.
+Qed.
+
 End INITMEM_INVERSION.
 
 Theorem init_mem_inversion:
   forall p m id v,
   init_mem p = Some m ->
   In (id, Gvar v) p.(prog_defs) ->
-  init_data_list_aligned 0 v.(gvar_init).
+  init_data_list_aligned 0 v.(gvar_init)
+  /\ forall i o, In (Init_addrof i o) v.(gvar_init) -> exists b, find_symbol (globalenv p) i = Some b.
 Proof.
   intros until v. unfold init_mem. set (ge := globalenv p).
   revert m. generalize Mem.empty. generalize (prog_defs p).
@@ -1446,7 +1474,7 @@ Proof.
   set (m1 := Mem.alloc_at m b 0 sz) in *.
   destruct (store_zeros m1 b 0 sz) as [m2|]; try discriminate.
   destruct (store_init_data_list ge m2 b 0 il) as [m3|] eqn:B; try discriminate.
-  eapply store_init_data_list_aligned; eauto.
+  split. eapply store_init_data_list_aligned; eauto. intros; eapply store_init_data_list_free_idents; eauto.
 + eapply IHdefs; eauto.
 Qed.
 

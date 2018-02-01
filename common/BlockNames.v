@@ -28,6 +28,7 @@ Module Type BlockType <: EQUALITY_TYPE.
   Axiom le_refl: forall b, le b b.
   Axiom le_trans: forall x y z, le x y -> le y z -> le x z.
   Axiom lt_le_trans: forall x y z, lt x y -> le y z -> lt x z.
+  Axiom le_lt_trans: forall x y z, le x y -> lt y z -> lt x z.
 
   Axiom glob_inj: forall i j, glob i = glob j -> i = j.
 
@@ -192,6 +193,14 @@ Module Block : BlockType.
   Proof.
     intros Hxy Hyz.
     destruct Hyz; try congruence.
+    eapply lt_trans; eauto.
+  Qed.
+
+  Lemma le_lt_trans x y z:
+    le x y -> lt y z -> lt x z.
+  Proof.
+    intros Hxy Hyz.
+    destruct Hxy; try congruence.
     eapply lt_trans; eauto.
   Qed.
 
