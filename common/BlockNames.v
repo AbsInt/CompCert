@@ -1,3 +1,4 @@
+Require Import DecidableClass.
 Require Import Coqlib.
 Require Import AST.
 Require Import Maps.
@@ -230,4 +231,12 @@ Proof.
   intros H.
   eapply Block.lt_trans; eauto.
   apply Block.lt_succ.
+Qed.
+
+Program Instance Decidable_eq_block (x y: Block.t): Decidable (x = y) :=
+  {
+    Decidable_witness := if Block.eq x y then true else false;
+  }.
+Next Obligation.
+  destruct Block.eq; firstorder.
 Qed.
