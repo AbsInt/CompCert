@@ -1112,7 +1112,7 @@ Proof.
     eapply Block.lt_le_trans; eauto.
   }
   rewrite SAME; auto.
-  eapply Block.lt_trans; eauto.
+  eapply Block.lt_trans; eauto. blomega.
   auto. auto.
 - assert (Block.lt sp bound') by eauto with va.
   eapply sound_stack_private_call; eauto. apply IHsound_stack; intros.
@@ -1121,9 +1121,9 @@ Proof.
     eapply Block.lt_trans. apply H1.
     eapply Block.lt_le_trans; eauto.
   }
-  rewrite SAME; eauto.
+  rewrite SAME; eauto; blomega.
   auto. auto.
-  apply bmatch_ext with m; auto. intros. apply INV. eauto.
+  apply bmatch_ext with m; auto. intros. apply INV. blomega.
   auto. auto. auto.
 Qed.
 
@@ -1183,8 +1183,8 @@ Lemma sound_stack_new_bound:
 Proof.
   intros. inv H.
 - constructor.
-- eapply sound_stack_public_call with (bound' := bound'0); eauto.
-- eapply sound_stack_private_call with (bound' := bound'0); eauto.
+- eapply sound_stack_public_call with (bound' := bound'0); eauto; blomega.
+- eapply sound_stack_private_call with (bound' := bound'0); eauto; blomega.
 Qed.
 
 Lemma sound_stack_exten:
@@ -1266,6 +1266,7 @@ Proof.
   intros (bc' & A & B & C & D & E & F & G).
   apply sound_call_state with bc'; auto.
   * eapply sound_stack_private_call with (bound' := Mem.nextblock m) (bc' := bc); eauto.
+    blomega.
     eapply mmatch_below; eauto.
     eapply mmatch_stack; eauto.
   * intros. exploit list_in_map_inv; eauto. intros (r & P & Q). subst v.
@@ -1278,6 +1279,7 @@ Proof.
   exploit anonymize_stack; eauto. intros (bc' & A & B & C & D & E & F & G).
   apply sound_call_state with bc'; auto.
   * eapply sound_stack_public_call with (bound' := Mem.nextblock m) (bc' := bc); eauto.
+    blomega.
     eapply mmatch_below; eauto.
   * intros. exploit list_in_map_inv; eauto. intros (r & P & Q). subst v.
     apply D with (areg ae r). auto with va.
@@ -1333,6 +1335,7 @@ Proof.
   apply sound_stack_inv with m. auto.
   intros. apply Q. red. eapply Block.lt_trans; eauto.
   rewrite C; auto.
+  blomega.
   exact AA.
 * (* public builtin call *)
   exploit anonymize_stack; eauto.
@@ -1352,6 +1355,7 @@ Proof.
   apply sound_stack_inv with m. auto.
   intros. apply Q. red. eapply Block.lt_trans; eauto.
   rewrite C; auto.
+  blomega.
   exact AA.
   }
   unfold transfer_builtin in TR.

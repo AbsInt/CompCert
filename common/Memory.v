@@ -353,6 +353,9 @@ Next Obligation.
   repeat rewrite BMap.gi. red; auto.
 Qed.
 Next Obligation.
+  blomega.
+Qed.
+Next Obligation.
   rewrite BMap.gi. auto.
 Qed.
 Next Obligation.
