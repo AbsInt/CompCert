@@ -36,6 +36,12 @@ Require Parser.
 Require Initializers.
 Require Int31.
 
+
+Extract Inlined Constant BlockNames.ident_to_string =>
+  "(fun i -> Camlcoq.coqstring_of_camlstring (Camlcoq.extern_atom i))".
+Extract Inlined Constant BlockNames.pos_to_string =>
+  "(fun p -> Camlcoq.coqstring_of_camlstring (Printf.sprintf ""%ld"" (Camlcoq.P.to_int32 p)))".
+
 (* Standard lib *)
 Require Import ExtrOcamlBasic.
 Require Import ExtrOcamlString.
@@ -167,6 +173,7 @@ Set Extraction AccessOpaque.
 Cd "extraction".
 
 Separate Extraction
+   BlockNames.block_compare
    Compiler.transf_c_program Compiler.transf_cminor_program
    Cexec.do_initial_state Cexec.do_step Cexec.at_final_state
    Ctypes.merge_attributes Ctypes.remove_attributes Ctypes.build_composite_env

@@ -2,6 +2,10 @@ Require Import DecidableClass.
 Require Import Coqlib.
 Require Import AST.
 Require Import Maps.
+Require Import String.
+
+Axiom ident_to_string: ident -> string.
+Axiom pos_to_string: positive -> string.
 
 (** * Interfaces *)
 
@@ -13,6 +17,7 @@ Module Type BlockType <: EQUALITY_TYPE.
   Parameter init : t.           (* initial dynamic block id *)
   Parameter succ : t -> t.
   Parameter ident_of: t -> option ident.
+  Parameter to_string: t -> string.
 
   Parameter lt : t -> t -> Prop.
   Parameter le : t -> t -> Prop.
@@ -210,6 +215,12 @@ Module Block : BlockType.
     | dyn i => None
     end.
 
+  Definition to_string (b: t): string :=
+    match b with
+    | glob_def i => append "glob:" (ident_to_string i)
+    | dyn b => append "dyn:" (pos_to_string b)
+    end.
+
   Lemma ident_of_glob i:
     ident_of (glob i) = Some i.
   Proof.
@@ -256,6 +267,13 @@ Program Instance Decidable_eq_block (x y: Block.t): Decidable (x = y) :=
 Next Obligation.
   destruct Block.eq; firstorder.
 Qed.
+
+Definition block_compare (b1 b2: Block.t) :=
+  if Block.lt_dec b1 b2
+  then (-1)%Z
+  else if Block.eq b1 b2
+       then 0%Z
+       else 1%Z.
 
 Hint Resolve Block.lt_le_trans Block.le_lt_trans Block.le_trans Block.lt_le Blt_ne Block.le_refl Block.lt_succ : blocknames.
 
