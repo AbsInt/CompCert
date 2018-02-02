@@ -152,6 +152,12 @@ with initializer_list :=
 (** Translate an initializing expression [a] for a scalar variable
   of type [ty].  Return the corresponding initialization datum. *)
 
+Definition transl_init_ptr (b: block) (ofs: ptrofs) :=
+  match Block.ident_of b with
+    | Some id => OK (Init_addrof id ofs)
+    | None => Error (msg "non-global pointer in initializer")
+  end.
+
 Definition transl_init_single (ce: composite_env) (ty: type) (a: expr) : res init_data :=
   do v <- constval_cast ce a ty;
   match v, ty with
@@ -163,20 +169,9 @@ Definition transl_init_single (ce: composite_env) (ty: type) (a: expr) : res ini
   | Vlong n, Tpointer _ _ => assertion (Archi.ptr64); OK(Init_int64 n)
   | Vsingle f, Tfloat F32 _ => OK(Init_float32 f)
   | Vfloat f, Tfloat F64 _ => OK(Init_float64 f)
-  | Vptr id ofs, Tint I32 sg _ => assertion (negb Archi.ptr64);
-                                   match Block.ident_of id with
-                                     Some i => OK(Init_addrof i ofs)
-                                   | _ => Error (msg "Vptr should be a global in initializer")
-                                   end
-  | Vptr id ofs, Tlong _ _ => assertion (Archi.ptr64);
-                               match Block.ident_of id with
-                                 Some i => OK(Init_addrof i ofs)
-                               | _ => Error (msg "Vptr should be a global in initializer")
-                               end
-  | Vptr id ofs, Tpointer _ _ => match Block.ident_of id with
-                                  Some i => OK(Init_addrof i ofs)
-                                | _ => Error (msg "Vptr should be a global in initializer")
-                                end
+  | Vptr b ofs, Tint I32 sg _ => assertion (negb Archi.ptr64); transl_init_ptr b ofs
+  | Vptr b ofs, Tlong _ _ => assertion (Archi.ptr64); transl_init_ptr b ofs
+  | Vptr b ofs, Tpointer _ _ => transl_init_ptr b ofs
   | Vundef, _ => Error(msg "undefined operation in initializer")
   | _, _ => Error (msg "type mismatch in initializer")
   end.

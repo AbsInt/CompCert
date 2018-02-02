@@ -630,10 +630,12 @@ Proof.
   destruct ty; try discriminate.
   destruct f1; inv EQ0; simpl in H2; inv H2; assumption.
 - (* pointer *)
+  unfold transl_init_ptr in *.
   unfold inj in H.
   destruct (Block.ident_of b1) eqn:Hb; try discriminate.
   assert (data = Init_addrof i ofs1 /\ chunk = Mptr).
   { remember Archi.ptr64 as ptr64.
+    unfold transl_init_ptr in *.
     destruct ty; inversion EQ0.
     destruct i0; inv H5. unfold Mptr. destruct Archi.ptr64; inv H6; inv H2; auto.
     subst ptr64. unfold Mptr. destruct Archi.ptr64; inv H5; inv H2; auto.
@@ -664,7 +666,8 @@ Local Transparent sizeof.
   destruct f0; inv EQ0; auto.
 - destruct ty; try discriminate.
   destruct f0; inv EQ0; auto.
-- destruct ty; try discriminate.
+- unfold transl_init_ptr in *.
+  destruct ty; try discriminate.
   destruct i0; inv EQ0; auto.
   destruct Archi.ptr64 eqn:SF; inv H0.
   destruct (Block.ident_of b) eqn:Hb; inv H1.
