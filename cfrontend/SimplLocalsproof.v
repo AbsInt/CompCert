@@ -173,11 +173,7 @@ Proof.
   eapply H1; eauto.
   destruct (f' b) as [[b' delta]|] eqn:?; auto.
   exploit H2; eauto. unfold Mem.valid_block. intros [A B].
-  {
-    (** FIXME: blomega should be able to fix this, when we introduce its final form. *)
-    exfalso.
-    intuition blomega.
-  }
+  exfalso; intuition blomega.
   intros. destruct (f b) as [[b'' delta']|] eqn:?. eauto.
   exploit H2; eauto. unfold Mem.valid_block. intros [A B].
   exfalso; intuition blomega.
@@ -2272,7 +2268,7 @@ Proof.
   eapply Genv.find_var_info_not_fresh; eauto.
   blomega. blomega.
   erewrite <- Genv.init_mem_genv_next; eauto.
-  eapply Mem.neutral_inject, Genv.initmem_inject; eauto.
+  eapply Genv.initmem_inject; eauto.
   constructor.
 Qed.
 

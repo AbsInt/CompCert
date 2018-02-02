@@ -1294,7 +1294,7 @@ Proof.
     eapply Genv.find_var_info_not_fresh; eauto.
     blomega.
   erewrite <- Genv.init_mem_genv_next; eauto.
-  eapply Mem.neutral_inject, Genv.initmem_inject; eauto.
+  eapply Genv.initmem_inject; eauto.
 Qed.
 
 Lemma transf_final_states:

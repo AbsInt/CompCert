@@ -1321,12 +1321,12 @@ Proof.
   intros. exploit list_forall2_in_left; eauto. intros (av & U & V).
   eapply D; eauto with va. apply vpincl_ge. apply H3; auto.
   intros (bc2 & J & K & L & M & N & O & P & Q).
-  exploit (return_from_private_call bc bc2 (Mem.nextblock m) sp0 ge rs ae vres m'); eauto.
+  exploit (return_from_private_call bc bc2); eauto.
   eapply mmatch_below; eauto.
   rewrite K; auto.
   intros. rewrite K; auto. rewrite C; auto.
   apply bmatch_inv with m. eapply mmatch_stack; eauto.
-  intros; apply Q; auto.
+  intros. apply Q; auto.
   eapply external_call_nextblock; eauto.
   intros (bc3 & U & V & W & X & Y & Z & AA).
   eapply sound_succ_state with (bc := bc3); eauto. simpl; auto.
@@ -1343,7 +1343,7 @@ Proof.
   exploit external_call_match; eauto.
   intros. exploit list_forall2_in_left; eauto. intros (av & U & V). eapply D; eauto with va.
   intros (bc2 & J & K & L & M & N & O & P & Q).
-  exploit (return_from_public_call bc bc2 (Mem.nextblock m) sp0 ge rs ae vres m'); eauto.
+  exploit (return_from_public_call bc bc2); eauto.
   eapply mmatch_below; eauto.
   rewrite K; auto.
   intros. rewrite K; auto. rewrite C; auto.
@@ -1887,7 +1887,7 @@ Proof.
 - apply RM; auto.
 - apply mmatch_inj_top with m0.
   replace (inj_of_bc bc) with (Mem.flat_inj (Mem.nextblock m0)).
-  erewrite <- Genv.init_mem_genv_next; eauto. apply Mem.neutral_inject.
+  erewrite <- Genv.init_mem_genv_next; eauto.
   eapply Genv.initmem_inject; eauto.
   symmetry; apply extensionality; unfold Mem.flat_inj; intros x.
   destruct (Block.lt_dec x (Mem.nextblock m0)).

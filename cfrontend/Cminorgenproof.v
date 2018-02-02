@@ -2235,7 +2235,7 @@ Proof.
   eapply match_callstate with (f := Mem.flat_inj (Mem.nextblock m0)) (cs := @nil frame) (cenv := PTree.empty Z).
   auto.
   erewrite <- Genv.init_mem_genv_next; eauto.
-  eapply Mem.neutral_inject, Genv.initmem_inject; eauto.
+  eapply Genv.initmem_inject; eauto.
   apply mcs_nil with (Mem.nextblock m0). apply match_globalenvs_init; auto. blomega. blomega.
   constructor. red; auto.
   constructor.

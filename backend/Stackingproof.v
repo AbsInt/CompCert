@@ -2144,7 +2144,7 @@ Proof.
   red; simpl; auto.
   red; simpl; auto.
   simpl. rewrite sep_pure. split; auto. split;[|split].
-  unfold j. erewrite <- Genv.init_mem_genv_next; eauto. eapply Mem.neutral_inject, Genv.initmem_inject; eauto.
+  unfold j. erewrite <- Genv.init_mem_genv_next; eauto. eapply Genv.initmem_inject; eauto.
   simpl. exists (Mem.nextblock m0); split. apply Block.le_refl.
   unfold j, Mem.flat_inj; constructor; intros.
     apply pred_dec_true; auto.

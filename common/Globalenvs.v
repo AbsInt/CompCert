@@ -1378,9 +1378,10 @@ End INITMEM_INJ.
 Theorem initmem_inject:
   forall p m,
   init_mem p = Some m ->
-  Mem.inject_neutral m.
+  Mem.inject (Mem.flat_inj Block.init) m m.
 Proof.
   unfold init_mem; intros.
+  apply Mem.neutral_inject.
   eapply alloc_globals_neutral; eauto.
   apply Mem.empty_inject_neutral.
 Qed.
