@@ -257,6 +257,6 @@ Next Obligation.
   destruct Block.eq; firstorder.
 Qed.
 
-Hint Resolve Block.lt_le_trans Block.le_lt_trans Block.le_trans Block.lt_le Blt_ne Block.le_refl : blocknames.
+Hint Resolve Block.lt_le_trans Block.le_lt_trans Block.le_trans Block.lt_le Blt_ne Block.le_refl Block.lt_succ : blocknames.
 
 Ltac blomega := eauto with blocknames.

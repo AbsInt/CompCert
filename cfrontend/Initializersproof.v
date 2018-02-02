@@ -323,9 +323,13 @@ Qed.
   [Vptr b ofs] where [Genv.find_symbol ge id = Some b]. *)
 
 Definition inj (b: block) :=
-  match Genv.find_symbol ge b with
-  | Some b' => Some (b', 0)
-  | None => None
+  match Block.ident_of b with
+    Some i =>
+    match Genv.find_symbol ge i with
+    | Some b' => Some (b', 0)
+    | None => None
+    end
+  | _ => None
   end.
 
 Lemma mem_empty_not_valid_pointer:
@@ -440,7 +444,7 @@ Proof.
   (* var local *)
   unfold empty_env in H. rewrite PTree.gempty in H. congruence.
   (* var_global *)
-  econstructor. unfold inj. rewrite H0. eauto. auto.
+  econstructor. unfold inj. rewrite Block.ident_of_glob, H0. eauto. auto.
   (* deref *)
   eauto.
   (* field struct *)
@@ -627,13 +631,14 @@ Proof.
   destruct f1; inv EQ0; simpl in H2; inv H2; assumption.
 - (* pointer *)
   unfold inj in H.
-  assert (data = Init_addrof b1 ofs1 /\ chunk = Mptr).
+  destruct (Block.ident_of b1) eqn:Hb; try discriminate.
+  assert (data = Init_addrof i ofs1 /\ chunk = Mptr).
   { remember Archi.ptr64 as ptr64.
     destruct ty; inversion EQ0.
-    destruct i; inv H5. unfold Mptr. destruct Archi.ptr64; inv H6; inv H2; auto.
+    destruct i0; inv H5. unfold Mptr. destruct Archi.ptr64; inv H6; inv H2; auto.
     subst ptr64. unfold Mptr. destruct Archi.ptr64; inv H5; inv H2; auto.
     inv H2. auto. }
-  destruct H4; subst. destruct (Genv.find_symbol ge b1); inv H.
+  destruct H4; subst. destruct (Genv.find_symbol ge i); inv H.
   rewrite Ptrofs.add_zero in H3. auto.
 - (* undef *)
   discriminate.
@@ -661,9 +666,14 @@ Local Transparent sizeof.
   destruct f0; inv EQ0; auto.
 - destruct ty; try discriminate.
   destruct i0; inv EQ0; auto.
-  destruct Archi.ptr64 eqn:SF; inv H0. simpl. rewrite SF; auto.
-  destruct ptr64; inv EQ0. simpl. rewrite <- Heqptr64; auto.
-  inv EQ0. unfold init_data_size, sizeof. auto.
+  destruct Archi.ptr64 eqn:SF; inv H0.
+  destruct (Block.ident_of b) eqn:Hb; inv H1.
+  simpl. rewrite SF; auto.
+  destruct ptr64; inv EQ0.
+  destruct (Block.ident_of b) eqn:Hb; inv H0.
+  simpl. rewrite <- Heqptr64; auto.
+  destruct (Block.ident_of b) eqn:Hb; inv EQ0.
+  unfold init_data_size, sizeof. auto.
 Qed.
 
 Notation idlsize := init_data_list_size.
