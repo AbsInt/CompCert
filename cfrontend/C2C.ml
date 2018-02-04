@@ -492,7 +492,9 @@ let make_builtin_va_arg env ty e =
 
 (** Constants *)
 
-let convertInt n = coqint_of_camlint(Int64.to_int32 n)
+let convertInt32 (n: int64) = coqint_of_camlint(Int64.to_int32 n)
+let convertInt64 (n: int64) = coqint_of_camlint64 n
+let convertIntZ  (n: int64) = Z.of_sint64 n
 
 (** Attributes *)
 
@@ -565,9 +567,9 @@ let rec convertTyp env t =
       (* Cparser verified that the type ty[] occurs only in
          contexts that are safe for Clight, so just treat as ty[0]. *)
       (* warning "array type of unspecified size"; *)
-      Tarray(convertTyp env ty, coqint_of_camlint 0l, convertAttr a)
+      Tarray(convertTyp env ty, Z.zero, convertAttr a)
   | C.TArray(ty, Some sz, a) ->
-      Tarray(convertTyp env ty, convertInt sz, convertAttr a)
+      Tarray(convertTyp env ty, convertIntZ sz, convertAttr a)
   | C.TFun(tres, targs, va, a) ->
       checkFunctionType env tres targs;
       Tfunction(begin match targs with
@@ -720,8 +722,8 @@ let rec convertExpr env e =
   | C.EConst(C.CInt(i, k, _)) ->
       let sg = if Cutil.is_signed_ikind k then Signed else Unsigned in
       if Cutil.sizeof_ikind k = 8
-      then Ctyping.econst_long (coqint_of_camlint64 i) sg
-      else Ctyping.econst_int (convertInt i) sg
+      then Ctyping.econst_long (convertInt64 i) sg
+      else Ctyping.econst_int (convertInt32 i) sg
   | C.EConst(C.CFloat(f, k)) ->
       if k = C.FLongDouble && not !Clflags.option_flongdouble then
         unsupported "'long double' floating-point constant";
@@ -733,7 +735,7 @@ let rec convertExpr env e =
       let ty = typeWideStringLiteral s in
       Evalof(Evar(name_for_wide_string_literal s, ty), ty)
   | C.EConst(C.CEnum(id, i)) ->
-      Ctyping.econst_int (convertInt i) Signed
+      Ctyping.econst_int (convertInt32 i) Signed
   | C.ESizeof ty1 ->
       Ctyping.esizeof (convertTyp env ty1)
   | C.EAlignof ty1 ->
