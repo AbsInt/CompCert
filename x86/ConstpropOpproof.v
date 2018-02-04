@@ -291,11 +291,16 @@ Lemma addr_strength_reduction_correct:
   let (addr', args') := addr_strength_reduction addr args vl in
   exists res', eval_addressing ge (Vptr sp Ptrofs.zero) addr' e##args' = Some res' /\ Val.lessdef res res'.
 Proof.
-  unfold eval_addressing, addr_strength_reduction. destruct Archi.ptr64.
-- intros until res. destruct (addressing_valid (fst (addr_strength_reduction_64 addr args vl))).
-  apply addr_strength_reduction_64_correct.
-  intros; exists res; auto.
-- apply addr_strength_reduction_32_correct.
+  intros until res. unfold addr_strength_reduction.
+  set (aa := if Archi.ptr64
+         then addr_strength_reduction_64 addr args vl
+         else addr_strength_reduction_32 addr args vl).
+  intros.
+  destruct (addressing_valid (fst aa)).
+- unfold aa, eval_addressing in *. destruct Archi.ptr64.
++ apply addr_strength_reduction_64_correct; auto.
++ apply addr_strength_reduction_32_correct; auto.
+- exists res; auto.
 Qed.
 
 Lemma make_cmp_base_correct:
