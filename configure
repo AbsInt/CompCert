@@ -626,12 +626,8 @@ MANDIR=$sharedir/man
 SHAREDIR=$sharedir
 OCAML_OPT_COMP=$ocaml_opt_comp
 MENHIR_INCLUDES=$menhir_includes
-EOF
-if $merlin; then
-    cat >> Makefile.config <<EOF
 COMPFLAGS=-bin-annot
 EOF
-fi
 
 if test "$target" != "manual"; then
 cat >> Makefile.config <<EOF
