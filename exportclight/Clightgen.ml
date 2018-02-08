@@ -19,6 +19,7 @@ open Clflags
 open CommonOptions
 open Driveraux
 open Frontend
+open Diagnostics
 
 let tool_name = "Clight generator"
 
@@ -29,6 +30,7 @@ let option_normalize = ref false
 (* From CompCert C AST to Clight *)
 
 let compile_c_ast sourcename csyntax ofile =
+  let loc = file_loc sourcename in
   let clight =
     match SimplExpr.transl_program csyntax with
     | Errors.OK p ->
@@ -38,12 +40,10 @@ let compile_c_ast sourcename csyntax ofile =
             then Clightnorm.norm_program p'
             else p'
         | Errors.Error msg ->
-            print_error stderr msg;
-            exit 2
+          fatal_error loc "%a" print_error  msg
         end
     | Errors.Error msg ->
-        print_error stderr msg;
-        exit 2 in
+      fatal_error loc "%a" print_error msg in
   (* Dump Clight in C syntax if requested *)
   if !option_dclight then begin
     let ofile = Filename.chop_suffix sourcename ".c" ^ ".light.c" in
@@ -104,7 +104,8 @@ language_support_help ^
   -dclight       Save generated Clight in <file>.light.c
 |} ^
   general_help ^
-  Cerrors.warning_help
+  warning_help
+
 
 let print_usage_and_exit () =
   printf "%s" usage_string; exit 0
@@ -145,11 +146,11 @@ let cmdline_actions =
   Exact "-dclight", Set option_dclight;]
   @ general_options
 (* Diagnostic options *)
-  @ Cerrors.warning_options
+  @ warning_options
   @ language_support_options @
 (* Catch options that are not handled *)
   [Prefix "-", Self (fun s ->
-      eprintf "Unknown option `%s'\n" s; exit 2);
+     fatal_error no_loc "Unknown option `%s'" s);
 (* File arguments *)
   Suffix ".c", Self (fun s ->
       incr num_input_files; push_action process_c_file s);
@@ -160,6 +161,7 @@ let cmdline_actions =
   ]
 
 let _ =
+  try
   Gc.set { (Gc.get()) with
               Gc.minor_heap_size = 524288; (* 512k *)
               Gc.major_heap_increment = 4194304 (* 4M *)
@@ -167,12 +169,13 @@ let _ =
   Printexc.record_backtrace true;
   Frontend.init ();
   parse_cmdline cmdline_actions;
-  if !option_o <> None && !num_input_files >= 2 then begin
-    eprintf "Ambiguous '-o' option (multiple source files)\n";
-    exit 2
-  end;
-  if !num_input_files = 0 then begin
-    eprintf "clightgen: error: no input file\n";
-    exit 2
-  end;
+  if !option_o <> None && !num_input_files >= 2 then
+    fatal_error no_loc "Ambiguous '-o' option (multiple source files)";
+  if !num_input_files = 0 then
+    fatal_error no_loc "no input file";
   perform_actions ()
+      with
+  | Sys_error msg
+  | CmdError msg -> error no_loc "%s" msg; exit 2
+  | Abort -> exit 2
+  | e -> crash e

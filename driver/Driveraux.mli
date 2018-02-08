@@ -16,7 +16,7 @@ val command: ?stdout:string -> string list -> int
     (** Execute the command with the given arguments and an optional file for
         the stdout. Returns the exit code. *)
 
-val command_error: string -> int -> unit
+val command_error: string -> int -> 'a
    (** Generate an error message for the given command and exit code *)
 
 val safe_remove: string -> unit
@@ -38,7 +38,7 @@ val output_filename_default: string -> string
 val ensure_inputfile_exists: string -> unit
    (** Test whether the given input file exists *)
 
-val print_error:out_channel -> Errors.errcode list -> unit
+val print_error:Format.formatter -> Errors.errcode list -> unit
    (** Printing of error messages *)
 
 val explode_comma_option: string -> string list

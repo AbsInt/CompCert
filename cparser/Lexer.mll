@@ -126,16 +126,16 @@ let currentLoc =
 (* Error reporting *)
 
 let fatal_error lb fmt =
-  Cerrors.fatal_error
+  Diagnostics.fatal_error
     (lb.lex_curr_p.pos_fname,lb.lex_curr_p.pos_lnum) fmt
 
 let error lb fmt =
-  Cerrors.error
+  Diagnostics.error
     (lb.lex_curr_p.pos_fname,lb.lex_curr_p.pos_lnum) fmt
 
 let warning lb fmt =
-  Cerrors.warning
-      (lb.lex_curr_p.pos_fname,lb.lex_curr_p.pos_lnum) Cerrors.Unnamed ("warning: " ^^ fmt)
+  Diagnostics.warning
+      (lb.lex_curr_p.pos_fname,lb.lex_curr_p.pos_lnum) Diagnostics.Unnamed ("warning: " ^^ fmt)
 
 (* Simple character escapes *)
 
@@ -483,7 +483,7 @@ and singleline_comment = parse
     and supplier = I.lexer_lexbuf_to_supplier lexer lexbuf
     and succeed () = ()
     and fail checkpoint =
-      Cerrors.fatal_error_raw "%s" (ErrorReports.report text !buffer checkpoint)
+      Diagnostics.fatal_error_raw "%s" (ErrorReports.report text !buffer checkpoint)
     in
     I.loop_handle succeed fail supplier checkpoint
 

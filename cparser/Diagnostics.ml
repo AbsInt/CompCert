@@ -299,11 +299,13 @@ let parse_loc_format s =
 
 (* Print the location or ccomp for the case of unknown loc *)
 let pp_loc fmt (filename,lineno) =
-  if filename <> "" && lineno <> -10 && filename <> "cabs loc unknown" then
+  let lineno = if lineno = -10 then "" else
     match !diagnostics_format with
-    | Default -> fprintf fmt "%t%s:%d:%t " bc filename lineno rsc
-    | MSVC -> fprintf fmt "%t%s(%d):%t " bc filename lineno rsc
-    | Vi -> fprintf fmt "%t%s +%d:%t " bc filename lineno rsc
+      | Default -> sprintf ":%d" lineno
+      | MSVC -> sprintf "(%d)" lineno
+      | Vi -> sprintf " +%d" lineno in
+  if filename <> "" && filename <> "cabs loc unknown" then
+    fprintf fmt "%t%s%s:%t " bc filename lineno rsc
   else
     fprintf fmt "%tccomp:%t " bc rsc
 
@@ -341,11 +343,12 @@ let fatal_error loc fmt =
   fatal_error None loc fmt
 
 let check_errors () =
-  if !num_errors > 0 then
+  if !num_errors > 0 then begin
     eprintf "@[<hov 0>%d error%s detected.@]@."
             !num_errors
             (if !num_errors = 1 then "" else "s");
-  !num_errors > 0
+    raise Abort
+  end
 
 let error_option w =
   let key = string_of_warning w in
@@ -428,3 +431,7 @@ let crash exn =
     eprintf "Fatal error: uncaught exception %s\n%s" exc backtrace;
     exit 2
   end
+
+let no_loc = ("", -1)
+
+let file_loc file = (file,-10)

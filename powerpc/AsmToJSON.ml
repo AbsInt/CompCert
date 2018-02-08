@@ -340,7 +340,7 @@ let pp_instructions pp ic =
     begin match ef with
       | EF_inline_asm _ ->
         instruction pp "Pinlineasm" [Id];
-        Cerrors.warning ("",-10) Cerrors.Inline_asm_sdump "inline assembler is not supported in sdump"
+        Diagnostics.(warning no_loc Inline_asm_sdump "inline assembler is not supported in sdump")
       | EF_annot (kind,txt,targs) ->
         let annot_string = PrintAsmaux.annot_text preg_annot "r1" (camlstring_of_coqstring txt) args in
         let len = String.length annot_string in

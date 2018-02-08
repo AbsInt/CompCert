@@ -14,7 +14,7 @@
 (* *********************************************************************)
 
 open C
-open Cerrors
+open Diagnostics
 open Cutil
 open Env
 

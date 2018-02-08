@@ -20,8 +20,8 @@
 open Machine
 open Cabs
 open C
-open Cerrors
-open Cutil
+open Diagnostics
+open !Cutil
 
 (** * Utility functions *)
 

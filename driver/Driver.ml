@@ -19,6 +19,7 @@ open Driveraux
 open Frontend
 open Assembler
 open Linker
+open Diagnostics
 
 (* Name used for version string etc. *)
 let tool_name = "C verified compiler"
@@ -61,8 +62,8 @@ let compile_c_file sourcename ifile ofile =
     | Errors.OK asm ->
         asm
     | Errors.Error msg ->
-        eprintf "%s: %a" sourcename print_error msg;
-        exit 2 in
+      let loc = file_loc sourcename in
+        fatal_error loc "%a"  print_error msg in
   (* Dump Asm in binary and JSON format *)
   AsmToJSON.print_if asm sourcename;
   (* Print Asm in text form *)
@@ -143,10 +144,8 @@ let process_h_file sourcename =
     ensure_inputfile_exists sourcename;
     preprocess sourcename (output_filename_default "-");
     ""
-  end else begin
-    eprintf "Error: input file %s ignored (not in -E mode)\n" sourcename;
-    exit 2
-  end
+  end else
+    fatal_error no_loc "input file %s ignored (not in -E mode)\n" sourcename
 
 let target_help =
   if Configuration.arch = "arm" && Configuration.model <> "armv6" then
@@ -223,7 +222,7 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>)
   -sdump         Save info for post-linking validation in <file>.json
 |} ^
   general_help ^
-  Cerrors.warning_help ^
+  warning_help ^
   {|Interpreter mode:
   -interp        Execute given .c files using the reference interpreter
   -quiet         Suppress diagnostic messages for the interpreter
@@ -237,10 +236,9 @@ let print_usage_and_exit () =
 
 let enforce_buildnr nr =
   let build = int_of_string Version.buildnr in
-  if nr != build then begin
-    eprintf "Mismatching builds: This is CompCert build %d, but QSK requires build %d.\n\
-Please use matching builds of QSK and CompCert.\n" build nr; exit 2
-  end
+  if nr != build then
+    fatal_error no_loc "Mismatching builds: This is CompCert build %d, but QSK requires build %d.\n\
+Please use matching builds of QSK and CompCert." build nr
 
 let dump_mnemonics destfile =
   let oc = open_out_bin destfile in
@@ -349,7 +347,7 @@ let cmdline_actions =
 (* General options *)
    general_options @
 (* Diagnostic options *)
-  Cerrors.warning_options @
+  warning_options @
 (* Interpreter mode *)
  [ Exact "-interp", Set option_interp;
   Exact "-quiet", Unit (fun () -> Interp.trace := 0);
@@ -371,7 +369,7 @@ let cmdline_actions =
   @ [
 (* Catch options that are not handled *)
   Prefix "-", Self (fun s ->
-      eprintf "Unknown option `%s'\n" s; exit 2);
+      fatal_error no_loc "Unknown option `%s'" s);
 (* File arguments *)
   Suffix ".c", Self (fun s ->
       push_action process_c_file s; incr num_source_files; incr num_input_files);
@@ -405,21 +403,17 @@ let _ =
     Frontend.init ();
     parse_cmdline cmdline_actions;
     DebugInit.init (); (* Initialize the debug functions *)
-    if nolink () && !option_o <> None && !num_source_files >= 2 then begin
-      eprintf "Ambiguous '-o' option (multiple source files)\n";
-      exit 2
-    end;
+    if nolink () && !option_o <> None && !num_source_files >= 2 then
+      fatal_error no_loc "Ambiguous '-o' option (multiple source files)";
     if !num_input_files = 0 then
-      begin
-        eprintf "ccomp: error: no input file\n";
-        exit 2
-      end;
+      fatal_error no_loc "no input file";
     let linker_args = time "Total compilation time" perform_actions () in
     if not (nolink ()) && linker_args <> [] then begin
       linker (output_filename_default "a.out") linker_args
     end;
-   if  Cerrors.check_errors () then exit 2
-  with Sys_error msg ->
-    eprintf "I/O error: %s.\n" msg; exit 2
-     | e ->
-       Cerrors.crash e
+    check_errors ()
+  with
+  | Sys_error msg
+  | CmdError msg -> error no_loc "%s" msg; exit 2
+  | Abort -> exit 2
+  | e -> crash e

@@ -23,7 +23,7 @@ open Machine
 open C
 open Cutil
 open Env
-open Cerrors
+open Diagnostics
 open Transform
 
 (* The set of struct fields that are byte-swapped.
