@@ -432,11 +432,16 @@ int main (void)
    return 0;
 }
 EOF
-    "$@" -o "$tmpout" "$tmpsrc" >/dev/null 2>/dev/null
+    errout=$("$@" -o "$tmpout" "$tmpsrc" 2>&1 >/dev/null)
     retcode=$?
+    errcount=$(echo "${errout}" | grep -ciE "(unknown|unsupported|unrecognized).*(option|argument)")
     rm -f "$tmpsrc" "$tmpout"
-    return $retcode
+    # Test failed or error is logged to stderr
+    if [ "${retcode}" != "0" ] || [ "${errcount}" != "0" ]; then return 1; fi
+    # OK and no error was logged
+    return 0
 }
+
 
 #
 # Test Assembler Support for CFI Directives
@@ -462,12 +467,14 @@ fi
 
 
 #
-# Test Availability of Option '-no-pie'
+# Test Availability of Option '-no-pie' or '-nopie'
 #
 if ($clinker_needs_no_pie) then
-  echo "Testing linker support for '-no-pie' option... " | tr -d '\n'
+  echo "Testing linker support for '-no-pie' / '-nopie' option... " | tr -d '\n'
   if testcompiler ${cc} -no-pie;
-  then echo "yes"; clinker_options="${clinker_options} -no-pie"
+  then echo "yes, '-no-pie'"; clinker_options="${clinker_options} -no-pie"
+  elif testcompiler ${cc} -nopie;
+  then echo "yes, '-nopie'"; clinker_options="${clinker_options} -nopie"
   else echo "no"; clinker_needs_no_pie=false
   fi
 fi
