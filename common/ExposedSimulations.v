@@ -28,7 +28,8 @@ Require Import Integers.
 Require Import Smallstep.
 
 
-Require Import Values. (*for meminj, compose_meminj,...*)
+Require Import Values. (*for me
+minj, compose_meminj,...*)
 
 Set Implicit Arguments.
 

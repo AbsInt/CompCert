@@ -479,8 +479,8 @@ Record semantics : Type := Semantics_gen {
   state: Type;
   genvtype: Type;
   step : genvtype -> state -> trace -> state -> Prop;
-  initial_state: state -> Prop;
-  final_state: state -> int -> Prop;
+  initial_state: state -> val -> list val -> Prop;
+  final_state: state -> int -> Prop; (* Make return a val *)
   globalenv: genvtype;
   symbolenv: Senv.t}.
 
@@ -506,11 +506,12 @@ Record expressive_semantics : Type :=
                   state Sem ->
                   option (state Sem);
   external_step_lemma:
-    forall g s1 f_and_args t s2,
-      at_external g s1 = Some f_and_args ->
-      step Sem g s1 t s2 ->
-      exists vr m_after_ext, 
-      after_external g vr (set_mem s1 m_after_ext) = Some s2 
+    forall g s1 ef args t s2,
+      at_external g s1 = Some (ef, args) ->
+      step Sem g s1 t s2 ->   
+      exists vr,
+        external_call ef (symbolenv Sem) args (get_mem s1) t (Val.maketotal vr) (get_mem s2) /\
+        after_external g vr (set_mem s1 (get_mem s2)) = Some s2 
 }.
 
 (** The form used in earlier CompCert versions, for backward compatibility. *)

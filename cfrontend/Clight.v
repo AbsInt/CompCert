@@ -678,6 +678,25 @@ Inductive initial_state (p: program): state -> Prop :=
       type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
       initial_state p (Callstate f nil Kstop m0).
 
+(*NEW*)
+(* The following parameters are simple and reasonable, *)
+(* but might not be needed. All definitions come from  *)
+(* compcomp/core/val_casted.v                          *)
+Parameter val_casted_list_func: list val -> typelist -> bool. (* TODO *)
+Parameter tys_nonvoid: typelist -> bool.
+Parameter vals_defined: list val -> bool.
+Inductive initial_core : state -> val -> list val -> Prop :=
+| INIT_CORE:
+    forall f b m args targs tres,
+      (* v = Vptr b Int.zero -> *)
+      Genv.find_funct_ptr ge b = Some (Internal f) ->
+      type_of_fundef (Internal f) = Tfunction targs tres cc_default ->
+      val_casted_list_func args targs 
+                           && tys_nonvoid targs 
+                           && vals_defined args
+                           && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->
+      initial_core (Callstate (Internal f) args Kstop m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
+
 (** A final state is a [Returnstate] with an empty continuation. *)
 
 Inductive final_state: state -> int -> Prop :=
