@@ -45,12 +45,14 @@ Supported targets:
   x86_32-macosx        (x86 32 bits, MacOS X)
   x86_32-cygwin        (x86 32 bits, Cygwin environment under Windows)
   x86_64-linux         (x86 64 bits, Linux)
+  x86_64-bsd           (x86 64 bits, BSD)
   x86_64-macosx        (x86 64 bits, MacOS X)
   rv32-linux           (RISC-V 32 bits, Linux)
   rv64-linux           (RISC-V 64 bits, Linux)
   manual               (edit configuration file by hand)
 
-For x86 targets, the "x86_32-" prefix can also be written "ia32-".
+For x86 targets, the "x86_32-" prefix can also be written "ia32-" or "i386-".
+For x86 targets, the "x86_64-" prefix can also be written "amd64-".
 
 For PowerPC targets, the "ppc-" prefix can be refined into:
   ppc64-               PowerPC 64 bits
@@ -136,9 +138,9 @@ case "$target" in
       arch="arm"; model="armv7r"; endianness="big"; bitsize=32;;
   armebv7m-*)
       arch="arm"; model="armv7m"; endianness="big"; bitsize=32;;
-  x86_32-*|ia32-*)
+  x86_32-*|ia32-*|i386-*)
       arch="x86"; model="32sse2"; endianness="little"; bitsize=32;;
-  x86_64-*)
+  x86_64-*|amd64-*)
       arch="x86"; model="64"; endianness="little"; bitsize=64;;
   powerpc-*|ppc-*)
       arch="powerpc"; model="ppc32"; endianness="big"; bitsize=32;;
@@ -351,6 +353,20 @@ fi
 if test "$arch" = "x86" -a "$bitsize" = "64"; then
 
   case "$target" in
+    bsd)
+        abi="standard"
+        casm="${toolprefix}gcc"
+        casm_options="-m64 -c"
+        cc="${toolprefix}gcc -m64"
+        clinker="${toolprefix}gcc"
+        clinker_options="-m64"
+        cprepro="${toolprefix}gcc"
+        cprepro_options="-std=c99 -m64 -U__GNUC__ -E"
+        libmath="-lm"
+        struct_passing="ref-callee"   # wrong!
+        struct_return="ref"           # to check!
+        system="bsd"
+        ;;
     linux)
         abi="standard"
         casm="${toolprefix}gcc"
