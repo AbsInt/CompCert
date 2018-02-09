@@ -495,9 +495,14 @@ Lemma normalize_addrmode_64_correct:
   | (am', Some delta) => Val.addl (eval_addrmode64 ge am' rs) (Vlong delta)
   end.
 Proof.
-  intros; destruct am as [base ofs [n|r]]; simpl; auto.
-  destruct (zeq (Int.signed (Int.repr n)) n); simpl; auto.
+  intros; destruct am as [base ofs [n|[id delta]]]; simpl.
+- destruct (offset_in_range n); auto; simpl.
   rewrite ! Val.addl_assoc. apply f_equal. apply f_equal. simpl. rewrite Int64.add_zero_l; auto.
+- destruct (ptroffset_in_range delta); auto.
+  destruct Archi.ptr64 eqn:SF; auto; simpl.
+  rewrite ! Val.addl_assoc. apply f_equal. apply f_equal.
+  rewrite <- Genv.shift_symbol_address_64 by auto.
+  f_equal. rewrite Ptrofs.add_zero_l, Ptrofs.of_int64_to_int64 by auto. auto.
 Qed.
 
 (** Processor conditions and comparisons *)
