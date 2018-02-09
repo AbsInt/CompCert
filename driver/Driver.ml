@@ -415,5 +415,5 @@ let _ =
   with
   | Sys_error msg
   | CmdError msg -> error no_loc "%s" msg; exit 2
-  | Abort -> exit 2
+  | Abort -> error_summary (); exit 2
   | e -> crash e

@@ -84,3 +84,6 @@ val no_loc : string * int
 
 val file_loc : string -> string * int
 (** [file_loc f] generates a location for file [f] *)
+
+val error_summary : unit -> unit
+(** Print a summary containing the numbers of errors encountered *)

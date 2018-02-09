@@ -342,13 +342,23 @@ let error loc fmt =
 let fatal_error loc fmt =
   fatal_error None loc fmt
 
+let error_summary () =
+ if !num_errors > 0 then begin
+    eprintf "@[<hov 0>%d error%s detected.@]@."
+            !num_errors
+            (if !num_errors = 1 then "" else "s");
+    num_errors := 0;
+  end
+
 let check_errors () =
   if !num_errors > 0 then begin
     eprintf "@[<hov 0>%d error%s detected.@]@."
             !num_errors
             (if !num_errors = 1 then "" else "s");
+    num_errors := 0;
     raise Abort
   end
+
 
 let error_option w =
   let key = string_of_warning w in
