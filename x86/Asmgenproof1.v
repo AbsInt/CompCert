@@ -498,8 +498,8 @@ Proof.
   intros; destruct am as [base ofs [n|[id delta]]]; simpl.
 - destruct (offset_in_range n); auto; simpl.
   rewrite ! Val.addl_assoc. apply f_equal. apply f_equal. simpl. rewrite Int64.add_zero_l; auto.
-- destruct (ptroffset_in_range delta); auto.
-  destruct Archi.ptr64 eqn:SF; auto; simpl.
+- destruct Archi.ptr64 eqn:SF; auto; simpl;
+  destruct (ptroffset_in_range delta); auto. simpl.
   rewrite ! Val.addl_assoc. apply f_equal. apply f_equal.
   rewrite <- Genv.shift_symbol_address_64 by auto.
   f_equal. rewrite Ptrofs.add_zero_l, Ptrofs.of_int64_to_int64 by auto. auto.
