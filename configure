@@ -176,8 +176,6 @@ casmruntime=""
 clinker_needs_no_pie=true
 clinker_options=""
 cprepro_options=""
-struct_passing=""
-struct_return=""
 
 
 #
@@ -205,8 +203,6 @@ if test "$arch" = "arm"; then
   cprepro="${toolprefix}gcc"
   cprepro_options="-std=c99 -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
   libmath="-lm"
-  struct_passing="ints"
-  struct_return="int1-4"
   system="linux"
 fi
 
@@ -228,10 +224,8 @@ if test "$arch" = "powerpc"; then
   case "$target" in
     linux)
         abi="linux"
-        struct_return="ref"
         ;;
     *)
-        struct_return="int1-8"
         abi="eabi"
         ;;
   esac
@@ -247,7 +241,6 @@ if test "$arch" = "powerpc"; then
         cprepro="${toolprefix}dcc"
         cprepro_options="-E -D__GNUC__"
         libmath="-lm"
-        struct_passing="ref-caller"
         system="diab"
         responsefile="diab"
         ;;
@@ -260,7 +253,6 @@ if test "$arch" = "powerpc"; then
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -U__GNUC__ -E"
         libmath="-lm"
-        struct_passing="ref-caller"
         system="linux"
         ;;
   esac
@@ -283,8 +275,6 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
         libmath="-lm"
-        struct_passing="ints"
-        struct_return="int1248"    # to check!
         system="bsd"
         ;;
     cygwin)
@@ -297,8 +287,6 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m32 -U__GNUC__ '-D__attribute__(x)=' -E"
         libmath="-lm"
-        struct_passing="ints"
-        struct_return="ref"
         system="cygwin"
         ;;
     linux)
@@ -311,8 +299,6 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
         libmath="-lm"
-        struct_passing="ints"
-        struct_return="ref"
         system="linux"
         ;;
     macosx)
@@ -328,8 +314,6 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' -E"
         libmath=""
-        struct_passing="ints"
-        struct_return="int1248"
         system="macosx"
 
         if [[ $kernel_major -gt 11 ]]; then
@@ -363,8 +347,6 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m64 -U__GNUC__ -E"
         libmath="-lm"
-        struct_passing="ref-callee"   # wrong!
-        struct_return="ref"           # to check!
         system="bsd"
         ;;
     linux)
@@ -377,8 +359,6 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m64 -U__GNUC__ -E"
         libmath="-lm"
-        struct_passing="ref-callee"   # wrong!
-        struct_return="ref"           # to check!
         system="linux"
         ;;
     macosx)
@@ -394,8 +374,6 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -arch x86_64 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' -E"
         libmath=""
-        struct_passing="ref-callee"   # wrong!
-        struct_return="ref"           # to check!
         system="macosx"
         ;;
     *)
@@ -424,8 +402,6 @@ if test "$arch" = "riscV"; then
   cprepro="${toolprefix}gcc"
   cprepro_options="$model_options -std=c99 -U__GNUC__ -E"
   libmath="-lm"
-  struct_passing="ref-callee"   # wrong!
-  struct_return="ref"           # to check!
   system="linux"
 fi
 
@@ -672,8 +648,6 @@ HAS_RUNTIME_LIB=$has_runtime_lib
 HAS_STANDARD_HEADERS=$has_standard_headers
 LIBMATH=$libmath
 MODEL=$model
-STRUCT_PASSING=$struct_passing
-STRUCT_RETURN=$struct_return
 SYSTEM=$system
 RESPONSEFILE=$responsefile
 EOF
@@ -715,19 +689,6 @@ BITSIZE=
 # ENDIANNESS=big     # for ARM or PowerPC
 # ENDIANNESS=little  # for ARM or x86
 ENDIANNESS=
-
-# Default calling conventions for passing structs and unions by value
-# See options -fstruct-passing=<style> and -fstruct-return=<style>
-# in the CompCert user's manual
-#
-STRUCT_PASSING=ref_callee
-# STRUCT_PASSING=ref_caller
-# STRUCT_PASSING=ints
-#
-STRUCT_RETURN=ref
-# STRUCT_RETURN=int1248
-# STRUCT_RETURN=int1-4
-# STRUCT_RETURN=int1-8
 
 # Target operating system and development environment
 #
@@ -808,7 +769,6 @@ CompCert configuration:
     Hardware model................ $model
     Application binary interface.. $abi
     Endianness.................... $endianness
-    Composite passing conventions. arguments: $struct_passing, return values: $struct_return
     OS and development env........ $system
     C compiler.................... $cc
     C preprocessor................ $cprepro
