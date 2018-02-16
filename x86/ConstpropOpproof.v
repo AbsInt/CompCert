@@ -328,24 +328,46 @@ Proof.
              e#r = Vundef \/ e#r = Vint Int.zero \/ e#r = Vint Int.one).
   { intros. apply vmatch_Uns_1 with bc Ptop. eapply vmatch_ge. eapply vincl_ge; eauto. apply MATCH. }
   unfold make_cmp. case (make_cmp_match c args vl); intros.
-- destruct (Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1)) eqn:E1.
-  simpl in H; inv H. InvBooleans. subst n.
-  exists (e#r1); split; auto. simpl.
-  exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
-  destruct (Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1)) eqn:E0.
-  simpl in H; inv H. InvBooleans. subst n.
-  exists (Val.xor e#r1 (Vint Int.one)); split; auto. simpl.
-  exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
-  apply make_cmp_base_correct; auto.
-- destruct (Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1)) eqn:E0.
-  simpl in H; inv H. InvBooleans. subst n.
-  exists (e#r1); split; auto. simpl.
-  exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
+- unfold make_cmp_imm_eq.
   destruct (Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1)) eqn:E1.
-  simpl in H; inv H. InvBooleans. subst n.
++ simpl in H; inv H. InvBooleans. subst n.
+  exists (e#r1); split; auto. simpl.
+  exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
++ destruct (Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1)) eqn:E0.
+* simpl in H; inv H. InvBooleans. subst n.
   exists (Val.xor e#r1 (Vint Int.one)); split; auto. simpl.
   exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
-  apply make_cmp_base_correct; auto.
+* apply make_cmp_base_correct; auto.
+- unfold make_cmp_imm_ne.
+  destruct (Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1)) eqn:E0.
++ simpl in H; inv H. InvBooleans. subst n.
+  exists (e#r1); split; auto. simpl.
+  exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
++ destruct (Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1)) eqn:E1.
+* simpl in H; inv H. InvBooleans. subst n.
+  exists (Val.xor e#r1 (Vint Int.one)); split; auto. simpl.
+  exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
+* apply make_cmp_base_correct; auto.
+- unfold make_cmp_imm_eq.
+  destruct (Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1)) eqn:E1.
++ simpl in H; inv H. InvBooleans. subst n.
+  exists (e#r1); split; auto. simpl.
+  exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
++ destruct (Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1)) eqn:E0.
+* simpl in H; inv H. InvBooleans. subst n.
+  exists (Val.xor e#r1 (Vint Int.one)); split; auto. simpl.
+  exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
+* apply make_cmp_base_correct; auto.
+- unfold make_cmp_imm_ne.
+  destruct (Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1)) eqn:E0.
++ simpl in H; inv H. InvBooleans. subst n.
+  exists (e#r1); split; auto. simpl.
+  exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
++ destruct (Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1)) eqn:E1.
+* simpl in H; inv H. InvBooleans. subst n.
+  exists (Val.xor e#r1 (Vint Int.one)); split; auto. simpl.
+  exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
+* apply make_cmp_base_correct; auto.
 - apply make_cmp_base_correct; auto.
 Qed.
 
