@@ -62,6 +62,10 @@ Extraction NoInline Memory.Mem.valid_pointer.
 (* Errors *)
 Extraction Inline Errors.bind Errors.bind2.
 
+(* AST *)
+Extract Inlined Constant AST.ident_of_string => "Camlcoq.ident_of_coqstring".
+Extract Inlined Constant AST.string_of_ident => "Camlcoq.coqstring_of_ident".
+
 (* Iteration *)
 
 Extract Constant Iteration.GenIter.iterate =>

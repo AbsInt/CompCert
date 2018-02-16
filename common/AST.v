@@ -31,6 +31,20 @@ Definition ident := positive.
 
 Definition ident_eq := peq.
 
+(** The mapping between the external representation of identifiers as
+  [string]s and their internal representation as [ident]s is axiomatized
+  as a bijection, and constructed incrementally by Camlcoq.ml *)
+
+Parameter ident_of_string: string -> ident.
+Parameter string_of_ident: ident -> string.
+
+Axiom string_of_ident_of_string:
+  forall s, string_of_ident (ident_of_string s) = s.
+Axiom ident_of_string_of_ident:
+  forall i, ident_of_string (string_of_ident i) = i.
+
+Notation "# s" := (ident_of_string s) (at level 1, format "'#' s").
+
 (** The intermediate languages are weakly typed, using the following types: *)
 
 Inductive typ : Type :=
