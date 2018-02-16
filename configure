@@ -227,16 +227,17 @@ if test "$arch" = "powerpc"; then
 
   case "$target" in
     linux)
+        abi="linux"
         struct_return="ref"
         ;;
     *)
         struct_return="int1-8"
+        abi="eabi"
         ;;
   esac
 
   case "$target" in
     eabi-diab)
-        abi="eabi"
         asm_supports_cfi=false
         casm="${toolprefix}das"
         casm_options="-Xalign-value"
@@ -251,7 +252,6 @@ if test "$arch" = "powerpc"; then
         responsefile="diab"
         ;;
     *)
-        abi="eabi"
         casm="${toolprefix}gcc"
         casm_options="-c"
         casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
