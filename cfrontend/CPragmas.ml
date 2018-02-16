@@ -72,7 +72,7 @@ let process_pragma name =
   | "section" :: _ ->
       C2C.error "ill-formed `section' pragma"; true
   | "use_section" :: classname :: identlist ->
-      if identlist = [] then C2C.warning Cerrors.Unnamed "empty `use_section' pragma";
+      if identlist = [] then C2C.warning Diagnostics.Unnamed "empty `use_section' pragma";
       List.iter (process_use_section_pragma classname) identlist;
       true
   | "use_section" :: _ ->

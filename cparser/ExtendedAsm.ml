@@ -33,7 +33,7 @@ open Printf
 open Machine
 open C
 open Cutil
-open Cerrors
+open Diagnostics
 
 (* Renaming of labeled and numbered operands *)
 
@@ -176,7 +176,7 @@ let rename_placeholders loc template subst =
       try
         StringMap.find p subst
       with Not_found ->
-        error loc"'%s' in asm text does not designate any operand" p;
+        error loc "'%s' in asm text does not designate any operand" p;
         "%<error>"
   in
     Str.global_substitute re_asm_placeholder

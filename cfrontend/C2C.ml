@@ -120,13 +120,16 @@ let currentLocation = ref Cutil.no_loc
 let updateLoc l = currentLocation := l
 
 let error fmt =
-  Cerrors.error !currentLocation fmt
+  Diagnostics.error !currentLocation fmt
+
+let fatal_error fmt =
+  Diagnostics.fatal_error !currentLocation fmt
 
 let unsupported msg =
-  Cerrors.error !currentLocation "unsupported feature: %s"  msg
+  Diagnostics.error !currentLocation "unsupported feature: %s"  msg
 
 let warning t msg =
-  Cerrors.warning !currentLocation t msg
+  Diagnostics.warning !currentLocation t msg
 
 let string_of_errmsg msg =
   let string_of_err = function
@@ -489,7 +492,9 @@ let make_builtin_va_arg env ty e =
 
 (** Constants *)
 
-let convertInt n = coqint_of_camlint(Int64.to_int32 n)
+let convertInt32 (n: int64) = coqint_of_camlint(Int64.to_int32 n)
+let convertInt64 (n: int64) = coqint_of_camlint64 n
+let convertIntZ  (n: int64) = Z.of_sint64 n
 
 (** Attributes *)
 
@@ -562,9 +567,9 @@ let rec convertTyp env t =
       (* Cparser verified that the type ty[] occurs only in
          contexts that are safe for Clight, so just treat as ty[0]. *)
       (* warning "array type of unspecified size"; *)
-      Tarray(convertTyp env ty, coqint_of_camlint 0l, convertAttr a)
+      Tarray(convertTyp env ty, Z.zero, convertAttr a)
   | C.TArray(ty, Some sz, a) ->
-      Tarray(convertTyp env ty, convertInt sz, convertAttr a)
+      Tarray(convertTyp env ty, convertIntZ sz, convertAttr a)
   | C.TFun(tres, targs, va, a) ->
       checkFunctionType env tres targs;
       Tfunction(begin match targs with
@@ -657,11 +662,11 @@ let checkFloatOverflow f typ =
   match f with
   | Fappli_IEEE.B754_finite _ -> ()
   | Fappli_IEEE.B754_zero _ ->
-      warning Cerrors.Literal_range "magnitude of floating-point constant too small for type '%s'"  typ
+      warning Diagnostics.Literal_range "magnitude of floating-point constant too small for type '%s'"  typ
   | Fappli_IEEE.B754_infinity _ ->
-      warning Cerrors.Literal_range "magnitude of floating-point constant too large for type '%s'"  typ
+      warning Diagnostics.Literal_range "magnitude of floating-point constant too large for type '%s'"  typ
   | Fappli_IEEE.B754_nan _ ->
-      warning Cerrors.Literal_range "floating-point converts converts to 'NaN'"
+      warning Diagnostics.Literal_range "floating-point converts converts to 'NaN'"
 
 let convertFloat f kind =
   let mant = z_of_str f.C.hex (f.C.intPart ^ f.C.fracPart) 0 in
@@ -717,8 +722,8 @@ let rec convertExpr env e =
   | C.EConst(C.CInt(i, k, _)) ->
       let sg = if Cutil.is_signed_ikind k then Signed else Unsigned in
       if Cutil.sizeof_ikind k = 8
-      then Ctyping.econst_long (coqint_of_camlint64 i) sg
-      else Ctyping.econst_int (convertInt i) sg
+      then Ctyping.econst_long (convertInt64 i) sg
+      else Ctyping.econst_int (convertInt32 i) sg
   | C.EConst(C.CFloat(f, k)) ->
       if k = C.FLongDouble && not !Clflags.option_flongdouble then
         unsupported "'long double' floating-point constant";
@@ -730,7 +735,7 @@ let rec convertExpr env e =
       let ty = typeWideStringLiteral s in
       Evalof(Evar(name_for_wide_string_literal s, ty), ty)
   | C.EConst(C.CEnum(id, i)) ->
-      Ctyping.econst_int (convertInt i) Signed
+      Ctyping.econst_int (convertInt32 i) Signed
   | C.ESizeof ty1 ->
       Ctyping.esizeof (convertTyp env ty1)
   | C.EAlignof ty1 ->
@@ -783,7 +788,7 @@ let rec convertExpr env e =
       let e2' = convertExpr env e2 in
       if Cutil.is_composite_type env e1.etyp
       && List.mem AVolatile (Cutil.attributes_of_type env e1.etyp) then
-        warning Cerrors.Unnamed "assignment to an lvalue of volatile composite type, the 'volatile' qualifier is ignored";
+        warning Diagnostics.Unnamed "assignment to an lvalue of volatile composite type, the 'volatile' qualifier is ignored";
       ewrap (Ctyping.eassign e1' e2')
   | C.EBinop((C.Oadd_assign|C.Osub_assign|C.Omul_assign|C.Odiv_assign|
               C.Omod_assign|C.Oand_assign|C.Oor_assign|C.Oxor_assign|
@@ -1080,7 +1085,7 @@ let rec convertStmt env s =
         | _ -> Cutil.is_debug_stmt s in
       if init.sdesc <> C.Sskip && not (init_debug init) then
         begin
-          warning Cerrors.Unnamed "ignored code at beginning of 'switch'";
+          warning Diagnostics.Unnamed "ignored code at beginning of 'switch'";
           contains_case init
         end;
       let te = convertExpr env e in
@@ -1276,7 +1281,7 @@ let rec convertGlobdecls env res gl =
           begin match Cutil.unroll env ty with
           | TFun(tres, targs, va, a) ->
               if targs = None then
-                warning Cerrors.Unnamed "'%s' is declared without a function prototype" id.name;
+                warning Diagnostics.Unnamed "'%s' is declared without a function prototype" id.name;
               convertGlobdecls env (convertFundecl env d :: res) gl'
           | _ ->
               convertGlobdecls env (convertGlobvar g.gloc env d :: res) gl'
@@ -1290,7 +1295,7 @@ let rec convertGlobdecls env res gl =
           convertGlobdecls env res gl'
       | C.Gpragma s ->
           if not (!process_pragma_hook s) then
-            warning Cerrors.Unknown_pragmas "unknown pragma ignored";
+            warning Diagnostics.Unknown_pragmas "unknown pragma ignored";
           convertGlobdecls env res gl'
 
 (** Convert struct and union declarations.
@@ -1388,7 +1393,7 @@ let public_globals gl =
 (** Convert a [C.program] into a [Csyntax.program] *)
 
 let convertProgram p =
-  Cerrors.reset();
+  Diagnostics.reset();
   stringNum := 0;
   Hashtbl.clear decl_atom;
   Hashtbl.clear stringTable;
@@ -1399,9 +1404,8 @@ let convertProgram p =
     let typs = convertCompositedefs env [] p in
     match build_composite_env typs with
     | Errors.Error msg ->
-        error "incorrect struct or union definition: %s"
-                       (string_of_errmsg msg);
-        None
+      fatal_error "incorrect struct or union definition: %s"
+                       (string_of_errmsg msg)
     | Errors.OK ce ->
         comp_env := ce;
         let gl1 = convertGlobdecls env [] p in
@@ -1413,6 +1417,7 @@ let convertProgram p =
             prog_main = intern_string "main";
             prog_types = typs;
             prog_comp_env = ce } in
-        if Cerrors.check_errors () then None else Some p'
+        Diagnostics.check_errors ();
+        p'
   with Env.Error msg ->
-    error "%s" (Env.error_message msg); None
+    fatal_error "%s" (Env.error_message msg)

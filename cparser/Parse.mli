@@ -15,7 +15,7 @@
 
 (* Entry point for the library: parse, elaborate, and transform *)
 
-val preprocessed_file: string -> string -> string -> C.program option
+val preprocessed_file: string -> string -> string -> C.program
 
 (* first arg: desired transformations
    second arg: source file name before preprocessing

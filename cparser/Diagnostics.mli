@@ -21,8 +21,8 @@ val reset : unit -> unit
 exception Abort
   (** Exception raised upon fatal errors *)
 
-val check_errors : unit -> bool
-  (** Check whether errors occured *)
+val check_errors : unit -> unit
+  (** Check whether errors occured and raise abort if an error occured *)
 
 type warning_type =
   | Unnamed                        (** warnings which cannot be turned off *)
@@ -78,3 +78,12 @@ val raise_on_errors : unit -> unit
 
 val crash: exn -> unit
 (** Report the backtrace of the last exception and exit *)
+
+val no_loc : string * int
+(** Location used for unknown locations *)
+
+val file_loc : string -> string * int
+(** [file_loc f] generates a location for file [f] *)
+
+val error_summary : unit -> unit
+(** Print a summary containing the numbers of errors encountered *)

@@ -16,12 +16,12 @@
 open Printf
 open Commandline
 open Clflags
+open CommonOptions
 open Driveraux
 open Frontend
+open Diagnostics
 
-(* Location of the compatibility library *)
-
-let stdlib_path = ref Configuration.stdlib_path
+let tool_name = "Clight generator"
 
 (* clightgen-specific options *)
 
@@ -30,6 +30,7 @@ let option_normalize = ref false
 (* From CompCert C AST to Clight *)
 
 let compile_c_ast sourcename csyntax ofile =
+  let loc = file_loc sourcename in
   let clight =
     match SimplExpr.transl_program csyntax with
     | Errors.OK p ->
@@ -39,12 +40,10 @@ let compile_c_ast sourcename csyntax ofile =
             then Clightnorm.norm_program p'
             else p'
         | Errors.Error msg ->
-            print_error stderr msg;
-            exit 2
+          fatal_error loc "%a" print_error  msg
         end
     | Errors.Error msg ->
-        print_error stderr msg;
-        exit 2 in
+      fatal_error loc "%a" print_error msg in
   (* Dump Clight in C syntax if requested *)
   if !option_dclight then begin
     let ofile = Filename.chop_suffix sourcename ".c" ^ ".light.c" in
@@ -86,52 +85,30 @@ let process_i_file sourcename =
   let ofile = output_filename sourcename ".i" in
   compile_c_file sourcename sourcename ofile
 
-let version_string =
-  if Version.buildnr <> "" && Version.tag <> "" then
-    sprintf "The CompCert Clight generator, %s, Build: %s, Tag: %s\n" Version.version Version.buildnr Version.tag
-  else
-    "The CompCert Clight generator, version "^ Version.version ^ "\n"
-
 let usage_string =
-  version_string ^
+  version_string tool_name^
 {|Usage: clightgen [options] <source files>
 Recognized source files:
   .c             C source file
+  .i or .p       C source file that should not be preprocessed
 Processing options:
   -normalize     Normalize the generated Clight code w.r.t. loads in expressions
   -E             Preprocess only, send result to standard output
   -o <file>      Generate output in <file>
 |} ^
 prepro_help ^
-{|Language support options (use -fno-<opt> to turn off -f<opt>) :
-  -fbitfields    Emulate bit fields in structs [off]
-  -flongdouble   Treat 'long double' as 'double' [off]
-  -fstruct-passing  Support passing structs and unions by value as function
-                    results or function arguments [off]
-  -fstruct-return   Like -fstruct-passing (deprecated)
-  -fvararg-calls Emulate calls to variable-argument functions [on]
-  -fpacked-structs  Emulate packed structs [off]
-  -fall          Activate all language support options above
-  -fnone         Turn off all language support options above
-Tracing options:
+language_support_help ^
+{|Tracing options:
   -dparse        Save C file after parsing and elaboration in <file>.parsed.c
   -dc            Save generated Compcert C in <file>.compcert.c
   -dclight       Save generated Clight in <file>.light.c
-General options:
-  -v             Print external commands before invoking them
-|}
+|} ^
+  general_help ^
+  warning_help
+
 
 let print_usage_and_exit () =
   printf "%s" usage_string; exit 0
-
-let print_version_and_exit () =
-  printf "%s" version_string; exit 0
-
-let language_support_options = [
-  option_fbitfields; option_flongdouble;
-  option_fstruct_passing; option_fvararg_calls; option_funprototyped;
-  option_fpacked_structs; option_finline_asm
-]
 
 let set_all opts () = List.iter (fun r -> r := true) opts
 let unset_all opts () = List.iter (fun r -> r := false) opts
@@ -149,48 +126,31 @@ let perform_actions () =
 let num_input_files = ref 0
 
 let cmdline_actions =
-  let f_opt name ref =
-    [Exact("-f" ^ name), Set ref; Exact("-fno-" ^ name), Unset ref] in
   [
 (* Getting help *)
   Exact "-help", Unit print_usage_and_exit;
-  Exact "--help", Unit print_usage_and_exit;
-(* Getting version info *)
-  Exact "-version", Unit print_version_and_exit;
-  Exact "--version", Unit print_version_and_exit;
+  Exact "--help", Unit print_usage_and_exit;]
+  (* Getting version info *)
+ @ version_options tool_name @
 (* Processing options *)
-  Exact "-E", Set option_E;
+ [ Exact "-E", Set option_E;
   Exact "-normalize", Set option_normalize;
   Exact "-o", String(fun s -> option_o := Some s);
   Prefix "-o", Self (fun s -> let s = String.sub s 2 ((String.length s) - 2) in
                               option_o := Some s);]
 (* Preprocessing options *)
   @ prepro_actions @
-(* Language support options -- more below *)
-  [Exact "-fall", Unit (set_all language_support_options);
-  Exact "-fnone", Unit (unset_all language_support_options);
 (* Tracing options *)
-  Exact "-dparse", Set option_dparse;
+ [ Exact "-dparse", Set option_dparse;
   Exact "-dc", Set option_dcmedium;
-  Exact "-dclight", Set option_dclight;
-(* General options *)
-  Exact "-v", Set option_v;
-  Exact "-stdlib", String(fun s -> stdlib_path := s);
-  ]
-(* -f options: come in -f and -fno- variants *)
-(* Language support options *)
-  @ f_opt "longdouble" option_flongdouble
-  @ f_opt "struct-return" option_fstruct_passing
-  @ f_opt "struct-passing" option_fstruct_passing
-  @ f_opt "bitfields" option_fbitfields
-  @ f_opt "vararg-calls" option_fvararg_calls
-  @ f_opt "unprototyped" option_funprototyped
-  @ f_opt "packed-structs" option_fpacked_structs
-  @ f_opt "inline-asm" option_finline_asm
-  @ [
+  Exact "-dclight", Set option_dclight;]
+  @ general_options
+(* Diagnostic options *)
+  @ warning_options
+  @ language_support_options @
 (* Catch options that are not handled *)
-  Prefix "-", Self (fun s ->
-      eprintf "Unknown option `%s'\n" s; exit 2);
+  [Prefix "-", Self (fun s ->
+     fatal_error no_loc "Unknown option `%s'" s);
 (* File arguments *)
   Suffix ".c", Self (fun s ->
       incr num_input_files; push_action process_c_file s);
@@ -201,6 +161,7 @@ let cmdline_actions =
   ]
 
 let _ =
+  try
   Gc.set { (Gc.get()) with
               Gc.minor_heap_size = 524288; (* 512k *)
               Gc.major_heap_increment = 4194304 (* 4M *)
@@ -208,12 +169,13 @@ let _ =
   Printexc.record_backtrace true;
   Frontend.init ();
   parse_cmdline cmdline_actions;
-  if !option_o <> None && !num_input_files >= 2 then begin
-    eprintf "Ambiguous '-o' option (multiple source files)\n";
-    exit 2
-  end;
-  if !num_input_files = 0 then begin
-    eprintf "clightgen: error: no input file\n";
-    exit 2
-  end;
+  if !option_o <> None && !num_input_files >= 2 then
+    fatal_error no_loc "Ambiguous '-o' option (multiple source files)";
+  if !num_input_files = 0 then
+    fatal_error no_loc "no input file";
   perform_actions ()
+      with
+  | Sys_error msg
+  | CmdError msg -> error no_loc "%s" msg; exit 2
+  | Abort -> exit 2
+  | e -> crash e

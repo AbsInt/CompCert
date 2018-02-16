@@ -18,6 +18,7 @@ open Driveraux
 (* From asm to object file *)
 
 let assemble ifile ofile =
+  Diagnostics.raise_on_errors ();
   let cmd = List.concat [
     Configuration.asm;
     ["-o"; ofile];
@@ -27,8 +28,7 @@ let assemble ifile ofile =
   let exc = command cmd in
   if exc <> 0 then begin
     safe_remove ofile;
-    command_error "assembler" exc;
-    exit 2
+    command_error "assembler" exc
   end
 
 let assembler_actions =

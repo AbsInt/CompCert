@@ -35,11 +35,16 @@ type action =
   | Integer of (int -> unit)    (** read next arg as an int, call function *)
   | Ignore                      (** ignore the next arg *)
   | Unit of (unit -> unit)      (** call the function with unit as argument *)
-
-val parse_cmdline: (pattern * action) list -> unit
-
 (* Note on precedence: [Exact] patterns are tried first, then the other
    patterns are tried in the order in which they appear in the list. *)
+
+exception CmdError of string
+(** Raise by [parse_cmdline] when an error occured *)
+
+val parse_cmdline: (pattern * action) list -> unit
+(** [parse_cmdline actions] parses the commandline and performs all [actions].
+    Raises [CmdError] if an error occurred.
+*)
 
 val longopt_int: string -> (int -> unit) -> pattern * action
 (** [longopt_int key fn] generates a pattern and an action for

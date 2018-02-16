@@ -45,12 +45,14 @@ Supported targets:
   x86_32-macosx        (x86 32 bits, MacOS X)
   x86_32-cygwin        (x86 32 bits, Cygwin environment under Windows)
   x86_64-linux         (x86 64 bits, Linux)
+  x86_64-bsd           (x86 64 bits, BSD)
   x86_64-macosx        (x86 64 bits, MacOS X)
   rv32-linux           (RISC-V 32 bits, Linux)
   rv64-linux           (RISC-V 64 bits, Linux)
   manual               (edit configuration file by hand)
 
-For x86 targets, the "x86_32-" prefix can also be written "ia32-".
+For x86 targets, the "x86_32-" prefix can also be written "ia32-" or "i386-".
+For x86 targets, the "x86_64-" prefix can also be written "amd64-".
 
 For PowerPC targets, the "ppc-" prefix can be refined into:
   ppc64-               PowerPC 64 bits
@@ -136,9 +138,9 @@ case "$target" in
       arch="arm"; model="armv7r"; endianness="big"; bitsize=32;;
   armebv7m-*)
       arch="arm"; model="armv7m"; endianness="big"; bitsize=32;;
-  x86_32-*|ia32-*)
+  x86_32-*|ia32-*|i386-*)
       arch="x86"; model="32sse2"; endianness="little"; bitsize=32;;
-  x86_64-*)
+  x86_64-*|amd64-*)
       arch="x86"; model="64"; endianness="little"; bitsize=64;;
   powerpc-*|ppc-*)
       arch="powerpc"; model="ppc32"; endianness="big"; bitsize=32;;
@@ -346,11 +348,25 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
 fi
 
 #
-# IA32 (64 bits) Target Configuration
+# x86 (64 bits) Target Configuration
 #
 if test "$arch" = "x86" -a "$bitsize" = "64"; then
 
   case "$target" in
+    bsd)
+        abi="standard"
+        casm="${toolprefix}gcc"
+        casm_options="-m64 -c"
+        cc="${toolprefix}gcc -m64"
+        clinker="${toolprefix}gcc"
+        clinker_options="-m64"
+        cprepro="${toolprefix}gcc"
+        cprepro_options="-std=c99 -m64 -U__GNUC__ -E"
+        libmath="-lm"
+        struct_passing="ref-callee"   # wrong!
+        struct_return="ref"           # to check!
+        system="bsd"
+        ;;
     linux)
         abi="standard"
         casm="${toolprefix}gcc"
@@ -432,11 +448,16 @@ int main (void)
    return 0;
 }
 EOF
-    "$@" -o "$tmpout" "$tmpsrc" >/dev/null 2>/dev/null
+    errout=$("$@" -o "$tmpout" "$tmpsrc" 2>&1 >/dev/null)
     retcode=$?
+    errcount=$(echo "${errout}" | grep -ciE "(unknown|unsupported|unrecognized).*(option|argument)")
     rm -f "$tmpsrc" "$tmpout"
-    return $retcode
+    # Test failed or error is logged to stderr
+    if [ "${retcode}" != "0" ] || [ "${errcount}" != "0" ]; then return 1; fi
+    # OK and no error was logged
+    return 0
 }
+
 
 #
 # Test Assembler Support for CFI Directives
@@ -462,12 +483,14 @@ fi
 
 
 #
-# Test Availability of Option '-no-pie'
+# Test Availability of Option '-no-pie' or '-nopie'
 #
 if ($clinker_needs_no_pie) then
-  echo "Testing linker support for '-no-pie' option... " | tr -d '\n'
+  echo "Testing linker support for '-no-pie' / '-nopie' option... " | tr -d '\n'
   if testcompiler ${cc} -no-pie;
-  then echo "yes"; clinker_options="${clinker_options} -no-pie"
+  then echo "yes, '-no-pie'"; clinker_options="${clinker_options} -no-pie"
+  elif testcompiler ${cc} -nopie;
+  then echo "yes, '-nopie'"; clinker_options="${clinker_options} -nopie"
   else echo "no"; clinker_needs_no_pie=false
   fi
 fi
@@ -626,12 +649,8 @@ MANDIR=$sharedir/man
 SHAREDIR=$sharedir
 OCAML_OPT_COMP=$ocaml_opt_comp
 MENHIR_INCLUDES=$menhir_includes
-EOF
-if $merlin; then
-    cat >> Makefile.config <<EOF
 COMPFLAGS=-bin-annot
 EOF
-fi
 
 if test "$target" != "manual"; then
 cat >> Makefile.config <<EOF

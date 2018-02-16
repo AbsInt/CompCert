@@ -35,6 +35,8 @@ type action =
   | Ignore
   | Unit of (unit -> unit)
 
+exception CmdError of string
+
 let match_pattern text = function
   | Exact s ->
       text = s
@@ -72,7 +74,8 @@ let parse_array spec argv first last =
         with Not_found -> find_action s inexact_cases in
       match optact with
       | None ->
-          eprintf "Unknown argument `%s'\n" s; exit 2
+        let msg = sprintf "Unknown argument `%s'" s in
+        raise (CmdError msg)
       | Some(Set r) ->
           r := true; parse (i+1)
       | Some(Unset r) ->
@@ -83,7 +86,8 @@ let parse_array spec argv first last =
           if i + 1 <= last then begin
             fn argv.(i+1); parse (i+2)
           end else begin
-            eprintf "Option `%s' expects an argument\n" s; exit 2
+            let msg = sprintf "Option `%s' expects an argument" s in
+            raise (CmdError msg)
           end
       | Some(Integer fn) ->
           if i + 1 <= last then begin
@@ -91,18 +95,20 @@ let parse_array spec argv first last =
               try
                 int_of_string argv.(i+1)
               with Failure _ ->
-                eprintf "Argument to option `%s' must be an integer\n" s;
-                exit 2
+                let msg = sprintf "Argument to option `%s' must be an integer" s in
+                raise (CmdError msg)
             in
             fn n; parse (i+2)
           end else begin
-            eprintf "Option `%s' expects an argument\n" s; exit 2
+            let msg = sprintf  "Option `%s' expects an argument" s in
+            raise (CmdError msg)
           end
       | Some (Ignore) ->
           if i + 1 <= last then begin
             parse (i+2)
           end else begin
-            eprintf "Option `%s' expects an argument\n" s; exit 2
+            let msg = sprintf "Option `%s' expects an argument" s in
+            raise (CmdError msg)
           end
       | Some (Unit f) -> f (); parse (i+1)
     end
@@ -115,8 +121,7 @@ let parse_cmdline spec =
     argv := expandargv Sys.argv;
     parse_array spec !argv 1 (Array.length !argv - 1)
   with Responsefile.Error s ->
-    eprintf "%s" s;
-    exit 2
+    raise (CmdError s)
 
 let long_int_action key s =
   let ls = String.length s
@@ -126,8 +131,8 @@ let long_int_action key s =
   try
     int_of_string s
   with Failure _ ->
-    eprintf "Argument to option `%s' must be an integer\n" key;
-    exit 2
+    let msg =  sprintf "Argument to option `%s' must be an integer" key in
+    raise (CmdError msg)
 
 let longopt_int key f =
   let act s =

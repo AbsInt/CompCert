@@ -14,7 +14,6 @@
 open Clflags
 open Commandline
 open Driveraux
-open Printf
 
 (* Common frontend functions between clightgen and ccomp *)
 
@@ -22,6 +21,7 @@ open Printf
 (* From C to preprocessed C *)
 
 let preprocess ifile ofile =
+  Diagnostics.raise_on_errors ();
   let output =
     if ofile = "-" then None else Some ofile in
   let cmd = List.concat [
@@ -37,8 +37,6 @@ let preprocess ifile ofile =
   if exc <> 0 then begin
     if ofile <> "-" then safe_remove ofile;
     command_error "preprocessor" exc;
-    eprintf "Error during preprocessing.\n";
-    exit 2
   end
 
 (* From preprocessed C to Csyntax *)
@@ -54,18 +52,11 @@ let parse_c_file sourcename ifile =
   ^ (if !option_fpacked_structs then "p" else "")
   in
   (* Parsing and production of a simplified C AST *)
-  let ast =
-    match Parse.preprocessed_file simplifs sourcename ifile with
-    | None -> exit 2
-    | Some p -> p in
+  let ast = Parse.preprocessed_file simplifs sourcename ifile in
   (* Save C AST if requested *)
   Cprint.print_if ast;
   (* Conversion to Csyntax *)
-  let csyntax =
-    match Timing.time "CompCert C generation" C2C.convertProgram ast with
-    | None -> exit 2
-    | Some p -> p in
-  flush stderr;
+  let csyntax = Timing.time "CompCert C generation" C2C.convertProgram ast in
   (* Save CompCert C AST if requested *)
   PrintCsyntax.print_if csyntax;
   csyntax

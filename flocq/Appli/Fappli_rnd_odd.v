@@ -199,7 +199,7 @@ case (Zeven (Zfloor r));  simpl; ring.
 apply trans_eq with (Zeven (Zceil r)).
 rewrite Zceil_floor_neq.
 rewrite Zeven_plus.
-simpl; reflexivity.
+destruct (Zeven (Zfloor r)); reflexivity.
 now apply sym_not_eq.
 rewrite <- (Zeven_opp (Zfloor (- r))).
 reflexivity.

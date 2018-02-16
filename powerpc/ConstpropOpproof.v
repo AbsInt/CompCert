@@ -156,25 +156,58 @@ Proof.
   assert (Y: forall r, vincl (AE.get r ae) (Uns Ptop 1) = true ->
              rs#r = Vundef \/ rs#r = Vint Int.zero \/ rs#r = Vint Int.one).
   { intros. apply vmatch_Uns_1 with bc Ptop. eapply vmatch_ge. eapply vincl_ge; eauto. apply MATCH. }
+  assert (Z: forall r, is_an_integer (AE.get r ae) = true -> 
+             match rs#r with Vptr _ _ => False | _ => True end).
+  { intros. generalize (MATCH r); intro V. revert H. inv V; auto; discriminate. }
   unfold make_cmp. case (make_cmp_match c args vl); intros.
 - destruct (Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1)) eqn:E1.
-  simpl in H; inv H. InvBooleans. subst n.
++ simpl in H; inv H. InvBooleans. subst n.
   exists (rs#r1); split; auto. simpl.
   exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
-  destruct (Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1)) eqn:E0.
-  simpl in H; inv H. InvBooleans. subst n.
++ destruct (Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1)) eqn:E0.
+* simpl in H; inv H. InvBooleans. subst n.
   exists (Val.xor rs#r1 (Vint Int.one)); split; auto. simpl.
   exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
-  apply make_cmp_base_correct; auto.
+* apply make_cmp_base_correct; auto.
 - destruct (Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1)) eqn:E0.
-  simpl in H; inv H. InvBooleans. subst n.
++ simpl in H; inv H. InvBooleans. subst n.
   exists (rs#r1); split; auto. simpl.
   exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
-  destruct (Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1)) eqn:E1.
-  simpl in H; inv H. InvBooleans. subst n.
++ destruct (Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1)) eqn:E1.
+* simpl in H; inv H. InvBooleans. subst n.
   exists (Val.xor rs#r1 (Vint Int.one)); split; auto. simpl.
   exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
+* apply make_cmp_base_correct; auto.
+- destruct (Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1)) eqn:E1.
++ simpl in H; inv H. InvBooleans. subst n.
+  exists (rs#r1); split; auto. simpl.
+  exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
++ destruct (Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1)) eqn:E0.
+* simpl in H; inv H. InvBooleans. subst n.
+  exists (Val.xor rs#r1 (Vint Int.one)); split; auto. simpl.
+  exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
+* destruct (is_an_integer v1) eqn:E.
+** simpl in H; inv H.
+  replace (eval_condition (Ccompuimm Ceq n) rs##(r1::nil) m)
+     with (eval_condition (Ccompimm Ceq n) rs##(r1::nil) m).
   apply make_cmp_base_correct; auto.
+  simpl. apply Z in E. destruct (rs#r1); auto; contradiction.
+** apply make_cmp_base_correct; auto.
+- destruct (Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1)) eqn:E0.
++ simpl in H; inv H. InvBooleans. subst n.
+  exists (rs#r1); split; auto. simpl.
+  exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
++ destruct (Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1)) eqn:E1.
+* simpl in H; inv H. InvBooleans. subst n.
+  exists (Val.xor rs#r1 (Vint Int.one)); split; auto. simpl.
+  exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
+* destruct (is_an_integer v1) eqn:E.
+** simpl in H; inv H.
+  replace (eval_condition (Ccompuimm Cne n) rs##(r1::nil) m)
+     with (eval_condition (Ccompimm Cne n) rs##(r1::nil) m).
+  apply make_cmp_base_correct; auto.
+  simpl. apply Z in E. destruct (rs#r1); auto; contradiction.
+** apply make_cmp_base_correct; auto.
 - apply make_cmp_base_correct; auto.
 Qed.
 

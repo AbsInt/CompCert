@@ -15,7 +15,7 @@
 
 (* Operations on C types and abstract syntax *)
 
-open Cerrors
+open Diagnostics
 open C
 open Env
 open Machine
