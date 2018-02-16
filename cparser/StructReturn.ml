@@ -18,7 +18,6 @@
    - passed by value as function parameters. *)
 
 open Machine
-open Configuration
 open C
 open Cutil
 open Transform
@@ -582,11 +581,11 @@ let program p =
   struct_passing_style :=
     if !Clflags.option_interp
     then SP_ref_callee
-    else Configuration.struct_passing_style;
+    else !Machine.config.struct_passing_style;
   struct_return_style :=
     if !Clflags.option_interp
     then SR_ref
-    else Configuration.struct_return_style;
+    else !Machine.config.struct_return_style;
   Transform.program
     ~decl:transf_decl
     ~fundef:transf_fundef
