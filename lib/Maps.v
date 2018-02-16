@@ -1049,7 +1049,7 @@ Module Type INDEXED_TYPE.
   Parameter eq: forall (x y: t), {x = y} + {x <> y}.
 End INDEXED_TYPE.
 
-Module IMap(X: INDEXED_TYPE).
+Module IMap(X: INDEXED_TYPE) <: MAP.
 
   Definition elt := X.t.
   Definition elt_eq := X.eq.
@@ -1060,7 +1060,7 @@ Module IMap(X: INDEXED_TYPE).
   Definition map (A B: Type) (f: A -> B) (m: t A) : t B := PMap.map f m.
 
   Lemma gi:
-    forall (A: Type) (x: A) (i: X.t), get i (init x) = x.
+    forall (A: Type) (i: X.t) (x: A), get i (init x) = x.
   Proof.
     intros. unfold get, init. apply PMap.gi.
   Qed.
@@ -1089,6 +1089,16 @@ Module IMap(X: INDEXED_TYPE).
     subst j. rewrite peq_true. reflexivity.
     rewrite peq_false. reflexivity.
     red; intro. elim n. apply X.index_inj; auto.
+  Qed.
+
+  Lemma gsident:
+    forall (A: Type) (i j: X.t) (m: t A),
+    get j (set i (get i m) m) = get j m.
+  Proof.
+    intros.
+    intros. destruct (X.eq i j).
+     rewrite e. rewrite gss. auto.
+     rewrite gso; auto.
   Qed.
 
   Lemma gmap:
