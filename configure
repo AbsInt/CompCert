@@ -348,7 +348,7 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
 fi
 
 #
-# IA32 (64 bits) Target Configuration
+# x86 (64 bits) Target Configuration
 #
 if test "$arch" = "x86" -a "$bitsize" = "64"; then
 
