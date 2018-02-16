@@ -9,7 +9,7 @@ Axiom pos_to_string: positive -> string.
 
 (** * Interfaces *)
 
-Module Type BlockType <: EQUALITY_TYPE.
+Module Type BlockType <: INDEXED_TYPE.
   Parameter t : Type.
   Parameter eq : forall b1 b2 : t, {b1 = b2} + {b1 <> b2}.
 
@@ -40,6 +40,8 @@ Module Type BlockType <: EQUALITY_TYPE.
   Axiom ident_of_glob: forall i, ident_of (glob i) = Some i.
   Axiom ident_of_inv: forall b i, ident_of b = Some i -> b = glob i.
 
+  Parameter index: t -> positive.
+  Axiom index_inj: forall (x y: t), index x = index y -> x = y.
 End BlockType.
 
 Module Type BMapType (M: BlockType).
@@ -239,9 +241,20 @@ Module Block : BlockType.
     inversion 1; auto.
   Qed.
 
+  Definition index (b: t): positive :=
+    match b with
+    | glob_def i => i~0
+    | dyn p => p~1
+    end.
+
+  Lemma index_inj (x y: t):
+    index x = index y -> x = y.
+  Proof.
+    destruct x, y; inversion 1; simpl in *; congruence.
+  Qed.
 End Block.
 
-Module BMap : BMapType Block := EMap Block.
+Module BMap : BMapType Block := IMap Block.
 
 (** * Properties *)
 
