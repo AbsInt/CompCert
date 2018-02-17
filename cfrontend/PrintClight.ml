@@ -23,10 +23,6 @@ open Cop
 open PrintCsyntax
 open Clight
 
-(* Naming temporaries *)
-
-let temp_name (id: AST.ident) = "$" ^ Z.to_string (Z.Zpos id)
-
 (* Declarator (identifier + type) -- reuse from PrintCsyntax *)
 
 (* Precedences and associativity (H&S section 7.2) *)
@@ -69,7 +65,7 @@ let rec expr p (prec, e) =
   | Evar(id, _) ->
       fprintf p "%s" (extern_atom id)
   | Etempvar(id, _) ->
-      fprintf p "%s" (temp_name id)
+      fprintf p "%s" (extern_atom id)
   | Ederef(a1, _) ->
       fprintf p "*%a" expr (prec', a1)
   | Efield(a1, f, _) ->
@@ -123,14 +119,14 @@ let rec print_stmt p s =
   | Sassign(e1, e2) ->
       fprintf p "@[<hv 2>%a =@ %a;@]" print_expr e1 print_expr e2
   | Sset(id, e2) ->
-      fprintf p "@[<hv 2>%s =@ %a;@]" (temp_name id) print_expr e2
+      fprintf p "@[<hv 2>%s =@ %a;@]" (extern_atom id) print_expr e2
   | Scall(None, e1, el) ->
       fprintf p "@[<hv 2>%a@,(@[<hov 0>%a@]);@]"
                 expr (15, e1)
                 print_expr_list (true, el)
   | Scall(Some id, e1, el) ->
       fprintf p "@[<hv 2>%s =@ %a@,(@[<hov 0>%a@]);@]"
-                (temp_name id)
+                (extern_atom id)
                 expr (15, e1)
                 print_expr_list (true, el)
   | Sbuiltin(None, ef, tyargs, el) ->
@@ -139,7 +135,7 @@ let rec print_stmt p s =
                 print_expr_list (true, el)
   | Sbuiltin(Some id, ef, tyargs, el) ->
       fprintf p "@[<hv 2>%s =@ builtin %s@,(@[<hov 0>%a@]);@]"
-                (temp_name id)
+                (extern_atom id)
                 (name_of_external ef)
                 print_expr_list (true, el)
   | Ssequence(Sskip, s2) ->
@@ -210,7 +206,7 @@ and print_stmt_for p s =
   | Sassign(e1, e2) ->
       fprintf p "%a = %a" print_expr e1 print_expr e2
   | Sset(id, e2) ->
-      fprintf p "%s = %a" (temp_name id) print_expr e2
+      fprintf p "%s = %a" (extern_atom id) print_expr e2
   | Ssequence(Sskip, s2) ->
       print_stmt_for p s2
   | Ssequence(s1, s2) ->
@@ -221,7 +217,7 @@ and print_stmt_for p s =
                 print_expr_list (true, el)
   | Scall(Some id, e1, el) ->
       fprintf p "@[<hv 2>%s =@ %a@,(@[<hov 0>%a@])@]"
-                (temp_name id)
+                (extern_atom id)
                 expr (15, e1)
                 print_expr_list (true, el)
   | Sbuiltin(None, ef, tyargs, el) ->
@@ -230,7 +226,7 @@ and print_stmt_for p s =
                 print_expr_list (true, el)
   | Sbuiltin(Some id, ef, tyargs, el) ->
       fprintf p "@[<hv 2>%s =@ builtin %s@,(@[<hov 0>%a@]);@]"
-                (temp_name id)
+                (extern_atom id)
                 (name_of_external ef)
                 print_expr_list (true, el)
   | _ ->
@@ -248,7 +244,7 @@ let print_function p id f =
     f.fn_vars;
   List.iter
     (fun (id, ty) ->
-      fprintf p "register %s;@ " (name_cdecl (temp_name id) ty))
+      fprintf p "register %s;@ " (name_cdecl (extern_atom id) ty))
     f.fn_temps;
   print_stmt p f.fn_body;
   fprintf p "@;<0 -2>}@]@ @ "
