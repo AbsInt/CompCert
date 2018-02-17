@@ -47,59 +47,8 @@ let print_list fn p l =
 
 exception Not_an_identifier
 
-let sanitize s =
-  let s' = Bytes.create (String.length s) in
-  for i = 0 to String.length s - 1 do
-    Bytes.set  s' i
-    (match String.get s i with
-      | 'A'..'Z' | 'a'..'z' | '0'..'9' | '_' as c -> c
-      | ' ' | '$' -> '_'
-      | _ -> raise Not_an_identifier)
-  done;
-  Bytes.to_string s'
-
-let temp_names : (ident, string) Hashtbl.t = Hashtbl.create 17
-
 let ident p id =
-  try
-    let s = Hashtbl.find string_of_atom id in
-    fprintf p "_%s" (sanitize s)
-  with Not_found | Not_an_identifier ->
-  try
-    let s = Hashtbl.find temp_names id in
-    fprintf p "%s" s
-  with Not_found ->
-    fprintf p "%ld%%positive" (P.to_int32 id)
-
-let iter_hashtbl_sorted (h: ('a, string) Hashtbl.t) (f: 'a * string -> unit) =
-  List.iter f
-    (List.fast_sort (fun (k1, d1) (k2, d2) -> String.compare d1 d2)
-      (Hashtbl.fold (fun k d accu -> (k, d) :: accu) h []))
-
-let define_idents p =
-  iter_hashtbl_sorted
-    string_of_atom
-    (fun (id, name) ->
-      try
-        fprintf p "Definition _%s : ident := %ld%%positive.@ "
-                  (sanitize name) (P.to_int32 id)
-      with Not_an_identifier ->
-        ());
-  iter_hashtbl_sorted
-    temp_names
-    (fun (id, name) ->
-      fprintf p "Definition %s : ident := %ld%%positive.@ "
-                name (P.to_int32 id));
-  fprintf p "@ "
-
-let name_temporary t =
-  let t1 = P.to_int t and t0 = P.to_int (first_unused_ident ()) in
-  if t1 >= t0 && not (Hashtbl.mem temp_names t)
-  then Hashtbl.add temp_names t (sprintf "_t'%d" (t1 - t0 + 1))
-
-let name_opt_temporary = function
-  | None -> ()
-  | Some id -> name_temporary id
+  fprintf p "#\"%s\"" (extern_atom id)
 
 (* Numbers *)
 
@@ -490,67 +439,11 @@ From compcert Require Import Coqlib Integers Floats AST Ctypes Cop Clight Clight
 Local Open Scope Z_scope.\n\
 \n"
 
-(* Naming the compiler-generated temporaries occurring in the program *)
-
-let rec name_expr = function
-  | Evar(id, t) -> ()
-  | Etempvar(id, t) -> name_temporary id
-  | Ederef(a1, t) -> name_expr a1
-  | Efield(a1, f, t) -> name_expr a1
-  | Econst_int(n, t) -> ()
-  | Econst_float(n, t) -> ()
-  | Econst_long(n, t) -> ()
-  | Econst_single(n, t) -> ()
-  | Eunop(op, a1, t) -> name_expr a1
-  | Eaddrof(a1, t) -> name_expr a1
-  | Ebinop(op, a1, a2, t) -> name_expr a1; name_expr a2
-  | Ecast(a1, t) -> name_expr a1
-  | Esizeof(t1, t) -> ()
-  | Ealignof(t1, t) -> ()
-
-let rec name_stmt = function
-  | Sskip -> ()
-  | Sassign(e1, e2) -> name_expr e1; name_expr e2
-  | Sset(id, e2) -> name_temporary id; name_expr e2
-  | Scall(optid, e1, el) ->
-      name_opt_temporary optid; name_expr e1; List.iter name_expr el
-  | Sbuiltin(optid, ef, tyl, el) ->
-      name_opt_temporary optid; List.iter name_expr el
-  | Ssequence(s1, s2) -> name_stmt s1; name_stmt s2
-  | Sifthenelse(e, s1, s2) -> name_expr e; name_stmt s1; name_stmt s2
-  | Sloop(s1, s2) -> name_stmt s1; name_stmt s2
-  | Sbreak -> ()
-  | Scontinue -> ()
-  | Sswitch(e, cases) -> name_expr e; name_lblstmts cases
-  | Sreturn (Some e) -> name_expr e
-  | Sreturn None -> ()
-  | Slabel(lbl, s1) -> name_stmt s1
-  | Sgoto lbl -> ()
-
-and name_lblstmts = function
-  | LSnil -> ()
-  | LScons(lbl, s, ls) -> name_stmt s; name_lblstmts ls
-
-let name_function f =
-  List.iter (fun (id, ty) -> name_temporary id) f.fn_temps;
-  name_stmt f.fn_body
-
-let name_globdef (id, g) =
-  match g with
-  | Gfun(Ctypes.Internal f) -> name_function f
-  | _ -> ()
-
-let name_program p =
-  List.iter name_globdef p.Ctypes.prog_defs
-
 (* All together *)
 
 let print_program p prog =
-  Hashtbl.clear temp_names;
-  name_program prog;
   fprintf p "@[<v 0>";
   fprintf p "%s" prologue;
-  define_idents p;
   List.iter (print_globdef p) prog.Ctypes.prog_defs;
   fprintf p "Definition composites : list composite_definition :=@ ";
   print_list print_composite_definition p prog.prog_types;
