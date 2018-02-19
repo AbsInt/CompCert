@@ -7,7 +7,24 @@ Require Import String.
 Axiom ident_to_string: ident -> string.
 Axiom pos_to_string: positive -> string.
 
-(** * Interfaces *)
+(** * Interface *)
+
+(** This is the interface of the memory block namespace. There should
+  be an embedding [glob] of global identifiers into the type of memory
+  blocks (which can be inverted with the [ident_of] operation).
+  It should also be possible to dynamically allocate block names,
+  starting with [init], then by applying [succ] whenever a new block
+  name is needed.
+
+  The space of block names must be equipped with a total order
+  ([le], [lt]), such that global blocks are considered smaller than
+  dynamically allocated blocks, and that dynamic blocks are allocated
+  in increasing order.
+
+  Finally, it should be possible to print out a string representation
+  for each block name ([to_string]), and there should be an injective
+  mapping into [positive], so that we can use an efficient [IMap]
+  implementation for block-indexed finite maps. *)
 
 Module Type BlockType <: INDEXED_TYPE.
   Parameter t : Type.
@@ -45,6 +62,9 @@ Module Type BlockType <: INDEXED_TYPE.
 End BlockType.
 
 (** * Implementation *)
+
+(** Block names are implemented as the disjoint union of [AST.ident]
+  and dynamically allocated [positive]. *)
 
 Module Block : BlockType.
   Inductive t_def :=
@@ -238,7 +258,9 @@ Module BMap : MAP
     with Definition elt_eq := Block.eq :=
   IMap Block.
 
-(** * Properties *)
+(** * Complements *)
+
+(** ** Properties *)
 
 Lemma Blt_trans_succ b1 b2:
   Block.lt b1 b2 -> Block.lt b1 (Block.succ b2).
@@ -254,6 +276,7 @@ Proof.
   intros LT EQ; subst; apply Block.lt_strict in LT; auto.
 Qed.
 
+(** ** Derived definitions *)
 
 Program Instance Decidable_eq_block (x y: Block.t): Decidable (x = y) :=
   {
@@ -270,6 +293,18 @@ Definition block_compare (b1 b2: Block.t) :=
        then 0%Z
        else 1%Z.
 
-Hint Resolve Block.lt_le_trans Block.le_lt_trans Block.le_trans Block.lt_le Blt_ne Block.le_refl Block.lt_succ : blocknames.
+(** ** Tactics *)
+
+(** This tactic is used to discharge inequalities involving block names. *)
+
+Hint Resolve
+  Block.lt_le_trans
+  Block.le_lt_trans
+  Block.le_trans
+  Block.lt_le
+  Blt_ne
+  Block.le_refl
+  Block.lt_succ
+  : blocknames.
 
 Ltac blomega := eauto with blocknames.
