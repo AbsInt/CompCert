@@ -44,27 +44,6 @@ Module Type BlockType <: INDEXED_TYPE.
   Axiom index_inj: forall (x y: t), index x = index y -> x = y.
 End BlockType.
 
-Module Type BMapType (M: BlockType).
-  Definition elt := M.t.
-  Definition elt_eq := M.eq.
-  Parameter t: Type -> Type.
-  Parameter init: forall {A}, A -> t A.
-  Parameter get: forall {A}, elt -> t A -> A.
-  Parameter set: forall {A}, elt -> A -> t A -> t A.
-  Axiom gi: forall {A} i (x: A), get i (init x) = x.
-  Axiom gss: forall {A} i (x: A) m, get i (set i x m) = x.
-  Axiom gso: forall {A} i j (x: A) m, i <> j -> get i (set j x m) = get i m.
-  Axiom gsspec:
-    forall {A} i j (x: A) m, get i (set j x m) = (if elt_eq i j then x else get i m).
-  Axiom gsident:
-    forall {A} i j (m: t A), get j (set i (get i m) m) = get j m.
-  Parameter map: forall {A B}, (A -> B) -> t A -> t B.
-  Axiom gmap:
-    forall {A B} (f: A -> B) i m, get i (map f m) = f (get i m).
-  Axiom set2:
-    forall {A} i (x y: A) m, set i y (set i x m) = set i y m.
-End BMapType.
-
 (** * Implementation *)
 
 Module Block : BlockType.
@@ -254,7 +233,10 @@ Module Block : BlockType.
   Qed.
 End Block.
 
-Module BMap : BMapType Block := IMap Block.
+Module BMap : MAP
+    with Definition elt := Block.t
+    with Definition elt_eq := Block.eq :=
+  IMap Block.
 
 (** * Properties *)
 
