@@ -4,9 +4,6 @@ Require Import AST.
 Require Import Maps.
 Require Import String.
 
-Axiom ident_to_string: ident -> string.
-Axiom pos_to_string: positive -> string.
-
 (** * Interface *)
 
 (** This is the interface of the memory block namespace. There should
@@ -62,6 +59,11 @@ Module Type BlockType <: INDEXED_TYPE.
 End BlockType.
 
 (** * Implementation *)
+
+(** We get some help from the Ocaml code to convert dynamic block
+  identifiers into strings. *)
+
+Parameter string_of_pos: positive -> string.
 
 (** Block names are implemented as the disjoint union of [AST.ident]
   and dynamically allocated [positive]. *)
@@ -218,8 +220,8 @@ Module Block : BlockType.
 
   Definition to_string (b: t): string :=
     match b with
-    | glob_def i => append "glob:" (ident_to_string i)
-    | dyn b => append "dyn:" (pos_to_string b)
+    | glob_def i => append "glob:" (string_of_ident i)
+    | dyn b => append "dyn:" (string_of_pos b)
     end.
 
   Lemma ident_of_glob i:

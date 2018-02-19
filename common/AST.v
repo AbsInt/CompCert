@@ -31,6 +31,8 @@ Definition ident := positive.
 
 Definition ident_eq := peq.
 
+Parameter string_of_ident: ident -> string.
+
 (** The intermediate languages are weakly typed, using the following types: *)
 
 Inductive typ : Type :=

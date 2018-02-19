@@ -36,12 +36,6 @@ Require Parser.
 Require Initializers.
 Require Int31.
 
-
-Extract Inlined Constant BlockNames.ident_to_string =>
-  "(fun i -> Camlcoq.coqstring_of_camlstring (Camlcoq.extern_atom i))".
-Extract Inlined Constant BlockNames.pos_to_string =>
-  "(fun p -> Camlcoq.coqstring_of_camlstring (Printf.sprintf ""%ld"" (Camlcoq.P.to_int32 p)))".
-
 (* Standard lib *)
 Require Import ExtrOcamlBasic.
 Require Import ExtrOcamlString.
@@ -67,6 +61,14 @@ Extraction NoInline Memory.Mem.valid_pointer.
 
 (* Errors *)
 Extraction Inline Errors.bind Errors.bind2.
+
+(* AST *)
+Extract Inlined Constant AST.string_of_ident =>
+  "(fun i -> Camlcoq.coqstring_of_camlstring (Camlcoq.extern_atom i))".
+
+(* BlockNames *)
+Extract Inlined Constant BlockNames.string_of_pos =>
+  "(fun p -> Camlcoq.coqstring_of_camlstring (Printf.sprintf ""%ld"" (Camlcoq.P.to_int32 p)))".
 
 (* Iteration *)
 
