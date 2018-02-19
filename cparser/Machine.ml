@@ -179,7 +179,7 @@ let x86_32_macosx =
                struct_return_style = SR_int1248 }
 
 let x86_32_bsd =
-  x86_32_macosx (* Struct Return needs to be checked *)
+  x86_32_macosx
 
 let x86_64 =
   { i32lpll64 with name = "x86_64"; char_signed = true;
