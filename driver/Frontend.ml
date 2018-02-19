@@ -65,7 +65,9 @@ let init () =
   Machine.config:=
     begin match Configuration.arch with
     | "powerpc" -> if Configuration.gnu_toolchain
-                   then Machine.ppc_32_bigendian
+                   then if Configuration.abi = "linux"
+                   then Machine.ppc_32_linux_bigendian
+                   else Machine.ppc_32_bigendian
                    else Machine.ppc_32_diab_bigendian
     | "arm"     -> if Configuration.is_big_endian
                    then Machine.arm_bigendian
@@ -75,6 +77,8 @@ let init () =
                    else
                      if Configuration.abi = "macosx"
                      then Machine.x86_32_macosx
+                     else if Configuration.system = "bsd"
+                     then Machine.x86_32_bsd
                      else Machine.x86_32
     | "riscV"   -> if Configuration.model = "64"
                    then Machine.rv64
