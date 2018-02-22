@@ -513,7 +513,17 @@ Record expressive_semantics : Type :=
       exists vr,
         external_call ef (symbolenv sem) args (get_mem sem s1) t (Val.maketotal vr) (get_mem sem s2) /\
         after_external g vr (set_mem sem s1 (get_mem sem s2)) = Some s2 
-}.
+    }.
+
+(*Reconstruct initial_states from initial_core*)
+Inductive initial_state (p:program): state -> Prop :=
+| initial_state_derived_intro': forall b f st0,
+  let ge := Genv.globalenv p in
+  Genv.init_mem p = Some (get_mem st0) ->
+  Genv.find_symbol ge p.(prog_main) = Some b ->
+  type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
+  initial_core st0 (Vptr b (Ptrofs.of_ints Int.zero)) nil ->
+  initial_state p st0.
 
 (** The form used in earlier CompCert versions, for backward compatibility. *)
 Definition Semantics {state funtype vartype: Type}
@@ -547,7 +557,31 @@ Open Scope smallstep_scope.
 
 (** * Forward simulations between two transition semantics. *)
  Section ForwardSimulations.
-  
+
+   (** Original: The general form of a forward simulation. *)
+   Record fsim_properties (L1 L2: semantics) (index: Type)
+          (order: index -> index -> Prop)
+          (match_states: index -> state L1 -> state L2 -> Prop) : Prop := {
+    fsim_order_wf: well_founded order;
+    (*This the old initial states: *)
+    (* fsim_match_initial_states:
+      fora      ll s1, initial_state L1 s1 ->
+      exists i,    exists s2, initial_state L2 s2 /\ match_states i s1 s2; *)
+    fsim_match_initial_cores:
+      exists i, exists s2, initial_state L2 s2 /\ match_states i s1 s2;
+    fsim_match_final_states:
+      forall i s1 s2 r,
+        match_states i s1 s2 -> final_state L1 s1 r -> final_state L2 s2 r;
+    fsim_simulation:
+      forall s1 t s1', Step L1 s1 t s1' ->
+                  forall i s2, match_states i s1 s2 ->
+                          exists i', exists s2', 
+                              (Plus L2 s2 t s2' \/ (Star L2 s2 t s2' /\ order i' i))
+                              /\ match_states i' s1' s2';
+    fsim_public_preserved:
+      forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
+    }.
+   
   Variables L1 L2: semantics.
   Notation get_mem1:=(get_mem L1).
   Notation get_mem2:=(get_mem L2).
@@ -837,29 +871,6 @@ Open Scope smallstep_scope.
   End Injection.
  End ForwardSimulations.
  
-(** The general form of a forward simulation. *)
-Record fsim_properties (L1 L2: semantics) (index: Type)
-                       (order: index -> index -> Prop)
-                       (match_states: index -> state L1 -> state L2 -> Prop) : Prop := {
-    fsim_order_wf: well_founded order;
-    (*This the old initial states: *)
-    (* fsim_match_initial_states:
-      forall s1, initial_state L1 s1 ->
-      exists i, exists s2, initial_state L2 s2 /\ match_states i s1 s2; *)
-    fsim_match_initial_cores:
-      exists i, exists s2, initial_state L2 s2 /\ match_states i s1 s2;
-    fsim_match_final_states:
-      forall i s1 s2 r,
-      match_states i s1 s2 -> final_state L1 s1 r -> final_state L2 s2 r;
-    fsim_simulation:
-      forall s1 t s1', Step L1 s1 t s1' ->
-      forall i s2, match_states i s1 s2 ->
-      exists i', exists s2', 
-         (Plus L2 s2 t s2' \/ (Star L2 s2 t s2' /\ order i' i))
-      /\ match_states i' s1' s2';
-    fsim_public_preserved:
-      forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
-  }.
 
 Arguments fsim_properties: clear implicits.
 
