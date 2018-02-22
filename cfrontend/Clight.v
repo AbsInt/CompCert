@@ -683,8 +683,9 @@ Inductive initial_state (p: program): state -> Prop :=
 (* but might not be needed. All definitions come from  *)
 (* compcomp/core/val_casted.v                          *)
 Parameter val_casted_list_func: list val -> typelist -> bool. (* TODO *)
-Parameter tys_nonvoid: typelist -> bool.
+Parameter tys_nonvoid: typelist -> bool .
 Parameter vals_defined: list val -> bool.
+(*NOTE: DOUBLE CHECK TARGS (it's not used right now)*)
 Inductive initial_core : state -> val -> list val -> Prop :=
 | initi_core:
     forall f b m args targs tres,
