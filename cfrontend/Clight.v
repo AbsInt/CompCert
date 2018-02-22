@@ -686,19 +686,37 @@ Parameter val_casted_list_func: list val -> typelist -> bool. (* TODO *)
 Parameter tys_nonvoid: typelist -> bool.
 Parameter vals_defined: list val -> bool.
 Inductive initial_core : state -> val -> list val -> Prop :=
-| INIT_CORE:
+| initi_core:
     forall f b m args targs tres,
       (* v = Vptr b Int.zero -> *)
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       type_of_fundef (Internal f) = Tfunction targs tres cc_default ->
-      val_casted_list_func args targs 
+      (*val_casted_list_func args targs 
                            && tys_nonvoid targs 
                            && vals_defined args
-                           && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->
+                           && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
       initial_core (Callstate (Internal f) args Kstop m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
 
-(** A final state is a [Returnstate] with an empty continuation. *)
+(* Lets derive initial_state from initial_core*)
+Parameter get_mem: state -> mem.
+Inductive initial_state_derived (p:program): state -> list val -> Prop :=
+| initial_state_derived_intro: forall b f st0 args,
+  let ge := Genv.globalenv p in
+  Genv.init_mem p = Some (get_mem st0) ->
+  Genv.find_symbol ge p.(prog_main) = Some b ->
+  type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
+  initial_core st0 (Vptr b (Ptrofs.of_ints Int.zero)) args ->
+  initial_state_derived p st0 args.
+Inductive initial_state_derived' (p:program): state -> Prop :=
+| initial_state_derived_intro': forall b f st0,
+  let ge := Genv.globalenv p in
+  Genv.init_mem p = Some (get_mem st0) ->
+  Genv.find_symbol ge p.(prog_main) = Some b ->
+  type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
+  initial_core st0 (Vptr b (Ptrofs.of_ints Int.zero)) nil ->
+  initial_state_derived' p st0.
 
+(** A final state is a [Returnstate] with an empty continuation. *)
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall r m,
       final_state (Returnstate (Vint r) Kstop m) r.

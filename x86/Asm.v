@@ -1130,38 +1130,17 @@ Inductive initial_state (p: program): state -> Prop :=
 (* but might not be needed. All definitions come from  *)
 (* compcomp/core/val_casted.v                          *)
 Parameter vals_defined: list val -> bool.
-Inductive initial_core : state -> val -> list val -> Prop :=
+Inductive initial_core (ge:genv ): state -> val -> list val -> Prop :=
 | INIT_CORE:
-    forall f b m args targs tres,
-      (* v = Vptr b Int.zero -> *)
+    forall f b m args rs0,
+      rs0 PC = Vptr b Ptrofs.zero ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
-      type_of_fundef (Internal f) = Tfunction targs tres cc_default ->
-       Val.has_type_list args targs 
-                              && vals_defined args
-                              && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->
-      initial_core (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
+      extcall_arguments rs0 m (fn_sig f) args ->
+      initial_core ge (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
 
-Definition cl_initial_core (ge: genv) (m: mem) (v: val) (args: list val) : option (regset * option mem) :=
-  match v with
-  | Vptr b i =>  if Int.eq_dec i Int.zero then
-    match  Genv.find_funct_ptr ge b with
-    | Some f =>
-       let fsig := funsig f in
-       let (m', stk) := Mem.alloc m 0 (Conventions1.size_arguments fsig) in
-       match store_arguments fsig.(sig_args) args (Vptr stk Int.zero) m' with
-        | Some m'' => 
-           Some ( (Pregmap.init Vundef)
-                      # PC <- v
-                      # ESP <- (Vptr stk Int.zero)
-                      # RA <- Vzero,
-                      Some m'')
-        | _ => None
-       end
-     | _ => None
-   end else None
-   | _ => None
-  end.
-
+Inductive initial_state_derived (p:program): state -> Prop :=
+  
+  
 
 
 Inductive final_state: state -> int -> Prop :=
