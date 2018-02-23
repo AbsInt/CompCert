@@ -33,31 +33,31 @@ Definition match_prog (p: Cminor.program) (tp: CminorSel.program) :=
 (** Processing of helper functions *)
 
 Lemma record_globdefs_sound:
-  forall dm id gd, (record_globdefs dm)!id = Some gd -> dm!id = Some gd.
+  forall dm id gd, (record_globdefs dm)$id = Some gd -> dm$id = Some gd.
 Proof.
   intros.
-  set (f := fun m id gd => if globdef_of_interest gd then PTree.set id gd m else m) in *.
-  set (P := fun m m' => m'!id = Some gd -> m!id = Some gd).
-  assert (X: P dm (PTree.fold f dm (PTree.empty _))).
-  { apply PTree_Properties.fold_rec.
+  set (f := fun m id gd => if globdef_of_interest gd then ATree.set id gd m else m) in *.
+  set (P := fun m m' => m'$id = Some gd -> m$id = Some gd).
+  assert (X: P dm (ATree.fold f dm (ATree.empty _))).
+  { apply ATree_Properties.fold_rec.
   - unfold P; intros. rewrite <- H0; auto.
-  - red. rewrite ! PTree.gempty. auto.
-  - unfold P; intros. rewrite PTree.gsspec. unfold f in H3.
+  - red. rewrite ! ATree.gempty. auto.
+  - unfold P; intros. rewrite ATree.gsspec. unfold f in H3.
     destruct (globdef_of_interest v).
-    + rewrite PTree.gsspec in H3. destruct (peq id k); auto.
-    + apply H2 in H3. destruct (peq id k). congruence. auto. }
+    + rewrite ATree.gsspec in H3. destruct (ATree.elt_eq id k); auto.
+    + apply H2 in H3. destruct (ATree.elt_eq id k). congruence. auto. }
   apply X. auto.
 Qed.
 
 Lemma lookup_helper_correct_1:
   forall globs name sg id,
   lookup_helper globs name sg = OK id ->
-  globs!id = Some (Gfun (External (EF_runtime name sg))).
+  globs$id = Some (Gfun (External (EF_runtime name sg))).
 Proof.
   intros.
-  set (P := fun (m: PTree.t globdef) res => res = Some id -> m!id = Some(Gfun(External (EF_runtime name sg)))).
-  assert (P globs (PTree.fold (lookup_helper_aux name sg) globs None)).
-  { apply PTree_Properties.fold_rec; red; intros.
+  set (P := fun (m: ATree.t globdef) res => res = Some id -> m$id = Some(Gfun(External (EF_runtime name sg)))).
+  assert (P globs (ATree.fold (lookup_helper_aux name sg) globs None)).
+  { apply ATree_Properties.fold_rec; red; intros.
   - rewrite <- H0. apply H1; auto.
   - discriminate.
   - assert (EITHER: k = id /\ v = Gfun (External (EF_runtime name sg))
@@ -67,11 +67,11 @@ Proof.
       destruct (signature_eq sg sg0); auto.
       inversion H3. left; split; auto. repeat f_equal; auto. }
     destruct EITHER as [[X Y] | X].
-    subst k v. apply PTree.gss.
-    apply H2 in X. rewrite PTree.gso by congruence. auto.
+    subst k v. apply ATree.gss.
+    apply H2 in X. rewrite ATree.gso by congruence. auto.
   }
   red in H0. unfold lookup_helper in H.
-  destruct (PTree.fold (lookup_helper_aux name sg) globs None); inv H. auto.
+  destruct (ATree.fold (lookup_helper_aux name sg) globs None); inv H. auto.
 Qed.
 
 Lemma lookup_helper_correct:
@@ -357,7 +357,7 @@ Proof.
   destruct (Genv.find_symbol ge id) as [b|] eqn:FS; try discriminate.
   rewrite Genv.find_funct_find_funct_ptr in H1.
   assert (DFL: exists b1, Genv.find_symbol ge id = Some b1 /\ Vptr b Ptrofs.zero = Vptr b1 Ptrofs.zero) by (exists b; auto).
-  unfold globdef; destruct (prog_defmap unit)!id as [[[f|ef] |gv] |] eqn:G; auto.
+  unfold globdef; destruct (prog_defmap unit)$id as [[[f|ef] |gv] |] eqn:G; auto.
   destruct (ef_inline ef) eqn:INLINE; auto.
   destruct (prog_defmap_linkorder _ _ _ _ H G) as (gd & P & Q).
   inv Q. inv H2.
@@ -601,14 +601,14 @@ Qed.
 (** Relationship between the local environments. *)
 
 Definition env_lessdef (e1 e2: env) : Prop :=
-  forall id v1, e1!id = Some v1 -> exists v2, e2!id = Some v2 /\ Val.lessdef v1 v2.
+  forall id v1, e1$id = Some v1 -> exists v2, e2$id = Some v2 /\ Val.lessdef v1 v2.
 
 Lemma set_var_lessdef:
   forall e1 e2 id v1 v2,
   env_lessdef e1 e2 -> Val.lessdef v1 v2 ->
-  env_lessdef (PTree.set id v1 e1) (PTree.set id v2 e2).
+  env_lessdef (ATree.set id v1 e1) (ATree.set id v2 e2).
 Proof.
-  intros; red; intros. rewrite PTree.gsspec in *. destruct (peq id0 id).
+  intros; red; intros. rewrite ATree.gsspec in *. destruct (ATree.elt_eq id0 id).
   exists v2; split; congruence.
   auto.
 Qed.
@@ -627,7 +627,7 @@ Lemma set_params_lessdef:
   env_lessdef (set_params vl1 il) (set_params vl2 il).
 Proof.
   induction il; simpl; intros.
-  red; intros. rewrite PTree.gempty in H0; congruence.
+  red; intros. rewrite ATree.gempty in H0; congruence.
   inv H; apply set_var_lessdef; auto.
 Qed.
 
@@ -837,9 +837,9 @@ Remark match_call_cont_cont:
   forall k k', match_call_cont k k' -> exists cunit hf, match_cont cunit hf k k'.
 Proof.
   intros. simple refine (let cunit : Cminor.program := _ in _).
-  econstructor. apply nil. apply nil. apply xH.
+  econstructor. apply nil. apply nil. apply #"!dummy_main!".
   simple refine (let hf : helper_functions := _ in _).
-  econstructor; apply xH.
+  econstructor; apply #"!dummy_helper!".
   exists cunit, hf; auto.
 Qed.
 

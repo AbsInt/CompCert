@@ -47,6 +47,10 @@ Extract Inlined Constant Coqlib.proj_sumbool => "(fun x -> x)".
 Extract Inlined Constant Datatypes.fst => "fst".
 Extract Inlined Constant Datatypes.snd => "snd".
 
+(* Symbols *)
+Extract Constant Symbols.Ident.of_string => "FastIdent.of_coqstring".
+Extract Constant Symbols.Ident.to_string => "FastIdent.to_coqstring".
+
 (* Decidable *)
 
 Extraction Inline DecidableClass.Decidable_witness DecidableClass.decide
@@ -61,10 +65,6 @@ Extraction NoInline Memory.Mem.valid_pointer.
 
 (* Errors *)
 Extraction Inline Errors.bind Errors.bind2.
-
-(* AST *)
-Extract Inlined Constant AST.ident_of_string => "Camlcoq.ident_of_coqstring".
-Extract Inlined Constant AST.string_of_ident => "Camlcoq.coqstring_of_ident".
 
 (* Iteration *)
 

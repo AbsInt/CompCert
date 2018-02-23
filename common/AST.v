@@ -18,32 +18,21 @@
 
 Require Import String.
 Require Import Coqlib Maps Errors Integers Floats.
+Require Export Symbols.
 Require Archi.
 
 Set Implicit Arguments.
 
 (** * Syntactic elements *)
 
-(** Identifiers (names of local variables, of global symbols and functions,
-  etc) are represented by the type [positive] of positive integers. *)
+(** The type [ident] provides an efficient representation for the
+  names of local variables, of global symbols and functions, etc. *)
 
-Definition ident := positive.
+Definition ident := Ident.t.
 
-Definition ident_eq := peq.
+Definition ident_eq := Ident.eq.
 
-(** The mapping between the external representation of identifiers as
-  [string]s and their internal representation as [ident]s is axiomatized
-  as a bijection, and constructed incrementally by Camlcoq.ml *)
-
-Parameter ident_of_string: string -> ident.
-Parameter string_of_ident: ident -> string.
-
-Axiom string_of_ident_of_string:
-  forall s, string_of_ident (ident_of_string s) = s.
-Axiom ident_of_string_of_ident:
-  forall i, ident_of_string (string_of_ident i) = i.
-
-Notation "# s" := (ident_of_string s) (at level 1, format "'#' s").
+Notation "# s" := (Ident.of_string s) (at level 1, format "'#' s").
 
 (** The intermediate languages are weakly typed, using the following types: *)
 
@@ -289,8 +278,8 @@ Definition prog_defs_names (F V: Type) (p: program F V) : list ident :=
 (** The "definition map" of a program maps names of globals to their definitions.
   If several definitions have the same name, the one appearing last in [p.(prog_defs)] wins. *)
 
-Definition prog_defmap (F V: Type) (p: program F V) : PTree.t (globdef F V) :=
-  PTree_Properties.of_list p.(prog_defs).
+Definition prog_defmap (F V: Type) (p: program F V) : ATree.t (globdef F V) :=
+  ATree_Properties.of_list p.(prog_defs).
 
 Section DEFMAP.
 
@@ -298,33 +287,33 @@ Variables F V: Type.
 Variable p: program F V.
 
 Lemma in_prog_defmap:
-  forall id g, (prog_defmap p)!id = Some g -> In (id, g) (prog_defs p).
+  forall id g, (prog_defmap p)$id = Some g -> In (id, g) (prog_defs p).
 Proof.
-  apply PTree_Properties.in_of_list.
+  apply ATree_Properties.in_of_list.
 Qed.
 
 Lemma prog_defmap_dom:
-  forall id, In id (prog_defs_names p) -> exists g, (prog_defmap p)!id = Some g.
+  forall id, In id (prog_defs_names p) -> exists g, (prog_defmap p)$id = Some g.
 Proof.
-  apply PTree_Properties.of_list_dom.
+  apply ATree_Properties.of_list_dom.
 Qed.
 
 Lemma prog_defmap_unique:
   forall defs1 id g defs2,
   prog_defs p = defs1 ++ (id, g) :: defs2 ->
   ~In id (map fst defs2) ->
-  (prog_defmap p)!id = Some g.
+  (prog_defmap p)$id = Some g.
 Proof.
-  unfold prog_defmap; intros. rewrite H. apply PTree_Properties.of_list_unique; auto.
+  unfold prog_defmap; intros. rewrite H. apply ATree_Properties.of_list_unique; auto.
 Qed.
 
 Lemma prog_defmap_norepet:
   forall id g,
   list_norepet (prog_defs_names p) ->
   In (id, g) (prog_defs p) ->
-  (prog_defmap p)!id = Some g.
+  (prog_defmap p)$id = Some g.
 Proof.
-  apply PTree_Properties.of_list_norepet.
+  apply ATree_Properties.of_list_norepet.
 Qed.
 
 End DEFMAP.
@@ -533,7 +522,7 @@ Definition ef_reloads (ef: external_function) : bool :=
 
 Definition external_function_eq: forall (ef1 ef2: external_function), {ef1=ef2} + {ef1<>ef2}.
 Proof.
-  generalize ident_eq string_dec signature_eq chunk_eq typ_eq list_eq_dec zeq Int.eq_dec; intros.
+  generalize ident_eq string_dec signature_eq chunk_eq typ_eq list_eq_dec zeq Int.eq_dec peq; intros.
   decide equality.
 Defined.
 Global Opaque external_function_eq.

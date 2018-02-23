@@ -95,7 +95,7 @@ let name_of_function prog fn =
   in find_name prog.Ctypes.prog_defs
 
 let invert_local_variable e b =
-  Maps.PTree.fold
+  Symbols.ATree.fold
     (fun res id (b', _) -> if b = b' then Some id else res)
     e None
 
@@ -129,12 +129,12 @@ let print_state p (prog, ge, s) =
               (name_of_function prog f)
               PrintCsyntax.print_expr r
   | Callstate(fd, args, k, m) ->
-      PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv Maps.PTree.empty;
+      PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv Symbols.ATree.empty;
       fprintf p "calling@ @[<hov 2>%s(%a)@]"
               (name_of_fundef prog fd)
               print_val_list args
   | Returnstate(res, k, m) ->
-      PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv Maps.PTree.empty;
+      PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv Symbols.ATree.empty;
       fprintf p "returning@ %a"
               print_val res
   | Stuckstate ->

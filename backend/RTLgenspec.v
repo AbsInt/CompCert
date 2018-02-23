@@ -238,7 +238,7 @@ Hint Resolve regs_valid_incr: rtlg.
   local or let-bound variable. *)
 
 Definition reg_in_map (m: mapping) (r: reg) : Prop :=
-  (exists id, m.(map_vars)!id = Some r) \/ In r m.(map_letvars).
+  (exists id, m.(map_vars)$id = Some r) \/ In r m.(map_letvars).
 
 (** A compilation environment (mapping) is valid in a given state if
   the registers associated with Cminor local variables and let-bound variables
@@ -316,7 +316,7 @@ Lemma init_mapping_valid:
 Proof.
   unfold map_valid, init_mapping.
   intros s r [[id A] | B].
-  simpl in A. rewrite PTree.gempty in A; discriminate.
+  simpl in A. rewrite ATree.gempty in A; discriminate.
   simpl in B. tauto.
 Qed.
 
@@ -326,7 +326,7 @@ Lemma find_var_in_map:
   forall s1 s2 map name r i,
   find_var map name s1 = OK r s2 i -> reg_in_map map r.
 Proof.
-  intros until r. unfold find_var; caseEq (map.(map_vars)!name).
+  intros until r. unfold find_var; caseEq (ATree.get name map.(map_vars)).
   intros. inv H0. left; exists name; auto.
   intros. inv H0.
 Qed.
@@ -371,7 +371,7 @@ Proof.
   intros. monadInv H.
   split. eauto with rtlg.
   inversion EQ. subst. red. intros r' [[id A] | B].
-  simpl in A. rewrite PTree.gsspec in A. destruct (peq id name).
+  simpl in A. rewrite ATree.gsspec in A. destruct (ATree.elt_eq id name).
   inv A. eauto with rtlg.
   apply reg_valid_incr with s1. eauto with rtlg.
   apply H0. left; exists id; auto.
@@ -381,9 +381,9 @@ Qed.
 
 Lemma add_var_find:
   forall s1 s2 map name r map' i,
-  add_var map name s1 = OK (r,map') s2 i -> map'.(map_vars)!name = Some r.
+  add_var map name s1 = OK (r,map') s2 i -> map'.(map_vars)$name = Some r.
 Proof.
-  intros. monadInv H. simpl. apply PTree.gss.
+  intros. monadInv H. simpl. apply ATree.gss.
 Qed.
 
 Lemma add_vars_valid:
@@ -517,7 +517,7 @@ Qed.
 Inductive target_reg_ok (map: mapping) (pr: list reg): expr -> reg -> Prop :=
   | target_reg_var:
       forall id r,
-      map.(map_vars)!id = Some r ->
+      map.(map_vars)$id = Some r ->
       target_reg_ok map pr (Evar id) r
   | target_reg_letvar:
       forall idx r,
@@ -587,7 +587,7 @@ Proof.
   intros. unfold alloc_reg in H1. destruct a;
   try (eapply new_reg_target_ok; eauto; fail).
   (* Evar *)
-  generalize H1; unfold find_var. caseEq (map_vars map)!i0; intros.
+  generalize H1; unfold find_var. caseEq (map_vars map)$i0; intros.
   inv H3. constructor. auto. inv H3.
   (* Elet *)
   generalize H1; unfold find_letvar. caseEq (nth_error (map_letvars map) n); intros.
@@ -673,7 +673,7 @@ Inductive reg_map_ok: mapping -> reg -> option ident -> Prop :=
       ~reg_in_map map rd ->
       reg_map_ok map rd None
   | reg_map_ok_somevar: forall map rd id,
-      map.(map_vars)!id = Some rd ->
+      map.(map_vars)$id = Some rd ->
       reg_map_ok map rd (Some id).
 
 Hint Resolve reg_map_ok_novar: rtlg.
@@ -696,7 +696,7 @@ Hint Resolve reg_map_ok_novar: rtlg.
 Inductive tr_expr (c: code):
        mapping -> list reg -> expr -> node -> node -> reg -> option ident -> Prop :=
   | tr_Evar: forall map pr id ns nd r rd dst,
-      map.(map_vars)!id = Some r ->
+      map.(map_vars)$id = Some r ->
       ((rd = r /\ dst = None) \/ (reg_map_ok map rd dst /\ ~In rd pr)) ->
       tr_move c ns r nd rd ->
       tr_expr c map pr (Evar id) ns nd rd dst
@@ -811,7 +811,7 @@ Inductive tr_exitexpr (c: code):
 
 Inductive tr_builtin_res: mapping -> builtin_res ident -> builtin_res reg -> Prop :=
   | tr_builtin_res_var: forall map id r,
-      map.(map_vars)!id = Some r ->
+      map.(map_vars)$id = Some r ->
       tr_builtin_res map (BR id) (BR r)
   | tr_builtin_res_none: forall map,
       tr_builtin_res map BR_none BR_none
@@ -833,7 +833,7 @@ Inductive tr_stmt (c: code) (map: mapping):
   | tr_Sskip: forall ns nexits ngoto nret rret,
      tr_stmt c map Sskip ns ns nexits ngoto nret rret
   | tr_Sassign: forall id a ns nd nexits ngoto nret rret r,
-     map.(map_vars)!id = Some r ->
+     map.(map_vars)$id = Some r ->
      tr_expr c map nil a ns nd r (Some id) ->
      tr_stmt c map (Sassign id a) ns nd nexits ngoto nret rret
   | tr_Sstore: forall chunk addr al b ns nd nexits ngoto nret rret rd n1 rl n2,
@@ -895,12 +895,12 @@ Inductive tr_stmt (c: code) (map: mapping):
      tr_expr c map nil a ns nret rret None ->
      tr_stmt c map (Sreturn (Some a)) ns nd nexits ngoto nret (Some rret)
   | tr_Slabel: forall lbl s ns nd nexits ngoto nret rret n,
-     ngoto!lbl = Some n ->
+     ngoto$lbl = Some n ->
      c!n = Some (Inop ns) ->
      tr_stmt c map s ns nd nexits ngoto nret rret ->
      tr_stmt c map (Slabel lbl s) ns nd nexits ngoto nret rret
   | tr_Sgoto: forall lbl ns nd nexits ngoto nret rret,
-     ngoto!lbl = Some ns ->
+     ngoto$lbl = Some ns ->
      tr_stmt c map (Sgoto lbl) ns nd nexits ngoto nret rret.
 
 (** [tr_function f tf] specifies the RTL function [tf] that
@@ -1002,7 +1002,7 @@ with transl_condexpr_charact:
 Proof.
   induction a; intros; try (monadInv TR); saturateTrans.
   (* Evar *)
-  generalize EQ; unfold find_var. caseEq (map_vars map)!i; intros; inv EQ1.
+  generalize EQ; unfold find_var. caseEq (map_vars map)$i; intros; inv EQ1.
   econstructor; eauto.
   inv OK. left; split; congruence. right; eauto with rtlg.
   eapply add_move_charact; eauto.
@@ -1096,7 +1096,7 @@ Lemma transl_expr_assign_charact:
 Proof.
   induction a; intros; monadInv TR; saturateTrans.
   (* Evar *)
-  generalize EQ; unfold find_var. caseEq (map_vars map)!i; intros; inv EQ1.
+  generalize EQ; unfold find_var. caseEq (map_vars map)$i; intros; inv EQ1.
   econstructor; eauto.
   eapply add_move_charact; eauto.
   (* Eop *)
@@ -1140,7 +1140,7 @@ Lemma alloc_optreg_map_ok:
   reg_map_ok map r optid.
 Proof.
   unfold alloc_optreg; intros. destruct optid.
-  constructor. unfold find_var in H0. destruct (map_vars map)!i0; monadInv H0. auto.
+  constructor. unfold find_var in H0. destruct (map_vars map)$i0; monadInv H0. auto.
   constructor. eapply new_reg_not_in_map; eauto.
 Qed.
 
@@ -1223,7 +1223,7 @@ Lemma convert_builtin_res_charact:
   tr_builtin_res map res res'.
 Proof.
   destruct res; simpl; intros.
-- monadInv TR. constructor.  unfold find_var in EQ. destruct (map_vars map)!x; inv EQ; auto.
+- monadInv TR. constructor.  unfold find_var in EQ. destruct (map_vars map)$x; inv EQ; auto.
 - destruct oty; monadInv TR.
 + constructor. eauto with rtlg.
 + constructor.
@@ -1241,7 +1241,7 @@ Proof.
   (* Sskip *)
   constructor.
   (* Sassign *)
-  revert EQ. unfold find_var. case_eq (map_vars map)!i; intros; monadInv EQ.
+  revert EQ. unfold find_var. case_eq (map_vars map)$i; intros; monadInv EQ.
   eapply tr_Sassign; eauto.
   eapply transl_expr_assign_charact; eauto with rtlg.
   constructor. auto.
@@ -1323,13 +1323,13 @@ Proof.
   constructor. auto. simpl; tauto.
   monadInv TR. constructor.
   (* Slabel *)
-  generalize EQ0; clear EQ0. case_eq (ngoto!l); intros; monadInv EQ0.
+  generalize EQ0; clear EQ0. case_eq (ngoto$l); intros; monadInv EQ0.
   generalize EQ1; clear EQ1. unfold handle_error.
   case_eq (update_instr n (Inop ns) s0); intros; inv EQ1.
   econstructor. eauto. eauto with rtlg.
   eapply tr_stmt_incr with s0; eauto with rtlg.
   (* Sgoto *)
-  generalize TR; clear TR. case_eq (ngoto!l); intros; monadInv TR.
+  generalize TR; clear TR. case_eq (ngoto$l); intros; monadInv TR.
   econstructor. auto.
 Qed.
 
@@ -1339,7 +1339,7 @@ Lemma transl_function_charact:
   tr_function f tf.
 Proof.
   intros until tf. unfold transl_function.
-  caseEq (reserve_labels (fn_body f) (PTree.empty node, init_state)).
+  caseEq (reserve_labels (fn_body f) (ATree.empty node, init_state)).
   intros ngoto s0 RESERVE.
   caseEq (transl_fun f ngoto s0). congruence.
   intros [nentry rparams] sfinal INCR TR E. inv E.

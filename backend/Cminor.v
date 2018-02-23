@@ -185,7 +185,7 @@ Definition funsig (fd: fundef) :=
 *)
 
 Definition genv := Genv.t fundef unit.
-Definition env := PTree.t val.
+Definition env := ATree.t val.
 
 (** The following functions build the initial local environment at
   function entry, binding parameters to the provided arguments and
@@ -193,21 +193,21 @@ Definition env := PTree.t val.
 
 Fixpoint set_params (vl: list val) (il: list ident) {struct il} : env :=
   match il, vl with
-  | i1 :: is, v1 :: vs => PTree.set i1 v1 (set_params vs is)
-  | i1 :: is, nil => PTree.set i1 Vundef (set_params nil is)
-  | _, _ => PTree.empty val
+  | i1 :: is, v1 :: vs => ATree.set i1 v1 (set_params vs is)
+  | i1 :: is, nil => ATree.set i1 Vundef (set_params nil is)
+  | _, _ => ATree.empty val
   end.
 
 Fixpoint set_locals (il: list ident) (e: env) {struct il} : env :=
   match il with
   | nil => e
-  | i1 :: is => PTree.set i1 Vundef (set_locals is e)
+  | i1 :: is => ATree.set i1 Vundef (set_locals is e)
   end.
 
 Definition set_optvar (optid: option ident) (v: val) (e: env) : env :=
   match optid with
   | None => e
-  | Some id => PTree.set id v e
+  | Some id => ATree.set id v e
   end.
 
 (** Continuations *)
@@ -359,7 +359,7 @@ Variable m: mem.
 
 Inductive eval_expr: expr -> val -> Prop :=
   | eval_Evar: forall id v,
-      PTree.get id e = Some v ->
+      ATree.get id e = Some v ->
       eval_expr (Evar id) v
   | eval_Econst: forall cst v,
       eval_constant sp cst = Some v ->
@@ -447,7 +447,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | step_assign: forall f id a k sp e m v,
       eval_expr sp e m a v ->
       step (State f (Sassign id a) k sp e m)
-        E0 (State f Sskip k sp (PTree.set id v e) m)
+        E0 (State f Sskip k sp (ATree.set id v e) m)
 
   | step_store: forall f chunk addr a k sp e m vaddr v m',
       eval_expr sp e m addr vaddr ->
@@ -673,7 +673,7 @@ with exec_stmt:
   | exec_Sassign:
       forall f sp e m id a v,
       eval_expr ge sp e m a v ->
-      exec_stmt f sp e m (Sassign id a) E0 (PTree.set id v e) m Out_normal
+      exec_stmt f sp e m (Sassign id a) E0 (ATree.set id v e) m Out_normal
   | exec_Sstore:
       forall f sp e m chunk addr a vaddr v m',
       eval_expr ge sp e m addr vaddr ->
@@ -948,7 +948,7 @@ Proof.
   constructor.
 
 (* assign *)
-  exists (State f Sskip k sp (PTree.set id v e) m); split.
+  exists (State f Sskip k sp (ATree.set id v e) m); split.
   apply star_one. constructor. auto.
   constructor.
 

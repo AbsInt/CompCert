@@ -112,14 +112,14 @@ Proof.
   split.
 - symmetry. apply Ctypes.sizeof_stable; auto.
 - revert C. induction t; simpl; auto;
-  destruct (prog_comp_env cunit)!i as [co|] eqn:X; try discriminate; erewrite H1 by eauto; auto.
+  destruct (prog_comp_env cunit)$i as [co|] eqn:X; try discriminate; erewrite H1 by eauto; auto.
 Qed.
 
 Lemma field_offset_stable:
   forall (cunit prog: Clight.program) id co f,
   linkorder cunit prog ->
-  cunit.(prog_comp_env)!id = Some co ->
-  prog.(prog_comp_env)!id = Some co /\
+  cunit.(prog_comp_env)$id = Some co ->
+  prog.(prog_comp_env)$id = Some co /\
   field_offset prog.(prog_comp_env) f (co_members co) = field_offset cunit.(prog_comp_env) f (co_members co).
 Proof.
   intros.
@@ -1038,19 +1038,19 @@ Record match_env (e: Clight.env) (te: Csharpminor.env) : Prop :=
   mk_match_env {
     me_local:
       forall id b ty,
-      e!id = Some (b, ty) -> te!id = Some(b, Ctypes.sizeof ge ty);
+      e$id = Some (b, ty) -> te$id = Some(b, Ctypes.sizeof ge ty);
     me_local_inv:
       forall id b sz,
-      te!id = Some (b, sz) -> exists ty, e!id = Some(b, ty)
+      te$id = Some (b, sz) -> exists ty, e$id = Some(b, ty)
   }.
 
 Lemma match_env_globals:
   forall e te id,
   match_env e te ->
-  e!id = None ->
-  te!id = None.
+  e$id = None ->
+  te$id = None.
 Proof.
-  intros. destruct (te!id) as [[b sz] | ] eqn:?; auto.
+  intros. destruct (te$id) as [[b sz] | ] eqn:?; auto.
   exploit me_local_inv; eauto. intros [ty EQ]. congruence.
 Qed.
 
@@ -1066,8 +1066,8 @@ Proof.
          end).
   assert (list_forall2
             (fun i_x i_y => fst i_x = fst i_y /\ R (snd i_x) (snd i_y))
-            (PTree.elements e) (PTree.elements te)).
-  apply PTree.elements_canonical_order.
+            (ATree.elements e) (ATree.elements te)).
+  apply ATree.elements_canonical_order.
   intros id [b ty] GET. exists (b, Ctypes.sizeof ge ty); split. eapply me_local; eauto. red; auto.
   intros id [b sz] GET. exploit me_local_inv; eauto. intros [ty EQ].
   exploit me_local; eauto. intros EQ1.
@@ -1095,8 +1095,8 @@ Lemma match_env_empty:
 Proof.
   unfold Clight.empty_env, Csharpminor.empty_env.
   constructor.
-  intros until ty. repeat rewrite PTree.gempty. congruence.
-  intros until sz. rewrite PTree.gempty. congruence.
+  intros until ty. repeat rewrite ATree.gempty. congruence.
+  intros until sz. rewrite ATree.gempty. congruence.
 Qed.
 
 (** The following lemmas establish the [match_env] invariant at
@@ -1117,15 +1117,15 @@ Proof.
 - inv H0. exists te1; split. constructor. auto.
 - monadInv H2. monadInv EQ. simpl in *.
   exploit transl_sizeof. eexact H. eauto. intros SZ; rewrite SZ.
-  exploit (IHalloc_variables x0 (PTree.set id (b1, Ctypes.sizeof ge ty) te1)).
+  exploit (IHalloc_variables x0 (ATree.set id (b1, Ctypes.sizeof ge ty) te1)).
   auto.
   constructor.
     (* me_local *)
-    intros until ty0. repeat rewrite PTree.gsspec.
-    destruct (peq id0 id); intros. congruence. eapply me_local; eauto.
+    intros until ty0. repeat rewrite ATree.gsspec.
+    destruct (ATree.elt_eq id0 id); intros. congruence. eapply me_local; eauto.
     (* me_local_inv *)
-    intros until sz. repeat rewrite PTree.gsspec.
-    destruct (peq id0 id); intros. exists ty; congruence. eapply me_local_inv; eauto.
+    intros until sz. repeat rewrite ATree.gsspec.
+    destruct (ATree.elt_eq id0 id); intros. exists ty; congruence. eapply me_local_inv; eauto.
   intros [te2 [ALLOC MENV]].
   exists te2; split. econstructor; eauto. auto.
 Qed.
@@ -1239,7 +1239,7 @@ Proof.
   simpl in TR. eauto.
 - (* field struct *)
   unfold make_field_access in EQ0. rewrite H1 in EQ0.
-  destruct (prog_comp_env cunit)!id as [co'|] eqn:CO; monadInv EQ0.
+  destruct (prog_comp_env cunit)$id as [co'|] eqn:CO; monadInv EQ0.
   exploit field_offset_stable. eexact LINK. eauto. instantiate (1 := i). intros [A B].
   rewrite <- B in EQ1.
   assert (x0 = delta) by (unfold ge in *; simpl in *; congruence).

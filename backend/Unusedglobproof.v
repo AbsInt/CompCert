@@ -34,7 +34,7 @@ Record match_prog_1 (u: IS.t) (p tp: program) : Prop := {
     tp.(prog_public) = p.(prog_public);
   match_prog_def:
     forall id,
-       (prog_defmap tp)!id = if IS.mem id u then (prog_defmap p)!id else None;
+       (prog_defmap tp)$id = if IS.mem id u then (prog_defmap p)$id else None;
   match_prog_unique:
     list_norepet (prog_defs_names tp)
 }.
@@ -59,7 +59,7 @@ Definition ref_def (gd: globdef fundef unit) (id: ident) : Prop :=
 
 Record valid_used_set (p: program) (u: IS.t) : Prop := {
   used_closed: forall id gd id',
-    IS.In id u -> (prog_defmap p)!id = Some gd -> ref_def gd id' ->
+    IS.In id u -> (prog_defmap p)$id = Some gd -> ref_def gd id' ->
     IS.In id' u;
   used_main:
     IS.In p.(prog_main) u;
@@ -148,7 +148,7 @@ Lemma add_ref_definition_incl:
   forall pm id w, workset_incl w (add_ref_definition pm id w).
 Proof.
   unfold add_ref_definition; intros.
-  destruct (pm!id) as [[[] | ? ] | ].
+  destruct (pm$id) as [[[] | ? ] | ].
   apply add_ref_function_incl.
   apply workset_incl_refl.
   apply add_ref_globvar_incl.
@@ -202,7 +202,7 @@ Qed.
 
 Lemma seen_add_ref_definition:
   forall pm id gd id' w,
-  pm!id = Some gd -> ref_def gd id' -> IS.In id' (add_ref_definition pm id w).
+  pm$id = Some gd -> ref_def gd id' -> IS.In id' (add_ref_definition pm id w).
 Proof.
   unfold add_ref_definition; intros. rewrite H. red in H0; destruct gd as [[f|ef]|gv].
   apply seen_add_ref_function; auto.
@@ -255,12 +255,12 @@ Let pm := prog_defmap p.
 
 Definition workset_invariant (w: workset) : Prop :=
   forall id gd id',
-  IS.In id w -> ~List.In id (w_todo w) -> pm!id = Some gd -> ref_def gd id' ->
+  IS.In id w -> ~List.In id (w_todo w) -> pm$id = Some gd -> ref_def gd id' ->
   IS.In id' w.
 
 Definition used_set_closed (u: IS.t) : Prop :=
   forall id gd id',
-  IS.In id u -> pm!id = Some gd -> ref_def gd id' -> IS.In id' u.
+  IS.In id u -> pm$id = Some gd -> ref_def gd id' -> IS.In id' u.
 
 Lemma iter_step_invariant:
   forall w,
@@ -320,7 +320,7 @@ Proof.
 - intros. eapply used_globals_incl; eauto. apply seen_public_initial_workset; auto.
 - intros. apply ISF.for_all_iff in H0.
 + red in H0. apply H0 in H1. unfold global_defined in H1.
-  destruct pm!id as [g|] eqn:E.
+  destruct pm$id as [g|] eqn:E.
 * left. change id with (fst (id,g)). apply in_map. apply in_prog_defmap; auto.
 * InvBooleans; auto.
 + hnf. simpl; intros; congruence.
@@ -335,7 +335,7 @@ Section TRANSFORMATION.
 Variable p: program.
 Variable used: IS.t.
 
-Let add_def (m: prog_map) idg := PTree.set (fst idg) (snd idg) m.
+Let add_def (m: prog_map) idg := ATree.set (fst idg) (snd idg) m.
 
 Remark filter_globdefs_accu:
   forall defs accu1 accu2 u,
@@ -357,14 +357,14 @@ Qed.
 Lemma filter_globdefs_map_1:
   forall id l u m1,
   IS.mem id u = false ->
-  m1!id = None ->
-  (fold_left add_def (filter_globdefs u nil l) m1)!id = None.
+  m1$id = None ->
+  (fold_left add_def (filter_globdefs u nil l) m1)$id = None.
 Proof.
   induction l as [ | [id1 gd1] l]; simpl; intros.
 - auto.
 - destruct (IS.mem id1 u) eqn:MEM.
 + rewrite filter_globdefs_nil. rewrite fold_left_app. simpl.
-  unfold add_def at 1. simpl. rewrite PTree.gso by congruence. eapply IHl; eauto.
+  unfold add_def at 1. simpl. rewrite ATree.gso by congruence. eapply IHl; eauto.
   rewrite ISF.remove_b. rewrite H; auto.
 + eapply IHl; eauto.
 Qed.
@@ -372,8 +372,8 @@ Qed.
 Lemma filter_globdefs_map_2:
   forall id l u m1 m2,
   IS.mem id u = true ->
-  m1!id = m2!id ->
-  (fold_left add_def (filter_globdefs u nil l) m1)!id = (fold_left add_def (List.rev l) m2)!id.
+  m1$id = m2$id ->
+  (fold_left add_def (filter_globdefs u nil l) m1)$id = (fold_left add_def (List.rev l) m2)$id.
 Proof.
   induction l as [ | [id1 gd1] l]; simpl; intros.
 - auto.
@@ -381,22 +381,22 @@ Proof.
   destruct (IS.mem id1 u) eqn:MEM.
 + rewrite filter_globdefs_nil. rewrite fold_left_app. simpl.
   unfold add_def at 1 3. simpl.
-  rewrite ! PTree.gsspec. destruct (peq id id1). auto.
+  rewrite ! ATree.gsspec. destruct (ATree.elt_eq id id1). auto.
   apply IHl; auto.
   apply IS.mem_1. apply IS.remove_2; auto. apply IS.mem_2; auto.
-+ unfold add_def at 2. simpl. rewrite PTree.gso by congruence. apply IHl; auto.
++ unfold add_def at 2. simpl. rewrite ATree.gso by congruence. apply IHl; auto.
 Qed.
 
 Lemma filter_globdefs_map:
   forall id u defs,
-  (PTree_Properties.of_list (filter_globdefs u nil (List.rev defs)))! id =
-  if IS.mem id u then (PTree_Properties.of_list defs)!id else None.
+  (ATree_Properties.of_list (filter_globdefs u nil (List.rev defs)))$ id =
+  if IS.mem id u then (ATree_Properties.of_list defs)$id else None.
 Proof.
-  intros. unfold PTree_Properties.of_list. fold prog_map. unfold PTree.elt. fold add_def.
+  intros. unfold ATree_Properties.of_list. fold prog_map. unfold ATree.elt. fold add_def.
   destruct (IS.mem id u) eqn:MEM.
 - erewrite filter_globdefs_map_2. rewrite List.rev_involutive. reflexivity.
   auto. auto.
-- apply filter_globdefs_map_1. auto. apply PTree.gempty.
+- apply filter_globdefs_map_1. auto. apply ATree.gempty.
 Qed.
 
 Lemma filter_globdefs_domain:
@@ -457,7 +457,7 @@ Definition kept (id: ident) : Prop := IS.In id used.
 
 Lemma kept_closed:
   forall id gd id',
-  kept id -> pm!id = Some gd -> ref_def gd id' -> kept id'.
+  kept id -> pm$id = Some gd -> ref_def gd id' -> kept id'.
 Proof.
   intros. eapply used_closed; eauto.
 Qed.
@@ -481,7 +481,7 @@ Lemma transform_find_symbol_1:
   Genv.find_symbol ge id = Some b -> kept id -> exists b', Genv.find_symbol tge id = Some b'.
 Proof.
   intros.
-  assert (A: exists g, (prog_defmap p)!id = Some g).
+  assert (A: exists g, (prog_defmap p)$id = Some g).
   { apply prog_defmap_dom. eapply Genv.find_symbol_inversion; eauto. }
   destruct A as (g & P).
   apply Genv.find_symbol_exists with g.
@@ -494,7 +494,7 @@ Lemma transform_find_symbol_2:
   Genv.find_symbol tge id = Some b -> kept id /\ exists b', Genv.find_symbol ge id = Some b'.
 Proof.
   intros.
-  assert (A: exists g, (prog_defmap tp)!id = Some g).
+  assert (A: exists g, (prog_defmap tp)$id = Some g).
   { apply prog_defmap_dom. eapply Genv.find_symbol_inversion; eauto. }
   destruct A as (g & P).
   erewrite match_prog_def in P by eauto.
@@ -568,15 +568,15 @@ Proof.
   exists b; split; auto. eapply init_meminj_eq; eauto.
 - exploit init_meminj_invert; eauto. intros (A & id & B & C).
   assert (kept id) by (eapply transform_find_symbol_2; eauto).
-  assert (pm!id = Some gd).
+  assert (pm$id = Some gd).
   { unfold pm; rewrite Genv.find_def_symbol. exists b; auto. }
-  assert ((prog_defmap tp)!id = Some gd).
+  assert ((prog_defmap tp)$id = Some gd).
   { erewrite match_prog_def by eauto. rewrite IS.mem_1 by auto. auto. }
   rewrite Genv.find_def_symbol in H3. destruct H3 as (b1 & P & Q).
   fold tge in P. replace b' with b1 by congruence. split; auto. split; auto.
   intros. eapply kept_closed; eauto.
 - exploit init_meminj_invert; eauto. intros (A & id & B & C).
-  assert ((prog_defmap tp)!id = Some gd).
+  assert ((prog_defmap tp)$id = Some gd).
   { rewrite Genv.find_def_symbol. exists b'; auto. }
   erewrite match_prog_def in H1 by eauto.
   destruct (IS.mem id used); try discriminate.
@@ -1079,7 +1079,7 @@ Lemma init_meminj_invert_strong:
   /\ (forall i, ref_def gd i -> kept i).
 Proof.
   intros. exploit init_meminj_invert; eauto. intros (A & id & B & C).
-  assert (exists gd, (prog_defmap p)!id = Some gd).
+  assert (exists gd, (prog_defmap p)$id = Some gd).
   { apply prog_defmap_dom. eapply Genv.find_symbol_inversion; eauto. }
   destruct H0 as [gd DM]. rewrite Genv.find_def_symbol in DM.
   destruct DM as (b'' & P & Q). fold ge in P. rewrite P in B; inv B.
@@ -1203,7 +1203,7 @@ Lemma init_mem_exists:
 Proof.
   intros. apply Genv.init_mem_exists.
   intros.
-  assert (P: (prog_defmap tp)!id = Some (Gvar v)).
+  assert (P: (prog_defmap tp)$id = Some (Gvar v)).
   { eapply prog_defmap_norepet; eauto. eapply match_prog_unique; eauto. }
   rewrite (match_prog_def _ _ _ TRANSF) in P. destruct (IS.mem id used) eqn:U; try discriminate.
   exploit Genv.init_mem_inversion; eauto. apply in_prog_defmap; eauto. intros [AL FV].
@@ -1305,7 +1305,7 @@ Qed.
 Remark used_not_defined:
   forall p used id,
   valid_used_set p used ->
-  (prog_defmap p)!id = None ->
+  (prog_defmap p)$id = None ->
   IS.mem id used = false \/ id = prog_main p.
 Proof.
   intros. destruct (IS.mem id used) eqn:M; auto.
@@ -1317,7 +1317,7 @@ Remark used_not_defined_2:
   forall p used id,
   valid_used_set p used ->
   id <> prog_main p ->
-  (prog_defmap p)!id = None ->
+  (prog_defmap p)$id = None ->
   ~IS.In id used.
 Proof.
   intros. exploit used_not_defined; eauto. intros [A|A].
@@ -1336,9 +1336,9 @@ Proof.
   destruct (link_prog_inv _ _ _ L) as (X & Y & Z).
   rewrite Z; clear Z; constructor.
 - intros. rewrite ISF.union_iff in H. rewrite ISF.union_iff.
-  rewrite prog_defmap_elements, PTree.gcombine in H0.
-  destruct (prog_defmap p1)!id as [gd1|] eqn:GD1;
-  destruct (prog_defmap p2)!id as [gd2|] eqn:GD2;
+  rewrite prog_defmap_elements, ATree.gcombine in H0.
+  destruct (prog_defmap p1)$id as [gd1|] eqn:GD1;
+  destruct (prog_defmap p2)$id as [gd2|] eqn:GD2;
   simpl in H0; try discriminate.
 + (* common definition *)
   exploit Y; eauto. intros (PUB1 & PUB2 & _).
@@ -1367,20 +1367,19 @@ Proof.
 - intros. rewrite ISF.union_iff in H.
   destruct (ident_eq id (prog_main p1)).
 + right; assumption.
-+ assert (E: exists g, link_prog_merge (prog_defmap p1)!id (prog_defmap p2)!id = Some g).
-  { destruct (prog_defmap p1)!id as [gd1|] eqn:GD1;
-    destruct (prog_defmap p2)!id as [gd2|] eqn:GD2; simpl.
++ assert (E: exists g, link_prog_merge (prog_defmap p1)$id (prog_defmap p2)$id = Some g).
+  { destruct (prog_defmap p1)$id as [gd1|] eqn:GD1;
+    destruct (prog_defmap p2)$id as [gd2|] eqn:GD2; simpl.
   * apply Y with id; auto.
   * exists gd1; auto.
   * exists gd2; auto.
   * eapply used_not_defined_2 in GD1; eauto. eapply used_not_defined_2 in GD2; eauto.
     tauto.
-    congruence.
   }
   destruct E as [g LD].
   left. unfold prog_defs_names; simpl.
-  change id with (fst (id, g)). apply in_map. apply PTree.elements_correct.
-  rewrite PTree.gcombine; auto.
+  change id with (fst (id, g)). apply in_map. apply ATree.elements_correct.
+  rewrite ATree.gcombine; auto.
 Qed.
 
 Theorem link_match_program:
@@ -1408,12 +1407,12 @@ Proof.
 + rewrite W. constructor; simpl; intros.
 * eapply match_prog_main; eauto.
 * rewrite (match_prog_public _ _ _ B1), (match_prog_public _ _ _ B2). auto.
-* rewrite ! prog_defmap_elements, !PTree.gcombine by auto.
+* rewrite ! prog_defmap_elements, !ATree.gcombine by auto.
   rewrite (match_prog_def _ _ _ B1 id), (match_prog_def _ _ _ B2 id).
   rewrite ISF.union_b.
 {
-  destruct (prog_defmap p1)!id as [gd1|] eqn:GD1;
-  destruct (prog_defmap p2)!id as [gd2|] eqn:GD2.
+  destruct (prog_defmap p1)$id as [gd1|] eqn:GD1;
+  destruct (prog_defmap p2)$id as [gd2|] eqn:GD2.
 - (* both defined *)
   exploit V; eauto. intros (PUB1 & PUB2 & _).
   assert (EQ1: IS.mem id used1 = true) by (apply IS.mem_1; eapply used_public; eauto).
@@ -1432,7 +1431,7 @@ Proof.
 - (* none defined *)
   destruct (IS.mem id used1), (IS.mem id used2); auto.
 }
-* intros. apply PTree.elements_keys_norepet.
+* intros. apply ATree.elements_keys_norepet.
 Qed.
 
 Instance TransfSelectionLink : TransfLink match_prog := link_match_program.

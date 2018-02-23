@@ -212,7 +212,7 @@ let external_function p = function
       assertions := (camlstring_of_coqstring text, [targ]) :: !assertions;
       fprintf p "(EF_annot_val %a %a)" coqstring text asttype targ
   | EF_debug(kind, text, targs) ->
-      fprintf p "(EF_debug %ld%%positive %ld%%positive %a)" (P.to_int32 kind) (P.to_int32 text) (print_list asttype) targs
+      fprintf p "(EF_debug %ld%%positive %a %a)" (P.to_int32 kind) ident text (print_list asttype) targs
   | EF_inline_asm(text, sg, clob) ->
       fprintf p "@[<hov 2>(EF_inline_asm %a@ %a@ %a)@]"
               coqstring text

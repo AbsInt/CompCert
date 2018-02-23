@@ -22,7 +22,7 @@ Local Open Scope string_scope.
 
 (** The working set *)
 
-Module IS := FSetAVL.Make(OrderedPositive).
+Module IS := FSetAVL.Make(OrderedIdent).
 
 Record workset := mk_workset {
   w_seen :> IS.t;
@@ -73,10 +73,10 @@ Definition add_ref_init_data (w: workset) (i: init_data) : workset :=
 Definition add_ref_globvar (gv: globvar unit) (w: workset): workset :=
   List.fold_left add_ref_init_data gv.(gvar_init) w.
 
-Definition prog_map : Type := PTree.t (globdef fundef unit).
+Definition prog_map : Type := ATree.t (globdef fundef unit).
 
 Definition add_ref_definition (pm: prog_map) (id: ident) (w: workset): workset :=
-  match pm!id with
+  match pm$id with
   | None => w
   | Some (Gfun (Internal f)) => add_ref_function f w
   | Some (Gfun (External ef)) => w
@@ -124,7 +124,7 @@ Fixpoint filter_globdefs (used: IS.t) (accu defs: list (ident * globdef fundef u
   the possible exception of the [prog_main] name. *)
 
 Definition global_defined (p: program) (pm: prog_map) (id: ident) : bool :=
-  match pm!id with Some _ => true | None => ident_eq id (prog_main p) end.
+  match pm$id with Some _ => true | None => ident_eq id (prog_main p) end.
 
 Definition transform_program (p: program) : res program :=
   let pm := prog_defmap p in

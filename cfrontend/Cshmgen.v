@@ -443,7 +443,7 @@ Definition transl_binop (ce: composite_env)
 Definition make_field_access (ce: composite_env) (ty: type) (f: ident) (a: expr) : res expr :=
   match ty with
   | Tstruct id _ =>
-      match ce!id with
+      match ce$id with
       | None =>
           Error (MSG "Undefined struct " :: CTX id :: nil)
       | Some co =>

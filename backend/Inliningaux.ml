@@ -15,38 +15,38 @@ open Datatypes
 open FSetAVL
 open Maps
 open Op
-open Ordered
+open Symbols
 open !RTL
 
-module PSet = Make(OrderedPositive)
+module ASet = Make(OrderedIdent)
 
 type inlining_info = {
-  call_cnt : int PTree.t; (* Count the number of direct calls to a function *)
-  addr_taken : PSet.t; (* The set of globals which have their address taken *)
+  call_cnt : int ATree.t; (* Count the number of direct calls to a function *)
+  addr_taken : ASet.t; (* The set of globals which have their address taken *)
 }
 
 let empty_inlining_info = {
-  call_cnt = PTree.empty;
-  addr_taken = PSet.empty;
+  call_cnt = ATree.empty;
+  addr_taken = ASet.empty;
 }
 
 let call_count id io =
-  match PTree.get id io.call_cnt with
+  match ATree.get id io.call_cnt with
   | Some cnt -> cnt
   | None -> 0
 
 let called id io =
-  let call_cnt = PTree.set id (1 + call_count id io) io.call_cnt in
+  let call_cnt = ATree.set id (1 + call_count id io) io.call_cnt in
   { io with call_cnt = call_cnt }
 
 let address_taken id io =
-  PSet.mem id io.addr_taken
+  ASet.mem id io.addr_taken
 
 let rec used_id io ids =
   match ids with
   | [] -> io
   | id::ids ->
-     used_id {io with addr_taken = PSet.add id io.addr_taken} ids
+     used_id {io with addr_taken = ASet.add id io.addr_taken} ids
 
 let used_in_globvar io gv =
   let used_in_init_data io = function

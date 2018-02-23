@@ -65,14 +65,14 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
   | tr_val_value: forall le v ty a tmp,
       typeof a = ty ->
       (forall tge e le' m,
-         (forall id, In id tmp -> le'!id = le!id) ->
+         (forall id, In id tmp -> le'$id = le$id) ->
          eval_expr tge e le' m a v) ->
       tr_expr le For_val (Csyntax.Eval v ty)
                            nil a tmp
   | tr_val_set: forall le sd v ty a any tmp,
       typeof a = ty ->
       (forall tge e le' m,
-         (forall id, In id tmp -> le'!id = le!id) ->
+         (forall id, In id tmp -> le'$id = le$id) ->
          eval_expr tge e le' m a v) ->
       tr_expr le (For_set sd) (Csyntax.Eval v ty)
                    (do_set sd a) any tmp
@@ -327,16 +327,16 @@ Combined Scheme tr_expr_exprlist from tr_expr_ind2, tr_exprlist_ind2.
 
 Lemma tr_expr_invariant:
   forall le dst r sl a tmps, tr_expr le dst r sl a tmps ->
-  forall le', (forall x, In x tmps -> le'!x = le!x) ->
+  forall le', (forall x, In x tmps -> le'$x = le$x) ->
   tr_expr le' dst r sl a tmps
 with tr_exprlist_invariant:
   forall le rl sl al tmps, tr_exprlist le rl sl al tmps ->
-  forall le', (forall x, In x tmps -> le'!x = le!x) ->
+  forall le', (forall x, In x tmps -> le'$x = le$x) ->
   tr_exprlist le' rl sl al tmps.
 Proof.
   induction 1; intros; econstructor; eauto.
-    intros. apply H0. intros. transitivity (le'!id); auto.
-    intros. apply H0. auto. intros. transitivity (le'!id); auto.
+    intros. apply H0. intros. transitivity (le'$id); auto.
+    intros. apply H0. auto. intros. transitivity (le'$id); auto.
   induction 1; intros; econstructor; eauto.
 Qed.
 
@@ -612,15 +612,6 @@ Lemma contained_app:
   contained l1 g1 g2 -> contained l2 g1 g2 -> contained (l1 ++ l2) g1 g2.
 Proof.
   intros; red; intros. destruct (in_app_or _ _ _ H1); auto.
-Qed.
-
-Lemma ident_of_string_inj s t:
-  ident_of_string s = ident_of_string t -> s = t.
-Proof.
-  intros Hst.
-  rewrite <- (string_of_ident_of_string s).
-  rewrite <- (string_of_ident_of_string t).
-  congruence.
 Qed.
 
 Lemma contained_disjoint:

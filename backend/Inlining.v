@@ -23,9 +23,9 @@ Require Import Op Registers RTL.
   inlining, as determined by the external heuristic
   [should_inline]. *)
 
-Definition funenv : Type := PTree.t function.
+Definition funenv : Type := ATree.t function.
 
-Definition size_fenv (fenv: funenv) := PTree_Properties.cardinal fenv.
+Definition size_fenv (fenv: funenv) := ATree_Properties.cardinal fenv.
 
 Parameter inlining_info: Type.  (* abstract type, implemented on the Caml side *)
 
@@ -37,15 +37,15 @@ Definition add_globdef (io: inlining_info) (fenv: funenv) (idg: ident * globdef 
   match idg with
   | (id, Gfun (Internal f)) =>
       if should_inline io id f
-      then PTree.set id f fenv
-      else PTree.remove id fenv
+      then ATree.set id f fenv
+      else ATree.remove id fenv
   | (id, _) =>
-      PTree.remove id fenv
+      ATree.remove id fenv
   end.
 
 Definition funenv_program (p: program) : funenv :=
   let io := inlining_analysis p in
-  List.fold_left (add_globdef io) p.(prog_defs) (PTree.empty function).
+  List.fold_left (add_globdef io) p.(prog_defs) (ATree.empty function).
 
 (** State monad *)
 
@@ -291,12 +291,12 @@ Variable rec: forall fenv', (size_fenv fenv' < size_fenv fenv)%nat -> context ->
 
 Inductive inline_decision (ros: reg + ident) : Type :=
   | Cannot_inline
-  | Can_inline (id: ident) (f: function) (P: ros = inr reg id) (Q: fenv!id = Some f).
+  | Can_inline (id: ident) (f: function) (P: ros = inr reg id) (Q: fenv$id = Some f).
 
 Program Definition can_inline (ros: reg + ident): inline_decision ros :=
   match ros with
   | inl r => Cannot_inline _
-  | inr id => match fenv!id with Some f => Can_inline _ id f _ _ | None => Cannot_inline _ end
+  | inr id => match fenv$id with Some f => Can_inline _ id f _ _ | None => Cannot_inline _ end
   end.
 
 (** Inlining of a call to function [f].  An appropriate context is
@@ -304,7 +304,7 @@ Program Definition can_inline (ros: reg + ident): inline_decision ros :=
   are inserted to copy the arguments of the call to the parameters of [f]. *)
 
 Definition inline_function (ctx: context) (id: ident) (f: function)
-                           (P: PTree.get id fenv = Some f)
+                           (P: ATree.get id fenv = Some f)
                            (args: list reg)
                            (retpc: node) (retreg: reg) : mon node :=
   let npc := max_pc_function f in
@@ -312,21 +312,21 @@ Definition inline_function (ctx: context) (id: ident) (f: function)
   do dpc <- reserve_nodes npc;
   do dreg <- reserve_regs nreg;
   let ctx' := callcontext ctx dpc dreg nreg f.(fn_stacksize) retpc retreg in
-  do x <- rec (PTree.remove id fenv) (PTree_Properties.cardinal_remove P) ctx' f;
+  do x <- rec (ATree.remove id fenv) (ATree_Properties.cardinal_remove P) ctx' f;
   add_moves (sregs ctx args) (sregs ctx' f.(fn_params)) (spc ctx' f.(fn_entrypoint)).
 
 (** Inlining of a tail call to function [f].  Similar to [inline_function],
   but the new context is different. *)
 
 Definition inline_tail_function (ctx: context) (id: ident) (f: function)
-                               (P: PTree.get id fenv = Some f)
+                               (P: ATree.get id fenv = Some f)
                                (args: list reg): mon node :=
   let npc := max_pc_function f in
   let nreg := max_reg_function f in
   do dpc <- reserve_nodes npc;
   do dreg <- reserve_regs nreg;
   let ctx' := tailcontext ctx dpc dreg nreg f.(fn_stacksize) in
-  do x <- rec (PTree.remove id fenv) (PTree_Properties.cardinal_remove P) ctx' f;
+  do x <- rec (ATree.remove id fenv) (ATree_Properties.cardinal_remove P) ctx' f;
   add_moves (sregs ctx args) (sregs ctx' f.(fn_params)) (spc ctx' f.(fn_entrypoint)).
 
 (** The instruction generated for a [Ireturn] instruction found in an

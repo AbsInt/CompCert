@@ -36,7 +36,7 @@ Local Open Scope string_scope.
   during translation of expressions, when crossing a [Elet] binding. *)
 
 Record mapping: Type := mkmapping {
-  map_vars: PTree.t reg;
+  map_vars: ATree.t reg;
   map_letvars: list reg
 }.
 
@@ -290,11 +290,11 @@ Definition new_reg : mon reg :=
 (** ** Operations on mappings *)
 
 Definition init_mapping : mapping :=
-  mkmapping (PTree.empty reg) nil.
+  mkmapping (ATree.empty reg) nil.
 
 Definition add_var (map: mapping) (name: ident) : mon (reg * mapping) :=
   do r <- new_reg;
-     ret (r, mkmapping (PTree.set name r map.(map_vars))
+     ret (r, mkmapping (ATree.set name r map.(map_vars))
                        map.(map_letvars)).
 
 Fixpoint add_vars (map: mapping) (names: list ident)
@@ -308,7 +308,7 @@ Fixpoint add_vars (map: mapping) (names: list ident)
   end.
 
 Definition find_var (map: mapping) (name: ident) : mon reg :=
-  match PTree.get name map.(map_vars) with
+  match ATree.get name map.(map_vars) with
   | None => error (Errors.MSG "RTLgen: unbound variable " :: Errors.CTX name :: nil)
   | Some r => ret r
   end.
@@ -551,7 +551,7 @@ Parameter more_likely: condexpr -> stmt -> stmt -> bool.
   [nlist] if it terminates by an [exit n] construct.  [rret] is the
   register where the return value of the function must be stored, if any. *)
 
-Definition labelmap : Type := PTree.t node.
+Definition labelmap : Type := ATree.t node.
 
 Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
                      (nexits: list node) (ngoto: labelmap) (nret: node) (rret: option reg)
@@ -628,7 +628,7 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
       end
   | Slabel lbl s' =>
       do ns <- transl_stmt map s' nd nexits ngoto nret rret;
-      match ngoto!lbl with
+      match ngoto$lbl with
       | None => error (Errors.msg "RTLgen: unbound label")
       | Some n =>
           do xx <-
@@ -638,7 +638,7 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
           ret ns
       end
   | Sgoto lbl =>
-      match ngoto!lbl with
+      match ngoto$lbl with
       | None => error (Errors.MSG "Undefined defined label " ::
                        Errors.CTX lbl :: nil)
       | Some n => ret n
@@ -650,7 +650,7 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
 Definition alloc_label (lbl: Cminor.label) (maps: labelmap * state) : labelmap * state :=
   let (map, s) := maps in
   let n := s.(st_nextnode) in
-  (PTree.set lbl n map,
+  (ATree.set lbl n map,
    mkstate s.(st_nextreg) (Pos.succ s.(st_nextnode)) s.(st_code) (reserve_instr_wf s)).
 
 Fixpoint reserve_labels (s: stmt) (ms: labelmap * state)
@@ -682,7 +682,7 @@ Definition transl_fun (f: CminorSel.function) (ngoto: labelmap): mon (node * lis
   ret (nentry, rparams).
 
 Definition transl_function (f: CminorSel.function) : Errors.res RTL.function :=
-  let (ngoto, s0) := reserve_labels f.(fn_body) (PTree.empty node, init_state) in
+  let (ngoto, s0) := reserve_labels f.(fn_body) (ATree.empty node, init_state) in
   match transl_fun f ngoto s0 with
   | Error msg => Errors.Error msg
   | OK (nentry, rparams) s i =>

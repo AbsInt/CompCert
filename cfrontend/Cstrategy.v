@@ -88,10 +88,10 @@ Inductive eval_simple_lvalue: expr -> block -> ptrofs -> Prop :=
   | esl_loc: forall b ofs ty,
       eval_simple_lvalue (Eloc b ofs ty) b ofs
   | esl_var_local: forall x ty b,
-      e!x = Some(b, ty) ->
+      e$x = Some(b, ty) ->
       eval_simple_lvalue (Evar x ty) b Ptrofs.zero
   | esl_var_global: forall x ty b,
-      e!x = None ->
+      e$x = None ->
       Genv.find_symbol ge x = Some b ->
       eval_simple_lvalue (Evar x ty) b Ptrofs.zero
   | esl_deref: forall r ty b ofs,
@@ -100,13 +100,13 @@ Inductive eval_simple_lvalue: expr -> block -> ptrofs -> Prop :=
   | esl_field_struct: forall r f ty b ofs id co a delta,
       eval_simple_rvalue r (Vptr b ofs) ->
       typeof r = Tstruct id a ->
-      ge.(genv_cenv)!id = Some co ->
+      ge.(genv_cenv)$id = Some co ->
       field_offset ge f (co_members co) = OK delta ->
       eval_simple_lvalue (Efield r f ty) b (Ptrofs.add ofs (Ptrofs.repr delta))
   | esl_field_union: forall r f ty b ofs id co a,
       eval_simple_rvalue r (Vptr b ofs) ->
       typeof r = Tunion id a ->
-      ge.(genv_cenv)!id = Some co ->
+      ge.(genv_cenv)$id = Some co ->
       eval_simple_lvalue (Efield r f ty) b ofs
 
 with eval_simple_rvalue: expr -> val -> Prop :=
@@ -521,15 +521,15 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
   | Eloc b ofs ty => False
   | Evar x ty =>
       exists b,
-      e!x = Some(b, ty)
-      \/ (e!x = None /\ Genv.find_symbol ge x = Some b)
+      e$x = Some(b, ty)
+      \/ (e$x = None /\ Genv.find_symbol ge x = Some b)
   | Ederef (Eval v ty1) ty =>
       exists b, exists ofs, v = Vptr b ofs
   | Efield (Eval v ty1) f ty =>
       exists b, exists ofs, v = Vptr b ofs /\
       match ty1 with
-      | Tstruct id _ => exists co delta, ge.(genv_cenv)!id = Some co /\ field_offset ge f (co_members co) = Errors.OK delta
-      | Tunion id _ => exists co, ge.(genv_cenv)!id = Some co
+      | Tstruct id _ => exists co delta, ge.(genv_cenv)$id = Some co /\ field_offset ge f (co_members co) = Errors.OK delta
+      | Tunion id _ => exists co, ge.(genv_cenv)$id = Some co
       | _ => False
       end
   | Eval v ty => False

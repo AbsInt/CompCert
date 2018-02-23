@@ -367,7 +367,7 @@ Lemma tr_expr_leftcontext_rec:
   /\ incl tmp' tmps
   /\ (forall le' e' sl3,
         tr_expr le' dst' e' sl3 a' tmp' ->
-        (forall id, ~In id tmp' -> le'!id = le!id) ->
+        (forall id, ~In id tmp' -> le'$id = le$id) ->
         Csyntax.typeof e' = Csyntax.typeof e ->
         tr_expr le' dst (C e') (sl3 ++ sl2) a tmps)
  ) /\ (
@@ -380,7 +380,7 @@ Lemma tr_expr_leftcontext_rec:
   /\ incl tmp' tmps
   /\ (forall le' e' sl3,
         tr_expr le' dst' e' sl3 a' tmp' ->
-        (forall id, ~In id tmp' -> le'!id = le!id) ->
+        (forall id, ~In id tmp' -> le'$id = le$id) ->
         Csyntax.typeof e' = Csyntax.typeof e ->
         tr_exprlist le' (C e') (sl3 ++ sl2) a tmps)
 ).
@@ -400,8 +400,8 @@ Ltac NOTIN :=
 
 Ltac UNCHANGED :=
   match goal with
-  | [ H: (forall (id: ident), ~In id _ -> ?le' ! id = ?le ! id) |-
-         (forall (id: ident), In id _ -> ?le' ! id = ?le ! id) ] =>
+  | [ H: (forall (id: ident), ~In id _ -> ?le' $ id = ?le $ id) |-
+         (forall (id: ident), In id _ -> ?le' $ id = ?le $ id) ] =>
       intros; apply H; NOTIN
   end.
 
@@ -725,7 +725,7 @@ Theorem tr_expr_leftcontext:
   /\ incl tmp' tmps
   /\ (forall le' r' sl3,
         tr_expr le' dst' r' sl3 a' tmp' ->
-        (forall id, ~In id tmp' -> le'!id = le!id) ->
+        (forall id, ~In id tmp' -> le'$id = le$id) ->
         Csyntax.typeof r' = Csyntax.typeof r ->
         tr_expr le' dst (C r') (sl3 ++ sl2) a tmps).
 Proof.
@@ -744,7 +744,7 @@ Theorem tr_top_leftcontext:
   /\ incl tmp' tmps
   /\ (forall le' m' r' sl3,
         tr_expr le' dst' r' sl3 a' tmp' ->
-        (forall id, ~In id tmp' -> le'!id = le!id) ->
+        (forall id, ~In id tmp' -> le'$id = le$id) ->
         Csyntax.typeof r' = Csyntax.typeof r ->
         tr_top tge e le' m' dst (C r') (sl3 ++ sl2) a tmps).
 Proof.
@@ -833,12 +833,12 @@ Lemma step_make_set:
   eval_lvalue tge e le m a b ofs ->
   typeof a = ty ->
   step1 tge (State f (make_set id a) k e le m)
-          t (State f Sskip k e (PTree.set id v le) m).
+          t (State f Sskip k e (ATree.set id v le) m).
 Proof.
   intros. exploit deref_loc_translated; eauto. rewrite <- H1.
   unfold make_set. destruct (chunk_for_volatile_type (typeof a)) as [chunk|].
 (* volatile case *)
-  intros. change (PTree.set id v le) with (set_opttemp (Some id) v le). econstructor.
+  intros. change (ATree.set id v le) with (set_opttemp (Some id) v le). econstructor.
   econstructor. constructor. eauto.
   simpl. unfold sem_cast. simpl. eauto. constructor.
   simpl. econstructor; eauto.
@@ -903,7 +903,7 @@ Lemma step_tr_rvalof:
                  t (State f Sskip k e le' m)
   /\ eval_expr tge e le' m a' v
   /\ typeof a' = typeof a
-  /\ forall x, ~In x tmp -> le'!x = le!x.
+  /\ forall x, ~In x tmp -> le'$x = le$x.
 Proof.
   intros. inv H1.
   (* not volatile *)
@@ -913,11 +913,11 @@ Proof.
   split. eapply eval_Elvalue; eauto.
   auto.
   (* volatile *)
-  intros. exists (PTree.set t0 v le); split.
+  intros. exists (ATree.set t0 v le); split.
   simpl. eapply star_two. econstructor. eapply step_make_set; eauto. traceEq.
-  split. constructor. apply PTree.gss.
+  split. constructor. apply ATree.gss.
   split. auto.
-  intros. apply PTree.gso. congruence.
+  intros. apply ATree.gso. congruence.
 Qed.
 
 (** Matching between continuations *)
@@ -1204,7 +1204,7 @@ Lemma tr_find_label_expression:
 Proof.
   intros. inv H.
   assert (nolabel (makeseq sl)). apply makeseq_nolabel.
-  eapply tr_find_label_top with (e := empty_env) (le := PTree.empty val) (m := Mem.empty).
+  eapply tr_find_label_top with (e := empty_env) (le := ATree.empty val) (m := Mem.empty).
   eauto. apply H.
 Qed.
 
@@ -1213,7 +1213,7 @@ Lemma tr_find_label_expr_stmt:
 Proof.
   intros. inv H.
   assert (nolabel (makeseq sl)). apply makeseq_nolabel.
-  eapply tr_find_label_top with (e := empty_env) (le := PTree.empty val) (m := Mem.empty).
+  eapply tr_find_label_top with (e := empty_env) (le := ATree.empty val) (m := Mem.empty).
   eauto. apply H.
 Qed.
 
@@ -1226,7 +1226,7 @@ Proof.
   assert (nolabel (makeseq (sl ++ makeif a Sskip Sbreak :: nil))).
   apply makeseq_nolabel.
   apply nolabel_list_app.
-  eapply tr_find_label_top with (e := empty_env) (le := PTree.empty val) (m := Mem.empty).
+  eapply tr_find_label_top with (e := empty_env) (le := ATree.empty val) (m := Mem.empty).
   eauto.
   simpl; split; auto. apply makeif_nolabel. red; simpl; auto. red; simpl; auto.
   apply H.
@@ -1419,7 +1419,7 @@ Lemma tr_val_gen:
   forall le dst v ty a tmp,
   typeof a = ty ->
   (forall tge e le' m,
-      (forall id, In id tmp -> le'!id = le!id) ->
+      (forall id, In id tmp -> le'$id = le$id) ->
       eval_expr tge e le' m a v) ->
   tr_expr le dst (Csyntax.Eval v ty) (final dst a) a tmp.
 Proof.
@@ -1463,8 +1463,8 @@ Proof.
   econstructor; eauto.
   change (final dst' (Etempvar t0 (Csyntax.typeof l)) ++ sl2) with (nil ++ (final dst' (Etempvar t0 (Csyntax.typeof l)) ++ sl2)).
   apply S. apply tr_val_gen. auto.
-  intros. constructor. rewrite H5; auto. apply PTree.gss.
-  intros. apply PTree.gso. red; intros; subst; elim H5; auto.
+  intros. constructor. rewrite H5; auto. apply ATree.gss.
+  intros. apply ATree.gso. red; intros; subst; elim H5; auto.
   auto.
 (* seqand true *)
   exploit tr_top_leftcontext; eauto. clear H9.
@@ -1516,8 +1516,8 @@ Proof.
   apply star_one. constructor. constructor. reflexivity. reflexivity.
   eapply match_exprstates; eauto.
   change sl2 with (nil ++ sl2). apply S. econstructor; eauto.
-  intros. constructor. rewrite H2. apply PTree.gss. auto.
-  intros. apply PTree.gso. congruence.
+  intros. constructor. rewrite H2. apply ATree.gss. auto.
+  intros. apply ATree.gso. congruence.
   auto.
   (* for effects *)
   exploit tr_simple_rvalue; eauto. intros [SL [TY EV]].
@@ -1552,8 +1552,8 @@ Proof.
   apply star_one. constructor. constructor. reflexivity. reflexivity.
   eapply match_exprstates; eauto.
   change sl2 with (nil ++ sl2). apply S. econstructor; eauto.
-  intros. constructor. rewrite H2. apply PTree.gss. auto.
-  intros. apply PTree.gso. congruence.
+  intros. constructor. rewrite H2. apply ATree.gss. auto.
+  intros. apply ATree.gso. congruence.
   auto.
   (* for effects *)
   exploit tr_simple_rvalue; eauto. intros [SL [TY EV]].
@@ -1696,8 +1696,8 @@ Proof.
   (* for value *)
   exploit tr_simple_rvalue; eauto. intros [SL2 [TY2 EV2]].
   exploit tr_simple_lvalue. eauto.
-    eapply tr_expr_invariant with (le' := PTree.set t0 v' le). eauto.
-    intros. apply PTree.gso. intuition congruence.
+    eapply tr_expr_invariant with (le' := ATree.set t0 v' le). eauto.
+    intros. apply ATree.gso. intuition congruence.
   intros [SL1 [TY1 EV1]].
   subst; simpl Kseqlist.
   econstructor; split.
@@ -1705,12 +1705,12 @@ Proof.
   eapply star_left. constructor. econstructor. eauto. rewrite <- TY2; eauto. 
   eapply star_left. constructor.
   apply star_one. eapply step_make_assign; eauto.
-  constructor. apply PTree.gss. simpl. eapply cast_idempotent; eauto. 
+  constructor. apply ATree.gss. simpl. eapply cast_idempotent; eauto.
   reflexivity. reflexivity. traceEq.
   econstructor. auto. apply S.
   apply tr_val_gen. auto. intros. constructor.
-  rewrite H4; auto. apply PTree.gss.
-  intros. apply PTree.gso. intuition congruence.
+  rewrite H4; auto. apply ATree.gss.
+  intros. apply ATree.gso. intuition congruence.
   auto. auto.
 (* assignop *)
   exploit tr_top_leftcontext; eauto. clear H15.
@@ -1740,8 +1740,8 @@ Proof.
   exploit tr_simple_rvalue. eauto. eapply tr_expr_invariant with (le := le) (le' := le'). eauto.
   intros. apply INV. NOTIN. simpl. intros [SL2 [TY2 EV2]].
   exploit tr_simple_lvalue. eauto.
-    eapply tr_expr_invariant with (le := le) (le' := PTree.set t v4 le'). eauto.
-    intros. rewrite PTree.gso. apply INV. NOTIN. intuition congruence.
+    eapply tr_expr_invariant with (le := le) (le' := ATree.set t v4 le'). eauto.
+    intros. rewrite ATree.gso. apply INV. NOTIN. intuition congruence.
   intros [? [? EV1'']].
   subst; simpl Kseqlist.
   econstructor; split.
@@ -1752,12 +1752,12 @@ Proof.
     rewrite TY3; rewrite <- TY1; rewrite <- TY2; rewrite comp_env_preserved; eauto.
     eassumption.
   econstructor. eapply step_make_assign; eauto.
-    constructor. apply PTree.gss. simpl. eapply cast_idempotent; eauto.
+    constructor. apply ATree.gss. simpl. eapply cast_idempotent; eauto.
     reflexivity. traceEq.
   econstructor. auto. apply S.
   apply tr_val_gen. auto. intros. constructor.
-  rewrite H10; auto. apply PTree.gss.
-  intros. rewrite PTree.gso. apply INV.
+  rewrite H10; auto. apply ATree.gss.
+  intros. rewrite ATree.gso. apply INV.
   red; intros; elim H10; auto.
   intuition congruence.
   auto. auto.
@@ -1808,8 +1808,8 @@ Proof.
   (* for value *)
   exploit tr_simple_lvalue; eauto. intros [SL1 [TY1 EV1]].
   exploit tr_simple_lvalue. eauto.
-    eapply tr_expr_invariant with (le' := PTree.set t v1 le). eauto.
-    intros. apply PTree.gso. intuition congruence.
+    eapply tr_expr_invariant with (le' := ATree.set t v1 le). eauto.
+    intros. apply ATree.gso. intuition congruence.
   intros [SL2 [TY2 EV2]].
   subst; simpl Kseqlist.
   econstructor; split.
@@ -1818,16 +1818,16 @@ Proof.
   constructor.
   eapply step_make_assign; eauto.
   unfold transl_incrdecr. destruct id; simpl in H2.
-  econstructor. constructor. apply PTree.gss. constructor.
+  econstructor. constructor. apply ATree.gss. constructor.
   rewrite comp_env_preserved; simpl; eauto.
-  econstructor. constructor. apply PTree.gss. constructor.
+  econstructor. constructor. apply ATree.gss. constructor.
   rewrite comp_env_preserved; simpl; eauto.
   destruct id; auto.
   traceEq.
   econstructor. auto. apply S.
   apply tr_val_gen. auto. intros. econstructor; eauto.
-  rewrite H5; auto. apply PTree.gss.
-  intros. apply PTree.gso. intuition congruence.
+  rewrite H5; auto. apply ATree.gss.
+  intros. apply ATree.gso. intuition congruence.
   auto. auto.
 (* postincr stuck *)
   exploit tr_top_leftcontext; eauto. clear H11.
@@ -1872,8 +1872,8 @@ Proof.
   econstructor. econstructor; eauto. rewrite <- TY1; eauto. traceEq.
   econstructor; eauto.
   change sl2 with (final For_val (Etempvar t (Csyntax.typeof r)) ++ sl2). apply S.
-  constructor. auto. intros. constructor. rewrite H2; auto. apply PTree.gss.
-  intros. apply PTree.gso. intuition congruence.
+  constructor. auto. intros. constructor. rewrite H2; auto. apply ATree.gss.
+  intros. apply ATree.gso. intuition congruence.
   auto.
   (* for effects *)
   econstructor; split.
@@ -1890,8 +1890,8 @@ Proof.
   rewrite <- TY1; eauto. traceEq.
   econstructor; eauto.
   apply S. constructor; auto.
-  intros. constructor. rewrite H2. apply PTree.gss. auto.
-  intros. apply PTree.gso. congruence.
+  intros. constructor. rewrite H2. apply ATree.gss. auto.
+  intros. apply ATree.gso. congruence.
   auto.
 
 (* call *)
@@ -1924,9 +1924,9 @@ Proof.
   constructor; auto. econstructor; eauto.
   intros. apply S.
   destruct dst'; constructor.
-  auto. intros. constructor. rewrite H5; auto. apply PTree.gss.
-  auto. intros. constructor. rewrite H5; auto. apply PTree.gss.
-  intros. apply PTree.gso. intuition congruence.
+  auto. intros. constructor. rewrite H5; auto. apply ATree.gss.
+  auto. intros. constructor. rewrite H5; auto. apply ATree.gss.
+  intros. apply ATree.gso. intuition congruence.
   auto.
 
 (* builtin *)
@@ -1953,8 +1953,8 @@ Proof.
   traceEq.
   econstructor; eauto.
   change sl2 with (nil ++ sl2). apply S.
-  apply tr_val_gen. auto. intros. constructor. rewrite H2; auto. simpl. apply PTree.gss.
-  intros; simpl. apply PTree.gso. intuition congruence.
+  apply tr_val_gen. auto. intros. constructor. rewrite H2; auto. simpl. apply ATree.gss.
+  intros; simpl. apply ATree.gso. intuition congruence.
   auto.
 Qed.
 

@@ -40,13 +40,13 @@ Local Open Scope error_monad_scope.
 (** To every Csharpminor variable, the compiler associates its offset
   in the Cminor stack data block. *)
 
-Definition compilenv := PTree.t Z.
+Definition compilenv := ATree.t Z.
 
 (** Generation of a Cminor expression for taking the address of
   a Csharpminor variable. *)
 
 Definition var_addr (cenv: compilenv) (id: ident): expr :=
-  match PTree.get id cenv with
+  match ATree.get id cenv with
   | Some ofs => Econst (Oaddrstack (Ptrofs.repr ofs))
   | None     => Econst (Oaddrsymbol id Ptrofs.zero)
   end.
@@ -226,7 +226,7 @@ Definition assign_variable
   let (id, sz) := id_sz in
   let (cenv, stacksize) := cenv_stacksize in
   let ofs := align stacksize (block_alignment sz) in
-  (PTree.set id ofs cenv, ofs + Z.max 0 sz).
+  (ATree.set id ofs cenv, ofs + Z.max 0 sz).
 
 Definition assign_variables (cenv_stacksize: compilenv * Z) (vars: list (ident * Z)) : compilenv * Z :=
   List.fold_left assign_variable vars cenv_stacksize.
@@ -248,7 +248,7 @@ End VarOrder.
 Module VarSort := Mergesort.Sort(VarOrder).
 
 Definition build_compilenv (f: Csharpminor.function) : compilenv * Z :=
-  assign_variables (PTree.empty Z, 0) (VarSort.sort (Csharpminor.fn_vars f)).
+  assign_variables (ATree.empty Z, 0) (VarSort.sort (Csharpminor.fn_vars f)).
 
 (** * Translation of functions *)
 

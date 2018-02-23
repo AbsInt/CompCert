@@ -146,13 +146,13 @@ Variable V: Type.  (**r The type of information attached to variables *)
 
 Record t: Type := mkgenv {
   genv_public: list ident;              (**r which symbol names are public *)
-  genv_symb: PTree.t block;             (**r mapping symbol -> block *)
+  genv_symb: ATree.t block;             (**r mapping symbol -> block *)
   genv_defs: PTree.t (globdef F V);     (**r mapping block -> definition *)
   genv_next: block;                     (**r next symbol pointer *)
-  genv_symb_range: forall id b, PTree.get id genv_symb = Some b -> Plt b genv_next;
+  genv_symb_range: forall id b, ATree.get id genv_symb = Some b -> Plt b genv_next;
   genv_defs_range: forall b g, PTree.get b genv_defs = Some g -> Plt b genv_next;
   genv_vars_inj: forall id1 id2 b,
-    PTree.get id1 genv_symb = Some b -> PTree.get id2 genv_symb = Some b -> id1 = id2
+    ATree.get id1 genv_symb = Some b -> ATree.get id2 genv_symb = Some b -> id1 = id2
 }.
 
 (** ** Lookup functions *)
@@ -160,7 +160,7 @@ Record t: Type := mkgenv {
 (** [find_symbol ge id] returns the block associated with the given name, if any *)
 
 Definition find_symbol (ge: t) (id: ident) : option block :=
-  PTree.get id ge.(genv_symb).
+  ATree.get id ge.(genv_symb).
 
 (** [symbol_address ge id ofs] returns a pointer into the block associated
   with [id], at byte offset [ofs].  [Vundef] is returned if no block is associated
@@ -203,7 +203,7 @@ Definition find_funct (ge: t) (v: val) : option F :=
 (** [invert_symbol ge b] returns the name associated with the given block, if any *)
 
 Definition invert_symbol (ge: t) (b: block) : option ident :=
-  PTree.fold
+  ATree.fold
     (fun res id b' => if eq_block b b' then Some id else res)
     ge.(genv_symb) None.
 
@@ -227,13 +227,13 @@ Definition block_is_volatile (ge: t) (b: block) : bool :=
 Program Definition add_global (ge: t) (idg: ident * globdef F V) : t :=
   @mkgenv
     ge.(genv_public)
-    (PTree.set idg#1 ge.(genv_next) ge.(genv_symb))
+    (ATree.set idg#1 ge.(genv_next) ge.(genv_symb))
     (PTree.set ge.(genv_next) idg#2 ge.(genv_defs))
     (Pos.succ ge.(genv_next))
     _ _ _.
 Next Obligation.
   destruct ge; simpl in *.
-  rewrite PTree.gsspec in H. destruct (peq id i). inv H. apply Plt_succ.
+  rewrite ATree.gsspec in H. destruct (ATree.elt_eq id i). inv H. apply Plt_succ.
   apply Plt_trans_succ; eauto.
 Qed.
 Next Obligation.
@@ -244,8 +244,8 @@ Next Obligation.
 Qed.
 Next Obligation.
   destruct ge; simpl in *.
-  rewrite PTree.gsspec in H. rewrite PTree.gsspec in H0.
-  destruct (peq id1 i); destruct (peq id2 i).
+  rewrite ATree.gsspec in H. rewrite ATree.gsspec in H0.
+  destruct (ATree.elt_eq id1 i); destruct (ATree.elt_eq id2 i).
   congruence.
   inv H. eelim Plt_strict. eapply genv_symb_range0; eauto.
   inv H0. eelim Plt_strict. eapply genv_symb_range0; eauto.
@@ -263,15 +263,15 @@ Proof.
 Qed.
 
 Program Definition empty_genv (pub: list ident): t :=
-  @mkgenv pub (PTree.empty _) (PTree.empty _) 1%positive _ _ _.
+  @mkgenv pub (ATree.empty _) (PTree.empty _) 1%positive _ _ _.
 Next Obligation.
-  rewrite PTree.gempty in H. discriminate.
+  rewrite ATree.gempty in H. discriminate.
 Qed.
 Next Obligation.
   rewrite PTree.gempty in H. discriminate.
 Qed.
 Next Obligation.
-  rewrite PTree.gempty in H. discriminate.
+  rewrite ATree.gempty in H. discriminate.
 Qed.
 
 Definition globalenv (p: program F V) :=
@@ -418,18 +418,18 @@ Qed.
 
 Theorem find_def_symbol:
   forall p id g,
-  (prog_defmap p)!id = Some g <-> exists b, find_symbol (globalenv p) id = Some b /\ find_def (globalenv p) b = Some g.
+  (prog_defmap p)$id = Some g <-> exists b, find_symbol (globalenv p) id = Some b /\ find_def (globalenv p) b = Some g.
 Proof.
   intros.
-  set (P := fun m ge => m!id = Some g <-> exists b, find_symbol ge id = Some b /\ find_def ge b = Some g).
+  set (P := fun m ge => m$id = Some g <-> exists b, find_symbol ge id = Some b /\ find_def ge b = Some g).
   assert (REC: forall l m ge,
             P m ge ->
-            P (fold_left (fun m idg => PTree.set idg#1 idg#2 m) l m)
+            P (fold_left (fun m idg => ATree.set idg#1 idg#2 m) l m)
               (add_globals ge l)).
   { induction l as [ | [id1 g1] l]; intros; simpl.
   - auto.
   - apply IHl. unfold P, add_global, find_symbol, find_def; simpl.
-    rewrite ! PTree.gsspec. destruct (peq id id1).
+    rewrite ! ATree.gsspec. destruct (ATree.elt_eq id id1).
     + subst id1. split; intros.
       inv H0. exists (genv_next ge); split; auto. apply PTree.gss.
       destruct H0 as (b & A & B). inv A. rewrite PTree.gss in B. auto.
@@ -440,7 +440,7 @@ Proof.
       apply Plt_ne. eapply genv_symb_range; eauto.
   }
   apply REC. unfold P, find_symbol, find_def; simpl.
-  rewrite ! PTree.gempty. split.
+  rewrite ! ATree.gempty. split.
   congruence.
   intros (b & A & B); congruence.
 Qed.
@@ -452,11 +452,11 @@ Theorem find_symbol_exists:
 Proof.
   intros. unfold globalenv. eapply add_globals_ensures; eauto.
 (* preserves *)
-  intros. unfold find_symbol; simpl. rewrite PTree.gsspec. destruct (peq id id0).
+  intros. unfold find_symbol; simpl. rewrite ATree.gsspec. destruct (ATree.elt_eq id id0).
   econstructor; eauto.
   auto.
 (* ensures *)
-  intros. unfold find_symbol; simpl. rewrite PTree.gss. econstructor; eauto.
+  intros. unfold find_symbol; simpl. rewrite ATree.gss. econstructor; eauto.
 Qed.
 
 Theorem find_symbol_inversion : forall p x b,
@@ -465,11 +465,11 @@ Theorem find_symbol_inversion : forall p x b,
 Proof.
   intros until b; unfold globalenv. eapply add_globals_preserves.
 (* preserves *)
-  unfold find_symbol; simpl; intros. rewrite PTree.gsspec in H1.
-  destruct (peq x id). subst x. change id with (fst (id, g)). apply List.in_map; auto.
+  unfold find_symbol; simpl; intros. rewrite ATree.gsspec in H1.
+  destruct (ATree.elt_eq x id). subst x. change id with (fst (id, g)). apply List.in_map; auto.
   auto.
 (* base *)
-  unfold find_symbol; simpl; intros. rewrite PTree.gempty in H. discriminate.
+  unfold find_symbol; simpl; intros. rewrite ATree.gempty in H. discriminate.
 Qed.
 
 Theorem find_def_inversion:
@@ -538,12 +538,12 @@ Theorem invert_find_symbol:
   invert_symbol ge b = Some id -> find_symbol ge id = Some b.
 Proof.
   intros until b; unfold find_symbol, invert_symbol.
-  apply PTree_Properties.fold_rec.
+  apply ATree_Properties.fold_rec.
   intros. rewrite H in H0; auto.
   congruence.
-  intros. destruct (eq_block b v). inv H2. apply PTree.gss.
-  rewrite PTree.gsspec. destruct (peq id k).
-  subst. assert (m!k = Some b) by auto. congruence.
+  intros. destruct (eq_block b v). inv H2. apply ATree.gss.
+  rewrite ATree.gsspec. destruct (ATree.elt_eq id k).
+  subst. assert (m$k = Some b) by auto. congruence.
   auto.
 Qed.
 
@@ -554,11 +554,11 @@ Proof.
   intros until b.
   assert (find_symbol ge id = Some b -> exists id', invert_symbol ge b = Some id').
   unfold find_symbol, invert_symbol.
-  apply PTree_Properties.fold_rec.
+  apply ATree_Properties.fold_rec.
   intros. rewrite H in H0; auto.
-  rewrite PTree.gempty; congruence.
+  rewrite ATree.gempty; congruence.
   intros. destruct (eq_block b v). exists k; auto.
-  rewrite PTree.gsspec in H2. destruct (peq id k).
+  rewrite ATree.gsspec in H2. destruct (ATree.elt_eq id k).
   inv H2. congruence. auto.
 
   intros; exploit H; eauto. intros [id' A].
@@ -611,8 +611,8 @@ Definition to_senv (ge: t) : Senv.t :=
     (block_is_volatile ge)
     ge.(genv_next)
     ge.(genv_vars_inj)
-    (invert_find_symbol ge)
-    (find_invert_symbol ge)
+    (@invert_find_symbol ge)
+    (@find_invert_symbol ge)
     (public_symbol_exists ge)
     ge.(genv_symb_range)
     (block_is_volatile_below ge).
@@ -1672,7 +1672,7 @@ Record match_genvs (ge1: t A V) (ge2: t B W): Prop := {
   mge_next:
     genv_next ge2 = genv_next ge1;
   mge_symb:
-    forall id, PTree.get id (genv_symb ge2) = PTree.get id (genv_symb ge1);
+    forall id, ATree.get id (genv_symb ge2) = ATree.get id (genv_symb ge1);
   mge_defs:
     forall b, option_rel R (PTree.get b (genv_defs ge1)) (PTree.get b (genv_defs ge2))
 }.
@@ -1685,7 +1685,7 @@ Lemma add_global_match:
 Proof.
   intros. destruct H. constructor; simpl; intros.
 - congruence.
-- rewrite mge_next0, ! PTree.gsspec. destruct (peq id0 id); auto.
+- rewrite mge_next0, ! ATree.gsspec. destruct (ATree.elt_eq id0 id); auto.
 - rewrite mge_next0, ! PTree.gsspec. destruct (peq b (genv_next ge1)).
   constructor; auto.
   auto.

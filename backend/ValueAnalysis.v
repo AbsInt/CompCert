@@ -32,7 +32,7 @@ Definition mafter_public_call : amem := mtop.
 
 Definition mafter_private_call (am_before: amem) : amem :=
   {| am_stack := am_before.(am_stack);
-     am_glob := PTree.empty _;
+     am_glob := ATree.empty _;
      am_nonstack := Nonstack;
      am_top := plub (ab_summary (am_stack am_before)) Nonstack |}.
 
@@ -167,7 +167,7 @@ Module DS := Dataflow_Solver(VA)(NodeSetForward).
 
 Definition mfunction_entry :=
   {| am_stack := ablock_init Pbot;
-     am_glob := PTree.empty _;
+     am_glob := ATree.empty _;
      am_nonstack := Nonstack;
      am_top := Nonstack |}.
 
@@ -224,15 +224,15 @@ Definition definitive_initializer (init: list init_data) : bool :=
 Definition alloc_global (rm: romem) (idg: ident * globdef fundef unit): romem :=
   match idg with
   | (id, Gfun f) =>
-      PTree.remove id rm
+      ATree.remove id rm
   | (id, Gvar v) =>
       if v.(gvar_readonly) && negb v.(gvar_volatile) && definitive_initializer v.(gvar_init)
-      then PTree.set id (store_init_data_list (ablock_init Pbot) 0 v.(gvar_init)) rm
-      else PTree.remove id rm
+      then ATree.set id (store_init_data_list (ablock_init Pbot) 0 v.(gvar_init)) rm
+      else ATree.remove id rm
   end.
 
 Definition romem_for (p: program) : romem :=
-  List.fold_left alloc_global p.(prog_defs) (PTree.empty _).
+  List.fold_left alloc_global p.(prog_defs) (ATree.empty _).
 
 (** * Soundness proof *)
 
@@ -400,11 +400,11 @@ Proof.
 Qed.
 
 Lemma mmatch_no_stack: forall m am astk,
-  mmatch bc m am -> mmatch bc m {| am_stack := astk; am_glob := PTree.empty _; am_nonstack := Nonstack; am_top := Nonstack |}.
+  mmatch bc m am -> mmatch bc m {| am_stack := astk; am_glob := ATree.empty _; am_nonstack := Nonstack; am_top := Nonstack |}.
 Proof.
   intros. destruct H. constructor; simpl; intros.
 - elim (NOSTACK b); auto.
-- rewrite PTree.gempty in H0; discriminate.
+- rewrite ATree.gempty in H0; discriminate.
 - eapply smatch_no_stack; eauto.
 - eapply smatch_no_stack; eauto.
 - auto.
@@ -492,7 +492,7 @@ Proof.
     subst b. apply SMSTACK.
     elim (NOSTACK b); auto.
   + (* globals *)
-    rewrite PTree.gempty in H0; discriminate.
+    rewrite ATree.gempty in H0; discriminate.
   + (* nonstack *)
     destruct (eq_block b sp). congruence. eapply SM; auto. eapply mmatch_nonstack; eauto.
   + (* top *)
@@ -582,7 +582,7 @@ Proof.
 - (* mmatch top *)
   constructor; simpl; intros.
   + destruct (eq_block b sp). congruence. elim n. eapply bc_stack; eauto.
-  + rewrite PTree.gempty in H0; discriminate.
+  + rewrite ATree.gempty in H0; discriminate.
   + destruct (eq_block b sp).
     subst b. eapply SM. eapply mmatch_stack; eauto.
     eapply SM. eapply mmatch_nonstack; eauto.
@@ -669,7 +669,7 @@ Proof.
 - (* mmatch top *)
   constructor; simpl; intros.
   + destruct (eq_block b sp). congruence. elim n. eapply bc_stack; eauto.
-  + rewrite PTree.gempty in H0; discriminate.
+  + rewrite ATree.gempty in H0; discriminate.
   + destruct (eq_block b sp). congruence.
     eapply SM. eauto. eapply mmatch_nonstack; eauto.
   + destruct (eq_block b sp). congruence.
@@ -756,7 +756,7 @@ Proof.
     subst b. eapply SM. eapply mmatch_nonstack; eauto. congruence.
     elim (NOSTACK b); auto.
   + (* globals *)
-    rewrite PTree.gempty in H0; discriminate.
+    rewrite ATree.gempty in H0; discriminate.
   + (* nonstack *)
     destruct (eq_block b sp). congruence. eapply SM; auto. eapply mmatch_nonstack; eauto.
   + (* top *)
@@ -867,7 +867,7 @@ Proof.
     subst b. exact BSTK.
     elim (NOSTACK b); auto.
   + (* globals *)
-    rewrite PTree.gempty in H0; discriminate.
+    rewrite ATree.gempty in H0; discriminate.
   + (* nonstack *)
     destruct (eq_block b sp). congruence. eapply SM; auto. eapply mmatch_nonstack; eauto.
   + (* top *)
@@ -1005,7 +1005,7 @@ Proof.
 - (* mmatch top *)
   constructor; simpl; intros.
   + apply ablock_init_sound. apply SMTOP. simpl; congruence.
-  + rewrite PTree.gempty in H0; discriminate.
+  + rewrite ATree.gempty in H0; discriminate.
   + apply SMTOP; auto.
   + apply SMTOP; auto.
   + red; simpl; intros. destruct (plt b (Mem.nextblock m)).
@@ -1692,7 +1692,7 @@ Proof.
 - destruct (Mem.alloc m 0 1) as [m1 b1] eqn:ALLOC.
   unfold Genv.find_symbol in H2; simpl in H2.
   unfold Genv.find_var_info, Genv.find_def in H3; simpl in H3.
-  rewrite PTree.gsspec in H2. destruct (peq id id1).
+  rewrite ATree.gsspec in H2. destruct (ATree.elt_eq id id1).
   inv H2. rewrite PTree.gss in H3. discriminate.
   assert (Plt b (Genv.genv_next g)) by (eapply Genv.genv_symb_range; eauto).
   rewrite PTree.gso in H3 by (apply Plt_ne; auto).
@@ -1709,7 +1709,7 @@ Proof.
   destruct (Genv.store_init_data_list ge m2 b1 0 (gvar_init gv)) as [m3 | ] eqn:SIDL; try discriminate.
   unfold Genv.find_symbol in H2; simpl in H2.
   unfold Genv.find_var_info, Genv.find_def in H3; simpl in H3.
-  rewrite PTree.gsspec in H2. destruct (peq id id1).
+  rewrite ATree.gsspec in H2. destruct (ATree.elt_eq id id1).
 + injection H2; clear H2; intro EQ.
   rewrite EQ, PTree.gss in H3. injection H3; clear H3; intros EQ'; subst v.
   assert (b = b1). { erewrite Mem.alloc_result by eauto. congruence. }
@@ -1751,11 +1751,11 @@ Proof.
   eapply alloc_global_match; eauto.
 Qed.
 
-Definition romem_consistent (defmap: PTree.t (globdef fundef unit)) (rm: romem) :=
+Definition romem_consistent (defmap: ATree.t (globdef fundef unit)) (rm: romem) :=
   forall id ab,
-  rm!id = Some ab ->
+  rm$id = Some ab ->
   exists v,
-     defmap!id = Some (Gvar v)
+     defmap$id = Some (Gvar v)
   /\ v.(gvar_readonly) = true
   /\ v.(gvar_volatile) = false
   /\ definitive_initializer v.(gvar_init) = true
@@ -1764,18 +1764,18 @@ Definition romem_consistent (defmap: PTree.t (globdef fundef unit)) (rm: romem) 
 Lemma alloc_global_consistent:
   forall dm rm idg,
   romem_consistent dm rm ->
-  romem_consistent (PTree.set (fst idg) (snd idg) dm) (alloc_global rm idg).
+  romem_consistent (ATree.set (fst idg) (snd idg) dm) (alloc_global rm idg).
 Proof.
   intros; red; intros. destruct idg as [id1 [f1 | v1]]; simpl in *.
-- rewrite PTree.grspec in H0. destruct (PTree.elt_eq id id1); try discriminate.
-  rewrite PTree.gso by auto. apply H; auto.
+- rewrite ATree.grspec in H0. destruct (ATree.elt_eq id id1); try discriminate.
+  rewrite ATree.gso by auto. apply H; auto.
 - destruct (gvar_readonly v1 && negb (gvar_volatile v1) && definitive_initializer (gvar_init v1)) eqn:RO.
 + InvBooleans. rewrite negb_true_iff in H4.
-  rewrite PTree.gsspec in *. destruct (peq id id1).
+  rewrite ATree.gsspec in *. destruct (ATree.elt_eq id id1).
 * inv H0. exists v1; auto.
 * apply H; auto.
-+ rewrite PTree.grspec in H0. destruct (PTree.elt_eq id id1); try discriminate.
-  rewrite PTree.gso by auto. apply H; auto.
++ rewrite ATree.grspec in H0. destruct (ATree.elt_eq id id1); try discriminate.
+  rewrite ATree.gso by auto. apply H; auto.
 Qed.
 
 Lemma romem_for_consistent:
@@ -1783,11 +1783,11 @@ Lemma romem_for_consistent:
 Proof.
   assert (REC: forall l dm rm,
             romem_consistent dm rm ->
-            romem_consistent (fold_left (fun m idg => PTree.set (fst idg) (snd idg) m) l dm)
+            romem_consistent (fold_left (fun m idg => ATree.set (fst idg) (snd idg) m) l dm)
                              (fold_left alloc_global l rm)).
   { induction l; intros; simpl; auto. apply IHl. apply alloc_global_consistent; auto. }
   intros. apply REC.
-  red; intros. rewrite PTree.gempty in H; discriminate.
+  red; intros. rewrite ATree.gempty in H; discriminate.
 Qed.
 
 Lemma romem_for_consistent_2:
@@ -1822,7 +1822,7 @@ Proof.
   assert (A: initial_mem_match bc m ge).
   {
     apply alloc_globals_match with (m := Mem.empty); auto.
-    red. unfold Genv.find_symbol; simpl; intros. rewrite PTree.gempty in H1; discriminate.
+    red. unfold Genv.find_symbol; simpl; intros. rewrite ATree.gempty in H1; discriminate.
   }
   assert (B: romem_consistent (prog_defmap prog) (romem_for cunit)) by (apply romem_for_consistent_2; auto).
   red; intros.

@@ -128,6 +128,19 @@ Module Type TREE.
   Axiom elements_keys_norepet:
     forall (A: Type) (m: t A),
     list_norepet (List.map (@fst elt A) (elements m)).
+  Axiom elements_canonical_order:
+    forall (A B: Type) (R: A -> B -> Prop) (m: t A) (n: t B),
+    (forall i x, get i m = Some x -> exists y, get i n = Some y /\ R x y) ->
+    (forall i y, get i n = Some y -> exists x, get i m = Some x /\ R x y) ->
+    list_forall2
+      (fun i_x i_y => fst i_x = fst i_y /\ R (snd i_x) (snd i_y))
+      (elements m) (elements n).
+  Axiom elements_canonical_order':
+    forall (A B: Type) (R: A -> B -> Prop) (m: t A) (n: t B),
+    (forall i, option_rel R (get i m) (get i n)) ->
+    list_forall2
+      (fun i_x i_y => fst i_x = fst i_y /\ R (snd i_x) (snd i_y))
+      (elements m) (elements n).
   Axiom elements_extensional:
     forall (A: Type) (m n: t A),
     (forall i, get i m = get i n) ->

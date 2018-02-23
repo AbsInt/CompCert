@@ -188,13 +188,13 @@ Definition globalenv (p: program) :=
   types.  The current value of the variable is stored in the
   associated memory block. *)
 
-Definition env := PTree.t (block * type). (* map variable -> location & type *)
+Definition env := ATree.t (block * type). (* map variable -> location & type *)
 
-Definition empty_env: env := (PTree.empty (block * type)).
+Definition empty_env: env := (ATree.empty (block * type)).
 
 (** The temporary environment maps local temporaries to values. *)
 
-Definition temp_env := PTree.t val.
+Definition temp_env := ATree.t val.
 
 (** [deref_loc ty m b ofs v] computes the value of a datum
   of type [ty] residing in memory [m] at block [b], offset [ofs].
@@ -257,7 +257,7 @@ Inductive alloc_variables: env -> mem ->
   | alloc_variables_cons:
       forall e m id ty vars m1 b1 m2 e2,
       Mem.alloc m 0 (sizeof ge ty) = (m1, b1) ->
-      alloc_variables (PTree.set id (b1, ty) e) m1 vars e2 m2 ->
+      alloc_variables (ATree.set id (b1, ty) e) m1 vars e2 m2 ->
       alloc_variables e m ((id, ty) :: vars) e2 m2.
 
 (** Initialization of local variables that are parameters to a function.
@@ -273,7 +273,7 @@ Inductive bind_parameters (e: env):
       bind_parameters e m nil nil m
   | bind_parameters_cons:
       forall m id ty params v1 vl b m1 m2,
-      PTree.get id e = Some(b, ty) ->
+      ATree.get id e = Some(b, ty) ->
       assign_loc ge ty m b Ptrofs.zero v1 m1 ->
       bind_parameters e m1 params vl m2 ->
       bind_parameters e m ((id, ty) :: params) (v1 :: vl) m2.
@@ -282,8 +282,8 @@ Inductive bind_parameters (e: env):
 
 Fixpoint create_undef_temps (temps: list (ident * type)) : temp_env :=
   match temps with
-  | nil => PTree.empty val
-  | (id, t) :: temps' => PTree.set id Vundef (create_undef_temps temps')
+  | nil => ATree.empty val
+  | (id, t) :: temps' => ATree.set id Vundef (create_undef_temps temps')
  end.
 
 (** Initialization of temporary variables that are parameters to a function. *)
@@ -292,7 +292,7 @@ Fixpoint bind_parameter_temps (formals: list (ident * type)) (args: list val)
                               (le: temp_env) : option temp_env :=
  match formals, args with
  | nil, nil => Some le
- | (id, t) :: xl, v :: vl => bind_parameter_temps xl vl (PTree.set id v le)
+ | (id, t) :: xl, v :: vl => bind_parameter_temps xl vl (ATree.set id v le)
  | _, _ => None
  end.
 
@@ -302,14 +302,14 @@ Definition block_of_binding (id_b_ty: ident * (block * type)) :=
   match id_b_ty with (id, (b, ty)) => (b, 0, sizeof ge ty) end.
 
 Definition blocks_of_env (e: env) : list (block * Z * Z) :=
-  List.map block_of_binding (PTree.elements e).
+  List.map block_of_binding (ATree.elements e).
 
 (** Optional assignment to a temporary *)
 
 Definition set_opttemp (optid: option ident) (v: val) (le: temp_env) :=
   match optid with
   | None => le
-  | Some id => PTree.set id v le
+  | Some id => ATree.set id v le
   end.
 
 (** Selection of the appropriate case of a [switch], given the value [n]
@@ -365,7 +365,7 @@ Inductive eval_expr: expr -> val -> Prop :=
   | eval_Econst_long:   forall i ty,
       eval_expr (Econst_long i ty) (Vlong i)
   | eval_Etempvar:  forall id ty v,
-      le!id = Some v ->
+      le$id = Some v ->
       eval_expr (Etempvar id ty) v
   | eval_Eaddrof: forall a ty loc ofs,
       eval_lvalue a loc ofs ->
@@ -398,10 +398,10 @@ Inductive eval_expr: expr -> val -> Prop :=
 
 with eval_lvalue: expr -> block -> ptrofs -> Prop :=
   | eval_Evar_local:   forall id l ty,
-      e!id = Some(l, ty) ->
+      e$id = Some(l, ty) ->
       eval_lvalue (Evar id ty) l Ptrofs.zero
   | eval_Evar_global: forall id l ty,
-      e!id = None ->
+      e$id = None ->
       Genv.find_symbol ge id = Some l ->
       eval_lvalue (Evar id ty) l Ptrofs.zero
   | eval_Ederef: forall a ty l ofs,
@@ -410,13 +410,13 @@ with eval_lvalue: expr -> block -> ptrofs -> Prop :=
  | eval_Efield_struct:   forall a i ty l ofs id co att delta,
       eval_expr a (Vptr l ofs) ->
       typeof a = Tstruct id att ->
-      ge.(genv_cenv)!id = Some co ->
+      ge.(genv_cenv)$id = Some co ->
       field_offset ge i (co_members co) = OK delta ->
       eval_lvalue (Efield a i ty) l (Ptrofs.add ofs (Ptrofs.repr delta))
  | eval_Efield_union:   forall a i ty l ofs id co att,
       eval_expr a (Vptr l ofs) ->
       typeof a = Tunion id att ->
-      ge.(genv_cenv)!id = Some co ->
+      ge.(genv_cenv)$id = Some co ->
       eval_lvalue (Efield a i ty) l ofs.
 
 Scheme eval_expr_ind2 := Minimality for eval_expr Sort Prop
@@ -557,7 +557,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | step_set:   forall f id a k e le m v,
       eval_expr e le m a v ->
       step (State f (Sset id a) k e le m)
-        E0 (State f Sskip k e (PTree.set id v le) m)
+        E0 (State f Sskip k e (ATree.set id v le) m)
 
   | step_call:   forall f optid a al k e le m tyargs tyres cconv vf vargs fd,
       classify_fun (typeof a) = fun_case_f tyargs tyres cconv ->

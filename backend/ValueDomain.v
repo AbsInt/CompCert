@@ -25,7 +25,7 @@ Inductive block_class : Type :=
   | BCother.
 
 Definition block_class_eq: forall (x y: block_class), {x=y} + {x<>y}.
-Proof. decide equality. apply peq. Defined.
+Proof. decide equality. apply ident_eq. Defined.
 
 Record block_classification : Type := BC {
   bc_img :> block -> block_class;
@@ -290,9 +290,9 @@ Qed.
 Definition pincl (p q: aptr) : bool :=
   match p, q with
   | Pbot, _ => true
-  | Gl id1 ofs1, Gl id2 ofs2 => peq id1 id2 && Ptrofs.eq_dec ofs1 ofs2
-  | Gl id1 ofs1, Glo id2 => peq id1 id2
-  | Glo id1, Glo id2 => peq id1 id2
+  | Gl id1 ofs1, Gl id2 ofs2 => ident_eq id1 id2 && Ptrofs.eq_dec ofs1 ofs2
+  | Gl id1 ofs1, Glo id2 => ident_eq id1 id2
+  | Glo id1, Glo id2 => ident_eq id1 id2
   | (Gl _ _ | Glo _ | Glob), Glob => true
   | (Gl _ _ | Glo _ | Glob | Nonstack), Nonstack => true
   | Stk ofs1, Stk ofs2 => Ptrofs.eq_dec ofs1 ofs2
@@ -391,14 +391,14 @@ Definition pcmp (c: comparison) (p1 p2: aptr) : abool :=
   match p1, p2 with
   | Pbot, _ | _, Pbot => Bnone
   | Gl id1 ofs1, Gl id2 ofs2 =>
-      if peq id1 id2 then Maybe (Ptrofs.cmpu c ofs1 ofs2)
+      if ident_eq id1 id2 then Maybe (Ptrofs.cmpu c ofs1 ofs2)
       else cmp_different_blocks c
   | Gl id1 ofs1, Glo id2 =>
-      if peq id1 id2 then Btop else cmp_different_blocks c
+      if ident_eq id1 id2 then Btop else cmp_different_blocks c
   | Glo id1, Gl id2 ofs2 =>
-      if peq id1 id2 then Btop else cmp_different_blocks c
+      if ident_eq id1 id2 then Btop else cmp_different_blocks c
   | Glo id1, Glo id2 =>
-      if peq id1 id2 then Btop else cmp_different_blocks c
+      if ident_eq id1 id2 then Btop else cmp_different_blocks c
   | Stk ofs1, Stk ofs2 => Maybe (Ptrofs.cmpu c ofs1 ofs2)
   | (Gl _ _ | Glo _ | Glob | Nonstack), (Stk _ | Stack) => cmp_different_blocks c
   | (Stk _ | Stack), (Gl _ _ | Glo _ | Glob | Nonstack) => cmp_different_blocks c
@@ -435,11 +435,11 @@ Proof.
     constructor.
   }
   unfold pcmp; inv H; inv H0; (apply cmatch_top || (apply DIFF; congruence) || idtac).
-  - destruct (peq id id0). subst id0. apply SAME. eapply bc_glob; eauto.
+  - destruct (ident_eq id id0). subst id0. apply SAME. eapply bc_glob; eauto.
     auto with va.
-  - destruct (peq id id0); auto with va.
-  - destruct (peq id id0); auto with va.
-  - destruct (peq id id0); auto with va.
+  - destruct (ident_eq id id0); auto with va.
+  - destruct (ident_eq id id0); auto with va.
+  - destruct (ident_eq id id0); auto with va.
   - apply SAME. eapply bc_stack; eauto.
 Qed.
 
@@ -473,11 +473,11 @@ Proof.
     constructor.
   }
   unfold pcmp; inv H; inv H0; (apply cmatch_top || (apply DIFF; congruence) || idtac).
-  - destruct (peq id id0). subst id0. apply SAME. eapply bc_glob; eauto.
+  - destruct (ident_eq id id0). subst id0. apply SAME. eapply bc_glob; eauto.
     auto with va.
-  - destruct (peq id id0); auto with va.
-  - destruct (peq id id0); auto with va.
-  - destruct (peq id id0); auto with va.
+  - destruct (ident_eq id id0); auto with va.
+  - destruct (ident_eq id id0); auto with va.
+  - destruct (ident_eq id id0); auto with va.
   - apply SAME. eapply bc_stack; eauto.
 Qed.
 
@@ -486,7 +486,7 @@ Lemma pcmp_none:
 Proof.
   intros.
   unfold pcmp; destruct p1; try constructor; destruct p2;
-  try (destruct (peq id id0));  try constructor; try (apply cmp_different_blocks_none).
+  try (destruct (ident_eq id id0));  try constructor; try (apply cmp_different_blocks_none).
 Qed.
 
 Definition pdisjoint (p1: aptr) (sz1: Z) (p2: aptr) (sz2: Z) : bool :=
@@ -494,13 +494,13 @@ Definition pdisjoint (p1: aptr) (sz1: Z) (p2: aptr) (sz2: Z) : bool :=
   | Pbot, _ => true
   | _, Pbot => true
   | Gl id1 ofs1, Gl id2 ofs2 =>
-      if peq id1 id2
+      if ident_eq id1 id2
       then zle (Ptrofs.unsigned ofs1 + sz1) (Ptrofs.unsigned ofs2)
            || zle (Ptrofs.unsigned ofs2 + sz2) (Ptrofs.unsigned ofs1)
       else true
-  | Gl id1 ofs1, Glo id2 => negb(peq id1 id2)
-  | Glo id1, Gl id2 ofs2 => negb(peq id1 id2)
-  | Glo id1, Glo id2 => negb(peq id1 id2)
+  | Gl id1 ofs1, Glo id2 => negb(ident_eq id1 id2)
+  | Glo id1, Gl id2 ofs2 => negb(ident_eq id1 id2)
+  | Glo id1, Glo id2 => negb(ident_eq id1 id2)
   | Stk ofs1, Stk ofs2 =>
       zle (Ptrofs.unsigned ofs1 + sz1) (Ptrofs.unsigned ofs2)
       || zle (Ptrofs.unsigned ofs2 + sz2) (Ptrofs.unsigned ofs1)
@@ -516,11 +516,11 @@ Lemma pdisjoint_sound:
   b1 <> b2 \/ Ptrofs.unsigned ofs1 + sz1 <= Ptrofs.unsigned ofs2 \/ Ptrofs.unsigned ofs2 + sz2 <= Ptrofs.unsigned ofs1.
 Proof.
   intros. inv H0; inv H1; simpl in H; try discriminate; try (left; congruence).
-- destruct (peq id id0). subst id0. destruct (orb_true_elim _ _ H); InvBooleans; auto.
+- destruct (ident_eq id id0). subst id0. destruct (orb_true_elim _ _ H); InvBooleans; auto.
   left; congruence.
-- destruct (peq id id0); try discriminate. left; congruence.
-- destruct (peq id id0); try discriminate. left; congruence.
-- destruct (peq id id0); try discriminate. left; congruence.
+- destruct (ident_eq id id0); try discriminate. left; congruence.
+- destruct (ident_eq id id0); try discriminate. left; congruence.
+- destruct (ident_eq id id0); try discriminate. left; congruence.
 - destruct (orb_true_elim _ _ H); InvBooleans; auto.
 Qed.
 
@@ -3616,12 +3616,12 @@ Qed.
 
 (** * Abstracting read-only global variables *)
 
-Definition romem := PTree.t ablock.
+Definition romem := ATree.t ablock.
 
 Definition romatch  (m: mem) (rm: romem) : Prop :=
   forall b id ab,
   bc b = BCglob id ->
-  rm!id = Some ab ->
+  rm$id = Some ab ->
   pge Glob ab.(ab_summary)
   /\ bmatch m b ab
   /\ forall ofs, ~Mem.perm m b ofs Max Writable.
@@ -3697,7 +3697,7 @@ Qed.
 
 Record amem : Type := AMem {
   am_stack: ablock;
-  am_glob: PTree.t ablock;
+  am_glob: ATree.t ablock;
   am_nonstack: aptr;
   am_top: aptr
 }.
@@ -3708,7 +3708,7 @@ Record mmatch (m: mem) (am: amem) : Prop := mk_mem_match {
     bmatch m b am.(am_stack);
   mmatch_glob: forall id ab b,
     bc b = BCglob id ->
-    am.(am_glob)!id = Some ab ->
+    am.(am_glob)$id = Some ab ->
     bmatch m b ab;
   mmatch_nonstack: forall b,
     bc b <> BCstack -> bc b <> BCinvalid ->
@@ -3722,7 +3722,7 @@ Record mmatch (m: mem) (am: amem) : Prop := mk_mem_match {
 
 Definition minit (p: aptr) :=
   {| am_stack := ablock_init p;
-     am_glob := PTree.empty _;
+     am_glob := ATree.empty _;
      am_nonstack := p;
      am_top := p |}.
 
@@ -3733,19 +3733,19 @@ Definition load (chunk: memory_chunk) (rm: romem) (m: amem) (p: aptr) : aval :=
   match p with
   | Pbot => if va_strict tt then Vbot else Vtop
   | Gl id ofs =>
-      match rm!id with
+      match rm$id with
       | Some ab => ablock_load chunk ab (Ptrofs.unsigned ofs)
       | None =>
-          match m.(am_glob)!id with
+          match m.(am_glob)$id with
           | Some ab => ablock_load chunk ab (Ptrofs.unsigned ofs)
           | None => vnormalize chunk (Ifptr m.(am_nonstack))
           end
       end
   | Glo id =>
-      match rm!id with
+      match rm$id with
       | Some ab => ablock_load_anywhere chunk ab
       | None =>
-          match m.(am_glob)!id with
+          match m.(am_glob)$id with
           | Some ab => ablock_load_anywhere chunk ab
           | None => vnormalize chunk (Ifptr m.(am_nonstack))
           end
@@ -3769,12 +3769,12 @@ Definition store (chunk: memory_chunk) (m: amem) (p: aptr) (av: aval) : amem :=
      am_glob :=
        match p with
        | Gl id ofs =>
-           let ab := match m.(am_glob)!id with Some ab => ab | None => ablock_init m.(am_nonstack) end in
-           PTree.set id (ablock_store chunk ab (Ptrofs.unsigned ofs) av) m.(am_glob)
+           let ab := match m.(am_glob)$id with Some ab => ab | None => ablock_init m.(am_nonstack) end in
+           ATree.set id (ablock_store chunk ab (Ptrofs.unsigned ofs) av) m.(am_glob)
        | Glo id =>
-           let ab := match m.(am_glob)!id with Some ab => ab | None => ablock_init m.(am_nonstack) end in
-           PTree.set id (ablock_store_anywhere chunk ab av) m.(am_glob)
-       | Glob | Nonstack | Ptop => PTree.empty _
+           let ab := match m.(am_glob)$id with Some ab => ab | None => ablock_init m.(am_nonstack) end in
+           ATree.set id (ablock_store_anywhere chunk ab av) m.(am_glob)
+       | Glob | Nonstack | Ptop => ATree.empty _
        | _ => m.(am_glob)
        end;
      am_nonstack :=
@@ -3792,10 +3792,10 @@ Definition loadbytes (m: amem) (rm: romem) (p: aptr) : aptr :=
   match p with
   | Pbot => if va_strict tt then Pbot else Ptop
   | Gl id _ | Glo id =>
-      match rm!id with
+      match rm$id with
       | Some ab => ablock_loadbytes ab
       | None =>
-          match m.(am_glob)!id with
+          match m.(am_glob)$id with
           | Some ab => ablock_loadbytes ab
           | None => m.(am_nonstack)
           end
@@ -3815,12 +3815,12 @@ Definition storebytes (m: amem) (dst: aptr) (sz: Z) (p: aptr) : amem :=
      am_glob :=
        match dst with
        | Gl id ofs =>
-           let ab := match m.(am_glob)!id with Some ab => ab | None => ablock_init m.(am_nonstack) end in
-           PTree.set id (ablock_storebytes ab p (Ptrofs.unsigned ofs) sz) m.(am_glob)
+           let ab := match m.(am_glob)$id with Some ab => ab | None => ablock_init m.(am_nonstack) end in
+           ATree.set id (ablock_storebytes ab p (Ptrofs.unsigned ofs) sz) m.(am_glob)
        | Glo id =>
-           let ab := match m.(am_glob)!id with Some ab => ab | None => ablock_init m.(am_nonstack) end in
-           PTree.set id (ablock_storebytes_anywhere ab p) m.(am_glob)
-       | Glob | Nonstack | Ptop => PTree.empty _
+           let ab := match m.(am_glob)$id with Some ab => ab | None => ablock_init m.(am_nonstack) end in
+           ATree.set id (ablock_storebytes_anywhere ab p) m.(am_glob)
+       | Glob | Nonstack | Ptop => ATree.empty _
        | _ => m.(am_glob)
        end;
      am_nonstack :=
@@ -3841,15 +3841,15 @@ Theorem load_sound:
 Proof.
   intros. unfold load. inv H2.
 - (* Gl id ofs *)
-  destruct (rm!id) as [ab|] eqn:RM.
+  destruct (rm$id) as [ab|] eqn:RM.
   eapply ablock_load_sound; eauto. eapply H0; eauto.
-  destruct (am_glob am)!id as [ab|] eqn:AM.
+  destruct (am_glob am)$id as [ab|] eqn:AM.
   eapply ablock_load_sound; eauto. eapply mmatch_glob; eauto.
   eapply vnormalize_cast; eauto. eapply mmatch_nonstack; eauto; congruence.
 - (* Glo id *)
-  destruct (rm!id) as [ab|] eqn:RM.
+  destruct (rm$id) as [ab|] eqn:RM.
   eapply ablock_load_anywhere_sound; eauto. eapply H0; eauto.
-  destruct (am_glob am)!id as [ab|] eqn:AM.
+  destruct (am_glob am)$id as [ab|] eqn:AM.
   eapply ablock_load_anywhere_sound; eauto. eapply mmatch_glob; eauto.
   eapply vnormalize_cast; eauto. eapply mmatch_nonstack; eauto; congruence.
 - (* Glob *)
@@ -3899,32 +3899,32 @@ Proof.
 
 - (* Globals *)
   rename b0 into b'.
-  assert (DFL: bc b <> BCglob id -> (am_glob am)!id = Some ab ->
+  assert (DFL: bc b <> BCglob id -> (am_glob am)$id = Some ab ->
                bmatch m' b' ab).
   { intros. apply bmatch_inv with m. eapply mmatch_glob; eauto.
     intros. eapply Mem.loadbytes_store_other; eauto. left; congruence. }
   inv PM.
-  + rewrite PTree.gsspec in H0. destruct (peq id id0).
+  + rewrite ATree.gsspec in H0. destruct (ATree.elt_eq id id0).
     subst id0; inv H0.
     assert (b' = b) by (eapply bc_glob; eauto). subst b'.
     eapply ablock_store_sound; eauto.
-    destruct (am_glob am)!id as [ab0|] eqn:GL.
+    destruct (am_glob am)$id as [ab0|] eqn:GL.
     eapply mmatch_glob; eauto.
     apply ablock_init_sound. eapply mmatch_nonstack; eauto; congruence.
     eapply DFL; eauto. congruence.
-  + rewrite PTree.gsspec in H0. destruct (peq id id0).
+  + rewrite ATree.gsspec in H0. destruct (ATree.elt_eq id id0).
     subst id0; inv H0.
     assert (b' = b) by (eapply bc_glob; eauto). subst b'.
     eapply ablock_store_anywhere_sound; eauto.
-    destruct (am_glob am)!id as [ab0|] eqn:GL.
+    destruct (am_glob am)$id as [ab0|] eqn:GL.
     eapply mmatch_glob; eauto.
     apply ablock_init_sound. eapply mmatch_nonstack; eauto; congruence.
     eapply DFL; eauto. congruence.
-  + rewrite PTree.gempty in H0; congruence.
+  + rewrite ATree.gempty in H0; congruence.
   + eapply DFL; eauto. congruence.
   + eapply DFL; eauto. congruence.
-  + rewrite PTree.gempty in H0; congruence.
-  + rewrite PTree.gempty in H0; congruence.
+  + rewrite ATree.gempty in H0; congruence.
+  + rewrite ATree.gempty in H0; congruence.
 
 - (* Nonstack *)
   assert (DFL: smatch m' b0 (vplub av (am_nonstack am))).
@@ -3964,15 +3964,15 @@ Theorem loadbytes_sound:
 Proof.
   intros. unfold loadbytes; inv H2.
 - (* Gl id ofs *)
-  destruct (rm!id) as [ab|] eqn:RM.
+  destruct (rm$id) as [ab|] eqn:RM.
   exploit H0; eauto. intros (A & B & C). eapply ablock_loadbytes_sound; eauto.
-  destruct (am_glob am)!id as [ab|] eqn:GL.
+  destruct (am_glob am)$id as [ab|] eqn:GL.
   eapply ablock_loadbytes_sound; eauto. eapply mmatch_glob; eauto.
   eapply smatch_loadbytes; eauto. eapply mmatch_nonstack; eauto with va.
 - (* Glo id *)
-  destruct (rm!id) as [ab|] eqn:RM.
+  destruct (rm$id) as [ab|] eqn:RM.
   exploit H0; eauto. intros (A & B & C). eapply ablock_loadbytes_sound; eauto.
-  destruct (am_glob am)!id as [ab|] eqn:GL.
+  destruct (am_glob am)$id as [ab|] eqn:GL.
   eapply ablock_loadbytes_sound; eauto. eapply mmatch_glob; eauto.
   eapply smatch_loadbytes; eauto. eapply mmatch_nonstack; eauto with va.
 - (* Glob *)
@@ -4011,32 +4011,32 @@ Proof.
 
 - (* Globals *)
   rename b0 into b'.
-  assert (DFL: bc b <> BCglob id -> (am_glob am)!id = Some ab ->
+  assert (DFL: bc b <> BCglob id -> (am_glob am)$id = Some ab ->
                bmatch m' b' ab).
   { intros. apply bmatch_inv with m. eapply mmatch_glob; eauto.
     intros. eapply Mem.loadbytes_storebytes_other; eauto. left; congruence. }
   inv PM.
-  + rewrite PTree.gsspec in H0. destruct (peq id id0).
+  + rewrite ATree.gsspec in H0. destruct (ATree.elt_eq id id0).
     subst id0; inv H0.
     assert (b' = b) by (eapply bc_glob; eauto). subst b'.
     eapply ablock_storebytes_sound; eauto.
-    destruct (am_glob am)!id as [ab0|] eqn:GL.
+    destruct (am_glob am)$id as [ab0|] eqn:GL.
     eapply mmatch_glob; eauto.
     apply ablock_init_sound. eapply mmatch_nonstack; eauto; congruence.
     eapply DFL; eauto. congruence.
-  + rewrite PTree.gsspec in H0. destruct (peq id id0).
+  + rewrite ATree.gsspec in H0. destruct (ATree.elt_eq id id0).
     subst id0; inv H0.
     assert (b' = b) by (eapply bc_glob; eauto). subst b'.
     eapply ablock_storebytes_anywhere_sound; eauto.
-    destruct (am_glob am)!id as [ab0|] eqn:GL.
+    destruct (am_glob am)$id as [ab0|] eqn:GL.
     eapply mmatch_glob; eauto.
     apply ablock_init_sound. eapply mmatch_nonstack; eauto; congruence.
     eapply DFL; eauto. congruence.
-  + rewrite PTree.gempty in H0; congruence.
+  + rewrite ATree.gempty in H0; congruence.
   + eapply DFL; eauto. congruence.
   + eapply DFL; eauto. congruence.
-  + rewrite PTree.gempty in H0; congruence.
-  + rewrite PTree.gempty in H0; congruence.
+  + rewrite ATree.gempty in H0; congruence.
+  + rewrite ATree.gempty in H0; congruence.
 
 - (* Nonstack *)
   assert (DFL: smatch m' b0 (plub q (am_nonstack am))).
@@ -4086,7 +4086,7 @@ Proof.
   intros. constructor; simpl; intros.
 - apply ablock_init_sound. apply smatch_ge with (ab_summary (am_stack am)).
   eapply mmatch_stack; eauto. constructor.
-- rewrite PTree.gempty in H1; discriminate.
+- rewrite ATree.gempty in H1; discriminate.
 - eapply smatch_ge. eapply mmatch_nonstack; eauto. constructor.
 - eapply smatch_ge. eapply mmatch_top; eauto. constructor.
 - eapply mmatch_below; eauto.
@@ -4098,21 +4098,21 @@ Definition mbeq (m1 m2: amem) : bool :=
   eq_aptr m1.(am_top) m2.(am_top)
   && eq_aptr m1.(am_nonstack) m2.(am_nonstack)
   && bbeq m1.(am_stack) m2.(am_stack)
-  && PTree.beq bbeq m1.(am_glob) m2.(am_glob).
+  && ATree.beq bbeq m1.(am_glob) m2.(am_glob).
 
 Lemma mbeq_sound:
   forall m1 m2, mbeq m1 m2 = true -> forall m, mmatch m m1 <-> mmatch m m2.
 Proof.
-  unfold mbeq; intros. InvBooleans. rewrite PTree.beq_correct in H1.
+  unfold mbeq; intros. InvBooleans. rewrite ATree.beq_correct in H1.
   split; intros M; inv M; constructor; intros.
 - erewrite <- bbeq_sound; eauto.
-- specialize (H1 id). rewrite H4 in H1. destruct (am_glob m1)!id eqn:G; try contradiction.
+- specialize (H1 id). rewrite H4 in H1. destruct (am_glob m1)$id eqn:G; try contradiction.
   erewrite <- bbeq_sound; eauto.
 - rewrite <- H; eauto.
 - rewrite <- H0; eauto.
 - auto.
 - erewrite bbeq_sound; eauto.
-- specialize (H1 id). rewrite H4 in H1. destruct (am_glob m2)!id eqn:G; try contradiction.
+- specialize (H1 id). rewrite H4 in H1. destruct (am_glob m2)$id eqn:G; try contradiction.
   erewrite bbeq_sound; eauto.
 - rewrite H; eauto.
 - rewrite H0; eauto.
@@ -4129,7 +4129,7 @@ Definition combine_ablock (ob1 ob2: option ablock) : option ablock :=
 
 Definition mlub (m1 m2: amem) : amem :=
 {| am_stack := blub m1.(am_stack) m2.(am_stack);
-   am_glob  := PTree.combine combine_ablock m1.(am_glob) m2.(am_glob);
+   am_glob  := ATree.combine combine_ablock m1.(am_glob) m2.(am_glob);
    am_nonstack := plub m1.(am_nonstack) m2.(am_nonstack);
    am_top := plub m1.(am_top) m2.(am_top) |}.
 
@@ -4138,9 +4138,9 @@ Lemma mmatch_lub_l:
 Proof.
   intros. inv H. constructor; simpl; intros.
 - apply bmatch_lub_l; auto.
-- rewrite PTree.gcombine in H0 by auto. unfold combine_ablock in H0.
-  destruct (am_glob x)!id as [b1|] eqn:G1;
-  destruct (am_glob y)!id as [b2|] eqn:G2;
+- rewrite ATree.gcombine in H0 by auto. unfold combine_ablock in H0.
+  destruct (am_glob x)$id as [b1|] eqn:G1;
+  destruct (am_glob y)$id as [b2|] eqn:G2;
   inv H0.
   apply bmatch_lub_l; eauto.
 - apply smatch_lub_l; auto.
@@ -4153,9 +4153,9 @@ Lemma mmatch_lub_r:
 Proof.
   intros. inv H. constructor; simpl; intros.
 - apply bmatch_lub_r; auto.
-- rewrite PTree.gcombine in H0 by auto. unfold combine_ablock in H0.
-  destruct (am_glob x)!id as [b1|] eqn:G1;
-  destruct (am_glob y)!id as [b2|] eqn:G2;
+- rewrite ATree.gcombine in H0 by auto. unfold combine_ablock in H0.
+  destruct (am_glob x)$id as [b1|] eqn:G1;
+  destruct (am_glob y)$id as [b2|] eqn:G2;
   inv H0.
   apply bmatch_lub_r; eauto.
 - apply smatch_lub_r; auto.
@@ -4364,7 +4364,7 @@ Proof.
   }
   constructor; simpl; intros.
   - apply ablock_init_sound. apply SM. congruence.
-  - rewrite PTree.gempty in H1; discriminate.
+  - rewrite ATree.gempty in H1; discriminate.
   - apply SM; auto.
   - apply SM; auto.
   - red; intros. eapply Mem.valid_block_inject_1. eapply inj_of_bc_valid; eauto. eauto.

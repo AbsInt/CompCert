@@ -41,7 +41,8 @@ Remark diff_same:
 Proof.
   induction s as [ | [v i] s]; simpl.
   auto.
-  rewrite Pos.compare_refl. rewrite dec_eq_true. auto.
+  destruct (Ident.compare_spec v v); try solve [eelim Ident.lt_not_eq; eauto].
+  rewrite dec_eq_true. auto.
 Qed.
 
 Remark delta_state_same:
@@ -117,7 +118,7 @@ Qed.
     but establish some confidence in the availability analysis. *)
 
 Definition avail_above (v: ident) (s: avail) : Prop :=
-  forall v' i', In (v', i') s -> Plt v v'.
+  forall v' i', In (v', i') s -> Ident.lt v v'.
 
 Inductive wf_avail: avail -> Prop :=
   | wf_avail_nil:
@@ -132,7 +133,7 @@ Lemma set_state_1:
 Proof.
   induction s as [ | [v' i'] s]; simpl.
 - auto.
-- destruct (Pos.compare v v'); simpl; auto.
+- destruct (Ident.compare v v'); simpl; auto.
 Qed.
 
 Lemma set_state_2:
@@ -141,7 +142,7 @@ Lemma set_state_2:
 Proof.
   induction s as [ | [v1 i1] s]; simpl; intros.
 - contradiction.
-- destruct (Pos.compare_spec v v1); simpl.
+- destruct (Ident.compare_spec v v1); simpl.
 + subst v1. destruct H0. congruence. auto.
 + auto.
 + destruct H0; auto.
@@ -155,14 +156,14 @@ Lemma set_state_3:
 Proof.
   induction 1; simpl; intros.
 - intuition congruence.
-- destruct (Pos.compare_spec v v0); simpl in H1.
+- destruct (Ident.compare_spec v v0); simpl in H1.
 + subst v0. destruct H1. inv H1; auto. right; split.
-  apply not_eq_sym. apply Plt_ne. eapply H; eauto.
+  apply not_eq_sym. apply Ident.lt_not_eq. eapply H; eauto.
   auto.
 + destruct H1. inv H1; auto.
-  destruct H1. inv H1. right; split; auto. apply not_eq_sym. apply Plt_ne. auto.
-  right; split; auto. apply not_eq_sym. apply Plt_ne. apply Plt_trans with v0; eauto.
-+ destruct H1. inv H1. right; split; auto. apply Plt_ne. auto.
+  destruct H1. inv H1. right; split; auto. apply not_eq_sym. apply Ident.lt_not_eq. auto.
+  right; split; auto. apply not_eq_sym. apply Ident.lt_not_eq. apply Ident.lt_trans with v0; eauto.
++ destruct H1. inv H1. right; split; auto. apply Ident.lt_not_eq. auto.
   destruct IHwf_avail as [A | [A B]]; auto.
 Qed.
 
@@ -171,11 +172,11 @@ Lemma wf_set_state:
 Proof.
   induction 1; simpl.
 - constructor. red; simpl; tauto. constructor.
-- destruct (Pos.compare_spec v v0).
+- destruct (Ident.compare_spec v v0).
 + subst v0. constructor; auto.
 + constructor.
   red; simpl; intros. destruct H2.
-  inv H2. auto. apply Plt_trans with v0; eauto.
+  inv H2. auto. apply Ident.lt_trans with v0; eauto.
   constructor; auto.
 + constructor.
   red; intros. exploit set_state_3. eexact H0. eauto. intros [[A B] | [A B]]; subst; eauto.
@@ -187,11 +188,11 @@ Lemma remove_state_1:
 Proof.
   induction 1; simpl; red; intros.
 - auto.
-- destruct (Pos.compare_spec v v0); simpl in *.
-+ subst v0. elim (Plt_strict v); eauto.
-+ destruct H1. inv H1.  elim (Plt_strict v); eauto.
-  elim (Plt_strict v). apply Plt_trans with v0; eauto.
-+ destruct H1. inv H1. elim (Plt_strict v); eauto.  tauto.
+- destruct (Ident.compare_spec v v0); simpl in *.
++ subst v0. elim (Ident.lt_not_eq v v); eauto.
++ destruct H1. inv H1.  elim (Ident.lt_not_eq v v); eauto.
+  elim (Ident.lt_not_eq v v); eauto. apply Ident.lt_trans with v0; eauto.
++ destruct H1. inv H1. elim (Ident.lt_not_eq v v); eauto.  tauto.
 Qed.
 
 Lemma remove_state_2:
@@ -199,7 +200,7 @@ Lemma remove_state_2:
 Proof.
   induction s as [ | [v1 i1] s]; simpl; intros.
 - auto.
-- destruct (Pos.compare_spec v v1); simpl.
+- destruct (Ident.compare_spec v v1); simpl.
 + subst v1. destruct H0. congruence. auto.
 + auto.
 + destruct H0; auto.
@@ -210,11 +211,11 @@ Lemma remove_state_3:
 Proof.
   induction 1; simpl; intros.
 - contradiction.
-- destruct (Pos.compare_spec v v0); simpl in H1.
-+ subst v0. split; auto. apply not_eq_sym; apply Plt_ne; eauto.
-+ destruct H1. inv H1. split; auto. apply not_eq_sym; apply Plt_ne; eauto.
-  split; auto. apply not_eq_sym; apply Plt_ne. apply Plt_trans with v0; eauto.
-+ destruct H1. inv H1. split; auto. apply Plt_ne; auto.
+- destruct (Ident.compare_spec v v0); simpl in H1.
++ subst v0. split; auto. apply not_eq_sym; apply Ident.lt_not_eq; eauto.
++ destruct H1. inv H1. split; auto. apply not_eq_sym; apply Ident.lt_not_eq; eauto.
+  split; auto. apply not_eq_sym; apply Ident.lt_not_eq. apply Ident.lt_trans with v0; eauto.
++ destruct H1. inv H1. split; auto. apply Ident.lt_not_eq; auto.
   destruct IHwf_avail as [A B] ; auto.
 Qed.
 
@@ -223,7 +224,7 @@ Lemma wf_remove_state:
 Proof.
   induction 1; simpl.
 - constructor.
-- destruct (Pos.compare_spec v v0).
+- destruct (Ident.compare_spec v v0).
 + auto.
 + constructor; auto.
 + constructor; auto. red; intros.
@@ -246,12 +247,22 @@ Lemma join_1:
 Proof.
   induction 1; simpl; try tauto; induction 1; simpl; intros I1 I2; auto.
   destruct I1, I2.
-- inv H3; inv H4. rewrite Pos.compare_refl. rewrite dec_eq_true; auto with coqlib.
+- inv H3; inv H4.
+  destruct (Ident.compare_spec v v); try solve [eelim Ident.lt_not_eq; eauto].
+  rewrite dec_eq_true; auto with coqlib.
 - inv H3.
-  assert (L: Plt v1 v) by eauto. apply Pos.compare_gt_iff in L. rewrite L. auto.
+  assert (L: Ident.lt v1 v) by eauto.
+  destruct (Ident.compare_spec v v1).
+  + eelim Ident.lt_not_eq; eauto.
+  + elim (Ident.lt_not_eq v v); eauto using Ident.lt_trans.
+  + auto.
 - inv H4.
-  assert (L: Plt v0 v) by eauto. apply Pos.compare_lt_iff in L. rewrite L. apply IHwf_avail. constructor; auto. auto. auto with coqlib.
-- destruct (Pos.compare v0 v1).
+  assert (L: Ident.lt v0 v) by eauto.
+  destruct (Ident.compare_spec v0 v).
+  + eelim Ident.lt_not_eq; eauto.
+  + apply IHwf_avail. constructor; auto. auto. auto with coqlib.
+  + elim (Ident.lt_not_eq v v); eauto using Ident.lt_trans.
+- destruct (Ident.compare v0 v1).
 + destruct (eq_debuginfo i0 i1); auto with coqlib.
 + apply IHwf_avail; auto with coqlib. constructor; auto.
 + eauto.
@@ -262,7 +273,7 @@ Lemma join_2:
   In (v, i) (join s1 s2) -> In (v, i) s1 /\ In (v, i) s2.
 Proof.
   induction 1; simpl; try tauto; induction 1; simpl; intros I; try tauto.
-  destruct (Pos.compare_spec v0 v1).
+  destruct (Ident.compare_spec v0 v1).
 - subst v1. destruct (eq_debuginfo i0 i1).
   + subst i1. destruct I. auto. exploit IHwf_avail; eauto. tauto.
   + exploit IHwf_avail; eauto. tauto.
@@ -275,7 +286,7 @@ Lemma wf_join:
   forall s1, wf_avail s1 -> forall s2, wf_avail s2 -> wf_avail (join s1 s2).
 Proof.
   induction 1; simpl; induction 1; simpl; try constructor.
-  destruct (Pos.compare_spec v v0).
+  destruct (Ident.compare_spec v v0).
 - subst v0. destruct (eq_debuginfo i i0); auto. constructor; auto.
   red; intros. apply join_2 in H3; auto. destruct H3. eauto.
 - apply IHwf_avail. constructor; auto.

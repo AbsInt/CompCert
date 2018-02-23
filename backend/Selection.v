@@ -62,7 +62,7 @@ Definition store (chunk: memory_chunk) (e1 e2: expr) :=
 Section SELECTION.
 
 Definition globdef := AST.globdef Cminor.fundef unit.
-Variable defmap: PTree.t globdef.
+Variable defmap: ATree.t globdef.
 Context {hf: helper_functions}.
 
 Definition sel_constant (cst: Cminor.constant) : expr :=
@@ -192,7 +192,7 @@ Definition classify_call (e: Cminor.expr) : call_kind :=
   match expr_is_addrof_ident e with
   | None => Call_default
   | Some id =>
-      match defmap!id with
+      match defmap$id with
       | Some(Gfun(External ef)) => if ef_inline ef then Call_builtin ef else Call_imm id
       | _ => Call_imm id
       end
@@ -322,7 +322,7 @@ End SELECTION.
 
 (** Conversion of functions. *)
 
-Definition sel_function (dm: PTree.t globdef) (hf: helper_functions) (f: Cminor.function) : res function :=
+Definition sel_function (dm: ATree.t globdef) (hf: helper_functions) (f: Cminor.function) : res function :=
   do body' <- sel_stmt dm f.(Cminor.fn_body);
   OK (mkfunction
         f.(Cminor.fn_sig)
@@ -331,7 +331,7 @@ Definition sel_function (dm: PTree.t globdef) (hf: helper_functions) (f: Cminor.
         f.(Cminor.fn_stackspace)
         body').
 
-Definition sel_fundef (dm: PTree.t globdef) (hf: helper_functions) (f: Cminor.fundef) : res fundef :=
+Definition sel_fundef (dm: ATree.t globdef) (hf: helper_functions) (f: Cminor.fundef) : res fundef :=
   transf_partial_fundef (sel_function dm hf) f.
 
 (** Setting up the helper functions. *)
@@ -349,10 +349,10 @@ Definition globdef_of_interest (gd: globdef) : bool :=
   | _ => false
   end.
 
-Definition record_globdefs (defmap: PTree.t globdef) : PTree.t globdef :=
-  PTree.fold
-    (fun m id gd => if globdef_of_interest gd then PTree.set id gd m else m)
-    defmap (PTree.empty globdef).
+Definition record_globdefs (defmap: ATree.t globdef) : ATree.t globdef :=
+  ATree.fold
+    (fun m id gd => if globdef_of_interest gd then ATree.set id gd m else m)
+    defmap (ATree.empty globdef).
 
 Definition lookup_helper_aux
      (name: String.string) (sg: signature) (res: option ident)
@@ -365,16 +365,16 @@ Definition lookup_helper_aux
   | _ => res
   end.
 
-Definition lookup_helper (globs: PTree.t globdef)
+Definition lookup_helper (globs: ATree.t globdef)
                          (name: String.string) (sg: signature) : res ident :=
-  match PTree.fold (lookup_helper_aux name sg) globs None with
+  match ATree.fold (lookup_helper_aux name sg) globs None with
   | Some id => OK id
   | None    => Error (MSG name :: MSG ": missing or incorrect declaration" :: nil)
   end.
 
 Local Open Scope string_scope.
 
-Definition get_helpers (defmap: PTree.t globdef) : res helper_functions :=
+Definition get_helpers (defmap: ATree.t globdef) : res helper_functions :=
   let globs := record_globdefs defmap in
   do i64_dtos <- lookup_helper globs "__compcert_i64_dtos" sig_f_l ;
   do i64_dtou <- lookup_helper globs "__compcert_i64_dtou" sig_f_l ;

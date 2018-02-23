@@ -69,10 +69,10 @@ Inductive eval_simple_lvalue: expr -> block -> ptrofs -> Prop :=
   | esl_loc: forall b ofs ty,
       eval_simple_lvalue (Eloc b ofs ty) b ofs
   | esl_var_local: forall x ty b,
-      e!x = Some(b, ty) ->
+      e$x = Some(b, ty) ->
       eval_simple_lvalue (Evar x ty) b Ptrofs.zero
   | esl_var_global: forall x ty b,
-      e!x = None ->
+      e$x = None ->
       Genv.find_symbol ge x = Some b ->
       eval_simple_lvalue (Evar x ty) b Ptrofs.zero
   | esl_deref: forall r ty b ofs,
@@ -80,7 +80,7 @@ Inductive eval_simple_lvalue: expr -> block -> ptrofs -> Prop :=
       eval_simple_lvalue (Ederef r ty) b ofs
   | esl_field_struct: forall r f ty b ofs id co a delta,
       eval_simple_rvalue r (Vptr b ofs) ->
-      typeof r = Tstruct id a -> ge.(genv_cenv)!id = Some co -> field_offset ge f (co_members co) = OK delta ->
+      typeof r = Tstruct id a -> ge.(genv_cenv)$id = Some co -> field_offset ge f (co_members co) = OK delta ->
       eval_simple_lvalue (Efield r f ty) b (Ptrofs.add ofs (Ptrofs.repr delta))
   | esl_field_union: forall r f ty b ofs id a,
       eval_simple_rvalue r (Vptr b ofs) ->
@@ -323,7 +323,7 @@ Qed.
   [Vptr b ofs] where [Genv.find_symbol ge id = Some b]. *)
 
 Definition inj (b: block) :=
-  match Genv.find_symbol ge b with
+  match Genv.find_symbol ge (Ident.of_positive b) with
   | Some b' => Some (b', 0)
   | None => None
   end.
@@ -438,9 +438,9 @@ Proof.
   (* lvalue *)
   induction 1; intros v' CV; simpl in CV; try (monadInv CV).
   (* var local *)
-  unfold empty_env in H. rewrite PTree.gempty in H. congruence.
+  unfold empty_env in H. rewrite ATree.gempty in H. congruence.
   (* var_global *)
-  econstructor. unfold inj. rewrite H0. eauto. auto.
+  econstructor. unfold inj. rewrite Ident.of_to_positive, H0. eauto. auto.
   (* deref *)
   eauto.
   (* field struct *)
@@ -627,13 +627,13 @@ Proof.
   destruct f1; inv EQ0; simpl in H2; inv H2; assumption.
 - (* pointer *)
   unfold inj in H.
-  assert (data = Init_addrof b1 ofs1 /\ chunk = Mptr).
+  assert (data = Init_addrof (Ident.of_positive b1) ofs1 /\ chunk = Mptr).
   { remember Archi.ptr64 as ptr64.
     destruct ty; inversion EQ0.
     destruct i; inv H5. unfold Mptr. destruct Archi.ptr64; inv H6; inv H2; auto.
     subst ptr64. unfold Mptr. destruct Archi.ptr64; inv H5; inv H2; auto.
     inv H2. auto. }
-  destruct H4; subst. destruct (Genv.find_symbol ge b1); inv H.
+  destruct H4; subst. destruct Genv.find_symbol; inv H.
   rewrite Ptrofs.add_zero in H3. auto.
 - (* undef *)
   discriminate.
@@ -716,13 +716,13 @@ Local Opaque sizeof.
 + Local Transparent sizeof. simpl. eapply tr_init_array_size; eauto. 
 + replace (idlsize d) with (idlsize d + 0) by omega.
   eapply tr_init_struct_size; eauto. simpl.
-  unfold lookup_composite in H. destruct (ge.(genv_cenv)!id) as [co'|] eqn:?; inv H.
+  unfold lookup_composite in H. destruct (ge.(genv_cenv)$id) as [co'|] eqn:?; inv H.
   erewrite co_consistent_sizeof by (eapply ce_consistent; eauto).
   unfold sizeof_composite. rewrite H0. apply align_le.
   destruct (co_alignof_two_p co) as [n EQ]. rewrite EQ. apply two_power_nat_pos.
 + rewrite idlsize_app, padding_size. 
   exploit tr_init_size; eauto. intros EQ; rewrite EQ. omega.
-  simpl. unfold lookup_composite in H. destruct (ge.(genv_cenv)!id) as [co'|] eqn:?; inv H.
+  simpl. unfold lookup_composite in H. destruct (ge.(genv_cenv)$id) as [co'|] eqn:?; inv H.
   apply Z.le_trans with (sizeof_union ge (co_members co)).
   eapply union_field_size; eauto.
   erewrite co_consistent_sizeof by (eapply ce_consistent; eauto).
@@ -771,11 +771,11 @@ Inductive exec_init: mem -> block -> Z -> type -> initializer -> mem -> Prop :=
       exec_init_array m b ofs ty sz il m' ->
       exec_init m b ofs (Tarray ty sz a) (Init_array il) m'
   | exec_init_struct: forall m b ofs id a il co m',
-      ge.(genv_cenv)!id = Some co -> co_su co = Struct ->
+      ge.(genv_cenv)$id = Some co -> co_su co = Struct ->
       exec_init_list m b ofs (fields_of_struct (co_members co) 0) il m' ->
       exec_init m b ofs (Tstruct id a) (Init_struct il) m'
   | exec_init_union: forall m b ofs id a f i ty co m',
-      ge.(genv_cenv)!id = Some co -> co_su co = Union ->
+      ge.(genv_cenv)$id = Some co -> co_su co = Union ->
       field_type f (co_members co) = OK ty ->
       exec_init m b ofs ty i m' ->
       exec_init m b ofs (Tunion id a) (Init_union f i) m'

@@ -24,39 +24,39 @@ Require Import Inlining.
 
 Definition fenv_compat (p: program) (fenv: funenv) : Prop :=
   forall id f,
-  fenv!id = Some f -> (prog_defmap p)!id = Some (Gfun (Internal f)).
+  fenv$id = Some f -> (prog_defmap p)$id = Some (Gfun (Internal f)).
 
 Lemma funenv_program_compat:
   forall p, fenv_compat p (funenv_program p).
 Proof.
-  set (P := fun (dm: PTree.t (globdef fundef unit)) (fenv: funenv) =>
+  set (P := fun (dm: ATree.t (globdef fundef unit)) (fenv: funenv) =>
               forall id f,
-              fenv!id = Some f -> dm!id = Some (Gfun (Internal f))).
+              fenv$id = Some f -> dm$id = Some (Gfun (Internal f))).
   assert (REMOVE: forall dm fenv id g,
              P dm fenv ->
-             P (PTree.set id g dm) (PTree.remove id fenv)).
-  { unfold P; intros. rewrite PTree.grspec in H0. destruct (PTree.elt_eq id0 id).
+             P (ATree.set id g dm) (ATree.remove id fenv)).
+  { unfold P; intros. rewrite ATree.grspec in H0. destruct (ATree.elt_eq id0 id).
     discriminate.
-    rewrite PTree.gso; auto.
+    rewrite ATree.gso; auto.
   }
   assert (ADD: forall io dm fenv idg,
              P dm fenv ->
-             P (PTree.set (fst idg) (snd idg) dm) (add_globdef io fenv idg)).
+             P (ATree.set (fst idg) (snd idg) dm) (add_globdef io fenv idg)).
   { intros io dm fenv [id g]; simpl; intros.
     destruct g as [ [f|ef] | v]; auto.
     destruct (should_inline io id f); auto.
-    red; intros. rewrite ! PTree.gsspec in *.
-    destruct (peq id0 id); auto. inv H0; auto.
+    red; intros. rewrite ! ATree.gsspec in *.
+    destruct (ATree.elt_eq id0 id); auto. inv H0; auto.
   }
   assert (REC: forall p l dm fenv,
             P dm fenv ->
-            P (fold_left (fun x idg => PTree.set (fst idg) (snd idg) x) l dm)
+            P (fold_left (fun x idg => ATree.set (fst idg) (snd idg) x) l dm)
               (fold_left (add_globdef p) l fenv)).
   { induction l; simpl; intros.
   - auto.
   - apply IHl. apply ADD; auto.
   }
-  intros. apply REC. red; intros.  rewrite PTree.gempty in H; discriminate.
+  intros. apply REC. red; intros.  rewrite ATree.gempty in H; discriminate.
 Qed.
 
 Lemma fenv_compat_linkorder:
@@ -283,7 +283,7 @@ Inductive tr_instr: context -> node -> instruction -> code -> Prop :=
       tr_instr ctx pc (Icall sg ros args res s) c
   | tr_call_inlined:forall ctx pc sg id args res s c f pc1 ctx',
       Ple res ctx.(mreg) ->
-      fenv!id = Some f ->
+      fenv$id = Some f ->
       c!(spc ctx pc) = Some(Inop pc1) ->
       tr_moves c pc1 (sregs ctx args) (sregs ctx' f.(fn_params)) (spc ctx' f.(fn_entrypoint)) ->
       tr_funbody ctx' f c ->
@@ -300,7 +300,7 @@ Inductive tr_instr: context -> node -> instruction -> code -> Prop :=
       ctx.(retinfo) = Some(s, res) ->
       tr_instr ctx pc (Itailcall sg ros args) c
   | tr_tailcall_inlined: forall ctx pc sg id args c f pc1 ctx',
-      fenv!id = Some f ->
+      fenv$id = Some f ->
       c!(spc ctx pc) = Some(Inop pc1) ->
       tr_moves c pc1 (sregs ctx args) (sregs ctx' f.(fn_params)) (spc ctx' f.(fn_entrypoint)) ->
       tr_funbody ctx' f c ->
@@ -337,7 +337,7 @@ with tr_funbody: context -> function -> code -> Prop :=
       tr_funbody ctx f c.
 
 Definition fenv_agree (fe: funenv) : Prop :=
-  forall id f, fe!id = Some f -> fenv!id = Some f.
+  forall id f, fe$id = Some f -> fenv$id = Some f.
 
 Section EXPAND_INSTR.
 
@@ -504,7 +504,7 @@ Proof.
     intros. rewrite S1. eapply set_instr_other; eauto. unfold node; xomega.
     xomega. xomega.
   eapply rec_spec; eauto.
-    red; intros. rewrite PTree.grspec in H. destruct (PTree.elt_eq id0 id); try discriminate. auto.
+    red; intros. rewrite ATree.grspec in H. destruct (ATree.elt_eq id0 id); try discriminate. auto.
     simpl. subst s2; simpl in *; xomega.
     simpl. subst s3; simpl in *; xomega.
     simpl. xomega.
@@ -534,7 +534,7 @@ Proof.
   eapply add_moves_spec; eauto.
     intros. rewrite S1. eapply set_instr_other; eauto. unfold node; xomega. xomega. xomega.
   eapply rec_spec; eauto.
-    red; intros. rewrite PTree.grspec in H. destruct (PTree.elt_eq id0 id); try discriminate. auto.
+    red; intros. rewrite ATree.grspec in H. destruct (ATree.elt_eq id0 id); try discriminate. auto.
     simpl. subst s3; simpl in *. subst s2; simpl in *. xomega.
     simpl. subst s3; simpl in *; xomega.
     simpl. xomega.

@@ -17,6 +17,7 @@
 
 Require Import String.
 Require Import Coqlib.
+Require Import Symbols.
 
 Close Scope string_scope.
 
@@ -30,7 +31,7 @@ Set Implicit Arguments.
 
 Inductive errcode: Type :=
   | MSG: string -> errcode
-  | CTX: positive -> errcode    (* a top-level identifier *)
+  | CTX: Ident.t -> errcode    (* a top-level identifier *)
   | POS: positive -> errcode.   (* a positive integer, e.g. a PC *)
 
 Definition errmsg: Type := list errcode.

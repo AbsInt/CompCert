@@ -53,7 +53,7 @@ Axiom i64_helpers_correct :
  /\ (forall x y, external_implements "__compcert_i64_smulh" sig_ll_l (x::y::nil) (Val.mullhs x y)).
 
 Definition helper_declared {F V: Type} (p: AST.program (AST.fundef F) V) (id: ident) (name: string) (sg: signature) : Prop :=
-  (prog_defmap p)!id = Some (Gfun (External (EF_runtime name sg))).
+  (prog_defmap p)$id = Some (Gfun (External (EF_runtime name sg))).
 
 Definition helper_functions_declared {F V: Type} (p: AST.program (AST.fundef F) V) (hf: helper_functions) : Prop :=
      helper_declared p i64_dtos "__compcert_i64_dtos" sig_f_l

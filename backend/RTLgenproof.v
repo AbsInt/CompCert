@@ -30,17 +30,17 @@ Record map_wf (m: mapping) : Prop :=
   mk_map_wf {
     map_wf_inj:
       (forall id1 id2 r,
-         m.(map_vars)!id1 = Some r -> m.(map_vars)!id2 = Some r -> id1 = id2);
+         m.(map_vars)$id1 = Some r -> m.(map_vars)$id2 = Some r -> id1 = id2);
      map_wf_disj:
       (forall id r,
-         m.(map_vars)!id = Some r -> In r m.(map_letvars) -> False)
+         m.(map_vars)$id = Some r -> In r m.(map_letvars) -> False)
   }.
 
 Lemma init_mapping_wf:
   map_wf init_mapping.
 Proof.
   unfold init_mapping; split; simpl.
-  intros until r. rewrite PTree.gempty. congruence.
+  intros until r. rewrite ATree.gempty. congruence.
   tauto.
 Qed.
 
@@ -51,8 +51,8 @@ Lemma add_var_wf:
 Proof.
   intros. monadInv H.
   apply mk_map_wf; simpl.
-  intros until r0. repeat rewrite PTree.gsspec.
-  destruct (peq id1 name); destruct (peq id2 name).
+  intros until r0. repeat rewrite ATree.gsspec.
+  destruct (ATree.elt_eq id1 name); destruct (ATree.elt_eq id2 name).
   congruence.
   intros. inv H. elimtype False.
   apply valid_fresh_absurd with r0 s1.
@@ -63,8 +63,8 @@ Proof.
   apply H1. left; exists id1; auto.
   eauto with rtlg.
   inv H0. eauto.
-  intros until r0. rewrite PTree.gsspec.
-  destruct (peq id name).
+  intros until r0. rewrite ATree.gsspec.
+  destruct (ATree.elt_eq id name).
   intros. inv H.
   apply valid_fresh_absurd with r0 s1.
   apply H1. right; auto.
@@ -103,7 +103,7 @@ Record match_env
   mk_match_env {
     me_vars:
       (forall id v,
-         e!id = Some v -> exists r, map.(map_vars)!id = Some r /\ Val.lessdef v rs#r);
+         e$id = Some v -> exists r, map.(map_vars)$id = Some r /\ Val.lessdef v rs#r);
     me_letvars:
       Val.lessdef_list le rs##(map.(map_letvars))
   }.
@@ -111,8 +111,8 @@ Record match_env
 Lemma match_env_find_var:
   forall map e le rs id v r,
   match_env map e le rs ->
-  e!id = Some v ->
-  map.(map_vars)!id = Some r ->
+  e$id = Some v ->
+  map.(map_vars)$id = Some r ->
   Val.lessdef v rs#r.
 Proof.
   intros. exploit me_vars; eauto. intros [r' [EQ' RS]].
@@ -176,12 +176,12 @@ Lemma match_env_update_var:
   forall map e le rs id r v tv,
   Val.lessdef v tv ->
   map_wf map ->
-  map.(map_vars)!id = Some r ->
+  map.(map_vars)$id = Some r ->
   match_env map e le rs ->
-  match_env map (PTree.set id v e) le (rs#r <- tv).
+  match_env map (ATree.set id v e) le (rs#r <- tv).
 Proof.
   intros. inversion H0. inversion H2. apply mk_match_env.
-  intros id' v'. rewrite PTree.gsspec. destruct (peq id' id); intros.
+  intros id' v'. rewrite ATree.gsspec. destruct (ATree.elt_eq id' id); intros.
   subst id'. inv H3. exists r; split. auto. rewrite PMap.gss. auto.
   exploit me_vars0; eauto. intros [r' [A B]].
   exists r'; split. auto. rewrite PMap.gso; auto.
@@ -249,10 +249,10 @@ Qed.
 Lemma match_env_empty:
   forall map,
   map.(map_letvars) = nil ->
-  match_env map (PTree.empty val) nil (Regmap.init Vundef).
+  match_env map (ATree.empty val) nil (Regmap.init Vundef).
 Proof.
   intros. apply mk_match_env.
-  intros. rewrite PTree.gempty in H0. discriminate.
+  intros. rewrite ATree.gempty in H0. discriminate.
   rewrite H. constructor.
 Qed.
 
@@ -281,7 +281,7 @@ Proof.
   destruct (IHil _ _ _ _ nil nil _ EQ) as [ME UNDEF]. constructor. inv ME. split.
   replace (init_regs nil x) with (Regmap.init Vundef) in me_vars0, me_letvars0.
   constructor; simpl.
-  intros id v. repeat rewrite PTree.gsspec. destruct (peq id a); intros.
+  intros id v. repeat rewrite ATree.gsspec. destruct (ATree.elt_eq id a); intros.
   subst a. inv H. exists x1; split. auto. constructor.
   eauto.
   eauto.
@@ -290,7 +290,7 @@ Proof.
   (* vl = v1 :: vs *)
   destruct (IHil _ _ _ _ _ _ _ EQ H0) as [ME UNDEF]. inv ME. split.
   constructor; simpl.
-  intros id v. repeat rewrite PTree.gsspec. destruct (peq id a); intros.
+  intros id v. repeat rewrite ATree.gsspec. destruct (ATree.elt_eq id a); intros.
   subst a. inv H. inv H1. exists x1; split. auto. rewrite Regmap.gss. constructor.
   inv H1. eexists; eauto.
   exploit me_vars0; eauto. intros [r' [C D]].
@@ -321,8 +321,8 @@ Proof.
   exploit IHil; eauto. intro.
   monadInv EQ1.
   constructor.
-  intros id v. simpl. repeat rewrite PTree.gsspec.
-  destruct (peq id a). subst a. intro.
+  intros id v. simpl. repeat rewrite ATree.gsspec.
+  destruct (ATree.elt_eq id a). subst a. intro.
   exists x1. split. auto. inv H3. constructor.
   eauto with rtlg.
   intros. eapply me_vars; eauto.
@@ -398,7 +398,7 @@ Proof.
   intros until tf. unfold transl_fundef, transf_partial_fundef.
   case f; intro.
   unfold transl_function.
-  destruct (reserve_labels (fn_body f0) (PTree.empty node, init_state)) as [ngoto s0].
+  destruct (reserve_labels (fn_body f0) (ATree.empty node, init_state)) as [ngoto s0].
   case (transl_fun f0 ngoto s0); simpl; intros.
   discriminate.
   destruct p. simpl in H. inversion H. reflexivity.
@@ -516,8 +516,8 @@ Definition transl_condexpr_prop
   corresponding to the evaluations of sub-expressions or sub-statements. *)
 
 Lemma transl_expr_Evar_correct:
-  forall (le : letenv) (id : positive) (v: val),
-  e ! id = Some v ->
+  forall (le : letenv) (id : ident) (v: val),
+  e $ id = Some v ->
   transl_expr_prop le (Evar id) v.
 Proof.
   intros; red; intros. inv TE.
@@ -1263,7 +1263,7 @@ Qed.
 
 Lemma tr_find_label:
   forall c map lbl n (ngoto: labelmap) nret rret s' k' cs,
-  ngoto!lbl = Some n ->
+  ngoto$lbl = Some n ->
   forall s k ns1 nd1 nexits1,
   find_label lbl s k = Some (s', k') ->
   tr_stmt c map s ns1 nd1 nexits1 ngoto nret rret ->

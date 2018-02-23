@@ -37,7 +37,7 @@ let mnemonic_names = [ "Padc"; "Padd"; "Padds"; "Pand";"Pannot"; "Pasr"; "Pb"; "
 
 type instruction_arg =
   | ALabel of positive
-  | Atom of positive
+  | Atom of ident
   | Data32 of Integers.Int.int
   | Data64 of Integers.Int64.int
   | DFreg of freg

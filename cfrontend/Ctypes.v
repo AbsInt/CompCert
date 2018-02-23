@@ -190,7 +190,7 @@ Record composite : Type := {
   co_sizeof_alignof: (co_alignof | co_sizeof)
 }.
 
-Definition composite_env : Type := PTree.t composite.
+Definition composite_env : Type := ATree.t composite.
 
 (** * Operations over types *)
 
@@ -240,7 +240,7 @@ Fixpoint complete_type (env: composite_env) (t: type) : bool :=
   | Tarray t' _ _ => complete_type env t'
   | Tfunction _ _ _ => false
   | Tstruct id _ | Tunion id _ =>
-      match env!id with Some co => true | None => false end
+      match env$id with Some co => true | None => false end
   end.
 
 Definition complete_or_function_type (env: composite_env) (t: type) : bool :=
@@ -280,7 +280,7 @@ Fixpoint alignof (env: composite_env) (t: type) : Z :=
       | Tarray t' _ _ => alignof env t'
       | Tfunction _ _ _ => 1
       | Tstruct id _ | Tunion id _ =>
-          match env!id with Some co => co_alignof co | None => 1 end
+          match env$id with Some co => co_alignof co | None => 1 end
     end).
 
 Remark align_attr_two_p:
@@ -310,8 +310,8 @@ Proof.
   exists (if Archi.ptr64 then 3%nat else 2%nat); destruct Archi.ptr64; auto.
   apply IHt.
   exists 0%nat; auto.
-  destruct (env!i). apply co_alignof_two_p. exists 0%nat; auto.
-  destruct (env!i). apply co_alignof_two_p. exists 0%nat; auto.
+  destruct (env$i). apply co_alignof_two_p. exists 0%nat; auto.
+  destruct (env$i). apply co_alignof_two_p. exists 0%nat; auto.
 Qed.
 
 Lemma alignof_pos:
@@ -343,7 +343,7 @@ Fixpoint sizeof (env: composite_env) (t: type) : Z :=
   | Tarray t' n _ => sizeof env t' * Z.max 0 n
   | Tfunction _ _ _ => 1
   | Tstruct id _ | Tunion id _ =>
-      match env!id with Some co => co_sizeof co | None => 0 end
+      match env$id with Some co => co_sizeof co | None => 0 end
   end.
 
 Lemma sizeof_pos:
@@ -354,8 +354,8 @@ Proof.
   destruct f; omega.
   destruct Archi.ptr64; omega.
   change 0 with (0 * Z.max 0 z) at 2. apply Zmult_ge_compat_r. auto. xomega.
-  destruct (env!i). apply co_sizeof_pos. omega.
-  destruct (env!i). apply co_sizeof_pos. omega.
+  destruct (env$i). apply co_sizeof_pos. omega.
+  destruct (env$i). apply co_sizeof_pos. omega.
 Qed.
 
 (** The size of a type is an integral multiple of its alignment,
@@ -380,8 +380,8 @@ Proof.
 - apply Z.divide_refl.
 - apply Z.divide_mul_l; auto.
 - apply Z.divide_refl.
-- destruct (env!i). apply co_sizeof_alignof. apply Z.divide_0_r.
-- destruct (env!i). apply co_sizeof_alignof. apply Z.divide_0_r.
+- destruct (env$i). apply co_sizeof_alignof. apply Z.divide_0_r.
+- destruct (env$i). apply co_sizeof_alignof. apply Z.divide_0_r.
 Qed.
 
 (** ** Size and alignment for composite definitions *)
@@ -618,7 +618,7 @@ Fixpoint alignof_blockcopy (env: composite_env) (t: type) : Z :=
   | Tarray t' _ _ => alignof_blockcopy env t'
   | Tfunction _ _ _ => 1
   | Tstruct id _ | Tunion id _ =>
-      match env!id with
+      match env$id with
       | Some co => Z.min 8 (co_alignof co)
       | None => 1
       end
@@ -646,8 +646,8 @@ Proof.
   destruct Archi.ptr64; auto.
   apply IHty.
   auto.
-  destruct (env!i); auto.
-  destruct (env!i); auto.
+  destruct (env$i); auto.
+  destruct (env$i); auto.
 Qed.
 
 Lemma alignof_blockcopy_pos:
@@ -681,8 +681,8 @@ Proof.
   apply Z.divide_refl.
   apply Z.divide_mul_l. auto.
   apply Z.divide_refl.
-  destruct (env!i). apply X. apply Z.divide_0_r.
-  destruct (env!i). apply X. apply Z.divide_0_r.
+  destruct (env$i). apply X. apply Z.divide_0_r.
+  destruct (env$i). apply X. apply Z.divide_0_r.
 Qed.
 
 (** Type ranks *)
@@ -697,7 +697,7 @@ Fixpoint rank_type (ce: composite_env) (t: type) : nat :=
   match t with
   | Tarray t' _ _ => S (rank_type ce t')
   | Tstruct id _ | Tunion id _ =>
-      match ce!id with
+      match ce$id with
       | None => O
       | Some co => S (co_rank co)
       end
@@ -800,7 +800,7 @@ Qed.
 Program Definition composite_of_def
      (env: composite_env) (id: ident) (su: struct_or_union) (m: members) (a: attr)
      : res composite :=
-  match env!id, complete_members env m return _ with
+  match env$id, complete_members env m return _ with
   | Some _, _ =>
       Error (MSG "Multiple definitions of struct or union " :: CTX id :: nil)
   | None, false =>
@@ -841,11 +841,11 @@ Fixpoint add_composite_definitions (env: composite_env) (defs: list composite_de
   | nil => OK env
   | Composite id su m a :: defs =>
       do co <- composite_of_def env id su m a;
-      add_composite_definitions (PTree.set id co env) defs
+      add_composite_definitions (ATree.set id co env) defs
   end.
 
 Definition build_composite_env (defs: list composite_definition) :=
-  add_composite_definitions (PTree.empty _) defs.
+  add_composite_definitions (ATree.empty _) defs.
 
 (** Stability properties for alignments, sizes, and ranks.  If the type is
   complete in a composite environment [env], its size, alignment, and rank
@@ -854,15 +854,15 @@ Definition build_composite_env (defs: list composite_definition) :=
 Section STABILITY.
 
 Variables env env': composite_env.
-Hypothesis extends: forall id co, env!id = Some co -> env'!id = Some co.
+Hypothesis extends: forall id co, env$id = Some co -> env'$id = Some co.
 
 Lemma alignof_stable:
   forall t, complete_type env t = true -> alignof env' t = alignof env t.
 Proof.
   induction t; simpl; intros; f_equal; auto.
-  destruct (env!i) as [co|] eqn:E; try discriminate.
+  destruct (env$i) as [co|] eqn:E; try discriminate.
   erewrite extends by eauto. auto.
-  destruct (env!i) as [co|] eqn:E; try discriminate.
+  destruct (env$i) as [co|] eqn:E; try discriminate.
   erewrite extends by eauto. auto.
 Qed.
 
@@ -871,9 +871,9 @@ Lemma sizeof_stable:
 Proof.
   induction t; simpl; intros; auto.
   rewrite IHt by auto. auto.
-  destruct (env!i) as [co|] eqn:E; try discriminate.
+  destruct (env$i) as [co|] eqn:E; try discriminate.
   erewrite extends by eauto. auto.
-  destruct (env!i) as [co|] eqn:E; try discriminate.
+  destruct (env$i) as [co|] eqn:E; try discriminate.
   erewrite extends by eauto. auto.
 Qed.
 
@@ -881,9 +881,9 @@ Lemma complete_type_stable:
   forall t, complete_type env t = true -> complete_type env' t = true.
 Proof.
   induction t; simpl; intros; auto.
-  destruct (env!i) as [co|] eqn:E; try discriminate.
+  destruct (env$i) as [co|] eqn:E; try discriminate.
   erewrite extends by eauto. auto.
-  destruct (env!i) as [co|] eqn:E; try discriminate.
+  destruct (env$i) as [co|] eqn:E; try discriminate.
   erewrite extends by eauto. auto.
 Qed.
 
@@ -891,9 +891,9 @@ Lemma rank_type_stable:
   forall t, complete_type env t = true -> rank_type env' t = rank_type env t.
 Proof.
   induction t; simpl; intros; auto.
-  destruct (env!i) as [co|] eqn:E; try discriminate.
+  destruct (env$i) as [co|] eqn:E; try discriminate.
   erewrite extends by eauto. auto.
-  destruct (env!i) as [co|] eqn:E; try discriminate.
+  destruct (env$i) as [co|] eqn:E; try discriminate.
   erewrite extends by eauto. auto.
 Qed.
 
@@ -951,12 +951,12 @@ End STABILITY.
 Lemma add_composite_definitions_incr:
   forall id co defs env1 env2,
   add_composite_definitions env1 defs = OK env2 ->
-  env1!id = Some co -> env2!id = Some co.
+  env1$id = Some co -> env2$id = Some co.
 Proof.
   induction defs; simpl; intros.
 - inv H; auto.
 - destruct a; monadInv H.
-  eapply IHdefs; eauto. rewrite PTree.gso; auto.
+  eapply IHdefs; eauto. rewrite ATree.gso; auto.
   red; intros; subst id0. unfold composite_of_def in EQ. rewrite H0 in EQ; discriminate.
 Qed.
 
@@ -976,11 +976,11 @@ Record composite_consistent (env: composite_env) (co: composite) : Prop := {
 }.
 
 Definition composite_env_consistent (env: composite_env) : Prop :=
-  forall id co, env!id = Some co -> composite_consistent env co.
+  forall id co, env$id = Some co -> composite_consistent env co.
 
 Lemma composite_consistent_stable:
   forall (env env': composite_env)
-         (EXTENDS: forall id co, env!id = Some co -> env'!id = Some co)
+         (EXTENDS: forall id co, env$id = Some co -> env'$id = Some co)
          co,
   composite_consistent env co -> composite_consistent env' co.
 Proof.
@@ -997,7 +997,7 @@ Lemma composite_of_def_consistent:
   composite_consistent env co.
 Proof.
   unfold composite_of_def; intros. 
-  destruct (env!id); try discriminate. destruct (complete_members env m) eqn:C; inv H.
+  destruct (env$id); try discriminate. destruct (complete_members env m) eqn:C; inv H.
   constructor; auto.
 Qed. 
 
@@ -1008,18 +1008,18 @@ Proof.
        add_composite_definitions env0 defs = OK env ->
        composite_env_consistent env0 ->
        composite_env_consistent env).
-  intros. eapply H; eauto. red; intros. rewrite PTree.gempty in H1; discriminate.
+  intros. eapply H; eauto. red; intros. rewrite ATree.gempty in H1; discriminate.
   induction defs as [|d1 defs]; simpl; intros.
 - inv H; auto.
 - destruct d1; monadInv H.
   eapply IHdefs; eauto.
-  set (env1 := PTree.set id x env0) in *.
-  assert (env0!id = None). 
-  { unfold composite_of_def in EQ. destruct (env0!id). discriminate. auto. }
-  assert (forall id1 co1, env0!id1 = Some co1 -> env1!id1 = Some co1).
-  { intros. unfold env1. rewrite PTree.gso; auto. congruence. }
+  set (env1 := ATree.set id x env0) in *.
+  assert (env0$id = None).
+  { unfold composite_of_def in EQ. destruct (env0$id). discriminate. auto. }
+  assert (forall id1 co1, env0$id1 = Some co1 -> env1$id1 = Some co1).
+  { intros. unfold env1. rewrite ATree.gso; auto. congruence. }
   red; intros. apply composite_consistent_stable with env0; auto.
-  unfold env1 in H2; rewrite PTree.gsspec in H2; destruct (peq id0 id).
+  unfold env1 in H2; rewrite ATree.gsspec in H2; destruct (ATree.elt_eq id0 id).
 + subst id0. inversion H2; clear H2. subst co.
   eapply composite_of_def_consistent; eauto.
 + eapply H0; eauto. 
@@ -1031,42 +1031,42 @@ Theorem build_composite_env_charact:
   forall id su m a defs env,
   build_composite_env defs = OK env ->
   In (Composite id su m a) defs ->
-  exists co, env!id = Some co /\ co_members co = m /\ co_attr co = a /\ co_su co = su.
+  exists co, env$id = Some co /\ co_members co = m /\ co_attr co = a /\ co_su co = su.
 Proof.
-  intros until defs. unfold build_composite_env. generalize (PTree.empty composite) as env0.
+  intros until defs. unfold build_composite_env. generalize (ATree.empty composite) as env0.
   revert defs. induction defs as [|d1 defs]; simpl; intros.
 - contradiction.
 - destruct d1; monadInv H.
   destruct H0; [idtac|eapply IHdefs;eauto]. inv H.
   unfold composite_of_def in EQ.
-  destruct (env0!id) eqn:E; try discriminate.
+  destruct (env0$id) eqn:E; try discriminate.
   destruct (complete_members env0 m) eqn:C; simplify_eq EQ. clear EQ; intros EQ.
   exists x.
-  split. eapply add_composite_definitions_incr; eauto. apply PTree.gss.
+  split. eapply add_composite_definitions_incr; eauto. apply ATree.gss.
   subst x; auto.
 Qed.
 
 Theorem build_composite_env_domain:
   forall env defs id co,
   build_composite_env defs = OK env ->
-  env!id = Some co ->
+  env$id = Some co ->
   In (Composite id (co_su co) (co_members co) (co_attr co)) defs.
 Proof.
   intros env0 defs0 id co.
   assert (REC: forall l env env',
     add_composite_definitions env l = OK env' ->
-    env'!id = Some co ->
-    env!id = Some co \/ In (Composite id (co_su co) (co_members co) (co_attr co)) l).
+    env'$id = Some co ->
+    env$id = Some co \/ In (Composite id (co_su co) (co_members co) (co_attr co)) l).
   { induction l; simpl; intros. 
   - inv H; auto.
   - destruct a; monadInv H. exploit IHl; eauto.
-    unfold composite_of_def in EQ. destruct (env!id0) eqn:E; try discriminate.
+    unfold composite_of_def in EQ. destruct (env$id0) eqn:E; try discriminate.
     destruct (complete_members env m) eqn:C; simplify_eq EQ. clear EQ; intros EQ.
-    rewrite PTree.gsspec. intros [A|A]; auto.
-    destruct (peq id id0); auto.
+    rewrite ATree.gsspec. intros [A|A]; auto.
+    destruct (_ id id0); auto.
     inv A. rewrite <- H0; auto.
   }
-  intros. exploit REC; eauto. rewrite PTree.gempty. intuition congruence.
+  intros. exploit REC; eauto. rewrite ATree.gempty. intuition congruence.
 Qed.
 
 (** As a corollay, in a consistent environment, the rank of a composite type
@@ -1083,7 +1083,7 @@ Qed.
 Lemma rank_struct_member:
   forall ce id a co id1 t1,
   composite_env_consistent ce ->
-  ce!id = Some co ->
+  ce$id = Some co ->
   In (id1, t1) (co_members co) ->
   (rank_type ce t1 < rank_type ce (Tstruct id a))%nat.
 Proof.
@@ -1096,7 +1096,7 @@ Qed.
 Lemma rank_union_member:
   forall ce id a co id1 t1,
   composite_env_consistent ce ->
-  ce!id = Some co ->
+  ce$id = Some co ->
   In (id1, t1) (co_members co) ->
   (rank_type ce t1 < rank_type ce (Tunion id a))%nat.
 Proof.
@@ -1265,7 +1265,7 @@ Qed.
 Lemma composite_of_def_eq:
   forall env id co,
   composite_consistent env co ->
-  env!id = None ->
+  env$id = None ->
   composite_of_def env id (co_su co) (co_members co) (co_attr co) = OK co.
 Proof.
   intros. destruct H as [A B C D]. unfold composite_of_def. rewrite H0, A.
@@ -1286,15 +1286,15 @@ Qed.
 
 Lemma composite_of_def_stable:
   forall (env env': composite_env)
-         (EXTENDS: forall id co, env!id = Some co -> env'!id = Some co)
+         (EXTENDS: forall id co, env$id = Some co -> env'$id = Some co)
          id su m a co,
-  env'!id = None ->
+  env'$id = None ->
   composite_of_def env id su m a = OK co ->
   composite_of_def env' id su m a = OK co.
 Proof.
   intros. 
   unfold composite_of_def in H0. 
-  destruct (env!id) eqn:E; try discriminate.
+  destruct (env$id) eqn:E; try discriminate.
   destruct (complete_members env m) eqn:CM; try discriminate.
   transitivity (composite_of_def env' id (co_su co) (co_members co) (co_attr co)).
   inv H0; auto. 
@@ -1308,26 +1308,26 @@ Lemma link_add_composite_definitions:
   build_composite_env l0 = OK env0 ->
   forall l env1 env1' env2,
   add_composite_definitions env1 l = OK env1' ->
-  (forall id co, env1!id = Some co -> env2!id = Some co) ->
-  (forall id co, env0!id = Some co -> env2!id = Some co) ->
-  (forall id, env2!id = if In_dec ident_eq id (map name_composite_def l0) then env0!id else env1!id) ->
+  (forall id co, env1$id = Some co -> env2$id = Some co) ->
+  (forall id co, env0$id = Some co -> env2$id = Some co) ->
+  (forall id, env2$id = if In_dec ident_eq id (map name_composite_def l0) then env0$id else env1$id) ->
   ((forall cd1 cd2, In cd1 l0 -> In cd2 l -> name_composite_def cd2 = name_composite_def cd1 -> cd2 = cd1)) ->
   { env2' |
       add_composite_definitions env2 (filter_redefs l0 l) = OK env2'
-  /\ (forall id co, env1'!id = Some co -> env2'!id = Some co)
-  /\ (forall id co, env0!id = Some co -> env2'!id = Some co) }.
+  /\ (forall id co, env1'$id = Some co -> env2'$id = Some co)
+  /\ (forall id co, env0$id = Some co -> env2'$id = Some co) }.
 Proof.
   induction l; simpl; intros until env2; intros ACD AGREE1 AGREE0 AGREE2 UNIQUE.
 - inv ACD. exists env2; auto.
 - destruct a. destruct (composite_of_def env1 id su m a) as [x|e] eqn:EQ; try discriminate.
   simpl in ACD.
   generalize EQ. unfold composite_of_def at 1. 
-  destruct (env1!id) eqn:E1; try congruence.
+  destruct (env1$id) eqn:E1; try congruence.
   destruct (complete_members env1 m) eqn:CM1; try congruence. 
   intros EQ1.
   simpl. destruct (in_dec ident_eq id (map name_composite_def l0)); simpl.
 + eapply IHl; eauto.
-* intros. rewrite PTree.gsspec in H0. destruct (peq id0 id); auto.
+* intros. rewrite ATree.gsspec in H0. destruct (ATree.elt_eq id0 id); auto.
   inv H0.
   exploit list_in_map_inv; eauto. intros ([id' su' m' a'] & P & Q).
   assert (X: Composite id su m a = Composite id' su' m' a').
@@ -1345,16 +1345,16 @@ Proof.
     inversion EQ1; auto. }
   subst co'. apply AGREE0; auto. 
 * intros. rewrite AGREE2. destruct (in_dec ident_eq id0 (map name_composite_def l0)); auto. 
-  rewrite PTree.gsspec. destruct (peq id0 id); auto. subst id0. contradiction.
-+ assert (E2: env2!id = None).
+  rewrite ATree.gsspec. destruct (ATree.elt_eq id0 id); auto. subst id0. contradiction.
++ assert (E2: env2$id = None).
   { rewrite AGREE2. rewrite pred_dec_false by auto. auto. }
   assert (E3: composite_of_def env2 id su m a = OK x).
   { eapply composite_of_def_stable. eexact AGREE1. eauto. eauto. }
   rewrite E3. simpl. eapply IHl; eauto. 
-* intros until co; rewrite ! PTree.gsspec. destruct (peq id0 id); auto.
-* intros until co; rewrite ! PTree.gsspec. intros. destruct (peq id0 id); auto.
+* intros until co; rewrite ! ATree.gsspec. destruct (ATree.elt_eq id0 id); auto.
+* intros until co; rewrite ! ATree.gsspec. intros. destruct (ATree.elt_eq id0 id); auto.
   subst id0. apply AGREE0 in H0. congruence.
-* intros. rewrite ! PTree.gsspec. destruct (peq id0 id); auto. subst id0. 
+* intros. rewrite ! ATree.gsspec. destruct (ATree.elt_eq id0 id); auto. subst id0.
   rewrite pred_dec_false by auto. auto.
 Qed.
 
@@ -1365,17 +1365,17 @@ Theorem link_build_composite_env:
   link l1 l2 = Some l ->
   { env |
      build_composite_env l = OK env
-  /\ (forall id co, env1!id = Some co -> env!id = Some co)
-  /\ (forall id co, env2!id = Some co -> env!id = Some co) }.
+  /\ (forall id co, env1$id = Some co -> env$id = Some co)
+  /\ (forall id co, env2$id = Some co -> env$id = Some co) }.
 Proof.
   intros. edestruct link_composite_def_inv as (A & B & C); eauto.
   edestruct link_add_composite_definitions as (env & P & Q & R).
   eexact H.
   eexact H0.
-  instantiate (1 := env1). intros. rewrite PTree.gempty in H2; discriminate.
+  instantiate (1 := env1). intros. rewrite ATree.gempty in H2; discriminate.
   auto.
   intros. destruct (in_dec ident_eq id (map name_composite_def l1)); auto.
-  rewrite PTree.gempty. destruct (env1!id) eqn:E1; auto. 
+  rewrite ATree.gempty. destruct (env1$id) eqn:E1; auto.
   exploit build_composite_env_domain. eexact H. eauto.
   intros. apply (in_map name_composite_def) in H2. elim n; auto. 
   auto.
@@ -1463,7 +1463,7 @@ Definition link_program {F:Type} (p1 p2: program F): option (program F) :=
 
 Definition linkorder_program {F: Type} (p1 p2: program F) : Prop :=
      linkorder (program_of_program p1) (program_of_program p2)
-  /\ (forall id co, p1.(prog_comp_env)!id = Some co -> p2.(prog_comp_env)!id = Some co).
+  /\ (forall id co, p1.(prog_comp_env)$id = Some co -> p2.(prog_comp_env)$id = Some co).
 
 Instance Linker_program (F: Type): Linker (program F) := {
   link := link_program;

@@ -13,7 +13,6 @@
 
 open Asm
 open AST
-open BinNums
 
 (** Auxiliary functions for builtin expansion *)
 
@@ -31,6 +30,6 @@ val set_current_function: coq_function -> unit
   (* Set the current function *)
 val get_current_function: unit -> coq_function
   (* Get the current function *)
-val expand_debug: positive -> int -> (preg -> int) -> (instruction -> unit) -> instruction list -> unit
+val expand_debug: ident -> int -> (preg -> int) -> (instruction -> unit) -> instruction list -> unit
   (* Expand builtin debug function. Takes the function id, the register number of the stackpointer, a
      function to get the dwarf mapping of varibale names  and for the expansion of simple instructions *)

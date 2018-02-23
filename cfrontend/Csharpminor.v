@@ -111,18 +111,18 @@ Definition funsig (fd: fundef) :=
 *)
 
 Definition genv := Genv.t fundef unit.
-Definition env := PTree.t (block * Z).
-Definition temp_env := PTree.t val.
+Definition env := ATree.t (block * Z).
+Definition temp_env := ATree.t val.
 
-Definition empty_env : env := PTree.empty (block * Z).
-Definition empty_temp_env : temp_env := PTree.empty val.
+Definition empty_env : env := ATree.empty (block * Z).
+Definition empty_temp_env : temp_env := ATree.empty val.
 
 (** Initialization of temporary variables *)
 
 Fixpoint create_undef_temps (temps: list ident) : temp_env :=
   match temps with
-  | nil => PTree.empty val
-  | id :: temps' => PTree.set id Vundef (create_undef_temps temps')
+  | nil => ATree.empty val
+  | id :: temps' => ATree.set id Vundef (create_undef_temps temps')
  end.
 
 (** Initialization of temporaries that are parameters. *)
@@ -131,7 +131,7 @@ Fixpoint bind_parameters (formals: list ident) (args: list val)
                          (le: temp_env) : option temp_env :=
  match formals, args with
  | nil, nil => Some le
- | id :: xl, v :: vl => bind_parameters xl vl (PTree.set id v le)
+ | id :: xl, v :: vl => bind_parameters xl vl (ATree.set id v le)
  | _, _ => None
  end.
 
@@ -275,7 +275,7 @@ Inductive alloc_variables: env -> mem ->
   | alloc_variables_cons:
       forall e m id sz vars m1 b1 m2 e2,
       Mem.alloc m 0 sz = (m1, b1) ->
-      alloc_variables (PTree.set id (b1, sz) e) m1 vars e2 m2 ->
+      alloc_variables (ATree.set id (b1, sz) e) m1 vars e2 m2 ->
       alloc_variables e m ((id, sz) :: vars) e2 m2.
 
 (** List of blocks mentioned in an environment, with low and high bounds *)
@@ -284,7 +284,7 @@ Definition block_of_binding (id_b_sz: ident * (block * Z)) :=
   match id_b_sz with (id, (b, sz)) => (b, 0, sz) end.
 
 Definition blocks_of_env (e: env) : list (block * Z * Z) :=
-  List.map block_of_binding (PTree.elements e).
+  List.map block_of_binding (ATree.elements e).
 
 Section RELSEM.
 
@@ -297,11 +297,11 @@ Variable ge: genv.
 Inductive eval_var_addr: env -> ident -> block -> Prop :=
   | eval_var_addr_local:
       forall e id b sz,
-      PTree.get id e = Some (b, sz) ->
+      ATree.get id e = Some (b, sz) ->
       eval_var_addr e id b
   | eval_var_addr_global:
       forall e id b,
-      PTree.get id e = None ->
+      ATree.get id e = None ->
       Genv.find_symbol ge id = Some b ->
       eval_var_addr e id b.
 
@@ -317,7 +317,7 @@ Variable m: mem.
 
 Inductive eval_expr: expr -> val -> Prop :=
   | eval_Evar: forall id v,
-      le!id = Some v ->
+      le$id = Some v ->
       eval_expr (Evar id) v
   | eval_Eaddrof: forall id b,
       eval_var_addr e id b ->
@@ -373,7 +373,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | step_set: forall f id a k e le m v,
       eval_expr e le m a v ->
       step (State f (Sset id a) k e le m)
-        E0 (State f Sskip k e (PTree.set id v le) m)
+        E0 (State f Sskip k e (ATree.set id v le) m)
 
   | step_store: forall f chunk addr a k e le m vaddr v m',
       eval_expr e le m addr vaddr ->

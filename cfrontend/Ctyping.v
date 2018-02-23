@@ -258,7 +258,7 @@ Definition type_conditional (ty1 ty2: type) : res type :=
 
 (** Type environments map identifiers to their types. *)
 
-Definition typenv := PTree.t type.
+Definition typenv := ATree.t type.
 
 Definition wt_cast (from to: type) : Prop :=
   classify_cast from to <> cast_case_default.
@@ -408,7 +408,7 @@ with wt_lvalue : expr -> Prop :=
   | wt_Eloc: forall b ofs ty,
       wt_lvalue (Eloc b ofs ty)
   | wt_Evar: forall x ty,
-      e!x = Some ty ->
+      e$x = Some ty ->
       wt_lvalue (Evar x ty)
   | wt_Ederef: forall r ty,
       wt_rvalue r ->
@@ -417,7 +417,7 @@ with wt_lvalue : expr -> Prop :=
   | wt_Efield: forall r f id a co ty,
       wt_rvalue r ->
       typeof r = Tstruct id a \/ typeof r = Tunion id a ->
-      ce!id = Some co ->
+      ce$id = Some co ->
       type_of_member a f co.(co_members) = OK ty ->
       wt_lvalue (Efield r f ty)
 
@@ -502,7 +502,7 @@ End WT_EXPR_STMT.
 Fixpoint bind_vars (e: typenv) (l: list (ident * type)) : typenv :=
   match l with
   | nil => e
-  | (id, ty) :: l => bind_vars (PTree.set id ty e) l
+  | (id, ty) :: l => bind_vars (ATree.set id ty e) l
   end.
 
 Inductive wt_function (ce: composite_env) (e: typenv) : function -> Prop :=
@@ -513,13 +513,13 @@ Inductive wt_function (ce: composite_env) (e: typenv) : function -> Prop :=
 Fixpoint bind_globdef (e: typenv) (l: list (ident * globdef fundef type)) : typenv :=
   match l with
   | nil => e
-  | (id, Gfun fd) :: l => bind_globdef (PTree.set id (type_of_fundef fd) e) l
-  | (id, Gvar v) :: l => bind_globdef (PTree.set id v.(gvar_info) e) l
+  | (id, Gfun fd) :: l => bind_globdef (ATree.set id (type_of_fundef fd) e) l
+  | (id, Gvar v) :: l => bind_globdef (ATree.set id v.(gvar_info) e) l
   end.
 
 Inductive wt_program : program -> Prop :=
   | wt_program_intro: forall p,
-      let e := bind_globdef (PTree.empty _) p.(prog_defs) in
+      let e := bind_globdef (ATree.empty _) p.(prog_defs) in
       (forall id f, In (id, Gfun (Internal f)) p.(prog_defs) ->
          wt_function p.(prog_comp_env) e f) ->
       wt_program p.
@@ -607,7 +607,7 @@ Fixpoint check_rvals (el: exprlist) : res unit :=
   type annotation. *)
 
 Definition evar (e: typenv) (x: ident) : res expr :=
-  match e!x with
+  match e$x with
   | Some ty => OK (Evar x ty)
   | None => Error (MSG "unbound variable " :: CTX x :: nil)
   end.
@@ -621,7 +621,7 @@ Definition efield (ce: composite_env) (r: expr) (f: ident) : res expr :=
   do x1 <- check_rval r;
   match typeof r with
   | Tstruct id a | Tunion id a =>
-      match ce!id with
+      match ce$id with
       | None => Error (MSG "unbound composite " :: CTX id :: nil)
       | Some co =>
           do ty <- type_of_member a f co.(co_members);
@@ -909,7 +909,7 @@ Definition retype_fundef (ce: composite_env) (e: typenv) (fd: fundef) : res fund
   end.
 
 Definition typecheck_program (p: program) : res program :=
-  let e := bind_globdef (PTree.empty _) p.(prog_defs) in
+  let e := bind_globdef (ATree.empty _) p.(prog_defs) in
   let ce := p.(prog_comp_env) in
   do tp <- transform_partial_program (retype_fundef ce e) p;
   OK {| prog_defs := tp.(AST.prog_defs);
@@ -1062,7 +1062,7 @@ Hint Extern 1 (wt_expr _ _ _) => (unfold wt_expr; simpl): ty.
 Lemma evar_sound:
   forall x a, evar e x = OK a -> wt_expr ce e a.
 Proof.
-  unfold evar; intros. destruct (e!x) as [ty|] eqn:E; inv H. eauto with ty.
+  unfold evar; intros. destruct (e$x) as [ty|] eqn:E; inv H. eauto with ty.
 Qed.
 
 Lemma ederef_sound:
@@ -1076,7 +1076,7 @@ Lemma efield_sound:
 Proof.
   intros. monadInv H.
   destruct (typeof r) eqn:TR; try discriminate;
-  destruct (ce!i) as [co|] eqn:CE; monadInv EQ0; eauto with ty.
+  destruct (ce$i) as [co|] eqn:CE; monadInv EQ0; eauto with ty.
 Qed.
 
 Lemma econst_int_sound:
@@ -1349,13 +1349,13 @@ Proof.
   rename x into tp.
   constructor; simpl.
   set (ce := prog_comp_env p) in *.
-  set (e := bind_globdef (PTree.empty type) (prog_defs p)) in *.
-  set (e' := bind_globdef (PTree.empty type) (AST.prog_defs tp)) in *.
+  set (e := bind_globdef (ATree.empty type) (prog_defs p)) in *.
+  set (e' := bind_globdef (ATree.empty type) (AST.prog_defs tp)) in *.
   assert (M: match_program (fun ctx f tf => retype_fundef ce e f = OK tf) eq p tp)
   by (eapply match_transform_partial_program; eauto).
   destruct M as (MATCH & _). simpl in MATCH.
   assert (ENVS: e' = e).
-  { unfold e, e'. revert MATCH; generalize (prog_defs p) (AST.prog_defs tp) (PTree.empty type).
+  { unfold e, e'. revert MATCH; generalize (prog_defs p) (AST.prog_defs tp) (ATree.empty type).
     induction l as [ | [id gd] l ]; intros l' t M; inv M.
     auto.
     destruct b1 as [id' gd']; destruct H1; simpl in *. inv H0; simpl.
@@ -1852,7 +1852,7 @@ Section PRESERVATION.
 Variable prog: program.
 Hypothesis WTPROG: wt_program prog.
 Let ge := globalenv prog.
-Let gtenv := bind_globdef (PTree.empty _) prog.(prog_defs).
+Let gtenv := bind_globdef (ATree.empty _) prog.(prog_defs).
 
 Hypothesis WT_EXTERNAL:
   forall id ef args res cc vargs m t vres m',

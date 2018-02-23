@@ -165,7 +165,7 @@ Variable m: mem.
 
 Inductive eval_expr: letenv -> expr -> val -> Prop :=
   | eval_Evar: forall le id v,
-      PTree.get id e = Some v ->
+      ATree.get id e = Some v ->
       eval_expr le (Evar id) v
   | eval_Eop: forall le op al vl v,
       eval_exprlist le al vl ->
@@ -284,7 +284,7 @@ End EVAL_EXPR.
 
 Definition set_builtin_res (res: builtin_res ident) (v: val) (e: env) : env :=
   match res with
-  | BR id => PTree.set id v e
+  | BR id => ATree.set id v e
   | _ => e
   end.
 
@@ -348,7 +348,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | step_assign: forall f id a k sp e m v,
       eval_expr sp e m nil a v ->
       step (State f (Sassign id a) k sp e m)
-        E0 (State f Sskip k sp (PTree.set id v e) m)
+        E0 (State f Sskip k sp (ATree.set id v e) m)
 
   | step_store: forall f chunk addr al b k sp e m vl v vaddr m',
       eval_exprlist sp e m nil al vl ->

@@ -70,7 +70,7 @@ type instruction_arg =
   | ALabel of positive
   | Float32 of Floats.float32
   | Float64 of Floats.float
-  | Atom of positive
+  | Atom of ident
   | String of string
 
 let pp_arg pp = function

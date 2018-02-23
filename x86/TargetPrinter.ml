@@ -89,17 +89,17 @@ let rec log2 n =
 module type SYSTEM =
     sig
       val raw_symbol: out_channel -> string -> unit
-      val symbol: out_channel -> P.t -> unit
+      val symbol: out_channel -> ident -> unit
       val label: out_channel -> int -> unit
       val name_of_section: section_name -> string
       val stack_alignment: int
       val print_align: out_channel -> int -> unit
       val print_mov_rs: out_channel -> ireg -> ident -> unit
-      val print_fun_info:  out_channel -> P.t -> unit
-      val print_var_info: out_channel -> P.t -> unit
+      val print_fun_info:  out_channel -> ident -> unit
+      val print_var_info: out_channel -> ident -> unit
       val print_epilogue: out_channel -> unit
-      val print_comm_decl: out_channel -> P.t -> Z.t -> int -> unit
-      val print_lcomm_decl: out_channel -> P.t -> Z.t -> int -> unit
+      val print_comm_decl: out_channel -> ident -> Z.t -> int -> unit
+      val print_lcomm_decl: out_channel -> ident -> Z.t -> int -> unit
     end
 
 (* Printer functions for ELF *)

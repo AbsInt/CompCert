@@ -25,10 +25,10 @@ module type TARGET =
       val print_prologue: out_channel -> unit
       val print_epilogue: out_channel -> unit
       val print_align: out_channel -> int -> unit
-      val print_comm_symb:  out_channel -> Z.t -> P.t -> int -> unit
-      val print_var_info: out_channel -> P.t -> unit
-      val print_fun_info: out_channel -> P.t -> unit
-      val get_section_names: P.t -> section_name * section_name * section_name
+      val print_comm_symb:  out_channel -> Z.t -> ident -> int -> unit
+      val print_var_info: out_channel -> ident -> unit
+      val print_fun_info: out_channel -> ident -> unit
+      val get_section_names: ident -> section_name * section_name * section_name
       val print_file_line: out_channel -> string -> int -> unit
       val print_optional_fun_info: out_channel -> unit
       val cfi_startproc: out_channel -> unit
@@ -39,7 +39,7 @@ module type TARGET =
       val section: out_channel -> section_name -> unit
       val name_of_section: section_name -> string
       val comment: string
-      val symbol: out_channel -> P.t -> unit
+      val symbol: out_channel -> ident -> unit
       val default_falignment: int
       val label: out_channel -> int -> unit
       val address: string

@@ -23,7 +23,7 @@ Require Compopts.
 Open Scope error_monad_scope.
 Open Scope string_scope.
 
-Module VSet := FSetAVL.Make(OrderedPositive).
+Module VSet := FSetAVL.Make(OrderedIdent).
 
 (** The set of local variables that can be lifted to temporaries,
   because they are scalar and their address is not taken. *)

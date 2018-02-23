@@ -74,7 +74,7 @@ Fixpoint set_state (v: ident) (i: debuginfo) (s: avail) : avail :=
   match s with
   | nil => (v, i) :: nil
   | (v', i') as vi' :: s' =>
-      match Pos.compare v v' with
+      match Ident.compare v v' with
       | Eq => (v, i) :: s'
       | Lt => (v, i) :: s
       | Gt => vi' :: set_state v i s'
@@ -85,7 +85,7 @@ Fixpoint remove_state (v: ident) (s: avail) : avail :=
   match s with
   | nil => nil
   | (v', i') as vi' :: s' =>
-      match Pos.compare v v' with
+      match Ident.compare v v' with
       | Eq => s'
       | Lt => s
       | Gt => vi' :: remove_state v s'
@@ -157,7 +157,7 @@ Fixpoint join (s1: avail) (s2: avail) {struct s1} : avail :=
         match s2 with
         | nil => nil
         | (v2, i2) as vi2 :: s2' =>
-            match Pos.compare v1 v2 with
+            match Ident.compare v1 v2 with
             | Eq => if eq_debuginfo i1 i2 then vi1 :: join s1' s2' else join s1' s2'
             | Lt => join s1' s2
             | Gt => join2 s2'
@@ -296,7 +296,7 @@ Fixpoint diff (s1 s2: avail) {struct s1} : avail :=
         match s2 with
         | nil => s1
         | (v2, i2) :: s2' =>
-            match Pos.compare v1 v2 with
+            match Ident.compare v1 v2 with
             | Eq => if eq_debuginfo i1 i2 then diff s1' s2' else vi1 :: diff s1' s2'
             | Lt => vi1 :: diff s1' s2
             | Gt => diff2 s2'

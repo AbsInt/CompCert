@@ -164,7 +164,7 @@ Qed.
 (** ** Matching between Cshaprminor's temporaries and Cminor's variables *)
 
 Definition match_temps (f: meminj) (le: Csharpminor.temp_env) (te: env) : Prop :=
-  forall id v, le!id = Some v -> exists v', te!(id) = Some v' /\ Val.inject f v v'.
+  forall id v, le$id = Some v -> exists v', te$(id) = Some v' /\ Val.inject f v v'.
 
 Lemma match_temps_invariant:
   forall f f' le te,
@@ -179,9 +179,9 @@ Lemma match_temps_assign:
   forall f le te id v tv,
   match_temps f le te ->
   Val.inject f v tv ->
-  match_temps f (PTree.set id v le) (PTree.set id tv te).
+  match_temps f (ATree.set id v le) (ATree.set id tv te).
 Proof.
-  intros; red; intros. rewrite PTree.gsspec in *. destruct (peq id0 id).
+  intros; red; intros. rewrite ATree.gsspec in *. destruct (ATree.elt_eq id0 id).
   inv H1. exists tv; auto.
   eauto.
 Qed.
@@ -206,7 +206,7 @@ Record match_env (f: meminj) (cenv: compilenv)
 
 (** C#minor local variables match sub-blocks of the Cminor stack data block. *)
     me_vars:
-      forall id, match_var f sp (e!id) (cenv!id);
+      forall id, match_var f sp (e$id) (cenv$id);
 
 (** [lo, hi] is a proper interval. *)
     me_low_high:
@@ -215,14 +215,14 @@ Record match_env (f: meminj) (cenv: compilenv)
 (** Every block appearing in the C#minor environment [e] must be
   in the range [lo, hi]. *)
     me_bounded:
-      forall id b sz, PTree.get id e = Some(b, sz) -> Ple lo b /\ Plt b hi;
+      forall id b sz, ATree.get id e = Some(b, sz) -> Ple lo b /\ Plt b hi;
 
 (** All blocks mapped to sub-blocks of the Cminor stack data must be
     images of variables from the C#minor environment [e] *)
     me_inv:
       forall b delta,
       f b = Some(sp, delta) ->
-      exists id, exists sz, PTree.get id e = Some(b, sz);
+      exists id, exists sz, ATree.get id e = Some(b, sz);
 
 (** All C#minor blocks below [lo] (i.e. allocated before the blocks
   referenced from [e]) must map to blocks that are below [sp]
@@ -294,39 +294,39 @@ Qed.
 
 Lemma match_env_alloc:
   forall f1 id cenv e sp lo m1 sz m2 b ofs f2,
-  match_env f1 (PTree.remove id cenv) e sp lo (Mem.nextblock m1) ->
+  match_env f1 (ATree.remove id cenv) e sp lo (Mem.nextblock m1) ->
   Mem.alloc m1 0 sz = (m2, b) ->
-  cenv!id = Some ofs ->
+  cenv$id = Some ofs ->
   inject_incr f1 f2 ->
   f2 b = Some(sp, ofs) ->
   (forall b', b' <> b -> f2 b' = f1 b') ->
-  e!id = None ->
-  match_env f2 cenv (PTree.set id (b, sz) e) sp lo (Mem.nextblock m2).
+  e$id = None ->
+  match_env f2 cenv (ATree.set id (b, sz) e) sp lo (Mem.nextblock m2).
 Proof.
   intros until f2; intros ME ALLOC CENV INCR SAME OTHER ENV.
   exploit Mem.nextblock_alloc; eauto. intros NEXTBLOCK.
   exploit Mem.alloc_result; eauto. intros RES.
   inv ME; constructor.
 (* vars *)
-  intros. rewrite PTree.gsspec. destruct (peq id0 id).
+  intros. rewrite ATree.gsspec. destruct (ATree.elt_eq id0 id).
   (* the new var *)
   subst id0. rewrite CENV. constructor. econstructor. eauto.
   rewrite Ptrofs.add_commut; rewrite Ptrofs.add_zero; auto.
   (* old vars *)
-  generalize (me_vars0 id0). rewrite PTree.gro; auto. intros M; inv M.
+  generalize (me_vars0 id0). rewrite ATree.gro; auto. intros M; inv M.
   constructor; eauto.
   constructor.
 (* low-high *)
   rewrite NEXTBLOCK; xomega.
 (* bounded *)
-  intros. rewrite PTree.gsspec in H. destruct (peq id0 id).
+  intros. rewrite ATree.gsspec in H. destruct (ATree.elt_eq id0 id).
   inv H. rewrite NEXTBLOCK; xomega.
   exploit me_bounded0; eauto. rewrite NEXTBLOCK; xomega.
 (* inv *)
   intros. destruct (eq_block b (Mem.nextblock m1)).
-  subst b. rewrite SAME in H; inv H. exists id; exists sz. apply PTree.gss.
+  subst b. rewrite SAME in H; inv H. exists id; exists sz. apply ATree.gss.
   rewrite OTHER in H; auto. exploit me_inv0; eauto.
-  intros [id1 [sz1 EQ]]. exists id1; exists sz1. rewrite PTree.gso; auto. congruence.
+  intros [id1 [sz1 EQ]]. exists id1; exists sz1. rewrite ATree.gso; auto. congruence.
 (* incr *)
   intros. rewrite OTHER in H. eauto. unfold block in *; xomega.
 Qed.
@@ -335,13 +335,13 @@ Qed.
 
 Definition match_bounds (e: Csharpminor.env) (m: mem) : Prop :=
   forall id b sz ofs p,
-  PTree.get id e = Some(b, sz) -> Mem.perm m b ofs Max p -> 0 <= ofs < sz.
+  ATree.get id e = Some(b, sz) -> Mem.perm m b ofs Max p -> 0 <= ofs < sz.
 
 Lemma match_bounds_invariant:
   forall e m1 m2,
   match_bounds e m1 ->
   (forall id b sz ofs p,
-   PTree.get id e = Some(b, sz) -> Mem.perm m2 b ofs Max p -> Mem.perm m1 b ofs Max p) ->
+   ATree.get id e = Some(b, sz) -> Mem.perm m2 b ofs Max p -> Mem.perm m1 b ofs Max p) ->
   match_bounds e m2.
 Proof.
   intros; red; intros. eapply H; eauto.
@@ -354,7 +354,7 @@ Qed.
 
 Inductive is_reachable_from_env (f: meminj) (e: Csharpminor.env) (sp: block) (ofs: Z) : Prop :=
   | is_reachable_intro: forall id b sz delta,
-      e!id = Some(b, sz) ->
+      e$id = Some(b, sz) ->
       f b = Some(sp, delta) ->
       delta <= ofs < delta + sz ->
       is_reachable_from_env f e sp ofs.
@@ -395,7 +395,7 @@ Proof.
                                else false
                       end
                  end).
-  destruct (List.existsb pred (PTree.elements e)) eqn:?.
+  destruct (List.existsb pred (ATree.elements e)) eqn:?.
   (* yes *)
   rewrite List.existsb_exists in Heqb.
   destruct Heqb as [[id [b sz]] [A B]].
@@ -403,14 +403,14 @@ Proof.
   destruct (eq_block sp sp'); try discriminate.
   destruct (andb_prop _ _ B).
   left. apply is_reachable_intro with id b sz delta.
-  apply PTree.elements_complete; auto.
+  apply ATree.elements_complete; auto.
   congruence.
   split; eapply proj_sumbool_true; eauto.
   (* no *)
   right; red; intro NE; inv NE.
-  assert (existsb pred (PTree.elements e) = true).
+  assert (existsb pred (ATree.elements e) = true).
   rewrite List.existsb_exists. exists (id, (b, sz)); split.
-  apply PTree.elements_correct; auto.
+  apply ATree.elements_correct; auto.
   simpl. rewrite H0. rewrite dec_eq_true.
   unfold proj_sumbool. destruct H1. rewrite zle_true; auto. rewrite zlt_true; auto.
   congruence.
@@ -548,7 +548,7 @@ Lemma match_callstack_set_temp:
   forall f cenv e le te sp lo hi cs bound tbound m tm tf id v tv,
   Val.inject f v tv ->
   match_callstack f m tm (Frame cenv tf e le te sp lo hi :: cs) bound tbound ->
-  match_callstack f m tm (Frame cenv tf e (PTree.set id v le) (PTree.set id tv te) sp lo hi :: cs) bound tbound.
+  match_callstack f m tm (Frame cenv tf e (ATree.set id v le) (ATree.set id tv te) sp lo hi :: cs) bound tbound.
 Proof.
   intros. inv H0. constructor; auto.
   eapply match_temps_assign; eauto.
@@ -560,22 +560,22 @@ Qed.
 
 Lemma in_blocks_of_env:
   forall e id b sz,
-  e!id = Some(b, sz) -> In (b, 0, sz) (blocks_of_env e).
+  e$id = Some(b, sz) -> In (b, 0, sz) (blocks_of_env e).
 Proof.
   unfold blocks_of_env; intros.
   change (b, 0, sz) with (block_of_binding (id, (b, sz))).
-  apply List.in_map. apply PTree.elements_correct. auto.
+  apply List.in_map. apply ATree.elements_correct. auto.
 Qed.
 
 Lemma in_blocks_of_env_inv:
   forall b lo hi e,
   In (b, lo, hi) (blocks_of_env e) ->
-  exists id, e!id = Some(b, hi) /\ lo = 0.
+  exists id, e$id = Some(b, hi) /\ lo = 0.
 Proof.
   unfold blocks_of_env; intros.
   exploit list_in_map_inv; eauto. intros [[id [b' sz]] [A B]].
   unfold block_of_binding in A. inv A.
-  exists id; intuition. apply PTree.elements_complete. auto.
+  exists id; intuition. apply ATree.elements_complete. auto.
 Qed.
 
 Lemma match_callstack_freelist:
@@ -674,7 +674,7 @@ Lemma match_callstack_alloc_right:
   Mem.alloc tm 0 tf.(fn_stackspace) = (tm', sp) ->
   Mem.inject f m tm ->
   match_temps f le te ->
-  (forall id, cenv!id = None) ->
+  (forall id, cenv$id = None) ->
   match_callstack f m tm'
       (Frame cenv tf empty_env le te sp (Mem.nextblock m) (Mem.nextblock m) :: cs)
       (Mem.nextblock m) (Mem.nextblock tm').
@@ -687,12 +687,12 @@ Proof.
   unfold block in *; xomega.
   auto.
   constructor; intros.
-    rewrite H3. rewrite PTree.gempty. constructor.
+    rewrite H3. rewrite ATree.gempty. constructor.
     xomega.
-    rewrite PTree.gempty in H4; discriminate.
+    rewrite ATree.gempty in H4; discriminate.
     eelim Mem.fresh_block_alloc; eauto. eapply Mem.valid_block_inject_2; eauto.
     rewrite RES. change (Mem.valid_block tm tb). eapply Mem.valid_block_inject_2; eauto.
-  red; intros. rewrite PTree.gempty in H4. discriminate.
+  red; intros. rewrite ATree.gempty in H4. discriminate.
   red; intros. left. eapply Mem.perm_alloc_2; eauto.
   eapply match_callstack_invariant with (tm1 := tm); eauto.
   rewrite RES; auto.
@@ -702,16 +702,16 @@ Qed.
 Lemma match_callstack_alloc_left:
   forall f1 m1 tm id cenv tf e le te sp lo cs sz m2 b f2 ofs,
   match_callstack f1 m1 tm
-    (Frame (PTree.remove id cenv) tf e le te sp lo (Mem.nextblock m1) :: cs)
+    (Frame (ATree.remove id cenv) tf e le te sp lo (Mem.nextblock m1) :: cs)
     (Mem.nextblock m1) (Mem.nextblock tm) ->
   Mem.alloc m1 0 sz = (m2, b) ->
-  cenv!id = Some ofs ->
+  cenv$id = Some ofs ->
   inject_incr f1 f2 ->
   f2 b = Some(sp, ofs) ->
   (forall b', b' <> b -> f2 b' = f1 b') ->
-  e!id = None ->
+  e$id = None ->
   match_callstack f2 m2 tm
-    (Frame cenv tf (PTree.set id (b, sz) e) le te sp lo (Mem.nextblock m2) :: cs)
+    (Frame cenv tf (ATree.set id (b, sz) e) le te sp lo (Mem.nextblock m2) :: cs)
     (Mem.nextblock m2) (Mem.nextblock tm).
 Proof.
   intros. inv H.
@@ -723,13 +723,13 @@ Proof.
   auto.
   eapply match_temps_invariant; eauto.
   eapply match_env_alloc; eauto.
-  red; intros. rewrite PTree.gsspec in H. destruct (peq id0 id).
+  red; intros. rewrite ATree.gsspec in H. destruct (ATree.elt_eq id0 id).
   inversion H. subst b0 sz0 id0. eapply Mem.perm_alloc_3; eauto.
   eapply BOUND0; eauto. eapply Mem.perm_alloc_4; eauto.
   exploit me_bounded; eauto. unfold block in *; xomega.
   red; intros. exploit PERM; eauto. intros [A|A]. auto. right.
   inv A. apply is_reachable_intro with id0 b0 sz0 delta; auto.
-  rewrite PTree.gso. auto. congruence.
+  rewrite ATree.gso. auto. congruence.
   eapply match_callstack_invariant with (m1 := m1); eauto.
   intros. eapply Mem.perm_alloc_4; eauto.
   unfold block in *; xomega.
@@ -745,26 +745,26 @@ Qed.
   local variables as sub-blocks of the Cminor stack data.  This is the most difficult part of the proof. *)
 
 Definition cenv_remove (cenv: compilenv) (vars: list (ident * Z)) : compilenv :=
-  fold_right (fun id_lv ce => PTree.remove (fst id_lv) ce) cenv vars.
+  fold_right (fun id_lv ce => ATree.remove (fst id_lv) ce) cenv vars.
 
 Remark cenv_remove_gso:
   forall id vars cenv,
   ~In id (map fst vars) ->
-  PTree.get id (cenv_remove cenv vars) = PTree.get id cenv.
+  ATree.get id (cenv_remove cenv vars) = ATree.get id cenv.
 Proof.
   induction vars; simpl; intros.
   auto.
-  rewrite PTree.gro. apply IHvars. intuition. intuition.
+  rewrite ATree.gro. apply IHvars. intuition. intuition.
 Qed.
 
 Remark cenv_remove_gss:
   forall id vars cenv,
   In id (map fst vars) ->
-  PTree.get id (cenv_remove cenv vars) = None.
+  ATree.get id (cenv_remove cenv vars) = None.
 Proof.
   induction vars; simpl; intros.
   contradiction.
-  rewrite PTree.grspec. destruct (PTree.elt_eq id (fst a)). auto.
+  rewrite ATree.grspec. destruct (ATree.elt_eq id (fst a)). auto.
   destruct H. intuition. eauto.
 Qed.
 
@@ -772,7 +772,7 @@ Definition cenv_compat (cenv: compilenv) (vars: list (ident * Z)) (tsz: Z) : Pro
   forall id sz,
   In (id, sz) vars ->
   exists ofs,
-      PTree.get id cenv = Some ofs
+      ATree.get id cenv = Some ofs
    /\ Mem.inj_offset_aligned ofs sz
    /\ 0 <= ofs
    /\ ofs + Z.max 0 sz <= tsz.
@@ -780,13 +780,13 @@ Definition cenv_compat (cenv: compilenv) (vars: list (ident * Z)) (tsz: Z) : Pro
 Definition cenv_separated (cenv: compilenv) (vars: list (ident * Z)) : Prop :=
   forall id1 sz1 ofs1 id2 sz2 ofs2,
   In (id1, sz1) vars -> In (id2, sz2) vars ->
-  PTree.get id1 cenv = Some ofs1 -> PTree.get id2 cenv = Some ofs2 ->
+  ATree.get id1 cenv = Some ofs1 -> ATree.get id2 cenv = Some ofs2 ->
   id1 <> id2 ->
   ofs1 + sz1 <= ofs2 \/ ofs2 + sz2 <= ofs1.
 
 Definition cenv_mem_separated (cenv: compilenv) (vars: list (ident * Z)) (f: meminj) (sp: block) (m: mem) : Prop :=
   forall id sz ofs b delta ofs' k p,
-  In (id, sz) vars -> PTree.get id cenv = Some ofs ->
+  In (id, sz) vars -> ATree.get id cenv = Some ofs ->
   f b = Some (sp, delta) ->
   Mem.perm m b ofs' k p ->
   ofs <= ofs' + delta < sz + ofs -> False.
@@ -804,7 +804,7 @@ Lemma match_callstack_alloc_variables_rec:
   cenv_compat cenv vars (fn_stackspace tf) ->
   cenv_separated cenv vars ->
   cenv_mem_separated cenv vars f1 sp m1 ->
-  (forall id sz, In (id, sz) vars -> e1!id = None) ->
+  (forall id sz, In (id, sz) vars -> e1$id = None) ->
   match_callstack f1 m1 tm
     (Frame (cenv_remove cenv vars) tf e1 le te sp lo (Mem.nextblock m1) :: cs)
     (Mem.nextblock m1) (Mem.nextblock tm) ->
@@ -844,7 +844,7 @@ Proof.
     omega.
     eapply SEP2. apply in_cons; eauto. eauto.
     rewrite D in H5; eauto. eauto. auto.
-    intros. rewrite PTree.gso. eapply UNBOUND; eauto with coqlib.
+    intros. rewrite ATree.gso. eapply UNBOUND; eauto with coqlib.
     red; intros; subst id0. elim H3. change id with (fst (id, sz0)). apply in_map; auto.
     eapply match_callstack_alloc_left; eauto.
     rewrite cenv_remove_gso; auto.
@@ -859,7 +859,7 @@ Lemma match_callstack_alloc_variables:
   list_norepet (map fst vars) ->
   cenv_compat cenv vars (fn_stackspace fn) ->
   cenv_separated cenv vars ->
-  (forall id ofs, cenv!id = Some ofs -> In id (map fst vars)) ->
+  (forall id ofs, cenv$id = Some ofs -> In id (map fst vars)) ->
   Mem.inject f1 m1 tm1 ->
   match_callstack f1 m1 tm1 cs (Mem.nextblock m1) (Mem.nextblock tm1) ->
   match_temps f1 le te ->
@@ -875,12 +875,12 @@ Proof.
   intros. apply Mem.perm_implies with Freeable; auto with mem. eapply Mem.perm_alloc_2; eauto.
   instantiate (1 := f1). red; intros. eelim Mem.fresh_block_alloc; eauto.
   eapply Mem.valid_block_inject_2; eauto.
-  intros. apply PTree.gempty.
+  intros. apply ATree.gempty.
   eapply match_callstack_alloc_right; eauto.
-  intros. destruct (In_dec peq id (map fst vars)).
+  intros. destruct (In_dec ident_eq id (map fst vars)).
   apply cenv_remove_gss; auto.
   rewrite cenv_remove_gso; auto.
-  destruct (cenv!id) as [ofs|] eqn:?; auto. elim n; eauto.
+  destruct (cenv$id) as [ofs|] eqn:?; auto. elim n; eauto.
   eapply Mem.alloc_right_inject; eauto.
 Qed.
 
@@ -975,21 +975,21 @@ Proof.
   apply EITHER in H. destruct H as [[P Q] | P].
   exploit COMPAT; eauto. intros [ofs [A [B [C D]]]].
   exists ofs.
-  split. rewrite PTree.gso; auto.
+  split. rewrite ATree.gso; auto.
   split. auto. split. auto. zify; omega.
   inv P. exists (align sz1 (block_alignment sz)).
-  split. apply PTree.gss.
+  split. apply ATree.gss.
   split. apply inj_offset_aligned_block.
   split. omega.
   omega.
   apply EITHER in H; apply EITHER in H0.
   destruct H as [[P Q] | P]; destruct H0 as [[R S] | R].
-  rewrite PTree.gso in *; auto. eapply SEP; eauto.
-  inv R. rewrite PTree.gso in H1; auto. rewrite PTree.gss in H2; inv H2.
+  rewrite ATree.gso in *; auto. eapply SEP; eauto.
+  inv R. rewrite ATree.gso in H1; auto. rewrite ATree.gss in H2; inv H2.
   exploit COMPAT; eauto. intros [ofs [A [B [C D]]]].
   assert (ofs = ofs1) by congruence. subst ofs.
   left. zify; omega.
-  inv P. rewrite PTree.gso in H2; auto. rewrite PTree.gss in H1; inv H1.
+  inv P. rewrite ATree.gso in H2; auto. rewrite ATree.gss in H1; inv H1.
   exploit COMPAT; eauto. intros [ofs [A [B [C D]]]].
   assert (ofs = ofs2) by congruence. subst ofs.
   right. zify; omega.
@@ -1064,28 +1064,28 @@ Qed.
 
 Lemma assign_variables_domain:
   forall id vars cesz,
-  (fst (assign_variables cesz vars))!id <> None ->
-  (fst cesz)!id <> None \/ In id (map fst vars).
+  (fst (assign_variables cesz vars))$id <> None ->
+  (fst cesz)$id <> None \/ In id (map fst vars).
 Proof.
   induction vars; simpl; intros.
   auto.
   exploit IHvars; eauto. unfold assign_variable. destruct a as [id1 sz1].
   destruct cesz as [cenv stksz]. simpl.
-  rewrite PTree.gsspec. destruct (peq id id1). auto. tauto.
+  rewrite ATree.gsspec. destruct (ATree.elt_eq id id1). auto. tauto.
 Qed.
 
 Lemma build_compilenv_domain:
   forall f cenv sz id ofs,
   build_compilenv f = (cenv, sz) ->
-  cenv!id = Some ofs -> In id (map fst (Csharpminor.fn_vars f)).
+  cenv$id = Some ofs -> In id (map fst (Csharpminor.fn_vars f)).
 Proof.
   unfold build_compilenv; intros.
   set (vars1 := Csharpminor.fn_vars f) in *.
   generalize (VarSort.Permuted_sort vars1). intros P.
   set (vars2 := VarSort.sort vars1) in *.
-  generalize (assign_variables_domain id vars2 (PTree.empty Z, 0)).
+  generalize (assign_variables_domain id vars2 (ATree.empty Z, 0)).
   rewrite H. simpl. intros. destruct H1. congruence.
-  rewrite PTree.gempty in H1. congruence.
+  rewrite ATree.gempty in H1. congruence.
   apply Permutation_in with (map fst vars2); auto.
   apply Permutation_map. apply Permutation_sym; auto.
 Qed.
@@ -1093,19 +1093,19 @@ Qed.
 (** Initialization of C#minor temporaries and Cminor local variables. *)
 
 Lemma create_undef_temps_val:
-  forall id v temps, (create_undef_temps temps)!id = Some v -> In id temps /\ v = Vundef.
+  forall id v temps, (create_undef_temps temps)$id = Some v -> In id temps /\ v = Vundef.
 Proof.
   induction temps; simpl; intros.
-  rewrite PTree.gempty in H. congruence.
-  rewrite PTree.gsspec in H. destruct (peq id a).
+  rewrite ATree.gempty in H. congruence.
+  rewrite ATree.gsspec in H. destruct (ATree.elt_eq id a).
   split. auto. congruence.
   exploit IHtemps; eauto. tauto.
 Qed.
 
 Fixpoint set_params' (vl: list val) (il: list ident) (te: Cminor.env) : Cminor.env :=
   match il, vl with
-  | i1 :: is, v1 :: vs => set_params' vs is (PTree.set i1 v1 te)
-  | i1 :: is, nil => set_params' nil is (PTree.set i1 Vundef te)
+  | i1 :: is, v1 :: vs => set_params' vs is (ATree.set i1 v1 te)
+  | i1 :: is, nil => set_params' nil is (ATree.set i1 Vundef te)
   | _, _ => te
   end.
 
@@ -1116,88 +1116,88 @@ Lemma bind_parameters_agree_rec:
   match_temps f le1 te ->
   match_temps f le2 (set_params' tvals vars te).
 Proof.
-Opaque PTree.set.
+Opaque ATree.set.
   induction vars; simpl; intros.
   destruct vals; try discriminate. inv H. auto.
   destruct vals; try discriminate. inv H0.
   simpl. eapply IHvars; eauto.
-  red; intros. rewrite PTree.gsspec in *. destruct (peq id a).
+  red; intros. rewrite ATree.gsspec in *. destruct (ATree.elt_eq id a).
   inv H0. exists v'; auto.
   apply H1; auto.
 Qed.
 
 Lemma set_params'_outside:
-  forall id il vl te, ~In id il -> (set_params' vl il te)!id = te!id.
+  forall id il vl te, ~In id il -> (set_params' vl il te)$id = te$id.
 Proof.
   induction il; simpl; intros. auto.
   destruct vl; rewrite IHil.
-  apply PTree.gso. intuition. intuition.
-  apply PTree.gso. intuition. intuition.
+  apply ATree.gso. intuition. intuition.
+  apply ATree.gso. intuition. intuition.
 Qed.
 
 Lemma set_params'_inside:
   forall id il vl te1 te2,
   In id il ->
-  (set_params' vl il te1)!id = (set_params' vl il te2)!id.
+  (set_params' vl il te1)$id = (set_params' vl il te2)$id.
 Proof.
   induction il; simpl; intros.
   contradiction.
-  destruct vl; destruct (List.in_dec peq id il); auto;
+  destruct vl; destruct (List.in_dec ident_eq id il); auto;
   repeat rewrite set_params'_outside; auto;
-  assert (a = id) by intuition; subst a; repeat rewrite PTree.gss; auto.
+  assert (a = id) by intuition; subst a; repeat rewrite ATree.gss; auto.
 Qed.
 
 Lemma set_params_set_params':
   forall il vl id,
   list_norepet il ->
-  (set_params vl il)!id = (set_params' vl il (PTree.empty val))!id.
+  (set_params vl il)$id = (set_params' vl il (ATree.empty val))$id.
 Proof.
   induction il; simpl; intros.
   auto.
   inv H. destruct vl.
-  rewrite PTree.gsspec. destruct (peq id a).
-  subst a. rewrite set_params'_outside; auto. rewrite PTree.gss; auto.
+  rewrite ATree.gsspec. destruct (ATree.elt_eq id a).
+  subst a. rewrite set_params'_outside; auto. rewrite ATree.gss; auto.
   rewrite IHil; auto.
-  destruct (List.in_dec peq id il). apply set_params'_inside; auto.
-  repeat rewrite set_params'_outside; auto. rewrite PTree.gso; auto.
-  rewrite PTree.gsspec. destruct (peq id a).
-  subst a. rewrite set_params'_outside; auto. rewrite PTree.gss; auto.
+  destruct (List.in_dec ident_eq id il). apply set_params'_inside; auto.
+  repeat rewrite set_params'_outside; auto. rewrite ATree.gso; auto.
+  rewrite ATree.gsspec. destruct (ATree.elt_eq id a).
+  subst a. rewrite set_params'_outside; auto. rewrite ATree.gss; auto.
   rewrite IHil; auto.
-  destruct (List.in_dec peq id il). apply set_params'_inside; auto.
-  repeat rewrite set_params'_outside; auto. rewrite PTree.gso; auto.
+  destruct (List.in_dec ident_eq id il). apply set_params'_inside; auto.
+  repeat rewrite set_params'_outside; auto. rewrite ATree.gso; auto.
 Qed.
 
 Lemma set_locals_outside:
   forall e id il,
-  ~In id il -> (set_locals il e)!id = e!id.
+  ~In id il -> (set_locals il e)$id = e$id.
 Proof.
   induction il; simpl; intros.
   auto.
-  rewrite PTree.gso. apply IHil. tauto. intuition.
+  rewrite ATree.gso. apply IHil. tauto. intuition.
 Qed.
 
 Lemma set_locals_inside:
   forall e id il,
-  In id il -> (set_locals il e)!id = Some Vundef.
+  In id il -> (set_locals il e)$id = Some Vundef.
 Proof.
   induction il; simpl; intros.
   contradiction.
-  destruct H. subst a. apply PTree.gss.
-  rewrite PTree.gsspec. destruct (peq id a). auto. auto.
+  destruct H. subst a. apply ATree.gss.
+  rewrite ATree.gsspec. destruct (ATree.elt_eq id a). auto. auto.
 Qed.
 
 Lemma set_locals_set_params':
   forall vars vals params id,
   list_norepet params ->
   list_disjoint params vars ->
-  (set_locals vars (set_params vals params)) ! id =
-  (set_params' vals params (set_locals vars (PTree.empty val))) ! id.
+  (set_locals vars (set_params vals params)) $ id =
+  (set_params' vals params (set_locals vars (ATree.empty val))) $ id.
 Proof.
-  intros. destruct (in_dec peq id vars).
+  intros. destruct (in_dec ident_eq id vars).
   assert (~In id params). apply list_disjoint_notin with vars; auto. apply list_disjoint_sym; auto.
   rewrite set_locals_inside; auto. rewrite set_params'_outside; auto. rewrite set_locals_inside; auto.
   rewrite set_locals_outside; auto. rewrite set_params_set_params'; auto.
-  destruct (in_dec peq id params).
+  destruct (in_dec ident_eq id params).
   apply set_params'_inside; auto.
   repeat rewrite set_params'_outside; auto.
   rewrite set_locals_outside; auto.
@@ -1213,7 +1213,7 @@ Lemma bind_parameters_agree:
 Proof.
   intros; red; intros.
   exploit bind_parameters_agree_rec; eauto.
-  instantiate (1 := set_locals temps (PTree.empty val)).
+  instantiate (1 := set_locals temps (ATree.empty val)).
   red; intros. exploit create_undef_temps_val; eauto. intros [A B]. subst v0.
   exists Vundef; split. apply set_locals_inside; auto. auto.
   intros [v' [A B]]. exists v'; split; auto.
@@ -1434,7 +1434,7 @@ Lemma var_addr_correct:
   /\ Val.inject f (Vptr b Ptrofs.zero) tv.
 Proof.
   unfold var_addr; intros.
-  assert (match_var f sp e!id cenv!id).
+  assert (match_var f sp e$id cenv$id).
     inv H. inv MENV. auto.
   inv H1; inv H0; try congruence.
   (* local *)
@@ -2043,7 +2043,7 @@ Proof.
     eapply external_call_nextblock; eauto.
     eapply external_call_nextblock; eauto.
   econstructor; eauto.
-Opaque PTree.set.
+Opaque ATree.set.
   unfold set_optvar. destruct optid; simpl.
   eapply match_callstack_set_temp; eauto.
   auto.
@@ -2232,7 +2232,7 @@ Proof.
   eapply match_program_main; eauto. 
   eexact FIND.
   rewrite <- H2. apply sig_preserved; auto.
-  eapply match_callstate with (f := Mem.flat_inj (Mem.nextblock m0)) (cs := @nil frame) (cenv := PTree.empty Z).
+  eapply match_callstate with (f := Mem.flat_inj (Mem.nextblock m0)) (cs := @nil frame) (cenv := ATree.empty Z).
   auto.
   eapply Genv.initmem_inject; eauto.
   apply mcs_nil with (Mem.nextblock m0). apply match_globalenvs_init; auto. xomega. xomega.

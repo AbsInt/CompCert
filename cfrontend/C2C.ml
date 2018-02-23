@@ -107,7 +107,7 @@ let atom_location a =
 
 (** The current environment of composite definitions *)
 
-let comp_env : composite_env ref = ref Maps.PTree.empty
+let comp_env : composite_env ref = ref Symbols.ATree.empty
 
 (** Hooks -- overriden in machine-dependent CPragmas module *)
 
@@ -1410,7 +1410,7 @@ let convertProgram p =
         comp_env := ce;
         let gl1 = convertGlobdecls env [] p in
         let gl2 = globals_for_strings gl1 in
-        comp_env := Maps.PTree.empty;
+        comp_env := Symbols.ATree.empty;
         let p' =
           { prog_defs = gl2;
             prog_public = public_globals gl2;

@@ -246,11 +246,11 @@ Let dm1 := prog_defmap p1.
 Let dm2 := prog_defmap p2.
 
 Definition link_prog_check (x: ident) (gd1: globdef F V) :=
-  match dm2!x with
+  match dm2$x with
   | None => true
   | Some gd2 =>
-      In_dec peq x p1.(prog_public)
-      && In_dec peq x p2.(prog_public)
+      In_dec ident_eq x p1.(prog_public)
+      && In_dec ident_eq x p2.(prog_public)
       && match link gd1 gd2 with Some _ => true | None => false end
   end.
 
@@ -263,10 +263,10 @@ Definition link_prog_merge (o1 o2: option (globdef F V)) :=
 
 Definition link_prog :=
   if ident_eq p1.(prog_main) p2.(prog_main)
-  && PTree_Properties.for_all dm1 link_prog_check then
+  && ATree_Properties.for_all dm1 link_prog_check then
     Some {| prog_main := p1.(prog_main);
             prog_public := p1.(prog_public) ++ p2.(prog_public);
-            prog_defs := PTree.elements (PTree.combine link_prog_merge dm1 dm2) |}
+            prog_defs := ATree.elements (ATree.combine link_prog_merge dm1 dm2) |}
   else
     None.
 
@@ -275,20 +275,20 @@ Lemma link_prog_inv:
   link_prog = Some p ->
       p1.(prog_main) = p2.(prog_main)
    /\ (forall id gd1 gd2,
-         dm1!id = Some gd1 -> dm2!id = Some gd2 ->
+         dm1$id = Some gd1 -> dm2$id = Some gd2 ->
          In id p1.(prog_public) /\ In id p2.(prog_public) /\ exists gd, link gd1 gd2 = Some gd)
   /\ p = {| prog_main := p1.(prog_main);
             prog_public := p1.(prog_public) ++ p2.(prog_public);
-            prog_defs := PTree.elements (PTree.combine link_prog_merge dm1 dm2) |}.
+            prog_defs := ATree.elements (ATree.combine link_prog_merge dm1 dm2) |}.
 Proof.
   unfold link_prog; intros p E.
   destruct (ident_eq (prog_main p1) (prog_main p2)); try discriminate.
-  destruct (PTree_Properties.for_all dm1 link_prog_check) eqn:C; inv E.
-  rewrite PTree_Properties.for_all_correct in C.
+  destruct (ATree_Properties.for_all dm1 link_prog_check) eqn:C; inv E.
+  rewrite ATree_Properties.for_all_correct in C.
   split; auto. split; auto.
   intros. exploit C; eauto. unfold link_prog_check. rewrite H0. intros.
-  destruct (in_dec peq id (prog_public p1)); try discriminate.
-  destruct (in_dec peq id (prog_public p2)); try discriminate.
+  destruct (in_dec ident_eq id (prog_public p1)); try discriminate.
+  destruct (in_dec ident_eq id (prog_public p2)); try discriminate.
   destruct (link gd1 gd2) eqn:L; try discriminate.
   intuition auto. exists g; auto.
 Qed.
@@ -296,26 +296,26 @@ Qed.
 Lemma link_prog_succeeds:
   p1.(prog_main) = p2.(prog_main) ->
   (forall id gd1 gd2,
-      dm1!id = Some gd1 -> dm2!id = Some gd2 ->
+      dm1$id = Some gd1 -> dm2$id = Some gd2 ->
       In id p1.(prog_public) /\ In id p2.(prog_public) /\ link gd1 gd2 <> None) ->
   link_prog =
     Some {| prog_main := p1.(prog_main);
             prog_public := p1.(prog_public) ++ p2.(prog_public);
-            prog_defs := PTree.elements (PTree.combine link_prog_merge dm1 dm2) |}.
+            prog_defs := ATree.elements (ATree.combine link_prog_merge dm1 dm2) |}.
 Proof.
   intros. unfold link_prog. unfold proj_sumbool. rewrite H, dec_eq_true. simpl.
-  replace (PTree_Properties.for_all dm1 link_prog_check) with true; auto.
-  symmetry. apply PTree_Properties.for_all_correct; intros. rename a into gd1.
-  unfold link_prog_check. destruct dm2!x as [gd2|] eqn:G2; auto.
+  replace (ATree_Properties.for_all dm1 link_prog_check) with true; auto.
+  symmetry. apply ATree_Properties.for_all_correct; intros. rename a into gd1.
+  unfold link_prog_check. destruct dm2$x as [gd2|] eqn:G2; auto.
   exploit H0; eauto. intros (P & Q & R). unfold proj_sumbool; rewrite ! pred_dec_true by auto.
   destruct (link gd1 gd2); auto; discriminate.
 Qed.
 
 Lemma prog_defmap_elements:
-  forall (m: PTree.t (globdef F V)) pub mn x,
-  (prog_defmap {| prog_defs := PTree.elements m; prog_public := pub; prog_main := mn |})!x = m!x.
+  forall (m: ATree.t (globdef F V)) pub mn x,
+  (prog_defmap {| prog_defs := ATree.elements m; prog_public := pub; prog_main := mn |})$x = m$x.
 Proof.
-  intros. unfold prog_defmap; simpl. apply PTree_Properties.of_list_elements.
+  intros. unfold prog_defmap; simpl. apply ATree_Properties.of_list_elements.
 Qed.
 
 End LINKER_PROG.
@@ -326,9 +326,9 @@ Instance Linker_prog (F V: Type) {LF: Linker F} {LV: Linker V} : Linker (program
      p1.(prog_main) = p2.(prog_main)
   /\ incl p1.(prog_public) p2.(prog_public)
   /\ forall id gd1,
-     (prog_defmap p1)!id = Some gd1 ->
+     (prog_defmap p1)$id = Some gd1 ->
      exists gd2,
-        (prog_defmap p2)!id = Some gd2
+        (prog_defmap p2)$id = Some gd2
      /\ linkorder gd1 gd2
      /\ (~In id p2.(prog_public) -> gd2 = gd1)
 }.
@@ -346,15 +346,15 @@ Proof.
 - intros. apply link_prog_inv in H. destruct H as (L1 & L2 & L3).
   subst z; simpl. intuition auto.
 + red; intros; apply in_app_iff; auto.
-+ rewrite prog_defmap_elements, PTree.gcombine, H by auto.
-  destruct (prog_defmap y)!id as [gd2|] eqn:GD2; simpl.
++ rewrite prog_defmap_elements, ATree.gcombine, H by auto.
+  destruct (prog_defmap y)$id as [gd2|] eqn:GD2; simpl.
 * exploit L2; eauto. intros (P & Q & gd & R).
   exists gd; split. auto. split. apply link_linkorder in R; tauto.
   rewrite in_app_iff; tauto.
 * exists gd1; split; auto. split. apply linkorder_refl. auto.
 + red; intros; apply in_app_iff; auto.
-+ rewrite prog_defmap_elements, PTree.gcombine, H by auto.
-  destruct (prog_defmap x)!id as [gd2|] eqn:GD2; simpl.
++ rewrite prog_defmap_elements, ATree.gcombine, H by auto.
+  destruct (prog_defmap x)$id as [gd2|] eqn:GD2; simpl.
 * exploit L2; eauto. intros (P & Q & gd & R).
   exists gd; split. auto. split. apply link_linkorder in R; tauto.
   rewrite in_app_iff; tauto.
@@ -364,8 +364,8 @@ Defined.
 Lemma prog_defmap_linkorder:
   forall {F V: Type} {LF: Linker F} {LV: Linker V} (p1 p2: program F V) id gd1,
   linkorder p1 p2 ->
-  (prog_defmap p1)!id = Some gd1 ->
-  exists gd2, (prog_defmap p2)!id = Some gd2 /\ linkorder gd1 gd2.
+  (prog_defmap p1)$id = Some gd1 ->
+  exists gd2, (prog_defmap p2)$id = Some gd2 /\ linkorder gd1 gd2.
 Proof.
   intros. destruct H as (A & B & C).
   exploit C; eauto. intros (gd2 & P & Q & R). exists gd2; auto.
@@ -415,9 +415,9 @@ Definition match_program_gen (ctx: C) (p1: program F1 V1) (p2: program F2 V2) : 
 
 Theorem match_program_defmap:
   forall ctx p1 p2, match_program_gen ctx p1 p2 ->
-  forall id, option_rel (match_globdef ctx) (prog_defmap p1)!id (prog_defmap p2)!id.
+  forall id, option_rel (match_globdef ctx) (prog_defmap p1)$id (prog_defmap p2)$id.
 Proof.
-  intros. apply PTree_Properties.of_list_related. apply H.
+  intros. apply ATree_Properties.of_list_related. apply H.
 Qed.
 
 Lemma match_program_gen_main:
@@ -644,8 +644,8 @@ Proof.
   exploit link_match_globdef. eexact H2. eexact H3. eauto. eauto. eauto.
   intros (tg & TL & _). intuition congruence.
 - split; [|split].
-+ rewrite R. apply PTree.elements_canonical_order'. intros id.
-  rewrite ! PTree.gcombine by auto.
++ rewrite R. apply ATree.elements_canonical_order'. intros id.
+  rewrite ! ATree.gcombine by auto.
   generalize (match_program_defmap _ _ _ _ _ H0 id) (match_program_defmap _ _ _ _ _ H1 id).
   clear R. intros R1 R2; inv R1; inv R2; unfold link_prog_merge.
 * constructor.

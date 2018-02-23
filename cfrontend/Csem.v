@@ -46,9 +46,9 @@ Definition globalenv (p: program) :=
   The current value of the variable is stored in the associated memory
   block. *)
 
-Definition env := PTree.t (block * type). (* map variable -> location & type *)
+Definition env := ATree.t (block * type). (* map variable -> location & type *)
 
-Definition empty_env: env := (PTree.empty (block * type)).
+Definition empty_env: env := (ATree.empty (block * type)).
 
 
 Section SEMANTICS.
@@ -125,7 +125,7 @@ Inductive alloc_variables: env -> mem ->
   | alloc_variables_cons:
       forall e m id ty vars m1 b1 m2 e2,
       Mem.alloc m 0 (sizeof ge ty) = (m1, b1) ->
-      alloc_variables (PTree.set id (b1, ty) e) m1 vars e2 m2 ->
+      alloc_variables (ATree.set id (b1, ty) e) m1 vars e2 m2 ->
       alloc_variables e m ((id, ty) :: vars) e2 m2.
 
 (** Initialization of local variables that are parameters to a function.
@@ -141,7 +141,7 @@ Inductive bind_parameters (e: env):
       bind_parameters e m nil nil m
   | bind_parameters_cons:
       forall m id ty params v1 vl b m1 m2,
-      PTree.get id e = Some(b, ty) ->
+      ATree.get id e = Some(b, ty) ->
       assign_loc ty m b Ptrofs.zero v1 E0 m1 ->
       bind_parameters e m1 params vl m2 ->
       bind_parameters e m ((id, ty) :: params) (v1 :: vl) m2.
@@ -152,7 +152,7 @@ Definition block_of_binding (id_b_ty: ident * (block * type)) :=
   match id_b_ty with (id, (b, ty)) => (b, 0, sizeof ge ty) end.
 
 Definition blocks_of_env (e: env) : list (block * Z * Z) :=
-  List.map block_of_binding (PTree.elements e).
+  List.map block_of_binding (ATree.elements e).
 
 (** Selection of the appropriate case of a [switch], given the value [n]
   of the selector expression. *)
@@ -209,11 +209,11 @@ Variable e: env.
 
 Inductive lred: expr -> mem -> expr -> mem -> Prop :=
   | red_var_local: forall x ty m b,
-      e!x = Some(b, ty) ->
+      e$x = Some(b, ty) ->
       lred (Evar x ty) m
            (Eloc b Ptrofs.zero ty) m
   | red_var_global: forall x ty m b,
-      e!x = None ->
+      e$x = None ->
       Genv.find_symbol ge x = Some b ->
       lred (Evar x ty) m
            (Eloc b Ptrofs.zero ty) m
@@ -221,12 +221,12 @@ Inductive lred: expr -> mem -> expr -> mem -> Prop :=
       lred (Ederef (Eval (Vptr b ofs) ty1) ty) m
            (Eloc b ofs ty) m
   | red_field_struct: forall b ofs id co a f ty m delta,
-      ge.(genv_cenv)!id = Some co ->
+      ge.(genv_cenv)$id = Some co ->
       field_offset ge f (co_members co) = OK delta ->
       lred (Efield (Eval (Vptr b ofs) (Tstruct id a)) f ty) m
            (Eloc b (Ptrofs.add ofs (Ptrofs.repr delta)) ty) m
   | red_field_union: forall b ofs id co a f ty m,
-      ge.(genv_cenv)!id = Some co ->
+      ge.(genv_cenv)$id = Some co ->
       lred (Efield (Eval (Vptr b ofs) (Tunion id a)) f ty) m
            (Eloc b ofs ty) m.
 

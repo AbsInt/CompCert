@@ -154,7 +154,7 @@ Proof.
 - auto.
 - auto.
 - auto.
-- rewrite (Genv.find_invert_symbol _ _ H0). simpl in H; rewrite H.
+- rewrite (Genv.find_invert_symbol H0). simpl in H; rewrite H.
   rewrite dec_eq_true. auto. 
 Qed.
 
@@ -238,7 +238,7 @@ Lemma do_volatile_load_complete:
   do_volatile_load w chunk m b ofs = Some(w', t, v).
 Proof.
   unfold do_volatile_load; intros. inv H; simpl in *.
-  rewrite H1. rewrite (Genv.find_invert_symbol _ _ H2). inv H0. inv H8. inv H6. rewrite H9.
+  rewrite H1. rewrite (Genv.find_invert_symbol H2). inv H0. inv H8. inv H6. rewrite H9.
   rewrite (val_of_eventval_complete _ _ _ H3). auto.
   rewrite H1. rewrite H2. inv H0. auto.
 Qed.
@@ -261,7 +261,7 @@ Lemma do_volatile_store_complete:
   do_volatile_store w chunk m b ofs v = Some(w', t, m').
 Proof.
   unfold do_volatile_store; intros. inv H; simpl in *.
-  rewrite H1. rewrite (Genv.find_invert_symbol _ _ H2).
+  rewrite H1. rewrite (Genv.find_invert_symbol H2).
   rewrite (eventval_of_val_complete _ _ _ H3).
   inv H0. inv H8. inv H6. rewrite H9. auto.
   rewrite H1. rewrite H2. inv H0. auto.
@@ -682,7 +682,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
   | LV, Eloc b ofs ty =>
       nil
   | LV, Evar x ty =>
-      match e!x with
+      match e$x with
       | Some(b, ty') =>
           check type_eq ty ty';
           topred (Lred "red_var_local" (Eloc b Ptrofs.zero ty) m)
@@ -704,13 +704,13 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       | Some(Vptr b ofs, ty') =>
           match ty' with
           | Tstruct id _ =>
-              do co <- ge.(genv_cenv)!id;
+              do co <- ge.(genv_cenv)$id;
               match field_offset ge f (co_members co) with
               | Error _ => stuck
               | OK delta => topred (Lred "red_field_struct" (Eloc b (Ptrofs.add ofs (Ptrofs.repr delta)) ty) m)
               end
           | Tunion id _ =>
-              do co <- ge.(genv_cenv)!id;
+              do co <- ge.(genv_cenv)$id;
               topred (Lred "red_field_union" (Eloc b ofs ty) m)
           | _ => stuck
           end
@@ -925,15 +925,15 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
   | Eloc b ofs ty => False
   | Evar x ty =>
       exists b,
-      e!x = Some(b, ty)
-      \/ (e!x = None /\ Genv.find_symbol ge x = Some b)
+      e$x = Some(b, ty)
+      \/ (e$x = None /\ Genv.find_symbol ge x = Some b)
   | Ederef (Eval v ty1) ty =>
       exists b, exists ofs, v = Vptr b ofs
   | Efield (Eval v ty1) f ty =>
       exists b, exists ofs, v = Vptr b ofs /\
       match ty1 with
-      | Tstruct id _ => exists co delta, ge.(genv_cenv)!id = Some co /\ field_offset ge f (co_members co) = OK delta
-      | Tunion  id _ => exists co, ge.(genv_cenv)!id = Some co
+      | Tstruct id _ => exists co delta, ge.(genv_cenv)$id = Some co /\ field_offset ge f (co_members co) = OK delta
+      | Tunion  id _ => exists co, ge.(genv_cenv)$id = Some co
       | _ => False
       end
   | Eval v ty => False
@@ -1318,7 +1318,7 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
 (* Eval *)
   split; intros. tauto. simpl; congruence.
 (* Evar *)
-  destruct (e!x) as [[b ty']|] eqn:?.
+  destruct (e$x) as [[b ty']|] eqn:?.
   destruct (type_eq ty ty')...
   subst. apply topred_ok; auto. apply red_var_local; auto.
   destruct (Genv.find_symbol ge x) as [b|] eqn:?...
@@ -1329,11 +1329,11 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   destruct v...
   destruct ty'...
   (* top struct *)
-  destruct (ge.(genv_cenv)!i0) as [co|] eqn:?...
+  destruct (ge.(genv_cenv)$i0) as [co|] eqn:?...
   destruct (field_offset ge f (co_members co)) as [delta|] eqn:?...
   apply topred_ok; auto. eapply red_field_struct; eauto.
   (* top union *)
-  destruct (ge.(genv_cenv)!i0) as [co|] eqn:?...
+  destruct (ge.(genv_cenv)$i0) as [co|] eqn:?...
   apply topred_ok; auto. eapply red_field_union; eauto.
   (* in depth *)
   eapply incontext_ok; eauto.
@@ -1846,7 +1846,7 @@ Fixpoint do_alloc_variables (e: env) (m: mem) (l: list (ident * type)) {struct l
   | nil => (e,m)
   | (id, ty) :: l' =>
       let (m1,b1) := Mem.alloc m 0 (sizeof ge ty) in
-      do_alloc_variables (PTree.set id (b1, ty) e) m1 l'
+      do_alloc_variables (ATree.set id (b1, ty) e) m1 l'
 end.
 
 Lemma do_alloc_variables_sound:
@@ -1872,7 +1872,7 @@ Function sem_bind_parameters (w: world) (e: env) (m: mem) (l: list (ident * type
   match l, lv  with
   | nil, nil => Some m
   | (id, ty) :: params, v1::lv =>
-      match PTree.get id e with
+      match ATree.get id e with
          | Some (b, ty') =>
              check (type_eq ty ty');
              do w', t, m1 <- do_assign_loc w ty m b Ptrofs.zero v1;

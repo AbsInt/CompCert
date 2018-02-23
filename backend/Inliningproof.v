@@ -392,7 +392,7 @@ Lemma find_inlined_function:
   forall fenv id rs fd f,
   fenv_compat prog fenv ->
   find_function ge (inr id) rs = Some fd ->
-  fenv!id = Some f ->
+  fenv$id = Some f ->
   fd = Internal f.
 Proof.
   intros.

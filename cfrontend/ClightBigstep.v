@@ -88,7 +88,7 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
   | exec_Sset:     forall e le m id a v,
       eval_expr ge e le m a v ->
       exec_stmt e le m (Sset id a)
-               E0 (PTree.set id v le) m Out_normal
+               E0 (ATree.set id v le) m Out_normal
   | exec_Scall:   forall e le m optid a al tyargs tyres cconv vf vargs f t m' vres,
       classify_fun (typeof a) = fun_case_f tyargs tyres cconv ->
       eval_expr ge e le m a vf ->

@@ -1093,7 +1093,7 @@ Qed.
 
 Inductive nmem : Type :=
   | NMemDead
-  | NMem (stk: ISet.t) (gl: PTree.t ISet.t).
+  | NMem (stk: ISet.t) (gl: ATree.t ISet.t).
 
 (** Interpretation of [nmem]:
 - [NMemDead]: all memory locations are unused (dead).  Acts as bottom.
@@ -1112,19 +1112,19 @@ Inductive nlive: nmem -> block -> Z -> Prop :=
       (STK: b = sp -> ~ISet.In ofs stk)
       (GL: forall id iv,
            Genv.find_symbol ge id = Some b ->
-           gl!id = Some iv ->
+           gl$id = Some iv ->
            ~ISet.In ofs iv),
       nlive (NMem stk gl) b ofs.
 
 (** All locations are live *)
 
-Definition nmem_all := NMem ISet.empty (PTree.empty _).
+Definition nmem_all := NMem ISet.empty (ATree.empty _).
 
 Lemma nlive_all: forall b ofs, nlive nmem_all b ofs.
 Proof.
   intros; constructor; intros.
   apply ISet.In_empty.
-  rewrite PTree.gempty in H0; discriminate.
+  rewrite ATree.gempty in H0; discriminate.
 Qed.
 
 (** Add a range of live locations to [nm].  The range starts at
@@ -1136,12 +1136,12 @@ Definition nmem_add (nm: nmem) (p: aptr) (sz: Z) : nmem :=
   | NMem stk gl =>
       match p with
       | Gl id ofs =>
-          match gl!id with
-          | Some iv => NMem stk (PTree.set id (ISet.remove (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz) iv) gl)
+          match gl$id with
+          | Some iv => NMem stk (ATree.set id (ISet.remove (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz) iv) gl)
           | None => nm
           end
       | Glo id =>
-          NMem stk (PTree.remove id gl)
+          NMem stk (ATree.remove id gl)
       | Stk ofs =>
           NMem (ISet.remove (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz) stk) gl
       | Stack =>
@@ -1162,11 +1162,11 @@ Proof.
   inv H1; try (apply nlive_all).
   - (* Gl id ofs *)
     assert (Genv.find_symbol ge id = Some b) by (eapply H; eauto).
-    destruct gl!id as [iv|] eqn:NG.
+    destruct gl$id as [iv|] eqn:NG.
   + constructor; simpl; intros.
     congruence.
     assert (id0 = id) by (eapply Genv.genv_vars_inj; eauto). subst id0.
-    rewrite PTree.gss in H5. inv H5. rewrite ISet.In_remove.
+    rewrite ATree.gss in H5. inv H5. rewrite ISet.In_remove.
     intros [A B]. elim A; auto.
   + constructor; simpl; intros.
     congruence.
@@ -1177,7 +1177,7 @@ Proof.
     constructor; simpl; intros.
     congruence.
     assert (id0 = id) by (eapply Genv.genv_vars_inj; eauto). subst id0.
-    rewrite PTree.grs in H5. congruence.
+    rewrite ATree.grs in H5. congruence.
   - (* Stk ofs *)
     constructor; simpl; intros.
     rewrite ISet.In_remove. intros [A B]. elim A; auto.
@@ -1194,14 +1194,14 @@ Lemma incl_nmem_add:
 Proof.
   intros. inversion H; subst. unfold nmem_add; destruct p; try (apply nlive_all).
 - (* Gl id ofs *)
-  destruct gl!id as [iv|] eqn:NG.
+  destruct gl$id as [iv|] eqn:NG.
   + split; simpl; intros. auto.
-    rewrite PTree.gsspec in H1. destruct (peq id0 id); eauto. inv H1.
+    rewrite ATree.gsspec in H1. destruct (ATree.elt_eq id0 id); eauto. inv H1.
     rewrite ISet.In_remove. intros [P Q]. eelim GL; eauto.
   + auto.
 - (* Glo id *)
   split; simpl; intros. auto.
-  rewrite PTree.grspec in H1. destruct (PTree.elt_eq id0 id). congruence. eauto.
+  rewrite ATree.grspec in H1. destruct (ATree.elt_eq id0 id). congruence. eauto.
 - (* Stk ofs *)
   split; simpl; intros.
   rewrite ISet.In_remove. intros [P Q]. eelim STK; eauto.
@@ -1222,11 +1222,11 @@ Definition nmem_remove (nm: nmem) (p: aptr) (sz: Z) : nmem :=
     match p with
     | Gl id ofs =>
         let iv' :=
-        match gl!id with
+        match gl$id with
         | Some iv => ISet.add (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz) iv
         | None    => ISet.interval (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz)
         end in
-        NMem stk (PTree.set id iv' gl)
+        NMem stk (ATree.set id iv' gl)
     | Stk ofs =>
         NMem (ISet.add (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz) stk) gl
     | _ => nm
@@ -1244,7 +1244,7 @@ Lemma nlive_remove:
 Proof.
   intros. inversion H2; subst. unfold nmem_remove; inv H1; auto.
 - (* Gl id ofs *)
-  set (iv' := match gl!id with
+  set (iv' := match gl$id with
                   | Some iv =>
                       ISet.add (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz) iv
                   | None =>
@@ -1253,8 +1253,8 @@ Proof.
               end).
   assert (Genv.find_symbol ge id = Some b) by (eapply H; eauto).
   split; simpl; auto; intros.
-  rewrite PTree.gsspec in H6. destruct (peq id0 id).
-+ inv H6. destruct H3. congruence. destruct gl!id as [iv0|] eqn:NG.
+  rewrite ATree.gsspec in H6. destruct (ATree.elt_eq id0 id).
++ inv H6. destruct H3. congruence. destruct gl$id as [iv0|] eqn:NG.
   unfold iv'; rewrite ISet.In_add. intros [P|P]. omega. eelim GL; eauto.
   unfold iv'; rewrite ISet.In_interval. omega.
 + eauto.
@@ -1273,7 +1273,7 @@ Definition nmem_contains (nm: nmem) (p: aptr) (sz: Z) :=
   | NMem stk gl =>
       match p with
       | Gl id ofs =>
-          match gl!id with
+          match gl$id with
           | Some iv => negb (ISet.contains (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz) iv)
           | None => true
           end
@@ -1296,7 +1296,7 @@ Proof.
   inv H1; try discriminate.
 - (* Gl id ofs *)
   assert (Genv.find_symbol ge id = Some b) by (eapply H; eauto).
-  destruct gl!id as [iv|] eqn:HG; inv H2.
+  destruct gl$id as [iv|] eqn:HG; inv H2.
   destruct (ISet.contains (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + sz) iv) eqn:IC; try discriminate.
   rewrite ISet.contains_spec in IC. eelim GL; eauto.
 - (* Stk ofs *)
@@ -1309,14 +1309,14 @@ Qed.
   a [Ireturn] or [Itailcall] instruction. *)
 
 Definition nmem_dead_stack (sz: Z) :=
-  NMem (ISet.interval 0 sz) (PTree.empty _).
+  NMem (ISet.interval 0 sz) (ATree.empty _).
 
 Lemma nlive_dead_stack:
   forall sz b' i, b' <> sp \/ ~(0 <= i < sz) -> nlive (nmem_dead_stack sz) b' i.
 Proof.
   intros; constructor; simpl; intros.
 - rewrite ISet.In_interval. intuition.
-- rewrite PTree.gempty in H1; discriminate.
+- rewrite ATree.gempty in H1; discriminate.
 Qed.
 
 (** Least upper bound *)
@@ -1327,7 +1327,7 @@ Definition nmem_lub (nm1 nm2: nmem) : nmem :=
   | _, NMemDead => nm1
   | NMem stk1 gl1, NMem stk2 gl2 =>
       NMem (ISet.inter stk1 stk2)
-           (PTree.combine
+           (ATree.combine
                 (fun o1 o2 =>
                   match o1, o2 with
                   | Some iv1, Some iv2 => Some(ISet.inter iv1 iv2)
@@ -1342,9 +1342,9 @@ Proof.
   intros. inversion H; subst. destruct nm2; simpl. auto.
   constructor; simpl; intros.
 - rewrite ISet.In_inter. intros [P Q]. eelim STK; eauto.
-- rewrite PTree.gcombine in H1 by auto.
-  destruct gl!id as [iv1|] eqn:NG1; try discriminate;
-  destruct gl0!id as [iv2|] eqn:NG2; inv H1.
+- rewrite ATree.gcombine in H1 by auto.
+  destruct gl$id as [iv1|] eqn:NG1; try discriminate;
+  destruct gl0$id as [iv2|] eqn:NG2; inv H1.
   rewrite ISet.In_inter. intros [P Q]. eelim GL; eauto.
 Qed.
 
@@ -1354,9 +1354,9 @@ Proof.
   intros. inversion H; subst. destruct nm1; simpl. auto.
   constructor; simpl; intros.
 - rewrite ISet.In_inter. intros [P Q]. eelim STK; eauto.
-- rewrite PTree.gcombine in H1 by auto.
-  destruct gl0!id as [iv1|] eqn:NG1; try discriminate;
-  destruct gl!id as [iv2|] eqn:NG2; inv H1.
+- rewrite ATree.gcombine in H1 by auto.
+  destruct gl0$id as [iv1|] eqn:NG1; try discriminate;
+  destruct gl$id as [iv2|] eqn:NG2; inv H1.
   rewrite ISet.In_inter. intros [P Q]. eelim GL; eauto.
 Qed.
 
@@ -1365,7 +1365,7 @@ Qed.
 Definition nmem_beq (nm1 nm2: nmem) : bool :=
   match nm1, nm2 with
   | NMemDead, NMemDead => true
-  | NMem stk1 gl1, NMem stk2 gl2 => ISet.beq stk1 stk2 && PTree.beq ISet.beq gl1 gl2
+  | NMem stk1 gl1, NMem stk2 gl2 => ISet.beq stk1 stk2 && ATree.beq ISet.beq gl1 gl2
   | _, _ => false
   end.
 
@@ -1377,13 +1377,13 @@ Proof.
   unfold nmem_beq; intros.
   destruct nm1 as [ | stk1 gl1]; destruct nm2 as [ | stk2 gl2]; try discriminate.
 - split; intros L; inv L.
-- InvBooleans. rewrite ISet.beq_spec in H0. rewrite PTree.beq_correct in H1.
+- InvBooleans. rewrite ISet.beq_spec in H0. rewrite ATree.beq_correct in H1.
   split; intros L; inv L; constructor; intros.
 + rewrite <- H0. eauto.
-+ specialize (H1 id). rewrite H2 in H1. destruct gl1!id as [iv1|] eqn: NG; try contradiction.
++ specialize (H1 id). rewrite H2 in H1. destruct gl1$id as [iv1|] eqn: NG; try contradiction.
   rewrite ISet.beq_spec in H1. rewrite <- H1. eauto.
 + rewrite H0. eauto.
-+ specialize (H1 id). rewrite H2 in H1. destruct gl2!id as [iv2|] eqn: NG; try contradiction.
++ specialize (H1 id). rewrite H2 in H1. destruct gl2$id as [iv2|] eqn: NG; try contradiction.
   rewrite ISet.beq_spec in H1. rewrite H1. eauto.
 Qed.
 
