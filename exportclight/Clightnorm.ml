@@ -33,12 +33,12 @@ open Camlcoq
 open Ctypes
 open Clight
 
-let gen_next : AST.ident ref = ref P.one
+let gen_next : int ref = ref 1
 let gen_trail : (AST.ident * coq_type) list ref = ref []
 
 let gensym ty =
-  let id = !gen_next in
-  gen_next := P.succ id;
+  let id = intern_string (Printf.sprintf "@%d" !gen_next) in
+  gen_next := !gen_next + 1;
   gen_trail := (id, ty) :: !gen_trail;
   id
 
@@ -148,10 +148,7 @@ let next_var curr (v, _) = if P.lt v curr then curr else P.succ v
 let next_var_list vars start = List.fold_left next_var start vars
 
 let norm_function f =
-  gen_next := next_var_list f.fn_params
-                (next_var_list f.fn_vars
-                   (next_var_list f.fn_temps
-                     (Camlcoq.first_unused_ident ())));
+  gen_next := 1;
   gen_trail := [];
   let s' = norm_stmt f.fn_body in
   let new_temps = !gen_trail in

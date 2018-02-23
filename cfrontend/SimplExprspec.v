@@ -555,13 +555,17 @@ Ltac monadInv H :=
 (** ** Freshness and separation properties. *)
 
 Definition within (id: ident) (g1 g2: generator) : Prop :=
-  Ple (gen_next g1) id /\ Plt id (gen_next g2).
+  exists p,
+    id = #(string_of_resid p) /\
+    Ple (gen_next g1) p /\ Plt p (gen_next g2).
 
 Lemma gensym_within:
   forall ty g1 id g2 I,
   gensym ty g1 = Res id g2 I -> within id g1 g2.
 Proof.
-  intros. monadInv H. split. apply Ple_refl. apply Plt_succ.
+  intros. monadInv H.
+  exists (gen_next g1); intuition idtac.
+  apply Ple_refl. apply Plt_succ.
 Qed.
 
 Lemma within_widen:
@@ -571,7 +575,8 @@ Lemma within_widen:
   Ple (gen_next g2) (gen_next g2') ->
   within id g1' g2'.
 Proof.
-  intros. destruct H. split.
+  intros. destruct H as (? & ? & ?).
+  exists x; intuition idtac.
   eapply Ple_trans; eauto.
   eapply Plt_Ple_trans; eauto.
 Qed.
@@ -609,26 +614,40 @@ Proof.
   intros; red; intros. destruct (in_app_or _ _ _ H1); auto.
 Qed.
 
+Lemma ident_of_string_inj s t:
+  ident_of_string s = ident_of_string t -> s = t.
+Proof.
+  intros Hst.
+  rewrite <- (string_of_ident_of_string s).
+  rewrite <- (string_of_ident_of_string t).
+  congruence.
+Qed.
+
 Lemma contained_disjoint:
   forall g1 l1 g2 l2 g3,
   contained l1 g1 g2 -> contained l2 g2 g3 -> list_disjoint l1 l2.
 Proof.
   intros; red; intros. red; intro; subst y.
-  exploit H; eauto. intros [A B]. exploit H0; eauto. intros [Csyntax D].
-  elim (Plt_strict x). apply Plt_Ple_trans with (gen_next g2); auto.
+  exploit H; eauto. intros (p & Hp & A & B).
+  exploit H0; eauto. intros (q & Hq & Csyntax & D).
+  assert (p = q) by (apply string_of_resid_inj, ident_of_string_inj; congruence).
+  subst q. elim (Plt_strict p). apply Plt_Ple_trans with (gen_next g2); auto.
 Qed.
 
 Lemma contained_notin:
   forall g1 l g2 id g3,
   contained l g1 g2 -> within id g2 g3 -> ~In id l.
 Proof.
-  intros; red; intros. exploit H; eauto. intros [Csyntax D]. destruct H0 as [A B].
-  elim (Plt_strict id). apply Plt_Ple_trans with (gen_next g2); auto.
+  intros; red; intros.
+  exploit H; eauto. intros (p & Hp & Csyntax & D).
+  destruct H0 as (q & Hq & A & B).
+  assert (p = q) by (apply string_of_resid_inj, ident_of_string_inj; congruence).
+  subst q. elim (Plt_strict p). apply Plt_Ple_trans with (gen_next g2); auto.
 Qed.
 
 Definition dest_below (dst: destination) (g: generator) : Prop :=
   match dst with
-  | For_set sd => Plt (sd_temp sd) g.(gen_next)
+  | For_set sd => exists p, sd_temp sd = #(string_of_resid p) /\ Plt p g.(gen_next)
   | _ => True
   end.
 
@@ -642,7 +661,7 @@ Lemma dest_for_set_seqbool_val:
   forall tmp ty g1 g2,
   within tmp g1 g2 -> dest_below (For_set (sd_seqbool_val tmp ty)) g2.
 Proof.
-  intros. destruct H. simpl. auto.
+  intros. destruct H as (p & Hp & A & B). simpl. eauto.
 Qed.
 
 Lemma dest_for_set_seqbool_set:
@@ -654,27 +673,30 @@ Qed.
 Lemma dest_for_set_condition_val:
   forall tmp tycast ty g1 g2, within tmp g1 g2 -> dest_below (For_set (SDbase tycast ty tmp)) g2.
 Proof.
-  intros. destruct H. simpl. auto.
+  intros. destruct H as (p & Hp & A & B). simpl. eauto.
 Qed.
 
 Lemma dest_for_set_condition_set:
   forall sd tmp tycast ty g1 g2, dest_below (For_set sd) g2 -> within tmp g1 g2 -> dest_below (For_set (SDcons tycast ty tmp sd)) g2.
 Proof.
-  intros. destruct H0. simpl. auto.
+  intros. destruct H0 as (p & Hp & A & B). simpl. eauto.
 Qed.
 
 Lemma sd_temp_notin:
   forall sd g1 g2 l, dest_below (For_set sd) g1 -> contained l g1 g2 -> ~In (sd_temp sd) l.
 Proof.
-  intros. simpl in H. red; intros. exploit H0; eauto. intros [A B].
-  elim (Plt_strict (sd_temp sd)). apply Plt_Ple_trans with (gen_next g1); auto.
+  intros. destruct H as (p & Hp & H). red; intros.
+  exploit H0; eauto. intros (q & Hq & A & B).
+  assert (p = q) by (apply string_of_resid_inj, ident_of_string_inj; congruence).
+  subst q. elim (Plt_strict p). apply Plt_Ple_trans with (gen_next g1); auto.
 Qed.
 
 Lemma dest_below_le:
   forall dst g1 g2,
   dest_below dst g1 -> Ple g1.(gen_next) g2.(gen_next) -> dest_below dst g2.
 Proof.
-  intros. destruct dst; simpl in *; auto. eapply Plt_Ple_trans; eauto.
+  intros. destruct dst; simpl in *; auto.
+  destruct H as (p & Hp & H). eauto using Plt_Ple_trans.
 Qed.
 
 Hint Resolve gensym_within within_widen contained_widen

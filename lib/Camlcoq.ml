@@ -299,7 +299,7 @@ let next_temp = ref 1
 
 let rec fresh_temp () =
   assert (!next_temp != 0);
-  let s = Printf.sprintf "$%d" !next_temp in
+  let s = Printf.sprintf "!%d" !next_temp in
   next_temp := !next_temp + 1;
   if Hashtbl.mem atom_of_string s then fresh_temp () else s
 
@@ -321,8 +321,6 @@ let extern_atom a =
     Hashtbl.add atom_of_string s a;
     Hashtbl.add string_of_atom a s;
     s
-
-let first_unused_ident () = !next_atom
 
 (* Strings *)
 
@@ -352,6 +350,8 @@ let ident_of_coqstring s =
   intern_string (camlstring_of_coqstring s)
 let coqstring_of_ident a =
   coqstring_of_camlstring (extern_atom a)
+let coqstring_of_resid p =
+  coqstring_of_camlstring (Printf.sprintf "$%d" (P.to_int p))
 
 (* Floats *)
 

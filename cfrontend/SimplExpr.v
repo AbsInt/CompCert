@@ -30,9 +30,13 @@ Local Open Scope string_scope.
 (** State and error monad for generating fresh identifiers. *)
 
 Record generator : Type := mkgenerator {
-  gen_next: ident;
+  gen_next: positive;
   gen_trail: list (ident * type)
 }.
+
+(** The ML code prints out the nth reserved identifier as "$n". *)
+Parameter string_of_resid : positive -> String.string.
+Axiom string_of_resid_inj : forall x y, string_of_resid x = string_of_resid y -> x = y.
 
 Inductive result (A: Type) (g: generator) : Type :=
   | Err: Errors.errmsg -> result A g
@@ -72,15 +76,13 @@ Notation "'do' ( X , Y ) <- A ; B" := (bind2 A (fun X Y => B))
 
 Local Open Scope gensym_monad_scope.
 
-Parameter first_unused_ident: unit -> ident.
-
 Definition initial_generator (x: unit) : generator :=
-  mkgenerator (first_unused_ident x) nil.
+  mkgenerator 1%positive nil.
 
 Definition gensym (ty: type): mon ident :=
   fun (g: generator) =>
-    Res (gen_next g)
-        (mkgenerator (Pos.succ (gen_next g)) ((gen_next g, ty) :: gen_trail g))
+    Res #(string_of_resid (gen_next g))
+        (mkgenerator (Pos.succ (gen_next g)) ((#(string_of_resid (gen_next g)), ty) :: gen_trail g))
         (Ple_succ (gen_next g)).
 
 (** Construct a sequence from a list of statements.  To facilitate the

@@ -94,7 +94,7 @@ Extract Constant Allocation.regalloc => "Regalloc.regalloc".
 Extract Constant Linearize.enumerate_aux => "Linearizeaux.enumerate_aux".
 
 (* SimplExpr *)
-Extract Constant SimplExpr.first_unused_ident => "Camlcoq.first_unused_ident".
+Extract Constant SimplExpr.string_of_resid => "Camlcoq.coqstring_of_resid".
 Extraction Inline SimplExpr.ret SimplExpr.error SimplExpr.bind SimplExpr.bind2.
 
 (* Compopts *)
