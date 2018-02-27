@@ -299,9 +299,6 @@ let coqstring_uppercase_ascii_of_camlstring s =
     cstring (d :: accu) (pos - 1)
   in cstring [] (String.length s - 1)
 
-let coqstring_of_resid p =
-  coqstring_of_camlstring (Printf.sprintf "$%d" (P.to_int p))
-
 (* Atoms (positive integers representing strings) *)
 
 type atom = Symbols.Ident.t

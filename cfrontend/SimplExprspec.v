@@ -12,6 +12,7 @@
 
 (** Relational specification of expression simplification. *)
 
+Require Import String.
 Require Import Coqlib Maps Errors Integers Floats.
 Require Import AST Linking Memory.
 Require Import Ctypes Cop Csyntax Clight SimplExpr.
@@ -551,6 +552,56 @@ Ltac monadInv H :=
   | (?F _ = Res _ _ _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
   end.
+
+(** ** Injectivity of symbol generation *)
+
+Lemma app_one_inj s1 s2 c1 c2:
+  (s1 ++ String c1 "" = s2 ++ String c2 "")%string ->
+  s1 = s2 /\ c1 = c2.
+Proof.
+  revert s2 c1 c2.
+  induction s1; intros.
+  - destruct s2; inv H; eauto.
+    induction s2; discriminate.
+  - destruct s2; inv H.
+    + induction s1; discriminate.
+    + apply IHs1 in H2. intuition congruence.
+Qed.
+
+Lemma string_of_resid_inj:
+  forall x y, string_of_resid x = string_of_resid y -> x = y.
+Proof.
+  intros x y H.
+  inv H. cut (N.pos x = N.pos y). { congruence. }
+  revert H1. generalize (N.pos x), (N.pos y). clear.
+  intros p.
+  functional induction (digits_of p); intros m Hm.
+  - apply Neqb_ok in e; subst.
+    rewrite digits_of_equation in Hm.
+    destruct (N.eqb_spec m 0); eauto.
+    destruct N.div_eucl. induction digits_of; discriminate.
+  - apply N.eqb_neq in e.
+    rewrite (digits_of_equation m) in Hm.
+    destruct (N.eqb_spec m 0); eauto.
+    destruct N.div_eucl. induction digits_of; discriminate.
+    destruct n as [|n]; try congruence. simpl in *.
+    destruct m as [|m]; try congruence. simpl in *.
+    pose proof (N.pos_div_eucl_remainder n 10) as Hrem.
+    pose proof (N.pos_div_eucl_remainder m 10) as Hrem'.
+    pose proof (N.pos_div_eucl_spec n 10) as Hspec.
+    pose proof (N.pos_div_eucl_spec m 10) as Hspec'.
+    rewrite e0 in Hspec, Hrem; subst. simpl in Hrem.
+    destruct (N.pos_div_eucl m 10) as [q' r']; subst. simpl in Hrem'.
+    cut (q = q' /\ r = r'). { xomega. }
+    clear - IHs Hrem Hrem' Hm.
+    apply app_one_inj in Hm. destruct Hm as [Hq Hr].
+    split; eauto.
+    assert (10 <> 0)%N by congruence. specialize (Hrem H). specialize (Hrem' H).
+    cut (48 + r = 48 + r')%N. { xomega. }
+    rewrite <- (Ascii.N_ascii_embedding (48 + r)%N) by xomega.
+    rewrite <- (Ascii.N_ascii_embedding (48 + r')%N) by xomega.
+    congruence.
+Qed.
 
 (** ** Freshness and separation properties. *)
 

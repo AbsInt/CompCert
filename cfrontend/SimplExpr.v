@@ -13,6 +13,7 @@
 (** Translation from Compcert C to Clight.
     Side effects are pulled out of Compcert C expressions. *)
 
+Require Import String.
 Require Import Coqlib.
 Require Import Errors.
 Require Import Integers.
@@ -25,18 +26,12 @@ Require Import Cop.
 Require Import Csyntax.
 Require Import Clight.
 
-Local Open Scope string_scope.
-
 (** State and error monad for generating fresh identifiers. *)
 
 Record generator : Type := mkgenerator {
   gen_next: positive;
   gen_trail: list (ident * type)
 }.
-
-(** The ML code prints out the nth reserved identifier as "$n". *)
-Parameter string_of_resid : positive -> String.string.
-Axiom string_of_resid_inj : forall x y, string_of_resid x = string_of_resid y -> x = y.
 
 Inductive result (A: Type) (g: generator) : Type :=
   | Err: Errors.errmsg -> result A g
@@ -78,6 +73,51 @@ Local Open Scope gensym_monad_scope.
 
 Definition initial_generator (x: unit) : generator :=
   mkgenerator 1%positive nil.
+
+(** We need to generate symbols of the form "$n", where n is a decimal
+  representation for the current value of genv_next. Because such
+  symbols are not legal C identifiers, they will not conflict with the
+  ones we got from the parser. *)
+
+Lemma N_size_nat_le m n:
+  N.le m n -> le (N.size_nat m) (N.size_nat n).
+Proof.
+  intros H.
+  apply N.right_induction with (z := m) (n := n); eauto.
+  - intros x y []. tauto.
+  - intros.
+    transitivity (N.size_nat n0); eauto.
+    clear.
+    destruct n0; simpl. { apply Nat.le_0_1. }
+    induction p; simpl; eauto using le_n_S.
+Qed.
+
+Definition digit_of (n: N) :=
+  String (Ascii.ascii_of_N (48 + n)) EmptyString.
+
+Function digits_of (n: N) {measure N.size_nat} :=
+  if N.eqb n 0%N then
+    EmptyString
+  else
+    let (q, r) := N.div_eucl n 10%N in
+    String.append (digits_of q) (digit_of r).
+Proof.
+  intros n Hnz q r Hqr.
+  apply N.eqb_neq in Hnz. destruct n as [|n]; try congruence. simpl in Hqr.
+  destruct q as [|q]. { destruct n; apply Nat.lt_0_succ. }
+  pose proof (N.pos_div_eucl_spec n 10) as Hspec.
+  rewrite Hqr in Hspec. rewrite Hspec.
+  apply lt_le_trans with (N.size_nat (N.pos q * 2)).
+  {
+    rewrite N.mul_comm. simpl.
+    apply Nat.lt_succ_diag_r.
+  }
+  apply N_size_nat_le.
+  xomega.
+Defined.
+
+Definition string_of_resid n :=
+  String "$" (digits_of (Npos n)).
 
 Definition gensym (ty: type): mon ident :=
   fun (g: generator) =>
