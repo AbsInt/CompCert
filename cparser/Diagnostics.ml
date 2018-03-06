@@ -90,6 +90,7 @@ type warning_type =
   | Inline_asm_sdump
   | Unused_variable
   | Unused_parameter
+  | Wrong_ais_parameter
 
 (* List of active warnings *)
 let active_warnings: warning_type list ref = ref [
@@ -110,6 +111,7 @@ let active_warnings: warning_type list ref = ref [
   Return_type;
   Literal_range;
   Inline_asm_sdump;
+  Wrong_ais_parameter;
 ]
 
 (* List of errors treated as warning *)
@@ -139,6 +141,7 @@ let string_of_warning = function
   | Inline_asm_sdump -> "inline-asm-sdump"
   | Unused_variable -> "unused-variable"
   | Unused_parameter -> "unused-parameter"
+  | Wrong_ais_parameter -> "wrong-ais-parameter"
 
 (* Activate the given warning *)
 let activate_warning w () =
@@ -184,7 +187,8 @@ let wall () =
     CompCert_conformance;
     Inline_asm_sdump;
     Unused_variable;
-    Unused_parameter
+    Unused_parameter;
+    Wrong_ais_parameter;
   ]
 
 let wnothing () =
@@ -214,6 +218,7 @@ let werror () =
     CompCert_conformance;
     Inline_asm_sdump;
     Unused_variable;
+    Wrong_ais_parameter;
   ]
 
 (* Generate the warning key for the message *)
@@ -390,6 +395,7 @@ let warning_options =
   error_option Inline_asm_sdump @
   error_option Unused_variable @
   error_option Unused_parameter @
+  error_option Wrong_ais_parameter @
   [Exact ("-Wfatal-errors"), Set error_fatal;
    Exact ("-fdiagnostics-color"), Ignore; (* Either output supports it or no color *)
    Exact ("-fno-diagnostics-color"), Unset color_diagnostics;

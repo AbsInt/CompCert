@@ -141,6 +141,8 @@ val is_void_type : Env.t -> typ -> bool
   (* Is type [void]? *)
 val is_integer_type : Env.t -> typ -> bool
   (* Is type integer? *)
+val is_float_type : Env.t -> typ -> bool
+  (* Is type float *)
 val is_arith_type : Env.t -> typ -> bool
   (* Is type integer or float? *)
 val is_pointer_type : Env.t -> typ -> bool
@@ -239,6 +241,8 @@ val field_of_arrow_access: Env.t -> typ -> string -> field
   (* Return the field info for a [x->field] access *)
 val valid_array_size: Env.t -> typ -> int64 -> bool
   (* Test whether the array size fits in half of the address space *)
+val is_volatile_variable: Env.t -> exp -> bool
+  (* Test whether the expression is an access to a volatile variable *)
 
 (* Constructors *)
 

@@ -707,6 +707,11 @@ let is_integer_type env t =
   | TEnum(_, _) -> true
   | _ -> false
 
+let is_float_type env t =
+  match unroll env t with
+  | TFloat (_, _) -> true
+  | _ -> false
+
 let is_arith_type env t =
   match unroll env t with
   | TInt(_, _) -> true
@@ -1207,3 +1212,8 @@ let rec subst_stmt phi s =
                List.map subst_asm_operand inputs,
                clob)
   }
+
+let is_volatile_variable env exp =
+  match exp.edesc with
+  |  EVar x -> List.mem AVolatile (attributes_of_type env exp.etyp)
+  | _ -> false

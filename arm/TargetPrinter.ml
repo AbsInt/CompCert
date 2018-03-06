@@ -15,6 +15,7 @@
 open Printf
 open Camlcoq
 open Sections
+open AisAnnot
 open AST
 open Asm
 open PrintAsmaux
@@ -459,15 +460,15 @@ struct
     | Pbuiltin(ef, args, res) ->
       begin match ef with
         | EF_annot(kind,txt, targs) ->
-          let annot =
             begin match (P.to_int kind) with
-              | 1 -> annot_text preg_annot "sp" (camlstring_of_coqstring txt) args
+              | 1 -> let annot = annot_text preg_annot "sp" (camlstring_of_coqstring txt) args in
+                fprintf oc "%s annotation: %S\n" comment annot
               | 2 -> let lbl = new_label () in
                 fprintf oc "%a: " label lbl;
-                ais_annot_text lbl preg_annot "sp" (camlstring_of_coqstring txt) args
+                add_ais_annot lbl preg_annot "sp" (camlstring_of_coqstring txt) args
               | _ -> assert false
-            end in
-          fprintf oc "%s annotation: %S\n" comment annot
+            end;
+          0
         | EF_debug(kind, txt, targs) ->
           print_debug_info comment print_file_line preg_annot "sp" oc
             (P.to_int kind) (extern_atom txt) args

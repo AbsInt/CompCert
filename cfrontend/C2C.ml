@@ -119,6 +119,10 @@ let currentLocation = ref Cutil.no_loc
 
 let updateLoc l = currentLocation := l
 
+let currentFunction = ref ""
+
+let updateFunction f = currentFunction := f
+
 let error fmt =
   Diagnostics.error !currentLocation fmt
 
@@ -140,21 +144,21 @@ let string_of_errmsg msg =
 
 (** ** The builtin environment *)
 
-(* let ais_annot_functions =
- *   if Configuration.elf_target then
- *     [(\* Ais Annotations, only available for ELF targets *\)
- *       "__builtin_ais_annot",
- *       (TVoid [],
- *        [TPtr(TInt(IChar, [AConst]), [])],
- *        true);]
- *   else
- *     [] *)
+let ais_annot_functions =
+  if Configuration.elf_target then
+    [(* Ais Annotations, only available for ELF targets *)
+       "__builtin_ais_annot",
+     (TVoid [],
+      [TPtr(TInt(IChar, [AConst]), [])],
+      true);]
+  else
+    []
 
 let builtins_generic = {
   Builtins.typedefs = [];
   Builtins.functions =
-    (* ais_annot_functions
-     * @ *)
+    ais_annot_functions
+      @
     [
     (* Integer arithmetic *)
     "__builtin_bswap",
@@ -871,19 +875,25 @@ let rec convertExpr env e =
           ezero
       end
 
-  (* | C.ECall({edesc = C.EVar {name = "__builtin_ais_annot"}}, args) when Configuration.elf_target ->
-   *     begin match args with
-   *     | {edesc = C.EConst(CStr txt)} :: args1 ->
-   *       let file,line = !currentLocation in
-   *       let loc_string = Printf.sprintf "# file %s, line %d\n" file line in
-   *       let targs1 = convertTypArgs env [] args1 in
-   *         Ebuiltin(
-   *            AST.EF_annot(P.of_int 2,coqstring_of_camlstring (loc_string ^ txt), typlist_of_typelist targs1),
-   *           targs1, convertExprList env args1, convertTyp env e.etyp)
-   *     | _ ->
-   *         error "argument 1 of '__builtin_ais_annot' must be a string literal";
-   *         ezero
-   *     end *)
+  | C.ECall({edesc = C.EVar {name = "__builtin_ais_annot"}}, args) when Configuration.elf_target ->
+      begin match args with
+      | {edesc = C.EConst(CStr txt)} :: args1 ->
+        let file,line = !currentLocation in
+        let fun_name = !currentFunction in
+        let loc_string = Printf.sprintf "# file:%s line:%d function:%s\n" file line fun_name in
+        let targs1 = convertTypArgs env [] args1 in
+        List.iter (fun exp -> if Cutil.is_float_type env exp.etyp then begin
+            error "floating point types are not supported in ais annotations"
+          end else if Cutil.is_volatile_variable env exp then begin
+            error "access to volatile variables are not supported in ais annotations"
+          end) args1;
+          Ebuiltin(
+             AST.EF_annot(P.of_int 2,coqstring_of_camlstring (loc_string ^ txt), typlist_of_typelist targs1),
+            targs1, convertExprList env args1, convertTyp env e.etyp)
+      | _ ->
+          error "argument 1 of '__builtin_ais_annot' must be a string literal";
+          ezero
+      end
 
  | C.ECall({edesc = C.EVar {name = "__builtin_memcpy_aligned"}}, args) ->
       make_builtin_memcpy (convertExprList env args)
@@ -1135,6 +1145,7 @@ and convertSwitch env is_64 = function
 
 let convertFundef loc env fd =
   checkFunctionType env fd.fd_ret (Some fd.fd_params);
+  updateFunction fd.fd_name.name;
   if fd.fd_vararg && not !Clflags.option_fvararg_calls then
     unsupported "variable-argument function (consider adding option [-fvararg-calls])";
   let ret =
