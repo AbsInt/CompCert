@@ -15,7 +15,6 @@
 open Printf
 open Camlcoq
 open Sections
-open AisAnnot
 open AST
 open Asm
 open PrintAsmaux
@@ -465,10 +464,9 @@ struct
                 fprintf oc "%s annotation: %S\n" comment annot
               | 2 -> let lbl = new_label () in
                 fprintf oc "%a: " label lbl;
-                add_ais_annot lbl preg_annot "sp" (camlstring_of_coqstring txt) args
+                AisAnnot.add_ais_annot lbl preg_annot "sp" (camlstring_of_coqstring txt) args
               | _ -> assert false
-            end;
-          0
+            end
         | EF_debug(kind, txt, targs) ->
           print_debug_info comment print_file_line preg_annot "sp" oc
             (P.to_int kind) (extern_atom txt) args
