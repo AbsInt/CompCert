@@ -37,7 +37,7 @@ exception Bad_parameter of string
 
 let warn_lval_arg  pos arg =
   let warn ty =
-    let msg = sprintf "expected register or memory cell but found %s for parameter '%s'" ty pos in
+    let msg = sprintf "expected register or global memory cell but found %s for parameter '%s'" ty pos in
       raise (Bad_parameter msg) in
   match arg with
   | BA_int _
