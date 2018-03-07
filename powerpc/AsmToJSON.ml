@@ -378,7 +378,7 @@ let print_if prog sourcename =
   | None -> ()
   | Some f ->
     let f = Filename.concat !sdump_folder f in
-    let oc = open_out f in
+    let oc = open_out_bin f in
     pp_ast (formatter_of_out_channel oc) pp_instructions prog sourcename;
     close_out oc
 
