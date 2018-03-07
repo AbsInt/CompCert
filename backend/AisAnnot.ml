@@ -36,22 +36,17 @@ let addr_global id ofs =
 exception Bad_parameter of string
 
 let warn_lval_arg  pos arg =
-  let warn ty =
-    let msg = sprintf "expected register or memory cell but found %s for parameter '%s'" ty pos in
-      raise (Bad_parameter msg) in
   match arg with
   | BA_int _
-  | BA_long _ -> warn "constant"
+  | BA_long _
+  | BA_addrstack _
+  | BA_addrglobal _
+  | BA_splitlong _
+  | BA_addptr _ ->
+    let msg = sprintf "expected register or memory cell for parameter '%s', skipping generation of ais annotation" pos in
+      raise (Bad_parameter msg)
   | BA_float _
   | BA_single _ -> assert false (* Should never occur and be avoided in C2C *)
-  | BA_addrstack ofs ->
-    warn "stack address"
-  | BA_addrglobal(id, ofs) ->
-    warn "global address"
-  | BA_splitlong(hi, lo) ->
-    warn "register pair";
-  | BA_addptr(a1, a2) ->
-    warn "pointer computation"
   | _ -> ()
 
 let ais_expr_arg pos preg_string sp_reg_name arg =
@@ -116,7 +111,7 @@ let loc_of_txt txt =
   with _ ->
     no_loc
 
-let re_ais_annot_param = Str.regexp "%%\\|%[el][1-9][0-9]*\\|%here\\|\007"
+let re_ais_annot_param = Str.regexp "%%\\|%[el][0-9]+\\|%here\\|\007"
 
 let add_ais_annot lbl preg_string sp_reg_name txt args =
   let fragment = function
@@ -159,6 +154,7 @@ let add_ais_annot lbl preg_string sp_reg_name txt args =
     ais_annot_list := (annot)::!ais_annot_list
 
 let validate_ais_annot env loc txt args =
+  let used_params = Array.make (List.length args) false in
   let fragment arg =
     match arg with
       | Str.Delim "%here"
@@ -169,10 +165,12 @@ let validate_ais_annot env loc txt args =
         let n = int_of_string (String.sub s 2 (String.length s - 2)) in
         try
           let arg = List.nth args (n-1) in
+          Array.set used_params (n-1) true;
           if Cutil.is_float_type env arg.C.etyp then
-            error loc "floating point types are not supported in ais annotations"
+            error loc "floating point types for parameter '%s' are not supported in ais annotations" s
           else if Cutil.is_volatile_variable env arg then
-            error loc "access to volatile variable '%a' is not supported in ais annotations" Cprint.exp (0,arg)
+            error loc "access to volatile variable '%a' for parameter '%s' is not supported in ais annotations" Cprint.exp (0,arg) s
         with _ ->
           error loc "unknown parameter '%s'" s
-  in List.iter fragment (Str.full_split re_ais_annot_param txt)
+  in List.iter fragment (Str.full_split re_ais_annot_param txt);
+  Array.iteri (fun pos used -> if not used then warning loc Unused_ais_parameter "unused parameter %d of ais annotation" pos) used_params

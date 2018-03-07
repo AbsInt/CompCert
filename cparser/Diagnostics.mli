@@ -48,6 +48,7 @@ type warning_type =
   | Unused_variable                (** unused local variables *)
   | Unused_parameter               (** unused function parameter *)
   | Wrong_ais_parameter            (** wrong parameter type for ais replacement *)
+  | Unused_ais_parameter           (** unused builtin ais parameter *)
 
 val warning  : (string * int) -> warning_type -> ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
 (** [warning (f,c) w fmt arg1 ... argN] formats the arguments [arg1] to [argN] as warining according to
