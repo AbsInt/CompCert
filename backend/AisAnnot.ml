@@ -37,7 +37,7 @@ exception Bad_parameter of string
 
 let warn_lval_arg  pos arg =
   let warn ty =
-    let msg = sprintf "expected register or global memory cell but found %s for parameter '%s'" ty pos in
+    let msg = sprintf "expected register or memory cell but found %s for parameter '%s'" ty pos in
       raise (Bad_parameter msg) in
   match arg with
   | BA_int _
@@ -45,7 +45,7 @@ let warn_lval_arg  pos arg =
   | BA_float _
   | BA_single _ -> assert false (* Should never occur and be avoided in C2C *)
   | BA_addrstack ofs ->
-    warn "stack cell"
+    warn "stack address"
   | BA_addrglobal(id, ofs) ->
     warn "global address"
   | BA_splitlong(hi, lo) ->
