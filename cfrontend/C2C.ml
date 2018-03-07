@@ -882,11 +882,7 @@ let rec convertExpr env e =
         let fun_name = !currentFunction in
         let loc_string = Printf.sprintf "# file:%s line:%d function:%s\n" file line fun_name in
         let targs1 = convertTypArgs env [] args1 in
-        List.iter (fun exp -> if Cutil.is_float_type env exp.etyp then begin
-            error "floating point types are not supported in ais annotations"
-          end else if Cutil.is_volatile_variable env exp then begin
-            error "access to volatile variables are not supported in ais annotations"
-          end) args1;
+        AisAnnot.validate_ais_annot env !currentLocation txt args1;
           Ebuiltin(
              AST.EF_annot(P.of_int 2,coqstring_of_camlstring (loc_string ^ txt), typlist_of_typelist targs1),
             targs1, convertExprList env args1, convertTyp env e.etyp)
