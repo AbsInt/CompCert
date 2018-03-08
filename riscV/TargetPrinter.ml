@@ -568,11 +568,11 @@ module Target : TARGET =
          begin match ef with
            | EF_annot(kind,txt, targs) ->
              begin match (P.to_int kind) with
-               | 1 -> let annot = annot_text preg_annot "sp" (camlstring_of_coqstring txt) args  in
+               | 1 -> let annot = annot_text preg_annot "x2" (camlstring_of_coqstring txt) args  in
                  fprintf oc "%s annotation: %S\n" comment annot
                | 2 -> let lbl = new_label () in
                  fprintf oc "%a: " label lbl;
-                 add_ais_annot lbl preg_annot "sp" (camlstring_of_coqstring txt) args
+                 add_ais_annot lbl preg_annot "x2" (camlstring_of_coqstring txt) args
                | _ -> assert false
              end
           | EF_debug(kind, txt, targs) ->
