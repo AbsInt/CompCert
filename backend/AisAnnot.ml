@@ -163,7 +163,14 @@ let json_ais_annot preg_string sp_reg_name txt args =
   let txt = ais_annot_txt false 0 preg_string sp_reg_name txt args in
   let t_to_json = function
     | Label _ -> String "%here"
-    | s -> s in
+    | String s ->   let buf = Buffer.create (String.length s) in
+      String.iter (fun c ->
+          begin match c with
+            | '\\' | '"' -> Buffer.add_char buf '\\'
+            | _ -> () end;
+          Buffer.add_char buf c) s;
+      String (Buffer.contents buf)
+    | Symbol s -> Symbol s in
   (List.map t_to_json txt)
 
 let validate_ais_annot env loc txt args =
