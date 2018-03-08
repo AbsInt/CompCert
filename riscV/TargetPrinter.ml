@@ -572,7 +572,7 @@ module Target : TARGET =
                  fprintf oc "%s annotation: %S\n" comment annot
                | 2 -> let lbl = new_label () in
                  fprintf oc "%a: " label lbl;
-                 add_ais_annot lbl preg_annot "r1" (camlstring_of_coqstring txt) args
+                 add_ais_annot lbl preg_annot "sp" (camlstring_of_coqstring txt) args
                | _ -> assert false
              end
           | EF_debug(kind, txt, targs) ->

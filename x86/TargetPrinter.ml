@@ -811,11 +811,12 @@ module Target(System: SYSTEM):TARGET =
           begin match ef with
             | EF_annot(kind,txt, targs) ->
                 begin match (P.to_int kind) with
-                  | 1 ->  let annot = annot_text preg_annot "sp" (camlstring_of_coqstring txt) args in
+                  | 1 ->  let annot = annot_text preg_annot "esp" (camlstring_of_coqstring txt) args in
                     fprintf oc "%s annotation: %S\n" comment annot
                   | 2 -> let lbl = new_label () in
-                    fprintf oc "%a: " label lbl;
-                    add_ais_annot lbl preg_ais_annot "r1" (camlstring_of_coqstring txt) args
+                    fprintf oc "%a: \n" label lbl;
+                    let sp = if Archi.ptr64 then "rsp" else "esp" in
+                    add_ais_annot lbl preg_ais_annot sp (camlstring_of_coqstring txt) args
                   | _ -> assert false
                 end
           | EF_debug(kind, txt, targs) ->
