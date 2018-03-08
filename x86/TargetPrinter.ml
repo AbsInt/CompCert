@@ -72,6 +72,23 @@ let preg_annot = function
   | FR r -> float_reg_name r
   | _ -> assert false
 
+let ais_int64_reg_name = function
+  | RAX -> "rax"  | RBX -> "rbx"  | RCX -> "rcx"  | RDX -> "rdx"
+  | RSI -> "rsi"  | RDI -> "rdi"  | RBP -> "rbp"  | RSP -> "rsp"
+  | R8  -> "r8"   | R9  -> "r9"   | R10 -> "r10"  | R11 -> "r11"
+  | R12 -> "r12"  | R13 -> "r13"  | R14 -> "r14"  | R15 -> "r15"
+
+let ais_int32_reg_name = function
+  | RAX -> "eax"  | RBX -> "ebx"  | RCX -> "ecx"  | RDX -> "edx"
+  | RSI -> "esi"  | RDI -> "edi"  | RBP -> "ebp"  | RSP -> "esp"
+  | R8  -> "r8d"  | R9  -> "r9d"  | R10 -> "r10d" | R11 -> "r11d"
+  | R12 -> "r12d" | R13 -> "r13d" | R14 -> "r14d" | R15 -> "r15d"
+
+let preg_ais_annot = function
+  | IR r -> if Archi.ptr64 then ais_int64_reg_name r else ais_int32_reg_name r
+  | FR r -> float_reg_name r
+  | _ -> assert false
+
 let z oc n = output_string oc (Z.to_string n)
 
 (* 32/64 bit dependencies *)
@@ -798,7 +815,7 @@ module Target(System: SYSTEM):TARGET =
                     fprintf oc "%s annotation: %S\n" comment annot
                   | 2 -> let lbl = new_label () in
                     fprintf oc "%a: " label lbl;
-                    add_ais_annot lbl preg_annot "r1" (camlstring_of_coqstring txt) args
+                    add_ais_annot lbl preg_ais_annot "r1" (camlstring_of_coqstring txt) args
                   | _ -> assert false
                 end
           | EF_debug(kind, txt, targs) ->
