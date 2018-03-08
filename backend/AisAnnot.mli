@@ -33,3 +33,12 @@ val validate_ais_annot: Env.t -> string * int -> string -> C.exp list -> unit
     that no volatile variables or float expressions are used as well as that no illegal format
     specifier is used in the [txt]
 *)
+
+val json_ais_annot: ('a -> string) -> string -> string -> 'a AST.builtin_arg list -> t list
+(** [json_ais_annot lbl preg spreg txt args] prints the ais annotation [txt] were the format
+    specifiers are replace according to their type:
+    -e: general expressions
+    -l: l-value expressions
+    -here: the address of the ais annotation [lbl]
+    for json export.
+*)

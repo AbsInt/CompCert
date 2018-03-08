@@ -113,7 +113,7 @@ let loc_of_txt txt =
 
 let re_ais_annot_param = Str.regexp "%%\\|%[el][0-9]+\\|%here\\|\007"
 
-let add_ais_annot lbl preg_string sp_reg_name txt args =
+let ais_annot_txt warn lbl preg_string sp_reg_name txt args =
   let fragment = function
     | Str.Delim "%here" ->
       [Label lbl]
@@ -138,8 +138,11 @@ let add_ais_annot lbl preg_string sp_reg_name txt args =
       List.concat (List.map fragment (Str.full_split re_ais_annot_param txt))
     with
     | Bad_parameter s ->
-      let loc = loc_of_txt txt in
-      warning loc Wrong_ais_parameter "wrong ais parameter %s" s; []
+      if warn then begin
+        let loc = loc_of_txt txt in
+        warning loc Wrong_ais_parameter "wrong ais parameter %s" s
+      end;
+      []
   in
   let rec merge acc = function
     | [] -> List.rev acc
@@ -149,9 +152,19 @@ let add_ais_annot lbl preg_string sp_reg_name txt args =
       merge acc (String (s1 ^ s2) :: rest)
     | String s:: rest  ->  merge ((String s)::acc) rest
   in
-  let annot = merge [] annot in
+  merge [] annot
+
+let add_ais_annot lbl preg_string sp_reg_name txt args =
+  let annot = ais_annot_txt true lbl preg_string sp_reg_name txt args in
   if annot <> [] then
     ais_annot_list := (annot)::!ais_annot_list
+
+let json_ais_annot preg_string sp_reg_name txt args =
+  let txt = ais_annot_txt false 0 preg_string sp_reg_name txt args in
+  let t_to_json = function
+    | Label _ -> String "%here"
+    | s -> s in
+  (List.map t_to_json txt)
 
 let validate_ais_annot env loc txt args =
   let used_params = Array.make (List.length args) false in

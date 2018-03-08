@@ -111,10 +111,15 @@ let mnemonic_names  =["Padd"; "Paddc"; "Padde"; "Paddi"; "Paddic"; "Paddis"; "Pa
 
 let pp_instructions pp ic =
   let ic = List.filter (fun s -> match s with
-      | Pbuiltin (ef,_,_) ->
+      | Pbuiltin (ef,args,_) ->
         begin match ef with
-          | EF_inline_asm _
-          | EF_annot _ -> true
+          | EF_inline_asm _ -> true
+          | EF_annot (kind,txt,targs) ->
+            begin match  P.to_int kind with
+              | 1 -> false
+              | 2 ->  AisAnnot.json_ais_annot preg_annot "r1" (camlstring_of_coqstring txt) args <> []
+              | _ -> false
+            end
           | _ -> false
         end
       | Pcfi_adjust _  (* Only debug relevant *)
@@ -342,19 +347,17 @@ let pp_instructions pp ic =
         instruction pp "Pinlineasm" [Id];
         Diagnostics.(warning no_loc Inline_asm_sdump "inline assembler is not supported in sdump")
       | EF_annot (kind,txt,targs) ->
-        let annot_string = PrintAsmaux.annot_text preg_annot "r1" (camlstring_of_coqstring txt) args in
-        let len = String.length annot_string in
-        let buf = Buffer.create len in
-        String.iter (fun c -> begin match c with
-            | '\\' | '"' -> Buffer.add_char buf '\\'
-            | _ -> () end;
-            Buffer.add_char buf c) annot_string;
-        let annot_string = Buffer.contents buf in
-        let kind = match P.to_int kind with
-          | 1 -> "normal"
-          | 2 -> "ais"
-          | _ -> assert false in
-        instruction pp "Pannot" [String kind;String annot_string]
+        begin match P.to_int kind with
+          | 2 ->
+            let annots = AisAnnot.json_ais_annot preg_annot "r1" (camlstring_of_coqstring txt) args in
+            let annots = List.map (function
+                | AisAnnot.String s -> String s
+                | AisAnnot.Symbol s -> Atom s
+                | AisAnnot.Label _ -> assert false (* should never happen *)
+              ) annots in
+            instruction pp "Pannot" annots
+          | _ -> assert false
+        end
       | EF_annot_val _
       | EF_builtin _
       | EF_debug _
