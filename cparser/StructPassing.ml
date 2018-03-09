@@ -323,10 +323,13 @@ and transf_call env ctx opt_lhs fn args ty =
     | None -> e
     | Some lhs -> eassign lhs e in
   match fn with
-  | {edesc = EVar { C.name = "__builtin_va_arg"
-                           | "__builtin_annot"
+  | {edesc = EVar { C.name = "__builtin_annot"
                            | "__builtin_annot_intval"
                            | "__builtin_ais_annot" } } ->
+      (* Do not transform the call in this case, just use the default
+         pass-by-reference mode for struct/union arguments. *)
+      opt_eassign {edesc = ECall(fn, args); etyp = ty}
+  | {edesc = EVar { C.name = "__builtin_va_arg" } } ->
       (* Do not transform the call in this case, just use the default
          pass-by-reference mode for struct/union arguments. *)
       opt_eassign {edesc = ECall(fn, args'); etyp = ty}
