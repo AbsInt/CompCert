@@ -140,7 +140,7 @@ let ais_annot_txt warn lbl preg_string sp_reg_name txt args =
     | Bad_parameter s ->
       if warn then begin
         let loc = loc_of_txt txt in
-        warning loc Wrong_ais_parameter "wrong ais parameter %s" s
+        warning loc Wrong_ais_parameter "wrong ais parameter: %s" s
       end;
       []
   in
