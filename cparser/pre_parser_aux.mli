@@ -18,6 +18,11 @@ type identifier_type =
   | TypedefId
   | OtherId
 
-let save_context:(unit -> (unit -> unit)) ref = ref (fun _ -> assert false)
-let declare_varname:(string -> unit) ref = ref (fun _ -> assert false)
-let declare_typename:(string -> unit) ref = ref (fun _ -> assert false)
+(* Applying once this functions saves the current context, and
+   applying it the second time restores it. *)
+val save_context : (unit -> (unit -> unit)) ref
+
+(* Change the context by changing an identifier to be a varname or a
+   typename *)
+val declare_varname : (string -> unit) ref
+val declare_typename : (string -> unit) ref
