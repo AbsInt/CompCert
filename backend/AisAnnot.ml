@@ -188,8 +188,14 @@ let validate_ais_annot env loc txt args =
           Array.set used_params (n-1) true;
           if Cutil.is_float_type env arg.C.etyp then
             error loc "floating point types for parameter '%s' are not supported in ais annotations" s
-          else if Cutil.is_volatile_variable env arg then
-            error loc "access to volatile variable '%a' for parameter '%s' is not supported in ais annotations" Cprint.exp (0,arg) s
+          else if Cutil.is_volatile_variable env arg then begin
+            let arg =
+              match arg.C.edesc with
+              | C.EVar id -> id.C.name
+              | _ -> assert false
+            in
+            error loc "access to volatile variable '%s' for parameter '%s' is not supported in ais annotations" arg s
+          end
         with _ ->
           error loc "unknown parameter '%s'" s
   in List.iter fragment (Str.full_split re_ais_annot_param txt);
