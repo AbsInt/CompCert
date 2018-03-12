@@ -16,6 +16,7 @@
 (** A deterministic evaluation strategy for C. *)
 
 Require Import Axioms.
+Require Import Classical.
 Require Import Coqlib.
 Require Import Errors.
 Require Import Maps.
@@ -432,8 +433,6 @@ Lemma plus_safe:
 Proof.
   intros. eapply star_plus_trans; eauto. apply H1. eapply safe_steps; eauto. auto.
 Qed.
-
-Require Import Classical.
 
 Lemma safe_imm_safe:
   forall f C a k e m K,
