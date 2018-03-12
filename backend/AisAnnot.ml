@@ -77,15 +77,16 @@ let ais_expr_arg pos preg_string sp_reg_name arg =
   | BA_addrglobal(id, ofs) ->
     addr_global id ofs
   | BA_splitlong(hi, lo) ->
-    combine " * 0x100000000 + " hi lo
+    let arg1 = combine " * " (ais_arg hi) (simple "0x100000000") in
+    combine " + " arg1 (ais_arg lo)
   | BA_addptr(a1, a2) ->
+    let a1 = ais_arg a1
+    and a2 = ais_arg a2 in
     combine " + " a1 a2
   and combine mid arg1 arg2 =
     let op_br = simple "("
     and mid = simple mid
-    and cl_br = simple ")"
-    and arg1 = ais_arg arg1
-    and arg2 = ais_arg arg2 in
+    and cl_br = simple ")" in
     op_br@arg1@mid@arg2@cl_br in
   ais_arg arg
 
