@@ -398,7 +398,7 @@ let init_data p = function
   | Init_int64 n -> fprintf p "Init_int64 %a" coqint64 n
   | Init_float32 n -> fprintf p "Init_float32 %a" coqsingle n
   | Init_float64 n -> fprintf p "Init_float64 %a" coqfloat n
-  | Init_space n -> fprintf p "Init_space %ld" (Z.to_int32 n)
+  | Init_space n -> fprintf p "Init_space %a" coqZ n
   | Init_addrof(id,ofs) -> fprintf p "Init_addrof %a %a" ident id coqptrofs ofs
 
 let print_variable p (id, v) =
