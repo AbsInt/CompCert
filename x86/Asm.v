@@ -1134,6 +1134,8 @@ Inductive initial_core (ge:genv ): state -> val -> list val -> Prop :=
 | INIT_CORE:
     forall f b m args rs0,
       rs0 PC = Vptr b Ptrofs.zero ->
+      rs0 RA = Vzero ->
+      rs0 RSP = Vnullptr ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       extcall_arguments rs0 m (fn_sig f) args ->
       initial_core ge (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.

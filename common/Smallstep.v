@@ -477,6 +477,8 @@ End CLOSURES.
 
 Record semantics : Type := Semantics_gen {
   state: Type;
+  main_block: block;
+  init_mem: option Memory.mem;
   (** A state contains a memory, so we use the following  *)
   (** setters or getters                                  *)
   (* If you put them here, you should move the lemmas too *)
@@ -488,15 +490,17 @@ Record semantics : Type := Semantics_gen {
   final_state: state -> int -> Prop; (* Make return a val *)
   globalenv: genvtype;
   symbolenv: Senv.t}.
+Arguments get_mem {_} _.
+Arguments set_mem {_} _ _.
 
 (*NEW*)
 Record expressive_semantics : Type :=
   Expressive_Semantics_gen {
       sem:> semantics;
-  set_get_mem: forall s,
-      s = set_mem sem s (get_mem sem s);
-  get_set_mem: forall s m,
-      m = get_mem sem (set_mem sem s m);
+  set_get_mem: forall (s: state sem),
+      s = set_mem s (get_mem s);
+  get_set_mem: forall (s: state sem) m,
+      m = get_mem (set_mem s m);
   (** States before and after external calls are identified *)
   (** external calls are exactly one step                   *)
   at_external: genvtype sem ->
@@ -511,22 +515,21 @@ Record expressive_semantics : Type :=
       at_external g s1 = Some (ef, args) ->
       step sem g s1 t s2 ->   
       exists vr,
-        external_call ef (symbolenv sem) args (get_mem sem s1) t (Val.maketotal vr) (get_mem sem s2) /\
-        after_external g vr (set_mem sem s1 (get_mem sem s2)) = Some s2 
+        external_call ef (symbolenv sem) args (get_mem s1) t (Val.maketotal vr) (get_mem s2) /\
+        after_external g vr (set_mem s1 (get_mem s2)) = Some s2 
     }.
 
-(*Reconstruct initial_states from initial_core*)
-Inductive initial_state (p:program): state -> Prop :=
-| initial_state_derived_intro': forall b f st0,
-  let ge := Genv.globalenv p in
-  Genv.init_mem p = Some (get_mem st0) ->
-  Genv.find_symbol ge p.(prog_main) = Some b ->
-  type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
-  initial_core st0 (Vptr b (Ptrofs.of_ints Int.zero)) nil ->
-  initial_state p st0.
+(*Reconstruct initial_states from initial_core *)
+Inductive initial_state (sem:semantics): state sem -> Prop :=
+| initial_state_derived_intro': forall st0,
+  init_mem sem = Some (get_mem st0) ->
+  initial_core sem st0 (Vptr (main_block sem) (Ptrofs.of_ints Int.zero)) nil ->
+  initial_state sem st0.
 
 (** The form used in earlier CompCert versions, for backward compatibility. *)
 Definition Semantics {state funtype vartype: Type}
+                     main_block
+                     init_mem
                      (get_mem: state -> Memory.mem)
                      (set_mem: state -> Memory.mem -> state)
                      (step: Genv.t funtype vartype -> state -> trace -> state -> Prop)
@@ -534,7 +537,9 @@ Definition Semantics {state funtype vartype: Type}
                      (final_state: state -> int -> Prop)
                      (globalenv: Genv.t funtype vartype)
   :=
-  {| state := state;
+    {| state := state;
+       main_block := main_block;
+       init_mem := init_mem;
      get_mem := get_mem ;
      set_mem := set_mem ;
      genvtype := Genv.t funtype vartype;
@@ -557,9 +562,11 @@ Open Scope smallstep_scope.
 
 (** * Forward simulations between two transition semantics. *)
  Section ForwardSimulations.
-
+   Context (L1 L2: semantics).
+   
    (** Original: The general form of a forward simulation. *)
-   Record fsim_properties (L1 L2: semantics) (index: Type)
+   Require Import Memory. (*TODO MOVE*)
+   Record fsim_properties (index: Type)
           (order: index -> index -> Prop)
           (match_states: index -> state L1 -> state L2 -> Prop) : Prop := {
     fsim_order_wf: well_founded order;
@@ -568,7 +575,9 @@ Open Scope smallstep_scope.
       fora      ll s1, initial_state L1 s1 ->
       exists i,    exists s2, initial_state L2 s2 /\ match_states i s1 s2; *)
     fsim_match_initial_cores:
-      exists i, exists s2, initial_state L2 s2 /\ match_states i s1 s2;
+      forall s1 f arg, initial_core L1 s1 f arg  -> 
+                  exists i, exists s2, get_mem s1 = get_mem s2 /\
+                             initial_core L2 s2 f arg /\ match_states i s1 s2;
     fsim_match_final_states:
       forall i s1 s2 r,
         match_states i s1 s2 -> final_state L1 s1 r -> final_state L2 s2 r;
@@ -581,82 +590,59 @@ Open Scope smallstep_scope.
     fsim_public_preserved:
       forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
     }.
-   
-  Variables L1 L2: semantics.
-  Notation get_mem1:=(get_mem L1).
-  Notation get_mem2:=(get_mem L2).
-
-  (** *Equality Phases*)
-  Section Equality.
+   Section EqualityAndExtension.
+     (** *Equality Phases*)
     Record fsim_properties_eq: Type :=
       {
         Eqindex: Type;
         Eqorder: Eqindex -> Eqindex -> Prop;
-        Eqmatch_states: Eqindex -> state L1 -> state L2 -> Prop;  
-        Eqfsim_order_wf: well_founded Eqorder;
-        Eqfsim_match_meminj: forall i s1 s2, Eqmatch_states i s1 s2 ->  (get_mem1 s1) = (get_mem2 s2);
-        (*    fsim_match_initial_states:
-      forall s1 m1 f m2, initial_state L1 (s1,m1) -> Mem.inject f m1 m2 ->
-      exists i, exists s2, initial_state L2 (s2,m2) /\ match_states i f (s1,m1) (s2,m2);*)
-        Eqfsim_match_initial_core:
-          forall s1 fp args, initial_core L1 s1 fp args -> 
-          exists i s2, get_mem1 s1 = get_mem2 s2 /\ initial_core L2 s2 fp args /\ Eqmatch_states i s1 s2;
-        Eqfsim_match_final_states:
-          forall i s1 s2 r ,
-            Eqmatch_states i s1 s2 -> final_state L1 s1 r -> (final_state L2 s2 r);
-        Eqfsim_simulation:
-          forall s1 t s1', Step L1 s1 t s1' ->
-                      forall i s2, Eqmatch_states i s1 s2 ->
-                              exists i', exists s2',
-                                  (Plus L2 s2 t s2' \/ (Star L2 s2 t s2' /\ Eqorder i' i))
-                                  /\ Eqmatch_states i' s1' s2';
-        Eqfsim_public_preserved:
-          forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
+        Eqmatch_states: Eqindex -> state L1 -> state L2 -> Prop;
+        Eqfsim:> fsim_properties Eqorder Eqmatch_states;
+        Eqfsim_match_meminj: forall i s1 s2, Eqmatch_states i s1 s2 ->  (get_mem s1) = (get_mem s2);
       }.
-  
-    
+
     Lemma sim_eqSim':
-      forall index order (match_states:index -> state L1 -> state L2 -> Prop),
-      (forall i s1 s2, match_states i s1 s2 ->  (get_mem1 s1) = (get_mem2 s2)) ->
-      fsim_properties L1 L2 index order match_states ->
-      fsim_properties_eq.
+      forall (index:Type) (order: index -> index -> Prop)
+        (match_states:index -> state L1 -> state L2 -> Prop),
+      (forall i s1 s2, match_states i s1 s2 ->  (@get_mem L1 s1) = (@get_mem L2 s2)) ->
+      fsim_properties order match_states ->
+      fsim_properties_eq.      
     Proof.
-      intros ? ? ? H HH; inv HH.
+      intros ? ? ? H HH. 
       econstructor; eauto.
     Qed.
-  End Equality.
 
+    Lemma sim_eqSim:
+      forall (EQ_SIM:fsim_properties_eq),
+      fsim_properties (Eqorder EQ_SIM) (Eqmatch_states EQ_SIM).
+    Proof.
+      intros EQ_SIM. destruct EQ_SIM; auto.
+    Qed.
+    
   
   (** *Extension Phases*)
-  Section Extensions.
-    
-   Record fsim_properties_ext: Type :=
-  {
-    Extindex: Type;
-    Extorder: Extindex -> Extindex -> Prop;
-    Extmatch_states: Extindex -> state L1 -> state L2 -> Prop;  
-    Extfsim_order_wf: well_founded Extorder;
-    Extfsim_match_meminj: forall i s1 s2, Extmatch_states i s1 s2 ->  Mem.extends (get_mem1 s1) (get_mem2 s2);
-(*    fsim_match_initial_states:
-      forall s1 m1 f m2, initial_state L1 (s1,m1) -> Mem.inject f m1 m2 ->
-      exists i, exists s2, initial_state L2 (s2,m2) /\ match_states i f (s1,m1) (s2,m2);*)
-    Extfsim_match_initial_states:
-      forall s1, initial_state L1 s1 -> 
-               exists i s2, initial_state L2 s2 /\ Extmatch_states i s1 s2;
-    Extfsim_match_final_states:
-      forall i s1 s2 r ,
-      Extmatch_states i s1 s2 -> final_state L1 s1 r -> (final_state L2 s2 r);
-    Extfsim_simulation:
-      forall s1 t s1', Step L1 s1 t s1' ->
-      forall i s2, Extmatch_states i s1 s2 ->
-      exists i', exists s2',
-         (Plus L2 s2 t s2' \/ (Star L2 s2 t s2' /\ Extorder i' i))
-         /\ Extmatch_states i' s1' s2';
-    Extfsim_public_preserved:
-      forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
-  }.
+    Record fsim_properties_ext: Type :=
+      {
+        Extindex: Type;
+        Extorder: Extindex -> Extindex -> Prop;
+        Extmatch_states: Extindex -> state L1 -> state L2 -> Prop;
+        Extfsim:> fsim_properties Extorder Extmatch_states;
+        Extfsim_match_meminj: forall i s1 s2, Extmatch_states i s1 s2 ->  (get_mem s1) = (get_mem s2);
+      }.
 
-   (** An alternate form of the simulation diagram *)
+    
+    Lemma sim_extSim':
+      forall (index:Type) (order: index -> index -> Prop)
+        (match_states:index -> state L1 -> state L2 -> Prop),
+      (forall i s1 s2, match_states i s1 s2 ->  (@get_mem L1 s1) = (@get_mem L2 s2)) ->
+      fsim_properties order match_states ->
+      fsim_properties_ext.      
+    Proof.
+      intros ? ? ? H HH. 
+      econstructor; eauto.
+    Qed.
+
+    (** An alternate form of the simulation diagram *)
    Lemma Extfsim_simulation':
        forall (SIM:fsim_properties_ext),
        forall i s1 t s1',
@@ -666,13 +652,21 @@ Open Scope smallstep_scope.
                                    Extmatch_states SIM i' s1' s2')
                \/ (exists i', Extorder SIM i' i /\ t = E0 /\ Extmatch_states SIM i' s1' s2).
    Proof.
-     intros. exploit Extfsim_simulation; eauto.
+     intros. exploit fsim_simulation; eauto.
+     eapply SIM.
      intros [i' [s2' [A B ]]]. intuition.
      left; exists i'; exists s2'; auto .
      inv H2. 
      right; exists i'; eauto.
      left; exists i'; exists s2'; split; auto. econstructor; eauto.
    Qed.
+   
+    Lemma sim_extSim:
+      forall (EXT_SIM:fsim_properties_ext),
+      fsim_properties (Extorder EXT_SIM) (Extmatch_states EXT_SIM).
+    Proof.
+      intros EXT_SIM. destruct EXT_SIM; auto.
+    Qed.
 
    (** *Star version of simulation*)
     Lemma Extsimulation_star:
@@ -680,7 +674,8 @@ Open Scope smallstep_scope.
       forall s1 t s1', Star L1 s1 t s1' ->
                   forall i s2,
                     Extmatch_states SIM  i s1 s2 ->
-                    exists i', exists s2', Star L2 s2 t s2' /\ Extmatch_states SIM  i' s1' s2'.
+                    exists i', exists s2', Star L2 s2 t s2' /\
+                                 Extmatch_states SIM  i' s1' s2'.
     Proof.
       intros S.
       induction 1; intros.
@@ -688,8 +683,9 @@ Open Scope smallstep_scope.
 
       (*split; auto; constructor.
       apply inject_incr_refl. constructor.*)
-
-      exploit Extfsim_simulation; eauto.
+      
+      exploit fsim_simulation; eauto.
+      apply S.
       intros [i' [s2' [A B]]].
       exploit IHstar; eauto. intros [i'' [s2'' [E F ]]].
       exists i'';exists s2''; split; auto. eapply star_trans; eauto.
@@ -734,49 +730,40 @@ Open Scope smallstep_scope.
     Proof.
       intros H; inv H.
       econstructor; eauto.
-      intros.
-      erewrite Eqfsim_match_meminj0; eauto.
-      eapply Mem.extends_refl.
     Qed.
 
-    Lemma sim_extSim:
-      forall index order (match_states:index -> state L1 -> state L2 -> Prop),
-      (forall i s1 s2, match_states i s1 s2 ->  Mem.extends (get_mem1 s1) (get_mem2 s2)) ->
-      fsim_properties L1 L2 index order match_states ->
-      fsim_properties_ext.
-    Proof.
-      intros ? ? ? H HH; inv HH.
-      econstructor; eauto.
-    Qed.
+    
+    End EqualityAndExtension.
 
-  End Extensions.
-
-  (** *Injection Phases*)
-  Section Injection.
+   Section InjectionSimulations.
+    (** *Injection Phases*)
+    
     Record fsim_properties_inj: Type :=
       {  Injindex: Type;
         Injorder: Injindex -> Injindex -> Prop;
         Injmatch_states: Injindex -> meminj -> state L1 -> state L2 -> Prop;  
         Injfsim_order_wf: well_founded Injorder;
-        Injfsim_match_meminj: forall i f s1 s2, Injmatch_states i f s1 s2 ->  Mem.inject f (get_mem1 s1) (get_mem2 s2);
-        Injfsim_match_full: forall i f s1 s2, Injmatch_states i f s1 s2 ->  injection_full f (get_mem1 s1);
+        Injfsim_match_meminj: forall i f s1 s2, Injmatch_states i f s1 s2 ->
+                                           Mem.inject f (get_mem s1) (get_mem s2);
+        Injfsim_match_full: forall i f s1 s2, Injmatch_states i f s1 s2 ->  injection_full f (get_mem s1);
         (*    fsim_match_initial_states:
       forall s1 m1 f m2, initial_state L1 (s1,m1) -> Mem.inject f m1 m2 ->
       exists i, exists s2, initial_state L2 (s2,m2) /\ match_states i f (s1,m1) (s2,m2);*)
-        Injfsim_match_initial_states:
-          forall s1, initial_state L1 s1 -> 
-                exists i f s2, initial_state L2 s2 /\ Injmatch_states i f s1 s2;
+        Injfsim_match_initial_core:
+          forall s1 f arg, initial_core L1 s1 f arg  -> 
+                      exists i s2 mu, get_mem s1 = get_mem s2 /\
+                                 initial_core L2 s2 f arg /\ Injmatch_states i mu s1 s2;
         Injfsim_match_final_states:
           forall i s1 s2 r f,
             Injmatch_states i f s1 s2 -> final_state L1 s1 r -> (final_state L2 s2 r);
         Injfsim_simulation:
           forall s1 t s1' f, Step L1 s1 t s1' ->
-                        forall i s2, Injmatch_states i f s1 s2 ->
-                                exists i', exists s2' f' t',
-                                    (Plus L2 s2 t' s2' \/ (Star L2 s2 t' s2' /\ Injorder i' i))
-                                    /\ Injmatch_states i' f' s1' s2' /\
-                                    Values.inject_incr f f' /\
-                                    inject_trace f' t t';
+          forall i s2, Injmatch_states i f s1 s2 ->
+                  exists i', exists s2' f' t',
+                      (Plus L2 s2 t' s2' \/ (Star L2 s2 t' s2' /\ Injorder i' i))
+                      /\ Injmatch_states i' f' s1' s2' /\
+                      Values.inject_incr f f' /\
+                      inject_trace f' t t';
         Injfsim_public_preserved:
           forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
       }.
@@ -868,7 +855,7 @@ Open Scope smallstep_scope.
       eapply inject_incr_trans; eauto.
     Admitted.
     
-  End Injection.
+  End InjectionSimulations.
  End ForwardSimulations.
  
 
@@ -915,7 +902,12 @@ Variable match_states: state L1 -> state L2 -> Prop.
 
 Hypothesis match_initial_states:
   forall s1, initial_state L1 s1 ->
-  exists s2, initial_state L2 s2 /\ match_states s1 s2.
+        exists s2, initial_state L2 s2 /\ match_states s1 s2.
+
+Hypothesis match_initial_cores:
+  forall s1 f arg, initial_core L1 s1 f arg  -> 
+  exists s2, get_mem s1 = get_mem s2 /\
+             initial_core L2 s2 f arg /\ match_states s1 s2.
 
 Hypothesis match_final_states:
   forall s1 s2 r,
@@ -950,8 +942,8 @@ Proof.
   apply Forward_simulation with order (fun idx s1 s2 => idx = s1 /\ match_states s1 s2);
   constructor.
 - auto.
-- intros. exploit match_initial_states; eauto. intros [s2 [A B]].
-    exists s1; exists s2; auto.
+- intros. exploit match_initial_cores; eauto. intros [s2 [A [B C]]].
+    exists s1; exists s2; repeat (split; auto).
 - intros. destruct H. eapply match_final_states; eauto.
 - intros. destruct H0. subst i. exploit simulation; eauto. intros [s2' [A B]].
   exists s1'; exists s2'; intuition auto.
@@ -1122,6 +1114,15 @@ End SIMULATION_SEQUENCES.
 
 (** ** Composing two forward simulations *)
 
+Ltac supertransitivity:=
+  repeat match goal with
+  |[|- ?x = ?y] =>
+   match goal with
+   | [|- x = x] => reflexivity
+   | [ H: x = _ |- _ ] => rewrite H in *; clear H
+   | [ H: _ = x |- _ ] => rewrite H in *; clear H
+   end
+  end.
 Lemma compose_forward_simulations:
   forall L1 L2 L3, forward_simulation L1 L2 -> forward_simulation L2 L3 -> forward_simulation L1 L3.
 Proof.
@@ -1138,9 +1139,11 @@ Proof.
   unfold ff_order. apply wf_lex_ord. apply wf_clos_trans.
   eapply fsim_order_wf; eauto. eapply fsim_order_wf; eauto.
 - (* initial states *)
-  intros. exploit (fsim_match_initial_states props); eauto. intros [i [s2 [A B]]].
-  exploit (fsim_match_initial_states props'); eauto. intros [i' [s3 [C D]]].
-  exists (i', i); exists s3; split; auto. exists s2; auto.
+  intros. exploit (fsim_match_initial_cores props); eauto. intros [i [s2 [A [B B']]]].
+  exploit (fsim_match_initial_cores props'); eauto. intros [i' [s3 [C [D D']]]].
+  exists (i', i); exists s3; repeat(split; auto).
+  supertransitivity.
+  exists s2; auto.
 - (* final states *)
   intros. destruct H as [s3 [A B]].
   eapply (fsim_match_final_states props'); eauto.
@@ -1184,8 +1187,9 @@ Record determinate (L: semantics) : Prop :=
       match_traces (symbolenv L) t1 t2 /\ (t1 = t2 -> s1 = s2);
     sd_traces:
       single_events L;
-    sd_initial_determ: forall s1 s2,
-      initial_state L s1 -> initial_state L s2 -> s1 = s2;
+    sd_initial_determ: forall s1 s2 f arg,
+        initial_core L s1 f arg -> initial_core L s2 f arg ->
+        get_mem s1 = get_mem s2 -> s1 = s2;
     sd_final_nostep: forall s r,
       final_state L s r -> Nostep L s;
     sd_final_determ: forall s r1 r2,
@@ -1255,11 +1259,14 @@ Record bsim_properties (L1 L2: semantics) (index: Type)
                        (order: index -> index -> Prop)
                        (match_states: index -> state L1 -> state L2 -> Prop) : Prop := {
     bsim_order_wf: well_founded order;
-    bsim_initial_states_exist:
-      forall s1, initial_state L1 s1 -> exists s2, initial_state L2 s2;
-    bsim_match_initial_states:
-      forall s1 s2, initial_state L1 s1 -> initial_state L2 s2 ->
-      exists i, exists s1', initial_state L1 s1' /\ match_states i s1' s2;
+    bsim_initial_cores_exist:
+      forall s1 f arg, initial_core L1 s1 f arg -> exists s2, initial_core L2 s2 f arg /\ get_mem s1 = get_mem s2;
+    bsim_match_initial_cores:
+      forall s1 s2 f arg, initial_core L1 s1 f arg  ->
+                  initial_core L2 s2 f arg  ->
+                  get_mem s1 = get_mem s2 -> (*NEEDED???*)
+                  exists i, exists s1', get_mem s1' = get_mem s2 /\
+                             initial_core L1 s1' f arg /\ match_states i s1' s2;
     bsim_match_final_states:
       forall i s1 s2 r,
       match_states i s1 s2 -> safe L1 s1 -> final_state L2 s2 r ->
@@ -1320,12 +1327,22 @@ Hypothesis public_preserved:
 
 Variable match_states: state L1 -> state L2 -> Prop.
 
-Hypothesis initial_states_exist:
+(*Hypothesis initial_states_exist:
   forall s1, initial_state L1 s1 -> exists s2, initial_state L2 s2.
 
 Hypothesis match_initial_states:
   forall s1 s2, initial_state L1 s1 -> initial_state L2 s2 ->
-  exists s1', initial_state L1 s1' /\ match_states s1' s2.
+           exists s1', initial_state L1 s1' /\ match_states s1' s2.*)
+
+Hypothesis initial_cores_exist:
+      forall s1 f arg, initial_core L1 s1 f arg -> exists s2, initial_core L2 s2 f arg /\ get_mem s1 = get_mem s2.
+
+Hypothesis match_initial_cores:
+  forall s1 s2 f arg, initial_core L1 s1 f arg  ->
+                 initial_core L2 s2 f arg  ->
+                 get_mem s1 = get_mem s2 -> (*NEEDED???*)
+                 exists s1', get_mem s1' = get_mem s2 /\
+                             initial_core L1 s1' f arg /\ match_states s1' s2.
 
 Hypothesis match_final_states:
   forall s1 s2 r,
@@ -1541,14 +1558,18 @@ Proof.
 - (* well founded *)
   unfold bb_order. apply wf_lex_ord. apply wf_clos_trans. eapply bsim_order_wf; eauto. eapply bsim_order_wf; eauto.
 - (* initial states exist *)
-  intros. exploit (bsim_initial_states_exist props); eauto. intros [s2 A].
-  eapply (bsim_initial_states_exist props'); eauto.
+  intros. exploit (bsim_initial_cores_exist props); eauto. intros [s2 [A A']].
+  exploit (bsim_initial_cores_exist props'); eauto; intros (s3&?&?).
+  exists s3; split; auto. supertransitivity.
 - (* match initial states *)
-  intros s1 s3 INIT1 INIT3.
-  exploit (bsim_initial_states_exist props); eauto. intros [s2 INIT2].
-  exploit (bsim_match_initial_states props'); eauto. intros [i2 [s2' [INIT2' M2]]].
-  exploit (bsim_match_initial_states props); eauto. intros [i1 [s1' [INIT1' M1]]].
-  exists (i1, i2); exists s1'; intuition auto. eapply bb_match_at; eauto.
+  intros s1 s3 f arg INIT1 INIT3 MEMeq1.
+  exploit (bsim_initial_cores_exist props); eauto. intros [s2 [INIT2 MEMeq2]].
+  exploit (bsim_match_initial_cores props'); eauto. supertransitivity.
+  intros [i2 [s2' [MEMeq3 [INIT2' M2]]]].
+  exploit (bsim_match_initial_cores props); eauto; supertransitivity.
+    intros [i1 [s1' [MEMeq [INIT1' M1]]]].
+  exists (i1, i2); exists s1'; intuition auto. supertransitivity.
+  eapply bb_match_at; eauto.
 - (* match final states *)
   intros i s1 s3 r MS SAFE FIN. inv MS.
   exploit (bsim_match_final_states props'); eauto.
@@ -1836,12 +1857,12 @@ Proof.
 - (* well founded *)
   apply wf_f2b_order.
 - (* initial states exist *)
-  intros. exploit (fsim_match_initial_states FS); eauto. intros [i [s2 [A B]]].
+  intros. exploit (fsim_match_initial_cores FS); eauto. intros [i [s2 [A [B B']]]].
   exists s2; auto.
 - (* initial states *)
-  intros. exploit (fsim_match_initial_states FS); eauto. intros [i [s2' [A B]]].
-  assert (s2 = s2') by (eapply sd_initial_determ; eauto). subst s2'.
-  exists (F2BI_after O); exists s1; split; auto. econstructor; eauto.
+  intros. exploit (fsim_match_initial_cores FS); eauto. intros [i [s2' [A [B B']]]].
+  assert (s2 = s2') by (eapply sd_initial_determ; eauto; supertransitivity). subst s2.
+  exists (F2BI_after O); exists s1; repeat(split; auto). econstructor; eauto.
 - (* final states *)
   intros. inv H.
   exploit f2b_progress; eauto. intros TRANS; inv TRANS.
@@ -1888,9 +1909,13 @@ Inductive atomic_step (ge: genvtype L): (trace * state L) -> trace -> (trace * s
 
 Definition atomic : semantics := {|
   state := (trace * state L)%type;
+  main_block := main_block L;
+  init_mem := init_mem L;
+  get_mem := fun s => get_mem (snd s) ;
+  set_mem := fun s m => (fst s, set_mem (snd s) m);
   genvtype := genvtype L;
   step := atomic_step;
-  initial_state := fun s => initial_state L (snd s) /\ fst s = E0;
+  initial_core := fun s f args => initial_core L (snd s) f args /\ fst s = E0;
   final_state := fun s r => final_state L (snd s) r /\ fst s = E0;
   globalenv := globalenv L;
   symbolenv := symbolenv L
@@ -1978,8 +2003,8 @@ Proof.
   eapply fsim_order_wf; eauto.
 - (* initial states *)
   intros. destruct s1 as [t1 s1]. simpl in H. destruct H. subst.
-  exploit (fsim_match_initial_states sim); eauto. intros [i [s2 [A B]]].
-  exists i; exists s2; split; auto. constructor; auto.
+  exploit (fsim_match_initial_cores sim); eauto. intros [i [s2 [A [B B']]]].
+  exists i; exists s2; repeat(split; auto). constructor; auto.
 - (* final states *)
   intros. destruct s1 as [t1 s1]. simpl in H0; destruct H0; subst. inv H.
   eapply (fsim_match_final_states sim); eauto.
@@ -2072,12 +2097,12 @@ Proof.
 - (* wf *)
   eapply bsim_order_wf; eauto.
 - (* initial states exist *)
-  intros. exploit (bsim_initial_states_exist sim); eauto. intros [s2 A].
+  intros. exploit (bsim_initial_cores_exist sim); eauto. intros [s2 [A A']].
   exists (E0, s2). simpl; auto.
 - (* initial states match *)
   intros. destruct s2 as [t s2]; simpl in H0; destruct H0; subst.
-  exploit (bsim_match_initial_states sim); eauto. intros [i [s1' [A B]]].
-  exists i; exists s1'; split. auto. econstructor. apply star_refl. auto. auto.
+  exploit (bsim_match_initial_cores sim); eauto. intros [i [s1' [A [B B']]]].
+  exists i; exists s1'; repeat(split; auto). econstructor. apply star_refl. auto. auto.
 - (* final states match *)
   intros. destruct s2 as [t s2]; simpl in H1; destruct H1; subst.
   inv H. exploit (bsim_match_final_states sim); eauto. eapply star_safe; eauto.
