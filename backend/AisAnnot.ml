@@ -146,14 +146,18 @@ let ais_annot_txt warn lbl preg_string sp_reg_name txt args =
       []
   in
   let rec merge acc = function
-    | [] -> List.rev acc
+    | [] -> acc
     | (Label _ as lbl):: rest ->  merge (lbl::acc) rest
     | (Symbol _ as sym) :: rest -> merge (sym::acc) rest
     | String s1 :: String s2 :: rest ->
       merge acc (String (s1 ^ s2) :: rest)
     | String s:: rest  ->  merge ((String s)::acc) rest
   in
-  merge [] annot
+  let rev_annot = match merge [] annot with
+    | [] -> []
+    | (String s)::rest -> (String (s^"\n"))::rest
+    | rest -> (String "\n")::rest in
+  List.rev rev_annot
 
 let add_ais_annot lbl preg_string sp_reg_name txt args =
   let annot = ais_annot_txt true lbl preg_string sp_reg_name txt args in

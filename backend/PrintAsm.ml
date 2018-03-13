@@ -162,8 +162,7 @@ module Printer(Target:TARGET) =
             print_addr oc Target.symbol symb
           | AisAnnot.String a -> fprintf oc "	.ascii %S\n" a in
         let annot oc str =
-          List.iter (annot_part oc) str;
-          fprintf oc "	.ascii \"\\n\"\n"
+          List.iter (annot_part oc) str
         in
         List.iter (annot oc) annots
       end
