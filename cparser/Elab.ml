@@ -42,6 +42,9 @@ let print_typ env fmt ty =
       Format.fprintf fmt "'%a' (aka '%a')" Cprint.typ_raw ty Cprint.typ_raw (unroll env ty)
   | _ -> Format.fprintf fmt "'%a'" Cprint.typ_raw ty
 
+let pp_field fmt id =
+ Format.fprintf fmt "%s" (if id <> "" then id else "<anonymous>")
+
 (* Error reporting for Env functions *)
 
 let wrap fn loc env arg =
@@ -798,28 +801,28 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
             | _ -> ILongLong (* trigger next error message *) in
           if integer_rank ik > integer_rank IInt then begin
             error loc
-              "the type of bit-field '%s' must be an integer type no bigger than 'int'" id;
+              "the type of bit-field '%a' must be an integer type no bigger than 'int'" pp_field id;
             None
           end else begin
             let expr,env' =(!elab_expr_f loc env sz) in
             match Ceval.integer_expr env' expr with
             | Some n ->
                 if n < 0L then begin
-                  error loc "bit-field '%s' has negative width (%Ld)" id n;
+                  error loc "bit-field '%a' has negative width (%Ld)" pp_field id n;
                   None
                 end else
                   let max = Int64.of_int(sizeof_ikind ik * 8) in
                   if n >  max then begin
-                    error loc "size of bit-field '%s' (%Ld bits) exceeds its type (%Ld bits)" id n max;
+                    error loc "size of bit-field '%a' (%Ld bits) exceeds its type (%Ld bits)" pp_field id n max;
                     None
                 end else
                 if n = 0L && id <> "" then begin
-                  error loc "named bit-field '%s' has zero width" id;
+                  error loc "named bit-field '%a' has zero width" pp_field id;
                   None
                 end else
                   Some(Int64.to_int n)
             | None ->
-                error loc "bit-field '%s' width not an integer constant" id;
+                error loc "bit-field '%a' width not an integer constant" pp_field id;
                 None
           end in
     let anon_composite = is_anonymous_composite ty in
@@ -857,7 +860,7 @@ and elab_struct_or_union_info keep_ty kind loc env members attrs =
          duplicate acc rest
        end else if fld.fld_name <> "" then begin
          if List.exists ((=) fld.fld_name) acc then
-           error loc "duplicate member '%s'" fld.fld_name;
+           error loc "duplicate member '%a'" pp_field fld.fld_name;
          duplicate (fld.fld_name::acc) rest
        end else
          duplicate acc rest in
@@ -870,7 +873,7 @@ and elab_struct_or_union_info keep_ty kind loc env members attrs =
   | fld :: rem ->
       if wrap incomplete_type loc env' fld.fld_typ then
         (* Must be fatal otherwise we get problems constructing the init *)
-        fatal_error loc "member '%s' has incomplete type" fld.fld_name;
+        fatal_error loc "member '%a' has incomplete type" pp_field fld.fld_name;
       check_incomplete rem in
   check_incomplete m;
   (* Warn for empty structs or unions *)
