@@ -2334,6 +2334,10 @@ let elab_fundef env spec name defs body loc =
   (* Special treatment of the "main" function. *)
   let body2 =
     if s = "main" then begin
+      if inline then
+        error loc "'main' is not allowed to be declared inline";
+      if noret then
+        warning loc Unnamed "'main' is not allowed to be declared _Noreturn";
       match unroll env ty_ret with
       | TInt(IInt, []) ->
           (* Add implicit "return 0;" at end of function body.
