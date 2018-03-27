@@ -1557,7 +1557,7 @@ let elab_expr vararg loc env a =
             emit_elab ~linkage env loc (Gdecl(sto, id, ty, None));
             { edesc = EVar id; etyp = ty },env
         | _ -> elab env a1 in
-      let bl = mmap  elab env al in
+      let bl = mmap elab env al in
       (* Extract type information *)
       let (res, args, vararg) =
         match unroll env b1.etyp with
@@ -1956,7 +1956,8 @@ let elab_expr vararg loc env a =
   | BINARY(COMMA, a1, a2) ->
       let b1,env = elab env a1 in
       let b2,env = elab env a2 in
-      { edesc = EBinop (Ocomma, b1, b2, b2.etyp); etyp = b2.etyp },env
+      let  ty2 = pointer_decay env b2.etyp in
+      { edesc = EBinop (Ocomma, b1, b2, ty2); etyp = ty2 },env
 
 (* Elaboration of pre- or post- increment/decrement *)
   and elab_pre_post_incr_decr op msg a1 =
