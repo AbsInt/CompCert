@@ -243,6 +243,8 @@ val valid_array_size: Env.t -> typ -> int64 -> bool
   (* Test whether the array size fits in half of the address space *)
 val is_volatile_variable: Env.t -> exp -> bool
   (* Test whether the expression is an access to a volatile variable *)
+val is_bitfield: Env.t -> exp -> bool
+  (* Test whether the expression is a bit-field *)
 
 (* Constructors *)
 

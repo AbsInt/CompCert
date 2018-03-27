@@ -1619,6 +1619,8 @@ let elab_expr vararg loc env a =
       let b1,env = elab env a1 in
       if wrap incomplete_type loc env b1.etyp then
         error "invalid application of 'sizeof' to an incomplete type %a" (print_typ env) b1.etyp;
+      if wrap is_bitfield loc env b1 then
+        error "invalid application of 'sizeof' to a bit-field";
       let bdesc =
         (* Catch special cases sizeof("string literal") *)
         match b1.edesc with
@@ -1641,7 +1643,9 @@ let elab_expr vararg loc env a =
   | EXPR_ALIGNOF a1 ->
       let b1,env = elab env a1 in
       if wrap incomplete_type loc env b1.etyp then
-        error "invalid application of 'alignof' to an incomplete type %a" (print_typ env) b1.etyp;
+        error "invalid application of '_Alignof' to an incomplete type %a" (print_typ env) b1.etyp;
+      if wrap is_bitfield loc env b1 then
+        error "invalid application of '_Alignof' to a bit-field";
       { edesc = EAlignof b1.etyp; etyp =  TInt(size_t_ikind(), []) },env
 
   | TYPE_ALIGNOF (spec, dcl) ->

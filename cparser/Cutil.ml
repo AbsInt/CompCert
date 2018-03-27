@@ -988,6 +988,16 @@ let is_call_to_fun e s =
   | EVar id -> id.C.name = s
   | _ -> false
 
+let is_bitfield env e =
+  match e.edesc with
+  | EUnop(Odot f,b) ->
+    let fld = field_of_dot_access env b.etyp f in
+    fld.fld_bitfield <> None
+  | EUnop(Oarrow f,b) ->
+    let fld = field_of_arrow_access env b.etyp f in
+    fld.fld_bitfield <> None
+  | _ -> false
+
 (* Assignment compatibility check over attributes.
    Standard attributes ("const", "volatile", "restrict") can safely
    be added (to the rhs type to get the lhs type) but must not be dropped.
