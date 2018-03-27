@@ -144,7 +144,7 @@ let rec transf_struct_members env id count = function
       end
 
 let rec transf_union_members env id count = function
-    [] -> []
+  | [] -> []
   | m :: ms ->
       (match m.fld_bitfield with
       | None ->  m::transf_union_members env id count ms
@@ -176,7 +176,7 @@ let rec transf_union_members env id count = function
              bf_signed = signed; bf_signed_res = signed2;
              bf_bool = is_bool};
           { fld_name = carrier; fld_typ = carrier_typ; fld_bitfield = None; fld_anonymous = false;}
-          :: transf_struct_members env id (count + 1) ms)
+          :: transf_union_members env id (count + 1) ms)
 
 let transf_composite env su id attr ml =
   match su with
