@@ -1035,9 +1035,6 @@ let valid_cast env tfrom tto =
     (TInt _ | TPtr _ | TEnum _) -> true
   (* between int and float types *)
   | (TInt _ | TFloat _ | TEnum _), (TInt _ | TFloat _ | TEnum _) -> true
-  (* between identical composites *)
-  | TStruct(s1, _), TStruct(s2, _) -> s1 = s2
-  | TUnion(s1, _), TUnion(s2, _) -> s1 = s2
   | _, _ -> false
 
 (* Check that the cast from tfrom to tto is an integer to pointer conversion *)
