@@ -1229,7 +1229,7 @@ module I = struct
                 if fld1.fld_name = name then
                   Some(Zunion(z, id, fld1), default_init env fld1.fld_typ)
                 else if fld.fld_anonymous && has_member env name fld.fld_typ then
-                  let zi = (Zunion(z, id, fld1),default_init env fld1.fld_typ) in
+                  let zi = (Zunion(z, id, fld1),i) in
                   member env zi name
                 else
                   find rem
