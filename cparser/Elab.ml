@@ -1076,6 +1076,11 @@ module I = struct
               * ident                   (* union type *)
               * field                   (* current member *)
 
+  type 'a result =
+    | OK of 'a
+    | NotFound
+    | Unsupported
+
   (* The initial state: default initialization, current point at top *)
   let top env name ty = (Ztop(name, ty), default_init env ty)
 
@@ -1122,52 +1127,53 @@ module I = struct
   let il_tail = function [] -> [] | i1 :: il -> il
 
   (* Advance the current point to the next point in right-up order.
-     Return None if no next point, i.e. we are at top *)
+     Return NotFound if no next point, i.e. we are at top *)
   let rec next = function
-    | Ztop(name, ty), i -> None
+    | Ztop(name, ty), i -> NotFound
     | Zarray(z, ty, sz, dfl, before, idx, after), i ->
         let idx' = Int64.succ idx in
         if index_below idx' sz
-        then Some(Zarray(z, ty, sz, dfl, i :: before, idx', il_tail after),
-                  il_head dfl after)
+        then OK(Zarray(z, ty, sz, dfl, i :: before, idx', il_tail after),
+                il_head dfl after)
         else next (z, Init_array (List.rev_append before (i :: after)))
     | Zstruct(z, id, before, fld, []), i ->
         next (z, Init_struct(id, List.rev_append before [(fld, i)]))
     | Zstruct(z, id, before, fld, (fld1, i1) :: after), i ->
-        Some(Zstruct(z, id, (fld, i) :: before, fld1, after), i1)
+        OK(Zstruct(z, id, (fld, i) :: before, fld1, after), i1)
     | Zunion(z, id, fld), i ->
         next (z, Init_union(id, fld, i))
 
   (* Move the current point "down" to the first component of an array,
      struct, or union.  No effect if the current point is a scalar. *)
-  let rec first env (z, i as zi) =
+  let first env (z, i as zi) =
     let ty = typeof zi in
     match unroll env ty, i with
     | TArray(ty, sz, _), Init_array il ->
         if index_below 0L sz then begin
           let dfl = default_init env ty in
-          Some(Zarray(z, ty, sz, dfl, [], 0L, il_tail il), il_head dfl il)
+          OK(Zarray(z, ty, sz, dfl, [], 0L, il_tail il), il_head dfl il)
         end
-        else None
+        else NotFound
     | TStruct(id, _), Init_struct(id', []) ->
-        None
+        NotFound
     | TStruct(id, _), Init_struct(id', (fld1, i1) :: flds) ->
-        Some(Zstruct(z, id, [], fld1, flds), i1)
+        OK(Zstruct(z, id, [], fld1, flds), i1)
     | TUnion(id, _), Init_union(id', fld, i) ->
         begin match (Env.find_union env id).Env.ci_members with
-        | [] -> None
+        | [] -> NotFound
         | fld1 :: _ ->
-            Some(Zunion(z, id, fld1),
-                 if fld.fld_name = fld1.fld_name
-                 then i
-                 else default_init env fld1.fld_typ)
+            OK(Zunion(z, id, fld1),
+               if fld.fld_name = fld1.fld_name
+               then i
+               else default_init env fld1.fld_typ)
         end
     | (TStruct _ | TUnion _), Init_single a ->
         (* This is a previous whole-struct initialization that we
-           are going to overwrite.  Revert to the default initializer. *)
-        first env (z, default_init env ty)
+           are going to overwrite.  Hard to support correctly
+           and without code duplication, so turn it into an error. *)
+        Unsupported
     | _ ->
-        Some (z, i)
+        OK (z, i)
 
   (* Move to the [n]-th element of the current point, which must be
      an array. *)
@@ -1178,17 +1184,17 @@ module I = struct
           let dfl = default_init env ty in
           let rec loop p before after =
             if p = n then
-              Some(Zarray(z, ty, sz, dfl, before, n, il_tail after),
-                   il_head dfl after)
+              OK (Zarray(z, ty, sz, dfl, before, n, il_tail after),
+                  il_head dfl after)
             else
               loop (Int64.succ p)
                    (il_head dfl after :: before)
                    (il_tail after)
           in loop 0L [] il
         end else
-          None
+          NotFound
     | _, _ ->
-      None
+      NotFound
 
   let has_member env name ty =
     let mem f id =
@@ -1209,10 +1215,10 @@ module I = struct
     match unroll env ty, i with
     | TStruct(id, _), Init_struct(id', flds) ->
         let rec find before = function
-          | [] -> None
+          | [] -> NotFound
           | (fld, i as f_i) :: after ->
               if fld.fld_name = name then
-                Some(Zstruct(z, id, before, fld, after), i)
+                OK(Zstruct(z, id, before, fld, after), i)
               else if fld.fld_anonymous && has_member env name fld.fld_typ then
                 let zi = (Zstruct(z, id, before, fld, after), i) in
                 member env zi name
@@ -1221,13 +1227,13 @@ module I = struct
         in find [] flds
     | TUnion(id, _), Init_union(id', fld, i) ->
         if fld.fld_name = name then
-          Some(Zunion(z, id, fld), i)
+          OK(Zunion(z, id, fld), i)
         else begin
           let rec find = function
-            | [] -> None
+            | [] -> NotFound
             | fld1 :: rem ->
                 if fld1.fld_name = name then
-                  Some(Zunion(z, id, fld1), default_init env fld1.fld_typ)
+                  OK(Zunion(z, id, fld1), default_init env fld1.fld_typ)
                 else if fld.fld_anonymous && has_member env name fld.fld_typ then
                   let zi = (Zunion(z, id, fld1),i) in
                   member env zi name
@@ -1236,9 +1242,12 @@ module I = struct
            in find (Env.find_union env id).Env.ci_members
          end
     | (TStruct _ | TUnion _), Init_single a ->
-        member env (z, default_init env ty) name
+        (* This is a previous whole-struct initialization that we
+           are going to overwrite.  Hard to support correctly
+           and without code duplication, so turn it into an error. *)
+        Unsupported
     | _, _ ->
-        None
+        NotFound
 end
 
 (* Interpret the given designator, moving the initialization state [zi]
@@ -1250,10 +1259,13 @@ let rec elab_designator loc env zi desig =
       zi
   | INFIELD_INIT name :: desig' ->
       begin match I.member env zi name with
-      | Some zi' ->
+      | I.OK zi' ->
           elab_designator loc env zi' desig'
-      | None ->
+      | I.NotFound ->
           error loc "%s has no member named %s" (I.name zi) name;
+          raise Exit
+      | I.Unsupported ->
+          error loc "unsupported reinitialization of %s that was previously initialized as a whole" (I.name zi);
           raise Exit
       end
   | ATINDEX_INIT a :: desig' ->
@@ -1264,11 +1276,12 @@ let rec elab_designator loc env zi desig =
           raise Exit
       | Some n ->
           match I.index env zi n with
-          | Some zi' ->
+          | I.OK zi' ->
               elab_designator loc env zi' desig'
-          | None ->
+          | I.NotFound ->
               error loc "array index %Ld within %s exceeds array bounds" n (I.name zi);
             raise Exit
+          | I.Unsupported -> assert false
       end
 
 (* Elaboration of an initialization expression.  Return the corresponding
@@ -1289,12 +1302,15 @@ let rec elab_list zi il first =
       if desig = [] then begin
         match (if first then I.first env zi else I.next zi)
         with
-        | None ->
+        | I.NotFound ->
             warning loc Unnamed "excess elements in initializer for %s"
                         (I.name zi);
             I.to_init zi
-        | Some zi' ->
+        | I.OK zi' ->
             elab_item zi' item il'
+        | I.Unsupported ->
+            error loc "unsupported reinitialization of %s that was previously initialized as a whole" (I.name zi);
+            raise Exit
       end else
         elab_item (elab_designator loc env (I.to_top zi) desig) item il'
 
@@ -1358,11 +1374,14 @@ and elab_single zi a il =
   | TStruct _ | TUnion _ | TArray _ ->
       (* This is an aggregate: we need to drill into it, recursively *)
       begin match I.first env zi with
-      | Some zi' ->
+      | I.OK zi' ->
           elab_single zi' a il
-      | None ->
+      | I.NotFound ->
           error loc "initializer for aggregate %s with no elements requires explicit braces"
                     (I.name zi);
+          raise Exit
+      | I.Unsupported ->
+          error loc "unsupported reinitialization of %s that was previously initialized as a whole" (I.name zi);
           raise Exit
       end
   | _ ->
