@@ -564,11 +564,13 @@ Lemma atomic_forward_simulation: forward_simulation L (atomic L).
 Proof.
   set (ms := fun (s: state L) (ts: state (atomic L)) => ts = (E0,s)).
   apply forward_simulation_plus with ms; intros.
-  auto.
-  exists (E0,s1); split. simpl; auto. red; auto.
-  red in H. subst s2. simpl; auto.
-  red in H0. subst s2. exists (E0,s1'); split.
-  apply step_atomic_plus; auto. red; auto.
+  - auto.
+  - exists (E0,s1); split. simpl; auto. red; auto.
+  - exists (E0,s1); split. simpl; auto.
+    inv H; econstructor; simpl; eauto. red; auto.
+  - red in H. subst s2. simpl; auto.
+  - red in H0. subst s2. exists (E0,s1'); split.
+    apply step_atomic_plus; auto. red; auto.
 Qed.
 
 Lemma atomic_star_star_gen:
@@ -640,17 +642,21 @@ Proof.
   intros [beh2 [A B]]. red in B. destruct B as [EQ | [t [C D]]].
   congruence.
   subst beh. inv H. inv H1.
-  apply program_runs with (E0,s). simpl; auto.
+  apply program_runs with (E0,s). apply atomic_initial; auto.
   apply state_goes_wrong with (E0,s'). apply star_atomic_star; auto.
   red; intros; red; intros. inv H. eelim H3; eauto. eelim H3; eauto.
   intros; red; intros. simpl in H. destruct H. eelim H4; eauto.
   apply program_goes_initially_wrong.
-  intros; red; intros. simpl in H; destruct H. eelim H1; eauto.
+  intros; red; intros. destruct s; eelim H1; eauto.
+  eapply atomic_initial';  eauto.
 - (* atomic L -> L *)
   inv H.
 + (* initial state defined *)
-  destruct s as [t s]. simpl in H0. destruct H0; subst t.
-  apply program_runs with s; auto.
+  destruct s as [t s]. 
+  eapply program_runs with s; auto.
+  eapply atomic_initial'; eauto.
+  inv H0. inv H2. simpl in *; subst t.
+  rename H0 into INITcore.
   inv H1.
 * (* termination *)
   destruct s' as [t' s']. simpl in H2; destruct H2; subst t'.
@@ -675,6 +681,7 @@ Proof.
 + (* initial state undefined *)
   apply program_goes_initially_wrong.
   intros; red; intros. elim (H0 (E0,s)); simpl; auto.
+  apply atomic_initial; auto.
 Qed.
 
 End ATOMIC.
