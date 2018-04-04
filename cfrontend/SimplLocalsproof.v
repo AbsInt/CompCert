@@ -17,6 +17,7 @@ Require Import Coqlib Errors Ordered Maps Integers Floats.
 Require Import AST Linking.
 Require Import Values Memory Globalenvs Events Smallstep.
 Require Import Ctypes Cop Clight SimplLocals.
+Require Import SCTactics.
 
 Module VSF := FSetFacts.Facts(VSet).
 Module VSP := FSetProperties.Properties(VSet).
@@ -2238,6 +2239,70 @@ Proof.
   econstructor; eauto with compat.
   eapply match_envs_set_opttemp; eauto.
 Qed.
+
+
+Lemma initial_cores_simulation:
+  forall S v args, initial_core prog S v args ->
+       exists R, get_mem S = get_mem R /\
+            initial_core tprog R v args /\ match_states S R.
+Proof.
+  intros. inv H.
+  eexists. split; eauto.
+  split.
+  - econstructor.
+    + eapply (Genv.init_mem_transf_partial (proj1 TRANSF)); eauto.
+    + rewrite symbols_preserved; auto.
+      replace (prog_main tprog) with (prog_main prog); eauto.
+      generalize (match_program_main (proj1 TRANSF)); simpl; auto.
+    + subst ge0. pose proof (proj1 TRANSF) as HH. simpl in HH. 
+      inv HH.
+      move.
+      
+  
+  exploit function_ptr_translated; eauto. intros [tf [A B]].
+  econstructor; split; [|split]; eauto.
+  eauto.
+  
+  * econstructor; eauto.
+    + eapply (Genv.init_mem_transf_partial (proj1 TRANSF)); eauto.
+    + rewrite symbols_preserved; auto.
+      replace (prog_main tprog) with (prog_main prog); eauto.
+      generalize (match_program_main (proj1 TRANSF)); simpl; auto.
+    + eapply function_ptr_translated in H2; destruct H2 as (? & ? & ?).
+      Ltac Have G:=
+        change G.
+      Have (Genv.find_funct_ptr (Genv.globalenv tprog) b = Some f).
+
+      rewrite B in H2; inversion H2; subst.
+
+      Set Printing Implicit.
+      
+
+
+  eapply (Genv.init_mem_transf_partial (proj1 TRANSF)); eauto.
+  rewrite symbols_preserved; eauto.
+  rewrite <- H3; apply type_of_fundef_preserved; auto.
+  econstructor; eauto.
+  intros. 
+  econstructor; eauto.
+  intros.
+  econstructor; eauto.
+  constructor; intros.
+  unfold Mem.flat_inj. apply pred_dec_true; auto.
+  unfold Mem.flat_inj in H. destruct (plt b1 (Mem.nextblock m0)); inv H. auto.
+  eapply Genv.find_symbol_not_fresh; eauto.
+  eapply Genv.find_funct_ptr_not_fresh; eauto.
+  eapply Genv.find_var_info_not_fresh; eauto.
+  xomega. xomega.
+  eapply Genv.initmem_inject; eauto.
+  constructor.
+Qed.
+
+
+ forall s1 f arg, initial_core L1 s1 f arg  -> 
+             exists i, exists s2, get_mem s1 = get_mem s2 /\
+                        initial_core L2 s2 f arg /\ match_states i s1 s2;
+                          
 
 Lemma initial_states_simulation:
   forall S, initial_state prog S ->

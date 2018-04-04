@@ -25,6 +25,8 @@ Require Import Coqlib.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Integers.
+(*NEW*) Require Import AST.
+(*NEW*) Require Import Values.
 
 Set Implicit Arguments.
 
@@ -473,30 +475,92 @@ End CLOSURES.
 
 (** The general form of a transition semantics. *)
 
-Record semantics : Type := Semantics_gen {
+Record part_semantics : Type :=
+  {
   state: Type;
   genvtype: Type;
+  get_mem: state -> Memory.mem;
+  set_mem: state -> Memory.mem -> state;
   step : genvtype -> state -> trace -> state -> Prop;
-  initial_state: state -> Prop;
+  initial_core: Memory.mem -> state -> val -> list val -> Prop;
+  at_external : state ->  option (external_function * signature * list val);
+  after_external : option val -> state -> Memory.mem -> option state;
   final_state: state -> int -> Prop;
   globalenv: genvtype;
   symbolenv: Senv.t
+  (*External call states must exectue the function in one step*)
+  (*at_extern_step:*) 
 }.
+Arguments get_mem {_} _.
+Arguments set_mem {_} _ _.
+
+(* Full semantics are for closed, complete programs. *)
+(* It contains a main function and an inital_mem     *)
+Record semantics : Type := {
+  part_sem:> part_semantics;
+  main_block: block;
+  init_mem: option Memory.mem
+                          }.
+
+(*ReconstructWe can recover initial_states from initial_core *)
+Inductive initial_state (sem:semantics): state sem -> Prop :=
+| initial_state_derived_intro': forall st0 m0,
+  init_mem sem = Some m0 ->
+  initial_core sem m0 st0 (Vptr (main_block sem) (Ptrofs.of_ints Int.zero)) nil ->
+  initial_state sem st0.
 
 (** The form used in earlier CompCert versions, for backward compatibility. *)
 
 Definition Semantics {state funtype vartype: Type}
+                     (get_mem: state -> Memory.mem)
+                     (set_mem: state -> Memory.mem -> state)
                      (step: Genv.t funtype vartype -> state -> trace -> state -> Prop)
-                     (initial_state: state -> Prop)
+                     (initial_core: Memory.mem -> state -> val -> list val  -> Prop)
+                     (at_external : state -> option (external_function * signature * list val))
+                     (after_external : option val -> state -> Memory.mem -> option state)
                      (final_state: state -> int -> Prop)
-                     (globalenv: Genv.t funtype vartype) :=
+                     (globalenv: Genv.t funtype vartype)
+                     (main_block: block)
+                     (init_mem: option Memory.mem):=
+  Build_semantics
   {| state := state;
      genvtype := Genv.t funtype vartype;
+     get_mem:= get_mem;
+     set_mem:= set_mem;
      step := step;
-     initial_state := initial_state;
+     initial_core := initial_core;
+     at_external := at_external;
+     after_external := after_external;
      final_state := final_state;
      globalenv := globalenv;
-     symbolenv := Genv.to_senv globalenv |}.
+     symbolenv := Genv.to_senv globalenv |}
+  main_block init_mem.
+
+Definition Semantics_gen (state genvtype: Type)
+                     (get_mem: state -> Memory.mem)
+                     (set_mem: state -> Memory.mem -> state)
+                     (step: genvtype -> state -> trace -> state -> Prop)
+                     (initial_core: Memory.mem -> state -> val -> list val  -> Prop)
+                     (at_external : state ->  option (external_function * signature * list val))
+                     (after_external : option val -> state -> Memory.mem -> option state)
+                     (final_state: state -> int -> Prop)
+                     (globalenv: genvtype)
+                     (main_block: block)
+                     (init_mem: option Memory.mem)
+                     (symbolenv: Senv.t):=
+  Build_semantics
+  {| state := state;
+     genvtype := genvtype;
+     get_mem:= get_mem;
+     set_mem:= set_mem;
+     step := step;
+     initial_core := initial_core;
+     at_external := at_external;
+     after_external := after_external;
+     final_state := final_state;
+     globalenv := globalenv;
+     symbolenv := symbolenv |}
+  main_block init_mem.
 
 (** Handy notations. *)
 
@@ -513,26 +577,30 @@ Open Scope smallstep_scope.
 
 (** The general form of a forward simulation. *)
 
-Record fsim_properties (L1 L2: semantics) (index: Type)
-                       (order: index -> index -> Prop)
-                       (match_states: index -> state L1 -> state L2 -> Prop) : Prop := {
+(** NEW: I will tolerate the duplication of initial_cores/initial_states, while 
+    we find a better abstraction. *)
+Record fsim_properties  (L1 L2: semantics) (index: Type)
+          (order: index -> index -> Prop)
+          (match_states: index -> state L1 -> state L2 -> Prop) : Prop := {
     fsim_order_wf: well_founded order;
+    fsim_match_initial_cores:
+      forall s1 f arg m0, initial_core L1 m0 s1 f arg  -> 
+                  exists i, exists s2, initial_core L2 m0 s2 f arg /\ match_states i s1 s2;
     fsim_match_initial_states:
-      forall s1, initial_state L1 s1 ->
-      exists i, exists s2, initial_state L2 s2 /\ match_states i s1 s2;
+      forall s1, initial_state L1 s1  -> 
+            exists i, exists s2, initial_state L2 s2 /\ match_states i s1 s2;
     fsim_match_final_states:
       forall i s1 s2 r,
-      match_states i s1 s2 -> final_state L1 s1 r -> final_state L2 s2 r;
+        match_states i s1 s2 -> final_state L1 s1 r -> final_state L2 s2 r;
     fsim_simulation:
       forall s1 t s1', Step L1 s1 t s1' ->
-      forall i s2, match_states i s1 s2 ->
-      exists i', exists s2',
-         (Plus L2 s2 t s2' \/ (Star L2 s2 t s2' /\ order i' i))
-      /\ match_states i' s1' s2';
+                  forall i s2, match_states i s1 s2 ->
+                          exists i', exists s2', 
+                              (Plus L2 s2 t s2' \/ (Star L2 s2 t s2' /\ order i' i))
+                              /\ match_states i' s1' s2';
     fsim_public_preserved:
       forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
-  }.
-
+    }.
 Arguments fsim_properties: clear implicits.
 
 Inductive forward_simulation (L1 L2: semantics) : Prop :=
@@ -560,6 +628,7 @@ Proof.
   left; exists i'; exists s2'; split; auto. econstructor; eauto.
 Qed.
 
+  
 (** ** Forward simulation diagrams. *)
 
 (** Various simulation diagrams that imply forward simulation *)
@@ -569,13 +638,17 @@ Section FORWARD_SIMU_DIAGRAMS.
 Variable L1: semantics.
 Variable L2: semantics.
 
+
 Hypothesis public_preserved:
   forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id.
 
 Variable match_states: state L1 -> state L2 -> Prop.
 
+Hypothesis match_initial_cores:
+  forall s1 f arg m0, initial_core L1 m0 s1 f arg  -> 
+  exists s2, initial_core L2 m0 s2 f arg /\ match_states s1 s2.
 Hypothesis match_initial_states:
-  forall s1, initial_state L1 s1 ->
+  forall s1, initial_state L1 s1  -> 
   exists s2, initial_state L2 s2 /\ match_states s1 s2.
 
 Hypothesis match_final_states:
@@ -611,8 +684,10 @@ Proof.
   apply Forward_simulation with order (fun idx s1 s2 => idx = s1 /\ match_states s1 s2);
   constructor.
 - auto.
+- intros. exploit match_initial_cores; eauto. intros [s2 [A B]].
+  exists s1; exists s2; repeat (split; auto).
 - intros. exploit match_initial_states; eauto. intros [s2 [A B]].
-    exists s1; exists s2; auto.
+  exists s1; exists s2; repeat (split; auto).
 - intros. destruct H. eapply match_final_states; eauto.
 - intros. destruct H0. subst i. exploit simulation; eauto. intros [s2' [A B]].
   exists s1'; exists s2'; intuition auto.
@@ -783,6 +858,15 @@ End SIMULATION_SEQUENCES.
 
 (** ** Composing two forward simulations *)
 
+Ltac supertransitivity:=
+  repeat match goal with
+  |[|- ?x = ?y] =>
+   match goal with
+   | [|- x = x] => reflexivity
+   | [ H: x = _ |- _ ] => rewrite H in *; clear H
+   | [ H: _ = x |- _ ] => rewrite H in *; clear H
+   end
+  end.
 Lemma compose_forward_simulations:
   forall L1 L2 L3, forward_simulation L1 L2 -> forward_simulation L2 L3 -> forward_simulation L1 L3.
 Proof.
@@ -798,10 +882,17 @@ Proof.
 - (* well founded *)
   unfold ff_order. apply wf_lex_ord. apply wf_clos_trans.
   eapply fsim_order_wf; eauto. eapply fsim_order_wf; eauto.
+- (* initial cores *)
+  intros. exploit (fsim_match_initial_cores props); eauto. intros [i [s2 [A B]]].
+  exploit (fsim_match_initial_cores props'); eauto. intros [i' [s3 [C D]]].
+  exists (i', i); exists s3; repeat(split; auto).
+  supertransitivity.
+  exists s2; auto.
 - (* initial states *)
   intros. exploit (fsim_match_initial_states props); eauto. intros [i [s2 [A B]]].
   exploit (fsim_match_initial_states props'); eauto. intros [i' [s3 [C D]]].
-  exists (i', i); exists s3; split; auto. exists s2; auto.
+  exists (i', i); exists s3; repeat(split; auto).
+  exists s2; auto.
 - (* final states *)
   intros. destruct H as [s3 [A B]].
   eapply (fsim_match_final_states props'); eauto.
@@ -845,8 +936,9 @@ Record determinate (L: semantics) : Prop :=
       match_traces (symbolenv L) t1 t2 /\ (t1 = t2 -> s1 = s2);
     sd_traces:
       single_events L;
-    sd_initial_determ: forall s1 s2,
-      initial_state L s1 -> initial_state L s2 -> s1 = s2;
+    sd_initial_determ: forall s1 s2 f arg m0,
+        initial_core L m0 s1 f arg -> initial_core L m0 s2 f arg ->
+        s1 = s2;
     sd_final_nostep: forall s r,
       final_state L s r -> Nostep L s;
     sd_final_determ: forall s r1 r2,
@@ -916,11 +1008,13 @@ Record bsim_properties (L1 L2: semantics) (index: Type)
                        (order: index -> index -> Prop)
                        (match_states: index -> state L1 -> state L2 -> Prop) : Prop := {
     bsim_order_wf: well_founded order;
-    bsim_initial_states_exist:
-      forall s1, initial_state L1 s1 -> exists s2, initial_state L2 s2;
-    bsim_match_initial_states:
-      forall s1 s2, initial_state L1 s1 -> initial_state L2 s2 ->
-      exists i, exists s1', initial_state L1 s1' /\ match_states i s1' s2;
+    bsim_initial_cores_exist:
+      forall s1 f arg m0, initial_core L1 m0 s1 f arg ->
+                     exists s2, initial_core L2 m0 s2 f arg;
+    bsim_match_initial_cores:
+      forall s1 s2 f arg m0, initial_core L1 m0 s1 f arg  ->
+                  initial_core L2 m0 s2 f arg  ->
+                  exists i, exists s1', initial_core L1 m0 s1' f arg /\ match_states i s1' s2;
     bsim_match_final_states:
       forall i s1 s2 r,
       match_states i s1 s2 -> safe L1 s1 -> final_state L2 s2 r ->
@@ -981,12 +1075,14 @@ Hypothesis public_preserved:
 
 Variable match_states: state L1 -> state L2 -> Prop.
 
-Hypothesis initial_states_exist:
-  forall s1, initial_state L1 s1 -> exists s2, initial_state L2 s2.
+Hypothesis initial_cores_exist:
+  forall s1 f arg m0, initial_core L1 m0 s1 f arg ->
+                 exists s2, initial_core L2 m0 s2 f arg.
 
-Hypothesis match_initial_states:
-  forall s1 s2, initial_state L1 s1 -> initial_state L2 s2 ->
-  exists s1', initial_state L1 s1' /\ match_states s1' s2.
+Hypothesis match_initial_cores:
+  forall s1 s2 f arg m0, initial_core L1 m0 s1 f arg  ->
+                 initial_core L2 m0 s2 f arg  ->
+                 exists s1', initial_core L1 m0 s1' f arg /\ match_states s1' s2.
 
 Hypothesis match_final_states:
   forall s1 s2 r,
@@ -1011,7 +1107,7 @@ Proof.
     (fun (x y: unit) => False)
     (fun (i: unit) s1 s2 => match_states s1 s2);
   constructor; auto.
-- red; intros; constructor; intros. contradiction.
+- red; intros; constructor; intros. contradiction. 
 - intros. exists tt; eauto.
 - intros. exists s1; split. apply star_refl. eauto.
 - intros. exploit simulation; eauto. intros [s1' [A B]].
@@ -1202,14 +1298,17 @@ Proof.
 - (* well founded *)
   unfold bb_order. apply wf_lex_ord. apply wf_clos_trans. eapply bsim_order_wf; eauto. eapply bsim_order_wf; eauto.
 - (* initial states exist *)
-  intros. exploit (bsim_initial_states_exist props); eauto. intros [s2 A].
-  eapply (bsim_initial_states_exist props'); eauto.
+  intros. exploit (bsim_initial_cores_exist props); eauto. intros [s2 ].
+  exploit (bsim_initial_cores_exist props'); eauto; intros (s3&?&?).
 - (* match initial states *)
-  intros s1 s3 INIT1 INIT3.
-  exploit (bsim_initial_states_exist props); eauto. intros [s2 INIT2].
-  exploit (bsim_match_initial_states props'); eauto. intros [i2 [s2' [INIT2' M2]]].
-  exploit (bsim_match_initial_states props); eauto. intros [i1 [s1' [INIT1' M1]]].
-  exists (i1, i2); exists s1'; intuition auto. eapply bb_match_at; eauto.
+  intros s1 s3 f arg m0 INIT1 INIT3.
+  exploit (bsim_initial_cores_exist props); eauto. intros [s2 INIT2].
+  exploit (bsim_match_initial_cores props'); eauto. supertransitivity.
+  intros [i2 [s2' [INIT2' M2]]].
+  exploit (bsim_match_initial_cores props); eauto; supertransitivity.
+    intros [i1 [s1' [INIT1' M1]]].
+  exists (i1, i2); exists s1'; intuition auto. supertransitivity.
+  eapply bb_match_at; eauto.
 - (* match final states *)
   intros i s1 s3 r MS SAFE FIN. inv MS.
   exploit (bsim_match_final_states props'); eauto.
@@ -1497,12 +1596,12 @@ Proof.
 - (* well founded *)
   apply wf_f2b_order.
 - (* initial states exist *)
-  intros. exploit (fsim_match_initial_states FS); eauto. intros [i [s2 [A B]]].
+  intros. exploit (fsim_match_initial_cores FS); eauto. intros [i [s2 [A B]]].
   exists s2; auto.
 - (* initial states *)
-  intros. exploit (fsim_match_initial_states FS); eauto. intros [i [s2' [A B]]].
-  assert (s2 = s2') by (eapply sd_initial_determ; eauto). subst s2'.
-  exists (F2BI_after O); exists s1; split; auto. econstructor; eauto.
+  intros. exploit (fsim_match_initial_cores FS); eauto. intros [i [s2' [A B]]].
+  assert (s2 = s2') by (eapply sd_initial_determ; eauto; supertransitivity). subst s2.
+  exists (F2BI_after O); exists s1; repeat(split; auto). econstructor; eauto.
 - (* final states *)
   intros. inv H.
   exploit f2b_progress; eauto. intros TRANS; inv TRANS.
@@ -1547,15 +1646,26 @@ Inductive atomic_step (ge: genvtype L): (trace * state L) -> trace -> (trace * s
       output_trace (ev :: t) ->
       atomic_step ge (ev :: t, s) (ev :: nil) (t, s).
 
-Definition atomic : semantics := {|
+Definition part_atomic : part_semantics := {|
   state := (trace * state L)%type;
+  get_mem := fun s => get_mem (snd s) ;
+  set_mem := fun s m => (fst s, set_mem (snd s) m);
   genvtype := genvtype L;
   step := atomic_step;
-  initial_state := fun s => initial_state L (snd s) /\ fst s = E0;
+  initial_core := fun m0 s f args => initial_core L m0 (snd s) f args /\ fst s = E0;
+  at_external := fun s => at_external _ (snd s) ;
+  after_external := fun ret s m => option_map (fun x => (fst s, x)) (after_external _ ret (snd s) m);
   final_state := fun s r => final_state L (snd s) r /\ fst s = E0;
   globalenv := globalenv L;
   symbolenv := symbolenv L
-|}.
+                                          |}.
+
+Definition atomic : semantics := {|
+  part_sem := part_atomic;
+  main_block := main_block L;
+  init_mem := init_mem L;
+                                  |}.
+  
 
 End ATOMIC.
 
@@ -1637,10 +1747,18 @@ Proof.
   apply Forward_simulation with order (ffs_match L1 L2 match_states); constructor.
 - (* wf *)
   eapply fsim_order_wf; eauto.
-- (* initial states *)
+- (* initial core *)
   intros. destruct s1 as [t1 s1]. simpl in H. destruct H. subst.
-  exploit (fsim_match_initial_states sim); eauto. intros [i [s2 [A B]]].
-  exists i; exists s2; split; auto. constructor; auto.
+  exploit (fsim_match_initial_cores sim); eauto. intros [i [s2 [A B]]].
+  exists i; exists s2; repeat(split; auto). constructor; auto.
+- (* initial states *)
+  intros. destruct s1 as [t1 s1]. inv H.
+  destruct H1; simpl in *; subst.
+  exploit (fsim_match_initial_states sim); eauto.  
+  econstructor; eauto.
+  intros [i [s2 [A B]]].
+  exists i; exists s2; split; auto.
+  constructor; auto.
 - (* final states *)
   intros. destruct s1 as [t1 s1]. simpl in H0; destruct H0; subst. inv H.
   eapply (fsim_match_final_states sim); eauto.
@@ -1733,12 +1851,12 @@ Proof.
 - (* wf *)
   eapply bsim_order_wf; eauto.
 - (* initial states exist *)
-  intros. exploit (bsim_initial_states_exist sim); eauto. intros [s2 A].
+  intros. exploit (bsim_initial_cores_exist sim); eauto. intros [s2 A].
   exists (E0, s2). simpl; auto.
 - (* initial states match *)
   intros. destruct s2 as [t s2]; simpl in H0; destruct H0; subst.
-  exploit (bsim_match_initial_states sim); eauto. intros [i [s1' [A B]]].
-  exists i; exists s1'; split. auto. econstructor. apply star_refl. auto. auto.
+  exploit (bsim_match_initial_cores sim); eauto. intros [i [s1' [A B]]].
+  exists i; exists s1'; repeat(split; auto). econstructor. apply star_refl. auto. auto.
 - (* final states match *)
   intros. destruct s2 as [t s2]; simpl in H1; destruct H1; subst.
   inv H. exploit (bsim_match_final_states sim); eauto. eapply star_safe; eauto.

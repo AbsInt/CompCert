@@ -493,6 +493,51 @@ Inductive state: Type :=
       (k: cont)
       (m: mem) : state.
 
+(**NEW *)
+Definition get_mem (s:state):=
+  match s with
+  | State _ _ _ _ _ m => m
+  | Callstate _ _ _ m => m
+  | Returnstate _ _ m => m
+  end.
+
+(**NEW *)
+Definition set_mem (s:state)(m:mem):=
+  match s with
+  | State f s k e le _ => State f s k e le m
+  | Callstate fd args k _ => Callstate fd args k m
+  | Returnstate res k _ => Returnstate res k m
+  end.
+
+(**NEW *)
+Definition at_external (c: state) : option (external_function * signature * list val) :=
+  match c with
+  | State _ _ _ _ _ _ => None
+  | Callstate fd args k _ =>
+      match fd with
+        Internal f => None
+      | External ef targs tres cc => 
+          Some (ef, ef_sig ef, args)
+      end
+  | Returnstate _ _ _ => None
+ end.
+
+(**NEW *)
+Definition after_external (rv: option val) (c: state) (m:mem): option state :=
+  match c with
+     Callstate fd vargs k m =>
+        match fd with
+          Internal _ => None
+        | External ef tps tp cc =>
+            match rv with
+              Some v => Some(Returnstate v k m)
+            | None  => Some(Returnstate Vundef k m)
+            end
+        end
+   | _ => None
+  end.
+
+
 (** Find the statement and manufacture the continuation
   corresponding to a label *)
 
@@ -669,6 +714,16 @@ Inductive step: state -> trace -> state -> Prop :=
   corresponding to the invocation of the ``main'' function of the program
   without arguments and with an empty continuation. *)
 
+
+Inductive initial_core (p: program): state -> val -> list val -> Prop :=
+  | initial_core_intro: forall b f args m0,
+      let ge := Genv.globalenv p in
+      Genv.init_mem p = Some m0 ->
+      Genv.find_symbol ge p.(prog_main) = Some b ->
+      Genv.find_funct_ptr ge b = Some f ->
+      type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
+      initial_core p (Callstate f nil Kstop m0) (Vptr b Ptrofs.zero) args.
+(*
 Inductive initial_state (p: program): state -> Prop :=
   | initial_state_intro: forall b f m0,
       let ge := Genv.globalenv p in
@@ -677,6 +732,7 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.find_funct_ptr ge b = Some f ->
       type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
       initial_state p (Callstate f nil Kstop m0).
+*)
 
 (** A final state is a [Returnstate] with an empty continuation. *)
 
@@ -715,11 +771,23 @@ Definition step2 (ge: genv) := step ge (function_entry2 ge).
 
 Definition semantics1 (p: program) :=
   let ge := globalenv p in
-  Semantics_gen step1 (initial_state p) final_state ge ge.
+  let main :=p.(prog_main) in
+  let init_mem:=(Genv.init_mem p) in
+  Semantics_gen get_mem set_mem step1
+                (initial_core p)
+                at_external
+                after_external
+                final_state ge main init_mem ge.
 
 Definition semantics2 (p: program) :=
   let ge := globalenv p in
-  Semantics_gen step2 (initial_state p) final_state ge ge.
+  let main :=p.(prog_main) in
+  let init_mem:=(Genv.init_mem p) in
+  Semantics_gen get_mem set_mem step2
+                (initial_core p)
+                at_external
+                after_external
+                final_state ge main init_mem ge.
 
 (** This semantics is receptive to changes in events. *)
 
