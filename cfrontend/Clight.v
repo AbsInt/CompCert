@@ -715,14 +715,15 @@ Inductive step: state -> trace -> state -> Prop :=
   without arguments and with an empty continuation. *)
 
 
-Inductive initial_core (p: program): state -> val -> list val -> Prop :=
+Inductive initial_core (p: program): mem -> state -> val -> list val -> Prop :=
   | initial_core_intro: forall b f args m0,
       let ge := Genv.globalenv p in
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
-      initial_core p (Callstate f nil Kstop m0) (Vptr b Ptrofs.zero) args.
+      initial_core p m0 (Callstate f nil Kstop m0) (Vptr b Ptrofs.zero) args.
+
 (*
 Inductive initial_state (p: program): state -> Prop :=
   | initial_state_intro: forall b f m0,

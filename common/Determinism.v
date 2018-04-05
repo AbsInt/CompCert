@@ -214,8 +214,8 @@ Hypothesis DET: sem_deterministic L.
 
 Ltac use_step_deterministic :=
   match goal with
-  | [ S1: Step L _ ?t1 _, S2: Step L _ ?t2 _ |- _ ] =>
-    destruct (det_step L DET _ _ _ _ _ S1 S2) as [EQ1 EQ2]; subst
+  | [ S1: Step ?L _ ?t1 _, S2: Step ?L _ ?t2 _ |- _ ] =>
+    destruct (det_step _ DET _ _ _ _ _ S1 S2) as [EQ1 EQ2]; subst
   end.
 
 (** Determinism for finite transition sequences. *)
@@ -238,7 +238,7 @@ Qed.
 
 Ltac use_star_step_diamond :=
   match goal with
-  | [ S1: Star L _ ?t1 _, S2: Star L _ ?t2 _ |- _ ] =>
+  | [ S1: Star ?L _ ?t1 _, S2: Star ?L _ ?t2 _ |- _ ] =>
     let t := fresh "t" in let P := fresh "P" in let EQ := fresh "EQ" in
     destruct (star_step_diamond _ _ _ S1 _ _ S2)
     as [t [ [P EQ] | [P EQ] ]]; subst
@@ -246,7 +246,7 @@ Ltac use_star_step_diamond :=
 
 Ltac use_nostep :=
   match goal with
-  | [ S: Step L ?s _ _, NO: Nostep L ?s |- _ ] => elim (NO _ _ S)
+  | [ S: Step ?L ?s _ _, NO: Nostep ?L ?s |- _ ] => elim (NO _ _ S)
   end.
 
 Lemma star_step_triangle:
@@ -265,7 +265,7 @@ Qed.
 
 Ltac use_star_step_triangle :=
   match goal with
-  | [ S1: Star L _ ?t1 _, S2: Star L _ ?t2 ?s2, NO: Nostep L ?s2 |- _ ] =>
+  | [ S1: Star ?L _ ?t1 _, S2: Star ?L _ ?t2 ?s2, NO: Nostep ?L ?s2 |- _ ] =>
     let t := fresh "t" in let P := fresh "P" in let EQ := fresh "EQ" in
     destruct (star_step_triangle _ _ _ _ _ S1 S2 NO)
     as [t [P EQ]]; subst
@@ -515,10 +515,17 @@ Local Open Scope pair_scope.
 Definition world_sem : semantics := @Semantics_gen
   (state L * world)%type
   (genvtype L)
+  (fun s => get_mem( fst s))
+  (fun s m => (set_mem (fst s) m, snd s))
   (fun ge s t s' => step L ge s#1 t s'#1 /\ possible_trace s#2 t s'#2)
-  (fun s => initial_state L s#1 /\ s#2 = initial_world)
+  (fun m0 s f args => initial_core L m0 s#1 f args /\ s#2 = initial_world)
+  (*fun s => initial_state L s#1 /\ s#2 = initial_world*)
+  (fun s => at_external L s#1 )
+  (fun r s m  => option_map (fun s1=> (s1, s#2))(after_external L r s#1 m) )
   (fun s r => final_state L s#1 r)
   (globalenv L)
+  (main_block L)
+  (init_mem L)
   (symbolenv L).
 
 (** If the original semantics is determinate, the world-aware semantics is deterministic. *)
@@ -534,10 +541,11 @@ Proof.
   exploit match_possible_traces; eauto. intros [EQ1 EQ2]. subst t2.
   split; auto.
   rewrite (surjective_pairing s1). rewrite (surjective_pairing s2). intuition congruence.
-(* initial states *)
+  (* initial states *)
   destruct H; destruct H0.
-  rewrite (surjective_pairing s1). rewrite (surjective_pairing s2). decEq.
-  eapply (sd_initial_determ D); eauto.
+  destruct H1; destruct H2.
+  rewrite (surjective_pairing st1). rewrite (surjective_pairing st0). decEq.
+  eapply (sd_initial_determ D); eauto; congruence.
   congruence.
 (* final states *)
   eapply (sd_final_determ D); eauto.
