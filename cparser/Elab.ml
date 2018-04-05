@@ -1819,9 +1819,6 @@ let elab_expr vararg loc env a =
               if not (wrap pointer_arithmetic_ok loc env ty) then
                 err "illegal pointer arithmetic in binary '-'";
               (TPtr(ty, []), TPtr(ty, []))
-          | (TInt _ | TEnum _), (TPtr(ty, a) | TArray(ty, _, a)) ->
-              check_ptr_arith env ty '-';
-              (TPtr(ty, []), TPtr(ty, []))
           | (TPtr(ty1, a1) | TArray(ty1, _, a1)),
             (TPtr(ty2, a2) | TArray(ty2, _, a2)) ->
               if not (compatible_types AttrIgnoreAll env ty1 ty2) then
