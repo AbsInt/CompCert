@@ -1124,6 +1124,27 @@ Inductive initial_state (p: program): state -> Prop :=
         # RSP <- Vnullptr in
       initial_state p (State rs0 m0).
 
+
+(*NEW*)
+(* The following parameters are simple and reasonable, *)
+(* but might not be needed. All definitions come from  *)
+(* compcomp/core/val_casted.v                          *)
+Parameter vals_defined: list val -> bool.
+Inductive initial_core (ge:genv ): state -> val -> list val -> Prop :=
+| INIT_CORE:
+    forall f b m args rs0,
+      rs0 PC = Vptr b Ptrofs.zero ->
+      rs0 RA = Vzero ->
+      rs0 RSP = Vnullptr ->
+      Genv.find_funct_ptr ge b = Some (Internal f) ->
+      extcall_arguments rs0 m (fn_sig f) args ->
+      initial_core ge (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
+
+Inductive initial_state_derived (p:program): state -> Prop :=
+  
+  
+
+
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m r,
       rs#PC = Vnullptr ->

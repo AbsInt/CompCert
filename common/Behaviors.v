@@ -141,8 +141,8 @@ Inductive state_behaves (s: state L): program_behavior -> Prop :=
       state_behaves s (Goes_wrong t).
 
 Inductive program_behaves: program_behavior -> Prop :=
-  | program_runs: forall s beh,
-      initial_state L s -> state_behaves s beh ->
+  | program_runs: forall s beh f args,
+      initial_core L s f args -> state_behaves s beh ->
       program_behaves beh
   | program_goes_initially_wrong:
       (forall s, ~initial_state L s) ->
@@ -266,7 +266,7 @@ Qed.
 Theorem program_behaves_exists:
   exists beh, program_behaves beh.
 Proof.
-  destruct (classic (exists s, initial_state L s)) as [[s0 INIT] | NOTINIT].
+  destruct (classic (exists s, initial_core L s)) as [[s0 INIT] | NOTINIT].
 (* 1. Initial state is defined. *)
   destruct (state_behaves_exists s0) as [beh SB].
   exists beh; econstructor; eauto.
@@ -322,7 +322,7 @@ Theorem forward_simulation_behavior_improves:
 Proof.
   intros L1 L2 FS. destruct FS as [init order match_states S]. intros. inv H.
 - (* initial state defined *)
-  exploit (fsim_match_initial_states S); eauto. intros [i [s' [INIT MATCH]]].
+  exploit (fsim_match_initial_cores S); eauto. intros [i [s' [INIT MATCH]]].
   exploit forward_simulation_state_behaves; eauto. intros [beh2 [A B]].
   exists beh2; split; auto. econstructor; eauto.
 - (* initial state undefined *)
