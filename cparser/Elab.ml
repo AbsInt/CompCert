@@ -101,6 +101,15 @@ let rec mmap f env = function
       let (tl', env2) = mmap f env1 tl in
       (hd' :: tl', env2)
 
+let rec mmap2 f env l1 l2 =
+  match l1,l2 with
+  | [],[] -> [],env
+  | a1::l1,a2::l2 ->
+    let hd,env1 = f env a1 a2 in
+    let tl,env2 = mmap2 f env1 l1 l2 in
+    (hd::tl,env2)
+  | _, _ -> invalid_arg "mmap2"
+
 (* To detect redefinitions within the same scope *)
 
 let previous_def fn env arg =
@@ -789,10 +798,10 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
       (* This should actually never be triggered, empty structs are captured earlier *)
       warning loc Missing_declarations "declaration does not declare anything";
 
-  let elab_bitfield (Name (_, _, _, loc), optbitsize) (id, ty) =
-    let optbitsize' =
+  let elab_bitfield env (Name (_, _, _, loc), optbitsize) (id, ty) =
+    let optbitsize',env' =
       match optbitsize with
-      | None -> None
+      | None -> None,env
       | Some sz ->
           let ik =
             match unroll env' ty with
@@ -802,35 +811,35 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
           if integer_rank ik > integer_rank IInt then begin
             error loc
               "the type of bit-field '%a' must be an integer type no bigger than 'int'" pp_field id;
-            None
+            None,env
           end else begin
             let expr,env' =(!elab_expr_f loc env sz) in
             match Ceval.integer_expr env' expr with
             | Some n ->
                 if n < 0L then begin
                   error loc "bit-field '%a' has negative width (%Ld)" pp_field id n;
-                  None
+                  None,env
                 end else
                   let max = Int64.of_int(sizeof_ikind ik * 8) in
                   if n >  max then begin
                     error loc "size of bit-field '%a' (%Ld bits) exceeds its type (%Ld bits)" pp_field id n max;
-                    None
+                    None,env
                 end else
                 if n = 0L && id <> "" then begin
                   error loc "named bit-field '%a' has zero width" pp_field id;
-                  None
+                  None,env
                 end else
-                  Some(Int64.to_int n)
+                  Some(Int64.to_int n),env'
             | None ->
                 error loc "bit-field '%a' width not an integer constant" pp_field id;
-                None
+                None,env
           end in
     let anon_composite = is_anonymous_composite ty in
     if id = "" && not anon_composite && optbitsize = None  then
       warning loc Missing_declarations "declaration does not declare anything";
-    { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize'; fld_anonymous = id = "" && anon_composite}
+    { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize'; fld_anonymous = id = "" && anon_composite},env'
   in
-  (List.map2 elab_bitfield fieldlist names, env')
+  (mmap2 elab_bitfield env' fieldlist names)
 
 (* Elaboration of a struct or union. C99 section 6.7.2.1 *)
 
