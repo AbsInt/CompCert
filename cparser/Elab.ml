@@ -1096,6 +1096,9 @@ module I = struct
   (* Change the initializer for the current point *)
   let set (z, i) i' = (z, i')
 
+  (* Is the current point at top? *)
+  let at_top = function Ztop(_, _), _ -> true | _, _ -> false
+
   (* Put the current point back to the top *)
   let rec to_top = function
     | Ztop(name, ty), i as zi -> zi
@@ -1381,7 +1384,13 @@ and elab_single zi a il =
          from the expression: do as above *)
       elab_list (I.set zi (Init_single a)) il false
   | TStruct _ | TUnion _ | TArray _ ->
-      (* This is an aggregate: we need to drill into it, recursively *)
+      (* This is an aggregate.
+         At top, explicit { } are required. *)
+      if I.at_top zi then begin
+        error loc "invalid initializer, an initializer list was expected";
+        raise Exit
+      end;
+      (* Otherwise we need to drill into the aggregate, recursively *)
       begin match I.first env zi with
       | I.OK zi' ->
           elab_single zi' a il
