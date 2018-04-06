@@ -17,6 +17,15 @@ open Driveraux
 
 (* Common frontend functions between clightgen and ccomp *)
 
+let predefined_macros =
+  [
+    "-D__COMPCERT__";
+    "-U__STDC_IEC_559_COMPLEX__";
+    "-D__STDC_NO_ATOMICS__";
+    "-D__STDC_NO_COMPLEX__";
+    "-D__STDC_NO_THREADS__";
+    "-D__STDC_NO_VLA__"
+  ]
 
 (* From C to preprocessed C *)
 
@@ -26,7 +35,7 @@ let preprocess ifile ofile =
     if ofile = "-" then None else Some ofile in
   let cmd = List.concat [
     Configuration.prepro;
-    ["-D__COMPCERT__"];
+    predefined_macros;
     (if !Clflags.use_standard_headers
      then ["-I" ^ Filename.concat !Clflags.stdlib_path "include" ]
      else []);
