@@ -610,7 +610,22 @@ Record fsim_properties (index: Type)
                               /\ match_states i' s1' s2';
     fsim_public_preserved:
       forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
- }.
+                                                                }.
+Lemma init_states_from_cores:
+    forall index match_states
+  (fsim_match_initial_cores:
+      forall (s1:state L1) f arg m0, initial_core L1 m0 s1 f arg  -> 
+                     exists i, exists s2, initial_core L2 m0 s2 f arg /\ match_states i s1 s2),
+    forall s1, initial_state L1 s1  -> 
+          exists (i:index), exists s2, initial_state L2 s2 /\ match_states i s1 s2.
+Proof.
+  intros. inv H.
+  eapply fsim_match_initial_cores0 in H1. destruct H1 as (i&s2&init_core&MATCH).
+  exists i, s2; split.
+  - econstructor.
+    admit.
+Admitted.
+    
 
    Section EqualityAndExtension.
      (** *Equality Phases*)
