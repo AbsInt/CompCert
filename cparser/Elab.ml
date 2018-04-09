@@ -750,6 +750,8 @@ and elab_parameter keep_ty env (PARAM (spec, id, decl, attr, loc)) =
   if noret then
     error loc "'_Noreturn' can only appear on functions";
   let id = match id with None -> "" | Some id -> id in
+  if id <> "" && is_void_type env1 ty then
+    error loc "argument '%s' may not have 'void' type" id;
   if id <> "" && redef Env.lookup_ident env id then
     error loc "redefinition of parameter '%s'" id;
   (* replace array and function types by pointer types *)
