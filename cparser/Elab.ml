@@ -69,6 +69,17 @@ let top_declarations = ref ([] : globdecl list)
 
 let top_environment = ref Env.empty
 
+(* Set of all globals with a definitions *)
+
+module StringSet = Set.Make(String)
+
+let global_defines = ref StringSet.empty
+
+let add_global_define loc name =
+  if StringSet.mem name !global_defines then
+    error loc "redefinition of '%s'" name;
+  global_defines := StringSet.add name !global_defines
+
 let emit_elab ?(debuginfo = true) ?(linkage = false) env loc td =
   let loc = elab_loc loc in
   let dec ={ gdesc = td; gloc = loc } in
@@ -84,7 +95,7 @@ let emit_elab ?(debuginfo = true) ?(linkage = false) env loc td =
     | _ -> ()
   end
 
-let reset() = top_declarations := []; top_environment := Env.empty
+let reset() = top_declarations := []; top_environment := Env.empty; global_defines := StringSet.empty
 
 let elaborated_program () =
   let p = !top_declarations in
@@ -2181,12 +2192,17 @@ let enter_decdefs local loc env sto dl =
     let sto1 = if local && isfun then Storage_extern else sto in
     (* enter ident in environment with declared type, because
        initializer can refer to the ident *)
+    if init <> NO_INIT && not local then
+      add_global_define loc s;
     let (id, sto', env1, ty, linkage) =
       enter_or_refine_ident local loc env s sto1 ty in
     if not isfun && is_void_type env ty then
       fatal_error loc "'%s' has incomplete type" s;
     (* process the initializer *)
     let (ty', init') = elab_initializer loc env1 s ty init in
+    (* if (sto = Storage_static || not local) then
+     *   (\* Check for constant initializer for static and global variables *\)
+     *   is_constant_init env loc init'; *)
     (* update environment with refined type *)
     let env2 = Env.add_ident env1 id sto' ty' in
     (* check for incomplete type *)
@@ -2350,6 +2366,7 @@ let elab_fundef env spec name defs body loc =
         (ty_ret, params, vararg, attr)
     | _ -> fatal_error loc "wrong type for function definition" in
   (* Enter function in the environment, for recursive references *)
+  add_global_define loc s;
   let (fun_id, sto1, env1, _, _) =
     enter_or_refine_ident false loc env1 s sto ty in
   let incomplete_param env ty =
@@ -2468,8 +2485,6 @@ let elab_asm_operand vararg loc env (ASMOPERAND(label, wide, chars, e)) =
 
 
 (* Contexts for elaborating statements *)
-
-module StringSet = Set.Make(String)
 
 type stmt_context = {
   ctx_return_typ: typ;          (**r return type for the function *)

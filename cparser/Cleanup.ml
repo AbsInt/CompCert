@@ -118,11 +118,23 @@ let add_enum e =
     e
 
 (* Saturate the set of referenced identifiers, starting with externally
-   visible global declarations *)
+   visible global declarations.
+
+   Externally-visible globals include a minima:
+   - Definitions of functions, unless "static" or "inline".
+   - Declaration of variables with default storage.
+
+   We choose to also treat as visible and therefore to keep:
+   - "static" initialized variables, so that the checks on initializers
+     performed in C2C are performed on all initializers.
+     If the variable turns out to be unused, it will be removed
+     later by the Unusedglob pass.
+*)
 
 let visible_decl (sto, id, ty, init) =
-  sto = Storage_default &&
-  match ty with TFun _ -> false | _ -> true
+    init <> None ||
+    (sto = Storage_default &&
+     match ty with TFun _ -> false | _ -> true)
 
 let visible_fundef f =
   match f.fd_storage with
