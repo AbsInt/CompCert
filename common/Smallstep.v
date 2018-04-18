@@ -510,7 +510,7 @@ Record semantics : Type := {
   init_mem: option Memory.mem
                           }.
 
-(*ReconstructWe can recover initial_states from initial_core *)
+(*We can recover initial_states from initial_core *)
 Inductive initial_state (sem:semantics): state sem -> Prop :=
 | initial_state_derived_intro': forall st0 m0,
   init_mem sem = Some m0 ->
@@ -585,7 +585,7 @@ Open Scope smallstep_scope.
 
  Section ForwardSimulations.
    Context (L1 L2: semantics).
-
+   
 (** The general form of a forward simulation. *)
 (** NEW: I will tolerate the duplication of initial_cores/initial_states, while 
     we find a better abstraction. *)
@@ -594,7 +594,7 @@ Record fsim_properties (index: Type)
           (match_states: index -> state L1 -> state L2 -> Prop) : Prop := {
     fsim_order_wf: well_founded order;
     fsim_match_initial_cores:
-      forall s1 f arg m0, initial_core L1 m0 s1 f arg  -> 
+      forall s1 f arg m0, initial_core L1 m0 s1 f arg  ->
                   exists i, exists s2, initial_core L2 m0 s2 f arg /\ match_states i s1 s2;
     fsim_match_initial_states:
       forall s1, initial_state L1 s1  -> 
@@ -611,7 +611,11 @@ Record fsim_properties (index: Type)
     fsim_public_preserved:
       forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
                                                                 }.
+
+(*In the case where initial_memories are equal, initial_states follows from initial_cores. *)
 Lemma init_states_from_cores:
+  forall (INIT_MEM: init_mem L1 = init_mem L2)
+   (INIT_BLOCK: main_block L1 = main_block L2),
     forall index match_states
   (fsim_match_initial_cores:
       forall (s1:state L1) f arg m0, initial_core L1 m0 s1 f arg  -> 
@@ -619,13 +623,11 @@ Lemma init_states_from_cores:
     forall s1, initial_state L1 s1  -> 
           exists (i:index), exists s2, initial_state L2 s2 /\ match_states i s1 s2.
 Proof.
-  intros. inv H.
+  intros. inv H. rewrite INIT_MEM, INIT_BLOCK in *.
   eapply fsim_match_initial_cores0 in H1. destruct H1 as (i&s2&init_core&MATCH).
-  exists i, s2; split.
-  - econstructor.
-    admit.
-Admitted.
-    
+  exists i, s2; split; eauto.
+  econstructor; eauto.
+Qed.  
 
    Section EqualityAndExtension.
      (** *Equality Phases*)
@@ -787,7 +789,7 @@ Admitted.
       forall s1 m1 f m2, initial_state L1 (s1,m1) -> Mem.inject f m1 m2 ->
       exists i, exists s2, initial_state L2 (s2,m2) /\ match_states i f (s1,m1) (s2,m2);*)
         Injfsim_match_initial_core:
-          forall s1 f arg m0, initial_core L1 m0 s1 f arg  -> 
+          forall s1 f arg m0, initial_core L1 m0 s1 f arg  ->
                       exists i s2 mu, initial_core L2 m0 s2 f arg /\ Injmatch_states i mu s1 s2;
         Injfsim_match_final_states:
           forall i s1 s2 r f,

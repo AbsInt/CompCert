@@ -739,22 +739,55 @@ Inductive initial_state (p: program): state -> Prop :=
 (* The following parameters are simple and reasonable, *)
 (* but might not be needed. All definitions come from  *)
 (* compcomp/core/val_casted.v                          *)
-Parameter val_casted_list_func: list val -> typelist -> bool. (* TODO *)
+
+(*Parameter val_casted_list_func: list val -> typelist -> bool. (* TODO *)
 Parameter tys_nonvoid: typelist -> bool .
 Parameter vals_defined: list val -> bool.
+ *)
+
+(*Following definition mimics *_not_fresh lemmas from common/Globalenvs.v*)
+Record globals_not_fresh {F V} (ge:Genv.t F V) m:=
+  {
+    find_symbol_not_fresh:
+       forall id b, Genv.find_symbol ge id = Some b -> Mem.valid_block m b;
+    find_funct_ptr_not_fresh:
+      forall b fp, Genv.find_funct_ptr ge b = Some fp -> Mem.valid_block m b;
+    find_var_info_not_fresh:
+      forall b def, Genv.find_var_info ge b = Some def -> Mem.valid_block m b;
+}. 
+  
+    
+(* No dangling pointers. 
+   In particular, nothing pointing after nextblock *)      
+Definition mem_well_formed m:=
+  Mem.inject (Mem.flat_inj (Mem.nextblock m)) m m.
+
+Definition arg_well_formed args m0:=
+      Val.inject_list (Mem.flat_inj (Mem.nextblock m0)) args args.
+
+Inductive val_casted_list: list val -> typelist -> Prop :=
+  | vcl_nil:
+      val_casted_list nil Tnil
+  | vcl_cons: forall v1 vl ty1 tyl,
+      val_casted v1 ty1 -> val_casted_list vl tyl ->
+      val_casted_list (v1 :: vl) (Tcons  ty1 tyl).
+
 (*NOTE: DOUBLE CHECK TARGS (it's not used right now)*)
-Inductive initial_core (p:program): mem -> state -> val -> list val -> Prop :=
+Inductive initial_core  (p:program): mem -> state -> val -> list val -> Prop :=
 | initi_core:
-    let ge := Genv.globalenv p in
-    forall f b m args targs tres,
-      (* v = Vptr b Int.zero -> *)
-      Genv.find_funct_ptr ge b = Some (Internal f) ->
-      type_of_fundef (Internal f) = Tfunction targs tres cc_default ->
+    let ge := globalenv p in
+    forall f fb m args targs tres,
+      Genv.find_funct_ptr ge fb = Some f ->
+      type_of_fundef f = Tfunction targs tres cc_default ->
+      globals_not_fresh ge m ->
+      mem_well_formed m ->
+      arg_well_formed args m ->
+      val_casted_list args targs ->
       (*val_casted_list_func args targs 
                            && tys_nonvoid targs 
                            && vals_defined args
                            && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
-      initial_core p m (Callstate (Internal f) args Kstop m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
+      initial_core p m (Callstate f args Kstop m) (Vptr fb (Ptrofs.of_ints Int.zero)) args.
 
 (** A final state is a [Returnstate] with an empty continuation. *)
 Inductive final_state: state -> int -> Prop :=

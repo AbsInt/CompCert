@@ -2242,47 +2242,87 @@ Qed.
 
 
 Lemma initial_cores_simulation:
-  forall m S v args, initial_core prog m S v args ->
+  forall S v args m, initial_core prog m S v args ->
        exists R, initial_core tprog m R v args /\ match_states S R.
 Proof.
   intros. inv H.
+  exploit function_ptr_translated; eauto. intros [tf [A B]].
+
   eexists. split; eauto.
-  - econstructor; eauto.
-    destruct TRANSF.
-    destruct H.    
-    !goal (Genv.find_funct_ptr (Genv.globalenv tprog) b = Some (Internal f)).
-    admit. (*ensure that f is preserved*)
-  - !goal (match_states (Callstate (Internal f) args Kstop m) (Callstate (Internal f) args Kstop m)).
-    admit.
+  - econstructor; try (instantiate (3 := tf)); eauto.
+    + erewrite <- H1.
+      eapply type_of_fundef_preserved; auto.
+    + inv H2; econstructor; intros.
+      * eapply find_symbol_not_fresh.
+        instantiate (1:= id).
+        rewrite <- symbols_preserved; auto.
+      * eapply find_funct_ptr_not_fresh.
+        admit.
+      * eapply find_funct_ptr_not_fresh.
+        admit.
+  - !goal (match_states (Callstate f args Kstop m) (Callstate tf args Kstop m)).
+    econstructor; eauto.
+    + intros.
+      econstructor. instantiate (1 := Mem.nextblock m).
+      
+      (* Global envs are in the memory:*)
+      constructor; intros.
+      unfold Mem.flat_inj. apply pred_dec_true; auto.
+      unfold Mem.flat_inj in H. destruct (plt b1 (Mem.nextblock m)); inv H. auto.
+      eapply H2 in H; eauto.
+      eapply H2 in H; eauto.
+      eapply H2 in H; eauto.
+      xomega. xomega.
+    + clear - H5. induction H5; constructor; eauto.
+      Unshelve.
+      auto.
+      auto.
 Admitted.
                           
 
 Lemma initial_states_simulation:
-  forall S, initial_state prog S ->
-  exists R, initial_state tprog R /\ match_states S R.
+    forall s1 : Smallstep.state (semantics1 prog),
+  initial_state (semantics1 prog) s1 ->
+  exists s2 : Smallstep.state (semantics2 tprog),
+    initial_state (semantics2 tprog) s2 /\ match_states s1 s2.
 Proof.
-  intros. inv H.
+  intros. inv H. inv H1. 
   exploit function_ptr_translated; eauto. intros [tf [A B]].
   econstructor; split.
   econstructor.
   eapply (Genv.init_mem_transf_partial (proj1 TRANSF)). eauto.
-  replace (prog_main tprog) with (prog_main prog). 
-  instantiate (1 := b). rewrite <- H1. apply symbols_preserved.
+  econstructor.
+  simpl.
+  replace (prog_main tprog) with (prog_main prog); eauto.
   generalize (match_program_main (proj1 TRANSF)). simpl; auto.
-  eauto.
   rewrite <- H3; apply type_of_fundef_preserved; auto.
+  { !goal (globals_not_fresh (globalenv tprog) m0).
+    eapply (Genv.init_mem_transf_partial (proj1 TRANSF)) in H0.
+    constructor;intros.
+    - eapply Genv.find_symbol_not_fresh; eauto.
+    - eapply Genv.find_funct_ptr_not_fresh; eauto.
+    - eapply Genv.find_var_info_not_fresh; eauto.
+  }
+  { !goal (mem_well_formed m0).
+    simpl in H0.
+    unfold mem_well_formed.
+    eapply Genv.initmem_inject; eauto.
+  }
+  !goal (arg_well_formed nil m0); constructor.
+  !goal (arg_well_formed nil m0); auto.
+  
   econstructor; eauto.
-  intros. instantiate (1 := Mem.flat_inj (Mem.nextblock m0)).
+  intros. 
   econstructor. instantiate (1 := Mem.nextblock m0).
+  simpl in H0.
   constructor; intros.
-  unfold Mem.flat_inj. apply pred_dec_true; auto.
-  unfold Mem.flat_inj in H. destruct (plt b1 (Mem.nextblock m0)); inv H. auto.
-  eapply Genv.find_symbol_not_fresh; eauto.
-  eapply Genv.find_funct_ptr_not_fresh; eauto.
-  eapply Genv.find_var_info_not_fresh; eauto.
-  xomega. xomega.
-  eapply Genv.initmem_inject; eauto.
-  constructor.
+    unfold Mem.flat_inj. apply pred_dec_true; auto.
+    unfold Mem.flat_inj in H. destruct (plt b1 (Mem.nextblock m0)); inv H. auto.
+    eapply Genv.find_symbol_not_fresh; eauto.
+    eapply Genv.find_funct_ptr_not_fresh; eauto.
+    eapply Genv.find_var_info_not_fresh; eauto.
+    xomega. xomega.
+    inv H9; constructor.
 Qed.
 
 Lemma final_states_simulation:
@@ -2299,6 +2339,9 @@ Theorem transf_program_correct:
 Proof.
   eapply forward_simulation_plus.
   apply senv_preserved.
+  eapply initial_cores_simulation.
+  
+  
   eexact initial_states_simulation.
   eexact final_states_simulation.
   eexact step_simulation.
