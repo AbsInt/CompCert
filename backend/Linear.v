@@ -263,5 +263,24 @@ Inductive final_state: state -> int -> Prop :=
       Locmap.getpair (map_rpair R (loc_result signature_main)) rs = Vint retcode ->
       final_state (Returnstate nil rs m) retcode.
 
+Definition get_mem (s:state):=
+  match s with
+  | State _ _ _ _ _ m => m
+  | Callstate _ _ _ m => m
+  | Returnstate _ _ m => m
+  end.
+
+
+Definition set_mem (s:state) (m:mem):=
+  match s with
+  | State sf f v n ls _ => State sf f v n ls m
+  | Callstate sf f ls _ => Callstate sf f ls m
+  | Returnstate sf ls _ => Returnstate sf ls m
+  end.
+
+Parameter initial_core: program -> mem -> state -> val -> list val -> Prop.
+Parameter at_external : state -> option (external_function * signature * list val).
+Parameter after_external : option val -> state -> Memory.mem -> option state.
+
 Definition semantics (p: program) :=
-  Semantics step (initial_state p) final_state (Genv.globalenv p).
+  Semantics get_mem set_mem step (initial_core p) at_external after_external final_state (Genv.globalenv p).

@@ -1129,21 +1129,120 @@ Inductive initial_state (p: program): state -> Prop :=
 (* The following parameters are simple and reasonable, *)
 (* but might not be needed. All definitions come from  *)
 (* compcomp/core/val_casted.v                          *)
-Parameter vals_defined: list val -> bool.
-Inductive initial_core (ge:genv ): state -> val -> list val -> Prop :=
-| INIT_CORE:
+(*This is the old non-deterministic initial_core. Can be deleted after 05/18*)
+Inductive initial_core' (p:program): mem -> state -> val -> list val -> Prop:=
+| INIT_CORE':
+    let ge := Genv.globalenv p in
     forall f b m args rs0,
       rs0 PC = Vptr b Ptrofs.zero ->
       rs0 RA = Vzero ->
       rs0 RSP = Vnullptr ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       extcall_arguments rs0 m (fn_sig f) args ->
-      initial_core ge (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
+      initial_core' p m (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
+Inductive initial_core (p:program): mem -> state -> val -> list val -> Prop:=
+| INIT_CORE:
+    let ge := Genv.globalenv p in
+    forall f b m args,
+      let rs0 :=
+        (Pregmap.init Vundef)
+        # PC <- (Vptr b Ptrofs.zero) 
+        # RA <- Vzero
+        # RSP <- Vnullptr in
+      Genv.find_funct_ptr ge b = Some (Internal f) ->
+      extcall_arguments rs0 m (fn_sig f) args ->
+      initial_core p m (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
 
-Inductive initial_state_derived (p:program): state -> Prop :=
-  
-  
+ Definition get_extcall_arg (inout: Locations.slot) (rs: regset) (m: mem) (l: Locations.loc) : option val :=
+ match l with
+  | Locations.R r => Some (rs (preg_of r))
+  | Locations.S inout ofs ty => 
+      let bofs := (Stacklayout.fe_ofs_arg + 4 * ofs)%Z  in
+      Mem.loadv (chunk_of_type ty) m
+                (Val.add (rs (IR SP)) (Vint (Int.repr bofs)))
+  end.
 
+Fixpoint get_extcall_arguments
+    (inout: Locations.slot) (rs: regset) (m: mem) (al: list (rpair Locations.loc)) : option (list val) :=
+  match al with
+  | One l :: al' => 
+     match get_extcall_arg inout rs m l with
+     | Some v => match get_extcall_arguments inout rs m al' with
+                         | Some vl => Some (v::vl)
+                         | None => None
+                        end
+     | None => None
+    end
+  | Twolong hi lo :: al' =>
+     match get_extcall_arg inout rs m hi with
+     | Some vhi => 
+       match get_extcall_arg inout rs m lo with
+       | Some vlo => 
+        match get_extcall_arguments inout rs m al' with
+                         | Some vl => Some (Val.longofwords vhi vlo :: vl)
+                         | None => None
+        end
+        | None => None
+      end
+     | None => None
+    end
+  | nil => Some nil
+ end.
+
+Definition at_external (p:program) (c: state) : option (external_function * signature * list val) :=
+  let ge := Genv.globalenv p in
+  match c with
+    State rs m =>
+    match rs PC with
+    | Vptr b i => if Ptrofs.eq_dec i Ptrofs.zero then
+                   match  Genv.find_funct_ptr ge b with
+                   | Some (External ef) =>
+                     match ef with
+                     | EF_external _ _ => 
+                       match get_extcall_arguments Locations.Outgoing rs m
+                                                   (Conventions1.loc_arguments (ef_sig ef)) with
+                       | Some args => Some (ef,(ef_sig ef), args)
+                       | None => None
+                       end
+                     | _ => None
+                     end
+                   | _ => None
+                   end
+                 else None
+    | _ => None
+    end
+  end.
+
+
+     
+
+Definition after_external_regset (p:program)(vret: option val) (rs: regset) : option regset :=
+  let ge := Genv.globalenv p in
+  match rs PC with
+  | Vptr b i => if Ptrofs.eq_dec i Ptrofs.zero then
+    match  Genv.find_funct_ptr ge b with
+    | Some (External ef) =>
+      match vret with
+      | Some res => 
+          Some ((set_pair (loc_external_result (ef_sig ef)) res rs) #PC <- (rs RA))
+      | None => 
+          Some ( rs #PC <- (rs RA))
+     end
+    | _ => None
+   end
+   else None
+ | _ => None
+ end.
+
+Definition after_external (p:program)(vret: option val)(c:state)(m:mem): option state:=
+  let ge := Genv.globalenv p in
+  match c with
+    State rs m' =>
+    match after_external_regset p vret rs with
+      Some rs' => Some (State rs' m)
+    | None => None
+    end
+  end.
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m r,
@@ -1151,8 +1250,22 @@ Inductive final_state: state -> int -> Prop :=
       rs#RAX = Vint r ->
       final_state (State rs m) r.
 
+
+Definition get_mem (s:state) :=
+  match s with
+  | State _ m => m
+  end.
+
+Definition set_mem (s:state)(m:mem) :=
+  match s with
+  | State rs _ => State rs m
+  end.
 Definition semantics (p: program) :=
-  Semantics step (initial_state p) final_state (Genv.globalenv p).
+  Semantics get_mem set_mem step
+            (initial_core p) (at_external p) (after_external p)
+            final_state (Genv.globalenv p)
+            p.(prog_main )
+            (Genv.init_mem p).
 
 (** Determinacy of the [Asm] semantics. *)
 
@@ -1203,8 +1316,8 @@ Ltac Equalities :=
   omega.
   eapply external_call_trace_length; eauto.
   eapply external_call_trace_length; eauto.
-- (* initial states *)
-  inv H; inv H0. f_equal. congruence.
+- (* initial cores *)
+  inv H; inv H0. f_equal.
 - (* final no step *)
   assert (NOTNULL: forall b ofs, Vnullptr <> Vptr b ofs).
   { intros; unfold Vnullptr; destruct Archi.ptr64; congruence. }
@@ -1212,7 +1325,6 @@ Ltac Equalities :=
 - (* final states *)
   inv H; inv H0. congruence.
 Qed.
-
 (** Classification functions for processor registers (used in Asmgenproof). *)
 
 Definition data_preg (r: preg) : bool :=
