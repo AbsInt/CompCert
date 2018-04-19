@@ -793,6 +793,9 @@ let rec convertExpr env e =
       if Cutil.is_composite_type env e1.etyp
       && List.mem AVolatile (Cutil.attributes_of_type env e1.etyp) then
         warning Diagnostics.Unnamed "assignment to an lvalue of volatile composite type, the 'volatile' qualifier is ignored";
+      if Cutil.is_composite_type env e2.etyp
+      && List.mem AVolatile (Cutil.attributes_of_type env e2.etyp) then
+        warning Diagnostics.Unnamed "assignment of a value of volatile composite type, the 'volatile' qualifier is ignored";
       ewrap (Ctyping.eassign e1' e2')
   | C.EBinop((C.Oadd_assign|C.Osub_assign|C.Omul_assign|C.Odiv_assign|
               C.Omod_assign|C.Oand_assign|C.Oor_assign|C.Oxor_assign|
