@@ -433,6 +433,16 @@ let expand_builtin_inline name args res =
       emit (Pmulhw(res, a1, a2))
   | "__builtin_mulhwu", [BA(IR a1); BA(IR a2)], BR(IR res) ->
       emit (Pmulhwu(res, a1, a2))
+  | "__builtin_mulhd", [BA(IR a1); BA(IR a2)], BR(IR res) ->
+      if Archi.ppc64 then
+        emit (Pmulhd(res, a1, a2))
+      else
+        raise (Error "__builtin_mulhd is only supported for PPC64 targets")
+  | "__builtin_mulhdu", [BA(IR a1); BA(IR a2)], BR(IR res) ->
+      if Archi.ppc64 then
+        emit (Pmulhdu(res, a1, a2))
+      else
+        raise (Error "__builtin_mulhdu is only supported for PPC64 targets")
   | ("__builtin_clz" | "__builtin_clzl"), [BA(IR a1)], BR(IR res) ->
       emit (Pcntlzw(res, a1))
   | "__builtin_clzll", [BA(IR a1)], BR(IR res) ->
@@ -543,10 +553,20 @@ let expand_builtin_inline name args res =
       emit (Plhbrx(res, GPR0, a1))
   | "__builtin_read32_reversed", [BA(IR a1)], BR(IR res) ->
       emit (Plwbrx(res, GPR0, a1))
+  | "__builtin_read64_reversed", [BA(IR a1)], BR(IR res) ->
+      if Archi.ppc64 then
+        emit (Pldbrx(res, GPR0, a1))
+      else
+        raise (Error "__builtin_read64_reversed is only supported for PPC64 targets")
   | "__builtin_write16_reversed", [BA(IR a1); BA(IR a2)], _ ->
       emit (Psthbrx(a2, GPR0, a1))
   | "__builtin_write32_reversed", [BA(IR a1); BA(IR a2)], _ ->
       emit (Pstwbrx(a2, GPR0, a1))
+  | "__builtin_write64_reversed", [BA(IR a1); BA(IR a2)], _ ->
+      if Archi.ppc64 then
+        emit (Pstdbrx(a2, GPR0, a1))
+      else
+        raise (Error "__builtin_write64_reversed is only supported for PPC64 targets")
   (* Synchronization *)
   | "__builtin_membar", [], _ ->
       ()

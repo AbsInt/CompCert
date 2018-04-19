@@ -618,6 +618,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	lbzx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pld(r1, c, r2) | Pld_a(r1, c, r2) ->
           fprintf oc "	ld	%a, %a(%a)\n" ireg r1 constant c ireg r2
+      | Pldbrx(r1, r2, r3) ->
+          fprintf oc "	ldbrx %a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pldx(r1, r2, r3) | Pldx_a(r1, r2, r3) ->
           fprintf oc "	ldx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Plfd(r1, c, r2)  | Plfd_a(r1, c, r2) ->
@@ -772,6 +774,8 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	stbx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pstd(r1, c, r2) | Pstd_a(r1, c, r2) ->
           fprintf oc "	std	%a, %a(%a)\n" ireg r1 constant c ireg r2
+      | Pstdbrx(r1, r2, r3) ->
+          fprintf oc "	stdbrx  %a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pstdx(r1, r2, r3) | Pstdx_a(r1, r2, r3) ->
           fprintf oc "	stdx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pstdu(r1, c, r2) ->

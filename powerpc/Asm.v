@@ -239,6 +239,7 @@ Inductive instruction : Type :=
   | Pld: ireg -> constant -> ireg -> instruction              (**r load 64-bit int (PPC64) *)
   | Pldx: ireg -> ireg -> ireg -> instruction                 (**r same, with 2 index regs *)
   | Pld_a: ireg -> constant -> ireg -> instruction            (**r load 64-bit quantity to int reg (PPC64) *)
+  | Pldbrx: ireg -> ireg -> ireg -> instruction               (**r load 64-bit int and reverse endianness (PPC64) *)
   | Pldx_a: ireg -> ireg -> ireg -> instruction               (**r same, with 2 index regs *)
   | Plfd: freg -> constant -> ireg -> instruction             (**r load 64-bit float *)
   | Plfdx: freg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
@@ -307,6 +308,7 @@ Inductive instruction : Type :=
   | Pstbx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
   | Pstd: ireg -> constant -> ireg -> instruction             (**r store 64-bit integer (PPC64) *)
   | Pstdx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs (PPC64) *)
+  | Pstdbrx: ireg -> ireg -> ireg -> instruction              (**r store 64-bit int with reverse endianness (PPC64) *)
   | Pstdu: ireg -> constant -> ireg -> instruction            (**r store 64-bit integer with update (PPC64) *)
   | Pstd_a: ireg -> constant -> ireg -> instruction           (**r store 64-bit quantity from int reg (PPC64) *)
   | Pstdx_a: ireg -> ireg -> ireg -> instruction              (**r same, with 2 index regs (PPC64) *)
@@ -1077,6 +1079,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Picbi _ _
   | Picbtls _ _ _
   | Pisync
+  | Pldbrx _ _ _
   | Plwsync
   | Plhbrx _ _ _
   | Plwzu _ _ _
@@ -1086,6 +1089,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pmtspr _ _
   | Prldicl _ _ _ _
   | Prldimi _ _ _ _
+  | Pstdbrx _ _ _
   | Pstdu _ _ _
   | Pstwbrx _ _ _
   | Pstwcx_ _ _ _

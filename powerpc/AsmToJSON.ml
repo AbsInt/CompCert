@@ -97,14 +97,14 @@ let mnemonic_names  =["Padd"; "Paddc"; "Padde"; "Paddi"; "Paddic"; "Paddis"; "Pa
                       "Pfmadd"; "Pfmr"; "Pfmsub"; "Pfmul"; "Pfmuls"; "Pfneg"; "Pfnmadd";
                       "Pfnmsub"; "Pfres"; "Pfrsp"; "Pfrsqrte"; "Pfsel"; "Pfsqrt"; "Pfsub";
                       "Pfsubs"; "Picbi"; "Picbtls"; "Pinlineasm"; "Pisel"; "Pisync"; "Plabel";
-                      "Plbz"; "Plbzx"; "Pld"; "Pldi"; "Pldx"; "Plfd"; "Plfdx"; "Plfi"; "Plfis";
+                      "Plbz"; "Plbzx"; "Pld"; "Pldbrx"; "Pldi"; "Pldx"; "Plfd"; "Plfdx"; "Plfi"; "Plfis";
                       "Plfs"; "Plfsx"; "Plha"; "Plhax"; "Plhbrx"; "Plhz"; "Plhzx"; "Plwarx";
                       "Plwbrx"; "Plwsync"; "Plwz"; "Plwzu"; "Plwzx"; "Pmbar"; "Pmfcr"; "Pmflr";
                       "Pmfspr"; "Pmr"; "Pmtctr"; "Pmtlr"; "Pmtspr"; "Pmulhd"; "Pmulhdu"; "Pmulhw";
                       "Pmulhwu"; "Pmulld"; "Pmulli"; "Pmullw"; "Pnand"; "Pnor"; "Por"; "Porc";
                       "Pori"; "Poris"; "Prldicl"; "Prldimi"; "Prldinm"; "Prlwimi"; "Prlwinm";
                       "Psld"; "Pslw"; "Psrad"; "Psradi"; "Psraw"; "Psrawi"; "Psrd"; "Psrw";
-                      "Pstb"; "Pstbx"; "Pstd"; "Pstdu"; "Pstdx"; "Pstfd"; "Pstfdu"; "Pstfdx";
+                      "Pstb"; "Pstbx"; "Pstd"; "Pstdbrx"; "Pstdu"; "Pstdx"; "Pstfd"; "Pstfdu"; "Pstfdx";
                       "Pstfs"; "Pstfsx"; "Psth"; "Psthbrx"; "Psthx"; "Pstw"; "Pstwbrx"; "Pstwcx_";
                       "Pstwu"; "Pstwux"; "Pstwx"; "Psubfc"; "Psubfe"; "Psubfic"; "Psubfze";
                       "Psync"; "Ptrap"; "Pxor"; "Pxori"; "Pxoris"]
@@ -236,6 +236,7 @@ let pp_instructions pp ic =
   | Plbzx (ir1,ir2,ir3) -> instruction pp "Plbzx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pld (ir1,c,ir2)
   | Pld_a (ir1,c,ir2) -> instruction pp "Pld" [Ireg ir1; Constant c; Ireg ir2]
+  | Pldbrx (ir1,ir2,ir3) -> instruction pp "Pldbrx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pldx (ir1,ir2,ir3)
   | Pldx_a (ir1,ir2,ir3) -> instruction pp "Pldx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Plfd (fr,c,ir)
@@ -305,6 +306,7 @@ let pp_instructions pp ic =
   | Pstbx (ir1,ir2,ir3) -> instruction pp "Pstbx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pstd (ir1,c,ir2)
   | Pstd_a (ir1,c,ir2) -> instruction pp "Pstd" [Ireg ir1; Constant c; Ireg ir2]
+  | Pstdbrx (ir1,ir2,ir3) -> instruction pp "Pstdbrx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pstdx (ir1,ir2,ir3)
   | Pstdx_a (ir1,ir2,ir3) -> instruction pp "Pstdx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pstdu (ir1,c,ir2) -> instruction pp "Pstdu" [Ireg ir1; Constant c; Ireg ir2]
