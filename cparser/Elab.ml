@@ -2367,8 +2367,10 @@ let elab_fundef env spec name defs body loc =
     | _ -> fatal_error loc "wrong type for function definition" in
   (* Enter function in the environment, for recursive references *)
   add_global_define loc s;
-  let (fun_id, sto1, env1, _, _) =
+  let (fun_id, sto1, env1, new_ty, _) =
     enter_or_refine_ident false loc env1 s sto ty in
+  (* Take into account attributes from previous declarations of the function *)
+  let attr = attributes_of_type env1 new_ty in
   let incomplete_param env ty =
     if wrap incomplete_type loc env ty then
       fatal_error loc "parameter has incomplete type" in
