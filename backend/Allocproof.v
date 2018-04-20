@@ -1317,15 +1317,6 @@ Proof.
   eauto.
 Qed.
 
-Definition callee_save_loc (l: loc) :=
-  match l with
-  | R r => is_callee_save r = true
-  | S sl ofs ty => sl <> Outgoing
-  end.
-
-Definition agree_callee_save (ls1 ls2: locset) : Prop :=
-  forall l, callee_save_loc l -> ls1 l = ls2 l.
-
 Lemma return_regs_agree_callee_save:
   forall caller callee,
   agree_callee_save caller (return_regs caller callee).
@@ -1345,7 +1336,7 @@ Proof.
   unfold no_caller_saves, callee_save_loc; intros.
   exploit EqSet.for_all_2; eauto.
   hnf. intros. simpl in H1. rewrite H1. auto.
-  lazy beta. destruct (eloc q). auto. destruct sl; congruence.
+  lazy beta. destruct (eloc q); auto.
 Qed.
 
 Lemma val_hiword_longofwords:

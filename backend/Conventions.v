@@ -103,3 +103,16 @@ Proof.
   generalize (loc_arguments_bounded _ _ _ H0).
   generalize (typesize_pos ty). omega.
 Qed.
+
+(** * Callee-save registers *)
+
+Definition callee_save_loc (l: loc) :=
+  match l with
+  | R r => is_callee_save r = true
+  | S sl ofs ty => True
+  end.
+
+Hint Unfold callee_save_loc.
+
+Definition agree_callee_save (ls1 ls2: Locmap.t) : Prop :=
+  forall l, callee_save_loc l -> ls1 l = ls2 l.
