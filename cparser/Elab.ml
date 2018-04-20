@@ -1854,6 +1854,7 @@ let elab_expr vararg loc env a =
                 err "%a and %a are not pointers to compatible types"
                    (print_typ env) b1.etyp (print_typ env) b1.etyp;
               check_ptr_arith env ty1 '-';
+              check_ptr_arith env ty2 '-';
               if wrap sizeof loc env ty1 = Some 0 then
                 err "subtraction between two pointers to zero-sized objects";
               (TPtr(ty1, []), TInt(ptrdiff_t_ikind(), []))
