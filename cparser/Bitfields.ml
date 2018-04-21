@@ -40,6 +40,10 @@ type bitfield_info =
      0 < pos + sz <= bitsizeof(int)
 *)
 
+let carrier_field bf =
+  { fld_name = bf.bf_carrier; fld_typ = bf.bf_carrier_typ;
+    fld_bitfield = None; fld_anonymous = false }
+
 (* Mapping (struct identifier, bitfield name) -> bitfield info *)
 
 let bitfield_table =
@@ -336,8 +340,7 @@ let rec transf_struct_init id fld_init_list =
       | Some bf ->
           let (el, rem') =
             pack_bitfield_init id bf.bf_carrier fld_init_list in
-          ({fld_name = bf.bf_carrier; fld_typ = bf.bf_carrier_typ;
-            fld_bitfield = None; fld_anonymous = false},
+          (carrier_field bf,
            Init_single {edesc = ECast(bf.bf_carrier_typ, or_expr_list el);
                         etyp = bf.bf_carrier_typ})
           :: transf_struct_init id rem'
@@ -504,7 +507,13 @@ and transf_init env i =
       let fld_init_list' =
         List.map (fun (f, i) -> (f, transf_init env i)) fld_init_list in
         Init_struct(id, transf_struct_init id fld_init_list')
-  | Init_union(id, fld, i) -> Init_union(id, fld, transf_init env i)
+  | Init_union(id, fld, i) ->
+      let i' = transf_init env i in
+      match is_bitfield id fld.fld_name with
+      | None ->
+          Init_union(id, fld, i')
+      | Some bf ->
+          Init_union(id, carrier_field bf, Init_single (bitfield_initializer bf i'))
 
 (* Declarations *)
 
