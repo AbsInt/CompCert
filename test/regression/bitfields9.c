@@ -11,6 +11,7 @@ struct t {
   unsigned int c: 16;
   _Bool d: 1;
   short e: 8;
+  int : 10;
 };
 
 union u {

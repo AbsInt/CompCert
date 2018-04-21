@@ -359,6 +359,20 @@ let rec transf_struct_init id fld_init_list =
                         etyp = bf.bf_carrier_typ})
           :: transf_struct_init id rem'
 
+(* Add default initialization for carrier fields that are not listed in the output of
+   [transf_struct_init].  This happens with carrier fields that contain no named
+   bitfields, only anonymous bitfields. *)
+
+let rec completed_struct_init env actual expected =
+  match actual, expected with
+  | [], [] -> []
+  | (f_a, i) :: actual', f_e :: expected' when f_a.fld_name = f_e.fld_name ->
+      (f_a, i) :: completed_struct_init env actual' expected'
+  | _, f_e :: expected' ->
+      (f_e, default_init env f_e.fld_typ) :: completed_struct_init env actual expected'
+  | _, [] ->
+      assert false
+
 (* Check whether a field access (e.f or e->f) is a bitfield access.
    If so, return carrier expression (e and *e, respectively)
    and bitfield_info *)
@@ -520,7 +534,12 @@ and transf_init env i =
   | Init_struct(id, fld_init_list) ->
       let fld_init_list' =
         List.map (fun (f, i) -> (f, transf_init env i)) fld_init_list in
-        Init_struct(id, transf_struct_init id fld_init_list')
+      begin match Hashtbl.find composite_transformed_members id with
+      | exception Not_found ->
+          Init_struct(id, fld_init_list')
+      | ml ->
+          Init_struct(id, completed_struct_init env (transf_struct_init id fld_init_list') ml)
+      end
   | Init_union(id, fld, i) ->
       let i' = transf_init env i in
       match is_bitfield id fld.fld_name with
