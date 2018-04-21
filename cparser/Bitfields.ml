@@ -44,7 +44,7 @@ let carrier_field bf =
   { fld_name = bf.bf_carrier; fld_typ = bf.bf_carrier_typ;
     fld_bitfield = None; fld_anonymous = false }
 
-(* Mapping (struct identifier, bitfield name) -> bitfield info *)
+(* Mapping (struct/union identifier, bitfield name) -> bitfield info *)
 
 let bitfield_table =
       (Hashtbl.create 57: (ident * string, bitfield_info) Hashtbl.t)
@@ -52,6 +52,13 @@ let bitfield_table =
 let is_bitfield structid fieldname =
   try Some (Hashtbl.find bitfield_table (structid, fieldname))
   with Not_found -> None
+
+(* Mapping struct/union identifier -> list of members after transformation,
+   including the carrier fields, but without the bit fields.
+   structs and unions containing no bit fields are not put in this table. *)
+
+let composite_transformed_members =
+      (Hashtbl.create 57: (ident, C.field list) Hashtbl.t)
 
 (* Signedness issues *)
 
@@ -183,9 +190,16 @@ let rec transf_union_members env id count = function
           :: transf_union_members env id (count + 1) ms)
 
 let transf_composite env su id attr ml =
-  match su with
-  | Struct -> (attr, transf_struct_members env id 1 ml)
-  | Union  -> (attr, transf_union_members env id 1 ml)
+  if List.for_all (fun f -> f.fld_bitfield = None) ml then
+    (attr, ml)
+  else begin
+    let ml' =
+      match su with
+      | Struct -> transf_struct_members env id 1 ml
+      | Union  -> transf_union_members env id 1 ml in
+    Hashtbl.add composite_transformed_members id ml';
+    (attr, ml')
+  end
 
 (* Bitfield manipulation expressions *)
 
@@ -537,6 +551,8 @@ let transf_fundef env f =
 (* Programs *)
 
 let program p =
+  Hashtbl.clear bitfield_table;
+  Hashtbl.clear composite_transformed_members;
   Transform.program
     ~composite:transf_composite
     ~decl: transf_decl
