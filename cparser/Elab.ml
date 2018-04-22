@@ -996,7 +996,7 @@ and elab_enum only loc tag optmembers attrs env =
   let tag = match tag with None -> "" | Some s -> s in
   match optmembers with
   | None ->
-    if only then
+    if only && not (redef Env.lookup_enum env tag) then
       fatal_error loc
          "forward declaration of 'enum %s' is not allowed in ISO C" tag;
       let (tag', info) = wrap Env.lookup_enum loc env tag in (tag', env)
