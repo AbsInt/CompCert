@@ -2585,13 +2585,13 @@ let rec elab_stmt env ctx s =
       if not ctx.ctx_in_switch then
         error loc "'case' statement not in switch statement";
       let a',env = elab_expr ctx.ctx_vararg loc env a in
-      begin match Ceval.integer_expr env a' with
+      let n =
+        match Ceval.integer_expr env a' with
         | None ->
-            error loc "expression of 'case' label is not an integer constant expression"
-        | Some n -> ()
-      end;
+            error loc "expression of 'case' label is not an integer constant expression"; 0L
+        | Some n -> n in
       let s1,env = elab_stmt env ctx s1 in
-      { sdesc = Slabeled(Scase a', s1); sloc = elab_loc loc },env
+      { sdesc = Slabeled(Scase(a', n), s1); sloc = elab_loc loc },env
 
   | DEFAULT(s1, loc) ->
       if not ctx.ctx_in_switch then

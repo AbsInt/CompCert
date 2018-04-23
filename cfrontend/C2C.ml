@@ -1005,7 +1005,7 @@ type switchbody =
 let rec flattenSwitch = function
   | {sdesc = C.Sseq(s1, s2)} ->
       flattenSwitch s1 @ flattenSwitch s2
-  | {sdesc = C.Slabeled(C.Scase e, s1)} ->
+  | {sdesc = C.Slabeled(C.Scase(e, _), s1)} ->
       Label(Case e) :: flattenSwitch s1
   | {sdesc = C.Slabeled(C.Sdefault, s1)} ->
       Label Default :: flattenSwitch s1

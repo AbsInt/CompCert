@@ -220,7 +220,7 @@ and stmt_desc =
 
 and slabel =
   | Slabel of string
-  | Scase of exp
+  | Scase of exp * int64
   | Sdefault
 
 (** Declarations *)

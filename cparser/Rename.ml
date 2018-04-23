@@ -188,7 +188,7 @@ and stmt_or_decl env s =
       (stmt env s, env)
 
 and slabel env = function
-  | Scase e -> Scase(exp env e)
+  | Scase(e, n) -> Scase(exp env e, n)
   | sl -> sl
 
 let fundef env f =

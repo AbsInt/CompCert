@@ -478,7 +478,7 @@ let rec stmt pp s =
 and slabel pp = function
   | Slabel s ->
       fprintf pp "%s" s
-  | Scase e ->
+  | Scase(e, _) ->
       fprintf pp "case %a" exp (0, e)
   | Sdefault ->
       fprintf pp "default"

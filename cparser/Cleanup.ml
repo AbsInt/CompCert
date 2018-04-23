@@ -93,7 +93,7 @@ let rec add_stmt s =
   | Scontinue -> ()
   | Sswitch(e, s1) -> add_exp e; add_stmt s1
   | Slabeled(lbl, s) ->
-      begin match lbl with Scase e -> add_exp e | _ -> () end;
+      begin match lbl with Scase(e, _) -> add_exp e | _ -> () end;
       add_stmt s
   | Sgoto lbl -> ()
   | Sreturn None -> ()
