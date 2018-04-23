@@ -2563,6 +2563,46 @@ let ctx_loop ctx = { ctx with ctx_break = true; ctx_continue = true }
 
 let ctx_switch ctx = { ctx with ctx_break = true; ctx_in_switch = true }
 
+(* Check the uniqueness of 'case' and 'default' in a 'switch' *)
+
+module Int64Set = Set.Make(Int64)
+
+let check_switch_cases switch_body =
+  let cases = ref Int64Set.empty
+  and default = ref false in
+  let rec check s =
+    match s.sdesc with
+    | Sskip -> ()
+    | Sdo _ -> ()
+    | Sseq(s1, s2) -> check s1; check s2
+    | Sif(_, s1, s2) -> check s1; check s2
+    | Swhile(_, s1) -> check s1
+    | Sdowhile(s1, _) -> check s1
+    | Sfor(s1, _, s2, s3) -> check s1; check s2; check s3
+    | Sbreak -> ()
+    | Scontinue -> ()
+    | Sswitch(_, _) -> () (* already checked during elaboration of this switch *)
+    | Slabeled(lbl, s1) ->
+        begin match lbl with
+        | Slabel _ -> ()
+        | Scase(_, n) ->
+            if Int64Set.mem n !cases then
+              Diagnostics.error s.sloc "duplicate case value '%Ld'" n
+            else
+              cases := Int64Set.add n !cases
+        | Sdefault ->
+            if !default then
+              Diagnostics.error s.sloc "multiple default labels in one switch"
+            else
+              default := true
+        end
+    | Sgoto _ -> ()
+    | Sreturn _ -> ()
+    | Sblock sl -> List.iter check sl
+    | Sdecl _ -> ()
+    | Sasm _ -> ()
+  in check switch_body
+
 (* Elaboration of statements *)
 
 let rec elab_stmt env ctx s =
@@ -2673,6 +2713,7 @@ let rec elab_stmt env ctx s =
         error loc "controlling expression of 'switch' does not have integer type (%a invalid)"
           (print_typ env) a'.etyp;
       let s1',env = elab_stmt env (ctx_switch ctx) s1 in
+      check_switch_cases s1';
       { sdesc = Sswitch(a', s1'); sloc = elab_loc loc },env
 
 (* 6.8.6 Break and continue statements *)
