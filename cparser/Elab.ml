@@ -2534,6 +2534,7 @@ type stmt_context = {
   ctx_labels: StringSet.t;      (**r all labels defined in the function *)
   ctx_break: bool;              (**r is 'break' allowed? *)
   ctx_continue: bool;           (**r is 'continue' allowed? *)
+  ctx_in_switch: bool;          (**r are 'case' and 'default' allowed? *)
   ctx_vararg: bool;             (**r is this a vararg function? *)
 }
 
@@ -2560,7 +2561,7 @@ let stmt_labels stmt =
 
 let ctx_loop ctx = { ctx with ctx_break = true; ctx_continue = true }
 
-let ctx_switch ctx = { ctx with ctx_break = true }
+let ctx_switch ctx = { ctx with ctx_break = true; ctx_in_switch = true }
 
 (* Elaboration of statements *)
 
@@ -2581,6 +2582,8 @@ let rec elab_stmt env ctx s =
       { sdesc = Slabeled(Slabel lbl, s1); sloc = elab_loc loc },env
 
   | CASE(a, s1, loc) ->
+      if not ctx.ctx_in_switch then
+        error loc "'case' statement not in switch statement";
       let a',env = elab_expr ctx.ctx_vararg loc env a in
       begin match Ceval.integer_expr env a' with
         | None ->
@@ -2591,6 +2594,8 @@ let rec elab_stmt env ctx s =
       { sdesc = Slabeled(Scase a', s1); sloc = elab_loc loc },env
 
   | DEFAULT(s1, loc) ->
+      if not ctx.ctx_in_switch then
+        error loc "'case' statement not in switch statement";
       let s1,env = elab_stmt env ctx s1 in
       { sdesc = Slabeled(Sdefault, s1); sloc = elab_loc loc },env
 
@@ -2765,6 +2770,7 @@ let elab_funbody return_typ vararg env b =
       ctx_labels = stmt_labels b;
       ctx_break = false;
       ctx_continue = false;
+      ctx_in_switch = false;
       ctx_vararg = vararg;} in
   fst(elab_stmt env ctx b)
 
