@@ -136,6 +136,13 @@ let redef fn env arg =
 
 (* Auxiliaries for handling declarations and redeclarations *)
 
+let name_of_storage_class = function
+  | Storage_default -> "<default>"
+  | Storage_extern -> "'extern'"
+  | Storage_static -> "'static'"
+  | Storage_auto -> "'auto'"
+  | Storage_register -> "'register'"
+
 let combine_toplevel_definitions loc env s old_sto old_ty sto ty =
   let new_ty =
     match combine_types AttrCompat env old_ty ty with
@@ -151,7 +158,6 @@ let combine_toplevel_definitions loc env s old_sto old_ty sto ty =
     match old_sto,sto with
     | Storage_static,Storage_static
     | Storage_extern,Storage_extern
-    | Storage_register,Storage_register
     | Storage_default,Storage_default -> sto
     | _,Storage_static ->
 	error loc "static declaration of '%s' follows non-static declaration" s;
@@ -160,8 +166,16 @@ let combine_toplevel_definitions loc env s old_sto old_ty sto ty =
     | Storage_extern,_ -> sto
     | Storage_default,Storage_extern -> Storage_extern
     | _,Storage_extern -> old_sto
+    (* "auto" and "register" don't appear in toplevel definitions.
+       Normally this was checked earlier.  Generate error message
+       instead of "assert false", just in case. *)
+    | _,Storage_auto
+    | Storage_auto,_
     | _,Storage_register
-    | Storage_register,_ -> Storage_register
+    | Storage_register,_ ->
+	error loc "unexpected %s declaration of '%s'"
+                  (name_of_storage_class sto) s;
+        sto
   in
     (new_sto, new_ty)
 
@@ -511,8 +525,9 @@ let get_nontype_attrs env ty =
   let nta = List.filter to_be_removed (attributes_of_type env ty) in
   (remove_attributes_type env nta ty, nta)
 
-(* Elaboration of a type specifier.  Returns 5-tuple:
-     (storage class, "inline" flag, "typedef" flag, elaborated type, new env)
+(* Elaboration of a type specifier.  Returns 6-tuple:
+     (storage class, "inline" flag, "noreturn" flag, "typedef" flag,
+      elaborated type, new env)
    Optional argument "only" is true if this is a standalone
    struct or union declaration, without variable names.
    C99 section 6.7.2.
@@ -535,9 +550,9 @@ let rec elab_specifier keep_ty ?(only = false) loc env specifier =
       attr := add_attributes (elab_cvspec env cv) !attr
   | SpecStorage st ->
       if !sto <> Storage_default && st <> TYPEDEF then
-        error loc "multiple storage-classes in declaration specifier";
+        error loc "multiple storage classes in declaration specifier";
       begin match st with
-      | AUTO -> ()
+      | AUTO -> sto := Storage_auto
       | STATIC -> sto := Storage_static
       | EXTERN -> sto := Storage_extern
       | REGISTER -> sto := Storage_register
@@ -727,8 +742,9 @@ and elab_parameter keep_ty env (PARAM (spec, id, decl, attr, loc)) =
   let ((ty, _), _) = elab_type_declarator keep_ty loc env1 bty false decl in
   let ty = add_attributes_type (elab_attributes env attr) ty in
   if sto <> Storage_default && sto <> Storage_register then
-    error loc
-      "invalid storage-class specifier in function declarator";
+    error loc                               (* NB: 'auto' not allowed *)
+      "invalid storage class %s for function parameter"
+      (name_of_storage_class sto);
   if inl then
     error loc "'inline' can only appear on functions";
   if noret then
@@ -1020,8 +1036,10 @@ and elab_enum only loc tag optmembers attrs env =
 let elab_type loc env spec decl =
   let (sto, inl, noret, tydef, bty, env') = elab_specifier false loc env spec in
   let ((ty, _), env'') = elab_type_declarator false loc env' bty false decl in
+  (* NB: it seems the parser doesn't accept any of the specifiers below.
+     We keep the error message as extra safety. *)
   if sto <> Storage_default || inl || noret || tydef then
-    error loc "'typedef', 'extern', 'static', 'register' and 'inline' are meaningless in cast";
+    error loc "'typedef', 'extern', 'static', 'auto', 'register' and 'inline' are meaningless in cast";
   (ty, env'')
 
 
@@ -2152,7 +2170,7 @@ let __func__type_and_init s =
 
 let enter_typedefs loc env sto dl =
   if sto <> Storage_default then
-    error loc "non-default storage-class on 'typedef' definition";
+    error loc "non-default storage class on 'typedef' definition";
   List.fold_left (fun env (s, ty, init) ->
     if init <> NO_INIT then
       error loc "initializer in typedef";
@@ -2175,8 +2193,9 @@ let enter_typedefs loc env sto dl =
 
 let enter_decdefs local loc env sto dl =
   (* Sanity checks on storage class *)
-  if sto = Storage_register && not local then
-    fatal_error loc "'register' storage-class on file-scoped variable";
+  if (sto = Storage_auto || sto = Storage_register) && not local then
+    fatal_error loc "illegal storage class %s on file-scoped variable"
+                    (name_of_storage_class sto);
   if sto <> Storage_default && dl = [] then
     warning loc Missing_declarations "declaration does not declare anything";
   let enter_decdef (decls, env) (s, ty, init) =
@@ -2185,12 +2204,19 @@ let enter_decdefs local loc env sto dl =
       error loc "'extern' declaration  variable has an initializer";
     if local && isfun then begin
       match sto with
-      | Storage_static -> error loc "function declared in block scope cannot have 'static' storage-class";
-      | Storage_register -> error loc "invalid 'register' storage-class on function";
+      | Storage_static ->
+          error loc "function declared in block scope cannot have 'static' storage class"
+      | Storage_auto | Storage_register ->
+          error loc "illegal storage class %s on function"
+                    (name_of_storage_class sto)
       | _ -> ()
     end;
     (* Local function declarations are always treated as extern *)
-    let sto1 = if local && isfun then Storage_extern else sto in
+    (* Local variable declarations with default storage are treated as 'auto' *)
+    let sto1 =
+      if local && isfun then Storage_extern
+      else if local && sto = Storage_default then Storage_auto
+      else sto in
     (* enter ident in environment with declared type, because
        initializer can refer to the ident *)
     if init <> NO_INIT && not local then
@@ -2258,13 +2284,10 @@ let elab_KR_function_parameters env params defs loc =
   | DECDEF((spec', name_init_list), loc') ->
       let name_list = List.map extract_name name_init_list in
       let (paramsenv, sto) = elab_name_group true loc' env (spec', name_list) in
-      begin match sto with
-      | Storage_extern ->
-        error loc' "invalid 'extern' storage-class specifier for function parameter"
-      | Storage_static ->
-        error loc' "invalid 'static' storage-class specifier for function parameter"
-      | _ -> ()
-      end;
+      if sto <> Storage_default && sto <> Storage_register then
+        error loc'                               (* NB: 'auto' not allowed *)
+           "invalid storage class %s for function parameter"
+           (name_of_storage_class sto);
       paramsenv
   | d -> (* Should never be produced by the parser *)
       fatal_error (Cabshelper.get_definitionloc d)
@@ -2331,8 +2354,9 @@ let inherit_vararg env s sto ty =
 let elab_fundef env spec name defs body loc =
   let (s, sto, inline, noret, ty, kr_params, env1) =
     elab_fundef_name true env spec name in
-  if sto = Storage_register then
-    fatal_error loc "invalid 'register' storage-class on function";
+  if sto = Storage_auto || sto = Storage_register then
+    fatal_error loc "invalid storage class %s on function"
+                    (name_of_storage_class sto);
   begin match kr_params, defs with
   | None, d::_ ->
     error (Cabshelper.get_definitionloc d)

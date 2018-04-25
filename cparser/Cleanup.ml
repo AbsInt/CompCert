@@ -134,7 +134,7 @@ let visible_fundef f =
   | Storage_default -> not f.fd_inline
   | Storage_extern -> true
   | Storage_static -> false
-  | Storage_register -> assert false
+  | Storage_auto | Storage_register -> assert false
 
 let rec add_init_globdecls accu = function
   | [] -> accu
