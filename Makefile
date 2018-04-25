@@ -147,6 +147,9 @@ endif
 
 proof: $(FILES:.v=.vo)
 
+# Turn off some warnings for compiling Flocq
+flocq/%.vo: COQCOPTS+=-w -compatibility-notation
+
 extraction: extraction/STAMP
 
 extraction/STAMP: $(FILES:.v=.vo) extraction/extraction.v $(ARCH)/extractionMachdep.v
