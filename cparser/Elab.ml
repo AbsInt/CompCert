@@ -931,6 +931,8 @@ and elab_struct_or_union keep_ty only kind loc tag optmembers attrs env =
     match tag with
       | None -> None, ""
       | Some s ->
+          if redef Env.lookup_enum env s then
+            error loc "'%s' redeclared as different kind of symbol" s;
           Env.lookup_composite env s, s
   in
   match optbinding, optmembers with
@@ -1011,7 +1013,12 @@ and elab_enum_item env ((s, exp), loc) nextval =
 (* Elaboration of an enumeration declaration.   C99 section 6.7.2.2  *)
 
 and elab_enum only loc tag optmembers attrs env =
-  let tag = match tag with None -> "" | Some s -> s in
+  let tag = match tag with
+    | None -> ""
+    | Some s ->
+      if redef Env.lookup_struct env s || redef Env.lookup_union env s then
+        error loc "'%s' redeclared as different kind of symbol" s;
+      s in
   match optmembers with
   | None ->
     if only && not (redef Env.lookup_enum env tag) then
