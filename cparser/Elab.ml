@@ -2236,9 +2236,6 @@ let enter_decdefs local loc env sto dl =
       fatal_error loc "'%s' has incomplete type" s;
     (* process the initializer *)
     let (ty', init') = elab_initializer loc env1 s ty init in
-    (* if (sto = Storage_static || not local) then
-     *   (\* Check for constant initializer for static and global variables *\)
-     *   is_constant_init env loc init'; *)
     (* update environment with refined type *)
     let env2 = Env.add_ident env1 id sto' ty' in
     (* check for incomplete type *)
@@ -2252,6 +2249,12 @@ let enter_decdefs local loc env sto dl =
     else begin
       (* Global definition *)
       emit_elab ~linkage env2 loc (Gdecl(sto', id, ty', init'));
+      (* Make sure the initializer is constant. *)
+      begin match init' with
+      | Some i when not (Ceval.is_constant_init env2 i) ->
+          error loc "initializer is not a compile-time constant"
+      | _ -> ()
+      end;
       (decls, env2)
     end in
   let (decls, env') = List.fold_left enter_decdef ([], env) dl in
