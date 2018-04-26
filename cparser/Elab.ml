@@ -792,6 +792,8 @@ and elab_name_group keep_ty loc env  (spec, namelist) =
 and elab_init_name_group keep_ty loc env (spec, namelist) =
   let (sto, inl, noret, tydef, bty, env') =
     elab_specifier keep_ty ~only:(namelist=[]) loc env spec in
+  if noret && tydef then
+    error loc "'_Noreturn' can only appear on functions";
   let elab_one_name env (Init_name (Name (id, decl, attr, loc), init)) =
     let ((ty, _), env1) =
       elab_type_declarator keep_ty loc env bty false  decl in
@@ -2180,6 +2182,8 @@ let __func__type_and_init s =
 let enter_typedefs loc env sto dl =
   if sto <> Storage_default then
     error loc "non-default storage class on 'typedef' definition";
+  if dl = [] then
+    warning loc Missing_declarations "typedef requires a name";
   List.fold_left (fun env (s, ty, init) ->
     if init <> NO_INIT then
       error loc "initializer in typedef";
