@@ -41,11 +41,3 @@ Proof @FunctionalExtensionality.functional_extensionality.
 Lemma extensionality:
   forall {A B: Type} (f g : A -> B),  (forall x, f x = g x) -> f = g.
 Proof @functional_extensionality.
-
-(** * Proof irrelevance *)
-
-(** We also use proof irrelevance. *)
-
-Axiom proof_irr: ClassicalFacts.proof_irrelevance.
-
-Arguments proof_irr [A].
