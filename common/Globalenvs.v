@@ -1199,7 +1199,7 @@ Proof.
   intros.
   assert (0 <= ofs < 1). { eapply Mem.perm_alloc_3; eauto. eapply Mem.perm_drop_4; eauto. }
   exploit Mem.perm_drop_2; eauto. intros ORD.
-  split. omega. inv ORD; auto.
+  split. omega. destruct p; elim ORD; reflexivity.
 * set (init := gvar_init v) in *.
   set (sz := init_data_list_size init) in *.
   destruct (Mem.alloc m 0 sz) as [m1 b] eqn:?.

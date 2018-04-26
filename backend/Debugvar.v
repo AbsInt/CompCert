@@ -27,6 +27,14 @@ Fixpoint safe_builtin_arg {A: Type} (a: builtin_arg A) : Prop :=
   | _ => False
   end.
 
+Lemma safe_builtin_arg_irr {A} (a: builtin_arg A) (p0 p1 : safe_builtin_arg a): p0 = p1.
+Proof.
+  induction a; try solve [destruct p0; destruct p1; reflexivity].
+  destruct p0 as [p0h p0l].
+  destruct p1 as [p1h p1l].
+  f_equal; auto.
+Qed.
+
 Definition debuginfo := { a : builtin_arg loc | safe_builtin_arg a }.
 
 (** Normalization of debug info.  Prefer an actual location to a constant.
@@ -144,7 +152,7 @@ Global Opaque eq_arg.
 Definition eq_debuginfo (i1 i2: debuginfo) : {i1=i2} + {i1 <> i2}.
 Proof.
   destruct (eq_arg (proj1_sig i1) (proj1_sig i2)).
-  left. destruct i1, i2; simpl in *. subst x0. f_equal. apply proof_irr.
+  left. destruct i1, i2; simpl in *. subst x0. f_equal. apply safe_builtin_arg_irr.
   right. congruence.
 Defined.
 Global Opaque eq_debuginfo.

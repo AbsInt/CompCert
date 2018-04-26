@@ -23,6 +23,7 @@
 - [free]: invalidate a memory block.
 *)
 
+Require Import Eqdep_dec.
 Require Import Coqlib.
 Require Import AST.
 Require Import Integers.
@@ -54,18 +55,49 @@ Inductive permission: Type :=
 (** In the list, each permission implies the other permissions further down the
     list.  We reflect this fact by the following order over permissions. *)
 
-Inductive perm_order: permission -> permission -> Prop :=
-  | perm_refl:  forall p, perm_order p p
-  | perm_F_any: forall p, perm_order Freeable p
-  | perm_W_R:   perm_order Writable Readable
-  | perm_any_N: forall p, perm_order p Nonempty.
+Definition perm_order (p1 p2: permission): Prop :=
+  match p1, p2 with 
+  | Freeable, _ => True
+  | Writable, Readable => True
+  | _, Nonempty => True
+  | x, y => x = y
+  end.
 
-Hint Constructors perm_order: mem.
+Lemma perm_refl: forall p, perm_order p p.
+Proof.
+  destruct p; constructor.
+Qed.
+Hint Resolve perm_refl: mem.
+
+Lemma perm_F_any: forall p, perm_order Freeable p.
+Proof.
+  constructor.
+Qed.
+Hint Resolve perm_F_any: mem.
+
+Lemma perm_W_R: perm_order Writable Readable.
+Proof.
+  constructor.
+Qed.
+Hint Resolve perm_W_R: mem.
+
+Lemma perm_any_N: forall p, perm_order p Nonempty.
+Proof.
+  destruct p; constructor.
+Qed.
+Hint Resolve perm_any_N: mem.
+
+Lemma perm_order_irr : forall p1 p2 (po1 po2: perm_order p1 p2), po1 = po2.
+Proof.
+ destruct p1; destruct p2; try discriminate; cbn;
+   destruct po1; try destruct po2; try reflexivity;
+   apply UIP_dec; decide equality.
+Qed.
 
 Lemma perm_order_trans:
   forall p1 p2 p3, perm_order p1 p2 -> perm_order p2 p3 -> perm_order p1 p3.
 Proof.
-  intros. inv H; inv H0; constructor.
+  destruct p1; destruct p2; destruct p3; try constructor; discriminate.
 Qed.
 
 (** Each address has not one, but two permissions associated
