@@ -2101,6 +2101,10 @@ let elab_expr vararg loc env a =
             if not (compatible_types AttrIgnoreAll env ty1 ty2) then
               warning Compare_distinct_pointer_types "comparison of distinct pointer types (%a and %a)"
                 (print_typ env) b1.etyp (print_typ env) b2.etyp;
+            let incomp_ty1 = wrap incomplete_type loc env ty1
+            and incomp_ty2 = wrap incomplete_type loc env ty2 in
+            if incomp_ty1 <> incomp_ty2 then
+              warning Unnamed "comparison of complete and incomplete pointers";
             EBinop(op, b1, b2, TPtr(ty1, []))
         | TPtr _, (TInt _ | TEnum _)
         | (TInt _ | TEnum _), TPtr _ ->
