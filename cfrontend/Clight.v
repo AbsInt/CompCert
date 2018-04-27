@@ -715,14 +715,14 @@ Inductive step: state -> trace -> state -> Prop :=
   without arguments and with an empty continuation. *)
 
 
-(*Inductive initial_core (p: program): mem -> state -> val -> list val -> Prop :=
-  | initial_core_intro: forall b f args m0,
+(*Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
+  | entry_point_intro: forall b f args m0,
       let ge := Genv.globalenv p in
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
-      initial_core p m0 (Callstate f nil Kstop m0) (Vptr b Ptrofs.zero) args.*)
+      entry_point p m0 (Callstate f nil Kstop m0) (Vptr b Ptrofs.zero) args.*)
 
 (*
 Inductive initial_state (p: program): state -> Prop :=
@@ -773,7 +773,7 @@ Inductive val_casted_list: list val -> typelist -> Prop :=
       val_casted_list (v1 :: vl) (Tcons  ty1 tyl).
 
 (*NOTE: DOUBLE CHECK TARGS (it's not used right now)*)
-Inductive initial_core  (p:program): mem -> state -> val -> list val -> Prop :=
+Inductive entry_point  (p:program): mem -> state -> val -> list val -> Prop :=
 | initi_core:
     let ge := globalenv p in
     forall f fb m args targs tres,
@@ -787,7 +787,7 @@ Inductive initial_core  (p:program): mem -> state -> val -> list val -> Prop :=
                            && tys_nonvoid targs 
                            && vals_defined args
                            && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
-      initial_core p m (Callstate f args Kstop m) (Vptr fb (Ptrofs.of_ints Int.zero)) args.
+      entry_point p m (Callstate f args Kstop m) (Vptr fb (Ptrofs.of_ints Int.zero)) args.
 
 (** A final state is a [Returnstate] with an empty continuation. *)
 Inductive final_state: state -> int -> Prop :=
@@ -828,7 +828,7 @@ Definition semantics1 (p: program) :=
   let main :=p.(prog_main) in
   let init_mem:=(Genv.init_mem p) in
   Semantics_gen get_mem set_mem step1
-                (initial_core p)
+                (entry_point p)
                 at_external
                 after_external
                 final_state ge main init_mem ge.
@@ -838,7 +838,7 @@ Definition semantics2 (p: program) :=
   let main :=p.(prog_main) in
   let init_mem:=(Genv.init_mem p) in
   Semantics_gen get_mem set_mem step2
-                (initial_core p)
+                (entry_point p)
                 at_external
                 after_external
                 final_state ge main init_mem ge.

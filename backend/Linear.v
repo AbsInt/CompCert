@@ -278,9 +278,9 @@ Definition set_mem (s:state) (m:mem):=
   | Returnstate sf ls _ => Returnstate sf ls m
   end.
 
-Parameter initial_core: program -> mem -> state -> val -> list val -> Prop.
+Parameter entry_point: program -> mem -> state -> val -> list val -> Prop.
 Parameter at_external : state -> option (external_function * signature * list val).
 Parameter after_external : option val -> state -> Memory.mem -> option state.
 
 Definition semantics (p: program) :=
-  Semantics get_mem set_mem step (initial_core p) at_external after_external final_state (Genv.globalenv p).
+  Semantics get_mem set_mem step (entry_point p) at_external after_external final_state (Genv.globalenv p).

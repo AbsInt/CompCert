@@ -2241,9 +2241,9 @@ Proof.
 Qed.
 
 
-Lemma initial_cores_simulation:
-  forall S v args m, initial_core prog m S v args ->
-       exists R, initial_core tprog m R v args /\ match_states S R.
+Lemma entry_points_simulation:
+  forall S v args m, entry_point prog m S v args ->
+       exists R, entry_point tprog m R v args /\ match_states S R.
 Proof.
   intros. inv H.
   exploit function_ptr_translated; eauto. intros [tf [A B]].
@@ -2339,7 +2339,7 @@ Theorem transf_program_correct:
 Proof.
   eapply forward_simulation_plus.
   apply senv_preserved.
-  eapply initial_cores_simulation.
+  eapply entry_points_simulation.
   
   
   eexact initial_states_simulation.

@@ -1129,8 +1129,8 @@ Inductive initial_state (p: program): state -> Prop :=
 (* The following parameters are simple and reasonable, *)
 (* but might not be needed. All definitions come from  *)
 (* compcomp/core/val_casted.v                          *)
-(*This is the old non-deterministic initial_core. Can be deleted after 05/18*)
-Inductive initial_core' (p:program): mem -> state -> val -> list val -> Prop:=
+(*This is the old non-deterministic entry_point. Can be deleted after 05/18*)
+Inductive entry_point' (p:program): mem -> state -> val -> list val -> Prop:=
 | INIT_CORE':
     let ge := Genv.globalenv p in
     forall f b m args rs0,
@@ -1139,8 +1139,8 @@ Inductive initial_core' (p:program): mem -> state -> val -> list val -> Prop:=
       rs0 RSP = Vnullptr ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       extcall_arguments rs0 m (fn_sig f) args ->
-      initial_core' p m (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
-Inductive initial_core (p:program): mem -> state -> val -> list val -> Prop:=
+      entry_point' p m (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
+Inductive entry_point (p:program): mem -> state -> val -> list val -> Prop:=
 | INIT_CORE:
     let ge := Genv.globalenv p in
     forall f b m args,
@@ -1151,7 +1151,7 @@ Inductive initial_core (p:program): mem -> state -> val -> list val -> Prop:=
         # RSP <- Vnullptr in
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       extcall_arguments rs0 m (fn_sig f) args ->
-      initial_core p m (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
+      entry_point p m (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
 
  Definition get_extcall_arg (inout: Locations.slot) (rs: regset) (m: mem) (l: Locations.loc) : option val :=
  match l with
@@ -1262,7 +1262,7 @@ Definition set_mem (s:state)(m:mem) :=
   end.
 Definition semantics (p: program) :=
   Semantics get_mem set_mem step
-            (initial_core p) (at_external p) (after_external p)
+            (entry_point p) (at_external p) (after_external p)
             final_state (Genv.globalenv p)
             p.(prog_main )
             (Genv.init_mem p).
