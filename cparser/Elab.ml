@@ -2595,7 +2595,8 @@ let check_switch_cases switch_body =
               Diagnostics.error s.sloc "multiple default labels in one switch"
             else
               default := true
-        end
+        end;
+        check s1
     | Sgoto _ -> ()
     | Sreturn _ -> ()
     | Sblock sl -> List.iter check sl
