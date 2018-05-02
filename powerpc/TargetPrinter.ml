@@ -619,7 +619,7 @@ module Target (System : SYSTEM):TARGET =
       | Pld(r1, c, r2) | Pld_a(r1, c, r2) ->
           fprintf oc "	ld	%a, %a(%a)\n" ireg r1 constant c ireg r2
       | Pldbrx(r1, r2, r3) ->
-          fprintf oc "	ldbrx %a, %a, %a\n" ireg r1 ireg r2 ireg r3
+          fprintf oc "	ldbrx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Pldx(r1, r2, r3) | Pldx_a(r1, r2, r3) ->
           fprintf oc "	ldx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Plfd(r1, c, r2)  | Plfd_a(r1, c, r2) ->
