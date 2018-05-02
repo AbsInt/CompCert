@@ -685,6 +685,8 @@ and elab_type_declarator keep_ty loc env ty kr_ok = function
   | Cabs.ARRAY(d, cv_specs, sz) ->
       let (ty, a) = get_nontype_attrs env ty in
       let a = add_attributes a (elab_cvspecs env cv_specs) in
+      if wrap incomplete_type loc env ty then
+        error loc "array type has incomplete element type %a" (print_typ env) ty;
       let sz' =
         match sz with
         | None ->
