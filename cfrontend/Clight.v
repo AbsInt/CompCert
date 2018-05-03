@@ -773,9 +773,8 @@ Inductive val_casted_list: list val -> typelist -> Prop :=
       val_casted_list (v1 :: vl) (Tcons  ty1 tyl).
 
 (*NOTE: DOUBLE CHECK TARGS (it's not used right now)*)
-Inductive entry_point  (p:program): mem -> state -> val -> list val -> Prop :=
+Inductive entry_point  (ge:genv): mem -> state -> val -> list val -> Prop :=
 | initi_core:
-    let ge := globalenv p in
     forall f fb m args targs tres,
       Genv.find_funct_ptr ge fb = Some f ->
       type_of_fundef f = Tfunction targs tres cc_default ->
@@ -787,7 +786,7 @@ Inductive entry_point  (p:program): mem -> state -> val -> list val -> Prop :=
                            && tys_nonvoid targs 
                            && vals_defined args
                            && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
-      entry_point p m (Callstate f args Kstop m) (Vptr fb (Ptrofs.of_ints Int.zero)) args.
+      entry_point ge m (Callstate f args Kstop m) (Vptr fb (Ptrofs.of_ints Int.zero)) args.
 
 (** A final state is a [Returnstate] with an empty continuation. *)
 Inductive final_state: state -> int -> Prop :=
@@ -823,25 +822,32 @@ Definition step2 (ge: genv) := step ge (function_entry2 ge).
 
 (** Wrapping up these definitions in two small-step semantics. *)
 
+Definition part_semantics1 (ge: genv) :=
+  Build_part_semantics get_mem set_mem (step1 ge)
+                       (entry_point ge)
+                       at_external
+                       after_external
+                       final_state ge ge.
+
 Definition semantics1 (p: program) :=
   let ge := globalenv p in
   let main :=p.(prog_main) in
   let init_mem:=(Genv.init_mem p) in
-  Semantics_gen get_mem set_mem step1
-                (entry_point p)
-                at_external
-                after_external
-                final_state ge main init_mem ge.
+  Build_semantics (part_semantics1 ge) main init_mem.
+
+Definition part_semantics2 (ge: genv) :=
+  Build_part_semantics get_mem set_mem (step2 ge)
+                       (entry_point ge)
+                       at_external
+                       after_external
+                       final_state ge ge.
 
 Definition semantics2 (p: program) :=
   let ge := globalenv p in
   let main :=p.(prog_main) in
   let init_mem:=(Genv.init_mem p) in
-  Semantics_gen get_mem set_mem step2
-                (entry_point p)
-                at_external
-                after_external
-                final_state ge main init_mem ge.
+  Build_semantics (part_semantics2 ge) main init_mem.
+
 
 (** This semantics is receptive to changes in events. *)
 

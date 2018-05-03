@@ -283,4 +283,4 @@ Parameter at_external : state -> option (external_function * signature * list va
 Parameter after_external : option val -> state -> Memory.mem -> option state.
 
 Definition semantics (p: program) :=
-  Semantics get_mem set_mem step (entry_point p) at_external after_external final_state (Genv.globalenv p).
+  Semantics get_mem set_mem (step (Genv.globalenv p)) (entry_point p) at_external after_external final_state (Genv.globalenv p).

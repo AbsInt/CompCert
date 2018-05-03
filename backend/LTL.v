@@ -310,7 +310,7 @@ Parameter after_external : option val -> state -> Memory.mem -> option state.
 Definition semantics (p: program) :=
   let main :=p.(prog_main) in
   let init_mem:=(Genv.init_mem p) in
-  Semantics get_mem set_mem step (entry_point p) at_external after_external final_state (Genv.globalenv p) main init_mem.
+  Semantics get_mem set_mem (step (Genv.globalenv p)) (entry_point p) at_external after_external final_state (Genv.globalenv p) main init_mem.
 
 (** * Operations over LTL *)
 

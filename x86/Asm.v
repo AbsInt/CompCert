@@ -1140,9 +1140,8 @@ Inductive entry_point' (p:program): mem -> state -> val -> list val -> Prop:=
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       extcall_arguments rs0 m (fn_sig f) args ->
       entry_point' p m (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
-Inductive entry_point (p:program): mem -> state -> val -> list val -> Prop:=
+Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop:=
 | INIT_CORE:
-    let ge := Genv.globalenv p in
     forall f b m args,
       let rs0 :=
         (Pregmap.init Vundef)
@@ -1151,34 +1150,35 @@ Inductive entry_point (p:program): mem -> state -> val -> list val -> Prop:=
         # RSP <- Vnullptr in
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       extcall_arguments rs0 m (fn_sig f) args ->
-      entry_point p m (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
+      entry_point ge m (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
 
- Definition get_extcall_arg (inout: Locations.slot) (rs: regset) (m: mem) (l: Locations.loc) : option val :=
+ Definition get_extcall_arg (rs: regset) (m: mem) (l: Locations.loc) : option val :=
  match l with
   | Locations.R r => Some (rs (preg_of r))
-  | Locations.S inout ofs ty => 
+  | Locations.S Locations.Outgoing ofs ty => 
       let bofs := (Stacklayout.fe_ofs_arg + 4 * ofs)%Z  in
       Mem.loadv (chunk_of_type ty) m
-                (Val.add (rs (IR SP)) (Vint (Int.repr bofs)))
+                (Val.offset_ptr (rs (IR SP)) (Ptrofs.repr bofs))
+  | _ => None
   end.
 
 Fixpoint get_extcall_arguments
-    (inout: Locations.slot) (rs: regset) (m: mem) (al: list (rpair Locations.loc)) : option (list val) :=
+    (rs: regset) (m: mem) (al: list (rpair Locations.loc)) : option (list val) :=
   match al with
   | One l :: al' => 
-     match get_extcall_arg inout rs m l with
-     | Some v => match get_extcall_arguments inout rs m al' with
+     match get_extcall_arg rs m l with
+     | Some v => match get_extcall_arguments rs m al' with
                          | Some vl => Some (v::vl)
                          | None => None
                         end
      | None => None
     end
   | Twolong hi lo :: al' =>
-     match get_extcall_arg inout rs m hi with
+     match get_extcall_arg rs m hi with
      | Some vhi => 
-       match get_extcall_arg inout rs m lo with
+       match get_extcall_arg rs m lo with
        | Some vlo => 
-        match get_extcall_arguments inout rs m al' with
+        match get_extcall_arguments rs m al' with
                          | Some vl => Some (Val.longofwords vhi vlo :: vl)
                          | None => None
         end
@@ -1189,22 +1189,17 @@ Fixpoint get_extcall_arguments
   | nil => Some nil
  end.
 
-Definition at_external (p:program) (c: state) : option (external_function * signature * list val) :=
-  let ge := Genv.globalenv p in
+Definition at_external (ge:genv) (c: state) : option (external_function * signature * list val) :=
   match c with
     State rs m =>
     match rs PC with
     | Vptr b i => if Ptrofs.eq_dec i Ptrofs.zero then
                    match  Genv.find_funct_ptr ge b with
                    | Some (External ef) =>
-                     match ef with
-                     | EF_external _ _ => 
-                       match get_extcall_arguments Locations.Outgoing rs m
-                                                   (Conventions1.loc_arguments (ef_sig ef)) with
-                       | Some args => Some (ef,(ef_sig ef), args)
-                       | None => None
-                       end
-                     | _ => None
+                     match get_extcall_arguments rs m
+                                                 (Conventions1.loc_arguments (ef_sig ef)) with
+                     | Some args => Some (ef,(ef_sig ef), args)
+                     | None => None
                      end
                    | _ => None
                    end
@@ -1216,8 +1211,7 @@ Definition at_external (p:program) (c: state) : option (external_function * sign
 
      
 
-Definition after_external_regset (p:program)(vret: option val) (rs: regset) : option regset :=
-  let ge := Genv.globalenv p in
+Definition after_external_regset (ge:genv)(vret: option val) (rs: regset) : option regset :=
   match rs PC with
   | Vptr b i => if Ptrofs.eq_dec i Ptrofs.zero then
     match  Genv.find_funct_ptr ge b with
@@ -1234,11 +1228,10 @@ Definition after_external_regset (p:program)(vret: option val) (rs: regset) : op
  | _ => None
  end.
 
-Definition after_external (p:program)(vret: option val)(c:state)(m:mem): option state:=
-  let ge := Genv.globalenv p in
+Definition after_external (ge:genv)(vret: option val)(c:state)(m:mem): option state:=
   match c with
     State rs m' =>
-    match after_external_regset p vret rs with
+    match after_external_regset ge vret rs with
       Some rs' => Some (State rs' m)
     | None => None
     end
@@ -1260,12 +1253,18 @@ Definition set_mem (s:state)(m:mem) :=
   match s with
   | State rs _ => State rs m
   end.
+
+Definition part_semantics (ge: genv) :=
+  Build_part_semantics get_mem set_mem (step ge)
+                       (entry_point ge)
+                       (at_external ge)
+                       (after_external ge)
+                       final_state ge (Genv.to_senv ge).
+
 Definition semantics (p: program) :=
-  Semantics get_mem set_mem step
-            (entry_point p) (at_external p) (after_external p)
-            final_state (Genv.globalenv p)
-            p.(prog_main )
-            (Genv.init_mem p).
+  Build_semantics (part_semantics (Genv.globalenv p))
+                  p.(prog_main)
+                  (Genv.init_mem p).
 
 (** Determinacy of the [Asm] semantics. *)
 
