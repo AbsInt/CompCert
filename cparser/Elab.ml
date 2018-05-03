@@ -542,7 +542,7 @@ let get_nontype_attrs env ty =
    C99 section 6.7.2.
 *)
 
-let rec elab_specifier keep_ty ?(only = false) loc env specifier =
+let rec elab_specifier ?(only = false) loc env specifier =
   (* We first divide the parts of the specifier as follows:
        - a storage class
        - a set of attributes (const, volatile, restrict)
@@ -647,14 +647,14 @@ let rec elab_specifier keep_ty ?(only = false) loc env specifier =
         let a' =
           add_attributes (get_struct_attrs()) (elab_attributes env a) in
         let (id', env') =
-          elab_struct_or_union keep_ty only Struct loc id optmembers a' env in
+          elab_struct_or_union only Struct loc id optmembers a' env in
         (!sto, !inline, !noreturn, !typedef, TStruct(id', !attr), env')
 
     | [Cabs.Tstruct_union(UNION, id, optmembers, a)] ->
         let a' =
           add_attributes (get_struct_attrs()) (elab_attributes env a) in
         let (id', env') =
-          elab_struct_or_union keep_ty only Union loc id optmembers a' env in
+          elab_struct_or_union only Union loc id optmembers a' env in
         (!sto, !inline, !noreturn, !typedef, TUnion(id', !attr), env')
 
     | [Cabs.Tenum(id, optmembers, a)] ->
@@ -688,7 +688,7 @@ and elab_return_type loc env ty =
       error loc "function cannot return function type %a" (print_typ env) ty
   | _ -> ()
 
-and elab_type_declarator keep_ty loc env ty kr_ok = function
+and elab_type_declarator loc env ty kr_ok = function
   | Cabs.JUSTBASE ->
       ((ty, None), env)
   | Cabs.ARRAY(d, cv_specs, sz) ->
@@ -712,23 +712,27 @@ and elab_type_declarator keep_ty loc env ty kr_ok = function
             | None ->
                 error loc "size of array is not a compile-time constant";
                 Some 1L in (* produces better error messages later *)
-       elab_type_declarator  keep_ty  loc env (TArray(ty, sz', a)) kr_ok  d
+       elab_type_declarator loc env (TArray(ty, sz', a)) kr_ok  d
   | Cabs.PTR(cv_specs, d) ->
       let (ty, a) = get_nontype_attrs env ty in
       let a = add_attributes a (elab_cvspecs env cv_specs) in
-      elab_type_declarator keep_ty  loc env (TPtr(ty, a)) kr_ok d
+      elab_type_declarator loc env (TPtr(ty, a)) kr_ok d
   | Cabs.PROTO(d, (params, vararg)) ->
       elab_return_type loc env ty;
       let (ty, a) = get_nontype_attrs env ty in
-      let params',env' = elab_parameters keep_ty env params in
-      let env = if  keep_ty then Env.add_types env env' else env in
-      elab_type_declarator  keep_ty  loc env (TFun(ty, Some params', vararg, a)) kr_ok d
+      let (params', _) = elab_parameters env params in
+      (* Temporary: we discard the extended environment returned by
+         elab_parameters, on the assumption that this is the end of
+         the scope introduced to treat the parameters.  This is a
+         correct assumption if we're in a function declaration.
+         For a function definition, more work is needed and will come later. *)
+      elab_type_declarator loc env (TFun(ty, Some params', vararg, a)) kr_ok d
   | Cabs.PROTO_OLD(d, params) ->
       elab_return_type loc env ty;
       let (ty, a) = get_nontype_attrs env ty in
       match params with
       | [] ->
-        elab_type_declarator  keep_ty loc env (TFun(ty, None, false, a)) kr_ok d
+        elab_type_declarator loc env (TFun(ty, None, false, a)) kr_ok d
       | _ ->
         if not kr_ok || d <> Cabs.JUSTBASE then
           fatal_error loc "illegal old-style K&R function definition";
@@ -736,9 +740,9 @@ and elab_type_declarator keep_ty loc env ty kr_ok = function
 
 (* Elaboration of parameters in a prototype *)
 
-and elab_parameters  keep_ty env params =
+and elab_parameters env params =
   (* Prototype introduces a new scope *)
-  let (vars, env) = mmap (elab_parameter  keep_ty) (Env.new_scope env) params in
+  let (vars, env) = mmap elab_parameter (Env.new_scope env) params in
   (* Catch special case f(t) where t is void or a typedef to void *)
   match vars with
     | [ ( {C.name=""}, t) ] when is_void_type env t -> [],env
@@ -746,11 +750,11 @@ and elab_parameters  keep_ty env params =
 
 (* Elaboration of a function parameter *)
 
-and elab_parameter keep_ty env (PARAM (spec, id, decl, attr, loc)) =
-  let (sto, inl, noret, tydef, bty, env1) = elab_specifier keep_ty loc env spec in
+and elab_parameter env (PARAM (spec, id, decl, attr, loc)) =
+  let (sto, inl, noret, tydef, bty, env1) = elab_specifier loc env spec in
   if tydef then
     error loc "'typedef' used in function parameter";
-  let ((ty, _), _) = elab_type_declarator keep_ty loc env1 bty false decl in
+  let ((ty, _), _) = elab_type_declarator loc env1 bty false decl in
   let ty = add_attributes_type (elab_attributes env attr) ty in
   if sto <> Storage_default && sto <> Storage_register then
     error loc                               (* NB: 'auto' not allowed *)
@@ -772,19 +776,19 @@ and elab_parameter keep_ty env (PARAM (spec, id, decl, attr, loc)) =
 
 (* Elaboration of a (specifier, Cabs "name") pair *)
 
-and elab_fundef_name keep_ty env spec (Name (id, decl, attr, loc)) =
-  let (sto, inl, noret, tydef, bty, env') = elab_specifier keep_ty loc env spec in
+and elab_fundef_name env spec (Name (id, decl, attr, loc)) =
+  let (sto, inl, noret, tydef, bty, env') = elab_specifier loc env spec in
   if tydef then
     error loc "'typedef' is forbidden here";
-  let ((ty, kr_params), env'') = elab_type_declarator keep_ty loc env' bty true decl in
+  let ((ty, kr_params), env'') = elab_type_declarator loc env' bty true decl in
   let a = elab_attributes env attr in
   (id, sto, inl, noret, add_attributes_type a ty, kr_params, env'')
 
 (* Elaboration of a name group.  C99 section 6.7.6 *)
 
-and elab_name_group keep_ty loc env  (spec, namelist) =
+and elab_name_group loc env  (spec, namelist) =
   let (sto, inl, noret, tydef, bty, env') =
-    elab_specifier keep_ty loc env spec in
+    elab_specifier loc env spec in
   if tydef then
     error loc "'typedef' is forbidden here";
   if inl then
@@ -793,21 +797,21 @@ and elab_name_group keep_ty loc env  (spec, namelist) =
     error loc "'_Noreturn' is forbidden here";
   let elab_one_name env (Name (id, decl, attr, loc)) =
     let ((ty, _), env1) =
-      elab_type_declarator keep_ty loc env bty false  decl in
+      elab_type_declarator loc env bty false  decl in
     let a = elab_attributes env attr in
     ((id, add_attributes_type a ty), env1) in
   (mmap elab_one_name env' namelist, sto)
 
 (* Elaboration of an init-name group *)
 
-and elab_init_name_group keep_ty loc env (spec, namelist) =
+and elab_init_name_group loc env (spec, namelist) =
   let (sto, inl, noret, tydef, bty, env') =
-    elab_specifier keep_ty ~only:(namelist=[]) loc env spec in
+    elab_specifier ~only:(namelist=[]) loc env spec in
   if noret && tydef then
     error loc "'_Noreturn' can only appear on functions";
   let elab_one_name env (Init_name (Name (id, decl, attr, loc), init)) =
     let ((ty, _), env1) =
-      elab_type_declarator keep_ty loc env bty false  decl in
+      elab_type_declarator loc env bty false  decl in
     let a = elab_attributes env attr in
     if inl && not (is_function_type env ty) then
       error loc "'inline' can only appear on functions";
@@ -823,7 +827,7 @@ and elab_init_name_group keep_ty loc env (spec, namelist) =
 
 (* Elaboration of a field group *)
 
-and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
+and elab_field_group env (Field_group (spec, fieldlist, loc)) =
 
   let fieldlist = List.map
     (function (None, x) -> (Name ("", JUSTBASE, [], loc), x)
@@ -832,7 +836,7 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
   in
 
   let ((names, env'), sto) =
-    elab_name_group keep_ty loc env  (spec, List.map fst fieldlist) in
+    elab_name_group loc env  (spec, List.map fst fieldlist) in
 
   if sto <> Storage_default then
     error loc "non-default storage in struct or union";
@@ -885,8 +889,8 @@ and elab_field_group keep_ty env (Field_group (spec, fieldlist, loc)) =
 
 (* Elaboration of a struct or union. C99 section 6.7.2.1 *)
 
-and elab_struct_or_union_info keep_ty kind loc env members attrs =
-  let (m, env') = mmap (elab_field_group keep_ty) env members in
+and elab_struct_or_union_info kind loc env members attrs =
+  let (m, env') = mmap elab_field_group env members in
   let m = List.flatten m in
   let m,_ = mmap (fun c fld  ->
       if fld.fld_anonymous then
@@ -936,7 +940,7 @@ and elab_struct_or_union_info keep_ty kind loc env members attrs =
     end;
   (composite_info_def env' kind attrs m, env')
 
-and elab_struct_or_union keep_ty only kind loc tag optmembers attrs env =
+and elab_struct_or_union only kind loc tag optmembers attrs env =
   let warn_attrs () =
     if attrs <> [] then
       warning loc Unnamed "attribute declaration must precede definition" in
@@ -965,7 +969,7 @@ and elab_struct_or_union keep_ty only kind loc tag optmembers attrs env =
       if ci.Env.ci_kind <> kind then
         error loc "use of '%s' with tag type that does not match previous declaration" tag;
       (* finishing the definition of an incomplete struct or union *)
-      let (ci', env') = elab_struct_or_union_info keep_ty kind loc env members attrs in
+      let (ci', env') = elab_struct_or_union_info kind loc env members attrs in
       (* Emit a global definition for it *)
       emit_elab env' loc (Gcompositedef(kind, tag', attrs, ci'.Env.ci_members));
       (* Replace infos but keep same ident *)
@@ -992,7 +996,7 @@ and elab_struct_or_union keep_ty only kind loc tag optmembers attrs env =
       emit_elab env' loc (Gcompositedecl(kind, tag', attrs));
       (* elaborate the members *)
       let (ci2, env'') =
-        elab_struct_or_union_info keep_ty kind loc env' members attrs in
+        elab_struct_or_union_info kind loc env' members attrs in
       (* emit a definition *)
       emit_elab env'' loc (Gcompositedef(kind, tag', attrs, ci2.Env.ci_members));
       (* Replace infos but keep same ident *)
@@ -1056,8 +1060,8 @@ and elab_enum only loc tag optmembers attrs env =
 (* Elaboration of a naked type, e.g. in a cast *)
 
 let elab_type loc env spec decl =
-  let (sto, inl, noret, tydef, bty, env') = elab_specifier false loc env spec in
-  let ((ty, _), env'') = elab_type_declarator false loc env' bty false decl in
+  let (sto, inl, noret, tydef, bty, env') = elab_specifier loc env spec in
+  let ((ty, _), env'') = elab_type_declarator loc env' bty false decl in
   (* NB: it seems the parser doesn't accept any of the specifiers below.
      We keep the error message as extra safety. *)
   if sto <> Storage_default || inl || noret || tydef then
@@ -2316,7 +2320,7 @@ let elab_KR_function_parameters env params defs loc =
       let name_list = List.map extract_name name_init_list in
       if name_list = [] then
         error loc' "declaration does not declare a parameter";
-      let (paramsenv, sto) = elab_name_group true loc' env (spec', name_list) in
+      let (paramsenv, sto) = elab_name_group loc' env (spec', name_list) in
       if sto <> Storage_default && sto <> Storage_register then
         error loc'                               (* NB: 'auto' not allowed *)
            "invalid storage class %s for function parameter"
@@ -2386,7 +2390,7 @@ let inherit_vararg env s sto ty =
 
 let elab_fundef env spec name defs body loc =
   let (s, sto, inline, noret, ty, kr_params, env1) =
-    elab_fundef_name true env spec name in
+    elab_fundef_name env spec name in
   if sto = Storage_auto || sto = Storage_register then
     fatal_error loc "invalid storage class %s on function"
                     (name_of_storage_class sto);
@@ -2517,7 +2521,7 @@ let elab_definition (for_loop: bool) (local: bool) (env: Env.t) (def: Cabs.defin
   (* "int x = 12, y[10], *z" *)
   | DECDEF(init_name_group, loc) ->
       let ((dl, env1), sto, tydef) =
-        elab_init_name_group false loc env init_name_group in
+        elab_init_name_group loc env init_name_group in
       if for_loop then begin
         let fun_declaration = List.exists (fun (_, ty, _) -> is_function_type env ty) dl in
         if fun_declaration || sto = Storage_extern || sto = Storage_static || tydef then
