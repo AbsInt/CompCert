@@ -188,7 +188,8 @@ let combine_toplevel_definitions loc env s old_sto old_ty sto ty =
   in
     (new_sto, new_ty)
 
-let enter_or_refine_ident local loc env s sto ty =
+let enter_or_refine_ident_base local loc env new_id sto ty =
+  let s = new_id.C.name in
   (* Check for illegal redefinitions:
        - a name that was previously a typedef
        - a variable that was already declared in the same local scope
@@ -198,11 +199,11 @@ let enter_or_refine_ident local loc env s sto ty =
   if redef Env.lookup_typedef env s then
     error loc "redefinition of '%s' as different kind of symbol" s;
   begin match previous_def Env.lookup_ident env s with
-  | Some(id, Env.II_ident(old_sto, old_ty))
-    when local && Env.in_current_scope env id
+  | Some(old_id, Env.II_ident(old_sto, old_ty))
+    when local && Env.in_current_scope env old_id
                && not (sto = Storage_extern && old_sto = Storage_extern) ->
       error loc "redefinition of '%s'" s
-  | Some(id, Env.II_enum _) when Env.in_current_scope env id ->
+  | Some(old_id, Env.II_enum _) when Env.in_current_scope env old_id ->
       error loc "redefinition of '%s' as different kind of symbol" s;
   | _ ->
      ()
@@ -210,21 +211,45 @@ let enter_or_refine_ident local loc env s sto ty =
   (* For a block-scoped, non-"extern" variable, a new declaration
      is entered, and it has no linkage. *)
   if local && sto <> Storage_extern then begin
-    let (id, env') = Env.enter_ident env s sto ty in
-    (id, sto, env', ty, false)
+    (new_id, sto, Env.add_ident env new_id sto ty, ty, false)
   end else begin
   (* For a file-scoped or "extern" variable, we need to check against
      prior declarations of this variable with internal or external linkage.
      The variable has linkage. *)
     match previous_def Env.lookup_ident !top_environment s with
-    | Some(id, Env.II_ident(old_sto, old_ty)) ->
+    | Some(old_id, Env.II_ident(old_sto, old_ty)) ->
         let (new_sto, new_ty) =
           combine_toplevel_definitions loc env s old_sto old_ty sto ty in
-        (id, new_sto, Env.add_ident env id new_sto new_ty, new_ty, true)
+        (old_id, new_sto, Env.add_ident env old_id new_sto new_ty, new_ty, true)
     | _ ->
-        let (id, env') = Env.enter_ident env s sto ty in
-        (id, sto, env', ty, true)
+        (new_id, sto, Env.add_ident env new_id sto ty, ty, true)
   end
+
+(* We use two variants of [enter_or_refine]:
+
+ - [enter_or_refine_ident] is to be used for all declarations,
+   block-scoped ([local = true]) or top-level ([local = false]).
+   The name of the declared thing is given as a string [s].  If a
+   previous declaration with this name exists in the current scope,
+   its unique identifier is returned.  Otherwise a fresh identifier
+   named [s] is created in the current scope of [env] and returned.
+
+ - [enter_or_refine_function] is to be used for function definitions.
+   Such definitions are always global, hence the [local] parameter
+   defaults to [false] and is omitted.  The function name is given
+   as an identifier, created in advance by the caller.  This
+   identifier is used if no previous declaration exists for the
+   function.  Otherwise, the identifier of the previous declaration is
+   used.  By creating the identifier in advance, [elab_fundef] makes
+   sure that it is properly scoped to file scope and not to the local
+   scope of function parameters.
+*)
+
+let enter_or_refine_ident local loc env s sto ty =
+  enter_or_refine_ident_base local loc env (Env.fresh_ident s) sto ty
+
+let enter_or_refine_function loc env id sto ty =
+  enter_or_refine_ident_base false loc env id sto ty
 
 (* Forward declarations *)
 
@@ -688,7 +713,14 @@ and elab_return_type loc env ty =
       error loc "function cannot return function type %a" (print_typ env) ty
   | _ -> ()
 
-and elab_type_declarator loc env ty kr_ok = function
+(* The [?fundef] parameter is true if we're elaborating a function definition
+   and false otherwise.  When [fundef = true], K&R function declarators
+   are allowed, and the returned environment includes bindings for the
+   function parameters and the struct/unions they may define.
+   When [fundef = false], K&R function declarators are rejected
+   and declarations in parameters are not returned. *)
+
+and elab_type_declarator ?(fundef = false) loc env ty = function
   | Cabs.JUSTBASE ->
       ((ty, None), env)
   | Cabs.ARRAY(d, cv_specs, sz) ->
@@ -712,31 +744,37 @@ and elab_type_declarator loc env ty kr_ok = function
             | None ->
                 error loc "size of array is not a compile-time constant";
                 Some 1L in (* produces better error messages later *)
-       elab_type_declarator loc env (TArray(ty, sz', a)) kr_ok  d
+       elab_type_declarator ~fundef loc env (TArray(ty, sz', a)) d
   | Cabs.PTR(cv_specs, d) ->
       let (ty, a) = get_nontype_attrs env ty in
       let a = add_attributes a (elab_cvspecs env cv_specs) in
-      elab_type_declarator loc env (TPtr(ty, a)) kr_ok d
+      elab_type_declarator ~fundef loc env (TPtr(ty, a)) d
   | Cabs.PROTO(d, (params, vararg)) ->
       elab_return_type loc env ty;
       let (ty, a) = get_nontype_attrs env ty in
-      let (params', _) = elab_parameters env params in
-      (* Temporary: we discard the extended environment returned by
-         elab_parameters, on the assumption that this is the end of
-         the scope introduced to treat the parameters.  This is a
-         correct assumption if we're in a function declaration.
-         For a function definition, more work is needed and will come later. *)
-      elab_type_declarator loc env (TFun(ty, Some params', vararg, a)) kr_ok d
+      let (params', env') = elab_parameters env params in
+      (* For a function declaration (fundef = false), the scope introduced
+         to treat parameters ends here, so we discard the extended
+         environment env' returned by elab_parameters.
+         For a function definition (fundef = true) we return the
+         extended environment env' so that it can serve as the basis
+         to elaborating the function body. *)
+      let env'' = if fundef then env' else env in
+      elab_type_declarator ~fundef loc env'' (TFun(ty, Some params', vararg, a)) d
   | Cabs.PROTO_OLD(d, params) ->
       elab_return_type loc env ty;
       let (ty, a) = get_nontype_attrs env ty in
+      (* For consistency with the PROTO case above, for a function definition
+         (fundef = true) we open a new scope, even though we do not
+         add any bindings for the parameters. *)
+      let env'' = if fundef then Env.new_scope env else env in
       match params with
       | [] ->
-        elab_type_declarator loc env (TFun(ty, None, false, a)) kr_ok d
+        elab_type_declarator ~fundef loc env'' (TFun(ty, None, false, a)) d
       | _ ->
-        if not kr_ok || d <> Cabs.JUSTBASE then
+        if not fundef || d <> Cabs.JUSTBASE then
           fatal_error loc "illegal old-style K&R function definition";
-        ((TFun(ty, None, false, a), Some params), env)
+        ((TFun(ty, None, false, a), Some params), env'')
 
 (* Elaboration of parameters in a prototype *)
 
@@ -754,7 +792,7 @@ and elab_parameter env (PARAM (spec, id, decl, attr, loc)) =
   let (sto, inl, noret, tydef, bty, env1) = elab_specifier loc env spec in
   if tydef then
     error loc "'typedef' used in function parameter";
-  let ((ty, _), _) = elab_type_declarator loc env1 bty false decl in
+  let ((ty, _), _) = elab_type_declarator loc env1 bty decl in
   let ty = add_attributes_type (elab_attributes env attr) ty in
   if sto <> Storage_default && sto <> Storage_register then
     error loc                               (* NB: 'auto' not allowed *)
@@ -774,15 +812,24 @@ and elab_parameter env (PARAM (spec, id, decl, attr, loc)) =
   let (id', env2) = Env.enter_ident env1 id sto ty1 in
   ( (id', ty1) , env2)
 
-(* Elaboration of a (specifier, Cabs "name") pair *)
+(* Elaboration of a (specifier, Cabs "name") pair as found in a function
+   definition.  Returns two environments: the first is [env]
+   enriched with struct/union definitions from the return type,
+   as usual; the second is like the first, plus a new scope.
+   For a prototyped function ([kr_params = None]) the new scope
+   includes bindings for the function parameters and the struct/unions
+   they may define.  For a K&R function ([kr_params <> None]) the new
+   scope is empty. *)
 
-and elab_fundef_name env spec (Name (id, decl, attr, loc)) =
+and elab_fundef_name env spec (Name (s, decl, attr, loc)) =
   let (sto, inl, noret, tydef, bty, env') = elab_specifier loc env spec in
   if tydef then
     error loc "'typedef' is forbidden here";
-  let ((ty, kr_params), env'') = elab_type_declarator loc env' bty true decl in
+  let id = Env.fresh_ident s in
+  let ((ty, kr_params), env'') = 
+    elab_type_declarator ~fundef:true loc env' bty decl in
   let a = elab_attributes env attr in
-  (id, sto, inl, noret, add_attributes_type a ty, kr_params, env'')
+  (id, sto, inl, noret, add_attributes_type a ty, kr_params, env', env'')
 
 (* Elaboration of a name group.  C99 section 6.7.6 *)
 
@@ -797,7 +844,7 @@ and elab_name_group loc env  (spec, namelist) =
     error loc "'_Noreturn' is forbidden here";
   let elab_one_name env (Name (id, decl, attr, loc)) =
     let ((ty, _), env1) =
-      elab_type_declarator loc env bty false  decl in
+      elab_type_declarator loc env bty decl in
     let a = elab_attributes env attr in
     ((id, add_attributes_type a ty), env1) in
   (mmap elab_one_name env' namelist, sto)
@@ -811,7 +858,7 @@ and elab_init_name_group loc env (spec, namelist) =
     error loc "'_Noreturn' can only appear on functions";
   let elab_one_name env (Init_name (Name (id, decl, attr, loc), init)) =
     let ((ty, _), env1) =
-      elab_type_declarator loc env bty false  decl in
+      elab_type_declarator loc env bty decl in
     let a = elab_attributes env attr in
     if inl && not (is_function_type env ty) then
       error loc "'inline' can only appear on functions";
@@ -1061,7 +1108,7 @@ and elab_enum only loc tag optmembers attrs env =
 
 let elab_type loc env spec decl =
   let (sto, inl, noret, tydef, bty, env') = elab_specifier loc env spec in
-  let ((ty, _), env'') = elab_type_declarator loc env' bty false decl in
+  let ((ty, _), env'') = elab_type_declarator loc env' bty decl in
   (* NB: it seems the parser doesn't accept any of the specifiers below.
      We keep the error message as extra safety. *)
   if sto <> Storage_default || inl || noret || tydef then
@@ -2388,9 +2435,19 @@ let inherit_vararg env s sto ty =
 
 (* Function definitions *)
 
-let elab_fundef env spec name defs body loc =
-  let (s, sto, inline, noret, ty, kr_params, env1) =
-    elab_fundef_name env spec name in
+let elab_fundef genv spec name defs body loc =
+  (* We maintain two environments:
+     - genv is the "global", file-scope environment.  It is enriched
+       with the declaration of the function, and also with
+       structs and unions defined as part of its return type.
+     - lenv is the "local" environment used to elaborate the function body.
+       It contains everything that genv contains, including
+       a declaration for the function, so as to support recursive calls.
+       In addition, it contains declarations for function parameters
+       and structs and unions defined in the parameter list. *)
+  let (fun_id, sto, inline, noret, ty, kr_params, genv, lenv) =
+    elab_fundef_name genv spec name in
+  let s = fun_id.C.name in
   if sto = Storage_auto || sto = Storage_register then
     fatal_error loc "invalid storage class %s on function"
                     (name_of_storage_class sto);
@@ -2403,57 +2460,70 @@ let elab_fundef env spec name defs body loc =
   (* Process the parameters and the K&R declarations, if any, to obtain:
       - [ty]: the full, prototyped type of the function
       - [extra_decls]: extra declarations to be inserted at the
-        beginning of the function *)
-  let (ty, extra_decls,env1) =
+        beginning of the function
+      - [lenv]: a first cut at the local environment, containing in particular
+        the structs and unions defined in the parameter list. *)
+  let (ty, extra_decls, lenv) =
     match ty, kr_params with
     | TFun(ty_ret, None, vararg, attr), None ->
-        (TFun(ty_ret, Some [], vararg, attr), [],env1)
+        (TFun(ty_ret, Some [], vararg, attr), [], lenv)
     | ty, None ->
-        (ty, [],env1)
+        (ty, [], lenv)
     | TFun(ty_ret, None, false, attr), Some params ->
         warning loc CompCert_conformance "non-prototype, pre-standard function definition, converting to prototype form";
-        let (params', extra_decls,env) =
-          elab_KR_function_parameters env params defs loc in
-        (TFun(ty_ret, Some params', inherit_vararg env s sto ty, attr), extra_decls,env)
+        let (params', extra_decls, lenv) =
+          elab_KR_function_parameters lenv params defs loc in
+        (TFun(ty_ret, Some params', inherit_vararg genv s sto ty, attr), extra_decls, lenv)
     | _, Some params ->
         assert false
   in
-  (* Extract infos from the type of the function *)
+  (* Extract infos from the type of the function.
+     Checks on the return type must be done in the global environment. *)
   let (ty_ret, params, vararg, attr) =
     match ty with
     | TFun(ty_ret, Some params, vararg, attr) ->
-         if wrap incomplete_type loc env1 ty_ret && not (is_void_type env ty_ret) then
+         if wrap incomplete_type loc genv ty_ret && not (is_void_type genv ty_ret) then
            fatal_error loc "incomplete result type %a in function definition"
-             (print_typ env) ty_ret;
+             (print_typ genv) ty_ret;
         (ty_ret, params, vararg, attr)
     | _ -> fatal_error loc "wrong type for function definition" in
-  (* Enter function in the environment, for recursive references *)
-  let (fun_id, sto1, env1, new_ty, _) =
-    enter_or_refine_ident false loc env1 s sto ty in
+  (* Enter function in the global environment *)
+  let (fun_id, sto1, genv, new_ty, _) =
+    enter_or_refine_function loc genv fun_id sto ty in
   add_global_define loc s;
+  (* Also enter it in the local environment, for recursive references *)
+  let lenv = Env.add_ident lenv fun_id sto new_ty in
   (* Take into account attributes from previous declarations of the function *)
-  let attr = attributes_of_type env1 new_ty in
+  let attr = attributes_of_type genv new_ty in
+  (* Additional checks on function parameters *)
   let incomplete_param env ty =
     if wrap incomplete_type loc env ty then
       fatal_error loc "parameter has incomplete type" in
-  (* Enter parameters and extra declarations in the environment *)
-  let env2 =
+  (* Enter parameters and extra declarations in the local environment.
+     For K&R functions this hasn't been done yet.
+     For prototyped functions this has been done by [elab_fundef_name]
+     already, but some parameter may have been shadowed by the
+     function name, while it should be the other way around, e.g.
+     [int f(int f) { return f+1; }], with [f] refering to the
+     parameter [f] and not to the function [f] within the body of the
+     function. *)
+  let lenv =
     List.fold_left (fun e (id, ty) -> incomplete_param e ty;
       Env.add_ident e id Storage_default ty)
-                   (Env.new_scope env1) params in
-  let env2 =
+                   lenv params in
+  let lenv =
     List.fold_left (fun e (sto, id, ty, init) -> Env.add_ident e id sto ty)
-                   env2 extra_decls in
-  (* Define "__func__" and enter it in the environment *)
+                   lenv extra_decls in
+  (* Define "__func__" and enter it in the local environment *)
   let (func_ty, func_init) = __func__type_and_init s in
-  let (func_id, _, env3, func_ty, _) =
-    enter_or_refine_ident true loc env2 "__func__" Storage_static func_ty in
-  emit_elab ~debuginfo:false env3 loc
+  let (func_id, _, lenv, func_ty, _) =
+    enter_or_refine_ident true loc lenv "__func__" Storage_static func_ty in
+  emit_elab ~debuginfo:false lenv loc
                   (Gdecl(Storage_static, func_id, func_ty, Some func_init));
   (* Elaborate function body *)
-  let body1 = !elab_funbody_f ty_ret vararg env3 body in
+  let body1 = !elab_funbody_f ty_ret vararg lenv body in
   (* Analyse it for returns *)
-  let (can_return, can_fallthrough) = Cflow.function_returns env3 body1 in
+  let (can_return, can_fallthrough) = Cflow.function_returns lenv body1 in
   (* Special treatment of the "main" function. *)
   let body2 =
     if s = "main" then begin
@@ -2461,7 +2531,7 @@ let elab_fundef env spec name defs body loc =
         error loc "'main' is not allowed to be declared inline";
       if noret then
         warning loc Unnamed "'main' is not allowed to be declared _Noreturn";
-      match unroll env ty_ret with
+      match unroll genv ty_ret with
       | TInt(IInt, []) ->
           (* Add implicit "return 0;" at end of function body.
              If we trusted the return analysis, we would do this only if
@@ -2474,7 +2544,7 @@ let elab_fundef env spec name defs body loc =
     end else begin
       (* For non-"main" functions, warn if the body can fall through
          and the return type is not "void". *)
-      if can_fallthrough && not (is_void_type env ty_ret) then
+      if can_fallthrough && not (is_void_type genv ty_ret) then
         warning loc Return_type "control reaches end of non-void function";
       body1
     end in
@@ -2503,8 +2573,8 @@ let elab_fundef env spec name defs body loc =
       fd_vararg = vararg;
       fd_locals = [];
       fd_body = body3 } in
-  emit_elab ~linkage:true env1 loc (Gfundef fn);
-  env1
+  emit_elab ~linkage:true genv loc (Gfundef fn);
+  genv
 
 (* Definitions *)
 
@@ -2832,8 +2902,16 @@ let elab_funbody return_typ vararg env b =
       ctx_break = false;
       ctx_continue = false;
       ctx_in_switch = false;
-      ctx_vararg = vararg;} in
-  fst(elab_stmt env ctx b)
+      ctx_vararg = vararg } in
+  (* The function body appears as a block in the AST but should not create
+     a new scope.  Instead, the scope used for function parameters must be
+     used for the body. *)
+  match b with
+  | BLOCK (b,loc) ->
+      let b',_ = elab_block_body env ctx b in
+      { sdesc = Sblock b'; sloc = elab_loc loc }
+  | _ ->
+      assert false
 
 (* Filling in forward declaration *)
 let _ = elab_funbody_f := elab_funbody
