@@ -2301,6 +2301,8 @@ let elab_KR_function_parameters env params defs loc =
   let elab_param_def env = function
   | DECDEF((spec', name_init_list), loc') ->
       let name_list = List.map extract_name name_init_list in
+      if name_list = [] then
+        error loc' "declaration does not declare a parameter";
       let (paramsenv, sto) = elab_name_group true loc' env (spec', name_list) in
       if sto <> Storage_default && sto <> Storage_register then
         error loc'                               (* NB: 'auto' not allowed *)
