@@ -2491,7 +2491,7 @@ let elab_fundef env spec name defs body loc =
 
 (* Definitions *)
 
-let rec elab_definition (local: bool) (env: Env.t) (def: Cabs.definition)
+let elab_definition (for_loop: bool) (local: bool) (env: Env.t) (def: Cabs.definition)
                     : decl list * Env.t =
   match def with
   (* "int f(int x) { ... }" *)
@@ -2505,6 +2505,11 @@ let rec elab_definition (local: bool) (env: Env.t) (def: Cabs.definition)
   | DECDEF(init_name_group, loc) ->
       let ((dl, env1), sto, tydef) =
         elab_init_name_group false loc env init_name_group in
+      if for_loop then begin
+        let fun_declaration = List.exists (fun (_, ty, _) -> is_function_type env ty) dl in
+        if fun_declaration || sto = Storage_extern || sto = Storage_static || tydef then
+          error loc "declaration of non-local variable in 'for' loop" ;
+      end;
       if tydef then
         let env2 = enter_typedefs loc env1 sto dl
         in ([], env2)
@@ -2515,13 +2520,6 @@ let rec elab_definition (local: bool) (env: Env.t) (def: Cabs.definition)
   | PRAGMA(s, loc) ->
       emit_elab env loc (Gpragma s);
       ([], env)
-
-and elab_definitions local env = function
-  | [] -> ([], env)
-  | d1 :: dl ->
-      let (decl1, env1) = elab_definition local env d1 in
-      let (decl2, env2) = elab_definitions local env1 dl in
-      (decl1 @ decl2, env2)
 
 (* Extended asm *)
 
@@ -2692,7 +2690,7 @@ let rec elab_stmt env ctx s =
             let a1,env = elab_for_expr ctx.ctx_vararg loc env None in
             (a1, env, None)
         | Some (FC_DECL def) ->
-            let (dcl, env') = elab_definition true (Env.new_scope env) def in
+            let (dcl, env') = elab_definition true true (Env.new_scope env) def in
             let loc = elab_loc (Cabshelper.get_definitionloc def) in
             (sskip, env',
              Some(List.map (fun d -> {sdesc = Sdecl d; sloc = loc}) dcl)) in
@@ -2796,7 +2794,7 @@ and elab_block_body env ctx sl =
   | [] ->
       [],env
   | DEFINITION def :: sl1 ->
-      let (dcl, env') = elab_definition true env def in
+      let (dcl, env') = elab_definition false true env def in
       let loc = elab_loc (Cabshelper.get_definitionloc def) in
       let dcl = List.map (fun ((sto,id,ty,_) as d) ->
         Debug.insert_local_declaration sto id ty loc;
@@ -2828,7 +2826,9 @@ let _ = elab_funbody_f := elab_funbody
 
 let elab_file prog =
   reset();
-  ignore (elab_definitions false (Builtins.environment()) prog);
+  let env = Builtins.environment () in
+  let elab_def env d = snd (elab_definition false false env d) in
+  ignore (List.fold_left elab_def env prog);
   let p = elaborated_program () in
   Checks.unused_variables p;
   Checks.unknown_attrs_program p;
