@@ -175,11 +175,20 @@ let rec attributes_of_type env t =
   | TFun(ty, params, vararg, a) -> a
   | TNamed(s, a) -> attributes_of_type env (unroll env t)
   | TStruct(s, a) ->
-      let ci = Env.find_struct env s in add_attributes ci.ci_attr a
+      begin match Env.find_struct env s with
+      | ci -> add_attributes ci.ci_attr a
+      | exception Env.Error(Env.Unbound_tag _) -> a
+      end
   | TUnion(s, a) ->
-      let ci = Env.find_union env s in add_attributes ci.ci_attr a
+      begin match Env.find_union env s with
+      | ci -> add_attributes ci.ci_attr a
+      | exception Env.Error(Env.Unbound_tag _) -> a
+      end
   | TEnum(s, a) ->
-    let ei = Env.find_enum env s in add_attributes ei.ei_attr a
+      begin match Env.find_enum env s with
+      | ei -> add_attributes ei.ei_attr a
+      | exception Env.Error(Env.Unbound_tag _) -> a
+      end
 
 (* Changing the attributes of a type (at top-level) *)
 (* Same hack as above for array types. *)
