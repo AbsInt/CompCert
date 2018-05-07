@@ -92,6 +92,7 @@ type warning_type =
   | Unused_parameter
   | Wrong_ais_parameter
   | Unused_ais_parameter
+  | Ignored_attributes
 
 (* List of active warnings *)
 let active_warnings: warning_type list ref = ref [
@@ -114,6 +115,7 @@ let active_warnings: warning_type list ref = ref [
   Inline_asm_sdump;
   Wrong_ais_parameter;
   Unused_ais_parameter;
+  Ignored_attributes;
 ]
 
 (* List of errors treated as warning *)
@@ -145,6 +147,7 @@ let string_of_warning = function
   | Unused_parameter -> "unused-parameter"
   | Wrong_ais_parameter -> "wrong-ais-parameter"
   | Unused_ais_parameter -> "unused-ais-parameter"
+  | Ignored_attributes -> "ignored-attributes"
 
 (* Activate the given warning *)
 let activate_warning w () =
@@ -192,6 +195,7 @@ let wall () =
     Unused_variable;
     Unused_parameter;
     Wrong_ais_parameter;
+    Ignored_attributes;
   ]
 
 let wnothing () =
@@ -223,6 +227,7 @@ let werror () =
     Unused_variable;
     Wrong_ais_parameter;
     Unused_ais_parameter;
+    Ignored_attributes;
   ]
 
 (* Generate the warning key for the message *)
@@ -401,6 +406,7 @@ let warning_options =
   error_option Unused_parameter @
   error_option Wrong_ais_parameter @
   error_option Unused_ais_parameter @
+  error_option Ignored_attributes @
   [Exact ("-Wfatal-errors"), Set error_fatal;
    Exact ("-fdiagnostics-color"), Ignore; (* Either output supports it or no color *)
    Exact ("-fno-diagnostics-color"), Unset color_diagnostics;

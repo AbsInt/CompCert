@@ -80,6 +80,9 @@ let add_global_define loc name =
     error loc "redefinition of '%s'" name;
   global_defines := StringSet.add name !global_defines
 
+let is_global_defined name =
+  StringSet.mem name !global_defines
+
 let emit_elab ?(debuginfo = true) ?(linkage = false) env loc td =
   let loc = elab_loc loc in
   let dec ={ gdesc = td; gloc = loc } in
@@ -153,6 +156,12 @@ let combine_toplevel_definitions loc env s old_sto old_ty sto ty =
           "redefinition of '%s' with a different type: %a vs %a"
           s (print_typ env) old_ty (print_typ env) ty;
         ty in
+  if is_global_defined s then begin
+    let old_attrs = attributes_of_type env old_ty
+    and new_attrs = attributes_of_type env ty in
+    if not (Cutil.incl_attributes new_attrs old_attrs) then
+      warning loc  Ignored_attributes "attribute declaration must precede definition"
+  end;
   let new_sto =
     (* The only case not allowed is removing static *)
     match old_sto,sto with
@@ -2238,10 +2247,10 @@ let enter_decdefs local loc env sto dl =
       else sto in
     (* enter ident in environment with declared type, because
        initializer can refer to the ident *)
-    if init <> NO_INIT && not local then
-      add_global_define loc s;
     let (id, sto', env1, ty, linkage) =
       enter_or_refine_ident local loc env s sto1 ty in
+    if init <> NO_INIT && not local then
+      add_global_define loc s;
     if not isfun && is_void_type env ty then
       fatal_error loc "'%s' has incomplete type" s;
     (* process the initializer *)
@@ -2415,9 +2424,9 @@ let elab_fundef env spec name defs body loc =
         (ty_ret, params, vararg, attr)
     | _ -> fatal_error loc "wrong type for function definition" in
   (* Enter function in the environment, for recursive references *)
-  add_global_define loc s;
   let (fun_id, sto1, env1, new_ty, _) =
     enter_or_refine_ident false loc env1 s sto ty in
+  add_global_define loc s;
   (* Take into account attributes from previous declarations of the function *)
   let attr = attributes_of_type env1 new_ty in
   let incomplete_param env ty =
