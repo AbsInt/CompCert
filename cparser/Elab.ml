@@ -173,7 +173,10 @@ let combine_toplevel_definitions loc env s old_sto old_ty sto ty =
         sto
     | Storage_static,_ -> Storage_static (* Static stays static *)
     | Storage_extern,_ -> sto
-    | Storage_default,Storage_extern -> Storage_extern
+    | Storage_default,Storage_extern ->
+      if is_global_defined s && is_function_type env ty then
+        warning loc Extern_after_definition "this extern declaration follows a non-extern definition and is ignored";
+      Storage_extern
     | _,Storage_extern -> old_sto
     (* "auto" and "register" don't appear in toplevel definitions.
        Normally this was checked earlier.  Generate error message
